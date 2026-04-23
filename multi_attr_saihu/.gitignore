@@ -1,0 +1,15 @@
+# Excel exports / imports (large binaries; regenerate from script)
+*.xlsx
+~$*.xlsx
+
+# Python
+__pycache__/
+*.py[cod]
+.Python
+.venv/
+venv/
+.env/
+
+# OS / editor
+.DS_Store
+Thumbs.db

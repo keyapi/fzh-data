@@ -1,0 +1,16 @@
+# 赛狐/Excel 大文件不纳入版本（本地保留即可）
+*.xlsx
+*.xls
+
+# 常见
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+*.log
+
+# IDE
+.idea/
+.vscode/
+.cursor/
