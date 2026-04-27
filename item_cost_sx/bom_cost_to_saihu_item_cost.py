@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 """
 从 EN「产品BOM成本列表」xlsx 计算「绍兴发货成本」；用赛狐「商品导出」的 SKU 列作白名单，Sheet1
-仅含两边交集。赛狐侧「采购成本」不接受 0：缺数或计算结果为 0 时均导出为空白（与空单元格导入行为一致）。
+仅含两边交集。赛狐侧「采购成本」不接受 0：缺数或计算结果为 0 时均导出为空白。
+若 BOM 未维护导致绍兴发货成本缺失，可按下划线分段：产品编号以「-」分节，对至少 4 节者取前 3
+节为「品类-面料-尺寸」键，在表内用同键下首次出现的**非 0 有效**成本作借用；明细列「成本借用自」标记来源行。
 
 默认 BOM：en_bom_cost_list 下最新 .xlsx；默认赛狐：edit_item/商品导出 x2215...xlsx；默认输出：item_cost_sx/out/。
 
@@ -40,6 +42,7 @@ COL_BCP = "绍兴包装半成品成本"
 COL_CCP = "绍兴包装成品成本"
 COL_TOT = "绍兴总成本"
 COL_XS = "绍兴发货成本"
+COL_BOR = "成本借用自(产品编号)"
 COL_ISSUE = "问题说明"
 
 OUT_DETAIL_COLS = [
@@ -51,6 +54,7 @@ OUT_DETAIL_COLS = [
     COL_CCP,
     COL_TOT,
     COL_XS,
+    COL_BOR,
     COL_ISSUE,
 ]
 
@@ -107,6 +111,92 @@ def _saihu_purchase_cost_export(v: Any) -> Any:
     if f == 0.0:
         return None
     return v
+
+
+def _sku_borrow_key(sku: str) -> str | None:
+    """
+    与「KS0001-QDKTR-140-RUSTYORANGE」类似：4 节及以上时取前 3 节为 品类-面料-尺寸 键；仅 3 节时整串为键。
+    少于此无法按规则借用（品名中误用「-」时可能分节不准，仅作简单规则）。
+    """
+    s = _norm_str(sku)
+    if not s:
+        return None
+    parts = s.split("-")
+    n = len(parts)
+    if n >= 4:
+        return "-".join(parts[0:3])
+    if n == 3:
+        return s
+    return None
+
+
+def _lender_value_ok(v: Any) -> bool:
+    """可作为出借方的绍兴发货成本：有数值且非 0。"""
+    if not _value_present(v):
+        return False
+    try:
+        return float(v) != 0.0
+    except (TypeError, ValueError):
+        return False
+
+
+def _missing_shaoxing_cost(v: Any) -> bool:
+    """未算出（None/NaN）。"""
+    if v is None:
+        return True
+    if isinstance(v, float) and (math.isnan(v) or pd.isna(v) or (v != v)):
+        return True
+    return False
+
+
+def _needs_borrow_cost(v: Any) -> bool:
+    """
+    是否应用同前缀借用：无有效成本（未算出 **或** 算出为 0）。
+    皮壳等规则下部分颜色行为 0，但同「品类-面料-尺寸」下其它颜色有非 0 成本，应能借；与赛狐侧「0 当空」一致。
+    """
+    if _missing_shaoxing_cost(v):
+        return True
+    try:
+        return float(v) == 0.0
+    except (TypeError, ValueError):
+        return False
+
+
+def _apply_sku_borrow(detail: pd.DataFrame) -> tuple[pd.DataFrame, int]:
+    """
+    在已有「绍兴发货成本」列上，对「无有效成本（未算出或 0）」的行，用同 borrow_key 下**文档顺序中第一个**
+    有非 0 有效成本的行来填充；仅一轮，只从初算有值行出借。
+    返回 (新 detail, 借用行数)。
+    """
+    d = detail.copy()
+    d[COL_BOR] = ""
+
+    first: dict[str, tuple[str, float]] = {}
+    for _, row in d.iterrows():
+        sku = _norm_str(row[COL_SKU])
+        k = _sku_borrow_key(sku)
+        if not k or not _lender_value_ok(row[COL_XS]):
+            continue
+        if k not in first:
+            rc = _round_cost(float(row[COL_XS]))
+            if rc is not None:
+                first[k] = (sku, float(rc))
+    n_bor = 0
+    for i in d.index:
+        v = d.at[i, COL_XS]
+        if not _needs_borrow_cost(v):
+            continue
+        sku = _norm_str(d.at[i, COL_SKU])
+        k = _sku_borrow_key(sku)
+        if not k or k not in first:
+            continue
+        lender_sku, cost = first[k]
+        if lender_sku == sku:
+            continue
+        d.at[i, COL_XS] = _round_cost(cost)
+        d.at[i, COL_BOR] = lender_sku
+        n_bor += 1
+    return d, n_bor
 
 
 def _latest_xlsx(folder: Path) -> Path:
@@ -389,6 +479,7 @@ def _print_summary(
     out_main: Path,
     out_issue: Path,
     src: Path,
+    n_borrow: int = 0,
 ) -> None:
     print("=" * 60)
     print("EN BOM 成本 -> 赛狐 采购成本 处理完成")
@@ -397,9 +488,11 @@ def _print_summary(
     print(f"主结果:         {out_main}")
     print(f"问题/对账:      {out_issue}")
     print(
-        f"BOM 去重行: {n_detail}；有绍兴发货成本数值: {n_bom_cost}；"
+        f"BOM 去重行: {n_detail}；绍兴发货成本可填(非 0、含同前缀借用): {n_bom_cost}；"
         f"需留空采购成本(导入时): {n_detail - n_bom_cost}"
     )
+    if n_borrow:
+        print(f"其中同「品类-面料-尺寸」前缀借用成本行数: {n_borrow}")
     print(
         f"Sheet1 可导入行(赛狐有该 SKU): {n_sheet1}；"
         f"仅EN有: {n_en_only}；仅赛狐有: {n_sai_only}"
@@ -439,8 +532,24 @@ def main() -> int:
 
     raw = _read_bom_excel(src)
     pr = _process_bom_dataframe(raw, str(src))
-    det = pr.detail
-    n_bom_filled = int(sum(1 for v in det[COL_XS] if _value_present(v)))
+    det, n_borrow = _apply_sku_borrow(pr.detail)
+    if n_borrow and pr.issues and str(pr.issues[0].get("类型")) == "汇总":
+        pr.issues[0]["说明"] = (
+            str(pr.issues[0].get("说明", ""))
+            + f"；同「品类-面料-尺寸」前缀借用成本行数={n_borrow}"
+        )
+    if n_borrow:
+        pr.issues.append(
+            {
+                "类型": "同前缀成本借用",
+                "产品编号": "",
+                "说明": (
+                    f"对绍兴发货成本缺失、或初算为 0 的行，按「-」分节(≥4 节取前 3 节为键)，"
+                    f"用同键下首次出现的非 0 成本作参照，明细见「{COL_BOR}」"
+                ),
+            }
+        )
+    n_bom_filled = int(sum(1 for v in det[COL_XS] if _lender_value_ok(v)))
 
     saihu_set: set[str] | None = None
     saihu_path_str = "（--skip-saihu-match）"
@@ -486,6 +595,7 @@ def main() -> int:
         out_main,
         out_issue,
         src,
+        n_borrow=n_borrow,
     )
     return 0
 
