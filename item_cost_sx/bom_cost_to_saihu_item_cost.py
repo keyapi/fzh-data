@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-从 EN「产品BOM成本列表」xlsx 计算「绍兴发货成本」；用赛狐「商品导出」的 SKU 列作白名单，Sheet1
-仅含两边交集。赛狐侧「采购成本」不接受 0：缺数或计算结果为 0 时均导出为空白。
+从 EN「产品BOM成本列表」xlsx 计算「绍兴发货成本」；用赛狐「商品导出」的 SKU 列作白名单，工作表
+「商品」仅含两边交集（与赛狐导入模板一致，不可使用默认名 Sheet1）。赛狐侧「采购成本」不接受 0：缺数或计算结果为 0 时均导出为空白。
 若 BOM 未维护导致绍兴发货成本缺失，可按下划线分段：产品编号以「-」分节，对至少 4 节者取前 3
 节为「品类-面料-尺寸」键，在表内用同键下首次出现的**非 0 有效**成本作借用；明细列「成本借用自」标记来源行。
 
@@ -58,7 +58,7 @@ OUT_DETAIL_COLS = [
     COL_ISSUE,
 ]
 
-SAI_HU_SHEET = "Sheet1"
+SAI_HU_SHEET = "商品"
 DETAIL_SHEET = "BOM处理明细"
 ISSUE_SHEET = "问题汇总"
 SHEET_EN_ONLY = "对账_仅EN有"
@@ -494,7 +494,7 @@ def _print_summary(
     if n_borrow:
         print(f"其中同「品类-面料-尺寸」前缀借用成本行数: {n_borrow}")
     print(
-        f"Sheet1 可导入行(赛狐有该 SKU): {n_sheet1}；"
+        f"工作表「{SAI_HU_SHEET}」可导入行(赛狐有该 SKU): {n_sheet1}；"
         f"仅EN有: {n_en_only}；仅赛狐有: {n_sai_only}"
     )
     print("=" * 60)
@@ -515,7 +515,7 @@ def main() -> int:
     ap.add_argument(
         "--skip-saihu-match",
         action="store_true",
-        help="不做赛狐交集，Sheet1=全部 BOM 行（慎用）",
+        help=f"不做赛狐交集，工作表「{SAI_HU_SHEET}」=全部 BOM 行（慎用）",
     )
     ap.add_argument("--source", type=Path, default=None, help="指定单个 BOM xlsx，默认取目录中最新")
     args = ap.parse_args()
@@ -570,7 +570,7 @@ def main() -> int:
         if "；赛狐可导入行" not in s0:
             pr.issues[0]["说明"] = (
                 s0
-                + f"；赛狐可导入行(Sheet1)={n_inter}；"
+                + f"；赛狐可导入行(工作表「{SAI_HU_SHEET}」)={n_inter}；"
                 f"仅EN有={len(en_only)}；仅赛狐有={len(saihu_only)}"
             )
 
