@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """
 从 EN「产品BOM成本列表」xlsx 计算「绍兴发货成本」；用赛狐「商品导出」的 SKU 列作白名单，工作表
-「商品」仅含两边交集（与赛狐导入模板一致，不可使用默认名 Sheet1）。赛狐侧「采购成本」不接受 0：缺数或计算结果为 0 时均导出为空白。
+「商品」仅含两边交集（与赛狐导入模板一致，不可使用默认名 Sheet1）。赛狐侧「采购成本」不接受 0：缺数或计算结果为 0 时均导出为空白。有有效采购成本时同写「采购备注」
+（前缀 EN绍兴发货成本- 加该行「绍兴发货方式」），避免被误认为完整采购成本。
 若 BOM 未维护导致绍兴发货成本缺失，可按下划线分段：产品编号以「-」分节，对至少 4 节者取前 3
 节为「品类-面料-尺寸」键，在表内用同键下首次出现的**非 0 有效**成本作借用；明细列「成本借用自」标记来源行。
 
@@ -59,6 +60,9 @@ OUT_DETAIL_COLS = [
 ]
 
 SAI_HU_SHEET = "商品"
+# 赛狐「商品」表可导入列：*SKU、采购成本(CNY)、采购备注
+COL_SAIHU_REMARK = "采购备注"
+SAIHU_REMARK_PREFIX = "EN绍兴发货成本-"
 DETAIL_SHEET = "BOM处理明细"
 ISSUE_SHEET = "问题汇总"
 SHEET_EN_ONLY = "对账_仅EN有"
@@ -359,7 +363,7 @@ def _read_bom_excel(path: Path) -> pd.DataFrame:
 def _saihu_import_frame(
     detail: pd.DataFrame, saihu_set: set[str] | None
 ) -> pd.DataFrame:
-    """两列 *SKU, 采购成本；仅赛狐中存在的行；缺数/0 用 None，写盘后再清 NaN。"""
+    """列 *SKU、采购成本(CNY)、采购备注；仅赛狐中存在的行；缺数/0 用 None，写盘后再清 NaN。"""
     sk = detail[COL_SKU].map(_norm_str)
     if saihu_set is not None:
         m = sk.isin(saihu_set)
@@ -369,11 +373,24 @@ def _saihu_import_frame(
     n = len(sub)
     sku_col: list[str] = []
     cost_col: list[Any] = []
+    remark_col: list[Any] = []
     for i in range(n):
         sku_col.append(_norm_str(sub[COL_SKU].iloc[i]))
         v = sub[COL_XS].iloc[i]
-        cost_col.append(_saihu_purchase_cost_export(v))
-    return pd.DataFrame({"*SKU": sku_col, "采购成本(CNY)": cost_col})
+        exported = _saihu_purchase_cost_export(v)
+        cost_col.append(exported)
+        if exported is None:
+            remark_col.append(None)
+        else:
+            mode = _norm_str(sub[COL_MODE].iloc[i]) if COL_MODE in sub.columns else ""
+            remark_col.append(f"{SAIHU_REMARK_PREFIX}{mode}")
+    return pd.DataFrame(
+        {
+            "*SKU": sku_col,
+            "采购成本(CNY)": cost_col,
+            COL_SAIHU_REMARK: remark_col,
+        }
+    )
 
 
 def _detail_with_sai_col(
