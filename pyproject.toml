@@ -1,0 +1,16 @@
+[project]
+name = "saihu-data-pipeline"
+version = "0.1.0"
+description = "赛狐/ERPNext/通途数据一致性维护工具集"
+requires-python = ">=3.10"
+dependencies = [
+    "pandas",
+    "openpyxl",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["multi_attr_saihu", "category", "item_cost_sx"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

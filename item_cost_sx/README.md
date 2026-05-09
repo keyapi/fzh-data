@@ -41,7 +41,8 @@
 - `pandas`、`openpyxl`
 
 ```bash
-pip install pandas openpyxl
+# 在仓库根目录
+uv sync
 ```
 
 ---
@@ -168,6 +169,7 @@ flowchart TD
 | 2026-04-27 | 主结果中采购成本工作表名由 `Sheet1` 改为 **`商品`**，以符合赛狐导入；更新 README 与脚本说明。 |
 | 2026-04-27 | `商品` 表增加 **`采购备注`** 列：有 `采购成本(CNY)` 时填 `EN绍兴发货成本-`+`绍兴发货方式`；与脚本常量 `SAIHU_REMARK_PREFIX`、`COL_SAIHU_REMARK` 一致。 |
 | 2026-04-27 | 约定：下表「日期」列**一律填本文档更新当日**；本节前与 [文档维护约定](#文档维护约定重要) 已同步。 |
+| 2026-05-09 | 项目整理：依赖安装改为根目录 `uv sync`；新增 [AGENT_HANDOFF.md](AGENT_HANDOFF.md) 供 Agent 使用。 |
 
 *（之后每次功能或行为变更，请在此表追加一行。）*
 

@@ -1,7 +1,7 @@
 # 赛狐 / ERPNext / 通途 数据流水线 — Agent 交接说明
 
 > **用途**：本文件供在新工作区（例如打开 `D:\Work\赛狐\Cursor`）后接手任务的 Agent 阅读，以恢复业务背景、脚本职责与使用方式。  
-> **代码位置**：与本文件同目录的 3 个 Python 脚本（历史文件夹名：`导入多属性商品`, 已改为 `multi_attr_saihu`）。
+> **代码位置**：与本文件同目录的 3 个 Python 脚本（目录 `multi_attr_saihu/`）。
 
 ---
 
@@ -9,11 +9,10 @@
 
 | 说明 | 内容 |
 |------|------|
-| **历史路径** | `D:\Work\赛狐\Cursor\导入多属性商品\` |
-| **已改为英文目录名**（便于上层 Agent / CI） | 已改为 `multi_attr_saihu`；重命名后已更新本文档中的路径描述。 |
-| **脚本互相依赖** | `erp_tongtu_bridge.py` **import** `erpnext_to_saihu` 中的 `_default_spu_from_sku`、`load_spu_status_maps`。三文件应保持在 **同一目录** 或调整 `PYTHONPATH` / 包结构。 |
+| **脚本互相依赖** | `erp_tongtu_bridge.py` **import** `erpnext_to_saihu` 中的 `_default_spu_from_sku`、`load_spu_status_maps`。三文件应保持在 **同一目录**。 |
+| **外部引用** | `category/build_saihu_category_import.py` 通过 `importlib.util` 动态导入本目录 `erpnext_to_saihu` 的 `_default_spu_from_sku`。 |
 
-**依赖**：`pandas`、`openpyxl`（`pip install pandas openpyxl`）。
+**依赖**：`pandas`、`openpyxl`（根目录 `uv sync` 安装）。
 
 **Git**：仓库内 `.gitignore` 忽略 `*.xlsx`（大文件不提交）；通常只跟踪 `.py`、本 `md`、`.gitignore`。
 
