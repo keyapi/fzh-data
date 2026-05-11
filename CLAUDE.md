@@ -118,6 +118,57 @@ module_dir/
 - **Rule**: This document is the first thing every AI agent reads. Stale information here causes repeated mistakes
 - **Commit message**: `docs: CLAUDE.md <what changed>`
 
+### 10. Module docs must follow code changes
+- **Rule**: When modifying a module's `.py` script, check if its `README.md` or `AGENT_HANDOFF.md` need updating. At minimum:
+  - Column name constants changed → update both docs
+  - Default paths changed → update both docs
+  - Business rules changed → update both docs
+  - New CLI args added → update both docs
+- **Consequence of not doing this**: Future agents (and humans) will use wrong column names, wrong paths, or misunderstand the business logic — causing bugs that look like "the script is broken" but are actually documentation drift
+- **Checklist before committing any `.py` change**:
+  1. Did I change any `COL_*` constant? → grep the md files for the old column name
+  2. Did I change any `_DEFAULT_*` path? → grep the md files for the old path
+  3. Did I add/remove a CLI argument? → update the usage section in README.md
+  4. Did I change a calculation rule? → update the business rules section in both docs
+
+### 11. Data source origins (who provides each Excel)
+When debugging missing columns or format changes, knowing which system produces each file is essential:
+
+| 数据文件 | 来源系统 | 导出/操作人 | 关键列可能变动 |
+|----------|----------|------------|--------------|
+| 物料导出 (含/不含 通途SKU) | ERPNext | 开发者导出 | 属性列名、物料编码格式 |
+| 通途普通商品 | 通途 | 运营导出 | SKU别名格式 |
+| 赛狐商品导出 | 赛狐 Saihu | 运营导出 | 列顺序、新增列 |
+| 赛狐导入模板 | 赛狐 Saihu | 运营下载 | 列名固定（按赛狐规范） |
+| 商品分类导出 | 赛狐 Saihu | 运营导出 | 分类层级列名 |
+| EN物料属性 | ERPNext (EN) | 开发者维护 | 款式ID、在售、赛狐分类 |
+| BOM 成本列表 | ERPNext (EN) | 开发者导出 | Query Report 列名 |
+| 重量模板 (手工) | ERPNext + 人工 | 同事下载后手工填 | 手填列名由同事约定 |
+
+### 12. Left-merge / SKU whitelist pattern
+- **Pattern used by**: `item_cost_sx`, `item_weight_size`
+- **Concept**: 赛狐 already has a fixed set of SKUs. The import file must contain exactly those SKUs — no more, no fewer
+- **Implementation**: Read 赛狐商品导出 → get `set(SKU)` → use as whitelist. Left-join saihu SKUs to source data. Unmatched saihu rows get empty values; unmatched source rows are reported but excluded from the import sheet
+- **Why**: 赛狐 will reject imports with SKUs not in its system, but will also skip updating SKUs not in the import file
+
+### 13. Template-based output writing
+- **Pattern used by**: `multi_attr_saihu/erpnext_to_saihu.py`, `item_weight_size/build_saihu_weight_import.py`, `category/build_saihu_category_import.py`
+- **Concept**: Open the 赛狐 template `.xlsx` with `openpyxl`, clear data rows (keep row 1 headers + hidden sheets), write new data, save as output
+- **Why**: Templates contain hidden sheets (data validation dropdowns like `g/kg/oz/lb`) and formatting that must be preserved for 赛狐 to accept the import
+- **Caution**: Do NOT create a new workbook from scratch with `pd.ExcelWriter` for template-based outputs — it will lose hidden sheets and fail 赛狐 validation
+
+### 14. Windows + Chinese path encoding
+- **Problem**: Shell commands with Chinese paths fail with `UnicodeEncodeError` or garbled output
+- **Fix**: Use `PYTHONIOENCODING=utf-8` env var, or use Python's `pathlib` to handle files instead of shell `mv`/`cp`
+- **Rule**: For file operations involving Chinese filenames, prefer Python (`shutil`, `pathlib`) over shell commands
+- **CRLF warnings**: Expected on Windows, harmless. Git auto-converts LF→CRLF on checkout
+
+### 15. uv.lock is committed
+- **Rule**: `uv.lock` IS tracked in git. It locks dependency versions for reproducibility
+- **Regenerate**: Run `uv lock` (or `uv sync`) after changing `pyproject.toml` dependencies. Commit the updated `uv.lock`
+
 ## Module docs location
 
 Human-readable README.md and agent-oriented AGENT_HANDOFF.md live in each module directory. Read both files before modifying any script — they contain business rules, data flow details, CLI reference, and known issues that are not repeated here.
+
+When you modify a module's `.py` script, check the module's README.md and AGENT_HANDOFF.md for stale content — see Lesson #10 above.
