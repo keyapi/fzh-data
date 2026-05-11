@@ -475,19 +475,19 @@ def main() -> int:
         "--weight-data",
         type=Path,
         default=None,
-        help="彭建已填的重量数据 xlsx（默认在 ../item_weight_size/ 中自动选择含「重尺」的最新文件）",
+        help="彭建已填的重量数据 xlsx（默认在 ./数据源/ 中自动选择含「重尺」的最新文件）",
     )
     ap.add_argument(
         "--saihu-export",
         type=Path,
         default=None,
-        help="赛狐商品导出 xlsx（默认在 ../item_weight_size/ 中自动选择含「商品导出」「填重尺」的最新文件）",
+        help="赛狐商品导出 xlsx（默认在 ./数据源/ 中自动选择含「商品导出」「填重尺」的最新文件）",
     )
     ap.add_argument(
         "--template",
         type=Path,
         default=None,
-        help="赛狐商品重尺导入模板 xlsx（默认在 ../item_weight_size/ 中自动选择含「模板」「商品重尺」的最新文件）",
+        help="赛狐商品重尺导入模板 xlsx（默认在 ./数据源/ 中自动选择含「模板」「商品重尺」的最新文件）",
     )
     ap.add_argument("--out-dir", type=Path, default=_DEFAULT_OUT_DIR, help="输出目录")
     args = ap.parse_args()

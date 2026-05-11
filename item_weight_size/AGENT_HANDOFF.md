@@ -1,4 +1,4 @@
-# item_size_weight — Agent 交接说明
+# item_weight_size — Agent 交接说明
 
 > **脚本**: `build_saihu_weight_import.py`（单一主脚本）  
 > **人读文档**: [README.md](README.md)
@@ -16,7 +16,7 @@
 ## 2. 管道步骤
 
 ```
-../item_weight_size/*.xlsx
+./数据源/*.xlsx
   → _read_saihu_export → SKU + spu 列表（2214 行）
   → _read_weight_data → 重量模板（798 行，含 5 个手填字段）
   → _build_mapped_rows:
@@ -94,7 +94,7 @@ class MappedRow:
 ## 6. 命令行
 
 ```bash
-cd item_size_weight
+cd item_weight_size
 python build_saihu_weight_import.py
 python build_saihu_weight_import.py --weight-data path/to/data.xlsx
 python build_saihu_weight_import.py --template path/to/template.xlsx
@@ -107,9 +107,9 @@ python build_saihu_weight_import.py --out-dir custom_output
 
 | 角色 | 默认查找规则 |
 |------|-------------|
-| 重量数据 | `../item_weight_size/` 下文件名含「重尺」的最新 xlsx |
-| 赛狐导出 | `../item_weight_size/` 下文件名含「商品导出」+「填重尺」的最新 xlsx |
-| 模板 | `../item_weight_size/` 下文件名含「模板」+「商品重尺」的最新 xlsx |
+| 重量数据 | `./数据源/` 下文件名含「重尺数据」的最新 xlsx |
+| 赛狐导出 | `./数据源/` 下文件名含「商品导出」+「填重尺」的最新 xlsx |
+| 模板 | `./数据源/` 下文件名含「模板」+「商品重尺」的最新 xlsx |
 | 输出 | `./out/` |
 
 `_ROOT = _DIR.parent`（工作区根目录）。
