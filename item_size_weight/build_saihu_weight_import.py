@@ -80,10 +80,11 @@ _OUT_SKIP_COLS = frozenset({
 
 # ── 问题报告 sheet 名 ──────────────────────────────
 SHEET_SUMMARY = "汇总"
-SHEET_WT_MISSING_LWH = "重量模板_长宽高不全"
-SHEET_WT_NO_MATCH = "重量模板_未匹配赛狐SKU"
-SHEET_SX_NO_MATCH = "赛狐SKU_未匹配重量模板"
-SHEET_BOX_DEFAULTED = "装箱量_已默认1"
+SHEET_UNFILLED_DETAIL = "未填充SKU明细"
+SHEET_WT_MISSING_LWH = "重量模板_长宽高不全(去重)"
+SHEET_WT_NO_MATCH = "重量模板_未匹配任何赛狐SKU"
+SHEET_SX_NO_MATCH = "赛狐SKU_无对应重量模板"
+SHEET_BOX_DEFAULTED = "装箱量_已默认1(去重)"
 
 # ── 匹配键 ─────────────────────────────────────────
 _WEIGHT_KEY_PREFIX = "ZLMB#"
@@ -203,7 +204,7 @@ def _build_mapped_rows(
     saihu_df: pd.DataFrame,
     weight_df: pd.DataFrame,
     issues: list[dict[str, Any]],
-) -> tuple[list[MappedRow], list[dict[str, Any]]]:
+) -> tuple[list[MappedRow], dict[str, list[dict[str, Any]]]]:
     """核心匹配与映射。"""
 
     # 重量模板 → dict[key, row]
@@ -219,24 +220,35 @@ def _build_mapped_rows(
     for w in wt_dup_warn:
         issues.append({"类型": "重量模板键重复", "说明": w})
 
-    # 收集各报告数据
+    # ── 逐行匹配 ──
     wt_matched_keys: set[str] = set()
-    wt_lwh_incomplete: list[dict[str, Any]] = []
-    box_defaulted: list[dict[str, Any]] = []
+    # 按重量模板去重的集合：记录每个模板被多少 SKU 引用
+    wt_missing_lwh_set: dict[str, dict[str, Any]] = {}  # key -> info
+    wt_missing_lwh_sku_count: dict[str, int] = {}        # key -> affected SKU count
+    wt_box_defaulted_set: dict[str, dict[str, Any]] = {} # key -> info
 
     mapped: list[MappedRow] = []
     sx_unmatched: list[dict[str, Any]] = []
+    unfilled_detail: list[dict[str, Any]] = []          # 每个未填充 SKU 一行
 
     for _i, sx_row in saihu_df.iterrows():
         sku = _norm(sx_row[COL_SX_SKU])
+        spu = _norm(sx_row.get(COL_SX_SPU, ""))
         key = _saihu_match_key(sku)
 
+        # ── 情况 1: 无法匹配 ──
         if not key or key not in wt_map:
             mapped.append(MappedRow(sku=sku))
+            reason = "SKU 少于 3 段，无法提取匹配键" if not key else f"匹配键 {key!r} 在重量模板中不存在"
+            unfilled_detail.append({
+                "SKU": sku, "spu": spu, "匹配键": key or "(无)",
+                "未填充原因": reason,
+            })
             if key:
-                sx_unmatched.append({"SKU": sku, "spu": _norm(sx_row.get(COL_SX_SPU, "")), "匹配键": key})
-            else:
-                sx_unmatched.append({"SKU": sku, "spu": _norm(sx_row.get(COL_SX_SPU, "")), "匹配键": "无法解析(少于3段)"})
+                sx_unmatched.append({
+                    "SKU": sku, "spu": spu, "匹配键": key,
+                    "说明": "该匹配键在彭建重量模板中不存在，无法获取重尺数据",
+                })
             continue
 
         wt_row = wt_map[key]
@@ -246,6 +258,7 @@ def _build_mapped_rows(
         w = _to_float(wt_row.get(COL_WT_PKG_W))
         h = _to_float(wt_row.get(COL_WT_PKG_H))
 
+        # ── 情况 2: 匹配成功但长宽高不全 ──
         if not (_value_present(l) and _value_present(w) and _value_present(h)):
             missing_cols = []
             if not _value_present(l):
@@ -254,41 +267,47 @@ def _build_mapped_rows(
                 missing_cols.append(COL_WT_PKG_W)
             if not _value_present(h):
                 missing_cols.append(COL_WT_PKG_H)
-            wt_lwh_incomplete.append({
-                "物料编码": _norm(wt_row[COL_WT_CODE]),
-                "款式ID": _norm(wt_row.get(COL_WT_STYLE, "")),
-                "物料组": _norm(wt_row.get(COL_WT_GROUP, "")),
-                "匹配键": key,
-                "缺失列": ", ".join(missing_cols),
+            reason = f"已匹配重量模板 {_norm(wt_row[COL_WT_CODE])}，但缺: {', '.join(missing_cols)}"
+            unfilled_detail.append({
+                "SKU": sku, "spu": spu, "匹配键": key,
+                "未填充原因": reason,
             })
+            if key not in wt_missing_lwh_set:
+                wt_missing_lwh_set[key] = {
+                    "物料编码": _norm(wt_row[COL_WT_CODE]),
+                    "款式ID": _norm(wt_row.get(COL_WT_STYLE, "")),
+                    "物料组": _norm(wt_row.get(COL_WT_GROUP, "")),
+                    "匹配键": key,
+                    "缺失列": ", ".join(missing_cols),
+                }
+                wt_missing_lwh_sku_count[key] = 0
+            wt_missing_lwh_sku_count[key] += 1
             mapped.append(MappedRow(sku=sku))
             continue
 
+        # ── 情况 3: 匹配成功且长宽高齐全 → 正常填充 ──
         gross = _to_float(wt_row.get(COL_WT_GROSS_WEIGHT))
         box_qty_raw = _to_float(wt_row.get(COL_WT_BOX_QTY))
 
-        # 装箱量缺省 → 1（长宽高都有值时）
         box_qty: int = 1
         if _value_present(box_qty_raw):
             box_qty = max(1, int(box_qty_raw))
         else:
-            box_defaulted.append({
-                "物料编码": _norm(wt_row[COL_WT_CODE]),
-                "款式ID": _norm(wt_row.get(COL_WT_STYLE, "")),
-                "匹配键": key,
-                "已默认装箱量": 1,
-            })
+            if key not in wt_box_defaulted_set:
+                wt_box_defaulted_set[key] = {
+                    "物料编码": _norm(wt_row[COL_WT_CODE]),
+                    "款式ID": _norm(wt_row.get(COL_WT_STYLE, "")),
+                    "物料组": _norm(wt_row.get(COL_WT_GROUP, "")),
+                    "匹配键": key,
+                    "已默认装箱量": 1,
+                    "说明": "彭建未填写装箱量，因长宽高有值，按规则自动设为 1",
+                }
 
-        # 计算输出值
-        # 箱规 = 包装长宽高
-        # 单箱重量(kg) = 实重(g) × 装箱量 ÷ 1000
-        # 商品包装规格高 = 包装高 ÷ 装箱量
         box_weight: float | None = None
         if _value_present(gross) and gross is not None:
             box_weight = round(gross * box_qty / 1000.0, 8)
 
-        pkg_weight: float | None = gross  # 暂按单个重量理解
-
+        pkg_weight: float | None = gross
         pkg_h_val = round(_safe_div(h, float(box_qty)), 8) if h is not None else None
 
         mapped.append(MappedRow(
@@ -304,7 +323,7 @@ def _build_mapped_rows(
             pkg_weight=pkg_weight,
         ))
 
-    # 收集重量模板未匹配的
+    # ── 收集重量模板未匹配的（在 wt_map 中但没被任何赛狐 SKU 引用）──
     wt_unmatched: list[dict[str, Any]] = []
     for key, row in wt_map.items():
         if key not in wt_matched_keys:
@@ -312,25 +331,43 @@ def _build_mapped_rows(
                 "物料编码": _norm(row[COL_WT_CODE]),
                 "款式ID": _norm(row.get(COL_WT_STYLE, "")),
                 "物料组": _norm(row.get(COL_WT_GROUP, "")),
+                "物料名称": _norm(row.get(COL_WT_NAME, "")),
                 "匹配键": key,
+                "说明": "该重量模板的匹配键在赛狐商品导出中找不到任何 SKU（可能赛狐尚未建档，或键不匹配）",
             })
 
-    # 汇总
+    # ── 汇总 ──
+    n_sx_unmatched = len(sx_unmatched)
+    n_lwh_incomplete = len(unfilled_detail) - n_sx_unmatched
     n_filled = sum(1 for m in mapped if m.box_l is not None)
+    n_wt_lwh_keys = len(wt_missing_lwh_set)
+    n_wt_box_def_keys = len(wt_box_defaulted_set)
+
     issues.insert(0, {
         "类型": "汇总",
-        "说明": (
-            f"赛狐 SKU 总数={len(saihu_df)}；"
-            f"已填充重尺={n_filled}；"
-            f"未匹配/长宽高不全={len(saihu_df) - n_filled}"
-        ),
+        "赛狐SKU总数": len(saihu_df),
+        "已填充重尺": n_filled,
+        "未填充合计": len(saihu_df) - n_filled,
+        "未填充_无匹配": n_sx_unmatched,
+        "未填充_匹配但缺长宽高": n_lwh_incomplete,
+        "重量模板总数": len(wt_map),
+        "重量模板_长宽高不全(去重模板数)": n_wt_lwh_keys,
+        "重量模板_未匹配任何赛狐SKU": len(wt_unmatched),
+        "装箱量_已默认1(去重模板数)": n_wt_box_def_keys,
     })
 
+    # 去重后加「影响SKU数」列
+    wt_lwh_report: list[dict[str, Any]] = []
+    for key, info in wt_missing_lwh_set.items():
+        info["影响SKU数"] = wt_missing_lwh_sku_count.get(key, 0)
+        wt_lwh_report.append(info)
+
     return mapped, {
-        SHEET_WT_MISSING_LWH: wt_lwh_incomplete,
+        SHEET_UNFILLED_DETAIL: unfilled_detail,
+        SHEET_WT_MISSING_LWH: wt_lwh_report,
         SHEET_WT_NO_MATCH: wt_unmatched,
         SHEET_SX_NO_MATCH: sx_unmatched,
-        SHEET_BOX_DEFAULTED: box_defaulted,
+        SHEET_BOX_DEFAULTED: list(wt_box_defaulted_set.values()),
     }
 
 
@@ -370,12 +407,13 @@ def _write_output(
 
 def _write_issues(out_path: Path, issues: list[dict], reports: dict[str, list[dict]]) -> None:
     with pd.ExcelWriter(out_path, engine="openpyxl") as w:
-        # 汇总
+        # 汇总（单行多列）
         if issues:
             pd.DataFrame(issues).to_excel(w, sheet_name=SHEET_SUMMARY, index=False)
 
         # 各分类报告
         sheets_order = [
+            SHEET_UNFILLED_DETAIL,
             SHEET_WT_MISSING_LWH,
             SHEET_WT_NO_MATCH,
             SHEET_SX_NO_MATCH,
@@ -392,27 +430,39 @@ def _write_issues(out_path: Path, issues: list[dict], reports: dict[str, list[di
 def _print_summary(
     n_saihu: int,
     n_filled: int,
+    n_sx_unmatched: int,
+    n_lwh_incomplete: int,
+    n_wt_lwh_keys: int,
+    n_wt_unmatched: int,
+    n_box_def: int,
     reports: dict[str, list[dict]],
     out_main: Path,
     out_issues: Path,
 ) -> None:
+    n_unfilled = n_saihu - n_filled
+    n_total_unfilled_detail = len(reports.get(SHEET_UNFILLED_DETAIL, []))
     print("=" * 60)
     print("赛狐 商品重尺导入 — 处理完成")
     print("=" * 60)
     print(f"主结果:         {out_main}")
     print(f"问题报告:       {out_issues}")
-    print(f"赛狐 SKU 总数: {n_saihu}")
-    print(f"已填充重尺:     {n_filled}")
-    print(f"未填充:         {n_saihu - n_filled}")
-    for label, key in [
-        ("重量模板_长宽高不全", SHEET_WT_MISSING_LWH),
-        ("重量模板_未匹配赛狐SKU", SHEET_WT_NO_MATCH),
-        ("赛狐SKU_未匹配重量模板", SHEET_SX_NO_MATCH),
-        ("装箱量_已默认1", SHEET_BOX_DEFAULTED),
-    ]:
-        n = len(reports.get(key, []))
-        if n:
-            print(f"  {label}: {n} 条")
+    print(f"赛狐 SKU 总数:   {n_saihu}")
+    print(f"已填充重尺:       {n_filled}")
+    print(f"未填充合计:       {n_unfilled}")
+    print(f"  其中 未匹配:    {n_sx_unmatched} 行 (赛狐 SKU 找不到对应重量模板)")
+    print(f"  其中 缺长宽高:  {n_lwh_incomplete} 行 (匹配到但重量模板长宽高不全)")
+    print(f"---")
+    print(f"重量模板长宽高不全(去重): {n_wt_lwh_keys} 个模板")
+    print(f"重量模板未匹配任何赛狐SKU: {n_wt_unmatched} 个模板")
+    print(f"装箱量已默认1(去重):       {n_box_def} 个模板")
+    print(f"---")
+    print(f"详见 {out_issues.name}:")
+    print(f"  「{SHEET_SUMMARY}」- 总览")
+    print(f"  「{SHEET_UNFILLED_DETAIL}」- 每个未填充 SKU 的原因 ({n_total_unfilled_detail} 行)")
+    print(f"  「{SHEET_WT_MISSING_LWH}」- 长宽高不全的重量模板 (去重, 含影响SKU数)")
+    print(f"  「{SHEET_WT_NO_MATCH}」- 未匹配的重量模板")
+    print(f"  「{SHEET_SX_NO_MATCH}」- 未匹配的赛狐 SKU")
+    print(f"  「{SHEET_BOX_DEFAULTED}」- 装箱量被默认设为 1 的模板")
     print("=" * 60)
 
 
@@ -482,7 +532,18 @@ def main() -> int:
     _write_issues(out_issues, issues, reports)
 
     n_filled = sum(1 for r in rows if r.box_l is not None)
-    _print_summary(len(saihu_df), n_filled, reports, out_main, out_issues)
+    n_sx_unmatched = len(reports.get(SHEET_SX_NO_MATCH, []))
+    n_unfilled = len(saihu_df) - n_filled
+    n_lwh_incomplete = n_unfilled - n_sx_unmatched
+    n_wt_lwh_keys = len(reports.get(SHEET_WT_MISSING_LWH, []))
+    n_wt_unmatched = len(reports.get(SHEET_WT_NO_MATCH, []))
+    n_box_def = len(reports.get(SHEET_BOX_DEFAULTED, []))
+    _print_summary(
+        len(saihu_df), n_filled,
+        n_sx_unmatched, n_lwh_incomplete,
+        n_wt_lwh_keys, n_wt_unmatched, n_box_def,
+        reports, out_main, out_issues,
+    )
     return 0
 
 
