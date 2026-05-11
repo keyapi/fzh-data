@@ -8,7 +8,7 @@
 
 长宽高三者全部有值才写入；装箱量缺省时若长宽高有值则默认 1。
 
-数据源默认从 ../item_weight_size/ 读取。
+数据源默认从 ./数据源/ 读取。
 
 使用：
   python build_saihu_weight_import.py
@@ -35,7 +35,7 @@ _DIR = Path(__file__).resolve().parent
 os.chdir(_DIR)
 _ROOT = _DIR.parent
 
-_DEFAULT_WEIGHT_DIR = _ROOT / "item_weight_size"
+_DEFAULT_WEIGHT_DIR = _DIR / "数据源"
 _DEFAULT_OUT_DIR = _DIR / "out"
 
 # ── 彭建重量模板 列名 ──────────────────────────────

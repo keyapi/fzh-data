@@ -9,7 +9,7 @@ dependencies = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["multi_attr_saihu", "category", "item_cost_sx", "item_size_weight"]
+packages = ["multi_attr_saihu", "category", "item_cost_sx", "item_weight_size"]
 
 [build-system]
 requires = ["hatchling"]

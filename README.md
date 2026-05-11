@@ -15,7 +15,7 @@ flowchart LR
         ma[multi_attr_saihu<br/>多属性商品导入]
         ct[category<br/>商品分类导入]
         ic[item_cost_sx<br/>采购成本导入]
-        sw[item_size_weight<br/>商品重尺导入]
+        sw[item_weight_size<br/>商品重尺导入]
     end
 
     subgraph 目标
@@ -52,7 +52,7 @@ flowchart LR
     ├── bom_cost_to_saihu_item_cost.py
     ├── README.md
     └── AGENT_HANDOFF.md
-└── item_size_weight/           # 商品重尺导入
+└── item_weight_size/           # 商品重尺导入
     ├── build_saihu_weight_import.py
     ├── README.md
     └── AGENT_HANDOFF.md
@@ -65,7 +65,7 @@ flowchart LR
 | `multi_attr_saihu` | 多属性商品导入 + 通途配对 | ERP 物料导出、通途商品、物料属性 | 赛狐商品导入（按在售/库存拆分） |
 | `category` | 商品 4 级分类生成 | 商品导出、物料属性、分类导出 | 赛狐分类导入 + 校验报告 |
 | `item_cost_sx` | EN BOM 成本转采购成本 | BOM 成本列表、商品导出 | 赛狐采购成本导入 + 对账报告 |
-| `item_size_weight` | 国外发货重尺导入 | 重量模板（手工填写）、商品导出 | 赛狐重尺导入 + 问题报告 |
+| `item_weight_size` | 国外发货重尺导入 | 重量模板（手工填写）、商品导出 | 赛狐重尺导入 + 问题报告 |
 
 四个模块**相互独立**，无代码依赖（`category` 仅动态导入 `multi_attr_saihu` 的 `_default_spu_from_sku` 函数）。
 
@@ -85,7 +85,7 @@ python build_saihu_category_import.py
 cd ../item_cost_sx
 python bom_cost_to_saihu_item_cost.py
 
-cd ../item_size_weight
+cd ../item_weight_size
 python build_saihu_weight_import.py
 ```
 

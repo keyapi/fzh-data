@@ -11,7 +11,7 @@ Each module runs from its own directory (`os.chdir()` on startup), has **no code
 | `multi_attr_saihu/` | `erpnext_to_saihu.py`, `erp_tongtu_bridge.py`, `tongtu_sku_explode.py` | ERPNext/Tongtu → Saihu multi-attribute product import |
 | `category/` | `build_saihu_category_import.py` | EN material attributes + Saihu category tree → 4-level category import |
 | `item_cost_sx/` | `bom_cost_to_saihu_item_cost.py` | EN BOM cost → Saihu purchase cost import |
-| `item_size_weight/` | `build_saihu_weight_import.py` | EN weight template → Saihu product size/weight import |
+| `item_weight_size/` | `build_saihu_weight_import.py` | EN weight template → Saihu product size/weight import |
 
 Each module has a `README.md` (for humans) and an `AGENT_HANDOFF.md` (for AI agents). Read both before modifying code.
 
