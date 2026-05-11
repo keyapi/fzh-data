@@ -509,7 +509,7 @@ def main() -> int:
             )
         return max(cands, key=lambda x: x.stat().st_mtime)
 
-    wt_path = args.weight_data or _find_file("重尺")
+    wt_path = args.weight_data or _find_file("重尺数据")
     saihu_path = args.saihu_export or _find_file("商品导出", "填重尺")
     tpl_path = args.template or _find_file("模板", "商品重尺")
     out_dir: Path = args.out_dir
