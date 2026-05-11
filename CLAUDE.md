@@ -112,6 +112,12 @@ module_dir/
 - **Shared venv**: The entire project uses ONE `.venv` at repo root. All modules share the same pandas/openpyxl installation
 - **`uv run` vs direct python**: `uv run python` creates the venv on first use; subsequent runs use cached venv
 
+### 9. Keep this document updated
+- **Rule**: Every time a new mistake is made and fixed, or a new convention is established, add an entry to this Lessons Learned section **immediately**
+- **Rule**: When a module's behavior, data flow, or conventions change, update both this CLAUDE.md and the module's README.md / AGENT_HANDOFF.md
+- **Rule**: This document is the first thing every AI agent reads. Stale information here causes repeated mistakes
+- **Commit message**: `docs: CLAUDE.md <what changed>`
+
 ## Module docs location
 
 Human-readable README.md and agent-oriented AGENT_HANDOFF.md live in each module directory. Read both files before modifying any script — they contain business rules, data flow details, CLI reference, and known issues that are not repeated here.
