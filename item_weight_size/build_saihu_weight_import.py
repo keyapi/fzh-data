@@ -22,7 +22,6 @@ from __future__ import annotations
 import argparse
 import math
 import os
-import shutil
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -377,20 +376,20 @@ def _write_output(
     out_path: Path,
     rows: list[MappedRow],
 ) -> None:
-    """复制模板后用 pandas 覆写「商品」sheet，保留隐藏 sheet 和数据验证。"""
+    """读取模板表头，用 pd.ExcelWriter 直接写新的 xlsx（不保留隐藏 sheet）。"""
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy(template_path, out_path)
 
-    # 构建 DataFrame，保持模板列顺序
-    df = pd.DataFrame([r.to_template_dict() for r in rows])
-    # 确保列顺序与模板一致
+    # 读取模板表头列顺序
     template_cols = pd.read_excel(template_path, sheet_name=SHEET_MAIN, nrows=0).columns.tolist()
+
+    # 构建 DataFrame
+    df = pd.DataFrame([r.to_template_dict() for r in rows])
     for c in template_cols:
         if c not in df.columns:
             df[c] = None
     df = df[template_cols]
 
-    with pd.ExcelWriter(out_path, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
+    with pd.ExcelWriter(out_path, engine='openpyxl') as writer:
         df.to_excel(writer, sheet_name=SHEET_MAIN, index=False)
 
 
