@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import math
 import os
+import shutil
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -29,7 +30,6 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
-from openpyxl import load_workbook
 
 _DIR = Path(__file__).resolve().parent
 os.chdir(_DIR)
@@ -377,32 +377,21 @@ def _write_output(
     out_path: Path,
     rows: list[MappedRow],
 ) -> None:
-    wb = load_workbook(template_path)
-    if SHEET_MAIN not in wb.sheetnames:
-        raise ValueError(f"模板缺工作表 {SHEET_MAIN!r}: {wb.sheetnames}")
-    ws = wb[SHEET_MAIN]
-
-    # 获取模板表头顺序
-    headers = [ws.cell(1, c).value for c in range(1, ws.max_column + 1)]
-
-    # 清空数据行（保留表头）
-    if ws.max_row > 1:
-        ws.delete_rows(2, ws.max_row - 1)
-
-    for r, row in enumerate(rows, start=2):
-        d = row.to_template_dict()
-        for c, h in enumerate(headers, start=1):
-            v = d.get(h)
-            if h in _OUT_SKIP_COLS:
-                ws.cell(row=r, column=c, value=None)
-            elif v is None or (isinstance(v, float) and pd.isna(v)):
-                ws.cell(row=r, column=c, value=None)
-            else:
-                ws.cell(row=r, column=c, value=v)
-
+    """复制模板后用 pandas 覆写「商品」sheet，保留隐藏 sheet 和数据验证。"""
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    wb.save(out_path)
-    wb.close()
+    shutil.copy(template_path, out_path)
+
+    # 构建 DataFrame，保持模板列顺序
+    df = pd.DataFrame([r.to_template_dict() for r in rows])
+    # 确保列顺序与模板一致
+    template_cols = pd.read_excel(template_path, sheet_name=SHEET_MAIN, nrows=0).columns.tolist()
+    for c in template_cols:
+        if c not in df.columns:
+            df[c] = None
+    df = df[template_cols]
+
+    with pd.ExcelWriter(out_path, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
+        df.to_excel(writer, sheet_name=SHEET_MAIN, index=False)
 
 
 def _write_issues(out_path: Path, issues: list[dict], reports: dict[str, list[dict]]) -> None:
