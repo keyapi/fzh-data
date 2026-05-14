@@ -238,37 +238,22 @@ def write_with_template_simple(
     data_rows: list[dict[str, Any]],
     sheet_name: str = "商品",
 ):
-    """Load template workbook, replace 商品 data rows, save."""
-    from openpyxl import load_workbook
+    """Copy template then overwrite sheet with pd.ExcelWriter(mode='a')."""
+    import shutil
 
-    wb = load_workbook(template_path)
-    if sheet_name not in wb.sheetnames:
-        raise ValueError(f"Sheet {sheet_name!r} not in template")
+    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy(template_path, out_path)
 
-    ws = wb[sheet_name]
-    # Read header from first row
-    header = []
-    for j in range(1, ws.max_column + 1):
-        v = ws.cell(row=1, column=j).value
-        header.append(v)
+    # 读取模板表头
+    template_cols = pd.read_excel(template_path, sheet_name=sheet_name, nrows=0).columns.tolist()
+    df = pd.DataFrame(data_rows)
+    for c in template_cols:
+        if c not in df.columns:
+            df[c] = None
+    df = df[template_cols]
 
-    col_index = {h: i + 1 for i, h in enumerate(header) if h is not None}
-
-    max_r = ws.max_row
-    if max_r > 1:
-        ws.delete_rows(2, max_r - 1)
-
-    start_row = 2
-    for offset, rowdict in enumerate(data_rows):
-        r = start_row + offset
-        for k, v in rowdict.items():
-            if k not in col_index:
-                continue
-            if pd.isna(v) or v is None or v == "":
-                continue
-            ws.cell(row=r, column=col_index[k], value=v)
-
-    wb.save(out_path)
+    with pd.ExcelWriter(out_path, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
+        df.to_excel(writer, sheet_name=sheet_name, index=False)
 
 
 def main():

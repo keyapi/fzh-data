@@ -174,7 +174,8 @@ python erp_tongtu_bridge.py [ERP通途SKU.xlsx] -t 通途SKU别名炸开.xlsx
 2. **`erpnext_to_saihu` 误选 `赛狐配对*.xlsx`**：自动选源要求 **`物料导出`** 且 **非** `产品 通途SKU`。  
 3. **`erp_tongtu_bridge` 误选 `通途SKU别名炸开`**：要求文件名同时含 **`物料导出`** 与 **`通途SKU`**。  
 4. **Excel 保存 Permission denied**：关闭正在打开的目标 xlsx 再运行。  
-5. **排序**：赛狐导入脚本最终按 **`*SKU` 纯字符串序**（非自然数序）；`200` 可能排在 `60` 前。
+5. **排序**：赛狐导入脚本最终按 **`*SKU` 纯字符串序**（非自然数序）；`200` 可能排在 `60` 前。  
+6. **xlsx 输出**：`write_with_template_simple()` 已修复——不再使用 `openpyxl.load_workbook()+save()`（会破坏 Data Validation），改用 `shutil.copy` + `pd.ExcelWriter(mode='a')`
 
 ---
 
