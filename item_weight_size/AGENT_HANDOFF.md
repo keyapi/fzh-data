@@ -126,4 +126,14 @@ python build_saihu_weight_import.py --out-dir custom_output
 
 ---
 
+## 9. 已解决问题
+
+### xlsx 输出导致赛狐导入失败
+- **现象**: 生成的 xlsx 赛狐导入不成功，手动用 Excel 打开另存后就正常
+- **根因**: `openpyxl.load_workbook()` + `wb.save()` 会丢弃模板中的 Data Validation 扩展
+- **修复**: 改用 `shutil.copy` 复制模板 → `pd.ExcelWriter(mode='a')` 覆写 `商品` sheet；后续简化为纯 `pd.ExcelWriter` 新建，因隐藏 sheet 非导入必须
+- **提交**: `ae14d32` / `6cc3276`
+
+---
+
 *若与代码不一致，以 `build_saihu_weight_import.py` 为准。*
