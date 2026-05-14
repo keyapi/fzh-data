@@ -16,8 +16,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import shutil
+
 import pandas as pd
-from openpyxl import load_workbook
 
 _DIR = Path(__file__).resolve().parent
 _ROOT = _DIR.parent
@@ -290,22 +291,6 @@ def load_style_saihu_map(path: str | Path) -> tuple[dict[str, str], list[str]]:
     return out, warnings
 
 
-def _append_sheet(
-    wb: Any, title: str, records: list[dict[str, str]], at_end: bool = True
-) -> None:
-    if title in wb.sheetnames:
-        del wb[title]
-    idx = len(wb.sheetnames) if at_end else 1
-    w = wb.create_sheet(title, idx)
-    if not records:
-        w.append(["(无数据)"])
-        return
-    keys = list(records[0].keys())
-    w.append(keys)
-    for r in records:
-        w.append([r.get(k, "") for k in keys])
-
-
 def _write_excel(
     template_path: Path,
     out_path: Path,
@@ -314,36 +299,39 @@ def _write_excel(
     sku_error_rows: list[dict[str, str]],
     style_audit: list[dict[str, str]],
 ) -> None:
-    wb = load_workbook(template_path)
-    if SHEET_MAIN not in wb.sheetnames:
-        raise ValueError(f"模板缺工作表 {SHEET_MAIN!r}: {wb.sheetnames}")
-    ws = wb[SHEET_MAIN]
-    if ws.max_row > 1:
-        ws.delete_rows(2, ws.max_row - 1)
-    for r, row in enumerate(rows, start=2):
-        for c, k in enumerate(OUT_COLS, start=1):
-            v = row[k]
-            if v == "" or v is None:
-                ws.cell(row=r, column=c, value=None)
-            else:
-                ws.cell(row=r, column=c, value=v)
-
-    if SHEET_REPORT in wb.sheetnames:
-        del wb[SHEET_REPORT]
-    wsr = wb.create_sheet(SHEET_REPORT, len(wb.sheetnames))
-    if report:
-        keys = [k for k in report[0] if not str(k).startswith("__")]
-        wsr.append(keys)
-        for rep in report:
-            wsr.append([rep.get(k, "") for k in keys])
-    else:
-        wsr.append(["(无核对数据)"])
-
-    _append_sheet(wb, SHEET_ERRORS, sku_error_rows, at_end=True)
-    _append_sheet(wb, SHEET_STYLE_AUDIT, style_audit, at_end=True)
-
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    wb.save(out_path)
+    shutil.copy(template_path, out_path)
+
+    # 读取模板表头
+    template_cols = pd.read_excel(template_path, sheet_name=SHEET_MAIN, nrows=0).columns.tolist()
+
+    # 构建主 DataFrame，用模板覆写「商品」sheet
+    df_main = pd.DataFrame(rows)
+    for c in template_cols:
+        if c not in df_main.columns:
+            df_main[c] = None
+    df_main = df_main[template_cols]
+
+    with pd.ExcelWriter(out_path, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
+        df_main.to_excel(writer, sheet_name=SHEET_MAIN, index=False)
+
+    # 用 pandas 追加其余 sheet
+    with pd.ExcelWriter(out_path, engine='openpyxl', mode='a', if_sheet_exists='overlay') as writer:
+        if report:
+            keys = [k for k in report[0] if not str(k).startswith("__")]
+            pd.DataFrame(report)[keys].to_excel(writer, sheet_name=SHEET_REPORT, index=False)
+        else:
+            pd.DataFrame({"(无核对数据)": []}).to_excel(writer, sheet_name=SHEET_REPORT, index=False)
+
+        if sku_error_rows:
+            pd.DataFrame(sku_error_rows).to_excel(writer, sheet_name=SHEET_ERRORS, index=False)
+        else:
+            pd.DataFrame({"(无数据)": []}).to_excel(writer, sheet_name=SHEET_ERRORS, index=False)
+
+        if style_audit:
+            pd.DataFrame(style_audit).to_excel(writer, sheet_name=SHEET_STYLE_AUDIT, index=False)
+        else:
+            pd.DataFrame({"(无数据)": []}).to_excel(writer, sheet_name=SHEET_STYLE_AUDIT, index=False)
 
 
 def main() -> int:

@@ -121,6 +121,7 @@ python build_saihu_category_import.py --category-export "新分类导出.xlsx"
 - **权限错误**: 关闭 Excel 中打开的目标文件后重试
 - **动态导入失败**: 确保 `multi_attr_saihu/erpnext_to_saihu.py` 存在且包含 `_default_spu_from_sku`
 - **分类匹配偏差**: 物料表中的「赛狐分类」必须与「商品分类导出」中的末级类名**完全一致**（含空格）
+- **xlsx 输出**: `_write_excel` 已修复——不再使用 `openpyxl.load_workbook()+save()`（会破坏 Data Validation），改用 `shutil.copy` + `pd.ExcelWriter(mode='a')`
 
 ---
 
