@@ -151,19 +151,27 @@ When debugging missing columns or format changes, knowing which system produces 
 - **Implementation**: Read 赛狐商品导出 → get `set(SKU)` → use as whitelist. Left-join saihu SKUs to source data. Unmatched saihu rows get empty values; unmatched source rows are reported but excluded from the import sheet
 - **Why**: 赛狐 will reject imports with SKUs not in its system, but will also skip updating SKUs not in the import file
 
-### 13. Template-based output writing
-- **Pattern used by**: `multi_attr_saihu/erpnext_to_saihu.py`, `item_weight_size/build_saihu_weight_import.py`, `category/build_saihu_category_import.py`
-- **Concept**: Open the 赛狐 template `.xlsx` with `openpyxl`, clear data rows (keep row 1 headers + hidden sheets), write new data, save as output
-- **Why**: Templates contain hidden sheets (data validation dropdowns like `g/kg/oz/lb`) and formatting that must be preserved for 赛狐 to accept the import
-- **Caution**: Do NOT create a new workbook from scratch with `pd.ExcelWriter` for template-based outputs — it will lose hidden sheets and fail 赛狐 validation
+### 13. openpyxl destroys Data Validation on save
+- **Problem**: `openpyxl.load_workbook(template) → ws.delete_rows/write → wb.save()` caused 赛狐 import to fail silently. 赛狐 confirmed the xlsx "格式有问题". Manually opening in Excel and re-saving fixed it
+- **Root cause**: openpyxl issues warning "Data Validation extension is not supported and will be removed" when loading, and does NOT preserve it on save. 赛狐 templates have data validation (dropdown cells for g/kg/oz/lb) that gets lost
+- **Fix**: Do NOT use `openpyxl.load_workbook()` + `wb.save()` for 赛狐 import outputs. Instead:
+  - For outputs needing hidden sheets: `shutil.copy(template) → pd.ExcelWriter(mode='a', if_sheet_exists='replace') → to_excel()`
+  - For outputs NOT needing hidden sheets: just `pd.ExcelWriter() → to_excel(sheet_name='商品')`
+- **Affects**: ALL modules that generate 赛狐 import files from templates
+- **Verified fix**: `item_weight_size` — tested and confirmed working with 赛狐 import. Other modules with same pattern need the same fix
 
-### 14. Windows + Chinese path encoding
+### 14. Template-based output writing (DEPRECATED — see #13)
+- **Old pattern** (do NOT use): `openpyxl.load_workbook(template) → modify → wb.save()`
+- **New pattern**: `shutil.copy(template, out) → pd.ExcelWriter(out, mode='a') → to_excel(sheet_name='商品')` or just `pd.ExcelWriter() → to_excel(sheet_name='商品')` if hidden sheets aren't needed
+- **Rule**: 赛狐 templates may contain hidden sheets and data validation, but the data validation is NOT essential for import. What matters is the correct sheet name (`商品`) and column headers
+
+### 15. Windows + Chinese path encoding
 - **Problem**: Shell commands with Chinese paths fail with `UnicodeEncodeError` or garbled output
 - **Fix**: Use `PYTHONIOENCODING=utf-8` env var, or use Python's `pathlib` to handle files instead of shell `mv`/`cp`
 - **Rule**: For file operations involving Chinese filenames, prefer Python (`shutil`, `pathlib`) over shell commands
 - **CRLF warnings**: Expected on Windows, harmless. Git auto-converts LF→CRLF on checkout
 
-### 15. uv.lock is committed
+### 16. uv.lock is committed
 - **Rule**: `uv.lock` IS tracked in git. It locks dependency versions for reproducibility
 - **Regenerate**: Run `uv lock` (or `uv sync`) after changing `pyproject.toml` dependencies. Commit the updated `uv.lock`
 
