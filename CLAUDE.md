@@ -264,7 +264,17 @@ When debugging missing columns or format changes, knowing which system produces 
 - **Pattern**: 生成两个文件——导入用（过滤掉不允许的值）+ 参考用（全量）。文件名需有明确区分词（如 `_导入_` vs `_全量参考_`）
 - **Applied by**: `stock_init` (过滤成本=0), `item_cost_sx` (过滤成本=0)
 
-### 20. 问题报告统一格式
+### 20. Git worktree: commit from worktree, not main repo
+- **Problem**: Shell CWD keeps resetting to worktree, but `git` commands operated on main repo (`D:\Work\赛狐\Cursor`), causing commits to land on `master` instead of worktree branch
+- **Fix**: Before commit, verify with `git branch` that `*` is on `claude/<name>`
+- **If mistake happens**: `git reset --hard <prev>` on master, `git cherry-pick <hash>` from reflog on worktree
+- **Also**: `Edit` tool file_path must point to worktree path, not main repo path
+
+### 21. 每次踩坑立即写文档，不等提醒
+- **Problem**: CLAUDE.md §9 写了「立即记录」，但多次由用户提醒后才补记
+- **Rule**: 操作完成后自查「学到新东西了吗？」如果是，当前回合即写入 md，commit 前确认已写入
+
+### 22. 问题报告统一格式
 - **Problem**: 早期脚本输出 `.txt` 报告，信息扁平无结构，不方便筛选和分析
 - **Fix**: 所有模块的问题报告统一为多 sheet 的 `.xlsx`，参照 `item_weight_size` 的 `_write_issues()` 模式：每个 sheet 对应一个问题类别，含明细列。空 sheet 写占位行「（无数据）」
 - **Pattern**: `汇总` sheet（单行多列总览）+ N 个明细 sheet（每个处理节点可能产生的边界问题）+ `每仓统计` sheet（按仓库维度汇总）
