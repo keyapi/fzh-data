@@ -1,8 +1,75 @@
 # CLAUDE.md
 
+## 通用守则 (Andrej Karpathy)
+
+> 源自 [Andrej Karpathy 对 LLM 编码陷阱的观察](https://x.com/karpathy/status/2015883857489522876)，由 [andrej-karpathy-skills](https://github.com/multica-ai/andrej-karpathy-skills) 整理。
+> **权衡取舍**：这些准则偏向谨慎而非速度。对于琐碎任务，自行判断。
+
+### 守则 1：编码前思考
+
+**不假设。不隐藏困惑。呈现权衡。**
+
+实施前：
+- 明确陈述你的假设。如果不确定，询问。
+- 如果存在多种解释，呈现它们——不要默默选择。
+- 如果存在更简单的方法，说出来。在有必要时提出异议。
+- 如果有不清楚的地方，停下来。指出困惑之处。提问。
+
+### 守则 2：简洁优先
+
+**用最少代码解决问题。不做投机性工作。**
+
+- 不添加未被要求的功能。
+- 不为一次性代码创建抽象。
+- 不添加未被要求的"灵活性"或"可配置性"。
+- 不为不可能发生的场景做错误处理。
+- 如果你写了 200 行但 50 行就够了，重写它。
+
+扪心自问："资深工程师会觉得这过于复杂吗？"如果是，就简化。
+
+### 守则 3：精准修改
+
+**只碰必须碰的。只清理自己造成的混乱。**
+
+编辑已有代码时：
+- 不要"改进"相邻的代码、注释或格式。
+- 不要重构没坏的东西。
+- 匹配已有风格，即使你更倾向于不同的写法。
+- 如果注意到无关的死代码，提一下——不要删除它。
+
+当你的改动产生孤儿时：
+- 删除因你的改动而不再使用的导入/变量/函数。
+- 不要删除已存在的死代码，除非被要求。
+
+检验标准：每一行被改动代码都应该能直接追溯到用户的请求。
+
+### 守则 4：目标驱动执行
+
+**定义成功标准。循环验证直到达成。**
+
+将任务转化为可验证的目标：
+- "添加校验" → "先写非法输入测试用例，再让它们通过"
+- "修 bug" → "先写一个能复现的测试，再让它通过"
+- "重构 X" → "确保重构前后测试都通过"
+
+对于多步骤任务，陈述简要计划：
+```
+1. [步骤] → 验证: [检查点]
+2. [步骤] → 验证: [检查点]
+3. [步骤] → 验证: [检查点]
+```
+
+强成功标准让你能独立循环推进。弱标准（"让它能工作"）需要不断澄清。
+
+**这些准则生效的标志：** diff 中不必要的改动变少、因过度复杂导致的返工变少、澄清性问题在实施前出现而非在犯错后。
+
+---
+
+## 项目信息
+
 Project: saihu-data-pipeline — 赛狐/ERPNext/通途 数据一致性维护 Python 工具集。
 
-## Four independent modules
+## Five independent modules
 
 Each module runs from its own directory (`os.chdir()` on startup), has **no code dependencies** on each other (except `category` dynamically imports `_default_spu_from_sku` from `multi_attr_saihu/erpnext_to_saihu.py`).
 
@@ -12,6 +79,7 @@ Each module runs from its own directory (`os.chdir()` on startup), has **no code
 | `category/` | `build_saihu_category_import.py` | EN material attributes + Saihu category tree → 4-level category import |
 | `item_cost_sx/` | `bom_cost_to_saihu_item_cost.py` | EN BOM cost → Saihu purchase cost import |
 | `item_weight_size/` | `build_saihu_weight_import.py` | EN weight template → Saihu product size/weight import |
+| `stock_init/` | `build_saihu_stock_init.py` | Tongtu multi-warehouse inventory + EN BOM cost → Saihu stock initial-value import |
 
 Each module has a `README.md` (for humans) and an `AGENT_HANDOFF.md` (for AI agents). Read both before modifying code.
 
@@ -91,7 +159,9 @@ module_dir/
 
 ### 5. 赛狐 purchase cost: zero equals empty
 - **Rule**: 赛狐 treats `采购成本=0` the same as empty — it will NOT import 0 values
-- **Fix**: Use `_openpyxl_clear_column_nan()` to post-process and nullify zeros in the cost column before saving
+- **Fix**: Generate two output files: import file (filter out cost=0), reference file (keep all). Use clear filenames to prevent mix-up
+- **Confirmed**: 2026-05-14 实测验证，赛狐导入文件含成本=0的行会静默跳过
+- **Pattern used by**: `item_cost_sx`, `stock_init`
 
 ### 6. SKU matching by prefix (shared across modules)
 - **Concept**: SKU format is `款式ID-面料-尺寸-颜色` (4 segments). The first 3 segments (`款式ID-面料-尺寸`) define a "group key"
@@ -144,9 +214,10 @@ When debugging missing columns or format changes, knowing which system produces 
 | EN物料属性 | ERPNext (EN) | 开发者维护 | 款式ID、在售、赛狐分类 |
 | BOM 成本列表 | ERPNext (EN) | 开发者导出 | Query Report 列名 |
 | 重量模板 (手工) | ERPNext + 人工 | 同事下载后手工填 | 手填列名由同事约定 |
+| 通途合并库存结存清单 | 通途 | 运营导出 | 仓库列名、SKU格式 |
 
 ### 12. Left-merge / SKU whitelist pattern
-- **Pattern used by**: `item_cost_sx`, `item_weight_size`
+- **Pattern used by**: `item_cost_sx`, `item_weight_size`, `stock_init`
 - **Concept**: 赛狐 already has a fixed set of SKUs. The import file must contain exactly those SKUs — no more, no fewer
 - **Implementation**: Read 赛狐商品导出 → get `set(SKU)` → use as whitelist. Left-join saihu SKUs to source data. Unmatched saihu rows get empty values; unmatched source rows are reported but excluded from the import sheet
 - **Why**: 赛狐 will reject imports with SKUs not in its system, but will also skip updating SKUs not in the import file
@@ -174,6 +245,31 @@ When debugging missing columns or format changes, knowing which system produces 
 ### 16. uv.lock is committed
 - **Rule**: `uv.lock` IS tracked in git. It locks dependency versions for reproducibility
 - **Regenerate**: Run `uv lock` (or `uv sync`) after changing `pyproject.toml` dependencies. Commit the updated `uv.lock`
+
+### 17. 赛狐库存共享策略 (Shared Inventory)
+- **Problem**: 入库时如果填了店铺/FNSKU（专属库存），后续成本补录单必须匹配全部字段（仓库+SKU+店铺+FNSKU）。补录导入时任一维度不匹配就失败（实测：加了店铺但缺FNSKU仍失败）
+- **Fix**: 开局和日常入库一律使用**共享库存**——店铺、FNSKU 留空。这样成本补录单只需仓库+SKU即可定位并修正成本
+- **Rule**: 如果不需要店铺/FNSKU 维度的库存区分，就不要在入库时填写它们。共享库存是"最简单调账"的基础
+- **Confirmed by**: 赛狐客服回复 + POLAND仓实战测试验证（2026-05-14）+ 三次导入测试（2026-05-15）：A→成功，B新增→成功，B中已存在行→失败（库存初始值导入拒绝已有库存的SKU，符合预期）
+
+### 18. 成本借用策略 (Cost Borrowing by Weight Template)
+- **Problem**: EN BOM 成本列表中，部分产品在目标仓库的成本列为 0。但这些产品与有成本的产品共享同一个「重量模板, 编号」（同款式-面料-尺寸，仅颜色不同）
+- **Source column**: EN 中的 `重量模板, 编号`（如 `ZLMB#KS0001-CMGDTH-100`），去除 `ZLMB#` 前缀得键
+- **Rule**: 每列独立借用。同重量模板键、同成本列内 0→非零。**纯列内操作，不跨列，不限制发货方式**
+- **⚠️ 不精确借用**：颜色变体可能有不同物流属性。借用记录在问题报告 `成本借用记录` sheet 中全量记录
+- **Apply to**: `stock_init` 模块
+
+### 19. 输出文件拆分
+- **Problem**: 赛狐导入文件和参考查看文件混在一起容易用错，导入含0成本行会被赛狐静默跳过
+- **Pattern**: 生成两个文件——导入用（过滤掉不允许的值）+ 参考用（全量）。文件名需有明确区分词（如 `_导入_` vs `_全量参考_`）
+- **Applied by**: `stock_init` (过滤成本=0), `item_cost_sx` (过滤成本=0)
+
+### 20. 问题报告统一格式
+- **Problem**: 早期脚本输出 `.txt` 报告，信息扁平无结构，不方便筛选和分析
+- **Fix**: 所有模块的问题报告统一为多 sheet 的 `.xlsx`，参照 `item_weight_size` 的 `_write_issues()` 模式：每个 sheet 对应一个问题类别，含明细列。空 sheet 写占位行「（无数据）」
+- **Pattern**: `汇总` sheet（单行多列总览）+ N 个明细 sheet（每个处理节点可能产生的边界问题）+ `每仓统计` sheet（按仓库维度汇总）
+- **Rule**: 新模块的问题报告都用此格式。不要用 txt/md/csv
+- **Detail sheets 应包含产品名称列**：方便人工审核时定位产品
 
 ## Module docs location
 
