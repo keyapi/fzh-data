@@ -112,19 +112,19 @@ cd <module_dir> && python <script>.py   # run any script
 
 ### Git workflow (standard process)
 
-1. Development happens on the **worktree branch** (e.g. `claude/romantic-chaplygin-47fe9f`), NOT directly on `master`
-2. After verifying the change works, merge into `master`:
+1. Development happens on the **worktree branch** (e.g. `claude/xxx`), NOT directly on `main`
+2. After verifying the change works, merge into `main`:
    ```bash
    cd D:\Work\赛狐\Cursor
-   git checkout master
-   git merge claude/romantic-chaplygin-47fe9f
+   git checkout main
+   git merge claude/xxx
    ```
-3. Sync the worktree branch back to master so it stays current:
+3. Sync the worktree branch back to main so it stays current:
    ```bash
-   cd .claude/worktrees/romantic-chaplygin-47fe9f
-   git merge master
+   cd .claude/worktrees/xxx
+   git merge main
    ```
-4. Never commit directly to `master` from the worktree — use the branch
+4. Never commit directly to `main` from the worktree — use the branch
 
 ## Lessons learned / Pitfalls
 
@@ -265,9 +265,9 @@ When debugging missing columns or format changes, knowing which system produces 
 - **Applied by**: `stock_init` (过滤成本=0), `item_cost_sx` (过滤成本=0)
 
 ### 20. Git worktree: commit from worktree, not main repo
-- **Problem**: Shell CWD keeps resetting to worktree, but `git` commands operated on main repo (`D:\Work\赛狐\Cursor`), causing commits to land on `master` instead of worktree branch
+- **Problem**: Shell CWD keeps resetting to worktree, but `git` commands operated on main repo (`D:\Work\赛狐\Cursor`), causing commits to land on `main` instead of worktree branch
 - **Fix**: Before commit, verify with `git branch` that `*` is on `claude/<name>`
-- **If mistake happens**: `git reset --hard <prev>` on master, `git cherry-pick <hash>` from reflog on worktree
+- **If mistake happens**: `git reset --hard <prev>` on main, `git cherry-pick <hash>` from reflog on worktree
 - **Also**: `Edit` tool file_path must point to worktree path, not main repo path
 
 ### 21. 每次踩坑立即写文档，不等提醒
