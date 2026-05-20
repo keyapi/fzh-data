@@ -10,14 +10,10 @@ compatibility: >
 metadata:
   module: item_cost_sx
   script: bom_cost_to_saihu_item_cost.py
-  inputs: EN BOM 成本列表 + 赛狐商品导出
-  outputs: 赛狐采购成本导入 + 问题报告
   updated: 2026-05-20
 ---
 
 # 赛狐采购成本导入
-
-## 一句话概括
 
 ERPNext BOM 成本列表 → 计算绍兴发货成本 → 同前缀成本借用 → 生成赛狐采购成本导入。
 
@@ -28,39 +24,15 @@ cd item_cost_sx
 python bom_cost_to_saihu_item_cost.py
 ```
 
-可选参数：
-```bash
-python bom_cost_to_saihu_item_cost.py --bom-dir ../en_bom_cost_list --out-dir out
-python bom_cost_to_saihu_item_cost.py --saihu-commodities "商品导出.xlsx"
-python bom_cost_to_saihu_item_cost.py --skip-saihu-match  # 不过滤赛狐 SKU
-```
+## 管道概要
 
-## 管道
+BOM成本列表 → 去重保留末行 → 计算绍兴发货成本(皮壳/半成品/成品三种公式) → 同前缀成本借用(前3段SKU为键) → 标记赛狐是否存在 → 生成 3 列导入表(*SKU + 采购成本CNY + 采购备注)。
 
-```
-BOM成本列表 → _read_bom_excel → _process_bom_dataframe(去重+计算绍兴发货成本)
-  → _apply_sku_borrow(同前缀借用) → 标记赛狐是否存在
-  → _saihu_import_frame(*SKU + 采购成本CNY + 采购备注) → 输出
-```
+## 硬约束
 
-## 成本计算
-
-| 发货方式 | 公式 |
-|---------|------|
-| 皮壳 | `皮壳成本` |
-| 半成品 | `皮壳成本 + 绍兴包装半成品成本` |
-| 成品 | `绍兴总成本` |
-| 其它/空 | 无法计算，排除 |
-
-## 同前缀成本借用
-
-SKU 按 `-` 分段，≥4段取前 3 段（品类-面料-尺寸）为键。同键下 0→非零 借用，一轮。
-
-## 关键约束
-
-- 工作表名必须 `商品`，非 `Sheet1`
+- 工作表名必须 `商品`，列：`*SKU`、`采购成本(CNY)`、`采购备注`
 - 采购成本=0 的行赛狐静默跳过不导入
-- 列：`*SKU`、`采购成本(CNY)`、`采购备注`
+- 发货方式为空的行排除（无法确定用哪种成本公式）
 
 ## 输出
 
@@ -70,4 +42,4 @@ SKU 按 `-` 分段，≥4段取前 3 段（品类-面料-尺寸）为键。同�
 ## 参考
 
 - [给人看的 README](../../item_cost_sx/README.md)
-- [给 Agent 的详细参考](../../item_cost_sx/AGENT_HANDOFF.md)
+- [Agent 详细参考](../../item_cost_sx/AGENT_HANDOFF.md) — 成本计算公式、同前缀借用详则、命令行参数、函数表

@@ -10,16 +10,12 @@ compatibility: >
 metadata:
   module: item_weight_size
   script: build_saihu_weight_import.py
-  inputs: 重量模板（手工填写） + 赛狐商品导出 + 赛狐重尺模板
-  outputs: 赛狐重尺导入 + 问题报告（4 sheet）
   updated: 2026-05-20
 ---
 
 # 赛狐商品重尺导入
 
-## 一句话概括
-
-同一品类-面料-尺寸的 SKU（仅颜色不同）重尺一致 → 人工维护重量模板 → 脚本匹配赛狐 SKU 填充。
+同一品类-面料-尺寸的 SKU（仅颜色不同）重尺一致 → 人工维护重量模板(ZLMB#前缀) → 脚本匹配赛狐 SKU 填充。
 
 ## 快速启动
 
@@ -28,19 +24,15 @@ cd item_weight_size
 python build_saihu_weight_import.py
 ```
 
-## 管道
+## 管道概要
 
-```
-重量模板(798行, ZLMB#前缀) → _weight_match_key(去ZLMB#得键)
-赛狐商品(2214行) → _saihu_match_key(前3段)
-  → 按键匹配 → 长宽高校验 → 填充字段 → 输出
-```
+重量模板(798行) → 去ZLMB#前缀得键 → 与赛狐SKU(2214行, 取前3段为键)匹配 → 长宽高三者校验 → 填充输出。
 
-## 匹配规则
+## 硬约束
 
-- 赛狐 SKU 前 3 段为键（≥4取[:3], =3全串, <3 无匹配）
-- 重量模板去 `ZLMB#` 前缀得键
 - 长宽高必须三者全部有值才填充
+- 装箱量缺省→1（仅在长宽高都有值时生效）
+- 输出用 `pd.ExcelWriter(sheet_name='商品')`，不复用模板（openpyxl 会破坏 Data Validation）
 
 ## 输出
 
@@ -50,4 +42,4 @@ python build_saihu_weight_import.py
 ## 参考
 
 - [给人看的 README](../../item_weight_size/README.md)
-- [给 Agent 的详细参考](../../item_weight_size/AGENT_HANDOFF.md)
+- [Agent 详细参考](../../item_weight_size/AGENT_HANDOFF.md) — MappedRow 数据类、字段映射全表、校验规则、列名常量
