@@ -36,6 +36,45 @@
 
 Project: fzh-data — FZH 公司数据管道工具集。当前主要用于维护**赛狐 / ERPNext / 通途**三方数据一致性。
 
+## 公司背景 (FZH)
+
+**FZH** 是跨境电商公司，在北美和欧洲销售**家居纺织品**（填充物为 PP棉/海绵的靠枕、沙发等）。
+销售平台：Amazon（北美+欧洲）、Wayfair、Home24、Shopify 等。
+
+### 供应链架构
+
+```
+绍兴工厂 (中国)
+  ├─ 生产皮壳、内胆、半成品
+  ├─ 部分成品直接生产 → FBA / 直接发货
+  │
+  └─ → 海外分公司仓库：
+       ├── USNJ (美东, NJ州) → 填充/压缩/包装/仓储/发货(2C+2B)
+       ├── USTX (美中, TX州) → 同上
+       └── POLAND (波兰)     → 同上
+            │
+            └─ → Amazon FBA / 第三方海外仓
+```
+
+### 赛狐仓库映射
+
+| 公司仓库 | 赛狐仓库名 | 说明 |
+|----------|-----------|------|
+| USNJ 美东仓 | CENTRADE | 已启用 |
+| USTX 美中仓 | DANEEY | 已启用 |
+| POLAND 波兰仓 | POLAND | 已启用 |
+| 绍兴工厂(本地) | — | 未启用（赛狐本地仓限制多） |
+
+> 赛狐有两种仓库类型：**本地仓**（中国仓，更多限制，未启用）和**海外仓**（我们用的 3 个分公司仓）。
+
+### 赛狐平台限制
+
+- 海外仓不能直接通过库存调账修改库存数量和采购单价，需通过**其他入库/其他出库**实现成本调整
+- 采购成本=0 的行赛狐静默跳过不导入
+- 导入模板工作表名必须为 `商品`，Data Validation 丢失会被拒绝
+
+---
+
 ## Skill 索引
 
 每个模块对应一个 Skill（`.claude/skills/<name>/SKILL.md`），Claude 自动按用户触发词加载。详情见各 Skill 文件 + 模块的 `AGENT_HANDOFF.md`。
@@ -180,6 +219,51 @@ If a `.py` change intentionally does NOT require doc updates (typo fix, reformat
 ### Why this matters
 
 The next agent session (whether yours, GQ's, or a colleague's via Claude Desktop) starts by reading CLAUDE.md, SKILL.md, and AGENT_HANDOFF.md. If those files are stale, the agent will make decisions based on wrong information — wasting time and introducing bugs.
+
+---
+
+## Skill 管理规则
+
+### 核心原则
+
+1. **每个模块一个 Skill**，职责单一，不堆砌
+2. **SKILL.md 是入口索引**（< 300 行），只放触发条件、约束、管道概要
+3. **AGENT_HANDOFF.md 放详情**（函数表、字段映射、边界条件、踩坑），按需加载
+4. **description 是触发命中的关键** — 必须包含用户真正会说的自然语言
+5. **所有 skill 文件纳入 git**，可回滚、可协作
+
+### description 编写规则
+
+- 包含用户真正会说出口的词：模块名、动词、数据源名
+- 中英文都要覆盖（如 "库存初始值"+"stock_init"+"通途库存"）
+- 用自然语言短语而非关键词堆砌
+- 明确 NOT 情况：什么情况下**不要**触发此 skill（如 "不要用于采购成本导入"）
+
+### 触发词覆盖规则
+
+description 中必须覆盖以下类型的触发词：
+
+| 类型 | 示例 |
+|------|------|
+| 模块名中英文 | stock_init/库存初始值、item_cost/采购成本、multi_attr/多属性 |
+| 核心动词 | 导入/导出/计算/匹配/生成/校验/配对 |
+| 数据源名 | 通途库存/EN BOM/重量模板/物料属性/分类导出 |
+| 用户习惯说法 | 库存初始化/成本借用/属性炸开/四级分类/通途配对 |
+
+### 编写原则
+
+| 原则 | 说明 |
+|------|------|
+| **SKILL.md < 300 行** | 只保留触发条件、约束、管道概要、输出文件 |
+| **AGENT_HANDOFF.md 放细节** | 函数表、字段映射、CLI 参数、边界条件、踩坑记录 |
+| **去重** | SKILL.md 不重复 CLAUDE.md 内容，不重复 AGENT_HANDOFF.md 内容，用引用代替 |
+| **发现即更新** | 每次脚本修改或新发现边界条件，立即更新 AGENT_HANDOFF.md，不积累记忆负担 |
+
+### 运行规则
+
+- **永远用 `uv run python`** 或 `python`（uv 管理的 venv）
+- **永远用 `uv add <包名>` 加依赖**，自动写入 `pyproject.toml`
+- 每个脚本从模块目录运行：`cd <module_dir> && python <script>.py`
 
 ---
 
