@@ -14,3 +14,7 @@ venv/
 .idea/
 .vscode/
 .cursor/
+
+# Claude session / worktrees
+.claude/
+.playwright-mcp/
