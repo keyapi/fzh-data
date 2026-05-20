@@ -146,6 +146,43 @@ Shell CWD resets to worktree but git commands could operate on main repo. Verify
 
 ---
 
+## Documentation enforcement
+
+**These are NOT guidelines. They are commit-time requirements.** Derived from the principle that stale docs are worse than no docs — the next agent session relies on them being accurate.
+
+### When you modify a `.py` script
+
+1. **Check** if the change affects any of these in `AGENT_HANDOFF.md`:
+   - Function names, signatures, or behavior
+   - Column name constants (`COL_*`)
+   - Field mappings or business rules
+   - CLI arguments or default paths
+   - Boundary conditions or known issues
+2. **If yes** → update `AGENT_HANDOFF.md` **in the same commit**.
+3. **If the module's purpose or scope changed** → update the corresponding SKILL.md `description` YAML field.
+
+### When you fix a bug caused by incorrect assumptions
+
+Add a lesson to the "Lessons learned" section above. Format: Problem → Root cause → Fix → Rule.
+
+### Before committing
+
+Run this self-check:
+
+```
+[ ] .py files changed? → Are corresponding AGENT_HANDOFF.md changes in the same diff?
+[ ] New pitfall discovered? → Added to Lessons learned above?
+[ ] Module scope changed? → SKILL.md description updated?
+```
+
+If a `.py` change intentionally does NOT require doc updates (typo fix, reformatting), explain why in the commit message.
+
+### Why this matters
+
+The next agent session (whether yours, GQ's, or a colleague's via Claude Desktop) starts by reading CLAUDE.md, SKILL.md, and AGENT_HANDOFF.md. If those files are stale, the agent will make decisions based on wrong information — wasting time and introducing bugs.
+
+---
+
 ## Module docs location
 
-Each module has `README.md` (human) + `AGENT_HANDOFF.md` (agent). Read both before modifying code. When you modify a `.py` script, check if its md files need updating.
+Each module has `README.md` (human) + `AGENT_HANDOFF.md` (agent). Read both before modifying code. SKILL.md in `.claude/skills/<name>/` is the agent entry point and references AGENT_HANDOFF.md for details. Never duplicate content between SKILL.md and AGENT_HANDOFF.md — SKILL.md links to AGENT_HANDOFF.md, not copies from it.
