@@ -43,7 +43,7 @@ flowchart LR
 .
 ├── pyproject.toml              # uv 环境管理（Python ≥ 3.10）
 ├── uv.lock                     # 依赖锁定
-├── CLAUDE.md                   # AI Agent 项目上下文（含 22 条踩坑记录）
+├── CLAUDE.md                   # AI Agent 项目上下文
 ├── multi_attr_saihu/           # 多属性商品导入
 │   ├── erpnext_to_saihu.py     #   ERP 纵向物料 → 赛狐多属性
 │   ├── erp_tongtu_bridge.py    #   通途 SKU 配对
@@ -82,13 +82,36 @@ flowchart LR
 
 ## 快速开始
 
-```bash
-# 安装依赖（仓库根目录，只需一次）
-uv sync
+### 1. 环境初始化
 
-# 各模块在自身目录下运行，脚本自动选取最新的数据文件
+```bash
+# 克隆仓库
+git clone git@github.com:keyapi/fzh-data.git
+cd fzh-data
+
+# 安装依赖（只需一次，Python ≥ 3.10）
+uv sync
+```
+
+### 2. 准备数据文件
+
+每个模块需要从对应系统导出数据 XLSX，放入各自的 `数据源/` 子目录。脚本运行时会**自动选取同名的最新文件**（按修改时间），无需手动指定文件名。
+
+| 模块 | 需要放入 `数据源/` 的文件 | 导出系统 |
+|------|--------------------------|----------|
+| `multi_attr_saihu` | 物料属性表、ERP 物料导出、赛狐模板、通途商品导出 | ERPNext / 通途 / 赛狐 |
+| `category` | 赛狐分类导出、赛狐商品导出、分类导入模板 | 赛狐 |
+| `item_cost_sx` | EN BOM 成本列表、赛狐商品导出 | ERPNext / 赛狐 |
+| `item_weight_size` | 重量模板（手工维护）、赛狐商品导出 | 手工 / 赛狐 |
+| `stock_init` | 通途库存结存、EN BOM 成本列表、赛狐商品导出 | 通途 / ERPNext / 赛狐 |
+
+> 具体每个数据文件的列名要求见各模块的 `README.md`。
+
+### 3. 运行脚本
+
+```bash
 cd multi_attr_saihu
-python erpnext_to_saihu.py [物料导出.xlsx] [模板.xlsx] --spu-status "EN物料属性.xlsx"
+python erpnext_to_saihu.py
 
 cd ../category
 python build_saihu_category_import.py
@@ -103,26 +126,37 @@ cd ../stock_init
 python build_saihu_stock_init.py
 ```
 
-## 数据目录约定
+输出文件在各模块的 `out/` 目录，文件名带时间戳（`*_YYYYMMDD_HHMMSS.xlsx`）。
 
-数据文件（`.xlsx`）**不纳入 Git**（`.gitignore` 已忽略）。各模块在自身目录下存放数据：
+---
 
-| 目录 | 用途 |
-|------|------|
-| `multi_attr_saihu/数据源/` | 物料属性表、ERP 导出、赛狐模板、通途源文件 |
-| `category/数据源/` | 赛狐分类导出、分类导入模板 |
-| `item_cost_sx/数据源/` | EN BOM 成本列表、赛狐商品导出 |
-| `item_weight_size/数据源/` | 重量模板（手工填写）、赛狐商品导出 |
-| `stock_init/数据源/` | 通途库存结存、EN BOM 成本列表、赛狐商品导出 |
+## 用 Claude Desktop 操作（推荐）
 
-输出统一在模块下的 `out/` 目录，文件名带时间戳（`*_YYYYMMDD_HHMMSS.xlsx`）。
+非技术同事无需记住命令。安装 [Claude Desktop](https://claude.ai/download) 后，**用 "Open Folder" 打开本仓库**，然后用自然语言说出需求即可。
+
+### 触发词速查
+
+| 你想做什么 | 就说这句话 |
+|-----------|-----------|
+| 生成库存初始值导入 | "**库存初始值导入**" 或 "**stock init**" |
+| 生成采购成本导入 | "**采购成本导入**" 或 "**BOM 成本**" |
+| 生成商品重尺导入 | "**重尺导入**" 或 "**重量尺寸**" |
+| 生成分类导入 | "**商品分类导入**" 或 "**四级分类**" |
+| 生成多属性商品导入 | "**多属性导入**" 或 "**通途配对**" |
+
+### 工作原理
+
+- 根目录的 [`CLAUDE.md`](CLAUDE.md) 包含项目全局上下文（公司背景、技术栈、踩坑记录），Claude 启动时自动加载
+- `.claude/skills/` 下每个模块有独立的 `SKILL.md`，Claude 自动根据你说话的内容匹配对应 Skill
+- 你不需要了解技术细节，Claude 会自己找正确的脚本、数据文件、参数
 
 ## CLAUDE.md — AI Agent 上下文
 
 根目录的 [`CLAUDE.md`](CLAUDE.md) 是本项目的 **Agent 配置文件**，包含：
 - **Andrej Karpathy 通用编码守则** — 所有 AI 修改代码时的行为准则
+- **公司背景** — 供应链架构、赛狐仓库映射
 - **项目技术栈与约定** — 模块结构、代码风格、Git 流程
-- **22 条踩坑记录** — 每个模块常见的错误及已确定的解决方案
+- **16 条踩坑记录** — 每个模块常见的错误及已确定的解决方案
 
 在 Claude Code 或 Claude Desktop 打开此项目时，`CLAUDE.md` 会被自动加载为 Agent 的系统提示。**所有文档修改请同步更新 CLAUDE.md**，避免 Agent 使用过时信息。
 
