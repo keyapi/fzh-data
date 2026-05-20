@@ -16,5 +16,6 @@ venv/
 .cursor/
 
 # Claude session / worktrees
-.claude/
+.claude/worktrees/
+.claude/settings.local.json
 .playwright-mcp/
