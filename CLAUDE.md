@@ -88,7 +88,8 @@ Project: fzh-data — FZH 公司数据管道工具集。当前主要用于维护
 | `multi-attr` | `multi_attr_saihu/` | ERP 纵向物料 → 赛狐多属性 + 通途配对 | 多属性、SPU、物料导出、通途配对 |
 | `en-image-upload` | `EN_API/` | 赛狐图片链接 → ERPNext API 更新物料组主图 | 图片链接、上传图片、物料组主图、EN API |
 
-六个模块**相互独立**（`category` 仅动态导入 `multi_attr` 的一个函数）。
+六个业务模块**相互独立**（`category` 仅动态导入 `multi_attr` 的一个函数）。
+两个**辅助 skill** (`frappe-core-api` / `frappe-errors-api`) 来自 [Frappe_Claude_Skill_Package](https://github.com/OpenAEC-Foundation/Frappe_Claude_Skill_Package) (MIT), 辅助所有 ERPNext API 相关开发调试。
 
 ## Tech stack
 
