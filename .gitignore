@@ -21,3 +21,7 @@ venv/
 .claude/worktrees/
 .claude/settings.local.json
 .playwright-mcp/
+
+# env files (secrets)
+.env
+.env.local

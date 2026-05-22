@@ -86,8 +86,9 @@ Project: fzh-data — FZH 公司数据管道工具集。当前主要用于维护
 | `item-weight` | `item_weight_size/` | 重量模板匹配 → 赛狐商品重尺导入 | 重尺、重量、尺寸、装箱量 |
 | `category` | `category/` | EN 物料属性 + 分类树 → 4 级分类导入 | 商品分类、四级分类、类目 |
 | `multi-attr` | `multi_attr_saihu/` | ERP 纵向物料 → 赛狐多属性 + 通途配对 | 多属性、SPU、物料导出、通途配对 |
+| `en-image-upload` | `EN_API/` | 赛狐图片链接 → ERPNext API 更新物料组主图 | 图片链接、上传图片、物料组主图、EN API |
 
-五个模块**相互独立**（`category` 仅动态导入 `multi_attr` 的一个函数）。
+六个模块**相互独立**（`category` 仅动态导入 `multi_attr` 的一个函数）。
 
 ## Tech stack
 
@@ -182,6 +183,30 @@ After every fix/discovery, write to CLAUDE.md/md files in the same session. Don'
 
 ### 16. Git worktree: commit from worktree, not main repo
 Shell CWD resets to worktree but git commands could operate on main repo. Verify `git branch` shows `* claude/<name>` before commit. If mistake: `git reset --hard <prev>` on main, `git cherry-pick <hash>` on worktree.
+
+### 17. COS 防盗链导致外部图片 URL 在 ERPNext 不显示预览
+赛狐导出的图片链接是 COS URL。直接用 `file_url` 模式创建 File 记录 (Doctype=File, file_url=COS URL)，ERPNext 页面不显示预览。根因: COS 开启了防盗链，浏览器通过 ERPNext 页面加载图片时带 `Referer: ensh.vilavi.cn` → COS 返回 403。修复: 下载图片 → 以真实文件上传 ERPNext → 使用本地 `/files/xxx` 路径。
+
+### 18. ERPNext upload_file API: file_url vs 真实文件上传
+- `upload_file(file_url=...)`: 创建 File 记录但 `file_size=0`, `thumbnail=None`, 不更新父文档字段
+- `upload_file(file=...)` (multipart): 创建 File 记录 `file_size>0`, 但仍不更新父文档字段
+- Item Group 的 image 字段需额外 `PUT /api/resource/Item Group/{name}` 设置
+- 两步缺一不可: File 记录 (UI 显示) + PUT image 字段 (数据存储)
+
+### 19. ERPNext REST API filters/fields 参数格式
+- 必须用 `json.dumps()` 而非手动拼接 JSON 字符串
+- 自定义字段 (custom_*) 在 filters 中需带 doctype 前缀: `[["Item Group", "custom_model_id", "=", "KS0001"]]`
+- `fields` 参数不要包含自定义字段 (会被 "Field not permitted in query" 拒绝)
+- `requests` 的 `params` 参数会自动 URL-encode，不要手动编码
+
+### 20. nginx 返回 417 Expectation Failed
+ERPNext 测试服务器 nginx/1.18.0 对 `Expect: 100-continue` 返回 417。解决: 自定义 `HTTPAdapter` 在 `send()` 中 `request.headers.pop("Expect", None)`。curl 用 `-H "Expect:"` 可绕过。
+
+### 21. .env 文件管理凭证 (stdlib only)
+- `.env` (gitignored) 存真实凭证，`.env.example` (git 跟踪) 为模板
+- 手动解析 `key=value` (stdlib only, 无 python-dotenv 依赖)
+- `os.environ.setdefault()` 确保环境变量优先级高于文件
+- 加载顺序: 系统环境变量 > 模块 `.env` > 项目根 `.env`
 
 ---
 

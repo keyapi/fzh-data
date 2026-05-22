@@ -6,10 +6,11 @@ requires-python = ">=3.10"
 dependencies = [
     "pandas",
     "openpyxl",
+    "requests",
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["multi_attr_saihu", "category", "item_cost_sx", "item_weight_size"]
+packages = ["multi_attr_saihu", "category", "item_cost_sx", "item_weight_size", "EN_API"]
 
 [build-system]
 requires = ["hatchling"]
