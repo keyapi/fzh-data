@@ -196,10 +196,9 @@ def get_warehouse_sku_map(df_tongtu: pd.DataFrame) -> dict[str, set[str]]:
 
 # ── 填入模板 ──────────────────────────────────────────
 
-def fill_template(rows: list[dict], out_path: Path):
-    """复制模板 → openpyxl 写入 → 保存。"""
+def _fill_single_file(rows: list[dict], out_path: Path):
+    """复制模板 → 写入单个仓库的数据 → 保存。"""
     shutil.copy(TEMPLATE_FILE, out_path)
-
     import openpyxl
     wb = openpyxl.load_workbook(out_path)
     ws = wb["基本信息"]
@@ -216,6 +215,20 @@ def fill_template(rows: list[dict], out_path: Path):
         ws.cell(row=row_idx, column=17, value=r.get("other_fee"))        # 其他费用
 
     wb.save(out_path)
+
+
+def fill_templates_by_warehouse(rows: list[dict], out_dir: Path, stamp: str) -> list[Path]:
+    """按仓库拆3个文件: CENTRADE / DANEEY / POLAND。返回文件路径列表。"""
+    out_paths = []
+    for wh in ["CENTRADE", "DANEEY", "POLAND"]:
+        wh_rows = [r for r in rows if r["warehouse"] == wh]
+        if not wh_rows:
+            continue
+        out_path = out_dir / f"赛狐_海外仓备货单_导入_{wh}_{stamp}.xlsx"
+        _fill_single_file(wh_rows, out_path)
+        out_paths.append(out_path)
+        print(f"  {wh}: {len(wh_rows)} 条 → {out_path.name}")
+    return out_paths
 
 
 # ── 主流程 ────────────────────────────────────────────
@@ -266,7 +279,7 @@ def main():
 
     # 6. 逐行拆分三成本
     results = []
-    issues = []  # (sku, reason)
+    issues = []  # [(sku, reason, warehouse?, 客户物料号)]
 
     for _, row in df_bom.iterrows():
         sku = str(row.get(col_map.get(norm_col("产品编号"), ""), "")).strip()
@@ -276,12 +289,12 @@ def main():
         # 发货方式为空 → 跳过
         method_col = col_map.get(norm_col("绍兴发货方式"))
         if method_col is None or pd.isna(row.get(method_col)):
-            issues.append((sku, "发货方式为空"))
+            issues.append((sku, "发货方式为空", "", ""))
             continue
 
         # 赛狐白名单（用产品编号 = 赛狐 SKU）
         if sku not in sai_whitelist:
-            issues.append((sku, "不在赛狐商品列表"))
+            issues.append((sku, "不在赛狐商品列表", "", ""))
             continue
 
         # 通过 BOM 的 客户物料号 匹配通途 SKU → 找仓库
@@ -293,7 +306,7 @@ def main():
         cust_sku = str(row.get(cust_col, "")).strip() if cust_col else ""
         wh_set = wh_map.get(cust_sku, set()) if cust_sku else set()
         if not wh_set:
-            issues.append((sku, f"通途无仓库记录(客户物料号={cust_sku})"))
+            issues.append((sku, "通途无仓库记录", f"客户物料号={cust_sku}" if cust_sku else "客户物料号为空", cust_sku))
             continue
 
         for wh_label in wh_set:
@@ -308,40 +321,44 @@ def main():
 
             cost = split_cost_for_row(row, col_map, wh_key)
             if cost is None:
-                issues.append((sku, f"无法拆分成本 (仓库={wh_label})"))
+                issues.append((sku, "无法拆分成本", wh_label, cust_sku))
                 continue
             results.append(cost)
 
     print(f"拆分结果: {len(results)} 条")
 
-    # 7. 输出
+    # 7. 输出（按仓库拆成 3 个文件）
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     OUT_DIR = OUT_BASE / stamp
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    out_path = OUT_DIR / f"赛狐_海外仓备货单_导入_{stamp}.xlsx"
-    fill_template(results, out_path)
-    print(f"\n导入文件: {out_path} ({len(results)} 条)")
+    out_paths = fill_templates_by_warehouse(results, OUT_DIR, stamp)
 
     # 8. 问题报告
     if issues:
         report_path = OUT_DIR / f"warehouse_restock_问题报告_{stamp}.xlsx"
-        df_issues = pd.DataFrame(issues, columns=["SKU", "原因"])
+        df_issues = pd.DataFrame(issues, columns=["SKU", "原因", "仓库", "客户物料号"])
         df_borrow = pd.DataFrame(borrow_records) if borrow_records else pd.DataFrame(columns=["产品编号", "重量模板", "借用列", "借用值"])
         with pd.ExcelWriter(report_path) as writer:
+            df_summary = df_issues["原因"].value_counts().reset_index()
+            df_summary.columns = ["原因", "数量"]
+            df_summary.to_excel(writer, sheet_name="汇总", index=False)
             df_issues.to_excel(writer, sheet_name="跳过明细", index=False)
             df_borrow.to_excel(writer, sheet_name="成本借用记录", index=False)
-        print(f"问题报告: {report_path} ({len(issues)} 条)")
+        print(f"\n问题报告: {report_path} ({len(issues)} 条)")
 
     # 9. 汇总
     print(f"\n{'=' * 60}")
     print("赛狐 海外仓备货单 — 生成完成")
     print(f"{'=' * 60}")
-    print(f"输出: {out_path}")
-    print(f"SKU-仓库 条目: {len(results)}")
-    print(f"跳过: {len(issues)}")
+    total = len(results)
+    for wh in ["CENTRADE", "DANEEY", "POLAND"]:
+        n = sum(1 for r in results if r["warehouse"] == wh)
+        print(f"  {wh}: {n} 条")
+    print(f"  合计: {total} 条")
+    print(f"  跳过: {len(issues)} 条")
     if borrow_records:
-        print(f"成本借用: {len(borrow_records)} 个单元格")
+        print(f"  成本借用: {len(borrow_records)} 个单元格")
 
 
 if __name__ == "__main__":

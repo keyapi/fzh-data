@@ -6,7 +6,7 @@ EN BOM Cost List → 三成本拆分 → 赛狐海外仓备货单导入。
 
 ```bash
 cd warehouse_restock
-python build_saihu_warehouse_restock.py
+uv run python build_saihu_warehouse_restock.py
 ```
 
 ## 管道

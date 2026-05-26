@@ -24,7 +24,7 @@ EN BOM Cost List → 三成本拆分（绍兴/头程/加工）→ 赛狐海外�
 
 ```bash
 cd warehouse_restock
-python build_saihu_warehouse_restock.py
+uv run python build_saihu_warehouse_restock.py
 ```
 
 ## 管道概要
