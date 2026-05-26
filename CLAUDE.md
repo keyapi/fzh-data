@@ -252,6 +252,15 @@ ERPNext 测试服务器 nginx/1.18.0 对 `Expect: 100-continue` 返回 417。解
 4. 443 端口 Host 名是 `ssh.github.com`，不在 config 的 `Host github.com` 规则内，可能没匹配到指定 key。可 `ssh-add ~/.ssh/id_ed25519_github` 让客户端自动尝试该 key
 5. 大概率 22 端口只是临时抽风，等几分钟重试即可 — 不要误判为权限问题
 
+### 23. 赛狐 其他出库 导入规则
+- **临时单号 = 自定义分组键**（不是系统单号）。同一临时单号的多行合并为**一笔**出库单，不同临时单号拆分
+- 系统单号 (OB2605260546 格式) 是赛狐导入后自动生成的，不可预知
+- 出库模板仅 **1 行表头**（不同于海外仓备货单的 2 行）
+- 同一 (出库仓库+SKU) 已有待确认记录时，新导入会被拒绝
+- **"条"统计** = 父行 + 子行的总数，不是出库单数量
+- Playwright MCP 文件上传受限于项目根目录，需先 `cp` 到 `D:/Work/赛狐/网页自动化/.playwright-mcp/`
+- 赛狐 API 下载需 POST `{"ids":[taskId]}` 获取 COS URL 再下载，不能直接 GET
+
 ---
 
 ## Documentation enforcement
