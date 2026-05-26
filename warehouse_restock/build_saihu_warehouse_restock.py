@@ -217,17 +217,23 @@ def _fill_single_file(rows: list[dict], out_path: Path):
     wb.save(out_path)
 
 
+MAX_BATCH = 1000  # 赛狐限制: 同临时单号不超过1000条
+
 def fill_templates_by_warehouse(rows: list[dict], out_dir: Path, stamp: str) -> list[Path]:
-    """按仓库拆3个文件: CENTRADE / DANEEY / POLAND。返回文件路径列表。"""
+    """按仓库拆文件，超过1000条自动分批次。"""
     out_paths = []
     for wh in ["CENTRADE", "DANEEY", "POLAND"]:
         wh_rows = [r for r in rows if r["warehouse"] == wh]
         if not wh_rows:
             continue
-        out_path = out_dir / f"赛狐_海外仓备货单_导入_{wh}_{stamp}.xlsx"
-        _fill_single_file(wh_rows, out_path)
-        out_paths.append(out_path)
-        print(f"  {wh}: {len(wh_rows)} 条 → {out_path.name}")
+        # 超过1000条时拆分批次
+        batches = [wh_rows[i:i+MAX_BATCH] for i in range(0, len(wh_rows), MAX_BATCH)]
+        for bi, batch in enumerate(batches):
+            tag = f"_{wh}" if len(batches) == 1 else f"_{wh}_p{bi+1}"
+            out_path = out_dir / f"赛狐_海外仓备货单_导入{tag}_{stamp}.xlsx"
+            _fill_single_file(batch, out_path)
+            out_paths.append(out_path)
+            print(f"  {wh}: {len(batch)} 条 → {out_path.name}")
     return out_paths
 
 
