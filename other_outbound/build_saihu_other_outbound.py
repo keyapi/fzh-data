@@ -32,9 +32,10 @@ def auto_select(pattern: str) -> Path:
     return max(candidates, key=lambda f: f.stat().st_mtime)
 
 
-def generate_outbound_rows(df_stock: pd.DataFrame) -> list[dict]:
-    """从库存明细中提取需要出库的行。"""
+def generate_outbound_rows(df_stock: pd.DataFrame) -> tuple[list[dict], list[dict]]:
+    """从库存明细中提取需要出库的行。返回 (正常行, 跳过的组合商品行)。"""
     rows = []
+    skipped = []
     for _, r in df_stock.iterrows():
         sku = str(r.get("SKU", "")).strip()
         wh = str(r.get("仓库", "")).strip()
@@ -46,13 +47,23 @@ def generate_outbound_rows(df_stock: pd.DataFrame) -> list[dict]:
         if available == 0 and defective == 0:
             continue
 
+        # 过滤组合商品 SKU（-ALL 后缀，其他出库不支持）
+        if sku.endswith("-ALL"):
+            skipped.append({
+                "SKU": sku,
+                "仓库": wh,
+                "可用数": available,
+                "原因": "组合商品SKU（-ALL后缀），其他出库不支持",
+            })
+            continue
+
         rows.append({
             "sku": sku,
             "warehouse": wh,
             "可用出库量": available,
             "次品出库量": defective,
         })
-    return rows
+    return rows, skipped
 
 
 def _fill_single_file(rows: list[dict], out_path: Path):
@@ -93,9 +104,12 @@ def main():
             return
         print(f"测试模式: SKU={test_sku}")
 
-    rows = generate_outbound_rows(df_stock)
+    rows, skipped_combo = generate_outbound_rows(df_stock)
     print(f"出库条目: {len(rows)}")
-
+    if skipped_combo:
+        print(f"  跳过的组合商品 SKU (-ALL): {len(skipped_combo)} 个")
+        for s in skipped_combo:
+            print(f"    {s['仓库']} {s['SKU']} (库存={s['可用数']})")
     if not rows:
         print("无需要出库的条目")
         return
@@ -114,6 +128,12 @@ def main():
         avail = sum(r["可用出库量"] for r in wh_rows)
         defect = sum(r["次品出库量"] for r in wh_rows)
         print(f"  {wh}: {len(wh_rows)} 条, 可用={avail}, 次品={defect} → {out_path.name}")
+
+    if skipped_combo:
+        df_skipped = pd.DataFrame(skipped_combo)
+        report_path = OUT_DIR / f"other_outbound_跳过组合商品_{stamp}.xlsx"
+        df_skipped.to_excel(report_path, sheet_name="组合商品跳过", index=False)
+        print(f"\n跳过报告: {report_path}")
 
     print(f"\n输出目录: {OUT_DIR}")
 
