@@ -120,9 +120,10 @@ Project: fzh-data — FZH 公司数据管道工具集。当前主要用于维护
 | `category` | `category/` | EN 物料属性 + 分类树 → 4 级分类导入 | 商品分类、四级分类、类目 |
 | `multi-attr` | `multi_attr_saihu/` | ERP 纵向物料 → 赛狐多属性 + 通途配对 | 多属性、SPU、物料导出、通途配对 |
 | `warehouse-restock` | `warehouse_restock/` | EN BOM → 三成本拆分 → 海外仓备货单导入 | 海外仓备货单、备货单、三成本拆分 |
+| `other-outbound` | `other_outbound/` | 赛狐库存明细 → 其他出库导入（清零库存） | 其他出库、清零库存、出库单 |
 | `en-image-upload` | `EN_API/` | 赛狐图片链接 → ERPNext API 更新物料组主图 | 图片链接、上传图片、物料组主图、EN API |
 
-七个业务模块**相互独立**（`category` 仅动态导入 `multi_attr` 的一个函数）。
+八个业务模块**相互独立**（`category` 仅动态导入 `multi_attr` 的一个函数）。
 两个**辅助 skill** (`frappe-core-api` / `frappe-errors-api`) 来自 [Frappe_Claude_Skill_Package](https://github.com/OpenAEC-Foundation/Frappe_Claude_Skill_Package) (MIT), 辅助所有 ERPNext API 相关开发调试。
 
 ## Tech stack
@@ -271,6 +272,26 @@ ERPNext 测试服务器 nginx/1.18.0 对 `Expect: 100-continue` 返回 417。解
 - 同一 SKU+仓库 在库存明细里可能有**多行**（不同店铺/FNSKU），不能按 SKU+仓库 聚合
 - 生成其他出库文件时，必须逐行保留店铺和 FNSKU，每条对应一行出库
 - 赛狐自定义 popover 多选组件（如商品类型筛选）对 MCP evaluate 不稳定，推荐用 API 参数或商业逻辑（如 `-ALL` 后缀）过滤
+
+### 26. 赛狐海外仓备货单模板与规则
+- 模板**2 行表头**（不同于其他出库的 1 行），7 个 sheet（4 个 hidden Data Validation）
+- 隐蔽限制：**单个备货单 ≤ 500 条**（弹窗未注明，赛狐内部校验）
+- 总计 ≤ 5000 条，超过 500 需拆批次（不同临时单号）
+- 临时单号可选（单批导入时），多批导入需各自不同
+
+### 27. 海外仓备货单模板三成本映射
+- `指定采购单价` = 绍兴发货成本（单价）
+- `物流费用` = 头程运费 × 1000（总金额，赛狐会自动除以数量得单价）
+- `其他费用` = 国外加工成本 × 1000
+- `*头程分摊方式` / `*税费分摊方式` = 自定义
+- `*备货数量` = 1000
+- 赛狐隐性公式: `单个头程费用 = (物流费用 + 其他费用 + 报关税费) / 备货数量`
+
+### 28. MCP 操作赛狐的局限
+- 自定义 select-container 组件用 evaluate 点击不稳定，易误关
+- VXE 表格 checkbox/menu 难定位，excel 导入后对话框被 Playwright timeout 误判
+- 建议核心业务逻辑用 Python 脚本，MCP 仅用于探索和一次性操作
+- 操作前后必须导出备份库存明细
 
 ---
 
