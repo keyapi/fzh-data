@@ -31,7 +31,7 @@ import random
 from pathlib import Path
 
 BASE = Path(__file__).resolve().parent.parent
-MODULES = ["multi_attr_saihu", "category", "item_cost_sx", "item_weight_size", "stock_init"]
+MODULES = ["multi_attr_saihu", "category", "item_cost_sx", "item_weight_size", "stock_init", "warehouse_restock", "other_outbound", "EN_API"]
 
 SKU_PATTERN = re.compile(r'^[A-Za-z0-9]+-[A-Za-z0-9\-_]+$')
 CN_PATTERN = re.compile(r'[一-鿿]')

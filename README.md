@@ -77,8 +77,11 @@ flowchart LR
 | `item_cost_sx` | EN BOM 成本转采购成本 | BOM 成本列表、商品导出 | 赛狐采购成本导入 + 对账报告 |
 | `item_weight_size` | 国外发货重尺导入 | 重量模板（手工填写）、商品导出 | 赛狐重尺导入 + 问题报告 |
 | `stock_init` | 库存初始值（数量+成本）导入 | 通途库存、BOM 成本、商品导出 | 赛狐库存初始值导入 + 差异报告 |
+| `warehouse_restock` | 海外仓备货单导入（三成本拆分） | EN BOM 成本列表、通途库存、商品导出 | 赛狐海外仓备货单导入 + 问题报告 |
+| `other_outbound` | 库存清零其他出库导入 | 赛狐库存明细导出 | 赛狐其他出库导入（按仓拆分） |
+| `EN_API` | ERPNext 物料组主图上传 | 赛狐图片链接 Excel | ERPNext File + Item Group image 更新 |
 
-五个模块**相互独立**，无代码依赖（`category` 仅动态导入 `multi_attr_saihu` 的 `_default_spu_from_sku` 函数）。
+八个业务模块**相互独立**（`category` 仅动态导入 `multi_attr_saihu` 的 `_default_spu_from_sku` 函数）。
 
 ## 快速开始
 
@@ -158,7 +161,7 @@ python build_saihu_stock_init.py
 - **Andrej Karpathy 通用编码守则** — 所有 AI 修改代码时的行为准则
 - **公司背景** — 供应链架构、赛狐仓库映射
 - **项目技术栈与约定** — 模块结构、代码风格、Git 流程
-- **16 条踩坑记录** — 每个模块常见的错误及已确定的解决方案
+- **28 条经验教训** — 涵盖各模块的踩坑记录和赛狐平台规则
 
 在 Claude Code 或 Claude Desktop 打开此项目时，`CLAUDE.md` 会被自动加载为 Agent 的系统提示。**所有文档修改请同步更新 CLAUDE.md**，避免 Agent 使用过时信息。
 
