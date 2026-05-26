@@ -289,12 +289,12 @@ def main():
         # 发货方式为空 → 跳过
         method_col = col_map.get(norm_col("绍兴发货方式"))
         if method_col is None or pd.isna(row.get(method_col)):
-            issues.append((sku, "发货方式为空", "", ""))
+            issues.append((sku, "发货方式为空", "", "", ""))
             continue
 
         # 赛狐白名单（用产品编号 = 赛狐 SKU）
         if sku not in sai_whitelist:
-            issues.append((sku, "不在赛狐商品列表", "", ""))
+            issues.append((sku, "不在赛狐商品列表", "", "", ""))
             continue
 
         # 通过 BOM 的 客户物料号 匹配通途 SKU → 找仓库
@@ -306,7 +306,8 @@ def main():
         cust_sku = str(row.get(cust_col, "")).strip() if cust_col else ""
         wh_set = wh_map.get(cust_sku, set()) if cust_sku else set()
         if not wh_set:
-            issues.append((sku, "通途无仓库记录", f"客户物料号={cust_sku}" if cust_sku else "客户物料号为空", cust_sku))
+            reason_detail = "客户物料号为空" if not cust_sku else "未匹配通途仓库"
+            issues.append((sku, "通途无仓库记录", "", reason_detail, cust_sku))
             continue
 
         for wh_label in wh_set:
@@ -321,7 +322,7 @@ def main():
 
             cost = split_cost_for_row(row, col_map, wh_key)
             if cost is None:
-                issues.append((sku, "无法拆分成本", wh_label, cust_sku))
+                issues.append((sku, "无法拆分成本", wh_label, "", cust_sku))
                 continue
             results.append(cost)
 
@@ -337,7 +338,7 @@ def main():
     # 8. 问题报告
     if issues:
         report_path = OUT_DIR / f"warehouse_restock_问题报告_{stamp}.xlsx"
-        df_issues = pd.DataFrame(issues, columns=["SKU", "原因", "仓库", "客户物料号"])
+        df_issues = pd.DataFrame(issues, columns=["SKU", "原因", "仓库", "原因详情", "客户物料号"])
         df_borrow = pd.DataFrame(borrow_records) if borrow_records else pd.DataFrame(columns=["产品编号", "重量模板", "借用列", "借用值"])
         with pd.ExcelWriter(report_path) as writer:
             df_summary = df_issues["原因"].value_counts().reset_index()
