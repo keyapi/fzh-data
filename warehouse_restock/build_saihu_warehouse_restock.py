@@ -289,12 +289,12 @@ def main():
         # 发货方式为空 → 跳过
         method_col = col_map.get(norm_col("绍兴发货方式"))
         if method_col is None or pd.isna(row.get(method_col)):
-            issues.append((sku, "发货方式为空", "", "", ""))
+            issues.append((sku, "发货方式为空", "全部", "BOM绍兴发货方式列为空", ""))
             continue
 
         # 赛狐白名单（用产品编号 = 赛狐 SKU）
         if sku not in sai_whitelist:
-            issues.append((sku, "不在赛狐商品列表", "", "", ""))
+            issues.append((sku, "不在赛狐商品列表", "全部", "赛狐商品导出中无此SKU", ""))
             continue
 
         # 通过 BOM 的 客户物料号 匹配通途 SKU → 找仓库
@@ -306,8 +306,8 @@ def main():
         cust_sku = str(row.get(cust_col, "")).strip() if cust_col else ""
         wh_set = wh_map.get(cust_sku, set()) if cust_sku else set()
         if not wh_set:
-            reason_detail = "客户物料号为空" if not cust_sku else "未匹配通途仓库"
-            issues.append((sku, "通途无仓库记录", "", reason_detail, cust_sku))
+            reason_detail = "客户物料号为空" if not cust_sku else f"客户物料号={cust_sku}"
+            issues.append((sku, "通途无仓库记录", "CENTRADE/DANEEY/POLAND均无", reason_detail, cust_sku))
             continue
 
         for wh_label in wh_set:
