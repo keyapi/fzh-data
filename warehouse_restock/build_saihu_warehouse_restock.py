@@ -339,6 +339,19 @@ def main():
 
     print(f"拆分结果: {len(results)} 条")
 
+    # 去重：同一 (SKU, 仓库) 只保留一条（同 SKU 可能通过多通途 SKU 命中同仓）
+    seen = set()
+    deduped = []
+    for r in results:
+        key = (r["sku"], r["warehouse"])
+        if key not in seen:
+            seen.add(key)
+            deduped.append(r)
+    dup_count = len(results) - len(deduped)
+    if dup_count:
+        print(f"去重: 移除 {dup_count} 条重复 → 剩余 {len(deduped)} 条")
+    results = deduped
+
     # 7. 输出（按仓库拆成 3 个文件）
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     OUT_DIR = OUT_BASE / stamp
