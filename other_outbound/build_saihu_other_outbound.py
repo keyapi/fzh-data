@@ -57,9 +57,14 @@ def generate_outbound_rows(df_stock: pd.DataFrame) -> tuple[list[dict], list[dic
             })
             continue
 
+        shop = str(r.get("店铺", "")).strip() if pd.notna(r.get("店铺")) else ""
+        fnsku = str(r.get("FNSKU", "")).strip() if pd.notna(r.get("FNSKU")) else ""
+
         rows.append({
             "sku": sku,
             "warehouse": wh,
+            "店铺": shop if shop and shop != "nan" else "",
+            "FNSKU": fnsku if fnsku and fnsku != "nan" else "",
             "可用出库量": available,
             "次品出库量": defective,
         })
@@ -78,6 +83,8 @@ def _fill_single_file(rows: list[dict], out_path: Path):
         ws.cell(row=row_idx, column=2, value=r["warehouse"])    # *出库仓库
         ws.cell(row=row_idx, column=3, value=OUTBOUND_TYPE)     # *出库类型
         ws.cell(row=row_idx, column=7, value=r["sku"])          # *SKU
+        ws.cell(row=row_idx, column=8, value=r.get("店铺", ""))  # 店铺
+        ws.cell(row=row_idx, column=9, value=r.get("FNSKU", "")) # FNSKU
         ws.cell(row=row_idx, column=10, value=r["可用出库量"])   # 可用出库量
         if r["次品出库量"] > 0:
             ws.cell(row=row_idx, column=11, value=r["次品出库量"])

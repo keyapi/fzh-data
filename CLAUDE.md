@@ -267,6 +267,11 @@ ERPNext 测试服务器 nginx/1.18.0 对 `Expect: 100-continue` 返回 417。解
 - 临时单号不可跨导入重复使用（即使导入内容不同）
 - VXE 表格（赛狐列表页使用的组件）的 checkbox/下拉菜单对 MCP Playwright 不友好，复杂选择操作建议人工完成
 
+### 25. 库存明细导出包含店铺/FNSKU 维度
+- 同一 SKU+仓库 在库存明细里可能有**多行**（不同店铺/FNSKU），不能按 SKU+仓库 聚合
+- 生成其他出库文件时，必须逐行保留店铺和 FNSKU，每条对应一行出库
+- 赛狐自定义 popover 多选组件（如商品类型筛选）对 MCP evaluate 不稳定，推荐用 API 参数或商业逻辑（如 `-ALL` 后缀）过滤
+
 ---
 
 ## Documentation enforcement
