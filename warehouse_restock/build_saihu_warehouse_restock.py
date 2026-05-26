@@ -217,7 +217,7 @@ def _fill_single_file(rows: list[dict], out_path: Path):
     wb.save(out_path)
 
 
-MAX_BATCH = 1000  # 赛狐限制: 同临时单号不超过1000条
+MAX_BATCH = 500  # 赛狐限制: 单个备货单不超过500条
 
 def fill_templates_by_warehouse(rows: list[dict], out_dir: Path, stamp: str) -> list[Path]:
     """按仓库拆文件，超过1000条自动分批次。"""
