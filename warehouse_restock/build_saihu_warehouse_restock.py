@@ -277,24 +277,27 @@ def main():
     df_bom, borrow_records = borrow_costs(df_bom, all_cost_cols)
     print(f"成本借用: {len(borrow_records)} 个单元格")
 
-    # 6. 逐行拆分三成本
+    # 6. 逐行拆分三成本（按 SKU+仓库 粒度：每个目标仓要么输出、要么报告跳过原因）
+    TARGET_WH = ["CENTRADE", "DANEEY", "POLAND"]
     results = []
-    issues = []  # [(sku, reason, warehouse?, 客户物料号)]
+    issues = []  # [(SKU, 原因, 仓库, 原因详情, 客户物料号)]
 
     for _, row in df_bom.iterrows():
         sku = str(row.get(col_map.get(norm_col("产品编号"), ""), "")).strip()
         if not sku or sku == "nan":
             continue
 
-        # 发货方式为空 → 跳过
+        # 发货方式为空 → 3仓全跳过
         method_col = col_map.get(norm_col("绍兴发货方式"))
         if method_col is None or pd.isna(row.get(method_col)):
-            issues.append((sku, "发货方式为空", "全部", "BOM绍兴发货方式列为空", ""))
+            for wh in TARGET_WH:
+                issues.append((sku, "发货方式为空", wh, "BOM绍兴发货方式列为空", ""))
             continue
 
-        # 赛狐白名单（用产品编号 = 赛狐 SKU）
+        # 赛狐白名单 → 3仓全跳过
         if sku not in sai_whitelist:
-            issues.append((sku, "不在赛狐商品列表", "全部", "赛狐商品导出中无此SKU", ""))
+            for wh in TARGET_WH:
+                issues.append((sku, "不在赛狐商品列表", wh, "赛狐商品导出中无此SKU", ""))
             continue
 
         # 通过 BOM 的 客户物料号 匹配通途 SKU → 找仓库
@@ -305,13 +308,15 @@ def main():
                 break
         cust_sku = str(row.get(cust_col, "")).strip() if cust_col else ""
         wh_set = wh_map.get(cust_sku, set()) if cust_sku else set()
-        if not wh_set:
-            reason_detail = "客户物料号为空" if not cust_sku else f"客户物料号={cust_sku}"
-            issues.append((sku, "通途无仓库记录", "CENTRADE/DANEEY/POLAND均无", reason_detail, cust_sku))
-            continue
 
-        for wh_label in wh_set:
-            # wh_label = CENTRADE/DANEEY/POLAND, need to reverse lookup
+        # 逐仓处理
+        for wh_label in TARGET_WH:
+            if wh_label not in wh_set:
+                # 该仓通途无此 SKU 记录
+                reason_detail = "客户物料号为空" if not cust_sku else f"客户物料号={cust_sku}"
+                issues.append((sku, "通途无此仓SKU记录", wh_label, reason_detail, cust_sku))
+                continue
+
             wh_key = None
             for k, v in WAREHOUSE_CONFIG.items():
                 if v["label"] == wh_label:
@@ -322,7 +327,7 @@ def main():
 
             cost = split_cost_for_row(row, col_map, wh_key)
             if cost is None:
-                issues.append((sku, "无法拆分成本", wh_label, "", cust_sku))
+                issues.append((sku, "无法拆分成本", wh_label, "发货方式无法识别", cust_sku))
                 continue
             results.append(cost)
 
