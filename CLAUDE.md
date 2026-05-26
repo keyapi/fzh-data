@@ -242,6 +242,15 @@ ERPNext 测试服务器 nginx/1.18.0 对 `Expect: 100-continue` 返回 417。解
 - `os.environ.setdefault()` 确保环境变量优先级高于文件
 - 加载顺序: 系统环境变量 > 模块 `.env` > 项目根 `.env`
 
+### 22. SSH 连 GitHub 失败排查
+**症状**: `git push` → `Permission denied (publickey)` 或 `Connection timed out`。
+**排查顺序**:
+1. `ssh -T git@github.com` — 端口 22 不通则超时，通但 key 不对则 Permission denied
+2. 22 端口超时可试 443: `ssh -T -p 443 git@ssh.github.com`（需先 `ssh-keyscan -p 443 ssh.github.com >> ~/.ssh/known_hosts`）
+3. 确认 `~/.ssh/config` 中 `Host github.com` 配置了 `IdentityFile ~/.ssh/id_ed25519_github` + `IdentitiesOnly yes`
+4. 443 端口 Host 名是 `ssh.github.com`，不在 config 的 `Host github.com` 规则内，可能没匹配到指定 key。可 `ssh-add ~/.ssh/id_ed25519_github` 让客户端自动尝试该 key
+5. 大概率 22 端口只是临时抽风，等几分钟重试即可 — 不要误判为权限问题
+
 ---
 
 ## Documentation enforcement
