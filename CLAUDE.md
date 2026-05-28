@@ -377,6 +377,7 @@ file_chooser = page.wait_for_event("filechooser")
 | `sellfox_import_other_inbound.py` | 其他入库：生成 Excel → 导入 → 确认 → 自验证 | 可见 |
 | `sellfox_import_other_outbound.py` | 其他出库：导入 → 确认 → 自验证 | 可见 |
 | `sellfox_import_warehouse_restock.py` | 海外仓备货单导入 | 可见 |
+| `sellfox_restock_allocate_ship.py` | 备货单分配库存+发货（独立脚本） | 可见 |
 | `sellfox_import_update.py` | 商品规格更新（参考：闭环验证模式） | 可见 |
 
 **所有脚本默认可见浏览器**，`--headless` 切换。E2E 测试不要加 `--headless`，确保能看到过程。
