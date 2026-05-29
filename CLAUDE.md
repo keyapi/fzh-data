@@ -378,6 +378,8 @@ file_chooser = page.wait_for_event("filechooser")
 | `sellfox_import_other_outbound.py` | 其他出库：导入 → 确认 → 自验证 | 可见 |
 | `sellfox_import_warehouse_restock.py` | 海外仓备货单导入 | 可见 |
 | `sellfox_restock_allocate_ship.py` | 备货单分配库存+发货（独立脚本） | 可见 |
+| `sellfox_restock_receive.py` | 备货单批量SKU收货（独立脚本） | 可见 |
+| `sellfox_restock_api.py` | **NEW** 备货单 API E2E（导入→配货→发货→收货） | 混合 |
 | `sellfox_import_update.py` | 商品规格更新（参考：闭环验证模式） | 可见 |
 
 **所有脚本默认可见浏览器**，`--headless` 切换。E2E 测试不要加 `--headless`，确保能看到过程。
@@ -459,6 +461,53 @@ el.querySelector('*').find(e => e.textContent.trim()==='全部').parentElement.c
 ### 46. Excel 生成后立即导入的陷阱
 两次生成的 Excel 临时单号格式如果仅用 `datetime.now().strftime("OB%Y%m%d%H%M")`（精确到分钟），同分钟内的多次运行会产生**相同临时单号**，赛狐拒绝重复导入。
 修复：`f"OB{datetime.now().strftime('%Y%m%d%H%M%S')}{batch_id}"` — 精确到秒+批次后缀。
+
+### 47. 导入前检查目录残留文件
+`restock/` / `outbound/` 等导入目录可能残留上次的真实商品文件。导入脚本遍历全部 `.xlsx`，不区分测试/真实。
+**每次测试前必须清空目标目录**，或创建独立测试子目录。
+
+### 48. 赛狐侧边栏 tab 切换
+侧边栏 `.menu-item` 点击不生效，必须点内层 `.menu_title` 才能切换 tab（MCP 验证）。
+脚本 `click_side_menu` 修复：用 `.menu_title` 替代 `span.line_clamp` 的 parentElement。
+
+### 49. 搜索过滤条件残留
+脚本使用搜索框后搜索类型和内容会持久化。后续脚本看到空表格。
+修复：每个脚本开始时点「重置」按钮 + 还原搜索类型为「SKU」。
+
+### 50. Element UI 隐藏元素
+Playwright 对 Element UI 的 dropdown/dialog/button 频繁报 hidden，拒绝点击。
+修复：关键交互用 `page.evaluate` 执行 JS click，不用 Playwright 原生 locator。
+仅在需要真实鼠标事件时（如文件上传、拖拽）使用 Playwright 原生点击。
+
+### 51. 海外仓备货单批量 SKU收货
+工具栏「收货」按钮先勾选订单才启用（`!btn.disabled`）。流程：
+1. 侧边栏点「待收货」→ 勾选 → 「收货」▼ →「SKU收货」
+2. 弹窗 `oversea_receiving_by_sku_dialog` 点「全部」→「确定」
+3. 确认弹窗「收货仓库存将会增加」→「确定」
+脚本：`sellfox_restock_receive.py`
+
+### 52. 赛狐海外仓备货单 API 端点（MCP 抓取）
+
+Cookie 认证即可（`sf_u`），配货/发货/收货无需额外 CSRF 头。
+**例外**：导入 API 需要 `sf-vvv-i` / `sf-vvv-t` 头（el-upload 组件 JS 生成），纯 requests 无法复现。
+
+| 步骤 | API | 请求体 | 纯API可行 |
+|------|-----|--------|----------|
+| 导入 | `POST /api/v1/excel/import.json` | multipart `FileData` + `fileName` | ❌ 需 Playwright |
+| 列表 | `POST /api/oversea/page.json` | `{pageNo, pageSize, status}` | ✅ |
+| 侧边栏 | `GET /api/oversea/stat.json` | - | ✅ |
+| 配货 | `POST /api/oversea/allotStock.json` | `[pickId, ...]` | ✅ |
+| 发货 | `POST /api/oversea/batchConfirmShip.json` | `{"ids": [...]}` | ✅ |
+| 收货-提交 | `POST /api/oversea/batch/receiveList.json` | pick items + arrivalQty | ✅ |
+| 收货-确认 | `POST /api/oversea/batch/receive.json` | 同 receiveList | ✅ |
+
+状态码：`0=待配货, 1=待发货, 2=待收货, 3=已完成, -1=已作废`
+`page.json` 返回每行含 `items[]` 子项（`quantity` 备货数, `signNum` 已收数, `pickId`）。
+Cookie 提取：`get_api_cookies()` 已有（`sellfox_auto_export.py`）。
+
+### 53. MCP 优先抓 API，再写脚本
+MCP 浏览器探索赛狐时，优先获取网络 API（Network 面板），记录端点+请求/响应格式。
+UI 交互作为 API 不可用时的 fallback。脚本最终目标是减少浏览器点击，用 API 替代。
 
 ---
 
