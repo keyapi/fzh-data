@@ -1,0 +1,30 @@
+# SPS Selenium automation - pinned versions
+selenium==4.34.2
+typing_extensions==4.14.1
+trio==0.30.0
+trio-websocket==0.12.2
+websocket-client==1.8.0
+urllib3==2.5.0
+outcome==1.3.0
+sniffio==1.3.1
+attrs==23.2.0
+wsproto==1.2.0
+certifi>=2025.6.15
+
+# Logging / config
+python-dotenv==1.0.0
+
+# Retry
+tenacity==8.2.3
+
+# Sellfox login (sellfox_login.py) + ddddocr/onnxruntime
+# On Windows: onnxruntime 1.23.x may fail to load native DLLs; 1.16.3 + numpy<2 works with ddddocr.
+# If you use opencv 4.13+ it wants numpy>=2; use a venv for Sellfox or downgrade opencv if needed.
+numpy>=1.21.6,<2
+onnxruntime==1.16.3
+webdriver-manager>=4.0.0
+ddddocr>=1.4.11
+Pillow>=9.5.0,<11
+pytesseract>=0.3.10
+
+# zoneinfo is stdlib on Python 3.9+

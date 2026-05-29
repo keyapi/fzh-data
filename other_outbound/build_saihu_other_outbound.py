@@ -39,12 +39,12 @@ def generate_outbound_rows(df_stock: pd.DataFrame) -> tuple[list[dict], list[dic
     for _, r in df_stock.iterrows():
         sku = str(r.get("SKU", "")).strip()
         wh = str(r.get("仓库", "")).strip()
-        available = int(r.get("可用数", 0) or 0)
+        out_qty = int(r.get("可用数", 0) or 0)
         defective = int(r.get("次品数", 0) or 0)
 
         if wh not in TARGET_WH:
             continue
-        if available == 0 and defective == 0:
+        if out_qty == 0 and defective == 0:
             continue
 
         # 过滤组合商品 SKU（-ALL 后缀，其他出库不支持）
@@ -65,21 +65,22 @@ def generate_outbound_rows(df_stock: pd.DataFrame) -> tuple[list[dict], list[dic
             "warehouse": wh,
             "店铺": shop if shop and shop != "nan" else "",
             "FNSKU": fnsku if fnsku and fnsku != "nan" else "",
-            "可用出库量": available,
+            "可用出库量": out_qty,
             "次品出库量": defective,
         })
     return rows, skipped
 
 
-def _fill_single_file(rows: list[dict], out_path: Path):
+def _fill_single_file(rows: list[dict], out_path: Path, batch_id: str = ""):
     shutil.copy(TEMPLATE_FILE, out_path)
     import openpyxl
     wb = openpyxl.load_workbook(out_path)
     ws = wb["sheet1"]
 
+    order_no = f"OB{datetime.now().strftime('%Y%m%d%H%M%S')}{batch_id}"
     for i, r in enumerate(rows):
-        row_idx = 2 + i  # 模板表头仅第1行，数据从第2行开始
-        ws.cell(row=row_idx, column=1, value=datetime.now().strftime("OB%Y%m%d%H%M"))  # 临时单号
+        row_idx = 2 + i
+        ws.cell(row=row_idx, column=1, value=order_no)
         ws.cell(row=row_idx, column=2, value=r["warehouse"])    # *出库仓库
         ws.cell(row=row_idx, column=3, value=OUTBOUND_TYPE)     # *出库类型
         ws.cell(row=row_idx, column=7, value=r["sku"])          # *SKU
@@ -121,6 +122,8 @@ def main():
         print("无需要出库的条目")
         return
 
+    MAX_PER_BATCH = 1000  # 赛狐限制: 同一临时单号不超过1000条
+
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     OUT_DIR = OUT_BASE / stamp
     OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -129,12 +132,16 @@ def main():
         wh_rows = [r for r in rows if r["warehouse"] == wh]
         if not wh_rows:
             continue
+        # 超过1000条拆批，每个批次用不同临时单号
+        batches = [wh_rows[i:i+MAX_PER_BATCH] for i in range(0, len(wh_rows), MAX_PER_BATCH)]
         tag = f"_TEST_{test_sku}" if test_sku else ""
-        out_path = OUT_DIR / f"赛狐_其他出库_导入_{wh}{tag}_{stamp}.xlsx"
-        _fill_single_file(wh_rows, out_path)
-        avail = sum(r["可用出库量"] for r in wh_rows)
-        defect = sum(r["次品出库量"] for r in wh_rows)
-        print(f"  {wh}: {len(wh_rows)} 条, 可用={avail}, 次品={defect} → {out_path.name}")
+        for bi, batch in enumerate(batches):
+            batch_tag = f"_{wh}{tag}" if len(batches) == 1 else f"_{wh}_p{bi+1}{tag}"
+            out_path = OUT_DIR / f"赛狐_其他出库_导入{batch_tag}_{stamp}.xlsx"
+            _fill_single_file(batch, out_path, batch_id=f"_p{bi+1}" if len(batches) > 1 else "")
+            avail = sum(r["可用出库量"] for r in batch)
+            defect = sum(r["次品出库量"] for r in batch)
+            print(f"  {wh}: {len(batch)} 条, 可用={avail}, 次品={defect} → {out_path.name}")
 
     if skipped_combo:
         df_skipped = pd.DataFrame(skipped_combo)
