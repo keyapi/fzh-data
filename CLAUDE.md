@@ -413,6 +413,53 @@ CLAUDE.md 守则 4 "目标驱动执行"：改完代码就跑验证，不是打�
 当前清理后缀：`-淘汰`(2), `-out`(9), `-Cover`(428), `-Foam`(28)。
 每类后缀的含义和风险见"三系统产品定义"表。
 
+### 41. 库存总数 = 可用数 + 占用数
+赛狐库存明细中 `库存总数 = 可用数 + 占用数`（全 2390 行精确成立）。
+- **可用数**：自由库存，可被其他出库扣除
+- **占用数**：已被订单锁定的库存，其他出库**无法扣除**
+- **计划数/在途数**：不属于物理库存（计划数=已创建未发货备货单，在途数=已发货未收货）
+- 其他出库**只能用可用数清零**，用库存总数会导致"可用良品库存不足"拒绝确认
+
+### 42. Playwright 点击按钮正确姿势
+**禁止用 `page.evaluate('btn.click()')`** — JS click 绕过 loading mask 导致服务器拒绝。
+正确做法：
+```python
+# ✅ Playwright 原生 click
+btn = page.locator('button', has_text='确认出库').first
+btn.wait_for(state='visible', timeout=5000)
+btn.click()
+# 等 loading mask 出现→消失
+mask = page.locator('.el-loading-mask').first
+mask.wait_for(state='attached', timeout=10000)
+mask.wait_for(state='hidden', timeout=120000)
+```
+**加载中遮罩（`el-loading-mask`）** 出现在 VXE 表格操作后，未消失前阻止后续点击。
+
+### 43. 批量勾选 + 一次性操作
+分配库存/发货时**不要逐行操作**（每行都会触发 loading mask）。
+- 先勾选全部目标行（循环点 checkbox）
+- 再点一次工具栏按钮（分配库存/发货）
+- 确认弹窗点一次确定
+- 用 `--after HH:MM` 时间过滤避免误操作旧单
+
+### 44. 海外仓备货单页面 tab 陷阱
+`stockOrder/index.html` 默认可能停留在任意 tab（待配货/待发货/待收货）。
+**"添加单据"按钮只有"全部"tab 才显示**。导入前必须：
+```javascript
+// 点击"全部"tab
+el.querySelector('*').find(e => e.textContent.trim()==='全部').parentElement.click()
+```
+否则导入脚本因找不到"添加单据"按钮而失败。
+
+### 45. 确认弹窗时序
+点击"发货"后弹出 `el-message-box__wrapper`，按钮文本有 `\n` 包裹需 `.trim()`。
+**确认后等待遮罩消失**，大订单（500+行）处理可能需 30-60 秒。
+导入等待超时至少设 120 次 × 2s = 240s（之前 80s 导致 POLAND_p3 超时）。
+
+### 46. Excel 生成后立即导入的陷阱
+两次生成的 Excel 临时单号格式如果仅用 `datetime.now().strftime("OB%Y%m%d%H%M")`（精确到分钟），同分钟内的多次运行会产生**相同临时单号**，赛狐拒绝重复导入。
+修复：`f"OB{datetime.now().strftime('%Y%m%d%H%M%S')}{batch_id}"` — 精确到秒+批次后缀。
+
 ---
 
 ## Documentation enforcement
