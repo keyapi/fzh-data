@@ -7,7 +7,7 @@ description: >
   Keywords: API integration, REST endpoint, webhook, token authentication,, how to connect, external API, send data to another system, API not working, 401 error.
   OAuth, frappe.call, external connection, rate limiting.
 license: MIT
-compatibility: "Claude Code, Claude.ai Projects, Claude API. Frappe v14-v16."
+compatibility: "Codex, Codex.ai Projects, Codex API. Frappe v14-v16."
 metadata:
   author: OpenAEC-Foundation
   version: "2.0"
