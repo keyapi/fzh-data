@@ -1,0 +1,31 @@
+﻿# Project-level Codex configuration for fzh-data
+# Committed to repo — every Codex user who opens this project gets these MCP servers.
+# 
+# After clone, the Agent reads AGENTS.md → finds the web search guide → runs:
+#   pip install git+https://github.com/changcheng967/free-web-tools.git
+#   npm install -g @playwright/mcp && npx playwright install chromium
+# Then restarts Codex — and these MCP servers are ready.
+
+# ===== MCP: free-web-tools (search + fetch, zero API key) =====
+# 8 tools: deep_search, web_search, fetch_url, news_search, instant_answer, etc.
+# Install: pip install git+https://github.com/changcheng967/free-web-tools.git
+[mcp_servers.free_web]
+command = "python"
+args = ["-m", "mcp_server"]
+startup_timeout_sec = 60
+
+# ===== MCP: Playwright (browser automation) =====
+# Full browser — navigate, search, screenshot, fill forms.
+# Install: npm install -g @playwright/mcp && npx playwright install chromium
+[mcp_servers.playwright]
+command = "npx"
+args = ["@playwright/mcp"]
+startup_timeout_sec = 60
+
+# ===== Approval: trust tools in this project =====
+# Pre-approve browser navigation and typing so web search doesn't prompt every time
+[mcp_servers.playwright.tools.browser_navigate]
+approval_mode = "approve"
+
+[mcp_servers.playwright.tools.browser_type]
+approval_mode = "approve"
