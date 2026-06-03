@@ -159,6 +159,17 @@ Project: fzh-data — FZH 公司数据管道工具集。当前主要用于维护
 八个业务模块**相互独立**（`category` 仅动态导入 `multi_attr` 的一个函数）。
 两个**辅助 skill** (`frappe-core-api` / `frappe-errors-api`) 来自 [Frappe_Claude_Skill_Package](https://github.com/OpenAEC-Foundation/Frappe_Claude_Skill_Package) (MIT), 辅助所有 ERPNext API 相关开发调试。
 
+## 网络搜索 / WebFetch
+
+> 不同 Agent + 模型组合的搜索能力不同。如果你发现自己的 Agent 无法搜索网页或抓取 URL，
+> **先读** `docs/codex_web_search_analysis.md`——快速决策树会告诉你需要做什么。
+
+| Agent | 模型 | 网络搜索 |
+|-------|------|---------|
+| Claude Desktop | 任意 | ✅ WebFetch 开箱即用（中国网络需 `skipWebFetchPreflight: true`） |
+| Codex Desktop | OpenAI 官方 | ✅ `web_search` 开箱即用 |
+| Codex Desktop | 第三方（DeepSeek 等） | ⚠️ 需安装 MCP：Playwright 或 free-web-tools |
+
 ## Tech stack
 
 - Python >= 3.10, managed with **uv** (`pyproject.toml` at root)
