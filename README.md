@@ -135,6 +135,14 @@ python build_saihu_stock_init.py
 
 ---
 
+﻿## Agent 环境注意事项（Codex Desktop + Codex++）
+
+如果你用的是 **Codex Desktop + Codex++（自定义模型如 DeepSeek）**：
+
+> 保持左下角审批模式为"默认权限"（默认值）。如果误切到"自动审批"，网页搜索、浏览器控制等功能全部失效。
+>
+> 详见 [docs/codex_web_search_setup.md](docs/codex_web_search_setup.md)
+
 ## 用 Claude Desktop 操作（推荐）
 
 非技术同事无需记住命令。安装 [Claude Desktop](https://claude.ai/download) 后，**用 "Open Folder" 打开本仓库**，然后用自然语言说出需求即可。

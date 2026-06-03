@@ -130,3 +130,53 @@ codex features enable guardian_approval
 4. **`trust_level = "trusted"` 不影响审批**：它只影响 sandbox 文件权限。
 5. **Codex 和 Claude 一样有隐藏配置**：`codex features list` 是发现它们的入口。
 6. **官方 config-reference 没有 `auto_review.model`**：确认此功能暂未实现。
+# Codex + Codex++ 新手避坑：网页搜索不工作
+
+> **TL;DR**：装完别碰左下角审批模式，默认就能搜索。如果不小心切了"自动审批"→ 切回"默认权限"即可。
+
+---
+
+## 默认状态
+
+Codex Desktop 安装后，审批模式默认为 **"默认权限（手动审批）"**。
+
+此时你可以：
+- 让 Agent 上网搜索
+- 控制浏览器
+- 安装 MCP 插件
+- 读写项目文件
+
+每个风险操作会弹窗让你点"允许"——这是预期行为。
+
+## 如果突然不能搜索了
+
+错误信息：
+```
+This action was rejected due to unacceptable risk.
+Reason: Automatic approval review failed: codex-auto-review model not supported
+```
+
+99% 是因为**左下角审批模式被切到了"自动审批"**。
+
+### 修复（1 秒）
+
+```
+左下角 → 点审批模式 → 选"默认权限"
+```
+
+不需要改任何配置文件，不需要重启。
+
+## 原理
+
+| 审批模式 | 左下角显示 | 工作原理 | 自定义模型能用吗 |
+|----------|-----------|---------|:---:|
+| **默认权限** | 默认权限 | 弹窗让你确认 → 不调模型 | ✅ |
+| 自动审批 | 自动审批 | Codex 调 `codex-auto-review` 模型自动审核 | ❌ DeepSeek 没这个模型 |
+
+自动审批是给 OpenAI 官方模型用的，Codex++ 接的 DeepSeek 不支持。
+
+## 提醒方式
+
+建议在公司内部文档 / 新手指南里加一句：
+
+> ⚠️ 使用 Codex++ 时，**不要将左下角审批模式改为"自动审批"**，否则网页搜索、浏览器控制等功能会全部失效。如果不小心切了，切回"默认权限"即可恢复。
