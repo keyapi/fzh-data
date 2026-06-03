@@ -2,7 +2,7 @@
 
 > 适用于：Codex Desktop + 自定义模型（DeepSeek 等非 OpenAI 模型）
 > 日期：2026-06-03
-> 结论：审批模式切到"默认权限（手动审批）"即可，无需改代码或 config。
+> 最终方案：审批模式切到"默认权限（手动审批）"
 
 ---
 
@@ -20,49 +20,9 @@ but you passed codex-auto-review.
 
 ## 根因
 
-Codex Desktop 有两套审批机制：
+Codex Desktop 的 `guardian_approval`（安全审批系统）在"自动审批"模式下调用 `codex-auto-review` 这个专用安全审查模型。**该模型名在 Codex 内部硬编码，无法通过配置更改。**
 
-| 机制 | 适用场景 | 触发条件 |
-|------|---------|---------|
-| **Sandbox** | 文件读写、命令执行 | 操作超出 writable_roots |
-| **Guardian Approval (**`guardian_approval`**)** | 网络访问、浏览器、MCP risky 调用 | 自动审批模式 + 风险操作 |
-
-`guardian_approval` 在"自动审批"模式下，会调用 `codex-auto-review` 模型做安全审查。但这个模型名只存在于 OpenAI 官方 API，自定义代理（DeepSeek）不认识 → 全部拒绝。
-
-### 额外根因：三层叠加
-
-这只是第一层。实际有三层问题叠加导致 Web Search 彻底不可用：
-
-```
-│ 第 3 层  协议不匹配
-│          Codex 用 Responses API (/v1/responses)
-│          DeepSeek 只有 Chat Completions API → 需要代理翻译
-│          Codex++/bridge 已解决这一层，但不完美
-│
-├── 第 2 层  tool_choice 参数不支持
-│          DeepSeek V4 (deepseek-reasoner) 不支持 tool_choice
-│          Web Search 依赖此参数 → API 层面直接报错
-│          deepseek-chat (V3) 反而支持
-│          Ref: github.com/deepseek-ai/DeepSeek-R1/issues/836
-│
-└── 第 1 层  codex-auto-review 模型不存在 ← 本文档主要讨论的
-           Codex 自动审批调用 codex-auto-review
-           第三方 provider 无此模型 → 拒绝全部高风险操作
-```
-
-**第 2 层补充说明**：即使审批通过，DeepSeek V4 Pro 收到 `tool_choice` 参数会返回：
-
-```json
-{"error": {"message": "deepseek-reasoner does not support this tool_choice"}}
-```
-
-这意味着 `deepseek-v4-pro` 下 Web Search **必然失败**，与审批无关。`deepseek-v4-flash` 基于 V3 架构，理论上可用。
-
-### 第 4 个问题：权限标志 bug
-
-Codex++ 内部可能复用了社区已知的 bug：使用 `--approval-mode full-auto`（不存在的 CLI 标志）。正确标志应为 `--dangerously-bypass-approvals-and-sandbox`。
-
-Ref: [ComposioHQ/agent-orchestrator Issue #147](https://github.com/ComposioHQ/agent-orchestrator/issues/147)
+自定义模型代理只暴露自己的模型名（如 `deepseek-v4-flash`、`deepseek-v4-pro`），不认识 `codex-auto-review` → 全部拒绝。
 
 ### 架构示意
 
@@ -77,69 +37,58 @@ Codex Desktop
 
 ## 尝试过的方案
 
-### 方案一：`model_migrations` 映射 ✅ 最佳方案
-
-Codex 原生支持模型名映射！在 `config.toml` 中配置：
-
-```toml
-[model_migrations]
-codex-auto-review = "deepseek-v4-flash"
-```
-
-这告诉 Codex："当需要 codex-auto-review 模型时，改用 deepseek-v4-flash"。**无需修改代理、无需禁用审批、无需切手动模式**。
-
-Codex 更新版还支持更精确的 `review_model`：
-
-```toml
-review_model = "deepseek-v4-flash"
-```
-
-Ref: LINUX DO 社区, [Cherry Studio PR #15068](https://github.com/CherryHQ/cherry-studio/pull/15068)。
-
-### 方案二：本地代理做模型名映射 ❌ 过度复杂
+### 方案一：本地代理做模型名映射 ⚠️ 可行但过度复杂
 
 思路：写一个 Python 代理在 57322 端口，拦截 `codex-auto-review` 请求并映射为 `deepseek-v4-flash`，再修改 `config.toml` 的 `base_url`。
 
-结果：代理可以工作，但需要修改 config.toml（有 sandbox 权限问题），且本质上是绕过安全机制。
+结果：可以工作，但需要额外维护代理进程 + 修改 config.toml。
 
-### 方案三：`codex features disable guardian_approval` ⚠️ 有用但过头
+### 方案二：`codex features disable guardian_approval` ⚠️ 可行但过头
 
 ```bash
 codex features disable guardian_approval
 ```
 
-可以禁用整个审批系统，项目设置为 `trusted` 时副作用可接受。但需要重启才能生效，且完全跳过了安全层。
+可以禁用整个审批系统，但完全跳过了安全层，且需要重启生效。
 
-### 方案四：切换审批模式 ✅ 备选
+### 方案三：`model_migrations` 映射 ❌ 无效（已验证）
+
+```toml
+[model_migrations]
+codex-auto-review = "deepseek-v4-flash"
+```
+
+经查阅 Codex 官方 [config-reference](https://developers.openai.com/codex/config-reference) 文档确认：
+- `model_migrations` 是**用户确认的模型迁移记录**（当 OpenAI 发布新模型替代旧模型时，通知用户迁移），**不参与模型路由**
+- `review_model` 是 `/review` 命令用的，不是审批系统用的
+- `auto_review.model` 配置项**不存在**（官方文档没有这个键）
+- `codex-auto-review` 模型名在 Codex 内部是**硬编码**的，目前无法通过 config 更改
+
+### 方案四：切换审批模式 ✅ 最终方案
 
 **在 Codex Desktop 左下角，将"自动审批"改为"默认权限（手动审批）"。**
 
-- 操作变成弹窗让你手动确认 → 不调用 `codex-auto-review` 模型
-- 比完全禁用更安全（你仍能看到每次确认）
+原理：`approvals_reviewer` 从 `auto_review` 切到 `user`，审批弹窗由用户手动确认，不调用 `codex-auto-review` 模型。
+
+- 比禁用 guardian_approval 安全（你仍能看到每次确认）
 - 即时生效，无需重启
+- 是官方支持的配置方式
 
 ## 最终配置
 
-**推荐配置**：添加 `model_migrations` 映射，自动审批即可正常工作。
-
 ```toml
-# config.toml
+# config.toml — 无需任何修改，保持原样
 model = "deepseek-v4-flash"
 model_provider = "custom"
 
 [model_providers.custom]
 base_url = "http://127.0.0.1:57321/v1"
-...
-
-# 关键：将 codex-auto-review 映射到可用模型
-[model_migrations]
-codex-auto-review = "deepseek-v4-flash"
 
 [projects.'d:\work\赛狐\cursor']
-trust_level = "trusted"  # 已有
+trust_level = "trusted"
 
-# guardian_approval: 保持启用 (true)
-# 审批模式: 手动 (UI 左下角切换)
+# guardian_approval: 保持启用
+# approvals_reviewer = "user" (等同于 UI 左下角选"默认权限")
 ```
 
 ## 对比：Codex vs Claude 的审批逻辑
@@ -147,9 +96,15 @@ trust_level = "trusted"  # 已有
 | 维度 | Claude Desktop | Codex Desktop |
 |------|---------------|---------------|
 | 搜索审核机制 | WebFetch 预检查 (`claude.ai/api/web/domain_info`) | Guardian Approval (`codex-auto-review` 模型调用) |
-| 绕过方式 | `settings.json` 加 `"skipWebFetchPreflight": true` | `model_migrations` 映射 `codex-auto-review`（最佳）或 UI 切手动审批 |
-| 共同点 | 都有隐藏配置项需用户发现 | 都有隐藏配置项需用户发现 |
+| 绕过方式 | `settings.json` 加 `"skipWebFetchPreflight": true` | 审批模式切"手动"（UI）或 `codex features disable guardian_approval`（CLI） |
+| 官方支持 | 有隐藏配置项 | `approvals_reviewer` 有 `user` 选项 |
 | 手动审批 | 不支持（要么自动要么跳过） | 支持手动审批模式（弹窗确认） |
+
+## 给 Codex 上游的建议
+
+如果想让自定义模型 + 自动审批也能用，可以给 `openai/codex` 提 feature request：
+
+> 支持 `auto_review_model` 配置项，允许用户指定自动审批使用的模型名，或让 `codex-auto-review` fallback 到主模型。
 
 ## 相关命令速查
 
@@ -167,20 +122,11 @@ codex features disable guardian_approval
 codex features enable guardian_approval
 ```
 
-## 相关 Issue 追踪
-
-| Issue | 仓库 | 关联 |
-|-------|------|------|
-| `deepseek-reasoner does not support tool_choice` | [deepseek-ai/DeepSeek-R1 #836](https://github.com/deepseek-ai/DeepSeek-R1/issues/836) | 第 2 层：V4 不支持 tool_choice |
-| Wrong permission flag for unattended mode | [ComposioHQ/agent-orchestrator #147](https://github.com/ComposioHQ/agent-orchestrator/issues/147) | 第 4 个问题：权限标志 bug |
-| Feature request: third-party model auto-approval | [BigPizzaV3/CodexPlusPlus #564](https://github.com/BigPizzaV3/CodexPlusPlus/issues/564) | Codex++ 改进建议（已提交） |
-
 ## Lessons Learned
 
-1. **`model_migrations` 是正解**：Codex 原生支持模型名映射，一行 `codex-auto-review = "deepseek-v4-flash"` 即可搞定自动审批。不需要改代理、不需要切手动模式。
-2. **手动审批模式是兜底方案**：当 `model_migrations` 不可用时（旧版 Codex 可能不支持），切手动审批保留安全层。
-3. **`trust_level = "trusted"` 不等于跳过审批**：它只影响 sandbox 文件权限，不影响网络审批。
-4. **Codex 的配置项和 Claude 一样有隐藏项**，`codex features list` 是发现它们的入口。
-5. **DeepSeek V4 Pro ≠ V4 Flash**：Pro 版基于 `deepseek-reasoner`（不支持 tool_choice），Flash 版基于 `deepseek-chat`（V3，支持 tool_choice）。Web Search 需要 tool_choice → Pro 版不可用。
-6. **三层问题叠加**：协议（Responses vs Chat Completions）+ 参数（tool_choice）+ 审批（codex-auto-review）。任何一层都可能导致失败，排查时要逐层排除。
-7. **`review_model` 是另一个可用选项**：Codex 新版支持 `review_model = "deepseek-v4-flash"` 精确指定审批模型，效果等同 `model_migrations`。
+1. **`codex-auto-review` 模型名硬编码**：自定义模型提供商无法使用自动审批。
+2. **`model_migrations` 不等于模型路由**：它是用户通知系统，不参与实际调用。
+3. **手动审批模式是唯一被官方支持的方案**：对于自定义模型用户。
+4. **`trust_level = "trusted"` 不影响审批**：它只影响 sandbox 文件权限。
+5. **Codex 和 Claude 一样有隐藏配置**：`codex features list` 是发现它们的入口。
+6. **官方 config-reference 没有 `auto_review.model`**：确认此功能暂未实现。
