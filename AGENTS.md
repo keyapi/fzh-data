@@ -278,13 +278,51 @@ ERPNext 测试服务器 nginx/1.18.0 对 `Expect: 100-continue` 返回 417。解
 - 加载顺序: 系统环境变量 > 模块 `.env` > 项目根 `.env`
 
 ### 22. SSH 连 GitHub 失败排查
-**症状**: `git push` → `Permission denied (publickey)` 或 `Connection timed out`。
+
+**症状**: `git push` → `Permission denied (publickey)` 或 `Connection timed out` 或 `Connection closed by remote host`。
+
+**双通道策略**：SSH（优先）和 HTTPS（兜底）两条路径，根据网络环境切换。
+
 **排查顺序**:
 1. `ssh -T git@github.com` — 端口 22 不通则超时，通但 key 不对则 Permission denied
 2. 22 端口超时可试 443: `ssh -T -p 443 git@ssh.github.com`（需先 `ssh-keyscan -p 443 ssh.github.com >> ~/.ssh/known_hosts`）
 3. 确认 `~/.ssh/config` 中 `Host github.com` 配置了 `IdentityFile ~/.ssh/id_ed25519_github` + `IdentitiesOnly yes`
 4. 443 端口 Host 名是 `ssh.github.com`，不在 config 的 `Host github.com` 规则内，可能没匹配到指定 key。可 `ssh-add ~/.ssh/id_ed25519_github` 让客户端自动尝试该 key
-5. 大概率 22 端口只是临时抽风，等几分钟重试即可 — 不要误判为权限问题
+
+**GFW DPI 拦截**（中国特有）：即使 443 端口通了，GFW 深度包检测可能识别 SSH 协议并掐断连接（`Connection closed by remote host` / `kex_exchange_identification`）。此时 SSH 通道完全不可用→切换 HTTP 代理认证方式：
+
+```bash
+# 创建 GitHub Personal Access Token (classic)
+# https://github.com/settings/tokens/new
+# 最小 scope: repo (private 仓库) 或 public_repo (公开仓库)
+# Token 格式: ghp_xxxx
+
+# 方式 1：临时 push（不保存 token）
+git push https://ghp_YOUR_TOKEN@github.com/owner/repo.git main
+
+# 方式 2：永久切换 remote 为 HTTPS + 额外自定义 httpheader 认证
+git remote set-url origin https://github.com/owner/repo.git
+git config --local http.https://github.com/.extraheader "AUTHORIZATION: bearer ghp_YOUR_TOKEN"
+```
+
+Token 仅存储在本地 `.git/config`，不会 push 到远程。SSH 仍可保留为另一种 remote（`git remote add ssh-origin git@github.com:...`），等网络恢复后切换。
+
+### 54. GitHub gh CLI 认证
+
+`gh` CLI 走 REST API（`api.github.com`），不是 SSH。即使 SSH push 能通，`gh` 也需要额外认证：
+
+```bash
+# 方式 1：交互式登录（浏览器 OAuth）
+gh auth login
+
+# 方式 2：Token 认证
+echo "ghp_YOUR_TOKEN" | gh auth login --with-token
+
+# 方式 3：环境变量（临时，不回显到 shell 历史）
+GH_TOKEN="ghp_YOUR_TOKEN" gh issue create ...
+```
+
+环境变量方式最安全，不会写入配置文件。每次 session 结束后 token 自动失效（仅存在于该 shell 进程）。
 
 ### 23. 赛狐 其他出库 导入规则
 - **临时单号 = 自定义分组键**（不是系统单号）。同一临时单号的多行合并为**一笔**出库单，不同临时单号拆分
