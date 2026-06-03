@@ -554,6 +554,16 @@ Cookie 提取：`get_api_cookies()` 已有（`sellfox_auto_export.py`）。
 MCP 浏览器探索赛狐时，优先获取网络 API（Network 面板），记录端点+请求/响应格式。
 UI 交互作为 API 不可用时的 fallback。脚本最终目标是减少浏览器点击，用 API 替代。
 
+### 55. Codex++ + DeepSeek 下绝对不要上传图片
+
+DeepSeek 模型（v4-pro / v4-flash）不支持多模态（`image_url` content type）。一旦上传图片：
+- 图片嵌入对话历史 → DeepSeek API 拒绝所有后续消息
+- 切换模型无效（历史已固化）
+- 编辑 `.jsonl` 文件去除图片 → 线程无法恢复（Codex 内部校验/缓存机制不可逆）
+- **该线程及所有 fork 子线程永久作废**
+
+Ref: [CodexPlusPlus#574](https://github.com/BigPizzaV3/CodexPlusPlus/issues/574)，`docs/codex_thread_disappear_debug.md`。
+
 ---
 
 ## Documentation enforcement
