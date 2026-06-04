@@ -245,3 +245,91 @@ Agent 会自动加载这些文件并按规则行事。
 | 给非技术同事推 Codex + DeepSeek | 图片上传=对话死刑，搜索靠 MCP |
 | 让 Hermes 自进化 Skill 碰 git/prod | V2EX 实测：第 7 天自动合入半成品 PR |
 | 用 7B 小模型跑 Hermes | 第三步开始胡说八道 |
+
+---
+
+## 六、企业多用户自建方案（预算友好）
+
+### 6.1 Codex/Claude/Hermes 并不是单人工具
+
+三者都有企业级多用户方案，但全功能价格高：
+
+| 功能 | Codex Enterprise | Claude Team Premium | Hermes（自建） |
+|------|---------|------|------|
+| 多用户 + RBAC | ✅ SCIM + 群组 | ✅ 5 座席起 | ✅ 5 种认证（含飞书/企微） |
+| Token 配额 | ✅ | ✅ 每用户上限 | 需自建网关 |
+| 知识共享 | ✅ Workspace Agents | ✅ Projects + Enterprise Search | ✅ 树形知识库 |
+| 审计日志 | ✅ Compliance API | ✅ | ✅ |
+| 价格 | 企业定制 | $100/座/月 | 免费 |
+
+Ref: [OpenAI Enterprise docs](https://help.openai.com/en/articles/8266401), [Claude Team plan](https://support.claude.com/en/articles/9266767), [Hermes RBAC](https://www.php.cn/faq/2345080.html)
+
+### 6.2 不想付企业版价格？开源方案能搭出同等功能
+
+| 你需要 | 开源方案 | 现状 |
+|--------|---------|------|
+| 多人共享 Memory | [Monet](https://github.com/team-monet/monet) — MCP-native, Group/User/Private 三级 | v0.3.1 |
+| Token 配额管理 | [Tailscale Aperture](https://tailscale.com/blog/aperture-public-beta) — 免费 6 人，跨 provider 统一配额 | 公测 |
+| | [LiteLLM](https://github.com/BerriAI/litellm) — 多 Key 负载均衡 + 每用户预算 | 成熟 |
+| 知识质量管控 | [OGX](https://github.com/ogx-ai/ogx) (Red Hat) — 供应商中立，ABAC 门控 | 2026 开源 |
+| 28 Agent 实战参考 | [28 AI Agents on a Single Server](https://dev.to/jay_wong_45c807c6799b4fb7/how-we-ran-28-ai-agents-on-a-single-server-and-what-broke-1pbf) — 47 条规则从 500+ 次纠正中涌现 | 实测 |
+
+### 6.3 务实自建架构（月成本 ¥50-200/人）
+
+```
+DeepSeek API (按量 ¥10-50/人/月)
+    ↓
+One-API 网关 (多 Key 负载均衡 + 每人独立配额)
+    ↓
+每人 Claude Desktop 3P (本地操作 Excel, git clone fzh-data)
+    +
+Monet (共享 Memory: 项目经验/规则/Lessons Learned)
+    +
+GitHub (AGENTS.md + skills 版本管理)
+```
+
+知识质量控制：版本化记忆 + 生命周期规则（临时 7 天 → 归档 30 天 → 清理）+ Agent 自动审核标记低可信度内容。
+
+---
+
+## 七、源链接索引
+
+### 学术论文（⭐⭐⭐⭐⭐）
+| 引用数据 | 来源 |
+|----------|------|
+| 428 中转站 9 投毒 17 窃密 | [ArXiv 2604.08407](https://arxiv.org/abs/2604.08407) — UCSB |
+| 45.83% Shadow API 身份不匹配 | [ArXiv 2603.01919](https://arxiv.org/abs/2603.01919) — CISPA |
+| ABAC 门控使跨租户泄露率降至 0% | [ArXiv 2605.05287](https://arxiv.org/html/2605.05287v1) — Red Hat |
+
+### 社区实测（⭐⭐⭐⭐）
+| 引用数据 | 来源 |
+|----------|------|
+| V2EX: Hermes 第 7 天自动合入半成品 PR | [V2EX 原帖](https://global.v2ex.co/t/1205463) |
+| Excel MCP 90 天遥测 (7,700 截图/20K VBA/68K 格式化) | [dev.to](https://dev.to/sbroenne/i-gave-ai-agents-real-excel-they-did-not-use-it-like-i-expected-proven-by-90-days-of-telemetry-4m78) |
+| 28 Agent 单服务器实战 (47 规则/500+ 纠正) | [dev.to](https://dev.to/jay_wong_45c807c6799b4fb7/how-we-ran-28-ai-agents-on-a-single-server-and-what-broke-1pbf) |
+| 看雪: 428 中转站实测 | [看雪论坛](https://bbs.kanxue.com/thread-291356.htm) |
+
+### 媒体报道（⭐⭐⭐）
+| 引用数据 | 来源 |
+|----------|------|
+| Hermes 多 Agent 跨境电商 | [腾讯新闻](https://news.qq.com/rain/a/20260503A04WZM00) |
+| AI 替代潮下的跨境电商 | [36氪](https://m.36kr.com/p/3767823249720068) |
+
+### 百度开发者平台文章（⭐⭐ — 未独立验证）
+| 引用数据 | 来源 |
+|----------|------|
+| 跨境零售成本 ¥230→1.7 万, 延迟 800ms→12s | [百度开发者](https://developer.baidu.com/article/detail.html?id=6937228) |
+| 医药企业 10 天→10 分钟, 年省 $100 万 | [百度开发者](https://developer.baidu.com/article/detail.html?id=6751551) |
+
+> ⚠️ 百度开发者平台是内容分发平台，非学术来源。以上两个案例中"某跨国零售集团"和"某医药企业"未具名，数据无法独立验证。报告中引用时已标注为"百度开发者文章，未经独立验证"。
+
+### 企业方案参考
+| 来源 | 链接 |
+|------|------|
+| OpenAI Enterprise 多用户管理 | [help.openai.com](https://help.openai.com/en/articles/8266401) |
+| Claude Team Plan 详情 | [support.claude.com](https://support.claude.com/en/articles/9266767) |
+| Tailscale Aperture (Token 配额) | [tailscale.com](https://tailscale.com/blog/aperture-public-beta) |
+| Monet (多租户共享 Memory) | [GitHub](https://github.com/team-monet/monet) |
+| OGX (供应商中立多租户框架) | [GitHub](https://github.com/ogx-ai/ogx) |
+| DuploCloud: 12 项多用户 AI 需求 | [duplocloud.com](https://duplocloud.com/blog/ai-native-devops-platform-requirements/) |
+| Forrester: 2026 Agentic AI 现状 | [forrester.com](https://www.forrester.com/blogs/the-state-of-agentic-ai-in-2026-companies-are-chasing-few-are-catching/) |

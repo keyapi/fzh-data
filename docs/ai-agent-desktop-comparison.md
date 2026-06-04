@@ -261,15 +261,42 @@ Hermes 会自动将成功经验总结为 **Skills**。在服务器部署中，�
 
 ## 信息源
 
+### 学术论文
+| 引用 | 链接 | 可信度 |
+|------|------|--------|
+| 428 中转站安全测试 (UCSB) | [ArXiv 2604.08407](https://arxiv.org/abs/2604.08407) | ⭐⭐⭐⭐⭐ |
+| Shadow API 身份欺诈 45.83% (CISPA) | [ArXiv 2603.01919](https://arxiv.org/abs/2603.01919) | ⭐⭐⭐⭐⭐ |
+| ABAC 多租户检索门控 (Red Hat) | [ArXiv 2605.05287](https://arxiv.org/html/2605.05287v1) | ⭐⭐⭐⭐⭐ |
+
+### 社区实测
+| 引用 | 链接 | 可信度 |
+|------|------|--------|
+| V2EX: Hermes 一周实测 | [V2EX](https://global.v2ex.co/t/1205463) | ⭐⭐⭐⭐ |
+| Excel MCP 90 天遥测 | [dev.to](https://dev.to/sbroenne/i-gave-ai-agents-real-excel-they-did-not-use-it-like-i-expected-proven-by-90-days-of-telemetry-4m78) | ⭐⭐⭐⭐ |
+| 28 Agent 单服务器实战 | [dev.to](https://dev.to/jay_wong_45c807c6799b4fb7/how-we-ran-28-ai-agents-on-a-single-server-and-what-broke-1pbf) | ⭐⭐⭐⭐ |
+| 看雪: 428 中转站实测 | [看雪](https://bbs.kanxue.com/thread-291356.htm) | ⭐⭐⭐⭐ |
+
+### 中文评测
+| 引用 | 链接 | 可信度 |
+|------|------|--------|
+| V2EX: Claude desktop vs Codex | [V2EX](https://global.v2ex.co/t/1213136) | ⭐⭐⭐ |
+| 什么值得买: 实测三月 Codex | [SMZDM](https://post.smzdm.com/p/anvpk46v/) | ⭐⭐⭐ |
+| LINUX DO: CodeX/Claude 体验 | [LINUX DO](https://linux.do/t/topic/2108676) | ⭐⭐⭐ |
+| CSDN: Codex 零基础教程 | [CSDN](https://blog.csdn.net/2403_88033173/article/details/161348521) | ⭐⭐⭐ |
+
+### 企业方案
 | 来源 | 链接 |
 |------|------|
-| V2EX - 开发用 Claude desktop 还是 Codex？ | `global.v2ex.co/t/1213136` |
-| 什么值得买 - 实测三月 Codex：我彻底放弃 Claude Code 了 | `post.smzdm.com/p/anvpk46v/` |
-| LINUX DO - CodeX和Claude桌面端的体验讨论 | `linux.do/t/topic/2108676` |
-| AIBase - 全线封杀！Claude桌面端收紧限制 | `aibase.com/zh/news/27764` |
-| 知乎 - 如何评价Codex桌面版？ | `zhihu.com/question/2001978391264502048` |
-| 智东西 - Hermes官方桌面版发布！踩坑记录 | `zhidx.com/p/562879` |
-| CSDN - 2026封神级AI神器 Codex 零基础教程 | `blog.csdn.net/2403_88033173/article/details/161348521` |
-| 快科技 - DeepSeek V4 不能用了 Claude桌面再次封杀 | `m.mydrivers.com/newsview/1120710` |
-| Gate - Codex 双模式（Excelmogging / Codemaxxing） | `gate.tv/zh/news/detail/20672372` |
-| 经理人 - Codex 新手入门教学 | `managertoday.com.tw/articles/view/72111` |
+| OpenAI Enterprise 多用户 | [help.openai.com](https://help.openai.com/en/articles/8266401) |
+| Claude Team Plan | [support.claude.com](https://support.claude.com/en/articles/9266767) |
+| Monet 多租户 Memory | [GitHub](https://github.com/team-monet/monet) |
+| Tailscale Aperture Token 配额 | [tailscale.com](https://tailscale.com/blog/aperture-public-beta) |
+| OGX 供应商中立框架 | [GitHub](https://github.com/ogx-ai/ogx) |
+| DuploCloud 12 项多用户需求 | [duplocloud.com](https://duplocloud.com/blog/ai-native-devops-platform-requirements/) |
+| Forrester 2026 Agentic AI | [forrester.com](https://www.forrester.com/blogs/the-state-of-agentic-ai-in-2026-companies-are-chasing-few-are-catching/) |
+
+### ⚠️ 百度开发者平台（未独立验证）
+以下数据来自百度开发者平台文章，案例未具名，无法独立验证：
+- 跨境零售成本对比: [6937228](https://developer.baidu.com/article/detail.html?id=6937228)
+- 医药企业案例: [6751551](https://developer.baidu.com/article/detail.html?id=6751551)
+- 金融投研案例: 多处文章引用
