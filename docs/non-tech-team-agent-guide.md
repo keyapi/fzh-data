@@ -266,29 +266,61 @@ Ref: [OpenAI Enterprise docs](https://help.openai.com/en/articles/8266401), [Cla
 
 ### 6.2 不想付企业版价格？开源方案能搭出同等功能
 
-| 你需要 | 开源方案 | 现状 |
-|--------|---------|------|
-| 多人共享 Memory | [Monet](https://github.com/team-monet/monet) — MCP-native, Group/User/Private 三级 | v0.3.1 |
-| Token 配额管理 | [Tailscale Aperture](https://tailscale.com/blog/aperture-public-beta) — 免费 6 人，跨 provider 统一配额 | 公测 |
-| | [LiteLLM](https://github.com/BerriAI/litellm) — 多 Key 负载均衡 + 每用户预算 | 成熟 |
-| 知识质量管控 | [OGX](https://github.com/ogx-ai/ogx) (Red Hat) — 供应商中立，ABAC 门控 | 2026 开源 |
-| 28 Agent 实战参考 | [28 AI Agents on a Single Server](https://dev.to/jay_wong_45c807c6799b4fb7/how-we-ran-28-ai-agents-on-a-single-server-and-what-broke-1pbf) — 47 条规则从 500+ 次纠正中涌现 | 实测 |
+#### API 网关（替代已停维的 One-API）
 
-### 6.3 务实自建架构（月成本 ¥50-200/人）
+> 你问的 `songquanpeng/one-api` 确实已停更。但有两个活跃的 fork/替代：
+
+| 项目 | 定位 | 核心能力 |
+|------|------|---------|
+| [**laisky/one-api**](https://github.com/laisky/one-api) | One-API 活跃 fork（31.8k stars） | 25+ 供应商聚合；多租户配额；MCP 聚合器 |
+| [**New-API**](https://github.com/calcium-ion/new-api) | One-API 增强版（24.2k stars） | 两阶段配额（预消费+后消费校准）；在线充值；渠道余额自动监控 |
+
+**One-API 做什么**：
+- **一个 DeepSeek Key → 多个分发给同事的 Token**：每个 Token 可独立设额度上限、过期时间、IP 白名单、可访问模型
+- **多 Key 负载均衡**：一个渠道挂多把 Key，自动加权轮询。Key 超额时自动切到备用
+- **分组+倍率计费**：不同用户组可设不同的模型倍率
+
+> "给 20 个同事每人一条 Token，每人每月限 500 万 Token DeepSeek"——One-API 一行 Docker + 后台点几下，零代码。
+
+**如果你的需求更复杂**（美元预算、SSO、多 Provider Fallback），上 [**LiteLLM**](https://github.com/BerriAI/litellm)（41.8k stars）。LiteLLM 支持：Team → User → Virtual Key 三级配额、美元预算上限、成本最低/延迟最低自动路由、自动 Failover。
+
+#### 共享 Memory / 经验沉淀
+
+| 项目 | 定位 | 关键特性 |
+|------|------|---------|
+| [**Monet**](https://github.com/team-monet/monet) | MCP-native 团队记忆平台 | Group/User/Private 三级；pgvector 语义搜索；Keycloak OIDC；审计日志 |
+| [**Mem0**](https://github.com/mem0ai/mem0) | 开源 Agent Memory | LoCoMo 91.6 分；21 框架集成；单次查询 ~6,900 tokens |
+| [**LangMem**](https://github.com/langchain-ai/langmem) | LangChain 生态 | 框架原生记忆提取 hooks |
+| [**Letta**](https://github.com/letta-ai/letta) | OS 式分层记忆 | RAM(上下文) = HDD(归档)，自主记忆管理 |
+
+**实战参考：28 Agent 单服务器（[原文](https://dev.to/jay_wong_45c807c6799b4fb7/how-we-ran-28-ai-agents-on-a-single-server-and-what-broke-1pbf)）**
+- 四层记忆：Personal(5KB cap) → Member → Channel(embeddings) → Company(vetted)
+- 纠正晋升管道：同一错误出现 2 次 → 晋升 Agent 核心规则 → 再犯 → 晋升全队规则
+- 8 周产出：**500+ 个体纠正 → 47 条全队规则**
+- API 成本从 $2,400/月 降至 ~$800/月（语义搜索替代上下文堆砌）
+
+### 6.3 务实自建架构（已验证方案）
 
 ```
-DeepSeek API (按量 ¥10-50/人/月)
+DeepSeek API (按量, ¥10-50/人/月)
     ↓
-One-API 网关 (多 Key 负载均衡 + 每人独立配额)
+laisky/one-api (Docker, 多 Key 负载均衡 + 每人独立 Token + 额度上限)
     ↓
 每人 Claude Desktop 3P (本地操作 Excel, git clone fzh-data)
     +
-Monet (共享 Memory: 项目经验/规则/Lessons Learned)
+Monet (共享 Memory: 四层记忆, MCP 接入)
     +
 GitHub (AGENTS.md + skills 版本管理)
+    +
+纠错晋升管道: 个体纠正 → 2次确认 → 核心规则 → 全队规则
 ```
 
-知识质量控制：版本化记忆 + 生命周期规则（临时 7 天 → 归档 30 天 → 清理）+ Agent 自动审核标记低可信度内容。
+组件明细：
+| 组件 | 作用 | 一行部署 |
+|------|------|---------|
+| One-API | DeepSeek Key → N 条 Token，每条独立配额 | `docker run -d -p 3000:3000 laisky/one-api` |
+| Monet | 团队共享 Memory（Group/User/Private 三级） | `git clone + pnpm quickstart` |
+| 纠错晋升 | 同一错误 2 次 → 规则化 → 全队共享 | 目前靠人工流程，可参考 Corellis 的 47 规则案例 |
 
 ---
 
