@@ -248,7 +248,7 @@ Agent 会自动加载这些文件并按规则行事。
 
 ---
 
-## 六、企业多用户自建方案（预算友好）
+## 六、企业多用户自建方案
 
 ### 6.1 Codex/Claude/Hermes 并不是单人工具
 
@@ -259,68 +259,89 @@ Agent 会自动加载这些文件并按规则行事。
 | 多用户 + RBAC | ✅ SCIM + 群组 | ✅ 5 座席起 | ✅ 5 种认证（含飞书/企微） |
 | Token 配额 | ✅ | ✅ 每用户上限 | 需自建网关 |
 | 知识共享 | ✅ Workspace Agents | ✅ Projects + Enterprise Search | ✅ 树形知识库 |
-| 审计日志 | ✅ Compliance API | ✅ | ✅ |
 | 价格 | 企业定制 | $100/座/月 | 免费 |
 
-Ref: [OpenAI Enterprise docs](https://help.openai.com/en/articles/8266401), [Claude Team plan](https://support.claude.com/en/articles/9266767), [Hermes RBAC](https://www.php.cn/faq/2345080.html)
+### 6.2 API 网关：DeepSeek Key → N 条有独立配额的 Token
 
-### 6.2 不想付企业版价格？开源方案能搭出同等功能
+**最成熟的选项：[QuantumNous/new-api](https://github.com/QuantumNous/new-api)**（36,958 ⭐，2026-06-03 更新）
 
-#### API 网关（替代已停维的 One-API）
+> `songquanpeng/one-api`（34,594 ⭐）已停止更新（最后推送 2026-01-09）。`new-api` 是其最活跃的 fork/继承者，昨天还在更新。
 
-> 你问的 `songquanpeng/one-api` 确实已停更。但有两个活跃的 fork/替代：
+**核心能力：**
+- **一个 DeepSeek Key → N 条 Token**：为你和同事每人创建独立 Token
+- **每 Token 独立配额**：Token 额度上限、过期时间、IP 白名单、可访问模型列表、访问频率限制
+- **多 Key 负载均衡**：一个渠道挂多把 Key，自动加权轮询，某 Key 超额自动切备用
+- **非 OpenAI 格式支持**：支持 Anthropic 原生协议（Claude Messages API），**Claude Desktop 可以直接用**
+- **分组+倍率计费**：DeepSeek 倍率 1.0，其他模型上浮
 
-| 项目 | 定位 | 核心能力 |
-|------|------|---------|
-| [**laisky/one-api**](https://github.com/laisky/one-api) | One-API 活跃 fork（31.8k stars） | 25+ 供应商聚合；多租户配额；MCP 聚合器 |
-| [**New-API**](https://github.com/calcium-ion/new-api) | One-API 增强版（24.2k stars） | 两阶段配额（预消费+后消费校准）；在线充值；渠道余额自动监控 |
+一行部署：`docker run -d -p 3000:3000 -v ./data:/data calcium-ion/new-api`
 
-**One-API 做什么**：
-- **一个 DeepSeek Key → 多个分发给同事的 Token**：每个 Token 可独立设额度上限、过期时间、IP 白名单、可访问模型
-- **多 Key 负载均衡**：一个渠道挂多把 Key，自动加权轮询。Key 超额时自动切到备用
-- **分组+倍率计费**：不同用户组可设不同的模型倍率
+> "给 5 个同事每人一条 Token，每人每月限 500 万 Token DeepSeek"——后台点几下，零代码。Claude Desktop 用户填 `https://你的服务器:3000` 作为 API 地址即可。
 
-> "给 20 个同事每人一条 Token，每人每月限 500 万 Token DeepSeek"——One-API 一行 Docker + 后台点几下，零代码。
+### 6.3 共享知识：当前阶段最实际的方案就是你已经在用的
 
-**如果你的需求更复杂**（美元预算、SSO、多 Provider Fallback），上 [**LiteLLM**](https://github.com/BerriAI/litellm)（41.8k stars）。LiteLLM 支持：Team → User → Virtual Key 三级配额、美元预算上限、成本最低/延迟最低自动路由、自动 Failover。
+**坦诚结论：搜索到的所有"团队共享 Memory"工具，没有一个是你装上就能用的现成产品。**
 
-#### 共享 Memory / 经验沉淀
+| 工具 | 实际定位 | 为什么不适合你 |
+|------|---------|--------------|
+| [Mem0](https://github.com/mem0ai/mem0)（57,665 ⭐） | 开发者 SDK——给程序员在自己 App 里嵌入记忆功能用的 | 需要写代码集成，不是独立产品 |
+| [Letta](https://github.com/letta-ai/letta)（23,134 ⭐） | 建"有状态的 AI Agent"的平台 | 给 AI 应用开发者用的框架 |
+| [Monet](https://github.com/team-monet/monet)（6 ⭐） | 原型/实验项目 | 6 颗星，不是生产工具 |
 
-| 项目 | 定位 | 关键特性 |
-|------|------|---------|
-| [**Monet**](https://github.com/team-monet/monet) | MCP-native 团队记忆平台 | Group/User/Private 三级；pgvector 语义搜索；Keycloak OIDC；审计日志 |
-| [**Mem0**](https://github.com/mem0ai/mem0) | 开源 Agent Memory | LoCoMo 91.6 分；21 框架集成；单次查询 ~6,900 tokens |
-| [**LangMem**](https://github.com/langchain-ai/langmem) | LangChain 生态 | 框架原生记忆提取 hooks |
-| [**Letta**](https://github.com/letta-ai/letta) | OS 式分层记忆 | RAM(上下文) = HDD(归档)，自主记忆管理 |
+**你现在的做法就是最实际的：AGENTS.md + skills + Lessons Learned → 提交到 GitHub。** 这是低技术门槛的知识共享：同事 git clone → Agent 自动读取 → 经验传递完成。
 
-**实战参考：28 Agent 单服务器（[原文](https://dev.to/jay_wong_45c807c6799b4fb7/how-we-ran-28-ai-agents-on-a-single-server-and-what-broke-1pbf)）**
-- 四层记忆：Personal(5KB cap) → Member → Channel(embeddings) → Company(vetted)
-- 纠正晋升管道：同一错误出现 2 次 → 晋升 Agent 核心规则 → 再犯 → 晋升全队规则
-- 8 周产出：**500+ 个体纠正 → 47 条全队规则**
-- API 成本从 $2,400/月 降至 ~$800/月（语义搜索替代上下文堆砌）
+### 6.4 28 Agent 单服务器实战案例详解
 
-### 6.3 务实自建架构（已验证方案）
+[原文](https://dev.to/jay_wong_45c807c6799b4fb7/how-we-ran-28-ai-agents-on-a-single-server-and-what-broke-1pbf) | [开源项目 Corellis](https://github.com/CorellisOrg/corellis)（MIT 协议）
 
+**背景**：一个团队在单台 64GB RAM 服务器（无 GPU）上跑了 28 个 AI Agent，处理 50,000+ 条 Slack 消息，持续 8 周。
+
+**系统架构**：
 ```
-DeepSeek API (按量, ¥10-50/人/月)
-    ↓
-laisky/one-api (Docker, 多 Key 负载均衡 + 每人独立 Token + 额度上限)
-    ↓
-每人 Claude Desktop 3P (本地操作 Excel, git clone fzh-data)
-    +
-Monet (共享 Memory: 四层记忆, MCP 接入)
-    +
-GitHub (AGENTS.md + skills 版本管理)
-    +
-纠错晋升管道: 个体纠正 → 2次确认 → 核心规则 → 全队规则
+一个 "Controller" Agent（分配目标+监控）
+    ↓ Slack 频道 + Notion 任务
+28 个专业 Agent 容器（Alice/Mktg, Bob/Ops, Carol/Fin...）
+    ↓ 各自 Docker 隔离
+共享知识库 + 团队记忆层
 ```
 
-组件明细：
-| 组件 | 作用 | 一行部署 |
-|------|------|---------|
-| One-API | DeepSeek Key → N 条 Token，每条独立配额 | `docker run -d -p 3000:3000 laisky/one-api` |
-| Monet | 团队共享 Memory（Group/User/Private 三级） | `git clone + pnpm quickstart` |
-| 纠错晋升 | 同一错误 2 次 → 规则化 → 全队共享 | 目前靠人工流程，可参考 Corellis 的 47 规则案例 |
+**四层记忆体系（核心亮点）**：
+```
+Company Memory（全公司，审核过的，永不过期）
+    ↑ 人工审核晋升
+Channel Memory（按主题，embeddings 语义搜索）
+    ↑ 自动索引
+Member Memory（按同事，存储纠正历史 + 偏好）
+    ↑ 每人独立
+Personal Memory（每 Agent，5KB 上限，每周自动修剪）
+```
+
+**"纠正晋升管道"——团队经验如何积累**：
+1. 某 Agent 犯错 → 记录到 `corrections.md`
+2. **同一错误出现 2 次** → 自动晋升为该 Agent 的"核心规则"
+3. 如果这条规则对全队都有用 → **推送到全队规则**（人工确认）
+4. 矛盾的纠正（如 A 要求"正式语气"、B 要求"随和"）→ **标记给人类裁决**
+5. 新 Agent 启动时**自动加载所有全队规则**，像"带着经验出生"
+
+**量化结果**：
+| 指标 | 数据 |
+|------|------|
+| 个体纠正次数 | 500+ |
+| 涌现的全队规则 | **47 条** |
+| API 成本变化 | $2,400/月 → **$800/月**（语义搜索替代上下文堆砌） |
+| 可用率 | 99.2% |
+| 季度报告耗时 | 从 2-3 小时人工 → **一句话 + 45 分钟 Agent 自动完成** |
+
+**踩过的坑**：
+- **记忆膨胀**：MEMORY.md 文件充斥重复和过时内容，Agent 幻觉"已完成的任务"
+- **纠正冲突**：不同的纠正彼此矛盾，产生垃圾输出——直到晋升管道里加了冲突检测
+- **协调死锁**：两个 Agent 花了 **整整 3 天** 互相等对方的 spec——经典死锁的自然语言版
+- **上下文开销**：大量 Token 浪费在堆砌上下文上，切到按需加载后才降本
+
+**对你公司的参考价值**：
+- 这不是一个你可以下载安装的产品，而是**一个团队自己搭的系统**（开源了一个叫 Corellis 的基础框架）
+- 核心思路（纠正晋升管道 + 四层记忆）**可以在你的团队里用简单的.md文件 + git 实现**
+- 你们现在的 AGENTS.md + Lessons Learned 已经走在这条路上了——缺的主要是"同一错误出现 2 次 → 自动提醒"这一步
 
 ---
 

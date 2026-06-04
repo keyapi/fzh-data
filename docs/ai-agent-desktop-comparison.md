@@ -289,9 +289,8 @@ Hermes 会自动将成功经验总结为 **Skills**。在服务器部署中，�
 |------|------|
 | OpenAI Enterprise 多用户 | [help.openai.com](https://help.openai.com/en/articles/8266401) |
 | Claude Team Plan | [support.claude.com](https://support.claude.com/en/articles/9266767) |
-| Monet 多租户 Memory | [GitHub](https://github.com/team-monet/monet) |
-| Tailscale Aperture Token 配额 | [tailscale.com](https://tailscale.com/blog/aperture-public-beta) |
-| OGX 供应商中立框架 | [GitHub](https://github.com/ogx-ai/ogx) |
+| API 网关: QuantumNous/new-api | [GitHub](https://github.com/QuantumNous/new-api)（36,958 ⭐，最后更新 2026-06-03） |
+| 28 Agent 实战: Corellis | [GitHub](https://github.com/CorellisOrg/corellis) + [dev.to 原文](https://dev.to/jay_wong_45c807c6799b4fb7/how-we-ran-28-ai-agents-on-a-single-server-and-what-broke-1pbf) |
 | DuploCloud 12 项多用户需求 | [duplocloud.com](https://duplocloud.com/blog/ai-native-devops-platform-requirements/) |
 | Forrester 2026 Agentic AI | [forrester.com](https://www.forrester.com/blogs/the-state-of-agentic-ai-in-2026-companies-are-chasing-few-are-catching/) |
 
