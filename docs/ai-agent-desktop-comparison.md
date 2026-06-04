@@ -6,14 +6,16 @@
 
 ---
 
-## 一分钟结论
+## 一分钟结论（修正版）
 
 | 你是什么人 | 选什么 | 花多少钱 |
 |-----------|--------|---------|
-| 非技术同事（日常办公、Excel、文档） | **Codex Desktop + OpenAI 官方订阅** | $20/月 |
-| 技术同事（写 Python、管数据） | Codex + Claude 组合 | $20-40/月 |
-| 预算极度有限 | Hermes（再等 3 个月看看） | 免费 |
-| ❌ 别碰 | Claude Desktop + DeepSeek 接第三方 | 被封了 |
+| 非技术同事（日常办公、Excel、文档） | **Codex Desktop + OpenAI 官方** | $20/月 |
+| 技术同事（写 Python、管数据、省钱） | **Claude Code CLI + DeepSeek V4** | API 按量 ~¥10-50/月 |
+| 技术同事（追求最强能力） | Claude Code + Codex 组合 | $20-40/月 |
+| 团队超过 5 人 | **Hermes 服务器部署**（试点） | ¥20-70/人/月 |
+| ❌ 别碰 | Codex + Codex++ + DeepSeek | 成本高、体验差 |
+| ❌ 别碰 | Claude Desktop 新版直接填 DeepSeek API | 被封了 |
 
 ---
 
@@ -65,29 +67,52 @@
 
 ---
 
-### 2. Claude Desktop — ⚠️ 技术同事的工具
+### 2. Claude Desktop — ⚠️ 分情况讨论
 
-**为什么不推荐给非技术同事：**
+**关键区分：你用的是什么版本、什么方式接 DeepSeek。**
 
-1. **桌面端体验差**。社区评价"桌面端纯半成品"，主力在命令行
-2. **2026 年 5 月 6 日起封杀第三方模型**。DeepSeek 用户必须搭本地代理做模型 ID 伪装，这对非技术人员是天书
-3. **学习曲线陡**。需要理解 MCP、config、环境变量
+#### 情况 A：旧版本 + 本地代理 → ✅ 可用
 
-**适合谁：**
-- 有技术背景的同事（知道什么是 API key、会配代理）
-- 需要深度推理、架构设计的场景
-- 配合 Codex 使用：Claude 做规划，Codex 做执行
+如果你在 2026 年 4 月底 - 5 月初下载了 Claude Desktop，并使用了本地代理（如 `deepclaude-mixed-setup`、`cc-switch`）+ 模型 ID 伪装，**目前仍可正常使用 DeepSeek V4**。
 
-**重大风险：Claude Desktop + DeepSeek = 猫鼠游戏**
+社区实测：
+- 模型 ID 伪装为 `claude-sonnet-4-6` 等 Anthropic 格式 → 绕过白名单
+- `deepclaude-mixed-setup`（npm 包）提供一键安装，支持 `claude-mode 3p/1p` 切换
+- 本项目用户实测：4 月底下载的版本 + 3P 模式接入 DeepSeek V4，至今能用
 
+**已知局限：**
+- 上传图片不报错但 DeepSeek 无法解析（纯文本模型）
+- 对话可以继续，不会像 Codex 那样线程卡死
+- "猫鼠游戏"风险：Anthropic 可能未来升级检测手段
+
+#### 情况 B：新版本 + 直接 Gateway 配置 → ❌ 已被封
+
+2026 年 5 月 6 日起，Anthropic 推送 1.6259.1 版本，新增**模型 ID 白名单**：
+- 只允许 `claude` 或 `anthropic` 前缀的模型
+- 直接填 DeepSeek API 地址 → 报错 `configured model is not an anthropic model`
+
+**绕过方法**：必须通过本地代理伪装模型 ID，不能用 Claude Desktop 原生配置面板。
+
+#### 情况 C：Claude Code CLI + DeepSeek → ✅ 最佳性价比
+
+**这是关键发现**——同样用 DeepSeek V4，Claude Code CLI 的成本和体验远优于 Codex Desktop：
+
+| 对比维度 | Claude Code + DeepSeek | Codex Desktop + DeepSeek |
+|----------|----------------------|--------------------------|
+| 缓存命中率 | 高（上下文策略好） | 低（Token 浪费严重） |
+| 同任务成本 | ¥0.5-1 | ¥12（10-20 倍差距） |
+| 图片上传 | 不报错，对话继续 | 线程永久卡死 |
+| Web Search | WebFetch 内置 | 需装 MCP |
+| 配置复杂度 | 环境变量一次配好 | 需桥接代理 + 协议转换 |
+
+Claude Code CLI 的环境变量配置（一次性）：
+```bash
+export ANTHROPIC_BASE_URL="https://api.deepseek.com/anthropic"
+export ANTHROPIC_AUTH_TOKEN="sk-你的Key"
+export ANTHROPIC_MODEL="deepseek-v4-pro"
 ```
-2026年4月: Gateway 模式短暂开放（2周）
-2026年5月6日: 模型 ID 白名单封杀（只允许 claude/anthropic 前缀）
-2026年5月底: 协议级变更（dynamic workflows 再次封杀国产模型）
-现在: 本地代理伪装模型 ID → 随时可能失效
-```
 
-**结论：不要把 Claude Desktop + DeepSeek 推给非技术同事。他们会恨你的。**
+**结论：对技术同事，推荐 Claude Code CLI + DeepSeek，不要用 Codex + DeepSeek。**
 
 ---
 
@@ -110,7 +135,69 @@
 
 **社区第三方版本**有中文支持（`dodo-reach/hermes-desktop`、`hermes-agent-cn`），但太碎片化，不适合推广给非技术同事。
 
-**建议：3 个月后再看。** Hermes 更新极快（"每周都不一样"），可能会快速成熟。
+**建议：3 个月后再看桌面端。** 但服务端部署值得现在了解。
+
+---
+
+### 3B. Hermes 服务器部署 — 🏭 企业团队方案
+
+**如果你不想让同事每人装一个桌面端，可以在公司服务器上部署 Hermes，大家通过浏览器或 IM（飞书/企微）使用。**
+
+#### 部署方式
+
+| 方案 | 难度 | 成本 | 适合 |
+|------|------|------|------|
+| **Docker 双容器**（官方） | ⭐⭐ | 服务器 ¥50/月 | 有 Docker 基础的团队 |
+| **阿里云计算巢** 一键部署 | ⭐ | 服务器 + 服务费 | 不想碰命令行的团队 |
+| **腾讯云轻量服务器** 应用模板 | ⭐ | ~¥188/年 | 预算敏感的团队 |
+
+#### Docker 部署（最灵活）
+
+```bash
+# 核心 Agent 服务
+docker run -d --name hermes --restart unless-stopped \
+  -v ~/.hermes:/opt/data \
+  -p 8642:8642 \
+  nousresearch/hermes-agent:latest gateway run
+
+# Web 管理面板
+docker run -d --name hermes-dashboard --restart unless-stopped \
+  -v ~/.hermes:/opt/data \
+  -p 9119:9119 \
+  nousresearch/hermes-agent:latest dashboard --host 0.0.0.0
+```
+
+#### 多用户支持
+
+| 功能 | 支持情况 |
+|------|---------|
+| **IM 接入** | ✅ 飞书、企业微信、钉钉、Telegram、微信 |
+| **Web 控制台** | ✅ 多人同时操作，权限隔离 |
+| **SSO 单点登录** | ✅ JWT / OAuth2.0 / LDAP |
+| **审计日志** | ✅ 保留 90 天操作日志 |
+| **资源配额** | ✅ 每用户 CPU/内存限额 |
+| **Token 消耗** | 取决于使用的模型 API（DeepSeek 极低） |
+
+#### 独特的"自我进化"能力
+
+Hermes 会自动将成功经验总结为 **Skills**。在服务器部署中，这些 Skills **可以跨用户共享**——A 同事解决问题的经验，B 同事自动受益。
+
+#### 成本测算（10 人团队）
+
+| 项目 | 月成本 |
+|------|--------|
+| 云服务器（4核8G） | ~¥100-200 |
+| DeepSeek API（共享池） | ~¥100-500（按使用量） |
+| **每人月均** | **¥20-70** |
+
+> 对比每人买 Codex $20/月 × 10 = $200/月 ≈ ¥1,450/月，Hermes 服务器方案有明显成本优势。
+
+#### 当前局限
+
+- 仍是较新产品，社区生态不如 Codex/Claude
+- "自我进化"效果需长期验证
+- 中文 IM 集成（企微/飞书）的稳定性待实测
+- 桌面端刚发预览版，服务端 + 桌面端的联动尚未成熟
 
 ---
 
@@ -140,25 +227,33 @@
 
 ---
 
-## 给公司推广的建议
+## 给公司推广的建议（更新）
 
-### 第 1 步：先让 1-2 个非技术同事试 Codex Desktop
+### 第 1 步：非技术同事 → Codex Desktop + OpenAI 官方订阅
 
-- 用 OpenAI 官方 $20/月订阅
-- 给他们 3 个具体任务（做 Excel、写邮件、查资料）
-- 收反馈：界面难不难？中文好不好？额度够不够？
+- $20/月，Excelmogging 办公模式，自然语言操作 Excel
+- 不要折腾 Codex++ / DeepSeek ——体验差、成本反而更高
 
-### 第 2 步：等 Hermes 成熟
+### 第 2 步：技术同事 → Claude Code CLI + DeepSeek
 
-- 关注 Nous Research 更新节奏
-- 等中文 UI + 稳定版发布
-- Hermes 免费 + 本地运行，长期成本最优
+- **成本最优**：同任务 Claude Code + DeepSeek 花费 ¥0.5-1，Codex + DeepSeek 花 ¥12
+- 环境变量一次性配置（5 分钟）
+- WebFetch 内置，不需要装 MCP
+- 图片上传不卡死线程（与 Codex 的关键差异）
 
-### 第 3 步：技术同事用 Codex + Claude 组合
+### 第 3 步：探索 Hermes 服务器部署
 
-- 技术同事可以折腾 Codex++/DeepSeek（我们已经踩过坑了）
-- 非技术同事用官方订阅
-- 本项目有完整的配置指南（见 AGENTS.md → 网络搜索 / WebFetch）
+- 如果团队超过 5 人，值得在服务器上部署 Hermes
+- Docker 双容器方案，5 分钟上线
+- 飞书/企微接入后，非技术同事甚至不需要装任何桌面软件
+- 长期成本最低（共享 API + 自我进化积累经验）
+
+### 第 4 步：不要做的事
+
+- ❌ 给非技术同事推 Claude Desktop 3P + 本地代理（技术门槛太高）
+- ❌ 给非技术同事推 Codex + Codex++ + DeepSeek（图片卡死 + 搜索靠 MCP）
+- ❌ 给任何人推 Hermes 桌面端（中文不支持，等 3 个月）
+- ❌ 现在就让全公司用 DeepSeek V4 Pro（`tool_choice` 参数 bug 影响部分功能）
 
 ---
 
