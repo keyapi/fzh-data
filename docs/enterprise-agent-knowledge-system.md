@@ -130,9 +130,127 @@ model_list:
 
 **结论**：多用户 API 管理 + 全量对话日志存储，**LiteLLM 一个项目全包了**。不需要 new-api + Squirrel 拼凑。
 
+### 2.4 代码级验证过程
+
+以上结论经过三层交叉验证（非仅凭文档摘要）：
+
+| 验证层 | 方法 | 证据 |
+|--------|------|------|
+| 数据库 schema | 直接读取 `schema.prisma` | `LiteLLM_SpendLogs` 表含 `messages Json` 和 `response Json` 字段 |
+| payload 构造 | 读取 `spend_tracking_utils.py` | `get_logging_payload` 从 `StandardLoggingPayload` 中提取 `messages` 和 `response` |
+| GitHub 元数据 | `gh repo view --json stargazerCount,pushedAt` | 49,247 ⭐，2026-06-04 推送 |
+
+**注意**：DeepWiki 文档摘要适合快速定位代码位置，但最终验证仍需直接读 `raw.githubusercontent.com` 的源码——本次验证中 DeepWiki 的 payload 构造代码被截断，源码才完整。
+
+### 2.5 WorkflowMessage：绕过截断限制
+
+`SpendLogs.messages` 受 `MAX_STRING_LENGTH_PROMPT_IN_DB` 截断影响，长 Agent 会话可能不完整。LiteLLM 2026 年 4 月通过 PR #26793 新增了三张表解决此问题：
+
+```
+LiteLLM_WorkflowRun         ← 一个 Agent 会话一条记录
+  session_id → 桥接到 SpendLogs（成本追踪自动关联）
+  status → pending/running/paused/failed/completed
+  input/output/metadata (Json)
+
+LiteLLM_WorkflowEvent       ← 追加型事件日志（不可修改）
+  event_type: "step.started" / "step.failed" / "hook.waiting"
+  step_name, sequence_number, data(Json)
+
+LiteLLM_WorkflowMessage     ← **完整消息，不截断**
+  role: "user" / "assistant"
+  content: 完整消息内容（无 MAX_STRING_LENGTH 限制）
+  sequence_number
+```
+
+**PR 原文**："spend logs truncate messages; this table stores them in full."
+
+**8 个 REST 端点**，Agent 会话可以这样用：
+- `POST /v1/workflows/runs` → 创建会话记录
+- `POST /runs/{id}/messages` → 追加每轮对话（不截断）
+- `POST /runs/{id}/events` → 记录关键事件（工具调用、用户纠正、任务完成）
+- `GET /runs?status=running` → 重启后恢复未完成的任务
+- session_id 自动关联到 SpendLogs → 成本追踪
+
+**对知识提取的实用意义**：如果你需要完整的 Agent 对话来做知识提取，用 `WorkflowMessage` 表，不要用 `SpendLogs.messages`。前者不截断，后者会在长会话中被截断。
+
 ---
 
-## 三、其他拼图
+## 三、实战参考：舰队学习（Fleet Learning）
+
+### 3.1 Corellis（OpenClaw 平台，2026 年 2 月投产）
+
+**是什么**：一个开源系统（MIT），将单个 OpenClaw AI 助手扩展为一支协调的 AI Agent 舰队。28 个 Agent（叫"lobsters"）运行在单台 64GB RAM 服务器上，持续 8 周以上。
+
+**GitHub**: [CorellisOrg/corellis](https://github.com/CorellisOrg/corellis) | 技术栈：Shell 77.9% + JavaScript 16.8% + Python 2.5%
+
+**架构**：
+
+```
+Controller（宿主机，OpenClaw 直接运行）
+  ├── 管理 Docker 容器（spawn/broadcast/sync/health）
+  ├── 写共享目录
+  │
+  └── Lobsters × 28（Docker 容器，每个 ~2GB RAM）
+        ├── ro: 共享 company-memory, company-skills, company-config
+        └── rw: 私有 workspace
+```
+
+**为什么 Controller 不放 Docker 里**："Docker-in-Docker adds complexity with no benefit."
+
+**纠错晋升管道（核心机制）**：
+```
+个体 Agent 被纠正 → 记录到 corrections.md
+    ↓ 同一错误出现 2 次
+晋升为该 Agent 的"核心规则"
+    ↓ 如果对全队有用
+推送到全队规则（人工确认）
+    ↓
+新 Agent 启动时自动加载所有全队规则
+```
+
+**四层记忆**：
+
+| 层 | 范围 | 容量策略 |
+|----|------|---------|
+| Personal | 单 Agent | 5KB cap，每周自动修剪 |
+| Member | 按同事 | 纠正历史 + 偏好 |
+| Channel | 按主题 | Embeddings 语义搜索 |
+| Company | 全公司 | 审核过的，永不过期 |
+
+**Teamind（语义团队记忆）**：50,000+ Slack 消息用 embeddings 索引。任何 Agent 都可以搜 "what did we decide about X?"
+
+**量化结果**：500+ 个体纠正 → 47 条全队规则；API 成本 $2,400→$800/月；可用率 99.2%
+
+### 3.2 Hermes 的舰队学习能力（v0.13.0, 2026 年 5 月）
+
+**Hermes 能做类似的事吗？能——而且更现代。**
+
+| 维度 | Corellis (OpenClaw) | Hermes (v0.13.0+) |
+|------|---------------------|---------------------|
+| 基础平台 | OpenClaw | Hermes Agent（自进化） |
+| 多 Agent 协调 | Controller + Lobster Docker | **Kanban 看板 + 黑板架构** |
+| 技能生成 | 手动 + 纠正晋升 | **自动 Skill 生成**（闭合学习循环） |
+| 纠错机制 | corrections.md + 晋升管道 | 心跳检测 + 僵尸回收 + 幻觉门禁 + **交接合同（Handoff Contracts）** |
+| 记忆系统 | 四层（Personal→Member→Channel→Company） | **四层**（核心记忆 + 用户画像 + FTS5 + Skill 库） |
+| RL 引擎 | ❌ | ✅ **Atropos RL**（工具轨迹→训练数据→模型飞轮） |
+| 可靠性 | 人工介入 | 断路器 + 自动封锁 + 重试限制 |
+
+**Hermes 的关键差异化**：
+- **自动 Skill 生成**：同类型任务重复执行后，工具调用次数减少 **60%+**
+- **交接合同**：定义 Agent 间的输入/输出格式和验证门禁，格式不符则阻塞交接——这比 Corellis 的"人工解决矛盾纠正"更自动化
+- **幻觉门禁**：Worker 声称完成任务但实际未完成时自动触发，防止 AI 团队空转
+
+**风险**：之前的调研已确认——Hermes 自生成 Skill 有安全隐患（V2EX 用户：第 7 天自动合入半成品 PR）。但 Kanban 看板 + 交接合同 + 幻觉门禁的组合，在 v0.13.0 已大幅改善多 Agent 可靠性。
+
+### 3.3 对你的参考价值
+
+Corellis 证明了**单服务器跑 28 个 Agent 的架构可行**（每个 Agent ~2GB RAM，64GB 够用）。但它的底层是 OpenClaw。
+
+如果你想用 Hermes 替代 OpenClaw 做舰队学习：
+- Hermes v0.13.0+ 的 Kanban + 黑板架构已支持多 Agent 协作
+- 自动 Skill 生成比 Corellis 的手动纠正晋升更先进
+- 但 Corellis 的"500+ 纠正 → 47 规则"是经过 8 周生产验证的量化结果，Hermes 缺乏同等规模的公开发布数据
+- Hermes 的自进化安全性仍需警惕（之前的 V2EX 教训）
 
 ### 3.1 知识提取层：有论文和原型，无现成产品
 
@@ -266,7 +384,8 @@ Cursor 的"实时 RL"做的不是知识提取，而是用用户交互作为训�
 4. **网关能否捕获本地文件 I/O** → 分析确认：文件内容出现在对话消息中就能捕获，但网关不碰本地磁盘
 5. **Agent 读写文件内容验证** → Read 结果回传 LLM → 网关可见。Write 内容来自 LLM 输出 → 网关可见
 6. **Monet/Mem0/Letta 定位澄清** → Monet 6⭐ 原型；Mem0 开发者 SDK；Letta Agent 平台。都不是团队知识库现成产品
-7. **28 Agent 案例详解** → Corellis 开源，四层记忆+纠错晋升管道，不是可下载产品而是自己搭的系统
+7. **28 Agent 案例详解** → Corellis 开源，四层记忆+纠错晋升管道，基于 OpenClaw，单服务器 64GB RAM
+8. **Hermes 舰队学习对比** → v0.13.0 Kanban + 黑板架构 + 交接合同 + 幻觉门禁。自动 Skill 生成比 Corellis 手动纠正更先进，但缺乏同等规模的公开发布数据
 
 ---
 
@@ -281,6 +400,9 @@ Cursor 的"实时 RL"做的不是知识提取，而是用用户交互作为训�
 | IBM Agent Mentor | [arXiv 2604.10513](https://arxiv.org/html/2604.10513v1) | ⭐⭐⭐⭐⭐ | 同行评审论文 |
 | Capital One 对话摘要 | [EACL 2026](https://aclanthology.org/2026.eacl-industry.41/) | ⭐⭐⭐⭐⭐ | 顶会论文 |
 | Corellis 28 Agent | [GitHub](https://github.com/CorellisOrg/corellis) + [dev.to](https://dev.to/jay_wong_45c807c6799b4fb7/how-we-ran-28-ai-agents-on-a-single-server-and-what-broke-1pbf) | ⭐⭐⭐⭐ | 开源+长篇实测 |
+| Hermes v0.13.0 多 Agent Release | [GitHub Releases](https://github.com/NousResearch/hermes-agent/releases/tag/v2026.5.7) | ⭐⭐⭐⭐ | 官方 Release Notes |
+| LiteLLM WorkflowMessage PR #26793 | [GitHub PR](https://github.com/BerriAI/litellm/pull/26793) | ⭐⭐⭐⭐⭐ | 直接读 PR + schema.prisma |
+| LiteLLM schema.prisma | [raw](https://raw.githubusercontent.com/BerriAI/litellm/main/schema.prisma) | ⭐⭐⭐⭐⭐ | 直接读源码 |
 | Obsidian Second Brain | [GitHub](https://github.com/eugeniughelbur/obsidian-second-brain) | ⭐⭐⭐ | 开源项目 |
 | 2026 Agent 可观测性报告 | [futureagi.com](https://futureagi.com/blog/best-ai-agent-observability-tools-2026/) | ⭐⭐⭐⭐ | 行业评测 |
 | 知识自动提取是最大缺口 | [dev.to](https://dev.to/utibe_okodi_339fb47a13ef5/i-evaluated-every-ai-agent-observability-tool-on-the-market-heres-whats-actually-missing-54c) | ⭐⭐⭐ | 独立评测 |
