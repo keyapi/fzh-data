@@ -2,410 +2,228 @@
 
 > 问题：能否搞一个项目，组合网关 + Agent 运行时 + 知识库，实现多用户管理 + 经验自动积累？
 >
-> 最后更新：2026-06-04
+> 最后更新：2026-06-05
 
 ---
 
-## 一、网关到底能看到什么
+## 一、结论先行：方向正确，已有先行者
 
-### 1.1 先厘清 Agent 读写文件时的数据流
-
-用户对"网关能不能看到 Agent 本地读写的文件"存疑。实际流程如下：
-
-**Agent 读取文件时：**
-```
-1. Agent 调 Read("数据源/通途导出.xlsx") → 本地执行，得到内容
-2. Agent 把内容放进下一条发给 LLM 的消息:
-   "我读了 Excel，表头是 SKU/仓库/数量，前5行是..."
-3. → 网关在步骤 2 的 HTTP 请求中捕获到文件内容 ✅
-```
-
-**Agent 写入文件时：**
-```
-1. LLM 输出: "请在 analyze.py 中写入: import pandas as pd\n..."
-2. → 网关在步骤 1 的 HTTP 响应中捕获到完整代码 ✅
-3. Agent 本地执行 Write("analyze.py", "import pandas...")
-4. Agent 告诉 LLM "文件已写入" → 确认消息也经过网关
-```
-
-**结论：网关不碰本地文件系统，但只要文件内容和代码出现在 Agent 与 LLM 的对话中，就能被网关记录。** 网关是网络层代理，看到的是 HTTP 请求/响应的全部内容。
-
-### 1.2 网关能捕获的
-
-| 数据类型 | 是否在请求/响应中 | 能否被网关捕获 |
-|----------|:---:|:---:|
-| 用户的文字输入 | ✅ messages 数组 | ✅ |
-| Agent 的系统提示词（含 AGENTS.md） | ✅ system prompt | ✅ |
-| 上传的图片 | ✅ base64 编码在 messages 中 | ✅（但体积大，存储成本高） |
-| 被读取的文件内容 | ✅ Agent 回传给 LLM 的消息中 | ✅ |
-| LLM 输出的代码/文本 | ✅ response choices | ✅ |
-| 工具调用请求（名称+参数） | ✅ tool_calls | ✅ |
-| Token 用量/延迟/错误 | ✅ response headers | ✅ |
-| 用户身份 | ✅ API Key → UserID | ✅ |
-
-**前提条件**：网关必须实际存储请求体和响应体，而不只是计费摘要。
-
-### 1.3 网关不能捕获的
-
-| 数据类型 | 为什么 |
-|----------|--------|
-| 工具执行的具体结果 | bash 输出、浏览器截图在 Agent 本地产生，不经过网关 HTTP |
-| 文件是否成功写入磁盘 | Agent 告诉 LLM "写好了"≠文件真实存在，网关无法验证 |
-| Agent 内部推理链 | 模型输出"我需要先理解数据"→后面的决策过程只有模型自己知道 |
+我们的需求不是第一个。**多个公司和开源项目已经在 2026 年搭建了类似的架构**。核心拼图都已存在，知识自动提取仍是最大缺口。
 
 ---
 
-## 二、网关选型：调研过程与最终推荐
+## 二、网关到底能看到什么
 
-### 2.1 第一次调研（已废弃）
+### 2.1 Agent 读写文件时的数据流
 
-最初推荐 `new-api`（36,958 ⭐）作为 API 网关。但经用户质疑后，核查代码发现：
+**Agent 读取文件时**：内容被回传给 LLM → 出现在 HTTP 请求的 messages 中 → 网关可见
+**Agent 写入文件时**：LLM 输出的代码 → 出现在 HTTP 响应中 → 网关可见
+**Agent 不把内容传给 LLM 时**：网关看不到（本地操作不经过网络）
 
-**new-api `model/log.go` 真实字段：**
-```go
-Id, UserId, CreatedAt, Type, Content,      // Content 是文本描述如"消费500 tokens"
-Username, TokenName, ModelName, Quota,       // 不是对话全文
-PromptTokens, CompletionTokens, UseTime,     // Token 计数
-ChannelId, TokenId, Group, Ip, RequestId     // 追踪信息
-```
-
-**没有 `request_body`，没有 `response_body`。** new-api 的日志是为计费设计的，不是为知识提取设计的。能回答"张三 14:32 用了多少 tokens"，不能回答"张三问了什么、模型答了什么"。
-
-### 2.2 第二次调研（已废弃）
-
-补充推荐了 Squirrel LLM Gateway（57 ⭐）和 AgentLens（2 ⭐）。但两者都是小型项目，不成熟。
-
-### 2.3 最终推荐：LiteLLM
+### 2.2 网关选型：LiteLLM（经代码验证）
 
 | 属性 | 值 |
 |------|-----|
 | GitHub | [BerriAI/litellm](https://github.com/BerriAI/litellm) |
-| Stars | **49,247**（经 `gh repo view` 验证） |
-| 最后更新 | **2026-06-04（今天）** |
-| 定位 | Python SDK + Proxy Server（AI Gateway），调用 100+ LLM |
+| Stars | **49,247**（`gh repo view` 验证） |
+| 最后更新 | 2026-06-04 |
 | 协议 | MIT |
 
-**为什么 LiteLLM 是唯一正确选择**：
-
-| 需求 | new-api | LiteLLM |
-|------|:---:|:---:|
-| 多用户配额（Org→Team→User→Key） | ✅ | ✅ 同样三级 + USD 预算 |
-| 请求/响应**全文**存储 | ❌ 只有 Token 计数 | ✅ `messages` + `response` JSON 存 PostgreSQL/Supabase |
-| 流式捕获 | ❌ | ✅ `StandardLoggingPayload` |
-| Agent 长会话全文（不截断） | ❌ | ✅ 2026年4月 `WorkflowMessage` 表 |
-| Anthropic 原生协议（非 OpenAI 格式） | ✅ | ✅ |
-| Docker 一行部署 | ✅ | ✅ |
-
-**LiteLLM 实际存储的字段**（来自代码和文档）：
-
-```yaml
-StandardLoggingPayload:
-  model: "deepseek-v4-pro"
-  messages: [{"role":"user","content":"帮我分析这个Excel的品类汇总..."}]   # 完整对话
-  response: {"choices":[{"message":{"content":"..."}}]}                     # 模型完整输出
-  end_user: "zhangsan"
-  total_cost: 0.023
-  response_time: 1.2
-  status: "success"
-  litellm_call_id: "uuid"
-```
-
-配置示例（Supabase/PostgreSQL 存储）：
-```yaml
-# config.yaml
-general_settings:
-  database_url: "postgresql://..."
-
-litellm_settings:
-  success_callback: ["supabase"]
-  failure_callback: ["supabase"]
-
-model_list:
-  - model_name: deepseek-v4-pro
-    litellm_params:
-      model: openai/deepseek-chat
-      api_base: https://api.deepseek.com/v1
-      api_key: os.environ/DEEPSEEK_API_KEY
-```
-
-**结论**：多用户 API 管理 + 全量对话日志存储，**LiteLLM 一个项目全包了**。不需要 new-api + Squirrel 拼凑。
-
-### 2.4 代码级验证过程
-
-以上结论经过三层交叉验证（非仅凭文档摘要）：
+**代码级验证过程**：
 
 | 验证层 | 方法 | 证据 |
 |--------|------|------|
-| 数据库 schema | 直接读取 `schema.prisma` | `LiteLLM_SpendLogs` 表含 `messages Json` 和 `response Json` 字段 |
-| payload 构造 | 读取 `spend_tracking_utils.py` | `get_logging_payload` 从 `StandardLoggingPayload` 中提取 `messages` 和 `response` |
-| GitHub 元数据 | `gh repo view --json stargazerCount,pushedAt` | 49,247 ⭐，2026-06-04 推送 |
+| 数据库 schema | 直接读 `schema.prisma` | `LiteLLM_SpendLogs` 含 `messages Json` + `response Json` 字段 |
+| payload 构造 | 读 `spend_tracking_utils.py` | `get_logging_payload` 从 `StandardLoggingPayload` 提取 |
+| 仓库元数据 | `gh repo view --json stargazerCount,pushedAt` | 49,247 ⭐ |
 
-**注意**：DeepWiki 文档摘要适合快速定位代码位置，但最终验证仍需直接读 `raw.githubusercontent.com` 的源码——本次验证中 DeepWiki 的 payload 构造代码被截断，源码才完整。
+**限制**：
+- `SpendLogs.messages` 受 `MAX_STRING_LENGTH` 截断（保留头 35% + 尾 65%）
+- 仅 `_arealtime` 类型调用会存储 messages
+- 2026 年 4 月新增 `LiteLLM_WorkflowMessage` 表绕过截断（PR #26793）
 
-### 2.5 WorkflowMessage：绕过截断限制
+### 2.3 `hermes proxy` 不是答案（代码验证）
 
-`SpendLogs.messages` 受 `MAX_STRING_LENGTH_PROMPT_IN_DB` 截断影响，长 Agent 会话可能不完整。LiteLLM 2026 年 4 月通过 PR #26793 新增了三张表解决此问题：
+`hermes proxy` 源码（`server.py`）的 docstring：
 
-```
-LiteLLM_WorkflowRun         ← 一个 Agent 会话一条记录
-  session_id → 桥接到 SpendLogs（成本追踪自动关联）
-  status → pending/running/paused/failed/completed
-  input/output/metadata (Json)
+> *"intentionally minimal — does NOT mediate, log, transform, or rewrite request/response bodies."*
 
-LiteLLM_WorkflowEvent       ← 追加型事件日志（不可修改）
-  event_type: "step.started" / "step.failed" / "hook.waiting"
-  step_name, sequence_number, data(Json)
-
-LiteLLM_WorkflowMessage     ← **完整消息，不截断**
-  role: "user" / "assistant"
-  content: 完整消息内容（无 MAX_STRING_LENGTH 限制）
-  sequence_number
-```
-
-**PR 原文**："spend logs truncate messages; this table stores them in full."
-
-**8 个 REST 端点**，Agent 会话可以这样用：
-- `POST /v1/workflows/runs` → 创建会话记录
-- `POST /runs/{id}/messages` → 追加每轮对话（不截断）
-- `POST /runs/{id}/events` → 记录关键事件（工具调用、用户纠正、任务完成）
-- `GET /runs?status=running` → 重启后恢复未完成的任务
-- session_id 自动关联到 SpendLogs → 成本追踪
-
-**对知识提取的实用意义**：如果你需要完整的 Agent 对话来做知识提取，用 `WorkflowMessage` 表，不要用 `SpendLogs.messages`。前者不截断，后者会在长会话中被截断。
+它只是一个 OAuth credential forwarder——剥离客户端 auth → 注入 OAuth token → 转发上游。不记录对话内容。
 
 ---
 
-## 三、实战参考：舰队学习（Fleet Learning）
+## 三、已有先行者：LiteLLM Agent Platform
 
-### 3.1 Corellis（OpenClaw 平台，2026 年 2 月投产）
-
-**是什么**：一个开源系统（MIT），将单个 OpenClaw AI 助手扩展为一支协调的 AI Agent 舰队。28 个 Agent（叫"lobsters"）运行在单台 64GB RAM 服务器上，持续 8 周以上。
-
-**GitHub**: [CorellisOrg/corellis](https://github.com/CorellisOrg/corellis) | 技术栈：Shell 77.9% + JavaScript 16.8% + Python 2.5%
-
-**架构**：
+**BerriAI（LiteLLM 团队）在 2026 年 5 月开源了 [litellm-agent-platform](https://github.com/BerriAI/litellm-agent-platform)**：
 
 ```
-Controller（宿主机，OpenClaw 直接运行）
-  ├── 管理 Docker 容器（spawn/broadcast/sync/health）
-  ├── 写共享目录
-  │
-  └── Lobsters × 28（Docker 容器，每个 ~2GB RAM）
-        ├── ro: 共享 company-memory, company-skills, company-config
-        └── rw: 私有 workspace
+┌─────────────────────────────────────────────┐
+│  Orchestrator (agent-deck / Hermes / Custom) │
+│  - Task decomposition → DAG                  │
+│  - Parallel scheduling                       │
+│  - Cost tracking per agent                   │
+└──────────────┬──────────────────────────────┘
+               │
+┌──────────────▼──────────────────────────────┐
+│  LiteLLM Agent Platform (Kubernetes)          │
+│  - Sandbox CRD per agent run                 │
+│  - Vault proxy (stub→real credential swap)   │
+│  - Postgres session persistence              │
+│  - LiteLLM Gateway (routing, rate limits)    │
+└──────────────┬──────────────────────────────┘
+               │
+┌──────────────▼──────────────────────────────┐
+│  Harnesses (selectable per task)             │
+│  Claude Code  │  Codex  │  Hermes  │  Aider  │
+└─────────────────────────────────────────────┘
 ```
 
-**为什么 Controller 不放 Docker 里**："Docker-in-Docker adds complexity with no benefit."
+**与我们需求的对照**：
 
-**纠错晋升管道（核心机制）**：
+| 我们的需求 | LiteLLM Agent Platform |
+|-----------|----------------------|
+| 多用户 API 管理 | ✅ Vault proxy + stub tokens |
+| 对话日志完整存储 | ✅ LiteLLM Gateway `messages` + `response` |
+| 支持 Claude/Codex 本地执行 | ✅ 多 harness 可选 |
+| 知识自动提取 | ❌ 仍未解决 |
+
+---
+
+## 四、Hermes + Claude Code 双栈架构（已验证的社区方案）
+
+[完整教程](https://dev.to/akaranjkar08/i-built-the-hermes-claude-code-dual-stack-orchestrator-meets-coder-heres-the-full-architecture-228a) | 来源：dev.to 2026
+
 ```
-个体 Agent 被纠正 → 记录到 corrections.md
-    ↓ 同一错误出现 2 次
-晋升为该 Agent 的"核心规则"
-    ↓ 如果对全队有用
-推送到全队规则（人工确认）
-    ↓
-新 Agent 启动时自动加载所有全队规则
+Telegram → Hermes (VPS $5/月, 7×24)
+              │  MCP over SSH tunnel (双向 stdio)
+              ↓
+           Claude Code (本地 MacBook)
 ```
 
-**四层记忆**：
+**通信方式**：不是 HTTP 代理，是 **SSH stdio 隧道 + MCP 协议**。
 
-| 层 | 范围 | 容量策略 |
-|----|------|---------|
-| Personal | 单 Agent | 5KB cap，每周自动修剪 |
-| Member | 按同事 | 纠正历史 + 偏好 |
-| Channel | 按主题 | Embeddings 语义搜索 |
-| Company | 全公司 | 审核过的，永不过期 |
+```json
+// 本地 Claude Code 注册远端 Hermes
+"hermes": {
+  "command": "ssh",
+  "args": ["-T", "root@vps-ip", "hermes mcp serve"]
+}
+```
 
-**Teamind（语义团队记忆）**：50,000+ Slack 消息用 embeddings 索引。任何 Agent 都可以搜 "what did we decide about X?"
+**角色分工**：
+- Hermes（VPS）：编排、Telegram/钉钉 gateway、持久记忆（SQLite）、cron。**不写代码**
+- Claude Code（本地）：编码、文件操作、git。**完整代码库访问**
 
-**量化结果**：500+ 个体纠正 → 47 条全队规则；API 成本 $2,400→$800/月；可用率 99.2%
+**知识共享方式**：每小时 cron 导出 Hermes 记忆 → markdown → Claude Code 通过 CLAUDE.md 读取。不是自动对话提取。
 
-### 3.2 Hermes 的舰队学习能力（v0.13.0, 2026 年 5 月）
+**可靠性问题**：SSH 隧道是"整个方案中最脆弱的一环"，MCP 调用有 200-400ms 延迟。
 
-**Hermes 能做类似的事吗？能——而且更现代。**
+---
 
-| 维度 | Corellis (OpenClaw) | Hermes (v0.13.0+) |
-|------|---------------------|---------------------|
-| 基础平台 | OpenClaw | Hermes Agent（自进化） |
-| 多 Agent 协调 | Controller + Lobster Docker | **Kanban 看板 + 黑板架构** |
-| 技能生成 | 手动 + 纠正晋升 | **自动 Skill 生成**（闭合学习循环） |
-| 纠错机制 | corrections.md + 晋升管道 | 心跳检测 + 僵尸回收 + 幻觉门禁 + **交接合同（Handoff Contracts）** |
-| 记忆系统 | 四层（Personal→Member→Channel→Company） | **四层**（核心记忆 + 用户画像 + FTS5 + Skill 库） |
-| RL 引擎 | ❌ | ✅ **Atropos RL**（工具轨迹→训练数据→模型飞轮） |
-| 可靠性 | 人工介入 | 断路器 + 自动封锁 + 重试限制 |
+## 五、实际落地案例
 
-**Hermes 的关键差异化**：
-- **自动 Skill 生成**：同类型任务重复执行后，工具调用次数减少 **60%+**
-- **交接合同**：定义 Agent 间的输入/输出格式和验证门禁，格式不符则阻塞交接——这比 Corellis 的"人工解决矛盾纠正"更自动化
-- **幻觉门禁**：Worker 声称完成任务但实际未完成时自动触发，防止 AI 团队空转
+### 5.1 Shopify River（5,938 员工，2026）
 
-**风险**：之前的调研已确认——Hermes 自生成 Skill 有安全隐患（V2EX 用户：第 7 天自动合入半成品 PR）。但 Kanban 看板 + 交接合同 + 幻觉门禁的组合，在 v0.13.0 已大幅改善多 Agent 可靠性。
+- 部署在**公开 Slack 频道**（非私信）
+- 30 天内 5,938 名员工使用，覆盖 4,450 个频道
+- 12.5% 的合并 PR 由 River 编写
+- **合并率从 36% → 77%**（2 个月内），靠的是**众包集体改进**，不是模型重训
+- 核心机制：公开可见 → 员工观察他人提示词 → 有机知识扩散
 
-### 3.3 对你的参考价值
+### 5.2 MCP Gateway Registry #665（"Agent 的 StackOverflow"）
 
-Corellis 证明了**单服务器跑 28 个 Agent 的架构可行**（每个 Agent ~2GB RAM，64GB 够用）。但它的底层是 OpenClaw。
+[GitHub Issue](https://github.com/agentic-community/mcp-gateway-registry/issues/665) | 2026 年 3-4 月 |
 
-如果你想用 Hermes 替代 OpenClaw 做舰队学习：
-- Hermes v0.13.0+ 的 Kanban + 黑板架构已支持多 Agent 协作
-- 自动 Skill 生成比 Corellis 的手动纠正晋升更先进
-- 但 Corellis 的"500+ 纠正 → 47 规则"是经过 8 周生产验证的量化结果，Hermes 缺乏同等规模的公开发布数据
-- Hermes 的自进化安全性仍需警惕（之前的 V2EX 教训）
+- Agent 自报问题/解决方案到共享知识库
+- 解决方案验证循环：不同 Agent 验证 → 置信度上升；执行失败 → 置信度下降
+- 三级信任：平台认证 → 社区签名 → 自行报告
+- **Token 节省 60-80%**（已知方案被检索到时）
+- KinthAI：31 个 Agent 共享同一知识库运行中
 
-### 3.1 知识提取层：有论文和原型，无现成产品
+### 5.3 Corellis（28 Agent，8 周验证）
 
-**这是整个系统最薄弱的环节。** 2026 年 Agent 可观测性行业共识：**trace → 知识自动提取是最大缺口。** 没有一个工具能自动把对话日志转成可复用的知识点。
+[GitHub](https://github.com/CorellisOrg/corellis) + [dev.to 原文](https://dev.to/jay_wong_45c807c6799b4fb7/how-we-ran-28-ai-agents-on-a-single-server-and-what-broke-1pbf)
 
-最接近的：
+- 基于 OpenClaw，单服务器 64GB RAM
+- 四层记忆：Personal（5KB cap）→ Member → Channel（embeddings）→ Company（审核过）
+- 纠错晋升管道：同一错误 2 次 → 晋升规则 → 推送全队
+- 8 周：500+ 纠正 → 47 条全队规则；API 成本 $2,400→$800/月
+
+### 5.4 Hermes 舰队学习能力（v0.13.0+）
+
+[Hermes v0.13.0 Release](https://github.com/NousResearch/hermes-agent/releases/tag/v2026.5.7)
+
+- **Kanban 看板 + 黑板架构**：多 Worker 从同一看板认领任务
+- **交接合同（Handoff Contracts）**：Agent 间定义输入/输出格式和验证门禁
+- **幻觉门禁**：Worker 声称完成任务但未完成时自动触发
+- **自动 Skill 生成**：同类型任务重复执行后工具调用减 60%+
+- **风险**：自生成 Skill 有安全隐患（V2EX 用户：第 7 天自动合入半成品 PR）
+
+---
+
+## 六、知识自动提取：2026 最大缺口
 
 | 项目 | 做了什么 | 成熟度 |
 |------|---------|--------|
-| **IBM ALTK-Evolve** | 从 Agent 交互轨迹中自动挖掘通用规则，评估频率/影响/置信度 | 研究原型（+8.9% 任务完成率） |
-| **IBM Agent Mentor** | 聚类执行轨迹，识别"好"vs"坏"结果，自动生成纠正性提示词 | 论文（arXiv 2604.10513） |
-| **Capital One 对话摘要管线** | 6 个 Agent 协作从对话中提取结构化知识 | 生产级（用于客服场景，非编程 Agent） |
-| **Elastic Knowledge Indicators** | 从日志自动提取实体/依赖/模式，7 天自清理 | 生产级（用于基础设施可观测性，非 Agent 知识） |
+| **IBM ALTK-Evolve** | Agent 交互轨迹 → 自动挖掘通用规则 | 研究原型 +8.9% |
+| **IBM Agent Mentor** | 聚类执行轨迹 → 自动生成纠正性提示词 | 论文 |
+| **agent-triage** | 提取行为规则，回放对话找根因 | v0.2.0 开源 |
+| **ai-knot** | 对话 → 结构化事实 → 衰减 + 检索 | v0.9.3 |
+| **Dnotitia AKB** | Agent 原生知识库（对话/决策/输出） | 2026 年 6 月开源 |
 
-### 3.2 知识存储层：有成熟方案
-
-| 方案 | 适合场景 | 成熟度 |
-|------|---------|--------|
-| **Obsidian + Git** | 团队知识库，Markdown 原生，Agent 可读写 | 成熟（Open Second Brain, Obsidian Second Brain） |
-| **Corellis 四层记忆** | Agent 舰队，纠错晋升管道（经项目实测验证） | 生产验证（28 Agent，MIT 开源） |
-| **Mem0**（57,665 ⭐） | 开发者 SDK，给 App 嵌入记忆功能 | 成熟，但不适合直接给团队用 |
-| **RAG + 向量数据库** | 语义搜索 | 成熟 |
-
-### 3.3 反馈回馈层：最弱
-
-**怎么让 Agent 在后续对话中自动用到积累的知识？** 现有做法：
-
-| 方式 | 例子 | 自动化程度 |
-|------|------|:---:|
-| Agent 启动时加载 AGENTS.md | 已经在用 | 自动 |
-| Agent 对话中说"请读 docs/xxx" | 手动但有效 | 手动 |
-| 系统提示词注入（IBM Agent Mentor 论文做法） | 自动但研究阶段 | 自动 |
+**没有现成的"对话日志 → 团队知识"产品。** 2026 年 Agent 可观测性行业承认这是最大的缺口。
 
 ---
 
-## 四、可行的务实架构
+## 七、务实推荐
 
-### 4.1 推荐版（核心组件已成熟）
+### 7.1 现在就做
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                网关层 (LiteLLM)                       │
-│                                                      │
-│  - DeepSeek Key → N 条 Virtual Key，每人独立配额      │
-│  - 全量 messages + response → PostgreSQL JSON        │
-│  - TPM/RPM 限流 + USD 预算上限                        │
-│  - 支持 Anthropic 原生协议（Claude Desktop 直接连）    │
-│                                                      │
-│  一行部署: docker run -p 4000:4000 litellm           │
-└──────────────────────┬──────────────────────────────┘
-                       │
-┌──────────────────────┴──────────────────────────────┐
-│              知识提取层（半自动，需自建）               │
-│                                                      │
-│  每周/每两周跑一次 Python 脚本：                        │
-│  1. LLM 扫描 LiteLLM 的 request_logs 表               │
-│  2. 提取：新发现的规律、踩过的坑、成功的模式            │
-│  3. 统计频率 → 出现 ≥2 次的标记为候选规则               │
-│  4. 生成 AGENTS.md 补丁草稿 → 人工审核 → 合并          │
-│                                                      │
-│  参考：IBM ALTK-Evolve（频率+影响+置信度筛选）          │
-│        Corellis（同一错误 2 次 → 晋升规则）            │
-└──────────────────────┬──────────────────────────────┘
-                       │
-┌──────────────────────┴──────────────────────────────┐
-│              知识存储层 (Obsidian / Git)              │
-│                                                      │
-│  fzh-data/                                          │
-│  ├── AGENTS.md          ← 审核过的团队规则            │
-│  ├── docs/lessons/      ← 踩坑记录（按日期）          │
-│  ├── docs/patterns/     ← 成功模式（按场景）          │
-│  └── .agents/skills/    ← 可复用的技能                │
-│                                                      │
-│  参考：Corellis 四层记忆 + Obsidian Second Brain      │
-└──────────────────────┬──────────────────────────────┘
-                       │
-┌──────────────────────┴──────────────────────────────┐
-│              回馈层 (AGENTS.md 自动加载)              │
-│                                                      │
-│  每人 git pull → Agent 自动读 AGENTS.md               │
-│  新同事 clone → 自动获得所有团队经验                    │
-│                                                      │
-│  参考：Corellis"新 Agent 启动时自动加载全队规则"        │
-└─────────────────────────────────────────────────────┘
+LiteLLM Gateway (Docker, 49K⭐)
+  ├── 多用户 Virtual Key + TPM/RPM/预算
+  ├── messages + response → PostgreSQL
+  └── WorkflowMessage 表（不截断，长会话友好）
 ```
 
-### 4.2 各组件成熟度
+### 7.2 需要自建
 
-| 组件 | 状态 | 说明 |
-|------|:---:|------|
-| LiteLLM 网关（多用户+全量日志） | ✅ 成熟 | 49,247 ⭐，一行 Docker |
-| PostgreSQL 日志存储 | ✅ LiteLLM 自带 | Supabase 或自建 PG |
-| 日志→知识提取脚本 | ❌ 需自建 | ~200 行 Python，核心难点是 LLM prompt 设计 |
-| Obsidian/Git 知识库 | ✅ 成熟 | |
-| AGENTS.md 自动加载 | ✅ 已经在用 | |
+~200 行 Python 脚本：每周 LLM 扫描日志 → 提取候选规则（参考 IBM 频率+影响+置信度） → 生成 AGENTS.md 补丁 → 人工审核合入
 
-### 4.3 网关能否捕获 Agent 生成的文件？
+### 7.3 可选扩展
 
-**直接捕获：不能。** 文件在同事本地电脑上，网关是网络层代理。
-
-**间接方案**：
-- Agent 生成的代码/分析结果**在对话中已经出现过**（LLM 输出 → 网关捕获）
-- 让 Agent 对话结束时生成"会话摘要"→ 自动记录关键文件和结论
-- 约定 Agent 把重要输出同时写入 Git（`git add && git commit`）
-
-### 4.4 Cursor 式蒸馏（不同话题，仅作对比）
-
-Cursor 的"实时 RL"做的不是知识提取，而是用用户交互作为训练信号来**微调模型权重**：
-- 收集数十亿 token 用户交互 → 提取隐式信号（编辑保留？追问？） → RL 更新权重 → 每 5 小时部署新检查点
-- 需要万卡 GPU + 自研 RL 管线，与团队知识沉淀是两层不同的问题
+- **Hermes VPS**（$5/月）：7×24 编排 + Telegram/钉钉 gateway
+- **Hermes + 本地 Claude Code**：MCP over SSH 桥接（200-400ms 延迟）
+- **Shopify 模式**：公开对话 → 众包知识扩散
 
 ---
 
-## 五、Honest Assessment
+## 八、调研日志
 
-**成熟的**：多用户 API 管理 + 全量对话日志 → LiteLLM 一个项目完美解决。49,247 星，今天还在更新，Docker 一行起。
-
-**需要自建的**：日志 → 知识提取脚本。IBM 和 Capital One 有论文和原型，但没有任何开源产品能直接使用。2026 年整个 Agent 可观测性行业承认这是一个未解决的缺口。
-
-**务实的**：写一个 ~200 行 Python 脚本，用 LLM 每周扫描 LiteLLM 的 `request_logs` 表，提取候选规则，生成 AGENTS.md 补丁草稿，人工审核后合并。这把你现在"手动更新 Lessons Learned"变成了"每周审核 AI 自动生成的草稿"——效率提升但不需要全自动。
-
-**不现实的**：全自动闭环（Agent 犯错 → 系统自动学 → 下次自动避免）。IBM 论文验证了方向可行，但未产品化。
-
----
-
-## 六、调研日志（保留中间讨论过程）
-
-1. **初始推荐 new-api** → 用户质疑 → 核查代码发现只记 Token 不记对话全文 → 废弃
-2. **补充推荐 Squirrel + AgentLens** → 用户指出 57 ⭐ / 2 ⭐ → 不成熟 → 废弃
-3. **发现 LiteLLM** → 49,247 ⭐ → 同时覆盖配额管理 + 全量日志 → 最终推荐
-4. **网关能否捕获本地文件 I/O** → 分析确认：文件内容出现在对话消息中就能捕获，但网关不碰本地磁盘
-5. **Agent 读写文件内容验证** → Read 结果回传 LLM → 网关可见。Write 内容来自 LLM 输出 → 网关可见
-6. **Monet/Mem0/Letta 定位澄清** → Monet 6⭐ 原型；Mem0 开发者 SDK；Letta Agent 平台。都不是团队知识库现成产品
-7. **28 Agent 案例详解** → Corellis 开源，四层记忆+纠错晋升管道，基于 OpenClaw，单服务器 64GB RAM
-8. **Hermes 舰队学习对比** → v0.13.0 Kanban + 黑板架构 + 交接合同 + 幻觉门禁。自动 Skill 生成比 Corellis 手动纠正更先进，但缺乏同等规模的公开发布数据
+1. **初始推荐 new-api** → 用户质疑 → 查源码确认只记 Token 不记全文 → 废弃
+2. **补充推荐 Squirrel + AgentLens** → 57 ⭐ / 2 ⭐ → 废弃
+3. **发现 LiteLLM** → 49,247 ⭐ → 查 schema + payload 构造代码 → 确认
+4. **误判 `hermes proxy`** → 查源码发现只是 credential forwarder → 修正
+5. **发现 LiteLLM Agent Platform** → BerriAI 自己做了我们想做的事
+6. **发现 Shopify River + MCP Registry + Dnotitia** → 企业级知识共享已有先行者
+7. **Corellis + Hermes v0.13** → 舰队学习有可复用的架构模式
+8. **知识自动提取仍是无解缺口** → IBM 论文+多个开源原型，但无产品化方案
 
 ---
 
-## 七、数据源索引
+## 九、数据源索引
 
 | 引用 | 链接 | 可信度 | 验证方式 |
 |------|------|--------|---------|
-| LiteLLM | [GitHub](https://github.com/BerriAI/litellm) | ⭐⭐⭐⭐⭐ | `gh repo view` 49,247 ⭐ |
-| LiteLLM StandardLoggingPayload | [DeepWiki](https://deepwiki.com/BerriAI/litellm/6-observability-and-logging) | ⭐⭐⭐⭐⭐ | 代码级文档 |
-| new-api 日志模型 | [model/log.go](https://github.com/QuantumNous/new-api) | ⭐⭐⭐⭐⭐ | 直接读源码 |
+| LiteLLM | [GitHub](https://github.com/BerriAI/litellm) | ⭐⭐⭐⭐⭐ | `gh repo view` + `schema.prisma` + `spend_tracking_utils.py` |
+| LiteLLM Agent Platform | [GitHub](https://github.com/BerriAI/litellm-agent-platform) | ⭐⭐⭐⭐ | 开源，pre-1.0 |
+| `hermes proxy` 源码 | [server.py](https://raw.githubusercontent.com/NousResearch/hermes-agent/main/hermes_cli/proxy/server.py) | ⭐⭐⭐⭐⭐ | docstring 确认功能边界 |
+| Hermes + Claude Code 双栈 | [dev.to](https://dev.to/akaranjkar08/i-built-the-hermes-claude-code-dual-stack-orchestrator-meets-coder-heres-the-full-architecture-228a) | ⭐⭐⭐⭐ | 完整教程+配置代码 |
+| Hermes v0.13.0 Release | [GitHub](https://github.com/NousResearch/hermes-agent/releases/tag/v2026.5.7) | ⭐⭐⭐⭐ | 官方 Release Notes |
+| Shopify River | [ZenML](https://www.zenml.io/llmops-database/building-a-public-ai-agent-workspace-for-organizational-learning) | ⭐⭐⭐⭐ | 生产数据 5,938 员工 |
+| MCP Registry #665 | [GitHub Issue](https://github.com/agentic-community/mcp-gateway-registry/issues/665) | ⭐⭐⭐ | 设计讨论，未落地 |
+| Corellis | [GitHub](https://github.com/CorellisOrg/corellis) + [dev.to](https://dev.to/jay_wong_45c807c6799b4fb7/how-we-ran-28-ai-agents-on-a-single-server-and-what-broke-1pbf) | ⭐⭐⭐⭐ | 开源+长篇实测 |
 | IBM ALTK-Evolve | [ibm.com](https://www.ibm.com/new/announcements/altk-evolve-on-the-job-learning-for-ai-agents) | ⭐⭐⭐⭐ | 官方公告 |
-| IBM Agent Mentor | [arXiv 2604.10513](https://arxiv.org/html/2604.10513v1) | ⭐⭐⭐⭐⭐ | 同行评审论文 |
-| Capital One 对话摘要 | [EACL 2026](https://aclanthology.org/2026.eacl-industry.41/) | ⭐⭐⭐⭐⭐ | 顶会论文 |
-| Corellis 28 Agent | [GitHub](https://github.com/CorellisOrg/corellis) + [dev.to](https://dev.to/jay_wong_45c807c6799b4fb7/how-we-ran-28-ai-agents-on-a-single-server-and-what-broke-1pbf) | ⭐⭐⭐⭐ | 开源+长篇实测 |
-| Hermes v0.13.0 多 Agent Release | [GitHub Releases](https://github.com/NousResearch/hermes-agent/releases/tag/v2026.5.7) | ⭐⭐⭐⭐ | 官方 Release Notes |
-| LiteLLM WorkflowMessage PR #26793 | [GitHub PR](https://github.com/BerriAI/litellm/pull/26793) | ⭐⭐⭐⭐⭐ | 直接读 PR + schema.prisma |
-| LiteLLM schema.prisma | [raw](https://raw.githubusercontent.com/BerriAI/litellm/main/schema.prisma) | ⭐⭐⭐⭐⭐ | 直接读源码 |
-| Obsidian Second Brain | [GitHub](https://github.com/eugeniughelbur/obsidian-second-brain) | ⭐⭐⭐ | 开源项目 |
-| 2026 Agent 可观测性报告 | [futureagi.com](https://futureagi.com/blog/best-ai-agent-observability-tools-2026/) | ⭐⭐⭐⭐ | 行业评测 |
-| 知识自动提取是最大缺口 | [dev.to](https://dev.to/utibe_okodi_339fb47a13ef5/i-evaluated-every-ai-agent-observability-tool-on-the-market-heres-whats-actually-missing-54c) | ⭐⭐⭐ | 独立评测 |
-| Monet（已弃用推荐） | [GitHub](https://github.com/team-monet/monet) | ⭐ | 6 ⭐ 原型 |
-| Squirrel LLM Gateway（已弃用推荐） | [GitHub](https://github.com/mylxsw/llm-gateway) | ⭐⭐ | 57 ⭐ |
-| AgentLens（已弃用推荐） | [GitHub](https://github.com/farzanhossan/agentlens) | ⭐ | 2 ⭐ |
+| IBM Agent Mentor | [arXiv 2604.10513](https://arxiv.org/html/2604.10513v1) | ⭐⭐⭐⭐⭐ | 同行评审 |
+| agent-triage | [GitHub](https://github.com/converra/agent-triage) | ⭐⭐⭐ | v0.2.0 |
+| Dnotitia AKB | 新闻稿 | ⭐⭐ | 2026 年 6 月开源 |
