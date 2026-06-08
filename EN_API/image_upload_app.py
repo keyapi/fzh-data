@@ -221,29 +221,6 @@ async def upload_images(
     )
 
 
-# ── 端口检测 ─────────────────────────────────────
-def _find_free_port(preferred: int = 8099) -> int:
-    """检测 preferred 是否可用，被占则自动找下一个可用端口。"""
-    import socket
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    try:
-        s.bind(("127.0.0.1", preferred))
-        s.close()
-        return preferred
-    except OSError:
-        s.close()
-    # Auto-find
-    for port in range(8100, 8120):
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        try:
-            s.bind(("127.0.0.1", port))
-            s.close()
-            return port
-        except OSError:
-            s.close()
-    raise RuntimeError("无法找到可用端口 (8099-8119)")
-
-
 # ── 主入口 ─────────────────────────────────────────
 def main():
     ap = argparse.ArgumentParser(description="Web 图片上传管理工具")
@@ -252,31 +229,21 @@ def main():
     ap.add_argument("--no-browser", action="store_true", help="不自动打开浏览器")
     args = ap.parse_args()
 
-    port = _find_free_port(args.port)
-    if port != args.port:
-        print(f"端口 {args.port} 被占用，自动使用 {port}")
-
-    url = f"http://127.0.0.1:{port}"
+    url = f"http://127.0.0.1:{args.port}"
     if not args.no_browser:
         webbrowser.open(url)
 
     print(f"\n{'='*60}")
-    print(f"  图片上传管理工具已启动")
-    print(f"  {url}")
+    print(f"  图片上传管理工具")
+    print(f"  启动中: {url}")
     print(f"  按 Ctrl+C 停止")
-    print(f"{'='*60}\n")
+    print(f"{'='*60}")
 
+    # uvicorn 会打印 "Uvicorn running on ..." 确认绑定成功
     try:
-        uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
+        uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="info")
     except KeyboardInterrupt:
         print("\n已停止")
-    except OSError as e:
-        print(f"\n启动失败: {e}")
-        if "10048" in str(e) or "address already in use" in str(e).lower():
-            print(f"端口 {port} 已被占用。请关闭占用该端口的程序后重试，")
-            print(f"或用 --port 指定其他端口。")
-            print(f"查看占用: netstat -ano | findstr :{port}")
-        return 1
 
 
 if __name__ == "__main__":

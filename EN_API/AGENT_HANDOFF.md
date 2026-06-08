@@ -167,9 +167,17 @@ uv run python upload_local_images.py -i D:/图片             # 自定义目录+
 ### 启动
 
 ```bash
-uv run python image_upload_app.py                 # 默认 http://127.0.0.1:8099
-uv run python image_upload_app.py --port 8080     # 自定义端口
+# 前台直接运行（唯一正确方式，不要用 Start-Job / Start-Process Hidden）
+cd EN_API && uv run python image_upload_app.py
+
+# 验证是否启动成功：终端必须看到 "Uvicorn running on http://127.0.0.1:8099"
+curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8099   # 应返回 200
 ```
+
+> 已踩坑: ❌ `Start-Job` (PowerShell) — 端口 Listen 但外部不可达
+> ❌ `Start-Process -WindowStyle Hidden` — 进程存活但端口不绑定
+> ❌ `log_level="warning"` — 沉默启动，无法判断成功与否
+> ✅ 唯一正确: 在当前终端直接 `uv run python image_upload_app.py`
 
 浏览器自动打开后:
 1. 拖拽/点击选择图片（可多次追加）→ 缩略图显示

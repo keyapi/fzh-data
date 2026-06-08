@@ -590,7 +590,10 @@ FilePond 的渲染模型：item 绝对定位 + JS 计算 `translate3d()` 逐个�
 
 在 Windows PowerShell `Start-Job` 后台作业中运行 `uv run python image_upload_app.py`，`Get-NetTCPConnection` 显示端口 Listen，但 HTTP 客户端连不上（ConnectionRefused）。**根因**: PowerShell 后台作业运行在隔离的 runspace 中，子进程继承该隔离，网络监听看似存在但对外部不可达。**修复**: 不要用 `Start-Job` 启 Web 服务。用 `Start-Process -NoNewWindow` 或直接在终端中运行。**关键信号**: 如果日志显示 uvicorn 已启动但 curl 连不上 → 检查是否在后台作业中。
 
-### 59. 图片压缩务必加 size guard
+### 59. uvicorn log_level 绝不能用 warning
+上一轮"优化"把 `log_level="info"` → `"warning"` 导致 uvicorn 不打印 "Uvicorn running on http://..." 启动确认信息。其他 Agent（Codex）启动进程后看不到任何输出，无法判断服务器是否成功绑定端口，反复尝试陷入死循环。**永远保持 `log_level="info"`**——这行日志是启动成功的唯一信号。
+
+### 60. 图片压缩务必加 size guard
 JPEG quality 85 重压缩一个已经高质量压缩过的 JPEG 可能会**增大**文件（459KB→574KB）。
 解决：`if len(compressed) >= len(original): return original`。这个保护必须默认内置，不给用户暴露"为什么压完更大了"的困惑。
 
