@@ -22,7 +22,7 @@
     --text: #2c3e50;
     --text-secondary: #7f8c8d;
     --border: #e0e4e8;
-    --thumb-size: 130px;
+    --thumb-min: 130px;
     --radius: 12px;
   }
   * { margin:0; padding:0; box-sizing:border-box; }
@@ -75,9 +75,9 @@
 
   /* ── Layout ── */
   .container {
-    max-width: 960px;
+    max-width: 1400px;
     margin: 32px auto;
-    padding: 0 20px;
+    padding: 0 24px;
   }
   .card {
     background: var(--card-bg);
@@ -109,16 +109,16 @@
     display: none !important;
   }
 
-  /* ── Thumbnail grid ── */
+  /* ── Thumbnail grid (CSS Grid auto-fill, fully responsive) ── */
   .thumb-grid {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(var(--thumb-min), 1fr));
     gap: 10px;
     min-height: 20px;
   }
   .thumb-item {
-    width: var(--thumb-size);
-    height: var(--thumb-size);
+    width: 100%;
+    aspect-ratio: 1;
     border-radius: 8px;
     overflow: hidden;
     position: relative;
@@ -272,7 +272,7 @@
     .container { margin: 16px auto; padding: 0 12px; }
     .card { padding: 20px 16px; }
     .btn { padding: 8px 16px; font-size: 14px; }
-    :root { --thumb-size: 100px; }
+    :root { --thumb-min: 100px; }
   }
 </style>
 </head>
@@ -306,6 +306,9 @@
     <div class="info-bar" id="info-bar" style="display:none">
       <span>已选 <span class="count" id="file-count">0</span> 张图片</span>
       <span style="font-size:13px; color:#999">↕ 拖拽缩略图可调整顺序，第1张为主图</span>
+      <label style="font-size:13px; color:var(--text-secondary); display:flex; align-items:center; gap:4px; cursor:pointer">
+        <input type="checkbox" id="chk-compress" checked style="width:16px;height:16px"> 压缩图片
+      </label>
       <div class="btn-group">
         <button class="btn btn-outline" id="btn-clear">清空重选</button>
         <button class="btn btn-primary" id="btn-upload">上传到 ERPNext</button>
@@ -457,6 +460,7 @@ btnUpload.addEventListener('click', async () => {
 
   const formData = new FormData();
   formData.append('env', env);
+  formData.append('compress', document.getElementById('chk-compress').checked ? 'true' : 'false');
   ordered.forEach(f => formData.append('files', f, f.name));
 
   try {

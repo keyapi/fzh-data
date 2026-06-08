@@ -72,6 +72,40 @@ class _NoExpectAdapter(HTTPAdapter):
         return super().send(request, **kwargs)
 
 
+# ── 图片压缩 ────────────────────────────────────────
+def compress_image(
+    data: bytes,
+    max_size: int = 1500,
+    quality: int = 85,
+) -> bytes:
+    """压缩图片: 缩放到 max_size 最大边长, 输出 JPEG 字节。"""
+    import io as _io
+    from PIL import Image
+
+    img = Image.open(_io.BytesIO(data))
+    w, h = img.size
+    if max(w, h) > max_size:
+        ratio = max_size / max(w, h)
+        img = img.resize((int(w * ratio), int(h * ratio)), Image.LANCZOS)
+
+    if img.mode in ("RGBA", "P", "LA"):
+        bg = Image.new("RGB", img.size, (255, 255, 255))
+        if img.mode == "P":
+            img = img.convert("RGBA")
+        bg.paste(img, mask=img.split()[-1] if img.mode == "RGBA" else None)
+        img = bg
+    elif img.mode != "RGB":
+        img = img.convert("RGB")
+
+    buf = _io.BytesIO()
+    img.save(buf, format="JPEG", quality=quality, optimize=True)
+    result = buf.getvalue()
+    # Don't let compression increase file size
+    if len(result) >= len(data):
+        return data
+    return result
+
+
 # ── ERPNext 客户端 ───────────────────────────────────
 class ErpnextClient:
     def __init__(self, base_url: str, api_key: str, api_secret: str) -> None:
@@ -122,6 +156,7 @@ async def index():
 async def upload_images(
     files: list[UploadFile] = File(..., description="图片文件列表（顺序即用户排列的顺序）"),
     env: str = Form("prod", description="目标环境"),
+    compress: bool = Form(True, description="是否压缩图片"),
 ):
     api_key = os.getenv("ERP_API_KEY", "")
     api_secret = os.getenv("ERP_API_SECRET", "")
@@ -133,7 +168,19 @@ async def upload_images(
     for idx, f in enumerate(files, 1):
         filename = f.filename or f"image_{idx}"
         content = await f.read()
-        print(f"  [{idx}/{len(files)}] {filename} ({len(content)} bytes)")
+        orig_size = len(content)
+
+        # Apply compression
+        if compress and Path(filename).suffix.lower() in _MIME_MAP:
+            try:
+                content = compress_image(content)
+                filename = f"{Path(filename).stem}.jpg"
+            except Exception as e:
+                print(f"    compress warning: {e}, using original")
+
+        comp_size = len(content)
+        size_info = f"({orig_size/1024:.0f}KB" + (f" -> {comp_size/1024:.0f}KB)" if compress else ")")
+        print(f"  [{idx}/{len(files)}] {filename} {size_info}")
         try:
             file_url = client.upload_file(filename, content)
             full_url = f"{base_url}{file_url}"

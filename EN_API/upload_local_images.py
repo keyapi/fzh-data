@@ -6,9 +6,10 @@
 输出 Excel 包含 filename / file_url / 完整链接。
 
 使用:
-  uv run python upload_local_images.py                       # 默认 prod + D:/EN上传图片
-  uv run python upload_local_images.py --env test            # 开发测试环境
-  uv run python upload_local_images.py --input-dir <path>    # 自定义输入目录
+  uv run python upload_local_images.py                       # 默认 prod + 自动压缩
+  uv run python upload_local_images.py --no-compress         # 不压缩原图上传
+  uv run python upload_local_images.py --max-size 2000       # 最大边长 2000px (默认 1500)
+  uv run python upload_local_images.py --quality 90          # JPEG 质量 90 (默认 85)
 """
 
 from __future__ import annotations
@@ -72,6 +73,50 @@ class _NoExpectAdapter(HTTPAdapter):
         return super().send(request, **kwargs)
 
 
+# ── 图片压缩 ────────────────────────────────────────
+def compress_image(
+    src: str | Path | bytes,
+    max_size: int = 1500,
+    quality: int = 85,
+) -> tuple[bytes, int, int]:
+    """压缩图片: 缩放到 max_size 最大边长, 输出 JPEG。
+
+    返回 (压缩后字节, 原始大小, 压缩后大小)。
+    """
+    import io as _io
+    from PIL import Image
+
+    if isinstance(src, (str, Path)):
+        orig_size = Path(src).stat().st_size
+        img = Image.open(Path(src))
+    else:
+        orig_size = len(src)
+        img = Image.open(_io.BytesIO(src))
+
+    w, h = img.size
+    if max(w, h) > max_size:
+        ratio = max_size / max(w, h)
+        img = img.resize((int(w * ratio), int(h * ratio)), Image.LANCZOS)
+
+    # Convert to RGB (handle PNG/GIF alpha)
+    if img.mode in ("RGBA", "P", "LA"):
+        bg = Image.new("RGB", img.size, (255, 255, 255))
+        if img.mode == "P":
+            img = img.convert("RGBA")
+        bg.paste(img, mask=img.split()[-1] if img.mode == "RGBA" else None)
+        img = bg
+    elif img.mode != "RGB":
+        img = img.convert("RGB")
+
+    buf = _io.BytesIO()
+    img.save(buf, format="JPEG", quality=quality, optimize=True)
+    compressed = buf.getvalue()
+    # Don't let compression increase file size (happens with already-optimized JPEGs)
+    if len(compressed) >= orig_size:
+        return (src if isinstance(src, bytes) else Path(src).read_bytes()), orig_size, orig_size
+    return compressed, orig_size, len(compressed)
+
+
 # ── ERPNext 客户端 ───────────────────────────────────
 class ErpnextClient:
     """ERPNext REST API 客户端（精简版，仅上传文件）。"""
@@ -83,18 +128,21 @@ class ErpnextClient:
         self.session.mount("https://", _NoExpectAdapter())
         self.session.mount("http://", _NoExpectAdapter())
 
-    def upload_local_file(self, file_path: str) -> str:
-        """上传本地文件到 ERPNext，返回 file_url（如 /files/xxx.jpg）。"""
+    def upload_local_file(self, file_path: str, file_bytes: bytes | None = None) -> str:
+        """上传文件到 ERPNext，返回 file_url。file_bytes 为 None 则读盘。"""
         path = Path(file_path)
         filename = path.name
-        mime = _MIME_MAP.get(path.suffix.lower(), "application/octet-stream")
+        # Use .jpg extension when we compress (always output JPEG)
+        out_name = filename if file_bytes is None else f"{path.stem}.jpg"
+        ext = Path(out_name).suffix.lower()
+        mime = _MIME_MAP.get(ext, "application/octet-stream")
 
         url = f"{self.base_url}/api/method/upload_file"
-        with open(path, "rb") as f:
-            resp = self._request("POST", url,
-                files={"file": (filename, f, mime)},
-                data={"is_private": "0"},
-            )
+        data = file_bytes if file_bytes is not None else path.read_bytes()
+        resp = self._request("POST", url,
+            files={"file": (out_name, data, mime)},
+            data={"is_private": "0"},
+        )
         return resp.json()["message"]["file_url"]
 
     def _request(
@@ -124,6 +172,12 @@ def main() -> int:
                     help="目标环境 (默认 prod，开发测试用 --env test)")
     ap.add_argument("--input-dir", "-i", type=Path, default=Path("D:/EN上传图片"),
                     help="图片目录 (默认 D:/EN上传图片)")
+    ap.add_argument("--no-compress", action="store_true",
+                    help="不压缩，直接上传原图")
+    ap.add_argument("--max-size", type=int, default=1500,
+                    help="压缩后最大边长 px (默认 1500)")
+    ap.add_argument("--quality", type=int, default=85,
+                    help="JPEG 压缩质量 1-100 (默认 85)")
     args = ap.parse_args()
 
     api_key = os.getenv("ERP_API_KEY", "")
@@ -148,21 +202,39 @@ def main() -> int:
         print(f"错误: 目录 {img_dir} 中没有图片文件")
         return 1
 
+    do_compress = not args.no_compress
+    if do_compress:
+        print(f"压缩: 最大 {args.max_size}px, JPEG quality {args.quality}")
+    else:
+        print("压缩: 已关闭 (原图上传)")
+
     print(f"找到 {len(image_files)} 个图片文件:")
     for f in image_files:
         print(f"  {f.name} ({f.stat().st_size / 1024:.0f} KB)")
 
     client = ErpnextClient(base_url, api_key, api_secret)
 
+    total_orig = 0
+    total_compressed = 0
     rows: list[dict[str, str]] = []
     for f in image_files:
         print(f"\n上传: {f.name} ...", end=" ")
         try:
-            file_url = client.upload_local_file(str(f))
+            file_bytes = None
+            if do_compress:
+                compressed, orig_sz, comp_sz = compress_image(
+                    str(f), max_size=args.max_size, quality=args.quality
+                )
+                file_bytes = compressed
+                total_orig += orig_sz
+                total_compressed += comp_sz
+                print(f"({orig_sz/1024:.0f}KB -> {comp_sz/1024:.0f}KB)", end=" ")
+
+            file_url = client.upload_local_file(str(f), file_bytes=file_bytes)
             full_url = f"{base_url}{file_url}"
             print(f"OK -> {full_url}")
             rows.append({
-                "文件名": f.name,
+                "文件名": f.name if file_bytes is None else f"{f.stem}.jpg",
                 "file_url": file_url,
                 "完整链接": full_url,
             })
@@ -173,6 +245,10 @@ def main() -> int:
                 "file_url": "",
                 "完整链接": f"上传失败: {e}",
             })
+
+    if do_compress and total_orig > 0:
+        ratio = (1 - total_compressed / total_orig) * 100
+        print(f"\n总计压缩: {total_orig/1024:.0f}KB -> {total_compressed/1024:.0f}KB (减小 {ratio:.0f}%)")
 
     out_dir = _DIR / "out"
     out_dir.mkdir(parents=True, exist_ok=True)

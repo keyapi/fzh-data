@@ -180,8 +180,17 @@ uv run python image_upload_app.py --port 8080     # 自定义端口
 ### 架构
 
 - **后端**: FastAPI + `ErpnextClient`（复用同一认证+nginx417处理）
-- **前端**: 单HTML + FilePond CDN（零构建，无npm）
-- **API**: `POST /api/upload-images` — 接收 multipart files + env → 返回 Excel
+- **前端**: 单 HTML，FilePond 只负责投掷区；独立 `.thumb-grid` (CSS Grid `auto-fill` + SortableJS) 渲染缩略图
+- **API**: `POST /api/upload-images` — 接收 multipart files + env + compress → 返回 Excel
+- **响应式**: Grid `auto-fill minmax(130px, 1fr)` + `aspect-ratio: 1`，无需媒体查询自适应列数
+
+### 压缩
+
+默认启用客户端压缩（quality 85 + max 1500px），比 ERPNext 内置优化（2MB→111KB 过度压缩）更温和可控。
+
+- CLI: `--no-compress` / `--quality` / `--max-size`
+- Web: 页面上"压缩图片"复选框
+- 安全保护: 压缩后若变大则保留原图
 
 ### 与 CLI 工具的关系
 

@@ -67,6 +67,9 @@ uv run python upload_item_images.py                  # 批量
 |------|------|
 | `--env test/prod` | 目标环境 (默认 prod，开发测试用 `--env test`) |
 | `--input-dir <path>` | 图片目录 (默认 D:/EN上传图片) |
+| `--no-compress` | 不压缩，直接上传原图 |
+| `--max-size <px>` | 压缩后最大边长 (默认 1500) |
+| `--quality <1-100>` | JPEG 质量 (默认 85) |
 
 ### image_upload_app.py
 
@@ -76,6 +79,7 @@ uv run python upload_item_images.py                  # 批量
 | `--no-browser` | 不自动打开浏览器 |
 
 > 启动后浏览器自动打开，页面顶部可切换测试/生产环境。
+> 页面上有「压缩图片」复选框，默认勾选（quality 85, max 1500px）。
 
 ## 环境
 

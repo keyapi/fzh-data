@@ -575,9 +575,15 @@ DeepSeek 模型（v4-pro / v4-flash）不支持多模态（`image_url` content t
 
 Ref: [CodexPlusPlus#574](https://github.com/BigPizzaV3/CodexPlusPlus/issues/574)，`docs/codex_thread_disappear_debug.md`。
 
----
+### 56. 不要跟 FilePond 内部布局打架
+FilePond 的渲染模型：item 绝对定位 + JS 计算 `translate3d()` 逐个排列。试图用 CSS `!important` + JS override 覆盖 inline transform 会导致 root 塌缩（`offsetHeight=0`）、card 布局崩溃、按钮消失。
+**正确做法**：FilePond 只管投掷区 + 文件数据管理，将 `.filepond--list { display: none }` 隐藏，另建独立 `<div>` 用 CSS Grid `auto-fill minmax()` + SortableJS 渲染缩略图网格。两个世界互不干扰。
 
-## Documentation enforcement
+### 57. 图片压缩务必加 size guard
+JPEG quality 85 重压缩一个已经高质量压缩过的 JPEG 可能会**增大**文件（459KB→574KB）。
+解决：`if len(compressed) >= len(original): return original`。这个保护必须默认内置，不给用户暴露"为什么压完更大了"的困惑。
+
+---
 
 **These are NOT guidelines. They are commit-time requirements.** Derived from the principle that stale docs are worse than no docs — the next agent session relies on them being accurate.
 
