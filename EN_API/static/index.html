@@ -5,10 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>图片上传到 ERPNext</title>
 
-<!-- FilePond core -->
+<!-- FilePond -->
 <link href="https://cdn.jsdelivr.net/npm/filepond@4/dist/filepond.min.css" rel="stylesheet">
-<!-- FilePond image preview plugin -->
 <link href="https://cdn.jsdelivr.net/npm/filepond-plugin-image-preview@4/dist/filepond-plugin-image-preview.min.css" rel="stylesheet">
+
+<!-- SortableJS -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1/Sortable.min.js"></script>
 
 <style>
   :root {
@@ -20,6 +22,7 @@
     --text: #2c3e50;
     --text-secondary: #7f8c8d;
     --border: #e0e4e8;
+    --thumb-size: 130px;
     --radius: 12px;
   }
   * { margin:0; padding:0; box-sizing:border-box; }
@@ -70,49 +73,127 @@
   }
   .env-toggle input { display: none; }
 
-  /* ── Main container ── */
+  /* ── Layout ── */
   .container {
-    max-width: 900px;
+    max-width: 960px;
     margin: 32px auto;
     padding: 0 20px;
   }
-
-  /* ── Card ── */
   .card {
     background: var(--card-bg);
     border-radius: var(--radius);
     box-shadow: 0 2px 12px rgba(0,0,0,.06);
-    padding: 32px;
+    padding: 28px 24px;
   }
 
-  /* ── FilePond overrides ── */
+  /* ── FilePond: compact drop-zone only, hide items ── */
   .filepond--root {
-    margin-bottom: 0;
+    margin-bottom: 16px;
+    height: auto !important;
+    min-height: 60px !important;
   }
   .filepond--panel-root {
     background: #fafbfc;
     border: 2px dashed var(--border);
     border-radius: var(--radius);
+    height: 60px !important;
   }
   .filepond--drop-label {
     color: var(--text-secondary);
-    font-size: 15px;
+    font-size: 14px;
+    height: 60px !important;
+    min-height: 60px !important;
   }
-  .filepond--item {
-    counter-increment: pond-counter;
+  /* Hide FilePond's internal item list — we use our own grid */
+  .filepond--list {
+    display: none !important;
   }
-  /* Position numbers on thumbnails */
-  .filepond--item-panel {
+
+  /* ── Thumbnail grid ── */
+  .thumb-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    min-height: 20px;
+  }
+  .thumb-item {
+    width: var(--thumb-size);
+    height: var(--thumb-size);
     border-radius: 8px;
+    overflow: hidden;
+    position: relative;
+    cursor: grab;
+    background: #eef1f5;
+    border: 2px solid transparent;
+    transition: border-color .2s, box-shadow .2s;
+    user-select: none;
   }
-  /* Number badge via JS-added class to avoid ::before conflict with FilePond internals */
+  .thumb-item:active { cursor: grabbing; }
+  .thumb-item:hover {
+    border-color: var(--primary);
+    box-shadow: 0 2px 8px rgba(74,144,217,.25);
+  }
+  .thumb-item.sortable-ghost {
+    opacity: .35;
+    border-style: dashed;
+  }
+  .thumb-item.sortable-chosen {
+    box-shadow: 0 4px 16px rgba(0,0,0,.15);
+  }
+  .thumb-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    pointer-events: none;
+  }
+
+  /* ── Badge on thumb ── */
+  .thumb-badge {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    width: 20px;
+    height: 20px;
+    background: var(--primary);
+    color: #fff;
+    border-radius: 50%;
+    font-size: 10px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,.3);
+    pointer-events: none;
+  }
+
+  /* ── Remove button on thumb ── */
+  .thumb-remove {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 20px;
+    height: 20px;
+    background: rgba(0,0,0,.45);
+    color: #fff;
+    border: none;
+    border-radius: 50%;
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    opacity: 0;
+    transition: opacity .15s;
+  }
+  .thumb-item:hover .thumb-remove { opacity: 1; }
 
   /* ── Info bar ── */
   .info-bar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-top: 20px;
+    margin-top: 18px;
     padding: 12px 16px;
     background: #f8f9fb;
     border-radius: 8px;
@@ -121,10 +202,7 @@
     flex-wrap: wrap;
     gap: 12px;
   }
-  .info-bar .count {
-    font-weight: 600;
-    color: var(--primary);
-  }
+  .info-bar .count { font-weight: 600; color: var(--primary); }
 
   /* ── Buttons ── */
   .btn-group { display: flex; gap: 10px; }
@@ -140,40 +218,21 @@
     align-items: center;
     gap: 6px;
   }
-  .btn:disabled {
-    opacity: .5;
-    cursor: not-allowed;
-  }
-  .btn-primary {
-    background: var(--primary);
-    color: #fff;
-  }
-  .btn-primary:hover:not(:disabled) {
-    background: var(--primary-hover);
-  }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .btn-primary { background: var(--primary); color: #fff; }
+  .btn-primary:hover:not(:disabled) { background: var(--primary-hover); }
   .btn-outline {
     background: #fff;
     color: var(--text);
     border: 1px solid var(--border);
   }
-  .btn-outline:hover:not(:disabled) {
-    background: #f5f7fa;
-  }
-  .btn-success {
-    background: var(--success);
-    color: #fff;
-  }
-  .btn-success:hover:not(:disabled) {
-    background: #219a52;
-  }
+  .btn-outline:hover:not(:disabled) { background: #f5f7fa; }
+  .btn-success { background: var(--success); color: #fff; }
+  .btn-success:hover:not(:disabled) { background: #219a52; }
 
   /* ── Status ── */
-  .status-area {
-    margin-top: 24px;
-    display: none;
-  }
+  .status-area { margin-top: 18px; display: none; }
   .status-area.visible { display: block; }
-
   .status-msg {
     padding: 14px 18px;
     border-radius: 8px;
@@ -197,7 +256,6 @@
     color: #2c5aa0;
     border: 1px solid #b3cde0;
   }
-
   .spinner {
     width: 20px; height: 20px;
     border: 3px solid transparent;
@@ -207,33 +265,14 @@
   }
   @keyframes spin { to { transform:rotate(360deg); } }
 
-  /* ── Number badge injected by JS ── */
-  .item-number {
-    position: absolute;
-    top: 4px;
-    left: 4px;
-    z-index: 10;
-    width: 22px;
-    height: 22px;
-    background: var(--primary);
-    color: #fff;
-    border-radius: 50%;
-    font-size: 11px;
-    font-weight: 700;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 1px 3px rgba(0,0,0,.2);
-    pointer-events: none;
-  }
-
   /* ── Responsive ── */
   @media (max-width: 640px) {
     .header { padding: 12px 16px; }
     .header h1 { font-size: 16px; }
     .container { margin: 16px auto; padding: 0 12px; }
-    .card { padding: 20px; }
+    .card { padding: 20px 16px; }
     .btn { padding: 8px 16px; font-size: 14px; }
+    :root { --thumb-size: 100px; }
   }
 </style>
 </head>
@@ -257,8 +296,11 @@
 
 <div class="container">
   <div class="card">
-    <!-- FilePond mount point -->
+    <!-- FilePond: drop zone only -->
     <input type="file" id="pond" multiple accept="image/*">
+
+    <!-- Thumbnail grid -->
+    <div class="thumb-grid" id="thumb-grid"></div>
 
     <!-- Info bar -->
     <div class="info-bar" id="info-bar" style="display:none">
@@ -280,22 +322,17 @@
   </div>
 </div>
 
-<!-- FilePond JS + plugins -->
 <script src="https://cdn.jsdelivr.net/npm/filepond@4/dist/filepond.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/filepond-plugin-image-preview@4/dist/filepond-plugin-image-preview.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/filepond-plugin-file-validate-type@1/dist/filepond-plugin-file-validate-type.min.js"></script>
 
 <script>
-// ── Register plugins ──
-FilePond.registerPlugin(
-  FilePondPluginImagePreview,
-  FilePondPluginFileValidateType
-);
+FilePond.registerPlugin(FilePondPluginImagePreview, FilePondPluginFileValidateType);
 
-// ── Init FilePond ──
+// ── FilePond: file store + drop zone only ──
 const pond = FilePond.create(document.querySelector('#pond'), {
   allowMultiple: true,
-  allowReorder: true,
+  allowReorder: false,      // we handle reorder via SortableJS on our grid
   allowFileTypeValidation: true,
   acceptedFileTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
   maxFiles: 50,
@@ -306,74 +343,121 @@ const pond = FilePond.create(document.querySelector('#pond'), {
   labelButtonRemoveItem: '×',
   labelButtonAbortItemLoad: '×',
   credits: false,
-
-  // Built-in reorder callback
-  onreorderfiles: () => { updateItemNumbers(); },
 });
 
-// ── Position number badges ──
-function updateItemNumbers() {
-  const items = document.querySelectorAll('.filepond--item');
-  document.querySelectorAll('.item-number').forEach(b => b.remove());
-  items.forEach((el, i) => {
-    const badge = document.createElement('span');
-    badge.className = 'item-number';
-    badge.textContent = i + 1;
-    el.style.position = 'relative';
-    el.appendChild(badge);
-  });
-}
-
-function updateInfoBar() {
-  const count = pond.getFiles().length;
-  document.getElementById('file-count').textContent = count;
-  document.getElementById('info-bar').style.display = count > 0 ? 'flex' : 'none';
-  // Enable/disable upload button
-  document.getElementById('btn-upload').disabled = count === 0;
-}
-
-// Update badges on add/remove/reorder
-pond.on('addfile', () => { updateItemNumbers(); updateInfoBar(); });
-pond.on('removefile', () => { updateItemNumbers(); updateInfoBar(); });
-pond.on('reorderfiles', () => { updateItemNumbers(); });
-
-// Initial state: disable upload button when no files
-updateInfoBar();
-
-// ── Environment toggle ──
-document.querySelectorAll('input[name="env"]').forEach(radio => {
-  radio.addEventListener('change', () => {
-    document.querySelectorAll('.env-toggle label').forEach(l => l.classList.remove('active'));
-    document.getElementById('lbl-' + radio.value).classList.add('active');
-  });
-});
-
-// ── Clear button ──
-document.getElementById('btn-clear').addEventListener('click', () => {
-  pond.removeFiles();
-  hideStatus();
-});
-
-// ── Upload button ──
+// ── Thumbnail grid ──
+const grid = document.getElementById('thumb-grid');
+const infoBar = document.getElementById('info-bar');
+const fileCountEl = document.getElementById('file-count');
 const btnUpload = document.getElementById('btn-upload');
+const btnClear = document.getElementById('btn-clear');
 const statusArea = document.getElementById('status-area');
 const statusMsg = document.getElementById('status-msg');
 const btnDownload = document.getElementById('btn-download');
 
-btnUpload.addEventListener('click', async () => {
-  const files = pond.getFiles();
-  if (files.length === 0) return;
+// Build a map: FilePond file id → DOM element + blob URL
+const fileMap = new Map(); // pondFileId → { el, url, file }
 
-  // Disable button during upload
+function createThumb(fpFile) {
+  const div = document.createElement('div');
+  div.className = 'thumb-item';
+  div.dataset.pondId = fpFile.id;
+
+  const img = document.createElement('img');
+  img.alt = fpFile.file.name;
+  img.draggable = false;
+
+  const blobUrl = URL.createObjectURL(fpFile.file);
+  img.src = blobUrl;
+
+  const badge = document.createElement('span');
+  badge.className = 'thumb-badge';
+
+  const removeBtn = document.createElement('button');
+  removeBtn.className = 'thumb-remove';
+  removeBtn.innerHTML = '&times;';
+  removeBtn.title = '移除';
+  removeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    pond.removeFile(fpFile.id);
+  });
+
+  div.appendChild(img);
+  div.appendChild(badge);
+  div.appendChild(removeBtn);
+  grid.appendChild(div);
+
+  fileMap.set(fpFile.id, { el: div, url: blobUrl, file: fpFile.file });
+}
+
+function removeThumb(fpFileId) {
+  const entry = fileMap.get(fpFileId);
+  if (!entry) return;
+  URL.revokeObjectURL(entry.url);
+  entry.el.remove();
+  fileMap.delete(fpFileId);
+}
+
+function refreshBadges() {
+  const items = grid.querySelectorAll('.thumb-item');
+  items.forEach((el, i) => {
+    const badge = el.querySelector('.thumb-badge');
+    if (badge) badge.textContent = i + 1;
+  });
+}
+
+function updateUI() {
+  const count = pond.getFiles().length;
+  fileCountEl.textContent = count;
+  infoBar.style.display = count > 0 ? 'flex' : 'none';
+  btnUpload.disabled = count === 0;
+  refreshBadges();
+}
+
+// SortableJS: drag to reorder in the grid
+Sortable.create(grid, {
+  animation: 150,
+  onEnd: () => refreshBadges(),
+});
+
+// FilePond events → sync grid
+pond.on('addfile', (err, fpFile) => {
+  if (err) return;
+  createThumb(fpFile);
+  updateUI();
+});
+
+pond.on('removefile', (err, fpFile) => {
+  if (err) return;
+  removeThumb(fpFile.id);
+  updateUI();
+});
+
+// Upload: collect files in GRID DOM order
+function getFilesInGridOrder() {
+  const items = grid.querySelectorAll('.thumb-item');
+  const ordered = [];
+  for (const el of items) {
+    const pondId = el.dataset.pondId;
+    const entry = fileMap.get(pondId);
+    if (entry) ordered.push(entry.file);
+  }
+  return ordered;
+}
+
+btnUpload.addEventListener('click', async () => {
+  const ordered = getFilesInGridOrder();
+  if (ordered.length === 0) return;
+
   btnUpload.disabled = true;
   btnUpload.textContent = '上传中...';
   const env = document.querySelector('input[name="env"]:checked').value;
 
-  showStatus('loading', `正在上传 ${files.length} 张图片...`);
+  showStatus('loading', `正在上传 ${ordered.length} 张图片...`);
 
   const formData = new FormData();
   formData.append('env', env);
-  files.forEach(fp => formData.append('files', fp.file, fp.file.name));
+  ordered.forEach(f => formData.append('files', f, f.name));
 
   try {
     const resp = await fetch('/api/upload-images', {
@@ -388,7 +472,7 @@ btnUpload.addEventListener('click', async () => {
 
     const resultStr = resp.headers.get('X-Upload-Result');
     const result = resultStr ? JSON.parse(resultStr) : {};
-    const total = result.total || files.length;
+    const total = result.total || ordered.length;
     const success = result.success || 0;
 
     if (success < total) {
@@ -410,11 +494,26 @@ btnUpload.addEventListener('click', async () => {
   } catch (err) {
     showStatus('error', `上传失败: ${err.message}`);
   } finally {
-    btnUpload.disabled = files.length === 0;
+    btnUpload.disabled = ordered.length === 0;
     btnUpload.textContent = '上传到 ERPNext';
   }
 });
 
+// ── Clear button ──
+btnClear.addEventListener('click', () => {
+  pond.removeFiles();
+  hideStatus();
+});
+
+// ── Environment toggle ──
+document.querySelectorAll('input[name="env"]').forEach(radio => {
+  radio.addEventListener('change', () => {
+    document.querySelectorAll('.env-toggle label').forEach(l => l.classList.remove('active'));
+    document.getElementById('lbl-' + radio.value).classList.add('active');
+  });
+});
+
+// ── Status helpers ──
 function showStatus(type, msg) {
   statusArea.className = 'status-area visible';
   statusMsg.className = 'status-msg ' + type;
@@ -427,6 +526,9 @@ function hideStatus() {
   statusArea.className = 'status-area';
   btnDownload.style.display = 'none';
 }
+
+// Initial
+updateUI();
 </script>
 
 </body>
