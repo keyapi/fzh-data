@@ -72,6 +72,9 @@
 
 ```
 AGENTS.md (< 200 lines)           ← 你正在读的，项目总纲 + 路由地图
+├── CONTRIBUTING.md               ← 技术开发贡献指南（B 类用户）
+├── docs/onboarding.md            ← 非技术同事快速上手（A 类用户）
+├── docs/requests.md              ← 用户需求收集（A 类 Agent 自动追加）
 ├── docs/company-context.md       ← 公司背景、供应链、三系统 SKU 定义
 ├── docs/agent-guide.md           ← Skill 管理规则、代码约定、文档 checklist
 ├── docs/codex_test_enapi_full.md ← Codex 测试 EN_API 全记录
@@ -80,5 +83,13 @@ AGENTS.md (< 200 lines)           ← 你正在读的，项目总纲 + 路由地
 ├── (其他 6 个模块)/AGENT_HANDOFF.md   ← 各模块详情
 └── .agents/skills/*/SKILL.md     ← Agent Skill 入口（按触发词加载）
 ```
+
+### 团队协作角色
+
+| 角色 | 怎么用 | 参考文档 |
+|------|--------|---------|
+| **A 类：非技术同事** | Agent 运行脚本 / Web UI，不提代码 | `docs/onboarding.md` |
+| **B 类：技术开发** | 分支开发 → PR → 审批 → merge | `CONTRIBUTING.md` |
+| **项目主** | 审批 PR，维护 main，管控版本 | 本文档 |
 
 > 所有经验教训（Lesson 1-60）已分散到各子模块 AGENT_HANDOFF.md 中，不堆在根目录。
