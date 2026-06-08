@@ -1,6 +1,6 @@
 # EN_API — Agent 交接说明
 
-> **脚本**: `upload_item_images.py` (单文件)
+> **脚本**: `upload_item_images.py` + `upload_local_images.py`
 > **人读文档**: [README.md](README.md)
 
 ---
@@ -110,4 +110,82 @@ python upload_item_images.py --input "x.xlsx" # 指定输入文件
 
 ---
 
-*若与代码不一致, 以 upload_item_images.py 为准。*
+## 8. 脚本: `upload_local_images.py` — 本地图片批量上传
+
+与 `upload_item_images.py`（赛狐 Excel → 更新物料组主图）不同，此脚本直接从本地目录读取图片文件，上传到 ERPNext 生成公开 URL（不绑定任何 doctype）。
+
+**用途**: 同事需要图片 URL 用于销售平台贴图。
+
+### 命令行
+
+```bash
+uv run python upload_local_images.py                       # 默认生产环境 (最常用)
+uv run python upload_local_images.py --env test            # 开发测试用
+uv run python upload_local_images.py -i D:/图片             # 自定义目录+生产
+```
+
+### 输出
+
+`out/图片上传链接_{ts}.xlsx` — 单 sheet `图片链接`，列：文件名、file_url、完整链接
+
+### 关键函数
+
+| 函数 | 作用 |
+|------|------|
+| `ErpnextClient.upload_local_file(file_path)` | 读取本地文件 → POST upload_file → 返回 file_url |
+
+---
+
+## 9. ⚠️ 环境策略（重要）
+
+### 用户分层
+
+| 角色 | 认知 | 默认环境 | 说明 |
+|------|------|---------|------|
+| **普通同事** | 只知道生产环境 | prod | 直接运行，不需要知道 `--env` 参数 |
+| **开发同事（你、个别开发）** | 知道有 test 环境 | 开发时手动 `--env test` | 测试通过后再切回 prod |
+
+### AI / Codex / Agent 行为规则
+
+1. **默认 `prod`** — 脚本的 `_DEFAULT_ENV = "prod"`，普通用户无感
+2. **不要主动问"测试还是生产"** — 除非用户明确提到"测试/开发/test"，否则默认就是生产
+3. **开发场景下用 `--env test`** — 你和开发同事在调试/测试时自行指定
+4. **永远不要硬编码 URL** — 仍通过 `_ENV_URLS` 映射 + `--env` 参数切换
+
+### 原因
+
+- 大部分同事是普通用户，连"测试环境"这个概念都不知道
+- 他们只需要跑脚本拿到结果，不需要额外的选择负担
+- 测试/生产共用同一套 API 凭证，环境切换靠 URL 区分，没有权限屏障
+
+---
+
+## 10. 脚本: `image_upload_app.py` — Web 图片上传管理工具
+
+面向电商运营同事的 Web UI，支持拖拽上传 + 缩略图排序 + Excel 下载。
+
+### 启动
+
+```bash
+uv run python image_upload_app.py                 # 默认 http://127.0.0.1:8099
+uv run python image_upload_app.py --port 8080     # 自定义端口
+```
+
+浏览器自动打开后:
+1. 拖拽/点击选择图片（可多次追加）→ 缩略图显示
+2. 拖拽缩略图调整顺序（第1张=主图）
+3. 页面顶部切换测试/生产环境
+4. 点击"上传到ERPNext"→ 后端逐张上传 → 下载Excel
+
+### 架构
+
+- **后端**: FastAPI + `ErpnextClient`（复用同一认证+nginx417处理）
+- **前端**: 单HTML + FilePond CDN（零构建，无npm）
+- **API**: `POST /api/upload-images` — 接收 multipart files + env → 返回 Excel
+
+### 与 CLI 工具的关系
+
+| 工具 | 适用场景 |
+|------|---------|
+| `upload_local_images.py` (CLI) | AI 自动调用、批处理、固定目录 |
+| `image_upload_app.py` (Web) | 普通同事手动操作、不同文件夹选图、需要排序 |

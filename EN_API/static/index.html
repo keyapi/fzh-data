@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>图片上传到 ERPNext</title>
+
+<!-- FilePond core -->
+<link href="https://cdn.jsdelivr.net/npm/filepond@4/dist/filepond.min.css" rel="stylesheet">
+<!-- FilePond image preview plugin -->
+<link href="https://cdn.jsdelivr.net/npm/filepond-plugin-image-preview@4/dist/filepond-plugin-image-preview.min.css" rel="stylesheet">
+
+<style>
+  :root {
+    --primary: #4a90d9;
+    --primary-hover: #357abd;
+    --success: #27ae60;
+    --bg: #f5f7fa;
+    --card-bg: #ffffff;
+    --text: #2c3e50;
+    --text-secondary: #7f8c8d;
+    --border: #e0e4e8;
+    --radius: 12px;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+      'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  /* ── Header ── */
+  .header {
+    background: var(--card-bg);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 1px 3px rgba(0,0,0,.04);
+  }
+  .header h1 {
+    font-size: 20px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .env-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: var(--text-secondary);
+  }
+  .env-toggle label {
+    cursor: pointer;
+    padding: 4px 14px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    transition: all .2s;
+    user-select: none;
+  }
+  .env-toggle label.active {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+  }
+  .env-toggle input { display: none; }
+
+  /* ── Main container ── */
+  .container {
+    max-width: 900px;
+    margin: 32px auto;
+    padding: 0 20px;
+  }
+
+  /* ── Card ── */
+  .card {
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    box-shadow: 0 2px 12px rgba(0,0,0,.06);
+    padding: 32px;
+  }
+
+  /* ── FilePond overrides ── */
+  .filepond--root {
+    margin-bottom: 0;
+  }
+  .filepond--panel-root {
+    background: #fafbfc;
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+  }
+  .filepond--drop-label {
+    color: var(--text-secondary);
+    font-size: 15px;
+  }
+  .filepond--item {
+    counter-increment: pond-counter;
+  }
+  /* Position numbers on thumbnails */
+  .filepond--item-panel {
+    border-radius: 8px;
+  }
+  /* Number badge via JS-added class to avoid ::before conflict with FilePond internals */
+
+  /* ── Info bar ── */
+  .info-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 20px;
+    padding: 12px 16px;
+    background: #f8f9fb;
+    border-radius: 8px;
+    font-size: 14px;
+    color: var(--text-secondary);
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .info-bar .count {
+    font-weight: 600;
+    color: var(--primary);
+  }
+
+  /* ── Buttons ── */
+  .btn-group { display: flex; gap: 10px; }
+  .btn {
+    padding: 10px 24px;
+    border: none;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all .2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn:disabled {
+    opacity: .5;
+    cursor: not-allowed;
+  }
+  .btn-primary {
+    background: var(--primary);
+    color: #fff;
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: var(--primary-hover);
+  }
+  .btn-outline {
+    background: #fff;
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn-outline:hover:not(:disabled) {
+    background: #f5f7fa;
+  }
+  .btn-success {
+    background: var(--success);
+    color: #fff;
+  }
+  .btn-success:hover:not(:disabled) {
+    background: #219a52;
+  }
+
+  /* ── Status ── */
+  .status-area {
+    margin-top: 24px;
+    display: none;
+  }
+  .status-area.visible { display: block; }
+
+  .status-msg {
+    padding: 14px 18px;
+    border-radius: 8px;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .status-msg.success {
+    background: #eafaf1;
+    color: #1e7e34;
+    border: 1px solid #a3d9b1;
+  }
+  .status-msg.error {
+    background: #fdecea;
+    color: #b71c1c;
+    border: 1px solid #f5b7b1;
+  }
+  .status-msg.loading {
+    background: #eaf0fb;
+    color: #2c5aa0;
+    border: 1px solid #b3cde0;
+  }
+
+  .spinner {
+    width: 20px; height: 20px;
+    border: 3px solid transparent;
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform:rotate(360deg); } }
+
+  /* ── Number badge injected by JS ── */
+  .item-number {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    z-index: 10;
+    width: 22px;
+    height: 22px;
+    background: var(--primary);
+    color: #fff;
+    border-radius: 50%;
+    font-size: 11px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,.2);
+    pointer-events: none;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 640px) {
+    .header { padding: 12px 16px; }
+    .header h1 { font-size: 16px; }
+    .container { margin: 16px auto; padding: 0 12px; }
+    .card { padding: 20px; }
+    .btn { padding: 8px 16px; font-size: 14px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+    图片上传到 ERPNext
+  </h1>
+  <div class="env-toggle">
+    <span>环境</span>
+    <label id="lbl-prod" class="active">
+      <input type="radio" name="env" value="prod" checked> 生产
+    </label>
+    <label id="lbl-test">
+      <input type="radio" name="env" value="test"> 测试
+    </label>
+  </div>
+</div>
+
+<div class="container">
+  <div class="card">
+    <!-- FilePond mount point -->
+    <input type="file" id="pond" multiple accept="image/*">
+
+    <!-- Info bar -->
+    <div class="info-bar" id="info-bar" style="display:none">
+      <span>已选 <span class="count" id="file-count">0</span> 张图片</span>
+      <span style="font-size:13px; color:#999">↕ 拖拽缩略图可调整顺序，第1张为主图</span>
+      <div class="btn-group">
+        <button class="btn btn-outline" id="btn-clear">清空重选</button>
+        <button class="btn btn-primary" id="btn-upload">上传到 ERPNext</button>
+      </div>
+    </div>
+
+    <!-- Status -->
+    <div class="status-area" id="status-area">
+      <div class="status-msg" id="status-msg"></div>
+      <div class="btn-group" style="margin-top:12px">
+        <button class="btn btn-success" id="btn-download" style="display:none">下载 Excel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- FilePond JS + plugins -->
+<script src="https://cdn.jsdelivr.net/npm/filepond@4/dist/filepond.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/filepond-plugin-image-preview@4/dist/filepond-plugin-image-preview.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/filepond-plugin-file-validate-type@1/dist/filepond-plugin-file-validate-type.min.js"></script>
+
+<script>
+// ── Register plugins ──
+FilePond.registerPlugin(
+  FilePondPluginImagePreview,
+  FilePondPluginFileValidateType
+);
+
+// ── Init FilePond ──
+const pond = FilePond.create(document.querySelector('#pond'), {
+  allowMultiple: true,
+  allowReorder: true,
+  allowFileTypeValidation: true,
+  acceptedFileTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+  maxFiles: 50,
+  labelIdle: '拖拽图片到此处 或 <span class="filepond--label-action">点击选择</span>',
+  labelFileTypeNotAllowed: '不支持的文件类型',
+  labelTapToUndo: '点击撤销',
+  labelTapToCancel: '点击取消',
+  labelButtonRemoveItem: '×',
+  labelButtonAbortItemLoad: '×',
+  credits: false,
+
+  // Built-in reorder callback
+  onreorderfiles: () => { updateItemNumbers(); },
+});
+
+// ── Position number badges ──
+function updateItemNumbers() {
+  const items = document.querySelectorAll('.filepond--item');
+  document.querySelectorAll('.item-number').forEach(b => b.remove());
+  items.forEach((el, i) => {
+    const badge = document.createElement('span');
+    badge.className = 'item-number';
+    badge.textContent = i + 1;
+    el.style.position = 'relative';
+    el.appendChild(badge);
+  });
+}
+
+function updateInfoBar() {
+  const count = pond.getFiles().length;
+  document.getElementById('file-count').textContent = count;
+  document.getElementById('info-bar').style.display = count > 0 ? 'flex' : 'none';
+  // Enable/disable upload button
+  document.getElementById('btn-upload').disabled = count === 0;
+}
+
+// Update badges on add/remove/reorder
+pond.on('addfile', () => { updateItemNumbers(); updateInfoBar(); });
+pond.on('removefile', () => { updateItemNumbers(); updateInfoBar(); });
+pond.on('reorderfiles', () => { updateItemNumbers(); });
+
+// Initial state: disable upload button when no files
+updateInfoBar();
+
+// ── Environment toggle ──
+document.querySelectorAll('input[name="env"]').forEach(radio => {
+  radio.addEventListener('change', () => {
+    document.querySelectorAll('.env-toggle label').forEach(l => l.classList.remove('active'));
+    document.getElementById('lbl-' + radio.value).classList.add('active');
+  });
+});
+
+// ── Clear button ──
+document.getElementById('btn-clear').addEventListener('click', () => {
+  pond.removeFiles();
+  hideStatus();
+});
+
+// ── Upload button ──
+const btnUpload = document.getElementById('btn-upload');
+const statusArea = document.getElementById('status-area');
+const statusMsg = document.getElementById('status-msg');
+const btnDownload = document.getElementById('btn-download');
+
+btnUpload.addEventListener('click', async () => {
+  const files = pond.getFiles();
+  if (files.length === 0) return;
+
+  // Disable button during upload
+  btnUpload.disabled = true;
+  btnUpload.textContent = '上传中...';
+  const env = document.querySelector('input[name="env"]:checked').value;
+
+  showStatus('loading', `正在上传 ${files.length} 张图片...`);
+
+  const formData = new FormData();
+  formData.append('env', env);
+  files.forEach(fp => formData.append('files', fp.file, fp.file.name));
+
+  try {
+    const resp = await fetch('/api/upload-images', {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(`服务器错误 (${resp.status}): ${text.substring(0, 200)}`);
+    }
+
+    const resultStr = resp.headers.get('X-Upload-Result');
+    const result = resultStr ? JSON.parse(resultStr) : {};
+    const total = result.total || files.length;
+    const success = result.success || 0;
+
+    if (success < total) {
+      showStatus('error', `上传完成：成功 ${success} / ${total} 张`);
+    } else {
+      showStatus('success', `全部上传成功！共 ${total} 张图片`);
+    }
+
+    const blob = await resp.blob();
+    btnDownload.style.display = 'inline-flex';
+    btnDownload.onclick = () => {
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `图片上传链接_${new Date().toISOString().replace(/[:.]/g,'').substring(0,15)}.xlsx`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    };
+  } catch (err) {
+    showStatus('error', `上传失败: ${err.message}`);
+  } finally {
+    btnUpload.disabled = files.length === 0;
+    btnUpload.textContent = '上传到 ERPNext';
+  }
+});
+
+function showStatus(type, msg) {
+  statusArea.className = 'status-area visible';
+  statusMsg.className = 'status-msg ' + type;
+  statusMsg.innerHTML = type === 'loading'
+    ? `<span class="spinner"></span>${msg}`
+    : msg;
+}
+
+function hideStatus() {
+  statusArea.className = 'status-area';
+  btnDownload.style.display = 'none';
+}
+</script>
+
+</body>
+</html>
