@@ -74,7 +74,6 @@
 AGENTS.md (< 200 lines)           ← 你正在读的，项目总纲 + 路由地图
 ├── CONTRIBUTING.md               ← 技术开发贡献指南（B 类用户）
 ├── docs/onboarding.md            ← 非技术同事快速上手（A 类用户）
-├── docs/requests.md              ← 用户需求收集（A 类 Agent 自动追加）
 ├── docs/company-context.md       ← 公司背景、供应链、三系统 SKU 定义
 ├── docs/agent-guide.md           ← Skill 管理规则、代码约定、文档 checklist
 ├── docs/codex_test_enapi_full.md ← Codex 测试 EN_API 全记录
