@@ -579,7 +579,18 @@ Ref: [CodexPlusPlus#574](https://github.com/BigPizzaV3/CodexPlusPlus/issues/574)
 FilePond 的渲染模型：item 绝对定位 + JS 计算 `translate3d()` 逐个排列。试图用 CSS `!important` + JS override 覆盖 inline transform 会导致 root 塌缩（`offsetHeight=0`）、card 布局崩溃、按钮消失。
 **正确做法**：FilePond 只管投掷区 + 文件数据管理，将 `.filepond--list { display: none }` 隐藏，另建独立 `<div>` 用 CSS Grid `auto-fill minmax()` + SortableJS 渲染缩略图网格。两个世界互不干扰。
 
-### 57. 图片压缩务必加 size guard
+### 57. uv cache 损坏的症状和修复
+
+**症状**: `uv run python` 突然报 `Failed to initialize cache at C:\Users\zhang\AppData\Local\uv\cache`
+**根因**: `Remove-Item -Recurse -Force` 删除 uv cache 后，系统可能异步重建同名目录/文件，导致 uv 认为 cache 路径已存在但类型不符。
+**修复**: 设置临时缓存路径 `$env:UV_CACHE_DIR = "C:\Users\zhang\AppData\Local\Temp\uv-cache"` 绕过损坏的默认 cache。
+**预防**: 不要用 `rm -rf` 删除 uv cache，用 `uv cache clean`。
+
+### 58. PowerShell Start-Job 中启动的 uvicorn 端口不可达
+
+在 Windows PowerShell `Start-Job` 后台作业中运行 `uv run python image_upload_app.py`，`Get-NetTCPConnection` 显示端口 Listen，但 HTTP 客户端连不上（ConnectionRefused）。**根因**: PowerShell 后台作业运行在隔离的 runspace 中，子进程继承该隔离，网络监听看似存在但对外部不可达。**修复**: 不要用 `Start-Job` 启 Web 服务。用 `Start-Process -NoNewWindow` 或直接在终端中运行。**关键信号**: 如果日志显示 uvicorn 已启动但 curl 连不上 → 检查是否在后台作业中。
+
+### 59. 图片压缩务必加 size guard
 JPEG quality 85 重压缩一个已经高质量压缩过的 JPEG 可能会**增大**文件（459KB→574KB）。
 解决：`if len(compressed) >= len(original): return original`。这个保护必须默认内置，不给用户暴露"为什么压完更大了"的困惑。
 
