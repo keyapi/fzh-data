@@ -44,9 +44,17 @@ Agent 执行 `git pull` 即可。如果本地有改动，Agent 会用 `git stash
 
 ## 有需求怎么提
 
-如果要做的事现有脚本搞不定，直接告诉 keyapi（项目负责人）。用你习惯的方式：微信 / 当面 / 邮件，说清楚要干什么就行。
+对 Agent 说（任选一种说法都可以）：
 
-> A 类同事不需要 GitHub 账号、不需要学 git、不需要提 Issue。需求收集是项目负责人的事，不是你的。
+> 帮我在 EN 创建待办：需要 XXX 功能，因为 XXX
+>
+> 帮我在 ERPNext 创建需求：XXX
+>
+> 帮我创建一个 ToDo：XXX
+
+Agent 会自动在 ERPNext 里创建一条待办记录。项目负责人会定期看 EN 里的 ToDo 列表，把需求转成实现。
+
+> A 类同事不需要 GitHub 账号、不需要学 git。Agent + EN ToDo 就是你的需求通道。
 
 ## 你不需要的东西
 
