@@ -110,3 +110,4 @@ N = M + K + J + F（如有差数，在备注中解释）
 - **赛狐平台踩坑** (Lesson 23-53)：见各模块 AGENT_HANDOFF.md（warehouse_restock, other_outbound 等）
 - **开发环境** (Lesson 8, 22, 54, 55, 57, 58)：见本文档各节
 - **MCP 工具配置** (Lesson 61)：FAC MCP 部署（OAuth + mcp-remote 桥接），见 [docs/fac-mcp-setup.md](fac-mcp-setup.md)
+- **FAC 实战踩坑** (Lesson 62-66)：已提交单据限制、中文 DocType、自定义报表 filter 发现、Issue 提交流程，见 [docs/fac-dev-notes.md](fac-dev-notes.md)
