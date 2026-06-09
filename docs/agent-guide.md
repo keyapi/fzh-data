@@ -109,3 +109,4 @@ N = M + K + J + F（如有差数，在备注中解释）
 - **EN_API 踩坑** (Lesson 17-21, 56-59)：见 EN_API/AGENT_HANDOFF.md
 - **赛狐平台踩坑** (Lesson 23-53)：见各模块 AGENT_HANDOFF.md（warehouse_restock, other_outbound 等）
 - **开发环境** (Lesson 8, 22, 54, 55, 57, 58)：见本文档各节
+- **MCP 工具配置** (Lesson 61)：FAC MCP 部署（OAuth + mcp-remote 桥接），见 [docs/fac-mcp-setup.md](fac-mcp-setup.md)
