@@ -317,9 +317,9 @@ input, select, textarea { font: inherit; color: inherit; }
     </template>
   </aside>
   <div v-if="showUpload" class="upload-overlay" @click.self="showUpload=false" @keydown.escape="showUpload=false">
-    <div class="upload-dialog"><h2>Upload Assets</h2><p>Images, videos, documents — drop them here</p>
-      <div class="drop-zone" :class="{'drag-over': dragOver}" @click="$refs.fileIn.click()" @dragover.prevent="dragOver=true" @dragleave="dragOver=false" @drop.prevent="handleDrop($event)"><div class="dz-icon">⇧</div><p>Drop files or click to browse</p><p class="dz-hint">JPG, PNG, WebP, MP4, PDF — max 50MB each</p></div>
-      <input type="file" ref="fileIn" multiple accept="image/*,video/*,.pdf,.doc,.docx" @change="handlePick" style="display:none">
+    <div class="upload-dialog"><h2>Upload Assets</h2><p>Images, videos, documents — drop or choose files. ZIP folders keep structure.</p>
+      <div class="drop-zone" :class="{'drag-over': dragOver}" @click="$refs.fileIn.click()" @dragover.prevent="dragOver=true" @dragleave="dragOver=false" @drop.prevent="handleDrop($event)"><div class="dz-icon">⇧</div><p>Drop files or click to browse</p><p class="dz-hint">JPG, PNG, WebP, MP4, PDF, ZIP — max 50MB each</p></div>
+      <input type="file" ref="fileIn" multiple accept="image/*,video/*,.pdf,.doc,.docx,.zip" @change="handlePick" style="display:none">
       <div v-if="uploading" style="text-align:center;color:var(--primary);font-size:13px;padding:8px">Uploading...</div>
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px"><button class="btn btn-secondary" @click="showUpload=false">Cancel</button></div>
     </div>
@@ -333,6 +333,7 @@ const API = {
   async get(id){const r=await fetch('/api/assets/'+id);if(!r.ok)throw new Error('API error');return r.json()},
   async update(id,d){const r=await fetch('/api/assets/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});if(!r.ok)throw new Error('API error');return r.json()},
   async upload(files){const fd=new FormData();Array.from(files).forEach(f=>fd.append('files',f));const r=await fetch('/api/upload',{method:'POST',body:fd});if(!r.ok)throw new Error('API error');return r.json()},
+  async uploadFolder(zipFile){const fd=new FormData();fd.append('file',zipFile);const r=await fetch('/api/upload/folder',{method:'POST',body:fd});if(!r.ok)throw new Error('API error');return r.json()},
   async searchProducts(q){const r=await fetch('/api/products/search?q='+encodeURIComponent(q));return r.json()},
 };
 
@@ -390,8 +391,18 @@ function openCollectionEditor(existing){if(existing){openEditor(existing);return
 
   async function processFiles(files){
     uploading.value=true;
-    try{const r=await API.upload(files);if(r.success){const dup=r.assets.filter(a=>a._dedup).length;const add=r.assets.length-dup;if(add)toast('Uploaded '+add+' file(s)');if(dup)toast(dup+' duplicate(s) skipped','error');await loadAssets()}}
-    catch(e){toast('Upload failed','error')}
+    const arr=Array.from(files);
+    const zips=arr.filter(f=>f.name&&f.name.toLowerCase().endsWith('.zip'));
+    const normal=arr.filter(f=>!zips.includes(f));
+    try{
+      let total=0,folderCount=0;
+      for(const z of zips){
+        const r=await API.uploadFolder(z);
+        if(r.success){total+=r.total;if(r.folders)for(const fd of r.folders)if(fd)toast('Folder: '+fd);}
+      }
+      if(normal.length){const r=await API.upload(normal);if(r.success){const dup=r.assets.filter(a=>a._dedup).length;const add=r.assets.length-dup;if(add)toast('Uploaded '+add+' file(s)');if(dup)toast(dup+' duplicate(s) skipped','error');total+= (r.assets||[]).length-dup}}
+      if(total)await loadAssets();
+    }catch(e){toast('Upload failed','error')}
     uploading.value=false;showUpload.value=false;
   }
   function handlePick(e){if(e.target.files.length)processFiles(e.target.files)}
