@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "fac": {
+      "url": "https://ensh.vilavi.cn/api/method/frappe_assistant_core.api.fac_endpoint.handle_mcp"
+    }
+  }
+}

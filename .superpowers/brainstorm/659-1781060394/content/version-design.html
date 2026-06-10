@@ -1,0 +1,112 @@
+<h2>Phase 4: Collection 版本历史 — 方案确认</h2>
+<p class="subtitle">右侧抽屉面板（AEM / Google Docs / Notion 模式）</p>
+
+<div class="section">
+  <h3>完整交互流程</h3>
+  <div style="display:flex;gap:4px;height:280px;margin-top:8px">
+    <div class="mock-sidebar" style="width:100px;font-size:10px;flex-shrink:0">PRODUCTS (2)<br><br>KS0001 2<br>KS0002 2</div>
+    <div class="mock-content" style="flex:1;display:flex;flex-direction:column;border:1px solid var(--border);border-radius:6px;overflow:hidden">
+      <!-- toolbar -->
+      <div style="padding:8px 12px;border-bottom:1px solid var(--border);background:var(--surface-hover);display:flex;align-items:center;gap:8px">
+        <button class="mock-button" style="font-size:10px;padding:2px 8px">← Back</button>
+        <strong style="font-size:12px">KS0001 Amazon US v2</strong>
+        <span style="font-size:10px;color:var(--text-muted)">v5 · listing · 4 assets</span>
+        <button class="mock-button" style="margin-left:auto;font-size:10px;padding:2px 8px;border:1px solid var(--primary);color:var(--primary)">🕐 History</button>
+        <button class="mock-button" style="font-size:10px;padding:2px 8px">Save</button>
+        <button class="mock-button" style="font-size:10px;padding:2px 8px">Export</button>
+      </div>
+      <!-- editor content -->
+      <div style="flex:1;display:flex;align-items:center;justify-content:center;font-size:20px;gap:6px;flex-wrap:wrap;padding:10px">
+        <div style="width:70px;height:70px;background:var(--border);border-radius:4px;display:flex;align-items:flex-end;font-size:9px">
+          <span style="background:var(--primary);color:#FFF;padding:0 3px;border-radius:2px;margin:2px">main</span>
+        </div>
+        <div style="width:70px;height:70px;background:var(--border);border-radius:4px;display:flex;align-items:flex-end;font-size:9px">
+          <span style="background:var(--primary);color:#FFF;padding:0 3px;border-radius:2px;margin:2px">alt</span>
+        </div>
+        <div style="width:70px;height:70px;background:var(--border);border-radius:4px;display:flex;align-items:flex-end;font-size:9px">
+          <span style="background:var(--primary);color:#FFF;padding:0 3px;border-radius:2px;margin:2px">life</span>
+        </div>
+        <div style="width:70px;height:70px;background:var(--border);border-radius:4px;display:flex;align-items:flex-end;font-size:9px">
+          <span style="background:var(--primary);color:#FFF;padding:0 3px;border-radius:2px;margin:2px">A+</span>
+        </div>
+        <div style="width:70px;height:70px;border:1px dashed var(--border);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:16px;opacity:0.3">+</div>
+      </div>
+    </div>
+    <!-- version history drawer -->
+    <div style="width:280px;flex-shrink:0;background:#1E293B;color:#F8FAFC;border-left:1px solid #334155;display:flex;flex-direction:column;font-size:11px;border-radius:6px;overflow:hidden;box-shadow:-4px 0 12px rgba(0,0,0,0.2)">
+      <div style="padding:10px 12px;border-bottom:1px solid #334155;display:flex;align-items:center;gap:6px">
+        <strong style="font-size:13px">History</strong>
+        <span style="margin-left:auto;cursor:pointer;opacity:0.5;font-size:16px">×</span>
+      </div>
+      <div style="flex:1;overflow-y:auto;padding:8px">
+        <!-- v5 current -->
+        <div style="padding:8px 10px;border-radius:6px;background:rgba(59,130,246,0.15);margin-bottom:6px;border-left:3px solid #3B82F6">
+          <div style="display:flex;align-items:center;gap:4px">
+            <strong>v5</strong>
+            <span style="font-size:9px;background:#3B82F6;color:#FFF;padding:0 5px;border-radius:3px">current</span>
+          </div>
+          <div style="font-size:9px;opacity:0.5;margin-top:2px">06/10 09:45 · 4 images</div>
+          <div style="display:flex;gap:3px;margin-top:4px">
+            <div style="width:28px;height:28px;background:rgba(255,255,255,0.1);border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:10px">🖼</div>
+            <div style="width:28px;height:28px;background:rgba(255,255,255,0.1);border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:10px">🖼</div>
+            <div style="width:28px;height:28px;background:rgba(255,255,255,0.1);border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:10px">🖼</div>
+            <div style="width:28px;height:28px;background:rgba(255,255,255,0.1);border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:10px">🖼</div>
+          </div>
+        </div>
+        <!-- v4 -->
+        <div style="padding:8px 10px;border-radius:6px;margin-bottom:6px;cursor:pointer;transition:background 0.1s">
+          <strong>v4</strong>
+          <div style="font-size:9px;opacity:0.5;margin-top:2px">06/10 09:30 · 3 images</div>
+          <div style="display:flex;gap:3px;margin-top:4px">
+            <div style="width:28px;height:28px;background:rgba(255,255,255,0.1);border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:10px">🖼</div>
+            <div style="width:28px;height:28px;background:rgba(255,255,255,0.1);border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:10px">🖼</div>
+            <div style="width:28px;height:28px;background:rgba(255,255,255,0.1);border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:10px">🖼</div>
+          </div>
+        </div>
+        <!-- v3 selected for restore -->
+        <div style="padding:8px 10px;border-radius:6px;margin-bottom:6px;cursor:pointer;background:rgba(245,158,11,0.12);border:1px solid #F59E0B;border-radius:6px">
+          <strong>v3</strong>
+          <div style="font-size:9px;opacity:0.5;margin-top:2px">06/10 09:15 · 2 images</div>
+          <div style="display:flex;gap:3px;margin-top:4px">
+            <div style="width:28px;height:28px;background:rgba(255,255,255,0.1);border-radius:3px">🖼</div>
+            <div style="width:28px;height:28px;background:rgba(255,255,255,0.1);border-radius:3px">🖼</div>
+          </div>
+          <button class="mock-button" style="margin-top:6px;font-size:10px;padding:3px 8px;width:100%;background:#F59E0B;color:#000;border:none;border-radius:4px;cursor:pointer">Restore to v3</button>
+        </div>
+        <!-- v2 -->
+        <div style="padding:8px 10px;border-radius:6px;margin-bottom:6px;cursor:pointer">
+          <strong>v2</strong>
+          <div style="font-size:9px;opacity:0.5;margin-top:2px">06/10 09:00 · 2 images</div>
+        </div>
+        <!-- v1 -->
+        <div style="padding:8px 10px;border-radius:6px;margin-bottom:6px;cursor:pointer">
+          <strong>v1</strong>
+          <div style="font-size:9px;opacity:0.5;margin-top:2px">06/10 08:45 · 1 image</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p style="font-size:12px;color:var(--text-secondary);margin-top:10px"><strong>交互</strong>：点 "History" → 右侧面板滑出。当前版本(v5)蓝色高亮。选 v3 → 黄色边框 + "Restore to v3"按钮。点 Restore → confirm → API调用 →面板关闭 → 编辑器自动刷新。</p>
+</div>
+
+<div class="section">
+  <h3>设计要点</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:8px">
+    <tr style="border-bottom:1px solid var(--border)"><td style="padding:4px;font-weight:600">面板宽度</td><td style="padding:4px">320px，和 Asset 详情面板一致</td></tr>
+    <tr style="border-bottom:1px solid var(--border)"><td style="padding:4px;font-weight:600">版本列表</td><td style="padding:4px">时间倒序，最新在上。每个版本显示 #、时间戳、图片数、缩略图预览</td></tr>
+    <tr style="border-bottom:1px solid var(--border)"><td style="padding:4px;font-weight:600">当前版本</td><td style="padding:4px">蓝色高亮 + "current" 标签，无 Restore 按钮</td></tr>
+    <tr style="border-bottom:1px solid var(--border)"><td style="padding:4px;font-weight:600">选中版本</td><td style="padding:4px">黄色边框，显示 "Restore to v{N}" 按钮</td></tr>
+    <tr style="border-bottom:1px solid var(--border)"><td style="padding:4px;font-weight:600">回滚确认</td><td style="padding:4px">confirm('Restore to v{N}? This will replace current images.') → 确认后调用 API</td></tr>
+    <tr style="border-bottom:1px solid var(--border)"><td style="padding:4px;font-weight:600">回滚后</td><td style="padding:4px">Toast 提示 → 面板关闭 → 编辑器刷新（当前版本自动快照后才回滚，回滚操作本身可逆）</td></tr>
+    <tr style="border-bottom:1px solid var(--border)"><td style="padding:4px;font-weight:600">关闭</td><td style="padding:4px">点 × 或点面板外区域 → 面板关闭，编辑器恢复到编辑模式</td></tr>
+    <tr><td style="padding:4px;font-weight:600">后端</td><td style="padding:4px">新增 POST /api/collections/{id}/versions/{v}/restore</td></tr>
+  </table>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="agree" onclick="toggleSelect(this)">
+    <div class="letter">✓</div>
+    <div class="content"><h3>确认，写设计文档</h3></div>
+  </div>
+</div>

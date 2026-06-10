@@ -75,7 +75,8 @@ input, select, textarea { font: inherit; color: inherit; }
 .thumb-card .drag-grip { position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; border-radius: 4px; background: rgba(0,0,0,0.45); color: #FFF; display: flex; align-items: center; justify-content: center; font-size: 13px; cursor: grab; opacity: 0; transition: opacity var(--transition); }
 .thumb-card:hover .drag-grip { opacity: 1; }
 .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 60vh; gap: 10px; color: var(--text-muted); user-select: none; }
-.empty-state .empty-icon { font-size: 56px; opacity: 0.35; margin-bottom: 4px; }
+.empty-state .empty-icon { width: 80px; height: 80px; margin-bottom: 4px; }
+.empty-state .empty-icon svg { width: 100%; height: 100%; opacity: .3; }
 .empty-state p { font-size: 14px; }
 .detail-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 20; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
 .detail-overlay.visible { opacity: 1; pointer-events: auto; }
@@ -296,7 +297,12 @@ input, select, textarea { font: inherit; color: inherit; }
         </div>
       </div>
       <div v-if="selectedIds.length>1" class="batch-bar">{{ selectedIds.length }} selected <button class="btn-batch" @click="batchTag">Tag</button> <button class="btn-batch" @click="batchLink">Link SKU</button> <button class="btn-batch" @click="batchDelete">Delete</button></div>
-      <div v-if="filtered.length===0 && !loading && !currentSubfolders.length" class="empty-state"><div class="empty-icon">{{ filterType==='all'?'📁':'🖼️' }}</div><p>No assets found</p><button class="btn btn-primary" @click="showUpload=true" style="margin-top:8px">Upload your first asset</button></div>
+      <div v-if="filtered.length===0 && !loading && !currentSubfolders.length" class="empty-state">
+        <div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6a2 2 0 0 1 2-2h5l2 2h9a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6z"/></svg></div>
+        <p v-if="filterFolder">Folder "{{ filterFolder.split('/').pop() }}" is empty</p>
+        <p v-else>No assets found</p>
+        <button class="btn btn-primary" @click="showUpload=true" style="margin-top:8px">Upload to this folder</button>
+      </div>
       <div v-show="filtered.length>0" class="thumb-grid" ref="thumbGrid">
         <div v-for="(a,i) in filtered" :key="a.id" class="thumb-card" :class="{selected: selectedIds.includes(a.id)}" :style="{animationDelay: (i*0.03)+'s'}" @click.stop="selectOne(a,$event)" draggable="false">
           <img :src="a.thumb_url || a.file_url" :alt="a.filename" loading="lazy" draggable="false">
@@ -414,8 +420,8 @@ input, select, textarea { font: inherit; color: inherit; }
   </div>
   <!-- NAS Browser -->
   <div v-if="showNas" class="upload-overlay" @click.self="showNas=false" @keydown.escape="showNas=false">
-    <div class="upload-dialog" style="width:640px"><h2>Browse NAS</h2>
-      <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;word-break:break-all">NAS: {{ nasCurrent||'/' }}</div>
+    <div class="upload-dialog" style="width:640px"><h2>{{ nasSource==='nas'?'🌐 Synology NAS':'📁 Local Files' }}</h2>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;word-break:break-all">Path: {{ nasCurrent||'/' }}</div>
       <div style="display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap">
         <button class="btn btn-secondary" style="font-size:11px;padding:2px 6px" @click="nasLoad('')">Root</button>
         <template v-for="(seg,i) in nasBreadcrumbs" :key="i">
@@ -428,8 +434,10 @@ input, select, textarea { font: inherit; color: inherit; }
         <div v-for="e in nasEntries" :key="e.path" style="display:flex;align-items:center;gap:8px;padding:4px 8px;border-bottom:1px solid var(--border);font-size:12px">
           <input v-if="e.type==='file'" type="checkbox" :value="e.path" v-model="nasSelected">
           <span v-else style="width:14px"></span>
-          <span v-if="e.type==='directory'" @click="nasLoad(e.path)" style="cursor:pointer;flex:1">📁 {{ e.name }} <span style="color:var(--text-muted);font-size:10px">({{ e.image_count }} images)</span></span>
-          <span v-else style="flex:1">🖼️ {{ e.name }} <span style="color:var(--text-muted);font-size:10px">{{ fmtSize(e.size) }}</span></span>
+          <span v-if="e.type==='file'&&e.has_thumbnail" style="width:32px;height:32px;flex-shrink:0;border-radius:3px;background:var(--border);background-size:cover;background-position:center" :style="'background-image:url(/api/nas/thumbnail?path='+encodeURIComponent(e.path)+')'"></span>
+          <span v-else style="width:32px;text-align:center;flex-shrink:0;font-size:18px">{{ e.type==='directory'?'📁':'📄' }}</span>
+          <span v-if="e.type==='directory'" @click="nasLoad(e.path)" style="cursor:pointer;flex:1">{{ e.name }} <span style="color:var(--text-muted);font-size:10px">({{ e.image_count>=0?e.image_count+' images':'' }})</span></span>
+          <span v-else style="flex:1">{{ e.name }} <span style="color:var(--text-muted);font-size:10px">{{ fmtSize(e.size) }}</span></span>
         </div>
         <div v-if="!nasLoading&&!nasEntries.length" style="text-align:center;padding:20px;color:var(--text-muted)">Empty directory</div>
       </div>
@@ -462,7 +470,7 @@ createApp({setup(){
   const showUpload=ref(false),uploading=ref(false),dragOver=ref(false),sidebarOpen=ref(true);
   const productQ=ref(''),productResults=ref([]),detailQ=ref(''),detailResults=ref([]);
   const toasts=ref([]),thumbGrid=ref(null),saving=ref(false),collections=ref([]),folders=ref([]),filterFolder=ref(null);
-  const showNas=ref(false),nasCurrent=ref(''),nasEntries=ref([]),nasSelected=ref([]),nasLoading=ref(false),nasImporting=ref(false);
+  const showNas=ref(false),nasCurrent=ref(''),nasSource=ref('local'),nasEntries=ref([]),nasSelected=ref([]),nasLoading=ref(false),nasImporting=ref(false);
   const nasBreadcrumbs=computed(()=>{const s=[];if(!nasCurrent.value)return s;const p=nasCurrent.value.split('/');let a='';p.forEach(seg=>{a+=(a?'/':'')+seg;s.push({name:seg,path:a})});return s});
   const editorColl=ref(null),editorSku=ref(null),editorPick=ref(false),editorPicked=ref([]),editorDirty=ref(false);
 const showHistory=ref(false),editorVersions=ref([]),selectedVer=ref(null);
@@ -510,7 +518,7 @@ const showHistory=ref(false),editorVersions=ref([]),selectedVer=ref(null);
   function folderClickByPath(p){filterFolder.value=p;filterProduct.value=null;filterTag.value=null;filterType.value='all'}
   const currentSubfolders=computed(()=>{if(!filterFolder.value)return[];return folders.value.filter(f=>{const p=f.path;return p!==filterFolder.value && p.startsWith(filterFolder.value+'/') && p.split('/').length===filterFolder.value.split('/').length+1}).map(f=>({path:f.path,name:f.path.split('/').pop(),count:f.asset_count}))})
   function getFolderThumb(path){return '/api/folders/'+encodeURIComponent(path)+'/thumbnail'}
-  async function nasLoad(path){nasLoading.value=true;nasSelected.value=[];nasCurrent.value=path||'';try{const r=await fetch('/api/nas/browse?path='+encodeURIComponent(path||''));const d=await r.json();nasEntries.value=d.entries||[]}catch(e){toast('NAS browse failed','error')}nasLoading.value=false}
+  async function nasLoad(path){nasLoading.value=true;nasSelected.value=[];nasCurrent.value=path||'';try{const r=await fetch('/api/nas/browse?path='+encodeURIComponent(path||''));const d=await r.json();nasSource.value=d.source||'local';nasEntries.value=d.entries||[];nasCurrent.value=d.path||path||''}catch(e){toast('NAS browse failed','error')}nasLoading.value=false}
   async function nasImport(){if(!nasSelected.value.length)return;nasImporting.value=true;try{const r=await fetch('/api/nas/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({paths:nasSelected.value})});const d=await r.json();if(d.success){toast('Imported '+d.total+' file(s)');await loadAssets();await loadFolders();showNas.value=false}else{toast(d.error||'Import failed','error')}}catch(e){toast('Import failed','error')}nasImporting.value=false}
   const editorItems=computed(()=>editorColl.value?editorColl.value.items||[]:[]);
   const editorSkus=computed(()=>{const m={};editorItems.value.forEach(i=>{const s=i.sku||'_unlinked';m[s]=(m[s]||0)+1});return Object.entries(m).map(([code,cnt])=>({code,count:cnt}))});
@@ -582,7 +590,7 @@ function rmLinkedSku(a,i){a.linked_skus.splice(i,1);saveDetail();toast('Unlinked
   watch(editorSkuItems,async()=>{await nextTick();initEditorSort()});
   watch(filtered,async()=>{await nextTick();initSort()});
 
-  return {assets,totalCount,loading,selectedIds,detailAsset,filterType,filterTag,filterProduct,sortBy,showUpload,uploading,dragOver,sidebarOpen,saving,productQ,productResults,detailQ,detailResults,toasts,typeFilters,allTags,filtered,thumbGrid,selectOne,clearAll,hasPendingAiTags,handlePick,handleDrop,processFiles,addTag,rmTag,confirmAi,linkSku,rmLinkedSku,saveDetail,searchProducts,searchForDetail,batchTag,batchLink,batchDelete,aiTagSelected,toast,fmtSize,fmtDate,collections,loadCollections,openCollectionEditor,showCollectionMenu,folders,folderTree,folderExpanded,folderToggle,folderClick,folderClickByPath,filterFolder,currentSubfolders,loadFolders,getFolderThumb,showNas,nasCurrent,nasEntries,nasSelected,nasLoading,nasImporting,nasBreadcrumbs,nasLoad,nasImport,editorColl,editorSku,editorSkus,editorSkuItems,editorPick,editorPicked,editorDirty,editorGrid,openEditor,closeEditor,saveEditor,exportEditor,removeEditorItem,setEditorRole,openAssetPicker,togglePick,addPickedToEditor,addSkuToEditor,showHistory,editorVersions,selectedVer,openHistory,restoreVersion,getThumbByAssetId};
+  return {assets,totalCount,loading,selectedIds,detailAsset,filterType,filterTag,filterProduct,sortBy,showUpload,uploading,dragOver,sidebarOpen,saving,productQ,productResults,detailQ,detailResults,toasts,typeFilters,allTags,filtered,thumbGrid,selectOne,clearAll,hasPendingAiTags,handlePick,handleDrop,processFiles,addTag,rmTag,confirmAi,linkSku,rmLinkedSku,saveDetail,searchProducts,searchForDetail,batchTag,batchLink,batchDelete,aiTagSelected,toast,fmtSize,fmtDate,collections,loadCollections,openCollectionEditor,showCollectionMenu,folders,folderTree,folderExpanded,folderToggle,folderClick,folderClickByPath,filterFolder,currentSubfolders,loadFolders,getFolderThumb,showNas,nasSource,nasCurrent,nasEntries,nasSelected,nasLoading,nasImporting,nasBreadcrumbs,nasLoad,nasImport,editorColl,editorSku,editorSkus,editorSkuItems,editorPick,editorPicked,editorDirty,editorGrid,openEditor,closeEditor,saveEditor,exportEditor,removeEditorItem,setEditorRole,openAssetPicker,togglePick,addPickedToEditor,addSkuToEditor,showHistory,editorVersions,selectedVer,openHistory,restoreVersion,getThumbByAssetId};
 }}).mount('#app');
 </script>
 </body>

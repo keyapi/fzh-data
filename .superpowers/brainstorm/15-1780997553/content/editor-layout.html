@@ -1,0 +1,26 @@
+<h2>Collection 编辑器：哪种外壳更顺手？</h2>
+<p class="subtitle">当前 DAM 工作台有侧边栏(左) + 资产网格(中) + 详情面板(右)。Collection 编辑器应该怎么呈现？</p>
+
+<div class="options">
+  <div class="option" data-choice="side-panel" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>右侧滑出面板 (Side Panel)</h3>
+      <p>和 Asset 详情面板一样从右侧滑入，宽度约 400px。上方显示 collection 信息 + 操作按钮，下方是可拖拽排序的资产列表（紧凑缩略图）。资产网格保持可见，可以从左边拖入。</p>
+    </div>
+  </div>
+  <div class="option" data-choice="overlay" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>居中弹窗 (Modal Overlay)</h3>
+      <p>独立大弹窗 (~800px 宽)，独占焦点。资产以较大缩略图网格排列，拖拽排序更宽敞。背后资产网格半透明遮罩。适合需要专注编辑的场景。</p>
+    </div>
+  </div>
+  <div class="option" data-choice="inline" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>原地替换 (Inline Replace)</h3>
+      <p>点 Collection 后，主网格区域切换为编辑器视图。左侧保留 collection 列表，右侧是当前 collection 的资产拖拽网格。侧边栏折叠。沉浸感最强但离开主视图。</p>
+    </div>
+  </div>
+</div>

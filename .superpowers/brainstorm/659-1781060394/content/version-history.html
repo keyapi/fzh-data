@@ -1,0 +1,102 @@
+<h2>Phase 4: Collection 版本历史</h2>
+<p class="subtitle">编辑器里加 "History" 按钮 → 展开版本历史面板 → 预览 + 回滚</p>
+
+<div class="section">
+  <h3>方案 A — 替换编辑器主区域（和 Collection 编辑器模式一致）</h3>
+  <p style="font-size:12px;color:var(--text-secondary)">点 "History" → 图片编辑区变为版本列表 + 预览，SKU 列表保留</p>
+  <div style="display:flex;gap:4px;height:260px;margin-top:8px">
+    <div class="mock-sidebar" style="width:110px;font-size:10px;flex-shrink:0">PRODUCTS (2)<br>KS0001<br>KS0002</div>
+    <div style="flex:1;display:flex;flex-direction:column;border:1px solid var(--border);border-radius:6px;overflow:hidden">
+      <div style="padding:8px 12px;border-bottom:1px solid var(--border);background:var(--surface-hover);display:flex;align-items:center;gap:8px">
+        <button class="mock-button" style="font-size:10px;padding:2px 8px">← Back</button>
+        <strong style="font-size:12px">KS0001 Amazon US v2</strong>
+        <span style="font-size:10px;color:var(--text-muted)">v5</span>
+        <span style="margin-left:auto;font-size:10px;background:var(--primary);color:#FFF;padding:2px 8px;border-radius:4px">History</span>
+        <button class="mock-button" style="font-size:10px;padding:2px 8px">Save</button>
+      </div>
+      <div style="flex:1;display:flex;overflow:hidden">
+        <!-- version list -->
+        <div style="width:160px;border-right:1px solid var(--border);padding:8px;overflow-y:auto;font-size:11px">
+          <div style="padding:6px 8px;border-radius:4px;background:var(--primary-light);cursor:pointer;margin-bottom:2px">
+            <strong>v5</strong> <span style="font-size:9px;color:var(--text-muted)">(current)</span><br>
+            <span style="font-size:9px;color:var(--text-muted)">06/10 09:45 · 4 images</span>
+          </div>
+          <div style="padding:6px 8px;border-radius:4px;cursor:pointer;margin-bottom:2px">
+            <strong>v4</strong><br>
+            <span style="font-size:9px;color:var(--text-muted)">06/10 09:30 · 3 images</span>
+          </div>
+          <div style="padding:6px 8px;border-radius:4px;cursor:pointer;margin-bottom:2px;border:2px solid var(--primary);border-radius:4px">
+            <strong>v3</strong> <span style="font-size:9px;color:var(--primary)">← viewing</span><br>
+            <span style="font-size:9px;color:var(--text-muted)">06/10 09:15 · 2 images</span>
+            <button class="mock-button" style="margin-top:4px;font-size:9px;padding:2px 6px;width:100%">Restore to v3</button>
+          </div>
+          <div style="padding:6px 8px;border-radius:4px;cursor:pointer;margin-bottom:2px">
+            <strong>v2</strong><br>
+            <span style="font-size:9px;color:var(--text-muted)">06/10 09:00 · 2 images</span>
+          </div>
+          <div style="padding:6px 8px;border-radius:4px;cursor:pointer;margin-bottom:2px">
+            <strong>v1</strong><br>
+            <span style="font-size:9px;color:var(--text-muted)">06/10 08:45 · 1 image</span>
+          </div>
+        </div>
+        <!-- version preview -->
+        <div style="flex:1;padding:10px;overflow-y:auto">
+          <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px">v3 snapshot — 2 images</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <div style="width:80px;height:80px;background:var(--border);border-radius:4px;display:flex;align-items:flex-end;justify-content:center;font-size:10px;position:relative">
+              <span style="position:absolute;bottom:2px;left:2px;font-size:8px;background:var(--primary);color:#FFF;padding:0 3px;border-radius:3px">main</span>
+              🖼️
+            </div>
+            <div style="width:80px;height:80px;background:var(--border);border-radius:4px;display:flex;align-items:flex-end;justify-content:center;font-size:10px;position:relative">
+              <span style="position:absolute;bottom:2px;left:2px;font-size:8px;background:var(--primary);color:#FFF;padding:0 3px;border-radius:3px">alt</span>
+              🖼️
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p style="font-size:11px;color:var(--text-muted);margin-top:6px">替换模式：History 替换图片编辑区，SKU 侧边栏保留。版本列表 + 预览分栏。</p>
+</div>
+
+<div class="section">
+  <h3>方案 B — 抽屉侧面板（和 Asset 详情面板一致）</h3>
+  <p style="font-size:12px;color:var(--text-secondary)">点 "History" → 右侧滑出面板显示版本列表 + 预览，编辑器保持可见</p>
+  <div style="display:flex;gap:4px;height:260px;margin-top:8px">
+    <div class="mock-sidebar" style="width:110px;font-size:10px;flex-shrink:0">PRODUCTS<br>KS0001<br>KS0002</div>
+    <div class="mock-content" style="flex:1;font-size:11px;display:flex;align-items:center;justify-content:center;flex-direction:column">
+      <span>🖼️  🖼️  🖼️  🖼️</span>
+      <span style="font-size:10px;opacity:0.5">editor images (still visible)</span>
+    </div>
+    <div style="width:240px;flex-shrink:0;border-left:1px solid var(--border);display:flex;flex-direction:column;font-size:11px">
+      <div style="padding:8px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px">
+        <strong>History</strong><button style="margin-left:auto;font-size:14px;cursor:pointer;background:none;border:none">×</button>
+      </div>
+      <div style="flex:1;overflow-y:auto;padding:6px">
+        <div style="padding:5px 8px;border-radius:4px;background:var(--primary-light);margin-bottom:2px;cursor:pointer"><strong>v5</strong> <span style="font-size:9px;color:var(--text-muted)">current · 4 imgs</span></div>
+        <div style="padding:5px 8px;border-radius:4px;margin-bottom:2px;cursor:pointer"><strong>v4</strong> <span style="font-size:9px;color:var(--text-muted)">3 imgs</span></div>
+        <div style="padding:5px 8px;border-radius:4px;margin-bottom:2px;cursor:pointer;border:2px solid var(--primary)"><strong>v3</strong> <span style="font-size:9px;color:var(--text-muted)">2 imgs</span>
+          <div style="display:flex;gap:4px;margin-top:4px">
+            <div style="width:36px;height:36px;background:var(--border);border-radius:2px;display:flex;align-items:center;justify-content:center;font-size:14px">🖼️</div>
+            <div style="width:36px;height:36px;background:var(--border);border-radius:2px;display:flex;align-items:center;justify-content:center;font-size:14px">🖼️</div>
+          </div>
+          <button class="mock-button" style="margin-top:4px;font-size:9px;padding:2px 6px;width:100%">Restore to v3</button>
+        </div>
+        <div style="padding:5px 8px;border-radius:4px;margin-bottom:2px;cursor:pointer"><strong>v2</strong> <span style="font-size:9px;color:var(--text-muted)">2 imgs</span></div>
+        <div style="padding:5px 8px;border-radius:4px;margin-bottom:2px;cursor:pointer"><strong>v1</strong> <span style="font-size:9px;color:var(--text-muted)">1 img</span></div>
+      </div>
+    </div>
+  </div>
+  <p style="font-size:11px;color:var(--text-muted);margin-top:6px">抽屉模式：版本历史在右侧窄面板，和 Asset 详情面板模式一致。当前编辑器内容仍可见。</p>
+</div>
+
+<div class="options" data-multiselect>
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content"><h3>替换编辑器主区域</h3><p>和 Collection 编辑器模式一致，分栏显示版本列表+预览。最大空间。</p></div>
+  </div>
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content"><h3>右侧抽屉面板</h3><p>和 Asset 详情面板一致，编辑器保持可见。版本预览空间较小。</p></div>
+  </div>
+</div>
