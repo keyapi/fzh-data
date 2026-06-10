@@ -39,6 +39,22 @@ HTTPS 协议不受 GFW 干扰，`gh` CLI 用 token 做认证——比 SSH 更稳
 
 ---
 
+## 首次初始化
+
+Clone 后运行一次：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File setup.ps1
+```
+
+> **为什么需要？** `CLAUDE.md` 是 symlink（→ AGENTS.md），Windows 上 git clone 不会自动创建。
+> `~/.claude/skills/` 同样需要链接到项目的 `.agents/skills/`。
+> 脚本也处理 superpowers（如果已安装）。
+
+运行一次即可，后续 `git pull` 新增的 skill 需要重新运行脚本。
+
+---
+
 ## 开发流程
 
 ```
