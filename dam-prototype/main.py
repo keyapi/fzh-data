@@ -13,10 +13,13 @@ import asyncio
 import hashlib
 import io
 import os
+import shutil
 import sys
+import tempfile
 import threading
 import uuid
 import webbrowser
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -256,61 +259,128 @@ async def update_asset(asset_id: str, data: dict):
     return _asset_to_dict(a)
 
 
-@app.post("/api/upload")
-async def upload_files(files: list[UploadFile] = File(...)):
-    results = []
+def _create_asset_from_bytes(data: bytes, filename: str, rel_dir: str = "") -> dict:
+    """Create an Asset record from file bytes. Returns _asset_to_dict result.
+
+    If rel_dir is provided, files are stored under files/{rel_dir}/{uuid}{ext}
+    preserving the original directory structure.
+    """
+    ext = Path(filename).suffix.lower()
+    if ext not in ALLOWED_EXTS:
+        return None
+    content_hash = hashlib.sha256(data).hexdigest()
+
+    # 去重
+    existing = session.query(Asset).filter_by(content_hash=content_hash).first()
+    if existing:
+        return {**_asset_to_dict(existing), "_dedup": True}
+
+    asset_id = str(uuid.uuid4())
     thumb_dir = NAS_ROOT / "thumbnails"
     store_dir = NAS_ROOT / "files"
 
+    # 保留目录结构: files/{rel_dir}/{uuid}{ext}
+    if rel_dir:
+        rel_dir = rel_dir.replace("\\", "/").strip("/")
+        store_subdir = store_dir / rel_dir
+        store_subdir.mkdir(parents=True, exist_ok=True)
+        stored_path = str(store_subdir / f"{asset_id}{ext}")
+    else:
+        stored_path = str(store_dir / f"{asset_id}{ext}")
+
+    asset = Asset(
+        id=asset_id,
+        filename=filename, asset_type=_guess_type(ext),
+        file_size=len(data), content_hash=content_hash,
+        stored_path=stored_path,
+        thumbnail_path=str(thumb_dir / f"{asset_id}.jpg"),
+        status="draft",
+    )
+
+    Path(asset.stored_path).write_bytes(data)
+
+    # 缩略图
+    try:
+        img = PILImage.open(io.BytesIO(data))
+        img.thumbnail(THUMB_SIZE, PILImage.LANCZOS)
+        if img.mode in ("RGBA", "P"): img = img.convert("RGB")
+        asset.width, asset.height = img.size
+        img.save(asset.thumbnail_path, "JPEG", quality=80)
+    except Exception:
+        asset.thumbnail_path = None
+
+    session.add(asset)
+    session.commit()
+    result = _asset_to_dict(asset)
+
+    # AI pipeline — 后台
+    if asset.asset_type == "image":
+        _stored = asset.stored_path
+        _aid = asset.id
+        _db = f"sqlite:///{DB_PATH}"
+        threading.Thread(target=_run_ai_background, args=(_aid, _stored, _db), daemon=True).start()
+
+    return result
+
+
+@app.post("/api/upload")
+async def upload_files(files: list[UploadFile] = File(...)):
+    results = []
     for f in files:
         if not f.filename: continue
-        ext = Path(f.filename).suffix.lower()
-        if ext not in ALLOWED_EXTS: continue
-
         data = await f.read()
-        content_hash = hashlib.sha256(data).hexdigest()
-
-        # 去重检查
-        existing = session.query(Asset).filter_by(content_hash=content_hash).first()
-        if existing:
-            results.append({**_asset_to_dict(existing), "_dedup": True})
-            continue
-
-        asset_id = str(uuid.uuid4())
-        asset = Asset(
-            id=asset_id,
-            filename=f.filename, asset_type=_guess_type(ext),
-            file_size=len(data), content_hash=content_hash,
-            stored_path=str(store_dir / f"{asset_id}{ext}"),
-            thumbnail_path=str(thumb_dir / f"{asset_id}.jpg"),
-            status="draft",
-        )
-
-        # 保存源文件
-        Path(asset.stored_path).write_bytes(data)
-
-        # 生成缩略图
-        try:
-            img = PILImage.open(io.BytesIO(data))
-            img.thumbnail(THUMB_SIZE, PILImage.LANCZOS)
-            if img.mode in ("RGBA", "P"): img = img.convert("RGB")
-            asset.width, asset.height = img.size
-            img.save(asset.thumbnail_path, "JPEG", quality=80)
-        except Exception:
-            asset.thumbnail_path = None
-
-        session.add(asset)
-        session.commit()
-        results.append(_asset_to_dict(asset))
-
-        # AI pipeline — 后台线程, 不阻塞上传响应
-        if asset.asset_type == "image":
-            _stored = asset.stored_path
-            _aid = asset.id
-            _db = f"sqlite:///{DB_PATH}"
-            threading.Thread(target=_run_ai_background, args=(_aid, _stored, _db), daemon=True).start()
-
+        r = _create_asset_from_bytes(data, f.filename)
+        if r:
+            results.append(r)
     return {"success": True, "assets": results}
+
+
+@app.post("/api/upload/folder")
+async def upload_folder(file: UploadFile = File(...)):
+    """上传 ZIP 文件，保留目录结构。
+
+    接受一个 ZIP 文件，解压后遍历所有文件，
+    保留原始目录层级信息，为每个文件创建 Asset 记录。
+    ZIP 中的目录结构映射到 files/{相对路径}/{uuid}.ext。
+    """
+    if not file.filename or not file.filename.lower().endswith('.zip'):
+        return {"success": False, "error": "Only ZIP files are accepted", "assets": []}
+
+    data = await file.read()
+    results = []
+    folders = set()
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmppath = Path(tmpdir)
+        try:
+            with zipfile.ZipFile(io.BytesIO(data)) as zf:
+                zf.extractall(tmppath)
+        except zipfile.BadZipFile:
+            return {"success": False, "error": "Invalid ZIP file", "assets": []}
+
+        for fpath in sorted(tmppath.rglob("*")):
+            if not fpath.is_file():
+                continue
+            # 跳过隐藏文件和 macOS 资源分支
+            if fpath.name.startswith("._") or fpath.name.startswith("__MACOSX"):
+                continue
+            rel_path = str(fpath.relative_to(tmppath).parent)
+            if rel_path == ".":
+                rel_path = ""
+            else:
+                rel_path = rel_path.replace("\\", "/")
+                folders.add(rel_path)
+            file_data = fpath.read_bytes()
+            r = _create_asset_from_bytes(file_data, fpath.name, rel_path)
+            if r:
+                results.append(r)
+
+    return {
+        "success": True,
+        "assets": results,
+        "folders": sorted(folders),
+        "total": len(results),
+    }
 
 
 # ── Tag APIs ──────────────────────────────────────────
