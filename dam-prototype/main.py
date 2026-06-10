@@ -132,7 +132,7 @@ def _asset_to_dict(a: Asset) -> dict[str, Any]:
         "compliance_status": a.compliance_status,
         "compliance_detail": a.compliance_detail,
         "status": a.status, "version": a.version,
-        "linked_sku": a.product_links[0].product_sku if a.product_links else None,
+        "linked_skus": [pl.product_sku for pl in (a.product_links or [])],
         "uploaded_at": a.uploaded_at.isoformat() if a.uploaded_at else None,
         "uploaded_by": a.uploaded_by,
     }
@@ -196,6 +196,19 @@ async def update_asset(asset_id: str, data: dict):
             if tag not in a.tags:
                 a.tags.append(tag)
         a.ai_tags_confirmed = True
+
+        if "linked_skus" in data:
+            new_skus = set(data["linked_skus"])
+            existing = {pl.product_sku: pl for pl in a.product_links}
+            for sku, pl in list(existing.items()):
+                if sku not in new_skus:
+                    session.delete(pl)
+            for sku in new_skus:
+                if sku not in existing:
+                    session.add(AssetProductLink(
+                        asset_id=a.id, product_sku=sku,
+                        match_level="exact", is_primary=False
+                    ))
 
     a.updated_at = datetime.now(timezone.utc)
     session.commit()

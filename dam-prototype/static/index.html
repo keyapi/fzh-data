@@ -232,9 +232,9 @@ input, select, textarea { font: inherit; color: inherit; }
           <button class="close-btn" @click="editorPick=false">×</button>
         </div>
         <div class="editor-picker-body">
-          <div v-for="a in assets" :key="a.id" class="editor-picker-asset" :class="{selected: editorPicked.includes(a.id)}" @click="togglePick(a.id)" :title="a.filename + (a.linked_sku ? ' ('+a.linked_sku+')' : '')">
+          <div v-for="a in assets" :key="a.id" class="editor-picker-asset" :class="{selected: editorPicked.includes(a.id)}" @click="togglePick(a.id)" :title="a.filename">
             <img :src="a.thumb_url || a.file_url" :alt="a.filename" loading="lazy">
-            <span v-if="a.linked_sku" class="picker-sku-badge">{{ a.linked_sku }}</span>
+            <span v-for="(sku,i) in (a.linked_skus||[]).slice(0,3)" :key="i" class="picker-sku-badge" :style="{bottom: (2+i*16)+'px'}">{{ sku }}</span>
           </div>
         </div>
       </div>
@@ -265,7 +265,7 @@ input, select, textarea { font: inherit; color: inherit; }
         <div class="detail-field"><label>Product</label>
           <input class="search-input" v-model="detailQ" @input="searchForDetail" placeholder="Search SKU...">
           <div v-if="detailResults.length" style="margin-top:4px"><div v-for="p in detailResults" :key="p.sku" class="filter-radio" @click="linkSku(detailAsset,p.sku)">{{ p.sku }} — {{ p.name }}</div></div>
-          <div v-if="detailAsset.linked_sku" style="margin-top:8px"><span class="product-link">{{ detailAsset.linked_sku }}<span class="rm" @click="detailAsset.linked_sku=null; saveDetail()">×</span></span></div>
+          <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:4px"><span v-for="(sku,i) in (detailAsset.linked_skus||[])" :key="i" class="product-link">{{ sku }}<span class="rm" @click="rmLinkedSku(detailAsset,i)">×</span></span></div>
         </div>
         <div class="detail-meta"><div v-if="detailAsset.file_size">Size: {{ fmtSize(detailAsset.file_size) }}</div><div v-if="detailAsset.width">Dimensions: {{ detailAsset.width }} × {{ detailAsset.height }}</div><div>Uploaded: {{ fmtDate(detailAsset.uploaded_at) }}</div></div>
       </div>
@@ -316,7 +316,7 @@ createApp({setup(){
     {value:'document',label:'Documents',count:assets.value.filter(a=>a.asset_type==='document').length},
   ]);
   const allTags=computed(()=>{const m={};assets.value.forEach(a=>{(a.tags||[]).forEach(t=>{m[t]=(m[t]||0)+1})});return Object.entries(m).map(([n,c])=>({name:n,count:c})).sort((a,b)=>b.count-a.count)});
-  const filtered=computed(()=>{let r=[...assets.value];if(filterProduct.value)r=r.filter(a=>a.linked_sku===filterProduct.value);if(sortBy.value==='newest')r.sort((a,b)=>new Date(b.uploaded_at||0)-new Date(a.uploaded_at||0));else if(sortBy.value==='oldest')r.sort((a,b)=>new Date(a.uploaded_at||0)-new Date(b.uploaded_at||0));else r.sort((a,b)=>(a.filename||'').localeCompare(b.filename||''));return r});
+  const filtered=computed(()=>{let r=[...assets.value];if(filterProduct.value)r=r.filter(a=>(a.linked_skus||[]).includes(filterProduct.value));if(sortBy.value==='newest')r.sort((a,b)=>new Date(b.uploaded_at||0)-new Date(a.uploaded_at||0));else if(sortBy.value==='oldest')r.sort((a,b)=>new Date(a.uploaded_at||0)-new Date(b.uploaded_at||0));else r.sort((a,b)=>(a.filename||'').localeCompare(b.filename||''));return r});
 
   function selectOne(a,ev){if(ev.ctrlKey||ev.metaKey){const i=selectedIds.value.indexOf(a.id);if(i>=0)selectedIds.value.splice(i,1);else selectedIds.value.push(a.id)}else{selectedIds.value=[a.id]}detailAsset.value=assets.value.find(x=>x.id===selectedIds.value[0])||null}
   function clearAll(){selectedIds.value=[];detailAsset.value=null}
@@ -334,7 +334,7 @@ createApp({setup(){
   async function setEditorRole(aid,role){if(!editorColl.value)return;try{const r=await fetch('/api/collections/'+editorColl.value.id+'/items',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({set_role:[{asset_id:aid,role}]})});if(!r.ok)throw new Error('Role failed');editorColl.value=await r.json();editorDirty.value=true}catch(e){toast('Role failed','error')}}
   function openAssetPicker(){editorPick.value=true;editorPicked.value=[]}
   function togglePick(aid){const i=editorPicked.value.indexOf(aid);if(i>=0)editorPicked.value.splice(i,1);else editorPicked.value.push(aid)}
-  async function addPickedToEditor(){if(!editorColl.value||!editorPicked.value.length)return;const colSkus=new Set((editorColl.value.items||[]).map(i=>i.sku).filter(Boolean));const cross=[];const allAssets=[];for(const aid of editorPicked.value){const a=assets.value.find(x=>x.id===aid);if(!a)continue;allAssets.push(a);if(a.linked_sku&&!colSkus.has(a.linked_sku))cross.push(a)}if(cross.length){const names=cross.map(a=>a.filename+' ('+a.linked_sku+')').join('\n');const currentSkus=[...colSkus].join(', ')||'none';if(!confirm('The following images belong to different SKU(s):\n\n'+names+'\n\nCurrent collection SKUs: '+currentSkus+'\n\nAdding them will also link them to the collection\'s SKUs. Continue?'))return}try{const maxPos=Math.max(0,...editorItems.value.map(i=>i.position));const adds=editorPicked.value.map((aid,idx)=>({asset_id:aid,position:maxPos+idx+1,role:'alternate'}));const r=await fetch('/api/collections/'+editorColl.value.id+'/items',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({add:adds})});if(!r.ok)throw new Error('Add failed');editorColl.value=await r.json();editorDirty.value=true;editorSku.value=null;editorPick.value=false;editorPicked.value=[];toast('Added '+adds.length+' asset(s)')}catch(e){toast('Add failed','error')}}
+  async function addPickedToEditor(){if(!editorColl.value||!editorPicked.value.length)return;const colSkus=new Set((editorColl.value.items||[]).map(i=>i.sku).filter(Boolean));const cross=[];const allAssets=[];for(const aid of editorPicked.value){const a=assets.value.find(x=>x.id===aid);if(!a)continue;allAssets.push(a);if(a.linked_skus&&a.linked_skus.length&&!a.linked_skus.some(s=>colSkus.has(s)))cross.push(a)}if(cross.length){const names=cross.map(a=>a.filename+' ('+(a.linked_skus||[]).join(', ')+')').join('\n');const currentSkus=[...colSkus].join(', ')||'none';if(!confirm('The following images belong to different SKU(s):\n\n'+names+'\n\nCurrent collection SKUs: '+currentSkus+'\n\nAdding them will also link them to the collection\'s SKUs. Continue?'))return}try{const maxPos=Math.max(0,...editorItems.value.map(i=>i.position));const adds=editorPicked.value.map((aid,idx)=>({asset_id:aid,position:maxPos+idx+1,role:'alternate'}));const r=await fetch('/api/collections/'+editorColl.value.id+'/items',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({add:adds})});if(!r.ok)throw new Error('Add failed');editorColl.value=await r.json();editorDirty.value=true;editorSku.value=null;editorPick.value=false;editorPicked.value=[];toast('Added '+adds.length+' asset(s)')}catch(e){toast('Add failed','error')}}
   async function addSkuToEditor(){const s=prompt('Enter SKU code:');if(!s)return;const ctx=editorColl.value.context||{};const skus=new Set(ctx.skus||[]);skus.add(s);ctx.skus=Array.from(skus);editorColl.value.context=ctx}
   function openCollectionEditor(existing){if(existing){openEditor(existing);return}const n=prompt('Collection name:');if(!n)return;const t=prompt('Type (listing/campaign/social/catalog/custom):','listing');if(!t)return;(async()=>{const ctx={skus:[]};const r=await fetch('/api/collections',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n,type:t,context:ctx,created_by:'user'})});const d=await r.json();await loadCollections();openEditor(d)})()}
   function showCollectionMenu(c,ev){const items=[{label:'Export Excel (Amazon)',action:()=>{window.open('/api/collections/'+c.id+'/export?platform=amazon')}},{label:'Export Excel (Wayfair)',action:()=>{window.open('/api/collections/'+c.id+'/export?platform=wayfair')}},{label:'Export Excel (Shopify)',action:()=>{window.open('/api/collections/'+c.id+'/export?platform=shopify')}},{label:'Delete',action:()=>{if(confirm('Delete '+c.name+'?')){fetch('/api/collections/'+c.id,{method:'DELETE'}).then(()=>loadCollections());toast('Deleted','error')}}}];const menu=document.createElement('div');menu.style.cssText='position:fixed;z-index:300;background:var(--surface);border:1px solid var(--border);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.15);padding:4px;min-width:180px;font-size:12px;font-family:var(--font-sans)';menu.style.left=ev.clientX+'px';menu.style.top=ev.clientY+'px';items.forEach(item=>{const el=document.createElement('div');el.textContent=item.label;el.style.cssText='padding:6px 10px;border-radius:4px;cursor:pointer;color:var(--text)';el.onmouseenter=()=>{el.style.background='var(--surface-hover)'};el.onmouseleave=()=>{el.style.background='transparent'};el.onclick=()=>{menu.remove();item.action()};menu.appendChild(el)});document.body.appendChild(menu);document.addEventListener('click',()=>menu.remove(),{once:true})}
@@ -350,21 +350,22 @@ createApp({setup(){
 
   async function saveDetail(){
     if(!detailAsset.value||saving.value)return;saving.value=true;
-    try{await API.update(detailAsset.value.id,{title:detailAsset.value.title,alt_text:detailAsset.value.alt_text,tags:detailAsset.value.tags,style:detailAsset.value.style,fabric:detailAsset.value.fabric,color:detailAsset.value.color,image_role:detailAsset.value.image_role});toast('Saved')}
+    try{await API.update(detailAsset.value.id,{title:detailAsset.value.title,alt_text:detailAsset.value.alt_text,tags:detailAsset.value.tags,style:detailAsset.value.style,fabric:detailAsset.value.fabric,color:detailAsset.value.color,image_role:detailAsset.value.image_role,linked_skus:detailAsset.value.linked_skus||[]});toast('Saved')}
     catch(e){toast('Save failed','error')}
     saving.value=false;
   }
   async function addTag(ev){const v=ev.target.value.trim();if(!v||(detailAsset.value.tags||[]).includes(v))return;detailAsset.value.tags.push(v);ev.target.value='';await saveDetail()}
   async function rmTag(i,src){if(src==='manual')detailAsset.value.tags.splice(i,1);else if(detailAsset.value.ai_tags)detailAsset.value.ai_tags.splice(i,1);await saveDetail()}
   async function confirmAi(a){try{await API.update(a.id,{ai_tags_confirmed:true});a.tags=[...new Set([...(a.tags||[]),...(a.ai_tags||[])])];a.ai_tags_confirmed=true;toast('AI tags confirmed')}catch(e){toast('Confirm failed','error')}}
-  function linkSku(a,sku){a.linked_sku=sku;detailResults.value=[];detailQ.value='';saveDetail();toast('Linked to '+sku)}
+  function linkSku(a,sku){if(!a.linked_skus)a.linked_skus=[];if(!a.linked_skus.includes(sku)){a.linked_skus.push(sku);saveDetail();toast('Linked to '+sku)}detailResults.value=[];detailQ.value=''}
+function rmLinkedSku(a,i){a.linked_skus.splice(i,1);saveDetail();toast('Unlinked')}
 
   let _st=null;
   async function searchProducts(){const q=productQ.value.trim();if(!q){productResults.value=[];return}clearTimeout(_st);_st=setTimeout(async()=>{productResults.value=await API.searchProducts(q)},200)}
   async function searchForDetail(){const q=detailQ.value.trim();if(!q){detailResults.value=[];return}detailResults.value=await API.searchProducts(q)}
 
   async function batchTag(){const t=prompt('Tag for all:');if(!t)return;for(const a of assets.value.filter(x=>selectedIds.value.includes(x.id))){if(!(a.tags||[]).includes(t)){a.tags.push(t);await API.update(a.id,{tags:a.tags})}}toast('Tagged with "'+t+'"')}
-  async function batchLink(){const s=prompt('SKU for all:');if(!s)return;assets.value.filter(a=>selectedIds.value.includes(a.id)).forEach(a=>{a.linked_sku=s});toast('Linked to '+s)}
+  async function batchLink(){const s=prompt('SKU for all:');if(!s)return;assets.value.filter(a=>selectedIds.value.includes(a.id)).forEach(a=>{if(!a.linked_skus)a.linked_skus=[];if(!a.linked_skus.includes(s))a.linked_skus.push(s)});toast('Linked to '+s)}
   function batchDelete(){if(!confirm('Delete '+selectedIds.value.length+' assets?'))return;assets.value=assets.value.filter(a=>!selectedIds.value.includes(a.id));clearAll();toast('Deleted','error')}
 
   function aiTagSelected(){const s=assets.value.filter(a=>selectedIds.value.includes(a.id));if(!s.length)return;toast('AI analyzing '+s.length+' — check back soon');s.forEach(a=>{if(a.asset_type==='image')a.ai_tags=['product photo','studio lighting','ecommerce ready'];else if(a.asset_type==='video')a.ai_tags=['product video','HD'];else a.ai_tags=['document','spec'];a.ai_tags_confirmed=false})}
@@ -381,7 +382,7 @@ createApp({setup(){
   watch(editorSkuItems,async()=>{await nextTick();initEditorSort()});
   watch(filtered,async()=>{await nextTick();initSort()});
 
-  return {assets,totalCount,loading,selectedIds,detailAsset,filterType,filterTag,filterProduct,sortBy,showUpload,uploading,dragOver,sidebarOpen,saving,productQ,productResults,detailQ,detailResults,toasts,typeFilters,allTags,filtered,thumbGrid,selectOne,clearAll,hasPendingAiTags,handlePick,handleDrop,processFiles,addTag,rmTag,confirmAi,linkSku,saveDetail,searchProducts,searchForDetail,batchTag,batchLink,batchDelete,aiTagSelected,toast,fmtSize,fmtDate,collections,loadCollections,openCollectionEditor,showCollectionMenu,editorColl,editorSku,editorSkus,editorSkuItems,editorPick,editorPicked,editorDirty,editorGrid,openEditor,closeEditor,saveEditor,exportEditor,removeEditorItem,setEditorRole,openAssetPicker,togglePick,addPickedToEditor,addSkuToEditor};
+  return {assets,totalCount,loading,selectedIds,detailAsset,filterType,filterTag,filterProduct,sortBy,showUpload,uploading,dragOver,sidebarOpen,saving,productQ,productResults,detailQ,detailResults,toasts,typeFilters,allTags,filtered,thumbGrid,selectOne,clearAll,hasPendingAiTags,handlePick,handleDrop,processFiles,addTag,rmTag,confirmAi,linkSku,rmLinkedSku,saveDetail,searchProducts,searchForDetail,batchTag,batchLink,batchDelete,aiTagSelected,toast,fmtSize,fmtDate,collections,loadCollections,openCollectionEditor,showCollectionMenu,editorColl,editorSku,editorSkus,editorSkuItems,editorPick,editorPicked,editorDirty,editorGrid,openEditor,closeEditor,saveEditor,exportEditor,removeEditorItem,setEditorRole,openAssetPicker,togglePick,addPickedToEditor,addSkuToEditor};
 }}).mount('#app');
 </script>
 </body>
