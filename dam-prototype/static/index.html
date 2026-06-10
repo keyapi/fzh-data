@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DAM · Vilavi PIM</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<link href="https://unpkg.com/filepond@4/dist/filepond.min.css" rel="stylesheet">
+<script src="https://unpkg.com/filepond@4/dist/filepond.min.js"></script>
+<script src="https://unpkg.com/sortablejs@1/Sortable.min.js"></script>
+<style>
+:root {
+  --font-sans: "Inter", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, sans-serif;
+  --bg: #FFFFFF; --bg-sidebar: #F1F5F9; --surface: #FFFFFF; --surface-hover: #F8FAFC;
+  --border: #E2E8F0; --text: #0F172A; --text-secondary: #64748B; --text-muted: #94A3B8;
+  --primary: #2563EB; --primary-hover: #1D4ED8; --primary-light: #EFF6FF;
+  --success: #16A34A; --warning: #F59E0B; --error: #EF4444;
+  --tag-bg: #F1F5F9; --tag-text: #334155; --tag-ai-bg: #FEF9C3; --tag-ai-text: #A16207;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05); --shadow: 0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06);
+  --shadow-lg: 0 10px 15px rgba(0,0,0,0.1), 0 4px 6px rgba(0,0,0,0.05);
+  --radius: 6px; --radius-lg: 10px; --radius-full: 9999px;
+  --sidebar-w: 220px; --detail-w: 320px; --header-h: 52px; --transition: 0.15s ease;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0F172A; --bg-sidebar: #1E293B; --surface: #1E293B; --surface-hover: #334155;
+    --border: #334155; --text: #F8FAFC; --text-secondary: #94A3B8; --text-muted: #64748B;
+    --primary: #3B82F6; --primary-hover: #2563EB; --primary-light: #1E3A5F;
+    --tag-bg: #334155; --tag-text: #CBD5E1; --tag-ai-bg: #422006; --tag-ai-text: #FDE68A;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.2); --shadow: 0 1px 3px rgba(0,0,0,0.3);
+  }
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--font-sans); font-size: 13px; line-height: 1.5; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; -webkit-font-smoothing: antialiased; }
+button { cursor: pointer; border: none; font: inherit; color: inherit; background: none; }
+input, select, textarea { font: inherit; color: inherit; }
+::selection { background: var(--primary-light); color: var(--primary); }
+#app { display: flex; flex-direction: column; height: 100vh; position: relative; z-index: 1; }
+.toolbar { display: flex; align-items: center; gap: 12px; height: var(--header-h); padding: 0 20px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; z-index: 10; }
+.toolbar-brand { font-size: 15px; font-weight: 600; letter-spacing: -0.02em; margin-right: 8px; }
+.toolbar-brand span { color: var(--text-muted); font-weight: 400; margin-left: 4px; }
+.toolbar-count { font-size: 12px; color: var(--text-muted); margin-right: auto; }
+.btn { display: inline-flex; align-items: center; gap: 5px; padding: 6px 14px; border-radius: var(--radius); font-size: 13px; font-weight: 500; transition: all var(--transition); white-space: nowrap; }
+.btn-primary { background: var(--primary); color: #FFF; } .btn-primary:hover { background: var(--primary-hover); }
+.btn-secondary { border: 1px solid var(--border); color: var(--text-secondary); } .btn-secondary:hover { background: var(--surface-hover); color: var(--text); }
+.btn-ai { background: linear-gradient(135deg, #7C3AED, #2563EB); color: #FFF; } .btn-ai:hover { opacity: 0.92; }
+.btn-ai:disabled { opacity: 0.4; cursor: not-allowed; }
+.main { display: flex; flex: 1; overflow: hidden; }
+.sidebar { width: var(--sidebar-w); min-width: var(--sidebar-w); background: var(--bg-sidebar); border-right: 1px solid var(--border); padding: 16px 14px; overflow-y: auto; flex-shrink: 0; transition: margin-left 0.2s, opacity 0.2s; }
+.sidebar.collapsed { margin-left: calc(-1 * var(--sidebar-w)); opacity: 0; pointer-events: none; }
+.sidebar-section { margin-bottom: 18px; }
+.sidebar-section h3 { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 6px; }
+.filter-radio { display: flex; align-items: center; gap: 8px; padding: 4px 8px; border-radius: 4px; font-size: 13px; cursor: pointer; transition: background 0.1s; }
+.filter-radio:hover { background: var(--surface-hover); } .filter-radio.active { background: var(--primary-light); color: var(--primary); font-weight: 500; }
+.filter-radio .count { margin-left: auto; font-size: 11px; color: var(--text-muted); min-width: 18px; text-align: right; }
+.tag-chip { display: inline-block; padding: 3px 10px; margin: 2px; border-radius: var(--radius-full); font-size: 12px; cursor: pointer; background: var(--tag-bg); color: var(--tag-text); border: 1px solid transparent; transition: all var(--transition); }
+.tag-chip:hover { border-color: var(--primary); } .tag-chip.active { background: var(--primary-light); color: var(--primary); border-color: var(--primary); }
+.search-input { width: 100%; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; background: var(--bg); outline: none; }
+.search-input:focus { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-light); }
+.select-sm { width: 100%; padding: 5px 8px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 12px; background: var(--bg); cursor: pointer; outline: none; }
+.grid-area { flex: 1; overflow-y: auto; padding: 16px 20px; }
+.thumb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+.thumb-card { position: relative; aspect-ratio: 1; border-radius: var(--radius); overflow: hidden; cursor: pointer; border: 2px solid transparent; background: var(--surface); box-shadow: var(--shadow); transition: border-color var(--transition), box-shadow var(--transition), transform var(--transition); animation: cardEnter 0.35s ease both; }
+@keyframes cardEnter { from { opacity: 0; transform: translateY(12px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
+.thumb-card:hover { border-color: var(--primary); box-shadow: var(--shadow-lg); transform: translateY(-2px); }
+.thumb-card.selected { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-light); }
+.thumb-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.thumb-card .sel-check { position: absolute; top: 6px; left: 6px; width: 22px; height: 22px; border-radius: 50%; background: var(--primary); color: #FFF; display: none; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; box-shadow: var(--shadow); }
+.thumb-card.selected .sel-check { display: flex; }
+.thumb-card .badge { position: absolute; bottom: 6px; right: 6px; padding: 1px 6px; border-radius: var(--radius-full); font-size: 10px; font-weight: 500; background: rgba(0,0,0,0.65); color: #FFF; }
+.thumb-card .badge.ai { background: var(--warning); color: #000; font-weight: 600; }
+.thumb-card .drag-grip { position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; border-radius: 4px; background: rgba(0,0,0,0.45); color: #FFF; display: flex; align-items: center; justify-content: center; font-size: 13px; cursor: grab; opacity: 0; transition: opacity var(--transition); }
+.thumb-card:hover .drag-grip { opacity: 1; }
+.empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 60vh; gap: 10px; color: var(--text-muted); user-select: none; }
+.empty-state .empty-icon { font-size: 56px; opacity: 0.35; margin-bottom: 4px; }
+.empty-state p { font-size: 14px; }
+.detail-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 20; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+.detail-overlay.visible { opacity: 1; pointer-events: auto; }
+.detail-panel { position: fixed; top: 0; right: 0; width: var(--detail-w); height: 100vh; background: var(--surface); border-left: 1px solid var(--border); z-index: 21; transform: translateX(100%); transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1); display: flex; flex-direction: column; box-shadow: var(--shadow-lg); }
+.detail-panel.open { transform: translateX(0); }
+.detail-header { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.detail-header h3 { font-size: 14px; font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.close-btn { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--text-muted); transition: all var(--transition); }
+.close-btn:hover { background: var(--surface-hover); color: var(--text); }
+.detail-body { flex: 1; overflow-y: auto; padding: 16px; }
+.detail-preview { width: 100%; border-radius: var(--radius); margin-bottom: 16px; box-shadow: var(--shadow); }
+.detail-field { margin-bottom: 14px; }
+.detail-field label { display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 5px; }
+.detail-field input, .detail-field textarea, .detail-field select { width: 100%; padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; background: var(--bg); outline: none; transition: border-color var(--transition); }
+.detail-field input:focus, .detail-field textarea:focus, .detail-field select:focus { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-light); }
+.detail-field textarea { min-height: 64px; resize: vertical; }
+.tags-row { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+.tag-pill { display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: var(--radius-full); font-size: 12px; font-weight: 500; }
+.tag-pill.manual { background: var(--tag-bg); color: var(--tag-text); }
+.tag-pill.ai { background: var(--tag-ai-bg); color: var(--tag-ai-text); border: 1px dashed var(--warning); }
+.tag-pill .rm { cursor: pointer; opacity: 0.5; font-size: 14px; line-height: 1; transition: opacity var(--transition); }
+.tag-pill .rm:hover { opacity: 1; }
+.tag-add { width: 100%; padding: 5px 8px; border: 1px dashed var(--border); border-radius: var(--radius); font-size: 12px; background: transparent; outline: none; }
+.tag-add:focus { border-color: var(--primary); }
+.detail-meta { font-size: 11px; color: var(--text-muted); margin-top: 8px; }
+.detail-meta div { padding: 2px 0; }
+.product-link { margin-top: 6px; display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; background: var(--primary-light); color: var(--primary); border-radius: var(--radius-full); font-size: 12px; font-weight: 500; }
+.product-link .rm { cursor: pointer; font-size: 14px; opacity: 0.6; }
+.batch-bar { display: flex; align-items: center; gap: 8px; padding: 8px 14px; margin-bottom: 12px; background: var(--primary); color: #FFF; border-radius: var(--radius); font-size: 13px; font-weight: 500; animation: slideDown 0.2s ease; }
+@keyframes slideDown { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+.batch-bar .btn-batch { padding: 3px 10px; border-radius: 4px; font-size: 12px; background: rgba(255,255,255,0.2); color: #FFF; transition: background var(--transition); }
+.batch-bar .btn-batch:hover { background: rgba(255,255,255,0.35); }
+.upload-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; z-index: 100; }
+.upload-dialog { background: var(--surface); border-radius: var(--radius-lg); padding: 32px; width: 460px; max-width: 90vw; box-shadow: var(--shadow-lg); }
+.upload-dialog h2 { font-size: 17px; font-weight: 600; margin-bottom: 6px; }
+.upload-dialog p { font-size: 13px; color: var(--text-secondary); margin-bottom: 16px; }
+.drop-zone { border: 2px dashed var(--border); border-radius: var(--radius); padding: 36px; text-align: center; cursor: pointer; transition: all var(--transition); color: var(--text-secondary); margin-bottom: 12px; }
+.drop-zone:hover, .drop-zone.drag-over { border-color: var(--primary); background: var(--primary-light); }
+.drop-zone .dz-icon { font-size: 36px; margin-bottom: 8px; opacity: 0.6; }
+.drop-zone p { font-size: 13px; color: var(--text-secondary); margin: 0; }
+.drop-zone .dz-hint { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+.toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 200; display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
+.toast { padding: 10px 18px; border-radius: var(--radius); font-size: 13px; font-weight: 500; color: #FFF; box-shadow: var(--shadow-lg); animation: toastIn 0.25s ease; pointer-events: auto; }
+.toast.success { background: var(--success); } .toast.error { background: var(--error); }
+@keyframes toastIn { from { transform: translateY(12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+/* ── Collection Editor ── */
+.editor-view { display: flex; flex: 1; overflow: hidden; }
+.editor-skus { width: 170px; min-width: 170px; background: var(--bg-sidebar); border-right: 1px solid var(--border); overflow-y: auto; padding: 10px; flex-shrink: 0; }
+.editor-skus h4 { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 8px; }
+.editor-sku-item { padding: 6px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; margin-bottom: 2px; transition: background 0.1s; display: flex; align-items: center; gap: 6px; }
+.editor-sku-item:hover { background: var(--surface-hover); }
+.editor-sku-item.active { background: var(--primary-light); color: var(--primary); font-weight: 500; }
+.editor-sku-item .sku-count { margin-left: auto; font-size: 10px; color: var(--text-muted); background: var(--border); padding: 0 5px; border-radius: 8px; }
+.editor-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.editor-toolbar { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
+.editor-toolbar h3 { font-size: 14px; font-weight: 600; margin-right: 4px; }
+.editor-toolbar .meta { font-size: 11px; color: var(--text-muted); }
+.editor-images { flex: 1; padding: 16px; overflow-y: auto; display: flex; flex-wrap: wrap; gap: 10px; align-content: flex-start; min-height: 100px; }
+.editor-img-card { position: relative; width: 120px; height: 120px; border-radius: 6px; overflow: hidden; border: 2px solid var(--border); cursor: grab; transition: border-color 0.15s, box-shadow 0.15s; background: var(--surface); flex-shrink: 0; }
+.editor-img-card:hover { border-color: var(--primary); box-shadow: var(--shadow); }
+.editor-img-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.editor-img-card .drag-grip { position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; border-radius: 3px; background: rgba(0,0,0,0.5); color: #FFF; display: flex; align-items: center; justify-content: center; font-size: 11px; cursor: grab; }
+.editor-img-card .role-badge { position: absolute; bottom: 4px; left: 4px; padding: 1px 6px; border-radius: 10px; font-size: 10px; font-weight: 500; background: var(--primary); color: #FFF; }
+.editor-img-card .rm-btn { position: absolute; top: 4px; left: 4px; width: 20px; height: 20px; border-radius: 50%; background: rgba(0,0,0,0.5); color: #FFF; display: flex; align-items: center; justify-content: center; font-size: 12px; cursor: pointer; opacity: 0; transition: opacity 0.15s; }
+.editor-img-card:hover .rm-btn { opacity: 1; }
+.editor-drop-zone { width: 120px; height: 120px; border: 2px dashed var(--border); border-radius: 6px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.15s; color: var(--text-muted); font-size: 24px; flex-shrink: 0; }
+.editor-drop-zone:hover { border-color: var(--primary); background: var(--primary-light); color: var(--primary); }
+.editor-role-select { position: absolute; bottom: 4px; right: 4px; padding: 1px 3px; border-radius: 4px; font-size: 9px; background: rgba(0,0,0,0.6); color: #FFF; border: none; cursor: pointer; outline: none; }
+.editor-picker-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.35); display: flex; align-items: center; justify-content: center; z-index: 100; }
+.editor-picker-dialog { background: var(--surface); border-radius: 8px; width: 680px; max-width: 90vw; max-height: 78vh; display: flex; flex-direction: column; box-shadow: var(--shadow-lg); }
+.editor-picker-header { padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; }
+.editor-picker-header h3 { font-size: 14px; font-weight: 600; }
+.editor-picker-body { flex: 1; overflow-y: auto; padding: 12px; display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 8px; }
+.editor-picker-asset { aspect-ratio: 1; border-radius: 4px; overflow: hidden; cursor: pointer; border: 2px solid transparent; transition: border-color 0.15s; }
+.editor-picker-asset:hover { border-color: var(--primary); }
+.editor-picker-asset.selected { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-light); }
+.editor-picker-asset img { width: 100%; height: 100%; object-fit: cover; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="toolbar">
+    <div class="toolbar-brand">DAM<span>Workspace</span></div>
+    <div class="toolbar-count">{{ totalCount || assets.length }} assets</div>
+    <button class="btn btn-secondary" @click="sidebarOpen = !sidebarOpen">{{ sidebarOpen ? '◁' : '▷' }}</button>
+    <button class="btn btn-primary" @click="showUpload = true">+ Upload</button>
+    <button class="btn btn-ai" @click="aiTagSelected" :disabled="selectedIds.length===0">AI Tag ({{ selectedIds.length }})</button>
+    <button class="btn btn-secondary" @click="clearAll" v-if="selectedIds.length>0">Clear</button>
+  </header>
+  <div class="main">
+    <aside class="sidebar" :class="{collapsed: !sidebarOpen}">
+      <div class="sidebar-section"><h3>Type</h3>
+        <label class="filter-radio" v-for="t in typeFilters" :key="t.value" :class="{active: filterType===t.value}" @click="filterType=t.value; loadAssets()">{{ t.label }}<span class="count">{{ t.count }}</span></label>
+      </div>
+      <div class="sidebar-section"><h3>Tags</h3>
+        <span v-for="t in allTags" :key="t.name" class="tag-chip" :class="{active: filterTag===t.name}" @click="filterTag = filterTag===t.name ? null : t.name; loadAssets()">{{ t.name }} {{ t.count }}</span>
+      </div>
+      <div class="sidebar-section"><h3>Product</h3>
+        <input class="search-input" v-model="productQ" @input="searchProducts" placeholder="Search SKU or name...">
+        <div v-if="productResults.length" style="margin-top:6px"><div v-for="p in productResults" :key="p.sku" class="filter-radio" :class="{active: filterProduct===p.sku}" @click="filterProduct = filterProduct===p.sku ? null : p.sku">{{ p.sku }}</div></div>
+      </div>
+      <div class="sidebar-section"><h3>Sort</h3>
+        <select class="select-sm" v-model="sortBy"><option value="newest">Newest</option><option value="oldest">Oldest</option><option value="name">Name</option></select>
+      </div>
+      <div class="sidebar-section"><h3>Collections</h3>
+        <button class="btn btn-primary" style="width:100%;font-size:12px;padding:4px;margin-bottom:4px" @click="openCollectionEditor()">+ New</button>
+        <div v-for="c in collections" :key="c.id" class="filter-radio" style="margin-top:4px;font-size:12px" @click="showCollectionActions(c)">
+          {{ c.name }} <span style="font-size:10px;color:var(--text-muted);margin-left:auto">v{{ c.version }}</span>
+        </div>
+      </div>
+    </aside>
+    <div class="grid-area" v-if="!editorColl">
+      <div v-if="selectedIds.length>1" class="batch-bar">{{ selectedIds.length }} selected <button class="btn-batch" @click="batchTag">Tag</button> <button class="btn-batch" @click="batchLink">Link SKU</button> <button class="btn-batch" @click="batchDelete">Delete</button></div>
+      <div v-if="filtered.length===0 && !loading" class="empty-state"><div class="empty-icon">{{ filterType==='all'?'📁':'🖼️' }}</div><p>No assets found</p><button class="btn btn-primary" @click="showUpload=true" style="margin-top:8px">Upload your first asset</button></div>
+      <div v-show="filtered.length>0" class="thumb-grid" ref="thumbGrid">
+        <div v-for="(a,i) in filtered" :key="a.id" class="thumb-card" :class="{selected: selectedIds.includes(a.id)}" :style="{animationDelay: (i*0.03)+'s'}" @click.stop="selectOne(a,$event)" draggable="false">
+          <img :src="a.thumb_url || a.file_url" :alt="a.filename" loading="lazy" draggable="false">
+          <span class="sel-check">✓</span><span class="drag-grip" @click.stop @mousedown.stop>⠿</span>
+          <span v-if="hasPendingAiTags(a)" class="badge ai">AI</span>
+        </div>
+      </div>
+    </div>
+    <div class="editor-view" v-if="editorColl">
+      <div class="editor-skus"><h4>Products ({{ editorSkus.length }})</h4>
+        <div v-for="sku in editorSkus" :key="sku.code" class="editor-sku-item" :class="{active: editorSku===sku.code}" @click="editorSku=sku.code">{{ sku.code }}<span class="sku-count">{{ sku.count }}</span></div>
+        <button class="btn btn-secondary" style="width:100%;margin-top:6px;font-size:11px;padding:4px" @click="addSkuToEditor">+ Add SKU</button>
+      </div>
+      <div class="editor-main">
+        <div class="editor-toolbar">
+          <button class="btn btn-secondary" @click="closeEditor" style="font-size:11px;padding:3px 8px">← Back</button>
+          <h3>{{ editorColl.name }}</h3><span class="meta">v{{ editorColl.version }} · {{ editorColl.type }} · {{ editorSkuItems.length }} assets</span>
+          <button class="btn btn-primary" @click="saveEditor" style="margin-left:auto;font-size:12px;padding:4px 12px">Save</button>
+          <button class="btn btn-secondary" @click="exportEditor" style="font-size:12px;padding:4px 12px">Export Excel</button>
+        </div>
+        <div class="editor-images" ref="editorGrid">
+          <div v-for="item in editorSkuItems" :key="item.asset_id" class="editor-img-card">
+            <img :src="item.thumb_url || item.file_url" :alt="item.filename">
+            <span class="drag-grip">⠿</span><span class="rm-btn" @click="removeEditorItem(item.asset_id)">×</span>
+            <span class="role-badge">{{ item.role }}</span>
+            <select class="editor-role-select" :value="item.role" @change="setEditorRole(item.asset_id, $event.target.value)">
+              <option value="main">Main</option><option value="alternate">Alt</option><option value="lifestyle">Life</option><option value="detail">Det.</option><option value="size_chart">Chart</option><option value="packaging">Pkg</option><option value="a_plus">A+</option><option value="other">Other</option>
+            </select>
+          </div>
+          <div class="editor-drop-zone" @click="openAssetPicker">+</div>
+        </div>
+      </div>
+    </div>
+    <div v-if="editorPick" class="editor-picker-overlay" @click.self="editorPick=false">
+      <div class="editor-picker-dialog">
+        <div class="editor-picker-header"><h3>Add Assets to "{{ editorColl.name }}"</h3>
+          <button class="btn btn-primary" @click="addPickedToEditor" style="margin-left:auto;font-size:12px;padding:4px 12px" :disabled="editorPicked.length===0">Add ({{ editorPicked.length }})</button>
+          <button class="close-btn" @click="editorPick=false">×</button>
+        </div>
+        <div class="editor-picker-body">
+          <div v-for="a in assets" :key="a.id" class="editor-picker-asset" :class="{selected: editorPicked.includes(a.id)}" @click="togglePick(a.id)">
+            <img :src="a.thumb_url || a.file_url" :alt="a.filename" loading="lazy">
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="detail-overlay" :class="{visible: !!detailAsset}" @click="detailAsset=null"></div>
+  <aside class="detail-panel" :class="{open: !!detailAsset}">
+    <template v-if="detailAsset">
+      <div class="detail-header"><h3 :title="detailAsset.filename">{{ detailAsset.filename }}</h3><button class="close-btn" @click="detailAsset=null">×</button></div>
+      <div class="detail-body">
+        <img v-if="detailAsset.thumb_url" :src="detailAsset.thumb_url" class="detail-preview" alt="Preview">
+        <div class="detail-field"><label>Title</label><input v-model="detailAsset.title" @change="saveDetail"></div>
+        <div class="detail-field"><label>Alt Text</label><textarea v-model="detailAsset.alt_text" @change="saveDetail" placeholder="SEO alt text..."></textarea></div>
+        <div class="detail-field"><label>Style (款式)</label><input v-model="detailAsset.style" @change="saveDetail" placeholder="e.g. 三角靠枕"></div>
+        <div class="detail-field"><label>Fabric (面料)</label><input v-model="detailAsset.fabric" @change="saveDetail" placeholder="e.g. PP棉"></div>
+        <div class="detail-field"><label>Color (颜色)</label><input v-model="detailAsset.color" @change="saveDetail" placeholder="e.g. RED"></div>
+        <div class="detail-field"><label>Image Role</label><select v-model="detailAsset.image_role" @change="saveDetail"><option value="main">Main</option><option value="alternate">Alternate</option><option value="lifestyle">Lifestyle</option><option value="detail">Detail</option><option value="size_chart">Size Chart</option><option value="packaging">Packaging</option><option value="a_plus">A+ Content</option><option value="other">Other</option></select></div>
+        <div class="detail-field"><label>Tags</label>
+          <div class="tags-row">
+            <span v-for="(t,i) in (detailAsset.tags||[])" :key="'m'+i" class="tag-pill manual">{{ t }}<span class="rm" @click="rmTag(i,'manual')">×</span></span>
+            <span v-for="(t,i) in (detailAsset.ai_tags||[])" :key="'a'+i" class="tag-pill ai">{{ t }}<span class="rm" @click="rmTag(i,'ai')">×</span></span>
+          </div>
+          <input class="tag-add" placeholder="+ add tag" @keydown.enter.prevent="addTag($event)">
+        </div>
+        <div class="detail-field" v-if="detailAsset.ai_tags && detailAsset.ai_tags.length && !detailAsset.ai_tags_confirmed">
+          <button class="btn btn-ai" @click="confirmAi(detailAsset)" style="width:100%;justify-content:center">Confirm AI Tags</button>
+        </div>
+        <div class="detail-field"><label>Product</label>
+          <input class="search-input" v-model="detailQ" @input="searchForDetail" placeholder="Search SKU...">
+          <div v-if="detailResults.length" style="margin-top:4px"><div v-for="p in detailResults" :key="p.sku" class="filter-radio" @click="linkSku(detailAsset,p.sku)">{{ p.sku }} — {{ p.name }}</div></div>
+          <div v-if="detailAsset.linked_sku" style="margin-top:8px"><span class="product-link">{{ detailAsset.linked_sku }}<span class="rm" @click="detailAsset.linked_sku=null; saveDetail()">×</span></span></div>
+        </div>
+        <div class="detail-meta"><div v-if="detailAsset.file_size">Size: {{ fmtSize(detailAsset.file_size) }}</div><div v-if="detailAsset.width">Dimensions: {{ detailAsset.width }} × {{ detailAsset.height }}</div><div>Uploaded: {{ fmtDate(detailAsset.uploaded_at) }}</div></div>
+      </div>
+    </template>
+  </aside>
+  <div v-if="showUpload" class="upload-overlay" @click.self="showUpload=false" @keydown.escape="showUpload=false">
+    <div class="upload-dialog"><h2>Upload Assets</h2><p>Images, videos, documents — drop them here</p>
+      <div class="drop-zone" :class="{'drag-over': dragOver}" @click="$refs.fileIn.click()" @dragover.prevent="dragOver=true" @dragleave="dragOver=false" @drop.prevent="handleDrop($event)"><div class="dz-icon">⇧</div><p>Drop files or click to browse</p><p class="dz-hint">JPG, PNG, WebP, MP4, PDF — max 50MB each</p></div>
+      <input type="file" ref="fileIn" multiple accept="image/*,video/*,.pdf,.doc,.docx" @change="handlePick" style="display:none">
+      <div v-if="uploading" style="text-align:center;color:var(--primary);font-size:13px;padding:8px">Uploading...</div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px"><button class="btn btn-secondary" @click="showUpload=false">Cancel</button></div>
+    </div>
+  </div>
+  <div class="toast-container"><div v-for="(t,i) in toasts" :key="i" class="toast" :class="t.type">{{ t.msg }}</div></div>
+</div>
+
+<script>
+const API = {
+  async list(p){const q=new URLSearchParams(p).toString();const r=await fetch('/api/assets'+(q?'?'+q:''));if(!r.ok)throw new Error('API error');return r.json()},
+  async get(id){const r=await fetch('/api/assets/'+id);if(!r.ok)throw new Error('API error');return r.json()},
+  async update(id,d){const r=await fetch('/api/assets/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});if(!r.ok)throw new Error('API error');return r.json()},
+  async upload(files){const fd=new FormData();Array.from(files).forEach(f=>fd.append('files',f));const r=await fetch('/api/upload',{method:'POST',body:fd});if(!r.ok)throw new Error('API error');return r.json()},
+  async searchProducts(q){const r=await fetch('/api/products/search?q='+encodeURIComponent(q));return r.json()},
+};
+
+const {createApp,ref,computed,watch,nextTick,onMounted}=Vue;
+createApp({setup(){
+  const assets=ref([]),totalCount=ref(0),loading=ref(false),selectedIds=ref([]),detailAsset=ref(null);
+  const filterType=ref('all'),filterTag=ref(null),filterProduct=ref(null),sortBy=ref('newest');
+  const showUpload=ref(false),uploading=ref(false),dragOver=ref(false),sidebarOpen=ref(true);
+  const productQ=ref(''),productResults=ref([]),detailQ=ref(''),detailResults=ref([]);
+  const toasts=ref([]),thumbGrid=ref(null),saving=ref(false),collections=ref([]);
+  const editorColl=ref(null),editorSku=ref(null),editorPick=ref(false),editorPicked=ref([]);
+
+  function toast(m,t){t=t||'success';const id=Date.now();toasts.value.push({id,msg:m,type:t});setTimeout(()=>{toasts.value=toasts.value.filter(x=>x.id!==id)},2800)}
+
+  async function loadAssets(){
+    loading.value=true;
+    try{const p={limit:'200'};if(filterType.value!=='all')p.asset_type=filterType.value;if(filterTag.value)p.tag=filterTag.value;const d=await API.list(p);assets.value=d.assets;totalCount.value=d.total}
+    catch(e){toast('Failed to load assets','error')}
+    loading.value=false;
+  }
+
+  const typeFilters=computed(()=>[
+    {value:'all',label:'All',count:totalCount.value||assets.value.length},
+    {value:'image',label:'Images',count:assets.value.filter(a=>a.asset_type==='image').length},
+    {value:'video',label:'Videos',count:assets.value.filter(a=>a.asset_type==='video').length},
+    {value:'document',label:'Documents',count:assets.value.filter(a=>a.asset_type==='document').length},
+  ]);
+  const allTags=computed(()=>{const m={};assets.value.forEach(a=>{(a.tags||[]).forEach(t=>{m[t]=(m[t]||0)+1})});return Object.entries(m).map(([n,c])=>({name:n,count:c})).sort((a,b)=>b.count-a.count)});
+  const filtered=computed(()=>{let r=[...assets.value];if(filterProduct.value)r=r.filter(a=>a.linked_sku===filterProduct.value);if(sortBy.value==='newest')r.sort((a,b)=>new Date(b.uploaded_at||0)-new Date(a.uploaded_at||0));else if(sortBy.value==='oldest')r.sort((a,b)=>new Date(a.uploaded_at||0)-new Date(b.uploaded_at||0));else r.sort((a,b)=>(a.filename||'').localeCompare(b.filename||''));return r});
+
+  function selectOne(a,ev){if(ev.ctrlKey||ev.metaKey){const i=selectedIds.value.indexOf(a.id);if(i>=0)selectedIds.value.splice(i,1);else selectedIds.value.push(a.id)}else{selectedIds.value=[a.id]}detailAsset.value=assets.value.find(x=>x.id===selectedIds.value[0])||null}
+  function clearAll(){selectedIds.value=[];detailAsset.value=null}
+  function hasPendingAiTags(a){return a.ai_tags&&a.ai_tags.length&&!a.ai_tags_confirmed}
+
+  async function loadCollections(){try{const r=await fetch('/api/collections');const d=await r.json();collections.value=d.collections||[]}catch(e){console.error(e)}}
+  const editorItems=computed(()=>editorColl.value?editorColl.value.items||[]:[]);
+  const editorSkus=computed(()=>{const m={};editorItems.value.forEach(i=>{const s=i.sku||'_unlinked';m[s]=(m[s]||0)+1});return Object.entries(m).map(([code,cnt])=>({code,count:cnt}))});
+  const editorSkuItems=computed(()=>{if(!editorSku.value)return editorItems.value;return editorItems.value.filter(i=>(i.sku||'_unlinked')===editorSku.value)});
+  async function openEditor(c){try{const r=await fetch('/api/collections/'+c.id);const d=await r.json();editorColl.value=d;const m={};d.items.forEach(i=>{const s=i.sku||'_unlinked';m[s]=(m[s]||0)+1});const skus=Object.entries(m);editorSku.value=skus.length>0?skus[0][0]:null;await loadAssets()}catch(e){toast('Failed to open collection','error')}}
+  function closeEditor(){editorColl.value=null;editorSku.value=null;editorPick.value=false;editorPicked.value=[]}
+  async function saveEditor(){if(!editorColl.value)return;try{const c=editorColl.value;const images=c.items.map((it,idx)=>({asset_id:it.asset_id,position:idx,role:it.role}));const r=await fetch('/api/collections/'+c.id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:c.name,type:c.type,context:c.context,images})});if(!r.ok)throw new Error('Save failed');editorColl.value=await r.json();toast('Collection saved')}catch(e){toast('Save failed','error')}}
+  async function exportEditor(){if(!editorColl.value)return;const plat=prompt('Platform (amazon/wayfair/shopify/home24):','amazon');if(!plat)return;window.open('/api/collections/'+editorColl.value.id+'/export?platform='+plat)}
+  async function removeEditorItem(aid){if(!editorColl.value)return;try{const r=await fetch('/api/collections/'+editorColl.value.id+'/items',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({remove:[aid]})});if(!r.ok)throw new Error('Remove failed');editorColl.value=await r.json();toast('Removed')}catch(e){toast('Remove failed','error')}}
+  async function setEditorRole(aid,role){if(!editorColl.value)return;try{const r=await fetch('/api/collections/'+editorColl.value.id+'/items',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({set_role:[{asset_id:aid,role}]})});if(!r.ok)throw new Error('Role failed');editorColl.value=await r.json()}catch(e){toast('Role failed','error')}}
+  function openAssetPicker(){editorPick.value=true;editorPicked.value=[]}
+  function togglePick(aid){const i=editorPicked.value.indexOf(aid);if(i>=0)editorPicked.value.splice(i,1);else editorPicked.value.push(aid)}
+  async function addPickedToEditor(){if(!editorColl.value||!editorPicked.value.length)return;try{const maxPos=Math.max(0,...editorItems.value.map(i=>i.position));const adds=editorPicked.value.map((aid,idx)=>({asset_id:aid,position:maxPos+idx+1,role:'alternate'}));const r=await fetch('/api/collections/'+editorColl.value.id+'/items',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({add:adds})});if(!r.ok)throw new Error('Add failed');editorColl.value=await r.json();editorPick.value=false;editorPicked.value=[];toast('Added '+adds.length+' asset(s)')}catch(e){toast('Add failed','error')}}
+  async function addSkuToEditor(){const s=prompt('Enter SKU code:');if(!s)return;const ctx=editorColl.value.context||{};const skus=new Set(ctx.skus||[]);skus.add(s);ctx.skus=Array.from(skus);editorColl.value.context=ctx}
+  function openCollectionEditor(existing){if(existing){openEditor(existing);return}const n=prompt('Collection name:');if(!n)return;const t=prompt('Type (listing/campaign/social/catalog/custom):','listing');if(!t)return;(async()=>{const ctx={skus:[]};const r=await fetch('/api/collections',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n,type:t,context:ctx,created_by:'user'})});const d=await r.json();await loadCollections();openEditor(d)})()}
+  async function showCollectionActions(c){const act=prompt('Collection: '+c.name+' (v'+c.version+')\n\n"open"=edit | "export"=download | "delete"=remove','open');if(!act)return;if(act==='open'){openEditor(c)}else if(act==='export'){const plat=prompt('Platform:','amazon');if(plat)window.open('/api/collections/'+c.id+'/export?platform='+plat)}else{toast('Action cancelled')}}
+
+  async function processFiles(files){
+    uploading.value=true;
+    try{const r=await API.upload(files);if(r.success){const dup=r.assets.filter(a=>a._dedup).length;const add=r.assets.length-dup;if(add)toast('Uploaded '+add+' file(s)');if(dup)toast(dup+' duplicate(s) skipped','error');await loadAssets()}}
+    catch(e){toast('Upload failed','error')}
+    uploading.value=false;showUpload.value=false;
+  }
+  function handlePick(e){if(e.target.files.length)processFiles(e.target.files)}
+  function handleDrop(e){dragOver.value=false;if(e.dataTransfer.files.length)processFiles(e.dataTransfer.files)}
+
+  async function saveDetail(){
+    if(!detailAsset.value||saving.value)return;saving.value=true;
+    try{await API.update(detailAsset.value.id,{title:detailAsset.value.title,alt_text:detailAsset.value.alt_text,tags:detailAsset.value.tags,style:detailAsset.value.style,fabric:detailAsset.value.fabric,color:detailAsset.value.color,image_role:detailAsset.value.image_role});toast('Saved')}
+    catch(e){toast('Save failed','error')}
+    saving.value=false;
+  }
+  async function addTag(ev){const v=ev.target.value.trim();if(!v||(detailAsset.value.tags||[]).includes(v))return;detailAsset.value.tags.push(v);ev.target.value='';await saveDetail()}
+  async function rmTag(i,src){if(src==='manual')detailAsset.value.tags.splice(i,1);else if(detailAsset.value.ai_tags)detailAsset.value.ai_tags.splice(i,1);await saveDetail()}
+  async function confirmAi(a){try{await API.update(a.id,{ai_tags_confirmed:true});a.tags=[...new Set([...(a.tags||[]),...(a.ai_tags||[])])];a.ai_tags_confirmed=true;toast('AI tags confirmed')}catch(e){toast('Confirm failed','error')}}
+  function linkSku(a,sku){a.linked_sku=sku;detailResults.value=[];detailQ.value='';saveDetail();toast('Linked to '+sku)}
+
+  let _st=null;
+  async function searchProducts(){const q=productQ.value.trim();if(!q){productResults.value=[];return}clearTimeout(_st);_st=setTimeout(async()=>{productResults.value=await API.searchProducts(q)},200)}
+  async function searchForDetail(){const q=detailQ.value.trim();if(!q){detailResults.value=[];return}detailResults.value=await API.searchProducts(q)}
+
+  async function batchTag(){const t=prompt('Tag for all:');if(!t)return;for(const a of assets.value.filter(x=>selectedIds.value.includes(x.id))){if(!(a.tags||[]).includes(t)){a.tags.push(t);await API.update(a.id,{tags:a.tags})}}toast('Tagged with "'+t+'"')}
+  async function batchLink(){const s=prompt('SKU for all:');if(!s)return;assets.value.filter(a=>selectedIds.value.includes(a.id)).forEach(a=>{a.linked_sku=s});toast('Linked to '+s)}
+  function batchDelete(){if(!confirm('Delete '+selectedIds.value.length+' assets?'))return;assets.value=assets.value.filter(a=>!selectedIds.value.includes(a.id));clearAll();toast('Deleted','error')}
+
+  function aiTagSelected(){const s=assets.value.filter(a=>selectedIds.value.includes(a.id));if(!s.length)return;toast('AI analyzing '+s.length+' — check back soon');s.forEach(a=>{if(a.asset_type==='image')a.ai_tags=['product photo','studio lighting','ecommerce ready'];else if(a.asset_type==='video')a.ai_tags=['product video','HD'];else a.ai_tags=['document','spec'];a.ai_tags_confirmed=false})}
+
+  function initSort(){if(!thumbGrid.value)return;Sortable.create(thumbGrid.value,{animation:200,handle:'.drag-grip',onEnd(evt){const f=[...filtered.value];const[mv]=f.splice(evt.oldIndex,1);f.splice(evt.newIndex,0,mv);const ids=new Set(f.map(a=>a.id));assets.value=[...f,...assets.value.filter(a=>!ids.has(a.id))]}})}
+  function initEditorSort(){if(!editorColl.value)return;const el=document.querySelector('.editor-images');if(!el)return;if(el._sortable)el._sortable.destroy();el._sortable=Sortable.create(el,{animation:200,handle:'.drag-grip',filter:'.editor-drop-zone',onEnd(evt){const items=[...editorColl.value.items];const[mv]=items.splice(evt.oldIndex,1);items.splice(evt.newIndex,0,mv);items.forEach((it,idx)=>{it.position=idx});editorColl.value.items=items}})}
+
+  function fmtSize(b){if(!b)return'0 B';const u=['B','KB','MB','GB'];let i=0,s=b;while(s>=1024&&i<u.length-1){s/=1024;i++}return s.toFixed(1)+' '+u[i]}
+  function fmtDate(d){return d?new Date(d).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}):''}
+  function onKey(e){if(e.key==='Escape'&&detailAsset.value){detailAsset.value=null;e.preventDefault()}}
+
+  const editorGrid=ref(null);
+  onMounted(async()=>{await loadAssets();await loadCollections();nextTick(initSort);document.addEventListener('keydown',onKey)});
+  watch(editorSkuItems,async()=>{await nextTick();initEditorSort()});
+  watch(filtered,async()=>{await nextTick();initSort()});
+
+  return {assets,totalCount,loading,selectedIds,detailAsset,filterType,filterTag,filterProduct,sortBy,showUpload,uploading,dragOver,sidebarOpen,saving,productQ,productResults,detailQ,detailResults,toasts,typeFilters,allTags,filtered,thumbGrid,selectOne,clearAll,hasPendingAiTags,handlePick,handleDrop,processFiles,addTag,rmTag,confirmAi,linkSku,saveDetail,searchProducts,searchForDetail,batchTag,batchLink,batchDelete,aiTagSelected,toast,fmtSize,fmtDate,collections,loadCollections,openCollectionEditor,showCollectionActions,editorColl,editorSku,editorSkus,editorSkuItems,editorPick,editorPicked,editorGrid,openEditor,closeEditor,saveEditor,exportEditor,removeEditorItem,setEditorRole,openAssetPicker,togglePick,addPickedToEditor,addSkuToEditor};
+}}).mount('#app');
+</script>
+</body>
+</html>
