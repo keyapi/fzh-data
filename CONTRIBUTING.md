@@ -1,6 +1,7 @@
 # 贡献指南（技术开发）
 
 > 你有 GitHub 权限，可以用 Claude Desktop Agent 开发新功能、修复问题、维护 Skill 和文档。
+> **main 分支受保护：所有改动必须通过 PR 合并，至少 1 人审批。**
 
 ## Git 认证配置
 
