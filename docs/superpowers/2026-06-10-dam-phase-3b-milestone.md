@@ -144,6 +144,21 @@
 - [ ] 拖拽资产从主网格直接放入编辑器（跨区域拖拽）
 - [ ] Collection item 的 SKU 覆盖（方案 B：在 CollectionItem 上设 SKU）
 - [ ] Delete collection 的下游确认（当前只是 toast）
+
+### 编辑器增强 — 跨 SKU 图片归属（2026-06-10 讨论，待实现）
+
+**场景**: 初期 Assets 尚未分配到 SKU，用户通过 Collection 编辑器反向给图分配 PRODUCT。
+
+**两种操作**:
+1. **加产品到批次**: 新 SKU 加入 Collection 的 context.skus，图保持原 SKU（当前已支持）
+2. **跨 SKU 链接图**: 用户手动给图片打上 1 个或多个 PRODUCT — **早期核心需求**
+
+当前 picker 已支持多 SKU 标签显示 + 确认弹窗，但弹窗文案偏向操作 1。操作 2 的真正实现需要:
+- Picker 里允许用户直接编辑/追加图片的 SKU（不只是查看）
+- 或者在目标 Collection 的 editor 里，把"添加图"和"给图打 SKU"作为关联操作
+- 未来权限控制（谁有权改图片的 SKU 归属）
+
+**现状**: 多 SKU 数据模型 + UI 已就绪。Picker 确认弹窗需要从"加产品到批次"改为同时支持"给图片加 SKU 标签"。
 - [ ] 编辑器内图片预览放大
 
 ---
