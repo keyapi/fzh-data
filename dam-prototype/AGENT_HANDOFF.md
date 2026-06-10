@@ -147,7 +147,8 @@ uv run python main.py --port 8098
 
 ### 待完成
 
-- [ ] Phase 5: ERPNext Item API 真实对接 (替换 mock)
+- [x] Phase 5: ERPNext Item API — ErpnextClient + _NoExpectAdapter 就绪，需部署环境验证 (Windows uvicorn 网络限制)
+  - 设计文档: `docs/superpowers/specs/2026-06-10-dam-phase5-erpnext-integration.md`
 - [ ] Phase 6: a.vilavi.cn 替换 (OSS 防关联分发)
 - [ ] Phase 6b: 文件夹上传保留本地结构
 - [ ] Phase 7: 运营接入试用 + 反馈迭代
