@@ -122,6 +122,7 @@ input, select, textarea { font: inherit; color: inherit; }
 .subfolder-card { width:140px; text-align:center; cursor:pointer; padding:8px; border-radius:var(--radius); transition:background .15s; }
 .subfolder-card:hover { background:var(--surface-hover); }
 .subfolder-thumb { width:120px; height:120px; object-fit:cover; border-radius:4px; background:var(--border); border:1px solid var(--border); }
+.subfolder-thumb.error { object-fit:contain; padding:24px; opacity:.5; }
 .subfolder-name { display:block; font-size:12px; margin-top:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .subfolder-count { font-size:10px; color:var(--text-muted); }
 .detail-meta div { padding: 2px 0; }
@@ -291,7 +292,7 @@ input, select, textarea { font: inherit; color: inherit; }
       <!-- 子文件夹卡片（仅浏览文件夹时显示） -->
       <div v-if="filterFolder && currentSubfolders.length" class="subfolder-grid">
         <div v-for="sf in currentSubfolders" :key="sf.path" class="subfolder-card" @click="folderClick(sf)" :title="sf.path">
-          <img :src="getFolderThumb(sf.path)" class="subfolder-thumb" loading="lazy">
+          <img :src="getFolderThumb(sf.path)" class="subfolder-thumb" loading="lazy" @error="$event.target.classList.add('error');$event.target.src='data:image/svg+xml,'+encodeURIComponent('<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23888%22 stroke-width=%221.5%22><path d=%22M2 6a2 2 0 0 1 2-2h5l2 2h9a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6z%22/></svg>')">
           <span class="subfolder-name">{{ sf.name }}</span>
           <span class="subfolder-count">{{ sf.count }}</span>
         </div>
@@ -436,7 +437,7 @@ input, select, textarea { font: inherit; color: inherit; }
           <span v-else style="width:14px"></span>
           <span v-if="e.type==='file'&&e.has_thumbnail" style="width:32px;height:32px;flex-shrink:0;border-radius:3px;background:var(--border);background-size:cover;background-position:center" :style="'background-image:url(/api/nas/thumbnail?path='+encodeURIComponent(e.path)+')'"></span>
           <span v-else style="width:32px;text-align:center;flex-shrink:0;font-size:18px">{{ e.type==='directory'?'📁':'📄' }}</span>
-          <span v-if="e.type==='directory'" @click="nasLoad(e.path)" style="cursor:pointer;flex:1">{{ e.name }} <span style="color:var(--text-muted);font-size:10px">({{ e.image_count>=0?e.image_count+' images':'' }})</span></span>
+          <span v-if="e.type==='directory'" @click="nasLoad(e.path)" style="cursor:pointer;flex:1">{{ e.name }} <span v-if="e.image_count>=0" style="color:var(--text-muted);font-size:10px">({{ e.image_count }} images)</span></span>
           <span v-else style="flex:1">{{ e.name }} <span style="color:var(--text-muted);font-size:10px">{{ fmtSize(e.size) }}</span></span>
         </div>
         <div v-if="!nasLoading&&!nasEntries.length" style="text-align:center;padding:20px;color:var(--text-muted)">Empty directory</div>
@@ -459,7 +460,7 @@ const API = {
   async list(p){const q=new URLSearchParams(p).toString();const r=await fetch('/api/assets'+(q?'?'+q:''));if(!r.ok)throw new Error('API error');return r.json()},
   async get(id){const r=await fetch('/api/assets/'+id);if(!r.ok)throw new Error('API error');return r.json()},
   async update(id,d){const r=await fetch('/api/assets/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});if(!r.ok)throw new Error('API error');return r.json()},
-  async upload(files,folders){const fd=new FormData();Array.from(files).forEach(f=>{const rp=f.webkitRelativePath||f.name;fd.append('files',f,rp)});const r=await fetch('/api/upload',{method:'POST',body:fd});if(!r.ok)throw new Error('API error');return r.json()},
+  async upload(files,folder){const fd=new FormData();Array.from(files).forEach(f=>{const rp=folder?(folder+'/'+(f.webkitRelativePath||f.name)):(f.webkitRelativePath||f.name);fd.append('files',f,rp)});if(folder)fd.append('folder',folder);const r=await fetch('/api/upload',{method:'POST',body:fd});if(!r.ok)throw new Error('API error');return r.json()},
   async searchProducts(q){const r=await fetch('/api/products/search?q='+encodeURIComponent(q));return r.json()},
 };
 
@@ -546,9 +547,9 @@ function openCollectionEditor(existing){if(existing){openEditor(existing);return
     try{
       let total=0;
       // 文件夹拖拽：从 DataTransfer items 递归遍历（保留空目录名）
-      if(files instanceof DataTransferItemList){const entries=await _traverseEntries(files);if(entries.length){const allFiles=entries.map(e=>{const f=e.file;Object.defineProperty(f,'webkitRelativePath',{value:(e.path?e.path+'/':'')+f.name,writable:false});return f});const r=await API.upload(allFiles);if(r.success){const dup=r.assets.filter(a=>a._dedup).length;total=r.total-dup;if(r.folders)r.folders.forEach(f=>toast('Folder: '+f))}}}
-      // 普通文件/文件夹选择器（webkitdirectory 或 multiple）
-      else{const arr=Array.from(files);if(arr.length){const r=await API.upload(arr);if(r.success){const dup=r.assets.filter(a=>a._dedup).length;total=r.total-dup;if(r.folders)r.folders.forEach(f=>toast('Folder: '+f))}if(total)toast('Uploaded '+total+' file(s)');if(r.success&&dup)toast(dup+' duplicate(s) skipped','error')}}
+      const ctxFolder=filterFolder.value||'';
+      if(files instanceof DataTransferItemList){const entries=await _traverseEntries(files);if(entries.length){const allFiles=entries.map(e=>{const f=e.file;Object.defineProperty(f,'webkitRelativePath',{value:(e.path?e.path+'/':'')+f.name,writable:false});return f});const r=await API.upload(allFiles,ctxFolder);if(r.success){const dup=r.assets.filter(a=>a._dedup).length;total=r.total-dup;if(r.folders)r.folders.forEach(f=>toast('Folder: '+f))}}}
+      else{const arr=Array.from(files);if(arr.length){const r=await API.upload(arr,ctxFolder);if(r.success){const dup=r.assets.filter(a=>a._dedup).length;total=r.total-dup;if(r.folders)r.folders.forEach(f=>toast('Folder: '+f))}if(total)toast('Uploaded '+total+' file(s)');if(r.success&&dup)toast(dup+' duplicate(s) skipped','error')}}
       if(total)await loadAssets();
     }catch(e){console.error(e);toast('Upload failed','error')}
     uploading.value=false;showUpload.value=false;
