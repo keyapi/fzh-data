@@ -355,6 +355,95 @@ async def upload_files(files: list[UploadFile] = File(...)):
     }
 
 
+# ── Folder APIs ──────────────────────────────────────
+
+@app.get("/api/folders")
+def list_folders():
+    """列出所有文件夹（从 stored_path 提取唯一目录），含资产计数。"""
+    assets = session.query(Asset.stored_path).filter(
+        Asset.stored_path.isnot(None)
+    ).all()
+    folder_counts: dict[str, int] = {}
+    for (sp,) in assets:
+        rel = sp.replace("\\", "/")
+        # 从路径中提取 files/ 后面的相对目录部分
+        marker = "/files/"
+        if marker in rel:
+            rel = rel.split(marker, 1)[1]
+        if "/" in rel:
+            # 逐层计入父文件夹
+            parts = rel.split("/")[:-1]
+            for i in range(len(parts)):
+                key = "/".join(parts[:i + 1])
+                folder_counts[key] = folder_counts.get(key, 0) + 1
+    folders = [{"path": k, "asset_count": v} for k, v in sorted(folder_counts.items())]
+    return {"folders": folders}
+
+
+def _rel_path(sp: str) -> str:
+    """从 stored_path 提取 files/ 后的相对目录+文件名。"""
+    rel = sp.replace("\\", "/")
+    marker = "/files/"
+    return rel.split(marker, 1)[1] if marker in rel else rel
+
+
+@app.get("/api/folders/{path:path}/assets")
+def folder_assets(path: str, limit: int = 200):
+    """列出某文件夹下的资产。"""
+    norm = path.replace("\\", "/").strip("/")
+    results = []
+    for a in session.query(Asset).filter(
+        Asset.stored_path.isnot(None)
+    ).all():
+        rel = _rel_path(a.stored_path)
+        dir_part = "/".join(rel.split("/")[:-1])
+        if dir_part == norm:
+            results.append(_asset_to_dict(a))
+            if len(results) >= limit:
+                break
+    return {"folder": norm, "assets": results}
+
+
+@app.get("/api/folders/{path:path}/thumbnail")
+def folder_thumbnail(path: str):
+    """生成文件夹拼贴缩略图（前 4 张图片拼成 2×2 网格）。"""
+    norm = path.replace("\\", "/").strip("/")
+    thumbs = []
+    for a in session.query(Asset).filter(
+        Asset.stored_path.isnot(None), Asset.thumbnail_path.isnot(None)
+    ).all():
+        rel = _rel_path(a.stored_path)
+        dir_part = "/".join(rel.split("/")[:-1])
+        if dir_part == norm:
+            thumbs.append(a.thumbnail_path)
+            if len(thumbs) >= 4:
+                break
+    if not thumbs:
+        return Response(status_code=404)
+
+    cell = 150  # 每格尺寸
+    cols = min(len(thumbs), 2)
+    rows = (len(thumbs) + 1) // 2
+    canvas = PILImage.new("RGB", (cell * 2, cell * 2), (240, 240, 240))
+
+    for idx, tp in enumerate(thumbs):
+        try:
+            img = PILImage.open(tp)
+            img.thumbnail((cell, cell), PILImage.LANCZOS)
+            if img.mode in ("RGBA", "P"):
+                img = img.convert("RGB")
+            row, col = idx // 2, idx % 2
+            x, y = col * cell + (cell - img.width) // 2, row * cell + (cell - img.height) // 2
+            canvas.paste(img, (x, y))
+        except Exception:
+            pass
+
+    buf = io.BytesIO()
+    canvas.save(buf, "JPEG", quality=75)
+    buf.seek(0)
+    return Response(content=buf.read(), media_type="image/jpeg")
+
+
 # ── Tag APIs ──────────────────────────────────────────
 
 @app.get("/api/tags")
