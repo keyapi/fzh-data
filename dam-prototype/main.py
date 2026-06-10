@@ -253,13 +253,14 @@ def _guess_type(ext: str) -> str:
 
 def _asset_to_dict(a: Asset) -> dict[str, Any]:
     thumb_name = Path(a.thumbnail_path).name if a.thumbnail_path else None
-    file_name = Path(a.stored_path).name
+    sp = a.stored_path.replace("\\", "/") if a.stored_path else ""
+    rel = sp.split("/files/", 1)[1] if "/files/" in sp else (Path(sp).name if sp else "")
     return {
         "id": a.id, "filename": a.filename, "asset_type": a.asset_type,
         "file_size": a.file_size, "width": a.width, "height": a.height,
         "content_hash": a.content_hash,
         "thumb_url": f"/thumb/{thumb_name}" if thumb_name else None,
-        "file_url": f"/files/{file_name}",
+        "file_url": f"/files/{rel}" if rel else None,
         "title": a.title, "alt_text": a.alt_text,
         "tags": [t.name for t in (a.tags or [])],
         "ai_tags": a.ai_metadata.get("tags") if a.ai_metadata else None,
@@ -709,7 +710,7 @@ def _coll_to_dict(c: AssetCollection) -> dict:
             "asset_id": ci.asset_id, "position": ci.position, "role": ci.role,
             "filename": a.filename if a else "",
             "thumb_url": f"/thumb/{Path(a.thumbnail_path).name}" if (a and a.thumbnail_path) else None,
-            "file_url": f"/files/{Path(a.stored_path).name}" if a else None,
+            "file_url": f"/files/{_rel_path(a.stored_path)}" if a else None,
             "sku": sku,
         })
     return {
