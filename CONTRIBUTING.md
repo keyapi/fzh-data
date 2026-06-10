@@ -102,6 +102,59 @@ Commit 格式：中文 `type(scope): description`。类型用 `feat` / `fix` / `
 4. 在 AGENTS.md 模块索引表里加一行
 5. 详细格式见 `docs/agent-guide.md`
 
+## 安全检查（提交前必做）
+
+> ⚠️ 以下规则源于真实泄露事故。违反任一条 → PR 不得合并。
+
+### 硬规则
+
+1. **禁止硬编码凭证** — 密钥、token、密码一律走 `os.getenv()` 或 `.env` 文件
+2. **文档/注释只用占位符** — spec、设计文档、注释中的示例密钥必须写成 `<your_key>` 或 `***`，禁止写真实值
+3. **禁止 `Bash(KEY=真实值 ...)` 进 allowlist** — 需要传 env var 给命令时，去 `.env` 里设，不要在命令行内联。已经内联过的：去 `settings.local.json` 把值换成 `*`
+
+### 提交前扫描
+
+```bash
+# 扫描密钥模式（提交前跑）
+grep -rnE "(api_key|api_secret|token|password)\s*=\s*['\"]?[a-zA-Z0-9_-]{10,}" --include="*.py" --include="*.md" --include="*.json" . | grep -v ".git/" | grep -v "settings.local.json" | grep -v ".env"
+```
+
+上面命令**不应有输出**。有输出 = 有疑似硬编码密钥，必须清理。
+
+### settings.local.json 陷阱
+
+Claude Desktop 的 "Always allow" 会把整条命令（含内联 env var 值）写进 `settings.local.json`。**永远不要**用以下方式传密钥：
+
+```bash
+# ❌ 禁止：内联 env var 会被写进 allowlist
+ERP_API_KEY="real_key" uv run python script.py
+```
+
+```bash
+# ✅ 正确：去 .env 文件设，脚本从 os.getenv 读
+uv run python script.py
+```
+
+如果已踩坑，清理方法：
+```bash
+python -c "
+p = '.claude/settings.local.json'
+c = open(p).read()
+for secret in ['real_key_1', 'real_key_2']:
+    c = c.replace(secret, '*')
+open(p, 'w').write(c)
+"
+```
+
+### PR review 必查项
+
+Reviewer 必须确认：
+- [ ] 无硬编码密钥、token、密码
+- [ ] 新增的 spec/设计文档里没有真实凭证
+- [ ] 新增的 allow 规则（settings.local.json diff）不含真实值
+
+---
+
 ## 代码约定
 
 - 技术栈：Python ≥ 3.10 + uv + pandas + openpyxl
