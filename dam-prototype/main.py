@@ -105,7 +105,10 @@ class ErpnextClient:
         body = {
             "doctype": "Item",
             "fields": ["item_code", "item_name"],
-            "filters": [["item_code", "like", f"%{query}%"]],
+            "or_filters": [
+                ["item_code", "like", f"%{query}%"],
+                ["item_name", "like", f"%{query}%"],
+            ],
             "limit_page_length": limit,
         }
         resp = self.session.post(url, json=body, timeout=(30, 60))
