@@ -82,6 +82,47 @@ def _load_dotenv() -> None:
 
 _load_dotenv()
 
+# ── ERPNext Client ────────────────────────────────────
+from requests.adapters import HTTPAdapter
+
+class _NoExpectAdapter(HTTPAdapter):
+    def send(self, request, **kwargs):
+        request.headers.pop("Expect", None)
+        return super().send(request, **kwargs)
+
+
+class ErpnextClient:
+    """Lightweight ERPNext REST API client (pattern from EN_API)."""
+    def __init__(self, base_url, api_key, api_secret):
+        self.base_url = base_url.rstrip("/")
+        self.session = __import__("requests").Session()
+        self.session.headers["Authorization"] = f"token {api_key}:{api_secret}"
+        self.session.mount("https://", _NoExpectAdapter())
+
+    def search_items(self, query: str, limit=20):
+        import json
+        url = f"{self.base_url}/api/method/frappe.client.get_list"
+        body = {
+            "doctype": "Item",
+            "fields": ["item_code", "item_name"],
+            "filters": [
+                ["item_code", "like", f"%{query}%"],
+                "OR",
+                ["item_name", "like", f"%{query}%"],
+            ],
+            "limit_page_length": limit,
+        }
+        resp = self.session.post(url, json=body, timeout=(10, 30))
+        resp.raise_for_status()
+        data = resp.json().get("message", [])
+        return [{"sku": r["item_code"], "name": r["item_name"]} for r in data[:limit]]
+
+
+ERP_URL = os.getenv("ERP_URL", "")
+ERP_API_KEY = os.getenv("ERP_API_KEY", "")
+ERP_API_SECRET = os.getenv("ERP_API_SECRET", "")
+_erp = ErpnextClient(ERP_URL, ERP_API_KEY, ERP_API_SECRET) if ERP_URL else None
+
 NAS_ROOT = Path(os.getenv("DAM_NAS_ROOT", str(_DIR / "mock_storage")))
 THUMB_SIZE = (300, 300)
 ALLOWED_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".mp4", ".mov", ".pdf", ".doc", ".docx"}
@@ -285,16 +326,14 @@ def list_tags():
 
 @app.get("/api/products/search")
 def search_products(q: str = Query("", min_length=1)):
-    """Mock ERPNext Item 搜索 — Phase 4 对接真实 API."""
-    mock = [
-        {"sku": "KS0001", "name": "Memory Foam Pillow - White - Standard"},
-        {"sku": "KS0002", "name": "Cooling Gel Pillow - Blue - Queen"},
-        {"sku": "KS0003", "name": "PP Cotton Cushion - Gray - 45x45"},
-        {"sku": "KS0004", "name": "L-Shape Sofa Cover - Beige - 3-Seater"},
-        {"sku": "KS0005", "name": "Floor Pillow - Navy - Round"},
-    ]
-    ql = q.lower()
-    return [p for p in mock if ql in p["sku"].lower() or ql in p["name"].lower()]
+    """Search ERPNext Items by item_code or item_name."""
+    if not _erp:
+        return []
+    try:
+        return _erp.search_items(q)
+    except Exception as e:
+        print(f"[erp] search failed: {e}")
+        return []
 
 
 @app.get("/api/products/{sku}/assets")
