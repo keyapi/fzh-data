@@ -122,6 +122,28 @@ input, select, textarea { font: inherit; color: inherit; }
 .toast.success { background: var(--success); } .toast.error { background: var(--error); }
 @keyframes toastIn { from { transform: translateY(12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+/* ── Version History Panel ── */
+.history-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.2); z-index: 22; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+.history-overlay.visible { opacity: 1; pointer-events: auto; }
+.history-panel { position: fixed; top: 0; right: 0; width: 320px; height: 100vh; background: var(--surface); border-left: 1px solid var(--border); z-index: 23; transform: translateX(100%); transition: transform 0.25s cubic-bezier(0.16,1,0.3,1); display: flex; flex-direction: column; box-shadow: var(--shadow-lg); }
+.history-panel.open { transform: translateX(0); }
+.history-header { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.history-header h3 { font-size: 14px; font-weight: 600; }
+.history-body { flex: 1; overflow-y: auto; padding: 10px; }
+.history-card { padding: 10px 12px; border-radius: 6px; margin-bottom: 6px; cursor: pointer; transition: all 0.15s; border-left: 3px solid transparent; background: var(--surface-hover); }
+.history-card:hover { background: var(--bg); }
+.history-card.current { border-left-color: var(--primary); background: var(--primary-light); }
+.history-card.selected { border: 1px solid var(--warning); }
+.history-card .ver-header { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+.history-card .ver-header strong { font-size: 13px; }
+.history-card .ver-header .badge { font-size: 9px; padding: 1px 5px; border-radius: 8px; font-weight: 500; }
+.history-card .ver-header .badge.current { background: var(--primary); color: #FFF; }
+.history-card .ver-meta { font-size: 10px; color: var(--text-muted); margin-bottom: 4px; }
+.history-card .ver-thumbs { display: flex; gap: 3px; }
+.history-card .ver-thumb { width: 26px; height: 26px; border-radius: 3px; overflow: hidden; background: var(--border); }
+.history-card .ver-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.history-card .restore-btn { margin-top: 6px; width: 100%; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; cursor: pointer; background: var(--warning); color: #000; border: none; display: none; }
+.history-card.selected .restore-btn { display: block; }
 /* ── Collection Editor ── */
 .editor-view { display: flex; flex: 1; overflow: hidden; }
 .editor-skus { width: 170px; min-width: 170px; background: var(--bg-sidebar); border-right: 1px solid var(--border); overflow-y: auto; padding: 10px; flex-shrink: 0; }
@@ -211,6 +233,7 @@ input, select, textarea { font: inherit; color: inherit; }
           <h3>{{ editorColl.name }}</h3><span class="meta">v{{ editorColl.version }} · {{ editorColl.type }} · {{ editorSkuItems.length }} assets</span>
           <span v-if="editorDirty" style="font-size:10px;color:var(--warning);margin-left:auto">● Unsaved</span><button class="btn btn-primary" @click="saveEditor" :style="editorDirty?{fontSize:'12px',padding:'4px 12px'}:{marginLeft:'auto',fontSize:'12px',padding:'4px 12px'}">Save</button>
           <button class="btn btn-secondary" @click="exportEditor" style="font-size:12px;padding:4px 12px">Export Excel</button>
+          <button class="btn btn-secondary" @click="openHistory" style="font-size:12px;padding:4px 12px">History</button>
         </div>
         <div class="editor-images" ref="editorGrid">
           <div v-for="item in editorSkuItems" :key="item.asset_id" class="editor-img-card">
@@ -222,6 +245,28 @@ input, select, textarea { font: inherit; color: inherit; }
             </select>
           </div>
           <div class="editor-drop-zone" @click="openAssetPicker">+</div>
+        </div>
+      </div>
+    </div>
+    <div class="history-overlay" :class="{visible: showHistory}" @click="showHistory=false"></div>
+    <div class="history-panel" :class="{open: showHistory}">
+      <div class="history-header"><h3>History</h3><button class="close-btn" @click="showHistory=false">&times;</button></div>
+      <div class="history-body">
+        <div v-for="ver in editorVersions" :key="ver.version" class="history-card"
+             :class="{current: ver.version===editorColl.version, selected: selectedVer===ver.version}"
+             @click="selectedVer = selectedVer===ver.version ? null : ver.version">
+          <div class="ver-header">
+            <strong>v{{ ver.version }}</strong>
+            <span v-if="ver.version===editorColl.version" class="badge current">current</span>
+          </div>
+          <div class="ver-meta">{{ fmtDate(ver.created_at) }} &middot; {{ (ver.snapshot.images||[]).length }} images</div>
+          <div class="ver-thumbs">
+            <div v-for="img in (ver.snapshot.images||[]).slice(0,4)" :key="img.asset_id" class="ver-thumb">
+              <img :src="getThumbByAssetId(img.asset_id)" loading="lazy">
+            </div>
+          </div>
+          <button v-if="selectedVer===ver.version && ver.version!==editorColl.version" class="restore-btn"
+                  @click.stop="restoreVersion(ver.version)">Restore to v{{ ver.version }}</button>
         </div>
       </div>
     </div>
@@ -299,6 +344,7 @@ createApp({setup(){
   const productQ=ref(''),productResults=ref([]),detailQ=ref(''),detailResults=ref([]);
   const toasts=ref([]),thumbGrid=ref(null),saving=ref(false),collections=ref([]);
   const editorColl=ref(null),editorSku=ref(null),editorPick=ref(false),editorPicked=ref([]),editorDirty=ref(false);
+const showHistory=ref(false),editorVersions=ref([]),selectedVer=ref(null);
 
   function toast(m,t){t=t||'success';const id=Date.now();toasts.value.push({id,msg:m,type:t});setTimeout(()=>{toasts.value=toasts.value.filter(x=>x.id!==id)},2800)}
 
@@ -336,7 +382,10 @@ createApp({setup(){
   function togglePick(aid){const i=editorPicked.value.indexOf(aid);if(i>=0)editorPicked.value.splice(i,1);else editorPicked.value.push(aid)}
   async function addPickedToEditor(){if(!editorColl.value||!editorPicked.value.length)return;const colSkus=new Set((editorColl.value.items||[]).map(i=>i.sku).filter(Boolean));const newSkus=new Set();for(const aid of editorPicked.value){const a=assets.value.find(x=>x.id===aid);if(!a)continue;if(a.linked_skus&&a.linked_skus.length){a.linked_skus.forEach(s=>{if(!colSkus.has(s))newSkus.add(s)})}}if(newSkus.size>0){const skuList=[...newSkus].join(', ');const currentSkus=[...colSkus].join(', ')||'none';if(!confirm('These images belong to: '+skuList+'\n\nCurrent products in this collection: '+currentSkus+'\n\nAdd '+skuList+' to this listing batch?\n(The images stay linked to their original SKUs)\n\nOK = add SKU(s) to collection\nCancel = don\'t add'))return}try{const maxPos=Math.max(0,...editorItems.value.map(i=>i.position));const adds=editorPicked.value.map((aid,idx)=>({asset_id:aid,position:maxPos+idx+1,role:'alternate'}));const r=await fetch('/api/collections/'+editorColl.value.id+'/items',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({add:adds})});if(!r.ok)throw new Error('Add failed');editorColl.value=await r.json();if(newSkus.size>0){const ctx=editorColl.value.context||{};const skus=new Set(ctx.skus||[]);[...newSkus].forEach(s=>skus.add(s));ctx.skus=[...skus];editorColl.value.context={...ctx}}editorDirty.value=true;editorSku.value=null;editorPick.value=false;editorPicked.value=[];toast('Added '+adds.length+' asset(s)')}catch(e){toast('Add failed','error')}}
   async function addSkuToEditor(){const s=prompt('Enter SKU code:');if(!s)return;const ctx=editorColl.value.context||{};const skus=new Set(ctx.skus||[]);skus.add(s);ctx.skus=Array.from(skus);editorColl.value.context=ctx}
-  function openCollectionEditor(existing){if(existing){openEditor(existing);return}const n=prompt('Collection name:');if(!n)return;const t=prompt('Type (listing/campaign/social/catalog/custom):','listing');if(!t)return;(async()=>{const ctx={skus:[]};const r=await fetch('/api/collections',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n,type:t,context:ctx,created_by:'user'})});const d=await r.json();await loadCollections();openEditor(d)})()}
+  async function openHistory(){if(!editorColl.value)return;try{const r=await fetch('/api/collections/'+editorColl.value.id+'/versions');const d=await r.json();editorVersions.value=d.versions||[];showHistory.value=true;selectedVer.value=null}catch(e){toast('Failed to load history','error')}}
+async function restoreVersion(v){if(!editorColl.value)return;if(!confirm('Restore to v'+v+'? Current v'+editorColl.value.version+' will be saved as a checkpoint.'))return;try{const r=await fetch('/api/collections/'+editorColl.value.id+'/versions/'+v+'/restore',{method:'POST'});if(!r.ok)throw new Error('Restore failed');editorColl.value=await r.json();editorDirty.value=false;showHistory.value=false;toast('Restored to v'+v)}catch(e){toast('Restore failed','error')}}
+function getThumbByAssetId(aid){const a=assets.value.find(x=>x.id===aid);return a?(a.thumb_url||a.file_url):''}
+function openCollectionEditor(existing){if(existing){openEditor(existing);return}const n=prompt('Collection name:');if(!n)return;const t=prompt('Type (listing/campaign/social/catalog/custom):','listing');if(!t)return;(async()=>{const ctx={skus:[]};const r=await fetch('/api/collections',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n,type:t,context:ctx,created_by:'user'})});const d=await r.json();await loadCollections();openEditor(d)})()}
   function showCollectionMenu(c,ev){const items=[{label:'Export Excel (Amazon)',action:()=>{window.open('/api/collections/'+c.id+'/export?platform=amazon')}},{label:'Export Excel (Wayfair)',action:()=>{window.open('/api/collections/'+c.id+'/export?platform=wayfair')}},{label:'Export Excel (Shopify)',action:()=>{window.open('/api/collections/'+c.id+'/export?platform=shopify')}},{label:'Delete',action:()=>{if(confirm('Delete '+c.name+'?')){fetch('/api/collections/'+c.id,{method:'DELETE'}).then(()=>loadCollections());toast('Deleted','error')}}}];const menu=document.createElement('div');menu.style.cssText='position:fixed;z-index:300;background:var(--surface);border:1px solid var(--border);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.15);padding:4px;min-width:180px;font-size:12px;font-family:var(--font-sans)';menu.style.left=ev.clientX+'px';menu.style.top=ev.clientY+'px';items.forEach(item=>{const el=document.createElement('div');el.textContent=item.label;el.style.cssText='padding:6px 10px;border-radius:4px;cursor:pointer;color:var(--text)';el.onmouseenter=()=>{el.style.background='var(--surface-hover)'};el.onmouseleave=()=>{el.style.background='transparent'};el.onclick=()=>{menu.remove();item.action()};menu.appendChild(el)});document.body.appendChild(menu);document.addEventListener('click',()=>menu.remove(),{once:true})}
 
   async function processFiles(files){
@@ -382,7 +431,7 @@ function rmLinkedSku(a,i){a.linked_skus.splice(i,1);saveDetail();toast('Unlinked
   watch(editorSkuItems,async()=>{await nextTick();initEditorSort()});
   watch(filtered,async()=>{await nextTick();initSort()});
 
-  return {assets,totalCount,loading,selectedIds,detailAsset,filterType,filterTag,filterProduct,sortBy,showUpload,uploading,dragOver,sidebarOpen,saving,productQ,productResults,detailQ,detailResults,toasts,typeFilters,allTags,filtered,thumbGrid,selectOne,clearAll,hasPendingAiTags,handlePick,handleDrop,processFiles,addTag,rmTag,confirmAi,linkSku,rmLinkedSku,saveDetail,searchProducts,searchForDetail,batchTag,batchLink,batchDelete,aiTagSelected,toast,fmtSize,fmtDate,collections,loadCollections,openCollectionEditor,showCollectionMenu,editorColl,editorSku,editorSkus,editorSkuItems,editorPick,editorPicked,editorDirty,editorGrid,openEditor,closeEditor,saveEditor,exportEditor,removeEditorItem,setEditorRole,openAssetPicker,togglePick,addPickedToEditor,addSkuToEditor};
+  return {assets,totalCount,loading,selectedIds,detailAsset,filterType,filterTag,filterProduct,sortBy,showUpload,uploading,dragOver,sidebarOpen,saving,productQ,productResults,detailQ,detailResults,toasts,typeFilters,allTags,filtered,thumbGrid,selectOne,clearAll,hasPendingAiTags,handlePick,handleDrop,processFiles,addTag,rmTag,confirmAi,linkSku,rmLinkedSku,saveDetail,searchProducts,searchForDetail,batchTag,batchLink,batchDelete,aiTagSelected,toast,fmtSize,fmtDate,collections,loadCollections,openCollectionEditor,showCollectionMenu,editorColl,editorSku,editorSkus,editorSkuItems,editorPick,editorPicked,editorDirty,editorGrid,openEditor,closeEditor,saveEditor,exportEditor,removeEditorItem,setEditorRole,openAssetPicker,togglePick,addPickedToEditor,addSkuToEditor,showHistory,editorVersions,selectedVer,openHistory,restoreVersion,getThumbByAssetId};
 }}).mount('#app');
 </script>
 </body>
