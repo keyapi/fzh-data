@@ -9,6 +9,7 @@ from pathlib import Path
 
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
+from openpyxl.utils import get_column_letter
 from sqlalchemy.orm import Session
 
 from models import AssetCollection, Asset
@@ -48,13 +49,15 @@ def export_collection_to_excel(
         raise ValueError("Collection not found")
 
     items = sorted(coll.items, key=lambda x: x.position)
+    if platform not in _COLUMN_MAP:
+        print(f"WARNING: unknown platform '{platform}', falling back to amazon columns")
     columns = _COLUMN_MAP.get(platform, _COLUMN_MAP["amazon"])
 
     # Group items by SKU, maintaining position order per SKU
     sku_images: dict[str, list[tuple[int, str]]] = defaultdict(list)
     sku_position: dict[str, int] = {}
     for idx, item in enumerate(items):
-        asset = session.query(Asset).filter_by(id=item.asset_id).first()
+        asset = item.asset
         if not asset:
             continue
         # Get SKU from asset's primary product link
@@ -88,14 +91,14 @@ def export_collection_to_excel(
     sorted_skus = sorted(sku_images.keys(), key=lambda s: sku_position[s])
     for row_idx, sku in enumerate(sorted_skus, 2):
         ws.cell(row=row_idx, column=1, value=sku)
-        for img_idx, (_, url) in enumerate(sorted(sku_images[sku], key=lambda x: x[0])):
+        for img_idx, (_, url) in enumerate(sku_images[sku]):
             if img_idx < len(columns):
                 ws.cell(row=row_idx, column=img_idx + 2, value=url)
 
     # Column widths
     ws.column_dimensions["A"].width = 20
     for i in range(len(columns)):
-        col_letter = chr(ord("B") + i)
+        col_letter = get_column_letter(i + 2)  # B=2, C=3, ...
         ws.column_dimensions[col_letter].width = 50
 
     buf = io.BytesIO()
