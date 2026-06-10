@@ -25,3 +25,4 @@ venv/
 # env files (secrets)
 .env
 .env.local
+.gh-token

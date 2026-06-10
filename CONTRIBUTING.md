@@ -2,6 +2,43 @@
 
 > 你有 GitHub 权限，可以用 Claude Desktop Agent 开发新功能、修复问题、维护 Skill 和文档。
 
+## Git 认证配置
+
+> SSH 在某些网络环境不稳定（GFW），推荐 HTTPS + GitHub CLI。
+
+### 首次配置
+
+1. 生成 [GitHub Personal Access Token](https://github.com/settings/tokens?type=beta)（Fine-grained token），权限：
+   - **Contents** — 读写（push/pull）
+   - **Issues** — 读写（给其他项目提 issue）
+2. 保存 token 到项目根目录：
+
+```bash
+echo "github_pat_YOUR_TOKEN" > .gh-token
+```
+
+3. 配置 `gh` 认证：
+
+```bash
+gh auth login --with-token < .gh-token
+gh auth setup-git         # git push/pull 自动走 gh 认证
+```
+
+4. 验证：
+
+```bash
+gh auth status            # 显示 ✓ Logged in
+git push origin main      # 应该能正常 push
+```
+
+`.gh-token` 已在 `.gitignore` 中，不会被提交。每个开发者用自己的 PAT。
+
+### 原理
+
+HTTPS 协议不受 GFW 干扰，`gh` CLI 用 token 做认证——比 SSH 更稳定，比把 token 嵌在 remote URL 里更安全。
+
+---
+
 ## 开发流程
 
 ```
