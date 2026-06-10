@@ -251,10 +251,15 @@ def _guess_type(ext: str) -> str:
     if ext in {".mp4", ".mov"}: return "video"
     return "document"
 
+def _file_rel(sp: str) -> str:
+    """从 stored_path 提取 files/ 后的相对路径。"""
+    s = sp.replace("\\", "/")
+    return s.split("/files/", 1)[1] if "/files/" in s else (Path(s).name if s else "")
+
+
 def _asset_to_dict(a: Asset) -> dict[str, Any]:
     thumb_name = Path(a.thumbnail_path).name if a.thumbnail_path else None
-    sp = a.stored_path.replace("\\", "/") if a.stored_path else ""
-    rel = sp.split("/files/", 1)[1] if "/files/" in sp else (Path(sp).name if sp else "")
+    rel = _file_rel(a.stored_path) if a.stored_path else ""
     return {
         "id": a.id, "filename": a.filename, "asset_type": a.asset_type,
         "file_size": a.file_size, "width": a.width, "height": a.height,
@@ -365,9 +370,9 @@ def _create_asset_from_bytes(data: bytes, filename: str, rel_dir: str = "") -> d
         return None
     content_hash = hashlib.sha256(data).hexdigest()
 
-    # 去重
+    # 去重（但保留目录结构：相同内容放不同文件夹时复制文件）
     existing = session.query(Asset).filter_by(content_hash=content_hash).first()
-    if existing:
+    if existing and not rel_dir:
         return {**_asset_to_dict(existing), "_dedup": True}
 
     asset_id = str(uuid.uuid4())
@@ -478,7 +483,7 @@ def list_folders():
     return {"folders": folders}
 
 
-def _rel_path(sp: str) -> str:
+def _file_rel(sp: str) -> str:
     """从 stored_path 提取 files/ 后的相对目录+文件名。"""
     rel = sp.replace("\\", "/")
     marker = "/files/"
@@ -493,7 +498,7 @@ def folder_assets(path: str, limit: int = 200):
     for a in session.query(Asset).filter(
         Asset.stored_path.isnot(None)
     ).all():
-        rel = _rel_path(a.stored_path)
+        rel = _file_rel(a.stored_path)
         dir_part = "/".join(rel.split("/")[:-1])
         if dir_part == norm:
             results.append(_asset_to_dict(a))
@@ -510,7 +515,7 @@ def folder_thumbnail(path: str):
     for a in session.query(Asset).filter(
         Asset.stored_path.isnot(None), Asset.thumbnail_path.isnot(None)
     ).all():
-        rel = _rel_path(a.stored_path)
+        rel = _file_rel(a.stored_path)
         dir_part = "/".join(rel.split("/")[:-1])
         if dir_part == norm:
             thumbs.append(a.thumbnail_path)
@@ -710,7 +715,7 @@ def _coll_to_dict(c: AssetCollection) -> dict:
             "asset_id": ci.asset_id, "position": ci.position, "role": ci.role,
             "filename": a.filename if a else "",
             "thumb_url": f"/thumb/{Path(a.thumbnail_path).name}" if (a and a.thumbnail_path) else None,
-            "file_url": f"/files/{_rel_path(a.stored_path)}" if a else None,
+            "file_url": f"/files/{_file_rel(a.stored_path)}" if a else None,
             "sku": sku,
         })
     return {
