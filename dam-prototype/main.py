@@ -13,13 +13,10 @@ import asyncio
 import hashlib
 import io
 import os
-import shutil
 import sys
-import tempfile
 import threading
 import uuid
 import webbrowser
-import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -325,56 +322,31 @@ def _create_asset_from_bytes(data: bytes, filename: str, rel_dir: str = "") -> d
 
 @app.post("/api/upload")
 async def upload_files(files: list[UploadFile] = File(...)):
-    results = []
-    for f in files:
-        if not f.filename: continue
-        data = await f.read()
-        r = _create_asset_from_bytes(data, f.filename)
-        if r:
-            results.append(r)
-    return {"success": True, "assets": results}
+    """上传文件。支持单文件和文件夹（通过 webkitRelativePath 保留目录结构）。
 
-
-@app.post("/api/upload/folder")
-async def upload_folder(file: UploadFile = File(...)):
-    """上传 ZIP 文件，保留目录结构。
-
-    接受一个 ZIP 文件，解压后遍历所有文件，
-    保留原始目录层级信息，为每个文件创建 Asset 记录。
-    ZIP 中的目录结构映射到 files/{相对路径}/{uuid}.ext。
+    前端用 webkitdirectory 或 webkitGetAsEntry 获取文件时，
+    FormData 第3参数传入 file.webkitRelativePath，
+    后端从 filename 中提取目录路径和文件名，
+    在 NAS 上重建 files/{目录}/{uuid}.{ext} 结构。
     """
-    if not file.filename or not file.filename.lower().endswith('.zip'):
-        return {"success": False, "error": "Only ZIP files are accepted", "assets": []}
-
-    data = await file.read()
     results = []
     folders = set()
-
-    with tempfile.TemporaryDirectory() as tmpdir:
-        tmppath = Path(tmpdir)
-        try:
-            with zipfile.ZipFile(io.BytesIO(data)) as zf:
-                zf.extractall(tmppath)
-        except zipfile.BadZipFile:
-            return {"success": False, "error": "Invalid ZIP file", "assets": []}
-
-        for fpath in sorted(tmppath.rglob("*")):
-            if not fpath.is_file():
-                continue
-            # 跳过隐藏文件和 macOS 资源分支
-            if fpath.name.startswith("._") or fpath.name.startswith("__MACOSX"):
-                continue
-            rel_path = str(fpath.relative_to(tmppath).parent)
-            if rel_path == ".":
-                rel_path = ""
-            else:
-                rel_path = rel_path.replace("\\", "/")
-                folders.add(rel_path)
-            file_data = fpath.read_bytes()
-            r = _create_asset_from_bytes(file_data, fpath.name, rel_path)
-            if r:
-                results.append(r)
-
+    for f in files:
+        if not f.filename: continue
+        # 从 webkitRelativePath 提取目录路径
+        fname = f.filename.replace("\\", "/")
+        if "/" in fname:
+            rel_dir = "/".join(fname.split("/")[:-1])
+            base_name = fname.split("/")[-1]
+            if rel_dir:
+                folders.add(rel_dir)
+        else:
+            rel_dir = ""
+            base_name = fname
+        data = await f.read()
+        r = _create_asset_from_bytes(data, base_name, rel_dir)
+        if r:
+            results.append(r)
     return {
         "success": True,
         "assets": results,

@@ -317,9 +317,14 @@ input, select, textarea { font: inherit; color: inherit; }
     </template>
   </aside>
   <div v-if="showUpload" class="upload-overlay" @click.self="showUpload=false" @keydown.escape="showUpload=false">
-    <div class="upload-dialog"><h2>Upload Assets</h2><p>Images, videos, documents — drop or choose files. ZIP folders keep structure.</p>
-      <div class="drop-zone" :class="{'drag-over': dragOver}" @click="$refs.fileIn.click()" @dragover.prevent="dragOver=true" @dragleave="dragOver=false" @drop.prevent="handleDrop($event)"><div class="dz-icon">⇧</div><p>Drop files or click to browse</p><p class="dz-hint">JPG, PNG, WebP, MP4, PDF, ZIP — max 50MB each</p></div>
-      <input type="file" ref="fileIn" multiple accept="image/*,video/*,.pdf,.doc,.docx,.zip" @change="handlePick" style="display:none">
+    <div class="upload-dialog"><h2>Upload Assets</h2><p>Drop files or folders, or use the buttons below. Folder structure is preserved.</p>
+      <div class="drop-zone" :class="{'drag-over': dragOver}" @click="$refs.fileIn.click()" @dragover.prevent="dragOver=true" @dragleave="dragOver=false" @drop.prevent="handleDrop($event)"><div class="dz-icon">⇧</div><p>Drop files or folders here</p><p class="dz-hint">JPG, PNG, WebP, MP4, PDF — max 50MB each</p></div>
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button class="btn btn-secondary" @click="$refs.fileIn.click()">Choose Files</button>
+        <button class="btn btn-secondary" @click="$refs.folderIn.click()">Choose Folder</button>
+      </div>
+      <input type="file" ref="fileIn" multiple accept="image/*,video/*,.pdf,.doc,.docx" @change="handlePick" style="display:none">
+      <input type="file" ref="folderIn" webkitdirectory multiple @change="handlePick" style="display:none">
       <div v-if="uploading" style="text-align:center;color:var(--primary);font-size:13px;padding:8px">Uploading...</div>
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px"><button class="btn btn-secondary" @click="showUpload=false">Cancel</button></div>
     </div>
@@ -332,8 +337,7 @@ const API = {
   async list(p){const q=new URLSearchParams(p).toString();const r=await fetch('/api/assets'+(q?'?'+q:''));if(!r.ok)throw new Error('API error');return r.json()},
   async get(id){const r=await fetch('/api/assets/'+id);if(!r.ok)throw new Error('API error');return r.json()},
   async update(id,d){const r=await fetch('/api/assets/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});if(!r.ok)throw new Error('API error');return r.json()},
-  async upload(files){const fd=new FormData();Array.from(files).forEach(f=>fd.append('files',f));const r=await fetch('/api/upload',{method:'POST',body:fd});if(!r.ok)throw new Error('API error');return r.json()},
-  async uploadFolder(zipFile){const fd=new FormData();fd.append('file',zipFile);const r=await fetch('/api/upload/folder',{method:'POST',body:fd});if(!r.ok)throw new Error('API error');return r.json()},
+  async upload(files,folders){const fd=new FormData();Array.from(files).forEach(f=>{const rp=f.webkitRelativePath||f.name;fd.append('files',f,rp)});const r=await fetch('/api/upload',{method:'POST',body:fd});if(!r.ok)throw new Error('API error');return r.json()},
   async searchProducts(q){const r=await fetch('/api/products/search?q='+encodeURIComponent(q));return r.json()},
 };
 
@@ -389,24 +393,22 @@ function getThumbByAssetId(aid){const a=assets.value.find(x=>x.id===aid);return 
 function openCollectionEditor(existing){if(existing){openEditor(existing);return}const n=prompt('Collection name:');if(!n)return;const t=prompt('Type (listing/campaign/social/catalog/custom):','listing');if(!t)return;(async()=>{const ctx={skus:[]};const r=await fetch('/api/collections',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n,type:t,context:ctx,created_by:'user'})});const d=await r.json();await loadCollections();openEditor(d)})()}
   function showCollectionMenu(c,ev){const items=[{label:'Export Excel (Amazon)',action:()=>{window.open('/api/collections/'+c.id+'/export?platform=amazon')}},{label:'Export Excel (Wayfair)',action:()=>{window.open('/api/collections/'+c.id+'/export?platform=wayfair')}},{label:'Export Excel (Shopify)',action:()=>{window.open('/api/collections/'+c.id+'/export?platform=shopify')}},{label:'Delete',action:()=>{if(confirm('Delete '+c.name+'?')){fetch('/api/collections/'+c.id,{method:'DELETE'}).then(()=>loadCollections());toast('Deleted','error')}}}];const menu=document.createElement('div');menu.style.cssText='position:fixed;z-index:300;background:var(--surface);border:1px solid var(--border);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.15);padding:4px;min-width:180px;font-size:12px;font-family:var(--font-sans)';menu.style.left=ev.clientX+'px';menu.style.top=ev.clientY+'px';items.forEach(item=>{const el=document.createElement('div');el.textContent=item.label;el.style.cssText='padding:6px 10px;border-radius:4px;cursor:pointer;color:var(--text)';el.onmouseenter=()=>{el.style.background='var(--surface-hover)'};el.onmouseleave=()=>{el.style.background='transparent'};el.onclick=()=>{menu.remove();item.action()};menu.appendChild(el)});document.body.appendChild(menu);document.addEventListener('click',()=>menu.remove(),{once:true})}
 
+  function _readEntry(entry,path){return new Promise((resolve)=>{if(entry.isFile){entry.file(f=>resolve([{file:f,path:path||''}]))}else if(entry.isDirectory){const r=entry.createReader();const all=[];const batch=()=>r.readEntries(entries=>{if(!entries.length){resolve(all)}else{entries.forEach(e=>all.push(e));batch()}});batch()}else{resolve([])}})}
+  async function _traverseEntries(items){const entries=[];for(const item of items){const e=item.webkitGetAsEntry?item.webkitGetAsEntry():null;if(!e)continue;const children=await _readEntry(e,e.fullPath.replace(/^\//,''));entries.push(...children)}return entries}
   async function processFiles(files){
     uploading.value=true;
-    const arr=Array.from(files);
-    const zips=arr.filter(f=>f.name&&f.name.toLowerCase().endsWith('.zip'));
-    const normal=arr.filter(f=>!zips.includes(f));
     try{
-      let total=0,folderCount=0;
-      for(const z of zips){
-        const r=await API.uploadFolder(z);
-        if(r.success){total+=r.total;if(r.folders)for(const fd of r.folders)if(fd)toast('Folder: '+fd);}
-      }
-      if(normal.length){const r=await API.upload(normal);if(r.success){const dup=r.assets.filter(a=>a._dedup).length;const add=r.assets.length-dup;if(add)toast('Uploaded '+add+' file(s)');if(dup)toast(dup+' duplicate(s) skipped','error');total+= (r.assets||[]).length-dup}}
+      let total=0;
+      // 文件夹拖拽：从 DataTransfer items 递归遍历（保留空目录名）
+      if(files instanceof DataTransferItemList){const entries=await _traverseEntries(files);if(entries.length){const allFiles=entries.map(e=>{const f=e.file;Object.defineProperty(f,'webkitRelativePath',{value:(e.path?e.path+'/':'')+f.name,writable:false});return f});const r=await API.upload(allFiles);if(r.success){const dup=r.assets.filter(a=>a._dedup).length;total=r.total-dup;if(r.folders)r.folders.forEach(f=>toast('Folder: '+f))}}}
+      // 普通文件/文件夹选择器（webkitdirectory 或 multiple）
+      else{const arr=Array.from(files);if(arr.length){const r=await API.upload(arr);if(r.success){const dup=r.assets.filter(a=>a._dedup).length;total=r.total-dup;if(r.folders)r.folders.forEach(f=>toast('Folder: '+f))}if(total)toast('Uploaded '+total+' file(s)');if(r.success&&dup)toast(dup+' duplicate(s) skipped','error')}}
       if(total)await loadAssets();
-    }catch(e){toast('Upload failed','error')}
+    }catch(e){console.error(e);toast('Upload failed','error')}
     uploading.value=false;showUpload.value=false;
   }
   function handlePick(e){if(e.target.files.length)processFiles(e.target.files)}
-  function handleDrop(e){dragOver.value=false;if(e.dataTransfer.files.length)processFiles(e.dataTransfer.files)}
+  function handleDrop(e){dragOver.value=false;const items=e.dataTransfer.items;if(items&&items.length&&items[0].webkitGetAsEntry){processFiles(items);return}if(e.dataTransfer.files.length)processFiles(e.dataTransfer.files)}
 
   async function saveDetail(){
     if(!detailAsset.value||saving.value)return;saving.value=true;
