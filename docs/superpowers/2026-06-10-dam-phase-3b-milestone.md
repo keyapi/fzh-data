@@ -1,6 +1,6 @@
 # DAM Prototype Phase 3b — 讨论记录与里程碑
 
-> 日期: 2026-06-09 ~ 2026-06-10 | 状态: Phase 3b 实现完成，待用户验收
+> 日期: 2026-06-09 ~ 2026-06-10 | 状态: Phase 3b + Phase 4 实现完成
 
 ---
 
@@ -125,6 +125,15 @@
 - [ ] 版本对比（diff 当前 vs 历史版本）
 - [ ] 回滚按钮 → POST /api/collections/{id}/versions/{v}/restore
 - [ ] 后端已有 `AssetCollectionVersion` 表和 version list API，需要前端 UI
+
+### Phase 4: Collection 版本历史 + 回滚 ✅ (2026-06-10)
+
+- [x] POST /api/collections/{id}/versions/{v}/restore (非破坏性回滚)
+- [x] History 按钮 + 右侧 320px 面板 (Google Docs / Figma 模式)
+- [x] 版本列表 (时间倒序 + 缩略图预览 + current 标签)
+- [x] Restore 按钮 (选中版本显示 + confirm 确认)
+- [x] 设计文档: `docs/superpowers/specs/2026-06-10-dam-phase4-version-history.md`
+- [x] 实施计划: `docs/superpowers/plans/2026-06-10-dam-phase4-version-history.md`
 
 ### Phase 5: ERPNext Item API 真实对接
 

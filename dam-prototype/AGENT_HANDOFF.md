@@ -138,9 +138,15 @@ uv run python main.py --port 8098
   - 实施计划: `docs/superpowers/plans/2026-06-10-dam-collection-editor.md`
   - 讨论记录: `docs/superpowers/2026-06-10-dam-phase-3b-milestone.md`
 
+- [x] Phase 4: Collection 版本历史 + 回滚 (右侧抽屉面板, Google Docs/Figma 非破坏性模式)
+  - 设计文档: `docs/superpowers/specs/2026-06-10-dam-phase4-version-history.md`
+  - 实施计划: `docs/superpowers/plans/2026-06-10-dam-phase4-version-history.md`
+- [x] 多 SKU 支持: AssetProductLink N:N, linked_skus 数组, Picker SKU 标签, 跨 SKU 确认
+- [x] 未保存变更守卫: beforeunload + 页内 confirm + ● Unsaved 视觉提示
+- [x] 侧边栏过滤器导航: TYPE/TAG/PRODUCT 点选关闭编辑器回到资产浏览
+
 ### 待完成
 
-- [ ] Phase 4: AssetCollection 历史版本查看 + 回滚
 - [ ] Phase 5: ERPNext Item API 真实对接 (替换 mock)
 - [ ] Phase 6: a.vilavi.cn 替换 (OSS 防关联分发)
 - [ ] Phase 6b: 文件夹上传保留本地结构
