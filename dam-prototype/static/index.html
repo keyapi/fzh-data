@@ -113,6 +113,16 @@ input, select, textarea { font: inherit; color: inherit; }
 .folder-breadcrumb { padding:4px 8px; font-size:11px; }
 .folder-breadcrumb a { color:var(--primary); text-decoration:none; }
 .folder-breadcrumb a:hover { text-decoration:underline; }
+.folder-header { display:flex; align-items:center; gap:8px; padding:8px 12px; background:var(--surface); border-bottom:1px solid var(--border); }
+.folder-header-icon { font-size:18px; }
+.folder-header-name { font-size:15px; font-weight:600; }
+.folder-header-count { font-size:11px; color:var(--text-muted); }
+.subfolder-grid { display:flex; flex-wrap:wrap; gap:10px; padding:12px; }
+.subfolder-card { width:140px; text-align:center; cursor:pointer; padding:8px; border-radius:var(--radius); transition:background .15s; }
+.subfolder-card:hover { background:var(--surface-hover); }
+.subfolder-thumb { width:120px; height:120px; object-fit:cover; border-radius:4px; background:var(--border); border:1px solid var(--border); }
+.subfolder-name { display:block; font-size:12px; margin-top:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.subfolder-count { font-size:10px; color:var(--text-muted); }
 .detail-meta div { padding: 2px 0; }
 .product-link { margin-top: 6px; display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; background: var(--primary-light); color: var(--primary); border-radius: var(--radius-full); font-size: 12px; font-weight: 500; }
 .product-link .rm { cursor: pointer; font-size: 14px; opacity: 0.6; }
@@ -271,8 +281,22 @@ input, select, textarea { font: inherit; color: inherit; }
       </div>
     </aside>
     <div class="grid-area" v-if="!editorColl">
+      <!-- 文件夹浏览头部 -->
+      <div v-if="filterFolder" class="folder-header">
+        <span class="folder-header-icon">📁</span>
+        <span class="folder-header-name">{{ filterFolder.split('/').pop() }}</span>
+        <span class="folder-header-count">{{ filtered.length }} assets</span>
+      </div>
+      <!-- 子文件夹卡片（仅浏览文件夹时显示） -->
+      <div v-if="filterFolder && currentSubfolders.length" class="subfolder-grid">
+        <div v-for="sf in currentSubfolders" :key="sf.path" class="subfolder-card" @click="folderClick(sf)" :title="sf.path">
+          <img :src="getFolderThumb(sf.path)" class="subfolder-thumb" loading="lazy">
+          <span class="subfolder-name">{{ sf.name }}</span>
+          <span class="subfolder-count">{{ sf.count }}</span>
+        </div>
+      </div>
       <div v-if="selectedIds.length>1" class="batch-bar">{{ selectedIds.length }} selected <button class="btn-batch" @click="batchTag">Tag</button> <button class="btn-batch" @click="batchLink">Link SKU</button> <button class="btn-batch" @click="batchDelete">Delete</button></div>
-      <div v-if="filtered.length===0 && !loading" class="empty-state"><div class="empty-icon">{{ filterType==='all'?'📁':'🖼️' }}</div><p>No assets found</p><button class="btn btn-primary" @click="showUpload=true" style="margin-top:8px">Upload your first asset</button></div>
+      <div v-if="filtered.length===0 && !loading && !currentSubfolders.length" class="empty-state"><div class="empty-icon">{{ filterType==='all'?'📁':'🖼️' }}</div><p>No assets found</p><button class="btn btn-primary" @click="showUpload=true" style="margin-top:8px">Upload your first asset</button></div>
       <div v-show="filtered.length>0" class="thumb-grid" ref="thumbGrid">
         <div v-for="(a,i) in filtered" :key="a.id" class="thumb-card" :class="{selected: selectedIds.includes(a.id)}" :style="{animationDelay: (i*0.03)+'s'}" @click.stop="selectOne(a,$event)" draggable="false">
           <img :src="a.thumb_url || a.file_url" :alt="a.filename" loading="lazy" draggable="false">
@@ -484,6 +508,7 @@ const showHistory=ref(false),editorVersions=ref([]),selectedVer=ref(null);
   function folderToggle(n){folderExpanded.value={...folderExpanded.value,[n.path]:!n.expanded}}
   function folderClick(n){if(!editorDirty.value||confirm('Discard unsaved changes?')){closeEditor(true);if(!n){filterFolder.value=null;filterProduct.value=null;filterTag.value=null;filterType.value='all'}else{filterFolder.value=filterFolder.value===n.path?null:n.path;filterProduct.value=null;filterTag.value=null;filterType.value='all'}}}
   function folderClickByPath(p){filterFolder.value=p;filterProduct.value=null;filterTag.value=null;filterType.value='all'}
+  const currentSubfolders=computed(()=>{if(!filterFolder.value)return[];return folders.value.filter(f=>{const p=f.path;return p!==filterFolder.value && p.startsWith(filterFolder.value+'/') && p.split('/').length===filterFolder.value.split('/').length+1}).map(f=>({path:f.path,name:f.path.split('/').pop(),count:f.asset_count}))})
   function getFolderThumb(path){return '/api/folders/'+encodeURIComponent(path)+'/thumbnail'}
   async function nasLoad(path){nasLoading.value=true;nasSelected.value=[];nasCurrent.value=path||'';try{const r=await fetch('/api/nas/browse?path='+encodeURIComponent(path||''));const d=await r.json();nasEntries.value=d.entries||[]}catch(e){toast('NAS browse failed','error')}nasLoading.value=false}
   async function nasImport(){if(!nasSelected.value.length)return;nasImporting.value=true;try{const r=await fetch('/api/nas/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({paths:nasSelected.value})});const d=await r.json();if(d.success){toast('Imported '+d.total+' file(s)');await loadAssets();await loadFolders();showNas.value=false}else{toast(d.error||'Import failed','error')}}catch(e){toast('Import failed','error')}nasImporting.value=false}
@@ -557,7 +582,7 @@ function rmLinkedSku(a,i){a.linked_skus.splice(i,1);saveDetail();toast('Unlinked
   watch(editorSkuItems,async()=>{await nextTick();initEditorSort()});
   watch(filtered,async()=>{await nextTick();initSort()});
 
-  return {assets,totalCount,loading,selectedIds,detailAsset,filterType,filterTag,filterProduct,sortBy,showUpload,uploading,dragOver,sidebarOpen,saving,productQ,productResults,detailQ,detailResults,toasts,typeFilters,allTags,filtered,thumbGrid,selectOne,clearAll,hasPendingAiTags,handlePick,handleDrop,processFiles,addTag,rmTag,confirmAi,linkSku,rmLinkedSku,saveDetail,searchProducts,searchForDetail,batchTag,batchLink,batchDelete,aiTagSelected,toast,fmtSize,fmtDate,collections,loadCollections,openCollectionEditor,showCollectionMenu,folders,folderTree,folderExpanded,folderToggle,folderClick,folderClickByPath,filterFolder,loadFolders,getFolderThumb,showNas,nasCurrent,nasEntries,nasSelected,nasLoading,nasImporting,nasBreadcrumbs,nasLoad,nasImport,editorColl,editorSku,editorSkus,editorSkuItems,editorPick,editorPicked,editorDirty,editorGrid,openEditor,closeEditor,saveEditor,exportEditor,removeEditorItem,setEditorRole,openAssetPicker,togglePick,addPickedToEditor,addSkuToEditor,showHistory,editorVersions,selectedVer,openHistory,restoreVersion,getThumbByAssetId};
+  return {assets,totalCount,loading,selectedIds,detailAsset,filterType,filterTag,filterProduct,sortBy,showUpload,uploading,dragOver,sidebarOpen,saving,productQ,productResults,detailQ,detailResults,toasts,typeFilters,allTags,filtered,thumbGrid,selectOne,clearAll,hasPendingAiTags,handlePick,handleDrop,processFiles,addTag,rmTag,confirmAi,linkSku,rmLinkedSku,saveDetail,searchProducts,searchForDetail,batchTag,batchLink,batchDelete,aiTagSelected,toast,fmtSize,fmtDate,collections,loadCollections,openCollectionEditor,showCollectionMenu,folders,folderTree,folderExpanded,folderToggle,folderClick,folderClickByPath,filterFolder,currentSubfolders,loadFolders,getFolderThumb,showNas,nasCurrent,nasEntries,nasSelected,nasLoading,nasImporting,nasBreadcrumbs,nasLoad,nasImport,editorColl,editorSku,editorSkus,editorSkuItems,editorPick,editorPicked,editorDirty,editorGrid,openEditor,closeEditor,saveEditor,exportEditor,removeEditorItem,setEditorRole,openAssetPicker,togglePick,addPickedToEditor,addSkuToEditor,showHistory,editorVersions,selectedVer,openHistory,restoreVersion,getThumbByAssetId};
 }}).mount('#app');
 </script>
 </body>
