@@ -12,6 +12,8 @@ dependencies = [
     "python-multipart>=0.0.32",
     "aiofiles>=25.1.0",
     "pillow>=12.2.0",
+    "sqlalchemy>=2.0.50",
+    "openai>=2.41.0",
 ]
 
 [tool.hatch.build.targets.wheel]
