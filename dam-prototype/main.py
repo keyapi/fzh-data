@@ -485,6 +485,46 @@ def get_collection_versions(coll_id: str):
     ]}
 
 
+@app.post("/api/collections/{coll_id}/versions/{v}/restore")
+def restore_version(coll_id: str, v: int):
+    """Non-destructive restore: snapshots current state, then rebuilds from version snapshot."""
+    c = session.query(AssetCollection).filter_by(id=coll_id).first()
+    if not c:
+        return JSONResponse({"error": "not found"}, 404)
+
+    ver = session.query(AssetCollectionVersion)\
+        .filter_by(collection_id=coll_id, version=v).first()
+    if not ver:
+        return JSONResponse({"error": "version not found"}, 404)
+
+    # Non-destructive: snapshot current state first (Figma pattern)
+    current_items = [{"asset_id": ci.asset_id, "position": ci.position, "role": ci.role}
+                     for ci in sorted(c.items, key=lambda x: x.position)]
+    if current_items:
+        session.add(AssetCollectionVersion(
+            collection_id=c.id, version=c.version,
+            snapshot={"images": current_items},
+        ))
+
+    # Wipe current items and rebuild from snapshot
+    for old in list(c.items):
+        session.delete(old)
+    session.flush()
+    for img in ver.snapshot.get("images", []):
+        session.add(AssetCollectionItem(
+            collection_id=c.id,
+            asset_id=img["asset_id"],
+            position=img["position"],
+            role=img.get("role", "alternate"),
+        ))
+
+    c.version += 1
+    c.updated_at = datetime.now(timezone.utc)
+    session.commit()
+    session.refresh(c)
+    return _coll_to_dict(c)
+
+
 @app.get("/api/collections/{coll_id}/export")
 def export_collection(coll_id: str, platform: str = "amazon"):
     from export import export_collection_to_excel
