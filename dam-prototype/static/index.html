@@ -101,6 +101,13 @@ input, select, textarea { font: inherit; color: inherit; }
 .tag-add { width: 100%; padding: 5px 8px; border: 1px dashed var(--border); border-radius: var(--radius); font-size: 12px; background: transparent; outline: none; }
 .tag-add:focus { border-color: var(--primary); }
 .detail-meta { font-size: 11px; color: var(--text-muted); margin-top: 8px; }
+.folder-item { display:flex; align-items:center; gap:6px; padding:4px 8px; border-radius:var(--radius); cursor:pointer; font-size:12px; margin-top:2px; }
+.folder-item:hover { background:var(--surface-hover); }
+.folder-item.active { background:var(--accent-bg); color:var(--accent-text); }
+.folder-thumb { width:28px; height:28px; border-radius:4px; background-size:cover; background-position:center; background-color:var(--border); flex-shrink:0; }
+.folder-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.folder-count { font-size:10px; color:var(--text-muted); margin-left:4px; }
+.folder-path-hint { font-size:9px; color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-left:34px; margin-top:-2px; }
 .detail-meta div { padding: 2px 0; }
 .product-link { margin-top: 6px; display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; background: var(--primary-light); color: var(--primary); border-radius: var(--radius-full); font-size: 12px; font-weight: 500; }
 .product-link .rm { cursor: pointer; font-size: 14px; opacity: 0.6; }
@@ -203,6 +210,13 @@ input, select, textarea { font: inherit; color: inherit; }
       </div>
       <div class="sidebar-section"><h3>Sort</h3>
         <select class="select-sm" v-model="sortBy"><option value="newest">Newest</option><option value="oldest">Oldest</option><option value="name">Name</option></select>
+      </div>
+      <div class="sidebar-section" v-if="folders.length"><h3>Folders</h3>
+        <div v-for="f in folders" :key="f.path" class="folder-item" @click="if(!editorDirty||confirm('You have unsaved changes. Discard them?')){closeEditor(true);filterFolder=filterFolder===f.path?null:f.path;filterProduct=null;filterTag=null;filterType='all'}" :class="{active: filterFolder===f.path}">
+          <div class="folder-thumb" :style="'background-image:url('+getFolderThumb(f.path)+')'"></div>
+          <div><span class="folder-name">{{ f.path.split('/').pop() }}</span><span class="folder-count">{{ f.asset_count }}</span></div>
+          <div class="folder-path-hint">{{ f.path }}</div>
+        </div>
       </div>
       <div class="sidebar-section"><h3>Collections</h3>
         <button class="btn btn-primary" style="width:100%;font-size:12px;padding:4px;margin-bottom:4px" @click="openCollectionEditor()">+ New</button>
@@ -347,7 +361,7 @@ createApp({setup(){
   const filterType=ref('all'),filterTag=ref(null),filterProduct=ref(null),sortBy=ref('newest');
   const showUpload=ref(false),uploading=ref(false),dragOver=ref(false),sidebarOpen=ref(true);
   const productQ=ref(''),productResults=ref([]),detailQ=ref(''),detailResults=ref([]);
-  const toasts=ref([]),thumbGrid=ref(null),saving=ref(false),collections=ref([]);
+  const toasts=ref([]),thumbGrid=ref(null),saving=ref(false),collections=ref([]),folders=ref([]),filterFolder=ref(null);
   const editorColl=ref(null),editorSku=ref(null),editorPick=ref(false),editorPicked=ref([]),editorDirty=ref(false);
 const showHistory=ref(false),editorVersions=ref([]),selectedVer=ref(null);
 
@@ -367,13 +381,16 @@ const showHistory=ref(false),editorVersions=ref([]),selectedVer=ref(null);
     {value:'document',label:'Documents',count:assets.value.filter(a=>a.asset_type==='document').length},
   ]);
   const allTags=computed(()=>{const m={};assets.value.forEach(a=>{(a.tags||[]).forEach(t=>{m[t]=(m[t]||0)+1})});return Object.entries(m).map(([n,c])=>({name:n,count:c})).sort((a,b)=>b.count-a.count)});
-  const filtered=computed(()=>{let r=[...assets.value];if(filterProduct.value)r=r.filter(a=>(a.linked_skus||[]).includes(filterProduct.value));if(sortBy.value==='newest')r.sort((a,b)=>new Date(b.uploaded_at||0)-new Date(a.uploaded_at||0));else if(sortBy.value==='oldest')r.sort((a,b)=>new Date(a.uploaded_at||0)-new Date(b.uploaded_at||0));else r.sort((a,b)=>(a.filename||'').localeCompare(b.filename||''));return r});
+  const filtered=computed(()=>{let r=[...assets.value];if(filterFolder.value)r=r.filter(a=>{const fs=getFolderFromStored(a.file_url);return fs===filterFolder.value});if(filterProduct.value)r=r.filter(a=>(a.linked_skus||[]).includes(filterProduct.value));if(sortBy.value==='newest')r.sort((a,b)=>new Date(b.uploaded_at||0)-new Date(a.uploaded_at||0));else if(sortBy.value==='oldest')r.sort((a,b)=>new Date(a.uploaded_at||0)-new Date(b.uploaded_at||0));else r.sort((a,b)=>(a.filename||'').localeCompare(b.filename||''));return r});
+  function getFolderFromStored(fileUrl){if(!fileUrl)return'';const p=fileUrl.split('/files/')[1];if(!p)return'';const s=p.split('/');s.pop();return s.join('/')}
 
   function selectOne(a,ev){if(ev.ctrlKey||ev.metaKey){const i=selectedIds.value.indexOf(a.id);if(i>=0)selectedIds.value.splice(i,1);else selectedIds.value.push(a.id)}else{selectedIds.value=[a.id]}detailAsset.value=assets.value.find(x=>x.id===selectedIds.value[0])||null}
   function clearAll(){selectedIds.value=[];detailAsset.value=null}
   function hasPendingAiTags(a){return a.ai_tags&&a.ai_tags.length&&!a.ai_tags_confirmed}
 
   async function loadCollections(){try{const r=await fetch('/api/collections');const d=await r.json();collections.value=d.collections||[]}catch(e){console.error(e)}}
+  async function loadFolders(){try{const r=await fetch('/api/folders');const d=await r.json();folders.value=d.folders||[]}catch(e){console.error(e)}}
+  function getFolderThumb(path){return '/api/folders/'+encodeURIComponent(path)+'/thumbnail'}
   const editorItems=computed(()=>editorColl.value?editorColl.value.items||[]:[]);
   const editorSkus=computed(()=>{const m={};editorItems.value.forEach(i=>{const s=i.sku||'_unlinked';m[s]=(m[s]||0)+1});return Object.entries(m).map(([code,cnt])=>({code,count:cnt}))});
   const editorSkuItems=computed(()=>{if(!editorSku.value)return editorItems.value;return editorItems.value.filter(i=>(i.sku||'_unlinked')===editorSku.value)});
@@ -440,11 +457,11 @@ function rmLinkedSku(a,i){a.linked_skus.splice(i,1);saveDetail();toast('Unlinked
   function onKey(e){if(e.key==='Escape'&&detailAsset.value){detailAsset.value=null;e.preventDefault()}}
 
   const editorGrid=ref(null);
-  onMounted(async()=>{await loadAssets();await loadCollections();nextTick(initSort);document.addEventListener('keydown',onKey);window.addEventListener('beforeunload',e=>{if(editorDirty.value){e.preventDefault();e.returnValue=''}})});
+  onMounted(async()=>{await loadAssets();await loadCollections();await loadFolders();nextTick(initSort);document.addEventListener('keydown',onKey);window.addEventListener('beforeunload',e=>{if(editorDirty.value){e.preventDefault();e.returnValue=''}})});
   watch(editorSkuItems,async()=>{await nextTick();initEditorSort()});
   watch(filtered,async()=>{await nextTick();initSort()});
 
-  return {assets,totalCount,loading,selectedIds,detailAsset,filterType,filterTag,filterProduct,sortBy,showUpload,uploading,dragOver,sidebarOpen,saving,productQ,productResults,detailQ,detailResults,toasts,typeFilters,allTags,filtered,thumbGrid,selectOne,clearAll,hasPendingAiTags,handlePick,handleDrop,processFiles,addTag,rmTag,confirmAi,linkSku,rmLinkedSku,saveDetail,searchProducts,searchForDetail,batchTag,batchLink,batchDelete,aiTagSelected,toast,fmtSize,fmtDate,collections,loadCollections,openCollectionEditor,showCollectionMenu,editorColl,editorSku,editorSkus,editorSkuItems,editorPick,editorPicked,editorDirty,editorGrid,openEditor,closeEditor,saveEditor,exportEditor,removeEditorItem,setEditorRole,openAssetPicker,togglePick,addPickedToEditor,addSkuToEditor,showHistory,editorVersions,selectedVer,openHistory,restoreVersion,getThumbByAssetId};
+  return {assets,totalCount,loading,selectedIds,detailAsset,filterType,filterTag,filterProduct,sortBy,showUpload,uploading,dragOver,sidebarOpen,saving,productQ,productResults,detailQ,detailResults,toasts,typeFilters,allTags,filtered,thumbGrid,selectOne,clearAll,hasPendingAiTags,handlePick,handleDrop,processFiles,addTag,rmTag,confirmAi,linkSku,rmLinkedSku,saveDetail,searchProducts,searchForDetail,batchTag,batchLink,batchDelete,aiTagSelected,toast,fmtSize,fmtDate,collections,loadCollections,openCollectionEditor,showCollectionMenu,folders,filterFolder,loadFolders,getFolderThumb,editorColl,editorSku,editorSkus,editorSkuItems,editorPick,editorPicked,editorDirty,editorGrid,openEditor,closeEditor,saveEditor,exportEditor,removeEditorItem,setEditorRole,openAssetPicker,togglePick,addPickedToEditor,addSkuToEditor,showHistory,editorVersions,selectedVer,openHistory,restoreVersion,getThumbByAssetId};
 }}).mount('#app');
 </script>
 </body>
