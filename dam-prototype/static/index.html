@@ -101,13 +101,18 @@ input, select, textarea { font: inherit; color: inherit; }
 .tag-add { width: 100%; padding: 5px 8px; border: 1px dashed var(--border); border-radius: var(--radius); font-size: 12px; background: transparent; outline: none; }
 .tag-add:focus { border-color: var(--primary); }
 .detail-meta { font-size: 11px; color: var(--text-muted); margin-top: 8px; }
-.folder-item { display:flex; align-items:center; gap:6px; padding:4px 8px; border-radius:var(--radius); cursor:pointer; font-size:12px; margin-top:2px; }
-.folder-item:hover { background:var(--surface-hover); }
-.folder-item.active { background:var(--accent-bg); color:var(--accent-text); }
-.folder-thumb { width:28px; height:28px; border-radius:4px; background-size:cover; background-position:center; background-color:var(--border); flex-shrink:0; }
-.folder-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.folder-count { font-size:10px; color:var(--text-muted); margin-left:4px; }
-.folder-path-hint { font-size:9px; color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-left:34px; margin-top:-2px; }
+.tree-node { display:flex; align-items:center; gap:4px; padding:3px 6px; border-radius:4px; cursor:pointer; font-size:12px; margin-top:1px; white-space:nowrap; overflow:hidden; }
+.tree-node:hover { background:var(--surface-hover); }
+.tree-node.active { background:var(--accent-bg); color:var(--accent-text); }
+.tree-node.active .tree-count { color:inherit; opacity:.7; }
+.tree-toggle { width:12px; text-align:center; font-size:9px; color:var(--text-muted); flex-shrink:0; cursor:pointer; user-select:none; }
+.tree-icon { font-size:13px; flex-shrink:0; }
+.tree-name { overflow:hidden; text-overflow:ellipsis; flex:1; }
+.tree-count { font-size:9px; color:var(--text-muted); flex-shrink:0; }
+.tree-node.sub .tree-icon, .tree-node.sub2 .tree-icon, .tree-node.sub3 .tree-icon { opacity:.6; }
+.folder-breadcrumb { padding:4px 8px; font-size:11px; }
+.folder-breadcrumb a { color:var(--primary); text-decoration:none; }
+.folder-breadcrumb a:hover { text-decoration:underline; }
 .detail-meta div { padding: 2px 0; }
 .product-link { margin-top: 6px; display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; background: var(--primary-light); color: var(--primary); border-radius: var(--radius-full); font-size: 12px; font-weight: 500; }
 .product-link .rm { cursor: pointer; font-size: 14px; opacity: 0.6; }
@@ -208,18 +213,55 @@ input, select, textarea { font: inherit; color: inherit; }
         <input class="search-input" v-model="productQ" @input="searchProducts" placeholder="Search SKU or name...">
         <div v-if="productResults.length" style="margin-top:6px"><div v-for="p in productResults" :key="p.sku" class="filter-radio" :class="{active: filterProduct===p.sku}" @click="if(!editorDirty||confirm('You have unsaved changes. Discard them?')){closeEditor(true);filterProduct=filterProduct===p.sku?null:p.sku}">{{ p.sku }}</div></div>
       </div>
-      <div class="sidebar-section"><h3>Sort</h3>
-        <select class="select-sm" v-model="sortBy"><option value="newest">Newest</option><option value="oldest">Oldest</option><option value="name">Name</option></select>
-      </div>
-      <div class="sidebar-section" v-if="folders.length"><h3>Folders</h3>
-        <div v-for="f in folders" :key="f.path" class="folder-item" @click="if(!editorDirty||confirm('You have unsaved changes. Discard them?')){closeEditor(true);filterFolder=filterFolder===f.path?null:f.path;filterProduct=null;filterTag=null;filterType='all'}" :class="{active: filterFolder===f.path}">
-          <div class="folder-thumb" :style="'background-image:url('+getFolderThumb(f.path)+')'"></div>
-          <div><span class="folder-name">{{ f.path.split('/').pop() }}</span><span class="folder-count">{{ f.asset_count }}</span></div>
-          <div class="folder-path-hint">{{ f.path }}</div>
+      <div class="sidebar-section" v-if="folderTree.length"><h3>Folders</h3>
+        <div v-for="(n,i) in folderTree" :key="n.path">
+          <div class="tree-node" :class="{active: filterFolder===n.path}" @click="folderClick(n)" :style="{paddingLeft: (n.depth*16+8)+'px'}" :title="n.path">
+            <span class="tree-toggle" @click.stop="folderToggle(n)" v-if="n.children.length">▸</span>
+            <span class="tree-toggle" v-else style="visibility:hidden">▸</span>
+            <span class="tree-icon">📁</span>
+            <span class="tree-name">{{ n.name }}</span>
+            <span class="tree-count">{{ n.count }}</span>
+          </div>
+          <div v-if="n.expanded" class="tree-children">
+            <div v-for="c in n.children" :key="c.path">
+              <div class="tree-node sub" :class="{active: filterFolder===c.path}" @click="folderClick(c)" :style="{paddingLeft: ((c.depth||1)*16+8)+'px'}" :title="c.path">
+                <span class="tree-toggle" @click.stop="folderToggle(c)" v-if="c.children.length">▸</span>
+                <span class="tree-toggle" v-else style="visibility:hidden">▸</span>
+                <span class="tree-icon">📁</span>
+                <span class="tree-name">{{ c.name }}</span>
+                <span class="tree-count">{{ c.count }}</span>
+              </div>
+              <!-- 3rd+ levels -->
+              <template v-for="cc in (c.expanded?c.children:[])" :key="cc.path">
+                <div class="tree-node sub2" :class="{active: filterFolder===cc.path}" @click="folderClick(cc)" :style="{paddingLeft: ((cc.depth||2)*16+8)+'px'}" :title="cc.path">
+                  <span class="tree-toggle" @click.stop="folderToggle(cc)" v-if="cc.children.length">▸</span>
+                  <span class="tree-toggle" v-else style="visibility:hidden">▸</span>
+                  <span class="tree-icon">📁</span>
+                  <span class="tree-name">{{ cc.name }}</span>
+                  <span class="tree-count">{{ cc.count }}</span>
+                </div>
+                <template v-for="ccc in (cc.expanded?cc.children:[])" :key="ccc.path">
+                  <div class="tree-node sub3" :class="{active: filterFolder===ccc.path}" @click="folderClick(ccc)" :style="{paddingLeft: ((ccc.depth||3)*16+8)+'px'}" :title="ccc.path">
+                    <span class="tree-icon">📁</span>
+                    <span class="tree-name">{{ ccc.name }}</span>
+                    <span class="tree-count">{{ ccc.count }}</span>
+                  </div>
+                </template>
+              </template>
+            </div>
+          </div>
         </div>
       </div>
+      <!-- Breadcrumb when folder selected -->
+      <div v-if="filterFolder" class="folder-breadcrumb" style="margin-top:4px">
+        <a href="#" @click.prevent="folderClick(null)" style="font-size:11px">Root</a>
+        <template v-for="(seg,i) in filterFolder.split('/')" :key="i">
+          <span style="color:var(--text-muted)"> / </span>
+          <a href="#" @click.prevent="folderClickByPath(filterFolder.split('/').slice(0,i+1).join('/'))" style="font-size:11px">{{ seg }}</a>
+        </template>
+      </div>
       <div class="sidebar-section" style="margin-bottom:8px">
-        <button class="btn btn-secondary" style="width:100%;font-size:12px;padding:4px" @click="showNas=true;nasLoad('')">Browse NAS</button>
+        <button class="btn btn-secondary" style="width:100%;font-size:12px;padding:4px" @click="showNas=true;nasLoad('')">🌐 Browse NAS</button>
       </div>
       <div class="sidebar-section"><h3>Collections</h3>
         <button class="btn btn-primary" style="width:100%;font-size:12px;padding:4px;margin-bottom:4px" @click="openCollectionEditor()">+ New</button>
@@ -425,7 +467,23 @@ const showHistory=ref(false),editorVersions=ref([]),selectedVer=ref(null);
   function hasPendingAiTags(a){return a.ai_tags&&a.ai_tags.length&&!a.ai_tags_confirmed}
 
   async function loadCollections(){try{const r=await fetch('/api/collections');const d=await r.json();collections.value=d.collections||[]}catch(e){console.error(e)}}
+  const folderExpanded=ref({});
   async function loadFolders(){try{const r=await fetch('/api/folders');const d=await r.json();folders.value=d.folders||[]}catch(e){console.error(e)}}
+  const folderTree=computed(()=>{const tree=[];const map={};
+    folders.value.forEach(f=>{
+      const parts=f.path.split('/');const name=parts.pop();const parentPath=parts.join('/');
+      const node={path:f.path,name,count:f.asset_count,depth:parts.length,children:[],expanded:!!folderExpanded.value[f.path]};
+      map[f.path]=node;
+      if(!parentPath){tree.push(node)}else{if(map[parentPath]){map[parentPath].children.push(node)}else{tree.push(node)}}
+    });
+    // Sort children by name
+    const sortChildren=(nodes)=>{nodes.sort((a,b)=>a.name.localeCompare(b.name));nodes.forEach(n=>sortChildren(n.children))};
+    sortChildren(tree);
+    return tree;
+  });
+  function folderToggle(n){folderExpanded.value={...folderExpanded.value,[n.path]:!n.expanded}}
+  function folderClick(n){if(!editorDirty.value||confirm('Discard unsaved changes?')){closeEditor(true);if(!n){filterFolder.value=null;filterProduct.value=null;filterTag.value=null;filterType.value='all'}else{filterFolder.value=filterFolder.value===n.path?null:n.path;filterProduct.value=null;filterTag.value=null;filterType.value='all'}}}
+  function folderClickByPath(p){filterFolder.value=p;filterProduct.value=null;filterTag.value=null;filterType.value='all'}
   function getFolderThumb(path){return '/api/folders/'+encodeURIComponent(path)+'/thumbnail'}
   async function nasLoad(path){nasLoading.value=true;nasSelected.value=[];nasCurrent.value=path||'';try{const r=await fetch('/api/nas/browse?path='+encodeURIComponent(path||''));const d=await r.json();nasEntries.value=d.entries||[]}catch(e){toast('NAS browse failed','error')}nasLoading.value=false}
   async function nasImport(){if(!nasSelected.value.length)return;nasImporting.value=true;try{const r=await fetch('/api/nas/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({paths:nasSelected.value})});const d=await r.json();if(d.success){toast('Imported '+d.total+' file(s)');await loadAssets();await loadFolders();showNas.value=false}else{toast(d.error||'Import failed','error')}}catch(e){toast('Import failed','error')}nasImporting.value=false}
@@ -499,7 +557,7 @@ function rmLinkedSku(a,i){a.linked_skus.splice(i,1);saveDetail();toast('Unlinked
   watch(editorSkuItems,async()=>{await nextTick();initEditorSort()});
   watch(filtered,async()=>{await nextTick();initSort()});
 
-  return {assets,totalCount,loading,selectedIds,detailAsset,filterType,filterTag,filterProduct,sortBy,showUpload,uploading,dragOver,sidebarOpen,saving,productQ,productResults,detailQ,detailResults,toasts,typeFilters,allTags,filtered,thumbGrid,selectOne,clearAll,hasPendingAiTags,handlePick,handleDrop,processFiles,addTag,rmTag,confirmAi,linkSku,rmLinkedSku,saveDetail,searchProducts,searchForDetail,batchTag,batchLink,batchDelete,aiTagSelected,toast,fmtSize,fmtDate,collections,loadCollections,openCollectionEditor,showCollectionMenu,folders,filterFolder,loadFolders,getFolderThumb,showNas,nasCurrent,nasEntries,nasSelected,nasLoading,nasImporting,nasBreadcrumbs,nasLoad,nasImport,editorColl,editorSku,editorSkus,editorSkuItems,editorPick,editorPicked,editorDirty,editorGrid,openEditor,closeEditor,saveEditor,exportEditor,removeEditorItem,setEditorRole,openAssetPicker,togglePick,addPickedToEditor,addSkuToEditor,showHistory,editorVersions,selectedVer,openHistory,restoreVersion,getThumbByAssetId};
+  return {assets,totalCount,loading,selectedIds,detailAsset,filterType,filterTag,filterProduct,sortBy,showUpload,uploading,dragOver,sidebarOpen,saving,productQ,productResults,detailQ,detailResults,toasts,typeFilters,allTags,filtered,thumbGrid,selectOne,clearAll,hasPendingAiTags,handlePick,handleDrop,processFiles,addTag,rmTag,confirmAi,linkSku,rmLinkedSku,saveDetail,searchProducts,searchForDetail,batchTag,batchLink,batchDelete,aiTagSelected,toast,fmtSize,fmtDate,collections,loadCollections,openCollectionEditor,showCollectionMenu,folders,folderTree,folderExpanded,folderToggle,folderClick,folderClickByPath,filterFolder,loadFolders,getFolderThumb,showNas,nasCurrent,nasEntries,nasSelected,nasLoading,nasImporting,nasBreadcrumbs,nasLoad,nasImport,editorColl,editorSku,editorSkus,editorSkuItems,editorPick,editorPicked,editorDirty,editorGrid,openEditor,closeEditor,saveEditor,exportEditor,removeEditorItem,setEditorRole,openAssetPicker,togglePick,addPickedToEditor,addSkuToEditor,showHistory,editorVersions,selectedVer,openHistory,restoreVersion,getThumbByAssetId};
 }}).mount('#app');
 </script>
 </body>
