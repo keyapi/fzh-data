@@ -444,6 +444,93 @@ def folder_thumbnail(path: str):
     return Response(content=buf.read(), media_type="image/jpeg")
 
 
+# ── NAS Browse APIs ──────────────────────────────────
+
+@app.get("/api/nas/browse")
+def nas_browse(path: str = Query("", description="Relative path from NAS_ROOT")):
+    """列出 NAS 上的目录内容（子目录 + 文件）。"""
+    norm = path.replace("\\", "/").strip("/")
+    target = (NAS_ROOT / norm).resolve() if norm else NAS_ROOT.resolve()
+    # 防路径遍历
+    if not str(target).startswith(str(NAS_ROOT.resolve())):
+        return {"error": "Access denied", "entries": []}
+    if not target.exists():
+        return {"error": "Not found", "entries": []}
+    entries = []
+    for p in sorted(target.iterdir()):
+        name = p.name
+        if name.startswith(".") or name.startswith("__MACOSX"):
+            continue
+        rel = str(p.relative_to(NAS_ROOT)).replace("\\", "/")
+        if p.is_dir():
+            # 统计子目录中的图片数量
+            img_count = 0
+            try:
+                for ext in (".jpg", ".jpeg", ".png", ".gif", ".webp"):
+                    img_count += len(list(p.rglob(f"*{ext}")))
+            except Exception:
+                pass
+            entries.append({"type": "directory", "name": name, "path": rel, "image_count": img_count})
+        elif p.suffix.lower() in ALLOWED_EXTS:
+            entries.append({
+                "type": "file",
+                "name": name,
+                "path": rel,
+                "ext": p.suffix.lower(),
+                "size": p.stat().st_size,
+            })
+    return {"path": norm, "entries": entries}
+
+
+@app.get("/api/nas/thumbnail")
+def nas_thumbnail(path: str = Query(..., description="File path relative to NAS_ROOT")):
+    """即时生成 NAS 文件的缩略图。"""
+    norm = path.replace("\\", "/").strip("/")
+    target = (NAS_ROOT / norm).resolve()
+    if not str(target).startswith(str(NAS_ROOT.resolve())):
+        return Response(status_code=403)
+    if not target.is_file():
+        return Response(status_code=404)
+    try:
+        img = PILImage.open(target)
+        img.thumbnail(THUMB_SIZE, PILImage.LANCZOS)
+        if img.mode in ("RGBA", "P"):
+            img = img.convert("RGB")
+        buf = io.BytesIO()
+        img.save(buf, "JPEG", quality=70)
+        buf.seek(0)
+        return Response(content=buf.read(), media_type="image/jpeg")
+    except Exception:
+        return Response(status_code=415)
+
+
+@app.post("/api/nas/import")
+def nas_import(body: dict):
+    """将选中的 NAS 文件导入 DAM。从路径推断标签（style/fabric/color）。"""
+    paths = body.get("paths", [])
+    if not paths:
+        return {"success": False, "error": "No paths provided", "assets": []}
+    results = []
+    for rel_path in paths:
+        norm = rel_path.replace("\\", "/").strip("/")
+        target = (NAS_ROOT / norm).resolve()
+        if not str(target).startswith(str(NAS_ROOT.resolve())):
+            continue
+        if not target.is_file():
+            continue
+        if target.suffix.lower() not in ALLOWED_EXTS:
+            continue
+        data = target.read_bytes()
+        # 从路径推断初始标签
+        parts = norm.split("/")
+        inferred_tags = [p for p in parts[:-1] if p and not p.startswith(".")]
+        rel_dir = "/".join(parts[:-1]) if len(parts) > 1 else ""
+        r = _create_asset_from_bytes(data, target.name, rel_dir)
+        if r:
+            results.append(r)
+    return {"success": True, "assets": results, "total": len(results)}
+
+
 # ── Tag APIs ──────────────────────────────────────────
 
 @app.get("/api/tags")
