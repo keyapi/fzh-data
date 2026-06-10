@@ -1,6 +1,6 @@
 # DAM Prototype Session Summary (2026-06-10)
 
-> 18+ commits · Phase 3b → 4 → 5 · 状态: Phase 3b+4+5 完成 (Phase 5 已验证通过)
+> 20 commits · Phase 3b → 4 → 5 · 状态: Phase 3b+4+5 全部完成
 
 ## 目标回顾
 
@@ -154,15 +154,52 @@ d1db715 docs(dam): Phase 3b milestone + AGENT_HANDOFF update
 afa6911 feat(dam): PATCH collection items endpoint + SKU info
 920fe43 fix(dam): N+1 query + column letter + platform fallback warning
 bba73f1 feat(dam): multi-SKU multi-row Excel export
+f01606c fix(dam): Phase 5 ERPNext search — remove OR filter, verified working
+df585dc fix(dam): use or_filters for ERPNext Item search (code + name)
 ```
 
 ## 待完成
 
-- [ ] Phase 5: ERPNext API 在部署环境验证 (代码已就绪)
+- [x] Phase 5: ERPNext Item API — 已验证通过 (详见下方"Phase 5 调试记录")
 - [ ] Phase 6: a.vilavi.cn 替换 (OSS 防关联分发)
 - [ ] Phase 6b: 文件夹上传保留本地结构
 - [ ] Phase 7: 运营接入试用 + 反馈迭代
 - [ ] 跨 SKU 图片归属操作 2 (给图打多 PRODUCT 标签)
+
+## Phase 5 调试记录 & 经验教训
+
+### 问题过程
+
+1. **初版代码**: 把 `"OR"` 字符串塞进 `filters` 数组 → 404 `单据类型 OR未找到`
+2. **错误诊断**: 早期 curl 测试碰巧没用 OR 返回 200，误判为"Windows sockets 间歇超时"
+3. **第一次修复** (f01606c): 去掉 OR，只搜 item_code → 能工作，但丢失了 item_name 搜索
+4. **正确修复** (df585dc): 用 `or_filters` 独立参数，同时搜 item_code + item_name
+
+### 根因
+
+> Frappe API 的 `filters` 和 `or_filters` 是**两个独立参数**，不是把 `"OR"` 放进 `filters` 数组。
+
+```python
+# 错误
+{"filters": [["a","like","%x%"], "OR", ["b","like","%x%"]]}
+
+# 正确
+{"or_filters": [["a","like","%x%"], ["b","like","%x%"]]}
+```
+
+### Lesson: 先搜再造 — 包括搜已有 Skill
+
+项目已安装 `frappe-core-api` skill（包含完整的 filter/or_filters 参数文档），但在写代码前没有加载它。CLAUDE.md 的"先搜再造"三原则的第一条就是"搜项目内"。
+
+**改进规则**: 涉及 Frappe/ERPNext API 开发时，**必须先加载 `frappe-core-api` skill**，确认 API 参数格式后再写代码。
+
+### Lesson: 错误信息要认真解读
+
+`"单据类型 OR未找到"` = Frappe 把 "OR" 当成了 DocType 名称去数据库查找，说明 filters 数组里的 "OR" 被当成过滤条件而不是逻辑操作符。这本身就是正确的诊断线索。
+
+### Lesson: 参考已有实现
+
+`EN_API/` 模块里有成熟的 ErpnextClient 实现（upload_item_images.py 等），它们用的是 REST API（`GET /api/resource/Item` + URL 编码参数），不是 RPC API。如果先研究已有代码，会更早发现正确的参数格式。
 
 ## 关键文件
 
