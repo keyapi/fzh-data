@@ -116,4 +116,3 @@ Commit 格式：中文 `type(scope): description`。类型用 `feat` / `fix` / `
 - 代码 review：让 Agent 读 PR diff 做 review
 - 测试：Agent 运行脚本，检查 Excel 输出
 - 合并：Agent 执行 `git merge`
-// test direct push
