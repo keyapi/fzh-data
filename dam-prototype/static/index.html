@@ -169,14 +169,14 @@ input, select, textarea { font: inherit; color: inherit; }
   <div class="main">
     <aside class="sidebar" :class="{collapsed: !sidebarOpen}">
       <div class="sidebar-section"><h3>Type</h3>
-        <label class="filter-radio" v-for="t in typeFilters" :key="t.value" :class="{active: filterType===t.value}" @click="filterType=t.value; loadAssets()">{{ t.label }}<span class="count">{{ t.count }}</span></label>
+        <label class="filter-radio" v-for="t in typeFilters" :key="t.value" :class="{active: filterType===t.value}" @click="closeEditor(); filterType=t.value; loadAssets()">{{ t.label }}<span class="count">{{ t.count }}</span></label>
       </div>
       <div class="sidebar-section"><h3>Tags</h3>
-        <span v-for="t in allTags" :key="t.name" class="tag-chip" :class="{active: filterTag===t.name}" @click="filterTag = filterTag===t.name ? null : t.name; loadAssets()">{{ t.name }} {{ t.count }}</span>
+        <span v-for="t in allTags" :key="t.name" class="tag-chip" :class="{active: filterTag===t.name}" @click="closeEditor(); filterTag = filterTag===t.name ? null : t.name; loadAssets()">{{ t.name }} {{ t.count }}</span>
       </div>
       <div class="sidebar-section"><h3>Product</h3>
         <input class="search-input" v-model="productQ" @input="searchProducts" placeholder="Search SKU or name...">
-        <div v-if="productResults.length" style="margin-top:6px"><div v-for="p in productResults" :key="p.sku" class="filter-radio" :class="{active: filterProduct===p.sku}" @click="filterProduct = filterProduct===p.sku ? null : p.sku">{{ p.sku }}</div></div>
+        <div v-if="productResults.length" style="margin-top:6px"><div v-for="p in productResults" :key="p.sku" class="filter-radio" :class="{active: filterProduct===p.sku}" @click="closeEditor(); filterProduct = filterProduct===p.sku ? null : p.sku">{{ p.sku }}</div></div>
       </div>
       <div class="sidebar-section"><h3>Sort</h3>
         <select class="select-sm" v-model="sortBy"><option value="newest">Newest</option><option value="oldest">Oldest</option><option value="name">Name</option></select>
