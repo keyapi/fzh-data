@@ -147,8 +147,9 @@ uv run python main.py --port 8098
 
 ### 待完成
 
-- [x] Phase 5: ERPNext Item API — ErpnextClient + _NoExpectAdapter 就绪，需部署环境验证 (Windows uvicorn 网络限制)
+- [x] Phase 5: ERPNext Item API — 已验证通过，产品搜索对接 EN 测试系统正常
   - 设计文档: `docs/superpowers/specs/2026-06-10-dam-phase5-erpnext-integration.md`
+  - **已知限制**: `frappe.client.get_list` 不支持 OR filter，仅按 `item_code` like 搜索
 - [ ] Phase 6: a.vilavi.cn 替换 (OSS 防关联分发)
 - [ ] Phase 6b: 文件夹上传保留本地结构
 - [ ] Phase 7: 运营接入试用 + 反馈迭代

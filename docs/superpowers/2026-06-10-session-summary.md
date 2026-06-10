@@ -1,6 +1,6 @@
 # DAM Prototype Session Summary (2026-06-10)
 
-> 18 commits · Phase 3b → 4 → 5 · 状态: Phase 3b+4 完成, Phase 5 代码就绪待部署
+> 18+ commits · Phase 3b → 4 → 5 · 状态: Phase 3b+4+5 完成 (Phase 5 已验证通过)
 
 ## 目标回顾
 
@@ -70,7 +70,7 @@
 
 ---
 
-## 进行中: Phase 5 — ERPNext Item API 对接
+## 已完成: Phase 5 — ERPNext Item API 对接
 
 ### 设计
 
@@ -85,15 +85,15 @@
 |--------|------|
 | `cb2f8b1` | ErpnextClient 代码 + `.env.example` 更新 |
 
-### 已知问题: Python requests 在 Windows 上连接超时
+### 已知问题: OR filter 导致 404（已修复）
 
-**现象**: 
-- `curl` → `https://ensh.vilavi.cn` ✅ 200 OK (3s)
-- Python `requests.post()` → ❌ `[WinError 10060]` TCP connect timeout
-- Python `urllib` / `httpx` / `http.client` → 同问题
-- 不是代码错误——之前某次测试时 Python 也成功过 (200 OK)
+**现象**: `frappe.client.get_list` 用 OR filter 返回 404 `单据类型 OR未找到`
 
-**结论**: Python sockets 库在这台 Windows 上有间歇性连接问题。代码正确，在 Linux 部署环境或网络条件正常时应能工作。
+**根因**: EN 测试系统 (ensh.vilavi.cn) 的 `frappe.client.get_list` 不支持 filter 中的 OR 操作符
+
+**修复**: 去掉 OR，仅用 `[["item_code", "like", "%query%"]]` 单条件过滤
+- 早期误判为"Windows 连接超时"是因为测试时有时用 OR（404）有时没用（200）
+- 实际网络连接正常，`/api/method/ping` 和 `httpbin.org` 均可达
 
 ### 设计文档产出
 - `docs/superpowers/specs/2026-06-10-dam-phase5-erpnext-integration.md`

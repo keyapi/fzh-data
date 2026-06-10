@@ -98,21 +98,17 @@ class ErpnextClient:
         self.session = __import__("requests").Session()
         self.session.headers["Authorization"] = f"token {api_key}:{api_secret}"
         self.session.mount("https://", _NoExpectAdapter())
+        self.session.mount("http://", _NoExpectAdapter())
 
     def search_items(self, query: str, limit=20):
-        import json
         url = f"{self.base_url}/api/method/frappe.client.get_list"
         body = {
             "doctype": "Item",
             "fields": ["item_code", "item_name"],
-            "filters": [
-                ["item_code", "like", f"%{query}%"],
-                "OR",
-                ["item_name", "like", f"%{query}%"],
-            ],
+            "filters": [["item_code", "like", f"%{query}%"]],
             "limit_page_length": limit,
         }
-        resp = self.session.post(url, json=body, timeout=(10, 30))
+        resp = self.session.post(url, json=body, timeout=(30, 60))
         resp.raise_for_status()
         data = resp.json().get("message", [])
         return [{"sku": r["item_code"], "name": r["item_name"]} for r in data[:limit]]
