@@ -891,11 +891,15 @@ def update_collection_items(coll_id: str, data: dict):
 
     # Apply additions
     if "add" in data:
-        for img in data["add"]:
+        max_pos = max((ci.position for ci in c.items), default=-1)
+        for i, img in enumerate(data["add"]):
+            pos = img.get("position")
+            if pos is None:
+                pos = max_pos + 1 + i
             session.add(AssetCollectionItem(
                 collection_id=c.id,
                 asset_id=img["asset_id"],
-                position=img.get("position", 0),
+                position=pos,
                 role=img.get("role", "alternate"),
             ))
 
