@@ -11,6 +11,7 @@
 <link href="https://unpkg.com/filepond@4/dist/filepond.min.css" rel="stylesheet">
 <script src="https://unpkg.com/filepond@4/dist/filepond.min.js"></script>
 <script src="https://unpkg.com/sortablejs@1/Sortable.min.js"></script>
+<script src="https://unpkg.com/split.js@1/dist/split.min.js"></script>
 <style>
 :root {
   --font-sans: "Inter", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, sans-serif;
@@ -49,6 +50,34 @@ input, select, textarea { font: inherit; color: inherit; }
 .btn-ai { background: linear-gradient(135deg, #7C3AED, #2563EB); color: #FFF; } .btn-ai:hover { opacity: 0.92; }
 .btn-ai:disabled { opacity: 0.4; cursor: not-allowed; }
 .main { display: flex; flex: 1; overflow: hidden; }
+.split-container { display: flex; flex: 1; overflow: hidden; }
+.split-container .gutter { background: var(--border); transition: background 0.15s; }
+.split-container .gutter:hover { background: var(--primary); }
+.split-container .gutter.gutter-horizontal { cursor: col-resize; width: 6px; }
+.left-pane { flex: 1; overflow-y: auto; min-width: 0; padding: 16px 20px; }
+.right-pane { overflow-y: auto; min-width: 300px; background: var(--bg-sidebar); border-left: 1px solid var(--border); display: flex; flex-direction: column; }
+.right-pane-header { display: flex; align-items: center; gap: 6px; padding: 10px 12px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.right-pane-header .title { font-size: 13px; font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.right-pane-header .close-btn { font-size: 16px; padding: 2px 6px; border-radius: 4px; border: none; background: none; cursor: pointer; color: var(--text-muted); }
+.right-pane-header .close-btn:hover { background: var(--surface-hover); color: var(--text); }
+.right-pane-body { flex: 1; overflow-y: auto; padding: 10px 12px; }
+.right-pane-footer { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-top: 1px solid var(--border); background: var(--surface); flex-shrink: 0; font-size: 11px; color: var(--text-muted); }
+.right-pane-footer input[type="range"] { width: 60px; }
+.rp-collection-item { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+.rp-collection-item:hover { background: var(--surface-hover); }
+.rp-collection-item.active { background: var(--primary-light); color: var(--primary); }
+.rp-collection-item .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rp-collection-item .meta { font-size: 10px; color: var(--text-muted); }
+.rp-sku-group { margin-bottom: 12px; }
+.rp-sku-header { font-size: 12px; font-weight: 600; padding: 4px 0; cursor: pointer; user-select: none; display: flex; align-items: center; gap: 4px; }
+.rp-sku-header .count { font-size: 10px; color: var(--text-muted); font-weight: 400; }
+.rp-thumb-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+.rp-thumb-wrap { position: relative; border-radius: 4px; overflow: hidden; border: 1px solid var(--border); background: var(--border); }
+.rp-thumb-wrap img { display: block; object-fit: cover; }
+.rp-thumb-wrap .role-badge { position: absolute; bottom: 2px; right: 2px; font-size: 9px; padding: 1px 4px; border-radius: 3px; background: rgba(0,0,0,0.7); color: #fff; }
+.rp-drop-zone { border: 2px dashed var(--border); border-radius: 6px; padding: 10px; text-align: center; font-size: 11px; color: var(--text-muted); margin-top: 4px; transition: all 0.15s; }
+.rp-drop-zone:hover, .rp-drop-zone.over { border-color: var(--primary); background: var(--primary-light); color: var(--primary); }
+.rp-empty { text-align: center; padding: 30px 10px; color: var(--text-muted); font-size: 12px; }
 .sidebar { width: var(--sidebar-w); min-width: var(--sidebar-w); background: var(--bg-sidebar); border-right: 1px solid var(--border); padding: 16px 14px; overflow-y: auto; flex-shrink: 0; transition: margin-left 0.2s, opacity 0.2s; }
 .sidebar.collapsed { margin-left: calc(-1 * var(--sidebar-w)); opacity: 0; pointer-events: none; }
 .sidebar-section { margin-bottom: 18px; }
@@ -269,6 +298,7 @@ input, select, textarea { font: inherit; color: inherit; }
     <button class="btn btn-primary" @click="showUpload = true">+ Upload</button>
     <button class="btn btn-ai" @click="aiTagSelected" :disabled="selectedIds.length===0">AI Tag ({{ selectedIds.length }})</button>
     <button class="btn btn-secondary" @click="clearAll" v-if="selectedIds.length>0">Clear</button>
+    <button class="btn btn-secondary" @click="showRightPane=!showRightPane" :class="{active: showRightPane}" style="margin-left:auto" :title="showRightPane ? 'Close dual pane' : 'Open dual pane'">{{ showRightPane ? '▮' : '▯' }} Dual Pane</button>
   </header>
   <div class="main">
     <aside class="sidebar" :class="{collapsed: !sidebarOpen}">
@@ -306,7 +336,7 @@ input, select, textarea { font: inherit; color: inherit; }
       <div class="sidebar-section"><h3>Collections</h3>
         <button class="btn btn-primary" style="width:100%;font-size:12px;padding:4px;margin-bottom:4px" @click="openCollectionEditor()">+ New</button>
         <div id="collection-drop-zone">
-        <div v-for="c in collections" :key="c.id" class="filter-radio collection-item" :data-collection-id="c.id" style="margin-top:4px;font-size:12px;cursor:pointer" @click="openEditor(c)" @contextmenu.prevent="showCollectionMenu(c,$event)">
+        <div v-for="c in collections" :key="c.id" class="filter-radio collection-item" :data-collection-id="c.id" style="margin-top:4px;font-size:12px;cursor:pointer" @click="showRightPane ? openRightPaneCollection(c.id) : openEditor(c)" @contextmenu.prevent="showCollectionMenu(c,$event)">
           {{ c.name }} <span style="font-size:10px;color:var(--text-muted);margin-left:auto">v{{ c.version }}</span>
         </div>
         </div>
@@ -406,6 +436,41 @@ input, select, textarea { font: inherit; color: inherit; }
           </div>
         </div>
       </div>
+    </div>
+  </div>
+  <!-- Right Pane: Second Resource Browser -->
+  <div class="right-pane" v-if="showRightPane" :style="{width: '42%'}">
+    <div class="right-pane-header">
+      <span class="title" v-if="rpCollectionData">{{ rpCollectionData.name }}</span>
+      <span class="title" v-else>Collection Panel</span>
+      <button class="close-btn" @click="closeRightPane">✕</button>
+    </div>
+    <div class="right-pane-body" v-if="rpCollectionData">
+      <div class="rp-sku-group" v-for="sku in rpSkus" :key="sku.code">
+        <div class="rp-sku-header" @click="rpSkuFilter = rpSkuFilter===sku.code ? null : sku.code">
+          {{ rpSkuFilter===sku.code ? '▾' : '▸' }} SKU: {{ sku.code }} <span class="count">({{ sku.count }})</span>
+        </div>
+        <template v-if="rpSkuFilter===sku.code || !rpSkuFilter">
+          <div class="rp-thumb-grid">
+            <div class="rp-thumb-wrap" v-for="item in rpFilteredItems.filter(i=>(i.sku||'_unlinked')===sku.code)" :key="item.asset_id" :title="(item.filename||'')+' ['+item.role+']'" :style="{width:rpThumbSize+'px',height:rpThumbSize+'px'}">
+              <img :src="item.thumb_url || item.file_url || ''" :style="{width:rpThumbSize+'px',height:rpThumbSize+'px'}" loading="lazy">
+              <span class="role-badge" v-if="item.role">{{ item.role.slice(0,4) }}</span>
+            </div>
+          </div>
+          <div class="rp-drop-zone" id="rp-drop-zone" :style="{minHeight: rpThumbSize+'px'}">
+            Drop assets here → {{ sku.code }} (alternate)
+          </div>
+        </template>
+      </div>
+      <div class="rp-empty" v-if="!rpSkus.length">No items in this collection</div>
+    </div>
+    <div class="right-pane-body rp-empty" v-else>
+      Select a Collection from the sidebar (right-click or click when dual pane is open)
+    </div>
+    <div class="right-pane-footer">
+      <span>Thumb:</span>
+      <input type="range" min="50" max="160" v-model.number="rpThumbSize">
+      <span style="margin-left:auto">v{{ rpCollectionData?.version }}</span>
     </div>
   </div>
   <div class="detail-overlay" :class="{visible: !!detailAsset}" @click="detailAsset=null"></div>
@@ -559,6 +624,43 @@ createApp({setup(){
   const nasBreadcrumbs=computed(()=>{const s=[];if(!nasCurrent.value)return s;const p=nasCurrent.value.split('/');let a='';p.filter(x=>x).forEach(seg=>{a+=(a?'/':'')+seg;s.push({name:seg,path:a})});return s});
   const editorColl=ref(null),editorSku=ref(null),editorPick=ref(false),editorPicked=ref([]),editorDirty=ref(false);
 const showHistory=ref(false),editorVersions=ref([]),selectedVer=ref(null);
+  // Dual pane
+  const showRightPane=ref(false),rpCollectionId=ref(null),rpCollectionData=ref(null),rpSkuFilter=ref(null),rpThumbSize=ref(80);
+  async function openRightPaneCollection(cid){
+    rpCollectionId.value=cid;showRightPane.value=true;rpSkuFilter.value=null;
+    try{const r=await fetch('/api/collections/'+cid);rpCollectionData.value=await r.json();nextTick(initRightPaneDrop)}
+    catch(e){toast('Failed to load collection','error')}
+  }
+  function closeRightPane(){showRightPane.value=false}
+  const rpSkus=computed(()=>{
+    if(!rpCollectionData.value)return[];
+    const m={};rpCollectionData.value.items.forEach(i=>{const s=i.sku||'_unlinked';m[s]=(m[s]||0)+1});
+    return Object.entries(m).map(([code,cnt])=>({code,count:cnt}))
+  });
+  const rpFilteredItems=computed(()=>{
+    if(!rpCollectionData.value)return[];
+    if(!rpSkuFilter.value)return rpCollectionData.value.items;
+    return rpCollectionData.value.items.filter(i=>(i.sku||'_unlinked')===rpSkuFilter.value)
+  });
+  function initRightPaneDrop(){
+    const el=document.getElementById('rp-drop-zone');
+    if(!el)return;
+    if(el._sortable)el._sortable.destroy();
+    el._sortable=Sortable.create(el,{
+      group:{name:'dam',pull:false,put:true},
+      sort:false,
+      onAdd(evt){
+        const aid=evt.item.dataset.assetId;
+        const cid=rpCollectionData.value?.id;
+        if(!aid||!cid){evt.item.remove();return}
+        fetch('/api/collections/'+cid+'/items',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({add:[{asset_id:aid,role:'alternate'}]})})
+          .then(r=>{if(!r.ok)throw new Error('Failed');return r.json()})
+          .then(d=>{rpCollectionData.value=d;loadCollections();if(editorColl.value&&editorColl.value.id===cid){editorColl.value=d;editorDirty.value=true}})
+          .catch(()=>toast('Failed','error'));
+        evt.item.remove();
+      }
+    })
+  }
 
   function toast(m,t){t=t||'success';const id=Date.now();toasts.value.push({id,msg:m,type:t});setTimeout(()=>{toasts.value=toasts.value.filter(x=>x.id!==id)},2800)}
 
@@ -722,7 +824,7 @@ function rmLinkedSku(a,i){a.linked_skus.splice(i,1);saveDetail();toast('Unlinked
   watch(filtered,async()=>{await nextTick();initSort()});
   watch(collections,async()=>{await nextTick();initCollectionDrop()});
 
-  return {assets,totalCount,loading,selectedIds,detailAsset,filterType,filterTag,filterProduct,sortBy,showUpload,uploading,dragOver,sidebarOpen,saving,productQ,productResults,detailQ,detailResults,toasts,typeFilters,allTags,filtered,thumbGrid,selectOne,clearAll,hasPendingAiTags,handlePick,handleDrop,processFiles,addTag,rmTag,confirmAi,linkSku,rmLinkedSku,saveDetail,searchProducts,searchForDetail,batchTag,batchLink,batchDelete,aiTagSelected,toast,fmtSize,fmtDate,collections,loadCollections,openCollectionEditor,showCollectionMenu,showAssetMenu,folders,folderTree,flattenedFolderTree,folderExpanded,folderToggle,folderClick,folderClickByPath,filterFolder,currentSubfolders,loadFolders,getFolderThumb,showNas,nasView,nasSource,nasCurrent,nasEntries,nasSelected,nasToggleSelect,nasPreviewImg,nasPreviewFiles,nasPreviewIdx,nasPreviewNav,isNasImage,nasTreeNodes,nasLoading,nasImporting,nasHistory,nasHistIdx,nasPreview,nasBreadcrumbs,nasLoad,nasNavBack,nasNavFwd,nasTreeToggle,nasImport,flattenedNasTree,editorColl,editorSku,editorSkus,editorSkuItems,editorPick,editorPicked,editorDirty,editorGrid,openEditor,closeEditor,saveEditor,exportEditor,removeEditorItem,setEditorRole,openAssetPicker,togglePick,addPickedToEditor,addSkuToEditor,showHistory,editorVersions,selectedVer,openHistory,restoreVersion,getThumbByAssetId};
+  return {assets,totalCount,loading,selectedIds,detailAsset,filterType,filterTag,filterProduct,sortBy,showUpload,uploading,dragOver,sidebarOpen,saving,productQ,productResults,detailQ,detailResults,toasts,typeFilters,allTags,filtered,thumbGrid,selectOne,clearAll,hasPendingAiTags,handlePick,handleDrop,processFiles,addTag,rmTag,confirmAi,linkSku,rmLinkedSku,saveDetail,searchProducts,searchForDetail,batchTag,batchLink,batchDelete,aiTagSelected,toast,fmtSize,fmtDate,collections,loadCollections,openCollectionEditor,showCollectionMenu,showAssetMenu,folders,folderTree,flattenedFolderTree,folderExpanded,folderToggle,folderClick,folderClickByPath,filterFolder,currentSubfolders,loadFolders,getFolderThumb,showNas,nasView,nasSource,nasCurrent,nasEntries,nasSelected,nasToggleSelect,nasPreviewImg,nasPreviewFiles,nasPreviewIdx,nasPreviewNav,isNasImage,nasTreeNodes,nasLoading,nasImporting,nasHistory,nasHistIdx,nasPreview,nasBreadcrumbs,nasLoad,nasNavBack,nasNavFwd,nasTreeToggle,nasImport,flattenedNasTree,editorColl,editorSku,editorSkus,editorSkuItems,editorPick,editorPicked,editorDirty,editorGrid,openEditor,closeEditor,saveEditor,exportEditor,removeEditorItem,setEditorRole,openAssetPicker,togglePick,addPickedToEditor,addSkuToEditor,showHistory,editorVersions,selectedVer,openHistory,restoreVersion,getThumbByAssetId,showRightPane,openRightPaneCollection,closeRightPane,rpCollectionData,rpSkus,rpFilteredItems,rpSkuFilter,rpThumbSize};
 }}).mount('#app');
 </script>
 </body>
