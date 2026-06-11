@@ -732,14 +732,14 @@ const showHistory=ref(false),editorVersions=ref([]),selectedVer=ref(null);
   // Global cleanup for cancelled drags (ESC or drop outside valid target)
   // ESC cancel: permanent listener with capture phase (more reliable than dynamic add/remove)
   let _dragActive=false;
-  window.addEventListener('keydown',(e)=>{
+  document.addEventListener('keyup',(e)=>{
     if(e.key==='Escape'&&_dragActive){
       const ghosts=document.querySelectorAll('.sortable-ghost,.sortable-fallback');
       ghosts.forEach(el=>{el.classList.add('cancelling');el.style.pointerEvents='none'});
       document.body.style.userSelect='';
       _dragActive=false;
     }
-  },{capture:true});
+  });
   function _cancelDrag(){} // no-op, kept for compatibility
   document.addEventListener('mouseup',(e)=>{
     // If dropped outside valid target, SortableJS handles it naturally
@@ -755,9 +755,9 @@ const showHistory=ref(false),editorVersions=ref([]),selectedVer=ref(null);
         el._sortable=Sortable.create(el,{
           group:{name:'dam',pull:false,put:true},sort:false,forceFallback:true,fallbackOnBody:true,
           onMove(evt){
-            // Only accept drop if mouse is actually over this element
+            const oe=evt.originalEvent||evt;
             const elRect=el.getBoundingClientRect();
-            const mx=evt.original.clientX,my=evt.original.clientY;
+            const mx=oe.clientX,my=oe.clientY;
             return mx>=elRect.left&&mx<=elRect.right&&my>=elRect.top&&my<=elRect.bottom;
           },
           onStart(evt){ el.classList.add('drag-over');_dragActive=true},
