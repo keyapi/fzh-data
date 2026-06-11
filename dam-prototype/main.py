@@ -207,12 +207,16 @@ class SynologyNAS:
                 f"{self.base_url}/webapi/entry.cgi",
                 params={
                     "api": "SYNO.FileStation.Thumb", "version": "2", "method": "get",
-                    "path": path, "size": size, "_sid": self.sid,
+                    "path": f'"{path}"', "size": size, "_sid": self.sid,
                 },
                 timeout=15, verify=False, stream=True,
             )
             if resp.status_code == 200:
-                return resp.content, resp.headers.get("Content-Type")
+                ct = resp.headers.get("Content-Type", "")
+                if "application/json" in ct:
+                    print(f"[nas] thumbnail returned JSON (likely error): {resp.content[:200]}")
+                    return None, None
+                return resp.content, ct
         except Exception as e:
             print(f"[nas] thumbnail error: {e}")
         return None, None

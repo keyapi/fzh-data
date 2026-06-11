@@ -485,8 +485,8 @@ input, select, textarea { font: inherit; color: inherit; }
               <div v-if="e.type==='directory'" class="nas-grid-folder"><span class="nas-grid-fld-icon">📁</span><span class="nas-grid-fld-name">{{ e.name }}</span></div>
               <div v-else class="nas-grid-file">
                 <div class="nas-grid-file-check" v-if="nasSelected.includes(e.path)">✓</div>
-                <img v-if="e.has_thumbnail" :src="'/api/nas/thumbnail?path='+encodeURIComponent(e.path)" class="nas-grid-img" loading="lazy">
-                <span v-else class="nas-grid-file-icon">🖼️</span>
+                <img v-if="isNasImage(e.name)" :src="'/api/nas/thumbnail?path='+encodeURIComponent(e.path)" class="nas-grid-img" loading="lazy" @error="e.target.style.display='none'">
+                <span v-if="!isNasImage(e.name)" class="nas-grid-file-icon">🖼️</span>
                 <span class="nas-grid-file-name">{{ e.name }}</span>
               </div>
             </div>
@@ -495,7 +495,7 @@ input, select, textarea { font: inherit; color: inherit; }
           <div v-if="!nasLoading&&nasView==='list'" class="nas-list">
             <div v-for="e in nasEntries" :key="e.path" class="nas-list-row" :class="{selected:nasSelected.includes(e.path)}" @click="e.type==='directory'?nasLoad(e.path):nasToggleSelect(e.path)" @dblclick="e.type==='directory'?nasLoad(e.path):nasPreviewImg(e)">
               <span style="width:20px;text-align:center;font-size:11px">{{ e.type==='file'&&nasSelected.includes(e.path)?'✓':'' }}</span>
-              <img v-if="e.type==='file'&&e.has_thumbnail" :src="'/api/nas/thumbnail?path='+encodeURIComponent(e.path)" style="width:28px;height:28px;object-fit:cover;border-radius:2px;flex-shrink:0">
+              <img v-if="e.type==='file'&&isNasImage(e.name)" :src="'/api/nas/thumbnail?path='+encodeURIComponent(e.path)" style="width:28px;height:28px;object-fit:cover;border-radius:2px;flex-shrink:0" @error="e.target.style.display='none'">
               <span v-else style="width:28px;text-align:center;flex-shrink:0">{{ e.type==='directory'?'📁':'📄' }}</span>
               <span class="nas-list-name">{{ e.name }}</span>
               <span class="nas-list-meta" v-if="e.type==='file'">{{ fmtSize(e.size) }}</span>
@@ -547,7 +547,8 @@ createApp({setup(){
   const nasLoading=ref(false),nasImporting=ref(false);
   const nasHistory=ref([]),nasHistIdx=ref(-1),nasPreview=ref(null),nasPreviewIdx=ref(0),nasPreviewFiles=ref([]);
   function nasToggleSelect(path){const i=nasSelected.value.indexOf(path);if(i>=0)nasSelected.value.splice(i,1);else nasSelected.value.push(path)}
-  function nasPreviewImg(e){const imgs=nasEntries.value.filter(x=>x.type==='file'&&/\.(jpg|jpeg|png|gif|webp)$/i.test(x.name));nasPreviewFiles.value=imgs.map(x=>x.path);nasPreviewIdx.value=imgs.findIndex(x=>x.path===e.path);if(nasPreviewIdx.value<0)nasPreviewIdx.value=0;nasPreview.value=e.path}
+  function isNasImage(name){return /\.(jpg|jpeg|jpe|bmp|png|tif|tiff|gif|arw|srf|sr2|dcr|k25|kdc|cr2|crw|nef|mrw|ptx|pef|raf|3fr|erf|mef|mos|orf|rw2|dng|x3f|heic|raw)$/i.test(name)}
+  function nasPreviewImg(e){const imgs=nasEntries.value.filter(x=>x.type==='file'&&isNasImage(x.name));nasPreviewFiles.value=imgs.map(x=>x.path);nasPreviewIdx.value=imgs.findIndex(x=>x.path===e.path);if(nasPreviewIdx.value<0)nasPreviewIdx.value=0;nasPreview.value=e.path}
   function nasPreviewNav(dir){nasPreviewIdx.value=(nasPreviewIdx.value+dir+nasPreviewFiles.value.length)%nasPreviewFiles.value.length;nasPreview.value=nasPreviewFiles.value[nasPreviewIdx.value]}
   const nasBreadcrumbs=computed(()=>{const s=[];if(!nasCurrent.value)return s;const p=nasCurrent.value.split('/');let a='';p.filter(x=>x).forEach(seg=>{a+=(a?'/':'')+seg;s.push({name:seg,path:a})});return s});
   const editorColl=ref(null),editorSku=ref(null),editorPick=ref(false),editorPicked=ref([]),editorDirty=ref(false);
@@ -676,7 +677,7 @@ function rmLinkedSku(a,i){a.linked_skus.splice(i,1);saveDetail();toast('Unlinked
   watch(editorSkuItems,async()=>{await nextTick();initEditorSort()});
   watch(filtered,async()=>{await nextTick();initSort()});
 
-  return {assets,totalCount,loading,selectedIds,detailAsset,filterType,filterTag,filterProduct,sortBy,showUpload,uploading,dragOver,sidebarOpen,saving,productQ,productResults,detailQ,detailResults,toasts,typeFilters,allTags,filtered,thumbGrid,selectOne,clearAll,hasPendingAiTags,handlePick,handleDrop,processFiles,addTag,rmTag,confirmAi,linkSku,rmLinkedSku,saveDetail,searchProducts,searchForDetail,batchTag,batchLink,batchDelete,aiTagSelected,toast,fmtSize,fmtDate,collections,loadCollections,openCollectionEditor,showCollectionMenu,folders,folderTree,folderExpanded,folderToggle,folderClick,folderClickByPath,filterFolder,currentSubfolders,loadFolders,getFolderThumb,showNas,nasView,nasSource,nasCurrent,nasEntries,nasSelected,nasToggleSelect,nasPreviewImg,nasTreeNodes,nasLoading,nasImporting,nasHistory,nasHistIdx,nasPreview,nasBreadcrumbs,nasLoad,nasNavBack,nasNavFwd,nasTreeToggle,nasImport,editorColl,editorSku,editorSkus,editorSkuItems,editorPick,editorPicked,editorDirty,editorGrid,openEditor,closeEditor,saveEditor,exportEditor,removeEditorItem,setEditorRole,openAssetPicker,togglePick,addPickedToEditor,addSkuToEditor,showHistory,editorVersions,selectedVer,openHistory,restoreVersion,getThumbByAssetId};
+  return {assets,totalCount,loading,selectedIds,detailAsset,filterType,filterTag,filterProduct,sortBy,showUpload,uploading,dragOver,sidebarOpen,saving,productQ,productResults,detailQ,detailResults,toasts,typeFilters,allTags,filtered,thumbGrid,selectOne,clearAll,hasPendingAiTags,handlePick,handleDrop,processFiles,addTag,rmTag,confirmAi,linkSku,rmLinkedSku,saveDetail,searchProducts,searchForDetail,batchTag,batchLink,batchDelete,aiTagSelected,toast,fmtSize,fmtDate,collections,loadCollections,openCollectionEditor,showCollectionMenu,folders,folderTree,flattenedFolderTree,folderExpanded,folderToggle,folderClick,folderClickByPath,filterFolder,currentSubfolders,loadFolders,getFolderThumb,showNas,nasView,nasSource,nasCurrent,nasEntries,nasSelected,nasToggleSelect,nasPreviewImg,nasPreviewFiles,nasPreviewIdx,nasPreviewNav,isNasImage,nasTreeNodes,nasLoading,nasImporting,nasHistory,nasHistIdx,nasPreview,nasBreadcrumbs,nasLoad,nasNavBack,nasNavFwd,nasTreeToggle,nasImport,flattenedNasTree,editorColl,editorSku,editorSkus,editorSkuItems,editorPick,editorPicked,editorDirty,editorGrid,openEditor,closeEditor,saveEditor,exportEditor,removeEditorItem,setEditorRole,openAssetPicker,togglePick,addPickedToEditor,addSkuToEditor,showHistory,editorVersions,selectedVer,openHistory,restoreVersion,getThumbByAssetId};
 }}).mount('#app');
 </script>
 </body>
