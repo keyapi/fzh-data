@@ -1,6 +1,6 @@
 # DAM Prototype Session Summary (2026-06-10 — 2026-06-11)
 
-> 36 commits · Phase 3b → 4 → 5 → 6b → NAS · 状态: 全部完成
+> 39 commits · Phase 3b → 4 → 5 → 6b → NAS · 状态: 全部完成
 
 ## 目标回顾
 
@@ -157,7 +157,7 @@ afa6911 feat(dam): PATCH collection items endpoint + SKU info
 bba73f1 feat(dam): multi-SKU multi-row Excel export
 ```
 
-### 本 session (Phase 5 修复 + 6b + NAS + 文档, 19 commits)
+### 本 session (Phase 5 修复 + 6b + NAS + 文档 + Bug修复, 22 commits)
 ```
 f01606c fix(dam): Phase 5 ERPNext search — remove OR filter, verified working
 df585dc fix(dam): use or_filters for ERPNext Item search (code + name)
@@ -178,17 +178,61 @@ eac6bc2 feat(dam): 文件夹浏览头部 + 子文件夹卡片网格
 ef3fd64 fix(dam): 空缩略图 + NAS 浏览器重设计 + 去重修复
 546d8e6 feat(dam): Windows 风格双面板 NAS 资源管理器
 dc9391a docs(dam): 全面更新 session summary + AGENT_HANDOFF
+738cbd9 docs(dam): 第二轮全面更新 — 修正 commit 计数 + 追加经验教训
+13ffc00 fix(dam): NAS tree panel + image preview nav + recursive folder trees
+d1c81db fix(dam): NAS thumbnail path quoting + setup return missing variables
 ```
 
 ## 待完成
 
 - [x] Phase 5: ERPNext Item API — 已验证通过 (正确 fix: `or_filters` 独立参数)
 - [x] Phase 6b: 文件夹上传保留本地结构 — webkitdirectory 实现
+- [x] NAS 左侧树面板 — `/api/nas/tree` 端点 + `flattenedNasTree` 递归渲染
+- [x] NAS 缩略图 — Synology API path 引号修正 + `isNasImage()` 扩展正则
+- [x] 文件夹树递归渲染 — `flattenedFolderTree` 替代 4 级硬编码模板
 - [ ] Phase 6: a.vilavi.cn 替换 (OSS 防关联分发)
-- [ ] 文件夹缩略图拼贴 — API 已实现，前端子文件夹卡片已显示
-- [ ] NAS 浏览器完善 — 真实 Synology 已连接，但左侧树和预览有已知问题
-- [ ] Phase 7: 运营接入试用 + 反馈迭代
-- [ ] 跨 SKU 图片归属操作 2 (给图打多 PRODUCT 标签)
+- [ ] Phase 7: NAS→Assets 拖拽导入 + Assets→Collection 拖拽
+- [ ] Phase 8: Smart Collection (基于规则自动填充)
+
+### 已知问题（全部已修复）
+1. ~~NAS 左侧树面板不显示~~ → 添加 `/api/nas/tree` 端点 (`13ffc00`)
+2. ~~NAS 图片预览未完整实现~~ → 修复 path 引号 + `isNasImage()` (`d1c81db`)
+3. ~~文件夹树深度硬编码 4 级~~ → `flattenedFolderTree` 递归 computed (`13ffc00`)
+4. ~~控制台 `.length of undefined` 错误~~ → setup() return 补全 6 个变量 (`d1c81db`)
+
+## 调试记录: 2026-06-11 三个 Bug 的根因分析
+
+### Bug 1: NAS 树面板不显示
+- **症状**: Browse NAS 打开后左侧空列
+- **调用链**: `nasLoad()` → fetch `/api/nas/tree?path=` → **404 (端点不存在)**
+- **根因**: commit `546d8e6` 只用前端双面板，未添加后端端点
+- **修复**: 在 `main.py` 添加 `@app.get("/api/nas/tree")` (NAS API + 本地 fallback)
+
+### Bug 2: NAS 图片无缩略图
+- **症状**: 所有图片显示 🖼️ 占位符
+- **调用链**: `get_thumbnail()` → Synology `SYNO.FileStation.Thumb` → path 参数格式错误
+- **根因**: Synology API 要求 `path=f'"{path}"'` (双引号包裹)，代码未加
+- **关键发现**: vilavi_pim `nas.py:132` 有注释 "Path must be wrapped in quotes per Synology API spec"
+- **修复**: `"path": f'"{path}"'` + JSON error detection + 前端 `isNasImage()` 替代不可靠的 `has_thumbnail`
+
+### Bug 3: 文件夹树 + NAS 树 + 所有 JS 报错
+- **症状**: FOLDERS 标题显示但无子节点，控制台反复报 `.length of undefined`
+- **根因分析过程**:
+  1. `folderTree` computed 数据正确 (2 个根节点)
+  2. `flattenedFolderTree` computed 逻辑正确
+  3. 模板 `v-for="n in flattenedFolderTree"` 不输出
+  4. `.bak` 文件也有相同错误 → 预置 bug
+  5. **关键突破**: Vue 3 `setup()` return 语句搜索 → 6 个变量未暴露
+- **根因**: `flattenedFolderTree`, `flattenedNasTree`, `isNasImage`, `nasPreviewFiles`, `nasPreviewIdx`, `nasPreviewNav` 全部在 setup 中 `const` 声明但**未 return**给模板
+- **Vue 3 行为**: CDN 模式下遗漏 return 不报错，变量静默为 `undefined`，`undefined.length` → TypeError
+- **修复**: 全部添加到 return 语句
+
+### 新经验教训
+1. **先搜已有实现**: vilavi_pim 有正确 API 调用方式，2 分钟读代码 > 2 小时调试
+2. **Vue 3 setup() return**: CDN 模式下遗漏不报错，变量静默 undefined — 最难发现的 bug 类型
+3. **`.length` 报错优先查 template → setup 变量映射**: 90% 是变量未暴露给模板
+4. **Synology API 特殊性**: FileStation.Thumb path 必须双引号 (与 FileStation.List folder_path 不同)
+5. **git add -A 陷阱**: 某次提交意外包含 56 个文件
 
 ## Phase 5 调试记录 & 经验教训
 

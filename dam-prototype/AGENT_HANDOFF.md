@@ -148,12 +148,12 @@ uv run python main.py --port 8098
   - `docs/superpowers/research/2026-06-10-dam-industry-research.md` (AEM + 13+ 系统)
   - `docs/superpowers/research/2026-06-10-erpnext-file-storage-nas.md` (存储架构)
 
-### 已知问题 (待修复)
+### 已知问题 (全部已修复 ✅)
 
-1. **NAS 左侧树不显示**: 最后 commit `546d8e6` 后 Vue 树面板不渲染。之前版本正常。
-2. **NAS 图片预览未完整实现**: vilavi_pim 有灯箱预览（`get_thumbnail` API），我们的 API 已实现但前端可能未正确调用。
-3. **文件夹树深度硬编码 4 级**: 模板非递归，深层嵌套不显示。
-4. **ERPNext Item 搜索仅 item_code+item_name**: 使用 `or_filters` 正确修复后支持双字段 like 搜索。
+1. ~~NAS 左侧树不显示~~ → 添加 `/api/nas/tree` 端点 + `flattenedNasTree` 递归渲染 (`13ffc00`)
+2. ~~NAS 图片预览未完整实现~~ → 修复 Synology path 引号 + `isNasImage()` 扩展正则 (`d1c81db`)
+3. ~~文件夹树深度硬编码 4 级~~ → `flattenedFolderTree` 递归 computed 替代硬编码模板 (`13ffc00`)
+4. ~~控制台 `.length of undefined` 错误~~ → setup() return 补全 6 个缺失变量 (`d1c81db`)
 
 ### 待完成
 
@@ -188,6 +188,25 @@ uv run python main.py --port 8098
 
 **7. `file_url` 需包含子目录路径**
 > 上传到 `files/subdir/uuid.jpg` 时，`_file_rel()` 必须从 `stored_path` 提取 `files/` 后的完整相对路径，否则缩略图和预览 404。
+
+**8. Vue 3 CDN setup() return 陷阱**
+> `setup()` 中 `const` 声明的变量如果未在 return 中暴露，模板里静默为 `undefined`，**不会报错**。
+> `v-for="n in undefined"` → 空输出，`undefined.length` → TypeError。
+> 当出现 `.length of undefined` 渲染错误时，优先检查 setup() return 是否遗漏变量。
+> 如 `flattenedFolderTree`, `isNasImage`, `nasPreviewFiles` 等 6 个变量漏 return 导致所有渲染失败。
+
+**9. Synology FileStation.Thumb path 必须用双引号包裹**
+> ```python
+> # 错误: "path": path
+> # 正确: "path": f'"{path}"'  # Synology API 要求，FileStation.List 不需要
+> ```
+> 参考 vilavi_pim `nas.py:132` 注释 "Path must be wrapped in quotes per Synology API spec"。
+> **教训**: 任何第三方 API 开发前，先搜项目中是否有现有实现可参考。
+
+**10. Synology `has_thumbnail` 字段不可靠**
+> `SYNO.FileStation.List` 返回的 `has_thumbnail` 可能为 false 即使文件支持缩略图。
+> 应用层应使用文件扩展名判断是否尝试加载缩略图，用 `@error` fallback 处理失败。
+> vilavi_pim `item_group_nas.js:331-332` 有完整的 Synology 支持格式列表（含 RAW: arw/cr2/nef/dng 等）。
 
 ### 关键配置
 
