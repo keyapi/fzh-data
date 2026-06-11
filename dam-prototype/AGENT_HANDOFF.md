@@ -296,31 +296,55 @@ dam-prototype/
 PR #4: https://github.com/keyapi/fzh-data/pull/4
 
 
-## 8.5 双面板 Collection 树浏览器 (2026-06-11)
+## 8.5 双面板 Collection 浏览器 (2026-06-11 v2 — Inline SKU Strip)
 
-### 架构
+### 架构 (方案 A: 对称独立面板)
 
-- **左面板**: Assets 网格 + 文件名搜索栏 (leftSearch + leftFiltered)
-- **右面板**: Collection 树状浏览器
+- **左面板**: Assets 网格 + 文件名搜索 (leftSearch + leftFiltered) + sidebar 筛选
+- **右面板**: Collection 树状浏览器 (inline SKU thumbnail strip 模式)
   - 顶层: 所有 Collection 列表 (可搜索 rpSearch)
-  - 展开 Collection → 显示 SKU 子节点 (类似文件夹)
-  - 点击 SKU → 展开该 SKU 下的图片缩略图网格
-  - 每个 SKU 下方有 drop zone → 从左侧拖入 Assets
-  - 图片 hover 显示 x 按钮 → 从 Collection 移除引用 (不删除资产)
-- **sidebar**: 保留 Type/Tags/Product/Folders/NAS/Collections 快速导航
-- **拖拽**: SortableJS group=dam + forceFallback:true + fallbackOnBody:true
-  - Assets (pull:clone, put:false) → Collection drop zones (pull:false, put:true)
-  - 不支持反向拖拽 (Collection → Assets), 用 x 按钮移除引用
+  - 展开 Collection → 每个 SKU 一行 (`.rp-sku-row`)
+  - 每行: 左边 SKU 代码 | 右边横向缩略图条 (`.rp-thumb-strip`)
+  - 缩略图大小可调 (rpThumbSize slider, 40-140px)
+  - 图片 hover → ✕ 按钮移除引用 (不删除资产)
+  - SKU 行本身即 drop target → 从左边拖入 Assets 直接添加到对应 SKU
+- **sidebar**: Type/Tags/Product/Folders/NAS/Collections (保留可折叠)
+- **拖拽**: SortableJS group=dam + forceFallback + fallbackOnBody
+  - Assets (pull:clone, put:false) → SKU rows (pull:false, put:true)
+  - 拖拽悬停时 SKU 行高亮 (`.rp-sku-row.drag-over`)
+  - 不支持反向拖拽 (Collection → Assets), ✕ 按钮代替
 
 ### 关键状态
 - rpExpandedCollections (reactive Set) — 哪些 Collection 展开了
-- rpActiveSku (reactive {}) — 每个 Collection 当前选中哪个 SKU
 - rpCollectionItems (reactive {}) — 懒加载的 Collection items 缓存
+- rpThumbSize (ref) — 缩略图大小 (默认 80px)
+- rpSearch — Collection 名搜索过滤
 
-### Git (最新 3 commits)
+### 设计决策
+- **不点击 SKU 逐个展开**: 全局鸟瞰，所有 SKU inline 显示缩略图
+- **Collection 删除引用**: 仅移除指针，不影响 Asset (AEM/Bynder 标准)
+- **无反向拖拽**: Collection→Assets 无意义，Asset 本来就在 Assets 里
+- **dock 位置**: 当前仅右侧，代码结构预留 bottom 切换 (类似 Chrome DevTools)
+
+### UI 改进 (vs v1)
+| v1 (之前) | v2 (现在) |
+|-----------|----------|
+| 点击 SKU 才展开图片 | 展开 Collection 后所有 SKU inline |
+| 独立 `.rp-drop-zone` div | SKU 行即 drop target |
+| Drop zone 占整行空间 | 紧凑，高亮整行 |
+| 无缩略图大小调节 | rpThumbSize slider |
+
+### 面板分割
+- split.js 可拖拽分割条 (`.gutter.gutter-horizontal`)
+- 从 sidebar CSS 前插入 gutter 样式
+- 右面板 `flex: 0 0 42%` → `overflow-y: auto` (split.js 控制宽度)
+
+### Git (最新)
+b6984a1 docs(dam): 更新 session summary + AGENT_HANDOFF
 2c830d5 feat(dam): 左面板文件名搜索 + leftFiltered
 5cfeb42 feat(dam): 右面板重构为树状 Collection→SKU 浏览器
 b956ca4 fix(dam): CSS 布局修复 + SortableJS forceFallback
+
 ## 9. 关联系统
 
 - **ERPNext** (ensh.vilavi.cn): REST API, FAC MCP 工具

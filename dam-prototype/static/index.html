@@ -50,7 +50,7 @@ input, select, textarea { font: inherit; color: inherit; }
 .btn-ai { background: linear-gradient(135deg, #7C3AED, #2563EB); color: #FFF; } .btn-ai:hover { opacity: 0.92; }
 .btn-ai:disabled { opacity: 0.4; cursor: not-allowed; }
 .main { display: flex; flex: 1; overflow: hidden; }
-.right-pane { flex: 0 0 42%; overflow-y: auto; min-width: 280px; background: var(--bg-sidebar); border-left: 1px solid var(--border); display: flex; flex-direction: column; }
+.right-pane { overflow-y: auto; min-width: 280px; background: var(--bg-sidebar); border-left: 1px solid var(--border); display: flex; flex-direction: column; }
 .right-pane-header { display: flex; align-items: center; gap: 6px; padding: 10px 12px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
 .right-pane-header .title { font-size: 13px; font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .right-pane-header .close-btn { font-size: 16px; padding: 2px 6px; border-radius: 4px; border: none; background: none; cursor: pointer; color: var(--text-muted); }
@@ -59,42 +59,36 @@ input, select, textarea { font: inherit; color: inherit; }
 .right-pane-footer { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-top: 1px solid var(--border); background: var(--surface); flex-shrink: 0; font-size: 11px; color: var(--text-muted); }
 .right-pane-footer input[type="range"] { width: 60px; }
 /* Right Pane Collection Tree */
-.rp-tree-collection { margin-bottom: 2px; }
-.rp-tree-node { display: flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; user-select: none; }
+.rp-tree-collection { margin-bottom: 4px; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.rp-tree-node { display: flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 0; cursor: pointer; font-size: 12px; user-select: none; }
 .rp-tree-node:hover { background: var(--surface-hover); }
-.rp-tree-node.collection { font-weight: 500; }
-.rp-tree-node.sku { padding-left: 24px; }
-.rp-tree-node.sku.active { background: var(--primary-light); color: var(--primary); }
+.rp-tree-node.collection { font-weight: 500; padding: 6px 10px; background: var(--bg-sidebar); border-bottom: 1px solid var(--border); }
 .rp-tree-node .tree-toggle { width: 14px; font-size: 10px; color: var(--text-muted); flex-shrink: 0; text-align: center; }
 .rp-tree-node .tree-icon { font-size: 14px; flex-shrink: 0; }
 .rp-tree-node .tree-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rp-tree-node .tree-count { font-size: 10px; color: var(--text-muted); flex-shrink: 0; }
 .rp-tree-node .tree-meta { font-size: 10px; color: var(--text-muted); flex-shrink: 0; }
-.rp-sku-content { padding: 6px 0 6px 24px; }
-.rp-sku-content .rp-thumb-grid { display: flex; flex-wrap: wrap; gap: 4px; }
-.rp-sku-content .rp-thumb-wrap { position: relative; border-radius: 4px; overflow: hidden; border: 1px solid var(--border); cursor: pointer; flex-shrink: 0; }
-.rp-sku-content .rp-thumb-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.rp-sku-content .rp-thumb-wrap .role-badge { position: absolute; bottom: 2px; left: 2px; background: rgba(0,0,0,0.6); color: #FFF; font-size: 8px; padding: 1px 4px; border-radius: 2px; }
-.rp-sku-content .rp-thumb-wrap .rp-rm-btn { position: absolute; top: 1px; right: 1px; width: 14px; height: 14px; background: rgba(0,0,0,0.5); color: #FFF; font-size: 10px; display: none; align-items: center; justify-content: center; border-radius: 50%; cursor: pointer; }
-.rp-sku-content .rp-thumb-wrap:hover .rp-rm-btn { display: flex; }
-.rp-drop-zone { margin-top: 4px; border: 2px dashed var(--border); border-radius: var(--radius); padding: 8px; text-align: center; font-size: 11px; color: var(--text-muted); transition: border-color var(--transition), background var(--transition); }
-.rp-drop-zone:hover, .rp-drop-zone.drag-over { border-color: var(--primary); background: var(--primary-light); }
-
-.rp-collection-item { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; }
-.rp-collection-item:hover { background: var(--surface-hover); }
-.rp-collection-item.active { background: var(--primary-light); color: var(--primary); }
-.rp-collection-item .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rp-collection-item .meta { font-size: 10px; color: var(--text-muted); }
-.rp-sku-group { margin-bottom: 12px; }
-.rp-sku-header { font-size: 12px; font-weight: 600; padding: 4px 0; cursor: pointer; user-select: none; display: flex; align-items: center; gap: 4px; }
-.rp-sku-header .count { font-size: 10px; color: var(--text-muted); font-weight: 400; }
-.rp-thumb-grid { display: flex; flex-wrap: wrap; gap: 6px; }
-.rp-thumb-wrap { position: relative; border-radius: 4px; overflow: hidden; border: 1px solid var(--border); background: var(--border); }
+.rp-sku-row { display: flex; align-items: flex-start; gap: 8px; padding: 6px 8px; border-bottom: 1px solid var(--border); transition: background 0.15s, box-shadow 0.15s; min-height: 48px; }
+.rp-sku-row:last-child { border-bottom: none; }
+.rp-sku-row.drag-over { background: var(--primary-light); box-shadow: inset 0 0 0 2px var(--primary); }
+.rp-sku-row .rp-sku-label { width: 100px; flex-shrink: 0; display: flex; flex-direction: column; justify-content: center; min-height: 40px; }
+.rp-sku-row .rp-sku-code { font-size: 12px; font-weight: 600; color: var(--text); word-break: break-all; }
+.rp-sku-row .rp-sku-n { font-size: 10px; color: var(--text-muted); }
+.rp-thumb-strip { display: flex; gap: 4px; overflow-x: auto; overflow-y: hidden; flex: 1; align-items: center; padding: 2px 0; }
+.rp-thumb-strip::-webkit-scrollbar { height: 4px; }
+.rp-thumb-strip::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+.rp-thumb-wrap { position: relative; border-radius: 4px; overflow: hidden; border: 1px solid var(--border); background: var(--border); flex-shrink: 0; }
 .rp-thumb-wrap img { display: block; object-fit: cover; }
-.rp-thumb-wrap .role-badge { position: absolute; bottom: 2px; right: 2px; font-size: 9px; padding: 1px 4px; border-radius: 3px; background: rgba(0,0,0,0.7); color: #fff; }
-.rp-drop-zone { border: 2px dashed var(--border); border-radius: 6px; padding: 10px; text-align: center; font-size: 11px; color: var(--text-muted); margin-top: 4px; transition: all 0.15s; }
-.rp-drop-zone:hover, .rp-drop-zone.over { border-color: var(--primary); background: var(--primary-light); color: var(--primary); }
+.rp-thumb-wrap .rp-rm-btn { position: absolute; top: 1px; right: 1px; width: 16px; height: 16px; background: rgba(0,0,0,0.55); color: #FFF; font-size: 10px; display: none; align-items: center; justify-content: center; border-radius: 50%; cursor: pointer; line-height: 1; }
+.rp-thumb-wrap:hover .rp-rm-btn { display: flex; }
+.rp-thumb-wrap .role-badge { position: absolute; bottom: 2px; left: 2px; font-size: 8px; padding: 1px 4px; border-radius: 2px; background: rgba(0,0,0,0.6); color: #fff; }
+.rp-sku-empty { padding: 20px 16px; text-align: center; font-size: 12px; color: var(--text-muted); }
 .rp-empty { text-align: center; padding: 30px 10px; color: var(--text-muted); font-size: 12px; }
+
+
+.gutter { background: var(--border); background-repeat: no-repeat; background-position: 50%; }
+.gutter:hover { background: var(--primary); }
+.gutter.gutter-horizontal { cursor: col-resize; width: 6px; }
 .sidebar { width: var(--sidebar-w); min-width: var(--sidebar-w); background: var(--bg-sidebar); border-right: 1px solid var(--border); padding: 16px 14px; overflow-y: auto; flex-shrink: 0; transition: margin-left 0.2s, opacity 0.2s; }
 .sidebar.collapsed { margin-left: calc(-1 * var(--sidebar-w)); opacity: 0; pointer-events: none; }
 .sidebar-section { margin-bottom: 18px; }
@@ -109,17 +103,18 @@ input, select, textarea { font: inherit; color: inherit; }
 .select-sm { width: 100%; padding: 5px 8px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 12px; background: var(--bg); cursor: pointer; outline: none; }
 .grid-area { flex: 1; overflow-y: auto; min-width: 300px; padding: 16px 20px; }
 .thumb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
-.thumb-card { position: relative; aspect-ratio: 1; border-radius: var(--radius); overflow: hidden; cursor: pointer; border: 2px solid transparent; background: var(--surface); box-shadow: var(--shadow); transition: border-color var(--transition), box-shadow var(--transition), transform var(--transition); animation: cardEnter 0.35s ease both; }
+.thumb-card { position: relative; aspect-ratio: 1; border-radius: var(--radius); overflow: hidden; cursor: grab; border: 2px solid transparent; background: var(--surface); box-shadow: var(--shadow); transition: border-color var(--transition), box-shadow var(--transition), transform var(--transition); animation: cardEnter 0.35s ease both; }
 @keyframes cardEnter { from { opacity: 0; transform: translateY(12px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
 .thumb-card:hover { border-color: var(--primary); box-shadow: var(--shadow-lg); transform: translateY(-2px); }
+.thumb-card:active { cursor: grabbing; }
 .thumb-card.selected { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-light); }
 .thumb-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .thumb-card .sel-check { position: absolute; top: 6px; left: 6px; width: 22px; height: 22px; border-radius: 50%; background: var(--primary); color: #FFF; display: none; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; box-shadow: var(--shadow); }
 .thumb-card.selected .sel-check { display: flex; }
 .thumb-card .badge { position: absolute; bottom: 6px; right: 6px; padding: 1px 6px; border-radius: var(--radius-full); font-size: 10px; font-weight: 500; background: rgba(0,0,0,0.65); color: #FFF; }
 .thumb-card .badge.ai { background: var(--warning); color: #000; font-weight: 600; }
-.thumb-card .drag-grip { position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; border-radius: 4px; background: rgba(0,0,0,0.45); color: #FFF; display: flex; align-items: center; justify-content: center; font-size: 13px; cursor: grab; opacity: 0; transition: opacity var(--transition); }
-.thumb-card:hover .drag-grip { opacity: 1; }
+
+
 .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 60vh; gap: 10px; color: var(--text-muted); user-select: none; }
 .empty-state .empty-icon { width: 80px; height: 80px; margin-bottom: 4px; }
 .empty-state .empty-icon svg { width: 100%; height: 100%; opacity: .3; }
@@ -388,8 +383,7 @@ input, select, textarea { font: inherit; color: inherit; }
       <div v-show="leftFiltered.length>0" class="thumb-grid" ref="thumbGrid">
         <div v-for="(a,i) in leftFiltered" :key="a.id" class="thumb-card" :class="{selected: selectedIds.includes(a.id)}" :style="{animationDelay: (i*0.03)+'s'}" @click.stop="selectOne(a,$event)" @contextmenu.prevent.stop="showAssetMenu(a,$event)" :data-asset-id="a.id">
           <img :src="a.thumb_url || a.file_url" :alt="a.filename" loading="lazy" draggable="false">
-          <span class="sel-check">✓</span><span class="drag-grip" @click.stop @mousedown.stop>⠿</span>
-          <span v-if="hasPendingAiTags(a)" class="badge ai">AI</span>
+          <span class="sel-check">✓</span><span v-if="hasPendingAiTags(a)" class="badge ai">AI</span>
         </div>
       </div>
     </div>
@@ -409,7 +403,7 @@ input, select, textarea { font: inherit; color: inherit; }
         <div class="editor-images" ref="editorGrid">
           <div v-for="item in editorSkuItems" :key="item.asset_id" class="editor-img-card">
             <img :src="item.thumb_url || item.file_url" :alt="item.filename">
-            <span class="drag-grip">⠿</span><span class="rm-btn" @click="removeEditorItem(item.asset_id)">×</span>
+            <span class="rm-btn" @click="removeEditorItem(item.asset_id)">×</span>
             <span class="role-badge">{{ item.role }}</span>
             <select class="editor-role-select" :value="item.role" @change="setEditorRole(item.asset_id, $event.target.value)">
               <option value="main">Main</option><option value="alternate">Alt</option><option value="lifestyle">Life</option><option value="detail">Det.</option><option value="size_chart">Chart</option><option value="packaging">Pkg</option><option value="a_plus">A+</option><option value="other">Other</option>
@@ -459,64 +453,58 @@ input, select, textarea { font: inherit; color: inherit; }
   <!-- Right Pane: Second Resource Browser -->
   <div class="right-pane" v-if="showRightPane && !editorColl">
     <div class="right-pane-header">
-      <input class="search-input" v-model="rpSearch" placeholder="Search collections..." style="flex:1;font-size:12px">
-      <button class="close-btn" @click="closeRightPane">✕</button>
+      <span class="title">Collections</span>
+      <input class="search-input" v-model="rpSearch" placeholder="Filter..." style="flex:1;max-width:180px;font-size:12px;height:26px">
+      <input type="range" min="40" max="140" v-model.number="rpThumbSize" title="Thumb size" style="width:60px">
+      <button class="close-btn" @click="closeRightPane">X</button>
     </div>
-    <div class="right-pane-body">
+    <div class="right-pane-body" style="padding:0">
       <div v-for="c in rpFilteredCollections" :key="c.id" class="rp-tree-collection">
-        <div class="rp-tree-node collection" @click="rpToggleCollection(c.id)">
-          <span class="tree-toggle">{{ rpExpandedCollections.has(c.id) ? '▾' : '▸' }}</span>
+        <div class="rp-tree-node collection" @click="rpExpandCollection(c.id)">
+          <span class="tree-toggle">{{ rpExpandedCollections.has(c.id) ? '▼' : '▶' }}</span>
           <span class="tree-icon">📁</span>
           <span class="tree-name">{{ c.name }}</span>
           <span class="tree-meta">v{{ c.version }}</span>
         </div>
         <template v-if="rpExpandedCollections.has(c.id)">
-          <div v-if="!rpCollectionItems[c.id] && rpLoading[c.id]" style="padding:4px 20px;font-size:11px;color:var(--text-muted)">Loading...</div>
+          <div v-if="!rpCollectionItems[c.id] && rpLoading[c.id]" style="padding:8px 16px;font-size:11px;color:var(--text-muted)">Loading...</div>
           <template v-if="rpCollectionItems[c.id]">
-            <div v-for="sku in rpGetSkus(c.id)" :key="sku.code" class="rp-tree-sku">
-              <div class="rp-tree-node sku" :class="{active: rpActiveSku[c.id]===sku.code}" @click="rpSelectSku(c.id, sku.code)">
-                <span class="tree-icon">📄</span>
-                <span class="tree-name">SKU: {{ sku.code }}</span>
-                <span class="tree-count">({{ sku.count }})</span>
+            <div v-for="sku in rpGetSkus(c.id)" :key="sku.code" class="rp-sku-row" :data-coll-id="c.id" :data-sku="sku.code">
+              <div class="rp-sku-label">
+                <span class="rp-sku-code">{{ sku.code }}</span>
+                <span class="rp-sku-n">({{ sku.count }})</span>
               </div>
-              <div v-if="rpActiveSku[c.id]===sku.code" class="rp-sku-content">
-                <div class="rp-thumb-grid">
-                  <div v-for="item in rpGetSkuItems(c.id, sku.code)" :key="item.asset_id" class="rp-thumb-wrap" :style="{width:rpThumbSize+'px',height:rpThumbSize+'px'}" :title="(item.filename||'')+' ['+item.role+']'">
-                    <img :src="item.thumb_url || item.file_url || ''" :style="{width:rpThumbSize+'px',height:rpThumbSize+'px'}" loading="lazy">
-                    <span class="role-badge" v-if="item.role">{{ (item.role||'').slice(0,4) }}</span>
-                    <span class="rp-rm-btn" @click.stop="rpRemoveItem(c.id, item.asset_id)">×</span>
-                  </div>
+              <div class="rp-thumb-strip">
+                <div v-for="item in rpGetSkuItems(c.id, sku.code)" :key="item.asset_id" class="rp-thumb-wrap" :style="{width:rpThumbSize+'px',height:rpThumbSize+'px'}" :title="(item.filename||'')">
+                  <img :src="item.thumb_url || item.file_url || ''" :style="{width:rpThumbSize+'px',height:rpThumbSize+'px'}" loading="lazy">
+                  <span class="role-badge" v-if="item.role">{{ (item.role||'').slice(0,5) }}</span>
+                  <span class="rp-rm-btn" @click.stop="rpRemoveItem(c.id, item.asset_id)">✕</span>
                 </div>
-                <div class="rp-drop-zone" :data-coll-id="c.id" :data-sku="sku.code" :style="{minHeight: rpThumbSize+'px'}">Drop here → {{ sku.code }}</div>
               </div>
             </div>
-            <div v-if="rpGetUnlinked(c.id).length" class="rp-tree-sku">
-              <div class="rp-tree-node sku" :class="{active: rpActiveSku[c.id]==='_unlinked'}" @click="rpSelectSku(c.id, '_unlinked')">
-                <span class="tree-icon">📄</span>
-                <span class="tree-name">_unlinked</span>
-                <span class="tree-count">({{ rpGetUnlinked(c.id).length }})</span>
+            <div v-if="rpGetUnlinked(c.id).length" class="rp-sku-row" :data-coll-id="c.id" data-sku="_unlinked">
+              <div class="rp-sku-label">
+                <span class="rp-sku-code" style="color:var(--text-muted);font-style:italic">_unlinked</span>
+                <span class="rp-sku-n">({{ rpGetUnlinked(c.id).length }})</span>
               </div>
-              <div v-if="rpActiveSku[c.id]==='_unlinked'" class="rp-sku-content">
-                <div class="rp-thumb-grid">
-                  <div v-for="item in rpGetUnlinked(c.id)" :key="item.asset_id" class="rp-thumb-wrap" :style="{width:rpThumbSize+'px',height:rpThumbSize+'px'}" :title="(item.filename||'')">
-                    <img :src="item.thumb_url || item.file_url || ''" :style="{width:rpThumbSize+'px',height:rpThumbSize+'px'}" loading="lazy">
-                    <span class="rp-rm-btn" @click.stop="rpRemoveItem(c.id, item.asset_id)">×</span>
-                  </div>
+              <div class="rp-thumb-strip">
+                <div v-for="item in rpGetUnlinked(c.id)" :key="item.asset_id" class="rp-thumb-wrap" :style="{width:rpThumbSize+'px',height:rpThumbSize+'px'}">
+                  <img :src="item.thumb_url || item.file_url || ''" :style="{width:rpThumbSize+'px',height:rpThumbSize+'px'}" loading="lazy">
+                  <span class="rp-rm-btn" @click.stop="rpRemoveItem(c.id, item.asset_id)">✕</span>
                 </div>
-                <div class="rp-drop-zone" :data-coll-id="c.id" data-sku="_unlinked" :style="{minHeight: rpThumbSize+'px'}">Drop here → _unlinked</div>
               </div>
             </div>
           </template>
+          <div v-else-if="!rpLoading[c.id]" class="rp-sku-empty">No items in this collection</div>
         </template>
       </div>
-      <div v-if="!collections.length" class="rp-empty">No collections yet. Create one from the sidebar.</div>
-      <div v-if="collections.length && !rpFilteredCollections.length && rpSearch" class="rp-empty">No collections match "{{ rpSearch }}"</div>
+      <div v-if="rpFilteredCollections.length===0" class="rp-empty">No collections found</div>
     </div>
     <div class="right-pane-footer">
-      <span>Thumb:</span>
-      <input type="range" min="50" max="160" v-model.number="rpThumbSize">
+      <span>{{ rpThumbSize }}px</span>
     </div>
   </div>
+
     <div class="detail-overlay" :class="{visible: !!detailAsset}" @click="detailAsset=null"></div>
   <aside class="detail-panel" :class="{open: !!detailAsset}">
     <template v-if="detailAsset">
@@ -686,11 +674,7 @@ const showHistory=ref(false),editorVersions=ref([]),selectedVer=ref(null);
   function closeRightPane(){showRightPane.value=false}
   async function rpExpandCollection(cid){
     if(!showRightPane.value)openRightPane();
-    if(!rpExpandedCollections.has(cid)){
-      await rpToggleCollection(cid);
-      const skus=rpGetSkus(cid);
-      if(skus.length&&!rpActiveSku[cid])rpSelectSku(cid,skus[0].code);
-    }
+    await rpToggleCollection(cid);
   }
   async function rpToggleCollection(cid){
     if(rpExpandedCollections.has(cid)){
@@ -737,14 +721,17 @@ const showHistory=ref(false),editorVersions=ref([]),selectedVer=ref(null);
   }
   function initRpDropZones(){
     nextTick(()=>{
-      const zones=document.querySelectorAll('.rp-drop-zone');
-      zones.forEach(el=>{
+      const rows=document.querySelectorAll('.rp-sku-row');
+      rows.forEach(el=>{
         if(el._sortable)el._sortable.destroy();
         const cid=el.dataset.collId;
         const sku=el.dataset.sku;
         el._sortable=Sortable.create(el,{
           group:{name:'dam',pull:false,put:true},sort:false,forceFallback:true,fallbackOnBody:true,
+          onStart(){ el.classList.add('drag-over') },
+          onEnd(){ el.classList.remove('drag-over') },
           onAdd(evt){
+            el.classList.remove('drag-over');
             const aid=evt.item.dataset.assetId;
             if(!aid||!cid){evt.item.remove();return}
             fetch('/api/collections/'+cid+'/items',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({add:[{asset_id:aid,role:sku==='_unlinked'?'other':'alternate'}]})})
@@ -757,7 +744,6 @@ const showHistory=ref(false),editorVersions=ref([]),selectedVer=ref(null);
       });
     });
   }
-
   function toast(m,t){t=t||'success';const id=Date.now();toasts.value.push({id,msg:m,type:t});setTimeout(()=>{toasts.value=toasts.value.filter(x=>x.id!==id)},2800)}
 
   async function loadAssets(){
@@ -871,7 +857,7 @@ function rmLinkedSku(a,i){a.linked_skus.splice(i,1);saveDetail();toast('Unlinked
 
   function aiTagSelected(){const s=assets.value.filter(a=>selectedIds.value.includes(a.id));if(!s.length)return;toast('AI analyzing '+s.length+' — check back soon');s.forEach(a=>{if(a.asset_type==='image')a.ai_tags=['product photo','studio lighting','ecommerce ready'];else if(a.asset_type==='video')a.ai_tags=['product video','HD'];else a.ai_tags=['document','spec'];a.ai_tags_confirmed=false})}
 
-  function initSort(){if(!thumbGrid.value)return;Sortable.create(thumbGrid.value,{animation:200,handle:'.drag-grip',group:{name:'dam',pull:'clone',put:false},forceFallback:true,fallbackOnBody:true,onEnd(evt){const f=[...leftFiltered.value];const[mv]=f.splice(evt.oldIndex,1);f.splice(evt.newIndex,0,mv);const ids=new Set(f.map(a=>a.id));assets.value=[...f,...assets.value.filter(a=>!ids.has(a.id))]}})}
+  function initSort(){if(!thumbGrid.value)return;Sortable.create(thumbGrid.value,{animation:200,group:{name:'dam',pull:'clone',put:false},forceFallback:true,fallbackOnBody:true,onStart(){document.body.style.userSelect='none'},onEnd(evt){document.body.style.userSelect='';const f=[...leftFiltered.value];const[mv]=f.splice(evt.oldIndex,1);f.splice(evt.newIndex,0,mv);const ids=new Set(f.map(a=>a.id));assets.value=[...f,...assets.value.filter(a=>!ids.has(a.id))]}})}
   function initCollectionDrop(){
     const el=document.getElementById('collection-drop-zone');
     if(!el)return;
