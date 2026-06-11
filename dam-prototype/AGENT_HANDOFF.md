@@ -1,4 +1,4 @@
-# DAM Prototype — Agent 交接说明
+﻿# DAM Prototype — Agent 交接说明
 
 > **给 AI Agent 读的技术文档。人类请读 [README.md](README.md)**
 
@@ -282,7 +282,7 @@ dam-prototype/
 ├── models.py        ← SQLAlchemy 数据模型
 ├── export.py        ← Excel 导出
 ├── ai_pipeline.py   ← AI 自动标签
-├── static/index.html ← Vue 3 SPA 前端 (单文件, ~900 行)
+├── static/index.html ← Vue 3 SPA 前端 (单文件, ~1000 行 (双面板重构后 ~93K))
 ├── .env             ← 真实凭证 (gitignored)
 ├── .env.example     ← 配置模板
 ├── dam.db           ← SQLite 数据库
@@ -295,6 +295,32 @@ dam-prototype/
 
 PR #4: https://github.com/keyapi/fzh-data/pull/4
 
+
+## 8.5 双面板 Collection 树浏览器 (2026-06-11)
+
+### 架构
+
+- **左面板**: Assets 网格 + 文件名搜索栏 (leftSearch + leftFiltered)
+- **右面板**: Collection 树状浏览器
+  - 顶层: 所有 Collection 列表 (可搜索 rpSearch)
+  - 展开 Collection → 显示 SKU 子节点 (类似文件夹)
+  - 点击 SKU → 展开该 SKU 下的图片缩略图网格
+  - 每个 SKU 下方有 drop zone → 从左侧拖入 Assets
+  - 图片 hover 显示 x 按钮 → 从 Collection 移除引用 (不删除资产)
+- **sidebar**: 保留 Type/Tags/Product/Folders/NAS/Collections 快速导航
+- **拖拽**: SortableJS group=dam + forceFallback:true + fallbackOnBody:true
+  - Assets (pull:clone, put:false) → Collection drop zones (pull:false, put:true)
+  - 不支持反向拖拽 (Collection → Assets), 用 x 按钮移除引用
+
+### 关键状态
+- rpExpandedCollections (reactive Set) — 哪些 Collection 展开了
+- rpActiveSku (reactive {}) — 每个 Collection 当前选中哪个 SKU
+- rpCollectionItems (reactive {}) — 懒加载的 Collection items 缓存
+
+### Git (最新 3 commits)
+2c830d5 feat(dam): 左面板文件名搜索 + leftFiltered
+5cfeb42 feat(dam): 右面板重构为树状 Collection→SKU 浏览器
+b956ca4 fix(dam): CSS 布局修复 + SortableJS forceFallback
 ## 9. 关联系统
 
 - **ERPNext** (ensh.vilavi.cn): REST API, FAC MCP 工具
