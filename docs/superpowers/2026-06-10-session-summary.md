@@ -1,6 +1,8 @@
 # DAM Prototype Session Summary (2026-06-10 — 2026-06-11)
 
-> 39 commits · Phase 3b → 4 → 5 → 6b → NAS · 状态: 全部完成
+> **新对话入口** — 新对话接手只需读: 本文档 + `dam-prototype/AGENT_HANDOFF.md` + `docs/superpowers/plans/2026-06-11-dam-phase7-multi-source-architecture.md`
+>
+> 39 commits · Phase 3b → 4 → 5 → 6b → NAS · 状态: 已完成，Phase 7 架构已规划待确认
 
 ## 目标回顾
 
@@ -436,3 +438,38 @@ d1c81db fix(dam): NAS thumbnail path quoting + setup return missing variables
 | `docs/superpowers/specs/2026-06-10-dam-phase5-erpnext-integration.md` | ERPNext 集成设计 |
 | `docs/superpowers/plans/2026-06-10-dam-collection-editor.md` | 编辑器实施计划 |
 | `docs/superpowers/plans/2026-06-10-dam-phase4-version-history.md` | 版本历史实施计划 |
+| `docs/superpowers/plans/2026-06-11-dam-phase7-multi-source-architecture.md` | Phase 7 架构规划 |
+| `docs/superpowers/research/2026-06-11-dam-multi-source-architecture.md` | 多来源 DAM 架构调研 |
+
+---
+
+## 新对话入口 (2026-06-11 更新)
+
+> **接手只需读 3 个文件**:
+> 1. `docs/superpowers/2026-06-10-session-summary.md` ← 你在读
+> 2. `dam-prototype/AGENT_HANDOFF.md` — 技术架构 + 当前状态
+> 3. `docs/superpowers/plans/2026-06-11-dam-phase7-multi-source-architecture.md` — 下一步计划
+
+### Session 状态快照
+
+| 项目 | 状态 |
+|------|------|
+| 分支 | `feature/dam-folder-upload` |
+| Commits | 39 个 (17 上一 session + 22 本 session) |
+| PR | #4 等待审批 |
+| 前端 | Vue 3 CDN SPA (`dam-prototype/static/index.html`) |
+| 后端 | FastAPI (`dam-prototype/main.py`) |
+| NAS | fzh.myds.me:11024 (Synology FileStation API) |
+| 数据库 | SQLite (`dam-prototype/dam.db`) |
+
+### 当前进度
+
+- [x] Phase 1-4: 数据模型 + AI + Collection CRUD + 版本历史
+- [x] Phase 5: ERPNext Item API (`or_filters` 正确修复)
+- [x] Phase 6b: 文件夹上传 (webkitdirectory)
+- [x] NAS 浏览器: 真实 Synology 连接 + 树面板 + 缩略图 + 灯箱预览
+- [x] 文件夹树: 递归渲染 + 拼贴缩略图
+- [x] 3 个 Bug 全部修复 (树面板/缩略图/setup return)
+- [ ] **下一步**: Phase 7a — 后端 NAS→Assets 导入完善
+- [ ] **下一步**: Phase 7b — 前端拖拽 (NAS→Assets, Assets→Collection)
+- [ ] **远期**: Phase 8 — Smart Collection
