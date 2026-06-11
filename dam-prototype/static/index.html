@@ -161,6 +161,11 @@ input, select, textarea { font: inherit; color: inherit; }
 .nas-explorer-footer { display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-top:1px solid var(--border); }
 .nas-lightbox { position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;display:flex;align-items:center;justify-content:center;flex-direction:column; }
 .nas-lightbox-close { position:absolute;top:16px;right:16px;background:none;border:none;color:#fff;font-size:24px;cursor:pointer;padding:8px; }
+.nas-lightbox-prev,.nas-lightbox-next { position:absolute;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.15);border:none;color:#fff;font-size:48px;cursor:pointer;padding:16px 8px;border-radius:4px; }
+.nas-lightbox-prev:hover,.nas-lightbox-next:hover { background:rgba(255,255,255,.25); }
+.nas-lightbox-prev { left:16px; }
+.nas-lightbox-next { right:16px; }
+.nas-lightbox-counter { color:#fff;font-size:13px;margin-top:12px; }
 .folder-header-icon { font-size:18px; }
 .folder-header-name { font-size:15px; font-weight:600; }
 .folder-header-count { font-size:11px; color:var(--text-muted); }
@@ -274,41 +279,12 @@ input, select, textarea { font: inherit; color: inherit; }
         <div v-if="productResults.length" style="margin-top:6px"><div v-for="p in productResults" :key="p.sku" class="filter-radio" :class="{active: filterProduct===p.sku}" @click="if(!editorDirty||confirm('You have unsaved changes. Discard them?')){closeEditor(true);filterProduct=filterProduct===p.sku?null:p.sku}">{{ p.sku }}</div></div>
       </div>
       <div class="sidebar-section" v-if="folderTree.length"><h3>Folders</h3>
-        <div v-for="(n,i) in folderTree" :key="n.path">
+        <div v-for="n in flattenedFolderTree" :key="n.path">
           <div class="tree-node" :class="{active: filterFolder===n.path}" @click="folderClick(n)" :style="{paddingLeft: (n.depth*16+8)+'px'}" :title="n.path">
-            <span class="tree-toggle" @click.stop="folderToggle(n)" v-if="n.children.length">▸</span>
-            <span class="tree-toggle" v-else style="visibility:hidden">▸</span>
+            <span class="tree-toggle" @click.stop="folderToggle(n)">{{ n.children&&n.children.length ? (n.expanded ? '▾' : '▸') : '' }}</span>
             <span class="tree-icon">📁</span>
             <span class="tree-name">{{ n.name }}</span>
             <span class="tree-count">{{ n.count }}</span>
-          </div>
-          <div v-if="n.expanded" class="tree-children">
-            <div v-for="c in n.children" :key="c.path">
-              <div class="tree-node sub" :class="{active: filterFolder===c.path}" @click="folderClick(c)" :style="{paddingLeft: ((c.depth||1)*16+8)+'px'}" :title="c.path">
-                <span class="tree-toggle" @click.stop="folderToggle(c)" v-if="c.children.length">▸</span>
-                <span class="tree-toggle" v-else style="visibility:hidden">▸</span>
-                <span class="tree-icon">📁</span>
-                <span class="tree-name">{{ c.name }}</span>
-                <span class="tree-count">{{ c.count }}</span>
-              </div>
-              <!-- 3rd+ levels -->
-              <template v-for="cc in (c.expanded?c.children:[])" :key="cc.path">
-                <div class="tree-node sub2" :class="{active: filterFolder===cc.path}" @click="folderClick(cc)" :style="{paddingLeft: ((cc.depth||2)*16+8)+'px'}" :title="cc.path">
-                  <span class="tree-toggle" @click.stop="folderToggle(cc)" v-if="cc.children.length">▸</span>
-                  <span class="tree-toggle" v-else style="visibility:hidden">▸</span>
-                  <span class="tree-icon">📁</span>
-                  <span class="tree-name">{{ cc.name }}</span>
-                  <span class="tree-count">{{ cc.count }}</span>
-                </div>
-                <template v-for="ccc in (cc.expanded?cc.children:[])" :key="ccc.path">
-                  <div class="tree-node sub3" :class="{active: filterFolder===ccc.path}" @click="folderClick(ccc)" :style="{paddingLeft: ((ccc.depth||3)*16+8)+'px'}" :title="ccc.path">
-                    <span class="tree-icon">📁</span>
-                    <span class="tree-name">{{ ccc.name }}</span>
-                    <span class="tree-count">{{ ccc.count }}</span>
-                  </div>
-                </template>
-              </template>
-            </div>
           </div>
         </div>
       </div>
@@ -493,29 +469,13 @@ input, select, textarea { font: inherit; color: inherit; }
       </div>
       <div class="nas-explorer-body">
         <div class="nas-tree-pane">
-          <div v-for="n in nasTreeNodes" :key="n.path">
+          <div v-for="n in flattenedNasTree" :key="n.path">
             <div class="nas-tree-node" :class="{active:nasCurrent===n.path}" :style="{paddingLeft:(n.depth*14+8)+'px'}" @click="nasLoad(n.path)" :title="n.path">
               <span class="nas-tree-arrow" @click.stop="nasTreeToggle(n)" v-if="n.has_children!==false">{{ n.expanded?'▾':'▸' }}</span>
               <span class="nas-tree-arrow" v-else style="visibility:hidden">▸</span>
               <span class="nas-tree-icon">📁</span>
               <span class="nas-tree-label">{{ n.name }}</span>
             </div>
-            <template v-if="n.expanded&&n.children">
-              <div v-for="c in n.children" :key="c.path">
-                <div class="nas-tree-node" :class="{active:nasCurrent===c.path}" :style="{paddingLeft:((c.depth||1)*14+8)+'px'}" @click="nasLoad(c.path)">
-                  <span class="nas-tree-arrow" @click.stop="nasTreeToggle(c)" v-if="c.has_children!==false">{{ c.expanded?'▾':'▸' }}</span>
-                  <span class="nas-tree-arrow" v-else style="visibility:hidden">▸</span>
-                  <span class="nas-tree-icon">📁</span>
-                  <span class="nas-tree-label">{{ c.name }}</span>
-                </div>
-                <template v-if="c.expanded&&c.children">
-                  <div v-for="cc in c.children" :key="cc.path" class="nas-tree-node" :class="{active:nasCurrent===cc.path}" :style="{paddingLeft:((cc.depth||2)*14+8)+'px'}" @click="nasLoad(cc.path)">
-                    <span class="nas-tree-icon">📁</span>
-                    <span class="nas-tree-label">{{ cc.name }}</span>
-                  </div>
-                </template>
-              </div>
-            </template>
           </div>
         </div>
         <div class="nas-content-pane">
@@ -557,8 +517,11 @@ input, select, textarea { font: inherit; color: inherit; }
   <!-- Image Preview Lightbox -->
   <div v-if="nasPreview" class="nas-lightbox" @click="nasPreview=null">
     <button class="nas-lightbox-close" @click="nasPreview=null">✕</button>
-    <img :src="'/api/nas/thumbnail?path='+encodeURIComponent(nasPreview)" style="max-width:85vw;max-height:85vh;object-fit:contain;border-radius:4px;box-shadow:0 8px 32px rgba(0,0,0,.4)">
-    <div style="color:#fff;font-size:13px;margin-top:12px">{{ nasPreview.split('/').pop() }}</div>
+    <button class="nas-lightbox-prev" @click.stop="nasPreviewNav(-1)" v-if="nasPreviewFiles.length>1">‹</button>
+    <img :src="'/api/nas/thumbnail?path='+encodeURIComponent(nasPreviewFiles[nasPreviewIdx]||nasPreview)" style="max-width:85vw;max-height:85vh;object-fit:contain;border-radius:4px;box-shadow:0 8px 32px rgba(0,0,0,.4)">
+    <button class="nas-lightbox-next" @click.stop="nasPreviewNav(1)" v-if="nasPreviewFiles.length>1">›</button>
+    <div class="nas-lightbox-counter" v-if="nasPreviewFiles.length>1">{{ nasPreviewIdx+1 }} / {{ nasPreviewFiles.length }}</div>
+    <div class="nas-lightbox-counter">{{ (nasPreviewFiles[nasPreviewIdx]||nasPreview).split('/').pop() }}</div>
   </div>
   <div class="toast-container"><div v-for="(t,i) in toasts" :key="i" class="toast" :class="t.type">{{ t.msg }}</div></div>
 </div>
@@ -582,9 +545,10 @@ createApp({setup(){
   const showNas=ref(false),nasView=ref('grid'),nasCurrent=ref(''),nasSource=ref('local');
   const nasEntries=ref([]),nasSelected=ref([]),nasTreeNodes=ref([]);
   const nasLoading=ref(false),nasImporting=ref(false);
-  const nasHistory=ref([]),nasHistIdx=ref(-1),nasPreview=ref(null);
+  const nasHistory=ref([]),nasHistIdx=ref(-1),nasPreview=ref(null),nasPreviewIdx=ref(0),nasPreviewFiles=ref([]);
   function nasToggleSelect(path){const i=nasSelected.value.indexOf(path);if(i>=0)nasSelected.value.splice(i,1);else nasSelected.value.push(path)}
-  function nasPreviewImg(e){if(/\.(jpg|jpeg|png|gif|webp)$/i.test(e.name))nasPreview.value=e.path}
+  function nasPreviewImg(e){const imgs=nasEntries.value.filter(x=>x.type==='file'&&/\.(jpg|jpeg|png|gif|webp)$/i.test(x.name));nasPreviewFiles.value=imgs.map(x=>x.path);nasPreviewIdx.value=imgs.findIndex(x=>x.path===e.path);if(nasPreviewIdx.value<0)nasPreviewIdx.value=0;nasPreview.value=e.path}
+  function nasPreviewNav(dir){nasPreviewIdx.value=(nasPreviewIdx.value+dir+nasPreviewFiles.value.length)%nasPreviewFiles.value.length;nasPreview.value=nasPreviewFiles.value[nasPreviewIdx.value]}
   const nasBreadcrumbs=computed(()=>{const s=[];if(!nasCurrent.value)return s;const p=nasCurrent.value.split('/');let a='';p.filter(x=>x).forEach(seg=>{a+=(a?'/':'')+seg;s.push({name:seg,path:a})});return s});
   const editorColl=ref(null),editorSku=ref(null),editorPick=ref(false),editorPicked=ref([]),editorDirty=ref(false);
 const showHistory=ref(false),editorVersions=ref([]),selectedVer=ref(null);
@@ -627,6 +591,7 @@ const showHistory=ref(false),editorVersions=ref([]),selectedVer=ref(null);
     sortChildren(tree);
     return tree;
   });
+  const flattenedFolderTree=computed(()=>{const r=[];const walk=(nodes)=>{if(!nodes)return;nodes.forEach(n=>{r.push(n);if(n.expanded&&n.children&&n.children.length)walk(n.children)})};walk(folderTree.value);return r})
   function folderToggle(n){folderExpanded.value={...folderExpanded.value,[n.path]:!n.expanded}}
   function folderClick(n){if(!editorDirty.value||confirm('Discard unsaved changes?')){closeEditor(true);if(!n){filterFolder.value=null;filterProduct.value=null;filterTag.value=null;filterType.value='all'}else{filterFolder.value=filterFolder.value===n.path?null:n.path;filterProduct.value=null;filterTag.value=null;filterType.value='all'}}}
   function folderClickByPath(p){filterFolder.value=p;filterProduct.value=null;filterTag.value=null;filterType.value='all'}
@@ -636,9 +601,10 @@ const showHistory=ref(false),editorVersions=ref([]),selectedVer=ref(null);
   function nasNavFwd(){if(nasHistIdx.value>=nasHistory.value.length-1)return;nasHistIdx.value++;nasLoad(nasHistory.value[nasHistIdx.value],true)}
   async function nasLoad(path,skipHistory){nasLoading.value=true;nasSelected.value=[];nasPreview.value=null;const newPath=path||'';try{const r=await fetch('/api/nas/browse?path='+encodeURIComponent(newPath));const d=await r.json();nasSource.value=d.source||'local';nasEntries.value=d.entries||[];nasCurrent.value=d.path||newPath}catch(e){toast('NAS browse failed','error')}nasLoading.value=false;
     if(!skipHistory&&nasHistory.value[nasHistIdx.value]!==nasCurrent.value){nasHistory.value=nasHistory.value.slice(0,nasHistIdx.value+1);nasHistory.value.push(nasCurrent.value);nasHistIdx.value=nasHistory.value.length-1}
-    if(!nasTreeNodes.value.length){try{const tr=await fetch('/api/nas/tree?path=');const td=await tr.json();nasTreeNodes.value=(td.entries||[]).map(e=>({...e,depth:0,expanded:false,children:null}))}catch(e){}}
+    if(!nasTreeNodes.value.length){try{const tr=await fetch('/api/nas/tree?path=');const td=await tr.json();nasTreeNodes.value=(td.entries||[]).map(e=>({...e,depth:0,expanded:false,children:null}))}catch(e){console.error('NAS tree load failed',e)}}
   }
-  async function nasTreeToggle(n){if(n.expanded){n.expanded=false;return}n.expanded=true;if(n.children)return;try{const r=await fetch('/api/nas/tree?path='+encodeURIComponent(n.path));const d=await r.json();n.children=(d.entries||[]).map(e=>({...e,depth:(n.depth||0)+1,expanded:false,children:null}))}catch(e){}}
+  const flattenedNasTree=computed(()=>{const r=[];const walk=(nodes)=>{if(!nodes)return;nodes.forEach(n=>{r.push(n);if(n.expanded&&n.children&&n.children.length)walk(n.children)})};walk(nasTreeNodes.value);return r})
+  async function nasTreeToggle(n){if(n.expanded){n.expanded=false;return}n.expanded=true;if(n.children)return;try{const r=await fetch('/api/nas/tree?path='+encodeURIComponent(n.path));const d=await r.json();n.children=(d.entries||[]).map(e=>({...e,depth:(n.depth||0)+1,expanded:false,children:null}))}catch(e){console.error('NAS tree toggle failed',e)}}
   async function nasImport(){if(!nasSelected.value.length)return;nasImporting.value=true;try{const r=await fetch('/api/nas/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({paths:nasSelected.value})});const d=await r.json();if(d.success){toast('Imported '+d.total+' file(s)');await loadAssets();await loadFolders();showNas.value=false}else{toast(d.error||'Import failed','error')}}catch(e){toast('Import failed','error')}nasImporting.value=false}
   const editorItems=computed(()=>editorColl.value?editorColl.value.items||[]:[]);
   const editorSkus=computed(()=>{const m={};editorItems.value.forEach(i=>{const s=i.sku||'_unlinked';m[s]=(m[s]||0)+1});return Object.entries(m).map(([code,cnt])=>({code,count:cnt}))});

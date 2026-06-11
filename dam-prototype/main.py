@@ -599,6 +599,30 @@ def nas_browse(path: str = Query("", description="NAS folder path")):
     return {"path": path or "", "entries": entries, "source": "local"}
 
 
+@app.get("/api/nas/tree")
+def nas_tree(path: str = Query("", description="NAS folder path for tree")):
+    """返回仅目录列表，含 has_children 标志，用于树状视图。"""
+    entries = []
+    if _nas and _nas.available:
+        raw = _nas.get_file_list(path, limit=500)
+        dirs = [e for e in raw if e.get("is_dir")]
+        for d in dirs:
+            subs = _nas.get_file_list(d["path"], limit=1)
+            d["has_children"] = any(s.get("is_dir") for s in subs)
+        entries = [
+            {"name": e["name"], "path": e["path"], "has_children": e.get("has_children", False)}
+            for e in dirs
+        ]
+    else:
+        all_entries = _local_browse(path)
+        dirs = [e for e in all_entries if e["type"] == "directory"]
+        for d in dirs:
+            subs = _local_browse(d["path"])
+            d["has_children"] = any(s["type"] == "directory" for s in subs)
+        entries = [{"name": d["name"], "path": d["path"], "has_children": d.get("has_children", False)} for d in dirs]
+    return {"entries": entries}
+
+
 @app.get("/api/nas/thumbnail")
 def nas_thumbnail(path: str = Query(..., description="File path for thumbnail")):
     """获取 NAS 文件缩略图。优先 Synology NAS，fallback 本地 Pillow 生成。"""
