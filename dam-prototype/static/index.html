@@ -796,6 +796,7 @@ const showHistory=ref(false),editorVersions=ref([]),selectedVer=ref(null);
     sortChildren(tree);
     return tree;
   });
+  const leftFiltered=computed(()=>{const q=leftSearch.value.toLowerCase().trim();if(!q)return filtered.value;return filtered.value.filter(a=>a.filename.toLowerCase().includes(q))});
   const flattenedFolderTree=computed(()=>{const r=[];const walk=(nodes)=>{if(!nodes)return;nodes.forEach(n=>{r.push(n);if(n.expanded&&n.children&&n.children.length)walk(n.children)})};walk(folderTree.value);return r})
   function folderToggle(n){folderExpanded.value={...folderExpanded.value,[n.path]:!n.expanded}}
   function folderClick(n){if(!editorDirty.value||confirm('Discard unsaved changes?')){closeEditor(true);if(!n){filterFolder.value=null;filterProduct.value=null;filterTag.value=null;filterType.value='all'}else{filterFolder.value=filterFolder.value===n.path?null:n.path;filterProduct.value=null;filterTag.value=null;filterType.value='all'}}}
@@ -923,6 +924,4 @@ function rmLinkedSku(a,i){a.linked_skus.splice(i,1);saveDetail();toast('Unlinked
 }}).mount('#app');
 </script>
 </body>
-</html
-  const leftFiltered=computed(()=>{const q=leftSearch.value.toLowerCase().trim();if(!q)return filtered.value;return filtered.value.filter(a=>a.filename.toLowerCase().includes(q))});
->
+</html>
