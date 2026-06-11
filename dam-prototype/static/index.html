@@ -941,5 +941,51 @@ function rmLinkedSku(a,i){a.linked_skus.splice(i,1);saveDetail();toast('Unlinked
   return {assets,totalCount,loading,selectedIds,detailAsset,filterType,filterTag,filterProduct,sortBy,showUpload,uploading,dragOver,sidebarOpen,saving,productQ,productResults,detailQ,detailResults,toasts,typeFilters,allTags,filtered,leftFiltered,leftSearch,thumbGrid,selectOne,clearAll,hasPendingAiTags,handlePick,handleDrop,processFiles,addTag,rmTag,confirmAi,linkSku,rmLinkedSku,saveDetail,searchProducts,searchForDetail,batchTag,batchLink,batchDelete,aiTagSelected,toast,fmtSize,fmtDate,collections,loadCollections,openCollectionEditor,showCollectionMenu,showAssetMenu,folders,folderTree,flattenedFolderTree,folderExpanded,folderToggle,folderClick,folderClickByPath,filterFolder,currentSubfolders,loadFolders,getFolderThumb,showNas,nasView,nasSource,nasCurrent,nasEntries,nasSelected,nasToggleSelect,nasPreviewImg,nasPreviewFiles,nasPreviewIdx,nasPreviewNav,isNasImage,nasTreeNodes,nasLoading,nasImporting,nasHistory,nasHistIdx,nasPreview,nasBreadcrumbs,nasLoad,nasNavBack,nasNavFwd,nasTreeToggle,nasImport,flattenedNasTree,editorColl,editorSku,editorSkus,editorSkuItems,editorPick,editorPicked,editorDirty,editorGrid,openEditor,closeEditor,saveEditor,exportEditor,removeEditorItem,setEditorRole,openAssetPicker,togglePick,addPickedToEditor,addSkuToEditor,showHistory,editorVersions,selectedVer,openHistory,restoreVersion,getThumbByAssetId,showRightPane,rpSearch,rpThumbSize,rpFilteredCollections,rpExpandedCollections,rpActiveSku,rpCollectionItems,rpLoading,openRightPane,closeRightPane,rpToggleCollection,rpExpandCollection,rpSelectSku,rpGetSkus,rpGetSkuItems,rpGetUnlinked,rpRemoveItem};
 }}).mount('#app');
 </script>
+
+<div id="__dbg" style="position:fixed;bottom:4px;left:4px;z-index:99999;background:rgba(0,0,0,0.85);color:#0f0;font:10px/1.3 monospace;padding:5px 8px;border-radius:4px;pointer-events:none">
+  <span id="__dbg_st">dragActive: FALSE</span> |
+  <span id="__dbg_ev" style="color:#ff0">ESC: -</span> |
+  <span id="__dbg_key" style="color:#888">keys: 0</span>
+</div>
+<div id="__dbg_cancel" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:99999;background:var(--primary);color:#fff;font:13px/1 sans-serif;padding:12px 24px;border-radius:8px;cursor:pointer;box-shadow:0 4px 20px rgba(0,0,0,0.4)">Cancel Drag (ESC / Click here)</div>
+<script>
+(function(){
+  var st=document.getElementById('__dbg_st'), evEl=document.getElementById('__dbg_ev'), keyEl=document.getElementById('__dbg_key');
+  var cancelBtn=document.getElementById('__dbg_cancel');
+  var keyCount=0;
+  function cancelDrag(){
+    var ghosts=document.querySelectorAll('.sortable-ghost,.sortable-fallback');
+    ghosts.forEach(function(el){el.classList.add('cancelling');el.style.pointerEvents='none'});
+    document.body.style.userSelect='';
+    window.__dragActive=false;
+    cancelBtn.style.display='none';
+  }
+  cancelBtn.onclick=cancelDrag;
+  // Right-click to cancel
+  document.addEventListener('contextmenu',function(e){
+    if(window.__dragActive){e.preventDefault();cancelDrag()}
+  });
+  // Cancel button appears during drag
+  setInterval(function(){
+    st.textContent='dragActive: '+(window.__dragActive?'TRUE':'FALSE');
+    cancelBtn.style.display=window.__dragActive?'block':'none';
+  },200);
+  // Catch ESC on window AND document AND body (capture + bubble)
+  function onEsc(e){
+    keyCount++;keyEl.textContent='keys:'+keyCount;
+    if(e.key==='Escape'){
+      evEl.textContent='ESC '+e.type+'! dragActive='+window.__dragActive;
+      if(window.__dragActive)cancelDrag();
+    }
+  }
+  window.addEventListener('keydown',onEsc,true);
+  window.addEventListener('keyup',onEsc,true);
+  document.addEventListener('keydown',onEsc,true);
+  document.addEventListener('keyup',onEsc,true);
+  document.body.addEventListener('keydown',onEsc,true);
+  document.body.addEventListener('keyup',onEsc,true);
+})();
+</script>
+
 </body>
 </html>
