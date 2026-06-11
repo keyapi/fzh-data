@@ -161,6 +161,34 @@ uv run python main.py --port 8098
 - [ ] NAS 浏览器完善: 修复树显示 + 图片预览 + 文件类型图标
 - [ ] Phase 7: 运营接入试用 + 反馈迭代
 
+### 经验教训 (Lessons Learned)
+
+**1. Frappe `or_filters` 是独立参数**
+> `filters` 和 `or_filters` 是两个独立参数，不能把 `"OR"` 字符串塞进 `filters` 数组。
+> ```python
+> # 错误: {"filters": [["a","like","%x%"], "OR", ["b","like","%x%"]]}
+> # 正确: {"or_filters": [["a","like","%x%"], ["b","like","%x%"]]}
+> ```
+> 涉及 Frappe API 开发时，**必须先加载 `frappe-core-api` skill**。
+
+**2. 先搜再造 — 搜已有 Skill**
+> 项目安装了 `frappe-core-api` skill（含完整 filter/or_filters 参数文档），但 Phase 5 写代码前没有加载它。CLAUDE.md 的"先搜再造"三原则第一条就是"搜项目内"。
+
+**3. 错误信息要认真解读**
+> `"单据类型 OR未找到"` = Frappe 把 "OR" 当成了 DocType 名称去数据库查找 → 本身就是正确的诊断线索。
+
+**4. 参考已有实现**
+> `EN_API/` 模块有成熟的 ErpnextClient 实现（REST API + URL 参数），如果先研究已有代码会更早发现正确格式。
+
+**5. 先搜索 Web API 标准，不要自己瞎猜**
+> 文件夹上传第一版用 ZIP 解压方案（错误），用户纠正后才搜到 `webkitGetAsEntry` / `webkitdirectory` 标准浏览器 API。AEM/Google Drive/Dropbox 都用直接选文件夹方式。
+
+**6. git add -A 陷阱**
+> 某次 commit 用了 `git add -A`，意外提交了 56 个文件。以后严格用 `git add <具体文件>`。
+
+**7. `file_url` 需包含子目录路径**
+> 上传到 `files/subdir/uuid.jpg` 时，`_file_rel()` 必须从 `stored_path` 提取 `files/` 后的完整相对路径，否则缩略图和预览 404。
+
 ### 关键配置
 
 - `.env` (gitignored): AI_API_KEY, ERP_URL/KEY/SECRET, NAS_URL/USERNAME/PASSWORD, DAM_NAS_ROOT

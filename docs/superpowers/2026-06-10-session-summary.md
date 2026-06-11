@@ -1,6 +1,6 @@
-# DAM Prototype Session Summary (2026-06-10)
+# DAM Prototype Session Summary (2026-06-10 — 2026-06-11)
 
-> 20 commits · Phase 3b → 4 → 5 · 状态: Phase 3b+4+5 全部完成
+> 36 commits · Phase 3b → 4 → 5 → 6b → NAS · 状态: 全部完成
 
 ## 目标回顾
 
@@ -134,9 +134,9 @@
 
 ---
 
-## Session Commits 完整列表 (28 个)
+## Session Commits 完整列表 (36 个)
 
-### 上一 session (Phase 3b → 4 → 5, 18 commits)
+### 上一 session (Phase 3b → 4 → 5, 17 commits)
 ```
 d7945b8 docs(dam): AGENT_HANDOFF — mark Phase 5 ERPNext client ready for deployment
 cb2f8b1 feat(dam): Phase 5 — ERPNext Item search replaces mock with ErpnextClient
@@ -157,7 +157,7 @@ afa6911 feat(dam): PATCH collection items endpoint + SKU info
 bba73f1 feat(dam): multi-SKU multi-row Excel export
 ```
 
-### 本 session (Phase 5 修复 + 6b + NAS, 10 commits)
+### 本 session (Phase 5 修复 + 6b + NAS + 文档, 19 commits)
 ```
 f01606c fix(dam): Phase 5 ERPNext search — remove OR filter, verified working
 df585dc fix(dam): use or_filters for ERPNext Item search (code + name)
@@ -177,6 +177,7 @@ eac6bc2 feat(dam): 文件夹浏览头部 + 子文件夹卡片网格
 62423e7 fix(dam): file_url 包含子目录路径
 ef3fd64 fix(dam): 空缩略图 + NAS 浏览器重设计 + 去重修复
 546d8e6 feat(dam): Windows 风格双面板 NAS 资源管理器
+dc9391a docs(dam): 全面更新 session summary + AGENT_HANDOFF
 ```
 
 ## 待完成
@@ -391,15 +392,3 @@ ef3fd64 fix(dam): 空缩略图 + NAS 浏览器重设计 + 去重修复
 | `docs/superpowers/specs/2026-06-10-dam-phase5-erpnext-integration.md` | ERPNext 集成设计 |
 | `docs/superpowers/plans/2026-06-10-dam-collection-editor.md` | 编辑器实施计划 |
 | `docs/superpowers/plans/2026-06-10-dam-phase4-version-history.md` | 版本历史实施计划 |
-
-| 文件 | 用途 |
-|------|------|
-| `dam-prototype/AGENT_HANDOFF.md` | Agent 交接说明 (已更新) |
-| `dam-prototype/main.py` | FastAPI 后端 (含 ErpnextClient) |
-| `dam-prototype/models.py` | 数据模型 |
-| `dam-prototype/static/index.html` | Vue 3 SPA 前端 |
-| `dam-prototype/export.py` | Excel 导出 |
-| `dam-prototype/.env` | 本地配置 (gitignored) |
-| `dam-prototype/.env.example` | 配置模板 |
-| `docs/superpowers/2026-06-10-dam-phase-3b-milestone.md` | 全过程里程碑 |
-| `docs/superpowers/2026-06-10-session-summary.md` | 本文档 |
