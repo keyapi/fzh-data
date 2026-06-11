@@ -1,8 +1,8 @@
 # DAM Prototype Session Summary (2026-06-10 — 2026-06-11)
 
-> **新对话入口** — 新对话接手只需读: 本文档 + `dam-prototype/AGENT_HANDOFF.md` + `docs/superpowers/plans/2026-06-11-dam-phase7-multi-source-architecture.md`
+> **新对话入口** — 新对话接手只需读: 本文档 + `dam-prototype/AGENT_HANDOFF.md`
 >
-> 39 commits · Phase 3b → 4 → 5 → 6b → NAS · 状态: 已完成，Phase 7 架构已规划待确认
+> 26 commits on branch · Phase 3b → 4 → 5 → 6b → NAS → 7b · 状态: Phase 7b 双面板完成但有已知问题
 
 ## 目标回顾
 
@@ -443,21 +443,82 @@ d1c81db fix(dam): NAS thumbnail path quoting + setup return missing variables
 
 ---
 
-## 新对话入口 (2026-06-11 更新)
+## 今日工作: 2026-06-11 (上午+下午)
 
-> **接手只需读 3 个文件**:
+### 新增 10 commits (分支共 26 commits)
+
+| Commit | 内容 |
+|--------|------|
+| `738cbd9` | docs: 修正 commit 计数 + 追加经验教训 |
+| `13ffc00` | **fix**: NAS 树面板 + 图片预览导航 + 递归文件夹树 |
+| `d1c81db` | **fix**: NAS 缩略图 path 引号 + Vue setup() return 补全 6 变量 |
+| `692509a` | docs: 记录 3 个 Bug 调试过程 + 多来源 DAM 架构调研 |
+| `5c284ca` | docs: Phase 7 架构计划 + 改进新对话 handoff |
+| `bec9163` | **fix**: NAS 文件下载导入 (Synology FileStation Download API 规范) |
+| `fc2c3d0` | feat: Assets→Collection 拖拽 + NAS 参考文档 + 先搜再造规则 |
+| `6be5ae7` | **fix**: PATCH collection items auto-position (was defaulting to 0) + 右键 Add to Collection |
+| `1482574` | docs: 双面板拖拽设计方案 (搜索 AEM/Lightroom/Notion/Figma) |
+| `7ff8987` | docs: 双面板设计 v2 — 通用资源管理器 (用户反馈修正) |
+| `1474c83` | **feat**: 双面板资源管理器 — Assets Grid + Collection Panel 同屏 |
+
+### 双面板实现 (P0 完成, 有已知问题)
+
+**已实现**:
+- ✅ 工具栏 "Dual Pane" 按钮切换右侧面板
+- ✅ 右侧面板显示 Collection 内容 (SKU 分组 + 缩略图 + role badge)
+- ✅ 缩略图大小滑块 (50-160px)
+- ✅ SKU 标题点击过滤
+- ✅ 每个 SKU 下方 SortableJS drop zone
+- ✅ Collection sidebar 点选: Dual Pane 开→右面板, 关→全屏编辑器
+- ✅ ✕ 关闭右面板回到全屏
+
+**已知问题**:
+1. **布局错误**: 点 Dual Pane 后右面板未正确显示在右侧，左侧 Assets 被 Collection 内容占据
+2. **拖拽不工作**: Assets 网格 ⠿ 手柄在双面板模式下拽不动
+3. **SKU 交互不对**: 用户要的是类似文件夹树的 flat list (COLLECTIONS→PRODUCT SKU→items），不是 toggle filter
+
+**用户期望的 SKU 展示**:
+```
+COLLECTIONS (侧边栏)
+  └── KS0001 Amazon US v2
+        ├── SKU: KS0001 (2 assets)    ← 类似子文件夹
+        ├── SKU: KS0002 (7 assets)
+        └── _unlinked (1 asset)
+```
+而非当前的点标题 toggle filter 模式。
+
+### 今日经验教训
+
+1. **"先搜再造" 规则落地**: 在 AGENT_HANDOFF.md 新增"开发铁律"章节，含 3 条强制规则 + 违例案例
+2. **NAS Synology API 参考文档**: `docs/superpowers/reference/2026-06-11-nas-synology-api-reference.md`
+3. **Vue 3 CDN setup() return 陷阱**: 遗漏 return 不会报错，变量静默 undefined — 最难发现
+4. **Synology FileStation.Thumb path 必须双引号**: `f'"{path}"'` (与 FileStation.List 不同)
+5. **Synology FileStation.Download path JSON 数组**: `json.dumps([path])` 单文件也如此
+
+### 文档产出
+
+| 文档 | 内容 |
+|------|------|
+| `docs/superpowers/reference/2026-06-11-nas-synology-api-reference.md` | NAS API 完整参考 (官方文档/开源库/vilavi_pim) |
+| `docs/superpowers/research/2026-06-11-dam-multi-source-architecture.md` | DAM 多来源架构调研 |
+| `docs/superpowers/plans/2026-06-11-dam-phase7-multi-source-architecture.md` | Phase 7 架构计划 |
+| `docs/superpowers/specs/2026-06-11-dam-dual-panel-design.md` | 双面板设计方案 v2 |
+
+---
+
+## 新对话入口 (2026-06-11 下午更新)
+
+> **接手只需读**:
 > 1. `docs/superpowers/2026-06-10-session-summary.md` ← 你在读
-> 2. `dam-prototype/AGENT_HANDOFF.md` — 技术架构 + 当前状态
-> 3. `docs/superpowers/plans/2026-06-11-dam-phase7-multi-source-architecture.md` — 下一步计划
+> 2. `dam-prototype/AGENT_HANDOFF.md` — 技术架构 + 当前状态 + 经验教训
 
 ### Session 状态快照
 
 | 项目 | 状态 |
 |------|------|
-| 分支 | `feature/dam-folder-upload` |
-| Commits | 39 个 (17 上一 session + 22 本 session) |
+| 分支 | `feature/dam-folder-upload` (26 commits ahead of main) |
 | PR | #4 等待审批 |
-| 前端 | Vue 3 CDN SPA (`dam-prototype/static/index.html`) |
+| 前端 | Vue 3 CDN SPA (`dam-prototype/static/index.html` ~1000 行) |
 | 后端 | FastAPI (`dam-prototype/main.py`) |
 | NAS | fzh.myds.me:11024 (Synology FileStation API) |
 | 数据库 | SQLite (`dam-prototype/dam.db`) |
@@ -468,8 +529,8 @@ d1c81db fix(dam): NAS thumbnail path quoting + setup return missing variables
 - [x] Phase 5: ERPNext Item API (`or_filters` 正确修复)
 - [x] Phase 6b: 文件夹上传 (webkitdirectory)
 - [x] NAS 浏览器: 真实 Synology 连接 + 树面板 + 缩略图 + 灯箱预览
-- [x] 文件夹树: 递归渲染 + 拼贴缩略图
-- [x] 3 个 Bug 全部修复 (树面板/缩略图/setup return)
-- [ ] **下一步**: Phase 7a — 后端 NAS→Assets 导入完善
-- [ ] **下一步**: Phase 7b — 前端拖拽 (NAS→Assets, Assets→Collection)
+- [x] NAS 文件下载导入: FileStation Download API 规范实现
+- [x] 右键 Assets → Add to Collection (PATCH auto-position 修复)
+- [x] 双面板: 基础框架完成 (有 3 个已知问题待修复)
+- [ ] **下一步**: 修复双面板 3 个已知问题 (布局/拖拽/SKU 展示)
 - [ ] **远期**: Phase 8 — Smart Collection

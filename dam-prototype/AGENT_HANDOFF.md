@@ -147,19 +147,38 @@ uv run python main.py --port 8098
 - [x] 行业调研文档
   - `docs/superpowers/research/2026-06-10-dam-industry-research.md` (AEM + 13+ 系统)
   - `docs/superpowers/research/2026-06-10-erpnext-file-storage-nas.md` (存储架构)
+  - `docs/superpowers/research/2026-06-11-dam-multi-source-architecture.md` (多来源 DAM 架构)
+  - `docs/superpowers/reference/2026-06-11-nas-synology-api-reference.md` (NAS API 参考)
+  - `docs/superpowers/plans/2026-06-11-dam-phase7-multi-source-architecture.md` (Phase 7 计划)
+  - `docs/superpowers/specs/2026-06-11-dam-dual-panel-design.md` (双面板设计)
 
-### 已知问题 (全部已修复 ✅)
+### 双面板 (Dual Pane) — 2026-06-11 新增
 
-1. ~~NAS 左侧树不显示~~ → 添加 `/api/nas/tree` 端点 + `flattenedNasTree` 递归渲染 (`13ffc00`)
-2. ~~NAS 图片预览未完整实现~~ → 修复 Synology path 引号 + `isNasImage()` 扩展正则 (`d1c81db`)
-3. ~~文件夹树深度硬编码 4 级~~ → `flattenedFolderTree` 递归 computed 替代硬编码模板 (`13ffc00`)
-4. ~~控制台 `.length of undefined` 错误~~ → setup() return 补全 6 个缺失变量 (`d1c81db`)
+- **功能**: 工具栏 "Dual Pane" 按钮 → 右侧面板显示 Collection 内容（SKU 分组 + 缩略图 + role badge + drop zone）
+- **布局库**: split.js CDN (已引入，未启用 resize)
+- **当前问题** (3 个):
+  1. **布局错误**: 点 Dual Pane 后右面板未显示在右侧，左侧 Assets 被替代
+  2. **拖拽不工作**: Assets 网格 ⠿ 手柄在双面板模式下拽不动
+  3. **SKU 交互不对**: 用户要类似文件夹树的 flat list，不是 toggle filter
+- **设计文档**: `docs/superpowers/specs/2026-06-11-dam-dual-panel-design.md`
+- **用户期望**: COLLECTIONS→PRODUCT SKU 像文件夹→子文件夹一样展开，每个 SKU 下列出资产
+
+### 已知问题
+
+| # | 问题 | 状态 | 备注 |
+|---|------|------|------|
+| 1 | 双面板布局 | ❌ 待修复 | 右侧面板位置错误 |
+| 2 | 双面板拖拽 | ❌ 待修复 | ⠿ 手柄无法拖拽 |
+| 3 | SKU 展示模式 | ❌ 待修复 | 需改为 flat list 树形 |
+| 4 | ~~NAS 树~~ | ✅ 已修复 | `13ffc00` |
+| 5 | ~~NAS 缩略图~~ | ✅ 已修复 | `d1c81db` |
+| 6 | ~~setup return~~ | ✅ 已修复 | `d1c81db` |
 
 ### 待完成
 
+- [ ] 修复双面板 3 个已知问题 (布局/拖拽/SKU 树)
 - [ ] Phase 6: a.vilavi.cn 替换 (OSS 防关联分发)
-- [ ] NAS 浏览器完善: 修复树显示 + 图片预览 + 文件类型图标
-- [ ] Phase 7: 运营接入试用 + 反馈迭代
+- [ ] Phase 8: Smart Collection (远期)
 
 ### 开发铁律: 先搜再造 (Search Before Building)
 
