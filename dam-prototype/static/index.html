@@ -58,6 +58,28 @@ input, select, textarea { font: inherit; color: inherit; }
 .right-pane-body { flex: 1; overflow-y: auto; padding: 10px 12px; }
 .right-pane-footer { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-top: 1px solid var(--border); background: var(--surface); flex-shrink: 0; font-size: 11px; color: var(--text-muted); }
 .right-pane-footer input[type="range"] { width: 60px; }
+/* Right Pane Collection Tree */
+.rp-tree-collection { margin-bottom: 2px; }
+.rp-tree-node { display: flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; user-select: none; }
+.rp-tree-node:hover { background: var(--surface-hover); }
+.rp-tree-node.collection { font-weight: 500; }
+.rp-tree-node.sku { padding-left: 24px; }
+.rp-tree-node.sku.active { background: var(--primary-light); color: var(--primary); }
+.rp-tree-node .tree-toggle { width: 14px; font-size: 10px; color: var(--text-muted); flex-shrink: 0; text-align: center; }
+.rp-tree-node .tree-icon { font-size: 14px; flex-shrink: 0; }
+.rp-tree-node .tree-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rp-tree-node .tree-count { font-size: 10px; color: var(--text-muted); flex-shrink: 0; }
+.rp-tree-node .tree-meta { font-size: 10px; color: var(--text-muted); flex-shrink: 0; }
+.rp-sku-content { padding: 6px 0 6px 24px; }
+.rp-sku-content .rp-thumb-grid { display: flex; flex-wrap: wrap; gap: 4px; }
+.rp-sku-content .rp-thumb-wrap { position: relative; border-radius: 4px; overflow: hidden; border: 1px solid var(--border); cursor: pointer; flex-shrink: 0; }
+.rp-sku-content .rp-thumb-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.rp-sku-content .rp-thumb-wrap .role-badge { position: absolute; bottom: 2px; left: 2px; background: rgba(0,0,0,0.6); color: #FFF; font-size: 8px; padding: 1px 4px; border-radius: 2px; }
+.rp-sku-content .rp-thumb-wrap .rp-rm-btn { position: absolute; top: 1px; right: 1px; width: 14px; height: 14px; background: rgba(0,0,0,0.5); color: #FFF; font-size: 10px; display: none; align-items: center; justify-content: center; border-radius: 50%; cursor: pointer; }
+.rp-sku-content .rp-thumb-wrap:hover .rp-rm-btn { display: flex; }
+.rp-drop-zone { margin-top: 4px; border: 2px dashed var(--border); border-radius: var(--radius); padding: 8px; text-align: center; font-size: 11px; color: var(--text-muted); transition: border-color var(--transition), background var(--transition); }
+.rp-drop-zone:hover, .rp-drop-zone.drag-over { border-color: var(--primary); background: var(--primary-light); }
+
 .rp-collection-item { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; }
 .rp-collection-item:hover { background: var(--surface-hover); }
 .rp-collection-item.active { background: var(--primary-light); color: var(--primary); }
@@ -293,7 +315,7 @@ input, select, textarea { font: inherit; color: inherit; }
     <button class="btn btn-primary" @click="showUpload = true">+ Upload</button>
     <button class="btn btn-ai" @click="aiTagSelected" :disabled="selectedIds.length===0">AI Tag ({{ selectedIds.length }})</button>
     <button class="btn btn-secondary" @click="clearAll" v-if="selectedIds.length>0">Clear</button>
-    <button class="btn btn-secondary" @click="showRightPane=!showRightPane" :class="{active: showRightPane}" style="margin-left:auto" :title="showRightPane ? 'Close dual pane' : 'Open dual pane'">{{ showRightPane ? '▮' : '▯' }} Dual Pane</button>
+    <button class="btn btn-secondary" @click="showRightPane ? closeRightPane() : openRightPane()" :class="{active: showRightPane}" style="margin-left:auto" :title="showRightPane ? 'Close dual pane' : 'Open dual pane'">{{ showRightPane ? '▮' : '▯' }} Dual Pane</button>
   </header>
   <div class="main">
     <aside class="sidebar" :class="{collapsed: !sidebarOpen}">
@@ -331,7 +353,7 @@ input, select, textarea { font: inherit; color: inherit; }
       <div class="sidebar-section"><h3>Collections</h3>
         <button class="btn btn-primary" style="width:100%;font-size:12px;padding:4px;margin-bottom:4px" @click="openCollectionEditor()">+ New</button>
         <div id="collection-drop-zone">
-        <div v-for="c in collections" :key="c.id" class="filter-radio collection-item" :data-collection-id="c.id" style="margin-top:4px;font-size:12px;cursor:pointer" @click="showRightPane ? openRightPaneCollection(c.id) : openEditor(c)" @contextmenu.prevent="showCollectionMenu(c,$event)">
+        <div v-for="c in collections" :key="c.id" class="filter-radio collection-item" :data-collection-id="c.id" style="margin-top:4px;font-size:12px;cursor:pointer" @click="showRightPane ? rpExpandCollection(c.id) : openEditor(c)" @contextmenu.prevent="showCollectionMenu(c,$event)">
           {{ c.name }} <span style="font-size:10px;color:var(--text-muted);margin-left:auto">v{{ c.version }}</span>
         </div>
         </div>
@@ -434,41 +456,67 @@ input, select, textarea { font: inherit; color: inherit; }
     </div>
   </div>
   <!-- Right Pane: Second Resource Browser -->
-  <div class="right-pane" v-if="showRightPane" :style="{width: '42%'}">
+  <div class="right-pane" v-if="showRightPane && !editorColl">
     <div class="right-pane-header">
-      <span class="title" v-if="rpCollectionData">{{ rpCollectionData.name }}</span>
-      <span class="title" v-else>Collection Panel</span>
+      <input class="search-input" v-model="rpSearch" placeholder="Search collections..." style="flex:1;font-size:12px">
       <button class="close-btn" @click="closeRightPane">✕</button>
     </div>
-    <div class="right-pane-body" v-if="rpCollectionData">
-      <div class="rp-sku-group" v-for="sku in rpSkus" :key="sku.code">
-        <div class="rp-sku-header" @click="rpSkuFilter = rpSkuFilter===sku.code ? null : sku.code">
-          {{ rpSkuFilter===sku.code ? '▾' : '▸' }} SKU: {{ sku.code }} <span class="count">({{ sku.count }})</span>
+    <div class="right-pane-body">
+      <div v-for="c in rpFilteredCollections" :key="c.id" class="rp-tree-collection">
+        <div class="rp-tree-node collection" @click="rpToggleCollection(c.id)">
+          <span class="tree-toggle">{{ rpExpandedCollections.has(c.id) ? '▾' : '▸' }}</span>
+          <span class="tree-icon">📁</span>
+          <span class="tree-name">{{ c.name }}</span>
+          <span class="tree-meta">v{{ c.version }}</span>
         </div>
-        <template v-if="rpSkuFilter===sku.code || !rpSkuFilter">
-          <div class="rp-thumb-grid">
-            <div class="rp-thumb-wrap" v-for="item in rpFilteredItems.filter(i=>(i.sku||'_unlinked')===sku.code)" :key="item.asset_id" :title="(item.filename||'')+' ['+item.role+']'" :style="{width:rpThumbSize+'px',height:rpThumbSize+'px'}">
-              <img :src="item.thumb_url || item.file_url || ''" :style="{width:rpThumbSize+'px',height:rpThumbSize+'px'}" loading="lazy">
-              <span class="role-badge" v-if="item.role">{{ item.role.slice(0,4) }}</span>
+        <template v-if="rpExpandedCollections.has(c.id)">
+          <div v-if="!rpCollectionItems[c.id] && rpLoading[c.id]" style="padding:4px 20px;font-size:11px;color:var(--text-muted)">Loading...</div>
+          <template v-if="rpCollectionItems[c.id]">
+            <div v-for="sku in rpGetSkus(c.id)" :key="sku.code" class="rp-tree-sku">
+              <div class="rp-tree-node sku" :class="{active: rpActiveSku[c.id]===sku.code}" @click="rpSelectSku(c.id, sku.code)">
+                <span class="tree-icon">📄</span>
+                <span class="tree-name">SKU: {{ sku.code }}</span>
+                <span class="tree-count">({{ sku.count }})</span>
+              </div>
+              <div v-if="rpActiveSku[c.id]===sku.code" class="rp-sku-content">
+                <div class="rp-thumb-grid">
+                  <div v-for="item in rpGetSkuItems(c.id, sku.code)" :key="item.asset_id" class="rp-thumb-wrap" :style="{width:rpThumbSize+'px',height:rpThumbSize+'px'}" :title="(item.filename||'')+' ['+item.role+']'">
+                    <img :src="item.thumb_url || item.file_url || ''" :style="{width:rpThumbSize+'px',height:rpThumbSize+'px'}" loading="lazy">
+                    <span class="role-badge" v-if="item.role">{{ (item.role||'').slice(0,4) }}</span>
+                    <span class="rp-rm-btn" @click.stop="rpRemoveItem(c.id, item.asset_id)">×</span>
+                  </div>
+                </div>
+                <div class="rp-drop-zone" :data-coll-id="c.id" :data-sku="sku.code" :style="{minHeight: rpThumbSize+'px'}">Drop here → {{ sku.code }}</div>
+              </div>
             </div>
-          </div>
-          <div class="rp-drop-zone" id="rp-drop-zone" :style="{minHeight: rpThumbSize+'px'}">
-            Drop assets here → {{ sku.code }} (alternate)
-          </div>
+            <div v-if="rpGetUnlinked(c.id).length" class="rp-tree-sku">
+              <div class="rp-tree-node sku" :class="{active: rpActiveSku[c.id]==='_unlinked'}" @click="rpSelectSku(c.id, '_unlinked')">
+                <span class="tree-icon">📄</span>
+                <span class="tree-name">_unlinked</span>
+                <span class="tree-count">({{ rpGetUnlinked(c.id).length }})</span>
+              </div>
+              <div v-if="rpActiveSku[c.id]==='_unlinked'" class="rp-sku-content">
+                <div class="rp-thumb-grid">
+                  <div v-for="item in rpGetUnlinked(c.id)" :key="item.asset_id" class="rp-thumb-wrap" :style="{width:rpThumbSize+'px',height:rpThumbSize+'px'}" :title="(item.filename||'')">
+                    <img :src="item.thumb_url || item.file_url || ''" :style="{width:rpThumbSize+'px',height:rpThumbSize+'px'}" loading="lazy">
+                    <span class="rp-rm-btn" @click.stop="rpRemoveItem(c.id, item.asset_id)">×</span>
+                  </div>
+                </div>
+                <div class="rp-drop-zone" :data-coll-id="c.id" data-sku="_unlinked" :style="{minHeight: rpThumbSize+'px'}">Drop here → _unlinked</div>
+              </div>
+            </div>
+          </template>
         </template>
       </div>
-      <div class="rp-empty" v-if="!rpSkus.length">No items in this collection</div>
-    </div>
-    <div class="right-pane-body rp-empty" v-else>
-      Select a Collection from the sidebar (right-click or click when dual pane is open)
+      <div v-if="!collections.length" class="rp-empty">No collections yet. Create one from the sidebar.</div>
+      <div v-if="collections.length && !rpFilteredCollections.length && rpSearch" class="rp-empty">No collections match "{{ rpSearch }}"</div>
     </div>
     <div class="right-pane-footer">
       <span>Thumb:</span>
       <input type="range" min="50" max="160" v-model.number="rpThumbSize">
-      <span style="margin-left:auto">v{{ rpCollectionData?.version }}</span>
     </div>
   </div>
-  <div class="detail-overlay" :class="{visible: !!detailAsset}" @click="detailAsset=null"></div>
+    <div class="detail-overlay" :class="{visible: !!detailAsset}" @click="detailAsset=null"></div>
   <aside class="detail-panel" :class="{open: !!detailAsset}">
     <template v-if="detailAsset">
       <div class="detail-header"><h3 :title="detailAsset.filename">{{ detailAsset.filename }}</h3><button class="close-btn" @click="detailAsset=null">×</button></div>
@@ -601,7 +649,7 @@ const API = {
   async searchProducts(q){const r=await fetch('/api/products/search?q='+encodeURIComponent(q));return r.json()},
 };
 
-const {createApp,ref,computed,watch,nextTick,onMounted}=Vue;
+const {createApp,ref,reactive,computed,watch,nextTick,onMounted}=Vue;
 createApp({setup(){
   const assets=ref([]),totalCount=ref(0),loading=ref(false),selectedIds=ref([]),detailAsset=ref(null);
   const filterType=ref('all'),filterTag=ref(null),filterProduct=ref(null),sortBy=ref('newest');
@@ -619,41 +667,94 @@ createApp({setup(){
   const nasBreadcrumbs=computed(()=>{const s=[];if(!nasCurrent.value)return s;const p=nasCurrent.value.split('/');let a='';p.filter(x=>x).forEach(seg=>{a+=(a?'/':'')+seg;s.push({name:seg,path:a})});return s});
   const editorColl=ref(null),editorSku=ref(null),editorPick=ref(false),editorPicked=ref([]),editorDirty=ref(false);
 const showHistory=ref(false),editorVersions=ref([]),selectedVer=ref(null);
-  // Dual pane
-  const showRightPane=ref(false),rpCollectionId=ref(null),rpCollectionData=ref(null),rpSkuFilter=ref(null),rpThumbSize=ref(80);
-  async function openRightPaneCollection(cid){
-    rpCollectionId.value=cid;showRightPane.value=true;rpSkuFilter.value=null;
-    try{const r=await fetch('/api/collections/'+cid);rpCollectionData.value=await r.json();nextTick(initRightPaneDrop)}
-    catch(e){toast('Failed to load collection','error')}
+  // Dual pane — Collection tree browser
+  const showRightPane=ref(false),rpSearch=ref(''),rpThumbSize=ref(80);
+  const rpExpandedCollections=reactive(new Set());
+  const rpActiveSku=reactive({});
+  const rpCollectionItems=reactive({});
+  const rpLoading=reactive({});
+  const rpFilteredCollections=computed(()=>{
+    const q=rpSearch.value.toLowerCase().trim();
+    if(!q)return collections.value;
+    return collections.value.filter(c=>c.name.toLowerCase().includes(q))
+  });
+  function openRightPane(){
+    showRightPane.value=true;
+    if(!collections.value.length)loadCollections();
   }
   function closeRightPane(){showRightPane.value=false}
-  const rpSkus=computed(()=>{
-    if(!rpCollectionData.value)return[];
-    const m={};rpCollectionData.value.items.forEach(i=>{const s=i.sku||'_unlinked';m[s]=(m[s]||0)+1});
-    return Object.entries(m).map(([code,cnt])=>({code,count:cnt}))
-  });
-  const rpFilteredItems=computed(()=>{
-    if(!rpCollectionData.value)return[];
-    if(!rpSkuFilter.value)return rpCollectionData.value.items;
-    return rpCollectionData.value.items.filter(i=>(i.sku||'_unlinked')===rpSkuFilter.value)
-  });
-  function initRightPaneDrop(){
-    const el=document.getElementById('rp-drop-zone');
-    if(!el)return;
-    if(el._sortable)el._sortable.destroy();
-    el._sortable=Sortable.create(el,{
-      group:{name:'dam',pull:false,put:true},sort:false,forceFallback:true,fallbackOnBody:true,
-      onAdd(evt){
-        const aid=evt.item.dataset.assetId;
-        const cid=rpCollectionData.value?.id;
-        if(!aid||!cid){evt.item.remove();return}
-        fetch('/api/collections/'+cid+'/items',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({add:[{asset_id:aid,role:'alternate'}]})})
-          .then(r=>{if(!r.ok)throw new Error('Failed');return r.json()})
-          .then(d=>{rpCollectionData.value=d;loadCollections();if(editorColl.value&&editorColl.value.id===cid){editorColl.value=d;editorDirty.value=true}})
-          .catch(()=>toast('Failed','error'));
-        evt.item.remove();
+  async function rpExpandCollection(cid){
+    if(!showRightPane.value)openRightPane();
+    if(!rpExpandedCollections.has(cid)){
+      await rpToggleCollection(cid);
+      const skus=rpGetSkus(cid);
+      if(skus.length&&!rpActiveSku[cid])rpSelectSku(cid,skus[0].code);
+    }
+  }
+  async function rpToggleCollection(cid){
+    if(rpExpandedCollections.has(cid)){
+      rpExpandedCollections.delete(cid);
+      delete rpActiveSku[cid];
+    }else{
+      rpExpandedCollections.add(cid);
+      if(!rpCollectionItems[cid]){
+        rpLoading[cid]=true;
+        try{const r=await fetch('/api/collections/'+cid);const d=await r.json();rpCollectionItems[cid]=d.items||[]}
+        catch(e){rpCollectionItems[cid]=[]}
+        rpLoading[cid]=false;
+        nextTick(initRpDropZones);
       }
-    })
+    }
+  }
+  function rpSelectSku(cid,skuCode){
+    rpActiveSku[cid]=rpActiveSku[cid]===skuCode?null:skuCode;
+    nextTick(initRpDropZones);
+  }
+  function rpGetSkus(cid){
+    const items=rpCollectionItems[cid]||[];
+    const m={};items.forEach(i=>{const s=i.sku||'_unlinked';if(s==='_unlinked')return;m[s]=(m[s]||0)+1});
+    return Object.entries(m).map(([code,count])=>({code,count}));
+  }
+  function rpGetSkuItems(cid,skuCode){
+    const items=rpCollectionItems[cid]||[];
+    return items.filter(i=>(i.sku||'_unlinked')===skuCode);
+  }
+  function rpGetUnlinked(cid){
+    const items=rpCollectionItems[cid]||[];
+    return items.filter(i=>!i.sku||i.sku==='_unlinked');
+  }
+  async function rpRemoveItem(cid,aid){
+    try{
+      const r=await fetch('/api/collections/'+cid+'/items',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({remove:[aid]})});
+      if(!r.ok)throw new Error('Failed');
+      const d=await r.json();
+      rpCollectionItems[cid]=d.items||[];
+      loadCollections();
+      if(editorColl.value&&editorColl.value.id===cid){editorColl.value=d;editorDirty.value=true}
+      toast('Removed from collection');
+    }catch(e){toast('Failed to remove','error')}
+  }
+  function initRpDropZones(){
+    nextTick(()=>{
+      const zones=document.querySelectorAll('.rp-drop-zone');
+      zones.forEach(el=>{
+        if(el._sortable)el._sortable.destroy();
+        const cid=el.dataset.collId;
+        const sku=el.dataset.sku;
+        el._sortable=Sortable.create(el,{
+          group:{name:'dam',pull:false,put:true},sort:false,forceFallback:true,fallbackOnBody:true,
+          onAdd(evt){
+            const aid=evt.item.dataset.assetId;
+            if(!aid||!cid){evt.item.remove();return}
+            fetch('/api/collections/'+cid+'/items',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({add:[{asset_id:aid,role:sku==='_unlinked'?'other':'alternate'}]})})
+              .then(r=>{if(!r.ok)throw new Error('Failed');return r.json()})
+              .then(d=>{rpCollectionItems[cid]=d.items||[];loadCollections();if(editorColl.value&&editorColl.value.id===cid){editorColl.value=d;editorDirty.value=true}toast('Added to collection')})
+              .catch(()=>toast('Failed','error'));
+            evt.item.remove();
+          }
+        });
+      });
+    });
   }
 
   function toast(m,t){t=t||'success';const id=Date.now();toasts.value.push({id,msg:m,type:t});setTimeout(()=>{toasts.value=toasts.value.filter(x=>x.id!==id)},2800)}
@@ -817,7 +918,7 @@ function rmLinkedSku(a,i){a.linked_skus.splice(i,1);saveDetail();toast('Unlinked
   watch(filtered,async()=>{await nextTick();initSort()});
   watch(collections,async()=>{await nextTick();initCollectionDrop()});
 
-  return {assets,totalCount,loading,selectedIds,detailAsset,filterType,filterTag,filterProduct,sortBy,showUpload,uploading,dragOver,sidebarOpen,saving,productQ,productResults,detailQ,detailResults,toasts,typeFilters,allTags,filtered,thumbGrid,selectOne,clearAll,hasPendingAiTags,handlePick,handleDrop,processFiles,addTag,rmTag,confirmAi,linkSku,rmLinkedSku,saveDetail,searchProducts,searchForDetail,batchTag,batchLink,batchDelete,aiTagSelected,toast,fmtSize,fmtDate,collections,loadCollections,openCollectionEditor,showCollectionMenu,showAssetMenu,folders,folderTree,flattenedFolderTree,folderExpanded,folderToggle,folderClick,folderClickByPath,filterFolder,currentSubfolders,loadFolders,getFolderThumb,showNas,nasView,nasSource,nasCurrent,nasEntries,nasSelected,nasToggleSelect,nasPreviewImg,nasPreviewFiles,nasPreviewIdx,nasPreviewNav,isNasImage,nasTreeNodes,nasLoading,nasImporting,nasHistory,nasHistIdx,nasPreview,nasBreadcrumbs,nasLoad,nasNavBack,nasNavFwd,nasTreeToggle,nasImport,flattenedNasTree,editorColl,editorSku,editorSkus,editorSkuItems,editorPick,editorPicked,editorDirty,editorGrid,openEditor,closeEditor,saveEditor,exportEditor,removeEditorItem,setEditorRole,openAssetPicker,togglePick,addPickedToEditor,addSkuToEditor,showHistory,editorVersions,selectedVer,openHistory,restoreVersion,getThumbByAssetId,showRightPane,openRightPaneCollection,closeRightPane,rpCollectionData,rpSkus,rpFilteredItems,rpSkuFilter,rpThumbSize};
+  return {assets,totalCount,loading,selectedIds,detailAsset,filterType,filterTag,filterProduct,sortBy,showUpload,uploading,dragOver,sidebarOpen,saving,productQ,productResults,detailQ,detailResults,toasts,typeFilters,allTags,filtered,thumbGrid,selectOne,clearAll,hasPendingAiTags,handlePick,handleDrop,processFiles,addTag,rmTag,confirmAi,linkSku,rmLinkedSku,saveDetail,searchProducts,searchForDetail,batchTag,batchLink,batchDelete,aiTagSelected,toast,fmtSize,fmtDate,collections,loadCollections,openCollectionEditor,showCollectionMenu,showAssetMenu,folders,folderTree,flattenedFolderTree,folderExpanded,folderToggle,folderClick,folderClickByPath,filterFolder,currentSubfolders,loadFolders,getFolderThumb,showNas,nasView,nasSource,nasCurrent,nasEntries,nasSelected,nasToggleSelect,nasPreviewImg,nasPreviewFiles,nasPreviewIdx,nasPreviewNav,isNasImage,nasTreeNodes,nasLoading,nasImporting,nasHistory,nasHistIdx,nasPreview,nasBreadcrumbs,nasLoad,nasNavBack,nasNavFwd,nasTreeToggle,nasImport,flattenedNasTree,editorColl,editorSku,editorSkus,editorSkuItems,editorPick,editorPicked,editorDirty,editorGrid,openEditor,closeEditor,saveEditor,exportEditor,removeEditorItem,setEditorRole,openAssetPicker,togglePick,addPickedToEditor,addSkuToEditor,showHistory,editorVersions,selectedVer,openHistory,restoreVersion,getThumbByAssetId,showRightPane,rpSearch,rpThumbSize,rpFilteredCollections,rpExpandedCollections,rpActiveSku,rpCollectionItems,rpLoading,openRightPane,closeRightPane,rpToggleCollection,rpExpandCollection,rpSelectSku,rpGetSkus,rpGetSkuItems,rpGetUnlinked,rpRemoveItem};
 }}).mount('#app');
 </script>
 </body>
