@@ -730,12 +730,17 @@ const showHistory=ref(false),editorVersions=ref([]),selectedVer=ref(null);
     }catch(e){toast('Failed to remove','error')}
   }
   // Global cleanup for cancelled drags (ESC or drop outside valid target)
-  // ESC cancel: hide ghost via CSS (no DOM removal = no SortableJS errors)
-  function _cancelDrag(){
-    const ghosts=document.querySelectorAll('.sortable-ghost,.sortable-fallback');
-    ghosts.forEach(el=>{el.classList.add('cancelling');el.style.pointerEvents='none'});
-    document.body.style.userSelect='';
-  }
+  // ESC cancel: permanent listener with capture phase (more reliable than dynamic add/remove)
+  let _dragActive=false;
+  window.addEventListener('keydown',(e)=>{
+    if(e.key==='Escape'&&_dragActive){
+      const ghosts=document.querySelectorAll('.sortable-ghost,.sortable-fallback');
+      ghosts.forEach(el=>{el.classList.add('cancelling');el.style.pointerEvents='none'});
+      document.body.style.userSelect='';
+      _dragActive=false;
+    }
+  },{capture:true});
+  function _cancelDrag(){} // no-op, kept for compatibility
   document.addEventListener('mouseup',(e)=>{
     // If dropped outside valid target, SortableJS handles it naturally
     // No need for manual ghost cleanup
@@ -749,10 +754,14 @@ const showHistory=ref(false),editorVersions=ref([]),selectedVer=ref(null);
         const sku=el.dataset.sku;
         el._sortable=Sortable.create(el,{
           group:{name:'dam',pull:false,put:true},sort:false,forceFallback:true,fallbackOnBody:true,
-          onStart(evt){ el.classList.add('drag-over');
-      const cancelDrag=(e)=>{if(e.key==='Escape'){_cancelDrag();el.classList.remove('drag-over');document.removeEventListener('keydown',cancelDrag);if(el._cancelDrag)delete el._cancelDrag}};
-      document.addEventListener('keydown',cancelDrag);el._cancelDrag=cancelDrag},
-          onEnd(){ el.classList.remove('drag-over');if(el._cancelDrag){document.removeEventListener('keydown',el._cancelDrag);delete el._cancelDrag} },
+          onMove(evt){
+            // Only accept drop if mouse is actually over this element
+            const elRect=el.getBoundingClientRect();
+            const mx=evt.original.clientX,my=evt.original.clientY;
+            return mx>=elRect.left&&mx<=elRect.right&&my>=elRect.top&&my<=elRect.bottom;
+          },
+          onStart(evt){ el.classList.add('drag-over');_dragActive=true},
+          onEnd(){ el.classList.remove('drag-over') },
           onAdd(evt){
             el.classList.remove('drag-over');
             const aid=evt.item.dataset.assetId;
@@ -880,9 +889,7 @@ function rmLinkedSku(a,i){a.linked_skus.splice(i,1);saveDetail();toast('Unlinked
 
   function aiTagSelected(){const s=assets.value.filter(a=>selectedIds.value.includes(a.id));if(!s.length)return;toast('AI analyzing '+s.length+' — check back soon');s.forEach(a=>{if(a.asset_type==='image')a.ai_tags=['product photo','studio lighting','ecommerce ready'];else if(a.asset_type==='video')a.ai_tags=['product video','HD'];else a.ai_tags=['document','spec'];a.ai_tags_confirmed=false})}
 
-  function initSort(){if(!thumbGrid.value)return;Sortable.create(thumbGrid.value,{animation:200,group:{name:'dam',pull:'clone',put:false},forceFallback:true,fallbackOnBody:true,onStart(evt){document.body.style.userSelect='none';nextTick(()=>{const g=document.querySelector('.sortable-ghost');if(g){const s=Math.max(0.35,Math.min(0.85, (rpThumbSize.value||80)/140));g.style.transform='scale('+s+')'}});
-      const cancelDrag=(e)=>{if(e.key==='Escape'){_cancelDrag();document.removeEventListener('keydown',cancelDrag);if(evt.item._cancelDrag)delete evt.item._cancelDrag}};
-      document.addEventListener('keydown',cancelDrag);evt.item._cancelDrag=cancelDrag},onEnd(evt){document.body.style.userSelect='';if(evt.item._cancelDrag){document.removeEventListener('keydown',evt.item._cancelDrag);delete evt.item._cancelDrag}const f=[...leftFiltered.value];const[mv]=f.splice(evt.oldIndex,1);f.splice(evt.newIndex,0,mv);const ids=new Set(f.map(a=>a.id));assets.value=[...f,...assets.value.filter(a=>!ids.has(a.id))]}})}
+  function initSort(){if(!thumbGrid.value)return;Sortable.create(thumbGrid.value,{animation:200,group:{name:'dam',pull:'clone',put:false},forceFallback:true,fallbackOnBody:true,onStart(evt){document.body.style.userSelect='none';_dragActive=true;nextTick(()=>{const g=document.querySelector('.sortable-ghost');if(g){const s=Math.max(0.35,Math.min(0.85, (rpThumbSize.value||80)/140));g.style.transform='scale('+s+')'}})},onEnd(evt){document.body.style.userSelect='';_dragActive=false;const f=[...leftFiltered.value];const[mv]=f.splice(evt.oldIndex,1);f.splice(evt.newIndex,0,mv);const ids=new Set(f.map(a=>a.id));assets.value=[...f,...assets.value.filter(a=>!ids.has(a.id))]}})}
   function initCollectionDrop(){
     const el=document.getElementById('collection-drop-zone');
     if(!el)return;
