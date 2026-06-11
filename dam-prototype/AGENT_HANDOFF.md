@@ -161,6 +161,44 @@ uv run python main.py --port 8098
 - [ ] NAS 浏览器完善: 修复树显示 + 图片预览 + 文件类型图标
 - [ ] Phase 7: 运营接入试用 + 反馈迭代
 
+### 开发铁律: 先搜再造 (Search Before Building)
+
+> **违反此规则是本项目最大的时间浪费来源。每次违反平均浪费 2 小时调试时间。**
+
+#### 规则 1: 第三方 API 开发前必须搜索 4 个来源
+
+| 顺序 | 来源 | 示例 (NAS API) |
+|------|------|---------------|
+| 1 | **项目内已有实现** | vilavi_pim `nas.py:132` 有完整调用方式 |
+| 2 | **官方文档** | Synology File Station API Guide (PDF) |
+| 3 | **开源项目** | N4S4/synology-api (332 stars, PyPI) |
+| 4 | **社区/StackOverflow** | Python Synology download examples |
+
+**违例案例 (2026-06-11)**:
+- 未读 vilavi_pim 代码，2 小时自猜 Synology Download API 参数 → 结果参数格式错误
+- 未搜官方 API Guide，不知道 `path` 需要 JSON 数组格式 `["/path"]`
+- 未搜 `N4S4/synology-api`，不知道已经有 `get_file()` 封装
+
+#### 规则 2: 前端方案选型前必须搜索对比
+
+| 顺序 | 来源 | 示例 (拖拽方案) |
+|------|------|----------------|
+| 1 | **业界主流库对比** | SortableJS vs vue-draggable-next vs HTML5 原生 |
+| 2 | **CDN 可用性** | jsDelivr/unpkg 上是否有 Vue 3 CDN 版本 |
+| 3 | **项目兼容性** | 是否与现有 SortableJS 用法冲突、是否支持 Frappe 移植 |
+
+**违例案例 (2026-06-11)**:
+- 未搜索对比，直接用 HTML5 原生 API 实现拖拽 → 与现有 SortableJS 冲突，缺少动画/移动端支持
+- 正确方案: `vue-draggable-next` (SortableJS 官方 Vue 3 封装) + `group` 配置
+
+#### 规则 3: 穷尽搜索确认信号
+
+以下信号出现时必须立即停止编码，重新搜索:
+- [ ] 网上搜不到 → **扩大搜索词** (英文/中文/技术术语变体)
+- [ ] 试了几种方案都不行 → **搜索"已有实现"** (开源项目/GitHub Issues)
+- [ ] API 返回错误 → **搜索官方文档 + 开源项目源码**
+- [ ] 感觉"应该这样写" → **先搜"<topic> best practice"**
+
 ### 经验教训 (Lessons Learned)
 
 **1. Frappe `or_filters` 是独立参数**

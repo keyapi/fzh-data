@@ -185,6 +185,10 @@ input, select, textarea { font: inherit; color: inherit; }
 @keyframes slideDown { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
 .batch-bar .btn-batch { padding: 3px 10px; border-radius: 4px; font-size: 12px; background: rgba(255,255,255,0.2); color: #FFF; transition: background var(--transition); }
 .batch-bar .btn-batch:hover { background: rgba(255,255,255,0.35); }
+.sortable-ghost { opacity: 0.4; }
+.collection-item { transition: background 0.15s ease, box-shadow 0.15s ease; }
+.sortable-chosen + .collection-item { /* parent highlight when dragging over */ }
+#collection-drop-zone .sortable-ghost { background: var(--primary-light); border-radius: var(--radius); box-shadow: inset 0 0 0 2px var(--primary); }
 .upload-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; z-index: 100; }
 .upload-dialog { background: var(--surface); border-radius: var(--radius-lg); padding: 32px; width: 460px; max-width: 90vw; box-shadow: var(--shadow-lg); }
 .upload-dialog h2 { font-size: 17px; font-weight: 600; margin-bottom: 6px; }
@@ -301,8 +305,10 @@ input, select, textarea { font: inherit; color: inherit; }
       </div>
       <div class="sidebar-section"><h3>Collections</h3>
         <button class="btn btn-primary" style="width:100%;font-size:12px;padding:4px;margin-bottom:4px" @click="openCollectionEditor()">+ New</button>
-        <div v-for="c in collections" :key="c.id" class="filter-radio" style="margin-top:4px;font-size:12px;cursor:pointer" @click="openEditor(c)" @contextmenu.prevent="showCollectionMenu(c,$event)">
+        <div id="collection-drop-zone">
+        <div v-for="c in collections" :key="c.id" class="filter-radio collection-item" :data-collection-id="c.id" style="margin-top:4px;font-size:12px;cursor:pointer" @click="openEditor(c)" @contextmenu.prevent="showCollectionMenu(c,$event)">
           {{ c.name }} <span style="font-size:10px;color:var(--text-muted);margin-left:auto">v{{ c.version }}</span>
+        </div>
         </div>
       </div>
     </aside>
@@ -332,7 +338,7 @@ input, select, textarea { font: inherit; color: inherit; }
         <button class="btn btn-primary" @click="showUpload=true" style="margin-top:8px">Upload to this folder</button>
       </div>
       <div v-show="filtered.length>0" class="thumb-grid" ref="thumbGrid">
-        <div v-for="(a,i) in filtered" :key="a.id" class="thumb-card" :class="{selected: selectedIds.includes(a.id)}" :style="{animationDelay: (i*0.03)+'s'}" @click.stop="selectOne(a,$event)" draggable="false">
+        <div v-for="(a,i) in filtered" :key="a.id" class="thumb-card" :class="{selected: selectedIds.includes(a.id)}" :style="{animationDelay: (i*0.03)+'s'}" @click.stop="selectOne(a,$event)" :data-asset-id="a.id">
           <img :src="a.thumb_url || a.file_url" :alt="a.filename" loading="lazy" draggable="false">
           <span class="sel-check">✓</span><span class="drag-grip" @click.stop @mousedown.stop>⠿</span>
           <span v-if="hasPendingAiTags(a)" class="badge ai">AI</span>
@@ -665,7 +671,44 @@ function rmLinkedSku(a,i){a.linked_skus.splice(i,1);saveDetail();toast('Unlinked
 
   function aiTagSelected(){const s=assets.value.filter(a=>selectedIds.value.includes(a.id));if(!s.length)return;toast('AI analyzing '+s.length+' — check back soon');s.forEach(a=>{if(a.asset_type==='image')a.ai_tags=['product photo','studio lighting','ecommerce ready'];else if(a.asset_type==='video')a.ai_tags=['product video','HD'];else a.ai_tags=['document','spec'];a.ai_tags_confirmed=false})}
 
-  function initSort(){if(!thumbGrid.value)return;Sortable.create(thumbGrid.value,{animation:200,handle:'.drag-grip',onEnd(evt){const f=[...filtered.value];const[mv]=f.splice(evt.oldIndex,1);f.splice(evt.newIndex,0,mv);const ids=new Set(f.map(a=>a.id));assets.value=[...f,...assets.value.filter(a=>!ids.has(a.id))]}})}
+  function initSort(){if(!thumbGrid.value)return;Sortable.create(thumbGrid.value,{animation:200,handle:'.drag-grip',group:{name:'dam',pull:'clone',put:false},onEnd(evt){const f=[...filtered.value];const[mv]=f.splice(evt.oldIndex,1);f.splice(evt.newIndex,0,mv);const ids=new Set(f.map(a=>a.id));assets.value=[...f,...assets.value.filter(a=>!ids.has(a.id))]}})}
+  function initCollectionDrop(){
+    const el=document.getElementById('collection-drop-zone');
+    if(!el)return;
+    let _dropClientY=0;
+    Sortable.create(el,{
+      group:{name:'dam',pull:false,put:true},
+      sort:false,
+      onMove(evt){_dropClientY=evt.original.clientY;return true},
+      onAdd(evt){
+        const aid=evt.item.dataset.assetId;
+        if(!aid){evt.item.remove();return}
+        // Find collection nearest to drop point
+        let cid=null;
+        const items=el.querySelectorAll('.collection-item');
+        for(const item of items){
+          const rect=item.getBoundingClientRect();
+          if(_dropClientY>=rect.top&&_dropClientY<=rect.bottom){cid=item.dataset.collectionId;break}
+        }
+        if(!cid){evt.item.remove();return}
+        const c=collections.value.find(x=>x.id===cid);
+        if(!c){evt.item.remove();return}
+        fetch('/api/collections/'+cid+'/items',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({add:[{asset_id:aid,role:'alternate'}]})})
+          .then(r=>{if(!r.ok)throw new Error('Failed');return r.json()})
+          .then(()=>{
+            loadCollections();
+            if(editorColl.value&&editorColl.value.id===cid){
+              fetch('/api/collections/'+cid).then(r=>r.json()).then(rd=>{
+                editorColl.value=rd;editorDirty.value=true
+              })
+            }
+            toast('Added to '+c.name)
+          })
+          .catch(()=>toast('Failed','error'));
+        evt.item.remove();
+      }
+    })
+  }
   function initEditorSort(){if(!editorColl.value)return;const el=document.querySelector('.editor-images');if(!el)return;if(el._sortable)el._sortable.destroy();el._sortable=Sortable.create(el,{animation:200,handle:'.drag-grip',filter:'.editor-drop-zone',onEnd(evt){const items=[...editorColl.value.items];const[mv]=items.splice(evt.oldIndex,1);items.splice(evt.newIndex,0,mv);items.forEach((it,idx)=>{it.position=idx});editorColl.value.items=items;editorDirty.value=true}})}
 
   function fmtSize(b){if(!b)return'0 B';const u=['B','KB','MB','GB'];let i=0,s=b;while(s>=1024&&i<u.length-1){s/=1024;i++}return s.toFixed(1)+' '+u[i]}
@@ -673,9 +716,10 @@ function rmLinkedSku(a,i){a.linked_skus.splice(i,1);saveDetail();toast('Unlinked
   function onKey(e){if(e.key==='Escape'&&detailAsset.value){detailAsset.value=null;e.preventDefault()}}
 
   const editorGrid=ref(null);
-  onMounted(async()=>{await loadAssets();await loadCollections();await loadFolders();nextTick(initSort);document.addEventListener('keydown',onKey);window.addEventListener('beforeunload',e=>{if(editorDirty.value){e.preventDefault();e.returnValue=''}})});
+  onMounted(async()=>{await loadAssets();await loadCollections();await loadFolders();nextTick(()=>{initSort();initCollectionDrop()});document.addEventListener('keydown',onKey);window.addEventListener('beforeunload',e=>{if(editorDirty.value){e.preventDefault();e.returnValue=''}})});
   watch(editorSkuItems,async()=>{await nextTick();initEditorSort()});
   watch(filtered,async()=>{await nextTick();initSort()});
+  watch(collections,async()=>{await nextTick();initCollectionDrop()});
 
   return {assets,totalCount,loading,selectedIds,detailAsset,filterType,filterTag,filterProduct,sortBy,showUpload,uploading,dragOver,sidebarOpen,saving,productQ,productResults,detailQ,detailResults,toasts,typeFilters,allTags,filtered,thumbGrid,selectOne,clearAll,hasPendingAiTags,handlePick,handleDrop,processFiles,addTag,rmTag,confirmAi,linkSku,rmLinkedSku,saveDetail,searchProducts,searchForDetail,batchTag,batchLink,batchDelete,aiTagSelected,toast,fmtSize,fmtDate,collections,loadCollections,openCollectionEditor,showCollectionMenu,folders,folderTree,flattenedFolderTree,folderExpanded,folderToggle,folderClick,folderClickByPath,filterFolder,currentSubfolders,loadFolders,getFolderThumb,showNas,nasView,nasSource,nasCurrent,nasEntries,nasSelected,nasToggleSelect,nasPreviewImg,nasPreviewFiles,nasPreviewIdx,nasPreviewNav,isNasImage,nasTreeNodes,nasLoading,nasImporting,nasHistory,nasHistIdx,nasPreview,nasBreadcrumbs,nasLoad,nasNavBack,nasNavFwd,nasTreeToggle,nasImport,flattenedNasTree,editorColl,editorSku,editorSkus,editorSkuItems,editorPick,editorPicked,editorDirty,editorGrid,openEditor,closeEditor,saveEditor,exportEditor,removeEditorItem,setEditorRole,openAssetPicker,togglePick,addPickedToEditor,addSkuToEditor,showHistory,editorVersions,selectedVer,openHistory,restoreVersion,getThumbByAssetId};
 }}).mount('#app');
