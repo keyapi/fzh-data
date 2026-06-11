@@ -221,6 +221,37 @@ class SynologyNAS:
             print(f"[nas] thumbnail error: {e}")
         return None, None
 
+    def download_file(self, path: str) -> bytes | None:
+        """Download file content from NAS via FileStation Download API.
+
+        Per Synology FileStation API spec:
+        - Single file: path as JSON array string '["/path/to/file"]'
+        - Response: raw file binary content
+        - mode="download" forces Content-Type: application/octet-stream
+        """
+        if not self.sid:
+            return None
+        try:
+            import json as _json
+            resp = __import__("requests").get(
+                f"{self.base_url}/webapi/entry.cgi",
+                params={
+                    "api": "SYNO.FileStation.Download", "version": "2",
+                    "method": "download",
+                    "path": _json.dumps([path]),
+                    "mode": "download",
+                    "_sid": self.sid,
+                },
+                timeout=120, verify=False,
+            )
+            if resp.status_code == 200:
+                ct = resp.headers.get("Content-Type", "")
+                if "application/json" not in ct:
+                    return resp.content
+        except Exception as e:
+            print(f"[nas] download error: {e}")
+        return None
+
 
 _nas = SynologyNAS() if NAS_URL else None
 
@@ -666,13 +697,12 @@ def nas_import(body: dict):
     results = []
     for rel_path in paths:
         norm = rel_path.replace("\\", "/").strip("/")
-        # Real NAS: download file bytes via Synology
+        data = None
+        filename = norm.split("/")[-1] if "/" in norm else norm
+        # Real NAS: download file bytes via Synology FileStation API
         if _nas and _nas.available:
-            # Use thumbnail as proxy to get file content (or we'd need a download API)
-            # For now, real NAS import requires a separate file download endpoint
-            # Fall through to local for now
-            target = (NAS_ROOT / norm).resolve()
-            if not target.is_file():
+            data = _nas.download_file("/" + norm)
+            if not data:
                 continue
         else:
             target = (NAS_ROOT / norm).resolve()
@@ -680,12 +710,15 @@ def nas_import(body: dict):
                 continue
             if not target.is_file():
                 continue
-        if target.suffix.lower() not in ALLOWED_EXTS:
+            if target.suffix.lower() not in ALLOWED_EXTS:
+                continue
+            data = target.read_bytes()
+            filename = target.name
+        if not data:
             continue
-        data = target.read_bytes()
         parts = norm.split("/")
         rel_dir = "/".join(parts[:-1]) if len(parts) > 1 else ""
-        r = _create_asset_from_bytes(data, target.name, rel_dir)
+        r = _create_asset_from_bytes(data, filename, rel_dir)
         if r:
             results.append(r)
     return {"success": True, "assets": results, "total": len(results)}

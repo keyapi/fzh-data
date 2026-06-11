@@ -485,7 +485,7 @@ input, select, textarea { font: inherit; color: inherit; }
               <div v-if="e.type==='directory'" class="nas-grid-folder"><span class="nas-grid-fld-icon">📁</span><span class="nas-grid-fld-name">{{ e.name }}</span></div>
               <div v-else class="nas-grid-file">
                 <div class="nas-grid-file-check" v-if="nasSelected.includes(e.path)">✓</div>
-                <img v-if="isNasImage(e.name)" :src="'/api/nas/thumbnail?path='+encodeURIComponent(e.path)" class="nas-grid-img" loading="lazy" @error="e.target.style.display='none'">
+                <img v-if="isNasImage(e.name)" :src="'/api/nas/thumbnail?path='+encodeURIComponent(e.path)" class="nas-grid-img" loading="lazy" @error="$event.target.style.display='none'">
                 <span v-if="!isNasImage(e.name)" class="nas-grid-file-icon">🖼️</span>
                 <span class="nas-grid-file-name">{{ e.name }}</span>
               </div>
@@ -495,7 +495,7 @@ input, select, textarea { font: inherit; color: inherit; }
           <div v-if="!nasLoading&&nasView==='list'" class="nas-list">
             <div v-for="e in nasEntries" :key="e.path" class="nas-list-row" :class="{selected:nasSelected.includes(e.path)}" @click="e.type==='directory'?nasLoad(e.path):nasToggleSelect(e.path)" @dblclick="e.type==='directory'?nasLoad(e.path):nasPreviewImg(e)">
               <span style="width:20px;text-align:center;font-size:11px">{{ e.type==='file'&&nasSelected.includes(e.path)?'✓':'' }}</span>
-              <img v-if="e.type==='file'&&isNasImage(e.name)" :src="'/api/nas/thumbnail?path='+encodeURIComponent(e.path)" style="width:28px;height:28px;object-fit:cover;border-radius:2px;flex-shrink:0" @error="e.target.style.display='none'">
+              <img v-if="e.type==='file'&&isNasImage(e.name)" :src="'/api/nas/thumbnail?path='+encodeURIComponent(e.path)" style="width:28px;height:28px;object-fit:cover;border-radius:2px;flex-shrink:0" @error="$event.target.style.display='none'">
               <span v-else style="width:28px;text-align:center;flex-shrink:0">{{ e.type==='directory'?'📁':'📄' }}</span>
               <span class="nas-list-name">{{ e.name }}</span>
               <span class="nas-list-meta" v-if="e.type==='file'">{{ fmtSize(e.size) }}</span>
