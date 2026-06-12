@@ -36,9 +36,9 @@ sys.path.insert(0, str(_DIR.parent))
 
 from NAS_API.synology import _load_dotenv, _parse_nas_url  # noqa: E402
 from nas_itemgroup_folders.reconcile import (  # noqa: E402
-    Action, ActionType,
+    Action, ActionType, Orphan,
     scan_erpnext, scan_nas, compare,
-    expected_path,
+    expected_path, detect_orphans,
 )
 
 # ── .env ────────────────────────────────────────────────
@@ -265,6 +265,11 @@ def main(full: bool = False, dry_run: bool = False, layout: str = "flat") -> Non
     fetch_all = _make_erpnext_fetcher()
     erp_items = scan_erpnext(fetch_all, ig_root)
     full_count = len(erp_items)
+    # Collect valid intermediate group names (from ALL items, before test filter)
+    valid_group_names: set[str] = set()
+    for item in erp_items:
+        for a in item.ancestors:
+            valid_group_names.add(a)
     if not full:
         erp_items = [i for i in erp_items if i.model_id in test_ids]
         print(f"    全部: {full_count} 叶子 | TEST MODE: {[i.model_id for i in erp_items]}")
@@ -353,7 +358,30 @@ def main(full: bool = False, dry_run: bool = False, layout: str = "flat") -> Non
             if sub_created:
                 print(f"    补建子文件夹: {sub_created}")
 
-    # 6. Report
+    # 6. Orphan detection
+    orphan_cleaned = 0
+    orphans = detect_orphans(
+        nas_ops.list_folder, target_folder,
+        valid_group_names, sub_folders, layout,
+    )
+    if orphans:
+        print(f"\n>>> 孤儿文件夹检测 ({len(orphans)} 项) ...")
+        for o in orphans:
+            if o.content_count == 0 and not dry_run:
+                try:
+                    nas_ops._fl.delete_blocking_function(o.path)
+                    print(f"  清理空孤儿: {o.path}")
+                    orphan_cleaned += 1
+                except Exception as e:
+                    print(f"  清理失败: {o.path}: {e}")
+            elif o.content_count == 0 and dry_run:
+                print(f"  可清理空文件夹: {o.path}")
+            else:
+                print(f"  ⚠️  有内容，禁止清理: {o.path} ({o.content_count} 文件)")
+    else:
+        print("\n>>> 孤儿检测: 无")
+
+    # 7. Report
     stats = _print_report(actions, layout, full, dry_run, executed, failed, sub_created)
 
     # Save JSON

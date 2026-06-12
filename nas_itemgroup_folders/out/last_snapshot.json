@@ -1,6 +1,6 @@
 {
-  "run_at": "2026-06-12T11:52:52.613182",
-  "layout": "tree",
+  "run_at": "2026-06-12T12:00:13.889643",
+  "layout": "flat",
   "erpnext": {
     "root": "产品",
     "total_leaves": 404,
@@ -14,7 +14,7 @@
           "床头靠枕",
           "三角靠枕类"
         ],
-        "expected_path": "/产品信息/床品类/床头靠枕/三角靠枕类/KS0001_三角靠枕"
+        "expected_path": "/产品信息/KS0001_三角靠枕"
       },
       {
         "name": "平条靠枕",
@@ -25,7 +25,7 @@
           "床头靠枕",
           "平条靠枕类"
         ],
-        "expected_path": "/产品信息/床品类/床头靠枕/平条靠枕类/KS0002_平条靠枕"
+        "expected_path": "/产品信息/KS0002_平条靠枕"
       }
     ]
   },
@@ -34,7 +34,7 @@
     "script_created": [
       {
         "name": "KS0001_三角靠枕",
-        "path": "/产品信息/床品类/床头靠枕/三角靠枕类/KS0001_三角靠枕",
+        "path": "/产品信息/KS0001_三角靠枕",
         "content_count": 0,
         "content_bytes": 0,
         "sub_folders": [
@@ -47,7 +47,7 @@
       },
       {
         "name": "KS0002_平条靠枕",
-        "path": "/产品信息/床品类/床头靠枕/平条靠枕类/KS0002_平条靠枕",
+        "path": "/产品信息/KS0002_平条靠枕",
         "content_count": 0,
         "content_bytes": 0,
         "sub_folders": [
@@ -60,12 +60,6 @@
       }
     ],
     "manual_or_unknown": [
-      {
-        "name": "床品类",
-        "path": "/产品信息/床品类",
-        "content_count": 0,
-        "content_bytes": 0
-      },
       {
         "name": "测试文件夹1",
         "path": "/产品信息/测试文件夹1",
