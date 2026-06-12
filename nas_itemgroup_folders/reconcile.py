@@ -324,8 +324,12 @@ def scan_erpnext(
             ancestors.append(parent)
             node = idx.get(parent)
         ancestors.reverse()
-        if ancestors and ancestors[0] == item_group_root:
-            ancestors = ancestors[1:]  # skip root
+        # Strip everything up to and including the root node
+        try:
+            root_idx = ancestors.index(item_group_root)
+            ancestors = ancestors[root_idx + 1:]
+        except ValueError:
+            pass  # root not found in chain, keep as-is
 
         items.append(ErpnextItem(
             name=leaf["name"],
