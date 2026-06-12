@@ -14,6 +14,7 @@ dependencies = [
     "pillow>=12.2.0",
     "sqlalchemy>=2.0.50",
     "openai>=2.41.0",
+    "synology-api>=0.9.0",
 ]
 
 [tool.hatch.build.targets.wheel]
