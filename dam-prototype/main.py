@@ -123,6 +123,138 @@ ERP_API_SECRET = os.getenv("ERP_API_SECRET", "")
 _erp = ErpnextClient(ERP_URL, ERP_API_KEY, ERP_API_SECRET) if ERP_URL else None
 
 NAS_ROOT = Path(os.getenv("DAM_NAS_ROOT", str(_DIR / "mock_storage")))
+
+# ── Synology NAS Client (adapted from vilavi_pim) ─────
+
+NAS_URL = os.getenv("NAS_URL", "")
+NAS_USERNAME = os.getenv("NAS_USERNAME", "")
+NAS_PASSWORD = os.getenv("NAS_PASSWORD", "")
+NAS_ROOT_FOLDER = os.getenv("NAS_ROOT_FOLDER", "/FZH共享文件夹")
+
+
+class SynologyNAS:
+    """Synology FileStation API client (pattern from vilavi_pim)."""
+    def __init__(self):
+        self.base_url = NAS_URL.rstrip("/") if NAS_URL else ""
+        self.username = NAS_USERNAME
+        self.password = NAS_PASSWORD
+        self.root_folder = NAS_ROOT_FOLDER
+        self.sid = None
+        if self.base_url:
+            self._login()
+
+    def _login(self):
+        try:
+            resp = __import__("requests").get(
+                f"{self.base_url}/webapi/auth.cgi",
+                params={
+                    "api": "SYNO.API.Auth", "version": "3", "method": "login",
+                    "account": self.username, "passwd": self.password,
+                    "session": "FileStation", "format": "sid",
+                },
+                timeout=10, verify=False,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                if data.get("success"):
+                    self.sid = data["data"]["sid"]
+        except Exception as e:
+            print(f"[nas] login failed: {e}")
+
+    @property
+    def available(self) -> bool:
+        return bool(self.base_url and self.sid)
+
+    def get_file_list(self, folder_path: str = "", limit: int = 1000, offset: int = 0) -> list[dict]:
+        if not self.sid:
+            return []
+        try:
+            resp = __import__("requests").get(
+                f"{self.base_url}/webapi/entry.cgi",
+                params={
+                    "api": "SYNO.FileStation.List", "version": "2", "method": "list",
+                    "folder_path": folder_path or self.root_folder,
+                    "offset": offset, "limit": limit,
+                    "sort_by": "name", "sort_direction": "asc",
+                    "additional": "thumbnail,size,time",
+                    "_sid": self.sid,
+                },
+                timeout=20, verify=False,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                if data.get("success"):
+                    return [
+                        {
+                            "name": f.get("name"),
+                            "path": f.get("path"),
+                            "is_dir": f.get("isdir", False),
+                            "size": f.get("additional", {}).get("size", 0),
+                            "mtime": f.get("additional", {}).get("time", {}).get("mtime", 0),
+                            "has_thumbnail": "thumbnail" in f.get("additional", {}),
+                        }
+                        for f in data["data"]["files"]
+                    ]
+        except Exception as e:
+            print(f"[nas] list error: {e}")
+        return []
+
+    def get_thumbnail(self, path: str, size: str = "medium") -> tuple[bytes | None, str | None]:
+        if not self.sid:
+            return None, None
+        try:
+            resp = __import__("requests").get(
+                f"{self.base_url}/webapi/entry.cgi",
+                params={
+                    "api": "SYNO.FileStation.Thumb", "version": "2", "method": "get",
+                    "path": f'"{path}"', "size": size, "_sid": self.sid,
+                },
+                timeout=15, verify=False, stream=True,
+            )
+            if resp.status_code == 200:
+                ct = resp.headers.get("Content-Type", "")
+                if "application/json" in ct:
+                    print(f"[nas] thumbnail returned JSON (likely error): {resp.content[:200]}")
+                    return None, None
+                return resp.content, ct
+        except Exception as e:
+            print(f"[nas] thumbnail error: {e}")
+        return None, None
+
+    def download_file(self, path: str) -> bytes | None:
+        """Download file content from NAS via FileStation Download API.
+
+        Per Synology FileStation API spec:
+        - Single file: path as JSON array string '["/path/to/file"]'
+        - Response: raw file binary content
+        - mode="download" forces Content-Type: application/octet-stream
+        """
+        if not self.sid:
+            return None
+        try:
+            import json as _json
+            resp = __import__("requests").get(
+                f"{self.base_url}/webapi/entry.cgi",
+                params={
+                    "api": "SYNO.FileStation.Download", "version": "2",
+                    "method": "download",
+                    "path": _json.dumps([path]),
+                    "mode": "download",
+                    "_sid": self.sid,
+                },
+                timeout=120, verify=False,
+            )
+            if resp.status_code == 200:
+                ct = resp.headers.get("Content-Type", "")
+                if "application/json" not in ct:
+                    return resp.content
+        except Exception as e:
+            print(f"[nas] download error: {e}")
+        return None
+
+
+_nas = SynologyNAS() if NAS_URL else None
+
 THUMB_SIZE = (300, 300)
 ALLOWED_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".mp4", ".mov", ".pdf", ".doc", ".docx"}
 DB_PATH = os.getenv("DAM_DB_PATH", str(_DIR / "dam.db"))
@@ -154,15 +286,21 @@ def _guess_type(ext: str) -> str:
     if ext in {".mp4", ".mov"}: return "video"
     return "document"
 
+def _file_rel(sp: str) -> str:
+    """从 stored_path 提取 files/ 后的相对路径。"""
+    s = sp.replace("\\", "/")
+    return s.split("/files/", 1)[1] if "/files/" in s else (Path(s).name if s else "")
+
+
 def _asset_to_dict(a: Asset) -> dict[str, Any]:
     thumb_name = Path(a.thumbnail_path).name if a.thumbnail_path else None
-    file_name = Path(a.stored_path).name
+    rel = _file_rel(a.stored_path) if a.stored_path else ""
     return {
         "id": a.id, "filename": a.filename, "asset_type": a.asset_type,
         "file_size": a.file_size, "width": a.width, "height": a.height,
         "content_hash": a.content_hash,
         "thumb_url": f"/thumb/{thumb_name}" if thumb_name else None,
-        "file_url": f"/files/{file_name}",
+        "file_url": f"/files/{rel}" if rel else None,
         "title": a.title, "alt_text": a.alt_text,
         "tags": [t.name for t in (a.tags or [])],
         "ai_tags": a.ai_metadata.get("tags") if a.ai_metadata else None,
@@ -256,61 +394,334 @@ async def update_asset(asset_id: str, data: dict):
     return _asset_to_dict(a)
 
 
-@app.post("/api/upload")
-async def upload_files(files: list[UploadFile] = File(...)):
-    results = []
+def _create_asset_from_bytes(data: bytes, filename: str, rel_dir: str = "") -> dict:
+    """Create an Asset record from file bytes. Returns _asset_to_dict result.
+
+    If rel_dir is provided, files are stored under files/{rel_dir}/{uuid}{ext}
+    preserving the original directory structure.
+    """
+    ext = Path(filename).suffix.lower()
+    if ext not in ALLOWED_EXTS:
+        return None
+    content_hash = hashlib.sha256(data).hexdigest()
+
+    # 去重（但保留目录结构：相同内容放不同文件夹时复制文件）
+    existing = session.query(Asset).filter_by(content_hash=content_hash).first()
+    if existing and not rel_dir:
+        return {**_asset_to_dict(existing), "_dedup": True}
+
+    asset_id = str(uuid.uuid4())
     thumb_dir = NAS_ROOT / "thumbnails"
     store_dir = NAS_ROOT / "files"
 
+    # 保留目录结构: files/{rel_dir}/{uuid}{ext}
+    if rel_dir:
+        rel_dir = rel_dir.replace("\\", "/").strip("/")
+        store_subdir = store_dir / rel_dir
+        store_subdir.mkdir(parents=True, exist_ok=True)
+        stored_path = str(store_subdir / f"{asset_id}{ext}")
+    else:
+        stored_path = str(store_dir / f"{asset_id}{ext}")
+
+    asset = Asset(
+        id=asset_id,
+        filename=filename, asset_type=_guess_type(ext),
+        file_size=len(data), content_hash=content_hash,
+        stored_path=stored_path,
+        thumbnail_path=str(thumb_dir / f"{asset_id}.jpg"),
+        status="draft",
+    )
+
+    Path(asset.stored_path).write_bytes(data)
+
+    # 缩略图
+    try:
+        img = PILImage.open(io.BytesIO(data))
+        img.thumbnail(THUMB_SIZE, PILImage.LANCZOS)
+        if img.mode in ("RGBA", "P"): img = img.convert("RGB")
+        asset.width, asset.height = img.size
+        img.save(asset.thumbnail_path, "JPEG", quality=80)
+    except Exception:
+        asset.thumbnail_path = None
+
+    session.add(asset)
+    session.commit()
+    result = _asset_to_dict(asset)
+
+    # AI pipeline — 后台
+    if asset.asset_type == "image":
+        _stored = asset.stored_path
+        _aid = asset.id
+        _db = f"sqlite:///{DB_PATH}"
+        threading.Thread(target=_run_ai_background, args=(_aid, _stored, _db), daemon=True).start()
+
+    return result
+
+
+@app.post("/api/upload")
+async def upload_files(files: list[UploadFile] = File(...)):
+    """上传文件。支持单文件和文件夹（通过 webkitRelativePath 保留目录结构）。
+
+    前端用 webkitdirectory 或 webkitGetAsEntry 获取文件时，
+    FormData 第3参数传入 file.webkitRelativePath，
+    后端从 filename 中提取目录路径和文件名，
+    在 NAS 上重建 files/{目录}/{uuid}.{ext} 结构。
+    """
+    results = []
+    folders = set()
     for f in files:
         if not f.filename: continue
-        ext = Path(f.filename).suffix.lower()
-        if ext not in ALLOWED_EXTS: continue
-
+        # 从 webkitRelativePath 提取目录路径
+        fname = f.filename.replace("\\", "/")
+        if "/" in fname:
+            rel_dir = "/".join(fname.split("/")[:-1])
+            base_name = fname.split("/")[-1]
+            if rel_dir:
+                folders.add(rel_dir)
+        else:
+            rel_dir = ""
+            base_name = fname
         data = await f.read()
-        content_hash = hashlib.sha256(data).hexdigest()
+        r = _create_asset_from_bytes(data, base_name, rel_dir)
+        if r:
+            results.append(r)
+    return {
+        "success": True,
+        "assets": results,
+        "folders": sorted(folders),
+        "total": len(results),
+    }
 
-        # 去重检查
-        existing = session.query(Asset).filter_by(content_hash=content_hash).first()
-        if existing:
-            results.append({**_asset_to_dict(existing), "_dedup": True})
-            continue
 
-        asset_id = str(uuid.uuid4())
-        asset = Asset(
-            id=asset_id,
-            filename=f.filename, asset_type=_guess_type(ext),
-            file_size=len(data), content_hash=content_hash,
-            stored_path=str(store_dir / f"{asset_id}{ext}"),
-            thumbnail_path=str(thumb_dir / f"{asset_id}.jpg"),
-            status="draft",
-        )
+# ── Folder APIs ──────────────────────────────────────
 
-        # 保存源文件
-        Path(asset.stored_path).write_bytes(data)
+@app.get("/api/folders")
+def list_folders():
+    """列出所有文件夹（从 stored_path 提取唯一目录），含资产计数。"""
+    assets = session.query(Asset.stored_path).filter(
+        Asset.stored_path.isnot(None)
+    ).all()
+    folder_counts: dict[str, int] = {}
+    for (sp,) in assets:
+        rel = sp.replace("\\", "/")
+        # 从路径中提取 files/ 后面的相对目录部分
+        marker = "/files/"
+        if marker in rel:
+            rel = rel.split(marker, 1)[1]
+        if "/" in rel:
+            # 逐层计入父文件夹
+            parts = rel.split("/")[:-1]
+            for i in range(len(parts)):
+                key = "/".join(parts[:i + 1])
+                folder_counts[key] = folder_counts.get(key, 0) + 1
+    folders = [{"path": k, "asset_count": v} for k, v in sorted(folder_counts.items())]
+    return {"folders": folders}
 
-        # 生成缩略图
+
+def _file_rel(sp: str) -> str:
+    """从 stored_path 提取 files/ 后的相对目录+文件名。"""
+    rel = sp.replace("\\", "/")
+    marker = "/files/"
+    return rel.split(marker, 1)[1] if marker in rel else rel
+
+
+@app.get("/api/folders/{path:path}/assets")
+def folder_assets(path: str, limit: int = 200):
+    """列出某文件夹下的资产。"""
+    norm = path.replace("\\", "/").strip("/")
+    results = []
+    for a in session.query(Asset).filter(
+        Asset.stored_path.isnot(None)
+    ).all():
+        rel = _file_rel(a.stored_path)
+        dir_part = "/".join(rel.split("/")[:-1])
+        if dir_part == norm:
+            results.append(_asset_to_dict(a))
+            if len(results) >= limit:
+                break
+    return {"folder": norm, "assets": results}
+
+
+@app.get("/api/folders/{path:path}/thumbnail")
+def folder_thumbnail(path: str):
+    """生成文件夹拼贴缩略图（前 4 张图片拼成 2×2 网格）。"""
+    norm = path.replace("\\", "/").strip("/")
+    thumbs = []
+    for a in session.query(Asset).filter(
+        Asset.stored_path.isnot(None), Asset.thumbnail_path.isnot(None)
+    ).all():
+        rel = _file_rel(a.stored_path)
+        dir_part = "/".join(rel.split("/")[:-1])
+        if dir_part == norm:
+            thumbs.append(a.thumbnail_path)
+            if len(thumbs) >= 4:
+                break
+    if not thumbs:
+        return Response(status_code=404)
+
+    cell = 150  # 每格尺寸
+    cols = min(len(thumbs), 2)
+    rows = (len(thumbs) + 1) // 2
+    canvas = PILImage.new("RGB", (cell * 2, cell * 2), (240, 240, 240))
+
+    for idx, tp in enumerate(thumbs):
         try:
-            img = PILImage.open(io.BytesIO(data))
-            img.thumbnail(THUMB_SIZE, PILImage.LANCZOS)
-            if img.mode in ("RGBA", "P"): img = img.convert("RGB")
-            asset.width, asset.height = img.size
-            img.save(asset.thumbnail_path, "JPEG", quality=80)
+            img = PILImage.open(tp)
+            img.thumbnail((cell, cell), PILImage.LANCZOS)
+            if img.mode in ("RGBA", "P"):
+                img = img.convert("RGB")
+            row, col = idx // 2, idx % 2
+            x, y = col * cell + (cell - img.width) // 2, row * cell + (cell - img.height) // 2
+            canvas.paste(img, (x, y))
         except Exception:
-            asset.thumbnail_path = None
+            pass
 
-        session.add(asset)
-        session.commit()
-        results.append(_asset_to_dict(asset))
+    buf = io.BytesIO()
+    canvas.save(buf, "JPEG", quality=75)
+    buf.seek(0)
+    return Response(content=buf.read(), media_type="image/jpeg")
 
-        # AI pipeline — 后台线程, 不阻塞上传响应
-        if asset.asset_type == "image":
-            _stored = asset.stored_path
-            _aid = asset.id
-            _db = f"sqlite:///{DB_PATH}"
-            threading.Thread(target=_run_ai_background, args=(_aid, _stored, _db), daemon=True).start()
 
-    return {"success": True, "assets": results}
+# ── NAS Browse APIs ──────────────────────────────────
+
+def _local_browse(path: str) -> list[dict]:
+    """本地文件系统浏览（NAS 不可用时的 fallback）。"""
+    norm = path.replace("\\", "/").strip("/")
+    target = (NAS_ROOT / norm).resolve() if norm else NAS_ROOT.resolve()
+    if not str(target).startswith(str(NAS_ROOT.resolve())):
+        return []
+    if not target.exists():
+        return []
+    entries = []
+    for p in sorted(target.iterdir()):
+        name = p.name
+        if name.startswith(".") or name.startswith("__MACOSX"):
+            continue
+        rel = str(p.relative_to(NAS_ROOT)).replace("\\", "/")
+        if p.is_dir():
+            img_count = 0
+            try:
+                for ext in (".jpg", ".jpeg", ".png", ".gif", ".webp"):
+                    img_count += len(list(p.rglob(f"*{ext}")))
+            except Exception:
+                pass
+            entries.append({"type": "directory", "name": name, "path": rel, "image_count": img_count})
+        elif p.suffix.lower() in ALLOWED_EXTS:
+            entries.append({"type": "file", "name": name, "path": rel, "ext": p.suffix.lower(), "size": p.stat().st_size})
+    return entries
+
+
+@app.get("/api/nas/browse")
+def nas_browse(path: str = Query("", description="NAS folder path")):
+    """列出 NAS 目录内容。优先使用 Synology NAS API，不可用时回退本地文件系统。"""
+    # 1) Real NAS via Synology FileStation API
+    if _nas and _nas.available:
+        raw = _nas.get_file_list(path, limit=500)
+        entries = [
+            {
+                "type": "directory" if e["is_dir"] else "file",
+                "name": e["name"],
+                "path": e["path"],
+                "image_count": 0 if not e["is_dir"] else -1,  # -1 = unknown (NAS doesn't pre-count)
+                "has_thumbnail": e.get("has_thumbnail", False),
+            }
+            for e in raw
+        ]
+        return {"path": path or _nas.root_folder, "entries": entries, "source": "nas"}
+
+    # 2) Fallback: local filesystem
+    entries = _local_browse(path)
+    return {"path": path or "", "entries": entries, "source": "local"}
+
+
+@app.get("/api/nas/tree")
+def nas_tree(path: str = Query("", description="NAS folder path for tree")):
+    """返回仅目录列表，含 has_children 标志，用于树状视图。"""
+    entries = []
+    if _nas and _nas.available:
+        raw = _nas.get_file_list(path, limit=500)
+        dirs = [e for e in raw if e.get("is_dir")]
+        for d in dirs:
+            subs = _nas.get_file_list(d["path"], limit=1)
+            d["has_children"] = any(s.get("is_dir") for s in subs)
+        entries = [
+            {"name": e["name"], "path": e["path"], "has_children": e.get("has_children", False)}
+            for e in dirs
+        ]
+    else:
+        all_entries = _local_browse(path)
+        dirs = [e for e in all_entries if e["type"] == "directory"]
+        for d in dirs:
+            subs = _local_browse(d["path"])
+            d["has_children"] = any(s["type"] == "directory" for s in subs)
+        entries = [{"name": d["name"], "path": d["path"], "has_children": d.get("has_children", False)} for d in dirs]
+    return {"entries": entries}
+
+
+@app.get("/api/nas/thumbnail")
+def nas_thumbnail(path: str = Query(..., description="File path for thumbnail")):
+    """获取 NAS 文件缩略图。优先 Synology NAS，fallback 本地 Pillow 生成。"""
+    # Real NAS: use Synology thumbnail API
+    if _nas and _nas.available:
+        content, content_type = _nas.get_thumbnail(path, size="medium")
+        if content:
+            return Response(content=content, media_type=content_type or "image/jpeg")
+        return Response(status_code=404)
+
+    # Fallback: local Pillow
+    norm = path.replace("\\", "/").strip("/")
+    target = (NAS_ROOT / norm).resolve()
+    if not str(target).startswith(str(NAS_ROOT.resolve())):
+        return Response(status_code=403)
+    if not target.is_file():
+        return Response(status_code=404)
+    try:
+        img = PILImage.open(target)
+        img.thumbnail(THUMB_SIZE, PILImage.LANCZOS)
+        if img.mode in ("RGBA", "P"):
+            img = img.convert("RGB")
+        buf = io.BytesIO()
+        img.save(buf, "JPEG", quality=70)
+        buf.seek(0)
+        return Response(content=buf.read(), media_type="image/jpeg")
+    except Exception:
+        return Response(status_code=415)
+
+
+@app.post("/api/nas/import")
+def nas_import(body: dict):
+    """将 NAS 文件导入 DAM。支持真实 NAS 和本地路径。"""
+    paths = body.get("paths", [])
+    if not paths:
+        return {"success": False, "error": "No paths provided", "assets": []}
+    results = []
+    for rel_path in paths:
+        norm = rel_path.replace("\\", "/").strip("/")
+        data = None
+        filename = norm.split("/")[-1] if "/" in norm else norm
+        # Real NAS: download file bytes via Synology FileStation API
+        if _nas and _nas.available:
+            data = _nas.download_file("/" + norm)
+            if not data:
+                continue
+        else:
+            target = (NAS_ROOT / norm).resolve()
+            if not str(target).startswith(str(NAS_ROOT.resolve())):
+                continue
+            if not target.is_file():
+                continue
+            if target.suffix.lower() not in ALLOWED_EXTS:
+                continue
+            data = target.read_bytes()
+            filename = target.name
+        if not data:
+            continue
+        parts = norm.split("/")
+        rel_dir = "/".join(parts[:-1]) if len(parts) > 1 else ""
+        r = _create_asset_from_bytes(data, filename, rel_dir)
+        if r:
+            results.append(r)
+    return {"success": True, "assets": results, "total": len(results)}
 
 
 # ── Tag APIs ──────────────────────────────────────────
@@ -365,7 +776,7 @@ def _coll_to_dict(c: AssetCollection) -> dict:
             "asset_id": ci.asset_id, "position": ci.position, "role": ci.role,
             "filename": a.filename if a else "",
             "thumb_url": f"/thumb/{Path(a.thumbnail_path).name}" if (a and a.thumbnail_path) else None,
-            "file_url": f"/files/{Path(a.stored_path).name}" if a else None,
+            "file_url": f"/files/{_file_rel(a.stored_path)}" if a else None,
             "sku": sku,
         })
     return {
@@ -480,11 +891,15 @@ def update_collection_items(coll_id: str, data: dict):
 
     # Apply additions
     if "add" in data:
-        for img in data["add"]:
+        max_pos = max((ci.position for ci in c.items), default=-1)
+        for i, img in enumerate(data["add"]):
+            pos = img.get("position")
+            if pos is None:
+                pos = max_pos + 1 + i
             session.add(AssetCollectionItem(
                 collection_id=c.id,
                 asset_id=img["asset_id"],
-                position=img.get("position", 0),
+                position=pos,
                 role=img.get("role", "alternate"),
             ))
 

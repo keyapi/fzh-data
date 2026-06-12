@@ -1,0 +1,132 @@
+<h2>AEM 模式验证完毕：Assets（存储）≠ Collections（引用）</h2>
+<p class="subtitle">已从 Adobe 官方文档 + 社区 + 培训材料穷尽搜索确认</p>
+
+<div class="section">
+  <h3>AEM 为什么把 Assets 和 Collections 分开？</h3>
+
+  <div style="display:flex;gap:12px;margin-top:12px">
+    <div style="flex:1;border:1px solid var(--border);border-radius:8px;padding:12px">
+      <div style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-muted);margin-bottom:6px">🗄️ Folders = 仓库货架</div>
+      <ul style="font-size:12px;line-height:1.7;padding-left:16px;color:var(--text)">
+        <li>物理存储层，永久结构</li>
+        <li>权限控制 (ACL) 绑定在文件夹</li>
+        <li>元数据 Schema 按文件夹继承</li>
+        <li>处理规则 (水印/压缩) 按文件夹</li>
+        <li>资产只能在一个文件夹</li>
+        <li><strong>谁在用：</strong>摄影师、管理员</li>
+      </ul>
+    </div>
+    <div style="flex:1;border:1px solid var(--border);border-radius:8px;padding:12px">
+      <div style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-muted);margin-bottom:6px">📋 Collections = 相册/播放列表</div>
+      <ul style="font-size:12px;line-height:1.7;padding-left:16px;color:var(--text)">
+        <li>逻辑引用层，存指针不存文件</li>
+        <li>删除 Collection ≠ 删除资产</li>
+        <li>一个资产可在多个 Collection</li>
+        <li>Smart Collection = 保存的搜索结果</li>
+        <li>Public (共享) 或 Private (个人)</li>
+        <li><strong>谁在用：</strong>运营、品牌、市场</li>
+      </ul>
+    </div>
+  </div>
+
+  <div style="background:var(--surface-hover);border-radius:8px;padding:12px;margin-top:12px">
+    <strong style="font-size:13px">核心理念（Adobe 官方文档原话）：</strong>
+    <blockquote style="font-size:12px;color:var(--text-secondary);margin:8px 0 0 0;border-left:3px solid var(--primary);padding-left:12px">
+      "A collection holds references to each asset, and any change made to an asset inside a collection reflects on the original asset as well."<br>
+      — Adobe Experience League, Files and Collections
+    </blockquote>
+    <blockquote style="font-size:12px;color:var(--text-secondary);margin:8px 0 0 0;border-left:3px solid var(--primary);padding-left:12px">
+      "Folder structure is the most permanent decision you make in a DAM. Collections are ad-hoc, shareable, and cross-folder."<br>
+      — Adobe AEM Community Experts
+    </blockquote>
+  </div>
+</div>
+
+<div class="section">
+  <h3>这个分离解决了什么真实问题？</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:8px">
+    <tr style="border-bottom:1px solid var(--border)">
+      <th style="text-align:left;padding:6px">问题</th>
+      <th style="text-align:left;padding:6px">只有 Folders</th>
+      <th style="text-align:left;padding:6px">只有 Collections</th>
+      <th style="text-align:left;padding:6px">Folders + Collections</th>
+    </tr>
+    <tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:6px">摄影师按拍摄日期建文件夹</td>
+      <td style="padding:6px;color:var(--success)">✅ 天然支持</td>
+      <td style="padding:6px;color:var(--error)">❌ 需要手动建 Collection</td>
+      <td style="padding:6px;color:var(--success)">✅ 上传即存储</td>
+    </tr>
+    <tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:6px">同一张图用在多个上贴批次</td>
+      <td style="padding:6px;color:var(--error)">❌ 需要复制文件</td>
+      <td style="padding:6px;color:var(--success)">✅ 引用即可</td>
+      <td style="padding:6px;color:var(--success)">✅ 引用即可</td>
+    </tr>
+    <tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:6px">权限管理（谁能删图）</td>
+      <td style="padding:6px;color:var(--success)">✅ 文件夹级 ACL</td>
+      <td style="padding:6px;color:var(--error)">❌ 引用无权限边界</td>
+      <td style="padding:6px;color:var(--success)">✅ 文件夹级 ACL</td>
+    </tr>
+    <tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:6px">运营按上贴批次找图</td>
+      <td style="padding:6px;color:var(--error)">❌ 要翻文件夹</td>
+      <td style="padding:6px;color:var(--success)">✅ 天然支持</td>
+      <td style="padding:6px;color:var(--success)">✅ 天然支持</td>
+    </tr>
+    <tr>
+      <td style="padding:6px">多团队共享</td>
+      <td style="padding:6px;color:var(--error)">❌ 串文件夹结构</td>
+      <td style="padding:6px;color:var(--success)">✅ Public/Private</td>
+      <td style="padding:6px;color:var(--success)">✅ 最佳</td>
+    </tr>
+  </table>
+</div>
+
+<div class="section">
+  <h3>映射到我们的场景</h3>
+  <div style="display:flex;align-items:center;gap:12px;margin-top:12px">
+    <div style="flex:1;background:var(--surface-hover);border-radius:8px;padding:12px;font-size:12px">
+      <strong>AEM</strong><br>
+      Folders (物理存储) → Collections (逻辑引用) → 导出<br>
+      📁 拍摄日期/摄影师 → 📋 Campaign/上贴批次 → 📄 Excel
+    </div>
+    <div style="font-size:20px">→</div>
+    <div style="flex:1;background:var(--primary-light);border-radius:8px;padding:12px;font-size:12px;border:2px solid var(--primary)">
+      <strong>DAM Prototype</strong><br>
+      <span style="color:var(--text-muted)">NAS文件夹（未来）</span> → Collections (上贴批次) → Excel导出<br>
+      <span style="color:var(--text-muted)">📁 暂不实现文件夹</span> → 📋 <strong>现在做</strong> → 📄 <strong>现在做</strong>
+    </div>
+  </div>
+  <p style="font-size:11px;color:var(--text-muted);margin-top:8px">Asset 的上传和管理（Flat storage）当前已可用。文件夹结构是 Phase 6+ 的事。现在聚焦 Collection 编辑器和多 SKU 导出。</p>
+</div>
+
+<div class="section">
+  <h3>关于"每个人是否允许不一样"</h3>
+  <p style="font-size:13px">AEM 的做法：Collections 支持 <strong>Public</strong>（所有人可见可编辑）和 <strong>Private</strong>（仅创建者+管理员）。</p>
+  <p style="font-size:13px;margin-top:4px">对我们：<strong>默认 Public</strong>。因为电商运营团队共享上贴任务，小王建的"6月Amazon上贴"小李也需要看到和编辑。不需要 Private 的复杂度。</p>
+  <p style="font-size:13px;margin-top:4px">但 Collection 列表可以<strong>按创建者过滤</strong>，降低列表噪音。</p>
+</div>
+
+<div class="section">
+  <h3>确认后的设计方向</h3>
+  <ol style="font-size:13px;line-height:2;padding-left:18px">
+    <li><strong>Collection = 上贴批次</strong>：一个 Collection 内含多个 SKU，每个 SKU 有自己的有序图片列表</li>
+    <li><strong>Collection 引用 Asset</strong>（已经是）：删除 Collection 不删 Asset，同一张图可出现在多个 Collection</li>
+    <li><strong>AEM 替换视图</strong>：点 Collection → 主区域切换为编辑器，不再用侧边栏</li>
+    <li><strong>导出 = 多行 Excel</strong>：N 个 SKU → N 行，每行列数 = 平台图片槽位数</li>
+    <li><strong>文件夹上传</strong>：Phase 6 再做，现在 flat storage 够用</li>
+  </ol>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="agree" onclick="toggleSelect(this)">
+    <div class="letter">✓</div>
+    <div class="content"><h3>方向确认，继续推进</h3></div>
+  </div>
+  <div class="option" data-choice="correct" onclick="toggleSelect(this)">
+    <div class="letter">?</div>
+    <div class="content"><h3>有修正</h3><p>我有不同理解或补充</p></div>
+  </div>
+</div>
