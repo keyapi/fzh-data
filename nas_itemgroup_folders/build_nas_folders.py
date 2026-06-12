@@ -275,6 +275,7 @@ def main(full: bool = False, dry_run: bool = False, layout: str = "flat") -> Non
 
     # 4. Execute safe actions
     executed, failed = 0, 0
+    _created_parents: set[str] = set()
     safe = [a for a in actions if a.safe and a.type not in (ActionType.MATCH, ActionType.IGNORE)]
     if not dry_run and safe:
         print(f"\n>>> 执行安全操作 ({len(safe)} 项) ...")
@@ -296,6 +297,19 @@ def main(full: bool = False, dry_run: bool = False, layout: str = "flat") -> Non
                     print(f"  OK RENAME {a.old_path} -> {a.new_path}")
 
                 elif a.type == ActionType.MOVE:
+                    # Ensure intermediate parent folders exist (skip target_folder itself)
+                    dst_parent = "/".join(a.new_path.split("/")[:-1])
+                    # Build paths from root, skipping parts that are already under target_folder
+                    target_parts = target_folder.rstrip("/").split("/")
+                    dst_parts = dst_parent.split("/")
+                    for depth in range(len(target_parts), len(dst_parts)):
+                        p = "/".join(dst_parts[:depth + 1])
+                        if p and p not in _created_parents and p != target_folder:
+                            nas_ops.create_folder(
+                                "/".join(dst_parts[:depth]),
+                                dst_parts[depth],
+                            )
+                            _created_parents.add(p)
                     if not nas_ops.move_folder(a.old_path, a.new_path):
                         raise Exception(f"move {a.old_path} failed")
                     print(f"  OK MOVE   {a.old_path} -> {a.new_path}")
