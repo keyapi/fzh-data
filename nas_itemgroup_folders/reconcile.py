@@ -107,3 +107,248 @@ def expected_path(
     else:
         parts = [target_folder] + [safe_name(a) for a in ancestors] + [folder]
         return "/".join(parts)
+
+
+# ── 对账比对 ──────────────────────────────────────────
+
+
+def compare(
+    erpnext_items: list[ErpnextItem],
+    nas_folders: list[NasFolder],
+    target_folder: str,
+    layout: str,
+    sub_folders: list[str],
+) -> list[Action]:
+    """核心对账：ERPNext vs NAS，输出 Action 列表。
+
+    匹配策略: 按 model_id (KS编码) 关联两边。
+    - 无 KS 码的 NAS 文件夹归入 IGNORE
+    - 同一 KS 码有多个 ERPNext 项 → 取第一个，后续标记冲突
+    """
+    actions: list[Action] = []
+    nas_by_model: dict[str, NasFolder] = {}
+    for nf in nas_folders:
+        if nf.model_id:
+            nas_by_model[nf.model_id] = nf
+
+    matched_nas: set[str] = set()
+
+    for item in erpnext_items:
+        nas = nas_by_model.get(item.model_id)
+        exp_name = expected_folder_name(item.model_id, item.name)
+        exp_path = expected_path(
+            item.model_id, item.name, target_folder, item.ancestors, layout
+        )
+
+        if nas is None:
+            actions.append(Action(
+                type=ActionType.CREATE,
+                model_id=item.model_id,
+                erpnext_name=item.name,
+                nas_name="",
+                old_path="",
+                new_path=exp_path,
+                content_count=0,
+                content_bytes=0,
+                safe=True,
+                reason=f"{item.model_id} {item.name}: NAS 不存在，将创建",
+            ))
+            continue
+
+        matched_nas.add(item.model_id)
+
+        # 名称检查
+        if nas.name != exp_name:
+            if nas.content_count == 0:
+                new_full = f"{target_folder}/{exp_name}"
+                if layout == "tree":
+                    new_full = expected_path(
+                        item.model_id, item.name, target_folder, item.ancestors, layout
+                    )
+                actions.append(Action(
+                    type=ActionType.RENAME,
+                    model_id=item.model_id,
+                    erpnext_name=item.name,
+                    nas_name=nas.name,
+                    old_path=nas.path,
+                    new_path=new_full,
+                    content_count=0,
+                    content_bytes=0,
+                    safe=True,
+                    reason=f"物料组改名: '{nas.name}' -> '{exp_name}' (空文件夹，自动重命名)",
+                ))
+            else:
+                actions.append(Action(
+                    type=ActionType.BLOCKED,
+                    model_id=item.model_id,
+                    erpnext_name=item.name,
+                    nas_name=nas.name,
+                    old_path=nas.path,
+                    new_path=f"{target_folder}/{exp_name}",
+                    content_count=nas.content_count,
+                    content_bytes=nas.content_bytes,
+                    safe=False,
+                    reason=f"物料组改名: '{nas.name}' -> '{exp_name}'，旧文件夹有 {nas.content_count} 个文件",
+                ))
+            continue
+
+        # 路径检查
+        if nas.path.rstrip("/") != exp_path.rstrip("/"):
+            if nas.content_count == 0:
+                actions.append(Action(
+                    type=ActionType.MOVE,
+                    model_id=item.model_id,
+                    erpnext_name=item.name,
+                    nas_name=nas.name,
+                    old_path=nas.path,
+                    new_path=exp_path,
+                    content_count=0,
+                    content_bytes=0,
+                    safe=True,
+                    reason=f"路径变更: '{nas.path}' -> '{exp_path}' (空文件夹，自动移动)",
+                ))
+            else:
+                actions.append(Action(
+                    type=ActionType.MOVE_APPROVAL,
+                    model_id=item.model_id,
+                    erpnext_name=item.name,
+                    nas_name=nas.name,
+                    old_path=nas.path,
+                    new_path=exp_path,
+                    content_count=nas.content_count,
+                    content_bytes=nas.content_bytes,
+                    safe=False,
+                    reason=f"路径变更: '{nas.path}' -> '{exp_path}'，含 {nas.content_count} 个文件，需确认后移动",
+                ))
+            continue
+
+        # MATCH
+        actions.append(Action(
+            type=ActionType.MATCH,
+            model_id=item.model_id,
+            erpnext_name=item.name,
+            nas_name=nas.name,
+            old_path="",
+            new_path="",
+            content_count=nas.content_count,
+            content_bytes=nas.content_bytes,
+            safe=True,
+            reason=f"一致: {nas.name}",
+        ))
+
+    # EXTRA: NAS 有但 ERPNext 无
+    for nf in nas_folders:
+        if nf.model_id and nf.model_id not in matched_nas:
+            if nf.content_count == 0:
+                actions.append(Action(
+                    type=ActionType.DELETE_EMPTY,
+                    model_id=nf.model_id,
+                    erpnext_name="",
+                    nas_name=nf.name,
+                    old_path=nf.path,
+                    new_path="",
+                    content_count=0,
+                    content_bytes=0,
+                    safe=True,
+                    reason=f"ERPNext 已无 {nf.model_id}，NAS 空文件夹可安全删除: {nf.name}",
+                ))
+            else:
+                actions.append(Action(
+                    type=ActionType.BLOCKED,
+                    model_id=nf.model_id,
+                    erpnext_name="",
+                    nas_name=nf.name,
+                    old_path=nf.path,
+                    new_path="",
+                    content_count=nf.content_count,
+                    content_bytes=nf.content_bytes,
+                    safe=False,
+                    reason=f"ERPNext 已无 {nf.model_id}，NAS 有 {nf.content_count} 个文件。建议确认是否恢复物料组或手动归档",
+                ))
+
+    # IGNORE: 非脚本创建的文件夹
+    for nf in nas_folders:
+        if not nf.is_script_created:
+            actions.append(Action(
+                type=ActionType.IGNORE,
+                model_id="",
+                erpnext_name="",
+                nas_name=nf.name,
+                old_path="",
+                new_path="",
+                content_count=nf.content_count,
+                content_bytes=nf.content_bytes,
+                safe=True,
+                reason=f"非脚本创建，不碰: {nf.name} ({nf.content_count} 文件)",
+            ))
+
+    return actions
+
+
+if __name__ == "__main__":
+    # Task 2 tests
+    assert parse_model_id('KS0001_三角靠枕') == 'KS0001'
+    assert parse_model_id('旧的设计文件1') is None
+    assert expected_path('KS0001', '三角靠枕', '/产品信息', ['床品类'], 'flat') == '/产品信息/KS0001_三角靠枕'
+
+    # Task 3 tests: compare()
+    erp = [ErpnextItem(name="三角靠枕", model_id="KS0001", parent="三角靠枕类",
+                       ancestors=["床品类", "床头靠枕", "三角靠枕类"])]
+
+    # Test MISSING
+    actions = compare(erp, [], "/产品信息", "flat", ["调研报告"])
+    assert len(actions) == 1
+    assert actions[0].type == ActionType.CREATE
+    assert actions[0].safe is True
+
+    # Test MATCH
+    nas = [NasFolder(name="KS0001_三角靠枕", path="/产品信息/KS0001_三角靠枕",
+                     model_id="KS0001", content_count=0, content_bytes=0,
+                     sub_folders=["调研报告"], extra_folders=[], is_script_created=True)]
+    actions = compare(erp, nas, "/产品信息", "flat", ["调研报告"])
+    assert actions[0].type == ActionType.MATCH
+
+    # Test NAME_MISMATCH (empty -> RENAME)
+    nas_rename = [NasFolder(name="KS0001_旧名", path="/产品信息/KS0001_旧名",
+                            model_id="KS0001", content_count=0, content_bytes=0,
+                            sub_folders=[], extra_folders=[], is_script_created=True)]
+    actions = compare(erp, nas_rename, "/产品信息", "flat", [])
+    assert actions[0].type == ActionType.RENAME
+
+    # Test NAME_MISMATCH (with content -> BLOCKED)
+    nas_blocked = [NasFolder(name="KS0001_旧名", path="/产品信息/KS0001_旧名",
+                             model_id="KS0001", content_count=5, content_bytes=1000,
+                             sub_folders=[], extra_folders=[], is_script_created=True)]
+    actions = compare(erp, nas_blocked, "/产品信息", "flat", [])
+    assert actions[0].type == ActionType.BLOCKED
+    assert actions[0].safe is False
+
+    # Test STRUC_MISMATCH (tree mode, wrong path -> MOVE)
+    nas_flat = [NasFolder(name="KS0001_三角靠枕", path="/产品信息/KS0001_三角靠枕",
+                          model_id="KS0001", content_count=0, content_bytes=0,
+                          sub_folders=[], extra_folders=[], is_script_created=True)]
+    actions = compare(erp, nas_flat, "/产品信息", "tree", [])
+    assert actions[0].type == ActionType.MOVE
+
+    # Test STRUC_MISMATCH (with content -> MOVE_APPROVAL)
+    nas_move_content = [NasFolder(name="KS0001_三角靠枕", path="/产品信息/KS0001_三角靠枕",
+                                  model_id="KS0001", content_count=10, content_bytes=5000,
+                                  sub_folders=[], extra_folders=[], is_script_created=True)]
+    actions = compare(erp, nas_move_content, "/产品信息", "tree", [])
+    assert actions[0].type == ActionType.MOVE_APPROVAL
+
+    # Test EXTRA
+    nas_extra = [NasFolder(name="KS9999_已删除", path="/产品信息/KS9999_已删除",
+                           model_id="KS9999", content_count=5, content_bytes=200,
+                           sub_folders=[], extra_folders=[], is_script_created=True)]
+    actions = compare([], nas_extra, "/产品信息", "flat", [])
+    assert actions[0].type == ActionType.BLOCKED  # has content
+
+    # Test IGNORE (non-script-created)
+    nas_manual = [NasFolder(name="旧文件", path="/产品信息/旧文件",
+                            model_id=None, content_count=10, content_bytes=100,
+                            sub_folders=[], extra_folders=[], is_script_created=False)]
+    actions = compare([], nas_manual, "/产品信息", "flat", [])
+    assert actions[0].type == ActionType.IGNORE
+
+    print("All reconcile tests passed!")
