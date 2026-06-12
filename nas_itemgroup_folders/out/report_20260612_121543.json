@@ -1,0 +1,22 @@
+{
+  "timestamp": "20260612_121543",
+  "target_folder": "/产品信息",
+  "item_group_root": "产品",
+  "layout": "flat",
+  "full_mode": false,
+  "dry_run": false,
+  "stats": {
+    "total_actions": 3,
+    "match": 1,
+    "create": 1,
+    "rename": 0,
+    "move": 0,
+    "move_approval": 0,
+    "blocked": 0,
+    "ignore": 1,
+    "executed": 1,
+    "failed": 0,
+    "sub_folder_created": 0
+  },
+  "blocked": []
+}

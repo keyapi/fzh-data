@@ -1,10 +1,2762 @@
 {
-  "run_at": "2026-06-12T12:00:13.889643",
+  "run_at": "2026-06-12T12:38:14.782690",
   "layout": "flat",
   "erpnext": {
     "root": "产品",
     "total_leaves": 404,
     "items": [
+      {
+        "name": "乐高收纳桶",
+        "model_id": "KS0236",
+        "parent": "儿童类",
+        "ancestors": [
+          "儿童类"
+        ],
+        "expected_path": "/产品信息/KS0236_乐高收纳桶"
+      },
+      {
+        "name": "储物罐坐墩",
+        "model_id": "KS0308",
+        "parent": "儿童类",
+        "ancestors": [
+          "儿童类"
+        ],
+        "expected_path": "/产品信息/KS0308_储物罐坐墩"
+      },
+      {
+        "name": "儿童拼图沙发",
+        "model_id": "KS0330",
+        "parent": "儿童类",
+        "ancestors": [
+          "儿童类"
+        ],
+        "expected_path": "/产品信息/KS0330_儿童拼图沙发"
+      },
+      {
+        "name": "儿童泡沫攀岩块-拱桥套组",
+        "model_id": "KS0240",
+        "parent": "儿童泡沫攀岩块类",
+        "ancestors": [
+          "儿童类",
+          "儿童泡沫攀岩块类"
+        ],
+        "expected_path": "/产品信息/KS0240_儿童泡沫攀岩块-拱桥套组"
+      },
+      {
+        "name": "儿童泡沫攀岩块-渐变攀岩梯",
+        "model_id": "KS0241",
+        "parent": "儿童泡沫攀岩块类",
+        "ancestors": [
+          "儿童类",
+          "儿童泡沫攀岩块类"
+        ],
+        "expected_path": "/产品信息/KS0241_儿童泡沫攀岩块-渐变攀岩梯"
+      },
+      {
+        "name": "儿童泡沫攀岩块-滑梯",
+        "model_id": "KS0242",
+        "parent": "儿童泡沫攀岩块类",
+        "ancestors": [
+          "儿童类",
+          "儿童泡沫攀岩块类"
+        ],
+        "expected_path": "/产品信息/KS0242_儿童泡沫攀岩块-滑梯"
+      },
+      {
+        "name": "儿童泡沫攀岩块-组合小山丘",
+        "model_id": "KS0243",
+        "parent": "儿童泡沫攀岩块类",
+        "ancestors": [
+          "儿童类",
+          "儿童泡沫攀岩块类"
+        ],
+        "expected_path": "/产品信息/KS0243_儿童泡沫攀岩块-组合小山丘"
+      },
+      {
+        "name": "儿童泡沫攀岩块-长方体平台",
+        "model_id": "KS0238",
+        "parent": "儿童泡沫攀岩块类",
+        "ancestors": [
+          "儿童类",
+          "儿童泡沫攀岩块类"
+        ],
+        "expected_path": "/产品信息/KS0238_儿童泡沫攀岩块-长方体平台"
+      },
+      {
+        "name": "儿童游戏床",
+        "model_id": "KS0372",
+        "parent": "儿童类",
+        "ancestors": [
+          "儿童类"
+        ],
+        "expected_path": "/产品信息/KS0372_儿童游戏床"
+      },
+      {
+        "name": "幼儿积木沙发",
+        "model_id": "KS0177",
+        "parent": "儿童类",
+        "ancestors": [
+          "儿童类"
+        ],
+        "expected_path": "/产品信息/KS0177_幼儿积木沙发"
+      },
+      {
+        "name": "果冻涂鸦沙发",
+        "model_id": "KS0176",
+        "parent": "儿童类",
+        "ancestors": [
+          "儿童类"
+        ],
+        "expected_path": "/产品信息/KS0176_果冻涂鸦沙发"
+      },
+      {
+        "name": "牵手椅凳",
+        "model_id": "KS0190",
+        "parent": "儿童类",
+        "ancestors": [
+          "儿童类"
+        ],
+        "expected_path": "/产品信息/KS0190_牵手椅凳"
+      },
+      {
+        "name": "三角猫隧道",
+        "model_id": "KS0189",
+        "parent": "宠物类",
+        "ancestors": [
+          "宠物类"
+        ],
+        "expected_path": "/产品信息/KS0189_三角猫隧道"
+      },
+      {
+        "name": "中控台车载狗窝",
+        "model_id": "KS0174",
+        "parent": "中控台车载狗窝类",
+        "ancestors": [
+          "宠物类",
+          "中控台车载狗窝类"
+        ],
+        "expected_path": "/产品信息/KS0174_中控台车载狗窝"
+      },
+      {
+        "name": "中控台车载狗窝四季款",
+        "model_id": "KS0234",
+        "parent": "中控台车载狗窝类",
+        "ancestors": [
+          "宠物类",
+          "中控台车载狗窝类"
+        ],
+        "expected_path": "/产品信息/KS0234_中控台车载狗窝四季款"
+      },
+      {
+        "name": "云朵宠物窝",
+        "model_id": "KS0346",
+        "parent": "宠物类",
+        "ancestors": [
+          "宠物类"
+        ],
+        "expected_path": "/产品信息/KS0346_云朵宠物窝"
+      },
+      {
+        "name": "仿毛皮大型犬垫子",
+        "model_id": "KS0237",
+        "parent": "宠物类",
+        "ancestors": [
+          "宠物类"
+        ],
+        "expected_path": "/产品信息/KS0237_仿毛皮大型犬垫子"
+      },
+      {
+        "name": "便携式旅行宠物床",
+        "model_id": "KS0136",
+        "parent": "宠物类",
+        "ancestors": [
+          "宠物类"
+        ],
+        "expected_path": "/产品信息/KS0136_便携式旅行宠物床"
+      },
+      {
+        "name": "半圆宠物爬梯",
+        "model_id": "KS0113",
+        "parent": "宠物类",
+        "ancestors": [
+          "宠物类"
+        ],
+        "expected_path": "/产品信息/KS0113_半圆宠物爬梯"
+      },
+      {
+        "name": "墙面游戏猫爬梯",
+        "model_id": "KS0188",
+        "parent": "宠物类",
+        "ancestors": [
+          "宠物类"
+        ],
+        "expected_path": "/产品信息/KS0188_墙面游戏猫爬梯"
+      },
+      {
+        "name": "多功能猫窝",
+        "model_id": "KS0164",
+        "parent": "宠物类",
+        "ancestors": [
+          "宠物类"
+        ],
+        "expected_path": "/产品信息/KS0164_多功能猫窝"
+      },
+      {
+        "name": "大尺寸车载宠物窝",
+        "model_id": "KS0125",
+        "parent": "宠物类",
+        "ancestors": [
+          "宠物类"
+        ],
+        "expected_path": "/产品信息/KS0125_大尺寸车载宠物窝"
+      },
+      {
+        "name": "安全感靠墙宠物窝",
+        "model_id": "KS0146",
+        "parent": "宠物类",
+        "ancestors": [
+          "宠物类"
+        ],
+        "expected_path": "/产品信息/KS0146_安全感靠墙宠物窝"
+      },
+      {
+        "name": "安抚宠物窝",
+        "model_id": "KS0131",
+        "parent": "宠物类",
+        "ancestors": [
+          "宠物类"
+        ],
+        "expected_path": "/产品信息/KS0131_安抚宠物窝"
+      },
+      {
+        "name": "宠物便携出行包",
+        "model_id": "KS0226",
+        "parent": "宠物类",
+        "ancestors": [
+          "宠物类"
+        ],
+        "expected_path": "/产品信息/KS0226_宠物便携出行包"
+      },
+      {
+        "name": "宠物冰垫",
+        "model_id": "KS0222",
+        "parent": "宠物类",
+        "ancestors": [
+          "宠物类"
+        ],
+        "expected_path": "/产品信息/KS0222_宠物冰垫"
+      },
+      {
+        "name": "宠物嗅闻趴趴垫",
+        "model_id": "KS0337",
+        "parent": "宠物类",
+        "ancestors": [
+          "宠物类"
+        ],
+        "expected_path": "/产品信息/KS0337_宠物嗅闻趴趴垫"
+      },
+      {
+        "name": "宠物外出手提包",
+        "model_id": "KS0214",
+        "parent": "宠物类",
+        "ancestors": [
+          "宠物类"
+        ],
+        "expected_path": "/产品信息/KS0214_宠物外出手提包"
+      },
+      {
+        "name": "宠物外出收纳包",
+        "model_id": "KS0197",
+        "parent": "宠物类",
+        "ancestors": [
+          "宠物类"
+        ],
+        "expected_path": "/产品信息/KS0197_宠物外出收纳包"
+      },
+      {
+        "name": "宠物度假风椰树躺椅",
+        "model_id": "KS0235",
+        "parent": "宠物类",
+        "ancestors": [
+          "宠物类"
+        ],
+        "expected_path": "/产品信息/KS0235_宠物度假风椰树躺椅"
+      },
+      {
+        "name": "宠物式懒人床",
+        "model_id": "KS0107",
+        "parent": "宠物类",
+        "ancestors": [
+          "宠物类"
+        ],
+        "expected_path": "/产品信息/KS0107_宠物式懒人床"
+      },
+      {
+        "name": "拐角狗床（PP棉）",
+        "model_id": "KS0021",
+        "parent": "宠物类",
+        "ancestors": [
+          "宠物类"
+        ],
+        "expected_path": "/产品信息/KS0021_拐角狗床（PP棉）"
+      },
+      {
+        "name": "新被子狗床",
+        "model_id": "KS0217",
+        "parent": "宠物类",
+        "ancestors": [
+          "宠物类"
+        ],
+        "expected_path": "/产品信息/KS0217_新被子狗床"
+      },
+      {
+        "name": "模块化宠物楼梯",
+        "model_id": "KS0247",
+        "parent": "宠物类",
+        "ancestors": [
+          "宠物类"
+        ],
+        "expected_path": "/产品信息/KS0247_模块化宠物楼梯"
+      },
+      {
+        "name": "横向穿戴宠物外出背包",
+        "model_id": "KS0210",
+        "parent": "宠物类",
+        "ancestors": [
+          "宠物类"
+        ],
+        "expected_path": "/产品信息/KS0210_横向穿戴宠物外出背包"
+      },
+      {
+        "name": "欧式宠物沙发",
+        "model_id": "KS0205",
+        "parent": "宠物类",
+        "ancestors": [
+          "宠物类"
+        ],
+        "expected_path": "/产品信息/KS0205_欧式宠物沙发"
+      },
+      {
+        "name": "欧式沙发狗床",
+        "model_id": "KS0233",
+        "parent": "宠物类",
+        "ancestors": [
+          "宠物类"
+        ],
+        "expected_path": "/产品信息/KS0233_欧式沙发狗床"
+      },
+      {
+        "name": "歌剧院猫窝",
+        "model_id": "KS0327",
+        "parent": "宠物类",
+        "ancestors": [
+          "宠物类"
+        ],
+        "expected_path": "/产品信息/KS0327_歌剧院猫窝"
+      },
+      {
+        "name": "毛毡DIY宠物窝",
+        "model_id": "KS0344",
+        "parent": "宠物类",
+        "ancestors": [
+          "宠物类"
+        ],
+        "expected_path": "/产品信息/KS0344_毛毡DIY宠物窝"
+      },
+      {
+        "name": "毛毡多层猫窝",
+        "model_id": "KS0184",
+        "parent": "宠物类",
+        "ancestors": [
+          "宠物类"
+        ],
+        "expected_path": "/产品信息/KS0184_毛毡多层猫窝"
+      },
+      {
+        "name": "毛毡宠物窝",
+        "model_id": "KS0129",
+        "parent": "宠物类",
+        "ancestors": [
+          "宠物类"
+        ],
+        "expected_path": "/产品信息/KS0129_毛毡宠物窝"
+      },
+      {
+        "name": "毛毡猫隧道",
+        "model_id": "KS0137",
+        "parent": "宠物类",
+        "ancestors": [
+          "宠物类"
+        ],
+        "expected_path": "/产品信息/KS0137_毛毡猫隧道"
+      },
+      {
+        "name": "沙发用宠物透气床垫",
+        "model_id": "KS0140",
+        "parent": "宠物类",
+        "ancestors": [
+          "宠物类"
+        ],
+        "expected_path": "/产品信息/KS0140_沙发用宠物透气床垫"
+      },
+      {
+        "name": "深睡眠狗窝",
+        "model_id": "KS0232",
+        "parent": "宠物类",
+        "ancestors": [
+          "宠物类"
+        ],
+        "expected_path": "/产品信息/KS0232_深睡眠狗窝"
+      },
+      {
+        "name": "狗护膝",
+        "model_id": "KS0126",
+        "parent": "宠物类",
+        "ancestors": [
+          "宠物类"
+        ],
+        "expected_path": "/产品信息/KS0126_狗护膝"
+      },
+      {
+        "name": "狗狗出行辅助带",
+        "model_id": "KS0223",
+        "parent": "宠物类",
+        "ancestors": [
+          "宠物类"
+        ],
+        "expected_path": "/产品信息/KS0223_狗狗出行辅助带"
+      },
+      {
+        "name": "狗狗自背包",
+        "model_id": "KS0200",
+        "parent": "宠物类",
+        "ancestors": [
+          "宠物类"
+        ],
+        "expected_path": "/产品信息/KS0200_狗狗自背包"
+      },
+      {
+        "name": "猫吊床",
+        "model_id": "KS0108",
+        "parent": "宠物类",
+        "ancestors": [
+          "宠物类"
+        ],
+        "expected_path": "/产品信息/KS0108_猫吊床"
+      },
+      {
+        "name": "猫秋千",
+        "model_id": "KS0203",
+        "parent": "宠物类",
+        "ancestors": [
+          "宠物类"
+        ],
+        "expected_path": "/产品信息/KS0203_猫秋千"
+      },
+      {
+        "name": "现代款宠物沙发",
+        "model_id": "KS0204",
+        "parent": "宠物类",
+        "ancestors": [
+          "宠物类"
+        ],
+        "expected_path": "/产品信息/KS0204_现代款宠物沙发"
+      },
+      {
+        "name": "窝垫两用宠物窝",
+        "model_id": "KS0380",
+        "parent": "宠物类",
+        "ancestors": [
+          "宠物类"
+        ],
+        "expected_path": "/产品信息/KS0380_窝垫两用宠物窝"
+      },
+      {
+        "name": "蓝白条纹款中控台车载狗窝",
+        "model_id": "KS0181",
+        "parent": "宠物类",
+        "ancestors": [
+          "宠物类"
+        ],
+        "expected_path": "/产品信息/KS0181_蓝白条纹款中控台车载狗窝"
+      },
+      {
+        "name": "襁褓宠物窝",
+        "model_id": "KS0343",
+        "parent": "宠物类",
+        "ancestors": [
+          "宠物类"
+        ],
+        "expected_path": "/产品信息/KS0343_襁褓宠物窝"
+      },
+      {
+        "name": "豌豆宠物窝",
+        "model_id": "KS0367",
+        "parent": "宠物类",
+        "ancestors": [
+          "宠物类"
+        ],
+        "expected_path": "/产品信息/KS0367_豌豆宠物窝"
+      },
+      {
+        "name": "车载宠物窝",
+        "model_id": "KS0118",
+        "parent": "宠物类",
+        "ancestors": [
+          "宠物类"
+        ],
+        "expected_path": "/产品信息/KS0118_车载宠物窝"
+      },
+      {
+        "name": "车载软体狗笼（采购）",
+        "model_id": "KS0202",
+        "parent": "宠物类",
+        "ancestors": [
+          "宠物类"
+        ],
+        "expected_path": "/产品信息/KS0202_车载软体狗笼（采购）"
+      },
+      {
+        "name": "长方形狗床（海绵）",
+        "model_id": "KS0020",
+        "parent": "宠物类",
+        "ancestors": [
+          "宠物类"
+        ],
+        "expected_path": "/产品信息/KS0020_长方形狗床（海绵）"
+      },
+      {
+        "name": "防猫抓沙发保护垫",
+        "model_id": "KS0213",
+        "parent": "宠物类",
+        "ancestors": [
+          "宠物类"
+        ],
+        "expected_path": "/产品信息/KS0213_防猫抓沙发保护垫"
+      },
+      {
+        "name": "高围挡宠物窝",
+        "model_id": "KS0349",
+        "parent": "宠物类",
+        "ancestors": [
+          "宠物类"
+        ],
+        "expected_path": "/产品信息/KS0349_高围挡宠物窝"
+      },
+      {
+        "name": "创意坐垫",
+        "model_id": "KS0169",
+        "parent": "坐垫",
+        "ancestors": [
+          "家具类",
+          "坐垫"
+        ],
+        "expected_path": "/产品信息/KS0169_创意坐垫"
+      },
+      {
+        "name": "地板枕头套装",
+        "model_id": "KS0133",
+        "parent": "坐垫",
+        "ancestors": [
+          "家具类",
+          "坐垫"
+        ],
+        "expected_path": "/产品信息/KS0133_地板枕头套装"
+      },
+      {
+        "name": "多功能格子组合坐垫4个",
+        "model_id": "KS0101",
+        "parent": "坐垫",
+        "ancestors": [
+          "家具类",
+          "坐垫"
+        ],
+        "expected_path": "/产品信息/KS0101_多功能格子组合坐垫4个"
+      },
+      {
+        "name": "庭院组合垫",
+        "model_id": "KS0157",
+        "parent": "坐垫",
+        "ancestors": [
+          "家具类",
+          "坐垫"
+        ],
+        "expected_path": "/产品信息/KS0157_庭院组合垫"
+      },
+      {
+        "name": "户外托盘垫-云朵款坐垫",
+        "model_id": "KS0494",
+        "parent": "户外托盘垫",
+        "ancestors": [
+          "家具类",
+          "坐垫",
+          "户外托盘垫"
+        ],
+        "expected_path": "/产品信息/KS0494_户外托盘垫-云朵款坐垫"
+      },
+      {
+        "name": "户外托盘垫-云朵款靠背",
+        "model_id": "KS0493",
+        "parent": "户外托盘垫",
+        "ancestors": [
+          "家具类",
+          "坐垫",
+          "户外托盘垫"
+        ],
+        "expected_path": "/产品信息/KS0493_户外托盘垫-云朵款靠背"
+      },
+      {
+        "name": "户外托盘垫-坐垫",
+        "model_id": "KS0459",
+        "parent": "户外托盘垫",
+        "ancestors": [
+          "家具类",
+          "坐垫",
+          "户外托盘垫"
+        ],
+        "expected_path": "/产品信息/KS0459_户外托盘垫-坐垫"
+      },
+      {
+        "name": "户外托盘垫-装饰方靠枕",
+        "model_id": "KS0462",
+        "parent": "户外托盘垫",
+        "ancestors": [
+          "家具类",
+          "坐垫",
+          "户外托盘垫"
+        ],
+        "expected_path": "/产品信息/KS0462_户外托盘垫-装饰方靠枕"
+      },
+      {
+        "name": "户外托盘垫-转角垫",
+        "model_id": "KS0461",
+        "parent": "户外托盘垫",
+        "ancestors": [
+          "家具类",
+          "坐垫",
+          "户外托盘垫"
+        ],
+        "expected_path": "/产品信息/KS0461_户外托盘垫-转角垫"
+      },
+      {
+        "name": "户外托盘垫-靠背",
+        "model_id": "KS0460",
+        "parent": "户外托盘垫",
+        "ancestors": [
+          "家具类",
+          "坐垫",
+          "户外托盘垫"
+        ],
+        "expected_path": "/产品信息/KS0460_户外托盘垫-靠背"
+      },
+      {
+        "name": "户外托盘垫印花款-坐垫",
+        "model_id": "KS0496",
+        "parent": "户外托盘垫",
+        "ancestors": [
+          "家具类",
+          "坐垫",
+          "户外托盘垫"
+        ],
+        "expected_path": "/产品信息/KS0496_户外托盘垫印花款-坐垫"
+      },
+      {
+        "name": "户外托盘垫印花款-装饰方靠枕",
+        "model_id": "KS0499",
+        "parent": "户外托盘垫",
+        "ancestors": [
+          "家具类",
+          "坐垫",
+          "户外托盘垫"
+        ],
+        "expected_path": "/产品信息/KS0499_户外托盘垫印花款-装饰方靠枕"
+      },
+      {
+        "name": "户外托盘垫印花款-转角垫",
+        "model_id": "KS0498",
+        "parent": "户外托盘垫",
+        "ancestors": [
+          "家具类",
+          "坐垫",
+          "户外托盘垫"
+        ],
+        "expected_path": "/产品信息/KS0498_户外托盘垫印花款-转角垫"
+      },
+      {
+        "name": "户外托盘垫印花款-靠背",
+        "model_id": "KS0497",
+        "parent": "户外托盘垫",
+        "ancestors": [
+          "家具类",
+          "坐垫",
+          "户外托盘垫"
+        ],
+        "expected_path": "/产品信息/KS0497_户外托盘垫印花款-靠背"
+      },
+      {
+        "name": "方形皮革坐垫",
+        "model_id": "KS0106",
+        "parent": "坐垫",
+        "ancestors": [
+          "家具类",
+          "坐垫"
+        ],
+        "expected_path": "/产品信息/KS0106_方形皮革坐垫"
+      },
+      {
+        "name": "模块组合坐垫4个",
+        "model_id": "KS0105",
+        "parent": "坐垫",
+        "ancestors": [
+          "家具类",
+          "坐垫"
+        ],
+        "expected_path": "/产品信息/KS0105_模块组合坐垫4个"
+      },
+      {
+        "name": "笔记本地垫",
+        "model_id": "KS0329",
+        "parent": "坐垫",
+        "ancestors": [
+          "家具类",
+          "坐垫"
+        ],
+        "expected_path": "/产品信息/KS0329_笔记本地垫"
+      },
+      {
+        "name": "蛋椅坐垫",
+        "model_id": "KS0155",
+        "parent": "坐垫",
+        "ancestors": [
+          "家具类",
+          "坐垫"
+        ],
+        "expected_path": "/产品信息/KS0155_蛋椅坐垫"
+      },
+      {
+        "name": "褶皱手提坐垫圆形",
+        "model_id": "KS0115",
+        "parent": "坐垫",
+        "ancestors": [
+          "家具类",
+          "坐垫"
+        ],
+        "expected_path": "/产品信息/KS0115_褶皱手提坐垫圆形"
+      },
+      {
+        "name": "褶皱手提坐垫方形",
+        "model_id": "KS0116",
+        "parent": "坐垫",
+        "ancestors": [
+          "家具类",
+          "坐垫"
+        ],
+        "expected_path": "/产品信息/KS0116_褶皱手提坐垫方形"
+      },
+      {
+        "name": "麻将沙发BOHO风格",
+        "model_id": "KS0454",
+        "parent": "坐垫",
+        "ancestors": [
+          "家具类",
+          "坐垫"
+        ],
+        "expected_path": "/产品信息/KS0454_麻将沙发BOHO风格"
+      },
+      {
+        "name": "麻将沙发优化款",
+        "model_id": "KS0385",
+        "parent": "坐垫",
+        "ancestors": [
+          "家具类",
+          "坐垫"
+        ],
+        "expected_path": "/产品信息/KS0385_麻将沙发优化款"
+      },
+      {
+        "name": "麻将沙发纯色版",
+        "model_id": "KS0443",
+        "parent": "坐垫",
+        "ancestors": [
+          "家具类",
+          "坐垫"
+        ],
+        "expected_path": "/产品信息/KS0443_麻将沙发纯色版"
+      },
+      {
+        "name": "麻将沙发衍生款",
+        "model_id": "KS0319",
+        "parent": "坐垫",
+        "ancestors": [
+          "家具类",
+          "坐垫"
+        ],
+        "expected_path": "/产品信息/KS0319_麻将沙发衍生款"
+      },
+      {
+        "name": "几何坐墩-梯形",
+        "model_id": "KS0315",
+        "parent": "几何坐墩",
+        "ancestors": [
+          "家具类",
+          "坐墩",
+          "几何坐墩"
+        ],
+        "expected_path": "/产品信息/KS0315_几何坐墩-梯形"
+      },
+      {
+        "name": "几何坐墩-椭圆形",
+        "model_id": "KS0333",
+        "parent": "几何坐墩",
+        "ancestors": [
+          "家具类",
+          "坐墩",
+          "几何坐墩"
+        ],
+        "expected_path": "/产品信息/KS0333_几何坐墩-椭圆形"
+      },
+      {
+        "name": "几何坐墩-长方体",
+        "model_id": "KS0316",
+        "parent": "几何坐墩",
+        "ancestors": [
+          "家具类",
+          "坐墩",
+          "几何坐墩"
+        ],
+        "expected_path": "/产品信息/KS0316_几何坐墩-长方体"
+      },
+      {
+        "name": "创意花生地垫",
+        "model_id": "KS0350",
+        "parent": "坐墩",
+        "ancestors": [
+          "家具类",
+          "坐墩"
+        ],
+        "expected_path": "/产品信息/KS0350_创意花生地垫"
+      },
+      {
+        "name": "坐墩三角款",
+        "model_id": "KS0318",
+        "parent": "坐墩",
+        "ancestors": [
+          "家具类",
+          "坐墩"
+        ],
+        "expected_path": "/产品信息/KS0318_坐墩三角款"
+      },
+      {
+        "name": "异形沙包坐墩",
+        "model_id": "KS0111",
+        "parent": "坐墩",
+        "ancestors": [
+          "家具类",
+          "坐墩"
+        ],
+        "expected_path": "/产品信息/KS0111_异形沙包坐墩"
+      },
+      {
+        "name": "抽条大兔毛系列-圆沙发-延长脚凳",
+        "model_id": "KS0500",
+        "parent": "坐墩",
+        "ancestors": [
+          "家具类",
+          "坐墩"
+        ],
+        "expected_path": "/产品信息/KS0500_抽条大兔毛系列-圆沙发-延长脚凳"
+      },
+      {
+        "name": "抽象手形地垫",
+        "model_id": "KS0370",
+        "parent": "坐墩",
+        "ancestors": [
+          "家具类",
+          "坐墩"
+        ],
+        "expected_path": "/产品信息/KS0370_抽象手形地垫"
+      },
+      {
+        "name": "曲线沙发座椅",
+        "model_id": "KS0374",
+        "parent": "坐墩",
+        "ancestors": [
+          "家具类",
+          "坐墩"
+        ],
+        "expected_path": "/产品信息/KS0374_曲线沙发座椅"
+      },
+      {
+        "name": "材质方墩",
+        "model_id": "KS0428",
+        "parent": "坐墩",
+        "ancestors": [
+          "家具类",
+          "坐墩"
+        ],
+        "expected_path": "/产品信息/KS0428_材质方墩"
+      },
+      {
+        "name": "椭圆墩-旧铁皮",
+        "model_id": "KS0458",
+        "parent": "坐墩",
+        "ancestors": [
+          "家具类",
+          "坐墩"
+        ],
+        "expected_path": "/产品信息/KS0458_椭圆墩-旧铁皮"
+      },
+      {
+        "name": "游戏房沙发",
+        "model_id": "KS0173",
+        "parent": "坐墩",
+        "ancestors": [
+          "家具类",
+          "坐墩"
+        ],
+        "expected_path": "/产品信息/KS0173_游戏房沙发"
+      },
+      {
+        "name": "罗马假日休闲脚凳",
+        "model_id": "KS0433",
+        "parent": "坐墩",
+        "ancestors": [
+          "家具类",
+          "坐墩"
+        ],
+        "expected_path": "/产品信息/KS0433_罗马假日休闲脚凳"
+      },
+      {
+        "name": "魔方边几凳",
+        "model_id": "KS0172",
+        "parent": "坐墩",
+        "ancestors": [
+          "家具类",
+          "坐墩"
+        ],
+        "expected_path": "/产品信息/KS0172_魔方边几凳"
+      },
+      {
+        "name": "鹅卵石套装",
+        "model_id": "KS0517",
+        "parent": "坐墩",
+        "ancestors": [
+          "家具类",
+          "坐墩"
+        ],
+        "expected_path": "/产品信息/KS0517_鹅卵石套装"
+      },
+      {
+        "name": "homie小沙发",
+        "model_id": "KS0457",
+        "parent": "单人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "单人沙发"
+        ],
+        "expected_path": "/产品信息/KS0457_homie小沙发"
+      },
+      {
+        "name": "U形锁沙发",
+        "model_id": "KS0356",
+        "parent": "单人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "单人沙发"
+        ],
+        "expected_path": "/产品信息/KS0356_U形锁沙发"
+      },
+      {
+        "name": "书虫沙发",
+        "model_id": "KS0179",
+        "parent": "单人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "单人沙发"
+        ],
+        "expected_path": "/产品信息/KS0179_书虫沙发"
+      },
+      {
+        "name": "休闲地板沙发椅",
+        "model_id": "KS0418",
+        "parent": "单人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "单人沙发"
+        ],
+        "expected_path": "/产品信息/KS0418_休闲地板沙发椅"
+      },
+      {
+        "name": "假日休闲躺椅",
+        "model_id": "KS0405",
+        "parent": "单人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "单人沙发"
+        ],
+        "expected_path": "/产品信息/KS0405_假日休闲躺椅"
+      },
+      {
+        "name": "假日休闲躺椅脚凳",
+        "model_id": "KS0530",
+        "parent": "单人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "单人沙发"
+        ],
+        "expected_path": "/产品信息/KS0530_假日休闲躺椅脚凳"
+      },
+      {
+        "name": "兔毛翻折沙发床",
+        "model_id": "KS0528",
+        "parent": "单人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "单人沙发"
+        ],
+        "expected_path": "/产品信息/KS0528_兔毛翻折沙发床"
+      },
+      {
+        "name": "单双人地板沙发-单人位",
+        "model_id": "KS0434",
+        "parent": "单人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "单人沙发"
+        ],
+        "expected_path": "/产品信息/KS0434_单双人地板沙发-单人位"
+      },
+      {
+        "name": "南瓜豆袋椅",
+        "model_id": "KS0401",
+        "parent": "单人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "单人沙发"
+        ],
+        "expected_path": "/产品信息/KS0401_南瓜豆袋椅"
+      },
+      {
+        "name": "坐坐熊地板沙发",
+        "model_id": "KS0186",
+        "parent": "单人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "单人沙发"
+        ],
+        "expected_path": "/产品信息/KS0186_坐坐熊地板沙发"
+      },
+      {
+        "name": "多片折叠沙发",
+        "model_id": "KS0123",
+        "parent": "单人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "单人沙发"
+        ],
+        "expected_path": "/产品信息/KS0123_多片折叠沙发"
+      },
+      {
+        "name": "多片折叠沙发-迭代款",
+        "model_id": "KS0196",
+        "parent": "单人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "单人沙发"
+        ],
+        "expected_path": "/产品信息/KS0196_多片折叠沙发-迭代款"
+      },
+      {
+        "name": "多边形单人豆袋椅",
+        "model_id": "KS0438",
+        "parent": "单人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "单人沙发"
+        ],
+        "expected_path": "/产品信息/KS0438_多边形单人豆袋椅"
+      },
+      {
+        "name": "大软垫摇椅",
+        "model_id": "KS0513",
+        "parent": "单人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "单人沙发"
+        ],
+        "expected_path": "/产品信息/KS0513_大软垫摇椅"
+      },
+      {
+        "name": "客厅娱乐化模块沙发",
+        "model_id": "KS0363",
+        "parent": "单人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "单人沙发"
+        ],
+        "expected_path": "/产品信息/KS0363_客厅娱乐化模块沙发"
+      },
+      {
+        "name": "嵌入式组合沙发",
+        "model_id": "KS0345",
+        "parent": "单人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "单人沙发"
+        ],
+        "expected_path": "/产品信息/KS0345_嵌入式组合沙发"
+      },
+      {
+        "name": "心形沙发",
+        "model_id": "KS0328",
+        "parent": "单人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "单人沙发"
+        ],
+        "expected_path": "/产品信息/KS0328_心形沙发"
+      },
+      {
+        "name": "情侣沙发",
+        "model_id": "KS0354",
+        "parent": "单人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "单人沙发"
+        ],
+        "expected_path": "/产品信息/KS0354_情侣沙发"
+      },
+      {
+        "name": "扭结地板沙发-沙发",
+        "model_id": "KS0514",
+        "parent": "单人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "单人沙发"
+        ],
+        "expected_path": "/产品信息/KS0514_扭结地板沙发-沙发"
+      },
+      {
+        "name": "扭结地板沙发-脚踏",
+        "model_id": "KS0522",
+        "parent": "单人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "单人沙发"
+        ],
+        "expected_path": "/产品信息/KS0522_扭结地板沙发-脚踏"
+      },
+      {
+        "name": "折叠软垫沙发床",
+        "model_id": "KS0437",
+        "parent": "单人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "单人沙发"
+        ],
+        "expected_path": "/产品信息/KS0437_折叠软垫沙发床"
+      },
+      {
+        "name": "抽条大兔毛沙发躺椅",
+        "model_id": "KS0395",
+        "parent": "单人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "单人沙发"
+        ],
+        "expected_path": "/产品信息/KS0395_抽条大兔毛沙发躺椅"
+      },
+      {
+        "name": "抽条大兔毛系列-圆沙发",
+        "model_id": "KS0390",
+        "parent": "单人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "单人沙发"
+        ],
+        "expected_path": "/产品信息/KS0390_抽条大兔毛系列-圆沙发"
+      },
+      {
+        "name": "拉带沙发",
+        "model_id": "KS0124",
+        "parent": "单人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "单人沙发"
+        ],
+        "expected_path": "/产品信息/KS0124_拉带沙发"
+      },
+      {
+        "name": "摩登沙发",
+        "model_id": "KS0463",
+        "parent": "单人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "单人沙发"
+        ],
+        "expected_path": "/产品信息/KS0463_摩登沙发"
+      },
+      {
+        "name": "摩登沙发-脚踏",
+        "model_id": "KS0464",
+        "parent": "单人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "单人沙发"
+        ],
+        "expected_path": "/产品信息/KS0464_摩登沙发-脚踏"
+      },
+      {
+        "name": "松饼大沙发",
+        "model_id": "KS0218",
+        "parent": "单人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "单人沙发"
+        ],
+        "expected_path": "/产品信息/KS0218_松饼大沙发"
+      },
+      {
+        "name": "松饼大沙发-放大版",
+        "model_id": "KS0394",
+        "parent": "单人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "单人沙发"
+        ],
+        "expected_path": "/产品信息/KS0394_松饼大沙发-放大版"
+      },
+      {
+        "name": "松饼沙发床",
+        "model_id": "KS0375",
+        "parent": "单人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "单人沙发"
+        ],
+        "expected_path": "/产品信息/KS0375_松饼沙发床"
+      },
+      {
+        "name": "梯形单元组合沙发",
+        "model_id": "KS0323",
+        "parent": "单人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "单人沙发"
+        ],
+        "expected_path": "/产品信息/KS0323_梯形单元组合沙发"
+      },
+      {
+        "name": "泡芙沙发",
+        "model_id": "KS0421",
+        "parent": "单人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "单人沙发"
+        ],
+        "expected_path": "/产品信息/KS0421_泡芙沙发"
+      },
+      {
+        "name": "流苏躺椅",
+        "model_id": "KS0376",
+        "parent": "单人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "单人沙发"
+        ],
+        "expected_path": "/产品信息/KS0376_流苏躺椅"
+      },
+      {
+        "name": "深卧单人沙发椅",
+        "model_id": "KS0483",
+        "parent": "单人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "单人沙发"
+        ],
+        "expected_path": "/产品信息/KS0483_深卧单人沙发椅"
+      },
+      {
+        "name": "瑜伽组合沙发",
+        "model_id": "KS0151",
+        "parent": "单人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "单人沙发"
+        ],
+        "expected_path": "/产品信息/KS0151_瑜伽组合沙发"
+      },
+      {
+        "name": "白日梦躺椅",
+        "model_id": "KS0495",
+        "parent": "单人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "单人沙发"
+        ],
+        "expected_path": "/产品信息/KS0495_白日梦躺椅"
+      },
+      {
+        "name": "皮带沙发",
+        "model_id": "KS0199",
+        "parent": "单人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "单人沙发"
+        ],
+        "expected_path": "/产品信息/KS0199_皮带沙发"
+      },
+      {
+        "name": "绑带沙发",
+        "model_id": "KS0127",
+        "parent": "单人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "单人沙发"
+        ],
+        "expected_path": "/产品信息/KS0127_绑带沙发"
+      },
+      {
+        "name": "苏打沙发",
+        "model_id": "KS0516",
+        "parent": "单人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "单人沙发"
+        ],
+        "expected_path": "/产品信息/KS0516_苏打沙发"
+      },
+      {
+        "name": "薯条沙发升级款",
+        "model_id": "KS0353",
+        "parent": "单人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "单人沙发"
+        ],
+        "expected_path": "/产品信息/KS0353_薯条沙发升级款"
+      },
+      {
+        "name": "角落单人软垫沙发",
+        "model_id": "KS0465",
+        "parent": "单人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "单人沙发"
+        ],
+        "expected_path": "/产品信息/KS0465_角落单人软垫沙发"
+      },
+      {
+        "name": "角落单人软垫沙发-脚踏",
+        "model_id": "KS0466",
+        "parent": "单人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "单人沙发"
+        ],
+        "expected_path": "/产品信息/KS0466_角落单人软垫沙发-脚踏"
+      },
+      {
+        "name": "贝壳造型沙发椅",
+        "model_id": "KS0339",
+        "parent": "单人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "单人沙发"
+        ],
+        "expected_path": "/产品信息/KS0339_贝壳造型沙发椅"
+      },
+      {
+        "name": "软糖沙发",
+        "model_id": "KS0480",
+        "parent": "单人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "单人沙发"
+        ],
+        "expected_path": "/产品信息/KS0480_软糖沙发"
+      },
+      {
+        "name": "上下连接大型豆袋沙发",
+        "model_id": "KS0389",
+        "parent": "地板沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "地板沙发"
+        ],
+        "expected_path": "/产品信息/KS0389_上下连接大型豆袋沙发"
+      },
+      {
+        "name": "创意香蕉船豆袋沙发椅",
+        "model_id": "KS0386",
+        "parent": "地板沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "地板沙发"
+        ],
+        "expected_path": "/产品信息/KS0386_创意香蕉船豆袋沙发椅"
+      },
+      {
+        "name": "半躺式升级人类狗床",
+        "model_id": "KS0403",
+        "parent": "地板沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "地板沙发"
+        ],
+        "expected_path": "/产品信息/KS0403_半躺式升级人类狗床"
+      },
+      {
+        "name": "可调节地板阅读椅",
+        "model_id": "KS0442",
+        "parent": "地板沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "地板沙发"
+        ],
+        "expected_path": "/产品信息/KS0442_可调节地板阅读椅"
+      },
+      {
+        "name": "吐司地垫",
+        "model_id": "KS0422",
+        "parent": "地板沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "地板沙发"
+        ],
+        "expected_path": "/产品信息/KS0422_吐司地垫"
+      },
+      {
+        "name": "地板沙发套装",
+        "model_id": "KS0440",
+        "parent": "地板沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "地板沙发"
+        ],
+        "expected_path": "/产品信息/KS0440_地板沙发套装"
+      },
+      {
+        "name": "多色可折叠豆袋椅",
+        "model_id": "KS0484",
+        "parent": "地板沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "地板沙发"
+        ],
+        "expected_path": "/产品信息/KS0484_多色可折叠豆袋椅"
+      },
+      {
+        "name": "大空间圆饼地垫沙发",
+        "model_id": "KS0432",
+        "parent": "地板沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "地板沙发"
+        ],
+        "expected_path": "/产品信息/KS0432_大空间圆饼地垫沙发"
+      },
+      {
+        "name": "安全屋地板椅",
+        "model_id": "KS0171",
+        "parent": "地板沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "地板沙发"
+        ],
+        "expected_path": "/产品信息/KS0171_安全屋地板椅"
+      },
+      {
+        "name": "家庭地垫沙发",
+        "model_id": "KS0312",
+        "parent": "地板沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "地板沙发"
+        ],
+        "expected_path": "/产品信息/KS0312_家庭地垫沙发"
+      },
+      {
+        "name": "折叠人类狗床",
+        "model_id": "KS0239",
+        "parent": "地板沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "地板沙发"
+        ],
+        "expected_path": "/产品信息/KS0239_折叠人类狗床"
+      },
+      {
+        "name": "折叠豆袋沙发床",
+        "model_id": "KS0231",
+        "parent": "地板沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "地板沙发"
+        ],
+        "expected_path": "/产品信息/KS0231_折叠豆袋沙发床"
+      },
+      {
+        "name": "汉堡地板坐垫",
+        "model_id": "KS0348",
+        "parent": "地板沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "地板沙发"
+        ],
+        "expected_path": "/产品信息/KS0348_汉堡地板坐垫"
+      },
+      {
+        "name": "竹节地板沙发",
+        "model_id": "KS0406",
+        "parent": "地板沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "地板沙发"
+        ],
+        "expected_path": "/产品信息/KS0406_竹节地板沙发"
+      },
+      {
+        "name": "苹果派地板沙发椅",
+        "model_id": "KS0512",
+        "parent": "地板沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "地板沙发"
+        ],
+        "expected_path": "/产品信息/KS0512_苹果派地板沙发椅"
+      },
+      {
+        "name": "襁褓豆袋躺椅",
+        "model_id": "KS0439",
+        "parent": "地板沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "地板沙发"
+        ],
+        "expected_path": "/产品信息/KS0439_襁褓豆袋躺椅"
+      },
+      {
+        "name": "读书角地垫",
+        "model_id": "KS0163",
+        "parent": "地板沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "地板沙发"
+        ],
+        "expected_path": "/产品信息/KS0163_读书角地垫"
+      },
+      {
+        "name": "零重力体感单人椅",
+        "model_id": "KS0430",
+        "parent": "地板沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "地板沙发"
+        ],
+        "expected_path": "/产品信息/KS0430_零重力体感单人椅"
+      },
+      {
+        "name": "DoubleLoop折叠沙发床",
+        "model_id": "KS0469",
+        "parent": "多人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "多人沙发"
+        ],
+        "expected_path": "/产品信息/KS0469_DoubleLoop折叠沙发床"
+      },
+      {
+        "name": "单双人地板沙发-双人位",
+        "model_id": "KS0435",
+        "parent": "多人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "多人沙发"
+        ],
+        "expected_path": "/产品信息/KS0435_单双人地板沙发-双人位"
+      },
+      {
+        "name": "双人小沙发",
+        "model_id": "KS0501",
+        "parent": "多人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "多人沙发"
+        ],
+        "expected_path": "/产品信息/KS0501_双人小沙发"
+      },
+      {
+        "name": "双人豆袋躺椅",
+        "model_id": "KS0400",
+        "parent": "多人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "多人沙发"
+        ],
+        "expected_path": "/产品信息/KS0400_双人豆袋躺椅"
+      },
+      {
+        "name": "双人躺椅",
+        "model_id": "KS0362",
+        "parent": "多人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "多人沙发"
+        ],
+        "expected_path": "/产品信息/KS0362_双人躺椅"
+      },
+      {
+        "name": "可组合扶手沙发套件",
+        "model_id": "KS0220",
+        "parent": "可组合扶手沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "多人沙发",
+          "可组合扶手沙发"
+        ],
+        "expected_path": "/产品信息/KS0220_可组合扶手沙发套件"
+      },
+      {
+        "name": "可组合扶手沙发扶手模块",
+        "model_id": "KS0245",
+        "parent": "可组合扶手沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "多人沙发",
+          "可组合扶手沙发"
+        ],
+        "expected_path": "/产品信息/KS0245_可组合扶手沙发扶手模块"
+      },
+      {
+        "name": "可组合扶手沙发靠背模块",
+        "model_id": "KS0246",
+        "parent": "可组合扶手沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "多人沙发",
+          "可组合扶手沙发"
+        ],
+        "expected_path": "/产品信息/KS0246_可组合扶手沙发靠背模块"
+      },
+      {
+        "name": "复古造型大体量沙发-右扶手",
+        "model_id": "KS0387",
+        "parent": "复古造型大体量沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "多人沙发",
+          "复古造型大体量沙发"
+        ],
+        "expected_path": "/产品信息/KS0387_复古造型大体量沙发-右扶手"
+      },
+      {
+        "name": "复古造型大体量沙发-左扶手带延长",
+        "model_id": "KS0392",
+        "parent": "复古造型大体量沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "多人沙发",
+          "复古造型大体量沙发"
+        ],
+        "expected_path": "/产品信息/KS0392_复古造型大体量沙发-左扶手带延长"
+      },
+      {
+        "name": "复古造型大体量沙发-无扶手",
+        "model_id": "KS0391",
+        "parent": "复古造型大体量沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "多人沙发",
+          "复古造型大体量沙发"
+        ],
+        "expected_path": "/产品信息/KS0391_复古造型大体量沙发-无扶手"
+      },
+      {
+        "name": "复古造型大体量沙发-脚踏",
+        "model_id": "KS0393",
+        "parent": "复古造型大体量沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "多人沙发",
+          "复古造型大体量沙发"
+        ],
+        "expected_path": "/产品信息/KS0393_复古造型大体量沙发-脚踏"
+      },
+      {
+        "name": "多功能懒人沙发床",
+        "model_id": "KS0119",
+        "parent": "多人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "多人沙发"
+        ],
+        "expected_path": "/产品信息/KS0119_多功能懒人沙发床"
+      },
+      {
+        "name": "多功能懒人沙发床迭代",
+        "model_id": "KS0467",
+        "parent": "多人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "多人沙发"
+        ],
+        "expected_path": "/产品信息/KS0467_多功能懒人沙发床迭代"
+      },
+      {
+        "name": "家庭休闲港懒人沙发",
+        "model_id": "KS0431",
+        "parent": "多人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "多人沙发"
+        ],
+        "expected_path": "/产品信息/KS0431_家庭休闲港懒人沙发"
+      },
+      {
+        "name": "床头可调沙发床",
+        "model_id": "KS0207",
+        "parent": "多人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "多人沙发"
+        ],
+        "expected_path": "/产品信息/KS0207_床头可调沙发床"
+      },
+      {
+        "name": "弧形流苏沙发",
+        "model_id": "KS0402",
+        "parent": "多人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "多人沙发"
+        ],
+        "expected_path": "/产品信息/KS0402_弧形流苏沙发"
+      },
+      {
+        "name": "怀抱沙发",
+        "model_id": "KS0429",
+        "parent": "多人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "多人沙发"
+        ],
+        "expected_path": "/产品信息/KS0429_怀抱沙发"
+      },
+      {
+        "name": "折叠沙发床",
+        "model_id": "KS0227",
+        "parent": "多人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "多人沙发"
+        ],
+        "expected_path": "/产品信息/KS0227_折叠沙发床"
+      },
+      {
+        "name": "拼图模块沙发-六边形模块",
+        "model_id": "KS0510",
+        "parent": "多人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "多人沙发"
+        ],
+        "expected_path": "/产品信息/KS0510_拼图模块沙发-六边形模块"
+      },
+      {
+        "name": "拼图模块沙发-单人",
+        "model_id": "KS0509",
+        "parent": "多人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "多人沙发"
+        ],
+        "expected_path": "/产品信息/KS0509_拼图模块沙发-单人"
+      },
+      {
+        "name": "拼接感沙发躺椅",
+        "model_id": "KS0482",
+        "parent": "多人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "多人沙发"
+        ],
+        "expected_path": "/产品信息/KS0482_拼接感沙发躺椅"
+      },
+      {
+        "name": "游乐场懒人沙发模块-脚凳款",
+        "model_id": "KS0409",
+        "parent": "游乐场懒人沙发模块",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "多人沙发",
+          "游乐场懒人沙发模块"
+        ],
+        "expected_path": "/产品信息/KS0409_游乐场懒人沙发模块-脚凳款"
+      },
+      {
+        "name": "游乐场懒人沙发模块-躺位款",
+        "model_id": "KS0410",
+        "parent": "游乐场懒人沙发模块",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "多人沙发",
+          "游乐场懒人沙发模块"
+        ],
+        "expected_path": "/产品信息/KS0410_游乐场懒人沙发模块-躺位款"
+      },
+      {
+        "name": "游乐场懒人沙发模块-转角款",
+        "model_id": "KS0407",
+        "parent": "游乐场懒人沙发模块",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "多人沙发",
+          "游乐场懒人沙发模块"
+        ],
+        "expected_path": "/产品信息/KS0407_游乐场懒人沙发模块-转角款"
+      },
+      {
+        "name": "游乐场懒人沙发模块-靠背款",
+        "model_id": "KS0408",
+        "parent": "游乐场懒人沙发模块",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "多人沙发",
+          "游乐场懒人沙发模块"
+        ],
+        "expected_path": "/产品信息/KS0408_游乐场懒人沙发模块-靠背款"
+      },
+      {
+        "name": "组合式兔毛沙发",
+        "model_id": "KS0368",
+        "parent": "多人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "多人沙发"
+        ],
+        "expected_path": "/产品信息/KS0368_组合式兔毛沙发"
+      },
+      {
+        "name": "自由模块沙发-右侧长转角",
+        "model_id": "KS0506",
+        "parent": "自由模块沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "多人沙发",
+          "自由模块沙发"
+        ],
+        "expected_path": "/产品信息/KS0506_自由模块沙发-右侧长转角"
+      },
+      {
+        "name": "自由模块沙发-右躺位",
+        "model_id": "KS0504",
+        "parent": "自由模块沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "多人沙发",
+          "自由模块沙发"
+        ],
+        "expected_path": "/产品信息/KS0504_自由模块沙发-右躺位"
+      },
+      {
+        "name": "自由模块沙发-左侧长转角",
+        "model_id": "KS0507",
+        "parent": "自由模块沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "多人沙发",
+          "自由模块沙发"
+        ],
+        "expected_path": "/产品信息/KS0507_自由模块沙发-左侧长转角"
+      },
+      {
+        "name": "自由模块沙发-左躺位",
+        "model_id": "KS0505",
+        "parent": "自由模块沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "多人沙发",
+          "自由模块沙发"
+        ],
+        "expected_path": "/产品信息/KS0505_自由模块沙发-左躺位"
+      },
+      {
+        "name": "自由模块沙发-转角款",
+        "model_id": "KS0503",
+        "parent": "自由模块沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "多人沙发",
+          "自由模块沙发"
+        ],
+        "expected_path": "/产品信息/KS0503_自由模块沙发-转角款"
+      },
+      {
+        "name": "自由模块沙发-软垫",
+        "model_id": "KS0508",
+        "parent": "自由模块沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "多人沙发",
+          "自由模块沙发"
+        ],
+        "expected_path": "/产品信息/KS0508_自由模块沙发-软垫"
+      },
+      {
+        "name": "自由模块沙发-靠背款",
+        "model_id": "KS0502",
+        "parent": "自由模块沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "多人沙发",
+          "自由模块沙发"
+        ],
+        "expected_path": "/产品信息/KS0502_自由模块沙发-靠背款"
+      },
+      {
+        "name": "苔丝沙发",
+        "model_id": "KS0441",
+        "parent": "多人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "多人沙发"
+        ],
+        "expected_path": "/产品信息/KS0441_苔丝沙发"
+      },
+      {
+        "name": "英伦风翻转沙发",
+        "model_id": "KS0358",
+        "parent": "多人沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "多人沙发"
+        ],
+        "expected_path": "/产品信息/KS0358_英伦风翻转沙发"
+      },
+      {
+        "name": "逗号组合沙发右扶手款",
+        "model_id": "KS0369",
+        "parent": "逗号组合沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "多人沙发",
+          "逗号组合沙发"
+        ],
+        "expected_path": "/产品信息/KS0369_逗号组合沙发右扶手款"
+      },
+      {
+        "name": "逗号组合沙发左扶手款",
+        "model_id": "KS0379",
+        "parent": "逗号组合沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "多人沙发",
+          "逗号组合沙发"
+        ],
+        "expected_path": "/产品信息/KS0379_逗号组合沙发左扶手款"
+      },
+      {
+        "name": "逗号组合沙发靠背款",
+        "model_id": "KS0378",
+        "parent": "逗号组合沙发",
+        "ancestors": [
+          "家具类",
+          "沙发",
+          "多人沙发",
+          "逗号组合沙发"
+        ],
+        "expected_path": "/产品信息/KS0378_逗号组合沙发靠背款"
+      },
+      {
+        "name": "南瓜茶几",
+        "model_id": "KS0373",
+        "parent": "茶几",
+        "ancestors": [
+          "家具类",
+          "茶几"
+        ],
+        "expected_path": "/产品信息/KS0373_南瓜茶几"
+      },
+      {
+        "name": "拼接感沙发躺椅(侧边几)",
+        "model_id": "KS0487",
+        "parent": "茶几",
+        "ancestors": [
+          "家具类",
+          "茶几"
+        ],
+        "expected_path": "/产品信息/KS0487_拼接感沙发躺椅(侧边几)"
+      },
+      {
+        "name": "曲线沙发茶几",
+        "model_id": "KS0382",
+        "parent": "茶几",
+        "ancestors": [
+          "家具类",
+          "茶几"
+        ],
+        "expected_path": "/产品信息/KS0382_曲线沙发茶几"
+      },
+      {
+        "name": "欧式复古茶几坐凳流苏款",
+        "model_id": "KS0332",
+        "parent": "茶几",
+        "ancestors": [
+          "家具类",
+          "茶几"
+        ],
+        "expected_path": "/产品信息/KS0332_欧式复古茶几坐凳流苏款"
+      },
+      {
+        "name": "波西米亚组合茶几",
+        "model_id": "KS0377",
+        "parent": "茶几",
+        "ancestors": [
+          "家具类",
+          "茶几"
+        ],
+        "expected_path": "/产品信息/KS0377_波西米亚组合茶几"
+      },
+      {
+        "name": "钟摆沙发",
+        "model_id": "KS0338",
+        "parent": "茶几",
+        "ancestors": [
+          "家具类",
+          "茶几"
+        ],
+        "expected_path": "/产品信息/KS0338_钟摆沙发"
+      },
+      {
+        "name": "BBL坐趴两用枕",
+        "model_id": "KS0347",
+        "parent": "功能枕类",
+        "ancestors": [
+          "床品类",
+          "功能枕类"
+        ],
+        "expected_path": "/产品信息/KS0347_BBL坐趴两用枕"
+      },
+      {
+        "name": "侧睡U形身体枕",
+        "model_id": "KS0320",
+        "parent": "功能枕类",
+        "ancestors": [
+          "床品类",
+          "功能枕类"
+        ],
+        "expected_path": "/产品信息/KS0320_侧睡U形身体枕"
+      },
+      {
+        "name": "侧睡两用楔形枕",
+        "model_id": "KS0230",
+        "parent": "功能枕类",
+        "ancestors": [
+          "床品类",
+          "功能枕类"
+        ],
+        "expected_path": "/产品信息/KS0230_侧睡两用楔形枕"
+      },
+      {
+        "name": "侧睡两用楔形枕迭代",
+        "model_id": "KS0436",
+        "parent": "功能枕类",
+        "ancestors": [
+          "床品类",
+          "功能枕类"
+        ],
+        "expected_path": "/产品信息/KS0436_侧睡两用楔形枕迭代"
+      },
+      {
+        "name": "侧睡枕-第三版",
+        "model_id": "KS0326",
+        "parent": "功能枕类",
+        "ancestors": [
+          "床品类",
+          "功能枕类"
+        ],
+        "expected_path": "/产品信息/KS0326_侧睡枕-第三版"
+      },
+      {
+        "name": "功能性手臂支撑阅读枕",
+        "model_id": "KS0452",
+        "parent": "功能枕类",
+        "ancestors": [
+          "床品类",
+          "功能枕类"
+        ],
+        "expected_path": "/产品信息/KS0452_功能性手臂支撑阅读枕"
+      },
+      {
+        "name": "可调节层高枕",
+        "model_id": "KS0128",
+        "parent": "功能枕类",
+        "ancestors": [
+          "床品类",
+          "功能枕类"
+        ],
+        "expected_path": "/产品信息/KS0128_可调节层高枕"
+      },
+      {
+        "name": "可调节趴睡枕",
+        "model_id": "KS0479",
+        "parent": "功能枕类",
+        "ancestors": [
+          "床品类",
+          "功能枕类"
+        ],
+        "expected_path": "/产品信息/KS0479_可调节趴睡枕"
+      },
+      {
+        "name": "多功能倚靠枕",
+        "model_id": "KS0147",
+        "parent": "功能枕类",
+        "ancestors": [
+          "床品类",
+          "功能枕类"
+        ],
+        "expected_path": "/产品信息/KS0147_多功能倚靠枕"
+      },
+      {
+        "name": "多功能床上靠背趴睡枕",
+        "model_id": "KS0304",
+        "parent": "功能枕类",
+        "ancestors": [
+          "床品类",
+          "功能枕类"
+        ],
+        "expected_path": "/产品信息/KS0304_多功能床上靠背趴睡枕"
+      },
+      {
+        "name": "多功能膝盖腿枕",
+        "model_id": "KS0142",
+        "parent": "功能枕类",
+        "ancestors": [
+          "床品类",
+          "功能枕类"
+        ],
+        "expected_path": "/产品信息/KS0142_多功能膝盖腿枕"
+      },
+      {
+        "name": "多功能阅读枕",
+        "model_id": "KS0143",
+        "parent": "功能枕类",
+        "ancestors": [
+          "床品类",
+          "功能枕类"
+        ],
+        "expected_path": "/产品信息/KS0143_多功能阅读枕"
+      },
+      {
+        "name": "带孔耳枕",
+        "model_id": "KS0212",
+        "parent": "功能枕类",
+        "ancestors": [
+          "床品类",
+          "功能枕类"
+        ],
+        "expected_path": "/产品信息/KS0212_带孔耳枕"
+      },
+      {
+        "name": "折叠三角腰枕",
+        "model_id": "KS0139",
+        "parent": "功能枕类",
+        "ancestors": [
+          "床品类",
+          "功能枕类"
+        ],
+        "expected_path": "/产品信息/KS0139_折叠三角腰枕"
+      },
+      {
+        "name": "护颈枕",
+        "model_id": "KS0103",
+        "parent": "功能枕类",
+        "ancestors": [
+          "床品类",
+          "功能枕类"
+        ],
+        "expected_path": "/产品信息/KS0103_护颈枕"
+      },
+      {
+        "name": "游戏阅读枕",
+        "model_id": "KS0187",
+        "parent": "功能枕类",
+        "ancestors": [
+          "床品类",
+          "功能枕类"
+        ],
+        "expected_path": "/产品信息/KS0187_游戏阅读枕"
+      },
+      {
+        "name": "立体透气护腰靠枕",
+        "model_id": "KS0229",
+        "parent": "功能枕类",
+        "ancestors": [
+          "床品类",
+          "功能枕类"
+        ],
+        "expected_path": "/产品信息/KS0229_立体透气护腰靠枕"
+      },
+      {
+        "name": "组合式侧睡枕",
+        "model_id": "KS0198",
+        "parent": "功能枕类",
+        "ancestors": [
+          "床品类",
+          "功能枕类"
+        ],
+        "expected_path": "/产品信息/KS0198_组合式侧睡枕"
+      },
+      {
+        "name": "组合趴睡枕",
+        "model_id": "KS0153",
+        "parent": "功能枕类",
+        "ancestors": [
+          "床品类",
+          "功能枕类"
+        ],
+        "expected_path": "/产品信息/KS0153_组合趴睡枕"
+      },
+      {
+        "name": "绑带款膝盖腿枕",
+        "model_id": "KS0307",
+        "parent": "功能枕类",
+        "ancestors": [
+          "床品类",
+          "功能枕类"
+        ],
+        "expected_path": "/产品信息/KS0307_绑带款膝盖腿枕"
+      },
+      {
+        "name": "蝴蝶护肩枕",
+        "model_id": "KS0148",
+        "parent": "功能枕类",
+        "ancestors": [
+          "床品类",
+          "功能枕类"
+        ],
+        "expected_path": "/产品信息/KS0148_蝴蝶护肩枕"
+      },
+      {
+        "name": "音孔枕",
+        "model_id": "KS0488",
+        "parent": "功能枕类",
+        "ancestors": [
+          "床品类",
+          "功能枕类"
+        ],
+        "expected_path": "/产品信息/KS0488_音孔枕"
+      },
+      {
+        "name": "颈椎枕",
+        "model_id": "KS0523",
+        "parent": "功能枕类",
+        "ancestors": [
+          "床品类",
+          "功能枕类"
+        ],
+        "expected_path": "/产品信息/KS0523_颈椎枕"
+      },
+      {
+        "name": "五件套靠枕",
+        "model_id": "KS0138",
+        "parent": "床上用品",
+        "ancestors": [
+          "床品类",
+          "床上用品"
+        ],
+        "expected_path": "/产品信息/KS0138_五件套靠枕"
+      },
+      {
+        "name": "床上用品印花套装- 圆饼枕",
+        "model_id": "KS0476",
+        "parent": "床上用品",
+        "ancestors": [
+          "床品类",
+          "床上用品"
+        ],
+        "expected_path": "/产品信息/KS0476_床上用品印花套装- 圆饼枕"
+      },
+      {
+        "name": "床上用品印花套装-标准枕头",
+        "model_id": "KS0472",
+        "parent": "床上用品",
+        "ancestors": [
+          "床品类",
+          "床上用品"
+        ],
+        "expected_path": "/产品信息/KS0472_床上用品印花套装-标准枕头"
+      },
+      {
+        "name": "床上用品印花套装-被罩",
+        "model_id": "KS0478",
+        "parent": "床上用品",
+        "ancestors": [
+          "床品类",
+          "床上用品"
+        ],
+        "expected_path": "/产品信息/KS0478_床上用品印花套装-被罩"
+      },
+      {
+        "name": "床上用品印花套装-长条抱枕",
+        "model_id": "KS0475",
+        "parent": "床上用品",
+        "ancestors": [
+          "床品类",
+          "床上用品"
+        ],
+        "expected_path": "/产品信息/KS0475_床上用品印花套装-长条抱枕"
+      },
+      {
+        "name": "欧式床旗",
+        "model_id": "KS0521",
+        "parent": "床上用品",
+        "ancestors": [
+          "床品类",
+          "床上用品"
+        ],
+        "expected_path": "/产品信息/KS0521_欧式床旗"
+      },
+      {
+        "name": "印花款-星球床头靠枕",
+        "model_id": "KS0313",
+        "parent": "床头板",
+        "ancestors": [
+          "床品类",
+          "床头板"
+        ],
+        "expected_path": "/产品信息/KS0313_印花款-星球床头靠枕"
+      },
+      {
+        "name": "双十字床头靠垫",
+        "model_id": "KS0360",
+        "parent": "床头板",
+        "ancestors": [
+          "床品类",
+          "床头板"
+        ],
+        "expected_path": "/产品信息/KS0360_双十字床头靠垫"
+      },
+      {
+        "name": "双排扣双层靠枕",
+        "model_id": "KS0399",
+        "parent": "床头板",
+        "ancestors": [
+          "床品类",
+          "床头板"
+        ],
+        "expected_path": "/产品信息/KS0399_双排扣双层靠枕"
+      },
+      {
+        "name": "口袋床头枕",
+        "model_id": "KS0357",
+        "parent": "床头板",
+        "ancestors": [
+          "床品类",
+          "床头板"
+        ],
+        "expected_path": "/产品信息/KS0357_口袋床头枕"
+      },
+      {
+        "name": "可调长度双面床头靠枕",
+        "model_id": "KS0201",
+        "parent": "床头板",
+        "ancestors": [
+          "床品类",
+          "床头板"
+        ],
+        "expected_path": "/产品信息/KS0201_可调长度双面床头靠枕"
+      },
+      {
+        "name": "巧克力床头板",
+        "model_id": "KS0398",
+        "parent": "床头板",
+        "ancestors": [
+          "床品类",
+          "床头板"
+        ],
+        "expected_path": "/产品信息/KS0398_巧克力床头板"
+      },
+      {
+        "name": "床头板弧形款",
+        "model_id": "KS0317",
+        "parent": "床头板",
+        "ancestors": [
+          "床品类",
+          "床头板"
+        ],
+        "expected_path": "/产品信息/KS0317_床头板弧形款"
+      },
+      {
+        "name": "床头板拼装款",
+        "model_id": "KS0331",
+        "parent": "床头板",
+        "ancestors": [
+          "床品类",
+          "床头板"
+        ],
+        "expected_path": "/产品信息/KS0331_床头板拼装款"
+      },
+      {
+        "name": "床头软装组合-圆枕",
+        "model_id": "KS0491",
+        "parent": "床头软装组合",
+        "ancestors": [
+          "床品类",
+          "床头板",
+          "床头软装组合"
+        ],
+        "expected_path": "/产品信息/KS0491_床头软装组合-圆枕"
+      },
+      {
+        "name": "床头软装组合-床头靠枕",
+        "model_id": "KS0489",
+        "parent": "床头软装组合",
+        "ancestors": [
+          "床品类",
+          "床头板",
+          "床头软装组合"
+        ],
+        "expected_path": "/产品信息/KS0489_床头软装组合-床头靠枕"
+      },
+      {
+        "name": "床头软装组合-长靠枕",
+        "model_id": "KS0490",
+        "parent": "床头软装组合",
+        "ancestors": [
+          "床品类",
+          "床头板",
+          "床头软装组合"
+        ],
+        "expected_path": "/产品信息/KS0490_床头软装组合-长靠枕"
+      },
+      {
+        "name": "悬挂式床头靠枕-海绵款",
+        "model_id": "KS0224",
+        "parent": "床头板",
+        "ancestors": [
+          "床品类",
+          "床头板"
+        ],
+        "expected_path": "/产品信息/KS0224_悬挂式床头靠枕-海绵款"
+      },
+      {
+        "name": "拼色褶皱床头靠枕",
+        "model_id": "KS0419",
+        "parent": "床头板",
+        "ancestors": [
+          "床品类",
+          "床头板"
+        ],
+        "expected_path": "/产品信息/KS0419_拼色褶皱床头靠枕"
+      },
+      {
+        "name": "棉花床头板",
+        "model_id": "KS0420",
+        "parent": "床头板",
+        "ancestors": [
+          "床品类",
+          "床头板"
+        ],
+        "expected_path": "/产品信息/KS0420_棉花床头板"
+      },
+      {
+        "name": "欧式床头靠枕-米白滚边吊穗款",
+        "model_id": "KS0364",
+        "parent": "欧式床头靠枕",
+        "ancestors": [
+          "床品类",
+          "床头板",
+          "欧式床头靠枕"
+        ],
+        "expected_path": "/产品信息/KS0364_欧式床头靠枕-米白滚边吊穗款"
+      },
+      {
+        "name": "欧式床头靠枕-腰果花吊穗款",
+        "model_id": "KS0365",
+        "parent": "欧式床头靠枕",
+        "ancestors": [
+          "床品类",
+          "床头板",
+          "欧式床头靠枕"
+        ],
+        "expected_path": "/产品信息/KS0365_欧式床头靠枕-腰果花吊穗款"
+      },
+      {
+        "name": "欧式床头靠枕-蓝色滚边吊穗款",
+        "model_id": "KS0366",
+        "parent": "欧式床头靠枕",
+        "ancestors": [
+          "床品类",
+          "床头板",
+          "欧式床头靠枕"
+        ],
+        "expected_path": "/产品信息/KS0366_欧式床头靠枕-蓝色滚边吊穗款"
+      },
+      {
+        "name": "欧式床头靠枕-流苏款",
+        "model_id": "KS0341",
+        "parent": "床头板",
+        "ancestors": [
+          "床品类",
+          "床头板"
+        ],
+        "expected_path": "/产品信息/KS0341_欧式床头靠枕-流苏款"
+      },
+      {
+        "name": "欧式床头靠枕-花边款",
+        "model_id": "KS0321",
+        "parent": "床头板",
+        "ancestors": [
+          "床品类",
+          "床头板"
+        ],
+        "expected_path": "/产品信息/KS0321_欧式床头靠枕-花边款"
+      },
+      {
+        "name": "欧式米白滚边吊穗大靠背",
+        "model_id": "KS0423",
+        "parent": "床头板",
+        "ancestors": [
+          "床品类",
+          "床头板"
+        ],
+        "expected_path": "/产品信息/KS0423_欧式米白滚边吊穗大靠背"
+      },
+      {
+        "name": "欧式腰果花吊穗大靠背",
+        "model_id": "KS0424",
+        "parent": "床头板",
+        "ancestors": [
+          "床品类",
+          "床头板"
+        ],
+        "expected_path": "/产品信息/KS0424_欧式腰果花吊穗大靠背"
+      },
+      {
+        "name": "欧式蓝色滚边吊穗大靠背",
+        "model_id": "KS0425",
+        "parent": "床头板",
+        "ancestors": [
+          "床品类",
+          "床头板"
+        ],
+        "expected_path": "/产品信息/KS0425_欧式蓝色滚边吊穗大靠背"
+      },
+      {
+        "name": "歌剧院床头靠枕套装-圆条枕",
+        "model_id": "KS0519",
+        "parent": "歌剧院床头靠枕套装",
+        "ancestors": [
+          "床品类",
+          "床头板",
+          "歌剧院床头靠枕套装"
+        ],
+        "expected_path": "/产品信息/KS0519_歌剧院床头靠枕套装-圆条枕"
+      },
+      {
+        "name": "歌剧院床头靠枕套装-方抱枕",
+        "model_id": "KS0518",
+        "parent": "歌剧院床头靠枕套装",
+        "ancestors": [
+          "床品类",
+          "床头板",
+          "歌剧院床头靠枕套装"
+        ],
+        "expected_path": "/产品信息/KS0518_歌剧院床头靠枕套装-方抱枕"
+      },
+      {
+        "name": "歌剧院床头靠枕套装-靠枕",
+        "model_id": "KS0511",
+        "parent": "歌剧院床头靠枕套装",
+        "ancestors": [
+          "床品类",
+          "床头板",
+          "歌剧院床头靠枕套装"
+        ],
+        "expected_path": "/产品信息/KS0511_歌剧院床头靠枕套装-靠枕"
+      },
+      {
+        "name": "灵活拼接床头板",
+        "model_id": "KS0453",
+        "parent": "床头板",
+        "ancestors": [
+          "床品类",
+          "床头板"
+        ],
+        "expected_path": "/产品信息/KS0453_灵活拼接床头板"
+      },
+      {
+        "name": "绗缝方格扣子床头板",
+        "model_id": "KS0396",
+        "parent": "床头板",
+        "ancestors": [
+          "床品类",
+          "床头板"
+        ],
+        "expected_path": "/产品信息/KS0396_绗缝方格扣子床头板"
+      },
+      {
+        "name": "绗缝菱形扣子床头板",
+        "model_id": "KS0397",
+        "parent": "床头板",
+        "ancestors": [
+          "床品类",
+          "床头板"
+        ],
+        "expected_path": "/产品信息/KS0397_绗缝菱形扣子床头板"
+      },
+      {
+        "name": "荧光床头板",
+        "model_id": "KS0384",
+        "parent": "床头板",
+        "ancestors": [
+          "床品类",
+          "床头板"
+        ],
+        "expected_path": "/产品信息/KS0384_荧光床头板"
+      },
+      {
+        "name": "落地式床头板",
+        "model_id": "KS0492",
+        "parent": "床头板",
+        "ancestors": [
+          "床品类",
+          "床头板"
+        ],
+        "expected_path": "/产品信息/KS0492_落地式床头板"
+      },
+      {
+        "name": "装饰风床头靠枕组合",
+        "model_id": "KS0456",
+        "parent": "床头板",
+        "ancestors": [
+          "床品类",
+          "床头板"
+        ],
+        "expected_path": "/产品信息/KS0456_装饰风床头靠枕组合"
+      },
+      {
+        "name": "贝壳床头靠垫",
+        "model_id": "KS0325",
+        "parent": "床头板",
+        "ancestors": [
+          "床品类",
+          "床头板"
+        ],
+        "expected_path": "/产品信息/KS0325_贝壳床头靠垫"
+      },
+      {
+        "name": "三角带圆柱靠枕",
+        "model_id": "KS0003",
+        "parent": "三角靠枕类",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "三角靠枕类"
+        ],
+        "expected_path": "/产品信息/KS0003_三角带圆柱靠枕"
+      },
       {
         "name": "三角靠枕",
         "model_id": "KS0001",
@@ -17,6 +2769,394 @@
         "expected_path": "/产品信息/KS0001_三角靠枕"
       },
       {
+        "name": "三角靠枕(碎海绵款)",
+        "model_id": "KS0524",
+        "parent": "三角靠枕类",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "三角靠枕类"
+        ],
+        "expected_path": "/产品信息/KS0524_三角靠枕(碎海绵款)"
+      },
+      {
+        "name": "三角靠枕无扣",
+        "model_id": "KS0248",
+        "parent": "三角靠枕类",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "三角靠枕类"
+        ],
+        "expected_path": "/产品信息/KS0248_三角靠枕无扣"
+      },
+      {
+        "name": "复古拼色褶皱三角靠枕",
+        "model_id": "KS0383",
+        "parent": "三角靠枕类",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "三角靠枕类"
+        ],
+        "expected_path": "/产品信息/KS0383_复古拼色褶皱三角靠枕"
+      },
+      {
+        "name": "床上用品印花套装-三角靠枕",
+        "model_id": "KS0477",
+        "parent": "三角靠枕类",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "三角靠枕类"
+        ],
+        "expected_path": "/产品信息/KS0477_床上用品印花套装-三角靠枕"
+      },
+      {
+        "name": "欧式三角靠枕",
+        "model_id": "KS0520",
+        "parent": "三角靠枕类",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "三角靠枕类"
+        ],
+        "expected_path": "/产品信息/KS0520_欧式三角靠枕"
+      },
+      {
+        "name": "BetterRest靠卧枕",
+        "model_id": "KS0468",
+        "parent": "其他靠枕",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "其他靠枕"
+        ],
+        "expected_path": "/产品信息/KS0468_BetterRest靠卧枕"
+      },
+      {
+        "name": "good靠枕",
+        "model_id": "KS0302",
+        "parent": "其他靠枕",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "其他靠枕"
+        ],
+        "expected_path": "/产品信息/KS0302_good靠枕"
+      },
+      {
+        "name": "purse楔形靠枕",
+        "model_id": "KS0351",
+        "parent": "其他靠枕",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "其他靠枕"
+        ],
+        "expected_path": "/产品信息/KS0351_purse楔形靠枕"
+      },
+      {
+        "name": "几何链条抱枕-三角",
+        "model_id": "KS0334",
+        "parent": "几何链条抱枕",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "其他靠枕",
+          "几何链条抱枕"
+        ],
+        "expected_path": "/产品信息/KS0334_几何链条抱枕-三角"
+      },
+      {
+        "name": "几何链条抱枕-椭圆",
+        "model_id": "KS0336",
+        "parent": "几何链条抱枕",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "其他靠枕",
+          "几何链条抱枕"
+        ],
+        "expected_path": "/产品信息/KS0336_几何链条抱枕-椭圆"
+      },
+      {
+        "name": "几何链条抱枕-矩形",
+        "model_id": "KS0335",
+        "parent": "几何链条抱枕",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "其他靠枕",
+          "几何链条抱枕"
+        ],
+        "expected_path": "/产品信息/KS0335_几何链条抱枕-矩形"
+      },
+      {
+        "name": "分段式床头靠枕",
+        "model_id": "KS0219",
+        "parent": "其他靠枕",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "其他靠枕"
+        ],
+        "expected_path": "/产品信息/KS0219_分段式床头靠枕"
+      },
+      {
+        "name": "双排扣床头靠枕",
+        "model_id": "KS0404",
+        "parent": "其他靠枕",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "其他靠枕"
+        ],
+        "expected_path": "/产品信息/KS0404_双排扣床头靠枕"
+      },
+      {
+        "name": "复古曲线拼色靠枕",
+        "model_id": "KS0388",
+        "parent": "其他靠枕",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "其他靠枕"
+        ],
+        "expected_path": "/产品信息/KS0388_复古曲线拼色靠枕"
+      },
+      {
+        "name": "床上用品印花套装- 小长方形枕",
+        "model_id": "KS0474",
+        "parent": "其他靠枕",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "其他靠枕"
+        ],
+        "expected_path": "/产品信息/KS0474_床上用品印花套装- 小长方形枕"
+      },
+      {
+        "name": "床上用品印花套装-大长方形枕头",
+        "model_id": "KS0473",
+        "parent": "其他靠枕",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "其他靠枕"
+        ],
+        "expected_path": "/产品信息/KS0473_床上用品印花套装-大长方形枕头"
+      },
+      {
+        "name": "弹簧床头靠枕",
+        "model_id": "KS0355",
+        "parent": "其他靠枕",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "其他靠枕"
+        ],
+        "expected_path": "/产品信息/KS0355_弹簧床头靠枕"
+      },
+      {
+        "name": "手臂支撑枕",
+        "model_id": "KS0322",
+        "parent": "其他靠枕",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "其他靠枕"
+        ],
+        "expected_path": "/产品信息/KS0322_手臂支撑枕"
+      },
+      {
+        "name": "抱枕三件套",
+        "model_id": "KS0145",
+        "parent": "其他靠枕",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "其他靠枕"
+        ],
+        "expected_path": "/产品信息/KS0145_抱枕三件套"
+      },
+      {
+        "name": "星球抱枕",
+        "model_id": "KS0019",
+        "parent": "其他靠枕",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "其他靠枕"
+        ],
+        "expected_path": "/产品信息/KS0019_星球抱枕"
+      },
+      {
+        "name": "杨桃多功能靠枕",
+        "model_id": "KS0381",
+        "parent": "其他靠枕",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "其他靠枕"
+        ],
+        "expected_path": "/产品信息/KS0381_杨桃多功能靠枕"
+      },
+      {
+        "name": "欧式米白滚边吊穗长条枕",
+        "model_id": "KS0412",
+        "parent": "其他靠枕",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "其他靠枕"
+        ],
+        "expected_path": "/产品信息/KS0412_欧式米白滚边吊穗长条枕"
+      },
+      {
+        "name": "欧式腰果花吊穗长条枕",
+        "model_id": "KS0414",
+        "parent": "其他靠枕",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "其他靠枕"
+        ],
+        "expected_path": "/产品信息/KS0414_欧式腰果花吊穗长条枕"
+      },
+      {
+        "name": "欧式蓝色滚边吊穗长条枕",
+        "model_id": "KS0416",
+        "parent": "其他靠枕",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "其他靠枕"
+        ],
+        "expected_path": "/产品信息/KS0416_欧式蓝色滚边吊穗长条枕"
+      },
+      {
+        "name": "沙发床头靠枕",
+        "model_id": "KS0194",
+        "parent": "其他靠枕",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "其他靠枕"
+        ],
+        "expected_path": "/产品信息/KS0194_沙发床头靠枕"
+      },
+      {
+        "name": "消波块解压靠枕",
+        "model_id": "KS0352",
+        "parent": "其他靠枕",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "其他靠枕"
+        ],
+        "expected_path": "/产品信息/KS0352_消波块解压靠枕"
+      },
+      {
+        "name": "深浅灰石头抱枕",
+        "model_id": "KS0251",
+        "parent": "其他靠枕",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "其他靠枕"
+        ],
+        "expected_path": "/产品信息/KS0251_深浅灰石头抱枕"
+      },
+      {
+        "name": "牛仔风阅读枕",
+        "model_id": "KS0300",
+        "parent": "其他靠枕",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "其他靠枕"
+        ],
+        "expected_path": "/产品信息/KS0300_牛仔风阅读枕"
+      },
+      {
+        "name": "糖果床头靠枕",
+        "model_id": "KS0359",
+        "parent": "其他靠枕",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "其他靠枕"
+        ],
+        "expected_path": "/产品信息/KS0359_糖果床头靠枕"
+      },
+      {
+        "name": "自立式三角靠枕",
+        "model_id": "KS0206",
+        "parent": "其他靠枕",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "其他靠枕"
+        ],
+        "expected_path": "/产品信息/KS0206_自立式三角靠枕"
+      },
+      {
+        "name": "贪吃蛇长条靠枕",
+        "model_id": "KS0361",
+        "parent": "其他靠枕",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "其他靠枕"
+        ],
+        "expected_path": "/产品信息/KS0361_贪吃蛇长条靠枕"
+      },
+      {
+        "name": "趣味小丑抱抱枕",
+        "model_id": "KS0371",
+        "parent": "其他靠枕",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "其他靠枕"
+        ],
+        "expected_path": "/产品信息/KS0371_趣味小丑抱抱枕"
+      },
+      {
+        "name": "身体支撑阅读枕",
+        "model_id": "KS0455",
+        "parent": "其他靠枕",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "其他靠枕"
+        ],
+        "expected_path": "/产品信息/KS0455_身体支撑阅读枕"
+      },
+      {
+        "name": "转角靠枕-直条款",
+        "model_id": "KS0451",
+        "parent": "其他靠枕",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "其他靠枕"
+        ],
+        "expected_path": "/产品信息/KS0451_转角靠枕-直条款"
+      },
+      {
+        "name": "转角靠枕-转角款",
+        "model_id": "KS0450",
+        "parent": "其他靠枕",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "其他靠枕"
+        ],
+        "expected_path": "/产品信息/KS0450_转角靠枕-转角款"
+      },
+      {
         "name": "平条靠枕",
         "model_id": "KS0002",
         "parent": "平条靠枕类",
@@ -26,6 +3166,1026 @@
           "平条靠枕类"
         ],
         "expected_path": "/产品信息/KS0002_平条靠枕"
+      },
+      {
+        "name": "平条靠枕无压条",
+        "model_id": "KS0249",
+        "parent": "平条靠枕类",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "平条靠枕类"
+        ],
+        "expected_path": "/产品信息/KS0249_平条靠枕无压条"
+      },
+      {
+        "name": "轻置物床头靠枕",
+        "model_id": "KS0301",
+        "parent": "平条靠枕类",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "平条靠枕类"
+        ],
+        "expected_path": "/产品信息/KS0301_轻置物床头靠枕"
+      },
+      {
+        "name": "圆柱颈枕弧形海绵靠枕",
+        "model_id": "KS0470",
+        "parent": "弧形靠枕",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "弧形靠枕"
+        ],
+        "expected_path": "/产品信息/KS0470_圆柱颈枕弧形海绵靠枕"
+      },
+      {
+        "name": "带圆柱弧形海绵靠枕",
+        "model_id": "KS0165",
+        "parent": "弧形靠枕",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "弧形靠枕"
+        ],
+        "expected_path": "/产品信息/KS0165_带圆柱弧形海绵靠枕"
+      },
+      {
+        "name": "弧形PP棉印花靠枕",
+        "model_id": "KS0008",
+        "parent": "弧形靠枕",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "弧形靠枕"
+        ],
+        "expected_path": "/产品信息/KS0008_弧形PP棉印花靠枕"
+      },
+      {
+        "name": "弧形PP棉靠枕",
+        "model_id": "KS0007",
+        "parent": "弧形靠枕",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "弧形靠枕"
+        ],
+        "expected_path": "/产品信息/KS0007_弧形PP棉靠枕"
+      },
+      {
+        "name": "弧形PP棉靠枕-拉链款",
+        "model_id": "KS0340",
+        "parent": "弧形靠枕",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "弧形靠枕"
+        ],
+        "expected_path": "/产品信息/KS0340_弧形PP棉靠枕-拉链款"
+      },
+      {
+        "name": "弧形海绵靠枕",
+        "model_id": "KS0006",
+        "parent": "弧形靠枕",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "弧形靠枕"
+        ],
+        "expected_path": "/产品信息/KS0006_弧形海绵靠枕"
+      },
+      {
+        "name": "弧形海绵靠枕-拉链款",
+        "model_id": "KS0342",
+        "parent": "弧形靠枕",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "弧形靠枕"
+        ],
+        "expected_path": "/产品信息/KS0342_弧形海绵靠枕-拉链款"
+      },
+      {
+        "name": "小马抱枕",
+        "model_id": "KS0529",
+        "parent": "方形靠枕",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "方形靠枕"
+        ],
+        "expected_path": "/产品信息/KS0529_小马抱枕"
+      },
+      {
+        "name": "床上用品印花套装-方抱枕",
+        "model_id": "KS0471",
+        "parent": "方形靠枕",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "方形靠枕"
+        ],
+        "expected_path": "/产品信息/KS0471_床上用品印花套装-方抱枕"
+      },
+      {
+        "name": "方形抱枕",
+        "model_id": "KS0481",
+        "parent": "方形靠枕",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "方形靠枕"
+        ],
+        "expected_path": "/产品信息/KS0481_方形抱枕"
+      },
+      {
+        "name": "欧式米白滚边吊穗方抱枕",
+        "model_id": "KS0411",
+        "parent": "方形靠枕",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "方形靠枕"
+        ],
+        "expected_path": "/产品信息/KS0411_欧式米白滚边吊穗方抱枕"
+      },
+      {
+        "name": "欧式腰果花吊穗方抱枕",
+        "model_id": "KS0413",
+        "parent": "方形靠枕",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "方形靠枕"
+        ],
+        "expected_path": "/产品信息/KS0413_欧式腰果花吊穗方抱枕"
+      },
+      {
+        "name": "欧式蓝色滚边吊穗方抱枕",
+        "model_id": "KS0415",
+        "parent": "方形靠枕",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "方形靠枕"
+        ],
+        "expected_path": "/产品信息/KS0415_欧式蓝色滚边吊穗方抱枕"
+      },
+      {
+        "name": "长方形枕套",
+        "model_id": "KS0244",
+        "parent": "方形靠枕",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "方形靠枕"
+        ],
+        "expected_path": "/产品信息/KS0244_长方形枕套"
+      },
+      {
+        "name": "组合式户外沙发-脚踏",
+        "model_id": "KS0527",
+        "parent": "组合式户外沙发",
+        "ancestors": [
+          "户外类",
+          "户外沙发",
+          "组合式户外沙发"
+        ],
+        "expected_path": "/产品信息/KS0527_组合式户外沙发-脚踏"
+      },
+      {
+        "name": "组合式户外沙发-转角",
+        "model_id": "KS0525",
+        "parent": "组合式户外沙发",
+        "ancestors": [
+          "户外类",
+          "户外沙发",
+          "组合式户外沙发"
+        ],
+        "expected_path": "/产品信息/KS0525_组合式户外沙发-转角"
+      },
+      {
+        "name": "组合式户外沙发-靠背",
+        "model_id": "KS0526",
+        "parent": "组合式户外沙发",
+        "ancestors": [
+          "户外类",
+          "户外沙发",
+          "组合式户外沙发"
+        ],
+        "expected_path": "/产品信息/KS0526_组合式户外沙发-靠背"
+      },
+      {
+        "name": "圆滚靠枕",
+        "model_id": "KS0004",
+        "parent": "未分类",
+        "ancestors": [
+          "未分类"
+        ],
+        "expected_path": "/产品信息/KS0004_圆滚靠枕"
+      },
+      {
+        "name": "毛毛虫靠枕",
+        "model_id": "KS0005",
+        "parent": "未分类",
+        "ancestors": [
+          "未分类"
+        ],
+        "expected_path": "/产品信息/KS0005_毛毛虫靠枕"
+      },
+      {
+        "name": "泰迪熊",
+        "model_id": "KS0026",
+        "parent": "未分类",
+        "ancestors": [
+          "未分类"
+        ],
+        "expected_path": "/产品信息/KS0026_泰迪熊"
+      },
+      {
+        "name": "爱心熊",
+        "model_id": "KS0027",
+        "parent": "未分类",
+        "ancestors": [
+          "未分类"
+        ],
+        "expected_path": "/产品信息/KS0027_爱心熊"
+      },
+      {
+        "name": "手臂编制",
+        "model_id": "KS0112",
+        "parent": "其他",
+        "ancestors": [
+          "赛狐暂不存在",
+          "其他"
+        ],
+        "expected_path": "/产品信息/KS0112_手臂编制"
+      },
+      {
+        "name": "护膝跪垫",
+        "model_id": "KS0159",
+        "parent": "其他",
+        "ancestors": [
+          "赛狐暂不存在",
+          "其他"
+        ],
+        "expected_path": "/产品信息/KS0159_护膝跪垫"
+      },
+      {
+        "name": "提臀枕",
+        "model_id": "KS0160",
+        "parent": "其他",
+        "ancestors": [
+          "赛狐暂不存在",
+          "其他"
+        ],
+        "expected_path": "/产品信息/KS0160_提臀枕"
+      },
+      {
+        "name": "杯托枕头",
+        "model_id": "KS0182",
+        "parent": "其他",
+        "ancestors": [
+          "赛狐暂不存在",
+          "其他"
+        ],
+        "expected_path": "/产品信息/KS0182_杯托枕头"
+      },
+      {
+        "name": "创意方抱枕",
+        "model_id": "KS0009",
+        "parent": "赛狐暂不存在",
+        "ancestors": [
+          "赛狐暂不存在"
+        ],
+        "expected_path": "/产品信息/KS0009_创意方抱枕"
+      },
+      {
+        "name": "圆形坐垫",
+        "model_id": "KS0010",
+        "parent": "赛狐暂不存在",
+        "ancestors": [
+          "赛狐暂不存在"
+        ],
+        "expected_path": "/产品信息/KS0010_圆形坐垫"
+      },
+      {
+        "name": "儿童安全座椅托盘",
+        "model_id": "KS0209",
+        "parent": "儿童",
+        "ancestors": [
+          "赛狐暂不存在",
+          "家居类",
+          "儿童"
+        ],
+        "expected_path": "/产品信息/KS0209_儿童安全座椅托盘"
+      },
+      {
+        "name": "儿童折叠沙发",
+        "model_id": "KS0311",
+        "parent": "儿童",
+        "ancestors": [
+          "赛狐暂不存在",
+          "家居类",
+          "儿童"
+        ],
+        "expected_path": "/产品信息/KS0311_儿童折叠沙发"
+      },
+      {
+        "name": "创意游戏凳",
+        "model_id": "KS0167",
+        "parent": "儿童",
+        "ancestors": [
+          "赛狐暂不存在",
+          "家居类",
+          "儿童"
+        ],
+        "expected_path": "/产品信息/KS0167_创意游戏凳"
+      },
+      {
+        "name": "乳胶款多功能膝盖腿枕",
+        "model_id": "KS0228",
+        "parent": "卧室",
+        "ancestors": [
+          "赛狐暂不存在",
+          "家居类",
+          "卧室"
+        ],
+        "expected_path": "/产品信息/KS0228_乳胶款多功能膝盖腿枕"
+      },
+      {
+        "name": "分区睡眠枕",
+        "model_id": "KS0158",
+        "parent": "卧室",
+        "ancestors": [
+          "赛狐暂不存在",
+          "家居类",
+          "卧室"
+        ],
+        "expected_path": "/产品信息/KS0158_分区睡眠枕"
+      },
+      {
+        "name": "创意床品3件套",
+        "model_id": "KS0024",
+        "parent": "卧室",
+        "ancestors": [
+          "赛狐暂不存在",
+          "家居类",
+          "卧室"
+        ],
+        "expected_path": "/产品信息/KS0024_创意床品3件套"
+      },
+      {
+        "name": "创意床品6件套",
+        "model_id": "KS0023",
+        "parent": "卧室",
+        "ancestors": [
+          "赛狐暂不存在",
+          "家居类",
+          "卧室"
+        ],
+        "expected_path": "/产品信息/KS0023_创意床品6件套"
+      },
+      {
+        "name": "孕妇趴睡枕",
+        "model_id": "KS0144",
+        "parent": "卧室",
+        "ancestors": [
+          "赛狐暂不存在",
+          "家居类",
+          "卧室"
+        ],
+        "expected_path": "/产品信息/KS0144_孕妇趴睡枕"
+      },
+      {
+        "name": "宽边正方形枕头",
+        "model_id": "KS0013",
+        "parent": "卧室",
+        "ancestors": [
+          "赛狐暂不存在",
+          "家居类",
+          "卧室"
+        ],
+        "expected_path": "/产品信息/KS0013_宽边正方形枕头"
+      },
+      {
+        "name": "宽边长方形枕头",
+        "model_id": "KS0012",
+        "parent": "卧室",
+        "ancestors": [
+          "赛狐暂不存在",
+          "家居类",
+          "卧室"
+        ],
+        "expected_path": "/产品信息/KS0012_宽边长方形枕头"
+      },
+      {
+        "name": "小方枕",
+        "model_id": "KS0261",
+        "parent": "卧室",
+        "ancestors": [
+          "赛狐暂不存在",
+          "家居类",
+          "卧室"
+        ],
+        "expected_path": "/产品信息/KS0261_小方枕"
+      },
+      {
+        "name": "折叠床垫",
+        "model_id": "KS0154",
+        "parent": "卧室",
+        "ancestors": [
+          "赛狐暂不存在",
+          "家居类",
+          "卧室"
+        ],
+        "expected_path": "/产品信息/KS0154_折叠床垫"
+      },
+      {
+        "name": "照片挂饰",
+        "model_id": "KS0303",
+        "parent": "卧室",
+        "ancestors": [
+          "赛狐暂不存在",
+          "家居类",
+          "卧室"
+        ],
+        "expected_path": "/产品信息/KS0303_照片挂饰"
+      },
+      {
+        "name": "胸腹部术后枕",
+        "model_id": "KS0152",
+        "parent": "卧室",
+        "ancestors": [
+          "赛狐暂不存在",
+          "家居类",
+          "卧室"
+        ],
+        "expected_path": "/产品信息/KS0152_胸腹部术后枕"
+      },
+      {
+        "name": "钩针土豆娃娃",
+        "model_id": "KS0306",
+        "parent": "卧室",
+        "ancestors": [
+          "赛狐暂不存在",
+          "家居类",
+          "卧室"
+        ],
+        "expected_path": "/产品信息/KS0306_钩针土豆娃娃"
+      },
+      {
+        "name": "骨头枕",
+        "model_id": "KS0102",
+        "parent": "卧室",
+        "ancestors": [
+          "赛狐暂不存在",
+          "家居类",
+          "卧室"
+        ],
+        "expected_path": "/产品信息/KS0102_骨头枕"
+      },
+      {
+        "name": "S形海绵沙发",
+        "model_id": "KS0208",
+        "parent": "客厅",
+        "ancestors": [
+          "赛狐暂不存在",
+          "家居类",
+          "客厅"
+        ],
+        "expected_path": "/产品信息/KS0208_S形海绵沙发"
+      },
+      {
+        "name": "冥想垫",
+        "model_id": "KS0130",
+        "parent": "客厅",
+        "ancestors": [
+          "赛狐暂不存在",
+          "家居类",
+          "客厅"
+        ],
+        "expected_path": "/产品信息/KS0130_冥想垫"
+      },
+      {
+        "name": "多功能柱状懒人沙发",
+        "model_id": "KS0110",
+        "parent": "客厅",
+        "ancestors": [
+          "赛狐暂不存在",
+          "家居类",
+          "客厅"
+        ],
+        "expected_path": "/产品信息/KS0110_多功能柱状懒人沙发"
+      },
+      {
+        "name": "家用体操垫",
+        "model_id": "KS0162",
+        "parent": "客厅",
+        "ancestors": [
+          "赛狐暂不存在",
+          "家居类",
+          "客厅"
+        ],
+        "expected_path": "/产品信息/KS0162_家用体操垫"
+      },
+      {
+        "name": "幸福观影超大沙发",
+        "model_id": "KS0417",
+        "parent": "客厅",
+        "ancestors": [
+          "赛狐暂不存在",
+          "家居类",
+          "客厅"
+        ],
+        "expected_path": "/产品信息/KS0417_幸福观影超大沙发"
+      },
+      {
+        "name": "弧形pp棉靠枕二次迭代",
+        "model_id": "KS0305",
+        "parent": "客厅",
+        "ancestors": [
+          "赛狐暂不存在",
+          "家居类",
+          "客厅"
+        ],
+        "expected_path": "/产品信息/KS0305_弧形pp棉靠枕二次迭代"
+      },
+      {
+        "name": "方形有扣地垫",
+        "model_id": "KS0117",
+        "parent": "客厅",
+        "ancestors": [
+          "赛狐暂不存在",
+          "家居类",
+          "客厅"
+        ],
+        "expected_path": "/产品信息/KS0117_方形有扣地垫"
+      },
+      {
+        "name": "游戏软趴靠垫",
+        "model_id": "KS0180",
+        "parent": "客厅",
+        "ancestors": [
+          "赛狐暂不存在",
+          "家居类",
+          "客厅"
+        ],
+        "expected_path": "/产品信息/KS0180_游戏软趴靠垫"
+      },
+      {
+        "name": "科技布系列抱枕",
+        "model_id": "KS0141",
+        "parent": "客厅",
+        "ancestors": [
+          "赛狐暂不存在",
+          "家居类",
+          "客厅"
+        ],
+        "expected_path": "/产品信息/KS0141_科技布系列抱枕"
+      },
+      {
+        "name": "翻折沙发躺椅",
+        "model_id": "KS0324",
+        "parent": "客厅",
+        "ancestors": [
+          "赛狐暂不存在",
+          "家居类",
+          "客厅"
+        ],
+        "expected_path": "/产品信息/KS0324_翻折沙发躺椅"
+      },
+      {
+        "name": "翻片懒人沙发",
+        "model_id": "KS0109",
+        "parent": "客厅",
+        "ancestors": [
+          "赛狐暂不存在",
+          "家居类",
+          "客厅"
+        ],
+        "expected_path": "/产品信息/KS0109_翻片懒人沙发"
+      },
+      {
+        "name": "腰背部支撑椅垫",
+        "model_id": "KS0161",
+        "parent": "客厅",
+        "ancestors": [
+          "赛狐暂不存在",
+          "家居类",
+          "客厅"
+        ],
+        "expected_path": "/产品信息/KS0161_腰背部支撑椅垫"
+      },
+      {
+        "name": "薯条躺椅",
+        "model_id": "KS0183",
+        "parent": "客厅",
+        "ancestors": [
+          "赛狐暂不存在",
+          "家居类",
+          "客厅"
+        ],
+        "expected_path": "/产品信息/KS0183_薯条躺椅"
+      },
+      {
+        "name": "躺椅沙发",
+        "model_id": "KS0168",
+        "parent": "客厅",
+        "ancestors": [
+          "赛狐暂不存在",
+          "家居类",
+          "客厅"
+        ],
+        "expected_path": "/产品信息/KS0168_躺椅沙发"
+      },
+      {
+        "name": "鞋子懒人沙发",
+        "model_id": "KS0122",
+        "parent": "客厅",
+        "ancestors": [
+          "赛狐暂不存在",
+          "家居类",
+          "客厅"
+        ],
+        "expected_path": "/产品信息/KS0122_鞋子懒人沙发"
+      },
+      {
+        "name": "便携椅包",
+        "model_id": "KS0170",
+        "parent": "庭院/户外",
+        "ancestors": [
+          "赛狐暂不存在",
+          "家居类",
+          "庭院/户外"
+        ],
+        "expected_path": "/产品信息/KS0170_便携椅包"
+      },
+      {
+        "name": "沙发ABC",
+        "model_id": "KSTest",
+        "parent": "沙发-弃用",
+        "ancestors": [
+          "赛狐暂不存在",
+          "家居类",
+          "沙发-弃用"
+        ],
+        "expected_path": "/产品信息/KSTest_沙发ABC"
+      },
+      {
+        "name": "棒球",
+        "model_id": "KS0022",
+        "parent": "赛狐暂不存在",
+        "ancestors": [
+          "赛狐暂不存在"
+        ],
+        "expected_path": "/产品信息/KS0022_棒球"
+      },
+      {
+        "name": "熊猫",
+        "model_id": "KS0028",
+        "parent": "赛狐暂不存在",
+        "ancestors": [
+          "赛狐暂不存在"
+        ],
+        "expected_path": "/产品信息/KS0028_熊猫"
+      },
+      {
+        "name": "窄边正方形抱枕",
+        "model_id": "KS0014",
+        "parent": "赛狐暂不存在",
+        "ancestors": [
+          "赛狐暂不存在"
+        ],
+        "expected_path": "/产品信息/KS0014_窄边正方形抱枕"
+      },
+      {
+        "name": "汽车后座折叠床",
+        "model_id": "KS0185",
+        "parent": "车用",
+        "ancestors": [
+          "赛狐暂不存在",
+          "车用"
+        ],
+        "expected_path": "/产品信息/KS0185_汽车后座折叠床"
+      },
+      {
+        "name": "车用舒睡枕",
+        "model_id": "KS0178",
+        "parent": "车用",
+        "ancestors": [
+          "赛狐暂不存在",
+          "车用"
+        ],
+        "expected_path": "/产品信息/KS0178_车用舒睡枕"
+      },
+      {
+        "name": "车载肩垫",
+        "model_id": "KS0135",
+        "parent": "车用",
+        "ancestors": [
+          "赛狐暂不存在",
+          "车用"
+        ],
+        "expected_path": "/产品信息/KS0135_车载肩垫"
+      },
+      {
+        "name": "里程碑毯 圆角",
+        "model_id": "KS0016",
+        "parent": "赛狐暂不存在",
+        "ancestors": [
+          "赛狐暂不存在"
+        ],
+        "expected_path": "/产品信息/KS0016_里程碑毯 圆角"
+      },
+      {
+        "name": "里程碑毯 直角",
+        "model_id": "KS0015",
+        "parent": "赛狐暂不存在",
+        "ancestors": [
+          "赛狐暂不存在"
+        ],
+        "expected_path": "/产品信息/KS0015_里程碑毯 直角"
+      },
+      {
+        "name": "三角带圆柱靠枕-圆柱",
+        "model_id": "KS0260",
+        "parent": "配件",
+        "ancestors": [
+          "配件"
+        ],
+        "expected_path": "/产品信息/KS0260_三角带圆柱靠枕-圆柱"
+      },
+      {
+        "name": "主体骨架",
+        "model_id": "ZTGJ5525",
+        "parent": "配件",
+        "ancestors": [
+          "配件"
+        ],
+        "expected_path": "/产品信息/ZTGJ5525_主体骨架"
+      },
+      {
+        "name": "人类口袋",
+        "model_id": "KS0309",
+        "parent": "配件",
+        "ancestors": [
+          "配件"
+        ],
+        "expected_path": "/产品信息/KS0309_人类口袋"
+      },
+      {
+        "name": "便携收纳U形枕",
+        "model_id": "KS0225",
+        "parent": "配件",
+        "ancestors": [
+          "配件"
+        ],
+        "expected_path": "/产品信息/KS0225_便携收纳U形枕"
+      },
+      {
+        "name": "剑麻",
+        "model_id": "JMPJ1010",
+        "parent": "配件",
+        "ancestors": [
+          "配件"
+        ],
+        "expected_path": "/产品信息/JMPJ1010_剑麻"
+      },
+      {
+        "name": "助眠睡眠袋",
+        "model_id": "KS0134",
+        "parent": "配件",
+        "ancestors": [
+          "配件"
+        ],
+        "expected_path": "/产品信息/KS0134_助眠睡眠袋"
+      },
+      {
+        "name": "可盘腿办公椅垫",
+        "model_id": "KS0195",
+        "parent": "配件",
+        "ancestors": [
+          "配件"
+        ],
+        "expected_path": "/产品信息/KS0195_可盘腿办公椅垫"
+      },
+      {
+        "name": "圆柱小枕",
+        "model_id": "KS0011",
+        "parent": "配件",
+        "ancestors": [
+          "配件"
+        ],
+        "expected_path": "/产品信息/KS0011_圆柱小枕"
+      },
+      {
+        "name": "塑料网格",
+        "model_id": "SLWG1010",
+        "parent": "配件",
+        "ancestors": [
+          "配件"
+        ],
+        "expected_path": "/产品信息/SLWG1010_塑料网格"
+      },
+      {
+        "name": "室内外躺椅垫",
+        "model_id": "KS0216",
+        "parent": "配件",
+        "ancestors": [
+          "配件"
+        ],
+        "expected_path": "/产品信息/KS0216_室内外躺椅垫"
+      },
+      {
+        "name": "密度板",
+        "model_id": "MDBPJ1010",
+        "parent": "配件",
+        "ancestors": [
+          "配件"
+        ],
+        "expected_path": "/产品信息/MDBPJ1010_密度板"
+      },
+      {
+        "name": "床垫连接垫",
+        "model_id": "KS0120",
+        "parent": "配件",
+        "ancestors": [
+          "配件"
+        ],
+        "expected_path": "/产品信息/KS0120_床垫连接垫"
+      },
+      {
+        "name": "床楔形枕头",
+        "model_id": "KS0121",
+        "parent": "配件",
+        "ancestors": [
+          "配件"
+        ],
+        "expected_path": "/产品信息/KS0121_床楔形枕头"
+      },
+      {
+        "name": "床边收纳袋",
+        "model_id": "KS0310",
+        "parent": "配件",
+        "ancestors": [
+          "配件"
+        ],
+        "expected_path": "/产品信息/KS0310_床边收纳袋"
+      },
+      {
+        "name": "户外露营毯",
+        "model_id": "KS0175",
+        "parent": "配件",
+        "ancestors": [
+          "配件"
+        ],
+        "expected_path": "/产品信息/KS0175_户外露营毯"
+      },
+      {
+        "name": "提手",
+        "model_id": "PJTS4040",
+        "parent": "配件",
+        "ancestors": [
+          "配件"
+        ],
+        "expected_path": "/产品信息/PJTS4040_提手"
+      },
+      {
+        "name": "日光毯",
+        "model_id": "RGTPJ1010",
+        "parent": "配件",
+        "ancestors": [
+          "配件"
+        ],
+        "expected_path": "/产品信息/RGTPJ1010_日光毯"
+      },
+      {
+        "name": "木腿",
+        "model_id": "MTPJ1010",
+        "parent": "配件",
+        "ancestors": [
+          "配件"
+        ],
+        "expected_path": "/产品信息/MTPJ1010_木腿"
+      },
+      {
+        "name": "毛毡",
+        "model_id": "MZPJ1010",
+        "parent": "配件",
+        "ancestors": [
+          "配件"
+        ],
+        "expected_path": "/产品信息/MZPJ1010_毛毡"
+      },
+      {
+        "name": "毛毡杯垫套装",
+        "model_id": "KS0193",
+        "parent": "配件",
+        "ancestors": [
+          "配件"
+        ],
+        "expected_path": "/产品信息/KS0193_毛毡杯垫套装"
+      },
+      {
+        "name": "毛球",
+        "model_id": "MQ1010",
+        "parent": "配件",
+        "ancestors": [
+          "配件"
+        ],
+        "expected_path": "/产品信息/MQ1010_毛球"
+      },
+      {
+        "name": "毛绒眼睛",
+        "model_id": "MRYJ1330",
+        "parent": "配件",
+        "ancestors": [
+          "配件"
+        ],
+        "expected_path": "/产品信息/MRYJ1330_毛绒眼睛"
+      },
+      {
+        "name": "汽车后座延长器",
+        "model_id": "KS0192",
+        "parent": "配件",
+        "ancestors": [
+          "配件"
+        ],
+        "expected_path": "/产品信息/KS0192_汽车后座延长器"
+      },
+      {
+        "name": "沙发支撑垫",
+        "model_id": "KS0156",
+        "parent": "配件",
+        "ancestors": [
+          "配件"
+        ],
+        "expected_path": "/产品信息/KS0156_沙发支撑垫"
+      },
+      {
+        "name": "耳朵汽车后座保护套",
+        "model_id": "KS0191",
+        "parent": "配件",
+        "ancestors": [
+          "配件"
+        ],
+        "expected_path": "/产品信息/KS0191_耳朵汽车后座保护套"
+      },
+      {
+        "name": "脚凳",
+        "model_id": "KS0150",
+        "parent": "配件",
+        "ancestors": [
+          "配件"
+        ],
+        "expected_path": "/产品信息/KS0150_脚凳"
+      },
+      {
+        "name": "软包墙围",
+        "model_id": "KS0211",
+        "parent": "配件",
+        "ancestors": [
+          "配件"
+        ],
+        "expected_path": "/产品信息/KS0211_软包墙围"
+      },
+      {
+        "name": "透气椅垫",
+        "model_id": "KS0149",
+        "parent": "配件",
+        "ancestors": [
+          "配件"
+        ],
+        "expected_path": "/产品信息/KS0149_透气椅垫"
+      },
+      {
+        "name": "金属杆",
+        "model_id": "JSGPJ1010",
+        "parent": "配件",
+        "ancestors": [
+          "配件"
+        ],
+        "expected_path": "/产品信息/JSGPJ1010_金属杆"
+      },
+      {
+        "name": "门挡风神器",
+        "model_id": "KS0104",
+        "parent": "配件",
+        "ancestors": [
+          "配件"
+        ],
+        "expected_path": "/产品信息/KS0104_门挡风神器"
+      },
+      {
+        "name": "静音球",
+        "model_id": "JYQ1011",
+        "parent": "配件",
+        "ancestors": [
+          "配件"
+        ],
+        "expected_path": "/产品信息/JYQ1011_静音球"
       }
     ]
   },

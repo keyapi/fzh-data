@@ -1,0 +1,32 @@
+{
+  "timestamp": "20260612_122355",
+  "target_folder": "/产品信息",
+  "item_group_root": "产品",
+  "layout": "flat",
+  "full_mode": false,
+  "dry_run": true,
+  "stats": {
+    "total_actions": 3,
+    "match": 1,
+    "create": 0,
+    "rename": 0,
+    "move": 0,
+    "move_approval": 0,
+    "blocked": 1,
+    "ignore": 1,
+    "executed": 0,
+    "failed": 0,
+    "sub_folder_created": 0
+  },
+  "blocked": [
+    {
+      "type": "BLOCKED",
+      "model_id": "KS0001",
+      "reason": "物料组改名: 'KS0001_三角枕' -> 'KS0001_三角靠枕'，旧文件夹有 1 个文件",
+      "old_path": "/产品信息/KS0001_三角枕",
+      "new_path": "/产品信息/KS0001_三角靠枕",
+      "content_count": 1,
+      "content_bytes": 0
+    }
+  ]
+}
