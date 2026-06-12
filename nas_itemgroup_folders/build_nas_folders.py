@@ -139,7 +139,8 @@ class _NasOps:
             return False
 
     def move_folder(self, src_path: str, dst_path: str) -> bool:
-        """CopyMove src to dst. dst_path is full path like /产品信息/床品类/KS0001_xxx."""
+        """CopyMove src to dst. Returns True if task submitted successfully.
+        The actual move executes asynchronously on NAS."""
         try:
             dst_parent = "/".join(dst_path.split("/")[:-1])
             resp = self._fl.start_copy_move(
@@ -148,7 +149,14 @@ class _NasOps:
                 overwrite=False,
                 remove_src=True,
             )
-            return resp.get("success", False)
+            # start_copy_move returns a string with task ID on success
+            if isinstance(resp, str) and "FileStation_" in resp:
+                return True
+            # Some versions return a dict
+            if isinstance(resp, dict) and resp.get("success"):
+                return True
+            print(f"    [nas] unexpected move response: {resp}")
+            return False
         except Exception as e:
             print(f"  [nas] move error {src_path} -> {dst_path}: {e}")
             return False
