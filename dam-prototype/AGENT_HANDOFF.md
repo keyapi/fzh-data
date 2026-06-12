@@ -296,54 +296,89 @@ dam-prototype/
 PR #4: https://github.com/keyapi/fzh-data/pull/4
 
 
-## 8.5 双面板 Collection 浏览器 (2026-06-11 v2 — Inline SKU Strip)
+## 8.5 双面板 Collection 浏览器 (2026-06-12 最新)
 
 ### 架构 (方案 A: 对称独立面板)
 
 - **左面板**: Assets 网格 + 文件名搜索 (leftSearch + leftFiltered) + sidebar 筛选
-- **右面板**: Collection 树状浏览器 (inline SKU thumbnail strip 模式)
+- **右面板**: Collection 树状浏览器 (inline SKU thumbnail strip)
   - 顶层: 所有 Collection 列表 (可搜索 rpSearch)
   - 展开 Collection → 每个 SKU 一行 (`.rp-sku-row`)
   - 每行: 左边 SKU 代码 | 右边横向缩略图条 (`.rp-thumb-strip`)
   - 缩略图大小可调 (rpThumbSize slider, 40-140px)
-  - 图片 hover → ✕ 按钮移除引用 (不删除资产)
-  - SKU 行本身即 drop target → 从左边拖入 Assets 直接添加到对应 SKU
+  - 图片 hover → ✕ 按钮移除引用
+  - SKU 行即 drop target (SortableJS on `.rp-sku-row`)
 - **sidebar**: Type/Tags/Product/Folders/NAS/Collections (保留可折叠)
 - **拖拽**: SortableJS group=dam + forceFallback + fallbackOnBody
   - Assets (pull:clone, put:false) → SKU rows (pull:false, put:true)
-  - 拖拽悬停时 SKU 行高亮 (`.rp-sku-row.drag-over`)
-  - 不支持反向拖拽 (Collection → Assets), ✕ 按钮代替
+  - 拖拽 ghost 自动缩放匹配目标缩略图大小
+  - 拖拽悬停时 SKU 行高亮 + 脉冲动画
+  - 新放入图片有弹性缩放动画 (dropIn keyframe)
+- **取消拖拽**: 3 种方式 (见下方已知问题)
 
-### 关键状态
-- rpExpandedCollections (reactive Set) — 哪些 Collection 展开了
-- rpCollectionItems (reactive {}) — 懒加载的 Collection items 缓存
-- rpThumbSize (ref) — 缩略图大小 (默认 80px)
-- rpSearch — Collection 名搜索过滤
+### 关键状态变量
+- `rpExpandedCollections` (reactive Set) — 展开的 Collection
+- `rpCollectionItems` (reactive {}) — 懒加载 items 缓存
+- `rpThumbSize` (ref, default 80) — 缩略图大小
+- `rpSearch` — Collection 名搜索
+- `window.__dragActive` (boolean) — 全局拖拽状态标志
 
-### 设计决策
-- **不点击 SKU 逐个展开**: 全局鸟瞰，所有 SKU inline 显示缩略图
-- **Collection 删除引用**: 仅移除指针，不影响 Asset (AEM/Bynder 标准)
-- **无反向拖拽**: Collection→Assets 无意义，Asset 本来就在 Assets 里
-- **dock 位置**: 当前仅右侧，代码结构预留 bottom 切换 (类似 Chrome DevTools)
+### 拖拽取消机制 (3 种)
+1. **ESC 键**: `document.addEventListener('keyup', ...)` + `window.__dragActive` 检测
+2. **屏幕中央取消按钮**: 拖拽中显示蓝色 "Cancel Drag" 按钮 (`#__dbg_cancel`)
+3. **右键**: `contextmenu` 事件 → `cancelDrag()`
 
-### UI 改进 (vs v1)
-| v1 (之前) | v2 (现在) |
-|-----------|----------|
-| 点击 SKU 才展开图片 | 展开 Collection 后所有 SKU inline |
-| 独立 `.rp-drop-zone` div | SKU 行即 drop target |
-| Drop zone 占整行空间 | 紧凑，高亮整行 |
-| 无缩略图大小调节 | rpThumbSize slider |
+### ~~已知问题 — ESC/拖出取消在 Codex 侧边栏浏览器中不工作~~
 
-### 面板分割
-- split.js 可拖拽分割条 (`.gutter.gutter-horizontal`)
-- 从 sidebar CSS 前插入 gutter 样式
-- 右面板 `flex: 0 0 42%` → `overflow-y: auto` (split.js 控制宽度)
+**严重性**: P1 — 核心交互不完整
 
-### Git (最新)
-b6984a1 docs(dam): 更新 session summary + AGENT_HANDOFF
+**现象**:
+- ESC 键和拖出 Collection 取消在 Playwright 测试中正常工作 (dragActive 正确追踪, cancelling class 应用, 零错误)
+- 在 Codex 桌面应用**侧边栏内嵌浏览器**中不工作
+- 左下角调试面板 (`#__dbg`) 显示 `dragActive` 状态和按键计数
+
+**已尝试的修复 (6 个 commits, 均未在 Codex 侧边栏浏览器中生效)**:
+1. `755930a` — ESC 动态 addEventListener + CSS 隐藏 ghost
+2. `e36a63d` — 永久 window keydown listener (capture:true) + _dragActive 标志
+3. `c2d9667` — keyup 替代 keydown + onMove evt.original→evt.originalEvent 修复
+4. `91c24a5` — `_dragActive` → `window.__dragActive` (闭包断裂修复)
+5. `40714f1` — 可见调试面板 + 屏幕中央取消按钮 + 右键取消 (当前)
+
+**根因假设**: Codex 侧边栏浏览器可能不向页面转发键盘事件 (keyup/keydown), 或者 SortableJS forceFallback 模式与内嵌浏览器的事件循环不兼容。
+
+**调试方法**: 
+- 刷新页面后, 左下角 `keys:` 计数器显示键盘事件数
+- 如果 `keys:` 始终为 0, 证明键盘事件未到达页面 → 只能用取消按钮/右键
+- 拖拽中 `dragActive: TRUE` 确认标志位正常
+
+**建议下一步**:
+1. 先确认 `keys:` 计数器在内嵌浏览器中是否增长
+2. 如果键盘事件被阻断, 改用以下替代方案:
+   - **Page-wide click-to-cancel**: 拖拽时点页面任意空白区域取消 (mouseup 后检查是否在有效 drop zone 外)
+   - 或接受当前方案: 点取消按钮 / 右键取消
+3. 如果键盘事件正常但 _dragActive 不对, 检查 Sortable onStart/onEnd 触发
+
+### 最近 10 个 commits (2026-06-11 ~ 06-12)
+
+```
+40714f1 feat(dam): visible debug panel + 3-way cancel
+91c24a5 fix(dam): _dragActive -> window.__dragActive (closure)
+c2d9667 fix(dam): ESC keyup listener + onMove evt.originalEvent
+e36a63d fix(dam): permanent ESC listener (capture) + onMove
+755930a feat(dam): ESC to cancel drag + CSS ghost fade-out
+8f26224 feat(dam): drag ghost auto-scale + drop animations
+9eea8d5 feat(dam): inline SKU thumbnail strip + whole-card drag
+6c9aea4 fix(dam): leftFiltered 插入位置缩进修复
+c8ec793 docs(dam): 更新 AGENT_HANDOFF — 双面板树浏览器
 2c830d5 feat(dam): 左面板文件名搜索 + leftFiltered
-5cfeb42 feat(dam): 右面板重构为树状 Collection→SKU 浏览器
-b956ca4 fix(dam): CSS 布局修复 + SortableJS forceFallback
+```
+
+### 设计文档索引
+- `docs/dual-pane-research.md` — AEM/Bynder/资源管理器方案分析 (2026-06-11)
+- `docs/ux-workflow.md` — 8轮用户访谈 + 工作流设计
+- `docs/industry-research.md` — 行业最佳实践 (AEM/Akeneo/Pimcore)
+- `docs/solution-design.md` — 完整方案设计
+- `DESIGN.md` — 设计令牌 (CSS变量 + 组件规范)
 
 ## 9. 关联系统
 
