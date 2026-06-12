@@ -285,6 +285,132 @@ def compare(
     return actions
 
 
+# ── 扫描器 ────────────────────────────────────────────
+
+
+def scan_erpnext(
+    fetch_all_item_groups,            # callable: () -> list[dict]
+    item_group_root: str = "产品",
+) -> list[ErpnextItem]:
+    """从 ERPNext 拉取 '产品' 子树下所有叶子节点。
+
+    fetch_all_item_groups: 返回 [{"name":..., "parent_item_group":..., "is_group":..., "custom_model_id":...}]
+    """
+    all_ig = fetch_all_item_groups()
+    idx = {d["name"]: d for d in all_ig if d.get("name")}
+
+    if item_group_root not in idx:
+        raise ValueError(f"Item Group '{item_group_root}' not found")
+
+    def _descendants(parent_name: str) -> list[dict]:
+        result: list[dict] = []
+        for d in idx.values():
+            if d.get("parent_item_group") == parent_name:
+                result.append(d)
+                result.extend(_descendants(d["name"]))
+        return result
+
+    subtree = [idx[item_group_root]] + _descendants(item_group_root)
+    leaves = [d for d in subtree if d.get("is_group") == 0 and d.get("custom_model_id")]
+
+    items: list[ErpnextItem] = []
+    for leaf in leaves:
+        ancestors: list[str] = []
+        node = leaf
+        while node:
+            parent = node.get("parent_item_group", "")
+            if not parent or parent not in idx:
+                break
+            ancestors.append(parent)
+            node = idx.get(parent)
+        ancestors.reverse()
+        if ancestors and ancestors[0] == item_group_root:
+            ancestors = ancestors[1:]  # skip root
+
+        items.append(ErpnextItem(
+            name=leaf["name"],
+            model_id=leaf["custom_model_id"],
+            parent=leaf["parent_item_group"],
+            ancestors=ancestors,
+        ))
+
+    return items
+
+
+def scan_nas(
+    list_folder,                       # callable: (path, limit) -> list[dict]
+    target_folder: str,
+    sub_folder_names: list[str],
+) -> list[NasFolder]:
+    """扫描 NAS 目标文件夹。
+
+    list_folder: 返回 [{"name":..., "path":..., "is_dir":..., "size":...}]
+    递归收集每个直接子文件夹的内容统计。
+    """
+    results: list[NasFolder] = []
+
+    # 列出 target_folder 的直接子项
+    items = list_folder(target_folder, limit=5000)
+
+    for item in items:
+        if not item["is_dir"]:
+            continue
+
+        folder_name = item["name"]
+        folder_path = item["path"]  # e.g. "/产品信息/KS0001_三角靠枕"
+
+        # 递归统计此文件夹内容
+        file_count, total_bytes, sub_dirs, extra = _scan_dir(
+            list_folder, folder_path, sub_folder_names
+        )
+
+        model_id = parse_model_id(folder_name)
+        script_subs = [d for d in sub_dirs if d in sub_folder_names]
+        extra_subs = [d for d in sub_dirs if d not in sub_folder_names]
+
+        results.append(NasFolder(
+            name=folder_name,
+            path=folder_path,
+            model_id=model_id,
+            content_count=file_count,
+            content_bytes=total_bytes,
+            sub_folders=script_subs,
+            extra_folders=extra_subs,
+            is_script_created=model_id is not None,
+        ))
+
+    return results
+
+
+def _scan_dir(
+    list_folder, path: str, sub_folder_names: list[str]
+) -> tuple[int, int, list[str], list[str]]:
+    """递归扫描一个目录，返回 (file_count, total_bytes, all_subdirs, extra_subdirs)。"""
+    items = list_folder(path, limit=5000)
+    file_count = 0
+    total_bytes = 0
+    subdir_names: list[str] = []
+    extra_names: list[str] = []
+
+    for item in items:
+        if item["is_dir"]:
+            subdir_names.append(item["name"])
+            # 递归子文件夹
+            fc, tb, _, _ = _scan_dir(
+                list_folder, f"{path}/{item['name']}", sub_folder_names
+            )
+            file_count += fc
+            total_bytes += tb
+            # 标记非标准子文件夹
+            if item["name"] not in sub_folder_names:
+                extra_names.append(item["name"])
+        else:
+            file_count += 1
+            total_bytes += item.get("size", 0)
+
+    return file_count, total_bytes, subdir_names, extra_names
+
+
 if __name__ == "__main__":
     # Task 2 tests
     assert parse_model_id('KS0001_三角靠枕') == 'KS0001'
@@ -350,5 +476,48 @@ if __name__ == "__main__":
                             sub_folders=[], extra_folders=[], is_script_created=False)]
     actions = compare([], nas_manual, "/产品信息", "flat", [])
     assert actions[0].type == ActionType.IGNORE
+
+    # Task 4 tests: scanners
+    # Test scan_erpnext
+    mock_fetch = lambda: [
+        {"name": "产品", "parent_item_group": "所有物料组", "is_group": 1, "custom_model_id": None},
+        {"name": "床品类", "parent_item_group": "产品", "is_group": 1, "custom_model_id": None},
+        {"name": "三角靠枕", "parent_item_group": "床品类", "is_group": 0, "custom_model_id": "KS0001"},
+        {"name": "平条靠枕", "parent_item_group": "床品类", "is_group": 0, "custom_model_id": "KS0002"},
+        {"name": "靠垫", "parent_item_group": "其他", "is_group": 0, "custom_model_id": "KD0001"},
+    ]
+    erp_items = scan_erpnext(mock_fetch, "产品")
+    assert len(erp_items) == 2
+    k1 = next(i for i in erp_items if i.model_id == "KS0001")
+    assert k1.name == "三角靠枕"
+    assert k1.ancestors == ["床品类"]
+
+    # Test scan_nas
+    mock_list = lambda path, limit: {
+        "/产品信息": [
+            {"name": "KS0001_三角靠枕", "path": "/产品信息/KS0001_三角靠枕", "is_dir": True, "size": 0},
+            {"name": "旧文件", "path": "/产品信息/旧文件", "is_dir": True, "size": 0},
+        ],
+        "/产品信息/KS0001_三角靠枕": [
+            {"name": "调研报告", "path": "/产品信息/KS0001_三角靠枕/调研报告", "is_dir": True, "size": 0},
+            {"name": "设计稿", "path": "/产品信息/KS0001_三角靠枕/设计稿", "is_dir": True, "size": 0},
+            {"name": "photo.jpg", "path": "/产品信息/KS0001_三角靠枕/photo.jpg", "is_dir": False, "size": 5000},
+        ],
+        "/产品信息/KS0001_三角靠枕/调研报告": [],
+        "/产品信息/KS0001_三角靠枕/设计稿": [],
+        "/产品信息/旧文件": [
+            {"name": "doc.pdf", "path": "/产品信息/旧文件/doc.pdf", "is_dir": False, "size": 1000},
+        ],
+    }[path]
+    nas_items = scan_nas(mock_list, "/产品信息", ["调研报告", "设计稿", "图片", "视频"])
+    assert len(nas_items) == 2
+    ks1 = next(f for f in nas_items if f.model_id == "KS0001")
+    assert ks1.content_count == 1  # photo.jpg
+    assert ks1.content_bytes == 5000
+    assert ks1.is_script_created is True
+    assert "调研报告" in ks1.sub_folders
+    old = next(f for f in nas_items if f.model_id is None)
+    assert old.is_script_created is False
+    assert old.content_count == 1  # doc.pdf
 
     print("All reconcile tests passed!")
