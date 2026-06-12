@@ -1,14 +1,14 @@
 # nas_itemgroup_folders/reconcile.py
 # -*- coding: utf-8 -*-
-"""NAS-ERPNext 对账引擎 — 纯逻辑，无 I/O 依赖。
+"""NAS-ERPNext 对账引擎 — 数据模型定义。
 
 比对 ERPNext Item Group 和 NAS 文件夹，输出分类后的 Action 列表。
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from itertools import groupby
+from dataclasses import dataclass
+from enum import Enum
 
 # ── 输入数据类 ─────────────────────────────────────────
 
@@ -36,21 +36,21 @@ class NasFolder:
 
 # ── 输出数据类 ─────────────────────────────────────────
 
-class ActionType:
-    CREATE        = "CREATE"
-    RENAME        = "RENAME"
-    MOVE          = "MOVE"
+class ActionType(str, Enum):
+    CREATE = "CREATE"
+    RENAME = "RENAME"
+    MOVE = "MOVE"
     MOVE_APPROVAL = "MOVE_APPROVAL"
-    DELETE_EMPTY  = "DELETE_EMPTY"
-    BLOCKED       = "BLOCKED"
-    IGNORE        = "IGNORE"
-    MATCH         = "MATCH"
+    DELETE_EMPTY = "DELETE_EMPTY"
+    BLOCKED = "BLOCKED"
+    IGNORE = "IGNORE"
+    MATCH = "MATCH"
 
 
 @dataclass
 class Action:
     """一条对账操作"""
-    type: str                    # ActionType 枚举值
+    type: ActionType               # ActionType 枚举值
     model_id: str                # KS 编码
     erpnext_name: str            # 物料组名
     nas_name: str                # NAS 文件夹名（可能为空）
