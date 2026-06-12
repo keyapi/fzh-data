@@ -9,6 +9,7 @@
 | `upload_item_images.py` | 更新物料组主图 | 赛狐图片链接 Excel | 上传结果报告 |
 | `upload_local_images.py` | CLI 批量上传本地图片 | 本地图片目录 | 图片链接 Excel |
 | `image_upload_app.py` | **Web 可视化上传** | 浏览器拖拽图片 | 图片链接 Excel |
+| `upload_pim_images.py` | 上传图片到物料组 custom_pim_images 子表 | 本地图片目录 | PIM图片上传报告 |
 
 ## 前置条件
 
@@ -111,3 +112,48 @@ Excel 文件（`赛狐图片链接/` 目录），列：
 `out/图片上传结果_{timestamp}.xlsx`:
 - `汇总` sheet — 总行数 + 成功/失败计数
 - `明细` sheet — 每行的处理状态和备注
+
+---
+
+## 脚本: `upload_pim_images.py` — PIM图片上传
+
+上传本地图片到 ERPNext 物料组的 `custom_pim_images` 子表，可选同步更新物料组主图字段。
+
+**用途**: 运营/设计同事提供物料组图片，上传到 ERPNext 的 PIM 图片管理中。
+
+### 命令行
+
+```bash
+uv run python upload_pim_images.py                      # 默认 test，仅写入子表
+uv run python upload_pim_images.py --env prod           # 生产环境
+uv run python upload_pim_images.py --update-image       # 同步更新物料组主图
+uv run python upload_pim_images.py --dry-run            # 预览模式
+uv run python upload_pim_images.py --no-compress        # 不压缩
+```
+
+### 参数
+
+| 参数 | 说明 |
+|------|------|
+| `--env test/prod` | 目标环境 (默认 test) |
+| `--update-image / -m` | 上传后同步更新物料组的 `image` 主图字段 |
+| `--dry-run` | 预览模式，只查不写 |
+| `--input-dir <path>` | 图片目录 (默认 C:/Users/DEV01/Pictures/EN物料组图片) |
+| `--no-compress` | 不压缩，直接上传原图 |
+| `--max-size <px>` | 压缩后最大边长 (默认 1500) |
+| `--quality <1-100>` | JPEG 质量 (默认 85) |
+
+### 处理流程
+
+```
+图片目录 → 文件名提取物料组名称 → 查询 ERPNext 物料组
+  → 压缩图片 (max 1500px, JPEG 85, 透明背景处理, 安全回退)
+  → 查重: custom_pim_images 已存在同名文件? → 是则跳过
+  → 上传文件到 ERPNext → 写入 custom_pim_images 子表
+  → [可选 --update-image] PUT 更新 image 主图字段
+  → 生成 Excel 报告
+```
+
+### 输出
+
+`out/PIM图片上传结果_{timestamp}.xlsx`，含汇总 + 明细 sheet。
