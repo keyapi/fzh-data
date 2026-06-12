@@ -267,7 +267,9 @@ def main(full: bool = False, dry_run: bool = False, layout: str = "flat") -> Non
     full_count = len(erp_items)
     # Collect valid intermediate group names (from ALL items, before test filter)
     valid_group_names: set[str] = set()
+    valid_model_ids: set[str] = set()
     for item in erp_items:
+        valid_model_ids.add(item.model_id)
         for a in item.ancestors:
             valid_group_names.add(a)
     if not full:
@@ -279,7 +281,7 @@ def main(full: bool = False, dry_run: bool = False, layout: str = "flat") -> Non
     # 2. Scan NAS
     print(f">>> 扫描 NAS: {target_folder}")
     nas_ops = _NasOps()
-    nas_folders = scan_nas(nas_ops.list_folder, target_folder, sub_folders)
+    nas_folders = scan_nas(nas_ops.list_folder, target_folder, sub_folders, valid_model_ids)
     script_count = sum(1 for f in nas_folders if f.is_script_created)
     manual_count = sum(1 for f in nas_folders if not f.is_script_created)
     print(f"    脚本创建: {script_count}  手动/未知: {manual_count}")
@@ -362,7 +364,7 @@ def main(full: bool = False, dry_run: bool = False, layout: str = "flat") -> Non
     orphan_cleaned = 0
     orphans = detect_orphans(
         nas_ops.list_folder, target_folder,
-        valid_group_names, sub_folders, layout,
+        valid_group_names, sub_folders, layout, valid_model_ids,
     )
     if orphans:
         print(f"\n>>> 孤儿文件夹检测 ({len(orphans)} 项) ...")

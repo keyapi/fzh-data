@@ -66,14 +66,24 @@ class Action:
 
 import re
 
-# KS 编码模式: 2个大写字母 + 4位数字开头
+# KS 编码模式: 2个大写字母 + 4位数字开头（标准格式）
 _KS_PATTERN = re.compile(r'^([A-Z]{2}\d{4})_')
 
 
-def parse_model_id(folder_name: str) -> str | None:
-    """从文件夹名解析 KS 编码，如 'KS0001_三角靠枕' -> 'KS0001'"""
+def parse_model_id(folder_name: str, valid_model_ids: set[str] | None = None) -> str | None:
+    """从文件夹名解析 KS 编码。
+
+    优先正则匹配 KS 标准格式 (2字母+4数字)。
+    正则不匹配时，如果提供了 valid_model_ids，则按 _ 拆分取前缀查集合。
+    """
     m = _KS_PATTERN.match(folder_name)
-    return m.group(1) if m else None
+    if m:
+        return m.group(1)
+    if valid_model_ids and "_" in folder_name:
+        prefix = folder_name.split("_")[0]
+        if prefix in valid_model_ids:
+            return prefix
+    return None
 
 
 # 文件夹名非法字符转义
@@ -345,6 +355,7 @@ def scan_nas(
     list_folder,                       # callable: (path, limit) -> list[dict]
     target_folder: str,
     sub_folder_names: list[str],
+    valid_model_ids: set[str] | None = None,
 ) -> list[NasFolder]:
     """扫描 NAS 目标文件夹，递归发现所有 KS 编码文件夹。
 
@@ -359,20 +370,19 @@ def scan_nas(
     # 2. For each KS-pattern folder, compute recursive stats and create NasFolder
     ks_folders: dict[str, dict] = {}
     for f in all_folders:
-        mid = parse_model_id(f["name"])
+        mid = parse_model_id(f["name"], valid_model_ids)
         if mid:
             ks_folders[f["path"]] = f
 
     for f in ks_folders.values():
         path = f["path"]
         folder_name = f["name"]
-        # Recursively count content: all files under this path that are NOT ks_folders themselves
-        # Actually, for simplicity, let's scan this folder's subtree for content
+        # Recursively count content
         file_count, total_bytes, sub_dirs, extra = _scan_dir(
             list_folder, path, sub_folder_names
         )
 
-        model_id = parse_model_id(folder_name)
+        model_id = parse_model_id(folder_name, valid_model_ids)
         script_subs = [d for d in sub_dirs if d in sub_folder_names]
         extra_subs = [d for d in sub_dirs if d not in sub_folder_names]
 
@@ -392,7 +402,7 @@ def scan_nas(
     for item in items:
         if not item["is_dir"]:
             continue
-        mid = parse_model_id(item["name"])
+        mid = parse_model_id(item["name"], valid_model_ids)
         if mid:
             continue  # Already handled above
         # Non-KS folder
@@ -430,6 +440,7 @@ def detect_orphans(
     valid_group_names: set[str],           # ERPNext 有效中间节点名称
     sub_folder_names: list[str],           # 标准子文件夹名
     layout: str = "flat",                  # 当前布局模式
+    valid_model_ids: set[str] | None = None,
 ) -> list[Orphan]:
     """扫描 NAS 树，检测非 KS 格式、非有效中间节点、非标准子文件夹的目录。
 
@@ -445,7 +456,7 @@ def detect_orphans(
     # Also collect all KS folders to check descendants
     ks_paths: set[str] = set()
     for d in all_dirs:
-        if parse_model_id(d["name"]):
+        if parse_model_id(d["name"], valid_model_ids):
             ks_paths.add(d["path"])
 
     orphans: list[Orphan] = []
@@ -454,11 +465,11 @@ def detect_orphans(
         path = d["path"]
 
         # Skip KS-pattern folders
-        if parse_model_id(name):
+        if parse_model_id(name, valid_model_ids):
             continue
         # Skip standard sub-folders (under a KS parent)
         parent_name_for_sub = path.split("/")[-2] if len(path.split("/")) > 1 else ""
-        if parse_model_id(parent_name_for_sub) and name in sub_folder_names:
+        if parse_model_id(parent_name_for_sub, valid_model_ids) and name in sub_folder_names:
             continue
         # Skip the target folder itself
         if path.rstrip("/") == target_folder.rstrip("/"):
@@ -466,7 +477,7 @@ def detect_orphans(
         depth = path.count("/") - target_folder.rstrip("/").count("/")
         # Skip if parent is neither KS nor valid group (manual subtree, leave alone)
         parent_name = path.rstrip("/").split("/")[-2] if depth >= 2 else ""
-        if depth >= 2 and not parse_model_id(parent_name) and parent_name not in valid_group_names:
+        if depth >= 2 and not parse_model_id(parent_name, valid_model_ids) and parent_name not in valid_group_names:
             continue
 
         # In tree mode: valid group names at any depth are not orphans
