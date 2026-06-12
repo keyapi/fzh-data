@@ -60,3 +60,50 @@ class Action:
     content_bytes: int           # 现有文件大小
     safe: bool                   # 是否可安全自动执行
     reason: str                  # 人类可读的说明
+
+
+# ── KS 编码解析 ────────────────────────────────────────
+
+import re
+
+# KS 编码模式: 2个大写字母 + 4位数字开头
+_KS_PATTERN = re.compile(r'^([A-Z]{2}\d{4})_')
+
+
+def parse_model_id(folder_name: str) -> str | None:
+    """从文件夹名解析 KS 编码，如 'KS0001_三角靠枕' -> 'KS0001'"""
+    m = _KS_PATTERN.match(folder_name)
+    return m.group(1) if m else None
+
+
+# 文件夹名非法字符转义
+_FORBIDDEN = str.maketrans({
+    "/": "_", "\\": "_", ":": "_", "*": "_", "?": "_",
+    '"': "_", "<": "_", ">": "_", "|": "_",
+})
+
+
+def safe_name(s: str) -> str:
+    return s.translate(_FORBIDDEN).strip()
+
+
+def expected_folder_name(model_id: str, name: str) -> str:
+    """根据物料组信息计算期望文件夹名"""
+    return safe_name(f"{model_id}_{name}")
+
+
+def expected_path(
+    model_id: str, name: str,
+    target_folder: str, ancestors: list[str], layout: str,
+) -> str:
+    """根据布局计算期望 NAS 路径。
+
+    flat: /产品信息/KS0001_三角靠枕
+    tree: /产品信息/床品类/床头靠枕/三角靠枕类/KS0001_三角靠枕
+    """
+    folder = expected_folder_name(model_id, name)
+    if layout == "flat":
+        return f"{target_folder}/{folder}"
+    else:
+        parts = [target_folder] + [safe_name(a) for a in ancestors] + [folder]
+        return "/".join(parts)
