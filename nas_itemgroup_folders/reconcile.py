@@ -346,26 +346,30 @@ def scan_nas(
     target_folder: str,
     sub_folder_names: list[str],
 ) -> list[NasFolder]:
-    """扫描 NAS 目标文件夹。
+    """扫描 NAS 目标文件夹，递归发现所有 KS 编码文件夹。
 
-    list_folder: 返回 [{"name":..., "path":..., "is_dir":..., "size":...}]
-    递归收集每个直接子文件夹的内容统计。
+    返回: 所有脚本创建的文件夹 + target_folder 直接子节点中非 KS 格式的文件夹。
     """
     results: list[NasFolder] = []
 
-    # 列出 target_folder 的直接子项
-    items = list_folder(target_folder, limit=5000)
+    # 1. Walk entire tree, collect all folders
+    all_folders: list[dict] = []  # [{"name":..., "path":..., "is_dir":..., "size":...}]
+    _walk_tree(list_folder, target_folder, sub_folder_names, all_folders)
 
-    for item in items:
-        if not item["is_dir"]:
-            continue
+    # 2. For each KS-pattern folder, compute recursive stats and create NasFolder
+    ks_folders: dict[str, dict] = {}
+    for f in all_folders:
+        mid = parse_model_id(f["name"])
+        if mid:
+            ks_folders[f["path"]] = f
 
-        folder_name = item["name"]
-        folder_path = item["path"]  # e.g. "/产品信息/KS0001_三角靠枕"
-
-        # 递归统计此文件夹内容
+    for f in ks_folders.values():
+        path = f["path"]
+        folder_name = f["name"]
+        # Recursively count content: all files under this path that are NOT ks_folders themselves
+        # Actually, for simplicity, let's scan this folder's subtree for content
         file_count, total_bytes, sub_dirs, extra = _scan_dir(
-            list_folder, folder_path, sub_folder_names
+            list_folder, path, sub_folder_names
         )
 
         model_id = parse_model_id(folder_name)
@@ -374,16 +378,49 @@ def scan_nas(
 
         results.append(NasFolder(
             name=folder_name,
-            path=folder_path,
+            path=path,
             model_id=model_id,
             content_count=file_count,
             content_bytes=total_bytes,
             sub_folders=script_subs,
             extra_folders=extra_subs,
-            is_script_created=model_id is not None,
+            is_script_created=True,
+        ))
+
+    # 3. Add non-KS direct children of target_folder as IGNORE items
+    items = list_folder(target_folder, limit=5000)
+    for item in items:
+        if not item["is_dir"]:
+            continue
+        mid = parse_model_id(item["name"])
+        if mid:
+            continue  # Already handled above
+        # Non-KS folder
+        fc, tb, _, _ = _scan_dir(list_folder, item["path"], sub_folder_names)
+        results.append(NasFolder(
+            name=item["name"],
+            path=item["path"],
+            model_id=None,
+            content_count=fc,
+            content_bytes=tb,
+            sub_folders=[],
+            extra_folders=[],
+            is_script_created=False,
         ))
 
     return results
+
+
+def _walk_tree(
+    list_folder, path: str, sub_folder_names: list[str],
+    collector: list[dict],
+) -> None:
+    """递归遍历目录树，收集所有文件夹到 collector。"""
+    items = list_folder(path, limit=5000)
+    for item in items:
+        if item["is_dir"]:
+            collector.append(item)
+            _walk_tree(list_folder, item["path"], sub_folder_names, collector)
 
 
 def _scan_dir(
