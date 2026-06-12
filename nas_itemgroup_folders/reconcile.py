@@ -453,6 +453,7 @@ def _scan_dir(
 
 
 if __name__ == "__main__":
+    import sys; sys.stdout.reconfigure(encoding="utf-8")
     # Task 2 tests
     assert parse_model_id('KS0001_三角靠枕') == 'KS0001'
     assert parse_model_id('旧的设计文件1') is None

@@ -18,6 +18,9 @@ import json
 import os
 import sys
 import time
+
+# Force UTF-8 stdout on Windows (GBK terminal workaround)
+sys.stdout.reconfigure(encoding="utf-8")
 from datetime import datetime
 from pathlib import Path
 

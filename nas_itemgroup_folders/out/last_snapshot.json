@@ -1,0 +1,77 @@
+{
+  "run_at": "2026-06-12T11:52:52.613182",
+  "layout": "tree",
+  "erpnext": {
+    "root": "产品",
+    "total_leaves": 404,
+    "items": [
+      {
+        "name": "三角靠枕",
+        "model_id": "KS0001",
+        "parent": "三角靠枕类",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "三角靠枕类"
+        ],
+        "expected_path": "/产品信息/床品类/床头靠枕/三角靠枕类/KS0001_三角靠枕"
+      },
+      {
+        "name": "平条靠枕",
+        "model_id": "KS0002",
+        "parent": "平条靠枕类",
+        "ancestors": [
+          "床品类",
+          "床头靠枕",
+          "平条靠枕类"
+        ],
+        "expected_path": "/产品信息/床品类/床头靠枕/平条靠枕类/KS0002_平条靠枕"
+      }
+    ]
+  },
+  "nas": {
+    "target": "/产品信息",
+    "script_created": [
+      {
+        "name": "KS0001_三角靠枕",
+        "path": "/产品信息/床品类/床头靠枕/三角靠枕类/KS0001_三角靠枕",
+        "content_count": 0,
+        "content_bytes": 0,
+        "sub_folders": [
+          "图片",
+          "视频",
+          "设计稿",
+          "调研报告"
+        ],
+        "extra_folders": []
+      },
+      {
+        "name": "KS0002_平条靠枕",
+        "path": "/产品信息/床品类/床头靠枕/平条靠枕类/KS0002_平条靠枕",
+        "content_count": 0,
+        "content_bytes": 0,
+        "sub_folders": [
+          "图片",
+          "视频",
+          "设计稿",
+          "调研报告"
+        ],
+        "extra_folders": []
+      }
+    ],
+    "manual_or_unknown": [
+      {
+        "name": "床品类",
+        "path": "/产品信息/床品类",
+        "content_count": 0,
+        "content_bytes": 0
+      },
+      {
+        "name": "测试文件夹1",
+        "path": "/产品信息/测试文件夹1",
+        "content_count": 1,
+        "content_bytes": 0
+      }
+    ]
+  }
+}

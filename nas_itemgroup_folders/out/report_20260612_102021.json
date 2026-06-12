@@ -1,0 +1,25 @@
+{
+  "timestamp": "20260612_102021",
+  "target_folder": "/产品信息",
+  "item_group_root": "产品",
+  "sub_folders": [
+    "调研报告",
+    "设计稿",
+    "图片",
+    "视频"
+  ],
+  "full_mode": false,
+  "dry_run": false,
+  "item_group_stats": {
+    "item_group_total": 2,
+    "item_group_created": 0,
+    "item_group_skipped": 2,
+    "item_group_failed": 0
+  },
+  "sub_folder_stats": {
+    "sub_folder_created": 8,
+    "sub_folder_skipped": 0,
+    "sub_folder_failed": 0
+  },
+  "failures": []
+}
