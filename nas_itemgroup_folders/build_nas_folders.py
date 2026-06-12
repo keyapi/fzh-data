@@ -18,6 +18,9 @@ import json
 import os
 import sys
 import time
+
+# Force UTF-8 stdout on Windows (GBK terminal workaround)
+sys.stdout.reconfigure(encoding="utf-8")
 from datetime import datetime
 from pathlib import Path
 
@@ -33,9 +36,9 @@ sys.path.insert(0, str(_DIR.parent))
 
 from NAS_API.synology import _load_dotenv, _parse_nas_url  # noqa: E402
 from nas_itemgroup_folders.reconcile import (  # noqa: E402
-    Action, ActionType,
+    Action, ActionType, Orphan,
     scan_erpnext, scan_nas, compare,
-    expected_path,
+    expected_path, detect_orphans,
 )
 
 # ── .env ────────────────────────────────────────────────
@@ -139,7 +142,8 @@ class _NasOps:
             return False
 
     def move_folder(self, src_path: str, dst_path: str) -> bool:
-        """CopyMove src to dst. dst_path is full path like /产品信息/床品类/KS0001_xxx."""
+        """CopyMove src to dst. Returns True if task submitted successfully.
+        The actual move executes asynchronously on NAS."""
         try:
             dst_parent = "/".join(dst_path.split("/")[:-1])
             resp = self._fl.start_copy_move(
@@ -148,7 +152,14 @@ class _NasOps:
                 overwrite=False,
                 remove_src=True,
             )
-            return resp.get("success", False)
+            # start_copy_move returns a string with task ID on success
+            if isinstance(resp, str) and "FileStation_" in resp:
+                return True
+            # Some versions return a dict
+            if isinstance(resp, dict) and resp.get("success"):
+                return True
+            print(f"    [nas] unexpected move response: {resp}")
+            return False
         except Exception as e:
             print(f"  [nas] move error {src_path} -> {dst_path}: {e}")
             return False
@@ -254,6 +265,11 @@ def main(full: bool = False, dry_run: bool = False, layout: str = "flat") -> Non
     fetch_all = _make_erpnext_fetcher()
     erp_items = scan_erpnext(fetch_all, ig_root)
     full_count = len(erp_items)
+    # Collect valid intermediate group names (from ALL items, before test filter)
+    valid_group_names: set[str] = set()
+    for item in erp_items:
+        for a in item.ancestors:
+            valid_group_names.add(a)
     if not full:
         erp_items = [i for i in erp_items if i.model_id in test_ids]
         print(f"    全部: {full_count} 叶子 | TEST MODE: {[i.model_id for i in erp_items]}")
@@ -275,6 +291,7 @@ def main(full: bool = False, dry_run: bool = False, layout: str = "flat") -> Non
 
     # 4. Execute safe actions
     executed, failed = 0, 0
+    _created_parents: set[str] = set()
     safe = [a for a in actions if a.safe and a.type not in (ActionType.MATCH, ActionType.IGNORE)]
     if not dry_run and safe:
         print(f"\n>>> 执行安全操作 ({len(safe)} 项) ...")
@@ -296,6 +313,19 @@ def main(full: bool = False, dry_run: bool = False, layout: str = "flat") -> Non
                     print(f"  OK RENAME {a.old_path} -> {a.new_path}")
 
                 elif a.type == ActionType.MOVE:
+                    # Ensure intermediate parent folders exist (skip target_folder itself)
+                    dst_parent = "/".join(a.new_path.split("/")[:-1])
+                    # Build paths from root, skipping parts that are already under target_folder
+                    target_parts = target_folder.rstrip("/").split("/")
+                    dst_parts = dst_parent.split("/")
+                    for depth in range(len(target_parts), len(dst_parts)):
+                        p = "/".join(dst_parts[:depth + 1])
+                        if p and p not in _created_parents and p != target_folder:
+                            nas_ops.create_folder(
+                                "/".join(dst_parts[:depth]),
+                                dst_parts[depth],
+                            )
+                            _created_parents.add(p)
                     if not nas_ops.move_folder(a.old_path, a.new_path):
                         raise Exception(f"move {a.old_path} failed")
                     print(f"  OK MOVE   {a.old_path} -> {a.new_path}")
@@ -328,7 +358,30 @@ def main(full: bool = False, dry_run: bool = False, layout: str = "flat") -> Non
             if sub_created:
                 print(f"    补建子文件夹: {sub_created}")
 
-    # 6. Report
+    # 6. Orphan detection
+    orphan_cleaned = 0
+    orphans = detect_orphans(
+        nas_ops.list_folder, target_folder,
+        valid_group_names, sub_folders, layout,
+    )
+    if orphans:
+        print(f"\n>>> 孤儿文件夹检测 ({len(orphans)} 项) ...")
+        for o in orphans:
+            if o.content_count == 0 and not dry_run:
+                try:
+                    nas_ops._fl.delete_blocking_function(o.path)
+                    print(f"  清理空孤儿: {o.path}")
+                    orphan_cleaned += 1
+                except Exception as e:
+                    print(f"  清理失败: {o.path}: {e}")
+            elif o.content_count == 0 and dry_run:
+                print(f"  可清理空文件夹: {o.path}")
+            else:
+                print(f"  ⚠️  有内容，禁止清理: {o.path} ({o.content_count} 文件)")
+    else:
+        print("\n>>> 孤儿检测: 无")
+
+    # 7. Report
     stats = _print_report(actions, layout, full, dry_run, executed, failed, sub_created)
 
     # Save JSON

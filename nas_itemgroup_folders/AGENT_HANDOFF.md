@@ -1,0 +1,181 @@
+# NAS-ERPNext 文件夹对账 — Agent 交接文档
+
+> 最后更新: 2026-06-12 | 分支: `feature/nas-itemgroup-folders` | 状态: 15/15 鲁棒性测试通过，等待全量执行
+
+## 背景
+
+视觉部负责人 LM 需要在 Synology NAS `/产品信息/` 下，按 ERPNext 生产环境 Item Group "产品" 子树的叶子节点创建文件夹。每个物料组建一个 `{custom_model_id}_{name}` 文件夹，内含 4 个标准子文件夹（调研报告/设计稿/图片/视频）。之后 LM 会手动将设计师产出整理进去。
+
+## 阶段性目标 & 完成情况
+
+### Phase 1: 基础设施 (✅ 完成)
+- [x] `NAS_API/synology.py` — 共享 Synology API 模块 (基于 N4S4/synology-api 库)
+- [x] `nas_itemgroup_folders/build_nas_folders.py` — 初始批量建文件夹脚本
+- [x] `nas_itemgroup_folders/.env` — 任务配置
+
+### Phase 2: 对账引擎 (✅ 完成)
+- [x] `reconcile.py` — 核心对账引擎: ErpnextItem/NasFolder/Action 数据模型
+- [x] `compare()` — 按 KS 编码比对，6 种状态分类
+- [x] `scan_erpnext()` / `scan_nas()` — 双端扫描器
+- [x] `detect_orphans()` — 孤儿中间文件夹检测
+- [x] `safe_name()` / `expected_path()` / `parse_model_id()` — 工具函数
+
+### Phase 3: 集成测试 (✅ 完成)
+- [x] flat ↔ tree 布局切换（空文件夹自动搬迁）
+- [x] 内容感知: 有文件→MOVE_APPROVAL，空→自动 MOVE
+- [x] 改名检测: NAME_MISMATCH / STRUC_MISMATCH
+- [x] 孤儿检测: 布局切换后残留空中间文件夹自动清理
+- [x] 终端 GBK 编码根治
+- [x] 15 个自动化鲁棒性测试全部通过
+
+### Phase 4: 待执行
+- [ ] 全量 `--full` 创建 404 个叶子节点（flat 布局）
+- [ ] `dam-prototype/main.py` 旧 SynologyNAS 类迁移到 NAS_API
+
+## 架构
+
+```
+NAS_API/                         ← 共享 NAS 模块
+  synology.py                    ← Synology FileStation 封装 (基于 synology-api 库)
+  .env                           ← NAS 凭证
+
+nas_itemgroup_folders/
+  reconcile.py                   ← 对账引擎 (纯逻辑 + Scanner)
+  build_nas_folders.py            ← CLI + NAS 操作编排 + 报告
+  verify_tree_structure.py        ← 树结构预览
+  test_robustness.py              ← 15 场景鲁棒性测试
+  README.md                       ← 用户文档
+  AGENT_HANDOFF.md                ← 本文件
+  .env                            ← NAS_TARGET_FOLDER, ERP_API_*, SUB_FOLDERS
+  out/                            ← JSON 报告 + last_snapshot.json
+```
+
+## 关键概念
+
+### 对账矩阵 (reconcile.py)
+
+每次运行从头发起对比，按 KS 编码（`custom_model_id`）关联：
+
+| 状态 | 说明 | 操作 |
+|------|------|------|
+| MATCH | 名称 + 路径都一致 | 检查子文件夹完整性 |
+| MISSING | ERPNext 有，NAS 无 | 自动创建 + 标准子文件夹 |
+| NAME_MISMATCH | 同 KS 码，名称不同 | 空→RENAME; 有内容→BLOCKED |
+| STRUC_MISMATCH | 同 KS 码，路径不同 | 空→MOVE; 有内容→MOVE_APPROVAL |
+| EXTRA | NAS 有 (KS格式)，ERPNext 无 | 空→DELETE_EMPTY; 有内容→BLOCKED |
+| IGNORE | NAS 有 (非 KS 格式) | 不碰 |
+
+**唯一抓手: KS 编码** (`parse_model_id` 匹配 `^[A-Z]{2}\d{4}_` 模式)。
+一旦文件夹名丢失 KS 前缀，引擎无法匹配，归入 IGNORE。
+
+### 布局模式
+
+- **flat**: `/产品信息/KS0001_三角靠枕/`
+- **tree**: `/产品信息/床品类/床头靠枕/三角靠枕类/KS0001_三角靠枕/`
+- 切换时空文件夹自动 CopyMove，有内容需确认 (MOVE_APPROVAL)
+
+### 孤儿检测
+
+布局切换后，空的中间文件夹（如 tree→flat 残留的 床品类/床头靠枕/...）自动检测并清理。
+仅针对 ERPNext 有效名称集合内的空文件夹做清理；未知文件夹、有内容文件夹跳过。
+
+## 使用
+
+```bash
+cd nas_itemgroup_folders
+uv run python build_nas_folders.py              # 测试模式 (KS0001, KS0002)
+uv run python build_nas_folders.py --full       # 全量 404 个
+uv run python build_nas_folders.py --dry-run    # 仅对比
+uv run python build_nas_folders.py --layout tree|flat
+uv run python test_robustness.py                # 全部鲁棒性测试
+```
+
+## 经验教训
+
+### 1. Windows GBK 终端编码 (⚠️ 最高优先级)
+
+**症状**: Python stdout 中文全部乱码，导致读取 NAS 文件夹名时做出错误判断。
+
+**根因**: Windows 终端 `chcp 936` (GBK)，Python 不设 `PYTHONIOENCODING` 时继承 GBK。
+
+**修复 (三层防护)**:
+```python
+# ① 脚本层面 — 每个脚本头部
+sys.stdout.reconfigure(encoding="utf-8")
+
+# ② Shell 层面 — ~/.bashrc
+export PYTHONIOENCODING=utf-8
+
+# ③ 子进程层面 — subprocess.run 参数
+encoding="utf-8", errors="replace"
+```
+
+**已有先例**: 项目 `warehouse_restock/` 的 `run_full_restock_flow.py` 和 `test_e2e_flow.py` 早已在子进程调用中设置 `PYTHONIOENCODING=utf-8`。
+
+### 2. synology-api 库的 API 差异
+
+| API | 返回值类型 | 判断成功 |
+|-----|-----------|---------|
+| `get_file_list()` | `{success: True, data: {files: [...]}}` | `resp.get("success")` |
+| `create_folder()` | `{success: True/False}` | `resp.get("success")` |
+| `start_copy_move()` | **task ID 字符串** `"FileStation_17812..."` | `isinstance(resp, str) and "FileStation_" in resp` |
+| `upload_file()` | `{success: True}` | `resp.get("success")` |
+| `rename_folder()` | `{success: True/False}` | `resp.get("success")` |
+| `delete_blocking_function()` | void (抛异常表示失败) | try/except |
+
+最坑的是 `start_copy_move` — 返回字符串而非 dict，导致早期 `resp.get("success")` 永远失败。
+
+### 3. NAS `#recycle` 回收站行为
+
+- **有内容的文件夹** → 删除后进回收站，可恢复
+- **空文件夹** → 删除后不进回收站，永久丢失
+- `#recycle` 目录 FileStation API 返回 407 (需 DSM 网页端管理)
+
+**对引擎的影响**: 空文件夹的 CREATE/RENAME/MOVE/DELETE 无数据损失风险。
+有内容的操作必须 BLOCKED 或需确认。
+
+### 4. 孤儿检测设计演进
+
+**初版 (危险)**: 把所有不在 ERPNext 名称集合里的文件夹当孤儿 → 删了 LM 的手动文件夹。
+
+**修正版 (安全)**:
+1. 仅在布局切换 (tree↔flat) 后触发
+2. 只清理 ERPNext 有效名称集合内 + 空的文件夹
+3. 有内容的文件夹 → 只报告不删除
+4. 非 KS 格式、非有效名称的 → 跳过 (手动文件夹保护)
+
+### 5. 鲁棒性测试设计要点
+
+- 每个测试独立: setup → mutate → reconcile → verify → restore
+- 通过子进程调用 `build_nas_folders.py` 获得真实对账输出
+- 解析子进程 stdout 提取状态计数（MATCH/CREATE/MOVE/...）
+- **执行操作的 run 输出操作结果，需再跑 `--dry-run` 验证最终 MATCH 状态**
+
+## 环境变量
+
+| 变量 | 所在文件 | 说明 |
+|------|---------|------|
+| `NAS_URL/USERNAME/PASSWORD` | `NAS_API/.env` | NAS 凭证 |
+| `NAS_TARGET_FOLDER` | `nas_itemgroup_folders/.env` | 默认 `/产品信息` |
+| `ERP_URL/API_KEY/API_SECRET` | `nas_itemgroup_folders/.env` | ERPNext 凭证 |
+| `ITEM_GROUP_ROOT` | `nas_itemgroup_folders/.env` | 默认 `产品` |
+| `SUB_FOLDERS` | `nas_itemgroup_folders/.env` | 逗号分隔，默认 `调研报告,设计稿,图片,视频` |
+
+## Git 提交历史
+
+```
+c27371f test(nas): 15-case robustness test suite
+762fcc7 feat(nas): orphan detection with layout-aware auto-cleanup
+4266184 docs(nas): comprehensive AGENT_HANDOFF with lessons learned
+2e60f76 fix(nas): force UTF-8 stdout to prevent Windows GBK terminal garbling
+e50f525 fix(nas): handle start_copy_move string return value
+1ad639a fix(nas): recursive tree scan for KS folders at any depth
+dfb829b fix(nas): create intermediate parent folders before MOVE
+df6824f fix(nas): ancestor root stripping for tree layout
+a0ba018 feat(nas): rewrite build script as ReconciliationRunner
+feb9c47 feat(nas): reconcile ErpnextScanner + NasScanner
+1e8f227 feat(nas): reconcile compare() engine with self-tests
+376417c feat(nas): reconcile KS code parser + path calculator
+1ada379 fix(nas): clean reconcile data models
+ef4cbc4 feat(nas): reconcile data models
+```

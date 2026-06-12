@@ -324,8 +324,12 @@ def scan_erpnext(
             ancestors.append(parent)
             node = idx.get(parent)
         ancestors.reverse()
-        if ancestors and ancestors[0] == item_group_root:
-            ancestors = ancestors[1:]  # skip root
+        # Strip everything up to and including the root node
+        try:
+            root_idx = ancestors.index(item_group_root)
+            ancestors = ancestors[root_idx + 1:]
+        except ValueError:
+            pass  # root not found in chain, keep as-is
 
         items.append(ErpnextItem(
             name=leaf["name"],
@@ -342,26 +346,30 @@ def scan_nas(
     target_folder: str,
     sub_folder_names: list[str],
 ) -> list[NasFolder]:
-    """扫描 NAS 目标文件夹。
+    """扫描 NAS 目标文件夹，递归发现所有 KS 编码文件夹。
 
-    list_folder: 返回 [{"name":..., "path":..., "is_dir":..., "size":...}]
-    递归收集每个直接子文件夹的内容统计。
+    返回: 所有脚本创建的文件夹 + target_folder 直接子节点中非 KS 格式的文件夹。
     """
     results: list[NasFolder] = []
 
-    # 列出 target_folder 的直接子项
-    items = list_folder(target_folder, limit=5000)
+    # 1. Walk entire tree, collect all folders
+    all_folders: list[dict] = []  # [{"name":..., "path":..., "is_dir":..., "size":...}]
+    _walk_tree(list_folder, target_folder, sub_folder_names, all_folders)
 
-    for item in items:
-        if not item["is_dir"]:
-            continue
+    # 2. For each KS-pattern folder, compute recursive stats and create NasFolder
+    ks_folders: dict[str, dict] = {}
+    for f in all_folders:
+        mid = parse_model_id(f["name"])
+        if mid:
+            ks_folders[f["path"]] = f
 
-        folder_name = item["name"]
-        folder_path = item["path"]  # e.g. "/产品信息/KS0001_三角靠枕"
-
-        # 递归统计此文件夹内容
+    for f in ks_folders.values():
+        path = f["path"]
+        folder_name = f["name"]
+        # Recursively count content: all files under this path that are NOT ks_folders themselves
+        # Actually, for simplicity, let's scan this folder's subtree for content
         file_count, total_bytes, sub_dirs, extra = _scan_dir(
-            list_folder, folder_path, sub_folder_names
+            list_folder, path, sub_folder_names
         )
 
         model_id = parse_model_id(folder_name)
@@ -370,16 +378,144 @@ def scan_nas(
 
         results.append(NasFolder(
             name=folder_name,
-            path=folder_path,
+            path=path,
             model_id=model_id,
             content_count=file_count,
             content_bytes=total_bytes,
             sub_folders=script_subs,
             extra_folders=extra_subs,
-            is_script_created=model_id is not None,
+            is_script_created=True,
+        ))
+
+    # 3. Add non-KS direct children of target_folder as IGNORE items
+    items = list_folder(target_folder, limit=5000)
+    for item in items:
+        if not item["is_dir"]:
+            continue
+        mid = parse_model_id(item["name"])
+        if mid:
+            continue  # Already handled above
+        # Non-KS folder
+        fc, tb, _, _ = _scan_dir(list_folder, item["path"], sub_folder_names)
+        results.append(NasFolder(
+            name=item["name"],
+            path=item["path"],
+            model_id=None,
+            content_count=fc,
+            content_bytes=tb,
+            sub_folders=[],
+            extra_folders=[],
+            is_script_created=False,
         ))
 
     return results
+
+
+# ── 孤儿检测 ──────────────────────────────────────────
+
+@dataclass
+class Orphan:
+    """疑似孤儿中间文件夹"""
+    path: str                     # 完整路径
+    name: str                     # 文件夹名
+    depth: int                    # 相对 target_folder 的深度
+    content_count: int            # 递归文件数
+    content_bytes: int            # 递归字节数
+    reason: str                   # 判定原因
+
+
+def detect_orphans(
+    list_folder,                           # callable: (path, limit) -> list[dict]
+    target_folder: str,
+    valid_group_names: set[str],           # ERPNext 有效中间节点名称
+    sub_folder_names: list[str],           # 标准子文件夹名
+    layout: str = "flat",                  # 当前布局模式
+) -> list[Orphan]:
+    """扫描 NAS 树，检测非 KS 格式、非有效中间节点、非标准子文件夹的目录。
+
+    返回疑似孤儿列表（按深度降序，深的在前方便后续删除）。
+
+    在 flat 布局下，ERPNext 有效名称的中间文件夹如果为空且无 KS 后代
+    也视为孤儿（tree→flat 切换残留）。
+    """
+    # Collect all directories recursively
+    all_dirs: list[dict] = []
+    _walk_tree(list_folder, target_folder, sub_folder_names, all_dirs)
+
+    # Also collect all KS folders to check descendants
+    ks_paths: set[str] = set()
+    for d in all_dirs:
+        if parse_model_id(d["name"]):
+            ks_paths.add(d["path"])
+
+    orphans: list[Orphan] = []
+    for d in all_dirs:
+        name = d["name"]
+        path = d["path"]
+
+        # Skip KS-pattern folders
+        if parse_model_id(name):
+            continue
+        # Skip standard sub-folders (under a KS parent)
+        parent_name_for_sub = path.split("/")[-2] if len(path.split("/")) > 1 else ""
+        if parse_model_id(parent_name_for_sub) and name in sub_folder_names:
+            continue
+        # Skip the target folder itself
+        if path.rstrip("/") == target_folder.rstrip("/"):
+            continue
+        depth = path.count("/") - target_folder.rstrip("/").count("/")
+        # Skip if parent is neither KS nor valid group (manual subtree, leave alone)
+        parent_name = path.rstrip("/").split("/")[-2] if depth >= 2 else ""
+        if depth >= 2 and not parse_model_id(parent_name) and parent_name not in valid_group_names:
+            continue
+
+        # In tree mode: valid group names at any depth are not orphans
+        if layout == "tree" and name in valid_group_names:
+            continue
+
+        # In flat mode: valid group names are orphans only if empty + no KS descendants
+        if layout == "flat" and name in valid_group_names:
+            has_ks_descendant = any(
+                kp.startswith(path + "/") for kp in ks_paths
+            )
+            if has_ks_descendant:
+                continue
+            # Fall through — empty tree residual, safe to clean
+
+        # In flat mode: non-valid, non-KS at depth 1 → skip (manual folder at root)
+        if layout == "flat" and depth == 1 and name not in valid_group_names:
+            continue
+
+        # Count content
+        fc, tb, _, _ = _scan_dir(list_folder, path, sub_folder_names)
+
+        orphans.append(Orphan(
+            path=path,
+            name=name,
+            depth=depth,
+            content_count=fc,
+            content_bytes=tb,
+            reason=(
+                f"空文件夹，可安全清理" if fc == 0
+                else f"含 {fc} 个文件 ({tb} 字节)，禁止自动清理"
+            ),
+        ))
+
+    # Sort by depth descending (delete deeper first)
+    orphans.sort(key=lambda o: o.path.count("/"), reverse=True)
+    return orphans
+
+
+def _walk_tree(
+    list_folder, path: str, sub_folder_names: list[str],
+    collector: list[dict],
+) -> None:
+    """递归遍历目录树，收集所有文件夹到 collector。"""
+    items = list_folder(path, limit=5000)
+    for item in items:
+        if item["is_dir"]:
+            collector.append(item)
+            _walk_tree(list_folder, item["path"], sub_folder_names, collector)
 
 
 def _scan_dir(
@@ -412,6 +548,7 @@ def _scan_dir(
 
 
 if __name__ == "__main__":
+    import sys; sys.stdout.reconfigure(encoding="utf-8")
     # Task 2 tests
     assert parse_model_id('KS0001_三角靠枕') == 'KS0001'
     assert parse_model_id('旧的设计文件1') is None
