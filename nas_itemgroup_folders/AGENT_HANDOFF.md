@@ -1,6 +1,6 @@
 # NAS-ERPNext 文件夹对账 — Agent 交接文档
 
-> 最后更新: 2026-06-12 | 分支: `feature/nas-itemgroup-folders` | 状态: 15/15 鲁棒性测试通过，等待全量执行
+> 最后更新: 2026-06-15 | 分支: `feature/nas-itemgroup-folders` | 状态: Phase 4 完成，新增文件夹扫描追踪
 
 ## 背景
 
@@ -28,9 +28,34 @@
 - [x] 终端 GBK 编码根治
 - [x] 15 个自动化鲁棒性测试全部通过
 
-### Phase 4: 待执行
-- [ ] 全量 `--full` 创建 404 个叶子节点（flat 布局）
+### Phase 4: 全量创建 (✅ 完成)
+- [x] 全量 `--full` 创建 404 个叶子节点（flat 布局）
 - [ ] `dam-prototype/main.py` 旧 SynologyNAS 类迁移到 NAS_API
+
+### Phase 5: 文件夹扫描与变更追踪 (✅ 完成)
+
+**背景**: LM 和同事需要了解 `/产品信息` 下哪些文件夹已有文件、哪些为空，
+并在同事陆续放入设计师产出后追踪进度。
+
+**需求**:
+1. 扫描 `/产品信息` 下所有文件夹，统计每个文件夹的文件数和大小
+2. 保存快照，支持后续对比
+3. 同事放文件后，重新扫描能自动显示变更
+
+**实现**: `scan_product_folders.py`
+- 纯 NAS 只读操作，不依赖 ERPNext
+- 复用 `NAS_API/synology.py` 的 `get_nas()` 和 reconcile 的 `parse_model_id()`
+- 递归扫描每个文件夹及其子文件夹（4 层：叶子 → 调研报告/设计稿/图片/视频）
+- 输出终端表格：有文件的排前面，空文件夹折叠展示
+- JSON 快照保存到 `out/scan_{timestamp}.json`
+- 自动对比上次快照，显示新增/移除文件夹、文件数增减
+
+**使用**:
+```bash
+uv run python nas_itemgroup_folders/scan_product_folders.py
+```
+
+**执行时间**: ~5 分钟（404 文件夹 × 5 层 API 调用）
 
 ## 架构
 
@@ -42,12 +67,13 @@ NAS_API/                         ← 共享 NAS 模块
 nas_itemgroup_folders/
   reconcile.py                   ← 对账引擎 (纯逻辑 + Scanner)
   build_nas_folders.py            ← CLI + NAS 操作编排 + 报告
+  scan_product_folders.py         ← 文件夹扫描 + 快照对比 + 变更追踪
   verify_tree_structure.py        ← 树结构预览
   test_robustness.py              ← 15 场景鲁棒性测试
   README.md                       ← 用户文档
   AGENT_HANDOFF.md                ← 本文件
   .env                            ← NAS_TARGET_FOLDER, ERP_API_*, SUB_FOLDERS
-  out/                            ← JSON 报告 + last_snapshot.json
+  out/                            ← JSON 报告 + snapshots + scan_*.json
 ```
 
 ## 关键概念
@@ -87,6 +113,7 @@ uv run python build_nas_folders.py              # 测试模式 (KS0001, KS0002)
 uv run python build_nas_folders.py --full       # 全量 404 个
 uv run python build_nas_folders.py --dry-run    # 仅对比
 uv run python build_nas_folders.py --layout tree|flat
+uv run python scan_product_folders.py           # 扫描文件夹 + 变更追踪
 uv run python test_robustness.py                # 全部鲁棒性测试
 ```
 
