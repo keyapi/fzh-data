@@ -74,3 +74,15 @@ FZH 是跨境电商公司，在北美和欧洲销售**家居纺织品**（填充
 | 其他入库 / 其他出库 | ✅ 已有自动化脚本 |
 | **海外仓备货单** | ✅ 主要方式 |
 | `run_full_restock_flow.py` | 调度器：导出→清零→备货单导入 |
+
+## ERPNext Item Group 叶子组约定
+
+部分 Item Group 节点为"叶子组"：既是分组节点（`is_group=1`）又是叶子（`is_leaf_group=1`）。
+
+叶子组的 `custom_model_id` 为 `LGKSxxxx` 格式（4 字母 + 4 数字），值取子节点中最小的 KS 编号：
+- 户外托盘垫 → `LGKS0459`（子节点: KS0459~KS0464）
+- 户外托盘垫-云朵款 → `LGKS0493`（子节点: KS0493, KS0494）
+
+**创建新叶子组必须同时设置**：`is_group=1`、`is_leaf_group=1`、`custom_model_id=LGKSxxxx`。
+
+> 详细实现见 `nas_itemgroup_folders/AGENT_HANDOFF.md` Phase 6。
