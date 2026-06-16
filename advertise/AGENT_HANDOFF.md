@@ -1,0 +1,301 @@
+# AGENT_HANDOFF.md — Amazon 广告数据分析模块
+
+> 本文件供接手此模块的 Agent 参考。包含完整列名映射、分析框架来源、架构决策和经验教训。
+
+## 模块定位
+
+从 Amazon 广告后台导出的 Sponsored Products 报告（4 份）→ 全维度 Excel 分析报告。分析维度对齐 2026 年业界最佳实践。
+
+## 数据源
+
+4 份报告均在 Amazon 广告后台同一路径导出（广告活动管理 → 报告 → 创建报告）：
+
+| 文件 | 行数 | 报告类型 |
+|------|------|---------|
+| `商品推广_广告活动_报告.csv` | ~37 | 广告活动级 |
+| `商品推广_投放_报告-30.xlsx` | ~180 | 投放/关键词级 |
+| `商品推广_搜索词_报告-30.xlsx` | ~5,000 | 客户搜索词级 |
+| `商品推广_广告位_报告-30.xlsx` | ~126 | 广告位级 |
+
+> 文件名需包含关键字 `广告活动` / `投放` / `搜索词` / `广告位`，`__init__.py` 自动识别。
+
+## 列名映射
+
+Amazon 中文后台导出 → 英文标准字段名（`__init__.py` 中定义）。
+
+### 广告活动报告
+
+| 中文 | 英文 | 说明 |
+|------|------|------|
+| 开始日期 | start_date | |
+| 结束日期 | end_date | |
+| 广告组合名称 | portfolio_name | Portfolio 分组 |
+| 广告活动类型 | campaign_type | 商品推广 |
+| 广告活动名称 | campaign_name | |
+| 零售商 | retailer | Amazon |
+| 国家/地区 | country | |
+| 状态 | status | ENABLED/PAUSED |
+| 货币 | currency | USD |
+| 预算 | budget | 日预算，带 `$` 前缀 |
+| 定位类型 | targeting_type | 自动投放/手动投放 |
+| 竞价策略 | bidding_strategy | 固定/动态 |
+| 展示量 | impressions | |
+| 点击量 | clicks | |
+| 点击率 (CTR) | ctr | |
+| 花费 | spend | 带 `$` 前缀，需清洗 |
+| 单次点击成本 (CPC) | cpc | |
+| 7天总订单数(#) | orders_7d | |
+| 广告投入产出比 (ACOS) 总计 | acos | |
+| 总广告投资回报率 (ROAS) | roas | |
+| 7天总销售额 | sales_7d | 带 `$` 前缀 |
+
+### 投放报告 & 搜索词报告（共同字段）
+
+| 中文 | 英文 | 专属于 |
+|------|------|--------|
+| 投放 | targeting | 投放关键词/商品 ASIN |
+| 匹配类型 | match_type | Broad/Phrase/Exact |
+| 客户搜索词 | search_term | 仅搜索词报告 |
+| 广告组名称 | ad_group_name | |
+| 搜索结果首页首位展示量份额 | top_search_is | 仅投放报告 |
+| 7天的转化率 | conversion_rate_7d | |
+| 7天内广告SKU销售量(#) | advertised_sku_units_7d | |
+| 7天内其他SKU销售量(#) | other_sku_units_7d | |
+| 7天内广告SKU销售额 | advertised_sku_sales_7d | |
+| 7天内其他SKU销售额 | other_sku_sales_7d | |
+
+### 广告位报告
+
+| 中文 | 英文 | 分类 |
+|------|------|------|
+| 放置 | placement | |
+| 亚马逊站内的搜索结果顶部 | → | Top of Search |
+| 亚马逊站内的商品页面 | → | Product Pages |
+| 亚马逊站内搜索结果的其余位置 | → | Rest of Search |
+| 亚马逊站外 | → | 站外 |
+
+### 注意事项
+
+1. **CSV 金额列带 `$` 前缀** — `__init__.py` 中做了 `str.replace(r"[$,\s]", "")` 清洗
+2. **百分比列可能以整数形式返回**（如 30 = 30%）— 自动除以 100
+3. **去重列名** — 广告活动报告中 去年曝光量/去重点击量 等列映射为 `impressions_dedup` / `clicks_dedup` / `spend_dedup` / `cpc_dedup`
+
+## 分析框架
+
+以下框架来自 2026 年业界资料的综合总结。
+
+### 关键词收割三步法
+
+```
+1. 自动/广泛匹配广告「探矿」收集搜索词数据（14-21天）
+2. 搜索词报告分析「找矿」：分离高转化词（订单≥3, ACOS<目标）
+3. 精准匹配「收割」：高转化词移入 Exact Match 活动 → 原数据源否定该词防止重叠
+```
+
+### 否定词 SOP
+
+满足任一条件即添加否定关键词：
+- 点击 ≥ 15-30 次，0 订单 → 精准否定
+- ACOS 远超目标 3 倍以上 → 否定
+- 属性/人群/用途完全不匹配 → 词组否定
+- 竞品品牌词/仿品词 → 精准否定
+- 垃圾意向词(cheap/free/used/wholesale) → 词组否定
+
+**SP 广告只有词组否定和精准否定两种，没有广泛否定。**
+
+### 300 分钟周优化流程
+
+| 日 | 动作 | 耗时 |
+|----|------|------|
+| 周一 | 下载搜索词+广告位报告，识别低效投放 | 15-20min |
+| 周三 | 挖掘自动广告搜索词，收割好词，加否定词 | 15-20min |
+| 周五 | 基于 2 周+数据调整出价，重新平衡预算 | 15-20min |
+
+> 不要每天优化——基于 24-48h 数据移动预算会产生鞭梢效应。每周最优。
+
+### ACOS 基准（2026）
+
+| 阶段 | 目标 ACOS | 策略 |
+|------|----------|------|
+| 新品期 (0-60天) | 30-60% | 激进冲排名 |
+| 成长期 (3-12月) | 20-35% | 平衡增长与盈利 |
+| 成熟期 (12月+) | 10-25% | 防守为主 |
+
+## 完整资料来源
+
+### 英文资料（2026）
+
+1. [Amazon Advertising Budgets 2026 - Canopy Management](https://canopymanagement.com/amazon-advertising-budgets-how-to-allocate-spend-across-campaigns/)
+2. [Sponsored Products Ad Guide - Feedvisor](https://feedvisor.com/resources/amazon-marketing-advertising-strategies/sponsored-products-ad-guide/)
+3. [AMS Ads: Master Amazon Advertising in 2026 - Automateed](https://www.automateed.com/ams-ads)
+4. [Amazon Bid Management Playbook 2026 - SalesDuo](https://salesduo.com/blog/amazon-bid-management/)
+5. [Amazon PPC Optimization Playbook 2026 - SellerSprite](https://sellersprite.co/en/blog/Amazon-PPC-Optimization-Playbook)
+6. [Placement Adjustments: Top of Search vs Product Pages - SellerSprite](https://sellersprite.co/en/blog/Placement-Adjustments-Top-of-Search-Product-Pages)
+7. [Amazon Ads Strategy That Actually Scales - YourEcomTeam](https://yourecomteam.co/blog/amazon-ads-strategy-that-actually-scales)
+8. [Amazon Ads Analytics: Make Your Data Actually Work - Coupler.io](https://blog.coupler.io/amazon-ads-analytics/)
+9. [Amazon PPC Campaign Structure 2026: Personas Over Keywords - IMH](https://influencermarketinghub.com/amazon-influencer-marketing/amazon-ppc-campaign-structure/)
+10. [Amazon PPC Guide 2026 - SellerSprite](https://www.sellersprite.ai/en/blog/amazon-ppc-guide-2026)
+11. [Amazon PPC Strategy 2026 - AMZScout/EHP](https://amzscout.net/blog/amazon-ppc-strategy-ehpconsulting/)
+12. [Amazon PPC Fundamentals 2026 - SellerSprite](https://www.sellersprite.com/en/blog/Amazon-PPC-Fundamentals-A-Beginner-Friendly-Course-Guide-(2026))
+13. [Amazon PPC Bidding Strategies: Dynamic vs Fixed - SellerSprite](https://m.sellersprite.com/en/blog/Amazon-PPC-Bidding-Strategies-Dynamic-vs-Fixed)
+14. [Amazon PPC Strategy: Complete Step-by-Step Guide 2026 - SalesDuo](https://salesduo.com/blog/create-an-amazon-ppc-strategy/)
+15. [Search Term Report Optimization Guide (2026) - WisePPC EN](https://wiseppc.com/blog/search-term-report-optimization/)
+16. [Amazon PPC Search Terms Guide - SellerSprite](https://www.sellersprite.com/en/blog/amazon-ppc-search-terms-guide)
+
+### 中文资料（2026）
+
+17. [亚马逊PPC广告诊断与ACOS优化 - CoGoLinks](https://www.cogolinks.com/news-center/b2c/26874)
+18. [亚马逊广告"避坑"指南：否定广告的完整逻辑 - 跨境魔方](https://www.upkuajing.com/knowledge/zixun/25823)
+19. [搜索词报告优化指南 (2026) - WisePPC CN](https://wiseppc.com/zh/blog/search-term-report-optimization/)
+20. [围剿高ACoS！重塑亚马逊广告盈亏认知 - 卖家精灵](https://mjzj.com/article/fbhi4l7ex1j4)
+21. [亚马逊广告分析，ACoS投入产出核算 - CoGoLinks](https://www.cogolinks.com/news-center/b2c/31389)
+22. [3个报告+1个工具锁定高转化词 - 卖家精灵](https://mjzj.com/article/fm421wzlr18g)
+23. [2026亚马逊广告投放完全指南 - mall520](https://mall520.com/814.html)
+24. [2026最全实战：意图为王打法体系 - 卖家精灵](https://mjzj.com/article/fp6ep7gtktmo)
+25. [亚马逊SP广告新品推广三阶段策略 - 跨境知道](https://www.ikjzd.com/articles/1810625995697092276)
+26. [商品推广报告解读 - 星火社](https://xinghuos.com/3020.html)
+
+## 架构决策
+
+### 为什么是模块化而不是单脚本？
+
+1. **独立可跑** — 每个分析脚本可单独调试和运行，不需要全跑一遍
+2. **对齐项目模式** — stock_init / item_cost_sx 等模块同样是多脚本 + 数据源 + out 结构
+3. **Web 扩展路径** — 中间 JSON 可直接被 Web 层消费，无需重新计算
+4. **Agent 友好** — 每个文件 < 200 行，Agent 可以在上下文窗口内完全理解
+
+### 为什么阈值是可配置常量而非命令行参数？
+
+- 命令行参数增加调用复杂度
+- 阈值通常不需要频繁改动
+- 修改脚本顶部常量比传参更直观
+
+### 为什么列名用中文精确匹配而非模糊？
+
+- Amazon 中文后台列名可能随版本变化，精确匹配能及时发现变更
+- 模糊匹配可能误命中其他列
+
+## 经验教训
+
+### Lesson 1: CSV 金额列格式
+
+**问题**：广告活动 CSV 的 spend/sales/budget/cpc 列值是 `$17.78` 格式的字符串，直接 `pd.to_numeric` 全变 NaN。
+**解决**：在 `__init__.py` 加载时先 `str.replace(r"[$,\s]", "", regex=True)` 清洗再转换。
+**适用**：所有 Amazon 中文后台导出的 CSV 报告。
+
+### Lesson 2: 去重列的存在
+
+**问题**：广告活动报告中有 impressions/clicks/spend/cpc 和它们的去重版本（impressions_dedup 等）。去重版本可能比非去重版本值大（因为去除了跨活动重复）。
+**决定**：当前分析用非去重版本。去重版本保留在列映射中但未参与分析。如需切换，修改分析脚本中的列名引用。
+
+### Lesson 3: 广告位中文值精确匹配
+
+**问题**：最初用模糊关键词匹配广告位分类（如 "顶部搜索结果"），未覆盖实际值 "亚马逊站内的搜索结果顶部"。
+**解决**：从实际数据导出所有唯一值，建立精确映射字典。4 个实际值：顶部 / 商品页面 / 其余位置 / 站外。
+
+### Lesson 4: 光环效应数据因报告而异
+
+**问题**：广告 SKU vs 其他 SKU 的销售数据只在投放报告中完整。广告位报告中没有这个字段，搜索词报告有同样的列。
+**解决**：光环效应分析放在 `analyze_targeting.py` 中。后续如需要可在搜索词报告中也做。
+
+### Lesson 5: 数据量较大的文件是搜索词报告
+
+**问题**：搜索词报告 4,928 行，4 个报告中最大。分类函数 classify_search_term 对每条搜索词做多次字符串匹配。
+**当前方案**：纯 Python 循环处理 5,000 行，耗时可忽略（< 1 秒）。如果扩大到 10 万+行，考虑预编译正则或并行处理。
+
+### Lesson 6: 搜索词必须聚合后再分类（严重缺陷）
+
+**问题**：Amazon 搜索词报告中，同一个客户搜索词会在多行出现——不同的广告活动、广告组、匹配类型各自独立记录。`bed wedge pillow for headboard` 在原始数据中出现了 13 行（分散在 7 个不同广告活动中）。其中 1 行（close-match，枕头138cm 活动）显示 67 点击 / $13.40 花费 / 0 订单，但该词**全量合计**有 1 订单 + $65.99 销售额。
+
+**根因**：`analyze_search_term.py` 逐行判断否定词，没有先按 search_term 聚合。导致一个实际有转化的词因为数据分散在某一行显示零订单，被误判为否定词候选。
+
+**正确做法**（Trellis/WisePPC/SellerSprite 一致）：
+1. 先 `GROUP BY search_term` 聚合：SUM(spend), SUM(clicks), SUM(orders), SUM(sales)
+2. 再基于聚合后的统一指标做分类
+3. 保留 contributing_campaigns 列表供溯源
+
+**来源**：[Trellis Search Term Report Workflow](https://gotrellis.com/resources/blog/amazon-search-term-report-workflow/) — "Pivot by customer search term so each query has one consolidated row."
+
+### Lesson 7: 5 桶分类体系（非 3 桶）
+
+**问题**：当前实现只有 3 个分类（收割/否定/浪费），缺少"观察"和"保护"两个关键的中间状态。
+
+**业界标准 5 桶体系**（Trellis/WisePPC）：
+
+| 桶 | 标准阈值 | 操作 |
+|----|---------|------|
+| **Harvest 收割** | 2-3+ 订单 AND ACoS ≤ 目标(15-30%) | 加入精准匹配活动 → 在源活动否定该词 |
+| **Negate 否定** | 15-20+ 点击 AND 0 订单，或完全无关意图 | 精准否定(特定词)或词组否定(整类无关主题) |
+| **Monitor 观察** | < 15 点击，数据不足 | 记录在案，下周期复查 |
+| **Protect 保护** | 品牌/战略/防御性词 | 保持投放，不论短期 ACoS |
+| **Ignore 忽略** | 极少展示/点击，花费可忽略 | 不做任何操作 |
+
+**关键**：Negate 阈值过低（10 点击→15-20 点击），因为 < 15 点击零订单是统计上的小样本，不是判决。"Negating under 15 clicks is usually premature."
+
+**来源**：[WisePPC 搜索词报告优化指南](https://wiseppc.com/zh/blog/search-term-report-optimization/) / [Trellis Workflow](https://gotrellis.com/resources/blog/amazon-search-term-report-workflow/)
+
+### Lesson 8: SP 广告 7 天点击归因窗口
+
+**问题**：Sponsored Products 使用 **7 天点击归因**。用户导出的"近 30 天"报告，最后 3-4 天的订单数据可能不完整——客户在报告最后一天点击，但在报告窗口外下单，该订单不会被计入。
+
+**影响**：报告末尾看起来"零订单"的词可能实际有转化。分析时应：
+1. 提示用户报告期最小 14 天（确保第一周归因完整）
+2. 推荐使用 30-60 天窗口
+3. 对大额花费但"零订单"的词，标注归因窗口风险
+
+**数据保留期**：Amazon 仅保留 **~60 天**搜索词数据，超过永久丢失。Treillis 建议每次下载后立即归档。
+
+**来源**：[SalesDuo Amazon Ads Reporting](https://salesduo.com/blog/amazon-ads-reporting/) / [Trellis Workflow](https://gotrellis.com/resources/blog/amazon-search-term-report-workflow/)
+
+### Lesson 9: 否定词操作的两个关键细节
+
+**1. SP 只有词组否定和精准否定，没有广泛否定。** 中文后台同样。
+
+**2. 收割后必须在源活动否定。** "Add it as a negative exact in the campaign that discovered it." 如果只收割不否定，新旧活动同时竞价同一个搜索词，造成自我竞争、CPC 抬高、归因混乱。**两步缺一不可。**
+
+**3. 谨慎使用词组否定。** "Negative phrase blocks every query containing the phrase — it's a wider blast radius." 一个不小心的词组否定可能屏蔽几十个正在转化的长尾词。只有确认整类主题永远不相关时才用。
+
+**来源**：[跨境魔方 否定广告完整逻辑](https://www.upkuajing.com/knowledge/zixun/25823) / [Trellis Workflow](https://gotrellis.com/resources/blog/amazon-search-term-report-workflow/)
+
+### Lesson 10: 决策日志的重要性
+
+**问题**：当前每次跑分析结果会覆盖前一次 JSON，没有历史记录。
+
+**业界标准**：Treillis 明确要求每次运行记录：
+- 收割了哪些词（+ 日期 + 来源活动）
+- 否定了哪些词（+ 原因 + 影响花费）
+- 标记为 Monitor 的词
+- 处理了多少花费
+
+> "Without a log, you re-litigate the same terms every week and can't explain account changes."
+
+**实现方向**：`out/decision_log.json` 追加式记录，不覆盖。`build_report.py` 行动 sheet 引用上期 vs 本期的变化。
+
+### Lesson 11: 报告字段命名差异（中文后台 vs API）
+
+**来源**：[Amazon Ads API v3 Report Types](https://advertising.amazon.com/API/docs/en-us/guides/reporting/v3/report-types/overview)
+
+**发现**：
+- 中文后台导出的列名与 API v3 标准字段名不完全对应
+- 广告活动 CSV 报告中"去重"开头的列（去重展示量/去重点击量/去重花费），中文后台显示为"去年曝光量/去年点击量/去年支出"——这是**编码错位**导致的
+- 广告位报告的放置列有 4 个实际值：站内搜索结果顶部/站内商品页面/站内搜索其余位置/站外
+- 搜索词报告中 `match_type` 对自动广告显示为 `-`（空），实际对应 API 的 Close-match / Loose-match / Substitutes / Complements
+
+### Lesson 12: CSV 金额格式问题
+
+**问题**：广告活动 CSV 报告的金额列（spend/sales/budget/cpc）是 `$17.78` 格式的文本字符串，pandas `pd.to_numeric` 直接调用全部返回 NaN。
+
+**根因**：Amazon 中文后台导出的 CSV 在金额列加了 `$` 符号前缀。
+
+**解决**：`__init__.py` 加载阶段统一清洗：`str.replace(r"[$,\s]", "", regex=True)` 后再 `pd.to_numeric`。
+
+**适用范围**：所有 Amazon 中文后台导出的 CSV 报告。
+
+## 后续可扩展方向
+
+1. **Web Dashboard** — 用 FastAPI + Chart.js 替换 Excel，支持日期范围筛选、活动筛选、词云
+2. **多期对比** — 加载多个月份的数据，生成环比/同比趋势图
+3. **自动化周报** — CronJob 定期跑分析 → 邮件发送 Excel
+4. **SB/SD 报告** — 扩展支持 Sponsored Brands / Sponsored Display 报告
+5. **盈亏建模** — 接入 EN BOM 成本数据，计算实际盈亏平衡 ACOS
+6. **Rufus/COSMO 适配** — 2026 年 Amazon 算法从关键词匹配转向意图理解，需要适配新的归因模型
