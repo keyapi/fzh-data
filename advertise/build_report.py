@@ -88,6 +88,8 @@ def _write_table(ws, start_row, headers, rows, money_cols=None, pct_cols=None):
     for ri, row in enumerate(rows):
         for ci, h in enumerate(headers):
             val = row.get(h)
+            if isinstance(val, list):
+                val = ", ".join(str(v) for v in val[:5])  # 最多5个活动名
             cell = ws.cell(row=start_row + 1 + ri, column=ci + 1, value=val)
             _style_data_cell(cell, is_money=(h in money_cols), is_pct=(h in pct_cols))
     return start_row + 1 + len(rows)
@@ -148,9 +150,17 @@ def build():
     ws6 = wb.create_sheet("行动建议")
     _build_action_sheet(ws6, campaign, targeting, search_term, placement)
 
-    # 保存
-    out_path = os.path.join(OUT_DIR, "如森US-广告分析报告.xlsx")
-    wb.save(out_path)
+    # 保存（如果文件被占用，尝试带序号的文件名）
+    base_name = "如森US-广告分析报告"
+    out_path = os.path.join(OUT_DIR, f"{base_name}.xlsx")
+    for attempt in range(10):
+        try:
+            wb.save(out_path)
+            break
+        except PermissionError:
+            import time
+            out_path = os.path.join(OUT_DIR, f"{base_name}_{attempt+2}.xlsx")
+            time.sleep(0.1)
     print(f"报告已生成: {out_path}")
     return out_path
 
@@ -227,10 +237,17 @@ def _build_overview(ws, campaign, targeting, search_term, placement):
         findings.append(f"整体 ACOS {acos_val:.1%}，偏高，需重点审视花费结构。")
     if roas_val and roas_val > 3:
         findings.append(f"ROAS {roas_val:.2f}x，投入产出表现良好。")
-    if ss.get("negative_candidate_count", 0) > 10:
-        findings.append(f"发现 {ss['negative_candidate_count']} 个否定词候选，屏蔽后可节省约 ${ss['negative_wasted_spend']:,.2f}。")
-    if ss.get("harvest_count", 0) > 0:
-        findings.append(f"发现 {ss['harvest_count']} 个关键词收割机会，建议加入精准匹配活动。")
+    buckets = ss.get("buckets", {})
+    if buckets:
+        h_b = buckets.get("Harvest", {})
+        n_b = buckets.get("Negate", {})
+        m_b = buckets.get("Monitor", {})
+        if h_b.get("count", 0) > 0:
+            findings.append(f"发现 {h_b['count']} 个收割词（Harvest），花费 ${h_b.get('spend',0):,.2f} 带来 ${h_b.get('sales',0):,.2f} 销售额。")
+        if n_b.get("count", 0) > 0:
+            findings.append(f"发现 {n_b['count']} 个否定词候选（Negate），屏蔽可节省 ${n_b.get('spend',0):,.2f}。")
+        if m_b.get("count", 0) > 0:
+            findings.append(f"{m_b['count']} 个搜索词数据不足（Monitor），建议下周期复查。")
     for i, f_text in enumerate(findings):
         ws.cell(row=conclusion_row + 1 + i, column=1, value=f"• {f_text}").font = CN_FONT
 
@@ -353,46 +370,100 @@ def _build_targeting_sheet(ws, targeting):
 
 
 def _build_search_term_sheet(ws, search_term):
-    """搜索词洞察 sheet — 关键词收割 + 否定词 + 搜索词分类。"""
+    """搜索词洞察 sheet — 5 桶分类 + 聚合指标 + 搜索词分类饼图。"""
     ws.sheet_properties.tabColor = "70AD47"
 
-    # 关键词收割
-    ws.cell(row=1, column=1, value="关键词收割清单（建议加入精准匹配）").font = SUBTITLE_FONT
+    # ── 桶概览 ──────────────────────────────────────────
+    ws.cell(row=1, column=1, value="搜索词 5 桶分类概览").font = SUBTITLE_FONT
+    buckets = search_term.get("summary", {}).get("buckets", {})
+    thresholds = search_term.get("thresholds", {})
+    ws.cell(row=2, column=1,
+            value=f"阈值: Harvest≥{thresholds.get('min_orders_harvest','?')}单 & ACOS≤{thresholds.get('max_acos_harvest',0):.0%} | "
+                  f"Negate≥{thresholds.get('min_clicks_negate','?')}点击 & 0单 | "
+                  f"Monitor<{thresholds.get('max_clicks_monitor','?')}点击 | "
+                  f"Ignore<${thresholds.get('max_spend_ignore',0):.0f} & <{thresholds.get('max_clicks_ignore','?')}点击").font = Font(name="微软雅黑", size=9, color="666666")
+
+    b_headers = ["桶", "数量", "花费", "销售额", "说明"]
+    for i, (name, info, desc) in enumerate([
+        ("Harvest 收割", buckets.get("Harvest", {}), "建议加入精准匹配"),
+        ("Negate 否定", buckets.get("Negate", {}), "建议添加否定关键词"),
+        ("Monitor 观察", buckets.get("Monitor", {}), "数据不足，下周期复查"),
+        ("Protect 保护", buckets.get("Protect", {}), "品牌/战略词，保持投放"),
+        ("Ignore 忽略", buckets.get("Ignore", {}), "花费可忽略，不做操作"),
+    ]):
+        r = 4 + i
+        ws.cell(row=r, column=1, value=name).font = Font(name="微软雅黑", bold=True, size=11)
+        ws.cell(row=r, column=2, value=info.get("count", 0)).font = NUM_FONT
+        ws.cell(row=r, column=3, value=f"${info.get('spend', 0):,.2f}").font = NUM_FONT
+        ws.cell(row=r, column=4, value=f"${info.get('sales', 0):,.2f}" if info.get("sales") else "—").font = NUM_FONT
+        ws.cell(row=r, column=5, value=desc).font = CN_FONT
+        # 颜色标记
+        if "Harvest" in name:
+            for c in range(1, 6):
+                ws.cell(row=r, column=c).fill = GOOD_FILL
+        elif "Negate" in name:
+            for c in range(1, 6):
+                ws.cell(row=r, column=c).fill = BAD_FILL
+        for c in range(1, 6):
+            ws.cell(row=r, column=c).border = THIN_BORDER
+
+    # 归因警告
+    attr_warn = search_term.get("summary", {}).get("attribution_warning")
+    if attr_warn:
+        ws.cell(row=10, column=1, value=f"⚠️ {attr_warn}").font = Font(name="微软雅黑", size=10, color="9C0006")
+
+    # ── 关键词收割 ──────────────────────────────────────
     harvest = search_term.get("harvest_keywords", [])
-    h_headers = ["search_term", "campaign_name", "match_type", "clicks", "orders_7d",
-                  "sales_7d", "spend", "acos", "roas", "ctr", "cpc"]
-    next_row = _write_table(ws, 3, h_headers, harvest,
+    h_row = 12
+    ws.cell(row=h_row, column=1, value=f"Harvest 收割清单（≥{thresholds.get('min_orders_harvest','?')}单 & ACOS≤{thresholds.get('max_acos_harvest',0):.0%}）— {len(harvest)}个").font = SUBTITLE_FONT
+    h_headers = ["search_term", "bucket", "term_category", "clicks", "orders_7d",
+                  "sales_7d", "spend", "acos", "roas", "ctr", "cpc", "campaign_name"]
+    next_row = _write_table(ws, h_row + 1, h_headers, harvest,
                             money_cols={"spend", "sales_7d", "cpc"},
                             pct_cols={"acos", "roas", "ctr"})
 
-    # 否定词
+    # ── 否定词 ──────────────────────────────────────────
     neg_row = next_row + 2
     negatives = search_term.get("negative_candidates", [])
-    ws.cell(row=neg_row, column=1, value=f"否定词候选（点击≥10、零订单，建议屏蔽）— 共{len(negatives)}个，浪费${search_term['summary'].get('negative_wasted_spend',0):,.2f}").font = SUBTITLE_FONT
-    n_headers = ["search_term", "campaign_name", "match_type", "clicks", "spend", "impressions"]
+    neg_spend = buckets.get("Negate", {}).get("spend", 0)
+    ws.cell(row=neg_row, column=1,
+            value=f"Negate 否定词候选（≥{thresholds.get('min_clicks_negate','?')}点击 & 0订单）— {len(negatives)}个，屏蔽可节省 ${neg_spend:,.2f}").font = SUBTITLE_FONT
+    n_headers = ["search_term", "term_category", "clicks", "spend", "impressions", "campaign_name"]
     end_neg = _write_table(ws, neg_row + 1, n_headers, negatives, money_cols={"spend"})
 
-    # 搜索词分类
-    cat_row = end_neg + 2
+    # ── 观察列表 ────────────────────────────────────────
+    mon_row = end_neg + 2
+    monitors = search_term.get("monitor_list", [])[:50]
+    mon_spend = buckets.get("Monitor", {}).get("spend", 0)
+    if monitors:
+        ws.cell(row=mon_row, column=1,
+                value=f"Monitor 观察列表（数据不足，下周期复查）— TOP50/{len(search_term.get('monitor_list',[]))}个，${mon_spend:,.2f}").font = SUBTITLE_FONT
+        m_headers = ["search_term", "term_category", "clicks", "orders_7d", "spend", "sales_7d", "acos", "campaign_name"]
+        mon_end = _write_table(ws, mon_row + 1, m_headers, monitors,
+                               money_cols={"spend", "sales_7d"},
+                               pct_cols={"acos"})
+    else:
+        mon_end = mon_row
+
+    # ── 搜索词分类 ──────────────────────────────────────
+    cat_row = mon_end + 2
     cats = search_term.get("category_distribution", [])
     if cats:
-        ws.cell(row=cat_row, column=1, value="搜索词分类分布").font = SUBTITLE_FONT
+        ws.cell(row=cat_row, column=1, value="搜索词分类分布（语义分类）").font = SUBTITLE_FONT
         cat_headers = ["term_category", "spend", "sales_7d", "orders_7d", "clicks",
                         "impressions", "acos", "roas", "count"]
         cat_end = _write_table(ws, cat_row + 1, cat_headers, cats,
                                money_cols={"spend", "sales_7d"},
                                pct_cols={"acos", "roas"})
 
-        # 饼图
         pie = PieChart()
         pie.title = "搜索词分类-花费占比"
         pie.width = 16
         pie.height = 10
-        cat_data_start = cat_row + 2
         data_ref = Reference(ws, min_col=2, min_row=cat_row + 1,
                              max_row=cat_row + 1 + len(cats))
-        cat_ref = Reference(ws, min_col=1, min_row=cat_data_start,
-                            max_row=cat_data_start - 1 + len(cats))
+        cat_ref = Reference(ws, min_col=1, min_row=cat_row + 2,
+                            max_row=cat_row + 1 + len(cats))
         pie.add_data(data_ref, titles_from_data=True)
         pie.set_categories(cat_ref)
         colors = ["4472C4", "ED7D31", "A5A5A5", "FFC000", "5B9BD5", "70AD47"]
@@ -402,9 +473,10 @@ def _build_search_term_sheet(ws, search_term):
             pie.series[0].data_points.append(pt)
         ws.add_chart(pie, f"I{cat_row}")
 
-    ws.column_dimensions['A'].width = 40
-    ws.column_dimensions['B'].width = 35
-    for ci in range(3, 12):
+    ws.column_dimensions['A'].width = 42
+    ws.column_dimensions['B'].width = 14
+    ws.column_dimensions['C'].width = 14
+    for ci in range(4, 13):
         ws.column_dimensions[get_column_letter(ci)].width = 14
 
 
@@ -470,33 +542,42 @@ def _build_placement_sheet(ws, placement):
 
 
 def _build_action_sheet(ws, campaign, targeting, search_term, placement):
-    """行动建议 sheet — 自动生成的操作清单。"""
+    """行动建议 sheet — 自动生成的操作清单 + 决策日志。"""
     ws.sheet_properties.tabColor = "A5A5A5"
 
     ws.cell(row=1, column=1, value="自动生成行动建议").font = TITLE_FONT
     ws.cell(row=2, column=1, value="基于广告数据分析，建议以下操作（按优先级排序）").font = CN_FONT
 
     actions = []
-    n = 1
+    buckets = search_term.get("summary", {}).get("buckets", {})
 
     # 1. 否定词添加
     negatives = search_term.get("negative_candidates", [])
+    neg_spend = buckets.get("Negate", {}).get("spend", 0)
     if negatives:
-        wasted = search_term["summary"].get("negative_wasted_spend", 0)
         actions.append(("高", f"添加否定关键词（{len(negatives)}个）",
-                         f"这些搜索词共花费 ${wasted:,.2f}，零转化。建议在对应广告活动中添加为否定精准匹配。",
-                         "具体词参见「搜索词洞察」sheet 否定词候选列表。"))
+                         f"这些搜索词共花费 ${neg_spend:,.2f}，零转化。建议在对应广告活动中添加为否定精准匹配/词组否定。",
+                         "参见「搜索词洞察」sheet → Negate 否定词候选。注意：精准否定优先，词组否���谨慎。"))
 
     # 2. 关键词收割
     harvest = search_term.get("harvest_keywords", [])
+    h_spend = buckets.get("Harvest", {}).get("spend", 0)
+    h_sales = buckets.get("Harvest", {}).get("sales", 0)
     if harvest:
-        harvest_spend = sum(h.get("spend", 0) or 0 for h in harvest)
-        harvest_sales = sum(h.get("sales_7d", 0) or 0 for h in harvest)
         actions.append(("高", f"关键词收割（{len(harvest)}个）",
-                         f"这些搜索词共产生 ${harvest_sales:,.2f} 销售额，花费 ${harvest_spend:,.2f}。建议新建精准匹配活动或加入现有精准组。",
-                         "具体词参见「搜索词洞察」sheet 关键词收割清单。"))
+                         f"这些词共花费 ${h_spend:,.2f}，带来 ${h_sales:,.2f} 销售额。"
+                         f"建议加入精准匹配活动，并在源活动中否定该词（防止自我竞争）。",
+                         "参见「搜索词洞察」sheet → Harvest 收割清单。两步缺一不可：加入精准 + 源活动否定。"))
 
-    # 3. 广告位优化
+    # 3. Monitor 复查提醒
+    monitors = search_term.get("monitor_list", [])
+    m_spend = buckets.get("Monitor", {}).get("spend", 0)
+    if monitors:
+        actions.append(("中", f"复查观察列表（{len(monitors)}个，${m_spend:,.2f}）",
+                         f"这些词数据量不足以决策，下周期积累更多数据后再判断。",
+                         "参见「搜索词洞察」sheet → Monitor 观察列表。"))
+
+    # 4. 广告位优化
     placements = placement.get("placements", [])
     for p in placements:
         acos_val = p.get("acos", 0) or 0
@@ -506,10 +587,10 @@ def _build_action_sheet(ws, campaign, targeting, search_term, placement):
                              ""))
         elif acos_val < 0.20 and p.get("cvr", 0) and p.get("cvr", 0) > 0.03:
             actions.append(("中", f"提高 {p['placement']} 出价",
-                             f"该广告位 ACOS {acos_val:.1%}，CVR {p.get('cvr',0):.2%}，转化效率高。建议提高出价 10-20% 扩展流量。",
+                             f"该广告位 ACOS {acos_val:.1%}，CVR {p.get('cvr',0):.2%}。建议提高出价 10-20%。",
                              ""))
 
-    # 4. 问题活动
+    # 5. 问题活动
     problems = campaign.get("problems", [])
     for p in problems[:5]:
         actions.append(("中", f"检查活动: {p.get('campaign_name', '')}",
