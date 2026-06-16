@@ -1,6 +1,10 @@
 # Amazon 广告数据分析工具
 
 > 适用场景：Amazon 后台导出的 Sponsored Products（商品推广）报告 → 全维度分析 → Excel 报告。
+>
+> **版本**: v0.2 | **分支**: amazon_advertise | **PR**: [#14](https://github.com/keyapi/fzh-data/pull/14)
+>
+> 详细技术文档（供 Agent 接手）→ `AGENT_HANDOFF.md`
 
 ## 快速开始
 

@@ -1,10 +1,64 @@
 # AGENT_HANDOFF.md — Amazon 广告数据分析模块
 
 > 本文件供接手此模块的 Agent 参考。包含完整列名映射、分析框架来源、架构决策和经验教训。
+>
+> **最后更新**: 2026-06-16 | **版本**: v0.2 | **分支**: amazon_advertise | **PR**: [#14](https://github.com/keyapi/fzh-data/pull/14)
 
 ## 模块定位
 
 从 Amazon 广告后台导出的 Sponsored Products 报告（4 份）→ 全维度 Excel 分析报告。分析维度对齐 2026 年业界最佳实践。
+
+## 阶段性目标与完成情况
+
+### Phase 1: 基础分析框架 ✅ (v0.1)
+
+| 目标 | 状态 | 说明 |
+|------|------|------|
+| 数据加载 + 列名映射 | ✅ | `__init__.py`: 4 份报告中文→英文标准化, CSV $ 符号清洗 |
+| 广告活动分析 | ✅ | `analyze_campaign.py`: ACOS/ROAS排行, 预算利用率, Portfolio聚合 |
+| 投放分析 | ✅ | `analyze_targeting.py`: 匹配类型对比, 光环效应, 零转化投放 |
+| 搜索词分析 (逐行版) | ✅ → ❌ | v0.1 逐行判断有缺陷, v0.2 重写 |
+| 广告位分析 | ✅ | `analyze_placement.py`: Top of Search/Product Pages/Rest/站外 四位对比 |
+| Excel 报告生成 | ✅ | `build_report.py`: 6 sheet + openpyxl 图表 |
+| 知识沉淀 | ✅ | `AGENT_HANDOFF.md`: 26 个资料来源 URL |
+
+### Phase 2: 搜索词修复 + 5 桶体系 ✅ (v0.2)
+
+| 目标 | 状态 | 说明 |
+|------|------|------|
+| 搜索词聚合 | ✅ | 先 GROUP BY search_term, 再分类 (修复 Lesson 6) |
+| 5 桶分类体系 | ✅ | Harvest/Negate/Monitor/Protect/Ignore (修复 Lesson 7) |
+| 阈值对齐行业标准 | ✅ | Harvest≥2单, Negate≥15点击, Monitor<15点击 |
+| 归因窗口检查 | ✅ | 报告期<14天自动警告 (修复 Lesson 8) |
+| 错误用例验证 | ✅ | `bed wedge pillow for headboard`: 误判否定词 → 正确入 Monitor |
+| Excel 报告更新 | ✅ | 搜索词 sheet 重写, 新增 Monitor 观察列表 |
+
+### Phase 3: 后续规划 (未开始)
+
+| 目标 | 优先级 | 依赖 |
+|------|--------|------|
+| 决策日志持久化 | 高 | 追加式 JSON, 不覆盖上次结果 |
+| 多期对比 (环比/同比) | 中 | 需要多期数据积累 |
+| Web Dashboard | 中 | FastAPI + Chart.js |
+| 盈亏建模 (接入 EN BOM 成本) | 中 | 需要成本数据 |
+| SB/SD 报告支持 | 低 | 需要 Sponsored Brands/Display 报告导出 |
+| 自动化周报 (CronJob) | 低 | 定时导出 + 邮件发送 |
+
+## 当前报告核心发现 (2026-05-17 ~ 2026-06-15)
+
+| 维度 | 关键数字 |
+|------|---------|
+| 30 天总花费 | $3,483 |
+| 30 天销售额 (7d归因) | $11,513 |
+| 整体 ACOS | 30.25% |
+| 整体 ROAS | 3.31x |
+| 独立搜索词 | 3,696 个 |
+| Harvest 收割词 | 10 个 ($168 花费 → $2,238 销售, 13.3x ROAS) |
+| Negate 否定词候选 | 32 个 (节省 $498) |
+| Monitor 观察 | 504 个 ($1,266 待观察) |
+| Top of Search | ACOS 17.34% — 最优广告位 |
+| Product Pages | ACOS 39.50% — 花费最多但效率偏低 |
+| 光环效应 | 广告SKU $2,413 + 其他SKU $9,100 = 3.77x |
 
 ## 数据源
 
