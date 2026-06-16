@@ -263,6 +263,32 @@ encoding="utf-8", errors="replace"
 | `ITEM_GROUP_ROOT` | `nas_itemgroup_folders/.env` | 默认 `产品` |
 | `SUB_FOLDERS` | `nas_itemgroup_folders/.env` | 逗号分隔，默认 `调研报告,设计稿,图片,视频` |
 
+### 10. 新建叶子组的完整 checklist（2026-06-16 踩坑）
+
+**症状**: Agent 创建叶子组时漏设 `is_leaf_group=1`、`custom_model_id=LGKSxxxx`，用错字段（写了 `custom_item_group_code` 而非 `custom_model_id`），以及不知道 LGKS 编号来源。
+
+**根因**: AGENTS.md 模块索引未收录 `nas_itemgroup_folders` 模块，Agent 找不到叶子组文档。`docs/company-context.md` 也未记录叶子组约定。
+
+**新建叶子组 checklist（必须全做）**:
+
+| # | 字段 | 值 | 说明 |
+|---|------|-----|------|
+| 1 | `item_group_name` | `品类-子类` | 如 `户外托盘垫-云朵款` |
+| 2 | `parent_item_group` | 所属父组 | 如 `户外托盘垫类` |
+| 3 | `is_group` | `1` | 它是分组节点 |
+| 4 | `is_leaf_group` | `1` | 它是叶子（自定义字段） |
+| 5 | `custom_model_id` | `LGKSxxxx` | xxxx = 子节点中最小的 KS 编号 |
+
+**LGKS 编号来源**: 查叶子组下的 KS 子节点（如 KS0493, KS0494），取最小值（0493），叶子组即为 `LGKS0493`。不是随便写的。
+
+**环境差异**:
+- **测试系统** (`ensh.vilavi.cn`): 有 FAC MCP，用 `mcp__fac__create_document` / `mcp__fac__update_document`
+- **生产系统** (`erpnext.vilavi.cn`): 无 FAC MCP，用裸 REST API（`EN_API/` 的 `ErpnextClient`）
+
+**同步顺序**: 测试系统 → 确认 → 生产系统 → NAS（`leaf_group_ops.py setup LGKSxxxx`）
+
+**文档修复**: AGENTS.md 加入 `nas-itemgroup-folders` 索引 + 关键规则 #7；`docs/company-context.md` 加入叶子组约定。
+
 ## Git 提交历史
 
 ```
