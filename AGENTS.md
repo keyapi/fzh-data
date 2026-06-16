@@ -53,6 +53,8 @@
 | `warehouse-restock` | `warehouse_restock/` | EN BOM → 三成本拆分 → 海外仓备货单 |
 | `other-outbound` | `other_outbound/` | 赛狐库存明细 → 其他出库清零 |
 | `en-image-upload` | `EN_API/` | 图片上传（CLI + Web UI + 物料组主图） |
+| `nas-itemgroup-folders` | `nas_itemgroup_folders/` | NAS-ERPNext 物料组文件夹对账 + 叶子组 (LGKS) 管理 |
+| `dam-prototype` | `dam-prototype/` | DAM 数字资产管理原型 |
 | `frappe-core-api` | — | ERPNext REST API 开发（外部 skill） |
 | `frappe-errors-api` | — | ERPNext API 错误处理（外部 skill） |
 
@@ -67,6 +69,7 @@
 4. **uvicorn log_level 永远用 info**（Lesson 59）——启动日志是唯一确认信号
 5. **图片压缩加 size guard**（Lesson 60）——压缩后变大则保留原图
 6. **不要用 PowerShell Start-Job 启 Web 服务**（Lesson 58）——端口隔离不可达
+7. **新建 Item Group 叶子组**：必须设 `is_group=1, is_leaf_group=1, custom_model_id=LGKS+最小子KS编号`（见 `docs/company-context.md`）
 
 ## 文档体系
 

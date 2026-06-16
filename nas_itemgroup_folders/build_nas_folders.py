@@ -38,7 +38,7 @@ from NAS_API.synology import _load_dotenv, _parse_nas_url  # noqa: E402
 from nas_itemgroup_folders.reconcile import (  # noqa: E402
     Action, ActionType, Orphan,
     scan_erpnext, scan_nas, compare,
-    expected_path, detect_orphans,
+    expected_path, expected_folder_name, detect_orphans,
 )
 
 # ── .env ────────────────────────────────────────────────
@@ -70,7 +70,7 @@ def _make_erpnext_fetcher():
     def fetch_all_item_groups() -> list[dict]:
         url = f"{base_url}/api/resource/Item Group"
         fields = json.dumps([
-            "name", "parent_item_group", "is_group", "custom_model_id",
+            "name", "parent_item_group", "is_group", "custom_model_id", "is_leaf_group",
         ])
         for attempt in range(3):
             try:
@@ -295,6 +295,14 @@ def main(full: bool = False, dry_run: bool = False, layout: str = "flat") -> Non
     executed, failed = 0, 0
     _created_parents: set[str] = set()
     safe = [a for a in actions if a.safe and a.type not in (ActionType.MATCH, ActionType.IGNORE)]
+
+    # 排序: CREATE 优先 (叶子组 → KS), 再 MOVE → RENAME → DELETE
+    _type_order = {ActionType.CREATE: 0, ActionType.MOVE: 1, ActionType.RENAME: 2, ActionType.DELETE_EMPTY: 3}
+    safe.sort(key=lambda a: (
+        _type_order.get(a.type, 99),
+        0 if a.model_id.startswith("LGKS") else 1,  # 叶子组在同类操作中优先
+    ))
+
     if not dry_run and safe:
         print(f"\n>>> 执行安全操作 ({len(safe)} 项) ...")
         for a in safe:
@@ -407,6 +415,11 @@ def main(full: bool = False, dry_run: bool = False, layout: str = "flat") -> Non
     print(f"Report: {report_path}")
 
     # Snapshot
+    lg_folder_by_model: dict[str, str] = {}
+    for i in erp_items:
+        if i.is_leaf_group:
+            lg_folder_by_model[i.model_id] = expected_folder_name(i.model_id, i.name)
+
     snapshot_path = _DIR_OUT / "last_snapshot.json"
     snapshot_path.write_text(json.dumps({
         "run_at": datetime.now().isoformat(),
@@ -417,8 +430,11 @@ def main(full: bool = False, dry_run: bool = False, layout: str = "flat") -> Non
             "items": [
                 {"name": i.name, "model_id": i.model_id,
                  "parent": i.parent, "ancestors": i.ancestors,
+                 "is_leaf_group": i.is_leaf_group,
                  "expected_path": expected_path(
-                     i.model_id, i.name, target_folder, i.ancestors, layout)}
+                     i.model_id, i.name, target_folder, i.ancestors, layout,
+                     leaf_group_folder_name=lg_folder_by_model.get(i.leaf_group_model_id) if i.leaf_group_model_id else None,
+                 )}
                 for i in erp_items
             ],
         },

@@ -1,6 +1,6 @@
 # NAS-ERPNext 文件夹对账 — Agent 交接文档
 
-> 最后更新: 2026-06-15 | 分支: `feature/nas-itemgroup-folders` | 状态: Phase 4 完成，新增文件夹扫描追踪
+> 最后更新: 2026-06-15 | 分支: `feature/nas-itemgroup-folders` | 状态: Phase 6 完成，12 叶子组已部署到 NAS
 
 ## 背景
 
@@ -57,6 +57,39 @@ uv run python nas_itemgroup_folders/scan_product_folders.py
 
 **执行时间**: ~5 分钟（404 文件夹 × 5 层 API 调用）
 
+### Phase 6: 叶子组支持 (✅ 完成)
+
+**背景**: ERPNext 新增 12 个"叶子组" Item Group——`is_group=1` + `is_leaf_group=1`（自定义字段），
+`custom_model_id` 为 `LGKSxxxx` 格式。它们是 KS 子物料组的品类容器，需要在 NAS 上也有对应文件夹，
+且 KS 子文件夹应嵌套在叶子组下。
+
+**需求**:
+1. 在 NAS `/产品信息/` 下创建 12 个 `LGKSxxxx_名称` 文件夹，每含 4 个标准子文件夹
+2. 将 52 个 KS 子文件夹从根目录移入对应叶子组
+3. 有内容的文件夹不自动移动（MOVE_APPROVAL），防止丢失设计师文件
+
+**实现**: `leaf_group_ops.py` + reconcile 引擎扩展
+
+**reconcile.py 改动**:
+- `ErpnextItem` 新增 `is_leaf_group` / `leaf_group_model_id` 字段
+- `scan_erpnext()` 收集 `is_leaf_group=1` 节点，为 KS 子节点标记所属叶子组
+- `expected_path()` 支持 `leaf_group_folder_name` 参数，生成嵌套路径
+- `compare()` 构建叶子组查找表，自动生成 MOVE/MOVE_APPROVAL
+
+**leaf_group_ops.py — 精准手术刀**:
+- 直接操作 NAS API，不扫全盘（秒级 vs 全量对账 5 分钟）
+- 支持单个/全部操作：`status` / `create` / `move` / `verify` / `setup`
+
+**使用**:
+```bash
+uv run python nas_itemgroup_folders/leaf_group_ops.py status          # 查看全部状态
+uv run python nas_itemgroup_folders/leaf_group_ops.py setup LGKS0220  # 单个
+uv run python nas_itemgroup_folders/leaf_group_ops.py setup --all     # 全部12个
+uv run python nas_itemgroup_folders/leaf_group_ops.py verify LGKS0459 # 验证某个
+```
+
+**NAS 部署结果**: 12 叶子组 / 48 标准子文件夹 / 52 KS 子文件夹已移入，全部验证通过。
+
 ## 架构
 
 ```
@@ -66,8 +99,9 @@ NAS_API/                         ← 共享 NAS 模块
 
 nas_itemgroup_folders/
   reconcile.py                   ← 对账引擎 (纯逻辑 + Scanner)
-  build_nas_folders.py            ← CLI + NAS 操作编排 + 报告
+  build_nas_folders.py            ← CLI + NAS 操作编排 + 报告 (全量)
   scan_product_folders.py         ← 文件夹扫描 + 快照对比 + 变更追踪
+  leaf_group_ops.py               ← 叶子组精准操作 (秒级, 不扫全盘)
   verify_tree_structure.py        ← 树结构预览
   test_robustness.py              ← 15 场景鲁棒性测试
   README.md                       ← 用户文档
@@ -109,11 +143,21 @@ nas_itemgroup_folders/
 
 ```bash
 cd nas_itemgroup_folders
+
+# 全量对账 (5 分钟)
 uv run python build_nas_folders.py              # 测试模式 (KS0001, KS0002)
-uv run python build_nas_folders.py --full       # 全量 404 个
+uv run python build_nas_folders.py --full       # 全量
 uv run python build_nas_folders.py --dry-run    # 仅对比
-uv run python build_nas_folders.py --layout tree|flat
-uv run python scan_product_folders.py           # 扫描文件夹 + 变更追踪
+
+# 文件夹扫描 + 变更追踪 (5 分钟)
+uv run python scan_product_folders.py
+
+# 叶子组精准操作 (秒级)
+uv run python leaf_group_ops.py status          # 查看12个状态
+uv run python leaf_group_ops.py setup LGKS0220  # 创建+移动 单个
+uv run python leaf_group_ops.py setup --all     # 全部
+
+# 测试
 uv run python test_robustness.py                # 全部鲁棒性测试
 ```
 
@@ -178,6 +222,37 @@ encoding="utf-8", errors="replace"
 - 解析子进程 stdout 提取状态计数（MATCH/CREATE/MOVE/...）
 - **执行操作的 run 输出操作结果，需再跑 `--dry-run` 验证最终 MATCH 状态**
 
+### 6. 全量对账 vs 精准操作 (⚠️ 性能认知)
+
+**症状**: 用 `build_nas_folders.py --full` 做单叶子组测试，等了 22 分钟才被用户打断。
+
+**根因**: 全量对账每次扫描 NAS 全部 404 个文件夹（递归 5 层 × 每层 API 调用），即使只需要操作 1 个叶子组。用户说"哪怕亲自去看 NAS 都不会这么慢"——完全正确。
+
+**修正**: `leaf_group_ops.py` 只发 1 + 4 + N 次 API（创建 1 + 子文件夹 4 + 移动 N 个子节点），秒级完成。**操作范围决定工具选择：**
+- 全量创建/对账 → `build_nas_folders.py` (5 分钟)
+- 精准操作几个文件夹 → `leaf_group_ops.py` (秒级)
+- 查看状态 → `leaf_group_ops.py status` (秒级)
+
+### 7. `get_nas()` vs 直接 `FileStation()` — 端口解析 (⚠️)
+
+**症状**: 手动 `FileStation(ip_address=host, port=5001)` 连接被拒。
+
+**根因**: NAS_URL 是 `https://fzh.myds.me:11024`（自定义端口），直接构造 `FileStation` 时没有解析端口，用了默认 5001。`get_nas()` 工厂函数调用了 `_parse_nas_url()` 正确提取端口 11024。
+
+**教训**: 永远用 `get_nas()` 或 `_parse_nas_url()`，不要手动构造 `FileStation`。
+
+### 8. ERPNext 结构会变 — 以最新读取为准
+
+**症状**: 第一次读 ERPNext 时 LGKS0496 嵌套在 LGKS0459 下；用户在对话中途更新了生产数据，重读后变为并列。用户引用旧结构要求验证，引发混淆。
+
+**教训**: 每次操作前重新读取 ERPNext 确认结构。不要假设对话中前一次读取仍然有效。结构变更记录应写入对话上下文。
+
+### 9. `parse_model_id` 对 LGKS 格式的兼容
+
+**症状**: `LGKS0220` 是 4 字母 + 4 数字，不匹配 `^[A-Z]{2}\d{4}_` 正则。
+
+**修正**: 已有的 fallback 机制——`parse_model_id` 接受可选的 `valid_model_ids` 集合，按 `_` 拆分取前缀查集合。只要 `scan_erpnext()` 把 LGKS model_id 加入 `valid_model_ids`，识别就自动生效。无需改正则。
+
 ## 环境变量
 
 | 变量 | 所在文件 | 说明 |
@@ -187,6 +262,64 @@ encoding="utf-8", errors="replace"
 | `ERP_URL/API_KEY/API_SECRET` | `nas_itemgroup_folders/.env` | ERPNext 凭证 |
 | `ITEM_GROUP_ROOT` | `nas_itemgroup_folders/.env` | 默认 `产品` |
 | `SUB_FOLDERS` | `nas_itemgroup_folders/.env` | 逗号分隔，默认 `调研报告,设计稿,图片,视频` |
+
+### 10. 新建叶子组的完整 checklist（2026-06-16 踩坑）
+
+**症状**: Agent 创建叶子组时漏设 `is_leaf_group=1`、`custom_model_id=LGKSxxxx`，用错字段（写了 `custom_item_group_code` 而非 `custom_model_id`），以及不知道 LGKS 编号来源。
+
+**根因**: AGENTS.md 模块索引未收录 `nas_itemgroup_folders` 模块，Agent 找不到叶子组文档。`docs/company-context.md` 也未记录叶子组约定。
+
+**新建叶子组 checklist（必须全做）**:
+
+| # | 字段 | 值 | 说明 |
+|---|------|-----|------|
+| 1 | `item_group_name` | `品类-子类` | 如 `户外托盘垫-云朵款` |
+| 2 | `parent_item_group` | 所属父组 | 如 `户外托盘垫类` |
+| 3 | `is_group` | `1` | 它是分组节点 |
+| 4 | `is_leaf_group` | `1` | 它是叶子（自定义字段） |
+| 5 | `custom_model_id` | `LGKSxxxx` | xxxx = 子节点中最小的 KS 编号 |
+
+**LGKS 编号来源**: 查叶子组下的 KS 子节点（如 KS0493, KS0494），取最小值（0493），叶子组即为 `LGKS0493`。不是随便写的。
+
+**环境差异**:
+- **测试系统** (`ensh.vilavi.cn`): 有 FAC MCP，用 `mcp__fac__create_document` / `mcp__fac__update_document`
+- **生产系统** (`erpnext.vilavi.cn`): 无 FAC MCP，用裸 REST API（`EN_API/` 的 `ErpnextClient`）
+
+**同步顺序**: 测试系统 → 确认 → 生产系统 → NAS（`leaf_group_ops.py setup LGKSxxxx`）
+
+**文档修复**: AGENTS.md 加入 `nas-itemgroup-folders` 索引 + 关键规则 #7；`docs/company-context.md` 加入叶子组约定。
+
+### 11. `leaf_group_ops.py` cmd_move 只搜根目录 (⚠️ 2026-06-16)
+
+**症状**: 新建 LGKS0493 叶子组后运行 `cmd_move LGKS0493`，输出 `[skip] KS0493_* 在根目录不存在，可能已移动` 但文件夹并未真正在目标位置。
+
+**根因**: `cmd_move()` 只调用 `_list_root_dirs(fl)` 搜索 `TARGET`（如 `/产品信息`）根目录。KS0493/KS0494 文件夹此前被嵌套在 LGKS0459 内（因为旧的 `LEAF_GROUPS` 定义把它们归在 LGKS0459 下，`build_nas_folders.py` 全量对账时按树状布局把它们移入了 LGKS0459 目录）。
+
+**修正**: 手动用 NAS API `start_copy_move` 从 `/产品信息/LGKS0459_户外托盘垫/KS0493_*` 移到 `/产品信息/LGKS0493_户外托盘垫-云朵款/`。
+
+**教训**: `cmd_move` 不是全 NAS 搜索。如果 KS 子文件夹在别的叶子组内部，需要先手动找到它们的位置再搬移。操作前先用 `verify`（或直接 `get_file_list` 扫全盘）确认 KS 文件夹的实际位置。
+
+### 12. Windows `curl` 中文 JSON Body 报错 (⚠️)
+
+**症状**: Windows `curl -d "{...中文字段...}"` POST 到 ERPNext API，返回 `AttributeError: 'bytes' object has no attribute 'pop'`。
+
+**根因**: Windows curl 将 JSON body 当作 bytes 发送，ERPNext 的 `frappe.api.v1.create_doc` 期望 dict 而非 bytes。`Content-Type` 头未正确触发 JSON 解析。
+
+**修正**: 用 Python `requests.Session.post(url, json=data)` 代替 curl。Python requests 自动设置正确的 `Content-Type: application/json` 并序列化为 UTF-8 字符串。
+
+**教训**: 对 ERPNext REST API 的写操作（POST/PUT），涉及中文内容的，一律用 Python requests 而非 Windows curl。GET 操作 curl 通常没问题。
+
+### 13. `LEAF_GROUPS` 字典是手动维护的单点真源 (⚠️)
+
+**症状**: 在 ERPNext 生产系统创建了 LGKS0493 叶子组并移动 KS0493/KS0494，但 `leaf_group_ops.py` 的 `LEAF_GROUPS` 字典还保留旧结构（KS0493/KS0494 在 LGKS0459 的 children 里）。如果不更新，下次 `build_nas_folders.py --full` 会按旧定义把 KS 子文件夹放回 LGKS0459。
+
+**根因**: `LEAF_GROUPS` 不是从 ERPNext 自动同步的——它是手工维护的硬编码字典。ERPNext 结构变化后必须同步更新。
+
+**教训**: 每次在 ERPNext 创建/移动叶子组或 KS 子节点后，立即更新 `LEAF_GROUPS` 字典。操作 checklist：
+1. ERPNext 改完 → 马上改 `leaf_group_ops.py` 的 `LEAF_GROUPS`
+2. 旧 parent 的 children 移除迁移走的 KS 编号
+3. 新 parent 的 children 加入迁入的 KS 编号
+4. 如果新增叶子组，按 `LGKSxxxx`（最小子 KS 编号）命名 key
 
 ## Git 提交历史
 

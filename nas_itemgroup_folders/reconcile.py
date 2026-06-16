@@ -14,11 +14,13 @@ from enum import Enum
 
 @dataclass
 class ErpnextItem:
-    """ERPNext 物料组叶子节点（已过滤：产品子树 + is_group=0 + 有 custom_model_id）"""
+    """ERPNext 物料组节点（叶子 is_group=0 或 叶子组 is_leaf_group=1）"""
     name: str                    # "三角靠枕"
     model_id: str                # "KS0001"
     parent: str                  # "三角靠枕类"
     ancestors: list[str]         # ["床品类", "床头靠枕", "三角靠枕类"] (不含根"产品")
+    is_leaf_group: bool = False              # True: is_leaf_group=1 的组节点
+    leaf_group_model_id: str | None = None   # KS 子节点所属叶子组的 model_id
 
 
 @dataclass
@@ -105,13 +107,17 @@ def expected_folder_name(model_id: str, name: str) -> str:
 def expected_path(
     model_id: str, name: str,
     target_folder: str, ancestors: list[str], layout: str,
+    leaf_group_folder_name: str | None = None,
 ) -> str:
     """根据布局计算期望 NAS 路径。
 
     flat: /产品信息/KS0001_三角靠枕
+    flat+叶子组子节点: /产品信息/LGKS0220_可组合扶手沙发/KS0220_可组合扶手沙发套件
     tree: /产品信息/床品类/床头靠枕/三角靠枕类/KS0001_三角靠枕
     """
     folder = expected_folder_name(model_id, name)
+    if leaf_group_folder_name:
+        return f"{target_folder}/{leaf_group_folder_name}/{folder}"
     if layout == "flat":
         return f"{target_folder}/{folder}"
     else:
@@ -141,13 +147,21 @@ def compare(
         if nf.model_id:
             nas_by_model[nf.model_id] = nf
 
+    # 叶子组 model_id → 文件夹名 查找表
+    lg_folder_by_model: dict[str, str] = {}
+    for item in erpnext_items:
+        if item.is_leaf_group:
+            lg_folder_by_model[item.model_id] = expected_folder_name(item.model_id, item.name)
+
     matched_nas: set[str] = set()
 
     for item in erpnext_items:
         nas = nas_by_model.get(item.model_id)
         exp_name = expected_folder_name(item.model_id, item.name)
+        lg_folder = lg_folder_by_model.get(item.leaf_group_model_id) if item.leaf_group_model_id else None
         exp_path = expected_path(
-            item.model_id, item.name, target_folder, item.ancestors, layout
+            item.model_id, item.name, target_folder, item.ancestors, layout,
+            leaf_group_folder_name=lg_folder,
         )
 
         if nas is None:
@@ -173,7 +187,8 @@ def compare(
                 new_full = f"{target_folder}/{exp_name}"
                 if layout == "tree":
                     new_full = expected_path(
-                        item.model_id, item.name, target_folder, item.ancestors, layout
+                        item.model_id, item.name, target_folder, item.ancestors, layout,
+                        leaf_group_folder_name=lg_folder,
                     )
                 actions.append(Action(
                     type=ActionType.RENAME,
@@ -302,9 +317,9 @@ def scan_erpnext(
     fetch_all_item_groups,            # callable: () -> list[dict]
     item_group_root: str = "产品",
 ) -> list[ErpnextItem]:
-    """从 ERPNext 拉取 '产品' 子树下所有叶子节点。
+    """从 ERPNext 拉取 '产品' 子树下所有叶子节点 + 叶子组。
 
-    fetch_all_item_groups: 返回 [{"name":..., "parent_item_group":..., "is_group":..., "custom_model_id":...}]
+    fetch_all_item_groups: 返回 [{"name":..., "parent_item_group":..., "is_group":..., "custom_model_id":..., "is_leaf_group":...}]
     """
     all_ig = fetch_all_item_groups()
     idx = {d["name"]: d for d in all_ig if d.get("name")}
@@ -321,31 +336,57 @@ def scan_erpnext(
         return result
 
     subtree = [idx[item_group_root]] + _descendants(item_group_root)
-    leaves = [d for d in subtree if d.get("is_group") == 0 and d.get("custom_model_id")]
 
-    items: list[ErpnextItem] = []
-    for leaf in leaves:
+    # KS 叶子节点 (is_group=0)
+    ks_leaves = [d for d in subtree if d.get("is_group") == 0 and d.get("custom_model_id")]
+
+    # 叶子组 (is_group=1 + is_leaf_group=1 + 有 custom_model_id)
+    leaf_groups = [d for d in subtree
+                   if d.get("is_group") == 1
+                   and d.get("is_leaf_group") == 1
+                   and d.get("custom_model_id")]
+
+    # 叶子组名称 → model_id 映射
+    lg_model_by_name: dict[str, str] = {lg["name"]: lg["custom_model_id"] for lg in leaf_groups}
+
+    def _resolve_ancestors(node: dict) -> list[str]:
         ancestors: list[str] = []
-        node = leaf
-        while node:
-            parent = node.get("parent_item_group", "")
+        cur = node
+        while cur:
+            parent = cur.get("parent_item_group", "")
             if not parent or parent not in idx:
                 break
             ancestors.append(parent)
-            node = idx.get(parent)
+            cur = idx.get(parent)
         ancestors.reverse()
-        # Strip everything up to and including the root node
         try:
-            root_idx = ancestors.index(item_group_root)
-            ancestors = ancestors[root_idx + 1:]
+            root_pos = ancestors.index(item_group_root)
+            ancestors = ancestors[root_pos + 1:]
         except ValueError:
-            pass  # root not found in chain, keep as-is
+            pass
+        return ancestors
 
+    items: list[ErpnextItem] = []
+
+    # 叶子组 → ErpnextItem
+    for lg in leaf_groups:
+        items.append(ErpnextItem(
+            name=lg["name"],
+            model_id=lg["custom_model_id"],
+            parent=lg["parent_item_group"],
+            ancestors=_resolve_ancestors(lg),
+            is_leaf_group=True,
+        ))
+
+    # KS 叶子 → ErpnextItem（标记所属叶子组）
+    for leaf in ks_leaves:
+        parent_name = leaf["parent_item_group"]
         items.append(ErpnextItem(
             name=leaf["name"],
             model_id=leaf["custom_model_id"],
-            parent=leaf["parent_item_group"],
-            ancestors=ancestors,
+            parent=parent_name,
+            ancestors=_resolve_ancestors(leaf),
+            leaf_group_model_id=lg_model_by_name.get(parent_name),
         ))
 
     return items
