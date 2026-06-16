@@ -353,3 +353,22 @@ Amazon 中文后台导出 → 英文标准字段名（`__init__.py` 中定义）
 4. **SB/SD 报告** — 扩展支持 Sponsored Brands / Sponsored Display 报告
 5. **盈亏建模** — 接入 EN BOM 成本数据，计算实际盈亏平衡 ACOS
 6. **Rufus/COSMO 适配** — 2026 年 Amazon 算法从关键词匹配转向意图理解，需要适配新的归因模型
+
+## 文档归档说明
+
+本模块遵循项目 `docs/superpowers/` 分类规范：
+
+| 文档类型 | 位置 | 说明 |
+|---------|------|------|
+| 调研报告 | `docs/superpowers/research/2026-06-16-amazon-advertising-analysis-research.md` | 35 个资料来源 + 方法论摘要 |
+| 设计文档 | `docs/superpowers/specs/2026-06-16-amazon-advertise-analysis-design.md` | 架构设计 + 决策记录 |
+| 实现计划 | `.claude/plans/amazon-wiggly-mountain.md` | 实现步骤 + 完成状态 |
+| Agent 参考 | `advertise/AGENT_HANDOFF.md` | 本文件 — 模块级完整参考 |
+| 人读文档 | `advertise/README.md` | 使用方法 + 指标说明 |
+| 参考文档 | `advertise/参考文档/` | **同事/朋友给的外部 MD/PDF（目前空）** |
+
+### 参考文档目录说明
+
+`advertise/参考文档/` 不是存放调研资料的。它的用途是：**同事或朋友从其他公司/渠道获得的 Amazon 广告投放相关 MD/PDF 文档**，可以直接放入此目录，Agent 可通过 Read 工具读取。
+
+调研资料（网上搜索到的网页内容、URL 列表、方法论摘要）按项目规范存放于 `docs/superpowers/research/`。
