@@ -289,6 +289,38 @@ encoding="utf-8", errors="replace"
 
 **文档修复**: AGENTS.md 加入 `nas-itemgroup-folders` 索引 + 关键规则 #7；`docs/company-context.md` 加入叶子组约定。
 
+### 11. `leaf_group_ops.py` cmd_move 只搜根目录 (⚠️ 2026-06-16)
+
+**症状**: 新建 LGKS0493 叶子组后运行 `cmd_move LGKS0493`，输出 `[skip] KS0493_* 在根目录不存在，可能已移动` 但文件夹并未真正在目标位置。
+
+**根因**: `cmd_move()` 只调用 `_list_root_dirs(fl)` 搜索 `TARGET`（如 `/产品信息`）根目录。KS0493/KS0494 文件夹此前被嵌套在 LGKS0459 内（因为旧的 `LEAF_GROUPS` 定义把它们归在 LGKS0459 下，`build_nas_folders.py` 全量对账时按树状布局把它们移入了 LGKS0459 目录）。
+
+**修正**: 手动用 NAS API `start_copy_move` 从 `/产品信息/LGKS0459_户外托盘垫/KS0493_*` 移到 `/产品信息/LGKS0493_户外托盘垫-云朵款/`。
+
+**教训**: `cmd_move` 不是全 NAS 搜索。如果 KS 子文件夹在别的叶子组内部，需要先手动找到它们的位置再搬移。操作前先用 `verify`（或直接 `get_file_list` 扫全盘）确认 KS 文件夹的实际位置。
+
+### 12. Windows `curl` 中文 JSON Body 报错 (⚠️)
+
+**症状**: Windows `curl -d "{...中文字段...}"` POST 到 ERPNext API，返回 `AttributeError: 'bytes' object has no attribute 'pop'`。
+
+**根因**: Windows curl 将 JSON body 当作 bytes 发送，ERPNext 的 `frappe.api.v1.create_doc` 期望 dict 而非 bytes。`Content-Type` 头未正确触发 JSON 解析。
+
+**修正**: 用 Python `requests.Session.post(url, json=data)` 代替 curl。Python requests 自动设置正确的 `Content-Type: application/json` 并序列化为 UTF-8 字符串。
+
+**教训**: 对 ERPNext REST API 的写操作（POST/PUT），涉及中文内容的，一律用 Python requests 而非 Windows curl。GET 操作 curl 通常没问题。
+
+### 13. `LEAF_GROUPS` 字典是手动维护的单点真源 (⚠️)
+
+**症状**: 在 ERPNext 生产系统创建了 LGKS0493 叶子组并移动 KS0493/KS0494，但 `leaf_group_ops.py` 的 `LEAF_GROUPS` 字典还保留旧结构（KS0493/KS0494 在 LGKS0459 的 children 里）。如果不更新，下次 `build_nas_folders.py --full` 会按旧定义把 KS 子文件夹放回 LGKS0459。
+
+**根因**: `LEAF_GROUPS` 不是从 ERPNext 自动同步的——它是手工维护的硬编码字典。ERPNext 结构变化后必须同步更新。
+
+**教训**: 每次在 ERPNext 创建/移动叶子组或 KS 子节点后，立即更新 `LEAF_GROUPS` 字典。操作 checklist：
+1. ERPNext 改完 → 马上改 `leaf_group_ops.py` 的 `LEAF_GROUPS`
+2. 旧 parent 的 children 移除迁移走的 KS 编号
+3. 新 parent 的 children 加入迁入的 KS 编号
+4. 如果新增叶子组，按 `LGKSxxxx`（最小子 KS 编号）命名 key
+
 ## Git 提交历史
 
 ```
