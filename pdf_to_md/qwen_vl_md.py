@@ -77,6 +77,24 @@ def _image_to_base64(pil_image: Image.Image) -> str:
     return base64.b64encode(buf.getvalue()).decode("utf-8")
 
 
+def _clean_vl_output(text: str) -> str:
+    """清理 VL 模型常见的幻觉 artifact。"""
+    lines = text.split("\n")
+    cleaned = []
+    for line in lines:
+        s = line.strip()
+        # "T filename.txt" → "filename.txt" (VL 幻觉前缀)
+        if s.startswith("T ") and len(s) > 3 and not s[2].isspace():
+            s = s[2:]
+        cleaned.append(s)
+    result = "\n".join(cleaned)
+    # 去掉末尾孤立的 ```
+    result = result.rstrip()
+    if result.endswith("```"):
+        result = result[:-3].rstrip()
+    return result
+
+
 def ocr_image_vl(pil_image: Image.Image) -> str:
     """调用 qwen-vl-ocr API，识别图片中的表格/文字，返回 Markdown。"""
     img_b64 = _image_to_base64(pil_image)
@@ -94,7 +112,8 @@ def ocr_image_vl(pil_image: Image.Image) -> str:
                     {
                         "type": "text",
                         "text": (
-                            "请将这张图片中的所有内容完整提取为 Markdown 格式。"
+                            "请将这张图片中的所有内容完整提取为 Markdown 格式，"
+                            "包括图片边缘的每一行文字。"
                             "如果有表格，请用 Markdown 表格格式输出。"
                             "如果是文字段落，请保持原文格式。"
                             "如果是文件名/标签，请保留。"
@@ -104,7 +123,7 @@ def ocr_image_vl(pil_image: Image.Image) -> str:
                 ],
             }
         ],
-        "temperature": 0.1,
+        "temperature": 0.0,
         "max_tokens": 4096,
     }
 
@@ -121,7 +140,7 @@ def ocr_image_vl(pil_image: Image.Image) -> str:
         resp.raise_for_status()
         data = resp.json()
         content = data["choices"][0]["message"]["content"]
-        return content.strip()
+        return _clean_vl_output(content.strip())
     except requests.exceptions.RequestException as e:
         print(f"  [VL API 错误] {e}")
         return ""

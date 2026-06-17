@@ -170,27 +170,29 @@ COSMO 能识别清晰使用场景
 | oversized camping chair | 超大露营椅 | | 0.50% | 513 |
 | lawn chairs folding | 草坪椅 折叠 | | 0.47% | 481 |
 | comfortable folding chair | 舒适的折叠椅 | | 0.45% | 465 |
-```
 ```markdown
-| BOCR16C1P2 | Title: Oversized Camping Chair, Portable Folding Camping Chairs with Side Pocket, Cup Holder and Carry Bag, Heavy Duty Outdoor Camping Chairs for Adults, Fishing, Sports, Trip, up to 400lbs, Style 2 | Bullet Point: |
-| --- | --- | --- |
-|  | Extremely Comfortable: Our camping chairs for adults heavy duty, designed with ergonomic principles, feature spacious seats with unfolded dimensions of 40.5" L x 28" W x 39" H. The Camping Folding Chair is filled with high-loft, high-density padding in areas such as the headrest, backrest, armrests, and seat cushion, providing ample space and support for your head, neck, back, waist, and hips. This ensures a comfortable experience even during prolonged sitting |  |
-|  | Sturdy and Enduring: Our camping chairs consist of a robust steel frame and newly upgraded support components, with a weight capacity of up to 400 pounds. The powder-coated finish on the steel frame effectively prevents corrosion and fading. Additionally, the 600D tear-resistant Oxford fabric is tightly stitched and highly breathable. Therefore, the Folding Camping Chair will remain stable, allowing for long-term use |  |
-|  | User-Friendly Details: For added convenience, we ingeniously designed 2 cup holders and 2 side pockets on this folding chair, allowing you to place beverages, smartphones, notebooks, and other items in an organized manner. This thoughtful design aims to provide you with the best seating experience while freeing up your hands |  |
-|  | Lightweight and Portable: This portable folding chair requires no assembly and can be opened for use within seconds. The outdoor folding chair is lightweight at only 12.6 pounds, making it extremely easy to carry. The compact structure of the camp chair allows for easy folding and storage in the provided portable carrying bag after fishing or any outdoor activity |  |
-|  | Versatile Applications: This folding lawn chair for adults is not only suitable for hiking, camping, and hiking activities but is also perfect for outdoor concerts, open-air movie nights, picnics, or for use at home. The universality of the folding camping chair for adults makes it an ideal seating choice for various occasions |  |
-|  | Modern Appearance: The foldable chair not only excels in functionality but also boasts a sleek modern appearance. Meticulously coordinated colors make the portable chair a fashionable accessory for outdoor activities, adding a touch of brilliance to your camping gear |  |
-| B0FJF2Y8G5 | Title: Oversized Camping Chairs for Adults - Heavy Duty Padded Outdoor Folding Lawn XL Camp Chair with Cup Holder Cooler Pockets for Outside Sports Beach Fishing Garden Portable Supports 500lbs, Black | Bullet Point: |
-|  | Oversized Padded Comfort - PUVASIA oversized camping chair heavy duty is designed with extra-wide 38.6" x 23.1" seating area with multi-layer high-density padding. Ergonomic lumbar/neck support and padded headrest deliver all-day comfort. |  |
-|  | Heavy-Duty Steel Frame - Newly upgraded reinforced X-shape steel construction with 22mm thickened tubes and anti-rust coating. Supports up to 500lbs for long-lasting durability. Non-slip textured feet ensure a stable seating experience for everyone. |  |
-|  | Extra Storage Space - Our foldable chairs for outside features side/back mesh pockets, along with adjustable cup holder and large insulated cooler bag. Perfectly stores drinks, snacks, and phones within easy reach. It a versatile choice for comfortable padded camping chair for adults. |  |
-|  | All-Weather Durability - Built to last, our luxury portable camping chairs construct with durable 600d tear-resistant oxford breathable fabric and reinforced stitching to prevent fraying. Ideal for camping, sporting events, barbecues, fishing, hiking, backyard lawn use, and more outdoor adventures. |  |
-|  | Portable & Quick Setup - Folds flat to 9.4" thick (only 12.9 lbs with carry bag). Sets up in 3 seconds for picnics, concerts, tailgates, or home use. The compact structure of our lightweight beach chairs allow for easy folding and storage in the carrying bag after any outdoor activity. |  |
-| B0DDQB78L2 | Title: Oversized XL Camping Chairs for Adults Heavy Duty Support 500 lbs Outdoor Folding Chairs Padded Portable Lawn Chairs Camp Chairs with Cup Holder | Bullet Point: |
-|  | Comfortable Camping Chair: The camping folding chair is filled with cotton padding in areas such as the headrest, backrest, armrests, and seat cushion, providing great space and support for your head, neck, back, waist, and hips. Allowing you to relax and stretch out ensures a comfortable experience during long time sitting. Our oversized comfy folding chair feature spacious seats and fine details with unfolded dimensions of 38.5"L x 23"W x 40"H |  |
-| X | 竞品listingcamping chair.xlsx |  |
-
-```
+| BOCR16C1P2 |  |
+| --- | --- |
+| Title: | Oversized Camping Chair, Portable Folding Camping Chairs with Side Pocket, Cup Holder and Carry Bag, Heavy Duty Outdoor Camping Chairs for Adults, Fishing, Sports, Trip, up to 400lbs, Style 2 |
+| Bullet Point: |  |
+|  | Extremely Comfortable: Our camping chairs for adults heavy duty, designed with ergonomic principles, feature spacious seats with unfolded dimensions of 40.5" L x 28" W x 39" H. The Camping Folding Chair is filled with high-loft, high-density padding in areas such as the headrest, backrest, armrests, and seat cushion, providing ample space and support for your head, neck, back, waist, and hips. This ensures a comfortable experience even during prolonged sitting |
+|  | Sturdy and Enduring: Our camping chairs consist of a robust steel frame and newly upgraded support components, with a weight capacity of up to 400 pounds. The powder-coated finish on the steel frame effectively prevents corrosion and fading. Additionally, the 600D tear-resistant Oxford fabric is tightly stitched and highly breathable. Therefore, the Folding Camping Chair will remain stable, allowing for long-term use |
+|  | User-Friendly Details: For added convenience, we ingeniously designed 2 cup holders and 2 side pockets on this folding chair, allowing you to place beverages, smartphones, notebooks, and other items in an organized manner. This thoughtful design aims to provide you with the best seating experience while freeing up your hands |
+|  | Lightweight and Portable: This portable folding chair requires no assembly and can be opened for use within seconds. The outdoor folding chair is lightweight at only 12.6 pounds, making it extremely easy to carry. The compact structure of the camp chair allows for easy folding and storage in the provided portable carrying bag after fishing or any outdoor activity |
+|  | Versatile Applications: This folding lawn chair for adults is not only suitable for hiking, camping, and hiking activities but is also perfect for outdoor concerts, open-air movie nights, picnics, or for use at home. The universality of the folding camping chair for adults makes it an ideal seating choice for various occasions |
+|  | Modern Appearance: The foldable chair not only excels in functionality but also boasts a sleek modern appearance. Meticulously coordinated colors make the portable chair a fashionable accessory for outdoor activities, adding a touch of brilliance to your camping gear |
+| B0FJF2Y8G5 |  |
+| Title: | Oversized Camping Chairs for Adults - Heavy Duty Padded Outdoor Folding Lawn XL Camp Chair with Cup Holder Cooler Pockets for Outside Sports Beach Fishing Garden Portable Supports 500lbs, Black |
+| Bullet Point: |  |
+|  | Oversized Padded Comfort - PUVASIA oversized camping chair heavy duty is designed with extra-wide 38.6" x 23.1" seating area with multi-layer high-density padding. Ergonomic lumbar/neck support and padded headrest deliver all-day comfort. |
+|  | Heavy-Duty Steel Frame - Newly upgraded reinforced X-shape steel construction with 22mm thickened tubes and anti-rust coating. Supports up to 500lbs for long-lasting durability. Non-slip textured feet ensure a stable seating experience for everyone. |
+|  | Extra Storage Space - Our foldable chairs for outside features side/back mesh pockets, along with adjustable cup holder and large insulated cooler bag. Perfectly stores drinks, snacks, and phones within easy reach. It a versatile choice for comfortable padded camping chair for adults. |
+|  | All-Weather Durability - Built to last, our luxury portable camping chairs construct with durable 600d tear-resistant oxford breathable fabric and reinforced stitching to prevent fraying. Ideal for camping, sporting events, barbecues, fishing, hiking, backyard lawn use, and more outdoor adventures. |
+|  | Portable & Quick Setup - Folds flat to 9.4" thick (only 12.9 lbs with carry bag). Sets up in 3 seconds for picnics, concerts, tailgates, or home use. The compact structure of our lightweight beach chairs allow for easy folding and storage in the carrying bag after any outdoor activity. |
+| B0DDQB78L2 |  |
+| Title: | Oversized XL Camping Chairs for Adults Heavy Duty Support 500 lbs Outdoor Folding Chairs Padded Portable Lawn Chairs Camp Chairs with Cup Holder |
+| Bullet Point: | Comfortable Camping Chair: The camping folding chair is filled with cotton padding in areas such as the headrest, backrest, armrests, and seat cushion, providing great space and support for your head, neck, back, waist, and hips. Allowing you to relax and stretch out ensures a comfortable experience during long time sitting. Our oversized comfy folding chair feature spacious seats and fine details with unfolded dimensions of 38.5"L x 23"W x 40"H |
+|  | 竞品listingcamping chair.xlsx |
 | 流量词 | 关键词翻译 | AC推荐词 | 流量占比 | 预估周曝光量 |
 | --- | --- | --- | --- | --- |
 | camping chairs | 露营椅 |  | 27.65% | 2.037 |
@@ -206,11 +208,11 @@ COSMO 能识别清晰使用场景
 | camp chairs for adults | 成人露营椅 |  | 1.78% | 131 |
 | padded camping chair | 带衬垫的露营椅 |  | 1.71% | 126 |
 | camping couch | 露营沙发 |  | 1.66% | 122 |
-| camp chairs for adults heavy duty | 成人重型露营椅 |  | 1.59% | 117 |
+| camp chairs for adults heavy du | 成人重型露营椅 |  | 1.59% | 117 |
 | heavy duty camping chairs | 重型野营椅 |  | 1.44% | 106 |
 | comfy camping chair | 舒适的露营椅 |  | 1.36% | 100 |
 | camping chairs | 露营椅 |  | 1.33% | 98 |
-| oversized camping chairs for adults | 成人超大露营椅 |  | 1.28% | 94 |
+| oversized camping chairs for ad | 成人超大露营椅 |  | 1.28% | 94 |
 | helinox chair | 海利诺克斯椅 |  | 1.21% | 89 |
 | camping sofa | 野营沙发 |  | 1.19% | 88 |
 | folding camping chairs | 折叠式野营椅 |  | 1.11% | 81 |
@@ -238,15 +240,20 @@ COSMO 能识别清晰使用场景
 | folding camping chair | 折叠露营椅 |  | 0.01% | 0 |
 | foldable camping chairs | 可折叠露营椅 |  | 0.00% | 0 |
 | folding camp chair | 折叠露营椅 |  | 0.00% | 0 |
-| rocking camping chairs for adults | 成人摇摆露营椅 |  | 0.00% | 0 |
+| rocking camping chairs for adult | 成人摇摆露营椅 |  | 0.00% | 0 |
 | heavy duty folding chairs | 重型折叠椅 |  | 0.00% | 0 |
 | camping rocking chair | 露营摇椅 |  | 0.00% | 0 |
 | rocking camp chair | 摇椅 |  | 0.00% | 0 |
 
 关键词.xlsx
+```markdown
 | 款号 | sku编码 | 产品名称 | 解决方案 |
-| --- | --- | --- | --- |
+| :--- | :--- | :--- | :--- |
 | KC2508 | KC2508_BLACK/GREY | oversized camping chair | 家居系统 |
+
+本品属性表1.xlsx
+
+2.知识库文件：亚马逊禁用词黑名单
 ```markdown
 此文档包含亚马逊严禁在标题(Title)、五点描述(Bullets)、产品描述(Description)及后台搜索词 (Search Terms)中出现的词汇与表达。
 
@@ -312,6 +319,4 @@ COSMO 能识别清晰使用场景
 - Non-toxic (无毒): 极易触发审核，建议改为 “BPA Free” 或 “Safe material”.
 - Safe, Healthy, Harmless (绝对化安全用语)
 
-T amazon_compliance_blacklist.txt
-
-```
+amazon_compliance_blacklist.txt
