@@ -61,12 +61,21 @@ import easyocr
 from PIL import Image, ImageEnhance, ImageOps, ImageFilter
 import numpy as np
 
+# PaddleOCR（可选，通过 ONNX Runtime 运行）
+_has_paddleocr = False
+try:
+    from paddleocr import PaddleOCR as _PaddleOCR
+    _has_paddleocr = True
+except ImportError:
+    pass
+
 
 # ---------------------------------------------------------------------------
 # OCR 引擎（延迟初始化）
 # ---------------------------------------------------------------------------
 
-_reader = None
+_reader = None        # easyocr
+_paddle_reader = None  # paddleocr + onnxruntime
 
 
 def _get_reader(lang: str):
@@ -75,6 +84,16 @@ def _get_reader(lang: str):
         print(f"[OCR] 初始化 easyocr（语言: {lang}）...")
         _reader = easyocr.Reader(lang.split(","), gpu=False)
     return _reader
+
+
+def _get_paddle_reader(lang: str = "ch"):
+    global _paddle_reader
+    if _paddle_reader is None:
+        lang_map = {"ch_sim,en": "ch", "ch_sim": "ch", "en": "en"}
+        plang = lang_map.get(lang, "ch")
+        print(f"[OCR] 初始化 PaddleOCR ONNX（语言: {plang}）...")
+        _paddle_reader = _PaddleOCR(engine="onnxruntime", lang=plang)
+    return _paddle_reader
 
 
 # ---------------------------------------------------------------------------
@@ -305,8 +324,8 @@ def has_text_layer(page) -> bool:
     return len(text) > 50
 
 
-def ocr_page(page, reader, dpi=300) -> str:
-    """OCR 页面 → 版面分析 → Markdown（表格或段落）。"""
+def ocr_page_easyocr(page, reader, dpi=300) -> str:
+    """easyocr → 版面分析 → Markdown。"""
     pix = page.get_pixmap(dpi=dpi)
     img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
 
@@ -332,7 +351,54 @@ def ocr_page(page, reader, dpi=300) -> str:
     return _postprocess_ocr_text(output)
 
 
-def convert(pdf_path: str, lang: str = "ch_sim,en", ocr_only: bool = False, dpi: int = 300):
+def ocr_page_paddleocr(page, reader, dpi=300) -> str:
+    """PaddleOCR (ONNX Runtime) → 版面分析 → Markdown。"""
+    pix = page.get_pixmap(dpi=dpi)
+    img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+    img_array = np.array(img)
+
+    raw = list(reader.predict(img_array))
+    if not raw:
+        return ""
+
+    # PaddleOCR 3.7 output: OCRResult dict with rec_texts, rec_scores, rec_polys
+    ocr_result = raw[0]
+    texts = ocr_result.get("rec_texts", []) or []
+    scores = ocr_result.get("rec_scores", []) or []
+    bboxes = ocr_result.get("rec_polys", []) or []
+
+    if not texts:
+        return ""
+
+    # 转换为 easyocr 兼容的 (bbox, text, conf) 格式
+    results = []
+    for i, text in enumerate(texts):
+        poly = bboxes[i] if i < len(bboxes) else [[0, 0], [0, 0], [0, 0], [0, 0]]
+        # poly 是 numpy array → 转为 list of lists
+        if hasattr(poly, "tolist"):
+            poly = poly.tolist()
+        score = float(scores[i]) if i < len(scores) else 0.5
+        results.append((poly, text, score))
+
+    rows = _group_rows(results, y_tol=30)  # PaddleOCR 词级检测需更大容差
+
+    if _is_table(rows):
+        output = _format_table(rows)
+    else:
+        output = _build_paragraph_text(rows)
+
+    return _postprocess_ocr_text(output)
+
+
+def ocr_page(page, reader, engine="easyocr", dpi=300) -> str:
+    """OCR 页面 → 版面分析 → Markdown（调度 easyocr / paddleocr）。"""
+    if engine == "paddleocr":
+        return ocr_page_paddleocr(page, reader, dpi=dpi)
+    return ocr_page_easyocr(page, reader, dpi=dpi)
+
+
+def convert(pdf_path: str, lang: str = "ch_sim,en", ocr_only: bool = False,
+            dpi: int = 300, engine: str = "easyocr"):
     """将 PDF 转换为 Markdown。"""
     pdf = Path(pdf_path).resolve()
     if not pdf.exists():
@@ -340,7 +406,15 @@ def convert(pdf_path: str, lang: str = "ch_sim,en", ocr_only: bool = False, dpi:
         sys.exit(1)
 
     md_path = pdf.with_suffix(".md")
-    reader = _get_reader(lang) if not ocr_only else None
+    if engine == "paddleocr":
+        if not _has_paddleocr:
+            print("错误: PaddleOCR 未安装，请运行: uv pip install paddleocr onnxruntime")
+            sys.exit(1)
+        reader = _get_paddle_reader(lang)
+    elif not ocr_only:
+        reader = _get_reader(lang)
+    else:
+        reader = None
 
     doc = fitz.open(str(pdf))
     total = doc.page_count
@@ -377,8 +451,8 @@ def convert(pdf_path: str, lang: str = "ch_sim,en", ocr_only: bool = False, dpi:
                 md_lines.append(_clean_page_numbers(fixed_pages[text_idx].strip()))
             text_idx += 1
         else:
-            print(f"  [OCR] 第 {page_num} 页 → 截图识别")
-            text = ocr_page(doc[i], reader, dpi=dpi)
+            print(f"  [OCR] 第 {page_num} 页 → 截图识别 ({engine})")
+            text = ocr_page(doc[i], reader, engine=engine, dpi=dpi)
             md_lines.append(text)
 
     doc.close()
@@ -398,9 +472,13 @@ def main():
     parser.add_argument("--lang", default="ch_sim,en", help="OCR 语言（默认: ch_sim,en）")
     parser.add_argument("--ocr-only", action="store_true", help="强制所有页均使用 OCR")
     parser.add_argument("--dpi", type=int, default=300, help="OCR 渲染分辨率（默认 300）")
+    parser.add_argument("--engine", default="paddleocr" if _has_paddleocr else "easyocr",
+                        choices=["easyocr", "paddleocr"],
+                        help="OCR 引擎（默认: paddleocr）")
     args = parser.parse_args()
 
-    convert(args.pdf_path, lang=args.lang, ocr_only=args.ocr_only, dpi=args.dpi)
+    convert(args.pdf_path, lang=args.lang, ocr_only=args.ocr_only, dpi=args.dpi,
+            engine=args.engine)
 
 
 if __name__ == "__main__":
