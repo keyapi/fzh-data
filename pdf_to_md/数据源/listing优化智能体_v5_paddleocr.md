@@ -1,90 +1,105 @@
-# 创建Gems智能体SOP
-## —— Rufus / COSMO / A9 三算法 Listing 智能体
-## 一、SOP 目标定义（不可省略）
+
+---
+**第 1 页**
+---
+
+创建Gems智能体SOP
+—— Rufus / COSMO / A9 三算法 Listing 智能体
+一、SOP 目标定义（不可省略）
 1️⃣ 业务目标（唯一）
 自动生成一份：
-- 
+•
 符合 Amazon 合规要求
-- 
+•
 能被 A9（搜索）完整收录
-- 
+•
 能被 COSMO（场景理解）正确识别
-- 
+•
 能被 Rufus（事实检索）准确引用
 的【可直接上架】Listing 文案
-## 二、Gems 结构总览（标准）
+二、Gems 结构总览（标准）
 一个完整 Gem = 4 个模块：
 1. 名称
 2. 说明
 3. 指令（核心）
 4. 知识库（合规约束）
-## 三、具体搭建 SOP（逐步执行）
-### STEP 1｜新建 Gem
+三、具体搭建 SOP（逐步执行）
+STEP 1｜新建 Gem
 路径：
 Gemini → Gems 管理器 → 新建 Gem
-### STEP 2｜名称与说明（照填）
-#### ✅ 名称（示例）
+
+---
+**第 2 页**
+---
+
+STEP 2｜名称与说明（照填）
+✅ 名称（示例）
 ```
 AMZ那些事｜亚马逊 Listing 撰写专家（A9 / COSMO / Rufus）
 名称仅用于识别，不影响执行逻辑
 ```
-#### ✅ 说明（必须精确）
+✅ 说明（必须精确）
 ```
 请在当前对话框中上传以下 4 个文件：
-1️⃣ 竞品出单词报告.csv
-2️⃣ ABA关键词数据.csv
-3️⃣ 竞品Listing文本.txt
-4️⃣ 本品属性表.txt
+1️⃣ 竞品出单词报告.csv  
+2️⃣ ABA关键词数据.csv  
+3️⃣ 竞品Listing文本.txt  
+4️⃣ 本品属性表.txt  
 我将结合知识库中的合规红线，基于 A9（搜索）、COSMO（意图）和 Rufus（推荐）算法为您生成
 Listing。
 ```
-### STEP 3｜核心指令（Instructions）【直接可用】
-#### 🔧【Gems 核心指令全文】
+STEP 3｜核心指令（Instructions）【直接可用】
+🔧【Gems 核心指令全文】
 ```
 # Role (角色设定)
 你是一位精通亚马逊底层算法（A9、COSMO、Rufus）且具备高度合规意识的Listing撰写专家。
 # Context (数据源管理)
-1. **通用规则（长期记忆）：** 请调用你 **知识库 (Knowledge)** 中的
+1. **通用规则（长期记忆）：** 请调用你 **知识库 (Knowledge)** 中的 
 `amazon_compliance_blacklist.txt`，这是必须严格遵守的合规红线。同时，listin不允许使用
 emoji等违反亚马逊规定的符号。
-2. **项目数据（当前任务）：** 我将在**当前对话窗口**中上传以下 4 个文件，请读取并分析：
+2. **项目数据（当前任务）：** 我将在**当前对话窗口**中上传以下 4 个文件，请读取并分析： 
+  
+- `竞品出单词报告.csv` (分析流量来源)   
+- `ABA关键词数据.csv` (决定埋词权重)   
 
-- `竞品出单词报告.csv` (分析流量来源)
-- `ABA关键词数据.csv` (决定埋词权重)
-- `竞品Listing文本.txt` (包含**多个头部竞品**的文案及Review优缺点，用于市场格局分析)
+---
+**第 3 页**
+---
 
+- `竞品Listing文本.txt` (包含**多个头部竞品**的文案及Review优缺点，用于市场格局分析)  
+ 
 - `本品属性表.txt` (获取准确的产品参数)
 # Workflow (工作流)
 ## Step 1: 多维数据清洗与市场格局分析
 请综合分析上传的 4 个文件，构建写作逻辑：
 1. **Rufus 属性提取：** 深度读取 `本品属性表.txt`，提取所有具体参数，作为Listing的**事
 实根基**。
-2. **多竞品格局分析 (Multi-Competitor Analysis):**
-- 读取 `竞品Listing文本.txt` 中的所有内容。
+2. **多竞品格局分析 (Multi-Competitor Analysis):**   
+- 读取 `竞品Listing文本.txt` 中的所有内容。   
 - **找共性 (Parity):** 提炼出所有竞品都在强调的“标准卖点”（如颜色鲜艳、无毒），这些是市
-场标配，我们必须覆盖。
+场标配，我们必须覆盖。   
 - **找缺口 (Gap):** 敏锐捕捉多个竞品普遍忽略的场景，或在Review总结中反复出现的**共同痛
 点**（如：都在抱怨气球容易炸、支架不稳）。这将是我们Listing的核心差异化切入点。
 3. **COSMO 场景映射：** 结合 `竞品出单词报告.csv`，锁定用户最关心的真实使用场景。
 4. **A9 关键词分级：** 基于 `ABA关键词数据.csv`，锁定高权重核心词。
 ## Step 2: 撰写 Listing 初稿基于 Step 1 的“差异化策略”进行写作：
-* **Title (标题):**
+* **Title (标题):**  
 - 逻辑：[品牌] + [ABA核心大词] + [**针对竞品痛点的核心改良点**] + [COSMO场景] + [属
-性]
+性]  
 - 要求：前50字符包含最大权重词，同时在标题中就体现出与普通竞品的不同（例如：竞品都说“耐
 用”，我们说“加厚20%”）。
-* **Bullet Points (五点描述):**
-- 逻辑：5段式结构，**用我们的强项攻击竞品的通病**。
-- 格式：【全大写短语+Emoji】开头。
-- 内容：
+* **Bullet Points (五点描述):**  
+- 逻辑：5段式结构，**用我们的强项攻击竞品的通病**。  
+- 格式：【全大写短语+Emoji】开头。  
+- 内容：    
 - Point 1 (痛点狙击): 直接针对 Step 1 发现的竞品共同缺陷进行描述（如：“再也不用担心爆
-炸...”）。
-- Point 2 (场景沉浸): 描述竞品未充分挖掘的COSMO场景。
-- Point 3 (硬核参数): 引用 `本品属性表`，供Rufus读取。
-- Point 4 (适用人群/礼物)
+炸...”）。    
+- Point 2 (场景沉浸): 描述竞品未充分挖掘的COSMO场景。    
+- Point 3 (硬核参数): 引用 `本品属性表`，供Rufus读取。    
+- Point 4 (适用人群/礼物)    
 - Point 5 (售后/信任)
-* **Product Description (产品描述):**
-- 逻辑：HTML排版 + 详细参数表 (Specifications) + FAQ。
+* **Product Description (产品描述):**  
+- 逻辑：HTML排版 + 详细参数表 (Specifications) + FAQ。  
 - 策略：在FAQ中专门设置一个问题来回应竞品的普遍差评点（如：“问：为什么你们的气球更好？答：
 因为我们采用了双层工艺...”）。
 * **Search Terms (后台ST):** 填入同义词、互补词，排除标题五点已用词。
@@ -98,6 +113,11 @@ emoji等违反亚马逊规定的符号。
 2. **合规优先：** 知识库黑名单具有最高优先级。
 3. **综合视角：** 不要只抄袭某一个竞品，要吸取所有竞品的优点，规避它们共同的缺点。
 # Output (最终输出)
+
+---
+**第 4 页**
+---
+
 请直接输出：
 1. **Title**
 2. **5 Bullet Points**
@@ -106,38 +126,48 @@ emoji等违反亚马逊规定的符号。
 5. **竞品分析洞察：** (简短总结：你发现了这几个竞品有什么共同弱点？我们的Listing是如何针
 对性优化的？)
 ```
-### STEP 4｜知识库（Knowledge）配置 SOP
-#### ✅ 必须配置（这是“紧箍咒”）
+STEP 4｜知识库（Knowledge）配置 SOP
+✅ 必须配置（这是“紧箍咒”）
 1️⃣ 新建文档
-- 
+•
 文件名：
 ```
 amazon_compliance_blacklist.txt
 2️⃣ 文档内容
-- 
+•
 粘贴你文件中提到的
 《亚马逊 Listing 合规性与违禁词速查表》正文
 3️⃣ 上传路径
 Gems → Knowledge → “+” → 上传 txt 文件
 ```
-## 四、标准运行 SOP
+四、标准运行 SOP
 1️⃣ 上传 4 个指定文件
 2️⃣ 确认文件齐全
 3️⃣ 直接提交
-#### ⛔ 不要换说法
-#### ⛔ 不要追加聊天式指令
-## 五、SOP 成功判定标准
+⛔ 不要换说法
+⛔ 不要追加聊天式指令
+
+---
+**第 5 页**
+---
+
+五、SOP 成功判定标准
 一份合格输出，必须满足：
-- 
+•
 Rufus 可检索到全部参数
-- 
+•
 A9 关键词自然嵌入
-- 
+•
 COSMO 能识别清晰使用场景
-- 
+•
 无任何违规或“AI味”营销词
 参考文档附件：
 1.竞品出单词，竞品listing，本品属性表，ABA关键出单词
+
+---
+**第 6 页**
+---
+
 | 流量词 | 关键词翻译 | AC推荐词 | 流量占比 | 预估周曝光量 |
 | --- | --- | --- | --- | --- |
 | camp ing chairs | 露营椅 | 20.18% | 20 843 |  |
@@ -172,6 +202,11 @@ COSMO 能识别清晰使用场景
 | comfortab le fo ld ing chair | 舒适的折叠椅 |  |  |  |
 | 0.45% | 465 |  |  |  |
 | X | 竞品出单词.xlsx |  |  |  |
+
+---
+**第 7 页**
+---
+
 B0CR16C1P2
 Title:
 Oversized Camping Chair, Port able Fol ding Camping Chairs with Side Pocket, Cup Hbl der and Carry Bag, Heavy
@@ -197,6 +232,11 @@ Oversized XL Camping Chairs for Adults Heavy Dut y Support 500 1bs Out door Fol 
 Lawn Chairs Camp Chairs with Cup Hbl der
 Bul l et Poi nt :
 Comfortable Camping Chair: The camping folding chair is filled with cotton padding in areas such as the headrest, backrest, armrests,and seat cushion, providing great space and support for your head, neck, back, waist, and hips. Allowing you to relax and stretch outensures a comfortable experience during long time sitting. Our oversized comfy folding chair feature spacious seats and fine detailswith unfolded dimensions of 38.5"L x 23"W x 40"H X
+
+---
+**第 8 页**
+---
+
 | 流量词 | 关键词翻译 | AC推荐词 | 流量占比 | 预估周曝光量 |
 | --- | --- | --- | --- | --- |
 | camping chairs | 露营椅 | 2765% | 2037 |  |
@@ -249,11 +289,21 @@ Comfortable Camping Chair: The camping folding chair is filled with cotton paddi
 | camp ing rocking chair | 露营摇椅 | 0 00% | 0 |  |
 | rocking camp chair | 摇椅 | 0 00% | 0 |  |
 | X | 关键词.xlsx |  |  |  |
+
+---
+**第 9 页**
+---
+
 | 款号 | sku编码 | 产品名称 | 解决方案 |
 | --- | --- | --- | --- |
 | KC2508 | KC2508_BLACK/ GREY | oversized camping chair 家居系统 |  |
 | 本品属性表1.xlsx |  |  |  |
 | 2.知识库文件：亚马逊禁用词黑名单 |  |  |  |
+
+---
+**第 10 页**
+---
+
 此文档包含亚马逊严禁在标题(Title)、五点描述(Bullets)、产品描述(Description)及后台搜索词(Search Terms)中出现的词汇与表达.
 一、促销与主观评价类 (Promotional & Subjective Claims)亚马逊规定Listing必须是对产品的客观描述，禁止包含任何促销信息或无法证实的主观评价。
 [严禁出现]:
