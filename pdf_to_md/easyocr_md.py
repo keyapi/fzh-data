@@ -7,6 +7,7 @@ easyocr_md.py — PDF → Markdown（EasyOCR 引擎）
     uv run python pdf_to_md/easyocr_md.py <pdf_path> [--dpi 300] [--ocr-only]
 """
 import sys
+import re
 import argparse
 
 sys.stdout.reconfigure(encoding="utf-8")
@@ -60,6 +61,55 @@ except ImportError:
 
 _reader = None
 
+# OCR 纠错词典（来源于 PR #18 同事 Jack 的积累）
+_CHAR_FIX = str.maketrans({
+    "穴": "文", "刍": "含", "趾": "逊", "珧": "现",
+    "廿": "中", "迷": "述", "颈": "须", "倩": "信",
+    "笫": "第", "狈": "须", "瓴": "须", "豳": "圈",
+    "潸": "清", "眄": "的", "菅": "营", "掎": "椅",
+    "枸": "椅", "晷": "营", "篁": "篮",
+})
+
+_WORD_FIX = {
+    # 常见英文 OCR 错误
+    "campng": "camping", "campig": "camping", "campg": "camping",
+    "foldng": "folding", "foldig": "folding", "folng": "folding",
+    "loldng": "folding", "Ioldng": "folding",
+    "char": "chair", "chars": "chairs", "chav": "chair",
+    "chays": "chairs", "chai": "chair",
+    "heaw": "heavy", "heawy": "heavy",
+    "duly": "duty", "dutr": "duty",
+    "portab": "portable", "le": "",  # handled by _merge_table_columns
+    "Iaw": "Lawn", "law": "lawn", "bam": "lawn",
+    "adylis": "adults", "aduls": "adults", "adullis": "adults",
+    "tor": "for", "lor": "for", "Ior": "for",
+    "ouiside": "outside", "Gutsde": "Outside", "oulside": "outside",
+    "Oversizcd": "Oversized", "Owersizcd": "Oversized",
+    "comlortab": "comfortable", "comlortable": "comfortable",
+    "flable": "foldable", "Ioldab": "Foldable", "foldab": "foldable",
+    "b89ch": "beach", "b8ach": "beach",
+    "roclng": "rocking", "rockig": "rocking", "reclnng": "reclining",
+    "gcirocker": "gci rocker",
+}
+
+
+def _ocr_correct(text: str) -> str:
+    """后处理纠错：中文字符映射 + 英文单词直查。"""
+    text = text.translate(_CHAR_FIX)
+    words = text.split()
+    corrected = []
+    for w in words:
+        m = re.match(r"^([^a-zA-Z]*)([a-zA-Z'.]+)([^a-zA-Z]*)$", w)
+        if not m:
+            corrected.append(w)
+            continue
+        pre, core, post = m.groups()
+        if core in _WORD_FIX:
+            corrected.append(pre + _WORD_FIX[core] + post)
+        else:
+            corrected.append(w)
+    return " ".join(corrected)
+
 
 def _get_reader(lang: str = "ch_sim,en"):
     global _reader
@@ -94,7 +144,8 @@ def ocr_page(page, dpi=300) -> str:
     else:
         output = _build_paragraph_text(rows)
 
-    return _postprocess_ocr_text(output)
+    output = _postprocess_ocr_text(output)
+    return _ocr_correct(output)
 
 
 # ---------------------------------------------------------------------------
