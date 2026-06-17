@@ -1,6 +1,10 @@
 # Amazon 广告数据分析 — 调研报告
 
-> 日期：2026-06-16 | 分支：amazon_advertise | 关联设计文档：`specs/2026-06-16-amazon-advertise-analysis-design.md`
+> 日期：2026-06-16 (更新 2026-06-17) | 分支：amazon_advertise | 版本: v0.3
+>
+> 关联设计文档: `specs/2026-06-16-amazon-advertise-analysis-design.md`
+> 
+> **2026-06-17 增量**: 补充 6 维度专家级深度调研（通用数据分析方法论 / Amazon 专家策略 / 数据生态 / 行业趋势 / 工具 / 系统架构）
 
 ## 调研目标
 
