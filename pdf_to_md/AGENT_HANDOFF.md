@@ -1,85 +1,121 @@
-# pdf_to_md — PDF → Markdown 转换 + OCR 文字识别
+# pdf_to_md — Agent 交接说明
 
-## 快速摘要
+> **脚本**: `pdf_to_md.py`（~300 行，唯一主脚本）
 
-将 PDF 文档（含截图/扫描件）完整转换为结构化 Markdown。纯文本页直接提取，截图页自动 OCR 识别中英文文字（含表格数据）。
+---
 
-## 目录结构
+## 1. 业务背景
+
+将 PDF 文档（含截图/扫描件）完整转换为结构化 Markdown：
+- 纯文本页 → PyMuPDF 直接提取（检测标题/列表，过滤行号）
+- 截图/图片页 → easyOCR + bbox 坐标版面分析（自动识别表格/列表/标题）
+
+---
+
+## 2. 处理流程
 
 ```
-pdf_to_md/
-├── AGENT_HANDOFF.md              ← 本文档
-├── scripts/
-│   └── pdf_to_md.py              ← 转换脚本（主入口）
-├── .agents/skills/
-│   └── pdf-to-md/SKILL.md        ← Claude Code 技能定义
-└── 数据源/
-    ├── listing优化智能体.pdf      ← 样例 PDF（10页）
-    ├── listing优化智能体.md       ← 转换后的 Markdown
-    └── listing_images/            ← PDF 中提取的截图
+PDF
+├─▶ 有文字层 (text > 50 chars)
+│     → page.get_text()
+│     → 过滤纯数字行（PDF 行号）
+│     → 逐行检测标题（一、→##, STEP N→###, ✅→####）
+│     → bullet 列表格式化
+│     → 输出 Markdown
+│
+└─▶ 纯截图
+      → page.get_pixmap(dpi=300)
+      → PIL → numpy → easyOCR (paragraph=False, 含 bbox)
+      → 按 Y 坐标分组为行 → 按 X 坐标排序
+      ├─▶ 多列行 ≥40% + 列数一致 ≥50% → Markdown 表格
+      └─▶ 单列
+          ├─▶ 标题检测 → 加 ## / ### / #### 标记
+          ├─▶ bullet/编号/中文字题 ≥25% → 列表
+          └─▶ 否则 → 段落文本
 ```
 
-## 快速启动
+---
+
+## 3. 关键函数
+
+| 函数 | 作用 |
+|------|------|
+| `has_text_layer(page)` | 判断页是否有 >50 字符的文本层 |
+| `extract_text_page(page)` | 提取文本 → 过滤行号 → 检测标题/列表 |
+| `_detect_heading(line)` | 检测一行是否为标题（中文序号/STEP/emoji/已有#） |
+| `_format_text_line(line)` | 格式化单行（bullet 列表 → `- `） |
+| `_group_rows(results, y_tol=15)` | 将 OCR bbox 按 Y 坐标分组为行，X 排序 |
+| `_is_table(rows)` | 启发式判断是否为表格 |
+| `_format_table(rows)` | 输出 Markdown 表格 |
+| `_format_list(texts)` | 输出 Markdown 列表（bullet/编号/题头） |
+| `_format_paragraphs(rows)` | 单列布局 → 检测标题/列表/段落 |
+| `ocr_page(page, reader, dpi=300)` | OCR → 版面分析 → Markdown |
+| `convert(pdf_path, ...)` | 主循环：逐页判断 → 处理 → 写文件到 out/ |
+
+---
+
+## 4. 命令行
 
 ```bash
-cd D:\Claude Demo\fzh-data\pdf_to_md
-
-# 确保依赖已安装
-pip install pymupdf easyocr pillow numpy
-
-# 运行转换
-python -X utf8 scripts/pdf_to_md.py "数据源/要转换的文件.pdf"
-
-# 强制 OCR（跳过文本层）
-python -X utf8 scripts/pdf_to_md.py --ocr-only "数据源/文件.pdf"
+cd pdf_to_md
+python -X utf8 pdf_to_md.py "数据源/文件.pdf"
+python -X utf8 pdf_to_md.py --ocr-only "数据源/文件.pdf"
+python -X utf8 pdf_to_md.py --dpi 400 "数据源/文件.pdf"
 ```
 
-输出文件与 PDF 同目录，文件名相同、扩展名为 `.md`。
+---
 
-## 依赖
+## 5. 数据路径约定
+
+| 角色 | 默认位置 |
+|------|----------|
+| 源 PDF | `pdf_to_md/数据源/*.pdf` |
+| 输出 MD | `pdf_to_md/out/*.md` |
+| 样例 | `pdf_to_md/数据源样例/` |
+
+---
+
+## 6. 输出格式
+
+页面之间以空行分隔，无页码标记。标题自动识别：
+
+```markdown
+## 一、主要章节
+### STEP 1｜子步骤
+#### ✅ 要点标记
+
+| 表格列1 | 表格列2 |
+|---|---|
+| 值 | 值 |
+
+- 列表项
+- 列表项
+```
+
+---
+
+## 7. 已知问题
+
+- **中文 OCR 准确率**：easyOCR 对复杂截图（小字体、中英文混排）准确率有限，表格列可能错位
+- **CPU 模式慢**：每页截图 OCR 约 5-30 秒；首次运行需下载 ~100MB 模型
+- **Windows 编码**：必须使用 `python -X utf8` 避免 GBK 编码报错
+- **文本层提取**：PyMuPDF 可能带入不可见行号（已过滤纯数字行）
+
+---
+
+## 8. 依赖
 
 | 包 | 用途 |
 |----|------|
 | `pymupdf` (fitz) | PDF 文本提取 + 页面渲染 |
-| `easyocr` | 图片文字识别（中英文） |
-| `pillow` | 图片加载（解决 OpenCV 中文路径问题） |
+| `easyocr` | OCR 文字识别（中英文） |
+| `pillow` | 图片加载 |
 | `numpy` | 图片数组转换 |
 
-首次运行 easyocr 会自动下载识别模型（约 100MB），后续使用已缓存。
-
-## 工作流程
-
-```
-PDF 文件
-  │
-  ├─▶ 有文字层? ──▶ page.get_text() 直接提取
-  │
-  └─▶ 纯截图? ───▶ page.get_pixmap() → PIL → numpy → easyocr
-                      │
-                      └─▶ 返回识别文本（段落模式）
+```bash
+pip install pymupdf easyocr pillow numpy
 ```
 
-## 硬约束
+---
 
-1. **中文路径处理**：OpenCV 的 `imread` 不支持中文路径，脚本内部通过 `PPaIPIL` → `numpy` 数组传入 easyocr，不要改为直接文件路径。
-2. **首次运行慢**：easyocr 需下载模型，CPU 模式下后续 OCR 每页约 5-30 秒（取决于截图复杂度和分辨率）。
-3. **OCR 准确率**：受截图质量影响。表格类数据建议人工校验数值。
-4. **编码**：Windows 下必须使用 `python -X utf8` 避免 GBK 编码报错。
-
-## 已知问题
-
-- `easyocr` 的 `paragraph=True` 模式返回 `(text, conf)` 二元组（非三元组），解包时已兼容处理
-- 高分辨率图片 OCR 较慢，可考虑降低 `dpi` 参数（当前 200）
-
-## 输出
-
-- Markdown 文件包含页面分隔符 `---` 和页码标记 `**第 N 页**`
-- 截图识别出的文字直接嵌入文档正文，不保留原图引用
-- 表格类数据尽量还原为 Markdown 表格格式
-
-## 参考
-
-- 转换脚本：`scripts/pdf_to_md.py`
-- 技能定义：`.agents/skills/pdf-to-md/SKILL.md`
-- 样例数据：`数据源/listing优化智能体.pdf`（10页，含5页截图）
-- 转换结果：`数据源/listing优化智能体.md`
+*若与代码不一致，以 `pdf_to_md.py` 为准。*
