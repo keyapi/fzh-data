@@ -444,7 +444,7 @@ def convert(pdf_path: str, lang: str = "ch_sim,en", ocr_only: bool = False,
     text_idx = 0
     for i, (is_text, _) in enumerate(page_meta):
         page_num = i + 1
-        md_lines.append(f"\n---\n**第 {page_num} 页**\n---\n")
+        # MD 文件不分页，不输出页标记
 
         if is_text:
             if text_idx < len(fixed_pages):
