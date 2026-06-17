@@ -19,7 +19,8 @@ pdf_to_md/
     ├── listing优化智能体.md       ← 当前最佳输出（v3 混合方案）
     ├── listing优化智能体_v1_flat.md    ← v1 纯 OCR 直出版本
     ├── listing优化智能体_v2_table.md   ← v2 同事脚本输出
-    ├── listing优化智能体_v3_hybrid.md  ← v3 最终输出备份
+    ├── listing优化智能体_v3_hybrid.md  ← v3 混合方案输出
+    ├── listing优化智能体_v4_final.md   ← v4 后处理管线输出（当前）
     ├── listing优化智能体_backup.md     ← 改版前原始输出
     └── listing_images/            ← PDF 中提取的截图
 ```
@@ -73,7 +74,7 @@ uv run python -X utf8 scripts/pdf_to_md.py --dpi 200 "数据源/文件.pdf"
 
 **问题**：纯文本页（第 7、10 页）段落被打碎成短行碎片，因为 `_group_rows` 对文本行也做了切分，`_format_paragraphs` 无合并逻辑。
 
-### v3 — 混合方案（当前主脚本）
+### v3 — 混合方案
 
 **集成逻辑**：
 
@@ -142,12 +143,53 @@ PDF 文件
 
 ## 已知问题与待改进
 
-| 问题 | 影响 | 建议方向 |
-|------|------|----------|
-| OCR 英文词被拆成多列 | 表格中 "folding chair" → "foldng \| char" 两列 | 换 PaddleOCR（内置表格线检测） |
-| 页码脚注数字未过滤 | 文本层中残留 `1 2 3 ... 46` 页码序列 | 添加 `^\d{1,3}$` 过滤规则 |
-| 表格列数偶尔超实际 | 空列较多，OCR 噪声被当作列 | 合并同质列 / 提高 `low_text` |
+| 问题 | 影响 | 状态 |
+|------|------|------|
+| ~~OCR 英文词被拆成多列~~ | v4 `_merge_table_columns` 已修复 | ✅ 已解决 |
+| ~~页码脚注数字未过滤~~ | v4 `_clean_page_numbers` 已修复 | ✅ 已解决 |
+| PaddleOCR 3.x + paddlepaddle 3.3 + Windows CPU | oneDNN PIR 转换 bug，predict() 崩溃 | 🔒 阻塞 |
+| easyocr 英文 OCR 精度 | 单词仍有个别字符误识别 | ⚠️ 持续 |
+| PDF→MD 原文格式丢失 | 粗体/斜体/层级缩进无法还原 | ⬜ 待办 |
+| Python 3.12 降级 | 为 PaddleOCR 兼容从 3.14→3.12 | 📌 已切换 |
 | PDF→MD 原文格式丢失 | 粗体/斜体/层级缩进无法还原 | 可能需要 markitdown 或多模态 LLM |
+
+### v4 — 后处理管线（当前主脚本，2026-06-17）
+
+**改进**（commit `a33963e`）：
+
+1. **表格列合并**（`_merge_table_columns`）
+   - 检测相邻短英文（2-8 字符），判断是否为被 OCR 拆开的单词片段
+   - 例如 `foldng | char` → `folding char`, `foldab | le` → `foldable`
+   - `_looks_split()` 验证合并后长度在 4-20 字符内
+
+2. **页码 artifacts 清理**（`_clean_page_numbers`）
+   - 检测单独成行的 1-3 位数字
+   - 仅当相邻行也是数字行时（连续页码序列）才移除
+   - 文本层第 2-4 页的 `1 2 3 ... 46` 页码序列完全清除
+
+3. **text_threshold 调优**：0.3→0.4 减少噪声，low_text=0.2 保留低密度区域
+
+4. **预处理回退**：`autocontrast + SHARPEN` 引入伪影导致 OCR 更差，回退为灰度+对比度增强
+
+**Python 版本**：3.14→3.12 降级（为 PaddleOCR 兼容预留）
+
+### PaddleOCR 调研（2026-06-17）
+
+**尝试**：PaddleOCR 3.7.0 + paddlepaddle 3.3.1 → Windows CPU
+
+**结论**：BLOCKED。`predict()` 在 text_detection 阶段崩溃：
+```
+NotImplementedError: ConvertPirAttribute2RuntimeAttribute not support
+  [pir::ArrayAttribute<pir::DoubleAttribute>]
+  (at onednn_instruction.cc:118)
+```
+根因是 paddlepaddle 3.3 PIR→oneDNN 转换不兼容。FLAGS_use_mkldnn=0 不生效，PaddleOCR v2 无法安装（PyPI 网络超时）。
+
+**替代路径**：
+- 等 paddlepaddle 修复 oneDNN bug
+- Docker 内跑 PaddleOCR（Linux 无此 bug）
+- 换其他 OCR 引擎（surya-ocr 不兼容 py3.14，Tesseract 中文弱）
+- 当前最优：继续打磨 easyocr 管线
 
 ## 对比分支
 
