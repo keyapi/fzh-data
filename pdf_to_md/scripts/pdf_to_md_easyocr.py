@@ -1,8 +1,8 @@
 """
-pdf_to_md.py — PDF → Markdown 转换（含图片 OCR + 版面分析 + 代码块检测）
+pdf_to_md.py — PDF → Markdown 转换（含图片 OCR + 表格/列表重建）
 
 将 PDF 文件转换为结构化的 Markdown 文档：
-- 纯文本页 → 直接提取 + 代码块/列表格式修复
+- 纯文本页 → 直接提取
 - 图片/截图页 → OCR + 版面分析（表格/列表/段落）
 - 输出文件与 PDF 同目录，文件名相同、扩展名为 .md
 
@@ -19,7 +19,7 @@ pdf_to_md.py — PDF → Markdown 转换（含图片 OCR + 版面分析 + 代码
     pdf_path   PDF 文件路径（含中文路径也可）
     --lang      OCR 语言，默认 "ch_sim,en"（中英文）
     --ocr-only  仅 OCR，跳过文本层的直接提取
-    --dpi       OCR 渲染分辨率（默认 300）
+    --dpi       OCR 渲染分辨率（默认 300，截图页建议 300+）
 """
 import sys
 import argparse
@@ -43,7 +43,7 @@ try:
 except ImportError:
     _MISSING_DEPS.append("easyocr")
 try:
-    from PIL import Image, ImageEnhance
+    from PIL import Image
 except ImportError:
     _MISSING_DEPS.append("pillow")
 try:
@@ -58,7 +58,7 @@ if _MISSING_DEPS:
 
 import fitz
 import easyocr
-from PIL import Image, ImageEnhance
+from PIL import Image
 import numpy as np
 
 
@@ -81,7 +81,7 @@ def _get_reader(lang: str):
 # 版面分析 — 表格 / 列表 / 段落重建
 # ---------------------------------------------------------------------------
 
-_Y_TOLERANCE = 15
+_Y_TOLERANCE = 15  # 同一行 Y 坐标容差（像素）
 
 
 def _group_rows(results, y_tol=_Y_TOLERANCE):
@@ -106,14 +106,18 @@ def _group_rows(results, y_tol=_Y_TOLERANCE):
 
 
 def _is_table(rows):
-    """判断是否为表格：列数相对一致，多列行占比高。"""
+    """判断是否为表格：要求列数相对一致，且多列行占比高。"""
     if len(rows) < 3:
         return False
     col_counts = [len(r["cells"]) for r in rows]
+    # 至少 40% 的行有 2 列以上
     multi = sum(1 for c in col_counts if c >= 2)
     if multi < len(rows) * 0.4:
         return False
+    # 主要列数（众数）
+    from collections import Counter
     main_cols = Counter(col_counts).most_common(1)[0][0]
+    # 超过 50% 的行与主要列数一致
     consistent = sum(1 for c in col_counts if abs(c - main_cols) <= 1)
     return consistent >= len(rows) * 0.5
 
@@ -125,104 +129,57 @@ def _format_table(rows):
         return "\n".join(r["cells"][0][1] for r in rows)
 
     lines = []
+    # 表头（第一行）
     first = rows[0]
-    h_cells = [first["cells"][c][1] if c < len(first["cells"]) else "" for c in range(ncols)]
-    # 跳过仅含单一空值的表头列
-    clean_header = [h if h.strip() else " " for h in h_cells]
-    lines.append(f"| {' | '.join(clean_header)} |")
+    h_cells = []
+    for c in range(ncols):
+        h_cells.append(first["cells"][c][1] if c < len(first["cells"]) else "")
+    lines.append(f"| {' | '.join(h_cells)} |")
     lines.append(f"|{'|'.join('---' for _ in range(ncols))}|")
+    # 数据行
     for row in rows[1:]:
         cells = [row["cells"][c][1] if c < len(row["cells"]) else "" for c in range(ncols)]
         lines.append(f"| {' | '.join(cells)} |")
     return "\n".join(lines)
 
 
-def _build_paragraph_text(rows):
-    """将非表格页面分组行重组为连续段落文本（合并相邻短行）。"""
-    texts = [r["cells"][0][1] for r in rows]
-    if not texts:
-        return ""
-
-    merged = []
-    buffer = ""
+def _format_list(texts):
+    """将文本行按列表检测并格式化。"""
+    lines = []
     for t in texts:
         stripped = t.strip()
-        if not stripped:
-            if buffer:
-                merged.append(buffer)
-                buffer = ""
-            merged.append("")
-            continue
-        # 如果 buffer 已存在且当前行像是一个新段落（开头大写/数字/符号），先 flush
-        if buffer and (
-            re.match(r"^[一二三四五六七八九十]+[、.]", stripped)
-            or re.match(r"^[A-Z][a-z]{2,}", stripped)
-            or re.match(r"^[\[【].+[\]】]", stripped)
-            or stripped.startswith(("•", "-", "*", "·", "▪", "►", "→", "✅", "🔧", "⛔"))
-            or re.match(r"^\d+[\.\)、]", stripped)
-        ):
-            merged.append(buffer)
-            buffer = stripped
-        elif buffer:
-            # 尝试判断是否是上一行的续文（上一行不以标点结尾，或当前行以小写开头）
-            if buffer[-1] not in "。，.；;：:！!？?、—-" and not stripped[0].isupper():
-                buffer += stripped
-            else:
-                buffer += " " + stripped
+        # bullet / 编号
+        if stripped.startswith(("•", "-", "*", "·", "▪", "►", "→")):
+            lines.append(f"- {stripped.lstrip('•-*·▪►→ ')}")
+        elif re.match(r"^\d+[\.\)、]", stripped):
+            lines.append(f"- {stripped}")
+        elif re.match(r"^[A-Z][a-z]", stripped) and len(stripped) < 40:
+            lines.append(f"- {stripped}")
+        elif re.match(r"^\[.+\]", stripped):
+            lines.append(f"### {stripped}")
+        elif re.match(r"^[一二三四五六七八九十]+[、.]", stripped):
+            lines.append(f"### {stripped}")
         else:
-            buffer = stripped
-    if buffer:
-        merged.append(buffer)
-
-    return "\n".join(merged)
+            lines.append(stripped)
+    return "\n".join(lines)
 
 
-# ---------------------------------------------------------------------------
-# 代码块 / 列表格式修复（文本层后处理）
-# ---------------------------------------------------------------------------
-
-def _fix_code_blocks(text: str, carry_in_code: bool = False):
-    """检测文本层中的「代码块」标记并套上 ``` 围栏。
-    返回 (fixed_text, in_code_at_end) 以支持跨页代码块追踪。"""
-    # 清理零宽字符
-    text = text.replace("​", "").replace("﻿", "")
-    lines = text.split("\n")
-    result = []
-    in_code = carry_in_code
-    code_buf = []
-    code_end_markers = re.compile(
-        r"^(STEP\s*\d|[一二三四五六七八九十]+[、.]|✅)"
+def _format_paragraphs(rows):
+    """将分组行输出为段落文本（单列布局），检测列表和结构化内容。"""
+    texts = [r["cells"][0][1] for r in rows]
+    # 尝试检测列表（bullet / 编号 / 中文字题 / [xxx] 标签）
+    patterns = [
+        lambda t: t.strip().startswith(("•", "-", "*", "·", "▪", "►", "→")),
+        lambda t: bool(re.match(r"^\d+[\.\)、]", t.strip())),
+        lambda t: bool(re.match(r"^\[.+\]", t.strip())),
+        lambda t: bool(re.match(r"^[一二三四五六七八九十]+[、.]", t.strip())),
+    ]
+    bullet_like = sum(
+        1 for t in texts if any(p(t) for p in patterns)
     )
-
-    for line in lines:
-        stripped = line.strip()
-        if stripped == "代码块" or stripped == "```":
-            if in_code and code_buf:
-                result.append("```")
-                result.extend(code_buf)
-                result.append("```")
-                code_buf = []
-                in_code = False
-            else:
-                in_code = True
-                code_buf = []
-            continue
-
-        if in_code:
-            if stripped and code_end_markers.match(stripped):
-                if code_buf:
-                    result.append("```")
-                    result.extend(code_buf)
-                    result.append("```")
-                    code_buf = []
-                    in_code = False
-                result.append(line)
-            else:
-                code_buf.append(line)
-        else:
-            result.append(line)
-
-    return "\n".join(result), in_code
+    if bullet_like >= len(texts) * 0.25 and len(texts) >= 3:
+        return _format_list(texts)
+    return "\n".join(texts)
 
 
 # ---------------------------------------------------------------------------
@@ -236,20 +193,19 @@ def has_text_layer(page) -> bool:
     return len(text) > 50
 
 
+def extract_text_page(page) -> str:
+    """从文本层提取页面内容。"""
+    return page.get_text()
+
+
 def ocr_page(page, reader, dpi=300) -> str:
-    """OCR 页面 → 版面分析 → Markdown（表格或段落）。"""
+    """OCR 页面 → 版面分析 → Markdown。"""
     pix = page.get_pixmap(dpi=dpi)
     img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+    img_array = np.array(img)
 
-    # 图像预处理：灰度 + 对比度增强
-    img_gray = img.convert("L")
-    enhancer = ImageEnhance.Contrast(img_gray)
-    img_enhanced = enhancer.enhance(2.0)
-    img_array = np.array(img_enhanced)
-
-    # paragraph=False → 获取 bbox 用于版面分析
-    results = reader.readtext(img_array, detail=1, paragraph=False,
-                              text_threshold=0.3, low_text=0.3)
+    # paragraph=False 获得 bbox 坐标（用于版面分析）
+    results = reader.readtext(img_array, detail=1, paragraph=False)
 
     if not results:
         return ""
@@ -259,7 +215,7 @@ def ocr_page(page, reader, dpi=300) -> str:
     if _is_table(rows):
         return _format_table(rows)
     else:
-        return _build_paragraph_text(rows)
+        return _format_paragraphs(rows)
 
 
 def convert(pdf_path: str, lang: str = "ch_sim,en", ocr_only: bool = False, dpi: int = 300):
@@ -278,38 +234,20 @@ def convert(pdf_path: str, lang: str = "ch_sim,en", ocr_only: bool = False, dpi:
 
     md_lines = []
 
-    # Phase 1: 提取所有页面原始文本，标记类型
-    page_meta = []  # (is_text_layer, raw_text_or_None)
-    for page in doc:
-        if ocr_only:
-            page_meta.append((False, None))
-        elif has_text_layer(page):
-            page_meta.append((True, page.get_text()))
-        else:
-            page_meta.append((False, None))
-
-    # Phase 2: 合并所有文本层页面，统一处理代码块跨页
-    PAGE_MARKER = "\n<!--PB-->\n"
-    combined_text = PAGE_MARKER.join(
-        t for is_text, t in page_meta if is_text
-    )
-    fixed_combined, _ = _fix_code_blocks(combined_text)
-    fixed_pages = fixed_combined.split(PAGE_MARKER) if fixed_combined.strip() else []
-
-    # Phase 3: 输出页面
-    text_idx = 0
-    for i, (is_text, _) in enumerate(page_meta):
+    for i, page in enumerate(doc):
         page_num = i + 1
         md_lines.append(f"\n---\n**第 {page_num} 页**\n---\n")
 
-        if is_text:
-            if text_idx < len(fixed_pages):
-                md_lines.append(fixed_pages[text_idx].strip())
-            text_idx += 1
+        if ocr_only:
+            text = ocr_page(page, reader, dpi=dpi)
         else:
-            print(f"  [OCR] 第 {page_num} 页 → 截图识别")
-            text = ocr_page(doc[i], reader, dpi=dpi)
-            md_lines.append(text)
+            if has_text_layer(page):
+                text = extract_text_page(page)
+            else:
+                print(f"  [OCR] 第 {page_num} 页 → 截图识别")
+                text = ocr_page(page, reader, dpi=dpi)
+
+        md_lines.append(text)
 
     doc.close()
 
@@ -323,7 +261,7 @@ def convert(pdf_path: str, lang: str = "ch_sim,en", ocr_only: bool = False, dpi:
 # ---------------------------------------------------------------------------
 
 def main():
-    parser = argparse.ArgumentParser(description="PDF → Markdown（含 OCR + 版面分析 + 代码块检测）")
+    parser = argparse.ArgumentParser(description="PDF → Markdown（含 OCR + 版面分析）")
     parser.add_argument("pdf_path", help="PDF 文件路径")
     parser.add_argument("--lang", default="ch_sim,en", help="OCR 语言（默认: ch_sim,en）")
     parser.add_argument("--ocr-only", action="store_true", help="强制所有页均使用 OCR")
