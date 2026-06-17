@@ -321,7 +321,9 @@ def convert(pdf_path: str, ocr_page_fn, *, lang: str = "ch_sim,en",
         print(f"错误: 文件不存在 — {pdf}")
         sys.exit(1)
 
-    md_path = pdf.with_suffix(".md")
+    out_dir = Path(__file__).parent / "out"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    md_path = out_dir / f"{pdf.stem}.md"
     doc = fitz.open(str(pdf))
     total = doc.page_count
     print(f"[PDF] {pdf.name} ({total} 页)")

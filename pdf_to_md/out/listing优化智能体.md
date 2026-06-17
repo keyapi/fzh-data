@@ -138,185 +138,172 @@ COSMO 能识别清晰使用场景
 无任何违规或“AI味”营销词
 参考文档附件：
 1.竞品出单词，竞品listing，本品属性表，ABA关键出单词
-```markdown
-| 流量词 | 关键词翻译 | AC推荐词 | 流量占比 | 预估周曝光量 |
-| :--- | :--- | :--- | :--- | :--- |
-| camping chairs | 露营椅 | | 20.18% | 20.843 |
-| beach chair | 沙滩椅 | | 14.59% | 15.070 |
-| outdoor chairs | 户外椅 | | 8.90% | 9.191 |
-| camping chair | 露营椅 | | 7.65% | 7.899 |
-| lawn chairs | 草坪椅 | | 5.15% | 5.323 |
-| outdoor chair | 户外椅 | | 3.55% | 3.665 |
-| gcirocker chair | gc摇椅 | | 2.91% | 3.002 |
-| camping chairs for adults | 成人露营椅 | | 2.88% | 2.980 |
-| folding chair | 折叠椅 | | 2.16% | 2.233 |
-| lawn chair | 草坪椅 | | 2.09% | 2.162 |
-| portable chair | 便携椅 | | 1.66% | 1.718 |
-| foldable chair | 折叠椅 | | 1.57% | 1.622 |
-| portable chairs for adults | 成人便携式椅子 | | 1.38% | 1.425 |
-| folding chairs | 折叠椅 | | 1.31% | 1.355 |
-| camp chairs | 露营椅 | | 1.28% | 1.321 |
-| camp chairs for adults | 成人露营椅 | | 1.11% | 1.148 |
-| camp chair | 营椅 | | 1.10% | 1.140 |
-| camping chairs heavy duty | 重型野营椅 | | 0.98% | 1.013 |
-| outside chairs | 外面的椅子 | | 0.89% | 919 |
-| heavy duty folding chair | 重型折叠椅 | | 0.68% | 705 |
-| yeti chair | 雪人椅 | | 0.65% | 670 |
-| fishing chair | 钓鱼椅 | | 0.61% | 626 |
-| chairs for outside | 户外椅子 | | 0.59% | 607 |
-| sports chair | 运动椅 | | 0.53% | 549 |
-| folding camp chair | 折叠露营椅 | | 0.51% | 527 |
-| folding chairs for outside | 户外折叠椅 | | 0.51% | 523 |
-| oversized camping chair | 超大露营椅 | | 0.50% | 513 |
-| lawn chairs folding | 草坪椅 折叠 | | 0.47% | 481 |
-| comfortable folding chair | 舒适的折叠椅 | | 0.45% | 465 |
-```markdown
-| BOCR16C1P2 |  |
-| --- | --- |
-| Title: | Oversized Camping Chair, Portable Folding Camping Chairs with Side Pocket, Cup Holder and Carry Bag, Heavy Duty Outdoor Camping Chairs for Adults, Fishing, Sports, Trip, up to 400lbs, Style 2 |
-| Bullet Point: |  |
-|  | Extremely Comfortable: Our camping chairs for adults heavy duty, designed with ergonomic principles, feature spacious seats with unfolded dimensions of 40.5" L x 28" W x 39" H. The Camping Folding Chair is filled with high-loft, high-density padding in areas such as the headrest, backrest, armrests, and seat cushion, providing ample space and support for your head, neck, back, waist, and hips. This ensures a comfortable experience even during prolonged sitting |
-|  | Sturdy and Enduring: Our camping chairs consist of a robust steel frame and newly upgraded support components, with a weight capacity of up to 400 pounds. The powder-coated finish on the steel frame effectively prevents corrosion and fading. Additionally, the 600D tear-resistant Oxford fabric is tightly stitched and highly breathable. Therefore, the Folding Camping Chair will remain stable, allowing for long-term use |
-|  | User-Friendly Details: For added convenience, we ingeniously designed 2 cup holders and 2 side pockets on this folding chair, allowing you to place beverages, smartphones, notebooks, and other items in an organized manner. This thoughtful design aims to provide you with the best seating experience while freeing up your hands |
-|  | Lightweight and Portable: This portable folding chair requires no assembly and can be opened for use within seconds. The outdoor folding chair is lightweight at only 12.6 pounds, making it extremely easy to carry. The compact structure of the camp chair allows for easy folding and storage in the provided portable carrying bag after fishing or any outdoor activity |
-|  | Versatile Applications: This folding lawn chair for adults is not only suitable for hiking, camping, and hiking activities but is also perfect for outdoor concerts, open-air movie nights, picnics, or for use at home. The universality of the folding camping chair for adults makes it an ideal seating choice for various occasions |
-|  | Modern Appearance: The foldable chair not only excels in functionality but also boasts a sleek modern appearance. Meticulously coordinated colors make the portable chair a fashionable accessory for outdoor activities, adding a touch of brilliance to your camping gear |
-| B0FJF2Y8G5 |  |
-| Title: | Oversized Camping Chairs for Adults - Heavy Duty Padded Outdoor Folding Lawn XL Camp Chair with Cup Holder Cooler Pockets for Outside Sports Beach Fishing Garden Portable Supports 500lbs, Black |
-| Bullet Point: |  |
-|  | Oversized Padded Comfort - PUVASIA oversized camping chair heavy duty is designed with extra-wide 38.6" x 23.1" seating area with multi-layer high-density padding. Ergonomic lumbar/neck support and padded headrest deliver all-day comfort. |
-|  | Heavy-Duty Steel Frame - Newly upgraded reinforced X-shape steel construction with 22mm thickened tubes and anti-rust coating. Supports up to 500lbs for long-lasting durability. Non-slip textured feet ensure a stable seating experience for everyone. |
-|  | Extra Storage Space - Our foldable chairs for outside features side/back mesh pockets, along with adjustable cup holder and large insulated cooler bag. Perfectly stores drinks, snacks, and phones within easy reach. It a versatile choice for comfortable padded camping chair for adults. |
-|  | All-Weather Durability - Built to last, our luxury portable camping chairs construct with durable 600d tear-resistant oxford breathable fabric and reinforced stitching to prevent fraying. Ideal for camping, sporting events, barbecues, fishing, hiking, backyard lawn use, and more outdoor adventures. |
-|  | Portable & Quick Setup - Folds flat to 9.4" thick (only 12.9 lbs with carry bag). Sets up in 3 seconds for picnics, concerts, tailgates, or home use. The compact structure of our lightweight beach chairs allow for easy folding and storage in the carrying bag after any outdoor activity. |
-| B0DDQB78L2 |  |
-| Title: | Oversized XL Camping Chairs for Adults Heavy Duty Support 500 lbs Outdoor Folding Chairs Padded Portable Lawn Chairs Camp Chairs with Cup Holder |
-| Bullet Point: | Comfortable Camping Chair: The camping folding chair is filled with cotton padding in areas such as the headrest, backrest, armrests, and seat cushion, providing great space and support for your head, neck, back, waist, and hips. Allowing you to relax and stretch out ensures a comfortable experience during long time sitting. Our oversized comfy folding chair feature spacious seats and fine details with unfolded dimensions of 38.5"L x 23"W x 40"H |
-|  | 竞品listingcamping chair.xlsx |
 | 流量词 | 关键词翻译 | AC推荐词 | 流量占比 | 预估周曝光量 |
 | --- | --- | --- | --- | --- |
-| camping chairs | 露营椅 |  | 27.65% | 2.037 |
-| oversized chair | 特大号椅子 |  | 23.26% | 1.713 |
-| folding chair | 折叠椅 |  | 5.09% | 375 |
-| hammock camping chair | 吊床露营椅 |  | 4.65% | 343 |
-| camping chairs heavy duty | 重型野营椅 |  | 4.42% | 326 |
-| camping chairs for adults | 成人露营椅 |  | 3.46% | 255 |
-| camp chair | 营椅 |  | 2.88% | 212 |
-| oversized camping chair | 超大露营椅 |  | 2.39% | 176 |
-| padded folding chairs | 软垫折叠椅 |  | 2.23% | 164 |
-| coleman camping chairs | 科尔曼露营椅 |  | 1.85% | 136 |
-| camp chairs for adults | 成人露营椅 |  | 1.78% | 131 |
-| padded camping chair | 带衬垫的露营椅 |  | 1.71% | 126 |
-| camping couch | 露营沙发 |  | 1.66% | 122 |
-| camp chairs for adults heavy du | 成人重型露营椅 |  | 1.59% | 117 |
-| heavy duty camping chairs | 重型野营椅 |  | 1.44% | 106 |
-| comfy camping chair | 舒适的露营椅 |  | 1.36% | 100 |
-| camping chairs | 露营椅 |  | 1.33% | 98 |
-| oversized camping chairs for ad | 成人超大露营椅 |  | 1.28% | 94 |
-| helinox chair | 海利诺克斯椅 |  | 1.21% | 89 |
-| camping sofa | 野营沙发 |  | 1.19% | 88 |
-| folding camping chairs | 折叠式野营椅 |  | 1.11% | 81 |
-| camping couch for adults | 成人露营沙发 |  | 1.06% | 78 |
-| yeti chair | 雪人椅 |  | 0.80% | 59 |
-| padded folding chair | 软垫折叠椅 |  | 0.65% | 48 |
-| heavy duty folding chair | 重型折叠椅 |  | 0.65% | 48 |
-| comfortable folding chair | 舒适的折叠椅 |  | 0.59% | 44 |
-| rocking lawn chair | 摇摆草坪椅 |  | 0.45% | 33 |
-| foldable chair | 折叠椅 |  | 0.44% | 32 |
-| chair camping | 椅子露营 |  | 0.40% | 29 |
-| silla camping | 露营椅 |  | 0.36% | 26 |
-| outdoor camping chairs | 户外露营椅 |  | 0.26% | 19 |
-| folding chairs 10 pack | 折叠椅10包 |  | 0.25% | 18 |
-| reclining camping chair | 躺椅 |  | 0.21% | 15 |
-| ice fishing chair | 冰钓椅 |  | 0.13% | 9 |
-| camping chair | 露营椅 |  | 0.09% | 6 |
-| folding lawn chair | 折叠草坪椅 |  | 0.04% | 3 |
-| heavy duty chair | 重型椅子 |  | 0.02% | 1 |
-| sports chair | 运动椅 |  | 0.02% | 1 |
-| outdoor folding chairs | 户外折叠椅 |  | 0.02% | 1 |
-| camping chair with canopy | 带顶篷的露营椅 |  | 0.02% | 1 |
-| sports chairs for adults | 成人运动椅 |  | 0.01% | 1 |
-| folding chair padded | 折叠椅软垫 |  | 0.01% | 1 |
-| folding camping chair | 折叠露营椅 |  | 0.01% | 0 |
-| foldable camping chairs | 可折叠露营椅 |  | 0.00% | 0 |
-| folding camp chair | 折叠露营椅 |  | 0.00% | 0 |
-| rocking camping chairs for adult | 成人摇摆露营椅 |  | 0.00% | 0 |
-| heavy duty folding chairs | 重型折叠椅 |  | 0.00% | 0 |
-| camping rocking chair | 露营摇椅 |  | 0.00% | 0 |
-| rocking camp chair | 摇椅 |  | 0.00% | 0 |
-
-关键词.xlsx
-```markdown
-| 款号 | sku编码 | 产品名称 | 解决方案 |
-| :--- | :--- | :--- | :--- |
-| KC2508 | KC2508_BLACK/GREY | oversized camping chair | 家居系统 |
-
-本品属性表1.xlsx
-
-2.知识库文件：亚马逊禁用词黑名单
-```markdown
-此文档包含亚马逊严禁在标题(Title)、五点描述(Bullets)、产品描述(Description)及后台搜索词 (Search Terms)中出现的词汇与表达。
-
-一、促销与主观评价类 (Promotional & Subjective Claims)
-
-亚马逊规定 Listing 必须是对产品的客观描述，禁止包含任何促销信息或无法证实的主观评价。
-
-[严禁出现]:
-
-- Best seller, Top rated, Best selling, #1 (最畅销/排名第一)
-- Hot item, Popular choice (爆款)
-- Free shipping, Free delivery (包邮)
-- Free gift, Bonus, Gift included (赠品)
-- On sale, Discount, x% off, Best price, Lowest price, Cheap (促销/打折/低价)
-- Satisfaction Guarantee, 100% Quality, Money back (满意度保证/退款保证)
-- Order now, Buy now (诱导购买动词)
-- Amazon's Choice, Certified (官方认证词)
-
-二、知识产权与品牌兼容性 (Intellectual Property)
-
-严禁未经授权使用他人的商标、品牌名。
-
-[严禁出现]:
-
-- 任何非本产品的品牌名称 (如: Nike, Disney, Apple, Lego, Velcro 等).
-- Velcro (维可牢/魔术贴): 必须改为 "hook and loop".
-- Onesie (连体衣): 必须改为 "bodysuit" 或 "romper".
-- Hula Hoop (呼啦圈): 必须改为 "toy hoop".
-- Chapstick (润唇膏): 必须改为 "lip balm".
-- Q-tip (棉签): 必须改为 "cotton swab".
-- Popsicle (冰棍): 必须改为 "ice pop".
-
-[配件兼容性正确写法]:
-
-- 错误写法: "[Brand Name] Case" (例如 iPhone 15 Case) -> 会被判定为侵权.
-- 正确写法: "Case compatible with [Brand Name]" 或 "Case for [Brand Name]".
-- 注意: 品牌名之前必须有 "compatible with" 或 "for".
-
-三、医疗器械与功效敏感词 (Medical & Health Claims)
-
-非 OTC 药品或未获得 FDA 认证的医疗器械，严禁暗示治疗、预防或治愈疾病的功能。
-
-[严禁出现]:
-
-- Cure, Heal, Treat, Treatment, Remedy (治愈/治疗/疗法)
-- Prevent, Prevention (预防)
-- Relief, Relieve, Stop pain (止痛/缓解 - 除非是合规 OTC)
-- Anti-virus, Anti-flu, Anti-inflammatory (抗病毒/消炎)
-- FDA approved, FDA cleared (除非有真实证书并已备案，否则严禁使用)
-- 涉及具体病症名称: Cancer, Diabetes, Arthritis 等.
-
-四、杀虫剂与生物杀灭剂敏感词 (Pesticide & Biocides)
-
-这是亚马逊最容易误杀的重灾区，任何暗示能“杀灭、驱除、抑制”生物（细菌、霉菌、昆虫）的词，都会被判定为杀虫剂，需要 EPA 注册号。
-
-[严禁出现 (除非你有 EPA 号)]:
-
-- Anti-bacterial, Anti-microbial (抗菌/抗微生物)
-- Anti-fungal, Mold resistant (抗霉菌/防霉)
-- Anti-dust mite (防尘螨)
-- Insect repellent, Bug stop (驱蚊/防虫)
-- Disinfect, Sanitize, Sterilize (消毒/杀菌)
-- Non-toxic (无毒): 极易触发审核，建议改为 “BPA Free” 或 “Safe material”.
-- Safe, Healthy, Harmless (绝对化安全用语)
-
-amazon_compliance_blacklist.txt
+| campng Chars | 露营椅 | 2018 | 20843 |  |
+| beach char | 沙滩掎 | 1459 | 15070 |  |
+| outdoor chars | 户外椅 | 890N | 9.191 |  |
+| camping char | 露营椅 | 765 | 7899 |  |
+| 旧m chars | 草坪掎 | 5.15 | 5323 |  |
+| outdoor char | 户外椅 | 355 | 3665/ |  |
+| gcirocker char | gci摇掎 | 291 | 3002 |  |
+| campng Chars lor adults | 成人露营掎 | 288 | 2980 |  |
+| folding char | 折叠椅 | 216 | 2233/ |  |
+| bam char | 草坪椅 | 209 | 2.162 |  |
+| portable char | 便携掎 | 16BK | 1718 |  |
+| foldab le char | 折叠椅 | 157 | 1622 |  |
+| portable chars for aduls | 成人便携式椅子 | 138 | 1425 |  |  |
+| foldng chars | 折叠椅 | 131 | 1355 |  |  |
+| carp chars | 露营椅 | 128 | 1321 |  |
+| camp chars lor adulls | 成人露营椅 | 111 | 1.148 |  |
+| camp char | 营椅 | 1.10 | 1.140 |  |
+| camping chars heawy = | July | 重型野营椅 | 098 | 1013/ |
+| outside Chars | 外面的掎子 | 083 | 919 |  |
+| heawy duty foldng char | 重型折叠椅 | 068 | 705 |  |
+| yeti Char | 雪人椅 | 065 | 670 |
+| fishng char | 钩鱼椅 | 061驺 | 626 |  |
+| Chars lor Oulside | 户外椅子 | 05躺 | 607 |  |
+| sorts char | 运动掎 | 053 | 549 |  |
+| folding camp char | 折叠露营椅 | 051] | 527 |  |
+| foldng chars for outside | 户外折叠掎 | 051 | 5231 |  |
+| owersized campig char | 超大露营椅 | 050哟 | 513 |  |
+| Iawn chars loldng | 草坪椅折叠 | 047 | 481 |  |
+| comfortable foldng char | 舒适的折叠椅 | 045 | 465 |  |
+| X | 竞品出单词.Xlsx |  |  |  |
+BOCRIGCIF2
+Title:
+Orersized Cami ne Chair, Fortable Foldi w Cami D Chairs Tth Side Focket
+Duty_Outdoor_Campin_Chairs _[orNdults,Fi shi 卫r_Sports,Trip,up_to_4001b3
+Bullet Foint :
+Extremely Comfortable: Qur camping chairs for adults heawy duty, designed with ergonomic principles; faature spaclous seats thunfoldad dimansions Of 40.5" L* 28" IW 《39" H.The Camping Folding Chair is filled tith high-loft high-density padding In areas suchas the headrast, backrest, armrests, and seat cushion, providing ample space and support for your head, neck, back, waist and hips。
+This ensures a comfortable experience even durlng prolonged sitting
+Sturdy and Enduring: Our camping chalrs conslst of a robust steel frame and newly upgraded support components; with a welightcapacity of up to 400 pounds. The powder-coated flnish on the steel frame_effectaly pravents corrosion and fading. Additionally, the GOOD tear-resistant Oxford fabric is tightly stitched and highly breathable. Therefore, the Folding Camping Chair wll remain stable。 allowng for long-term Use
+User-Friendly Details: For added convaniance, We inganlously designed 2 cup holders and 2 slde pockets on thls folding chair; allowing you to place baverages, smartphonas, notebooks, and other itams in an organizad manner This thoughtful dasign alms toprovide VOU with the best seating axperience hile freelng u your hands
+Lightaight and Portabla: This portable folding chair raqulras no assembly and can be opanad for usa Within saconds. Tha Outdoorfolding chair i lighteight at only 12.6 pounds, making it axramaly easy t0 carry. The compact structure of the camp chair allows foreasy folding and storage in the provided portable carrying bag after flshing or any Outdoor actlvity
+Versatile Applications: This folding lawn chalr for adults Is not only suitable for hlking, camping, and hking actiities but Is also perfectfor outdoor concarts, open-air movia nights; plcnics, or for Use at homg. The unlversality of the folding camping chair for adults makesi an Ideal seating choice forvarlous occasions
+Modern Appearance: The foldable chair not only axcels In functionality butalso boasts a sleak modern appearance. Maticulously coordinaated colors makethe portable chalr a fashionable accessory for utdoor actlvitiies; adding atouch Of brilliance t0 Vour camping gear BORJ R2 3C5
+Title:
+Oersized Campi ne Chairs [0r dults
+Cooler Fockels [or_Qulsi de_Sports Beach Fishi 1 Carden Fortable Supports 5OOLbs, Black
+Bullet Point:
+Owersized Padded Comfort 一mult-layer high-density padding. Ergonomic lumbarlneck support and padded headrest deliver al-day comfort:
+Heaw-Duty Steel Frame
+Supports up to 50OIbs for long-lasting durability. Non-slip texured feet ensure a stable seating experiance for everyone。
+Extra Storage Spacainsulated cooler bag. Perfactly storas drinks, snacks; and phones within easy reach. I a versatila cholce for comfortabla paddedcamping chair for adults。
+Hll-Waatherfabric and reinforced stitching to pravent fraying. Ideal for camping, sporting avents; barbecues, fishing, hiklng, backyard law use。 and more Outdoor adwentures。
+Portable & Quick Setup 一home use. The compact structure of our lightwalght beach chairs allow for easy folding and storage in the carrying ba9 after anyoutdoor actiity. BITBY8L2
+Title:
+Oersized 讧 Catpi 1 Chairs [Or Aults HaVy Duty Suppott 500 Ibs Qutdoor Folding Chaits Padded Portable
+Iam_Chairs_Cam_Chairsw th_Cup_HLder
+Bullet Foi nt :
+Comfortable Camping Chair: The camping folding chair Is flled with cotton padding in areas such as the headrest, backrest, armrests。 and seat cushlon, providing great space and support for your head, neck, back; walst, and hips. Allowing yOU t relaxand stretch outengures a comfortabla axparience during long timg sitting. Qur oversized comfy folding chair faature spacious s8ats and fine datailswth unfolded dimansions of 38.5"L|23"W #40"H X
+| 谥量词 | 关键词翻译 | AC推荏词 | 谥蠡比 | 预估周曝,量 |
+| --- | --- | --- | --- | --- |
+| campng chars | 2365 | 2037 |  |  |
+| 骥誓椅孑 |  |  |  |  |
+| Owersized char | 23.26 | 1713 |  |  |
+| foldng char | 折叠椅 | 509 | 375 |  |
+| hammock campng char | 465K | 343 |  |  |
+| campng chars heayy duly | r哺 | 442驹 | 326 |  |
+| campng Chars loraduls | 34[ | 255 |  |  |  |
+| camp Char | 营椅 | 288 | 212 |  |
+| Owersized campng char | 超大露萱椅 | 239 | 176 |  |
+| padded foldng chars | 223 | 164 |  |  |
+| coleman camp ng Chars | 185 | 1361 |  |  |
+| camp chars for adults | 178 | 131 |  |  |
+| Char | 撺 |  |  |  |
+| paddedl ceonomg | 136 | 128 |  |  |
+| carp chars lor aduls heawy du_ | 159 | 1I7 |  |  |
+| heayy duly campng chars | 144 | 1OBI |  |  |
+| comfy campng char | 136 | 100 |  |  |  |
+| camp Chars | 133 | 驵 |  |  |
+| Oyersized campng chars lorad | 128 | 94 |  |  |
+| 蠹 |  |  |  |  |
+| belmonchota | 19 | 8 |  |  |
+| foldng campng chars | 111 | 81 |  |  |
+| campng couch for aduls | 106 | 78 |  |  |
+| yeli Ichar | 雪人椅 | 080哟 | 59 |
+| padded folding cha | 软垫折叠椅 | 065g | 48 |  |
+| heavy duty foldng char | 重型折叠椅 | 065 | 4 |  |
+| comfortable foldng char | 舒适的折叠椅 | 059 | 44 |  |
+| rockng law char | 摇摆草坪椅 | 045 | 33 |  |
+| foldab 1 char | 折叠椅 | 044 | 32 |  |
+| char campng | 040 | 29 |  |  |
+| silla campng | 036 | 26 |  |  |
+| < |  |  |  |  |
+| outdoor campng chars | 026 | 19 |  |  |
+| foldng chars Iopack | 025 | 1 |  |  |
+| reclining camping chai | 躺椅 | 021 | 15 |  |
+| Jce fishng char | 013 | 9 |  |  |
+| campng char | x5 | 00躺 | B |  |
+| foldng lawn char | 004 | 3 |  |  |
+| heawy duty char | 002 |  |  |  |
+| 』 |  |  |  |  |
+| sorts char | 002 |  |  |  |
+| outdoor foldng chars | 002 |  |  |  |
+| campng char wirh canopy | '噩 | 002 |  |  |
+| sorts Chars lor adults | 001 |  |  |  |
+| foldngchar padded | 折叠椅软垫 | 001 |  |  |
+| foldng campng char | 折叠露萱掎 | 001 |  |  |
+| Ioldab le campng chars | 00Oy |  |  |  |
+| 莱-犄 |  |  |  |  |
+| rodng campmhacharstoradul | O00w |  |  |  |  |
+| 成人摇摆露营椅 |  |  |  |  |
+| heavy duty folding chars | 00Cy |  |  |  |
+| campng rockng chai | 嚣= | 000y |  |  |
+| rocking camp char | 00Cy |  |  |  |
+| X | 关键词.Xlsx |  |  |  |
+| 款写 | 5ku编码 | 产品名称 | 解#方案 |
+| --- | --- | --- | --- |
+| 12508 | }2508_盯 ACT CHE' | owersized Cami 1 Chair 家居系统 |  |
+| X | 本品属性表1.XlsX |  |  |
+| 2.知识库文件:  亚马逊禁用词黑名单 |  |  |  |
+| 此文档包含亚马逊严禁{标题 Iitle) 。 五点描述IBullets) . | 产品描述 [Description] 皮后台搜索词 |  |  |  |  |
+| --- | --- | --- | --- | --- | --- |
+| ISeach Terns]f出珧的词汇与表达。 |  |  |  |  |  |
+| 一 | 促销与芏观评价类 (Fromotional & Subjective Claimsl |  |  |  |  |
+| 亚马逊规定 Listing 必颏是对产品的客观描述。禁止包含任何促销信息或无法证实的主观评怵。 |  |  |  |  |  |
+| [严禁出珧]: |  |  |  |  |  |
+| C | Bcst seler; Top Iated, Best selline; #1 (最畅销 | 排名笫-) |  |  |  |  |
+| = | Hot iem, Fopllar Chnice (爆款1 |  |  |  |  |
+|  | Fr8C shipping; FreC deliver { 包邮) |  |  |  |  |
+| C | FrCC Ei, Bonlls, Cift ichded (赠品] |  |  |  |  |
+| 一 | On sale; Discount, x%6 0f; Bcst price, Lowest price, Cleap (促销打折{低价] |  |  |  |  |
+| 一 | Satisfaction [llarantec; LOOMi Quality, Money back (黼意度保证'退款保证) |  |  |  |  |
+|  | Order IOI, Buy DO (诱导购买动词 |  |  |  |  |
+| a | Amazon's Choice; Certifed [官方认证词] |  |  |  |  |
+|  | 知识产杈与品牌兼容性 (Intellectlual Fropeity) |  |  |  |  |
+| 严禁末经授权使用他人的府标。品牌名。 |  |  |  |  |  |
+| [严禁出珧]: |  |  |  |  |  |
+| 任何非本产品的品牌名称 (如: Nic; Disney, Applc; LEBO, Telcro 等). |  |  |  |  |  |
+| 一 | Velcro (维可牢{魔术贴:必领改为 "Iook and luop" |  |  |  |  |
+| = | Onesie {连体衣:_必领改为 "bodysuit" 或 "romper" |  |  |  |  |
+| a | Hula Hoop [呼咄圈:  必领改为 | "tov | Icop" |  |  |
+| a | Chapstick (润屑膏:  必领改为 "lip balm" - |  |  |  |  |
+| - Q-tip [棉签}:  必颈改为 "cotton Swab" - |  |  |  |  |  |
+| = | Fopsicle (冰棍):  必颈改为 "ice pop" |  |  |  |  |
+| [配卅兼容性正确写滋]: |  |  |  |  |  |
+| 错误写迭: "[Brand Name] Casc" {例如 vhone 15 Case) -> 会被判寇为侵杈。 |  |  |  |  |  |
+|  | 正确写祛: "Case Compatible with [rand Lame]" 或 "Casc Rr [Brand Iame]"一 |  |  |  |  |
+| = | 注意:  品牌名之前必颏有 "compatible sith " 或 "for"。 |  |  |  |  |
+| 三。 匮疗器械与功效撖感词 [edical & Health Claims] |  |  |  |  |  |
+| 非OTC 药品或耒获得}4讥证的医器械。严禁睛示治疗。预防或治愈蒺病的功能。 |  |  |  |  |  |
+| [严禁出珧]: |  |  |  |  |  |
+|  | Cure; Heal, Treal;, Treatment; Remedy (治;愈'治疗法] |  |  |  |  |
+|  | Frewent; Frerention (预防) |  |  |  |  |
+|  | Relief; Relicr; | Stop | ' Pain {止痛}缓解 | a | 除非是合规 OIC] |
+| : | Mnti-rirls; Ainti-flu, Anti-inflammator [抗病毒[消炎] |  |  |  |  |
+| 一 | RA approved, 印D4 cleared (除非有真实证书升已备案。否则严禁使用] |  |  |  |  |
+|  | 褴及具忡病症名称: Cancer; Diabetes; thritis 等。 |  |  |  |  |
+| 凹。。杀虫剂与生物杀灭剂撖感词 [Pesticide & Biocides} |  |  |  |  |  |
+| 这是亚马逊最窄易误杀的重灾区。任何艄示能 "杀灭。驱除。抑剁"  生物 {细菌。霹菌。昆虫 |  |  |  |  |  |
+| 的词。都会被判定为杀虫剂。肃要 B』 注册写 |  |  |  |  |  |
+| [严禁出现 (除非你有 EPA 写) ]: |  |  |  |  |  |
+| : | Anti-bacterial, Anti-microbial [抗菌航微生物] |  |  |  |  |
+|  | Anti-funBal, Wold Iesistant (抗:菌防'爵] |  |  |  |  |
+| = | Anti-dust mite {防尘螨) |  |  |  |  |
+|  | Insect Iepcllent BuB stop (驱蚊'防虫 |  |  |  |  |
+| 一 | Disinfect; Sanitize;, Sterilize [消毒{杀菡] |  |  |  |  |
+| 一 | Non-toxic (无莓}:  椴易触岌审核。建设改为 "B4 Frec" 或 "Safe material"- |  |  |  |  |
+| = | Safe, Healthy, Harmless (绝对化安全用语) |  |  |  |  |
+| amazon_compliance_blacklist:txt |  |  |  |  |  |
