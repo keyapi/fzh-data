@@ -1,3 +1,10 @@
+---
+okf: v0.1
+type: Spec
+title: Amazon 广告数据分析 — 设计文档
+description: 架构设计 + 技术决策
+tags: [amazon, advertising, spec, architecture]
+---
 # Amazon 广告数据分析 — 设计文档
 
 > 日期：2026-06-16 | 分支：amazon_advertise | 状态：✅ v0.2 已实现 | PR: [#14](https://github.com/keyapi/fzh-data/pull/14)

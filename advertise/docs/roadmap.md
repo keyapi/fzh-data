@@ -1,3 +1,10 @@
+---
+okf: v0.1
+type: Roadmap
+title: 专家系统路线图
+description: 阶段状态 + 下一步优先级
+tags: [amazon, advertising, roadmap, planning]
+---
 # 专家系统路线图 — Amazon 广告分析
 
 > 何时读: 规划下一阶段工作时、需要了解整体进度和优先级。

@@ -1,3 +1,10 @@
+---
+okf: v0.1
+type: Reference
+title: 工具生态系统对比
+description: 优麦云 vs 卖家精灵 vs Perpetua vs Pacvue 等
+tags: [amazon, advertising, reference, tools]
+---
 # 工具生态系统对比
 
 > 何时读: 需要评估工具选型、了解优卖云能做什么/不能做什么、或接入新工具。

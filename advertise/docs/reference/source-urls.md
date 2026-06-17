@@ -1,3 +1,10 @@
+---
+okf: v0.1
+type: Reference
+title: 资料来源 URL 索引
+description: 60+ 调研来源 URL，按主题分类
+tags: [amazon, advertising, reference, research]
+---
 # 资料来源 URL 索引
 
 > 何时读: 需要验证某个结论的来源、或做进一步深入调研。

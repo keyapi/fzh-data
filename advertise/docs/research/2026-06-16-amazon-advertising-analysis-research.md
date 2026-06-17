@@ -1,3 +1,11 @@
+---
+okf: v0.1
+type: Research
+title: Amazon 广告数据分析 — 调研报告
+description: 6 维度 × 60+ 来源深度调研
+tags: [amazon, advertising, research, 2026]
+timestamp: 2026-06-17T00:00:00Z
+---
 # Amazon 广告数据分析 — 调研报告
 
 > 日期：2026-06-16 (更新 2026-06-17) | 分支：amazon_advertise | 版本: v0.3

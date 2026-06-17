@@ -1,3 +1,10 @@
+---
+okf: v0.1
+type: Lesson
+title: 经验教训
+description: 12 条 Lessons Learned
+tags: [amazon, advertising, lessons, best-practices]
+---
 # 经验教训 — Amazon 广告分析模块
 
 > 何时读: 接手模块时、遇到类似问题时、做架构决策时参考。

@@ -1,3 +1,10 @@
+---
+okf: v0.1
+type: Reference
+title: 数据源全图
+description: Amazon SP 13 种报告 + Seller Central + AMC + 第三方数据
+tags: [amazon, advertising, reference, data-sources]
+---
 # 数据源全图 — Amazon 广告数据生态
 
 > 何时读: 需要知道"我们还有什么数据没拿到"，规划下一阶段数据接入。

@@ -1,3 +1,11 @@
+---
+okf: v0.1
+type: Reference
+title: 列名映射参考
+description: Amazon 中文后台导出→英文标准字段名完整映射
+tags: [amazon, advertising, reference, data-format]
+resource: advertise/__init__.py
+---
 # 列名映射参考
 
 > 何时读: 需要了解 Amazon 中文后台导出 → 英文标准字段名的完整映射。

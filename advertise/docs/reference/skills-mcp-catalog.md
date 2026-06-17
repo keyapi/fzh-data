@@ -1,3 +1,10 @@
+---
+okf: v0.1
+type: Reference
+title: 可复用 Skills/MCP 目录
+description: 7 个可复用 MCP + Skills + Python 库
+tags: [amazon, advertising, reference, skills, mcp]
+---
 # 可复用 Skills/MCP 目录
 
 > 何时读: 需要评估"哪些功能可以直接用现成的，不需要从零开发"。
