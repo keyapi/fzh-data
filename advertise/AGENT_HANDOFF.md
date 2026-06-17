@@ -143,33 +143,69 @@
 
 | 场景 | 推荐工具 | 月费 |
 |------|---------|------|
-| 关键词研究 + 竞品分析 | SellerSprite API | $19-49 |
+| 日常广告管理 + ERP | **优麦云** (已在用) | ¥216-666/月 |
+| 竞品关键词情报 | 卖家精灵 MCP (按需) | $19-49 |
 | PPC 规则自动化 | Scale Insights (透明, 按 ASIN 收费) | $78-688 |
 | AI 全自动优化 | Perpetua (中等预算) / Pacvue (企业) | $250-500+ |
 | 数据分析管道 | Amazon Ads API (免费) + Coupler.io ETL | API 免费 + ETL $24+ |
-| 利润分析 (TACoS, 真实 P&L) | Sellerboard / Helium 10 Profits | $19-79 |
-| 数据仓库 | AMC (AWS Clean Room) | 基础版包含在广告花费中 |
+| 利润分析 (TACoS) | Sellerboard / Helium 10 Profits | $19-79 |
 
-### 专家系统路线图
+> **优麦云无 API**，但保存全量历史广告数据（突破 Amazon 60 天限制），支持 Excel 导出。
+> **卖家精灵有 MCP 服务** (`open.sellersprite.com/mcp/22`)，可用于竞品关键词情报。
+
+### 可复用的 Skills/MCP（避免从零造轮子）
+
+| 资源 | 类型 | 用途 |
+|------|------|------|
+| [Two Minute Reports MCP](https://github.com/twominutereports/twominutereports-mcp) | MCP Server | 自然语言查询 Amazon Ads 数据 |
+| [Amazon 官方 Ads MCP](https://advertising.amazon.com) | MCP Server | 2026.2 公测，自然语言→Ads API |
+| [Agent Central MCP](https://github.com/agentcentral-to/agent-central-mcp) | MCP Server | 144 工具覆盖 Ads+Seller Central+库存 |
+| [LaunchFast PPC Research](https://github.com/BlockchainHB/launchfastmcp-skills) | Agent Skill | 竞品关键词→批量 CSV |
+| [amz-ppc-optimizer](https://github.com/ehsanmqn/amz-ppc-optimizer) | Python 开源 | 搜索词报告分析+出价调整 |
+| [python-amazon-ad-api](https://pypi.org/project/python-amazon-ad-api/) | Python 库 | Ads API v3 封装 (12.6K/月) |
+| [claudesdk-amazon-skills-chat](https://github.com/liangdabiao/claudesdk-amazon-skills-chat) | 54 个 Skill | 中文 Amazon 卖家 AI 助手参考 |
+
+### TACoS 方法论（专家核心指标）
+
+**公式**: TACoS = 广告花费 / 总营收（自然+广告）× 100%。合并 Ads Console + Seller Central Business Reports。
+
+| 信号 | 含义 | 操作 |
+|------|------|------|
+| 差距扩大（TACoS↓ 营收↑）| 自然飞轮运转 | 增加预算 |
+| 差距缩小（TACoS→ACoS）| 广告蚕食自然 | 减少已排名靠前词的精准投放 |
+| 差距扩大 + 营收↓ | 缩量保利润 | 排查竞品截流 |
+
+### AMC 自服务化（2025.9 起可用）
+
+免费：广告归因事件（展示/点击/转化/NTB）。付费：$500/月 Retail Purchases 5-Year（CLV/队列/流失）。建议 $20K+/月广告花费。实操：模板→AI 生成 SQL→创建受众→同步广告活动。
+
+### COSMO/Alexa for Shopping（2026 核心变化）
+
+COSMO: 630 万节点 × 2900 万边 × 15 种关系类型。搜索从"词匹配"→"意图理解"。
+**已验证案例**: 厨房电器品牌 关键词→人设架构 → ACoS 42%→24%，营收+31%，60 天。
+**Sponsored Prompts** (2026.3): 出价×语义质量分，非纯拍卖。
+**预算重分配**: 关键词 60%→30%, ASIN 定向 15%→40%, 按人设组织广告活动。
+
+### 专家系统路线图（已修正）
 
 ```
-Phase 1 (已完成 v0.2): 基础 4 维分析 + Excel 报告
-Phase 2 (当前): 补齐数据源 + 竞争情报 + 时序对比
+Phase 1 (✅ v0.2): 基础 4 维分析 + Excel 报告
+Phase 2 (当前): 补齐数据源 + TACoS + 时序对比 + 优麦云导出对接
 Phase 3: 接入 Amazon Ads API 自动化数据拉取
-Phase 4: 接入 SellerSprite API 竞品数据
-Phase 5: 规则引擎自动化（否定词/收割/出价建议 → API 执行）
-Phase 6: ML 辅助（异常检测/出价优化/NLP 搜索词分类）
-Phase 7: 闭环反馈（分析 → 建议 → 执行 → 评估 → 优化）
+Phase 4: 规则引擎自动化（否定词/收割 → API 执行）
+Phase 5: ML 辅助（异常检测/出价优化/NLP 搜索词分类）
+Phase 6: AMC 接入（多触点归因/LTV/增量测试）
+Phase 7: 闭环反馈 + COSMO 覆盖审计
 ```
 
 ### 立即可以做的事情
 
-1. **问用户**: 盈亏平衡 ACoS 是多少？（产品毛利率）
+1. **问用户**: 盈亏平衡 ACoS 是多少？（产品毛利率）→ 才能计算 TACoS 基准
 2. **问用户**: 有没有上个月的数据？（环比对比）
 3. **问用户**: 是否有 Brand Registry？（可获取 ABA 数据）
-4. **问用户**: 是否开通了 SellerSprite？（可获取竞品关键词数据）
+4. **从优麦云导出**: 广告活动/搜索词/销售/库存 Excel → 放入数据源
 5. **导出补充报告**: Purchased Product + Search Term Impression Share + Performance Over Time
-6. **对接 SellerSprite API**: `sellersprite.ai/en/blog/SellerSprite-Data-Service`
+6. **试用 Two Minute Reports MCP**: 自然语言查询 Amazon Ads 数据
 
 ## 列名映射
 
