@@ -2,7 +2,7 @@
 
 > 本文件供接手此模块的 Agent 参考。包含完整列名映射、分析框架来源、架构决策和经验教训。
 >
-> **最后更新**: 2026-06-16 | **版本**: v0.2 | **分支**: amazon_advertise | **PR**: [#14](https://github.com/keyapi/fzh-data/pull/14)
+> **最后更新**: 2026-06-17 | **版本**: v0.3 (专家调研版) | **分支**: amazon_advertise | **PR**: [#14](https://github.com/keyapi/fzh-data/pull/14)
 
 ## 模块定位
 
@@ -72,6 +72,104 @@
 | `商品推广_广告位_报告-30.xlsx` | ~126 | 广告位级 |
 
 > 文件名需包含关键字 `广告活动` / `投放` / `搜索词` / `广告位`，`__init__.py` 自动识别。
+
+## 专家级分析评估 (v0.3 深度调研)
+
+> 2026-06-17 执行了 6 维度 × 35+ 来源的深度调研。
+> 完整调研报告: `docs/superpowers/research/2026-06-16-amazon-advertising-analysis-research.md`
+
+### 当前方法的 7 个层次缺陷
+
+对照 CRISP-DM 专家级数据分析和 Amazon 广告行业最佳实践，当前 v0.2 存在以下不足：
+
+| # | 缺陷 | 专家标准 | 影响 |
+|---|------|---------|------|
+| 1 | **缺少 Business Understanding 阶段** | CRISP-DM 要求 15% 时间在此阶段：定义成功标准、利益相关者、业务目标→分析问题翻译 | 分析了数据但不知道"盈亏平衡点"在哪 |
+| 2 | **无环比/同比** | 任何数据分析必须有时序对比。无历史数据 = 不知道 30% ACoS 是改善了还是恶化了 | 无法判断趋势 |
+| 3 | **无行业基准** | 需要同比类目平均水平、竞品水平。Eightx 2026 数据: 家居类目平均 ACoS 32.5% | 30% ACoS 是"好"还是"一般"？无参照物 |
+| 4 | **数据源严重不全** | Amazon SP 共 13 种报告，我们只有 4 种。缺少: Purchased Product (光环效应), Search Term Impression Share (份额), Budget (预算利用率), Performance Over Time (趋势) | 大量分析维度缺失 |
+| 5 | **无竞争情报** | 专家必须对比竞品。工具：SellerSprite 反向 ASIN 查竞品关键词, ABA Search Query Performance | 不知道竞品在投什么词、出什么价 |
+| 6 | **ACoS 单一指标** | 专家看 TACoS (广告花费/总营收), NTB% (新客占比), LTV, 增量贡献。ACoS 只是战术指标 | 可能误判盈亏（低 ACoS 但蚕食了自然流量） |
+| 7 | **无归因模型** | 7天点击归因有严重局限。AMC 提供多触点归因、增量测试、路径分析 | 无法区分广告驱动 vs 自然转化 |
+
+### 我们缺失的 9 种 SP 报告
+
+| 报告 | 用途 | 优先级 |
+|------|------|--------|
+| **Purchased Product** | 光环效应：点击广告后买了哪些非广告商品 | 🔴 高 |
+| **Search Term Impression Share** | 搜索词展示份额 vs 竞品 | 🔴 高 |
+| **Budget** | 预算利用率 + 建议预算 | 🟡 中 |
+| **Performance Over Time** | 按日/周趋势（环比/同比基础） | 🔴 高 |
+| **Advertised Product** | 按 ASIN/SKU 表现 | 🟡 中 |
+| **Gross and Invalid Traffic** | 无效点击/展示监控 | 🟢 低 |
+| **Purchased Product (SB)** | Sponsored Brands 光环效应 | 🟢 低 |
+| **Audience** | 受众定向表现 | 🟢 低 |
+| **Video** | 视频广告效果 | 🟢 低 |
+
+### 专家级分析的数据需求清单
+
+一个完整的 Amazon 广告分析系统需要以下数据：
+
+**第一方数据（Amazon 后台可导出）:**
+- [ ] 全部 13 种 SP 报告（当前只有 4 种）
+- [ ] Brand Analytics: Search Query Performance（品牌注册后可获取）
+- [ ] Brand Analytics: Demographics（客户画像：年龄/收入/教育）
+- [ ] Brand Analytics: Market Basket Analysis（连带购买）
+- [ ] Brand Analytics: Repeat Purchase Behavior（复购率）
+- [ ] Seller Central Business Reports（自然流量/转化率）
+- [ ] Amazon Marketing Cloud（如果预算允许，解锁多触点归因+LTV）
+
+**第二方数据（第三方工具获取）:**
+- [ ] 竞品关键词（SellerSprite 反向 ASIN → 竞品在投什么词/出价）
+- [ ] 类目基准（类目平均 CPC/ACoS/转化率）
+- [ ] 价格历史（Keepa 价格 + BSR 趋势）
+
+**外部数据:**
+- [ ] 节假日日历（Prime Day, BFCM, 返校季等）
+- [ ] 汇率（多站点）
+
+### 2026 年行业巨变
+
+1. **Rufus 已退役** (2026.5.13) → **Alexa for Shopping** 嵌入搜索栏。COSMO 知识图谱（15+ 关系类型）替换关键词匹配
+2. **搜索个性化 60%+**: 搜索结果因人而异（Buyer Persona 功能）
+3. **Sponsored Prompts** (全新广告形式): Alexa for Shopping 内的对话式广告，语义质量分×出价
+4. **CPC 通胀不可逆**: 平台平均 CPC $1.18-1.34 (+34% vs 两年前), 80% 品牌报告 CPC 上涨
+5. **关键词→人**: 投放预算从关键词 60% 降至 30%，商品/ASIN 定向升至 40%
+6. **AMC 自服务化** (2025.9): 无需代理商，广告主可直接在 Ads Console 访问 AMC
+7. **Conversion Path Reporting** (2025.11): 30 天多触点转化路径，跨 SP/SB/SD/DSP/STV
+8. **归因窗口缩短** (2026.1.1): 展示归因从固定 14 天改为算法过滤的短窗口
+
+### 工具选型建议
+
+| 场景 | 推荐工具 | 月费 |
+|------|---------|------|
+| 关键词研究 + 竞品分析 | SellerSprite API | $19-49 |
+| PPC 规则自动化 | Scale Insights (透明, 按 ASIN 收费) | $78-688 |
+| AI 全自动优化 | Perpetua (中等预算) / Pacvue (企业) | $250-500+ |
+| 数据分析管道 | Amazon Ads API (免费) + Coupler.io ETL | API 免费 + ETL $24+ |
+| 利润分析 (TACoS, 真实 P&L) | Sellerboard / Helium 10 Profits | $19-79 |
+| 数据仓库 | AMC (AWS Clean Room) | 基础版包含在广告花费中 |
+
+### 专家系统路线图
+
+```
+Phase 1 (已完成 v0.2): 基础 4 维分析 + Excel 报告
+Phase 2 (当前): 补齐数据源 + 竞争情报 + 时序对比
+Phase 3: 接入 Amazon Ads API 自动化数据拉取
+Phase 4: 接入 SellerSprite API 竞品数据
+Phase 5: 规则引擎自动化（否定词/收割/出价建议 → API 执行）
+Phase 6: ML 辅助（异常检测/出价优化/NLP 搜索词分类）
+Phase 7: 闭环反馈（分析 → 建议 → 执行 → 评估 → 优化）
+```
+
+### 立即可以做的事情
+
+1. **问用户**: 盈亏平衡 ACoS 是多少？（产品毛利率）
+2. **问用户**: 有没有上个月的数据？（环比对比）
+3. **问用户**: 是否有 Brand Registry？（可获取 ABA 数据）
+4. **问用户**: 是否开通了 SellerSprite？（可获取竞品关键词数据）
+5. **导出补充报告**: Purchased Product + Search Term Impression Share + Performance Over Time
+6. **对接 SellerSprite API**: `sellersprite.ai/en/blog/SellerSprite-Data-Service`
 
 ## 列名映射
 
