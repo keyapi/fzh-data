@@ -20,7 +20,8 @@ pdf_to_md/
     ├── listing优化智能体_v1_flat.md    ← v1 纯 OCR 直出版本
     ├── listing优化智能体_v2_table.md   ← v2 同事脚本输出
     ├── listing优化智能体_v3_hybrid.md  ← v3 混合方案输出
-    ├── listing优化智能体_v4_final.md   ← v4 后处理管线输出（当前）
+    ├── listing优化智能体_v4_final.md   ← v4 后处理管线输出
+    ├── listing优化智能体_v5_paddleocr.md ← v5 PaddleOCR ONNX 输出（当前）
     ├── listing优化智能体_backup.md     ← 改版前原始输出
     └── listing_images/            ← PDF 中提取的截图
 ```
@@ -147,10 +148,11 @@ PDF 文件
 |------|------|------|
 | ~~OCR 英文词被拆成多列~~ | v4 `_merge_table_columns` 已修复 | ✅ 已解决 |
 | ~~页码脚注数字未过滤~~ | v4 `_clean_page_numbers` 已修复 | ✅ 已解决 |
-| PaddleOCR 3.x + paddlepaddle 3.3 + Windows CPU | oneDNN PIR 转换 bug，predict() 崩溃 | 🔒 阻塞 |
-| easyocr 英文 OCR 精度 | 单词仍有个别字符误识别 | ⚠️ 持续 |
+| ~~PaddleOCR CPU 崩溃~~ | v5 `engine='onnxruntime'` 彻底绕过 | ✅ 已解决 |
+| ~~easyocr 英文 OCR 精度~~ | v5 PaddleOCR 替换 easyocr，精度飞跃 | ✅ 已解决 |
+| 词分割（space-splitting） | "camp ing" "fo ld ing" 仍偶有空格 | ⚠️ 轻微 |
 | PDF→MD 原文格式丢失 | 粗体/斜体/层级缩进无法还原 | ⬜ 待办 |
-| Python 3.12 降级 | 为 PaddleOCR 兼容从 3.14→3.12 | 📌 已切换 |
+| Python 3.12 | 为 PaddleOCR 兼容从 3.14→3.12 | 📌 已切换 |
 | PDF→MD 原文格式丢失 | 粗体/斜体/层级缩进无法还原 | 可能需要 markitdown 或多模态 LLM |
 
 ### v4 — 后处理管线（当前主脚本，2026-06-17）
@@ -173,11 +175,26 @@ PDF 文件
 
 **Python 版本**：3.14→3.12 降级（为 PaddleOCR 兼容预留）
 
-### PaddleOCR 调研（2026-06-17）
+### v5 — PaddleOCR ONNX Runtime（当前主脚本，2026-06-17）
 
-**尝试**：PaddleOCR 3.7.0 + paddlepaddle 3.3.1 → Windows CPU
+**关键突破**（commit `a04fa5e`）：
 
-**结论**：BLOCKED。`predict()` 在 text_detection 阶段崩溃：
+PaddleOCR 3.7.0 原生支持 ONNX Runtime 后端，完全绕过 oneDNN bug：
+```python
+ocr = PaddleOCR(engine='onnxruntime', lang='ch')
+```
+
+**改进**：
+- 中英文识别精度显著提升：`露营掎` → `露营椅`，`campng Chars` → `camp ing chairs`
+- 数字识别更准：`2018` → `20.18%`
+- 文本页段落流畅，不再碎片化
+- 首次运行自动下载 ONNX 模型（~200MB），后续缓存
+
+**与 easyocr 对比**：PaddleOCR 全维度优于 easyocr。easyocr 保留为 `--engine easyocr` 降级方案。
+
+### PaddleOCR 调研（2026-06-17）— 已解决
+
+**问题**：PaddleOCR 3.7.0 + paddlepaddle 3.3.1 → Windows CPU 崩溃
 ```
 NotImplementedError: ConvertPirAttribute2RuntimeAttribute not support
   [pir::ArrayAttribute<pir::DoubleAttribute>]
