@@ -55,7 +55,7 @@ if _MISSING_DEPS:
 
 import fitz
 import easyocr
-from PIL import Image
+from PIL import Image, ImageEnhance
 import numpy as np
 
 
@@ -92,21 +92,22 @@ def extract_text_page(page) -> str:
 
 def ocr_page(page, reader) -> str:
     """对页面图片内容做 OCR，返回识别文本。"""
-    # 将 PDF 页面渲染为图片
     pix = page.get_pixmap(dpi=200)
     img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-    img_array = np.array(img)
 
-    results = reader.readtext(img_array, detail=1, paragraph=True)
-    lines = []
-    for item in results:
-        # paragraph=True returns (text, conf) tuples
-        # paragraph=False returns (bbox, text, conf) tuples
-        if isinstance(item, tuple) and len(item) == 2:
-            lines.append(item[0])
-        elif isinstance(item, tuple) and len(item) == 3:
-            lines.append(item[1])
-    return "\n".join(lines)
+    # 图像预处理：灰度化 + 对比度增强，提升 OCR 准确率
+    img_gray = img.convert("L")
+    enhancer = ImageEnhance.Contrast(img_gray)
+    img_enhanced = enhancer.enhance(2.0)
+    img_array = np.array(img_enhanced)
+
+    # text_threshold=0.3 低阈值捕获表格/截图文字
+    # low_text=0.3 不丢弃低密度文本区域
+    # detail=0 直接返回文本列表
+    results = reader.readtext(
+        img_array, detail=0, text_threshold=0.3, low_text=0.3
+    )
+    return "\n".join(results)
 
 
 def convert(pdf_path: str, lang: str = "ch_sim,en", ocr_only: bool = False):
