@@ -234,6 +234,73 @@ def _postprocess_ocr_text(text: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# 文本层 MD 格式修复 — 标题 / 列表 / 代码块
+# ---------------------------------------------------------------------------
+
+def _detect_heading(line: str):
+    """检测文本行是否为标题。返回带 Markdown 标记的行，或 None。"""
+    s = line.strip()
+    if not s:
+        return None
+    if re.match(r"^#{1,6}\s", s):
+        return s
+    # 中文序号标题
+    if re.match(r"^[一二三四五六七八九十]+[、]", s):
+        return f"## {s}"
+    # STEP 标题
+    if re.match(r"^STEP\s+\d+", s, re.IGNORECASE):
+        return f"### {s}"
+    # emoji 标记行
+    if re.match(r"^[✅🔧⛔📌⭐💡]", s):
+        return f"#### {s}"
+    # 副标题
+    if s.startswith("——") or s.startswith("--"):
+        return f"## {s}"
+    return None
+
+
+def _format_text_line(line: str) -> str:
+    """将单行格式化为 MD 列表/段落。"""
+    s = line.strip()
+    if not s:
+        return ""
+    if s.startswith("•") or s.startswith("·"):
+        return f"- {s.lstrip('•· ')}"
+    return s
+
+
+def _format_text_layer(text: str) -> str:
+    """对文本层页面做 MD 格式修复：标题检测、列表、数字行过滤。"""
+    raw_lines = text.split("\n")
+
+    lines = []
+    for line in raw_lines:
+        stripped = line.strip()
+        if stripped.isdigit():  # 过滤页码/行号
+            continue
+        heading = _detect_heading(line)
+        if heading:
+            lines.append(heading)
+        else:
+            lines.append(_format_text_line(line))
+
+    # 文档标题检测：非标题行 后紧跟 —— → 升级为 H1
+    result = []
+    i = 0
+    while i < len(lines):
+        cur = lines[i]
+        if (not re.match(r"^#{1,6}\s", cur)
+                and i + 1 < len(lines)
+                and re.match(r"^##\s+——", lines[i + 1])):
+            result.append(f"# {cur.strip()}")
+        else:
+            result.append(cur)
+        i += 1
+
+    return "\n".join(result)
+
+
+# ---------------------------------------------------------------------------
 # Pipeline
 # ---------------------------------------------------------------------------
 
@@ -286,7 +353,8 @@ def convert(pdf_path: str, ocr_page_fn, *, lang: str = "ch_sim,en",
 
         if is_text:
             if text_idx < len(fixed_pages):
-                md_lines.append(_clean_page_numbers(fixed_pages[text_idx].strip()))
+                raw = _clean_page_numbers(fixed_pages[text_idx].strip())
+                md_lines.append(_format_text_layer(raw))
             text_idx += 1
         else:
             print(f"  [{engine_label}] 第 {page_num} 页 → 截图识别")
