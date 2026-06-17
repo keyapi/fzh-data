@@ -58,7 +58,7 @@ if _MISSING_DEPS:
 
 import fitz
 import easyocr
-from PIL import Image, ImageEnhance
+from PIL import Image, ImageEnhance, ImageOps, ImageFilter
 import numpy as np
 
 
@@ -226,8 +226,77 @@ def _fix_code_blocks(text: str, carry_in_code: bool = False):
 
 
 # ---------------------------------------------------------------------------
-# 核心逻辑
+# 后处理 — 表格列合并 / 页码清理 / 文本修复
 # ---------------------------------------------------------------------------
+
+_SPLIT_WORD_PATTERN = re.compile(r"^[a-z]{2,8}$", re.IGNORECASE)
+_PAGE_NUM_PATTERN = re.compile(r"^\d{1,3}$")
+
+
+def _looks_split(a: str, b: str) -> bool:
+    """判断两个单元格是否像是被 OCR 拆开的单词片段。"""
+    # 都是纯英文，且合并后长度合理
+    if not (_SPLIT_WORD_PATTERN.match(a) and _SPLIT_WORD_PATTERN.match(b)):
+        return False
+    combined = a + b
+    return 4 <= len(combined) <= 20
+
+
+def _merge_table_columns(md_table: str) -> str:
+    """检测并合并表格中被 OCR 拆分的单词列（如 foldng | char → folding char）。"""
+    lines = md_table.split("\n")
+    result = []
+    for line in lines:
+        if not line.startswith("|"):
+            result.append(line)
+            continue
+        # 解析单元格
+        raw = line.strip().strip("|")
+        cells = [c.strip() for c in raw.split("|")]
+        if len(cells) < 2:
+            result.append(line)
+            continue
+
+        merged = []
+        i = 0
+        while i < len(cells):
+            if i + 1 < len(cells) and _looks_split(cells[i], cells[i + 1]):
+                merged.append(f"{cells[i]} {cells[i + 1]}")
+                i += 2
+            else:
+                merged.append(cells[i])
+                i += 1
+        result.append("| " + " | ".join(merged) + " |")
+    return "\n".join(result)
+
+
+def _clean_page_numbers(text: str) -> str:
+    """移除文本中的页码脚注数字（单独成行的 1-3 位数字）。"""
+    lines = text.split("\n")
+    # 收集连续数字行的范围
+    cleaned = []
+    i = 0
+    while i < len(lines):
+        stripped = lines[i].strip()
+        if _PAGE_NUM_PATTERN.match(stripped):
+            # 检查上下文是否也是数字行（连续页码）
+            prev_is_num = i > 0 and _PAGE_NUM_PATTERN.match(lines[i-1].strip())
+            next_is_num = i + 1 < len(lines) and _PAGE_NUM_PATTERN.match(lines[i+1].strip())
+            if prev_is_num or next_is_num:
+                i += 1
+                continue
+        cleaned.append(lines[i])
+        i += 1
+    return "\n".join(cleaned)
+
+
+def _postprocess_ocr_text(text: str) -> str:
+    """OCR 后处理流水线。"""
+    text = _clean_page_numbers(text)
+    # 表格页做列合并
+    if text.strip().startswith("|"):
+        text = _merge_table_columns(text)
+    return text
 
 
 def has_text_layer(page) -> bool:
@@ -241,15 +310,14 @@ def ocr_page(page, reader, dpi=300) -> str:
     pix = page.get_pixmap(dpi=dpi)
     img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
 
-    # 图像预处理：灰度 + 对比度增强
+    # 预处理：灰度 + 对比度增强（保守）
     img_gray = img.convert("L")
     enhancer = ImageEnhance.Contrast(img_gray)
     img_enhanced = enhancer.enhance(2.0)
     img_array = np.array(img_enhanced)
 
-    # paragraph=False → 获取 bbox 用于版面分析
     results = reader.readtext(img_array, detail=1, paragraph=False,
-                              text_threshold=0.3, low_text=0.3)
+                              text_threshold=0.4, low_text=0.2)
 
     if not results:
         return ""
@@ -257,9 +325,11 @@ def ocr_page(page, reader, dpi=300) -> str:
     rows = _group_rows(results)
 
     if _is_table(rows):
-        return _format_table(rows)
+        output = _format_table(rows)
     else:
-        return _build_paragraph_text(rows)
+        output = _build_paragraph_text(rows)
+
+    return _postprocess_ocr_text(output)
 
 
 def convert(pdf_path: str, lang: str = "ch_sim,en", ocr_only: bool = False, dpi: int = 300):
@@ -304,7 +374,7 @@ def convert(pdf_path: str, lang: str = "ch_sim,en", ocr_only: bool = False, dpi:
 
         if is_text:
             if text_idx < len(fixed_pages):
-                md_lines.append(fixed_pages[text_idx].strip())
+                md_lines.append(_clean_page_numbers(fixed_pages[text_idx].strip()))
             text_idx += 1
         else:
             print(f"  [OCR] 第 {page_num} 页 → 截图识别")
