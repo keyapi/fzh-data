@@ -18,6 +18,7 @@ tags: [openai, api-proxy, tailscale, vultr, chatgpt]
 | 查看架构设计决策 | [architecture.md](architecture.md) |
 | 查阅工具、术语、链接 | [reference/tools-index.md](reference/tools-index.md) |
 | 查阅经验教训 | [lessons/lessons-learned.md](lessons/lessons-learned.md) |
+| 部署 LAN 网关让同事使用 | [lan-gateway.md](lan-gateway.md) |
 | 查看变更历史 | [log.md](log.md) |
 
 ## 目录结构

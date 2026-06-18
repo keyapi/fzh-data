@@ -36,10 +36,29 @@
 
 **fzh-data** — FZH 跨境电商数据管道工具集，维护**赛狐 / ERPNext / 通途**三方数据一致性。
 
-- 技术栈：Python ≥ 3.10 + uv + pandas + openpyxl（详见 `pyproject.toml`）
+### Agent 新机器首次 clone 后必做
+
+```powershell
+# 1. 安装 uv (Python 包管理器) — 只需一次
+powershell -ExecutionPolicy Bypass -Command "irm https://astral.sh/uv/install.ps1 | iex"
+
+# 2. 安装项目依赖
+uv sync
+
+# 3. 初始化 symlink (CLAUDE.md, skills)
+powershell -ExecutionPolicy Bypass -File setup.ps1
+```
+
+> 以上 3 步做完即可正常开发。所有脚本通过 `uv run python <script.py>` 运行，不需要全局 Python / conda。
+> 如果 `uv` 不是命令，重新打开终端或手动加 `$env:Path += ";$env:USERPROFILE\.cargo\bin"`。
+> 如果同事 agent clone 后不知道怎么做，让它读本项目 AGENTS.md 的本节。
+
+### 运行环境
+
+- Python >= 3.10 + uv (详见 `pyproject.toml`)
 - 运行方式：`uv run python <script.py>`，脚本从所在目录运行
-- Git：中文 commit `type(scope): description`，开发在分支 → merge 到 main
-- 公司背景、供应链、三系统 SKU 定义 → `docs/company-context.md`
+- Git：中文 commit `type(scope): description`，开发在分支 -> merge 到 main
+- 公司背景、供应链、三系统 SKU 定义 -> `docs/company-context.md`
 
 ## 模块索引
 
