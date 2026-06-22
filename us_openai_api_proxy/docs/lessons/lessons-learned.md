@@ -153,13 +153,11 @@ Compose 中加 `pull_policy: never` 防止重复拉取。
 
 **问题**：docker-compose.yml 里配了 MySQL 容器，但没给 new-api 传 `SQL_DSN` 环境变量。new-api 检测不到 MySQL 就静默降级为内置 SQLite，初始化页面弹出"数据库警告：您正在使用 SQLite"。
 
-**原因**：docker-compose 只负责启动容器，不管容器之间的连接配置。每个服务的数据库连接串必须显式传入。
+**根因**：没有从官方 docker-compose.yml 出发。官方文件里有完整的 `SQL_DSN` 配置（默认 PostgreSQL，MySQL 注释掉），我们按 `docker run` 教程里的单容器思路自己写 compose，漏掉了数据库连接参数。
 
-**修复**：加一行环境变量：
-```yaml
-new-api:
-  environment:
-    - SQL_DSN=root:pass@tcp(mysql:3306)/new_api?charset=utf8mb4&parseTime=True&loc=Local
-```
+**修复**：加一行环境变量 `SQL_DSN=root:pass@tcp(mysql:3306)/new_api`。
 
-**教训**：docker-compose 的核心理念是 `docker compose up -d` 一行搞定所有依赖。如果启动后还需要手动安装依赖或手动配置，说明 compose 文件不完整。容器间的依赖关系（depends_on + healthcheck）和连接参数（environment variables）都属于 compose 文件的定义范围，缺一不可。
+**现状**：MySQL 模式已正常，GQ 已完成管理员初始化，不换 PostgreSQL。
+
+**教训**：部署开源项目第一步永远是拉原版 docker-compose.yml，在上面改，不要按教程里的 `docker run` 单容器命令自己拼 compose。`docker run -e KEY=VALUE` 的参数在 compose 里就是 `environment:` 段，一一对应。漏一个就翻车。
+
