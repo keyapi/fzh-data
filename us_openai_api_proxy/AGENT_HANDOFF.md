@@ -112,14 +112,20 @@ ssh us-ubuntu-proxy systemctl start cliproxyapi
 | `/opt/new-api/data/` | new-api 数据 |
 | `/opt/new-api/mysql/` | MySQL 数据卷 |
 | `/opt/new-api/redis/` | Redis 数据卷 |
+| `/etc/iptables/rules.v4` | iptables 持久化 (含 Tailscale NAT) |
 
-## 国内部署注意 (Lesson 20-24)
+## 国内部署注意 (Lesson 20-26)
 
 1. Tailscale 务必 `--accept-dns=false`（否则 DNS 挂）
 2. Docker 用 DaoCloud 代理拉取（`docker.m.daocloud.io`）
 3. apt 备非阿里云镜像源（清华 `mirrors.tuna.tsinghua.edu.cn`）
 4. shim-signed GRUB 交互提示需 `debconf-set-selections` 修复
 5. 国内 Tailscale P2P 可能失败，DERP relay 兜底
+6. Docker bridge 容器无法直接访问 Tailscale IP — 需 iptables MASQUERADE
+   ```bash
+   iptables -t nat -I POSTROUTING -s <DOCKER_SUBNET> -o tailscale0 -j MASQUERADE
+   netfilter-persistent save   # 持久化
+   ```
 
 ## 待办
 
@@ -135,5 +141,5 @@ ssh us-ubuntu-proxy systemctl start cliproxyapi
 - [docs/architecture.md](./docs/architecture.md) — 架构详解
 - [docs/operations.md](./docs/operations.md) — 运维手册
 - [docs/log.md](./docs/log.md) — 变更日志
-- [docs/lessons/lessons-learned.md](./docs/lessons/lessons-learned.md) — 24 条经验教训
+- [docs/lessons/lessons-learned.md](./docs/lessons/lessons-learned.md) — 26 条经验教训
 - [docs/lan-gateway.md](./docs/lan-gateway.md) — LAN 网关
