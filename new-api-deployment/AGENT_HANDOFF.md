@@ -18,6 +18,19 @@
 | 端口 | `localhost:3000` |
 | 数据持久化 | `D:\docker\new-api\data\one-api.db` |
 
+### Docker 镜像
+
+| 项目 | 值 |
+|------|-----|
+| 运行时镜像名 | `calciumion/new-api:latest` |
+| 镜像拉取源 | **DaoCloud 加速器** `docker.m.daocloud.io/calciumion/new-api:latest` |
+| 镜像 digest | `bd30213d8088` |
+| 镜像大小 | ~266MB |
+| 为何用 DaoCloud | Docker Hub 直连 TLS 握手超时（国内网络限制）|
+| 拉取方式 | `docker pull docker.m.daocloud.io/calciumion/new-api:latest` → `docker tag` 重命名 |
+
+> ⚠️ 两个镜像 digest 相同（内容一致），只是拉取渠道不同。如需换源（如阿里云加速器），重新 pull + retag 即可。
+
 ### 账号体系
 
 | 用户 | 角色 | 密码（见 `.secrets.env`）| 用途 |
