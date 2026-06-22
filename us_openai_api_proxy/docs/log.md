@@ -9,6 +9,8 @@ tags: [openai, api-proxy, changelog]
 
 ## 2026-06-22 (v0.5)
 
+- **v0.5**: Lesson 25 — docker-compose 必须自包含，漏配 MySQL 连接串导致 new-api 静默降级 SQLite
+
 - **v0.5**: 上海 ERPNext 测试服务器加入 Tailscale (100.119.28.72)
 - **v0.5**: Docker v29.1.3 安装 (DaoCloud 镜像, 清华 apt 源)
 - **v0.5**: new-api Docker 部署 (MySQL 8.0 + Redis 7 + calciumion/new-api, 端口 3000)

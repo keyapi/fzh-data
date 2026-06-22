@@ -148,3 +148,18 @@ Compose 中加 `pull_policy: never` 防止重复拉取。
 4. 公网直连（放弃 Tailscale 加密，不推荐）
 
 **教训**：Tailscale 在国内两台云服务器之间的延迟不一定优于公网。P2P 打洞受 NAT 类型影响极大。对于 API 分发场景（new-api），可以接受 DERP 延迟。
+
+## Lesson 25: docker-compose 文件必须自包含，不能假设默认行为
+
+**问题**：docker-compose.yml 里配了 MySQL 容器，但没给 new-api 传 `SQL_DSN` 环境变量。new-api 检测不到 MySQL 就静默降级为内置 SQLite，初始化页面弹出"数据库警告：您正在使用 SQLite"。
+
+**原因**：docker-compose 只负责启动容器，不管容器之间的连接配置。每个服务的数据库连接串必须显式传入。
+
+**修复**：加一行环境变量：
+```yaml
+new-api:
+  environment:
+    - SQL_DSN=root:pass@tcp(mysql:3306)/new_api?charset=utf8mb4&parseTime=True&loc=Local
+```
+
+**教训**：docker-compose 的核心理念是 `docker compose up -d` 一行搞定所有依赖。如果启动后还需要手动安装依赖或手动配置，说明 compose 文件不完整。容器间的依赖关系（depends_on + healthcheck）和连接参数（environment variables）都属于 compose 文件的定义范围，缺一不可。
