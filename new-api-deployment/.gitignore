@@ -1,0 +1,3 @@
+# 敏感信息 — 包含密码、API Key、Token 等，严禁提交
+.secrets.env
+*.log
