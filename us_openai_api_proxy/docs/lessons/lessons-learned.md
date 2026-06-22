@@ -37,7 +37,7 @@ OKF v0.1 规范、AGENT_HANDOFF.md 确保 Agent 接手丝滑，敏感信息用 .
 
 ## Lesson 8: Ping 通 != TCP 端口通 (Windows 防火墙)
 
-从底层往上排查：ICMP ping → TCP 端口 → HTTP 应用层。Windows 防火墙可能阻断 Tailscale 虚拟网卡。
+从底层往上排查：ICMP ping → TCP 端口 → HTTP 应用层。
 
 ## Lesson 9: 代理进程须常驻
 
@@ -69,41 +69,18 @@ P2P 直连是 bonus，架构设计始终以 DERP relay 兜底为前提。
 
 ## Lesson 16: SSH SOCKS 代理解决无 GUI 服务器 OAuth
 
-**问题**：Ubuntu 无桌面，无法浏览器 OAuth。且北京 IP 登录 ChatGPT 可能触发风控。
-
-**解决**：一条 SSH 命令同时解决:
-```bash
-ssh -L 1455:127.0.0.1:1455 -D 1080 us-ubuntu-proxy
-```
-- `-L 1455`: OAuth 回调隧道回服务器
-- `-D 1080`: SOCKS 代理，浏览器流量走服务器美国 IP
-
-启动走 SOCKS 的 Chrome: `chrome.exe --proxy-server="socks5://localhost:1080"`
-
-**教训**：SSH 是瑞士军刀，`-D` 动态端口转发经常被忽略但极其强大。
+一条 SSH 命令 `-L 1455:... -D 1080` 同时解决回调隧道 + US IP 问题。
 
 ## Lesson 17: systemd 让运维降维
 
-**优势**：
-- `Restart=always` 崩溃自愈，不用写监控脚本保活
-- `journalctl -u cliproxyapi -f` 实时看日志
-- `systemctl enable` 开机自启零配置
-- 内存仅 10.8MB，远超 Windows Service (NSSM) 的复杂度和失败率
-
-**教训**：能用 systemd 就用 systemd，不要手动后台进程。
+`Restart=always` 崩溃自愈，`journalctl -u xxx -f` 实时日志，`systemctl enable` 开机自启零配置。
 
 ## Lesson 18: Tailscale 新机器入网只需 2 条命令
 
-```bash
-curl -fsSL https://tailscale.com/install.sh | sh
-tailscale up
-```
-
-浏览器打开链接授权即可。全流程 2 分钟。比配置任何 VPN 都快。
+`curl ... | sh` + `tailscale up`，浏览器授权 2 分钟搞定。
 
 ## Lesson 19: 敏感信息分层管理
 
-不要在文档里写真实 IP / Key / 密码。分层:
 | 层级 | 位置 | 内容 |
 |------|------|------|
 | L1 | Git 文档 | 占位符 `<VAR>` |
@@ -111,4 +88,63 @@ tailscale up
 | L3 | `~/.ssh/config` | SSH 密钥路径 |
 | L4 | Tailscale 控制台 | 机器列表 |
 
-**教训**：文档里出现真实 IP 或 Key = 安全漏洞。新 Agent 接手不需要知道公网 IP，只需要 Tailscale IP 和 API Key。
+## Lesson 20: Tailscale MagicDNS 会破坏国内服务器 DNS
+
+**问题**：`tailscale up` 后系统 DNS 全部超时。`/etc/resolv.conf` 被设为 `foreign` 模式，DNS Domain 被改为 `tailxxxx.ts.net`。
+
+**原因**：Tailscale MagicDNS 接管了 systemd-resolved，但国内阿里云 ECS 的 DNS 服务器（100.100.2.x）要求特定网络环境。MagicDNS 的覆盖导致 systemd-resolved 无法正确转发查询。
+
+**解决**：`tailscale up --accept-dns=false --accept-routes`。禁用 MagicDNS 接管，保留系统原有 DNS。
+
+**教训**：国内云服务器部署 Tailscale 时务必加 `--accept-dns=false`，否则 DNS 秒挂。
+
+## Lesson 21: shim-signed GRUB 交互提示阻塞 apt
+
+**问题**：Ubuntu 22.04 上 `apt-get install` docker 时被 shim-signed 的 GRUB 设备选择交互提示卡死，`DEBIAN_FRONTEND=noninteractive` 无效。
+
+**原因**：已知 Ubuntu Bug (#2080297)，shim-signed 的 postinst 脚本硬编码了 EFI 分区路径，与阿里云 ECS 的实际分区不匹配。
+
+**解决**：
+```bash
+echo "grub-efi-amd64 grub-efi/install_devices multiselect /dev/nvme0n1p2" | debconf-set-selections
+```
+然后用 `dpkg --configure -a` 修复。
+
+**教训**：阿里云 Ubuntu 上装 Docker 前，先 `dpkg --configure -a` 确认没有残留的 broken package。
+
+## Lesson 22: 阿里云内网镜像不可盲目依赖
+
+**问题**：`mirrors.cloud.aliyuncs.com` 解析到内网 IP `100.100.2.148` 但 TCP 超时不可达。
+
+**原因**：阿里云 ECS 内网镜像仅在特定区域/可用区内可达，跨区域或网络变更后可能失效。
+
+**解决**：换清华镜像 `mirrors.tuna.tsinghua.edu.cn`。国内服务器部署时准备至少 2 个备选镜像源。
+
+**教训**：`/etc/apt/sources.list` 里永远备一个非阿里云的镜像源。
+
+## Lesson 23: Docker 镜像在国内必须用代理拉取
+
+**问题**：Docker Hub (`registry-1.docker.io`) 从国内被完全阻断，TLS 握手超时。公共镜像加速器（如 `docker.1ms.run`）不稳定。
+
+**解决**：DaoCloud 代理 `docker.m.daocloud.io`：
+```bash
+docker pull docker.m.daocloud.io/library/mysql:8.0
+docker tag docker.m.daocloud.io/library/mysql:8.0 mysql:8.0
+```
+Compose 中加 `pull_policy: never` 防止重复拉取。
+
+**教训**：国内 Docker 部署三步走：① 配置 Daocloud mirror ② 手动 `docker pull` + `docker tag` ③ Compose `pull_policy: never`。
+
+## Lesson 24: Tailscale 两台国内机器之间延迟可能反而更高
+
+**问题**：北京和上海两台国内机器，Tailscale IP 间延迟极高（200ms+），而公网 IP 直连仅 30ms。
+
+**原因**：双 NAT（办公网 + 阿里云 VPC）导致 P2P 打洞失败，流量绕道境外 DERP（东京/纽约）来回。
+
+**方案优先级**：
+1. 尝试 Peer Relays（`tailscale set --relay-server-port 3478`，UDP 中继）
+2. 自建国内 DERP（需国内 VPS + 备案域名）
+3. 接受 DERP relay（API 调用场景 200ms 延迟可接受）
+4. 公网直连（放弃 Tailscale 加密，不推荐）
+
+**教训**：Tailscale 在国内两台云服务器之间的延迟不一定优于公网。P2P 打洞受 NAT 类型影响极大。对于 API 分发场景（new-api），可以接受 DERP 延迟。

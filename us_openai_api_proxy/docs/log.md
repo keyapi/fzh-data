@@ -7,28 +7,33 @@ tags: [openai, api-proxy, changelog]
 ---
 # 变更日志
 
+## 2026-06-22 (v0.5)
+
+- **v0.5**: 上海 ERPNext 测试服务器加入 Tailscale (100.119.28.72)
+- **v0.5**: Docker v29.1.3 安装 (DaoCloud 镜像, 清华 apt 源)
+- **v0.5**: new-api Docker 部署 (MySQL 8.0 + Redis 7 + calciumion/new-api, 端口 3000)
+- **v0.5**: 上海 Tailscale 延迟优化 — 启用 Peer Relays (`--relay-server-port 3478`)
+- **v0.5**: Lesson 20-24 — Tailscale MagicDNS / shim-signed / 阿里云镜像 / Docker 代理 / 国内 Tailscale 延迟
+- **v0.5**: sh-agent 用户创建 + 用户权限体系确立
+- **v0.5**: 上海 SSH config: `ssh sh-erpnext-test`
+
 ## 2026-06-22 (v0.4)
 
 - **v0.4**: 迁移至 Ubuntu 24.04 (1C2G) — 放弃 Windows Server，新开 Vultr Ubuntu
-- **v0.4**: systemd 部署 — `cliproxyapi.service` 开机自启，`Restart=always` 崩溃自愈
-- **v0.4**: SSH SOCKS 代理 OAuth 方案 — `ssh -D 1080` 解决无 GUI Ubuntu 的浏览器登录问题，同时确保 OpenAI 看到美国 IP
-- **v0.4**: 健康检查 — `health_check.sh` + cron 每 5 分钟自动检查 systemd + API 端口
-- **v0.4**: 运维体系 — SSH config 一键登录、gq-agent 最小权限用户、Windows Terminal profile
-- **v0.4**: 敏感信息分层 — L1 占位符文档 / L2 .env gitignore / L3 SSH config / L4 Tailscale 控制台
-- **v0.4**: Lesson 16-18 — SSH SOCKS OAuth、systemd 自动拉起、Tailscale 新机入网流程
-- **v0.4**: 新 OAuth 账号 — `fzhvickyjing@gmail.com` (免费，待升级)
+- **v0.4**: systemd 部署 + 健康检查 cron + SSH SOCKS OAuth
+- **v0.4**: Lesson 16-19
 
 ## 2026-06-18 (v0.3)
 
-- **v0.3**: 决策放弃 Windows Server — 多用户 RDP Tailscale 冲突 + NSSM 注册失败 + 资源不足
-- **v0.3**: Lesson 10-15 — Windows 多用户、重启丢进程、Linux vs Windows、LAN 网关、P2P 退化
+- **v0.3**: 放弃 Windows Server（多用户 RDP 冲突 + NSSM 失败）
+- **v0.3**: Lesson 10-15
 
 ## 2026-06-18 (v0.2)
 
-- **v0.2**: LAN 网关部署 — 网关电脑开 `lite_lan_proxy.py` :3000，同事无需装 Tailscale
-- **v0.2**: ping 通 != TCP 端口通 (Windows 防火墙)，代理进程须常驻
+- **v0.2**: LAN 网关部署 + ping != TCP 端口通
+- **v0.2**: Lesson 8-9
 
 ## 2026-06-18 (v0.1)
 
 - **v0.1**: 初始搭建 — Tailscale P2P 直连、CLIProxyAPI v7.2.16、OKF 文档骨架
-- **v0.1**: 确认 P2P 直连无需 HK DERP、架构决策 Vultr VM 而非实体电脑
+- **v0.1**: Lesson 1-7
