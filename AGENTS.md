@@ -36,10 +36,29 @@
 
 **fzh-data** — FZH 跨境电商数据管道工具集，维护**赛狐 / ERPNext / 通途**三方数据一致性。
 
-- 技术栈：Python ≥ 3.10 + uv + pandas + openpyxl（详见 `pyproject.toml`）
+### Agent 新机器首次 clone 后必做
+
+```powershell
+# 1. 安装 uv (Python 包管理器) — 只需一次
+powershell -ExecutionPolicy Bypass -Command "irm https://astral.sh/uv/install.ps1 | iex"
+
+# 2. 安装项目依赖
+uv sync
+
+# 3. 初始化 symlink (CLAUDE.md, skills)
+powershell -ExecutionPolicy Bypass -File setup.ps1
+```
+
+> 以上 3 步做完即可正常开发。所有脚本通过 `uv run python <script.py>` 运行，不需要全局 Python / conda。
+> 如果 `uv` 不是命令，重新打开终端或手动加 `$env:Path += ";$env:USERPROFILE\.cargo\bin"`。
+> 如果同事 agent clone 后不知道怎么做，让它读本项目 AGENTS.md 的本节。
+
+### 运行环境
+
+- Python >= 3.10 + uv (详见 `pyproject.toml`)
 - 运行方式：`uv run python <script.py>`，脚本从所在目录运行
-- Git：中文 commit `type(scope): description`，开发在分支 → merge 到 main
-- 公司背景、供应链、三系统 SKU 定义 → `docs/company-context.md`
+- Git：中文 commit `type(scope): description`，开发在分支 -> merge 到 main
+- 公司背景、供应链、三系统 SKU 定义 -> `docs/company-context.md`
 
 ## 模块索引
 
@@ -54,6 +73,7 @@
 | `other-outbound` | `other_outbound/` | 赛狐库存明细 → 其他出库清零 |
 | `en-image-upload` | `EN_API/` | 图片上传（CLI + Web UI + 物料组主图） |
 | `nas-itemgroup-folders` | `nas_itemgroup_folders/` | NAS-ERPNext 物料组文件夹对账 + 叶子组 (LGKS) 管理 |
+| `us-openai-api-proxy` | `us_openai_api_proxy/` | US Vultr Tailscale + CLIProxyAPI → ChatGPT API 共享 |
 | `dam-prototype` | `dam-prototype/` | DAM 数字资产管理原型 |
 | `frappe-core-api` | — | ERPNext REST API 开发（外部 skill） |
 | `frappe-errors-api` | — | ERPNext API 错误处理（外部 skill） |
@@ -70,6 +90,7 @@
 5. **图片压缩加 size guard**（Lesson 60）——压缩后变大则保留原图
 6. **不要用 PowerShell Start-Job 启 Web 服务**（Lesson 58）——端口隔离不可达
 7. **新建 Item Group 叶子组**：必须设 `is_group=1, is_leaf_group=1, custom_model_id=LGKS+最小子KS编号`（见 `docs/company-context.md`）
+8. **提交 PR 前扫描凭证**：`git diff origin/main...HEAD | grep -iE "(api_key|api_secret|password|token|ghp_|github_pat_)\s*=\s*['\"]?\w{8,}"` 必须有零输出。禁止硬编码密钥/token/密码，禁止提交 CSV 数据文件、PDF、图片到公开仓库。违反 PR 不得合并（详见 `CONTRIBUTING.md` 安全检查章节）
 8. **OKF 文档规范**：新建子项目/模块时，必须创建 `docs/` 目录，按 [OKF v0.1](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md) 规范编写文档。所有 `.md` 文件必须有 YAML frontmatter（`type` 字段必填），每个目录必须有 `index.md`，每个 bundle 必须有 `log.md`。参考示例：`advertise/docs/`。触发 `/okf` 或编辑 Markdown 时自动加载 OKF skill。
 
 ## 文档体系
