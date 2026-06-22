@@ -9,7 +9,8 @@ tags: [openai, api-proxy, changelog]
 
 ## 2026-06-22 (v0.5)
 
-- **v0.5**: Lesson 25 — docker-compose 必须自包含，漏配 MySQL 连接串导致 new-api 静默降级 SQLite
+- **v0.5**: Lesson 25 — docker-compose 必须自包含 (漏 SQL_DSN → 降级 SQLite), 必须从官方 compose 出发
+- **v0.5**: Lesson 26 — Docker bridge 无法访问宿主机 Tailscale (经典冲突, iptables MASQUERADE 修复, 附 5 个社区链接)
 
 - **v0.5**: 上海 ERPNext 测试服务器加入 Tailscale (100.119.28.72)
 - **v0.5**: Docker v29.1.3 安装 (DaoCloud 镜像, 清华 apt 源)

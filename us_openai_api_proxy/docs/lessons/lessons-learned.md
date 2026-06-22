@@ -161,3 +161,31 @@ Compose 中加 `pull_policy: never` 防止重复拉取。
 
 **教训**：部署开源项目第一步永远是拉原版 docker-compose.yml，在上面改，不要按教程里的 `docker run` 单容器命令自己拼 compose。`docker run -e KEY=VALUE` 的参数在 compose 里就是 `environment:` 段，一一对应。漏一个就翻车。
 
+## Lesson 26: Docker bridge 容器无法访问宿主机 Tailscale 网络
+
+**问题**：new-api Docker 容器（bridge 网络）无法访问 US Ubuntu 的 Tailscale IP `100.126.133.106:8317`。宿主机能通，容器不通。
+
+**根因**：Docker bridge 网络的容器有独立的网络命名空间，`tailscale0` 虚拟网卡在宿主机上，容器内看不到。即使宿主机开启了 IP forwarding，回程路由也有问题——应答包会被 Tailscale 的路由表 52 劫持，走 `tailscale0` 而不是 `docker0`。
+
+这是 Tailscale + Docker 的**经典已知冲突**，2025 年 Docker 28 的网络变更加剧了问题。
+
+**社区 4 种标准方案**：
+
+| 方案 | 做法 | 适用场景 |
+|------|------|---------|
+| **MASQUERADE** ✅ | `iptables -t nat -I POSTROUTING -s <docker子网> -o tailscale0 -j MASQUERADE` | Tailscale 在宿主机 |
+| DOCKER-USER 链 | `iptables -I DOCKER-USER -j ts-forward` | Tailscale 官方推荐 (Docker 28+) |
+| Sidecar 模式 | Tailscale 单独容器，app 容器 `network_mode: "service:tailscale"` | Tailscale 也容器化 |
+| host 网络 | `network_mode: host` | 简单但 MySQL auth_socket 可能冲突 |
+
+**我们选 MASQUERADE**——Tailscale 直接跑在宿主机（非容器化），这是社区推荐的标准做法，不是 hack。
+
+**持久化**：iptables 规则重启后会丢失，需要 `apt install iptables-persistent && netfilter-persistent save`。
+
+**相关链接**：
+- [Tailscale Docker stateful filtering 官方文档](https://tailscale.com/docs/reference/messages/client/docker-stateful-filtering)
+- [moby/moby#49498: Docker 28 stops containers communicating with tailscale network](https://github.com/moby/moby/issues/49498)
+- [tailscale/tailscale#15401: container cannot reach other containers by name](https://github.com/tailscale/tailscale/issues/15401)
+- [tailscale/tailscale#14008: External DNS SERVFAIL with Tailscale on Docker host](https://github.com/tailscale/tailscale/issues/14008)
+- [tailscale/tailscale#13367: No connectivity from docker container when tailscale exit-node is set](https://github.com/tailscale/tailscale/issues/13367)
+
