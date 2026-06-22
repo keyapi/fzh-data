@@ -95,6 +95,95 @@
 
 ---
 
+## 三、部署后初始化配置流程
+
+容器启动后，首次访问 `http://localhost:3000` 会显示**系统初始化页面**（数据库检查 → 管理员账号 → 使用模式 → 完成初始化）。
+
+### 方案 A：通过 API 完成初始化（推荐脚本方式）
+
+```bash
+# 1. 注册管理员（首次注册用户自动成为管理员，但 role=1 需修正）
+curl -s -X POST http://localhost:3000/api/user/register \
+  -H "Content-Type: application/json" \
+  -d '{"username":"root","password":"<ADMIN_PASSWORD>","password2":"<ADMIN_PASSWORD>","email":"admin@local.dev","verification_code":""}'
+
+# 2. 修正 role（New API 首次注册 role=1，需改为 100）
+docker exec new-api sqlite3 /data/one-api.db \
+  "UPDATE users SET role=100 WHERE id=1;"
+
+# 3. 完成初始化（将 setup 状态从 false→true）
+curl -s -X POST http://localhost:3000/api/setup \
+  -H "Cookie: session=<SESS_VAL>" \
+  -H "New-Api-User: 1" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+
+# 4. 验证
+curl -s http://localhost:3000/api/status | grep '"setup"'
+# → setup: true
+```
+
+### 方案 B：通过 Web 页面完成（可视化）
+
+1. 浏览器访问 `http://localhost:3000`
+2. 页面自动跳转到初始化向导
+3. 依次配置：
+   - **数据库检查** → SQLite 模式无需操作，直接下一步
+   - **管理员账号** → 填写用户名 `root`、密码
+   - **使用模式** → 选**多用户模式**（非自用模式）
+   - **完成初始化** → 点击完成，自动跳转到登录页
+4. 用刚创建的管理员账号登录
+5. **关键**: 登录后进入 **设置 → 运营设置**，勾选**合规确认**，否则订阅功能不可用
+
+> ⚠️ 方案 B 创建的管理员账号 role 是正确的（直接为 100），无需手动修正。
+
+### 初始化后调整额度
+
+```bash
+# 方式一：后台页面操作
+# 设置 → 运营设置 → 找到用户额度相关配置
+
+# 方式二：API 充值
+curl -s -X POST http://localhost:3000/api/user/manage \
+  -H "Cookie: session=<SESS_VAL>" -H "New-Api-User: 1" \
+  -H "Content-Type: application/json" \
+  -d '{"id":<用户ID>,"action":"add_quota","mode":"add","value":500000}'
+
+# 方式三：直接改数据库
+MSYS2_ARG_CONV_EXCL="*" docker exec new-api sqlite3 /data/one-api.db \
+  "UPDATE users SET quota=500000 WHERE id=2;"
+```
+
+### 分发 Token 给用户
+
+```bash
+# 1. 为当前用户创建令牌（系统自动生成无连字符的 Key）
+curl -s -X POST http://localhost:3000/api/token/ \
+  -H "Cookie: session=<SESS_VAL>" -H "New-Api-User: 1" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"用户令牌名","remain_quota":0,"unlimited_quota":true}'
+
+# 2. 查看生成的 Key（从数据库获取）
+MSYS2_ARG_CONV_EXCL="*" docker exec new-api sqlite3 /data/one-api.db \
+  "SELECT [key] FROM tokens WHERE name='用户令牌名';"
+
+# 3. 将 Key 复制给用户在客户端配置
+# 用户配置示例（Codex++ / Cherry Studio 等）：
+#   Base URL: http://localhost:3000
+#   API Key: <上面获取的 Key>
+#   Model: deepseek-v4-flash
+
+# 4. 如果 Token 需要归属其他用户（API 只能创建给当前用户）
+#    通过数据库转移所有权
+MSYS2_ARG_CONV_EXCL="*" docker exec new-api sqlite3 /data/one-api.db \
+  "UPDATE tokens SET user_id=<目标用户ID> WHERE name='用户令牌名';"
+```
+
+> ⚠️ 令牌 Key 不能含连字符，必须用系统自动生成
+> ⚠️ 用于订阅管控的 Token 必须设 `unlimited_quota=true`
+
+---
+
 ## 三、订阅套餐系统（核心功能）
 
 ### 解决的问题
