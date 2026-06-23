@@ -56,7 +56,9 @@ ssh sh-erpnext-test "cd /opt/new-api && docker compose restart new-api"
 
 ### new-api Web UI
 - 地址: `http://<SH_TAILSCALE_IP>:3000` (Tailscale 内网)
-- 待初始化: 管理员账号 + 渠道配置 + API Key 分发
+- 管理员: `root`, 密码见 `.secrets.env`
+- **初始化状态**: ✅ 已完成, 渠道已配置 (GPT Proxy → US CLIProxyAPI), 订阅已启用
+- 测试用户: `testuser`, 密码见 `.secrets.env`, 绑定 2min/¥0.05 订阅套餐
 
 ## US Ubuntu CLIProxyAPI 运维
 
@@ -130,10 +132,80 @@ ssh us-ubuntu-proxy systemctl start cliproxyapi
 ## 待办
 
 1. **ChatGPT 付费账号**（当前阻塞）
-2. new-api 初始化 + 渠道配置 (可交 GQ)
+2. ~~new-api 初始化 + 渠道配置~~ ✅ **已完成**（admin `root`, 渠道 GPT Proxy, 订阅 2min/¥0.05）
 3. new-api 安全加固 (绑 Tailscale IP)
 4. Tailscale 延迟优化 (Peer Relays / 自建 DERP)
 5. Telegram/邮件告警
+6. **清理**: 删除遗留 `admin` 用户（role=1, 非管理员）
+
+---
+
+## New API 参考（两地通用）
+
+> 详细部署日志见 `D:\Claude Demo\fzh-data\new-api-deployment\AGENT_HANDOFF.md`
+
+### 角色体系
+
+| 角色 | New API | 说明 |
+|------|---------|------|
+| `RootUser` = 100 | 超级管理员 | Web 向导创建时自动为 100 |
+| `AdminUser` = 10 | 管理员 | |
+| `CommonUser` = 1 | 普通用户 | 注册/API 创建默认值，需手动升为 100 |
+
+### 常见问题速查
+
+| 现象 | 原因 | 解决 |
+|------|------|------|
+| `Unauthorized, insufficient privileges` | role < 100 | `UPDATE users SET role=100 WHERE id=N` |
+| `Unauthorized, New-Api-User header not provided` | 管理 API 缺 Header | 加 `-H "New-Api-User: 用户ID"` |
+| `Invalid token` | Token Key 含连字符 | 用系统 `POST /api/token/` 生成 |
+| `模型价格未配置` | ModelRatio 缺该模型 | 后台 → 运营设置 → 模型定价 |
+| 订阅功能不可用 | 未确认合规声明 | `POST /api/option/payment_compliance {"confirmed":true}` |
+| `bad_response_status_code` | base_url 带 `/v1` 导致路径重复 | base_url 去掉末尾 `/v1` |
+
+### 管理 API 认证
+
+所有管理 API 必须同时携带：
+```bash
+-H "Cookie: session=<SESS>" -H "New-Api-User: <用户ID>"
+```
+
+### 定价配置参数
+
+| 参数 | 作用 | 存放位置（options 表 key） |
+|------|------|--------------------------|
+| `ModelRatio` | 输入 token 单价 | `ModelRatio` |
+| `CompletionRatio` | 输出倍率（相对输入） | `CompletionRatio` |
+| `CacheRatio` | 缓存命中倍率 | `CacheRatio` |
+
+**公式**: `显示价(¥/1M) = ModelRatio × 1,000,000 / 500,000 × 7.3`
+
+### 订阅套餐
+
+```bash
+# 创建
+POST /api/subscription/admin/plans
+{"plan":{"title":"套餐名","total_amount":3424,
+         "quota_reset_period":"custom","quota_reset_custom_seconds":120,
+         "duration_unit":"month","duration_value":12,"price_amount":0}}
+
+# 分配
+POST /api/subscription/admin/users/{id}/subscriptions
+{"plan_id": 1}
+```
+
+重置周期: `"never"` / `"daily"` / `"weekly"` / `"monthly"` / `"custom"`
+**令牌必须 `unlimited_quota=true`**, 额度由订阅控制。
+
+### 上海 new-api 渠道
+
+| 名称 | 类型 | 模型 | Base URL |
+|------|------|------|---------|
+| GPT Proxy | OpenAI (1) | `gpt-5.5,gpt-5.4-mini` | `http://<US_TS_IP>:8317` |
+
+> base_url 不加 `/v1`, New API 自动拼接 `http://<US_TS_IP>:8317/v1/chat/completions`
+
+---
 
 ## 见也
 
