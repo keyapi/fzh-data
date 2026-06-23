@@ -54,6 +54,25 @@ powershell -ExecutionPolicy Bypass -File setup.ps1
 
 运行一次即可，后续 `git pull` 新增的 skill 需要重新运行脚本。
 
+### Git Worktree 创建（Windows 特别说明）
+
+> `CLAUDE.md` 和 `.claude/skills` 在 git 中以 symlink 形式跟踪（mode 120000）。
+> Git for Windows 默认 `core.symlinks=false`，clone 和 worktree 均正常。
+> 如果机器上 `core.symlinks=true`（如开启了 Windows 开发者模式），worktree 会因权限不足失败。
+
+**Windows 上正确的 worktree 创建方式：**
+
+```bash
+# 从主 repo 目录（如 D:\Work\赛狐\Cursor）执行
+git -c core.symlinks=false worktree add <path> -b <branch-name>
+
+# worktree 创建后，在新 worktree 中运行
+cd <path>
+powershell -ExecutionPolicy Bypass -File setup.ps1
+```
+
+> `setup.ps1` 的 `New-SafeSymlink` 会尝试创建真实 symlink，失败则自动回退为文件拷贝。
+
 ---
 
 ## 开发流程
