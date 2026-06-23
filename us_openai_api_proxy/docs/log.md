@@ -7,6 +7,12 @@ tags: [openai, api-proxy, changelog]
 ---
 # 变更日志
 
+## 2026-06-23 (v0.8)
+
+- **v0.8**: Tailscale 安全升级 v1.32.3 → v1.98.4 (手动静态二进制替换, arm64)
+- **v0.8**: 验证新版 iptables 规则 — ts-forward MARK 方向未变化, 手工 MASQUERADE 仍需保留
+- **v0.8**: 升级后重新认证, 所有节点正常, 手机 new-api + 翻墙正常
+
 ## 2026-06-23 (v0.7)
 
 - **v0.7**: 方案 A 实施完成 — 办公室全员可通过路由器访问 Tailscale 网络

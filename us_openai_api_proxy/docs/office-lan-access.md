@@ -257,7 +257,7 @@ uci commit && /etc/init.d/firewall restart
 ## 当前局限
 
 1. **新华三静态路由可能是冗余的**：默认路由已指向 OpenWrt，即使没有新增的静态路由，理论上也应工作。但添加后更明确。
-2. **Tailscale 版本较旧**：1.32.3，新版可能有更好的 iptables 兼容性
+2. **Tailscale 版本**：已升级至 1.98.4 (2026-06-23)，但 ts-forward MARK 方向未变化，手工 MASQUERADE 仍需保留
 3. **OpenWrt 非官方固件**：R22.11.13 是自定义版本，部分 init 脚本不兼容
 4. **防火墙重启后需重新启动 Tailscale**：已写入 `/etc/firewall.user` 做持久化
 
