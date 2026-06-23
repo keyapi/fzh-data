@@ -132,8 +132,9 @@ ssh us-ubuntu-proxy systemctl start cliproxyapi
 1. **ChatGPT 付费账号**（当前阻塞）
 2. new-api 初始化 + 渠道配置 (可交 GQ)
 3. new-api 安全加固 (绑 Tailscale IP)
-4. Tailscale 延迟优化 (Peer Relays / 自建 DERP)
-5. Telegram/邮件告警
+4. **办公室全员 Tailscale 访问** → [docs/office-lan-access.md](./docs/office-lan-access.md) (方案 A 优先)
+5. Tailscale 延迟优化 (Peer Relays / 自建 DERP)
+6. Telegram/邮件告警
 
 ## 见也
 
@@ -142,4 +143,5 @@ ssh us-ubuntu-proxy systemctl start cliproxyapi
 - [docs/operations.md](./docs/operations.md) — 运维手册
 - [docs/log.md](./docs/log.md) — 变更日志
 - [docs/lessons/lessons-learned.md](./docs/lessons/lessons-learned.md) — 26 条经验教训
-- [docs/lan-gateway.md](./docs/lan-gateway.md) — LAN 网关
+- [docs/office-lan-access.md](./docs/office-lan-access.md) — 办公室全员访问 Tailscale (5 方案)
+- [docs/lan-gateway.md](./docs/lan-gateway.md) — LAN 网关 (lite_lan_proxy.py)

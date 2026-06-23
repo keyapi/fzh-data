@@ -7,6 +7,11 @@ tags: [openai, api-proxy, changelog]
 ---
 # 变更日志
 
+## 2026-06-23 (v0.6)
+
+- **v0.6**: 新增 `docs/office-lan-access.md` — 办公室全员访问 Tailscale 5 种方案全景 (OpenWrt/PC网关/公网/全员Tailscale/Subnet Router)
+- **v0.6**: 方案 A (OpenWrt 路由器) 详细部署步骤 — 当前优先级最高
+
 ## 2026-06-22 (v0.5)
 
 - **v0.5**: Lesson 25 — docker-compose 必须自包含 (漏 SQL_DSN → 降级 SQLite), 必须从官方 compose 出发
