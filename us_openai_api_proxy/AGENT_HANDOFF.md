@@ -9,54 +9,35 @@ tags: [openai, api-proxy, tailscale, handoff, new-api]
 
 > 本文档让新 Agent 或新对话在最少 token 内了解模块状态并继续工作。
 
-## 架构总览 (v0.7)
+## 架构总览 (v0.5)
 
 ```
                           Tailscale 虚拟网络
-    ┌──────────────────────────────────────────────────────────┐
-    │                                                          │
-    │  北京办公室                    上海                       美国
-    │  ┌────────────────────┐  ┌──────────────────┐  ┌──────────────┐
-    │  │ OpenWrt R68S       │  │ sh-erpnext-test  │  │ us-ubuntu    │
-    │  │ Tailscale 网关     │  │ new-api :3000    │  │ CLIProxyAPI  │
-    │  │ 100.124.94.69     │  │ 100.119.28.72   │  │ :8317        │
-    │  │ MASQUERADE + fwd  │  │ ┌──────────────┐ │  │ 100.126.133.106│
-    │  └──┬─────────────────┘  │ │ DeepSeek 直连 │ │  │ ChatGPT OAuth│
-    │     │static route        │ │ OpenAI → US  │─┼──→              │
-    │  ┌──┴─────────────────┐  │ └──────────────┘ │  └──────────────┘
-    │  │ 新华三 ER3208G3-P-E │  └──────────────────┘
-    │  │ 静态路由: 100.64   │
-    │  │ /10 → 192.168.100.1│
-    │  └──┬─────────────────┘
-    │     │ WiFi FZH-5G
-    │  ┌──┴─────────────────┐
-    │  │ 同事 PC + 手机      │
-    │  │ (192.168.10.x,     │
-    │  │  无需 Tailscale)    │
-    │  └────────────────────┘
-    └──────────────────────────────────────────────────────────┘
+    ┌──────────────────────────────────────────────────┐
+    │                                                  │
+    │  北京                    上海                      美国
+    │  ┌──────────┐    ┌──────────────────┐    ┌──────────────┐
+    │  │ fzhpc13   │    │ sh-erpnext-test  │    │ us-ubuntu    │
+    │  │ LAN网关   │    │ new-api :3000    │    │ CLIProxyAPI  │
+    │  │  :3000   │    │ ┌──────────────┐ │    │ :8317        │
+    │  │          │    │ │ DeepSeek 直连 │ │    │ ChatGPT OAuth│
+    │  └──────────┘    │ │ OpenAI → US  │─┼────→              │
+    │                  │ └──────────────┘ │    └──────────────┘
+    │  同事 PC         └──────────────────┘
+    │   ↓ HTTP
+    │  LAN网关 :3000 或 new-api :3000
+    └──────────────────────────────────────────────────┘
 ```
 
 ## 服务器清单
 
-> 敏感 IP/密钥在 `.env`（gitignored），文档仅用占位符。
+> ⚠️ 真实 IP/密钥在 `.env`（gitignored），文档仅用占位符。
 
 | 机器 | SSH | Tailscale IP | 角色 |
 |------|-----|-------------|------|
 | US Ubuntu | `ssh us-ubuntu-proxy` | `<US_TS_IP>` | CLIProxyAPI (ChatGPT → API) |
 | 上海测试 | `ssh sh-erpnext-test` | `<SH_TS_IP>` | new-api (API 分发中心) |
-| 北京 OpenWrt | `ssh root@192.168.100.1` | `100.124.94.69` | Tailscale LAN 网关 |
-| 北京新华三 | Web `192.168.10.1` | — | 办公室主路由 + WiFi |
-
-## 北京网络拓扑
-
-```
-联通光猫 → OpenWrt R68S (Tailscale 网关) → 新华三 ER3208G3-P-E → WiFi AP → 办公室设备 (192.168.10.x)
-```
-
-- OpenWrt LAN: 192.168.100.1/24, Tailscale IP: 100.124.94.69
-- 新华三 LAN: 192.168.10.0/24, WAN1: 192.168.100.181
-- 办公室设备无需装 Tailscale，通过路由器转发访问 Tailscale 网络。
+| 北京办公 | — | `<BJ_TS_IP>` | LAN 网关 + 开发 |
 
 ## 上海 new-api 运维
 
@@ -75,7 +56,9 @@ ssh sh-erpnext-test "cd /opt/new-api && docker compose restart new-api"
 
 ### new-api Web UI
 - 地址: `http://<SH_TAILSCALE_IP>:3000` (Tailscale 内网)
-- 待初始化: 管理员账号 + 渠道配置 + API Key 分发
+- 管理员: `root`, 密码见 `.secrets.env`
+- **初始化状态**: ✅ 已完成, 渠道已配置 (GPT Proxy → US CLIProxyAPI), 订阅已启用
+- 测试用户: `testuser`, 密码见 `.secrets.env`, 绑定 2min/¥0.05 订阅套餐
 
 ## US Ubuntu CLIProxyAPI 运维
 
@@ -149,11 +132,80 @@ ssh us-ubuntu-proxy systemctl start cliproxyapi
 ## 待办
 
 1. **ChatGPT 付费账号**（当前阻塞）
-2. new-api 初始化 + 渠道配置 (可交 GQ)
+2. ~~new-api 初始化 + 渠道配置~~ ✅ **已完成**（admin `root`, 渠道 GPT Proxy, 订阅 2min/¥0.05）
 3. new-api 安全加固 (绑 Tailscale IP)
-4. ~~办公室全员 Tailscale 访问~~ ✅ 已完成 (v0.7) — see [docs/office-lan-access.md](./docs/office-lan-access.md)
-5. Tailscale 延迟优化 (Peer Relays / 自建 DERP)
-6. Telegram/邮件告警
+4. Tailscale 延迟优化 (Peer Relays / 自建 DERP)
+5. Telegram/邮件告警
+6. **清理**: 删除遗留 `admin` 用户（role=1, 非管理员）
+
+---
+
+## New API 参考（两地通用）
+
+> 详细部署日志见 `D:\Claude Demo\fzh-data\new-api-deployment\AGENT_HANDOFF.md`
+
+### 角色体系
+
+| 角色 | New API | 说明 |
+|------|---------|------|
+| `RootUser` = 100 | 超级管理员 | Web 向导创建时自动为 100 |
+| `AdminUser` = 10 | 管理员 | |
+| `CommonUser` = 1 | 普通用户 | 注册/API 创建默认值，需手动升为 100 |
+
+### 常见问题速查
+
+| 现象 | 原因 | 解决 |
+|------|------|------|
+| `Unauthorized, insufficient privileges` | role < 100 | `UPDATE users SET role=100 WHERE id=N` |
+| `Unauthorized, New-Api-User header not provided` | 管理 API 缺 Header | 加 `-H "New-Api-User: 用户ID"` |
+| `Invalid token` | Token Key 含连字符 | 用系统 `POST /api/token/` 生成 |
+| `模型价格未配置` | ModelRatio 缺该模型 | 后台 → 运营设置 → 模型定价 |
+| 订阅功能不可用 | 未确认合规声明 | `POST /api/option/payment_compliance {"confirmed":true}` |
+| `bad_response_status_code` | base_url 带 `/v1` 导致路径重复 | base_url 去掉末尾 `/v1` |
+
+### 管理 API 认证
+
+所有管理 API 必须同时携带：
+```bash
+-H "Cookie: session=<SESS>" -H "New-Api-User: <用户ID>"
+```
+
+### 定价配置参数
+
+| 参数 | 作用 | 存放位置（options 表 key） |
+|------|------|--------------------------|
+| `ModelRatio` | 输入 token 单价 | `ModelRatio` |
+| `CompletionRatio` | 输出倍率（相对输入） | `CompletionRatio` |
+| `CacheRatio` | 缓存命中倍率 | `CacheRatio` |
+
+**公式**: `显示价(¥/1M) = ModelRatio × 1,000,000 / 500,000 × 7.3`
+
+### 订阅套餐
+
+```bash
+# 创建
+POST /api/subscription/admin/plans
+{"plan":{"title":"套餐名","total_amount":3424,
+         "quota_reset_period":"custom","quota_reset_custom_seconds":120,
+         "duration_unit":"month","duration_value":12,"price_amount":0}}
+
+# 分配
+POST /api/subscription/admin/users/{id}/subscriptions
+{"plan_id": 1}
+```
+
+重置周期: `"never"` / `"daily"` / `"weekly"` / `"monthly"` / `"custom"`
+**令牌必须 `unlimited_quota=true`**, 额度由订阅控制。
+
+### 上海 new-api 渠道
+
+| 名称 | 类型 | 模型 | Base URL |
+|------|------|------|---------|
+| GPT Proxy | OpenAI (1) | `gpt-5.5,gpt-5.4-mini` | `http://<US_TS_IP>:8317` |
+
+> base_url 不加 `/v1`, New API 自动拼接 `http://<US_TS_IP>:8317/v1/chat/completions`
+
+---
 
 ## 见也
 
@@ -162,5 +214,4 @@ ssh us-ubuntu-proxy systemctl start cliproxyapi
 - [docs/operations.md](./docs/operations.md) — 运维手册
 - [docs/log.md](./docs/log.md) — 变更日志
 - [docs/lessons/lessons-learned.md](./docs/lessons/lessons-learned.md) — 26 条经验教训
-- [docs/office-lan-access.md](./docs/office-lan-access.md) — 办公室全员访问 Tailscale (5 方案)
-- [docs/lan-gateway.md](./docs/lan-gateway.md) — LAN 网关 (lite_lan_proxy.py)
+- [docs/lan-gateway.md](./docs/lan-gateway.md) — LAN 网关
