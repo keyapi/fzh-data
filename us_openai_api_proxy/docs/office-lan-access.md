@@ -1,220 +1,269 @@
 ---
 okf: v0.1
 type: Explanation
-title: 北京办公室全员访问 Tailscale API 方案
-description: 5 种方案让办公室所有电脑无需安装 Tailscale 即可访问上海 new-api 和美国 CLIProxyAPI
-tags: [tailscale, openwrt, lan, subnet, office-network]
+title: 北京办公室全员访问 Tailscale — 方案 A 实施记录
+description: 在 OpenWrt + 新华三双层路由下，实现办公室所有设备无需安装 Tailscale 即可访问 Tailscale 网络内的上海 new-api 和美国 CLIProxyAPI
+tags: [tailscale, openwrt, h3c, subnet, office-network, routing, nat]
 ---
-# 北京办公室全员访问 Tailscale API 方案
+# 北京办公室全员访问 Tailscale — 方案 A 实施记录
 
 ## 目标
 
-办公室所有电脑能访问 Tailscale 网络内的 API 服务：
+办公室所有电脑（包括手机连 WiFi）能访问 Tailscale 网络内的 API 服务：
 
 | 服务 | Tailscale IP | 端口 |
 |------|-------------|------|
-| US CLIProxyAPI (ChatGPT) | `<US_TS_IP>` | 8317 |
-| 上海 new-api (API 分发) | `<SH_TS_IP>` | 3000 |
+| 上海 new-api (API 分发) | `100.119.28.72` | 3000 |
+| US CLIProxyAPI (ChatGPT) | `100.126.133.106` | 8317 |
 
-现状：只有装过 Tailscale 的电脑（fzhpc13、fzh-dev01）能访问这些 Tailscale IP。
-目标：办公室全员无需装 Tailscale 即可访问。
-
-## 方案全景
-
-| 方案 | 做法 | 复杂度 | 电脑需Tailscale | 稳定性 | 安全 | 当前状态 |
-|------|------|--------|:--:|--------|------|---------|
-| **A: OpenWrt 路由** | 路由器装 Tailscale + 静态路由 | 中 | 不需要 | ⭐⭐⭐ | ⭐⭐⭐ | ⭐ 优先试验 |
-| **B: PC 网关** | fzhpc13 做 Tailscale 网关 | 低 | 不需要 | ⭐⭐ | ⭐⭐ | 已有基础 |
-| **C: 公网直连** | 阿里云安全组放行端口 | 极低 | 不需要 | ⭐⭐⭐ | ⭐ | 测试可用 |
-| **D: 每台装 Tailscale** | 所有 PC 装 Tailscale | 零 | 需要 | ⭐⭐⭐ | ⭐⭐⭐ | 推广难 |
-| **E: Subnet Router** | 反方向: Tailscale→LAN | 中 | 需要(远程) | ⭐⭐⭐ | ⭐⭐⭐ | 另一方向 |
-
----
-
-## 方案 A: OpenWrt 路由器装 Tailscale + 静态路由 ⭐ 推荐
-
-### 原理
+## 公司网络拓扑
 
 ```
-┌─────────────────────────────────────────────┐
-│                 北京办公室                    │
-│                                              │
-│  同事PC ─┐                                   │
-│  同事PC ─┤─→ OpenWrt 路由器 (Tailscale) ─→ Tailscale 网络
-│  同事PC ─┘    192.168.x.1                     │  100.x.x.x
-│                静态路由: 100.64.0.0/10 →      │
-│                tailscale0                     │  上海 new-api
-│                                              │  美国 CLIProxyAPI
-└─────────────────────────────────────────────┘
+联通光猫 192.168.1.1
+├── LAN1 → OpenWrt WAN (eth1, DHCP 192.168.1.3)
+├── LAN2 → 新华三 WAN2 (备用，默认不走)
+└── LAN3 → 群晖 NAS 192.168.100.242
+
+OpenWrt (FastRhino R68S, ARMv8, OpenWrt R22.11.13)
+├── WAN: eth1 (192.168.1.3)
+├── LAN: br-lan (192.168.100.1/24)
+│   ├── 新华三 WAN1 (192.168.100.181)
+│   └── NAS (192.168.100.242)
+└── OpenClash: redir-host 模式, tproxy, DNS 127.0.0.1:7874
+    Passwall/ShadowsocksR (已停用)
+
+新华三 ER3208G3-P-E (Release 0136P01)
+├── WAN1: 192.168.100.181 → OpenWrt LAN (主)
+├── WAN2: 直连联通光猫 (备用, 策略路由已禁用)
+├── LAN: 192.168.10.0/24, 8 个 LAN 口 + VLAN
+└── WiFi AP (FZH-5G) → 办公室 PC + 手机 (DHCP 192.168.10.x)
 ```
 
-路由器上加一条静态路由，所有 LAN 流量去往 Tailscale CGNAT (100.64.0.0/10) 的包都转发到 tailscale0 接口。办公室电脑不需要任何改动。
+> 三层 NAT：联通光猫 → OpenWrt → 新华三 → WiFi 客户端。
+> 关键设备 IP 和凭证在 `../.env`（gitignored）。
 
-### 前提条件
+## 已实施：方案 A — OpenWrt + 新华三 双层配置
 
-- OpenWrt 路由器，arm64 架构
-- 剩余存储空间 > 10MB（Tailscale 包约 8MB）
-- 路由器已能正常翻墙（有 OpenClash）
+### 最终架构
 
-### 部署步骤
+```
+办公室 WiFi 设备 (192.168.10.x, 无 Tailscale)
+    │
+    ↓ 默认网关
+新华三 ER3208G3-P-E (192.168.10.1)
+    │ 静态路由: 100.64.0.0/10 → 192.168.100.1 (WAN1)
+    ↓
+OpenWrt R68S (192.168.100.1) ← Tailscale: 100.124.94.69
+    │ ts-forward: ACCEPT (out=tailscale0)
+    │ MASQUERADE: POSTROUTING -o tailscale0
+    ↓ WireGuard (Tailscale)
+上海 new-api (100.119.28.72:3000)
+美国 CLIProxyAPI (100.126.133.106:8317)
+```
+
+### 实施日期：2026-06-23
+
+## 实施步骤
+
+### 步骤 1：OpenWrt — 安装 Tailscale
+
+**路由器配置：**
+- 型号：FastRhino R68S，ARMv8 四核，CPU Mark 28662
+- 固件：OpenWrt R22.11.13 / LuCI Master
+- 存储：overlay 820MB，可用 602MB
+- 架构：rockchip/armv8 (aarch64_generic)
+- opkg 源：immortalwrt.org 21.02.1
 
 ```bash
-# 1. 安装 Tailscale
 opkg update
-opkg install tailscale
-
-# 2. 启动 + 关键参数
-tailscale up \
-  --accept-routes \
-  --accept-dns=false \
-  --snat-subnet-routes=true
-
-# 浏览器打开输出的认证 URL，用微软账户授权
-
-# 3. 添加静态路由: LAN → Tailscale CGNAT
-ip route add 100.64.0.0/10 dev tailscale0
-
-# 4. OpenWrt 防火墙: 允许 LAN → tailscale0 转发
-# LuCI → Network → Firewall → Traffic Rules → 新增:
-#   Source: lan
-#   Destination: tailscale0 (或 100.64.0.0/10)
-#   Action: accept
-# 或命令行:
-iptables -I FORWARD -i br-lan -o tailscale0 -j ACCEPT
-iptables -I FORWARD -i tailscale0 -o br-lan -m state --state RELATED,ESTABLISHED -j ACCEPT
-
-# 5. 持久化（OpenWrt 重启后保留）
-# 静态路由写入 /etc/rc.local 或 LuCI → Network → Static Routes
-# 防火墙规则在 LuCI 中添加即自动持久化
+opkg install tailscale   # v1.32.3-1, ~3.6MB
 ```
 
-### 验证
+### 步骤 2：OpenWrt — 启动 Tailscale
 
 ```bash
-# 在任意一台办公室电脑上（不需要装 Tailscale）:
-curl http://<SH_TS_IP>:3000
-curl http://<US_TS_IP>:8317/v1/models \
-  -H "Authorization: Bearer <API_KEY>"
+/etc/init.d/tailscale enable
+/etc/init.d/tailscale start
+tailscale up --accept-dns=false --accept-routes
 ```
 
-### 注意事项
+关键参数：
+- `--accept-dns=false`：不改路由器 DNS（保护 OpenClash）
+- `--accept-routes`：接受其他节点发布的子网路由
 
-- **性能**: 路由器 ARM CPU 只做路由转发，不做 WireGuard 加密（Tailscale 已加密），性能影响极小
-- **翻墙共存**: Tailscale 和 OpenClash 互不冲突，Tailscale 只是加了一张虚拟网卡和一条路由
-- **`--accept-dns=false`**: 关键！不让 Tailscale 改路由器 DNS，否则 OpenClash 可能受影响
-- **存储**: 如果空间不足，用 [GuNanOvO/openwrt-tailscale](https://github.com/GuNanOvO/openwrt-tailscale) 的精简版 (< 8MB)
+浏览器打开认证 URL，用微软账户登录。在 Tailscale Admin Console 禁用 key expiry。
 
----
+路由器 Tailscale IP：**100.124.94.69**
 
-## 方案 B: fzhpc13 做 Tailscale 网关
+### 步骤 3：OpenWrt — 备份现有配置
 
-### 原理
+实施前备份所有 UCI 配置、iptables 规则、路由表：
+- 备份位置：`C:\Users\zhang\uci_full_backup_20260623.txt` 等
+- 实际路径见 `.env`
 
-fzhpc13 已有 Tailscale，启用了 IP 转发后可以作为 LAN 内其他设备的 Tailscale 网关。
+### 步骤 4：OpenWrt — 防火墙配置
 
-```
-同事PC ─→ fzhpc13 (网关, Tailscale) ─→ Tailscale 网络
-           192.168.x.xxx
-```
+#### 4a：添加 tailscale0 网络接口 (UCI)
 
-### fzhpc13 上的操作
-
-```powershell
-# 启用 IP 转发
-Set-NetIPInterface -Forwarding Enabled
-
-# 或通过注册表:
-# HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\IPEnableRouter = 1
+```bash
+uci set network.tailscale=interface
+uci set network.tailscale.proto='none'
+uci set network.tailscale.device='tailscale0'
+uci commit network
 ```
 
-### OpenWrt 上的操作
+#### 4b：创建 tailscale 防火墙区域 (UCI)
 
-在路由器上加静态路由，让所有去 Tailscale 的流量经过 fzhpc13：
-
-```
-目的网络: 100.64.0.0/10
-网关: <fzhpc13_LAN_IP>
-```
-
-### 优缺点
-
-| 优点 | 缺点 |
-|------|------|
-| 已部分实现 (lite_lan_proxy.py) | fzhpc13 关机则全办公室断 |
-| 配置简单 | Windows IP 转发不如 Linux 稳定 |
-| 不需要动路由器 | 只能转发 TCP，不如方案 A 透明 |
-
-### 当前状态
-
-`lite_lan_proxy.py` 已在 fzhpc13 上跑，转发 :3000 → CLIProxyAPI。这是方案 B 的简化版——只能转发单个端口，不是完整路由。
-
----
-
-## 方案 C: 公网直连
-
-### 做法
-
-阿里云安全组放行端口 3000，同事直接访问 `http://<SH_PUBLIC_IP>:3000`。
-
-### 优缺点
-
-| 优点 | 缺点 |
-|------|------|
-| 零部署 | 公网暴露，无加密 |
-| 延迟最低 (~30ms) | 需额外安全措施（IP 白名单/HTTPS） |
-
-### 建议
-
-如果选这个，至少加 IP 白名单（只允许办公室公网 IP）或配置 nginx 反代 + HTTPS。
-
----
-
-## 方案 D: 每台电脑装 Tailscale
-
-```powershell
-winget install Tailscale.Tailscale
-tailscale up
+```bash
+uci add firewall zone
+uci set firewall.@zone[-1].name='tailscale'
+uci set firewall.@zone[-1].network='tailscale'
+uci set firewall.@zone[-1].input='ACCEPT'
+uci set firewall.@zone[-1].output='ACCEPT'
+uci set firewall.@zone[-1].forward='ACCEPT'
+uci set firewall.@zone[-1].masq='1'
 ```
 
-最直接的方案，但每台电脑需要安装、认证、管理。适合技术人员（< 5 台），不适合全员推广。
+#### 4c：双向转发 (UCI)
 
----
+```bash
+# lan → tailscale
+uci add firewall forwarding
+uci set firewall.@forwarding[-1].src='lan'
+uci set firewall.@forwarding[-1].dest='tailscale'
 
-## 方案 E: Tailscale Subnet Router（反方向）
+# tailscale → lan (回程)
+uci add firewall forwarding
+uci set firewall.@forwarding[-1].src='tailscale'
+uci set firewall.@forwarding[-1].dest='lan'
 
-Tailscale 的标准"子网路由"功能解决的是**相反方向**的问题：
-
-```
-远程 Tailscale 设备 ─→ 路由器(Subnet Router) ─→ LAN 设备(无 Tailscale)
-```
-
-让出差/远程的同事能访问办公室局域网设备。不是"LAN 访问 Tailscale"的方向，但将来可能需要。
-
----
-
-## 推荐实施顺序
-
-```
-1. 方案 A (OpenWrt 路由) — 一劳永逸，优先试验
-2. 如果路由器空间/性能不够 → 方案 B (fzhpc13 网关)
-3. 如果只需快速测试 → 方案 C (公网，加 IP 白名单)
-4. 将来有远程访问 LAN 需求 → 方案 E (Subnet Router)
+uci commit firewall
+/etc/init.d/firewall restart
 ```
 
-## 验证清单
+#### 4d：添加回程路由 — 192.168.10.0/24
 
-- [ ] 办公室任意电脑 `ping <SH_TS_IP>` 能通
-- [ ] 办公室任意电脑 `curl http://<SH_TS_IP>:3000` 返回 new-api 页面
-- [ ] 办公室任意电脑 `curl http://<US_TS_IP>:8317/v1/models` 返回模型列表
-- [ ] 路由器重启后规则/路由仍然生效
+OpenWrt 默认不知道新华三 LAN 子网，需手动添加：
 
-## 相关资源
+```bash
+uci set network.route_h3c=route
+uci set network.route_h3c.interface='lan'
+uci set network.route_h3c.target='192.168.10.0'
+uci set network.route_h3c.netmask='255.255.255.0'
+uci set network.route_h3c.gateway='192.168.100.181'
+uci commit network
+/etc/init.d/network reload
+```
 
-- [Tailscale on OpenWrt 官方包](https://openwrt.org/packages/pkgdata/tailscale)
-- [Tailscale Subnet Router 文档](https://tailscale.com/docs/features/subnet-routers)
-- [OpenWrt Tailscale 精简版](https://github.com/GuNanOvO/openwrt-tailscale)
+### 步骤 5：OpenWrt — 关键修复：MASQUERADE
+
+**这是最关键的发现。** Tailscale v1.32.3 的 `ts-forward` MARK 规则只在 `in=tailscale0`（入站）时触发，去往 tailscale0 的出站流量未被标记，导致 `ts-postrouting` 的 MASQUERADE 不生效。LAN 设备的源 IP 不会被 NAT 为路由器的 Tailscale IP，远端服务器无法回包。
+
+**修复：** 在 POSTROUTING 第一位添加无条件 MASQUERADE：
+
+```bash
+iptables -t nat -I POSTROUTING 1 -o tailscale0 -j MASQUERADE
+```
+
+**持久化：** 写入 `/etc/firewall.user`（防火墙重启时自动执行）。
+
+### 步骤 6：新华三 — 静态路由
+
+新华三 ER3208G3-P-E 的默认路由 `0.0.0.0/0 → 192.168.100.1 (WAN1)` 已存在，但为确保 Tailscale 流量不走 WAN2 备份链路，添加了一条更具体的静态路由：
+
+| 字段 | 值 |
+|------|-----|
+| 目的 IP 地址 | `100.64.0.0` |
+| 掩码长度 | `10`（即 255.192.0.0） |
+| 优先级 | `2` |
+| 下一跳 IP | `192.168.100.1` |
+| 出接口 | WAN1 |
+| 描述 | Tailscale |
+
+新华三管理路径：`高级选项 → 静态路由 → 添加`
+
+> 注：新华三的默认路由已经指向 OpenWrt，此静态路由为加强保障。新华三的策略路由（全部流量走 WAN2）已禁用，不影响。
+
+### 步骤 7：验证
+
+```bash
+# 路由器自身验证
+tailscale ping 100.119.28.72        # pong via DERP(hkg)
+curl http://100.119.28.72:3000      # HTTP 200 (new-api)
+curl http://100.126.133.106:8317/v1/models  # HTTP 200 (CLIProxyAPI)
+
+# 办公室手机 (FZH-5G WiFi, 无 Tailscale)
+http://100.119.28.72:3000/          # new-api 页面正常
+https://google.com                  # 翻墙正常
+```
+
+- [x] 办公室任意设备 `curl http://100.119.28.72:3000` 返回 new-api 页面
+- [x] 翻墙 (OpenClash) 不受影响
+- [x] 路由器重启后规则/路由持久化
+
+## 踩坑记录
+
+### 坑 1：防火墙重启冲掉 Tailscale iptables 规则
+
+`/etc/init.d/firewall restart` 会 flush 所有 iptables 规则并重建。Tailscale 的 `ts-forward` 和 `ts-postrouting` 链会被删除。修复：防火墙重启后必须 `tailscale restart` 恢复。
+
+### 坑 2：ts-forward MARK 规则方向
+
+Tailscale v1.32.3 的 ts-forward MARK 规则匹配条件是 `in=tailscale0`，只标记入站流量。出站流量（LAN → tailscale0）不会被标记，导致 MASQUERADE 缺失。根因是 tcpdump/conntrack 分析确认的。
+
+### 坑 3：三层 NAT — 回程路由
+
+新华三 LAN 子网 (192.168.10.0/24) 对 OpenWrt 不可见，默认走 WAN (eth1 → 联通光猫)。必须在 OpenWrt 上添加 `192.168.10.0/24 via 192.168.100.181` 的回程路由。
+
+### 坑 4：新华三 OpenWrt 混淆
+
+新华三 ER3208G3-P-E 的 Web 管理界面使用了 LuCI 框架（路径 `/cgi-bin/luci/`），但实际是 H3C 自研固件（Release 0136P01），不是开源 OpenWrt。不能用 UCI 命令管理。
+
+### 坑 5：浏览器直接导航 Hash 路由不刷新
+
+新华三 Web UI 使用 hash-based SPA 路由（`#admin/...`），直接 URL 导航后页面内容不刷新，必须点击侧边栏菜单触发 JavaScript 渲染。
+
+## 与 OpenClash 共存
+
+| 冲突点 | 状态 |
+|--------|------|
+| DNS | `--accept-dns=false` 防止 Tailscale 覆写 OpenClash DNS |
+| TUN 竞争 | OpenClash 用 tproxy，不用 TUN — 不冲突 |
+| 策略路由 | Tailscale table 52 vs Clash fwmark 0x162 — 各自独立 |
+| 进程直连 | 建议在 OpenClash 添加 `PROCESS-NAME,tailscaled,DIRECT` 规则 |
+
+## 维护命令
+
+```bash
+# SSH 到 OpenWrt
+ssh -i <key_path> root@192.168.100.1
+
+# 检查 Tailscale 状态
+tailscale status
+
+# 检查 iptables MASQUERADE
+iptables -t nat -L POSTROUTING -n -v | grep tailscale0
+
+# 防火墙重启后恢复 Tailscale 规则
+/etc/init.d/tailscale restart
+
+# 回滚（如需）
+uci delete network.tailscale
+uci delete network.route_h3c
+# 删除 firewall 中 tailscale zone 和 forwarding
+uci commit && /etc/init.d/firewall restart
+```
+
+## 当前局限
+
+1. **新华三静态路由可能是冗余的**：默认路由已指向 OpenWrt，即使没有新增的静态路由，理论上也应工作。但添加后更明确。
+2. **Tailscale 版本较旧**：1.32.3，新版可能有更好的 iptables 兼容性
+3. **OpenWrt 非官方固件**：R22.11.13 是自定义版本，部分 init 脚本不兼容
+4. **防火墙重启后需重新启动 Tailscale**：已写入 `/etc/firewall.user` 做持久化
 
 ## 见也
 
-- [architecture.md](architecture.md) — 整体架构
-- [lessons/lessons-learned.md](lessons/lessons-learned.md) — Lesson 24 (国内 Tailscale 延迟), Lesson 26 (Docker+Tailscale)
+- [architecture.md](architecture.md) — 整体架构（服务器+API 流）
+- [lan-gateway.md](lan-gateway.md) — 方案 B（fzhpc13 网关）
+- [log.md](log.md) — 变更日志
+- [../AGENT_HANDOFF.md](../AGENT_HANDOFF.md) — Agent 接手参考

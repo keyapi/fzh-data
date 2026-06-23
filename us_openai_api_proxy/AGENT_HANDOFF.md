@@ -9,35 +9,54 @@ tags: [openai, api-proxy, tailscale, handoff, new-api]
 
 > 本文档让新 Agent 或新对话在最少 token 内了解模块状态并继续工作。
 
-## 架构总览 (v0.5)
+## 架构总览 (v0.7)
 
 ```
                           Tailscale 虚拟网络
-    ┌──────────────────────────────────────────────────┐
-    │                                                  │
-    │  北京                    上海                      美国
-    │  ┌──────────┐    ┌──────────────────┐    ┌──────────────┐
-    │  │ fzhpc13   │    │ sh-erpnext-test  │    │ us-ubuntu    │
-    │  │ LAN网关   │    │ new-api :3000    │    │ CLIProxyAPI  │
-    │  │  :3000   │    │ ┌──────────────┐ │    │ :8317        │
-    │  │          │    │ │ DeepSeek 直连 │ │    │ ChatGPT OAuth│
-    │  └──────────┘    │ │ OpenAI → US  │─┼────→              │
-    │                  │ └──────────────┘ │    └──────────────┘
-    │  同事 PC         └──────────────────┘
-    │   ↓ HTTP
-    │  LAN网关 :3000 或 new-api :3000
-    └──────────────────────────────────────────────────┘
+    ┌──────────────────────────────────────────────────────────┐
+    │                                                          │
+    │  北京办公室                    上海                       美国
+    │  ┌────────────────────┐  ┌──────────────────┐  ┌──────────────┐
+    │  │ OpenWrt R68S       │  │ sh-erpnext-test  │  │ us-ubuntu    │
+    │  │ Tailscale 网关     │  │ new-api :3000    │  │ CLIProxyAPI  │
+    │  │ 100.124.94.69     │  │ 100.119.28.72   │  │ :8317        │
+    │  │ MASQUERADE + fwd  │  │ ┌──────────────┐ │  │ 100.126.133.106│
+    │  └──┬─────────────────┘  │ │ DeepSeek 直连 │ │  │ ChatGPT OAuth│
+    │     │static route        │ │ OpenAI → US  │─┼──→              │
+    │  ┌──┴─────────────────┐  │ └──────────────┘ │  └──────────────┘
+    │  │ 新华三 ER3208G3-P-E │  └──────────────────┘
+    │  │ 静态路由: 100.64   │
+    │  │ /10 → 192.168.100.1│
+    │  └──┬─────────────────┘
+    │     │ WiFi FZH-5G
+    │  ┌──┴─────────────────┐
+    │  │ 同事 PC + 手机      │
+    │  │ (192.168.10.x,     │
+    │  │  无需 Tailscale)    │
+    │  └────────────────────┘
+    └──────────────────────────────────────────────────────────┘
 ```
 
 ## 服务器清单
 
-> ⚠️ 真实 IP/密钥在 `.env`（gitignored），文档仅用占位符。
+> 敏感 IP/密钥在 `.env`（gitignored），文档仅用占位符。
 
 | 机器 | SSH | Tailscale IP | 角色 |
 |------|-----|-------------|------|
 | US Ubuntu | `ssh us-ubuntu-proxy` | `<US_TS_IP>` | CLIProxyAPI (ChatGPT → API) |
 | 上海测试 | `ssh sh-erpnext-test` | `<SH_TS_IP>` | new-api (API 分发中心) |
-| 北京办公 | — | `<BJ_TS_IP>` | LAN 网关 + 开发 |
+| 北京 OpenWrt | `ssh root@192.168.100.1` | `100.124.94.69` | Tailscale LAN 网关 |
+| 北京新华三 | Web `192.168.10.1` | — | 办公室主路由 + WiFi |
+
+## 北京网络拓扑
+
+```
+联通光猫 → OpenWrt R68S (Tailscale 网关) → 新华三 ER3208G3-P-E → WiFi AP → 办公室设备 (192.168.10.x)
+```
+
+- OpenWrt LAN: 192.168.100.1/24, Tailscale IP: 100.124.94.69
+- 新华三 LAN: 192.168.10.0/24, WAN1: 192.168.100.181
+- 办公室设备无需装 Tailscale，通过路由器转发访问 Tailscale 网络。
 
 ## 上海 new-api 运维
 
@@ -132,7 +151,7 @@ ssh us-ubuntu-proxy systemctl start cliproxyapi
 1. **ChatGPT 付费账号**（当前阻塞）
 2. new-api 初始化 + 渠道配置 (可交 GQ)
 3. new-api 安全加固 (绑 Tailscale IP)
-4. **办公室全员 Tailscale 访问** → [docs/office-lan-access.md](./docs/office-lan-access.md) (方案 A 优先)
+4. ~~办公室全员 Tailscale 访问~~ ✅ 已完成 (v0.7) — see [docs/office-lan-access.md](./docs/office-lan-access.md)
 5. Tailscale 延迟优化 (Peer Relays / 自建 DERP)
 6. Telegram/邮件告警
 

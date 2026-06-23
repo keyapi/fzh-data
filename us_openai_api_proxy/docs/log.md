@@ -7,6 +7,16 @@ tags: [openai, api-proxy, changelog]
 ---
 # 变更日志
 
+## 2026-06-23 (v0.7)
+
+- **v0.7**: 方案 A 实施完成 — 办公室全员可通过路由器访问 Tailscale 网络
+- **v0.7**: OpenWrt R68S 安装 Tailscale v1.32.3 + 防火墙 zone 配置 + LAN↔tailscale 转发
+- **v0.7**: 关键修复: MASQUERADE on tailscale0 (ts-forward MARK 只匹配入站，出站无 SNAT)
+- **v0.7**: 回程路由: 192.168.10.0/24 via 192.168.100.181 (新华三 LAN 子网)
+- **v0.7**: 新华三 ER3208G3-P-E 静态路由: 100.64.0.0/10 → 192.168.100.1 (WAN1)
+- **v0.7**: 验证通过: 手机 (无 Tailscale) 访问 new-api + 翻墙均正常
+- **v0.7**: 踩坑 5 条: 防火墙冲掉 iptables / MARK 方向 / 三层 NAT 回程 / 新华三 LuCI 混淆 / Hash 路由
+
 ## 2026-06-23 (v0.6)
 
 - **v0.6**: 新增 `docs/office-lan-access.md` — 办公室全员访问 Tailscale 5 种方案全景 (OpenWrt/PC网关/公网/全员Tailscale/Subnet Router)

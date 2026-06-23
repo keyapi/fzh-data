@@ -20,7 +20,7 @@ tags: [openai, api-proxy, tailscale, vultr, chatgpt]
 | 查阅经验教训 | [lessons/lessons-learned.md](lessons/lessons-learned.md) |
 | 日常运维、监控、同事接入 | [operations.md](operations.md) |
 | 部署 LAN 网关让同事使用 | [lan-gateway.md](lan-gateway.md) |
-| 办公室全员访问 Tailscale (5方案) | [office-lan-access.md](office-lan-access.md) |
+| 办公室全员访问 Tailscale (已实施) | [office-lan-access.md](office-lan-access.md) |
 | 查看变更历史 | [log.md](log.md) |
 
 ## 目录结构
