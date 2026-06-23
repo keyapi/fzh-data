@@ -28,10 +28,11 @@ fi
 TOTAL_COUNT=0
 
 # 分别扫描 图片、视频、设计稿、调研报告 四个分类
+# depth 3: depth 2 = 普通产品 (KSxxxx/图片), depth 3 = LGKS 叶子组嵌套 (LGKSxxxx/KSxxxx/图片)
 for cat in "图片" "视频" "设计稿" "调研报告"; do
     # 找出所有存在实际文件的目录路径（递归无限深度，排除 @eaDir）
     # 逻辑：先找到所有文件，再提取其所有祖先目录（到分类文件夹自身），去重后即为"有叶子的目录"
-    CAT_PATHS=$(find "$BASE_PATH" -maxdepth 2 -type d -name "$cat" -print0 | while IFS= read -r -d '' cdir; do
+    CAT_PATHS=$(find "$BASE_PATH" -maxdepth 3 -type d -name "$cat" ! -path "*/#recycle/*" -print0 | while IFS= read -r -d '' cdir; do
         find "$cdir" -type d -name "@eaDir" -prune -o -type f -print | while IFS= read -r f; do
             d=$(dirname "$f")
             while [ "$d" != "$cdir" ]; do
