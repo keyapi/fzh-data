@@ -1,25 +1,42 @@
-# NAS 产品信息目录路径扫描脚本
+# NAS 运维脚本集
 
 ## 概述
 
-部署在群晖 NAS 上的 Bash 脚本，用于扫描 `/volume1/产品信息/` 目录下所有产品文件夹的路径结构，输出到 `folder_paths_simple.txt`。
+部署在群晖 NAS `/volume1/技术部/` 上的 Bash 脚本集合 — 产品目录扫描 + ACL 权限实时修复。
 
 ## 核心文件
 
 | 文件 | 说明 |
 |------|------|
-| `generate_products_visuals.sh` | 扫描脚本，部署在 NAS `/volume1/技术部/` 上运行 |
+| `generate_products_visuals.sh` | 扫描 `/volume1/产品信息/` 下所有产品文件夹路径 |
+| `fix_design_permissions.sh` | inotify 实时监控"设计稿"文件夹，自动移除"视觉需求（读取）"角色权限 |
 | `folder_paths_simple.txt` | 输出的路径清单报告，位于 `/volume1/FZH共享文件夹/` |
+| `docs/` | OKF 文档（[index.md](docs/index.md) / [log.md](docs/log.md)） |
 
 ## 部署环境
 
 | 项目 | 值 |
 |------|-----|
-| NAS 地址 | `fzh.myds.me:31022` |
-| 用户 | `fzh.nas` |
-| 脚本路径 | `/volume1/技术部/generate_products_visuals.sh` |
+| NAS 域名 | `fzh.myds.me:31022` |
+| NAS 局域网 IP | `192.168.1.5:31022` (域名不可用时使用) |
+| SSH 用户 | `fzh.nas` |
+| SSH 密码 | 不在文档中 — 见 `.env` 文件 (`NAS_SSH_PASSWORD`) 或向用户询问 |
+| 脚本路径 | `/volume1/技术部/` |
+| 脚本 1 | `generate_products_visuals.sh` — 定时任务（建议每天凌晨） |
+| 脚本 2 | `fix_design_permissions.sh` — 开机触发 (root), 命令: `flock -xn /volume1/技术部/.fix_design.lock -c '/bin/bash /volume1/技术部/fix_design_permissions.sh'` |
 | 输出路径 | `/volume1/FZH共享文件夹/folder_paths_simple.txt` |
-| 定时任务 | 群晖 DSM 任务计划程序（建议每天凌晨） |
+
+### NAS 连接注意事项
+
+1. **不要用 SFTP** — 群晖默认关闭 SFTP。使用 base64 over SSH exec 传输文件
+2. **paramiko 已在 pyproject.toml** — 新对话先 `uv sync` 而非 `uv add paramiko`
+3. **Windows GBK 编码** — Python `print()` 中文/emoji 前必须:
+   ```python
+   sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+   ```
+4. **ps aux 中文路径显示为 `???`** — 排查进程时搜 `inotifywait` 再查父进程，不要只搜脚本名
+5. **DSM 计划任务点"运行"不杀旧实例** — 排查时先 `ps aux | grep inotifywait` 确认只有一个实例
+6. **root PATH 不含 /usr/local/bin** — `/usr/local/bin/inotifywait` 必须用绝对路径
 
 ## 目录结构
 
