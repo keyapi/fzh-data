@@ -19,9 +19,10 @@
 |------|-----|
 | NAS 地址 | `fzh.myds.me:31022` |
 | 用户 | `fzh.nas` |
-| 脚本路径 | `/volume1/技术部/generate_products_visuals.sh` |
+| 脚本路径 | `/volume1/技术部/` |
+| 脚本 1 | `generate_products_visuals.sh` — 定时任务（建议每天凌晨） |
+| 脚本 2 | `fix_design_permissions.sh` — 开机触发 (root), 命令: `flock -xn /volume1/技术部/.fix_design.lock -c '/bin/bash /volume1/技术部/fix_design_permissions.sh'` |
 | 输出路径 | `/volume1/FZH共享文件夹/folder_paths_simple.txt` |
-| 定时任务 | 群晖 DSM 任务计划程序（建议每天凌晨） |
 
 ## 目录结构
 
