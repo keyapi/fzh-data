@@ -2,49 +2,89 @@
 
 ## 概述
 
-部署在群晖 NAS 上的 Bash 脚本，用于扫描 `/volume1/产品信息/` 目录下所有产品文件夹的路径结构。
-
-根据最新 NAS 存储规范，`/volume1/产品信息/` 下每个产品以 `编号_产品名称` 格式组织，内部统一包含 4 个分类文件夹：`图片`、`视频`、`设计稿`、`调研报告`。脚本扫描这 4 个分类下所有存在实际文件的目录路径，输出到报告文件中。
+部署在群晖 NAS 上的 Bash 脚本，用于扫描 `/volume1/产品信息/` 目录下所有产品文件夹的路径结构，输出到 `folder_paths_simple.txt`。
 
 ## 核心文件
 
 | 文件 | 说明 |
 |------|------|
-| `generate_products_visuals.sh` | 扫描脚本，部署在 NAS 上运行 |
-| `folder_paths_simple.txt` | 输出的路径清单报告（由脚本生成） |
+| `generate_products_visuals.sh` | 扫描脚本，部署在 NAS `/volume1/技术部/` 上运行 |
+| `folder_paths_simple.txt` | 输出的路径清单报告，位于 `/volume1/FZH共享文件夹/` |
 
-## 目录结构预期
+## 部署环境
+
+| 项目 | 值 |
+|------|-----|
+| NAS 地址 | `fzh.myds.me:31022` |
+| 用户 | `fzh.nas` |
+| 脚本路径 | `/volume1/技术部/generate_products_visuals.sh` |
+| 输出路径 | `/volume1/FZH共享文件夹/folder_paths_simple.txt` |
+| 定时任务 | 群晖 DSM 任务计划程序（建议每天凌晨） |
+
+## 目录结构
+
+### 普通产品 (depth 2)
 
 ```
 /volume1/产品信息/
-├── JMPJ1010_剑麻/
+├── KS0001_三角靠枕/
 │   ├── 图片/
-│   │   ├── 2024/
+│   │   ├── 2026新图/
 │   │   │   └── photo.jpg
-│   │   └── 2025/          ← 无文件，不输出
 │   ├── 视频/
-│   │   └── demo.mp4
 │   ├── 设计稿/
-│   │   └── v2/
-│   │       └── draft.ai
 │   └── 调研报告/
-│       └── report.pdf
-├── KS0007_弧形PP棉靠枕/
-│   └── ...
-└── ...
 ```
 
-## 脚本功能
+### LGKS 叶子组 (depth 3 — v1.1 新增支持)
 
-### 扫描逻辑
+根据项目 `docs/company-context.md` 和 `nas_itemgroup_folders/` 模块定义的叶子组规范，LGKS 系列产品在叶子组目录下嵌套了多个 KS 子款式：
 
-1. 定位 `/volume1/产品信息/` 下所有产品的 4 个分类文件夹（图片/视频/设计稿/调研报告）
-2. 在每个分类文件夹下**递归扫描所有文件**（无深度限制）
-3. 从文件位置向上回溯，提取所有祖先目录路径（直到分类文件夹自身）
-4. **去重**后输出——只有子树中至少存在一个实际文件的目录才会被记录
-5. 自动排除群晖 NAS 系统缓存文件夹 `@eaDir`
+```
+/volume1/产品信息/
+├── LGKS0220_可组合扶手沙发/         ← 叶子组 (depth 1)
+│   ├── 图片/                         ← LG 自身分类 (depth 2)
+│   ├── 视频/
+│   ├── 设计稿/
+│   ├── 调研报告/
+│   ├── KS0220_可组合扶手沙发套件/    ← KS 子款式 (depth 2)
+│   │   ├── 图片/                     ← 子款式分类 (depth 3)
+│   │   ├── 视频/
+│   │   └── ...
+│   ├── KS0245_扶手模块/
+│   └── KS0246_靠背模块/
+```
 
-### 输出报告结构
+NAS 上目前有 **13 个 LGKS 叶子组**，每个包含 2-5 个 KS 子款式。
+
+## 扫描逻辑
+
+1. 从 `BASE_PATH` 出发，最多扫描 **3 层**（覆盖普通产品 depth 2 + LGKS 嵌套 depth 3）
+2. 找到所有名为 `图片`/`视频`/`设计稿`/`调研报告` 的目录
+3. 在每个分类目录下**递归查找所有文件**（无深度限制）
+4. 从文件位置向上回溯，提取所有祖先目录路径
+5. **去重**后输出 — 只有子树中存在实际文件的目录才会被记录
+6. 自动排除：
+   - `@eaDir`：群晖系统缩略图缓存，`find -prune` 跳过
+   - `#recycle`：群晖回收站中已删除的产品
+
+## 配置项
+
+脚本顶部可修改变量：
+
+```bash
+OUTPUT_FILE="/volume1/FZH共享文件夹/folder_paths_simple.txt"
+BASE_PATH="/volume1/产品信息"
+```
+
+如需增减分类，修改 for 循环：
+```bash
+for cat in "图片" "视频" "设计稿" "调研报告"; do
+```
+
+如需调整扫描深度，修改 `-maxdepth` 参数（当前为 3）。
+
+## 输出报告结构
 
 ```
 📁 产品信息目录分类文件夹路径列表
@@ -54,73 +94,103 @@
 
 图片目录路径:
 ----------------
-/volume1/产品信息/JMPJ1010_剑麻/图片
-/volume1/产品信息/JMPJ1010_剑麻/图片/2024
-/volume1/产品信息/JMPJ1010_剑麻/图片/展厅实拍
+/volume1/产品信息/KS0001_三角靠枕/图片
+/volume1/产品信息/KS0001_三角靠枕/图片/2026新图
+...
+/volume1/产品信息/LGKS0220_组合沙发/KS0220_套件/图片
 ...
 
-图片文件夹数量: 12
+图片文件夹数量: 5717
 
 视频目录路径:
-----------------
 ...
-
-视频文件夹数量: 5
-
 设计稿目录路径:
 ...
-
 调研报告目录路径:
 ...
 
 扫描完成: ...
-各分类文件夹总数: 30
-总计生成路径行数: 42
+各分类文件夹总数: 6295
+总计生成路径行数: 6323
 ```
 
-### 关键规则
+## ERPNext 集成
 
-- **有空文件的目录不输出**：如果 `图片/2025/` 是空目录（没有任何文件），则不包含该路径
-- **目录下含有子目录且有文件才输出**：如果 `图片/2025/` 下有子目录且子目录中有文件，则 `图片/2025/` 和其子目录都会被输出
-- **`@eaDir` 自动排除**：群晖的缩略图缓存目录不会被扫描
+测试环境的 ERPNext 系统有脚本读取 `/volume1/FZH共享文件夹/folder_paths_simple.txt`。路径格式遵循 `编号_名称/分类/子目录...` 的层级结构，ERPNext 脚本可以按产品编号（KSxxxx/LGKSxxxx）和分类维度解析。
 
-## 配置说明
+---
 
-在脚本顶部修改以下变量：
+## 部署经验教训 (Lessons Learned)
 
+### Lesson 1: CRLF 换行符污染
+
+**问题：** 从 Windows (Git) 直接上传 `.sh` 文件到 Linux NAS，脚本中的 `\r\n` 导致：
+- 每行末尾 `\r` 被 bash 解释为命令名的一部分（`$'\r': command not found`）
+- 变量赋值末尾带 `\r`，如 `OUTPUT_FILE="/volume1/.../folder_paths_simple.txt\r"`
+- `> "$OUTPUT_FILE"` 创建了带 `\r` 字符的文件名，产生幽灵空文件
+
+**解决：**
 ```bash
-OUTPUT_FILE="/volume1/FZH共享文件夹/folder_paths_simple.txt"   # 输出路径
-BASE_PATH="/volume1/产品信息"                                    # 扫描根目录
+# 上传后必须转换
+sed -i 's/\r//g' "/volume1/技术部/generate_products_visuals.sh"
+# 或在本地转换后再上传
+content = content.replace(b'\r\n', b'\n')
 ```
 
-如需增减分类，修改第 31 行的 `for` 循环：
+**预防：** 项目应在 `.gitattributes` 中声明 `*.sh text eol=lf`。
 
-```bash
-for cat in "图片" "视频" "设计稿" "调研报告"; do
+### Lesson 2: Synology ACL 锁定特殊文件名
+
+**问题：** 含控制字符（`\r`）的文件名被 Synology ACL 保护，SSH 下 `rm`、`mv`、`chmod` 均返回 `Permission denied`，即使文件 owner 匹配。
+
+**现象：**
+```
+-rwxrwxrwx+ 1 fzh.nas users 0 Jun 23 15:06 folder_paths_simple.txt\r\r
+PermissionError: [Errno 13] Permission denied
 ```
 
-## 使用方法
+**解决：** 通过 DSM 网页端 File Station 手动删除，或从 Windows SMB 映射驱动器删除。
 
-### NAS 上直接运行
+### Lesson 3: Windows GBK 控制台编码
 
-```bash
-bash /path/to/generate_products_visuals.sh
+**问题：** 脚本输出和文件内容含 emoji / 中文，Python `print()` 在 Windows GBK 控制台报错：
+```
+UnicodeEncodeError: 'gbk' codec can't encode character '\U0001f4c1'
 ```
 
-### 定时任务（推荐）
-
-在群晖 NAS 的任务计划程序中添加定时任务，例如每天凌晨执行：
-
-```bash
-0 3 * * * bash /path/to/generate_products_visuals.sh
+**解决：**
+```python
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 ```
+或者将输出写入文件后通过 `Read` 工具查看，避免控制台编码问题。
 
-## 技术要点
+### Lesson 4: 不要用 SFTP 上传文件到群晖
 
-| 方面 | 说明 |
-|------|------|
-| 脚本语言 | Bash |
-| 核心命令 | `find` + `dirname` 回溯 + `sort -u` 去重 |
-| 兼容性 | 群晖 DSM 内置 Bash，无需额外依赖 |
-| `@eaDir` 处理 | 使用 `find -prune` 跳过，避免进入系统缓存目录 |
-| 空目录过滤 | 通过"找文件→回溯祖先路径"的间接方式实现 |
+**问题：** 群晖默认关闭 SFTP 子系统，paramiko `SFTPClient.from_transport()` 报 `Channel closed`。
+
+**解决：** 使用 base64 编码通过 SSH exec 传输：
+```python
+b64 = base64.b64encode(content).decode('ascii')
+client.exec_command(f'echo "{b64}" | base64 -d > /path/to/file')
+```
+**注意：** 确保内容已先做 CRLF→LF 转换，否则上传后立即产生问题。
+
+### Lesson 5: 群晖 find 对 @eaDir 的 Permission Denied 是正常的
+
+群晖 `@eaDir/SYNO@.fileindexdb` 目录受系统保护，`find` 会报 `Permission denied`。这些消息输出到 stderr，不影响脚本功能。已在脚本中用 `-prune` 跳过 `@eaDir`，但根级 `@eaDir` 仍会触发一次警告。
+
+### Lesson 6: LGKS 叶子组需要 3 层深度扫描
+
+详见 Fix 2。最初 PR #34 只设了 `-maxdepth 2`，遗漏了 LGKS 下 KS 子款式的分类目录。
+修改为 `-maxdepth 3` 并加 `! -path "*/#recycle/*"` 排除回收站可解决。
+
+---
+
+## 修改记录
+
+### v1.1 (2026-06-23)
+
+- **Fix:** `maxdepth 2 → 3` 支持 LGKS 叶子组内 KS 子款式扫描
+- **Fix:** 添加 `! -path "*/#recycle/*"` 排除回收站
+- **Doc:** 记录完整部署经验教训（Lesson 1-6）
+- **已验证:** 输出从 6222 → 6295 文件夹，新增 73 个 KS 子款式路径，LGKS mentions 从 63 → 136
