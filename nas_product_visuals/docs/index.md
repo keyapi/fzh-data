@@ -29,7 +29,7 @@ flock -xn /volume1/技术部/.fix_design.lock -c '/bin/bash /volume1/技术部/f
 
 ## 新对话速查
 
-1. **连接**: `ssh fzh.nas@192.168.1.5 -p 31022` (局域网) 或 `fzh.myds.me` (外网)，密码需向用户询问
+1. **连接**: 读取 `nas_product_visuals/.env` 获取 `NAS_SSH_HOST/PORT/USER/PASSWORD` (gitignored, 本地文件)
 2. **环境**: 先 `uv sync` (不要 `uv add paramiko` — 已在 pyproject.toml)
 3. **编码**: Windows 下所有 Python 输出必经 `io.TextIOWrapper(buf, encoding='utf-8')`
 4. **部署**: base64 over SSH exec (不用 SFTP)

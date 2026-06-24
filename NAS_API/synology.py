@@ -212,6 +212,7 @@ def get_nas(env_paths: list[Path] | None = None) -> SynologyNAS:
             _DIR / ".env",
             _DIR.parent / ".env",
             _DIR.parent / "dam-prototype" / ".env",
+            _DIR.parent / "nas_product_visuals" / ".env",
         ]
     _load_dotenv(env_paths)
     return SynologyNAS(

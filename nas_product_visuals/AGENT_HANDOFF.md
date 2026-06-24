@@ -20,7 +20,7 @@
 | NAS 域名 | `fzh.myds.me:31022` |
 | NAS 局域网 IP | `192.168.1.5:31022` (域名不可用时使用) |
 | SSH 用户 | `fzh.nas` |
-| SSH 密码 | 不在文档中 — 每次新对话需向用户询问 |
+| SSH 密码 | 不在文档中 — 见 `.env` 文件 (`NAS_SSH_PASSWORD`) 或向用户询问 |
 | 脚本路径 | `/volume1/技术部/` |
 | 脚本 1 | `generate_products_visuals.sh` — 定时任务（建议每天凌晨） |
 | 脚本 2 | `fix_design_permissions.sh` — 开机触发 (root), 命令: `flock -xn /volume1/技术部/.fix_design.lock -c '/bin/bash /volume1/技术部/fix_design_permissions.sh'` |
