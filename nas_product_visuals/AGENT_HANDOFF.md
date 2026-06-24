@@ -1,15 +1,17 @@
-# NAS 产品信息目录路径扫描脚本
+# NAS 运维脚本集
 
 ## 概述
 
-部署在群晖 NAS 上的 Bash 脚本，用于扫描 `/volume1/产品信息/` 目录下所有产品文件夹的路径结构，输出到 `folder_paths_simple.txt`。
+部署在群晖 NAS `/volume1/技术部/` 上的 Bash 脚本集合 — 产品目录扫描 + ACL 权限实时修复。
 
 ## 核心文件
 
 | 文件 | 说明 |
 |------|------|
-| `generate_products_visuals.sh` | 扫描脚本，部署在 NAS `/volume1/技术部/` 上运行 |
+| `generate_products_visuals.sh` | 扫描 `/volume1/产品信息/` 下所有产品文件夹路径 |
+| `fix_design_permissions.sh` | inotify 实时监控"设计稿"文件夹，自动移除"视觉需求（读取）"角色权限 |
 | `folder_paths_simple.txt` | 输出的路径清单报告，位于 `/volume1/FZH共享文件夹/` |
+| `docs/` | OKF 文档（[index.md](docs/index.md) / [log.md](docs/log.md)） |
 
 ## 部署环境
 
