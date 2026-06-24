@@ -17,12 +17,26 @@
 
 | 项目 | 值 |
 |------|-----|
-| NAS 地址 | `fzh.myds.me:31022` |
-| 用户 | `fzh.nas` |
+| NAS 域名 | `fzh.myds.me:31022` |
+| NAS 局域网 IP | `192.168.1.5:31022` (域名不可用时使用) |
+| SSH 用户 | `fzh.nas` |
+| SSH 密码 | 不在文档中 — 每次新对话需向用户询问 |
 | 脚本路径 | `/volume1/技术部/` |
 | 脚本 1 | `generate_products_visuals.sh` — 定时任务（建议每天凌晨） |
 | 脚本 2 | `fix_design_permissions.sh` — 开机触发 (root), 命令: `flock -xn /volume1/技术部/.fix_design.lock -c '/bin/bash /volume1/技术部/fix_design_permissions.sh'` |
 | 输出路径 | `/volume1/FZH共享文件夹/folder_paths_simple.txt` |
+
+### NAS 连接注意事项
+
+1. **不要用 SFTP** — 群晖默认关闭 SFTP。使用 base64 over SSH exec 传输文件
+2. **paramiko 已在 pyproject.toml** — 新对话先 `uv sync` 而非 `uv add paramiko`
+3. **Windows GBK 编码** — Python `print()` 中文/emoji 前必须:
+   ```python
+   sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+   ```
+4. **ps aux 中文路径显示为 `???`** — 排查进程时搜 `inotifywait` 再查父进程，不要只搜脚本名
+5. **DSM 计划任务点"运行"不杀旧实例** — 排查时先 `ps aux | grep inotifywait` 确认只有一个实例
+6. **root PATH 不含 /usr/local/bin** — `/usr/local/bin/inotifywait` 必须用绝对路径
 
 ## 目录结构
 
