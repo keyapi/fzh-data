@@ -43,7 +43,7 @@ function New-SafeSymlink {
         return
     }
     try {
-        New-Item -ItemType SymbolicLink -Path $Path -Target $Target -Force | Out-Null
+        New-Item -ItemType SymbolicLink -Path $Path -Target $Target -Force -ErrorAction Stop | Out-Null
         Write-Host "  [OK] $Path -> $Target" -ForegroundColor Green
     } catch {
         Write-Host "  [WARN] symlink failed, fallback to copy: $Path" -ForegroundColor Yellow

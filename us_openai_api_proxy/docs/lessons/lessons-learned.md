@@ -189,3 +189,56 @@ Compose 中加 `pull_policy: never` 防止重复拉取。
 - [tailscale/tailscale#14008: External DNS SERVFAIL with Tailscale on Docker host](https://github.com/tailscale/tailscale/issues/14008)
 - [tailscale/tailscale#13367: No connectivity from docker container when tailscale exit-node is set](https://github.com/tailscale/tailscale/issues/13367)
 
+---
+
+### Lesson 27: OpenClash "绕过中国大陆IP" 关闭导致国内应用 UDP 卡顿 (v0.9, 2026-06-24)
+
+**现象**：小会议室电脑开钉钉视频会议卡顿，关掉 OpenWrt 路由器后正常。
+
+**根因**：OpenClash 的 `china_ip_route` 开关是**关闭的** (`0`)。这意味着所有流量（包括国内 IP）都进入 Clash 内核处理。在 `redir-host + tproxy` 模式下，UDP 流量被 TPROXY 劫持到 `127.0.0.1:7895`，代理节点对 UDP 转发延迟高、丢包严重。钉钉视频会议使用 UDP (WebRTC) 做媒体传输，即使服务器是国内阿里云 IP，UDP 包仍然通过代理节点中转。
+
+**修复**（两处改动）：
+
+1. **开启 "绕过中国大陆IP"**：
+   ```bash
+   uci set openclash.config.china_ip_route='1'
+   uci commit openclash
+   ```
+   开启后 OpenClash 在 iptables 层面插入 `match-set china_ip_route dst RETURN` 规则，国内 IP 流量不进 Clash 内核。效果验证：
+   - NAT TCP: 254 pkts RETURN (绕过) vs 188 REDIRECT (进Clash)
+   - MANGLE UDP: 471 pkts RETURN vs 73 TPROXY
+
+2. **添加钉钉域名 DIRECT 规则**（双重保险，在 `/etc/openclash/custom/openclash_custom_rules.list`）：
+   ```yaml
+   - DOMAIN-SUFFIX,dingtalk.com,DIRECT
+   - DOMAIN-SUFFIX,dingtalk.cn,DIRECT
+   - DOMAIN-SUFFIX,dingtalkapps.com,DIRECT
+   - DOMAIN-SUFFIX,alicdn.com,DIRECT
+   - DOMAIN-KEYWORD,dingtalk,DIRECT
+   ```
+
+**前置条件**（均已满足）：
+- DNS 劫持已开启 (`enable_redirect_dns=1`)
+- 国内 IP 段文件已存在 (`/etc/openclash/china_ip_route.ipset`, 4293 条, 152KB)
+- 国内 DNS 服务器已配置 (114.114.114.114, 119.29.29.29, doh.pub)
+
+**为什么之前关着**：该功能在某些旧版本中可能有兼容性问题或性能影响，但 v0.47.088 + Mihomo alpha 内核已经稳定。开启后翻墙功能不受影响——只有 `china_ip_route` 匹配的国内 IP 走直连，其余仍进 Clash 代理。
+
+**回滚**（如需）：
+```bash
+uci set openclash.config.china_ip_route='0' && uci commit openclash
+cp /etc/openclash/custom/openclash_custom_rules.list.bak /etc/openclash/custom/openclash_custom_rules.list
+/etc/init.d/openclash restart
+```
+（规则文件的 `.bak` 备份在执行修改时已自动创建）
+
+**当前 OpenClash 配置关键参数**：
+| 参数 | 值 | 说明 |
+|------|-----|------|
+| `en_mode` | `redir-host` | 运行模式 |
+| `china_ip_route` | **1** (已改为) | 绕过中国大陆IP |
+| `enable_redirect_dns` | `1` | DNS 劫持 |
+| `enable_udp_proxy` | `1` | UDP 代理 |
+| `lan_ac_mode` | `0` | 局域网访问控制 |
+| Mihomo 内核 | `alpha-g8f2d84f` | 最新 alpha |
+| 软件版本 | `v0.47.088` | — |

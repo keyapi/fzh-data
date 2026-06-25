@@ -7,6 +7,15 @@ tags: [openai, api-proxy, changelog]
 ---
 # 变更日志
 
+## 2026-06-24 (v0.9)
+
+- **v0.9**: 钉钉视频会议卡顿修复 — 开启 OpenClash "绕过中国大陆IP" + 添加钉钉域名 DIRECT 规则
+- **v0.9**: 根因: `china_ip_route=0` (关闭) 导致国内 IP 的 UDP 流量被 TPROXY 劫持进 Clash 内核, 代理节点 UDP 转发性能差
+- **v0.9**: 修复: `china_ip_route=1` (开启) → iptables 层面 RETURN 国内 IP 流量, 不进 Clash 内核
+- **v0.9**: 双重保险: 覆写规则添加 5 条钉钉域名 DIRECT 规则 (dingtalk.com/dingtalk.cn/dingtalkapps.com/alicdn.com/KEYWORD:dingtalk)
+- **v0.9**: 效果: NAT TCP 254 pkts RETURN vs 188 REDIRECT, MANGLE UDP 471 pkts RETURN vs 73 TPROXY
+- **v0.9**: 不影响翻墙: 非国内 IP 流量仍正常进 Clash 代理
+
 ## 2026-06-23 (v0.8)
 
 - **v0.8**: Tailscale 安全升级 v1.32.3 → v1.98.4 (手动静态二进制替换, arm64)
