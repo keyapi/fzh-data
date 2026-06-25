@@ -75,6 +75,41 @@ tags: [amazon, advertising, roadmap, planning]
 5. **导出补充报告**: Purchased Product + Search Term Impression Share + Performance Over Time
 6. **试用 Two Minute Reports MCP**: 自然语言查 Amazon Ads 数据
 
+## Phase 4 更新 (2026-06-25)
+
+基于赛狐 API 接入实践，进一步细化:
+
+| 优先级 | 模块 | 状态 | 说明 |
+|--------|------|------|------|
+| 🔴 P0 | 赛狐 API 端点验证 | ⚠️ 进行中 | Token 已获取，端点待白名单 IP 验证 |
+| 🔴 P0 | 广告读写能力确认 | ⚠️ 待验证 | 赛狐 API 是否支持 campaign 创建/修改/出价？ |
+| 🔴 P0 | 自动化数据管道 (API→DB) | ⬜ 待开始 | 确认 API 能力后启动 |
+| 🔴 P0 | 决策日志数据库 | ⬜ 待开始 | 每次分析持久化 |
+| 🟡 P1 | MCP Server 集成 | ⬜ 待开始 | Sellfox MCP (2星第三方) 或自建 |
+| 🟡 P1 | TACoS+利润感知分析 | ⬜ 待开始 | |
+| 🟡 P1 | LLM 搜索词语义分类 | ⬜ 待开始 | |
+| 🟡 P1 | Web Dashboard | ⬜ 待开始 | FastAPI + React + ECharts |
+| 🟢 P2 | AMC 集成 | ⬜ 待开始 | |
+| 🟢 P2 | 预测模型 + 多期对比 | ⬜ 待开始 | |
+
+## Phase 4 更新 (2026-06-24)
+
+基于83次搜索的行业全景调研，调整优先级:
+
+| 优先级 | 模块 | 理由 |
+|--------|------|------|
+| 🔴 P0 | 自动化数据管道 (API→DB) | 解决60天窗口，一切分析基础 |
+| 🔴 P0 | MCP Server集成 | AI Agent操作Ads，自然语言管理 |
+| 🔴 P0 | 决策日志数据库 | 持久化+审计+学习 |
+| 🟡 P1 | TACoS+利润感知分析 | ACoS升级到完整商业视角 |
+| 🟡 P1 | LLM搜索词语义分类 | 替代硬编码关键词 |
+| 🟡 P1 | Web Dashboard | 替代Excel |
+| 🟡 P1 | 定时Workflow引擎 | 自动化周度/日常 |
+| 🟢 P2 | AMC集成 | 自定义归因+增量分析 |
+| 🟢 P2 | 预测模型 | 预算预测+出价优化 |
+| 🟢 P2 | 多期对比 | 环比/同比趋势 |
+| 🟢 P2 | 多Agent协作架构 | Strategy→Analysis→Execution→Monitoring |
+
 ## See also
 - [调研报告](research/2026-06-16-amazon-advertising-analysis-research.md)
 - [设计文档](specs/2026-06-16-amazon-advertise-analysis-design.md)
