@@ -7,6 +7,14 @@ tags: [openai, api-proxy, changelog]
 ---
 # 变更日志
 
+## 2026-06-25 (v0.10)
+
+- **v0.10**: OpenClash 翻墙全断事件诊断 — 代理订阅链接过期, 所有非中国 IP TCP 流量被 TPROXY 劫持到失效代理, 导致 SSH/外网全死
+- **v0.10**: SSH config 优化: `us-ubuntu-proxy` 改为 Tailscale 内网 IP 优先, 新增 `us-ubuntu-proxy-pub` 公网备用
+- **v0.10**: 确认 OpenClash 流量劫持链路: 非中国 IP TCP → iptables REDIRECT → Clash :7892 → 失效代理 → 连接秒断
+- **v0.10**: 确认 china_ip_route 绕过规则正常工作 (中国 IP TCP/UDP RETURN, 非中国 IP 仍进 Clash)
+- **v0.10**: 诊断方法: 切换 WiFi 直连光猫绕过 OpenClash 验证, SSH SOCKS 代理应急翻墙
+
 ## 2026-06-24 (v0.9)
 
 - **v0.9**: 钉钉视频会议卡顿修复 — 开启 OpenClash "绕过中国大陆IP" + 添加钉钉域名 DIRECT 规则
