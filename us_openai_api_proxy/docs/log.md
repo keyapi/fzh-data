@@ -16,6 +16,11 @@ tags: [openai, api-proxy, changelog]
 - **v0.11**: 推荐 API 用户用方案 B (`https://api.vilavi.cn`), 方案 A 作为兜底
 - **v0.11**: DNS 小插曲: OpenClash 缓存了新域名的 NXDOMAIN, 重启 OpenClash 后自动恢复, 无需额外配置
 
+## 2026-06-25 (v0.12)
+
+- **v0.12**: Lesson 29 — new-api 钉钉 OAuth 登录可行性调研 (new-api 原生不支持, 需 OIDC 桥接代理)
+- **v0.12**: 调研记录: 钉钉 OAuth 端点/参数/限制方案/离职撤销, 参考链接见 Lesson 29
+
 ## 2026-06-24 (v0.9)
 
 - **v0.9**: 钉钉视频会议卡顿修复 — 开启 OpenClash "绕过中国大陆IP" + 添加钉钉域名 DIRECT 规则

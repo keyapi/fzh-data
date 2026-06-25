@@ -242,3 +242,102 @@ cp /etc/openclash/custom/openclash_custom_rules.list.bak /etc/openclash/custom/o
 | `lan_ac_mode` | `0` | 局域网访问控制 |
 | Mihomo 内核 | `alpha-g8f2d84f` | 最新 alpha |
 | 软件版本 | `v0.47.088` | — |
+
+---
+
+### Lesson 29: new-api 钉钉 OAuth 登录可行性调研 (v0.12, 2026-06-25)
+
+**需求**：公司用钉钉，希望员工通过钉钉自动登录 new-api 获取 API Key，仅限本公司员工，离职后自动失效。
+
+**结论**：new-api 原生不支持钉钉 OAuth。需通过 OIDC 桥接代理实现，不改 new-api 代码。
+
+#### new-api 现有 OAuth 支持
+
+| 提供方 | 内置 | 备注 |
+|--------|:--:|------|
+| GitHub | ✅ | `oauth/github.go` |
+| Discord | ✅ | `oauth/discord.go` |
+| OIDC (通用) | ✅ | `oauth/oidc.go` — 标准 OIDC 协议 |
+| 微信 | ✅ | `controller/wechat.go` |
+| Telegram | ✅ | controller 内引用 |
+| Linux DO | ✅ | `oauth/linuxdo.go` |
+| **钉钉** | ❌ | 无 |
+| **飞书** | ❌ | 无 (one-api 有) |
+
+new-api 提供"自定义 OAuth 提供方"功能（Root 管理员在后台配置），可对接标准 OIDC 协议的服务。
+
+#### 为什么自定义 OAuth 不能直接对接钉钉
+
+| 不兼容点 | 标准 OIDC | 钉钉 |
+|----------|-----------|------|
+| 回调参数名 | `code` | `authCode` |
+| 用户信息请求头 | `Authorization: Bearer` | `x-acs-dingtalk-access-token` |
+| 发现端点 | `/.well-known/openid-configuration` | 无 |
+
+new-api 控制器只从 URL 提取 `code`，自定义提供方默认用 `Authorization: Bearer`。不修改代码无法对接。
+
+#### 钉钉 OAuth 2.0 技术细节
+
+| 组件 | 端点/值 |
+|------|---------|
+| 授权 URL | `https://login.dingtalk.com/oauth2/auth` |
+| 令牌 URL | `POST https://api.dingtalk.com/v1.0/oauth2/userAccessToken` |
+| 用户信息 URL | `GET https://api.dingtalk.com/v1.0/contact/users/me` |
+| 用户信息请求头 | `x-acs-dingtalk-access-token: {token}` |
+| Scope | `openid` 或 `openid corpid` |
+| 令牌有效期 | 7200 秒 (2 小时) |
+
+用户信息响应示例：
+```json
+{
+  "nick": "zhangsan",
+  "avatarUrl": "https://...",
+  "mobile": "150xxxx9144",
+  "openId": "123",
+  "unionId": "z21HjQliSzpw0Yxxxx",
+  "email": "zhangsan@alibaba-inc.com",
+  "stateCode": "86"
+}
+```
+
+#### 推荐方案：OIDC 桥接代理
+
+写一个轻量 FastAPI 服务（~150 行），把钉钉的专有 OAuth 流程翻译成标准 OIDC：
+
+```
+用户 → 钉钉授权 → 桥接代理 (翻译 authCode + 请求头)
+    → new-api 自定义 OAuth → 自动创建用户/登录
+```
+
+- 暴露 `/.well-known/openid-configuration` 端点
+- 把 `code` → `authCode` 转换
+- 把 `Authorization: Bearer` → `x-acs-dingtalk-access-token` 转换
+- 服务端验证 `corpId` 白名单
+
+参考项目：[RayCarterLab/DingTalkOAuth](https://github.com/RayCarterLab/DingTalkOAuth)（FastAPI 钉钉集成）
+
+#### 限制本公司员工
+
+三种方式，按推荐排序：
+
+| 方式 | 实现 | 可靠性 |
+|------|------|--------|
+| **服务端验证 corpId** (推荐) | 桥接代理里检查 `corpId` 白名单 | 最可靠 |
+| 授权 URL 带 `corpId` 参数 | `&corpId=公司ID` | 用户可切换 |
+| `exclusiveLogin=true` | 强制单一组织 | 需开通专属账号 |
+
+#### 离职自动失效
+
+| 机制 | 延迟 | 实现 |
+|------|------|------|
+| OAuth 令牌 2 小时过期 | ≤2h | 无需额外开发 |
+| 登录时查钉钉 API | 即时 | 桥接代理每次验证 |
+| 定时同步通讯录 | ≤1h | cron job + 钉钉通讯录 API |
+
+#### 参考链接
+
+- [new-api GitHub](https://github.com/Calcium-Ion/new-api) — 内置 OAuth 提供方列表
+- [new-api 自定义 OAuth 文档](https://docs.newapi.pro/zh/docs/guide/feature-guide/admin/custom-oauth)
+- [钉钉开放平台 — 获取身份凭证](https://open.dingtalk.com/document/orgapp/obtain-identity-credentials)
+- [RayCarterLab/DingTalkOAuth](https://github.com/RayCarterLab/DingTalkOAuth) — FastAPI 钉钉 OAuth 集成参考
+- [Logto 钉钉集成文档](https://docs.logto.io/integrations/dingtalk-web)
