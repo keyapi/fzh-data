@@ -7,6 +7,14 @@ tags: [openai, api-proxy, changelog]
 ---
 # 变更日志
 
+## 2026-06-25 (v0.11)
+
+- **v0.11**: 方案 A (Tailscale Funnel): `tailscale funnel --bg 3000` → 公网 HTTPS URL, 零配置, ~300ms 延迟
+- **v0.11**: 方案 B (nginx HTTPS 反代): `api.vilavi.cn` → nginx 443 反代 127.0.0.1:3000, Let's Encrypt 证书, ~30ms 延迟
+- **v0.11**: ERPNext 零影响 (nginx SNI 多域名共存, 未改 frappe-bench.conf)
+- **v0.11**: 推荐 API 用户用方案 B (`https://api.vilavi.cn`), 方案 A 作为兜底
+- **v0.11**: DNS 小插曲: OpenClash 缓存了新域名的 NXDOMAIN, 重启 OpenClash 后自动恢复, 无需额外配置
+
 ## 2026-06-24 (v0.9)
 
 - **v0.9**: 钉钉视频会议卡顿修复 — 开启 OpenClash "绕过中国大陆IP" + 添加钉钉域名 DIRECT 规则
