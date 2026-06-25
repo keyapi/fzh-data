@@ -42,7 +42,7 @@ timestamp: 2026-06-25
 
 **解决**: 使用 Playwright MCP 的 `browser_run_code_unsafe` 功能：
 ```javascript
-await page.fill('input[type="password"]', 'VZKGdd0Q');
+await page.fill('input[type="password"]', '<SELLFOX_API_DOC_KEY>');
 await page.click('button:has-text("访问文档")');
 ```
 

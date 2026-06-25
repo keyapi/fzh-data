@@ -27,9 +27,9 @@
 
 | 项目 | 位置 |
 |------|------|
-| 赛狐 API 凭证 | `advertise/.env` (SELLFOX_APP_ID=368618) |
+| 赛狐 API 凭证 | `advertise/.env` (SELLFOX_APP_ID=<SELLFOX_APP_ID>) |
 | 赛狐 API 配置 | `advertise/config_sellfox.json` |
-| API 文档 | https://sellfoxapi.apifox.cn/ (密码: VZKGdd0Q) |
+| API 文档 | https://sellfoxapi.apifox.cn/ (密码: <SELLFOX_API_DOC_KEY>) |
 | API 生产环境 | https://openapi.sellfox.com/ |
 | Token 端点 | GET `/api/oauth/v2/token.json` (client_credentials) |
 

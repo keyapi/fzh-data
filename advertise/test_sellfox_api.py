@@ -40,8 +40,8 @@ print("=" * 60)
 
 if not APP_ID or not APP_SECRET:
     print("\n❌ 未找到凭证！请确保 advertise/.env 文件存在且包含:")
-    print("  SELLFOX_APP_ID=368618")
-    print("  SELLFOX_APP_SECRET=910891e4-...")
+    print("  SELLFOX_APP_ID=<SELLFOX_APP_ID>")
+    print("  SELLFOX_APP_SECRET=<your-secret>")
     sys.exit(1)
 
 # 检查当前公网 IP

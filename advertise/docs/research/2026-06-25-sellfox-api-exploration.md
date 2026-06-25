@@ -16,13 +16,13 @@ timestamp: 2026-06-25
 
 | 项目 | 值 |
 |------|-----|
-| App ID | 368618 |
-| App Secret | 910891e4-48db-4b30-84d4-6b238a1e9a47 |
+| App ID | <SELLFOX_APP_ID> |
+| App Secret | <SELLFOX_APP_SECRET> |
 | 账号名 | AGENT |
 | 权限范围 | 全部模块 |
 | 生产环境 | https://openapi.sellfox.com/ |
 | API 文档 | https://sellfoxapi.apifox.cn/ |
-| 文档密码 | VZKGdd0Q |
+| 文档密码 | <SELLFOX_API_DOC_KEY> |
 | IP 白名单 | 123.117.236.65 (北京办公室), 82.156.238.248 (VPS) |
 
 ## 2. 认证探索过程
@@ -33,8 +33,8 @@ timestamp: 2026-06-25
 
 **参数**:
 ```
-client_id=368618
-client_secret=910891e4-48db-4b30-84d4-6b238a1e9a47
+client_id=<SELLFOX_APP_ID>
+client_secret=<SELLFOX_APP_SECRET>
 grant_type=client_credentials
 ```
 
@@ -44,7 +44,7 @@ grant_type=client_credentials
   "code": 0,
   "msg": "success",
   "data": {
-    "access_token": "ddf41762-d978-44a6-b854-6ca2a7309466",
+    "access_token": "<ACCESS_TOKEN_EXAMPLE>",
     "expires_in": 86399998
   },
   "ts": 1782294762679,
@@ -76,9 +76,9 @@ grant_type=client_credentials
 | URL | 结果 |
 |-----|------|
 | https://sellfoxapi.apifox.cn/ | 密码保护页 |
-| https://sellfoxapi.apifox.cn/?password=VZKGdd0Q | 密码保护页（query param 无效） |
+| https://sellfoxapi.apifox.cn/?password=<SELLFOX_API_DOC_KEY> | 密码保护页（query param 无效） |
 | https://sellfoxapi.apifox.cn/doc-1589130.md | 密码保护页 |
-| https://sellfoxapi.apifox.cn/doc-1589130.md?password=VZKGdd0Q | 密码保护页 |
+| https://sellfoxapi.apifox.cn/doc-1589130.md?password=<SELLFOX_API_DOC_KEY> | 密码保护页 |
 | https://sellfoxapi.apifox.cn/llms.txt | 密码保护页 |
 
 WebFetch 无法通过 Apifox 的交互式密码保护（需要点击按钮 + 表单提交）。
@@ -88,7 +88,7 @@ WebFetch 无法通过 Apifox 的交互式密码保护（需要点击按钮 + 表
 **方法**: 使用 Playwright MCP 的 `browser_run_code_unsafe`
 
 ```javascript
-await page.fill('input[type="password"]', 'VZKGdd0Q');
+await page.fill('input[type="password"]', '<SELLFOX_API_DOC_KEY>');
 await page.click('button:has-text("访问文档")');
 const text = await page.evaluate(() => document.body.innerText);
 ```
@@ -183,7 +183,7 @@ const text = await page.evaluate(() => document.body.innerText);
 ## 6. 对下一步的建议
 
 1. **从白名单 IP 运行** `test_sellfox_api.py` — 脚本会自动尝试所有认证方式并保存 OpenAPI JSON
-2. **在浏览器中打开** `https://sellfoxapi.apifox.cn/`，输入密码 VZKGdd0Q，展开"广告"模块查看具体 API 端点
+2. **在浏览器中打开** `https://sellfoxapi.apifox.cn/`，输入密码 <SELLFOX_API_DOC_KEY>，展开"广告"模块查看具体 API 端点
 3. **优先验证广告 API 写能力** — 是否支持创建/修改 campaign、调整出价、添加关键词
 4. **确认数据范围** — 历史数据可回溯天数、刷新频率
 
