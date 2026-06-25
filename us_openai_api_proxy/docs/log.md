@@ -7,19 +7,13 @@ tags: [openai, api-proxy, changelog]
 ---
 # 变更日志
 
-## 2026-06-25 (v0.11)
+## 2026-06-25 (v0.10)
 
-- **v0.11**: 方案 A (Tailscale Funnel): `tailscale funnel --bg 3000` → 公网 HTTPS URL, 零配置, ~300ms 延迟
-- **v0.11**: 方案 B (nginx HTTPS 反代): `api.vilavi.cn` → nginx 443 反代 127.0.0.1:3000, Let's Encrypt 证书, ~30ms 延迟
-- **v0.11**: ERPNext 零影响 (nginx SNI 多域名共存, 未改 frappe-bench.conf)
-- **v0.11**: 安全加固: `RegisterEnabled=false` (关闭公开注册), 管理员后台手动创建用户
-- **v0.11**: 推荐 API 用户用方案 B (`https://api.vilavi.cn`), 方案 A 作为兜底
-- **v0.11**: DNS 小插曲: OpenClash 缓存了新域名的 NXDOMAIN, 重启 OpenClash 后自动恢复, 无需额外配置
-
-## 2026-06-25 (v0.12)
-
-- **v0.12**: Lesson 29 — new-api 钉钉 OAuth 登录可行性调研 (new-api 原生不支持, 需 OIDC 桥接代理)
-- **v0.12**: 调研记录: 钉钉 OAuth 端点/参数/限制方案/离职撤销, 参考链接见 Lesson 29
+- **v0.10**: OpenClash 翻墙全断事件诊断 — 代理订阅链接过期, 所有非中国 IP TCP 流量被 TPROXY 劫持到失效代理, 导致 SSH/外网全死
+- **v0.10**: SSH config 优化: `us-ubuntu-proxy` 改为 Tailscale 内网 IP 优先, 新增 `us-ubuntu-proxy-pub` 公网备用
+- **v0.10**: 确认 OpenClash 流量劫持链路: 非中国 IP TCP → iptables REDIRECT → Clash :7892 → 失效代理 → 连接秒断
+- **v0.10**: 确认 china_ip_route 绕过规则正常工作 (中国 IP TCP/UDP RETURN, 非中国 IP 仍进 Clash)
+- **v0.10**: 诊断方法: 切换 WiFi 直连光猫绕过 OpenClash 验证, SSH SOCKS 代理应急翻墙
 
 ## 2026-06-24 (v0.9)
 

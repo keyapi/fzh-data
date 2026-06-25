@@ -245,99 +245,49 @@ cp /etc/openclash/custom/openclash_custom_rules.list.bak /etc/openclash/custom/o
 
 ---
 
-### Lesson 29: new-api 钉钉 OAuth 登录可行性调研 (v0.12, 2026-06-25)
+### Lesson 28: OpenClash 代理失效导致全办公室外网瘫痪 + SSH SOCKS 应急 (v0.10, 2026-06-25)
 
-**需求**：公司用钉钉，希望员工通过钉钉自动登录 new-api 获取 API Key，仅限本公司员工，离职后自动失效。
+**现象**：办公室 FZH-5G WiFi 下所有设备无法访问外网，翻墙线路全部失效。本地电脑 SSH 到 US 服务器秒断（`Connection closed by remote host`）。
 
-**结论**：new-api 原生不支持钉钉 OAuth。需通过 OIDC 桥接代理实现，不改 new-api 代码。
+**诊断过程**：
 
-#### new-api 现有 OAuth 支持
+1. **切换 WiFi 直连光猫**（绕过 OpenWrt/OpenClash）→ SSH 恢复正常 → 确认问题在 OpenClash
+2. **检查 OpenClash NAT iptables 链**：
+   - `match-set china_ip_route dst` → RETURN（中国 IP 正常直连）✓
+   - `REDIRECT tcp ... redir ports :7892`（非中国 IP TCP 全部劫持到 Clash）← 这是根因
+3. **US 服务器公网 IP 不在中国 IP 段**（`<US_PUBLIC_IP>`）→ 被 iptables REDIRECT → 进入 Clash → 走失效代理 → 连接秒断
+4. **应急方案**：SSH SOCKS 隧道（`ssh -D 1080 us-ubuntu-proxy`）走 Tailscale 内网 `100.x.x.x`，不经过 OpenClash → 成功翻墙
+5. **最终修复**：更新 OpenClash 代理订阅链接（ssrdog 新链接）
 
-| 提供方 | 内置 | 备注 |
-|--------|:--:|------|
-| GitHub | ✅ | `oauth/github.go` |
-| Discord | ✅ | `oauth/discord.go` |
-| OIDC (通用) | ✅ | `oauth/oidc.go` — 标准 OIDC 协议 |
-| 微信 | ✅ | `controller/wechat.go` |
-| Telegram | ✅ | controller 内引用 |
-| Linux DO | ✅ | `oauth/linuxdo.go` |
-| **钉钉** | ❌ | 无 |
-| **飞书** | ❌ | 无 (one-api 有) |
-
-new-api 提供"自定义 OAuth 提供方"功能（Root 管理员在后台配置），可对接标准 OIDC 协议的服务。
-
-#### 为什么自定义 OAuth 不能直接对接钉钉
-
-| 不兼容点 | 标准 OIDC | 钉钉 |
-|----------|-----------|------|
-| 回调参数名 | `code` | `authCode` |
-| 用户信息请求头 | `Authorization: Bearer` | `x-acs-dingtalk-access-token` |
-| 发现端点 | `/.well-known/openid-configuration` | 无 |
-
-new-api 控制器只从 URL 提取 `code`，自定义提供方默认用 `Authorization: Bearer`。不修改代码无法对接。
-
-#### 钉钉 OAuth 2.0 技术细节
-
-| 组件 | 端点/值 |
-|------|---------|
-| 授权 URL | `https://login.dingtalk.com/oauth2/auth` |
-| 令牌 URL | `POST https://api.dingtalk.com/v1.0/oauth2/userAccessToken` |
-| 用户信息 URL | `GET https://api.dingtalk.com/v1.0/contact/users/me` |
-| 用户信息请求头 | `x-acs-dingtalk-access-token: {token}` |
-| Scope | `openid` 或 `openid corpid` |
-| 令牌有效期 | 7200 秒 (2 小时) |
-
-用户信息响应示例：
-```json
-{
-  "nick": "zhangsan",
-  "avatarUrl": "https://...",
-  "mobile": "150xxxx9144",
-  "openId": "123",
-  "unionId": "z21HjQliSzpw0Yxxxx",
-  "email": "zhangsan@alibaba-inc.com",
-  "stateCode": "86"
-}
-```
-
-#### 推荐方案：OIDC 桥接代理
-
-写一个轻量 FastAPI 服务（~150 行），把钉钉的专有 OAuth 流程翻译成标准 OIDC：
+**根因链路**：
 
 ```
-用户 → 钉钉授权 → 桥接代理 (翻译 authCode + 请求头)
-    → new-api 自定义 OAuth → 自动创建用户/登录
+设备 → FZH-5G WiFi → 新华三 → OpenWrt iptables:
+  目标 IP 检查:
+    ✓ 中国 IP (china_ip_route) → RETURN → 联通直连 → 正常
+    ✗ 非中国 IP → REDIRECT :7892 → Clash 内核 → 失效代理 → 连接秒断
 ```
 
-- 暴露 `/.well-known/openid-configuration` 端点
-- 把 `code` → `authCode` 转换
-- 把 `Authorization: Bearer` → `x-acs-dingtalk-access-token` 转换
-- 服务端验证 `corpId` 白名单
+这包括 SSH（TCP 22 到国外 IP）、浏览器访问国外网站、API 调用等所有非中国流量。
 
-参考项目：[RayCarterLab/DingTalkOAuth](https://github.com/RayCarterLab/DingTalkOAuth)（FastAPI 钉钉集成）
+**教训**：
 
-#### 限制本公司员工
+1. **代理订阅是单点故障**：订阅过期 → 所有非中国流量全死。建议设置订阅自动更新 + 健康检查告警。
+2. **Tailscale 内网是救命稻草**：Tailscale 使用自己的 WireGuard 隧道，流量不经过 OpenClash iptables 劫持。SSH 配置应优先使用 Tailscale 内网 IP（100.x.x.x），公网 IP 做备用。
+3. **诊断利器**：切换 WiFi 直连光猫是快速排除 OpenWrt/OpenClash 问题的方法。中国 IP 直连正常 + 国外 IP 全断 = 代理失效。
+4. **SSH 不应依赖翻墙**：关键服务器（US Ubuntu）的 SSH 应通过 Tailscale 内网 IP 访问，确保翻墙挂掉时仍可达。
+5. **OpenClash china_ip_route 已确认正常工作**：中国 IP 的 TCP 和 UDP 都正确 RETURN，不受代理状态影响。
 
-三种方式，按推荐排序：
+**SSH Config 优化**（双路 fallback）：
 
-| 方式 | 实现 | 可靠性 |
-|------|------|--------|
-| **服务端验证 corpId** (推荐) | 桥接代理里检查 `corpId` 白名单 | 最可靠 |
-| 授权 URL 带 `corpId` 参数 | `&corpId=公司ID` | 用户可切换 |
-| `exclusiveLogin=true` | 强制单一组织 | 需开通专属账号 |
+```
+Host us-ubuntu-proxy          ← 主：Tailscale 内网，不依赖翻墙
+    HostName <US_TS_IP>
 
-#### 离职自动失效
+Host us-ubuntu-proxy-pub      ← 备：公网 IP，需要翻墙正常
+    HostName <US_PUBLIC_IP>
+```
 
-| 机制 | 延迟 | 实现 |
-|------|------|------|
-| OAuth 令牌 2 小时过期 | ≤2h | 无需额外开发 |
-| 登录时查钉钉 API | 即时 | 桥接代理每次验证 |
-| 定时同步通讯录 | ≤1h | cron job + 钉钉通讯录 API |
+> 敏感 IP 值见 `.env`（gitignored），以上用占位符。
 
-#### 参考链接
-
-- [new-api GitHub](https://github.com/Calcium-Ion/new-api) — 内置 OAuth 提供方列表
-- [new-api 自定义 OAuth 文档](https://docs.newapi.pro/zh/docs/guide/feature-guide/admin/custom-oauth)
-- [钉钉开放平台 — 获取身份凭证](https://open.dingtalk.com/document/orgapp/obtain-identity-credentials)
-- [RayCarterLab/DingTalkOAuth](https://github.com/RayCarterLab/DingTalkOAuth) — FastAPI 钉钉 OAuth 集成参考
-- [Logto 钉钉集成文档](https://docs.logto.io/integrations/dingtalk-web)
+**相关**：Lesson 27 (OpenClash china_ip_route), `../.env` (US 服务器 IP)
