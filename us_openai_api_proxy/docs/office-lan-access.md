@@ -261,6 +261,43 @@ uci commit && /etc/init.d/firewall restart
 3. **OpenWrt 非官方固件**：R22.11.13 是自定义版本，部分 init 脚本不兼容
 4. **防火墙重启后需重新启动 Tailscale**：已写入 `/etc/firewall.user` 做持久化
 
+## 深圳/远程办公室访问 new-api (v0.11, 2026-06-25)
+
+北京办公室已通过路由器访问 Tailscale 网络，但深圳办公室无 IT 人员、无 OpenWrt 路由器、公网 IP 动态变化，需要不依赖 Tailscale 客户端的公网接入方案。
+
+### 方案 A: Tailscale Funnel (兜底)
+
+```
+深圳浏览器 → https://<hostname>.<tailnet>.ts.net
+    → Tailscale Funnel Relay → 加密隧道 → 上海 new-api:3000
+```
+
+- 一行命令: `tailscale funnel --bg 3000`（上海服务器上运行）
+- 自动 HTTPS 证书，零安全组改动，零 nginx 改动
+- **不需要安装任何软件**，任何浏览器直接打开 URL
+- 延迟 ~300ms（经 Tailscale relay 中转）
+- 回滚: `tailscale funnel reset`
+
+### 方案 B: nginx HTTPS 反代 (推荐日常使用)
+
+```
+深圳浏览器 → https://api.vilavi.cn (HTTPS 443)
+    → 阿里云安全组 → nginx → new-api:3000
+```
+
+- 新增 `/etc/nginx/conf.d/new-api.conf`，未修改现有 frappe-bench.conf
+- nginx SNI 按域名区分，与 `ensh.vilavi.cn` (ERPNext) 零冲突
+- Let's Encrypt 自动续签证书
+- 延迟 ~30ms（直连上海阿里云）
+- DNS: Cloudflare A 记录 `api.vilavi.cn` → `<SH_PUBLIC_IP>`
+
+### Codex++ 配置
+
+| 字段 | 值 |
+|------|-----|
+| Base URL | `https://api.vilavi.cn` |
+| API Key | 在 new-api 后台创建的令牌 |
+
 ## 见也
 
 - [architecture.md](architecture.md) — 整体架构（服务器+API 流）
