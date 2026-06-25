@@ -242,3 +242,52 @@ cp /etc/openclash/custom/openclash_custom_rules.list.bak /etc/openclash/custom/o
 | `lan_ac_mode` | `0` | 局域网访问控制 |
 | Mihomo 内核 | `alpha-g8f2d84f` | 最新 alpha |
 | 软件版本 | `v0.47.088` | — |
+
+---
+
+### Lesson 28: OpenClash 代理失效导致全办公室外网瘫痪 + SSH SOCKS 应急 (v0.10, 2026-06-25)
+
+**现象**：办公室 FZH-5G WiFi 下所有设备无法访问外网，翻墙线路全部失效。本地电脑 SSH 到 US 服务器秒断（`Connection closed by remote host`）。
+
+**诊断过程**：
+
+1. **切换 WiFi 直连光猫**（绕过 OpenWrt/OpenClash）→ SSH 恢复正常 → 确认问题在 OpenClash
+2. **检查 OpenClash NAT iptables 链**：
+   - `match-set china_ip_route dst` → RETURN（中国 IP 正常直连）✓
+   - `REDIRECT tcp ... redir ports :7892`（非中国 IP TCP 全部劫持到 Clash）← 这是根因
+3. **US 服务器公网 IP 不在中国 IP 段**（`<US_PUBLIC_IP>`）→ 被 iptables REDIRECT → 进入 Clash → 走失效代理 → 连接秒断
+4. **应急方案**：SSH SOCKS 隧道（`ssh -D 1080 us-ubuntu-proxy`）走 Tailscale 内网 `100.x.x.x`，不经过 OpenClash → 成功翻墙
+5. **最终修复**：更新 OpenClash 代理订阅链接（ssrdog 新链接）
+
+**根因链路**：
+
+```
+设备 → FZH-5G WiFi → 新华三 → OpenWrt iptables:
+  目标 IP 检查:
+    ✓ 中国 IP (china_ip_route) → RETURN → 联通直连 → 正常
+    ✗ 非中国 IP → REDIRECT :7892 → Clash 内核 → 失效代理 → 连接秒断
+```
+
+这包括 SSH（TCP 22 到国外 IP）、浏览器访问国外网站、API 调用等所有非中国流量。
+
+**教训**：
+
+1. **代理订阅是单点故障**：订阅过期 → 所有非中国流量全死。建议设置订阅自动更新 + 健康检查告警。
+2. **Tailscale 内网是救命稻草**：Tailscale 使用自己的 WireGuard 隧道，流量不经过 OpenClash iptables 劫持。SSH 配置应优先使用 Tailscale 内网 IP（100.x.x.x），公网 IP 做备用。
+3. **诊断利器**：切换 WiFi 直连光猫是快速排除 OpenWrt/OpenClash 问题的方法。中国 IP 直连正常 + 国外 IP 全断 = 代理失效。
+4. **SSH 不应依赖翻墙**：关键服务器（US Ubuntu）的 SSH 应通过 Tailscale 内网 IP 访问，确保翻墙挂掉时仍可达。
+5. **OpenClash china_ip_route 已确认正常工作**：中国 IP 的 TCP 和 UDP 都正确 RETURN，不受代理状态影响。
+
+**SSH Config 优化**（双路 fallback）：
+
+```
+Host us-ubuntu-proxy          ← 主：Tailscale 内网，不依赖翻墙
+    HostName <US_TS_IP>
+
+Host us-ubuntu-proxy-pub      ← 备：公网 IP，需要翻墙正常
+    HostName <US_PUBLIC_IP>
+```
+
+> 敏感 IP 值见 `.env`（gitignored），以上用占位符。
+
+**相关**：Lesson 27 (OpenClash china_ip_route), `../.env` (US 服务器 IP)
