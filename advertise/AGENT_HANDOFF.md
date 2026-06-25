@@ -22,7 +22,21 @@ uv run python -m advertise.build_report         # → Excel 报告
 
 `数据源/如森US-近30天广告数据/` — 4 个文件 (campaign/targeting/search_term/placement), 2026-05-17 ~ 06-15
 
+<<<<<<< HEAD
+| 项目 | 位置 |
+|------|------|
+| 赛狐 API 凭证 | `advertise/.env` (SELLFOX_APP_ID=<SELLFOX_APP_ID>) |
+| 赛狐 API 配置 | `advertise/config_sellfox.json` |
+| API 文档 | https://sellfoxapi.apifox.cn/ (密码: <SELLFOX_API_DOC_KEY>) |
+| API 生产环境 | https://openapi.sellfox.com/ |
+| Token 端点 | GET `/api/oauth/v2/token.json` (client_credentials) |
+
+## 文档地图（渐进式加载）
+
+### 快速上手
+=======
 ## 文档地图 (渐进式加载 → 文档符合 OKF v0.1 规范)
+>>>>>>> origin/main
 
 | 你需要... | 读这个 |
 |----------|--------|
