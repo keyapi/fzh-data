@@ -291,3 +291,53 @@ Host us-ubuntu-proxy-pub      ← 备：公网 IP，需要翻墙正常
 > 敏感 IP 值见 `.env`（gitignored），以上用占位符。
 
 **相关**：Lesson 27 (OpenClash china_ip_route), `../.env` (US 服务器 IP)
+
+
+## Lesson 29: 钉钉 OAuth 接入 new-api（SSO 单点登录）
+
+**日期**：2026-06-25
+
+**背景**：公司内部使用 new-api 作为大模型 API 网关，每个新同事入职都需要管理员手动创建账号。目标是通过钉钉扫码登录实现自动创建账号（SSO），省去手动开账号的繁琐工作。
+
+**调研结论**：
+
+1. **全网无现成方案**：没有任何人为 new-api 或 one-api 做过钉钉 OAuth 集成，没有相关 PR/Issue/fork。
+
+2. **new-api 有两套 OAuth 扩展机制**：
+   - 内置 Provider（GitHub、OIDC、飞书、微信等）— 硬编码
+   - **自定义 Provider**（`controller/custom_oauth.go`）— 支持动态注册任意 OAuth/OIDC provider，含 OIDC Discovery
+
+3. **钉钉 → OIDC 桥接方案对比**：
+   - [dingtalk-oidc](https://github.com/maggch97/dingtalk-oidc)：Go 实现，功能完整但作者声明 99% AI 生成、无安全保证，密钥每次重启重新生成，内存状态
+   - [Logto connector](https://www.npmjs.com/package/@logto/connector-dingtalk-web)：需部署整套 Logto，杀鸡用牛刀
+   - [APISIX dingtalk-auth](https://docs.apiseven.com/hub/dingtalk-auth)：网关级方案，未使用 APISIX
+
+**最终方案**：自写 OIDC 桥接代理（~220 行 FastAPI）+ new-api 自定义 OAuth
+
+**架构**：
+```
+浏览器 → new-api (Custom OAuth) → OIDC Bridge (FastAPI) → 钉钉 OAuth v2 API
+```
+
+**钉钉 OAuth v2 端点**（第三方企业应用）：
+- 授权页：`https://login.dingtalk.com/oauth2/auth`
+- 换 token：`POST https://api.dingtalk.com/v1.0/oauth2/userAccessToken`
+- 用户信息：`GET https://api.dingtalk.com/v1.0/contact/users/me`
+
+**OIDC Bridge 关键设计决策**：
+- 固定 RSA 密钥对（持久化到文件），不像 dingtalk-oidc 每次重启换密钥，确保 id_token 签名稳定
+- SQLite 存 state/code/token（不像 dingtalk-oidc 存内存），重启不丢会话
+- `ALLOWED_CORP_ID` 限定只能本公司员工登录
+- 不需要暴露公网端口（仅 new-api 容器内部访问）
+
+**new-api 配置方式**：
+- 后台 → 自定义 OAuth → 添加提供商 → 填入 discovery URL → 自动填充
+
+**代码位置**：`new-api-dingtalk-oidc/main.py`
+
+**待办**：在钉钉开放平台创建第三方企业应用 → 获取 AppKey/AppSecret → 配置回调域名 → 填入 docker-compose 环境变量 → 启动 → new-api 后台配置
+
+**参考链接**：
+- new-api 仓库：https://github.com/Calcium-Ion/new-api
+- dingtalk-oidc（参考）：https://github.com/maggch97/dingtalk-oidc
+- 钉钉 OAuth2 文档：https://open.dingtalk.com/document/orgapp/obtain-user-token
