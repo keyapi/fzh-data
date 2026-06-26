@@ -26,6 +26,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse
+from contextlib import asynccontextmanager
 from jwcrypto import jwk, jwt
 
 # ── Config ──────────────────────────────────────────────────────────
@@ -112,7 +113,14 @@ _db.commit()
 
 # ── FastAPI app ──────────────────────────────────────────────────────
 
-app = FastAPI(title="DingTalk OIDC Bridge", version="0.1.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Start background services on app startup."""
+    import stream_listener
+    stream_listener.start_stream_listener()
+    yield
+
+app = FastAPI(title="new-api-dingtalk-oidc", version="0.2.0", lifespan=lifespan)
 
 
 def _cleanup_expired():
@@ -228,7 +236,7 @@ async def dingtalk_callback(code: str = "", state: str = ""):
     if corp_id and ALLOWED_CORP_ID and corp_id != ALLOWED_CORP_ID:
         raise HTTPException(403, f"user not in allowed corp (got {corp_id})")
 
-    user_name = user_data.get("nick") or user_data.get("name") or dingtalk_user_id
+    user_name = user_data.get("name") or user_data.get("nick") or dingtalk_user_id
     email = user_data.get("email") or f"{dingtalk_user_id}@dingtalk"
     avatar = user_data.get("avatarUrl") or ""
 
@@ -341,3 +349,5 @@ def userinfo(request: Request):
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
