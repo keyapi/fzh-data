@@ -1,0 +1,46 @@
+version: "3.8"
+
+services:
+  new-api:
+    image: calciumion/new-api:latest
+    container_name: new-api
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - //d/docker/new-api/data:/data
+    environment:
+      - TZ=Asia/Shanghai
+      - SQL_DSN=one-api.db
+    env_file:
+      - .secrets.env
+    extra_hosts:
+      # 让容器内的 localhost 指向宿主机，这样 new-api 能通过
+      # http://localhost:8086 访问 new-api-dingtalk-oidc（与 discovery doc 一致）
+      - "localhost:host-gateway"
+    networks:
+      - api-net
+
+  new-api-dingtalk-oidc:
+    build: ../new-api-dingtalk-oidc
+    container_name: new-api-dingtalk-oidc
+    restart: unless-stopped
+    ports:
+      # 必须暴露到宿主机：浏览器 OAuth 重定向需要直接访问此端口
+      - "8086:8086"
+    volumes:
+      - //d/docker/new-api-dingtalk-oidc/data:/data
+    environment:
+      - TZ=Asia/Shanghai
+      - ISSUER
+      - DINGTALK_CLIENT_ID
+      - DINGTALK_CLIENT_SECRET
+      - ALLOWED_CORP_ID
+    env_file:
+      - .secrets.env
+    networks:
+      - api-net
+
+networks:
+  api-net:
+    driver: bridge
