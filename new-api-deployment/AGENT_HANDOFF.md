@@ -352,21 +352,53 @@ docker cp 本地文件路径 new-api:/tmp/
 
 ## 八、后续待办
 
+- [x] **钉钉 SSO 登录**: 已通过 OIDC Bridge 实现，见 `new-api-dingtalk-oidc/`
+- [x] **新用户自动配置**: 登录后自动绑 Daily-20RMB + 创建 Default 令牌
+- [x] **离职自动封号**: Stream 模式实时 + 每日兜底检查
+- [x] **Docker Compose 统一管理**: 4 个服务由一个 compose 文件管理
 - [ ] **修改默认密码**: 生产环境前务必修改默认密码
 - [ ] **添加更多渠道**: 可按需添加 OpenAI、Claude、通义千问等
-- [ ] **配置 Redis**: 提升缓存和性能（`-e REDIS_CONN_STRING=...`）
-- [ ] **迁移 PostgreSQL**: SQLite 适合测试，生产建议用 PostgreSQL
-- [ ] **配置 HTTPS**: 如果对外提供服务，需要反向代理 + SSL
-- [ ] **PR #5006**: 渠道亲和力支持到 Key 级别（Open，未合并）
-- [ ] **Issue #4963**: 缓存命中率统计看板（未实现，可考虑自己开发）
 
 ---
 
-## 九、参考链接
+## 九、钉钉 SSO 系统架构
+
+```
+浏览器 → api.vilavi.cn (nginx)
+  ├─ /          → new-api:3000
+  ├─ /oidc/*    → new-api-dingtalk-oidc:8086 → 钉钉 OAuth API
+  └─ /api/user/register → 403 (封堵密码注册)
+
+cron 每分钟 → auto-bind: 绑套餐 + 建令牌
+cron 每日 3 点 → offboarding-check: 离职兜底
+Stream 实时 → user_leave_org → 即刻封号
+```
+
+### 钉钉应用配置
+
+- 类型: 第三方企业应用
+- 权限: Contact.User.Read + qyapi_get_member
+- 回调: `https://api.vilavi.cn/oidc/callback`
+- 事件订阅: Stream 模式, `user_leave_org`
+
+### 服管理系统
+
+```bash
+cd /opt/new-api && docker compose ps    # 查看 4 个服务
+cd /opt/new-api && docker compose restart bridge  # 重启桥接器
+cd /opt/new-api-dingtalk-oidc && docker build -t new-api-dingtalk-oidc .  # 更新镜像
+crontab -l  # 查看定时任务
+```
+
+---
+
+## 十、参考链接
 
 - GitHub 仓库: https://github.com/QuantumNous/new-api
 - 官方文档: https://docs.newapi.pro/zh/docs
 - Docker Hub: https://hub.docker.com/r/calciumion/new-api
 - DeepSeek 定价: https://api-docs.deepseek.com/zh-cn/quick_start/pricing
-- 本地脚本: `sync_pricing.py`
+- 本地脚本: `sync_pricing.py`, `auto-bind-subscription.py`, `offboarding-check.py`
+- 桥接器: `../new-api-dingtalk-oidc/main.py` + `stream_listener.py`
+- 方案文档: `../docs/solutions/integration-issues/dingtalk-sso-new-api-oidc-bridge.md`
 - 本地敏感信息: `.secrets.env`（请勿提交）
