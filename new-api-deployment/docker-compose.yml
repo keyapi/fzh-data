@@ -12,6 +12,7 @@ services:
     environment:
       - TZ=Asia/Shanghai
       - SQL_DSN=one-api.db
+      - GENERATE_DEFAULT_TOKEN=true
     env_file:
       - .secrets.env
     extra_hosts:
