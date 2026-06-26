@@ -246,3 +246,23 @@ new-api 的 `GenericOAuthProvider.ExchangeToken()` 发 POST 时用 `Content-Type
 ### 错误 5：`管理员关闭了新用户注册`
 
 `options.RegisterEnabled = false`。修复：MySQL 设为 `true` 并重启 new-api。
+
+### 错误 6：OAuth 新用户无默认令牌
+
+`GENERATE_DEFAULT_TOKEN` 仅对密码注册生效。修复：扩展 auto-bind 脚本同时检测无令牌用户并创建默认令牌。
+
+---
+
+## Docker Compose 统一管理
+
+4 个服务全部由 `/opt/new-api/docker-compose.yml` 管理：
+
+```yaml
+services:
+  new-api:   # API 网关 + GENERATE_DEFAULT_TOKEN
+  mysql:     # 数据库
+  redis:     # 缓存
+  bridge:    # 钉钉 OIDC (image: new-api-dingtalk-oidc:latest)
+```
+
+`docker compose up -d` 一键启动，`docker compose ps` 查看状态。服务器重启后 Docker daemon + restart policy 自动恢复全部服务。

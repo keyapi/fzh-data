@@ -13,6 +13,8 @@ Usage:
     python3 auto-bind-subscription.py
 """
 
+import secrets
+import string
 import subprocess
 import sys
 import time
@@ -85,16 +87,54 @@ def bind_subscription(user_id: int) -> bool:
         return False
 
 
-def main():
-    users = find_unbound_users()
-    if not users:
-        return
+def find_tokenless_users() -> list[int]:
+    """Return user IDs with DingTalk OAuth but no token."""
+    output = run_mysql("""
+        SELECT u.id
+        FROM users u
+        INNER JOIN user_oauth_bindings b ON u.id = b.user_id
+        LEFT JOIN tokens t ON u.id = t.user_id
+        WHERE t.id IS NULL
+    """)
+    if not output:
+        return []
+    return [int(line) for line in output.split("\n") if line.strip()]
 
+
+def create_default_token(user_id: int) -> bool:
+    """Create a default API token for the given user."""
+    key = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(48))
+    now = int(time.time())
+    sql = f"""
+        INSERT INTO tokens
+            (user_id, `key`, name, status, remain_quota, unlimited_quota,
+             created_time, expired_time)
+        VALUES
+            ({user_id}, '{key}', 'Default', 1, 0, 1, {now}, -1)
+    """
+    try:
+        run_mysql(sql)
+        return True
+    except SystemExit:
+        return False
+
+
+def main():
+    # 1. Auto-bind subscription
+    users = find_unbound_users()
     for uid in users:
         if bind_subscription(uid):
             print(f"[OK] Bound Daily-20 to user_id={uid}")
         else:
             print(f"[FAIL] Failed to bind user_id={uid}", file=sys.stderr)
+
+    # 2. Auto-create default token
+    tokenless = find_tokenless_users()
+    for uid in tokenless:
+        if create_default_token(uid):
+            print(f"[OK] Created default token for user_id={uid}")
+        else:
+            print(f"[FAIL] Failed to create token for user_id={uid}", file=sys.stderr)
 
 
 if __name__ == "__main__":
