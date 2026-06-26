@@ -1,6 +1,7 @@
 ---
 title: 钉钉 SSO 登录 new-api（OIDC Bridge 桥接方案）
 date: 2026-06-26
+last_updated: 2026-06-26
 category: integration-issues
 module: new-api-deployment
 problem_type: architecture_pattern
@@ -158,6 +159,67 @@ VALUES
 - [sync_pricing.py](../../new-api-deployment/sync_pricing.py) — ModelRatio 计算脚本
 - [oidc-bridge/main.py](../../new-api-dingtalk-oidc/main.py) — OIDC Bridge 源码
 - [auto-bind-subscription.py](../../new-api-deployment/auto-bind-subscription.py) — 自动绑套餐脚本
+- [offboarding-check.py](../../new-api-deployment/offboarding-check.py) — 离职兜底检查脚本
+- [test-offboarding.py](../../new-api-deployment/test-offboarding.py) — 离职封号测试脚本
+- [stream_listener.py](../../new-api-dingtalk-oidc/stream_listener.py) — Stream 事件监听器
+
+---
+
+## 离职自动封号
+
+### 权限配置
+
+在钉钉开发者后台 → 权限管理 → 开通 **成员信息读权限** (`qyapi_get_member`)，即可用 App Token 查询任意用户（含在职/离职状态）。
+
+### 架构
+
+```
+钉钉 Stream (WebSocket)
+  ├── user_leave_org 事件 → App Token → getbyunionid → v2/user/get
+  │     → 查 unionId (user_oauth_bindings) → UPDATE users SET status=2
+  │
+  └── 兜底: 每日凌晨 3 点 cron → App Token → getbyunionid
+        → 查 active 状态 → 不活跃则禁用
+```
+
+### App Token 获取
+
+```python
+POST https://api.dingtalk.com/v1.0/oauth2/accessToken
+{"appKey": "...", "appSecret": "...", "grantType": "client_credentials"}
+# 注意: 参数名用 appKey/appSecret，不是 clientId/clientSecret
+```
+
+### 用户状态查询
+
+```python
+# Step 1: unionId → userId (需要 qyapi_get_member)
+POST https://oapi.dingtalk.com/topapi/user/getbyunionid?access_token=TOKEN
+{"unionid": "xxx"}
+# → {"errcode": 0, "result": {"userid": "014709..."}}
+
+# Step 2: userId → 完整信息 (含 active 状态)
+POST https://oapi.dingtalk.com/topapi/v2/user/get?access_token=TOKEN
+{"userid": "014709..."}
+# → {"result": {"active": true, "name": "张克勇", ...}}
+```
+
+### API 调用注意事项
+
+- 新 OAuth2 App Token 只能调 `api.dingtalk.com/v1.0/` 新端点
+- `qyapi_get_member` 权限解锁的是 `oapi.dingtalk.com` 旧端点
+- 新端点 `GET /v1.0/contact/users/{userId}` 用 App Token 会报权限不足
+- 旧端点 `POST /oapi.dingtalk.com/topapi/v2/user/get` 用 App Token 正常工作
+- 参数命名: 新端点用 `appKey`/`appSecret`，旧端点 query param 用 `access_token`
+
+### 密码注册封堵
+
+```nginx
+# nginx new-api.conf
+location = /api/user/register {
+    return 403;  # 仅钉钉 OAuth 可注册
+}
+```
 
 ---
 

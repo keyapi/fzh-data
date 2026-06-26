@@ -21,6 +21,22 @@ summary: 开发与部署记录
 - SQLite 存储 state/code/token (持久化)
 - ALLOWED_CORP_ID 可选校验
 
+### v0.2.0 — 离职自动封号
+
+- 集成 `dingtalk-stream` SDK，Stream 模式监听 `user_leave_org` 事件
+- App Token (client_credentials) 驱动，不依赖 per-user refreshToken
+- 需要 `qyapi_get_member` 权限，使用旧 API `getbyunionid` + `v2/user/get`
+- 新 API 参数命名: `appKey`/`appSecret` (非 `clientId`/`clientSecret`)
+- `pymysql` 直连 new-api MySQL 禁用用户
+- 移除 refreshToken 存储逻辑 (v0.1 遗留)
+- nginx 封堵 `POST /api/user/register` 密码注册
+
+### 新增文件
+
+- `stream_listener.py` — Stream 事件监听器
+- `new-api-deployment/offboarding-check.py` — 定时兜底脚本
+- `new-api-deployment/test-offboarding.py` — 测试脚本
+
 ## 调试问题
 
 | 问题 | 修复 |
