@@ -55,6 +55,10 @@ uv sync
 #     （不要用全局 pip——包必须装到项目 .venv 里）
 # 4b. Playwright（浏览器自动化）
 #     npm install -g @playwright/mcp && npx playwright install chromium
+#
+# 4c. Tavily（AI 优化搜索，需注册获取个人 API Key，可选）
+#     uv pip install mcp-tavily
+#     注册 → https://app.tavily.com/home → 获取 Key → 改 .codex/config.toml 里的 TAVILY_API_KEY
 
 # 5. 初始化 symlink（仅 Claude Desktop 需要；Codex 用户跳过此步）
 powershell -ExecutionPolicy Bypass -File setup.ps1
