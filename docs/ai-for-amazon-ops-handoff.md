@@ -4,8 +4,9 @@ type: Handoff
 title: AI 赋能 Amazon 运营分享 — 制作交接文档
 description: 记录本次任务的需求、分析、执行过程、问题及参考资料，供 Claude 接手继续搜索和优化。
 date: 2026-06-29
-branch: codex/ai-for-amazon-ops-presentation
-agent: Codex CLI (OpenAI Codex Desktop)
+updated: 2026-06-29 (Claude 接手完成)
+branch: codex/ai-for-amazon-ops-presentation → claude/loving-driscoll-a11361
+agent: Codex CLI (OpenAI Codex Desktop) → Claude Desktop Agent
 ---
 
 # HAND_OFF: AI 赋能 Amazon 运营分享制作
@@ -162,3 +163,56 @@ Part 5: 行动建议 (2分钟)
 - **新增文件**: `docs/ai-for-amazon-ops-2026.md` (244 行)
 - **状态**: 已创建，待 commit 和 PR
 - **目标 base**: `main`
+
+---
+
+## 9. Claude 接手记录（2026-06-29）
+
+### 执行过程
+
+1. **恢复文件**：从 git commit `1d0213d` 提取两个文件到 worktree
+2. **3 路并行调研**（web search + 本地搜索）：
+   - Agent 1: Rufus/Alexa for Shopping + COSMO 算法 + AI Listing 工具
+   - Agent 2: AI 视频工具 + 竞品工具（Helium10/Jungle Scout/DataHawk）+ 跨境案例 + PPC 成本
+   - Agent 3: 本地内部文档（advertise/docs/、company-context、onboarding、agent-guide 等 15+ 份）
+3. **全篇重写** `docs/ai-for-amazon-ops-2026.md`：344 行 → 588 行
+4. **提交并创建 PR**：[fzh-data#54](https://github.com/keyapi/fzh-data/pull/54)
+
+### 7 条不足覆盖情况
+
+| # | 原始不足 | Claude 补充 | 状态 |
+|---|---------|------------|------|
+| 1 | Listing 偏弱 | COSMO 15 种语义关系 × 5 层、5 步实操框架、6 个 AI 工具实测对比 | ✅ |
+| 2 | Rufus 缺深度 | Rufus→Alexa for Shopping 完整解读（3亿+用户、210%增长、$120亿增量、5大数据源） | ✅ |
+| 3 | 竞品工具未覆盖 | Helium 10 ($129, ChatGPT-5.1) / Jungle Scout ($49, AI评分) / DataHawk (企业级) 对比 | ✅ |
+| 4 | AI 视频缺失 | Amazon 免费 AI 视频生成器 + Runway/HeyGen/Synthesia 价格对比 + 成本降幅 90%+ | ✅ |
+| 5 | COSMO 未涉及 | COSMO 深度解读：15种语义关系、A9 vs COSMO 对比、750+ 属性字段填空策略 | ✅ |
+| 6 | 缺实际案例 | MelodySusie（ACOS 1/3）、ubras（2人=10人）、Jihong（+770%内容）、Emitever（+120%销售）等 | ✅ |
+| 7 | 成本缺失 | PPC 工具 $5K/$30K 花费级别对比、5 人团队预算 ¥50-150/月、视频制作成本降幅 | ✅ |
+
+### 额外补充（超出 Codex 初版 + handoff 范围）
+
+- API 中转站风险警告（45% 造假、4% 窃取凭证）
+- MCP/Skills 生态（Two Minute Reports、Amazon Official Ads MCP、Agent Central MCP）
+- 75 字符标题新规（2026.7.27 生效）+ Item Highlights 字段
+- A10 算法 2026 排名因素
+- AMC（Amazon Marketing Cloud）数据能力
+- 赛狐 API 16 个模块含 Ads（为广告自动化留接口）
+- 企业知识沉淀系统愿景（LiteLLM + Git）
+- "不要做的事"避坑清单（5 条）
+- 参考文献从 4 个扩展到 17 个分类 URL
+- 应演示需求移除：28-Agent Corellis 案例
+
+### Claude 搜索质量对比
+
+| 维度 | Codex (free-web-tools MCP) | Claude (内置 WebSearch) |
+|------|---------------------------|------------------------|
+| 中文搜索 | 几乎全返回百度百科、央视网 | 返回 ZonGuru、SellerSprite、Canopy Management 等行业源 |
+| 英文搜索 | 仅 Bing 后端工作 | 多引擎覆盖，返回 ecommerceparadise、Videowise、SmartScout 等 |
+| 搜索结果可用率 | 低（大部分不相关） | 高（46 个新关键词提及，17 个新 URL 引用） |
+| 中文跨境案例 | 未获取到 | 获取到吉宏股份、义乌 AI Agent、StoreClaw 等中文源 |
+
+### 仍待确认
+
+- [ ] "张克勇"和"如森 US"是否需要匿名化
+- [ ] 如需转 PPT，可进一步调整格式
