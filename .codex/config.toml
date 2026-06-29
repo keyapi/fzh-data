@@ -52,3 +52,15 @@ startup_timeout_sec = 60
 TAVILY_API_KEY = "<your-tavily-api-key>"
 
 
+
+# ===== MCP: Tavily (AI-optimized web search, 1000 free calls/mo) =====
+# Tools: search, extract, map, crawl
+# Install: uv pip install mcp-tavily
+# Get API key: https://app.tavily.com/home
+[mcp_servers.tavily]
+command = "uv"
+args = ["run", "python", "-m", "mcp_server_tavily"]
+startup_timeout_sec = 60
+
+[mcp_servers.tavily.env]
+TAVILY_API_KEY = "<your-tavily-api-key>"
