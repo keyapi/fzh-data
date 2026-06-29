@@ -51,9 +51,8 @@ uv sync
 
 # 4. 安装 MCP 服务器
 # 4a. free-web-tools（网页搜索，无需 API Key）
-#     用项目 venv 的 pip 安装（不要用全局 pip）：
-#     .venv\Scripts\pip.exe install git+https://github.com/changcheng967/free-web-tools.git
-#     或：uv pip install git+https://github.com/changcheng967/free-web-tools.git
+#     uv pip install git+https://github.com/changcheng967/free-web-tools.git
+#     （不要用全局 pip——包必须装到项目 .venv 里）
 # 4b. Playwright（浏览器自动化）
 #     npm install -g @playwright/mcp && npx playwright install chromium
 
@@ -61,6 +60,9 @@ uv sync
 powershell -ExecutionPolicy Bypass -File setup.ps1
 ```
 
+
+> **首次打开项目时，Codex 弹窗问「是否信任此项目」→ 务必选「是」！**
+> 选「否」会导致 `.codex/config.toml` 里的 MCP 和 `.agents/skills/` 全部不加载。
 > **Codex 用户**：以上步骤做完后，需**新建对话**，工作目录设为 `fzh-data` 项目根目录。Codex 会自动读取 `.codex/config.toml` 中的 MCP 配置和 `.agents/skills/`。
 >
 > 所有脚本通过 `uv run python <script.py>` 运行，不需要全局 Python / conda。
