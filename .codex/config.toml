@@ -1,4 +1,4 @@
-﻿# Project-level Codex configuration for fzh-data
+# Project-level Codex configuration for fzh-data
 # Committed to repo -- every Codex user who opens this project gets these MCP servers.
 #
 # After clone, the Agent reads AGENTS.md -> finds the web search guide -> runs:
@@ -38,20 +38,6 @@ approval_mode = "approve"
 
 [mcp_servers.playwright.tools.browser_evaluate]
 approval_mode = "approve"
-
-# ===== MCP: Tavily (AI-optimized web search, 1000 free calls/mo) =====
-# Tools: search, extract, map, crawl
-# Install: uv pip install mcp-tavily
-# Get API key: https://app.tavily.com/home
-[mcp_servers.tavily]
-command = "uv"
-args = ["run", "python", "-m", "mcp_server_tavily"]
-startup_timeout_sec = 60
-
-[mcp_servers.tavily.env]
-TAVILY_API_KEY = "<your-tavily-api-key>"
-
-
 
 # ===== MCP: Tavily (AI-optimized web search, 1000 free calls/mo) =====
 # Tools: search, extract, map, crawl
