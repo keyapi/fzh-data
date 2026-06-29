@@ -1,4 +1,4 @@
----
+﻿---
 okf: v0.1
 type: Presentation
 title: AI 赋能 Amazon 运营 — 2026 实战指南
@@ -352,7 +352,7 @@ A+ 内容不被 A9 索引，但 COSMO/Alexa for Shopping **会完整读取**。�
 |------|------|------|
 | 白底主图优化 | AI 抠图 + 背景处理 | 符合 Amazon 规范（纯白底、产品 ≥85% 画面、无文字/Logo/水印） |
 | 生活场景图 | Midjourney / Adobe Firefly | A+ 模块、品牌故事 |
-| AI 自动标注 | DeepSeek Vision API（**我们已落地**） | 自动标注颜色/角度/品类/背景 + Amazon 合规检查 |
+| AI 自动标注 | 通义千问 Vision API（**我们已落地**） | 自动标注颜色/角度/品类/背景 + Amazon 合规检查 |
 
 #### 视频
 
@@ -391,7 +391,7 @@ A+ 内容不被 A9 索引，但 COSMO/Alexa for Shopping **会完整读取**。�
 │   工具 v0.3  │   赛狐导入        │   工具 (拖拽排序)            │
 │              │                  │                            │
 │ ✅ 搜索词     │ ✅ 采购成本       │ ✅ AI 图片自动标注           │
-│   5 桶分类   │   自动计算        │   DeepSeek Vision +        │
+│   5 桶分类   │   自动计算        │   通义千问 Vision +        │
 │              │                  │   Amazon 合规检查           │
 │ ✅ 卖家精灵   │ ✅ 商品重尺       │ 🔜 AI 商品图自动生成         │
 │   MCP 接入   │   重量匹配       │                            │
