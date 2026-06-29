@@ -135,6 +135,8 @@ Codex++ 是 GitHub 上的开源项目，给 Codex 增加"切换 API 供应商"�
 2. 点击左侧 **"供应商配置"** → 右侧 **"添加供应商"**
 3. 填写以下内容：
 
+![Codex++ 管理工具主界面](images/step4a-manager-main.png)
+
 | 配置项 | 填什么 |
 |--------|--------|
 | 名称 | `公司个人账号` |
@@ -248,6 +250,7 @@ Codex 左下角有一个审批模式切换，**保持"默认权限（手动审�
 | `step3a-vilavi-login.png` | api.vilavi.cn 钉钉扫码登录页 | 第三步 — 登录后台 |
 | `step3a2-dingtalk-qrcode.png` | 钉钉扫码弹窗 | 第三步 — 登录后台 |
 | `step3b-token-management.png` | new-api 令牌管理页面（圈复制按钮） | 第三步 — 找令牌 |
+| `step4a-manager-main.png` | Codex++ 管理工具主界面 | 第四步 — 管理工具 |
 | `step4b-provider-form.png` | 供应商配置表单（名称填"公司个人账号"） | 第四步 — 添加供应商 |
 | `step4c-save-success.png` | 供应商已保存并启用 | 第四步 — 保存 |
 | `step5a-settings-button.png` | 左下角齿轮设置入口 | 第五步 — 沙箱 |
