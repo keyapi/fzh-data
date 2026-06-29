@@ -38,39 +38,50 @@
 
 ### Agent 新机器首次 clone 后必做
 
-```powershell
+```bash
+# 0. 检测并安装 Git（如未安装）
+#    Agent 执行：先 `git --version` 检查，若不存在则按 OS 安装：
+#    Windows:  winget install Git.Git --silent --accept-package-agreements
+#    Mac:      brew install git
+#    Linux:    sudo apt-get install -y git
+
 # 1. 安装 uv (Python 包管理器) — 只需一次
-powershell -ExecutionPolicy Bypass -Command "irm https://astral.sh/uv/install.ps1 | iex"
+#    Windows: powershell -ExecutionPolicy Bypass -Command "irm https://astral.sh/uv/install.ps1 | iex"
+#    Mac/Linux: curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # 2. 安装项目依赖
 uv sync
 
 # 3. 检查并安装 Node.js（如未安装则自动装）
 #    Agent 执行：先 `node --version` 检查，若不存在则：
-#    winget install OpenJS.NodeJS.LTS --silent --accept-package-agreements --accept-source-agreements
+#    Windows:  winget install OpenJS.NodeJS.LTS --silent --accept-package-agreements
+#    Mac:      brew install node
+#    Linux:    sudo apt-get install -y nodejs
 
-# 4. 安装 MCP 服务器
+# 4. 安装 MCP 服务器（非技术同事优先 4a + 4c）
 # 4a. free-web-tools（网页搜索，无需 API Key）
 #     uv pip install git+https://github.com/changcheng967/free-web-tools.git
 #     （不要用全局 pip——包必须装到项目 .venv 里）
-# 4b. Playwright（浏览器自动化）
+# 4b. Playwright（浏览器自动化，需要时再装）
 #     npm install -g @playwright/mcp && npx playwright install chromium
 #
-# 4c. Tavily（AI 优化搜索，需注册获取个人 API Key，可选）
+# 4c. Tavily（AI 优化搜索，1000 次/月免费，推荐装）
 #     uv pip install mcp-tavily
 #     注册 → https://app.tavily.com/home → 获取 Key → 改 .codex/config.toml 里的 TAVILY_API_KEY
 
 # 5. 初始化 symlink（仅 Claude Desktop 需要；Codex 用户跳过此步）
-powershell -ExecutionPolicy Bypass -File setup.ps1
+#    powershell -ExecutionPolicy Bypass -File setup.ps1
+
+# ⚠️ MCP 装完后必须重启 Codex（或 Claude Desktop），配置才会生效！
 ```
 
 
 > **首次打开项目时，Codex 弹窗问「是否信任此项目」→ 务必选「是」！**
 > 选「否」会导致 `.codex/config.toml` 里的 MCP 和 `.agents/skills/` 全部不加载。
-> **Codex 用户**：以上步骤做完后，需**新建对话**，工作目录设为 `fzh-data` 项目根目录。Codex 会自动读取 `.codex/config.toml` 中的 MCP 配置和 `.agents/skills/`。
+> MCP 安装完成后**必须重启 Codex**（不是新建对话，是完全退出再打开）。
 >
 > 所有脚本通过 `uv run python <script.py>` 运行，不需要全局 Python / conda。
-> 如果 `uv` 不是命令，重新打开终端或手动加 `$env:Path += ";$env:USERPROFILE\.cargo\bin"`。
+> 如果 `uv` 不是命令，重新打开终端或手动加 `$env:Path += ";$env:USERPROFILE\.cargo\bin"`（Windows）或 `export PATH="$HOME/.cargo/bin:$PATH"`（Mac/Linux）。
 >
 > 如果同事 agent clone 后不知道怎么做，让它读本项目 AGENTS.md 的本节。
 ### 运行环境
@@ -113,8 +124,10 @@ powershell -ExecutionPolicy Bypass -File setup.ps1
 6. **不要用 PowerShell Start-Job 启 Web 服务**（Lesson 58）——端口隔离不可达
 7. **新建 Item Group 叶子组**：必须设 `is_group=1, is_leaf_group=1, custom_model_id=LGKS+最小子KS编号`（见 `docs/company-context.md`）
 8. **永远不直接 push main**：任何改动（包括文档）必须走 `feature/xxx` 分支 → 提交 → `git push -u origin feature/xxx` → GitHub 开 PR → 审批后合并。唯一例外：紧急 revert。
+   **所有 Agent（Claude Code、Codex CLI 等）都必须遵守本条。**
+   如果 Agent 不确定如何创建 PR，用 `gh pr create --title "..." --body "..."` 命令。
 9. **提交 PR 前扫描凭证**：`git diff origin/main...HEAD | grep -iE "(api_key|api_secret|password|token|ghp_|github_pat_)\s*=\s*['\"]?\w{8,}"` 必须有零输出。禁止硬编码密钥/token/密码，禁止提交 CSV 数据文件、PDF、图片到公开仓库。违反 PR 不得合并（详见 `CONTRIBUTING.md` 安全检查章节）
-8. **OKF 文档规范**：新建子项目/模块时，必须创建 `docs/` 目录，按 [OKF v0.1](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md) 规范编写文档。所有 `.md` 文件必须有 YAML frontmatter（`type` 字段必填），每个目录必须有 `index.md`，每个 bundle 必须有 `log.md`。参考示例：`advertise/docs/`。触发 `/okf` 或编辑 Markdown 时自动加载 OKF skill。
+10. **OKF 文档规范**：新建子项目/模块时，必须创建 `docs/` 目录，按 [OKF v0.1](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md) 规范编写文档。所有 `.md` 文件必须有 YAML frontmatter（`type` 字段必填），每个目录必须有 `index.md`，每个 bundle 必须有 `log.md`。参考示例：`advertise/docs/`。触发 `/okf` 或编辑 Markdown 时自动加载 OKF skill。
 
 ## 文档体系
 
