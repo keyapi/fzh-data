@@ -1,4 +1,4 @@
-# AGENTS.md
+﻿# AGENTS.md
 
 > 本文件是项目**唯一指令来源**，Claude Code / Codex CLI 共用。
 > `CLAUDE.md` 应为此文件 symlink，不要直接编辑 CLAUDE.md。
@@ -45,14 +45,28 @@ powershell -ExecutionPolicy Bypass -Command "irm https://astral.sh/uv/install.ps
 # 2. 安装项目依赖
 uv sync
 
-# 3. 初始化 symlink (CLAUDE.md, skills)
+# 3. 检查并安装 Node.js（如未安装则自动装）
+#    Agent 执行：先 `node --version` 检查，若不存在则：
+#    winget install OpenJS.NodeJS.LTS --silent --accept-package-agreements --accept-source-agreements
+
+# 4. 安装 MCP 服务器
+# 4a. free-web-tools（网页搜索，无需 API Key）
+#     用项目 venv 的 pip 安装（不要用全局 pip）：
+#     .venv\Scripts\pip.exe install git+https://github.com/changcheng967/free-web-tools.git
+#     或：uv pip install git+https://github.com/changcheng967/free-web-tools.git
+# 4b. Playwright（浏览器自动化）
+#     npm install -g @playwright/mcp && npx playwright install chromium
+
+# 5. 初始化 symlink（仅 Claude Desktop 需要；Codex 用户跳过此步）
 powershell -ExecutionPolicy Bypass -File setup.ps1
 ```
 
-> 以上 3 步做完即可正常开发。所有脚本通过 `uv run python <script.py>` 运行，不需要全局 Python / conda。
+> **Codex 用户**：以上步骤做完后，需**新建对话**，工作目录设为 `fzh-data` 项目根目录。Codex 会自动读取 `.codex/config.toml` 中的 MCP 配置和 `.agents/skills/`。
+>
+> 所有脚本通过 `uv run python <script.py>` 运行，不需要全局 Python / conda。
 > 如果 `uv` 不是命令，重新打开终端或手动加 `$env:Path += ";$env:USERPROFILE\.cargo\bin"`。
+>
 > 如果同事 agent clone 后不知道怎么做，让它读本项目 AGENTS.md 的本节。
-
 ### 运行环境
 
 - Python >= 3.10 + uv (详见 `pyproject.toml`)
