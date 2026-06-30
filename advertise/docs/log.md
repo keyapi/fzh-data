@@ -8,6 +8,15 @@ tags: [amazon, advertising, changelog]
 
 # 变更日志
 
+## 2026-06-30
+
+- **v0.3 修正**: 9 种 SP 报告类型官方文档逐项校验（3 并行 agent），修正 5 处错误声明
+- **v0.3 修正**: `data-sources.md` 重写缺失报告表 — 增加校验状态(✅/⚠️/❌)、实际获取方式、官方文档 URL
+- **v0.3 修正**: 新增 Lesson 13（外部数据源声明必须先验证官方文档）+ `docs/solutions/documentation-gaps/unverified-external-api-claims-in-docs.md`
+- **v0.3 修正**: AGENT_HANDOFF.md 修复 merge conflict + 清理过时引用 + 添加 Agent 首次接手检查清单
+- **v0.3 修正**: README.md 添加非技术同事入口 + troubleshooting section
+- **v0.3 修正**: 创建 `advertise/数据源/.gitkeep` + `README.txt` 确保目录在仓库中可见
+
 ## 2026-06-17
 
 - **v0.3**: 文档架构重构 — 按 OKF v0.1 标准加 frontmatter, 文档从 `docs/superpowers/` 移至 `advertise/docs/`（co-location）

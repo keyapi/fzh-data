@@ -19,19 +19,23 @@ tags: [amazon, advertising, reference, data-sources]
 | 搜索词 | `商品推广_搜索词_报告-30.xlsx` | ~5,000 | 客户搜索词级 |
 | 广告位 | `商品推广_广告位_报告-30.xlsx` | ~126 | 广告位级 |
 
-## 我们缺失的 SP 报告 (9 种)
+## 我们缺失的 SP 相关报告 (9 种，经官方文档校验)
 
-| # | 报告 | API ID | 优先级 | 用途 |
-|---|------|--------|--------|------|
-| 1 | Purchased Product | `spPurchasedProduct` | 🔴 高 | 光环效应: 点击广告后买了哪些其他商品 |
-| 2 | Search Term Impression Share | `spSearchTermImpressionShare` | 🔴 高 | 每个搜索词 vs 竞品的展示份额 |
-| 3 | Performance Over Time | (时间序列) | 🔴 高 | 按日/周趋势，环比/同比基础 |
-| 4 | Budget | (beta) | 🟡 中 | 预算利用率 + 建议预算 |
-| 5 | Advertised Product | `spAdvertisedProduct` | 🟡 中 | 按 ASIN/SKU 的表现 |
-| 6 | Ad Group | `spAdGroups` | 🟢 低 | 广告组级表现 |
-| 7 | Gross and Invalid Traffic | `spGrossAndInvalidTraffic` | 🟢 低 | 无效点击/展示监控 |
-| 8 | Audience | `spAudience` | 🟢 低 | 受众定向表现 |
-| 9 | Video | `spVideo` | 🟢 低 | 视频广告效果 |
+> ✅ = 官方确认存在 &nbsp; ⚠️ = 仅 Console 可导出（无 API）&nbsp; ❌ = 不存在/信息有误
+>
+> 校验时间：2026-06-30，来源均为 `advertising.amazon.com` 官方文档。
+
+| # | 报告 | 原 API ID | 校验 | 实际获取方式 | 优先级 | 官方文档 URL |
+|---|------|-----------|------|-------------|--------|-------------|
+| 1 | Purchased Product | `spPurchasedProduct` | ✅ CONFIRMED | Ads Console + API v3 | 🔴 高 | [API docs](https://advertising.amazon.com/API/docs/en-us/guides/reporting/v3/report-types/overview) |
+| 2 | Search Term Impression Share | `spSearchTermImpressionShare` | ⚠️ CONSOLE ONLY | Ads Console → 报告中心（API 不支持，社区呼吁多年仍未开放） | 🔴 高 | [What's New 2021](https://advertising.amazon.com/en-us/resources/whats-new/search-term-impression-report-sponsored-products) |
+| 3 | Performance Over Time | — | ⚠️ CONSOLE ONLY | Ads Console → 报告中心。等效数据可通过 `spCampaigns` + `timeUnit: DAILY` 从 API 获取 | 🔴 高 | [Help](https://advertising.amazon.com/help/GEN8F92YG8C694HY) |
+| 4 | Budget | — | ❌ NOT FOUND | 不存在独立的 Budget 报告。有 Budget Usage API (`/sp/campaigns/budget/usage`) 返回实时预算使用率，但无"建议预算"功能 | 🟡 中 | [Budget Usage API](https://advertising.amazon.com/API/docs/en-us/guides/budgets/usage/overview) |
+| 5 | Advertised Product | `spAdvertisedProduct` | ✅ CONFIRMED | Ads API v3（`groupBy: advertiser`，按 ASIN/SKU 维度，最大 31 天） | 🟡 中 | [API docs](https://advertising.amazon.com/API/docs/en-us/guides/reporting/v3/report-types/advertised-product) |
+| 6 | Ad Group (SP) | `spAdGroups` | ❌ NOT FOUND for SP | SP 无独立 Ad Group 报告。用 `spCampaigns` + `groupBy: adGroup` 代替。仅 SB/SD 有 `sbAdGroup`/`sdAdGroup` | 🟢 低 | [API docs](https://advertising.amazon.com/API/docs/en-us/guides/reporting/v3/report-types/ad-group) |
+| 7 | Gross and Invalid Traffic | `spGrossAndInvalidTraffic` | ✅ CONFIRMED | Ads Console + API v2/v3（三广告类型 SP/SB/SD 各有变体，回溯 365 天） | 🟢 低 | [Help](https://advertising.amazon.com/help/GSH9JG8Q38TMWGL5) |
+| 8 | Audience | `spAudience` | ✅ CONFIRMED | Ads Console + API（仅 SP，需开启 Audience bid adjustment，回溯 90 天） | 🟢 低 | [Help](https://advertising.amazon.ca/help/GA44MFEHYENPNK3D) |
+| 9 | Video | `spVideo` | ❌ NOT FOUND | 不存在独立 Video 报告。SB Video 在标准 SB 报告中用 `creativeType: video` 过滤；SP Video (SPV) 为 beta 创意格式，数据含在标准 SP 报告中 | 🟢 低 | — |
 
 ## Seller Central 数据（独立于 Ads Console）
 
