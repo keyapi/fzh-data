@@ -3,6 +3,16 @@
 > **脚本**: `upload_item_images.py` + `upload_local_images.py`
 > **人读文档**: [README.md](README.md)
 
+### 相关交接文档
+
+| 文档 | 说明 |
+|------|------|
+| [AGENT_HANDOFF_物料组重构.md](AGENT_HANDOFF_物料组重构.md) | 赛狐分类 → EN 系统物料组重构 |
+| [AGENT_HANDOFF_PIM_ANALYSIS.md](AGENT_HANDOFF_PIM_ANALYSIS.md) | PIM 图片缺失统计分析 |
+| [AGENT_HANDOFF_NAS_ANALYSIS.md](AGENT_HANDOFF_NAS_ANALYSIS.md) | NAS 路径与物料组关联性分析 |
+| [AGENT_HANDOFF_LG_QUERY.md](AGENT_HANDOFF_LG_QUERY.md) | LG 前缀物料组款式ID更新 |
+| [AGENT_HANDOFF_独立站产品链接.md](AGENT_HANDOFF_独立站产品链接.md) | daneey.com 产品链接写入物料组 |
+
 ---
 
 ## 1. 业务背景
