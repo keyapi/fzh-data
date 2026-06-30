@@ -37,6 +37,110 @@ tags: [amazon, advertising, reference, data-sources]
 | 8 | Audience | `spAudience` | ✅ CONFIRMED | Ads Console + API（仅 SP，需开启 Audience bid adjustment，回溯 90 天） | 🟢 低 | [Help](https://advertising.amazon.ca/help/GA44MFEHYENPNK3D) |
 | 9 | Video | `spVideo` | ❌ NOT FOUND | 不存在独立 Video 报告。SB Video 在标准 SB 报告中用 `creativeType: video` 过滤；SP Video (SPV) 为 beta 创意格式，数据含在标准 SP 报告中 | 🟢 低 | — |
 
+### 各报告列结构详表
+
+以下为 6 种可获取报告（4 API + 2 Console-only）的关键列。首次接入新报告类型时无需重新搜索官网。
+
+#### 1. Purchased Product Report（✅ API + Console）
+
+> 光环效应核心数据源。显示点击广告后用户实际购买了哪些商品（含非广告 ASIN）。
+
+| 列名 (EN) | 预计中文后台列名 | 含义 |
+|-----------|----------------|------|
+| `advertisedAsin` | 已推广的 ASIN | 被点击的广告商品 ASIN |
+| `advertisedSku` | 已推广的 SKU | 被点击的广告商品 SKU |
+| `campaignName` / `campaignId` | 广告活动名称/ID | |
+| `adGroupName` / `adGroupId` | 广告组名称/ID | |
+| `impressions` | 展示量 | |
+| `clicks` | 点击量 | |
+| `cost` | 花费 | |
+| `purchases1d` / `7d` / `14d` / `30d` | X天总订单数 | 归因窗口内广告 ASIN 的订单 |
+| `sales1d` / `7d` / `14d` / `30d` | X天总销售额 | 归因窗口内广告 ASIN 的销售额 |
+| `unitsSoldOtherSku1d` ~ `30d` | X天内其他SKU销售量 | **光环效应**：买了别的 SKU |
+| `salesOtherSku1d` ~ `30d` | X天内其他SKU销售额 | **光环效应**：别的 SKU 销售额 |
+| `purchasesOtherSku1d` ~ `30d` | X天内其他SKU订单数 | **光环效应**：别的 SKU 订单数 |
+
+> 配置：`groupBy: ["asin"]`，归因窗口 1d/7d/14d/30d，数据保留 ~65-95 天
+> 已知坑：API 输出和 Console UI 导出可能有小幅差异（Amazon 官方确认属正常）
+
+#### 2. Search Term Impression Share Report（⚠️ Console only）
+
+> 每个搜索词上你的展示占比和排名。**API 不支持，只能 Console 手动导出**。
+
+| 列名 | 含义 |
+|------|------|
+| `searchTermImpressionShare` | 搜索词展示份额 — 你的广告在该搜索词上获得的展示占所有广告主总展示的百分比 |
+| `searchTermImpressionRank` | 搜索词展示排名 — 你在该搜索词上的排名（1=第一） |
+| 其他列 | 同搜索词报告的标准列（impressions, clicks, cost, sales 等） |
+
+> API 中有类似指标 `topOfSearchImpressionShare`（v4 keyword recommendations API），但仅覆盖 Top of Search 位置，不等同于此报告
+
+#### 3. Performance Over Time Report（⚠️ Console only）
+
+> 每日趋势视图。Console 专用格式，但等效数据可通过 API 获取。
+
+| 列名 | 含义 |
+|------|------|
+| `date` | 日期 |
+| `clicks` | 点击量 |
+| `cpc` | 单次点击成本 |
+| `spend` | 花费 |
+
+> 等效 API 方案：调用 `spCampaigns`（或 `spAdGroups`）report type，设置 `timeUnit: DAILY` — 底层指标完全一致，只是展示格式不同。Console 回溯 90 天。
+
+#### 4. Advertised Product Report（✅ API v3）
+
+> 按 ASIN/SKU 的广告表现。当前项目中无等效数据。
+
+| 列名 (EN) | 预计中文后台列名 | 含义 |
+|-----------|----------------|------|
+| `advertisedAsin` | 已推广的 ASIN | |
+| `advertisedSku` | 已推广的 SKU | |
+| `campaignId` / `adGroupId` / `adId` | 活动/组/广告 ID | 三级层级 |
+| `impressions` | 展示量 | |
+| `clicks` | 点击量 | |
+| `cost` | 花费 | |
+| `purchases1d` / `7d` / `14d` / `30d` | X天总订单数 | |
+| `sales1d` / `7d` / `14d` / `30d` | X天总销售额 | |
+| `acosClicks7d` / `acosClicks14d` | ACOS | |
+| `roasClicks7d` / `roasClicks14d` | ROAS | |
+
+> 配置：`groupBy: ["advertiser"]`，`timeUnit: SUMMARY 或 DAILY`，最大 31 天范围，保留 95 天
+
+#### 5. Gross and Invalid Traffic Report（✅ API + Console）
+
+> 无效点击/展示监控。Amazon 只对有效事件收费。
+
+| 列名 (EN) | 预计中文后台列名 | 含义 |
+|-----------|----------------|------|
+| `grossImpressions` | 总展示量 | 含无效 |
+| `grossClicks` | 总点击量 | 含无效 |
+| `invalidImpressions` | 无效展示量 | Amazon 过滤掉的展示 |
+| `invalidClicks` | 无效点击量 | Amazon 过滤掉的点击（不收费） |
+| `invalidImpressionRate` | 无效展示率 | |
+| `invalidClickRate` | 无效点击率 | |
+
+> 回溯 365 天。SP/SB/SD 三种广告类型各有独立变体。
+
+#### 6. Audience Report（✅ API + Console）
+
+> 受众定向表现。需要 campaign 层面开启 audience bid adjustments 才有数据。
+
+| 列名 (EN) | 预计中文后台列名 | 含义 |
+|-----------|----------------|------|
+| `audienceId` / `audienceName` | 受众 ID/名称 | AMC 创建或 Amazon 内置受众 |
+| `impressions` | 展示量 | |
+| `clicks` | 点击量 | |
+| `ctr` | 点击率 | |
+| `cpc` | 单次点击成本 | |
+| `cost` | 花费 | |
+| `roas` | 广告投资回报率 | |
+| `sales` | 销售额 | |
+| `orders` | 订单数 | |
+| `unitsSold` | 销售量 | |
+
+> 仅 SP，回溯 90 天。SD 有独立版本（`sdAudience`），SB 无标准受众报告。
+
 ## Seller Central 数据（独立于 Ads Console）
 
 | 数据源 | 获取方式 | 关键字段 |

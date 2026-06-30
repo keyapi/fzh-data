@@ -98,6 +98,7 @@ resource: advertise/__init__.py
 4. **搜索词匹配类型显示 `-`**: 自动广告的 Close/Loose/Substitutes/Complements 在中文后台显示为空
 
 ## See also
-- [数据源全图](data-sources.md)
+- [数据源全图](data-sources.md) — 6 种新报告的列结构详表（Purchased Product / Impression Share / Perf Over Time / Advertised Product / Invalid Traffic / Audience）
+- [向运营同事要数据的沟通模板](colleague-data-requests.md)
 - [调研报告](../research/2026-06-16-amazon-advertising-analysis-research.md)
 - [`advertise/__init__.py`](../../../advertise/__init__.py)

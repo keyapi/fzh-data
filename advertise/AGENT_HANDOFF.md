@@ -40,6 +40,7 @@ uv run python -m advertise.build_report         # → Excel 报告
 | 你需要... | 读这个 |
 |----------|--------|
 | 了解运行方法 + 指标说明 | [`README.md`](README.md) |
+| 向运营同事要数据（沟通模板） | [`docs/reference/colleague-data-requests.md`](docs/reference/colleague-data-requests.md) |
 | 查阅列名映射 | [`docs/reference/column-mappings.md`](docs/reference/column-mappings.md) |
 | 了解我们有什么数据 / 缺什么 | [`docs/reference/data-sources.md`](docs/reference/data-sources.md) |
 | 了解工具 (优麦云/卖家精灵等) | [`docs/reference/tools-ecosystem.md`](docs/reference/tools-ecosystem.md) |
