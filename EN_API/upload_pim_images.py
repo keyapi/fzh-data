@@ -118,6 +118,16 @@ def compress_image(
     """
     orig_size = len(data)
     img = Image.open(io.BytesIO(data))
+
+    # Apply EXIF orientation (fixes rotated photos from cameras/phones)
+    try:
+        from PIL import ImageOps
+        transposed = ImageOps.exif_transpose(img)
+        if transposed is not None:
+            img = transposed
+    except Exception:
+        pass
+
     w, h = img.size
 
     if max(w, h) > max_size:

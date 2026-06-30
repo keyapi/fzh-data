@@ -25,7 +25,7 @@ C:/Users/DEV01/Pictures/EN物料组图片/ 目录
       1. filename stem → FILENAME_MAPPING 查询 (有映射则使用映射名)
       2. 对每个目标物料组名称执行:
          a. 查 Item Group (支持一对多，如单双人地板沙发→单人位+双人位)
-         b. 压缩图片 (max 1500px, JPEG quality 85)
+         b. 压缩图片 (max 1500px, JPEG quality 85, 自动修正 EXIF 方向)
          c. 查重: 检查 custom_pim_images 是否已存在同名文件 → 存在则跳过
          d. POST /api/method/upload_file (上传到 ERPNext)
          e. PUT /api/resource/Item Group/{name}
@@ -48,7 +48,7 @@ C:/Users/DEV01/Pictures/EN物料组图片/ 目录
 | `ErpnextClient.upload_file(filename, bytes, doctype, docname)` | 上传文件到 ERPNext，返回 file_url |
 | `ErpnextClient.update_pim_images(docname, file_url)` | 向 custom_pim_images 子表追加记录 |
 | `ErpnextClient.set_image_field(docname, file_url)` | 更新物料组的 image 主图字段 |
-| `compress_image(data, max_size, quality)` | 压缩图片（缩放 + RGB转换 + 安全回退） |
+| `compress_image(data, max_size, quality)` | 压缩图片（缩放 + RGB转换 + EXIF方向修正 + 安全回退） |
 
 ### custom_pim_images 子表 (Item Group Image) 字段
 
@@ -148,10 +148,11 @@ uv run python upload_pim_images.py --no-compress        # 不压缩
 ## 8. 边界条件
 
 1. **物料组未找到** → 跳过该文件，报告标记"跳过"
-2. **图片压缩** → 仅当 `max(w,h) > 1500` 时缩放；透明背景填充白色；压缩后变大则保留原图
+2. **图片压缩** → 仅当 `max(w,h) > 1500` 时缩放；透明背景填充白色；压缩后变大则保留原图；自动应用 `ImageOps.exif_transpose()` 修正相机/手机照片的 EXIF 方向标签（如 Orientation=6 旋转90°），避免上传后图片倾斜
 3. **--update-image 失败** → 不影响子表写入，报告标记"成功"（非"成功(含主图)"）
 4. **子表已有记录** → 自动递增 `sort_order`；首条记录 `is_primary=1`
 5. **文件名映射** → 先在 `FILENAME_MAPPING` 中查找，未命中则直接用文件名查询
 6. **一对多映射** → 同一张图片上传到多个物料组，报告分别为每行记录
 7. **凭证** — `.env` 文件或环境变量 `(TEST|PROD)_ERP_API_KEY` / `(TEST|PROD)_ERP_API_SECRET`
-8. **文件名编码** → 中文文件名正常支持（通过 `requests` + UTF-8 传输）
+8. **文件名编码** → 中文文件名正常支持（通过 `requests` + UTF-8 传输）；测试系统 (ensh.vilavi.cn) 上传中文文件名文件时，需额外传 `file_name` 参数，否则文件不会实际保存到磁盘
+9. **EXIF 方向** → 图片压缩会自动调用 `ImageOps.exif_transpose()` 修正 EXIF Orientation 标签（手机/相机照片常见值为 3/6/8），确保上传后方向正确；若已有上传的倾斜图片，需清除原文件记录后重新上传
