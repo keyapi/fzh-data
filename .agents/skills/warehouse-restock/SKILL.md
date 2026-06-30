@@ -20,6 +20,17 @@ metadata:
 
 EN BOM Cost List → 三成本拆分（绍兴/头程/加工）→ 赛狐海外仓备货单模板。
 
+## 数据准备
+
+**通途库存数据需先从通途 ERP 自动下载**，脚本在外部项目 `fzh-web-automation`（`D:\Work\赛狐\网页自动化\`，GitHub: `keyapi/fzh-web-automation`）：
+
+```bash
+cd D:\Work\赛狐\网页自动化
+uv run python tongtu_auto_export.py
+```
+
+下载的 `通途合并库存结存清单*.xlsx` 放入 `warehouse_restock/数据源/` 目录。
+
 ## 两种使用方式
 
 ### 方式 1：只生成 Excel（不碰赛狐）

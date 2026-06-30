@@ -17,11 +17,22 @@ metadata:
 
 把通途 6 仓库存 + EN BOM 成本 → 合并映射到赛狐 3 仓 → 生成库存初始值导入 xlsx。
 
+## 数据准备
+
+**通途库存需先从通途 ERP 自动下载**，脚本在外部项目 `fzh-web-automation`（`D:\Work\赛狐\网页自动化\`，GitHub: `keyapi/fzh-web-automation`）：
+
+```bash
+cd D:\Work\赛狐\网页自动化
+uv run python tongtu_auto_export.py
+```
+
+下载的 `通途合并库存结存清单*.xlsx` 放入 `stock_init/数据源/` 目录。
+
 ## 快速启动
 
 ```bash
 cd stock_init
-python build_saihu_stock_init.py
+uv run python build_saihu_stock_init.py
 ```
 
 脚本自动选取 `数据源/` 下最新的数据文件。输出在 `out/{时间戳}/` 下。
