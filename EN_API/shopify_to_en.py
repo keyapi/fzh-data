@@ -140,17 +140,39 @@ class ErpnextClient:
         skus_to_query = [s for s in skus if s not in self._sku_cache]
         if not skus_to_query and not force_refresh:
             return self._sku_cache
+
+        # 提取基础 SKU：TT 前缀的 SKU 格式为 TT数字+K+数字，后面跟的是后缀
+        # 如 TT0312640K0064285-1、TT0031131K0063816-C-peach、TT0312588K0064179-Foam
+        # 基础码 = TT0312640K0064285、TT0031131K0063816、TT0312588K0064179
+        import re
+        base_skus = set()
+        suffix_map = {}
+        tt_pattern = re.compile(r'^(TT\d+K\d+)')
+        for s in skus_to_query:
+            m = tt_pattern.match(s)
+            if m:
+                base = m.group(1)
+                if base != s:
+                    base_skus.add(base)
+                    suffix_map[s] = base
+
+        expanded_skus = list(set(skus_to_query) | base_skus)
         url = f"{self.base_url}/api/method/{self.API_PATH}"
-        print(f"  [API] 查询 {len(skus_to_query)} 个 SKU 的物料组映射...")
+        print(f"  [API] 查询 {len(expanded_skus)} 个 SKU 的物料组映射（含 {len(base_skus)} 个基础码）...")
         try:
-            resp = self._request("POST", url, json={"skus": skus_to_query}, retries=1, retry_delay=2, timeout=(60, 300))
+            resp = self._request("POST", url, json={"skus": expanded_skus}, retries=1, retry_delay=2, timeout=(60, 300))
             message = resp.json().get("message", {})
             for item in message.get("results", []):
                 sku = item.get("sku", "").strip()
                 if sku:
                     self._sku_cache[sku] = {"item_name": item.get("item_name", ""), "item_code": item.get("item_code", ""), "item_group": item.get("item_group", ""), "customer_name": item.get("customer_name", ""), "item_group_url": item.get("item_group_url", "")}
+            # 后缀 → 基础码 映射：如果基础码查到但后缀没查到，让后缀指向基础码的结果
+            for suffixed, base in suffix_map.items():
+                if suffixed not in self._sku_cache and base in self._sku_cache and self._sku_cache[base].get("item_group"):
+                    self._sku_cache[suffixed] = self._sku_cache[base]
             for sku in message.get("not_found", []):
-                self._sku_cache[sku] = {}
+                if sku not in self._sku_cache:
+                    self._sku_cache[sku] = {}
             print(f"  [API] 成功: {message.get('total', 0)} 条, 未找到: {len(message.get('not_found', []))} 个")
         except Exception as e:
             err = getattr(e, "response", None)
@@ -231,7 +253,7 @@ def from_api(store_url: str = _STORE_URL, max_products: int | None = None) -> li
             handle = item.get("handle", "").strip()
             if not handle:
                 continue
-            p = Product(handle=handle, title=item.get("title", "").strip(), url=f"{base}/products/{handle}")
+            p = Product(handle=handle, title=item.get("title", "").strip(), url=f"{base}/products/{handle}", product_category=item.get("product_type", "").strip() or "")
             for v in item.get("variants", []):
                 sku = (v.get("sku") or "").strip()
                 if sku:
@@ -338,7 +360,8 @@ class EnWriter:
             else:
                 ok = self.client.update_daneey_urls(ig_name, html)
                 s = "更新成功" if ok else "更新失败"
-                (self.stats["成功更新"] if ok else self.stats["更新失败"]) += 1
+                if ok: self.stats["成功更新"] += 1
+                else: self.stats["更新失败"] += 1
                 print(f"  [{s}] {ig_name} ({len(prods)} 产品, {sku_count} SKU)")
                 log.append({"物料组": ig_name, "产品数": len(prods), "SKU数": sku_count, "操作": s})
         if dry_run:
@@ -382,8 +405,20 @@ def generate_match_report(results: list[dict], unmatched: list[dict], stats: dic
             df_ok = pd.DataFrame(results)
             if "item_group" in df_ok.columns: df_ok = df_ok.sort_values("item_group")
             df_ok.to_excel(writer, sheet_name="匹配成功", index=False)
+        # ── 未匹配（独立站在售但EN无对应物料组） ──
         if unmatched:
-            pd.DataFrame(unmatched).to_excel(writer, sheet_name="未匹配", index=False)
+            df_no = pd.DataFrame(unmatched)
+            # 保留关键列方便分析
+            cols = ["title", "url", "skus", "product_category"]
+            cols = [c for c in cols if c in df_no.columns]
+            df_no = df_no[cols] if cols else df_no
+            df_no.to_excel(writer, sheet_name="独立站独有_EN无对应", index=False)
+
+            # ── 按分类汇总未匹配 ──
+            if "product_category" in df_no.columns:
+                cat_stats = df_no["product_category"].value_counts().reset_index()
+                cat_stats.columns = ["Shopify 分类", "独立站有_EN无(产品数)"]
+                cat_stats.to_excel(writer, sheet_name="差异分析_按分类", index=False)
         if results:
             by_group = defaultdict(list)
             for r in results: by_group[r.get("item_group", "(未知)")].append(r)
