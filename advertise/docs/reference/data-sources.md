@@ -157,13 +157,44 @@ tags: [amazon, advertising, reference, data-sources]
 | Flexible Shopping Insights | 付费 | 有机转化数据（30 天试用） |
 | Retail Purchases 5-Year | $500/月 | CLV、队列分析、流失建模（60 天试用） |
 
-## 第三方数据源
+## 第三方数据源 — 经 2026-06-30 官方文档核验
 
-| 来源 | 内容 | API |
-|------|------|-----|
-| **优麦云** (在用) | 全量历史广告数据 + 销售/库存 | ❌ (仅 Excel 导出) |
-| 卖家精灵 | 竞品关键词情报 | ✅ MCP (`open.sellersprite.com/mcp/22`) |
-| Keepa | 价格历史 + BSR 趋势 | ✅ API |
+### 优麦云 (Sellerspace) — 在用的广告+ERP 工具
+
+| 项目 | 详情 |
+|------|------|
+| 官网 | https://www.sellerspace.com/ |
+| 公司 | 成都云雅（卖家精灵姊妹产品），亚马逊广告高级合作伙伴 |
+| API | ✅ **MCP API** — `https://www.sellerspace.com/mcp/`（API Key 认证，sk-ss-xxx） |
+| MCP 能力 | 广告活动/广告组/推广商品/关键词/非关键词/搜索词/商品维度/店铺维度/否定关键词/否定商品 — **读写**（调整竞价/预算/启停 + 创建投放词/否定词） |
+| 数据保留 | 首次同步近 60 天，增量每 30-60 分钟更新，**永久保留已同步数据** |
+| 导出格式 | UI: Excel (.xlsx) + PNG 图片；MCP: JSON |
+| 销售数据 | ✅ 24h 分时销售 + 经营分析 50+ 指标，历史订单追补 2 年 |
+| 库存数据 | ✅ FBA 可售预估/补货建议/库龄/仓储费，每 1-2h 同步 |
+| 价格 | 30 天免费试用 → 创业版 ¥2,880/年（含 MCP）→ 企业版 ¥5,880/年 |
+| MCP 文档 | https://www.sellerspace.com/tw/help/doc/sellerspace-mcp-configuration-tutorial/ |
+| MCP 能力清单 | https://www.sellerspace.com/web/mcp/capabilities |
+
+> ⚠️ 文档修正 (2026-06-30)：原声明"仅 Excel 导出"已过时，优麦云现提供 MCP API。
+
+### 卖家精灵 (SellerSprite) — 竞品关键词情报
+
+| 项目 | 详情 |
+|------|------|
+| 官网 | https://www.sellersprite.com/ |
+| 数据平台 | https://open.sellersprite.com |
+| MCP | ✅ **38 个工具**，4 领域（商品/关键词/流量/趋势）+ 10 组合工作流 + 17 策略卡 |
+| MCP SSE 端点 | `https://mcp.sellersprite.com/sse`（Header: `secret-key`）|
+| MCP 文档 | https://open.sellersprite.com/mcp/15 |
+| REST API | 43+ 端点（按端点独立收费 ¥9,800-249,930/年）|
+| 核心能力 | 关键词反查(ASIN→关键词)、关键词挖掘(种子词→长尾)、流量词对比、出单词反查、关键词收录检测 |
+| 导出 | Excel (.xlsx) + PDF，免费 0次/日，付费 50次/日 |
+| 价格 | 月付 ¥368 → 年付 ¥1,998（单站）→ ¥9,980（VIP） |
+| 与优麦云 | 同公司产品，关键词词库可直接推送到优麦云广告活动 |
+
+> ⚠️ 文档修正 (2026-06-30)：原 MCP URL `open.sellersprite.com/mcp/22` 只是文档页面编号，真正的 MCP 端点见上表。
+>
+> Keepa 同为第三方选品工具，有 API，此处不再展开。
 
 ## 官方文档 URL
 
