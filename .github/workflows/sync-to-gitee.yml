@@ -13,8 +13,6 @@ jobs:
         with:
           fetch-depth: 0
       - name: Push to Gitee
-        uses: pixta-dev/repository-mirroring-action@v1
-        with:
-          target_repo_url: "https://gitee.com/keyapi/fzh-data.git"
-          target_repo_username: "${{ secrets.GITEE_USERNAME }}"
-          target_repo_token: "${{ secrets.GITEE_TOKEN }}"
+        run: |
+          git remote add gitee https://${{ secrets.GITEE_USERNAME }}:${{ secrets.GITEE_TOKEN }}@gitee.com/keyapi/fzh-data.git
+          git push gitee main --force
