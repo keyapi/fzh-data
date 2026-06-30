@@ -147,7 +147,7 @@ uv run python upload_pim_images.py --no-compress        # 不压缩
 
 ```
 图片目录 → 文件名提取物料组名称 → 查询 ERPNext 物料组
-  → 压缩图片 (max 1500px, JPEG 85, 透明背景处理, 安全回退)
+  → 压缩图片 (max 1500px, JPEG 85, EXIF方向修正, 透明背景处理, 安全回退)
   → 查重: custom_pim_images 已存在同名文件? → 是则跳过
   → 上传文件到 ERPNext → 写入 custom_pim_images 子表
   → [可选 --update-image] PUT 更新 image 主图字段
