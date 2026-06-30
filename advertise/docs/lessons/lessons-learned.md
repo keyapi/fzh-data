@@ -8,7 +8,7 @@ tags: [amazon, advertising, lessons, best-practices]
 # 经验教训 — Amazon 广告分析模块
 
 > 何时读: 接手模块时、遇到类似问题时、做架构决策时参考。
-> 最后更新: 2026-06-30 | 共 13 条
+> 最后更新: 2026-06-30 | 共 14 条
 
 ## Lesson 1: CSV 金额列格式 (已修复)
 
@@ -85,6 +85,20 @@ tags: [amazon, advertising, lessons, best-practices]
 **教训**: 任何引用外部系统能力的声明（API 端点、报告类型、数据源、工具支持矩阵）必须在写入仓库前对照官方文档逐条验证并附上出处 URL。从命名约定推断的 API ID（如认为"Ad Group 报告" = `spAdGroups`）不可信。
 
 **详见**: [`docs/solutions/documentation-gaps/unverified-external-api-claims-in-docs.md`](../../../docs/solutions/documentation-gaps/unverified-external-api-claims-in-docs.md)
+
+## Lesson 14: 第三方工具能力声明同样需要官方核验 (v0.3 修复)
+
+**问题**: 继 Lesson 13 的 Amazon SP 报告校验后，进一步核验了项目中引用的两个第三方工具能力声明：
+- **优麦云**: 原文档称"仅 Excel 导出、无 API"。实际已提供 MCP API（`sellerspace.com/mcp/`），覆盖 10 个广告维度的读写操作。
+- **卖家精灵**: 原文档 MCP 端点写的是 `open.sellersprite.com/mcp/22`。实际这只是文档页面编号，真正的 MCP SSE 端点是 `mcp.sellersprite.com/sse`。
+
+**影响**: 基于错误的"优麦云无 API"假设，项目规划中排除了程序化对接优麦云的选项。基于错误的卖家精灵 MCP URL，Agent 配置 MCP 时会连接失败。
+
+**解决**: 逐项核验后更新 `data-sources.md` 和 `colleague-data-requests.md` 中的工具能力矩阵，附官网文档 URL。
+
+**教训**: Lesson 13 的规则同样适用于第三方工具——"X 工具支持 Y 功能"、"X 工具的 API 端点是 Z"这类声明必须对照工具官方文档/帮助中心逐条验证，不能凭记忆或早期印象写入。
+
+**详见**: [`docs/reference/data-sources.md`](../reference/data-sources.md) 第三方数据源章节
 
 ## See also
 - [数据源全图](../reference/data-sources.md)

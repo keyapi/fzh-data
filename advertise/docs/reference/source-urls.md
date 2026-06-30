@@ -94,8 +94,16 @@ tags: [amazon, advertising, reference, research]
 
 60. [优麦云官网](https://www.sellerspace.com)
 61. [优麦云帮助中心](https://www.sellerspace.com/zh/help/doc/user-manual-for-new-users/)
-62. [卖家精灵 MCP](https://open.sellersprite.com/mcp/22)
-63. [HyperFX 2026 PPC Tools Rankings](https://www.hyperfx.ai/blog/best-amazon-ads-automation-tools-2026)
+62. [优麦云 MCP 接入指南](https://www.sellerspace.com/tw/help/doc/sellerspace-mcp-configuration-tutorial/)
+63. [优麦云 MCP 能力清单](https://www.sellerspace.com/web/mcp/capabilities)
+64. [优麦云数据同步机制](https://www.sellerspace.com/zh/help/doc/about-data-first-sync/)
+65. [卖家精灵官网](https://www.sellersprite.com)
+66. [卖家精灵开放平台](https://open.sellersprite.com)
+67. [卖家精灵 MCP 概览](https://open.sellersprite.com/mcp/15)（注意：/mcp/22 仅为品类关键词场景文档页）
+68. [卖家精灵 MCP SSE 端点](https://mcp.sellersprite.com/sse)
+69. [卖家精灵 API 平台](https://open.sellersprite.com/api/57)
+70. [卖家精灵 API 定价](https://www.sellersprite.com/cn/price)
+71. [HyperFX 2026 PPC Tools Rankings](https://www.hyperfx.ai/blog/best-amazon-ads-automation-tools-2026)
 
 ## See also
 - [调研报告](../research/2026-06-16-amazon-advertising-analysis-research.md)

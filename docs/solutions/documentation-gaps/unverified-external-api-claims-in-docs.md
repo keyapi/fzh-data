@@ -138,6 +138,17 @@ The `spSearchTermImpressionShare` claim propagated through 5 interconnected docu
 
 Fixing one wrong claim meant fixing 5 documents. Verifying at write time would have prevented all of it.
 
+### Follow-up (2026-06-30): 优麦云 + 卖家精灵
+
+同一核验流程应用于第三方工具声明后，同样发现错误：
+
+| 工具 | 原声明 | 核验结果 |
+|------|--------|---------|
+| 优麦云 | "仅 Excel 导出、无 API" | 已有 MCP API (`sellerspace.com/mcp/`)，10 维度读写 |
+| 卖家精灵 | MCP 端点 `open.sellersprite.com/mcp/22` | 只是文档页面，真实端点为 `mcp.sellersprite.com/sse` |
+
+这类错误的模式一致：**早期调研时的印象/二手信息被当作确定事实写入了文档**，后续无人对照官方来源复查。Lesson 13 的规则完全适用于第三方工具。
+
 ## Related
 
 - `advertise/docs/reference/data-sources.md` — The file that was corrected with verification status for all 9 SP report types
