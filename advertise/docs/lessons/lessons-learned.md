@@ -8,7 +8,7 @@ tags: [amazon, advertising, lessons, best-practices]
 # 经验教训 — Amazon 广告分析模块
 
 > 何时读: 接手模块时、遇到类似问题时、做架构决策时参考。
-> 最后更新: 2026-06-17 | 共 12 条
+> 最后更新: 2026-06-30 | 共 13 条
 
 ## Lesson 1: CSV 金额列格式 (已修复)
 
@@ -73,6 +73,18 @@ tags: [amazon, advertising, lessons, best-practices]
 **问题**: AGENT_HANDOFF.md 一度膨胀到 350+ 行，Agent 难以快速定位。
 **解决**: 按 Diátaxis 框架拆分: 入口(AGENT_HANDOFF) → 参考(reference/) → 调研(research/) → 设计(specs/)。
 **原则**: 每个文件独立可读，底部有 "See also" 交叉引用，入口文件只放高频信息+导航。
+
+## Lesson 13: 外部数据源声明必须先验证官方文档 (v0.3 修复)
+
+**问题**: `data-sources.md` 列出了 9 种"缺失的 SP 报告"，每项分配了 API ID 和优先级。但这些声明来自二手资料推断，未经 Amazon 官方 API 文档验证。2026-06-30 三路并行 agent 校验后发现：3 种报告不存在（Budget、Ad Group for SP、Video），2 种仅 Console 无 API（Search Term Impression Share、Performance Over Time），仅 4 种确认正确。
+
+**影响**: 错误的 API ID 和报告类型传导到 roadmap、AGENT_HANDOFF（"4/13 SP 报告"）、column-mappings，导致 phantom 任务项和膨胀的数据覆盖率指标。Agent 会基于不存在的报告给用户错误指引。
+
+**解决**: 用官方文档逐项校验后重写表格，新增校验状态（✅/⚠️/❌）、实际获取方式、官方文档 URL 三列。校验时间戳 `2026-06-30` 作为后续重新校验的锚点。
+
+**教训**: 任何引用外部系统能力的声明（API 端点、报告类型、数据源、工具支持矩阵）必须在写入仓库前对照官方文档逐条验证并附上出处 URL。从命名约定推断的 API ID（如认为"Ad Group 报告" = `spAdGroups`）不可信。
+
+**详见**: [`docs/solutions/documentation-gaps/unverified-external-api-claims-in-docs.md`](../../../docs/solutions/documentation-gaps/unverified-external-api-claims-in-docs.md)
 
 ## See also
 - [数据源全图](../reference/data-sources.md)

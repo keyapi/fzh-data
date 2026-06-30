@@ -6,7 +6,7 @@
 
 ## 这是什么
 
-从 Amazon 后台导出的 Sponsored Products 报告 → 全维度 Excel 分析报告。当前覆盖 4/13 种 SP 报告。
+从 Amazon 后台导出的 Sponsored Products 报告 → 全维度 Excel 分析报告。当前覆盖 4 种 SP 报告（Console 可导出共 10 种，API 可获取 6-7 种）。
 
 ## 快速启动
 
@@ -20,23 +20,22 @@ uv run python -m advertise.build_report         # → Excel 报告
 
 ## 当前数据
 
-`数据源/如森US-近30天广告数据/` — 4 个文件 (campaign/targeting/search_term/placement), 2026-05-17 ~ 06-15
+`数据源/` — 每次分析前从 Amazon 广告后台下载最新的 4 份 SP 报告（30 天窗口）。数据文件不会被 git 跟踪。
 
-<<<<<<< HEAD
-| 项目 | 位置 |
-|------|------|
-| 赛狐 API 凭证 | `advertise/.env` (SELLFOX_APP_ID=<SELLFOX_APP_ID>) |
-| 赛狐 API 配置 | `advertise/config_sellfox.json` |
-| API 文档 | https://sellfoxapi.apifox.cn/ (密码: <SELLFOX_API_DOC_KEY>) |
-| API 生产环境 | https://openapi.sellfox.com/ |
-| Token 端点 | GET `/api/oauth/v2/token.json` (client_credentials) |
+> 赛狐 API（如需接入 API）：凭证在 `advertise/.env`，配置在 `advertise/config_sellfox.json`
+> API 文档 https://sellfoxapi.apifox.cn/ | 生产环境 https://openapi.sellfox.com/
 
-## 文档地图（渐进式加载）
+## Agent 首次接手检查清单
 
-### 快速上手
-=======
+当用户说"帮我分析 Amazon 广告数据"时，按以下步骤执行：
+
+1. 检查 `数据源/` 目录下是否存在含以下关键词的文件：`广告活动`、`投放`、`搜索词`、`广告位`
+2. 如果文件不足 4 个 → 引导用户从 Amazon 广告后台下载（导航：广告活动管理 → 报告 → 创建报告 → 选择对应报告类型）
+3. 如果文件齐备 → 按文件名关键词识别各报告类型
+4. 依次运行 `analyze_campaign` → `analyze_targeting` → `analyze_search_term` → `analyze_placement` → `build_report`（均通过 `uv run python -m advertise.<script>` 从项目根目录运行）
+5. 报告输出到 `advertise/out/如森US-广告分析报告.xlsx`，告知用户路径
+
 ## 文档地图 (渐进式加载 → 文档符合 OKF v0.1 规范)
->>>>>>> origin/main
 
 | 你需要... | 读这个 |
 |----------|--------|
@@ -76,7 +75,7 @@ Top of Search 最优 (ACOS 17.34%), 光环效应 3.77x
 1. 缺 Business Understanding (盈亏平衡点未知)
 2. 无环比/同比
 3. 无行业基准 (家居类目平均 ACOS 32.5%)
-4. 数据源不全 (4/13 种 SP 报告)
+4. 数据源不全 (4 种 SP 报告已接入；经 2026-06-30 官方文档校验，Console 可导出 10 种，API 可获取 6-7 种，详见 data-sources.md)
 5. 无竞争情报
 6. 只看 ACoS 不看 TACoS/NTB%/LTV
 7. 无多触点归因
