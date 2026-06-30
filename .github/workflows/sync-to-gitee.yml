@@ -1,0 +1,20 @@
+name: Sync to Gitee
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Push to Gitee
+        uses: pixta-dev/repository-mirroring-action@v1
+        with:
+          target_repo_url: "https://gitee.com/keyapi/fzh-data.git"
+          target_repo_username: "${{ secrets.GITEE_USERNAME }}"
+          target_repo_token: "${{ secrets.GITEE_TOKEN }}"
