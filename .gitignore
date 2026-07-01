@@ -24,6 +24,10 @@ venv/
 
 # env files (secrets)
 .env
+*.cookie.txt
+cookie.txt
+**/docs/api-reference/llms_parsed.json
+**/docs/api-reference/download_log.json
 .env.local
 .gh-token
 out/*

@@ -1,0 +1,1928 @@
+# 结算利润-SKU
+
+## OpenAPI Specification
+
+```yaml
+openapi: 3.0.1
+info:
+  title: ''
+  description: ''
+  version: 1.0.0
+paths:
+  /api/financial/v2/dailyProfit/sku.json:
+    post:
+      summary: 结算利润-SKU
+      deprecated: false
+      description: 结算利润-SKU
+      operationId: skuUsingPOST
+      tags:
+        - 财务/结算利润V2
+        - 结算利润V2
+      parameters:
+        - name: access_token
+          in: query
+          description: 通过获取token接口获得的token，详见 [获取 Access Token](doc-1589130)
+          required: true
+          example: '{{access_token}}'
+          schema:
+            type: string
+        - name: client_id
+          in: query
+          description: client_id, 获取方式详见 [申请API权限](1748360)
+          required: true
+          example: '{{client_id}}'
+          schema:
+            type: string
+        - name: timestamp
+          in: query
+          description: 13位毫秒时间戳，与当前时间差异不超过正负15分钟，示例：1668153260508
+          required: true
+          example: '121212'
+          schema:
+            type: string
+        - name: nonce
+          in: query
+          description: '随机整数值，保证每个请求唯一，示例：11251 '
+          required: true
+          example: '121212'
+          schema:
+            type: string
+        - name: sign
+          in: query
+          description: 请求签名，详见  [生成sign（签名）](doc-1749562)
+          required: true
+          example: '121212121'
+          schema:
+            type: string
+        - name: Content-Type
+          in: header
+          description: 固定再header位置加入Content-Type:application/json
+          example: application/json
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FinAmzDailyProfitSkuOpenParam'
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: >-
+                  #/components/schemas/OpenResult%C2%ABFinAmzProfitReportPageOpenV3VO%C2%BB
+          headers: {}
+          x-apifox-name: ''
+        '201':
+          description: Created
+          headers: {}
+          x-apifox-name: ''
+        '401':
+          description: Unauthorized
+          headers: {}
+          x-apifox-name: ''
+        '403':
+          description: Forbidden
+          headers: {}
+          x-apifox-name: ''
+        '404':
+          description: Not Found
+          headers: {}
+          x-apifox-name: ''
+      security: []
+      x-order: '2147483647'
+      x-apifox-folder: 财务/结算利润V2
+      x-apifox-status: released
+      x-run-in-apifox: https://app.apifox.com/web/project/1827046/apis/api-399397929-run
+components:
+  schemas:
+    FinAmzDailyProfitSkuOpenParam:
+      type: object
+      required:
+        - startDate
+        - endDate
+      properties:
+        dateType:
+          type: integer
+          format: int32
+          description: 日期类型，按月：1，按日：2
+        developers:
+          type: array
+          description: 开发员,多个批量查询,格式:["1","2"]
+          items:
+            type: string
+        searchType:
+          type: string
+          description: 搜索字段
+          enum:
+            - asin
+            - sku
+            - name
+        showOnMonth:
+          type: boolean
+          description: 是否按月展示
+        searchMode:
+          type: string
+          description: 搜索类型 精确（exact） 支持批量搜索, 模糊搜索（blur）  不支持批量搜索
+          enum:
+            - exact
+            - blur
+        showOnDay:
+          type: boolean
+          description: 是否按日展示
+        searchContents:
+          type: array
+          description: 搜索内容，单个/批量搜索都传数组,格式:["1","2"]
+          items:
+            type: string
+        startDate:
+          type: string
+          description: 开始时间
+          examples:
+            - 20250101
+        endDate:
+          type: string
+          description: 结束时间
+          examples:
+            - 20250101
+        fullCids:
+          type: array
+          description: 商品分类ID,格式:["1","2"]
+          items:
+            type: string
+        labelIds:
+          type: array
+          description: 产品标签ID,格式:["1","2"]
+          items:
+            type: string
+        shopIds:
+          type: array
+          description: 店铺ID,格式:[1,2]
+          items:
+            type: integer
+            format: int32
+        brandIdList:
+          type: array
+          description: 品牌,格式:[1,2]
+          items:
+            type: integer
+            format: int64
+        marketplaceIds:
+          type: array
+          description: 国家站点,格式:["1","2"]
+          items:
+            type: string
+        currency:
+          type: string
+          description: 币种
+        selectAllLabel:
+          type: string
+          description: 是否筛选全部标签,false代表任一，true代表全部,默认为false
+          enum:
+            - 'true'
+            - 'false'
+        orderBy:
+          type: string
+          description: >-
+            排序字段(默认按sales_num进行排序，界面的所有一级费用字段均可参与排序),
+            常用：sales_num、product_sales、gross_profit、gross_profit_rate、roi
+        desc:
+          type: boolean
+          description: 排序方式,true=desc(降序), false=asc(升序)
+        pageNo:
+          type: integer
+          format: int32
+          description: 第几页  默认第一页
+          examples:
+            - 1
+        pageSize:
+          type: integer
+          format: int32
+          description: 每页条数，默认20 最大支持200
+          examples:
+            - 20
+      title: FinAmzDailyProfitSkuOpenParam
+      x-apifox-orders:
+        - dateType
+        - developers
+        - searchType
+        - showOnMonth
+        - searchMode
+        - showOnDay
+        - searchContents
+        - startDate
+        - endDate
+        - fullCids
+        - labelIds
+        - shopIds
+        - brandIdList
+        - marketplaceIds
+        - currency
+        - selectAllLabel
+        - orderBy
+        - desc
+        - pageNo
+        - pageSize
+      x-apifox-ignore-properties: []
+      x-apifox-folder: ''
+    OpenResult«FinAmzProfitReportPageOpenV3VO»:
+      type: object
+      properties:
+        requestId:
+          type: string
+        code:
+          type: integer
+          format: int32
+          description: code(默认0代表成功)
+        msg:
+          type: string
+          description: 错误信息
+        data:
+          $ref: '#/components/schemas/FinAmzProfitReportPageOpenV3VO'
+        ts:
+          type: integer
+          format: int64
+          description: 响应时间戳
+      title: OpenResult«FinAmzProfitReportPageOpenV3VO»
+      x-apifox-orders:
+        - requestId
+        - code
+        - msg
+        - data
+        - ts
+      x-apifox-ignore-properties: []
+      x-apifox-folder: ''
+    FinAmzProfitReportPageOpenV3VO:
+      type: object
+      properties:
+        pageNo:
+          type: integer
+          format: int32
+          description: 当前页
+        reportList:
+          type: array
+          items:
+            $ref: '#/components/schemas/FinAmzMskuDaySummaryDorisVO'
+        pageSize:
+          type: integer
+          format: int32
+          description: 每页条数
+        totalPage:
+          type: integer
+          format: int32
+          description: 总页数
+        totalSize:
+          type: integer
+          format: int32
+          description: 总条数
+      title: FinAmzProfitReportPageOpenV3VO
+      x-apifox-orders:
+        - pageNo
+        - reportList
+        - pageSize
+        - totalPage
+        - totalSize
+      x-apifox-ignore-properties: []
+      x-apifox-folder: ''
+    FinAmzMskuDaySummaryDorisVO:
+      type: object
+      properties:
+        currencyList:
+          type: array
+          items:
+            type: string
+        puid:
+          type: integer
+          format: int64
+          description: 商户ID
+        shopId:
+          type: string
+          description: 店铺ID
+        bizDay:
+          type: integer
+          format: int32
+          description: 业务天(yyyyMMdd)
+        bizDate:
+          type: integer
+          format: int32
+          description: 业务月(yyyyMMdd)
+        year:
+          type: integer
+          format: int32
+          description: 业务(年)
+        shopInfos:
+          type: array
+          description: 店铺/站点信息
+          items:
+            $ref: '#/components/schemas/ShopBasicVO'
+        commodityInfos:
+          type: array
+          description: 商品信息
+          items:
+            $ref: '#/components/schemas/CommodityBasicVO'
+        brandNames:
+          type: array
+          description: 品牌名称
+          items:
+            type: string
+        mskuList:
+          type: array
+          description: 商品编码MSKU
+          items:
+            type: string
+        id:
+          type: integer
+          format: int64
+          description: ID
+        imgUrl:
+          type: string
+          description: 图片URL
+        currency:
+          type: string
+          description: 货币类型
+        rate:
+          type: number
+          description: 货币汇率（转人民币）
+        skuList:
+          type: array
+          description: 商品编码SKU
+          items:
+            type: string
+        asinList:
+          type: array
+          description: 产品编码ASIN
+          items:
+            type: string
+        parentAsinList:
+          type: array
+          description: 产品编码父ASIN
+          items:
+            type: string
+        spu:
+          type: string
+          description: 商品spu（多属性商品）
+        spuName:
+          type: string
+          description: 商品spu款名
+        developerSpuNameList:
+          type: array
+          description: SPU 开发员名称列表
+          items:
+            type: string
+        developerNameList:
+          type: array
+          description: 开发员名称列表
+          items:
+            type: string
+        developerViewNameList:
+          type: array
+          description: 开发员查看列表
+          items:
+            type: string
+        salesManNameList:
+          type: array
+          description: 业务员名称 列表
+          items:
+            type: string
+        salesMansNameList:
+          type: array
+          description: 业务员名称(业绩归属) 列表
+          items:
+            type: string
+        productCategoryList:
+          type: array
+          description: 商品分类
+          items:
+            type: string
+        productLabelsList:
+          type: array
+          description: 商品标签
+          items:
+            type: object
+            x-apifox-orders: []
+            properties: {}
+            x-apifox-ignore-properties: []
+        lowCostStore:
+          type: integer
+          format: int32
+          description: 0普通商品，1低价商城商品
+        openDateList:
+          type: array
+          description: 上架时间
+          items:
+            type: string
+        firstSaleDateList:
+          type: array
+          description: 开售时间
+          items:
+            type: string
+        devDateList:
+          type: array
+          description: 产品开发时间
+          items:
+            type: string
+        operateStatusList:
+          type: array
+          description: 商品运营状态
+          items:
+            type: string
+        devStatusList:
+          type: array
+          description: 商品开发状态
+          items:
+            type: string
+        salesNum:
+          type: integer
+          format: int32
+          description: 销量
+        fbaSalesNum:
+          type: integer
+          format: int32
+          description: FBA销量
+        fbmSalesNum:
+          type: integer
+          format: int32
+          description: FBM销量
+        multiChannelNum:
+          type: integer
+          format: int32
+          description: 多渠道销量
+        refundNum:
+          type: integer
+          format: int32
+          description: 退款量
+        refundRate:
+          type: number
+          description: 退款率
+        fbaRefundNum:
+          type: integer
+          format: int32
+          description: FBA退款量
+        fbmRefundNum:
+          type: integer
+          format: int32
+          description: FBM退款量
+        reissueNum:
+          type: integer
+          format: int32
+          description: 补发量
+        reissueRate:
+          type: number
+          description: 补发率
+        returnNum:
+          type: integer
+          format: int32
+          description: 退货量
+        returnRate:
+          type: number
+          description: 退货率
+        adjCompensationNum:
+          type: integer
+          format: int32
+          description: 赔偿量
+        fbaReissueNum:
+          type: integer
+          format: int32
+          description: 补发量-FBA补发量
+        fbmReissueNum:
+          type: integer
+          format: int32
+          description: 补发量-FBM补发量
+        removalNum:
+          type: integer
+          format: int32
+          description: 移除量
+        disposalNum:
+          type: integer
+          format: int32
+          description: 销毁量
+        returnSellAbleNum:
+          type: integer
+          format: int32
+          description: 退货量-退货可售
+        returnUnsellAbleNum:
+          type: integer
+          format: int32
+          description: 退货量-退货不可售
+        cpcSalesNum:
+          type: integer
+          format: int32
+          description: 广告订单量
+        adSpOrderNum:
+          type: integer
+          format: int32
+          description: SP广告订单量
+        adSdOrderNum:
+          type: integer
+          format: int32
+          description: SD广告订单量
+        adSbsOrderNum:
+          type: integer
+          format: int32
+          description: SB旗舰店广告订单量
+        adSbvOrderNum:
+          type: integer
+          format: int32
+          description: SB视频广告订单量
+        adSbOrderNum:
+          type: integer
+          format: int32
+          description: SB商品集广告订单量
+        batchCostFbaNum:
+          type: integer
+          format: int32
+          description: FBA成本数量
+        batchCostFbmNum:
+          type: integer
+          format: int32
+          description: FBM成本数量
+        batchCostMcNum:
+          type: integer
+          format: int32
+          description: 多渠道订单成本数量
+        batchCrpcFeeSellNum:
+          type: integer
+          format: int32
+          description: 买家退货数量(可售)
+        batchCrpcFeeUnSellNum:
+          type: integer
+          format: int32
+          description: 买家退货数量(不可售)
+        batchApcFeeSellNum:
+          type: integer
+          format: int32
+          description: 库存调整数量(可售)
+        batchApcFeeUnSellNum:
+          type: integer
+          format: int32
+          description: 库存调整数量(不可售)
+        batchVrpcFeeSellNum:
+          type: integer
+          format: int32
+          description: 库存移除数量(可售)
+        batchVrpcFeeUnSellNum:
+          type: integer
+          format: int32
+          description: 库存移除数量(不可售)
+        batchDfpcFeeSellNum:
+          type: integer
+          format: int32
+          description: 库存差异数量(可售)
+        batchDfpcFeeUnSellNum:
+          type: integer
+          format: int32
+          description: 库存差异数量(不可售)
+        receivedDiffNum:
+          type: integer
+          format: int32
+          description: 签收差异数量
+        productSales:
+          type: number
+          description: 销售额
+        fbaSales:
+          type: number
+          description: fba销售额（根据配置含税不含税）
+        fbmSales:
+          type: number
+          description: fbm销售额（根据配置含税不含税）
+        fbaSalesOrigin:
+          type: number
+          description: 原始fba销售额
+        fbmSalesOrigin:
+          type: number
+          description: 原始fbm销售额
+        productSalesTax:
+          type: number
+          description: 商品价格税
+        shippingCredits:
+          type: number
+          description: 买家运费
+        giftWrapFee:
+          type: number
+          description: 礼品包装费
+        regulatoryFee:
+          type: number
+          description: 监管费
+        orderTax:
+          type: number
+          description: 订单税费
+        compensationFee:
+          type: number
+          description: 赔偿费
+        refundSales:
+          type: number
+          description: 销售额退回
+        promotionValue:
+          type: number
+          description: 促销折扣
+        promotionValueTax:
+          type: number
+          description: 促销折扣税
+        commission:
+          type: number
+          description: 销售佣金
+        amazonLicensingFee:
+          type: number
+          description: 商标使用许可佣金
+        amazonExclusivesFee:
+          type: number
+          description: 独家销售计划
+        fbaFulfillmentFee:
+          type: number
+          description: FBA配送费
+        fbaMultiChannelFee:
+          type: number
+          description: FBA多渠道配送费
+        fbaNonMultiChannelFee:
+          type: number
+          description: FBA非多渠道配送费
+        fbmPostageFee:
+          type: number
+          description: FBM便捷配送费
+        giftWrapChargeBack:
+          type: number
+          description: 礼品包装扣款
+        shippingChargeBack:
+          type: number
+          description: 买家运费扣除
+        fbaTransportationFee:
+          type: number
+          description: MCF计重费
+        fixedClosingFee:
+          type: number
+          description: 固定费
+        variableClosingFee:
+          type: number
+          description: 媒体类成交费
+        fbaWeightBasedFee:
+          type: number
+          description: FBA计重费
+        codChargeBack:
+          type: number
+          description: COD扣款
+        codItemCharge:
+          type: number
+          description: COD收费
+        subscriptionFee:
+          type: number
+          description: 订阅费
+        fbaAglFee:
+          type: number
+          description: AGL
+        disposalFee:
+          type: number
+          description: 销毁费(弃用，建议使用fbaDisposalFee字段)
+        removalFee:
+          type: number
+          description: 移除费(弃用，建议使用fbaDisposalFee字段)
+        recoveryAmount:
+          type: number
+          description: 成功收费
+        refundManagementFee:
+          type: number
+          description: 退款管理费
+        digitalServicesFee:
+          type: number
+          description: 数字服务费
+        fbaSaleFee:
+          type: number
+          description: FBA买家运费
+        fbmSaleFee:
+          type: number
+          description: FBM买家运费
+        shippingCreditsTax:
+          type: number
+          description: 买家运费税
+        giftWrapCreditsTax:
+          type: number
+          description: 礼品包装税
+        marketplaceWithheldTax:
+          type: number
+          description: 商城代扣税
+        codTax:
+          type: number
+          description: COD税
+        lvig:
+          type: number
+          description: 低价值商品税
+        regulatoryTax:
+          type: number
+          description: 监管费代扣费
+        tcsCgst:
+          type: number
+          description: TcsCgst
+        tcsSgst:
+          type: number
+          description: TcsSgst
+        tcsIgst:
+          type: number
+          description: TcsIgst
+        tcsUtgst:
+          type: number
+          description: TcsUtgst
+        tds:
+          type: number
+          description: TDS
+        fbaInventoryCompensation:
+          type: number
+          description: FBA库存赔偿
+        reimbursement:
+          type: number
+          description: 赔付
+        revenue:
+          type: number
+          description: 清算收入
+        liquidationsBrokerageFee:
+          type: number
+          description: 清算-清算调整收入
+        feeAdjustment:
+          type: number
+          description: 费用调整-订单费用调整
+        refundCommission:
+          type: number
+          description: 信用卡拒付收入
+        guaranteeClaim:
+          type: number
+          description: A-to-Z索赔收入
+        cod:
+          type: number
+          description: COD
+        netco:
+          type: number
+          description: NetCo
+        fbaPerUnitFulfillmentFee:
+          type: number
+          description: 费用调整-FBA配送费调整
+        buyerRecharge:
+          type: number
+          description: 费用调整-买家再收费
+        rentalExtensionFee:
+          type: number
+          description: 租赁收入
+        retrochargeTax:
+          type: number
+          description: 反向订单税
+        a2zGuaranteeRecovery:
+          type: number
+          description: 费用调整-A-to-Z索赔调整
+        adjustmentAmount:
+          type: number
+          description: 费用调整-佣金调整
+        adjustmentOther:
+          type: number
+          description: 费用调整-账户欠费调整
+        taxCollectedAtSource:
+          type: number
+          description: 费用调整-TCS调整
+        amazonShippingReimbursement:
+          type: number
+          description: 亚马逊运费赔偿
+        reimbursedAmount:
+          type: number
+          description: SAFE-T索赔
+        sellerRewards:
+          type: number
+          description: 卖家奖励
+        subscriptionFeeCorrection:
+          type: number
+          description: 费用调整-订阅费调整
+        fbaOrderFee:
+          type: number
+          description: 其他-FBA订单处理费
+        renewedProgramFee:
+          type: number
+          description: 其他-翻新产品服务费
+        technologyFee:
+          type: number
+          description: 其他-技术费
+        costOfPointsGranted:
+          type: number
+          description: 其他-积分花费
+        giftWrapCommission:
+          type: number
+          description: 其他-礼品包装费手续费
+        shippingHb:
+          type: number
+          description: 其他-运费手续费
+        getPaidFasterFee:
+          type: number
+          description: 其他-加速收款费
+        amazonAcceleratorFee:
+          type: number
+          description: 其他-品牌加速器计划佣金
+        csbaFee:
+          type: number
+          description: 其他-CSBA费
+        exportCharge:
+          type: number
+          description: 其他-出口费
+        salesTaxCollectionFee:
+          type: number
+          description: 其他-税务计算服务费
+        amazonForAllFee:
+          type: number
+          description: 其他-买家灵活融资计划费
+        fbaReturnFee:
+          type: number
+          description: 退货入仓费
+        compensatedClawback:
+          type: number
+          description: 赔偿追回
+        commissionExpend:
+          type: number
+          description: 信用卡拒付支出
+        guaranteeExpend:
+          type: number
+          description: A-to-Z索赔支出
+        liquidationsAdjustmentsFee:
+          type: number
+          description: 清算支出
+        revenueAdjustment:
+          type: number
+          description: 清算调整支出
+        dealWithAmazon:
+          type: number
+          description: 应付亚马逊
+        imagingServicesFee:
+          type: number
+          description: 图片服务费
+        reviewer:
+          type: number
+          description: 早期评论人计划
+        disbursementCorrection:
+          type: number
+          description: 支付修正（不需要计算在利润报表）
+        chargeBackRecovery:
+          type: number
+          description: 信用卡拒付调整
+        collectOnDeliveryRevenue:
+          type: number
+          description: 其他-COD买家支付
+        fbaDisposalFee:
+          type: number
+          description: 销毁费
+        fbaRemovalFee:
+          type: number
+          description: 移除费
+        fbaInboundCartonFee:
+          type: number
+          description: 人工处理费
+        fbaInboundDefectFee:
+          type: number
+          description: 计划外服务费
+        labelingFee:
+          type: number
+          description: 贴标费
+        paidServicesFee:
+          type: number
+          description: 专属服务费
+        polyBaggingFee:
+          type: number
+          description: 包装袋费
+        processingFee:
+          type: number
+          description: 卫星仓手续费
+        storageTransportationFee:
+          type: number
+          description: 卫星仓配送费
+        opaqueBaggingFee:
+          type: number
+          description: 不透明包装袋费
+        bubbleWrapFee:
+          type: number
+          description: 气泡膜包装费
+        marketplaceFacilitatorTax:
+          type: number
+          description: 反向订单税代扣税
+        miscAdjustment:
+          type: number
+          description: 杂费调整
+        comminglingVat:
+          type: number
+          description: 混标入库增值税
+        couponsPromoteFee:
+          type: number
+          description: 优惠券
+        ldPromoteFee:
+          type: number
+          description: LD费
+        vineEnrollmentFee:
+          type: number
+          description: Vine
+        fbaShipFee:
+          type: number
+          description: 合作承运费
+        fbaInboundConvenienceFee:
+          type: number
+          description: 入库配置费
+        returnPostageFee:
+          type: number
+          description: 退货标签费
+        reCommerceCharge:
+          type: number
+          description: 评级与转售费
+        postageBilling:
+          type: number
+          description: 邮资计费
+        highVolumelistingFee:
+          type: number
+          description: SKU超量费
+        starStorageFee:
+          type: number
+          description: 卫星仓月仓储费
+        feeExpend:
+          type: number
+          description: 冲销调整
+        withheldAmount:
+          type: number
+          description: 账户级代扣税
+        amazonVatServiceFee:
+          type: number
+          description: 亚马逊增值税服务费
+        capacityReservationFee:
+          type: number
+          description: 库容预留费
+        fbaOverageFee:
+          type: number
+          description: 仓储超量费
+        inventoryPlacementFee:
+          type: number
+          description: 非订阅费调整
+        customerReturnHrrUnitFee:
+          type: number
+          description: 退货处理费
+        otherRefundSales:
+          type: number
+          description: 其他退款
+        fbaRefundSales:
+          type: number
+          description: FBA销售额退款
+        fbmRefundSales:
+          type: number
+          description: FBM销售额退款
+        promotionRefund:
+          type: number
+          description: 促销扣款退款
+        refundMarketplaceWithheldTax:
+          type: number
+          description: 商城代扣税退款
+        refundProductSalesTax:
+          type: number
+          description: 商品价格税退款
+        refundGiftWrapCreditsTax:
+          type: number
+          description: 礼品包装税退款
+        refundShippingCreditsTax:
+          type: number
+          description: 买家运费税退款
+        promotionRefundSalesTax:
+          type: number
+          description: 促销折扣税退款
+        refundlvig:
+          type: number
+          description: 低价值商品税退款
+        refundTcsCgst:
+          type: number
+          description: TCS-CGST退款
+        refundTcsSgst:
+          type: number
+          description: TCS-SGST退款
+        refundTcsIgst:
+          type: number
+          description: TCS-IGST退款
+        commissionRefundSales:
+          type: number
+          description: 佣金退款
+        fbaFulfillmentRefundSales:
+          type: number
+          description: FBA配送费退款
+        shippingChargeRefundSales:
+          type: number
+          description: 买家运费退款
+        promotionRefundSales:
+          type: number
+          description: 促销折扣退款(与promotionRefund值一致)
+        taxRefundSales:
+          type: number
+          description: 税费退款
+        fbaWeightRefundFee:
+          type: number
+          description: 费用调整-FBA计重费退款
+        postageRefund:
+          type: number
+          description: 费用调整-标签费退款
+        refundDigitalServicesFee:
+          type: number
+          description: 数字服务费退款
+        cpcSales:
+          type: number
+          description: 广告销售额
+        cpcSalesRate:
+          type: number
+          description: 广告销售额占比
+        adFeeRefund:
+          type: number
+          description: 广告费退款-结算报告
+        cpcSettlementCost:
+          type: number
+          description: CPC广告花费-结算报告
+        cpcAdExpensesCost:
+          type: number
+          description: CPC广告花费-广告账单
+        cpcCostSettlementDiff:
+          type: number
+          description: 广告花费差额-结算报告
+        cpcCostAdExpensesDiff:
+          type: number
+          description: 广告花费差额-广告账单
+        cpcOtherCost:
+          type: number
+          description: 其他广告费-广告账单
+        cpcSpCost:
+          type: number
+          description: SP
+        cpcSdCost:
+          type: number
+          description: SD
+        cpcSbvCost:
+          type: number
+          description: SB视频
+        cpcSbFlagshipStore:
+          type: number
+          description: SB旗舰店
+        cpcSbCost:
+          type: number
+          description: SB商品集
+        cpcSpCostInvoice:
+          type: number
+          description: SP-广告发票分摊
+        cpcSdCostInvoice:
+          type: number
+          description: SD-广告发票分摊
+        cpcSbvCostInvoice:
+          type: number
+          description: SB视频-广告发票分摊
+        cpcSbFlagshipStoreInvoice:
+          type: number
+          description: SB旗舰店-广告发票分摊
+        cpcSbCostInvoice:
+          type: number
+          description: SB商品集-广告发票分摊
+        cpcSpCostShop:
+          type: number
+          description: SP  店铺维度
+        cpcSdCostShop:
+          type: number
+          description: SD  店铺维度
+        cpcSbvCostShop:
+          type: number
+          description: SB视频  店铺维度
+        cpcSbFlagshipStoreShop:
+          type: number
+          description: SB旗舰店  店铺维度
+        cpcCostSettlementDiffShop:
+          type: number
+          description: 广告花费差额（结算报告）  店铺维度
+        cpcCostAdExpensesDiffShop:
+          type: number
+          description: 广告花费差额（广告账单） 店铺维度
+        cpcSbCostShop:
+          type: number
+          description: SB商品集  店铺维度
+        adSpOrderSales:
+          type: number
+          description: SP广告销售额
+        adSdOrderSales:
+          type: number
+          description: SD广告销售额
+        adSbsOrderSales:
+          type: number
+          description: SB旗舰店广告销售额
+        adSbvOrderSales:
+          type: number
+          description: SB视频广告销售额
+        adSbOrderSales:
+          type: number
+          description: SB商品集广告销售额
+        storageFee:
+          type: number
+          description: 月仓储费
+        storageFeeRate:
+          type: number
+          description: 月仓储费占比
+        storageRenewalBilling:
+          type: number
+          description: 长期仓储费
+        storageRenewalBillingRate:
+          type: number
+          description: 长期仓储费占比
+        storageFeeReport:
+          type: number
+          description: 月仓储费报告
+        storageFeeDiff:
+          type: number
+          description: 月仓储费差额
+        storageLongFeeReport:
+          type: number
+          description: 长期仓储费报告
+        storageLongFeeDiff:
+          type: number
+          description: 长期仓储费差额
+        evaluationFee:
+          type: number
+          description: 测评费
+        evaluationCapital:
+          type: number
+          description: 测评费-本金
+        evaluationCommission:
+          type: number
+          description: 测评费-佣金
+        purchasePcFee:
+          type: number
+          description: 采购成本(固定方式)
+        headTripPcFee:
+          type: number
+          description: 头程费用(固定方式)
+        fbmShippingCredits:
+          type: number
+          description: FBM运费
+        purchasePcFeeBatch:
+          type: number
+          description: 采购成本(先入先出)
+        purchasePcFeeRate:
+          type: number
+          description: 采购成本占比
+        headTripPcFeeBatch:
+          type: number
+          description: 头程费用(先入先出)
+        headTripPcFeeRate:
+          type: number
+          description: 头程费用占比
+        batchPurchaseCostFba:
+          type: number
+          description: FBA采购成本
+        batchPurchaseCostFbm:
+          type: number
+          description: FBM采购成本
+        batchHeadtripCostFba:
+          type: number
+          description: FBA头程费用
+        batchHeadtripCostFbm:
+          type: number
+          description: FBM头程费用
+        batchPurchaseCostMc:
+          type: number
+          description: 多渠道订单-采购成本
+        batchHeadtripCostMc:
+          type: number
+          description: 多渠道订单-头程费用
+        fixedPurchaseCostFbm:
+          type: number
+          description: FBM采购成本
+        batchPurchaseCrpcFeeSell:
+          type: number
+          description: 买家退货(可售)-采购成本
+        batchHeadtripCrpcFeeSell:
+          type: number
+          description: 买家退货(可售)-头程费用
+        batchPurchaseCrpcFeeUnsell:
+          type: number
+          description: 买家退货(不可售)-采购成本
+        batchHeadtripCrpcFeeUnsell:
+          type: number
+          description: 买家退货(不可售)-头程费用
+        batchPurchaseApcFeeSell:
+          type: number
+          description: 库存盘点(可售)-采购成本
+        batchHeadtripApcFeeSell:
+          type: number
+          description: 库存盘点(可售)-头程费用
+        batchPurchaseApcFeeUnsell:
+          type: number
+          description: 库存盘点(不可售)-采购成本
+        batchHeadtripApcFeeUnsell:
+          type: number
+          description: 库存盘点(不可售)-头程费用
+        batchPurchaseVrpcFeeSell:
+          type: number
+          description: 库存移除(可售)-采购成本
+        batchHeadtripVrpcFeeSell:
+          type: number
+          description: 库存移除(可售)-头程费用
+        batchPurchaseVrpcFeeUnsell:
+          type: number
+          description: 库存移除(不可售)-采购成本
+        batchHeadtripVrpcFeeUnsell:
+          type: number
+          description: 库存移除(不可售)-头程费用
+        batchPurchaseDfpcFeeSell:
+          type: number
+          description: 库存差异(可售)-采购成本
+        batchHeadtripDfpcFeeSell:
+          type: number
+          description: 库存差异(可售)-头程费用
+        batchPurchaseDfpcFeeUnsell:
+          type: number
+          description: 库存差异(不可售)-采购成本
+        batchHeadtripDfpcFeeUnsell:
+          type: number
+          description: 库存差异(不可售)-头程费用
+        receivedDiffPurchase:
+          type: number
+          description: 签收差异-采购成本
+        receivedDiffHeadtrip:
+          type: number
+          description: 签收差异-头程费用
+        fixedPurchaseRtpcFee:
+          type: number
+          description: 补发订单-采购成本
+        fixedPurchaseRpcFee:
+          type: number
+          description: 移除商品-采购成本
+        fixedPurchaseCostFba:
+          type: number
+          description: FBA采购成本
+        fixedHeadTripCostMc:
+          type: number
+          description: 多渠道订单-头程费用
+        fixedHeadTripRpcFee:
+          type: number
+          description: 移除商品-头程费用
+        fixedPurchaseDpcFee:
+          type: number
+          description: 销毁商品-采购成本
+        fixedPurchaseCostMc:
+          type: number
+          description: 多渠道订单-采购成本
+        fixedHeadTripCostFba:
+          type: number
+          description: FBA头程费用
+        fixedHeadTripCostFbm:
+          type: number
+          description: FBM头程费用
+        fixedHeadTripCrpcFee:
+          type: number
+          description: 买家退货-头程费用
+        fixedPurchaseApcFee:
+          type: number
+          description: 库存调整赔偿-采购成本
+        fixedHeadTripDpcFee:
+          type: number
+          description: 销毁商品-头程费用
+        fixedHeadTripApcFee:
+          type: number
+          description: 库存调整赔偿-头程费用
+        fixedHeadTripRtpcFee:
+          type: number
+          description: 补发订单-头程费用
+        fixedPurchaseCrpcFee:
+          type: number
+          description: 买家退货-采购成本
+        shopOtherFee:
+          type: number
+          description: 店铺其他费
+        asinOtherFee:
+          type: number
+          description: 产品其他费
+        monthlyFixedFee:
+          type: number
+          description: 每月固定费
+        fixedFee:
+          type: number
+          description: 固定费用
+        otherIncomeFee:
+          type: number
+          description: 其他费收入
+        otherExpendFee:
+          type: number
+          description: 其他费支出
+        transPlanLabelFee:
+          type: number
+          description: 透明计划标签费
+        otherServiceFee:
+          type: number
+          description: 其余服务费
+        otherExpend:
+          type: number
+          description: 其他支出
+        orderOtherIncome:
+          type: number
+          description: 订单其他收入
+        orderOtherExpend:
+          type: number
+          description: 订单支出其他
+        cpcCost:
+          type: number
+          description: 广告费（根据来源计算）
+        cpcCostRate:
+          type: number
+          description: 广告费占比（根据来源计算）
+        promoteFee:
+          type: number
+          description: 推广费
+        promoteFeeRate:
+          type: number
+          description: 推广费占比
+        collection:
+          type: number
+          description: 亚马逊回款
+        grossProfit:
+          type: number
+          description: 毛利润
+        grossIncome:
+          type: number
+          description: 投资收入
+        grossInvestment:
+          type: number
+          description: 投资成本
+        grossProfitRate:
+          type: number
+          description: 毛利率
+        roi:
+          type: number
+          description: ROI
+        shopOtherFeeInfos:
+          type: array
+          description: 店铺其他费信息
+          items: &ref_0
+            $ref: '#/components/schemas/OtherFeeDetailOpenVo'
+        asinOtherFeeInfos:
+          type: array
+          description: 产品其他费信息
+          items: *ref_0
+        monthlyFixedFeeInfos:
+          type: array
+          description: 每月固定费信息
+          items: *ref_0
+        avgPurchasePcFeeBatch:
+          type: number
+          description: 平均采购成本
+        avgHeadTripPcFeeBatch:
+          type: number
+          description: 平均头程费用
+        cpcCostDiff:
+          type: number
+          description: 差异分摊： 广告花费差额(结算报告)+广告花费差额(广告账单)
+        cpcCostDiffShop:
+          type: number
+          description: '差异分摊  店铺维度: 广告花费差额(结算报告,店铺维度)+广告花费差额(广告账单,店铺维度)'
+        cpcSb:
+          type: number
+          description: '广告花费(SB): SB商品集+SB视频+SB旗舰店'
+        cpcSbInvoice:
+          type: number
+          description: '广告花费(SB)广告发票分摊: SB商品集+SB视频+SB旗舰店'
+        cpcSbShop:
+          type: number
+          description: '广告花费(SB)店铺维度: SB商品集+SB视频+SB旗舰店'
+        tcs:
+          type: number
+          description: 'TCS: tcsCgst+tcsSgst+tcsIgst+tcsUtgst'
+        orderMCFIFO:
+          type: number
+          description: '多渠道订单(先入先出): 采购成本 + 头程费用'
+        buyerReturnFIFOFeeSell:
+          type: number
+          description: '买家退货 可售(先入先出): 采购成本 + 头程费用'
+        buyerReturnFIFOFeeUnSell:
+          type: number
+          description: '买家退货 不可售(先入先出): 采购成本 + 头程费用'
+        buyerReturnFIFOFee:
+          type: number
+          description: '买家退货(先入先出): 可售 + 不可售'
+        inventoryAdjFIFOFeeSell:
+          type: number
+          description: '库存盘点 可售(先入先出): 采购成本 + 头程费用'
+        inventoryAdjFIFOFeeUnSell:
+          type: number
+          description: '库存盘点 不可售(先入先出): 采购成本 + 头程费用'
+        inventoryAdjFIFOFee:
+          type: number
+          description: '库存盘点(先入先出): 可售 + 不可售'
+        inventoryRemovalFIFOFeeSell:
+          type: number
+          description: '库存移除 可售(先入先出): 采购成本 + 头程费用'
+        inventoryRemovalFIFOFeeUnSell:
+          type: number
+          description: '库存移除 不可售(先入先出): 采购成本 + 头程费用'
+        inventoryRemovalFIFOFee:
+          type: number
+          description: '库存移除(先入先出): 可售 + 不可售'
+        inventoryVarianceFIFOFeeSell:
+          type: number
+          description: '库存差异 可售(先入先出): 采购成本 + 头程费用'
+        inventoryVarianceFIFOFeeUnSell:
+          type: number
+          description: '库存差异 不可售(先入先出): 采购成本 + 头程费用'
+        inventoryVarianceFIFOFee:
+          type: number
+          description: '库存差异(先入先出): 可售 + 不可售'
+        orderMCFIXED:
+          type: number
+          description: '多渠道订单(固定方式): 采购成本 + 头程费用'
+        buyerReturnFIXED:
+          type: number
+          description: '买家退货(固定方式): 采购成本 + 头程费用'
+        inventoryAdjFIXED:
+          type: number
+          description: '库存盘点(固定方式): 采购成本 + 头程费用'
+        reissueFIXED:
+          type: number
+          description: '补发订单(固定方式): 采购成本 + 头程费用'
+        disposalFIXED:
+          type: number
+          description: '销毁商品(固定方式): 采购成本 + 头程费用'
+        removalFIXED:
+          type: number
+          description: '移除商品(固定方式): 采购成本 + 头程费用'
+        liquidation:
+          type: number
+          description: 清算：清算调整收入 + 清算收入
+        costAdjustment:
+          type: number
+          description: >-
+            费用调整:
+            订单费用调整+FBA配送费调整+FBA计重费调整+标签费退款+买家再收费+A-to-Z索赔调整+佣金调整+订阅费调整+账户欠费调整+TCS调整
+        orderIncome:
+          type: number
+          description: '订单收入: 销售额 + 买家运费 + 礼品包装费 + 监管费 + COD收费'
+        orderExpend:
+          type: number
+          description: >-
+            订单支出: 订单支出其他 + 促销折扣 + 独家销售计划 + 销售佣金 + FBA配送费 + FBM便捷配送费 + 礼品包装扣款 +
+            买家运费扣除 + MCF计重费 + 固定费 + 媒体类成交费 + FBA计重费 + COD扣款 + 数字服务费 + 商标使用许可佣金
+        serviceFeeExpend:
+          type: number
+          description: >-
+            服务费支出: 专属服务费 + 订阅费 + 月仓储费 + 卫星仓月仓储费 + 长期仓储费 + 仓储超量费 + 销毁费 + 移除费 +
+            退货入仓费 + 合作承运费 + 入库配置费 + 人工处理费 + AGL + 计划外服务费 + 贴标费 + 包装袋费 + 不透明包装袋费
+            + 气泡膜包装费 + SKU超量费 + 邮资计费 + 退货标签费 + 非订阅费调整 + 赔偿追回 + 卫星仓手续费 + 卫星仓配送费 +
+            评级与转售费 + 退货处理费
+        customFee:
+          type: number
+          description: '自定义费用: 测评费 + 店铺其他费 + 产品其他费 + 固定费用 + 每月固定费用'
+        refund:
+          type: number
+          description: >-
+            退款: 销售额退回 + 数字服务费退款 + 佣金退款 + 退款管理费 + FBA配送费退款 + 买家运费退款 + 促销折扣退款 +
+            税费退款 + 其他退款
+        adStOrderNum:
+          type: integer
+          format: int32
+          description: ST广告订单量
+        adCrOrderNum:
+          type: integer
+          format: int32
+          description: 创作者广告订单量
+        adStOrderSales:
+          type: number
+          description: ST广告销售额
+        adCrOrderSales:
+          type: number
+          description: 创作者广告销售额
+        cpcStCost:
+          type: number
+          description: ST
+        cpcCrCost:
+          type: number
+          description: 创作者
+        cpcStCostShop:
+          type: number
+          description: ST-店铺维度
+        cpcCrCostShop:
+          type: number
+          description: 创作者-店铺维度
+      title: FinAmzMskuDaySummaryDorisVO
+      x-apifox-orders:
+        - currencyList
+        - puid
+        - shopId
+        - bizDay
+        - bizDate
+        - year
+        - shopInfos
+        - commodityInfos
+        - brandNames
+        - mskuList
+        - id
+        - imgUrl
+        - currency
+        - rate
+        - skuList
+        - asinList
+        - parentAsinList
+        - spu
+        - spuName
+        - developerSpuNameList
+        - developerNameList
+        - developerViewNameList
+        - salesManNameList
+        - salesMansNameList
+        - productCategoryList
+        - productLabelsList
+        - lowCostStore
+        - openDateList
+        - firstSaleDateList
+        - devDateList
+        - operateStatusList
+        - devStatusList
+        - salesNum
+        - fbaSalesNum
+        - fbmSalesNum
+        - multiChannelNum
+        - refundNum
+        - refundRate
+        - fbaRefundNum
+        - fbmRefundNum
+        - reissueNum
+        - reissueRate
+        - returnNum
+        - returnRate
+        - adjCompensationNum
+        - fbaReissueNum
+        - fbmReissueNum
+        - removalNum
+        - disposalNum
+        - returnSellAbleNum
+        - returnUnsellAbleNum
+        - cpcSalesNum
+        - adSpOrderNum
+        - adSdOrderNum
+        - adSbsOrderNum
+        - adSbvOrderNum
+        - adSbOrderNum
+        - batchCostFbaNum
+        - batchCostFbmNum
+        - batchCostMcNum
+        - batchCrpcFeeSellNum
+        - batchCrpcFeeUnSellNum
+        - batchApcFeeSellNum
+        - batchApcFeeUnSellNum
+        - batchVrpcFeeSellNum
+        - batchVrpcFeeUnSellNum
+        - batchDfpcFeeSellNum
+        - batchDfpcFeeUnSellNum
+        - receivedDiffNum
+        - productSales
+        - fbaSales
+        - fbmSales
+        - fbaSalesOrigin
+        - fbmSalesOrigin
+        - productSalesTax
+        - shippingCredits
+        - giftWrapFee
+        - regulatoryFee
+        - orderTax
+        - compensationFee
+        - refundSales
+        - promotionValue
+        - promotionValueTax
+        - commission
+        - amazonLicensingFee
+        - amazonExclusivesFee
+        - fbaFulfillmentFee
+        - fbaMultiChannelFee
+        - fbaNonMultiChannelFee
+        - fbmPostageFee
+        - giftWrapChargeBack
+        - shippingChargeBack
+        - fbaTransportationFee
+        - fixedClosingFee
+        - variableClosingFee
+        - fbaWeightBasedFee
+        - codChargeBack
+        - codItemCharge
+        - subscriptionFee
+        - fbaAglFee
+        - disposalFee
+        - removalFee
+        - recoveryAmount
+        - refundManagementFee
+        - digitalServicesFee
+        - fbaSaleFee
+        - fbmSaleFee
+        - shippingCreditsTax
+        - giftWrapCreditsTax
+        - marketplaceWithheldTax
+        - codTax
+        - lvig
+        - regulatoryTax
+        - tcsCgst
+        - tcsSgst
+        - tcsIgst
+        - tcsUtgst
+        - tds
+        - fbaInventoryCompensation
+        - reimbursement
+        - revenue
+        - liquidationsBrokerageFee
+        - feeAdjustment
+        - refundCommission
+        - guaranteeClaim
+        - cod
+        - netco
+        - fbaPerUnitFulfillmentFee
+        - buyerRecharge
+        - rentalExtensionFee
+        - retrochargeTax
+        - a2zGuaranteeRecovery
+        - adjustmentAmount
+        - adjustmentOther
+        - taxCollectedAtSource
+        - amazonShippingReimbursement
+        - reimbursedAmount
+        - sellerRewards
+        - subscriptionFeeCorrection
+        - fbaOrderFee
+        - renewedProgramFee
+        - technologyFee
+        - costOfPointsGranted
+        - giftWrapCommission
+        - shippingHb
+        - getPaidFasterFee
+        - amazonAcceleratorFee
+        - csbaFee
+        - exportCharge
+        - salesTaxCollectionFee
+        - amazonForAllFee
+        - fbaReturnFee
+        - compensatedClawback
+        - commissionExpend
+        - guaranteeExpend
+        - liquidationsAdjustmentsFee
+        - revenueAdjustment
+        - dealWithAmazon
+        - imagingServicesFee
+        - reviewer
+        - disbursementCorrection
+        - chargeBackRecovery
+        - collectOnDeliveryRevenue
+        - fbaDisposalFee
+        - fbaRemovalFee
+        - fbaInboundCartonFee
+        - fbaInboundDefectFee
+        - labelingFee
+        - paidServicesFee
+        - polyBaggingFee
+        - processingFee
+        - storageTransportationFee
+        - opaqueBaggingFee
+        - bubbleWrapFee
+        - marketplaceFacilitatorTax
+        - miscAdjustment
+        - comminglingVat
+        - couponsPromoteFee
+        - ldPromoteFee
+        - vineEnrollmentFee
+        - fbaShipFee
+        - fbaInboundConvenienceFee
+        - returnPostageFee
+        - reCommerceCharge
+        - postageBilling
+        - highVolumelistingFee
+        - starStorageFee
+        - feeExpend
+        - withheldAmount
+        - amazonVatServiceFee
+        - capacityReservationFee
+        - fbaOverageFee
+        - inventoryPlacementFee
+        - customerReturnHrrUnitFee
+        - otherRefundSales
+        - fbaRefundSales
+        - fbmRefundSales
+        - promotionRefund
+        - refundMarketplaceWithheldTax
+        - refundProductSalesTax
+        - refundGiftWrapCreditsTax
+        - refundShippingCreditsTax
+        - promotionRefundSalesTax
+        - refundlvig
+        - refundTcsCgst
+        - refundTcsSgst
+        - refundTcsIgst
+        - commissionRefundSales
+        - fbaFulfillmentRefundSales
+        - shippingChargeRefundSales
+        - promotionRefundSales
+        - taxRefundSales
+        - fbaWeightRefundFee
+        - postageRefund
+        - refundDigitalServicesFee
+        - cpcSales
+        - cpcSalesRate
+        - adFeeRefund
+        - cpcSettlementCost
+        - cpcAdExpensesCost
+        - cpcCostSettlementDiff
+        - cpcCostAdExpensesDiff
+        - cpcOtherCost
+        - cpcSpCost
+        - cpcSdCost
+        - cpcSbvCost
+        - cpcSbFlagshipStore
+        - cpcSbCost
+        - cpcSpCostInvoice
+        - cpcSdCostInvoice
+        - cpcSbvCostInvoice
+        - cpcSbFlagshipStoreInvoice
+        - cpcSbCostInvoice
+        - cpcSpCostShop
+        - cpcSdCostShop
+        - cpcSbvCostShop
+        - cpcSbFlagshipStoreShop
+        - cpcCostSettlementDiffShop
+        - cpcCostAdExpensesDiffShop
+        - cpcSbCostShop
+        - adSpOrderSales
+        - adSdOrderSales
+        - adSbsOrderSales
+        - adSbvOrderSales
+        - adSbOrderSales
+        - storageFee
+        - storageFeeRate
+        - storageRenewalBilling
+        - storageRenewalBillingRate
+        - storageFeeReport
+        - storageFeeDiff
+        - storageLongFeeReport
+        - storageLongFeeDiff
+        - evaluationFee
+        - evaluationCapital
+        - evaluationCommission
+        - purchasePcFee
+        - headTripPcFee
+        - fbmShippingCredits
+        - purchasePcFeeBatch
+        - purchasePcFeeRate
+        - headTripPcFeeBatch
+        - headTripPcFeeRate
+        - batchPurchaseCostFba
+        - batchPurchaseCostFbm
+        - batchHeadtripCostFba
+        - batchHeadtripCostFbm
+        - batchPurchaseCostMc
+        - batchHeadtripCostMc
+        - fixedPurchaseCostFbm
+        - batchPurchaseCrpcFeeSell
+        - batchHeadtripCrpcFeeSell
+        - batchPurchaseCrpcFeeUnsell
+        - batchHeadtripCrpcFeeUnsell
+        - batchPurchaseApcFeeSell
+        - batchHeadtripApcFeeSell
+        - batchPurchaseApcFeeUnsell
+        - batchHeadtripApcFeeUnsell
+        - batchPurchaseVrpcFeeSell
+        - batchHeadtripVrpcFeeSell
+        - batchPurchaseVrpcFeeUnsell
+        - batchHeadtripVrpcFeeUnsell
+        - batchPurchaseDfpcFeeSell
+        - batchHeadtripDfpcFeeSell
+        - batchPurchaseDfpcFeeUnsell
+        - batchHeadtripDfpcFeeUnsell
+        - receivedDiffPurchase
+        - receivedDiffHeadtrip
+        - fixedPurchaseRtpcFee
+        - fixedPurchaseRpcFee
+        - fixedPurchaseCostFba
+        - fixedHeadTripCostMc
+        - fixedHeadTripRpcFee
+        - fixedPurchaseDpcFee
+        - fixedPurchaseCostMc
+        - fixedHeadTripCostFba
+        - fixedHeadTripCostFbm
+        - fixedHeadTripCrpcFee
+        - fixedPurchaseApcFee
+        - fixedHeadTripDpcFee
+        - fixedHeadTripApcFee
+        - fixedHeadTripRtpcFee
+        - fixedPurchaseCrpcFee
+        - shopOtherFee
+        - asinOtherFee
+        - monthlyFixedFee
+        - fixedFee
+        - otherIncomeFee
+        - otherExpendFee
+        - transPlanLabelFee
+        - otherServiceFee
+        - otherExpend
+        - orderOtherIncome
+        - orderOtherExpend
+        - cpcCost
+        - cpcCostRate
+        - promoteFee
+        - promoteFeeRate
+        - collection
+        - grossProfit
+        - grossIncome
+        - grossInvestment
+        - grossProfitRate
+        - roi
+        - shopOtherFeeInfos
+        - asinOtherFeeInfos
+        - monthlyFixedFeeInfos
+        - avgPurchasePcFeeBatch
+        - avgHeadTripPcFeeBatch
+        - cpcCostDiff
+        - cpcCostDiffShop
+        - cpcSb
+        - cpcSbInvoice
+        - cpcSbShop
+        - tcs
+        - orderMCFIFO
+        - buyerReturnFIFOFeeSell
+        - buyerReturnFIFOFeeUnSell
+        - buyerReturnFIFOFee
+        - inventoryAdjFIFOFeeSell
+        - inventoryAdjFIFOFeeUnSell
+        - inventoryAdjFIFOFee
+        - inventoryRemovalFIFOFeeSell
+        - inventoryRemovalFIFOFeeUnSell
+        - inventoryRemovalFIFOFee
+        - inventoryVarianceFIFOFeeSell
+        - inventoryVarianceFIFOFeeUnSell
+        - inventoryVarianceFIFOFee
+        - orderMCFIXED
+        - buyerReturnFIXED
+        - inventoryAdjFIXED
+        - reissueFIXED
+        - disposalFIXED
+        - removalFIXED
+        - liquidation
+        - costAdjustment
+        - orderIncome
+        - orderExpend
+        - serviceFeeExpend
+        - customFee
+        - refund
+        - adStOrderNum
+        - adCrOrderNum
+        - adStOrderSales
+        - adCrOrderSales
+        - cpcStCost
+        - cpcCrCost
+        - cpcStCostShop
+        - cpcCrCostShop
+      x-apifox-ignore-properties: []
+      x-apifox-folder: ''
+    OtherFeeDetailOpenVo:
+      type: object
+      properties:
+        name:
+          type: string
+          description: 费用项名称
+        allocationFee:
+          type: number
+          description: 费用金额
+      title: OtherFeeDetailOpenVo
+      x-apifox-orders:
+        - name
+        - allocationFee
+      x-apifox-ignore-properties: []
+      x-apifox-folder: ''
+    CommodityBasicVO:
+      type: object
+      properties:
+        sku:
+          type: string
+          description: SKU
+        skuName:
+          type: string
+          description: 品名
+      title: CommodityBasicVO
+      x-apifox-orders:
+        - sku
+        - skuName
+      x-apifox-ignore-properties: []
+      x-apifox-folder: ''
+    ShopBasicVO:
+      type: object
+      properties:
+        shopId:
+          type: integer
+          format: int32
+          description: 店铺ID
+        shopName:
+          type: string
+          description: 店铺名称
+        marketplaceId:
+          type: string
+          description: 站点ID
+        marketplaceName:
+          type: string
+          description: 站点名称
+      title: ShopBasicVO
+      x-apifox-orders:
+        - shopId
+        - shopName
+        - marketplaceId
+        - marketplaceName
+      x-apifox-ignore-properties: []
+      x-apifox-folder: ''
+  securitySchemes: {}
+servers: []
+security: []
+
+```
