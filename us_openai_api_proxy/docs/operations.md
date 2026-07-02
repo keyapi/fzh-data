@@ -292,6 +292,69 @@ RestartSec=10
 WantedBy=multi-user.target
 ```
 
+### 日常运维
+
+#### 上海 SSH 隧道
+
+```bash
+# 查看状态（是否运行、运行多久）
+ssh sh-erpnext-test systemctl status socks5-tunnel
+
+# 查看最近日志
+ssh sh-erpnext-test journalctl -u socks5-tunnel -n 20 --no-pager
+
+# 启动
+ssh sh-erpnext-test systemctl start socks5-tunnel
+
+# 停止（⚠️ 办公室翻墙会断）
+ssh sh-erpnext-test systemctl stop socks5-tunnel
+
+# 重启
+ssh sh-erpnext-test systemctl restart socks5-tunnel
+
+# 测试代理是否正常
+ssh sh-erpnext-test "curl -x socks5h://100.119.28.72:1080 -s --max-time 10 https://www.google.com -o /dev/null -w '%{http_code}'"
+# 正常输出: 200
+```
+
+隧道特性：
+- **开机自启**：`systemctl enable socks5-tunnel`（已设置）
+- **崩溃自愈**：`Restart=always`，SSH 断开 10 秒后自动重连
+- **存活检测**：`ServerAliveInterval=30` + `ServerAliveCountMax=3`，90 秒无响应判定断开
+
+#### 办公室翻墙状态
+
+```bash
+# 查看 OpenClash 是否在走 Emergency 代理
+ssh -i ~/.ssh/id_rsa_openwrt root@192.168.100.1 \
+  "tail -20 /tmp/openclash.log | grep -oE 'Emergency\[|SSRDOG\[' | sort | uniq -c"
+```
+
+输出中 `Emergency[` 数量 > 0 说明应急线路正在工作。
+
+#### 链路全检（一键脚本）
+
+```bash
+echo "=== 1. 上海 Tailscale 状态 ==="
+ssh sh-erpnext-test "tailscale status | grep vultr"
+
+echo "=== 2. 上海 SSH 隧道 ==="
+ssh sh-erpnext-test systemctl is-active socks5-tunnel
+
+echo "=== 3. SOCKS5 端口 ==="
+ssh sh-erpnext-test "ss -tlnp | grep 1080"
+
+echo "=== 4. 代理 Google 可达 ==="
+ssh sh-erpnext-test "curl -x socks5h://100.119.28.72:1080 -s --max-time 10 https://www.google.com -o /dev/null -w '%{http_code}'"
+
+echo "=== 5. OpenClash 运行状态 ==="
+ssh -i ~/.ssh/id_rsa_openwrt root@192.168.100.1 "ps | grep 'clash -d' | grep -v grep | head -1"
+
+echo "=== 6. 办公室流量线路 ==="
+ssh -i ~/.ssh/id_rsa_openwrt root@192.168.100.1 \
+  "tail -10 /tmp/openclash.log | grep -oE 'Emergency\[|SSRDOG\[' | sort | uniq -c"
+```
+
 ## 见也
 
 - [../AGENT_HANDOFF.md](../AGENT_HANDOFF.md) — Agent 参考
