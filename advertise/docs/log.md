@@ -8,7 +8,27 @@ tags: [amazon, advertising, changelog]
 
 # 变更日志
 
-## 2026-07-02
+## 2026-07-02 (Phase 3-4)
+
+- **v0.5 Phase 3**: 跨报告集成分析 — `analyze_cross.py` 产出 Blended ACOS per campaign、Gateway ASIN 最终判定、搜索词收割/否定清单、账户健康度评分 (55/100 C级)
+- **v0.5 Phase 3**: 输出正确 ACOS: 直接 51.8% → 含光环 **41.1%** (光环拯救 10.7 个百分点)
+- **v0.5 Phase 3**: `build_full_report.py` 扩展为 10-sheet Excel (新增"跨报告集成"sheet) + 47 条行动建议
+- **v0.5 Phase 4**: `calibrate_thresholds.py` — 基于实际数据分布的阈值基线标定 + 敏感度分析
+- **v0.5 Phase 4**: `generate_negatives.py` — Amazon bulksheet .xlsx 否定词生成器 (16 候选词 → 53 行，含 campaign ID 映射)
+- **v0.5 Phase 4**: 调研确认否定词格式为 .xlsx (非 CSV)，赛狐 API 仅支持查询否定词
+
+## 2026-07-02 (Phase 1-2)
+
+- **v0.5 Phase 1**: 基础设施重构 — `utils.py` (共享工具), `thresholds.py` (集中阈值), `column_maps.py` (API 8 种报告列名映射), `config/bjryecltd-us.json` (账户配置)
+- **v0.5 Phase 1**: `__init__.py` 重写 — 双格式 (Console + API) 自动检测、多路径回退、多文件合并加载
+- **v0.5 Phase 1**: 新增 3 个分析脚本: `analyze_purchased_item.py` (最高 ROI, 13 行 → Gateway ASIN), `analyze_advertised_product.py` (29 ASIN 效率排行), `analyze_ad_group.py` (29 组结构诊断)
+- **v0.5 Phase 1**: 所有现有脚本适配 API 格式 — `_safe_num()` 去重到 utils, 列名从 Console 格式 (orders_7d) 修正为 API 格式 (orders), Placement 中/英文双支持
+- **v0.5 Phase 1**: 消除 4 处 `_safe_num()` 重复, 硬编码阈值集中到 `thresholds.py`, `PROTECTED_TERMS` 等品牌词配置从空集变为可配置
+- **v0.5 Phase 2**: `build_full_report.py` — 读 7 个分析 JSON, 产出 10-sheet Excel + 47 条行动建议
+- **v0.5**: 调研产出 3 份深度报告: `sp-report-analysis-value.md` (734 行), `existing-codebase-audit.md` (651 行), `amazon-bulk-negative-keyword-format.md`
+- **v0.5**: 创建 `2026-07-02-ad-analysis-master-plan.md` — 4 阶段总体规划
+
+## 2026-07-02 (v0.4)
 
 - **v0.4**: 赛狐 API 全量广告报告拉取 — BJRYECLTD-US (June 2026) 20 个报告 (SP 8 + SB 7 + SD 5)
 - **v0.4**: 新增 3 个拉取脚本: `SELLFOX_API/fetch_ad_reports.py` (4 核心 SP), `fetch_extra_reports.py` (3 额外 SP), `fetch_sb_sd_reports.py` (12 SB+SD)

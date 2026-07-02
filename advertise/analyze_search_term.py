@@ -19,70 +19,17 @@ import numpy as np
 import pandas as pd
 from datetime import datetime
 from advertise import load_data, save_json
+from advertise.utils import safe_num, numeric_cols
+from advertise.thresholds import (
+    MIN_ORDERS_HARVEST, MAX_ACOS_HARVEST,
+    MIN_CLICKS_NEGATE, MIN_SPEND_NEGATE,
+    MAX_CLICKS_MONITOR, MAX_SPEND_IGNORE, MAX_CLICKS_IGNORE,
+    ATTRIBUTION_WINDOW_DAYS, MIN_REPORT_DAYS,
+    PROTECTED_TERMS, BRAND_TERMS, COMPETITOR_BRANDS,
+    JUNK_ROOTS, CATEGORY_ROOTS,
+)
 
-# ── 可配置阈值（对齐 2026 行业标准）────────────────────
-
-# Harvest 收割: 已验证的高转化词 → 建议加入精准匹配
-MIN_ORDERS_HARVEST = 2          # 最少订单数（1个是巧合, 2+是信号）
-MAX_ACOS_HARVEST = 0.30         # 最大 ACoS（取决于产品毛利率）
-
-# Negate 否定: 花钱不转化的词 → 建议屏蔽
-MIN_CLICKS_NEGATE = 15          # 最少点击量（< 15 是小样本, 不是判决）
-MIN_SPEND_NEGATE = 2.0          # 最低花费 ($)
-
-# Monitor 观察: 数据量不足，暂不决策
-MAX_CLICKS_MONITOR = 15         # 点击量低于此值 → 观察
-
-# Ignore 忽略: 花费可忽略不计
-MAX_SPEND_IGNORE = 1.0          # 花费低于此值 → 忽略
-MAX_CLICKS_IGNORE = 5           # 点击量低于此值 → 忽略
-
-# 归因窗口警告
-ATTRIBUTION_WINDOW_DAYS = 7     # SP 广告 7 天点击归因
-MIN_REPORT_DAYS = 14            # 报告期最少天数（确保归因完整）
-
-# Protect 保护: 品牌词/战略词列表（按实际维护）
-PROTECTED_TERMS = set()
-
-# ── 搜索词语义分类规则 ─────────────────────────────────
-BRAND_TERMS = {"senight", "snight", "如森"}
-COMPETITOR_BRANDS = {"tempur", "sealy", "simmons", "my pillow", "coop", "sutera",
-                      "beckham", "utopia", "epabo", "snuggle", "mlily", "zamat",
-                      "cushion lab", "eli", "yippo", "sweetnight", "weekender",
-                      "coisum", "vicks", "ziraki", "pancake", "linenspa",
-                      "dreamfit", "mediflow", "sleep number", "purple",
-                      "casper", "nectar", "ghostbed", "avocado", "saatva",
-                      "leesa", "helix", "amerisleep", "bear", "puffy"}
-JUNK_ROOTS = {"cheap", "free", "used", "wholesale", "refurbished", "bulk",
-              "second hand", "return", "clearance", "liquidation",
-              "parts", "repair", "manual", "instruction", "recipe", "book",
-              "poster", "print", "sticker", "toy", "game", "costume",
-              "clothing", "shoes", "socks", "underwear", "food", "candy",
-              "camera", "phone", "computer", "cable", "battery", "sofa",
-              "table", "chair", "desk", "lamp", "rug", "curtain", "tv",
-              "monitor", "speaker", "headphone", "watch", "jewelry",
-              "basketball", "football", "yoga mat", "dumbbell",
-              "cat", "dog", "pet", "fish", "bird", "rabbit",
-              "car", "motorcycle", "bicycle", "truck", "boat",
-              "drill", "hammer", "screwdriver", "wrench", "tool",
-              "makeup", "lipstick", "nail polish", "perfume",
-              "supplement", "vitamin", "protein", "tea", "coffee",
-              "massage", "chiropractor", "doctor", "surgery"}
-CATEGORY_ROOTS = {"pillow", "cushion", "bolster", "headboard", "headrest",
-                  "mattress", "topper", "bed", "sleep", "bedding",
-                  "neck", "back", "lumbar", "support", "memory foam",
-                  "gel", "cooling", "bamboo", "shredded", "down",
-                  "feather", "cotton", "polyester", "microfiber",
-                  "wedge", "body", "pregnancy", "maternity", "knee",
-                  "leg", "foot", "arm", "chair pad", "seat", "throw",
-                  "decorative", "euro", "sham", "case", "cover",
-                  "orthopedic", "cervical", "ergonomic", "hotel",
-                  "luxury", "firm", "soft", "side", "stomach", "back"}
-
-
-def _safe_num(series):
-    return pd.to_numeric(series, errors="coerce")
-
+# ── Semantic classification rules (imported from thresholds) ────────────
 
 def classify_term_category(term):
     """基于规则匹配对搜索词语义分类。"""
@@ -128,11 +75,11 @@ def analyze(df):
     df = df.copy()
 
     # ── Step 0: 数值化 + 日期范围检查 ──────────────────
-    metric_cols = ("spend", "sales_7d", "orders_7d", "units_7d", "clicks",
+    metric_cols = ("spend", "sales", "orders", "units", "clicks",
                     "impressions", "acos", "roas", "ctr", "cpc", "conversion_rate_7d")
     for col in metric_cols:
         if col in df.columns:
-            df[col] = _safe_num(df[col])
+            df[col] = safe_num(df[col])
 
     report_days = None
     if "start_date" in df.columns and "end_date" in df.columns:
@@ -146,9 +93,9 @@ def analyze(df):
 
     agg_spec = {
         "spend": "sum",
-        "sales_7d": "sum",
-        "orders_7d": "sum",
-        "units_7d": "sum",
+        "sales": "sum",
+        "orders": "sum",
+        "units": "sum",
         "clicks": "sum",
         "impressions": "sum",
     }
@@ -168,16 +115,16 @@ def analyze(df):
     aggregated["ctr"] = aggregated["clicks"] / aggregated["impressions"].replace(0, np.nan)
     aggregated["cpc"] = aggregated["spend"] / aggregated["clicks"].replace(0, np.nan)
     aggregated["acos"] = np.where(
-        aggregated["sales_7d"] > 0,
-        aggregated["spend"] / aggregated["sales_7d"],
+        aggregated["sales"] > 0,
+        aggregated["spend"] / aggregated["sales"],
         np.nan,
     )
     aggregated["roas"] = np.where(
         aggregated["spend"] > 0,
-        aggregated["sales_7d"] / aggregated["spend"],
+        aggregated["sales"] / aggregated["spend"],
         np.nan,
     )
-    aggregated["cvr"] = aggregated["orders_7d"] / aggregated["clicks"].replace(0, np.nan)
+    aggregated["cvr"] = aggregated["orders"] / aggregated["clicks"].replace(0, np.nan)
 
     # 语义分类
     aggregated["term_category"] = aggregated.index.map(classify_term_category)
@@ -192,7 +139,7 @@ def analyze(df):
     # Harvest 收割
     harvest_mask = (
         (~protect_mask)
-        & (terms["orders_7d"] >= MIN_ORDERS_HARVEST)
+        & (terms["orders"] >= MIN_ORDERS_HARVEST)
         & (terms["acos"].notna())
         & (terms["acos"] <= MAX_ACOS_HARVEST)
     )
@@ -203,7 +150,7 @@ def analyze(df):
         & (~harvest_mask)
         & (terms["clicks"] >= MIN_CLICKS_NEGATE)
         & (terms["spend"] >= MIN_SPEND_NEGATE)
-        & (terms["orders_7d"].fillna(0) == 0)
+        & (terms["orders"].fillna(0) == 0)
     )
     # 不相关词直接否定（不管点击量）
     negate_irrelevant_mask = (
@@ -211,7 +158,7 @@ def analyze(df):
         & (~harvest_mask)
         & (terms["term_category"] == "不相关词")
         & (terms["spend"] >= MIN_SPEND_NEGATE)
-        & (terms["orders_7d"].fillna(0) == 0)
+        & (terms["orders"].fillna(0) == 0)
     )
     negate_mask = negate_clicks_mask | negate_irrelevant_mask
 
@@ -237,7 +184,7 @@ def analyze(df):
     # ── Step 4: 输出序列化 ──────────────────────────────
     output_cols = [
         "search_term", "bucket", "term_category",
-        "spend", "sales_7d", "orders_7d", "clicks", "impressions",
+        "spend", "sales", "orders", "clicks", "impressions",
         "acos", "roas", "ctr", "cpc", "cvr",
         "campaign_name", "match_type",
     ]
@@ -251,7 +198,7 @@ def analyze(df):
                 r[k] = _serialize(v)
         return result
 
-    harvest_list = _bucket_list(terms, "Harvest", sort_by="sales_7d")
+    harvest_list = _bucket_list(terms, "Harvest", sort_by="sales")
     negate_list = _bucket_list(terms, "Negate", sort_by="spend")
     monitor_list = _bucket_list(terms, "Monitor", sort_by="spend")
     protect_list = _bucket_list(terms, "Protect", sort_by="spend")
@@ -259,14 +206,14 @@ def analyze(df):
     # ── Step 5: 搜索词分类统计（基于聚合后数据）─────────
     cat_stats = terms.groupby("term_category").agg(
         spend=("spend", "sum"),
-        sales_7d=("sales_7d", "sum"),
-        orders_7d=("orders_7d", "sum"),
+        sales=("sales", "sum"),
+        orders=("orders", "sum"),
         clicks=("clicks", "sum"),
         impressions=("impressions", "sum"),
         count=("search_term", "count"),
     ).reset_index()
-    cat_stats["acos"] = cat_stats["spend"] / cat_stats["sales_7d"].replace(0, np.nan)
-    cat_stats["roas"] = cat_stats["sales_7d"] / cat_stats["spend"].replace(0, np.nan)
+    cat_stats["acos"] = cat_stats["spend"] / cat_stats["sales"].replace(0, np.nan)
+    cat_stats["roas"] = cat_stats["sales"] / cat_stats["spend"].replace(0, np.nan)
     category_list = cat_stats.to_dict(orient="records")
     for r in category_list:
         for k, v in r.items():
@@ -276,7 +223,7 @@ def analyze(df):
     bucket_counts = terms["bucket"].value_counts().to_dict()
     negate_spend = float(terms.loc[terms["bucket"] == "Negate", "spend"].sum())
     harvest_spend = float(terms.loc[terms["bucket"] == "Harvest", "spend"].sum())
-    harvest_sales = float(terms.loc[terms["bucket"] == "Harvest", "sales_7d"].sum())
+    harvest_sales = float(terms.loc[terms["bucket"] == "Harvest", "sales"].sum())
     monitor_spend = float(terms.loc[terms["bucket"] == "Monitor", "spend"].sum())
 
     # ── Step 7: 汇总 ────────────────────────────────────
@@ -284,8 +231,8 @@ def analyze(df):
         "raw_row_count": len(df),
         "unique_search_terms": n_total,
         "total_spend": round(float(terms["spend"].sum()), 2),
-        "total_sales_7d": round(float(terms["sales_7d"].sum()), 2),
-        "total_orders_7d": int(terms["orders_7d"].sum()),
+        "total_sales": round(float(terms["sales"].sum()), 2),
+        "total_orders": int(terms["orders"].sum()),
         "total_clicks": int(terms["clicks"].sum()),
         "report_days": report_days,
         "attribution_warning": (
@@ -338,7 +285,7 @@ if __name__ == "__main__":
     print(f"  原始行数: {s['raw_row_count']}")
     print(f"  去重搜索词: {s['unique_search_terms']}")
     print(f"  总花费: ${s['total_spend']:,.2f}")
-    print(f"  总销售额(7d): ${s['total_sales_7d']:,.2f}")
+    print(f"  总销售额(7d): ${s['total_sales']:,.2f}")
     if s.get("attribution_warning"):
         print(f"  ⚠️ 归因警告: {s['attribution_warning']}")
     print(f"  桶分布:")
