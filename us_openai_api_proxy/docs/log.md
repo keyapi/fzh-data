@@ -7,6 +7,37 @@ tags: [openai, api-proxy, changelog]
 ---
 # 变更日志
 
+## 2026-07-01 (v0.11)
+
+- **v0.11**: 七一 GFW 全面封锁事件 — SSRDog 订阅中午12点失效, Tailscale 北京直连 US 中断 (100% 丢包), SSH 公网 IP 被 DPI 拦截
+- **v0.11**: 应急方案: SSH ProxyJump 上海跳板 + SOCKS5 代理 (`-D 1080 -J sh-erpnext-test`)
+- **v0.11**: 链路: PC → 上海服务器 → Tailscale (上海↔US direct 170ms) → US Vultr → 互联网
+- **v0.11**: 确认上海 Tailscale 正常 — vultr 节点 active/direct 149.28.67.226:41641
+- **v0.11**: 更新 GFW 应急翻墙流程到 operations.md
+
+## 2026-07-02 (v0.12)
+
+- **v0.12**: 办公室全员应急代理部署完成 — OpenWrt/OpenClash → 上海 SSH SOCKS5 隧道 → US Vultr
+- **v0.12**: 上海 `socks5-tunnel` systemd service 部署, 绑定 Tailscale IP :1080, iptables 限制仅 OpenWrt 可访问
+- **v0.12**: OpenWrt Tailscale 路由正常 — OpenWrt 自身可达上海 Tailscale IP (ping 85ms)
+- **v0.12**: OpenClash 新增 Emergency 代理组 + SH-Tailscale-US SOCKS5 节点, Auto fallback 首位
+- **v0.12**: 验证通过 — 办公室流量经 Emergency[SH-Tailscale-US] 代理, Google/Microsoft 正常
+- **v0.12**: 回滚就绪 — SSRDogAnyTLS.yaml.bak 备份 + 回滚步骤文档化
+- **v0.12**: `openclash_custom_overwrite.sh` 持久化方案 — 订阅更新后自动注入 Emergency（注入两个路径，幂等）
+- **v0.12**: OpenClash 关键发现：UCI `config_path` 为 `config/SSRDogAnyTLS.yaml`，但 Clash 实际加载根目录同名文件
+- **v0.12**: overwrite 脚本已验证：恢复干净备份 → 运行脚本 → 双路径注入成功 → 重启 Clash → 流量走 Emergency
+- **v0.12**: 更新 operations.md — 订阅更新持久化机制 + 用户操作流程
+- **v0.12**: Tailscale 确认 Personal 永久免费计划 — 6 用户 / 无限设备，当前 3 用户 7 设备远在限额内
+
+## 后续规划
+
+- **Phase 2 (待 SSRDog 恢复后)**：在 Vultr 部署 VLESS+Reality 作为独立备份线路
+  - 协议：VLESS + XTLS Vision + Reality（当前 GFW 环境下最抗封锁）
+  - 目标：不依赖任何第三方订阅，SSRDog 挂掉也有自己的翻墙出口
+  - OpenClash 双线路：SSRDog 优先，Reality fallback
+- **短期优化**：上海 SSH 隧道添加健康检查 cron（每 60s curl 测试，失败告警）
+- **密钥安全**：上海服务器上的 `id_ed25519_us_proxy_tunnel` 用完可删，或创建受限专用密钥
+
 ## 2026-06-25 (v0.10)
 
 - **v0.10**: OpenClash 翻墙全断事件诊断 — 代理订阅链接过期, 所有非中国 IP TCP 流量被 TPROXY 劫持到失效代理, 导致 SSH/外网全死
