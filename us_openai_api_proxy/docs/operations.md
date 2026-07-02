@@ -105,6 +105,193 @@ ssh us-ubuntu-proxy "
 
 待后续实施。
 
+## GFW 应急翻墙 (个人 Chrome / 备用)
+
+当 SSRDog 订阅失效 + Tailscale 直连被封锁时的应急方案。
+
+### 链路
+
+```
+本地 Chrome (SOCKS5 → localhost:1080)
+    → SSH 加密隧道 (经上海跳板)
+        → 上海服务器 (国内直连)
+            → Tailscale (上海↔US direct)
+                → US Vultr 服务器
+                    → 互联网 (Google/Gmail 等)
+```
+
+### 步骤 1: 启动 SSH 隧道 (Git Bash)
+
+```bash
+ssh -i ~/.ssh/id_ed25519_us_proxy -o StrictHostKeyChecking=accept-new \
+    -D 1080 -J sh-erpnext-test root@100.126.133.106
+```
+
+保持终端窗口不关。如果断了重新跑。
+
+### 步骤 2: 启动 Chrome (PowerShell)
+
+```powershell
+& "C:\Program Files\Google\Chrome\Application\chrome.exe" `
+    --proxy-server="socks5://127.0.0.1:1080" `
+    --user-data-dir="$env:TEMP\chrome-proxy"
+```
+
+用这个独立 Chrome 窗口访问 Google/Gmail/SSRDog。
+
+### 前置条件
+
+- 上海服务器 (`sh-erpnext-test`) 能 SSH（国内线路一般不受影响）
+- 上海 → 美国 Tailscale 连通（上海有 Tailscale，通常不受 GFW 影响）
+- 本地有 `~/.ssh/id_ed25519_us_proxy` 密钥
+
+### 诊断
+
+```bash
+# 检查上海 Tailscale 状态
+ssh sh-erpnext-test "tailscale status | grep vultr"
+
+# 检查上海→美国连通性
+ssh sh-erpnext-test "ping -c 3 100.126.133.106"
+
+# 测试完整链路
+ssh -i ~/.ssh/id_ed25519_us_proxy -o StrictHostKeyChecking=accept-new \
+    -J sh-erpnext-test root@100.126.133.106 "curl -s --max-time 5 https://www.google.com -o /dev/null -w '%{http_code}'"
+```
+
+## GFW 应急翻墙 (办公室全员 / OpenWrt+OpenClash)
+
+当 SSRDog 订阅失效时，通过上海 SSH SOCKS5 隧道为办公室全员提供代理。
+
+### 链路
+
+```
+办公室设备 (192.168.10.x, 无任何配置)
+    → 新华三 → OpenWrt (OpenClash TPROXY)
+        → OpenClash 通过 Tailscale 连接到上海 SOCKS5
+            → 上海 SSH 持久化隧道 (systemd)
+                → Tailscale (上海→US direct)
+                    → US Vultr → 互联网
+```
+
+### 部署架构
+
+| 组件 | 位置 | 配置 |
+|------|------|------|
+| SOCKS5 出口 | US Vultr | `ssh -D` via SSH 服务 |
+| SSH 隧道 | 上海 (100.119.28.72) | systemd service `socks5-tunnel`, 绑定 Tailscale IP:1080 |
+| iptables 访问控制 | 上海 | 仅允许 OpenWrt Tailscale IP (100.124.94.69) 访问 :1080 |
+| OpenClash 代理节点 | OpenWrt | SOCKS5 → 100.119.28.72:1080 |
+| OpenClash 策略 | OpenWrt | Emergency 组 → Auto fallback 首位 |
+
+### OpenClash 配置要点
+
+配置位置：`/etc/openclash/config/SSRDogAnyTLS.yaml`
+
+1. **新增 SOCKS5 节点**（proxy 列表首行）：
+   ```yaml
+   - { name: SH-Tailscale-US, type: socks5, server: 100.119.28.72, port: 1080 }
+   ```
+
+2. **新增 Emergency 策略组**（proxy-groups 里）：
+   ```yaml
+   - { name: Emergency, type: select, proxies: [SH-Tailscale-US, DIRECT] }
+   ```
+
+3. **Auto fallback 首位放 Emergency**：
+   ```yaml
+   - { name: Auto, type: fallback, proxies: [Emergency, ...原 SSRDog 节点] }
+   ```
+
+4. **MATCH 规则指向 Emergency**：
+   ```yaml
+   - 'MATCH,Emergency'
+   ```
+
+### 应急启动步骤
+
+```bash
+# 1. 确认链路
+ssh sh-erpnext-test "tailscale status | grep vultr"  # 应显示 active
+
+# 2. 启动上海 SSH 隧道 (systemd 托管)
+ssh sh-erpnext-test systemctl start socks5-tunnel
+
+# 3. 确认 SOCKS5 端口监听
+ssh sh-erpnext-test "ss -tlnp | grep 1080"  # 应在 100.119.28.72:1080
+
+# 4. 测试代理
+ssh sh-erpnext-test "curl -x socks5h://100.119.28.72:1080 https://www.google.com -o /dev/null -w '%{http_code}'"  # 应返回 200
+
+# 5. 确认 OpenWrt 能连到上海
+ssh root@192.168.100.1 "ping -c 2 100.119.28.72"
+
+# 6. 确认 OpenClash 运行
+ssh root@192.168.100.1 "/etc/init.d/openclash status"
+
+# 7. 查看实时代理日志
+ssh root@192.168.100.1 "tail -f /tmp/openclash.log | grep SH-Tailscale-US"
+```
+
+### 订阅更新后 Emergency 持久化机制
+
+**问题**：SSRDog 订阅链接有效期仅 5 分钟，需手动粘贴新链接到 OpenClash GUI 更新。每次更新会重新生成配置文件，覆盖手动添加的 Emergency 配置。
+
+**方案**：使用 OpenClash 的 `openclash_custom_overwrite.sh` 脚本（`/etc/openclash/custom/`），在每次配置重新生成后自动注入 Emergency 代理组。
+
+**脚本逻辑**（已部署于 2026-07-02）：
+1. 检查配置中是否已有 `SH-Tailscale-US` 节点（幂等，已有则跳过）
+2. 注入 SOCKS5 代理节点 + Emergency 策略组
+3. Emergency 插入 Auto fallback 首位
+4. MATCH 规则指向 Emergency
+5. 同时处理两个路径：`/etc/openclash/config/` 和 `/etc/openclash/`（覆盖 Clash 实际加载的路径）
+
+**用户操作流程**：
+1. 登录 SSRDog 后台 → 复制最新订阅链接（5分钟内有效）
+2. OpenClash LuCI → 配置管理 → 粘贴订阅链接 → 更新配置
+3. OpenClash 自动重启 → overwrite 脚本自动注入 Emergency
+4. 不需要任何额外操作，Emergency 代理组自动出现
+
+### 回滚步骤
+
+```bash
+# 1. 恢复 OpenClash 原配置
+ssh root@192.168.100.1 "cp /etc/openclash/config/SSRDogAnyTLS.yaml.bak /etc/openclash/config/SSRDogAnyTLS.yaml"
+
+# 2. 重启 OpenClash
+ssh root@192.168.100.1 /etc/init.d/openclash restart
+
+# 3. (可选) 停止上海隧道
+ssh sh-erpnext-test systemctl stop socks5-tunnel
+```
+
+### 上海 SSH 隧道 systemd service
+
+`/etc/systemd/system/socks5-tunnel.service`:
+
+```ini
+[Unit]
+Description=SSH SOCKS5 Tunnel to US Vultr via Tailscale
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/bin/ssh -N -D 100.119.28.72:1080 \
+    -o ServerAliveInterval=30 \
+    -o ServerAliveCountMax=3 \
+    -o ExitOnForwardFailure=yes \
+    -o StrictHostKeyChecking=accept-new \
+    -i /root/.ssh/id_ed25519_us_proxy_tunnel \
+    root@100.126.133.106
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+
 ## 见也
 
 - [../AGENT_HANDOFF.md](../AGENT_HANDOFF.md) — Agent 参考
