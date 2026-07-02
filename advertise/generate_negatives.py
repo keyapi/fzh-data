@@ -99,9 +99,36 @@ def generate(level="campaign", account="BJRYECLTD-US", period="2026-06"):
         entity = "Negative Keyword"
         default_state = "enabled"
 
+    # ── Match type logic ──────────────────────────────────────
+    # Different negation strategies based on WHY the term was flagged:
+    #
+    #   不相关词 (irrelevant): "cheap", "free shipping", "used" — categorically junk
+    #     → phrase match: block ALL searches containing this phrase
+    #
+    #   品牌词 (brand): competitor brand names — do NOT negate
+    #     → WARNING only: competitor conquesting may be intentional strategy
+    #
+    #   品类词/长尾词/其他: category terms with high clicks but 0 orders
+    #     → exact match (conservative): might convert with different bid/placement
+    #
+    #   竞品词: competitor product searches
+    #     → exact match: block this specific term only
+
+    def get_match_type(term_data):
+        cat = (term_data.get("term_category") or "").strip()
+        if cat == "不相关词":
+            return "phrase", "irrelevant"
+        elif cat in ("品类词", "长尾词", "竞品词"):
+            return "exact", "low_performance"
+        elif cat == "品牌词":
+            return None, "brand_protection"  # DO NOT NEGATE
+        else:
+            return "exact", "low_performance"
+
     row = 2
     written = 0
     skipped_no_campaign = 0
+    skipped_brand_protection = 0
 
     for term_data in negative_terms:
         search_term = str(term_data.get("search_term", "")).strip()
@@ -111,9 +138,15 @@ def generate(level="campaign", account="BJRYECLTD-US", period="2026-06"):
         spend = term_data.get("spend", 0) or 0
         clicks = term_data.get("clicks", 0) or 0
 
-        # Determine match type for negation
-        # Default to exact (most conservative, blocks only the exact phrase)
-        match_type = "exact"
+        # Determine match type and reason for negation
+        match_type, neg_reason = get_match_type(term_data)
+
+        # Brand terms: DO NOT NEGATE, flag for manual review
+        if match_type is None:
+            skipped_brand_protection += 1
+            print(f"  [保护] 品牌词不否定: '{search_term}' — ${spend:.2f}, {clicks} 点击, "
+                  f"可能是有意竞品投放，请人工审核")
+            continue
 
         # Find which campaigns this term appeared in
         if has_ids:
@@ -142,9 +175,12 @@ def generate(level="campaign", account="BJRYECLTD-US", period="2026-06"):
                 ws.cell(row=row, column=10, value=match_type)
                 ws.cell(row=row, column=11, value=default_state)
 
-                # Add a note about the waste metrics in a comment
+                # Add context about why this term was flagged
+                cat_label = (term_data.get("term_category") or "未知")
                 ws.cell(row=row, column=9).comment = openpyxl.comments.Comment(
-                    f"${spend:.2f} 花费, {clicks} 点击, 0 订单 — 自动识别于 {period}",
+                    f"${spend:.2f} 花费, {clicks} 点击, 0 订单 | "
+                    f"分类: {cat_label} | 策略: {neg_reason} ({match_type} match) | "
+                    f"自动识别于 {period}",
                     "auto-generator")
 
                 row += 1
@@ -173,8 +209,13 @@ def generate(level="campaign", account="BJRYECLTD-US", period="2026-06"):
     wb.save(out)
     print(f"[OK] 否定词 bulksheet: {out}")
     print(f"  级别: {level}-level")
-    print(f"  行数: {written} 个否定词 (来自 {len(negative_terms)} 个候选词)")
+    print(f"  候选词总数: {len(negative_terms)}")
+    print(f"  已生成否定: {written} 行")
+    print(f"  品牌保护(不否定): {skipped_brand_protection} 个 — 需人工审核")
     print(f"  跳过(无活动ID): {skipped_no_campaign}")
+    if skipped_brand_protection > 0:
+        print(f"\n  ⚠ 有 {skipped_brand_protection} 个品牌词被保护未加入否定 — "
+              f"请确认竞品投放策略后手动处理")
     print(f"\n  下一步: 打开 Amazon Ads Console → Bulk Operations → Upload spreadsheet → 选择此文件")
     return out
 
