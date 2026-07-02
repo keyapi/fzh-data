@@ -4,7 +4,7 @@ type: Index
 title: 赛狐 API 文档 — 总索引
 description: SELLFOX_API 模块 OKF 文档导航
 tags: [sellfox, saihu, API, integration]
-timestamp: 2026-07-01
+timestamp: 2026-07-02
 ---
 
 # 赛狐 API 文档
@@ -19,6 +19,8 @@ timestamp: 2026-07-01
 | 搜索具体 API 端点 | [api-reference/](api-reference/) — 419 个 API Markdown |
 | 了解 API 接入过程 | [lessons/2026-06-25-sellfox-integration-lessons.md](lessons/2026-06-25-sellfox-integration-lessons.md) |
 | 查看探索记录 | [research/2026-06-25-sellfox-api-exploration.md](research/2026-06-25-sellfox-api-exploration.md) |
+| 查看接入踩坑记录 | [lessons/2026-06-25-sellfox-integration-lessons.md](lessons/2026-06-25-sellfox-integration-lessons.md) (16 条教训) |
+| 运行实战脚本 | [../fetch_ad_reports.py](../fetch_ad_reports.py) — 拉取 SP 广告报告 |
 | 查看 API 索引原文 | [api-reference/llms.txt](api-reference/llms.txt) |
 | 查看变更历史 | [log.md](log.md) |
 
@@ -50,6 +52,10 @@ SELLFOX_API/
 ├── AGENT_HANDOFF.md          ← Agent 入口
 ├── download_docs.py          ← 文档下载/更新脚本
 ├── test_api.py               ← 连通性测试
+├── fetch_ad_reports.py       ← SP 4 种核心报告拉取
+├── fetch_extra_reports.py    ← SP 额外 3 种报告拉取
+├── fetch_sb_sd_reports.py    ← SB+SD 全量报告拉取
+├── .env                      ← API 凭证 (gitignored)
 ├── config.json
 └── docs/                     ← OKF v0.1 bundle
     ├── index.md              ← 本文件

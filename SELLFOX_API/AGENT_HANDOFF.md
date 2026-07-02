@@ -18,14 +18,20 @@ python download_docs.py --all
 
 # 测试 OpenAPI 连通性（需在白名单 IP）
 python test_api.py
+
+# 拉取 SP 广告报告 (4 种: Campaign/Targeting/SearchTerm/Placement)
+python fetch_ad_reports.py --days 7
+
+# 指定店铺名称拉取
+python fetch_ad_reports.py --shop-name "MyStore" --days 30
 ```
 
 ## 凭证
 
 | 项目 | 位置 |
 |------|------|
-| App ID / Secret | `advertise/.env` |
-| API 文档密码 | `advertise/.env` 中的 `SELLFOX_API_DOC_KEY` |
+| App ID / Secret | `SELLFOX_API/.env`（优先），`advertise/.env`（备用） |
+| API 文档密码 | `.env` 中的 `SELLFOX_API_DOC_KEY` |
 | 生产环境 | `https://openapi.sellfox.com/` |
 | API 文档 | `https://sellfoxapi.apifox.cn/` |
 

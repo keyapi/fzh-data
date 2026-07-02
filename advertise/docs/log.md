@@ -8,6 +8,17 @@ tags: [amazon, advertising, changelog]
 
 # 变更日志
 
+## 2026-07-02
+
+- **v0.4**: 赛狐 API 全量广告报告拉取 — BJRYECLTD-US (June 2026) 20 个报告 (SP 8 + SB 7 + SD 5)
+- **v0.4**: 新增 3 个拉取脚本: `SELLFOX_API/fetch_ad_reports.py` (4 核心 SP), `fetch_extra_reports.py` (3 额外 SP), `fetch_sb_sd_reports.py` (12 SB+SD)
+- **v0.4**: 新增 `sp-report-column-reference.md` (40KB) — SP 8 种报告 162 字段完整定义，18 个来源交叉验证
+- **v0.4**: 新增 `sb-sd-report-column-reference.md` — SB 7 种 + SD 5 种报告 419 字段定义，12 个来源交叉验证
+- **v0.4**: 新增 `amazon-official-docs/` — 官方来源归档 (sources-summary, field-definitions-quick-reference, sb-sd-sources)
+- **v0.4**: 更新 `AGENT_HANDOFF.md` — 凭证路径修正为 `SELLFOX_API/.env`，添加 API 拉取入口
+- **v0.4**: 确认 SB/SD 投放极少: SB 0 行数据, SD 仅 1 个再营销 campaign (7 天 × 3-5 KB)
+- **v0.4**: 关键发现:requests 在中文 Windows 签名失败→改用 urllib; 下载文件为 xlsx 非 csv; taskIds 为数组非单值; 中文状态字符串; URL 需百分号编码; 任务间需 2s 延时
+
 ## 2026-06-30
 
 - **v0.3 修正**: 9 种 SP 报告类型官方文档逐项校验（3 并行 agent），修正 5 处错误声明

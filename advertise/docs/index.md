@@ -18,6 +18,8 @@ tags: [amazon, advertising, index]
 | 查看调研来源和方法论 | [research/](research/) |
 | 查看设计决策和架构 | [specs/](specs/) |
 | 查阅列名映射、数据源、工具对比 | [reference/](reference/) |
+| 查阅 API 报告字段定义 (SP) | [reference/sp-report-column-reference.md](reference/sp-report-column-reference.md) |
+| 查阅 API 报告字段定义 (SB+SD) | [reference/sb-sd-report-column-reference.md](reference/sb-sd-report-column-reference.md) |
 | 查阅经验教训 | [lessons/](lessons/) |
 
 ## 目录结构
@@ -34,7 +36,10 @@ advertise/docs/                         ← OKF v0.1 bundle
 │   ├── data-sources.md
 │   ├── tools-ecosystem.md
 │   ├── skills-mcp-catalog.md
-│   └── source-urls.md
+│   ├── source-urls.md
+│   ├── sp-report-column-reference.md     ← SP 8种报告 API 字段定义
+│   ├── sb-sd-report-column-reference.md  ← SB+SD 12种报告 API 字段定义
+│   └── amazon-official-docs/           ← Amazon 官方来源归档
 └── lessons/                           ← 经验教训
     └── lessons-learned.md
 ```
