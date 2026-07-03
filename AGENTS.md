@@ -114,6 +114,7 @@ uv sync
 
 > 每个模块有 `AGENT_HANDOFF.md`（Agent 参考）和 `README.md`（人读）。
 > Skill 文件在 `.agents/skills/<name>/SKILL.md`，Agent 按触发词自动加载。
+> **ERPNext 系统访问**: 生产 (`erpnext.vilavi.cn`) → REST API, 测试 (`ensh.vilavi.cn`) → FAC MCP + REST API. 详见 `EN_API/README.md`
 
 ## 关键行为规则
 
