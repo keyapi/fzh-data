@@ -35,6 +35,8 @@ tags: [openai, api-proxy, changelog]
 - **v0.12-fix**: **关键 bug 修复**：overwrite 脚本此前强制 `MATCH,Emergency`，导致 SSRDog 恢复后流量仍走 Emergency
 - **v0.12-fix**: 修复逻辑：MATCH 保持原始 `SSRDOG`，Emergency 放入 Auto fallback **末尾**（SSRDog 优先，Emergency 兜底）
 - **v0.12-fix**: 验证：SSRDog 正常时走 `Japan丨02` 节点，全部流量回归 SSRDog；Emergency 静默待命
+- **v0.12-fix**: 订阅更新全流程验证通过：LuCI 更新订阅 → 自动下载 → overwrite 注入 Emergency（末尾兜底）→ SSRDOG 优先使用
+- **v0.12-fix**: 关键行为确认：旧订阅链接过期自动失败 → 新链接自动重试成功 → MATCH 保持 SSRDOG 未被覆盖 → Emergency 在 Auto 末尾静默待命
 
 ## 后续规划
 
