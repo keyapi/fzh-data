@@ -237,6 +237,7 @@ roles_needed = {s["allow_edit"] for s in wf["states"]} | {t["allowed"] for t in 
 - [FAC MCP 部署指南](../fac-mcp-setup.md) — 测试系统 MCP 连接方式
 - [FAC 开发实战笔记](../fac-dev-notes.md) — FAC 工具使用技巧和踩坑
 - [.env.example](../../EN_API/.env.example) — API 凭证配置模板
+- [ERPNext Workflow Operations Guide](architecture-patterns/erpnext-workflow-operations-guide.md) — 命名规范、设计模式、测试策略、常见陷阱
 
 ---
 

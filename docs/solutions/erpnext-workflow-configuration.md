@@ -139,3 +139,4 @@ Workflow (主表)
 - [ERPNext 中国企业使用工作流实用指南](https://www.erpnextyun.com/erpnext-%e4%b8%ad%e5%9b%bd%e4%bc%81%e4%b8%9a%e4%bd%bf%e7%94%a8%e5%b7%a5%e4%bd%9c%e6%b5%81%ef%bc%88workflow-%ef%bc%89%e5%ae%9e%e7%94%a8%e6%8c%87%e5%8d%97/)
 - [Frappe Forum: Custom Sub-Workflow Implementation](https://discuss.frappe.io/t/custom-sub-workflow-implementation-in-frappe-help-needed/148574)
 - FAC MCP 实际验证的 Workflow/Workflow Document State/Workflow Transition 字段结构
+- [ERPNext Workflow Operations Guide](architecture-patterns/erpnext-workflow-operations-guide.md) — 实际操作指南（依赖创建、设计模式、常见陷阱、测试策略）
