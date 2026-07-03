@@ -237,4 +237,53 @@ roles_needed = {s["allow_edit"] for s in wf["states"]} | {t["allowed"] for t in 
 - [FAC MCP 部署指南](../fac-mcp-setup.md) — 测试系统 MCP 连接方式
 - [FAC 开发实战笔记](../fac-dev-notes.md) — FAC 工具使用技巧和踩坑
 - [.env.example](../../EN_API/.env.example) — API 凭证配置模板
+
+---
+
+## 追加：销售出库单审批流（Delivery Note）
+
+### 创建时间：2026-07-03
+
+参考 4 个生产活跃工作流的设计模式，在测试系统新建。
+
+**DocType**: Delivery Note | **7 状态 + 10 转换** | 活动
+
+### 角色
+
+| # | 英文名 | 中文翻译 | 职责 | 来源 |
+|---|--------|---------|------|------|
+| 1 | Workflow Stock User | 审批流-仓管员 | 填单 + 所有拒绝后的重提 | 已有 |
+| 2 | Finance Supervisor | 审批流-财务主管 | 确认是否报税 | 已有 |
+| 3 | Workflow Supply Chain Manager | 审批流-供应链经理 | 填总运费 + 最终提交 | **新建** |
+
+### 流程
+
+```
+Draft (doc=0)
+  ↓ Submit [仓管员]
+待财务主管确认报税 (doc=0)
+  ↓ Approve [财务主管]          Reject → 财务主管已拒绝 → Submit 回/s Reject 回 Draft
+待供应链经理确认运费 (doc=0)
+  ↓ Approve [供应链经理]        Reject → 供应链经理已拒绝 → Submit 回/s Reject 级联到财务主管已拒绝
+Approved (doc=1)
+  ↓ 取消 [供应链经理]
+已取消 (doc=2)
+```
+
+### 设计要点
+
+- 所有中间状态 doc_status=0，只在 Approved 设 doc_status=1
+- 级联回退：供应链经理已拒绝 --Reject[仓管员]--> 财务主管已拒绝 --Reject[仓管员]--> Draft
+- 无自循环 Action（中间状态 doc=0 可直接编辑）
+- 取消仅从 Approved，使用简单 `取消` Action
+
+### 新建依赖
+
+- 3 个 Workflow State: 待财务主管确认报税, 待供应链经理确认运费, 供应链经理已拒绝
+- 1 个 Role: Workflow Supply Chain Manager
+- 1 个 Translation: Workflow Supply Chain Manager → 审批流-供应链经理
+
+### URL
+
+测试系统: http://ensh.vilavi.cn/app/workflow/销售出库单审批
 - [workflow_prod_output.json](../../EN_API/workflow_prod_output.json) — 生产系统工作流原始 JSON
