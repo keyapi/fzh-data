@@ -177,8 +177,23 @@ Frappe v15 中不存在 `frappe.exceptions.WorkflowTransitionError`。当工作�
 **中文 URL 编码。**
 Python `requests` 库自动处理 URL 编码。curl 等其他工具不会。使用 curl 时需要手动百分号编码中文字符。
 
-**workflow_data 和 workflow_builder_id 无功能影响。**
-这两个字段存储可视化构建器的画布坐标和节点 ID。复制的工作流中可以为 null/空，不影响任何功能行为。
+**workflow_data 和 workflow_builder_id 无功能影响，但影响设计器显示。**
+这两个字段存储可视化构建器的画布坐标和节点 ID。通过 FAC MCP / REST API 创建的工作流，`workflow_data` 为 null，`workflow_builder_id` 为空——这会导致用工作流设计器打开时，所有状态节点和操作节点挤在一条线上。需要在设计器中手动拖拽布局，保存后 `workflow_data` 才会填充。
+
+**因此，在复制工作流或保存工作流快照时，应同时保存 `workflow_data` 字段**，以便将来重建时设计器能直接显示直观的图形布局。保存后的布局 JSON 快照应放入 `EN_API/` 目录供后续参考。
+
+```python
+# 保存工作流布局数据
+layout = {
+    'workflow_name': wf['workflow_name'],
+    'workflow_data': wf['workflow_data'],  # 画布坐标
+}
+# 每个子表行也有 workflow_builder_id，用于关联画布上的节点
+for s in wf['states']:
+    s_id = s.get('workflow_builder_id')  # 如 "1", "2", "3"...
+for t in wf['transitions']:
+    t_id = t.get('workflow_builder_id')  # 如 "action-1", "action-2"...
+```
 
 **列表视图默认不显示 workflow_state。**
 `workflow_state` 自定义字段自动创建时 `hidden=1` 且 `in_list_view=0`。要使其在文档列表页可见，需更新 Custom Field：

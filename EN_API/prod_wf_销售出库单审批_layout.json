@@ -1,0 +1,85 @@
+{
+  "workflow_name": "销售出库单审批",
+  "document_type": "Delivery Note",
+  "workflow_data": "[{\"type\":\"state\",\"dimensions\":{\"width\":81,\"height\":53},\"handleBounds\":{\"source\":[{\"id\":\"top\",\"position\":\"top\",\"x\":36.78125,\"y\":-11,\"width\":7,\"height\":7},{\"id\":\"right\",\"position\":\"right\",\"x\":84.5625,\"y\":23,\"width\":7,\"height\":7},{\"id\":\"bottom\",\"position\":\"bottom\",\"x\":36.78125,\"y\":57,\"width\":7,\"height\":7},{\"id\":\"left\",\"position\":\"left\",\"x\":-11,\"y\":23,\"width\":7,\"height\":7}]},\"computedPosition\":{\"x\":481,\"y\":5,\"z\":0},\"id\":\"1\",\"position\":{\"x\":481,\"y\":5}},{\"type\":\"state\",\"dimensions\":{\"width\":162,\"height\":74},\"handleBounds\":{\"source\":[{\"id\":\"top\",\"position\":\"top\",\"x\":77.5,\"y\":-11,\"width\":7,\"height\":7},{\"id\":\"right\",\"position\":\"right\",\"x\":166,\"y\":33.5,\"width\":7,\"height\":7},{\"id\":\"bottom\",\"position\":\"bottom\",\"x\":77.5,\"y\":78,\"width\":7,\"height\":7},{\"id\":\"left\",\"position\":\"left\",\"x\":-11,\"y\":33.5,\"width\":7,\"height\":7}]},\"computedPosition\":{\"x\":957,\"y\":-3,\"z\":0},\"id\":\"2\",\"position\":{\"x\":957,\"y\":-3}},{\"type\":\"state\",\"dimensions\":{\"width\":152,\"height\":53},\"handleBounds\":{\"source\":[{\"id\":\"top\",\"position\":\"top\",\"x\":72.484375,\"y\":-11,\"width\":7,\"height\":7},{\"id\":\"right\",\"position\":\"right\",\"x\":155.96875,\"y\":23,\"width\":7,\"height\":7},{\"id\":\"bottom\",\"position\":\"bottom\",\"x\":72.484375,\"y\":57,\"width\":7,\"height\":7},{\"id\":\"left\",\"position\":\"left\",\"x\":-11,\"y\":23,\"width\":7,\"height\":7}]},\"computedPosition\":{\"x\":892,\"y\":310,\"z\":0},\"id\":\"3\",\"position\":{\"x\":892,\"y\":310}},{\"type\":\"state\",\"dimensions\":{\"width\":162,\"height\":74},\"handleBounds\":{\"source\":[{\"id\":\"top\",\"position\":\"top\",\"x\":77.5,\"y\":-11,\"width\":7,\"height\":7},{\"id\":\"right\",\"position\":\"right\",\"x\":166,\"y\":33.5,\"width\":7,\"height\":7},{\"id\":\"bottom\",\"position\":\"bottom\",\"x\":77.5,\"y\":78,\"width\":7,\"height\":7},{\"id\":\"left\",\"position\":\"left\",\"x\":-11,\"y\":33.5,\"width\":7,\"height\":7}]},\"computedPosition\":{\"x\":1713,\"y\":-12,\"z\":0},\"id\":\"4\",\"position\":{\"x\":1713,\"y\":-12}},{\"type\":\"state\",\"dimensions\":{\"width\":162,\"height\":74},\"handleBounds\":{\"source\":[{\"id\":\"top\",\"position\":\"top\",\"x\":77.5,\"y\":-11,\"width\":7,\"height\":7},{\"id\":\"right\",\"position\":\"right\",\"x\":166,\"y\":33.5,\"width\":7,\"height\":7},{\"id\":\"bottom\",\"position\":\"bottom\",\"x\":77.5,\"y\":78,\"width\":7,\"height\":7},{\"id\":\"left\",\"position\":\"left\",\"x\":-11,\"y\":33.5,\"width\":7,\"height\":7}]},\"computedPosition\":{\"x\":1995,\"y\":241,\"z\":0},\"id\":\"5\",\"position\":{\"x\":1995,\"y\":241}},{\"type\":\"state\",\"dimensions\":{\"width\":95,\"height\":53},\"handleBounds\":{\"source\":[{\"id\":\"top\",\"position\":\"top\",\"x\":43.921875,\"y\":-11,\"width\":7,\"height\":7},{\"id\":\"right\",\"position\":\"right\",\"x\":98.84375,\"y\":23,\"width\":7,\"height\":7},{\"id\":\"bottom\",\"position\":\"bottom\",\"x\":43.921875,\"y\":57,\"width\":7,\"height\":7},{\"id\":\"left\",\"position\":\"left\",\"x\":-11,\"y\":23,\"width\":7,\"height\":7}]},\"computedPosition\":{\"x\":2347.5540758810434,\"y\":-5,\"z\":0},\"id\":\"6\",\"position\":{\"x\":2347.5540758810434,\"y\":-5}},{\"type\":\"state\",\"dimensions\":{\"width\":95,\"height\":53},\"handleBounds\":{\"source\":[{\"id\":\"top\",\"position\":\"top\",\"x\":43.921875,\"y\":-11,\"width\":7,\"height\":7},{\"id\":\"right\",\"position\":\"right\",\"x\":98.84375,\"y\":23,\"width\":7,\"height\":7},{\"id\":\"bottom\",\"position\":\"bottom\",\"x\":43.921875,\"y\":57,\"width\":7,\"height\":7},{\"id\":\"left\",\"position\":\"left\",\"x\":-11,\"y\":23,\"width\":7,\"height\":7}]},\"computedPosition\":{\"x\":2918.962706610314,\"y\":-6,\"z\":0},\"id\":\"7\",\"position\":{\"x\":2918.962706610314,\"y\":-6}},{\"type\":\"action\",\"dimensions\":{\"width\":51,\"height\":33},\"handleBounds\":{\"source\":[{\"id\":\"top\",\"position\":\"top\",\"x\":22.28125,\"y\":-2,\"width\":6,\"height\":6},{\"id\":\"right\",\"position\":\"right\",\"x\":46.5625,\"y\":13.5,\"width\":6,\"height\":6},{\"id\":\"bottom\",\"position\":\"bottom\",\"x\":22.28125,\"y\":29,\"width\":6,\"height\":6},{\"id\":\"left\",\"position\":\"left\",\"x\":-2,\"y\":13.5,\"width\":6,\"height\":6}]},\"computedPosition\":{\"x\":783,\"y\":7,\"z\":0},\"id\":\"action-1\",\"position\":{\"x\":783,\"y\":7},\"data\":{\"from_id\":\"1\",\"to_id\":\"2\"}},{\"type\":\"action\",\"dimensions\":{\"width\":51,\"height\":33},\"handleBounds\":{\"source\":[{\"id\":\"top\",\"position\":\"top\",\"x\":22.28125,\"y\":-2,\"width\":6,\"height\":6},{\"id\":\"right\",\"position\":\"right\",\"x\":46.5625,\"y\":13.5,\"width\":6,\"height\":6},{\"id\":\"bottom\",\"position\":\"bottom\",\"x\":22.28125,\"y\":29,\"width\":6,\"height\":6},{\"id\":\"left\",\"position\":\"left\",\"x\":-2,\"y\":13.5,\"width\":6,\"height\":6}]},\"computedPosition\":{\"x\":1474,\"y\":13,\"z\":0},\"id\":\"action-2\",\"position\":{\"x\":1474,\"y\":13},\"data\":{\"from_id\":\"2\",\"to_id\":\"4\"}},{\"type\":\"action\",\"dimensions\":{\"width\":51,\"height\":33},\"handleBounds\":{\"source\":[{\"id\":\"top\",\"position\":\"top\",\"x\":22.28125,\"y\":-2,\"width\":6,\"height\":6},{\"id\":\"right\",\"position\":\"right\",\"x\":46.5625,\"y\":13.5,\"width\":6,\"height\":6},{\"id\":\"bottom\",\"position\":\"bottom\",\"x\":22.28125,\"y\":29,\"width\":6,\"height\":6},{\"id\":\"left\",\"position\":\"left\",\"x\":-2,\"y\":13.5,\"width\":6,\"height\":6}]},\"computedPosition\":{\"x\":1262,\"y\":143,\"z\":0},\"id\":\"action-3\",\"position\":{\"x\":1262,\"y\":143},\"data\":{\"from_id\":\"2\",\"to_id\":\"3\"}},{\"type\":\"action\",\"dimensions\":{\"width\":51,\"height\":33},\"handleBounds\":{\"source\":[{\"id\":\"top\",\"position\":\"top\",\"x\":22.28125,\"y\":-2,\"width\":6,\"height\":6},{\"id\":\"right\",\"position\":\"right\",\"x\":46.5625,\"y\":13.5,\"width\":6,\"height\":6},{\"id\":\"bottom\",\"position\":\"bottom\",\"x\":22.28125,\"y\":29,\"width\":6,\"height\":6},{\"id\":\"left\",\"position\":\"left\",\"x\":-2,\"y\":13.5,\"width\":6,\"height\":6}]},\"computedPosition\":{\"x\":727,\"y\":197,\"z\":0},\"id\":\"action-4\",\"position\":{\"x\":727,\"y\":197},\"data\":{\"from_id\":\"3\",\"to_id\":\"2\"}},{\"type\":\"action\",\"dimensions\":{\"width\":51,\"height\":33},\"handleBounds\":{\"source\":[{\"id\":\"top\",\"position\":\"top\",\"x\":22.28125,\"y\":-2,\"width\":6,\"height\":6},{\"id\":\"right\",\"position\":\"right\",\"x\":46.5625,\"y\":13.5,\"width\":6,\"height\":6},{\"id\":\"bottom\",\"position\":\"bottom\",\"x\":22.28125,\"y\":29,\"width\":6,\"height\":6},{\"id\":\"left\",\"position\":\"left\",\"x\":-2,\"y\":13.5,\"width\":6,\"height\":6}]},\"computedPosition\":{\"x\":2204,\"y\":4,\"z\":0},\"id\":\"action-6\",\"position\":{\"x\":2204,\"y\":4},\"data\":{\"from_id\":\"4\",\"to_id\":\"6\"}},{\"type\":\"action\",\"dimensions\":{\"width\":51,\"height\":33},\"handleBounds\":{\"source\":[{\"id\":\"top\",\"position\":\"top\",\"x\":22.28125,\"y\":-2,\"width\":6,\"height\":6},{\"id\":\"right\",\"position\":\"right\",\"x\":46.5625,\"y\":13.5,\"width\":6,\"height\":6},{\"id\":\"bottom\",\"position\":\"bottom\",\"x\":22.28125,\"y\":29,\"width\":6,\"height\":6},{\"id\":\"left\",\"position\":\"left\",\"x\":-2,\"y\":13.5,\"width\":6,\"height\":6}]},\"computedPosition\":{\"x\":1996,\"y\":112,\"z\":0},\"id\":\"action-7\",\"position\":{\"x\":1996,\"y\":112},\"data\":{\"from_id\":\"4\",\"to_id\":\"5\"}},{\"type\":\"action\",\"dimensions\":{\"width\":51,\"height\":33},\"handleBounds\":{\"source\":[{\"id\":\"top\",\"position\":\"top\",\"x\":22.28125,\"y\":-2,\"width\":6,\"height\":6},{\"id\":\"right\",\"position\":\"right\",\"x\":46.5625,\"y\":13.5,\"width\":6,\"height\":6},{\"id\":\"bottom\",\"position\":\"bottom\",\"x\":22.28125,\"y\":29,\"width\":6,\"height\":6},{\"id\":\"left\",\"position\":\"left\",\"x\":-2,\"y\":13.5,\"width\":6,\"height\":6}]},\"computedPosition\":{\"x\":1562,\"y\":217.80000000000013,\"z\":0},\"id\":\"action-8\",\"position\":{\"x\":1562,\"y\":217.80000000000013},\"data\":{\"from_id\":\"5\",\"to_id\":\"4\"}},{\"type\":\"action\",\"dimensions\":{\"width\":51,\"height\":33},\"handleBounds\":{\"source\":[{\"id\":\"top\",\"position\":\"top\",\"x\":22.28125,\"y\":-2,\"width\":6,\"height\":6},{\"id\":\"right\",\"position\":\"right\",\"x\":46.5625,\"y\":13.5,\"width\":6,\"height\":6},{\"id\":\"bottom\",\"position\":\"bottom\",\"x\":22.28125,\"y\":29,\"width\":6,\"height\":6},{\"id\":\"left\",\"position\":\"left\",\"x\":-2,\"y\":13.5,\"width\":6,\"height\":6}]},\"computedPosition\":{\"x\":2749.1513054084385,\"y\":3.484283433489594,\"z\":0},\"id\":\"action-10\",\"position\":{\"x\":2749.1513054084385,\"y\":3.484283433489594},\"data\":{\"from_id\":\"6\",\"to_id\":\"7\"}},{\"sourceHandle\":\"right\",\"targetHandle\":\"left\",\"type\":\"transition\",\"source\":\"1\",\"target\":\"action-1\",\"updatable\":true,\"id\":\"edge-1-action-1\",\"animated\":true,\"sourceX\":572.5625,\"sourceY\":31.5,\"targetX\":781,\"targetY\":23.5},{\"sourceHandle\":\"right\",\"targetHandle\":\"left\",\"type\":\"transition\",\"source\":\"action-1\",\"target\":\"2\",\"updatable\":true,\"id\":\"edge-action-1-2\",\"animated\":true,\"sourceX\":835.5625,\"sourceY\":23.5,\"targetX\":946,\"targetY\":34,\"markerEnd\":{\"type\":\"arrow\",\"width\":15,\"height\":15,\"strokeWidth\":1.5,\"color\":\"#687178\"}},{\"sourceHandle\":\"right\",\"targetHandle\":\"left\",\"type\":\"transition\",\"source\":\"2\",\"target\":\"action-2\",\"updatable\":true,\"id\":\"edge-2-action-2\",\"animated\":true,\"sourceX\":1130,\"sourceY\":34,\"targetX\":1472,\"targetY\":29.5},{\"sourceHandle\":\"right\",\"targetHandle\":\"left\",\"type\":\"transition\",\"source\":\"action-2\",\"target\":\"4\",\"updatable\":true,\"id\":\"edge-action-2-4\",\"animated\":true,\"sourceX\":1526.5625,\"sourceY\":29.5,\"targetX\":1702,\"targetY\":25,\"markerEnd\":{\"type\":\"arrow\",\"width\":15,\"height\":15,\"strokeWidth\":1.5,\"color\":\"#687178\"}},{\"sourceHandle\":\"right\",\"targetHandle\":\"left\",\"type\":\"transition\",\"source\":\"2\",\"target\":\"action-3\",\"updatable\":true,\"id\":\"edge-2-action-3\",\"animated\":true,\"sourceX\":1130,\"sourceY\":34,\"targetX\":1260,\"targetY\":159.5},{\"sourceHandle\":\"right\",\"targetHandle\":\"top\",\"type\":\"transition\",\"source\":\"action-3\",\"target\":\"3\",\"updatable\":true,\"animated\":true,\"sourceX\":1314.5625,\"sourceY\":159.5,\"targetX\":967.984375,\"targetY\":299,\"markerEnd\":{\"type\":\"arrow\",\"width\":15,\"height\":15,\"strokeWidth\":1.5,\"color\":\"#687178\"},\"id\":\"vueflow__edge-action-3right-3top\"},{\"sourceHandle\":\"left\",\"targetHandle\":\"left\",\"type\":\"transition\",\"source\":\"3\",\"target\":\"action-4\",\"updatable\":true,\"animated\":true,\"sourceX\":881,\"sourceY\":336.5,\"targetX\":725,\"targetY\":213.5,\"id\":\"vueflow__edge-3left-action-4left\"},{\"sourceHandle\":\"right\",\"targetHandle\":\"left\",\"type\":\"transition\",\"source\":\"action-4\",\"target\":\"2\",\"updatable\":true,\"id\":\"edge-action-4-2\",\"animated\":true,\"sourceX\":779.5625,\"sourceY\":213.5,\"targetX\":946,\"targetY\":34,\"markerEnd\":{\"type\":\"arrow\",\"width\":15,\"height\":15,\"strokeWidth\":1.5,\"color\":\"#687178\"}},{\"sourceHandle\":\"right\",\"targetHandle\":\"left\",\"type\":\"transition\",\"source\":\"4\",\"target\":\"action-6\",\"updatable\":true,\"id\":\"edge-4-action-6\",\"animated\":true,\"sourceX\":1886,\"sourceY\":25,\"targetX\":2202,\"targetY\":20.5},{\"sourceHandle\":\"right\",\"targetHandle\":\"left\",\"type\":\"transition\",\"source\":\"action-6\",\"target\":\"6\",\"updatable\":true,\"id\":\"edge-action-6-6\",\"animated\":true,\"sourceX\":2256.5625,\"sourceY\":20.5,\"targetX\":2336.5540758810434,\"targetY\":21.5,\"markerEnd\":{\"type\":\"arrow\",\"width\":15,\"height\":15,\"strokeWidth\":1.5,\"color\":\"#687178\"}},{\"sourceHandle\":\"right\",\"targetHandle\":\"left\",\"type\":\"transition\",\"source\":\"4\",\"target\":\"action-7\",\"updatable\":true,\"id\":\"edge-4-action-7\",\"animated\":true,\"sourceX\":1886,\"sourceY\":25,\"targetX\":1994,\"targetY\":128.5},{\"sourceHandle\":\"right\",\"targetHandle\":\"top\",\"type\":\"transition\",\"source\":\"action-7\",\"target\":\"5\",\"updatable\":true,\"animated\":true,\"sourceX\":2048.5625,\"sourceY\":128.5,\"targetX\":2076,\"targetY\":230,\"markerEnd\":{\"type\":\"arrow\",\"width\":15,\"height\":15,\"strokeWidth\":1.5,\"color\":\"#687178\"},\"id\":\"vueflow__edge-action-7right-5top\"},{\"sourceHandle\":\"left\",\"targetHandle\":\"left\",\"type\":\"transition\",\"source\":\"5\",\"target\":\"action-8\",\"updatable\":true,\"animated\":true,\"sourceX\":1984,\"sourceY\":278,\"targetX\":1560,\"targetY\":234.30000000000013,\"id\":\"vueflow__edge-5left-action-8left\"},{\"sourceHandle\":\"right\",\"targetHandle\":\"left\",\"type\":\"transition\",\"source\":\"action-8\",\"target\":\"4\",\"updatable\":true,\"id\":\"edge-action-8-4\",\"animated\":true,\"sourceX\":1614.5625,\"sourceY\":234.30000000000013,\"targetX\":1702,\"targetY\":25,\"markerEnd\":{\"type\":\"arrow\",\"width\":15,\"height\":15,\"strokeWidth\":1.5,\"color\":\"#687178\"}},{\"sourceHandle\":\"right\",\"targetHandle\":\"left\",\"type\":\"transition\",\"source\":\"6\",\"target\":\"action-10\",\"updatable\":true,\"id\":\"edge-6-action-10\",\"animated\":true,\"sourceX\":2453.3978258810434,\"sourceY\":21.5,\"targetX\":2747.1513054084385,\"targetY\":19.984283433489594},{\"sourceHandle\":\"right\",\"targetHandle\":\"left\",\"type\":\"transition\",\"source\":\"action-10\",\"target\":\"7\",\"updatable\":true,\"id\":\"edge-action-10-7\",\"animated\":true,\"sourceX\":2801.7138054084385,\"sourceY\":19.984283433489594,\"targetX\":2907.962706610314,\"targetY\":20.5,\"markerEnd\":{\"type\":\"arrow\",\"width\":15,\"height\":15,\"strokeWidth\":1.5,\"color\":\"#687178\"}}]",
+  "states_summary": [
+    {
+      "state": "Draft",
+      "builder_id": "1"
+    },
+    {
+      "state": "待财务主管确认报税",
+      "builder_id": "2"
+    },
+    {
+      "state": "财务主管已拒绝",
+      "builder_id": "3"
+    },
+    {
+      "state": "待供应链经理确认运费",
+      "builder_id": "4"
+    },
+    {
+      "state": "供应链经理已拒绝",
+      "builder_id": "5"
+    },
+    {
+      "state": "Approved",
+      "builder_id": "6"
+    },
+    {
+      "state": "已取消",
+      "builder_id": "7"
+    }
+  ],
+  "transitions_summary": [
+    {
+      "from": "Draft",
+      "action": "Submit",
+      "to": "待财务主管确认报税",
+      "builder_id": "action-1"
+    },
+    {
+      "from": "待财务主管确认报税",
+      "action": "Approve",
+      "to": "待供应链经理确认运费",
+      "builder_id": "action-2"
+    },
+    {
+      "from": "待财务主管确认报税",
+      "action": "Reject",
+      "to": "财务主管已拒绝",
+      "builder_id": "action-3"
+    },
+    {
+      "from": "财务主管已拒绝",
+      "action": "Submit",
+      "to": "待财务主管确认报税",
+      "builder_id": "action-4"
+    },
+    {
+      "from": "待供应链经理确认运费",
+      "action": "Approve",
+      "to": "Approved",
+      "builder_id": "action-6"
+    },
+    {
+      "from": "待供应链经理确认运费",
+      "action": "Reject",
+      "to": "供应链经理已拒绝",
+      "builder_id": "action-7"
+    },
+    {
+      "from": "供应链经理已拒绝",
+      "action": "Submit",
+      "to": "待供应链经理确认运费",
+      "builder_id": "action-8"
+    },
+    {
+      "from": "Approved",
+      "action": "取消",
+      "to": "已取消",
+      "builder_id": "action-10"
+    }
+  ]
+}
