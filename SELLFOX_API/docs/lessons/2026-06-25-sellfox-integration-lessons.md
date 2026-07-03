@@ -10,7 +10,7 @@ timestamp: 2026-06-25
 # 赛狐 API 接入踩坑记录
 
 > 何时读: 接入赛狐 API 遇到问题时、需要了解认证流程时、回顾架构决策时。
-> 最后更新: 2026-06-25 | 共 10 条教训
+> 最后更新: 2026-07-02 | 共 16 条教训
 
 ## Lesson 1: IP 白名单是硬门槛
 
@@ -149,7 +149,117 @@ await page.click('button:has-text("访问文档")');
 - 入口文档（AGENT_HANDOFF.md）应明确记录凭证位置
 - 避免在对话历史中遗失关键配置信息
 
+## Lesson 11: `requests` 库在中文 Windows 上签名失败 — 用 `urllib`
+
+**问题**: 使用 `requests.post(params=..., json=...)` 调用赛狐业务 API，签名算法本身正确（已验证 HMAC-SHA256 hexdigest），但服务器始终返回 `code=40011`（签名错误）。
+
+**排查过程**: 
+- 用文档中的 Python 示例验证签名算法 → 正确
+- 用 `python -c "..."` 一次性脚本测试 → 成功
+- 但保存为 `.py` 文件运行 → 失败
+- 最终发现：`requests` 库在中文 Windows（GBK locale）下，URL 构建过程存在编码交互问题，导致最终发出的 URL 与服务端计算的签名字符串不一致
+
+**解决**: 全部改用 Python 标准库 `urllib.request`，手动构建完整 URL + `.encode("utf-8")`。不再依赖 `requests` 的隐式编码。
+```python
+full_url = f"{DOMAIN}{url_path}?access_token={token}&client_id={APP_ID}&nonce={nonce}&timestamp={ts}&sign={sig}"
+req = urllib.request.Request(full_url, data=json.dumps(body).encode("utf-8"),
+                             headers={"Content-Type": "application/json"}, method="POST")
+```
+
+**教训**:
+- `requests` 不是银弹——在非英语 locale 下可能出编码问题
+- 签名类 API 对 URL 字节级一致性要求极高，任何编码差异都会导致签名不匹配
+- 使用 stdlib `urllib` 不仅免去依赖，还能在 UTF-8 边界上获得完全控制
+- 最小可复现脚本（`python -c "..."`）exposed 了问题范围：文件 vs 交互式执行
+
+## Lesson 12: 下载文件是 `.xlsx` 不是 `.csv`，含中文列名
+
+**问题**: API 文档暗示下载的是 CSV 格式，但实际下载的文件是 `.xlsx`（Excel 二进制格式）。用 `openpyxl` 打开才能读取，且列名全是中文（店铺、日期、广告活动、花费、曝光量、CPC 等）。
+
+**解决**: 
+- 文件扩展名保存为 `.xlsx`
+- 使用 `openpyxl.load_workbook()` 读取，sheet 名为 `sheet`
+- 列名映射已在 `advertise/__init__.py` 中定义（中文→英文）
+
+**教训**:
+- 不要假设 API 返回的文件格式——验证前几百字节的文件头
+- XLSX 文件以 `PK\x03\x04` 开头（ZIP 格式），CSV 以文本开头
+
+## Lesson 13: 轮询接口用 `taskIds`（数组），不是 `id`（单值）
+
+**问题**: 使用 `{"id": task_id}` 调用 `/api/cpc/download/pageList.json` 返回空 rows。文档中参数名可能误导。
+
+**根因**: API 期望的参数是 `taskIds`（字符串数组），不是 `id`（单值字符串）。
+
+**正确用法**:
+```python
+signed_post("/api/cpc/download/pageList.json", {
+    "taskIds": ["98829", "98830"],
+    "pageNo": 1,
+    "pageSize": 50,
+})
+```
+
+**教训**:
+- API 参数名和类型要与实际请求对比验证，不要只信文档
+- 中文 API 文档可能使用复数形式命名（`taskIds`）
+
+## Lesson 14: 报告状态用中文字符串，不是数字码
+
+**问题**: 预期轮询返回 `status: 2`（完成）/ `status: 3`（失败）等数字状态码，实际返回的是 `reportState` 字段，值为中文字符串。
+
+**实际值**:
+- `"已生成"` = 完成（含 downloadUrl）
+- `"生成中"` = 处理中
+- `"失败"` = 失败
+
+**代码处理**:
+```python
+state = row.get("reportState", "unknown")
+if state == "已生成":
+    url = row.get("downloadUrl", [])[0]
+    download_file(url, outpath)
+elif state == "失败":
+    print(f"Task failed: {row}")
+```
+
+**教训**:
+- 国内 ERP API 常用中文状态值——不要假设英文或数字枚举
+- 直接打印 API 返回的原始 row 对象，快速了解实际数据结构
+
+## Lesson 15: 下载 URL 含中文需百分号编码
+
+**问题**: API 返回的 `downloadUrl` 包含中文字符（如 `/path/广告活动报告.xlsx`），直接用 `urllib.request.Request(url)` 报错 `UnicodeEncodeError: 'ascii' codec can't encode characters`。
+
+**解决**: 对 URL 的 path 组件进行百分号编码，保留结构字符：
+```python
+parts = urllib.parse.urlparse(url)
+encoded_path = urllib.parse.quote(parts.path, safe='/:@!$&()*+,;=')
+safe_url = parts._replace(path=encoded_path).geturl()
+```
+
+**教训**:
+- HTTP 标准要求 URL 中非 ASCII 字符必须百分号编码
+- `safe` 参数需要保留 `/ ? & =` 等 URL 结构分隔符不变
+
+## Lesson 16: 创建任务需要间隔延时防限流
+
+**问题**: 连续创建 4 个下载任务，第 2 个开始返回 `code=40019`（请求过于频繁）。
+
+**解决**: 每个任务创建之间加 `time.sleep(2)`。2 秒间隔在生产中稳定可用，4 个任务全部创建成功。
+
+**教训**:
+- 赛狐 API 有请求频率限制，文档中未明确写出具体的 QPS 阈值
+- 批量操作时默认加延时是安全策略——异步任务不需要实时性
+
 ---
+
+## 更新历史
+
+| 日期 | 变更 |
+|------|------|
+| 2026-06-25 | 初始 10 条教训（认证、IP、Playwright、架构决策） |
+| 2026-07-02 | 新增 6 条教训（编码、文件格式、参数、状态、URL、限流）— 基于 `fetch_ad_reports.py` 实战测试 |
 
 ## See also
 - [赛狐 API 实践指南](../reference/2026-sellfox-api-guide.md)
@@ -157,3 +267,4 @@ await page.click('button:has-text("访问文档")');
 - [SP-API 开发者模型](../reference/2026-sp-api-developer-model.md)
 - [v0.1-v0.3 12条开发教训](lessons-learned.md)
 - [AGENT_HANDOFF.md](../../AGENT_HANDOFF.md)
+- [fetch_ad_reports.py](../../fetch_ad_reports.py) — 实战脚本（纯 stdlib，零依赖）

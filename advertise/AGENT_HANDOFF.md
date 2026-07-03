@@ -2,7 +2,7 @@
 
 > **入口文件** — Agent 接手时先读这个。需要细节时按链接深入。
 >
-> 版本: v0.3 | 分支: amazon_advertise | PR: [#14](https://github.com/keyapi/fzh-data/pull/14) | 更新: 2026-06-17
+> 版本: v0.4 | 分支: amazon_advertise | PR: [#14](https://github.com/keyapi/fzh-data/pull/14) | 更新: 2026-07-02
 
 ## 这是什么
 
@@ -22,7 +22,8 @@ uv run python -m advertise.build_report         # → Excel 报告
 
 `数据源/` — 每次分析前从 Amazon 广告后台下载最新的 4 份 SP 报告（30 天窗口）。数据文件不会被 git 跟踪。
 
-> 赛狐 API（如需接入 API）：凭证在 `advertise/.env`，配置在 `advertise/config_sellfox.json`
+> 赛狐 API（如需接入 API）：凭证在 `SELLFOX_API/.env`（优先），`advertise/.env`（备用）
+> 实战脚本：`SELLFOX_API/fetch_ad_reports.py` — 已通过 API 端到端验证（4 种 SP 报告拉取成功）
 > API 文档 https://sellfoxapi.apifox.cn/ | 生产环境 https://openapi.sellfox.com/
 
 ## Agent 首次接手检查清单
