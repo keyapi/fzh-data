@@ -29,6 +29,13 @@ tags: [openai, api-proxy, changelog]
 - **v0.12**: 更新 operations.md — 订阅更新持久化机制 + 用户操作流程
 - **v0.12**: Tailscale 确认 Personal 永久免费计划 — 6 用户 / 无限设备，当前 3 用户 7 设备远在限额内
 
+## 2026-07-03 (v0.12 修复)
+
+- **v0.12-fix**: SSRDog 订阅恢复 — 新链接下载成功，节点已更新（32GB 剩余，25 天重置）
+- **v0.12-fix**: **关键 bug 修复**：overwrite 脚本此前强制 `MATCH,Emergency`，导致 SSRDog 恢复后流量仍走 Emergency
+- **v0.12-fix**: 修复逻辑：MATCH 保持原始 `SSRDOG`，Emergency 放入 Auto fallback **末尾**（SSRDog 优先，Emergency 兜底）
+- **v0.12-fix**: 验证：SSRDog 正常时走 `Japan丨02` 节点，全部流量回归 SSRDog；Emergency 静默待命
+
 ## 后续规划
 
 - **Phase 2 (待 SSRDog 恢复后)**：在 Vultr 部署 VLESS+Reality 作为独立备份线路

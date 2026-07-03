@@ -198,15 +198,16 @@ ssh -i ~/.ssh/id_ed25519_us_proxy -o StrictHostKeyChecking=accept-new \
    - { name: Emergency, type: select, proxies: [SH-Tailscale-US, DIRECT] }
    ```
 
-3. **Auto fallback 首位放 Emergency**：
+3. **Auto fallback 末尾放 Emergency**（SSRDog 优先，Emergency 兜底）：
    ```yaml
-   - { name: Auto, type: fallback, proxies: [Emergency, ...原 SSRDog 节点] }
+   - { name: Auto, type: fallback, proxies: [...原 SSRDog 节点, Emergency] }
    ```
 
-4. **MATCH 规则指向 Emergency**：
+4. **MATCH 规则保持原始值**（不修改为 Emergency）：
    ```yaml
-   - 'MATCH,Emergency'
+   - 'MATCH,SSRDOG'
    ```
+   > Auto fallback 会按顺序测试：SSRDog 国家组 → Emergency。SSRDog 正常时自动选中 SSRDog，全挂时才走 Emergency。
 
 ### 应急启动步骤
 
@@ -239,11 +240,11 @@ ssh root@192.168.100.1 "tail -f /tmp/openclash.log | grep SH-Tailscale-US"
 
 **方案**：使用 OpenClash 的 `openclash_custom_overwrite.sh` 脚本（`/etc/openclash/custom/`），在每次配置重新生成后自动注入 Emergency 代理组。
 
-**脚本逻辑**（已部署于 2026-07-02）：
+**脚本逻辑**（已部署于 2026-07-02，2026-07-03 修复）：
 1. 检查配置中是否已有 `SH-Tailscale-US` 节点（幂等，已有则跳过）
 2. 注入 SOCKS5 代理节点 + Emergency 策略组
-3. Emergency 插入 Auto fallback 首位
-4. MATCH 规则指向 Emergency
+3. Emergency 放入 Auto fallback **末尾**（SSRDog 优先，全部失败才兜底）
+4. **不修改 MATCH 规则**（保持原始 `MATCH,SSRDOG`）
 5. 同时处理两个路径：`/etc/openclash/config/` 和 `/etc/openclash/`（覆盖 Clash 实际加载的路径）
 
 **用户操作流程**：
