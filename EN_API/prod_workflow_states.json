@@ -1,0 +1,172 @@
+[
+  {
+    "name": "Approved",
+    "workflow_state_name": "Approved",
+    "style": "Success"
+  },
+  {
+    "name": "Draft",
+    "workflow_state_name": "Draft",
+    "style": "Info"
+  },
+  {
+    "name": "Rejected",
+    "workflow_state_name": "Rejected",
+    "style": "Danger"
+  },
+  {
+    "name": "仓库经理已审批",
+    "workflow_state_name": "仓库经理已审批",
+    "style": ""
+  },
+  {
+    "name": "供应商选择人已拒绝",
+    "workflow_state_name": "供应商选择人已拒绝",
+    "style": "Danger"
+  },
+  {
+    "name": "取消审批被拒绝",
+    "workflow_state_name": "取消审批被拒绝",
+    "style": ""
+  },
+  {
+    "name": "取消待财务主管审批",
+    "workflow_state_name": "取消待财务主管审批",
+    "style": "Warning"
+  },
+  {
+    "name": "已取消",
+    "workflow_state_name": "已取消",
+    "style": "Inverse"
+  },
+  {
+    "name": "待仓库确认",
+    "workflow_state_name": "待仓库确认",
+    "style": "Warning"
+  },
+  {
+    "name": "待仓库确认退货",
+    "workflow_state_name": "待仓库确认退货",
+    "style": "Warning"
+  },
+  {
+    "name": "待仓库经理审批",
+    "workflow_state_name": "待仓库经理审批",
+    "style": "Warning"
+  },
+  {
+    "name": "待供应商选择人审批",
+    "workflow_state_name": "待供应商选择人审批",
+    "style": "Warning"
+  },
+  {
+    "name": "待物料控制审批",
+    "workflow_state_name": "待物料控制审批",
+    "style": "Warning"
+  },
+  {
+    "name": "待生产经理审批",
+    "workflow_state_name": "待生产经理审批",
+    "style": "Warning"
+  },
+  {
+    "name": "待绍兴厂长审批",
+    "workflow_state_name": "待绍兴厂长审批",
+    "style": "Warning"
+  },
+  {
+    "name": "待绍兴总经理审批",
+    "workflow_state_name": "待绍兴总经理审批",
+    "style": "Warning"
+  },
+  {
+    "name": "待财务主管审批",
+    "workflow_state_name": "待财务主管审批",
+    "style": "Warning"
+  },
+  {
+    "name": "待财务主管确认开票名称",
+    "workflow_state_name": "待财务主管确认开票名称",
+    "style": "Warning"
+  },
+  {
+    "name": "待财务总监审批",
+    "workflow_state_name": "待财务总监审批",
+    "style": "Warning"
+  },
+  {
+    "name": "待采购经理审批",
+    "workflow_state_name": "待采购经理审批",
+    "style": "Warning"
+  },
+  {
+    "name": "物料控制已拒绝",
+    "workflow_state_name": "物料控制已拒绝",
+    "style": "Danger"
+  },
+  {
+    "name": "生产经理已取消",
+    "workflow_state_name": "生产经理已取消",
+    "style": "Danger"
+  },
+  {
+    "name": "生产经理已审批",
+    "workflow_state_name": "生产经理已审批",
+    "style": "Success"
+  },
+  {
+    "name": "生产经理已拒绝",
+    "workflow_state_name": "生产经理已拒绝",
+    "style": "Warning"
+  },
+  {
+    "name": "绍兴厂长已审批",
+    "workflow_state_name": "绍兴厂长已审批",
+    "style": "Success"
+  },
+  {
+    "name": "绍兴厂长已拒绝",
+    "workflow_state_name": "绍兴厂长已拒绝",
+    "style": "Danger"
+  },
+  {
+    "name": "绍兴总经理已审批",
+    "workflow_state_name": "绍兴总经理已审批",
+    "style": "Success"
+  },
+  {
+    "name": "绍兴总经理已拒绝",
+    "workflow_state_name": "绍兴总经理已拒绝",
+    "style": "Danger"
+  },
+  {
+    "name": "财务主管已拒绝",
+    "workflow_state_name": "财务主管已拒绝",
+    "style": "Danger"
+  },
+  {
+    "name": "财务主管已确认开票名称",
+    "workflow_state_name": "财务主管已确认开票名称",
+    "style": "Info"
+  },
+  {
+    "name": "财务总监已审批",
+    "workflow_state_name": "财务总监已审批",
+    "style": "Success"
+  },
+  {
+    "name": "财务总监已拒绝",
+    "workflow_state_name": "财务总监已拒绝",
+    "style": "Danger"
+  },
+  {
+    "name": "采购经理已审批",
+    "workflow_state_name": "采购经理已审批",
+    "style": "Success"
+  },
+  {
+    "name": "采购经理已拒绝",
+    "workflow_state_name": "采购经理已拒绝",
+    "style": "Danger"
+  }
+]

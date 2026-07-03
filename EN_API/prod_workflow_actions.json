@@ -1,0 +1,46 @@
+[
+  {
+    "name": "Approve",
+    "workflow_action_name": "Approve"
+  },
+  {
+    "name": "Reject",
+    "workflow_action_name": "Reject"
+  },
+  {
+    "name": "Review",
+    "workflow_action_name": "Review"
+  },
+  {
+    "name": "Submit",
+    "workflow_action_name": "Submit"
+  },
+  {
+    "name": "取消",
+    "workflow_action_name": "取消"
+  },
+  {
+    "name": "批准取消",
+    "workflow_action_name": "批准取消"
+  },
+  {
+    "name": "提交取消审批",
+    "workflow_action_name": "提交取消审批"
+  },
+  {
+    "name": "确认开票公司名称",
+    "workflow_action_name": "确认开票公司名称"
+  },
+  {
+    "name": "订单变更",
+    "workflow_action_name": "订单变更"
+  },
+  {
+    "name": "返回",
+    "workflow_action_name": "返回"
+  },
+  {
+    "name": "返回已提交",
+    "workflow_action_name": "返回已提交"
+  }
+]
