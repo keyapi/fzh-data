@@ -182,6 +182,8 @@ Python `requests` 库自动处理 URL 编码。curl 等其他工具不会。使�
 
 **因此，在复制工作流或保存工作流快照时，应同时保存 `workflow_data` 字段**，以便将来重建时设计器能直接显示直观的图形布局。保存后的布局 JSON 快照应放入 `EN_API/` 目录供后续参考。
 
+还可以通过算法自动生成合理的布局数据，详见 [工作流设计器画布自动布局算法](workflow-builder-layout-algorithm.md)。
+
 ```python
 # 保存工作流布局数据
 layout = {
