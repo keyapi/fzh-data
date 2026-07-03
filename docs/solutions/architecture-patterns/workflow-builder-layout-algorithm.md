@@ -353,6 +353,78 @@ def generate_workflow_data(states, transitions):
     return json.dumps(nodes, ensure_ascii=False)
 ```
 
+### 条件分支处理（v3 改进）
+
+当工作流包含条件分支（同一状态有多条 forward 转换，如 `is_return==0` vs `is_return==1`）时：
+
+```python
+from collections import Counter
+
+# 1. 检测分支点：出度 > 1 的状态
+out_degree = Counter(t['state'] for t in forward)
+branch_points = {s for s, cnt in out_degree.items() if cnt > 1}
+
+# 2. 检测合并点：被 >1 个 forward 转换指向的状态
+merge_targets = Counter(t['next_state'] for t in forward)
+merge_points = {s for s, cnt in merge_targets.items() if cnt > 1}
+
+# 3. 主线路保留第一条分支，其余分支做垂直偏移
+BRANCH_Y_OFFSET = 120
+for bp in branch_points:
+    branch_targets = [t['next_state'] for t in forward if t['state'] == bp]
+    primary = branch_targets[0]  # 第一条为主路径
+    for bt in branch_targets[1:]:  # 其余为分支
+        branch_states[bt] = True  # 标记为分支状态
+
+# 4. 布局时分支状态给予 y 偏移
+for i, s in enumerate(main_line):
+    y = Y_MAIN
+    if s in branch_states:
+        y = Y_MAIN - BRANCH_Y_OFFSET * (branch_count + 1)
+    # ...
+```
+
+### 操作防重叠
+
+当同一源状态有多条 forward 转换时，错开位置：
+
+```python
+action_offsets = {}
+for t in forward:
+    key = t['state']
+    offset_idx = action_offsets.get(key, 0)
+    x = X_START + src_idx * H_SPACING + 220 + offset_idx * 60
+    y = Y_MAIN + 5 + offset_idx * 25
+    action_offsets[key] = offset_idx + 1
+```
+
+### 非标准回退
+
+部分 resubmit 操作不回到拒绝源状态（如 `取消审批被拒绝 --返回--> Approved`），需要按实际目标定位：
+
+```python
+resubmits = [t for t in transitions if t['state'] == rej_name and t['action'] in ('Submit', '返回')]
+for r in resubmits:
+    target = r['next_state']
+    if target in main_line:
+        dst_idx = main_line.index(target)
+        x = (src_x + X_START + dst_idx * H_SPACING) / 2  # 源和目标的中间
+```
+
+### 自循环拒绝
+
+当 Reject 的目标就是自身时（如 `Draft --Reject--> Draft`），放在主线下方不远处：
+
+```python
+if t['action'] in ('Reject',) and t['state'] == t['next_state']:
+    # 自循环 — 放在状态下方 y=120 处
+    nodes.append({
+        'type': 'action', 'id': f'action-{action_counter}',
+        'position': {'x': src_x - 80, 'y': 120},
+        'data': {'from_id': state_ids[s], 'to_id': state_ids[s]}
+    })
+```
+
 ## 为什么重要
 
 `workflow_data` 虽然不影响审批功能，但直接影响工作流设计器的可用性。一个自动生成的合理布局能：
@@ -420,3 +492,20 @@ def generate_workflow_data(states, transitions):
 - 根据状态名长度动态调整 H_SPACING（中文约占 16px/字）
 - action ID 应与 transition 创建顺序保持一致（而非按拓扑分类重排）
 - 补充 `handleBounds` 模板数据避免设计器首次加载闪烁
+
+### 二次验证：测试报价工作流（2026-07-03）
+
+**工作流结构**：3 状态 + 4 转换，两条自循环拒绝（Draft→Reject→Draft, Approved by Sales Manager→Reject→同状态）
+
+**算法结果**：正确生成 3 状态在主线 + 2 自循环操作在下方 y=120。与现有布局（斜线排列）相比更直观。
+
+### 三次验证：采购入库V3（2026-07-03）
+
+**工作流结构**：9 状态 + 11 转换，含条件分支（`is_return==1`/`is_return==0`）、合并点、取消子流程、非标准回退（`返回→Approved`）
+
+**v3 改进**：
+- 分支检测：Draft 有 2 条 Submit → 待仓库确认（分支，y=-115）和待仓库确认退货（主路，y=5）
+- 操作防重叠：两条 Submit 分别放在 (700,10) 和 (760,35)
+- 非标准回退：`返回` 从取消审批被拒绝正确指向 Approved（取两点中点）
+
+**对比生产布局**：主线结构一致（Draft→审批→取消顺序正确），分支偏移方向正确。生产布局更宽松（间距更大）且分支放在 Draft 上方而非合并到主线中。
