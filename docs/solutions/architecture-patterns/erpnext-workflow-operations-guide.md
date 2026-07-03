@@ -180,7 +180,25 @@ Python `requests` library handles URL encoding automatically. Curl and other too
 **workflow_data and workflow_builder_id are non-functional.**
 These store visual builder canvas coordinates. They can be null/empty in copied workflows without affecting any functional behavior.
 
-### 8. Workflow Testing Strategy
+**List view does not show workflow_state by default.**
+The `workflow_state` custom field is auto-created as `hidden=1` and `in_list_view=0`. To make it visible in the document list view, update the Custom Field:
+
+```python
+update_document("Custom Field", "Delivery Note-workflow_state", {
+    "hidden": 0,
+    "in_list_view": 1
+})
+```
+
+### 8. Post-Creation Setup
+
+After creating a workflow, complete these setup steps:
+
+1. **Assign workflow roles to test/admin users** — Administrator does not auto-include workflow roles; use `update_document("User", "Administrator", {"roles": [{"role": "Workflow Stock User"}, ...]})`
+2. **Show workflow_state in list view** — update the auto-created Custom Field to set `hidden=0, in_list_view=1`
+3. **Verify the custom field was created** — the `workflow_state` field is auto-created on the DocType when the workflow is first saved with `is_active=1`
+
+### 9. Workflow Testing Strategy
 
 1. Create a test document with items that have actual stock (for submittable doctypes)
 2. Walk every transition using `run_workflow` via FAC MCP
