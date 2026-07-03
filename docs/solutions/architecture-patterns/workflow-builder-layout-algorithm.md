@@ -372,3 +372,51 @@ def generate_workflow_data(states, transitions):
 - [ERPNext 工作流配置完整指南](../erpnext-workflow-configuration.md) — workflow_data 字段定义
 - [生产→测试工作流复制实录](../workflow-copy-prod-to-test.md) — Lesson 69: workflow_data 非必需但影响设计器
 - [销售出库单审批布局快照](../../../EN_API/prod_wf_销售出库单审批_layout.json) — 用户手动排列的参考布局
+- [自动生成布局测试输出](../../../EN_API/gen_wf_layout_v2.json) — 算法生成的布局 JSON
+
+---
+
+## 验证记录（2026-07-03）
+
+### 验证方法
+
+1. 备份用户手工排列的 `workflow_data` → `EN_API/prod_wf_销售出库单审批_layout_backup.json`
+2. 运行 `generate_workflow_data()` 生成新布局 → 保存至 `EN_API/gen_wf_layout_v2.json`
+3. 通过 REST API `PUT /api/resource/Workflow/销售出库单审批` 写入测试系统
+4. 更新 6 条 transition 的 `workflow_builder_id` 对齐画布 action 节点（FAC MCP `update_document`）
+5. 读取回工作流验证数据结构完整性
+6. 恢复用户原始手工布局 + 原始 builder_id
+
+### 验证结果
+
+**数据结构**：算法生成了 7 个 state 节点 + 8 个 action 节点，ID 全部唯一，`from_id`/`to_id` 映射正确。
+
+**坐标对比**：
+
+| 节点类型 | 用户手工 | 算法生成 | 偏差 |
+|---------|---------|---------|------|
+| Draft | (481, 5) | (480, 5) | ~0 |
+| 待财务主管确认报税 | (957, -3) | (930, 5) | x-27 |
+| 待供应链经理确认运费 | (1713, -12) | (1380, 5) | x-333 |
+| Approved | (2347, -5) | (1830, 5) | x-517 |
+| 已取消 | (2919, -6) | (2280, 5) | x-639 |
+| 财务主管已拒绝 | (892, 310) | (890, 310) | ~0 |
+| 供应链经理已拒绝 | (1995, 241) | (1340, 310) | x-655 |
+| Reject action (财务) | (1262, 143) | (1210, 150) | ≈ |
+| Reject action (供应链) | (1996, 112) | (1660, 150) | ≈ |
+
+**关键发现**：
+
+1. **y 轴定位精准**：主线路 y≈5（用户 y≈-12~5），拒绝操作 y=150（用户 y=112~143），已拒绝状态 y=310（用户 y=241~310）——拒绝环的垂直分层完全正确。
+
+2. **x 轴间距偏紧**：算法使用固定 H_SPACING=450，用户实际间距更大（用户总宽约 2438px，算法总宽约 1800px）。原因：用户拖拽时给宽标签状态（待财务主管确认报税、待供应链经理确认运费）留了更多空间。
+
+3. **builder_id 对齐**：算法生成的 action ID 序列（action-1~action-8）与 transition 子表的 builder_id 不匹配（用户手动保存后为 action-1~4,6~8,10）。需要额外一步更新 transition 的 builder_id 来对齐画布节点。
+
+4. **缺失元素**：算法未生成 `handleBounds`（连接点锚点）和 `computedPosition`（布局计算位置）字段，但设计器打开时会自动补全，不影响显示。
+
+### 改进方向
+
+- 根据状态名长度动态调整 H_SPACING（中文约占 16px/字）
+- action ID 应与 transition 创建顺序保持一致（而非按拓扑分类重排）
+- 补充 `handleBounds` 模板数据避免设计器首次加载闪烁
