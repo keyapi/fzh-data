@@ -2,7 +2,7 @@
 
 > 适用场景：Amazon 后台导出的 Sponsored Products（商品推广）报告 → 全维度分析 → Excel 报告。
 >
-> **版本**: v0.2 | **分支**: amazon_advertise | **PR**: [#14](https://github.com/keyapi/fzh-data/pull/14)
+> **版本**: v0.5 | **分支**: amazon_advertise | **PR**: [#14](https://github.com/keyapi/fzh-data/pull/14)
 >
 > 详细技术文档（供 Agent 接手）→ `AGENT_HANDOFF.md`
 
@@ -18,48 +18,49 @@ Agent 会自动读文档、找文件、跑脚本、出报告。你只需验证�
 
 ## 快速开始
 
-### 1. 准备数据
+### 1. 准备数据（推荐：赛狐 API 自动拉取）
 
-把 Amazon 广告后台导出的 4 份报告放到 `数据源/` 下任意子目录：
+`ash
+# 拉取 7 种 SP 报告（需先在 SELLFOX_API/.env 配置凭证）
+uv run python SELLFOX_API/fetch_ad_reports.py --shop <店铺ID> --days 37
+uv run python SELLFOX_API/fetch_extra_reports.py
+`
 
-> 注意：`数据源/` 和 `out/` 目录已被 `.gitignore` 排除。数据文件**不会被提交到 git**。每次分析前需从 Amazon 广告后台下载最新数据。
-
-| 报告名称 | 必需 | 导出路径 |
-|---------|------|---------|
-| 商品推广_广告活动_报告 | ✅ | 广告活动管理 → 报告 → 创建报告 → 广告活动 |
-| 商品推广_投放_报告 | ✅ | 同上，选择 "投放" |
-| 商品推广_搜索词_报告 | ✅ | 同上，选择 "搜索词" |
-| 商品推广_广告位_报告 | ✅ | 同上，选择 "广告位" |
-
-> 文件名需包含关键字：`广告活动` / `投放` / `搜索词` / `广告位`，脚本会自动识别。
+> 备选：手动从 Amazon 广告后台下载 7 份报告放入 数据源/，脚本自动识别中/英文文件名。
 
 ### 2. 运行分析
 
-```bash
-# 依次运行 4 个分析脚本（可单独跑）
+`ash
+# 7 维分析 + 跨报告集成 + 优化产出
 uv run python -m advertise.analyze_campaign
 uv run python -m advertise.analyze_targeting
 uv run python -m advertise.analyze_search_term
 uv run python -m advertise.analyze_placement
-
-# 生成最终 Excel 报告
-uv run python -m advertise.build_report
-```
-
-输出在 `out/如森US-广告分析报告.xlsx`。
+uv run python -m advertise.analyze_ad_group
+uv run python -m advertise.analyze_advertised_product
+uv run python -m advertise.analyze_purchased_item
+uv run python -m advertise.analyze_cross
+uv run python -m advertise.build_full_report
+uv run python -m advertise.calibrate_thresholds
+uv run python -m advertise.generate_negatives
+`
 
 ### 3. 查看报告
 
-用 Excel / WPS 打开，6 个 Sheet：
+用 Excel / WPS 打开，10 个 Sheet + 48 条行动建议：
 
 | Sheet | 内容 |
 |-------|------|
-| 总览 | 30 天关键数字、数据一致性校验、核心发现 |
-| 广告活动 | 37 个活动 ACOS/ROAS 排行 + 散点图 |
+| 总览 | 关键数字、直接/混合 ACOS、健康度评分 |
+| 跨报告集成 | Blended ACOS、Gateway ASIN、收割/否定清单 |
+| 广告活动 | 活动 ACOS/ROAS 排行 + 散点图 |
 | 投放表现 | 按匹配类型对比、光环效应、零转化投放 |
-| 搜索词洞察 | 关键词收割 TOP50、否定词候选、搜索词分类饼图 |
-| 广告位效率 | Top of Search vs Product Pages vs Rest 对比 + 出价建议 |
-| 行动建议 | 按优先级排列的操作清单 + 优化节奏 |
+| 搜索词 | 5 桶分类、关键词收割 TOP50、否定词候选 |
+| 广告位 | Top of Search vs Product Pages vs Rest 对比 |
+| 广告组结构 | 组粒度预算分配、跨活动同名组检测 |
+| ASIN效率 | 29 ASIN 效率排行、零销售高花费标记 |
+| 品牌光环 | Gateway ASIN 判定、交叉销售矩阵 |
+| 行动建议 | 48 条按优先级排列的操作清单 |
 
 ## 分析指标说明
 
@@ -98,30 +99,36 @@ MIN_CLICKS_NEGATIVE = 10      # 否定词：最低点击数
 
 ```
 advertise/
-├── 数据源/                ← Amazon 后台导出的原始报告（csv/xlsx）
-├── 参考文档/              ← 同事/朋友给的参考文档（MD/PDF）
-├── out/                   ← 分析输出（JSON + Excel）
-├── analyze_campaign.py    ← 广告活动层分析
-├── analyze_targeting.py   ← 投放/关键词层分析
-├── analyze_search_term.py ← 搜索词层分析（核心）
-├── analyze_placement.py   ← 广告位层分析
-├── build_report.py        ← 汇总 → Excel
+├── config/                ← 账户配置 (品牌词/阈值/竞品)
+├── data/                  ← 赛狐 API 拉取的原始报告（xlsx）
+├── 数据源/                ← 手动导出的原始报告
+├── 参考文档/              ← 产品策略参考
+├── out/                   ← 分析输出（JSON + Excel + bulksheet）
+├── analyze_campaign.py    ← 广告活动
+├── analyze_targeting.py   ← 投放/关键词
+├── analyze_search_term.py ← 搜索词 5 桶（核心）
+├── analyze_placement.py   ← 广告位
+├── analyze_ad_group.py    ← 广告组结构
+├── analyze_advertised_product.py ← ASIN 效率
+├── analyze_purchased_item.py     ← 品牌光环
+├── analyze_cross.py       ← 跨报告集成
+├── build_full_report.py   ← 10-sheet Excel
+├── calibrate_thresholds.py ← 阈值标定
+├── generate_negatives.py  ← 否定词 bulksheet
+├── utils.py / thresholds.py / column_maps.py ← 基础设施
 ├── README.md              ← 本文件
 └── AGENT_HANDOFF.md       ← Agent 开发参考
-```
-
-## 常见问题
-
-| 问题 | 解决 |
-|------|------|
-| 脚本报"找不到数据文件" | 检查 `数据源/` 下是否有包含关键词（广告活动/投放/搜索词/广告位）的文件 |
-| 数据文件存在但识别不了 | 文件名需包含对应中文关键词，详见上方表格 |
-| 报告数据为空 | 确认报告日期范围覆盖最近 30 天且有实际广告投放 |
-| Excel 列名不匹配 | 告诉 Agent：用映射表重跑，映射表在 `docs/reference/column-mappings.md` |
+`docs/reference/column-mappings.md` |
 | 输出报告在哪 | `out/如森US-广告分析报告.xlsx` |
 
 ## 后续计划
 
-- [ ] Web 交互页面（筛选/下钻/趋势图）
+- [x] 7 种 SP 报告全覆盖 + 跨报告集成分析
+- [x] 否定词 bulksheet 自动生成
+- [x] 阈值自动标定
+- [ ] 产品线聚合视图
+- [ ] 搜索词战略分层（防守/主攻/长尾）
+- [ ] Campaign 结构蓝图建议
 - [ ] 多期数据对比（环比/同比）
-- [ ] 自动化周报（定时导出 + 邮件发送）
+- [ ] 决策日志持久化
+- [ ] Web Dashboard

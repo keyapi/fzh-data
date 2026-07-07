@@ -50,6 +50,26 @@ def generate(level="campaign", account="BJRYECLTD-US", period="2026-06"):
 
     print(f"找到 {len(negative_terms)} 个否定候选词")
 
+    # Brand protection: skip brand/protected terms
+    from advertise.thresholds import PROTECTED_TERMS, BRAND_TERMS
+    protected = set(t.lower() for t in (list(PROTECTED_TERMS) + BRAND_TERMS) if t)
+    skipped_brand = []
+    filtered_terms = []
+    for term in negative_terms:
+        term_text = (term.get("search_term", "") if isinstance(term, dict) else str(term)).lower()
+        is_protected = any(p in term_text for p in protected)
+        if is_protected:
+            skipped_brand.append(term)
+        else:
+            filtered_terms.append(term)
+    if skipped_brand:
+        skipped_names = [(t.get("search_term","?") if isinstance(t,dict) else str(t)) for t in skipped_brand]
+        print(f"  Brand-protected (not negating): {len(skipped_brand)} terms -> {skipped_names}")
+    negative_terms = filtered_terms
+    if not negative_terms:
+        print("All candidates are protected terms, no negatives needed")
+        return None
+
     # Build mapping: search_term → [(campaign_id, campaign_name, ad_group_id, ad_group_name)]
     df = st_df.copy()
     # Ensure we have the right columns
