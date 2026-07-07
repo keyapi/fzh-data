@@ -1,3 +1,12 @@
+---
+okf: v0.1
+type: Research
+title: Amazon 否定词 Bulksheet 格式研究
+description: Amazon Ads Console Bulk Operations 的否定关键词 .xlsx 文件格式规范
+tags: [amazon, advertising, negative-keywords, bulksheet, research]
+created: 2026-07-02
+updated: 2026-07-07
+---
 # Amazon Advertising: Negative Keyword Bulk Upload Format
 
 > Research date: 2026-07-02

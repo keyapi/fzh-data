@@ -1,3 +1,11 @@
+---
+okf: v0.1
+type: Handoff
+title: Amazon 广告数据分析模块 — Agent 交接说明
+description: 入口文件，Agent 接手时先读，7 种 SP 报告 + 跨报告集成 + 阈值标定 + 否定词
+tags: [amazon, advertising, handoff, agent]
+updated: 2026-07-07
+---
 # AGENT_HANDOFF.md — Amazon 广告数据分析模块
 
 > **入口文件** — Agent 接手时先读这个。需要细节时按链接深入。

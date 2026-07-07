@@ -8,6 +8,8 @@ tags: [amazon, advertising, changelog]
 
 # 变更日志
 
+- **OKF 合规**: 补齐 4 个 .md 文件 YAML frontmatter (AGENT_HANDOFF/README/amazon-bulk-negative-keyword-format/Daneey Chat) + 6 个目录 index.md + docs/index.md 更新导航
+
 ## 2026-07-07 (v0.5.1) — P0-P3 改进
 
 - **P0 配置+文档**: protected_terms 填入品牌词 (daneey/senight/rucen/bjryecltd), strategic_terms 三层关键词配置

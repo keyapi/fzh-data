@@ -1,3 +1,11 @@
+---
+okf: v0.1
+type: Reference
+title: Daneey 户外无骨模块沙发 — 页面与广告优化 ChatGPT 策略
+description: 同事 ChatGPT 聊天记录整理，产品定位/竞争策略/Campaign 结构/关键词分层/30天优化节奏
+tags: [amazon, advertising, strategy, daneey, outdoor-sofa, reference]
+source: ChatGPT conversation, 2026-07-06
+---
 # Daneey Amazon 户外无骨模块沙发页面与广告优化聊天记录整理
 
 > 产品链接：<https://www.amazon.com/dp/B0H2L27766?th=1>  

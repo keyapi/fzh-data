@@ -1,3 +1,11 @@
+---
+okf: v0.1
+type: Guide
+title: Amazon 广告数据分析工具 — 用户指南
+description: 非技术同事快速入口 + 技术同事运行指南，7 种 SP 报告分析
+tags: [amazon, advertising, guide, user]
+updated: 2026-07-07
+---
 # Amazon 广告数据分析工具
 
 > 适用场景：Amazon 后台导出的 Sponsored Products（商品推广）报告 → 全维度分析 → Excel 报告。
