@@ -99,9 +99,11 @@ def build_report(account="BJRYECLTD-US", period="2026-06"):
     ad_product = load_json("advertised_product_analysis.json")
     purchased = load_json("purchased_item_analysis.json")
     cross = load_json("cross_analysis.json")
+    product_line = load_json("product_line_analysis.json")
+    blueprint = load_json("campaign_blueprint.json")
 
     ws_names = ["总览", "跨报告集成", "广告活动", "投放表现", "搜索词", "广告位",
-                "广告组结构", "ASIN效率", "品牌光环", "行动建议"]
+                "广告组结构", "ASIN效率", "品牌光环", "产品线聚合", "结构蓝图", "行动建议"]
     for i, name in enumerate(ws_names):
         if i == 0:
             ws = wb.active
@@ -293,9 +295,20 @@ def build_report(account="BJRYECLTD-US", period="2026-06"):
     mc = len(search.get("monitor_list", [])) if search.get("monitor_list") else 0
     pc = len(search.get("protect_list", [])) if search.get("protect_list") else 0
     ic = sb.get("ignore_count", 0) if "ignore_count" in sb else (sb["unique_search_terms"] - hc - nc - mc - pc)
+        # Strategic tier summary
+    st_tiers = search.get("strategic_tiers", {})
+    tier_str = ""
+    if st_tiers:
+        tier_cn = {"attack": "主攻", "defense": "防守", "long_tail": "长尾", "general": "通用"}
+        parts = []
+        for t in ["attack", "defense", "long_tail", "general"]:
+            if t in st_tiers:
+                parts.append(f"{tier_cn.get(t,t)}({st_tiers[t]})")
+        tier_str = " | 战略层: " + " ".join(parts)
+
     ws.cell(row=1, column=1, value=f"搜索词分类: Harvest {hc} | "
             f"Negate {nc} | Monitor {mc} | "
-            f"Ignore {ic} | Protect {pc}").font = SUB_FONT
+            f"Ignore {ic} | Protect {pc}{tier_str}").font = SUB_FONT
 
     bucket_map = {
         "Harvest": search.get("harvest_keywords", []),
@@ -473,7 +486,60 @@ def build_report(account="BJRYECLTD-US", period="2026-06"):
     style_data(ws, 5, rc - 1, len(ch))
     auto_width(ws, len(ch))
 
-    # ── Sheet 9: Action Recommendations ───────────────────────
+    # ── Sheet 10: Product Line Aggregation ──────────────────
+    ws = wb["产品线聚合"]
+    add_title(ws, f"产品线广告效率 — {account} — {period}", 8)
+
+    pl_hdrs = ["产品线", "花费", "直接ACOS", "混合ACOS", "ROAS", "活动数", "结构健康", "建议"]
+    for c, h in enumerate(pl_hdrs, 1):
+        ws.cell(row=3, column=c, value=h)
+    style_header(ws, 3, len(pl_hdrs))
+
+    for i, pl in enumerate(product_line.get("product_lines", []), 4):
+        ws.cell(row=i, column=1, value=pl.get("product","")).font = CN_FONT
+        ws.cell(row=i, column=2, value=fmt_usd(pl.get("spend"))).font = NUM_FONT
+        ws.cell(row=i, column=3, value=fmt_pct(pl.get("direct_acos"))).font = NUM_FONT
+        ws.cell(row=i, column=4, value=fmt_pct(pl.get("blended_acos"))).font = NUM_FONT
+        ws.cell(row=i, column=5, value=fmt_num(pl.get("roas"), 1)).font = NUM_FONT
+        ws.cell(row=i, column=6, value=pl.get("campaign_count",0)).font = NUM_FONT
+        ws.cell(row=i, column=7, value=f"{pl.get('structure_score',0):.0f}%").font = NUM_FONT
+        ws.cell(row=i, column=8, value=pl.get("recommendation","")).font = CN_FONT
+        acos_val = pl.get("direct_acos")
+        if acos_val and float(acos_val) > 0.4:
+            ws.cell(row=i, column=3).fill = BAD
+        elif acos_val and float(acos_val) < 0.25:
+            ws.cell(row=i, column=3).fill = GOOD
+    style_data(ws, 4, 3 + len(product_line.get("product_lines", [])), len(pl_hdrs))
+    auto_width(ws, len(pl_hdrs), max_width=40)
+
+    # ── Sheet 11: Campaign Structure Blueprint ──────────────────
+    ws = wb["结构蓝图"]
+    add_title(ws, f"Campaign 结构蓝图 — {account} — {period}", 6)
+
+    bp_hdrs = ["产品", "当前月花费", "建议月预算", "预算差距", "缺少活动类型", "应建活动"]
+    for c, h in enumerate(bp_hdrs, 1):
+        ws.cell(row=3, column=c, value=h)
+    style_header(ws, 3, len(bp_hdrs))
+
+    row = 4
+    for bp in blueprint.get("blueprints", []):
+        missing_camps = bp.get("missing_campaigns", [])
+        ws.cell(row=row, column=1, value=bp.get("product","")).font = CN_FONT
+        ws.cell(row=row, column=2, value=fmt_usd(bp.get("current_monthly_spend"))).font = NUM_FONT
+        ws.cell(row=row, column=3, value=fmt_usd(bp.get("suggested_monthly_budget"))).font = NUM_FONT
+        ws.cell(row=row, column=4, value=fmt_usd(bp.get("budget_gap"))).font = NUM_FONT
+        ws.cell(row=row, column=5, value=", ".join([m["type"] for m in missing_camps])).font = CN_FONT
+        ws.cell(row=row, column=6, value=", ".join([m["name"] for m in missing_camps][:3])).font = CN_FONT
+        ws.cell(row=row, column=6).alignment = Alignment(wrap_text=True)
+        gap = bp.get("budget_gap", 0)
+        if gap > 0:
+            ws.cell(row=row, column=4).fill = WARN
+        style_data(ws, row, row, len(bp_hdrs))
+        row += 1
+    auto_width(ws, len(bp_hdrs), max_width=50)
+    ws.column_dimensions["F"].width = 60
+
+    # ── Sheet 12: Action Recommendations ───────────────────────
     ws = wb["行动建议"]
     add_title(ws, f"行动建议 — {account} — {period}", 3)
 
@@ -499,16 +565,22 @@ def build_report(account="BJRYECLTD-US", period="2026-06"):
             f"Gateway ASIN {g['advertised_sku'][:30]}: 拉动{g['purchased_units']}件${g['purchased_sales']:,.2f}其他产品销售 — 即使自身ACOS高也绝不暂停"))
 
     # From SearchTerm negate candidates
-    negates = search.get("negative_candidates", [])
+    negates = cross.get("negate_actions", search.get("negative_candidates", []))
     for n in negates[:10]:
+        p = n.get("priority", "")
+        w = n.get("suggested_week", "")
+        tag = f"[{p} W{w}] " if p else ""
         actions.append(("否定候选", "negate",
-            f"搜索词 '{n.get('search_term','')}' — ${n.get('spend',0):.2f} 花费, {n.get('clicks',0)} 点击, 0订单"))
+            f"{tag}搜索词 '{n.get('search_term','')}' — ${n.get('spend',0):.2f} 花费, {n.get('clicks',0)} 点击, 0订单"))
 
-    # From SearchTerm harvest candidates
-    harvests = search.get("harvest_keywords", [])
+    # From SearchTerm harvest candidates (with priority from cross)
+    harvests = cross.get("harvest_actions", search.get("harvest_keywords", []))
     for h in harvests[:5]:
+        p = h.get("priority", "")
+        w = h.get("suggested_week", "")
+        tag = f"[{p} W{w}] " if p else ""
         actions.append(("关键词收割", "harvest_add_exact",
-            f"搜索词 '{h.get('search_term','')}' — ${h.get('spend',0):.2f} → ${h.get('sales',0):.2f}, 建议加入精准匹配"))
+            f"{tag}搜索词 '{h.get('search_term','')}' — ${h.get('spend',0):.2f} → ${h.get('sales',0):.2f}, 建议加入精准匹配"))
 
     ah = ["类别", "操作", "详情"]
     for c, h in enumerate(ah, 1):
