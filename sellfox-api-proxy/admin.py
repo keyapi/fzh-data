@@ -107,7 +107,16 @@ async def oidc_callback(request: Request, code: str = "", state: str = ""):
     await _ensure_user_has_key(request.app.state.db, dingtalk_id, display_name)
 
     token = make_session_token(dingtalk_id, display_name)
-    resp = HTMLResponse(_read_template("admin.html"))
+
+    # Use JS redirect to strip OIDC query params from the URL bar.
+    # Returning HTMLResponse directly would leave ?code=...&state=... in the
+    # address bar, causing "Invalid state" on browser refresh.
+    redirect_html = (
+        '<!DOCTYPE html><html><head><meta charset="UTF-8">'
+        '<script>window.location.replace("/sellfox/admin");</script>'
+        '</head><body><p>登录成功，正在跳转...</p></body></html>'
+    )
+    resp = HTMLResponse(redirect_html)
     resp.set_cookie(COOKIE_NAME, token, max_age=SESSION_TTL,
                     httponly=True, samesite="lax", path="/")
     return resp
@@ -121,7 +130,12 @@ async def dev_login(request: Request, name: str = "测试用户", id: str = "tes
         raise HTTPException(404)
     await _ensure_user_has_key(request.app.state.db, id, name)
     token = make_session_token(id, name)
-    resp = HTMLResponse(_read_template("admin.html"))
+    redirect_html = (
+        '<!DOCTYPE html><html><head><meta charset="UTF-8">'
+        '<script>window.location.replace("/sellfox/admin");</script>'
+        '</head><body><p>登录成功，正在跳转...</p></body></html>'
+    )
+    resp = HTMLResponse(redirect_html)
     resp.set_cookie(COOKIE_NAME, token, max_age=SESSION_TTL,
                     httponly=True, samesite="lax", path="/")
     return resp
