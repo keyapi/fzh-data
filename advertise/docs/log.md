@@ -8,6 +8,20 @@ tags: [amazon, advertising, changelog]
 
 # 变更日志
 
+- **OKF 合规**: 补齐 4 个 .md 文件 YAML frontmatter (AGENT_HANDOFF/README/amazon-bulk-negative-keyword-format/Daneey Chat) + 6 个目录 index.md + docs/index.md 更新导航
+
+## 2026-07-07 (v0.5.1) — P0-P3 改进
+
+- **P0 配置+文档**: protected_terms 填入品牌词 (daneey/senight/rucen/bjryecltd), strategic_terms 三层关键词配置
+- **P0 文档同步**: AGENT_HANDOFF.md v0.4→v0.5, README.md v0.2→v0.5, roadmap.md v0.3→v0.5.1, existing-codebase-audit.md 加 v0.5 修复标记
+- **P1 搜索词战略分层**: nalyze_search_term.py 新增 classify_strategic_tier() — attack(主攻)/defense(防守)/long_tail(长尾)/general(通用) 四层标签, 产出 71主攻/142防守/12长尾
+- **P1 行动建议时间线**: nalyze_cross.py harvest/negate 建议加 priority(P0/P1/P2) + suggested_week(W1/W2/W3) 字段
+- **P1 品牌词安全校验**: generate_negatives.py 加品牌词保护逻辑 — brand/protected terms 自动跳过不否定
+- **P2 产品线聚合**: 新建 nalyze_product_line.py — 按产品线(SKU前缀)聚合7条产品线, 计算结构健康度+缺失活动类型
+- **P2 Campaign 结构蓝图**: 新建 suggest_campaign_structure.py — 基于 Daneey 策略输出7活动模板+预算分配建议
+- **P3 决策日志**: 新建 decision_log.py — out/decision_log.jsonl 追加式记录, 含上期diff对比
+- **参考归档**: Daneey ChatGPT 聊天记录 参考文档/Daneey_Amazon_Outdoor_Sofa_Optimization_Chat.md 作为产品策略参考正式纳入文档体系
+
 ## 2026-07-02 (Phase 3-4)
 
 - **v0.5 Phase 3**: 跨报告集成分析 — `analyze_cross.py` 产出 Blended ACOS per campaign、Gateway ASIN 最终判定、搜索词收割/否定清单、账户健康度评分 (55/100 C级)

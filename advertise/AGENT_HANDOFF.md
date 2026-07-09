@@ -1,12 +1,20 @@
+---
+okf: v0.1
+type: Handoff
+title: Amazon 广告数据分析模块 — Agent 交接说明
+description: 入口文件，Agent 接手时先读，7 种 SP 报告 + 跨报告集成 + 阈值标定 + 否定词
+tags: [amazon, advertising, handoff, agent]
+updated: 2026-07-07
+---
 # AGENT_HANDOFF.md — Amazon 广告数据分析模块
 
 > **入口文件** — Agent 接手时先读这个。需要细节时按链接深入。
 >
-> 版本: v0.4 | 分支: amazon_advertise | PR: [#14](https://github.com/keyapi/fzh-data/pull/14) | 更新: 2026-07-02
+> 版本: v0.5 | 分支: amazon_advertise | PR: [#14](https://github.com/keyapi/fzh-data/pull/14) | 更新: 2026-07-07
 
 ## 这是什么
 
-从 Amazon 后台导出的 Sponsored Products 报告 → 全维度 Excel 分析报告。当前覆盖 4 种 SP 报告（Console 可导出共 10 种，API 可获取 6-7 种）。
+从 Amazon 后台导出的 Sponsored Products 报告 → 全维度 Excel 分析报告。当前覆盖 7 种 SP 报告 + 跨报告集成分析 + 阈值标定 + 否定词 bulksheet 生成。SB/SD 数据极少暂未接入。
 
 ## 快速启动
 
@@ -61,17 +69,19 @@ Top of Search 最优 (ACOS 17.34%), 光环效应 3.77x
 
 ## 关键架构决策
 
-- **模块化 > 单脚本**: 独立可跑, JSON 中间产物可被 Web 消费
-- **阈值常量 > 命令行参数**: 少改, 直观
+- **模块化 > 单脚本**: 7 独立分析 → JSON 中间产物 → nalyze_cross 集成 → uild_full_report Excel
+- **双格式自动检测**: Console CSV + API xlsx, column_maps.py 统一映射
 - **5 桶分类** (v0.2): Harvest(≥2单) / Negate(≥15点击) / Monitor / Protect / Ignore
 - **先聚合再分类** (v0.2): GROUP BY search_term 后判断 (修复 Lesson 6)
+- **跨报告集成** (v0.5): 混合 ACOS, Gateway ASIN 判定, 账户健康度评分
+- **阈值集中管理**: 	hresholds.py + config/bjryecltd-us.json, calibrate_thresholds.py 自动标定
 
 ## 当前工具
 
 **优麦云** (在用) — ERP+广告管理, 无 API 但 Excel 导出, 保存全量历史数据
 **卖家精灵** MCP — 竞品关键词情报 (按需, `open.sellersprite.com/mcp/22`)
 
-## 7 个已知不足
+## 当前局限 (v0.5 剩余 6 项)
 
 1. 缺 Business Understanding (盈亏平衡点未知)
 2. 无环比/同比

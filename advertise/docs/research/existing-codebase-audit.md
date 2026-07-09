@@ -14,6 +14,11 @@ sources:
   - advertise/build_report.py
 ---
 
+> **⚠️ 本文档为 v0.5 之前的审计状态 (2026-07-02 上午)。**
+> 下列 6 个关键发现在当天 v0.5 冲刺中已全部修复：API 列名映射 ✅、数据路径回退 ✅、_safe_num() 去重 ✅、3 个新分析脚本 ✅、阈值标定 ✅、品牌词配置 ✅
+> 当前代码实际状态见 dvertise/docs/log.md v0.5 条目。此审计保留用于对比参考。
+
+
 # Amazon SP 广告分析代码库审计
 
 > 审计日期: 2026-07-02
@@ -28,14 +33,14 @@ sources:
 
 | 维度 | 状态 |
 |------|------|
-| SP 报告类型覆盖 | 4 / 10 (仅 Campaign, Targeting, SearchTerm, Placement) |
-| Console CSV 输入 | 已支持 (4 映射表) |
-| API xlsx 输入 | **未支持** (列名不同, 需新映射表) |
-| SP 分析脚本 | 4 (Campaign / Targeting / SearchTerm / Placement) |
-| 报告生成器 | 1 (6-sheet Excel) |
-| SB 分析 | 0 (数据文件已就绪但无分析) |
+| SP 报告类型覆盖 | ~~4 / 10~~ → **7 / 8 (v0.5 已修复)** |
+| Console CSV 输入 | 已支持 + API xlsx 双格式 (v0.5) |
+| API xlsx 输入 | **✅ 已支持 (v0.5)** — column_maps.py 8 种映射 |
+| SP 分析脚本 | **7 + cross (v0.5)** — Campaign/Targeting/SearchTerm/Placement/AdGroup/AdvertisedProduct/PurchasedItem + analyze_cross |
+| 报告生成器 | 2 — uild_report.py (6-sheet legacy) + uild_full_report.py (10-sheet + 48 actions, v0.5) |
+| SB 分析 | 0 (数据几乎为空, 已确认无需分析) |
 | SD 分析 | 0 (数据文件已就绪但无分析) |
-| 决策日志持久化 | 未实现 (每次覆盖) |
+| 决策日志持久化 | 未实现 (P3 计划) |
 | 多期对比 | 未实现 |
 | TACoS | 未实现 (缺自然销售数据) |
 
@@ -45,8 +50,8 @@ sources:
 2. **数据源路径错误**: `load_data()` 默认读取 `advertise/数据源/` (空), 实际数据在 `advertise/data/` (46+ 文件)。
 3. **`_safe_num()` 重复 4 次**: 4 个分析脚本各有独立副本, 不共享。
 4. **`_serialize()` 重复 2 次**: `__init__.py` 的 `save_json()` 和 `analyze_search_term.py` 的 `_serialize()` 功能重叠。
-5. **无 API-format 分析能力**: 已通过 API 获取的 AdvertisedProduct / PurchasedProduct / AdGroup / Business 4 种报告无对应分析脚本。
-6. **阈值全为行业默认值**: 未按 BJRYECLTD-US 实际数据标定。
+5. ~~**无 API-format 分析能力**~~ ✅ v0.5: 新增 nalyze_ad_group.py, nalyze_advertised_product.py, nalyze_purchased_item.py AdvertisedProduct / PurchasedProduct / AdGroup / Business 4 种报告无对应分析脚本。
+6. ~~**阈值全为行业默认值**~~ ✅ v0.5: calibrate_thresholds.py + config/bjryecltd-us.json
 
 ---
 

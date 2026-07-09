@@ -25,6 +25,7 @@ tags: [amazon, advertising, index]
 | 了解各报告分析价值 | [research/sp-report-analysis-value.md](research/sp-report-analysis-value.md) |
 | 了解代码库现状 | [research/existing-codebase-audit.md](research/existing-codebase-audit.md) |
 | 了解否定词 bulksheet 格式 | [research/amazon-bulk-negative-keyword-format.md](research/amazon-bulk-negative-keyword-format.md) |
+| 产品策略参考 (Daneey 户外沙发) | [../参考文档/Daneey_Amazon_Outdoor_Sofa_Optimization_Chat.md](../参考文档/Daneey_Amazon_Outdoor_Sofa_Optimization_Chat.md) |
 
 ## 目录结构
 

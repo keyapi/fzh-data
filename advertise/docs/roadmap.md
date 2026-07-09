@@ -16,6 +16,9 @@ tags: [amazon, advertising, roadmap, planning]
 | v0.1 | 2026-06-16 | 基础 4 维分析 + Excel 报告, 逐行搜索词分析 |
 | v0.2 | 2026-06-16 | 搜索词聚合→5桶分类, 阈值对齐行业标准, 归因窗口检查 |
 | v0.3 | 2026-06-17 | 6 维度专家调研, 工具修正(优麦云), Skills/MCP 调研, TACoS/AMC/COSMO 深度挖掘 |
+| v0.4 | 2026-07-02 | 赛狐 API 全量拉取 (SP 8 + SB 7 + SD 5), 字段定义文档 (162+419 字段) |
+| v0.5 | 2026-07-02 | Phase 1-4 完成: API 映射 + 3 新分析脚本 + 跨报告集成 + 阈值标定 + 否定词生成 + 10-sheet Excel + 48 条建议 |
+| v0.5.1 | 2026-07-07 | 文档同步 + 品牌词配置 + Daneey 产品策略参考归档 + P1-P3 改进规划 |
 
 ## 核心发现 (v0.2 分析)
 
@@ -68,12 +71,13 @@ tags: [amazon, advertising, roadmap, planning]
 
 ## 立即可执行
 
-1. **问用户**: 盈亏平衡 ACoS？（产品毛利率）→ 才能算 TACoS 基准
-2. **问用户**: 上期数据？（环比对比）
-3. **问用户**: Brand Registry 状态？（可获取 ABA 数据）
-4. **从优麦云导出**: 广告/搜索词/销售/库存 Excel → 放入 `数据源/`
-5. **导出补充报告**: Purchased Product + Search Term Impression Share + Performance Over Time
-6. **试用 Two Minute Reports MCP**: 自然语言查 Amazon Ads 数据
+1. **P1: 搜索词战略分层** — nalyze_search_term.py 加 strategic_tier 标签
+2. **P1: 行动建议时间线** — nalyze_cross.py 输出加 priority + suggested_week
+3. **P1: 品牌词安全校验** — generate_negatives.py 加品牌词保护逻辑
+4. **P2: 产品线聚合** — 新建 nalyze_product_line.py
+5. **P2: Campaign 结构蓝图** — 新建 suggest_campaign_structure.py
+6. **P2: 预算分配诊断** — nalyze_cross.py 增强
+7. **P3: PAT 竞品推荐** — 新建 suggest_pat_targets.py
 
 ## See also
 - [调研报告](research/2026-06-16-amazon-advertising-analysis-research.md)
