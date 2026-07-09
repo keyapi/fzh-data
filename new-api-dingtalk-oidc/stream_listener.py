@@ -9,6 +9,7 @@ Usage: runs as a background thread inside the FastAPI bridge process.
 
 import logging
 import os
+import sqlite3
 import threading
 import time
 
@@ -29,6 +30,11 @@ MYSQL_PORT = int(os.getenv("MYSQL_PORT", "3306"))
 MYSQL_USER = os.getenv("MYSQL_USER", "root")
 MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD", "new-api-root-pwd")
 MYSQL_DB = os.getenv("MYSQL_DB", "new_api")
+
+PROXY_DB_PATH = os.getenv(
+    "PROXY_DB_PATH",
+    "/data/sellfox-proxy/sellfox-proxy.db",
+)
 
 
 # ── DingTalk API helpers ─────────────────────────────────────────────
@@ -115,6 +121,31 @@ def disable_new_api_user(user_id: int):
         db.close()
 
 
+def disable_proxy_keys(union_id: str) -> int:
+    """Disable all active proxy API keys for a departed DingTalk user.
+    Returns the number of keys disabled.
+    """
+    try:
+        db = sqlite3.connect(PROXY_DB_PATH)
+        cur = db.execute(
+            "UPDATE api_keys SET is_active = 0 "
+            "WHERE dingtalk_union_id = ? AND is_active = 1",
+            (union_id,),
+        )
+        count = cur.rowcount
+        db.commit()
+        db.close()
+        if count:
+            logger.info(
+                "disabled %d proxy key(s) for union_id=%s",
+                count, union_id[:16],
+            )
+        return count
+    except Exception as e:
+        logger.warning("Failed to disable proxy keys for %s: %s", union_id[:16], e)
+        return 0
+
+
 # ── Event Handler ─────────────────────────────────────────────────────
 
 class OffboardingHandler(dingtalk_stream.EventHandler):
@@ -165,6 +196,7 @@ class OffboardingHandler(dingtalk_stream.EventHandler):
                     continue
 
                 disable_new_api_user(new_api_user_id)
+                disable_proxy_keys(union_id)
             except Exception as e:
                 logger.error("error processing userId=%s: %s", uid, e)
 

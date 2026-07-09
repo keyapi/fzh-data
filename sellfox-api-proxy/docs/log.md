@@ -10,12 +10,18 @@ tags: [sellfox, api-proxy, gateway, log]
 
 ## 2026-07-09
 
+- **v0.4.3 离职封号集成 + 冒烟测试 + OIDC 刷新修复**:
+  - 离职封号: `offboarding-check.py` 和 `stream_listener.py` 在封禁 new-api 账号时同步禁用 proxy keys（按 `dingtalk_union_id`）
+  - db.py 新增 `disable_keys_by_union_id()` 函数
+  - 新建 `smoke_test.py`（290 行，纯 stdlib，9 条用例），支持 `--local` / 远程双模式
+  - **OIDC 刷新修复** (#16): 登录成功后浏览器 URL 残留 `?code=...&state=...`，刷新时重新提交已消费的 state → `Invalid state`。修复：回调返回 JS `window.location.replace("/sellfox/admin")` 跳转到干净 URL
+  - **旧 Key 无法复制** (#17): 加密功能 (v0.4.1) 上线前创建的 key 的 `key_encrypted` 为空字符串，`_reveal_key()` 返回 None → 前端提示"无法复制此 Key"。解决：删除旧 key，重新 OIDC 登录触发 auto-provision 创建新 key（带加密）
 - **v0.4.2 中文 UI + 复制修复**: 全中文界面、复制按钮移到 Key 列、`data.key → undefined` 修复
 - **v0.4.1 Key 加密存储**: XOR + SHA-256 纯 Python（零依赖），`POST /api/keys/{id}/reveal` 随时复制
 - **v0.4.0 Accounts + Auto-Provision**: Provider→Account 重构，`_ensure_user_has_key()` 首次登录自动配给，per-account 全局限速
 - **v0.3.0 角色隔离**: Admin Key=管理员看全部，钉钉登录=用户只看自己
 - **v0.2.1 浏览器可用**: `<base href>` + 相对 URL + cookie path 修复
-- **完整经验教训**: [2026-07-09-full-architecture-evolution.md](lessons/2026-07-09-full-architecture-evolution.md) — 15 条核心教训
+- **完整经验教训**: [2026-07-09-full-architecture-evolution.md](lessons/2026-07-09-full-architecture-evolution.md) — 17 条核心教训
 
 ## 2026-07-08
 
