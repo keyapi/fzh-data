@@ -192,3 +192,17 @@ async def delete_key(db: aiosqlite.Connection, key_id: str) -> bool:
     cursor = await db.execute("DELETE FROM api_keys WHERE id = ?", (key_id,))
     await db.commit()
     return cursor.rowcount > 0
+
+
+async def disable_keys_by_union_id(db: aiosqlite.Connection, union_id: str) -> int:
+    """Disable all active API keys for a DingTalk user. Returns count of disabled keys.
+
+    Called from offboarding flow (admin API or external scripts).
+    """
+    cursor = await db.execute(
+        "UPDATE api_keys SET is_active = 0 "
+        "WHERE dingtalk_union_id = ? AND is_active = 1",
+        (union_id,),
+    )
+    await db.commit()
+    return cursor.rowcount
