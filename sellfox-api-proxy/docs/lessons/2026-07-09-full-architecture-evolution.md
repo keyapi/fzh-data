@@ -15,7 +15,7 @@ sources:
 
 # sellfox-api-proxy 架构演进全记录
 
-> 最后更新: 2026-07-09 | 覆盖版本: v0.1.0 → v0.4.2 | 共 15 条核心教训
+> 最后更新: 2026-07-09 | 覆盖版本: v0.1.0 → v0.4.3 | 共 17 条核心教训
 
 ---
 
@@ -216,6 +216,30 @@ cd /opt/new-api && docker compose up -d sellfox-proxy
 
 ---
 
+## 16. OIDC 回调不能直接返回 HTML——URL 残留导致刷新失败
+
+**问题**：OIDC 回调 `/admin/oidc-callback?code=...&state=...` 成功后直接返回 `admin.html`。浏览器地址栏残留 OIDC query 参数。用户刷新时重新提交已消费的 `state` → `{"detail":"Invalid state"}`。
+
+**修复**：回调成功后返回极简 HTML 页面，通过 `window.location.replace("/sellfox/admin")` 跳转到干净 URL。Cookie 照常设置（`path="/"`），浏览器地址栏变成 `/sellfox/admin`，刷新安全。
+
+**代码**：`admin.py` 中 `oidc_callback()` 和 `dev_login()` 均改为返回 JS 重定向页面。
+
+**教训**：OIDC 回调的 response 必须改变浏览器 URL（要么 302 重定向，要么 JS redirect）。不能直接返回目标页面。
+
+---
+
+## 17. Key 加密上线后旧 Key 的 `key_encrypted` 为空
+
+**问题**：加密功能 (v0.4.1) 通过 migration 添加 `key_encrypted` 列（`DEFAULT ''`），旧 key 的该列保持空字符串。`_reveal_key()` 中 `not row[0]` 对空字符串返回 True → 返回 None → 前端显示"无法复制此 Key"。
+
+**无法恢复**：旧 key 的原始值在创建时未加密存储，`key_hash`（SHA-256）不可逆，无法回填。
+
+**修复**：删除旧 key，让用户重新 OIDC 登录触发 auto-provision 创建新 key（带加密）。
+
+**教训**：migration 添加加密列时，要么：(1) 在 migration 中加密已有数据（需要原始值），要么 (2) 接受旧数据无法恢复，但要明确区分"未加密"和"解密失败"两种状态。当前 `key_encrypted = ''` 被当作"不可恢复"，语义不精确。
+
+---
+
 ## 更新历史
 
 | 日期 | 版本 | 变更 |
@@ -224,3 +248,4 @@ cd /opt/new-api && docker compose up -d sellfox-proxy
 | 2026-07-08 上午 | v0.2 | 首次部署 VPS，浏览器登录修复 |
 | 2026-07-08 下午 | v0.3 | 钉钉 OIDC 登录，Provider 重构 |
 | 2026-07-09 | v0.4 | Accounts 模型，自动配给，Key 加密，中文 UI |
+| 2026-07-09 下午 | v0.4.3 | 离职封号集成 + 冒烟测试 + OIDC 刷新修复 + 旧 Key 加密兼容 |

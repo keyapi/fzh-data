@@ -1,14 +1,14 @@
 # sellfox-api-proxy — Agent Handoff
 
-> **给接手 Agent 的第一句话**：赛狐 API 代理网关已部署到上海 VPS (`api.vilavi.cn/sellfox/`)，v0.4.2 生产可用。支持钉钉 OIDC 登录、自动配给 Key、多 Account、全局限速、Key 加密存储。代码 1,234 行 (Python + JS + HTML)。
+> **给接手 Agent 的第一句话**：赛狐 API 代理网关已部署到上海 VPS (`api.vilavi.cn/sellfox/`)，v0.4.3 生产可用。支持钉钉 OIDC 登录、自动配给 Key、多 Account、全局限速、Key 加密存储、离职自动封号、冒烟测试全覆盖。代码 ~1,500 行 (Python + JS + HTML)。
 
 ## 快速理解
 
 **问题**：赛狐 API (openapi.sellfox.com) 要求 IP 白名单 + 只支持 5 个 API 账号。团队的 IP 不固定（家里/办公室/联通动态 IP），App ID/Secret 不能直接分发给同事。
 
-**方案**：在 VPS（固定 IP 82.156.238.248）上部署一个 API 代理网关，持有赛狐真实凭证，对外给每个同事发放独立 API Key。借鉴 Kong 插件阶段模型，用声明式 YAML 配置 Provider，之后加新 API (通途等) 只需写插件或配置。
+**方案**：在 VPS（固定 IP 82.156.238.248）上部署一个 API 代理网关，持有赛狐真实凭证，对外给每个同事发放独立 API Key。借鉴 Kong 插件阶段模型，用声明式 YAML 配置 Provider。
 
-**进度**：方案设计完成，文档齐全，尚未开始编码。
+**进度**：v0.4.3 已完成 — 核心功能全部实现并测试通过，包括离职封号集成和冒烟测试。
 
 ## 文档导航
 
@@ -19,7 +19,9 @@
 | 理解通用 API 网关分析（Gateon/Bifrost/ShenYu/等） | [docs/research/2026-07-08-api-gateway-deep-dive.md](docs/research/2026-07-08-api-gateway-deep-dive.md) |
 | 深入理解 Kong 架构分析 | [docs/research/2026-07-08-kong-architecture-analysis.md](docs/research/2026-07-08-kong-architecture-analysis.md) |
 | 看对话过程完整摘要 | [docs/research/2026-07-07-conversation-evolution.md](docs/research/2026-07-07-conversation-evolution.md) |
-| 看实施计划 | [CLAUDE.md 计划文件](C:\Users\zhang\.claude\plans\api-app-quirky-metcalfe.md) |
+| 看完整经验教训（17 条） | [docs/lessons/2026-07-09-full-architecture-evolution.md](docs/lessons/2026-07-09-full-architecture-evolution.md) |
+| 运行冒烟测试 | `ADMIN_API_KEY=xxx python smoke_test.py [--local]` |
+| 了解离职封号机制 | `new-api-deployment/offboarding-check.py` + `new-api-dingtalk-oidc/stream_listener.py` |
 | 看所有文档索引 | [docs/index.md](docs/index.md) |
 
 ## 关键架构决策
@@ -31,6 +33,10 @@
 3. **声明式配置 + SQLite 双层存储**：静态配置（providers/plugins）放 YAML，动态数据（API Keys）放 SQLite。避免 Kong DB-less"改 Key 要 reload"的痛点。
 
 4. **策略模式支持多 Provider**：认证策略（static_key / oauth2_cc / custom）+ 签名策略（noop / sellfox_hmac / md5_sign / custom）。加新 API = 加 YAML + 可选加 ~40 行插件。
+
+5. **复用钉钉 OIDC 身份体系**：不重建登录系统，通过已有的 `new-api-dingtalk-oidc` 桥实现 OIDC 登录。API Key 绑定 `dingtalk_union_id`，离职时 `offboarding-check.py`（每日 cron）+ `stream_listener.py`（实时 Stream）双通道自动封号。
+
+6. **冒烟测试覆盖**：`smoke_test.py`（290 行，纯 stdlib，9 条用例）覆盖 health/auth/CRUD/proxy/rate-limit，支持 `--local`（VPS 本地）和远程（公网 nginx）双模式。
 
 ## 关键代码参考
 
