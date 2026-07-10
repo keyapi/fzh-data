@@ -143,8 +143,10 @@ AGENTS.md (< 200 lines)           ← 你正在读的，项目总纲 + 路由地
 ├── docs/company-context.md       ← 公司背景、供应链、三系统 SKU 定义
 ├── docs/agent-guide.md           ← Skill 管理规则、代码约定、文档 checklist
 ├── docs/solutions/               ← 已解决问题记录（bug、最佳实践、工作流），YAML frontmatter 可按 module/tags 搜索
+├── erpnext/docs/                  ← 工单排查 OKF 文档（方法论、经验教训、API 参考）
 ├── docs/codex_test_enapi_full.md ← Codex 测试 EN_API 全记录
 ├── EN_API/AGENT_HANDOFF.md       ← EN_API 模块详情（API 端点、压缩、启动）
+├── erpnext/AGENT_HANDOFF.md       ← 工单排查模块（setup→fetch→report）
 ├── warehouse_restock/AGENT_HANDOFF.md ← 备货单模块详情
 ├── (其他 6 个模块)/AGENT_HANDOFF.md   ← 各模块详情
 └── .agents/skills/*/SKILL.md     ← Agent Skill 入口（按触发词加载）

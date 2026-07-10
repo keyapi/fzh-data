@@ -1,6 +1,6 @@
 ---
 name: erpnext-wo-audit
-description: ERPNext 生产工单数据排查 — 检测一键完工虚拟 Job Card (HR-EMP-00001)，交叉验证真实产量，生成分类 Excel 报告。覆盖 erpnext/ 模块的 setup→fetch→report 流水线。
+description: EN/ERPNext 生产工单数据排查 — 检测一键完工虚拟 Job Card (HR-EMP-00001)，交叉验证真实产量，生成分类 Excel 报告。覆盖 erpnext/ 模块的 setup→fetch→report 流水线。触发词: en 工单、erpnext 工单排查、一键完工、生产工单分析。
 ---
 
 # ERPNext 生产工单数据排查
