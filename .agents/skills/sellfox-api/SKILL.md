@@ -20,22 +20,47 @@ metadata:
   accounts: sellfox-main (赛狐 ERP)
   api_docs: SELLFOX_API/docs/api-reference/
   scripts: SELLFOX_API/fetch_ad_reports.py, SELLFOX_API/fetch_extra_reports.py, SELLFOX_API/fetch_sb_sd_reports.py
-  updated: 2026-07-09
+  updated: 2026-07-10
 ---
 
 # 赛狐 API 访问
 
-## §1 快速路由
+## §1 入口路由（Agent 必须按顺序执行，不可跳过）
 
-**先判断用户身份，选对路径：**
+### Step 0 — 检查本地凭证（先读 `.env`）
 
-| 用户说 | 身份判断 | 走哪条路 |
-|--------|---------|---------|
-| "帮我调赛狐API" / "拉广告报告" / "查店铺" | 运营/业务人员 | → §2 代理 API |
-| "我有 App ID/Secret" / "在 VPS 上跑脚本" | 开发人员 | → §3 直接 API |
-| "赛狐某个接口怎么调" | 任意 | → §5 API 文档 |
+```bash
+# Agent 先执行这个检查，再决定走哪条路
+grep -E "SELLFOX_API_KEY|SAIFU_KEY|SELLFOX_APP_ID" .env 2>/dev/null || echo "NO_CREDENTIALS"
+```
 
-**规则**：除非用户明确说在 VPS 上运行或有赛狐凭证，否则默认走代理 API。
+| 检查结果 | 走哪条路 |
+|----------|---------|
+| `.env` 有 `SELLFOX_API_KEY=sk-xxx` 或 `SAIFU_KEY=sk-xxx` | → §2 代理 API，直接用 |
+| `.env` 有 `SELLFOX_APP_ID` + `SELLFOX_APP_SECRET` | → 确认用户是否在 VPS 白名单 IP 上，是则走 §3 直接 API |
+| 都没有 | → Step 1 |
+
+### Step 1 — 引导用户获取凭证（90% 用户走这条）
+
+**优先推荐代理 API**。告诉用户（用自然语言，不要用 curl）：
+
+> 赛狐 API 通过 https://api.vilavi.cn/sellfox 代理访问。
+> 请打开 https://api.vilavi.cn/sellfox/admin ，用钉钉登录。
+> 登录后系统自动分配 Key，点「复制」把 `sk-xxx` 发给我。
+> 我拿到后存到项目 `.env`，后续直接用。
+
+**只有**用户明确说"我有 App ID 和 Secret"、"在 VPS 上跑"、"直连 openapi.sellfox.com"时，才提示：
+> （开发者如需直连赛狐官方 API，去赛狐开放平台后台获取 App ID 和 Secret，配置到 `.env` 的 `SELLFOX_APP_ID` + `SELLFOX_APP_SECRET`）
+
+### Step 2 — 持久化 Key
+
+用户给 `sk-xxx` 后，Agent 立即写入项目根目录 `.env`：
+
+```bash
+echo "SELLFOX_API_KEY=sk-xxx" >> .env
+```
+
+后续对话 Step 0 自动命中，无需再问。
 
 ---
 
