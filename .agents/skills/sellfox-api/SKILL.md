@@ -27,6 +27,10 @@ metadata:
 
 ## §1 入口路由（Agent 必须按顺序执行，不可跳过）
 
+> **CRITICAL**: Do NOT ask the user for API keys, App IDs, or any credentials
+> until you have completed Step 0 AND Step 1 below. The answer is almost always
+> "guide user to the admin page for DingTalk login", not "ask for credentials".
+
 ### Step 0 — 检查本地凭证（先读 `.env`）
 
 ```bash
@@ -48,6 +52,8 @@ grep -E "SELLFOX_API_KEY|SAIFU_KEY|SELLFOX_APP_ID" .env 2>/dev/null || echo "NO_
 > 请打开 https://api.vilavi.cn/sellfox/admin ，用钉钉登录。
 > 登录后系统自动分配 Key，点「复制」把 `sk-xxx` 发给我。
 > 我拿到后存到项目 `.env`，后续直接用。
+
+**禁止**：不要提"Admin Key"、"管理员密码"、"admin 密码登录"。用户只需钉钉登录。
 
 **只有**用户明确说"我有 App ID 和 Secret"、"在 VPS 上跑"、"直连 openapi.sellfox.com"时，才提示：
 > （开发者如需直连赛狐官方 API，去赛狐开放平台后台获取 App ID 和 Secret，配置到 `.env` 的 `SELLFOX_APP_ID` + `SELLFOX_APP_SECRET`）
