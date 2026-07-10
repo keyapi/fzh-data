@@ -1,27 +1,114 @@
 #!/usr/bin/env python3
-"""生成6月工单排查报告 Excel v4 — 统一列格式 + open_material_qty全覆盖"""
-import json, os, sys, urllib.request, ssl
+"""生成月度工单排查报告 Excel v4 — 统一列格式 + open_material_qty全覆盖
+
+读取 fetch.py 生成的标准 JSON 文件，输出分类 Excel 报告。
+
+用法:
+  python erpnext/scripts/gen_report.py              # 默认 /tmp/erpnext_*.json
+  python erpnext/scripts/gen_report.py --month 2026-06  # 从 --month 派生路径
+  python erpnext/scripts/gen_report.py --wo /path/to/wo.json --jc /path/to/jc.json
+"""
+import argparse, json, os, sys, urllib.request, ssl
+from pathlib import Path
 sys.stdout.reconfigure(encoding='utf-8')
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
-base = r'D:\Work\赛狐\Cursor\.claude\worktrees\wonderful-varahamihira-c80876\erpnext\data'
-ctx = ssl.create_default_context()
+# ── Default paths (from fetch.py output) ─────────────────
+BASE = Path(__file__).resolve().parent.parent
+DATA_DIR = BASE / "data"
+TMP_DIR = Path("/tmp")
 
-# Load data
-with open('/tmp/wo_full.json', 'r', encoding='utf-8') as f: wo_full = json.load(f)
-with open('/tmp/zero_mat_creation.json', 'r', encoding='utf-8') as f: creation_data = {r['name']: r['creation'] for r in json.load(f)}
-with open('/tmp/all_job_cards3.json', 'r', encoding='utf-8') as f: all_jc = json.load(f)
-with open('/tmp/zero_mat_full2.json', 'r', encoding='utf-8') as f: zero_mat_detail = json.load(f)
-with open('/tmp/mixed_wo_data.json', 'r', encoding='utf-8') as f: mixed_data = json.load(f)
+def resolve_paths(month: str | None = None, wo_path: str | None = None, jc_path: str | None = None):
+    """Resolve input JSON paths. Priority: explicit args > month-derived > defaults."""
+    if wo_path and jc_path:
+        return Path(wo_path), Path(jc_path)
 
-# Categories
-fg_wos = [wo for wo, d in zero_mat_detail.items() if d['ops_count'] == 0]
-semi_wos = [wo for wo, d in zero_mat_detail.items() if d['ops_count'] > 0]
-mixed_wos = ['WO-26-01532','WO-26-01539','WO-26-01540','WO-26-01611']
-nc_touched = ['WO-26-00082','WO-26-00254','WO-26-00748','WO-26-01349']
-scan_clean = [w for w in wo_full if w not in nc_touched]
+    if month:
+        return (
+            TMP_DIR / f"erpnext_wo_data_{month}.json",  # future-proofing
+            TMP_DIR / f"erpnext_jc_data_{month}.json",
+        )
+
+    # Default: look for files from fetch.py
+    wo_file = TMP_DIR / "erpnext_wo_data.json"
+    jc_file = TMP_DIR / "erpnext_jc_data.json"
+    if wo_file.is_file() and jc_file.is_file():
+        return wo_file, jc_file
+
+    # Fallback to legacy paths from conversational workflow
+    wo_file = TMP_DIR / "wo_full.json"
+    jc_file = TMP_DIR / "all_job_cards3.json"
+    if wo_file.is_file():
+        return wo_file, jc_file
+
+    raise FileNotFoundError(
+        "未找到数据文件。请先运行:\n"
+        "  uv run python erpnext/scripts/fetch.py --month 2026-06\n"
+        f"或手动指定: --wo <path> --jc <path>"
+    )
+
+# ── Load data ─────────────────────────────────────────────
+def load_data(wo_path, jc_path):
+    """Load WO and JC data from JSON files."""
+    with open(wo_path, 'r', encoding='utf-8') as f:
+        wo_full = json.load(f)
+    with open(jc_path, 'r', encoding='utf-8') as f:
+        all_jc = json.load(f)
+    return wo_full, all_jc
+
+# ── Parse CLI args ────────────────────────────────────────
+parser = argparse.ArgumentParser(description="生成 ERPNext 工单排查报告")
+parser.add_argument("--month", help="目标月份 (如 2026-06)")
+parser.add_argument("--wo", help="工单 JSON 路径")
+parser.add_argument("--jc", help="Job Card JSON 路径")
+parser.add_argument("--output", help="输出路径 (默认 erpnext/data/)")
+args = parser.parse_args()
+
+wo_path, jc_path = resolve_paths(args.month, args.wo, args.jc)
+print(f"读取数据: WO={wo_path}, JC={jc_path}")
+
+wo_full, all_jc = load_data(wo_path, jc_path)
+print(f"工单: {len(wo_full)} 条, JC数据: {len(all_jc)} 个工作单")
+
+# Derive creation dates from wo_full
+creation_data = {}
+for wo_name, d in wo_full.items():
+    cre = d.get('creation', '')
+    if cre:
+        creation_data[wo_name] = cre
+
+# zero_mat_detail = all WOs with ops data (wo_full already has per-WO detail)
+zero_mat_detail = {wo: d for wo, d in wo_full.items() if isinstance(d, dict)}
+
+# Categories (dynamically from data, not month-specific)
+fg_wos = [wo for wo, d in zero_mat_detail.items()
+          if isinstance(d, dict) and d.get('ops_count', len(d.get('operations', d.get('ops', [])))) == 0]
+semi_wos = [wo for wo, d in zero_mat_detail.items()
+            if isinstance(d, dict) and d.get('ops_count', len(d.get('operations', d.get('ops', [])))) > 0]
+
+# mixed and nc_touched: WOs with both real and virtual JCs
+def classify_jc_owner(wo_name):
+    jcs = all_jc.get(wo_name, [])
+    if not jcs: return 'no_jc'
+    has_yang = any('yangyisen' in jc.get('owner','') for jc in jcs)
+    has_real = any('yangyisen' not in jc.get('owner','') for jc in jcs)
+    if has_yang and has_real: return 'mixed'
+    if has_yang: return 'virtual_only'
+    return 'real_only'
+
+mixed_wos = [wo for wo in wo_full if classify_jc_owner(wo) == 'mixed' and wo not in semi_wos and wo not in fg_wos]
+nc_touched = [wo for wo in wo_full
+              if wo not in fg_wos and wo not in semi_wos
+              and classify_jc_owner(wo) == 'virtual_only'
+              and wo_full[wo].get('status', '') != 'Completed']
+scan_clean = [w for w in wo_full if w not in nc_touched and w not in mixed_wos and w not in fg_wos and w not in semi_wos]
+
+# Fallback: if no WOs classified, include all
+if not fg_wos and not semi_wos:
+    fg_wos = [wo for wo, d in zero_mat_detail.items() if isinstance(d, dict)]
+    semi_wos = []
 
 # Universal column headers (consistent across ALL sheets)
 HDR_ALL = ['工单号', '创建时间', '产品类型', '产品编码', '状态', '工序数',
@@ -69,20 +156,16 @@ def jc_analysis(wo_name):
         return '纯真实工人', f'全部{total}条真实工人', total
 
 def get_item(wo_name):
-    for src in [wo_full, zero_mat_detail, mixed_data]:
+    for src in [wo_full, zero_mat_detail]:
         d = src.get(wo_name, {})
-        item = d.get('item','') or d.get('production_item','')
-        if item: return item
+        if isinstance(d, dict):
+            item = d.get('item','') or d.get('production_item','')
+            if item: return item
     return ''
 
 def get_wo_data(wo_name):
     if wo_name in wo_full: return wo_full[wo_name]
     if wo_name in zero_mat_detail: return zero_mat_detail[wo_name]
-    if wo_name in mixed_data:
-        d = mixed_data[wo_name]
-        return {'qty': d['qty'], 'produced_qty': d['produced_qty'], 'open_material_qty': d.get('open_material_qty',0),
-                'status': d.get('status',''), 'production_item': d.get('item','') or d.get('production_item',''),
-                'operations': [], 'ops_count': 0}
     return {}
 
 def fmt_cre(wo_name):
@@ -261,7 +344,16 @@ for m in [
     srow8(ws7, row, m); row += 1
 for i, w in enumerate([6, 20, 45, 55, 60], 1): ws7.column_dimensions[get_column_letter(i)].width = w
 
-output = os.path.join(base, '2026-06_工单排查报告.xlsx')
+# Determine output filename from month or current data
+if args.month:
+    month_str = args.month
+elif args.output:
+    month_str = None
+else:
+    month_str = "unknown"
+output_name = args.output or (f'{month_str}_工单排查报告.xlsx' if month_str else '工单排查报告.xlsx')
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+output = str(DATA_DIR / output_name)
 wb.save(output)
 print(f'OK: {output}')
 print(f'Sheets: {wb.sheetnames}')

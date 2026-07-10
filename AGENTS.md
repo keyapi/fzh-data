@@ -109,8 +109,8 @@ uv sync
 | `new-api-deployment` | `new-api-deployment/` | new-api 部署（上海阿里云）+ 订阅/配额管理 |
 | `new-api-dingtalk-oidc` | `new-api-dingtalk-oidc/` | 钉钉 OAuth → OIDC 桥接代理（FastAPI） |
 | `dam-prototype` | `dam-prototype/` | DAM 数字资产管理原型 |
-| `erpnext` | `erpnext/` | 工单数据排查 + 一键完工检测 (8步法) |
-| `work-order-audit` | `.agents/skills/work-order-audit/` | 生产工单排查 Skill，按触发词自动加载 |
+| `erpnext` | `erpnext/` | 工单排查 (setup→fetch→report 流水线) |
+| `erpnext-wo-audit` | `.agents/skills/erpnext-wo-audit/` | 工单排查 Skill，按触发词自动加载 |
 | `frappe-core-api` | — | ERPNext REST API 开发（外部 skill） |
 | `frappe-errors-api` | — | ERPNext API 错误处理（外部 skill） |
 
