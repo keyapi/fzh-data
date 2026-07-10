@@ -109,6 +109,7 @@ uv sync
 | `new-api-deployment` | `new-api-deployment/` | new-api 部署（上海阿里云）+ 订阅/配额管理 |
 | `new-api-dingtalk-oidc` | `new-api-dingtalk-oidc/` | 钉钉 OAuth → OIDC 桥接代理（FastAPI） |
 | `dam-prototype` | `dam-prototype/` | DAM 数字资产管理原型 |
+| `erpnext` | `erpnext/` | ERPNext 工单数据排查 + 一键完工检测 |
 | `frappe-core-api` | — | ERPNext REST API 开发（外部 skill） |
 | `frappe-errors-api` | — | ERPNext API 错误处理（外部 skill） |
 
@@ -136,10 +137,11 @@ uv sync
 ```
 AGENTS.md (< 200 lines)           ← 你正在读的，项目总纲 + 路由地图
 ├── CONTRIBUTING.md               ← 技术开发贡献指南（B 类用户）
+├── CONCEPTS.md                    ← 共享领域词汇（实体、流程、状态概念）
 ├── docs/onboarding.md            ← 非技术同事快速上手（A 类用户）
 ├── docs/company-context.md       ← 公司背景、供应链、三系统 SKU 定义
 ├── docs/agent-guide.md           ← Skill 管理规则、代码约定、文档 checklist
-├── docs/solutions/               ← 已解决问题的记录（bug、最佳实践、架构模式）
+├── docs/solutions/               ← 已解决问题记录（bug、最佳实践、工作流），YAML frontmatter 可按 module/tags 搜索
 ├── docs/codex_test_enapi_full.md ← Codex 测试 EN_API 全记录
 ├── EN_API/AGENT_HANDOFF.md       ← EN_API 模块详情（API 端点、压缩、启动）
 ├── warehouse_restock/AGENT_HANDOFF.md ← 备货单模块详情
