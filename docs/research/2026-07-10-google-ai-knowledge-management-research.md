@@ -45,6 +45,18 @@ OKF（开放知识格式）提供了一套极简的「Markdown + YAML」标准�
 - 如果是复杂的行业本体论和术语表，**RDF** 是更好的替代。
 - 如果是 AI 编程助手或工作流配置，使用 **.ai.yml** 标准更加高效。
 
+Sources:
+- [1] https://www.linkedin.com/posts/ganesh-selvaraj-phd-87559844_how-the-open-knowledge-format-can-improve-activity-7476533022771830784-zsA_
+- [2] https://www.theaiera.cn/blogs/google-open-knowledge-format
+- [3] https://www.linkedin.com/posts/arunkumargofficial_okf-openknowledgeformat-enterpriseai-activity-7474058066649436160-ioHy
+- [4] https://www.linkedin.com/posts/sawdeepa_okf-genai-llm-activity-7477214754000924672-8g4F
+- [5] https://www.linkedin.com/posts/stevearrants_google-released-the-open-knowledge-format-activity-7477030975663783937-Q37O
+- [6] https://gist.github.com/0xdevalias/f40bc5a6f84c4c5ad862e314894b2fa6
+- [7] https://aicodingrules.org
+- [8] https://github.com/SamurAIGPT/llm-wiki-agent
+- [9] https://www.switas.com/articles/google-open-knowledge-format-and-the-future-of-agentic-search-optimization
+- [10] https://github.com/jlevy/markform
+
 ---
 
 ## Q2: 我一边用 Claude 操作软件（比如 API 查询内部软件），一边想把部分功能落实到代码编程，一边把期间的经验教训、操作经验整理不断更新为企业内部知识库。这种三合一场景怎么设计？
@@ -196,6 +208,12 @@ def fetch_tongtu_data(api_url, payload, headers):
 2. **纯粹的"线性阅读"**：不搞复杂的双链，人类和 AI 都是从头读到尾。背景、坑、命令行指令、源码，全在同一个文件里，这完全符合传统的"操作手册/图书馆"式管理。
 3. **沉淀极其自然**：你在和 Claude/Codex 聊天分析 Bug 时，可以直接对它说："把我们刚才分析的这个 Bug 原因、安装这个特定依赖的命令，以及刚才改好的代码片段，合并写成一个标准格式的 Markdown，放到 02_Bug_Analysis/ 目录下。" AI 会自动帮你生成符合上面格式的文件，你直接 Git Commit 即可。
 
+Sources:
+- [1] https://okf.md/spec/
+- [2] https://okf.md
+- [3] https://www.reddit.com/r/codex/comments/1s8oskb/now_that_both_are_open_source_time_for_a_claude/
+- [4] https://www.reddit.com/r/ClaudeAI/comments/1u9rbs8/googles_new_open_knowledge_format_is_basically/
+
 ---
 
 ## Q4: 我创建这些文档之后，我的 Agent 读取操作似乎问题不大。但是新开对话或者别人 Agent git clone 之后，说同样的话，未必能跑得顺。
@@ -337,6 +355,16 @@ def fetch_tongtu_data(api_url, payload, headers):
 1. 打开你根目录的 AGENTS.md / CLAUDE.md。
 2. 检查里面是否有一句："当你完成一个阶段，请使用脚本/或手动将成果同步到根目录的 index 中"。如果没有，把上面的方案 A 的规范贴进去。
 3. 如果子项目超过 10 个，强烈建议让 Claude 帮你写个 `update_index.py`，每次有代码提交时跑一下，彻底解放你作为管理者的精力。
+
+Sources:
+- [1] https://asdlc.io/practices/agents-md-spec/
+- [2] https://github.com/danielrosehill/Claude-Code-Repos-Index/blob/main/CLAUDE.md
+- [3] https://daplab.cs.columbia.edu/general/2026/03/31/your-ai-agent-doesnt-care-about-your-readme.html
+- [4] https://vadim.blog/claude-code-no-indexing/
+- [5] https://hannahstulberg.substack.com/p/claude-code-for-everything-the-best-personal-assistant-remembers-everything-about-you
+- [6] https://elite-ai-assisted-coding.dev/p/context-from-internal-git-repos
+- [7] https://github.com/microsoft/skills/blob/main/.github/plugins/deep-wiki/skills/wiki-agents-md/SKILL.md
+- [8] https://codewithmukesh.com/blog/claude-md-mastery-dotnet/
 
 ---
 
