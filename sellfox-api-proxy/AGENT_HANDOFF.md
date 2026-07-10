@@ -1,5 +1,9 @@
 # sellfox-api-proxy — Agent Handoff
 
+> **路由提示**
+> - 普通用户想调赛狐 API → 不需要看这个文档。打开 https://api.vilavi.cn/sellfox/admin 钉钉登录拿 Key 即可。详细指引见 `.agents/skills/sellfox-api/SKILL.md` §2
+> - 接手这个代理项目的开发者 → 继续往下读
+
 > **给接手 Agent 的第一句话**：赛狐 API 代理网关已部署到上海 VPS (`api.vilavi.cn/sellfox/`)，v0.4.3 生产可用。支持钉钉 OIDC 登录、自动配给 Key、多 Account、全局限速、Key 加密存储、离职自动封号、冒烟测试全覆盖。代码 ~1,500 行 (Python + JS + HTML)。
 
 ## 快速理解
