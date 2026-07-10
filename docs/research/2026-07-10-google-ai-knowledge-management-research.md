@@ -4,7 +4,7 @@ type: Research
 title: Google AI — 知识库管理方案调研（OKF 替代方案 + 银行级知识库设计）
 date: 2026-07-10
 tags: [okf, knowledge-management, ai-agent, monorepo, documentation, rag, banking]
-source: https://share.google/aimode/yFq00aWTlGPFQov3X
+source: Google AI Mode shared conversation (internal link)
 ---
 
 # 与 Google AI 关于知识库管理方案的完整对话
@@ -57,23 +57,23 @@ OKF（开放知识格式）提供了一套极简的「Markdown + YAML」标准�
 
 ### 1. 软件操作层（替代 OKF 定义 API 和工具）
 
-不要再用 OKF 写长篇的 Markdown 来告诉 Claude 怎么调 ERPNext 或通途。
+不要再用 OKF 写长篇的 Markdown 来告诉 Claude 怎么调 内部软件 或内部软件。
 
-- **OpenAPI / Swagger 标准 (JSON/YAML)**：直接把 ERPNext 和通途的 API 导出为标准 OpenAPI 规范文件。Claude 等主流大模型对 OpenAPI 的原生解析能力远超 OKF，能自动生成准确的工具调用（Tool Calling）参数。
+- **OpenAPI / Swagger 标准 (JSON/YAML)**：直接把 内部软件 和内部软件的 API 导出为标准 OpenAPI 规范文件。Claude 等主流大模型对 OpenAPI 的原生解析能力远超 OKF，能自动生成准确的工具调用（Tool Calling）参数。
 - **MCP (Model Context Protocol)**：由 Anthropic（Claude 官方）推出的模型上下文协议。你可以搭建一个 MCP 服务端，把内部软件的查询功能封装进去。Claude 可以实时、安全地连接并操作你的内部系统，无需在 Prompt 里塞满操作说明。
 
 ### 2. 代码编程层（替代 OKF 的规则约束）
 
 将你在开发和调试过程中总结的"坑"和"代码规范"，通过以下标准固化：
 
-- **MDC / .cursorrules 文件**：如果你或 Claude 使用 Cursor/VS Code 等工具写代码，将编程规范、框架要求、ERPNext 专属 API 限制写进这个文件。AI 编码时会自动加载，避免重复犯错。
+- **MDC / .cursorrules 文件**：如果你或 Claude 使用 Cursor/VS Code 等工具写代码，将编程规范、框架要求、内部软件 专属 API 限制写进这个文件。AI 编码时会自动加载，避免重复犯错。
 - **AI_RULES.md / SPEC.md**：在代码仓库根目录建立一个专属的 AI 指引文件，只写针对代码生成的"硬性约束"（例如：禁止使用某旧版 API、必须包含异常捕获等）。
 
 ### 3. 企业内部知识库层（替代 OKF 的文档管理）
 
 你和 Claude 共同总结的操作经验、业务逻辑和教训，需要高频更新且易于检索：
 
-- **双链 Markdown (Obsidian / Logseq 规范)**：知识库继续保持轻量级的 Markdown 格式，但引入双向链接（`[[知识点]]`）标准。例如，在"通途订单同步失败"的经验文档里，链接到 `[[通途 API 报错码 401]]`。这种图谱结构可以让 Claude 在检索（RAG）时，顺着链接找到相关的所有上下游经验。
+- **双链 Markdown (Obsidian / Logseq 规范)**：知识库继续保持轻量级的 Markdown 格式，但引入双向链接（`[[知识点]]`）标准。例如，在"内部软件订单同步失败"的经验文档里，链接到 `[[内部软件 API 报错码 401]]`。这种图谱结构可以让 Claude 在检索（RAG）时，顺着链接找到相关的所有上下游经验。
 - **Front Matter 元数据规范**：在每篇 Markdown 顶部使用标准的 YAML 格式标注元数据。这能让知识库既方便人类阅读，又方便 AI 自动归类和更新。
 
 ### 最佳实践落地建议
@@ -83,7 +83,7 @@ OKF（开放知识格式）提供了一套极简的「Markdown + YAML」标准�
 ```
 your-project/
 ├── .cursorrules               ← 告诉 Claude 怎么帮你写代码（代码层）
-├── mcp-server/                ← 帮 Claude 实时连接 ERPNext/通途的通道（操作层）
+├── mcp-server/                ← 帮 Claude 实时连接 内部软件/内部软件的通道（操作层）
 └── docs-knowledge/            ← 你们的操作经验知识库（知识层）
     ├── README.md              ← 知识库的总索引
     └── 01-erpnext-auth.md     ← 带有 YAML 头部的双链经验文档
@@ -113,7 +113,7 @@ your-project/
 company-knowledge-base/
 ├── README.md                  # 知识库总目录（图书大厅索引）
 ├── 01_User_Demands/           # 1号柜：用户需求与背景调研
-│   ├── ERPNext_custom_print.md
+│   ├── 内部软件_custom_print.md
 │   └── Tongtu_order_sync_need.md
 ├── 02_Bug_Analysis/           # 2号柜：Bug 分析与排查全记录
 │   ├── bug_20260710_erp_timeout.md
@@ -136,27 +136,27 @@ company-knowledge-base/
 ---
 type: knowledge-artifact
 category: Bug_Analysis
-system: ERPNext
-tags: [API超时, 依赖安装, Frappe]
+system: 内部软件
+tags: [API超时, 依赖安装, 内部软件框架]
 last_updated: 2026-07-10
 status: resolved
 ---
 
-# 修复 ERPNext 在通途订单同步时的超时 Bug
+# 修复 内部软件 在内部软件订单同步时的超时 Bug
 
 ## 1. 业务背景与用户需求
 
-财务需要每天下午 4 点从通途同步前一天的账单数据。由于近期通途修改了导出格式，
-ERPNext 的旧脚本无法正确解析，导致大量数据积压。
+财务需要每天下午 4 点从内部软件同步前一天的账单数据。由于近期内部软件修改了导出格式，
+内部软件 的旧脚本无法正确解析，导致大量数据积压。
 
 ## 2. 调研与排查过程
 
-通过 Claude Desktop 调试时发现，Frappe 框架的 Python 请求库在等待通途响应时
+通过 Claude Desktop 调试时发现，内部软件框架的 Python 请求库在等待内部软件响应时
 超过了 120 秒，触发了系统层面的网关超时（Gateway Timeout）。
 
 ## 3. 依赖与安装教训（踩坑点）
 
-在尝试升级 Python 的 `requests` 库时，发现 ERPNext 依赖的某个旧版组件与新版
+在尝试升级 Python 的 `requests` 库时，发现 内部软件 依赖的某个旧版组件与新版
 `requests` 冲突，导致系统崩溃。
 
 **正确安装步骤：**
@@ -173,21 +173,21 @@ Timeout 设置为 60 秒。
 import requests
 
 def fetch_tongtu_data(api_url, payload, headers):
-    # 修复点：显式增加 timeout 参数，防止 Frappe 进程死锁
+    # 修复点：显式增加 timeout 参数，防止 内部软件框架 进程死锁
     try:
         response = requests.post(api_url, json=payload, headers=headers,
                                  timeout=(10, 60))
         return response.json()
     except requests.exceptions.Timeout:
-        print("通途 API 响应超时，正在准备重试...")
+        print("内部软件 API 响应超时，正在准备重试...")
         # 具体的重试逻辑代码...
 ```
 
 ## 5. 后续人工校验（非 API 操作）
 
-脚本跑完后，API 无法自动校对金额。**必须由人工登录通途后台**：
+脚本跑完后，API 无法自动校对金额。**必须由人工登录内部软件后台**：
 1. 点击"财务管理" -> "月度对账单"
-2. 导出 PDF，与 ERPNext 的 `General Ledger` 进行人工核对
+2. 导出 PDF，与 内部软件 的 `General Ledger` 进行人工核对
 ```
 
 ### 为什么这种方式最适合你目前的 Claude/Codex 工作流？
@@ -224,12 +224,12 @@ def fetch_tongtu_data(api_url, payload, headers):
 【AI Agent 请注意】：当你面临以下任务时，请务必先读取对应的专属文档，严禁盲目猜测。
 
 ### 🚨 1. 场景：排查系统报错与 Bug
-- **通途 API 401/超时问题** -> 优先读取 `02_Bug_Analysis/bug_tongtu_401_auth.md`
-- **ERPNext 财务对账对不上** -> 优先读取 `02_Bug_Analysis/bug_20260710_erp_timeout.md`
+- **内部软件 API 401/超时问题** -> 优先读取 `02_Bug_Analysis/bug_tongtu_401_auth.md`
+- **内部软件 财务对账对不上** -> 优先读取 `02_Bug_Analysis/bug_20260710_erp_timeout.md`
 
 ### 🛠️ 2. 场景：安装依赖、部署环境或写代码
-- **涉及 Frappe / ERPNext 的依赖安装** -> 必须先看 `03_Dev_Environment/erpnext_frappe_install.md`，严禁直接使用 upgrade 命令。
-- **涉及通途或 ERPNext 软件人工后台操作（无API）** -> 必须看 `04_Manual_Operations/` 目录。
+- **涉及 内部软件框架 / 内部软件 的依赖安装** -> 必须先看 `03_Dev_Environment/erpnext_frappe_install.md`，严禁直接使用 upgrade 命令。
+- **涉及内部软件或 内部软件 软件人工后台操作（无API）** -> 必须看 `04_Manual_Operations/` 目录。
 ```
 
 当别人新开对话，把这个 README.md 喂给 Claude 时，Claude 看到用户的提问，就能精准地去 git clone 出来的目录里定向读取那个对的文件。
@@ -238,15 +238,15 @@ def fetch_tongtu_data(api_url, payload, headers):
 
 别人或新 Agent 跑不顺，往往是因为文档里写了太多当时的"碎碎念"和"故事背景"，AI 抓不住核心。图书馆式的文档，必须像菜谱一样明确。
 
-- ❌ 不好（日记体）： "那天我们测试通途同步，发现有个报错，后来小张试了换依赖，最后发现指定 2.31.0 版本才跑通……"（新 Agent 容易把中间错误的尝试也学过去）
+- ❌ 不好（日记体）： "那天我们测试内部软件同步，发现有个报错，后来小张试了换依赖，最后发现指定 2.31.0 版本才跑通……"（新 Agent 容易把中间错误的尝试也学过去）
 - ✅ 好（断言式/SOP）： 直接在文档最显眼的地方，用 `⚠️ 核心强约束` 框起来
 
 ```markdown
 ## ⚠️ 核心强约束（AI 必须遵守）
 
 1. **环境限制**：严禁在未激活 `bench env` 时执行 pip。
-2. **版本死锁**：通途模块强制绑定 `requests==2.31.0`，升级会导致核心依赖崩溃。
-3. **人工兜底**：脚本运行完毕后，AI 无法验证金额，必须提示人类去通途后台导出 PDF 进行【人工月度对账】。
+2. **版本死锁**：内部软件模块强制绑定 `requests==2.31.0`，升级会导致核心依赖崩溃。
+3. **人工兜底**：脚本运行完毕后，AI 无法验证金额，必须提示人类去内部软件后台导出 PDF 进行【人工月度对账】。
 ```
 
 ### 3. 利用元数据（YAML Front Matter）进行"硬检索"
@@ -259,12 +259,12 @@ def fetch_tongtu_data(api_url, payload, headers):
 
 ```json
 {
-  "ERPNext": ["02_Bug_Analysis/bug_20260710_erp_timeout.md", "03_Dev_Environment/erpnext_frappe_install.md"],
-  "通途": ["04_Manual_Operations/tongtu_monthly_export.md"]
+  "内部软件": ["02_Bug_Analysis/bug_20260710_erp_timeout.md", "03_Dev_Environment/erpnext_frappe_install.md"],
+  "内部软件": ["04_Manual_Operations/tongtu_monthly_export.md"]
 }
 ```
 
-当新对话开始，用户说："帮我查一下通途的数据"，Agent 只要先瞟一眼这个 JSON，就会立刻知道："哦，通途无 API 操作在 `04_Manual_Operations/tongtu_monthly_export.md`，我得先去读它。"
+当新对话开始，用户说："帮我查一下内部软件的数据"，Agent 只要先瞟一眼这个 JSON，就会立刻知道："哦，内部软件无 API 操作在 `04_Manual_Operations/tongtu_monthly_export.md`，我得先去读它。"
 
 ### 总结你的落地三步走
 
@@ -494,6 +494,3 @@ last_verified: 2026-07-10   # 最后验证时间（金融科技要求时效性�
 
 ---
 
-## Q8: 先不用。我让 Claude 按照你的思路继续优化了。另外，如果一个银行科技子公司的运营部门想自己搞一套知识库，比如把之前实施过程中的规则、经验教训都记录，并且之后接入 Agent 能自主发现，应该如何设计？
-
-（注：此问题与 Q6 相同，Google AI 给出了同样的四层演进设计回答，此处不重复记录。）
