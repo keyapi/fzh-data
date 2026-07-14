@@ -67,7 +67,12 @@ uv sync
 #
 # 4c. Tavily（AI 优化搜索，1000 次/月免费，推荐装）
 #     uv pip install mcp-tavily
-#     注册 → https://app.tavily.com/home → 获取 Key → 改 .codex/config.toml 里的 TAVILY_API_KEY
+#     API Key 已配置在 .codex/config.toml 中，无需自行注册
+# 4d. AnySearch（Agent 专用搜索，1000 次/天免费，推荐装）
+#     无需额外安装（npx mcp-remote 自动下载）
+#     API Key 已配置在 .codex/config.toml 中，无需自行注册
+#     ⚠️ Claude Desktop 用户：MCP 无法加载，改用 curl 直调 API，
+#        详见 docs/lessons/anysearch-tavily-dual-search-setup.md
 
 # 5. 初始化 symlink（仅 Claude Desktop 需要；Codex 用户跳过此步）
 #    powershell -ExecutionPolicy Bypass -File setup.ps1

@@ -49,4 +49,14 @@ args = ["run", "python", "-m", "mcp_server_tavily"]
 startup_timeout_sec = 60
 
 [mcp_servers.tavily.env]
-TAVILY_API_KEY = "<your-tavily-api-key>"
+TAVILY_API_KEY = "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"
+
+# ===== MCP: AnySearch (Agent专用搜索, 1000 free calls/day) =====
+# 20+ 垂直领域: 代码/法律/金融/安全/企业工商/能源等
+# Tools: search, batch_search, extract, get_sub_domains
+# 接入: npx mcp-remote (Streamable HTTP → stdio 桥接)
+# 注册: https://anysearch.com/console/api-keys
+[mcp_servers.anysearch]
+command = "npx"
+args = ["-y", "mcp-remote", "https://api.anysearch.com/mcp", "--header", "X-Anysearch-Client: mcp/1.0.0", "--header", "Authorization: Bearer as_sk_afc76f7fea4554ccaa95ca4fe258c2b9"]
+startup_timeout_sec = 60
