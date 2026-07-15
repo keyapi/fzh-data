@@ -2,6 +2,11 @@
 
 Shared domain vocabulary for this project — entities, named processes, and status concepts with project-specific meaning. Seeded with core domain vocabulary, then accretes as ce-compound and ce-compound-refresh process learnings; direct edits are fine. Glossary only, not a spec or catch-all.
 
+## Development Environment
+
+### 3P 模式 (Third-Party Provider Mode)
+Claude Desktop 的第三方 API 模式，允许连接非 Anthropic 模型（如 DeepSeek）。此模式有独立的配置文件路径 `Claude-3p\claude_desktop_config.json`（区别于普通模式的 `Claude\` 路径），配置中包含 `"deploymentMode": "3p"` 字段。MCP 服务器的配置格式与普通模式相同。
+
 ## Manufacturing
 
 ### 一键完工 (One-Click Complete)
