@@ -16,7 +16,7 @@ purpose: >
 > 你（阅读此文档的 Agent）应当基于以下事实和需求，**独立规划自己的调研路径**。
 > 之前已有 Agent 做过一轮调研并给出了架构建议，但你不应依赖其结论。
 > 如果你想知道之前的调研结果（仅供对比参考），见：
-> - `sellfox_shipping/docs/research/comprehensive-research-2026-07-15.md`
+> - `sellfox_shipping/docs/research/research-claude-sonnet-2026-07-15.md`
 > - `docs/solutions/architecture-patterns/sellfox-shipping-research-and-architecture.md`
 > - `.claude/plans/sellfox-shipping-ethereal-quill.md`
 >

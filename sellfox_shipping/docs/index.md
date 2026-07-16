@@ -19,7 +19,7 @@ updated: 2026-07-15
 
 ## 调研
 
-- [research/comprehensive-research-2026-07-15.md](research/comprehensive-research-2026-07-15.md) — 完整调研文档（可供其他 Agent 评估）
+- [research/research-claude-sonnet-2026-07-15.md](research/research-claude-sonnet-2026-07-15.md) — 完整调研文档（可供其他 Agent 评估）
 
 ## 规划
 
