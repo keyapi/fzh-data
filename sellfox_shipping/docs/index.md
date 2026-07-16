@@ -1,8 +1,9 @@
 ---
-type: index
+okf: v0.1
+type: Index
 module: sellfox_shipping
 created: 2026-07-15
-updated: 2026-07-15
+updated: 2026-07-16
 ---
 
 # sellfox_shipping — 文档索引
@@ -19,8 +20,5 @@ updated: 2026-07-15
 
 ## 调研
 
-- [research/comprehensive-research-2026-07-15.md](research/comprehensive-research-2026-07-15.md) — 完整调研文档（可供其他 Agent 评估）
-
-## 规划
-
-- 上级规划: `../../.claude/plans/sellfox-shipping-ethereal-quill.md`
+- [research/index.md](research/index.md) — 调研文档导航
+- [research/research-synthesis-2026-07-16.md](research/research-synthesis-2026-07-16.md) — 当前推荐的独立综合调研与规划入口

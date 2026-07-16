@@ -1,5 +1,8 @@
 ---
-type: briefing
+okf: v0.1
+type: Reference
+title: 赛狐尾程打单 — Agent 独立调研简报
+description: 面向独立调研 Agent 的业务背景、已知需求与待确认问题
 module: sellfox_shipping
 created: 2026-07-15
 updated: 2026-07-16

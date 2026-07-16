@@ -1,8 +1,11 @@
 ---
-type: research
+okf: v0.1
+type: Research
+title: 赛狐尾程打单系统 — 完整调研文档
+description: 2026-07-15 的完整调研过程、来源、排除方案与早期架构结论
 module: sellfox_shipping
 created: 2026-07-15
-updated: 2026-07-15
+updated: 2026-07-16
 status: complete
 ---
 

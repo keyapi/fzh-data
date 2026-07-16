@@ -1,3 +1,11 @@
+---
+okf: v0.1
+type: Reference
+title: 赛狐尾程打单 — 新 Agent 开局指南
+description: 新对话或独立 Agent 的调研入口、阅读顺序与产出约定
+timestamp: 2026-07-16
+---
+
 # 赛狐尾程打单 — 新 Agent 开局指南
 
 > 写给新开对话的 AI Agent（Claude Code / Codex / Cursor 等）或同事的 Agent
