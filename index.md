@@ -24,7 +24,7 @@ generated: 2026-07-16 16:11
 | **pdf_to_md** | 6 | Index, Lesson, Log, Reference | [pdf_to_md/](pdf_to_md/) -> [pdf_to_md/docs/index.md](pdf_to_md/docs/index.md) |
 | **root** | 1 | Index | [root/](root/) -> [index.md](index.md) |
 | **sellfox-api-proxy** | 12 | Index, Lesson, Log, Research | [sellfox-api-proxy/](sellfox-api-proxy/) -> [sellfox-api-proxy/docs/index.md](sellfox-api-proxy/docs/index.md) |
-| **sellfox_shipping** | 9 | Guide, Handoff, Index, Log | [sellfox_shipping/](sellfox_shipping/) -> [sellfox_shipping/docs/index.md](sellfox_shipping/docs/index.md) |
+| **sellfox_shipping** | 10 | Guide, Handoff, Index, Log | [sellfox_shipping/](sellfox_shipping/) -> [sellfox_shipping/docs/index.md](sellfox_shipping/docs/index.md) |
 | **us_openai_api_proxy** | 9 | Explanation, Handoff, HowTo, Index | [us_openai_api_proxy/](us_openai_api_proxy/) -> [us_openai_api_proxy/docs/index.md](us_openai_api_proxy/docs/index.md) |
 
 ## Module Details
@@ -157,6 +157,7 @@ generated: 2026-07-16 16:11
 | Index | index.md | [sellfox_shipping/docs/index.md](sellfox_shipping/docs/index.md) | 2026-07-16 |
 | Index | 赛狐尾程打单 — 调研索引 | [sellfox_shipping/docs/research/index.md](sellfox_shipping/docs/research/index.md) | 2026-07-16 |
 | Log | log.md | [sellfox_shipping/docs/log.md](sellfox_shipping/docs/log.md) | 2026-07-16 |
+| Reference | 2026-07-16 会话进度与交接记录 | [sellfox_shipping/docs/research/session-progress-2026-07-16.md](sellfox_shipping/docs/research/session-progress-2026-07-16.md) | 2026-07-16 |
 | Reference | 赛狐尾程打单 — Agent 独立调研简报 | [sellfox_shipping/docs/research/briefing-for-independent-agent.md](sellfox_shipping/docs/research/briefing-for-independent-agent.md) | 2026-07-16 |
 | Reference | 赛狐尾程打单 — 新 Agent 开局指南 | [sellfox_shipping/docs/research/ONBOARDING.md](sellfox_shipping/docs/research/ONBOARDING.md) | 2026-07-16 |
 | Research | 赛狐尾程打单系统 — 完整调研文档 | [sellfox_shipping/docs/research/comprehensive-research-2026-07-15.md](sellfox_shipping/docs/research/comprehensive-research-2026-07-15.md) | 2026-07-16 |

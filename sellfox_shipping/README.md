@@ -32,7 +32,7 @@ uv run python -m sellfox_shipping.cli orders --status to_print
 
 ## 架构
 
-详见 [AGENT_HANDOFF.md](AGENT_HANDOFF.md) 和 [docs/index.md](docs/index.md)。
+详见 [AGENT_HANDOFF.md](AGENT_HANDOFF.md)、[docs/research/session-progress-2026-07-16.md](docs/research/session-progress-2026-07-16.md)（换 Agent 交接）和 [docs/index.md](docs/index.md)。
 
 ## 当前阶段
 

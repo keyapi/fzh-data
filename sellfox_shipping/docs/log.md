@@ -8,6 +8,12 @@ updated: 2026-07-16
 
 # sellfox_shipping — 变更日志
 
+## 2026-07-16 — 会话进度交接文档
+
+- 新增 `docs/research/session-progress-2026-07-16.md`：完整记录独立调研落地、命名边界、P1A TDD 实现、审查修复、提交哈希、未完成项与勿踩坑
+- 更新 `research/index.md`、`docs/index.md`、`AGENT_HANDOFF.md`：区分「接手继续实现」与「从零独立再调研」阅读顺序
+- 目的：新开对话或其它软件 Agent 可从会话进度文档无缝续作，无需依赖聊天上下文
+
 ## 2026-07-16 — P1A 包裹只读同步纵切
 
 - 新增内部 snake_case 包裹模型；赛狐 camelCase 仅在 gateway 边界解析

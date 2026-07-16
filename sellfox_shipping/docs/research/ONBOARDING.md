@@ -10,9 +10,14 @@ timestamp: 2026-07-16
 
 > 写给新开对话的 AI Agent（Claude Code / Codex / Cursor 等）或同事的 Agent
 
+> **若你的任务是接手继续实现（不是从零再调研）：** 不要按本文「忽略已有结论」路径走。  
+> 请改读 [session-progress-2026-07-16.md](session-progress-2026-07-16.md) →  
+> [research-synthesis-2026-07-16.md](research-synthesis-2026-07-16.md) →  
+> [AGENT_HANDOFF.md](../../AGENT_HANDOFF.md)。
+
 ## 你的任务
 
-独立调研和规划**赛狐尾程打单系统**。前端 Agent 已经做过一轮调研，但**你不应依赖其结论**。
+独立调研和规划**赛狐尾程打单系统**。前端 Agent 已经做过一轮调研，但**你不应依赖其结论**（本路径仅用于刻意重新调研）。
 
 ## 开局步骤
 

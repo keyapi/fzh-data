@@ -15,10 +15,11 @@ updated: 2026-07-16
 ## 文档
 
 - [README.md](../README.md) — 项目概述与快速开始
-- [AGENT_HANDOFF.md](../AGENT_HANDOFF.md) — Agent 参考
+- [AGENT_HANDOFF.md](../AGENT_HANDOFF.md) — Agent 参考（含新对话 30 秒接手顺序）
 - [log.md](log.md) — 变更日志
 
-## 调研
+## 调研 / 交接
 
 - [research/index.md](research/index.md) — 调研文档导航
+- [research/session-progress-2026-07-16.md](research/session-progress-2026-07-16.md) — **换对话 / 换 Agent 必读**：已完成过程、提交、下一步
 - [research/research-synthesis-2026-07-16.md](research/research-synthesis-2026-07-16.md) — 当前推荐的独立综合调研与规划入口
