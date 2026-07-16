@@ -8,6 +8,13 @@ updated: 2026-07-16
 
 # sellfox_shipping — 变更日志
 
+## 2026-07-16 — P1A 包裹查询与同步审计
+
+- 新增 `packages-list` CLI：按账户 / 状态 / 渠道过滤本地包裹摘要（`order_count` / `item_count`）
+- 新增 `shipping_audit_events` 表；`packages.sync` 结束（含 `partial_failed`）写入 `AuditEvent`（actor + 计数摘要）
+- 明确并行边界：同事 Agent 调研 VITE/Karrio 未提交前，本分支不扩展 VITE spike / Karrio connector
+- 测试：`uv run pytest tests/sellfox_shipping -q` → 26 passed
+
 ## 2026-07-16 — 会话进度交接文档
 
 - 新增 `docs/research/session-progress-2026-07-16.md`：完整记录独立调研落地、命名边界、P1A TDD 实现、审查修复、提交哈希、未完成项与勿踩坑

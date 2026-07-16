@@ -27,6 +27,8 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
 from sellfox_shipping.package_models import (
+    AuditEventRecord,
+    PackageListItem,
     SellfoxPackageAddress,
     SellfoxPackageItemRecord,
     SellfoxPackageLogistics,
@@ -165,6 +167,20 @@ class PackageItemRow(Base):
     variation: Mapped[str] = mapped_column(String, default="")
 
 
+class AuditEventRow(Base):
+    __tablename__ = "shipping_audit_events"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    actor: Mapped[str] = mapped_column(String)
+    action: Mapped[str] = mapped_column(String)
+    entity_type: Mapped[str] = mapped_column(String)
+    entity_id: Mapped[str] = mapped_column(String)
+    summary: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.current_timestamp()
+    )
+
+
 @dataclass(frozen=True)
 class UpsertOutcome:
     package_id: int
@@ -295,6 +311,133 @@ class PackageRepository:
             ).all()
             return self._to_record(account_key, package, order_rows, item_rows)
 
+    def list_packages(
+        self,
+        *,
+        account_key: str,
+        package_status: str | None = None,
+        channel_name: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[PackageListItem]:
+        with self._session_factory() as session:
+            query = (
+                select(PackageRow, ShippingAccountRow.account_key)
+                .join(
+                    ShippingAccountRow,
+                    ShippingAccountRow.id == PackageRow.account_id,
+                )
+                .where(ShippingAccountRow.account_key == account_key)
+            )
+            if package_status is not None:
+                query = query.where(PackageRow.package_status == package_status)
+            if channel_name is not None:
+                query = query.where(PackageRow.channel_name == channel_name)
+            query = (
+                query.order_by(PackageRow.package_sn)
+                .offset(offset)
+                .limit(limit)
+            )
+            rows = session.execute(query).all()
+            items: list[PackageListItem] = []
+            for package, account in rows:
+                order_count = (
+                    session.scalar(
+                        select(func.count())
+                        .select_from(PackageOrderRow)
+                        .where(PackageOrderRow.package_id == package.id)
+                    )
+                    or 0
+                )
+                item_count = (
+                    session.scalar(
+                        select(func.count())
+                        .select_from(PackageItemRow)
+                        .where(PackageItemRow.package_id == package.id)
+                    )
+                    or 0
+                )
+                items.append(
+                    PackageListItem(
+                        account_key=account,
+                        package_sn=package.package_sn,
+                        package_status=package.package_status,
+                        channel_name=package.channel_name,
+                        shop_name=package.shop_name,
+                        marketplace=package.marketplace,
+                        tracking_number=package.tracking_number,
+                        order_count=order_count,
+                        item_count=item_count,
+                        fetched_at=package.fetched_at,
+                    )
+                )
+            return items
+
+    def count_packages(
+        self,
+        *,
+        account_key: str,
+        package_status: str | None = None,
+        channel_name: str | None = None,
+    ) -> int:
+        with self._session_factory() as session:
+            query = (
+                select(func.count())
+                .select_from(PackageRow)
+                .join(
+                    ShippingAccountRow,
+                    ShippingAccountRow.id == PackageRow.account_id,
+                )
+                .where(ShippingAccountRow.account_key == account_key)
+            )
+            if package_status is not None:
+                query = query.where(PackageRow.package_status == package_status)
+            if channel_name is not None:
+                query = query.where(PackageRow.channel_name == channel_name)
+            return session.scalar(query) or 0
+
+    def append_audit_event(
+        self,
+        *,
+        actor: str,
+        action: str,
+        entity_type: str,
+        entity_id: str,
+        summary: str = "",
+    ) -> int:
+        with self._session_factory.begin() as session:
+            row = AuditEventRow(
+                actor=actor,
+                action=action,
+                entity_type=entity_type,
+                entity_id=entity_id,
+                summary=summary,
+                created_at=datetime.now(timezone.utc).replace(tzinfo=None),
+            )
+            session.add(row)
+            session.flush()
+            return row.id
+
+    def list_audit_events(self, *, limit: int = 50) -> list[AuditEventRecord]:
+        with self._session_factory() as session:
+            rows = session.scalars(
+                select(AuditEventRow)
+                .order_by(AuditEventRow.id.desc())
+                .limit(limit)
+            ).all()
+            return [
+                AuditEventRecord(
+                    id=row.id,
+                    actor=row.actor,
+                    action=row.action,
+                    entity_type=row.entity_type,
+                    entity_id=row.entity_id,
+                    summary=row.summary,
+                    created_at=row.created_at,
+                )
+                for row in rows
+            ]
+
     def count_rows(self) -> dict[str, int]:
         tables = {
             "accounts": ShippingAccountRow,
@@ -302,6 +445,7 @@ class PackageRepository:
             "orders": OrderRow,
             "package_orders": PackageOrderRow,
             "package_items": PackageItemRow,
+            "audit_events": AuditEventRow,
         }
         with self._session_factory() as session:
             return {

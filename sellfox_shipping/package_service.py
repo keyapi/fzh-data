@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from typing import Protocol
 
 from pydantic import BaseModel, Field, field_validator
 
-from sellfox_shipping.package_models import SellfoxPackagePage
+from sellfox_shipping.package_models import (
+    PackageListItem,
+    PackageListResult,
+    SellfoxPackagePage,
+)
 from sellfox_shipping.package_repository import UpsertOutcome
 
 
@@ -27,6 +32,36 @@ class PackagePageGateway(Protocol):
 class PackageWriter(Protocol):
     def upsert(self, record) -> UpsertOutcome: ...
 
+    def append_audit_event(
+        self,
+        *,
+        actor: str,
+        action: str,
+        entity_type: str,
+        entity_id: str,
+        summary: str = "",
+    ) -> int: ...
+
+
+class PackageReader(Protocol):
+    def list_packages(
+        self,
+        *,
+        account_key: str,
+        package_status: str | None = None,
+        channel_name: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[PackageListItem]: ...
+
+    def count_packages(
+        self,
+        *,
+        account_key: str,
+        package_status: str | None = None,
+        channel_name: str | None = None,
+    ) -> int: ...
+
 
 class PackageSyncRequest(BaseModel):
     account_key: str
@@ -40,6 +75,22 @@ class PackageSyncRequest(BaseModel):
     @field_validator("account_key", "actor")
     @classmethod
     def reject_blank_identifiers(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("must not be blank")
+        return value
+
+
+class PackageListRequest(BaseModel):
+    account_key: str
+    package_status: str | None = None
+    channel_name: str | None = None
+    limit: int = Field(default=50, ge=1, le=500)
+    offset: int = Field(default=0, ge=0)
+
+    @field_validator("account_key")
+    @classmethod
+    def reject_blank_account(cls, value: str) -> str:
         value = value.strip()
         if not value:
             raise ValueError("must not be blank")
@@ -121,6 +172,7 @@ class SyncPackagesService:
                 report.sync_status = "partial_failed"
                 report.run_errors.append(f"page {page_no}: gateway error")
                 report.finished_at = datetime.now(timezone.utc)
+                self._write_audit(request, report)
                 return report
             report.total_in_sellfox = page.total_size
             page_offset = processed_rows
@@ -193,12 +245,65 @@ class SyncPackagesService:
                     f"page {page_no}: empty page before total_size"
                 )
                 report.finished_at = datetime.now(timezone.utc)
+                self._write_audit(request, report)
                 return report
             page_no += 1
 
         report.row_results.sort(key=lambda row: row.source_row_number)
         report.sync_status = "completed"
         report.finished_at = datetime.now(timezone.utc)
+        self._write_audit(request, report)
         if not report.is_reconciled:
             raise RuntimeError("package sync report failed reconciliation")
         return report
+
+    def _write_audit(
+        self,
+        request: PackageSyncRequest,
+        report: PackageSyncReport,
+    ) -> None:
+        summary = json.dumps(
+            {
+                "sync_status": report.sync_status,
+                "input_count": report.input_count,
+                "success_count": report.success_count,
+                "failed_count": report.failed_count,
+                "created_count": report.created_count,
+                "updated_count": report.updated_count,
+                "total_in_sellfox": report.total_in_sellfox,
+            },
+            ensure_ascii=False,
+        )
+        try:
+            self.repository.append_audit_event(
+                actor=request.actor,
+                action="packages.sync",
+                entity_type="account",
+                entity_id=request.account_key,
+                summary=summary,
+            )
+        except Exception:
+            # Audit must not discard an already-built sync report.
+            report.run_errors.append("audit write failed")
+
+
+class ListPackagesService:
+    """Read local package summaries for review CLI/REST."""
+
+    def __init__(self, repository: PackageReader):
+        self.repository = repository
+
+    def list(self, request: PackageListRequest) -> PackageListResult:
+        items = self.repository.list_packages(
+            account_key=request.account_key,
+            package_status=request.package_status,
+            channel_name=request.channel_name,
+            limit=request.limit,
+            offset=request.offset,
+        )
+        total = self.repository.count_packages(
+            account_key=request.account_key,
+            package_status=request.package_status,
+            channel_name=request.channel_name,
+        )
+        return PackageListResult(total=total, items=items)

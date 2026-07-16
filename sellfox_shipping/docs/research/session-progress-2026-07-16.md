@@ -182,7 +182,28 @@ uv run python -m sellfox_shipping.cli packages-sync \
 |--------|------|
 | `27cd46d` | 独立调研 + OKF 导航 + 命名边界 |
 | `0b157e7` | P1A 包裹只读同步 + 21 tests |
-| （待提交） | 本文 + OKF 导航联动（`session-progress`、索引、`AGENT_HANDOFF` 接手段） |
+| `275919e` | 本文 + OKF 导航联动（`session-progress`、索引、`AGENT_HANDOFF`） |
+| （本切片待提交） | `packages-list` + `AuditEvent`；测试 26 passed |
+
+### 7.1 并行工作边界（2026-07-16）
+
+同事 Agent 正在并行调研 **VITE API** 与 **Karrio**，**尚未提交**。本分支在其成果落地前：
+
+- **不扩展** VITE spike / Karrio custom connector / GOFO 接入实现  
+- **不改写**综合文档中 VITE/Karrio 专章为「最终结论」  
+- **继续做**与样例无关的 P1A：本地包裹查询、`AuditEvent`、后续 migration/OIDC/审核界面  
+
+对方提交后，再对照合并进 `research/` 或 P1C 决策材料。
+
+### 7.2 本切片续作（提交 `275919e` 之后）
+
+已实现并验证：
+
+1. **`ListPackagesService` + `packages-list` CLI** — 按 `account_key` / `package_status` / `channel_name` 过滤；返回 `order_count` / `item_count` 摘要，不走 legacy `store.py`。  
+2. **`shipping_audit_events` + sync 审计** — 每次 `packages.sync` 结束（含 `partial_failed`）写一条 `AuditEvent`；审计写失败只记入 `run_errors`，不丢弃同步报告。  
+3. 测试基线：**26 passed**（原 21 + 5）。  
+
+仍未做：migration、OIDC、Web 审核页、Excel、`submitToPlatform`、VITE/Karrio。
 
 工作区可能仍有**无关**未提交文件（advertise、dam、codex config 等）；接手时**只提交 sellfox_shipping 相关改动**，勿把敏感配置或数据文件打进 PR。
 

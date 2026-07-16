@@ -62,16 +62,27 @@ def _get_client():
     )
 
 
-def _get_package_sync_service():
+def _get_package_repository():
     from sellfox_shipping.package_repository import PackageRepository
-    from sellfox_shipping.package_service import SyncPackagesService
 
     config = _load_config()
     db_path = BASE_DIR / config.get("store", {}).get("db_path", "data/shipping.db")
+    return PackageRepository(db_path)
+
+
+def _get_package_sync_service():
+    from sellfox_shipping.package_service import SyncPackagesService
+
     return SyncPackagesService(
         gateway=_get_client(),
-        repository=PackageRepository(db_path),
+        repository=_get_package_repository(),
     )
+
+
+def _get_package_list_service():
+    from sellfox_shipping.package_service import ListPackagesService
+
+    return ListPackagesService(_get_package_repository())
 
 
 # ── Commands ──────────────────────────────────────────────────────
@@ -138,6 +149,30 @@ def packages_sync(
     _output(payload, json_output)
     if report.sync_status != "completed":
         raise typer.Exit(1)
+
+
+@app.command("packages-list")
+def packages_list(
+    status: Optional[str] = typer.Option(None, help="Filter by package_status"),
+    channel: Optional[str] = typer.Option(None, help="Filter by channel_name"),
+    limit: int = typer.Option(50, min=1, max=500, help="Max results"),
+    offset: int = typer.Option(0, min=0, help="Offset for pagination"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """List local package summaries from the package store."""
+    from sellfox_shipping.package_service import PackageListRequest
+
+    config = _load_config()
+    result = _get_package_list_service().list(
+        PackageListRequest(
+            account_key=config["sellfox"]["proxy_account"],
+            package_status=status,
+            channel_name=channel,
+            limit=limit,
+            offset=offset,
+        )
+    )
+    _output(result.model_dump(mode="json"), json_output)
 
 
 @app.command()

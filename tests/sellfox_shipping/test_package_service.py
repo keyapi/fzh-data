@@ -10,6 +10,8 @@ from sellfox_shipping.package_models import (
 )
 from sellfox_shipping.package_repository import PackageRepository
 from sellfox_shipping.package_service import (
+    ListPackagesService,
+    PackageListRequest,
     PackageSyncRequest,
     SyncPackagesService,
 )
@@ -185,6 +187,9 @@ def test_persistence_error_is_redacted_from_report() -> None:
         def upsert(self, record):
             raise RuntimeError("email=user@example.com")
 
+        def append_audit_event(self, **kwargs):
+            return 1
+
     page = SellfoxPackagePage(
         page_no=1,
         page_size=20,
@@ -273,3 +278,61 @@ def test_first_page_gateway_failure_reports_unknown_total(tmp_path) -> None:
     assert report.sync_status == "partial_failed"
     assert report.total_in_sellfox is None
     assert report.remaining_count is None
+
+
+def test_sync_writes_audit_event_for_actor(tmp_path) -> None:
+    page = SellfoxPackagePage(
+        page_no=1,
+        page_size=20,
+        total_size=1,
+        records=[_record("P10001", 1)],
+    )
+    repository = PackageRepository(tmp_path / "shipping.db")
+    service = SyncPackagesService(FakeGateway({1: page}), repository)
+
+    service.sync(
+        PackageSyncRequest(
+            account_key="sellfox-main",
+            date_start="2026-07-15",
+            date_end="2026-07-16",
+            actor="user-1",
+        )
+    )
+
+    events = repository.list_audit_events(limit=5)
+    assert len(events) == 1
+    assert events[0].actor == "user-1"
+    assert events[0].action == "packages.sync"
+    assert events[0].entity_type == "account"
+    assert events[0].entity_id == "sellfox-main"
+    assert "input_count" in events[0].summary
+
+
+def test_list_packages_service_returns_filtered_summaries(tmp_path) -> None:
+    repository = PackageRepository(tmp_path / "shipping.db")
+    repository.upsert(
+        SellfoxPackageRecord(
+            account_key="sellfox-main",
+            package_sn="P10001",
+            package_status="to_audit",
+        )
+    )
+    repository.upsert(
+        SellfoxPackageRecord(
+            account_key="sellfox-main",
+            package_sn="P10002",
+            package_status="shipped",
+        )
+    )
+    service = ListPackagesService(repository)
+
+    result = service.list(
+        PackageListRequest(
+            account_key="sellfox-main",
+            package_status="to_audit",
+            limit=20,
+        )
+    )
+
+    assert result.total == 1
+    assert [item.package_sn for item in result.items] == ["P10001"]

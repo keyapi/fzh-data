@@ -82,6 +82,7 @@ def test_repeated_upsert_updates_without_duplicate_relationships(tmp_path) -> No
         "orders": 2,
         "package_orders": 2,
         "package_items": 2,
+        "audit_events": 0,
     }
 
 
@@ -122,6 +123,7 @@ def test_concurrent_upserts_keep_one_account_scoped_package(tmp_path) -> None:
         "orders": 2,
         "package_orders": 2,
         "package_items": 2,
+        "audit_events": 0,
     }
 
 
@@ -137,3 +139,46 @@ def test_sqlite_enables_wal_foreign_keys_and_busy_timeout(tmp_path) -> None:
     assert journal_mode == "wal"
     assert foreign_keys == 1
     assert busy_timeout >= 5000
+
+
+def test_list_packages_filters_by_status_channel_and_account(tmp_path) -> None:
+    repository = PackageRepository(tmp_path / "shipping.db")
+    repository.upsert(_record(package_sn="P1", package_status="to_audit"))
+    other = _record(package_sn="P2", package_status="shipped")
+    other.logistics.channel_name = "GLS"
+    repository.upsert(other)
+    repository.upsert(
+        _record(account_key="sellfox-us-2", package_sn="P1", package_status="to_audit")
+    )
+
+    rows = repository.list_packages(
+        account_key="sellfox-main",
+        package_status="to_audit",
+        channel_name="蜴国际",
+        limit=50,
+    )
+
+    assert [row.package_sn for row in rows] == ["P1"]
+    assert rows[0].order_count == 2
+    assert rows[0].item_count == 2
+    assert rows[0].channel_name == "蜴国际"
+
+
+def test_append_and_list_audit_events(tmp_path) -> None:
+    repository = PackageRepository(tmp_path / "shipping.db")
+
+    event_id = repository.append_audit_event(
+        actor="user-1",
+        action="packages.sync",
+        entity_type="account",
+        entity_id="sellfox-main",
+        summary='{"input_count": 2}',
+    )
+    events = repository.list_audit_events(limit=10)
+
+    assert event_id > 0
+    assert len(events) == 1
+    assert events[0].actor == "user-1"
+    assert events[0].action == "packages.sync"
+    assert events[0].entity_id == "sellfox-main"
+    assert repository.count_rows()["audit_events"] == 1

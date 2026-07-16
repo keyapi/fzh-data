@@ -90,3 +90,31 @@ class SellfoxPackagePage(BaseModel):
     total_size: int
     records: list[SellfoxPackageRecord] = Field(default_factory=list)
     errors: list[PackageRowError] = Field(default_factory=list)
+
+
+class PackageListItem(BaseModel):
+    account_key: str
+    package_sn: str
+    package_status: str = ""
+    channel_name: str = ""
+    shop_name: str = ""
+    marketplace: str = ""
+    tracking_number: str = ""
+    order_count: int = 0
+    item_count: int = 0
+    fetched_at: datetime | None = None
+
+
+class PackageListResult(BaseModel):
+    total: int
+    items: list[PackageListItem] = Field(default_factory=list)
+
+
+class AuditEventRecord(BaseModel):
+    id: int
+    actor: str
+    action: str
+    entity_type: str
+    entity_id: str
+    summary: str = ""
+    created_at: datetime

@@ -44,6 +44,9 @@ uv run python -m sellfox_shipping.cli packages-sync \
   --date-start 2026-07-15 --date-end 2026-07-16 \
   --actor <operator-id> --json
 
+# 本地包裹列表（只读本地库）
+uv run python -m sellfox_shipping.cli packages-list --status to_audit --json
+
 # Web Server (legacy FastAPI + FastMCP，尚无 OIDC)
 uv run python -m sellfox_shipping.cli serve
 
@@ -102,12 +105,16 @@ sellfox_shipping/
 - `SyncPackagesService`：按实际行数分页；`input = success+skipped+failed+unmatched`
 - `partial_failed`：中途失败保留已落库结果 + 报告；CLI 退出码 1
 - `packages-sync` JSON CLI（强制非空 `actor`）
+- `packages-list`：本地包裹摘要查询（状态/渠道过滤）
+- `shipping_audit_events`：同步结束写 `packages.sync` 审计（含部分失败）
 
-**已验证：** `uv run pytest tests/sellfox_shipping -q` → 21 passed  
+**已验证：** `uv run pytest tests/sellfox_shipping -q` → 26 passed  
 
 **未调用：** `submitToPlatform`  
 
-**未实现：** Alembic migration、钉钉 OIDC、包裹审核 Web/REST、AuditEvent、Artifact、蜴国际 Excel、安全回写状态机
+**并行中（同事 Agent，未提交）：** VITE API / Karrio 调研 — 本分支暂不碰  
+
+**未实现：** Alembic migration、钉钉 OIDC、包裹审核 Web/REST、Artifact、蜴国际 Excel、安全回写状态机
 
 ## 待实现
 

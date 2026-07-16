@@ -21,6 +21,9 @@ uv run python -m sellfox_shipping.cli serve
 # 运行前通过环境变量提供 Sellfox proxy key
 uv run python -m sellfox_shipping.cli packages-sync --date-start 2026-07-15 --date-end 2026-07-16 --actor <operator-id> --json
 
+# 本地包裹列表（只读本地库）
+uv run python -m sellfox_shipping.cli packages-list --status to_audit --json
+
 # Legacy：从赛狐拉订单
 uv run python -m sellfox_shipping.cli fetch --date-start 2026-07-01 --date-end 2026-07-15
 
@@ -42,6 +45,7 @@ uv run python -m sellfox_shipping.cli orders --status to_print
 - `(sellfox_account_id, package_sn)` 作用域和订单/包裹多对多持久化
 - SQLite WAL + SQLAlchemy repository
 - 分页同步、逐行差异报告和失败后部分报告
-- `packages-sync` JSON CLI
+- `packages-sync` / `packages-list` JSON CLI
+- 同步结束写入 `AuditEvent`（`packages.sync`）
 
-下一步：schema migration、钉钉 OIDC、包裹查询/审核界面；蜴国际 Excel 依赖真实样例。
+下一步：schema migration、钉钉 OIDC、包裹审核 Web/REST；蜴国际 Excel 依赖真实样例。VITE/Karrio 由同事 Agent 并行调研中。
