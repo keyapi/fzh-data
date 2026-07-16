@@ -47,6 +47,10 @@ uv run python -m sellfox_shipping.cli packages-sync \
 # 本地包裹列表（只读本地库）
 uv run python -m sellfox_shipping.cli packages-list --status to_audit --json
 
+# REST（legacy Web 服务启动后）
+# GET /api/packages?status=to_audit&channel=蜴国际
+# GET /api/packages/{package_sn}
+
 # Web Server (legacy FastAPI + FastMCP，尚无 OIDC)
 uv run python -m sellfox_shipping.cli serve
 
