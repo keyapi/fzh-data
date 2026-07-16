@@ -317,3 +317,17 @@ orders → addresses, order_items, labels (含 cost/currency), tracking_log, rul
 ### Frappe/ERPNext
 - https://docs.frappe.io/framework/user/en/basics/architecture
 - https://gavv.in/blog/how-does-frappe-work
+
+## 独立验证
+
+2026-07-16 另一 Agent（claude/strange-jones）执行了完全独立的第二轮调研
+（详见 `sellfox_shipping/docs/research/claude-strange-jones-methodology-2026-07-16.md`），在屏蔽本已有结论的前提下独立到达了大部分相似结论
+（Karrio 借鉴、ERPNext Shipping 不可用、Excel 模板必要、SQLite + Docker Compose），
+但在 **Agent 界面选型**上存在关键分歧：
+
+- 本调研推荐 FastAPI + FastMCP + Typer CLI 三界面架构
+- 独立调研推荐 CLI-first + REST API，MCP 推迟到 P2+
+- 独立调研收集了 2026 年 CLI vs MCP 实证数据：CLI 比 MCP 便宜 10-35x token 消耗、CLI 可靠性 100% vs MCP 72%
+- 独立调研额外确认：DeepSeek 不原生支持 MCP，Vite/亿龙达有 API 文档（用户微信群里）
+
+两个调研可以作为互补视角参考。最终技术选型由团队根据具体情况决定。
