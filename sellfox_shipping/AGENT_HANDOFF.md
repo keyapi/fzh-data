@@ -113,14 +113,15 @@ sellfox_shipping/
 - `shipping_audit_events`：同步结束写 `packages.sync` 审计（含部分失败）
 - REST：`GET /api/packages`、`GET /api/packages/{package_sn}`
 - Web：`/packages`、`/packages/{package_sn}` server-rendered 审核只读页
+- Schema：Alembic `0001_package_schema`；仓库启动自动 upgrade/stamp
 
-**已验证：** `uv run pytest tests/sellfox_shipping -q` → 32 passed  
+**已验证：** `uv run pytest tests/sellfox_shipping -q` → 34 passed  
 
 **未调用：** `submitToPlatform`  
 
 **并行中（同事 Agent，未提交）：** VITE API / Karrio 调研 — 本分支暂不碰  
 
-**未实现：** Alembic migration、钉钉 OIDC、包裹审核 Web/REST、Artifact、蜴国际 Excel、安全回写状态机
+**未实现：** 钉钉 OIDC、Artifact、蜴国际 Excel、安全回写状态机、审核动作（通过/驳回）写库
 
 ## 待实现
 

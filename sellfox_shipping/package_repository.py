@@ -194,13 +194,15 @@ class PackageRepository:
         path = Path(db_path)
         path.parent.mkdir(parents=True, exist_ok=True)
         _initialize_sqlite(path)
+        from sellfox_shipping.schema import upgrade_schema
+
+        upgrade_schema(path)
         self.engine = create_engine(
             f"sqlite:///{path}",
             connect_args={"check_same_thread": False},
         )
         event.listen(self.engine, "connect", _configure_sqlite)
         self._session_factory = sessionmaker(self.engine, expire_on_commit=False)
-        Base.metadata.create_all(self.engine)
 
     def upsert(self, record: SellfoxPackageRecord) -> UpsertOutcome:
         with self._session_factory.begin() as session:

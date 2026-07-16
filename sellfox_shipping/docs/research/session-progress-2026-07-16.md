@@ -133,7 +133,7 @@ uv run python -m sellfox_shipping.cli packages-sync \
 - `shipping_package_orders` — 包裹↔订单多对多
 - `shipping_package_items` — 按包裹保存商品行
 
-**SQLite：** WAL、`foreign_keys=ON`、`busy_timeout=5000`。当前用 `create_all`，**尚无正式 Alembic/migration 流水线**。
+**SQLite：** WAL、`foreign_keys=ON`、`busy_timeout=5000`。Schema 由 Alembic `0001_package_schema` 管理（`schema.upgrade_schema`）；legacy create_all 库无版本表时 stamp。
 
 **Legacy 仍在、尚未迁移：** `models.py` / `store.py` 订单中心模型、Web `/api/orders/*`、MCP、`fetch` CLI。不要在其上堆蜴国际流程。
 
@@ -149,10 +149,10 @@ uv run python -m sellfox_shipping.cli packages-sync \
 
 ### P1A 后续（可继续编码，不依赖蜴国际样例）
 
-- [ ] 正式 schema migration（替换裸 `create_all`）  
+- [x] 正式 schema migration（Alembic `0001_package_schema`）  
 - [ ] 钉钉 OIDC；禁止未认证暴露 PII（legacy Web 仍绑定 `0.0.0.0` 且无 auth）  
-- [ ] 包裹查询/审核 Web + REST，全部走 `SyncPackagesService` / repository，不复制逻辑到 `app.py`  
-- [ ] `AuditEvent` 记录 actor  
+- [x] 包裹查询/审核只读 Web + REST（审核写操作尚未做）  
+- [x] `AuditEvent` 记录 actor（同步路径）  
 - [ ] 逐步废弃或隔离 legacy 订单入口，避免双模型漂移  
 - [ ] 更新 skill `.claude/skills/sellfox-shipping/SKILL.md`（仍写「P1 骨架 / P2 FedEx」，已过时）
 
@@ -203,9 +203,10 @@ uv run python -m sellfox_shipping.cli packages-sync \
 2. **`shipping_audit_events` + sync 审计** — 每次 `packages.sync` 结束（含 `partial_failed`）写一条 `AuditEvent`；审计写失败只记入 `run_errors`，不丢弃同步报告。  
 3. **`GET /api/packages` + `GET /api/packages/{package_sn}`** — REST 只读。  
 4. **`/packages` + `/packages/{package_sn}` Jinja 页** — server-rendered 审核只读；Starlette 1.2 需 `TemplateResponse(request, name, context)`。  
-5. 测试基线：**32 passed**。  
+5. **Alembic** — `schema.upgrade_schema()`；`0001_package_schema`；legacy create_all 库 stamp。  
+6. 测试基线：**34 passed**。  
 
-仍未做：migration、OIDC、Excel、`submitToPlatform`、VITE/Karrio。
+仍未做：OIDC、Excel、`submitToPlatform`、VITE/Karrio、审核写操作。
 
 工作区可能仍有**无关**未提交文件（advertise、dam、codex config 等）；接手时**只提交 sellfox_shipping 相关改动**，勿把敏感配置或数据文件打进 PR。
 

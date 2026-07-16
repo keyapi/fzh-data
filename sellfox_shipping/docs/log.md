@@ -8,6 +8,13 @@ updated: 2026-07-16
 
 # sellfox_shipping — 变更日志
 
+## 2026-07-16 — P1A Alembic schema migration
+
+- 新增 `schema.upgrade_schema()` + Alembic `0001_package_schema`
+- `PackageRepository` 启动改为跑 migration，不再裸 `create_all`
+- 已有 create_all 库无 `alembic_version` 时 stamp head，避免重复建表失败
+- 依赖增加 `alembic`；测试 34 passed
+
 ## 2026-07-16 — P1A 包裹审核 Jinja 页
 
 - 新增 server-rendered `/packages` 与 `/packages/{package_sn}`，共用 ListPackagesService / PackageRepository
