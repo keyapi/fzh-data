@@ -49,7 +49,7 @@ sellfox-api-proxy/                      # 赛狐 API 代理（可直接复用）
 完成独立调研后，如果不放心可以看：
 
 ```
-sellfox_shipping/docs/research/research-claude-sonnet-2026-07-15.md   # 已有的完整调研
+sellfox_shipping/docs/research/research-agent-a-2026-07-15.md   # Agent A 的完整调研
 docs/solutions/architecture-patterns/sellfox-shipping-research-and-architecture.md  # 已有的架构决策
 ```
 
@@ -72,10 +72,10 @@ research-<agent标识>-<YYYY-MM-DD>.md
 
 示例：
 ```
-research-claude-sonnet-2026-07-16.md
-research-codex-gpt5-2026-07-16.md
-research-cursor-opus48-2026-07-16.md
-research-同事名-agent-2026-07-16.md
+research-agent-a-2026-07-15.md   (第一个 Agent)
+research-agent-b-2026-07-16.md   (第二个 Agent，你的文件名)
+research-agent-c-2026-07-16.md   (第三个 Agent)
+research-synthesis-2026-07-17.md (综合 Agent)
 ```
 
 **绝对不要覆盖或编辑他人的调研文件。** 每个 Agent 只写自己的文件。这样即使所有分支最终合并，也不会有冲突。
