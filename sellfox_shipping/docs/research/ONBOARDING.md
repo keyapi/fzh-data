@@ -13,8 +13,8 @@
 ```bash
 git clone https://github.com/keyapi/fzh-data.git
 cd fzh-data
-git checkout feature/sellfox-shipping-p1-research    # 读取文档用
-git checkout -b research/<你的名字或Agent名>          # 创建你自己的独立分支
+git checkout sellfox-shipping-research-agent-a    # 读取文档用
+git checkout -b sellfox-shipping-research-agent-b  # 创建你自己的独立分支
 ```
 
 ### 2. 阅读简报（唯一入口，先别看别的）
@@ -89,7 +89,7 @@ research-synthesis-2026-07-17.md (综合 Agent)
 
 ## 注意
 
-- 使用你自己的分支，不要直接提交到 `feature/sellfox-shipping-p1-research`
+- 使用你自己的分支，不要直接提交到 `sellfox-shipping-research-agent-a`
 - 你的调研方法、结论、架构可以完全不同——这正是用户想要的多样性
 - 所有外部搜索保留原始 URL
 - **只写你自己的文件，遵循命名约定**
