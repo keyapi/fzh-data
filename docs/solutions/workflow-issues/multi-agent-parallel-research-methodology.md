@@ -30,7 +30,7 @@ tags:
 
 每条独立路径的 Agent 开局遵循 `ONBOARDING.md`：
 
-1. **Clone + 独立分支**：从 `feature/sellfox-shipping-p1-research` 创建独立 worktree 分支，如 `research/grill-breadth-w4d8k2`
+1. **Clone + 独立分支**：从 `feature/sellfox-shipping-p1-research` 创建独立 worktree 分支，如 `sellfox-shipping-research-agent-c`
 2. **读简报**（唯一入口）：`sellfox_shipping/docs/research/briefing-for-independent-agent.md` — 只有事实和需求，不含已有结论
 3. **读项目背景**：`docs/company-context.md`, `AGENTS.md`, `CONCEPTS.md`
 4. **了解基础设施**：赛狐 API 文档、`sellfox-api-proxy/`
@@ -82,21 +82,18 @@ tags:
 
 ```bash
 # 1. 创建独立 worktree
-git worktree add -b research/grill-breadth-w4d8k2 \
-  worktrees/grill-breadth-w4d8k2 feature/sellfox-shipping-p1-research
+git worktree add -b sellfox-shipping-research-agent-c \
+  worktrees/sellfox-shipping-research-agent-c feature/sellfox-shipping-p1-research
 
 # 2. 读简报（不读已有调研）
 cat sellfox_shipping/docs/research/briefing-for-independent-agent.md
 
-# 3. 写 grill critique
-# → sellfox_shipping/docs/research/grill-breadth-critique-2026-07-16.md
+# 3. 写独立调研文档（含 grill + 调研）
+# → sellfox_shipping/docs/research/research-agent-c-2026-07-16.md
 
-# 4. 广度调研 8 个主题
-# → sellfox_shipping/docs/research/grill-breadth-research-2026-07-16.md
-
-# 5. 提交到独立分支（不修改共享的 index.md/log.md 以避免 merge 冲突）
-git add sellfox_shipping/docs/research/grill-breadth-*.md
-git commit -m "docs(sellfox-shipping): independent research path C"
+# 4. 提交到独立分支（不修改共享的 index.md/log.md 以避免 merge 冲突）
+git add sellfox_shipping/docs/research/research-agent-c-*.md
+git commit -m "docs(sellfox-shipping): independent research agent C"
 ```
 
 ### Grill 问题的组织方式
@@ -113,13 +110,12 @@ git commit -m "docs(sellfox-shipping): independent research path C"
 
 ### 文档命名避免冲突
 
-多条路径写入同一目录 `sellfox_shipping/docs/research/` 时，用路径标识区分：
+多条路径写入同一目录 `sellfox_shipping/docs/research/` 时，用 agent 标识区分：
 
 ```
-grill-breadth-critique-2026-07-16.md   # 路径 C: grill
-grill-breadth-research-2026-07-16.md   # 路径 C: 调研
-agent-a-critique-2026-07-16.md         # 路径 A
-agent-b-research-2026-07-16.md         # 路径 B
+research-agent-a-2026-07-16.md   # Agent A: 深度优先
+research-agent-b-2026-07-16.md   # Agent B: 深度优先完全独立
+research-agent-c-2026-07-16.md   # Agent C: 广度优先 + grill-first
 ```
 
 **共享文件（index.md, log.md）由汇总 Agent 统一更新**，各路径不修改。
