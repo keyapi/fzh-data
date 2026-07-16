@@ -201,9 +201,11 @@ uv run python -m sellfox_shipping.cli packages-sync \
 
 1. **`ListPackagesService` + `packages-list` CLI** — 按 `account_key` / `package_status` / `channel_name` 过滤；返回 `order_count` / `item_count` 摘要，不走 legacy `store.py`。  
 2. **`shipping_audit_events` + sync 审计** — 每次 `packages.sync` 结束（含 `partial_failed`）写一条 `AuditEvent`；审计写失败只记入 `run_errors`，不丢弃同步报告。  
-3. 测试基线：**26 passed**（原 21 + 5）。  
+3. **`GET /api/packages` + `GET /api/packages/{package_sn}`** — REST 只读。  
+4. **`/packages` + `/packages/{package_sn}` Jinja 页** — server-rendered 审核只读；Starlette 1.2 需 `TemplateResponse(request, name, context)`。  
+5. 测试基线：**32 passed**。  
 
-仍未做：migration、OIDC、Web 审核页、Excel、`submitToPlatform`、VITE/Karrio。
+仍未做：migration、OIDC、Excel、`submitToPlatform`、VITE/Karrio。
 
 工作区可能仍有**无关**未提交文件（advertise、dam、codex config 等）；接手时**只提交 sellfox_shipping 相关改动**，勿把敏感配置或数据文件打进 PR。
 

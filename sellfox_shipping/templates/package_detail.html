@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>包裹 {{ package.package_sn }} — 赛狐尾程打单</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, 'Microsoft YaHei', sans-serif; background: #f5f5f5; color: #333; }
+        .header { background: #1a1a2e; color: #fff; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+        .header h1 { font-size: 18px; }
+        .nav a { color: #a0a0c0; text-decoration: none; margin-left: 20px; font-size: 14px; }
+        .nav a:hover, .nav a.active { color: #fff; }
+        .container { max-width: 1200px; margin: 24px auto; padding: 0 24px; }
+        .panel { background: #fff; border-radius: 8px; padding: 24px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .panel h2 { font-size: 16px; margin-bottom: 16px; }
+        .info-row { display: flex; gap: 24px; flex-wrap: wrap; }
+        .info-item { flex: 1; min-width: 180px; }
+        .info-item .label { font-size: 11px; color: #888; margin-bottom: 4px; }
+        .info-item .value { font-size: 14px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #eee; font-size: 13px; }
+        th { color: #888; font-weight: 600; font-size: 11px; text-transform: uppercase; }
+        .back { display: inline-block; margin-bottom: 16px; color: #1a1a2e; font-size: 13px; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; background: #d1ecf1; color: #0c5460; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>包裹 {{ package.package_sn }}</h1>
+        <div class="nav">
+            <a href="/">首页</a>
+            <a href="/packages" class="active">包裹</a>
+            <a href="/orders">订单 (legacy)</a>
+        </div>
+    </div>
+    <div class="container">
+        <a class="back" href="/packages">← 返回包裹列表</a>
+
+        <div class="panel">
+            <h2>基本信息</h2>
+            <div class="info-row">
+                <div class="info-item"><div class="label">包裹号</div><div class="value">{{ package.package_sn }}</div></div>
+                <div class="info-item"><div class="label">状态</div><div class="value"><span class="badge">{{ package.package_status or '—' }}</span></div></div>
+                <div class="info-item"><div class="label">渠道</div><div class="value">{{ package.logistics.channel_name or '—' }}</div></div>
+                <div class="info-item"><div class="label">店铺</div><div class="value">{{ package.shop_name or '—' }}</div></div>
+                <div class="info-item"><div class="label">追踪号</div><div class="value">{{ package.logistics.tracking_number or '—' }}</div></div>
+                <div class="info-item"><div class="label">站点</div><div class="value">{{ package.marketplace or '—' }}</div></div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>收货地址</h2>
+            <div class="info-row">
+                <div class="info-item"><div class="label">姓名</div><div class="value">{{ package.address.name or '—' }}</div></div>
+                <div class="info-item"><div class="label">电话</div><div class="value">{{ package.address.phone or package.address.mobile or '—' }}</div></div>
+                <div class="info-item"><div class="label">城市/州</div><div class="value">{{ package.address.city or '—' }} {{ package.address.state_or_region or '' }}</div></div>
+                <div class="info-item"><div class="label">邮编</div><div class="value">{{ package.address.postal_code or '—' }}</div></div>
+                <div class="info-item"><div class="label">国家</div><div class="value">{{ package.address.country_code or package.address.country or '—' }}</div></div>
+                <div class="info-item"><div class="label">地址</div><div class="value">{{ package.address.address_line_1 or '—' }} {{ package.address.address_line_2 or '' }}</div></div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>关联订单 ({{ package.orders|length }})</h2>
+            <table>
+                <thead>
+                    <tr><th>订单号</th><th>状态</th><th>金额</th><th>币种</th></tr>
+                </thead>
+                <tbody>
+                    {% for order in package.orders %}
+                    <tr>
+                        <td>{{ order.external_order_id }}</td>
+                        <td>{{ order.order_status or '—' }}</td>
+                        <td>{{ order.order_total }}</td>
+                        <td>{{ order.currency or '—' }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="4">无关联订单</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="panel">
+            <h2>商品行 ({{ package.items|length }})</h2>
+            <table>
+                <thead>
+                    <tr><th>订单号</th><th>行 ID</th><th>Seller SKU</th><th>数量</th><th>变体</th></tr>
+                </thead>
+                <tbody>
+                    {% for item in package.items %}
+                    <tr>
+                        <td>{{ item.external_order_id }}</td>
+                        <td>{{ item.order_item_id }}</td>
+                        <td>{{ item.seller_sku or '—' }}</td>
+                        <td>{{ item.quantity }}</td>
+                        <td>{{ item.variation or '—' }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="5">无商品行</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</body>
+</html>
