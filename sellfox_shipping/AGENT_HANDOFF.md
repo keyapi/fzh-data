@@ -111,8 +111,10 @@ sellfox_shipping/
 - `packages-sync` JSON CLI（强制非空 `actor`）
 - `packages-list`：本地包裹摘要查询（状态/渠道过滤）
 - `shipping_audit_events`：同步结束写 `packages.sync` 审计（含部分失败）
+- REST：`GET /api/packages`、`GET /api/packages/{package_sn}`
+- Web：`/packages`、`/packages/{package_sn}` server-rendered 审核只读页
 
-**已验证：** `uv run pytest tests/sellfox_shipping -q` → 26 passed  
+**已验证：** `uv run pytest tests/sellfox_shipping -q` → 32 passed  
 
 **未调用：** `submitToPlatform`  
 

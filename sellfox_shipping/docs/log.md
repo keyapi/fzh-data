@@ -8,6 +8,13 @@ updated: 2026-07-16
 
 # sellfox_shipping — 变更日志
 
+## 2026-07-16 — P1A 包裹审核 Jinja 页
+
+- 新增 server-rendered `/packages` 与 `/packages/{package_sn}`，共用 ListPackagesService / PackageRepository
+- 修正 Starlette 1.2 `TemplateResponse(request, name, context)` 签名（旧写法触发 Jinja LRUCache TypeError）
+- 导航加入「包裹」入口；legacy 订单页标注
+- 测试：`uv run pytest tests/sellfox_shipping -q` → 32 passed
+
 ## 2026-07-16 — P1A 包裹 REST 只读接口
 
 - 新增 `GET /api/packages` 与 `GET /api/packages/{package_sn}`，共用 `ListPackagesService` / `PackageRepository`

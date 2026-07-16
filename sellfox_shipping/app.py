@@ -201,12 +201,60 @@ async def list_rules():
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(request, "index.html")
+
+
+@app.get("/packages", response_class=HTMLResponse)
+async def packages_page(
+    request: Request,
+    status: str | None = Query(None),
+    channel: str | None = Query(None),
+    limit: int = Query(50, le=500),
+    offset: int = Query(0, ge=0),
+):
+    """Server-rendered package list for review (read-only)."""
+    account_key = config["sellfox"]["proxy_account"]
+    result = _get_package_list_service().list(
+        PackageListRequest(
+            account_key=account_key,
+            package_status=status,
+            channel_name=channel,
+            limit=limit,
+            offset=offset,
+        )
+    )
+    return templates.TemplateResponse(
+        request,
+        "packages.html",
+        {
+            "account_key": account_key,
+            "status": status or "",
+            "channel": channel or "",
+            "total": result.total,
+            "items": result.items,
+        },
+    )
+
+
+@app.get("/packages/{package_sn}", response_class=HTMLResponse)
+async def package_detail_page(request: Request, package_sn: str):
+    """Server-rendered package detail for review (read-only)."""
+    record = _get_package_repository().get(
+        config["sellfox"]["proxy_account"],
+        package_sn,
+    )
+    if record is None:
+        raise HTTPException(404, f"Package {package_sn} not found")
+    return templates.TemplateResponse(
+        request,
+        "package_detail.html",
+        {"package": record},
+    )
 
 
 @app.get("/orders", response_class=HTMLResponse)
 async def orders_page(request: Request):
-    return templates.TemplateResponse("orders.html", {"request": request})
+    return templates.TemplateResponse(request, "orders.html")
 
 
 # ── MCP mount — appended in main.py after FastMCP server is created ──
