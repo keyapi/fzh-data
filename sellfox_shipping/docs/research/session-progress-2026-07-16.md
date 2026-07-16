@@ -183,7 +183,7 @@ uv run python -m sellfox_shipping.cli packages-sync \
 | `27cd46d` | 独立调研 + OKF 导航 + 命名边界 |
 | `0b157e7` | P1A 包裹只读同步 + 21 tests |
 | `275919e` | 本文 + OKF 导航联动（`session-progress`、索引、`AGENT_HANDOFF`） |
-| （本切片待提交） | `packages-list` + `AuditEvent`；测试 26 passed |
+| `ebed58a` | `packages-list` + `AuditEvent`；测试 26 passed |
 
 ### 7.1 并行工作边界（2026-07-16）
 
