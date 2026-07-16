@@ -23,7 +23,7 @@ applies_when:
 > 本调研于 2026-07-16 独立执行，未参考已有 `sellfox-shipping-research-and-architecture.md`。
 > 两个调研独立到达相似结论（Karrio 借鉴、ERPNext Shipping 不可用、Excel 模板必要），
 > 但在 **Agent 界面选型**上存在关键分歧。
-> 调研文档见 `sellfox_shipping/docs/research/claude-strange-jones-research-2026-07-16.md`。
+> 调研文档见 `sellfox_shipping/docs/research/research-agent-b-2026-07-16.md`。
 
 ## Context
 

@@ -4,7 +4,7 @@ module: sellfox_shipping
 created: 2026-07-16
 updated: 2026-07-16
 status: complete
-agent: claude/strange-jones-0bb7be
+agent: research-agent-b
 method: >
   完全独立调研，未参考已有 P1 调研结论。
   两阶段：Phase 0 广域搜索（5路并行tavily）→ Area 1（多承运人架构）+ Area 2（AI Agent界面）。

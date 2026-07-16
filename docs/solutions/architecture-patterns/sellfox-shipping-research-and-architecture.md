@@ -320,8 +320,8 @@ orders → addresses, order_items, labels (含 cost/currency), tracking_log, rul
 
 ## 独立验证
 
-2026-07-16 另一 Agent（claude/strange-jones）执行了完全独立的第二轮调研
-（详见 `sellfox_shipping/docs/research/claude-strange-jones-methodology-2026-07-16.md`），在屏蔽本已有结论的前提下独立到达了大部分相似结论
+2026-07-16 另一 Agent（research-agent-b）执行了完全独立的第二轮调研
+（详见 `sellfox_shipping/docs/research/research-agent-b-methodology-2026-07-16.md`），在屏蔽本已有结论的前提下独立到达了大部分相似结论
 （Karrio 借鉴、ERPNext Shipping 不可用、Excel 模板必要、SQLite + Docker Compose），
 但在 **Agent 界面选型**上存在关键分歧：
 
