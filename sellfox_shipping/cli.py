@@ -62,6 +62,18 @@ def _get_client():
     )
 
 
+def _get_package_sync_service():
+    from sellfox_shipping.package_repository import PackageRepository
+    from sellfox_shipping.package_service import SyncPackagesService
+
+    config = _load_config()
+    db_path = BASE_DIR / config.get("store", {}).get("db_path", "data/shipping.db")
+    return SyncPackagesService(
+        gateway=_get_client(),
+        repository=PackageRepository(db_path),
+    )
+
+
 # ── Commands ──────────────────────────────────────────────────────
 
 @app.command()
@@ -96,6 +108,36 @@ def fetch(
         page_no += 1
 
     _output({"fetched": len(all_orders), "total_in_sellfox": total}, json_output)
+
+
+@app.command("packages-sync")
+def packages_sync(
+    date_start: str = typer.Option(..., help="Start date (yyyy-MM-dd)"),
+    date_end: str = typer.Option(..., help="End date (yyyy-MM-dd)"),
+    actor: str = typer.Option(..., help="Operator identity for the audit report"),
+    status: Optional[str] = typer.Option(None, help="Sellfox package status"),
+    page_size: int = typer.Option(50, min=1, max=200),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Synchronize Sellfox package-processing records into the package store."""
+    from sellfox_shipping.package_service import PackageSyncRequest
+
+    config = _load_config()
+    request = PackageSyncRequest(
+        account_key=config["sellfox"]["proxy_account"],
+        date_start=date_start,
+        date_end=date_end,
+        actor=actor,
+        status=status,
+        page_size=page_size,
+    )
+    report = _get_package_sync_service().sync(request)
+    payload = report.model_dump(mode="json")
+    payload["is_reconciled"] = report.is_reconciled
+    payload["remaining_count"] = report.remaining_count
+    _output(payload, json_output)
+    if report.sync_status != "completed":
+        raise typer.Exit(1)
 
 
 @app.command()

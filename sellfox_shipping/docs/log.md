@@ -8,6 +8,15 @@ updated: 2026-07-16
 
 # sellfox_shipping — 变更日志
 
+## 2026-07-16 — P1A 包裹只读同步纵切
+
+- 新增内部 snake_case 包裹模型；赛狐 camelCase 仅在 gateway 边界解析
+- 修复 Sellfox proxy 动态 account 路径和 Bearer 认证头
+- 新增 SQLAlchemy package repository，启用 SQLite WAL、foreign keys、busy timeout，并按账户保存包裹—订单多对多关系
+- 新增 `SyncPackagesService`：按实际返回行分页，输出逐行对账；中途 gateway 失败保留已处理结果并返回 `partial_failed`
+- 新增 `packages-sync` JSON CLI；要求 actor，部分失败输出报告后返回非零退出码
+- 新增 21 个定向测试；当前纵切不调用 `submitToPlatform`，不表示 P1A/P1B 全部完成
+
 ## 2026-07-16 — 独立综合调研与导航
 
 - 新增独立综合调研，形成以内部 `(sellfox_account_id, package_sn)` 为包裹业务键、以包裹批次为主线的架构判断

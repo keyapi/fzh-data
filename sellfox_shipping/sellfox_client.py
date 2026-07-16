@@ -6,30 +6,49 @@ OAuth 2.0 token refresh, HMAC signing, and IP whitelist.
 
 from __future__ import annotations
 
-import hashlib
-import hmac
-import time
+import copy
 from datetime import datetime
 from typing import Optional
 
 import httpx
 
 from sellfox_shipping.models import Address, Order, OrderItem, PackageStatus
+from sellfox_shipping.package_models import (
+    PackageRowError,
+    SellfoxPackageAddress,
+    SellfoxPackageItemRecord,
+    SellfoxPackageLogistics,
+    SellfoxPackageOrderRecord,
+    SellfoxPackagePage,
+    SellfoxPackageRecord,
+)
 
 
 class SellfoxClient:
     """Thin wrapper over sellfox-api-proxy for order fetch + tracking write-back."""
 
-    def __init__(self, proxy_base_url: str, proxy_account: str, proxy_api_key: str = ""):
+    def __init__(
+        self,
+        proxy_base_url: str,
+        proxy_account: str,
+        proxy_api_key: str = "",
+        http_client: httpx.Client | None = None,
+    ):
         self.base_url = proxy_base_url.rstrip("/")
         self.account = proxy_account
         self.api_key = proxy_api_key
-        self._client = httpx.Client(timeout=30)
+        self._client = http_client or httpx.Client(timeout=30)
+
+    def _proxy_path(self, api_path: str) -> str:
+        return f"/v1/{self.account}{api_path}"
 
     def _post(self, path: str, body: dict) -> dict:
         """Call the proxy. The proxy handles Sellfox OAuth + signing."""
         url = f"{self.base_url}{path}"
-        resp = self._client.post(url, json=body)
+        headers = {}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        resp = self._client.post(url, json=body, headers=headers)
         resp.raise_for_status()
         return resp.json()
 
@@ -57,7 +76,7 @@ class SellfoxClient:
         if shop_ids:
             body["shopIdList"] = shop_ids
 
-        data = self._post("/v1/sellfox-main/api/order/pageList.json", body)
+        data = self._post(self._proxy_path("/api/order/pageList.json"), body)
 
         if data.get("code") != 0:
             raise RuntimeError(f"Sellfox API error: {data.get('msg', 'unknown')}")
@@ -75,7 +94,10 @@ class SellfoxClient:
             "shopId": shop_id,
             "amazonOrderId": amazon_order_id,
         }
-        data = self._post("/v1/sellfox-main/api/order/detailByOrderId.json", body)
+        data = self._post(
+            self._proxy_path("/api/order/detailByOrderId.json"),
+            body,
+        )
 
         if data.get("code") != 0:
             return None
@@ -85,7 +107,7 @@ class SellfoxClient:
 
     # ── Package fetching ────────────────────────────────────────
 
-    def fetch_packages(
+    def fetch_package_page(
         self,
         date_start: str,
         date_end: str,
@@ -93,8 +115,8 @@ class SellfoxClient:
         shop_ids: Optional[list[str]] = None,
         page_no: int = 1,
         page_size: int = 20,
-    ) -> tuple[list[Order], int]:
-        """Fetch packages (order processing view) from Sellfox."""
+    ) -> SellfoxPackagePage:
+        """Fetch and parse one package-processing page from Sellfox."""
         body = {
             "purchaseDateStart": date_start,
             "purchaseDateEnd": date_end,
@@ -106,15 +128,65 @@ class SellfoxClient:
         if shop_ids:
             body["shopIdList"] = shop_ids
 
-        data = self._post("/v1/sellfox-main/api/packageShip/v1/getPackagePage.json", body)
+        data = self._post(
+            self._proxy_path("/api/packageShip/v1/getPackagePage.json"),
+            body,
+        )
 
         if data.get("code") != 0:
             raise RuntimeError(f"Sellfox API error: {data.get('msg', 'unknown')}")
 
         page = data.get("data", {})
         rows = page.get("rows", [])
-        orders = [_parse_package_row(r) for r in rows]
-        return orders, page.get("totalSize", 0)
+        records: list[SellfoxPackageRecord] = []
+        errors: list[PackageRowError] = []
+        for row_index, row in enumerate(rows, start=1):
+            try:
+                record = parse_sellfox_package(self.account, row)
+                record.source_row_index = row_index
+                records.append(record)
+            except (AttributeError, TypeError, ValueError) as exc:
+                package_sn = ""
+                if isinstance(row, dict):
+                    package_sn = str(row.get("packageSn") or "")
+                errors.append(
+                    PackageRowError(
+                        row_index=row_index,
+                        package_sn=package_sn,
+                        reason=str(exc),
+                    )
+                )
+
+        return SellfoxPackagePage(
+            page_no=int(page.get("pageNo") or page_no),
+            page_size=int(page.get("pageSize") or page_size),
+            total_size=int(page.get("totalSize") or 0),
+            records=records,
+            errors=errors,
+        )
+
+    def fetch_packages(
+        self,
+        date_start: str,
+        date_end: str,
+        status: Optional[str] = None,
+        shop_ids: Optional[list[str]] = None,
+        page_no: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[Order], int]:
+        """Deprecated compatibility wrapper preserving the legacy Order result."""
+        page = self.fetch_package_page(
+            date_start=date_start,
+            date_end=date_end,
+            status=status,
+            shop_ids=shop_ids,
+            page_no=page_no,
+            page_size=page_size,
+        )
+        return [
+            _package_record_to_legacy_order(record)
+            for record in page.records
+        ], page.total_size
 
     # ── Tracking write-back ─────────────────────────────────────
 
@@ -140,12 +212,142 @@ class SellfoxClient:
             body["items"] = items
 
         # endpoint TBD — may need to check exact Sellfox API path
-        data = self._post("/v1/sellfox-main/api/packageShip/submitToPlatform.json", body)
+        data = self._post(
+            self._proxy_path("/api/packageShip/submitToPlatform.json"),
+            body,
+        )
 
         return data.get("code") == 0
 
 
 # ── Response parsers ──────────────────────────────────────────────
+
+def parse_sellfox_package(account_key: str, payload: object) -> SellfoxPackageRecord:
+    """Convert one Sellfox wire payload into an internal snake_case record."""
+    if not isinstance(payload, dict):
+        raise ValueError("package row must be an object")
+    package_sn = str(payload.get("packageSn") or "").strip()
+    if not package_sn:
+        raise ValueError("missing packageSn")
+
+    address_data = _object_field(payload, "address")
+    logistics_data = _object_field(payload, "logistics")
+    order_data = _object_list_field(payload, "orders")
+    item_data = _object_list_field(payload, "items")
+    orders = [
+        SellfoxPackageOrderRecord(
+            external_order_id=str(order.get("amazonOrderId") or ""),
+            order_status=str(order.get("orderStatus") or ""),
+            purchase_date=_parse_date(order.get("purchaseDate")),
+            earliest_ship_date=_parse_date(order.get("earliestShipDate")),
+            latest_ship_date=_parse_date(order.get("latestShipDate")),
+            order_total=_to_float(order.get("orderTotalAmount")),
+            currency=str(order.get("orderTotalCurrency") or ""),
+        )
+        for order in order_data
+        if str(order.get("amazonOrderId") or "").strip()
+    ]
+    items = [
+        SellfoxPackageItemRecord(
+            external_order_id=str(item.get("amazonOrderId") or ""),
+            order_item_id=str(item.get("orderItemId") or ""),
+            seller_sku=str(item.get("sellerSku") or ""),
+            commodity_sku=str(item.get("commoditySku") or ""),
+            quantity=_to_int(item.get("quantityOrdered")),
+            main_image=str(item.get("mainImage") or ""),
+            variation=str(item.get("variationChildStr") or ""),
+        )
+        for item in item_data
+        if str(item.get("orderItemId") or "").strip()
+    ]
+
+    return SellfoxPackageRecord(
+        account_key=account_key,
+        package_sn=package_sn,
+        shop_id=str(payload.get("shopId") or ""),
+        shop_name=str(payload.get("shopName") or ""),
+        platform_name=str(payload.get("platformName") or ""),
+        marketplace=str(payload.get("marketplace") or ""),
+        package_status=str(payload.get("status") or ""),
+        address=SellfoxPackageAddress(
+            name=str(address_data.get("name") or ""),
+            company=str(address_data.get("company") or ""),
+            address_line_1=str(address_data.get("address1") or ""),
+            address_line_2=str(address_data.get("address2") or ""),
+            city=str(address_data.get("city") or ""),
+            state_or_region=str(address_data.get("stateOrRegion") or ""),
+            postal_code=str(address_data.get("postalCode") or ""),
+            country=str(address_data.get("country") or ""),
+            country_code=str(address_data.get("countryCode") or ""),
+            phone=str(address_data.get("phone") or ""),
+            mobile=str(address_data.get("mobile") or ""),
+            email=str(address_data.get("buyerEmail") or ""),
+        ),
+        logistics=SellfoxPackageLogistics(
+            warehouse_name=str(logistics_data.get("warehouseName") or ""),
+            channel_name=str(logistics_data.get("channelName") or ""),
+            tracking_number=str(logistics_data.get("trackNo") or ""),
+            forward_number=str(logistics_data.get("forwardNo") or ""),
+            estimated_cost=_to_float(logistics_data.get("fbmCost")),
+            currency=str(logistics_data.get("orderTotalCurrency") or ""),
+            weight_grams=_to_float(logistics_data.get("packageWeight")),
+            length_cm=_to_float(logistics_data.get("length")),
+            width_cm=_to_float(logistics_data.get("width")),
+            height_cm=_to_float(logistics_data.get("height")),
+        ),
+        orders=orders,
+        items=items,
+        raw_payload=copy.deepcopy(payload),
+    )
+
+
+def _package_record_to_legacy_order(record: SellfoxPackageRecord) -> Order:
+    first_order = record.orders[0] if record.orders else None
+    try:
+        package_status = PackageStatus(record.package_status)
+    except ValueError:
+        package_status = PackageStatus.TO_AUDIT
+    return Order(
+        amazon_order_id=first_order.external_order_id if first_order else "",
+        package_sn=record.package_sn,
+        shop_id=record.shop_id,
+        shop_name=record.shop_name,
+        platform=record.platform_name or "Amazon",
+        marketplace=record.marketplace,
+        order_status=first_order.order_status if first_order else "",
+        package_status=package_status,
+        purchase_date=first_order.purchase_date if first_order else None,
+        earliest_ship_date=(
+            first_order.earliest_ship_date if first_order else None
+        ),
+        latest_ship_date=first_order.latest_ship_date if first_order else None,
+        shipping_address=Address(
+            name=record.address.name,
+            company=record.address.company,
+            address1=record.address.address_line_1,
+            address2=record.address.address_line_2,
+            city=record.address.city,
+            state=record.address.state_or_region,
+            postal_code=record.address.postal_code,
+            country=record.address.country,
+            country_code=record.address.country_code,
+            phone=record.address.phone or record.address.mobile,
+            email=record.address.email,
+        ),
+        items=[
+            OrderItem(
+                order_item_id=item.order_item_id,
+                seller_sku=item.seller_sku,
+                commodity_sku=item.commodity_sku,
+                quantity=item.quantity,
+                main_image=item.main_image,
+                variation=item.variation,
+            )
+            for item in record.items
+        ],
+        raw_json=_truncate_json(record.raw_payload),
+    )
+
 
 def _parse_order_row(r: dict) -> Order:
     items = []
@@ -224,55 +426,6 @@ def _parse_order_detail(d: dict) -> Order:
     )
 
 
-def _parse_package_row(r: dict) -> Order:
-    addr_data = r.get("address") or {}
-    addr = Address(
-        name=addr_data.get("name", ""),
-        company=addr_data.get("company", ""),
-        address1=addr_data.get("address1", ""),
-        address2=addr_data.get("address2", ""),
-        city=addr_data.get("city", ""),
-        state=addr_data.get("stateOrRegion", ""),
-        postal_code=addr_data.get("postalCode", ""),
-        country=addr_data.get("country", ""),
-        country_code=addr_data.get("countryCode", ""),
-        phone=addr_data.get("phone", ""),
-        email=addr_data.get("buyerEmail", ""),
-    )
-
-    items = []
-    for item in (r.get("items") or []):
-        items.append(OrderItem(
-            order_item_id=item.get("orderItemId", ""),
-            seller_sku=item.get("sellerSku", ""),
-            commodity_sku=item.get("commoditySku", ""),
-            quantity=int(item.get("quantityOrdered", 0)),
-            main_image=item.get("mainImage", ""),
-            variation=item.get("variationChildStr", ""),
-        ))
-
-    logistics = r.get("logistics") or {}
-    orders_data = r.get("orders") or []
-    first_order = orders_data[0] if orders_data else {}
-
-    return Order(
-        amazon_order_id=first_order.get("amazonOrderId", ""),
-        package_sn=r.get("packageSn", ""),
-        shop_id=r.get("shopId", ""),
-        shop_name=r.get("shopName", ""),
-        platform=r.get("platformName", "Amazon"),
-        marketplace=r.get("marketplace", ""),
-        order_status=first_order.get("orderStatus", ""),
-        package_status=PackageStatus(r.get("status", "to_audit")),
-        purchase_date=_parse_date(first_order.get("purchaseDate")),
-        earliest_ship_date=_parse_date(first_order.get("earliestShipDate")),
-        latest_ship_date=_parse_date(first_order.get("latestShipDate")),
-        shipping_address=addr,
-        items=items,
-        raw_json=_truncate_json(r),
-    )
-
-
 def _parse_date(val: Optional[str]) -> Optional[datetime]:
     if not val:
         return None
@@ -283,6 +436,40 @@ def _parse_date(val: Optional[str]) -> Optional[datetime]:
         except ValueError:
             continue
     return None
+
+
+def _to_float(value: object) -> float:
+    try:
+        return float(value or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _to_int(value: object) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _object_field(payload: dict, field_name: str) -> dict:
+    value = payload.get(field_name)
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError(f"invalid {field_name}: expected object")
+    return value
+
+
+def _object_list_field(payload: dict, field_name: str) -> list[dict]:
+    value = payload.get(field_name)
+    if value is None:
+        return []
+    if not isinstance(value, list) or any(
+        not isinstance(item, dict) for item in value
+    ):
+        raise ValueError(f"invalid {field_name}: expected object list")
+    return value
 
 
 def _truncate_json(obj: dict, max_chars: int = 50000) -> str:

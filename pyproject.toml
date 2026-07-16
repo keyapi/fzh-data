@@ -28,3 +28,8 @@ packages = ["multi_attr_saihu", "category", "item_cost_sx", "item_weight_size", 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
