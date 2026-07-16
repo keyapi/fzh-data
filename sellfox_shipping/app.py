@@ -19,6 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from sellfox_shipping.models import Address, Order, PackageStatus
+from sellfox_shipping.package_service import ListPackagesService, PackageListRequest
 from sellfox_shipping.sellfox_client import SellfoxClient
 from sellfox_shipping.store import Store
 
@@ -39,6 +40,17 @@ sellfox = SellfoxClient(
     proxy_account=config["sellfox"]["proxy_account"],
     proxy_api_key=os.getenv("SELLFOX_PROXY_API_KEY", ""),
 )
+
+
+def _get_package_repository():
+    from sellfox_shipping.package_repository import PackageRepository
+
+    return PackageRepository(BASE_DIR / config.get("store", {}).get("db_path", "data/shipping.db"))
+
+
+def _get_package_list_service() -> ListPackagesService:
+    return ListPackagesService(_get_package_repository())
+
 
 # ── FastAPI app ──────────────────────────────────────────────────
 
@@ -62,6 +74,38 @@ app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 @app.get("/api/health")
 async def health():
     return {"status": "ok", "database": str(store.conn.execute("SELECT 1").fetchone())}
+
+
+@app.get("/api/packages")
+async def list_packages(
+    status: str | None = Query(None, description="Filter by package_status"),
+    channel: str | None = Query(None, description="Filter by channel_name"),
+    limit: int = Query(50, le=500),
+    offset: int = Query(0, ge=0),
+):
+    """List local package summaries from the package-centric store."""
+    result = _get_package_list_service().list(
+        PackageListRequest(
+            account_key=config["sellfox"]["proxy_account"],
+            package_status=status,
+            channel_name=channel,
+            limit=limit,
+            offset=offset,
+        )
+    )
+    return result.model_dump(mode="json")
+
+
+@app.get("/api/packages/{package_sn}")
+async def get_package(package_sn: str):
+    """Return a single normalized package record from the local store."""
+    record = _get_package_repository().get(
+        config["sellfox"]["proxy_account"],
+        package_sn,
+    )
+    if record is None:
+        raise HTTPException(404, f"Package {package_sn} not found")
+    return record.model_dump(mode="json")
 
 
 @app.get("/api/orders")

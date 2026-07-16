@@ -8,6 +8,11 @@ updated: 2026-07-16
 
 # sellfox_shipping — 变更日志
 
+## 2026-07-16 — P1A 包裹 REST 只读接口
+
+- 新增 `GET /api/packages` 与 `GET /api/packages/{package_sn}`，共用 `ListPackagesService` / `PackageRepository`
+- 新增 3 个 FastAPI 定向测试；`uv run pytest tests/sellfox_shipping -q` → 29 passed
+
 ## 2026-07-16 — P1A 包裹查询与同步审计
 
 - 新增 `packages-list` CLI：按账户 / 状态 / 渠道过滤本地包裹摘要（`order_count` / `item_count`）
