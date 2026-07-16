@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>订单列表 — 赛狐尾程打单</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, 'Microsoft YaHei', sans-serif; background: #f5f5f5; color: #333; }
+        .header { background: #1a1a2e; color: #fff; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+        .header h1 { font-size: 18px; }
+        .nav a { color: #a0a0c0; text-decoration: none; margin-left: 20px; font-size: 14px; }
+        .nav a:hover, .nav a.active { color: #fff; }
+        .container { max-width: 1200px; margin: 24px auto; padding: 0 24px; }
+        .panel { background: #fff; border-radius: 8px; padding: 24px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .panel h2 { font-size: 16px; margin-bottom: 16px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #eee; font-size: 13px; }
+        th { color: #888; font-weight: 600; font-size: 11px; text-transform: uppercase; }
+        tr:hover { background: #f9f9ff; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+        .badge-pending { background: #fff3cd; color: #856404; }
+        .badge-shipped { background: #d4edda; color: #155724; }
+        .badge-error { background: #f8d7da; color: #721c24; }
+        .badge-info { background: #d1ecf1; color: #0c5460; }
+        .empty { text-align: center; padding: 48px; color: #999; }
+        .toolbar { display: flex; gap: 12px; margin-bottom: 16px; align-items: center; }
+        .toolbar select, .toolbar button { padding: 6px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; }
+        .toolbar button { background: #1a1a2e; color: #fff; cursor: pointer; border: none; }
+        .toolbar button:hover { background: #2a2a4e; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>赛狐尾程打单 — 订单列表</h1>
+        <div class="nav">
+            <a href="/">首页</a>
+            <a href="/orders" class="active">订单</a>
+        </div>
+    </div>
+    <div class="container">
+        <div class="panel">
+            <div class="toolbar">
+                <select id="statusFilter" onchange="loadOrders()">
+                    <option value="">全部状态</option>
+                    <option value="to_audit">待审核</option>
+                    <option value="to_process">待处理</option>
+                    <option value="to_print">待打单</option>
+                    <option value="has_shipped">已发货</option>
+                    <option value="has_canceled">已作废</option>
+                </select>
+                <button onclick="loadOrders()">刷新</button>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>订单号</th>
+                        <th>店铺</th>
+                        <th>站点</th>
+                        <th>状态</th>
+                        <th>金额</th>
+                        <th>SKU数</th>
+                        <th>下单时间</th>
+                    </tr>
+                </thead>
+                <tbody id="orderTable">
+                    <tr><td colspan="7" class="empty">加载中...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <script>
+        function statusBadge(s) {
+            const map = {
+                to_audit: 'badge-info', to_process: 'badge-info',
+                to_print: 'badge-pending', apply_track_no: 'badge-info',
+                has_shipped: 'badge-shipped', has_canceled: 'badge-error'
+            };
+            const labels = {
+                to_audit: '待审核', to_process: '待处理',
+                to_print: '待打单', apply_track_no: '物流下单',
+                has_shipped: '已发货', has_canceled: '已作废'
+            };
+            return `<span class="badge ${map[s] || 'badge-info'}">${labels[s] || s}</span>`;
+        }
+
+        function loadOrders() {
+            const status = document.getElementById('statusFilter').value;
+            const params = new URLSearchParams({limit: 50});
+            if (status) params.set('status', status);
+            fetch('/api/orders?' + params)
+                .then(r => r.json())
+                .then(d => {
+                    const tbody = document.getElementById('orderTable');
+                    if (!d.orders || d.orders.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="7" class="empty">暂无订单，请先通过 API 拉取</td></tr>';
+                        return;
+                    }
+                    tbody.innerHTML = d.orders.map(o => `
+                        <tr>
+                            <td><a href="#" onclick="viewOrder('${o.amazon_order_id}')">${o.amazon_order_id || '—'}</a></td>
+                            <td>${o.shop_name || '—'}</td>
+                            <td>${o.marketplace || '—'}</td>
+                            <td>${statusBadge(o.package_status)}</td>
+                            <td>${(o.order_total || 0).toFixed(2)} ${o.currency || ''}</td>
+                            <td>${(o.items || []).length}</td>
+                            <td>${o.purchase_date ? o.purchase_date.slice(0,10) : '—'}</td>
+                        </tr>
+                    `).join('');
+                });
+        }
+
+        function viewOrder(id) {
+            alert('订单详情: ' + id + '\n(详情页 P2 实现)');
+        }
+
+        loadOrders();
+    </script>
+</body>
+</html>

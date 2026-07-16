@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>赛狐尾程打单 — FZH Shipping</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, 'Microsoft YaHei', sans-serif; background: #f5f5f5; color: #333; }
+        .header { background: #1a1a2e; color: #fff; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+        .header h1 { font-size: 18px; }
+        .nav a { color: #a0a0c0; text-decoration: none; margin-left: 20px; font-size: 14px; }
+        .nav a:hover, .nav a.active { color: #fff; }
+        .container { max-width: 1200px; margin: 24px auto; padding: 0 24px; }
+        .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+        .stat-card { background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .stat-card .label { font-size: 12px; color: #888; text-transform: uppercase; margin-bottom: 8px; }
+        .stat-card .value { font-size: 28px; font-weight: 700; }
+        .panel { background: #fff; border-radius: 8px; padding: 24px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .panel h2 { font-size: 16px; margin-bottom: 16px; color: #1a1a2e; }
+        .info-row { display: flex; gap: 24px; flex-wrap: wrap; }
+        .info-item { flex: 1; min-width: 200px; }
+        .info-item .label { font-size: 11px; color: #888; margin-bottom: 4px; }
+        .info-item .value { font-size: 14px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #eee; font-size: 13px; }
+        th { color: #888; font-weight: 600; font-size: 11px; text-transform: uppercase; }
+        tr:hover { background: #f9f9ff; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+        .badge-pending { background: #fff3cd; color: #856404; }
+        .badge-shipped { background: #d4edda; color: #155724; }
+        .badge-error { background: #f8d7da; color: #721c24; }
+        .empty { text-align: center; padding: 48px; color: #999; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>赛狐尾程打单</h1>
+        <div class="nav">
+            <a href="/" class="active">首页</a>
+            <a href="/orders">订单</a>
+            <a href="/api/health">API</a>
+        </div>
+    </div>
+    <div class="container">
+        <div class="stats" id="stats">
+            <div class="stat-card"><div class="label">待打单</div><div class="value" id="stat-pending">—</div></div>
+            <div class="stat-card"><div class="label">已发货</div><div class="value" id="stat-shipped">—</div></div>
+            <div class="stat-card"><div class="label">承运人</div><div class="value" id="stat-carriers">—</div></div>
+            <div class="stat-card"><div class="label">仓库</div><div class="value" id="stat-warehouses">—</div></div>
+        </div>
+
+        <div class="panel">
+            <h2>系统信息</h2>
+            <div class="info-row">
+                <div class="info-item">
+                    <div class="label">架构</div>
+                    <div class="value">FastAPI + FastMCP + Typer CLI</div>
+                </div>
+                <div class="info-item">
+                    <div class="label">REST API</div>
+                    <div class="value"><a href="/api/health">/api/health</a></div>
+                </div>
+                <div class="info-item">
+                    <div class="label">MCP 端点</div>
+                    <div class="value">/mcp (AI Agent 专用)</div>
+                </div>
+                <div class="info-item">
+                    <div class="label">阶段</div>
+                    <div class="value">P1 — 骨架搭建</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>快速操作</h2>
+            <div class="info-row">
+                <div class="info-item">
+                    <div class="label">CLI</div>
+                    <div class="value"><code>uv run python cli.py fetch --date-start 2026-07-01 --date-end 2026-07-15</code></div>
+                </div>
+                <div class="info-item">
+                    <div class="label">API 拉单</div>
+                    <div class="value"><code>POST /api/orders/fetch?date_start=2026-07-01&date_end=2026-07-15</code></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>进展</h2>
+            <table>
+                <tr><td>P1 骨架</td><td><span class="badge badge-pending">进行中</span></td><td>项目结构、models、store、sellfox_client、FastAPI、FastMCP、CLI、Web UI</td></tr>
+                <tr><td>P2 FedEx</td><td><span class="badge badge-pending">待开始</span></td><td>FedEx REST API 对接、标签生成、追踪号回写</td></tr>
+                <tr><td>P3 规则引擎</td><td><span class="badge badge-pending">待开始</span></td><td>YAML 决策表、Excel 格式转换</td></tr>
+                <tr><td>P4 批量+报告</td><td><span class="badge badge-pending">待开始</span></td><td>批量操作、煮湖报告、错误恢复</td></tr>
+                <tr><td>P5 其他承运人</td><td><span class="badge badge-pending">待开始</span></td><td>GLS、DHL、Vite、Wayfair</td></tr>
+                <tr><td>P6 打磨</td><td><span class="badge badge-pending">待开始</span></td><td>中文优化、打印、Pottery Barn EDI</td></tr>
+            </table>
+        </div>
+    </div>
+    <script>
+        fetch('/api/orders')
+            .then(r => r.json())
+            .then(d => {
+                document.getElementById('stat-pending').textContent = d.total || 0;
+            });
+        fetch('/api/orders?status=has_shipped')
+            .then(r => r.json())
+            .then(d => {
+                document.getElementById('stat-shipped').textContent = d.total || 0;
+            });
+        fetch('/api/carriers')
+            .then(r => r.json())
+            .then(d => {
+                document.getElementById('stat-carriers').textContent = Object.keys(d).length;
+            });
+        fetch('/api/warehouses')
+            .then(r => r.json())
+            .then(d => {
+                document.getElementById('stat-warehouses').textContent = Object.keys(d).length;
+            });
+    </script>
+</body>
+</html>
