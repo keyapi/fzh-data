@@ -35,3 +35,8 @@ out/*
 数据源/*
 !数据源/.gitkeep
 !数据源/README.txt
+
+# sellfox_shipping 原始业务样例（可含 PII）— 只跟踪说明文件
+sellfox_shipping/数据源/**
+!sellfox_shipping/数据源/.gitkeep
+!sellfox_shipping/数据源/**/README.md
