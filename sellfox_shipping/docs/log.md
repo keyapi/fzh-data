@@ -8,6 +8,12 @@ updated: 2026-07-17
 
 # sellfox_shipping — 变更日志
 
+## 2026-07-17 — 进入 P1C：提交状态聚合 + 外部依赖备忘
+
+- 用户确认：VITE 文档/测试已由同事验证，PR #88 / #89 合入 main（`vite-api/`）；暂不提本分支 PR
+- 用户确认：蜴国际有 API、无测试环境，同事测试中
+- 新增 `submission_state.aggregate_package_submission_state`（综合调研 §3.3 穷尽优先级）；**尚无** `submitToPlatform` 网络调用
+
 ## 2026-07-17 — ShippingBatch MVP + Artifact 扁平 private/files
 
 ### 代码
