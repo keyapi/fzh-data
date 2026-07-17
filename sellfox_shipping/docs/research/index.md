@@ -24,7 +24,7 @@ timestamp: 2026-07-16
 - [local-vs-sellfox-status-2026-07-17.md](local-vs-sellfox-status-2026-07-17.md) — 赛狐状态 vs 本地审核；通过/驳回含义。
 - [pnumber-to-sellfox-trace-2026-07-17.md](pnumber-to-sellfox-trace-2026-07-17.md) — 通途 P 号→赛狐订单追溯；§6 PDF 面单替换。
 - [artifact-vs-erpnext-file-2026-07-17.md](artifact-vs-erpnext-file-2026-07-17.md) — Artifact 扁平 private/files；content_hash = MD5（对齐 ERPNext File）
-- [lizard-api-vs-excel-2026-07-17.md](lizard-api-vs-excel-2026-07-17.md) — 蜴国际 API（PR #90）与 Excel 路径对照；欠费未测下单
+- [lizard-api-vs-excel-2026-07-17.md](lizard-api-vs-excel-2026-07-17.md) — 蜴国际 API PR#90/#91；负余额下 create/getLabel/cancel 已验；Excel 仍生产默认
 - [async-label-and-webhook-2026-07-17.md](async-label-and-webhook-2026-07-17.md) — VITE/蜴国际 Hook URL 空置 + 异步面单轮询（IT：约 30s）
 - [vite-httpx-vs-karrio-decision-2026-07-17.md](vite-httpx-vs-karrio-decision-2026-07-17.md) — VITE：采用 httpx；近期不做 Karrio custom connector
 - [oidc-and-submit-rate-gate-2026-07-17.md](oidc-and-submit-rate-gate-2026-07-17.md) — 可选钉钉 OIDC + SQLite 跨进程 submit 限流

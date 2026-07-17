@@ -197,7 +197,7 @@ generated: 2026-07-20 11:22
 | Research | Artifact 存储与 ERPNext File 对照 | [sellfox_shipping/docs/research/artifact-vs-erpnext-file-2026-07-17.md](sellfox_shipping/docs/research/artifact-vs-erpnext-file-2026-07-17.md) | 2026-07-20 |
 | Research | Colab 通途/FedEx/蜴国际 notebook 遗产逻辑摘要 | [sellfox_shipping/docs/research/colab-notebook-legacy-summary-2026-07-17.md](sellfox_shipping/docs/research/colab-notebook-legacy-summary-2026-07-17.md) | 2026-07-20 |
 | Research | VITE spike 决策 — httpx adapter vs Karrio custom connector | [sellfox_shipping/docs/research/vite-httpx-vs-karrio-decision-2026-07-17.md](sellfox_shipping/docs/research/vite-httpx-vs-karrio-decision-2026-07-17.md) | 2026-07-20 |
-| Research | 蜴国际 API（PR #90）与现有 Excel 路径对照 | [sellfox_shipping/docs/research/lizard-api-vs-excel-2026-07-17.md](sellfox_shipping/docs/research/lizard-api-vs-excel-2026-07-17.md) | 2026-07-20 |
+| Research | 蜴国际 API（PR #90/#91）与现有 Excel 路径对照 | [sellfox_shipping/docs/research/lizard-api-vs-excel-2026-07-17.md](sellfox_shipping/docs/research/lizard-api-vs-excel-2026-07-17.md) | 2026-07-20 |
 | Research | 蜴国际 P0 样例列映射（2026-07-17） | [sellfox_shipping/docs/research/lizard-p0-column-mapping-2026-07-17.md](sellfox_shipping/docs/research/lizard-p0-column-mapping-2026-07-17.md) | 2026-07-20 |
 | Research | 赛狐原生蜴国际测试夹具（通途样例重映射） | [sellfox_shipping/docs/research/sellfox-native-lizard-fixture-2026-07-17.md](sellfox_shipping/docs/research/sellfox-native-lizard-fixture-2026-07-17.md) | 2026-07-20 |
 | Research | 赛狐尾程打单系统 — 完整调研文档 | [sellfox_shipping/docs/research/comprehensive-research-2026-07-15.md](sellfox_shipping/docs/research/comprehensive-research-2026-07-15.md) | 2026-07-16 |

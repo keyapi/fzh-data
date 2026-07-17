@@ -8,6 +8,11 @@ updated: 2026-07-17
 
 # sellfox_shipping — 变更日志
 
+## 2026-07-17 — 蜴国际 PR#91：负余额 create/getLabel/cancel 已验
+
+- main：`7e1ec1f`；更新 `lizard-api-vs-excel-2026-07-17.md`
+- Excel 仍生产默认；可规划 httpx adapter；禁止拷贝明文凭证
+
 ## 2026-07-17 — OIDC 脚手架 + SQLite submit 跨进程限流
 
 - `SqliteSubmitRateLimiter` + Alembic `0007`；CLI 真调默认使用
