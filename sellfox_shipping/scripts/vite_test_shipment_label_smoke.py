@@ -1,7 +1,6 @@
 """One-off VITE test-env createShipment + getLabel smoke (not production).
 
-Uses virtual test balance. Key from VITE_API_KEY or vite-api test-credentials.md.
-Never prints the key.
+Uses virtual test balance. Key from repo-root .env (VITE_API_KEY). Never prints the key.
 
 Usage:
   uv run python sellfox_shipping/scripts/vite_test_shipment_label_smoke.py
@@ -16,26 +15,19 @@ import random
 import sys
 import time
 from datetime import date
-from pathlib import Path
 
 from sellfox_shipping.carriers.vite import ViteClientError, ViteGofoClient
+from sellfox_shipping.env_loader import load_dotenv
 
 
 def _load_key() -> str:
-    env = (os.getenv("VITE_API_KEY") or "").strip()
-    if env:
-        return env
-    cred = Path("vite-api/docs/test-guide/test-credentials.md")
-    if not cred.is_file():
-        raise SystemExit("VITE_API_KEY unset and vite-api credentials doc missing")
-    for line in cred.read_text(encoding="utf-8").splitlines():
-        if "API Key" not in line:
-            continue
-        start = line.find("`")
-        end = line.rfind("`")
-        if start >= 0 and end > start:
-            return line[start + 1 : end].strip()
-    raise SystemExit("could not parse API Key from credentials doc")
+    load_dotenv()
+    key = (os.getenv("VITE_API_KEY") or "").strip()
+    if not key:
+        raise SystemExit(
+            "VITE_API_KEY unset; copy sellfox_shipping/.env.example keys into repo-root .env"
+        )
+    return key
 
 
 def _request_id() -> str:
@@ -86,7 +78,7 @@ def main() -> int:
     args = parser.parse_args()
 
     key = _load_key()
-    print(f"key_source={'env' if os.getenv('VITE_API_KEY') else 'vite-api-doc'} key_len={len(key)}")
+    print(f"key_source=env key_len={len(key)}")
 
     with ViteGofoClient(api_key=key, base_url="https://test-api.vitedirect.com") as client:
         before = client._client.get("/user/account")

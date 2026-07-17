@@ -1,55 +1,41 @@
 """One-off 蜴国际 live smoke: create → getLabel → cancel (1 order).
 
-Credentials: LIZARD_APP_TOKEN / LIZARD_APP_KEY env, or parse from
-origin/main 蜴国际-API/AGENT_HANDOFF.md (never print secrets).
+Credentials: YIGLOBAL_APP_TOKEN / YIGLOBAL_APP_KEY from repo-root .env (never print secrets).
+Legacy LIZARD_* names still accepted.
 """
 
 from __future__ import annotations
 
 import os
-import subprocess
 import sys
 import time
-from pathlib import Path
 
 from sellfox_shipping.carriers.lizard.api_client import LizardApiClient, LizardApiError
+from sellfox_shipping.env_loader import load_dotenv
+
+
+def _env_first(*names: str, default: str = "") -> str:
+    for name in names:
+        val = (os.getenv(name) or "").strip()
+        if val:
+            return val
+    return default
 
 
 def _load_creds() -> tuple[str, str, str]:
-    token = (os.getenv("LIZARD_APP_TOKEN") or "").strip()
-    key = (os.getenv("LIZARD_APP_KEY") or "").strip()
-    base = (os.getenv("LIZARD_API_BASE_URL") or "http://47.106.72.196").strip()
-    if token and key:
-        return token, key, base
-    # Fallback: colleague docs on main (do not print values).
-    listing = subprocess.check_output(
-        ["git", "ls-tree", "-r", "origin/main", "--name-only"],
-        text=True,
-        encoding="utf-8",
+    load_dotenv()
+    token = _env_first("YIGLOBAL_APP_TOKEN", "LIZARD_APP_TOKEN", "LIZARD_TOKEN")
+    key = _env_first("YIGLOBAL_APP_KEY", "LIZARD_APP_KEY", "LIZARD_KEY")
+    base = _env_first(
+        "YIGLOBAL_API_BASE_URL",
+        "LIZARD_API_BASE_URL",
+        default="http://47.106.72.196",
     )
-    handoff = next(
-        (
-            p
-            for p in listing.splitlines()
-            if p.endswith("-API/AGENT_HANDOFF.md")
-            and not p.startswith(("EN_", "SELLFOX", "NAS", "vite"))
-        ),
-        None,
-    )
-    if not handoff:
-        raise SystemExit("set LIZARD_APP_TOKEN/LIZARD_APP_KEY or ensure main has 蜴国际-API")
-    text = subprocess.check_output(
-        ["git", "show", f"origin/main:{handoff}"],
-        text=True,
-        encoding="utf-8",
-    )
-    for line in text.splitlines():
-        if "**token**:" in line.lower() or line.strip().startswith("- **token**"):
-            token = line.split(":", 1)[1].strip().strip("`")
-        if "**key**:" in line.lower() or line.strip().startswith("- **key**"):
-            key = line.split(":", 1)[1].strip().strip("`")
     if not token or not key:
-        raise SystemExit("could not parse token/key; set env vars")
+        raise SystemExit(
+            "YIGLOBAL_APP_TOKEN/YIGLOBAL_APP_KEY unset; "
+            "copy sellfox_shipping/.env.example keys into repo-root .env"
+        )
     return token, key, base
 
 

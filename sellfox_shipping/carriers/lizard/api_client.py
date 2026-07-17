@@ -3,7 +3,7 @@
 Uses **sync** ``httpx.Client`` — same stack as Sellfox/VITE/ERPNext in this repo.
 Async is available in httpx but not why we chose it; Service/CLI today are sync.
 
-Credentials via env only — never hardcode. Docs: origin/main ``蜴国际-API/`` (PR #90/#91).
+Credentials via env only — never hardcode. Docs: ``yiglobal-api/`` on main (PR #90/#91; was 蜴国际-API).
 """
 
 from __future__ import annotations
@@ -15,6 +15,14 @@ import httpx
 
 
 DEFAULT_BASE = "http://47.106.72.196"
+
+
+def _env_first(*names: str, default: str = "") -> str:
+    for name in names:
+        val = (os.getenv(name) or "").strip()
+        if val:
+            return val
+    return default
 
 
 class LizardApiError(RuntimeError):
@@ -69,9 +77,13 @@ class LizardApiClient:
     @classmethod
     def from_env(cls) -> LizardApiClient:
         return cls(
-            app_token=os.getenv("LIZARD_APP_TOKEN", ""),
-            app_key=os.getenv("LIZARD_APP_KEY", ""),
-            base_url=os.getenv("LIZARD_API_BASE_URL", DEFAULT_BASE),
+            app_token=_env_first("YIGLOBAL_APP_TOKEN", "LIZARD_APP_TOKEN", "LIZARD_TOKEN"),
+            app_key=_env_first("YIGLOBAL_APP_KEY", "LIZARD_APP_KEY", "LIZARD_KEY"),
+            base_url=_env_first(
+                "YIGLOBAL_API_BASE_URL",
+                "LIZARD_API_BASE_URL",
+                default=DEFAULT_BASE,
+            ),
         )
 
     def get_token(self, *, force: bool = False) -> str:
