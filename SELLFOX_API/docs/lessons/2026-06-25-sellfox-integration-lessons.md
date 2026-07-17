@@ -274,9 +274,25 @@ V2 详情 API (`/api/commodity/v2/getCommodityDetail.json`) 的 `commoditySizeVO
 
 **覆盖率**: 非组合 SKU 约 70%（2200+ SKU 中 ~200 个采样）。新系列（KS024+、KS042+、KS050+）90%+ 有数据；老系列（KS000）几乎全空。报关重量 `declareWeight` 100% 有数据但多为同事临时填写，不可信。
 
-**兜底方案**: 当赛狐商品 API 返回全 0 时，需从 ERPNext Item doctype 的 `custom_finish_good_weight_per_unit`（国外成品重尺）或 `custom_fg_weight_per_unit`（绍兴工厂）获取。若 ERPNext 也空，按 `ZLMB#` 前缀的重量模板匹配（相同物料组 + 尺寸，不同面料借用）。
+**兜底方案 — ERPNext 重量模板**: 当赛狐商品 API 返回全 0 时，从 ERPNext 生产系统查询 `ZLMB#` 前缀的重量模板 Item。
 
-**当前盲区**: KS0002 整个物料组（平条靠枕）在赛狐和 ERPNext 均无重尺数据。需同事补录。
+查询路径（优先级递减）：
+```
+SKU: KS0002-DL-194-IVORY → ZLMB 编码 = ZLMB#KS0002-DL-194
+       ↑ 面料编码必须匹配（DL≠CMM！）
+```
+| 优先级 | ERPNext 字段 | 含义 | 示例(KS0002-DL-194) |
+|--------|-------------|------|---------------------|
+| 1 | `custom_finish_good_weight_per_unit` + `custom_fg_package_L/W/H` | 国外成品重尺 | 0.0 → 落到下一级 |
+| 2 | `custom_fg_weight_per_unit` + `custom_package_L/W/H` | 绍兴工厂重尺 | **4100g, 58×19×45cm** ✅ |
+| 3 | 同物料组+同尺寸、不同面料的 ZLMB 借用 | 兜底的兜底 | 暂无此需求 |
+
+**实测验证 (2026-07-17)**:
+- `ZLMB#KS0002-DL-194`: 绍兴 4100g/58×19×45cm ✅（国外为空）
+- `ZLMB#KS0001-AHR-194`: 国外 6400g/76×17×57cm, 绍兴 6400g/76×17×57cm ✅
+- `ZLMB#KS0002-CMM-194`: 全空 ❌（面料编码不匹配，不应查询）
+
+**陷阱**: ZLMB 编码的面料段必须匹配 SKU 的面料段。`KS0002-DL-194` → `ZLMB#KS0002-DL-194`，不是 `ZLMB#KS0002-CMM-194`。编码不匹配会查错 Item 导致误判"无数据"。
 
 **来源**: Agent A/B/C 并行调研 + 实测验证。`sellfox_shipping/docs/research/` 下有完整抽样记录。
 
