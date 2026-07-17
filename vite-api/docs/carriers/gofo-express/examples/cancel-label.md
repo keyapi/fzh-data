@@ -7,7 +7,7 @@
 ```bash
 # 替换 {requestId} 为创建标签时使用的 requestId
 curl -X DELETE "https://test-api.vitedirect.com/shipment2/label/1689480000123" \
-  -H "x-api-key: H5se84hM6Y34Kx2XjfRzg16t6wXSJydq6Bxk1Kzd"
+  -H "x-api-key: <your-vite-api-key>"
 ```
 
 ### 响应

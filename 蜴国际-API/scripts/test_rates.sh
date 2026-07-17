@@ -4,8 +4,8 @@
 # 前置条件: curl 可用
 
 BASE_URL="http://47.106.72.196"
-TOKEN="94fdf6868f2940a98bd480faad62dcee"
-KEY="5d3fcf5cc41169561df0f50aee552080"
+TOKEN="$LIZARD_TOKEN"
+KEY="$LIZARD_KEY"
 
 # 检测可用的 Python（python3 在某些环境下是无效 stub）
 PYTHON=""

@@ -4,7 +4,7 @@
 
 ```bash
 curl -X POST "https://test-api.vitedirect.com/shipment2/gofo" \
-  -H "x-api-key: H5se84hM6Y34Kx2XjfRzg16t6wXSJydq6Bxk1Kzd" \
+  -H "x-api-key: <your-vite-api-key>" \
   -H "Content-Type: application/json" \
   -d '{
     "requestId": "1689480000987",

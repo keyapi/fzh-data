@@ -7,7 +7,7 @@
 ```bash
 # 替换 {orderId} 为创建标签时返回的 orderId
 curl -X GET "https://test-api.vitedirect.com/shipment2/label/PPGF-1689480000123-1753253592246" \
-  -H "x-api-key: H5se84hM6Y34Kx2XjfRzg16t6wXSJydq6Bxk1Kzd"
+  -H "x-api-key: <your-vite-api-key>"
 ```
 
 ### 成功响应

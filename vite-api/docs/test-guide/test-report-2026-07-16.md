@@ -4,7 +4,7 @@
 |------|------|
 | 测试日期 | 2026-07-16 |
 | 测试环境 | `https://test-api.vitedirect.com` |
-| API Key | `H5se84hM6Y34Kx2XjfRzg16t6wXSJydq6Bxk1Kzd` |
+| API Key | `<your-vite-api-key>` |
 | 测试承运商 | GOFO Express |
 | 初始余额 | $2,000.00 |
 
@@ -35,7 +35,7 @@
 **请求**:
 ```bash
 curl -X GET "https://test-api.vitedirect.com/user/account" \
-  -H "x-api-key: H5se84hM6Y34Kx2XjfRzg16t6wXSJydq6Bxk1Kzd"
+  -H "x-api-key: <your-vite-api-key>"
 ```
 
 **响应**: `200 OK`
@@ -74,7 +74,7 @@ curl -X GET "https://test-api.vitedirect.com/user/account" \
 **请求**:
 ```bash
 curl -X POST "https://test-api.vitedirect.com/rate2/gofo" \
-  -H "x-api-key: H5se84hM6Y34Kx2XjfRzg16t6wXSJydq6Bxk1Kzd" \
+  -H "x-api-key: <your-vite-api-key>" \
   -H "Content-Type: application/json" \
   -d '{
     "shipDate": "2026-07-20",
@@ -285,7 +285,7 @@ curl -X POST "https://test-api.vitedirect.com/rate2/gofo" \
 **请求**:
 ```bash
 curl -X GET "https://test-api.vitedirect.com/shipment2/label/PPGF-178418959212345-1784189591445" \
-  -H "x-api-key: H5se84hM6Y34Kx2XjfRzg16t6wXSJydq6Bxk1Kzd"
+  -H "x-api-key: <your-vite-api-key>"
 ```
 
 **响应**: `200 OK`
@@ -332,7 +332,7 @@ curl -X GET "https://test-api.vitedirect.com/shipment2/label/PPGF-17841895921234
 **请求**:
 ```bash
 curl -X DELETE "https://test-api.vitedirect.com/shipment2/label/PPGF-178418959212345-1784189591445" \
-  -H "x-api-key: H5se84hM6Y34Kx2XjfRzg16t6wXSJydq6Bxk1Kzd"
+  -H "x-api-key: <your-vite-api-key>"
 ```
 
 **响应**: `200 OK`
@@ -378,7 +378,7 @@ curl -X DELETE "https://test-api.vitedirect.com/shipment2/label/PPGF-17841895921
 **请求**:
 ```bash
 curl -X POST "https://test-api.vitedirect.com/shipment2/gofo/batch" \
-  -H "x-api-key: H5se84hM6Y34Kx2XjfRzg16t6wXSJydq6Bxk1Kzd" \
+  -H "x-api-key: <your-vite-api-key>" \
   -H "Content-Type: application/json" \
   -d '{
     "shipments": [

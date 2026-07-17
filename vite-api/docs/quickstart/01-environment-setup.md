@@ -5,12 +5,12 @@
 测试环境 API Key 已提供:
 
 ```
-H5se84hM6Y34Kx2XjfRzg16t6wXSJydq6Bxk1Kzd
+<your-vite-api-key>
 ```
 
 所有请求需要在 Header 中携带:
 ```
-x-api-key: H5se84hM6Y34Kx2XjfRzg16t6wXSJydq6Bxk1Kzd
+x-api-key: <your-vite-api-key>
 ```
 
 ## 2. Base URL
@@ -25,7 +25,7 @@ https://test-api.vitedirect.com
 ```bash
 # 简单连通性测试
 curl -X GET "https://test-api.vitedirect.com/user/account" \
-  -H "x-api-key: H5se84hM6Y34Kx2XjfRzg16t6wXSJydq6Bxk1Kzd"
+  -H "x-api-key: <your-vite-api-key>"
 ```
 
 预期返回:
