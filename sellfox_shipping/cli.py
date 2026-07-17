@@ -28,6 +28,11 @@ app = typer.Typer(
 
 BASE_DIR = Path(__file__).parent
 
+from sellfox_shipping.env_loader import load_dotenv
+
+load_dotenv()
+
+
 def _load_config() -> dict:
     with open(BASE_DIR / "config.yaml", encoding="utf-8") as f:
         return yaml.safe_load(f)
