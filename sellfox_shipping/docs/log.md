@@ -8,6 +8,12 @@ updated: 2026-07-17
 
 # sellfox_shipping — 变更日志
 
+## 2026-07-17 — 蜴国际 API PR#90 备忘 + Web 提交确认（dry-run）
+
+- main：`蜴国际-API/`（PR #90）；对照 `docs/research/lizard-api-vs-excel-2026-07-17.md`
+- 包裹详情：准备 Intent + dry-run；**不**从 Web 真调 submitToPlatform
+- 仍保持 Excel 主路径（API 下单因欠费未验证）
+
 ## 2026-07-17 — P1C：SubmissionIntent + CAS（mock）
 
 - Alembic `0006`：scopes / intents / attempts

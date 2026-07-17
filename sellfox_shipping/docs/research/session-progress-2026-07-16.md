@@ -389,7 +389,7 @@ git status
 
 | 项 | 状态 |
 |----|------|
-| 蜴国际 API | **有**；**无测试系统**；同事正在测。未接入本仓代码 |
+| 蜴国际 API | 文档合入 main：`蜴国际-API/`（PR **#90**）。getToken/ratesv2 可用；createOrder 等欠费未测。**未接本仓代码**；对照见 lizard-api-vs-excel |
 | VITE 文档 + 测试环境 | 已到位；同事测完并合入 **main**：PR **#88**、后续小变更 **#89** |
 | 本分支 PR | **暂不提 PR**，继续在 `feature/sellfox-shipping-p1a-rest` 开发 |
 | 查 VITE 资料 | `origin/main` 的 `vite-api/` 模块（或已合并的 PR 88 内容） |
@@ -442,9 +442,24 @@ uv run python -m sellfox_shipping.cli packages-submit-intent \
 
 ### 下一刀
 
-- Web 确认 UI；1 rps 限流；回读 VERIFIED
+- ~~Web 确认 UI~~（准备 Intent + dry-run；真调仍仅 CLI）
+- 1 rps 限流；回读 VERIFIED
 - VITE spike（`vite-api/` on main）
-- 蜴国际 API（同事测试有结果后）
+- ~~蜴国际 API 文档~~ → PR **#90** 已合入 main（`蜴国际-API/`）；createOrder/getLabel 因欠费未测 → 暂不替换 Excel
+
+## 17. 2026-07-17 续：蜴国际 API PR#90 + Web 提交确认
+
+**事实：** Merge PR **#90** → `origin/main` 模块 `蜴国际-API/`（getToken/ratesv2 已测；下单类欠费未测）。  
+**对照文档：** [lizard-api-vs-excel-2026-07-17.md](lizard-api-vs-excel-2026-07-17.md)  
+**安全提醒：** 该模块 HANDOFF 若含明文 token/key，勿拷贝；建议同事改为环境变量占位。
+
+**本切片：**
+
+| 项 | 说明 |
+|----|------|
+| Web | 包裹详情「赛狐回写确认」：准备 Intent + dry-run（**无** submitToPlatform） |
+| 路由 | `POST .../prepare-submit`、`POST .../submit-intent/{id}` |
+| 测试 | `test_package_prepare_submit_and_dry_run_web` |
 
 ## 14. 本文档维护约定
 

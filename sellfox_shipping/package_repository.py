@@ -1365,6 +1365,28 @@ class PackageRepository:
             ).all()
             return [str(s) for s in rows]
 
+    def list_submission_intents_for_package(
+        self,
+        *,
+        account_key: str,
+        package_sn: str,
+    ) -> list[SubmissionIntentRecord]:
+        with self._session_factory() as session:
+            rows = session.scalars(
+                select(SubmissionIntentRow)
+                .join(PackageRow, PackageRow.id == SubmissionIntentRow.package_id)
+                .join(
+                    ShippingAccountRow,
+                    ShippingAccountRow.id == PackageRow.account_id,
+                )
+                .where(
+                    ShippingAccountRow.account_key == account_key,
+                    PackageRow.package_sn == package_sn,
+                )
+                .order_by(SubmissionIntentRow.id)
+            ).all()
+            return [_intent_to_record(account_key, row) for row in rows]
+
     def list_packages(
         self,
         *,

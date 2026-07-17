@@ -78,6 +78,73 @@
         </div>
 
         <div class="panel">
+            <h2>赛狐回写确认（P1C · 仅准备 / dry-run）</h2>
+            <p style="font-size:13px;color:#666;margin-bottom:12px;line-height:1.5;">
+                一包多单会生成多条 <code>SubmissionIntent</code>。本页<strong>不会</strong>调用
+                <code>submitToPlatform</code>。真调请用 CLI
+                <code>--no-dry-run --i-understand-side-effects</code>，且须确认测试包裹范围。
+                {% if package_submission_state %}
+                当前聚合状态：<span class="badge">{{ package_submission_state }}</span>
+                {% endif %}
+            </p>
+            <form method="post" action="/packages/{{ package.package_sn }}/prepare-submit"
+                  class="info-row" style="align-items:flex-end;margin-bottom:16px;">
+                <div class="info-item">
+                    <div class="label">操作者</div>
+                    <input name="actor" value="web-user" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;width:100%;" />
+                </div>
+                <div class="info-item">
+                    <div class="label">承运人（可空=渠道名）</div>
+                    <input name="carrier_name" placeholder="可选覆盖" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;width:100%;" />
+                </div>
+                <div class="info-item">
+                    <div class="label">服务</div>
+                    <input name="shipping_service" placeholder="可选" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;width:100%;" />
+                </div>
+                <div class="info-item">
+                    <button type="submit" style="padding:8px 14px;background:#1a1a2e;color:#fff;border:none;border-radius:4px;cursor:pointer;">
+                        准备 Intent
+                    </button>
+                </div>
+            </form>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Intent</th>
+                        <th>订单</th>
+                        <th>状态</th>
+                        <th>request_hash</th>
+                        <th>确认人</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for intent in submission_intents or [] %}
+                    <tr>
+                        <td>#{{ intent.id }}</td>
+                        <td>{{ intent.external_order_id }}</td>
+                        <td><span class="badge">{{ intent.status }}</span></td>
+                        <td><code title="{{ intent.request_hash }}">{{ intent.request_hash[:12] }}…</code></td>
+                        <td>{{ intent.confirmed_by or '—' }}</td>
+                        <td>
+                            <form method="post"
+                                  action="/packages/{{ package.package_sn }}/submit-intent/{{ intent.id }}"
+                                  style="display:inline;">
+                                <input type="hidden" name="actor" value="web-user" />
+                                <button type="submit" style="padding:4px 10px;font-size:12px;cursor:pointer;">
+                                    dry-run
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="6">尚无 Intent。需本地审核 approved + 真实追踪号后点「准备 Intent」。</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="panel">
             <h2>收货地址</h2>
             <div class="info-row">
                 <div class="info-item"><div class="label">姓名</div><div class="value">{{ package.address.name or '—' }}</div></div>

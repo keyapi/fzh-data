@@ -24,6 +24,7 @@ timestamp: 2026-07-16
 - [local-vs-sellfox-status-2026-07-17.md](local-vs-sellfox-status-2026-07-17.md) — 赛狐状态 vs 本地审核；通过/驳回含义。
 - [pnumber-to-sellfox-trace-2026-07-17.md](pnumber-to-sellfox-trace-2026-07-17.md) — 通途 P 号→赛狐订单追溯；§6 PDF 面单替换。
 - [artifact-vs-erpnext-file-2026-07-17.md](artifact-vs-erpnext-file-2026-07-17.md) — Artifact 扁平 private/files；content_hash = MD5（对齐 ERPNext File）
+- [lizard-api-vs-excel-2026-07-17.md](lizard-api-vs-excel-2026-07-17.md) — 蜴国际 API（PR #90）与 Excel 路径对照；欠费未测下单
 - [sellfox-native-lizard-fixture-2026-07-17.md](sellfox-native-lizard-fixture-2026-07-17.md) — 赛狐原生夹具 00/02/03/04（上传·追踪号·面单）。
 
 ## 全部调研文档
