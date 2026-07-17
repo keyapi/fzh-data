@@ -36,8 +36,10 @@ def test_register_artifact_dedups_storage_by_content_hash(tmp_path: Path) -> Non
     blob = Path(repo.artifacts_root) / a1.storage_relpath
     assert blob.is_file()
     assert blob.read_bytes() == content
-    # only one physical file
-    files = list((Path(repo.artifacts_root) / "by-hash").rglob("*"))
+    assert a1.storage_relpath.startswith("private/files/")
+    assert a1.storage_relpath == a2.storage_relpath
+    # only one physical file under private/files
+    files = list((Path(repo.artifacts_root) / "private" / "files").rglob("*"))
     assert sum(1 for f in files if f.is_file()) == 1
 
 
@@ -78,5 +80,5 @@ def test_migration_head_includes_artifacts(tmp_path: Path) -> None:
             "SELECT name FROM sqlite_master WHERE type='table' "
             "AND name='shipping_artifacts'"
         ).scalar_one()
-    assert version == "0004_artifacts"
+    assert version == "0005_shipping_batches"
     assert table == "shipping_artifacts"

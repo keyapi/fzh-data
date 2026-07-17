@@ -236,6 +236,33 @@ class ArtifactRecord:
     created_at: datetime | None = None
 
 
+@dataclass(frozen=True)
+class ShippingBatchRecord:
+    id: int
+    account_key: str
+    adapter: str
+    status: str
+    template_version: str = ""
+    created_by: str = ""
+    export_artifact_id: int | None = None
+    import_artifact_id: int | None = None
+    input_count: int = 0
+    success_count: int = 0
+    skipped_count: int = 0
+    failed_count: int = 0
+    unmatched_count: int = 0
+    summary: str = ""
+    created_at: datetime | None = None
+
+
+@dataclass(frozen=True)
+class BatchPackageRecord:
+    batch_id: int
+    package_sn: str
+    status: str
+    reason: str = ""
+
+
 class ArtifactRow(Base):
     __tablename__ = "shipping_artifacts"
 
@@ -256,6 +283,52 @@ class ArtifactRow(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.current_timestamp()
     )
+
+
+class ShippingBatchRow(Base):
+    __tablename__ = "shipping_batches"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    account_id: Mapped[int] = mapped_column(
+        ForeignKey("shipping_accounts.id", ondelete="CASCADE")
+    )
+    adapter: Mapped[str] = mapped_column(String, default="lizard")
+    status: Mapped[str] = mapped_column(String, default="exported")
+    template_version: Mapped[str] = mapped_column(String, default="")
+    created_by: Mapped[str] = mapped_column(String, default="")
+    export_artifact_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    import_artifact_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    input_count: Mapped[int] = mapped_column(Integer, default=0)
+    success_count: Mapped[int] = mapped_column(Integer, default=0)
+    skipped_count: Mapped[int] = mapped_column(Integer, default=0)
+    failed_count: Mapped[int] = mapped_column(Integer, default=0)
+    unmatched_count: Mapped[int] = mapped_column(Integer, default=0)
+    summary: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.current_timestamp()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.current_timestamp()
+    )
+
+
+class BatchPackageRow(Base):
+    __tablename__ = "shipping_batch_packages"
+    __table_args__ = (
+        UniqueConstraint(
+            "batch_id",
+            "package_sn",
+            name="uq_shipping_batch_package",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    batch_id: Mapped[int] = mapped_column(
+        ForeignKey("shipping_batches.id", ondelete="CASCADE")
+    )
+    package_sn: Mapped[str] = mapped_column(String)
+    status: Mapped[str] = mapped_column(String, default="exported")
+    reason: Mapped[str] = mapped_column(String, default="")
 
 
 @dataclass(frozen=True)
@@ -587,14 +660,26 @@ class PackageRepository:
         if not content:
             raise ValueError("content is empty")
         digest = hashlib.sha256(content).hexdigest()
-        relpath = f"by-hash/{digest[:2]}/{digest}"
-        blob_path = self.artifacts_root / relpath
-        blob_path.parent.mkdir(parents=True, exist_ok=True)
-        if not blob_path.exists():
-            blob_path.write_bytes(content)
         mime = mime_type or _guess_mime(name)
         with self._session_factory.begin() as session:
             account = self._get_or_create_account(session, account_key)
+            # Reuse blob path if this content_hash already stored (ERPNext-like dedup).
+            prior = session.scalar(
+                select(ArtifactRow)
+                .where(
+                    ArtifactRow.account_id == account.id,
+                    ArtifactRow.content_hash == digest,
+                )
+                .limit(1)
+            )
+            if prior is not None:
+                relpath = prior.storage_relpath
+            else:
+                relpath = _flat_private_relpath(name, digest)
+                blob_path = self.artifacts_root / relpath
+                blob_path.parent.mkdir(parents=True, exist_ok=True)
+                if not blob_path.exists():
+                    blob_path.write_bytes(content)
             row = ArtifactRow(
                 account_id=account.id,
                 kind=kind_s,
@@ -658,6 +743,190 @@ class PackageRepository:
                 query = query.where(ArtifactRow.kind == kind)
             rows = session.execute(query).all()
             return [_artifact_to_record(ak, row) for row, ak in rows]
+
+    def create_export_batch(
+        self,
+        *,
+        account_key: str,
+        actor: str,
+        template_version: str,
+        export_artifact_id: int | None,
+        exported_package_sns: list[str],
+        skipped_rows: list[dict],
+        summary: str = "",
+    ) -> ShippingBatchRecord:
+        actor_s = (actor or "").strip()
+        if not actor_s:
+            raise ValueError("actor is required")
+        now = datetime.now(timezone.utc)
+        with self._session_factory.begin() as session:
+            account = self._get_or_create_account(session, account_key)
+            batch = ShippingBatchRow(
+                account_id=account.id,
+                adapter="lizard",
+                status="exported",
+                template_version=template_version or "",
+                created_by=actor_s,
+                export_artifact_id=export_artifact_id,
+                input_count=len(exported_package_sns) + len(skipped_rows),
+                success_count=len(exported_package_sns),
+                skipped_count=len(skipped_rows),
+                summary=summary or "",
+                created_at=now,
+                updated_at=now,
+            )
+            session.add(batch)
+            session.flush()
+            batch_id = int(batch.id)
+            for sn in exported_package_sns:
+                session.add(
+                    BatchPackageRow(
+                        batch_id=batch_id,
+                        package_sn=sn,
+                        status="exported",
+                        reason="",
+                    )
+                )
+            for row in skipped_rows:
+                session.add(
+                    BatchPackageRow(
+                        batch_id=batch_id,
+                        package_sn=str(row.get("package_sn") or ""),
+                        status="skipped",
+                        reason=str(row.get("reason") or ""),
+                    )
+                )
+        self.append_audit_event(
+            actor=actor_s,
+            action="batches.export_created",
+            entity_type="batch",
+            entity_id=str(batch_id),
+            summary=summary or f"exported={len(exported_package_sns)}",
+        )
+        record = self.get_batch(batch_id)
+        assert record is not None
+        return record
+
+    def apply_import_to_batch(
+        self,
+        *,
+        batch_id: int,
+        import_artifact_id: int | None,
+        matched_sns: list[str],
+        conflict_sns: list[str],
+        unmatched_sns: list[str],
+        actor: str,
+        summary: str = "",
+    ) -> ShippingBatchRecord:
+        actor_s = (actor or "").strip() or "system"
+        now = datetime.now(timezone.utc)
+        with self._session_factory.begin() as session:
+            batch = session.get(ShippingBatchRow, batch_id)
+            if batch is None:
+                raise LookupError(f"Batch {batch_id} not found")
+            batch.import_artifact_id = import_artifact_id
+            batch.status = "tracking_imported"
+            batch.success_count = len(matched_sns)
+            batch.failed_count = len(conflict_sns)
+            batch.unmatched_count = len(unmatched_sns)
+            batch.summary = summary or batch.summary
+            batch.updated_at = now
+            for sn in matched_sns:
+                self._upsert_batch_package(session, batch_id, sn, "tracking_matched", "")
+            for sn in conflict_sns:
+                self._upsert_batch_package(
+                    session, batch_id, sn, "tracking_conflict", "tracking conflict"
+                )
+            for sn in unmatched_sns:
+                self._upsert_batch_package(
+                    session, batch_id, sn, "unmatched", "not in local DB"
+                )
+        self.append_audit_event(
+            actor=actor_s,
+            action="batches.tracking_imported",
+            entity_type="batch",
+            entity_id=str(batch_id),
+            summary=summary,
+        )
+        record = self.get_batch(batch_id)
+        assert record is not None
+        return record
+
+    def _upsert_batch_package(
+        self,
+        session: Session,
+        batch_id: int,
+        package_sn: str,
+        status: str,
+        reason: str,
+    ) -> None:
+        sn = (package_sn or "").strip()
+        if not sn:
+            return
+        row = session.scalar(
+            select(BatchPackageRow).where(
+                BatchPackageRow.batch_id == batch_id,
+                BatchPackageRow.package_sn == sn,
+            )
+        )
+        if row is None:
+            session.add(
+                BatchPackageRow(
+                    batch_id=batch_id,
+                    package_sn=sn,
+                    status=status,
+                    reason=reason,
+                )
+            )
+        else:
+            row.status = status
+            row.reason = reason
+
+    def get_batch(self, batch_id: int) -> ShippingBatchRecord | None:
+        with self._session_factory() as session:
+            row = session.get(ShippingBatchRow, batch_id)
+            if row is None:
+                return None
+            account = session.get(ShippingAccountRow, row.account_id)
+            return _batch_to_record(account.account_key if account else "", row)
+
+    def list_batches(
+        self,
+        *,
+        account_key: str,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[ShippingBatchRecord]:
+        with self._session_factory() as session:
+            rows = session.execute(
+                select(ShippingBatchRow, ShippingAccountRow.account_key)
+                .join(
+                    ShippingAccountRow,
+                    ShippingAccountRow.id == ShippingBatchRow.account_id,
+                )
+                .where(ShippingAccountRow.account_key == account_key)
+                .order_by(ShippingBatchRow.id.desc())
+                .offset(offset)
+                .limit(limit)
+            ).all()
+            return [_batch_to_record(ak, row) for row, ak in rows]
+
+    def list_batch_packages(self, batch_id: int) -> list[BatchPackageRecord]:
+        with self._session_factory() as session:
+            rows = session.scalars(
+                select(BatchPackageRow)
+                .where(BatchPackageRow.batch_id == batch_id)
+                .order_by(BatchPackageRow.package_sn)
+            ).all()
+            return [
+                BatchPackageRecord(
+                    batch_id=r.batch_id,
+                    package_sn=r.package_sn,
+                    status=r.status,
+                    reason=r.reason or "",
+                )
+                for r in rows
+            ]
 
     def list_packages(
         self,
@@ -1018,6 +1287,26 @@ def _artifact_to_record(account_key: str, row: ArtifactRow) -> ArtifactRecord:
     )
 
 
+def _batch_to_record(account_key: str, row: ShippingBatchRow) -> ShippingBatchRecord:
+    return ShippingBatchRecord(
+        id=int(row.id),
+        account_key=account_key,
+        adapter=row.adapter or "lizard",
+        status=row.status or "",
+        template_version=row.template_version or "",
+        created_by=row.created_by or "",
+        export_artifact_id=row.export_artifact_id,
+        import_artifact_id=row.import_artifact_id,
+        input_count=int(row.input_count or 0),
+        success_count=int(row.success_count or 0),
+        skipped_count=int(row.skipped_count or 0),
+        failed_count=int(row.failed_count or 0),
+        unmatched_count=int(row.unmatched_count or 0),
+        summary=row.summary or "",
+        created_at=row.created_at,
+    )
+
+
 def _guess_mime(file_name: str) -> str:
     lower = file_name.lower()
     if lower.endswith(".xlsx"):
@@ -1027,6 +1316,25 @@ def _guess_mime(file_name: str) -> str:
     if lower.endswith(".pdf"):
         return "application/pdf"
     return "application/octet-stream"
+
+
+def _sanitize_filename(name: str) -> str:
+    """Keep a readable flat name; strip path separators (ERPNext-like)."""
+    import re
+
+    base = Path(name or "unnamed.bin").name
+    cleaned = "".join("_" if ch in '\\/:*?"<>|\0' else ch for ch in base)
+    cleaned = re.sub(r"[_\s]+", "_", cleaned).strip("._ ")
+    return cleaned or "unnamed.bin"
+
+
+def _flat_private_relpath(file_name: str, content_hash: str) -> str:
+    """ERPNext-like flat private/files path; hash suffix avoids name collisions."""
+    safe = _sanitize_filename(file_name)
+    stem = Path(safe).stem
+    suffix = Path(safe).suffix or ".bin"
+    # Prefer readable name; include short hash so two different files can share a stem.
+    return f"private/files/{stem}_{content_hash[:8]}{suffix}"
 
 
 def _configure_sqlite(dbapi_connection, _connection_record) -> None:

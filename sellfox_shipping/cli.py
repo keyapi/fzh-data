@@ -261,6 +261,9 @@ def lizard_export(
 def lizard_import_tracking(
     input_path: Path = typer.Option(..., "--input", "-i", help="Lizard return xlsx"),
     actor: str = typer.Option("cli", help="Actor for audit"),
+    batch_id: Optional[int] = typer.Option(
+        None, "--batch-id", help="Optional ShippingBatch id to update"
+    ),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
 ):
     """Parse lizard tracking-return Excel and reconcile by package_sn (P1B)."""
@@ -275,6 +278,7 @@ def lizard_import_tracking(
             account_key=config["sellfox"]["proxy_account"],
             actor=actor,
             input_path=input_path,
+            batch_id=batch_id,
         )
     )
     _output(result.model_dump(mode="json"), json_output)
@@ -371,6 +375,7 @@ def serve(
     typer.echo(f"  Export:     http://{host}:{port}/lizard/export")
     typer.echo(f"  Import:     http://{host}:{port}/lizard/import")
     typer.echo(f"  Artifacts:  http://{host}:{port}/lizard/artifacts")
+    typer.echo(f"  Batches:    http://{host}:{port}/lizard/batches")
     typer.echo(f"  REST:       http://{host}:{port}/api/")
     if reload:
         typer.echo("  Reload:     ON (code changes auto-restart)")
