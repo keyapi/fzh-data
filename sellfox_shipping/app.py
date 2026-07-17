@@ -67,18 +67,22 @@ def _get_package_review_service() -> ReviewPackageService:
 
 
 def _get_lizard_dims_lookup():
-    """Cascade: commodity pageList → ERPNext ZLMB (same as CLI)."""
+    """Override → commodity pageList → ERPNext ZLMB."""
     from sellfox_shipping.carriers.lizard.cascade import CascadingDimsLookup
     from sellfox_shipping.carriers.lizard.commodity_dims import CommodityPageListDimsLookup
     from sellfox_shipping.carriers.lizard.erpnext_dims import ErpnextZlmbDimsLookup
+    from sellfox_shipping.carriers.lizard.override_dims import RepositoryDimsLookup
     from sellfox_shipping.env_loader import load_dotenv as _load_env
 
     _load_env(Path(__file__).resolve().parents[1] / "EN_API" / ".env")
     _load_env()
 
+    repo = _get_package_repository()
+    account_key = config["sellfox"]["proxy_account"]
+    override = RepositoryDimsLookup(repo, account_key)
     primary = CommodityPageListDimsLookup(
         proxy_base_url=config["sellfox"]["proxy_base_url"],
-        proxy_account=config["sellfox"]["proxy_account"],
+        proxy_account=account_key,
         proxy_api_key=os.getenv("SELLFOX_PROXY_API_KEY", ""),
     )
     erp_key = (
@@ -88,7 +92,7 @@ def _get_lizard_dims_lookup():
         os.getenv("PROD_ERP_API_SECRET") or os.getenv("ERP_API_SECRET") or ""
     ).strip()
     if not erp_key or not erp_secret:
-        return primary
+        return CascadingDimsLookup(override, primary)
     erp_url = (os.getenv("ERP_URL") or "https://erpnext.vilavi.cn").strip().rstrip(
         "/"
     )
@@ -97,7 +101,7 @@ def _get_lizard_dims_lookup():
         api_key=erp_key,
         api_secret=erp_secret,
     )
-    return CascadingDimsLookup(primary, fallback)
+    return CascadingDimsLookup(override, primary, fallback)
 
 
 # ── FastAPI app ──────────────────────────────────────────────────
@@ -312,27 +316,57 @@ async def packages_page(
 @app.get("/packages/{package_sn}", response_class=HTMLResponse)
 async def package_detail_page(request: Request, package_sn: str):
     """Server-rendered package detail for review."""
-    record = _get_package_repository().get(
-        config["sellfox"]["proxy_account"],
-        package_sn,
-    )
+    account_key = config["sellfox"]["proxy_account"]
+    record = _get_package_repository().get(account_key, package_sn)
     if record is None:
         raise HTTPException(404, f"Package {package_sn} not found")
     return templates.TemplateResponse(
         request,
         "package_detail.html",
-        {"package": record, "message": ""},
+        {
+            "package": record,
+            "message": "",
+            "carton_rows": _carton_rows_for_package(account_key, record),
+        },
     )
+
+
+def _carton_rows_for_package(account_key: str, record) -> list[dict]:
+    repo = _get_package_repository()
+    lookup = _get_lizard_dims_lookup()
+    seen: set[str] = set()
+    rows: list[dict] = []
+    for item in record.items:
+        sku = (item.commodity_sku or "").strip()
+        if not sku or sku in seen:
+            continue
+        seen.add(sku)
+        override = repo.get_carton_override(account_key, sku)
+        resolved = lookup.get(sku)
+        rows.append(
+            {
+                "commodity_sku": sku,
+                "override": override,
+                "resolved": resolved,
+                "source": (
+                    "override"
+                    if override is not None
+                    else ("cascade" if resolved is not None else "missing")
+                ),
+            }
+        )
+    return rows
 
 
 @app.post("/packages/{package_sn}/review", response_class=HTMLResponse)
 async def package_review_form(request: Request, package_sn: str):
     """HTML form post for local review decision."""
     form = await request.form()
+    account_key = config["sellfox"]["proxy_account"]
     try:
         record = _get_package_review_service().review(
             PackageReviewRequest(
-                account_key=config["sellfox"]["proxy_account"],
+                account_key=account_key,
                 package_sn=package_sn,
                 actor=str(form.get("actor") or "web-user"),
                 decision=str(form.get("decision") or ""),
@@ -343,17 +377,62 @@ async def package_review_form(request: Request, package_sn: str):
     except LookupError as exc:
         raise HTTPException(404, str(exc)) from exc
     except ValueError as exc:
-        record = _get_package_repository().get(
-            config["sellfox"]["proxy_account"],
-            package_sn,
-        )
+        record = _get_package_repository().get(account_key, package_sn)
         if record is None:
             raise HTTPException(404, f"Package {package_sn} not found") from exc
         message = f"审核失败: {exc}"
     return templates.TemplateResponse(
         request,
         "package_detail.html",
-        {"package": record, "message": message},
+        {
+            "package": record,
+            "message": message,
+            "carton_rows": _carton_rows_for_package(account_key, record),
+        },
+    )
+
+
+@app.post("/packages/{package_sn}/carton-override", response_class=HTMLResponse)
+async def package_carton_override_form(request: Request, package_sn: str):
+    """Save manual carton dims for a commodity_sku on this package."""
+    from sellfox_shipping.carriers.lizard.dims import CartonDims
+
+    form = await request.form()
+    account_key = config["sellfox"]["proxy_account"]
+    repo = _get_package_repository()
+    record = repo.get(account_key, package_sn)
+    if record is None:
+        raise HTTPException(404, f"Package {package_sn} not found")
+    sku = str(form.get("commodity_sku") or "").strip()
+    actor = str(form.get("actor") or "web-user").strip() or "web-user"
+    note = str(form.get("note") or "").strip()
+    try:
+        dims = CartonDims(
+            weight_kg=float(form.get("weight_kg") or 0),
+            length_cm=float(form.get("length_cm") or 0),
+            width_cm=float(form.get("width_cm") or 0),
+            height_cm=float(form.get("height_cm") or 0),
+        )
+        repo.set_carton_override(
+            account_key=account_key,
+            commodity_sku=sku,
+            dims=dims,
+            actor=actor,
+            note=note,
+        )
+        message = f"已保存重尺补录：{sku}"
+    except (TypeError, ValueError) as exc:
+        message = f"重尺补录失败: {exc}"
+    record = repo.get(account_key, package_sn)
+    assert record is not None
+    return templates.TemplateResponse(
+        request,
+        "package_detail.html",
+        {
+            "package": record,
+            "message": message,
+            "carton_rows": _carton_rows_for_package(account_key, record),
+        },
     )
 
 

@@ -127,18 +127,18 @@ sellfox_shipping/
 - P1B：`lizard-export` / `lizard-import-tracking` CLI；重尺 pageList → ERPNext ZLMB；导入可覆盖 `trackNo==packageSn` 占位
 - Schema：Alembic `0001` + `0002_local_review_status`
 
-**已验证：** `uv run pytest tests/sellfox_shipping -q` → 60 passed  
+**已验证：** `uv run pytest tests/sellfox_shipping -q` → 64 passed  
 
 **未调用：** `submitToPlatform`  
 
-**未实现：** 钉钉 OIDC、Artifact 批次表、`submitToPlatform` 安全回写、缺 dims 人工补录 UI、PDF 生产拆分
+**未实现：** 钉钉 OIDC、Artifact 批次表、`submitToPlatform` 安全回写、PDF 生产拆分
 
 ## 待实现
 
 | 阶段 | 内容 | 依赖 |
 |------|------|------|
 | P1A 后续 | OIDC；legacy 入口隔离 | 钉钉 OIDC 配置 |
-| P1B 收尾 | 缺 dims 人工补录；导出批次 Artifact 表 | — |
+| P1B 收尾 | 导出批次 Artifact 表 | — |
 | P1C | 人工确认后赛狐回写；VITE 测试 spike | **干净测试包裹** + 用户确认范围（勿用已 has_shipped 的 38 单） |
 | P2+ | PDF/packlist、GLS Excel、经验证的 API connector | 各承运人资料 |
 
