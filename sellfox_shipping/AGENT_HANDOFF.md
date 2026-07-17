@@ -65,6 +65,10 @@ uv run python -m sellfox_shipping.cli packages-prepare-submit \
 uv run python -m sellfox_shipping.cli packages-submit-intent \
   --intent-id <N> --actor <operator-id> --json
 
+# P1C：SUCCESS → VERIFIED（仅 packageDetail 回读，不重新 submit）
+uv run python -m sellfox_shipping.cli packages-verify-intent \
+  --intent-id <N> --actor <operator-id> --json
+
 # Web Server（FastAPI；本地开发请加 --reload）
 uv run python -m sellfox_shipping.cli serve --host 127.0.0.1 --port 8401 --reload
 # 打开 http://127.0.0.1:8401/packages
@@ -137,11 +141,11 @@ sellfox_shipping/
 - P1B：`lizard-export` / `lizard-import-tracking` CLI；重尺 pageList → ERPNext ZLMB；导入可覆盖 `trackNo==packageSn` 占位
 - Schema：Alembic `0001` … `0006_submission_intents`
 
-**已验证：** `uv run pytest tests/sellfox_shipping -q` → **106 passed**
+**已验证：** `uv run pytest tests/sellfox_shipping -q` → **113 passed**
 
 **未调用：** `submitToPlatform`  
 
-**未实现：** 钉钉 OIDC、Web 提交确认 UI、1 rps、回读 VERIFIED、VITE spike、完整批次 P1C 状态机
+**未实现：** 钉钉 OIDC、1 rps 多实例协调、回读权威性生产验证、VITE spike、蜴国际 API adapter
 
 ## 待实现
 
@@ -149,7 +153,7 @@ sellfox_shipping/
 |------|------|------|
 | P1A 后续 | OIDC；legacy 入口隔离 | 钉钉 OIDC 配置 |
 | P1B 收尾 | ~~Artifact~~ / ~~ShippingBatch MVP~~（`0004`+`0005`；`/lizard/artifacts`、`/lizard/batches`） | — |
-| P1C | Intent/Attempt/CAS mock + CLI dry-run | 干净测试包裹 + `--i-understand-side-effects` 才真调 |
+| P1C | Intent/CAS + Web dry-run + **1 rps** + **回读 VERIFIED** | 真调须确认测试包裹；VITE spike 未做 |
 | P2+ | PDF/packlist、GLS Excel、经验证的 API connector | 各承运人资料 |
 
 详细决策与暂不做边界见综合调研文档。过程细节见 [session-progress](docs/research/session-progress-2026-07-16.md)。

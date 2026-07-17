@@ -443,7 +443,7 @@ uv run python -m sellfox_shipping.cli packages-submit-intent \
 ### 下一刀
 
 - ~~Web 确认 UI~~（准备 Intent + dry-run；真调仍仅 CLI）
-- 1 rps 限流；回读 VERIFIED
+- ~~1 rps 限流；回读 VERIFIED~~
 - VITE spike（`vite-api/` on main）
 - ~~蜴国际 API 文档~~ → PR **#90** 已合入 main（`蜴国际-API/`）；createOrder/getLabel 因欠费未测 → 暂不替换 Excel
 
@@ -460,6 +460,24 @@ uv run python -m sellfox_shipping.cli packages-submit-intent \
 | Web | 包裹详情「赛狐回写确认」：准备 Intent + dry-run（**无** submitToPlatform） |
 | 路由 | `POST .../prepare-submit`、`POST .../submit-intent/{id}` |
 | 测试 | `test_package_prepare_submit_and_dry_run_web` |
+
+## 18. 2026-07-17 续：1 rps + 回读 VERIFIED
+
+**验证：** `uv run pytest tests/sellfox_shipping -q` → **113 passed**
+
+| 项 | 说明 |
+|----|------|
+| 限流 | `SubmitRateLimiter`（进程内，默认 ≥1s 间隔）；结果字段 `rate_limited_wait_ms` |
+| 回读 | submit 成功后调 `packageDetail`；`logistics.trackNo` 与 intent 一致 → `VERIFIED` |
+| 不匹配 / 超时 | **保持 SUCCESS**，不标 UNKNOWN、不自动重发 |
+| CLI | `packages-verify-intent --intent-id N`（仅回读升格） |
+| Client | `SellfoxClient.fetch_package_detail(package_sn)` |
+
+```text
+# 真调后若仍 SUCCESS，可单独回读核验
+uv run python -m sellfox_shipping.cli packages-verify-intent \
+  --intent-id <N> --actor <谁> --json
+```
 
 ## 14. 本文档维护约定
 

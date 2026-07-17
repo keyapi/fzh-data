@@ -1042,6 +1042,46 @@ class PackageRepository:
                 for r in rows
             ]
 
+    def get_package_sn_by_db_id(self, package_db_id: int) -> str | None:
+        with self._session_factory() as session:
+            row = session.get(PackageRow, package_db_id)
+            return row.package_sn if row is not None else None
+
+    def mark_submission_intent_verified(
+        self,
+        *,
+        intent_id: int,
+        summary: str = "",
+    ) -> SubmissionIntentRecord:
+        now = datetime.now(timezone.utc)
+        with self._session_factory.begin() as session:
+            intent = session.get(SubmissionIntentRow, intent_id)
+            if intent is None:
+                raise LookupError(f"Intent {intent_id} not found")
+            if intent.status not in {"SUCCESS", "VERIFIED"}:
+                raise RuntimeError(
+                    f"intent status {intent.status} cannot be verified"
+                )
+            intent.status = "VERIFIED"
+            intent.updated_at = now
+            if summary:
+                # keep audit trail on latest attempt if any
+                attempt = session.scalar(
+                    select(SubmissionAttemptRow)
+                    .where(SubmissionAttemptRow.intent_id == intent_id)
+                    .order_by(SubmissionAttemptRow.attempt_no.desc())
+                    .limit(1)
+                )
+                if attempt is not None:
+                    note = (attempt.http_summary or "")
+                    suffix = f" | verified: {summary}"
+                    attempt.http_summary = (note + suffix)[:2000]
+                    attempt.updated_at = now
+            account = session.get(ShippingAccountRow, intent.account_id)
+            return _intent_to_record(
+                account.account_key if account else "", intent
+            )
+
     def get_package_db_id(self, account_key: str, package_sn: str) -> int | None:
         with self._session_factory() as session:
             row = session.scalar(

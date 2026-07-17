@@ -229,6 +229,20 @@ class SellfoxClient:
             return {"code": -1, "raw": data}
         return data
 
+    def fetch_package_detail(self, package_sn: str) -> dict | None:
+        """POST packageDetail; returns data object or None on soft failure."""
+        sn = (package_sn or "").strip()
+        if not sn:
+            raise ValueError("package_sn is required")
+        data = self._post(
+            self._proxy_path("/api/packageShip/v1/packageDetail.json"),
+            {"packageSn": sn},
+        )
+        if not isinstance(data, dict) or data.get("code") != 0:
+            return None
+        detail = data.get("data")
+        return detail if isinstance(detail, dict) else None
+
 
 # ── Response parsers ──────────────────────────────────────────────
 

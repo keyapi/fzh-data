@@ -8,6 +8,12 @@ updated: 2026-07-17
 
 # sellfox_shipping — 变更日志
 
+## 2026-07-17 — P1C：1 rps 限流 + packageDetail 回读 VERIFIED
+
+- `submission_rate_limit.SubmitRateLimiter`（默认 1 次/秒）
+- submit 成功后 `fetch_package_detail`；trackNo 匹配 → VERIFIED；失败/不匹配留 SUCCESS
+- CLI：`packages-verify-intent`；测试 113 passed
+
 ## 2026-07-17 — 蜴国际 API PR#90 备忘 + Web 提交确认（dry-run）
 
 - main：`蜴国际-API/`（PR #90）；对照 `docs/research/lizard-api-vs-excel-2026-07-17.md`
