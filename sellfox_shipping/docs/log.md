@@ -8,6 +8,13 @@ updated: 2026-07-17
 
 # sellfox_shipping — 变更日志
 
+## 2026-07-17 — Artifact 文件制品表（content_hash 去重）
+
+- 表 `shipping_artifacts`（Alembic `0004`）；blob 存 `data/artifacts/by-hash/{hh}/{sha256}`
+- 同 content_hash 只存一份文件；多条记录可不同 `file_name` / `virtual_folder`（类比 ERPNext File）
+- 导出上传表、导入追踪号均登记；Web：`/lizard/artifacts` 列表 + 下载
+- **含系统生成文件**（export）与人工上传文件（import）
+
 ## 2026-07-17 — 文档：P1B 进度快照与 Artifact 说明
 
 - 更新 `session-progress` §11：Web/补录/夹具提交列表、未做边界

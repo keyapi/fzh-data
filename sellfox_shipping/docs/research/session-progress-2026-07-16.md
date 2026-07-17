@@ -301,27 +301,17 @@ git status
 
 ### P1B 规划中仍缺（见综合调研 §5.3 / §10）
 
-- **导出批次 Artifact 表**：把每次导出/导入的 Excel 登记为只读「制品」记录（见下节说明），而非仅落在 `data/exports/` 目录
-- 完整 `ShippingBatch` / `BatchPackage` 批次状态机（当前是按需导出，无正式批次实体）
+- ~~**导出批次 Artifact 表**~~ → **已实现**（2026-07-17）：`shipping_artifacts` + `/lizard/artifacts`
+- 完整 `ShippingBatch` / `BatchPackage` 批次状态机（当前是按需导出，无正式批次实体；Artifact 已能追溯单次导出/导入文件）
 
-### 明确未做 / 勿做
+### Artifact 答疑（实现后）
 
-- **未** `submitToPlatform`（P1C）；38 单历史 `has_shipped` **禁止**用来测写回
-- 蜴国际真上传：无测试账号时可能产生费用，需问同事
-- 服务改代码后须**重启** `serve`（无 reload）
-
-### 「导出批次 Artifact 表」是什么意思？
-
-规划里的 **Artifact（制品）** = 系统保存的一份**原始文件凭证**，例如：
-
-- 导出给蜴国际的上传 Excel
-- 从蜴国际下载后导入的追踪号 Excel
-- 以后的面单 PDF
-
-每条 Artifact 至少应有：文件路径、**SHA-256**、MIME/大小、**模板版本**、操作人、时间、所属批次。  
-作用：重复上传可按 hash **幂等**；事后能回答「这批导出的是哪一版文件」；原始文件不被后续处理覆盖。
-
-今天的实现只把导出文件写到 `data/exports/`，并在 audit 里记了一笔摘要；**还没有**独立的 `shipping_artifacts`（或等价）表把文件元数据结构化存库。这就是 AGENT_HANDOFF 里「P1B 还剩 Artifact 表」的含义——**可延后**，不阻塞日常导出/导入试用。
+| 问题 | 答案 |
+|------|------|
+| 是否含系统生成文件？ | **是**。`lizard-export` / Web 导出生成的上传 Excel 会登记为 `lizard_upload_export` |
+| 人工上传？ | **是**。导入追踪号 Excel 登记为 `lizard_tracking_import` |
+| 在哪里看？ | Web：`http://127.0.0.1:8401/lizard/artifacts`；磁盘：`sellfox_shipping/data/artifacts/by-hash/…` |
+| 与 ERPNext File 关系？ | 刻意对齐：`content_hash` 去重存盘；不同 `file_name` / `virtual_folder` 可指向同一 blob |
 
 ## 12. 本文档维护约定
 

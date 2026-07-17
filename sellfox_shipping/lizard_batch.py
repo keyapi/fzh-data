@@ -20,6 +20,11 @@ from sellfox_shipping.carriers.lizard.spreadsheet import (
     write_upload_xlsx,
 )
 from sellfox_shipping.package_models import PackageListItem, SellfoxPackageRecord
+from sellfox_shipping.package_repository import ArtifactRecord
+
+
+ARTIFACT_KIND_UPLOAD_EXPORT = "lizard_upload_export"
+ARTIFACT_KIND_TRACKING_IMPORT = "lizard_tracking_import"
 
 
 class PackageExportReader(Protocol):
@@ -56,6 +61,20 @@ class PackageExportReader(Protocol):
         cost_currency: str | None = None,
     ) -> SellfoxPackageRecord: ...
 
+    def register_artifact(
+        self,
+        *,
+        account_key: str,
+        kind: str,
+        file_name: str,
+        content: bytes,
+        actor: str,
+        template_version: str = "",
+        virtual_folder: str = "",
+        mime_type: str = "",
+        summary: str = "",
+    ) -> ArtifactRecord: ...
+
 
 class LizardExportRequest(BaseModel):
     account_key: str
@@ -82,6 +101,7 @@ class LizardExportResult(BaseModel):
     exported: int
     skipped: int
     skipped_rows: list[dict] = Field(default_factory=list)
+    artifact_id: int | None = None
 
 
 class ExportLizardUploadService:
@@ -122,16 +142,28 @@ class ExportLizardUploadService:
             shipper_code=request.shipper_code,
         )
         path = write_upload_xlsx(built.dataframe, request.output_path)
-        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        content = path.read_bytes()
+        digest = hashlib.sha256(content).hexdigest()
+        summary = (
+            f"exported={built.exported} skipped={built.skipped} "
+            f"template={LIZARD_TEMPLATE_VERSION}"
+        )
+        artifact = self._reader.register_artifact(
+            account_key=request.account_key,
+            kind=ARTIFACT_KIND_UPLOAD_EXPORT,
+            file_name=path.name,
+            content=content,
+            actor=request.actor,
+            template_version=LIZARD_TEMPLATE_VERSION,
+            virtual_folder="lizard/export",
+            summary=summary,
+        )
         self._reader.append_audit_event(
             actor=request.actor,
             action="lizard.upload_export",
-            entity_type="batch",
-            entity_id=digest[:16],
-            summary=(
-                f"exported={built.exported} skipped={built.skipped} "
-                f"template={LIZARD_TEMPLATE_VERSION} path={path.name}"
-            ),
+            entity_type="artifact",
+            entity_id=str(artifact.id),
+            summary=f"{summary} path={path.name}",
         )
         return LizardExportResult(
             template_version=built.template_version,
@@ -144,6 +176,7 @@ class ExportLizardUploadService:
                 {"package_sn": r.package_sn, "reason": r.reason}
                 for r in built.skipped_rows
             ],
+            artifact_id=artifact.id,
         )
 
 
@@ -170,6 +203,7 @@ class LizardImportResult(BaseModel):
     unmatched_rows: list[dict] = Field(default_factory=list)
     conflict_rows: list[dict] = Field(default_factory=list)
     parsed_at: str = ""
+    artifact_id: int | None = None
 
 
 class ImportLizardTrackingService:
@@ -190,8 +224,10 @@ class ImportLizardTrackingService:
                 offset=0,
             )
         }
+        input_path = Path(request.input_path)
+        content = input_path.read_bytes()
         parsed: TrackingReturnParseResult = parse_tracking_return(
-            request.input_path,
+            input_path,
             known_package_sns=known,
         )
         persisted = 0
@@ -226,6 +262,19 @@ class ImportLizardTrackingService:
             entry["persisted"] = True
             matched_rows.append(entry)
 
+        summary = (
+            f"matched={parsed.matched} persisted={persisted} "
+            f"conflicts={len(conflicts)} unmatched={parsed.unmatched}"
+        )
+        artifact = self._reader.register_artifact(
+            account_key=request.account_key,
+            kind=ARTIFACT_KIND_TRACKING_IMPORT,
+            file_name=input_path.name,
+            content=content,
+            actor=request.actor,
+            virtual_folder="lizard/import",
+            summary=summary,
+        )
         result = LizardImportResult(
             total=parsed.total,
             matched=parsed.matched,
@@ -243,15 +292,13 @@ class ImportLizardTrackingService:
             ],
             conflict_rows=conflicts,
             parsed_at=datetime.now(timezone.utc).isoformat(),
+            artifact_id=artifact.id,
         )
         self._reader.append_audit_event(
             actor=request.actor,
             action="lizard.tracking_import",
-            entity_type="batch",
-            entity_id=Path(request.input_path).name,
-            summary=(
-                f"matched={result.matched} persisted={result.persisted} "
-                f"conflicts={result.conflicts} unmatched={result.unmatched}"
-            ),
+            entity_type="artifact",
+            entity_id=str(artifact.id),
+            summary=summary,
         )
         return result
