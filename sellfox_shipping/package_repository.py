@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 from dataclasses import dataclass
@@ -219,6 +220,45 @@ class CartonOverrideRecord:
 
 
 @dataclass(frozen=True)
+class ArtifactRecord:
+    id: int
+    account_key: str
+    kind: str
+    file_name: str
+    content_hash: str
+    storage_relpath: str
+    mime_type: str = ""
+    file_size: int = 0
+    template_version: str = ""
+    virtual_folder: str = ""
+    summary: str = ""
+    created_by: str = ""
+    created_at: datetime | None = None
+
+
+class ArtifactRow(Base):
+    __tablename__ = "shipping_artifacts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    account_id: Mapped[int] = mapped_column(
+        ForeignKey("shipping_accounts.id", ondelete="CASCADE")
+    )
+    kind: Mapped[str] = mapped_column(String)
+    file_name: Mapped[str] = mapped_column(String)
+    content_hash: Mapped[str] = mapped_column(String)
+    storage_relpath: Mapped[str] = mapped_column(String)
+    mime_type: Mapped[str] = mapped_column(String, default="")
+    file_size: Mapped[int] = mapped_column(Integer, default=0)
+    template_version: Mapped[str] = mapped_column(String, default="")
+    virtual_folder: Mapped[str] = mapped_column(String, default="")
+    summary: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[str] = mapped_column(String, default="")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.current_timestamp()
+    )
+
+
+@dataclass(frozen=True)
 class UpsertOutcome:
     package_id: int
     created: bool
@@ -240,6 +280,9 @@ class PackageRepository:
         )
         event.listen(self.engine, "connect", _configure_sqlite)
         self._session_factory = sessionmaker(self.engine, expire_on_commit=False)
+        self._db_path = path
+        self.artifacts_root = path.parent / "artifacts"
+        self.artifacts_root.mkdir(parents=True, exist_ok=True)
 
     def upsert(self, record: SellfoxPackageRecord) -> UpsertOutcome:
         with self._session_factory.begin() as session:
@@ -515,6 +558,106 @@ class PackageRepository:
         record = self.get_carton_override(account_key, sku)
         assert record is not None
         return record
+
+    def register_artifact(
+        self,
+        *,
+        account_key: str,
+        kind: str,
+        file_name: str,
+        content: bytes,
+        actor: str,
+        template_version: str = "",
+        virtual_folder: str = "",
+        mime_type: str = "",
+        summary: str = "",
+    ) -> ArtifactRecord:
+        """Register a file artifact; physical bytes deduped by content_hash.
+
+        Like ERPNext File: same content_hash → one blob on disk; multiple
+        artifact rows may use different file_name / virtual_folder.
+        """
+        kind_s = (kind or "").strip()
+        name = Path(file_name or "unnamed.bin").name
+        actor_s = (actor or "").strip()
+        if not kind_s:
+            raise ValueError("kind is required")
+        if not actor_s:
+            raise ValueError("actor is required")
+        if not content:
+            raise ValueError("content is empty")
+        digest = hashlib.sha256(content).hexdigest()
+        relpath = f"by-hash/{digest[:2]}/{digest}"
+        blob_path = self.artifacts_root / relpath
+        blob_path.parent.mkdir(parents=True, exist_ok=True)
+        if not blob_path.exists():
+            blob_path.write_bytes(content)
+        mime = mime_type or _guess_mime(name)
+        with self._session_factory.begin() as session:
+            account = self._get_or_create_account(session, account_key)
+            row = ArtifactRow(
+                account_id=account.id,
+                kind=kind_s,
+                file_name=name,
+                content_hash=digest,
+                storage_relpath=relpath.replace("\\", "/"),
+                mime_type=mime,
+                file_size=len(content),
+                template_version=template_version or "",
+                virtual_folder=virtual_folder or "",
+                summary=summary or "",
+                created_by=actor_s,
+                created_at=datetime.now(timezone.utc),
+            )
+            session.add(row)
+            session.flush()
+            artifact_id = int(row.id)
+        self.append_audit_event(
+            actor=actor_s,
+            action="artifacts.register",
+            entity_type="artifact",
+            entity_id=str(artifact_id),
+            summary=f"{kind_s} {name} sha256={digest[:12]}…",
+        )
+        record = self.get_artifact(artifact_id)
+        assert record is not None
+        return record
+
+    def get_artifact(self, artifact_id: int) -> ArtifactRecord | None:
+        with self._session_factory() as session:
+            row = session.get(ArtifactRow, artifact_id)
+            if row is None:
+                return None
+            account = session.get(ShippingAccountRow, row.account_id)
+            return _artifact_to_record(account.account_key if account else "", row)
+
+    def resolve_artifact_path(self, artifact: ArtifactRecord) -> Path:
+        return self.artifacts_root / artifact.storage_relpath
+
+    def list_artifacts(
+        self,
+        *,
+        account_key: str,
+        kind: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[ArtifactRecord]:
+        with self._session_factory() as session:
+            query = (
+                select(ArtifactRow, ShippingAccountRow.account_key)
+                .join(
+                    ShippingAccountRow,
+                    ShippingAccountRow.id == ArtifactRow.account_id,
+                )
+                .where(ShippingAccountRow.account_key == account_key)
+                .order_by(ArtifactRow.id.desc())
+                .offset(offset)
+                .limit(limit)
+            )
+            if kind is not None:
+                query = query.where(ArtifactRow.kind == kind)
+            rows = session.execute(query).all()
+            return [_artifact_to_record(ak, row) for row, ak in rows]
 
     def list_packages(
         self,
@@ -855,6 +998,35 @@ class PackageRepository:
             ],
             raw_payload=json.loads(package.raw_json or "{}"),
         )
+
+
+def _artifact_to_record(account_key: str, row: ArtifactRow) -> ArtifactRecord:
+    return ArtifactRecord(
+        id=int(row.id),
+        account_key=account_key,
+        kind=row.kind,
+        file_name=row.file_name,
+        content_hash=row.content_hash,
+        storage_relpath=row.storage_relpath,
+        mime_type=row.mime_type or "",
+        file_size=int(row.file_size or 0),
+        template_version=row.template_version or "",
+        virtual_folder=row.virtual_folder or "",
+        summary=row.summary or "",
+        created_by=row.created_by or "",
+        created_at=row.created_at,
+    )
+
+
+def _guess_mime(file_name: str) -> str:
+    lower = file_name.lower()
+    if lower.endswith(".xlsx"):
+        return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    if lower.endswith(".xls"):
+        return "application/vnd.ms-excel"
+    if lower.endswith(".pdf"):
+        return "application/pdf"
+    return "application/octet-stream"
 
 
 def _configure_sqlite(dbapi_connection, _connection_record) -> None:

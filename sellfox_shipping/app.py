@@ -599,6 +599,48 @@ async def lizard_import_form(
     )
 
 
+@app.get("/lizard/artifacts", response_class=HTMLResponse)
+async def lizard_artifacts_page(
+    request: Request,
+    kind: str | None = Query(None),
+    limit: int = Query(50, le=200),
+):
+    """List registered export/import file artifacts (content_hash deduped on disk)."""
+    account_key = config["sellfox"]["proxy_account"]
+    items = _get_package_repository().list_artifacts(
+        account_key=account_key,
+        kind=kind or None,
+        limit=limit,
+    )
+    return templates.TemplateResponse(
+        request,
+        "lizard_artifacts.html",
+        {
+            "account_key": account_key,
+            "kind": kind or "",
+            "items": items,
+        },
+    )
+
+
+@app.get("/lizard/artifacts/{artifact_id}/download")
+async def lizard_artifact_download(artifact_id: int):
+    """Download the blob for an artifact (by content_hash storage path)."""
+    repo = _get_package_repository()
+    record = repo.get_artifact(artifact_id)
+    if record is None:
+        raise HTTPException(404, f"Artifact {artifact_id} not found")
+    path = repo.resolve_artifact_path(record)
+    if not path.is_file():
+        raise HTTPException(404, "Artifact blob missing on disk")
+    return FileResponse(
+        path=str(path),
+        filename=record.file_name,
+        media_type=record.mime_type
+        or "application/octet-stream",
+    )
+
+
 # ── MCP mount — appended in main.py after FastMCP server is created ──
 
 def mount_mcp(mcp_app):

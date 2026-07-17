@@ -63,6 +63,7 @@ uv run python -m sellfox_shipping.cli serve
 # 打开 http://127.0.0.1:8401/packages
 # 导出：http://127.0.0.1:8401/lizard/export
 # 导入对账：http://127.0.0.1:8401/lizard/import
+# 文件制品：http://127.0.0.1:8401/lizard/artifacts
 
 # Legacy 订单 CLI（勿作为主流程扩展）
 uv run python -m sellfox_shipping.cli fetch --date-start 2026-07-01 --date-end 2026-07-15
@@ -128,7 +129,7 @@ sellfox_shipping/
 - P1B：`lizard-export` / `lizard-import-tracking` CLI；重尺 pageList → ERPNext ZLMB；导入可覆盖 `trackNo==packageSn` 占位
 - Schema：Alembic `0001` + `0002_local_review_status`
 
-**已验证：** `uv run pytest tests/sellfox_shipping -q` → 64 passed  
+**已验证：** `uv run pytest tests/sellfox_shipping -q` → 68 passed  
 
 **未调用：** `submitToPlatform`  
 
@@ -139,7 +140,7 @@ sellfox_shipping/
 | 阶段 | 内容 | 依赖 |
 |------|------|------|
 | P1A 后续 | OIDC；legacy 入口隔离 | 钉钉 OIDC 配置 |
-| P1B 收尾 | 导出/导入 **Artifact 表**（文件 SHA256、模板版本、路径、操作人；支持重复文件幂等）。说明见 session-progress §11 | 可延后，不阻塞试用 |
+| P1B 收尾 | ~~Artifact 表~~ **已完成**（`0004` + `/lizard/artifacts`） | — |
 | P1C | 人工确认后赛狐回写；VITE 测试 spike | **干净测试包裹** + 用户确认范围（勿用已 has_shipped 的 38 单） |
 | P2+ | PDF/packlist、GLS Excel、经验证的 API connector | 各承运人资料 |
 

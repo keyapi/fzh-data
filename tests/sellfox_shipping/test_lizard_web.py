@@ -145,3 +145,32 @@ def test_lizard_import_post_shows_reconciliation_report(tmp_path, monkeypatch) -
     saved = repo.get(app_module.config["sellfox"]["proxy_account"], "P2AWEBIMP")
     assert saved is not None
     assert saved.logistics.tracking_number == "TN-WEB-1"
+    arts = repo.list_artifacts(
+        account_key=app_module.config["sellfox"]["proxy_account"],
+        kind="lizard_tracking_import",
+    )
+    assert len(arts) == 1
+
+
+def test_artifacts_page_lists_registered_file(tmp_path, monkeypatch) -> None:
+    repo = PackageRepository(tmp_path / "shipping.db")
+    account = app_module.config["sellfox"]["proxy_account"]
+    art = repo.register_artifact(
+        account_key=account,
+        kind="lizard_upload_export",
+        file_name="demo.xlsx",
+        content=b"PK-demo",
+        actor="web-tester",
+        virtual_folder="lizard/export",
+        summary="demo",
+    )
+    monkeypatch.setattr(app_module, "_get_package_repository", lambda: repo)
+
+    page = TestClient(app_module.app).get("/lizard/artifacts")
+    assert page.status_code == 200
+    assert "demo.xlsx" in page.text
+    assert "content_hash" in page.text
+
+    dl = TestClient(app_module.app).get(f"/lizard/artifacts/{art.id}/download")
+    assert dl.status_code == 200
+    assert dl.content == b"PK-demo"
