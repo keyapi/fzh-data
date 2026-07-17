@@ -8,6 +8,14 @@ updated: 2026-07-17
 
 # sellfox_shipping — 变更日志
 
+## 2026-07-17 — P1C：SubmissionIntent + CAS（mock）
+
+- Alembic `0006`：scopes / intents / attempts
+- `submission_service.py`：prepare、CAS、UNKNOWN scope 阻断、IN_FLIGHT recover
+- `sellfox_client.submit_to_platform(wire)` 新路径（`orderId`）
+- CLI：`packages-prepare-submit`、`packages-submit-intent`（默认 dry-run）
+- 测试 +106；**106 passed**；暂不提 PR
+
 ## 2026-07-17 — 进入 P1C：提交状态聚合 + 外部依赖备忘
 
 - 用户确认：VITE 文档/测试已由同事验证，PR #88 / #89 合入 main（`vite-api/`）；暂不提本分支 PR

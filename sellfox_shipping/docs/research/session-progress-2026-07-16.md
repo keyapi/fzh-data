@@ -410,6 +410,42 @@ git status
 - 未确认范围的生产回写
 - 把 VITE/蜴国际凭证写入 Git
 
+## 16. 2026-07-17 续：SubmissionIntent + CAS（mock）
+
+**分支：** `feature/sellfox-shipping-p1a-rest`  
+**验证：** `uv run pytest tests/sellfox_shipping -q` → **106 passed**  
+**Schema head：** `0006_submission_intents`
+
+| 项 | 说明 |
+|----|------|
+| Alembic `0006` | `shipping_submission_scopes` / `_intents` / `_attempts` |
+| Service | `submission_service.py`：canonical SHA-256 hash、prepare、CAS、UNKNOWN scope、recover |
+| Wire | 新路径用 `orderId`（非 legacy `write_tracking` 的 `amazonOrderId`） |
+| CLI | `packages-prepare-submit`；`packages-submit-intent`（默认 `--dry-run`；真调需 `--no-dry-run --i-understand-side-effects`） |
+| 测试 | hash / CAS / scope / recover / migration |
+
+### 操作员（仍不默认打赛狐）
+
+```text
+# 1. 包裹已 approved + 有真实 tracking_number
+uv run python -m sellfox_shipping.cli packages-prepare-submit \
+  --package-sn P2A... --actor <谁> --json
+
+# 2. 预览提交（无 HTTP）
+uv run python -m sellfox_shipping.cli packages-submit-intent \
+  --intent-id <N> --actor <谁> --json
+
+# 3. 真调（须用户确认测试包裹 + 双 flag）
+uv run python -m sellfox_shipping.cli packages-submit-intent \
+  --intent-id <N> --actor <谁> --no-dry-run --i-understand-side-effects --json
+```
+
+### 下一刀
+
+- Web 确认 UI；1 rps 限流；回读 VERIFIED
+- VITE spike（`vite-api/` on main）
+- 蜴国际 API（同事测试有结果后）
+
 ## 14. 本文档维护约定
 
 后续 Agent 完成一个可交付切片后，应：

@@ -286,6 +286,54 @@ def lizard_import_tracking(
         raise typer.Exit(2)
 
 
+@app.command("packages-prepare-submit")
+def packages_prepare_submit(
+    package_sn: str = typer.Option(..., "--package-sn", help="Sellfox packageSn"),
+    actor: str = typer.Option("cli", help="Actor for audit"),
+    carrier_name: str = typer.Option("", help="Override carrier name"),
+    shipping_service: str = typer.Option("", help="Optional ship service"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Create SubmissionIntent rows for an approved package (no HTTP)."""
+    from sellfox_shipping.submission_service import SubmissionService
+
+    config = _load_config()
+    result = SubmissionService(_get_package_repository()).prepare_intents_for_package(
+        account_key=config["sellfox"]["proxy_account"],
+        package_sn=package_sn,
+        actor=actor,
+        carrier_name=carrier_name or "",
+        shipping_service=shipping_service or "",
+    )
+    _output(result.__dict__, json_output)
+
+
+@app.command("packages-submit-intent")
+def packages_submit_intent(
+    intent_id: int = typer.Option(..., "--intent-id", help="SubmissionIntent id"),
+    actor: str = typer.Option("cli", help="Actor for audit"),
+    dry_run: bool = typer.Option(True, help="Preview only; no HTTP (default)"),
+    i_understand_side_effects: bool = typer.Option(
+        False,
+        "--i-understand-side-effects",
+        help="Allow real submitToPlatform (requires --no-dry-run)",
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Submit one intent (default dry-run; real call needs explicit side-effect flag)."""
+    from sellfox_shipping.submission_service import SubmissionService
+
+    repo = _get_package_repository()
+    client = _get_client() if (not dry_run and i_understand_side_effects) else None
+    result = SubmissionService(repo, client).submit_intent(
+        intent_id=intent_id,
+        actor=actor,
+        dry_run=dry_run,
+        allow_side_effects=i_understand_side_effects and not dry_run,
+    )
+    _output(result.__dict__, json_output)
+
+
 @app.command()
 def orders(
     status: Optional[str] = typer.Option(None, help="Filter by package_status"),

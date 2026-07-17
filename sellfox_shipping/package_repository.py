@@ -331,6 +331,120 @@ class BatchPackageRow(Base):
     reason: Mapped[str] = mapped_column(String, default="")
 
 
+class SubmissionScopeRow(Base):
+    __tablename__ = "shipping_submission_scopes"
+    __table_args__ = (
+        UniqueConstraint(
+            "account_id",
+            "package_id",
+            "order_id",
+            name="uq_shipping_submission_scope",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    account_id: Mapped[int] = mapped_column(
+        ForeignKey("shipping_accounts.id", ondelete="CASCADE")
+    )
+    package_id: Mapped[int] = mapped_column(
+        ForeignKey("shipping_packages.id", ondelete="CASCADE")
+    )
+    order_id: Mapped[int] = mapped_column(
+        ForeignKey("shipping_orders.id", ondelete="CASCADE")
+    )
+    status: Mapped[str] = mapped_column(String, default="OPEN")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.current_timestamp()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.current_timestamp()
+    )
+
+
+class SubmissionIntentRow(Base):
+    __tablename__ = "shipping_submission_intents"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    account_id: Mapped[int] = mapped_column(
+        ForeignKey("shipping_accounts.id", ondelete="CASCADE")
+    )
+    package_id: Mapped[int] = mapped_column(
+        ForeignKey("shipping_packages.id", ondelete="CASCADE")
+    )
+    order_id: Mapped[int] = mapped_column(
+        ForeignKey("shipping_orders.id", ondelete="CASCADE")
+    )
+    scope_id: Mapped[int] = mapped_column(
+        ForeignKey("shipping_submission_scopes.id", ondelete="CASCADE")
+    )
+    external_order_id: Mapped[str] = mapped_column(String, default="")
+    request_hash: Mapped[str] = mapped_column(String, unique=True)
+    canonical_request: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String, default="READY")
+    version: Mapped[int] = mapped_column(Integer, default=0)
+    confirmed_by: Mapped[str] = mapped_column(String, default="")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.current_timestamp()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.current_timestamp()
+    )
+
+
+class SubmissionAttemptRow(Base):
+    __tablename__ = "shipping_submission_attempts"
+    __table_args__ = (
+        UniqueConstraint(
+            "intent_id",
+            "attempt_no",
+            name="uq_shipping_submission_attempt_no",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    intent_id: Mapped[int] = mapped_column(
+        ForeignKey("shipping_submission_intents.id", ondelete="CASCADE")
+    )
+    attempt_no: Mapped[int] = mapped_column(Integer, default=1)
+    status: Mapped[str] = mapped_column(String, default="CREATED")
+    send_state: Mapped[str] = mapped_column(String, default="NOT_SENT")
+    actor: Mapped[str] = mapped_column(String, default="")
+    http_status: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    http_summary: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.current_timestamp()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.current_timestamp()
+    )
+
+
+@dataclass(frozen=True)
+class SubmissionIntentRecord:
+    id: int
+    account_key: str
+    package_id: int
+    order_db_id: int
+    external_order_id: str
+    request_hash: str
+    canonical_request: str
+    status: str
+    version: int
+    confirmed_by: str = ""
+
+
+@dataclass(frozen=True)
+class SubmissionAttemptRecord:
+    id: int
+    intent_id: int
+    attempt_no: int
+    status: str
+    send_state: str
+    actor: str = ""
+    http_status: int | None = None
+    http_summary: str = ""
+
+
 @dataclass(frozen=True)
 class UpsertOutcome:
     package_id: int
@@ -928,6 +1042,329 @@ class PackageRepository:
                 for r in rows
             ]
 
+    def get_package_db_id(self, account_key: str, package_sn: str) -> int | None:
+        with self._session_factory() as session:
+            row = session.scalar(
+                select(PackageRow.id)
+                .join(
+                    ShippingAccountRow,
+                    ShippingAccountRow.id == PackageRow.account_id,
+                )
+                .where(
+                    ShippingAccountRow.account_key == account_key,
+                    PackageRow.package_sn == package_sn,
+                )
+            )
+            return int(row) if row is not None else None
+
+    def list_package_order_db_ids(
+        self, account_key: str, package_sn: str
+    ) -> list[tuple[int, str]]:
+        with self._session_factory() as session:
+            rows = session.execute(
+                select(OrderRow.id, OrderRow.external_order_id)
+                .join(PackageOrderRow, PackageOrderRow.order_id == OrderRow.id)
+                .join(PackageRow, PackageRow.id == PackageOrderRow.package_id)
+                .join(
+                    ShippingAccountRow,
+                    ShippingAccountRow.id == PackageRow.account_id,
+                )
+                .where(
+                    ShippingAccountRow.account_key == account_key,
+                    PackageRow.package_sn == package_sn,
+                )
+                .order_by(OrderRow.external_order_id)
+            ).all()
+            return [(int(oid), str(ext)) for oid, ext in rows]
+
+    def list_order_items_for_package_order(
+        self,
+        *,
+        package_db_id: int,
+        external_order_id: str,
+    ) -> list[dict[str, object]]:
+        with self._session_factory() as session:
+            rows = session.scalars(
+                select(PackageItemRow)
+                .where(
+                    PackageItemRow.package_id == package_db_id,
+                    PackageItemRow.external_order_id == external_order_id,
+                )
+                .order_by(PackageItemRow.order_item_id)
+            ).all()
+            return [
+                {
+                    "order_item_id": r.order_item_id,
+                    "quantity": int(r.quantity or 0),
+                }
+                for r in rows
+            ]
+
+    def _get_or_create_submission_scope(
+        self,
+        session: Session,
+        *,
+        account_id: int,
+        package_id: int,
+        order_db_id: int,
+    ) -> SubmissionScopeRow:
+        scope = session.scalar(
+            select(SubmissionScopeRow).where(
+                SubmissionScopeRow.account_id == account_id,
+                SubmissionScopeRow.package_id == package_id,
+                SubmissionScopeRow.order_id == order_db_id,
+            )
+        )
+        if scope is None:
+            scope = SubmissionScopeRow(
+                account_id=account_id,
+                package_id=package_id,
+                order_id=order_db_id,
+                status="OPEN",
+            )
+            session.add(scope)
+            session.flush()
+        return scope
+
+    def is_submission_scope_blocked(
+        self,
+        *,
+        account_key: str,
+        package_db_id: int,
+        order_db_id: int,
+    ) -> bool:
+        with self._session_factory() as session:
+            account = self._get_or_create_account(session, account_key)
+            scope = session.scalar(
+                select(SubmissionScopeRow).where(
+                    SubmissionScopeRow.account_id == account.id,
+                    SubmissionScopeRow.package_id == package_db_id,
+                    SubmissionScopeRow.order_id == order_db_id,
+                )
+            )
+            return scope is not None and scope.status == "UNKNOWN_BLOCKED"
+
+    def is_submission_scope_blocked_by_intent(self, intent_id: int) -> bool:
+        with self._session_factory() as session:
+            intent = session.get(SubmissionIntentRow, intent_id)
+            if intent is None:
+                return True
+            scope = session.get(SubmissionScopeRow, intent.scope_id)
+            return scope is not None and scope.status == "UNKNOWN_BLOCKED"
+
+    def upsert_submission_intent(
+        self,
+        *,
+        account_key: str,
+        package_db_id: int,
+        order_db_id: int,
+        external_order_id: str,
+        request_hash: str,
+        canonical_request: str,
+        confirmed_by: str,
+    ) -> SubmissionIntentRecord:
+        now = datetime.now(timezone.utc)
+        with self._session_factory.begin() as session:
+            account = self._get_or_create_account(session, account_key)
+            scope = self._get_or_create_submission_scope(
+                session,
+                account_id=account.id,
+                package_id=package_db_id,
+                order_db_id=order_db_id,
+            )
+            if scope.status == "UNKNOWN_BLOCKED":
+                raise RuntimeError("submission scope is UNKNOWN_BLOCKED")
+            existing = session.scalar(
+                select(SubmissionIntentRow).where(
+                    SubmissionIntentRow.request_hash == request_hash
+                )
+            )
+            if existing is not None:
+                return _intent_to_record(account_key, existing)
+            row = SubmissionIntentRow(
+                account_id=account.id,
+                package_id=package_db_id,
+                order_id=order_db_id,
+                scope_id=scope.id,
+                external_order_id=external_order_id,
+                request_hash=request_hash,
+                canonical_request=canonical_request,
+                status="READY",
+                version=0,
+                confirmed_by=confirmed_by,
+                created_at=now,
+                updated_at=now,
+            )
+            session.add(row)
+            session.flush()
+            return _intent_to_record(account_key, row)
+
+    def get_submission_intent(self, intent_id: int) -> SubmissionIntentRecord | None:
+        with self._session_factory() as session:
+            row = session.get(SubmissionIntentRow, intent_id)
+            if row is None:
+                return None
+            account = session.get(ShippingAccountRow, row.account_id)
+            return _intent_to_record(account.account_key if account else "", row)
+
+    def get_submission_attempt(
+        self, attempt_id: int
+    ) -> SubmissionAttemptRecord | None:
+        with self._session_factory() as session:
+            row = session.get(SubmissionAttemptRow, attempt_id)
+            if row is None:
+                return None
+            return _attempt_to_record(row)
+
+    def create_submission_attempt(
+        self,
+        *,
+        intent_id: int,
+        actor: str,
+    ) -> SubmissionAttemptRecord:
+        now = datetime.now(timezone.utc)
+        with self._session_factory.begin() as session:
+            intent = session.get(SubmissionIntentRow, intent_id)
+            if intent is None:
+                raise LookupError(f"Intent {intent_id} not found")
+            if intent.status not in {"READY", "FAILED"}:
+                raise RuntimeError(f"intent status {intent.status} cannot submit")
+            last_no = session.scalar(
+                select(func.max(SubmissionAttemptRow.attempt_no)).where(
+                    SubmissionAttemptRow.intent_id == intent_id
+                )
+            )
+            attempt_no = int(last_no or 0) + 1
+            row = SubmissionAttemptRow(
+                intent_id=intent_id,
+                attempt_no=attempt_no,
+                status="CREATED",
+                send_state="NOT_SENT",
+                actor=actor,
+                created_at=now,
+                updated_at=now,
+            )
+            session.add(row)
+            session.flush()
+            return _attempt_to_record(row)
+
+    def cas_submission_to_in_flight(
+        self,
+        *,
+        intent_id: int,
+        attempt_id: int,
+        expected_intent_version: int,
+    ) -> bool:
+        now = datetime.now(timezone.utc)
+        with self._session_factory.begin() as session:
+            intent = session.get(SubmissionIntentRow, intent_id)
+            attempt = session.get(SubmissionAttemptRow, attempt_id)
+            if intent is None or attempt is None:
+                return False
+            if intent.status not in {"READY", "FAILED"}:
+                return False
+            if intent.version != expected_intent_version:
+                return False
+            if attempt.status != "CREATED" or attempt.send_state != "NOT_SENT":
+                return False
+            intent.status = "IN_FLIGHT"
+            intent.version = expected_intent_version + 1
+            intent.updated_at = now
+            attempt.status = "IN_FLIGHT"
+            attempt.send_state = "SENT"
+            attempt.updated_at = now
+            return True
+
+    def mark_submission_attempt_result(
+        self,
+        *,
+        attempt_id: int,
+        intent_id: int,
+        attempt_status: str,
+        intent_status: str,
+        http_status: int | None,
+        http_summary: str,
+    ) -> None:
+        now = datetime.now(timezone.utc)
+        with self._session_factory.begin() as session:
+            attempt = session.get(SubmissionAttemptRow, attempt_id)
+            intent = session.get(SubmissionIntentRow, intent_id)
+            if attempt is None or intent is None:
+                raise LookupError("attempt or intent missing")
+            attempt.status = attempt_status
+            attempt.http_status = http_status
+            attempt.http_summary = http_summary or ""
+            attempt.updated_at = now
+            intent.status = intent_status
+            intent.updated_at = now
+
+    def mark_submission_unknown_and_block_scope(
+        self,
+        *,
+        attempt_id: int,
+        intent_id: int,
+        http_summary: str,
+    ) -> None:
+        now = datetime.now(timezone.utc)
+        with self._session_factory.begin() as session:
+            attempt = session.get(SubmissionAttemptRow, attempt_id)
+            intent = session.get(SubmissionIntentRow, intent_id)
+            if attempt is None or intent is None:
+                raise LookupError("attempt or intent missing")
+            attempt.status = "UNKNOWN"
+            attempt.http_summary = http_summary or ""
+            attempt.updated_at = now
+            intent.status = "UNKNOWN"
+            intent.updated_at = now
+            scope = session.get(SubmissionScopeRow, intent.scope_id)
+            if scope is not None:
+                scope.status = "UNKNOWN_BLOCKED"
+                scope.updated_at = now
+
+    def recover_stale_submission_in_flight(self, *, actor: str) -> int:
+        now = datetime.now(timezone.utc)
+        recovered = 0
+        with self._session_factory.begin() as session:
+            stale_intents = session.scalars(
+                select(SubmissionIntentRow).where(
+                    SubmissionIntentRow.status == "IN_FLIGHT"
+                )
+            ).all()
+            for intent in stale_intents:
+                intent.status = "UNKNOWN"
+                intent.updated_at = now
+                scope = session.get(SubmissionScopeRow, intent.scope_id)
+                if scope is not None:
+                    scope.status = "UNKNOWN_BLOCKED"
+                    scope.updated_at = now
+                recovered += 1
+            stale_attempts = session.scalars(
+                select(SubmissionAttemptRow).where(
+                    SubmissionAttemptRow.status == "IN_FLIGHT"
+                )
+            ).all()
+            for attempt in stale_attempts:
+                attempt.status = "UNKNOWN"
+                attempt.updated_at = now
+        if recovered:
+            self.append_audit_event(
+                actor=actor,
+                action="submission.recover_in_flight",
+                entity_type="submission",
+                entity_id="*",
+                summary=f"recovered={recovered}",
+            )
+        return recovered
+
+    def list_intent_statuses_for_package(self, package_db_id: int) -> list[str]:
+        with self._session_factory() as session:
+            rows = session.scalars(
+                select(SubmissionIntentRow.status).where(
+                    SubmissionIntentRow.package_id == package_db_id
+                )
+            ).all()
+            return [str(s) for s in rows]
+
     def list_packages(
         self,
         *,
@@ -1304,6 +1741,34 @@ def _batch_to_record(account_key: str, row: ShippingBatchRow) -> ShippingBatchRe
         unmatched_count=int(row.unmatched_count or 0),
         summary=row.summary or "",
         created_at=row.created_at,
+    )
+
+
+def _intent_to_record(account_key: str, row: SubmissionIntentRow) -> SubmissionIntentRecord:
+    return SubmissionIntentRecord(
+        id=int(row.id),
+        account_key=account_key,
+        package_id=int(row.package_id),
+        order_db_id=int(row.order_id),
+        external_order_id=row.external_order_id or "",
+        request_hash=row.request_hash,
+        canonical_request=row.canonical_request or "",
+        status=row.status or "",
+        version=int(row.version or 0),
+        confirmed_by=row.confirmed_by or "",
+    )
+
+
+def _attempt_to_record(row: SubmissionAttemptRow) -> SubmissionAttemptRecord:
+    return SubmissionAttemptRecord(
+        id=int(row.id),
+        intent_id=int(row.intent_id),
+        attempt_no=int(row.attempt_no or 1),
+        status=row.status or "",
+        send_state=row.send_state or "",
+        actor=row.actor or "",
+        http_status=row.http_status,
+        http_summary=row.http_summary or "",
     )
 
 
