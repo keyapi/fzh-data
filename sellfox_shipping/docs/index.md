@@ -26,3 +26,5 @@ updated: 2026-07-16
 - [research/lizard-p0-column-mapping-2026-07-17.md](research/lizard-p0-column-mapping-2026-07-17.md) — 蜴国际 P0 样例列映射（匹配键 / 单位）
 - [research/colab-notebook-legacy-summary-2026-07-17.md](research/colab-notebook-legacy-summary-2026-07-17.md) — Colab 通途/蜴国际/背贴 notebook 摘要
 - [research/sellfox-carton-dims-source-2026-07-17.md](research/sellfox-carton-dims-source-2026-07-17.md) — 重尺：商品 pageList carton* 字段
+- [research/local-vs-sellfox-status-2026-07-17.md](research/local-vs-sellfox-status-2026-07-17.md) — 赛狐状态 vs 本地通过/驳回
+- [research/pnumber-to-sellfox-trace-2026-07-17.md](research/pnumber-to-sellfox-trace-2026-07-17.md) — 通途 P 号追溯赛狐（对照）
