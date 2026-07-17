@@ -31,4 +31,4 @@ tags: [sellfox-shipping, oidc, rate-limit, karrio]
 
 ## 蜴国际（同事并行）
 
-用户已请同事在**余额仍为负**时仍测 `createOrder` + `getLabel` + 取消。本仓等待其结论；在此之前 Excel 仍为主路径。勿在本分支假设 API 已可替换 Excel。
+PR **#91** 已合入 main：负余额下 **createOrder / getLabel / cancelOrder** 冒烟通过。详见 [lizard-api-vs-excel-2026-07-17.md](lizard-api-vs-excel-2026-07-17.md)。Excel 仍为生产默认，直至本仓 adapter 受控验证。

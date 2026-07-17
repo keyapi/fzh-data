@@ -604,6 +604,27 @@ P1C VITE spike 技术退出门：**关闭**（真测 + 决策记录）。生产�
 - 同事蜴国际 API 冒烟结论入库（对照 Excel）
 - `ViteGofoClient` → `ApiCarrierAdapter`（有业务范围时）
 
+## 26. 2026-07-17 续：蜴国际 PR#91 — 负余额下单/面单/取消已验
+
+**事实：** Merge PR **#91** → `origin/main` `蜴国际-API/`（`7e1ec1f`）。同事在余额仍为负时完成：
+
+| 接口 | 结果 |
+|------|------|
+| createOrder | ✅ 同步返回跟踪号 + 面单 PDF URL |
+| getLabel | ✅ sync_service_status=1 |
+| cancelOrder | ✅ code=200 |
+| rates / ratesv2 | ✅ |
+
+**实现要点：** `reference_no` 全链路一致；create 可能已带标签，仍保留 ~30s getLabel 轮询兜底。  
+**对照更新：** [lizard-api-vs-excel-2026-07-17.md](lizard-api-vs-excel-2026-07-17.md)  
+**口径：** API 冒烟通过；**Excel 仍为生产默认**，直至本仓 httpx adapter + 受控批次验证。勿拷贝 main HANDOFF 明文 Key。
+
+### 下一刀
+
+- （可选）本仓 `carriers/lizard` httpx 薄客户端（mock + 对照 PR91 契约；真调须确认范围）
+- 公网 OIDC 启用
+- VITE / 蜴国际 → `ApiCarrierAdapter`（有业务范围时）
+
 ## 14. 本文档维护约定
 
 后续 Agent 完成一个可交付切片后，应：
