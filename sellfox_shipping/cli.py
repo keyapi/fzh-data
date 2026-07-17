@@ -180,6 +180,71 @@ def packages_list(
     _output(result.model_dump(mode="json"), json_output)
 
 
+@app.command("lizard-export")
+def lizard_export(
+    output: Path = typer.Option(..., "--output", "-o", help="Output xlsx path"),
+    actor: str = typer.Option("cli", help="Actor for audit"),
+    limit: int = typer.Option(500, min=1, max=5000),
+    shipper_code: str = typer.Option("S0143", help="Lizard shipper / sub-account code"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Export approved 蜴国际 packages to lizard upload Excel (P1B)."""
+    import os
+
+    from sellfox_shipping.carriers.lizard.commodity_dims import (
+        CommodityPageListDimsLookup,
+    )
+    from sellfox_shipping.lizard_batch import (
+        ExportLizardUploadService,
+        LizardExportRequest,
+    )
+
+    config = _load_config()
+    repo = _get_package_repository()
+    dims = CommodityPageListDimsLookup(
+        proxy_base_url=config["sellfox"]["proxy_base_url"],
+        proxy_account=config["sellfox"]["proxy_account"],
+        proxy_api_key=os.getenv("SELLFOX_PROXY_API_KEY", ""),
+    )
+    result = ExportLizardUploadService(repo, dims).export(
+        LizardExportRequest(
+            account_key=config["sellfox"]["proxy_account"],
+            actor=actor,
+            output_path=output,
+            limit=limit,
+            shipper_code=shipper_code,
+        )
+    )
+    _output(result.model_dump(mode="json"), json_output)
+    if result.exported == 0:
+        raise typer.Exit(1)
+
+
+@app.command("lizard-import-tracking")
+def lizard_import_tracking(
+    input_path: Path = typer.Option(..., "--input", "-i", help="Lizard return xlsx"),
+    actor: str = typer.Option("cli", help="Actor for audit"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Parse lizard tracking-return Excel and reconcile by package_sn (P1B)."""
+    from sellfox_shipping.lizard_batch import (
+        ImportLizardTrackingService,
+        LizardImportRequest,
+    )
+
+    config = _load_config()
+    result = ImportLizardTrackingService(_get_package_repository()).import_file(
+        LizardImportRequest(
+            account_key=config["sellfox"]["proxy_account"],
+            actor=actor,
+            input_path=input_path,
+        )
+    )
+    _output(result.model_dump(mode="json"), json_output)
+    if result.unmatched:
+        raise typer.Exit(2)
+
+
 @app.command()
 def orders(
     status: Optional[str] = typer.Option(None, help="Filter by package_status"),
