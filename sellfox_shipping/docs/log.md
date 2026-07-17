@@ -8,6 +8,11 @@ updated: 2026-07-17
 
 # sellfox_shipping — 变更日志
 
+## 2026-07-17 — 凭证迁入根 `.env`，冒烟脚本不再读文档密钥
+
+- 本地：`VITE_*` / `YIGLOBAL_*` 写入仓库根 `.env`（gitignore）
+- 模板：`sellfox_shipping/.env.example`；脚本仅 env
+
 ## 2026-07-17 — 蜴国际本仓 1 票真调（create/getLabel/cancel）
 
 - 脚本：`scripts/lizard_api_create_cancel_smoke.py`；全程 code=200 / sync=1 / cancel Success

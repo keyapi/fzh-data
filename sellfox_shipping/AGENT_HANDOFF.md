@@ -22,7 +22,7 @@ updated: 2026-07-17
 
 **阶段口径：** 旧「P1 骨架完成 / P2 FedEx」作废；现行阶段为 **P0 → P1A → P1B → P1C → P2+**。旧代码称 **legacy skeleton**。  
 **当前：** P1A/P1B 可用；**P1C**：Intent/CAS + 限流回读已落地；**VITE httpx spike + 测试真测 + 选型决策已完成**（不做 Karrio VITE connector）。默认 dry-run CLI。  
-**外部：** VITE → `vite-api/` + `carriers/vite/`；蜴国际 → `蜴国际-API/`（**#90 文档 + #91 负余额下单/面单/取消已验**）。Excel 仍生产默认。**暂不提 PR。**
+**外部：** VITE → `vite-api/` + `carriers/vite/`；蜴国际 → `yiglobal-api/`（**#90 文档 + #91 负余额下单/面单/取消已验**；原 `蜴国际-API/`）。Excel 仍生产默认。**暂不提 PR。**
 **限速：** 官方 1 rps；共享代理现约 0.5 rps → `sellfox.submit_min_interval_seconds` 默认 `2.0`。
 ## 架构
 
@@ -182,4 +182,4 @@ sellfox_shipping/
 | VITE 测试 | 根目录 `.env`：`VITE_API_KEY` / `VITE_API_BASE_URL`（变量名跨环境一致，只换值） |
 | GLS/FedEx | 后续验证，不在当前纵切 |
 
-真调前：复制 [`.env.example`](.env.example) 键到仓库根 `.env`。禁止把真实 Key 写入仓库或文档。赛狐导入/回写前必须用户确认范围。
+真调前：复制 [`.env.example`](.env.example) 键到仓库根 `.env`（gitignore）。冒烟脚本**只**读 env，不再从 Markdown 取密钥。禁止把真实 Key 写入仓库或文档。赛狐导入/回写前必须用户确认范围。

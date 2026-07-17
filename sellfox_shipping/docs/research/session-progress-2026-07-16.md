@@ -644,6 +644,13 @@ P1C VITE spike 技术退出门：**关闭**（真测 + 决策记录）。生产�
 
 本仓客户端契约与 PR#91 一致。追踪号/PDF 字段名需对照 `result` 键再钉死（本次解析为空但状态已成功）。Excel 仍生产默认。
 
+## 29. 2026-07-17 续：凭证迁入根目录 `.env`
+
+- **本地真实值：** 仓库根 `d:\Work\赛狐\Cursor\.env`（gitignore，不提交）
+- **模板：** `sellfox_shipping/.env.example`（`VITE_*` / `YIGLOBAL_*`）
+- 冒烟脚本去掉从 `vite-api` / `yiglobal-api` Markdown 读密钥的回退；只 `load_dotenv` + env
+- 同事去敏后的 API 文档继续保留；审批 Agent 回撤文档明文不影响本机真调
+
 ### 下一刀
 
 - 钉死 getLabel/create 的 tracking / label URL 字段名（对照 main api-reference 样例）
