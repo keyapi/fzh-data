@@ -321,11 +321,20 @@ def packages_submit_intent(
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
 ):
     """Submit one intent (default dry-run; real call needs explicit side-effect flag)."""
+    from sellfox_shipping.submission_rate_limit import SubmitRateLimiter
     from sellfox_shipping.submission_service import SubmissionService
 
+    config = _load_config()
     repo = _get_package_repository()
     client = _get_client() if (not dry_run and i_understand_side_effects) else None
-    result = SubmissionService(repo, client).submit_intent(
+    interval = float(
+        config.get("sellfox", {}).get("submit_min_interval_seconds", 2.0)
+    )
+    result = SubmissionService(
+        repo,
+        client,
+        rate_limiter=SubmitRateLimiter(interval),
+    ).submit_intent(
         intent_id=intent_id,
         actor=actor,
         dry_run=dry_run,

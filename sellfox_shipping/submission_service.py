@@ -1,4 +1,4 @@
-"""P1C: SubmissionIntent preparation, CAS, 1 rps submit, and readback VERIFIED."""
+"""P1C: SubmissionIntent preparation, CAS, rate-limited submit, readback VERIFIED."""
 
 from __future__ import annotations
 
@@ -157,7 +157,7 @@ class SubmissionService:
     ):
         self._repo = repository
         self._client = submit_client
-        self._rate_limiter = rate_limiter or SubmitRateLimiter(1.0)
+        self._rate_limiter = rate_limiter or SubmitRateLimiter(2.0)
 
     def recover_stale_in_flight(self, *, actor: str = "system") -> int:
         return self._repo.recover_stale_submission_in_flight(actor=actor)

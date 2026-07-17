@@ -173,7 +173,7 @@ uv run python -m sellfox_shipping.cli packages-sync \
 - [x] 蜴国际 `SpreadsheetCarrierAdapter` 骨架：导出 / 导入对账（CLI `lizard-export` / `lizard-import-tracking`）  
 - [x] ERPNext ZLMB# 重尺兜底（Lesson 17；级联 DimsLookup）  
 - [ ] 人工确认后的安全 `submitToPlatform`（订单级 `SubmissionIntent` / `SubmissionAttempt`、scope UNKNOWN 阻断、包裹聚合状态）  
-- [ ] VITE 测试环境 spike（Karrio custom connector vs 直接 httpx），不替换通途生产
+- [x] VITE httpx spike（mock）；Karrio custom connector 对比仍可选；不替换通途生产
 
 ### 明确暂不做（见综合文档 §11）
 
@@ -467,7 +467,7 @@ uv run python -m sellfox_shipping.cli packages-submit-intent \
 
 | 项 | 说明 |
 |----|------|
-| 限流 | `SubmitRateLimiter`（进程内，默认 ≥1s 间隔）；结果字段 `rate_limited_wait_ms` |
+| 限流 | `SubmitRateLimiter`（进程内）；结果字段 `rate_limited_wait_ms` |
 | 回读 | submit 成功后调 `packageDetail`；`logistics.trackNo` 与 intent 一致 → `VERIFIED` |
 | 不匹配 / 超时 | **保持 SUCCESS**，不标 UNKNOWN、不自动重发 |
 | CLI | `packages-verify-intent --intent-id N`（仅回读升格） |
@@ -478,6 +478,33 @@ uv run python -m sellfox_shipping.cli packages-submit-intent \
 uv run python -m sellfox_shipping.cli packages-verify-intent \
   --intent-id <N> --actor <谁> --json
 ```
+
+## 19. 2026-07-17 续：代理限速口径 + VITE httpx spike
+
+**用户澄清（限速两层）：**
+
+| 路径 | 限速 | 本仓库应对 |
+|------|------|------------|
+| 直连赛狐官方 OpenAPI | 最多 **1 rps** | `submit_min_interval_seconds: 1.0` |
+| 共享代理 `https://api.vilavi.cn/sellfox`（admin：[/sellfox/admin](https://api.vilavi.cn/sellfox/admin)） | 现约 **0.5 rps**（用户可在代理侧改） | 默认 **`2.0`**（≈0.5 rps）；与 `config.yaml` 中 `proxy_base_url` 一致 |
+
+进程内 `SubmitRateLimiter` **不能**替代多实例/多操作员协调；多客户端并发时仍依赖代理侧限速。
+
+**VITE spike（仅 httpx，mock）：**
+
+| 项 | 说明 |
+|----|------|
+| 模块 | `sellfox_shipping/carriers/vite/client.py` → `ViteGofoClient` |
+| 端点 | `POST /rate2/gofo`、`POST /shipment2/gofo`、`GET /shipment2/label/{orderId}` |
+| 凭证 | `VITE_API_KEY` / 可选 `VITE_API_BASE_URL`；**不入仓** |
+| 测试 | `tests/sellfox_shipping/test_vite_client.py`（`httpx.MockTransport` only） |
+| 不做 | 不替换通途生产；本切片不做 Karrio custom connector；无 live 打单除非用户给 key + 确认范围 |
+
+### 下一刀
+
+- （可选）真测 VITE test env：用户提供范围后再跑 rate（避免误下单）
+- Karrio custom connector 对比笔记（仍可选）
+- 多实例 submit 协调 / OIDC / 蜴国际 createOrder 验证后 adapter
 
 ## 14. 本文档维护约定
 
