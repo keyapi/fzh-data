@@ -18,12 +18,13 @@
 | 接口 | 状态 | 日期 | 备注 |
 |------|------|------|------|
 | getToken | ✅ 通过 | 2026-07-17 | 正常返回 access_token(JWT)，有效期 24h |
-| rates | ⚠️ 待重试 | 2026-07-17 | 提示"发货地址不存在"，需先备案地址 |
+| rates | ✅ 通过 | 2026-07-17 | 成功返回费用估算 |
 | ratesv2 | ✅ 通过 | 2026-07-17 | 成功返回多物流产品费用试算 |
-| createOrder | ⏳ 未测试 | — | 账户欠费 |
-| getLabel | ⏳ 未测试 | — | 需先创建订单 |
-| getBalance | ⏳ 未测试 | — | 账户欠费 |
-| getOrderInfo | ⏳ 未测试 | — | 需先有订单 |
+| createOrder | ✅ 通过 | 2026-07-17 | 成功创建订单，同步返回跟踪号及面单 PDF |
+| getLabel | ✅ 通过 | 2026-07-17 | sync_service_status=1, order_status=2(已预报) |
+| cancelOrder | ✅ 通过 | 2026-07-17 | 成功取消订单(code=200) |
+| getBalance | ⏳ 未测试 | — | — |
+| getOrderInfo | ⏳ 未测试 | — | — |
 
 ## API 调用流程
 

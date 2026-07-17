@@ -78,18 +78,26 @@
 
 ## 当前测试结论
 
-- ✅ `getToken` — 正常可用（access_token 为 JWT，有效期 24 小时）
-- ✅ `ratesv2` — 正常可用，成功返回多物流产品的费用估算（如 FedEx-Ground-J-TX 费用 $14.86）
-- ⏳ `rates` — 需要已备案的发件地址才能测试
-- ⏳ 其他接口 — 账户欠费暂未测试
+| 接口 | 状态 | 日期 | 备注 |
+|------|------|------|------|
+| `getToken` | ✅ 通过 | 2026-07-17 | 正常返回 access_token(JWT)，有效期 24h |
+| `rates` | ✅ 通过 | 2026-07-17 | 成功返回费用估算（FedEx-Ground-J-TX $14.86） |
+| `ratesv2` | ✅ 通过 | 2026-07-17 | 成功返回多物流产品费用对比 |
+| `createOrder` | ✅ 通过 | 2026-07-17 | 成功创建订单，同步返回跟踪号和面单 PDF |
+| `getLabel` | ✅ 通过 | 2026-07-17 | 成功获取面单信息（sync_service_status=1） |
+| `cancelOrder` | ✅ 通过 | 2026-07-17 | 成功取消已创建的订单 |
+| `getBalance` | ⏳ 未测试 | — | — |
+| `getOrderInfo` | ⏳ 未测试 | — | — |
+| `getPrintLabel` | ⏳ 未测试 | — | — |
 
 ## 注意事项
 
 1. **access_token 有效期 24 小时**，建议缓存重复使用。失效时会返回 `code: 401, msg: token过期`
 2. **发件地址必须已备案**，否则费用试算和创建订单会报错
 3. 创建订单后，面单和跟踪号是**异步返回**的，建议 30 秒轮询 `getLabel` 接口
-4. 物流产品代码 (`sm_code`) 可以在批量导入管理页右侧查看物流产品信息列表
-5. 计量单位：`weight_unit_type = 1` 表示 LBS/Inches，`2` 表示 KG/CM
+4. **reference_no 必须保持一致**：cancelOrder、getLabel 等接口的 `reference_no` 必须与 createOrder 时使用的值完全一致，否则返回 `"订单数据不存在"`
+5. 物流产品代码 (`sm_code`) 可以在批量导入管理页右侧查看物流产品信息列表
+6. 计量单位：`weight_unit_type = 1` 表示 LBS/Inches，`2` 表示 KG/CM
 
 ## 相关资源
 

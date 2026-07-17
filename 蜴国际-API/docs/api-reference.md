@@ -227,7 +227,12 @@ Authorization: {access_token}
 }
 ```
 
-**测试结果**: ⏳ 未测试（账户欠费）
+**测试结果**: ✅ 可用（2026-07-17 验证成功）
+- 成功创建订单，返回 order_code、费用明细、跟踪号及面单 PDF 链接
+- 示例订单号: `M6180202607171907132`
+- 跟踪号: `874517391911`
+- 面单文件: `http://hdm-labelpro.oss-cn-shenzhen.aliyuncs.com/HaoDuoMenService/.../labels/...pdf`
+- **⚠️ 注意**: `reference_no` 后续在 cancelOrder/getLabel 等接口中会被用作查询条件，**必须保存下来**，否则无法操作该订单
 
 ---
 
@@ -244,9 +249,12 @@ Authorization: {access_token}
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | order_code | string | 是 | 订单号 |
-| reference_no | string | 是 | 参考号 |
+| reference_no | string | 是 | **参考号（必须与创建订单时一致）** |
 
 **说明**: 仅在订单为草稿、已预报、已提交（未在预报执行中）状态时可取消。
+
+**测试结果**: ✅ 可用（2026-07-17 验证成功）
+- 成功取消已创建的订单，返回 `code: 200, msg: "Success"`
 
 ---
 
@@ -263,7 +271,7 @@ Authorization: {access_token}
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | order_code | string | 是 | 订单号 |
-| reference_no | string | 是 | 参考号 |
+| reference_no | string | 是 | **参考号（必须与创建订单时一致）** |
 
 **响应码说明**:
 - **200**: 面单已就绪，返回面单 URL 和跟踪号
@@ -273,6 +281,10 @@ Authorization: {access_token}
 - 同一个单号一秒钟限制查询一次
 - 关注 `sync_service_status` 和 `logistics_err` 字段判断是否预报失败
 - `sync_service_status = 2` 且 `logistics_err` 有值时表示预报失败
+
+**测试结果**: ✅ 可用（2026-07-17 验证成功）
+- 成功返回面单信息，`sync_service_status=1`（同步成功），`order_status=2`（已预报）
+- 面单 URL 和跟踪号与 createOrder 返回的一致
 
 ---
 
