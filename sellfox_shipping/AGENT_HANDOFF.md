@@ -21,7 +21,8 @@ updated: 2026-07-17
 4. 当前分支：`feature/sellfox-shipping-p1a-rest`
 
 **阶段口径：** 旧「P1 骨架完成 / P2 FedEx」作废；现行阶段为 **P0 → P1A → P1B → P1C → P2+**。旧代码称 **legacy skeleton**。  
-**当前：** P1A 完成；P1B 主路径（导出/导入/补录/Artifact/Batch MVP/Web）可用；**未进** P1C（`submitToPlatform`）。
+**当前：** P1A/P1B 可用；**已开 P1C**（提交状态聚合纯函数）；`submitToPlatform` 网络调用仍未做。  
+**外部：** VITE 见 main `vite-api/`（PR #88/#89）；蜴国际 API 同事测试中（无测试环境）。**暂不提 PR。**
 
 ## 架构
 
@@ -140,7 +141,7 @@ sellfox_shipping/
 |------|------|------|
 | P1A 后续 | OIDC；legacy 入口隔离 | 钉钉 OIDC 配置 |
 | P1B 收尾 | ~~Artifact~~ / ~~ShippingBatch MVP~~（`0004`+`0005`；`/lizard/artifacts`、`/lizard/batches`） | — |
-| P1C | 人工确认后赛狐回写；VITE 测试 spike | **干净测试包裹** + 用户确认范围（勿用已 has_shipped 的 38 单） |
+| P1C | 提交状态聚合已开；Intent/Attempt/安全回写/VITE spike 未完 | 干净测试包裹 + 用户确认范围；VITE 见 `vite-api/` |
 | P2+ | PDF/packlist、GLS Excel、经验证的 API connector | 各承运人资料 |
 
 详细决策与暂不做边界见综合调研文档。过程细节见 [session-progress](docs/research/session-progress-2026-07-16.md)。

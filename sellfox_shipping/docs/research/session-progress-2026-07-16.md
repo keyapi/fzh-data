@@ -383,6 +383,33 @@ git status
 - 若本地曾用 SHA-256 登记制品：清空 `data/artifacts/` 后重新导出/导入即可（算法已改 MD5）
 - `数据源/**`、`data/`、真实 Key 不入 Git
 
+## 15. 2026-07-17 续：外部依赖进展 + 进入 P1C
+
+### 用户同步（事实）
+
+| 项 | 状态 |
+|----|------|
+| 蜴国际 API | **有**；**无测试系统**；同事正在测。未接入本仓代码 |
+| VITE 文档 + 测试环境 | 已到位；同事测完并合入 **main**：PR **#88**、后续小变更 **#89** |
+| 本分支 PR | **暂不提 PR**，继续在 `feature/sellfox-shipping-p1a-rest` 开发 |
+| 查 VITE 资料 | `origin/main` 的 `vite-api/` 模块（或已合并的 PR 88 内容） |
+
+### 规划下一步（P1C）
+
+综合调研 §10 **P1C**：人工确认 + 安全 `submitToPlatform` + VITE spike。
+
+本切片已开：
+
+1. **纯函数** `aggregate_package_submission_state`（无 HTTP）— `submission_state.py` + `test_submission_state.py`
+2. 后续（未做）：`SubmissionIntent` / `SubmissionAttempt` 表、CAS、1 rps、mock 下的 `submitToPlatform`；**真实调用前必须用户确认测试包裹范围**
+3. VITE spike：对照 `vite-api/` 文档做 httpx adapter vs Karrio 比较；**不替换通途生产**；凭证不入仓
+
+### 仍禁止
+
+- 对历史 `has_shipped` 样例调用 `submitToPlatform`
+- 未确认范围的生产回写
+- 把 VITE/蜴国际凭证写入 Git
+
 ## 14. 本文档维护约定
 
 后续 Agent 完成一个可交付切片后，应：
