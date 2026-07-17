@@ -31,3 +31,13 @@ def test_load_dotenv_aliases_sellfox_api_key(tmp_path, monkeypatch) -> None:
     load_dotenv(env_file)
 
     assert os.environ["SELLFOX_PROXY_API_KEY"] == "sk-from-admin"
+
+
+def test_load_dotenv_overwrites_blank_existing_value(tmp_path, monkeypatch) -> None:
+    env_file = tmp_path / ".env"
+    env_file.write_text("SELLFOX_PROXY_API_KEY=from-file\n", encoding="utf-8")
+    monkeypatch.setenv("SELLFOX_PROXY_API_KEY", "   ")
+
+    load_dotenv(env_file)
+
+    assert os.environ["SELLFOX_PROXY_API_KEY"] == "from-file"

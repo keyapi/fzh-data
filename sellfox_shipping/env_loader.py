@@ -31,15 +31,20 @@ def load_dotenv(path: Path | None = None) -> Path | None:
             value = value[1:-1]
         value = value.strip()
         if key:
-            os.environ.setdefault(key, value)
+            _set_if_blank(key, value)
     _apply_key_aliases()
     return env_path
 
 
+def _set_if_blank(key: str, value: str) -> None:
+    """Set env var when missing or blank; never clobber a non-empty value."""
+    if not value:
+        return
+    if not (os.environ.get(key) or "").strip():
+        os.environ[key] = value
+
+
 def _apply_key_aliases() -> None:
     for source, target in _KEY_ALIASES:
-        if os.environ.get(target):
-            continue
         value = (os.environ.get(source) or "").strip()
-        if value:
-            os.environ[target] = value
+        _set_if_blank(target, value)
