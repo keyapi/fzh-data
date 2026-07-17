@@ -21,8 +21,8 @@ updated: 2026-07-17
 4. 当前分支：`feature/sellfox-shipping-p1a-rest`
 
 **阶段口径：** 旧「P1 骨架完成 / P2 FedEx」作废；现行阶段为 **P0 → P1A → P1B → P1C → P2+**。旧代码称 **legacy skeleton**。  
-**当前：** P1A/P1B 可用；**已开 P1C**（提交状态聚合纯函数）；`submitToPlatform` 网络调用仍未做。  
-**外部：** VITE 见 main `vite-api/`（PR #88/#89）；蜴国际 API 同事测试中（无测试环境）。**暂不提 PR。**
+**当前：** P1A/P1B 可用；**P1C 进行中**（Intent/CAS mock 已落地；默认 dry-run CLI）。  
+**外部：** VITE 见 main `vite-api/`（PR #88/#89）；蜴国际 API 同事测试中。**暂不提 PR。**
 
 ## 架构
 
@@ -56,6 +56,14 @@ uv run python -m sellfox_shipping.cli lizard-export -o out/lizard-upload.xlsx --
 # 可选 --batch-id：回写对应 ShippingBatch
 uv run python -m sellfox_shipping.cli lizard-import-tracking \
   -i path/to/return.xlsx --actor <operator-id> --batch-id <N> --json
+
+# P1C：准备 submitToPlatform intents（无 HTTP）
+uv run python -m sellfox_shipping.cli packages-prepare-submit \
+  --package-sn <packageSn> --actor <operator-id> --json
+
+# P1C：提交单个 intent（默认 dry-run）
+uv run python -m sellfox_shipping.cli packages-submit-intent \
+  --intent-id <N> --actor <operator-id> --json
 
 # Web Server（FastAPI；本地开发请加 --reload）
 uv run python -m sellfox_shipping.cli serve --host 127.0.0.1 --port 8401 --reload
@@ -127,13 +135,13 @@ sellfox_shipping/
 - REST：`GET /api/packages`、`GET /api/packages/{package_sn}`、`POST /api/packages/{package_sn}/review`
 - Web：`/packages` 审核；`/lizard/export` 下载上传表；`/lizard/import` 追踪号导入 + 对账报告（**仅本地**）
 - P1B：`lizard-export` / `lizard-import-tracking` CLI；重尺 pageList → ERPNext ZLMB；导入可覆盖 `trackNo==packageSn` 占位
-- Schema：Alembic `0001` … `0005_shipping_batches`
+- Schema：Alembic `0001` … `0006_submission_intents`
 
-**已验证：** `uv run pytest tests/sellfox_shipping -q`  
+**已验证：** `uv run pytest tests/sellfox_shipping -q` → **106 passed**
 
 **未调用：** `submitToPlatform`  
 
-**未实现：** 钉钉 OIDC、`submitToPlatform` 安全回写、PDF 生产拆分、完整 P1C 批次状态机
+**未实现：** 钉钉 OIDC、Web 提交确认 UI、1 rps、回读 VERIFIED、VITE spike、完整批次 P1C 状态机
 
 ## 待实现
 
@@ -141,7 +149,7 @@ sellfox_shipping/
 |------|------|------|
 | P1A 后续 | OIDC；legacy 入口隔离 | 钉钉 OIDC 配置 |
 | P1B 收尾 | ~~Artifact~~ / ~~ShippingBatch MVP~~（`0004`+`0005`；`/lizard/artifacts`、`/lizard/batches`） | — |
-| P1C | 提交状态聚合已开；Intent/Attempt/安全回写/VITE spike 未完 | 干净测试包裹 + 用户确认范围；VITE 见 `vite-api/` |
+| P1C | Intent/Attempt/CAS mock + CLI dry-run | 干净测试包裹 + `--i-understand-side-effects` 才真调 |
 | P2+ | PDF/packlist、GLS Excel、经验证的 API connector | 各承运人资料 |
 
 详细决策与暂不做边界见综合调研文档。过程细节见 [session-progress](docs/research/session-progress-2026-07-16.md)。

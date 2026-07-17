@@ -219,6 +219,16 @@ class SellfoxClient:
 
         return data.get("code") == 0
 
+    def submit_to_platform(self, wire_body: dict[str, object]) -> dict[str, object]:
+        """POST submitToPlatform with caller-built wire JSON (uses orderId, not amazonOrderId)."""
+        data = self._post(
+            self._proxy_path("/api/packageShip/submitToPlatform.json"),
+            wire_body,
+        )
+        if not isinstance(data, dict):
+            return {"code": -1, "raw": data}
+        return data
+
 
 # ── Response parsers ──────────────────────────────────────────────
 

@@ -81,5 +81,5 @@ def test_migration_head_includes_artifacts(tmp_path: Path) -> None:
             "SELECT name FROM sqlite_master WHERE type='table' "
             "AND name='shipping_artifacts'"
         ).scalar_one()
-    assert version == "0005_shipping_batches"
+    assert version == "0006_submission_intents"
     assert table == "shipping_artifacts"
