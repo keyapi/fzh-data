@@ -8,6 +8,14 @@ updated: 2026-07-17
 
 # sellfox_shipping — 变更日志
 
+## 2026-07-17 — P1B 蜴国际 Excel 导出/导入骨架
+
+- `carriers/lizard/`：上传表构建、追踪号返回解析、commodity pageList 重尺查找
+- Service：`ExportLizardUploadService` / `ImportLizardTrackingService`（对账报告 + AuditEvent）
+- CLI：`lizard-export`、`lizard-import-tracking`
+- 缺 carton dims 的包裹计入 skipped，不静默导出空重尺；ERPNext 兜底另开
+- 测试：`test_lizard_spreadsheet` + `test_lizard_batch`；全量 sellfox_shipping 通过
+
 ## 2026-07-17 — 重尺来自商品 pageList（非包裹）
 
 - 包裹 API 确无重尺；`/api/commodity/pageList.json` + `skus` + `isGroup=0` 返回 cartonWeight/LWH

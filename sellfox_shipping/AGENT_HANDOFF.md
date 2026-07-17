@@ -47,6 +47,12 @@ uv run python -m sellfox_shipping.cli packages-sync \
 # 本地包裹列表（只读本地库）
 uv run python -m sellfox_shipping.cli packages-list --status to_audit --json
 
+# P1B：蜴国际上传 Excel（仅 local_review=approved 且渠道含「蜴」；重尺走 commodity pageList）
+uv run python -m sellfox_shipping.cli lizard-export -o out/lizard-upload.xlsx --actor <operator-id> --json
+
+# P1B：解析蜴国际返回追踪号 Excel（按 package_sn 对账；尚未回写赛狐）
+uv run python -m sellfox_shipping.cli lizard-import-tracking -i path/to/return.xlsx --actor <operator-id> --json
+
 # REST（legacy Web 服务启动后）
 # GET /api/packages?status=to_audit&channel=蜴国际
 # GET /api/packages/{package_sn}
@@ -67,7 +73,8 @@ sellfox_shipping/
 ├── main.py               # 入口：FastAPI + FastMCP 组装（legacy）
 ├── app.py                # FastAPI app（legacy REST + Web UI）
 ├── mcp_tools.py          # FastMCP（legacy；根 uv 环境无 fastmcp，Docker 另装）
-├── cli.py                # Typer CLI；含 packages-sync
+├── cli.py                # Typer CLI；packages-sync / lizard-export / lizard-import-tracking
+├── lizard_batch.py       # P1B 导出/导入 Service ★
 ├── models.py             # Legacy 订单中心 Pydantic 模型
 ├── store.py              # Legacy sqlite3 订单库
 ├── sellfox_client.py     # 赛狐 gateway：Bearer、动态 account、包裹解析
@@ -75,7 +82,8 @@ sellfox_shipping/
 ├── package_repository.py # SQLAlchemy 多对多持久化 ★
 ├── package_service.py    # 包裹分页同步与数量对账 ★
 ├── config.yaml           # proxy、仓库、承运人配置
-├── carriers/             # 承运人抽象（尚未接 Excel/API 闭环）
+├── carriers/lizard/      # 蜴国际 Excel 模板与重尺查找 ★
+├── carriers/             # 其它承运人抽象（尚未接闭环）
 ├── templates/            # Web UI (Jinja2)
 ├── docs/
 │   ├── index.md
@@ -122,15 +130,15 @@ sellfox_shipping/
 
 **并行中（同事 Agent，未提交）：** VITE API / Karrio 调研 — 本分支暂不碰  
 
-**未实现：** 钉钉 OIDC、Artifact、蜴国际 Excel、安全回写状态机、审核动作（通过/驳回）写库
+**未实现：** 钉钉 OIDC、Artifact 批次表、ERPNext 重尺兜底、`submitToPlatform` 安全回写、追踪号写回本地/赛狐
 
 ## 待实现
 
 | 阶段 | 内容 | 依赖 |
 |------|------|------|
-| P0 | 蜴国际上传/返回/PDF 样例；赛狐提交与回读契约 | 业务真实样例、测试包裹 |
-| P1A 后续 | migration、OIDC、包裹查询/审核界面、AuditEvent | 钉钉 OIDC 配置 |
-| P1B | 蜴国际 Excel 导出/导入与对账 | P0 样例 |
+| P0 | 赛狐提交与回读契约；ERPNext 兜底（并行） | 测试包裹；Claude 调研 |
+| P1A 后续 | OIDC；legacy 入口隔离 | 钉钉 OIDC 配置 |
+| P1B 后续 | 导入结果落库追踪号；缺 dims 人工补录 UI | ERPNext 兜底可选 |
 | P1C | 人工确认后赛狐回写；VITE 测试 spike | 测试范围与账号 |
 | P2+ | PDF/packlist、GLS Excel、经验证的 API connector | 各承运人资料 |
 
