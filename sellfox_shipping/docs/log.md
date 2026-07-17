@@ -8,6 +8,11 @@ updated: 2026-07-17
 
 # sellfox_shipping — 变更日志
 
+## 2026-07-17 — VITE 测试环境 rate 真测
+
+- 仅 test-api：account + rate2/gofo（三组合法 service/channel）；未打单
+- 脚本：`scripts/vite_test_rate_smoke.py`；结果记入 session-progress §20
+
 ## 2026-07-17 — 限速对齐代理 + VITE httpx spike
 
 - 用户澄清：官方赛狐 API ≤1 rps；共享代理 `api.vilavi.cn/sellfox` 现约 0.5 rps（可调）

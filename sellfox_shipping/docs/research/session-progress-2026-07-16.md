@@ -506,6 +506,28 @@ uv run python -m sellfox_shipping.cli packages-verify-intent \
 - Karrio custom connector 对比笔记（仍可选）
 - 多实例 submit 协调 / OIDC / 蜴国际 createOrder 验证后 adapter
 
+## 20. 2026-07-17 续：VITE 测试环境 rate 真测
+
+**范围：** 仅 `test-api.vitedirect.com` 的 `GET /user/account` + `POST /rate2/gofo`；**未** createShipment / getLabel。  
+**脚本：** `sellfox_shipping/scripts/vite_test_rate_smoke.py`（key 来自 `VITE_API_KEY` 或 `vite-api` 测试文档；不打印 key）。
+
+| 项 | 结果 |
+|----|------|
+| 账户 | `200`，`balance≈2969.48`（虚拟余额；rate 不计费） |
+| GOFO_PX + PARCEL | OK，`totalAmount=3.8`，zone=3 |
+| GOFO_PARCEL + GFUS | OK，`totalAmount=3.35`，zone=1 |
+| GOFO_PARCEL + YT | OK，`totalAmount=3.35`，zone=1 |
+| GOFO_PX + GFUS | 仍无效（与 PR#88 报告一致） |
+| 文档示例 CA `91321` 发件 | 400「邮编不在配送范围」→ 改用报告内 MA `02478`→NH `03053` |
+
+**口径：** 测试价 ≠ 生产价；同事正用生产测 rate。本仓继续以测试环境验证契约，不切换通途生产。
+
+### 下一刀
+
+- （可选）测试环境 createShipment + getLabel（会动虚拟余额；须用户确认）
+- Karrio custom connector 对比笔记（仍可选）
+- 多实例 submit 协调 / OIDC / 蜴国际 createOrder 验证后 adapter
+
 ## 14. 本文档维护约定
 
 后续 Agent 完成一个可交付切片后，应：
