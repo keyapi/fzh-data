@@ -2,7 +2,8 @@
 # 仓库映射、承运人凭证、物流规则
 
 sellfox:
-  proxy_base_url: "http://localhost:8400"  # sellfox-api-proxy 地址
+  # Client appends /v1/{proxy_account}/... — do NOT include /v1/sellfox-main here
+  proxy_base_url: "https://api.vilavi.cn/sellfox"
   proxy_account: "sellfox-main"
 
 # ── 仓库地址配置 ──────────────────────────────────────────────────

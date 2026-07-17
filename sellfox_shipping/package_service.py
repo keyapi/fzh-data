@@ -138,6 +138,15 @@ class PackageSyncReport(BaseModel):
         return max(self.total_in_sellfox - self.input_count, 0)
 
 
+def _redact_gateway_error(exc: Exception) -> str:
+    """Keep status/type for operators; never echo response bodies or tokens."""
+    response = getattr(exc, "response", None)
+    status_code = getattr(response, "status_code", None)
+    if status_code is not None:
+        return f"{type(exc).__name__} http_{status_code}"
+    return type(exc).__name__
+
+
 class SyncPackagesService:
     """Fetch all package pages and persist every valid row with reconciliation."""
 
@@ -168,9 +177,11 @@ class SyncPackagesService:
                     page_no=page_no,
                     page_size=request.page_size,
                 )
-            except Exception:
+            except Exception as exc:
                 report.sync_status = "partial_failed"
-                report.run_errors.append(f"page {page_no}: gateway error")
+                report.run_errors.append(
+                    f"page {page_no}: gateway error ({_redact_gateway_error(exc)})"
+                )
                 report.finished_at = datetime.now(timezone.utc)
                 self._write_audit(request, report)
                 return report

@@ -27,6 +27,11 @@ from sellfox_shipping.store import Store
 
 BASE_DIR = Path(__file__).parent
 
+from sellfox_shipping.env_loader import load_dotenv
+
+load_dotenv()
+
+
 def _load_config() -> dict:
     path = BASE_DIR / "config.yaml"
     with open(path, encoding="utf-8") as f:
