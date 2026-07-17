@@ -25,7 +25,7 @@ generated: 2026-07-20 11:22
 | **pdf_to_md** | 6 | Index, Lesson, Log, Reference | [pdf_to_md/](pdf_to_md/) -> [pdf_to_md/docs/index.md](pdf_to_md/docs/index.md) |
 | **root** | 1 | Index | [root/](root/) -> [index.md](index.md) |
 | **sellfox-api-proxy** | 12 | Index, Lesson, Log, Research | [sellfox-api-proxy/](sellfox-api-proxy/) -> [sellfox-api-proxy/docs/index.md](sellfox-api-proxy/docs/index.md) |
-| **sellfox_shipping** | 21 | Guide, Handoff, Index, Log | [sellfox_shipping/](sellfox_shipping/) -> [sellfox_shipping/docs/index.md](sellfox_shipping/docs/index.md) |
+| **sellfox_shipping** | 22 | Guide, Handoff, Index, Log | [sellfox_shipping/](sellfox_shipping/) -> [sellfox_shipping/docs/index.md](sellfox_shipping/docs/index.md) |
 | **us_openai_api_proxy** | 9 | Explanation, Handoff, HowTo, Index | [us_openai_api_proxy/](us_openai_api_proxy/) -> [us_openai_api_proxy/docs/index.md](us_openai_api_proxy/docs/index.md) |
 | **vite-api** | 1 | Reference | [vite-api/](vite-api/) -> [vite-api/docs/test-guide/test-credentials.md](vite-api/docs/test-guide/test-credentials.md) |
 | **yiglobal-api** | 2 | Index, Log | [yiglobal-api/](yiglobal-api/) -> [yiglobal-api/docs/index.md](yiglobal-api/docs/index.md) |
@@ -196,6 +196,7 @@ generated: 2026-07-20 11:22
 | Reference | 赛狐尾程打单 — 新 Agent 开局指南 | [sellfox_shipping/docs/research/ONBOARDING.md](sellfox_shipping/docs/research/ONBOARDING.md) | 2026-07-16 |
 | Research | Artifact 存储与 ERPNext File 对照 | [sellfox_shipping/docs/research/artifact-vs-erpnext-file-2026-07-17.md](sellfox_shipping/docs/research/artifact-vs-erpnext-file-2026-07-17.md) | 2026-07-20 |
 | Research | Colab 通途/FedEx/蜴国际 notebook 遗产逻辑摘要 | [sellfox_shipping/docs/research/colab-notebook-legacy-summary-2026-07-17.md](sellfox_shipping/docs/research/colab-notebook-legacy-summary-2026-07-17.md) | 2026-07-20 |
+| Research | VITE spike 决策 — httpx adapter vs Karrio custom connector | [sellfox_shipping/docs/research/vite-httpx-vs-karrio-decision-2026-07-17.md](sellfox_shipping/docs/research/vite-httpx-vs-karrio-decision-2026-07-17.md) | 2026-07-20 |
 | Research | 蜴国际 API（PR #90）与现有 Excel 路径对照 | [sellfox_shipping/docs/research/lizard-api-vs-excel-2026-07-17.md](sellfox_shipping/docs/research/lizard-api-vs-excel-2026-07-17.md) | 2026-07-20 |
 | Research | 蜴国际 P0 样例列映射（2026-07-17） | [sellfox_shipping/docs/research/lizard-p0-column-mapping-2026-07-17.md](sellfox_shipping/docs/research/lizard-p0-column-mapping-2026-07-17.md) | 2026-07-20 |
 | Research | 赛狐原生蜴国际测试夹具（通途样例重映射） | [sellfox_shipping/docs/research/sellfox-native-lizard-fixture-2026-07-17.md](sellfox_shipping/docs/research/sellfox-native-lizard-fixture-2026-07-17.md) | 2026-07-20 |
