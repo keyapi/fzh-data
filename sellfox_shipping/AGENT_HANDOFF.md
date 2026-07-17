@@ -145,7 +145,9 @@ sellfox_shipping/
 
 **未调用：** `submitToPlatform`（默认 dry-run）  
 
-**未实现：** 钉钉 OIDC、submit 多实例协调、回读权威性生产验证、VITE live / Karrio 对比、蜴国际 API adapter
+**未实现：** 钉钉 OIDC、submit 多实例协调、回读权威性生产验证、VITE Karrio 对比、蜴国际 API adapter
+
+**VITE 测试环境真测：** account + rate（3 组合）+ createShipment + getLabel（1 票异步 OK）已验证；不替换通途生产。
 
 ## 待实现
 
