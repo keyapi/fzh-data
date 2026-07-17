@@ -30,6 +30,7 @@ def test_register_artifact_dedups_storage_by_content_hash(tmp_path: Path) -> Non
     )
     assert a1.id != a2.id
     assert a1.content_hash == a2.content_hash
+    assert len(a1.content_hash) == 32  # MD5 hex, same as ERPNext File
     assert a1.storage_relpath == a2.storage_relpath
     assert a1.file_name == "lizard-upload-A.xlsx"
     assert a2.file_name == "lizard-upload-B.xlsx"

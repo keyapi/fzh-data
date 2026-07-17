@@ -659,7 +659,7 @@ class PackageRepository:
             raise ValueError("actor is required")
         if not content:
             raise ValueError("content is empty")
-        digest = hashlib.sha256(content).hexdigest()
+        digest = hashlib.md5(content, usedforsecurity=False).hexdigest()
         mime = mime_type or _guess_mime(name)
         with self._session_factory.begin() as session:
             account = self._get_or_create_account(session, account_key)
@@ -702,7 +702,7 @@ class PackageRepository:
             action="artifacts.register",
             entity_type="artifact",
             entity_id=str(artifact_id),
-            summary=f"{kind_s} {name} sha256={digest[:12]}…",
+            summary=f"{kind_s} {name} md5={digest[:12]}…",
         )
         record = self.get_artifact(artifact_id)
         assert record is not None

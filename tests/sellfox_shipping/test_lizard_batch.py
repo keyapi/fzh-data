@@ -78,13 +78,14 @@ def test_export_service_writes_xlsx_and_audit(tmp_path: Path) -> None:
     assert result.skipped == 0
     assert result.artifact_id is not None
     assert Path(result.output_path).is_file()
-    assert len(result.file_sha256) == 64
+    assert len(result.file_md5) == 32
     df = pd.read_excel(out)
     assert df.iloc[0]["参考编号/Reference Code"] == "P2ATEST001"
     arts = repo.list_artifacts(account_key="sellfox-main", kind="lizard_upload_export")
     assert len(arts) == 1
     assert arts[0].id == result.artifact_id
-    assert arts[0].content_hash == result.file_sha256
+    assert arts[0].content_hash == result.file_md5
+    assert len(arts[0].content_hash) == 32
     events = repo.list_audit_events(limit=10)
     assert any(e.action == "lizard.upload_export" for e in events)
     assert any(e.action == "artifacts.register" for e in events)

@@ -14,7 +14,7 @@ updated: 2026-07-17
 
 - Alembic `0005`：`shipping_batches` / `shipping_batch_packages`
 - 导出创建批次；导入可带 `batch_id` 回写（`exported` → `tracking_imported`）
-- Artifact 磁盘：`data/artifacts/private/files/{stem}_{hash8}{ext}`（SHA-256 去重）
+- Artifact 磁盘：`data/artifacts/private/files/{stem}_{hash8}{ext}`（**MD5** 去重，对齐 ERPNext File）
 - Web：`/lizard/batches`、详情；导入可选批次 ID；CLI `--batch-id`
 - 测试：`test_shipping_batch` + Web 批次页；全套 **72 passed**
 
@@ -25,7 +25,13 @@ updated: 2026-07-17
 3. `/lizard/import` 填同一 `batch_id` 导入返回表 → 本地落库 + 批次状态更新
 4. `/lizard/artifacts` 看文件；`/lizard/batches` 看批次
 
-详见 `docs/research/session-progress-2026-07-16.md` §13；hash 取舍见 `artifact-vs-erpnext-file-2026-07-17.md`。
+详见 `docs/research/session-progress-2026-07-16.md` §13；EN 对照见 `artifact-vs-erpnext-file-2026-07-17.md`。
+
+## 2026-07-17 — Artifact content_hash 改为 MD5（对齐 ERPNext）
+
+- `register_artifact` / 导出 `file_md5`：`hashlib.md5`（32 hex）
+- 旧本地 SHA-256 制品不自动迁移；测试库可清空 `data/artifacts/`
+- 文档与制品页文案同步
 
 ## 2026-07-17 — Artifact 文件制品表（content_hash 去重）
 
