@@ -25,6 +25,12 @@ class CountingSubmitClient:
         self.calls += 1
         return {"code": 0, "wire": wire_body}
 
+    def fetch_package_detail(self, package_sn: str) -> dict | None:
+        return {
+            "packageSn": package_sn,
+            "logistics": {"trackNo": "TN-SUBMIT-1", "channelName": "FedEx"},
+        }
+
 
 def _seed_package(repo: PackageRepository, sn: str = "P2ASUBMIT1") -> None:
     repo.upsert(
@@ -133,7 +139,8 @@ def test_successful_submit_calls_http_once(tmp_path: Path) -> None:
         allow_side_effects=True,
     )
     assert client.calls == 1
-    assert result.intent_status == "SUCCESS"
+    assert result.intent_status == "VERIFIED"
+    assert result.verified is True
     assert result.http_called is True
 
 

@@ -334,6 +334,23 @@ def packages_submit_intent(
     _output(result.__dict__, json_output)
 
 
+@app.command("packages-verify-intent")
+def packages_verify_intent(
+    intent_id: int = typer.Option(..., "--intent-id", help="SubmissionIntent id"),
+    actor: str = typer.Option("cli", help="Actor for audit"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Promote SUCCESS → VERIFIED via packageDetail readback (no submit)."""
+    from sellfox_shipping.submission_service import SubmissionService
+
+    repo = _get_package_repository()
+    result = SubmissionService(repo, _get_client()).verify_intent_from_readback(
+        intent_id=intent_id,
+        actor=actor,
+    )
+    _output(result.__dict__, json_output)
+
+
 @app.command()
 def orders(
     status: Optional[str] = typer.Option(None, help="Filter by package_status"),

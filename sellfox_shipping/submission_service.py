@@ -1,19 +1,14 @@
-"""P1C: SubmissionIntent preparation, CAS, and mock-safe submitToPlatform."""
+"""P1C: SubmissionIntent preparation, CAS, 1 rps submit, and readback VERIFIED."""
 
 from __future__ import annotations
 
 import hashlib
 import json
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from typing import Protocol
 
-from sellfox_shipping.package_models import SellfoxPackageRecord
-from sellfox_shipping.package_repository import (
-    PackageRepository,
-    SubmissionAttemptRecord,
-    SubmissionIntentRecord,
-)
+from sellfox_shipping.package_repository import PackageRepository
+from sellfox_shipping.submission_rate_limit import SubmitRateLimiter
 from sellfox_shipping.submission_state import aggregate_package_submission_state
 
 
@@ -65,11 +60,16 @@ class SubmitIntentResult:
     package_submission_state: str
     http_called: bool
     dry_run: bool
+    verified: bool = False
+    rate_limited_wait_ms: int = 0
 
 
 class SellfoxSubmitClient(Protocol):
     def submit_to_platform(self, wire_body: dict[str, object]) -> dict[str, object]:
         """POST submitToPlatform; returns parsed JSON body."""
+
+    def fetch_package_detail(self, package_sn: str) -> dict | None:
+        """POST packageDetail; returns data dict or None."""
 
 
 def build_canonical_request(
@@ -86,7 +86,10 @@ def build_canonical_request(
     """Return canonical request, JSON snapshot, and SHA-256 request_hash."""
     sorted_items = sorted(
         items,
-        key=lambda row: (str(row.get("order_item_id", "")), int(row.get("quantity", 0))),
+        key=lambda row: (
+            str(row.get("order_item_id", "")),
+            int(row.get("quantity", 0)),
+        ),
     )
     req = CanonicalSubmitRequest(
         sellfox_account_id=account_key,
@@ -128,14 +131,33 @@ def canonical_to_wire_body(req: CanonicalSubmitRequest) -> dict[str, object]:
     return body
 
 
+def tracking_matches_detail(detail: dict, expected_track_no: str) -> bool:
+    """Conservative match: logistics.trackNo equals expected (non-empty)."""
+    expected = (expected_track_no or "").strip()
+    if not expected:
+        return False
+    logistics = detail.get("logistics") if isinstance(detail, dict) else None
+    if not isinstance(logistics, dict):
+        logistics = {}
+    actual = str(
+        logistics.get("trackNo")
+        or logistics.get("trackingNumber")
+        or detail.get("trackNo")
+        or ""
+    ).strip()
+    return bool(actual) and actual == expected
+
+
 class SubmissionService:
     def __init__(
         self,
         repository: PackageRepository,
         submit_client: SellfoxSubmitClient | None = None,
+        rate_limiter: SubmitRateLimiter | None = None,
     ):
         self._repo = repository
         self._client = submit_client
+        self._rate_limiter = rate_limiter or SubmitRateLimiter(1.0)
 
     def recover_stale_in_flight(self, *, actor: str = "system") -> int:
         return self._repo.recover_stale_submission_in_flight(actor=actor)
@@ -220,6 +242,7 @@ class SubmissionService:
         actor: str,
         dry_run: bool = True,
         allow_side_effects: bool = False,
+        verify_readback: bool = True,
     ) -> SubmitIntentResult:
         intent = self._repo.get_submission_intent(intent_id)
         if intent is None:
@@ -257,7 +280,6 @@ class SubmissionService:
         if not cas:
             raise SubmissionCasError("CAS to IN_FLIGHT failed")
 
-        http_called = False
         if self._client is None:
             raise RuntimeError("submit client required for side effects")
         canonical = json.loads(intent.canonical_request)
@@ -272,6 +294,11 @@ class SubmissionService:
             items=list(canonical["items"]),
         )
         wire = canonical_to_wire_body(req)
+
+        wait_s = self._rate_limiter.wait()
+        wait_ms = int(round(wait_s * 1000))
+        http_called = False
+        verified = False
         try:
             http_called = True
             resp = self._client.submit_to_platform(wire)
@@ -284,6 +311,12 @@ class SubmissionService:
                     http_status=200,
                     http_summary=json.dumps(resp, ensure_ascii=False)[:2000],
                 )
+                if verify_readback:
+                    verified = self._try_verify_after_success(
+                        intent_id=intent_id,
+                        package_db_id=intent.package_id,
+                        expected_track_no=req.tracking_number,
+                    )
             else:
                 self._repo.mark_submission_attempt_result(
                     attempt_id=attempt.id,
@@ -313,4 +346,89 @@ class SubmissionService:
             package_submission_state=aggregate_package_submission_state(states),
             http_called=http_called,
             dry_run=False,
+            verified=verified or updated.status == "VERIFIED",
+            rate_limited_wait_ms=wait_ms,
         )
+
+    def verify_intent_from_readback(
+        self,
+        *,
+        intent_id: int,
+        actor: str,
+    ) -> SubmitIntentResult:
+        """Promote SUCCESS → VERIFIED via packageDetail when trackNo matches.
+
+        Readback failure or mismatch leaves SUCCESS; does not mark UNKNOWN.
+        """
+        intent = self._repo.get_submission_intent(intent_id)
+        if intent is None:
+            raise LookupError(f"Intent {intent_id} not found")
+        if intent.status == "VERIFIED":
+            states = self._repo.list_intent_statuses_for_package(intent.package_id)
+            return SubmitIntentResult(
+                intent_id=intent_id,
+                attempt_id=0,
+                intent_status="VERIFIED",
+                attempt_status="",
+                package_submission_state=aggregate_package_submission_state(states),
+                http_called=False,
+                dry_run=False,
+                verified=True,
+            )
+        if intent.status != "SUCCESS":
+            raise RuntimeError(
+                f"verify requires SUCCESS intent, got {intent.status}"
+            )
+        canonical = json.loads(intent.canonical_request)
+        expected = str(canonical.get("tracking_number") or "")
+        verified = self._try_verify_after_success(
+            intent_id=intent_id,
+            package_db_id=intent.package_id,
+            expected_track_no=expected,
+        )
+        updated = self._repo.get_submission_intent(intent_id)
+        assert updated is not None
+        states = self._repo.list_intent_statuses_for_package(updated.package_id)
+        self._repo.append_audit_event(
+            actor=actor,
+            action="submission.verify_readback",
+            entity_type="intent",
+            entity_id=str(intent_id),
+            summary=f"verified={verified}",
+        )
+        return SubmitIntentResult(
+            intent_id=intent_id,
+            attempt_id=0,
+            intent_status=updated.status,
+            attempt_status="",
+            package_submission_state=aggregate_package_submission_state(states),
+            http_called=True,
+            dry_run=False,
+            verified=verified,
+        )
+
+    def _try_verify_after_success(
+        self,
+        *,
+        intent_id: int,
+        package_db_id: int,
+        expected_track_no: str,
+    ) -> bool:
+        if self._client is None:
+            return False
+        package_sn = self._repo.get_package_sn_by_db_id(package_db_id)
+        if not package_sn:
+            return False
+        try:
+            detail = self._client.fetch_package_detail(package_sn)
+        except Exception:  # noqa: BLE001 — leave SUCCESS
+            return False
+        if not isinstance(detail, dict):
+            return False
+        if not tracking_matches_detail(detail, expected_track_no):
+            return False
+        self._repo.mark_submission_intent_verified(
+            intent_id=intent_id,
+            summary=f"packageDetail trackNo matched {expected_track_no}",
+        )
+        return True
