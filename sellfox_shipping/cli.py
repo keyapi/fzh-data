@@ -251,13 +251,26 @@ def serve(
     host: str = typer.Option("0.0.0.0", help="Bind host"),
     port: int = typer.Option(8401, help="Bind port"),
 ):
-    """Start the web server (FastAPI + FastMCP)."""
+    """Start the web server (FastAPI; FastMCP mounted when installed)."""
     import uvicorn
+
     typer.echo(f"Starting sellfox-shipping on {host}:{port}")
-    typer.echo(f"  Web UI:  http://{host}:{port}")
+    typer.echo(f"  Web UI:  http://{host}:{port}/packages")
     typer.echo(f"  REST:    http://{host}:{port}/api/")
-    typer.echo(f"  MCP:     http://{host}:{port}/mcp")
-    uvicorn.run("sellfox_shipping.main:app", host=host, port=port, reload=True)
+    try:
+        import fastmcp  # noqa: F401
+    except ImportError:
+        typer.echo("  MCP:     disabled (fastmcp not installed)")
+    else:
+        typer.echo(f"  MCP:     http://{host}:{port}/mcp")
+    # log_level=info: startup line is the only reliable ready signal (Lesson 59)
+    uvicorn.run(
+        "sellfox_shipping.main:app",
+        host=host,
+        port=port,
+        reload=False,
+        log_level="info",
+    )
 
 
 if __name__ == "__main__":

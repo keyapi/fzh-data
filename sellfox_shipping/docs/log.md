@@ -8,6 +8,13 @@ updated: 2026-07-16
 
 # sellfox_shipping — 变更日志
 
+## 2026-07-17 — serve 不依赖 fastmcp
+
+- `main.py` 将 FastMCP 改为可选挂载；未安装时仍可启动 Web/REST
+- `serve` 关闭 reload、使用 `log_level=info`；无 fastmcp 时提示 MCP disabled
+- 实测：`uv run python -m sellfox_shipping.cli serve` 后 `GET /packages` → 200
+- 测试：`test_serve_without_fastmcp.py`；全量 36 passed
+
 ## 2026-07-16 — P1A Alembic schema migration
 
 - 新增 `schema.upgrade_schema()` + Alembic `0001_package_schema`

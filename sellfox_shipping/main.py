@@ -1,10 +1,17 @@
-"""Entry point — wires FastAPI app + FastMCP together, starts uvicorn."""
+"""Entry point — wires FastAPI app + optional FastMCP, starts uvicorn."""
+
+from __future__ import annotations
 
 from sellfox_shipping.app import app, mount_mcp, store
-from sellfox_shipping.mcp_tools import init_mcp, mcp
 
-# Wire MCP tools to shared store
-init_mcp(store)
+mcp_enabled = False
 
-# Mount FastMCP ASGI app under /mcp
-mount_mcp(mcp.asgi_app())
+try:
+    from sellfox_shipping.mcp_tools import init_mcp, mcp
+except ImportError:
+    # FastMCP is optional for P1A Web/REST; Docker may install it separately.
+    pass
+else:
+    init_mcp(store)
+    mount_mcp(mcp.asgi_app())
+    mcp_enabled = True
