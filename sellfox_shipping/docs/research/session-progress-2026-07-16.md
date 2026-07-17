@@ -528,6 +528,26 @@ uv run python -m sellfox_shipping.cli packages-verify-intent \
 - Karrio custom connector 对比笔记（仍可选）
 - 多实例 submit 协调 / OIDC / 蜴国际 createOrder 验证后 adapter
 
+## 21. 2026-07-17 续：VITE 测试环境 createShipment + getLabel
+
+**范围：** 仅 test-api；**1** 票 `GOFO_PX`+`PARCEL`（MA `02478` → NH `03053`）。  
+**脚本：** `scripts/vite_test_shipment_label_smoke.py`（可 `--order-id` 只轮询）。
+
+| 步骤 | 结果 |
+|------|------|
+| createShipment | OK；`status=pending`；`totalAmount=3.8`；余额 2978.14→2974.34 |
+| getLabel（45s 内） | 一直 `pending`（空 tracking / 无 url） |
+| getLabel（事后轮询） | **OK**；`tracking=GF60061989217965245700`；PDF url 在 `storage-develop.vitedirect.com` |
+| 结论 | 创建同步成功；标签异步，**轮询宜 ≥2–3 分钟**，不要 45s 就判失败 |
+
+未测 cancel。同账户余额在轮询窗口内曾继续下降（疑同事并用测试账户），与本单扣费可分开看。
+
+### 下一刀
+
+- Karrio custom connector 对比笔记（仍可选）
+- 多实例 submit 协调 / OIDC / 蜴国际 createOrder 验证后 adapter
+- （可选）测试环境 cancel label
+
 ## 14. 本文档维护约定
 
 后续 Agent 完成一个可交付切片后，应：

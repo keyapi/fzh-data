@@ -8,6 +8,12 @@ updated: 2026-07-17
 
 # sellfox_shipping — 变更日志
 
+## 2026-07-17 — VITE 测试环境 createShipment + getLabel
+
+- 1 票 GOFO_PX/PARCEL：创建 OK（pending→扣 $3.8）；getLabel 异步约 1–3 分钟后 OK
+- 脚本：`scripts/vite_test_shipment_label_smoke.py`；轮询超时建议 ≥180s
+- 详见 session-progress §21
+
 ## 2026-07-17 — VITE 测试环境 rate 真测
 
 - 仅 test-api：account + rate2/gofo（三组合法 service/channel）；未打单
