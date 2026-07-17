@@ -357,27 +357,35 @@ def rules(
 def serve(
     host: str = typer.Option("0.0.0.0", help="Bind host"),
     port: int = typer.Option(8401, help="Bind port"),
+    reload: bool = typer.Option(
+        False,
+        "--reload",
+        help="Auto-reload on code change (local dev only; production keep off)",
+    ),
 ):
     """Start the web server (FastAPI; FastMCP mounted when installed)."""
     import uvicorn
 
     typer.echo(f"Starting sellfox-shipping on {host}:{port}")
-    typer.echo(f"  Web UI:  http://{host}:{port}/packages")
-    typer.echo(f"  Export:  http://{host}:{port}/lizard/export")
-    typer.echo(f"  Import:  http://{host}:{port}/lizard/import")
-    typer.echo(f"  REST:    http://{host}:{port}/api/")
+    typer.echo(f"  Web UI:     http://{host}:{port}/packages")
+    typer.echo(f"  Export:     http://{host}:{port}/lizard/export")
+    typer.echo(f"  Import:     http://{host}:{port}/lizard/import")
+    typer.echo(f"  Artifacts:  http://{host}:{port}/lizard/artifacts")
+    typer.echo(f"  REST:       http://{host}:{port}/api/")
+    if reload:
+        typer.echo("  Reload:     ON (code changes auto-restart)")
     try:
         import fastmcp  # noqa: F401
     except ImportError:
-        typer.echo("  MCP:     disabled (fastmcp not installed)")
+        typer.echo("  MCP:        disabled (fastmcp not installed)")
     else:
-        typer.echo(f"  MCP:     http://{host}:{port}/mcp")
+        typer.echo(f"  MCP:        http://{host}:{port}/mcp")
     # log_level=info: startup line is the only reliable ready signal (Lesson 59)
     uvicorn.run(
         "sellfox_shipping.main:app",
         host=host,
         port=port,
-        reload=False,
+        reload=reload,
         log_level="info",
     )
 
