@@ -26,6 +26,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
+from sellfox_shipping.carriers.lizard.dims import CartonDims
 from sellfox_shipping.package_models import (
     AuditEventRecord,
     PackageListItem,
@@ -180,6 +181,41 @@ class AuditEventRow(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.current_timestamp()
     )
+
+
+class CartonOverrideRow(Base):
+    __tablename__ = "shipping_carton_overrides"
+    __table_args__ = (
+        UniqueConstraint(
+            "account_id",
+            "commodity_sku",
+            name="uq_shipping_carton_override_account_sku",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    account_id: Mapped[int] = mapped_column(
+        ForeignKey("shipping_accounts.id", ondelete="CASCADE")
+    )
+    commodity_sku: Mapped[str] = mapped_column(String)
+    weight_kg: Mapped[float] = mapped_column(Float, default=0)
+    length_cm: Mapped[float] = mapped_column(Float, default=0)
+    width_cm: Mapped[float] = mapped_column(Float, default=0)
+    height_cm: Mapped[float] = mapped_column(Float, default=0)
+    note: Mapped[str] = mapped_column(String, default="")
+    updated_by: Mapped[str] = mapped_column(String, default="")
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.current_timestamp()
+    )
+
+
+@dataclass(frozen=True)
+class CartonOverrideRecord:
+    account_key: str
+    commodity_sku: str
+    dims: CartonDims
+    note: str = ""
+    updated_by: str = ""
 
 
 @dataclass(frozen=True)
@@ -395,6 +431,90 @@ class PackageRepository:
                 .order_by(PackageItemRow.order_item_id)
             ).all()
             return self._to_record(account_key, package, order_rows, item_rows)
+
+    def get_carton_override(
+        self, account_key: str, commodity_sku: str
+    ) -> CartonOverrideRecord | None:
+        sku = (commodity_sku or "").strip()
+        if not sku:
+            return None
+        with self._session_factory() as session:
+            row = session.scalar(
+                select(CartonOverrideRow)
+                .join(
+                    ShippingAccountRow,
+                    ShippingAccountRow.id == CartonOverrideRow.account_id,
+                )
+                .where(
+                    ShippingAccountRow.account_key == account_key,
+                    CartonOverrideRow.commodity_sku == sku,
+                )
+            )
+            if row is None:
+                return None
+            return CartonOverrideRecord(
+                account_key=account_key,
+                commodity_sku=row.commodity_sku,
+                dims=CartonDims(
+                    weight_kg=float(row.weight_kg or 0),
+                    length_cm=float(row.length_cm or 0),
+                    width_cm=float(row.width_cm or 0),
+                    height_cm=float(row.height_cm or 0),
+                ),
+                note=row.note or "",
+                updated_by=row.updated_by or "",
+            )
+
+    def set_carton_override(
+        self,
+        *,
+        account_key: str,
+        commodity_sku: str,
+        dims: CartonDims,
+        actor: str,
+        note: str = "",
+    ) -> CartonOverrideRecord:
+        sku = (commodity_sku or "").strip()
+        if not sku:
+            raise ValueError("commodity_sku is required")
+        if not dims.is_complete:
+            raise ValueError("dims must be complete (weight and L/W/H > 0)")
+        actor_name = (actor or "").strip()
+        if not actor_name:
+            raise ValueError("actor is required")
+        with self._session_factory.begin() as session:
+            account = self._get_or_create_account(session, account_key)
+            row = session.scalar(
+                select(CartonOverrideRow).where(
+                    CartonOverrideRow.account_id == account.id,
+                    CartonOverrideRow.commodity_sku == sku,
+                )
+            )
+            if row is None:
+                row = CartonOverrideRow(
+                    account_id=account.id,
+                    commodity_sku=sku,
+                )
+                session.add(row)
+            row.weight_kg = dims.weight_kg
+            row.length_cm = dims.length_cm
+            row.width_cm = dims.width_cm
+            row.height_cm = dims.height_cm
+            row.note = note or ""
+            row.updated_by = actor_name
+            row.updated_at = datetime.now(timezone.utc)
+        self.append_audit_event(
+            actor=actor_name,
+            action="lizard.carton_override",
+            entity_type="commodity_sku",
+            entity_id=sku,
+            summary=(
+                f"{dims.weight_kg}kg {dims.length_cm}x{dims.width_cm}x{dims.height_cm}cm"
+            ),
+        )
+        record = self.get_carton_override(account_key, sku)
+        assert record is not None
+        return record
 
     def list_packages(
         self,

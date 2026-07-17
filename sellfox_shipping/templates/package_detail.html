@@ -112,7 +112,7 @@
             <h2>商品行 ({{ package.items|length }})</h2>
             <table>
                 <thead>
-                    <tr><th>订单号</th><th>行 ID</th><th>Seller SKU</th><th>数量</th><th>变体</th></tr>
+                    <tr><th>订单号</th><th>行 ID</th><th>Seller SKU</th><th>商品 SKU</th><th>数量</th><th>变体</th></tr>
                 </thead>
                 <tbody>
                     {% for item in package.items %}
@@ -120,14 +120,76 @@
                         <td>{{ item.external_order_id }}</td>
                         <td>{{ item.order_item_id }}</td>
                         <td>{{ item.seller_sku or '—' }}</td>
+                        <td>{{ item.commodity_sku or '—' }}</td>
                         <td>{{ item.quantity }}</td>
                         <td>{{ item.variation or '—' }}</td>
                     </tr>
                     {% else %}
-                    <tr><td colspan="5">无商品行</td></tr>
+                    <tr><td colspan="6">无商品行</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
+        </div>
+
+        <div class="panel">
+            <h2>重尺补录（导出缺 carton 时）</h2>
+            <p style="font-size:13px;color:#666;margin-bottom:12px;line-height:1.5;">
+                优先于赛狐 pageList / ERPNext。单位：重量 <strong>kg</strong>，长宽高 <strong>cm</strong>。
+                补录后可再走「导出」页。
+            </p>
+            {% for row in carton_rows or [] %}
+            <form method="post" action="/packages/{{ package.package_sn }}/carton-override"
+                  style="border:1px solid #eee;border-radius:6px;padding:12px;margin-bottom:12px;">
+                <div class="info-row" style="margin-bottom:8px;">
+                    <div class="info-item">
+                        <div class="label">商品 SKU</div>
+                        <div class="value"><code>{{ row.commodity_sku }}</code></div>
+                        <input type="hidden" name="commodity_sku" value="{{ row.commodity_sku }}" />
+                    </div>
+                    <div class="info-item">
+                        <div class="label">当前来源</div>
+                        <div class="value">
+                            {% if row.source == 'override' %}本地补录
+                            {% elif row.source == 'cascade' %}pageList/ERPNext
+                            {% else %}<span style="color:#721c24;">缺失</span>{% endif %}
+                            {% if row.resolved %}
+                            · {{ row.resolved.weight_kg }}kg
+                              {{ row.resolved.length_cm }}×{{ row.resolved.width_cm }}×{{ row.resolved.height_cm }}
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                <div class="info-row" style="align-items:flex-end;">
+                    <div class="info-item"><div class="label">重量 kg</div>
+                        <input name="weight_kg" type="number" step="0.01" min="0.01" required
+                               value="{{ row.override.dims.weight_kg if row.override else (row.resolved.weight_kg if row.resolved else '') }}"
+                               style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;width:100%;" /></div>
+                    <div class="info-item"><div class="label">长 cm</div>
+                        <input name="length_cm" type="number" step="0.1" min="0.1" required
+                               value="{{ row.override.dims.length_cm if row.override else (row.resolved.length_cm if row.resolved else '') }}"
+                               style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;width:100%;" /></div>
+                    <div class="info-item"><div class="label">宽 cm</div>
+                        <input name="width_cm" type="number" step="0.1" min="0.1" required
+                               value="{{ row.override.dims.width_cm if row.override else (row.resolved.width_cm if row.resolved else '') }}"
+                               style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;width:100%;" /></div>
+                    <div class="info-item"><div class="label">高 cm</div>
+                        <input name="height_cm" type="number" step="0.1" min="0.1" required
+                               value="{{ row.override.dims.height_cm if row.override else (row.resolved.height_cm if row.resolved else '') }}"
+                               style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;width:100%;" /></div>
+                    <div class="info-item"><div class="label">操作者</div>
+                        <input name="actor" value="web-user"
+                               style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;width:100%;" /></div>
+                    <div class="info-item"><div class="label">备注</div>
+                        <input name="note" placeholder="可选"
+                               style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;width:100%;" /></div>
+                    <div class="info-item">
+                        <button type="submit" style="padding:8px 14px;background:#1a1a2e;color:#fff;border:none;border-radius:4px;cursor:pointer;">保存补录</button>
+                    </div>
+                </div>
+            </form>
+            {% else %}
+            <p style="color:#999;">无商品 SKU，无法补录。</p>
+            {% endfor %}
         </div>
     </div>
 </body>

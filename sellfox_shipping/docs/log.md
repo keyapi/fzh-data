@@ -8,6 +8,13 @@ updated: 2026-07-17
 
 # sellfox_shipping — 变更日志
 
+## 2026-07-17 — 缺 dims 人工补录
+
+- 表 `shipping_carton_overrides`（Alembic `0003`）；按 commodity_sku 覆盖
+- 查找链：本地补录 → pageList → ERPNext ZLMB
+- 包裹详情页「重尺补录」表单；审计 `lizard.carton_override`
+- 测试：`test_carton_override` + UI 保存
+
 ## 2026-07-17 — Web：蜴国际导出 / 导入对账页
 
 - `/lizard/export`：导出 approved + 渠道含「蜴」→ 下载 xlsx（同 CLI `lizard-export`）

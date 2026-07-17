@@ -18,7 +18,7 @@ def test_repository_applies_alembic_migration_on_empty_db(tmp_path) -> None:
             "SELECT name FROM sqlite_master WHERE type='table' AND name='shipping_audit_events'"
         ).scalar_one()
 
-    assert version == "0002_local_review_status"
+    assert version == "0003_carton_overrides"
     assert packages == "shipping_packages"
     assert audit == "shipping_audit_events"
 
@@ -43,6 +43,6 @@ def test_repository_stamps_existing_create_all_database(tmp_path) -> None:
             "WHERE name='local_review_status'"
         ).scalar()
 
-    assert version == "0002_local_review_status"
+    assert version == "0003_carton_overrides"
     assert review_col == 1
     assert repository.count_rows()["packages"] == 0

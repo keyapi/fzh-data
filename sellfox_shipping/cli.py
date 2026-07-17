@@ -181,7 +181,7 @@ def packages_list(
 
 
 def _get_lizard_dims_lookup():
-    """Sellfox commodity pageList first; ERPNext ZLMB# Item as Lesson 17 fallback."""
+    """Local override → Sellfox commodity pageList → ERPNext ZLMB."""
     import os
     from pathlib import Path
 
@@ -190,15 +190,18 @@ def _get_lizard_dims_lookup():
         CommodityPageListDimsLookup,
     )
     from sellfox_shipping.carriers.lizard.erpnext_dims import ErpnextZlmbDimsLookup
+    from sellfox_shipping.carriers.lizard.override_dims import RepositoryDimsLookup
     from sellfox_shipping.env_loader import load_dotenv
 
     load_dotenv(Path(__file__).resolve().parents[1] / "EN_API" / ".env")
     load_dotenv()
 
     config = _load_config()
+    account_key = config["sellfox"]["proxy_account"]
+    override = RepositoryDimsLookup(_get_package_repository(), account_key)
     primary = CommodityPageListDimsLookup(
         proxy_base_url=config["sellfox"]["proxy_base_url"],
-        proxy_account=config["sellfox"]["proxy_account"],
+        proxy_account=account_key,
         proxy_api_key=os.getenv("SELLFOX_PROXY_API_KEY", ""),
     )
     erp_key = (
@@ -212,7 +215,7 @@ def _get_lizard_dims_lookup():
         or ""
     ).strip()
     if not erp_key or not erp_secret:
-        return primary
+        return CascadingDimsLookup(override, primary)
     erp_url = (
         os.getenv("ERP_URL") or "https://erpnext.vilavi.cn"
     ).strip().rstrip("/")
@@ -221,7 +224,7 @@ def _get_lizard_dims_lookup():
         api_key=erp_key,
         api_secret=erp_secret,
     )
-    return CascadingDimsLookup(primary, fallback)
+    return CascadingDimsLookup(override, primary, fallback)
 
 
 @app.command("lizard-export")
