@@ -10,7 +10,7 @@ timestamp: 2026-06-25
 # 赛狐 API 接入踩坑记录
 
 > 何时读: 接入赛狐 API 遇到问题时、需要了解认证流程时、回顾架构决策时。
-> 最后更新: 2026-07-02 | 共 16 条教训
+> 最后更新: 2026-07-17 | 共 17 条教训
 
 ## Lesson 1: IP 白名单是硬门槛
 
@@ -254,12 +254,39 @@ safe_url = parts._replace(path=encoded_path).geturl()
 
 ---
 
+## Lesson 17: 商品重尺数据在 SKU 列表 API，不在包裹 API — 且覆盖不全
+
+**发现日期**: 2026-07-17
+
+**问题**: 需要计算包裹重量和体积用于尾程打单。直觉上应该从包裹 API 获取——但包裹 API 不返回重量/尺寸字段。
+
+**数据实际位置**: 赛狐商品 API `POST /api/commodity/pageList.json`（`skuType: "0"` 过滤非组合 SKU）。
+
+**数据字段**:
+| 字段 | 含义 | 单位 |
+|------|------|------|
+| `cartonWeight` | 单箱重量 | kg |
+| `cartonLength` | 外箱长 | cm |
+| `cartonWidth` | 外箱宽 | cm |
+| `cartonHeight` | 外箱高 | cm |
+
+V2 详情 API (`/api/commodity/v2/getCommodityDetail.json`) 的 `commoditySizeVOList[0]` 有更完整的数据（含 `wrapCartonWeight` 包装重量 g、`cartonQty` 装箱量、单位标注、英制转换），但扁平字段（`cartonWeight` 等）反而为 None。
+
+**覆盖率**: 非组合 SKU 约 70%（2200+ SKU 中 ~200 个采样）。新系列（KS024+、KS042+、KS050+）90%+ 有数据；老系列（KS000）几乎全空。报关重量 `declareWeight` 100% 有数据但多为同事临时填写，不可信。
+
+**兜底方案**: 当赛狐商品 API 返回全 0 时，需从 ERPNext Item doctype 的 `custom_finish_good_weight_per_unit`（国外成品重尺）或 `custom_fg_weight_per_unit`（绍兴工厂）获取。若 ERPNext 也空，按 `ZLMB#` 前缀的重量模板匹配（相同物料组 + 尺寸，不同面料借用）。
+
+**当前盲区**: KS0002 整个物料组（平条靠枕）在赛狐和 ERPNext 均无重尺数据。需同事补录。
+
+**来源**: Agent A/B/C 并行调研 + 实测验证。`sellfox_shipping/docs/research/` 下有完整抽样记录。
+
 ## 更新历史
 
 | 日期 | 变更 |
 |------|------|
 | 2026-06-25 | 初始 10 条教训（认证、IP、Playwright、架构决策） |
 | 2026-07-02 | 新增 6 条教训（编码、文件格式、参数、状态、URL、限流）— 基于 `fetch_ad_reports.py` 实战测试 |
+| 2026-07-17 | 新增 Lesson 17（重尺数据位置、覆盖率、兜底方案）— 基于 sellfox_shipping 调研 |
 
 ## See also
 - [赛狐 API 实践指南](../reference/2026-sellfox-api-guide.md)
