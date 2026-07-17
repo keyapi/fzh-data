@@ -8,8 +8,8 @@
 
 ## 凭证信息
 
-- **token**: 94fdf6868f2940a98bd480faad62dcee
-- **key**: 5d3fcf5cc41169561df0f50aee552080
+- **token**: <your-lizard-token>
+- **key**: <your-lizard-key>
 - **客户代码**: M6180（通过 getToken 返回）
 - **当前 access_token**: 见 `.token_cache` 或重新获取
 
@@ -90,8 +90,8 @@ BASE_URL = "http://47.106.72.196"
 
 # 1. 获取 token
 resp = requests.post(f"{BASE_URL}/api/svc/getToken", data={
-    "app_token": "94fdf6868f2940a98bd480faad62dcee",
-    "app_key": "5d3fcf5cc41169561df0f50aee552080"
+    "app_token": "<your-lizard-token>",
+    "app_key": "<your-lizard-key>"
 })
 token = resp.json()["result"]["access_token"]
 

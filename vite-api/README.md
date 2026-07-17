@@ -21,7 +21,7 @@ FZH 公司 Vite 发货 API 集成项目。支持多承运商（GOFO Express、US
 ```bash
 # 测试连通性
 curl -X GET "https://test-api.vitedirect.com/user/account" \
-  -H "x-api-key: H5se84hM6Y34Kx2XjfRzg16t6wXSJydq6Bxk1Kzd"
+  -H "x-api-key: <your-vite-api-key>"
 ```
 
 ## 文档目录

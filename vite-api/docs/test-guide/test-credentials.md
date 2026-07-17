@@ -6,7 +6,7 @@
 
 | 项目 | 值 |
 |------|-----|
-| API Key | `H5se84hM6Y34Kx2XjfRzg16t6wXSJydq6Bxk1Kzd` |
+| API Key | `<your-vite-api-key>` |
 | Base URL | `https://test-api.vitedirect.com` |
 
 ## EEVEE 系统登录
@@ -35,7 +35,7 @@
 ```bash
 # 测试 API 连通性
 curl -X GET "https://test-api.vitedirect.com/user/account" \
-  -H "x-api-key: H5se84hM6Y34Kx2XjfRzg16t6wXSJydq6Bxk1Kzd"
+  -H "x-api-key: <your-vite-api-key>"
 
 # 预期返回: {"balance": <数值>}
 ```
