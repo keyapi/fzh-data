@@ -1,4 +1,17 @@
-"""Process-local 1 rps gate for submitToPlatform side effects."""
+"""Process-local throttle for Sellfox submitToPlatform side effects.
+
+Rate-limit layers (do not confuse):
+
+1. **Official Sellfox OpenAPI** — max ~1 request/second when calling their base URL
+   directly. Client interval should be ``>= 1.0`` seconds.
+2. **Shared proxy** ``https://api.vilavi.cn/sellfox`` (admin UI under
+   ``/sellfox/admin``) — currently throttled around **0.5 rps** so multiple
+   operators do not stampede one upstream account. Proxy ops may change this;
+   set ``sellfox.submit_min_interval_seconds`` in config.yaml to match
+   (default ``2.0`` ≈ 0.5 rps for the proxy path).
+
+This module only enforces the **client-side** interval inside one process.
+"""
 
 from __future__ import annotations
 
@@ -12,7 +25,7 @@ class SubmitRateLimiter:
     Single-process only (matches P1 SQLite single writer). Returns seconds waited.
     """
 
-    def __init__(self, min_interval_seconds: float = 1.0) -> None:
+    def __init__(self, min_interval_seconds: float = 2.0) -> None:
         self._min_interval = max(0.0, float(min_interval_seconds))
         self._lock = threading.Lock()
         self._last_monotonic: float | None = None

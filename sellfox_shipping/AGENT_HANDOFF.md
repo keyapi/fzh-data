@@ -21,9 +21,9 @@ updated: 2026-07-17
 4. 当前分支：`feature/sellfox-shipping-p1a-rest`
 
 **阶段口径：** 旧「P1 骨架完成 / P2 FedEx」作废；现行阶段为 **P0 → P1A → P1B → P1C → P2+**。旧代码称 **legacy skeleton**。  
-**当前：** P1A/P1B 可用；**P1C 进行中**（Intent/CAS mock 已落地；默认 dry-run CLI）。  
-**外部：** VITE → `vite-api/`（#88/#89）；蜴国际 API 文档 → `蜴国际-API/`（#90，下单未测）。**暂不提 PR。**
-
+**当前：** P1A/P1B 可用；**P1C 进行中**（Intent/CAS + 限流回读；VITE httpx spike mock 已落地；默认 dry-run CLI）。  
+**外部：** VITE → `vite-api/`（#88/#89）+ 本仓 `carriers/vite/`；蜴国际 API 文档 → `蜴国际-API/`（#90，下单未测）。**暂不提 PR。**  
+**限速：** 官方 1 rps；共享代理现约 0.5 rps → `sellfox.submit_min_interval_seconds` 默认 `2.0`。
 ## 架构
 
 ```
@@ -141,11 +141,11 @@ sellfox_shipping/
 - P1B：`lizard-export` / `lizard-import-tracking` CLI；重尺 pageList → ERPNext ZLMB；导入可覆盖 `trackNo==packageSn` 占位
 - Schema：Alembic `0001` … `0006_submission_intents`
 
-**已验证：** `uv run pytest tests/sellfox_shipping -q` → **113 passed**
+**已验证：** `uv run pytest tests/sellfox_shipping -q`
 
-**未调用：** `submitToPlatform`  
+**未调用：** `submitToPlatform`（默认 dry-run）  
 
-**未实现：** 钉钉 OIDC、1 rps 多实例协调、回读权威性生产验证、VITE spike、蜴国际 API adapter
+**未实现：** 钉钉 OIDC、submit 多实例协调、回读权威性生产验证、VITE live / Karrio 对比、蜴国际 API adapter
 
 ## 待实现
 
@@ -153,7 +153,7 @@ sellfox_shipping/
 |------|------|------|
 | P1A 后续 | OIDC；legacy 入口隔离 | 钉钉 OIDC 配置 |
 | P1B 收尾 | ~~Artifact~~ / ~~ShippingBatch MVP~~（`0004`+`0005`；`/lizard/artifacts`、`/lizard/batches`） | — |
-| P1C | Intent/CAS + Web dry-run + **1 rps** + **回读 VERIFIED** | 真调须确认测试包裹；VITE spike 未做 |
+| P1C | Intent/CAS + Web dry-run + **可配置限流** + **回读 VERIFIED** + **VITE httpx mock** | 真调须确认测试包裹；VITE live 另确认 |
 | P2+ | PDF/packlist、GLS Excel、经验证的 API connector | 各承运人资料 |
 
 详细决策与暂不做边界见综合调研文档。过程细节见 [session-progress](docs/research/session-progress-2026-07-16.md)。

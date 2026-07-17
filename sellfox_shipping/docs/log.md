@@ -8,9 +8,15 @@ updated: 2026-07-17
 
 # sellfox_shipping — 变更日志
 
+## 2026-07-17 — 限速对齐代理 + VITE httpx spike
+
+- 用户澄清：官方赛狐 API ≤1 rps；共享代理 `api.vilavi.cn/sellfox` 现约 0.5 rps（可调）
+- `config.yaml`：`submit_min_interval_seconds: 2.0`（对齐代理）；CLI 读取该值
+- VITE：`carriers/vite/client.py` GOFO rate/shipment/label（mock 测试）；不替换通途；凭证仅 env
+
 ## 2026-07-17 — P1C：1 rps 限流 + packageDetail 回读 VERIFIED
 
-- `submission_rate_limit.SubmitRateLimiter`（默认 1 次/秒）
+- `submission_rate_limit.SubmitRateLimiter`（进程内；现默认对齐代理 2.0s）
 - submit 成功后 `fetch_package_detail`；trackNo 匹配 → VERIFIED；失败/不匹配留 SUCCESS
 - CLI：`packages-verify-intent`；测试 113 passed
 
