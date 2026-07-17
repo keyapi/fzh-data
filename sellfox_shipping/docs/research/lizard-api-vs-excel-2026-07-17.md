@@ -56,7 +56,7 @@ getToken → rates/ratesv2 → createOrder → getLabel（建议轮询）→ 可
 ## 接入建议（更新）
 
 1. **Excel 闭环暂保留为生产默认**（操作习惯、批量、对账报告已稳）；API 冒烟通过 ≠ 自动切生产。
-2. 下一步可开薄 **httpx client**（仿 `carriers/vite/`）：token 缓存、rates、create、getLabel 轮询、cancel；凭证仅 env；**不**把明文写入 Git。
+2. 本仓已有薄 **httpx** 客户端：`carriers/lizard/api_client.py`（`LizardApiClient`；同步 Client；凭证 `LIZARD_APP_TOKEN` / `LIZARD_APP_KEY`）。**为何 httpx：** 与赛狐/VITE/ERPNext 同一依赖；Service/CLI 现为同步调用。异步不是选型主因（需要时可换 `AsyncClient`，当前未用）。
 3. `ApiCarrierAdapter`：`reference_no=packageSn`、S0143→shipper 映射表、轮询/同步双路径、Artifact 存 PDF、再进 P1C `submitToPlatform`。
 4. 仍建议同事将 main 上 HANDOFF 明文 Key 改为环境变量占位并轮换。
 
