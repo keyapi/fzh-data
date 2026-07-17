@@ -22,7 +22,7 @@ updated: 2026-07-17
 
 **阶段口径：** 旧「P1 骨架完成 / P2 FedEx」作废；现行阶段为 **P0 → P1A → P1B → P1C → P2+**。旧代码称 **legacy skeleton**。  
 **当前：** P1A/P1B 可用；**P1C**：Intent/CAS + 限流回读已落地；**VITE httpx spike + 测试真测 + 选型决策已完成**（不做 Karrio VITE connector）。默认 dry-run CLI。  
-**外部：** VITE → `vite-api/` + `carriers/vite/`；蜴国际 API 文档 → `蜴国际-API/`（#90，下单未测）。**暂不提 PR。**  
+**外部：** VITE → `vite-api/` + `carriers/vite/`；蜴国际 → `蜴国际-API/`（**#90 文档 + #91 负余额下单/面单/取消已验**）。Excel 仍生产默认。**暂不提 PR。**
 **限速：** 官方 1 rps；共享代理现约 0.5 rps → `sellfox.submit_min_interval_seconds` 默认 `2.0`。
 ## 架构
 
