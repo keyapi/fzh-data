@@ -149,7 +149,7 @@ sellfox_shipping/
 
 **已落地（本切片）：** SQLite 跨进程 submit gate；OIDC 代码默认关闭。  
 **VITE：** 测试环境 account/rate/create/getLabel/cancel 已验；决策采用 httpx。  
-**蜴国际：** PR#91 已验 createOrder/getLabel/cancelOrder（负余额亦可）；Excel 仍生产默认；本仓 API adapter 未写。勿从 main HANDOFF 拷明文 Key。
+**蜴国际：** PR#91 已验下单链路；本仓 `LizardApiClient`（httpx 同步，mock）；Excel 仍生产默认。勿从 main HANDOFF 拷明文 Key。
 
 ## 待实现
 

@@ -625,6 +625,18 @@ P1C VITE spike 技术退出门：**关闭**（真测 + 决策记录）。生产�
 - 公网 OIDC 启用
 - VITE / 蜴国际 → `ApiCarrierAdapter`（有业务范围时）
 
+## 27. 2026-07-17 续：蜴国际 httpx 薄客户端（mock）
+
+**代码：** `carriers/lizard/api_client.py` — `get_token` / `ratesv2` / `create_order` / `get_label` / `cancel_order`  
+**测试：** `tests/sellfox_shipping/test_lizard_api_client.py`（MockTransport only）  
+**选型说明：** 用 **同步** `httpx.Client`，因本仓已统一 httpx、CLI/Service 同步；**不是**为了异步。Excel 仍生产默认；真调需 env 凭证 + 用户确认范围。
+
+### 下一刀
+
+- （可选）受控真调 1 票 create→getLabel→cancel（须确认）
+- S0143→shipper 映射 + `reference_no=packageSn` 挂入导出/适配层
+- 公网 OIDC；ApiCarrierAdapter
+
 ## 14. 本文档维护约定
 
 后续 Agent 完成一个可交付切片后，应：

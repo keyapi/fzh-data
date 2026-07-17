@@ -8,6 +8,11 @@ updated: 2026-07-17
 
 # sellfox_shipping — 变更日志
 
+## 2026-07-17 — 蜴国际 httpx 薄客户端（mock）
+
+- `LizardApiClient`：token/ratesv2/create/getLabel/cancel；同步 httpx（非为异步选型）
+- Excel 仍生产默认；真调另确认
+
 ## 2026-07-17 — 蜴国际 PR#91：负余额 create/getLabel/cancel 已验
 
 - main：`7e1ec1f`；更新 `lizard-api-vs-excel-2026-07-17.md`
