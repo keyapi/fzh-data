@@ -21,6 +21,8 @@ timestamp: 2026-07-16
 - [lizard-p0-column-mapping-2026-07-17.md](lizard-p0-column-mapping-2026-07-17.md) — P0 真实样例列映射（匹配键、单位陷阱、批次关系）。
 - [colab-notebook-legacy-summary-2026-07-17.md](colab-notebook-legacy-summary-2026-07-17.md) — 通途/FedEx/蜴国际 Colab notebook 遗产逻辑摘要。
 - [sellfox-carton-dims-source-2026-07-17.md](sellfox-carton-dims-source-2026-07-17.md) — 重尺来自商品 pageList，非包裹 API。
+- [local-vs-sellfox-status-2026-07-17.md](local-vs-sellfox-status-2026-07-17.md) — 赛狐状态 vs 本地审核；通过/驳回含义。
+- [pnumber-to-sellfox-trace-2026-07-17.md](pnumber-to-sellfox-trace-2026-07-17.md) — 通途 P 号→赛狐订单追溯（对照用）。
 
 ## 全部调研文档
 

@@ -8,6 +8,11 @@ updated: 2026-07-17
 
 # sellfox_shipping — 变更日志
 
+## 2026-07-17 — 状态澄清 + 通途 P 号追溯文档
+
+- 新增 `local-vs-sellfox-status`：本地通过/驳回不改赛狐；导出数据来自 API 汇总
+- 收录并脱敏 `pnumber-to-sellfox-trace`（38/38；文档内禁止写密钥）
+
 ## 2026-07-17 — ERPNext ZLMB 重尺兜底接入
 
 - `CascadingDimsLookup`：赛狐 pageList → ERPNext `ZLMB#{前3段}` Item

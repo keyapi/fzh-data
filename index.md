@@ -25,7 +25,7 @@ generated: 2026-07-20 11:22
 | **pdf_to_md** | 6 | Index, Lesson, Log, Reference | [pdf_to_md/](pdf_to_md/) -> [pdf_to_md/docs/index.md](pdf_to_md/docs/index.md) |
 | **root** | 1 | Index | [root/](root/) -> [index.md](index.md) |
 | **sellfox-api-proxy** | 12 | Index, Lesson, Log, Research | [sellfox-api-proxy/](sellfox-api-proxy/) -> [sellfox-api-proxy/docs/index.md](sellfox-api-proxy/docs/index.md) |
-| **sellfox_shipping** | 15 | Guide, Handoff, Index, Log | [sellfox_shipping/](sellfox_shipping/) -> [sellfox_shipping/docs/index.md](sellfox_shipping/docs/index.md) |
+| **sellfox_shipping** | 17 | Guide, Handoff, Index, Log | [sellfox_shipping/](sellfox_shipping/) -> [sellfox_shipping/docs/index.md](sellfox_shipping/docs/index.md) |
 | **us_openai_api_proxy** | 9 | Explanation, Handoff, HowTo, Index | [us_openai_api_proxy/](us_openai_api_proxy/) -> [us_openai_api_proxy/docs/index.md](us_openai_api_proxy/docs/index.md) |
 | **vite-api** | 1 | Reference | [vite-api/](vite-api/) -> [vite-api/docs/test-guide/test-credentials.md](vite-api/docs/test-guide/test-credentials.md) |
 | **yiglobal-api** | 2 | Index, Log | [yiglobal-api/](yiglobal-api/) -> [yiglobal-api/docs/index.md](yiglobal-api/docs/index.md) |
@@ -191,6 +191,7 @@ generated: 2026-07-20 11:22
 | Reference | 2026-07-16 会话进度与交接记录 | [sellfox_shipping/docs/research/session-progress-2026-07-16.md](sellfox_shipping/docs/research/session-progress-2026-07-16.md) | 2026-07-20 |
 | Reference | 蜴国际 P0 样例放置说明 | [sellfox_shipping/数据源/蜥蜴国际-p0-样例/README.md](sellfox_shipping/数据源/蜥蜴国际-p0-样例/README.md) | 2026-07-20 |
 | Reference | 蜴国际 P0 样例放置路径 | [sellfox_shipping/docs/reference/lizard-p0-sample-path.md](sellfox_shipping/docs/reference/lizard-p0-sample-path.md) | 2026-07-20 |
+| Reference | 赛狐包裹状态 vs 本地审核状态 | [sellfox_shipping/docs/research/local-vs-sellfox-status-2026-07-17.md](sellfox_shipping/docs/research/local-vs-sellfox-status-2026-07-17.md) | 2026-07-20 |
 | Reference | 赛狐尾程打单 — Agent 独立调研简报 | [sellfox_shipping/docs/research/briefing-for-independent-agent.md](sellfox_shipping/docs/research/briefing-for-independent-agent.md) | 2026-07-16 |
 | Reference | 赛狐尾程打单 — 新 Agent 开局指南 | [sellfox_shipping/docs/research/ONBOARDING.md](sellfox_shipping/docs/research/ONBOARDING.md) | 2026-07-16 |
 | Research | Colab 通途/FedEx/蜴国际 notebook 遗产逻辑摘要 | [sellfox_shipping/docs/research/colab-notebook-legacy-summary-2026-07-17.md](sellfox_shipping/docs/research/colab-notebook-legacy-summary-2026-07-17.md) | 2026-07-20 |
@@ -198,6 +199,7 @@ generated: 2026-07-20 11:22
 | Research | 赛狐尾程打单系统 — 完整调研文档 | [sellfox_shipping/docs/research/comprehensive-research-2026-07-15.md](sellfox_shipping/docs/research/comprehensive-research-2026-07-15.md) | 2026-07-16 |
 | Research | 赛狐尾程打单系统独立调研综合与架构判断 | [sellfox_shipping/docs/research/research-synthesis-2026-07-16.md](sellfox_shipping/docs/research/research-synthesis-2026-07-16.md) | 2026-07-20 |
 | Research | 赛狐重尺来源 — 商品 pageList（非包裹 API） | [sellfox_shipping/docs/research/sellfox-carton-dims-source-2026-07-17.md](sellfox_shipping/docs/research/sellfox-carton-dims-source-2026-07-17.md) | 2026-07-20 |
+| Research | 通途 P 号追溯赛狐订单（验证记录） | [sellfox_shipping/docs/research/pnumber-to-sellfox-trace-2026-07-17.md](sellfox_shipping/docs/research/pnumber-to-sellfox-trace-2026-07-17.md) | 2026-07-20 |
 
 ### us_openai_api_proxy
 
