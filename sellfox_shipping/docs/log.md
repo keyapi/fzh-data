@@ -8,6 +8,12 @@ updated: 2026-07-17
 
 # sellfox_shipping — 变更日志
 
+## 2026-07-17 — 文档：P1B 进度快照与 Artifact 说明
+
+- 更新 `session-progress` §11：Web/补录/夹具提交列表、未做边界
+- 澄清「导出批次 Artifact 表」= 登记导出/导入 Excel 的只读制品元数据（hash/模板版本等），非业务必须立即实现
+- 同步 `AGENT_HANDOFF` 接手段（分支、64 passed、P1B 状态）
+
 ## 2026-07-17 — 缺 dims 人工补录
 
 - 表 `shipping_carton_overrides`（Alembic `0003`）；按 commodity_sku 覆盖

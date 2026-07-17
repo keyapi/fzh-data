@@ -280,7 +280,50 @@ git status
 | PDF 通途→赛狐 | `scripts/replace_tongtu_refs_in_labels.py`（可提交）；详见 `pnumber-to-sellfox-trace` §6 |
 | 本地导入 smoke | 38/38 persisted；**未** `submitToPlatform` |
 
-## 11. 本文档维护约定
+## 11. 2026-07-17 续：P1B Web + 重尺补录（文档快照）
+
+**分支：** `feature/sellfox-shipping-p1a-rest`  
+**验证：** `uv run pytest tests/sellfox_shipping -q` → **64 passed**
+
+| 提交 | 内容 |
+|------|------|
+| `4585c16` | 追踪号本地落库 + 赛狐原生夹具脚本 |
+| `63e7319` | Web `/lizard/export`、`/lizard/import` 对账页 |
+| `057bd48` | serve 启动打印导出/导入 URL |
+| `1af6efc` | 缺 carton 本地人工补录（`0003` + 包裹详情表单） |
+
+### P1B 已具备
+
+- CLI：`lizard-export` / `lizard-import-tracking`
+- Web：导出、导入对账、本地审核、重尺补录
+- 重尺链：本地 override → pageList → ERPNext ZLMB
+- 夹具 02/03/04（本地 gitignore，可对照格式）
+
+### P1B 规划中仍缺（见综合调研 §5.3 / §10）
+
+- **导出批次 Artifact 表**：把每次导出/导入的 Excel 登记为只读「制品」记录（见下节说明），而非仅落在 `data/exports/` 目录
+- 完整 `ShippingBatch` / `BatchPackage` 批次状态机（当前是按需导出，无正式批次实体）
+
+### 明确未做 / 勿做
+
+- **未** `submitToPlatform`（P1C）；38 单历史 `has_shipped` **禁止**用来测写回
+- 蜴国际真上传：无测试账号时可能产生费用，需问同事
+- 服务改代码后须**重启** `serve`（无 reload）
+
+### 「导出批次 Artifact 表」是什么意思？
+
+规划里的 **Artifact（制品）** = 系统保存的一份**原始文件凭证**，例如：
+
+- 导出给蜴国际的上传 Excel
+- 从蜴国际下载后导入的追踪号 Excel
+- 以后的面单 PDF
+
+每条 Artifact 至少应有：文件路径、**SHA-256**、MIME/大小、**模板版本**、操作人、时间、所属批次。  
+作用：重复上传可按 hash **幂等**；事后能回答「这批导出的是哪一版文件」；原始文件不被后续处理覆盖。
+
+今天的实现只把导出文件写到 `data/exports/`，并在 audit 里记了一笔摘要；**还没有**独立的 `shipping_artifacts`（或等价）表把文件元数据结构化存库。这就是 AGENT_HANDOFF 里「P1B 还剩 Artifact 表」的含义——**可延后**，不阻塞日常导出/导入试用。
+
+## 12. 本文档维护约定
 
 后续 Agent 完成一个可交付切片后，应：
 

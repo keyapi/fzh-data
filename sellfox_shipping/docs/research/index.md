@@ -16,7 +16,7 @@ timestamp: 2026-07-16
 | **读目标架构与阶段规划** | [research-synthesis-2026-07-16.md](research-synthesis-2026-07-16.md) — **当前推荐的规划入口** |
 | **从零独立再调研**（刻意不看结论） | [ONBOARDING.md](ONBOARDING.md) → [briefing-for-independent-agent.md](briefing-for-independent-agent.md) |
 
-- [session-progress-2026-07-16.md](session-progress-2026-07-16.md) — 2026-07-16 会话全过程：决策、提交、P1A 实现细节、已修问题、下一步与勿踩坑。**换 Agent 必读。**
+- [session-progress-2026-07-16.md](session-progress-2026-07-16.md) — 2026-07-16 会话全过程 + **§11 P1B 快照（2026-07-17）**。**换 Agent 必读。**
 - [research-synthesis-2026-07-16.md](research-synthesis-2026-07-16.md) — 独立综合调研与架构判断；包裹批次主线；蜴国际 Excel 与 VITE/Karrio 分阶段规划。
 - [lizard-p0-column-mapping-2026-07-17.md](lizard-p0-column-mapping-2026-07-17.md) — P0 真实样例列映射（匹配键、单位陷阱、批次关系）。
 - [colab-notebook-legacy-summary-2026-07-17.md](colab-notebook-legacy-summary-2026-07-17.md) — 通途/FedEx/蜴国际 Colab notebook 遗产逻辑摘要。

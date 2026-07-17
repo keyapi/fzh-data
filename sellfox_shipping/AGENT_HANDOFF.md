@@ -3,7 +3,7 @@ okf: v0.1
 type: Handoff
 title: sellfox_shipping — Agent 交接说明
 description: 包裹中心架构、当前实现、运行方式与后续阶段边界
-updated: 2026-07-16
+updated: 2026-07-17
 ---
 
 # sellfox_shipping — Agent 交接说明
@@ -15,12 +15,13 @@ updated: 2026-07-16
 
 ## 新对话 / 换 Agent 接手（30 秒）
 
-1. 读 [session-progress-2026-07-16.md](docs/research/session-progress-2026-07-16.md) — 已完成过程、提交、下一步、勿踩坑  
-2. 读 [research-synthesis-2026-07-16.md](docs/research/research-synthesis-2026-07-16.md) — 目标架构与阶段（以该文档为准，取代本文旧 P1/P2 叙述）  
-3. 跑验证：`uv run pytest tests/sellfox_shipping -q`（末次证据：21 passed）  
-4. 当前分支：`research/claude-strange-jones`；关键提交：`27cd46d`（调研）、`0b157e7`（同步）、`275919e`（交接文档）、`ebed58a`（列表+审计）
+1. 读 [session-progress-2026-07-16.md](docs/research/session-progress-2026-07-16.md) — 已完成过程、提交、下一步、勿踩坑（含 §11 P1B 快照）  
+2. 读 [research-synthesis-2026-07-16.md](docs/research/research-synthesis-2026-07-16.md) — 目标架构与阶段  
+3. 跑验证：`uv run pytest tests/sellfox_shipping -q`（末次证据：**64 passed**）  
+4. 当前分支：`feature/sellfox-shipping-p1a-rest`
 
-**阶段口径：** 旧「P1 骨架完成 / P2 FedEx」作废；现行阶段为 **P0 → P1A → P1B → P1C → P2+**。旧代码称 **legacy skeleton**。
+**阶段口径：** 旧「P1 骨架完成 / P2 FedEx」作废；现行阶段为 **P0 → P1A → P1B → P1C → P2+**。旧代码称 **legacy skeleton**。  
+**当前：** P1A 完成；P1B 主路径（导出/导入/补录/Web）可用；缺正式 Artifact/Batch 表；**未进** P1C。
 
 ## 架构
 
@@ -138,7 +139,7 @@ sellfox_shipping/
 | 阶段 | 内容 | 依赖 |
 |------|------|------|
 | P1A 后续 | OIDC；legacy 入口隔离 | 钉钉 OIDC 配置 |
-| P1B 收尾 | 导出批次 Artifact 表 | — |
+| P1B 收尾 | 导出/导入 **Artifact 表**（文件 SHA256、模板版本、路径、操作人；支持重复文件幂等）。说明见 session-progress §11 | 可延后，不阻塞试用 |
 | P1C | 人工确认后赛狐回写；VITE 测试 spike | **干净测试包裹** + 用户确认范围（勿用已 has_shipped 的 38 单） |
 | P2+ | PDF/packlist、GLS Excel、经验证的 API connector | 各承运人资料 |
 
