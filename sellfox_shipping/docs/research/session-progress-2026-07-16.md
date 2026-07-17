@@ -631,11 +631,24 @@ P1C VITE spike 技术退出门：**关闭**（真测 + 决策记录）。生产�
 **测试：** `tests/sellfox_shipping/test_lizard_api_client.py`（MockTransport only）  
 **选型说明：** 用 **同步** `httpx.Client`，因本仓已统一 httpx、CLI/Service 同步；**不是**为了异步。Excel 仍生产默认；真调需 env 凭证 + 用户确认范围。
 
+## 28. 2026-07-17 续：蜴国际 API 本仓 1 票真调
+
+**脚本：** `scripts/lizard_api_create_cancel_smoke.py`（create → getLabel → cancel）
+
+| 步骤 | 结果 |
+|------|------|
+| getToken | OK |
+| createOrder | OK；`order_code=M6180202607173152034`；`reference_no=SMOKE-1784280071` |
+| getLabel | OK；`sync_service_status=1`，`order_status=2` |
+| cancelOrder | OK；`code=200 msg=Success` |
+
+本仓客户端契约与 PR#91 一致。追踪号/PDF 字段名需对照 `result` 键再钉死（本次解析为空但状态已成功）。Excel 仍生产默认。
+
 ### 下一刀
 
-- （可选）受控真调 1 票 create→getLabel→cancel（须确认）
-- S0143→shipper 映射 + `reference_no=packageSn` 挂入导出/适配层
-- 公网 OIDC；ApiCarrierAdapter
+- 钉死 getLabel/create 的 tracking / label URL 字段名（对照 main api-reference 样例）
+- S0143 映射 + `reference_no=packageSn` 接入适配层
+- 公网 OIDC
 
 ## 14. 本文档维护约定
 

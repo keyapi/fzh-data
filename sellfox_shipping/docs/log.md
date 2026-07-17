@@ -8,6 +8,11 @@ updated: 2026-07-17
 
 # sellfox_shipping — 变更日志
 
+## 2026-07-17 — 蜴国际本仓 1 票真调（create/getLabel/cancel）
+
+- 脚本：`scripts/lizard_api_create_cancel_smoke.py`；全程 code=200 / sync=1 / cancel Success
+- 详见 session-progress §28
+
 ## 2026-07-17 — 蜴国际 httpx 薄客户端（mock）
 
 - `LizardApiClient`：token/ratesv2/create/getLabel/cancel；同步 httpx（非为异步选型）
