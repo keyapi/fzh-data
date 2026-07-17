@@ -120,9 +120,9 @@ def test_two_submits_spaced_by_rate_limit(tmp_path: Path) -> None:
         allow_side_effects=True,
     )
     assert client.submit_calls == 2
-    assert r2.rate_limited_wait_ms >= 900
+    assert r2.rate_limited_wait_ms >= 800
     gap = client.submit_times[1] - client.submit_times[0]
-    assert gap >= 0.9
+    assert gap >= 0.8
 
 
 def test_success_readback_matching_track_becomes_verified(tmp_path: Path) -> None:

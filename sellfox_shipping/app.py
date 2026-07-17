@@ -14,7 +14,7 @@ from pathlib import Path
 
 import yaml
 from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -111,6 +111,40 @@ app = FastAPI(
     description="赛狐尾程打单系统 — 三界面架构 (REST + MCP + CLI)",
     version="0.1.0",
 )
+
+from sellfox_shipping.auth_oidc import (  # noqa: E402
+    PUBLIC_PATH_PREFIXES,
+    build_oidc_router,
+    load_oidc_settings,
+    require_user,
+)
+
+_oidc_settings = load_oidc_settings(config)
+app.include_router(build_oidc_router(_oidc_settings))
+
+
+@app.middleware("http")
+async def oidc_gate(request: Request, call_next):
+    if not _oidc_settings.enabled:
+        return await call_next(request)
+    path = request.url.path
+    if any(path == p or path.startswith(p + "/") for p in PUBLIC_PATH_PREFIXES):
+        return await call_next(request)
+    if path.startswith("/static"):
+        return await call_next(request)
+    try:
+        user = require_user(request, _oidc_settings)
+    except HTTPException:
+        if path.startswith("/api/"):
+            return HTMLResponse(
+                '{"detail":"Authentication required"}',
+                status_code=401,
+                media_type="application/json",
+            )
+        return RedirectResponse("/oidc-login")
+    request.state.user = user
+    return await call_next(request)
+
 
 templates_dir = BASE_DIR / "templates"
 templates_dir.mkdir(exist_ok=True)

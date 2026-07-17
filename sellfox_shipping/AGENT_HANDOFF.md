@@ -145,9 +145,11 @@ sellfox_shipping/
 
 **未调用：** `submitToPlatform`（默认 dry-run）  
 
-**未实现：** 钉钉 OIDC、submit 多实例协调、回读权威性生产验证、蜴国际 API adapter、VITE→`ApiCarrierAdapter` 挂载
+**未实现：** 公网 OIDC 启用与 redirect 登记、回读权威性生产验证、蜴国际 API adapter、VITE→`ApiCarrierAdapter` 挂载
 
-**VITE：** 测试环境 account/rate/create/getLabel/**cancel** 已验；决策采用 httpx，近期不做 Karrio custom connector；不替换通途生产。
+**已落地（本切片）：** SQLite 跨进程 submit gate；OIDC 代码默认关闭。  
+**VITE：** 测试环境 account/rate/create/getLabel/cancel 已验；决策采用 httpx。  
+**蜴国际：** 同事并行测 createOrder/getLabel/取消（可负余额）；等结论前 Excel 主路径。
 
 ## 待实现
 

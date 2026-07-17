@@ -321,7 +321,7 @@ def packages_submit_intent(
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
 ):
     """Submit one intent (default dry-run; real call needs explicit side-effect flag)."""
-    from sellfox_shipping.submission_rate_limit import SubmitRateLimiter
+    from sellfox_shipping.submission_rate_limit import SqliteSubmitRateLimiter
     from sellfox_shipping.submission_service import SubmissionService
 
     config = _load_config()
@@ -330,10 +330,11 @@ def packages_submit_intent(
     interval = float(
         config.get("sellfox", {}).get("submit_min_interval_seconds", 2.0)
     )
+    db_path = BASE_DIR / config.get("store", {}).get("db_path", "data/shipping.db")
     result = SubmissionService(
         repo,
         client,
-        rate_limiter=SubmitRateLimiter(interval),
+        rate_limiter=SqliteSubmitRateLimiter(db_path, interval),
     ).submit_intent(
         intent_id=intent_id,
         actor=actor,

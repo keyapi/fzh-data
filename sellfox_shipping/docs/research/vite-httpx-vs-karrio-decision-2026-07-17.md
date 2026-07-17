@@ -10,7 +10,16 @@ tags: [sellfox-shipping, vite, karrio, httpx, decision]
 # VITE spike 决策：httpx vs Karrio custom connector
 
 **范围：** 仅技术决策证据；**不**切换通途生产、**不**承诺 P3 上线。  
-**对照规划：** [research-synthesis-2026-07-16.md](research-synthesis-2026-07-16.md) §7.5 / §8.2。
+**对照规划：** [research-synthesis-2026-07-16.md](research-synthesis-2026-07-16.md) §7.5 / §8.2；早期 [comprehensive-research-2026-07-15.md](comprehensive-research-2026-07-15.md)。
+
+## 0. PR 编号澄清（2026-07-17 重读）
+
+| PR | 实际内容 |
+|----|----------|
+| **#87 / #89** | `vite-api/`：VITE 文档与测试报告（**无**独立 Karrio 专章） |
+| **#88** | `research/claude-strange-jones` → 合入本仓 **research-synthesis** 等；**Karrio 深度评估在此**（§7 不用 Server、无 VITE connector、spike= custom vs httpx） |
+
+同事「昨天调研 Karrio」主要落在 **PR#88 综合调研**，不是 vite-api 目录。本决策与 #88 规划一致，并用 httpx 真测关闭 spike。
 
 ## 1. 已完成的 httpx 侧证据
 
