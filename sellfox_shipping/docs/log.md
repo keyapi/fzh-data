@@ -8,6 +8,13 @@ updated: 2026-07-17
 
 # sellfox_shipping — 变更日志
 
+## 2026-07-17 — OIDC 脚手架 + SQLite submit 跨进程限流
+
+- `SqliteSubmitRateLimiter` + Alembic `0007`；CLI 真调默认使用
+- `auth_oidc.py`：默认关闭；复用 api.vilavi.cn/oidc
+- Karrio：重读 PR#88，维持 httpx 决策；蜴国际同事并行测下单（负余额）
+- 详见 `docs/research/oidc-and-submit-rate-gate-2026-07-17.md`
+
 ## 2026-07-17 — VITE cancel 真测 + Karrio 决策提交
 
 - `cancel_label`：DELETE 可用 orderId；create→OK→cancel 余额退回

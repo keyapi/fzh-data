@@ -586,6 +586,24 @@ P1C VITE spike 技术退出门：**关闭**（真测 + 决策记录）。生产�
 - 蜴国际：余额恢复后 createOrder+getLabel 冒烟；此前 Excel 主路径
 - 将 `ViteGofoClient` 挂到未来 `ApiCarrierAdapter`（单位换算、requestId、轮询/cancel）— 有业务范围时再开
 
+## 25. 2026-07-17 续：Karrio 重读 + OIDC 脚手架 + SQLite submit gate
+
+**Karrio：** 重读 PR#88（综合调研）与早期 research；确认与 httpx 决策一致。PR 澄清见决策文 §0。  
+**落档：** [oidc-and-submit-rate-gate-2026-07-17.md](oidc-and-submit-rate-gate-2026-07-17.md)
+
+| 项 | 说明 |
+|----|------|
+| Alembic `0007` | `shipping_submit_rate_gate` |
+| 限流 | `SqliteSubmitRateLimiter`；CLI submit 默认使用 |
+| OIDC | `auth_oidc.py`；默认 `auth.enabled: false`；对齐 proxy 桥 |
+| 蜴国际 | 同事在负余额下测 createOrder/getLabel/取消 — **等结论**；Excel 仍主路径 |
+
+### 下一刀
+
+- 公网部署前：打开 OIDC + 登记 redirect + HTTPS
+- 同事蜴国际 API 冒烟结论入库（对照 Excel）
+- `ViteGofoClient` → `ApiCarrierAdapter`（有业务范围时）
+
 ## 14. 本文档维护约定
 
 后续 Agent 完成一个可交付切片后，应：

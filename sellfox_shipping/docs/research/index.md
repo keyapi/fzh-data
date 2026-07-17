@@ -27,6 +27,7 @@ timestamp: 2026-07-16
 - [lizard-api-vs-excel-2026-07-17.md](lizard-api-vs-excel-2026-07-17.md) — 蜴国际 API（PR #90）与 Excel 路径对照；欠费未测下单
 - [async-label-and-webhook-2026-07-17.md](async-label-and-webhook-2026-07-17.md) — VITE/蜴国际 Hook URL 空置 + 异步面单轮询（IT：约 30s）
 - [vite-httpx-vs-karrio-decision-2026-07-17.md](vite-httpx-vs-karrio-decision-2026-07-17.md) — VITE：采用 httpx；近期不做 Karrio custom connector
+- [oidc-and-submit-rate-gate-2026-07-17.md](oidc-and-submit-rate-gate-2026-07-17.md) — 可选钉钉 OIDC + SQLite 跨进程 submit 限流
 - [sellfox-native-lizard-fixture-2026-07-17.md](sellfox-native-lizard-fixture-2026-07-17.md) — 赛狐原生夹具 00/02/03/04（上传·追踪号·面单）。
 
 ## 全部调研文档

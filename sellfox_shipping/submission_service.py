@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from sellfox_shipping.package_repository import PackageRepository
-from sellfox_shipping.submission_rate_limit import SubmitRateLimiter
+from sellfox_shipping.submission_rate_limit import RateLimiter, SubmitRateLimiter
 from sellfox_shipping.submission_state import aggregate_package_submission_state
 
 
@@ -153,7 +153,7 @@ class SubmissionService:
         self,
         repository: PackageRepository,
         submit_client: SellfoxSubmitClient | None = None,
-        rate_limiter: SubmitRateLimiter | None = None,
+        rate_limiter: RateLimiter | None = None,
     ):
         self._repo = repository
         self._client = submit_client
