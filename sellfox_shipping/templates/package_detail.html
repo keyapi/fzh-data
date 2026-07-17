@@ -37,16 +37,40 @@
     <div class="container">
         <a class="back" href="/packages">← 返回包裹列表</a>
 
+        {% if message %}
+        <div class="panel" style="background:#eef8ee;">{{ message }}</div>
+        {% endif %}
+
         <div class="panel">
             <h2>基本信息</h2>
             <div class="info-row">
                 <div class="info-item"><div class="label">包裹号</div><div class="value">{{ package.package_sn }}</div></div>
-                <div class="info-item"><div class="label">状态</div><div class="value"><span class="badge">{{ package.package_status or '—' }}</span></div></div>
+                <div class="info-item"><div class="label">赛狐状态</div><div class="value"><span class="badge">{{ package.package_status or '—' }}</span></div></div>
+                <div class="info-item"><div class="label">本地审核</div><div class="value"><span class="badge">{{ package.local_review_status or 'pending' }}</span></div></div>
                 <div class="info-item"><div class="label">渠道</div><div class="value">{{ package.logistics.channel_name or '—' }}</div></div>
                 <div class="info-item"><div class="label">店铺</div><div class="value">{{ package.shop_name or '—' }}</div></div>
                 <div class="info-item"><div class="label">追踪号</div><div class="value">{{ package.logistics.tracking_number or '—' }}</div></div>
                 <div class="info-item"><div class="label">站点</div><div class="value">{{ package.marketplace or '—' }}</div></div>
             </div>
+        </div>
+
+        <div class="panel">
+            <h2>本地审核（导出 Excel 前）</h2>
+            <form method="post" action="/packages/{{ package.package_sn }}/review" class="info-row" style="align-items:flex-end;">
+                <div class="info-item">
+                    <div class="label">操作者</div>
+                    <input name="actor" value="web-user" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;width:100%;" />
+                </div>
+                <div class="info-item">
+                    <div class="label">备注</div>
+                    <input name="note" placeholder="可选" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;width:100%;" />
+                </div>
+                <div class="info-item" style="display:flex;gap:8px;">
+                    <button name="decision" value="approved" type="submit" style="padding:8px 14px;background:#155724;color:#fff;border:none;border-radius:4px;cursor:pointer;">通过</button>
+                    <button name="decision" value="rejected" type="submit" style="padding:8px 14px;background:#721c24;color:#fff;border:none;border-radius:4px;cursor:pointer;">驳回</button>
+                    <button name="decision" value="pending" type="submit" style="padding:8px 14px;background:#856404;color:#fff;border:none;border-radius:4px;cursor:pointer;">重置待审</button>
+                </div>
+            </form>
         </div>
 
         <div class="panel">

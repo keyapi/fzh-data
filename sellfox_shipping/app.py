@@ -19,7 +19,12 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from sellfox_shipping.models import Address, Order, PackageStatus
-from sellfox_shipping.package_service import ListPackagesService, PackageListRequest
+from sellfox_shipping.package_service import (
+    ListPackagesService,
+    PackageListRequest,
+    PackageReviewRequest,
+    ReviewPackageService,
+)
 from sellfox_shipping.sellfox_client import SellfoxClient
 from sellfox_shipping.store import Store
 
@@ -55,6 +60,10 @@ def _get_package_repository():
 
 def _get_package_list_service() -> ListPackagesService:
     return ListPackagesService(_get_package_repository())
+
+
+def _get_package_review_service() -> ReviewPackageService:
+    return ReviewPackageService(_get_package_repository())
 
 
 # ── FastAPI app ──────────────────────────────────────────────────
@@ -110,6 +119,28 @@ async def get_package(package_sn: str):
     )
     if record is None:
         raise HTTPException(404, f"Package {package_sn} not found")
+    return record.model_dump(mode="json")
+
+
+@app.post("/api/packages/{package_sn}/review")
+async def review_package(package_sn: str, body: dict):
+    """Set local review status (approved/rejected/pending) with audit."""
+    from pydantic import ValidationError
+
+    try:
+        record = _get_package_review_service().review(
+            PackageReviewRequest(
+                account_key=config["sellfox"]["proxy_account"],
+                package_sn=package_sn,
+                actor=str(body.get("actor") or ""),
+                decision=str(body.get("decision") or ""),
+                note=str(body.get("note") or ""),
+            )
+        )
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValidationError as exc:
+        raise HTTPException(422, exc.errors()) from exc
     return record.model_dump(mode="json")
 
 
@@ -214,16 +245,18 @@ async def packages_page(
     request: Request,
     status: str | None = Query(None),
     channel: str | None = Query(None),
+    review: str | None = Query(None),
     limit: int = Query(50, le=500),
     offset: int = Query(0, ge=0),
 ):
-    """Server-rendered package list for review (read-only)."""
+    """Server-rendered package list for review."""
     account_key = config["sellfox"]["proxy_account"]
     result = _get_package_list_service().list(
         PackageListRequest(
             account_key=account_key,
             package_status=status,
             channel_name=channel,
+            local_review_status=review,
             limit=limit,
             offset=offset,
         )
@@ -235,6 +268,7 @@ async def packages_page(
             "account_key": account_key,
             "status": status or "",
             "channel": channel or "",
+            "review": review or "",
             "total": result.total,
             "items": result.items,
         },
@@ -243,7 +277,7 @@ async def packages_page(
 
 @app.get("/packages/{package_sn}", response_class=HTMLResponse)
 async def package_detail_page(request: Request, package_sn: str):
-    """Server-rendered package detail for review (read-only)."""
+    """Server-rendered package detail for review."""
     record = _get_package_repository().get(
         config["sellfox"]["proxy_account"],
         package_sn,
@@ -253,7 +287,39 @@ async def package_detail_page(request: Request, package_sn: str):
     return templates.TemplateResponse(
         request,
         "package_detail.html",
-        {"package": record},
+        {"package": record, "message": ""},
+    )
+
+
+@app.post("/packages/{package_sn}/review", response_class=HTMLResponse)
+async def package_review_form(request: Request, package_sn: str):
+    """HTML form post for local review decision."""
+    form = await request.form()
+    try:
+        record = _get_package_review_service().review(
+            PackageReviewRequest(
+                account_key=config["sellfox"]["proxy_account"],
+                package_sn=package_sn,
+                actor=str(form.get("actor") or "web-user"),
+                decision=str(form.get("decision") or ""),
+                note=str(form.get("note") or ""),
+            )
+        )
+        message = f"已更新本地审核状态为 {record.local_review_status}"
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        record = _get_package_repository().get(
+            config["sellfox"]["proxy_account"],
+            package_sn,
+        )
+        if record is None:
+            raise HTTPException(404, f"Package {package_sn} not found") from exc
+        message = f"审核失败: {exc}"
+    return templates.TemplateResponse(
+        request,
+        "package_detail.html",
+        {"package": record, "message": message},
     )
 
 

@@ -93,6 +93,7 @@ class PackageRow(Base):
     platform_name: Mapped[str] = mapped_column(String, default="")
     marketplace: Mapped[str] = mapped_column(String, default="")
     package_status: Mapped[str] = mapped_column(String, default="")
+    local_review_status: Mapped[str] = mapped_column(String, default="pending")
     address_name: Mapped[str] = mapped_column(String, default="")
     address_company: Mapped[str] = mapped_column(String, default="")
     address_line_1: Mapped[str] = mapped_column(String, default="")
@@ -313,12 +314,51 @@ class PackageRepository:
             ).all()
             return self._to_record(account_key, package, order_rows, item_rows)
 
+    def set_local_review_status(
+        self,
+        *,
+        account_key: str,
+        package_sn: str,
+        local_review_status: str,
+    ) -> SellfoxPackageRecord:
+        with self._session_factory.begin() as session:
+            package = session.scalar(
+                select(PackageRow)
+                .join(
+                    ShippingAccountRow,
+                    ShippingAccountRow.id == PackageRow.account_id,
+                )
+                .where(
+                    ShippingAccountRow.account_key == account_key,
+                    PackageRow.package_sn == package_sn,
+                )
+            )
+            if package is None:
+                raise LookupError(f"Package {package_sn} not found")
+            package.local_review_status = local_review_status
+            order_rows = session.scalars(
+                select(OrderRow)
+                .join(
+                    PackageOrderRow,
+                    PackageOrderRow.order_id == OrderRow.id,
+                )
+                .where(PackageOrderRow.package_id == package.id)
+                .order_by(OrderRow.external_order_id)
+            ).all()
+            item_rows = session.scalars(
+                select(PackageItemRow)
+                .where(PackageItemRow.package_id == package.id)
+                .order_by(PackageItemRow.order_item_id)
+            ).all()
+            return self._to_record(account_key, package, order_rows, item_rows)
+
     def list_packages(
         self,
         *,
         account_key: str,
         package_status: str | None = None,
         channel_name: str | None = None,
+        local_review_status: str | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[PackageListItem]:
@@ -335,6 +375,10 @@ class PackageRepository:
                 query = query.where(PackageRow.package_status == package_status)
             if channel_name is not None:
                 query = query.where(PackageRow.channel_name == channel_name)
+            if local_review_status is not None:
+                query = query.where(
+                    PackageRow.local_review_status == local_review_status
+                )
             query = (
                 query.order_by(PackageRow.package_sn)
                 .offset(offset)
@@ -364,6 +408,7 @@ class PackageRepository:
                         account_key=account,
                         package_sn=package.package_sn,
                         package_status=package.package_status,
+                        local_review_status=package.local_review_status or "pending",
                         channel_name=package.channel_name,
                         shop_name=package.shop_name,
                         marketplace=package.marketplace,
@@ -381,6 +426,7 @@ class PackageRepository:
         account_key: str,
         package_status: str | None = None,
         channel_name: str | None = None,
+        local_review_status: str | None = None,
     ) -> int:
         with self._session_factory() as session:
             query = (
@@ -396,6 +442,10 @@ class PackageRepository:
                 query = query.where(PackageRow.package_status == package_status)
             if channel_name is not None:
                 query = query.where(PackageRow.channel_name == channel_name)
+            if local_review_status is not None:
+                query = query.where(
+                    PackageRow.local_review_status == local_review_status
+                )
             return session.scalar(query) or 0
 
     def append_audit_event(
@@ -588,6 +638,7 @@ class PackageRepository:
             platform_name=package.platform_name,
             marketplace=package.marketplace,
             package_status=package.package_status,
+            local_review_status=package.local_review_status or "pending",
             address=SellfoxPackageAddress(
                 name=package.address_name,
                 company=package.address_company,
