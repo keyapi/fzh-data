@@ -51,8 +51,9 @@ uv run python -m sellfox_shipping.cli packages-list --status to_audit --json
 # GET /api/packages?status=to_audit&channel=蜴国际
 # GET /api/packages/{package_sn}
 
-# Web Server (legacy FastAPI + FastMCP，尚无 OIDC)
+# Web Server（FastAPI；FastMCP 未安装时自动跳过）
 uv run python -m sellfox_shipping.cli serve
+# 打开 http://127.0.0.1:8401/packages
 
 # Legacy 订单 CLI（勿作为主流程扩展）
 uv run python -m sellfox_shipping.cli fetch --date-start 2026-07-01 --date-end 2026-07-15
