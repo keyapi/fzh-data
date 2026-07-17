@@ -3,10 +3,28 @@ okf: v0.1
 type: Log
 module: sellfox_shipping
 created: 2026-07-15
-updated: 2026-07-16
+updated: 2026-07-17
 ---
 
 # sellfox_shipping — 变更日志
+
+## 2026-07-17 — 重尺来自商品 pageList（非包裹）
+
+- 包裹 API 确无重尺；`/api/commodity/pageList.json` + `skus` + `isGroup=0` 返回 cartonWeight/LWH
+- 试转换重生成：8/10 有值；KS0002-DL-194-* carton 为 0
+- 文档：`docs/research/sellfox-carton-dims-source-2026-07-17.md`；发货编码暂固定 S0143
+
+## 2026-07-17 — 赛狐→蜴国际试转换 + Colab 遗产
+
+- 确认：参考编号=赛狐 `packageSn`（`P2A…`）；P0 样例 `P8140…` 为通途号
+- 试生成 `trial-sellfox-to-lizard-upload-10.xlsx`（重量空：API 无 packageWeight）
+- Colab notebook 摘要：`docs/research/colab-notebook-legacy-summary-2026-07-17.md`（notebook 主做背贴，不生成上传表）
+
+## 2026-07-17 — 蜴国际 P0 样例列映射
+
+- 样例已入 `数据源/蜥蜴国际-p0-样例/`（gitignore）；① 仅表头无数据，②③④ 为同事 B 同批往返
+- 分析结论：`docs/research/lizard-p0-column-mapping-2026-07-17.md`
+- 匹配键 `参考编号/Reference Code`；追踪号 `物流单号`；上传重量为克、返回为 kg
 
 ## 2026-07-17 — 本地包裹审核写操作
 

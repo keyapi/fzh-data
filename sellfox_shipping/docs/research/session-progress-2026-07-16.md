@@ -143,8 +143,19 @@ uv run python -m sellfox_shipping.cli packages-sync \
 
 ### 阻塞 P1B 的 P0（业务依赖，代码无法替代）
 
-- [ ] 收集蜴国际：上传 Excel、返回追踪号 Excel、PDF 样例（可脱敏）  
-- [ ] 确认客户参考号列名/格式及是否原样回传 `package_sn`  
+- [x] 收集蜴国际：上传 Excel、返回追踪号 Excel、PDF 样例（已放到 `数据源/蜥蜴国际-p0-样例/`；① 赛狐导出仅表头无数据）  
+- [x] 列结构分析：见 [lizard-p0-column-mapping-2026-07-17.md](lizard-p0-column-mapping-2026-07-17.md)  
+  - 匹配键：`参考编号/Reference Code`（形如 `P8140…`）上传/返回原样一致  
+  - 追踪号列：`物流单号`；蜴国际侧单号：`订单号`（`M6180…`，非赛狐 orderId）  
+  - **重量单位陷阱**：上传 `重量`=克，返回 `重量(kg)`=千克  
+  - ① 与 ②–④ 非同批；②⊂③（38/99）；当前本地 sync 库与样例 `P8140…` 零重叠  
+- [x] **业务确认**：参考号=赛狐 `packageSn`；重量按蜴国际模板要求换算即可  
+- [x] Colab notebook 遗产摘要（背贴为主，不生成上传 Excel）  
+- [x] 赛狐→蜴国际试转换 10 单；重尺改走 commodity pageList（8/10 命中）  
+- [ ] 未命中 SKU（如 KS0002-DL-194）接 ERPNext 重量模板兜底  
+- [ ] 发货编码：暂 `S0143`；仓别映射（USNJ/USTX）待业务确认后再做  
+- [ ] 同事 A 重导①（有数据行的赛狐按包裹导出）  
+- [ ] 明确 `submitToPlatform` 合约验证范围  
 - [ ] 用测试包裹验证赛狐提交契约与回读语义（`submitToPlatform` 幂等性、回读权威性仍为待验证假设）
 
 ### P1A 后续（可继续编码，不依赖蜴国际样例）
