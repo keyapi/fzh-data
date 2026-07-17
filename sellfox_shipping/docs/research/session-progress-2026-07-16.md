@@ -554,11 +554,37 @@ uv run python -m sellfox_shipping.cli packages-verify-intent \
 
 与 §21 一致：本地先轮询；公网就绪后再考虑填 Hook / 验订阅。
 
+## 23. 2026-07-17 续：VITE 选型 — httpx，不做 Karrio custom connector
+
+**决策文档：** [vite-httpx-vs-karrio-decision-2026-07-17.md](vite-httpx-vs-karrio-decision-2026-07-17.md)
+
+| 结论 | 说明 |
+|------|------|
+| 采用 | 已落地的 `ViteGofoClient`（httpx） |
+| 不做 | 为 VITE 新建 Karrio extension（无现成 connector，成本 > 收益） |
+| 仍不做 | Karrio Server；通途生产切换 |
+
+P1C VITE spike 技术退出门：**关闭**（真测 + 决策记录）。生产接入仍另需业务门。
+
+## 24. 2026-07-17 续：VITE 测试环境 cancel
+
+**脚本：** `scripts/vite_test_create_cancel_smoke.py`（create → poll OK → DELETE）。
+
+| 项 | 结果 |
+|----|------|
+| cancel 路径 | **`orderId` 可用**（`DELETE /shipment2/label/{orderId}`） |
+| 响应 | `status=success`，message canceled |
+| getLabel 之后 | `status=canceled`，`url` 空 |
+| 余额 | 创建前=取消后（本票 **$3.80 退回** 虚拟余额） |
+| 等到 OK | 约 1 分钟级 pending 后再 cancel |
+
+旧票 `PPGF-1784276863…` 再 cancel 已返回 `no-shipmentLabel-exist`（环境清理/过期），故用新票闭环。
+
 ### 下一刀
 
-- Karrio custom connector 对比笔记（仍可选）
-- 多实例 submit 协调 / OIDC / 蜴国际 createOrder 验证后 adapter
-- （可选）测试环境 cancel label
+- 多实例 submit 协调 / 钉钉 OIDC（P1A 债）
+- 蜴国际：余额恢复后 createOrder+getLabel 冒烟；此前 Excel 主路径
+- 将 `ViteGofoClient` 挂到未来 `ApiCarrierAdapter`（单位换算、requestId、轮询/cancel）— 有业务范围时再开
 
 ## 14. 本文档维护约定
 

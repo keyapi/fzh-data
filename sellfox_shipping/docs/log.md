@@ -8,6 +8,16 @@ updated: 2026-07-17
 
 # sellfox_shipping — 变更日志
 
+## 2026-07-17 — VITE cancel 真测 + Karrio 决策提交
+
+- `cancel_label`：DELETE 可用 orderId；create→OK→cancel 余额退回
+- 决策文：`vite-httpx-vs-karrio-decision-2026-07-17.md`（采用 httpx）
+
+## 2026-07-17 — VITE 决策：httpx，不做 Karrio custom connector
+
+- 决策文：`docs/research/vite-httpx-vs-karrio-decision-2026-07-17.md`
+- P1C VITE spike 技术退出门关闭；不切换通途
+
 ## 2026-07-17 — 异步面单 / Webhook 口径落档
 
 - 用户：VITE API Hook URL 空；蜴国际有 webhook；本地部署

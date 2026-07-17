@@ -81,6 +81,16 @@ class ViteGofoClient:
             return [data]
         raise ViteClientError("VITE label response is neither list nor object")
 
+    def cancel_label(self, label_ref: str) -> dict[str, Any]:
+        """DELETE label. Path accepts requestId or orderId (colleague: prefer orderId)."""
+        ref = (label_ref or "").strip()
+        if not ref:
+            raise ValueError("label_ref is required")
+        data = self._request_json("DELETE", f"/shipment2/label/{ref}")
+        if not isinstance(data, dict):
+            raise ViteClientError("VITE cancel response is not a JSON object")
+        return data
+
     def _post_json(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
         data = self._request_json("POST", path, body=body)
         if not isinstance(data, dict):

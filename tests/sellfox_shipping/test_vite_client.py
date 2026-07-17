@@ -80,6 +80,21 @@ def test_401_raises_vite_client_error():
     assert exc.value.status_code == 401
 
 
+def test_cancel_label_delete():
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "DELETE"
+        assert request.url.path == "/shipment2/label/PPGF-1"
+        return httpx.Response(
+            200,
+            json={"status": "success", "message": "target label has been canceled"},
+        )
+
+    with _client(handler) as client:
+        out = client.cancel_label("PPGF-1")
+
+    assert out["status"] == "success"
+
+
 def test_empty_api_key_rejected():
     with pytest.raises(ValueError, match="api_key"):
         ViteGofoClient(api_key="  ")
