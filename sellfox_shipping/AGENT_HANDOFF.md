@@ -22,7 +22,7 @@ updated: 2026-07-17
 
 **阶段口径：** 旧「P1 骨架完成 / P2 FedEx」作废；现行阶段为 **P0 → P1A → P1B → P1C → P2+**。旧代码称 **legacy skeleton**。  
 **当前：** P1A/P1B 可用；**P1C 进行中**（Intent/CAS mock 已落地；默认 dry-run CLI）。  
-**外部：** VITE 见 main `vite-api/`（PR #88/#89）；蜴国际 API 同事测试中。**暂不提 PR。**
+**外部：** VITE → `vite-api/`（#88/#89）；蜴国际 API 文档 → `蜴国际-API/`（#90，下单未测）。**暂不提 PR。**
 
 ## 架构
 

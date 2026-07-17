@@ -323,12 +323,30 @@ async def package_detail_page(request: Request, package_sn: str):
     return templates.TemplateResponse(
         request,
         "package_detail.html",
-        {
-            "package": record,
-            "message": "",
-            "carton_rows": _carton_rows_for_package(account_key, record),
-        },
+        _package_detail_context(account_key, record, message=""),
     )
+
+
+def _package_detail_context(account_key: str, record, *, message: str) -> dict:
+    from sellfox_shipping.submission_state import aggregate_package_submission_state
+
+    repo = _get_package_repository()
+    intents = repo.list_submission_intents_for_package(
+        account_key=account_key,
+        package_sn=record.package_sn,
+    )
+    package_submission_state = (
+        aggregate_package_submission_state([i.status for i in intents])
+        if intents
+        else ""
+    )
+    return {
+        "package": record,
+        "message": message,
+        "carton_rows": _carton_rows_for_package(account_key, record),
+        "submission_intents": intents,
+        "package_submission_state": package_submission_state,
+    }
 
 
 def _carton_rows_for_package(account_key: str, record) -> list[dict]:
@@ -384,11 +402,7 @@ async def package_review_form(request: Request, package_sn: str):
     return templates.TemplateResponse(
         request,
         "package_detail.html",
-        {
-            "package": record,
-            "message": message,
-            "carton_rows": _carton_rows_for_package(account_key, record),
-        },
+        _package_detail_context(account_key, record, message=message),
     )
 
 
@@ -428,11 +442,79 @@ async def package_carton_override_form(request: Request, package_sn: str):
     return templates.TemplateResponse(
         request,
         "package_detail.html",
-        {
-            "package": record,
-            "message": message,
-            "carton_rows": _carton_rows_for_package(account_key, record),
-        },
+        _package_detail_context(account_key, record, message=message),
+    )
+
+
+@app.post("/packages/{package_sn}/prepare-submit", response_class=HTMLResponse)
+async def package_prepare_submit_form(request: Request, package_sn: str):
+    """Create SubmissionIntent rows (no HTTP)."""
+    from sellfox_shipping.submission_service import SubmissionService
+
+    form = await request.form()
+    account_key = config["sellfox"]["proxy_account"]
+    repo = _get_package_repository()
+    actor = str(form.get("actor") or "web-user").strip() or "web-user"
+    try:
+        result = SubmissionService(repo).prepare_intents_for_package(
+            account_key=account_key,
+            package_sn=package_sn,
+            actor=actor,
+            carrier_name=str(form.get("carrier_name") or "").strip(),
+            shipping_service=str(form.get("shipping_service") or "").strip(),
+        )
+        message = (
+            f"已准备提交意图 {len(result.intent_ids)} 条；"
+            f"包裹聚合状态 {result.package_submission_state}"
+        )
+    except Exception as exc:  # noqa: BLE001
+        message = f"准备提交失败: {exc}"
+    record = repo.get(account_key, package_sn)
+    if record is None:
+        raise HTTPException(404, f"Package {package_sn} not found")
+    return templates.TemplateResponse(
+        request,
+        "package_detail.html",
+        _package_detail_context(account_key, record, message=message),
+    )
+
+
+@app.post(
+    "/packages/{package_sn}/submit-intent/{intent_id}",
+    response_class=HTMLResponse,
+)
+async def package_submit_intent_dry_run(
+    request: Request,
+    package_sn: str,
+    intent_id: int,
+):
+    """Dry-run one intent from Web (never calls submitToPlatform)."""
+    from sellfox_shipping.submission_service import SubmissionService
+
+    form = await request.form()
+    account_key = config["sellfox"]["proxy_account"]
+    repo = _get_package_repository()
+    actor = str(form.get("actor") or "web-user").strip() or "web-user"
+    try:
+        result = SubmissionService(repo).submit_intent(
+            intent_id=intent_id,
+            actor=actor,
+            dry_run=True,
+            allow_side_effects=False,
+        )
+        message = (
+            f"Intent #{intent_id} dry-run OK；状态 {result.intent_status}；"
+            f"聚合 {result.package_submission_state}（未调用 HTTP）"
+        )
+    except Exception as exc:  # noqa: BLE001
+        message = f"dry-run 失败: {exc}"
+    record = repo.get(account_key, package_sn)
+    if record is None:
+        raise HTTPException(404, f"Package {package_sn} not found")
+    return templates.TemplateResponse(
+        request,
+        "package_detail.html",
+        _package_detail_context(account_key, record, message=message),
     )
 
 
