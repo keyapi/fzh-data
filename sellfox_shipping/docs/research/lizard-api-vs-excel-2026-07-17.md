@@ -26,13 +26,15 @@ tags: [sellfox-shipping, lizard, api, excel]
 ## API 主流程
 
 ```text
-getToken → rates/ratesv2 → createOrder → getLabel（异步，建议约 30s 轮询）
+getToken → rates/ratesv2 → createOrder → getLabel（异步）
 ```
 
+- **[用户转发 · 蜴国际 IT]** 因跨境网络，面单及跟踪号异步返回；创建订单成功后调查询接口取面单，**建议约 30 秒请求一次**。
 - 业务 Header：`Authorization: {access_token}`
 - Excel 的发件编码（如 **S0143**）在 API 中须展开为完整 `shipper_address`（须后台已备案）
 - `reference_no` ≈ 我方参考编号（应对齐赛狐 `packageSn`）
 - 计量：`weight_unit_type` 1=LBS/In、2=KG/CM
+- 生产后台有 Webhook 地址配置；**本地部署阶段不填、不以 webhook 为主路径**（见 [async-label-and-webhook-2026-07-17.md](async-label-and-webhook-2026-07-17.md)）
 
 ## 与本模块 Excel 路径对照
 

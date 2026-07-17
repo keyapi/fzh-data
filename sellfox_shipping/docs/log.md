@@ -8,6 +8,12 @@ updated: 2026-07-17
 
 # sellfox_shipping — 变更日志
 
+## 2026-07-17 — 异步面单 / Webhook 口径落档
+
+- 用户：VITE API Hook URL 空；蜴国际有 webhook；本地部署
+- 蜴国际 IT：getLabel 异步，建议 30s 轮询
+- 新增 `docs/research/async-label-and-webhook-2026-07-17.md`
+
 ## 2026-07-17 — VITE 测试环境 createShipment + getLabel
 
 - 1 票 GOFO_PX/PARCEL：创建 OK（pending→扣 $3.8）；getLabel 异步约 1–3 分钟后 OK

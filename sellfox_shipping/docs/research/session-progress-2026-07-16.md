@@ -542,6 +542,18 @@ uv run python -m sellfox_shipping.cli packages-verify-intent \
 
 未测 cancel。同账户余额在轮询窗口内曾继续下降（疑同事并用测试账户），与本单扣费可分开看。
 
+## 22. 2026-07-17 续：Webhook 空置 + 异步轮询口径
+
+**用户确认：**
+
+- VITE 测试后台 **API Hook URL** 暂空（生产估计同类）；蜴国际生产后台亦有 webhook 配置。
+- 当前为 **本地测试部署** → 不以 webhook 为主路径。
+- 蜴国际 IT：面单/追踪号异步；创建成功后查接口，**建议 30s 一次**。
+
+**落档：** [async-label-and-webhook-2026-07-17.md](async-label-and-webhook-2026-07-17.md)
+
+与 §21 一致：本地先轮询；公网就绪后再考虑填 Hook / 验订阅。
+
 ### 下一刀
 
 - Karrio custom connector 对比笔记（仍可选）
