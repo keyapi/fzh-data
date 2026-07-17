@@ -120,7 +120,7 @@ class LizardExportRequest(BaseModel):
 class LizardExportResult(BaseModel):
     template_version: str
     output_path: str
-    file_sha256: str
+    file_md5: str
     total_candidates: int
     exported: int
     skipped: int
@@ -168,7 +168,7 @@ class ExportLizardUploadService:
         )
         path = write_upload_xlsx(built.dataframe, request.output_path)
         content = path.read_bytes()
-        digest = hashlib.sha256(content).hexdigest()
+        digest = hashlib.md5(content, usedforsecurity=False).hexdigest()
         summary = (
             f"exported={built.exported} skipped={built.skipped} "
             f"template={LIZARD_TEMPLATE_VERSION}"
@@ -210,7 +210,7 @@ class ExportLizardUploadService:
         return LizardExportResult(
             template_version=built.template_version,
             output_path=str(path),
-            file_sha256=digest,
+            file_md5=digest,
             total_candidates=len(packages),
             exported=built.exported,
             skipped=built.skipped,

@@ -43,9 +43,8 @@
             <h2>导出 / 导入文件登记</h2>
             <p class="hint">
                 包含<strong>系统生成</strong>的上传 Excel，以及<strong>人工上传</strong>的追踪号返回 Excel。
-                磁盘按 <code>content_hash</code>（SHA-256）去重；物理路径扁平：
-                <code>data/artifacts/private/files/…</code>（对齐 ERPNext <code>/private/files</code> 习惯，
-                非 MD5；详见调研文档 artifact-vs-erpnext-file）。
+                磁盘按 <code>content_hash</code>（MD5，与 ERPNext File 一致）去重；物理路径扁平：
+                <code>data/artifacts/private/files/…</code>（对齐 ERPNext <code>/private/files</code> 习惯）。
             </p>
             <form class="toolbar" method="get" action="/lizard/artifacts">
                 <select name="kind">

@@ -312,8 +312,8 @@ git status
 | 是否含系统生成文件？ | **是**。`lizard-export` / Web 导出生成的上传 Excel 会登记为 `lizard_upload_export` |
 | 人工上传？ | **是**。导入追踪号 Excel 登记为 `lizard_tracking_import` |
 | 在哪里看？ | Web：`/lizard/artifacts`；磁盘：`data/artifacts/private/files/…` |
-| content_hash？ | **SHA-256**（64 hex）。ERPNext File 常见为 MD5（32 hex）。**非必须不对齐**——见对照文档「为何没硬对齐」；若要跨系统比 hash 可改 MD5/双写 |
-| 与 ERPNext File 关系？ | 扁平 `private/files` + hash 去重 blob；`virtual_folder` 不改物理路径。详见 [artifact-vs-erpnext-file](artifact-vs-erpnext-file-2026-07-17.md) |
+| content_hash？ | **MD5**（32 hex），与 ERPNext File 对齐 |
+| 与 ERPNext File 关系？ | 扁平 `private/files` + MD5 去重 blob；`virtual_folder` 不改物理路径。详见 [artifact-vs-erpnext-file](artifact-vs-erpnext-file-2026-07-17.md) |
 | ShippingBatch？ | Web：`/lizard/batches`；导出自动建批；导入填批次 ID 更新包裹行状态 |
 
 ## 13. 2026-07-17 续：ShippingBatch MVP + 扁平 Artifact + 操作记录
@@ -329,10 +329,10 @@ git status
 | Alembic `0005` | 表 `shipping_batches`、`shipping_batch_packages` |
 | 导出建批 | `ExportLizardUploadService` → `create_export_batch`；结果含 `batch_id` |
 | 导入回填 | `LizardImportRequest.batch_id` 可选；`apply_import_to_batch`；状态 `exported` → `tracking_imported` |
-| Artifact 路径 | `data/artifacts/private/files/{stem}_{hash8}{ext}`；同 SHA-256 共用 blob |
+| Artifact 路径 | `data/artifacts/private/files/{stem}_{hash8}{ext}`；同 **MD5** 共用 blob（对齐 EN） |
 | Web | `/lizard/batches`、`/lizard/batches/{id}`；导入表单「批次 ID」；导航「批次」 |
 | CLI | `lizard-import-tracking --batch-id N` |
-| 文档 | `artifact-vs-erpnext-file-2026-07-17.md`（含 MD5 vs SHA-256 答疑） |
+| 文档 | `artifact-vs-erpnext-file-2026-07-17.md`（content_hash = MD5） |
 
 ### 操作员步骤（本地，不调用 submitToPlatform）
 
@@ -374,12 +374,13 @@ git status
 
 - `submitToPlatform` / 赛狐追踪号回写
 - 完整提交状态机、钉钉 OIDC
-- Artifact 公网 `/files` 分流；强制与 EN `content_hash`（MD5）同值（见对照文档；可后续改）
+- Artifact 公网 `/files` 分流
 
 ### 已知坑
 
 - 旧 `serve` 无 `--reload` 时改路由会 404 → Ctrl+C 后带 `--reload` 重启
 - 历史 38 单蜥蜴样例 `trackNo` 多为 packageSn 占位 → **勿**当回写测试数据
+- 若本地曾用 SHA-256 登记制品：清空 `data/artifacts/` 后重新导出/导入即可（算法已改 MD5）
 - `数据源/**`、`data/`、真实 Key 不入 Git
 
 ## 14. 本文档维护约定
