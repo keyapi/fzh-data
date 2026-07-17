@@ -360,6 +360,8 @@ def serve(
 
     typer.echo(f"Starting sellfox-shipping on {host}:{port}")
     typer.echo(f"  Web UI:  http://{host}:{port}/packages")
+    typer.echo(f"  Export:  http://{host}:{port}/lizard/export")
+    typer.echo(f"  Import:  http://{host}:{port}/lizard/import")
     typer.echo(f"  REST:    http://{host}:{port}/api/")
     try:
         import fastmcp  # noqa: F401
