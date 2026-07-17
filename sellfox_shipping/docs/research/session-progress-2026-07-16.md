@@ -149,12 +149,13 @@ uv run python -m sellfox_shipping.cli packages-sync \
 
 ### P1A 后续（可继续编码，不依赖蜴国际样例）
 
-- [x] 正式 schema migration（Alembic `0001_package_schema`）  
+- [x] 正式 schema migration（Alembic `0001` + `0002_local_review_status`）  
 - [ ] 钉钉 OIDC；禁止未认证暴露 PII（legacy Web 仍绑定 `0.0.0.0` 且无 auth）  
-- [x] 包裹查询/审核只读 Web + REST（审核写操作尚未做）  
-- [x] `AuditEvent` 记录 actor（同步路径）  
-- [ ] 逐步废弃或隔离 legacy 订单入口，避免双模型漂移  
-- [ ] 更新 skill `.claude/skills/sellfox-shipping/SKILL.md`（仍写「P1 骨架 / P2 FedEx」，已过时）
+- [x] 包裹查询 Web + REST  
+- [x] 本地审核写操作（通过/驳回/重置 + AuditEvent）  
+- [x] `AuditEvent` 记录 actor（同步 + 审核）  
+- [x] Skill 已更新为 P1A 包裹主路径（`.agents/skills/sellfox-shipping`）  
+- [ ] 逐步废弃或隔离 legacy 订单入口，避免双模型漂移
 
 ### P1B / P1C（依赖样例或明确测试账号）
 
@@ -181,9 +182,13 @@ uv run python -m sellfox_shipping.cli packages-sync \
 | Commit | 说明 |
 |--------|------|
 | `27cd46d` | 独立调研 + OKF 导航 + 命名边界 |
-| `0b157e7` | P1A 包裹只读同步 + 21 tests |
-| `275919e` | 本文 + OKF 导航联动（`session-progress`、索引、`AGENT_HANDOFF`） |
-| `ebed58a` | `packages-list` + `AuditEvent`；测试 26 passed |
+| `0b157e7` | P1A 包裹只读同步 |
+| `275919e` / `ebed58a` | 交接文档；packages-list + AuditEvent |
+| `a03f3e2` | PR #88 合入 main |
+| `4605670`～`bda5e0d` | REST + Jinja 包裹页 |
+| `7472fbc` | Alembic `0001` |
+| `97cdcb1`～`1a2f340` | serve 可选 MCP；线上 proxy + `.env` 加载；真实同步验证 |
+| （本切片） | 本地审核写操作 `local_review_status` + migration `0002` |
 
 ### 7.1 并行工作边界（2026-07-16）
 

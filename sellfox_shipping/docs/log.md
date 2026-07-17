@@ -8,6 +8,13 @@ updated: 2026-07-16
 
 # sellfox_shipping — 变更日志
 
+## 2026-07-17 — 本地包裹审核写操作
+
+- 新增 `local_review_status`（pending/approved/rejected）与 Alembic `0002`
+- `POST /api/packages/{sn}/review` + 详情页表单；同步不覆盖本地审核状态
+- 审核写入 `packages.review` AuditEvent；列表可按本地审核筛选
+- 测试 44 passed
+
 ## 2026-07-17 — serve 不依赖 fastmcp
 
 - `main.py` 将 FastMCP 改为可选挂载；未安装时仍可启动 Web/REST

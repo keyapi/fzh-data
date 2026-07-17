@@ -47,12 +47,18 @@
             <h2>本地包裹（只读）</h2>
             <form class="toolbar" method="get" action="/packages">
                 <select name="status">
-                    <option value="">全部状态</option>
+                    <option value="">全部赛狐状态</option>
                     <option value="to_audit" {% if status == 'to_audit' %}selected{% endif %}>待审核</option>
                     <option value="to_process" {% if status == 'to_process' %}selected{% endif %}>待处理</option>
                     <option value="to_print" {% if status == 'to_print' %}selected{% endif %}>待打单</option>
                     <option value="has_shipped" {% if status == 'has_shipped' %}selected{% endif %}>已发货</option>
                     <option value="has_canceled" {% if status == 'has_canceled' %}selected{% endif %}>已作废</option>
+                </select>
+                <select name="review">
+                    <option value="">全部本地审核</option>
+                    <option value="pending" {% if review == 'pending' %}selected{% endif %}>待审</option>
+                    <option value="approved" {% if review == 'approved' %}selected{% endif %}>已通过</option>
+                    <option value="rejected" {% if review == 'rejected' %}selected{% endif %}>已驳回</option>
                 </select>
                 <input type="text" name="channel" value="{{ channel or '' }}" placeholder="渠道名，如 蜴国际" />
                 <button type="submit">筛选</button>
@@ -62,7 +68,8 @@
                 <thead>
                     <tr>
                         <th>包裹号</th>
-                        <th>状态</th>
+                        <th>赛狐状态</th>
+                        <th>本地审核</th>
                         <th>渠道</th>
                         <th>店铺</th>
                         <th>订单数</th>
@@ -76,6 +83,7 @@
                     <tr>
                         <td><a class="pkg" href="/packages/{{ item.package_sn }}">{{ item.package_sn }}</a></td>
                         <td><span class="badge badge-info">{{ item.package_status or '—' }}</span></td>
+                        <td><span class="badge badge-pending">{{ item.local_review_status or 'pending' }}</span></td>
                         <td>{{ item.channel_name or '—' }}</td>
                         <td>{{ item.shop_name or '—' }}</td>
                         <td>{{ item.order_count }}</td>
@@ -84,7 +92,7 @@
                     </tr>
                     {% endfor %}
                     {% else %}
-                    <tr><td colspan="7" class="empty">暂无包裹。请先运行 packages-sync 同步到本地库。</td></tr>
+                    <tr><td colspan="8" class="empty">暂无包裹。请先运行 packages-sync 同步到本地库。</td></tr>
                     {% endif %}
                 </tbody>
             </table>

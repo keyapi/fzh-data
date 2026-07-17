@@ -11,9 +11,6 @@ from alembic.config import Config
 PACKAGE_ROOT = Path(__file__).resolve().parent
 ALEMBIC_INI = PACKAGE_ROOT / "alembic.ini"
 MIGRATIONS_DIR = PACKAGE_ROOT / "migrations"
-HEAD_REVISION = "0001_package_schema"
-
-
 def upgrade_schema(db_path: str | Path) -> None:
     """Upgrade package tables to head, or stamp legacy create_all databases."""
     path = Path(db_path)
@@ -32,7 +29,9 @@ def upgrade_schema(db_path: str | Path) -> None:
         }
 
     if "shipping_packages" in table_names and "alembic_version" not in table_names:
-        command.stamp(cfg, HEAD_REVISION)
+        # Legacy create_all DBs: stamp first revision then apply later migrations.
+        command.stamp(cfg, "0001_package_schema")
+        command.upgrade(cfg, "head")
         return
 
     command.upgrade(cfg, "head")

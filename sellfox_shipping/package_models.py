@@ -69,6 +69,7 @@ class SellfoxPackageRecord(BaseModel):
     platform_name: str = ""
     marketplace: str = ""
     package_status: str = ""
+    local_review_status: str = "pending"
     address: SellfoxPackageAddress = Field(default_factory=SellfoxPackageAddress)
     logistics: SellfoxPackageLogistics = Field(
         default_factory=SellfoxPackageLogistics
@@ -96,6 +97,7 @@ class PackageListItem(BaseModel):
     account_key: str
     package_sn: str
     package_status: str = ""
+    local_review_status: str = "pending"
     channel_name: str = ""
     shop_name: str = ""
     marketplace: str = ""
