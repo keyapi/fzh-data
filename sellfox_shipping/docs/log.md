@@ -8,6 +8,20 @@ updated: 2026-07-17
 
 # sellfox_shipping — 变更日志
 
+## 2026-07-17 — PDF 面单通途→赛狐替换（夹具 04）
+
+- Claude：`pymupdf` 替换 38 页 `CUST REF`/`Ref No`；写入 `sellfox-native-fixture/04-*.pdf`
+- 文档：`pnumber-to-sellfox-trace` §6；夹具总览同步含 04
+- 可提交脚本：`scripts/replace_tongtu_refs_in_labels.py`（`数据源/` 下入口 gitignore，仅转调）
+- 样例 PDF/输出 PDF **不入 git**
+
+## 2026-07-17 — 赛狐原生蜴国际测试夹具 + 本地导入实测
+
+- 子目录 `数据源/…/sellfox-native-fixture/`（gitignore）：02/03 按 packageSn 重建；后补 04 面单
+- 脚本：`scripts/rebuild_sellfox_lizard_fixtures.py`；说明见 `docs/research/sellfox-native-lizard-fixture-2026-07-17.md`
+- 修正 P81401195 Amazon 尾号 `…0563432`
+- 导入落库：`tracking_number == package_sn` 视为占位可覆盖；补同步 7 个 `P2AJA9T…` 后 smoke：**38/38** persisted，conflicts=0；未调用 submitToPlatform
+
 ## 2026-07-17 — 状态澄清 + 通途 P 号追溯文档
 
 - 新增 `local-vs-sellfox-status`：本地通过/驳回不改赛狐；导出数据来自 API 汇总

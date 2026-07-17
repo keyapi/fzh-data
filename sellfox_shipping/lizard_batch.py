@@ -46,6 +46,16 @@ class PackageExportReader(Protocol):
         summary: str = "",
     ) -> int: ...
 
+    def set_tracking_number(
+        self,
+        *,
+        account_key: str,
+        package_sn: str,
+        tracking_number: str,
+        estimated_cost: float | None = None,
+        cost_currency: str | None = None,
+    ) -> SellfoxPackageRecord: ...
+
 
 class LizardExportRequest(BaseModel):
     account_key: str
@@ -154,15 +164,18 @@ class LizardImportResult(BaseModel):
     total: int
     matched: int
     unmatched: int
+    persisted: int = 0
+    conflicts: int = 0
     matched_rows: list[dict] = Field(default_factory=list)
     unmatched_rows: list[dict] = Field(default_factory=list)
+    conflict_rows: list[dict] = Field(default_factory=list)
     parsed_at: str = ""
 
 
 class ImportLizardTrackingService:
-    """Parse return Excel and reconcile against known local package_sn values.
+    """Parse return Excel, reconcile by package_sn, persist tracking locally.
 
-    Does not write tracking back to Sellfox yet (P1C). Persists audit only.
+    Does **not** call Sellfox submitToPlatform (P1C).
     """
 
     def __init__(self, reader: PackageExportReader):
@@ -181,21 +194,45 @@ class ImportLizardTrackingService:
             request.input_path,
             known_package_sns=known,
         )
+        persisted = 0
+        conflicts: list[dict] = []
+        matched_rows: list[dict] = []
+        for row in parsed.rows:
+            if not row.matched:
+                continue
+            existing = self._reader.get(request.account_key, row.package_sn)
+            prior = (existing.logistics.tracking_number if existing else "") or ""
+            # Sellfox often mirrors packageSn into trackNo before real carrier TN exists.
+            prior_is_placeholder = (not prior) or prior == row.package_sn
+            entry = {
+                "package_sn": row.package_sn,
+                "tracking_number": row.tracking_number,
+                "carrier_order_no": row.carrier_order_no,
+                "freight": row.freight,
+                "delivery_style": row.delivery_style,
+            }
+            if not prior_is_placeholder and prior != row.tracking_number:
+                entry["conflict_with"] = prior
+                conflicts.append(entry)
+                matched_rows.append(entry)
+                continue
+            self._reader.set_tracking_number(
+                account_key=request.account_key,
+                package_sn=row.package_sn,
+                tracking_number=row.tracking_number,
+                estimated_cost=row.freight,
+            )
+            persisted += 1
+            entry["persisted"] = True
+            matched_rows.append(entry)
+
         result = LizardImportResult(
             total=parsed.total,
             matched=parsed.matched,
             unmatched=parsed.unmatched,
-            matched_rows=[
-                {
-                    "package_sn": r.package_sn,
-                    "tracking_number": r.tracking_number,
-                    "carrier_order_no": r.carrier_order_no,
-                    "freight": r.freight,
-                    "delivery_style": r.delivery_style,
-                }
-                for r in parsed.rows
-                if r.matched
-            ],
+            persisted=persisted,
+            conflicts=len(conflicts),
+            matched_rows=matched_rows,
             unmatched_rows=[
                 {
                     "package_sn": r.package_sn,
@@ -204,6 +241,7 @@ class ImportLizardTrackingService:
                 }
                 for r in parsed.unmatched_rows
             ],
+            conflict_rows=conflicts,
             parsed_at=datetime.now(timezone.utc).isoformat(),
         )
         self._reader.append_audit_event(
@@ -211,6 +249,9 @@ class ImportLizardTrackingService:
             action="lizard.tracking_import",
             entity_type="batch",
             entity_id=Path(request.input_path).name,
-            summary=f"matched={result.matched} unmatched={result.unmatched} total={result.total}",
+            summary=(
+                f"matched={result.matched} persisted={result.persisted} "
+                f"conflicts={result.conflicts} unmatched={result.unmatched}"
+            ),
         )
         return result

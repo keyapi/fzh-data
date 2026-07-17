@@ -22,7 +22,8 @@ timestamp: 2026-07-16
 - [colab-notebook-legacy-summary-2026-07-17.md](colab-notebook-legacy-summary-2026-07-17.md) — 通途/FedEx/蜴国际 Colab notebook 遗产逻辑摘要。
 - [sellfox-carton-dims-source-2026-07-17.md](sellfox-carton-dims-source-2026-07-17.md) — 重尺来自商品 pageList，非包裹 API。
 - [local-vs-sellfox-status-2026-07-17.md](local-vs-sellfox-status-2026-07-17.md) — 赛狐状态 vs 本地审核；通过/驳回含义。
-- [pnumber-to-sellfox-trace-2026-07-17.md](pnumber-to-sellfox-trace-2026-07-17.md) — 通途 P 号→赛狐订单追溯（对照用）。
+- [pnumber-to-sellfox-trace-2026-07-17.md](pnumber-to-sellfox-trace-2026-07-17.md) — 通途 P 号→赛狐订单追溯；§6 PDF 面单替换。
+- [sellfox-native-lizard-fixture-2026-07-17.md](sellfox-native-lizard-fixture-2026-07-17.md) — 赛狐原生夹具 00/02/03/04（上传·追踪号·面单）。
 
 ## 全部调研文档
 
