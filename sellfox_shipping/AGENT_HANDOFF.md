@@ -60,6 +60,8 @@ uv run python -m sellfox_shipping.cli lizard-import-tracking -i path/to/return.x
 # Web Server（FastAPI；FastMCP 未安装时自动跳过）
 uv run python -m sellfox_shipping.cli serve
 # 打开 http://127.0.0.1:8401/packages
+# 导出：http://127.0.0.1:8401/lizard/export
+# 导入对账：http://127.0.0.1:8401/lizard/import
 
 # Legacy 订单 CLI（勿作为主流程扩展）
 uv run python -m sellfox_shipping.cli fetch --date-start 2026-07-01 --date-end 2026-07-15
@@ -120,26 +122,24 @@ sellfox_shipping/
 - `packages-sync` JSON CLI（强制非空 `actor`）
 - `packages-list`：本地包裹摘要查询（状态/渠道过滤）
 - `shipping_audit_events`：同步结束写 `packages.sync` 审计（含部分失败）
-- REST：`GET /api/packages`、`GET /api/packages/{package_sn}`
-- Web：`/packages`、`/packages/{package_sn}` server-rendered 审核只读页
-- Schema：Alembic `0001_package_schema`；仓库启动自动 upgrade/stamp
+- REST：`GET /api/packages`、`GET /api/packages/{package_sn}`、`POST /api/packages/{package_sn}/review`
+- Web：`/packages` 审核；`/lizard/export` 下载上传表；`/lizard/import` 追踪号导入 + 对账报告（**仅本地**）
+- P1B：`lizard-export` / `lizard-import-tracking` CLI；重尺 pageList → ERPNext ZLMB；导入可覆盖 `trackNo==packageSn` 占位
+- Schema：Alembic `0001` + `0002_local_review_status`
 
-**已验证：** `uv run pytest tests/sellfox_shipping -q` → 34 passed  
+**已验证：** `uv run pytest tests/sellfox_shipping -q` → 60 passed  
 
 **未调用：** `submitToPlatform`  
 
-**并行中（同事 Agent，未提交）：** VITE API / Karrio 调研 — 本分支暂不碰  
-
-**未实现：** 钉钉 OIDC、Artifact 批次表、ERPNext 重尺兜底、`submitToPlatform` 安全回写、追踪号写回本地/赛狐
+**未实现：** 钉钉 OIDC、Artifact 批次表、`submitToPlatform` 安全回写、缺 dims 人工补录 UI、PDF 生产拆分
 
 ## 待实现
 
 | 阶段 | 内容 | 依赖 |
 |------|------|------|
-| P0 | 赛狐提交与回读契约 | 测试包裹 |
 | P1A 后续 | OIDC；legacy 入口隔离 | 钉钉 OIDC 配置 |
-| P1B 后续 | 导入结果落库追踪号；缺 dims 人工补录 UI | — |
-| P1C | 人工确认后赛狐回写；VITE 测试 spike | 测试范围与账号 |
+| P1B 收尾 | 缺 dims 人工补录；导出批次 Artifact 表 | — |
+| P1C | 人工确认后赛狐回写；VITE 测试 spike | **干净测试包裹** + 用户确认范围（勿用已 has_shipped 的 38 单） |
 | P2+ | PDF/packlist、GLS Excel、经验证的 API connector | 各承运人资料 |
 
 详细决策与暂不做边界见综合调研文档。过程细节见 [session-progress](docs/research/session-progress-2026-07-16.md)。

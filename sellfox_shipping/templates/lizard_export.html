@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>蜴国际导出 — 赛狐尾程打单</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, 'Microsoft YaHei', sans-serif; background: #f5f5f5; color: #333; }
+        .header { background: #1a1a2e; color: #fff; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+        .header h1 { font-size: 18px; }
+        .nav a { color: #a0a0c0; text-decoration: none; margin-left: 20px; font-size: 14px; }
+        .nav a:hover, .nav a.active { color: #fff; }
+        .container { max-width: 720px; margin: 24px auto; padding: 0 24px; }
+        .panel { background: #fff; border-radius: 8px; padding: 24px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .panel h2 { font-size: 16px; margin-bottom: 8px; }
+        .hint { font-size: 13px; color: #666; margin-bottom: 16px; line-height: 1.5; }
+        label { display: block; font-size: 12px; color: #888; margin-bottom: 4px; margin-top: 12px; }
+        input { width: 100%; padding: 8px 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+        button { margin-top: 20px; background: #1a1a2e; color: #fff; border: none; padding: 10px 18px; border-radius: 4px; cursor: pointer; font-size: 14px; }
+        button:hover { background: #2a2a4e; }
+        .error { background: #f8d7da; color: #721c24; padding: 12px; border-radius: 6px; margin-bottom: 16px; font-size: 13px; }
+        .warn { background: #fff3cd; color: #856404; padding: 12px; border-radius: 6px; margin-bottom: 16px; font-size: 13px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; }
+        th, td { text-align: left; padding: 8px; border-bottom: 1px solid #eee; }
+        th { color: #888; font-size: 11px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>蜴国际 — 导出上传表</h1>
+        <div class="nav">
+            <a href="/">首页</a>
+            <a href="/packages">包裹</a>
+            <a href="/lizard/export" class="active">导出</a>
+            <a href="/lizard/import">导入追踪号</a>
+        </div>
+    </div>
+    <div class="container">
+        <div class="panel">
+            <h2>导出已通过审核的蜴国际包裹</h2>
+            <p class="hint">
+                仅导出本地审核为 <strong>approved</strong>、渠道名含「蜴」的包裹。
+                生成 Excel 供人工上传蜴国际后台；<strong>不会</strong>调用 submitToPlatform。
+            </p>
+            {% if error %}
+            <div class="error">{{ error }}</div>
+            {% endif %}
+            <div class="warn">真上传蜴国际可能产生费用；测试请先问同事，或只下载对照夹具格式。</div>
+            <form method="post" action="/lizard/export">
+                <label for="actor">操作人（审计）</label>
+                <input id="actor" name="actor" value="{{ default_actor }}" required />
+                <label for="shipper_code">发货编码 / shipper Code</label>
+                <input id="shipper_code" name="shipper_code" value="{{ default_shipper }}" />
+                <label for="limit">最多条数</label>
+                <input id="limit" name="limit" type="number" min="1" max="5000" value="{{ default_limit }}" />
+                <button type="submit">生成并下载 Excel</button>
+            </form>
+            {% if skipped_rows %}
+            <h2 style="margin-top:24px">跳过明细</h2>
+            <table>
+                <thead><tr><th>包裹号</th><th>原因</th></tr></thead>
+                <tbody>
+                {% for row in skipped_rows %}
+                    <tr><td>{{ row.package_sn }}</td><td>{{ row.reason }}</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>

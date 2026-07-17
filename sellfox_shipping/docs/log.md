@@ -8,6 +8,13 @@ updated: 2026-07-17
 
 # sellfox_shipping — 变更日志
 
+## 2026-07-17 — Web：蜴国际导出 / 导入对账页
+
+- `/lizard/export`：导出 approved + 渠道含「蜴」→ 下载 xlsx（同 CLI `lizard-export`）
+- `/lizard/import`：上传返回 Excel → 本地落库 + 对账报告（matched/persisted/conflicts/unmatched）
+- **不**调用 `submitToPlatform`；导航已挂到首页/包裹页
+- 测试：`tests/sellfox_shipping/test_lizard_web.py`
+
 ## 2026-07-17 — PDF 面单通途→赛狐替换（夹具 04）
 
 - Claude：`pymupdf` 替换 38 页 `CUST REF`/`Ref No`；写入 `sellfox-native-fixture/04-*.pdf`

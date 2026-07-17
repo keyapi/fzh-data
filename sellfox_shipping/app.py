@@ -13,8 +13,8 @@ import sys
 from pathlib import Path
 
 import yaml
-from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -64,6 +64,40 @@ def _get_package_list_service() -> ListPackagesService:
 
 def _get_package_review_service() -> ReviewPackageService:
     return ReviewPackageService(_get_package_repository())
+
+
+def _get_lizard_dims_lookup():
+    """Cascade: commodity pageList → ERPNext ZLMB (same as CLI)."""
+    from sellfox_shipping.carriers.lizard.cascade import CascadingDimsLookup
+    from sellfox_shipping.carriers.lizard.commodity_dims import CommodityPageListDimsLookup
+    from sellfox_shipping.carriers.lizard.erpnext_dims import ErpnextZlmbDimsLookup
+    from sellfox_shipping.env_loader import load_dotenv as _load_env
+
+    _load_env(Path(__file__).resolve().parents[1] / "EN_API" / ".env")
+    _load_env()
+
+    primary = CommodityPageListDimsLookup(
+        proxy_base_url=config["sellfox"]["proxy_base_url"],
+        proxy_account=config["sellfox"]["proxy_account"],
+        proxy_api_key=os.getenv("SELLFOX_PROXY_API_KEY", ""),
+    )
+    erp_key = (
+        os.getenv("PROD_ERP_API_KEY") or os.getenv("ERP_API_KEY") or ""
+    ).strip()
+    erp_secret = (
+        os.getenv("PROD_ERP_API_SECRET") or os.getenv("ERP_API_SECRET") or ""
+    ).strip()
+    if not erp_key or not erp_secret:
+        return primary
+    erp_url = (os.getenv("ERP_URL") or "https://erpnext.vilavi.cn").strip().rstrip(
+        "/"
+    )
+    fallback = ErpnextZlmbDimsLookup(
+        base_url=erp_url,
+        api_key=erp_key,
+        api_secret=erp_secret,
+    )
+    return CascadingDimsLookup(primary, fallback)
 
 
 # ── FastAPI app ──────────────────────────────────────────────────
@@ -326,6 +360,164 @@ async def package_review_form(request: Request, package_sn: str):
 @app.get("/orders", response_class=HTMLResponse)
 async def orders_page(request: Request):
     return templates.TemplateResponse(request, "orders.html")
+
+
+@app.get("/lizard/export", response_class=HTMLResponse)
+async def lizard_export_page(request: Request):
+    """Form to export approved 蜴国际 packages to upload Excel."""
+    return templates.TemplateResponse(
+        request,
+        "lizard_export.html",
+        {
+            "message": "",
+            "error": "",
+            "default_actor": "web-user",
+            "default_shipper": "S0143",
+            "default_limit": 500,
+        },
+    )
+
+
+@app.post("/lizard/export")
+async def lizard_export_form(
+    request: Request,
+    actor: str = Form("web-user"),
+    limit: int = Form(500),
+    shipper_code: str = Form("S0143"),
+):
+    """Run export service and download xlsx (does not call submitToPlatform)."""
+    from datetime import datetime, timezone
+
+    from sellfox_shipping.lizard_batch import (
+        ExportLizardUploadService,
+        LizardExportRequest,
+    )
+
+    out_dir = BASE_DIR / "data" / "exports"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    output_path = out_dir / f"lizard-upload-{stamp}.xlsx"
+    try:
+        result = ExportLizardUploadService(
+            _get_package_repository(),
+            _get_lizard_dims_lookup(),
+        ).export(
+            LizardExportRequest(
+                account_key=config["sellfox"]["proxy_account"],
+                actor=(actor or "web-user").strip() or "web-user",
+                output_path=output_path,
+                limit=max(1, min(int(limit), 5000)),
+                shipper_code=(shipper_code or "S0143").strip() or "S0143",
+            )
+        )
+    except Exception as exc:  # noqa: BLE001 — surface to operator
+        return templates.TemplateResponse(
+            request,
+            "lizard_export.html",
+            {
+                "message": "",
+                "error": f"导出失败: {exc}",
+                "default_actor": actor,
+                "default_shipper": shipper_code,
+                "default_limit": limit,
+            },
+            status_code=400,
+        )
+    if result.exported == 0:
+        return templates.TemplateResponse(
+            request,
+            "lizard_export.html",
+            {
+                "message": "",
+                "error": (
+                    f"没有可导出的行（候选 {result.total_candidates}，"
+                    f"跳过 {result.skipped}）。请确认本地审核为 approved，"
+                    "渠道名含「蜴」，且重尺可查。"
+                ),
+                "skipped_rows": result.skipped_rows,
+                "default_actor": actor,
+                "default_shipper": shipper_code,
+                "default_limit": limit,
+            },
+            status_code=400,
+        )
+    return FileResponse(
+        path=str(output_path),
+        filename=output_path.name,
+        media_type=(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ),
+    )
+
+
+@app.get("/lizard/import", response_class=HTMLResponse)
+async def lizard_import_page(request: Request):
+    """Form to import lizard tracking-return Excel (local DB only)."""
+    return templates.TemplateResponse(
+        request,
+        "lizard_import.html",
+        {
+            "result": None,
+            "error": "",
+            "default_actor": "web-user",
+        },
+    )
+
+
+@app.post("/lizard/import", response_class=HTMLResponse)
+async def lizard_import_form(
+    request: Request,
+    actor: str = Form("web-user"),
+    file: UploadFile = File(...),
+):
+    """Parse return Excel, persist tracking locally, show reconciliation report."""
+    import tempfile
+
+    from sellfox_shipping.lizard_batch import (
+        ImportLizardTrackingService,
+        LizardImportRequest,
+    )
+
+    suffix = Path(file.filename or "return.xlsx").suffix or ".xlsx"
+    try:
+        raw = await file.read()
+        if not raw:
+            raise ValueError("上传文件为空")
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            tmp.write(raw)
+            tmp_path = Path(tmp.name)
+        try:
+            result = ImportLizardTrackingService(
+                _get_package_repository()
+            ).import_file(
+                LizardImportRequest(
+                    account_key=config["sellfox"]["proxy_account"],
+                    actor=(actor or "web-user").strip() or "web-user",
+                    input_path=tmp_path,
+                )
+            )
+        finally:
+            tmp_path.unlink(missing_ok=True)
+    except Exception as exc:  # noqa: BLE001
+        return templates.TemplateResponse(
+            request,
+            "lizard_import.html",
+            {
+                "result": None,
+                "error": f"导入失败: {exc}",
+                "default_actor": actor,
+            },
+            status_code=400,
+        )
+    return templates.TemplateResponse(
+        request,
+        "lizard_import.html",
+        {
+            "result": result,
+            "error": "",
+            "default_actor": actor,
+        },
+    )
 
 
 # ── MCP mount — appended in main.py after FastMCP server is created ──
