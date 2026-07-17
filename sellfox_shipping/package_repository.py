@@ -352,6 +352,50 @@ class PackageRepository:
             ).all()
             return self._to_record(account_key, package, order_rows, item_rows)
 
+    def set_tracking_number(
+        self,
+        *,
+        account_key: str,
+        package_sn: str,
+        tracking_number: str,
+        estimated_cost: float | None = None,
+        cost_currency: str | None = None,
+    ) -> SellfoxPackageRecord:
+        with self._session_factory.begin() as session:
+            package = session.scalar(
+                select(PackageRow)
+                .join(
+                    ShippingAccountRow,
+                    ShippingAccountRow.id == PackageRow.account_id,
+                )
+                .where(
+                    ShippingAccountRow.account_key == account_key,
+                    PackageRow.package_sn == package_sn,
+                )
+            )
+            if package is None:
+                raise LookupError(f"Package {package_sn} not found")
+            package.tracking_number = tracking_number
+            if estimated_cost is not None:
+                package.estimated_cost = estimated_cost
+            if cost_currency is not None:
+                package.cost_currency = cost_currency
+            order_rows = session.scalars(
+                select(OrderRow)
+                .join(
+                    PackageOrderRow,
+                    PackageOrderRow.order_id == OrderRow.id,
+                )
+                .where(PackageOrderRow.package_id == package.id)
+                .order_by(OrderRow.external_order_id)
+            ).all()
+            item_rows = session.scalars(
+                select(PackageItemRow)
+                .where(PackageItemRow.package_id == package.id)
+                .order_by(PackageItemRow.order_item_id)
+            ).all()
+            return self._to_record(account_key, package, order_rows, item_rows)
+
     def list_packages(
         self,
         *,

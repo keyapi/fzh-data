@@ -21,6 +21,7 @@ dependencies = [
     "jinja2>=3.0",
     "typer>=0.9",
     "alembic>=1.18.5",
+    "pymupdf>=1.28.0",
 ]
 
 [tool.hatch.build.targets.wheel]

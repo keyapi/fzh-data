@@ -271,7 +271,16 @@ git status
 **Cursor 会话 transcript（可选追溯）：**  
 `agent-transcripts/6a537da8-7f80-449f-91f3-bb7511de203d`（本机 Cursor 项目目录下；仓库外，不入 Git）。
 
-## 10. 本文档维护约定
+## 10. 2026-07-17 续：赛狐原生夹具 + PDF 面单替换
+
+| 交付 | 位置 |
+|------|------|
+| 夹具 00/02/03/04 | `数据源/…/sellfox-native-fixture/`（gitignore） |
+| 上传/追踪号重建 | `scripts/rebuild_sellfox_lizard_fixtures.py` |
+| PDF 通途→赛狐 | `scripts/replace_tongtu_refs_in_labels.py`（可提交）；详见 `pnumber-to-sellfox-trace` §6 |
+| 本地导入 smoke | 38/38 persisted；**未** `submitToPlatform` |
+
+## 11. 本文档维护约定
 
 后续 Agent 完成一个可交付切片后，应：
 

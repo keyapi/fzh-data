@@ -27,4 +27,5 @@ updated: 2026-07-16
 - [research/colab-notebook-legacy-summary-2026-07-17.md](research/colab-notebook-legacy-summary-2026-07-17.md) — Colab 通途/蜴国际/背贴 notebook 摘要
 - [research/sellfox-carton-dims-source-2026-07-17.md](research/sellfox-carton-dims-source-2026-07-17.md) — 重尺：商品 pageList carton* 字段
 - [research/local-vs-sellfox-status-2026-07-17.md](research/local-vs-sellfox-status-2026-07-17.md) — 赛狐状态 vs 本地通过/驳回
-- [research/pnumber-to-sellfox-trace-2026-07-17.md](research/pnumber-to-sellfox-trace-2026-07-17.md) — 通途 P 号追溯赛狐（对照）
+- [research/pnumber-to-sellfox-trace-2026-07-17.md](research/pnumber-to-sellfox-trace-2026-07-17.md) — 通途 P 号追溯赛狐；§6 PDF 面单替换
+- [research/sellfox-native-lizard-fixture-2026-07-17.md](research/sellfox-native-lizard-fixture-2026-07-17.md) — 赛狐原生夹具 00/02/03/04（上传·追踪号·面单）

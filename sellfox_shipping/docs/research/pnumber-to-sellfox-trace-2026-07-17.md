@@ -76,7 +76,7 @@ P81401351（蜥蜴 Excel 参考编号 = 通途包裹号）
 | P81401229 | 114-1501501-0903440 | Shipped |
 | P81401217 | 111-4617012-2727417 | Shipped |
 | P81401203 | 111-4106795-3792213 | Shipped |
-| P81401195 | 114-8410891-0563433 | Shipped |
+| P81401195 | 114-8410891-0563432 | Shipped |
 | P81401186 | 113-5579900-4694666 | Shipped |
 | P81401178 | 111-2052943-3117040 | Shipped |
 | P81401163 | 113-6082325-4473804 | Shipped |
@@ -122,3 +122,53 @@ P81401351（蜥蜴 Excel 参考编号 = 通途包裹号）
 | 用途 | 证明旧 Excel 可对回平台订单 | 生产导出/导入 |
 
 **不要**把通途 P 号当赛狐 `packageSn` 写入新导出。测试赛狐→蜴国际应用 `to_process`/`to_print` 等未发货包裹 + 本地模拟返回 Excel，**不要**调用 `submitToPlatform`。
+
+---
+
+## 6. PDF 标签文件通途→赛狐替换
+
+### 6.1 输入
+
+| 文件 | 位置 |
+|------|------|
+| 映射 CSV | `sellfox-native-fixture/00-tongtu-to-sellfox-package-map.csv` |
+| 原始 PDF | `4 04-lizard-labels-2026-07-15 7.15蜴国际面单.pdf`（38 页，每页一个标签） |
+
+### 6.2 输出
+
+`sellfox-native-fixture/04-lizard-labels-2026-07-15.pdf`（38 页，P814xxxxx → P2xxxxx）
+
+### 6.3 技术细节
+
+- 使用 `pymupdf`（fitz）库
+- 整体替换 `CUST REF: P81401351` → `CUST REF: P2AKA9T726406`
+- 5 页使用 `Ref No:Pxxxx` 格式（非 `CUST REF:`），脚本处理两种格式
+- 保留原始字体（Helvetica-Bold, 14.3pt）和颜色
+- 替换后文本保持整体可选中
+
+### 6.4 可复用脚本
+
+**入库路径（可 git 提交）：** `sellfox_shipping/scripts/replace_tongtu_refs_in_labels.py`  
+**本地便捷入口（gitignore）：** `数据源/蜥蜴国际-p0-样例/replace_tongtu_refs_in_labels.py`（转调 scripts 版）
+
+```bash
+uv run python sellfox_shipping/scripts/replace_tongtu_refs_in_labels.py
+```
+
+依赖：`pymupdf`（已装可用；未装则 `uv add pymupdf`）。  
+样例 PDF / 输出 PDF / 映射 CSV 仍在 `数据源/` 下，**不入 git**（含地址与面单 PII）。
+
+### 6.5 sellfox-native-fixture 目录结构
+
+```
+sellfox-native-fixture/
+├── 00-tongtu-to-sellfox-package-map.csv   # 38条 P号映射
+├── 02-sellfox-lizard-upload.xlsx          # 赛狐原生上传 Excel
+├── 03-sellfox-lizard-tracking-return.xlsx # 赛狐原生追踪号返回
+├── 04-lizard-labels-2026-07-15.pdf        # 面单 PDF（CUST REF/Ref No → packageSn）
+└── README.md
+```
+
+### 6.6 操作记录（2026-07-17）
+
+Claude 侧完成 PDF 通途→赛狐替换；Cursor 侧同步文档，并将脚本迁到 `scripts/` 以便推送。验证期望：`Replaced: 38/38`，输出中 `P814` 剩余 0。

@@ -94,6 +94,7 @@ def test_import_service_reconciles_known_sns(tmp_path: Path) -> None:
                 "参考编号/Reference Code": "P2ATEST001",
                 "物流单号": "TN1",
                 "订单号": "M1",
+                "运费": 12.5,
             },
             {
                 "参考编号/Reference Code": "NOPE",
@@ -112,4 +113,73 @@ def test_import_service_reconciles_known_sns(tmp_path: Path) -> None:
     )
     assert result.matched == 1
     assert result.unmatched == 1
+    assert result.persisted == 1
     assert result.matched_rows[0]["tracking_number"] == "TN1"
+    saved = repo.get("sellfox-main", "P2ATEST001")
+    assert saved is not None
+    assert saved.logistics.tracking_number == "TN1"
+    assert saved.logistics.estimated_cost == 12.5
+
+
+def test_import_conflict_does_not_overwrite_different_tracking(tmp_path: Path) -> None:
+    repo = PackageRepository(tmp_path / "shipping.db")
+    _seed_approved(repo)
+    repo.set_tracking_number(
+        account_key="sellfox-main",
+        package_sn="P2ATEST001",
+        tracking_number="OLD-TN",
+    )
+    ret = tmp_path / "return.xlsx"
+    pd.DataFrame(
+        [
+            {
+                "参考编号/Reference Code": "P2ATEST001",
+                "物流单号": "NEW-TN",
+                "订单号": "M1",
+            }
+        ]
+    ).to_excel(ret, index=False)
+    result = ImportLizardTrackingService(repo).import_file(
+        LizardImportRequest(
+            account_key="sellfox-main",
+            actor="user-1",
+            input_path=ret,
+        )
+    )
+    assert result.persisted == 0
+    assert result.conflicts == 1
+    assert repo.get("sellfox-main", "P2ATEST001").logistics.tracking_number == "OLD-TN"
+
+
+def test_import_overwrites_package_sn_placeholder_tracking(tmp_path: Path) -> None:
+    """Sellfox trackNo often equals packageSn before real carrier tracking exists."""
+    repo = PackageRepository(tmp_path / "shipping.db")
+    _seed_approved(repo)
+    repo.set_tracking_number(
+        account_key="sellfox-main",
+        package_sn="P2ATEST001",
+        tracking_number="P2ATEST001",
+    )
+    ret = tmp_path / "return.xlsx"
+    pd.DataFrame(
+        [
+            {
+                "参考编号/Reference Code": "P2ATEST001",
+                "物流单号": "8822446688",
+                "订单号": "M1",
+                "运费": 9.9,
+            }
+        ]
+    ).to_excel(ret, index=False)
+    result = ImportLizardTrackingService(repo).import_file(
+        LizardImportRequest(
+            account_key="sellfox-main",
+            actor="user-1",
+            input_path=ret,
+        )
+    )
+    assert result.persisted == 1
+    assert result.conflicts == 0
+    saved = repo.get("sellfox-main", "P2ATEST001")
+    assert saved is not None
+    assert saved.logistics.tracking_number == "8822446688"
