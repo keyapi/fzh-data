@@ -503,6 +503,11 @@ async def lizard_export_form(
             status_code=400,
         )
     if result.exported == 0:
+        batch_hint = (
+            f" 批次 #{result.batch_id} 已登记（全跳过）。"
+            if result.batch_id
+            else ""
+        )
         return templates.TemplateResponse(
             request,
             "lizard_export.html",
@@ -511,7 +516,7 @@ async def lizard_export_form(
                 "error": (
                     f"没有可导出的行（候选 {result.total_candidates}，"
                     f"跳过 {result.skipped}）。请确认本地审核为 approved，"
-                    "渠道名含「蜴」，且重尺可查。"
+                    f"渠道名含「蜴」，且重尺可查。{batch_hint}"
                 ),
                 "skipped_rows": result.skipped_rows,
                 "default_actor": actor,
@@ -520,17 +525,28 @@ async def lizard_export_form(
             },
             status_code=400,
         )
+    download_name = output_path.name
+    headers: dict[str, str] = {}
+    if result.batch_id is not None:
+        download_name = (
+            f"lizard-upload-batch{result.batch_id}-{stamp}.xlsx"
+        )
+        headers["X-Shipping-Batch-Id"] = str(result.batch_id)
     return FileResponse(
         path=str(output_path),
-        filename=output_path.name,
+        filename=download_name,
         media_type=(
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         ),
+        headers=headers or None,
     )
 
 
 @app.get("/lizard/import", response_class=HTMLResponse)
-async def lizard_import_page(request: Request):
+async def lizard_import_page(
+    request: Request,
+    batch_id: int | None = Query(None),
+):
     """Form to import lizard tracking-return Excel (local DB only)."""
     return templates.TemplateResponse(
         request,
@@ -539,6 +555,7 @@ async def lizard_import_page(request: Request):
             "result": None,
             "error": "",
             "default_actor": "web-user",
+            "default_batch_id": batch_id or "",
         },
     )
 
@@ -547,6 +564,7 @@ async def lizard_import_page(request: Request):
 async def lizard_import_form(
     request: Request,
     actor: str = Form("web-user"),
+    batch_id: str = Form(""),
     file: UploadFile = File(...),
 ):
     """Parse return Excel, persist tracking locally, show reconciliation report."""
@@ -558,6 +576,23 @@ async def lizard_import_form(
     )
 
     suffix = Path(file.filename or "return.xlsx").suffix or ".xlsx"
+    parsed_batch_id: int | None = None
+    batch_raw = (batch_id or "").strip()
+    if batch_raw:
+        try:
+            parsed_batch_id = int(batch_raw)
+        except ValueError as exc:
+            return templates.TemplateResponse(
+                request,
+                "lizard_import.html",
+                {
+                    "result": None,
+                    "error": f"批次 ID 无效: {exc}",
+                    "default_actor": actor,
+                    "default_batch_id": batch_raw,
+                },
+                status_code=400,
+            )
     try:
         raw = await file.read()
         if not raw:
@@ -573,6 +608,7 @@ async def lizard_import_form(
                     account_key=config["sellfox"]["proxy_account"],
                     actor=(actor or "web-user").strip() or "web-user",
                     input_path=tmp_path,
+                    batch_id=parsed_batch_id,
                 )
             )
         finally:
@@ -585,6 +621,7 @@ async def lizard_import_form(
                 "result": None,
                 "error": f"导入失败: {exc}",
                 "default_actor": actor,
+                "default_batch_id": batch_raw,
             },
             status_code=400,
         )
@@ -595,6 +632,46 @@ async def lizard_import_form(
             "result": result,
             "error": "",
             "default_actor": actor,
+            "default_batch_id": result.batch_id or batch_raw,
+        },
+    )
+
+
+@app.get("/lizard/batches", response_class=HTMLResponse)
+async def lizard_batches_page(
+    request: Request,
+    limit: int = Query(50, le=200),
+):
+    """List ShippingBatch rows for current account."""
+    account_key = config["sellfox"]["proxy_account"]
+    items = _get_package_repository().list_batches(
+        account_key=account_key,
+        limit=limit,
+    )
+    return templates.TemplateResponse(
+        request,
+        "lizard_batches.html",
+        {
+            "account_key": account_key,
+            "items": items,
+        },
+    )
+
+
+@app.get("/lizard/batches/{batch_id}", response_class=HTMLResponse)
+async def lizard_batch_detail(request: Request, batch_id: int):
+    """Show one batch and its package rows."""
+    repo = _get_package_repository()
+    batch = repo.get_batch(batch_id)
+    if batch is None:
+        raise HTTPException(404, f"Batch {batch_id} not found")
+    packages = repo.list_batch_packages(batch_id)
+    return templates.TemplateResponse(
+        request,
+        "lizard_batch_detail.html",
+        {
+            "batch": batch,
+            "packages": packages,
         },
     )
 

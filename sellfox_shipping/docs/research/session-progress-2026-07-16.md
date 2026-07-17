@@ -302,7 +302,8 @@ git status
 ### P1B 规划中仍缺（见综合调研 §5.3 / §10）
 
 - ~~**导出批次 Artifact 表**~~ → **已实现**（2026-07-17）：`shipping_artifacts` + `/lizard/artifacts`
-- 完整 `ShippingBatch` / `BatchPackage` 批次状态机（当前是按需导出，无正式批次实体；Artifact 已能追溯单次导出/导入文件）
+- ~~**ShippingBatch / BatchPackage 最小实体**~~ → **已实现**（2026-07-17）：Alembic `0005`；导出建批；导入可选 `batch_id`；Web `/lizard/batches`
+- 完整 P1C 提交状态机 / `submitToPlatform`（Batch 目前只有 `exported` → `tracking_imported`）
 
 ### Artifact 答疑（实现后）
 
@@ -310,10 +311,78 @@ git status
 |------|------|
 | 是否含系统生成文件？ | **是**。`lizard-export` / Web 导出生成的上传 Excel 会登记为 `lizard_upload_export` |
 | 人工上传？ | **是**。导入追踪号 Excel 登记为 `lizard_tracking_import` |
-| 在哪里看？ | Web：`http://127.0.0.1:8401/lizard/artifacts`；磁盘：`sellfox_shipping/data/artifacts/by-hash/…` |
-| 与 ERPNext File 关系？ | 刻意对齐：`content_hash` 去重存盘；不同 `file_name` / `virtual_folder` 可指向同一 blob |
+| 在哪里看？ | Web：`/lizard/artifacts`；磁盘：`data/artifacts/private/files/…` |
+| content_hash？ | **SHA-256**（64 hex）。ERPNext File 常见为 MD5（32 hex）。**非必须不对齐**——见对照文档「为何没硬对齐」；若要跨系统比 hash 可改 MD5/双写 |
+| 与 ERPNext File 关系？ | 扁平 `private/files` + hash 去重 blob；`virtual_folder` 不改物理路径。详见 [artifact-vs-erpnext-file](artifact-vs-erpnext-file-2026-07-17.md) |
+| ShippingBatch？ | Web：`/lizard/batches`；导出自动建批；导入填批次 ID 更新包裹行状态 |
 
-## 12. 本文档维护约定
+## 13. 2026-07-17 续：ShippingBatch MVP + 扁平 Artifact + 操作记录
+
+**分支：** `feature/sellfox-shipping-p1a-rest`  
+**验证：** `uv run pytest tests/sellfox_shipping -q` → **72 passed**  
+**Schema head：** `0005_shipping_batches`（依赖 `0004_artifacts`）
+
+### 本切片交付
+
+| 项 | 说明 |
+|----|------|
+| Alembic `0005` | 表 `shipping_batches`、`shipping_batch_packages` |
+| 导出建批 | `ExportLizardUploadService` → `create_export_batch`；结果含 `batch_id` |
+| 导入回填 | `LizardImportRequest.batch_id` 可选；`apply_import_to_batch`；状态 `exported` → `tracking_imported` |
+| Artifact 路径 | `data/artifacts/private/files/{stem}_{hash8}{ext}`；同 SHA-256 共用 blob |
+| Web | `/lizard/batches`、`/lizard/batches/{id}`；导入表单「批次 ID」；导航「批次」 |
+| CLI | `lizard-import-tracking --batch-id N` |
+| 文档 | `artifact-vs-erpnext-file-2026-07-17.md`（含 MD5 vs SHA-256 答疑） |
+
+### 操作员步骤（本地，不调用 submitToPlatform）
+
+```text
+1. 启动（务必 --reload，避免旧进程 404）
+   uv run python -m sellfox_shipping.cli serve --host 127.0.0.1 --port 8401 --reload
+
+2. 同步 / 审核包裹（已有流程）
+   packages-sync → 包裹详情本地审核 approved → 缺重尺则补录
+
+3. 导出蜴国际上传表
+   Web:  http://127.0.0.1:8401/lizard/export
+   CLI:  uv run python -m sellfox_shipping.cli lizard-export -o out/lizard-upload.xlsx --actor <谁> --json
+   → 下载文件名含 batch{N}；响应头 X-Shipping-Batch-Id
+   → 自动登记 Artifact(kind=lizard_upload_export) + ShippingBatch(status=exported)
+
+4. 人工上传 Excel 到蜴国际后台（可能产生费用；测试先问同事）
+
+5. 导入追踪号返回表并对账
+   Web:  /lizard/import  （可填步骤 3 的批次 ID，或从 /lizard/batches 点「导入到此批」）
+   CLI:  lizard-import-tracking -i return.xlsx --actor <谁> --batch-id N --json
+   → 只写本地库追踪号；登记 Artifact(kind=lizard_tracking_import)
+   → 若带 batch_id：批次 → tracking_imported；包裹行 tracking_matched / conflict / unmatched
+
+6. 查阅
+   制品: http://127.0.0.1:8401/lizard/artifacts
+   批次: http://127.0.0.1:8401/lizard/batches
+   磁盘: sellfox_shipping/data/artifacts/private/files/
+```
+
+### 批次 / 包裹行状态（MVP，非 P1C）
+
+| 实体 | 状态 |
+|------|------|
+| ShippingBatch | `exported` → `tracking_imported` |
+| BatchPackage | `exported` / `skipped` / `tracking_matched` / `tracking_conflict` / `unmatched` |
+
+### 仍不做
+
+- `submitToPlatform` / 赛狐追踪号回写
+- 完整提交状态机、钉钉 OIDC
+- Artifact 公网 `/files` 分流；强制与 EN `content_hash`（MD5）同值（见对照文档；可后续改）
+
+### 已知坑
+
+- 旧 `serve` 无 `--reload` 时改路由会 404 → Ctrl+C 后带 `--reload` 重启
+- 历史 38 单蜥蜴样例 `trackNo` 多为 packageSn 占位 → **勿**当回写测试数据
+- `数据源/**`、`data/`、真实 Key 不入 Git
+
+## 14. 本文档维护约定
 
 后续 Agent 完成一个可交付切片后，应：
 

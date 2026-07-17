@@ -75,6 +75,30 @@ class PackageExportReader(Protocol):
         summary: str = "",
     ) -> ArtifactRecord: ...
 
+    def create_export_batch(
+        self,
+        *,
+        account_key: str,
+        actor: str,
+        template_version: str,
+        export_artifact_id: int | None,
+        exported_package_sns: list[str],
+        skipped_rows: list[dict],
+        summary: str = "",
+    ): ...
+
+    def apply_import_to_batch(
+        self,
+        *,
+        batch_id: int,
+        import_artifact_id: int | None,
+        matched_sns: list[str],
+        conflict_sns: list[str],
+        unmatched_sns: list[str],
+        actor: str,
+        summary: str = "",
+    ): ...
+
 
 class LizardExportRequest(BaseModel):
     account_key: str
@@ -102,6 +126,7 @@ class LizardExportResult(BaseModel):
     skipped: int
     skipped_rows: list[dict] = Field(default_factory=list)
     artifact_id: int | None = None
+    batch_id: int | None = None
 
 
 class ExportLizardUploadService:
@@ -158,12 +183,29 @@ class ExportLizardUploadService:
             virtual_folder="lizard/export",
             summary=summary,
         )
+        skipped_payload = [
+            {"package_sn": r.package_sn, "reason": r.reason}
+            for r in built.skipped_rows
+        ]
+        exported_sns = [
+            str(v)
+            for v in built.dataframe["参考编号/Reference Code"].tolist()
+        ] if built.exported else []
+        batch = self._reader.create_export_batch(
+            account_key=request.account_key,
+            actor=request.actor,
+            template_version=LIZARD_TEMPLATE_VERSION,
+            export_artifact_id=artifact.id,
+            exported_package_sns=exported_sns,
+            skipped_rows=skipped_payload,
+            summary=summary,
+        )
         self._reader.append_audit_event(
             actor=request.actor,
             action="lizard.upload_export",
             entity_type="artifact",
             entity_id=str(artifact.id),
-            summary=f"{summary} path={path.name}",
+            summary=f"{summary} path={path.name} batch={batch.id}",
         )
         return LizardExportResult(
             template_version=built.template_version,
@@ -172,11 +214,9 @@ class ExportLizardUploadService:
             total_candidates=len(packages),
             exported=built.exported,
             skipped=built.skipped,
-            skipped_rows=[
-                {"package_sn": r.package_sn, "reason": r.reason}
-                for r in built.skipped_rows
-            ],
+            skipped_rows=skipped_payload,
             artifact_id=artifact.id,
+            batch_id=batch.id,
         )
 
 
@@ -184,6 +224,7 @@ class LizardImportRequest(BaseModel):
     account_key: str
     actor: str
     input_path: Path
+    batch_id: int | None = None
 
     @field_validator("actor")
     @classmethod
@@ -204,6 +245,7 @@ class LizardImportResult(BaseModel):
     conflict_rows: list[dict] = Field(default_factory=list)
     parsed_at: str = ""
     artifact_id: int | None = None
+    batch_id: int | None = None
 
 
 class ImportLizardTrackingService:
@@ -275,6 +317,24 @@ class ImportLizardTrackingService:
             virtual_folder="lizard/import",
             summary=summary,
         )
+        batch_id = request.batch_id
+        if batch_id is not None:
+            matched_sns = [
+                r["package_sn"]
+                for r in matched_rows
+                if r.get("persisted")
+            ]
+            conflict_sns = [r["package_sn"] for r in conflicts]
+            unmatched_sns = [r.package_sn for r in parsed.unmatched_rows]
+            self._reader.apply_import_to_batch(
+                batch_id=batch_id,
+                import_artifact_id=artifact.id,
+                matched_sns=matched_sns,
+                conflict_sns=conflict_sns,
+                unmatched_sns=unmatched_sns,
+                actor=request.actor,
+                summary=summary,
+            )
         result = LizardImportResult(
             total=parsed.total,
             matched=parsed.matched,
@@ -293,12 +353,13 @@ class ImportLizardTrackingService:
             conflict_rows=conflicts,
             parsed_at=datetime.now(timezone.utc).isoformat(),
             artifact_id=artifact.id,
+            batch_id=batch_id,
         )
         self._reader.append_audit_event(
             actor=request.actor,
             action="lizard.tracking_import",
             entity_type="artifact",
             entity_id=str(artifact.id),
-            summary=summary,
+            summary=summary + (f" batch={batch_id}" if batch_id else ""),
         )
         return result

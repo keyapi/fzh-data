@@ -41,6 +41,7 @@
             <a href="/lizard/export">导出</a>
             <a href="/lizard/import" class="active">导入追踪号</a>
             <a href="/lizard/artifacts">制品</a>
+            <a href="/lizard/batches">批次</a>
         </div>
     </div>
     <div class="container">
@@ -49,6 +50,7 @@
             <p class="hint">
                 按「参考编号/Reference Code」= 赛狐 <code>packageSn</code> 匹配。
                 结果<strong>只写入本地库</strong>，<strong>不写回赛狐</strong>，不会调用 <strong>submitToPlatform</strong>。
+                若填写批次 ID，会把匹配结果回写到该 <code>ShippingBatch</code>。
             </p>
             <div class="warn">可用夹具 <code>sellfox-native-fixture/03-sellfox-lizard-tracking-return.xlsx</code> 做本地验证。</div>
             {% if error %}
@@ -57,6 +59,8 @@
             <form method="post" action="/lizard/import" enctype="multipart/form-data">
                 <label for="actor">操作人（审计）</label>
                 <input id="actor" name="actor" value="{{ default_actor }}" required />
+                <label for="batch_id">批次 ID（可选，关联导出批）</label>
+                <input id="batch_id" name="batch_id" value="{{ default_batch_id }}" placeholder="例如 3" />
                 <label for="file">蜴国际返回 Excel（.xlsx）</label>
                 <input id="file" name="file" type="file" accept=".xlsx,.xls" required />
                 <button type="submit">导入并对账</button>
@@ -76,6 +80,9 @@
             <p class="hint">解析时间 {{ result.parsed_at }}
                 {% if result.artifact_id %}
                 · 制品 <a href="/lizard/artifacts">#{{ result.artifact_id }}</a>
+                {% endif %}
+                {% if result.batch_id %}
+                · 批次 <a href="/lizard/batches/{{ result.batch_id }}">#{{ result.batch_id }}</a>
                 {% endif %}
             </p>
 

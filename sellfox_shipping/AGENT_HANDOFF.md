@@ -17,11 +17,11 @@ updated: 2026-07-17
 
 1. 读 [session-progress-2026-07-16.md](docs/research/session-progress-2026-07-16.md) — 已完成过程、提交、下一步、勿踩坑（含 §11 P1B 快照）  
 2. 读 [research-synthesis-2026-07-16.md](docs/research/research-synthesis-2026-07-16.md) — 目标架构与阶段  
-3. 跑验证：`uv run pytest tests/sellfox_shipping -q`（末次证据：**64 passed**）  
+3. 跑验证：`uv run pytest tests/sellfox_shipping -q`  
 4. 当前分支：`feature/sellfox-shipping-p1a-rest`
 
 **阶段口径：** 旧「P1 骨架完成 / P2 FedEx」作废；现行阶段为 **P0 → P1A → P1B → P1C → P2+**。旧代码称 **legacy skeleton**。  
-**当前：** P1A 完成；P1B 主路径（导出/导入/补录/Web）可用；缺正式 Artifact/Batch 表；**未进** P1C。
+**当前：** P1A 完成；P1B 主路径（导出/导入/补录/Artifact/Batch MVP/Web）可用；**未进** P1C（`submitToPlatform`）。
 
 ## 架构
 
@@ -52,18 +52,17 @@ uv run python -m sellfox_shipping.cli packages-list --status to_audit --json
 uv run python -m sellfox_shipping.cli lizard-export -o out/lizard-upload.xlsx --actor <operator-id> --json
 
 # P1B：解析蜴国际返回追踪号 Excel（按 package_sn 对账；尚未回写赛狐）
-uv run python -m sellfox_shipping.cli lizard-import-tracking -i path/to/return.xlsx --actor <operator-id> --json
+# 可选 --batch-id：回写对应 ShippingBatch
+uv run python -m sellfox_shipping.cli lizard-import-tracking \
+  -i path/to/return.xlsx --actor <operator-id> --batch-id <N> --json
 
-# REST（legacy Web 服务启动后）
-# GET /api/packages?status=to_audit&channel=蜴国际
-# GET /api/packages/{package_sn}
-
-# Web Server（FastAPI；FastMCP 未安装时自动跳过）
-uv run python -m sellfox_shipping.cli serve
+# Web Server（FastAPI；本地开发请加 --reload）
+uv run python -m sellfox_shipping.cli serve --host 127.0.0.1 --port 8401 --reload
 # 打开 http://127.0.0.1:8401/packages
 # 导出：http://127.0.0.1:8401/lizard/export
 # 导入对账：http://127.0.0.1:8401/lizard/import
 # 文件制品：http://127.0.0.1:8401/lizard/artifacts
+# 打单批次：http://127.0.0.1:8401/lizard/batches
 
 # Legacy 订单 CLI（勿作为主流程扩展）
 uv run python -m sellfox_shipping.cli fetch --date-start 2026-07-01 --date-end 2026-07-15
@@ -127,20 +126,20 @@ sellfox_shipping/
 - REST：`GET /api/packages`、`GET /api/packages/{package_sn}`、`POST /api/packages/{package_sn}/review`
 - Web：`/packages` 审核；`/lizard/export` 下载上传表；`/lizard/import` 追踪号导入 + 对账报告（**仅本地**）
 - P1B：`lizard-export` / `lizard-import-tracking` CLI；重尺 pageList → ERPNext ZLMB；导入可覆盖 `trackNo==packageSn` 占位
-- Schema：Alembic `0001` + `0002_local_review_status`
+- Schema：Alembic `0001` … `0005_shipping_batches`
 
-**已验证：** `uv run pytest tests/sellfox_shipping -q` → 68 passed  
+**已验证：** `uv run pytest tests/sellfox_shipping -q`  
 
 **未调用：** `submitToPlatform`  
 
-**未实现：** 钉钉 OIDC、Artifact 批次表、`submitToPlatform` 安全回写、PDF 生产拆分
+**未实现：** 钉钉 OIDC、`submitToPlatform` 安全回写、PDF 生产拆分、完整 P1C 批次状态机
 
 ## 待实现
 
 | 阶段 | 内容 | 依赖 |
 |------|------|------|
 | P1A 后续 | OIDC；legacy 入口隔离 | 钉钉 OIDC 配置 |
-| P1B 收尾 | ~~Artifact 表~~ **已完成**（`0004` + `/lizard/artifacts`） | — |
+| P1B 收尾 | ~~Artifact~~ / ~~ShippingBatch MVP~~（`0004`+`0005`；`/lizard/artifacts`、`/lizard/batches`） | — |
 | P1C | 人工确认后赛狐回写；VITE 测试 spike | **干净测试包裹** + 用户确认范围（勿用已 has_shipped 的 38 单） |
 | P2+ | PDF/packlist、GLS Excel、经验证的 API connector | 各承运人资料 |
 

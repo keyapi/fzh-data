@@ -174,3 +174,77 @@ def test_artifacts_page_lists_registered_file(tmp_path, monkeypatch) -> None:
     dl = TestClient(app_module.app).get(f"/lizard/artifacts/{art.id}/download")
     assert dl.status_code == 200
     assert dl.content == b"PK-demo"
+
+
+def test_batches_page_lists_export_batch(tmp_path, monkeypatch) -> None:
+    from sellfox_shipping.carriers.lizard.dims import CartonDims, StaticDimsLookup
+    from sellfox_shipping.lizard_batch import (
+        ExportLizardUploadService,
+        LizardExportRequest,
+    )
+    from sellfox_shipping.package_models import (
+        SellfoxPackageAddress,
+        SellfoxPackageItemRecord,
+        SellfoxPackageLogistics,
+        SellfoxPackageRecord,
+    )
+
+    repo = PackageRepository(tmp_path / "shipping.db")
+    account = app_module.config["sellfox"]["proxy_account"]
+    repo.upsert(
+        SellfoxPackageRecord(
+            account_key=account,
+            package_sn="P2ABATCHWEB",
+            local_review_status="approved",
+            address=SellfoxPackageAddress(
+                name="Test",
+                address_line_1="1 Main",
+                city="Newark",
+                state_or_region="NJ",
+                postal_code="07101",
+                country_code="US",
+                phone="5551234567",
+            ),
+            logistics=SellfoxPackageLogistics(channel_name="蜴国际-FedEx"),
+            items=[
+                SellfoxPackageItemRecord(
+                    external_order_id="O1",
+                    order_item_id="I1",
+                    seller_sku="SKU-A",
+                    commodity_sku="KS0248-HLR-60-BLACK",
+                    quantity=1,
+                )
+            ],
+        )
+    )
+    repo.set_local_review_status(
+        account_key=account,
+        package_sn="P2ABATCHWEB",
+        local_review_status="approved",
+    )
+    dims = StaticDimsLookup(
+        {
+            "KS0248-HLR-60-BLACK": CartonDims(
+                weight_kg=2.5, length_cm=60, width_cm=55, height_cm=5
+            )
+        }
+    )
+    exported = ExportLizardUploadService(repo, dims).export(
+        LizardExportRequest(
+            account_key=account,
+            actor="web-tester",
+            output_path=tmp_path / "out.xlsx",
+        )
+    )
+    monkeypatch.setattr(app_module, "_get_package_repository", lambda: repo)
+
+    page = TestClient(app_module.app).get("/lizard/batches")
+    assert page.status_code == 200
+    assert f"#{exported.batch_id}" in page.text
+
+    detail = TestClient(app_module.app).get(
+        f"/lizard/batches/{exported.batch_id}"
+    )
+    assert detail.status_code == 200
+    assert "P2ABATCHWEB" in detail.text
+    assert "exported" in detail.text

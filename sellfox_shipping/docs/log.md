@@ -8,9 +8,28 @@ updated: 2026-07-17
 
 # sellfox_shipping — 变更日志
 
+## 2026-07-17 — ShippingBatch MVP + Artifact 扁平 private/files
+
+### 代码
+
+- Alembic `0005`：`shipping_batches` / `shipping_batch_packages`
+- 导出创建批次；导入可带 `batch_id` 回写（`exported` → `tracking_imported`）
+- Artifact 磁盘：`data/artifacts/private/files/{stem}_{hash8}{ext}`（SHA-256 去重）
+- Web：`/lizard/batches`、详情；导入可选批次 ID；CLI `--batch-id`
+- 测试：`test_shipping_batch` + Web 批次页；全套 **72 passed**
+
+### 操作员怎么用（摘要）
+
+1. `serve --reload` → `/lizard/export` 导出（得 `batch_id`）
+2. 人工上传蜴国际（费用风险）
+3. `/lizard/import` 填同一 `batch_id` 导入返回表 → 本地落库 + 批次状态更新
+4. `/lizard/artifacts` 看文件；`/lizard/batches` 看批次
+
+详见 `docs/research/session-progress-2026-07-16.md` §13；hash 取舍见 `artifact-vs-erpnext-file-2026-07-17.md`。
+
 ## 2026-07-17 — Artifact 文件制品表（content_hash 去重）
 
-- 表 `shipping_artifacts`（Alembic `0004`）；blob 存 `data/artifacts/by-hash/{hh}/{sha256}`
+- 表 `shipping_artifacts`（Alembic `0004`）；blob 现为 `private/files/…`（早期实现曾用 `by-hash/`）
 - 同 content_hash 只存一份文件；多条记录可不同 `file_name` / `virtual_folder`（类比 ERPNext File）
 - 导出上传表、导入追踪号均登记；Web：`/lizard/artifacts` 列表 + 下载
 - **含系统生成文件**（export）与人工上传文件（import）
