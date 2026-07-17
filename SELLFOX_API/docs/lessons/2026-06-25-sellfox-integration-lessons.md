@@ -283,9 +283,11 @@ SKU: KS0002-DL-194-IVORY → ZLMB 编码 = ZLMB#KS0002-DL-194
 ```
 | 优先级 | ERPNext 字段 | 含义 | 示例(KS0002-DL-194) |
 |--------|-------------|------|---------------------|
-| 1 | `custom_finish_good_weight_per_unit` + `custom_fg_package_L/W/H` | 国外成品重尺 | 0.0 → 落到下一级 |
-| 2 | `custom_fg_weight_per_unit` + `custom_package_L/W/H` | 绍兴工厂重尺 | **4100g, 58×19×45cm** ✅ |
+| 1 | `custom_finish_good_weight_per_unit` + `custom_fg_package_length/width/height` | 国外成品重尺 | 0.0 → 落到下一级 |
+| 2 | `custom_fg_weight_per_unit` + `custom_package_length/width/height` | 绍兴工厂重尺 | **4100g, 58×19×45cm** ✅ |
 | 3 | 同物料组+同尺寸、不同面料的 ZLMB 借用 | 兜底的兜底 | 暂无此需求 |
+
+> 字段名是完整的 `*_length/width/height`（不是 `*_L/W/H` 缩写）。重量单位为**克**。
 
 **实测验证 (2026-07-17)**:
 - `ZLMB#KS0002-DL-194`: 绍兴 4100g/58×19×45cm ✅（国外为空）

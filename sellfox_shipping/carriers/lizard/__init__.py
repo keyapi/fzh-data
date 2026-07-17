@@ -1,5 +1,6 @@
 """蜴国际 spreadsheet carrier helpers (P1B)."""
 
+from sellfox_shipping.carriers.lizard.cascade import CascadingDimsLookup
 from sellfox_shipping.carriers.lizard.dims import CartonDims, StaticDimsLookup
 from sellfox_shipping.carriers.lizard.spreadsheet import (
     LIZARD_TEMPLATE_VERSION,
@@ -10,6 +11,7 @@ from sellfox_shipping.carriers.lizard.spreadsheet import (
 
 __all__ = [
     "CartonDims",
+    "CascadingDimsLookup",
     "LIZARD_TEMPLATE_VERSION",
     "StaticDimsLookup",
     "build_upload_dataframe",

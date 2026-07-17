@@ -25,12 +25,19 @@ tags: [sellfox-shipping, lizard, cartonWeight, commodity]
 ```
 包裹 API → items[].commoditySku
   → pageList { skus: [...], isGroup: "0" }
-  → cartonWeight(kg) × 1000 × qty → 上传「重量」(克级，对齐同事 B 样例)
+  → cartonWeight(kg) × 1000 × qty → 上传「重量」(克级)
   → cartonLength/Width/Height → 长/宽/高 (cm)
-  → cartonWeight==0 或未命中 → ERPNext 重量模板 / 人工
+  → carton 为 0 / 未命中
+       → ERPNext Item ZLMB#{style-fabric-size}
+            1) custom_finish_good_weight_per_unit + custom_fg_package_length/width/height
+            2) custom_fg_weight_per_unit + custom_package_length/width/height
+       （重量字段单位：克 → ÷1000 得 kg）
+  → 仍未命中 → skipped，人工补录
 ```
 
-用 **`commoditySku`**（如 `KS0001-HLR-100-BLACK`）查，不要只用 sellerSku（平台 MSKU）。
+凭证：`EN_API/.env` 的 `ERP_API_KEY` / `ERP_API_SECRET`（或 `PROD_ERP_*`），默认 `https://erpnext.vilavi.cn`。实现：`CascadingDimsLookup(CommodityPageListDimsLookup, ErpnextZlmbDimsLookup)`。
+
+详见 Lesson 17：`SELLFOX_API/docs/lessons/2026-06-25-sellfox-integration-lessons.md`。
 
 ## 试转换复核（同 10 单）
 

@@ -8,6 +8,13 @@ updated: 2026-07-17
 
 # sellfox_shipping — 变更日志
 
+## 2026-07-17 — ERPNext ZLMB 重尺兜底接入
+
+- `CascadingDimsLookup`：赛狐 pageList → ERPNext `ZLMB#{前3段}` Item
+- 字段优先级：国外成品 → 绍兴工厂；实测 KS0002-DL-194 → 4.1kg / 58×19×45
+- 凭证读 `EN_API/.env`（`ERP_API_KEY`/`ERP_API_SECRET`）；修正 Lesson 17 字段名为 `*_length/width/height`
+- 测试 54 passed
+
 ## 2026-07-17 — P1B 蜴国际 Excel 导出/导入骨架
 
 - `carriers/lizard/`：上传表构建、追踪号返回解析、commodity pageList 重尺查找

@@ -180,6 +180,50 @@ def packages_list(
     _output(result.model_dump(mode="json"), json_output)
 
 
+def _get_lizard_dims_lookup():
+    """Sellfox commodity pageList first; ERPNext ZLMB# Item as Lesson 17 fallback."""
+    import os
+    from pathlib import Path
+
+    from sellfox_shipping.carriers.lizard.cascade import CascadingDimsLookup
+    from sellfox_shipping.carriers.lizard.commodity_dims import (
+        CommodityPageListDimsLookup,
+    )
+    from sellfox_shipping.carriers.lizard.erpnext_dims import ErpnextZlmbDimsLookup
+    from sellfox_shipping.env_loader import load_dotenv
+
+    load_dotenv(Path(__file__).resolve().parents[1] / "EN_API" / ".env")
+    load_dotenv()
+
+    config = _load_config()
+    primary = CommodityPageListDimsLookup(
+        proxy_base_url=config["sellfox"]["proxy_base_url"],
+        proxy_account=config["sellfox"]["proxy_account"],
+        proxy_api_key=os.getenv("SELLFOX_PROXY_API_KEY", ""),
+    )
+    erp_key = (
+        os.getenv("PROD_ERP_API_KEY")
+        or os.getenv("ERP_API_KEY")
+        or ""
+    ).strip()
+    erp_secret = (
+        os.getenv("PROD_ERP_API_SECRET")
+        or os.getenv("ERP_API_SECRET")
+        or ""
+    ).strip()
+    if not erp_key or not erp_secret:
+        return primary
+    erp_url = (
+        os.getenv("ERP_URL") or "https://erpnext.vilavi.cn"
+    ).strip().rstrip("/")
+    fallback = ErpnextZlmbDimsLookup(
+        base_url=erp_url,
+        api_key=erp_key,
+        api_secret=erp_secret,
+    )
+    return CascadingDimsLookup(primary, fallback)
+
+
 @app.command("lizard-export")
 def lizard_export(
     output: Path = typer.Option(..., "--output", "-o", help="Output xlsx path"),
@@ -189,11 +233,6 @@ def lizard_export(
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
 ):
     """Export approved 蜴国际 packages to lizard upload Excel (P1B)."""
-    import os
-
-    from sellfox_shipping.carriers.lizard.commodity_dims import (
-        CommodityPageListDimsLookup,
-    )
     from sellfox_shipping.lizard_batch import (
         ExportLizardUploadService,
         LizardExportRequest,
@@ -201,12 +240,7 @@ def lizard_export(
 
     config = _load_config()
     repo = _get_package_repository()
-    dims = CommodityPageListDimsLookup(
-        proxy_base_url=config["sellfox"]["proxy_base_url"],
-        proxy_account=config["sellfox"]["proxy_account"],
-        proxy_api_key=os.getenv("SELLFOX_PROXY_API_KEY", ""),
-    )
-    result = ExportLizardUploadService(repo, dims).export(
+    result = ExportLizardUploadService(repo, _get_lizard_dims_lookup()).export(
         LizardExportRequest(
             account_key=config["sellfox"]["proxy_account"],
             actor=actor,
