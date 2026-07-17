@@ -136,9 +136,9 @@ sellfox_shipping/
 
 | 阶段 | 内容 | 依赖 |
 |------|------|------|
-| P0 | 赛狐提交与回读契约；ERPNext 兜底（并行） | 测试包裹；Claude 调研 |
+| P0 | 赛狐提交与回读契约 | 测试包裹 |
 | P1A 后续 | OIDC；legacy 入口隔离 | 钉钉 OIDC 配置 |
-| P1B 后续 | 导入结果落库追踪号；缺 dims 人工补录 UI | ERPNext 兜底可选 |
+| P1B 后续 | 导入结果落库追踪号；缺 dims 人工补录 UI | — |
 | P1C | 人工确认后赛狐回写；VITE 测试 spike | 测试范围与账号 |
 | P2+ | PDF/packlist、GLS Excel、经验证的 API connector | 各承运人资料 |
 

@@ -171,7 +171,7 @@ uv run python -m sellfox_shipping.cli packages-sync \
 ### P1B / P1C（依赖样例或明确测试账号）
 
 - [x] 蜴国际 `SpreadsheetCarrierAdapter` 骨架：导出 / 导入对账（CLI `lizard-export` / `lizard-import-tracking`）  
-- [ ] ERPNext 重量模板兜底（并行由 Claude 调研）  
+- [x] ERPNext ZLMB# 重尺兜底（Lesson 17；级联 DimsLookup）  
 - [ ] 人工确认后的安全 `submitToPlatform`（订单级 `SubmissionIntent` / `SubmissionAttempt`、scope UNKNOWN 阻断、包裹聚合状态）  
 - [ ] VITE 测试环境 spike（Karrio custom connector vs 直接 httpx），不替换通途生产
 
