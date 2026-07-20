@@ -5,12 +5,15 @@
 ## 前置准备
 
 1. **系统访问**：确认可访问 http://47.106.72.196/index.html
-2. **API 凭证**：在系统「个人中心 → 开发者信息」中获取 token 和 key
+2. **API 凭证**：在系统「个人中心 → 开发者信息」中获取 token 和 key，写入仓库根 `.env`：
+   - `YIGLOBAL_APP_TOKEN` / `YIGLOBAL_APP_KEY` / `YIGLOBAL_API_BASE_URL`
+   - 见 [`../.env.example`](../.env.example)
 3. **发件地址备案**（重要）：在系统中添加并备案发件地址，否则费用试算会报错。Excel 中的地址编码（如 **S0143**）对应系统中的一条发件地址，但 API 中必须填写完整的地址信息，不能直接使用编码。
 
 ## 步骤 1：获取 access_token
 
 ```bash
+# 值从环境变量读取；下面 YOUR_* 仅为占位
 curl -s -X POST http://47.106.72.196/api/svc/getToken \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "app_token=YOUR_TOKEN&app_key=YOUR_KEY"

@@ -1,15 +1,18 @@
-# 蜴国际 API — AGENT_HANDOFF
+# 蜴国际 API（yiglobal-api）— AGENT_HANDOFF
 
-> Agent 交接文档 — 2026-07-17
+> Agent 交接文档 — 2026-07-17；目录于 2026-07-20 由 `蜴国际-API/` 重命名为 `yiglobal-api/`
 
 ## 项目概述
 
-蜴国际打单系统 API 对接。系统地址: http://47.106.72.196/index.html
+蜴国际打单系统 API 对接。系统地址: http://47.106.72.196/index.html  
+模块目录：`yiglobal-api/`（业务中文名仍称「蜴国际」）。
 
 ## 凭证信息
 
-- **token**: <your-lizard-token>
-- **key**: <your-lizard-key>
+真实值只放**仓库根** `.env`（gitignore），见 [`.env.example`](.env.example)：
+
+- `YIGLOBAL_APP_TOKEN` / `YIGLOBAL_APP_KEY` / `YIGLOBAL_API_BASE_URL`
+- HTTP 请求体字段名仍是对方契约：`app_token` / `app_key`（不要改成 env 名）
 - **客户代码**: M6180（通过 getToken 返回）
 - **当前 access_token**: 见 `.token_cache` 或重新获取
 
@@ -89,9 +92,10 @@ import requests
 BASE_URL = "http://47.106.72.196"
 
 # 1. 获取 token
+# app_token / app_key 为 API 字段名；值来自 env YIGLOBAL_APP_TOKEN / YIGLOBAL_APP_KEY
 resp = requests.post(f"{BASE_URL}/api/svc/getToken", data={
-    "app_token": "<your-lizard-token>",
-    "app_key": "<your-lizard-key>"
+    "app_token": "<your-yiglobal-app-token>",
+    "app_key": "<your-yiglobal-app-key>"
 })
 token = resp.json()["result"]["access_token"]
 

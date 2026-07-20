@@ -1,11 +1,17 @@
 #!/bin/bash
-# 蜴国际 API 费用试算测试脚本
-# 使用说明: 直接运行即可，脚本会自动获取 token 并调用费用试算
+# 蜴国际 (yiglobal-api) 费用试算测试脚本
+# 凭证：仓库根 .env 中的 YIGLOBAL_APP_TOKEN / YIGLOBAL_APP_KEY
+# （兼容旧名 LIZARD_TOKEN / LIZARD_KEY / LIZARD_APP_*，优先用 YIGLOBAL_*）
 # 前置条件: curl 可用
 
-BASE_URL="http://47.106.72.196"
-TOKEN="$LIZARD_TOKEN"
-KEY="$LIZARD_KEY"
+BASE_URL="${YIGLOBAL_API_BASE_URL:-http://47.106.72.196}"
+TOKEN="${YIGLOBAL_APP_TOKEN:-${LIZARD_APP_TOKEN:-$LIZARD_TOKEN}}"
+KEY="${YIGLOBAL_APP_KEY:-${LIZARD_APP_KEY:-$LIZARD_KEY}}"
+
+if [ -z "$TOKEN" ] || [ -z "$KEY" ]; then
+  echo "Error: set YIGLOBAL_APP_TOKEN and YIGLOBAL_APP_KEY in repo-root .env"
+  exit 1
+fi
 
 # 检测可用的 Python（python3 在某些环境下是无效 stub）
 PYTHON=""

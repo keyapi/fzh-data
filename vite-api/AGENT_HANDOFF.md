@@ -14,11 +14,21 @@ Vite shipment API integration for FZH company. This module documents the API int
 | Primary Carrier | GOFO Express |
 | Auth | x-api-key header |
 
+## Credentials (env)
+
+真实值只放**仓库根** `.env`（见 [`.env.example`](.env.example)）：
+
+- `VITE_API_KEY` / `VITE_API_BASE_URL` — **变量名跨 test/prod 相同，只换值**
+- 开发默认填测试环境；生产由部署侧注入同名变量
+- EEVEE 登录用 `VITE_TEST_ACCOUNT` / `VITE_TEST_PASSWORD`（勿写入 Markdown）
+- 可选：若测试 Key 曾泄露，可联系 VITE 轮换（当前泄露面为 test-api，非生产 Key）
+
 ## Key Files
 
 | File | Purpose |
 |------|---------|
-| `docs/test-guide/test-credentials.md` | **Test credentials (real values)** |
+| `.env.example` | 变量名模板（无真实值） |
+| `docs/test-guide/test-credentials.md` | 测试凭证说明（占位符；真值在根 `.env`） |
 | `docs/reference/channel-codes.md` | GFUS/YT channel to platform mapping |
 | `docs/carriers/gofo-express/` | GOFO Express docs (overview, endpoints, 6 examples) |
 | `docs/return-labels/` | Return label documentation |
