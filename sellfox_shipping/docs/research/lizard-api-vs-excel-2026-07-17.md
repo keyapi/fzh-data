@@ -10,7 +10,7 @@ updated: 2026-07-17
 
 # 蜴国际 API（PR #90 / #91）↔ Excel 路径
 
-**来源：** `origin/main` 模块 `蜴国际-API/`  
+**来源：** `origin/main` 模块 `yiglobal-api/`（原 `蜴国际-API/`，PR #93 重命名）  
 - PR **#90**（`90712b0`）：模块初建 + 文档  
 - PR **#91**（`7e1ec1f` / `8ce1c22`）：负余额下仍完成 **createOrder / getLabel / cancelOrder** 真测并更新文档  
 
@@ -56,12 +56,13 @@ getToken → rates/ratesv2 → createOrder → getLabel（建议轮询）→ 可
 ## 接入建议（更新）
 
 1. **Excel 闭环暂保留为生产默认**（操作习惯、批量、对账报告已稳）；API 冒烟通过 ≠ 自动切生产。
-2. 本仓已有薄 **httpx** 客户端：`carriers/lizard/api_client.py`（`LizardApiClient`；同步 Client；凭证 `LIZARD_APP_TOKEN` / `LIZARD_APP_KEY`）。**为何 httpx：** 与赛狐/VITE/ERPNext 同一依赖；Service/CLI 现为同步调用。异步不是选型主因（需要时可换 `AsyncClient`，当前未用）。
-3. `ApiCarrierAdapter`：`reference_no=packageSn`、S0143→shipper 映射表、轮询/同步双路径、Artifact 存 PDF、再进 P1C `submitToPlatform`。
-4. 仍建议同事将 main 上 HANDOFF 明文 Key 改为环境变量占位并轮换。
+2. 本仓已有薄 **httpx** 客户端：`carriers/lizard/api_client.py`（`LizardApiClient`；同步 Client；凭证 `YIGLOBAL_APP_TOKEN` / `YIGLOBAL_APP_KEY`，兼容旧 `LIZARD_*`）。**为何 httpx：** 与赛狐/VITE/ERPNext 同一依赖；Service/CLI 现为同步调用。异步不是选型主因（需要时可换 `AsyncClient`，当前未用）。
+3. **字段已钉死（2026-07-20）：** `result.labels.tracking_number` / `result.labels.label_url`（根级同名字段作回退）；解析函数 `parse_create_order_result` / `parse_get_label_result`。
+4. `ApiCarrierAdapter`：`reference_no=packageSn`、S0143→shipper 映射表、轮询/同步双路径、Artifact 存 PDF、再进 P1C `submitToPlatform`。
+5. Excel 仍为生产默认；API 不自动切流。
 
 ## 相关
 
-- main：`蜴国际-API/README.md`、`docs/api-reference.md`、`AGENT_HANDOFF.md`
+- main：`yiglobal-api/README.md`、`docs/api-reference.md`、`AGENT_HANDOFF.md`
 - [async-label-and-webhook-2026-07-17.md](async-label-and-webhook-2026-07-17.md)
 - 官方页：`http://47.106.72.196/api_doc2.html`

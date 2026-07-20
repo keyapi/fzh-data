@@ -651,9 +651,18 @@ P1C VITE spike 技术退出门：**关闭**（真测 + 决策记录）。生产�
 - 冒烟脚本去掉从 `vite-api` / `yiglobal-api` Markdown 读密钥的回退；只 `load_dotenv` + env
 - 同事去敏后的 API 文档继续保留；审批 Agent 回撤文档明文不影响本机真调
 
+## 30. 2026-07-20：恢复 P1C 分支 + 钉死 getLabel/create 字段
+
+- 分支曾被 reset 到 main；已从本地对象 `c489149` 恢复并 rebase 到含 PR #93 的 `origin/main`
+- Env 对齐：`YIGLOBAL_APP_*`（兼容旧 `LIZARD_*`）；文档路径 `yiglobal-api/`
+- 解析钉死（`yiglobal-api/docs/api-reference.md`）：
+  - **主路径：** `result.labels.tracking_number` / `result.labels.label_url`
+  - **回退：** 同名字段在 `result` 根上
+  - **就绪：** `code=200` 且 `sync_service_status=1`
+- 代码：`parse_create_order_result` / `parse_get_label_result`（`carriers/lizard/api_client.py`）
+
 ### 下一刀
 
-- 钉死 getLabel/create 的 tracking / label URL 字段名（对照 main api-reference 样例）
 - S0143 映射 + `reference_no=packageSn` 接入适配层
 - 公网 OIDC
 
