@@ -8,6 +8,11 @@ updated: 2026-07-20
 
 # sellfox_shipping — 变更日志
 
+## 2026-07-20 — ce-compound：trackNo 写路径边界
+
+- `docs/solutions/architecture-patterns/sellfox-trackno-write-path-vs-local-import.md` — 本地 import ≠ 赛狐 UI trackNo；submitToPlatform 为文档化写入口；401/has_shipped 禁重放
+- research 交叉引用已更新；`CONCEPTS.md` 增补 sellfox_shipping 词汇
+
 ## 2026-07-20 — 同事 20260720 蜴国际样例 + live 401
 
 - 样例 3 文件：上传 xls / 跟踪号 xlsx / 面单 PDF（通途 P#，非赛狐 packageSn）

@@ -37,6 +37,8 @@ OpenAPI「订单处理」下**无**单独「只改物流、不提交平台」接
 3. 产品目标近期改为：验证**赛狐包裹详情能否显示正确 `trackNo`**，**暂不要求**推 Amazon。
 4. Intent / CLI 真调路径**保留**备用；若探针证明「关自动推送仍推 Amazon」，则禁止用此 API 仅填号，改记缺口。
 
+仓库级可检索固化（ce-compound）：[`docs/solutions/architecture-patterns/sellfox-trackno-write-path-vs-local-import.md`](../../../docs/solutions/architecture-patterns/sellfox-trackno-write-path-vs-local-import.md)。
+
 ## 1 票探针协议
 
 前置：
