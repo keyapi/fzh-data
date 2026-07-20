@@ -3,10 +3,15 @@ okf: v0.1
 type: Log
 module: sellfox_shipping
 created: 2026-07-15
-updated: 2026-07-17
+updated: 2026-07-20
 ---
 
 # sellfox_shipping — 变更日志
+
+## 2026-07-20 — OIDC 公网就绪（默认仍关闭）
+
+- 启用缺配置启动失败；HTTPS Secure cookie；JSON 401；写操作 actor=钉钉 identity
+- 测试：`test_auth_oidc_gate.py`
 
 ## 2026-07-20 — S0143 映射 + reference_no=packageSn 适配层
 

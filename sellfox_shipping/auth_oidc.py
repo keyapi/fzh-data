@@ -63,6 +63,49 @@ def load_oidc_settings(config: dict[str, Any]) -> OidcSettings:
     )
 
 
+def assert_oidc_config_complete(settings: OidcSettings) -> None:
+    """Fail fast when auth is on but secrets / redirect are missing."""
+    if not settings.enabled:
+        return
+    missing: list[str] = []
+    if not settings.issuer:
+        missing.append("OIDC_ISSUER / oidc.issuer")
+    if not settings.client_id:
+        missing.append("OIDC_CLIENT_ID / oidc.client_id")
+    if not settings.client_secret:
+        missing.append("OIDC_CLIENT_SECRET / oidc.client_secret")
+    if not settings.redirect_uri:
+        missing.append("OIDC_REDIRECT_URI / oidc.redirect_uri")
+    if not settings.session_secret:
+        missing.append("SELLFOX_SHIPPING_SESSION_SECRET / auth.session_secret")
+    if missing:
+        raise RuntimeError(
+            "auth.enabled=true but OIDC config incomplete: " + ", ".join(missing)
+        )
+
+
+def cookie_should_be_secure(redirect_uri: str) -> bool:
+    return redirect_uri.strip().lower().startswith("https://")
+
+
+def resolve_actor(
+    request: Request,
+    settings: OidcSettings,
+    *,
+    fallback: str = "",
+) -> str:
+    """Prefer DingTalk OIDC identity when auth is enabled; else form fallback."""
+    if settings.enabled:
+        user = getattr(request.state, "user", None)
+        if not user:
+            user = current_user(request, settings)
+        if user and user.get("identity"):
+            return str(user["identity"])
+        raise HTTPException(401, "Authentication required")
+    text = (fallback or "").strip()
+    return text or "web-user"
+
+
 def make_session_token(
     identity: str,
     display_name: str,
@@ -193,6 +236,7 @@ def build_oidc_router(settings: OidcSettings) -> APIRouter:
             httponly=True,
             samesite="lax",
             path="/",
+            secure=cookie_should_be_secure(settings.redirect_uri),
         )
         return resp
 

@@ -671,8 +671,21 @@ P1C VITE spike 技术退出门：**关闭**（真测 + 决策记录）。生产�
 
 ### 下一刀
 
-- 公网 OIDC（仍默认 `auth.enabled: false`）
+- ~~公网 OIDC（仍默认 `auth.enabled: false`）~~ → §32
 - （可选）`ApiCarrierAdapter` 编排：create → 轮询 getLabel → Artifact
+
+## 32. 2026-07-20：OIDC 公网就绪（默认仍关闭）
+
+- `assert_oidc_config_complete`：启用时缺 secret/redirect 启动失败
+- HTTPS redirect → session cookie `Secure`；API 未登录 JSON 401
+- `resolve_actor`：写操作优先钉钉 identity
+- 测试：`tests/sellfox_shipping/test_auth_oidc_gate.py`
+- **仍默认** `auth.enabled: false`；公网前需登记 redirect + 填 env（见 `.env.example`）
+
+### 下一刀
+
+- （可选）`ApiCarrierAdapter`：create → 轮询 getLabel → Artifact
+- 真公网：运维打开 OIDC + HTTPS 反代 + 桥登记 redirect
 
 ## 14. 本文档维护约定
 
