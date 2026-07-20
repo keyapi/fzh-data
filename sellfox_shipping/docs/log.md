@@ -8,6 +8,11 @@ updated: 2026-07-20
 
 # sellfox_shipping — 变更日志
 
+## 2026-07-20 — LizardApiShipmentService（create→poll→Artifact）
+
+- `api_shipment.py`：可选 API 编排；Excel 仍默认；未挂 Web/CLI
+- 测试：`test_lizard_api_shipment.py`
+
 ## 2026-07-20 — OIDC 公网就绪（默认仍关闭）
 
 - 启用缺配置启动失败；HTTPS Secure cookie；JSON 401；写操作 actor=钉钉 identity
