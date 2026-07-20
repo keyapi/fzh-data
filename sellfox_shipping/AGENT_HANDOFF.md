@@ -145,9 +145,9 @@ sellfox_shipping/
 
 **未调用：** `submitToPlatform`（默认 dry-run）  
 
-**未实现：** 公网实际打开 OIDC（需运维登记 redirect + HTTPS）、回读权威性生产验证、VITE 同构编排、API 路径挂 Web/CLI；Excel 仍生产默认
+**未实现：** 公网实际打开 OIDC、live `submitToPlatform` 填号探针结论（dry-run 已过）、VITE 同构编排挂界面；Excel 仍生产默认；**默认不推销售平台**（通途写平台 + 自动推送关）
 
-**已落地（本切片）：** SQLite submit gate；OIDC 启用路径就绪（默认关）；`order_adapter` + `LizardApiShipmentService`（create→poll getLabel→Artifact，opt-in）。
+**已落地（本切片）：** SQLite submit gate；OIDC 启用路径就绪（默认关）；`order_adapter` + `LizardApiShipmentService`；submit vs 自动推送边界文档 + trackNo 探针 dry-run。
 **VITE：** 测试环境 account/rate/create/getLabel/cancel 已验；决策采用 httpx。  
 **蜴国际：** PR#91 已验下单链路；本仓 `LizardApiClient`（httpx 同步，mock）；Excel 仍生产默认。勿从 main HANDOFF 拷明文 Key。
 

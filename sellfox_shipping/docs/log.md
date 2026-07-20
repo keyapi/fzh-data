@@ -8,6 +8,11 @@ updated: 2026-07-20
 
 # sellfox_shipping — 变更日志
 
+## 2026-07-20 — submitToPlatform vs 自动推送边界
+
+- 研究：`docs/research/submit-to-platform-vs-autopush-2026-07-20.md`（通途写平台；自动推送关；trackNo 探针）
+- PR 切片指南：`docs/research/pr-slice-guide-2026-07-20.md`
+
 ## 2026-07-20 — LizardApiShipmentService（create→poll→Artifact）
 
 - `api_shipment.py`：可选 API 编排；Excel 仍默认；未挂 Web/CLI

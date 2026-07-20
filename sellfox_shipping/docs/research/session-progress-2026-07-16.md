@@ -700,6 +700,19 @@ P1C VITE spike 技术退出门：**关闭**（真测 + 决策记录）。生产�
 - （可选）CLI 受控真调 / 把 tracking 写回包裹 / VITE 同构编排
 - 真公网：运维打开 OIDC + HTTPS
 
+## 34. 2026-07-20：submitToPlatform vs 自动推送 + trackNo 探针（部分）
+
+- 文档：[`submit-to-platform-vs-autopush-2026-07-20.md`](submit-to-platform-vs-autopush-2026-07-20.md)
+- 业务：通途写平台；赛狐自动推送关；历史计划含 submit 是因「赛狐原生全闭环」假设
+- 只读：`P2AJA9T726203` 本地有真实运单、赛狐详情仍占位 `packageSn`
+- dry-run：`P2AMA9T726848` → intent#1 wire `trackNo=PROBE20260720TRACK01` OK
+- **live submitToPlatform 未跑**（安全闸）；补跑命令见该文
+
+### 下一刀
+
+- 拆 PR 合 main → 本地 Excel 走查
+- 操作员可选补完 1 票 live 填号探针
+
 ## 14. 本文档维护约定
 
 后续 Agent 完成一个可交付切片后，应：
