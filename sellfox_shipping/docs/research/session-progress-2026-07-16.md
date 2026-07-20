@@ -133,7 +133,7 @@ uv run python -m sellfox_shipping.cli packages-sync \
 - `shipping_package_orders` — 包裹↔订单多对多
 - `shipping_package_items` — 按包裹保存商品行
 
-**SQLite：** WAL、`foreign_keys=ON`、`busy_timeout=5000`。当前用 `create_all`，**尚无正式 Alembic/migration 流水线**。
+**SQLite：** WAL、`foreign_keys=ON`、`busy_timeout=5000`。Schema 由 Alembic `0001_package_schema` 管理（`schema.upgrade_schema`）；legacy create_all 库无版本表时 stamp。
 
 **Legacy 仍在、尚未迁移：** `models.py` / `store.py` 订单中心模型、Web `/api/orders/*`、MCP、`fetch` CLI。不要在其上堆蜴国际流程。
 
@@ -143,24 +143,37 @@ uv run python -m sellfox_shipping.cli packages-sync \
 
 ### 阻塞 P1B 的 P0（业务依赖，代码无法替代）
 
-- [ ] 收集蜴国际：上传 Excel、返回追踪号 Excel、PDF 样例（可脱敏）  
-- [ ] 确认客户参考号列名/格式及是否原样回传 `package_sn`  
+- [x] 收集蜴国际：上传 Excel、返回追踪号 Excel、PDF 样例（已放到 `数据源/蜥蜴国际-p0-样例/`；① 赛狐导出仅表头无数据）  
+- [x] 列结构分析：见 [lizard-p0-column-mapping-2026-07-17.md](lizard-p0-column-mapping-2026-07-17.md)  
+  - 匹配键：`参考编号/Reference Code`（形如 `P8140…`）上传/返回原样一致  
+  - 追踪号列：`物流单号`；蜴国际侧单号：`订单号`（`M6180…`，非赛狐 orderId）  
+  - **重量单位陷阱**：上传 `重量`=克，返回 `重量(kg)`=千克  
+  - ① 与 ②–④ 非同批；②⊂③（38/99）；当前本地 sync 库与样例 `P8140…` 零重叠  
+- [x] **业务确认**：参考号=赛狐 `packageSn`；重量按蜴国际模板要求换算即可  
+- [x] Colab notebook 遗产摘要（背贴为主，不生成上传 Excel）  
+- [x] 赛狐→蜴国际试转换 10 单；重尺改走 commodity pageList（8/10 命中）  
+- [ ] 未命中 SKU（如 KS0002-DL-194）接 ERPNext 重量模板兜底  
+- [ ] 发货编码：暂 `S0143`；仓别映射（USNJ/USTX）待业务确认后再做  
+- [ ] 同事 A 重导①（有数据行的赛狐按包裹导出）  
+- [ ] 明确 `submitToPlatform` 合约验证范围  
 - [ ] 用测试包裹验证赛狐提交契约与回读语义（`submitToPlatform` 幂等性、回读权威性仍为待验证假设）
 
 ### P1A 后续（可继续编码，不依赖蜴国际样例）
 
-- [ ] 正式 schema migration（替换裸 `create_all`）  
+- [x] 正式 schema migration（Alembic `0001` + `0002_local_review_status`）  
 - [ ] 钉钉 OIDC；禁止未认证暴露 PII（legacy Web 仍绑定 `0.0.0.0` 且无 auth）  
-- [ ] 包裹查询/审核 Web + REST，全部走 `SyncPackagesService` / repository，不复制逻辑到 `app.py`  
-- [ ] `AuditEvent` 记录 actor  
-- [ ] 逐步废弃或隔离 legacy 订单入口，避免双模型漂移  
-- [ ] 更新 skill `.claude/skills/sellfox-shipping/SKILL.md`（仍写「P1 骨架 / P2 FedEx」，已过时）
+- [x] 包裹查询 Web + REST  
+- [x] 本地审核写操作（通过/驳回/重置 + AuditEvent）  
+- [x] `AuditEvent` 记录 actor（同步 + 审核）  
+- [x] Skill 已更新为 P1A 包裹主路径（`.agents/skills/sellfox-shipping`）  
+- [ ] 逐步废弃或隔离 legacy 订单入口，避免双模型漂移
 
 ### P1B / P1C（依赖样例或明确测试账号）
 
-- [ ] 蜴国际 `SpreadsheetCarrierAdapter`：导出 / 导入 / 对账  
+- [x] 蜴国际 `SpreadsheetCarrierAdapter` 骨架：导出 / 导入对账（CLI `lizard-export` / `lizard-import-tracking`）  
+- [x] ERPNext ZLMB# 重尺兜底（Lesson 17；级联 DimsLookup）  
 - [ ] 人工确认后的安全 `submitToPlatform`（订单级 `SubmissionIntent` / `SubmissionAttempt`、scope UNKNOWN 阻断、包裹聚合状态）  
-- [ ] VITE 测试环境 spike（Karrio custom connector vs 直接 httpx），不替换通途生产
+- [x] VITE httpx spike（mock）；Karrio custom connector 对比仍可选；不替换通途生产
 
 ### 明确暂不做（见综合文档 §11）
 
@@ -181,9 +194,13 @@ uv run python -m sellfox_shipping.cli packages-sync \
 | Commit | 说明 |
 |--------|------|
 | `27cd46d` | 独立调研 + OKF 导航 + 命名边界 |
-| `0b157e7` | P1A 包裹只读同步 + 21 tests |
-| `275919e` | 本文 + OKF 导航联动（`session-progress`、索引、`AGENT_HANDOFF`） |
-| `ebed58a` | `packages-list` + `AuditEvent`；测试 26 passed |
+| `0b157e7` | P1A 包裹只读同步 |
+| `275919e` / `ebed58a` | 交接文档；packages-list + AuditEvent |
+| `a03f3e2` | PR #88 合入 main |
+| `4605670`～`bda5e0d` | REST + Jinja 包裹页 |
+| `7472fbc` | Alembic `0001` |
+| `97cdcb1`～`1a2f340` | serve 可选 MCP；线上 proxy + `.env` 加载；真实同步验证 |
+| （本切片） | 本地审核写操作 `local_review_status` + migration `0002` |
 
 ### 7.1 并行工作边界（2026-07-16）
 
@@ -201,9 +218,12 @@ uv run python -m sellfox_shipping.cli packages-sync \
 
 1. **`ListPackagesService` + `packages-list` CLI** — 按 `account_key` / `package_status` / `channel_name` 过滤；返回 `order_count` / `item_count` 摘要，不走 legacy `store.py`。  
 2. **`shipping_audit_events` + sync 审计** — 每次 `packages.sync` 结束（含 `partial_failed`）写一条 `AuditEvent`；审计写失败只记入 `run_errors`，不丢弃同步报告。  
-3. 测试基线：**26 passed**（原 21 + 5）。  
+3. **`GET /api/packages` + `GET /api/packages/{package_sn}`** — REST 只读。  
+4. **`/packages` + `/packages/{package_sn}` Jinja 页** — server-rendered 审核只读；Starlette 1.2 需 `TemplateResponse(request, name, context)`。  
+5. **Alembic** — `schema.upgrade_schema()`；`0001_package_schema`；legacy create_all 库 stamp。  
+6. 测试基线：**34 passed**。  
 
-仍未做：migration、OIDC、Web 审核页、Excel、`submitToPlatform`、VITE/Karrio。
+仍未做：OIDC、Excel、`submitToPlatform`、VITE/Karrio、审核写操作。
 
 工作区可能仍有**无关**未提交文件（advertise、dam、codex config 等）；接手时**只提交 sellfox_shipping 相关改动**，勿把敏感配置或数据文件打进 PR。
 
@@ -251,7 +271,458 @@ git status
 **Cursor 会话 transcript（可选追溯）：**  
 `agent-transcripts/6a537da8-7f80-449f-91f3-bb7511de203d`（本机 Cursor 项目目录下；仓库外，不入 Git）。
 
-## 10. 本文档维护约定
+## 10. 2026-07-17 续：赛狐原生夹具 + PDF 面单替换
+
+| 交付 | 位置 |
+|------|------|
+| 夹具 00/02/03/04 | `数据源/…/sellfox-native-fixture/`（gitignore） |
+| 上传/追踪号重建 | `scripts/rebuild_sellfox_lizard_fixtures.py` |
+| PDF 通途→赛狐 | `scripts/replace_tongtu_refs_in_labels.py`（可提交）；详见 `pnumber-to-sellfox-trace` §6 |
+| 本地导入 smoke | 38/38 persisted；**未** `submitToPlatform` |
+
+## 11. 2026-07-17 续：P1B Web + 重尺补录（文档快照）
+
+**分支：** `feature/sellfox-shipping-p1a-rest`  
+**验证：** `uv run pytest tests/sellfox_shipping -q` → **64 passed**
+
+| 提交 | 内容 |
+|------|------|
+| `4585c16` | 追踪号本地落库 + 赛狐原生夹具脚本 |
+| `63e7319` | Web `/lizard/export`、`/lizard/import` 对账页 |
+| `057bd48` | serve 启动打印导出/导入 URL |
+| `1af6efc` | 缺 carton 本地人工补录（`0003` + 包裹详情表单） |
+
+### P1B 已具备
+
+- CLI：`lizard-export` / `lizard-import-tracking`
+- Web：导出、导入对账、本地审核、重尺补录
+- 重尺链：本地 override → pageList → ERPNext ZLMB
+- 夹具 02/03/04（本地 gitignore，可对照格式）
+
+### P1B 规划中仍缺（见综合调研 §5.3 / §10）
+
+- ~~**导出批次 Artifact 表**~~ → **已实现**（2026-07-17）：`shipping_artifacts` + `/lizard/artifacts`
+- ~~**ShippingBatch / BatchPackage 最小实体**~~ → **已实现**（2026-07-17）：Alembic `0005`；导出建批；导入可选 `batch_id`；Web `/lizard/batches`
+- 完整 P1C 提交状态机 / `submitToPlatform`（Batch 目前只有 `exported` → `tracking_imported`）
+
+### Artifact 答疑（实现后）
+
+| 问题 | 答案 |
+|------|------|
+| 是否含系统生成文件？ | **是**。`lizard-export` / Web 导出生成的上传 Excel 会登记为 `lizard_upload_export` |
+| 人工上传？ | **是**。导入追踪号 Excel 登记为 `lizard_tracking_import` |
+| 在哪里看？ | Web：`/lizard/artifacts`；磁盘：`data/artifacts/private/files/…` |
+| content_hash？ | **MD5**（32 hex），与 ERPNext File 对齐 |
+| 与 ERPNext File 关系？ | 扁平 `private/files` + MD5 去重 blob；`virtual_folder` 不改物理路径。详见 [artifact-vs-erpnext-file](artifact-vs-erpnext-file-2026-07-17.md) |
+| ShippingBatch？ | Web：`/lizard/batches`；导出自动建批；导入填批次 ID 更新包裹行状态 |
+
+## 13. 2026-07-17 续：ShippingBatch MVP + 扁平 Artifact + 操作记录
+
+**分支：** `feature/sellfox-shipping-p1a-rest`  
+**验证：** `uv run pytest tests/sellfox_shipping -q` → **72 passed**  
+**Schema head：** `0005_shipping_batches`（依赖 `0004_artifacts`）
+
+### 本切片交付
+
+| 项 | 说明 |
+|----|------|
+| Alembic `0005` | 表 `shipping_batches`、`shipping_batch_packages` |
+| 导出建批 | `ExportLizardUploadService` → `create_export_batch`；结果含 `batch_id` |
+| 导入回填 | `LizardImportRequest.batch_id` 可选；`apply_import_to_batch`；状态 `exported` → `tracking_imported` |
+| Artifact 路径 | `data/artifacts/private/files/{stem}_{hash8}{ext}`；同 **MD5** 共用 blob（对齐 EN） |
+| Web | `/lizard/batches`、`/lizard/batches/{id}`；导入表单「批次 ID」；导航「批次」 |
+| CLI | `lizard-import-tracking --batch-id N` |
+| 文档 | `artifact-vs-erpnext-file-2026-07-17.md`（content_hash = MD5） |
+
+### 操作员步骤（本地，不调用 submitToPlatform）
+
+```text
+1. 启动（务必 --reload，避免旧进程 404）
+   uv run python -m sellfox_shipping.cli serve --host 127.0.0.1 --port 8401 --reload
+
+2. 同步 / 审核包裹（已有流程）
+   packages-sync → 包裹详情本地审核 approved → 缺重尺则补录
+
+3. 导出蜴国际上传表
+   Web:  http://127.0.0.1:8401/lizard/export
+   CLI:  uv run python -m sellfox_shipping.cli lizard-export -o out/lizard-upload.xlsx --actor <谁> --json
+   → 下载文件名含 batch{N}；响应头 X-Shipping-Batch-Id
+   → 自动登记 Artifact(kind=lizard_upload_export) + ShippingBatch(status=exported)
+
+4. 人工上传 Excel 到蜴国际后台（可能产生费用；测试先问同事）
+
+5. 导入追踪号返回表并对账
+   Web:  /lizard/import  （可填步骤 3 的批次 ID，或从 /lizard/batches 点「导入到此批」）
+   CLI:  lizard-import-tracking -i return.xlsx --actor <谁> --batch-id N --json
+   → 只写本地库追踪号；登记 Artifact(kind=lizard_tracking_import)
+   → 若带 batch_id：批次 → tracking_imported；包裹行 tracking_matched / conflict / unmatched
+
+6. 查阅
+   制品: http://127.0.0.1:8401/lizard/artifacts
+   批次: http://127.0.0.1:8401/lizard/batches
+   磁盘: sellfox_shipping/data/artifacts/private/files/
+```
+
+### 批次 / 包裹行状态（MVP，非 P1C）
+
+| 实体 | 状态 |
+|------|------|
+| ShippingBatch | `exported` → `tracking_imported` |
+| BatchPackage | `exported` / `skipped` / `tracking_matched` / `tracking_conflict` / `unmatched` |
+
+### 仍不做
+
+- `submitToPlatform` / 赛狐追踪号回写
+- 完整提交状态机、钉钉 OIDC
+- Artifact 公网 `/files` 分流
+
+### 已知坑
+
+- 旧 `serve` 无 `--reload` 时改路由会 404 → Ctrl+C 后带 `--reload` 重启
+- 历史 38 单蜥蜴样例 `trackNo` 多为 packageSn 占位 → **勿**当回写测试数据
+- 若本地曾用 SHA-256 登记制品：清空 `data/artifacts/` 后重新导出/导入即可（算法已改 MD5）
+- `数据源/**`、`data/`、真实 Key 不入 Git
+
+## 15. 2026-07-17 续：外部依赖进展 + 进入 P1C
+
+### 用户同步（事实）
+
+| 项 | 状态 |
+|----|------|
+| 蜴国际 API | 文档合入 main：`蜴国际-API/`（PR **#90**）。getToken/ratesv2 可用；createOrder 等欠费未测。**未接本仓代码**；对照见 lizard-api-vs-excel |
+| VITE 文档 + 测试环境 | 已到位；同事测完并合入 **main**：PR **#88**、后续小变更 **#89** |
+| 本分支 PR | **暂不提 PR**，继续在 `feature/sellfox-shipping-p1a-rest` 开发 |
+| 查 VITE 资料 | `origin/main` 的 `vite-api/` 模块（或已合并的 PR 88 内容） |
+
+### 规划下一步（P1C）
+
+综合调研 §10 **P1C**：人工确认 + 安全 `submitToPlatform` + VITE spike。
+
+本切片已开：
+
+1. **纯函数** `aggregate_package_submission_state`（无 HTTP）— `submission_state.py` + `test_submission_state.py`
+2. 后续（未做）：`SubmissionIntent` / `SubmissionAttempt` 表、CAS、1 rps、mock 下的 `submitToPlatform`；**真实调用前必须用户确认测试包裹范围**
+3. VITE spike：对照 `vite-api/` 文档做 httpx adapter vs Karrio 比较；**不替换通途生产**；凭证不入仓
+
+### 仍禁止
+
+- 对历史 `has_shipped` 样例调用 `submitToPlatform`
+- 未确认范围的生产回写
+- 把 VITE/蜴国际凭证写入 Git
+
+## 16. 2026-07-17 续：SubmissionIntent + CAS（mock）
+
+**分支：** `feature/sellfox-shipping-p1a-rest`  
+**验证：** `uv run pytest tests/sellfox_shipping -q` → **106 passed**  
+**Schema head：** `0006_submission_intents`
+
+| 项 | 说明 |
+|----|------|
+| Alembic `0006` | `shipping_submission_scopes` / `_intents` / `_attempts` |
+| Service | `submission_service.py`：canonical SHA-256 hash、prepare、CAS、UNKNOWN scope、recover |
+| Wire | 新路径用 `orderId`（非 legacy `write_tracking` 的 `amazonOrderId`） |
+| CLI | `packages-prepare-submit`；`packages-submit-intent`（默认 `--dry-run`；真调需 `--no-dry-run --i-understand-side-effects`） |
+| 测试 | hash / CAS / scope / recover / migration |
+
+### 操作员（仍不默认打赛狐）
+
+```text
+# 1. 包裹已 approved + 有真实 tracking_number
+uv run python -m sellfox_shipping.cli packages-prepare-submit \
+  --package-sn P2A... --actor <谁> --json
+
+# 2. 预览提交（无 HTTP）
+uv run python -m sellfox_shipping.cli packages-submit-intent \
+  --intent-id <N> --actor <谁> --json
+
+# 3. 真调（须用户确认测试包裹 + 双 flag）
+uv run python -m sellfox_shipping.cli packages-submit-intent \
+  --intent-id <N> --actor <谁> --no-dry-run --i-understand-side-effects --json
+```
+
+### 下一刀
+
+- ~~Web 确认 UI~~（准备 Intent + dry-run；真调仍仅 CLI）
+- ~~1 rps 限流；回读 VERIFIED~~
+- VITE spike（`vite-api/` on main）
+- ~~蜴国际 API 文档~~ → PR **#90** 已合入 main（`蜴国际-API/`）；createOrder/getLabel 因欠费未测 → 暂不替换 Excel
+
+## 17. 2026-07-17 续：蜴国际 API PR#90 + Web 提交确认
+
+**事实：** Merge PR **#90** → `origin/main` 模块 `蜴国际-API/`（getToken/ratesv2 已测；下单类欠费未测）。  
+**对照文档：** [lizard-api-vs-excel-2026-07-17.md](lizard-api-vs-excel-2026-07-17.md)  
+**安全提醒：** 该模块 HANDOFF 若含明文 token/key，勿拷贝；建议同事改为环境变量占位。
+
+**本切片：**
+
+| 项 | 说明 |
+|----|------|
+| Web | 包裹详情「赛狐回写确认」：准备 Intent + dry-run（**无** submitToPlatform） |
+| 路由 | `POST .../prepare-submit`、`POST .../submit-intent/{id}` |
+| 测试 | `test_package_prepare_submit_and_dry_run_web` |
+
+## 18. 2026-07-17 续：1 rps + 回读 VERIFIED
+
+**验证：** `uv run pytest tests/sellfox_shipping -q` → **113 passed**
+
+| 项 | 说明 |
+|----|------|
+| 限流 | `SubmitRateLimiter`（进程内）；结果字段 `rate_limited_wait_ms` |
+| 回读 | submit 成功后调 `packageDetail`；`logistics.trackNo` 与 intent 一致 → `VERIFIED` |
+| 不匹配 / 超时 | **保持 SUCCESS**，不标 UNKNOWN、不自动重发 |
+| CLI | `packages-verify-intent --intent-id N`（仅回读升格） |
+| Client | `SellfoxClient.fetch_package_detail(package_sn)` |
+
+```text
+# 真调后若仍 SUCCESS，可单独回读核验
+uv run python -m sellfox_shipping.cli packages-verify-intent \
+  --intent-id <N> --actor <谁> --json
+```
+
+## 19. 2026-07-17 续：代理限速口径 + VITE httpx spike
+
+**用户澄清（限速两层）：**
+
+| 路径 | 限速 | 本仓库应对 |
+|------|------|------------|
+| 直连赛狐官方 OpenAPI | 最多 **1 rps** | `submit_min_interval_seconds: 1.0` |
+| 共享代理 `https://api.vilavi.cn/sellfox`（admin：[/sellfox/admin](https://api.vilavi.cn/sellfox/admin)） | 现约 **0.5 rps**（用户可在代理侧改） | 默认 **`2.0`**（≈0.5 rps）；与 `config.yaml` 中 `proxy_base_url` 一致 |
+
+进程内 `SubmitRateLimiter` **不能**替代多实例/多操作员协调；多客户端并发时仍依赖代理侧限速。
+
+**VITE spike（仅 httpx，mock）：**
+
+| 项 | 说明 |
+|----|------|
+| 模块 | `sellfox_shipping/carriers/vite/client.py` → `ViteGofoClient` |
+| 端点 | `POST /rate2/gofo`、`POST /shipment2/gofo`、`GET /shipment2/label/{orderId}` |
+| 凭证 | `VITE_API_KEY` / 可选 `VITE_API_BASE_URL`；**不入仓** |
+| 测试 | `tests/sellfox_shipping/test_vite_client.py`（`httpx.MockTransport` only） |
+| 不做 | 不替换通途生产；本切片不做 Karrio custom connector；无 live 打单除非用户给 key + 确认范围 |
+
+### 下一刀
+
+- （可选）真测 VITE test env：用户提供范围后再跑 rate（避免误下单）
+- Karrio custom connector 对比笔记（仍可选）
+- 多实例 submit 协调 / OIDC / 蜴国际 createOrder 验证后 adapter
+
+## 20. 2026-07-17 续：VITE 测试环境 rate 真测
+
+**范围：** 仅 `test-api.vitedirect.com` 的 `GET /user/account` + `POST /rate2/gofo`；**未** createShipment / getLabel。  
+**脚本：** `sellfox_shipping/scripts/vite_test_rate_smoke.py`（key 来自 `VITE_API_KEY` 或 `vite-api` 测试文档；不打印 key）。
+
+| 项 | 结果 |
+|----|------|
+| 账户 | `200`，`balance≈2969.48`（虚拟余额；rate 不计费） |
+| GOFO_PX + PARCEL | OK，`totalAmount=3.8`，zone=3 |
+| GOFO_PARCEL + GFUS | OK，`totalAmount=3.35`，zone=1 |
+| GOFO_PARCEL + YT | OK，`totalAmount=3.35`，zone=1 |
+| GOFO_PX + GFUS | 仍无效（与 PR#88 报告一致） |
+| 文档示例 CA `91321` 发件 | 400「邮编不在配送范围」→ 改用报告内 MA `02478`→NH `03053` |
+
+**口径：** 测试价 ≠ 生产价；同事正用生产测 rate。本仓继续以测试环境验证契约，不切换通途生产。
+
+### 下一刀
+
+- （可选）测试环境 createShipment + getLabel（会动虚拟余额；须用户确认）
+- Karrio custom connector 对比笔记（仍可选）
+- 多实例 submit 协调 / OIDC / 蜴国际 createOrder 验证后 adapter
+
+## 21. 2026-07-17 续：VITE 测试环境 createShipment + getLabel
+
+**范围：** 仅 test-api；**1** 票 `GOFO_PX`+`PARCEL`（MA `02478` → NH `03053`）。  
+**脚本：** `scripts/vite_test_shipment_label_smoke.py`（可 `--order-id` 只轮询）。
+
+| 步骤 | 结果 |
+|------|------|
+| createShipment | OK；`status=pending`；`totalAmount=3.8`；余额 2978.14→2974.34 |
+| getLabel（45s 内） | 一直 `pending`（空 tracking / 无 url） |
+| getLabel（事后轮询） | **OK**；`tracking=GF60061989217965245700`；PDF url 在 `storage-develop.vitedirect.com` |
+| 结论 | 创建同步成功；标签异步，**轮询宜 ≥2–3 分钟**，不要 45s 就判失败 |
+
+未测 cancel。同账户余额在轮询窗口内曾继续下降（疑同事并用测试账户），与本单扣费可分开看。
+
+## 22. 2026-07-17 续：Webhook 空置 + 异步轮询口径
+
+**用户确认：**
+
+- VITE 测试后台 **API Hook URL** 暂空（生产估计同类）；蜴国际生产后台亦有 webhook 配置。
+- 当前为 **本地测试部署** → 不以 webhook 为主路径。
+- 蜴国际 IT：面单/追踪号异步；创建成功后查接口，**建议 30s 一次**。
+
+**落档：** [async-label-and-webhook-2026-07-17.md](async-label-and-webhook-2026-07-17.md)
+
+与 §21 一致：本地先轮询；公网就绪后再考虑填 Hook / 验订阅。
+
+## 23. 2026-07-17 续：VITE 选型 — httpx，不做 Karrio custom connector
+
+**决策文档：** [vite-httpx-vs-karrio-decision-2026-07-17.md](vite-httpx-vs-karrio-decision-2026-07-17.md)
+
+| 结论 | 说明 |
+|------|------|
+| 采用 | 已落地的 `ViteGofoClient`（httpx） |
+| 不做 | 为 VITE 新建 Karrio extension（无现成 connector，成本 > 收益） |
+| 仍不做 | Karrio Server；通途生产切换 |
+
+P1C VITE spike 技术退出门：**关闭**（真测 + 决策记录）。生产接入仍另需业务门。
+
+## 24. 2026-07-17 续：VITE 测试环境 cancel
+
+**脚本：** `scripts/vite_test_create_cancel_smoke.py`（create → poll OK → DELETE）。
+
+| 项 | 结果 |
+|----|------|
+| cancel 路径 | **`orderId` 可用**（`DELETE /shipment2/label/{orderId}`） |
+| 响应 | `status=success`，message canceled |
+| getLabel 之后 | `status=canceled`，`url` 空 |
+| 余额 | 创建前=取消后（本票 **$3.80 退回** 虚拟余额） |
+| 等到 OK | 约 1 分钟级 pending 后再 cancel |
+
+旧票 `PPGF-1784276863…` 再 cancel 已返回 `no-shipmentLabel-exist`（环境清理/过期），故用新票闭环。
+
+### 下一刀
+
+- 多实例 submit 协调 / 钉钉 OIDC（P1A 债）
+- 蜴国际：余额恢复后 createOrder+getLabel 冒烟；此前 Excel 主路径
+- 将 `ViteGofoClient` 挂到未来 `ApiCarrierAdapter`（单位换算、requestId、轮询/cancel）— 有业务范围时再开
+
+## 25. 2026-07-17 续：Karrio 重读 + OIDC 脚手架 + SQLite submit gate
+
+**Karrio：** 重读 PR#88（综合调研）与早期 research；确认与 httpx 决策一致。PR 澄清见决策文 §0。  
+**落档：** [oidc-and-submit-rate-gate-2026-07-17.md](oidc-and-submit-rate-gate-2026-07-17.md)
+
+| 项 | 说明 |
+|----|------|
+| Alembic `0007` | `shipping_submit_rate_gate` |
+| 限流 | `SqliteSubmitRateLimiter`；CLI submit 默认使用 |
+| OIDC | `auth_oidc.py`；默认 `auth.enabled: false`；对齐 proxy 桥 |
+| 蜴国际 | 同事在负余额下测 createOrder/getLabel/取消 — **等结论**；Excel 仍主路径 |
+
+### 下一刀
+
+- 公网部署前：打开 OIDC + 登记 redirect + HTTPS
+- 同事蜴国际 API 冒烟结论入库（对照 Excel）
+- `ViteGofoClient` → `ApiCarrierAdapter`（有业务范围时）
+
+## 26. 2026-07-17 续：蜴国际 PR#91 — 负余额下单/面单/取消已验
+
+**事实：** Merge PR **#91** → `origin/main` `蜴国际-API/`（`7e1ec1f`）。同事在余额仍为负时完成：
+
+| 接口 | 结果 |
+|------|------|
+| createOrder | ✅ 同步返回跟踪号 + 面单 PDF URL |
+| getLabel | ✅ sync_service_status=1 |
+| cancelOrder | ✅ code=200 |
+| rates / ratesv2 | ✅ |
+
+**实现要点：** `reference_no` 全链路一致；create 可能已带标签，仍保留 ~30s getLabel 轮询兜底。  
+**对照更新：** [lizard-api-vs-excel-2026-07-17.md](lizard-api-vs-excel-2026-07-17.md)  
+**口径：** API 冒烟通过；**Excel 仍为生产默认**，直至本仓 httpx adapter + 受控批次验证。勿拷贝 main HANDOFF 明文 Key。
+
+### 下一刀
+
+- （可选）本仓 `carriers/lizard` httpx 薄客户端（mock + 对照 PR91 契约；真调须确认范围）
+- 公网 OIDC 启用
+- VITE / 蜴国际 → `ApiCarrierAdapter`（有业务范围时）
+
+## 27. 2026-07-17 续：蜴国际 httpx 薄客户端（mock）
+
+**代码：** `carriers/lizard/api_client.py` — `get_token` / `ratesv2` / `create_order` / `get_label` / `cancel_order`  
+**测试：** `tests/sellfox_shipping/test_lizard_api_client.py`（MockTransport only）  
+**选型说明：** 用 **同步** `httpx.Client`，因本仓已统一 httpx、CLI/Service 同步；**不是**为了异步。Excel 仍生产默认；真调需 env 凭证 + 用户确认范围。
+
+## 28. 2026-07-17 续：蜴国际 API 本仓 1 票真调
+
+**脚本：** `scripts/lizard_api_create_cancel_smoke.py`（create → getLabel → cancel）
+
+| 步骤 | 结果 |
+|------|------|
+| getToken | OK |
+| createOrder | OK；`order_code=M6180202607173152034`；`reference_no=SMOKE-1784280071` |
+| getLabel | OK；`sync_service_status=1`，`order_status=2` |
+| cancelOrder | OK；`code=200 msg=Success` |
+
+本仓客户端契约与 PR#91 一致。追踪号/PDF 字段名需对照 `result` 键再钉死（本次解析为空但状态已成功）。Excel 仍生产默认。
+
+## 29. 2026-07-17 续：凭证迁入根目录 `.env`
+
+- **本地真实值：** 仓库根 `d:\Work\赛狐\Cursor\.env`（gitignore，不提交）
+- **模板：** `sellfox_shipping/.env.example`（`VITE_*` / `YIGLOBAL_*`）
+- 冒烟脚本去掉从 `vite-api` / `yiglobal-api` Markdown 读密钥的回退；只 `load_dotenv` + env
+- 同事去敏后的 API 文档继续保留；审批 Agent 回撤文档明文不影响本机真调
+
+## 30. 2026-07-20：恢复 P1C 分支 + 钉死 getLabel/create 字段
+
+- 分支曾被 reset 到 main；已从本地对象 `c489149` 恢复并 rebase 到含 PR #93 的 `origin/main`
+- Env 对齐：`YIGLOBAL_APP_*`（兼容旧 `LIZARD_*`）；文档路径 `yiglobal-api/`
+- 解析钉死（`yiglobal-api/docs/api-reference.md`）：
+  - **主路径：** `result.labels.tracking_number` / `result.labels.label_url`
+  - **回退：** 同名字段在 `result` 根上
+  - **就绪：** `code=200` 且 `sync_service_status=1`
+- 代码：`parse_create_order_result` / `parse_get_label_result`（`carriers/lizard/api_client.py`）
+
+## 31. 2026-07-20：S0143 映射 + reference_no=packageSn 适配层
+
+- 新模块：`carriers/lizard/order_adapter.py`
+  - `shipper_address_for_code("S0143")` → 备案地址 JSON（来源 `yiglobal-api` HANDOFF）
+  - `build_create_order_body(package, sm_code=...)`：**强制** `reference_no=package_sn`
+- Excel 仍生产默认；本刀**不**自动 createOrder / 不替换 spreadsheet 路径
+- 测试：`tests/sellfox_shipping/test_lizard_order_adapter.py`
+
+### 下一刀
+
+- ~~公网 OIDC（仍默认 `auth.enabled: false`）~~ → §32
+- （可选）`ApiCarrierAdapter` 编排：create → 轮询 getLabel → Artifact
+
+## 32. 2026-07-20：OIDC 公网就绪（默认仍关闭）
+
+- `assert_oidc_config_complete`：启用时缺 secret/redirect 启动失败
+- HTTPS redirect → session cookie `Secure`；API 未登录 JSON 401
+- `resolve_actor`：写操作优先钉钉 identity
+- 测试：`tests/sellfox_shipping/test_auth_oidc_gate.py`
+- **仍默认** `auth.enabled: false`；公网前需登记 redirect + 填 env（见 `.env.example`）
+
+### 下一刀
+
+- （可选）`ApiCarrierAdapter`：create → 轮询 getLabel → Artifact
+- 真公网：运维打开 OIDC + HTTPS 反代 + 桥登记 redirect
+
+## 33. 2026-07-20：LizardApiShipmentService（API 编排，Excel 仍默认）
+
+- 新模块：`carriers/lizard/api_shipment.py`
+  - `ship_package`：`build_create_order_body` → createOrder → 轮询 getLabel → 下载 PDF → `register_artifact(kind=lizard_api_label)`
+  - 可注入 `sleep` / `fetch_bytes` / `monotonic`（单测不真调）
+- **未**挂 Web/CLI；Excel 导出仍是生产默认
+- 测试：`tests/sellfox_shipping/test_lizard_api_shipment.py`
+
+### 下一刀
+
+- （可选）CLI 受控真调 / 把 tracking 写回包裹 / VITE 同构编排
+- 真公网：运维打开 OIDC + HTTPS
+
+## 34. 2026-07-20：submitToPlatform vs 自动推送 + trackNo 探针（部分）
+
+- 文档：[`submit-to-platform-vs-autopush-2026-07-20.md`](submit-to-platform-vs-autopush-2026-07-20.md)
+- 业务：通途写平台；赛狐自动推送关；历史计划含 submit 是因「赛狐原生全闭环」假设
+- 只读：`P2AJA9T726203` 本地有真实运单、赛狐详情仍占位 `packageSn`
+- dry-run：`P2AMA9T726848` → intent#1 wire `trackNo=PROBE20260720TRACK01` OK
+- **live submitToPlatform 未跑**（安全闸）；补跑命令见该文
+
+### 下一刀
+
+- 拆 PR 合 main → 本地 Excel 走查
+- 操作员可选补完 1 票 live 填号探针
+
+## 35. 2026-07-20：PR #96 + 本地 Excel 走查
+
+- PR：https://github.com/keyapi/fzh-data/pull/96 （分支 `feature/sellfox-shipping-p1-integrated`；三遍审阅见 `pr-slice-guide`）
+- 说明：`app.py` 耦合不宜硬拆多代码 PR；docs 小 PR 因闸控未另开，文档已含在 #96
+- Excel 走查（本地，**无** submitToPlatform）：
+  - 脚本：`scripts/excel_walkthrough_local.py`
+  - 导出 5 票 `to_process` → batch#3；合成返回表导入：**matched=5 persisted=5 conflicts=0 unmatched=0**
+  - 报告：`out/excel_walkthrough/REPORT.json`（gitignore 区）
+
+## 14. 本文档维护约定
 
 后续 Agent 完成一个可交付切片后，应：
 

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>打单批次 ShippingBatch — 赛狐尾程打单</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, 'Microsoft YaHei', sans-serif; background: #f5f5f5; color: #333; }
+        .header { background: #1a1a2e; color: #fff; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+        .header h1 { font-size: 18px; }
+        .nav a { color: #a0a0c0; text-decoration: none; margin-left: 20px; font-size: 14px; }
+        .nav a:hover, .nav a.active { color: #fff; }
+        .container { max-width: 1100px; margin: 24px auto; padding: 0 24px; }
+        .panel { background: #fff; border-radius: 8px; padding: 24px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .panel h2 { font-size: 16px; margin-bottom: 8px; }
+        .hint { font-size: 13px; color: #666; margin-bottom: 16px; line-height: 1.5; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #eee; vertical-align: top; }
+        th { color: #888; font-size: 11px; }
+        .empty { text-align: center; padding: 32px; color: #999; }
+        a.dl { color: #1a1a2e; font-weight: 600; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; background: #eef; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>打单批次 ShippingBatch</h1>
+        <div class="nav">
+            <a href="/">首页</a>
+            <a href="/packages">包裹</a>
+            <a href="/lizard/export">导出</a>
+            <a href="/lizard/import">导入追踪号</a>
+            <a href="/lizard/artifacts">制品</a>
+            <a href="/lizard/batches" class="active">批次</a>
+        </div>
+    </div>
+    <div class="container">
+        <div class="panel">
+            <h2>导出 → 导入 批次</h2>
+            <p class="hint">
+                每次成功导出上传表会创建一批次（状态 <code>exported</code>）。
+                导入追踪号时可填批次 ID，回填为 <code>tracking_imported</code>。
+                尚未包含 submitToPlatform。账户 {{ account_key }} · 本页 {{ items|length }} 条。
+            </p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>状态</th>
+                        <th>模板</th>
+                        <th>导出制品</th>
+                        <th>导入制品</th>
+                        <th>成功</th>
+                        <th>跳过</th>
+                        <th>冲突</th>
+                        <th>未匹配</th>
+                        <th>操作人</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if items %}
+                    {% for item in items %}
+                    <tr>
+                        <td><a class="dl" href="/lizard/batches/{{ item.id }}">#{{ item.id }}</a></td>
+                        <td><span class="badge">{{ item.status }}</span></td>
+                        <td>{{ item.template_version or '—' }}</td>
+                        <td>
+                            {% if item.export_artifact_id %}
+                            <a href="/lizard/artifacts">#{{ item.export_artifact_id }}</a>
+                            {% else %}—{% endif %}
+                        </td>
+                        <td>
+                            {% if item.import_artifact_id %}
+                            <a href="/lizard/artifacts">#{{ item.import_artifact_id }}</a>
+                            {% else %}—{% endif %}
+                        </td>
+                        <td>{{ item.success_count }}</td>
+                        <td>{{ item.skipped_count }}</td>
+                        <td>{{ item.failed_count }}</td>
+                        <td>{{ item.unmatched_count }}</td>
+                        <td>{{ item.created_by }}</td>
+                        <td>
+                            <a class="dl" href="/lizard/import?batch_id={{ item.id }}">导入到此批</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% else %}
+                    <tr><td colspan="11" class="empty">暂无批次。请先导出一次。</td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</body>
+</html>

@@ -251,7 +251,7 @@ def test_gateway_failure_after_first_page_returns_partial_report(tmp_path) -> No
     assert report.input_count == report.success_count == 1
     assert report.total_in_sellfox == 2
     assert report.remaining_count == 1
-    assert report.run_errors == ["page 2: gateway error"]
+    assert report.run_errors == ["page 2: gateway error (RuntimeError)"]
     assert "private response" not in report.model_dump_json()
     assert repository.count_rows()["packages"] == 1
 

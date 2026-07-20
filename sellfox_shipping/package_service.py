@@ -50,6 +50,7 @@ class PackageReader(Protocol):
         account_key: str,
         package_status: str | None = None,
         channel_name: str | None = None,
+        local_review_status: str | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[PackageListItem]: ...
@@ -60,6 +61,25 @@ class PackageReader(Protocol):
         account_key: str,
         package_status: str | None = None,
         channel_name: str | None = None,
+        local_review_status: str | None = None,
+    ) -> int: ...
+
+    def set_local_review_status(
+        self,
+        *,
+        account_key: str,
+        package_sn: str,
+        local_review_status: str,
+    ): ...
+
+    def append_audit_event(
+        self,
+        *,
+        actor: str,
+        action: str,
+        entity_type: str,
+        entity_id: str,
+        summary: str = "",
     ) -> int: ...
 
 
@@ -85,6 +105,7 @@ class PackageListRequest(BaseModel):
     account_key: str
     package_status: str | None = None
     channel_name: str | None = None
+    local_review_status: str | None = None
     limit: int = Field(default=50, ge=1, le=500)
     offset: int = Field(default=0, ge=0)
 
@@ -94,6 +115,30 @@ class PackageListRequest(BaseModel):
         value = value.strip()
         if not value:
             raise ValueError("must not be blank")
+        return value
+
+
+class PackageReviewRequest(BaseModel):
+    account_key: str
+    package_sn: str
+    actor: str
+    decision: str
+    note: str = ""
+
+    @field_validator("account_key", "package_sn", "actor")
+    @classmethod
+    def reject_blank_identifiers(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("must not be blank")
+        return value
+
+    @field_validator("decision")
+    @classmethod
+    def validate_decision(cls, value: str) -> str:
+        value = value.strip().lower()
+        if value not in {"approved", "rejected", "pending"}:
+            raise ValueError("decision must be approved, rejected, or pending")
         return value
 
 
@@ -138,6 +183,15 @@ class PackageSyncReport(BaseModel):
         return max(self.total_in_sellfox - self.input_count, 0)
 
 
+def _redact_gateway_error(exc: Exception) -> str:
+    """Keep status/type for operators; never echo response bodies or tokens."""
+    response = getattr(exc, "response", None)
+    status_code = getattr(response, "status_code", None)
+    if status_code is not None:
+        return f"{type(exc).__name__} http_{status_code}"
+    return type(exc).__name__
+
+
 class SyncPackagesService:
     """Fetch all package pages and persist every valid row with reconciliation."""
 
@@ -168,9 +222,11 @@ class SyncPackagesService:
                     page_no=page_no,
                     page_size=request.page_size,
                 )
-            except Exception:
+            except Exception as exc:
                 report.sync_status = "partial_failed"
-                report.run_errors.append(f"page {page_no}: gateway error")
+                report.run_errors.append(
+                    f"page {page_no}: gateway error ({_redact_gateway_error(exc)})"
+                )
                 report.finished_at = datetime.now(timezone.utc)
                 self._write_audit(request, report)
                 return report
@@ -298,6 +354,7 @@ class ListPackagesService:
             account_key=request.account_key,
             package_status=request.package_status,
             channel_name=request.channel_name,
+            local_review_status=request.local_review_status,
             limit=request.limit,
             offset=request.offset,
         )
@@ -305,5 +362,36 @@ class ListPackagesService:
             account_key=request.account_key,
             package_status=request.package_status,
             channel_name=request.channel_name,
+            local_review_status=request.local_review_status,
         )
         return PackageListResult(total=total, items=items)
+
+
+class ReviewPackageService:
+    """Record local review decisions before Excel export (P1B)."""
+
+    def __init__(self, repository: PackageReader):
+        self.repository = repository
+
+    def review(self, request: PackageReviewRequest):
+        record = self.repository.set_local_review_status(
+            account_key=request.account_key,
+            package_sn=request.package_sn,
+            local_review_status=request.decision,
+        )
+        summary = json.dumps(
+            {
+                "decision": request.decision,
+                "note": request.note,
+                "package_sn": request.package_sn,
+            },
+            ensure_ascii=False,
+        )
+        self.repository.append_audit_event(
+            actor=request.actor,
+            action="packages.review",
+            entity_type="package",
+            entity_id=request.package_sn,
+            summary=summary,
+        )
+        return record

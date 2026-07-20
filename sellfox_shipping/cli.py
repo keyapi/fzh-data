@@ -28,6 +28,11 @@ app = typer.Typer(
 
 BASE_DIR = Path(__file__).parent
 
+from sellfox_shipping.env_loader import load_dotenv
+
+load_dotenv()
+
+
 def _load_config() -> dict:
     with open(BASE_DIR / "config.yaml", encoding="utf-8") as f:
         return yaml.safe_load(f)
@@ -175,6 +180,187 @@ def packages_list(
     _output(result.model_dump(mode="json"), json_output)
 
 
+def _get_lizard_dims_lookup():
+    """Local override → Sellfox commodity pageList → ERPNext ZLMB."""
+    import os
+    from pathlib import Path
+
+    from sellfox_shipping.carriers.lizard.cascade import CascadingDimsLookup
+    from sellfox_shipping.carriers.lizard.commodity_dims import (
+        CommodityPageListDimsLookup,
+    )
+    from sellfox_shipping.carriers.lizard.erpnext_dims import ErpnextZlmbDimsLookup
+    from sellfox_shipping.carriers.lizard.override_dims import RepositoryDimsLookup
+    from sellfox_shipping.env_loader import load_dotenv
+
+    load_dotenv(Path(__file__).resolve().parents[1] / "EN_API" / ".env")
+    load_dotenv()
+
+    config = _load_config()
+    account_key = config["sellfox"]["proxy_account"]
+    override = RepositoryDimsLookup(_get_package_repository(), account_key)
+    primary = CommodityPageListDimsLookup(
+        proxy_base_url=config["sellfox"]["proxy_base_url"],
+        proxy_account=account_key,
+        proxy_api_key=os.getenv("SELLFOX_PROXY_API_KEY", ""),
+    )
+    erp_key = (
+        os.getenv("PROD_ERP_API_KEY")
+        or os.getenv("ERP_API_KEY")
+        or ""
+    ).strip()
+    erp_secret = (
+        os.getenv("PROD_ERP_API_SECRET")
+        or os.getenv("ERP_API_SECRET")
+        or ""
+    ).strip()
+    if not erp_key or not erp_secret:
+        return CascadingDimsLookup(override, primary)
+    erp_url = (
+        os.getenv("ERP_URL") or "https://erpnext.vilavi.cn"
+    ).strip().rstrip("/")
+    fallback = ErpnextZlmbDimsLookup(
+        base_url=erp_url,
+        api_key=erp_key,
+        api_secret=erp_secret,
+    )
+    return CascadingDimsLookup(override, primary, fallback)
+
+
+@app.command("lizard-export")
+def lizard_export(
+    output: Path = typer.Option(..., "--output", "-o", help="Output xlsx path"),
+    actor: str = typer.Option("cli", help="Actor for audit"),
+    limit: int = typer.Option(500, min=1, max=5000),
+    shipper_code: str = typer.Option("S0143", help="Lizard shipper / sub-account code"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Export approved 蜴国际 packages to lizard upload Excel (P1B)."""
+    from sellfox_shipping.lizard_batch import (
+        ExportLizardUploadService,
+        LizardExportRequest,
+    )
+
+    config = _load_config()
+    repo = _get_package_repository()
+    result = ExportLizardUploadService(repo, _get_lizard_dims_lookup()).export(
+        LizardExportRequest(
+            account_key=config["sellfox"]["proxy_account"],
+            actor=actor,
+            output_path=output,
+            limit=limit,
+            shipper_code=shipper_code,
+        )
+    )
+    _output(result.model_dump(mode="json"), json_output)
+    if result.exported == 0:
+        raise typer.Exit(1)
+
+
+@app.command("lizard-import-tracking")
+def lizard_import_tracking(
+    input_path: Path = typer.Option(..., "--input", "-i", help="Lizard return xlsx"),
+    actor: str = typer.Option("cli", help="Actor for audit"),
+    batch_id: Optional[int] = typer.Option(
+        None, "--batch-id", help="Optional ShippingBatch id to update"
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Parse lizard tracking-return Excel and reconcile by package_sn (P1B)."""
+    from sellfox_shipping.lizard_batch import (
+        ImportLizardTrackingService,
+        LizardImportRequest,
+    )
+
+    config = _load_config()
+    result = ImportLizardTrackingService(_get_package_repository()).import_file(
+        LizardImportRequest(
+            account_key=config["sellfox"]["proxy_account"],
+            actor=actor,
+            input_path=input_path,
+            batch_id=batch_id,
+        )
+    )
+    _output(result.model_dump(mode="json"), json_output)
+    if result.unmatched:
+        raise typer.Exit(2)
+
+
+@app.command("packages-prepare-submit")
+def packages_prepare_submit(
+    package_sn: str = typer.Option(..., "--package-sn", help="Sellfox packageSn"),
+    actor: str = typer.Option("cli", help="Actor for audit"),
+    carrier_name: str = typer.Option("", help="Override carrier name"),
+    shipping_service: str = typer.Option("", help="Optional ship service"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Create SubmissionIntent rows for an approved package (no HTTP)."""
+    from sellfox_shipping.submission_service import SubmissionService
+
+    config = _load_config()
+    result = SubmissionService(_get_package_repository()).prepare_intents_for_package(
+        account_key=config["sellfox"]["proxy_account"],
+        package_sn=package_sn,
+        actor=actor,
+        carrier_name=carrier_name or "",
+        shipping_service=shipping_service or "",
+    )
+    _output(result.__dict__, json_output)
+
+
+@app.command("packages-submit-intent")
+def packages_submit_intent(
+    intent_id: int = typer.Option(..., "--intent-id", help="SubmissionIntent id"),
+    actor: str = typer.Option("cli", help="Actor for audit"),
+    dry_run: bool = typer.Option(True, help="Preview only; no HTTP (default)"),
+    i_understand_side_effects: bool = typer.Option(
+        False,
+        "--i-understand-side-effects",
+        help="Allow real submitToPlatform (requires --no-dry-run)",
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Submit one intent (default dry-run; real call needs explicit side-effect flag)."""
+    from sellfox_shipping.submission_rate_limit import SqliteSubmitRateLimiter
+    from sellfox_shipping.submission_service import SubmissionService
+
+    config = _load_config()
+    repo = _get_package_repository()
+    client = _get_client() if (not dry_run and i_understand_side_effects) else None
+    interval = float(
+        config.get("sellfox", {}).get("submit_min_interval_seconds", 2.0)
+    )
+    db_path = BASE_DIR / config.get("store", {}).get("db_path", "data/shipping.db")
+    result = SubmissionService(
+        repo,
+        client,
+        rate_limiter=SqliteSubmitRateLimiter(db_path, interval),
+    ).submit_intent(
+        intent_id=intent_id,
+        actor=actor,
+        dry_run=dry_run,
+        allow_side_effects=i_understand_side_effects and not dry_run,
+    )
+    _output(result.__dict__, json_output)
+
+
+@app.command("packages-verify-intent")
+def packages_verify_intent(
+    intent_id: int = typer.Option(..., "--intent-id", help="SubmissionIntent id"),
+    actor: str = typer.Option("cli", help="Actor for audit"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Promote SUCCESS → VERIFIED via packageDetail readback (no submit)."""
+    from sellfox_shipping.submission_service import SubmissionService
+
+    repo = _get_package_repository()
+    result = SubmissionService(repo, _get_client()).verify_intent_from_readback(
+        intent_id=intent_id,
+        actor=actor,
+    )
+    _output(result.__dict__, json_output)
+
+
 @app.command()
 def orders(
     status: Optional[str] = typer.Option(None, help="Filter by package_status"),
@@ -250,14 +436,38 @@ def rules(
 def serve(
     host: str = typer.Option("0.0.0.0", help="Bind host"),
     port: int = typer.Option(8401, help="Bind port"),
+    reload: bool = typer.Option(
+        False,
+        "--reload",
+        help="Auto-reload on code change (local dev only; production keep off)",
+    ),
 ):
-    """Start the web server (FastAPI + FastMCP)."""
+    """Start the web server (FastAPI; FastMCP mounted when installed)."""
     import uvicorn
+
     typer.echo(f"Starting sellfox-shipping on {host}:{port}")
-    typer.echo(f"  Web UI:  http://{host}:{port}")
-    typer.echo(f"  REST:    http://{host}:{port}/api/")
-    typer.echo(f"  MCP:     http://{host}:{port}/mcp")
-    uvicorn.run("sellfox_shipping.main:app", host=host, port=port, reload=True)
+    typer.echo(f"  Web UI:     http://{host}:{port}/packages")
+    typer.echo(f"  Export:     http://{host}:{port}/lizard/export")
+    typer.echo(f"  Import:     http://{host}:{port}/lizard/import")
+    typer.echo(f"  Artifacts:  http://{host}:{port}/lizard/artifacts")
+    typer.echo(f"  Batches:    http://{host}:{port}/lizard/batches")
+    typer.echo(f"  REST:       http://{host}:{port}/api/")
+    if reload:
+        typer.echo("  Reload:     ON (code changes auto-restart)")
+    try:
+        import fastmcp  # noqa: F401
+    except ImportError:
+        typer.echo("  MCP:        disabled (fastmcp not installed)")
+    else:
+        typer.echo(f"  MCP:        http://{host}:{port}/mcp")
+    # log_level=info: startup line is the only reliable ready signal (Lesson 59)
+    uvicorn.run(
+        "sellfox_shipping.main:app",
+        host=host,
+        port=port,
+        reload=reload,
+        log_level="info",
+    )
 
 
 if __name__ == "__main__":

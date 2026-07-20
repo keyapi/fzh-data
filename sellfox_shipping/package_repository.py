@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 from dataclasses import dataclass
@@ -26,6 +27,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
+from sellfox_shipping.carriers.lizard.dims import CartonDims
 from sellfox_shipping.package_models import (
     AuditEventRecord,
     PackageListItem,
@@ -93,6 +95,7 @@ class PackageRow(Base):
     platform_name: Mapped[str] = mapped_column(String, default="")
     marketplace: Mapped[str] = mapped_column(String, default="")
     package_status: Mapped[str] = mapped_column(String, default="")
+    local_review_status: Mapped[str] = mapped_column(String, default="pending")
     address_name: Mapped[str] = mapped_column(String, default="")
     address_company: Mapped[str] = mapped_column(String, default="")
     address_line_1: Mapped[str] = mapped_column(String, default="")
@@ -181,6 +184,267 @@ class AuditEventRow(Base):
     )
 
 
+class CartonOverrideRow(Base):
+    __tablename__ = "shipping_carton_overrides"
+    __table_args__ = (
+        UniqueConstraint(
+            "account_id",
+            "commodity_sku",
+            name="uq_shipping_carton_override_account_sku",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    account_id: Mapped[int] = mapped_column(
+        ForeignKey("shipping_accounts.id", ondelete="CASCADE")
+    )
+    commodity_sku: Mapped[str] = mapped_column(String)
+    weight_kg: Mapped[float] = mapped_column(Float, default=0)
+    length_cm: Mapped[float] = mapped_column(Float, default=0)
+    width_cm: Mapped[float] = mapped_column(Float, default=0)
+    height_cm: Mapped[float] = mapped_column(Float, default=0)
+    note: Mapped[str] = mapped_column(String, default="")
+    updated_by: Mapped[str] = mapped_column(String, default="")
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.current_timestamp()
+    )
+
+
+@dataclass(frozen=True)
+class CartonOverrideRecord:
+    account_key: str
+    commodity_sku: str
+    dims: CartonDims
+    note: str = ""
+    updated_by: str = ""
+
+
+@dataclass(frozen=True)
+class ArtifactRecord:
+    id: int
+    account_key: str
+    kind: str
+    file_name: str
+    content_hash: str
+    storage_relpath: str
+    mime_type: str = ""
+    file_size: int = 0
+    template_version: str = ""
+    virtual_folder: str = ""
+    summary: str = ""
+    created_by: str = ""
+    created_at: datetime | None = None
+
+
+@dataclass(frozen=True)
+class ShippingBatchRecord:
+    id: int
+    account_key: str
+    adapter: str
+    status: str
+    template_version: str = ""
+    created_by: str = ""
+    export_artifact_id: int | None = None
+    import_artifact_id: int | None = None
+    input_count: int = 0
+    success_count: int = 0
+    skipped_count: int = 0
+    failed_count: int = 0
+    unmatched_count: int = 0
+    summary: str = ""
+    created_at: datetime | None = None
+
+
+@dataclass(frozen=True)
+class BatchPackageRecord:
+    batch_id: int
+    package_sn: str
+    status: str
+    reason: str = ""
+
+
+class ArtifactRow(Base):
+    __tablename__ = "shipping_artifacts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    account_id: Mapped[int] = mapped_column(
+        ForeignKey("shipping_accounts.id", ondelete="CASCADE")
+    )
+    kind: Mapped[str] = mapped_column(String)
+    file_name: Mapped[str] = mapped_column(String)
+    content_hash: Mapped[str] = mapped_column(String)
+    storage_relpath: Mapped[str] = mapped_column(String)
+    mime_type: Mapped[str] = mapped_column(String, default="")
+    file_size: Mapped[int] = mapped_column(Integer, default=0)
+    template_version: Mapped[str] = mapped_column(String, default="")
+    virtual_folder: Mapped[str] = mapped_column(String, default="")
+    summary: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[str] = mapped_column(String, default="")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.current_timestamp()
+    )
+
+
+class ShippingBatchRow(Base):
+    __tablename__ = "shipping_batches"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    account_id: Mapped[int] = mapped_column(
+        ForeignKey("shipping_accounts.id", ondelete="CASCADE")
+    )
+    adapter: Mapped[str] = mapped_column(String, default="lizard")
+    status: Mapped[str] = mapped_column(String, default="exported")
+    template_version: Mapped[str] = mapped_column(String, default="")
+    created_by: Mapped[str] = mapped_column(String, default="")
+    export_artifact_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    import_artifact_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    input_count: Mapped[int] = mapped_column(Integer, default=0)
+    success_count: Mapped[int] = mapped_column(Integer, default=0)
+    skipped_count: Mapped[int] = mapped_column(Integer, default=0)
+    failed_count: Mapped[int] = mapped_column(Integer, default=0)
+    unmatched_count: Mapped[int] = mapped_column(Integer, default=0)
+    summary: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.current_timestamp()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.current_timestamp()
+    )
+
+
+class BatchPackageRow(Base):
+    __tablename__ = "shipping_batch_packages"
+    __table_args__ = (
+        UniqueConstraint(
+            "batch_id",
+            "package_sn",
+            name="uq_shipping_batch_package",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    batch_id: Mapped[int] = mapped_column(
+        ForeignKey("shipping_batches.id", ondelete="CASCADE")
+    )
+    package_sn: Mapped[str] = mapped_column(String)
+    status: Mapped[str] = mapped_column(String, default="exported")
+    reason: Mapped[str] = mapped_column(String, default="")
+
+
+class SubmissionScopeRow(Base):
+    __tablename__ = "shipping_submission_scopes"
+    __table_args__ = (
+        UniqueConstraint(
+            "account_id",
+            "package_id",
+            "order_id",
+            name="uq_shipping_submission_scope",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    account_id: Mapped[int] = mapped_column(
+        ForeignKey("shipping_accounts.id", ondelete="CASCADE")
+    )
+    package_id: Mapped[int] = mapped_column(
+        ForeignKey("shipping_packages.id", ondelete="CASCADE")
+    )
+    order_id: Mapped[int] = mapped_column(
+        ForeignKey("shipping_orders.id", ondelete="CASCADE")
+    )
+    status: Mapped[str] = mapped_column(String, default="OPEN")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.current_timestamp()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.current_timestamp()
+    )
+
+
+class SubmissionIntentRow(Base):
+    __tablename__ = "shipping_submission_intents"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    account_id: Mapped[int] = mapped_column(
+        ForeignKey("shipping_accounts.id", ondelete="CASCADE")
+    )
+    package_id: Mapped[int] = mapped_column(
+        ForeignKey("shipping_packages.id", ondelete="CASCADE")
+    )
+    order_id: Mapped[int] = mapped_column(
+        ForeignKey("shipping_orders.id", ondelete="CASCADE")
+    )
+    scope_id: Mapped[int] = mapped_column(
+        ForeignKey("shipping_submission_scopes.id", ondelete="CASCADE")
+    )
+    external_order_id: Mapped[str] = mapped_column(String, default="")
+    request_hash: Mapped[str] = mapped_column(String, unique=True)
+    canonical_request: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String, default="READY")
+    version: Mapped[int] = mapped_column(Integer, default=0)
+    confirmed_by: Mapped[str] = mapped_column(String, default="")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.current_timestamp()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.current_timestamp()
+    )
+
+
+class SubmissionAttemptRow(Base):
+    __tablename__ = "shipping_submission_attempts"
+    __table_args__ = (
+        UniqueConstraint(
+            "intent_id",
+            "attempt_no",
+            name="uq_shipping_submission_attempt_no",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    intent_id: Mapped[int] = mapped_column(
+        ForeignKey("shipping_submission_intents.id", ondelete="CASCADE")
+    )
+    attempt_no: Mapped[int] = mapped_column(Integer, default=1)
+    status: Mapped[str] = mapped_column(String, default="CREATED")
+    send_state: Mapped[str] = mapped_column(String, default="NOT_SENT")
+    actor: Mapped[str] = mapped_column(String, default="")
+    http_status: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    http_summary: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.current_timestamp()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.current_timestamp()
+    )
+
+
+@dataclass(frozen=True)
+class SubmissionIntentRecord:
+    id: int
+    account_key: str
+    package_id: int
+    order_db_id: int
+    external_order_id: str
+    request_hash: str
+    canonical_request: str
+    status: str
+    version: int
+    confirmed_by: str = ""
+
+
+@dataclass(frozen=True)
+class SubmissionAttemptRecord:
+    id: int
+    intent_id: int
+    attempt_no: int
+    status: str
+    send_state: str
+    actor: str = ""
+    http_status: int | None = None
+    http_summary: str = ""
+
+
 @dataclass(frozen=True)
 class UpsertOutcome:
     package_id: int
@@ -194,13 +458,18 @@ class PackageRepository:
         path = Path(db_path)
         path.parent.mkdir(parents=True, exist_ok=True)
         _initialize_sqlite(path)
+        from sellfox_shipping.schema import upgrade_schema
+
+        upgrade_schema(path)
         self.engine = create_engine(
             f"sqlite:///{path}",
             connect_args={"check_same_thread": False},
         )
         event.listen(self.engine, "connect", _configure_sqlite)
         self._session_factory = sessionmaker(self.engine, expire_on_commit=False)
-        Base.metadata.create_all(self.engine)
+        self._db_path = path
+        self.artifacts_root = path.parent / "artifacts"
+        self.artifacts_root.mkdir(parents=True, exist_ok=True)
 
     def upsert(self, record: SellfoxPackageRecord) -> UpsertOutcome:
         with self._session_factory.begin() as session:
@@ -311,12 +580,860 @@ class PackageRepository:
             ).all()
             return self._to_record(account_key, package, order_rows, item_rows)
 
+    def set_local_review_status(
+        self,
+        *,
+        account_key: str,
+        package_sn: str,
+        local_review_status: str,
+    ) -> SellfoxPackageRecord:
+        with self._session_factory.begin() as session:
+            package = session.scalar(
+                select(PackageRow)
+                .join(
+                    ShippingAccountRow,
+                    ShippingAccountRow.id == PackageRow.account_id,
+                )
+                .where(
+                    ShippingAccountRow.account_key == account_key,
+                    PackageRow.package_sn == package_sn,
+                )
+            )
+            if package is None:
+                raise LookupError(f"Package {package_sn} not found")
+            package.local_review_status = local_review_status
+            order_rows = session.scalars(
+                select(OrderRow)
+                .join(
+                    PackageOrderRow,
+                    PackageOrderRow.order_id == OrderRow.id,
+                )
+                .where(PackageOrderRow.package_id == package.id)
+                .order_by(OrderRow.external_order_id)
+            ).all()
+            item_rows = session.scalars(
+                select(PackageItemRow)
+                .where(PackageItemRow.package_id == package.id)
+                .order_by(PackageItemRow.order_item_id)
+            ).all()
+            return self._to_record(account_key, package, order_rows, item_rows)
+
+    def set_tracking_number(
+        self,
+        *,
+        account_key: str,
+        package_sn: str,
+        tracking_number: str,
+        estimated_cost: float | None = None,
+        cost_currency: str | None = None,
+    ) -> SellfoxPackageRecord:
+        with self._session_factory.begin() as session:
+            package = session.scalar(
+                select(PackageRow)
+                .join(
+                    ShippingAccountRow,
+                    ShippingAccountRow.id == PackageRow.account_id,
+                )
+                .where(
+                    ShippingAccountRow.account_key == account_key,
+                    PackageRow.package_sn == package_sn,
+                )
+            )
+            if package is None:
+                raise LookupError(f"Package {package_sn} not found")
+            package.tracking_number = tracking_number
+            if estimated_cost is not None:
+                package.estimated_cost = estimated_cost
+            if cost_currency is not None:
+                package.cost_currency = cost_currency
+            order_rows = session.scalars(
+                select(OrderRow)
+                .join(
+                    PackageOrderRow,
+                    PackageOrderRow.order_id == OrderRow.id,
+                )
+                .where(PackageOrderRow.package_id == package.id)
+                .order_by(OrderRow.external_order_id)
+            ).all()
+            item_rows = session.scalars(
+                select(PackageItemRow)
+                .where(PackageItemRow.package_id == package.id)
+                .order_by(PackageItemRow.order_item_id)
+            ).all()
+            return self._to_record(account_key, package, order_rows, item_rows)
+
+    def get_carton_override(
+        self, account_key: str, commodity_sku: str
+    ) -> CartonOverrideRecord | None:
+        sku = (commodity_sku or "").strip()
+        if not sku:
+            return None
+        with self._session_factory() as session:
+            row = session.scalar(
+                select(CartonOverrideRow)
+                .join(
+                    ShippingAccountRow,
+                    ShippingAccountRow.id == CartonOverrideRow.account_id,
+                )
+                .where(
+                    ShippingAccountRow.account_key == account_key,
+                    CartonOverrideRow.commodity_sku == sku,
+                )
+            )
+            if row is None:
+                return None
+            return CartonOverrideRecord(
+                account_key=account_key,
+                commodity_sku=row.commodity_sku,
+                dims=CartonDims(
+                    weight_kg=float(row.weight_kg or 0),
+                    length_cm=float(row.length_cm or 0),
+                    width_cm=float(row.width_cm or 0),
+                    height_cm=float(row.height_cm or 0),
+                ),
+                note=row.note or "",
+                updated_by=row.updated_by or "",
+            )
+
+    def set_carton_override(
+        self,
+        *,
+        account_key: str,
+        commodity_sku: str,
+        dims: CartonDims,
+        actor: str,
+        note: str = "",
+    ) -> CartonOverrideRecord:
+        sku = (commodity_sku or "").strip()
+        if not sku:
+            raise ValueError("commodity_sku is required")
+        if not dims.is_complete:
+            raise ValueError("dims must be complete (weight and L/W/H > 0)")
+        actor_name = (actor or "").strip()
+        if not actor_name:
+            raise ValueError("actor is required")
+        with self._session_factory.begin() as session:
+            account = self._get_or_create_account(session, account_key)
+            row = session.scalar(
+                select(CartonOverrideRow).where(
+                    CartonOverrideRow.account_id == account.id,
+                    CartonOverrideRow.commodity_sku == sku,
+                )
+            )
+            if row is None:
+                row = CartonOverrideRow(
+                    account_id=account.id,
+                    commodity_sku=sku,
+                )
+                session.add(row)
+            row.weight_kg = dims.weight_kg
+            row.length_cm = dims.length_cm
+            row.width_cm = dims.width_cm
+            row.height_cm = dims.height_cm
+            row.note = note or ""
+            row.updated_by = actor_name
+            row.updated_at = datetime.now(timezone.utc)
+        self.append_audit_event(
+            actor=actor_name,
+            action="lizard.carton_override",
+            entity_type="commodity_sku",
+            entity_id=sku,
+            summary=(
+                f"{dims.weight_kg}kg {dims.length_cm}x{dims.width_cm}x{dims.height_cm}cm"
+            ),
+        )
+        record = self.get_carton_override(account_key, sku)
+        assert record is not None
+        return record
+
+    def register_artifact(
+        self,
+        *,
+        account_key: str,
+        kind: str,
+        file_name: str,
+        content: bytes,
+        actor: str,
+        template_version: str = "",
+        virtual_folder: str = "",
+        mime_type: str = "",
+        summary: str = "",
+    ) -> ArtifactRecord:
+        """Register a file artifact; physical bytes deduped by content_hash.
+
+        Like ERPNext File: same content_hash → one blob on disk; multiple
+        artifact rows may use different file_name / virtual_folder.
+        """
+        kind_s = (kind or "").strip()
+        name = Path(file_name or "unnamed.bin").name
+        actor_s = (actor or "").strip()
+        if not kind_s:
+            raise ValueError("kind is required")
+        if not actor_s:
+            raise ValueError("actor is required")
+        if not content:
+            raise ValueError("content is empty")
+        digest = hashlib.md5(content, usedforsecurity=False).hexdigest()
+        mime = mime_type or _guess_mime(name)
+        with self._session_factory.begin() as session:
+            account = self._get_or_create_account(session, account_key)
+            # Reuse blob path if this content_hash already stored (ERPNext-like dedup).
+            prior = session.scalar(
+                select(ArtifactRow)
+                .where(
+                    ArtifactRow.account_id == account.id,
+                    ArtifactRow.content_hash == digest,
+                )
+                .limit(1)
+            )
+            if prior is not None:
+                relpath = prior.storage_relpath
+            else:
+                relpath = _flat_private_relpath(name, digest)
+                blob_path = self.artifacts_root / relpath
+                blob_path.parent.mkdir(parents=True, exist_ok=True)
+                if not blob_path.exists():
+                    blob_path.write_bytes(content)
+            row = ArtifactRow(
+                account_id=account.id,
+                kind=kind_s,
+                file_name=name,
+                content_hash=digest,
+                storage_relpath=relpath.replace("\\", "/"),
+                mime_type=mime,
+                file_size=len(content),
+                template_version=template_version or "",
+                virtual_folder=virtual_folder or "",
+                summary=summary or "",
+                created_by=actor_s,
+                created_at=datetime.now(timezone.utc),
+            )
+            session.add(row)
+            session.flush()
+            artifact_id = int(row.id)
+        self.append_audit_event(
+            actor=actor_s,
+            action="artifacts.register",
+            entity_type="artifact",
+            entity_id=str(artifact_id),
+            summary=f"{kind_s} {name} md5={digest[:12]}…",
+        )
+        record = self.get_artifact(artifact_id)
+        assert record is not None
+        return record
+
+    def get_artifact(self, artifact_id: int) -> ArtifactRecord | None:
+        with self._session_factory() as session:
+            row = session.get(ArtifactRow, artifact_id)
+            if row is None:
+                return None
+            account = session.get(ShippingAccountRow, row.account_id)
+            return _artifact_to_record(account.account_key if account else "", row)
+
+    def resolve_artifact_path(self, artifact: ArtifactRecord) -> Path:
+        return self.artifacts_root / artifact.storage_relpath
+
+    def list_artifacts(
+        self,
+        *,
+        account_key: str,
+        kind: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[ArtifactRecord]:
+        with self._session_factory() as session:
+            query = (
+                select(ArtifactRow, ShippingAccountRow.account_key)
+                .join(
+                    ShippingAccountRow,
+                    ShippingAccountRow.id == ArtifactRow.account_id,
+                )
+                .where(ShippingAccountRow.account_key == account_key)
+                .order_by(ArtifactRow.id.desc())
+                .offset(offset)
+                .limit(limit)
+            )
+            if kind is not None:
+                query = query.where(ArtifactRow.kind == kind)
+            rows = session.execute(query).all()
+            return [_artifact_to_record(ak, row) for row, ak in rows]
+
+    def create_export_batch(
+        self,
+        *,
+        account_key: str,
+        actor: str,
+        template_version: str,
+        export_artifact_id: int | None,
+        exported_package_sns: list[str],
+        skipped_rows: list[dict],
+        summary: str = "",
+    ) -> ShippingBatchRecord:
+        actor_s = (actor or "").strip()
+        if not actor_s:
+            raise ValueError("actor is required")
+        now = datetime.now(timezone.utc)
+        with self._session_factory.begin() as session:
+            account = self._get_or_create_account(session, account_key)
+            batch = ShippingBatchRow(
+                account_id=account.id,
+                adapter="lizard",
+                status="exported",
+                template_version=template_version or "",
+                created_by=actor_s,
+                export_artifact_id=export_artifact_id,
+                input_count=len(exported_package_sns) + len(skipped_rows),
+                success_count=len(exported_package_sns),
+                skipped_count=len(skipped_rows),
+                summary=summary or "",
+                created_at=now,
+                updated_at=now,
+            )
+            session.add(batch)
+            session.flush()
+            batch_id = int(batch.id)
+            for sn in exported_package_sns:
+                session.add(
+                    BatchPackageRow(
+                        batch_id=batch_id,
+                        package_sn=sn,
+                        status="exported",
+                        reason="",
+                    )
+                )
+            for row in skipped_rows:
+                session.add(
+                    BatchPackageRow(
+                        batch_id=batch_id,
+                        package_sn=str(row.get("package_sn") or ""),
+                        status="skipped",
+                        reason=str(row.get("reason") or ""),
+                    )
+                )
+        self.append_audit_event(
+            actor=actor_s,
+            action="batches.export_created",
+            entity_type="batch",
+            entity_id=str(batch_id),
+            summary=summary or f"exported={len(exported_package_sns)}",
+        )
+        record = self.get_batch(batch_id)
+        assert record is not None
+        return record
+
+    def apply_import_to_batch(
+        self,
+        *,
+        batch_id: int,
+        import_artifact_id: int | None,
+        matched_sns: list[str],
+        conflict_sns: list[str],
+        unmatched_sns: list[str],
+        actor: str,
+        summary: str = "",
+    ) -> ShippingBatchRecord:
+        actor_s = (actor or "").strip() or "system"
+        now = datetime.now(timezone.utc)
+        with self._session_factory.begin() as session:
+            batch = session.get(ShippingBatchRow, batch_id)
+            if batch is None:
+                raise LookupError(f"Batch {batch_id} not found")
+            batch.import_artifact_id = import_artifact_id
+            batch.status = "tracking_imported"
+            batch.success_count = len(matched_sns)
+            batch.failed_count = len(conflict_sns)
+            batch.unmatched_count = len(unmatched_sns)
+            batch.summary = summary or batch.summary
+            batch.updated_at = now
+            for sn in matched_sns:
+                self._upsert_batch_package(session, batch_id, sn, "tracking_matched", "")
+            for sn in conflict_sns:
+                self._upsert_batch_package(
+                    session, batch_id, sn, "tracking_conflict", "tracking conflict"
+                )
+            for sn in unmatched_sns:
+                self._upsert_batch_package(
+                    session, batch_id, sn, "unmatched", "not in local DB"
+                )
+        self.append_audit_event(
+            actor=actor_s,
+            action="batches.tracking_imported",
+            entity_type="batch",
+            entity_id=str(batch_id),
+            summary=summary,
+        )
+        record = self.get_batch(batch_id)
+        assert record is not None
+        return record
+
+    def _upsert_batch_package(
+        self,
+        session: Session,
+        batch_id: int,
+        package_sn: str,
+        status: str,
+        reason: str,
+    ) -> None:
+        sn = (package_sn or "").strip()
+        if not sn:
+            return
+        row = session.scalar(
+            select(BatchPackageRow).where(
+                BatchPackageRow.batch_id == batch_id,
+                BatchPackageRow.package_sn == sn,
+            )
+        )
+        if row is None:
+            session.add(
+                BatchPackageRow(
+                    batch_id=batch_id,
+                    package_sn=sn,
+                    status=status,
+                    reason=reason,
+                )
+            )
+        else:
+            row.status = status
+            row.reason = reason
+
+    def get_batch(self, batch_id: int) -> ShippingBatchRecord | None:
+        with self._session_factory() as session:
+            row = session.get(ShippingBatchRow, batch_id)
+            if row is None:
+                return None
+            account = session.get(ShippingAccountRow, row.account_id)
+            return _batch_to_record(account.account_key if account else "", row)
+
+    def list_batches(
+        self,
+        *,
+        account_key: str,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[ShippingBatchRecord]:
+        with self._session_factory() as session:
+            rows = session.execute(
+                select(ShippingBatchRow, ShippingAccountRow.account_key)
+                .join(
+                    ShippingAccountRow,
+                    ShippingAccountRow.id == ShippingBatchRow.account_id,
+                )
+                .where(ShippingAccountRow.account_key == account_key)
+                .order_by(ShippingBatchRow.id.desc())
+                .offset(offset)
+                .limit(limit)
+            ).all()
+            return [_batch_to_record(ak, row) for row, ak in rows]
+
+    def list_batch_packages(self, batch_id: int) -> list[BatchPackageRecord]:
+        with self._session_factory() as session:
+            rows = session.scalars(
+                select(BatchPackageRow)
+                .where(BatchPackageRow.batch_id == batch_id)
+                .order_by(BatchPackageRow.package_sn)
+            ).all()
+            return [
+                BatchPackageRecord(
+                    batch_id=r.batch_id,
+                    package_sn=r.package_sn,
+                    status=r.status,
+                    reason=r.reason or "",
+                )
+                for r in rows
+            ]
+
+    def get_package_sn_by_db_id(self, package_db_id: int) -> str | None:
+        with self._session_factory() as session:
+            row = session.get(PackageRow, package_db_id)
+            return row.package_sn if row is not None else None
+
+    def mark_submission_intent_verified(
+        self,
+        *,
+        intent_id: int,
+        summary: str = "",
+    ) -> SubmissionIntentRecord:
+        now = datetime.now(timezone.utc)
+        with self._session_factory.begin() as session:
+            intent = session.get(SubmissionIntentRow, intent_id)
+            if intent is None:
+                raise LookupError(f"Intent {intent_id} not found")
+            if intent.status not in {"SUCCESS", "VERIFIED"}:
+                raise RuntimeError(
+                    f"intent status {intent.status} cannot be verified"
+                )
+            intent.status = "VERIFIED"
+            intent.updated_at = now
+            if summary:
+                # keep audit trail on latest attempt if any
+                attempt = session.scalar(
+                    select(SubmissionAttemptRow)
+                    .where(SubmissionAttemptRow.intent_id == intent_id)
+                    .order_by(SubmissionAttemptRow.attempt_no.desc())
+                    .limit(1)
+                )
+                if attempt is not None:
+                    note = (attempt.http_summary or "")
+                    suffix = f" | verified: {summary}"
+                    attempt.http_summary = (note + suffix)[:2000]
+                    attempt.updated_at = now
+            account = session.get(ShippingAccountRow, intent.account_id)
+            return _intent_to_record(
+                account.account_key if account else "", intent
+            )
+
+    def get_package_db_id(self, account_key: str, package_sn: str) -> int | None:
+        with self._session_factory() as session:
+            row = session.scalar(
+                select(PackageRow.id)
+                .join(
+                    ShippingAccountRow,
+                    ShippingAccountRow.id == PackageRow.account_id,
+                )
+                .where(
+                    ShippingAccountRow.account_key == account_key,
+                    PackageRow.package_sn == package_sn,
+                )
+            )
+            return int(row) if row is not None else None
+
+    def list_package_order_db_ids(
+        self, account_key: str, package_sn: str
+    ) -> list[tuple[int, str]]:
+        with self._session_factory() as session:
+            rows = session.execute(
+                select(OrderRow.id, OrderRow.external_order_id)
+                .join(PackageOrderRow, PackageOrderRow.order_id == OrderRow.id)
+                .join(PackageRow, PackageRow.id == PackageOrderRow.package_id)
+                .join(
+                    ShippingAccountRow,
+                    ShippingAccountRow.id == PackageRow.account_id,
+                )
+                .where(
+                    ShippingAccountRow.account_key == account_key,
+                    PackageRow.package_sn == package_sn,
+                )
+                .order_by(OrderRow.external_order_id)
+            ).all()
+            return [(int(oid), str(ext)) for oid, ext in rows]
+
+    def list_order_items_for_package_order(
+        self,
+        *,
+        package_db_id: int,
+        external_order_id: str,
+    ) -> list[dict[str, object]]:
+        with self._session_factory() as session:
+            rows = session.scalars(
+                select(PackageItemRow)
+                .where(
+                    PackageItemRow.package_id == package_db_id,
+                    PackageItemRow.external_order_id == external_order_id,
+                )
+                .order_by(PackageItemRow.order_item_id)
+            ).all()
+            return [
+                {
+                    "order_item_id": r.order_item_id,
+                    "quantity": int(r.quantity or 0),
+                }
+                for r in rows
+            ]
+
+    def _get_or_create_submission_scope(
+        self,
+        session: Session,
+        *,
+        account_id: int,
+        package_id: int,
+        order_db_id: int,
+    ) -> SubmissionScopeRow:
+        scope = session.scalar(
+            select(SubmissionScopeRow).where(
+                SubmissionScopeRow.account_id == account_id,
+                SubmissionScopeRow.package_id == package_id,
+                SubmissionScopeRow.order_id == order_db_id,
+            )
+        )
+        if scope is None:
+            scope = SubmissionScopeRow(
+                account_id=account_id,
+                package_id=package_id,
+                order_id=order_db_id,
+                status="OPEN",
+            )
+            session.add(scope)
+            session.flush()
+        return scope
+
+    def is_submission_scope_blocked(
+        self,
+        *,
+        account_key: str,
+        package_db_id: int,
+        order_db_id: int,
+    ) -> bool:
+        with self._session_factory() as session:
+            account = self._get_or_create_account(session, account_key)
+            scope = session.scalar(
+                select(SubmissionScopeRow).where(
+                    SubmissionScopeRow.account_id == account.id,
+                    SubmissionScopeRow.package_id == package_db_id,
+                    SubmissionScopeRow.order_id == order_db_id,
+                )
+            )
+            return scope is not None and scope.status == "UNKNOWN_BLOCKED"
+
+    def is_submission_scope_blocked_by_intent(self, intent_id: int) -> bool:
+        with self._session_factory() as session:
+            intent = session.get(SubmissionIntentRow, intent_id)
+            if intent is None:
+                return True
+            scope = session.get(SubmissionScopeRow, intent.scope_id)
+            return scope is not None and scope.status == "UNKNOWN_BLOCKED"
+
+    def upsert_submission_intent(
+        self,
+        *,
+        account_key: str,
+        package_db_id: int,
+        order_db_id: int,
+        external_order_id: str,
+        request_hash: str,
+        canonical_request: str,
+        confirmed_by: str,
+    ) -> SubmissionIntentRecord:
+        now = datetime.now(timezone.utc)
+        with self._session_factory.begin() as session:
+            account = self._get_or_create_account(session, account_key)
+            scope = self._get_or_create_submission_scope(
+                session,
+                account_id=account.id,
+                package_id=package_db_id,
+                order_db_id=order_db_id,
+            )
+            if scope.status == "UNKNOWN_BLOCKED":
+                raise RuntimeError("submission scope is UNKNOWN_BLOCKED")
+            existing = session.scalar(
+                select(SubmissionIntentRow).where(
+                    SubmissionIntentRow.request_hash == request_hash
+                )
+            )
+            if existing is not None:
+                return _intent_to_record(account_key, existing)
+            row = SubmissionIntentRow(
+                account_id=account.id,
+                package_id=package_db_id,
+                order_id=order_db_id,
+                scope_id=scope.id,
+                external_order_id=external_order_id,
+                request_hash=request_hash,
+                canonical_request=canonical_request,
+                status="READY",
+                version=0,
+                confirmed_by=confirmed_by,
+                created_at=now,
+                updated_at=now,
+            )
+            session.add(row)
+            session.flush()
+            return _intent_to_record(account_key, row)
+
+    def get_submission_intent(self, intent_id: int) -> SubmissionIntentRecord | None:
+        with self._session_factory() as session:
+            row = session.get(SubmissionIntentRow, intent_id)
+            if row is None:
+                return None
+            account = session.get(ShippingAccountRow, row.account_id)
+            return _intent_to_record(account.account_key if account else "", row)
+
+    def get_submission_attempt(
+        self, attempt_id: int
+    ) -> SubmissionAttemptRecord | None:
+        with self._session_factory() as session:
+            row = session.get(SubmissionAttemptRow, attempt_id)
+            if row is None:
+                return None
+            return _attempt_to_record(row)
+
+    def create_submission_attempt(
+        self,
+        *,
+        intent_id: int,
+        actor: str,
+    ) -> SubmissionAttemptRecord:
+        now = datetime.now(timezone.utc)
+        with self._session_factory.begin() as session:
+            intent = session.get(SubmissionIntentRow, intent_id)
+            if intent is None:
+                raise LookupError(f"Intent {intent_id} not found")
+            if intent.status not in {"READY", "FAILED"}:
+                raise RuntimeError(f"intent status {intent.status} cannot submit")
+            last_no = session.scalar(
+                select(func.max(SubmissionAttemptRow.attempt_no)).where(
+                    SubmissionAttemptRow.intent_id == intent_id
+                )
+            )
+            attempt_no = int(last_no or 0) + 1
+            row = SubmissionAttemptRow(
+                intent_id=intent_id,
+                attempt_no=attempt_no,
+                status="CREATED",
+                send_state="NOT_SENT",
+                actor=actor,
+                created_at=now,
+                updated_at=now,
+            )
+            session.add(row)
+            session.flush()
+            return _attempt_to_record(row)
+
+    def cas_submission_to_in_flight(
+        self,
+        *,
+        intent_id: int,
+        attempt_id: int,
+        expected_intent_version: int,
+    ) -> bool:
+        now = datetime.now(timezone.utc)
+        with self._session_factory.begin() as session:
+            intent = session.get(SubmissionIntentRow, intent_id)
+            attempt = session.get(SubmissionAttemptRow, attempt_id)
+            if intent is None or attempt is None:
+                return False
+            if intent.status not in {"READY", "FAILED"}:
+                return False
+            if intent.version != expected_intent_version:
+                return False
+            if attempt.status != "CREATED" or attempt.send_state != "NOT_SENT":
+                return False
+            intent.status = "IN_FLIGHT"
+            intent.version = expected_intent_version + 1
+            intent.updated_at = now
+            attempt.status = "IN_FLIGHT"
+            attempt.send_state = "SENT"
+            attempt.updated_at = now
+            return True
+
+    def mark_submission_attempt_result(
+        self,
+        *,
+        attempt_id: int,
+        intent_id: int,
+        attempt_status: str,
+        intent_status: str,
+        http_status: int | None,
+        http_summary: str,
+    ) -> None:
+        now = datetime.now(timezone.utc)
+        with self._session_factory.begin() as session:
+            attempt = session.get(SubmissionAttemptRow, attempt_id)
+            intent = session.get(SubmissionIntentRow, intent_id)
+            if attempt is None or intent is None:
+                raise LookupError("attempt or intent missing")
+            attempt.status = attempt_status
+            attempt.http_status = http_status
+            attempt.http_summary = http_summary or ""
+            attempt.updated_at = now
+            intent.status = intent_status
+            intent.updated_at = now
+
+    def mark_submission_unknown_and_block_scope(
+        self,
+        *,
+        attempt_id: int,
+        intent_id: int,
+        http_summary: str,
+    ) -> None:
+        now = datetime.now(timezone.utc)
+        with self._session_factory.begin() as session:
+            attempt = session.get(SubmissionAttemptRow, attempt_id)
+            intent = session.get(SubmissionIntentRow, intent_id)
+            if attempt is None or intent is None:
+                raise LookupError("attempt or intent missing")
+            attempt.status = "UNKNOWN"
+            attempt.http_summary = http_summary or ""
+            attempt.updated_at = now
+            intent.status = "UNKNOWN"
+            intent.updated_at = now
+            scope = session.get(SubmissionScopeRow, intent.scope_id)
+            if scope is not None:
+                scope.status = "UNKNOWN_BLOCKED"
+                scope.updated_at = now
+
+    def recover_stale_submission_in_flight(self, *, actor: str) -> int:
+        now = datetime.now(timezone.utc)
+        recovered = 0
+        with self._session_factory.begin() as session:
+            stale_intents = session.scalars(
+                select(SubmissionIntentRow).where(
+                    SubmissionIntentRow.status == "IN_FLIGHT"
+                )
+            ).all()
+            for intent in stale_intents:
+                intent.status = "UNKNOWN"
+                intent.updated_at = now
+                scope = session.get(SubmissionScopeRow, intent.scope_id)
+                if scope is not None:
+                    scope.status = "UNKNOWN_BLOCKED"
+                    scope.updated_at = now
+                recovered += 1
+            stale_attempts = session.scalars(
+                select(SubmissionAttemptRow).where(
+                    SubmissionAttemptRow.status == "IN_FLIGHT"
+                )
+            ).all()
+            for attempt in stale_attempts:
+                attempt.status = "UNKNOWN"
+                attempt.updated_at = now
+        if recovered:
+            self.append_audit_event(
+                actor=actor,
+                action="submission.recover_in_flight",
+                entity_type="submission",
+                entity_id="*",
+                summary=f"recovered={recovered}",
+            )
+        return recovered
+
+    def list_intent_statuses_for_package(self, package_db_id: int) -> list[str]:
+        with self._session_factory() as session:
+            rows = session.scalars(
+                select(SubmissionIntentRow.status).where(
+                    SubmissionIntentRow.package_id == package_db_id
+                )
+            ).all()
+            return [str(s) for s in rows]
+
+    def list_submission_intents_for_package(
+        self,
+        *,
+        account_key: str,
+        package_sn: str,
+    ) -> list[SubmissionIntentRecord]:
+        with self._session_factory() as session:
+            rows = session.scalars(
+                select(SubmissionIntentRow)
+                .join(PackageRow, PackageRow.id == SubmissionIntentRow.package_id)
+                .join(
+                    ShippingAccountRow,
+                    ShippingAccountRow.id == PackageRow.account_id,
+                )
+                .where(
+                    ShippingAccountRow.account_key == account_key,
+                    PackageRow.package_sn == package_sn,
+                )
+                .order_by(SubmissionIntentRow.id)
+            ).all()
+            return [_intent_to_record(account_key, row) for row in rows]
+
     def list_packages(
         self,
         *,
         account_key: str,
         package_status: str | None = None,
         channel_name: str | None = None,
+        local_review_status: str | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[PackageListItem]:
@@ -333,6 +1450,10 @@ class PackageRepository:
                 query = query.where(PackageRow.package_status == package_status)
             if channel_name is not None:
                 query = query.where(PackageRow.channel_name == channel_name)
+            if local_review_status is not None:
+                query = query.where(
+                    PackageRow.local_review_status == local_review_status
+                )
             query = (
                 query.order_by(PackageRow.package_sn)
                 .offset(offset)
@@ -362,6 +1483,7 @@ class PackageRepository:
                         account_key=account,
                         package_sn=package.package_sn,
                         package_status=package.package_status,
+                        local_review_status=package.local_review_status or "pending",
                         channel_name=package.channel_name,
                         shop_name=package.shop_name,
                         marketplace=package.marketplace,
@@ -379,6 +1501,7 @@ class PackageRepository:
         account_key: str,
         package_status: str | None = None,
         channel_name: str | None = None,
+        local_review_status: str | None = None,
     ) -> int:
         with self._session_factory() as session:
             query = (
@@ -394,6 +1517,10 @@ class PackageRepository:
                 query = query.where(PackageRow.package_status == package_status)
             if channel_name is not None:
                 query = query.where(PackageRow.channel_name == channel_name)
+            if local_review_status is not None:
+                query = query.where(
+                    PackageRow.local_review_status == local_review_status
+                )
             return session.scalar(query) or 0
 
     def append_audit_event(
@@ -586,6 +1713,7 @@ class PackageRepository:
             platform_name=package.platform_name,
             marketplace=package.marketplace,
             package_status=package.package_status,
+            local_review_status=package.local_review_status or "pending",
             address=SellfoxPackageAddress(
                 name=package.address_name,
                 company=package.address_company,
@@ -638,6 +1766,102 @@ class PackageRepository:
             ],
             raw_payload=json.loads(package.raw_json or "{}"),
         )
+
+
+def _artifact_to_record(account_key: str, row: ArtifactRow) -> ArtifactRecord:
+    return ArtifactRecord(
+        id=int(row.id),
+        account_key=account_key,
+        kind=row.kind,
+        file_name=row.file_name,
+        content_hash=row.content_hash,
+        storage_relpath=row.storage_relpath,
+        mime_type=row.mime_type or "",
+        file_size=int(row.file_size or 0),
+        template_version=row.template_version or "",
+        virtual_folder=row.virtual_folder or "",
+        summary=row.summary or "",
+        created_by=row.created_by or "",
+        created_at=row.created_at,
+    )
+
+
+def _batch_to_record(account_key: str, row: ShippingBatchRow) -> ShippingBatchRecord:
+    return ShippingBatchRecord(
+        id=int(row.id),
+        account_key=account_key,
+        adapter=row.adapter or "lizard",
+        status=row.status or "",
+        template_version=row.template_version or "",
+        created_by=row.created_by or "",
+        export_artifact_id=row.export_artifact_id,
+        import_artifact_id=row.import_artifact_id,
+        input_count=int(row.input_count or 0),
+        success_count=int(row.success_count or 0),
+        skipped_count=int(row.skipped_count or 0),
+        failed_count=int(row.failed_count or 0),
+        unmatched_count=int(row.unmatched_count or 0),
+        summary=row.summary or "",
+        created_at=row.created_at,
+    )
+
+
+def _intent_to_record(account_key: str, row: SubmissionIntentRow) -> SubmissionIntentRecord:
+    return SubmissionIntentRecord(
+        id=int(row.id),
+        account_key=account_key,
+        package_id=int(row.package_id),
+        order_db_id=int(row.order_id),
+        external_order_id=row.external_order_id or "",
+        request_hash=row.request_hash,
+        canonical_request=row.canonical_request or "",
+        status=row.status or "",
+        version=int(row.version or 0),
+        confirmed_by=row.confirmed_by or "",
+    )
+
+
+def _attempt_to_record(row: SubmissionAttemptRow) -> SubmissionAttemptRecord:
+    return SubmissionAttemptRecord(
+        id=int(row.id),
+        intent_id=int(row.intent_id),
+        attempt_no=int(row.attempt_no or 1),
+        status=row.status or "",
+        send_state=row.send_state or "",
+        actor=row.actor or "",
+        http_status=row.http_status,
+        http_summary=row.http_summary or "",
+    )
+
+
+def _guess_mime(file_name: str) -> str:
+    lower = file_name.lower()
+    if lower.endswith(".xlsx"):
+        return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    if lower.endswith(".xls"):
+        return "application/vnd.ms-excel"
+    if lower.endswith(".pdf"):
+        return "application/pdf"
+    return "application/octet-stream"
+
+
+def _sanitize_filename(name: str) -> str:
+    """Keep a readable flat name; strip path separators (ERPNext-like)."""
+    import re
+
+    base = Path(name or "unnamed.bin").name
+    cleaned = "".join("_" if ch in '\\/:*?"<>|\0' else ch for ch in base)
+    cleaned = re.sub(r"[_\s]+", "_", cleaned).strip("._ ")
+    return cleaned or "unnamed.bin"
+
+
+def _flat_private_relpath(file_name: str, content_hash: str) -> str:
+    """ERPNext-like flat private/files path; hash suffix avoids name collisions."""
+    safe = _sanitize_filename(file_name)
+    stem = Path(safe).stem
+    suffix = Path(safe).suffix or ".bin"
+    # Prefer readable name; include short hash so two different files can share a stem.
+    return f"private/files/{stem}_{content_hash[:8]}{suffix}"
 
 
 def _configure_sqlite(dbapi_connection, _connection_record) -> None:

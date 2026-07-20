@@ -2,8 +2,29 @@
 # 仓库映射、承运人凭证、物流规则
 
 sellfox:
-  proxy_base_url: "http://localhost:8400"  # sellfox-api-proxy 地址
+  # Client appends /v1/{proxy_account}/... — do NOT include /v1/sellfox-main here
+  proxy_base_url: "https://api.vilavi.cn/sellfox"
   proxy_account: "sellfox-main"
+  # Client-side throttle between submitToPlatform / packageDetail side-effect calls.
+  # - Official Sellfox OpenAPI: max 1 request/second → use 1.0 when pointing at official base URL.
+  # - Shared proxy https://api.vilavi.cn/sellfox (admin: /sellfox/admin): currently ~0.5 rps
+  #   to protect multi-user traffic; proxy ops may change server-side — keep this in sync.
+  # Default matches our proxy path (2.0s ≈ 0.5 rps).
+  submit_min_interval_seconds: 2.0
+
+# ── 认证（默认关闭；公网部署前必须打开）──────────────────────────
+# 复用公司钉钉 OIDC 桥 https://api.vilavi.cn/oidc（new-api-dingtalk-oidc）
+auth:
+  enabled: false
+  # session_secret: set via SELLFOX_SHIPPING_SESSION_SECRET
+  cookie_name: shipping_session
+  session_ttl_seconds: 28800
+
+oidc:
+  issuer: "https://api.vilavi.cn/oidc"
+  client_id: "sellfox-shipping"
+  # client_secret / redirect_uri: prefer env OIDC_CLIENT_SECRET / OIDC_REDIRECT_URI
+  redirect_uri: "http://127.0.0.1:8401/oidc-callback"
 
 # ── 仓库地址配置 ──────────────────────────────────────────────────
 
