@@ -10,7 +10,7 @@ for deterministic unit tests (no live HTTP).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 import httpx
 
@@ -21,7 +21,9 @@ from sellfox_shipping.carriers.lizard.api_client import (
 from sellfox_shipping.carriers.lizard.order_adapter import build_create_order_body
 from sellfox_shipping.carriers.lizard.spreadsheet import SHIPPER_CODE_DEFAULT
 from sellfox_shipping.package_models import SellfoxPackageRecord
-from sellfox_shipping.package_repository import PackageRepository
+
+if TYPE_CHECKING:
+    from sellfox_shipping.package_repository import PackageRepository
 
 ARTIFACT_KIND = "lizard_api_label"
 
