@@ -1,6 +1,18 @@
-# 蜴国际-API — 面单打印系统对接
+# yiglobal-api — 蜴国际面单打印系统对接
 
-> 蜴国际打单系统 API 对接模块。提供面单打印、费用试算、订单管理等接口。
+> 目录名 `yiglobal-api/`（原 `蜴国际-API/`）。业务上仍称「蜴国际」。提供面单打印、费用试算、订单管理等接口。
+
+## 凭证（环境变量）
+
+复制 [`.env.example`](.env.example) 中的键到**仓库根** `.env`（gitignore）：
+
+| 环境变量 | 用途 |
+|----------|------|
+| `YIGLOBAL_APP_TOKEN` | 开发者 token（仅生产环境；对方无单独测试环境） |
+| `YIGLOBAL_APP_KEY` | 开发者 key |
+| `YIGLOBAL_API_BASE_URL` | 默认 `http://47.106.72.196` |
+
+HTTP 字段仍为 `app_token` / `app_key`。脚本：`scripts/test_rates.sh`。
 
 ## 接口总览
 

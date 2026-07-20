@@ -1,10 +1,12 @@
 ---
-type: index
-module: 蜴国际-API
+okf: v0.1
+type: Index
+module: yiglobal-api
+title: yiglobal-api 文档索引
 description: 蜴国际打单系统 API 对接模块文档索引
 ---
 
-# 蜴国际-API 文档索引
+# yiglobal-api 文档索引
 
 | 文档 | 说明 |
 |------|------|

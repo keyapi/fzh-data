@@ -144,8 +144,8 @@ sellfox_shipping/
 | 项目 | 来源 |
 |------|------|
 | 赛狐 API | 环境变量 `SELLFOX_PROXY_API_KEY`，经 sellfox-api-proxy |
-| 蜴国际 | P0 收集真实模板；无 API |
-| VITE | P1C 仅测试环境验证，不替换通途生产 |
+| 蜴国际 API | 根目录 `.env`：`YIGLOBAL_APP_TOKEN` / `YIGLOBAL_APP_KEY`（见 [`.env.example`](.env.example)；模块文档在 `yiglobal-api/`） |
+| VITE 测试 | 根目录 `.env`：`VITE_API_KEY` / `VITE_API_BASE_URL`（变量名跨环境一致，只换值） |
 | GLS/FedEx | 后续验证，不在当前纵切 |
 
-禁止把真实 Key 写入仓库或文档。赛狐导入/回写前必须用户确认范围。
+真调前：复制 [`.env.example`](.env.example) 键到仓库根 `.env`。禁止把真实 Key 写入仓库或文档。赛狐导入/回写前必须用户确认范围。
