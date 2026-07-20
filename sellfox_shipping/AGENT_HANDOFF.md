@@ -145,7 +145,7 @@ sellfox_shipping/
 
 **未调用：** `submitToPlatform`（默认 dry-run）  
 
-**未实现：** 公网 OIDC 启用与 redirect 登记、回读权威性生产验证、蜴国际 API adapter、VITE→`ApiCarrierAdapter` 挂载
+**未实现：** 公网 OIDC 启用与 redirect 登记、回读权威性生产验证、VITE→`ApiCarrierAdapter` 挂载；蜴国际 API 已有 `order_adapter`（S0143 / `reference_no=packageSn`），Excel 仍生产默认
 
 **已落地（本切片）：** SQLite 跨进程 submit gate；OIDC 代码默认关闭。  
 **VITE：** 测试环境 account/rate/create/getLabel/cancel 已验；决策采用 httpx。  

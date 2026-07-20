@@ -661,10 +661,18 @@ P1C VITE spike 技术退出门：**关闭**（真测 + 决策记录）。生产�
   - **就绪：** `code=200` 且 `sync_service_status=1`
 - 代码：`parse_create_order_result` / `parse_get_label_result`（`carriers/lizard/api_client.py`）
 
+## 31. 2026-07-20：S0143 映射 + reference_no=packageSn 适配层
+
+- 新模块：`carriers/lizard/order_adapter.py`
+  - `shipper_address_for_code("S0143")` → 备案地址 JSON（来源 `yiglobal-api` HANDOFF）
+  - `build_create_order_body(package, sm_code=...)`：**强制** `reference_no=package_sn`
+- Excel 仍生产默认；本刀**不**自动 createOrder / 不替换 spreadsheet 路径
+- 测试：`tests/sellfox_shipping/test_lizard_order_adapter.py`
+
 ### 下一刀
 
-- S0143 映射 + `reference_no=packageSn` 接入适配层
-- 公网 OIDC
+- 公网 OIDC（仍默认 `auth.enabled: false`）
+- （可选）`ApiCarrierAdapter` 编排：create → 轮询 getLabel → Artifact
 
 ## 14. 本文档维护约定
 

@@ -8,6 +8,10 @@ updated: 2026-07-17
 
 # sellfox_shipping — 变更日志
 
+## 2026-07-20 — S0143 映射 + reference_no=packageSn 适配层
+
+- `order_adapter.py`：备案发件地址表 + `build_create_order_body`（Excel 仍默认）
+
 ## 2026-07-20 — 恢复 P1C + 钉死 getLabel/create 字段解析
 
 - 从本地 `c489149` 恢复分支并 rebase main（含 `yiglobal-api` / `YIGLOBAL_*`）
