@@ -687,6 +687,19 @@ P1C VITE spike 技术退出门：**关闭**（真测 + 决策记录）。生产�
 - （可选）`ApiCarrierAdapter`：create → 轮询 getLabel → Artifact
 - 真公网：运维打开 OIDC + HTTPS 反代 + 桥登记 redirect
 
+## 33. 2026-07-20：LizardApiShipmentService（API 编排，Excel 仍默认）
+
+- 新模块：`carriers/lizard/api_shipment.py`
+  - `ship_package`：`build_create_order_body` → createOrder → 轮询 getLabel → 下载 PDF → `register_artifact(kind=lizard_api_label)`
+  - 可注入 `sleep` / `fetch_bytes` / `monotonic`（单测不真调）
+- **未**挂 Web/CLI；Excel 导出仍是生产默认
+- 测试：`tests/sellfox_shipping/test_lizard_api_shipment.py`
+
+### 下一刀
+
+- （可选）CLI 受控真调 / 把 tracking 写回包裹 / VITE 同构编排
+- 真公网：运维打开 OIDC + HTTPS
+
 ## 14. 本文档维护约定
 
 后续 Agent 完成一个可交付切片后，应：
