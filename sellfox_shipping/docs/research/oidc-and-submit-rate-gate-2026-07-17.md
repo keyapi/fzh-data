@@ -26,8 +26,11 @@ tags: [sellfox-shipping, oidc, rate-limit, karrio]
 
 - 复用 `https://api.vilavi.cn/oidc`（`new-api-dingtalk-oidc`），模式对齐 `sellfox-api-proxy`。
 - `auth.enabled: false` 默认；本地开发不挡。
-- 打开：`auth.enabled: true` + `SELLFOX_SHIPPING_SESSION_SECRET` + `OIDC_CLIENT_SECRET`，并在钉钉/OIDC 桥登记 `redirect_uri`。
-- 路由：`/oidc-login`、`/oidc-callback`、`/logout`；中间件保护其余路径（`/api/health` 放行）。
+- 打开：`auth.enabled: true`（或 `SELLFOX_SHIPPING_AUTH_ENABLED=true`）+ `SELLFOX_SHIPPING_SESSION_SECRET` + `OIDC_CLIENT_SECRET`，并在钉钉/OIDC 桥登记 `redirect_uri`。
+- **启用校验：** 缺 issuer/client/secret/redirect/session_secret 时进程启动失败（不静默放行）。
+- **HTTPS cookie：** `redirect_uri` 为 `https://` 时 session cookie 带 `Secure`。
+- **审计：** 写操作 actor 优先钉钉 `sub`（`resolve_actor`），表单 `web-user` 仅本地关闭认证时使用。
+- 路由：`/oidc-login`、`/oidc-callback`、`/logout`；中间件保护其余路径（`/api/health` 放行）；API 未登录返回 JSON 401。
 
 ## 蜴国际（同事并行）
 

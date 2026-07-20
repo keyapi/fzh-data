@@ -14,7 +14,12 @@ from pathlib import Path
 
 import yaml
 from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    RedirectResponse,
+)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -114,12 +119,15 @@ app = FastAPI(
 
 from sellfox_shipping.auth_oidc import (  # noqa: E402
     PUBLIC_PATH_PREFIXES,
+    assert_oidc_config_complete,
     build_oidc_router,
     load_oidc_settings,
     require_user,
+    resolve_actor,
 )
 
 _oidc_settings = load_oidc_settings(config)
+assert_oidc_config_complete(_oidc_settings)
 app.include_router(build_oidc_router(_oidc_settings))
 
 
@@ -136,14 +144,17 @@ async def oidc_gate(request: Request, call_next):
         user = require_user(request, _oidc_settings)
     except HTTPException:
         if path.startswith("/api/"):
-            return HTMLResponse(
-                '{"detail":"Authentication required"}',
+            return JSONResponse(
+                {"detail": "Authentication required"},
                 status_code=401,
-                media_type="application/json",
             )
         return RedirectResponse("/oidc-login")
     request.state.user = user
     return await call_next(request)
+
+
+def _web_actor(request: Request, fallback: str = "") -> str:
+    return resolve_actor(request, _oidc_settings, fallback=fallback)
 
 
 templates_dir = BASE_DIR / "templates"
@@ -195,7 +206,7 @@ async def get_package(package_sn: str):
 
 
 @app.post("/api/packages/{package_sn}/review")
-async def review_package(package_sn: str, body: dict):
+async def review_package(request: Request, package_sn: str, body: dict):
     """Set local review status (approved/rejected/pending) with audit."""
     from pydantic import ValidationError
 
@@ -204,7 +215,7 @@ async def review_package(package_sn: str, body: dict):
             PackageReviewRequest(
                 account_key=config["sellfox"]["proxy_account"],
                 package_sn=package_sn,
-                actor=str(body.get("actor") or ""),
+                actor=_web_actor(request, str(body.get("actor") or "")),
                 decision=str(body.get("decision") or ""),
                 note=str(body.get("note") or ""),
             )
@@ -420,7 +431,7 @@ async def package_review_form(request: Request, package_sn: str):
             PackageReviewRequest(
                 account_key=account_key,
                 package_sn=package_sn,
-                actor=str(form.get("actor") or "web-user"),
+                actor=_web_actor(request, str(form.get("actor") or "web-user")),
                 decision=str(form.get("decision") or ""),
                 note=str(form.get("note") or ""),
             )
@@ -452,7 +463,7 @@ async def package_carton_override_form(request: Request, package_sn: str):
     if record is None:
         raise HTTPException(404, f"Package {package_sn} not found")
     sku = str(form.get("commodity_sku") or "").strip()
-    actor = str(form.get("actor") or "web-user").strip() or "web-user"
+    actor = _web_actor(request, str(form.get("actor") or "web-user"))
     note = str(form.get("note") or "").strip()
     try:
         dims = CartonDims(
@@ -488,7 +499,7 @@ async def package_prepare_submit_form(request: Request, package_sn: str):
     form = await request.form()
     account_key = config["sellfox"]["proxy_account"]
     repo = _get_package_repository()
-    actor = str(form.get("actor") or "web-user").strip() or "web-user"
+    actor = _web_actor(request, str(form.get("actor") or "web-user"))
     try:
         result = SubmissionService(repo).prepare_intents_for_package(
             account_key=account_key,
@@ -528,7 +539,7 @@ async def package_submit_intent_dry_run(
     form = await request.form()
     account_key = config["sellfox"]["proxy_account"]
     repo = _get_package_repository()
-    actor = str(form.get("actor") or "web-user").strip() or "web-user"
+    actor = _web_actor(request, str(form.get("actor") or "web-user"))
     try:
         result = SubmissionService(repo).submit_intent(
             intent_id=intent_id,
@@ -599,7 +610,7 @@ async def lizard_export_form(
         ).export(
             LizardExportRequest(
                 account_key=config["sellfox"]["proxy_account"],
-                actor=(actor or "web-user").strip() or "web-user",
+                actor=_web_actor(request, actor),
                 output_path=output_path,
                 limit=max(1, min(int(limit), 5000)),
                 shipper_code=(shipper_code or "S0143").strip() or "S0143",
@@ -722,7 +733,7 @@ async def lizard_import_form(
             ).import_file(
                 LizardImportRequest(
                     account_key=config["sellfox"]["proxy_account"],
-                    actor=(actor or "web-user").strip() or "web-user",
+                    actor=_web_actor(request, actor),
                     input_path=tmp_path,
                     batch_id=parsed_batch_id,
                 )
