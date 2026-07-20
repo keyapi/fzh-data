@@ -16,6 +16,10 @@ import httpx
 
 DEFAULT_BASE = "http://47.106.72.196"
 
+# Pinned field paths from yiglobal-api/docs/api-reference.md (createOrder / getLabel).
+# Primary: result.labels.{tracking_number,label_url}
+# Fallback: same keys on result root (some live responses omit nesting).
+
 
 def _env_first(*names: str, default: str = "") -> str:
     for name in names:
@@ -23,6 +27,74 @@ def _env_first(*names: str, default: str = "") -> str:
         if val:
             return val
     return default
+
+
+def _as_dict(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _pick_str(*candidates: Any) -> str:
+    for c in candidates:
+        if c is None:
+            continue
+        s = str(c).strip()
+        if s:
+            return s
+    return ""
+
+
+def parse_create_order_result(payload: dict[str, Any]) -> dict[str, str]:
+    """Extract order_code / tracking_number / label_url from createOrder JSON.
+
+    Canonical shape (api-reference)::
+
+        result.order_code
+        result.labels.tracking_number
+        result.labels.label_url
+    """
+    result = _as_dict(payload.get("result"))
+    labels = _as_dict(result.get("labels"))
+    return {
+        "order_code": _pick_str(result.get("order_code"), payload.get("order_code")),
+        "tracking_number": _pick_str(
+            labels.get("tracking_number"),
+            result.get("tracking_number"),
+        ),
+        "label_url": _pick_str(
+            labels.get("label_url"),
+            result.get("label_url"),
+        ),
+        "file_type": _pick_str(labels.get("file_type"), result.get("file_type")),
+    }
+
+
+def parse_get_label_result(payload: dict[str, Any]) -> dict[str, Any]:
+    """Extract tracking / label URL / sync flags from getLabel JSON.
+
+    When ready (code=200), tracking and PDF match createOrder ``labels`` shape.
+    Also surfaces ``sync_service_status`` / ``order_status`` / ``logistics_err``.
+    """
+    result = _as_dict(payload.get("result"))
+    labels = _as_dict(result.get("labels"))
+    return {
+        "code": payload.get("code"),
+        "sync_service_status": result.get("sync_service_status"),
+        "order_status": result.get("order_status"),
+        "logistics_err": result.get("logistics_err"),
+        "tracking_number": _pick_str(
+            labels.get("tracking_number"),
+            result.get("tracking_number"),
+        ),
+        "label_url": _pick_str(
+            labels.get("label_url"),
+            result.get("label_url"),
+        ),
+        "file_type": _pick_str(labels.get("file_type"), result.get("file_type")),
+        "label_ready": (
+            payload.get("code") in (200, "200")
+            and result.get("sync_service_status") in (1, "1")
+        ),
+    }
 
 
 class LizardApiError(RuntimeError):

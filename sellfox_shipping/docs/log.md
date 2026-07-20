@@ -8,6 +8,11 @@ updated: 2026-07-17
 
 # sellfox_shipping — 变更日志
 
+## 2026-07-20 — 恢复 P1C + 钉死 getLabel/create 字段解析
+
+- 从本地 `c489149` 恢复分支并 rebase main（含 `yiglobal-api` / `YIGLOBAL_*`）
+- `parse_create_order_result` / `parse_get_label_result`：主路径 `result.labels.*`
+
 ## 2026-07-17 — 凭证迁入根 `.env`，冒烟脚本不再读文档密钥
 
 - 本地：`VITE_*` / `YIGLOBAL_*` 写入仓库根 `.env`（gitignore）

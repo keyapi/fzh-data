@@ -7,7 +7,12 @@ import json
 import httpx
 import pytest
 
-from sellfox_shipping.carriers.lizard.api_client import LizardApiClient, LizardApiError
+from sellfox_shipping.carriers.lizard.api_client import (
+    LizardApiClient,
+    LizardApiError,
+    parse_create_order_result,
+    parse_get_label_result,
+)
 
 
 def _client(handler) -> LizardApiClient:
@@ -134,3 +139,68 @@ def test_business_error_raises():
 def test_missing_credentials():
     with pytest.raises(ValueError, match="app_token"):
         LizardApiClient(app_token="", app_key="k")
+
+
+def test_parse_create_order_prefers_labels_nesting():
+    parsed = parse_create_order_result(
+        {
+            "code": 200,
+            "result": {
+                "order_code": "M6180-1",
+                "labels": {
+                    "tracking_number": "1ZABC",
+                    "label_url": "http://cdn.example/a.pdf",
+                    "file_type": "pdf",
+                },
+                "tracking_number": "IGNORE-TOP",
+            },
+        }
+    )
+    assert parsed == {
+        "order_code": "M6180-1",
+        "tracking_number": "1ZABC",
+        "label_url": "http://cdn.example/a.pdf",
+        "file_type": "pdf",
+    }
+
+
+def test_parse_create_order_falls_back_to_result_root():
+    parsed = parse_create_order_result(
+        {
+            "code": 200,
+            "result": {
+                "order_code": "M6180-2",
+                "tracking_number": "8745",
+                "label_url": "http://cdn.example/b.pdf",
+            },
+        }
+    )
+    assert parsed["tracking_number"] == "8745"
+    assert parsed["label_url"] == "http://cdn.example/b.pdf"
+
+
+def test_parse_get_label_ready_and_nested_labels():
+    parsed = parse_get_label_result(
+        {
+            "code": 200,
+            "result": {
+                "sync_service_status": 1,
+                "order_status": 2,
+                "labels": {
+                    "tracking_number": "TN1",
+                    "label_url": "http://cdn.example/c.pdf",
+                },
+            },
+        }
+    )
+    assert parsed["label_ready"] is True
+    assert parsed["tracking_number"] == "TN1"
+    assert parsed["label_url"] == "http://cdn.example/c.pdf"
+
+
+def test_parse_get_label_processing_not_ready():
+    parsed = parse_get_label_result(
+        {"code": 202, "msg": "processing", "result": {"sync_service_status": 0}}
+    )
+    assert parsed["label_ready"] is False
+    assert parsed["tracking_number"] == ""
