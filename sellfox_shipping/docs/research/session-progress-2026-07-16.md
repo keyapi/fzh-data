@@ -713,6 +713,15 @@ P1C VITE spike 技术退出门：**关闭**（真测 + 决策记录）。生产�
 - 拆 PR 合 main → 本地 Excel 走查
 - 操作员可选补完 1 票 live 填号探针
 
+## 35. 2026-07-20：PR #96 + 本地 Excel 走查
+
+- PR：https://github.com/keyapi/fzh-data/pull/96 （分支 `feature/sellfox-shipping-p1-integrated`；三遍审阅见 `pr-slice-guide`）
+- 说明：`app.py` 耦合不宜硬拆多代码 PR；docs 小 PR 因闸控未另开，文档已含在 #96
+- Excel 走查（本地，**无** submitToPlatform）：
+  - 脚本：`scripts/excel_walkthrough_local.py`
+  - 导出 5 票 `to_process` → batch#3；合成返回表导入：**matched=5 persisted=5 conflicts=0 unmatched=0**
+  - 报告：`out/excel_walkthrough/REPORT.json`（gitignore 区）
+
 ## 14. 本文档维护约定
 
 后续 Agent 完成一个可交付切片后，应：

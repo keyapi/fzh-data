@@ -8,6 +8,10 @@ updated: 2026-07-20
 
 # sellfox_shipping — 变更日志
 
+## 2026-07-20 — 本地 Excel 走查
+
+- `scripts/excel_walkthrough_local.py`：导出→合成返回→导入；5/5 persisted（batch#3）
+
 ## 2026-07-20 — submitToPlatform vs 自动推送边界
 
 - 研究：`docs/research/submit-to-platform-vs-autopush-2026-07-20.md`（通途写平台；自动推送关；trackNo 探针）
