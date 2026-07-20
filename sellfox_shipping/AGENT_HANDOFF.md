@@ -143,11 +143,13 @@ sellfox_shipping/
 
 **已验证：** `uv run pytest tests/sellfox_shipping -q`
 
-**未调用：** `submitToPlatform`（默认 dry-run）  
+**未默认调用：** `submitToPlatform`（CLI 默认 dry-run）  
 
-**未实现：** 公网实际打开 OIDC、live `submitToPlatform` 填号探针结论（dry-run 已过）、VITE 同构编排挂界面；Excel 仍生产默认；**默认不推销售平台**（通途写平台 + 自动推送关）
+**live 探针（2026-07-20）：** `P2AMA9T726848` intent#1 真调 → 代理 **401**；scope `UNKNOWN_BLOCKED`；赛狐 `trackNo` 未变。填号结论待修写权限后再测。
 
-**已落地（本切片）：** SQLite submit gate；OIDC 启用路径就绪（默认关）；`order_adapter` + `LizardApiShipmentService`；submit vs 自动推送边界文档 + trackNo 探针 dry-run。
+**未实现：** 公网实际打开 OIDC、成功的 live 填号、VITE 同构编排挂界面；Excel 仍生产默认；**默认不推销售平台**（通途写平台 + 自动推送关）
+
+**已落地（本切片）：** SQLite submit gate；OIDC 启用路径就绪（默认关）；`order_adapter` + `LizardApiShipmentService`；submit vs 自动推送边界文档；20260720 通途样例映射 + 本地 import。
 **VITE：** 测试环境 account/rate/create/getLabel/cancel 已验；决策采用 httpx。  
 **蜴国际：** PR#91 已验下单链路；本仓 `LizardApiClient`（httpx 同步，mock）；Excel 仍生产默认。勿从 main HANDOFF 拷明文 Key。
 

@@ -8,6 +8,13 @@ updated: 2026-07-20
 
 # sellfox_shipping — 变更日志
 
+## 2026-07-20 — 同事 20260720 蜴国际样例 + live 401
+
+- 样例 3 文件：上传 xls / 跟踪号 xlsx / 面单 PDF（通途 P#，非赛狐 packageSn）
+- 映射 3 票均为 has_shipped；本地 remapped import 3/3；赛狐 trackNo 仍占位/空
+- live `submitToPlatform`（to_process `P2AMA9T726848`）→ 代理 HTTP 401；scope UNKNOWN_BLOCKED
+- 研究笔记已更新：`docs/research/submit-to-platform-vs-autopush-2026-07-20.md`；session-progress §36
+
 ## 2026-07-20 — 本地 Excel 走查
 
 - `scripts/excel_walkthrough_local.py`：导出→合成返回→导入；5/5 persisted（batch#3）
