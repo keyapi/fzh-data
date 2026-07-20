@@ -16,6 +16,7 @@ from sellfox_shipping.carriers.lizard.api_client import (
     parse_create_order_result,
     parse_get_label_result,
 )
+from sellfox_shipping.carriers.lizard.order_adapter import shipper_address_for_code
 from sellfox_shipping.env_loader import load_dotenv
 
 
@@ -74,17 +75,9 @@ def main() -> int:
         "oa_telphone": "2816770938",
         "oa_doorplate": "",
         "oa_phone_ext": "",
+        "oa_email": "noreply@example.com",
         "signature_service": "",
-        "shipper_address": {
-            "shipper_name": "Dan-zhao",
-            "shipper_postal_code": "77099",
-            "shipper_address1": "10812 Fallstone Rd",
-            "shipper_address2": "Suite 402",
-            "shipper_state_province": "TX",
-            "shipper_city": "Houston",
-            "shipper_country": "US",
-            "shipper_telphone": "2816770938",
-        },
+        "shipper_address": shipper_address_for_code("S0143"),
     }
 
     with LizardApiClient(app_token=token, app_key=key, base_url=base) as client:

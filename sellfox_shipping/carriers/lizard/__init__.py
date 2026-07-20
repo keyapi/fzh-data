@@ -1,8 +1,18 @@
 """蜴国际 spreadsheet carrier helpers (P1B) + optional API client (PR#91)."""
 
-from sellfox_shipping.carriers.lizard.api_client import LizardApiClient, LizardApiError
+from sellfox_shipping.carriers.lizard.api_client import (
+    LizardApiClient,
+    LizardApiError,
+    parse_create_order_result,
+    parse_get_label_result,
+)
 from sellfox_shipping.carriers.lizard.cascade import CascadingDimsLookup
 from sellfox_shipping.carriers.lizard.dims import CartonDims, StaticDimsLookup
+from sellfox_shipping.carriers.lizard.order_adapter import (
+    UnknownShipperCodeError,
+    build_create_order_body,
+    shipper_address_for_code,
+)
 from sellfox_shipping.carriers.lizard.spreadsheet import (
     LIZARD_TEMPLATE_VERSION,
     build_upload_dataframe,
@@ -17,7 +27,12 @@ __all__ = [
     "LizardApiClient",
     "LizardApiError",
     "StaticDimsLookup",
+    "UnknownShipperCodeError",
+    "build_create_order_body",
     "build_upload_dataframe",
+    "parse_create_order_result",
+    "parse_get_label_result",
     "parse_tracking_return",
+    "shipper_address_for_code",
     "write_upload_xlsx",
 ]
