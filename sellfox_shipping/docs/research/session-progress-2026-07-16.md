@@ -722,6 +722,23 @@ P1C VITE spike 技术退出门：**关闭**（真测 + 决策记录）。生产�
   - 导出 5 票 `to_process` → batch#3；合成返回表导入：**matched=5 persisted=5 conflicts=0 unmatched=0**
   - 报告：`out/excel_walkthrough/REPORT.json`（gitignore 区）
 
+## 36. 2026-07-20：同事蜴国际样例 `20260720/` + live 401
+
+- 样例目录（gitignore）：`sellfox_shipping/数据源/蜥蜴国际-p0-样例/20260720/`
+  - 上传 xls / 跟踪号 xlsx / `label(1).pdf`
+  - 参考编号=通途 `P81428880/893/871`（非赛狐 packageSn）
+  - 物流单号：`382685918857` / `382685920386` / `874574378255`
+- 映射赛狐：`P2AMA9T726894` / `P2AMA9T726915` / `P2ANA9T727052` — 全是 **has_shipped**；赛狐 trackNo 仍占位或 null；Amazon 已 Shipped
+- 本地：detail upsert + remapped `lizard-import` → 3/3 本地有真实运单；**未**对 has_shipped 调 submit
+- live 探针：`P2AMA9T726848` intent#1 → 代理 **401**；scope `UNKNOWN_BLOCKED`；回读 trackNo 仍 null
+- 文档：更新 [`submit-to-platform-vs-autopush-2026-07-20.md`](submit-to-platform-vs-autopush-2026-07-20.md)
+
+### 下一刀
+
+- 修代理 Key/`submitToPlatform` 写权限（401）
+- 新建 to_process intent（勿重放 blocked scope）后再填号探针
+- 生产导出参考编号继续用赛狐 `packageSn`，勿用通途 P#
+
 ## 14. 本文档维护约定
 
 后续 Agent 完成一个可交付切片后，应：

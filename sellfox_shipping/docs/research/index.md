@@ -28,7 +28,7 @@ timestamp: 2026-07-16
 - [async-label-and-webhook-2026-07-17.md](async-label-and-webhook-2026-07-17.md) — VITE/蜴国际 Hook URL 空置 + 异步面单轮询（IT：约 30s）
 - [vite-httpx-vs-karrio-decision-2026-07-17.md](vite-httpx-vs-karrio-decision-2026-07-17.md) — VITE：采用 httpx；近期不做 Karrio custom connector
 - [oidc-and-submit-rate-gate-2026-07-17.md](oidc-and-submit-rate-gate-2026-07-17.md) — 可选钉钉 OIDC + SQLite 跨进程 submit 限流
-- [submit-to-platform-vs-autopush-2026-07-20.md](submit-to-platform-vs-autopush-2026-07-20.md) — submitToPlatform vs 通途写平台/自动推送关；trackNo 探针协议
+- [submit-to-platform-vs-autopush-2026-07-20.md](submit-to-platform-vs-autopush-2026-07-20.md) — submitToPlatform vs 通途写平台/自动推送关；trackNo 探针协议（solutions 固化：[sellfox-trackno-write-path-vs-local-import.md](../../../docs/solutions/architecture-patterns/sellfox-trackno-write-path-vs-local-import.md)）
 - [pr-slice-guide-2026-07-20.md](pr-slice-guide-2026-07-20.md) — 长分支 PR 切片与三遍审阅
 - [sellfox-native-lizard-fixture-2026-07-17.md](sellfox-native-lizard-fixture-2026-07-17.md) — 赛狐原生夹具 00/02/03/04（上传·追踪号·面单）。
 
