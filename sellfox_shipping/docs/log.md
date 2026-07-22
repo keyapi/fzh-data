@@ -3,10 +3,17 @@ okf: v0.1
 type: Log
 module: sellfox_shipping
 created: 2026-07-15
-updated: 2026-07-20
+updated: 2026-07-22
 ---
 
 # sellfox_shipping — 变更日志
+
+## 2026-07-22 — 文档交接体系刷新
+
+- 热入口唯一：`AGENT_HANDOFF.md`（全貌七块）；session-progress / synthesis 降为冷档案/规划底稿
+- synthesis：文首裁决框 + 承运人双通道 / P1C 出口 / 样例进度定点修订
+- skill / README / 两处 index / ONBOARDING / sample-path 对齐
+- Spec：`docs/superpowers/specs/2026-07-21-sellfox-shipping-handoff-docs-design.md`
 
 ## 2026-07-20 — ce-compound：trackNo 写路径边界
 
