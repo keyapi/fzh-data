@@ -4,13 +4,15 @@ type: Reference
 title: 2026-07-16 会话进度与交接记录
 description: 独立调研规划落地与 P1A 包裹只读同步纵切的完整过程、提交、验证与下一步，供新对话或其它 Agent 接手
 timestamp: 2026-07-16
+updated: 2026-07-22
 tags: [sellfox-shipping, handoff, session-progress, p1a]
 ---
 
 # 2026-07-16 会话进度与交接记录
 
-> **给新对话 / 其它软件 Agent：** 先读本文，再读 [research-synthesis-2026-07-16.md](research-synthesis-2026-07-16.md) 与 [AGENT_HANDOFF.md](../../AGENT_HANDOFF.md)。  
-> 本文记录**已发生的工作过程与决策**；综合调研文档记录**目标架构与阶段规划**；二者不要混读。
+> **冷档案（2026-07-22）：** 本文是过程日记，**现行状态以 [AGENT_HANDOFF.md](../../AGENT_HANDOFF.md) 为准。**  
+> 早期章节中的「submit/Excel/OIDC 未做」「暂不提 PR」、旧分支名等保留为**当时记录**，不要据此判断现状。  
+> 目标架构底稿见 [research-synthesis-2026-07-16.md](research-synthesis-2026-07-16.md)（先看文首裁决框）。
 
 ## 1. 会话目标与结果
 
