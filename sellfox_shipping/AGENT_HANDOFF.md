@@ -3,27 +3,74 @@ okf: v0.1
 type: Handoff
 title: sellfox_shipping — Agent 交接说明
 description: 包裹中心架构、当前实现、运行方式与后续阶段边界
-updated: 2026-07-17
+updated: 2026-07-22
 ---
 
 # sellfox_shipping — Agent 交接说明
 
 > **赛狐尾程打单系统** — 包裹批次工作流  
 > 人读文档: [README.md](README.md)  
-> **新 Agent 必读:** [docs/research/session-progress-2026-07-16.md](docs/research/session-progress-2026-07-16.md)  
-> **规划入口:** [docs/research/research-synthesis-2026-07-16.md](docs/research/research-synthesis-2026-07-16.md)
+> **新 Agent：只读本文件即可接手。** 细节经 [docs/index.md](docs/index.md) 按需深挖。  
+> 过程日记 / 规划底稿（非默认入口）：[session-progress](docs/research/session-progress-2026-07-16.md)、[research-synthesis](docs/research/research-synthesis-2026-07-16.md)
 
 ## 新对话 / 换 Agent 接手（30 秒）
 
-1. 读 [session-progress-2026-07-16.md](docs/research/session-progress-2026-07-16.md) — 已完成过程、提交、下一步、勿踩坑（含 §11 P1B 快照）  
-2. 读 [research-synthesis-2026-07-16.md](docs/research/research-synthesis-2026-07-16.md) — 目标架构与阶段  
-3. 跑验证：`uv run pytest tests/sellfox_shipping -q`  
-4. 当前分支：`feature/sellfox-shipping-p1a-rest`
+1. 读完本文件（全貌七块 + 禁区 + 命令）
+2. 跑验证：`uv run pytest tests/sellfox_shipping -q`
+3. 需要细节时经 [docs/index.md](docs/index.md) 点进单篇
 
-**阶段口径：** 旧「P1 骨架完成 / P2 FedEx」作废；现行阶段为 **P0 → P1A → P1B → P1C → P2+**。旧代码称 **legacy skeleton**。  
-**当前：** P1A/P1B 可用；**P1C**：Intent/CAS + 限流回读已落地；**VITE httpx spike + 测试真测 + 选型决策已完成**（不做 Karrio VITE connector）。默认 dry-run CLI。  
-**外部：** VITE → `vite-api/` + `carriers/vite/`；蜴国际 → `yiglobal-api/`（**#90 文档 + #91 负余额下单/面单/取消已验**；原 `蜴国际-API/`）。Excel 仍生产默认。**暂不提 PR。**
-**限速：** 官方 1 rps；共享代理现约 0.5 rps → `sellfox.submit_min_interval_seconds` 默认 `2.0`。
+**不要**默认先读 session-progress / synthesis。
+
+## 全貌七块
+
+### 1. 背景 / 现行目的
+
+Excel 本地闭环（审核 → 导出 → 人工上传物流商 → 导入对账）+ **通途写销售平台**；赛狐**自动推送关**。  
+近期产品目标：验证赛狐包裹详情能否显示正确 `trackNo`（非默认推 Amazon）。
+
+### 2. 阶段图
+
+`P0 → P1A → P1B → P1C → P2+`  
+代码主路径已合入 main（PR **#96** 集成、**#97** 文档/边界）。  
+**产品** trackNo 可见性闭环**未关**（live submit 曾 401）。
+
+### 3. 已完成
+
+- 同步 / 审核 / 蜴国际 Excel 导出·导入 / Artifact·Batch / Intent·CAS·限流
+- OIDC 启用路径就绪（**默认关**）
+- 蜴国际 API 客户端 + 可选编排（**Excel 仍生产默认**）
+- VITE httpx spike + 决策（不做 Karrio VITE connector）
+- 边界文档：submit vs 通途/自动推送；trackNo 写路径 solutions
+
+### 4. 波折
+
+- live `submitToPlatform`（`P2AMA9T726848`）→ 代理 **401**；scope `UNKNOWN_BLOCKED`；赛狐 `trackNo` 未变
+- **禁盲重放**；本地 `lizard-import` ≠ 赛狐 UI `trackNo`
+
+### 5. 教训（深挖）
+
+- [submit-to-platform-vs-autopush-2026-07-20.md](docs/research/submit-to-platform-vs-autopush-2026-07-20.md)
+- [sellfox-trackno-write-path-vs-local-import.md](../docs/solutions/architecture-patterns/sellfox-trackno-write-path-vs-local-import.md)
+
+### 6. 下一步（≤3）
+
+1. 修赛狐写权限 / 代理 401
+2. 新 `to_process` 测试包裹做 trackNo 可见性探针
+3. （可选）公网打开 OIDC
+
+### 7. 重规划裁决
+
+- **不**整本作废 synthesis；修订 P1C 出口与承运人双通道（见 synthesis 文首裁决框）
+- **承运人双通道：** `SpreadsheetCarrierAdapter` 与 `ApiCarrierAdapter` 同等级；同一承运人可两者皆有；**生产默认 Excel**；有 API 另挂可选路径（蜴国际 API 已有，不替表）
+- 平台推送非本阶段默认；Intent/CLI 真调路径保留备用
+
+## 禁区
+
+- 不盲重放 `submitToPlatform`；真调须用户确认测试包裹
+- 不把 legacy `store.py` 订单模型当生产闭环
+- 不从文档/HANDOFF 拷明文 API Key
+- 赛狐导入/回写前必须确认范围（默认测试商品）
+
 ## 架构
 
 ```
@@ -106,7 +153,7 @@ sellfox_shipping/
 │   ├── log.md
 │   └── research/
 │       ├── research-synthesis-2026-07-16.md   # 规划
-│       └── session-progress-2026-07-16.md     # 会话进度交接
+│       └── session-progress-2026-07-16.md     # 冷档案
 └── Dockerfile
 ```
 

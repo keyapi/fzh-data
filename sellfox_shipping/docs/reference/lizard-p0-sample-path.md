@@ -13,7 +13,7 @@ timestamp: 2026-07-17
 | 项 | 值 |
 |----|-----|
 | 工作区 | `D:\Work\赛狐\Cursor`（主目录，**不是** `.claude/worktrees/...`） |
-| 分支 | `feature/sellfox-shipping-p1a-rest` |
+| 分支 | 以当前工作分支为准；样例映射见 lizard-p0-column-mapping（历史曾用 `p1a-rest`，已过时） |
 
 ## 请把 4 个文件放到这里
 

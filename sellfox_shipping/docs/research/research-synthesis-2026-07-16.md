@@ -9,10 +9,14 @@ timestamp: 2026-07-16
 
 # 赛狐尾程打单系统独立调研综合与架构判断
 
-> **接手实现进度（非本文职责）：** 本文是目标架构与阶段规划。  
-> 2026-07-16 已完成过程、Git 提交、P1A 代码事实与下一步清单见  
-> [session-progress-2026-07-16.md](session-progress-2026-07-16.md)。  
-> 新对话 / 换 Agent：**先读 session-progress，再读本文。**
+> **现行状态以 [AGENT_HANDOFF.md](../../AGENT_HANDOFF.md) 为准。** 本文是 2026-07-16 规划底稿，非热状态日记。
+>
+> **2026-07-22 裁决（读正文前先读本框）：**
+> 1. **目的：** Excel 本地闭环 + 通途写销售平台；赛狐自动推送关；近期验证赛狐可见 `trackNo`。
+> 2. **承运人双通道：** Spreadsheet / API 同等级；同一承运人可两者皆有；**生产默认 Excel**；蜴国际 API 已有仍不替表。
+> 3. **P1C 出口修订：** 以赛狐 `trackNo` 探针（或证明不可用并记缺口）为准；**平台推送非本阶段默认**。详见 [submit-to-platform-vs-autopush-2026-07-20.md](submit-to-platform-vs-autopush-2026-07-20.md)。
+> 4. **进度：** PR #96/#97 已合；live submit 曾代理 401；勿盲重放。
+> 5. 过程细节见 [session-progress](session-progress-2026-07-16.md)（冷档案）。
 
 ## 1. 执行摘要
 
@@ -22,14 +26,14 @@ timestamp: 2026-07-16
 
 1. 从赛狐“订单处理”包裹接口拉取包裹，而不是从“全部订单”接口建立主流程。
 2. 以 `Order ↔ Package` 多对多关系保存一单多包、一包多单，所有 Excel、PDF、追踪号和提交平台操作均按稳定业务标识对账，不依赖行序或页序。
-3. 将蜴国际实现为 `SpreadsheetCarrierAdapter`，将 VITE、FedEx 等实现为 `ApiCarrierAdapter`；二者共享批次、制品、追踪号分配、审核、审计和回写能力。
+3. **通道与承运人解耦：** `SpreadsheetCarrierAdapter` 与 `ApiCarrierAdapter` 是同等级通道；同一承运人可两者皆有。生产默认 Excel（含蜴国际及仍依赖表的物流）；API 为可选路径（蜴国际已有客户端+可选编排；VITE 走 httpx）。二者共享批次、制品、追踪号分配、审核、审计和回写能力。
 4. Karrio 只放在防腐层之后，作为可选的 API connector 依赖。复用其统一模型、Mapper/Proxy/Settings 和已有成熟 connector，不运行 Karrio Server，不复制或 fork 已有 connector。
 5. Karrio **没有现成 VITE/GOFO connector**。P1 的 VITE spike 是按 Karrio extension 规范新建最小 custom connector 的一次性技术实验，并与直接 `httpx` adapter 比较代码量、错误映射和维护收益；它不承诺复用现成 connector，也不承诺上线。[K-SDK][K-EXT]
 6. 当前 1–5 人、日常少于 200 包裹、峰值少于 500 包裹的共享单服务器场景，FastAPI + Service Layer + SQLite WAL 足够。先同步执行并持久化批次状态；达到明确门槛后再引入 worker 或 PostgreSQL。
 7. `submitToPlatform` 是不可盲目重放的外部副作用。一包多单按订单建立稳定 `SubmissionIntent`，每次网络调用记 `SubmissionAttempt`；调用前持久化 `CREATED/NOT_SENT`、CAS 后才发送，残留 `IN_FLIGHT` 一律转 `UNKNOWN`。阻断按 `(sellfox_account_id, package_id, order_id)` scope，而非 request hash，字段变化不能绕过。回读是否即时、是否足以作为权威确认仍待验证。[SF-SUBMIT]
 8. P1 是独立服务：Jinja2 server-rendered Web + 少量 JavaScript、REST/JSON CLI、SQLAlchemy + SQLite；记录每包裹/运单成本和币种，提供中英文 UI，不依赖 ERPNext，但 Service Layer/REST 可供未来 ERPNext app 调用。
 
-最先要解决的不是技术选型，而是输入契约。业务方已确认蜴国际模板存在客户参考号字段，且该值会出现在返回 Excel/PDF；但**三类真实样例尚未收集，具体列名、格式和可机器解析性仍须验证**，这是 P0 的硬前置和当前最大风险。
+最先要解决的不是技术选型，而是输入契约。业务方已确认蜴国际模板存在客户参考号字段，且该值会出现在返回 Excel/PDF；P0 样例**已收集并映射**（见 [lizard-p0-column-mapping-2026-07-17.md](lizard-p0-column-mapping-2026-07-17.md)）；早期「列名/可解析性」风险已缓解。输入契约仍重要，但不再是未开工的硬阻断。
 
 本文从本次澄清重新定义 P0–P3，并取代当前 `sellfox_shipping/AGENT_HANDOFF.md` 的旧 P1/P2 阶段描述；该文件所称“P1 骨架完成”在本文统一称为 **legacy skeleton**，不表示生产工作流已完成。
 
@@ -48,7 +52,7 @@ timestamp: 2026-07-16
 
 本节来源为文内的 [2026-07-16 需求澄清决策记录](#user-2026-07-16) `[USER-2026-07-16]`，不是 `briefing-for-independent-agent.md`；briefing 仅提供较早背景。
 
-- **[用户确认事实]** P1 试点物流商为**蜴国际**。美国使用较多，目前只有 Excel 流程。
+- **[用户确认事实]** P1 试点物流商为**蜴国际**。美国使用较多，目前只有 Excel 流程。（**2026-07-16 事实**；其后蜴国际 API 已验通，见 [lizard-api-vs-excel-2026-07-17.md](lizard-api-vs-excel-2026-07-17.md)。**Excel 仍为生产默认。**）
 - **[用户确认事实]** P1 完整闭环是：
 
   `赛狐拉包裹 → 人工审核 → 导出蜴国际 Excel → 人工上传物流商 → 物流商返回追踪号 Excel → 按 packageSn/客户参考号对账 → 人工复核 → 赛狐 submitToPlatform → 回读核验`
@@ -59,7 +63,7 @@ timestamp: 2026-07-16
 - **[用户确认事实]** VITE 当前主要通过通途 API；大件使用 VITE。未来美国可能有两家分公司、多个账户分别结算。
 - **[用户确认事实]** P1 只做 VITE 测试环境技术验证，不替换通途现有生产接入。
 - **[用户确认事实]** 欧洲主要使用 GLS；波兰 GLS 当前走 Excel。是否已有可用 API 和账户仍待确认。
-- **[用户确认事实]** 蜴国际模板有客户参考号字段，且会出现在返回 Excel/PDF；真实上传文件、返回文件和 PDF 样例尚未收集，具体列名与格式必须作为 P0 前置验证。
+- **[用户确认事实]** 蜴国际模板有客户参考号字段，且会出现在返回 Excel/PDF；真实上传文件、返回文件和 PDF 样例尚未收集，具体列名与格式必须作为 P0 前置验证。→ 已由 P0 映射文档覆盖；本句保留为当时记录。
 - **[用户确认事实]** 需要记录每个包裹/运单的发货成本和币种；Web UI 需要支持中英文。
 - **[用户确认事实]** 系统作为独立服务运行，不依赖 ERPNext；同时 Service Layer/REST 应允许未来 ERPNext app 调用。
 
@@ -271,6 +275,8 @@ def aggregate_package(intent_states):
 - `ApiCarrierAdapter`：VITE、FedEx、未来其他 API。
 - 可选 Karrio：在 `ApiCarrierAdapter` 内部复用经验证的现成 connector；对于没有现成 connector 的 VITE，只在 spike 中按 extension 规范实现最小 custom connector，并与直接 `httpx` adapter 对比。
 
+**注（2026-07-22）：** 上表是通道类型，不是「一家承运人只能选一种」。共享批次/制品/对账/审核/审计/回写不变。
+
 **结论：明确推荐。** 它保留 Karrio 最有价值的协议抽象，同时不把公司业务流程交给不匹配的 Server 模型。
 
 ---
@@ -300,6 +306,8 @@ def aggregate_package(intent_states):
                                  │    └─ optional Karrio SDK    │
                                  └──────────────────────────────┘
 ```
+
+**注（2026-07-22）：** 上图是通道类型，不是「一家承运人只能选一种」。共享批次/制品/对账/审核/审计/回写不变。
 
 FastAPI 只负责 HTTP、OIDC 会话和请求/响应。CLI 输出稳定 JSON，调用相同 Service Layer。MCP 延后，避免在核心用例未稳定时增加一套权限和工具协议。系统独立部署，不依赖 ERPNext；未来 ERPNext app 如需接入，只调用稳定的 Service Layer/REST，不直接共享数据库。
 
@@ -491,7 +499,7 @@ Company Package/Address
 
 Karrio Custom Carrier 官方流程要求基于承运人 API 文档实现 JSON 或 XML/SOAP schema、`Proxy`、`Mapper` 和契约测试。它原生面向在线 API。
 
-**[架构判断]** 蜴国际是人工上传 Excel、人工取得返回文件/PDF的异步人机流程。硬套 Custom Carrier 会把文件批次、人工确认和未匹配记录伪装成一次 API 请求，丢失真正的业务状态。因此应实现公司自己的 `SpreadsheetCarrierAdapter`，不为蜴国际开发 Karrio connector。
+**[架构判断]** 蜴国际是人工上传 Excel、人工取得返回文件/PDF的异步人机流程。硬套 Custom Carrier 会把文件批次、人工确认和未匹配记录伪装成一次 API 请求，丢失真正的业务状态。因此应实现公司自己的 `SpreadsheetCarrierAdapter` 作为一等通道；**不为蜴国际做 Karrio connector**。公司自建 Excel 一等 + **可选** API（客户端已落地，不替代 Excel 生产默认）。
 
 VITE/GOFO 不同：它有在线 JSON API，但 Karrio 没有现成 connector。[K-SDK][K-REPO] 因此 P1 只做以下技术实验：
 
@@ -584,6 +592,8 @@ VITE spike 仅在测试环境执行：用 Karrio extension 规范新建最小 cu
 
 未通过时，继续通途生产流程；即使任一 spike 实现通过，也只形成候选方案，不能因已写代码就自动上线。
 
+**决策已定（2026-07-17）：** 采用直接 httpx；近期不做 Karrio custom connector。见 [vite-httpx-vs-karrio-decision-2026-07-17.md](vite-httpx-vs-karrio-decision-2026-07-17.md)。
+
 ---
 
 ## 9. 当前骨架的可验证问题
@@ -661,7 +671,7 @@ VITE spike 仅在测试环境执行：用 Karrio extension 规范新建最小 cu
 - 使用测试商品/包裹完成受控端到端闭环，扩大范围前再次由用户确认。
 - 在隔离环境按 Karrio extension 规范实现最小 VITE custom connector，并实现等价直接 `httpx` adapter，量化比较代码量与收益；只产出技术决策证据，不切换通途生产、不承诺上线。
 
-**退出门：** 蜴国际受控测试批次端到端核验；无盲重放；VITE 形成通过/不通过结论和生产决策材料。
+**退出门：** 赛狐可见 `trackNo` 探针通过（或证明 `submitToPlatform` 在关自动推送下不可用并记缺口）；无盲重放；VITE 决策材料已归档（httpx）。**平台推送非本阶段默认。**
 
 ### P2：PDF、packlist 与 GLS Excel
 
@@ -852,8 +862,8 @@ started_at / finished_at
 
 > 对话决策摘要，非逐字稿。以下只记录本次对话中已确认、可作为本文范围与验收依据的决定，不把研究判断改写成用户原话。
 
-1. **P1 闭环：** 从赛狐拉取包裹并审核，导出蜴国际 Excel，由人工上传；导入蜴国际返回的追踪号 Excel，按 `packageSn`/客户参考号对账并人工复核，再逐条调用赛狐 `submitToPlatform`，最后回读核验。
-2. **试点顺序：** 蜴国际是 P1 首个业务试点；美国使用较多，当前只有 Excel 流程。真实上传 Excel、返回 Excel 和 PDF 样例尚未收集，必须先完成 P0 样例验证。
+1. **P1 闭环：** 从赛狐拉取包裹并审核，导出蜴国际 Excel，由人工上传；导入蜴国际返回的追踪号 Excel，按 `packageSn`/客户参考号对账并人工复核，再逐条调用赛狐 `submitToPlatform`，最后回读核验。（历史规划路径；现行以文首裁决框 / [submit-to-platform-vs-autopush-2026-07-20.md](submit-to-platform-vs-autopush-2026-07-20.md) 为准。）
+2. **试点顺序：** 蜴国际是 P1 首个业务试点；美国使用较多，当前只有 Excel 流程。真实上传 Excel、返回 Excel 和 PDF 样例：**P0 已映射**（见 [lizard-p0-column-mapping-2026-07-17.md](lizard-p0-column-mapping-2026-07-17.md)）。
 3. **参考号：** 蜴国际模板有客户参考号字段，且会出现在返回 Excel/PDF；具体列名、格式和可机器解析性仍以真实样例为准。
 4. **包裹关系：** 生产中确有少量一单多包和一包多单场景；Excel 行序和 PDF 页序均不可作为匹配依据。后续 PDF 按包裹号匹配，packlist 后置。
 5. **物流商选择：** P1 读取赛狐 `channelName`；本地规则引擎只留扩展点，不建设第二套完整规则。
