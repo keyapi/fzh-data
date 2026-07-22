@@ -29,11 +29,10 @@ triggers:
 
 ## 新对话必读
 
-1. `sellfox_shipping/docs/research/session-progress-2026-07-16.md`
-2. `sellfox_shipping/docs/research/research-synthesis-2026-07-16.md`
-3. `sellfox_shipping/AGENT_HANDOFF.md`
+1. `sellfox_shipping/AGENT_HANDOFF.md`（唯一默认入口）
+2. 需要细节时：`sellfox_shipping/docs/index.md`
 
-阶段口径：旧「P1 骨架 / P2 FedEx」作废；现行 **P0 → P1A → P1B → P1C → P2+**。legacy 订单 Web/MCP/store 勿当生产闭环。
+阶段口径：现行 **P0 → P1A → P1B → P1C → P2+**。legacy 订单 Web/MCP/store 勿当生产闭环。
 
 ## 何时触发
 
@@ -64,8 +63,8 @@ uv run python -m sellfox_shipping.cli serve
 | `models.py` / `store.py` | **legacy** 订单中心 |
 | `docs/research/` | 规划与会话进度 |
 
-## 当前阶段（P1A）
+## 当前阶段（P1C 产品缺口）
 
-已完成：只读同步、列表 CLI/REST/Web、AuditEvent、Alembic。  
-未做：OIDC、蜴国际 Excel、`submitToPlatform`、VITE/Karrio（同事可能并行调研）。  
-赛狐回写前必须用户确认范围。
+已完成：同步、审核、蜴国际 Excel、Batch/Artifact、Intent/CAS/限流、OIDC 路径（默认关）、VITE httpx 决策、蜴国际 API 可选。  
+未关：公网 OIDC、成功的 live 填号（赛狐 `trackNo` 可见性）。  
+Excel 仍生产默认。赛狐回写前必须用户确认范围。

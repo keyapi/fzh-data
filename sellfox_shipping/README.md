@@ -3,7 +3,7 @@ okf: v0.1
 type: Guide
 title: sellfox_shipping — 赛狐尾程打单系统
 description: 赛狐包裹同步、物流批次、追踪号审核与回写的独立服务
-updated: 2026-07-16
+updated: 2026-07-22
 ---
 
 # sellfox_shipping — 赛狐尾程打单系统
@@ -35,17 +35,11 @@ uv run python -m sellfox_shipping.cli orders --status to_print
 
 ## 架构
 
-详见 [AGENT_HANDOFF.md](AGENT_HANDOFF.md)、[docs/research/session-progress-2026-07-16.md](docs/research/session-progress-2026-07-16.md)（换 Agent 交接）和 [docs/index.md](docs/index.md)。
+详见 [AGENT_HANDOFF.md](AGENT_HANDOFF.md) 与 [docs/index.md](docs/index.md)。
 
 ## 当前阶段
 
-**P1A 第一条纵切已完成：**
+**P1A–P1C 代码主路径已合入 main（PR #96 / #97）。** Excel 本地闭环可用；Intent/CAS 默认 dry-run。  
+产品缺口：赛狐可见 `trackNo`（live 曾 401）。通途写平台；自动推送关。Excel 生产默认；API 可选。
 
-- 赛狐 camelCase wire payload → Python snake_case 包裹模型
-- `(sellfox_account_id, package_sn)` 作用域和订单/包裹多对多持久化
-- SQLite WAL + SQLAlchemy repository
-- 分页同步、逐行差异报告和失败后部分报告
-- `packages-sync` / `packages-list` JSON CLI
-- 同步结束写入 `AuditEvent`（`packages.sync`）
-
-下一步：schema migration、钉钉 OIDC、包裹审核 Web/REST；蜴国际 Excel 依赖真实样例。VITE/Karrio 由同事 Agent 并行调研中。
+接手：只读 [AGENT_HANDOFF.md](AGENT_HANDOFF.md)。

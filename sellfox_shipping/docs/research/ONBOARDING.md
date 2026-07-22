@@ -10,10 +10,9 @@ timestamp: 2026-07-16
 
 > 写给新开对话的 AI Agent（Claude Code / Codex / Cursor 等）或同事的 Agent
 
-> **若你的任务是接手继续实现（不是从零再调研）：** 不要按本文「忽略已有结论」路径走。  
-> 请改读 [session-progress-2026-07-16.md](session-progress-2026-07-16.md) →  
-> [research-synthesis-2026-07-16.md](research-synthesis-2026-07-16.md) →  
-> [AGENT_HANDOFF.md](../../AGENT_HANDOFF.md)。
+> **若你的任务是接手继续实现（不是从零再调研）：** 不要按本文路径走。  
+> **只读** [AGENT_HANDOFF.md](../../AGENT_HANDOFF.md)。  
+> 本文 + 旧 research 分支名仅用于刻意独立再调研；`feature/sellfox-shipping-p1-research` 等为历史分支，可能已不存在。
 
 ## 你的任务
 
