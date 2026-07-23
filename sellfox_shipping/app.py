@@ -455,7 +455,7 @@ async def package_review_form(request: Request, package_sn: str):
 
 @app.post("/packages/{package_sn}/carton-override", response_class=HTMLResponse)
 async def package_carton_override_form(request: Request, package_sn: str):
-    """Save manual carton dims for a commodity_sku on this package."""
+    """Save manual carton dims for one or more commodity_skus on this package."""
     from sellfox_shipping.carriers.lizard.dims import CartonDims
 
     form = await request.form()
@@ -464,26 +464,57 @@ async def package_carton_override_form(request: Request, package_sn: str):
     record = repo.get(account_key, package_sn)
     if record is None:
         raise HTTPException(404, f"Package {package_sn} not found")
-    sku = str(form.get("commodity_sku") or "").strip()
-    actor = _web_actor(request, str(form.get("actor") or "web-user"))
-    note = str(form.get("note") or "").strip()
-    try:
-        dims = CartonDims(
-            weight_kg=float(form.get("weight_kg") or 0),
-            length_cm=float(form.get("length_cm") or 0),
-            width_cm=float(form.get("width_cm") or 0),
-            height_cm=float(form.get("height_cm") or 0),
-        )
-        repo.set_carton_override(
-            account_key=account_key,
-            commodity_sku=sku,
-            dims=dims,
-            actor=actor,
-            note=note,
-        )
-        message = f"已保存重尺补录：{sku}"
-    except (TypeError, ValueError) as exc:
-        message = f"重尺补录失败: {exc}"
+
+    # Support both single-row (legacy) and multi-row (table form) submissions.
+    # When multiple rows share the same field name, use getlist to collect them.
+    skus = form.getlist("commodity_sku")
+    if not skus:
+        # Legacy single-row fallback (form.get returns one value)
+        sku = str(form.get("commodity_sku") or "").strip()
+        skus = [sku] if sku else []
+
+    saved: list[str] = []
+    errors: list[str] = []
+    for i, sku in enumerate(skus):
+        sku = (sku or "").strip()
+        if not sku:
+            continue
+        try:
+            weight_kg = float(_form_val_at(form, "weight_kg", i) or 0)
+            length_cm = float(_form_val_at(form, "length_cm", i) or 0)
+            width_cm = float(_form_val_at(form, "width_cm", i) or 0)
+            height_cm = float(_form_val_at(form, "height_cm", i) or 0)
+            actor = _web_actor(
+                request, str(_form_val_at(form, "actor", i) or "web-user")
+            )
+            note = str(_form_val_at(form, "note", i) or "").strip()
+            if weight_kg <= 0 or length_cm <= 0 or width_cm <= 0 or height_cm <= 0:
+                errors.append(f"{sku}: 所有字段必须大于 0")
+                continue
+            dims = CartonDims(
+                weight_kg=weight_kg,
+                length_cm=length_cm,
+                width_cm=width_cm,
+                height_cm=height_cm,
+            )
+            repo.set_carton_override(
+                account_key=account_key,
+                commodity_sku=sku,
+                dims=dims,
+                actor=actor,
+                note=note,
+            )
+            saved.append(sku)
+        except (TypeError, ValueError) as exc:
+            errors.append(f"{sku}: {exc}")
+
+    parts: list[str] = []
+    if saved:
+        parts.append(f"已保存 {len(saved)} 个 SKU 重尺补录")
+    if errors:
+        parts.append(f"失败 {len(errors)}: {'; '.join(errors)}")
+    message = "；".join(parts) if parts else "无有效重尺数据可保存"
+
     record = repo.get(account_key, package_sn)
     assert record is not None
     return templates.TemplateResponse(
@@ -491,6 +522,18 @@ async def package_carton_override_form(request: Request, package_sn: str):
         "package_detail.html",
         _package_detail_context(account_key, record, message=message),
     )
+
+
+def _form_val_at(form, field: str, index: int) -> str | None:
+    """Get the index-th value of a multi-value form field."""
+    vals = form.getlist(field)
+    if index < len(vals):
+        return str(vals[index])
+    # Legacy single-value fallback (only use when index==0)
+    if index == 0:
+        v = form.get(field)
+        return str(v) if v else None
+    return None
 
 
 @app.post("/packages/{package_sn}/prepare-submit", response_class=HTMLResponse)
