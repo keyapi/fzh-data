@@ -3,7 +3,7 @@ okf: v0.1
 type: Index
 title: 赛狐尾程打单 — 调研索引
 description: 汇总尾程打单需求简报、既有调研与当前推荐的独立综合规划入口
-timestamp: 2026-07-22
+timestamp: 2026-07-23
 ---
 
 # 赛狐尾程打单 — 调研索引
@@ -32,6 +32,7 @@ timestamp: 2026-07-22
 - [submit-to-platform-vs-autopush-2026-07-20.md](submit-to-platform-vs-autopush-2026-07-20.md) — submitToPlatform vs 通途写平台/自动推送关；trackNo 探针协议（solutions 固化：[sellfox-trackno-write-path-vs-local-import.md](../../../docs/solutions/architecture-patterns/sellfox-trackno-write-path-vs-local-import.md)）
 - [pr-slice-guide-2026-07-20.md](pr-slice-guide-2026-07-20.md) — 长分支 PR 切片与三遍审阅
 - [sellfox-native-lizard-fixture-2026-07-17.md](sellfox-native-lizard-fixture-2026-07-17.md) — 赛狐原生夹具 00/02/03/04（上传·追踪号·面单）。
+- [erpnext-zlmb-dims-v2-2026-07-23.md](erpnext-zlmb-dims-v2-2026-07-23.md) — EN ZLMB# 重尺 V2：跨面料 sibling 借用 + weight/dims 独立决策。
 
 ## 全部调研文档
 

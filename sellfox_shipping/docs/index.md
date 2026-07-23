@@ -3,7 +3,7 @@ okf: v0.1
 type: Index
 module: sellfox_shipping
 created: 2026-07-15
-updated: 2026-07-22
+updated: 2026-07-23
 ---
 
 # sellfox_shipping — 文档索引
@@ -33,3 +33,4 @@ updated: 2026-07-22
 - [research/vite-httpx-vs-karrio-decision-2026-07-17.md](research/vite-httpx-vs-karrio-decision-2026-07-17.md) — VITE：采用 httpx；近期不做 Karrio custom connector
 - [research/submit-to-platform-vs-autopush-2026-07-20.md](research/submit-to-platform-vs-autopush-2026-07-20.md) — submitToPlatform vs 通途写平台/自动推送关；trackNo 探针协议
 - [research/pr-slice-guide-2026-07-20.md](research/pr-slice-guide-2026-07-20.md) — 长分支 PR 切片与三遍审阅
+- [research/erpnext-zlmb-dims-v2-2026-07-23.md](research/erpnext-zlmb-dims-v2-2026-07-23.md) — EN ZLMB# 重尺 V2：跨面料 sibling 借用

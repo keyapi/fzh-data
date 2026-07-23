@@ -188,15 +188,12 @@ def packages_list(
 
 
 def _get_lizard_dims_lookup():
-    """Local override → Sellfox commodity pageList → ERPNext ZLMB."""
+    """Local override → EN ZLMB# (V2 with sibling borrowing)."""
     import os
     from pathlib import Path
 
     from sellfox_shipping.carriers.lizard.cascade import CascadingDimsLookup
-    from sellfox_shipping.carriers.lizard.commodity_dims import (
-        CommodityPageListDimsLookup,
-    )
-    from sellfox_shipping.carriers.lizard.erpnext_dims import ErpnextZlmbDimsLookup
+    from sellfox_shipping.carriers.lizard.erpnext_dims_v2 import ErpnextDimsLookupV2
     from sellfox_shipping.carriers.lizard.override_dims import RepositoryDimsLookup
     from sellfox_shipping.env_loader import load_dotenv
 
@@ -206,11 +203,8 @@ def _get_lizard_dims_lookup():
     config = _load_config()
     account_key = config["sellfox"]["proxy_account"]
     override = RepositoryDimsLookup(_get_package_repository(), account_key)
-    primary = CommodityPageListDimsLookup(
-        proxy_base_url=config["sellfox"]["proxy_base_url"],
-        proxy_account=account_key,
-        proxy_api_key=os.getenv("SELLFOX_PROXY_API_KEY", ""),
-    )
+    lookups: list = [override]
+
     erp_key = (
         os.getenv("PROD_ERP_API_KEY")
         or os.getenv("ERP_API_KEY")
@@ -221,17 +215,18 @@ def _get_lizard_dims_lookup():
         or os.getenv("ERP_API_SECRET")
         or ""
     ).strip()
-    if not erp_key or not erp_secret:
-        return CascadingDimsLookup(override, primary)
-    erp_url = (
-        os.getenv("ERP_URL") or "https://erpnext.vilavi.cn"
-    ).strip().rstrip("/")
-    fallback = ErpnextZlmbDimsLookup(
-        base_url=erp_url,
-        api_key=erp_key,
-        api_secret=erp_secret,
-    )
-    return CascadingDimsLookup(override, primary, fallback)
+    if erp_key and erp_secret:
+        erp_url = (
+            os.getenv("ERP_URL") or "https://erpnext.vilavi.cn"
+        ).strip().rstrip("/")
+        lookups.append(
+            ErpnextDimsLookupV2(
+                base_url=erp_url,
+                api_key=erp_key,
+                api_secret=erp_secret,
+            )
+        )
+    return CascadingDimsLookup(*lookups)
 
 
 @app.command("lizard-export")

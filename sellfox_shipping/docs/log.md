@@ -3,10 +3,39 @@ okf: v0.1
 type: Log
 module: sellfox_shipping
 created: 2026-07-15
-updated: 2026-07-22
+updated: 2026-07-23
 ---
 
 # sellfox_shipping — 变更日志
+
+## 2026-07-23 — EN 重尺 V2：sibling 借用 + 直连赛狐 + 筛选/分页修复
+
+### 直连赛狐 API
+- 新增 `sellfox_shipping/direct_sellfox_client.py`：OAuth2 + HMAC-SHA256 直连 `openapi.sellfox.com`
+- CLI `_get_client()` 自动检测 `SELLFOX_APP_ID`/`SELLFOX_APP_SECRET` 切换直连/代理模式
+- `.env` 新增 `SELLFOX_APP_ID` / `SELLFOX_APP_SECRET` / `SELLFOX_API_DOMAIN`
+
+### 筛选修复
+- `app.py` 两处路由 `or None`：表单空值 `""` → `None`，避免 DB 精确匹配空字符串导致 0 结果
+- REST API `GET /api/packages` 补 `review` query param
+- 前端 `packages.html`：审核下拉加 `shipped`/`closed` 选项 + badge 按状态变色 + `autocomplete="off"`
+
+### 分页修复
+- `package_service.py`：锁定首页 `total_size`，防止 API 分页过程中 `totalSize` 波动导致末页丢包
+- 终止条件：`page_input_count < page.page_size`（末页）或 `processed >= locked_total`
+
+### 自动审核
+- `package_repository.py`：`_auto_set_review_on_terminal_status()` — sync 时 `has_shipped`→`shipped`，`has_canceled`→`closed`；人工审批不覆盖
+
+### EN 重尺 V2（sibling 借用）
+- 新增 `carriers/lizard/erpnext_dims_v2.py`：`ErpnextDimsLookupV2`
+  - ZLMB 精确匹配 → 数据不全时触发 sibling 借用（同 KS + 同尺寸 + 跨面料）
+  - 重量独立决策：FG weight → 借 sibling FG → FTY weight → 借 sibling FTY
+  - 长宽高一体决策：FG dims 全>0 → 借 sibling FG dims → FTY dims → 借 sibling FTY dims
+  - EN API 按 `ZLMB#{style}-%-{size}` 模糊搜索 sibling 池，带缓存
+- `app.py` / `cli.py`：`_get_lizard_dims_lookup()` 移除 CommodityPageListDimsLookup（需代理），接入 V2
+- `_carton_rows_for_package()`：`lookup.get()` 包 try/except，EN 故障不阻断页面
+- 暂不做多 SKU 合并，每个 SKU 独立展示重尺
 
 ## 2026-07-22 — 文档交接体系刷新
 
