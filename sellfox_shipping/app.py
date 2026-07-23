@@ -72,10 +72,9 @@ def _get_package_review_service() -> ReviewPackageService:
 
 
 def _get_lizard_dims_lookup():
-    """Override → commodity pageList → ERPNext ZLMB."""
+    """Override → EN ZLMB# (V2 with sibling borrowing)."""
     from sellfox_shipping.carriers.lizard.cascade import CascadingDimsLookup
-    from sellfox_shipping.carriers.lizard.commodity_dims import CommodityPageListDimsLookup
-    from sellfox_shipping.carriers.lizard.erpnext_dims import ErpnextZlmbDimsLookup
+    from sellfox_shipping.carriers.lizard.erpnext_dims_v2 import ErpnextDimsLookupV2
     from sellfox_shipping.carriers.lizard.override_dims import RepositoryDimsLookup
     from sellfox_shipping.env_loader import load_dotenv as _load_env
 
@@ -85,28 +84,26 @@ def _get_lizard_dims_lookup():
     repo = _get_package_repository()
     account_key = config["sellfox"]["proxy_account"]
     override = RepositoryDimsLookup(repo, account_key)
-    primary = CommodityPageListDimsLookup(
-        proxy_base_url=config["sellfox"]["proxy_base_url"],
-        proxy_account=account_key,
-        proxy_api_key=os.getenv("SELLFOX_PROXY_API_KEY", ""),
-    )
+    lookups: list = [override]
+
     erp_key = (
         os.getenv("PROD_ERP_API_KEY") or os.getenv("ERP_API_KEY") or ""
     ).strip()
     erp_secret = (
         os.getenv("PROD_ERP_API_SECRET") or os.getenv("ERP_API_SECRET") or ""
     ).strip()
-    if not erp_key or not erp_secret:
-        return CascadingDimsLookup(override, primary)
-    erp_url = (os.getenv("ERP_URL") or "https://erpnext.vilavi.cn").strip().rstrip(
-        "/"
-    )
-    fallback = ErpnextZlmbDimsLookup(
-        base_url=erp_url,
-        api_key=erp_key,
-        api_secret=erp_secret,
-    )
-    return CascadingDimsLookup(override, primary, fallback)
+    if erp_key and erp_secret:
+        erp_url = (
+            os.getenv("ERP_URL") or "https://erpnext.vilavi.cn"
+        ).strip().rstrip("/")
+        lookups.append(
+            ErpnextDimsLookupV2(
+                base_url=erp_url,
+                api_key=erp_key,
+                api_secret=erp_secret,
+            )
+        )
+    return CascadingDimsLookup(*lookups)
 
 
 # ── FastAPI app ──────────────────────────────────────────────────
@@ -407,7 +404,10 @@ def _carton_rows_for_package(account_key: str, record) -> list[dict]:
             continue
         seen.add(sku)
         override = repo.get_carton_override(account_key, sku)
-        resolved = lookup.get(sku)
+        try:
+            resolved = lookup.get(sku)
+        except Exception:
+            resolved = None
         rows.append(
             {
                 "commodity_sku": sku,
