@@ -56,5 +56,5 @@ def test_migration_head_includes_carton_overrides(tmp_path: Path) -> None:
             "SELECT name FROM sqlite_master WHERE type='table' "
             "AND name='shipping_carton_overrides'"
         ).scalar_one()
-    assert version == "0007_submit_rate_gate"
+    assert version == "0009_package_routing"
     assert table == "shipping_carton_overrides"

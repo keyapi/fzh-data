@@ -384,10 +384,14 @@ def _package_detail_context(account_key: str, record, *, message: str) -> dict:
         if intents
         else ""
     )
+    carton_rows = _carton_rows_for_package(account_key, record)
+    routing_result = _compute_routing(record, carton_rows)
     return {
         "package": record,
         "message": message,
-        "carton_rows": _carton_rows_for_package(account_key, record),
+        "carton_rows": carton_rows,
+        "package_dims": _compute_package_dims(record, carton_rows),
+        "routing_result": routing_result,
         "submission_intents": intents,
         "package_submission_state": package_submission_state,
     }
@@ -421,6 +425,144 @@ def _carton_rows_for_package(account_key: str, record) -> list[dict]:
             }
         )
     return rows
+
+
+def _compute_package_dims(record, carton_rows: list[dict]) -> dict | None:
+    """Merge per-SKU dims into package-level dims and persist to DB.
+
+    长=max, 宽=max, 高=sum, 重量=sum(weight × qty).
+    Results are stored in shipping_package_dims for downstream consumption.
+    """
+    cr_by_sku = {r["commodity_sku"]: r for r in carton_rows}
+    total_weight_kg = 0.0
+    lengths: list[float] = []
+    widths: list[float] = []
+    heights: list[float] = []
+
+    for item in record.items:
+        sku = (item.commodity_sku or "").strip()
+        if not sku:
+            continue
+        cr = cr_by_sku.get(sku)
+        if cr is None:
+            continue
+        dims = cr["override"].dims if cr.get("override") else cr.get("resolved")
+        if dims is None or not dims.is_complete:
+            continue
+        qty = item.quantity or 1
+        total_weight_kg += dims.weight_kg * qty
+        lengths.append(dims.length_cm)
+        widths.append(dims.width_cm)
+        heights.append(dims.height_cm)
+
+    if not lengths:
+        return None
+
+    result = {
+        "weight_kg": round(total_weight_kg, 2),
+        "length_cm": max(lengths),
+        "width_cm": max(widths),
+        "height_cm": sum(heights),
+        "sku_count": len(lengths),
+    }
+
+    # Persist to DB for downstream (carrier export, rule engine, etc.)
+    repo = _get_package_repository()
+    package_db_id = repo.get_package_db_id(
+        config["sellfox"]["proxy_account"], record.package_sn
+    )
+    if package_db_id is not None:
+        try:
+            repo.upsert_package_dims(
+                package_db_id=package_db_id,
+                weight_kg=result["weight_kg"],
+                length_cm=result["length_cm"],
+                width_cm=result["width_cm"],
+                height_cm=result["height_cm"],
+                sku_count=result["sku_count"],
+            )
+        except Exception:
+            pass  # best-effort persist
+
+    return result
+
+
+def _compute_routing(record, carton_rows: list[dict]):
+    """Run rule engine on package data and return a RoutingResult."""
+    from pathlib import Path
+
+    from sellfox_shipping.routing.engine import RuleEngine
+    from sellfox_shipping.routing.models import PackageRoutingData
+
+    rules_path = Path(__file__).parent / "routing" / "routing_rules.yaml"
+    if not rules_path.exists():
+        return None
+
+    # Build dimensional data from carton rows + items
+    sides: list[float] = []
+    total_weight = 0.0
+    total_qty = 0
+    cr_by_sku = {r["commodity_sku"]: r for r in carton_rows}
+    for item in record.items:
+        sku = (item.commodity_sku or "").strip()
+        if not sku:
+            continue
+        cr = cr_by_sku.get(sku)
+        if cr is None:
+            continue
+        dims = cr["override"].dims if cr.get("override") else cr.get("resolved")
+        if dims is None or not dims.is_complete:
+            continue
+        qty = item.quantity or 1
+        total_qty += qty
+        total_weight += dims.weight_kg * qty
+        sides.append(dims.length_cm)
+        sides.append(dims.width_cm)
+        sides.append(dims.height_cm)
+
+    # Collect all unique sides across SKUs and sort descending for 3-side check
+    unique_sides = sorted(set(sides), reverse=True)
+    if len(unique_sides) < 3:
+        unique_sides += [0] * (3 - len(unique_sides))
+
+    data = PackageRoutingData(
+        package_sn=record.package_sn,
+        shop_name=record.shop_name or "",
+        warehouse_name=record.logistics.warehouse_name or "",
+        destination_country=record.address.country_code or record.address.country or "",
+        destination_state=record.address.state_or_region or "",
+        postal_code=record.address.postal_code or "",
+        longest_side_cm=unique_sides[0],
+        second_side_cm=unique_sides[1],
+        third_side_cm=unique_sides[2],
+        weight_kg=round(total_weight, 2) if total_weight > 0 else 0.0,
+        total_quantity=total_qty,
+        channel_name=record.logistics.channel_name or "",
+    )
+
+    try:
+        repo = _get_package_repository()
+        engine = RuleEngine.from_yaml(str(rules_path))
+        result = engine.route(data)
+        # Persist to DB for downstream consumption
+        package_db_id = repo.get_package_db_id(
+            config["sellfox"]["proxy_account"], record.package_sn
+        )
+        if package_db_id is not None:
+            try:
+                repo.upsert_package_routing(
+                    package_db_id=package_db_id,
+                    carrier=result.carrier,
+                    label=result.label,
+                    reason=result.reason,
+                    rule_name=result.rule_name,
+                    matched=result.matched,
+                )
+            except Exception:
+                pass
+        return result
+    except Exception:
+        return None
 
 
 @app.post("/packages/{package_sn}/review", response_class=HTMLResponse)

@@ -35,6 +35,7 @@ timestamp: 2026-07-23
 - [tongtool-carrier-analysis-2026-07-22.md](tongtool-carrier-analysis-2026-07-22.md) — **通途 US 仓库实际承运商分析**：9,646 条自发货订单，VITE/蜴国际/US-FedEx 分布、包裹尺寸、多SKU合并算法。
 - [routing-rules-design-2026-07-22.md](routing-rules-design-2026-07-22.md) — **路由规则设计方案**：5 层决策流 + 规则数据结构 + 集成方案。
 - [erpnext-zlmb-dims-v2-2026-07-23.md](erpnext-zlmb-dims-v2-2026-07-23.md) — EN ZLMB# 重尺 V2：跨面料 sibling 借用 + weight/dims 独立决策。
+- [routing-engine-v1-2026-07-24.md](routing-engine-v1-2026-07-24.md) — **规则引擎 V1**：YAML 驱动路由 + 10 种运算符 + 排除店铺。
 
 ## 全部调研文档
 
