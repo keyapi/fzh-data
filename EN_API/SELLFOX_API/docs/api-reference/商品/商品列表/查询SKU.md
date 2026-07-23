@@ -1,0 +1,855 @@
+# 查询SKU
+
+## OpenAPI Specification
+
+```yaml
+openapi: 3.0.1
+info:
+  title: ''
+  description: ''
+  version: 1.0.0
+paths:
+  /api/commodity/pageList.json:
+    post:
+      summary: 查询SKU
+      deprecated: false
+      description: ''
+      operationId: pageListUsingPOST_3
+      tags:
+        - 商品/商品列表
+        - 商品列表
+      parameters:
+        - name: access_token
+          in: query
+          description: 通过获取token接口获得的token，详见 [获取 Access Token](doc-1589130)
+          required: true
+          example: '{{access_token}}'
+          schema:
+            type: string
+        - name: client_id
+          in: query
+          description: client_id, 获取方式详见 [申请API权限](1748360)
+          required: true
+          example: '{{client_id}}'
+          schema:
+            type: string
+        - name: timestamp
+          in: query
+          description: 13位毫秒时间戳，与当前时间差异不超过正负15分钟，示例：1668153260508
+          required: true
+          example: '121212'
+          schema:
+            type: string
+        - name: nonce
+          in: query
+          description: '随机整数值，保证每个请求唯一，示例：11251 '
+          required: true
+          example: '121212'
+          schema:
+            type: string
+        - name: sign
+          in: query
+          description: 请求签名，详见  [生成sign（签名）](doc-1749562)
+          required: true
+          example: '121212121'
+          schema:
+            type: string
+        - name: Content-Type
+          in: header
+          description: 固定再header位置加入Content-Type:application/json
+          example: application/json
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommodityListOpenQo'
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: >-
+                  #/components/schemas/OpenResult%C2%ABPage%C2%ABCommodityOpenVo%C2%BB%C2%BB
+          headers: {}
+          x-apifox-name: 成功
+        '201':
+          description: Created
+          headers: {}
+          x-apifox-name: 成功
+        '401':
+          description: Unauthorized
+          headers: {}
+          x-apifox-name: 没有权限
+        '403':
+          description: Forbidden
+          headers: {}
+          x-apifox-name: 禁止访问
+        '404':
+          description: Not Found
+          headers: {}
+          x-apifox-name: 记录不存在
+      security: []
+      x-order: '5'
+      x-apifox-folder: 商品/商品列表
+      x-apifox-status: released
+      x-run-in-apifox: https://app.apifox.com/web/project/1827046/apis/api-51516600-run
+components:
+  schemas:
+    CommodityListOpenQo:
+      type: object
+      properties:
+        isAllGroup:
+          type: integer
+          format: int32
+        skus:
+          type: array
+          description: SKU集合
+          items:
+            type: string
+          examples:
+            - 1
+        pageNo:
+          type: string
+          description: 第几页,默认1
+          examples:
+            - 1
+        pageSize:
+          type: string
+          description: 每页条数,默认20
+          examples:
+            - 20
+        fullCids:
+          type: array
+          description: 分类ID，多个用，隔开
+          items:
+            type: string
+          examples:
+            - 1234
+        isGroup:
+          type: string
+          description: sku类型，0普通SKU  1组合sku 2加工sku 5辅料
+          examples:
+            - 0
+        devIdList:
+          type: array
+          description: 开发员id
+          items:
+            type: string
+          examples:
+            - - '12345'
+              - '22334'
+        visitors:
+          type: array
+          description: 查看人id
+          items:
+            type: string
+          examples:
+            - - 1
+              - 2
+        purchaserIds:
+          type: array
+          description: 采购员id
+          items:
+            type: string
+          examples:
+            - - '12345'
+              - '22334'
+        state:
+          type: string
+          description: 商品状态:0停售，1在售 不传为全部
+          examples:
+            - 1
+        relAuxFlag:
+          type: integer
+          format: int32
+          description: 是否关联辅料:0未关联，1已关联 不传为全部
+          examples:
+            - 1
+        createTimeStart:
+          type: string
+          description: 创建时间开始于，yyyy-MM-dd hh:mm:ss
+          examples:
+            - '2022-01-01 00:00:00'
+        createTimeEnd:
+          type: string
+          description: 创建时间结束于，yyyy-MM-dd hh:mm:ss
+          examples:
+            - '2022-01-01 23:59:59'
+        modifiedTimeStart:
+          type: string
+          description: 修改时间开始于，yyyy-MM-dd hh:mm:ss
+          examples:
+            - '2022-01-01 00:00:00'
+        modifiedTimeEnd:
+          type: string
+          description: 修改时间结束于，yyyy-MM-dd hh:mm:ss
+          examples:
+            - '2022-01-01 23:59:59'
+        devDateStart:
+          type: string
+          description: 开发时间开始于，yyyy-MM-dd
+          examples:
+            - '2022-01-01'
+        devDateEnd:
+          type: string
+          description: 开发时间结束于，yyyy-MM-dd
+          examples:
+            - '2022-01-01'
+        searchField:
+          type: string
+          description: 搜索字段
+          examples:
+            - name,sku,spu,spuName,model,supplierName,msku,identificationCode
+        searchValue:
+          type: string
+          description: 搜索值
+        brandIds:
+          type: array
+          description: 品牌ID列表
+          items:
+            type: string
+          examples:
+            - '-1为无品牌'
+      title: CommodityListOpenQo
+      x-apifox-orders:
+        - isAllGroup
+        - skus
+        - pageNo
+        - pageSize
+        - fullCids
+        - isGroup
+        - devIdList
+        - visitors
+        - purchaserIds
+        - state
+        - relAuxFlag
+        - createTimeStart
+        - createTimeEnd
+        - modifiedTimeStart
+        - modifiedTimeEnd
+        - devDateStart
+        - devDateEnd
+        - searchField
+        - searchValue
+        - brandIds
+      x-apifox-ignore-properties: []
+      x-apifox-folder: ''
+    OpenResult«Page«CommodityOpenVo»»:
+      type: object
+      properties:
+        requestId:
+          type: string
+        code:
+          type: integer
+          format: int32
+          description: code(默认0代表成功)
+        msg:
+          type: string
+          description: 错误信息
+        data:
+          $ref: '#/components/schemas/Page%C2%ABCommodityOpenVo%C2%BB'
+        ts:
+          type: integer
+          format: int64
+          description: 响应时间戳
+      title: OpenResult«Page«CommodityOpenVo»»
+      x-apifox-orders:
+        - requestId
+        - code
+        - msg
+        - data
+        - ts
+      x-apifox-ignore-properties: []
+      x-apifox-folder: ''
+    Page«CommodityOpenVo»:
+      type: object
+      properties:
+        pageNo:
+          type: integer
+          format: int32
+          description: 页码
+        pageSize:
+          type: integer
+          format: int32
+          description: 每页条数
+        totalPage:
+          type: integer
+          format: int32
+          description: 总页数
+        totalSize:
+          type: integer
+          format: int32
+          description: 总条数
+        rows:
+          type: array
+          description: 当前页数据
+          items:
+            $ref: '#/components/schemas/CommodityOpenVo'
+      title: Page«CommodityOpenVo»
+      x-apifox-orders:
+        - pageNo
+        - pageSize
+        - totalPage
+        - totalSize
+        - rows
+      x-apifox-ignore-properties: []
+      x-apifox-folder: ''
+    CommodityOpenVo:
+      type: object
+      properties:
+        id:
+          type: string
+          description: 商品ID
+        name:
+          type: string
+          description: 商品名称
+        sku:
+          type: string
+          description: SKU
+        fullCid:
+          type: string
+          description: 分类ID
+        fullName:
+          type: string
+          description: 分类名
+        isGroup:
+          type: string
+          description: 0表示普通sku,1表示组合sku,2表示加工SKU,5表示辅料
+        needAssembleProcess:
+          type: string
+          description: 是否需要加工过程，支持true或false
+        purchaseCost:
+          type: string
+          description: 采购成本 RMB支持两位小数
+        processCost:
+          type: string
+          description: 加工费 RMB支持两位小数
+        state:
+          type: string
+          description: 商品状态(0：停售，1：在售，2：开发中，3：代售，4：清仓)
+        weight:
+          type: string
+          description: 重量，单位为g 支持2为小数
+        originalWeight:
+          type: number
+          description: 原始重量
+        originalWeightUnit:
+          type: string
+          description: 原始重量单位，可选 克(g)、千克(kg)、磅(lb)、盎司(oz)
+        length:
+          type: string
+          description: 商品长，单位为cm，支持两位小数
+        width:
+          type: string
+          description: 商品宽，单位为cm，支持两位小数
+        height:
+          type: string
+          description: 商品高，单位为cm，支持两位小数
+        cartonLength:
+          type: string
+          description: 箱规——长 单位为cm 支持两位小数
+        cartonWidth:
+          type: string
+          description: 箱规——宽 单位为cm 支持两位小数
+        cartonHeight:
+          type: string
+          description: 箱规——高 单位为cm 支持两位小数
+        cartonWeight:
+          type: string
+          description: 单箱重量 单位为kg 支持两位小数
+        cartonQty:
+          type: string
+          description: 单箱数量 只能为正整数
+        imgUrl:
+          type: string
+          description: 图片url 必须https或http开头
+        sourceUrls:
+          type: string
+          description: 商品来源网址 ，请http或https开头，多个用|隔开，最大长度不超过5000
+        logisticsCostList:
+          type: array
+          description: 头程信息
+          items:
+            $ref: '#/components/schemas/CommodityLogisticsOpenCost'
+        createTime:
+          type: string
+          description: createTime
+        devId:
+          type: string
+          description: 开发员id 可以从获取子账号接口获取
+        visitors:
+          type: array
+          description: 查看人Id，以逗号拼接
+          items:
+            $ref: '#/components/schemas/CommodityVisitorOpenVO'
+        purchaserId:
+          type: string
+          description: 采购员id 可以从获取子账号接口获取
+        purchaseDays:
+          type: string
+          description: 采购时长 仅支持正整数
+        spu:
+          type: string
+          description: 多属性商品spu
+        spuName:
+          type: string
+          description: 款名
+        commodityCode:
+          type: string
+          description: 商品编号
+        identificationCode:
+          type: string
+          description: 标识码
+        model:
+          type: string
+          description: 型号
+        declareNameCh:
+          type: string
+          description: 报关中文名 长度不超过200
+        declareNameEn:
+          type: string
+          description: 报关英文名 长度不超过200，必须为英文
+        declareCharge:
+          type: string
+          description: 报关单价, 单位为 USD
+        declareChargeUnit:
+          type: string
+          description: 报关单价单位, 单位默认 USD
+        declareWeight:
+          type: string
+          description: 报关重量, 单位为 g，仅支持正整数
+        declareWeightUnit:
+          type: string
+          description: 报关重量单位, 默认g
+        hsCode:
+          type: string
+          description: 海关编码 长度不超过20位
+        dangerTransportList:
+          type: array
+          description: dangerTransportList 是否危险运输品 多个用，隔开 传0或者空代表非危险品
+          items:
+            type: string
+        declareMaterial:
+          type: string
+          description: 中文材质
+        declareUseTo:
+          type: string
+          description: 中文用途
+        declareModel:
+          type: string
+          description: 报关型号
+        declareDepartment:
+          type: string
+          description: 报关单位
+        declareBrandType:
+          type: string
+          description: >-
+            报关品牌类型: 1:无品牌,2:境内自主品牌3:境内收购品牌,4:境外品牌(贴牌生产)5:境外品牌(其他)*  具体值见
+            CommodityDeclareBrandTypeEnum
+        declareDiscountType:
+          type: string
+          description: 报关出口享惠情况 1:享惠;2:不享惠;3:不确定享受情况
+        declareElements:
+          type: string
+          description: 申报要素
+        supplierCommodityDtoList:
+          type: array
+          description: 供应商信息
+          items:
+            $ref: '#/components/schemas/SupplierCommodityOpenDto'
+        commodityAttributeValueRelaList:
+          type: array
+          description: 商品属性
+          items:
+            $ref: '#/components/schemas/CommodityAttributeValueRelaOpenVo'
+        childSkus:
+          type: array
+          description: childSkus,用于组合sku或加工sku对应的子sku 当isGroup 为1和2时必填
+          items:
+            $ref: '#/components/schemas/CommodityCreateChildSkuOpenVo'
+        remark:
+          type: string
+          description: 商品备注，长度不超过1024
+        isBind1688:
+          type: string
+          description: 是否配对了1688商品
+        isNeedQc:
+          type: string
+          description: 是否开启质检流程，支持true或false
+        brandId:
+          type: string
+          description: 品牌Id
+        brandName:
+          type: string
+          description: 品牌名称
+        materialQuality:
+          type: string
+          description: 材质
+        unit:
+          type: string
+          description: 单位
+        useTo:
+          type: string
+          description: 用途
+        wrapCartonLength:
+          type: string
+          description: 包装-长
+        wrapCartonWidth:
+          type: string
+          description: 包装-宽
+        wrapCartonHeight:
+          type: string
+          description: 包装-高
+        wrapCartonWeight:
+          type: string
+          description: 包装重量
+        wrapCartonWeightUnit:
+          type: string
+          description: 包装重量单位,g,kg,lb,oz
+        devDate:
+          type: string
+          description: 开发时间
+      title: CommodityOpenVo
+      x-apifox-orders:
+        - id
+        - name
+        - sku
+        - fullCid
+        - fullName
+        - isGroup
+        - needAssembleProcess
+        - purchaseCost
+        - processCost
+        - state
+        - weight
+        - originalWeight
+        - originalWeightUnit
+        - length
+        - width
+        - height
+        - cartonLength
+        - cartonWidth
+        - cartonHeight
+        - cartonWeight
+        - cartonQty
+        - imgUrl
+        - sourceUrls
+        - logisticsCostList
+        - createTime
+        - devId
+        - visitors
+        - purchaserId
+        - purchaseDays
+        - spu
+        - spuName
+        - commodityCode
+        - identificationCode
+        - model
+        - declareNameCh
+        - declareNameEn
+        - declareCharge
+        - declareChargeUnit
+        - declareWeight
+        - declareWeightUnit
+        - hsCode
+        - dangerTransportList
+        - declareMaterial
+        - declareUseTo
+        - declareModel
+        - declareDepartment
+        - declareBrandType
+        - declareDiscountType
+        - declareElements
+        - supplierCommodityDtoList
+        - commodityAttributeValueRelaList
+        - childSkus
+        - remark
+        - isBind1688
+        - isNeedQc
+        - brandId
+        - brandName
+        - materialQuality
+        - unit
+        - useTo
+        - wrapCartonLength
+        - wrapCartonWidth
+        - wrapCartonHeight
+        - wrapCartonWeight
+        - wrapCartonWeightUnit
+        - devDate
+      x-apifox-ignore-properties: []
+      x-apifox-folder: ''
+    CommodityCreateChildSkuOpenVo:
+      type: object
+      properties:
+        childId:
+          type: string
+          description: childId
+        sku:
+          type: string
+          description: sku
+        num:
+          type: string
+          description: 数量
+      title: CommodityCreateChildSkuOpenVo
+      x-apifox-orders:
+        - childId
+        - sku
+        - num
+      x-apifox-ignore-properties: []
+      x-apifox-folder: ''
+    CommodityAttributeValueRelaOpenVo:
+      type: object
+      properties:
+        attributeId:
+          type: string
+          description: 商品属性id
+        attributeValueId:
+          type: string
+          description: 商品属性值id
+        attributeCn:
+          type: string
+          description: 属性中文描述
+        attributeEn:
+          type: string
+          description: 属性英文描述
+        attributeValueCn:
+          type: string
+          description: 属性值中文描述
+        attributeValueEn:
+          type: string
+          description: 属性值英文描述
+      title: CommodityAttributeValueRelaOpenVo
+      x-apifox-orders:
+        - attributeId
+        - attributeValueId
+        - attributeCn
+        - attributeEn
+        - attributeValueCn
+        - attributeValueEn
+      x-apifox-ignore-properties: []
+      x-apifox-folder: ''
+    SupplierCommodityOpenDto:
+      type: object
+      properties:
+        supplierId:
+          type: string
+          description: 供应商ID，可从获取供应商接口获取
+        sourceUrl:
+          type: string
+          description: 商品链接(https://或http:开头)
+        supplier1688Vo:
+          type: array
+          description: 1688供应商信息
+          items:
+            $ref: '#/components/schemas/SupplierCommodity1688OpenVo'
+        isMain:
+          type: boolean
+          description: 是否首选供应商
+        purchase:
+          type: string
+          description: 采购单价
+        pairingType:
+          type: string
+          description: 配对类型：1单个 2多个
+        extraInfoModel:
+          $ref: '#/components/schemas/CommoditySupplierExtraInfoModel'
+      title: SupplierCommodityOpenDto
+      x-apifox-orders:
+        - supplierId
+        - sourceUrl
+        - supplier1688Vo
+        - isMain
+        - purchase
+        - pairingType
+        - extraInfoModel
+      x-apifox-ignore-properties: []
+      x-apifox-folder: ''
+    CommoditySupplierExtraInfoModel:
+      type: object
+      properties:
+        priceRangeList:
+          type: array
+          description: 采购价区间
+          items:
+            $ref: '#/components/schemas/SupplierPriceRange'
+      title: CommoditySupplierExtraInfoModel
+      x-apifox-orders:
+        - priceRangeList
+      x-apifox-ignore-properties: []
+      x-apifox-folder: ''
+    SupplierPriceRange:
+      type: object
+      properties:
+        minPurchaseQuantity:
+          type: integer
+          format: int32
+          description: 最小采购数量
+        purchase:
+          type: number
+          description: 采购单价
+        priceIncludeTax:
+          type: number
+          description: 含税价
+      title: SupplierPriceRange
+      x-apifox-orders:
+        - minPurchaseQuantity
+        - purchase
+        - priceIncludeTax
+      x-apifox-ignore-properties: []
+      x-apifox-folder: ''
+    SupplierCommodity1688OpenVo:
+      type: object
+      properties:
+        supplier:
+          type: string
+          description: 1688供应商
+        productId:
+          type: string
+          description: 1688商品id
+        title:
+          type: string
+          description: 1688商品标题
+        sourceUrl:
+          type: string
+          description: 来源url
+        skuId:
+          type: string
+          description: skuId
+        specId:
+          type: string
+          description: specId
+        attrs:
+          type: array
+          description: 变种属性
+          items:
+            $ref: '#/components/schemas/Attr'
+        attrDisplay:
+          type: string
+          description: 规格，展示用
+        imgUrl:
+          type: string
+          description: 图片
+        priceRanges:
+          type: array
+          description: 区间价格。按数量范围设定的区间价格
+          items:
+            $ref: '#/components/schemas/PriceRange'
+        retailprice:
+          type: string
+          description: 建议零售价，国际站无需关注
+      title: SupplierCommodity1688OpenVo
+      x-apifox-orders:
+        - supplier
+        - productId
+        - title
+        - sourceUrl
+        - skuId
+        - specId
+        - attrs
+        - attrDisplay
+        - imgUrl
+        - priceRanges
+        - retailprice
+      x-apifox-ignore-properties: []
+      x-apifox-folder: ''
+    PriceRange:
+      type: object
+      properties:
+        startQuantity:
+          type: string
+          description: 数量
+        price:
+          type: string
+          description: 价格
+      title: PriceRange
+      x-apifox-orders:
+        - startQuantity
+        - price
+      x-apifox-ignore-properties: []
+      x-apifox-folder: ''
+    Attr:
+      type: object
+      properties:
+        id:
+          type: string
+          description: 属性id
+        name:
+          type: string
+          description: 属性名
+        valueId:
+          type: string
+          description: 属性值id
+        value:
+          type: string
+          description: 属性值
+      title: Attr
+      x-apifox-orders:
+        - id
+        - name
+        - valueId
+        - value
+      x-apifox-ignore-properties: []
+      x-apifox-folder: ''
+    CommodityVisitorOpenVO:
+      type: object
+      properties:
+        visitorId:
+          type: string
+          description: 查看员id
+        visitorName:
+          type: string
+          description: 查看员姓名
+      title: CommodityVisitorOpenVO
+      x-apifox-orders:
+        - visitorId
+        - visitorName
+      x-apifox-ignore-properties: []
+      x-apifox-folder: ''
+    CommodityLogisticsOpenCost:
+      type: object
+      properties:
+        marketplaceId:
+          type: string
+          description: 站点，为Amazon站点ID，详见开发指南>>站点对应关系
+        headTripCost:
+          type: number
+          description: fba头程费用
+        clearanceHsCode:
+          type: string
+          description: 清关hscode
+        clearancePrice:
+          type: number
+          description: 清关单价
+        clearancePriceUnit:
+          type: string
+          description: 清关单价
+        fbaDeclareRate:
+          type: number
+          description: FBA货件报关税率
+        link:
+          type: string
+          description: 产品链接
+        remark:
+          type: string
+          description: 备注
+      title: CommodityLogisticsOpenCost
+      x-apifox-orders:
+        - marketplaceId
+        - headTripCost
+        - clearanceHsCode
+        - clearancePrice
+        - clearancePriceUnit
+        - fbaDeclareRate
+        - link
+        - remark
+      x-apifox-ignore-properties: []
+      x-apifox-folder: ''
+  securitySchemes: {}
+servers: []
+security: []
+
+```

@@ -1,0 +1,16 @@
+{
+  "sellfox": {
+    "account": "AGENT",
+    "app_id": "<请从 .env 获取 SELLFOX_APP_ID>",
+    "app_secret": "<请从 .env 获取 SELLFOX_APP_SECRET>",
+    "api_domain": "https://openapi.sellfox.com",
+    "api_doc": "https://sellfoxapi.apifox.cn/",
+    "api_doc_key": "<请从 .env 获取 SELLFOX_API_DOC_KEY>",
+    "created": "2026-06-24",
+    "permissions": "全部模块",
+    "whitelist_ips": [
+      "<北京办公室IP>",
+      "<VPS IP>"
+    ]
+  }
+}
