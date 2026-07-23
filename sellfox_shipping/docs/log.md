@@ -3,40 +3,10 @@ okf: v0.1
 type: Log
 module: sellfox_shipping
 created: 2026-07-15
-updated: 2026-07-24
+updated: 2026-07-23
 ---
 
 # sellfox_shipping — 变更日志
-
-## 2026-07-24 — 规则引擎 V1 + 包裹重尺 + 路由建议
-
-### 规则引擎
-- 新增 `routing/` 包：`models.py` / `conditions.py` / `engine.py`
-- YAML 驱动：`routing/routing_rules.yaml` — 增改规则无需代码变更
-- 10 种运算符：eq/neq/gt/gte/lt/lte/in/not_in/contains/between
-- match 模式：all（全部满足）/ any（任一满足）
-- 排除店铺：WFUS / OSTK / PotteryBarnUS 走平台物流
-- 首条规则：蜴国际小件标准（三边≤68×43×43cm 重量≤15kg 数量≤1）→ 否则 VITE
-
-### 包裹重尺（DB 持久化）
-- `shipping_package_dims` 表：合并后 weight_kg / L/W/H_cm / sku_count
-- 合并规则：长=max · 宽=max · 高=sum · 重量=sum
-- 打开详情页自动计算并落库
-
-### 路由结果（DB 持久化）
-- `shipping_package_routing` 表：carrier / label / reason / rule_name / matched
-- 打开详情页自动运行引擎并落库
-
-### 页面布局
-- 基本信息 → 建议渠道方式 → 商品行（含包裹重尺 + SKU重尺编辑）→ 审核 → 回写 → 地址 → 订单
-
-## 2026-07-24 — 重尺补录合并到商品行 + 批量保存
-
-- 重尺字段（重量/长/宽/高）从独立「重尺补录」区域移入「商品行」表格子表
-- 单个 `<form>` 包裹整表，底部「保存全部重尺」按钮统一提交
-- 后端 `carton-override` 端点升级批量处理：`form.getlist()` 逐行保存，`_form_val_at()` 按索引取值
-- 重尺来源标签：`EN ZLMB`（自动查询）/ `本地补录`（人工覆盖）
-- 移除独立重尺补录 panel
 
 ## 2026-07-23 — EN 重尺 V2：sibling 借用 + 直连赛狐 + 筛选/分页修复
 
@@ -73,6 +43,31 @@ updated: 2026-07-24
 - synthesis：文首裁决框 + 承运人双通道 / P1C 出口 / 样例进度定点修订
 - skill / README / 两处 index / ONBOARDING / sample-path 对齐
 - Spec：`docs/superpowers/specs/2026-07-21-sellfox-shipping-handoff-docs-design.md`
+
+## 2026-07-22 — tongtool-carrier-analysis：通途承运商分析 + 路由规则设计
+
+### 背景
+- 赛狐系统的承运商数据为测试数据（"蜴国际 89%"不实）
+- 需要从 EN 生产系统查通途订单获取实际承运商分布
+
+### 已完成
+- 从 `erpnext.vilavi.cn` 拉取通途订单 14,416 条（CENTRADE 6,124 + DANEEY 8,292）
+- 排除平台物流 (WF/OS/PB) 4,747 条 + Tiktok物流 23 条 → 有效 **9,646 条**
+- 实际承运商：VITE-Fedex **69.2%**, M6180蜴国际 **26.2%**, US-FedEx 4.3%
+- 包裹尺寸：9,633 SKU，中位数 57.5×48×18cm，体积重 9.7kg
+- 多 SKU 合并算法：L=max, W=max, H=sum
+- 5 层路由规则设计：定仓→定承运人→选服务→比价→执行
+
+### 产出文档
+- `docs/research/tongtool-carrier-analysis-2026-07-22.md` — 分析报告（含查找逻辑、9,646 条数据分布）
+- `docs/research/routing-rules-design-2026-07-22.md` — 路由规则设计方案
+- `docs/solutions/chatgpt-ups-fedex-analysis-reference-2026-07-22.md` — ChatGPT 参考
+
+### 关键决策
+- 承运商仅从 `raw_data.merchantCarrierShortname` 提取
+- 排除 platformCode IN (WF, OS, PB) + Tiktok物流
+- 初期直接比价（不设复杂评分公式）
+- Expected Cost / Carrier Profile 等待 Invoice 数据积累后实现
 
 ## 2026-07-20 — ce-compound：trackNo 写路径边界
 
