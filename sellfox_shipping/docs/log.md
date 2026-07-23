@@ -15,6 +15,31 @@ updated: 2026-07-22
 - skill / README / 两处 index / ONBOARDING / sample-path 对齐
 - Spec：`docs/superpowers/specs/2026-07-21-sellfox-shipping-handoff-docs-design.md`
 
+## 2026-07-22 — tongtool-carrier-analysis：通途承运商分析 + 路由规则设计
+
+### 背景
+- 赛狐系统的承运商数据为测试数据（"蜴国际 89%"不实）
+- 需要从 EN 生产系统查通途订单获取实际承运商分布
+
+### 已完成
+- 从 `erpnext.vilavi.cn` 拉取通途订单 14,416 条（CENTRADE 6,124 + DANEEY 8,292）
+- 排除平台物流 (WF/OS/PB) 4,747 条 + Tiktok物流 23 条 → 有效 **9,646 条**
+- 实际承运商：VITE-Fedex **69.2%**, M6180蜴国际 **26.2%**, US-FedEx 4.3%
+- 包裹尺寸：9,633 SKU，中位数 57.5×48×18cm，体积重 9.7kg
+- 多 SKU 合并算法：L=max, W=max, H=sum
+- 5 层路由规则设计：定仓→定承运人→选服务→比价→执行
+
+### 产出文档
+- `docs/research/tongtool-carrier-analysis-2026-07-22.md` — 分析报告（含查找逻辑、9,646 条数据分布）
+- `docs/research/routing-rules-design-2026-07-22.md` — 路由规则设计方案
+- `docs/solutions/chatgpt-ups-fedex-analysis-reference-2026-07-22.md` — ChatGPT 参考
+
+### 关键决策
+- 承运商仅从 `raw_data.merchantCarrierShortname` 提取
+- 排除 platformCode IN (WF, OS, PB) + Tiktok物流
+- 初期直接比价（不设复杂评分公式）
+- Expected Cost / Carrier Profile 等待 Invoice 数据积累后实现
+
 ## 2026-07-20 — ce-compound：trackNo 写路径边界
 
 - `docs/solutions/architecture-patterns/sellfox-trackno-write-path-vs-local-import.md` — 本地 import ≠ 赛狐 UI trackNo；submitToPlatform 为文档化写入口；401/has_shipped 禁重放

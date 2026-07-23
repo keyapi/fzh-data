@@ -32,6 +32,8 @@ timestamp: 2026-07-22
 - [submit-to-platform-vs-autopush-2026-07-20.md](submit-to-platform-vs-autopush-2026-07-20.md) — submitToPlatform vs 通途写平台/自动推送关；trackNo 探针协议（solutions 固化：[sellfox-trackno-write-path-vs-local-import.md](../../../docs/solutions/architecture-patterns/sellfox-trackno-write-path-vs-local-import.md)）
 - [pr-slice-guide-2026-07-20.md](pr-slice-guide-2026-07-20.md) — 长分支 PR 切片与三遍审阅
 - [sellfox-native-lizard-fixture-2026-07-17.md](sellfox-native-lizard-fixture-2026-07-17.md) — 赛狐原生夹具 00/02/03/04（上传·追踪号·面单）。
+- [tongtool-carrier-analysis-2026-07-22.md](tongtool-carrier-analysis-2026-07-22.md) — **通途 US 仓库实际承运商分析**：9,646 条自发货订单，VITE/蜴国际/US-FedEx 分布、包裹尺寸、多SKU合并算法。
+- [routing-rules-design-2026-07-22.md](routing-rules-design-2026-07-22.md) — **路由规则设计方案**：5 层决策流 + 规则数据结构 + 集成方案。
 
 ## 全部调研文档
 

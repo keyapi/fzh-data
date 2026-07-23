@@ -33,3 +33,5 @@ updated: 2026-07-22
 - [research/vite-httpx-vs-karrio-decision-2026-07-17.md](research/vite-httpx-vs-karrio-decision-2026-07-17.md) — VITE：采用 httpx；近期不做 Karrio custom connector
 - [research/submit-to-platform-vs-autopush-2026-07-20.md](research/submit-to-platform-vs-autopush-2026-07-20.md) — submitToPlatform vs 通途写平台/自动推送关；trackNo 探针协议
 - [research/pr-slice-guide-2026-07-20.md](research/pr-slice-guide-2026-07-20.md) — 长分支 PR 切片与三遍审阅
+- [research/tongtool-carrier-analysis-2026-07-22.md](research/tongtool-carrier-analysis-2026-07-22.md) — **通途 US 仓库实际承运商分析**：9,646 条自发货订单，VITE/蜴国际/US-FedEx 分布、包裹尺寸、多SKU合并算法
+- [research/routing-rules-design-2026-07-22.md](research/routing-rules-design-2026-07-22.md) — **路由规则设计方案**：5 层决策流 + 规则数据结构 + 集成方案
