@@ -66,7 +66,7 @@ def test_package_detail_page_renders_orders(tmp_path, monkeypatch) -> None:
     assert response.status_code == 200
     assert "P20002" in response.text
     assert "O-1" in response.text
-    assert "重尺补录" in response.text
+    assert "商品行" in response.text
 
 
 def test_package_detail_page_returns_404_html_for_missing(tmp_path, monkeypatch) -> None:
@@ -103,7 +103,8 @@ def test_package_carton_override_form_saves(tmp_path, monkeypatch) -> None:
         },
     )
     assert response.status_code == 200
-    assert "已保存重尺补录" in response.text
+    assert "已保存" in response.text
+    assert "重尺补录" in response.text
     saved = repo.get_carton_override(account, "KS-SEED-1")
     assert saved is not None
     assert saved.dims.weight_kg == 3.5

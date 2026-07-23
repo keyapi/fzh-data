@@ -16,7 +16,7 @@
     {
       "name": "sellfox-shipping",
       "runtimeExecutable": "uv",
-      "runtimeArgs": ["run", "python", "-m", "sellfox_shipping.cli", "serve", "--host", "127.0.0.1", "--port", "8401"],
+      "runtimeArgs": ["run", "python", "-m", "sellfox_shipping.cli", "serve", "--host", "127.0.0.1", "--port", "8401", "--reload"],
       "port": 8401
     }
   ]

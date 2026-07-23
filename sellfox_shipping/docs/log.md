@@ -3,10 +3,18 @@ okf: v0.1
 type: Log
 module: sellfox_shipping
 created: 2026-07-15
-updated: 2026-07-23
+updated: 2026-07-24
 ---
 
 # sellfox_shipping — 变更日志
+
+## 2026-07-24 — 重尺补录合并到商品行 + 批量保存
+
+- 重尺字段（重量/长/宽/高）从独立「重尺补录」区域移入「商品行」表格子表
+- 单个 `<form>` 包裹整表，底部「保存全部重尺」按钮统一提交
+- 后端 `carton-override` 端点升级批量处理：`form.getlist()` 逐行保存，`_form_val_at()` 按索引取值
+- 重尺来源标签：`EN ZLMB`（自动查询）/ `本地补录`（人工覆盖）
+- 移除独立重尺补录 panel
 
 ## 2026-07-23 — EN 重尺 V2：sibling 借用 + 直连赛狐 + 筛选/分页修复
 
