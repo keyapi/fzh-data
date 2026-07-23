@@ -39,3 +39,6 @@ out/*
 # sellfox_shipping 原始业务样例（可含 PII，不入仓）
 sellfox_shipping/数据源/**
 !sellfox_shipping/数据源/.gitkeep
+
+# sellfox_shipping local DB
+sellfox_shipping/data/
