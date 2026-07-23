@@ -3,7 +3,7 @@ okf: v0.1
 type: Index
 title: 赛狐尾程打单 — 调研索引
 description: 汇总尾程打单需求简报、既有调研与当前推荐的独立综合规划入口
-timestamp: 2026-07-22
+timestamp: 2026-07-23
 ---
 
 # 赛狐尾程打单 — 调研索引
@@ -34,6 +34,7 @@ timestamp: 2026-07-22
 - [sellfox-native-lizard-fixture-2026-07-17.md](sellfox-native-lizard-fixture-2026-07-17.md) — 赛狐原生夹具 00/02/03/04（上传·追踪号·面单）。
 - [tongtool-carrier-analysis-2026-07-22.md](tongtool-carrier-analysis-2026-07-22.md) — **通途 US 仓库实际承运商分析**：9,646 条自发货订单，VITE/蜴国际/US-FedEx 分布、包裹尺寸、多SKU合并算法。
 - [routing-rules-design-2026-07-22.md](routing-rules-design-2026-07-22.md) — **路由规则设计方案**：5 层决策流 + 规则数据结构 + 集成方案。
+- [erpnext-zlmb-dims-v2-2026-07-23.md](erpnext-zlmb-dims-v2-2026-07-23.md) — EN ZLMB# 重尺 V2：跨面料 sibling 借用 + weight/dims 独立决策。
 
 ## 全部调研文档
 
