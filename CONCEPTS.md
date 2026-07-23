@@ -51,3 +51,8 @@ ERPNext's stock auxiliary accounting system that adds extra tracking fields (e.g
 
 ### Version Drift (版本差异)
 The gap between the test ERPNext version and the production ERPNext version. Currently the test system runs ERPNext v15.59.0 while production runs v15.43.3. This drift means ERPNext internal APIs (such as `get_inventory_dimensions()`) may return different field sets between the two environments, causing custom app code to work on test but silently fail on production.
+
+## Integrations
+
+### DingTalk Custom Robot (钉钉自定义机器人)
+A webhook-based DingTalk group messaging channel used by AI agents (WorkBuddy, Claude Code) in this project to send notifications and file download links. Uses HMAC-SHA256 signing. Distinct from DingTalk enterprise internal bots — custom robots do not require AppKey/AppSecret and are scoped to a single group, making them safe to share with non-developer agent users. Cannot send file attachments directly; file delivery uses ActionCard messages with download links hosted on ERPNext.
