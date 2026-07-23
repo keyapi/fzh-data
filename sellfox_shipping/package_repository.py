@@ -1697,6 +1697,7 @@ class PackageRepository:
             default=str,
         )
         package.fetched_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        _auto_set_review_on_terminal_status(package)
 
     @staticmethod
     def _to_record(
@@ -1862,6 +1863,24 @@ def _flat_private_relpath(file_name: str, content_hash: str) -> str:
     suffix = Path(safe).suffix or ".bin"
     # Prefer readable name; include short hash so two different files can share a stem.
     return f"private/files/{stem}_{content_hash[:8]}{suffix}"
+
+
+def _auto_set_review_on_terminal_status(package: PackageRow) -> None:
+    """When package_status is terminal, promote default 'pending' review to match.
+
+    Only touches rows whose local_review_status is still the DB default ('pending').
+    Manual review decisions (approved / rejected) are never overwritten.
+    """
+    _TERMINAL_REVIEW = {
+        "has_shipped": "shipped",
+        "has_canceled": "closed",
+    }
+    target = _TERMINAL_REVIEW.get(package.package_status)
+    if target is None:
+        return
+    current = (package.local_review_status or "pending").strip()
+    if current == "pending":
+        package.local_review_status = target
 
 
 def _configure_sqlite(dbapi_connection, _connection_record) -> None:

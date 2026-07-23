@@ -59,6 +59,13 @@ def _get_store():
 def _get_client():
     import os
     from sellfox_shipping.sellfox_client import SellfoxClient
+
+    app_id = os.getenv("SELLFOX_APP_ID", "").strip()
+    app_secret = os.getenv("SELLFOX_APP_SECRET", "").strip()
+    if app_id and app_secret:
+        from sellfox_shipping.direct_sellfox_client import DirectSellfoxClient
+        return DirectSellfoxClient()
+
     config = _load_config()
     return SellfoxClient(
         proxy_base_url=config["sellfox"]["proxy_base_url"],

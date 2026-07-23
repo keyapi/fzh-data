@@ -20,6 +20,9 @@
         tr:hover { background: #f9f9ff; }
         .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
         .badge-pending { background: #fff3cd; color: #856404; }
+        .badge-pending-auto { background: #e8e0f0; color: #5a3d7a; }
+        .badge-approved { background: #d4edda; color: #155724; }
+        .badge-rejected { background: #f8d7da; color: #721c24; }
         .badge-shipped { background: #d4edda; color: #155724; }
         .badge-error { background: #f8d7da; color: #721c24; }
         .badge-info { background: #d1ecf1; color: #0c5460; }
@@ -49,7 +52,7 @@
     <div class="container">
         <div class="panel">
             <h2>本地包裹（只读）</h2>
-            <form class="toolbar" method="get" action="/packages">
+            <form class="toolbar" method="get" action="/packages" autocomplete="off">
                 <select name="status">
                     <option value="">全部赛狐状态</option>
                     <option value="to_audit" {% if status == 'to_audit' %}selected{% endif %}>待审核</option>
@@ -63,6 +66,8 @@
                     <option value="pending" {% if review == 'pending' %}selected{% endif %}>待审</option>
                     <option value="approved" {% if review == 'approved' %}selected{% endif %}>已通过</option>
                     <option value="rejected" {% if review == 'rejected' %}selected{% endif %}>已驳回</option>
+                    <option value="shipped" {% if review == 'shipped' %}selected{% endif %}>已发货(自动)</option>
+                    <option value="closed" {% if review == 'closed' %}selected{% endif %}>已作废(自动)</option>
                 </select>
                 <input type="text" name="channel" value="{{ channel or '' }}" placeholder="渠道名，如 蜴国际" />
                 <button type="submit">筛选</button>
@@ -87,7 +92,7 @@
                     <tr>
                         <td><a class="pkg" href="/packages/{{ item.package_sn }}">{{ item.package_sn }}</a></td>
                         <td><span class="badge badge-info">{{ item.package_status or '—' }}</span></td>
-                        <td><span class="badge badge-pending">{{ item.local_review_status or 'pending' }}</span></td>
+                        <td><span class="badge {% if item.local_review_status == 'approved' %}badge-approved{% elif item.local_review_status == 'rejected' %}badge-rejected{% elif item.local_review_status == 'shipped' %}badge-shipped{% elif item.local_review_status == 'closed' %}badge-rejected{% else %}badge-pending{% endif %}">{{ item.local_review_status or 'pending' }}</span></td>
                         <td>{{ item.channel_name or '—' }}</td>
                         <td>{{ item.shop_name or '—' }}</td>
                         <td>{{ item.order_count }}</td>

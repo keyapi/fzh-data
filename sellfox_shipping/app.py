@@ -177,6 +177,7 @@ async def health():
 async def list_packages(
     status: str | None = Query(None, description="Filter by package_status"),
     channel: str | None = Query(None, description="Filter by channel_name"),
+    review: str | None = Query(None, description="Filter by local_review_status"),
     limit: int = Query(50, le=500),
     offset: int = Query(0, ge=0),
 ):
@@ -184,8 +185,9 @@ async def list_packages(
     result = _get_package_list_service().list(
         PackageListRequest(
             account_key=config["sellfox"]["proxy_account"],
-            package_status=status,
-            channel_name=channel,
+            package_status=status or None,
+            channel_name=channel or None,
+            local_review_status=review or None,
             limit=limit,
             offset=offset,
         )
@@ -337,9 +339,9 @@ async def packages_page(
     result = _get_package_list_service().list(
         PackageListRequest(
             account_key=account_key,
-            package_status=status,
-            channel_name=channel,
-            local_review_status=review,
+            package_status=status or None,
+            channel_name=channel or None,
+            local_review_status=review or None,
             limit=limit,
             offset=offset,
         )

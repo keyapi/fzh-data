@@ -211,6 +211,7 @@ class SyncPackagesService:
         )
         page_no = 1
         processed_rows = 0
+        locked_total: int | None = None
 
         while True:
             try:
@@ -230,7 +231,9 @@ class SyncPackagesService:
                 report.finished_at = datetime.now(timezone.utc)
                 self._write_audit(request, report)
                 return report
-            report.total_in_sellfox = page.total_size
+            if locked_total is None:
+                locked_total = page.total_size
+            report.total_in_sellfox = locked_total
             page_offset = processed_rows
             page_input_count = len(page.records) + len(page.errors)
 
@@ -293,7 +296,14 @@ class SyncPackagesService:
                 )
 
             processed_rows += page_input_count
-            if processed_rows >= page.total_size:
+            # Stop when (a) server returned fewer items than its page_size (last page),
+            # or (b) we've covered the locked total from page 1.
+            # Using locked_total prevents early termination when the API's totalSize
+            # drifts between pages (packages added/removed during sync).
+            actual_page_size = page.page_size or request.page_size
+            if page_input_count < actual_page_size:
+                break
+            if processed_rows >= locked_total:
                 break
             if page_input_count == 0:
                 report.sync_status = "partial_failed"
