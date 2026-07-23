@@ -451,6 +451,64 @@ class UpsertOutcome:
     created: bool
 
 
+@dataclass(frozen=True)
+class PackageDimsRecord:
+    package_id: int
+    weight_kg: float
+    length_cm: float
+    width_cm: float
+    height_cm: float
+    sku_count: int
+    computed_at: datetime | None = None
+
+
+@dataclass(frozen=True)
+class PackageRoutingRecord:
+    package_id: int
+    carrier: str
+    label: str
+    reason: str
+    rule_name: str
+    matched: bool
+    computed_at: datetime | None = None
+
+
+class PackageDimsRow(Base):
+    __tablename__ = "shipping_package_dims"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    package_id: Mapped[int] = mapped_column(
+        ForeignKey("shipping_packages.id", ondelete="CASCADE"),
+        unique=True,
+    )
+    weight_kg: Mapped[float] = mapped_column(Float, default=0)
+    length_cm: Mapped[float] = mapped_column(Float, default=0)
+    width_cm: Mapped[float] = mapped_column(Float, default=0)
+    height_cm: Mapped[float] = mapped_column(Float, default=0)
+    sku_count: Mapped[int] = mapped_column(Integer, default=0)
+    computed_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.current_timestamp()
+    )
+
+
+class PackageRoutingRow(Base):
+    __tablename__ = "shipping_package_routing"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    package_id: Mapped[int] = mapped_column(
+        ForeignKey("shipping_packages.id", ondelete="CASCADE"),
+        unique=True,
+    )
+    carrier: Mapped[str] = mapped_column(String, default="")
+    label: Mapped[str] = mapped_column(String, default="")
+    reason: Mapped[str] = mapped_column(String, default="")
+    rule_name: Mapped[str] = mapped_column(String, default="")
+    matched: Mapped[bool] = mapped_column(default=False)
+    computed_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.current_timestamp()
+    )
+
+
 class PackageRepository:
     """Persist normalized package snapshots with account-scoped uniqueness."""
 
@@ -1579,6 +1637,100 @@ class PackageRepository:
                 name: session.scalar(select(func.count()).select_from(model)) or 0
                 for name, model in tables.items()
             }
+
+    def upsert_package_dims(
+        self,
+        *,
+        package_db_id: int,
+        weight_kg: float,
+        length_cm: float,
+        width_cm: float,
+        height_cm: float,
+        sku_count: int,
+    ) -> PackageDimsRecord:
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        with self._session_factory.begin() as session:
+            row = session.get(PackageDimsRow, package_db_id)
+            if row is None:
+                row = PackageDimsRow(package_id=package_db_id)
+                session.add(row)
+            row.weight_kg = weight_kg
+            row.length_cm = length_cm
+            row.width_cm = width_cm
+            row.height_cm = height_cm
+            row.sku_count = sku_count
+            row.computed_at = now
+        return PackageDimsRecord(
+            package_id=package_db_id,
+            weight_kg=weight_kg,
+            length_cm=length_cm,
+            width_cm=width_cm,
+            height_cm=height_cm,
+            sku_count=sku_count,
+            computed_at=now,
+        )
+
+    def get_package_dims(self, package_db_id: int) -> PackageDimsRecord | None:
+        with self._session_factory() as session:
+            row = session.get(PackageDimsRow, package_db_id)
+            if row is None:
+                return None
+            return PackageDimsRecord(
+                package_id=row.package_id,
+                weight_kg=float(row.weight_kg or 0),
+                length_cm=float(row.length_cm or 0),
+                width_cm=float(row.width_cm or 0),
+                height_cm=float(row.height_cm or 0),
+                sku_count=int(row.sku_count or 0),
+                computed_at=row.computed_at,
+            )
+
+    def upsert_package_routing(
+        self,
+        *,
+        package_db_id: int,
+        carrier: str,
+        label: str,
+        reason: str,
+        rule_name: str,
+        matched: bool,
+    ) -> PackageRoutingRecord:
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        with self._session_factory.begin() as session:
+            row = session.get(PackageRoutingRow, package_db_id)
+            if row is None:
+                row = PackageRoutingRow(package_id=package_db_id)
+                session.add(row)
+            row.carrier = carrier
+            row.label = label
+            row.reason = reason
+            row.rule_name = rule_name
+            row.matched = matched
+            row.computed_at = now
+        return PackageRoutingRecord(
+            package_id=package_db_id,
+            carrier=carrier,
+            label=label,
+            reason=reason,
+            rule_name=rule_name,
+            matched=matched,
+            computed_at=now,
+        )
+
+    def get_package_routing(self, package_db_id: int) -> PackageRoutingRecord | None:
+        with self._session_factory() as session:
+            row = session.get(PackageRoutingRow, package_db_id)
+            if row is None:
+                return None
+            return PackageRoutingRecord(
+                package_id=row.package_id,
+                carrier=row.carrier or "",
+                label=row.label or "",
+                reason=row.reason or "",
+                rule_name=row.rule_name or "",
+                matched=bool(row.matched),
+                computed_at=row.computed_at,
+            )
 
     @staticmethod
     def _get_or_create_account(

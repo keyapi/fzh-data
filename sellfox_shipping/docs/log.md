@@ -8,6 +8,28 @@ updated: 2026-07-24
 
 # sellfox_shipping — 变更日志
 
+## 2026-07-24 — 规则引擎 V1 + 包裹重尺 + 路由建议
+
+### 规则引擎
+- 新增 `routing/` 包：`models.py` / `conditions.py` / `engine.py`
+- YAML 驱动：`routing/routing_rules.yaml` — 增改规则无需代码变更
+- 10 种运算符：eq/neq/gt/gte/lt/lte/in/not_in/contains/between
+- match 模式：all（全部满足）/ any（任一满足）
+- 排除店铺：WFUS / OSTK / PotteryBarnUS 走平台物流
+- 首条规则：蜴国际小件标准（三边≤68×43×43cm 重量≤15kg 数量≤1）→ 否则 VITE
+
+### 包裹重尺（DB 持久化）
+- `shipping_package_dims` 表：合并后 weight_kg / L/W/H_cm / sku_count
+- 合并规则：长=max · 宽=max · 高=sum · 重量=sum
+- 打开详情页自动计算并落库
+
+### 路由结果（DB 持久化）
+- `shipping_package_routing` 表：carrier / label / reason / rule_name / matched
+- 打开详情页自动运行引擎并落库
+
+### 页面布局
+- 基本信息 → 建议渠道方式 → 商品行（含包裹重尺 + SKU重尺编辑）→ 审核 → 回写 → 地址 → 订单
+
 ## 2026-07-24 — 重尺补录合并到商品行 + 批量保存
 
 - 重尺字段（重量/长/宽/高）从独立「重尺补录」区域移入「商品行」表格子表

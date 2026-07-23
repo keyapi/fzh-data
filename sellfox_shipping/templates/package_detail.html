@@ -23,6 +23,10 @@
         th { color: #888; font-weight: 600; font-size: 11px; text-transform: uppercase; }
         .back { display: inline-block; margin-bottom: 16px; color: #1a1a2e; font-size: 13px; }
         .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; background: #d1ecf1; color: #0c5460; }
+        .route-card { border: 2px solid #c0d0f0; border-radius: 8px; padding: 16px; background: #f8faff; }
+        .route-card.excluded { border-color: #f0c0c0; background: #fff8f8; }
+        .route-card .carrier { font-size: 20px; font-weight: 700; }
+        .route-card .reason { font-size: 13px; color: #666; margin-top: 4px; }
     </style>
 </head>
 <body>
@@ -45,6 +49,7 @@
         <div class="panel" style="background:#eef8ee;">{{ message }}</div>
         {% endif %}
 
+        <!-- 1. 基本信息 -->
         <div class="panel">
             <h2>基本信息</h2>
             <div class="info-row">
@@ -58,130 +63,65 @@
             </div>
         </div>
 
+        <!-- 2. 路由建议 -->
+        {% if routing_result %}
         <div class="panel">
-            <h2>本地审核（导出 Excel 前）</h2>
-            <form method="post" action="/packages/{{ package.package_sn }}/review" class="info-row" style="align-items:flex-end;">
-                <div class="info-item">
-                    <div class="label">操作者</div>
-                    <input name="actor" value="web-user" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;width:100%;" />
+            <h2>建议渠道方式</h2>
+            <div class="route-card {% if not routing_result.matched %}excluded{% endif %}">
+                <div class="info-row" style="align-items:center;">
+                    <div class="info-item" style="flex:2;">
+                        <div class="label">建议承运商</div>
+                        <div class="carrier" style="{% if not routing_result.matched %}color:#721c24;{% else %}color:#155724;{% endif %}">
+                            {{ routing_result.label }}
+                        </div>
+                        <div class="reason">{{ routing_result.reason }}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="label">匹配规则</div>
+                        <div class="value">{{ routing_result.rule_name or '—' }}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="label">状态</div>
+                        <div class="value">
+                            {% if routing_result.matched %}
+                            <span class="badge" style="background:#d4edda;color:#155724;">已匹配</span>
+                            {% else %}
+                            <span class="badge" style="background:#f8d7da;color:#721c24;">已排除</span>
+                            {% endif %}
+                        </div>
+                    </div>
                 </div>
-                <div class="info-item">
-                    <div class="label">备注</div>
-                    <input name="note" placeholder="可选" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;width:100%;" />
-                </div>
-                <div class="info-item" style="display:flex;gap:8px;">
-                    <button name="decision" value="approved" type="submit" style="padding:8px 14px;background:#155724;color:#fff;border:none;border-radius:4px;cursor:pointer;">通过</button>
-                    <button name="decision" value="rejected" type="submit" style="padding:8px 14px;background:#721c24;color:#fff;border:none;border-radius:4px;cursor:pointer;">驳回</button>
-                    <button name="decision" value="pending" type="submit" style="padding:8px 14px;background:#856404;color:#fff;border:none;border-radius:4px;cursor:pointer;">重置待审</button>
-                </div>
-            </form>
-        </div>
-
-        <div class="panel">
-            <h2>赛狐回写确认（P1C · 仅准备 / dry-run）</h2>
-            <p style="font-size:13px;color:#666;margin-bottom:12px;line-height:1.5;">
-                一包多单会生成多条 <code>SubmissionIntent</code>。本页<strong>不会</strong>调用
-                <code>submitToPlatform</code>。真调请用 CLI
-                <code>--no-dry-run --i-understand-side-effects</code>，且须确认测试包裹范围。
-                {% if package_submission_state %}
-                当前聚合状态：<span class="badge">{{ package_submission_state }}</span>
-                {% endif %}
-            </p>
-            <form method="post" action="/packages/{{ package.package_sn }}/prepare-submit"
-                  class="info-row" style="align-items:flex-end;margin-bottom:16px;">
-                <div class="info-item">
-                    <div class="label">操作者</div>
-                    <input name="actor" value="web-user" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;width:100%;" />
-                </div>
-                <div class="info-item">
-                    <div class="label">承运人（可空=渠道名）</div>
-                    <input name="carrier_name" placeholder="可选覆盖" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;width:100%;" />
-                </div>
-                <div class="info-item">
-                    <div class="label">服务</div>
-                    <input name="shipping_service" placeholder="可选" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;width:100%;" />
-                </div>
-                <div class="info-item">
-                    <button type="submit" style="padding:8px 14px;background:#1a1a2e;color:#fff;border:none;border-radius:4px;cursor:pointer;">
-                        准备 Intent
-                    </button>
-                </div>
-            </form>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Intent</th>
-                        <th>订单</th>
-                        <th>状态</th>
-                        <th>request_hash</th>
-                        <th>确认人</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for intent in submission_intents or [] %}
-                    <tr>
-                        <td>#{{ intent.id }}</td>
-                        <td>{{ intent.external_order_id }}</td>
-                        <td><span class="badge">{{ intent.status }}</span></td>
-                        <td><code title="{{ intent.request_hash }}">{{ intent.request_hash[:12] }}…</code></td>
-                        <td>{{ intent.confirmed_by or '—' }}</td>
-                        <td>
-                            <form method="post"
-                                  action="/packages/{{ package.package_sn }}/submit-intent/{{ intent.id }}"
-                                  style="display:inline;">
-                                <input type="hidden" name="actor" value="web-user" />
-                                <button type="submit" style="padding:4px 10px;font-size:12px;cursor:pointer;">
-                                    dry-run
-                                </button>
-                            </form>
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr><td colspan="6">尚无 Intent。需本地审核 approved + 真实追踪号后点「准备 Intent」。</td></tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-
-        <div class="panel">
-            <h2>收货地址</h2>
-            <div class="info-row">
-                <div class="info-item"><div class="label">姓名</div><div class="value">{{ package.address.name or '—' }}</div></div>
-                <div class="info-item"><div class="label">电话</div><div class="value">{{ package.address.phone or package.address.mobile or '—' }}</div></div>
-                <div class="info-item"><div class="label">城市/州</div><div class="value">{{ package.address.city or '—' }} {{ package.address.state_or_region or '' }}</div></div>
-                <div class="info-item"><div class="label">邮编</div><div class="value">{{ package.address.postal_code or '—' }}</div></div>
-                <div class="info-item"><div class="label">国家</div><div class="value">{{ package.address.country_code or package.address.country or '—' }}</div></div>
-                <div class="info-item"><div class="label">地址</div><div class="value">{{ package.address.address_line_1 or '—' }} {{ package.address.address_line_2 or '' }}</div></div>
             </div>
         </div>
+        {% endif %}
 
-        <div class="panel">
-            <h2>关联订单 ({{ package.orders|length }})</h2>
-            <table>
-                <thead>
-                    <tr><th>订单号</th><th>状态</th><th>金额</th><th>币种</th></tr>
-                </thead>
-                <tbody>
-                    {% for order in package.orders %}
-                    <tr>
-                        <td>{{ order.external_order_id }}</td>
-                        <td>{{ order.order_status or '—' }}</td>
-                        <td>{{ order.order_total }}</td>
-                        <td>{{ order.currency or '—' }}</td>
-                    </tr>
-                    {% else %}
-                    <tr><td colspan="4">无关联订单</td></tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-
+        <!-- 3. 商品行 + 包裹重尺 -->
         <div class="panel">
             <h2>商品行 ({{ package.items|length }})</h2>
             <p style="font-size:13px;color:#666;margin-bottom:12px;line-height:1.5;">
                 单位：重量 <strong>kg</strong>，长宽高 <strong>cm</strong>。补录优先于 EN ZLMB# 自动查询。
             </p>
+            {% if package_dims %}
+            <div style="background:#f0f4ff;border:1px solid #c0d0f0;border-radius:6px;padding:12px;margin-bottom:16px;">
+                <table style="margin:0;">
+                    <thead>
+                        <tr>
+                            <th>包裹重量 kg</th><th>包裹长 cm</th><th>包裹宽 cm</th><th>包裹高 cm</th><th>SKU 数</th><th>合并规则</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>{{ package_dims.weight_kg }}</strong></td>
+                            <td><strong>{{ package_dims.length_cm }}</strong></td>
+                            <td><strong>{{ package_dims.width_cm }}</strong></td>
+                            <td><strong>{{ package_dims.height_cm }}</strong></td>
+                            <td>{{ package_dims.sku_count }}</td>
+                            <td style="font-size:11px;color:#888;">长=max · 宽=max · 高=sum · 重量=sum</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
             <form method="post" action="/packages/{{ package.package_sn }}/carton-override">
             <table>
                 <thead>
@@ -239,6 +179,120 @@
             </div>
             {% endif %}
             </form>
+        </div>
+
+        <!-- 4. 本地审核 -->
+        <div class="panel">
+            <h2>本地审核（导出 Excel 前）</h2>
+            <form method="post" action="/packages/{{ package.package_sn }}/review" class="info-row" style="align-items:flex-end;">
+                <div class="info-item">
+                    <div class="label">操作者</div>
+                    <input name="actor" value="web-user" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;width:100%;" />
+                </div>
+                <div class="info-item">
+                    <div class="label">备注</div>
+                    <input name="note" placeholder="可选" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;width:100%;" />
+                </div>
+                <div class="info-item" style="display:flex;gap:8px;">
+                    <button name="decision" value="approved" type="submit" style="padding:8px 14px;background:#155724;color:#fff;border:none;border-radius:4px;cursor:pointer;">通过</button>
+                    <button name="decision" value="rejected" type="submit" style="padding:8px 14px;background:#721c24;color:#fff;border:none;border-radius:4px;cursor:pointer;">驳回</button>
+                    <button name="decision" value="pending" type="submit" style="padding:8px 14px;background:#856404;color:#fff;border:none;border-radius:4px;cursor:pointer;">重置待审</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- 5. 赛狐回写确认 -->
+        <div class="panel">
+            <h2>赛狐回写确认（P1C · 仅准备 / dry-run）</h2>
+            <p style="font-size:13px;color:#666;margin-bottom:12px;line-height:1.5;">
+                一包多单会生成多条 <code>SubmissionIntent</code>。本页<strong>不会</strong>调用
+                <code>submitToPlatform</code>。真调请用 CLI
+                <code>--no-dry-run --i-understand-side-effects</code>，且须确认测试包裹范围。
+                {% if package_submission_state %}
+                当前聚合状态：<span class="badge">{{ package_submission_state }}</span>
+                {% endif %}
+            </p>
+            <form method="post" action="/packages/{{ package.package_sn }}/prepare-submit"
+                  class="info-row" style="align-items:flex-end;margin-bottom:16px;">
+                <div class="info-item">
+                    <div class="label">操作者</div>
+                    <input name="actor" value="web-user" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;width:100%;" />
+                </div>
+                <div class="info-item">
+                    <div class="label">承运人（可空=渠道名）</div>
+                    <input name="carrier_name" placeholder="可选覆盖" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;width:100%;" />
+                </div>
+                <div class="info-item">
+                    <div class="label">服务</div>
+                    <input name="shipping_service" placeholder="可选" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;width:100%;" />
+                </div>
+                <div class="info-item">
+                    <button type="submit" style="padding:8px 14px;background:#1a1a2e;color:#fff;border:none;border-radius:4px;cursor:pointer;">
+                        准备 Intent
+                    </button>
+                </div>
+            </form>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Intent</th><th>订单</th><th>状态</th><th>request_hash</th><th>确认人</th><th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for intent in submission_intents or [] %}
+                    <tr>
+                        <td>#{{ intent.id }}</td>
+                        <td>{{ intent.external_order_id }}</td>
+                        <td><span class="badge">{{ intent.status }}</span></td>
+                        <td><code title="{{ intent.request_hash }}">{{ intent.request_hash[:12] }}…</code></td>
+                        <td>{{ intent.confirmed_by or '—' }}</td>
+                        <td>
+                            <form method="post" action="/packages/{{ package.package_sn }}/submit-intent/{{ intent.id }}" style="display:inline;">
+                                <input type="hidden" name="actor" value="web-user" />
+                                <button type="submit" style="padding:4px 10px;font-size:12px;cursor:pointer;">dry-run</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="6">尚无 Intent。需本地审核 approved + 真实追踪号后点「准备 Intent」。</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 6. 收货地址 -->
+        <div class="panel">
+            <h2>收货地址</h2>
+            <div class="info-row">
+                <div class="info-item"><div class="label">姓名</div><div class="value">{{ package.address.name or '—' }}</div></div>
+                <div class="info-item"><div class="label">电话</div><div class="value">{{ package.address.phone or package.address.mobile or '—' }}</div></div>
+                <div class="info-item"><div class="label">城市/州</div><div class="value">{{ package.address.city or '—' }} {{ package.address.state_or_region or '' }}</div></div>
+                <div class="info-item"><div class="label">邮编</div><div class="value">{{ package.address.postal_code or '—' }}</div></div>
+                <div class="info-item"><div class="label">国家</div><div class="value">{{ package.address.country_code or package.address.country or '—' }}</div></div>
+                <div class="info-item"><div class="label">地址</div><div class="value">{{ package.address.address_line_1 or '—' }} {{ package.address.address_line_2 or '' }}</div></div>
+            </div>
+        </div>
+
+        <!-- 7. 关联订单 -->
+        <div class="panel">
+            <h2>关联订单 ({{ package.orders|length }})</h2>
+            <table>
+                <thead>
+                    <tr><th>订单号</th><th>状态</th><th>金额</th><th>币种</th></tr>
+                </thead>
+                <tbody>
+                    {% for order in package.orders %}
+                    <tr>
+                        <td>{{ order.external_order_id }}</td>
+                        <td>{{ order.order_status or '—' }}</td>
+                        <td>{{ order.order_total }}</td>
+                        <td>{{ order.currency or '—' }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="4">无关联订单</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
     </div>
 </body>

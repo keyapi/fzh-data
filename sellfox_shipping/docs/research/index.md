@@ -33,6 +33,7 @@ timestamp: 2026-07-23
 - [pr-slice-guide-2026-07-20.md](pr-slice-guide-2026-07-20.md) — 长分支 PR 切片与三遍审阅
 - [sellfox-native-lizard-fixture-2026-07-17.md](sellfox-native-lizard-fixture-2026-07-17.md) — 赛狐原生夹具 00/02/03/04（上传·追踪号·面单）。
 - [erpnext-zlmb-dims-v2-2026-07-23.md](erpnext-zlmb-dims-v2-2026-07-23.md) — EN ZLMB# 重尺 V2：跨面料 sibling 借用 + weight/dims 独立决策。
+- [routing-engine-v1-2026-07-24.md](routing-engine-v1-2026-07-24.md) — **规则引擎 V1**：YAML 驱动路由 + 10 种运算符 + 排除店铺。
 
 ## 全部调研文档
 
