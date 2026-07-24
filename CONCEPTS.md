@@ -2,6 +2,20 @@
 
 Shared domain vocabulary for this project — entities, named processes, and status concepts with project-specific meaning. Seeded with core domain vocabulary, then accretes as ce-compound and ce-compound-refresh process learnings; direct edits are fine. Glossary only, not a spec or catch-all.
 
+## Unified AI access (ai_access_poc)
+
+### 壳 PoC (Shell PoC)
+C′ 双轨中的浏览器壳：Open WebUI + Docker-only Open Terminal + 赛狐只读 Workspace Tool。验证「Chat 能拉搜索词报告并分析」，不做 Portal、不做广告写。
+
+### 板 PoC (Board PoC)
+C′ 双轨中的业务板：IvyeaOps fork 后把领星 OpenAPI 换成赛狐只读适配（sellers + 搜索词规范化 + optimizer 候选）。与壳并行规划，壳绿后再全力推进。
+
+### Tool summary（赛狐报告）
+Workspace Tool 拉取 xlsx 后返回的 JSON 文本摘要（`totals` + `top_by_spend_csv` 等）。聊天模型不能读二进制 xlsx，分析必须靠 summary 或沙箱代码。
+
+### Open Terminal vs Code Interpreter
+Open WebUI 里两套代码执行能力：Open Terminal = Docker Linux 沙箱（推荐）；Code Interpreter 默认引擎 Pyodide（legacy，浏览器 WASM）。同一会话互斥。
+
 ## Cross-border shipping (sellfox_shipping)
 
 ### Sellfox packageSn
