@@ -6,6 +6,7 @@ description: 对 PR #109 调研第八节开放问题的证据优先独立复审�
 tags: [ai-agent, independent-review, open-webui, ivyeaops, odysseus, sellfox, skill-md]
 created: 2026-07-24
 updated: 2026-07-24
+revision_note: "2026-07-24 下午纠偏：advertise/ 不得视为已验证资产；赛狐广告无写 API；补充 IvyeaOps→赛狐分层成本与 OWUI 融合模式"
 sources:
   - docs/research/2026-07-24-fzh-unified-ai-access-research.md
   - docs/research/2026-07-24-handoff-unified-ai-access.md
@@ -64,7 +65,7 @@ sources:
 | IvyeaOps 有电商业务模块/护栏/Win exe | README + `docs/lingxing-erp-guide.md`：规则引擎、双开关、三重复核、回滚、Win x64 exe、局域网共享 | L1 | **成立** |
 | IvyeaOps Skill 中心兼容 SKILL.md | `skill_paths.py`：扫 `**/SKILL.md`，落盘 `~/.hermes/skills/`；bundled 含 `zach-search-term-report-analyzer` | L1 | **成立（文件系统 Agent Skills 布局）** |
 | Odysseus 有 skills + 定时任务 | README：skills、MCP、scheduled agent tasks；Compose = App+ChromaDB+SearXNG(+ntfy) | L1 | **成立**；无电商模块 |
-| FZH 已有赛狐拉取 + 广告阈值配置 | `SELLFOX_API/fetch_ad_reports.py`（OAuth+HMAC+异步任务）；`advertise/thresholds.py`（Home & Garden 校准 + `config/<account>.json`） | L1 | **成立**；分析脚本充分性仍待运营审 |
+| FZH 已有赛狐拉取 + 广告阈值配置 | `SELLFOX_API/fetch_ad_reports.py`（OAuth+HMAC+异步任务）；`advertise/thresholds.py`（Home & Garden 校准 + `config/<account>.json`） | L1 | **拉取成立**；分析/阈值 **未经验证**（§8.1） |
 | OIDC 是选型硬门槛 | FZH 已有 `new-api-dingtalk-oidc`；用户已纠偏 | L1/用户 | **非硬门槛**（加分项） |
 | RAG 是选型硬门槛 | FZH 已用 OKF/MD；用户已纠偏 | 用户 | **非硬门槛** |
 
@@ -229,17 +230,17 @@ sources:
 | 方案 | 决定性反证 |
 |------|------------|
 | **B 全量 Fork 改赛狐** | 22+ 领星命名后端/前端文件 + 异种签名 + 字段映射开放式；与「张不长期维护」冲突。业务 UI 价值真实，但接入成本不是「有限机械」。 |
-| **C 双平台混合运行** | 两套用户体系/权限/升级/故障面；违反「维护者不绑死」；仅当边界是「参考仓库不部署」才可接受 — 那已并入 A′。 |
+| **C 双平台混合运行** | ~~无边界双跑~~ → **修正**：无共享身份/数据的双真相源仍否决；**有边界的 Portal 融合（C′，§8.4）允许** |
 | **D Odysseus** | 通用工作区无电商 Level A；多容器占 4C8G；shell 默认风险；对 FZH 赛狐场景无增量优势。 |
 | **纯 A 忽视 IvyeaOps** | 会丢掉已验证的运营 UX/护栏/中文 Skill 资产 — 故裁决是 A′ 而非「无视 B」。 |
 
 ### 4.5 强制反证（对推荐本身）
 
 **若选 Open WebUI 主路径，为何可接受放弃 IvyeaOps 业务模块？**  
-- FZH **已有** `advertise/` 分析管线与 Home & Garden 阈值，重复造「搜索词五桶」不是必须从 IvyeaOps 搬代码。  
-- IvyeaOps 广告板的数据面绑领星；搬走 UI 却接不上赛狐 = 空壳。  
-- Listing/调研板有价值，但老板当前 P0 是广告手脚 + 浏览器 Chat；可用 Skill（含 zach bundled 同类）+ Tool 覆盖 80% Chat/模板叙事，再用固定 `$` Skill 近似 Level A。  
-- 若 3 个月内运营强烈需要「按钮式大盘/工单」，再评估 **只部署 IvyeaOps 非领星模块**（Listing/Skill/知识库）作辅 — 仍避免改领星全栈。
+- ~~FZH 已有 advertise/ 五桶~~ → **已纠偏作废，见 §8.1**。未验证的 `advertise/` 不能替代 IvyeaOps 规则引擎。  
+- IvyeaOps 广告板的数据面绑领星；但 **optimizer 与 READ_DATASETS 分层清晰**，只读赛狐适配有限可估（§8.3），不是「搬走 UI 必空壳」。  
+- Listing/调研/Skill 中心不依赖领星，可先用。  
+- **更优修正**：不必「放弃模块」——用 **Portal 融合（§8.4）** 同时保留 OWUI 隔离壳与 IvyeaOps 板。
 
 **AGPL / 小社区 / vibe coding 风险**（若未来仍碰 IvyeaOps）：仅作只读参考或内网单机 exe 试用；衍生修改需合规 AGPL；不作为公司唯一生产关键路径。
 
@@ -281,9 +282,137 @@ sources:
 
 ## 7. 建议的下一步（非本阶段范围）
 
-1. 确认 A′ 后做最小 PoC：OWUI + 一个赛狐拉取 Tool + 一个 `$` 广告分析 Skill + oikb 同步 `docs/research` 子集。  
-2. 运营负责人审 `advertise/thresholds.py` 默认值。  
-3. 仅当 PoC 证明 Level A 不足，再开「IvyeaOps 非领星模块试用」专题 — 仍不做全量领星替换。
+1. **纠偏后优先**：用运营负责人校验「规则引擎方法论」本身（可对照 IvyeaOps 文档第五节 + 本地跑一次只读候选），**不要**拿未验证的 `advertise/` 输出当真理。  
+2. PoC 分叉二选一（或并行小样）：  
+   - **壳 PoC**：OWUI + Open Terminal Docker + 赛狐只读 Tool（拉报告落盘）  
+   - **板 PoC**：IvyeaOps fork → 仅替换 `lingxing_openapi` + 1–2 个 `READ_DATASETS`（店铺 + 搜索词报表）验证字段同构  
+3. 若两板都要：上 **Portal 融合（§8.4）**，不要代码级硬揉。  
+4. 赛狐广告写 API 出现前：工单写路径保持禁用；护栏设计可先文档化抄 IvyeaOps。
+
+---
+
+## 8. 纠偏补篇（2026-07-24 用户反馈后）
+
+### 8.1 纠正：`advertise/` 不是「已有可靠五桶」
+
+**用户澄清（采纳为事实）**：`advertise/` 分析管线是个人用 Claude Desktop、不到半天、未请教运营、网上拼经验做成的；看过部分输出已知有 bug，**未经运营验证**。因此：
+
+- ❌ 不得再用「FZH 已有五桶，不必搬 IvyeaOps」作为否决 B 的主论据（原 §4.5 该条作废）。  
+- ✅ `advertise/` 仅作：列名映射试验、赛狐 xlsx 形状样本、脚本骨架参考。  
+- ✅ **运营规则的可信来源**应转向：运营专家本人、IvyeaOps 规则引擎（Hector 运营实战产物）、zach/claude-ads Skill —— 再经 FZH 运营负责人签字。
+
+### 8.2 赛狐广告 API 边界（读写）
+
+**用户确认 + 文档核对**：
+
+| 能力 | 赛狐现状 | 证据 |
+|------|----------|------|
+| 拉报告 | ✅ 异步任务 `createTask` / `pageList` / `downloadUrl` | `SELLFOX_API/fetch_ad_reports.py`（L1） |
+| 读实体（活动/词/否定词列表等） | ✅ `POST /api/cpc/manageData/*.json`（查询管理数据，非写） | `SELLFOX_API/docs/api-reference/广告/基础数据/`（L1） |
+| 创建/修改广告、否词下发、改竞价预算 | ❌ **当前 API 不支持**（未来可能加） | 用户领域确认；文档无 put/create 写路径 |
+
+**含义**：即便上 IvyeaOps，**写操作工单/三复核链路短期用不上赛狐**；其价值在 **只读大盘 + 规则引擎出「建议候选」+ 人工去赛狐后台执行**（半自动）。护栏代码可保留作未来写 API 的壳。
+
+### 8.3 IvyeaOps → 赛狐：按源码重估真实成本
+
+#### 架构分层（L1 源码）
+
+```text
+UI (LingXing*.tsx)
+    ↓
+router lingxing.py
+    ↓
+lingxing_service.py     ← 双开关 / 限流 / 审计网关
+    ├── lingxing_openapi.py   ← 仅传输：MD5+AES 签名（须整文件替换）
+    ├── lingxing_data.py      ← READ_DATASETS 注册表（route+列）→ 缓存
+    ├── lingxing_optimizer.py ← 纯规则；只调 fetch_dataset(key)；不直连 URL
+    ├── lingxing_operate.py   ← 写：putSp* / addNegative*（赛狐暂无对等）
+    └── dashboard/report/automation …
+```
+
+**关键可复用点**：`lingxing_optimizer.py`（~486 行）在数据变成「统一行 schema」后，**业务规则可大体保留**（否词/降加 bid/加预算/收割）。它不绑领星 URL，只绑 dataset key。
+
+**关键阻抗**：
+
+| 点 | 领星（IvyeaOps） | 赛狐（FZH 经验） | 影响 |
+|----|------------------|------------------|------|
+| 报表获取 | 按日同步 `report_date` 循环拉 JSON | **异步任务** → 轮询 → 下 xlsx | 优化器 `_agg` 按日循环要改成「区间任务+规范化入库」 |
+| 签名 | MD5 + AES-ECB(appId) | OAuth + HMAC-SHA256 | 传输层整换（可复用 FZH `signed_post`） |
+| 店铺 ID | `sid` int | 赛狐 `shop.id` | 全链路参数映射 |
+| 字段名 | `cost/sales/orders/clicks/query` | 中文列 / API 英文字段不一 | 规范化适配器 |
+| 毛利 | `asin_profit` 数据集 | 需找赛狐财务/利润等价 API 或手工毛利配置 | 目标 ACOS 推导可能降级为「手动目标」 |
+| 写操作 | 7 条 put/add/archive 路由 | **无** | 工单执行禁用；建议导出人工 |
+
+`lingxing_data.READ_DATASETS` 广告相关条目（约 10+）：`sp_campaigns/adgroups/keywords/targets`、多份 `*_report`、`sp_product_ads`、`asin_profit` —— 每条要改 `route` + 响应 `_extract_rows` + 列映射。
+
+#### 工作量区间（人天，一人熟悉两边 API）
+
+| 阶段 | 内容 | 估 |
+|------|------|----|
+| T0 传输 | 新 `sellfox_openapi.py` 替换签名/token；网关改调用 | **2–4** |
+| T1 注册表 | 重写 READ_DATASETS 中店铺+广告实体+报表；缓存键不变 | **5–10** |
+| T2 报表阻抗 | 异步任务编排 + xlsx→统一 schema 入库，供优化器消费 | **5–12**（最大不确定性） |
+| T3 优化器微调 | 字段/店铺 ID/毛利降级；关写路径 UI | **2–5** |
+| T4 前端文案 | 领星→赛狐标签、隐藏写开关 | **1–3** |
+| T5 写操作 | **搁置**至赛狐提供写 API | 0 现在 / 另估未来 |
+| **只读「建议候选」可用合计** | | **约 15–34 人天** |
+| Listing/调研/Skill 中心 | 不依赖领星，可先用 | **0–2**（部署） |
+
+相对原复审「15–40 人天到只读」：**量级仍成立**；更精确是 **中枢在 T2 报表模型差异**，不是「改几个 URL」。  
+相对「从零用 OWUI 重做规则引擎+看板」：IvyeaOps 仍可能更省 —— **前提是承认 advertise/ 不可信**，而规则价值在 IvyeaOps/运营。
+
+### 8.4 融合：OWUI 壳 + IvyeaOps 板 —— 能否、怎么融
+
+**不要**：把两套前端揉成一个 monorepo 进程（栈不同：Svelte vs React；许可证 AGPL；维护面爆炸）。
+
+**要**：在 **网关 / 身份 / 数据** 层融合 —— 业界常见「AI 门户 + 领域应用」模式。
+
+```mermaid
+flowchart TB
+  dingtalk[钉钉OIDC_Bridge]
+  nginx[nginx_门户]
+  owui[OpenWebUI_Chat加Terminal沙箱]
+  ivyea[IvyeaOps_运营板块]
+  sellfox[sellfox_proxy或共享客户端]
+  git[fzh-data_Git_Skills_OKF]
+
+  dingtalk --> nginx
+  nginx -->|"/chat"| owui
+  nginx -->|"/ops"| ivyea
+  owui --> sellfox
+  ivyea --> sellfox
+  git -.-> owui
+  git -.-> ivyea
+```
+
+| 融合模式 | 做法 | 案例/依据 | 适合 FZH？ |
+|----------|------|-----------|------------|
+| **A. 反向代理门户** | 同域名 `/chat`→OWUI、`/ops`→IvyeaOps；钉钉 OIDC / oauth2-proxy 统一登录 | OWUI 官方 Trusted Header + oauth2-proxy；企业多应用同 SSO 门户 | **最推荐** |
+| **B. 同站 iframe** | 壳里嵌另一应用；需同站 cookie | Ginto AI 嵌 OWUI（同站子域） | 可用但脆；次选 |
+| **C. Tool/API 桥** | OWUI Tool 调 IvyeaOps HTTP「跑优化引擎」；板仍在 /ops 看结果 | OWUI Tools/OpenAPI；IvyeaOps 已有后端 API | 好：Chat 触发板能力 |
+| **D. 共享数据面** | 唯一赛狐客户端 + 报告缓存；两边只读同一库 | 内部中台模式 | 中长期；防双拉配额 |
+| **E. 代码合并** | Fork 揉进 OWUI 插件 | 罕见成功 | **不推荐** |
+
+**多人隔离怎么兼顾**：
+
+- Chat/跑脚本/不可信代码 → **只走 OWUI + Open Terminal Docker**（可上 Terminals 每用户容器）  
+- 点按钮看大盘/出否词建议 → **走 IvyeaOps**（业务状态在其 SQLite；勿对运营开放 PTY）  
+- 两边共用：钉钉身份、`api.vilavi.cn` 模型、赛狐代理、Git Skills  
+
+这把原「方案 C 双跑 = 维护加倍否决」修正为：**C′ 门户融合在边界清晰时可接受** —— 维护的是「两个容器 + 一个 nginx」，不是两套互斥真相源；规则与报告缓存尽量单点。
+
+### 8.5 纠偏后的裁决修正
+
+| 原 A′ 论据 | 修正后 |
+|------------|--------|
+| advertise 已有五桶可替代 IvyeaOps 引擎 | **撤销**；引擎价值回落到 IvyeaOps/运营 |
+| 双跑一律否决 | **改为**：禁止无边界双真相源；**允许** Portal 下 OWUI∥IvyeaOps，共享赛狐读适配 |
+| 只推 OWUI | **改为推荐路径 C′（门户融合）或分阶段**：  
+  1) 先 Portal + OWUI（隔离 Chat）  
+  2) 并行 IvyeaOps 赛狐**只读**适配（要 Level A 规则建议）  
+  3) 写 API 到来再接通 operate |
+
+**置信度**：架构中高；赛狐字段同构与 T2 人天仍中低，需 PoC 钉死。
 
 ---
 
@@ -292,4 +421,6 @@ sources:
 - 原调研（有偏差标注）: `docs/research/2026-07-24-fzh-unified-ai-access-research.md`（在 `feature/unified-ai-access-research`）  
 - 交接: `docs/research/2026-07-24-handoff-unified-ai-access.md`  
 - 赛狐脚本: `SELLFOX_API/fetch_ad_reports.py`  
-- 阈值: `advertise/thresholds.py`
+- 阈值（**未经验证**）: `advertise/thresholds.py`  
+- IvyeaOps 数据注册表: `server/app/services/lingxing_data.py`  
+- IvyeaOps 规则引擎: `server/app/services/lingxing_optimizer.py`
