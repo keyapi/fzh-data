@@ -1,8 +1,13 @@
 """Sellfox OpenAPI client (stdlib only).
 
+Two access modes (prefer proxy when key is present):
+
+1. **Proxy** — ``SELLFOX_PROXY_API_KEY`` → ``https://api.vilavi.cn/sellfox``
+   (Bearer; proxy handles OAuth + HMAC).
+2. **Direct** — ``SELLFOX_APP_ID`` + ``SELLFOX_APP_SECRET`` → ``openapi.sellfox.com``
+   (client_credentials + HMAC-SHA256). Requires VPS whitelist IP.
+
 Extracted for reuse by CLI scripts and Open WebUI Tools.
-Auth: OAuth client_credentials + HMAC-SHA256 request signing.
-Same contract as SELLFOX_API/fetch_ad_reports.py.
 """
 from __future__ import annotations
 
@@ -39,38 +44,73 @@ def load_env(paths: List[Path]) -> Dict[str, str]:
 
 @dataclass
 class SellfoxConfig:
-    app_id: str
-    app_secret: str
+    """Prefer proxy when ``proxy_api_key`` is set; else direct App ID/Secret."""
+
+    mode: str = "direct"  # "proxy" | "direct"
+    # Proxy (api.vilavi.cn/sellfox)
+    proxy_base_url: str = "https://api.vilavi.cn/sellfox"
+    proxy_account: str = "sellfox-main"
+    proxy_api_key: str = ""
+    # Direct (openapi.sellfox.com)
+    app_id: str = ""
+    app_secret: str = ""
     domain: str = "https://openapi.sellfox.com"
 
     @classmethod
     def from_env(cls, *extra_env_files: Path) -> "SellfoxConfig":
         here = Path(__file__).resolve().parent
         root = here.parent
-        paths = [here / ".env", root / "advertise" / ".env", *extra_env_files]
+        paths = [
+            root / ".env",
+            here / ".env",
+            root / "advertise" / ".env",
+            root / "ai_access_poc" / "open_webui" / ".env",
+            *extra_env_files,
+        ]
         env = load_env(paths)
+        proxy_key = (
+            env.get("SELLFOX_PROXY_API_KEY")
+            or env.get("SELLFOX_API_KEY")
+            or env.get("SAIFU_KEY")
+            or ""
+        ).strip()
+        if proxy_key:
+            return cls(
+                mode="proxy",
+                proxy_base_url=env.get(
+                    "SELLFOX_PROXY_BASE_URL", "https://api.vilavi.cn/sellfox"
+                ).rstrip("/"),
+                proxy_account=env.get("SELLFOX_PROXY_ACCOUNT", "sellfox-main"),
+                proxy_api_key=proxy_key,
+            )
         app_id = env.get("SELLFOX_APP_ID", "")
         app_secret = env.get("SELLFOX_APP_SECRET", "")
         if not app_id or not app_secret:
             raise ValueError(
-                "SELLFOX_APP_ID and SELLFOX_APP_SECRET required "
-                "(SELLFOX_API/.env or environment)"
+                "Prefer SELLFOX_PROXY_API_KEY (api.vilavi.cn/sellfox), "
+                "or set SELLFOX_APP_ID + SELLFOX_APP_SECRET for direct OpenAPI"
             )
         return cls(
+            mode="direct",
             app_id=app_id,
             app_secret=app_secret,
-            domain=env.get("SELLFOX_API_DOMAIN", "https://openapi.sellfox.com").rstrip("/"),
+            domain=env.get("SELLFOX_API_DOMAIN", "https://openapi.sellfox.com").rstrip(
+                "/"
+            ),
         )
 
 
 class SellfoxClient:
-    """Minimal Sellfox OpenAPI client for read/report flows."""
+    """Minimal Sellfox client for read/report flows (proxy or direct)."""
 
     def __init__(self, config: SellfoxConfig):
         self.config = config
         self.access_token: Optional[str] = None
 
-    def authenticate(self) -> str:
+    def authenticate(self) -> Optional[str]:
+        """Direct mode only. Proxy mode is a no-op (Bearer key is enough)."""
+        if self.config.mode == "proxy":
+            return None
         url = (
             f"{self.config.domain}/api/oauth/v2/token.json"
             f"?client_id={self.config.app_id}"
@@ -85,7 +125,55 @@ class SellfoxClient:
         self.access_token = data["data"]["access_token"]
         return self.access_token
 
-    def signed_post(self, url_path: str, body: Optional[dict] = None) -> Any:
+    def _proxy_post(self, url_path: str, body: Optional[dict] = None) -> Any:
+        if not url_path.startswith("/"):
+            url_path = "/" + url_path
+        full_url = (
+            f"{self.config.proxy_base_url}/v1/{self.config.proxy_account}{url_path}"
+        )
+        payload = json.dumps(body or {}).encode("utf-8")
+        last_err: Optional[Exception] = None
+        for attempt in range(6):
+            req = urllib.request.Request(
+                full_url,
+                data=payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {self.config.proxy_api_key}",
+                },
+                method="POST",
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=60) as resp:
+                    raw = resp.read().decode("utf-8")
+            except urllib.error.HTTPError as e:
+                raw = e.read().decode("utf-8")
+            try:
+                result = json.loads(raw)
+            except json.JSONDecodeError as e:
+                raise RuntimeError(f"Non-JSON proxy response on {url_path}: {raw[:200]}") from e
+            # Corporate proxy rate limit (FastAPI detail) — not Sellfox envelope
+            detail = result.get("detail") if isinstance(result, dict) else None
+            if isinstance(detail, str) and "Rate limited" in detail:
+                wait_s = 1.0 + attempt
+                if "Retry after" in detail:
+                    try:
+                        wait_s = float(detail.split("Retry after")[-1].strip().rstrip("s"))
+                        wait_s = max(wait_s, 0.5) + 0.2
+                    except ValueError:
+                        pass
+                time.sleep(wait_s)
+                last_err = RuntimeError(f"Rate limited on {url_path}: {detail}")
+                continue
+            if result.get("code") != 0:
+                raise RuntimeError(
+                    f"API error on {url_path}: code={result.get('code')} "
+                    f"msg={result.get('msg', result)}"
+                )
+            return result["data"]
+        raise last_err or RuntimeError(f"Rate limited on {url_path} after retries")
+
+    def _direct_post(self, url_path: str, body: Optional[dict] = None) -> Any:
         if not self.access_token:
             self.authenticate()
         ts = str(int(time.time() * 1000))
@@ -129,6 +217,12 @@ class SellfoxClient:
             )
         return result["data"]
 
+    def signed_post(self, url_path: str, body: Optional[dict] = None) -> Any:
+        """POST to Sellfox path (proxy Bearer or direct signed)."""
+        if self.config.mode == "proxy":
+            return self._proxy_post(url_path, body)
+        return self._direct_post(url_path, body)
+
     def list_shops(self) -> List[dict]:
         data = self.signed_post("/api/shop/pageList.json", {"pageSize": 200})
         return data.get("rows") or []
@@ -145,7 +239,9 @@ class SellfoxClient:
         if not shops:
             raise RuntimeError("No shops found")
         if shop_name:
-            matched = [s for s in shops if shop_name.lower() in (s.get("name") or "").lower()]
+            matched = [
+                s for s in shops if shop_name.lower() in (s.get("name") or "").lower()
+            ]
             if not matched:
                 raise RuntimeError(f"No shops matching '{shop_name}'")
             shops = matched
@@ -219,9 +315,7 @@ class SellfoxClient:
         end_date = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
         start_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
         sid, sname = self.resolve_shop(shop_id=shop_id, shop_name=shop_name)
-        tid = self.create_report_task(
-            sid, "adSearchTermReport", start_date, end_date
-        )
+        tid = self.create_report_task(sid, "adSearchTermReport", start_date, end_date)
         pending = {tid}
         waited = 0
         filepath: Optional[Path] = None
@@ -234,11 +328,15 @@ class SellfoxClient:
                 urls = row.get("downloadUrl") or []
                 if not urls:
                     raise RuntimeError(f"Task done but no downloadUrl: {row}")
-                filepath = out_dir / f"SearchTerm_{sname}_{start_date}_{end_date}.xlsx"
+                safe_name = "".join(
+                    c if c.isalnum() or c in "-_" else "_" for c in sname
+                )[:40]
+                filepath = out_dir / f"SearchTerm_{safe_name}_{start_date}_{end_date}.xlsx"
                 size = self.download_file(urls[0], filepath)
                 pending.discard(tid)
                 return {
                     "ok": True,
+                    "mode": self.config.mode,
                     "shop_id": sid,
                     "shop_name": sname,
                     "task_id": tid,

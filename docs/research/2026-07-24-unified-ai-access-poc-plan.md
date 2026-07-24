@@ -162,6 +162,8 @@ fetch_dataset("sp_search_term_report")
 Import 一条 Markdown Skill：`$赛狐搜索词拉取` — 固定步骤：问店铺 → 调 Tool → 汇报路径与行数 → **禁止**自动否词。  
 规则解释可另 Skill，正文可摘 IvyeaOps 方法论第五节（标注来源），**阈值数字留空待运营填**。
 
+> **壳验收补记（2026-07-24）**：S1–S4 已绿。Tool 除 filepath 外须返回 JSON `summary`（totals + top CSV），深挖用 Docker Open Terminal；Pyodide Code Interpreter 为 legacy 且与 Terminal 同聊互斥。详见 `docs/solutions/tooling-decisions/owui-sellfox-xlsx-tool-summary-open-terminal.md` 与 `ai_access_poc/docs/specs/2026-07-24-shell-acceptance.md`。
+
 ### 3.4 壳 PoC 任务拆解
 
 | ID | 任务 | 预估 |

@@ -28,8 +28,17 @@ def test_sign_string_stable():
     assert "client_id=id" in sorted_str
 
 
-def test_config_dataclass():
-    cfg = SellfoxConfig(app_id="a", app_secret="b")
+def test_config_dataclass_direct():
+    cfg = SellfoxConfig(mode="direct", app_id="a", app_secret="b")
     assert cfg.domain == "https://openapi.sellfox.com"
+    assert cfg.mode == "direct"
     client = SellfoxClient(cfg)
     assert client.access_token is None
+
+
+def test_config_dataclass_proxy():
+    cfg = SellfoxConfig(mode="proxy", proxy_api_key="sk-test")
+    assert cfg.proxy_base_url == "https://api.vilavi.cn/sellfox"
+    assert cfg.proxy_account == "sellfox-main"
+    client = SellfoxClient(cfg)
+    assert client.authenticate() is None
