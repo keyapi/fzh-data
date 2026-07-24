@@ -372,6 +372,36 @@ async def package_detail_page(request: Request, package_sn: str):
     )
 
 
+@app.post("/packages/{package_sn}/fetch-rates", response_class=HTMLResponse)
+async def package_fetch_rates(request: Request, package_sn: str):
+    """Fetch VITE + Lizard rates on demand and redirect back to detail page."""
+    account_key = config["sellfox"]["proxy_account"]
+    repo = _get_package_repository()
+    record = repo.get(account_key, package_sn)
+    if record is None:
+        raise HTTPException(404, f"Package {package_sn} not found")
+
+    carton_rows = _carton_rows_for_package(account_key, record)
+    package_dims = _compute_package_dims(record, carton_rows)
+    routing_result = _compute_routing(record, carton_rows)
+
+    vite_rate = _get_vite_rate(record, package_dims, routing_result)
+    _get_lizard_rate(record, package_dims)
+
+    if vite_rate and "error" not in vite_rate:
+        message = f"报价已更新 — {vite_rate.get('service', '')} ${vite_rate.get('total_amount', '—')}"
+    elif vite_rate and "error" in vite_rate:
+        message = f"报价失败: {vite_rate['error']}"
+    else:
+        message = "报价完成（查看历史记录）"
+
+    # Re-render with fresh context (live rate + updated history)
+    ctx = _package_detail_context(account_key, record, message=message)
+    ctx["vite_rate"] = vite_rate
+    ctx["rate_history"] = _get_rate_history(repo, record, account_key)
+    return templates.TemplateResponse(request, "package_detail.html", ctx)
+
+
 def _package_detail_context(account_key: str, record, *, message: str) -> dict:
     from sellfox_shipping.submission_state import aggregate_package_submission_state
 
@@ -388,11 +418,6 @@ def _package_detail_context(account_key: str, record, *, message: str) -> dict:
     carton_rows = _carton_rows_for_package(account_key, record)
     package_dims = _compute_package_dims(record, carton_rows)
     routing_result = _compute_routing(record, carton_rows)
-    # Fetch rates from all available carriers (always both VITE + Lizard).
-    # The routing suggestion determines which rate is shown in 运费试算,
-    # but all results are persisted to history.
-    vite_rate = _get_vite_rate(record, package_dims, routing_result)
-    _get_lizard_rate(record, package_dims)  # persist only, not displayed in live panel
     rate_history = _get_rate_history(repo, record, account_key)
     return {
         "package": record,
@@ -400,7 +425,7 @@ def _package_detail_context(account_key: str, record, *, message: str) -> dict:
         "carton_rows": carton_rows,
         "package_dims": package_dims,
         "routing_result": routing_result,
-        "vite_rate": vite_rate,
+        "vite_rate": None,  # fetched on-demand via button
         "rate_history": rate_history,
         "submission_intents": intents,
         "package_submission_state": package_submission_state,
@@ -735,7 +760,7 @@ def _get_vite_rate(
             "use_fedex": use_fedex,
         }
         # Persist for historical tracking
-        _persist_rate(record, result)
+        _persist_rate(record, result, raw_response=rate)
         return result
     except Exception as exc:
         return {"source": "vite", "error": f"VITE rate fetch failed: {exc}"}
@@ -848,7 +873,7 @@ def _get_lizard_rate(
                 "weight_lb": round(package_dims["weight_kg"] * 2.20462, 2),
                 "use_fedex": False,
             }
-            _persist_rate(record, rate_record)
+            _persist_rate(record, rate_record, raw_response=item)
 
         return None
 
@@ -856,7 +881,7 @@ def _get_lizard_rate(
         return None
 
 
-def _persist_rate(record, rate_result: dict) -> None:
+def _persist_rate(record, rate_result: dict, raw_response: dict | None = None) -> None:
     """Best-effort persist of a successful rate fetch to the DB."""
     try:
         repo = _get_package_repository()
@@ -864,9 +889,22 @@ def _persist_rate(record, rate_result: dict) -> None:
             config["sellfox"]["proxy_account"], record.package_sn
         )
         if package_db_id is not None:
-            repo.insert_package_rate(package_db_id=package_db_id, rate=rate_result)
+            repo.insert_package_rate(
+                package_db_id=package_db_id,
+                rate=rate_result,
+                raw_data=_json_compact(raw_response) if raw_response else None,
+            )
     except Exception:
         pass
+
+
+def _json_compact(obj) -> str | None:
+    import json
+
+    try:
+        return json.dumps(obj, ensure_ascii=False, default=str, indent=2)
+    except Exception:
+        return None
 
 
 def _get_rate_history(repo, record, account_key: str) -> list:

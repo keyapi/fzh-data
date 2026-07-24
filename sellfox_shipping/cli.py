@@ -465,6 +465,7 @@ def packages_rate_history(
                 "max_side_in": r.max_side_in,
                 "weight_lb": r.weight_lb,
                 "is_fedex": r.is_fedex,
+                "raw_data": r.raw_data,
             }
             for r in rates
         ],

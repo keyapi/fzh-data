@@ -92,6 +92,11 @@
                     </div>
                 </div>
             </div>
+            <form method="post" action="/packages/{{ package.package_sn }}/fetch-rates" style="margin-top:12px;">
+                <button type="submit" style="padding:8px 18px;background:#1a1a2e;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:13px;">
+                    获取 VITE + 蜴国际 报价
+                </button>
+            </form>
         </div>
         {% endif %}
 
@@ -152,7 +157,7 @@
             <table>
                 <thead>
                     <tr>
-                        <th>时间</th><th>渠道</th><th>运费</th><th>计费重(lbs)</th><th>Zone</th><th>最长边(in)</th>
+                        <th>时间</th><th>渠道</th><th>运费</th><th>计费重(lbs)</th><th>Zone</th><th>最长边(in)</th><th>原始数据</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -173,6 +178,16 @@
                         <td>{{ rh.billing_weight if rh.billing_weight is not none else '—' }}</td>
                         <td>{{ rh.zone or '—' }}</td>
                         <td>{{ rh.max_side_in if rh.max_side_in is not none else '—' }}</td>
+                        <td>
+                            {% if rh.raw_data %}
+                            <details style="font-size:11px;">
+                                <summary style="cursor:pointer;color:#1a1a2e;font-weight:600;">JSON ({{ rh.raw_data|length }} chars)</summary>
+                                <pre style="max-width:500px;max-height:300px;overflow:auto;background:#1e1e2e;color:#cdd6f4;padding:10px;border-radius:4px;margin-top:4px;font-size:11px;line-height:1.5;white-space:pre-wrap;word-break:break-all;">{{ rh.raw_data }}</pre>
+                            </details>
+                            {% else %}
+                            <span style="color:#ccc;">—</span>
+                            {% endif %}
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
