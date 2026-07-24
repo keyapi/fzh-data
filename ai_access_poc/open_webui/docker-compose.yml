@@ -8,7 +8,7 @@ services:
     environment:
       # Model gateway (api.vilavi.cn OpenAI-compatible)
       OPENAI_API_BASE_URL: "${OPENAI_API_BASE_URL:-https://api.vilavi.cn/v1}"
-      OPENAI_API_KEY: "${OPENAI_API_KEY:?set OPENAI_API_KEY in .env}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
       WEBUI_NAME: "FZH AI Shell PoC"
       # Optional: pre-seed admin — change after first login
       # WEBUI_ADMIN_EMAIL / password via UI on first run is fine for PoC
@@ -29,7 +29,7 @@ services:
     # PoC: no host port by default (only reachable from open-webui on Docker network).
     # Uncomment for local debug: ports: ["8000:8000"]
     environment:
-      OPEN_TERMINAL_API_KEY: "${OPEN_TERMINAL_API_KEY:?set OPEN_TERMINAL_API_KEY in .env}"
+      OPEN_TERMINAL_API_KEY: "${OPEN_TERMINAL_API_KEY:-change-me-open-terminal-key}"
     volumes:
       - terminal-home:/home/user
       - ./reports:/data/sellfox_reports
