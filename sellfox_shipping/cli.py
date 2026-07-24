@@ -434,6 +434,44 @@ def rules(
     _output(config.get("rules", []), json_output)
 
 
+@app.command("packages-rate-history")
+def packages_rate_history(
+    package_sn: str = typer.Option(..., "--package-sn", help="Sellfox packageSn"),
+    limit: int = typer.Option(10, min=1, max=50, help="Max history rows (default 10)"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Query VITE rate quote history for a package (AI-operable JSON output)."""
+    config = _load_config()
+    repo = _get_package_repository()
+    package_db_id = repo.get_package_db_id(
+        config["sellfox"]["proxy_account"], package_sn
+    )
+    if package_db_id is None:
+        _output({"error": f"Package {package_sn} not found"}, json_output)
+        raise typer.Exit(1)
+
+    rates = repo.list_package_rates(package_db_id, limit=limit)
+    _output(
+        [
+            {
+                "fetched_at": r.fetched_at.isoformat() if r.fetched_at else None,
+                "carrier": r.carrier,
+                "service": r.service,
+                "total_amount": r.total_amount,
+                "currency": r.currency,
+                "billing_weight_lb": r.billing_weight,
+                "zone": r.zone,
+                "channel": r.channel,
+                "max_side_in": r.max_side_in,
+                "weight_lb": r.weight_lb,
+                "is_fedex": r.is_fedex,
+            }
+            for r in rates
+        ],
+        json_output,
+    )
+
+
 @app.command()
 def serve(
     host: str = typer.Option("0.0.0.0", help="Bind host"),

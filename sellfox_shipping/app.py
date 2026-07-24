@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import sys
+from datetime import date
 from pathlib import Path
 
 import yaml
@@ -385,13 +386,22 @@ def _package_detail_context(account_key: str, record, *, message: str) -> dict:
         else ""
     )
     carton_rows = _carton_rows_for_package(account_key, record)
+    package_dims = _compute_package_dims(record, carton_rows)
     routing_result = _compute_routing(record, carton_rows)
+    # Fetch rates from all available carriers (always both VITE + Lizard).
+    # The routing suggestion determines which rate is shown in 运费试算,
+    # but all results are persisted to history.
+    vite_rate = _get_vite_rate(record, package_dims, routing_result)
+    _get_lizard_rate(record, package_dims)  # persist only, not displayed in live panel
+    rate_history = _get_rate_history(repo, record, account_key)
     return {
         "package": record,
         "message": message,
         "carton_rows": carton_rows,
-        "package_dims": _compute_package_dims(record, carton_rows),
+        "package_dims": package_dims,
         "routing_result": routing_result,
+        "vite_rate": vite_rate,
+        "rate_history": rate_history,
         "submission_intents": intents,
         "package_submission_state": package_submission_state,
     }
@@ -563,6 +573,311 @@ def _compute_routing(record, carton_rows: list[dict]):
         return result
     except Exception:
         return None
+
+
+def _build_vite_ship_from(record) -> dict:
+    """Build VITE-compatible sender address from warehouse config."""
+    wh_name = (record.logistics.warehouse_name or "").strip()
+    if wh_name:
+        warehouses_cfg = config.get("warehouses", {})
+        wh = warehouses_cfg.get(wh_name, {})
+        addr = wh.get("address", {})
+        if addr.get("address1"):
+            return {
+                "fullName": (addr.get("name") or "FZH Warehouse")[:35],
+                "company": (addr.get("company") or "")[:35],
+                "address1": addr["address1"][:50],
+                "address2": (addr.get("address2") or "")[:50],
+                "city": (addr.get("city") or "")[:28],
+                "state": (addr.get("state") or "")[:2],
+                "zipCode": (addr.get("postal_code") or "")[:10],
+                "phoneNumber": (addr.get("phone") or addr.get("email") or "0000000000")[:15],
+            }
+    return {
+        "fullName": "FZH Test",
+        "address1": "90 Chester rd",
+        "city": "Belmont",
+        "state": "MA",
+        "zipCode": "02478",
+        "phoneNumber": "1111111111",
+    }
+
+
+def _build_vite_ship_to(record) -> dict:
+    """Build VITE-compatible recipient address from package record."""
+    addr = record.address
+    return {
+        "fullName": (addr.name or "Customer")[:35],
+        "address1": (addr.address_line_1 or "")[:50],
+        "address2": (addr.address_line_2 or "")[:35],
+        "city": (addr.city or "")[:28],
+        "state": (addr.state_or_region or addr.city or "XX")[:2],
+        "zipCode": (addr.postal_code or "")[:10],
+        "phoneNumber": (addr.phone or addr.mobile or "0000000000")[:15],
+    }
+
+
+VITE_FEDEX_CHANNEL = (os.getenv("VITE_FEDEX_CHANNEL") or "ODFC").strip()
+
+
+def _read_env_key(key: str) -> str:
+    """Read a value directly from the .env file, bypassing os.environ cache."""
+    env_path = Path(__file__).resolve().parents[1] / ".env"
+    if not env_path.is_file():
+        return (os.getenv(key) or "").strip()
+    for line in env_path.read_text(encoding="utf-8-sig").splitlines():
+        line = line.strip()
+        if line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        if k.strip() == key:
+            val = v.strip()
+            if len(val) >= 2 and val[0] == val[-1] and val[0] in "'\"":
+                val = val[1:-1]
+            return val.strip()
+    return (os.getenv(key) or "").strip()
+
+
+def _get_vite_rate(
+    record,
+    package_dims: dict | None,
+    routing_result,
+) -> dict | None:
+    """Fetch VITE rate quote (GOFO or FedEx) when routing suggests VITE.
+
+    Converts kg/cm to lbs/inches. Routes to FedEx when longest side
+    exceeds the GOFO 22-inch limit, otherwise uses GOFO.
+    """
+    if routing_result is None or getattr(routing_result, "carrier", "") != "vite":
+        return None
+
+    if not package_dims:
+        return {"source": "vite", "error": "Missing package dimensions"}
+
+    try:
+        from sellfox_shipping.carriers.vite import ViteGofoClient
+
+        # Unit conversion: kg → lbs, cm → inches
+        weight_lb = round(package_dims["weight_kg"] * 2.20462, 2)
+        length_in = round(package_dims["length_cm"] / 2.54, 1)
+        width_in = round(package_dims["width_cm"] / 2.54, 1)
+        height_in = round(package_dims["height_cm"] / 2.54, 1)
+
+        max_side_in = max(length_in, width_in, height_in)
+        use_fedex = max_side_in > 22.0
+
+        ship_from = _build_vite_ship_from(record)
+        ship_to = _build_vite_ship_to(record)
+
+        body: dict = {
+            "shipDate": date.today().isoformat(),
+            "from": ship_from,
+            "to": ship_to,
+            "packages": [{
+                "weight": weight_lb,
+                "length": length_in,
+                "width": width_in,
+                "height": height_in,
+            }],
+        }
+
+        if use_fedex:
+            channel = VITE_FEDEX_CHANNEL
+            body["channel"] = channel
+            body["serviceType"] = "FEDEX_GROUND"
+            dest_country = (
+                record.address.country_code or record.address.country or ""
+            ).upper()
+        else:
+            channel = "GFUS"
+            body["channel"] = channel
+            body["serviceType"] = "GOFO_PARCEL"
+
+        api_key = _read_env_key("VITE_API_KEY")
+        if not api_key:
+            return {"source": "vite", "error": "VITE_API_KEY not configured"}
+        vite_base = _read_env_key("VITE_API_BASE_URL") or "https://test-api.vitedirect.com"
+
+        with ViteGofoClient(api_key=api_key, base_url=vite_base) as client:
+            if use_fedex:
+                if dest_country != "US":
+                    try:
+                        rate = client.rate_fedex_international(body)
+                    except Exception:
+                        # International FedEx endpoint unavailable; GOFO/FedEx
+                        # domestic only accept US state codes.
+                        return {
+                            "source": "vite",
+                            "error": (
+                                f"VITE does not support international destination "
+                                f"({dest_country}). FedEx international endpoint "
+                                f"returned 404."
+                            ),
+                        }
+                else:
+                    rate = client.rate_fedex(body)
+            else:
+                rate = client.rate_gofo(body)
+
+        ad = rate.get("amountDetails") or {}
+        result = {
+            "source": "vite_fedex" if use_fedex else "vite_gofo",
+            "service": rate.get("serviceDescription") or (
+                "FEDEX_GROUND" if use_fedex else "GOFO_PARCEL"
+            ),
+            "total_amount": rate.get("totalAmount"),
+            "currency": rate.get("currency", "USD"),
+            "billing_weight": rate.get("billingWeight"),
+            "zone": rate.get("zone"),
+            "channel": channel,
+            "max_side_in": max_side_in,
+            "weight_lb": weight_lb,
+            "use_fedex": use_fedex,
+        }
+        # Persist for historical tracking
+        _persist_rate(record, result)
+        return result
+    except Exception as exc:
+        return {"source": "vite", "error": f"VITE rate fetch failed: {exc}"}
+
+
+# Lizard warehouse → ca_zone mapping (based on S0143 shipper registration)
+_LIZARD_CA_ZONE: dict[str, int] = {
+    "CENTRADE": 1,  # NJ → 美东
+    "DANEEY": 1,    # TX → S0143 在系统归为美东
+    "POLAND": 0,    # 全域
+}
+
+
+def _get_lizard_rate(
+    record,
+    package_dims: dict | None,
+) -> dict | None:
+    """Fetch Lizard (蜴国际) ratesv2 quote and persist all products to history.
+
+    Called independently of routing — always tries to fetch for every package
+    with dimensions, so history accumulates both VITE and Lizard quotes.
+    The live 运费试算 panel still shows only the routing-suggested carrier.
+    """
+    if package_dims is None:
+        return {"source": "lizard", "error": "Missing package dimensions"}
+
+    try:
+        from sellfox_shipping.carriers.lizard.api_client import LizardApiClient
+
+        token = _read_env_key("YIGLOBAL_APP_TOKEN") or os.getenv("LIZARD_APP_TOKEN", "")
+        key = _read_env_key("YIGLOBAL_APP_KEY") or os.getenv("LIZARD_APP_KEY", "")
+        if not token or not key:
+            return {
+                "source": "lizard",
+                "error": "Lizard credentials not configured (YIGLOBAL_APP_TOKEN / YIGLOBAL_APP_KEY)",
+            }
+
+        wh_name = (record.logistics.warehouse_name or "").strip()
+        ca_zone = _LIZARD_CA_ZONE.get(wh_name, 0)
+
+        addr = record.address
+        body = {
+            "weight_unit_type": 2,  # KG/CM
+            "ca_zone": ca_zone,
+            "parcel_declared_value": 10,
+            "parcel_quantity": 1,
+            "box_list": [{
+                "box_actual_weight": package_dims["weight_kg"],
+                "box_length": package_dims["length_cm"],
+                "box_width": package_dims["width_cm"],
+                "box_height": package_dims["height_cm"],
+            }],
+            "oa_firstname": (addr.name or "Customer")[:35],
+            "oa_company": "",
+            "oa_country": (addr.country_code or addr.country or "US").upper(),
+            "oa_state": (addr.state_or_region or addr.city or "XX")[:2],
+            "oa_city": (addr.city or "")[:28],
+            "oa_postcode": (addr.postal_code or "")[:10],
+            "oa_street_address1": (addr.address_line_1 or "")[:50],
+            "oa_street_address2": (addr.address_line_2 or "")[:35],
+            "oa_telphone": (addr.phone or addr.mobile or "0000000000")[:15],
+            "oa_doorplate": "",
+            "oa_phone_ext": "",
+            "signature_service": "SSF",
+            "reference_no": record.package_sn,
+            "shipper_address": {
+                "shipper_name": "Dan-zhao",
+                "shipper_postal_code": "77099",
+                "shipper_address1": "10812 Fallstone Rd",
+                "shipper_address2": "Suite 402",
+                "shipper_state_province": "TX",
+                "shipper_city": "Houston",
+                "shipper_country": "US",
+                "shipper_telphone": "2816770938",
+            },
+        }
+
+        base_url = _read_env_key("YIGLOBAL_API_BASE_URL") or os.getenv(
+            "LIZARD_API_BASE_URL", "http://47.106.72.196"
+        )
+
+        with LizardApiClient(
+            app_token=token, app_key=key, base_url=base_url
+        ) as client:
+            resp = client.ratesv2(body)
+
+        result = resp.get("result") or {}
+        if not isinstance(result, dict) or not result:
+            return {"source": "lizard", "error": "No rates returned from Lizard API"}
+
+        # Persist all products with valid total_charge
+        for sm_code, item in result.items():
+            if not isinstance(item, dict):
+                continue
+            raw_total = item.get("total_charge")
+            if raw_total is None or str(raw_total).strip() == "":
+                continue
+            total = float(raw_total)
+            if total <= 0:
+                continue
+            rate_record = {
+                "source": "lizard",
+                "service": str(sm_code),
+                "total_amount": total,
+                "currency": str(item.get("currency_code", "USD")),
+                "billing_weight": float(item.get("charge_weight", 0) or 0),
+                "zone": str(item.get("address_type_text", "")),
+                "channel": str(sm_code),
+                "max_side_in": round(package_dims["length_cm"] / 2.54, 1),
+                "weight_lb": round(package_dims["weight_kg"] * 2.20462, 2),
+                "use_fedex": False,
+            }
+            _persist_rate(record, rate_record)
+
+        return None
+
+    except Exception:
+        return None
+
+
+def _persist_rate(record, rate_result: dict) -> None:
+    """Best-effort persist of a successful rate fetch to the DB."""
+    try:
+        repo = _get_package_repository()
+        package_db_id = repo.get_package_db_id(
+            config["sellfox"]["proxy_account"], record.package_sn
+        )
+        if package_db_id is not None:
+            repo.insert_package_rate(package_db_id=package_db_id, rate=rate_result)
+    except Exception:
+        pass
+
+
+def _get_rate_history(repo, record, account_key: str) -> list:
+    """Return recent rate fetch history for this package."""
+    try:
+        package_db_id = repo.get_package_db_id(account_key, record.package_sn)
+        if package_db_id is None:
+            return []
+        return repo.list_package_rates(package_db_id, limit=10)
+    except Exception:
+        return []
 
 
 @app.post("/packages/{package_sn}/review", response_class=HTMLResponse)

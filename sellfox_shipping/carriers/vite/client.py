@@ -69,6 +69,22 @@ class ViteGofoClient:
     def create_shipment_gofo(self, body: dict[str, Any]) -> dict[str, Any]:
         return self._post_json("/shipment2/gofo", body)
 
+    # ── FedEx endpoints ──────────────────────────────────────────
+
+    def rate_fedex(self, body: dict[str, Any]) -> dict[str, Any]:
+        """POST /rate2/fedex — domestic FedEx rate query."""
+        return self._post_json("/rate2/fedex", body)
+
+    def rate_fedex_international(self, body: dict[str, Any]) -> dict[str, Any]:
+        """POST /rate2/fedex/international — international FedEx rate query."""
+        return self._post_json("/rate2/fedex/international", body)
+
+    def create_shipment_fedex(self, body: dict[str, Any]) -> dict[str, Any]:
+        """POST /shipment2/fedex — create domestic FedEx label (future use)."""
+        return self._post_json("/shipment2/fedex", body)
+
+    # ── Shared label endpoints ───────────────────────────────────
+
     def get_label(self, order_id: str) -> list[dict[str, Any]]:
         """GET label; official success body is a JSON array of label objects."""
         oid = (order_id or "").strip()

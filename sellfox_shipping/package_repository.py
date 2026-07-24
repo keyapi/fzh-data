@@ -509,6 +509,47 @@ class PackageRoutingRow(Base):
     )
 
 
+class PackageRateRow(Base):
+    """One row per rate fetch — not unique on package_id, preserves history."""
+
+    __tablename__ = "shipping_package_rates"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    package_id: Mapped[int] = mapped_column(
+        ForeignKey("shipping_packages.id", ondelete="CASCADE"),
+    )
+    carrier: Mapped[str] = mapped_column(String, default="")
+    service: Mapped[str] = mapped_column(String, default="")
+    total_amount: Mapped[float | None] = mapped_column(Float, nullable=True)
+    currency: Mapped[str] = mapped_column(String, default="USD")
+    billing_weight: Mapped[float | None] = mapped_column(Float, nullable=True)
+    zone: Mapped[str] = mapped_column(String, default="")
+    channel: Mapped[str] = mapped_column(String, default="")
+    max_side_in: Mapped[float | None] = mapped_column(Float, nullable=True)
+    weight_lb: Mapped[float | None] = mapped_column(Float, nullable=True)
+    is_fedex: Mapped[bool] = mapped_column(default=False)
+    fetched_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.current_timestamp()
+    )
+
+
+@dataclass(frozen=True)
+class PackageRateRecord:
+    id: int
+    package_id: int
+    carrier: str
+    service: str
+    total_amount: float | None
+    currency: str
+    billing_weight: float | None
+    zone: str
+    channel: str
+    max_side_in: float | None
+    weight_lb: float | None
+    is_fedex: bool
+    fetched_at: datetime | None = None
+
+
 class PackageRepository:
     """Persist normalized package snapshots with account-scoped uniqueness."""
 
@@ -1732,6 +1773,40 @@ class PackageRepository:
                 computed_at=row.computed_at,
             )
 
+    def insert_package_rate(self, *, package_db_id: int, rate: dict) -> PackageRateRecord:
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        with self._session_factory.begin() as session:
+            row = PackageRateRow(
+                package_id=package_db_id,
+                carrier=rate.get("source", ""),
+                service=rate.get("service", ""),
+                total_amount=rate.get("total_amount"),
+                currency=rate.get("currency", "USD"),
+                billing_weight=rate.get("billing_weight"),
+                zone=str(rate.get("zone") or ""),
+                channel=rate.get("channel", ""),
+                max_side_in=rate.get("max_side_in"),
+                weight_lb=rate.get("weight_lb"),
+                is_fedex=rate.get("use_fedex", False),
+                fetched_at=now,
+            )
+            session.add(row)
+            session.flush()
+            return _rate_row_to_record(row)
+
+    def list_package_rates(
+        self, package_db_id: int, *, limit: int = 20
+    ) -> list[PackageRateRecord]:
+        with self._session_factory() as session:
+            rows = (
+                session.query(PackageRateRow)
+                .where(PackageRateRow.package_id == package_db_id)
+                .order_by(PackageRateRow.fetched_at.desc())
+                .limit(limit)
+                .all()
+            )
+            return [_rate_row_to_record(r) for r in rows]
+
     @staticmethod
     def _get_or_create_account(
         session: Session,
@@ -1984,6 +2059,31 @@ def _attempt_to_record(row: SubmissionAttemptRow) -> SubmissionAttemptRecord:
         actor=row.actor or "",
         http_status=row.http_status,
         http_summary=row.http_summary or "",
+    )
+
+
+def _rate_row_to_record(row: PackageRateRow) -> PackageRateRecord:
+    fetched_at = row.fetched_at
+    if fetched_at is not None:
+        from datetime import timedelta, timezone
+
+        fetched_at = fetched_at.replace(tzinfo=timezone.utc).astimezone(
+            timezone(timedelta(hours=8))
+        )
+    return PackageRateRecord(
+        id=int(row.id),
+        package_id=int(row.package_id),
+        carrier=row.carrier or "",
+        service=row.service or "",
+        total_amount=float(row.total_amount) if row.total_amount is not None else None,
+        currency=row.currency or "USD",
+        billing_weight=float(row.billing_weight) if row.billing_weight is not None else None,
+        zone=row.zone or "",
+        channel=row.channel or "",
+        max_side_in=float(row.max_side_in) if row.max_side_in is not None else None,
+        weight_lb=float(row.weight_lb) if row.weight_lb is not None else None,
+        is_fedex=bool(row.is_fedex),
+        fetched_at=fetched_at,
     )
 
 
