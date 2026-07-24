@@ -12,7 +12,7 @@
 | 标定店 | `TOODDLY-Daneey-US` |
 | 凭证 | `SELLFOX_PROXY_API_KEY` → `api.vilavi.cn/sellfox` |
 | 后端端口 | `8001` |
-| fzh-data 分支 | `feature/ai-access-board-poc` |
+| fzh-data | 已合并 PR [#116](https://github.com/keyapi/fzh-data/pull/116)（`main`） |
 
 ## 与壳的分工
 
@@ -22,3 +22,7 @@
 ## 共享代码
 
 复用本仓 [`SELLFOX_API/client.py`](../../SELLFOX_API/client.py)。外部树通过 `PYTHONPATH` 或拷贝薄适配器 `sellfox_openapi.py` 调用 client。
+
+## 下一步
+
+运营审阅 → [docs/specs/ops-review-brief.md](docs/specs/ops-review-brief.md)。签字前不得把候选当自动执行依据。
