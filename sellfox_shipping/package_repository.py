@@ -528,6 +528,7 @@ class PackageRateRow(Base):
     max_side_in: Mapped[float | None] = mapped_column(Float, nullable=True)
     weight_lb: Mapped[float | None] = mapped_column(Float, nullable=True)
     is_fedex: Mapped[bool] = mapped_column(default=False)
+    address_type: Mapped[str] = mapped_column(String, default="")
     raw_data: Mapped[str | None] = mapped_column(Text, nullable=True)
     fetched_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.current_timestamp()
@@ -548,6 +549,7 @@ class PackageRateRecord:
     max_side_in: float | None
     weight_lb: float | None
     is_fedex: bool
+    address_type: str = ""
     raw_data: str | None = None
     fetched_at: datetime | None = None
 
@@ -1790,6 +1792,7 @@ class PackageRepository:
                 max_side_in=rate.get("max_side_in"),
                 weight_lb=rate.get("weight_lb"),
                 is_fedex=rate.get("use_fedex", False),
+                address_type=rate.get("address_type", ""),
                 raw_data=raw_data,
                 fetched_at=now,
             )
@@ -2086,6 +2089,7 @@ def _rate_row_to_record(row: PackageRateRow) -> PackageRateRecord:
         max_side_in=float(row.max_side_in) if row.max_side_in is not None else None,
         weight_lb=float(row.weight_lb) if row.weight_lb is not None else None,
         is_fedex=bool(row.is_fedex),
+        address_type=row.address_type or "",
         raw_data=row.raw_data,
         fetched_at=fetched_at,
     )

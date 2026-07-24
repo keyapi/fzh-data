@@ -208,9 +208,10 @@ sellfox_shipping/
 | 蜴国际询价 | ratesv2 全部产品，S0143 发件，ca_zone=1(美东) |
 | 历史报价 | `shipping_package_rates` 表，VITE + 蜴国际共用，按需获取 |
 | 手动触发 | 点击按钮 → POST `/fetch-rates`，避免每次页面加载拉取 API |
-| 原始响应 | `raw_data` 列存储完整 API 返回 JSON（indent=2 格式化） |
+| 原始响应 | `raw_data` 列存储完整 API 返回 JSON（indent=2 格式化，暗色代码块可展开） |
+| 地址类型 | `address_type` 列存储 `address_type_text`（Residential/Commercial），与 Zone 分离 |
 | CLI | `packages-rate-history --package-sn X --json` |
-| 数据库 | `0010_package_rates` + `0011_package_rates_raw` migrations |
+| 数据库 | `0010_package_rates` → `0011_package_rates_raw` → `0012_package_rates_address_type` |
 
 ### 数据流
 
