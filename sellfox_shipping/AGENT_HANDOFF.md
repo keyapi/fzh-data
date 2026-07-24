@@ -206,22 +206,35 @@ sellfox_shipping/
 |------|------|
 | VITE 询价 | 最长边 ≤22" GOFO(GFUS), >22" FedEx(ODFC)；生产环境已验 |
 | 蜴国际询价 | ratesv2 全部产品，S0143 发件，ca_zone=1(美东) |
-| 历史报价 | `shipping_package_rates` 表，VITE + 蜴国际共用，每次 fetch INSERT 新行 |
+| 历史报价 | `shipping_package_rates` 表，VITE + 蜴国际共用，按需获取 |
+| 手动触发 | 点击按钮 → POST `/fetch-rates`，避免每次页面加载拉取 API |
+| 原始响应 | `raw_data` 列存储完整 API 返回 JSON（indent=2 格式化） |
 | CLI | `packages-rate-history --package-sn X --json` |
-| 数据库 | `0010_package_rates` migration |
+| 数据库 | `0010_package_rates` + `0011_package_rates_raw` migrations |
 
 ### 数据流
 
 ```
-包裹详情页
-  → _compute_package_dims()        # 合并重尺
-  → _compute_routing()             # 路由建议（蜥国际/VITE）
-  → _get_vite_rate()               # VITE GOFO/FedEx 实时询价
+包裹详情页（初始加载：仅路由建议 + 历史，不调 API）
+  → 用户点击「获取 VITE + 蜴国际 报价」
+  → POST /packages/{sn}/fetch-rates
+  → _get_vite_rate()               # VITE GOFO/FedEx
   → _get_lizard_rate()             # 蜴国际 ratesv2（静默持久化）
-  → _persist_rate()                # 写入 shipping_package_rates
+  → _persist_rate(raw_response=…)  # 写入 shipping_package_rates（含 raw_data）
+  → 刷新页面
   → 运费试算面板（路由建议承运商）
-  → 历史报价面板（VITE + 蜴国际 混合，上海时间）
+  → 历史报价面板（VITE + 蜴国际 混合，点击展开 JSON）
 ```
+
+## 问题记录
+
+| 问题 | 修复 |
+|------|------|
+| EN_API/.env 缺失 → EN ZLMB 重尺全返回"缺失" | 从 `D:\Claude Demo\fzh-data\EN_API\.env` 复制到 worktree |
+| FedEx ODFC 测试环境 403 | 切换生产环境 + prod API key |
+| 上海时间显示为 UTC | `_rate_row_to_record` 引用 `row.fetched_at` 而非转换后的局部变量 |
+| address2 字段名不匹配 | Pydantic 模型用 `address_line_2`，不是 `address2` |
+| 国际地址 state 为空 → API 400 | `_build_vite_ship_to` city 前 2 字符兜底 |
 
 ## 待实现
 
