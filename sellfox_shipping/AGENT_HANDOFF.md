@@ -197,8 +197,31 @@ sellfox_shipping/
 **未实现：** 公网实际打开 OIDC、成功的 live 填号、VITE 同构编排挂界面；Excel 仍生产默认；**默认不推销售平台**（通途写平台 + 自动推送关）
 
 **已落地（本切片）：** SQLite submit gate；OIDC 启用路径就绪（默认关）；`order_adapter` + `LizardApiShipmentService`；submit vs 自动推送边界文档；20260720 通途样例映射 + 本地 import。
-**VITE：** 测试环境 account/rate/create/getLabel/cancel 已验；决策采用 httpx。  
-**蜴国际：** PR#91 已验下单链路；本仓 `LizardApiClient`（httpx 同步，mock）；Excel 仍生产默认。勿从 main HANDOFF 拷明文 Key。
+**VITE：** 生产环境 GOFO + FedEx rate/create/shipment/label；决策采用 httpx。FedEx channel=ODFC，22" 阈值自动切换 GOFO/FedEx。  
+**蜴国际：** PR#91 已验下单链路；本仓 `LizardApiClient`（httpx 同步，mock）；ratesv2 报价已集成，Excel 仍生产默认。勿从 main HANDOFF 拷明文 Key。
+
+## 报价引擎 (新增)
+
+| 功能 | 说明 |
+|------|------|
+| VITE 询价 | 最长边 ≤22" GOFO(GFUS), >22" FedEx(ODFC)；生产环境已验 |
+| 蜴国际询价 | ratesv2 全部产品，S0143 发件，ca_zone=1(美东) |
+| 历史报价 | `shipping_package_rates` 表，VITE + 蜴国际共用，每次 fetch INSERT 新行 |
+| CLI | `packages-rate-history --package-sn X --json` |
+| 数据库 | `0010_package_rates` migration |
+
+### 数据流
+
+```
+包裹详情页
+  → _compute_package_dims()        # 合并重尺
+  → _compute_routing()             # 路由建议（蜥国际/VITE）
+  → _get_vite_rate()               # VITE GOFO/FedEx 实时询价
+  → _get_lizard_rate()             # 蜴国际 ratesv2（静默持久化）
+  → _persist_rate()                # 写入 shipping_package_rates
+  → 运费试算面板（路由建议承运商）
+  → 历史报价面板（VITE + 蜴国际 混合，上海时间）
+```
 
 ## 待实现
 

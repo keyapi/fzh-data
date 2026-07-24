@@ -92,6 +92,10 @@ carriers:
     class: carriers.csv_polling.CSVPollingCarrier
     label_format: PDF
     csv_template: "数据源样例/vite_template.csv"
+    # FedEx rate API (P1C spike)
+    # channel env var: VITE_FEDEX_CHANNEL — TODO: confirm with VITE account manager
+    fedex_ground_service: "FEDEX_GROUND"
+    gofo_max_side_inches: 22
 
   lizard:
     enabled: false  # P5 启用

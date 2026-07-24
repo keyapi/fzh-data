@@ -95,6 +95,91 @@
         </div>
         {% endif %}
 
+        <!-- 2.5 运费试算 -->
+        {% if vite_rate %}
+        <div class="panel">
+            <h2>运费试算</h2>
+            {% if vite_rate.error %}
+            <div class="route-card excluded">
+                <div class="reason" style="color:#721c24;">{{ vite_rate.error }}</div>
+            </div>
+            {% else %}
+            <div class="route-card" style="border-color:#c0f0c0;background:#f8fff8;">
+                <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:center;">
+                    <div class="info-item">
+                        <div class="label">来源</div>
+                        <div class="value" style="font-weight:700;font-size:16px;">
+                            {% if vite_rate.source == 'lizard' %}
+                            <span class="badge" style="background:#d4edda;color:#155724;">蜴国际</span>
+                            {% else %}
+                            <span class="badge" style="background:#d1ecf1;color:#0c5460;">VITE</span>
+                            {% endif %}
+                            {{ vite_rate.service }}
+                        </div>
+                    </div>
+                    <div class="info-item">
+                        <div class="label">预估运费</div>
+                        <div class="value" style="font-weight:700;font-size:20px;color:#155724;">
+                            {{ vite_rate.total_amount or '—' }} {{ vite_rate.currency }}
+                        </div>
+                    </div>
+                    <div class="info-item">
+                        <div class="label">计费重（lbs）</div>
+                        <div class="value">{{ vite_rate.billing_weight or '—' }}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="label">Zone</div>
+                        <div class="value">{{ vite_rate.zone or '—' }}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="label">最长边（inches）</div>
+                        <div class="value">{{ vite_rate.max_side_in }} in</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="label">渠道</div>
+                        <div class="value"><code>{{ vite_rate.channel or '—' }}</code></div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- 2.6 历史报价 -->
+        {% if rate_history %}
+        <div class="panel">
+            <h2>历史报价 (最近 {{ rate_history|length }} 条)</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>时间</th><th>渠道</th><th>运费</th><th>计费重(lbs)</th><th>Zone</th><th>最长边(in)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for rh in rate_history %}
+                    <tr>
+                        <td style="font-size:11px;">{{ rh.fetched_at.strftime('%Y-%m-%d %H:%M:%S') if rh.fetched_at else '—' }}</td>
+                        <td>
+                            {% if rh.carrier == 'lizard' %}
+                            <span class="badge" style="background:#d4edda;color:#155724;">蜴国际</span>
+                            {% elif rh.is_fedex %}
+                            <span class="badge" style="background:#ffeaa7;color:#6c5b00;">FedEx</span>
+                            {% else %}
+                            <span class="badge" style="background:#d1ecf1;color:#0c5460;">GOFO</span>
+                            {% endif %}
+                            <code>{{ rh.channel or '—' }}</code>
+                        </td>
+                        <td><strong>${{ rh.total_amount if rh.total_amount is not none else '—' }}</strong> {{ rh.currency }}</td>
+                        <td>{{ rh.billing_weight if rh.billing_weight is not none else '—' }}</td>
+                        <td>{{ rh.zone or '—' }}</td>
+                        <td>{{ rh.max_side_in if rh.max_side_in is not none else '—' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+
         <!-- 3. 商品行 + 包裹重尺 -->
         <div class="panel">
             <h2>商品行 ({{ package.items|length }})</h2>
