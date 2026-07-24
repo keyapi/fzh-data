@@ -8,6 +8,7 @@ title: ai_access_poc 变更日志
 
 ## 2026-07-24
 
+- **Portal PoC**：`portal/` — nginx `/chat`→OWUI、`/ops`→board stub、钉钉 OIDC dry-run；E2E 10/10；运营审 DEFERRED。
 - **板 PoC B1–B6**：`ai_access_poc/board/` + 外部 `IvyeaOps-sellfox`；独立 runner 产出否词/收割候选；写禁。
 - **壳 PoC 收口文档**：补齐 `open_webui/AGENT_HANDOFF.md`、OKF（roadmap / specs / lessons / reference）、README 补充 CI vs Terminal；全仓 solutions 写入 Tool summary + Open Terminal 模式。
 - **壳 PoC 验证**：compose（OWUI + Terminal slim）、api.vilavi.cn 冒烟、赛狐代理拉 SP 搜索词、Tool v0.3 summary、Skill、自定义模型 `fzh-sellfox-ops`；Open Terminal 深挖与 Pyodide CI 对照演示。

@@ -32,3 +32,7 @@ FZH_DATA_ROOT=<path-to-fzh-data>   # 供外部树 import client
 ## 验收
 
 见 [docs/specs/b1-b6-checklist.md](docs/specs/b1-b6-checklist.md)。
+
+## 下一步
+
+运营审 **DEFERRED**。Portal：`ai_access_poc/portal/`（nginx `/chat` `/ops` + 钉钉 dry-run）。

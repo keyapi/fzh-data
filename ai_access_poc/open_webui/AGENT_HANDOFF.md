@@ -77,4 +77,4 @@ Open Terminal 在 Admin → Settings → Integrations → Open Terminal：
 
 ## 下一步（非本壳）
 
-板 PoC：IvyeaOps fork → `sellfox_openapi` → `sellers` + 搜索词规范化 cache → optimizer 只读候选（关写）。两条绿后再 Portal。
+板 PoC 已合并（#116）。Portal PoC：`ai_access_poc/portal/`。运营审 **DEFERRED**。

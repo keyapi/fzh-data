@@ -221,10 +221,17 @@ Week2:  B4–B6；S4；运营初审（若候选已出）
 
 ---
 
-## 8. 本 PR 交付与下一切片
+## 8. 交付进度与下一切片
 
-**本 PR 只交付本 Spec + 索引更新。**  
-下一 PR（需你确认启动）建议：`feature/ai-access-shell-poc` 与/或 `feature/ai-access-board-poc`（板在外部 fork 则 fzh-data 只收「适配笔记 + 客户端抽取」）。
+| 切片 | 状态 |
+|------|------|
+| 本 Spec + 索引 | 已交付 |
+| 壳 PoC | **已合并** [#113](https://github.com/keyapi/fzh-data/pull/113) |
+| 板 PoC | **已合并** [#116](https://github.com/keyapi/fzh-data/pull/116) |
+| Portal nginx `/chat` `/ops` + 钉钉 dry-run | **本切片** `ai_access_poc/portal/` |
+| 运营审 | **DEFERRED**（不阻塞 Portal） |
+
+**再下一切片**：钉钉 live SSO + oauth2-proxy；扩展 READ_DATASETS；写 API 后再开 operate。
 
 ---
 
