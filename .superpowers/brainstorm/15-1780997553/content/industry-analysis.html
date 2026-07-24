@@ -1,0 +1,118 @@
+<h2>行业方案对比：资产组编辑器布局</h2>
+<p class="subtitle">研究了 Shopify、Amazon、IPV Curator、WordPress、StreamYard 等 7 个系统的 Collection/Lightbox/图片组 UI 模式</p>
+
+<div class="section">
+  <h3>行业共识（所有系统都这样做）</h3>
+  <ul style="font-size:13px;line-height:1.8;padding-left:18px;color:var(--text)">
+    <li><strong>拖拽手柄 + 视觉落点指示</strong> — IPV Curator 用绿色横线，Shopify 用蓝色阴影</li>
+    <li><strong>Position = 导出顺序</strong> — 第 1 张 = 主图，导出时映射到各平台列名</li>
+    <li><strong>显式保存按钮</strong> — Shopify/Amazon 都不自动保存，需要点 Save</li>
+    <li><strong>缩略图 + 角色标签</strong> — 每张图片上标明 main/alternate/lifestyle</li>
+    <li><strong>备选排序方式</strong> — 除了拖拽，还有"按名称/按日期"下拉排序作为备选</li>
+  </ul>
+</div>
+
+<div class="section">
+  <h3>四种布局模式对比</h3>
+
+  <table style="width:100%;border-collapse:collapse;font-size:13px">
+    <tr style="border-bottom:2px solid var(--border)">
+      <th style="text-align:left;padding:6px;width:15%">模式</th>
+      <th style="text-align:left;padding:6px;width:20%">谁在用</th>
+      <th style="text-align:left;padding:6px;width:30%">交互方式</th>
+      <th style="text-align:left;padding:6px;width:35%">优缺点</th>
+    </tr>
+    <tr style="border-bottom:1px solid var(--border);background:var(--surface-hover)">
+      <td style="padding:8px 6px;font-weight:600">🅰️ 右侧抽屉<br><span style="font-weight:400;font-size:11px;color:var(--text-muted)">Right Drawer</span></td>
+      <td style="padding:8px 6px">Shopify 媒体区<br>Notion Page Peek<br>macOS 预览</td>
+      <td style="padding:8px 6px">点 Collection → 右侧滑入面板。从主网格<strong>拖入</strong>面板=添加，面板内<strong>拖拽</strong>=排序</td>
+      <td style="padding:8px 6px"><span style="color:var(--success)">✅</span> 不离开主视图，边浏览边编辑<br><span style="color:var(--success)">✅</span> 贴合现有 DAM 架构<br><span style="color:var(--error)">❌</span> 窄面板（~360px），大图看不太清</td>
+    </tr>
+    <tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:8px 6px;font-weight:600">🅱️ 分栏策展<br><span style="font-weight:400;font-size:11px;color:var(--text-muted)">Split Curation</span></td>
+      <td style="padding:8px 6px">WordPress Gallery<br>大多数企业 DAM<br>FilePond 双面板</td>
+      <td style="padding:8px 6px">全屏双栏：左侧=资产池（可搜索过滤），右侧=Collection 列表。左右<strong>拖拽</strong>添加</td>
+      <td style="padding:8px 6px"><span style="color:var(--success)">✅</span> 策展心智模型最清晰<br><span style="color:var(--success)">✅</span> 源和目标始终可见<br><span style="color:var(--error)">❌</span> 需要全屏切换，丢弃侧边栏上下文<br><span style="color:var(--error)">❌</span> 实现量大，和现有布局冲突</td>
+    </tr>
+    <tr style="border-bottom:1px solid var(--border);background:var(--surface-hover)">
+      <td style="padding:8px 6px;font-weight:600">🅲 全屏替换<br><span style="font-weight:400;font-size:11px;color:var(--text-muted)">Full Replace</span></td>
+      <td style="padding:8px 6px">Shopify 单品编辑<br>Amazon Image Mgr<br>Google Photos Album</td>
+      <td style="padding:8px 6px">点 Collection → 主区域完全切换为编辑器，有"添加资产"按钮弹出选择器</td>
+      <td style="padding:8px 6px"><span style="color:var(--success)">✅</span> 空间最大，大缩略图网格<br><span style="color:var(--success)">✅</span> 专注编辑无干扰<br><span style="color:var(--error)">❌</span> 看不到全部资产池<br><span style="color:var(--error)">❌</span> 添加资产需额外步骤</td>
+    </tr>
+    <tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:8px 6px;font-weight:600">🅳 弹窗<br><span style="font-weight:400;font-size:11px;color:var(--text-muted)">Modal</span></td>
+      <td style="padding:8px 6px">REACH "Change Order"<br>轻量编辑场景</td>
+      <td style="padding:8px 6px">点按钮 → 居中弹窗仅显示 Collection 列表，拖拽排序后保存</td>
+      <td style="padding:8px 6px"><span style="color:var(--success)">✅</span> 实现最简单<br><span style="color:var(--error)">❌</span> 只能排序，不能添加/对比<br><span style="color:var(--error)">❌</span> 功能太弱，不适合主编辑器</td>
+    </tr>
+  </table>
+</div>
+
+<div class="section">
+  <h3>推荐：🅰️ 右侧抽屉 + 可展开</h3>
+  <p>理由：</p>
+  <ol style="font-size:13px;line-height:1.8;padding-left:18px;color:var(--text)">
+    <li><strong>贴合现有架构</strong> — Asset 详情面板已经是右侧滑出，Collection 编辑器复用同一模式，用户零学习成本</li>
+    <li><strong>边浏览边策展</strong> — 资产网格始终可见，可以对比不同图片决定"哪张做主图"，这是电商运营的核心操作</li>
+    <li><strong>SortableJS 已就绪</strong> — 只需把 Sortable 绑定到 Collection 面板内的列表上，不需要重构布局</li>
+    <li><strong>窄面板对列表够用</strong> — Collection 内是有序列表（不是网格），200px 宽的缩略图+角色标签在 360px 面板里空间充裕</li>
+    <li><strong>加个展开按钮</strong> — 点一下面板宽度从 360px → 520px，解决看大图的需求</li>
+  </ol>
+</div>
+
+<div class="section">
+  <h3>具体交互设计</h3>
+  <div style="display:flex;gap:6px;height:260px;margin-top:8px">
+    <div class="mock-sidebar" style="width:60px;flex-shrink:0;font-size:9px">Tags<br>Collections</div>
+    <div class="mock-content" style="flex:1;font-size:10px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:4px">
+      <span>🖼️  🖼️  🖼️  🖼️</span>
+      <span>🖼️  🖼️  🖼️  🖼️</span>
+      <span style="font-size:10px;opacity:0.5">资产网格（可搜索过滤，拖出添加）</span>
+    </div>
+    <div style="width:240px;flex-shrink:0;background:var(--bg);border:1px solid var(--border);border-radius:8px;display:flex;flex-direction:column;overflow:hidden">
+      <div style="padding:10px;border-bottom:1px solid var(--border);background:var(--surface-hover)">
+        <strong style="font-size:12px">📋 Softer 系列</strong>
+        <div style="font-size:10px;color:var(--text-muted)">listing · 4 assets · v3</div>
+      </div>
+      <div style="flex:1;overflow-y:auto;padding:6px">
+        <div style="display:flex;align-items:center;gap:6px;padding:5px;background:var(--primary-light);border-radius:4px;margin-bottom:4px;border-left:3px solid var(--primary)">
+          <div style="font-size:10px;color:var(--text-muted);cursor:grab">⠿</div>
+          <div style="width:40px;height:40px;background:var(--border);border-radius:3px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:14px">🖼️</div>
+          <div style="flex:1;font-size:11px"><strong>main</strong><br><span style="font-size:9px;color:var(--text-muted)">white-pillow-front.jpg</span></div>
+          <span style="font-size:9px;cursor:pointer;opacity:0.4">×</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;padding:5px;border-radius:4px;margin-bottom:4px">
+          <div style="font-size:10px;color:var(--text-muted);cursor:grab">⠿</div>
+          <div style="width:40px;height:40px;background:var(--border);border-radius:3px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:14px">🖼️</div>
+          <div style="flex:1;font-size:11px"><strong>lifestyle</strong><br><span style="font-size:9px;color:var(--text-muted)">sofa-room-scene.jpg</span></div>
+          <span style="font-size:9px;cursor:pointer;opacity:0.4">×</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;padding:5px;border-radius:4px;margin-bottom:4px">
+          <div style="font-size:10px;color:var(--text-muted);cursor:grab">⠿</div>
+          <div style="width:40px;height:40px;background:var(--border);border-radius:3px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:14px">🖼️</div>
+          <div style="flex:1;font-size:11px"><strong>detail</strong><br><span style="font-size:9px;color:var(--text-muted)">stitching-closeup.jpg</span></div>
+          <span style="font-size:9px;cursor:pointer;opacity:0.4">×</span>
+        </div>
+        <div style="text-align:center;padding:8px;border:1px dashed var(--border);border-radius:4px;font-size:11px;color:var(--text-muted)">拖拽资产到此处添加</div>
+      </div>
+      <div style="padding:8px;border-top:1px solid var(--border);display:flex;gap:4px">
+        <button class="mock-button" style="font-size:10px;padding:3px 8px">保存</button>
+        <button class="mock-button" style="font-size:10px;padding:3px 8px">导出</button>
+        <button class="mock-button" style="font-size:10px;padding:3px 8px;margin-left:auto">⇱ 展开</button>
+      </div>
+    </div>
+  </div>
+  <p style="font-size:11px;color:var(--text-muted);margin-top:8px">左侧 = 资产网格（可拖出） | 右侧 = Collection 编辑面板（可拖入+排序+展开） | 底部 = 操作栏（保存/导出/展开）</p>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="agree" onclick="toggleSelect(this)">
+    <div class="letter">✓</div>
+    <div class="content"><h3>同意，按这个方向做</h3></div>
+  </div>
+  <div class="option" data-choice="other" onclick="toggleSelect(this)">
+    <div class="letter">?</div>
+    <div class="content"><h3>有不同想法</h3><p>我要换成其他方案或有补充</p></div>
+  </div>
+</div>

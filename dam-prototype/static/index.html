@@ -11,6 +11,7 @@
 <link href="https://unpkg.com/filepond@4/dist/filepond.min.css" rel="stylesheet">
 <script src="https://unpkg.com/filepond@4/dist/filepond.min.js"></script>
 <script src="https://unpkg.com/sortablejs@1/Sortable.min.js"></script>
+<script src="https://unpkg.com/split.js@1/dist/split.min.js"></script>
 <style>
 :root {
   --font-sans: "Inter", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, sans-serif;
@@ -49,6 +50,46 @@ input, select, textarea { font: inherit; color: inherit; }
 .btn-ai { background: linear-gradient(135deg, #7C3AED, #2563EB); color: #FFF; } .btn-ai:hover { opacity: 0.92; }
 .btn-ai:disabled { opacity: 0.4; cursor: not-allowed; }
 .main { display: flex; flex: 1; overflow: hidden; }
+.right-pane { overflow-y: auto; min-width: 280px; background: var(--bg-sidebar); border-left: 1px solid var(--border); display: flex; flex-direction: column; }
+.right-pane-header { display: flex; align-items: center; gap: 6px; padding: 10px 12px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.right-pane-header .title { font-size: 13px; font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.right-pane-header .close-btn { font-size: 16px; padding: 2px 6px; border-radius: 4px; border: none; background: none; cursor: pointer; color: var(--text-muted); }
+.right-pane-header .close-btn:hover { background: var(--surface-hover); color: var(--text); }
+.right-pane-body { flex: 1; overflow-y: auto; padding: 10px 12px; }
+.right-pane-footer { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-top: 1px solid var(--border); background: var(--surface); flex-shrink: 0; font-size: 11px; color: var(--text-muted); }
+.right-pane-footer input[type="range"] { width: 60px; }
+/* Right Pane Collection Tree */
+.rp-tree-collection { margin-bottom: 4px; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.rp-tree-node { display: flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 0; cursor: pointer; font-size: 12px; user-select: none; }
+.rp-tree-node:hover { background: var(--surface-hover); }
+.rp-tree-node.collection { font-weight: 500; padding: 6px 10px; background: var(--bg-sidebar); border-bottom: 1px solid var(--border); }
+.rp-tree-node .tree-toggle { width: 14px; font-size: 10px; color: var(--text-muted); flex-shrink: 0; text-align: center; }
+.rp-tree-node .tree-icon { font-size: 14px; flex-shrink: 0; }
+.rp-tree-node .tree-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rp-tree-node .tree-count { font-size: 10px; color: var(--text-muted); flex-shrink: 0; }
+.rp-tree-node .tree-meta { font-size: 10px; color: var(--text-muted); flex-shrink: 0; }
+.rp-sku-row { display: flex; align-items: flex-start; gap: 8px; padding: 6px 8px; border-bottom: 1px solid var(--border); transition: background 0.15s, box-shadow 0.15s; min-height: 48px; }
+.rp-sku-row:last-child { border-bottom: none; }
+.rp-sku-row.drag-over { background: var(--primary-light); box-shadow: inset 0 0 0 2px var(--primary); animation: pulseBorder 0.8s ease-in-out infinite; }
+@keyframes pulseBorder { 0%, 100% { box-shadow: inset 0 0 0 2px var(--primary); } 50% { box-shadow: inset 0 0 0 4px var(--primary); } }
+.rp-sku-row .rp-sku-label { width: 100px; flex-shrink: 0; display: flex; flex-direction: column; justify-content: center; min-height: 40px; }
+.rp-sku-row .rp-sku-code { font-size: 12px; font-weight: 600; color: var(--text); word-break: break-all; }
+.rp-sku-row .rp-sku-n { font-size: 10px; color: var(--text-muted); }
+.rp-thumb-strip { display: flex; gap: 4px; overflow-x: auto; overflow-y: hidden; flex: 1; align-items: center; padding: 2px 0; }
+.rp-thumb-strip::-webkit-scrollbar { height: 4px; }
+.rp-thumb-strip::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+.rp-thumb-wrap { position: relative; border-radius: 4px; overflow: hidden; border: 1px solid var(--border); background: var(--border); flex-shrink: 0; }
+.rp-thumb-wrap img { display: block; object-fit: cover; }
+.rp-thumb-wrap .rp-rm-btn { position: absolute; top: 1px; right: 1px; width: 16px; height: 16px; background: rgba(0,0,0,0.55); color: #FFF; font-size: 10px; display: none; align-items: center; justify-content: center; border-radius: 50%; cursor: pointer; line-height: 1; }
+.rp-thumb-wrap:hover .rp-rm-btn { display: flex; }
+.rp-thumb-wrap .role-badge { position: absolute; bottom: 2px; left: 2px; font-size: 8px; padding: 1px 4px; border-radius: 2px; background: rgba(0,0,0,0.6); color: #fff; }
+.rp-sku-empty { padding: 20px 16px; text-align: center; font-size: 12px; color: var(--text-muted); }
+.rp-empty { text-align: center; padding: 30px 10px; color: var(--text-muted); font-size: 12px; }
+
+
+.gutter { background: var(--border); background-repeat: no-repeat; background-position: 50%; }
+.gutter:hover { background: var(--primary); }
+.gutter.gutter-horizontal { cursor: col-resize; width: 6px; }
 .sidebar { width: var(--sidebar-w); min-width: var(--sidebar-w); background: var(--bg-sidebar); border-right: 1px solid var(--border); padding: 16px 14px; overflow-y: auto; flex-shrink: 0; transition: margin-left 0.2s, opacity 0.2s; }
 .sidebar.collapsed { margin-left: calc(-1 * var(--sidebar-w)); opacity: 0; pointer-events: none; }
 .sidebar-section { margin-bottom: 18px; }
@@ -61,21 +102,32 @@ input, select, textarea { font: inherit; color: inherit; }
 .search-input { width: 100%; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; background: var(--bg); outline: none; }
 .search-input:focus { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-light); }
 .select-sm { width: 100%; padding: 5px 8px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 12px; background: var(--bg); cursor: pointer; outline: none; }
-.grid-area { flex: 1; overflow-y: auto; padding: 16px 20px; }
+.grid-area { flex: 1; overflow-y: auto; min-width: 300px; padding: 16px 20px; }
 .thumb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
-.thumb-card { position: relative; aspect-ratio: 1; border-radius: var(--radius); overflow: hidden; cursor: pointer; border: 2px solid transparent; background: var(--surface); box-shadow: var(--shadow); transition: border-color var(--transition), box-shadow var(--transition), transform var(--transition); animation: cardEnter 0.35s ease both; }
+.thumb-card { position: relative; aspect-ratio: 1; border-radius: var(--radius); overflow: hidden; cursor: grab; border: 2px solid transparent; background: var(--surface); box-shadow: var(--shadow); transition: border-color var(--transition), box-shadow var(--transition), transform var(--transition); animation: cardEnter 0.35s ease both; }
 @keyframes cardEnter { from { opacity: 0; transform: translateY(12px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
 .thumb-card:hover { border-color: var(--primary); box-shadow: var(--shadow-lg); transform: translateY(-2px); }
+.thumb-card:active { cursor: grabbing; }
 .thumb-card.selected { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-light); }
+/* SortableJS drag ghost: scaled to match Collection thumb size */
+.sortable-ghost.cancelling, .sortable-fallback.cancelling { animation: ghostCancel 0.25s cubic-bezier(0.4,0,1,1) forwards !important; pointer-events: none !important; }
+@keyframes ghostCancel { to { opacity: 0; transform: scale(0.3) !important; } }
+.sortable-ghost { opacity: 0.85 !important; transform: scale(0.65) !important; transform-origin: center center !important; border-radius: var(--radius) !important; box-shadow: 0 8px 25px rgba(0,0,0,0.3) !important; border: 2px solid var(--primary) !important; transition: transform 0.1s ease !important; z-index: 9999 !important; }
+.sortable-fallback { opacity: 0.85 !important; transform: scale(0.65) !important; transform-origin: center center !important; border-radius: var(--radius) !important; box-shadow: 0 8px 25px rgba(0,0,0,0.3) !important; border: 2px solid var(--primary) !important; }
+/* Drop animation: new items in Collection thumbnail strip */
+.rp-thumb-strip .rp-thumb-wrap:last-child { animation: dropIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+@keyframes dropIn { from { opacity: 0; transform: scale(0.3); } to { opacity: 1; transform: scale(1); } }
+
 .thumb-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .thumb-card .sel-check { position: absolute; top: 6px; left: 6px; width: 22px; height: 22px; border-radius: 50%; background: var(--primary); color: #FFF; display: none; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; box-shadow: var(--shadow); }
 .thumb-card.selected .sel-check { display: flex; }
 .thumb-card .badge { position: absolute; bottom: 6px; right: 6px; padding: 1px 6px; border-radius: var(--radius-full); font-size: 10px; font-weight: 500; background: rgba(0,0,0,0.65); color: #FFF; }
 .thumb-card .badge.ai { background: var(--warning); color: #000; font-weight: 600; }
-.thumb-card .drag-grip { position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; border-radius: 4px; background: rgba(0,0,0,0.45); color: #FFF; display: flex; align-items: center; justify-content: center; font-size: 13px; cursor: grab; opacity: 0; transition: opacity var(--transition); }
-.thumb-card:hover .drag-grip { opacity: 1; }
+
+
 .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 60vh; gap: 10px; color: var(--text-muted); user-select: none; }
-.empty-state .empty-icon { font-size: 56px; opacity: 0.35; margin-bottom: 4px; }
+.empty-state .empty-icon { width: 80px; height: 80px; margin-bottom: 4px; }
+.empty-state .empty-icon svg { width: 100%; height: 100%; opacity: .3; }
 .empty-state p { font-size: 14px; }
 .detail-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 20; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
 .detail-overlay.visible { opacity: 1; pointer-events: auto; }
@@ -101,6 +153,82 @@ input, select, textarea { font: inherit; color: inherit; }
 .tag-add { width: 100%; padding: 5px 8px; border: 1px dashed var(--border); border-radius: var(--radius); font-size: 12px; background: transparent; outline: none; }
 .tag-add:focus { border-color: var(--primary); }
 .detail-meta { font-size: 11px; color: var(--text-muted); margin-top: 8px; }
+.tree-node { display:flex; align-items:center; gap:4px; padding:3px 6px; border-radius:4px; cursor:pointer; font-size:12px; margin-top:1px; white-space:nowrap; overflow:hidden; }
+.tree-node:hover { background:var(--surface-hover); }
+.tree-node.active { background:var(--accent-bg); color:var(--accent-text); }
+.tree-node.active .tree-count { color:inherit; opacity:.7; }
+.tree-toggle { width:12px; text-align:center; font-size:9px; color:var(--text-muted); flex-shrink:0; cursor:pointer; user-select:none; }
+.tree-icon { font-size:13px; flex-shrink:0; }
+.tree-name { overflow:hidden; text-overflow:ellipsis; flex:1; }
+.tree-count { font-size:9px; color:var(--text-muted); flex-shrink:0; }
+.tree-node.sub .tree-icon, .tree-node.sub2 .tree-icon, .tree-node.sub3 .tree-icon { opacity:.6; }
+.folder-breadcrumb { padding:4px 8px; font-size:11px; }
+.folder-breadcrumb a { color:var(--primary); text-decoration:none; }
+.folder-breadcrumb a:hover { text-decoration:underline; }
+.folder-header { display:flex; align-items:center; gap:8px; padding:8px 12px; background:var(--surface); border-bottom:1px solid var(--border); }
+/* NAS Explorer dual-pane */
+.nas-explorer-overlay { position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:100; }
+.nas-explorer { background:var(--surface);border-radius:10px;width:92vw;max-width:1100px;height:85vh;max-height:700px;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.3);overflow:hidden; }
+.nas-explorer-toolbar { display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border); }
+.nas-nav-btns { display:flex;gap:2px; }
+.nas-nav-btns button { background:none;border:1px solid var(--border);border-radius:4px;padding:3px 8px;cursor:pointer;font-size:13px;color:var(--text); }
+.nas-nav-btns button:disabled { opacity:.3; }
+.nas-nav-btns button:hover:not(:disabled) { background:var(--surface-hover); }
+.nas-breadcrumbs { display:flex;align-items:center;gap:2px;font-size:12px;flex:1;overflow:hidden; }
+.nas-bc-item { padding:2px 6px;border-radius:3px;cursor:pointer;white-space:nowrap; }
+.nas-bc-item:hover { background:var(--surface-hover); }
+.nas-bc-sep { color:var(--text-muted);font-size:12px; }
+.nas-view-btns { display:flex;gap:2px; }
+.nas-view-btns button { background:none;border:1px solid var(--border);border-radius:3px;padding:3px 7px;cursor:pointer;font-size:14px;color:var(--text-muted); }
+.nas-view-btns button.active { background:var(--accent-bg);color:var(--accent-text); }
+.nas-view-btns button:hover:not(.active) { background:var(--surface-hover); }
+.nas-explorer-body { flex:1;display:flex;overflow:hidden; }
+.nas-tree-pane { width:220px;flex-shrink:0;border-right:1px solid var(--border);overflow-y:auto;padding:4px 0;background:var(--surface); }
+.nas-tree-node { display:flex;align-items:center;gap:2px;padding:3px 8px;cursor:pointer;font-size:12px;white-space:nowrap;overflow:hidden; }
+.nas-tree-node:hover { background:var(--surface-hover); }
+.nas-tree-node.active { background:var(--accent-bg); }
+.nas-tree-arrow { width:14px;text-align:center;font-size:9px;color:var(--text-muted);flex-shrink:0; }
+.nas-tree-icon { font-size:13px;flex-shrink:0; }
+.nas-tree-label { overflow:hidden;text-overflow:ellipsis; }
+.nas-content-pane { flex:1;overflow-y:auto;padding:8px; }
+.nas-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px; }
+.nas-grid-item { border-radius:6px;cursor:pointer;padding:4px;transition:background .1s;text-align:center; }
+.nas-grid-item:hover { background:var(--surface-hover); }
+.nas-grid-item.selected { background:var(--accent-bg); }
+.nas-grid-folder { padding:8px 0; }
+.nas-grid-fld-icon { font-size:36px;display:block; }
+.nas-grid-fld-name { font-size:10px;display:block;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.nas-grid-file { position:relative; }
+.nas-grid-file-check { position:absolute;top:4px;left:4px;width:18px;height:18px;background:var(--primary);color:#fff;border-radius:50%;font-size:11px;display:flex;align-items:center;justify-content:center;z-index:1; }
+.nas-grid-img { width:100%;height:90px;object-fit:cover;border-radius:3px;background:var(--border); }
+.nas-grid-file-icon { font-size:36px;display:block;height:90px;line-height:90px; }
+.nas-grid-file-name { font-size:10px;display:block;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.nas-list { }
+.nas-list-row { display:flex;align-items:center;gap:6px;padding:3px 8px;border-bottom:1px solid var(--border);font-size:12px;border-radius:3px;cursor:pointer; }
+.nas-list-row:hover { background:var(--surface-hover); }
+.nas-list-row.selected { background:var(--accent-bg); }
+.nas-list-name { flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.nas-list-meta { font-size:10px;color:var(--text-muted);width:60px;text-align:right;flex-shrink:0; }
+.nas-explorer-footer { display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-top:1px solid var(--border); }
+.nas-lightbox { position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;display:flex;align-items:center;justify-content:center;flex-direction:column; }
+.nas-lightbox-close { position:absolute;top:16px;right:16px;background:none;border:none;color:#fff;font-size:24px;cursor:pointer;padding:8px; }
+.nas-lightbox-prev,.nas-lightbox-next { position:absolute;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.15);border:none;color:#fff;font-size:48px;cursor:pointer;padding:16px 8px;border-radius:4px; }
+.nas-lightbox-prev:hover,.nas-lightbox-next:hover { background:rgba(255,255,255,.25); }
+.nas-lightbox-prev { left:16px; }
+.nas-lightbox-next { right:16px; }
+.nas-lightbox-counter { color:#fff;font-size:13px;margin-top:12px; }
+.folder-header-icon { font-size:18px; }
+.folder-header-name { font-size:15px; font-weight:600; }
+.folder-header-count { font-size:11px; color:var(--text-muted); }
+.subfolder-grid { display:flex; flex-wrap:wrap; gap:10px; padding:12px; }
+.subfolder-card { width:140px; text-align:center; cursor:pointer; padding:8px; border-radius:var(--radius); transition:background .15s; }
+.subfolder-card:hover { background:var(--surface-hover); }
+.subfolder-thumb-wrap { width:120px; height:120px; margin:0 auto; position:relative; border-radius:4px; overflow:hidden; background:#d4d0c8; border:1px solid #c5c0b8; }
+.subfolder-thumb-img { width:100%; height:100%; object-fit:cover; position:absolute; inset:0; }
+.subfolder-thumb-folder { width:100%; height:100%; display:flex; align-items:center; justify-content:center; position:absolute; inset:0; }
+.subfolder-thumb-folder svg { width:48px; height:48px; opacity:.5; }
+.subfolder-name { display:block; font-size:12px; margin-top:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.subfolder-count { font-size:10px; color:var(--text-muted); }
 .detail-meta div { padding: 2px 0; }
 .product-link { margin-top: 6px; display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; background: var(--primary-light); color: var(--primary); border-radius: var(--radius-full); font-size: 12px; font-weight: 500; }
 .product-link .rm { cursor: pointer; font-size: 14px; opacity: 0.6; }
@@ -108,6 +236,10 @@ input, select, textarea { font: inherit; color: inherit; }
 @keyframes slideDown { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
 .batch-bar .btn-batch { padding: 3px 10px; border-radius: 4px; font-size: 12px; background: rgba(255,255,255,0.2); color: #FFF; transition: background var(--transition); }
 .batch-bar .btn-batch:hover { background: rgba(255,255,255,0.35); }
+.sortable-ghost { opacity: 0.4; }
+.collection-item { transition: background 0.15s ease, box-shadow 0.15s ease; }
+.sortable-chosen + .collection-item { /* parent highlight when dragging over */ }
+#collection-drop-zone .sortable-ghost { background: var(--primary-light); border-radius: var(--radius); box-shadow: inset 0 0 0 2px var(--primary); }
 .upload-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; z-index: 100; }
 .upload-dialog { background: var(--surface); border-radius: var(--radius-lg); padding: 32px; width: 460px; max-width: 90vw; box-shadow: var(--shadow-lg); }
 .upload-dialog h2 { font-size: 17px; font-weight: 600; margin-bottom: 6px; }
@@ -188,6 +320,7 @@ input, select, textarea { font: inherit; color: inherit; }
     <button class="btn btn-primary" @click="showUpload = true">+ Upload</button>
     <button class="btn btn-ai" @click="aiTagSelected" :disabled="selectedIds.length===0">AI Tag ({{ selectedIds.length }})</button>
     <button class="btn btn-secondary" @click="clearAll" v-if="selectedIds.length>0">Clear</button>
+    <button class="btn btn-secondary" @click="showRightPane ? closeRightPane() : openRightPane()" :class="{active: showRightPane}" style="margin-left:auto" :title="showRightPane ? 'Close dual pane' : 'Open dual pane'">{{ showRightPane ? '▮' : '▯' }} Dual Pane</button>
   </header>
   <div class="main">
     <aside class="sidebar" :class="{collapsed: !sidebarOpen}">
@@ -201,24 +334,66 @@ input, select, textarea { font: inherit; color: inherit; }
         <input class="search-input" v-model="productQ" @input="searchProducts" placeholder="Search SKU or name...">
         <div v-if="productResults.length" style="margin-top:6px"><div v-for="p in productResults" :key="p.sku" class="filter-radio" :class="{active: filterProduct===p.sku}" @click="if(!editorDirty||confirm('You have unsaved changes. Discard them?')){closeEditor(true);filterProduct=filterProduct===p.sku?null:p.sku}">{{ p.sku }}</div></div>
       </div>
-      <div class="sidebar-section"><h3>Sort</h3>
-        <select class="select-sm" v-model="sortBy"><option value="newest">Newest</option><option value="oldest">Oldest</option><option value="name">Name</option></select>
+      <div class="sidebar-section" v-if="folderTree.length"><h3>Folders</h3>
+        <div v-for="n in flattenedFolderTree" :key="n.path">
+          <div class="tree-node" :class="{active: filterFolder===n.path}" @click="folderClick(n)" :style="{paddingLeft: (n.depth*16+8)+'px'}" :title="n.path">
+            <span class="tree-toggle" @click.stop="folderToggle(n)">{{ n.children&&n.children.length ? (n.expanded ? '▾' : '▸') : '' }}</span>
+            <span class="tree-icon">📁</span>
+            <span class="tree-name">{{ n.name }}</span>
+            <span class="tree-count">{{ n.count }}</span>
+          </div>
+        </div>
+      </div>
+      <!-- Breadcrumb when folder selected -->
+      <div v-if="filterFolder" class="folder-breadcrumb" style="margin-top:4px">
+        <a href="#" @click.prevent="folderClick(null)" style="font-size:11px">Root</a>
+        <template v-for="(seg,i) in filterFolder.split('/')" :key="i">
+          <span style="color:var(--text-muted)"> / </span>
+          <a href="#" @click.prevent="folderClickByPath(filterFolder.split('/').slice(0,i+1).join('/'))" style="font-size:11px">{{ seg }}</a>
+        </template>
+      </div>
+      <div class="sidebar-section" style="margin-bottom:8px">
+        <button class="btn btn-secondary" style="width:100%;font-size:12px;padding:4px" @click="showNas=true;nasLoad('')">🌐 Browse NAS</button>
       </div>
       <div class="sidebar-section"><h3>Collections</h3>
         <button class="btn btn-primary" style="width:100%;font-size:12px;padding:4px;margin-bottom:4px" @click="openCollectionEditor()">+ New</button>
-        <div v-for="c in collections" :key="c.id" class="filter-radio" style="margin-top:4px;font-size:12px;cursor:pointer" @click="openEditor(c)" @contextmenu.prevent="showCollectionMenu(c,$event)">
+        <div id="collection-drop-zone">
+        <div v-for="c in collections" :key="c.id" class="filter-radio collection-item" :data-collection-id="c.id" style="margin-top:4px;font-size:12px;cursor:pointer" @click="showRightPane ? rpExpandCollection(c.id) : openEditor(c)" @contextmenu.prevent="showCollectionMenu(c,$event)">
           {{ c.name }} <span style="font-size:10px;color:var(--text-muted);margin-left:auto">v{{ c.version }}</span>
+        </div>
         </div>
       </div>
     </aside>
     <div class="grid-area" v-if="!editorColl">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><input class="search-input" v-model="leftSearch" placeholder="Search filenames..." style="flex:1;max-width:320px"><span v-if="leftSearch" style="font-size:11px;color:var(--text-muted)">{{ leftFiltered.length }} results</span></div>
+      <!-- 文件夹浏览头部 -->
+      <div v-if="filterFolder" class="folder-header">
+        <span class="folder-header-icon">📁</span>
+        <span class="folder-header-name">{{ filterFolder.split('/').pop() }}</span>
+        <span class="folder-header-count">{{ leftFiltered.length }} assets</span>
+      </div>
+      <!-- 子文件夹卡片（仅浏览文件夹时显示） -->
+      <div v-if="filterFolder && currentSubfolders.length" class="subfolder-grid">
+        <div v-for="sf in currentSubfolders" :key="sf.path" class="subfolder-card" @click="folderClick(sf)" :title="sf.path">
+          <div class="subfolder-thumb-wrap">
+            <div class="subfolder-thumb-folder"><svg viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="1.5"><path d="M2 6a2 2 0 0 1 2-2h5l2 2h9a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6z"/></svg></div>
+            <img :src="getFolderThumb(sf.path)" class="subfolder-thumb-img" loading="lazy">
+          </div>
+          <span class="subfolder-name">{{ sf.name }}</span>
+          <span class="subfolder-count">{{ sf.count }}</span>
+        </div>
+      </div>
       <div v-if="selectedIds.length>1" class="batch-bar">{{ selectedIds.length }} selected <button class="btn-batch" @click="batchTag">Tag</button> <button class="btn-batch" @click="batchLink">Link SKU</button> <button class="btn-batch" @click="batchDelete">Delete</button></div>
-      <div v-if="filtered.length===0 && !loading" class="empty-state"><div class="empty-icon">{{ filterType==='all'?'📁':'🖼️' }}</div><p>No assets found</p><button class="btn btn-primary" @click="showUpload=true" style="margin-top:8px">Upload your first asset</button></div>
-      <div v-show="filtered.length>0" class="thumb-grid" ref="thumbGrid">
-        <div v-for="(a,i) in filtered" :key="a.id" class="thumb-card" :class="{selected: selectedIds.includes(a.id)}" :style="{animationDelay: (i*0.03)+'s'}" @click.stop="selectOne(a,$event)" draggable="false">
+      <div v-if="leftFiltered.length===0 && !loading && !currentSubfolders.length" class="empty-state">
+        <div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6a2 2 0 0 1 2-2h5l2 2h9a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6z"/></svg></div>
+        <p v-if="filterFolder">Folder "{{ filterFolder.split('/').pop() }}" is empty</p>
+        <p v-else>No assets found</p>
+        <button class="btn btn-primary" @click="showUpload=true" style="margin-top:8px">Upload to this folder</button>
+      </div>
+      <div v-show="leftFiltered.length>0" class="thumb-grid" ref="thumbGrid">
+        <div v-for="(a,i) in leftFiltered" :key="a.id" class="thumb-card" :class="{selected: selectedIds.includes(a.id)}" :style="{animationDelay: (i*0.03)+'s'}" @click.stop="selectOne(a,$event)" @contextmenu.prevent.stop="showAssetMenu(a,$event)" :data-asset-id="a.id">
           <img :src="a.thumb_url || a.file_url" :alt="a.filename" loading="lazy" draggable="false">
-          <span class="sel-check">✓</span><span class="drag-grip" @click.stop @mousedown.stop>⠿</span>
-          <span v-if="hasPendingAiTags(a)" class="badge ai">AI</span>
+          <span class="sel-check">✓</span><span v-if="hasPendingAiTags(a)" class="badge ai">AI</span>
         </div>
       </div>
     </div>
@@ -238,7 +413,7 @@ input, select, textarea { font: inherit; color: inherit; }
         <div class="editor-images" ref="editorGrid">
           <div v-for="item in editorSkuItems" :key="item.asset_id" class="editor-img-card">
             <img :src="item.thumb_url || item.file_url" :alt="item.filename">
-            <span class="drag-grip">⠿</span><span class="rm-btn" @click="removeEditorItem(item.asset_id)">×</span>
+            <span class="rm-btn" @click="removeEditorItem(item.asset_id)">×</span>
             <span class="role-badge">{{ item.role }}</span>
             <select class="editor-role-select" :value="item.role" @change="setEditorRole(item.asset_id, $event.target.value)">
               <option value="main">Main</option><option value="alternate">Alt</option><option value="lifestyle">Life</option><option value="detail">Det.</option><option value="size_chart">Chart</option><option value="packaging">Pkg</option><option value="a_plus">A+</option><option value="other">Other</option>
@@ -285,7 +460,62 @@ input, select, textarea { font: inherit; color: inherit; }
       </div>
     </div>
   </div>
-  <div class="detail-overlay" :class="{visible: !!detailAsset}" @click="detailAsset=null"></div>
+  <!-- Right Pane: Second Resource Browser -->
+  <div class="right-pane" v-if="showRightPane && !editorColl">
+    <div class="right-pane-header">
+      <span class="title">Collections</span>
+      <input class="search-input" v-model="rpSearch" placeholder="Filter..." style="flex:1;max-width:180px;font-size:12px;height:26px">
+      <input type="range" min="40" max="140" v-model.number="rpThumbSize" title="Thumb size" style="width:60px">
+      <button class="close-btn" @click="closeRightPane">X</button>
+    </div>
+    <div class="right-pane-body" style="padding:0">
+      <div v-for="c in rpFilteredCollections" :key="c.id" class="rp-tree-collection">
+        <div class="rp-tree-node collection" @click="rpExpandCollection(c.id)">
+          <span class="tree-toggle">{{ rpExpandedCollections.has(c.id) ? '▼' : '▶' }}</span>
+          <span class="tree-icon">📁</span>
+          <span class="tree-name">{{ c.name }}</span>
+          <span class="tree-meta">v{{ c.version }}</span>
+        </div>
+        <template v-if="rpExpandedCollections.has(c.id)">
+          <div v-if="!rpCollectionItems[c.id] && rpLoading[c.id]" style="padding:8px 16px;font-size:11px;color:var(--text-muted)">Loading...</div>
+          <template v-if="rpCollectionItems[c.id]">
+            <div v-for="sku in rpGetSkus(c.id)" :key="sku.code" class="rp-sku-row" :data-coll-id="c.id" :data-sku="sku.code">
+              <div class="rp-sku-label">
+                <span class="rp-sku-code">{{ sku.code }}</span>
+                <span class="rp-sku-n">({{ sku.count }})</span>
+              </div>
+              <div class="rp-thumb-strip">
+                <div v-for="item in rpGetSkuItems(c.id, sku.code)" :key="item.asset_id" class="rp-thumb-wrap" :style="{width:rpThumbSize+'px',height:rpThumbSize+'px'}" :title="(item.filename||'')">
+                  <img :src="item.thumb_url || item.file_url || ''" :style="{width:rpThumbSize+'px',height:rpThumbSize+'px'}" loading="lazy">
+                  <span class="role-badge" v-if="item.role">{{ (item.role||'').slice(0,5) }}</span>
+                  <span class="rp-rm-btn" @click.stop="rpRemoveItem(c.id, item.asset_id)">✕</span>
+                </div>
+              </div>
+            </div>
+            <div v-if="rpGetUnlinked(c.id).length" class="rp-sku-row" :data-coll-id="c.id" data-sku="_unlinked">
+              <div class="rp-sku-label">
+                <span class="rp-sku-code" style="color:var(--text-muted);font-style:italic">_unlinked</span>
+                <span class="rp-sku-n">({{ rpGetUnlinked(c.id).length }})</span>
+              </div>
+              <div class="rp-thumb-strip">
+                <div v-for="item in rpGetUnlinked(c.id)" :key="item.asset_id" class="rp-thumb-wrap" :style="{width:rpThumbSize+'px',height:rpThumbSize+'px'}">
+                  <img :src="item.thumb_url || item.file_url || ''" :style="{width:rpThumbSize+'px',height:rpThumbSize+'px'}" loading="lazy">
+                  <span class="rp-rm-btn" @click.stop="rpRemoveItem(c.id, item.asset_id)">✕</span>
+                </div>
+              </div>
+            </div>
+          </template>
+          <div v-else-if="!rpLoading[c.id]" class="rp-sku-empty">No items in this collection</div>
+        </template>
+      </div>
+      <div v-if="rpFilteredCollections.length===0" class="rp-empty">No collections found</div>
+    </div>
+    <div class="right-pane-footer">
+      <span>{{ rpThumbSize }}px</span>
+    </div>
+  </div>
+
+    <div class="detail-overlay" :class="{visible: !!detailAsset}" @click="detailAsset=null"></div>
   <aside class="detail-panel" :class="{open: !!detailAsset}">
     <template v-if="detailAsset">
       <div class="detail-header"><h3 :title="detailAsset.filename">{{ detailAsset.filename }}</h3><button class="close-btn" @click="detailAsset=null">×</button></div>
@@ -317,12 +547,94 @@ input, select, textarea { font: inherit; color: inherit; }
     </template>
   </aside>
   <div v-if="showUpload" class="upload-overlay" @click.self="showUpload=false" @keydown.escape="showUpload=false">
-    <div class="upload-dialog"><h2>Upload Assets</h2><p>Images, videos, documents — drop them here</p>
-      <div class="drop-zone" :class="{'drag-over': dragOver}" @click="$refs.fileIn.click()" @dragover.prevent="dragOver=true" @dragleave="dragOver=false" @drop.prevent="handleDrop($event)"><div class="dz-icon">⇧</div><p>Drop files or click to browse</p><p class="dz-hint">JPG, PNG, WebP, MP4, PDF — max 50MB each</p></div>
+    <div class="upload-dialog"><h2>Upload Assets</h2><p>Drop files or folders, or use the buttons below. Folder structure is preserved.</p>
+      <div class="drop-zone" :class="{'drag-over': dragOver}" @click="$refs.fileIn.click()" @dragover.prevent="dragOver=true" @dragleave="dragOver=false" @drop.prevent="handleDrop($event)"><div class="dz-icon">⇧</div><p>Drop files or folders here</p><p class="dz-hint">JPG, PNG, WebP, MP4, PDF — max 50MB each</p></div>
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button class="btn btn-secondary" @click="$refs.fileIn.click()">Choose Files</button>
+        <button class="btn btn-secondary" @click="$refs.folderIn.click()">Choose Folder</button>
+      </div>
       <input type="file" ref="fileIn" multiple accept="image/*,video/*,.pdf,.doc,.docx" @change="handlePick" style="display:none">
+      <input type="file" ref="folderIn" webkitdirectory multiple @change="handlePick" style="display:none">
       <div v-if="uploading" style="text-align:center;color:var(--primary);font-size:13px;padding:8px">Uploading...</div>
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px"><button class="btn btn-secondary" @click="showUpload=false">Cancel</button></div>
     </div>
+  </div>
+  <!-- NAS Explorer (dual-pane with tree) -->
+  <div v-if="showNas" class="nas-explorer-overlay" @click.self="showNas=false" @keydown.escape="showNas=false">
+    <div class="nas-explorer">
+      <div class="nas-explorer-toolbar">
+        <div class="nas-nav-btns">
+          <button @click="nasNavBack()" :disabled="nasHistIdx<=0" title="Back">←</button>
+          <button @click="nasNavFwd()" :disabled="nasHistIdx>=nasHistory.length-1" title="Forward">→</button>
+          <button @click="nasLoad(nasCurrent,true)" title="Refresh">↻</button>
+        </div>
+        <div class="nas-breadcrumbs">
+          <span class="nas-bc-item" @click="nasLoad('')">🏠</span>
+          <template v-for="(seg,i) in nasBreadcrumbs" :key="i">
+            <span class="nas-bc-sep">›</span>
+            <span class="nas-bc-item" @click="nasLoad(seg.path)">{{ seg.name }}</span>
+          </template>
+        </div>
+        <div class="nas-view-btns">
+          <button :class="{active:nasView==='grid'}" @click="nasView='grid'" title="Grid">⊞</button>
+          <button :class="{active:nasView==='list'}" @click="nasView='list'" title="List">☰</button>
+        </div>
+      </div>
+      <div class="nas-explorer-body">
+        <div class="nas-tree-pane">
+          <div v-for="n in flattenedNasTree" :key="n.path">
+            <div class="nas-tree-node" :class="{active:nasCurrent===n.path}" :style="{paddingLeft:(n.depth*14+8)+'px'}" @click="nasLoad(n.path)" :title="n.path">
+              <span class="nas-tree-arrow" @click.stop="nasTreeToggle(n)" v-if="n.has_children!==false">{{ n.expanded?'▾':'▸' }}</span>
+              <span class="nas-tree-arrow" v-else style="visibility:hidden">▸</span>
+              <span class="nas-tree-icon">📁</span>
+              <span class="nas-tree-label">{{ n.name }}</span>
+            </div>
+          </div>
+        </div>
+        <div class="nas-content-pane">
+          <div v-if="nasLoading" style="text-align:center;padding:60px;color:var(--text-muted)">Loading...</div>
+          <div v-if="!nasLoading&&nasView==='grid'" class="nas-grid">
+            <div v-for="e in nasEntries" :key="e.path" class="nas-grid-item" :class="{selected:nasSelected.includes(e.path)}" @click="e.type==='directory'?nasLoad(e.path):nasToggleSelect(e.path)" @dblclick="e.type==='directory'?nasLoad(e.path):nasPreviewImg(e)">
+              <div v-if="e.type==='directory'" class="nas-grid-folder"><span class="nas-grid-fld-icon">📁</span><span class="nas-grid-fld-name">{{ e.name }}</span></div>
+              <div v-else class="nas-grid-file">
+                <div class="nas-grid-file-check" v-if="nasSelected.includes(e.path)">✓</div>
+                <img v-if="isNasImage(e.name)" :src="'/api/nas/thumbnail?path='+encodeURIComponent(e.path)" class="nas-grid-img" loading="lazy" @error="$event.target.style.display='none'">
+                <span v-if="!isNasImage(e.name)" class="nas-grid-file-icon">🖼️</span>
+                <span class="nas-grid-file-name">{{ e.name }}</span>
+              </div>
+            </div>
+            <div v-if="!nasEntries.length" style="text-align:center;padding:60px;color:var(--text-muted);grid-column:1/-1">Empty</div>
+          </div>
+          <div v-if="!nasLoading&&nasView==='list'" class="nas-list">
+            <div v-for="e in nasEntries" :key="e.path" class="nas-list-row" :class="{selected:nasSelected.includes(e.path)}" @click="e.type==='directory'?nasLoad(e.path):nasToggleSelect(e.path)" @dblclick="e.type==='directory'?nasLoad(e.path):nasPreviewImg(e)">
+              <span style="width:20px;text-align:center;font-size:11px">{{ e.type==='file'&&nasSelected.includes(e.path)?'✓':'' }}</span>
+              <img v-if="e.type==='file'&&isNasImage(e.name)" :src="'/api/nas/thumbnail?path='+encodeURIComponent(e.path)" style="width:28px;height:28px;object-fit:cover;border-radius:2px;flex-shrink:0" @error="$event.target.style.display='none'">
+              <span v-else style="width:28px;text-align:center;flex-shrink:0">{{ e.type==='directory'?'📁':'📄' }}</span>
+              <span class="nas-list-name">{{ e.name }}</span>
+              <span class="nas-list-meta" v-if="e.type==='file'">{{ fmtSize(e.size) }}</span>
+              <span class="nas-list-meta" v-else>{{ e.image_count>=0?e.image_count+' imgs':'' }}</span>
+            </div>
+            <div v-if="!nasEntries.length" style="text-align:center;padding:60px;color:var(--text-muted)">Empty</div>
+          </div>
+        </div>
+      </div>
+      <div class="nas-explorer-footer">
+        <span style="font-size:11px;color:var(--text-muted)">{{ nasEntries.length }} items · {{ nasSelected.length?nasSelected.length+' selected':'' }}</span>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-secondary" @click="showNas=false">Cancel</button>
+          <button class="btn btn-primary" :disabled="!nasSelected.length||nasImporting" @click="nasImport()">{{ nasImporting?'Importing…':'Import '+nasSelected.length+' file(s)' }}</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- Image Preview Lightbox -->
+  <div v-if="nasPreview" class="nas-lightbox" @click="nasPreview=null">
+    <button class="nas-lightbox-close" @click="nasPreview=null">✕</button>
+    <button class="nas-lightbox-prev" @click.stop="nasPreviewNav(-1)" v-if="nasPreviewFiles.length>1">‹</button>
+    <img :src="'/api/nas/thumbnail?path='+encodeURIComponent(nasPreviewFiles[nasPreviewIdx]||nasPreview)" style="max-width:85vw;max-height:85vh;object-fit:contain;border-radius:4px;box-shadow:0 8px 32px rgba(0,0,0,.4)">
+    <button class="nas-lightbox-next" @click.stop="nasPreviewNav(1)" v-if="nasPreviewFiles.length>1">›</button>
+    <div class="nas-lightbox-counter" v-if="nasPreviewFiles.length>1">{{ nasPreviewIdx+1 }} / {{ nasPreviewFiles.length }}</div>
+    <div class="nas-lightbox-counter">{{ (nasPreviewFiles[nasPreviewIdx]||nasPreview).split('/').pop() }}</div>
   </div>
   <div class="toast-container"><div v-for="(t,i) in toasts" :key="i" class="toast" :class="t.type">{{ t.msg }}</div></div>
 </div>
@@ -332,20 +644,138 @@ const API = {
   async list(p){const q=new URLSearchParams(p).toString();const r=await fetch('/api/assets'+(q?'?'+q:''));if(!r.ok)throw new Error('API error');return r.json()},
   async get(id){const r=await fetch('/api/assets/'+id);if(!r.ok)throw new Error('API error');return r.json()},
   async update(id,d){const r=await fetch('/api/assets/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});if(!r.ok)throw new Error('API error');return r.json()},
-  async upload(files){const fd=new FormData();Array.from(files).forEach(f=>fd.append('files',f));const r=await fetch('/api/upload',{method:'POST',body:fd});if(!r.ok)throw new Error('API error');return r.json()},
+  async upload(files,folder){const fd=new FormData();Array.from(files).forEach(f=>{const rp=folder?(folder+'/'+(f.webkitRelativePath||f.name)):(f.webkitRelativePath||f.name);fd.append('files',f,rp)});if(folder)fd.append('folder',folder);const r=await fetch('/api/upload',{method:'POST',body:fd});if(!r.ok)throw new Error('API error');return r.json()},
   async searchProducts(q){const r=await fetch('/api/products/search?q='+encodeURIComponent(q));return r.json()},
 };
 
-const {createApp,ref,computed,watch,nextTick,onMounted}=Vue;
+const {createApp,ref,reactive,computed,watch,nextTick,onMounted}=Vue;
 createApp({setup(){
   const assets=ref([]),totalCount=ref(0),loading=ref(false),selectedIds=ref([]),detailAsset=ref(null);
   const filterType=ref('all'),filterTag=ref(null),filterProduct=ref(null),sortBy=ref('newest');
-  const showUpload=ref(false),uploading=ref(false),dragOver=ref(false),sidebarOpen=ref(true);
+  const showUpload=ref(false),uploading=ref(false),dragOver=ref(false),sidebarOpen=ref(true),leftSearch=ref('');
   const productQ=ref(''),productResults=ref([]),detailQ=ref(''),detailResults=ref([]);
-  const toasts=ref([]),thumbGrid=ref(null),saving=ref(false),collections=ref([]);
+  const toasts=ref([]),thumbGrid=ref(null),saving=ref(false),collections=ref([]),folders=ref([]),filterFolder=ref(null);
+  const showNas=ref(false),nasView=ref('grid'),nasCurrent=ref(''),nasSource=ref('local');
+  const nasEntries=ref([]),nasSelected=ref([]),nasTreeNodes=ref([]);
+  const nasLoading=ref(false),nasImporting=ref(false);
+  const nasHistory=ref([]),nasHistIdx=ref(-1),nasPreview=ref(null),nasPreviewIdx=ref(0),nasPreviewFiles=ref([]);
+  function nasToggleSelect(path){const i=nasSelected.value.indexOf(path);if(i>=0)nasSelected.value.splice(i,1);else nasSelected.value.push(path)}
+  function isNasImage(name){return /\.(jpg|jpeg|jpe|bmp|png|tif|tiff|gif|arw|srf|sr2|dcr|k25|kdc|cr2|crw|nef|mrw|ptx|pef|raf|3fr|erf|mef|mos|orf|rw2|dng|x3f|heic|raw)$/i.test(name)}
+  function nasPreviewImg(e){const imgs=nasEntries.value.filter(x=>x.type==='file'&&isNasImage(x.name));nasPreviewFiles.value=imgs.map(x=>x.path);nasPreviewIdx.value=imgs.findIndex(x=>x.path===e.path);if(nasPreviewIdx.value<0)nasPreviewIdx.value=0;nasPreview.value=e.path}
+  function nasPreviewNav(dir){nasPreviewIdx.value=(nasPreviewIdx.value+dir+nasPreviewFiles.value.length)%nasPreviewFiles.value.length;nasPreview.value=nasPreviewFiles.value[nasPreviewIdx.value]}
+  const nasBreadcrumbs=computed(()=>{const s=[];if(!nasCurrent.value)return s;const p=nasCurrent.value.split('/');let a='';p.filter(x=>x).forEach(seg=>{a+=(a?'/':'')+seg;s.push({name:seg,path:a})});return s});
   const editorColl=ref(null),editorSku=ref(null),editorPick=ref(false),editorPicked=ref([]),editorDirty=ref(false);
 const showHistory=ref(false),editorVersions=ref([]),selectedVer=ref(null);
-
+  // Dual pane — Collection tree browser
+  const showRightPane=ref(false),rpSearch=ref(''),rpThumbSize=ref(80);
+  const rpExpandedCollections=reactive(new Set());
+  const rpActiveSku=reactive({});
+  const rpCollectionItems=reactive({});
+  const rpLoading=reactive({});
+  const rpFilteredCollections=computed(()=>{
+    const q=rpSearch.value.toLowerCase().trim();
+    if(!q)return collections.value;
+    return collections.value.filter(c=>c.name.toLowerCase().includes(q))
+  });
+  function openRightPane(){
+    showRightPane.value=true;
+    if(!collections.value.length)loadCollections();
+  }
+  function closeRightPane(){showRightPane.value=false}
+  async function rpExpandCollection(cid){
+    if(!showRightPane.value)openRightPane();
+    await rpToggleCollection(cid);
+  }
+  async function rpToggleCollection(cid){
+    if(rpExpandedCollections.has(cid)){
+      rpExpandedCollections.delete(cid);
+      delete rpActiveSku[cid];
+    }else{
+      rpExpandedCollections.add(cid);
+      if(!rpCollectionItems[cid]){
+        rpLoading[cid]=true;
+        try{const r=await fetch('/api/collections/'+cid);const d=await r.json();rpCollectionItems[cid]=d.items||[]}
+        catch(e){rpCollectionItems[cid]=[]}
+        rpLoading[cid]=false;
+        nextTick(initRpDropZones);
+      }
+    }
+  }
+  function rpSelectSku(cid,skuCode){
+    rpActiveSku[cid]=rpActiveSku[cid]===skuCode?null:skuCode;
+    nextTick(initRpDropZones);
+  }
+  function rpGetSkus(cid){
+    const items=rpCollectionItems[cid]||[];
+    const m={};items.forEach(i=>{const s=i.sku||'_unlinked';if(s==='_unlinked')return;m[s]=(m[s]||0)+1});
+    return Object.entries(m).map(([code,count])=>({code,count}));
+  }
+  function rpGetSkuItems(cid,skuCode){
+    const items=rpCollectionItems[cid]||[];
+    return items.filter(i=>(i.sku||'_unlinked')===skuCode);
+  }
+  function rpGetUnlinked(cid){
+    const items=rpCollectionItems[cid]||[];
+    return items.filter(i=>!i.sku||i.sku==='_unlinked');
+  }
+  async function rpRemoveItem(cid,aid){
+    try{
+      const r=await fetch('/api/collections/'+cid+'/items',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({remove:[aid]})});
+      if(!r.ok)throw new Error('Failed');
+      const d=await r.json();
+      rpCollectionItems[cid]=d.items||[];
+      loadCollections();
+      if(editorColl.value&&editorColl.value.id===cid){editorColl.value=d;editorDirty.value=true}
+      toast('Removed from collection');
+    }catch(e){toast('Failed to remove','error')}
+  }
+  // Global cleanup for cancelled drags (ESC or drop outside valid target)
+  // ESC cancel: permanent listener with capture phase (more reliable than dynamic add/remove)
+  window.__dragActive=false;
+  document.addEventListener('keyup',(e)=>{
+    if(e.key==='Escape'&&window.__dragActive){
+      const ghosts=document.querySelectorAll('.sortable-ghost,.sortable-fallback');
+      ghosts.forEach(el=>{el.classList.add('cancelling');el.style.pointerEvents='none'});
+      document.body.style.userSelect='';
+      window.__dragActive=false;
+    }
+  });
+  function _cancelDrag(){} // no-op, kept for compatibility
+  document.addEventListener('mouseup',(e)=>{
+    // If dropped outside valid target, SortableJS handles it naturally
+    // No need for manual ghost cleanup
+  });
+  function initRpDropZones(){
+    nextTick(()=>{
+      const rows=document.querySelectorAll('.rp-sku-row');
+      rows.forEach(el=>{
+        if(el._sortable)el._sortable.destroy();
+        const cid=el.dataset.collId;
+        const sku=el.dataset.sku;
+        el._sortable=Sortable.create(el,{
+          group:{name:'dam',pull:false,put:true},sort:false,forceFallback:true,fallbackOnBody:true,
+          onMove(evt){
+            const oe=evt.originalEvent||evt;
+            const elRect=el.getBoundingClientRect();
+            const mx=oe.clientX,my=oe.clientY;
+            return mx>=elRect.left&&mx<=elRect.right&&my>=elRect.top&&my<=elRect.bottom;
+          },
+          onStart(evt){ el.classList.add('drag-over');window.__dragActive=true},
+          onEnd(){ el.classList.remove('drag-over') },
+          onAdd(evt){
+            el.classList.remove('drag-over');
+            const aid=evt.item.dataset.assetId;
+            if(!aid||!cid){evt.item.remove();return}
+            fetch('/api/collections/'+cid+'/items',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({add:[{asset_id:aid,role:sku==='_unlinked'?'other':'alternate'}]})})
+              .then(r=>{if(!r.ok)throw new Error('Failed');return r.json()})
+              .then(d=>{rpCollectionItems[cid]=d.items||[];loadCollections();if(editorColl.value&&editorColl.value.id===cid){editorColl.value=d;editorDirty.value=true}toast('Added to collection')})
+              .catch(()=>toast('Failed','error'));
+            evt.item.remove();
+          }
+        });
+      });
+    });
+  }
   function toast(m,t){t=t||'success';const id=Date.now();toasts.value.push({id,msg:m,type:t});setTimeout(()=>{toasts.value=toasts.value.filter(x=>x.id!==id)},2800)}
 
   async function loadAssets(){
@@ -362,13 +792,44 @@ const showHistory=ref(false),editorVersions=ref([]),selectedVer=ref(null);
     {value:'document',label:'Documents',count:assets.value.filter(a=>a.asset_type==='document').length},
   ]);
   const allTags=computed(()=>{const m={};assets.value.forEach(a=>{(a.tags||[]).forEach(t=>{m[t]=(m[t]||0)+1})});return Object.entries(m).map(([n,c])=>({name:n,count:c})).sort((a,b)=>b.count-a.count)});
-  const filtered=computed(()=>{let r=[...assets.value];if(filterProduct.value)r=r.filter(a=>(a.linked_skus||[]).includes(filterProduct.value));if(sortBy.value==='newest')r.sort((a,b)=>new Date(b.uploaded_at||0)-new Date(a.uploaded_at||0));else if(sortBy.value==='oldest')r.sort((a,b)=>new Date(a.uploaded_at||0)-new Date(b.uploaded_at||0));else r.sort((a,b)=>(a.filename||'').localeCompare(b.filename||''));return r});
+  const filtered=computed(()=>{let r=[...assets.value];if(filterFolder.value)r=r.filter(a=>{const fs=getFolderFromStored(a.file_url);return fs===filterFolder.value});if(filterProduct.value)r=r.filter(a=>(a.linked_skus||[]).includes(filterProduct.value));if(sortBy.value==='newest')r.sort((a,b)=>new Date(b.uploaded_at||0)-new Date(a.uploaded_at||0));else if(sortBy.value==='oldest')r.sort((a,b)=>new Date(a.uploaded_at||0)-new Date(b.uploaded_at||0));else r.sort((a,b)=>(a.filename||'').localeCompare(b.filename||''));return r});
+  function getFolderFromStored(fileUrl){if(!fileUrl)return'';const p=fileUrl.split('/files/')[1];if(!p)return'';const s=p.split('/');s.pop();return s.join('/')}
 
   function selectOne(a,ev){if(ev.ctrlKey||ev.metaKey){const i=selectedIds.value.indexOf(a.id);if(i>=0)selectedIds.value.splice(i,1);else selectedIds.value.push(a.id)}else{selectedIds.value=[a.id]}detailAsset.value=assets.value.find(x=>x.id===selectedIds.value[0])||null}
   function clearAll(){selectedIds.value=[];detailAsset.value=null}
   function hasPendingAiTags(a){return a.ai_tags&&a.ai_tags.length&&!a.ai_tags_confirmed}
 
   async function loadCollections(){try{const r=await fetch('/api/collections');const d=await r.json();collections.value=d.collections||[]}catch(e){console.error(e)}}
+  const folderExpanded=ref({});
+  async function loadFolders(){try{const r=await fetch('/api/folders');const d=await r.json();folders.value=d.folders||[]}catch(e){console.error(e)}}
+  const folderTree=computed(()=>{const tree=[];const map={};
+    folders.value.forEach(f=>{
+      const parts=f.path.split('/');const name=parts.pop();const parentPath=parts.join('/');
+      const node={path:f.path,name,count:f.asset_count,depth:parts.length,children:[],expanded:!!folderExpanded.value[f.path]};
+      map[f.path]=node;
+      if(!parentPath){tree.push(node)}else{if(map[parentPath]){map[parentPath].children.push(node)}else{tree.push(node)}}
+    });
+    // Sort children by name
+    const sortChildren=(nodes)=>{nodes.sort((a,b)=>a.name.localeCompare(b.name));nodes.forEach(n=>sortChildren(n.children))};
+    sortChildren(tree);
+    return tree;
+  });
+  const leftFiltered=computed(()=>{const q=leftSearch.value.toLowerCase().trim();if(!q)return filtered.value;return filtered.value.filter(a=>a.filename.toLowerCase().includes(q))});
+  const flattenedFolderTree=computed(()=>{const r=[];const walk=(nodes)=>{if(!nodes)return;nodes.forEach(n=>{r.push(n);if(n.expanded&&n.children&&n.children.length)walk(n.children)})};walk(folderTree.value);return r})
+  function folderToggle(n){folderExpanded.value={...folderExpanded.value,[n.path]:!n.expanded}}
+  function folderClick(n){if(!editorDirty.value||confirm('Discard unsaved changes?')){closeEditor(true);if(!n){filterFolder.value=null;filterProduct.value=null;filterTag.value=null;filterType.value='all'}else{filterFolder.value=filterFolder.value===n.path?null:n.path;filterProduct.value=null;filterTag.value=null;filterType.value='all'}}}
+  function folderClickByPath(p){filterFolder.value=p;filterProduct.value=null;filterTag.value=null;filterType.value='all'}
+  const currentSubfolders=computed(()=>{if(!filterFolder.value)return[];return folders.value.filter(f=>{const p=f.path;return p!==filterFolder.value && p.startsWith(filterFolder.value+'/') && p.split('/').length===filterFolder.value.split('/').length+1}).map(f=>({path:f.path,name:f.path.split('/').pop(),count:f.asset_count}))})
+  function getFolderThumb(path){return '/api/folders/'+encodeURIComponent(path)+'/thumbnail'}
+  function nasNavBack(){if(nasHistIdx.value<=0)return;nasHistIdx.value--;nasLoad(nasHistory.value[nasHistIdx.value],true)}
+  function nasNavFwd(){if(nasHistIdx.value>=nasHistory.value.length-1)return;nasHistIdx.value++;nasLoad(nasHistory.value[nasHistIdx.value],true)}
+  async function nasLoad(path,skipHistory){nasLoading.value=true;nasSelected.value=[];nasPreview.value=null;const newPath=path||'';try{const r=await fetch('/api/nas/browse?path='+encodeURIComponent(newPath));const d=await r.json();nasSource.value=d.source||'local';nasEntries.value=d.entries||[];nasCurrent.value=d.path||newPath}catch(e){toast('NAS browse failed','error')}nasLoading.value=false;
+    if(!skipHistory&&nasHistory.value[nasHistIdx.value]!==nasCurrent.value){nasHistory.value=nasHistory.value.slice(0,nasHistIdx.value+1);nasHistory.value.push(nasCurrent.value);nasHistIdx.value=nasHistory.value.length-1}
+    if(!nasTreeNodes.value.length){try{const tr=await fetch('/api/nas/tree?path=');const td=await tr.json();nasTreeNodes.value=(td.entries||[]).map(e=>({...e,depth:0,expanded:false,children:null}))}catch(e){console.error('NAS tree load failed',e)}}
+  }
+  const flattenedNasTree=computed(()=>{const r=[];const walk=(nodes)=>{if(!nodes)return;nodes.forEach(n=>{r.push(n);if(n.expanded&&n.children&&n.children.length)walk(n.children)})};walk(nasTreeNodes.value);return r})
+  async function nasTreeToggle(n){if(n.expanded){n.expanded=false;return}n.expanded=true;if(n.children)return;try{const r=await fetch('/api/nas/tree?path='+encodeURIComponent(n.path));const d=await r.json();n.children=(d.entries||[]).map(e=>({...e,depth:(n.depth||0)+1,expanded:false,children:null}))}catch(e){console.error('NAS tree toggle failed',e)}}
+  async function nasImport(){if(!nasSelected.value.length)return;nasImporting.value=true;try{const r=await fetch('/api/nas/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({paths:nasSelected.value})});const d=await r.json();if(d.success){toast('Imported '+d.total+' file(s)');await loadAssets();await loadFolders();showNas.value=false}else{toast(d.error||'Import failed','error')}}catch(e){toast('Import failed','error')}nasImporting.value=false}
   const editorItems=computed(()=>editorColl.value?editorColl.value.items||[]:[]);
   const editorSkus=computed(()=>{const m={};editorItems.value.forEach(i=>{const s=i.sku||'_unlinked';m[s]=(m[s]||0)+1});return Object.entries(m).map(([code,cnt])=>({code,count:cnt}))});
   const editorSkuItems=computed(()=>{if(!editorSku.value)return editorItems.value;return editorItems.value.filter(i=>(i.sku||'_unlinked')===editorSku.value)});
@@ -387,15 +848,24 @@ async function restoreVersion(v){if(!editorColl.value)return;if(!confirm('Restor
 function getThumbByAssetId(aid){const a=assets.value.find(x=>x.id===aid);return a?(a.thumb_url||a.file_url):''}
 function openCollectionEditor(existing){if(existing){openEditor(existing);return}const n=prompt('Collection name:');if(!n)return;const t=prompt('Type (listing/campaign/social/catalog/custom):','listing');if(!t)return;(async()=>{const ctx={skus:[]};const r=await fetch('/api/collections',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n,type:t,context:ctx,created_by:'user'})});const d=await r.json();await loadCollections();openEditor(d)})()}
   function showCollectionMenu(c,ev){const items=[{label:'Export Excel (Amazon)',action:()=>{window.open('/api/collections/'+c.id+'/export?platform=amazon')}},{label:'Export Excel (Wayfair)',action:()=>{window.open('/api/collections/'+c.id+'/export?platform=wayfair')}},{label:'Export Excel (Shopify)',action:()=>{window.open('/api/collections/'+c.id+'/export?platform=shopify')}},{label:'Delete',action:()=>{if(confirm('Delete '+c.name+'?')){fetch('/api/collections/'+c.id,{method:'DELETE'}).then(()=>loadCollections());toast('Deleted','error')}}}];const menu=document.createElement('div');menu.style.cssText='position:fixed;z-index:300;background:var(--surface);border:1px solid var(--border);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.15);padding:4px;min-width:180px;font-size:12px;font-family:var(--font-sans)';menu.style.left=ev.clientX+'px';menu.style.top=ev.clientY+'px';items.forEach(item=>{const el=document.createElement('div');el.textContent=item.label;el.style.cssText='padding:6px 10px;border-radius:4px;cursor:pointer;color:var(--text)';el.onmouseenter=()=>{el.style.background='var(--surface-hover)'};el.onmouseleave=()=>{el.style.background='transparent'};el.onclick=()=>{menu.remove();item.action()};menu.appendChild(el)});document.body.appendChild(menu);document.addEventListener('click',()=>menu.remove(),{once:true})}
+  function showAssetMenu(a,ev){if(!collections.value||!collections.value.length)return;const items=collections.value.map(c=>({label:'Add to '+c.name,action:()=>{fetch('/api/collections/'+c.id+'/items',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({add:[{asset_id:a.id,role:'alternate'}]})}).then(r=>{if(!r.ok)throw new Error('Failed');toast('Added to '+c.name);loadCollections();if(editorColl.value&&editorColl.value.id===c.id){fetch('/api/collections/'+c.id).then(r=>r.json()).then(rd=>{editorColl.value=rd;editorDirty.value=true})}}).catch(()=>toast('Failed','error'))}}));const menu=document.createElement('div');menu.style.cssText='position:fixed;z-index:300;background:var(--surface);border:1px solid var(--border);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.15);padding:4px;min-width:200px;font-size:12px;font-family:var(--font-sans)';menu.style.left=ev.clientX+'px';menu.style.top=ev.clientY+'px';items.forEach(item=>{const el=document.createElement('div');el.textContent=item.label;el.style.cssText='padding:6px 10px;border-radius:4px;cursor:pointer;color:var(--text)';el.onmouseenter=()=>{el.style.background='var(--surface-hover)'};el.onmouseleave=()=>{el.style.background='transparent'};el.onclick=()=>{menu.remove();item.action()};menu.appendChild(el)});document.body.appendChild(menu);document.addEventListener('click',()=>menu.remove(),{once:true})}
 
+  function _readEntry(entry,path){return new Promise((resolve)=>{if(entry.isFile){entry.file(f=>resolve([{file:f,path:path||''}]))}else if(entry.isDirectory){const r=entry.createReader();const all=[];const batch=()=>r.readEntries(entries=>{if(!entries.length){resolve(all)}else{entries.forEach(e=>all.push(e));batch()}});batch()}else{resolve([])}})}
+  async function _traverseEntries(items){const entries=[];for(const item of items){const e=item.webkitGetAsEntry?item.webkitGetAsEntry():null;if(!e)continue;const children=await _readEntry(e,e.fullPath.replace(/^\//,''));entries.push(...children)}return entries}
   async function processFiles(files){
     uploading.value=true;
-    try{const r=await API.upload(files);if(r.success){const dup=r.assets.filter(a=>a._dedup).length;const add=r.assets.length-dup;if(add)toast('Uploaded '+add+' file(s)');if(dup)toast(dup+' duplicate(s) skipped','error');await loadAssets()}}
-    catch(e){toast('Upload failed','error')}
+    try{
+      let total=0;
+      // 文件夹拖拽：从 DataTransfer items 递归遍历（保留空目录名）
+      const ctxFolder=filterFolder.value||'';
+      if(files instanceof DataTransferItemList){const entries=await _traverseEntries(files);if(entries.length){const allFiles=entries.map(e=>{const f=e.file;Object.defineProperty(f,'webkitRelativePath',{value:(e.path?e.path+'/':'')+f.name,writable:false});return f});const r=await API.upload(allFiles,ctxFolder);if(r.success){const dup=r.assets.filter(a=>a._dedup).length;total=r.total-dup;if(r.folders)r.folders.forEach(f=>toast('Folder: '+f))}}}
+      else{const arr=Array.from(files);if(arr.length){const r=await API.upload(arr,ctxFolder);if(r.success){const dup=r.assets.filter(a=>a._dedup).length;total=r.total-dup;if(r.folders)r.folders.forEach(f=>toast('Folder: '+f))}if(total)toast('Uploaded '+total+' file(s)');if(r.success&&dup)toast(dup+' duplicate(s) skipped','error')}}
+      if(total)await loadAssets();
+    }catch(e){console.error(e);toast('Upload failed','error')}
     uploading.value=false;showUpload.value=false;
   }
   function handlePick(e){if(e.target.files.length)processFiles(e.target.files)}
-  function handleDrop(e){dragOver.value=false;if(e.dataTransfer.files.length)processFiles(e.dataTransfer.files)}
+  function handleDrop(e){dragOver.value=false;const items=e.dataTransfer.items;if(items&&items.length&&items[0].webkitGetAsEntry){processFiles(items);return}if(e.dataTransfer.files.length)processFiles(e.dataTransfer.files)}
 
   async function saveDetail(){
     if(!detailAsset.value||saving.value)return;saving.value=true;
@@ -419,7 +889,43 @@ function rmLinkedSku(a,i){a.linked_skus.splice(i,1);saveDetail();toast('Unlinked
 
   function aiTagSelected(){const s=assets.value.filter(a=>selectedIds.value.includes(a.id));if(!s.length)return;toast('AI analyzing '+s.length+' — check back soon');s.forEach(a=>{if(a.asset_type==='image')a.ai_tags=['product photo','studio lighting','ecommerce ready'];else if(a.asset_type==='video')a.ai_tags=['product video','HD'];else a.ai_tags=['document','spec'];a.ai_tags_confirmed=false})}
 
-  function initSort(){if(!thumbGrid.value)return;Sortable.create(thumbGrid.value,{animation:200,handle:'.drag-grip',onEnd(evt){const f=[...filtered.value];const[mv]=f.splice(evt.oldIndex,1);f.splice(evt.newIndex,0,mv);const ids=new Set(f.map(a=>a.id));assets.value=[...f,...assets.value.filter(a=>!ids.has(a.id))]}})}
+  function initSort(){if(!thumbGrid.value)return;Sortable.create(thumbGrid.value,{animation:200,group:{name:'dam',pull:'clone',put:false},forceFallback:true,fallbackOnBody:true,onStart(evt){document.body.style.userSelect='none';window.__dragActive=true;nextTick(()=>{const g=document.querySelector('.sortable-ghost');if(g){const s=Math.max(0.35,Math.min(0.85, (rpThumbSize.value||80)/140));g.style.transform='scale('+s+')'}})},onEnd(evt){document.body.style.userSelect='';window.__dragActive=false;const f=[...leftFiltered.value];const[mv]=f.splice(evt.oldIndex,1);f.splice(evt.newIndex,0,mv);const ids=new Set(f.map(a=>a.id));assets.value=[...f,...assets.value.filter(a=>!ids.has(a.id))]}})}
+  function initCollectionDrop(){
+    const el=document.getElementById('collection-drop-zone');
+    if(!el)return;
+    let _dropClientY=0;
+    Sortable.create(el,{
+      group:{name:'dam',pull:false,put:true},sort:false,forceFallback:true,fallbackOnBody:true,
+      onMove(evt){_dropClientY=evt.original.clientY;return true},
+      onAdd(evt){
+        const aid=evt.item.dataset.assetId;
+        if(!aid){evt.item.remove();return}
+        // Find collection nearest to drop point
+        let cid=null;
+        const items=el.querySelectorAll('.collection-item');
+        for(const item of items){
+          const rect=item.getBoundingClientRect();
+          if(_dropClientY>=rect.top&&_dropClientY<=rect.bottom){cid=item.dataset.collectionId;break}
+        }
+        if(!cid){evt.item.remove();return}
+        const c=collections.value.find(x=>x.id===cid);
+        if(!c){evt.item.remove();return}
+        fetch('/api/collections/'+cid+'/items',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({add:[{asset_id:aid,role:'alternate'}]})})
+          .then(r=>{if(!r.ok)throw new Error('Failed');return r.json()})
+          .then(()=>{
+            loadCollections();
+            if(editorColl.value&&editorColl.value.id===cid){
+              fetch('/api/collections/'+cid).then(r=>r.json()).then(rd=>{
+                editorColl.value=rd;editorDirty.value=true
+              })
+            }
+            toast('Added to '+c.name)
+          })
+          .catch(()=>toast('Failed','error'));
+        evt.item.remove();
+      }
+    })
+  }
   function initEditorSort(){if(!editorColl.value)return;const el=document.querySelector('.editor-images');if(!el)return;if(el._sortable)el._sortable.destroy();el._sortable=Sortable.create(el,{animation:200,handle:'.drag-grip',filter:'.editor-drop-zone',onEnd(evt){const items=[...editorColl.value.items];const[mv]=items.splice(evt.oldIndex,1);items.splice(evt.newIndex,0,mv);items.forEach((it,idx)=>{it.position=idx});editorColl.value.items=items;editorDirty.value=true}})}
 
   function fmtSize(b){if(!b)return'0 B';const u=['B','KB','MB','GB'];let i=0,s=b;while(s>=1024&&i<u.length-1){s/=1024;i++}return s.toFixed(1)+' '+u[i]}
@@ -427,12 +933,59 @@ function rmLinkedSku(a,i){a.linked_skus.splice(i,1);saveDetail();toast('Unlinked
   function onKey(e){if(e.key==='Escape'&&detailAsset.value){detailAsset.value=null;e.preventDefault()}}
 
   const editorGrid=ref(null);
-  onMounted(async()=>{await loadAssets();await loadCollections();nextTick(initSort);document.addEventListener('keydown',onKey);window.addEventListener('beforeunload',e=>{if(editorDirty.value){e.preventDefault();e.returnValue=''}})});
+  onMounted(async()=>{await loadAssets();await loadCollections();await loadFolders();nextTick(()=>{initSort();initCollectionDrop()});document.addEventListener('keydown',onKey);window.addEventListener('beforeunload',e=>{if(editorDirty.value){e.preventDefault();e.returnValue=''}})});
   watch(editorSkuItems,async()=>{await nextTick();initEditorSort()});
-  watch(filtered,async()=>{await nextTick();initSort()});
+  watch(leftFiltered,async()=>{await nextTick();initSort()});
+  watch(collections,async()=>{await nextTick();initCollectionDrop()});
 
-  return {assets,totalCount,loading,selectedIds,detailAsset,filterType,filterTag,filterProduct,sortBy,showUpload,uploading,dragOver,sidebarOpen,saving,productQ,productResults,detailQ,detailResults,toasts,typeFilters,allTags,filtered,thumbGrid,selectOne,clearAll,hasPendingAiTags,handlePick,handleDrop,processFiles,addTag,rmTag,confirmAi,linkSku,rmLinkedSku,saveDetail,searchProducts,searchForDetail,batchTag,batchLink,batchDelete,aiTagSelected,toast,fmtSize,fmtDate,collections,loadCollections,openCollectionEditor,showCollectionMenu,editorColl,editorSku,editorSkus,editorSkuItems,editorPick,editorPicked,editorDirty,editorGrid,openEditor,closeEditor,saveEditor,exportEditor,removeEditorItem,setEditorRole,openAssetPicker,togglePick,addPickedToEditor,addSkuToEditor,showHistory,editorVersions,selectedVer,openHistory,restoreVersion,getThumbByAssetId};
+  return {assets,totalCount,loading,selectedIds,detailAsset,filterType,filterTag,filterProduct,sortBy,showUpload,uploading,dragOver,sidebarOpen,saving,productQ,productResults,detailQ,detailResults,toasts,typeFilters,allTags,filtered,leftFiltered,leftSearch,thumbGrid,selectOne,clearAll,hasPendingAiTags,handlePick,handleDrop,processFiles,addTag,rmTag,confirmAi,linkSku,rmLinkedSku,saveDetail,searchProducts,searchForDetail,batchTag,batchLink,batchDelete,aiTagSelected,toast,fmtSize,fmtDate,collections,loadCollections,openCollectionEditor,showCollectionMenu,showAssetMenu,folders,folderTree,flattenedFolderTree,folderExpanded,folderToggle,folderClick,folderClickByPath,filterFolder,currentSubfolders,loadFolders,getFolderThumb,showNas,nasView,nasSource,nasCurrent,nasEntries,nasSelected,nasToggleSelect,nasPreviewImg,nasPreviewFiles,nasPreviewIdx,nasPreviewNav,isNasImage,nasTreeNodes,nasLoading,nasImporting,nasHistory,nasHistIdx,nasPreview,nasBreadcrumbs,nasLoad,nasNavBack,nasNavFwd,nasTreeToggle,nasImport,flattenedNasTree,editorColl,editorSku,editorSkus,editorSkuItems,editorPick,editorPicked,editorDirty,editorGrid,openEditor,closeEditor,saveEditor,exportEditor,removeEditorItem,setEditorRole,openAssetPicker,togglePick,addPickedToEditor,addSkuToEditor,showHistory,editorVersions,selectedVer,openHistory,restoreVersion,getThumbByAssetId,showRightPane,rpSearch,rpThumbSize,rpFilteredCollections,rpExpandedCollections,rpActiveSku,rpCollectionItems,rpLoading,openRightPane,closeRightPane,rpToggleCollection,rpExpandCollection,rpSelectSku,rpGetSkus,rpGetSkuItems,rpGetUnlinked,rpRemoveItem};
 }}).mount('#app');
 </script>
+
+<div id="__dbg" style="position:fixed;bottom:4px;left:4px;z-index:99999;background:rgba(0,0,0,0.85);color:#0f0;font:10px/1.3 monospace;padding:5px 8px;border-radius:4px;pointer-events:none">
+  <span id="__dbg_st">dragActive: FALSE</span> |
+  <span id="__dbg_ev" style="color:#ff0">ESC: -</span> |
+  <span id="__dbg_key" style="color:#888">keys: 0</span>
+</div>
+<div id="__dbg_cancel" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:99999;background:var(--primary);color:#fff;font:13px/1 sans-serif;padding:12px 24px;border-radius:8px;cursor:pointer;box-shadow:0 4px 20px rgba(0,0,0,0.4)">Cancel Drag (ESC / Click here)</div>
+<script>
+(function(){
+  var st=document.getElementById('__dbg_st'), evEl=document.getElementById('__dbg_ev'), keyEl=document.getElementById('__dbg_key');
+  var cancelBtn=document.getElementById('__dbg_cancel');
+  var keyCount=0;
+  function cancelDrag(){
+    var ghosts=document.querySelectorAll('.sortable-ghost,.sortable-fallback');
+    ghosts.forEach(function(el){el.classList.add('cancelling');el.style.pointerEvents='none'});
+    document.body.style.userSelect='';
+    window.__dragActive=false;
+    cancelBtn.style.display='none';
+  }
+  cancelBtn.onclick=cancelDrag;
+  // Right-click to cancel
+  document.addEventListener('contextmenu',function(e){
+    if(window.__dragActive){e.preventDefault();cancelDrag()}
+  });
+  // Cancel button appears during drag
+  setInterval(function(){
+    st.textContent='dragActive: '+(window.__dragActive?'TRUE':'FALSE');
+    cancelBtn.style.display=window.__dragActive?'block':'none';
+  },200);
+  // Catch ESC on window AND document AND body (capture + bubble)
+  function onEsc(e){
+    keyCount++;keyEl.textContent='keys:'+keyCount;
+    if(e.key==='Escape'){
+      evEl.textContent='ESC '+e.type+'! dragActive='+window.__dragActive;
+      if(window.__dragActive)cancelDrag();
+    }
+  }
+  window.addEventListener('keydown',onEsc,true);
+  window.addEventListener('keyup',onEsc,true);
+  document.addEventListener('keydown',onEsc,true);
+  document.addEventListener('keyup',onEsc,true);
+  document.body.addEventListener('keydown',onEsc,true);
+  document.body.addEventListener('keyup',onEsc,true);
+})();
+</script>
+
 </body>
 </html>

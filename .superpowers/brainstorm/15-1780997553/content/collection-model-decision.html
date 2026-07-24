@@ -1,0 +1,111 @@
+<h2>关键发现：Collection 的本质是什么？</h2>
+<p class="subtitle">研究了 AEM、TESSA、Shopify、Amazon 后，发现当前方案有一个根本性问题需要先澄清</p>
+
+<div class="section">
+  <h3>问题：现在导出 1 个 Collection = 1 行 Excel（1 个 SKU）</h3>
+  <div class="mockup">
+    <div class="mockup-header">当前 export.py 行为</div>
+    <div class="mockup-body">
+      <table style="width:100%;border-collapse:collapse;font-size:12px;font-family:monospace">
+        <tr style="background:#D9E2F3"><th style="padding:4px 8px;border:1px solid #ccc">SKU</th><th style="padding:4px 8px;border:1px solid #ccc">main_image_url</th><th style="padding:4px 8px;border:1px solid #ccc">other_image_url1</th><th style="padding:4px 8px;border:1px solid #ccc">other_image_url2</th></tr>
+        <tr><td style="padding:4px 8px;border:1px solid #ccc">KS0001</td><td style="padding:4px 8px;border:1px solid #ccc">/files/xxx.jpg</td><td style="padding:4px 8px;border:1px solid #ccc">/files/yyy.jpg</td><td style="padding:4px 8px;border:1px solid #ccc">/files/zzz.jpg</td></tr>
+      </table>
+      <p style="font-size:11px;color:var(--text-muted);margin-top:6px">只有 1 行。Collection.context.product_sku 是单个值。</p>
+    </div>
+  </div>
+  <p style="margin-top:8px"><strong>但你的实际场景是 Amazon Inventory Template：一个 Excel 里 N 个 SKU，每个 SKU 一行图片 URL。</strong></p>
+</div>
+
+<div class="section">
+  <h3>三种 Collection 模型</h3>
+
+  <div style="display:flex;gap:12px;margin-top:12px">
+    <div style="flex:1;border:1px solid var(--border);border-radius:8px;padding:12px">
+      <h4 style="margin-bottom:4px">🅰️ 单产品 Collection</h4>
+      <p style="font-size:11px;color:var(--text-muted)">当前方案</p>
+      <hr style="margin:8px 0">
+      <p style="font-size:12px">1 Collection = 1 个 SKU 的图片组</p>
+      <p style="font-size:12px;margin-top:4px">导出时聚合多个 Collection → 1 个 Excel</p>
+      <div style="background:var(--surface-hover);border-radius:4px;padding:8px;margin-top:8px;font-size:11px">
+        <strong>例：</strong><br>
+        Collection "KS0001 Amazon US" → 7张图<br>
+        Collection "KS0002 Amazon US" → 5张图<br>
+        导出：选 20 个 Collection → 1 个 Excel 20 行
+      </div>
+      <div style="margin-top:8px">
+        <span style="font-size:10px;color:var(--success)">✅ 简单清晰</span>
+        <span style="font-size:10px;color:var(--error);display:block">❌ 每次上贴要建 N 个 Collection</span>
+        <span style="font-size:10px;color:var(--error);display:block">❌ 导入导出需"批量"概念</span>
+        <span style="font-size:10px;color:var(--error);display:block">❌ 没有"批次"概念</span>
+      </div>
+    </div>
+    <div style="flex:1;border:2px solid var(--primary);border-radius:8px;padding:12px;background:var(--primary-light)">
+      <h4 style="margin-bottom:4px">🅱️ 上贴批次 Collection <span style="font-size:10px;background:var(--primary);color:#FFF;padding:1px 6px;border-radius:10px">推荐</span></h4>
+      <p style="font-size:11px;color:var(--text-muted)">匹配 Amazon Inventory Template</p>
+      <hr style="margin:8px 0">
+      <p style="font-size:12px">1 Collection = 1 个上贴批次，内含多个 SKU</p>
+      <p style="font-size:12px;margin-top:4px">每个 SKU 有自己的有序图片列表</p>
+      <div style="background:var(--surface-hover);border-radius:4px;padding:8px;margin-top:8px;font-size:11px">
+        <strong>例：</strong><br>
+        Collection "6月上贴-家居纺织 Amazon US"<br>
+        ├ KS0001 → [主图, 场景图, 细节图]<br>
+        ├ KS0002 → [主图, 场景图]<br>
+        └ KS0015 → [主图, 场景图, 细节图, A+图]
+      </div>
+      <div style="margin-top:8px">
+        <span style="font-size:10px;color:var(--success);display:block">✅ 1 个 Excel = 1 个 Collection</span>
+        <span style="font-size:10px;color:var(--success);display:block">✅ 有"批次"概念，匹配运营心智模型</span>
+        <span style="font-size:10px;color:var(--success);display:block">✅ 导出简单直接</span>
+        <span style="font-size:10px;color:var(--error);display:block">❌ 数据模型更复杂</span>
+        <span style="font-size:10px;color:var(--error);display:block">❌ 内部 SKU 间图片不共享</span>
+      </div>
+    </div>
+    <div style="flex:1;border:1px solid var(--border);border-radius:8px;padding:12px">
+      <h4 style="margin-bottom:4px">🅲 AEM 风格 Collection</h4>
+      <p style="font-size:11px;color:var(--text-muted)">Collection 只管分组，导出是独立操作</p>
+      <hr style="margin:8px 0">
+      <p style="font-size:12px">Collection = 资产文件夹（类似 NAS 文件夹）</p>
+      <p style="font-size:12px;margin-top:4px">"上贴任务"是独立概念，引用 Collection + SKU</p>
+      <div style="background:var(--surface-hover);border-radius:4px;padding:8px;margin-top:8px;font-size:11px">
+        <strong>例：</strong><br>
+        Collection "枕头白底图" = 20张图片<br>
+        Listing Job "6月 Amazon 上贴" →<br>
+        选 KS0001 从枕头白底图挑3张 →<br>
+        选 KS0002 从枕头白底图挑2张 → 导出
+      </div>
+      <div style="margin-top:8px">
+        <span style="font-size:10px;color:var(--success);display:block">✅ 最灵活，AEM/Bynder 标准模式</span>
+        <span style="font-size:10px;color:var(--success);display:block">✅ Collection 可复用（不同 Listing Job 引用）</span>
+        <span style="font-size:10px;color:var(--error);display:block">❌ 两个新概念，实现量大</span>
+        <span style="font-size:10px;color:var(--error);display:block">❌ 对运营来说太抽象</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>关于 AEM "替换视图"</h3>
+  <p>研究结论：AEM 打开 Collection 后，<strong>主视图切换</strong>为只显示该 Collection 内的资产（搜索范围也限定在里面）。不是侧边栏、不是弹窗——是导航进入了一个"子目录"。</p>
+  <p style="margin-top:4px">这个模式有道理，因为：</p>
+  <ul style="font-size:13px;line-height:1.8;padding-left:18px">
+    <li>AEM 的 Collection 是一个<strong>浏览单元</strong>（像文件夹），不是编辑工具</li>
+    <li>替换视图 = "我进入了这个 Collection" 的明确信号</li>
+    <li>和 🅱️ 上贴批次模型最匹配：点进批次 → 看到所有 SKU 的图片 → 编辑 → 导出</li>
+  </ul>
+  <p style="margin-top:4px">如果选 🅱️ 模型，推荐用 <strong>AEM 替换视图</strong> 而非侧边栏。</p>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content"><h3>🅱️ 上贴批次 Collection</h3><p>推荐 — 匹配运营实际工作流：一次上贴 = 一个批次 = 一个 Collection</p></div>
+  </div>
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content"><h3>🅰️ 单产品 Collection</h3><p>保持当前模型，加批量导出能力</p></div>
+  </div>
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content"><h3>🅲 AEM 风格</h3><p>Collection + Listing Job 两个概念</p></div>
+  </div>
+</div>

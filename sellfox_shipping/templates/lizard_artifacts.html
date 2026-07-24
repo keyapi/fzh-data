@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文件制品 Artifact — 赛狐尾程打单</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, 'Microsoft YaHei', sans-serif; background: #f5f5f5; color: #333; }
+        .header { background: #1a1a2e; color: #fff; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+        .header h1 { font-size: 18px; }
+        .nav a { color: #a0a0c0; text-decoration: none; margin-left: 20px; font-size: 14px; }
+        .nav a:hover, .nav a.active { color: #fff; }
+        .container { max-width: 1100px; margin: 24px auto; padding: 0 24px; }
+        .panel { background: #fff; border-radius: 8px; padding: 24px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .panel h2 { font-size: 16px; margin-bottom: 8px; }
+        .hint { font-size: 13px; color: #666; margin-bottom: 16px; line-height: 1.5; }
+        .toolbar { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+        .toolbar select, .toolbar button { padding: 6px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; }
+        .toolbar button { background: #1a1a2e; color: #fff; border: none; cursor: pointer; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #eee; vertical-align: top; }
+        th { color: #888; font-size: 11px; }
+        code { font-size: 11px; }
+        .empty { text-align: center; padding: 32px; color: #999; }
+        a.dl { color: #1a1a2e; font-weight: 600; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>文件制品 Artifact</h1>
+        <div class="nav">
+            <a href="/">首页</a>
+            <a href="/packages">包裹</a>
+            <a href="/lizard/export">导出</a>
+            <a href="/lizard/import">导入追踪号</a>
+            <a href="/lizard/artifacts">制品</a>
+            <a href="/lizard/batches">批次</a>
+        </div>
+    </div>
+    <div class="container">
+        <div class="panel">
+            <h2>导出 / 导入文件登记</h2>
+            <p class="hint">
+                包含<strong>系统生成</strong>的上传 Excel，以及<strong>人工上传</strong>的追踪号返回 Excel。
+                磁盘按 <code>content_hash</code>（MD5，与 ERPNext File 一致）去重；物理路径扁平：
+                <code>data/artifacts/private/files/…</code>（对齐 ERPNext <code>/private/files</code> 习惯）。
+            </p>
+            <form class="toolbar" method="get" action="/lizard/artifacts">
+                <select name="kind">
+                    <option value="">全部类型</option>
+                    <option value="lizard_upload_export" {% if kind == 'lizard_upload_export' %}selected{% endif %}>导出上传表</option>
+                    <option value="lizard_tracking_import" {% if kind == 'lizard_tracking_import' %}selected{% endif %}>导入追踪号</option>
+                </select>
+                <button type="submit">筛选</button>
+            </form>
+            <div class="hint">账户 {{ account_key }} · 共 {{ items|length }} 条（本页）</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>类型</th>
+                        <th>显示名</th>
+                        <th>虚拟目录</th>
+                        <th>大小</th>
+                        <th>content_hash</th>
+                        <th>模板</th>
+                        <th>操作人</th>
+                        <th>摘要</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if items %}
+                    {% for item in items %}
+                    <tr>
+                        <td>{{ item.id }}</td>
+                        <td>{{ item.kind }}</td>
+                        <td>{{ item.file_name }}</td>
+                        <td>{{ item.virtual_folder or '—' }}</td>
+                        <td>{{ item.file_size }}</td>
+                        <td><code title="{{ item.content_hash }}">{{ item.content_hash[:12] }}…</code></td>
+                        <td>{{ item.template_version or '—' }}</td>
+                        <td>{{ item.created_by }}</td>
+                        <td>{{ item.summary or '—' }}</td>
+                        <td><a class="dl" href="/lizard/artifacts/{{ item.id }}/download">下载</a></td>
+                    </tr>
+                    {% endfor %}
+                    {% else %}
+                    <tr><td colspan="10" class="empty">暂无制品。请先导出或导入一次。</td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</body>
+</html>

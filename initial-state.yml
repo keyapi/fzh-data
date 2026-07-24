@@ -1,0 +1,15 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - heading "图片上传到 ERPNext" [level=1] [ref=e3]:
+      - img [ref=e4]
+      - text: 图片上传到 ERPNext
+    - generic [ref=e8]:
+      - generic [ref=e9]: 环境
+      - generic [ref=e10] [cursor=pointer]: 生产
+      - generic [ref=e11] [cursor=pointer]: 测试
+  - generic [ref=e17]:
+    - button "拖拽图片到此处 或 点击选择" [ref=e18]
+    - generic [ref=e15]: 拖拽图片到此处 或 点击选择
+    - generic:
+      - list
+    - alert [ref=e16]

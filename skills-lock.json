@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "skills": {
+    "brainstorming": {
+      "source": "nexu-io/open-design",
+      "sourceType": "github",
+      "skillPath": "skills/brainstorming/SKILL.md",
+      "computedHash": "b90c8fa029a61f4bafb7b69b7daa2f3822187d140214b216eb420c26f0d2e0c2"
+    },
+    "design-md": {
+      "source": "nexu-io/open-design",
+      "sourceType": "github",
+      "skillPath": "skills/design-md/SKILL.md",
+      "computedHash": "b5c1adadb356e1a861ee40df673122b8436908a2ef8e0be832a314bbd7877964"
+    },
+    "design-review": {
+      "source": "nexu-io/open-design",
+      "sourceType": "github",
+      "skillPath": "skills/design-review/SKILL.md",
+      "computedHash": "d7cb3690ec6548fee96c287a831de3833b63314679b83e2931ee04c09cb3d079"
+    },
+    "ecommerce-image-workflow": {
+      "source": "nexu-io/open-design",
+      "sourceType": "github",
+      "skillPath": "skills/ecommerce-image-workflow/SKILL.md",
+      "computedHash": "b49468448ae7b58915817cc3de0236ee0cb624835afd72c0fc2e8ceca574e07f"
+    },
+    "frontend-design": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "skillPath": "skills/frontend-design/SKILL.md",
+      "computedHash": "516bd2154eb843a8240e43d5b285229129853114ad7075a5e141e1c08e408c84"
+    }
+  }
+}

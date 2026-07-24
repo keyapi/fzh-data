@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>包裹列表 — 赛狐尾程打单</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, 'Microsoft YaHei', sans-serif; background: #f5f5f5; color: #333; }
+        .header { background: #1a1a2e; color: #fff; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+        .header h1 { font-size: 18px; }
+        .nav a { color: #a0a0c0; text-decoration: none; margin-left: 20px; font-size: 14px; }
+        .nav a:hover, .nav a.active { color: #fff; }
+        .container { max-width: 1200px; margin: 24px auto; padding: 0 24px; }
+        .panel { background: #fff; border-radius: 8px; padding: 24px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .panel h2 { font-size: 16px; margin-bottom: 16px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #eee; font-size: 13px; }
+        th { color: #888; font-weight: 600; font-size: 11px; text-transform: uppercase; }
+        tr:hover { background: #f9f9ff; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+        .badge-pending { background: #fff3cd; color: #856404; }
+        .badge-pending-auto { background: #e8e0f0; color: #5a3d7a; }
+        .badge-approved { background: #d4edda; color: #155724; }
+        .badge-rejected { background: #f8d7da; color: #721c24; }
+        .badge-shipped { background: #d4edda; color: #155724; }
+        .badge-error { background: #f8d7da; color: #721c24; }
+        .badge-info { background: #d1ecf1; color: #0c5460; }
+        .empty { text-align: center; padding: 48px; color: #999; }
+        .toolbar { display: flex; gap: 12px; margin-bottom: 16px; align-items: center; flex-wrap: wrap; }
+        .toolbar select, .toolbar input, .toolbar button { padding: 6px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; }
+        .toolbar button { background: #1a1a2e; color: #fff; cursor: pointer; border: none; }
+        .toolbar button:hover { background: #2a2a4e; }
+        .meta { font-size: 12px; color: #888; margin-bottom: 12px; }
+        a.pkg { color: #1a1a2e; text-decoration: none; font-weight: 600; }
+        a.pkg:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>赛狐尾程打单 — 包裹列表</h1>
+        <div class="nav">
+            <a href="/">首页</a>
+            <a href="/packages" class="active">包裹</a>
+            <a href="/lizard/export">导出</a>
+            <a href="/lizard/import">导入追踪号</a>
+            <a href="/lizard/artifacts">制品</a>
+            <a href="/lizard/batches">批次</a>
+            <a href="/orders">订单 (legacy)</a>
+        </div>
+    </div>
+    <div class="container">
+        <div class="panel">
+            <h2>本地包裹（只读）</h2>
+            <form class="toolbar" method="get" action="/packages" autocomplete="off">
+                <select name="status">
+                    <option value="">全部赛狐状态</option>
+                    <option value="to_audit" {% if status == 'to_audit' %}selected{% endif %}>待审核</option>
+                    <option value="to_process" {% if status == 'to_process' %}selected{% endif %}>待处理</option>
+                    <option value="to_print" {% if status == 'to_print' %}selected{% endif %}>待打单</option>
+                    <option value="has_shipped" {% if status == 'has_shipped' %}selected{% endif %}>已发货</option>
+                    <option value="has_canceled" {% if status == 'has_canceled' %}selected{% endif %}>已作废</option>
+                </select>
+                <select name="review">
+                    <option value="">全部本地审核</option>
+                    <option value="pending" {% if review == 'pending' %}selected{% endif %}>待审</option>
+                    <option value="approved" {% if review == 'approved' %}selected{% endif %}>已通过</option>
+                    <option value="rejected" {% if review == 'rejected' %}selected{% endif %}>已驳回</option>
+                    <option value="shipped" {% if review == 'shipped' %}selected{% endif %}>已发货(自动)</option>
+                    <option value="closed" {% if review == 'closed' %}selected{% endif %}>已作废(自动)</option>
+                </select>
+                <input type="text" name="channel" value="{{ channel or '' }}" placeholder="渠道名，如 蜴国际" />
+                <button type="submit">筛选</button>
+            </form>
+            <div class="meta">共 {{ total }} 条 · 账户 {{ account_key }}</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>包裹号</th>
+                        <th>赛狐状态</th>
+                        <th>本地审核</th>
+                        <th>渠道</th>
+                        <th>店铺</th>
+                        <th>订单数</th>
+                        <th>商品行</th>
+                        <th>追踪号</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if items %}
+                    {% for item in items %}
+                    <tr>
+                        <td><a class="pkg" href="/packages/{{ item.package_sn }}">{{ item.package_sn }}</a></td>
+                        <td><span class="badge badge-info">{{ item.package_status or '—' }}</span></td>
+                        <td><span class="badge {% if item.local_review_status == 'approved' %}badge-approved{% elif item.local_review_status == 'rejected' %}badge-rejected{% elif item.local_review_status == 'shipped' %}badge-shipped{% elif item.local_review_status == 'closed' %}badge-rejected{% else %}badge-pending{% endif %}">{{ item.local_review_status or 'pending' }}</span></td>
+                        <td>{{ item.channel_name or '—' }}</td>
+                        <td>{{ item.shop_name or '—' }}</td>
+                        <td>{{ item.order_count }}</td>
+                        <td>{{ item.item_count }}</td>
+                        <td>{{ item.tracking_number or '—' }}</td>
+                    </tr>
+                    {% endfor %}
+                    {% else %}
+                    <tr><td colspan="8" class="empty">暂无包裹。请先运行 packages-sync 同步到本地库。</td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</body>
+</html>

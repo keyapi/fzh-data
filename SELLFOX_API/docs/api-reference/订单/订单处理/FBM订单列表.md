@@ -1,0 +1,530 @@
+# FBM订单列表
+
+## OpenAPI Specification
+
+```yaml
+openapi: 3.0.1
+info:
+  title: ''
+  description: ''
+  version: 1.0.0
+paths:
+  /api/packageShip/getPackagePage.json:
+    post:
+      summary: FBM订单列表
+      deprecated: false
+      description: ''
+      operationId: getPackagePageUsingPOST
+      tags:
+        - 订单/订单处理
+        - FBM
+      parameters:
+        - name: access_token
+          in: query
+          description: 通过获取token接口获得的token，详见 [获取 Access Token](doc-1589130)
+          required: true
+          example: '{{access_token}}'
+          schema:
+            type: string
+        - name: client_id
+          in: query
+          description: client_id, 获取方式详见 [申请API权限](1748360)
+          required: true
+          example: '{{client_id}}'
+          schema:
+            type: string
+        - name: timestamp
+          in: query
+          description: 13位毫秒时间戳，与当前时间差异不超过正负15分钟，示例：1668153260508
+          required: true
+          example: '121212'
+          schema:
+            type: string
+        - name: nonce
+          in: query
+          description: '随机整数值，保证每个请求唯一，示例：11251 '
+          required: true
+          example: '121212'
+          schema:
+            type: string
+        - name: sign
+          in: query
+          description: 请求签名，详见  [生成sign（签名）](doc-1749562)
+          required: true
+          example: '121212121'
+          schema:
+            type: string
+        - name: Content-Type
+          in: header
+          description: 固定再header位置加入Content-Type:application/json
+          example: application/json
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PackageSearchOpenQO'
+            example: ''
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: >-
+                  #/components/schemas/Result%C2%ABPage%C2%ABPackageOpenVO%C2%BB%C2%BB
+          headers: {}
+          x-apifox-name: 成功
+        '201':
+          description: Created
+          content:
+            '*/*':
+              schema:
+                type: object
+                properties: {}
+                x-apifox-orders: []
+                x-apifox-ignore-properties: []
+          headers: {}
+          x-apifox-name: 成功
+        '401':
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                type: object
+                properties: {}
+                x-apifox-orders: []
+                x-apifox-ignore-properties: []
+          headers: {}
+          x-apifox-name: 没有权限
+        '403':
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                type: object
+                properties: {}
+                x-apifox-orders: []
+                x-apifox-ignore-properties: []
+          headers: {}
+          x-apifox-name: 禁止访问
+        '404':
+          description: Not Found
+          content:
+            '*/*':
+              schema:
+                type: object
+                properties: {}
+                x-apifox-orders: []
+                x-apifox-ignore-properties: []
+          headers: {}
+          x-apifox-name: 记录不存在
+      security: []
+      x-apifox-folder: 订单/订单处理
+      x-apifox-status: released
+      x-run-in-apifox: https://app.apifox.com/web/project/1827046/apis/api-196574169-run
+components:
+  schemas:
+    PackageSearchOpenQO:
+      type: object
+      required:
+        - purchaseDateStart
+        - purchaseDateEnd
+      properties:
+        pageNo:
+          type: string
+          description: 第几页，默认第1页
+        pageSize:
+          type: string
+          description: 每页条数，默认20 最大支持200
+        shopIdList:
+          type: array
+          description: 店铺ID，最多200个
+          items:
+            type: string
+        packageStatus:
+          type: string
+          description: >-
+            包裹状态：to_audit（待审核）、to_process（待处理）、apply_track_no（物流下单）、to_print（待打单）、has_shipped（已发货）、has_canceled（已作废）
+        purchaseDateStart:
+          type: string
+          description: 下单开始时间，时间跨度不能超过12个月，时间格式支持 yyyy-MM-dd或者yyyy-MM-dd HH:mm:ss
+        purchaseDateEnd:
+          type: string
+          description: 下单结束时间，时间跨度不能超过12个月，时间格式支持 yyyy-MM-dd或者yyyy-MM-dd HH:mm:ss
+        searchType:
+          type: string
+          description: 搜索类型：packageSn（包裹号）、orderId（订单号）、trackNo（跟踪号）
+        searchContentList:
+          type: array
+          description: 搜索内容 最多200个
+          items:
+            type: string
+        orderStatusList:
+          type: array
+          description: >-
+            订单状态：Unshipped、PartiallyShipped、Shipped、InvoiceUnconfirmed、Canceled、Unfulfillable
+          items:
+            type: string
+        customizedFlag:
+          type: string
+          description: 是否定制 0=否 1=是
+      title: PackageSearchOpenQO
+      x-apifox-orders:
+        - pageNo
+        - pageSize
+        - shopIdList
+        - packageStatus
+        - purchaseDateStart
+        - purchaseDateEnd
+        - searchType
+        - searchContentList
+        - orderStatusList
+        - customizedFlag
+      x-apifox-ignore-properties: []
+      x-apifox-folder: ''
+    Result«Page«PackageOpenVO»»:
+      type: object
+      properties:
+        code:
+          type: integer
+          format: int32
+        data:
+          $ref: '#/components/schemas/Page%C2%ABPackageOpenVO%C2%BB'
+        msg:
+          type: string
+        ts:
+          type: integer
+          format: int64
+      title: Result«Page«PackageOpenVO»»
+      x-apifox-orders:
+        - code
+        - data
+        - msg
+        - ts
+      x-apifox-ignore-properties: []
+      x-apifox-folder: ''
+    Page«PackageOpenVO»:
+      type: object
+      properties:
+        pageNo:
+          type: integer
+          format: int32
+          description: 页码
+        pageSize:
+          type: integer
+          format: int32
+          description: 每页条数
+        totalPage:
+          type: integer
+          format: int32
+          description: 总页数
+        totalSize:
+          type: integer
+          format: int32
+          description: 总条数
+        rows:
+          type: array
+          description: 当前页数据
+          items:
+            $ref: '#/components/schemas/PackageOpenVO'
+      title: Page«PackageOpenVO»
+      x-apifox-orders:
+        - pageNo
+        - pageSize
+        - totalPage
+        - totalSize
+        - rows
+      x-apifox-ignore-properties: []
+      x-apifox-folder: ''
+    PackageOpenVO:
+      type: object
+      properties:
+        packageSn:
+          type: string
+          description: 包裹号
+        shopId:
+          type: string
+          description: 店铺id
+        shopName:
+          type: string
+          description: 店铺名称
+        platformName:
+          type: string
+          description: 平台名称
+        reason:
+          type: string
+          description: 原因
+        marketplace:
+          type: string
+          description: 站点
+        status:
+          type: string
+          description: >-
+            包裹状态
+            to_audit（待审核）、to_process（待处理）、apply_track_no（物流下单）、to_print（待打单）、has_shipped（已发货）、has_canceled（已作废）
+        remarks:
+          type: string
+          description: 备注
+        shipTime:
+          type: string
+          description: 发货时间
+        applyTime:
+          type: string
+          description: 物流下单时间
+        submitTime:
+          type: string
+          description: 提交平台时间
+        resendMark:
+          type: string
+          description: 是否重发包裹， 取值：true/false
+        isReShip:
+          type: string
+          description: 是否补发包裹，取值：true/false
+        outOfStock:
+          type: string
+          description: 是否缺货，取值：true/false
+        address:
+          $ref: '#/components/schemas/PackageAddressOpenVO'
+        logistics:
+          $ref: '#/components/schemas/PackageLogisticsOpenVO'
+        items:
+          type: array
+          description: 商品信息
+          items:
+            $ref: '#/components/schemas/PackageItemOpenVO'
+        orders:
+          type: array
+          description: 订单信息
+          items:
+            $ref: '#/components/schemas/PackageOrderOpenVO'
+      title: PackageOpenVO
+      x-apifox-orders:
+        - packageSn
+        - shopId
+        - shopName
+        - platformName
+        - reason
+        - marketplace
+        - status
+        - remarks
+        - shipTime
+        - applyTime
+        - submitTime
+        - resendMark
+        - isReShip
+        - outOfStock
+        - address
+        - logistics
+        - items
+        - orders
+      x-apifox-ignore-properties: []
+      x-apifox-folder: ''
+    PackageOrderOpenVO:
+      type: object
+      properties:
+        amazonOrderId:
+          type: string
+          description: 订单号
+        orderStatus:
+          type: string
+          description: >-
+            订单状态
+            Unshipped、PartiallyShipped、Shipped、InvoiceUnconfirmed、Canceled、Unfulfillable
+        purchaseDate:
+          type: string
+          description: 下单时间
+        buyerRequestedCancelMark:
+          type: string
+          description: 是否买家申请取消，取值：true/false
+        splitMark:
+          type: string
+          description: '拆分订单，取值：true/false '
+        shipmentServiceLevelCategory:
+          type: string
+          description: 买家指定
+        orderTotalAmount:
+          type: string
+          description: 销售收益
+        orderTotalCurrency:
+          type: string
+          description: 销售收益币种
+        profit:
+          type: string
+          description: 预估毛利
+        profitRate:
+          type: string
+          description: 预估毛利率%
+        earliestShipDate:
+          type: string
+          description: 最早发货时间
+        latestShipDate:
+          type: string
+          description: 最晚发货时间
+        earliestDeliveryDate:
+          type: string
+          description: 最早妥投时间
+        latestDeliveryDate:
+          type: string
+          description: 最晚妥投时间
+      title: PackageOrderOpenVO
+      x-apifox-orders:
+        - amazonOrderId
+        - orderStatus
+        - purchaseDate
+        - buyerRequestedCancelMark
+        - splitMark
+        - shipmentServiceLevelCategory
+        - orderTotalAmount
+        - orderTotalCurrency
+        - profit
+        - profitRate
+        - earliestShipDate
+        - latestShipDate
+        - earliestDeliveryDate
+        - latestDeliveryDate
+      x-apifox-ignore-properties: []
+      x-apifox-folder: ''
+    PackageItemOpenVO:
+      type: object
+      properties:
+        orderItemId:
+          type: string
+          description: 订单商品ID
+        amazonOrderId:
+          type: string
+          description: 订单号
+        mainImage:
+          type: string
+          description: MSKU图片链接
+        sellerSku:
+          type: string
+          description: MSKU
+        variationChildStr:
+          type: string
+          description: 规格属性
+        quantityOrdered:
+          type: string
+          description: MSKU数量
+        commoditySku:
+          type: string
+          description: 本地SKU
+        isGroup:
+          type: string
+          description: 商品类型：0.普通商品，1.组合商品 2.加工商品 5.辅料商品
+        customizedMark:
+          type: string
+          description: 定制商品，取值：true/false
+      title: PackageItemOpenVO
+      x-apifox-orders:
+        - orderItemId
+        - amazonOrderId
+        - mainImage
+        - sellerSku
+        - variationChildStr
+        - quantityOrdered
+        - commoditySku
+        - isGroup
+        - customizedMark
+      x-apifox-ignore-properties: []
+      x-apifox-folder: ''
+    PackageLogisticsOpenVO:
+      type: object
+      properties:
+        warehouseName:
+          type: string
+          description: 发货仓库
+        channelName:
+          type: string
+          description: 发货渠道
+        trackNo:
+          type: string
+          description: 跟踪号
+        forwardNo:
+          type: string
+          description: 物流商单号
+        fbmCost:
+          type: string
+          description: 预估运费
+        orderTotalCurrency:
+          type: string
+          description: 币种
+      title: PackageLogisticsOpenVO
+      x-apifox-orders:
+        - warehouseName
+        - channelName
+        - trackNo
+        - forwardNo
+        - fbmCost
+        - orderTotalCurrency
+      x-apifox-ignore-properties: []
+      x-apifox-folder: ''
+    PackageAddressOpenVO:
+      type: object
+      properties:
+        name:
+          type: string
+          description: 收件人
+        country:
+          type: string
+          description: 国家/地区
+        countryCode:
+          type: string
+          description: 国家二字码
+        postalCode:
+          type: string
+          description: 邮编
+        company:
+          type: string
+          description: 公司名称
+        stateOrRegion:
+          type: string
+          description: 州/省
+        phone:
+          type: string
+          description: 电话
+        mobile:
+          type: string
+          description: 手机
+        taxNumber:
+          type: string
+          description: 税号
+        city:
+          type: string
+          description: 城市
+        apartmentNumber:
+          type: string
+          description: 门牌号
+        buyerEmail:
+          type: string
+          description: 邮箱
+        address1:
+          type: string
+          description: 地址1
+        address2:
+          type: string
+          description: 地址2
+      title: PackageAddressOpenVO
+      x-apifox-orders:
+        - name
+        - country
+        - countryCode
+        - postalCode
+        - company
+        - stateOrRegion
+        - phone
+        - mobile
+        - taxNumber
+        - city
+        - apartmentNumber
+        - buyerEmail
+        - address1
+        - address2
+      x-apifox-ignore-properties: []
+      x-apifox-folder: ''
+  securitySchemes: {}
+servers: []
+security: []
+
+```

@@ -1,0 +1,178 @@
+<h2>Tag vs Collection：四个系统的设计对比</h2>
+<p class="subtitle">AEM、ERPNext File、Notion、Google Photos — 它们各自如何区分"标签"和"分组/专辑"</p>
+
+<div class="section">
+  <h3>1. AEM：三层模型（Folders / Tags / Collections）</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:8px">
+    <tr style="border-bottom:2px solid var(--border)">
+      <th style="text-align:left;padding:6px"></th>
+      <th style="text-align:left;padding:6px">Folders 📁</th>
+      <th style="text-align:left;padding:6px">Tags 🏷️</th>
+      <th style="text-align:left;padding:6px">Collections 📋</th>
+    </tr>
+    <tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:6px;font-weight:600">回答什么问题</td>
+      <td style="padding:6px"><strong>WHERE</strong><br>资产在哪里？</td>
+      <td style="padding:6px"><strong>WHAT</strong><br>资产是什么？</td>
+      <td style="padding:6px"><strong>WHICH / WHY</strong><br>哪些资产用于什么目的？</td>
+    </tr>
+    <tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:6px;font-weight:600">结构</td>
+      <td style="padding:6px">层次树 (hierarchical)</td>
+      <td style="padding:6px">层次分类法 + 命名空间 (namespaces)</td>
+      <td style="padding:6px">扁平列表 (flat references)</td>
+    </tr>
+    <tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:6px;font-weight:600">关系</td>
+      <td style="padding:6px">1:1（资产只在一个文件夹）</td>
+      <td style="padding:6px">N:N（资产可以有多个标签）</td>
+      <td style="padding:6px">N:N（资产可在多个 Collection）</td>
+    </tr>
+    <tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:6px;font-weight:600">生命周期</td>
+      <td style="padding:6px">永久（最"重"的决定）</td>
+      <td style="padding:6px">持久（受控词汇表，治理严格）</td>
+      <td style="padding:6px">临时/项目级（ad-hoc curation）</td>
+    </tr>
+    <tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:6px;font-weight:600">谁操作</td>
+      <td style="padding:6px">管理员</td>
+      <td style="padding:6px">DAM 管理员维护体系，所有人使用</td>
+      <td style="padding:6px">任何人（运营、市场、品牌）</td>
+    </tr>
+    <tr>
+      <td style="padding:6px;font-weight:600">关键差异</td>
+      <td style="padding:6px">物理位置，绑权限</td>
+      <td style="padding:6px" colspan="2"><strong>Tags = 描述资产本身的属性</strong>（白色、枕头、正面）<br><strong>Collections = 描述资产被用于什么目的</strong>（6月上贴、夏季Campaign）<br><em>Tag 说资产"是什么"，Collection 说资产"用来干什么"</em></td>
+    </tr>
+  </table>
+</div>
+
+<div class="section">
+  <h3>2. ERPNext File：通用附件模型</h3>
+  <div style="background:var(--surface-hover);border-radius:8px;padding:12px;margin-top:8px">
+    <p style="font-size:13px"><code>tabFile</code> 表的关键字段（经搜索验证）：</p>
+    <table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:4px;font-family:monospace">
+      <tr style="border-bottom:1px solid var(--border)"><td style="padding:3px 8px">file_url</td><td style="padding:3px 8px;color:var(--text-muted)">文件路径</td></tr>
+      <tr style="border-bottom:1px solid var(--border)"><td style="padding:3px 8px">attached_to_doctype</td><td style="padding:3px 8px;color:var(--text-muted)">关联的 DocType 名（如 "Item", "Sales Order"）</td></tr>
+      <tr style="border-bottom:1px solid var(--border)"><td style="padding:3px 8px">attached_to_name</td><td style="padding:3px 8px;color:var(--text-muted)">关联的具体单据名（如 "KS0001"）</td></tr>
+      <tr><td style="padding:3px 8px">is_private</td><td style="padding:3px 8px;color:var(--text-muted)">访问控制</td></tr>
+    </table>
+    <p style="font-size:12px;color:var(--text-secondary);margin-top:8px"><strong>关键设计</strong>：一个文件可以有<strong>多条</strong> tabFile 记录，分别附加到不同 DocType 的不同单据。这是通用外键模式 — (doctype, docname) 作为灵活的 FK 对。</p>
+    <p style="font-size:12px;color:var(--text-secondary);margin-top:4px">比如同一张产品图可以同时附加到 <code>Item KS0001</code> 和 <code>Sales Order SO-00042</code> 和 <code>Website Item hero_banner</code>。</p>
+  </div>
+</div>
+
+<div class="section">
+  <h3>3. 对我们的 DAM 的启示</h3>
+
+  <div style="border:2px solid var(--primary);border-radius:8px;padding:12px;margin-top:8px;background:var(--primary-light)">
+    <h4 style="margin-bottom:6px">当前 DAM 的数据模型其实是合理的</h4>
+
+    <div style="font-size:13px;line-height:1.7">
+      <p><strong>Tag = Asset 的属性</strong>（当前已有）</p>
+      <ul style="padding-left:18px;font-size:12px;color:var(--text-secondary)">
+        <li>描述资产"是什么"：颜色、角度、品类、场景</li>
+        <li>N:N 关系，通过 asset_tag 关联表</li>
+        <li>有 category 枚举约束（color|angle|style|fabric|size|role|scene|season|custom）</li>
+      </ul>
+
+      <p style="margin-top:8px"><strong>Collection = 资产被用于什么目的</strong>（当前已有，需扩展）</p>
+      <ul style="padding-left:18px;font-size:12px;color:var(--text-secondary)">
+        <li>描述资产"用来干什么"：上贴、Campaign、画册</li>
+        <li><code>type</code> 枚举定义目的类型</li>
+        <li><code>context</code> JSON 定义具体目标</li>
+        <li>N:N 引用（通过 AssetCollectionItem）</li>
+      </ul>
+    </div>
+  </div>
+
+  <div style="margin-top:12px">
+    <h4>用户担心的问题：Collection 的 context 太灵活 = 像 tag 一样随意？</h4>
+
+    <p style="font-size:13px">这个担心是对的，但 AEM 和 ERPNext File 给出了答案：</p>
+
+    <div style="display:flex;gap:12px;margin-top:8px">
+      <div style="flex:1;border:1px solid var(--border);border-radius:6px;padding:10px">
+        <div style="font-size:11px;font-weight:600;color:var(--primary);margin-bottom:4px">AEM 的做法</div>
+        <p style="font-size:12px;color:var(--text-secondary)">用 <code>type</code> 枚举 + 每种 type 有固定 context schema 来<strong>约束灵活度</strong>。</p>
+        <div style="font-size:11px;background:var(--surface-hover);border-radius:4px;padding:6px;margin-top:4px;font-family:monospace">
+          type="listing" → context={skus, channel, marketplace}<br>
+          type="campaign" → context={campaign, season, platforms}<br>
+          type="catalog" → context={season, product_line}
+        </div>
+      </div>
+      <div style="flex:1;border:1px solid var(--border);border-radius:6px;padding:10px">
+        <div style="font-size:11px;font-weight:600;color:var(--primary);margin-bottom:4px">ERPNext 的做法</div>
+        <p style="font-size:12px;color:var(--text-secondary)">用 <code>(doctype, docname)</code> 作为通用 FK 对 — 灵活但有<strong>结构</strong>。</p>
+        <div style="font-size:11px;background:var(--surface-hover);border-radius:4px;padding:6px;margin-top:4px;font-family:monospace">
+          attached_to_doctype = "Item"<br>
+          attached_to_name = "KS0001"
+        </div>
+        <p style="font-size:11px;color:var(--text-muted);margin-top:4px">不是自由文本，是引用真实存在的单据。</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>4. 建议：Collection 的 type/context 设计</h3>
+  <p style="font-size:13px;margin-bottom:8px">参考 AEM type 枚举 + ERPNext (doctype, docname) 引用模式：</p>
+
+  <table style="width:100%;border-collapse:collapse;font-size:12px">
+    <tr style="border-bottom:2px solid var(--border)">
+      <th style="text-align:left;padding:6px">type</th>
+      <th style="text-align:left;padding:6px">含义</th>
+      <th style="text-align:left;padding:6px">context 包含</th>
+      <th style="text-align:left;padding:6px">Phase</th>
+    </tr>
+    <tr style="border-bottom:1px solid var(--border);background:var(--primary-light)">
+      <td style="padding:6px"><code>listing</code></td>
+      <td style="padding:6px">平台 Listing 上贴批次</td>
+      <td style="padding:6px"><code>skus: [str]</code>, <code>channel: str</code>, <code>marketplace: str</code></td>
+      <td style="padding:6px"><strong>Phase 3b 先做</strong></td>
+    </tr>
+    <tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:6px"><code>campaign</code></td>
+      <td style="padding:6px">营销 Campaign 图片组</td>
+      <td style="padding:6px"><code>campaign_name: str</code>, <code>season: str</code>, <code>platforms: [str]</code></td>
+      <td style="padding:6px">Phase 5+</td>
+    </tr>
+    <tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:6px"><code>catalog</code></td>
+      <td style="padding:6px">产品画册/目录</td>
+      <td style="padding:6px"><code>product_line: str</code>, <code>season: str</code></td>
+      <td style="padding:6px">Phase 5+</td>
+    </tr>
+    <tr>
+      <td style="padding:6px"><code>custom</code></td>
+      <td style="padding:6px">自由用途</td>
+      <td style="padding:6px"><code>description: str</code></td>
+      <td style="padding:6px">已有</td>
+    </tr>
+  </table>
+
+  <p style="font-size:12px;color:var(--text-muted);margin-top:8px">每个 type 有固定 context schema → 不会像 tag 一样随意。如果以后要关联 ERPNext 单据，可以在 context 里加 <code>erpnext_doctype</code> + <code>erpnext_docname</code>。</p>
+</div>
+
+<div class="section">
+  <h3>关于 Private Collection</h3>
+  <p style="font-size:13px">搜索确认：AEM 的 Private Collection = 仅创建者+管理员可见。这是一种<strong>访问控制</strong>机制，不是"关联到某个人"的语义。</p>
+  <p style="font-size:13px;margin-top:4px">对我们：</p>
+  <ul style="font-size:12px;line-height:1.8;padding-left:18px;color:var(--text-secondary)">
+    <li>Phase 3b 默认 Public，不需要 Private 的复杂度</li>
+    <li>如果以后需要"按销售渠道/账号负责人隔离"，可以借助 Collection 的 context（如 context.channel = "Amazon-US"）过滤，而不是靠 Private 标记</li>
+    <li>ERPNext 的 <code>tabFile.is_private</code> 模式是一个参考，但现在不需要</li>
+  </ul>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="agree" onclick="toggleSelect(this)">
+    <div class="letter">✓</div>
+    <div class="content"><h3>理解并同意，写实施计划</h3><p>Collection = type枚举约束的引用层，listing先做</p></div>
+  </div>
+  <div class="option" data-choice="discuss" onclick="toggleSelect(this)">
+    <div class="letter">?</div>
+    <div class="content"><h3>还有讨论空间</h3><p>我对某些点有不同看法</p></div>
+  </div>
+</div>

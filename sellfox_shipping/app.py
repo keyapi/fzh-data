@@ -1,0 +1,1355 @@
+"""sellfox_shipping — FastAPI web application.
+
+Three interfaces sharing one service layer:
+  - /api/*   → REST API (Web UI backend)
+  - /mcp     → FastMCP mount (AI Agent tools)
+  - /        → Web UI (Jinja2 templates)
+"""
+
+from __future__ import annotations
+
+import os
+import sys
+from datetime import date
+from pathlib import Path
+
+import yaml
+from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    RedirectResponse,
+)
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+
+from sellfox_shipping.models import Address, Order, PackageStatus
+from sellfox_shipping.package_service import (
+    ListPackagesService,
+    PackageListRequest,
+    PackageReviewRequest,
+    ReviewPackageService,
+)
+from sellfox_shipping.sellfox_client import SellfoxClient
+from sellfox_shipping.store import Store
+
+# ── Bootstrap ─────────────────────────────────────────────────────
+
+BASE_DIR = Path(__file__).parent
+
+from sellfox_shipping.env_loader import load_dotenv
+
+load_dotenv()
+
+
+def _load_config() -> dict:
+    path = BASE_DIR / "config.yaml"
+    with open(path, encoding="utf-8") as f:
+        return yaml.safe_load(f)
+
+config = _load_config()
+store = Store(db_path=BASE_DIR / config.get("store", {}).get("db_path", "data/shipping.db"))
+
+sellfox = SellfoxClient(
+    proxy_base_url=config["sellfox"]["proxy_base_url"],
+    proxy_account=config["sellfox"]["proxy_account"],
+    proxy_api_key=os.getenv("SELLFOX_PROXY_API_KEY", ""),
+)
+
+
+def _get_package_repository():
+    from sellfox_shipping.package_repository import PackageRepository
+
+    return PackageRepository(BASE_DIR / config.get("store", {}).get("db_path", "data/shipping.db"))
+
+
+def _get_package_list_service() -> ListPackagesService:
+    return ListPackagesService(_get_package_repository())
+
+
+def _get_package_review_service() -> ReviewPackageService:
+    return ReviewPackageService(_get_package_repository())
+
+
+def _get_lizard_dims_lookup():
+    """Override → EN ZLMB# (V2 with sibling borrowing)."""
+    from sellfox_shipping.carriers.lizard.cascade import CascadingDimsLookup
+    from sellfox_shipping.carriers.lizard.erpnext_dims_v2 import ErpnextDimsLookupV2
+    from sellfox_shipping.carriers.lizard.override_dims import RepositoryDimsLookup
+    from sellfox_shipping.env_loader import load_dotenv as _load_env
+
+    _load_env(Path(__file__).resolve().parents[1] / "EN_API" / ".env")
+    _load_env()
+
+    repo = _get_package_repository()
+    account_key = config["sellfox"]["proxy_account"]
+    override = RepositoryDimsLookup(repo, account_key)
+    lookups: list = [override]
+
+    erp_key = (
+        os.getenv("PROD_ERP_API_KEY") or os.getenv("ERP_API_KEY") or ""
+    ).strip()
+    erp_secret = (
+        os.getenv("PROD_ERP_API_SECRET") or os.getenv("ERP_API_SECRET") or ""
+    ).strip()
+    if erp_key and erp_secret:
+        erp_url = (
+            os.getenv("ERP_URL") or "https://erpnext.vilavi.cn"
+        ).strip().rstrip("/")
+        lookups.append(
+            ErpnextDimsLookupV2(
+                base_url=erp_url,
+                api_key=erp_key,
+                api_secret=erp_secret,
+            )
+        )
+    return CascadingDimsLookup(*lookups)
+
+
+# ── FastAPI app ──────────────────────────────────────────────────
+
+app = FastAPI(
+    title="sellfox-shipping",
+    description="赛狐尾程打单系统 — 三界面架构 (REST + MCP + CLI)",
+    version="0.1.0",
+)
+
+from sellfox_shipping.auth_oidc import (  # noqa: E402
+    PUBLIC_PATH_PREFIXES,
+    assert_oidc_config_complete,
+    build_oidc_router,
+    load_oidc_settings,
+    require_user,
+    resolve_actor,
+)
+
+_oidc_settings = load_oidc_settings(config)
+assert_oidc_config_complete(_oidc_settings)
+app.include_router(build_oidc_router(_oidc_settings))
+
+
+@app.middleware("http")
+async def oidc_gate(request: Request, call_next):
+    if not _oidc_settings.enabled:
+        return await call_next(request)
+    path = request.url.path
+    if any(path == p or path.startswith(p + "/") for p in PUBLIC_PATH_PREFIXES):
+        return await call_next(request)
+    if path.startswith("/static"):
+        return await call_next(request)
+    try:
+        user = require_user(request, _oidc_settings)
+    except HTTPException:
+        if path.startswith("/api/"):
+            return JSONResponse(
+                {"detail": "Authentication required"},
+                status_code=401,
+            )
+        return RedirectResponse("/oidc-login")
+    request.state.user = user
+    return await call_next(request)
+
+
+def _web_actor(request: Request, fallback: str = "") -> str:
+    return resolve_actor(request, _oidc_settings, fallback=fallback)
+
+
+templates_dir = BASE_DIR / "templates"
+templates_dir.mkdir(exist_ok=True)
+templates = Jinja2Templates(directory=str(templates_dir))
+
+static_dir = BASE_DIR / "static"
+static_dir.mkdir(exist_ok=True)
+app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+
+# ── REST endpoints ───────────────────────────────────────────────
+
+@app.get("/api/health")
+async def health():
+    return {"status": "ok", "database": str(store.conn.execute("SELECT 1").fetchone())}
+
+
+@app.get("/api/packages")
+async def list_packages(
+    status: str | None = Query(None, description="Filter by package_status"),
+    channel: str | None = Query(None, description="Filter by channel_name"),
+    review: str | None = Query(None, description="Filter by local_review_status"),
+    limit: int = Query(50, le=500),
+    offset: int = Query(0, ge=0),
+):
+    """List local package summaries from the package-centric store."""
+    result = _get_package_list_service().list(
+        PackageListRequest(
+            account_key=config["sellfox"]["proxy_account"],
+            package_status=status or None,
+            channel_name=channel or None,
+            local_review_status=review or None,
+            limit=limit,
+            offset=offset,
+        )
+    )
+    return result.model_dump(mode="json")
+
+
+@app.get("/api/packages/{package_sn}")
+async def get_package(package_sn: str):
+    """Return a single normalized package record from the local store."""
+    record = _get_package_repository().get(
+        config["sellfox"]["proxy_account"],
+        package_sn,
+    )
+    if record is None:
+        raise HTTPException(404, f"Package {package_sn} not found")
+    return record.model_dump(mode="json")
+
+
+@app.post("/api/packages/{package_sn}/review")
+async def review_package(request: Request, package_sn: str, body: dict):
+    """Set local review status (approved/rejected/pending) with audit."""
+    from pydantic import ValidationError
+
+    try:
+        record = _get_package_review_service().review(
+            PackageReviewRequest(
+                account_key=config["sellfox"]["proxy_account"],
+                package_sn=package_sn,
+                actor=_web_actor(request, str(body.get("actor") or "")),
+                decision=str(body.get("decision") or ""),
+                note=str(body.get("note") or ""),
+            )
+        )
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValidationError as exc:
+        raise HTTPException(422, exc.errors()) from exc
+    return record.model_dump(mode="json")
+
+
+@app.get("/api/orders")
+async def list_orders(
+    status: str | None = Query(None),
+    carrier: str | None = Query(None),
+    limit: int = Query(50, le=200),
+    offset: int = Query(0),
+):
+    orders = store.list_orders(status=status, carrier=carrier, limit=limit, offset=offset)
+    total = store.count_orders(status=status)
+    return {
+        "orders": [o.model_dump(mode="json") for o in orders],
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }
+
+
+@app.get("/api/orders/{amazon_order_id}")
+async def get_order(amazon_order_id: str):
+    order = store.get_order(amazon_order_id)
+    if not order:
+        raise HTTPException(404, f"Order {amazon_order_id} not found")
+    labels = store.get_labels_for_order(order.id)
+    return {
+        "order": order.model_dump(mode="json"),
+        "labels": [l.model_dump(mode="json") for l in labels],
+    }
+
+
+@app.post("/api/orders/fetch")
+async def fetch_orders_from_sellfox(
+    date_start: str = Query(description="yyyy-MM-dd"),
+    date_end: str = Query(description="yyyy-MM-dd"),
+    status: str | None = Query(None),
+    page_size: int = Query(20, le=200),
+):
+    """Pull orders from Sellfox into local store."""
+    all_orders = []
+    page_no = 1
+    total = 0
+    while True:
+        orders, total = sellfox.fetch_orders(
+            date_start=date_start,
+            date_end=date_end,
+            status=status,
+            page_no=page_no,
+            page_size=page_size,
+        )
+        for o in orders:
+            store.upsert_order(o)
+        all_orders.extend(orders)
+        if page_no * page_size >= total:
+            break
+        page_no += 1
+    return {"fetched": len(all_orders), "total_in_sellfox": total}
+
+
+@app.post("/api/orders/fetch-detail")
+async def fetch_order_detail(shop_id: str, amazon_order_id: str):
+    """Pull a single full order detail from Sellfox."""
+    order = sellfox.get_order_detail(shop_id, amazon_order_id)
+    if not order:
+        raise HTTPException(404, f"Order {amazon_order_id} not found in Sellfox")
+    order_id = store.upsert_order(order)
+    return {
+        "order_id": order_id,
+        "amazon_order_id": order.amazon_order_id,
+        "has_address": bool(order.shipping_address.address1),
+    }
+
+
+@app.get("/api/warehouses")
+async def list_warehouses():
+    return config.get("warehouses", {})
+
+
+@app.get("/api/carriers")
+async def list_carriers():
+    return {
+        name: {"enabled": cfg.get("enabled", False)}
+        for name, cfg in config.get("carriers", {}).items()
+    }
+
+
+@app.get("/api/rules")
+async def list_rules():
+    return config.get("rules", [])
+
+
+# ── Web UI ────────────────────────────────────────────────────────
+
+@app.get("/", response_class=HTMLResponse)
+async def index(request: Request):
+    return templates.TemplateResponse(request, "index.html")
+
+
+@app.get("/packages", response_class=HTMLResponse)
+async def packages_page(
+    request: Request,
+    status: str | None = Query(None),
+    channel: str | None = Query(None),
+    review: str | None = Query(None),
+    limit: int = Query(50, le=500),
+    offset: int = Query(0, ge=0),
+):
+    """Server-rendered package list for review."""
+    account_key = config["sellfox"]["proxy_account"]
+    result = _get_package_list_service().list(
+        PackageListRequest(
+            account_key=account_key,
+            package_status=status or None,
+            channel_name=channel or None,
+            local_review_status=review or None,
+            limit=limit,
+            offset=offset,
+        )
+    )
+    return templates.TemplateResponse(
+        request,
+        "packages.html",
+        {
+            "account_key": account_key,
+            "status": status or "",
+            "channel": channel or "",
+            "review": review or "",
+            "total": result.total,
+            "items": result.items,
+        },
+    )
+
+
+@app.get("/packages/{package_sn}", response_class=HTMLResponse)
+async def package_detail_page(request: Request, package_sn: str):
+    """Server-rendered package detail for review."""
+    account_key = config["sellfox"]["proxy_account"]
+    record = _get_package_repository().get(account_key, package_sn)
+    if record is None:
+        raise HTTPException(404, f"Package {package_sn} not found")
+    return templates.TemplateResponse(
+        request,
+        "package_detail.html",
+        _package_detail_context(account_key, record, message=""),
+    )
+
+
+def _package_detail_context(account_key: str, record, *, message: str) -> dict:
+    from sellfox_shipping.submission_state import aggregate_package_submission_state
+
+    repo = _get_package_repository()
+    intents = repo.list_submission_intents_for_package(
+        account_key=account_key,
+        package_sn=record.package_sn,
+    )
+    package_submission_state = (
+        aggregate_package_submission_state([i.status for i in intents])
+        if intents
+        else ""
+    )
+    carton_rows = _carton_rows_for_package(account_key, record)
+    package_dims = _compute_package_dims(record, carton_rows)
+    routing_result = _compute_routing(record, carton_rows)
+    # Fetch rates from all available carriers (always both VITE + Lizard).
+    # The routing suggestion determines which rate is shown in 运费试算,
+    # but all results are persisted to history.
+    vite_rate = _get_vite_rate(record, package_dims, routing_result)
+    _get_lizard_rate(record, package_dims)  # persist only, not displayed in live panel
+    rate_history = _get_rate_history(repo, record, account_key)
+    return {
+        "package": record,
+        "message": message,
+        "carton_rows": carton_rows,
+        "package_dims": package_dims,
+        "routing_result": routing_result,
+        "vite_rate": vite_rate,
+        "rate_history": rate_history,
+        "submission_intents": intents,
+        "package_submission_state": package_submission_state,
+    }
+
+
+def _carton_rows_for_package(account_key: str, record) -> list[dict]:
+    repo = _get_package_repository()
+    lookup = _get_lizard_dims_lookup()
+    seen: set[str] = set()
+    rows: list[dict] = []
+    for item in record.items:
+        sku = (item.commodity_sku or "").strip()
+        if not sku or sku in seen:
+            continue
+        seen.add(sku)
+        override = repo.get_carton_override(account_key, sku)
+        try:
+            resolved = lookup.get(sku)
+        except Exception:
+            resolved = None
+        rows.append(
+            {
+                "commodity_sku": sku,
+                "override": override,
+                "resolved": resolved,
+                "source": (
+                    "override"
+                    if override is not None
+                    else ("cascade" if resolved is not None else "missing")
+                ),
+            }
+        )
+    return rows
+
+
+def _compute_package_dims(record, carton_rows: list[dict]) -> dict | None:
+    """Merge per-SKU dims into package-level dims and persist to DB.
+
+    长=max, 宽=max, 高=sum, 重量=sum(weight × qty).
+    Results are stored in shipping_package_dims for downstream consumption.
+    """
+    cr_by_sku = {r["commodity_sku"]: r for r in carton_rows}
+    total_weight_kg = 0.0
+    lengths: list[float] = []
+    widths: list[float] = []
+    heights: list[float] = []
+
+    for item in record.items:
+        sku = (item.commodity_sku or "").strip()
+        if not sku:
+            continue
+        cr = cr_by_sku.get(sku)
+        if cr is None:
+            continue
+        dims = cr["override"].dims if cr.get("override") else cr.get("resolved")
+        if dims is None or not dims.is_complete:
+            continue
+        qty = item.quantity or 1
+        total_weight_kg += dims.weight_kg * qty
+        lengths.append(dims.length_cm)
+        widths.append(dims.width_cm)
+        heights.append(dims.height_cm)
+
+    if not lengths:
+        return None
+
+    result = {
+        "weight_kg": round(total_weight_kg, 2),
+        "length_cm": max(lengths),
+        "width_cm": max(widths),
+        "height_cm": sum(heights),
+        "sku_count": len(lengths),
+    }
+
+    # Persist to DB for downstream (carrier export, rule engine, etc.)
+    repo = _get_package_repository()
+    package_db_id = repo.get_package_db_id(
+        config["sellfox"]["proxy_account"], record.package_sn
+    )
+    if package_db_id is not None:
+        try:
+            repo.upsert_package_dims(
+                package_db_id=package_db_id,
+                weight_kg=result["weight_kg"],
+                length_cm=result["length_cm"],
+                width_cm=result["width_cm"],
+                height_cm=result["height_cm"],
+                sku_count=result["sku_count"],
+            )
+        except Exception:
+            pass  # best-effort persist
+
+    return result
+
+
+def _compute_routing(record, carton_rows: list[dict]):
+    """Run rule engine on package data and return a RoutingResult."""
+    from pathlib import Path
+
+    from sellfox_shipping.routing.engine import RuleEngine
+    from sellfox_shipping.routing.models import PackageRoutingData
+
+    rules_path = Path(__file__).parent / "routing" / "routing_rules.yaml"
+    if not rules_path.exists():
+        return None
+
+    # Build dimensional data from carton rows + items
+    sides: list[float] = []
+    total_weight = 0.0
+    total_qty = 0
+    cr_by_sku = {r["commodity_sku"]: r for r in carton_rows}
+    for item in record.items:
+        sku = (item.commodity_sku or "").strip()
+        if not sku:
+            continue
+        cr = cr_by_sku.get(sku)
+        if cr is None:
+            continue
+        dims = cr["override"].dims if cr.get("override") else cr.get("resolved")
+        if dims is None or not dims.is_complete:
+            continue
+        qty = item.quantity or 1
+        total_qty += qty
+        total_weight += dims.weight_kg * qty
+        sides.append(dims.length_cm)
+        sides.append(dims.width_cm)
+        sides.append(dims.height_cm)
+
+    # Collect all unique sides across SKUs and sort descending for 3-side check
+    unique_sides = sorted(set(sides), reverse=True)
+    if len(unique_sides) < 3:
+        unique_sides += [0] * (3 - len(unique_sides))
+
+    data = PackageRoutingData(
+        package_sn=record.package_sn,
+        shop_name=record.shop_name or "",
+        warehouse_name=record.logistics.warehouse_name or "",
+        destination_country=record.address.country_code or record.address.country or "",
+        destination_state=record.address.state_or_region or "",
+        postal_code=record.address.postal_code or "",
+        longest_side_cm=unique_sides[0],
+        second_side_cm=unique_sides[1],
+        third_side_cm=unique_sides[2],
+        weight_kg=round(total_weight, 2) if total_weight > 0 else 0.0,
+        total_quantity=total_qty,
+        channel_name=record.logistics.channel_name or "",
+    )
+
+    try:
+        repo = _get_package_repository()
+        engine = RuleEngine.from_yaml(str(rules_path))
+        result = engine.route(data)
+        # Persist to DB for downstream consumption
+        package_db_id = repo.get_package_db_id(
+            config["sellfox"]["proxy_account"], record.package_sn
+        )
+        if package_db_id is not None:
+            try:
+                repo.upsert_package_routing(
+                    package_db_id=package_db_id,
+                    carrier=result.carrier,
+                    label=result.label,
+                    reason=result.reason,
+                    rule_name=result.rule_name,
+                    matched=result.matched,
+                )
+            except Exception:
+                pass
+        return result
+    except Exception:
+        return None
+
+
+def _build_vite_ship_from(record) -> dict:
+    """Build VITE-compatible sender address from warehouse config."""
+    wh_name = (record.logistics.warehouse_name or "").strip()
+    if wh_name:
+        warehouses_cfg = config.get("warehouses", {})
+        wh = warehouses_cfg.get(wh_name, {})
+        addr = wh.get("address", {})
+        if addr.get("address1"):
+            return {
+                "fullName": (addr.get("name") or "FZH Warehouse")[:35],
+                "company": (addr.get("company") or "")[:35],
+                "address1": addr["address1"][:50],
+                "address2": (addr.get("address2") or "")[:50],
+                "city": (addr.get("city") or "")[:28],
+                "state": (addr.get("state") or "")[:2],
+                "zipCode": (addr.get("postal_code") or "")[:10],
+                "phoneNumber": (addr.get("phone") or addr.get("email") or "0000000000")[:15],
+            }
+    return {
+        "fullName": "FZH Test",
+        "address1": "90 Chester rd",
+        "city": "Belmont",
+        "state": "MA",
+        "zipCode": "02478",
+        "phoneNumber": "1111111111",
+    }
+
+
+def _build_vite_ship_to(record) -> dict:
+    """Build VITE-compatible recipient address from package record."""
+    addr = record.address
+    return {
+        "fullName": (addr.name or "Customer")[:35],
+        "address1": (addr.address_line_1 or "")[:50],
+        "address2": (addr.address_line_2 or "")[:35],
+        "city": (addr.city or "")[:28],
+        "state": (addr.state_or_region or addr.city or "XX")[:2],
+        "zipCode": (addr.postal_code or "")[:10],
+        "phoneNumber": (addr.phone or addr.mobile or "0000000000")[:15],
+    }
+
+
+VITE_FEDEX_CHANNEL = (os.getenv("VITE_FEDEX_CHANNEL") or "ODFC").strip()
+
+
+def _read_env_key(key: str) -> str:
+    """Read a value directly from the .env file, bypassing os.environ cache."""
+    env_path = Path(__file__).resolve().parents[1] / ".env"
+    if not env_path.is_file():
+        return (os.getenv(key) or "").strip()
+    for line in env_path.read_text(encoding="utf-8-sig").splitlines():
+        line = line.strip()
+        if line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        if k.strip() == key:
+            val = v.strip()
+            if len(val) >= 2 and val[0] == val[-1] and val[0] in "'\"":
+                val = val[1:-1]
+            return val.strip()
+    return (os.getenv(key) or "").strip()
+
+
+def _get_vite_rate(
+    record,
+    package_dims: dict | None,
+    routing_result,
+) -> dict | None:
+    """Fetch VITE rate quote (GOFO or FedEx) when routing suggests VITE.
+
+    Converts kg/cm to lbs/inches. Routes to FedEx when longest side
+    exceeds the GOFO 22-inch limit, otherwise uses GOFO.
+    """
+    if routing_result is None or getattr(routing_result, "carrier", "") != "vite":
+        return None
+
+    if not package_dims:
+        return {"source": "vite", "error": "Missing package dimensions"}
+
+    try:
+        from sellfox_shipping.carriers.vite import ViteGofoClient
+
+        # Unit conversion: kg → lbs, cm → inches
+        weight_lb = round(package_dims["weight_kg"] * 2.20462, 2)
+        length_in = round(package_dims["length_cm"] / 2.54, 1)
+        width_in = round(package_dims["width_cm"] / 2.54, 1)
+        height_in = round(package_dims["height_cm"] / 2.54, 1)
+
+        max_side_in = max(length_in, width_in, height_in)
+        use_fedex = max_side_in > 22.0
+
+        ship_from = _build_vite_ship_from(record)
+        ship_to = _build_vite_ship_to(record)
+
+        body: dict = {
+            "shipDate": date.today().isoformat(),
+            "from": ship_from,
+            "to": ship_to,
+            "packages": [{
+                "weight": weight_lb,
+                "length": length_in,
+                "width": width_in,
+                "height": height_in,
+            }],
+        }
+
+        if use_fedex:
+            channel = VITE_FEDEX_CHANNEL
+            body["channel"] = channel
+            body["serviceType"] = "FEDEX_GROUND"
+            dest_country = (
+                record.address.country_code or record.address.country or ""
+            ).upper()
+        else:
+            channel = "GFUS"
+            body["channel"] = channel
+            body["serviceType"] = "GOFO_PARCEL"
+
+        api_key = _read_env_key("VITE_API_KEY")
+        if not api_key:
+            return {"source": "vite", "error": "VITE_API_KEY not configured"}
+        vite_base = _read_env_key("VITE_API_BASE_URL") or "https://test-api.vitedirect.com"
+
+        with ViteGofoClient(api_key=api_key, base_url=vite_base) as client:
+            if use_fedex:
+                if dest_country != "US":
+                    try:
+                        rate = client.rate_fedex_international(body)
+                    except Exception:
+                        # International FedEx endpoint unavailable; GOFO/FedEx
+                        # domestic only accept US state codes.
+                        return {
+                            "source": "vite",
+                            "error": (
+                                f"VITE does not support international destination "
+                                f"({dest_country}). FedEx international endpoint "
+                                f"returned 404."
+                            ),
+                        }
+                else:
+                    rate = client.rate_fedex(body)
+            else:
+                rate = client.rate_gofo(body)
+
+        ad = rate.get("amountDetails") or {}
+        result = {
+            "source": "vite_fedex" if use_fedex else "vite_gofo",
+            "service": rate.get("serviceDescription") or (
+                "FEDEX_GROUND" if use_fedex else "GOFO_PARCEL"
+            ),
+            "total_amount": rate.get("totalAmount"),
+            "currency": rate.get("currency", "USD"),
+            "billing_weight": rate.get("billingWeight"),
+            "zone": rate.get("zone"),
+            "channel": channel,
+            "max_side_in": max_side_in,
+            "weight_lb": weight_lb,
+            "use_fedex": use_fedex,
+        }
+        # Persist for historical tracking
+        _persist_rate(record, result)
+        return result
+    except Exception as exc:
+        return {"source": "vite", "error": f"VITE rate fetch failed: {exc}"}
+
+
+# Lizard warehouse → ca_zone mapping (based on S0143 shipper registration)
+_LIZARD_CA_ZONE: dict[str, int] = {
+    "CENTRADE": 1,  # NJ → 美东
+    "DANEEY": 1,    # TX → S0143 在系统归为美东
+    "POLAND": 0,    # 全域
+}
+
+
+def _get_lizard_rate(
+    record,
+    package_dims: dict | None,
+) -> dict | None:
+    """Fetch Lizard (蜴国际) ratesv2 quote and persist all products to history.
+
+    Called independently of routing — always tries to fetch for every package
+    with dimensions, so history accumulates both VITE and Lizard quotes.
+    The live 运费试算 panel still shows only the routing-suggested carrier.
+    """
+    if package_dims is None:
+        return {"source": "lizard", "error": "Missing package dimensions"}
+
+    try:
+        from sellfox_shipping.carriers.lizard.api_client import LizardApiClient
+
+        token = _read_env_key("YIGLOBAL_APP_TOKEN") or os.getenv("LIZARD_APP_TOKEN", "")
+        key = _read_env_key("YIGLOBAL_APP_KEY") or os.getenv("LIZARD_APP_KEY", "")
+        if not token or not key:
+            return {
+                "source": "lizard",
+                "error": "Lizard credentials not configured (YIGLOBAL_APP_TOKEN / YIGLOBAL_APP_KEY)",
+            }
+
+        wh_name = (record.logistics.warehouse_name or "").strip()
+        ca_zone = _LIZARD_CA_ZONE.get(wh_name, 0)
+
+        addr = record.address
+        body = {
+            "weight_unit_type": 2,  # KG/CM
+            "ca_zone": ca_zone,
+            "parcel_declared_value": 10,
+            "parcel_quantity": 1,
+            "box_list": [{
+                "box_actual_weight": package_dims["weight_kg"],
+                "box_length": package_dims["length_cm"],
+                "box_width": package_dims["width_cm"],
+                "box_height": package_dims["height_cm"],
+            }],
+            "oa_firstname": (addr.name or "Customer")[:35],
+            "oa_company": "",
+            "oa_country": (addr.country_code or addr.country or "US").upper(),
+            "oa_state": (addr.state_or_region or addr.city or "XX")[:2],
+            "oa_city": (addr.city or "")[:28],
+            "oa_postcode": (addr.postal_code or "")[:10],
+            "oa_street_address1": (addr.address_line_1 or "")[:50],
+            "oa_street_address2": (addr.address_line_2 or "")[:35],
+            "oa_telphone": (addr.phone or addr.mobile or "0000000000")[:15],
+            "oa_doorplate": "",
+            "oa_phone_ext": "",
+            "signature_service": "SSF",
+            "reference_no": record.package_sn,
+            "shipper_address": {
+                "shipper_name": "Dan-zhao",
+                "shipper_postal_code": "77099",
+                "shipper_address1": "10812 Fallstone Rd",
+                "shipper_address2": "Suite 402",
+                "shipper_state_province": "TX",
+                "shipper_city": "Houston",
+                "shipper_country": "US",
+                "shipper_telphone": "2816770938",
+            },
+        }
+
+        base_url = _read_env_key("YIGLOBAL_API_BASE_URL") or os.getenv(
+            "LIZARD_API_BASE_URL", "http://47.106.72.196"
+        )
+
+        with LizardApiClient(
+            app_token=token, app_key=key, base_url=base_url
+        ) as client:
+            resp = client.ratesv2(body)
+
+        result = resp.get("result") or {}
+        if not isinstance(result, dict) or not result:
+            return {"source": "lizard", "error": "No rates returned from Lizard API"}
+
+        # Persist all products with valid total_charge
+        for sm_code, item in result.items():
+            if not isinstance(item, dict):
+                continue
+            raw_total = item.get("total_charge")
+            if raw_total is None or str(raw_total).strip() == "":
+                continue
+            total = float(raw_total)
+            if total <= 0:
+                continue
+            rate_record = {
+                "source": "lizard",
+                "service": str(sm_code),
+                "total_amount": total,
+                "currency": str(item.get("currency_code", "USD")),
+                "billing_weight": float(item.get("charge_weight", 0) or 0),
+                "zone": str(item.get("address_type_text", "")),
+                "channel": str(sm_code),
+                "max_side_in": round(package_dims["length_cm"] / 2.54, 1),
+                "weight_lb": round(package_dims["weight_kg"] * 2.20462, 2),
+                "use_fedex": False,
+            }
+            _persist_rate(record, rate_record)
+
+        return None
+
+    except Exception:
+        return None
+
+
+def _persist_rate(record, rate_result: dict) -> None:
+    """Best-effort persist of a successful rate fetch to the DB."""
+    try:
+        repo = _get_package_repository()
+        package_db_id = repo.get_package_db_id(
+            config["sellfox"]["proxy_account"], record.package_sn
+        )
+        if package_db_id is not None:
+            repo.insert_package_rate(package_db_id=package_db_id, rate=rate_result)
+    except Exception:
+        pass
+
+
+def _get_rate_history(repo, record, account_key: str) -> list:
+    """Return recent rate fetch history for this package."""
+    try:
+        package_db_id = repo.get_package_db_id(account_key, record.package_sn)
+        if package_db_id is None:
+            return []
+        return repo.list_package_rates(package_db_id, limit=10)
+    except Exception:
+        return []
+
+
+@app.post("/packages/{package_sn}/review", response_class=HTMLResponse)
+async def package_review_form(request: Request, package_sn: str):
+    """HTML form post for local review decision."""
+    form = await request.form()
+    account_key = config["sellfox"]["proxy_account"]
+    try:
+        record = _get_package_review_service().review(
+            PackageReviewRequest(
+                account_key=account_key,
+                package_sn=package_sn,
+                actor=_web_actor(request, str(form.get("actor") or "web-user")),
+                decision=str(form.get("decision") or ""),
+                note=str(form.get("note") or ""),
+            )
+        )
+        message = f"已更新本地审核状态为 {record.local_review_status}"
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        record = _get_package_repository().get(account_key, package_sn)
+        if record is None:
+            raise HTTPException(404, f"Package {package_sn} not found") from exc
+        message = f"审核失败: {exc}"
+    return templates.TemplateResponse(
+        request,
+        "package_detail.html",
+        _package_detail_context(account_key, record, message=message),
+    )
+
+
+@app.post("/packages/{package_sn}/carton-override", response_class=HTMLResponse)
+async def package_carton_override_form(request: Request, package_sn: str):
+    """Save manual carton dims for one or more commodity_skus on this package."""
+    from sellfox_shipping.carriers.lizard.dims import CartonDims
+
+    form = await request.form()
+    account_key = config["sellfox"]["proxy_account"]
+    repo = _get_package_repository()
+    record = repo.get(account_key, package_sn)
+    if record is None:
+        raise HTTPException(404, f"Package {package_sn} not found")
+
+    # Support both single-row (legacy) and multi-row (table form) submissions.
+    # When multiple rows share the same field name, use getlist to collect them.
+    skus = form.getlist("commodity_sku")
+    if not skus:
+        # Legacy single-row fallback (form.get returns one value)
+        sku = str(form.get("commodity_sku") or "").strip()
+        skus = [sku] if sku else []
+
+    saved: list[str] = []
+    errors: list[str] = []
+    for i, sku in enumerate(skus):
+        sku = (sku or "").strip()
+        if not sku:
+            continue
+        try:
+            weight_kg = float(_form_val_at(form, "weight_kg", i) or 0)
+            length_cm = float(_form_val_at(form, "length_cm", i) or 0)
+            width_cm = float(_form_val_at(form, "width_cm", i) or 0)
+            height_cm = float(_form_val_at(form, "height_cm", i) or 0)
+            actor = _web_actor(
+                request, str(_form_val_at(form, "actor", i) or "web-user")
+            )
+            note = str(_form_val_at(form, "note", i) or "").strip()
+            if weight_kg <= 0 or length_cm <= 0 or width_cm <= 0 or height_cm <= 0:
+                errors.append(f"{sku}: 所有字段必须大于 0")
+                continue
+            dims = CartonDims(
+                weight_kg=weight_kg,
+                length_cm=length_cm,
+                width_cm=width_cm,
+                height_cm=height_cm,
+            )
+            repo.set_carton_override(
+                account_key=account_key,
+                commodity_sku=sku,
+                dims=dims,
+                actor=actor,
+                note=note,
+            )
+            saved.append(sku)
+        except (TypeError, ValueError) as exc:
+            errors.append(f"{sku}: {exc}")
+
+    parts: list[str] = []
+    if saved:
+        parts.append(f"已保存 {len(saved)} 个 SKU 重尺补录")
+    if errors:
+        parts.append(f"失败 {len(errors)}: {'; '.join(errors)}")
+    message = "；".join(parts) if parts else "无有效重尺数据可保存"
+
+    record = repo.get(account_key, package_sn)
+    assert record is not None
+    return templates.TemplateResponse(
+        request,
+        "package_detail.html",
+        _package_detail_context(account_key, record, message=message),
+    )
+
+
+def _form_val_at(form, field: str, index: int) -> str | None:
+    """Get the index-th value of a multi-value form field."""
+    vals = form.getlist(field)
+    if index < len(vals):
+        return str(vals[index])
+    # Legacy single-value fallback (only use when index==0)
+    if index == 0:
+        v = form.get(field)
+        return str(v) if v else None
+    return None
+
+
+@app.post("/packages/{package_sn}/prepare-submit", response_class=HTMLResponse)
+async def package_prepare_submit_form(request: Request, package_sn: str):
+    """Create SubmissionIntent rows (no HTTP)."""
+    from sellfox_shipping.submission_service import SubmissionService
+
+    form = await request.form()
+    account_key = config["sellfox"]["proxy_account"]
+    repo = _get_package_repository()
+    actor = _web_actor(request, str(form.get("actor") or "web-user"))
+    try:
+        result = SubmissionService(repo).prepare_intents_for_package(
+            account_key=account_key,
+            package_sn=package_sn,
+            actor=actor,
+            carrier_name=str(form.get("carrier_name") or "").strip(),
+            shipping_service=str(form.get("shipping_service") or "").strip(),
+        )
+        message = (
+            f"已准备提交意图 {len(result.intent_ids)} 条；"
+            f"包裹聚合状态 {result.package_submission_state}"
+        )
+    except Exception as exc:  # noqa: BLE001
+        message = f"准备提交失败: {exc}"
+    record = repo.get(account_key, package_sn)
+    if record is None:
+        raise HTTPException(404, f"Package {package_sn} not found")
+    return templates.TemplateResponse(
+        request,
+        "package_detail.html",
+        _package_detail_context(account_key, record, message=message),
+    )
+
+
+@app.post(
+    "/packages/{package_sn}/submit-intent/{intent_id}",
+    response_class=HTMLResponse,
+)
+async def package_submit_intent_dry_run(
+    request: Request,
+    package_sn: str,
+    intent_id: int,
+):
+    """Dry-run one intent from Web (never calls submitToPlatform)."""
+    from sellfox_shipping.submission_service import SubmissionService
+
+    form = await request.form()
+    account_key = config["sellfox"]["proxy_account"]
+    repo = _get_package_repository()
+    actor = _web_actor(request, str(form.get("actor") or "web-user"))
+    try:
+        result = SubmissionService(repo).submit_intent(
+            intent_id=intent_id,
+            actor=actor,
+            dry_run=True,
+            allow_side_effects=False,
+        )
+        message = (
+            f"Intent #{intent_id} dry-run OK；状态 {result.intent_status}；"
+            f"聚合 {result.package_submission_state}（未调用 HTTP）"
+        )
+    except Exception as exc:  # noqa: BLE001
+        message = f"dry-run 失败: {exc}"
+    record = repo.get(account_key, package_sn)
+    if record is None:
+        raise HTTPException(404, f"Package {package_sn} not found")
+    return templates.TemplateResponse(
+        request,
+        "package_detail.html",
+        _package_detail_context(account_key, record, message=message),
+    )
+
+
+@app.get("/orders", response_class=HTMLResponse)
+async def orders_page(request: Request):
+    return templates.TemplateResponse(request, "orders.html")
+
+
+@app.get("/lizard/export", response_class=HTMLResponse)
+async def lizard_export_page(request: Request):
+    """Form to export approved 蜴国际 packages to upload Excel."""
+    return templates.TemplateResponse(
+        request,
+        "lizard_export.html",
+        {
+            "message": "",
+            "error": "",
+            "default_actor": "web-user",
+            "default_shipper": "S0143",
+            "default_limit": 500,
+        },
+    )
+
+
+@app.post("/lizard/export")
+async def lizard_export_form(
+    request: Request,
+    actor: str = Form("web-user"),
+    limit: int = Form(500),
+    shipper_code: str = Form("S0143"),
+):
+    """Run export service and download xlsx (does not call submitToPlatform)."""
+    from datetime import datetime, timezone
+
+    from sellfox_shipping.lizard_batch import (
+        ExportLizardUploadService,
+        LizardExportRequest,
+    )
+
+    out_dir = BASE_DIR / "data" / "exports"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    output_path = out_dir / f"lizard-upload-{stamp}.xlsx"
+    try:
+        result = ExportLizardUploadService(
+            _get_package_repository(),
+            _get_lizard_dims_lookup(),
+        ).export(
+            LizardExportRequest(
+                account_key=config["sellfox"]["proxy_account"],
+                actor=_web_actor(request, actor),
+                output_path=output_path,
+                limit=max(1, min(int(limit), 5000)),
+                shipper_code=(shipper_code or "S0143").strip() or "S0143",
+            )
+        )
+    except Exception as exc:  # noqa: BLE001 — surface to operator
+        return templates.TemplateResponse(
+            request,
+            "lizard_export.html",
+            {
+                "message": "",
+                "error": f"导出失败: {exc}",
+                "default_actor": actor,
+                "default_shipper": shipper_code,
+                "default_limit": limit,
+            },
+            status_code=400,
+        )
+    if result.exported == 0:
+        batch_hint = (
+            f" 批次 #{result.batch_id} 已登记（全跳过）。"
+            if result.batch_id
+            else ""
+        )
+        return templates.TemplateResponse(
+            request,
+            "lizard_export.html",
+            {
+                "message": "",
+                "error": (
+                    f"没有可导出的行（候选 {result.total_candidates}，"
+                    f"跳过 {result.skipped}）。请确认本地审核为 approved，"
+                    f"渠道名含「蜴」，且重尺可查。{batch_hint}"
+                ),
+                "skipped_rows": result.skipped_rows,
+                "default_actor": actor,
+                "default_shipper": shipper_code,
+                "default_limit": limit,
+            },
+            status_code=400,
+        )
+    download_name = output_path.name
+    headers: dict[str, str] = {}
+    if result.batch_id is not None:
+        download_name = (
+            f"lizard-upload-batch{result.batch_id}-{stamp}.xlsx"
+        )
+        headers["X-Shipping-Batch-Id"] = str(result.batch_id)
+    return FileResponse(
+        path=str(output_path),
+        filename=download_name,
+        media_type=(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ),
+        headers=headers or None,
+    )
+
+
+@app.get("/lizard/import", response_class=HTMLResponse)
+async def lizard_import_page(
+    request: Request,
+    batch_id: int | None = Query(None),
+):
+    """Form to import lizard tracking-return Excel (local DB only)."""
+    return templates.TemplateResponse(
+        request,
+        "lizard_import.html",
+        {
+            "result": None,
+            "error": "",
+            "default_actor": "web-user",
+            "default_batch_id": batch_id or "",
+        },
+    )
+
+
+@app.post("/lizard/import", response_class=HTMLResponse)
+async def lizard_import_form(
+    request: Request,
+    actor: str = Form("web-user"),
+    batch_id: str = Form(""),
+    file: UploadFile = File(...),
+):
+    """Parse return Excel, persist tracking locally, show reconciliation report."""
+    import tempfile
+
+    from sellfox_shipping.lizard_batch import (
+        ImportLizardTrackingService,
+        LizardImportRequest,
+    )
+
+    suffix = Path(file.filename or "return.xlsx").suffix or ".xlsx"
+    parsed_batch_id: int | None = None
+    batch_raw = (batch_id or "").strip()
+    if batch_raw:
+        try:
+            parsed_batch_id = int(batch_raw)
+        except ValueError as exc:
+            return templates.TemplateResponse(
+                request,
+                "lizard_import.html",
+                {
+                    "result": None,
+                    "error": f"批次 ID 无效: {exc}",
+                    "default_actor": actor,
+                    "default_batch_id": batch_raw,
+                },
+                status_code=400,
+            )
+    try:
+        raw = await file.read()
+        if not raw:
+            raise ValueError("上传文件为空")
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            tmp.write(raw)
+            tmp_path = Path(tmp.name)
+        try:
+            result = ImportLizardTrackingService(
+                _get_package_repository()
+            ).import_file(
+                LizardImportRequest(
+                    account_key=config["sellfox"]["proxy_account"],
+                    actor=_web_actor(request, actor),
+                    input_path=tmp_path,
+                    batch_id=parsed_batch_id,
+                )
+            )
+        finally:
+            tmp_path.unlink(missing_ok=True)
+    except Exception as exc:  # noqa: BLE001
+        return templates.TemplateResponse(
+            request,
+            "lizard_import.html",
+            {
+                "result": None,
+                "error": f"导入失败: {exc}",
+                "default_actor": actor,
+                "default_batch_id": batch_raw,
+            },
+            status_code=400,
+        )
+    return templates.TemplateResponse(
+        request,
+        "lizard_import.html",
+        {
+            "result": result,
+            "error": "",
+            "default_actor": actor,
+            "default_batch_id": result.batch_id or batch_raw,
+        },
+    )
+
+
+@app.get("/lizard/batches", response_class=HTMLResponse)
+async def lizard_batches_page(
+    request: Request,
+    limit: int = Query(50, le=200),
+):
+    """List ShippingBatch rows for current account."""
+    account_key = config["sellfox"]["proxy_account"]
+    items = _get_package_repository().list_batches(
+        account_key=account_key,
+        limit=limit,
+    )
+    return templates.TemplateResponse(
+        request,
+        "lizard_batches.html",
+        {
+            "account_key": account_key,
+            "items": items,
+        },
+    )
+
+
+@app.get("/lizard/batches/{batch_id}", response_class=HTMLResponse)
+async def lizard_batch_detail(request: Request, batch_id: int):
+    """Show one batch and its package rows."""
+    repo = _get_package_repository()
+    batch = repo.get_batch(batch_id)
+    if batch is None:
+        raise HTTPException(404, f"Batch {batch_id} not found")
+    packages = repo.list_batch_packages(batch_id)
+    return templates.TemplateResponse(
+        request,
+        "lizard_batch_detail.html",
+        {
+            "batch": batch,
+            "packages": packages,
+        },
+    )
+
+
+@app.get("/lizard/artifacts", response_class=HTMLResponse)
+async def lizard_artifacts_page(
+    request: Request,
+    kind: str | None = Query(None),
+    limit: int = Query(50, le=200),
+):
+    """List registered export/import file artifacts (content_hash deduped on disk)."""
+    account_key = config["sellfox"]["proxy_account"]
+    items = _get_package_repository().list_artifacts(
+        account_key=account_key,
+        kind=kind or None,
+        limit=limit,
+    )
+    return templates.TemplateResponse(
+        request,
+        "lizard_artifacts.html",
+        {
+            "account_key": account_key,
+            "kind": kind or "",
+            "items": items,
+        },
+    )
+
+
+@app.get("/lizard/artifacts/{artifact_id}/download")
+async def lizard_artifact_download(artifact_id: int):
+    """Download the blob for an artifact (by content_hash storage path)."""
+    repo = _get_package_repository()
+    record = repo.get_artifact(artifact_id)
+    if record is None:
+        raise HTTPException(404, f"Artifact {artifact_id} not found")
+    path = repo.resolve_artifact_path(record)
+    if not path.is_file():
+        raise HTTPException(404, "Artifact blob missing on disk")
+    return FileResponse(
+        path=str(path),
+        filename=record.file_name,
+        media_type=record.mime_type
+        or "application/octet-stream",
+    )
+
+
+# ── MCP mount — appended in main.py after FastMCP server is created ──
+
+def mount_mcp(mcp_app):
+    """Mount FastMCP ASGI app. Called from main.py after MCP tools are defined."""
+    app.mount("/mcp", mcp_app)
+    return app

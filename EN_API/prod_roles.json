@@ -1,0 +1,412 @@
+[
+  {
+    "name": "Academics User",
+    "role_name": "Academics User",
+    "desk_access": 1
+  },
+  {
+    "name": "Accounts Manager",
+    "role_name": "Accounts Manager",
+    "desk_access": 1
+  },
+  {
+    "name": "Accounts User",
+    "role_name": "Accounts User",
+    "desk_access": 1
+  },
+  {
+    "name": "Administrator",
+    "role_name": "Administrator",
+    "desk_access": 1
+  },
+  {
+    "name": "Agriculture Manager",
+    "role_name": "Agriculture Manager",
+    "desk_access": 1
+  },
+  {
+    "name": "Agriculture User",
+    "role_name": "Agriculture User",
+    "desk_access": 1
+  },
+  {
+    "name": "All",
+    "role_name": "All",
+    "desk_access": 1
+  },
+  {
+    "name": "Analytics",
+    "role_name": "Analytics",
+    "desk_access": 1
+  },
+  {
+    "name": "Auditor",
+    "role_name": "Auditor",
+    "desk_access": 1
+  },
+  {
+    "name": "Blogger",
+    "role_name": "Blogger",
+    "desk_access": 1
+  },
+  {
+    "name": "Channel Operator",
+    "role_name": "Channel Operator",
+    "desk_access": 1
+  },
+  {
+    "name": "Chief Financial Officer",
+    "role_name": "Chief Financial Officer",
+    "desk_access": 1
+  },
+  {
+    "name": "Content Editor",
+    "role_name": "Content Editor",
+    "desk_access": 1
+  },
+  {
+    "name": "Customer",
+    "role_name": "Customer",
+    "desk_access": 0
+  },
+  {
+    "name": "Dashboard Manager",
+    "role_name": "Dashboard Manager",
+    "desk_access": 1
+  },
+  {
+    "name": "Delivery Manager",
+    "role_name": "Delivery Manager",
+    "desk_access": 1
+  },
+  {
+    "name": "Delivery User",
+    "role_name": "Delivery User",
+    "desk_access": 1
+  },
+  {
+    "name": "Desk User",
+    "role_name": "Desk User",
+    "desk_access": 1
+  },
+  {
+    "name": "Employee",
+    "role_name": "Employee",
+    "desk_access": 1
+  },
+  {
+    "name": "Expense Approver",
+    "role_name": "Expense Approver",
+    "desk_access": 1
+  },
+  {
+    "name": "Finance Supervisor",
+    "role_name": "Finance Supervisor",
+    "desk_access": 1
+  },
+  {
+    "name": "Fleet Manager",
+    "role_name": "Fleet Manager",
+    "desk_access": 1
+  },
+  {
+    "name": "Fulfillment User",
+    "role_name": "Fulfillment User",
+    "desk_access": 1
+  },
+  {
+    "name": "General Manager",
+    "role_name": "General Manager",
+    "desk_access": 1
+  },
+  {
+    "name": "Guest",
+    "role_name": "Guest",
+    "desk_access": 0
+  },
+  {
+    "name": "HR Manager",
+    "role_name": "HR Manager",
+    "desk_access": 1
+  },
+  {
+    "name": "HR User",
+    "role_name": "HR User",
+    "desk_access": 1
+  },
+  {
+    "name": "Inbox User",
+    "role_name": "Inbox User",
+    "desk_access": 1
+  },
+  {
+    "name": "Insights Admin",
+    "role_name": "Insights Admin",
+    "desk_access": 1
+  },
+  {
+    "name": "Insights User",
+    "role_name": "Insights User",
+    "desk_access": 0
+  },
+  {
+    "name": "Interviewer",
+    "role_name": "Interviewer",
+    "desk_access": 1
+  },
+  {
+    "name": "Item Manager",
+    "role_name": "Item Manager",
+    "desk_access": 1
+  },
+  {
+    "name": "Item Operator",
+    "role_name": "Item Operator",
+    "desk_access": 1
+  },
+  {
+    "name": "Item Supporting Material Manager",
+    "role_name": "Item Supporting Material Manager",
+    "desk_access": 1
+  },
+  {
+    "name": "Knowledge Base Contributor",
+    "role_name": "Knowledge Base Contributor",
+    "desk_access": 1
+  },
+  {
+    "name": "Knowledge Base Editor",
+    "role_name": "Knowledge Base Editor",
+    "desk_access": 1
+  },
+  {
+    "name": "Leave Approver",
+    "role_name": "Leave Approver",
+    "desk_access": 1
+  },
+  {
+    "name": "Maintenance Manager",
+    "role_name": "Maintenance Manager",
+    "desk_access": 1
+  },
+  {
+    "name": "Maintenance User",
+    "role_name": "Maintenance User",
+    "desk_access": 1
+  },
+  {
+    "name": "Manufacturing Manager",
+    "role_name": "Manufacturing Manager",
+    "desk_access": 1
+  },
+  {
+    "name": "Manufacturing User",
+    "role_name": "Manufacturing User",
+    "desk_access": 1
+  },
+  {
+    "name": "Material Controller",
+    "role_name": "Material Controller",
+    "desk_access": 1
+  },
+  {
+    "name": "Material Requester",
+    "role_name": "Material Requester",
+    "desk_access": 1
+  },
+  {
+    "name": "Newsletter Manager",
+    "role_name": "Newsletter Manager",
+    "desk_access": 1
+  },
+  {
+    "name": "PIM Admin",
+    "role_name": "PIM Admin",
+    "desk_access": 1
+  },
+  {
+    "name": "PIM Item Group Browser Hiding",
+    "role_name": "PIM Item Group Browser Hiding",
+    "desk_access": 1
+  },
+  {
+    "name": "Prepared Report User",
+    "role_name": "Prepared Report User",
+    "desk_access": 1
+  },
+  {
+    "name": "Projects Manager",
+    "role_name": "Projects Manager",
+    "desk_access": 1
+  },
+  {
+    "name": "Projects User",
+    "role_name": "Projects User",
+    "desk_access": 1
+  },
+  {
+    "name": "Purchase Manager",
+    "role_name": "Purchase Manager",
+    "desk_access": 1
+  },
+  {
+    "name": "Purchase Master Manager",
+    "role_name": "Purchase Master Manager",
+    "desk_access": 1
+  },
+  {
+    "name": "Purchase Master Operator",
+    "role_name": "Purchase Master Operator",
+    "desk_access": 1
+  },
+  {
+    "name": "Purchase Order Approver",
+    "role_name": "Purchase Order Approver",
+    "desk_access": 1
+  },
+  {
+    "name": "Purchase Order Operator",
+    "role_name": "Purchase Order Operator",
+    "desk_access": 1
+  },
+  {
+    "name": "Purchase Order Supplier Selector",
+    "role_name": "Purchase Order Supplier Selector",
+    "desk_access": 1
+  },
+  {
+    "name": "Purchase Receipt Operator",
+    "role_name": "Purchase Receipt Operator",
+    "desk_access": 1
+  },
+  {
+    "name": "Purchase User",
+    "role_name": "Purchase User",
+    "desk_access": 1
+  },
+  {
+    "name": "Quality Manager",
+    "role_name": "Quality Manager",
+    "desk_access": 1
+  },
+  {
+    "name": "Report Manager",
+    "role_name": "Report Manager",
+    "desk_access": 1
+  },
+  {
+    "name": "Sales Manager",
+    "role_name": "Sales Manager",
+    "desk_access": 1
+  },
+  {
+    "name": "Sales Master Manager",
+    "role_name": "Sales Master Manager",
+    "desk_access": 1
+  },
+  {
+    "name": "Sales User",
+    "role_name": "Sales User",
+    "desk_access": 1
+  },
+  {
+    "name": "Scan Worker",
+    "role_name": "Scan Worker",
+    "desk_access": 1
+  },
+  {
+    "name": "Script Manager",
+    "role_name": "Script Manager",
+    "desk_access": 1
+  },
+  {
+    "name": "Shaoxing Factory Director",
+    "role_name": "Shaoxing Factory Director",
+    "desk_access": 1
+  },
+  {
+    "name": "Shaoxing General Manager",
+    "role_name": "Shaoxing General Manager",
+    "desk_access": 1
+  },
+  {
+    "name": "Stock Manager",
+    "role_name": "Stock Manager",
+    "desk_access": 1
+  },
+  {
+    "name": "Stock User",
+    "role_name": "Stock User",
+    "desk_access": 1
+  },
+  {
+    "name": "Supplier",
+    "role_name": "Supplier",
+    "desk_access": 0
+  },
+  {
+    "name": "Support Team",
+    "role_name": "Support Team",
+    "desk_access": 1
+  },
+  {
+    "name": "System Manager",
+    "role_name": "System Manager",
+    "desk_access": 1
+  },
+  {
+    "name": "System Software Developer",
+    "role_name": "System Software Developer",
+    "desk_access": 1
+  },
+  {
+    "name": "Template Manager",
+    "role_name": "Template Manager",
+    "desk_access": 1
+  },
+  {
+    "name": "Translator",
+    "role_name": "Translator",
+    "desk_access": 1
+  },
+  {
+    "name": "Website Manager",
+    "role_name": "Website Manager",
+    "desk_access": 1
+  },
+  {
+    "name": "Wiki Approver",
+    "role_name": "Wiki Approver",
+    "desk_access": 1
+  },
+  {
+    "name": "Workflow Manufacturing Manager",
+    "role_name": "Workflow Manufacturing Manager",
+    "desk_access": 1
+  },
+  {
+    "name": "Workflow Manufacturing User",
+    "role_name": "Workflow Manufacturing User",
+    "desk_access": 1
+  },
+  {
+    "name": "Workflow Stock Manager",
+    "role_name": "Workflow Stock Manager",
+    "desk_access": 1
+  },
+  {
+    "name": "Workflow Stock User",
+    "role_name": "Workflow Stock User",
+    "desk_access": 1
+  },
+  {
+    "name": "Workspace Manager",
+    "role_name": "Workspace Manager",
+    "desk_access": 1
+  },
+  {
+    "name": "委外",
+    "role_name": "委外",
+    "desk_access": 1
+  }
+]

@@ -1,4 +1,4 @@
-# DAM Prototype — Agent 交接说明
+﻿# DAM Prototype — Agent 交接说明
 
 > **给 AI Agent 读的技术文档。人类请读 [README.md](README.md)**
 
@@ -121,50 +121,272 @@ uv run python main.py --port 8098
 
 **已安装的 Skill**: frontend-design, brainstorming, design-md, design-review, ecommerce-image-workflow, superpowers 14件套
 
-## 8. 当前状态 (2026-06-10)
+## 8. 当前状态 (2026-06-11)
 
 ### 已完成
 
-- [x] 市场调研 + 行业对标 (docs/research.md, docs/industry-research.md)
-- [x] 用户访谈 8 轮 (docs/ux-workflow.md 记录)
-- [x] DESIGN.md 设计令牌
-- [x] DAM 原型 v2 (Vue 3 CDN, 浏览器验证通过)
-- [x] 方案设计文档 (docs/solution-design.md)
-- [x] Phase 1: SQLite 数据模型 (7 实体) + 上传 API + 缩略图 + 去重 + 前端 CRUD
-- [x] Phase 2: AI 自动标签 + 合规检查 (OpenRouter free VL / Aliyun Bailian)
-- [x] Phase 3: AssetCollection CRUD API + 版本快照 + Excel 导出模块 + 前端 Collection 面板
-- [x] Phase 3b: Collection 编辑器 (AEM 替换视图) + 多 SKU 多行 Excel 导出 + SortableJS 拖拽 + 角色设置 + Asset Picker + 右键菜单
-  - 设计文档: `docs/superpowers/specs/2026-06-10-dam-collection-editor-design.md`
-  - 实施计划: `docs/superpowers/plans/2026-06-10-dam-collection-editor.md`
-  - 讨论记录: `docs/superpowers/2026-06-10-dam-phase-3b-milestone.md`
+- [x] Phase 1-4: 数据模型 + AI 标签 + Collection CRUD + 编辑器 + 版本历史
+- [x] Phase 5: ERPNext Item API — `or_filters` 正确修复，item_code + item_name 双字段搜索
+  - 设计: `docs/superpowers/specs/2026-06-10-dam-phase5-erpnext-integration.md`
+  - **教训**: `filters` 和 `or_filters` 是 Frappe API 两个独立参数
+- [x] Phase 6b: 文件夹上传保留目录结构 (webkitdirectory)
+  - 前端: `<input webkitdirectory>` + `webkitGetAsEntry()` 递归拖拽
+  - 后端: 从 UploadFile.filename 提取路径 → `files/{path}/{uuid}.ext`
+  - `file_url` 修复: `_file_rel()` 提取 `files/` 后的完整路径
+  - 去重修复: 有 folder 上下文时跳过去重，复制到目标文件夹
+- [x] 侧边栏文件夹树视图 + 子文件夹卡片 + 拼贴缩略图
+  - `/api/folders` — 目录树 + 资产计数
+  - `/api/folders/{path}/thumbnail` — 前 4 张 2×2 拼贴
+  - 空文件夹: CSS 双层 SVG 文件夹图标
+- [x] NAS 浏览器 (Synology FileStation API)
+  - SynologyNAS 类移植自 vilavi_pim `nas.py`
+  - NAS 凭证: `fzh.myds.me:11024` / `fzh.test` (从 `.env` 读取，不硬编码)
+  - `/api/nas/browse`, `/api/nas/tree`, `/api/nas/thumbnail`, `/api/nas/import`
+  - 真实 NAS 已验证连接成功（38 个根目录文件夹）
+  - Windows 风格双面板: 左树 + 右 Grid/List + 面包屑 + 前进后退 + 灯箱预览
+- [x] 行业调研文档
+  - `docs/superpowers/research/2026-06-10-dam-industry-research.md` (AEM + 13+ 系统)
+  - `docs/superpowers/research/2026-06-10-erpnext-file-storage-nas.md` (存储架构)
+  - `docs/superpowers/research/2026-06-11-dam-multi-source-architecture.md` (多来源 DAM 架构)
+  - `docs/superpowers/reference/2026-06-11-nas-synology-api-reference.md` (NAS API 参考)
+  - `docs/superpowers/plans/2026-06-11-dam-phase7-multi-source-architecture.md` (Phase 7 计划)
+  - `docs/superpowers/specs/2026-06-11-dam-dual-panel-design.md` (双面板设计)
 
-- [x] Phase 4: Collection 版本历史 + 回滚 (右侧抽屉面板, Google Docs/Figma 非破坏性模式)
-  - 设计文档: `docs/superpowers/specs/2026-06-10-dam-phase4-version-history.md`
-  - 实施计划: `docs/superpowers/plans/2026-06-10-dam-phase4-version-history.md`
-- [x] 多 SKU 支持: AssetProductLink N:N, linked_skus 数组, Picker SKU 标签, 跨 SKU 确认
-- [x] 未保存变更守卫: beforeunload + 页内 confirm + ● Unsaved 视觉提示
-- [x] 侧边栏过滤器导航: TYPE/TAG/PRODUCT 点选关闭编辑器回到资产浏览
+### 双面板 (Dual Pane) — 2026-06-11 新增
+
+- **功能**: 工具栏 "Dual Pane" 按钮 → 右侧面板显示 Collection 内容（SKU 分组 + 缩略图 + role badge + drop zone）
+- **布局库**: split.js CDN (已引入，未启用 resize)
+- **当前问题** (3 个):
+  1. **布局错误**: 点 Dual Pane 后右面板未显示在右侧，左侧 Assets 被替代
+  2. **拖拽不工作**: Assets 网格 ⠿ 手柄在双面板模式下拽不动
+  3. **SKU 交互不对**: 用户要类似文件夹树的 flat list，不是 toggle filter
+- **设计文档**: `docs/superpowers/specs/2026-06-11-dam-dual-panel-design.md`
+- **用户期望**: COLLECTIONS→PRODUCT SKU 像文件夹→子文件夹一样展开，每个 SKU 下列出资产
+
+### 已知问题
+
+| # | 问题 | 状态 | 备注 |
+|---|------|------|------|
+| 1 | 双面板布局 | ❌ 待修复 | 右侧面板位置错误 |
+| 2 | 双面板拖拽 | ❌ 待修复 | ⠿ 手柄无法拖拽 |
+| 3 | SKU 展示模式 | ❌ 待修复 | 需改为 flat list 树形 |
+| 4 | ~~NAS 树~~ | ✅ 已修复 | `13ffc00` |
+| 5 | ~~NAS 缩略图~~ | ✅ 已修复 | `d1c81db` |
+| 6 | ~~setup return~~ | ✅ 已修复 | `d1c81db` |
 
 ### 待完成
 
-- [x] Phase 5: ERPNext Item API — 已验证通过，产品搜索对接 EN 测试系统正常
-  - 设计文档: `docs/superpowers/specs/2026-06-10-dam-phase5-erpnext-integration.md`
-  - **已知限制**: `frappe.client.get_list` 不支持 OR filter，仅按 `item_code` like 搜索
+- [ ] 修复双面板 3 个已知问题 (布局/拖拽/SKU 树)
 - [ ] Phase 6: a.vilavi.cn 替换 (OSS 防关联分发)
-- [ ] Phase 6b: 文件夹上传保留本地结构
-- [ ] Phase 7: 运营接入试用 + 反馈迭代
+- [ ] Phase 8: Smart Collection (远期)
+
+### 开发铁律: 先搜再造 (Search Before Building)
+
+> **违反此规则是本项目最大的时间浪费来源。每次违反平均浪费 2 小时调试时间。**
+
+#### 规则 1: 第三方 API 开发前必须搜索 4 个来源
+
+| 顺序 | 来源 | 示例 (NAS API) |
+|------|------|---------------|
+| 1 | **项目内已有实现** | vilavi_pim `nas.py:132` 有完整调用方式 |
+| 2 | **官方文档** | Synology File Station API Guide (PDF) |
+| 3 | **开源项目** | N4S4/synology-api (332 stars, PyPI) |
+| 4 | **社区/StackOverflow** | Python Synology download examples |
+
+**违例案例 (2026-06-11)**:
+- 未读 vilavi_pim 代码，2 小时自猜 Synology Download API 参数 → 结果参数格式错误
+- 未搜官方 API Guide，不知道 `path` 需要 JSON 数组格式 `["/path"]`
+- 未搜 `N4S4/synology-api`，不知道已经有 `get_file()` 封装
+
+#### 规则 2: 前端方案选型前必须搜索对比
+
+| 顺序 | 来源 | 示例 (拖拽方案) |
+|------|------|----------------|
+| 1 | **业界主流库对比** | SortableJS vs vue-draggable-next vs HTML5 原生 |
+| 2 | **CDN 可用性** | jsDelivr/unpkg 上是否有 Vue 3 CDN 版本 |
+| 3 | **项目兼容性** | 是否与现有 SortableJS 用法冲突、是否支持 Frappe 移植 |
+
+**违例案例 (2026-06-11)**:
+- 未搜索对比，直接用 HTML5 原生 API 实现拖拽 → 与现有 SortableJS 冲突，缺少动画/移动端支持
+- 正确方案: `vue-draggable-next` (SortableJS 官方 Vue 3 封装) + `group` 配置
+
+#### 规则 3: 穷尽搜索确认信号
+
+以下信号出现时必须立即停止编码，重新搜索:
+- [ ] 网上搜不到 → **扩大搜索词** (英文/中文/技术术语变体)
+- [ ] 试了几种方案都不行 → **搜索"已有实现"** (开源项目/GitHub Issues)
+- [ ] API 返回错误 → **搜索官方文档 + 开源项目源码**
+- [ ] 感觉"应该这样写" → **先搜"<topic> best practice"**
+
+### 经验教训 (Lessons Learned)
+
+**1. Frappe `or_filters` 是独立参数**
+> `filters` 和 `or_filters` 是两个独立参数，不能把 `"OR"` 字符串塞进 `filters` 数组。
+> ```python
+> # 错误: {"filters": [["a","like","%x%"], "OR", ["b","like","%x%"]]}
+> # 正确: {"or_filters": [["a","like","%x%"], ["b","like","%x%"]]}
+> ```
+> 涉及 Frappe API 开发时，**必须先加载 `frappe-core-api` skill**。
+
+**2. 先搜再造 — 搜已有 Skill**
+> 项目安装了 `frappe-core-api` skill（含完整 filter/or_filters 参数文档），但 Phase 5 写代码前没有加载它。CLAUDE.md 的"先搜再造"三原则第一条就是"搜项目内"。
+
+**3. 错误信息要认真解读**
+> `"单据类型 OR未找到"` = Frappe 把 "OR" 当成了 DocType 名称去数据库查找 → 本身就是正确的诊断线索。
+
+**4. 参考已有实现**
+> `EN_API/` 模块有成熟的 ErpnextClient 实现（REST API + URL 参数），如果先研究已有代码会更早发现正确格式。
+
+**5. 先搜索 Web API 标准，不要自己瞎猜**
+> 文件夹上传第一版用 ZIP 解压方案（错误），用户纠正后才搜到 `webkitGetAsEntry` / `webkitdirectory` 标准浏览器 API。AEM/Google Drive/Dropbox 都用直接选文件夹方式。
+
+**6. git add -A 陷阱**
+> 某次 commit 用了 `git add -A`，意外提交了 56 个文件。以后严格用 `git add <具体文件>`。
+
+**7. `file_url` 需包含子目录路径**
+> 上传到 `files/subdir/uuid.jpg` 时，`_file_rel()` 必须从 `stored_path` 提取 `files/` 后的完整相对路径，否则缩略图和预览 404。
+
+**8. Vue 3 CDN setup() return 陷阱**
+> `setup()` 中 `const` 声明的变量如果未在 return 中暴露，模板里静默为 `undefined`，**不会报错**。
+> `v-for="n in undefined"` → 空输出，`undefined.length` → TypeError。
+> 当出现 `.length of undefined` 渲染错误时，优先检查 setup() return 是否遗漏变量。
+> 如 `flattenedFolderTree`, `isNasImage`, `nasPreviewFiles` 等 6 个变量漏 return 导致所有渲染失败。
+
+**9. Synology FileStation.Thumb path 必须用双引号包裹**
+> ```python
+> # 错误: "path": path
+> # 正确: "path": f'"{path}"'  # Synology API 要求，FileStation.List 不需要
+> ```
+> 参考 vilavi_pim `nas.py:132` 注释 "Path must be wrapped in quotes per Synology API spec"。
+> **教训**: 任何第三方 API 开发前，先搜项目中是否有现有实现可参考。
+
+**10. Synology `has_thumbnail` 字段不可靠**
+> `SYNO.FileStation.List` 返回的 `has_thumbnail` 可能为 false 即使文件支持缩略图。
+> 应用层应使用文件扩展名判断是否尝试加载缩略图，用 `@error` fallback 处理失败。
+> vilavi_pim `item_group_nas.js:331-332` 有完整的 Synology 支持格式列表（含 RAW: arw/cr2/nef/dng 等）。
 
 ### 关键配置
 
-- `.env`: AI_API_KEY (OpenRouter sk-or-v1-...), AI_MODEL (nvidia/nemotron-nano-12b-v2-vl:free)
-- AI 自动切换: key 前缀 `sk-or-v1-` → OpenRouter, 否则 → 阿里百炼
+- `.env` (gitignored): AI_API_KEY, ERP_URL/KEY/SECRET, NAS_URL/USERNAME/PASSWORD, DAM_NAS_ROOT
+- `.env.example`: 配置模板
 - 服务器: `uv run python main.py --port 8098`
-- 数据库: dam-prototype/dam.db (SQLite, 自动创建)
+- 数据库: dam-prototype/dam.db (SQLite)
 - 存储: mock_storage/ (files/ + thumbnails/)
+- NAS: Synology `fzh.myds.me:11024` (FileStation API)
+
+### 代码架构
+
+```
+dam-prototype/
+├── main.py          ← FastAPI (ErpnextClient + SynologyNAS + 文件夹/NAS API)
+├── models.py        ← SQLAlchemy 数据模型
+├── export.py        ← Excel 导出
+├── ai_pipeline.py   ← AI 自动标签
+├── static/index.html ← Vue 3 SPA 前端 (单文件, ~1000 行 (双面板重构后 ~93K))
+├── .env             ← 真实凭证 (gitignored)
+├── .env.example     ← 配置模板
+├── dam.db           ← SQLite 数据库
+└── mock_storage/    ← 本地文件存储 (files/ + thumbnails/)
+```
+
+### 开发流程 (已更新)
+
+按 `CONTRIBUTING.md` 新规: **分支 → PR → 审批 → merge**。当前工作在 `feature/dam-folder-upload` 分支。
+
+PR #4: https://github.com/keyapi/fzh-data/pull/4
+
+
+## 8.5 双面板 Collection 浏览器 (2026-06-12 最新)
+
+### 架构 (方案 A: 对称独立面板)
+
+- **左面板**: Assets 网格 + 文件名搜索 (leftSearch + leftFiltered) + sidebar 筛选
+- **右面板**: Collection 树状浏览器 (inline SKU thumbnail strip)
+  - 顶层: 所有 Collection 列表 (可搜索 rpSearch)
+  - 展开 Collection → 每个 SKU 一行 (`.rp-sku-row`)
+  - 每行: 左边 SKU 代码 | 右边横向缩略图条 (`.rp-thumb-strip`)
+  - 缩略图大小可调 (rpThumbSize slider, 40-140px)
+  - 图片 hover → ✕ 按钮移除引用
+  - SKU 行即 drop target (SortableJS on `.rp-sku-row`)
+- **sidebar**: Type/Tags/Product/Folders/NAS/Collections (保留可折叠)
+- **拖拽**: SortableJS group=dam + forceFallback + fallbackOnBody
+  - Assets (pull:clone, put:false) → SKU rows (pull:false, put:true)
+  - 拖拽 ghost 自动缩放匹配目标缩略图大小
+  - 拖拽悬停时 SKU 行高亮 + 脉冲动画
+  - 新放入图片有弹性缩放动画 (dropIn keyframe)
+- **取消拖拽**: 3 种方式 (见下方已知问题)
+
+### 关键状态变量
+- `rpExpandedCollections` (reactive Set) — 展开的 Collection
+- `rpCollectionItems` (reactive {}) — 懒加载 items 缓存
+- `rpThumbSize` (ref, default 80) — 缩略图大小
+- `rpSearch` — Collection 名搜索
+- `window.__dragActive` (boolean) — 全局拖拽状态标志
+
+### 拖拽取消机制 (3 种)
+1. **ESC 键**: `document.addEventListener('keyup', ...)` + `window.__dragActive` 检测
+2. **屏幕中央取消按钮**: 拖拽中显示蓝色 "Cancel Drag" 按钮 (`#__dbg_cancel`)
+3. **右键**: `contextmenu` 事件 → `cancelDrag()`
+
+### ~~已知问题 — ESC/拖出取消在 Codex 侧边栏浏览器中不工作~~
+
+**严重性**: P1 — 核心交互不完整
+
+**现象**:
+- ESC 键和拖出 Collection 取消在 Playwright 测试中正常工作 (dragActive 正确追踪, cancelling class 应用, 零错误)
+- 在 Codex 桌面应用**侧边栏内嵌浏览器**中不工作
+- 左下角调试面板 (`#__dbg`) 显示 `dragActive` 状态和按键计数
+
+**已尝试的修复 (6 个 commits, 均未在 Codex 侧边栏浏览器中生效)**:
+1. `755930a` — ESC 动态 addEventListener + CSS 隐藏 ghost
+2. `e36a63d` — 永久 window keydown listener (capture:true) + _dragActive 标志
+3. `c2d9667` — keyup 替代 keydown + onMove evt.original→evt.originalEvent 修复
+4. `91c24a5` — `_dragActive` → `window.__dragActive` (闭包断裂修复)
+5. `40714f1` — 可见调试面板 + 屏幕中央取消按钮 + 右键取消 (当前)
+
+**根因假设**: Codex 侧边栏浏览器可能不向页面转发键盘事件 (keyup/keydown), 或者 SortableJS forceFallback 模式与内嵌浏览器的事件循环不兼容。
+
+**调试方法**: 
+- 刷新页面后, 左下角 `keys:` 计数器显示键盘事件数
+- 如果 `keys:` 始终为 0, 证明键盘事件未到达页面 → 只能用取消按钮/右键
+- 拖拽中 `dragActive: TRUE` 确认标志位正常
+
+**建议下一步**:
+1. 先确认 `keys:` 计数器在内嵌浏览器中是否增长
+2. 如果键盘事件被阻断, 改用以下替代方案:
+   - **Page-wide click-to-cancel**: 拖拽时点页面任意空白区域取消 (mouseup 后检查是否在有效 drop zone 外)
+   - 或接受当前方案: 点取消按钮 / 右键取消
+3. 如果键盘事件正常但 _dragActive 不对, 检查 Sortable onStart/onEnd 触发
+
+### 最近 10 个 commits (2026-06-11 ~ 06-12)
+
+```
+40714f1 feat(dam): visible debug panel + 3-way cancel
+91c24a5 fix(dam): _dragActive -> window.__dragActive (closure)
+c2d9667 fix(dam): ESC keyup listener + onMove evt.originalEvent
+e36a63d fix(dam): permanent ESC listener (capture) + onMove
+755930a feat(dam): ESC to cancel drag + CSS ghost fade-out
+8f26224 feat(dam): drag ghost auto-scale + drop animations
+9eea8d5 feat(dam): inline SKU thumbnail strip + whole-card drag
+6c9aea4 fix(dam): leftFiltered 插入位置缩进修复
+c8ec793 docs(dam): 更新 AGENT_HANDOFF — 双面板树浏览器
+2c830d5 feat(dam): 左面板文件名搜索 + leftFiltered
+```
+
+### 设计文档索引
+- `docs/dual-pane-research.md` — AEM/Bynder/资源管理器方案分析 (2026-06-11)
+- `docs/ux-workflow.md` — 8轮用户访谈 + 工作流设计
+- `docs/industry-research.md` — 行业最佳实践 (AEM/Akeneo/Pimcore)
+- `docs/solution-design.md` — 完整方案设计
+- `DESIGN.md` — 设计令牌 (CSS变量 + 组件规范)
 
 ## 9. 关联系统
 
-- **ERPNext**: REST API (Item/BOM/Item Group)。已有 ErpnextClient 类 (EN_API/)
-- **a.vilavi.cn**: 老系统，组ID → FTP 上传 → OSS 防关联分发。同事即将离职。需要被 DAM 接管
-- **EN_API**: 图片上传前端 (image_upload_app.py)，可复用 FilePond/SortableJS 模式
+- **ERPNext** (ensh.vilavi.cn): REST API, FAC MCP 工具
+- **vilavi_pim** (private repo `keyapi/vilavi_pim`): Browse NAS 参考实现
+  - `vilavi_pim/api/nas.py` → SynologyNAS 类 (已移植)
+  - `vilavi_pim/public/js/item_group_nas.js` → NASBrowser 前端 (待完整移植)
+- **a.vilavi.cn**: 老系统 OSS 分发，需被 DAM 接管
+- **EN_API**: 图片上传参考 (ErpnextClient 模式)
+- **dfp_external_storage**: 开源 Frappe S3 集成 (生产存储备选)
 - **NAS**: 共享文件存储，DAM 资产物理存放位置

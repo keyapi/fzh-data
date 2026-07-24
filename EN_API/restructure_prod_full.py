@@ -78,6 +78,8 @@ _load_dotenv([
 # ── HTTP ───────────────────────────────────────────────
 class _NoExpectAdapter(HTTPAdapter):
     def send(self, request, **kwargs):
+        # urllib3 2.x 内部会重新添加 Expect，必须在发送前从 PreparedRequest 剥离
+        request.headers.pop("Expect", None)
         return super().send(request, **kwargs)
 
 
@@ -86,6 +88,7 @@ class ErpnextClient:
         self.base_url = base_url.rstrip("/")
         self.session = requests.Session()
         self.session.headers["Authorization"] = f"token {api_key}:{api_secret}"
+        self.session.headers.pop("Expect", None)  # 防止 nginx 417
         self.session.mount("https://", _NoExpectAdapter())
         self.session.mount("http://", _NoExpectAdapter())
 
@@ -184,34 +187,6 @@ def load_commodities(path: Path) -> tuple[dict[str, str], list[dict]]:
     return spu_to_cat, list(cat_nodes.values())
 
 
-def build_saihu_tree(cat_nodes: list[dict]) -> dict[str, list[str]]:
-    """构建赛狐分类树的父子映射: parent_name -> [child_names]"""
-    tree: dict[str, list[str]] = {}
-    for n in cat_nodes:
-        parent = n.get("parent", "")
-        if parent:
-            tree.setdefault(parent, []).append(n["name"])
-        # 顶层节点也加入（根节点 "产品" 下）
-        tree.setdefault(n["name"], [])
-    return tree
-
-
-def find_leaf_nodes(cat_nodes: list[dict]) -> set[str]:
-    """找出赛狐分类树中的所有叶子节点名称。"""
-    tree = build_saihu_tree(cat_nodes)
-    leaves: set[str] = set()
-    for name, children in tree.items():
-        if not children:
-            leaves.add(name)
-    # 也检查 cat_nodes 中哪些在 tree 中不在 parent 位置
-    all_node_names = {n["name"] for n in cat_nodes}
-    for n in cat_nodes:
-        if n["name"] not in tree or not tree.get(n["name"]):
-            if n["name"] not in {c for kids in tree.values() for c in kids}:
-                pass  # already handled
-    return leaves
-
-
 # ── 备份 ───────────────────────────────────────────────
 def backup_production(client: ErpnextClient, out_dir: Path) -> dict[str, Any]:
     """全量备份生产系统物料组。"""
@@ -279,18 +254,18 @@ def backup_production(client: ErpnextClient, out_dir: Path) -> dict[str, Any]:
 def build_moves(
     en_data: list[dict],
     spu_to_cat: dict[str, str],
-    saihu_leaves: set[str],
     en_idx: dict[str, dict] | None = None,
-) -> list[dict]:
+) -> tuple[list[dict], list[dict]]:
     """基于 SPU 映射建立移动清单。
 
-    对目标父节点是赛狐叶子节点的情况:
-    - 若该叶子节点在 EN 中已存在（如"三角靠枕"），保持目标不变
-    - 若该叶子节点在 EN 中不存在，上移至父级分类
+    返回 (moves, leaf_skipped):
+    - moves: 待执行的移动清单
+    - leaf_skipped: 因源节点是叶子(is_group=0)而跳过的移动（需用户确认）
     """
     if en_idx is None:
         en_idx = build_index(en_data)
     moves: list[dict] = []
+    leaf_skipped: list[dict] = []
 
     for en_name, en_node in en_idx.items():
         mid = str(en_node.get("custom_model_id") or "").strip()
@@ -304,28 +279,25 @@ def build_moves(
         current_parent = en_node.get("parent_item_group") or ""
         parts = cat_path.split("/")
         target_parent = parts[-1].strip()
-        rerouted = False
-        original_target = target_parent
 
         # 若目标分类名与产品自身名称相同，上移一级避免自引用
         if target_parent == en_name and len(parts) > 1:
             target_parent = parts[-2].strip()
-            original_target = target_parent
-
-        # 若目标是赛狐叶子节点且 EN 中不存在该节点，上移至父级
-        if target_parent in saihu_leaves and not en_name_exists(target_parent, en_data):
-            if len(parts) > 1:
-                parent_idx = parts.index(target_parent) if target_parent in parts else -1
-                if parent_idx > 0:
-                    target_parent = parts[parent_idx - 1].strip()
-                else:
-                    target_parent = parts[-2].strip() if len(parts) > 1 else "产品"
-            else:
-                target_parent = "产品"
-            rerouted = True
 
         # 跳过已在正确位置的产品
         if current_parent == target_parent:
+            continue
+
+        # ⚠ 叶子节点(is_group=0)不做移动，需用户确认
+        if en_node.get("is_group") == 0:
+            leaf_skipped.append({
+                "en_name": en_name,
+                "en_group_name": en_node.get("item_group_name", ""),
+                "custom_model_id": mid,
+                "current_parent": current_parent,
+                "target_parent": target_parent,
+                "target_path": cat_path,
+            })
             continue
 
         moves.append({
@@ -335,12 +307,10 @@ def build_moves(
             "current_parent": current_parent,
             "target_parent": target_parent,
             "target_path": cat_path,
-            "rerouted": rerouted,
-            "original_target": original_target if rerouted else "",
         })
 
     moves.sort(key=lambda x: (x["target_path"], x["en_name"]))
-    return moves
+    return moves, leaf_skipped
 
 
 # ── 分析 ──────────────────────────────────────────────
@@ -364,34 +334,54 @@ def analyze(
     cat_nodes: list[dict],
     en_data: list[dict],
     moves: list[dict],
-    saihu_leaves: set[str],
 ) -> dict[str, Any]:
-    """生成操作清单。只创建非叶子赛狐节点。"""
+    """生成操作清单。
+
+    对每个赛狐分类节点检查其在 EN 系统中的状态：
+    - 若已存在且是组(is_group=1)：跳过
+    - 若已存在且是叶子(is_group=0)：标记为 leaf_warning，用户需确认
+    - 若不存在：加入 to_create
+    """
+    en_by_name: dict[str, dict] = {}
+    for d in en_data:
+        g = d.get("item_group_name", "")
+        if g:
+            en_by_name[g] = d
+
     to_create: list[dict] = []
-    skipped_leaves: list[dict] = []
+    leaf_warning: list[dict] = []
+
     for n in sorted(cat_nodes, key=lambda x: (x["level"], x["name"])):
+        name = n["name"]
         parent = n["parent"] or "产品"
-        if en_node_exists(n["name"], parent, en_data):
+
+        existing = en_by_name.get(name)
+        if existing is not None:
+            # 节点已存在 — 检查是否是叶子
+            is_grp = existing.get("is_group", 0)
+            if is_grp == 0:
+                leaf_warning.append({
+                    "name": name,
+                    "parent": existing.get("parent_item_group", ""),
+                    "desired_parent": parent,
+                })
+            # 已存在(is_group=0 或 1)都不创建
             continue
-        if n["name"] in saihu_leaves:
-            skipped_leaves.append(n)
-            continue
-        to_create.append(n)
+
+        if not en_node_exists(name, parent, en_data):
+            to_create.append(n)
 
     total_mapped = len({m["en_name"] for m in moves})
-    rerouted = [m for m in moves if m.get("rerouted")]
 
     return {
         "to_create": to_create,
-        "skipped_leaves": skipped_leaves,
+        "leaf_warning": leaf_warning,
         "moves": moves,
-        "rerouted": rerouted,
         "_stats": {
             "赛狐分类节点(总)": len(cat_nodes),
-            "需创建(非叶子)": len(to_create),
-            "跳过(叶子不创建)": len(skipped_leaves),
+            "需创建": len(to_create),
+            "已有叶子节点(需确认)": len(leaf_warning),
             "EN产品需移动": len(moves),
-            "其中已重路由": len(rerouted),
             "EN产品有映射": total_mapped,
         },
     }
@@ -455,12 +445,9 @@ def execute(
     success_count = 0
     fail_count = 0
     for i, m in enumerate(moves):
-        rerouted_mark = " [重路由]" if m.get("rerouted") else ""
         _log_op({"阶段": "2-移动", "操作": "PUT",
                   "name": m["en_name"],
-                  "from": m["current_parent"], "to": m["target_parent"],
-                  "rerouted": m.get("rerouted", False),
-                  "original_target": m.get("original_target", "")})
+                  "from": m["current_parent"], "to": m["target_parent"]})
         if not dry_run:
             try:
                 fields: dict[str, Any] = {"parent_item_group": m["target_parent"]}
@@ -468,7 +455,7 @@ def execute(
                 _log_op({**_OP_LOG[-1], "状态": "OK"})
                 success_count += 1
                 if len(moves) <= 30 or i < 3 or i >= len(moves) - 3:
-                    print(f"  [OK] MOVE {m['en_name']}: {m['current_parent']} -> {m['target_parent']}{rerouted_mark}")
+                    print(f"  [OK] MOVE {m['en_name']}: {m['current_parent']} -> {m['target_parent']}")
                 time.sleep(batch_delay * 0.5)
             except requests.RequestException as e:
                 body_text = _get_error_body(e)
@@ -492,7 +479,7 @@ def execute(
                     ok = False
         else:
             if len(moves) <= 30 or i < 3 or i >= len(moves) - 3:
-                print(f"  [DRY] MOVE {m['en_name']}({m.get('custom_model_id','')}): {m['current_parent']} -> {m['target_parent']}{rerouted_mark}")
+                print(f"  [DRY] MOVE {m['en_name']}({m.get('custom_model_id','')}): {m['current_parent']} -> {m['target_parent']}")
 
     if not dry_run:
         print(f"  移动结果: 成功={success_count}, 失败={fail_count}")
@@ -541,7 +528,7 @@ def verify(
 
     stats = {
         "生产系统节点数": len(data),
-        "非叶节点应创建": len(created_nodes),
+        "应创建节点": len(created_nodes),
         "已成功创建": len(created_nodes) - len(missing_nodes),
         "创建失败": len(missing_nodes),
         "产品位置正确": correct,
@@ -570,23 +557,22 @@ def write_comprehensive_report(
     verify_stats: dict[str, Any] | None,
     dry_run: bool,
     out_dir: Path,
+    env_label: str = "生产系统",
 ) -> Path:
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     tag = "预览" if dry_run else "执行"
-    path = out_dir / f"生产系统重构{tag}_{ts}.xlsx"
+    path = out_dir / f"物料组重构{tag}_{ts}.xlsx"
 
     stats = analysis["_stats"]
 
     # ── 执行摘要 ──
     summary_rows = [
         {"指标": "模式", "数值": "DRY-RUN" if dry_run else "执行"},
-        {"指标": "环境", "数值": "生产系统 (https://erpnext.vilavi.cn)"},
+        {"指标": "环境", "数值": env_label},
         {"指标": "数据源", "数值": "Commodities 赛狐导出"},
         {"指标": "赛狐分类节点(总)", "数值": stats.get("赛狐分类节点(总)", "")},
-        {"指标": "需创建(非叶子)", "数值": stats.get("需创建(非叶子)", "")},
-        {"指标": "跳过(叶子不创建)", "数值": stats.get("跳过(叶子不创建)", "")},
+        {"指标": "需创建", "数值": stats.get("需创建", "")},
         {"指标": "EN产品需移动", "数值": stats.get("EN产品需移动", "")},
-        {"指标": "其中已重路由", "数值": stats.get("其中已重路由", "")},
         {"指标": "EN产品有映射", "数值": stats.get("EN产品有映射", "")},
         {"指标": "报告生成时间", "数值": datetime.now().strftime("%Y-%m-%d %H:%M:%S")},
     ]
@@ -595,16 +581,12 @@ def write_comprehensive_report(
 
     # ── 赛狐结构 ──
     cat_rows = []
-    all_cats = sorted(analysis.get("skipped_leaves", [])
-                      + analysis["to_create"],
-                      key=lambda x: (x["level"], x["name"]))
-    for n in all_cats:
+    for n in sorted(analysis["to_create"], key=lambda x: (x["level"], x["name"])):
         cat_rows.append({
             "层级": n.get("level", ""),
             "名称": n["name"],
             "父级": n.get("parent", ""),
-            "是叶子": "是" if n.get("name") in {s["name"] for s in analysis.get("skipped_leaves", [])} else "否",
-            "操作": "跳过(不创建)" if n.get("name") in {s["name"] for s in analysis.get("skipped_leaves", [])} else "创建",
+            "操作": "创建",
         })
 
     # ── 操作日志 ──
@@ -627,19 +609,6 @@ def write_comprehensive_report(
             "SPU": m.get("custom_model_id", ""),
             "当前父级": m.get("current_parent", ""),
             "目标父级": m.get("target_parent", ""),
-            "赛狐路径": m.get("target_path", ""),
-            "已重路由": "是" if m.get("rerouted") else "否",
-            "原始目标": m.get("original_target", ""),
-        })
-
-    # ── 重路由明细 ──
-    rerouted_rows = []
-    for m in analysis.get("rerouted", []):
-        rerouted_rows.append({
-            "产品名称": m.get("en_name", ""),
-            "SPU": m.get("custom_model_id", ""),
-            "原始目标": m.get("original_target", ""),
-            "重路由至": m.get("target_parent", ""),
             "赛狐路径": m.get("target_path", ""),
         })
 
@@ -666,8 +635,6 @@ def write_comprehensive_report(
         pd.DataFrame(cat_rows).to_excel(writer, sheet_name="赛狐结构", index=False)
         pd.DataFrame(log_rows).to_excel(writer, sheet_name="操作日志", index=False)
         pd.DataFrame(move_rows).to_excel(writer, sheet_name="移动清单", index=False)
-        if rerouted_rows:
-            pd.DataFrame(rerouted_rows).to_excel(writer, sheet_name="重路由明细", index=False)
         if verify_rows:
             pd.DataFrame(verify_rows).to_excel(writer, sheet_name="验证结果", index=False)
         if error_rows:
@@ -680,7 +647,8 @@ def write_comprehensive_report(
 # ── 主入口 ─────────────────────────────────────────────
 def main() -> int:
     import argparse
-    ap = argparse.ArgumentParser(description="按赛狐分类重构 EN 生产系统物料组（完整版）")
+    ap = argparse.ArgumentParser(description="按赛狐分类重构 EN 物料组树结构")
+    ap.add_argument("--env", choices=["prod", "test"], default="prod", help="目标环境")
     ap.add_argument("--dry-run", action="store_true", help="预览操作，不下发修改")
     ap.add_argument("--skip-backup", action="store_true", help="跳过备份（仅执行模式）")
     ap.add_argument("--batch", type=float, default=0.3, help="请求间隔秒数")
@@ -690,14 +658,19 @@ def main() -> int:
     out_dir = args.out_dir
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    prod_key = os.getenv("PROD_ERP_API_KEY", "")
-    prod_secret = os.getenv("PROD_ERP_API_SECRET", "")
-    if not prod_key or not prod_secret:
-        print("错误: 请设置 PROD_ERP_API_KEY / PROD_ERP_API_SECRET")
+    _ENVS = {
+        "prod": {"url": "https://erpnext.vilavi.cn", "key": "PROD_ERP_API_KEY", "sec": "PROD_ERP_API_SECRET", "label": "生产系统"},
+        "test": {"url": "https://ensh.vilavi.cn", "key": "TEST_ERP_API_KEY", "sec": "TEST_ERP_API_SECRET", "label": "测试系统"},
+    }
+    env_info = _ENVS[args.env]
+    api_key = os.getenv(env_info["key"], "")
+    api_secret = os.getenv(env_info["sec"], "")
+    if not api_key or not api_secret:
+        print(f"错误: 请设置 {env_info['key']} / {env_info['sec']}")
         return 1
 
-    client = ErpnextClient("https://erpnext.vilavi.cn", prod_key, prod_secret)
-    print(f"生产环境: https://erpnext.vilavi.cn")
+    client = ErpnextClient(env_info["url"], api_key, api_secret)
+    print(f"{env_info['label']}: {env_info['url']}")
     print(f"模式: {'DRY-RUN' if args.dry_run else '执行'}")
 
     # ── 备份 ──
@@ -713,36 +686,34 @@ def main() -> int:
         print(f"错误: {_DIR_DATA} 下找不到 Commodities .xlsx 文件")
         print(f"  可用文件: {[f.name for f in xlsx_files]}")
         return 1
-    commod_path = commod_files[-1]
+    # 优先使用重构版（若存在），否则用最新的原版
+    refactored = [f for f in commod_files if "重构版" in f.name]
+    commod_path = refactored[-1] if refactored else commod_files[-1]
     print(f"\n赛狐商品文件: {commod_path.name}")
 
     spu_to_cat, cat_nodes = load_commodities(commod_path)
     print(f"  SPU->分类映射: {len(spu_to_cat)} 条")
     print(f"  分类树节点: {len(cat_nodes)} 个")
 
-    # ── 识别赛狐叶子节点 ──
-    saihu_leaves = find_leaf_nodes(cat_nodes)
-    print(f"  赛狐叶子节点: {len(saihu_leaves)} 个 (将跳过创建)")
-    print(f"    {sorted(saihu_leaves)}")
-
-    # ── 获取 EN 生产数据 ──
-    print("\n获取生产系统数据...")
+    # ── 获取 EN 数据 ──
+    print(f"\n获取{env_info['label']}数据...")
     try:
         en_data = client.fetch_all_item_groups()
-        print(f"  生产系统: {len(en_data)} 条记录")
+        print(f"  {env_info['label']}: {len(en_data)} 条记录")
     except requests.RequestException as e:
         print(f"错误: {e}")
         return 1
 
     # ── 建立移动清单 ──
     en_idx = build_index(en_data)
-    moves = build_moves(en_data, spu_to_cat, saihu_leaves, en_idx)
+    moves, leaf_skipped = build_moves(en_data, spu_to_cat, en_idx)
     print(f"\n  可匹配的产品: {len(moves)} 个")
-    rerouted = [m for m in moves if m.get("rerouted")]
-    if rerouted:
-        print(f"  其中已重路由(目标叶子不存在): {len(rerouted)} 个")
-        for r in rerouted[:5]:
-            print(f"    {r['en_name']}: {r['original_target']} -> {r['target_parent']}")
+    if leaf_skipped:
+        print(f"  ⚠ 其中 {len(leaf_skipped)} 个是叶子节点(is_group=0)，已跳过（需用户确认）：")
+        for ls in leaf_skipped[:5]:
+            print(f"      {ls['en_name']}: {ls['current_parent']} -> {ls['target_parent']}")
+        if len(leaf_skipped) > 5:
+            print(f"      ... 共 {len(leaf_skipped)} 个")
 
     # 未匹配的 EN 产品
     unmatched = []
@@ -754,14 +725,18 @@ def main() -> int:
         print(f"  未匹配产品: {len(unmatched)} 个 (将留在原位)")
 
     # ── 分析 ──
-    analysis = analyze(cat_nodes, en_data, moves, saihu_leaves)
+    analysis = analyze(cat_nodes, en_data, moves)
     print(f"\n── 分析结果 ──")
     for k, v in analysis["_stats"].items():
         print(f"  {k}: {v}")
     if analysis["to_create"]:
         print(f"  将创建的节点: {[n['name'] for n in analysis['to_create']]}")
-    if analysis.get("skipped_leaves"):
-        print(f"  跳过的叶子: {[n['name'] for n in analysis['skipped_leaves']]}")
+    lw = analysis.get("leaf_warning", [])
+    if lw:
+        print(f"\n  ⚠ 以下节点在 EN 中已存在且是叶子节点(is_group=0)")
+        print(f"     脚本不会自动处理它们。如需调整，请联系用户确认：")
+        for n in lw:
+            print(f"      - {n['name']} (当前parent={n['parent']}, 目标parent={n['desired_parent']})")
 
     # ── 执行 ──
     ok = execute(client, analysis, dry_run=args.dry_run, batch_delay=args.batch)
@@ -774,7 +749,7 @@ def main() -> int:
 
     # ── 报告 ──
     rpt = write_comprehensive_report(backup_result, analysis, _OP_LOG, vstats,
-                                      args.dry_run, out_dir)
+                                      args.dry_run, out_dir, env_info["label"])
     print(f"\n[{'OK' if ok else '有错误'}] 完成！")
     return 0 if ok else 1
 

@@ -1,0 +1,857 @@
+# 赛狐开放平台
+
+## Docs
+- 开发指南 [赛狐开放平台免责声明](https://sellfoxapi.apifox.cn/doc-3471817.md): 
+- 开发指南 [申请API权限](https://sellfoxapi.apifox.cn/doc-1748360.md): 
+- 开发指南 [获取 Access Token](https://sellfoxapi.apifox.cn/doc-1589130.md): 
+- 开发指南 [限流策略说明](https://sellfoxapi.apifox.cn/doc-4717915.md): 
+- 开发指南 [生成sign（签名）](https://sellfoxapi.apifox.cn/doc-1749562.md): 
+- 开发指南 [公共请求参数](https://sellfoxapi.apifox.cn/doc-1749600.md): 
+- 开发指南 [公共报错](https://sellfoxapi.apifox.cn/doc-1759053.md): 
+- 开发指南 [创建赛狐报告](https://sellfoxapi.apifox.cn/doc-2982783.md): 
+- 开发指南 [更新公告](https://sellfoxapi.apifox.cn/doc-8391559.md): 
+- 开发指南 > 数据结构 [站点MarketplaceId对应关系](https://sellfoxapi.apifox.cn/doc-1759292.md): 
+- 开发指南 > 数据结构 [FBA货件打印类型](https://sellfoxapi.apifox.cn/doc-1781783.md): 
+- 开发指南 > 数据结构 [省份 城市 代码关系](https://sellfoxapi.apifox.cn/doc-1786591.md): 
+- 开发指南 > 数据结构 [查询亚马逊国家和地区列表](https://sellfoxapi.apifox.cn/doc-8796292.md): 
+- 开发指南 > 数据结构 [产品分析（2.0）指标定义](https://sellfoxapi.apifox.cn/doc-8966970.md): 
+- [赛狐开放平台免责声明](https://sellfoxapi.apifox.cn/doc-3471817.md?nav=2): 
+- [申请API权限](https://sellfoxapi.apifox.cn/doc-1748360.md?nav=2): 
+- [获取 Access Token](https://sellfoxapi.apifox.cn/doc-1589130.md?nav=2): 
+- [限流策略说明](https://sellfoxapi.apifox.cn/doc-4717915.md?nav=2): 
+- [生成sign（签名）](https://sellfoxapi.apifox.cn/doc-1749562.md?nav=2): 
+- [公共请求参数](https://sellfoxapi.apifox.cn/doc-1749600.md?nav=2): 
+- [公共报错](https://sellfoxapi.apifox.cn/doc-1759053.md?nav=2): 
+- [创建赛狐报告](https://sellfoxapi.apifox.cn/doc-2982783.md?nav=2): 
+- [更新公告](https://sellfoxapi.apifox.cn/doc-8391559.md?nav=2): 
+- 数据结构 [站点MarketplaceId对应关系](https://sellfoxapi.apifox.cn/doc-1759292.md?nav=2): 
+- 数据结构 [FBA货件打印类型](https://sellfoxapi.apifox.cn/doc-1781783.md?nav=2): 
+- 数据结构 [省份 城市 代码关系](https://sellfoxapi.apifox.cn/doc-1786591.md?nav=2): 
+- 数据结构 [查询亚马逊国家和地区列表](https://sellfoxapi.apifox.cn/doc-8796292.md?nav=2): 
+- 数据结构 [产品分析（2.0）指标定义](https://sellfoxapi.apifox.cn/doc-8966970.md?nav=2): 
+- [赛狐开放平台免责声明](https://sellfoxapi.apifox.cn/doc-3471817.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- [申请API权限](https://sellfoxapi.apifox.cn/doc-1748360.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- [获取 Access Token](https://sellfoxapi.apifox.cn/doc-1589130.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- [限流策略说明](https://sellfoxapi.apifox.cn/doc-4717915.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- [生成sign（签名）](https://sellfoxapi.apifox.cn/doc-1749562.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- [公共请求参数](https://sellfoxapi.apifox.cn/doc-1749600.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- [公共报错](https://sellfoxapi.apifox.cn/doc-1759053.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- [创建赛狐报告](https://sellfoxapi.apifox.cn/doc-2982783.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- [更新公告](https://sellfoxapi.apifox.cn/doc-8391559.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 数据结构 [站点MarketplaceId对应关系](https://sellfoxapi.apifox.cn/doc-1759292.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 数据结构 [FBA货件打印类型](https://sellfoxapi.apifox.cn/doc-1781783.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 数据结构 [省份 城市 代码关系](https://sellfoxapi.apifox.cn/doc-1786591.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 数据结构 [查询亚马逊国家和地区列表](https://sellfoxapi.apifox.cn/doc-8796292.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 数据结构 [产品分析（2.0）指标定义](https://sellfoxapi.apifox.cn/doc-8966970.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+
+## API Docs
+- 商品 > 商品列表 [创建SKU](https://sellfoxapi.apifox.cn/api-51516592.md): 
+- 商品 > 商品列表 [修改SKU](https://sellfoxapi.apifox.cn/api-51516597.md): 
+- 商品 > 商品列表 [查询SKU](https://sellfoxapi.apifox.cn/api-51516600.md): 
+- 商品 > 商品列表 [创建SPU](https://sellfoxapi.apifox.cn/api-51516599.md): 
+- 商品 > 商品列表 [修改SPU](https://sellfoxapi.apifox.cn/api-51516601.md): 
+- 商品 > 商品列表 [查询SPU](https://sellfoxapi.apifox.cn/api-51516598.md): 
+- 商品 > 商品列表 [获取商品属性列表](https://sellfoxapi.apifox.cn/api-52898925.md): 
+- 商品 > 商品列表 [查看商品详情](https://sellfoxapi.apifox.cn/api-112191241.md): 
+- 商品 > 商品列表 [查看商品详情V2](https://sellfoxapi.apifox.cn/api-352500605.md): 
+- 商品 > 商品列表 [查询品牌](https://sellfoxapi.apifox.cn/api-363817141.md): 
+- 商品 > 商品分类 [新增商品分类](https://sellfoxapi.apifox.cn/api-131281549.md): 
+- 商品 > 商品分类 [查询商品分类](https://sellfoxapi.apifox.cn/api-51516593.md): 
+- 商品 > 商品分类 [修改商品分类](https://sellfoxapi.apifox.cn/api-51516596.md): 
+- 商品 > 商品分类 [删除商品分类](https://sellfoxapi.apifox.cn/api-51516595.md): 
+- 商品 > 辅料管理 [查询辅料](https://sellfoxapi.apifox.cn/api-74245902.md): 
+- 商品 > 质检模板 [质检模板列表](https://sellfoxapi.apifox.cn/api-383488079.md): 
+- 销售 > 在线产品 [获取在线产品信息](https://sellfoxapi.apifox.cn/api-51516624.md): 
+- 销售 > 在线产品 [获取在线产品信息V2](https://sellfoxapi.apifox.cn/api-420168353.md): 
+- 销售 > 在线产品 [在线产品修改业务员](https://sellfoxapi.apifox.cn/api-165322872.md): 修改在线产品的业务员，包括业绩归属的业务员
+- 销售 > 在线产品 [查询Listing操作日志列表](https://sellfoxapi.apifox.cn/api-431277213.md): 用户获取自身亚马逊店铺产品的操作日志
+- 销售 > 退货报告 [FBA退货报告查询](https://sellfoxapi.apifox.cn/api-116412069.md): 
+- 销售 > 退货报告 [FBM退货报告查询](https://sellfoxapi.apifox.cn/api-116412070.md): 
+- 销售 > 在线产品配对 [在线产品按ASIN匹配商品](https://sellfoxapi.apifox.cn/api-119077677.md): 支持批量匹配，会出现部分成功或部分失败的情况，只会返回匹配商品失败的错误提示信息，匹配成功的商品不会返回错误提示。
+- 销售 > 在线产品配对 [在线产品按MSKU匹配商品](https://sellfoxapi.apifox.cn/api-119077678.md): 支持批量匹配，会出现部分成功或部分失败的情况，只会返回匹配商品失败的错误提示信息，匹配成功的商品不会返回错误提示。
+- 订单 > 全部订单 [订单详情](https://sellfoxapi.apifox.cn/api-51516626.md): 
+- 订单 > 全部订单 [订单详情 批量接口](https://sellfoxapi.apifox.cn/api-476895394.md): 
+- 订单 > 全部订单 [订单列表](https://sellfoxapi.apifox.cn/api-51516627.md): 
+- 订单 > 订单处理 [FBM订单列表](https://sellfoxapi.apifox.cn/api-196574169.md): 
+- 订单 > 订单处理 [FBM订单详情](https://sellfoxapi.apifox.cn/api-196574170.md): 
+- 订单 > 订单处理 [提交平台](https://sellfoxapi.apifox.cn/api-227637649.md): 
+- 订单 > 订单处理 [更换配对](https://sellfoxapi.apifox.cn/api-302751092.md): 
+- 订单 > 订单处理 [查询订单处理列表](https://sellfoxapi.apifox.cn/api-395863444.md): 
+- 订单 > 订单处理 [查询订单处理详情](https://sellfoxapi.apifox.cn/api-395863445.md): 
+- 客服 > Review [获取评价明细列表](https://sellfoxapi.apifox.cn/api-119107035.md): 
+- 广告 > 天维度报告 [创建广告下载任务](https://sellfoxapi.apifox.cn/api-52365899.md): 
+- 广告 > 天维度报告 [查询广告报告进度](https://sellfoxapi.apifox.cn/api-52365898.md): 
+- 广告 > 小时维度报告 [小时报告-SP广告活动报告](https://sellfoxapi.apifox.cn/api-352957023.md): 
+- 广告 > 小时维度报告 [小时报告-SP广告组报告](https://sellfoxapi.apifox.cn/api-352957028.md): 
+- 广告 > 小时维度报告 [小时报告-SP广告产品报告](https://sellfoxapi.apifox.cn/api-352957030.md): 
+- 广告 > 小时维度报告 [小时报告-SP投放报告](https://sellfoxapi.apifox.cn/api-352957031.md): 
+- 广告 > 小时维度报告 [小时报告-SP广告位报告](https://sellfoxapi.apifox.cn/api-352957029.md): 
+- 广告 > 小时维度报告 [小时报告-SB广告活动报告](https://sellfoxapi.apifox.cn/api-352957032.md): 
+- 广告 > 小时维度报告 [小时报告-SB广告组报告](https://sellfoxapi.apifox.cn/api-352957033.md): 
+- 广告 > 小时维度报告 [小时报告-SB投放报告](https://sellfoxapi.apifox.cn/api-352957035.md): 
+- 广告 > 小时维度报告 [小时报告-SB广告位报告](https://sellfoxapi.apifox.cn/api-352957034.md): 
+- 广告 > 小时维度报告 [小时报告-SD广告活动报告](https://sellfoxapi.apifox.cn/api-352957024.md): 
+- 广告 > 小时维度报告 [小时报告-SD广告组报告](https://sellfoxapi.apifox.cn/api-352957025.md): 
+- 广告 > 小时维度报告 [小时报告-SD广告产品报告](https://sellfoxapi.apifox.cn/api-352957026.md): 
+- 广告 > 小时维度报告 [小时报告-SD投放报告](https://sellfoxapi.apifox.cn/api-352957027.md): 
+- 广告 > 基础数据 [广告组合](https://sellfoxapi.apifox.cn/api-367482262.md): 
+- 广告 > 基础数据 [SP广告活动](https://sellfoxapi.apifox.cn/api-367482273.md): 
+- 广告 > 基础数据 [SP广告组](https://sellfoxapi.apifox.cn/api-367482276.md): 
+- 广告 > 基础数据 [SP广告产品](https://sellfoxapi.apifox.cn/api-367482277.md): 
+- 广告 > 基础数据 [SP商品投放](https://sellfoxapi.apifox.cn/api-367482279.md): 
+- 广告 > 基础数据 [SP关键词投放](https://sellfoxapi.apifox.cn/api-367482278.md): 
+- 广告 > 基础数据 [SP否定商品](https://sellfoxapi.apifox.cn/api-367482281.md): 
+- 广告 > 基础数据 [SP否定关键词](https://sellfoxapi.apifox.cn/api-367482280.md): 
+- 广告 > 基础数据 [SB广告活动](https://sellfoxapi.apifox.cn/api-367482282.md): 
+- 广告 > 基础数据 [SB广告组](https://sellfoxapi.apifox.cn/api-367482263.md): 
+- 广告 > 基础数据 [SB广告产品(创意)](https://sellfoxapi.apifox.cn/api-367482264.md): 
+- 广告 > 基础数据 [SB商品投放](https://sellfoxapi.apifox.cn/api-367482266.md): 
+- 广告 > 基础数据 [SB关键词投放](https://sellfoxapi.apifox.cn/api-367482265.md): 
+- 广告 > 基础数据 [SB否定商品](https://sellfoxapi.apifox.cn/api-367482268.md): 
+- 广告 > 基础数据 [SB否定关键词](https://sellfoxapi.apifox.cn/api-367482267.md): 
+- 广告 > 基础数据 [SD广告活动](https://sellfoxapi.apifox.cn/api-367482269.md): 
+- 广告 > 基础数据 [SD广告组](https://sellfoxapi.apifox.cn/api-367482270.md): 
+- 广告 > 基础数据 [SD广告产品](https://sellfoxapi.apifox.cn/api-367482271.md): 
+- 广告 > 基础数据 [SD广告创意](https://sellfoxapi.apifox.cn/api-367482272.md): 
+- 广告 > 基础数据 [SD商品投放](https://sellfoxapi.apifox.cn/api-367482274.md): 
+- 广告 > 基础数据 [SD否定商品](https://sellfoxapi.apifox.cn/api-367482275.md): 
+- 广告 > 其他报告 [ABA搜索词](https://sellfoxapi.apifox.cn/api-426587990.md): 
+- FBA > 发货计划 [创建发货计划](https://sellfoxapi.apifox.cn/api-78670102.md): 
+- FBA > 发货计划 [获取发货批次列表](https://sellfoxapi.apifox.cn/api-248109094.md): 
+- FBA > 发货计划 [获取发货批次详情](https://sellfoxapi.apifox.cn/api-248109093.md): 
+- FBA > FBA货件（STA） [入库计划详情](https://sellfoxapi.apifox.cn/api-250107681.md): 
+- FBA > FBA货件（STA） [获取入库计划列表](https://sellfoxapi.apifox.cn/api-250107682.md): 
+- FBA > FBA货件（STA） [货件详情](https://sellfoxapi.apifox.cn/api-250107683.md): 
+- FBA > FBA货件（STA） [更新追踪编码](https://sellfoxapi.apifox.cn/api-261465769.md): 
+- FBA > FBA货件（STA） [确认预计送达时间窗口](https://sellfoxapi.apifox.cn/api-309716626.md): 
+- FBA > FBA货件（STA） [确认装箱选项](https://sellfoxapi.apifox.cn/api-309716627.md): 
+- FBA > FBA货件（STA） [确认入库配置选项](https://sellfoxapi.apifox.cn/api-309716628.md): 
+- FBA > FBA货件（STA） [确认运输承运人选项](https://sellfoxapi.apifox.cn/api-309716629.md): 
+- FBA > FBA货件（STA） [创建入库计划](https://sellfoxapi.apifox.cn/api-309716630.md): 
+- FBA > FBA货件（STA） [生成预计送达时间窗口](https://sellfoxapi.apifox.cn/api-309716631.md): 
+- FBA > FBA货件（STA） [生成装箱组选项](https://sellfoxapi.apifox.cn/api-309716632.md): 
+- FBA > FBA货件（STA） [生成入库配置项](https://sellfoxapi.apifox.cn/api-309716633.md): 
+- FBA > FBA货件（STA） [生成运输承运人选项](https://sellfoxapi.apifox.cn/api-309716634.md): 
+- FBA > FBA货件（STA） [打印BOL文件](https://sellfoxapi.apifox.cn/api-309716635.md): 
+- FBA > FBA货件（STA） [打印外箱标签](https://sellfoxapi.apifox.cn/api-309716636.md): 
+- FBA > FBA货件（STA） [查询预计送达时间窗口](https://sellfoxapi.apifox.cn/api-309716637.md): 
+- FBA > FBA货件（STA） [查询装箱组商品](https://sellfoxapi.apifox.cn/api-309716638.md): 
+- FBA > FBA货件（STA） [查询装箱组选项](https://sellfoxapi.apifox.cn/api-309716639.md): 
+- FBA > FBA货件（STA） [取消入库计划](https://sellfoxapi.apifox.cn/api-309716625.md): 
+- FBA > FBA货件（STA） [查询入库配置项](https://sellfoxapi.apifox.cn/api-309716640.md): 
+- FBA > FBA货件（STA） [查询运输承运人选项](https://sellfoxapi.apifox.cn/api-309716641.md): 
+- FBA > FBA货件（STA） [提交装箱信息](https://sellfoxapi.apifox.cn/api-309716642.md): 
+- FBA > FBA货件（STA） [查询异步任务状态](https://sellfoxapi.apifox.cn/api-309716643.md): 
+- FBA > FBA货件（STA） [批量查询货件详情](https://sellfoxapi.apifox.cn/api-328122511.md): 
+- FBA > FBA货件（STA） [同步工作流](https://sellfoxapi.apifox.cn/api-462028305.md): <p><strong>调用流程：</strong></p><ol><li>调用此接口，返回 taskId</li><li>使用 taskId 调用 /taskProcess 接口轮询任务状态</li><li>任务完成后获取同步结果详情</li></ol><p><strong>最终数据结构：</strong></p><pre>{"success":10,"fail":2,"results":[{"inboundPlanId":"WP-XXXXX","success":true,"message":"同步成功"}]}</pre>
+- FBA > 发货单 [获取FBA发货单列表](https://sellfoxapi.apifox.cn/api-51516614.md): 
+- FBA > 发货单 [FBA发货单产品查询](https://sellfoxapi.apifox.cn/api-51516613.md): 
+- FBA > 发货单 [FBA发货单批量产品查询](https://sellfoxapi.apifox.cn/api-195576737.md): 
+- FBA > 发货单 [FBA发货单配货](https://sellfoxapi.apifox.cn/api-51516610.md): 
+- FBA > 发货单 [FBA发货单发货](https://sellfoxapi.apifox.cn/api-51516611.md): 
+- FBA > 发货单 [FBA发货单创建](https://sellfoxapi.apifox.cn/api-51516612.md): 
+- FBA > 发货单 [FBA发货单详情](https://sellfoxapi.apifox.cn/api-188252058.md): 
+- FBA > 发货单 [FBA发货单编辑物流费用](https://sellfoxapi.apifox.cn/api-188252059.md): 
+- FBA > FBA货件（旧版） [获取FBA货件列表](https://sellfoxapi.apifox.cn/api-51516609.md): 
+- FBA > FBA货件（旧版） [FBA货件产品查询](https://sellfoxapi.apifox.cn/api-382285993.md): 
+- FBA > FBA货件（旧版） [查询FBA货件外箱标签](https://sellfoxapi.apifox.cn/api-51516615.md): 
+- FBA > FBA货件（旧版） [查询FBA货件托拍标签](https://sellfoxapi.apifox.cn/api-51516616.md): 
+- FBA > FBA货件（旧版） [FBA货件产品批量查询](https://sellfoxapi.apifox.cn/api-328123046.md): 
+- FBA > 头程分摊 [头程分摊列表页](https://sellfoxapi.apifox.cn/api-74141036.md): 
+- FBA > 成本补录单 [查询成本调整单列表](https://sellfoxapi.apifox.cn/api-74141034.md): 
+- FBA > 物流商 [查询物流商列表](https://sellfoxapi.apifox.cn/api-74141037.md): 
+- 采购 > 采购单 [采购单创建](https://sellfoxapi.apifox.cn/api-181712559.md): 
+- 采购 > 采购单 [采购单列表](https://sellfoxapi.apifox.cn/api-51516633.md): 
+- 采购 > 采购单 [采购单到货](https://sellfoxapi.apifox.cn/api-51516628.md): 
+- 采购 > 采购单 [获取结算方式列表](https://sellfoxapi.apifox.cn/api-52898926.md): 
+- 采购 > 采购单 [采购单取消](https://sellfoxapi.apifox.cn/api-51516630.md): 
+- 采购 > 采购单 [添加采购单运单号](https://sellfoxapi.apifox.cn/api-51516634.md): 
+- 采购 > 采购单 [终止剩余到货](https://sellfoxapi.apifox.cn/api-51516631.md): 
+- 采购 > 采购单 [采购单下单](https://sellfoxapi.apifox.cn/api-51516632.md): 
+- 采购 > 采购单 [商品维度结束到货](https://sellfoxapi.apifox.cn/api-192296427.md): 
+- 采购 > 采购单 [修改预计到货时间](https://sellfoxapi.apifox.cn/api-352501086.md): 
+- 采购 > 采购单 [修改采购单SKU备注](https://sellfoxapi.apifox.cn/api-352501087.md): 
+- 采购 > 采购单 [修改采购单采购数量](https://sellfoxapi.apifox.cn/api-352501088.md): 
+- 采购 > 采购入库 [查询采购入库单列表](https://sellfoxapi.apifox.cn/api-74141046.md): 
+- 采购 > 采购退货单 [创建采购退货单](https://sellfoxapi.apifox.cn/api-188536050.md): 
+- 采购 > 采购退货单 [查询采购退货单详情](https://sellfoxapi.apifox.cn/api-74141040.md): 
+- 采购 > 采购退货单 [查询采购退货单列表](https://sellfoxapi.apifox.cn/api-74141042.md): 
+- 采购 > 采购退货单 [确认退货](https://sellfoxapi.apifox.cn/api-437972184.md): 
+- 采购 > 供应商 [获取供应商列表](https://sellfoxapi.apifox.cn/api-52898927.md): 
+- 采购 > 供应商 [供应商创建修改](https://sellfoxapi.apifox.cn/api-52898928.md): 
+- 采购 > 采购计划 [创建采购计划](https://sellfoxapi.apifox.cn/api-181712560.md): 
+- 采购 > 采购计划 [采购计划分页查询](https://sellfoxapi.apifox.cn/api-182977809.md): 
+- 采购 > 采购变更 [创建采购变更单（V1.0）](https://sellfoxapi.apifox.cn/api-185594125.md): 
+- 采购 > 采购变更 [创建采购变更单（V2.0）](https://sellfoxapi.apifox.cn/api-254038550.md): 创建采购变更单（V2.0）
+- 采购 > 结算方式 [获取所有结算方式](https://sellfoxapi.apifox.cn/api-187268786.md): 
+- 采购 > 采购方 [采购方列表](https://sellfoxapi.apifox.cn/api-187268787.md): 
+- 仓库 > 仓库列表 [查询仓库列表](https://sellfoxapi.apifox.cn/api-51516623.md): 
+- 仓库 > 库存明细 [查询库存明细](https://sellfoxapi.apifox.cn/api-51516622.md): 
+- 仓库 > 库存明细 [查询库存明细批次信息](https://sellfoxapi.apifox.cn/api-433626708.md): 
+- 仓库 > FBA库存 [查询FBA库存明细](https://sellfoxapi.apifox.cn/api-51516618.md): 
+- 仓库 > 海外仓备货单 [海外仓备货单列表页](https://sellfoxapi.apifox.cn/api-74141039.md): 
+- 仓库 > 海外仓备货单 [海外仓备货单详情](https://sellfoxapi.apifox.cn/api-74141038.md): 
+- 仓库 > 海外仓备货单 [保存海外仓备货单](https://sellfoxapi.apifox.cn/api-146723591.md): 
+- 仓库 > 海外仓备货单 [备货单批量收货](https://sellfoxapi.apifox.cn/api-150128334.md): 
+- 仓库 > 海外仓备货单 [结束剩余到货](https://sellfoxapi.apifox.cn/api-150128335.md): 
+- 仓库 > 海外仓备货单 [备货单批量收货（2.0）](https://sellfoxapi.apifox.cn/api-172001347.md): 
+- 仓库 > 海外仓备货单 [结束剩余到货（2.0）](https://sellfoxapi.apifox.cn/api-172001348.md): 
+- 仓库 > 海外仓备货单 [保存海外仓备货单（2.0）](https://sellfoxapi.apifox.cn/api-172001349.md): 
+- 仓库 > 其他入库 [其他入库单创建 (该接口将要下线，如有需要，请调V2接口：/api/warehouseInOut/inRecord/v2) ](https://sellfoxapi.apifox.cn/api-51516621.md): 
+- 仓库 > 其他入库 [其他入库单创建（2.0）](https://sellfoxapi.apifox.cn/api-172001654.md): 
+- 仓库 > 其他入库 [其他入库列表页](https://sellfoxapi.apifox.cn/api-199427642.md): 
+- 仓库 > 其他入库 [批量确认入库](https://sellfoxapi.apifox.cn/api-437953562.md): 
+- 仓库 > 其他入库 [批量删除入库单](https://sellfoxapi.apifox.cn/api-437953563.md): 
+- 仓库 > 其他入库 [获取其他入库自定义类型](https://sellfoxapi.apifox.cn/api-437953564.md): 
+- 仓库 > 其他出库 [其他出库列表页](https://sellfoxapi.apifox.cn/api-74141061.md): 
+- 仓库 > 其他出库 [创建其他出库单(该接口将要下线，如有需要，请调V2接口：api/warehouseInOut/outRecord/v2)](https://sellfoxapi.apifox.cn/api-146723558.md): 
+- 仓库 > 其他出库 [创建其他出库单（2.0）](https://sellfoxapi.apifox.cn/api-172001653.md): 
+- 仓库 > 其他出库 [删除其他出库单](https://sellfoxapi.apifox.cn/api-399063059.md): 
+- 仓库 > 其他出库 [批量确认出库](https://sellfoxapi.apifox.cn/api-437965947.md): 
+- 仓库 > 其他出库 [获取其他入库自定义类型](https://sellfoxapi.apifox.cn/api-438220143.md): 
+- 仓库 > 其他出库 [获取其他出库自定义类型](https://sellfoxapi.apifox.cn/api-438220144.md): 
+- 仓库 > 调整单 [创建调整单](https://sellfoxapi.apifox.cn/api-51516619.md): 
+- 仓库 > 调整单 [创建调整单（灰度用户使用）](https://sellfoxapi.apifox.cn/api-360743256.md): 
+- 仓库 > 调整单 [查询调整单列表（灰度用户使用）](https://sellfoxapi.apifox.cn/api-360743257.md): 
+- 仓库 > 调整单 [批量确认调整单](https://sellfoxapi.apifox.cn/api-437950677.md): 
+- 仓库 > 加工单 [加工单列表页](https://sellfoxapi.apifox.cn/api-74141043.md): 
+- 仓库 > 加工单 [加工单详情](https://sellfoxapi.apifox.cn/api-74141041.md): 
+- 仓库 > 加工单 [创建拆分单](https://sellfoxapi.apifox.cn/api-240578466.md): 
+- 仓库 > 加工单 [拆分单列表页](https://sellfoxapi.apifox.cn/api-240578468.md): 
+- 仓库 > 加工单 [查看拆分单详情](https://sellfoxapi.apifox.cn/api-240578467.md): 
+- 仓库 > 调拨单 [调拨单列表](https://sellfoxapi.apifox.cn/api-74141045.md): 
+- 仓库 > 调拨单 [调拨单详情](https://sellfoxapi.apifox.cn/api-74141044.md): 
+- 仓库 > 盘点单 [盘点单列表](https://sellfoxapi.apifox.cn/api-74141033.md): 
+- 仓库 > 盘点单 [盘点单商品](https://sellfoxapi.apifox.cn/api-74141035.md): 
+- 仓库 > 库存流水 [获取库存流水](https://sellfoxapi.apifox.cn/api-51516620.md): 
+- 仓库 > 货架管理 [货架位列表分页查询](https://sellfoxapi.apifox.cn/api-52898929.md): 
+- 仓库 > 移除入库单 [移除入库单列表查询](https://sellfoxapi.apifox.cn/api-233405724.md): 
+- 仓库 > 装箱任务 [创建装箱明细（按箱子维度）](https://sellfoxapi.apifox.cn/api-325184193.md): 
+- 仓库 > 装箱任务 [结束装箱](https://sellfoxapi.apifox.cn/api-325184194.md): 
+- 仓库 > 装箱任务 [查询装箱任务列表](https://sellfoxapi.apifox.cn/api-325184195.md): 
+- 仓库 > 装箱任务 [重新装箱](https://sellfoxapi.apifox.cn/api-325184196.md): 
+- 仓库 > 库龄报表 [库龄报表列表页](https://sellfoxapi.apifox.cn/api-327031118.md): 
+- 数据 > 销量统计 [获取销量数据](https://sellfoxapi.apifox.cn/api-51516604.md): 
+- 数据 > 销量统计 [生成销量报告](https://sellfoxapi.apifox.cn/api-123726731.md): 
+- 数据 > 产品分析 [获取产品分析数据（新）](https://sellfoxapi.apifox.cn/api-319973191.md): 
+- 数据 > 产品分析 [获取产品分析数据（旧）](https://sellfoxapi.apifox.cn/api-51516603.md): 
+- 数据 > 产品分析 [获取产品分析数据（2.0）即将上线](https://sellfoxapi.apifox.cn/api-474651907.md): 
+- 数据 > 店铺表现 [店铺表现按天查询](https://sellfoxapi.apifox.cn/api-146414432.md): 
+- 数据 > 销售利润 [获取销售利润数据(产品)](https://sellfoxapi.apifox.cn/api-227646618.md): 
+- 数据 > 销售利润 [获取销售利润数据(店铺)](https://sellfoxapi.apifox.cn/api-227646619.md): 
+- 数据 > 销售利润 [获取销售利润数据(产品)V2 即将上线](https://sellfoxapi.apifox.cn/api-424122730.md): 
+- 数据 > 销售利润 [获取销售利润数据(店铺)V2 即将上线](https://sellfoxapi.apifox.cn/api-424147159.md): 
+- 数据 > 自定义报表 [获取自定义报表列表数据](https://sellfoxapi.apifox.cn/api-248307071.md): 
+- 数据 > 标签管理 [查询标签对应产品/商品](https://sellfoxapi.apifox.cn/api-437848186.md): 
+- 数据 > 标签管理 [查询标签列表页](https://sellfoxapi.apifox.cn/api-437848187.md): 
+- 数据 > 标签管理 [查询产品标签列表](https://sellfoxapi.apifox.cn/api-437848188.md): 
+- 数据 > 标签管理 [创建手动标签](https://sellfoxapi.apifox.cn/api-459166568.md): 
+- 数据 > 标签管理 [移除标签](https://sellfoxapi.apifox.cn/api-459166570.md): 
+- 数据 > 标签管理 [手动打标](https://sellfoxapi.apifox.cn/api-459166571.md): 
+- 数据 > 标签管理 [删除手动/动态标签](https://sellfoxapi.apifox.cn/api-459166569.md): 
+- 财务 > 批次成本 [获取FBA仓库列表数据](https://sellfoxapi.apifox.cn/api-252647060.md): 
+- 财务 > 批次成本 [获取批次入库数据](https://sellfoxapi.apifox.cn/api-103235384.md): 
+- 财务 > 批次成本 [获取批次出库数据](https://sellfoxapi.apifox.cn/api-103235385.md): 
+- 财务 > 批次成本 [获取货件签收数据](https://sellfoxapi.apifox.cn/api-198592414.md): 
+- 财务 > 应收报表（即将下线） [获取应收报表数据](https://sellfoxapi.apifox.cn/api-165756004.md): 
+- 财务 > 结算中心（即将下线） [结算汇总-分页查询](https://sellfoxapi.apifox.cn/api-186297246.md): 结算汇总-分页查询
+- 财务 > 结算中心（即将下线） [查询结算明细](https://sellfoxapi.apifox.cn/api-74141060.md): 
+- 财务 > 结算管理（即将下线） [查询发货与结算记录](https://sellfoxapi.apifox.cn/api-204485188.md): 
+- 财务 > 结算利润（已下线） [按日利润报表-ASIN](https://sellfoxapi.apifox.cn/api-207463418.md): 按日利润报表-ASIN
+- 财务 > 结算利润（已下线） [按日利润报表-父ASIN](https://sellfoxapi.apifox.cn/api-207463421.md): 按日利润报表-父ASIN
+- 财务 > 结算利润（已下线） [按日利润报表-MSKU](https://sellfoxapi.apifox.cn/api-207463420.md): 按日利润报表-MSKU
+- 财务 > 结算利润（已下线） [按日利润报表-SKU](https://sellfoxapi.apifox.cn/api-207463424.md): 按日利润报表-SKU
+- 财务 > 结算利润（已下线） [按日利润报表-SPU](https://sellfoxapi.apifox.cn/api-207463425.md): 按日利润报表-SPU
+- 财务 > 结算利润（已下线） [按日利润报表-开发员](https://sellfoxapi.apifox.cn/api-207463419.md): 按日利润报表-开发员
+- 财务 > 结算利润（已下线） [按日利润报表-业务员](https://sellfoxapi.apifox.cn/api-207463422.md): 按日利润报表-业务员
+- 财务 > 结算利润（已下线） [按日利润报表-店铺](https://sellfoxapi.apifox.cn/api-207463423.md): 按日利润报表-店铺
+- 财务 > 利润报表（即将下线） [利润报表-查询ASIN](https://sellfoxapi.apifox.cn/api-105508483.md): 
+- 财务 > 利润报表（即将下线） [利润报表-查询开发员](https://sellfoxapi.apifox.cn/api-105508484.md): 
+- 财务 > 利润报表（即将下线） [利润报表-查询MSKU](https://sellfoxapi.apifox.cn/api-105508485.md): 
+- 财务 > 利润报表（即将下线） [利润报表-查询订单](https://sellfoxapi.apifox.cn/api-105508486.md): 
+- 财务 > 利润报表（即将下线） [利润报表-查询父ASIN](https://sellfoxapi.apifox.cn/api-105508487.md): 
+- 财务 > 利润报表（即将下线） [利润报表-查询业务员](https://sellfoxapi.apifox.cn/api-105508488.md): 
+- 财务 > 利润报表（即将下线） [利润报表-结算总览](https://sellfoxapi.apifox.cn/api-105508489.md): 
+- 财务 > 利润报表（即将下线） [利润报表-查询店铺](https://sellfoxapi.apifox.cn/api-105508490.md): 
+- 财务 > 利润报表（即将下线） [利润报表-查询店铺汇总](https://sellfoxapi.apifox.cn/api-105508491.md): 
+- 财务 > 利润报表（即将下线） [利润报表-查询SKU](https://sellfoxapi.apifox.cn/api-105508492.md): 
+- 财务 > 应收报表V2 [获取应收报表数据](https://sellfoxapi.apifox.cn/api-399397922.md): 
+- 财务 > 结算中心V2 [查询结算明细-分页查询](https://sellfoxapi.apifox.cn/api-399397941.md): 查询结算明细-分页查询
+- 财务 > 结算中心V2 [结算汇总-分页查询](https://sellfoxapi.apifox.cn/api-399397942.md): 结算汇总-分页查询
+- 财务 > 发货与结算V2 [查询发货与结算记录](https://sellfoxapi.apifox.cn/api-399397943.md): 
+- 财务 > 结算利润V2 [结算利润-ASIN](https://sellfoxapi.apifox.cn/api-399397923.md): 结算利润-ASIN
+- 财务 > 结算利润V2 [结算利润-开发员](https://sellfoxapi.apifox.cn/api-399397924.md): 结算利润-开发员
+- 财务 > 结算利润V2 [结算利润-MSKU](https://sellfoxapi.apifox.cn/api-399397925.md): 结算利润-MSKU
+- 财务 > 结算利润V2 [结算利润-父ASIN](https://sellfoxapi.apifox.cn/api-399397926.md): 结算利润-父ASIN
+- 财务 > 结算利润V2 [结算利润-业务员](https://sellfoxapi.apifox.cn/api-399397927.md): 结算利润-业务员
+- 财务 > 结算利润V2 [结算利润-店铺](https://sellfoxapi.apifox.cn/api-399397928.md): 结算利润-店铺
+- 财务 > 结算利润V2 [结算利润-SKU](https://sellfoxapi.apifox.cn/api-399397929.md): 结算利润-SKU
+- 财务 > 结算利润V2 [结算利润-SPU](https://sellfoxapi.apifox.cn/api-399397930.md): 结算利润-SPU
+- 财务 > 利润报表V2 [利润报表-ASIN](https://sellfoxapi.apifox.cn/api-399397931.md): 利润报表-ASIN
+- 财务 > 利润报表V2 [利润报表-开发员](https://sellfoxapi.apifox.cn/api-399397932.md): 利润报表-开发员
+- 财务 > 利润报表V2 [利润报表-MSKU](https://sellfoxapi.apifox.cn/api-399397933.md): 利润报表-MSKU
+- 财务 > 利润报表V2 [利润报表-父ASIN](https://sellfoxapi.apifox.cn/api-399397934.md): 利润报表-父ASIN
+- 财务 > 利润报表V2 [利润报表-业务员](https://sellfoxapi.apifox.cn/api-399397935.md): 利润报表-业务员
+- 财务 > 利润报表V2 [利润报表-店铺](https://sellfoxapi.apifox.cn/api-399397936.md): 利润报表-店铺
+- 财务 > 利润报表V2 [利润报表-店铺汇总](https://sellfoxapi.apifox.cn/api-399397937.md): 利润报表-店铺汇总
+- 财务 > 利润报表V2 [利润报表-SKU](https://sellfoxapi.apifox.cn/api-399397938.md): 利润报表-SKU
+- 财务 > 利润报表V2 [利润报表-SPU](https://sellfoxapi.apifox.cn/api-399397939.md): 利润报表-SPU
+- 财务 > 利润报表V2 [利润报表-订单](https://sellfoxapi.apifox.cn/api-399397940.md): 
+- 财务 > 广告发票 [查询发票详情](https://sellfoxapi.apifox.cn/api-436025995.md): 
+- 财务 > 广告发票 [查询广告发票详情](https://sellfoxapi.apifox.cn/api-436025996.md): 
+- 财务 > 广告发票V2 [查询发票分摊详情-V2](https://sellfoxapi.apifox.cn/api-436025997.md): 
+- 财务 > 广告发票V2 [查询广告发票列表-V2](https://sellfoxapi.apifox.cn/api-436025998.md): 
+- 财务 > 请付款 [查询请款池-测评订单](https://sellfoxapi.apifox.cn/api-436025999.md): 
+- 财务 > 请付款 [查询请款池-物流商](https://sellfoxapi.apifox.cn/api-436026000.md): 
+- 财务 > 请付款 [查询请款池-其他费用](https://sellfoxapi.apifox.cn/api-436026001.md): 
+- 财务 > 请付款 [查询付款单列表](https://sellfoxapi.apifox.cn/api-436026002.md): 
+- 财务 > 请付款 [查询请款池-海外仓备货单](https://sellfoxapi.apifox.cn/api-436026003.md): 
+- 财务 > 请付款 [查询请款池-采购单](https://sellfoxapi.apifox.cn/api-436026004.md): 
+- 财务 > 请付款 [查询收款单列表](https://sellfoxapi.apifox.cn/api-436026005.md): 
+- 财务 > 请付款 [查询请款单列表](https://sellfoxapi.apifox.cn/api-436026006.md): 
+- 财务 > 请付款 [查询请款池-发货单](https://sellfoxapi.apifox.cn/api-436026007.md): 
+- 财务 > 请付款 [查询请款池-SKU](https://sellfoxapi.apifox.cn/api-436026008.md): 
+- 财务 > 请付款 [查询请款池-入库单](https://sellfoxapi.apifox.cn/api-436026009.md): 
+- 财务 > 库存报表 [FBA仓库-明细](https://sellfoxapi.apifox.cn/api-436026010.md): 
+- 财务 > 库存报表 [FBA仓库-汇总](https://sellfoxapi.apifox.cn/api-436026011.md): 
+- 财务 > 延迟交易 [延迟金额](https://sellfoxapi.apifox.cn/api-450303866.md): 
+- 财务 > 延迟交易 [延迟交易](https://sellfoxapi.apifox.cn/api-450303867.md): 
+- 财务 > 延迟交易 [月末延迟](https://sellfoxapi.apifox.cn/api-450303868.md): 
+- 工具 > 打印标签 [打印FNSKU标签](https://sellfoxapi.apifox.cn/api-276159768.md): 
+- 设置 > 汇率设置 [汇率列表](https://sellfoxapi.apifox.cn/api-381980290.md): 汇率列表
+- 设置 > 子账号 [获取子账号列表](https://sellfoxapi.apifox.cn/api-51516594.md): 
+- 设置 > 店铺授权 [获取店铺列表](https://sellfoxapi.apifox.cn/api-51516635.md): 
+- 设置 > 自定义字段 [自定义字段列表](https://sellfoxapi.apifox.cn/api-383488738.md): 
+- Feed > 提交Feed [提交Feed](https://sellfoxapi.apifox.cn/api-86977620.md): 
+- Feed > 提交Feed [查询Feed执行情况](https://sellfoxapi.apifox.cn/api-86977618.md): 
+- Feed > 提交Feed [获取Feed处理结果](https://sellfoxapi.apifox.cn/api-86977619.md): 
+- 报告中心 > 亚马逊原报告 [Amazon原表下载-生成任务](https://sellfoxapi.apifox.cn/api-52761476.md): 
+- 报告中心 > 亚马逊原报告 [Amazon原表下载-查询任务进度](https://sellfoxapi.apifox.cn/api-52761475.md): 
+- 报告中心 > 赛狐报告 [创建报告任务](https://sellfoxapi.apifox.cn/api-110499331.md): 
+- 报告中心 > 赛狐报告 [获取报告](https://sellfoxapi.apifox.cn/api-110499332.md): 
+- 报告中心 > 插件获取报告 [插件获取报告](https://sellfoxapi.apifox.cn/api-410910348.md): 
+- 报告中心 > 报表管理 [获取Amazon赔偿报告](https://sellfoxapi.apifox.cn/api-51516602.md): 
+- 报告中心 > 报表管理 [获取Amazon盘库报告](https://sellfoxapi.apifox.cn/api-51516605.md): 
+- 报告中心 > 报表管理 [获取Amazon长期仓储费报告](https://sellfoxapi.apifox.cn/api-51516606.md): 
+- 报告中心 > 报表管理 [获取Amazon移除货件报告](https://sellfoxapi.apifox.cn/api-51516607.md): 
+- 报告中心 > 报表管理 [获取Amazon月仓储费报告](https://sellfoxapi.apifox.cn/api-51516608.md): 
+- 多平台 > 销售 [获取AliExpress在线产品（子体）](https://sellfoxapi.apifox.cn/api-421782541.md): 用户获取自身AliExpress店铺的子体产品信息
+- 多平台 > 销售 [获取AliExpress在线产品（父体）](https://sellfoxapi.apifox.cn/api-421782542.md): 用户获取自身AliExpress店铺的父体产品信息
+- 多平台 > 销售 [获取eBay在线产品（子体）](https://sellfoxapi.apifox.cn/api-421782543.md): 用户获取自身eBay店铺的子体产品信息
+- 多平台 > 销售 [获取eBay在线产品（父体）](https://sellfoxapi.apifox.cn/api-421782544.md): 用户获取自身eBay店铺的父体产品信息
+- 多平台 > 销售 [获取SHEIN在线产品（子体）](https://sellfoxapi.apifox.cn/api-421782545.md): 用户获取自身SHEIN店铺的子体产品信息
+- 多平台 > 销售 [获取SHEIN在线产品（父体）](https://sellfoxapi.apifox.cn/api-421782546.md): 用户获取自身SHEIN店铺的父体产品信息
+- 多平台 > 销售 [获取Shopify在线产品（子体）](https://sellfoxapi.apifox.cn/api-421782547.md): 用户获取自身Shopify店铺的子体产品信息
+- 多平台 > 销售 [获取Shopify在线产品（父体）](https://sellfoxapi.apifox.cn/api-421782548.md): 用户获取自身Shopify店铺的父体产品信息
+- 多平台 > 销售 [获取Temu本土店的在线产品（子体）](https://sellfoxapi.apifox.cn/api-421782549.md): 用户获取自身Temu本土店铺的子体产品信息
+- 多平台 > 销售 [获取Temu本土店的在线产品（父体）](https://sellfoxapi.apifox.cn/api-421782550.md): 用户获取自身Temu本土店铺的父体产品信息
+- 多平台 > 销售 [获取Temu跨境店的在线产品（子体）](https://sellfoxapi.apifox.cn/api-421782551.md): 用户获取自身Temu跨境店铺的子体产品信息
+- 多平台 > 销售 [获取Temu跨境店的在线产品（父体）](https://sellfoxapi.apifox.cn/api-421782552.md): 用户获取自身Temu跨境店铺的父体产品信息
+- 多平台 > 销售 [获取TikTok在线产品（全托子体）](https://sellfoxapi.apifox.cn/api-421782553.md): 用户获取自身TikTok店铺（全托）的子体产品信息
+- 多平台 > 销售 [获取TikTok在线产品（全托父体）](https://sellfoxapi.apifox.cn/api-421782554.md): 用户获取自身TikTok店铺（全托）的父体产品信息
+- 多平台 > 销售 [获取TikTok在线产品（自营店全球商品--子体）](https://sellfoxapi.apifox.cn/api-421782555.md): 用户获取自身TikTok店铺（自营店全球商品）的子体产品信息
+- 多平台 > 销售 [获取TikTok在线产品（自营店全球商品--父体）](https://sellfoxapi.apifox.cn/api-421782556.md): 用户获取自身TikTok店铺（自营店全球商品）的父体产品信息
+- 多平台 > 销售 [获取TikTok在线产品（自营店铺商品-子体）](https://sellfoxapi.apifox.cn/api-421782557.md): 用户获取自身TikTok店铺（自营店铺商品）的子体产品信息
+- 多平台 > 销售 [获取TikTok在线产品（自营店铺商品-父体）](https://sellfoxapi.apifox.cn/api-421782558.md): 用户获取自身TikTok店铺（自营店铺商品）的父体产品信息
+- 多平台 > 销售 [获取Walmart在线产品（子体）](https://sellfoxapi.apifox.cn/api-421782559.md): 用户获取自身Walmart店铺的子体产品信息
+- 多平台 > 销售 [获取Walmart在线产品（父体）](https://sellfoxapi.apifox.cn/api-421782560.md): 用户获取自身Walmart店铺的父体产品信息
+- 多平台 > 订单 [多平台订单列表](https://sellfoxapi.apifox.cn/api-352485971.md): <b>API不返回本土店相关的数据</b>
+- 多平台 > 订单 [查询多平台配对列表](https://sellfoxapi.apifox.cn/api-422323117.md): 
+- 多平台 > 订单 [批量添加/编辑多平台配对关系](https://sellfoxapi.apifox.cn/api-422323118.md): 
+- 多平台 > 订单 [订单审核](https://sellfoxapi.apifox.cn/api-422323123.md): 
+- 多平台 > 订单 [批量创建手工订单](https://sellfoxapi.apifox.cn/api-422323120.md): 
+- 多平台 > 订单 [物流下单发货](https://sellfoxapi.apifox.cn/api-445014704.md): 
+- 多平台 > 订单 [合并订单](https://sellfoxapi.apifox.cn/api-422323124.md): 
+- 多平台 > 订单 [拆分订单](https://sellfoxapi.apifox.cn/api-422323127.md): 
+- 多平台 > 订单 [称重发货](https://sellfoxapi.apifox.cn/api-422323129.md): 
+- 多平台 > 订单 [编辑订单](https://sellfoxapi.apifox.cn/api-422323128.md): 
+- 多平台 > 订单 [更新订单客服备注/拣货备注](https://sellfoxapi.apifox.cn/api-422323121.md): 
+- 多平台 > 订单 [快速出库](https://sellfoxapi.apifox.cn/api-422323126.md): 
+- 多平台 > 订单 [批量Temu地址解密](https://sellfoxapi.apifox.cn/api-422323119.md): 
+- 多平台 > 订单 [查询物流渠道列表](https://sellfoxapi.apifox.cn/api-422323125.md): 
+- 多平台 > 平台仓 [多平台发货单-分配库存](https://sellfoxapi.apifox.cn/api-450305645.md): 
+- 多平台 > 平台仓 [多平台发货单-确认发货](https://sellfoxapi.apifox.cn/api-450305646.md): 
+- 多平台 > 平台仓 [多平台发货单-获取多平台发货单列表](https://sellfoxapi.apifox.cn/api-450305647.md): 
+- 多平台 > 平台仓 [多平台发货单-修改备注](https://sellfoxapi.apifox.cn/api-450305648.md): 
+- 多平台 > 平台仓 [Temu-获取Temu货件列表](https://sellfoxapi.apifox.cn/api-450307764.md): 
+- 多平台 > 平台仓 [Temu-获取Temu库存列表](https://sellfoxapi.apifox.cn/api-450307763.md): 
+- 多平台 > 数据 [销量统计](https://sellfoxapi.apifox.cn/api-459161465.md): 
+- 多平台 > 财务 [多平台利润报表-多渠道订单管理](https://sellfoxapi.apifox.cn/api-365907899.md): 
+- 多平台 > 财务 [多平台利润报表-查询MSKU](https://sellfoxapi.apifox.cn/api-365907900.md): 
+- 多平台 > 财务 [多平台利润报表-查询店铺](https://sellfoxapi.apifox.cn/api-365907901.md): 
+- 多平台 > 财务 [多平台利润报表-查询SKU](https://sellfoxapi.apifox.cn/api-365907902.md): 
+- 多平台 > 财务 [多平台利润报表-查询结算明细-AliExpress](https://sellfoxapi.apifox.cn/api-426459614.md): 
+- 多平台 > 财务 [多平台利润报表-查询结算明细-eBay](https://sellfoxapi.apifox.cn/api-426459615.md): 
+- 多平台 > 财务 [多平台利润报表-查询结算明细-MercadoLibre](https://sellfoxapi.apifox.cn/api-426459616.md): 
+- 多平台 > 财务 [多平台利润报表-查询结算明细-SHEIN全托管-明细](https://sellfoxapi.apifox.cn/api-426459617.md): 
+- 多平台 > 财务 [多平台利润报表-查询结算明细-SHEIN全托管-汇总](https://sellfoxapi.apifox.cn/api-426459618.md): 
+- 多平台 > 财务 [多平台利润报表-查询结算明细-SHEIN自运营/半托管](https://sellfoxapi.apifox.cn/api-426459619.md): 
+- 多平台 > 财务 [多平台利润报表-查询结算明细-Shopify](https://sellfoxapi.apifox.cn/api-426459620.md): 
+- 多平台 > 财务 [Temu全托利润报表-查询开发员](https://sellfoxapi.apifox.cn/api-365907903.md): 
+- 多平台 > 财务 [Temu全托利润报表-查询产品ID](https://sellfoxapi.apifox.cn/api-365907904.md): 
+- 多平台 > 财务 [Temu全托利润报表-查询业务员](https://sellfoxapi.apifox.cn/api-365907905.md): 
+- 多平台 > 财务 [Temu全托利润报表-查询店铺](https://sellfoxapi.apifox.cn/api-365907906.md): 
+- 多平台 > 财务 [Temu全托利润报表-查询SKU](https://sellfoxapi.apifox.cn/api-365907907.md): 
+- 多平台 > 财务 [Temu全托利润报表-查询结算总览](https://sellfoxapi.apifox.cn/api-426460072.md): 
+- 多平台 > 财务 [Temu全托利润报表-查询结算明细-交易收入](https://sellfoxapi.apifox.cn/api-426460071.md): 
+- 多平台 > 财务 [Temu全托利润报表-查询结算明细-交易结算](https://sellfoxapi.apifox.cn/api-426460073.md): 
+- 多平台 > 财务 [Temu全托利润报表-查询结算明细-广告服务费](https://sellfoxapi.apifox.cn/api-426460055.md): 
+- 多平台 > 财务 [Temu全托利润报表-查询结算明细-售后赔付扣款](https://sellfoxapi.apifox.cn/api-426460056.md): 
+- 多平台 > 财务 [Temu全托利润报表-查询结算明细-售后补寄](https://sellfoxapi.apifox.cn/api-426460057.md): 
+- 多平台 > 财务 [Temu全托利润报表-查询结算明细-揽收服务费](https://sellfoxapi.apifox.cn/api-426460058.md): 
+- 多平台 > 财务 [Temu全托利润报表-查询结算明细-非商责平台售后补贴调整](https://sellfoxapi.apifox.cn/api-426460059.md): 
+- 多平台 > 财务 [Temu全托利润报表-查询结算明细-EPR费用-已扣费](https://sellfoxapi.apifox.cn/api-426460060.md): 
+- 多平台 > 财务 [Temu全托利润报表-查询结算明细-EPR费用-已退费](https://sellfoxapi.apifox.cn/api-426460061.md): 
+- 多平台 > 财务 [Temu全托利润报表-查询结算明细-商品品质保障-质量问题（JIT商品）](https://sellfoxapi.apifox.cn/api-426460062.md): 
+- 多平台 > 财务 [Temu全托利润报表-查询结算明细-质量事故违规扣款](https://sellfoxapi.apifox.cn/api-426460063.md): 
+- 多平台 > 财务 [Temu全托利润报表-查询结算明细-退回服务费](https://sellfoxapi.apifox.cn/api-426460064.md): 
+- 多平台 > 财务 [Temu全托利润报表-查询结算明细-退货分拣打包费](https://sellfoxapi.apifox.cn/api-426460065.md): 
+- 多平台 > 财务 [Temu全托利润报表-查询结算明细-非商责平台售后补贴](https://sellfoxapi.apifox.cn/api-426460066.md): 
+- 多平台 > 财务 [Temu全托利润报表-查询结算明细-消费者退款](https://sellfoxapi.apifox.cn/api-426460067.md): 
+- 多平台 > 财务 [Temu全托利润报表-查询结算明细-店铺其他账务](https://sellfoxapi.apifox.cn/api-426460068.md): 
+- 多平台 > 财务 [Temu全托利润报表-查询结算明细-备货违规扣款](https://sellfoxapi.apifox.cn/api-426460069.md): 
+- 多平台 > 财务 [Temu全托利润报表-查询结算明细-第三方揽收入库贴标服务费](https://sellfoxapi.apifox.cn/api-426460070.md): 
+- 多平台 > 财务 [Temu全托利润报表-查询结算明细-仓储增值服务-贴标费](https://sellfoxapi.apifox.cn/api-426460074.md): 
+- 多平台 > 财务 [Temu全托利润报表-查询结算明细-分仓揽收调拨费用](https://sellfoxapi.apifox.cn/api-426460075.md): 
+- 多平台 > 财务 [Temu半托利润报表-查询开发员](https://sellfoxapi.apifox.cn/api-365907908.md): 
+- 多平台 > 财务 [Temu半托利润报表-查询产品ID](https://sellfoxapi.apifox.cn/api-365907909.md): 
+- 多平台 > 财务 [Temu半托利润报表-查询业务员](https://sellfoxapi.apifox.cn/api-365907910.md): 
+- 多平台 > 财务 [Temu半托利润报表-查询店铺](https://sellfoxapi.apifox.cn/api-365907911.md): 
+- 多平台 > 财务 [Temu半托利润报表-查询SKU](https://sellfoxapi.apifox.cn/api-365907912.md): 
+- 多平台 > 财务 [Temu半托利润报表-查询结算总览](https://sellfoxapi.apifox.cn/api-426460689.md): 
+- 多平台 > 财务 [Temu半托利润报表-查询结算明细-交易收入](https://sellfoxapi.apifox.cn/api-426460694.md): 
+- 多平台 > 财务 [Temu半托利润报表-查询结算明细-结算](https://sellfoxapi.apifox.cn/api-426460688.md): 
+- 多平台 > 财务 [Temu半托利润报表-查询结算明细-广告服务费](https://sellfoxapi.apifox.cn/api-426460677.md): 
+- 多平台 > 财务 [Temu半托利润报表-查询结算明细-买家拒付](https://sellfoxapi.apifox.cn/api-426460678.md): 
+- 多平台 > 财务 [Temu半托利润报表-查询结算明细-消费者和解](https://sellfoxapi.apifox.cn/api-426460679.md): 
+- 多平台 > 财务 [Temu半托利润报表-查询结算明细-处置费](https://sellfoxapi.apifox.cn/api-426460680.md): 
+- 多平台 > 财务 [Temu半托利润报表-查询结算明细-EPR费用-已扣费](https://sellfoxapi.apifox.cn/api-426460681.md): 
+- 多平台 > 财务 [Temu半托利润报表-查询结算明细-EPR费用-已退费](https://sellfoxapi.apifox.cn/api-426460682.md): 
+- 多平台 > 财务 [Temu半托利润报表-查询结算明细-欺诈发货](https://sellfoxapi.apifox.cn/api-426460683.md): 
+- 多平台 > 财务 [Temu半托利润报表-查询结算明细-运费收入](https://sellfoxapi.apifox.cn/api-426460684.md): 
+- 多平台 > 财务 [Temu半托利润报表-查询结算明细-运费退款](https://sellfoxapi.apifox.cn/api-426460685.md): 
+- 多平台 > 财务 [Temu半托利润报表-查询结算明细-退货面单费](https://sellfoxapi.apifox.cn/api-426460686.md): 
+- 多平台 > 财务 [Temu半托利润报表-查询结算明细-售后退款](https://sellfoxapi.apifox.cn/api-426460687.md): 
+- 多平台 > 财务 [Temu半托利润报表-查询结算明细-发货面单费](https://sellfoxapi.apifox.cn/api-426460690.md): 
+- 多平台 > 财务 [Temu半托利润报表-查询结算明细-店铺其他账务](https://sellfoxapi.apifox.cn/api-426460691.md): 
+- 多平台 > 财务 [Temu半托利润报表-查询结算明细-税金退回](https://sellfoxapi.apifox.cn/api-426460692.md): 
+- 多平台 > 财务 [Temu半托利润报表-查询结算明细-税金代扣](https://sellfoxapi.apifox.cn/api-426460693.md): 
+- 多平台 > 财务 [Temu半托利润报表-查询结算明细-履约违规](https://sellfoxapi.apifox.cn/api-426460695.md): 
+- 多平台 > 财务 [TikTok利润报表-查询开发员](https://sellfoxapi.apifox.cn/api-365907913.md): 
+- 多平台 > 财务 [TikTok利润报表-查询MSKU](https://sellfoxapi.apifox.cn/api-365907914.md): 
+- 多平台 > 财务 [TikTok利润报表-查询店铺](https://sellfoxapi.apifox.cn/api-365907915.md): 
+- 多平台 > 财务 [TikTok利润报表-查询SKU](https://sellfoxapi.apifox.cn/api-365907916.md): 
+- 多平台 > 财务 [TikTok利润报表-查询业务员](https://sellfoxapi.apifox.cn/api-365907917.md): 
+- 多平台 > 财务 [TikTok利润报表-查询账单明细](https://sellfoxapi.apifox.cn/api-426461067.md): 
+- 多平台 > 财务 [Walmart利润报表-查询开发员](https://sellfoxapi.apifox.cn/api-365907918.md): 
+- 多平台 > 财务 [Walmart利润报表-查询MSKU](https://sellfoxapi.apifox.cn/api-365907919.md): 
+- 多平台 > 财务 [Walmart利润报表-查询业务员](https://sellfoxapi.apifox.cn/api-365907920.md): 
+- 多平台 > 财务 [Walmart利润报表-查询店铺](https://sellfoxapi.apifox.cn/api-365907921.md): 
+- 多平台 > 财务 [Walmart利润报表-查询SKU](https://sellfoxapi.apifox.cn/api-365907922.md): 
+- 多平台 > 财务 [Walmart利润报表-查询结算明细](https://sellfoxapi.apifox.cn/api-426460712.md): 
+- 多平台 > 设置 [多平台店铺列表](https://sellfoxapi.apifox.cn/api-372129191.md): 多平台店铺列表
+- 商品列表 [创建SKU](https://sellfoxapi.apifox.cn/api-51516592.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 商品列表 [修改SKU](https://sellfoxapi.apifox.cn/api-51516597.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 商品列表 [查询SKU](https://sellfoxapi.apifox.cn/api-51516600.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 商品列表 [创建SPU](https://sellfoxapi.apifox.cn/api-51516599.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 商品列表 [修改SPU](https://sellfoxapi.apifox.cn/api-51516601.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 商品列表 [查询SPU](https://sellfoxapi.apifox.cn/api-51516598.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 商品列表 [获取商品属性列表](https://sellfoxapi.apifox.cn/api-52898925.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 商品列表 [查看商品详情](https://sellfoxapi.apifox.cn/api-112191241.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 商品列表 [查看商品详情V2](https://sellfoxapi.apifox.cn/api-352500605.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 商品列表 [查询品牌](https://sellfoxapi.apifox.cn/api-363817141.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 商品分类 [新增商品分类](https://sellfoxapi.apifox.cn/api-131281549.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 商品分类 [查询商品分类](https://sellfoxapi.apifox.cn/api-51516593.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 商品分类 [修改商品分类](https://sellfoxapi.apifox.cn/api-51516596.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 商品分类 [删除商品分类](https://sellfoxapi.apifox.cn/api-51516595.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 辅料管理 [查询辅料](https://sellfoxapi.apifox.cn/api-74245902.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 质检模板 [质检模板列表](https://sellfoxapi.apifox.cn/api-383488079.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 在线产品 [获取在线产品信息](https://sellfoxapi.apifox.cn/api-51516624.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 在线产品 [获取在线产品信息V2](https://sellfoxapi.apifox.cn/api-420168353.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 在线产品 [在线产品修改业务员](https://sellfoxapi.apifox.cn/api-165322872.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 修改在线产品的业务员，包括业绩归属的业务员
+- 在线产品 [查询Listing操作日志列表](https://sellfoxapi.apifox.cn/api-431277213.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 用户获取自身亚马逊店铺产品的操作日志
+- 退货报告 [FBA退货报告查询](https://sellfoxapi.apifox.cn/api-116412069.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 退货报告 [FBM退货报告查询](https://sellfoxapi.apifox.cn/api-116412070.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 在线产品配对 [在线产品按ASIN匹配商品](https://sellfoxapi.apifox.cn/api-119077677.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 支持批量匹配，会出现部分成功或部分失败的情况，只会返回匹配商品失败的错误提示信息，匹配成功的商品不会返回错误提示。
+- 在线产品配对 [在线产品按MSKU匹配商品](https://sellfoxapi.apifox.cn/api-119077678.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 支持批量匹配，会出现部分成功或部分失败的情况，只会返回匹配商品失败的错误提示信息，匹配成功的商品不会返回错误提示。
+- 全部订单 [订单详情](https://sellfoxapi.apifox.cn/api-51516626.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 全部订单 [订单详情 批量接口](https://sellfoxapi.apifox.cn/api-476895394.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 全部订单 [订单列表](https://sellfoxapi.apifox.cn/api-51516627.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 订单处理 [FBM订单列表](https://sellfoxapi.apifox.cn/api-196574169.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 订单处理 [FBM订单详情](https://sellfoxapi.apifox.cn/api-196574170.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 订单处理 [提交平台](https://sellfoxapi.apifox.cn/api-227637649.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 订单处理 [更换配对](https://sellfoxapi.apifox.cn/api-302751092.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 订单处理 [查询订单处理列表](https://sellfoxapi.apifox.cn/api-395863444.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 订单处理 [查询订单处理详情](https://sellfoxapi.apifox.cn/api-395863445.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- Review [获取评价明细列表](https://sellfoxapi.apifox.cn/api-119107035.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 天维度报告 [创建广告下载任务](https://sellfoxapi.apifox.cn/api-52365899.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 天维度报告 [查询广告报告进度](https://sellfoxapi.apifox.cn/api-52365898.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 小时维度报告 [小时报告-SP广告活动报告](https://sellfoxapi.apifox.cn/api-352957023.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 小时维度报告 [小时报告-SP广告组报告](https://sellfoxapi.apifox.cn/api-352957028.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 小时维度报告 [小时报告-SP广告产品报告](https://sellfoxapi.apifox.cn/api-352957030.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 小时维度报告 [小时报告-SP投放报告](https://sellfoxapi.apifox.cn/api-352957031.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 小时维度报告 [小时报告-SP广告位报告](https://sellfoxapi.apifox.cn/api-352957029.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 小时维度报告 [小时报告-SB广告活动报告](https://sellfoxapi.apifox.cn/api-352957032.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 小时维度报告 [小时报告-SB广告组报告](https://sellfoxapi.apifox.cn/api-352957033.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 小时维度报告 [小时报告-SB投放报告](https://sellfoxapi.apifox.cn/api-352957035.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 小时维度报告 [小时报告-SB广告位报告](https://sellfoxapi.apifox.cn/api-352957034.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 小时维度报告 [小时报告-SD广告活动报告](https://sellfoxapi.apifox.cn/api-352957024.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 小时维度报告 [小时报告-SD广告组报告](https://sellfoxapi.apifox.cn/api-352957025.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 小时维度报告 [小时报告-SD广告产品报告](https://sellfoxapi.apifox.cn/api-352957026.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 小时维度报告 [小时报告-SD投放报告](https://sellfoxapi.apifox.cn/api-352957027.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 基础数据 [广告组合](https://sellfoxapi.apifox.cn/api-367482262.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 基础数据 [SP广告活动](https://sellfoxapi.apifox.cn/api-367482273.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 基础数据 [SP广告组](https://sellfoxapi.apifox.cn/api-367482276.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 基础数据 [SP广告产品](https://sellfoxapi.apifox.cn/api-367482277.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 基础数据 [SP商品投放](https://sellfoxapi.apifox.cn/api-367482279.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 基础数据 [SP关键词投放](https://sellfoxapi.apifox.cn/api-367482278.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 基础数据 [SP否定商品](https://sellfoxapi.apifox.cn/api-367482281.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 基础数据 [SP否定关键词](https://sellfoxapi.apifox.cn/api-367482280.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 基础数据 [SB广告活动](https://sellfoxapi.apifox.cn/api-367482282.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 基础数据 [SB广告组](https://sellfoxapi.apifox.cn/api-367482263.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 基础数据 [SB广告产品(创意)](https://sellfoxapi.apifox.cn/api-367482264.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 基础数据 [SB商品投放](https://sellfoxapi.apifox.cn/api-367482266.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 基础数据 [SB关键词投放](https://sellfoxapi.apifox.cn/api-367482265.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 基础数据 [SB否定商品](https://sellfoxapi.apifox.cn/api-367482268.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 基础数据 [SB否定关键词](https://sellfoxapi.apifox.cn/api-367482267.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 基础数据 [SD广告活动](https://sellfoxapi.apifox.cn/api-367482269.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 基础数据 [SD广告组](https://sellfoxapi.apifox.cn/api-367482270.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 基础数据 [SD广告产品](https://sellfoxapi.apifox.cn/api-367482271.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 基础数据 [SD广告创意](https://sellfoxapi.apifox.cn/api-367482272.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 基础数据 [SD商品投放](https://sellfoxapi.apifox.cn/api-367482274.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 基础数据 [SD否定商品](https://sellfoxapi.apifox.cn/api-367482275.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 其他报告 [ABA搜索词](https://sellfoxapi.apifox.cn/api-426587990.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 发货计划 [创建发货计划](https://sellfoxapi.apifox.cn/api-78670102.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 发货计划 [获取发货批次列表](https://sellfoxapi.apifox.cn/api-248109094.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 发货计划 [获取发货批次详情](https://sellfoxapi.apifox.cn/api-248109093.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- FBA货件（STA） [入库计划详情](https://sellfoxapi.apifox.cn/api-250107681.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- FBA货件（STA） [获取入库计划列表](https://sellfoxapi.apifox.cn/api-250107682.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- FBA货件（STA） [货件详情](https://sellfoxapi.apifox.cn/api-250107683.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- FBA货件（STA） [更新追踪编码](https://sellfoxapi.apifox.cn/api-261465769.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- FBA货件（STA） [确认预计送达时间窗口](https://sellfoxapi.apifox.cn/api-309716626.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- FBA货件（STA） [确认装箱选项](https://sellfoxapi.apifox.cn/api-309716627.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- FBA货件（STA） [确认入库配置选项](https://sellfoxapi.apifox.cn/api-309716628.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- FBA货件（STA） [确认运输承运人选项](https://sellfoxapi.apifox.cn/api-309716629.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- FBA货件（STA） [创建入库计划](https://sellfoxapi.apifox.cn/api-309716630.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- FBA货件（STA） [生成预计送达时间窗口](https://sellfoxapi.apifox.cn/api-309716631.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- FBA货件（STA） [生成装箱组选项](https://sellfoxapi.apifox.cn/api-309716632.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- FBA货件（STA） [生成入库配置项](https://sellfoxapi.apifox.cn/api-309716633.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- FBA货件（STA） [生成运输承运人选项](https://sellfoxapi.apifox.cn/api-309716634.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- FBA货件（STA） [打印BOL文件](https://sellfoxapi.apifox.cn/api-309716635.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- FBA货件（STA） [打印外箱标签](https://sellfoxapi.apifox.cn/api-309716636.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- FBA货件（STA） [查询预计送达时间窗口](https://sellfoxapi.apifox.cn/api-309716637.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- FBA货件（STA） [查询装箱组商品](https://sellfoxapi.apifox.cn/api-309716638.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- FBA货件（STA） [查询装箱组选项](https://sellfoxapi.apifox.cn/api-309716639.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- FBA货件（STA） [取消入库计划](https://sellfoxapi.apifox.cn/api-309716625.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- FBA货件（STA） [查询入库配置项](https://sellfoxapi.apifox.cn/api-309716640.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- FBA货件（STA） [查询运输承运人选项](https://sellfoxapi.apifox.cn/api-309716641.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- FBA货件（STA） [提交装箱信息](https://sellfoxapi.apifox.cn/api-309716642.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- FBA货件（STA） [查询异步任务状态](https://sellfoxapi.apifox.cn/api-309716643.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- FBA货件（STA） [批量查询货件详情](https://sellfoxapi.apifox.cn/api-328122511.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- FBA货件（STA） [同步工作流](https://sellfoxapi.apifox.cn/api-462028305.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): <p><strong>调用流程：</strong></p><ol><li>调用此接口，返回 taskId</li><li>使用 taskId 调用 /taskProcess 接口轮询任务状态</li><li>任务完成后获取同步结果详情</li></ol><p><strong>最终数据结构：</strong></p><pre>{"success":10,"fail":2,"results":[{"inboundPlanId":"WP-XXXXX","success":true,"message":"同步成功"}]}</pre>
+- 发货单 [获取FBA发货单列表](https://sellfoxapi.apifox.cn/api-51516614.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 发货单 [FBA发货单产品查询](https://sellfoxapi.apifox.cn/api-51516613.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 发货单 [FBA发货单批量产品查询](https://sellfoxapi.apifox.cn/api-195576737.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 发货单 [FBA发货单配货](https://sellfoxapi.apifox.cn/api-51516610.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 发货单 [FBA发货单发货](https://sellfoxapi.apifox.cn/api-51516611.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 发货单 [FBA发货单创建](https://sellfoxapi.apifox.cn/api-51516612.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 发货单 [FBA发货单详情](https://sellfoxapi.apifox.cn/api-188252058.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 发货单 [FBA发货单编辑物流费用](https://sellfoxapi.apifox.cn/api-188252059.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- FBA货件（旧版） [获取FBA货件列表](https://sellfoxapi.apifox.cn/api-51516609.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- FBA货件（旧版） [FBA货件产品查询](https://sellfoxapi.apifox.cn/api-382285993.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- FBA货件（旧版） [查询FBA货件外箱标签](https://sellfoxapi.apifox.cn/api-51516615.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- FBA货件（旧版） [查询FBA货件托拍标签](https://sellfoxapi.apifox.cn/api-51516616.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- FBA货件（旧版） [FBA货件产品批量查询](https://sellfoxapi.apifox.cn/api-328123046.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 头程分摊 [头程分摊列表页](https://sellfoxapi.apifox.cn/api-74141036.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 成本补录单 [查询成本调整单列表](https://sellfoxapi.apifox.cn/api-74141034.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 物流商 [查询物流商列表](https://sellfoxapi.apifox.cn/api-74141037.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 采购单 [采购单创建](https://sellfoxapi.apifox.cn/api-181712559.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 采购单 [采购单列表](https://sellfoxapi.apifox.cn/api-51516633.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 采购单 [采购单到货](https://sellfoxapi.apifox.cn/api-51516628.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 采购单 [获取结算方式列表](https://sellfoxapi.apifox.cn/api-52898926.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 采购单 [采购单取消](https://sellfoxapi.apifox.cn/api-51516630.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 采购单 [添加采购单运单号](https://sellfoxapi.apifox.cn/api-51516634.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 采购单 [终止剩余到货](https://sellfoxapi.apifox.cn/api-51516631.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 采购单 [采购单下单](https://sellfoxapi.apifox.cn/api-51516632.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 采购单 [商品维度结束到货](https://sellfoxapi.apifox.cn/api-192296427.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 采购单 [修改预计到货时间](https://sellfoxapi.apifox.cn/api-352501086.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 采购单 [修改采购单SKU备注](https://sellfoxapi.apifox.cn/api-352501087.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 采购单 [修改采购单采购数量](https://sellfoxapi.apifox.cn/api-352501088.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 采购入库 [查询采购入库单列表](https://sellfoxapi.apifox.cn/api-74141046.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 采购退货单 [创建采购退货单](https://sellfoxapi.apifox.cn/api-188536050.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 采购退货单 [查询采购退货单详情](https://sellfoxapi.apifox.cn/api-74141040.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 采购退货单 [查询采购退货单列表](https://sellfoxapi.apifox.cn/api-74141042.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 采购退货单 [确认退货](https://sellfoxapi.apifox.cn/api-437972184.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 供应商 [获取供应商列表](https://sellfoxapi.apifox.cn/api-52898927.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 供应商 [供应商创建修改](https://sellfoxapi.apifox.cn/api-52898928.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 采购计划 [创建采购计划](https://sellfoxapi.apifox.cn/api-181712560.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 采购计划 [采购计划分页查询](https://sellfoxapi.apifox.cn/api-182977809.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 采购变更 [创建采购变更单（V1.0）](https://sellfoxapi.apifox.cn/api-185594125.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 采购变更 [创建采购变更单（V2.0）](https://sellfoxapi.apifox.cn/api-254038550.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 创建采购变更单（V2.0）
+- 结算方式 [获取所有结算方式](https://sellfoxapi.apifox.cn/api-187268786.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 采购方 [采购方列表](https://sellfoxapi.apifox.cn/api-187268787.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 仓库列表 [查询仓库列表](https://sellfoxapi.apifox.cn/api-51516623.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 库存明细 [查询库存明细](https://sellfoxapi.apifox.cn/api-51516622.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 库存明细 [查询库存明细批次信息](https://sellfoxapi.apifox.cn/api-433626708.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- FBA库存 [查询FBA库存明细](https://sellfoxapi.apifox.cn/api-51516618.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 海外仓备货单 [海外仓备货单列表页](https://sellfoxapi.apifox.cn/api-74141039.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 海外仓备货单 [海外仓备货单详情](https://sellfoxapi.apifox.cn/api-74141038.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 海外仓备货单 [保存海外仓备货单](https://sellfoxapi.apifox.cn/api-146723591.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 海外仓备货单 [备货单批量收货](https://sellfoxapi.apifox.cn/api-150128334.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 海外仓备货单 [结束剩余到货](https://sellfoxapi.apifox.cn/api-150128335.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 海外仓备货单 [备货单批量收货（2.0）](https://sellfoxapi.apifox.cn/api-172001347.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 海外仓备货单 [结束剩余到货（2.0）](https://sellfoxapi.apifox.cn/api-172001348.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 海外仓备货单 [保存海外仓备货单（2.0）](https://sellfoxapi.apifox.cn/api-172001349.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 其他入库 [其他入库单创建 (该接口将要下线，如有需要，请调V2接口：/api/warehouseInOut/inRecord/v2) ](https://sellfoxapi.apifox.cn/api-51516621.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 其他入库 [其他入库单创建（2.0）](https://sellfoxapi.apifox.cn/api-172001654.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 其他入库 [其他入库列表页](https://sellfoxapi.apifox.cn/api-199427642.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 其他入库 [批量确认入库](https://sellfoxapi.apifox.cn/api-437953562.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 其他入库 [批量删除入库单](https://sellfoxapi.apifox.cn/api-437953563.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 其他入库 [获取其他入库自定义类型](https://sellfoxapi.apifox.cn/api-437953564.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 其他出库 [其他出库列表页](https://sellfoxapi.apifox.cn/api-74141061.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 其他出库 [创建其他出库单(该接口将要下线，如有需要，请调V2接口：api/warehouseInOut/outRecord/v2)](https://sellfoxapi.apifox.cn/api-146723558.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 其他出库 [创建其他出库单（2.0）](https://sellfoxapi.apifox.cn/api-172001653.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 其他出库 [删除其他出库单](https://sellfoxapi.apifox.cn/api-399063059.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 其他出库 [批量确认出库](https://sellfoxapi.apifox.cn/api-437965947.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 其他出库 [获取其他入库自定义类型](https://sellfoxapi.apifox.cn/api-438220143.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 其他出库 [获取其他出库自定义类型](https://sellfoxapi.apifox.cn/api-438220144.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 调整单 [创建调整单](https://sellfoxapi.apifox.cn/api-51516619.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 调整单 [创建调整单（灰度用户使用）](https://sellfoxapi.apifox.cn/api-360743256.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 调整单 [查询调整单列表（灰度用户使用）](https://sellfoxapi.apifox.cn/api-360743257.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 调整单 [批量确认调整单](https://sellfoxapi.apifox.cn/api-437950677.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 加工单 [加工单列表页](https://sellfoxapi.apifox.cn/api-74141043.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 加工单 [加工单详情](https://sellfoxapi.apifox.cn/api-74141041.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 加工单 [创建拆分单](https://sellfoxapi.apifox.cn/api-240578466.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 加工单 [拆分单列表页](https://sellfoxapi.apifox.cn/api-240578468.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 加工单 [查看拆分单详情](https://sellfoxapi.apifox.cn/api-240578467.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 调拨单 [调拨单列表](https://sellfoxapi.apifox.cn/api-74141045.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 调拨单 [调拨单详情](https://sellfoxapi.apifox.cn/api-74141044.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 盘点单 [盘点单列表](https://sellfoxapi.apifox.cn/api-74141033.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 盘点单 [盘点单商品](https://sellfoxapi.apifox.cn/api-74141035.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 库存流水 [获取库存流水](https://sellfoxapi.apifox.cn/api-51516620.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 货架管理 [货架位列表分页查询](https://sellfoxapi.apifox.cn/api-52898929.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 移除入库单 [移除入库单列表查询](https://sellfoxapi.apifox.cn/api-233405724.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 装箱任务 [创建装箱明细（按箱子维度）](https://sellfoxapi.apifox.cn/api-325184193.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 装箱任务 [结束装箱](https://sellfoxapi.apifox.cn/api-325184194.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 装箱任务 [查询装箱任务列表](https://sellfoxapi.apifox.cn/api-325184195.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 装箱任务 [重新装箱](https://sellfoxapi.apifox.cn/api-325184196.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 库龄报表 [库龄报表列表页](https://sellfoxapi.apifox.cn/api-327031118.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 销量统计 [获取销量数据](https://sellfoxapi.apifox.cn/api-51516604.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 销量统计 [生成销量报告](https://sellfoxapi.apifox.cn/api-123726731.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 产品分析 [获取产品分析数据（新）](https://sellfoxapi.apifox.cn/api-319973191.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 产品分析 [获取产品分析数据（旧）](https://sellfoxapi.apifox.cn/api-51516603.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 产品分析 [获取产品分析数据（2.0）即将上线](https://sellfoxapi.apifox.cn/api-474651907.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 店铺表现 [店铺表现按天查询](https://sellfoxapi.apifox.cn/api-146414432.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 销售利润 [获取销售利润数据(产品)](https://sellfoxapi.apifox.cn/api-227646618.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 销售利润 [获取销售利润数据(店铺)](https://sellfoxapi.apifox.cn/api-227646619.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 销售利润 [获取销售利润数据(产品)V2 即将上线](https://sellfoxapi.apifox.cn/api-424122730.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 销售利润 [获取销售利润数据(店铺)V2 即将上线](https://sellfoxapi.apifox.cn/api-424147159.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 自定义报表 [获取自定义报表列表数据](https://sellfoxapi.apifox.cn/api-248307071.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 标签管理 [查询标签对应产品/商品](https://sellfoxapi.apifox.cn/api-437848186.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 标签管理 [查询标签列表页](https://sellfoxapi.apifox.cn/api-437848187.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 标签管理 [查询产品标签列表](https://sellfoxapi.apifox.cn/api-437848188.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 标签管理 [创建手动标签](https://sellfoxapi.apifox.cn/api-459166568.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 标签管理 [移除标签](https://sellfoxapi.apifox.cn/api-459166570.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 标签管理 [手动打标](https://sellfoxapi.apifox.cn/api-459166571.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 标签管理 [删除手动/动态标签](https://sellfoxapi.apifox.cn/api-459166569.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 批次成本 [获取FBA仓库列表数据](https://sellfoxapi.apifox.cn/api-252647060.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 批次成本 [获取批次入库数据](https://sellfoxapi.apifox.cn/api-103235384.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 批次成本 [获取批次出库数据](https://sellfoxapi.apifox.cn/api-103235385.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 批次成本 [获取货件签收数据](https://sellfoxapi.apifox.cn/api-198592414.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 应收报表（即将下线） [获取应收报表数据](https://sellfoxapi.apifox.cn/api-165756004.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 结算中心（即将下线） [结算汇总-分页查询](https://sellfoxapi.apifox.cn/api-186297246.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 结算汇总-分页查询
+- 结算中心（即将下线） [查询结算明细](https://sellfoxapi.apifox.cn/api-74141060.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 结算管理（即将下线） [查询发货与结算记录](https://sellfoxapi.apifox.cn/api-204485188.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 结算利润（已下线） [按日利润报表-ASIN](https://sellfoxapi.apifox.cn/api-207463418.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 按日利润报表-ASIN
+- 结算利润（已下线） [按日利润报表-父ASIN](https://sellfoxapi.apifox.cn/api-207463421.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 按日利润报表-父ASIN
+- 结算利润（已下线） [按日利润报表-MSKU](https://sellfoxapi.apifox.cn/api-207463420.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 按日利润报表-MSKU
+- 结算利润（已下线） [按日利润报表-SKU](https://sellfoxapi.apifox.cn/api-207463424.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 按日利润报表-SKU
+- 结算利润（已下线） [按日利润报表-SPU](https://sellfoxapi.apifox.cn/api-207463425.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 按日利润报表-SPU
+- 结算利润（已下线） [按日利润报表-开发员](https://sellfoxapi.apifox.cn/api-207463419.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 按日利润报表-开发员
+- 结算利润（已下线） [按日利润报表-业务员](https://sellfoxapi.apifox.cn/api-207463422.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 按日利润报表-业务员
+- 结算利润（已下线） [按日利润报表-店铺](https://sellfoxapi.apifox.cn/api-207463423.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 按日利润报表-店铺
+- 利润报表（即将下线） [利润报表-查询ASIN](https://sellfoxapi.apifox.cn/api-105508483.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 利润报表（即将下线） [利润报表-查询开发员](https://sellfoxapi.apifox.cn/api-105508484.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 利润报表（即将下线） [利润报表-查询MSKU](https://sellfoxapi.apifox.cn/api-105508485.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 利润报表（即将下线） [利润报表-查询订单](https://sellfoxapi.apifox.cn/api-105508486.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 利润报表（即将下线） [利润报表-查询父ASIN](https://sellfoxapi.apifox.cn/api-105508487.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 利润报表（即将下线） [利润报表-查询业务员](https://sellfoxapi.apifox.cn/api-105508488.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 利润报表（即将下线） [利润报表-结算总览](https://sellfoxapi.apifox.cn/api-105508489.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 利润报表（即将下线） [利润报表-查询店铺](https://sellfoxapi.apifox.cn/api-105508490.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 利润报表（即将下线） [利润报表-查询店铺汇总](https://sellfoxapi.apifox.cn/api-105508491.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 利润报表（即将下线） [利润报表-查询SKU](https://sellfoxapi.apifox.cn/api-105508492.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 应收报表V2 [获取应收报表数据](https://sellfoxapi.apifox.cn/api-399397922.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 结算中心V2 [查询结算明细-分页查询](https://sellfoxapi.apifox.cn/api-399397941.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 查询结算明细-分页查询
+- 结算中心V2 [结算汇总-分页查询](https://sellfoxapi.apifox.cn/api-399397942.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 结算汇总-分页查询
+- 发货与结算V2 [查询发货与结算记录](https://sellfoxapi.apifox.cn/api-399397943.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 结算利润V2 [结算利润-ASIN](https://sellfoxapi.apifox.cn/api-399397923.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 结算利润-ASIN
+- 结算利润V2 [结算利润-开发员](https://sellfoxapi.apifox.cn/api-399397924.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 结算利润-开发员
+- 结算利润V2 [结算利润-MSKU](https://sellfoxapi.apifox.cn/api-399397925.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 结算利润-MSKU
+- 结算利润V2 [结算利润-父ASIN](https://sellfoxapi.apifox.cn/api-399397926.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 结算利润-父ASIN
+- 结算利润V2 [结算利润-业务员](https://sellfoxapi.apifox.cn/api-399397927.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 结算利润-业务员
+- 结算利润V2 [结算利润-店铺](https://sellfoxapi.apifox.cn/api-399397928.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 结算利润-店铺
+- 结算利润V2 [结算利润-SKU](https://sellfoxapi.apifox.cn/api-399397929.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 结算利润-SKU
+- 结算利润V2 [结算利润-SPU](https://sellfoxapi.apifox.cn/api-399397930.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 结算利润-SPU
+- 利润报表V2 [利润报表-ASIN](https://sellfoxapi.apifox.cn/api-399397931.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 利润报表-ASIN
+- 利润报表V2 [利润报表-开发员](https://sellfoxapi.apifox.cn/api-399397932.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 利润报表-开发员
+- 利润报表V2 [利润报表-MSKU](https://sellfoxapi.apifox.cn/api-399397933.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 利润报表-MSKU
+- 利润报表V2 [利润报表-父ASIN](https://sellfoxapi.apifox.cn/api-399397934.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 利润报表-父ASIN
+- 利润报表V2 [利润报表-业务员](https://sellfoxapi.apifox.cn/api-399397935.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 利润报表-业务员
+- 利润报表V2 [利润报表-店铺](https://sellfoxapi.apifox.cn/api-399397936.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 利润报表-店铺
+- 利润报表V2 [利润报表-店铺汇总](https://sellfoxapi.apifox.cn/api-399397937.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 利润报表-店铺汇总
+- 利润报表V2 [利润报表-SKU](https://sellfoxapi.apifox.cn/api-399397938.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 利润报表-SKU
+- 利润报表V2 [利润报表-SPU](https://sellfoxapi.apifox.cn/api-399397939.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 利润报表-SPU
+- 利润报表V2 [利润报表-订单](https://sellfoxapi.apifox.cn/api-399397940.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 广告发票 [查询发票详情](https://sellfoxapi.apifox.cn/api-436025995.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 广告发票 [查询广告发票详情](https://sellfoxapi.apifox.cn/api-436025996.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 广告发票V2 [查询发票分摊详情-V2](https://sellfoxapi.apifox.cn/api-436025997.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 广告发票V2 [查询广告发票列表-V2](https://sellfoxapi.apifox.cn/api-436025998.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 请付款 [查询请款池-测评订单](https://sellfoxapi.apifox.cn/api-436025999.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 请付款 [查询请款池-物流商](https://sellfoxapi.apifox.cn/api-436026000.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 请付款 [查询请款池-其他费用](https://sellfoxapi.apifox.cn/api-436026001.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 请付款 [查询付款单列表](https://sellfoxapi.apifox.cn/api-436026002.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 请付款 [查询请款池-海外仓备货单](https://sellfoxapi.apifox.cn/api-436026003.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 请付款 [查询请款池-采购单](https://sellfoxapi.apifox.cn/api-436026004.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 请付款 [查询收款单列表](https://sellfoxapi.apifox.cn/api-436026005.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 请付款 [查询请款单列表](https://sellfoxapi.apifox.cn/api-436026006.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 请付款 [查询请款池-发货单](https://sellfoxapi.apifox.cn/api-436026007.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 请付款 [查询请款池-SKU](https://sellfoxapi.apifox.cn/api-436026008.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 请付款 [查询请款池-入库单](https://sellfoxapi.apifox.cn/api-436026009.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 库存报表 [FBA仓库-明细](https://sellfoxapi.apifox.cn/api-436026010.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 库存报表 [FBA仓库-汇总](https://sellfoxapi.apifox.cn/api-436026011.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 延迟交易 [延迟金额](https://sellfoxapi.apifox.cn/api-450303866.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 延迟交易 [延迟交易](https://sellfoxapi.apifox.cn/api-450303867.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 延迟交易 [月末延迟](https://sellfoxapi.apifox.cn/api-450303868.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 打印标签 [打印FNSKU标签](https://sellfoxapi.apifox.cn/api-276159768.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 汇率设置 [汇率列表](https://sellfoxapi.apifox.cn/api-381980290.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 汇率列表
+- 子账号 [获取子账号列表](https://sellfoxapi.apifox.cn/api-51516594.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 店铺授权 [获取店铺列表](https://sellfoxapi.apifox.cn/api-51516635.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 自定义字段 [自定义字段列表](https://sellfoxapi.apifox.cn/api-383488738.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 提交Feed [提交Feed](https://sellfoxapi.apifox.cn/api-86977620.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 提交Feed [查询Feed执行情况](https://sellfoxapi.apifox.cn/api-86977618.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 提交Feed [获取Feed处理结果](https://sellfoxapi.apifox.cn/api-86977619.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 亚马逊原报告 [Amazon原表下载-生成任务](https://sellfoxapi.apifox.cn/api-52761476.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 亚马逊原报告 [Amazon原表下载-查询任务进度](https://sellfoxapi.apifox.cn/api-52761475.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 赛狐报告 [创建报告任务](https://sellfoxapi.apifox.cn/api-110499331.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 赛狐报告 [获取报告](https://sellfoxapi.apifox.cn/api-110499332.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 插件获取报告 [插件获取报告](https://sellfoxapi.apifox.cn/api-410910348.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 报表管理 [获取Amazon赔偿报告](https://sellfoxapi.apifox.cn/api-51516602.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 报表管理 [获取Amazon盘库报告](https://sellfoxapi.apifox.cn/api-51516605.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 报表管理 [获取Amazon长期仓储费报告](https://sellfoxapi.apifox.cn/api-51516606.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 报表管理 [获取Amazon移除货件报告](https://sellfoxapi.apifox.cn/api-51516607.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 报表管理 [获取Amazon月仓储费报告](https://sellfoxapi.apifox.cn/api-51516608.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 销售 [获取AliExpress在线产品（子体）](https://sellfoxapi.apifox.cn/api-421782541.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 用户获取自身AliExpress店铺的子体产品信息
+- 销售 [获取AliExpress在线产品（父体）](https://sellfoxapi.apifox.cn/api-421782542.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 用户获取自身AliExpress店铺的父体产品信息
+- 销售 [获取eBay在线产品（子体）](https://sellfoxapi.apifox.cn/api-421782543.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 用户获取自身eBay店铺的子体产品信息
+- 销售 [获取eBay在线产品（父体）](https://sellfoxapi.apifox.cn/api-421782544.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 用户获取自身eBay店铺的父体产品信息
+- 销售 [获取SHEIN在线产品（子体）](https://sellfoxapi.apifox.cn/api-421782545.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 用户获取自身SHEIN店铺的子体产品信息
+- 销售 [获取SHEIN在线产品（父体）](https://sellfoxapi.apifox.cn/api-421782546.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 用户获取自身SHEIN店铺的父体产品信息
+- 销售 [获取Shopify在线产品（子体）](https://sellfoxapi.apifox.cn/api-421782547.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 用户获取自身Shopify店铺的子体产品信息
+- 销售 [获取Shopify在线产品（父体）](https://sellfoxapi.apifox.cn/api-421782548.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 用户获取自身Shopify店铺的父体产品信息
+- 销售 [获取Temu本土店的在线产品（子体）](https://sellfoxapi.apifox.cn/api-421782549.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 用户获取自身Temu本土店铺的子体产品信息
+- 销售 [获取Temu本土店的在线产品（父体）](https://sellfoxapi.apifox.cn/api-421782550.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 用户获取自身Temu本土店铺的父体产品信息
+- 销售 [获取Temu跨境店的在线产品（子体）](https://sellfoxapi.apifox.cn/api-421782551.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 用户获取自身Temu跨境店铺的子体产品信息
+- 销售 [获取Temu跨境店的在线产品（父体）](https://sellfoxapi.apifox.cn/api-421782552.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 用户获取自身Temu跨境店铺的父体产品信息
+- 销售 [获取TikTok在线产品（全托子体）](https://sellfoxapi.apifox.cn/api-421782553.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 用户获取自身TikTok店铺（全托）的子体产品信息
+- 销售 [获取TikTok在线产品（全托父体）](https://sellfoxapi.apifox.cn/api-421782554.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 用户获取自身TikTok店铺（全托）的父体产品信息
+- 销售 [获取TikTok在线产品（自营店全球商品--子体）](https://sellfoxapi.apifox.cn/api-421782555.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 用户获取自身TikTok店铺（自营店全球商品）的子体产品信息
+- 销售 [获取TikTok在线产品（自营店全球商品--父体）](https://sellfoxapi.apifox.cn/api-421782556.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 用户获取自身TikTok店铺（自营店全球商品）的父体产品信息
+- 销售 [获取TikTok在线产品（自营店铺商品-子体）](https://sellfoxapi.apifox.cn/api-421782557.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 用户获取自身TikTok店铺（自营店铺商品）的子体产品信息
+- 销售 [获取TikTok在线产品（自营店铺商品-父体）](https://sellfoxapi.apifox.cn/api-421782558.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 用户获取自身TikTok店铺（自营店铺商品）的父体产品信息
+- 销售 [获取Walmart在线产品（子体）](https://sellfoxapi.apifox.cn/api-421782559.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 用户获取自身Walmart店铺的子体产品信息
+- 销售 [获取Walmart在线产品（父体）](https://sellfoxapi.apifox.cn/api-421782560.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 用户获取自身Walmart店铺的父体产品信息
+- 订单 [多平台订单列表](https://sellfoxapi.apifox.cn/api-352485971.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): <b>API不返回本土店相关的数据</b>
+- 订单 [查询多平台配对列表](https://sellfoxapi.apifox.cn/api-422323117.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 订单 [批量添加/编辑多平台配对关系](https://sellfoxapi.apifox.cn/api-422323118.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 订单 [订单审核](https://sellfoxapi.apifox.cn/api-422323123.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 订单 [批量创建手工订单](https://sellfoxapi.apifox.cn/api-422323120.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 订单 [物流下单发货](https://sellfoxapi.apifox.cn/api-445014704.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 订单 [合并订单](https://sellfoxapi.apifox.cn/api-422323124.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 订单 [拆分订单](https://sellfoxapi.apifox.cn/api-422323127.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 订单 [称重发货](https://sellfoxapi.apifox.cn/api-422323129.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 订单 [编辑订单](https://sellfoxapi.apifox.cn/api-422323128.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 订单 [更新订单客服备注/拣货备注](https://sellfoxapi.apifox.cn/api-422323121.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 订单 [快速出库](https://sellfoxapi.apifox.cn/api-422323126.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 订单 [批量Temu地址解密](https://sellfoxapi.apifox.cn/api-422323119.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 订单 [查询物流渠道列表](https://sellfoxapi.apifox.cn/api-422323125.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 平台仓 [多平台发货单-分配库存](https://sellfoxapi.apifox.cn/api-450305645.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 平台仓 [多平台发货单-确认发货](https://sellfoxapi.apifox.cn/api-450305646.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 平台仓 [多平台发货单-获取多平台发货单列表](https://sellfoxapi.apifox.cn/api-450305647.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 平台仓 [多平台发货单-修改备注](https://sellfoxapi.apifox.cn/api-450305648.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 平台仓 [Temu-获取Temu货件列表](https://sellfoxapi.apifox.cn/api-450307764.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 平台仓 [Temu-获取Temu库存列表](https://sellfoxapi.apifox.cn/api-450307763.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 数据 [销量统计](https://sellfoxapi.apifox.cn/api-459161465.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [多平台利润报表-多渠道订单管理](https://sellfoxapi.apifox.cn/api-365907899.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [多平台利润报表-查询MSKU](https://sellfoxapi.apifox.cn/api-365907900.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [多平台利润报表-查询店铺](https://sellfoxapi.apifox.cn/api-365907901.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [多平台利润报表-查询SKU](https://sellfoxapi.apifox.cn/api-365907902.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [多平台利润报表-查询结算明细-AliExpress](https://sellfoxapi.apifox.cn/api-426459614.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [多平台利润报表-查询结算明细-eBay](https://sellfoxapi.apifox.cn/api-426459615.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [多平台利润报表-查询结算明细-MercadoLibre](https://sellfoxapi.apifox.cn/api-426459616.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [多平台利润报表-查询结算明细-SHEIN全托管-明细](https://sellfoxapi.apifox.cn/api-426459617.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [多平台利润报表-查询结算明细-SHEIN全托管-汇总](https://sellfoxapi.apifox.cn/api-426459618.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [多平台利润报表-查询结算明细-SHEIN自运营/半托管](https://sellfoxapi.apifox.cn/api-426459619.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [多平台利润报表-查询结算明细-Shopify](https://sellfoxapi.apifox.cn/api-426459620.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu全托利润报表-查询开发员](https://sellfoxapi.apifox.cn/api-365907903.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu全托利润报表-查询产品ID](https://sellfoxapi.apifox.cn/api-365907904.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu全托利润报表-查询业务员](https://sellfoxapi.apifox.cn/api-365907905.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu全托利润报表-查询店铺](https://sellfoxapi.apifox.cn/api-365907906.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu全托利润报表-查询SKU](https://sellfoxapi.apifox.cn/api-365907907.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu全托利润报表-查询结算总览](https://sellfoxapi.apifox.cn/api-426460072.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu全托利润报表-查询结算明细-交易收入](https://sellfoxapi.apifox.cn/api-426460071.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu全托利润报表-查询结算明细-交易结算](https://sellfoxapi.apifox.cn/api-426460073.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu全托利润报表-查询结算明细-广告服务费](https://sellfoxapi.apifox.cn/api-426460055.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu全托利润报表-查询结算明细-售后赔付扣款](https://sellfoxapi.apifox.cn/api-426460056.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu全托利润报表-查询结算明细-售后补寄](https://sellfoxapi.apifox.cn/api-426460057.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu全托利润报表-查询结算明细-揽收服务费](https://sellfoxapi.apifox.cn/api-426460058.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu全托利润报表-查询结算明细-非商责平台售后补贴调整](https://sellfoxapi.apifox.cn/api-426460059.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu全托利润报表-查询结算明细-EPR费用-已扣费](https://sellfoxapi.apifox.cn/api-426460060.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu全托利润报表-查询结算明细-EPR费用-已退费](https://sellfoxapi.apifox.cn/api-426460061.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu全托利润报表-查询结算明细-商品品质保障-质量问题（JIT商品）](https://sellfoxapi.apifox.cn/api-426460062.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu全托利润报表-查询结算明细-质量事故违规扣款](https://sellfoxapi.apifox.cn/api-426460063.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu全托利润报表-查询结算明细-退回服务费](https://sellfoxapi.apifox.cn/api-426460064.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu全托利润报表-查询结算明细-退货分拣打包费](https://sellfoxapi.apifox.cn/api-426460065.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu全托利润报表-查询结算明细-非商责平台售后补贴](https://sellfoxapi.apifox.cn/api-426460066.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu全托利润报表-查询结算明细-消费者退款](https://sellfoxapi.apifox.cn/api-426460067.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu全托利润报表-查询结算明细-店铺其他账务](https://sellfoxapi.apifox.cn/api-426460068.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu全托利润报表-查询结算明细-备货违规扣款](https://sellfoxapi.apifox.cn/api-426460069.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu全托利润报表-查询结算明细-第三方揽收入库贴标服务费](https://sellfoxapi.apifox.cn/api-426460070.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu全托利润报表-查询结算明细-仓储增值服务-贴标费](https://sellfoxapi.apifox.cn/api-426460074.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu全托利润报表-查询结算明细-分仓揽收调拨费用](https://sellfoxapi.apifox.cn/api-426460075.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu半托利润报表-查询开发员](https://sellfoxapi.apifox.cn/api-365907908.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu半托利润报表-查询产品ID](https://sellfoxapi.apifox.cn/api-365907909.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu半托利润报表-查询业务员](https://sellfoxapi.apifox.cn/api-365907910.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu半托利润报表-查询店铺](https://sellfoxapi.apifox.cn/api-365907911.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu半托利润报表-查询SKU](https://sellfoxapi.apifox.cn/api-365907912.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu半托利润报表-查询结算总览](https://sellfoxapi.apifox.cn/api-426460689.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu半托利润报表-查询结算明细-交易收入](https://sellfoxapi.apifox.cn/api-426460694.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu半托利润报表-查询结算明细-结算](https://sellfoxapi.apifox.cn/api-426460688.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu半托利润报表-查询结算明细-广告服务费](https://sellfoxapi.apifox.cn/api-426460677.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu半托利润报表-查询结算明细-买家拒付](https://sellfoxapi.apifox.cn/api-426460678.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu半托利润报表-查询结算明细-消费者和解](https://sellfoxapi.apifox.cn/api-426460679.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu半托利润报表-查询结算明细-处置费](https://sellfoxapi.apifox.cn/api-426460680.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu半托利润报表-查询结算明细-EPR费用-已扣费](https://sellfoxapi.apifox.cn/api-426460681.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu半托利润报表-查询结算明细-EPR费用-已退费](https://sellfoxapi.apifox.cn/api-426460682.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu半托利润报表-查询结算明细-欺诈发货](https://sellfoxapi.apifox.cn/api-426460683.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu半托利润报表-查询结算明细-运费收入](https://sellfoxapi.apifox.cn/api-426460684.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu半托利润报表-查询结算明细-运费退款](https://sellfoxapi.apifox.cn/api-426460685.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu半托利润报表-查询结算明细-退货面单费](https://sellfoxapi.apifox.cn/api-426460686.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu半托利润报表-查询结算明细-售后退款](https://sellfoxapi.apifox.cn/api-426460687.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu半托利润报表-查询结算明细-发货面单费](https://sellfoxapi.apifox.cn/api-426460690.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu半托利润报表-查询结算明细-店铺其他账务](https://sellfoxapi.apifox.cn/api-426460691.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu半托利润报表-查询结算明细-税金退回](https://sellfoxapi.apifox.cn/api-426460692.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu半托利润报表-查询结算明细-税金代扣](https://sellfoxapi.apifox.cn/api-426460693.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Temu半托利润报表-查询结算明细-履约违规](https://sellfoxapi.apifox.cn/api-426460695.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [TikTok利润报表-查询开发员](https://sellfoxapi.apifox.cn/api-365907913.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [TikTok利润报表-查询MSKU](https://sellfoxapi.apifox.cn/api-365907914.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [TikTok利润报表-查询店铺](https://sellfoxapi.apifox.cn/api-365907915.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [TikTok利润报表-查询SKU](https://sellfoxapi.apifox.cn/api-365907916.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [TikTok利润报表-查询业务员](https://sellfoxapi.apifox.cn/api-365907917.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [TikTok利润报表-查询账单明细](https://sellfoxapi.apifox.cn/api-426461067.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Walmart利润报表-查询开发员](https://sellfoxapi.apifox.cn/api-365907918.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Walmart利润报表-查询MSKU](https://sellfoxapi.apifox.cn/api-365907919.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Walmart利润报表-查询业务员](https://sellfoxapi.apifox.cn/api-365907920.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Walmart利润报表-查询店铺](https://sellfoxapi.apifox.cn/api-365907921.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Walmart利润报表-查询SKU](https://sellfoxapi.apifox.cn/api-365907922.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 财务 [Walmart利润报表-查询结算明细](https://sellfoxapi.apifox.cn/api-426460712.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 
+- 设置 [多平台店铺列表](https://sellfoxapi.apifox.cn/api-372129191.md?nav=01GJPY2G1RSAM6SGKMWST7DRZ8): 多平台店铺列表

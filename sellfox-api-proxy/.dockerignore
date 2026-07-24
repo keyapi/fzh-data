@@ -1,0 +1,8 @@
+__pycache__
+*.pyc
+.env
+*.db
+.git
+docs/
+config.yaml.local
+test_*.py

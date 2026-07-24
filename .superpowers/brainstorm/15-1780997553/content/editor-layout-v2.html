@@ -1,0 +1,68 @@
+<h2>Collection 编辑器布局对比</h2>
+<p class="subtitle">灰色=现有DAM界面，蓝色高亮=Collection编辑器区域。注意编辑器出现后主网格是否还能看到。</p>
+
+<div class="section">
+  <h3>A — 右侧滑出面板</h3>
+  <p>编辑器从右侧滑入，<strong>遮住详情面板</strong>。左侧边栏 + 中间资产网格保持可见，可以从网格里挑资产拖进编辑器。</p>
+  <div style="display:flex;gap:4px;height:220px;margin-top:8px">
+    <div class="mock-sidebar" style="width:80px;flex-shrink:0;font-size:10px">Tags<br>Filters<br>Collections</div>
+    <div class="mock-content" style="flex:1;font-size:11px;display:flex;align-items:center;justify-content:center">🖼️ 资产缩略图网格（仍然可见，可以从中拖入）</div>
+    <div style="width:200px;flex-shrink:0;background:#2563EB;color:#FFF;border-radius:6px;padding:10px;font-size:11px;display:flex;flex-direction:column;gap:6px">
+      <strong>📋 Softer 系列</strong>
+      <span style="opacity:0.8">4 assets · v3 · listing</span>
+      <div style="background:rgba(255,255,255,0.15);border-radius:4px;padding:8px;flex:1;display:flex;flex-direction:column;gap:3px">
+        <div style="background:rgba(255,255,255,0.2);border-radius:2px;padding:4px">🖼️ 主图 · main</div>
+        <div style="background:rgba(255,255,255,0.2);border-radius:2px;padding:4px">🖼️ 场景图 · lifestyle</div>
+        <div style="background:rgba(255,255,255,0.2);border-radius:2px;padding:4px">🖼️ 细节图 · detail</div>
+      </div>
+      <div style="display:flex;gap:4px"><button class="mock-button" style="font-size:10px;padding:3px 6px">+ 添加</button><button class="mock-button" style="font-size:10px;padding:3px 6px">导出</button></div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>C — 原地替换</h3>
+  <p>主网格区域<strong>完全切换</strong>为编辑器，看不到资产网格。左侧侧边栏折叠或保留。类似"进入了一个子页面"。</p>
+  <div style="display:flex;gap:4px;height:220px;margin-top:8px">
+    <div class="mock-sidebar" style="width:80px;flex-shrink:0;font-size:10px;opacity:0.5">Collections</div>
+    <div style="flex:1;background:#2563EB;color:#FFF;border-radius:6px;padding:12px;display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;align-items:center;gap:8px"><strong>📋 Softer 系列</strong><span style="opacity:0.7;font-size:11px">listing · 4 assets</span><span style="margin-left:auto;font-size:11px">← Back to assets</span></div>
+      <div style="display:flex;gap:8px;flex:1">
+        <div style="flex:1;background:rgba(255,255,255,0.15);border-radius:4px;padding:10px;display:flex;flex-direction:column;gap:4px">
+          <span style="font-size:10px;opacity:0.7">有序资产列表（可拖拽排序）</span>
+          <div style="background:rgba(255,255,255,0.2);border-radius:4px;padding:6px">🖼️ 主图 · main</div>
+          <div style="background:rgba(255,255,255,0.2);border-radius:4px;padding:6px">🖼️ 场景图 · lifestyle</div>
+          <div style="background:rgba(255,255,255,0.2);border-radius:4px;padding:6px">🖼️ 细节图 · detail</div>
+        </div>
+        <div style="width:180px;background:rgba(255,255,255,0.1);border-radius:4px;padding:10px;font-size:10px">
+          <span style="opacity:0.7">资产选择器（从全部资产中挑选添加）</span>
+          <div style="background:rgba(255,255,255,0.15);border-radius:3px;padding:3px;margin-top:4px">🖼️ +</div>
+          <div style="background:rgba(255,255,255,0.15);border-radius:3px;padding:3px;margin-top:3px">🖼️ +</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:4px"><button class="mock-button" style="font-size:10px;padding:3px 6px">保存</button><button class="mock-button" style="font-size:10px;padding:3px 6px">导出 Excel</button></div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>关键区别</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:8px">
+    <tr style="border-bottom:1px solid var(--border)"><th style="text-align:left;padding:6px"></th><th style="text-align:center;padding:6px">A 滑出面板</th><th style="text-align:center;padding:6px">C 原地替换</th></tr>
+    <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px">资产网格可见？</td><td style="text-align:center;padding:6px;color:var(--success)">✅ 可见</td><td style="text-align:center;padding:6px;color:var(--error)">❌ 隐藏</td></tr>
+    <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px">添加资产方式</td><td style="text-align:center;padding:6px">从左边网格拖入</td><td style="text-align:center;padding:6px">右侧资产选择器点击</td></tr>
+    <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px">编辑器宽度</td><td style="text-align:center;padding:6px">~360px 窄面板</td><td style="text-align:center;padding:6px">全主区域宽度</td></tr>
+    <tr><td style="padding:6px">使用感</td><td style="text-align:center;padding:6px">快速查看/微调</td><td style="text-align:center;padding:6px">专注编辑</td></tr>
+  </table>
+</div>
+
+<div class="options" data-multiselect>
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content"><h3>右侧滑出面板</h3><p>编辑器当侧边栏，资产网格始终可见</p></div>
+  </div>
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content"><h3>原地替换</h3><p>沉浸式编辑，主区域完全切换</p></div>
+  </div>
+</div>

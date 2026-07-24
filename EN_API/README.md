@@ -10,7 +10,6 @@
 | `upload_local_images.py` | CLI 批量上传本地图片 | 本地图片目录 | 图片链接 Excel |
 | `image_upload_app.py` | **Web 可视化上传** | 浏览器拖拽图片 | 图片链接 Excel |
 | `upload_pim_images.py` | 上传图片到物料组 custom_pim_images 子表 | 本地图片目录 | PIM图片上传报告 |
-| `dn_trace_report.py` | **销售出库→物料移动追溯报表** | 月份或DN单号 | 追溯明细 Excel |
 
 ## 前置条件
 
@@ -158,44 +157,3 @@ uv run python upload_pim_images.py --no-compress        # 不压缩
 ### 输出
 
 `out/PIM图片上传结果_{timestamp}.xlsx`，含汇总 + 明细 sheet。
-
----
-
-## 脚本: `dn_trace_report.py` — 销售出库→物料移动追溯报表
-
-从销售出库(DN)维度追溯其关联的销售订单(SO)、生产工单(WO)、工单耗用(SE)及发料明细，汇总为 Excel。
-
-**数据链**: `DN → DN Item.against_sales_order → SO → WO.sales_order → WO (In Process/Completed) → SE.work_order → SE (Material Consumption for Manufacture, docstatus 0/1) → SE Item`
-
-**输出**: 两个 Sheet
-- `追溯明细` — 非成品工单(production_item 非 KS 开头)的完整链路，含 SE/SE Item 发料明细 + **是否面料**判断
-- `成品工单` — 成品工单(KS 开头，不涉及耗用)，仅 DN→SO→WO 层级
-
-### 命令行
-
-```bash
-# 按月份拉取
-uv run python EN_API/dn_trace_report.py --month 2026-07
-
-# 按单号
-uv run python EN_API/dn_trace_report.py --dn DN-2407-00001,DN-2407-00002
-
-# 测试环境
-uv run python EN_API/dn_trace_report.py --month 2026-07 --test
-```
-
-### 参数
-
-| 参数 | 说明 |
-|------|------|
-| `--month YYYY-MM` | 目标月份，拉取该月所有已提交 DN（与 `--dn` 二选一） |
-| `--dn DN-xxx,DN-yyy` | 指定 DN 单号逗号分隔（与 `--month` 二选一） |
-| `--test` | 使用测试系统 (ensh.vilavi.cn) |
-| `--output / -o` | 输出路径 (默认 `EN_API/out/`) |
-
-### 关键实现细节
-
-- **仅 DN 按日期过滤**，SO/WO/SE 不受日期限制（解决跨月工单耗用遗漏）
-- **操作人自动解析**：从邮箱格式转换为 User.full_name 真实姓名
-- **成品/半成品自动分离**：production_item 以 KS 开头归入"成品工单"，其余归入"追溯明细"
-- **面料自动识别**：通过物料所属 Item Group 是否属于"面料"及其子组判断，输出"是/否"

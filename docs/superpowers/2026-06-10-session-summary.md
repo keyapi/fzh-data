@@ -1,6 +1,8 @@
-# DAM Prototype Session Summary (2026-06-10)
+# DAM Prototype Session Summary (2026-06-10 — 2026-06-11)
 
-> 20 commits · Phase 3b → 4 → 5 · 状态: Phase 3b+4+5 全部完成
+> **新对话入口** — 新对话接手只需读: 本文档 + `dam-prototype/AGENT_HANDOFF.md`
+>
+> 26 commits on branch · Phase 3b → 4 → 5 → 6b → NAS → 7b · 状态: Phase 7b 双面板完成但有已知问题
 
 ## 目标回顾
 
@@ -134,8 +136,9 @@
 
 ---
 
-## Session Commits 完整列表 (18个)
+## Session Commits 完整列表 (36 个)
 
+### 上一 session (Phase 3b → 4 → 5, 17 commits)
 ```
 d7945b8 docs(dam): AGENT_HANDOFF — mark Phase 5 ERPNext client ready for deployment
 cb2f8b1 feat(dam): Phase 5 — ERPNext Item search replaces mock with ErpnextClient
@@ -154,17 +157,84 @@ d1db715 docs(dam): Phase 3b milestone + AGENT_HANDOFF update
 afa6911 feat(dam): PATCH collection items endpoint + SKU info
 920fe43 fix(dam): N+1 query + column letter + platform fallback warning
 bba73f1 feat(dam): multi-SKU multi-row Excel export
+```
+
+### 本 session (Phase 5 修复 + 6b + NAS + 文档 + Bug修复, 22 commits)
+```
 f01606c fix(dam): Phase 5 ERPNext search — remove OR filter, verified working
 df585dc fix(dam): use or_filters for ERPNext Item search (code + name)
+fcf5fd0 docs(dam): Phase 5 completion + debugging lessons learned
+e9b6ecc chore: 添加 sqlalchemy + openai 依赖
+7025b7b docs(dam): DAM/PIM 行业调研 — AEM + 13+ 系统功能细节
+a40ce28 feat(dam): 文件夹上传 — ZIP 解压保留目录结构 (废弃)
+c375aef feat(dam): 前端支持 ZIP 文件夹上传 (废弃)
+d1248be feat(dam): 文件夹上传 — webkitdirectory 保留目录结构
+e68dca9 feat(dam): 文件夹列表 + 拼贴缩略图 API
+c29ff03 feat(dam): 前端侧边栏文件夹视图
+9fa3070 feat(dam): 侧边栏文件夹树状视图
+eac6bc2 feat(dam): 文件夹浏览头部 + 子文件夹卡片网格
+570e832 feat(dam): NAS 浏览导入 (初版假数据)
+2823357 feat(dam): 集成真实 Synology NAS + 修复文件夹空状态 UI
+3966911 fix(dam): 真实 NAS 连接 + 文件夹空缩略图 fallback + 上传上下文
+62423e7 fix(dam): file_url 包含子目录路径
+ef3fd64 fix(dam): 空缩略图 + NAS 浏览器重设计 + 去重修复
+546d8e6 feat(dam): Windows 风格双面板 NAS 资源管理器
+dc9391a docs(dam): 全面更新 session summary + AGENT_HANDOFF
+738cbd9 docs(dam): 第二轮全面更新 — 修正 commit 计数 + 追加经验教训
+13ffc00 fix(dam): NAS tree panel + image preview nav + recursive folder trees
+d1c81db fix(dam): NAS thumbnail path quoting + setup return missing variables
 ```
 
 ## 待完成
 
-- [x] Phase 5: ERPNext Item API — 已验证通过 (详见下方"Phase 5 调试记录")
+- [x] Phase 5: ERPNext Item API — 已验证通过 (正确 fix: `or_filters` 独立参数)
+- [x] Phase 6b: 文件夹上传保留本地结构 — webkitdirectory 实现
+- [x] NAS 左侧树面板 — `/api/nas/tree` 端点 + `flattenedNasTree` 递归渲染
+- [x] NAS 缩略图 — Synology API path 引号修正 + `isNasImage()` 扩展正则
+- [x] 文件夹树递归渲染 — `flattenedFolderTree` 替代 4 级硬编码模板
 - [ ] Phase 6: a.vilavi.cn 替换 (OSS 防关联分发)
-- [ ] Phase 6b: 文件夹上传保留本地结构
-- [ ] Phase 7: 运营接入试用 + 反馈迭代
-- [ ] 跨 SKU 图片归属操作 2 (给图打多 PRODUCT 标签)
+- [ ] Phase 7: NAS→Assets 拖拽导入 + Assets→Collection 拖拽
+- [ ] Phase 8: Smart Collection (基于规则自动填充)
+
+### 已知问题（全部已修复）
+1. ~~NAS 左侧树面板不显示~~ → 添加 `/api/nas/tree` 端点 (`13ffc00`)
+2. ~~NAS 图片预览未完整实现~~ → 修复 path 引号 + `isNasImage()` (`d1c81db`)
+3. ~~文件夹树深度硬编码 4 级~~ → `flattenedFolderTree` 递归 computed (`13ffc00`)
+4. ~~控制台 `.length of undefined` 错误~~ → setup() return 补全 6 个变量 (`d1c81db`)
+
+## 调试记录: 2026-06-11 三个 Bug 的根因分析
+
+### Bug 1: NAS 树面板不显示
+- **症状**: Browse NAS 打开后左侧空列
+- **调用链**: `nasLoad()` → fetch `/api/nas/tree?path=` → **404 (端点不存在)**
+- **根因**: commit `546d8e6` 只用前端双面板，未添加后端端点
+- **修复**: 在 `main.py` 添加 `@app.get("/api/nas/tree")` (NAS API + 本地 fallback)
+
+### Bug 2: NAS 图片无缩略图
+- **症状**: 所有图片显示 🖼️ 占位符
+- **调用链**: `get_thumbnail()` → Synology `SYNO.FileStation.Thumb` → path 参数格式错误
+- **根因**: Synology API 要求 `path=f'"{path}"'` (双引号包裹)，代码未加
+- **关键发现**: vilavi_pim `nas.py:132` 有注释 "Path must be wrapped in quotes per Synology API spec"
+- **修复**: `"path": f'"{path}"'` + JSON error detection + 前端 `isNasImage()` 替代不可靠的 `has_thumbnail`
+
+### Bug 3: 文件夹树 + NAS 树 + 所有 JS 报错
+- **症状**: FOLDERS 标题显示但无子节点，控制台反复报 `.length of undefined`
+- **根因分析过程**:
+  1. `folderTree` computed 数据正确 (2 个根节点)
+  2. `flattenedFolderTree` computed 逻辑正确
+  3. 模板 `v-for="n in flattenedFolderTree"` 不输出
+  4. `.bak` 文件也有相同错误 → 预置 bug
+  5. **关键突破**: Vue 3 `setup()` return 语句搜索 → 6 个变量未暴露
+- **根因**: `flattenedFolderTree`, `flattenedNasTree`, `isNasImage`, `nasPreviewFiles`, `nasPreviewIdx`, `nasPreviewNav` 全部在 setup 中 `const` 声明但**未 return**给模板
+- **Vue 3 行为**: CDN 模式下遗漏 return 不报错，变量静默为 `undefined`，`undefined.length` → TypeError
+- **修复**: 全部添加到 return 语句
+
+### 新经验教训
+1. **先搜已有实现**: vilavi_pim 有正确 API 调用方式，2 分钟读代码 > 2 小时调试
+2. **Vue 3 setup() return**: CDN 模式下遗漏不报错，变量静默 undefined — 最难发现的 bug 类型
+3. **`.length` 报错优先查 template → setup 变量映射**: 90% 是变量未暴露给模板
+4. **Synology API 特殊性**: FileStation.Thumb path 必须双引号 (与 FileStation.List folder_path 不同)
+5. **git add -A 陷阱**: 某次提交意外包含 56 个文件
 
 ## Phase 5 调试记录 & 经验教训
 
@@ -201,16 +271,266 @@ df585dc fix(dam): use or_filters for ERPNext Item search (code + name)
 
 `EN_API/` 模块里有成熟的 ErpnextClient 实现（upload_item_images.py 等），它们用的是 REST API（`GET /api/resource/Item` + URL 编码参数），不是 RPC API。如果先研究已有代码，会更早发现正确的参数格式。
 
-## 关键文件
+### Lesson: 先搜索正确的 Web API，不要自己瞎猜
+
+文件夹上传第一版用了 ZIP 解压方案，用户纠正后才搜索 `webkitGetAsEntry` / `webkitdirectory` 标准浏览器 API。AEM/Google Drive/Dropbox 都是用直接选文件夹的方式，不是 ZIP。
+
+**改进规则**: 实现功能前，先搜"<功能> web API standard"确认浏览器原生支持。
+
+### Lesson: 先加载 Skill 再写代码
+
+项目安装了 `frappe-core-api` skill（含完整 filter/or_filters 参数文档），但两次都没先加载：
+- Phase 5: 不知道 `or_filters` 是独立参数
+- vilavi_pim: 不会直接用现成的 `nas.py` + `item_group_nas.js`
+
+**改进规则**: 任何涉及特定领域（Frappe、NAS API 等）的工作，第一步加载对应 skill。
+
+### Lesson: git add -A 陷阱
+
+某次 commit 用了 `git add -A`，意外提交了 56 个文件（二进制、测试临时文件、`.mcp.json` 等）。以后严格用 `git add <具体文件>`。
+
+---
+
+## Phase 6b: 文件夹上传（保留目录结构）
+
+### 背景
+
+用户指出 AEM Assets 支持直接选择本地文件夹上传（含多层子文件夹），不需要 ZIP。参考了 `webkitGetAsEntry` API 和 `webkitdirectory` 标准。
+
+### 实现
+
+| Commit | 内容 |
+|--------|------|
+| `a40ce28` | ZIP 方案（第一版，错误方案） |
+| `c375aef` | 前端 ZIP 检测（废弃） |
+| `d1248be` | **正确方案**: webkitdirectory + webkitRelativePath |
+| `e68dca9` | 文件夹列表 API + 拼贴缩略图 |
+| `c29ff03` | 前端侧边栏文件夹视图 |
+| `9fa3070` | 树状文件夹视图（Windows/Mac 风格） |
+| `eac6bc2` | 文件夹浏览头部 + 子文件夹卡片网格 |
+| `62423e7` | **修复**: file_url 包含子目录路径 |
+| `ef3fd64` | **修复**: 去重时保留目录结构 + 空缩略图 fallback |
+
+### 技术要点
+
+- 前端: `<input webkitdirectory>` 选文件夹 / `webkitGetAsEntry()` 拖拽文件夹递归
+- FormData 第 3 参数传 `file.webkitRelativePath` 保留完整路径
+- 后端: 从 `UploadFile.filename` 提取目录 → 存入 `files/{path}/{uuid}.ext`
+- 去重修改: 有 `rel_dir` 上下文时跳过去重，复制到目标文件夹
+- `file_url` 修复: 用 `_file_rel()` 从 `stored_path` 提取 `files/` 后的完整相对路径
+- 空文件夹缩略图: CSS 双层结构（底部 SVG 文件夹图标 + 上层拼贴图覆盖）
+
+### 已知问题
+
+- 文件夹树左侧可展开，右侧显示子文件夹卡片 + 拼贴缩略图
+- 空文件夹显示 SVG 文件夹图标 + "Folder 'xxx' is empty"
+- "Upload to this folder" 传递当前 filterFolder 上下文
+
+---
+
+## Phase 6: NAS 浏览器 (Browse NAS)
+
+### 背景
+
+需要从 Synology NAS 浏览并导入图片到 DAM。vilavi_pim 已有完整的 `SynologyNAS` 类 + `item_group_nas.js` 前端实现。
+
+### 参考代码来源
+
+**vilavi_pim** (private repo, commit `7cb8229`):
+- `vilavi_pim/api/nas.py` (160行) — SynologyNAS 类
+  - FileStation API: `SYNO.API.Auth` 登录 → 获取 SID
+  - `SYNO.FileStation.List` 列出目录 (folder_path, additional=thumbnail,size,time)
+  - `SYNO.FileStation.Thumb` 获取缩略图 (small/medium/large/original)
+  - Session 缓存 1h，失败不抛异常
+- `vilavi_pim/public/js/item_group_nas.js` (249行) — 前端 NAS 浏览器
+  - 左侧 300px 树侧栏 + 右侧 Grid/List 视图
+  - 面包屑导航 + 工具栏
+  - 点击图片 → 灯箱预览
+- `vilavi_pim/hooks.py` — 注册到 Item Group: `"Item Group": "public/js/item_group_nas.js"`
+
+**NAS 凭证** (从 ERPNext PIM Settings 获取):
+- URL: `https://fzh.myds.me:11024`
+- Username: `fzh.test`
+- Password: `Fzh,1023` (由用户提供，已写入 `.env`)
+
+### 实现
+
+| Commit | 内容 |
+|--------|------|
+| `570e832` | 初版 NAS 浏览（假数据，本地文件系统） |
+| `2823357` | **真实 Synology NAS 连接** + SynologyNAS 类移植 |
+| `546d8e6` | **Windows 风格双面板资源管理器** + 树懒加载 + 灯箱预览 |
+
+### 技术要点
+
+- SynologyNAS 类移植自 vilavi_pim (`nas.py`)
+- 配置: `NAS_URL`/`NAS_USERNAME`/`NAS_PASSWORD`/`NAS_ROOT_FOLDER` 从 `.env`
+- 不可用时自动 fallback 到本地文件系统 (mock_storage)
+- `/api/nas/browse` — 列出目录内容（优先 NAS API，回退本地）
+- `/api/nas/tree` — 懒加载文件夹树（仅返回子目录）
+- `/api/nas/thumbnail` — 获取缩略图（优先 NAS FileStation.Thumb，回退 Pillow）
+- 前进/后退导航历史 + 面包屑
+- Grid/List 双视图 + 灯箱预览
+- 文件选中 + 批量导入 DAM
+
+### 已知问题 (2026-06-11)
+
+1. **左侧文件夹树不显示**: 最后一次 commit (`546d8e6`) 后树面板不渲染。之前版本正常显示 38 个 Synology 文件夹。
+   可能原因: `nasTreeNodes` 初始化或 Vue 响应式问题。
+2. **NAS 图片预览未实现**: vilavi_pim 的灯箱使用 `/api/method/vilavi_pim.api.nas.get_thumbnail`，我们的 thumbnail API 已实现但可能未正确调用。
+   需要: 检查 `nasPreviewImg` 函数和 `/api/nas/thumbnail` 端点。
+3. **非图片文件缩略图**: Synology FileStation.Thumb 只支持图片/视频，文档类文件需要通用图标。
+
+---
+
+## ERPNext File 存储 & dfp_external_storage 调研
+
+### ERPNext 原生 File 存储
+
+- **DB 层级 + 扁平物理文件**: 所有文件在 `sites/{site}/public/files/` (or `private/files/`) 扁平存储，层级关系通过 `File` DocType 的 `folder` 字段（Link 到另一个 `File` 记录）形成
+- 文件夹本身是 `File` 记录（`is_folder=1`）
+- File URL: `/files/{hashed_name}.ext` 或 `/private/files/{hashed_name}.ext`
+- 物理文件名 hash 化，不含路径
+- **这不是对象存储 Bucket**，S3 对象存储是扁平 key-value（通过 key 前缀模拟文件夹）
+
+### dfp_external_storage (开源 S3 集成)
+
+- GitHub: `developmentforpeople/dfp_external_storage`
+- 按 Frappe 文件夹 → S3 Bucket 映射路由
+- 配置 `Home` → 所有文件走 S3；配置 `Attachments` → 仅附件走 S3
+- 上传直连 S3（不经过本地磁盘）、流式传输、presigned URL
+- S3 不可达时自动 fallback 到本地磁盘
+- 可作为 DAM 生产环境的存储后端
+
+### 存储模式对比
+
+| 方案 | 物理 | 层级 | 适用 |
+|------|------|------|------|
+| DAM 原型当前 | `files/{path}/{uuid}.ext` | 物理子目录 | 原型验证 |
+| ERPNext 原生 | 扁平 hash 文件名 | DB `File.folder` | 迁入 Frappe |
+| dfp_external_storage | S3 bucket | Frappe folder → S3 映射 | 生产 |
+| NAS 直连 | NAS 原始目录树 | 物理目录 | 浏览导入源 |
+
+### 研究文档
+
+- `docs/superpowers/research/2026-06-10-dam-industry-research.md` — AEM + 13+ 系统功能细节
+- `docs/superpowers/research/2026-06-10-erpnext-file-storage-nas.md` — File 存储 + dfp_external_storage + NAS
+
+---
+
+## 关键文件 (更新)
 
 | 文件 | 用途 |
 |------|------|
-| `dam-prototype/AGENT_HANDOFF.md` | Agent 交接说明 (已更新) |
-| `dam-prototype/main.py` | FastAPI 后端 (含 ErpnextClient) |
+| `dam-prototype/AGENT_HANDOFF.md` | Agent 交接说明 |
+| `dam-prototype/main.py` | FastAPI 后端 (ErpnextClient + SynologyNAS + 文件夹 API) |
 | `dam-prototype/models.py` | 数据模型 |
-| `dam-prototype/static/index.html` | Vue 3 SPA 前端 |
+| `dam-prototype/static/index.html` | Vue 3 SPA 前端 (文件夹树 + NAS 浏览器) |
 | `dam-prototype/export.py` | Excel 导出 |
-| `dam-prototype/.env` | 本地配置 (gitignored) |
+| `dam-prototype/.env` | 本地配置 (gitignored, 含真实 NAS/ERP 凭证) |
 | `dam-prototype/.env.example` | 配置模板 |
-| `docs/superpowers/2026-06-10-dam-phase-3b-milestone.md` | 全过程里程碑 |
 | `docs/superpowers/2026-06-10-session-summary.md` | 本文档 |
+| `docs/superpowers/2026-06-10-dam-phase-3b-milestone.md` | Phase 3b 里程碑 |
+| `docs/superpowers/research/2026-06-10-dam-industry-research.md` | 行业调研 |
+| `docs/superpowers/research/2026-06-10-erpnext-file-storage-nas.md` | 存储架构 + NAS |
+| `docs/superpowers/specs/2026-06-10-dam-collection-editor-design.md` | 编辑器设计 |
+| `docs/superpowers/specs/2026-06-10-dam-phase4-version-history.md` | 版本历史设计 |
+| `docs/superpowers/specs/2026-06-10-dam-phase5-erpnext-integration.md` | ERPNext 集成设计 |
+| `docs/superpowers/plans/2026-06-10-dam-collection-editor.md` | 编辑器实施计划 |
+| `docs/superpowers/plans/2026-06-10-dam-phase4-version-history.md` | 版本历史实施计划 |
+| `docs/superpowers/plans/2026-06-11-dam-phase7-multi-source-architecture.md` | Phase 7 架构规划 |
+| `docs/superpowers/research/2026-06-11-dam-multi-source-architecture.md` | 多来源 DAM 架构调研 |
+
+---
+
+## 今日工作: 2026-06-11 (上午+下午)
+
+### 新增 10 commits (分支共 26 commits)
+
+| Commit | 内容 |
+|--------|------|
+| `738cbd9` | docs: 修正 commit 计数 + 追加经验教训 |
+| `13ffc00` | **fix**: NAS 树面板 + 图片预览导航 + 递归文件夹树 |
+| `d1c81db` | **fix**: NAS 缩略图 path 引号 + Vue setup() return 补全 6 变量 |
+| `692509a` | docs: 记录 3 个 Bug 调试过程 + 多来源 DAM 架构调研 |
+| `5c284ca` | docs: Phase 7 架构计划 + 改进新对话 handoff |
+| `bec9163` | **fix**: NAS 文件下载导入 (Synology FileStation Download API 规范) |
+| `fc2c3d0` | feat: Assets→Collection 拖拽 + NAS 参考文档 + 先搜再造规则 |
+| `6be5ae7` | **fix**: PATCH collection items auto-position (was defaulting to 0) + 右键 Add to Collection |
+| `1482574` | docs: 双面板拖拽设计方案 (搜索 AEM/Lightroom/Notion/Figma) |
+| `7ff8987` | docs: 双面板设计 v2 — 通用资源管理器 (用户反馈修正) |
+| `1474c83` | **feat**: 双面板资源管理器 — Assets Grid + Collection Panel 同屏 |
+
+### 双面板实现 (P0 完成, 有已知问题)
+
+**已实现**:
+- ✅ 工具栏 "Dual Pane" 按钮切换右侧面板
+- ✅ 右侧面板显示 Collection 内容 (SKU 分组 + 缩略图 + role badge)
+- ✅ 缩略图大小滑块 (50-160px)
+- ✅ SKU 标题点击过滤
+- ✅ 每个 SKU 下方 SortableJS drop zone
+- ✅ Collection sidebar 点选: Dual Pane 开→右面板, 关→全屏编辑器
+- ✅ ✕ 关闭右面板回到全屏
+
+**已知问题**:
+1. **布局错误**: 点 Dual Pane 后右面板未正确显示在右侧，左侧 Assets 被 Collection 内容占据
+2. **拖拽不工作**: Assets 网格 ⠿ 手柄在双面板模式下拽不动
+3. **SKU 交互不对**: 用户要的是类似文件夹树的 flat list (COLLECTIONS→PRODUCT SKU→items），不是 toggle filter
+
+**用户期望的 SKU 展示**:
+```
+COLLECTIONS (侧边栏)
+  └── KS0001 Amazon US v2
+        ├── SKU: KS0001 (2 assets)    ← 类似子文件夹
+        ├── SKU: KS0002 (7 assets)
+        └── _unlinked (1 asset)
+```
+而非当前的点标题 toggle filter 模式。
+
+### 今日经验教训
+
+1. **"先搜再造" 规则落地**: 在 AGENT_HANDOFF.md 新增"开发铁律"章节，含 3 条强制规则 + 违例案例
+2. **NAS Synology API 参考文档**: `docs/superpowers/reference/2026-06-11-nas-synology-api-reference.md`
+3. **Vue 3 CDN setup() return 陷阱**: 遗漏 return 不会报错，变量静默 undefined — 最难发现
+4. **Synology FileStation.Thumb path 必须双引号**: `f'"{path}"'` (与 FileStation.List 不同)
+5. **Synology FileStation.Download path JSON 数组**: `json.dumps([path])` 单文件也如此
+
+### 文档产出
+
+| 文档 | 内容 |
+|------|------|
+| `docs/superpowers/reference/2026-06-11-nas-synology-api-reference.md` | NAS API 完整参考 (官方文档/开源库/vilavi_pim) |
+| `docs/superpowers/research/2026-06-11-dam-multi-source-architecture.md` | DAM 多来源架构调研 |
+| `docs/superpowers/plans/2026-06-11-dam-phase7-multi-source-architecture.md` | Phase 7 架构计划 |
+| `docs/superpowers/specs/2026-06-11-dam-dual-panel-design.md` | 双面板设计方案 v2 |
+
+---
+
+## 新对话入口 (2026-06-11 下午更新)
+
+> **接手只需读**:
+> 1. `docs/superpowers/2026-06-10-session-summary.md` ← 你在读
+> 2. `dam-prototype/AGENT_HANDOFF.md` — 技术架构 + 当前状态 + 经验教训
+
+### Session 状态快照
+
+| 项目 | 状态 |
+|------|------|
+| 分支 | `feature/dam-folder-upload` (26 commits ahead of main) |
+| PR | #4 等待审批 |
+| 前端 | Vue 3 CDN SPA (`dam-prototype/static/index.html` ~1000 行) |
+| 后端 | FastAPI (`dam-prototype/main.py`) |
+| NAS | fzh.myds.me:11024 (Synology FileStation API) |
+| 数据库 | SQLite (`dam-prototype/dam.db`) |
+
+### 当前进度
+
+- [x] Phase 1-4: 数据模型 + AI + Collection CRUD + 版本历史
+- [x] Phase 5: ERPNext Item API (`or_filters` 正确修复)
+- [x] Phase 6b: 文件夹上传 (webkitdirectory)
+- [x] NAS 浏览器: 真实 Synology 连接 + 树面板 + 缩略图 + 灯箱预览
+- [x] NAS 文件下载导入: FileStation Download API 规范实现
+- [x] 右键 Assets → Add to Collection (PATCH auto-position 修复)
+- [x] 双面板: 基础框架完成 (有 3 个已知问题待修复)
+- [ ] **下一步**: 修复双面板 3 个已知问题 (布局/拖拽/SKU 展示)
+- [ ] **远期**: Phase 8 — Smart Collection

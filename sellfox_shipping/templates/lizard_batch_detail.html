@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>批次 #{{ batch.id }} — 赛狐尾程打单</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, 'Microsoft YaHei', sans-serif; background: #f5f5f5; color: #333; }
+        .header { background: #1a1a2e; color: #fff; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+        .header h1 { font-size: 18px; }
+        .nav a { color: #a0a0c0; text-decoration: none; margin-left: 20px; font-size: 14px; }
+        .nav a:hover, .nav a.active { color: #fff; }
+        .container { max-width: 960px; margin: 24px auto; padding: 0 24px; }
+        .panel { background: #fff; border-radius: 8px; padding: 24px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .panel h2 { font-size: 16px; margin-bottom: 8px; }
+        .hint { font-size: 13px; color: #666; margin-bottom: 16px; line-height: 1.5; }
+        .stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin: 16px 0; }
+        .stat { background: #f8f8fc; border-radius: 6px; padding: 12px; text-align: center; }
+        .stat .n { font-size: 22px; font-weight: 700; }
+        .stat .l { font-size: 11px; color: #888; margin-top: 4px; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #eee; }
+        th { color: #888; font-size: 11px; }
+        a.dl { color: #1a1a2e; font-weight: 600; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; background: #eef; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>批次 #{{ batch.id }}</h1>
+        <div class="nav">
+            <a href="/">首页</a>
+            <a href="/packages">包裹</a>
+            <a href="/lizard/export">导出</a>
+            <a href="/lizard/import">导入追踪号</a>
+            <a href="/lizard/artifacts">制品</a>
+            <a href="/lizard/batches" class="active">批次</a>
+        </div>
+    </div>
+    <div class="container">
+        <div class="panel">
+            <h2>批次摘要</h2>
+            <p class="hint">
+                状态 <span class="badge">{{ batch.status }}</span>
+                · 适配器 {{ batch.adapter }}
+                · 模板 {{ batch.template_version or '—' }}
+                · 操作人 {{ batch.created_by }}
+                {% if batch.export_artifact_id %}
+                · 导出制品 <a href="/lizard/artifacts">#{{ batch.export_artifact_id }}</a>
+                {% endif %}
+                {% if batch.import_artifact_id %}
+                · 导入制品 <a href="/lizard/artifacts">#{{ batch.import_artifact_id }}</a>
+                {% endif %}
+            </p>
+            <div class="stats">
+                <div class="stat"><div class="n">{{ batch.input_count }}</div><div class="l">候选</div></div>
+                <div class="stat"><div class="n">{{ batch.success_count }}</div><div class="l">成功</div></div>
+                <div class="stat"><div class="n">{{ batch.skipped_count }}</div><div class="l">跳过</div></div>
+                <div class="stat"><div class="n">{{ batch.failed_count }}</div><div class="l">冲突</div></div>
+                <div class="stat"><div class="n">{{ batch.unmatched_count }}</div><div class="l">未匹配</div></div>
+            </div>
+            <p class="hint">{{ batch.summary or '' }}</p>
+            <p><a class="dl" href="/lizard/import?batch_id={{ batch.id }}">导入追踪号到此批 →</a></p>
+        </div>
+        <div class="panel">
+            <h2>批次包裹</h2>
+            <table>
+                <thead>
+                    <tr><th>包裹号</th><th>状态</th><th>原因</th></tr>
+                </thead>
+                <tbody>
+                    {% for pkg in packages %}
+                    <tr>
+                        <td><a href="/packages/{{ pkg.package_sn }}">{{ pkg.package_sn }}</a></td>
+                        <td><span class="badge">{{ pkg.status }}</span></td>
+                        <td>{{ pkg.reason or '—' }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="3">无包裹行</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</body>
+</html>

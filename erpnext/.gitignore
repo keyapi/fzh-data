@@ -1,0 +1,13 @@
+# erpnext/ — ERPNext 业务数据分析
+#
+# 目录结构:
+#   data/          — 分析结果 (xlsx, json)，不提交 git
+#   scripts/       — 分析脚本
+#   docs/          — 方法论文档
+#   skills/        — 可复用 Agent Skill
+
+# 业务数据绝不提交
+data/
+*.xlsx
+*.json
+!skills/**/*.json

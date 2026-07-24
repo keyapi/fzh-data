@@ -1,0 +1,6 @@
+# 敏感信息
+.env
+
+# CLIProxyAPI 凭证
+auth/
+backups
