@@ -118,7 +118,7 @@ ssh us-ubuntu-proxy systemctl start cliproxyapi
 
 ## 国内部署注意 (Lesson 20-26)
 
-1. Tailscale 务必 `--accept-dns=false`（否则 DNS 挂）
+1. Tailscale 务必 `--accept-dns=false`（否则 DNS 挂；不只国内服务器，冷启动也可能失败 — Lesson 29）
 2. Docker 用 DaoCloud 代理拉取（`docker.m.daocloud.io`）
 3. apt 备非阿里云镜像源（清华 `mirrors.tuna.tsinghua.edu.cn`）
 4. shim-signed GRUB 交互提示需 `debconf-set-selections` 修复

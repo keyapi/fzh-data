@@ -341,3 +341,24 @@ Host us-ubuntu-proxy-pub      ← 备：公网 IP，需要翻墙正常
 - new-api 仓库：https://github.com/Calcium-Ion/new-api
 - dingtalk-oidc（参考）：https://github.com/maggch97/dingtalk-oidc
 - 钉钉 OAuth2 文档：https://open.dingtalk.com/document/orgapp/obtain-user-token
+
+## Lesson 29: Tailscale MagicDNS 冷启动无上游导致全线 DNS 挂 (2026-07-27)
+
+**问题**：US Vultr 服务器内核升级重启后，所有 DNS 查询返回 SERVFAIL。`/etc/resolv.conf` 被 Tailscale 设为 `nameserver 100.100.100.100`，日志刷屏 `dns: resolver: forward: no upstream resolvers set, returning SERVFAIL`。
+
+**原因**：Tailscale MagicDNS 接管了系统 DNS，但 tailnet 未配置上游解析器。重启后 tailscaled 冷启动，尝试回退读取系统 DNS → systemd-resolved 返回 `500 Internal Server Error`（因 resolv.conf 被 Tailscale 自己设成 foreign 模式）→ 找不到上游 → 全部查询 SERVFAIL。
+
+重启前正常运行一个月未暴露，因长期运行的 tailscaled 缓存了 DNS 状态。重启后状态丢失才暴露。
+
+**修复**：
+1. `tailscale set --accept-dns=false` 禁用 MagicDNS
+2. systemd-resolved 配置持久化上游 DNS（Vultr DNS + Cloudflare 备用）
+3. `ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf`
+
+**教训**：不需要 MagicDNS 的节点（只用 IP 通信的出口节点）务必设 `--accept-dns=false`。即使服务器不在中国，MagicDNS 冷启动也可能失败。Tailscale 官方 Issue #15471 / #14252 记录了完全相同的问题。
+
+**诊断命令**：
+```bash
+tailscale dns status                          # 查看 MagicDNS 状态和上游解析器
+journalctl -u tailscaled | grep -i "dns\|SERVFAIL"  # 查看 DNS 错误
+```
