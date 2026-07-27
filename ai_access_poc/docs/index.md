@@ -16,6 +16,7 @@ timestamp: 2026-07-24
 | 板 PoC | [board/README.md](../board/README.md) |
 | 板 Agent | [board/AGENT_HANDOFF.md](../board/AGENT_HANDOFF.md) |
 | 板 B1–B6 验收 | [board/docs/specs/b1-b6-checklist.md](../board/docs/specs/b1-b6-checklist.md) |
+| 运营审简报（下一步） | [board/docs/specs/ops-review-brief.md](../board/docs/specs/ops-review-brief.md) |
 | 变更历史 | [log.md](log.md) |
 | 路线图 | [roadmap.md](roadmap.md) |
 | 壳验收 | [specs/2026-07-24-shell-acceptance.md](specs/2026-07-24-shell-acceptance.md) |
