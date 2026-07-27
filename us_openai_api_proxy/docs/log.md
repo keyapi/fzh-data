@@ -38,6 +38,13 @@ tags: [openai, api-proxy, changelog]
 - **v0.12-fix**: 订阅更新全流程验证通过：LuCI 更新订阅 → 自动下载 → overwrite 注入 Emergency（末尾兜底）→ SSRDOG 优先使用
 - **v0.12-fix**: 关键行为确认：旧订阅链接过期自动失败 → 新链接自动重试成功 → MATCH 保持 SSRDOG 未被覆盖 → Emergency 在 Auto 末尾静默待命
 
+## 2026-07-27 (v0.13)
+
+- **v0.13**: US Vultr DNS 故障 — 7/20 内核升级后重启，Tailscale MagicDNS 冷启动失败（`no upstream resolvers set, returning SERVFAIL`）
+- **v0.13**: 根因：MagicDNS 在无上游解析器时返回 SERVFAIL（Tailscale 已知问题 #15471/#14252），重启前因长期运行未暴露
+- **v0.13**: 修复：`tailscale set --accept-dns=false` + systemd-resolved 配置持久化（Vultr DNS 108.61.10.10 + Cloudflare 1.1.1.1 备用）
+- **v0.13**: 应急线路验证恢复：上海 SOCKS5 → US → Google 200 / YouTube 200
+
 ## 后续规划
 
 - **Phase 2 (待 SSRDog 恢复后)**：在 Vultr 部署 VLESS+Reality 作为独立备份线路
