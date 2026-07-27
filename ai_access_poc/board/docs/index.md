@@ -10,6 +10,8 @@ timestamp: 2026-07-24
 
 | 你需要… | 读这个 |
 |---------|--------|
+| **本机点着体验 :8001** | [specs/hands-on-ivyeaops-sellfox.md](specs/hands-on-ivyeaops-sellfox.md) |
+| Phase2 跟上游 / 五杠杆 | [specs/phase2-backlog.md](specs/phase2-backlog.md) |
 | B1–B6 清单 | [specs/b1-b6-checklist.md](specs/b1-b6-checklist.md) |
 | 搜索词列映射 | [reference/column-mapping.md](reference/column-mapping.md) |
 | 已知偏差 | [reference/deviations.md](reference/deviations.md) |
