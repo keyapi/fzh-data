@@ -8,8 +8,9 @@ title: board PoC 变更日志
 
 ## 2026-07-27
 
-- **可体验工作台**：`uv` 装 IvyeaOps `server\.venv` + 构建 `client/dist`；启动/ingest 脚本；Optimizer 对 TOODDLY-Daneey-US 跑通（live cache，候选约否词+收割）；主体验 `:8001`。
-- 文档：`hands-on-ivyeaops-sellfox.md`、`phase2-backlog.md`；Portal 落地页链到 `:8001`。
+- **品牌化 + 凭证 + 兜底 LLM**：侧栏「赛狐 ERP」；status Chip 显示赛狐 Proxy；默认 light；`seed_ivyeaops_hub_from_owui.ps1` → assistant_* = api.vilavi.cn。
+- **可体验工作台**：`uv` 装 IvyeaOps `server\.venv` + 构建 `client/dist`；启动/ingest 脚本；Optimizer 对 TOODDLY-Daneey-US 跑通；主体验 `:8001`。
+- 文档：`hands-on-ivyeaops-sellfox.md`、`phase2-backlog.md`。
 
 ## 2026-07-24
 

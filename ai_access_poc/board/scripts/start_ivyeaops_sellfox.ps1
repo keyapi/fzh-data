@@ -62,29 +62,33 @@ if (-not $env:SELLFOX_PROXY_API_KEY -and -not ($env:SELLFOX_APP_ID -and $env:SEL
     Write-Fail "No SELLFOX_PROXY_API_KEY (or AppId/Secret). Put key in ai_access_poc/open_webui/.env"
 }
 
-# Ensure hub_settings: read on, operate off
-$Hub = Join-Path $IvyRoot "data\hub_settings.json"
-New-Item -ItemType Directory -Force -Path (Join-Path $IvyRoot "data") | Out-Null
-$hubObj = @{
-    setup_done = $true
-    lingxing_enabled = $true
-    lingxing_operate_enabled = $false
-    lingxing_operate_require_human = $true
-    lingxing_operate_expires_at = ""
-    lingxing_circuit_reason = ""
-}
-if (Test-Path $Hub) {
+# Seed assistant_* (new-api) from open_webui/.env when Key present
+$SeedScript = Join-Path $PSScriptRoot "seed_ivyeaops_hub_from_owui.ps1"
+if (Test-Path $SeedScript) {
     try {
-        $existing = Get-Content $Hub -Raw -Encoding utf8 | ConvertFrom-Json
-        $existing.PSObject.Properties | ForEach-Object {
-            if (-not $hubObj.ContainsKey($_.Name)) { $hubObj[$_.Name] = $_.Value }
-        }
-    } catch {}
+        Write-Info "Seeding hub_settings assistant_* from open_webui/.env ..."
+        & powershell -NoProfile -ExecutionPolicy Bypass -File $SeedScript
+    } catch {
+        Write-Info "LLM seed skipped: $_"
+    }
 }
-$hubObj.lingxing_enabled = $true
-$hubObj.lingxing_operate_enabled = $false
-$hubObj.setup_done = $true
-($hubObj | ConvertTo-Json -Depth 8) | Set-Content -Path $Hub -Encoding utf8
+
+# Ensure read on / operate off without wiping assistant keys
+New-Item -ItemType Directory -Force -Path (Join-Path $IvyRoot "data") | Out-Null
+$Hub = Join-Path $IvyRoot "data\hub_settings.json"
+& $VenvPy -c @"
+import json, pathlib
+p = pathlib.Path(r'''$Hub''')
+data = json.loads(p.read_text(encoding='utf-8')) if p.is_file() else {}
+data['setup_done'] = True
+data['lingxing_enabled'] = True
+data['lingxing_operate_enabled'] = False
+data['lingxing_operate_require_human'] = True
+data['lingxing_operate_expires_at'] = ''
+data['lingxing_circuit_reason'] = ''
+p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')
+print('hub patched', p)
+"@
 
 $url = "http://127.0.0.1:8001"
 try {
