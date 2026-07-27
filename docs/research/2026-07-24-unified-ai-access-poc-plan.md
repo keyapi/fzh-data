@@ -226,12 +226,12 @@ Week2:  B4–B6；S4；运营初审（若候选已出）
 | 切片 | 状态 |
 |------|------|
 | 本 Spec + 索引 | 已交付 |
-| 壳 PoC | **已合并** [#113](https://github.com/keyapi/fzh-data/pull/113) |
-| 板 PoC | **已合并** [#116](https://github.com/keyapi/fzh-data/pull/116) |
-| Portal nginx `/chat` `/ops` + 钉钉 dry-run | **本切片** `ai_access_poc/portal/` |
-| 运营审 | **DEFERRED**（不阻塞 Portal） |
+| 壳 PoC `feature/ai-access-shell-poc` | **已合并** [#113](https://github.com/keyapi/fzh-data/pull/113)（S1–S4） |
+| 板 PoC `feature/ai-access-board-poc` | **已合并** [#116](https://github.com/keyapi/fzh-data/pull/116)（B1–B6；外部 fork 适配笔记在 `ai_access_poc/board/`） |
 
-**再下一切片**：钉钉 live SSO + oauth2-proxy；扩展 READ_DATASETS；写 API 后再开 operate。
+**当前下一步（非代码，阻塞 Portal）**：运营审 — 见 `ai_access_poc/board/docs/specs/ops-review-brief.md`（计划 §4）。
+
+**再下一切片（需你确认启动）**：Portal nginx `/chat` + `/ops` + 钉钉专题；扩展 READ_DATASETS；写 API 后再开 operate。
 
 ---
 

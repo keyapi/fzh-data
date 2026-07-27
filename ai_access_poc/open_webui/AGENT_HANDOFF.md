@@ -77,4 +77,4 @@ Open Terminal 在 Admin → Settings → Integrations → Open Terminal：
 
 ## 下一步（非本壳）
 
-板 PoC 已合并（#116）。Portal PoC：`ai_access_poc/portal/`。运营审 **DEFERRED**。
+板 PoC B1–B6 已绿（PR [#116](https://github.com/keyapi/fzh-data/pull/116)）。当前阻塞：**运营审**候选与偏差清单（`ai_access_poc/board/docs/specs/ops-review-brief.md`）。审过后再开 Portal（nginx `/chat` `/ops` + 钉钉）。
