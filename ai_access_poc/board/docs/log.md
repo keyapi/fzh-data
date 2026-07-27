@@ -6,6 +6,12 @@ title: board PoC 变更日志
 
 # 变更日志
 
+## 2026-07-27
+
+- **品牌化 + 凭证 + 兜底 LLM**：侧栏「赛狐 ERP」；status Chip 显示赛狐 Proxy；默认 light；`seed_ivyeaops_hub_from_owui.ps1` → assistant_* = api.vilavi.cn。
+- **可体验工作台**：`uv` 装 IvyeaOps `server\.venv` + 构建 `client/dist`；启动/ingest 脚本；Optimizer 对 TOODDLY-Daneey-US 跑通；主体验 `:8001`。
+- 文档：`hands-on-ivyeaops-sellfox.md`、`phase2-backlog.md`。
+
 ## 2026-07-24
 
 - **双 PoC 合并后收口**：#116 已合 main；新增运营审简报 `specs/ops-review-brief.md`；main 复跑 runner 确认 99 店 / 1922 行 / 候选 19。

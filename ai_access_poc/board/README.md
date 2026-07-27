@@ -11,18 +11,29 @@
 | 窗口模式 | `SELLFOX_WINDOW_MODE=aggregate`（整窗一次 createTask） |
 | 标定店 | `TOODDLY-Daneey-US` |
 | 凭证 | `SELLFOX_PROXY_API_KEY` → `api.vilavi.cn/sellfox` |
-| 后端端口 | `8001` |
-| fzh-data | 已合并 PR [#116](https://github.com/keyapi/fzh-data/pull/116)（`main`） |
+| 后端端口 | `8001`（**主体验入口**） |
+| Python | **uv** 管理 `IvyeaOps-sellfox/server/.venv` |
 
-## 与壳的分工
+## 快速开始（无领星）
+
+```powershell
+# 一次：uv + 前端
+powershell -ExecutionPolicy Bypass -File ai_access_poc\board\scripts\setup_ivyeaops_uv.ps1
+# 每次：启动 SPA + 注入赛狐只读
+powershell -ExecutionPolicy Bypass -File ai_access_poc\board\scripts\start_ivyeaops_sellfox.ps1
+# 分析前：拉搜索词 cache
+powershell -ExecutionPolicy Bypass -File ai_access_poc\board\scripts\ingest_sellfox_for_ivyeaops.ps1
+```
+
+打开 http://127.0.0.1:8001 → 领星页（数据=赛狐）选店 → Optimizer。  
+详细点击清单：[docs/specs/hands-on-ivyeaops-sellfox.md](docs/specs/hands-on-ivyeaops-sellfox.md)。
+
+## 与壳 / Portal 的分工
 
 - **壳**（`open_webui/`）：Chat 拉数 + Tool JSON summary + Terminal 深挖  
-- **板**（本目录笔记 + 外部树）：规则引擎否词/收割**候选** → 人工去赛狐后台；**禁止写 API**
+- **板 UI**（仓外 IvyeaOps `:8001`）：完整工作台 + 赛狐只读广告分析  
+- **Portal `/ops`**：候选**摘要 stub**，不是完整 SPA  
 
 ## 共享代码
 
-复用本仓 [`SELLFOX_API/client.py`](../../SELLFOX_API/client.py)。外部树通过 `PYTHONPATH` 或拷贝薄适配器 `sellfox_openapi.py` 调用 client。
-
-## 下一步
-
-运营审阅 → [docs/specs/ops-review-brief.md](docs/specs/ops-review-brief.md)。签字前不得把候选当自动执行依据。
+复用本仓 [`SELLFOX_API/client.py`](../../SELLFOX_API/client.py)。外部树 `sellfox_openapi.py` 经 `FZH_DATA_ROOT` import client。
