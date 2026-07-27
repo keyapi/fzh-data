@@ -1,0 +1,79 @@
+# FZH AI Portal PoC — nginx /chat + /ops (+ optional 钉钉 OIDC)
+#
+# Prerequisite: shell PoC Open WebUI already running
+#   cd ../open_webui && docker compose up -d
+# so external network open_webui_public exists and alias open-webui is reachable.
+#
+# Start Portal:
+#   docker compose up -d --build
+# Optional DingTalk:
+#   set DINGTALK_CLIENT_ID/SECRET in .env then:
+#   docker compose --profile dingtalk up -d --build
+
+name: fzh-ai-portal
+
+services:
+  portal-nginx:
+    image: nginx:1.27-alpine
+    container_name: fzh-ai-portal
+    restart: unless-stopped
+    ports:
+      - "${PORTAL_PORT:-8088}:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/html:/usr/share/nginx/html:ro
+    depends_on:
+      - ops-stub
+    networks:
+      - portal
+      - owui_public
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  ops-stub:
+    build: ./ops_stub
+    container_name: fzh-portal-ops-stub
+    restart: unless-stopped
+    environment:
+      BOARD_OUT_DIR: /data/board_out
+      PORTAL_PUBLIC_URL: "${PORTAL_PUBLIC_URL:-http://127.0.0.1:8088}"
+      IVYEAOPS_UPSTREAM: "${IVYEAOPS_UPSTREAM:-}"
+      DINGTALK_ENABLED: "${DINGTALK_ENABLED:-0}"
+      DINGTALK_CLIENT_ID: "${DINGTALK_CLIENT_ID:-}"
+    volumes:
+      # Prefer real board/out when present; else fixtures (fresh clone)
+      - ${BOARD_OUT_HOST:-../board/out}:/data/board_out:ro
+    networks:
+      - portal
+    # Host port optional (debug); Portal reaches via Docker DNS
+    ports:
+      - "${OPS_STUB_PORT:-8090}:8090"
+
+  # Optional — reuse new-api-dingtalk-oidc when secrets present
+  dingtalk-oidc:
+    profiles: ["dingtalk"]
+    build:
+      context: ../../new-api-dingtalk-oidc
+      dockerfile: Dockerfile
+    container_name: fzh-portal-dingtalk-oidc
+    restart: unless-stopped
+    environment:
+      ISSUER: "${OIDC_ISSUER:-http://127.0.0.1:8088/oidc}"
+      DINGTALK_CLIENT_ID: "${DINGTALK_CLIENT_ID}"
+      DINGTALK_CLIENT_SECRET: "${DINGTALK_CLIENT_SECRET}"
+      ALLOWED_CORP_ID: "${ALLOWED_CORP_ID:-}"
+      BIND_HOST: "0.0.0.0"
+      BIND_PORT: "8086"
+    volumes:
+      - portal-oidc-data:/data
+    networks:
+      - portal
+
+networks:
+  portal:
+  owui_public:
+    external: true
+    name: open_webui_public
+
+volumes:
+  portal-oidc-data:

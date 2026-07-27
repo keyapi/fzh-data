@@ -94,6 +94,8 @@ generated: 2026-07-27 13:57
 | Log | ai_access_poc 变更日志 | [ai_access_poc/docs/log.md](ai_access_poc/docs/log.md) | 2026-07-27 |
 | Log | board PoC 变更日志 | [ai_access_poc/board/docs/log.md](ai_access_poc/board/docs/log.md) | 2026-07-27 |
 | Reference | Compose 与环境变量 | [ai_access_poc/docs/reference/compose-and-env.md](ai_access_poc/docs/reference/compose-and-env.md) | 2026-07-24 |
+| Reference | Portal Compose 与路由 | [ai_access_poc/portal/docs/reference/compose-and-routing.md](ai_access_poc/portal/docs/reference/compose-and-routing.md) | 2026-07-24 |
+| Reference | Portal 钉钉 OIDC | [ai_access_poc/portal/docs/reference/dingtalk-oidc.md](ai_access_poc/portal/docs/reference/dingtalk-oidc.md) | 2026-07-24 |
 | Reference | Tool / Skill / 模型约定 | [ai_access_poc/docs/reference/tool-skill-model.md](ai_access_poc/docs/reference/tool-skill-model.md) | 2026-07-24 |
 | Reference | 搜索词列映射（优化器 ↔ 赛狐 xlsx） | [ai_access_poc/board/docs/reference/column-mapping.md](ai_access_poc/board/docs/reference/column-mapping.md) | 2026-07-24 |
 | Reference | 板 PoC 已知偏差清单 | [ai_access_poc/board/docs/reference/deviations.md](ai_access_poc/board/docs/reference/deviations.md) | 2026-07-24 |

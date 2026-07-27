@@ -1,0 +1,67 @@
+{
+  "base": "http://127.0.0.1:8088",
+  "ts": "2026-07-24T18:30:31",
+  "passed": true,
+  "checks": [
+    {
+      "name": "portal_health",
+      "ok": true,
+      "detail": "HTTP 200 body=b'{\"ok\":true,\"service\":\"fzh-ai-portal\",\"routes\":[\"/\",\"/chat\",\"/ops\",\"/oidc\"]}'",
+      "status": 200
+    },
+    {
+      "name": "landing",
+      "ok": true,
+      "detail": "HTTP 200 len=4064",
+      "status": 200
+    },
+    {
+      "name": "chat_redirect",
+      "ok": true,
+      "detail": "HTTP 302 Location='/chat/'",
+      "status": 302
+    },
+    {
+      "name": "chat_proxy",
+      "ok": true,
+      "detail": "HTTP 200 len=11098 head=b'<!doctype html>\\n<html lang=\"en\">\\n\\t<head>\\n\\t\\t<meta charset=\"utf-8\" />\\n\\t\\t<link rel='",
+      "status": 200
+    },
+    {
+      "name": "chat_root_assets",
+      "ok": true,
+      "detail": "/api/config → HTTP 200 len=328",
+      "status": null
+    },
+    {
+      "name": "ops_page",
+      "ok": true,
+      "detail": "HTTP 200 len=4328",
+      "status": 200
+    },
+    {
+      "name": "ops_health",
+      "ok": true,
+      "detail": "HTTP 200 candidates.available=True dingtalk={'enabled': False, 'client_id_configured': False, 'mode': 'dry-run', 'oidc_path': '/oidc/', 'enable_hint': 'Set DINGTALK_CLIENT_ID/SECRET + compose --profile dingtalk'}",
+      "status": 200
+    },
+    {
+      "name": "ops_candidates",
+      "ok": true,
+      "detail": "HTTP 200 candidates=19",
+      "status": 200
+    },
+    {
+      "name": "auth_status",
+      "ok": true,
+      "detail": "HTTP 200 mode=dry-run",
+      "status": 200
+    },
+    {
+      "name": "oidc_path",
+      "ok": true,
+      "detail": "HTTP 503 dry-run hint present",
+      "status": 503
+    }
+  ]
+}

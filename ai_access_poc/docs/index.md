@@ -2,8 +2,8 @@
 okf: v0.1
 type: Index
 title: ai_access_poc — 文档索引
-description: 统一 AI 接入 PoC（壳 Open WebUI + 板 IvyeaOps）OKF 入口
-tags: [ai-agent, poc, index, open-webui, sellfox]
+description: 统一 AI 接入 PoC（壳 + 板 + Portal）OKF 入口
+tags: [ai-agent, poc, index, open-webui, sellfox, portal]
 timestamp: 2026-07-24
 ---
 
@@ -15,6 +15,9 @@ timestamp: 2026-07-24
 | Agent 交接（壳） | [open_webui/AGENT_HANDOFF.md](../open_webui/AGENT_HANDOFF.md) |
 | 板 PoC | [board/README.md](../board/README.md) |
 | 板 Agent | [board/AGENT_HANDOFF.md](../board/AGENT_HANDOFF.md) |
+| Portal | [portal/README.md](../portal/README.md) |
+| Portal Agent | [portal/AGENT_HANDOFF.md](../portal/AGENT_HANDOFF.md) |
+| Portal E2E | [portal/docs/specs/2026-07-24-portal-e2e.md](../portal/docs/specs/2026-07-24-portal-e2e.md) |
 | 板 B1–B6 验收 | [board/docs/specs/b1-b6-checklist.md](../board/docs/specs/b1-b6-checklist.md) |
 | 运营审简报（下一步） | [board/docs/specs/ops-review-brief.md](../board/docs/specs/ops-review-brief.md) |
 | 变更历史 | [log.md](log.md) |

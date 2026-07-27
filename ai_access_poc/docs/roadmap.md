@@ -36,4 +36,4 @@ timestamp: 2026-07-24
 
 ## 明确不做（当前阶段）
 
-广告写操作、全量看板、bare-metal Open Terminal、未验证 `advertise/` 当真理。
+广告写操作、全量看板、bare-metal Open Terminal、未验证 `advertise/` 当真理、IvyeaOps AGPL vendoring。
