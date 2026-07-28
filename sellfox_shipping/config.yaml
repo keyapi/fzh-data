@@ -88,7 +88,8 @@ carriers:
       EU: FEDEX_INTERNATIONAL_ECONOMY
 
   vite:
-    enabled: false  # P5 启用
+    enabled: true  # P5 启用
+    label: "VITE"
     class: carriers.csv_polling.CSVPollingCarrier
     label_format: PDF
     csv_template: "数据源样例/vite_template.csv"
@@ -98,7 +99,7 @@ carriers:
     gofo_max_side_inches: 22
 
   lizard:
-    enabled: false  # P5 启用
+    enabled: true  # P5 启用
     label: "蜥蜴集团/蜴国际"
     class: carriers.csv_polling.CSVPollingCarrier
     label_format: PDF
