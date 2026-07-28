@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Phase2 ingest: entities + Targeting/Campaign reports + asin_profit → sellfox_cache.
 
+OPTIONAL warm-up / boil-the-lake. On-demand path is fetch_dataset → ensure_dataset;
+colleagues do not need this script to use 数据浏览 / 优化建议.
+
 Default shop: BJRYECLTD-US (596841). Search-term alone: ingest_sellfox_search_term.py.
 
 Run via::

@@ -8,6 +8,8 @@ title: board PoC 变更日志
 
 ## 2026-07-28
 
+- **本阶段收口 / 交接**：handoff 快照写清「按需 12/12 + Phase2 五杠杆已通」；**ASIN 形搜索词进收割**仅文档化、**不改优化器**。compound：[sellfox-search-term-asin-as-keyword-harvest.md](../../docs/solutions/best-practices/sellfox-search-term-asin-as-keyword-harvest.md)。
+- **原生按需语义对齐**：`fetch_dataset` PoC miss/`force` → `ensure_dataset` 拉赛狐；12/12 READ_DATASETS 接线（含 FBA/广告组/定向/定向报表）；禁止回落领星；dashboard/automation/report aggregate 一次取窗；probe 测赛狐；离线 phase2 ingest 标明可选预热。见 [sellfox-ivyeaops-ondemand-fetch-parity.md](../../docs/solutions/architecture-patterns/sellfox-ivyeaops-ondemand-fetch-parity.md)。
 - **内置浏览器 E2E**：BJRYECLTD-US 运行优化引擎 → **候选 35**（含降/加 bid；加预算 0=阈值未达）。启动脚本默认不弹系统浏览器（`-OpenBrowser` 可选）；子进程显式注入 `SELLFOX_*`。
 - **ce-compound**：沉淀 [sellfox-ivyeaops-five-lever-ingest.md](../../docs/solutions/architecture-patterns/sellfox-ivyeaops-five-lever-ingest.md)；同步 handoff / roadmap / 缺口矩阵过时句。
 - **Phase2 ingest 落地**：`ingest_sellfox_phase2.ps1` → 实体(spKeyword/spCampaign/spAdProduct) + Targeting/Campaign/SearchTerm + asin_profit；`fetch_dataset` PoC 已读 cache。标定店 `run_store(596841)` 候选 35（含降/加 bid）。计划见 `docs/superpowers/plans/2026-07-28-phase2-sellfox-ingest.md`。

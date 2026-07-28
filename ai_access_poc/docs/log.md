@@ -8,6 +8,7 @@ title: ai_access_poc 变更日志
 
 ## 2026-07-28
 
+- **板阶段收口**：按需 12/12 + Phase2 五杠杆已通；handoff/index/roadmap 可交接；ASIN 收割坑只文档化。solutions：`sellfox-ivyeaops-ondemand-fetch-parity.md`、`sellfox-search-term-asin-as-keyword-harvest.md`。
 - **板 Phase2**：五杠杆 ingest 接线完成；ce-compound 写入 `docs/solutions/architecture-patterns/sellfox-ivyeaops-five-lever-ingest.md`；roadmap 勾选 ingest，下一步改为运营审 / 上游 merge / IvyeaAgent。
 
 ## 2026-07-24

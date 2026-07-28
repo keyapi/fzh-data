@@ -15,6 +15,9 @@ timestamp: 2026-07-24
 | Agent 交接（壳） | [open_webui/AGENT_HANDOFF.md](../open_webui/AGENT_HANDOFF.md) |
 | 板 PoC | [board/README.md](../board/README.md) |
 | 板 Agent | [board/AGENT_HANDOFF.md](../board/AGENT_HANDOFF.md) |
+| 板 docs 索引 | [board/docs/index.md](../board/docs/index.md) |
+| 按需拉取经验 | [sellfox-ivyeaops-ondemand-fetch-parity.md](../../docs/solutions/architecture-patterns/sellfox-ivyeaops-ondemand-fetch-parity.md) |
+| 收割×ASIN（deferred） | [sellfox-search-term-asin-as-keyword-harvest.md](../../docs/solutions/best-practices/sellfox-search-term-asin-as-keyword-harvest.md) |
 | Portal | [portal/README.md](../portal/README.md) |
 | Portal Agent | [portal/AGENT_HANDOFF.md](../portal/AGENT_HANDOFF.md) |
 | Portal E2E | [portal/docs/specs/2026-07-24-portal-e2e.md](../portal/docs/specs/2026-07-24-portal-e2e.md) |

@@ -38,11 +38,11 @@ IvyeaOps READ_DATASETS：**无对等键**（领星也未注册小时级）。状
 
 | Path | → IvyeaOps | 状态 |
 |------|------------|------|
-| `spCampaign.json` | `sp_campaigns`（`budget`→`daily_budget`） | **源已验证可映射未接线** |
-| `spKeyword.json` | `sp_keywords`（`bid`/`state`） | **源已验证可映射未接线** |
-| `spAdProduct.json` | `sp_product_ads` | **源已验证可映射未接线** |
-| `spGroup.json` | `sp_adgroups` | 文档对齐；优化器不直接消费 |
-| `spTarget.json` | `sp_targets` | 文档对齐；operate 写前置用 |
+| `spCampaign.json` | `sp_campaigns`（`budget`→`daily_budget`） | **已接线（按需）** |
+| `spKeyword.json` | `sp_keywords`（`bid`/`state`） | **已接线（按需）** |
+| `spAdProduct.json` | `sp_product_ads` | **已接线（按需）** |
+| `spGroup.json` | `sp_adgroups` | **已接线（按需）** |
+| `spTarget.json` | `sp_targets` | **已接线（按需）** |
 | `spNeKeyword.json` / `spNeTarget.json` | — | 只读否词实体 |
 | SB/SD 全套 `sb*` / `sd*` | — | IvyeaOps 当前仅 SP |
 | `portfolio.json` | — | 广告组合 |
@@ -65,8 +65,8 @@ IvyeaOps READ_DATASETS：**无对等键**（领星也未注册小时级）。状
 
 | 能力 | Path | 备注 |
 |------|------|------|
-| 店铺列表 | `/api/shop/pageList.json` | → `sellers`（已接线 PoC） |
-| FBA 库存 | `/api/inventoryManage/fba/pageList.json` | → `fba_stock` 候选 |
+| 店铺列表 | `/api/shop/pageList.json` | → `sellers`（已接线 PoC，实时） |
+| FBA 库存 | `/api/inventoryManage/fba/pageList.json` | → `fba_stock`（已接线，按需） |
 | ABA 搜索词 | `/api/cpc/searchTerms/pageList.json` | 非优化器 |
 | 报告中心 Amazon 原表 / 插件 | `/api/report/center/*` | SP-API/插件源报告通道；去年项目有记录，非优化器主路径 |
 
@@ -74,19 +74,22 @@ IvyeaOps READ_DATASETS：**无对等键**（领星也未注册小时级）。状
 
 | IvyeaOps | 赛狐源 | 状态 |
 |----------|--------|------|
-| `sellers` | `shop/pageList` | **已接线** |
-| `sp_search_term_report` | `adSearchTermReport` | **已接线** |
-| `sp_keyword_report` | `adTargeringReport`（过滤关键词行） | **已接线** |
-| `sp_keywords` | `manageData/spKeyword` | **已接线** |
-| `sp_campaign_report` | `adCampaignReport` | **已接线** |
-| `sp_campaigns` | `manageData/spCampaign` | **已接线** |
-| `sp_product_ads` | `adProductReport` 或 `spAdProduct` | **已接线**（实体 `spAdProduct`） |
-| `asin_profit` | `monthProfit/asin`（`grossProfitRate`→`grossRate`） | **已接线**（权限已通；数值 caveat） |
-| `sp_target_report` | Targeting 定向行 / `sdTargetListReport` | **需拼表或过滤**（优化器未消费） |
-| `sp_targets` / `sp_adgroups` | `spTarget` / `spGroup` | **源已验证可映射未接线**（写前置） |
-| `fba_stock` | FBA pageList | **权限或文档未证伪**（未本轮实拉） |
+| `sellers` | `shop/pageList` | **已接线（实时）** |
+| `sp_search_term_report` | `adSearchTermReport` | **已接线（按需拉取+TTL cache）** |
+| `sp_keyword_report` | `adTargeringReport`（关键词匹配类型行） | **已接线（与定向报表共享一次下载）** |
+| `sp_target_report` | `adTargeringReport`（非关键词行） | **已接线** |
+| `sp_keywords` | `manageData/spKeyword` | **已接线（按需）** |
+| `sp_campaign_report` | `adCampaignReport` | **已接线（按需）** |
+| `sp_campaigns` | `manageData/spCampaign` | **已接线（按需）** |
+| `sp_product_ads` | `manageData/spAdProduct` | **已接线（按需）** |
+| `sp_adgroups` | `manageData/spGroup` | **已接线（按需）** |
+| `sp_targets` | `manageData/spTarget` | **已接线（按需）** |
+| `asin_profit` | `monthProfit/asin`（`grossProfitRate`→`grossRate`） | **已接线（按需；数值 caveat）** |
+| `fba_stock` | `inventoryManage/fba/pageList` | **已接线（按需）** |
 
-**结论（2026-07-28）**：赛狐 **不是**「顶替不了领星」。优化器必需 SP 数据集已 **ingest 接线**（见 [phase2-dataset-gap.md](../specs/phase2-dataset-gap.md)）；剩余是 SB/SD/小时/ABA/原表扩展面、上游 merge、运营审与写路径禁令。经验沉淀：[sellfox-ivyeaops-five-lever-ingest.md](../../../../docs/solutions/architecture-patterns/sellfox-ivyeaops-five-lever-ingest.md)。
+**原生语义（2026-07-28 对齐）**：`fetch_dataset` 在 PoC 下 miss/`force` → `sellfox_ingest.ensure_dataset` 实时拉赛狐写 cache（TTL 默认 1800s）；**禁止回落领星**。离线 `ingest_sellfox_phase2.ps1` 仅可选预热/对账，不是同事用产品的前置条件。
+
+**结论（2026-07-28）**：READ_DATASETS **12/12** 赛狐只读路径已齐；剩余是 SB/SD/小时/ABA 扩展、上游 merge、运营审与写路径禁令。经验：[sellfox-ivyeaops-five-lever-ingest.md](../../../../docs/solutions/architecture-patterns/sellfox-ivyeaops-five-lever-ingest.md)。
 
 ## 7. 历史记录索引
 

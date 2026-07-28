@@ -1,5 +1,9 @@
 # Phase2: entities + Targeting/Campaign + asin_profit → IvyeaOps sellfox_cache
 #
+# OPTIONAL warm-up / boil-the-lake tool. Product path is on-demand:
+# Browse / Optimizer miss·force → fetch_dataset → sellfox_ingest.ensure_dataset.
+# You do NOT need to run this before colleagues use 数据浏览 / 优化建议.
+#
 # Usage:
 #   powershell -ExecutionPolicy Bypass -File ai_access_poc\board\scripts\ingest_sellfox_phase2.ps1
 # Optional:

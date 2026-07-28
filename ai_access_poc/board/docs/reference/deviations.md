@@ -17,5 +17,6 @@ timestamp: 2026-07-24
 | D4 | sid vs shopId | 映射 | 配置一店 | 独立 runner 不依赖 sid；IvyeaOps 路径用规范化 sid |
 | D5 | AGPL 外部树 | 合规 | 不 vendoring | 工作树在 `IvyeaOps-sellfox` |
 | D6 | 无广告写 API | 不能自动否词 | CSV 人工 | `write_blocked` 字段 + operate 硬禁 |
+| D7 | Auto/商品/类目「用户搜索词」可为 ASIN | 收割候选像在加 ASIN 词 | 过滤 `B0…`（**未实施**） | 2026-07-28 TOODDLY 确认报表真值；见 solutions best-practice |
 
 更新规则：运营签字前可改阈值并回填本表。
