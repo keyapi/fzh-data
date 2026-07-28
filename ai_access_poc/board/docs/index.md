@@ -12,6 +12,8 @@ timestamp: 2026-07-24
 |---------|--------|
 | **本机点着体验 :8001** | [specs/hands-on-ivyeaops-sellfox.md](specs/hands-on-ivyeaops-sellfox.md) |
 | Phase2 跟上游 / 五杠杆 | [specs/phase2-backlog.md](specs/phase2-backlog.md) |
+| Phase2 数据集缺口矩阵 | [specs/phase2-dataset-gap.md](specs/phase2-dataset-gap.md) |
+| 五杠杆 ingest 经验（solutions） | [../../../docs/solutions/architecture-patterns/sellfox-ivyeaops-five-lever-ingest.md](../../../docs/solutions/architecture-patterns/sellfox-ivyeaops-five-lever-ingest.md) |
 | B1–B6 清单 | [specs/b1-b6-checklist.md](specs/b1-b6-checklist.md) |
 | 运营审简报 | [specs/ops-review-brief.md](specs/ops-review-brief.md) |
 | 搜索词列映射 | [reference/column-mapping.md](reference/column-mapping.md) |

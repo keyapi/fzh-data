@@ -86,7 +86,7 @@ IvyeaOps READ_DATASETS：**无对等键**（领星也未注册小时级）。状
 | `sp_targets` / `sp_adgroups` | `spTarget` / `spGroup` | **源已验证可映射未接线**（写前置） |
 | `fba_stock` | FBA pageList | **权限或文档未证伪**（未本轮实拉） |
 
-**结论（阶段性）**：赛狐 **不是**「顶替不了领星」。优化器必需的 SP 数据在赛狐侧均有对等源（报表和/或实体）；缺口是 **PoC ingest 未接** + 归因/拼表规则，不是能力真空。SB/SD/小时/ABA/原表为扩展面。
+**结论（2026-07-28）**：赛狐 **不是**「顶替不了领星」。优化器必需 SP 数据集已 **ingest 接线**（见 [phase2-dataset-gap.md](../specs/phase2-dataset-gap.md)）；剩余是 SB/SD/小时/ABA/原表扩展面、上游 merge、运营审与写路径禁令。经验沉淀：[sellfox-ivyeaops-five-lever-ingest.md](../../../../docs/solutions/architecture-patterns/sellfox-ivyeaops-five-lever-ingest.md)。
 
 ## 7. 历史记录索引
 
@@ -98,4 +98,5 @@ IvyeaOps READ_DATASETS：**无对等键**（领星也未注册小时级）。状
 ## 相关
 
 - [phase2-dataset-gap.md](../specs/phase2-dataset-gap.md)
+- 经验：[sellfox-ivyeaops-five-lever-ingest.md](../../../../docs/solutions/architecture-patterns/sellfox-ivyeaops-five-lever-ingest.md)
 - SP7 验证包：`advertise/docs/research/2026-07-28-report-verify/`
