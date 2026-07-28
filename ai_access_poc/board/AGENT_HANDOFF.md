@@ -69,6 +69,6 @@ Python：**用 uv** 管理 IvyeaOps `server\.venv`（`setup_ivyeaops_uv.ps1`）�
 - 运营审 **DEFERRED**。Portal 仅壳+摘要（另 PR）；完整产品在 `:8001`。
 - **Sorftime Key**：暂不接销售人员链接；市场调研 `/market` 保持 UI-only，待用户提供 Key 再测真实查词。
 - **IvyeaAgent**：与 IvyeaOps 不同仓 — https://github.com/Hector-xue/ivyea-agent（本地 `:8765`）。未启动不影响 `/assistant` 直连 new-api；仅知识库/部分 text chain 需要。
-- **Phase2 调研门禁（2026-07-28）已过**：缺口矩阵 [`docs/specs/phase2-dataset-gap.md`](docs/specs/phase2-dataset-gap.md)。实现顺序留给 **superpowers**：Targeting+keyword 实体 → Campaign+budget → 财务权限/margin override → 上游 merge → IvyeaAgent。
+- **Phase2 调研门禁（2026-07-28）已过**：缺口矩阵 [`docs/specs/phase2-dataset-gap.md`](docs/specs/phase2-dataset-gap.md)；煮湖总表 [`docs/research/2026-07-28-sellfox-ad-catalog-map.md`](docs/research/2026-07-28-sellfox-ad-catalog-map.md)（利润 API 已通）。实现顺序留给 **superpowers**：Targeting+keyword 实体 → Campaign+budget → asin_profit ingest（caveat）→ 上游 merge → IvyeaAgent。
 
 经验沉淀见：[docs/solutions/integration-issues/ivyeaops-assistant-deepseek-v4-model-name.md](../../docs/solutions/integration-issues/ivyeaops-assistant-deepseek-v4-model-name.md)。
