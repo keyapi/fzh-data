@@ -3,7 +3,7 @@ okf: v0.1
 type: Index
 module: sellfox_shipping
 created: 2026-07-15
-updated: 2026-07-23
+updated: 2026-07-28
 ---
 
 # sellfox_shipping — 文档索引
@@ -36,3 +36,4 @@ updated: 2026-07-23
 - [research/tongtool-carrier-analysis-2026-07-22.md](research/tongtool-carrier-analysis-2026-07-22.md) — **通途 US 仓库实际承运商分析**：9,646 条自发货订单，VITE/蜴国际/US-FedEx 分布、包裹尺寸、多SKU合并算法
 - [research/routing-rules-design-2026-07-22.md](research/routing-rules-design-2026-07-22.md) — **路由规则设计方案**：5 层决策流 + 规则数据结构 + 集成方案
 - [research/erpnext-zlmb-dims-v2-2026-07-23.md](research/erpnext-zlmb-dims-v2-2026-07-23.md) — EN ZLMB# 重尺 V2：跨面料 sibling 借用
+- [research/sku-label-back-sticker-analysis-2026-07-28.md](research/sku-label-back-sticker-analysis-2026-07-28.md) — **SKU 背贴 PDF 生成**：Colab notebook 逻辑分析 + sellfox_shipping 集成方案
