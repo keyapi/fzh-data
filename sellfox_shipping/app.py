@@ -227,6 +227,118 @@ async def review_package(request: Request, package_sn: str, body: dict):
     return record.model_dump(mode="json")
 
 
+@app.post("/api/packages/{package_sn}/create-label")
+async def api_create_label(request: Request, package_sn: str, body: dict):
+    """Create a shipping label via carrier API. Returns label record as JSON.
+
+    Body: {"carrier": "vite", "service_level": "GOFO_PARCEL", "channel": "GFUS"}
+    """
+    from sellfox_shipping.label_service import LabelService, LabelServiceError
+
+    account_key = config["sellfox"]["proxy_account"]
+    record = _get_package_repository().get(account_key, package_sn)
+    if record is None:
+        raise HTTPException(404, f"Package {package_sn} not found")
+
+    carrier = str(body.get("carrier") or "").strip()
+    if not carrier:
+        raise HTTPException(400, "carrier is required")
+
+    try:
+        service = LabelService(_get_package_repository())
+        result = service.create_label(
+            carrier=carrier,
+            package=record,
+            account_key=account_key,
+            actor=_web_actor(request, str(body.get("actor") or "")),
+            service_level=str(body.get("service_level") or ""),
+            channel=str(body.get("channel") or ""),
+        )
+    except LabelServiceError as exc:
+        raise HTTPException(exc.http_status, str(exc)) from exc
+    return result
+
+
+@app.get("/api/packages/{package_sn}/labels")
+async def api_package_labels(package_sn: str):
+    """List all shipping labels for a package."""
+    from sellfox_shipping.label_service import LabelService
+
+    account_key = config["sellfox"]["proxy_account"]
+    record = _get_package_repository().get(account_key, package_sn)
+    if record is None:
+        raise HTTPException(404, f"Package {package_sn} not found")
+    service = LabelService(_get_package_repository())
+    return service.get_labels_for_package(account_key, package_sn)
+
+
+@app.get("/api/labels/{label_id}/download")
+async def api_label_download(label_id: int):
+    """Download a label's PDF artifact."""
+    repo = _get_package_repository()
+    label = repo.get_label(label_id)
+    if label is None:
+        raise HTTPException(404, f"Label {label_id} not found")
+    if label.artifact_id is None:
+        raise HTTPException(404, f"Label {label_id} has no PDF artifact")
+    artifact = repo.get_artifact(label.artifact_id)
+    if artifact is None:
+        raise HTTPException(404, "Artifact not found")
+    path = repo.resolve_artifact_path(artifact)
+    if not path.is_file():
+        raise HTTPException(404, "Artifact blob missing on disk")
+    return FileResponse(
+        path=str(path),
+        filename=artifact.file_name,
+        media_type=artifact.mime_type or "application/pdf",
+    )
+
+
+@app.post("/api/labels/{label_id}/cancel")
+async def api_cancel_label(request: Request, label_id: int):
+    """Cancel a shipping label via carrier API."""
+    from sellfox_shipping.label_service import LabelService, LabelServiceError
+
+    try:
+        body = await request.json() if request.headers.get("content-type") == "application/json" else {}
+    except Exception:
+        body = {}
+    actor = _web_actor(request, str(body.get("actor") or ""))
+
+    try:
+        service = LabelService(_get_package_repository())
+        return service.cancel_label(label_id, actor=actor)
+    except LabelServiceError as exc:
+        raise HTTPException(exc.http_status, str(exc)) from exc
+
+
+@app.post("/packages/{package_sn}/cancel-label/{label_id}", response_class=HTMLResponse)
+async def package_cancel_label_form(request: Request, package_sn: str, label_id: int):
+    """HTML form post to cancel a label."""
+    from sellfox_shipping.label_service import LabelService, LabelServiceError
+
+    form = await request.form()
+    account_key = config["sellfox"]["proxy_account"]
+    repo = _get_package_repository()
+    record = repo.get(account_key, package_sn)
+    if record is None:
+        raise HTTPException(404, f"Package {package_sn} not found")
+
+    actor = _web_actor(request, str(form.get("actor") or "web-user"))
+    try:
+        svc = LabelService(repo)
+        result = svc.cancel_label(label_id, actor=actor)
+        message = f"面单已取消 — {result.get('message', 'OK')}"
+    except LabelServiceError as exc:
+        message = f"取消失败: {exc}"
+
+    return templates.TemplateResponse(
+        request,
+        "package_detail.html",
+        _package_detail_context(account_key, record, message=message),
+    )
+
+
 @app.get("/api/orders")
 async def list_orders(
     status: str | None = Query(None),
@@ -372,7 +484,36 @@ async def package_detail_page(request: Request, package_sn: str):
     )
 
 
-def _package_detail_context(account_key: str, record, *, message: str) -> dict:
+@app.post("/packages/{package_sn}/fetch-rates", response_class=HTMLResponse)
+async def package_fetch_rates(request: Request, package_sn: str):
+    """Fetch VITE + Lizard rates on demand and redirect back to detail page."""
+    account_key = config["sellfox"]["proxy_account"]
+    repo = _get_package_repository()
+    record = repo.get(account_key, package_sn)
+    if record is None:
+        raise HTTPException(404, f"Package {package_sn} not found")
+
+    carton_rows = _carton_rows_for_package(account_key, record)
+    package_dims = _compute_package_dims(record, carton_rows)
+    routing_result = _compute_routing(record, carton_rows)
+
+    vite_rate = _get_vite_rate(record, package_dims, routing_result)
+    _get_lizard_rate(record, package_dims)
+
+    if vite_rate and "error" not in vite_rate:
+        message = f"报价已更新 — {vite_rate.get('service', '')} ${vite_rate.get('total_amount', '—')}"
+    elif vite_rate and "error" in vite_rate:
+        message = f"报价失败: {vite_rate['error']}"
+    else:
+        message = "报价完成（查看历史记录）"
+
+    # Re-render with fresh context (live rate + updated history)
+    ctx = _package_detail_context(account_key, record, message=message, vite_rate_override=vite_rate)
+    ctx["rate_history"] = _get_rate_history(repo, record, account_key)
+    return templates.TemplateResponse(request, "package_detail.html", ctx)
+
+
+def _package_detail_context(account_key: str, record, *, message: str, vite_rate_override: dict | None = None) -> dict:
     from sellfox_shipping.submission_state import aggregate_package_submission_state
 
     repo = _get_package_repository()
@@ -388,12 +529,16 @@ def _package_detail_context(account_key: str, record, *, message: str) -> dict:
     carton_rows = _carton_rows_for_package(account_key, record)
     package_dims = _compute_package_dims(record, carton_rows)
     routing_result = _compute_routing(record, carton_rows)
-    # Fetch rates from all available carriers (always both VITE + Lizard).
-    # The routing suggestion determines which rate is shown in 运费试算,
-    # but all results are persisted to history.
-    vite_rate = _get_vite_rate(record, package_dims, routing_result)
-    _get_lizard_rate(record, package_dims)  # persist only, not displayed in live panel
     rate_history = _get_rate_history(repo, record, account_key)
+
+    # Labels + enabled carriers for UI
+    labels = _get_labels_for_package(account_key, record.package_sn)
+    enabled_carriers = _get_enabled_carriers()
+    lizard_services = _get_lizard_services(repo, record, account_key)
+
+    # Use override from fetch-rates, or None for initial load (on-demand pattern)
+    vite_rate = vite_rate_override
+
     return {
         "package": record,
         "message": message,
@@ -404,6 +549,9 @@ def _package_detail_context(account_key: str, record, *, message: str) -> dict:
         "rate_history": rate_history,
         "submission_intents": intents,
         "package_submission_state": package_submission_state,
+        "labels": labels,
+        "enabled_carriers": enabled_carriers,
+        "lizard_services": lizard_services,
     }
 
 
@@ -643,12 +791,14 @@ def _get_vite_rate(
     package_dims: dict | None,
     routing_result,
 ) -> dict | None:
-    """Fetch VITE rate quote (GOFO or FedEx) when routing suggests VITE.
+    """Fetch VITE rate quote (GOFO or FedEx) for all routable packages.
 
     Converts kg/cm to lbs/inches. Routes to FedEx when longest side
     exceeds the GOFO 22-inch limit, otherwise uses GOFO.
+    Excluded shops (platform logistics) are still skipped.
     """
-    if routing_result is None or getattr(routing_result, "carrier", "") != "vite":
+    if routing_result is not None and not routing_result.matched:
+        # Platform logistics (excluded shops) — skip rate fetch
         return None
 
     if not package_dims:
@@ -729,13 +879,14 @@ def _get_vite_rate(
             "currency": rate.get("currency", "USD"),
             "billing_weight": rate.get("billingWeight"),
             "zone": rate.get("zone"),
+            "address_type": str(rate.get("address_type_text", "")),
             "channel": channel,
             "max_side_in": max_side_in,
             "weight_lb": weight_lb,
             "use_fedex": use_fedex,
         }
         # Persist for historical tracking
-        _persist_rate(record, result)
+        _persist_rate(record, result, raw_response=rate)
         return result
     except Exception as exc:
         return {"source": "vite", "error": f"VITE rate fetch failed: {exc}"}
@@ -842,13 +993,14 @@ def _get_lizard_rate(
                 "total_amount": total,
                 "currency": str(item.get("currency_code", "USD")),
                 "billing_weight": float(item.get("charge_weight", 0) or 0),
-                "zone": str(item.get("address_type_text", "")),
+                "zone": str(item.get("zone", "")),
+                "address_type": str(item.get("address_type_text", "")),
                 "channel": str(sm_code),
                 "max_side_in": round(package_dims["length_cm"] / 2.54, 1),
                 "weight_lb": round(package_dims["weight_kg"] * 2.20462, 2),
                 "use_fedex": False,
             }
-            _persist_rate(record, rate_record)
+            _persist_rate(record, rate_record, raw_response=item)
 
         return None
 
@@ -856,7 +1008,7 @@ def _get_lizard_rate(
         return None
 
 
-def _persist_rate(record, rate_result: dict) -> None:
+def _persist_rate(record, rate_result: dict, raw_response: dict | None = None) -> None:
     """Best-effort persist of a successful rate fetch to the DB."""
     try:
         repo = _get_package_repository()
@@ -864,9 +1016,22 @@ def _persist_rate(record, rate_result: dict) -> None:
             config["sellfox"]["proxy_account"], record.package_sn
         )
         if package_db_id is not None:
-            repo.insert_package_rate(package_db_id=package_db_id, rate=rate_result)
+            repo.insert_package_rate(
+                package_db_id=package_db_id,
+                rate=rate_result,
+                raw_data=_json_compact(raw_response) if raw_response else None,
+            )
     except Exception:
         pass
+
+
+def _json_compact(obj) -> str | None:
+    import json
+
+    try:
+        return json.dumps(obj, ensure_ascii=False, default=str, indent=2)
+    except Exception:
+        return None
 
 
 def _get_rate_history(repo, record, account_key: str) -> list:
@@ -878,6 +1043,72 @@ def _get_rate_history(repo, record, account_key: str) -> list:
         return repo.list_package_rates(package_db_id, limit=10)
     except Exception:
         return []
+
+
+def _get_labels_for_package(account_key: str, package_sn: str) -> list[dict]:
+    """Return shipping labels for a package (for Web UI)."""
+    try:
+        repo = _get_package_repository()
+        records = repo.list_labels_for_package(
+            account_key=account_key, package_sn=package_sn
+        )
+        result: list[dict] = []
+        for r in records:
+            result.append({
+                "id": r.id,
+                "carrier": r.carrier,
+                "service_level": r.service_level,
+                "tracking_number": r.tracking_number,
+                "carrier_order_id": r.carrier_order_id,
+                "total_amount": r.total_amount,
+                "currency": r.currency,
+                "status": r.status,
+                "artifact_id": r.artifact_id,
+                "label_url": r.label_url,
+                "created_by": r.created_by,
+                "created_at": r.created_at,
+            })
+        return result
+    except Exception:
+        return []
+
+
+def _get_enabled_carriers() -> list[dict]:
+    """Return carriers with enabled=true from config for UI dropdown."""
+    carriers = config.get("carriers", {})
+    result: list[dict] = []
+    for name, cfg in carriers.items():
+        if cfg.get("enabled"):
+            result.append({
+                "name": name,
+                "label": cfg.get("label", name.upper()),
+            })
+    return result
+
+
+def _get_lizard_services(repo, record, account_key: str) -> list[dict]:
+    """Extract available lizard sm_codes from rate history for this package."""
+    seen: set[str] = set()
+    services: list[dict] = []
+    try:
+        db_id = repo.get_package_db_id(account_key, record.package_sn)
+        if db_id:
+            for r in repo.list_package_rates(db_id, limit=20):
+                if r.carrier == "lizard" and r.channel and r.channel not in seen:
+                    seen.add(r.channel)
+                    services.append({"value": r.channel, "label": r.channel})
+    except Exception:
+        pass
+    # Also include all known sm_codes if rate history is sparse
+    _known = [
+        "FedEx-Ground-J-TX", "FedEx-21-AHS-TX", "FedEx-21-AHS-USEA",
+        "FedEx-Eco-21-TX", "FedEx-Economy-10-HOU", "FedEx-Economy-10-USEA",
+        "FedEx-Ground-20-OS-TX", "FedEx-Ground-J-USWE",
+    ]
+    for sm in _known:
+        if sm not in seen:
+            services.append({"value": sm, "label": sm})
+    return services
 
 
 @app.post("/packages/{package_sn}/review", response_class=HTMLResponse)
@@ -1019,6 +1250,47 @@ async def package_prepare_submit_form(request: Request, package_sn: str):
     record = repo.get(account_key, package_sn)
     if record is None:
         raise HTTPException(404, f"Package {package_sn} not found")
+    return templates.TemplateResponse(
+        request,
+        "package_detail.html",
+        _package_detail_context(account_key, record, message=message),
+    )
+
+
+@app.post("/packages/{package_sn}/create-label", response_class=HTMLResponse)
+async def package_create_label_form(request: Request, package_sn: str):
+    """HTML form post to create a shipping label."""
+    from sellfox_shipping.label_service import LabelService, LabelServiceError
+
+    form = await request.form()
+    account_key = config["sellfox"]["proxy_account"]
+    repo = _get_package_repository()
+    record = repo.get(account_key, package_sn)
+    if record is None:
+        raise HTTPException(404, f"Package {package_sn} not found")
+
+    actor = _web_actor(request, str(form.get("actor") or "web-user"))
+    carrier = str(form.get("carrier") or "vite").strip()
+    service_level = str(form.get("service_level") or "").strip()
+
+    try:
+        svc = LabelService(repo)
+        result = svc.create_label(
+            carrier=carrier,
+            package=record,
+            account_key=account_key,
+            actor=actor,
+            service_level=service_level,
+        )
+        message = (
+            f"面单创建成功 — 追踪号: {result.get('tracking_number', '—')} | "
+            f"订单号: {result.get('carrier_order_id', '—')}"
+        )
+    except LabelServiceError as exc:
+        message = f"面单创建失败: {exc}"
+    except Exception as exc:
+        message = f"面单创建失败: {exc}"
+
     return templates.TemplateResponse(
         request,
         "package_detail.html",

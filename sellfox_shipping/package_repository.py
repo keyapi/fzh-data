@@ -528,6 +528,8 @@ class PackageRateRow(Base):
     max_side_in: Mapped[float | None] = mapped_column(Float, nullable=True)
     weight_lb: Mapped[float | None] = mapped_column(Float, nullable=True)
     is_fedex: Mapped[bool] = mapped_column(default=False)
+    address_type: Mapped[str] = mapped_column(String, default="")
+    raw_data: Mapped[str | None] = mapped_column(Text, nullable=True)
     fetched_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.current_timestamp()
     )
@@ -547,7 +549,67 @@ class PackageRateRecord:
     max_side_in: float | None
     weight_lb: float | None
     is_fedex: bool
+    address_type: str = ""
+    raw_data: str | None = None
     fetched_at: datetime | None = None
+
+
+class ShippingLabelRow(Base):
+    """One row per label creation attempt — not unique, preserves history."""
+
+    __tablename__ = "shipping_labels"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    account_id: Mapped[int] = mapped_column(
+        ForeignKey("shipping_accounts.id", ondelete="CASCADE"),
+    )
+    package_id: Mapped[int] = mapped_column(
+        ForeignKey("shipping_packages.id", ondelete="CASCADE"),
+    )
+    carrier: Mapped[str] = mapped_column(String, default="")
+    service_level: Mapped[str] = mapped_column(String, default="")
+    tracking_number: Mapped[str] = mapped_column(String, default="")
+    carrier_order_id: Mapped[str] = mapped_column(String, default="")
+    request_id: Mapped[str] = mapped_column(String, default="")
+    label_url: Mapped[str] = mapped_column(Text, default="")
+    artifact_id: Mapped[int | None] = mapped_column(
+        ForeignKey("shipping_artifacts.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    label_format: Mapped[str] = mapped_column(String, default="PDF")
+    total_amount: Mapped[float | None] = mapped_column(Float, nullable=True)
+    currency: Mapped[str] = mapped_column(String, default="USD")
+    status: Mapped[str] = mapped_column(String, default="pending")
+    carrier_response_json: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[str] = mapped_column(String, default="")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.current_timestamp()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.current_timestamp()
+    )
+
+
+@dataclass(frozen=True)
+class ShippingLabelRecord:
+    id: int
+    account_key: str
+    package_id: int
+    carrier: str
+    service_level: str
+    tracking_number: str
+    carrier_order_id: str
+    request_id: str
+    label_url: str
+    artifact_id: int | None
+    label_format: str
+    total_amount: float | None
+    currency: str
+    status: str
+    carrier_response_json: str
+    created_by: str
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 class PackageRepository:
@@ -1773,7 +1835,7 @@ class PackageRepository:
                 computed_at=row.computed_at,
             )
 
-    def insert_package_rate(self, *, package_db_id: int, rate: dict) -> PackageRateRecord:
+    def insert_package_rate(self, *, package_db_id: int, rate: dict, raw_data: str | None = None) -> PackageRateRecord:
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         with self._session_factory.begin() as session:
             row = PackageRateRow(
@@ -1788,6 +1850,8 @@ class PackageRepository:
                 max_side_in=rate.get("max_side_in"),
                 weight_lb=rate.get("weight_lb"),
                 is_fedex=rate.get("use_fedex", False),
+                address_type=rate.get("address_type", ""),
+                raw_data=raw_data,
                 fetched_at=now,
             )
             session.add(row)
@@ -1806,6 +1870,120 @@ class PackageRepository:
                 .all()
             )
             return [_rate_row_to_record(r) for r in rows]
+
+    # ── shipping_labels ──────────────────────────────────────────
+
+    def insert_label(
+        self,
+        *,
+        account_key: str,
+        package_db_id: int,
+        carrier: str,
+        service_level: str,
+        tracking_number: str,
+        carrier_order_id: str,
+        request_id: str,
+        label_url: str,
+        artifact_id: int | None,
+        total_amount: float | None,
+        currency: str,
+        status: str,
+        carrier_response_json: str,
+        created_by: str,
+    ) -> ShippingLabelRecord:
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        with self._session_factory.begin() as session:
+            account = self._get_or_create_account(session, account_key)
+            row = ShippingLabelRow(
+                account_id=account.id,
+                package_id=package_db_id,
+                carrier=carrier,
+                service_level=service_level,
+                tracking_number=tracking_number,
+                carrier_order_id=carrier_order_id,
+                request_id=request_id,
+                label_url=label_url,
+                artifact_id=artifact_id,
+                total_amount=total_amount,
+                currency=currency,
+                status=status,
+                carrier_response_json=carrier_response_json,
+                created_by=created_by,
+                created_at=now,
+                updated_at=now,
+            )
+            session.add(row)
+            session.flush()
+            label_id = int(row.id)
+        self.append_audit_event(
+            actor=created_by,
+            action="labels.create",
+            entity_type="shipping_label",
+            entity_id=str(label_id),
+            summary=f"{carrier} tracking={tracking_number} order={carrier_order_id}",
+        )
+        record = self.get_label(label_id)
+        assert record is not None
+        return record
+
+    def get_label(self, label_id: int) -> ShippingLabelRecord | None:
+        with self._session_factory() as session:
+            row = session.get(ShippingLabelRow, label_id)
+            if row is None:
+                return None
+            account = session.get(ShippingAccountRow, row.account_id)
+            return _shipping_label_to_record(
+                account.account_key if account else "", row
+            )
+
+    def list_labels_for_package(
+        self,
+        *,
+        account_key: str,
+        package_sn: str,
+        limit: int = 50,
+    ) -> list[ShippingLabelRecord]:
+        with self._session_factory() as session:
+            rows = (
+                session.query(ShippingLabelRow)
+                .join(
+                    PackageRow,
+                    PackageRow.id == ShippingLabelRow.package_id,
+                )
+                .join(
+                    ShippingAccountRow,
+                    ShippingAccountRow.id == PackageRow.account_id,
+                )
+                .where(
+                    ShippingAccountRow.account_key == account_key,
+                    PackageRow.package_sn == package_sn,
+                )
+                .order_by(ShippingLabelRow.created_at.desc())
+                .limit(limit)
+                .all()
+            )
+            return [
+                _shipping_label_to_record(account_key, r) for r in rows
+            ]
+
+    def update_label_status(
+        self, label_id: int, status: str
+    ) -> ShippingLabelRecord | None:
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        with self._session_factory.begin() as session:
+            row = session.get(ShippingLabelRow, label_id)
+            if row is None:
+                return None
+            row.status = status
+            row.updated_at = now
+        self.append_audit_event(
+            actor="system",
+            action="labels.update_status",
+            entity_type="shipping_label",
+            entity_id=str(label_id),
+            summary=f"status={status}",
+        )
+        return self.get_label(label_id)
 
     @staticmethod
     def _get_or_create_account(
@@ -2083,7 +2261,46 @@ def _rate_row_to_record(row: PackageRateRow) -> PackageRateRecord:
         max_side_in=float(row.max_side_in) if row.max_side_in is not None else None,
         weight_lb=float(row.weight_lb) if row.weight_lb is not None else None,
         is_fedex=bool(row.is_fedex),
+        address_type=row.address_type or "",
+        raw_data=row.raw_data,
         fetched_at=fetched_at,
+    )
+
+
+def _shipping_label_to_record(
+    account_key: str, row: ShippingLabelRow
+) -> ShippingLabelRecord:
+    created_at = row.created_at
+    updated_at = row.updated_at
+    if created_at is not None:
+        from datetime import timedelta, timezone
+        created_at = created_at.replace(tzinfo=timezone.utc).astimezone(
+            timezone(timedelta(hours=8))
+        )
+    if updated_at is not None:
+        from datetime import timedelta, timezone
+        updated_at = updated_at.replace(tzinfo=timezone.utc).astimezone(
+            timezone(timedelta(hours=8))
+        )
+    return ShippingLabelRecord(
+        id=int(row.id),
+        account_key=account_key,
+        package_id=int(row.package_id),
+        carrier=row.carrier or "",
+        service_level=row.service_level or "",
+        tracking_number=row.tracking_number or "",
+        carrier_order_id=row.carrier_order_id or "",
+        request_id=row.request_id or "",
+        label_url=row.label_url or "",
+        artifact_id=int(row.artifact_id) if row.artifact_id is not None else None,
+        label_format=row.label_format or "PDF",
+        total_amount=float(row.total_amount) if row.total_amount is not None else None,
+        currency=row.currency or "USD",
+        status=row.status or "pending",
+        carrier_response_json=row.carrier_response_json or "",
+        created_by=row.created_by or "",
+        created_at=created_at,
+        updated_at=updated_at,
     )
 
 

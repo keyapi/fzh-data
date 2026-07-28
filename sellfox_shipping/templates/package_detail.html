@@ -92,6 +92,11 @@
                     </div>
                 </div>
             </div>
+            <form method="post" action="/packages/{{ package.package_sn }}/fetch-rates" style="margin-top:12px;">
+                <button type="submit" style="padding:8px 18px;background:#1a1a2e;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:13px;">
+                    获取 VITE + 蜴国际 报价
+                </button>
+            </form>
         </div>
         {% endif %}
 
@@ -152,7 +157,7 @@
             <table>
                 <thead>
                     <tr>
-                        <th>时间</th><th>渠道</th><th>运费</th><th>计费重(lbs)</th><th>Zone</th><th>最长边(in)</th>
+                        <th>时间</th><th>渠道</th><th>运费</th><th>计费重(lbs)</th><th>Zone</th><th>类型</th><th>最长边(in)</th><th>原始数据</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -172,13 +177,125 @@
                         <td><strong>${{ rh.total_amount if rh.total_amount is not none else '—' }}</strong> {{ rh.currency }}</td>
                         <td>{{ rh.billing_weight if rh.billing_weight is not none else '—' }}</td>
                         <td>{{ rh.zone or '—' }}</td>
+                        <td>{{ rh.address_type or '—' }}</td>
                         <td>{{ rh.max_side_in if rh.max_side_in is not none else '—' }}</td>
+                        <td>
+                            {% if rh.raw_data %}
+                            <details style="font-size:11px;">
+                                <summary style="cursor:pointer;color:#1a1a2e;font-weight:600;">JSON ({{ rh.raw_data|length }} chars)</summary>
+                                <pre style="max-width:500px;max-height:300px;overflow:auto;background:#1e1e2e;color:#cdd6f4;padding:10px;border-radius:4px;margin-top:4px;font-size:11px;line-height:1.5;white-space:pre-wrap;word-break:break-all;">{{ rh.raw_data }}</pre>
+                            </details>
+                            {% else %}
+                            <span style="color:#ccc;">—</span>
+                            {% endif %}
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
         {% endif %}
+
+        <!-- 2.7 创建面单 -->
+        <div class="panel">
+            <h2>创建面单</h2>
+            {% if not package_dims %}
+            <p style="font-size:13px;color:#721c24;">包裹尺寸未计算，无法创建面单。请先在下方商品行中确保重尺数据完整。</p>
+            {% else %}
+            <form method="post" action="/packages/{{ package.package_sn }}/create-label">
+            <div class="info-row" style="align-items:flex-end;">
+                <div class="info-item">
+                    <div class="label">承运商</div>
+                    <select name="carrier" id="carrier-select" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;" onchange="switchServices()">
+                        {% for c in enabled_carriers or [] %}
+                        <option value="{{ c.name }}" {% if routing_result and routing_result.carrier == c.name %}selected{% endif %}>{{ c.label }}</option>
+                        {% else %}
+                        <option value="vite">VITE</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="info-item">
+                    <div class="label">服务类型</div>
+                    <select name="service_level" id="service-select" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;">
+                    </select>
+                </div>
+                <div class="info-item">
+                    <div class="label">操作者</div>
+                    <input name="actor" value="web-user" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;width:120px;" />
+                </div>
+                <div class="info-item">
+                    <button type="submit" style="padding:8px 18px;background:#1a1a2e;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:14px;">
+                        创建面单
+                    </button>
+                </div>
+            </div>
+            </form>
+            <script>
+            var carrierServices = {
+                'vite': [
+                    {value:'GOFO_PARCEL', label:'GOFO_PARCEL (≤22in)'},
+                    {value:'FEDEX_GROUND', label:'FEDEX_GROUND (>22in)'}
+                ],
+                'lizard': [
+                    {% for s in lizard_services or [] %}
+                    {value:'{{ s.value }}', label:'{{ s.label }}'},
+                    {% endfor %}
+                ]
+            };
+            function switchServices() {
+                var carrier = document.getElementById('carrier-select').value;
+                var sel = document.getElementById('service-select');
+                sel.innerHTML = '';
+                var services = carrierServices[carrier] || [];
+                services.forEach(function(s) {
+                    var opt = document.createElement('option');
+                    opt.value = s.value;
+                    opt.textContent = s.label;
+                    sel.appendChild(opt);
+                });
+            }
+            switchServices();  // init on page load
+            </script>
+            {% endif %}
+
+            {% if labels %}
+            <table style="margin-top:16px;">
+                <thead>
+                    <tr>
+                        <th>创建时间</th><th>承运商</th><th>追踪号</th><th>服务</th>
+                        <th>金额</th><th>状态</th><th>面单PDF</th><th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for label in labels %}
+                    <tr>
+                        <td style="font-size:11px;">{{ label.created_at.strftime('%Y-%m-%d %H:%M:%S') if label.created_at else '—' }}</td>
+                        <td><span class="badge" style="background:#d1ecf1;color:#0c5460;">{{ label.carrier }}</span></td>
+                        <td><code>{{ label.tracking_number or '—' }}</code></td>
+                        <td>{{ label.service_level or '—' }}</td>
+                        <td>{% if label.total_amount %}${{ label.total_amount }} {{ label.currency }}{% else %}—{% endif %}</td>
+                        <td><span class="badge" style="background:{% if label.status == 'generated' %}#d4edda;color:#155724;{% else %}#fff3cd;color:#856404;{% endif %}">{{ label.status }}</span></td>
+                        <td>
+                            {% if label.artifact_id %}
+                            <a href="/api/labels/{{ label.id }}/download" download style="font-size:12px;color:#1a1a2e;">下载 PDF</a>
+                            {% else %}—{% endif %}
+                        </td>
+                        <td>
+                            {% if label.status != 'cancelled' %}
+                            <form method="post" action="/packages/{{ package.package_sn }}/cancel-label/{{ label.id }}" style="display:inline;" onsubmit="return confirm('确认取消面单？取消后无法恢复。')">
+                                <input type="hidden" name="actor" value="web-user" />
+                                <button type="submit" style="padding:2px 8px;font-size:11px;background:#721c24;color:#fff;border:none;border-radius:3px;cursor:pointer;">取消</button>
+                            </form>
+                            {% else %}
+                            <span style="font-size:11px;color:#999;">已取消</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+        </div>
 
         <!-- 3. 商品行 + 包裹重尺 -->
         <div class="panel">
