@@ -110,9 +110,11 @@ def analyze(df):
 
     report_days = None
     if "start_date" in df.columns and "end_date" in df.columns:
-        min_date = pd.to_datetime(df["start_date"]).min()
-        max_date = pd.to_datetime(df["end_date"]).max()
-        report_days = (max_date - min_date).days + 1
+        # API xlsx may use Chinese placeholders like "无结束日期"
+        min_date = pd.to_datetime(df["start_date"], errors="coerce").min()
+        max_date = pd.to_datetime(df["end_date"], errors="coerce").max()
+        if pd.notna(min_date) and pd.notna(max_date):
+            report_days = (max_date - min_date).days + 1
 
     # ── Step 1: 按 search_term 聚合 ─────────────────────
     if "search_term" not in df.columns:

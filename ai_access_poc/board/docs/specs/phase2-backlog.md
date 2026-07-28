@@ -24,14 +24,29 @@ git merge upstream/main
 
 ## 2. 更多赛狐报表 → 五杠杆
 
-| 杠杆 | 需要的数据集 | Phase1 |
-|------|----------------|--------|
-| 否词 / 收割 | `sp_search_term_report` | 已通 |
-| 降 bid / 加 bid | `sp_keyword_report` (+ keywords 实体) | 未接 |
-| 加预算 | `sp_campaign_report` | 未接 |
-| 目标 ACOS 按毛利 | `asin_profit` / product ads | 未接（现用默认 30%） |
+| 杠杆 | 需要的数据集 | Phase1 | 2026-07-28 |
+|------|----------------|--------|------------|
+| 否词 / 收割 | `sp_search_term_report` | 已通 | **已接线** |
+| 降 bid / 加 bid | `sp_keyword_report` (+ keywords 实体) | 未接 | **已接线**（Targeting 过滤 + `spKeyword`） |
+| 加预算 | `sp_campaign_report` + campaigns | 未接 | **已接线**（阈值严时候选可为 0） |
+| 目标 ACOS 按毛利 | `asin_profit` / product ads | 默认 30% | **已接线**（毛利 caveat；标定店已出 ~51% 均值） |
 
-做法：查赛狐 OpenAPI 是否有对等报表 → 扩展 `sellfox_ingest` → `fetch_dataset` 分支 → 再跑 Optimizer。仍保持 `confirm_ticket` 硬禁。
+完整缺口矩阵：[phase2-dataset-gap.md](phase2-dataset-gap.md)  
+报表验证包：`advertise/docs/research/2026-07-28-report-verify/`  
+脚本：`board/scripts/ingest_sellfox_phase2.ps1`
+
+### 下一步（ingest + 按需已通）
+
+1. ~~实现 Targeting + keyword 实体 → 降/加 bid~~ **完成**  
+2. ~~Campaign + campaign 实体 → 加预算~~ **完成**  
+3. ~~asin_profit 接线~~ **完成**（数值 caveat）  
+4. ~~对齐原生按需拉取 12/12；禁止回落领星~~ **完成**（离线 ingest = 可选预热）  
+5. **DEFERRED**：收割/否词过滤 ASIN 形「用户搜索词」（不改逻辑直至产品拍板）— [sellfox-search-term-asin-as-keyword-harvest.md](../../../../docs/solutions/best-practices/sellfox-search-term-asin-as-keyword-harvest.md)  
+6. `git fetch upstream` 合并 IvyeaOps（fork 内，不 vendoring）— 见 Phase3 计划  
+7. IvyeaAgent（知识库，与广告杠杆解耦）  
+8. 运营审简报 / 加预算阈值：E2E 证实最高利用率 ~0.77&lt;0.85，**空候选属预期**  
+
+Phase3 计划：[`docs/superpowers/plans/2026-07-28-phase3-ops-merge-agent.md`](../../../../docs/superpowers/plans/2026-07-28-phase3-ops-merge-agent.md)
 
 ## 3. 百家之长（本地 overlay，不 PR 上游）
 

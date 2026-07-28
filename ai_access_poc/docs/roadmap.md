@@ -23,16 +23,21 @@ timestamp: 2026-07-24
 - [x] B6 偏差清单 + candidates 导出
 - [x] PR [#116](https://github.com/keyapi/fzh-data/pull/116) 合并（2026-07-24）
 
-## 进行中 / 下一步（阻塞）
+## 进行中 / 下一步
 
-- [ ] **运营审** `board/docs/reference/deviations.md` + 本地 `board/out/candidates.csv`  
+- [x] **Phase2 五杠杆 ingest**（2026-07-28）：实体 + Targeting/Campaign/SearchTerm + asin_profit；标定店候选含降/加 bid。见 [board/docs/specs/phase2-dataset-gap.md](../board/docs/specs/phase2-dataset-gap.md)
+- [x] **按需拉取对齐原生**（2026-07-28）：READ_DATASETS 12/12；禁止回落领星；离线 ingest 可选预热。见 [sellfox-ivyeaops-ondemand-fetch-parity.md](../../docs/solutions/architecture-patterns/sellfox-ivyeaops-ondemand-fetch-parity.md)
+- [ ] **DEFERRED**：收割过滤 ASIN 形搜索词（仅文档，未改逻辑）— [sellfox-search-term-asin-as-keyword-harvest.md](../../docs/solutions/best-practices/sellfox-search-term-asin-as-keyword-harvest.md)
+- [ ] **运营审** `board/docs/reference/deviations.md` + 本地 candidates  
   简报：[board/docs/specs/ops-review-brief.md](../board/docs/specs/ops-review-brief.md)  
   三类标注：可直接用 / 阈值要改 / 不适用家纺 — **签字前不得自动执行**
+- [ ] **上游 IvyeaOps merge**（fork 内）
+- [ ] **IvyeaAgent**（知识库）
 
 ## 之后（需确认启动）
 
 - [ ] Portal：nginx `/chat` `/ops` + 钉钉（新专题）
-- [ ] 扩展 READ_DATASETS；赛狐写 API 后再谈 operate
+- [ ] 赛狐广告写 API 后再谈 operate（当前硬禁）
 
 ## 明确不做（当前阶段）
 

@@ -301,24 +301,28 @@ class SellfoxClient:
         filepath.write_bytes(content)
         return len(content)
 
-    def pull_sp_search_term(
+    def pull_cpc_report(
         self,
+        report_type_code: str,
         *,
         days: int = 7,
         shop_id: Optional[str] = None,
         shop_name: Optional[str] = None,
         out_dir: Path,
+        file_prefix: str = "Report",
+        ad_type_code: str = "sp",
         max_wait_s: int = 300,
         poll_s: int = 5,
     ) -> dict:
-        """Create + poll + download SP search-term report. Read-only."""
+        """Create + poll + download a CPC download-center report. Read-only."""
         end_date = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
         start_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
         sid, sname = self.resolve_shop(shop_id=shop_id, shop_name=shop_name)
-        tid = self.create_report_task(sid, "adSearchTermReport", start_date, end_date)
+        tid = self.create_report_task(
+            sid, report_type_code, start_date, end_date, ad_type_code=ad_type_code
+        )
         pending = {tid}
         waited = 0
-        filepath: Optional[Path] = None
         while pending and waited < max_wait_s:
             time.sleep(poll_s)
             waited += poll_s
@@ -331,7 +335,7 @@ class SellfoxClient:
                 safe_name = "".join(
                     c if c.isalnum() or c in "-_" else "_" for c in sname
                 )[:40]
-                filepath = out_dir / f"SearchTerm_{safe_name}_{start_date}_{end_date}.xlsx"
+                filepath = out_dir / f"{file_prefix}_{safe_name}_{start_date}_{end_date}.xlsx"
                 size = self.download_file(urls[0], filepath)
                 pending.discard(tid)
                 return {
@@ -340,13 +344,40 @@ class SellfoxClient:
                     "shop_id": sid,
                     "shop_name": sname,
                     "task_id": tid,
+                    "report_type_code": report_type_code,
                     "start_date": start_date,
                     "end_date": end_date,
                     "filepath": str(filepath),
                     "bytes": size,
                     "waited_s": waited,
-                    "note": "Read-only pull. Do not negate keywords automatically.",
+                    "note": "Read-only pull.",
                 }
             if state == "失败":
                 raise RuntimeError(f"Report task failed: {row}")
-        raise TimeoutError(f"Search-term report still pending after {waited}s task={tid}")
+        raise TimeoutError(
+            f"{report_type_code} still pending after {waited}s task={tid}"
+        )
+
+    def pull_sp_search_term(
+        self,
+        *,
+        days: int = 7,
+        shop_id: Optional[str] = None,
+        shop_name: Optional[str] = None,
+        out_dir: Path,
+        max_wait_s: int = 300,
+        poll_s: int = 5,
+    ) -> dict:
+        """Create + poll + download SP search-term report. Read-only."""
+        out = self.pull_cpc_report(
+            "adSearchTermReport",
+            days=days,
+            shop_id=shop_id,
+            shop_name=shop_name,
+            out_dir=out_dir,
+            file_prefix="SearchTerm",
+            max_wait_s=max_wait_s,
+            poll_s=poll_s,
+        )
+        out["note"] = "Read-only pull. Do not negate keywords automatically."
+        return out

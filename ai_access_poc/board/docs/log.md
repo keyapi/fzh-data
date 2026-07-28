@@ -6,6 +6,17 @@ title: board PoC 变更日志
 
 # 变更日志
 
+## 2026-07-28
+
+- **本阶段收口 / 交接**：handoff 快照写清「按需 12/12 + Phase2 五杠杆已通」；**ASIN 形搜索词进收割**仅文档化、**不改优化器**。compound：[sellfox-search-term-asin-as-keyword-harvest.md](../../docs/solutions/best-practices/sellfox-search-term-asin-as-keyword-harvest.md)。
+- **原生按需语义对齐**：`fetch_dataset` PoC miss/`force` → `ensure_dataset` 拉赛狐；12/12 READ_DATASETS 接线（含 FBA/广告组/定向/定向报表）；禁止回落领星；dashboard/automation/report aggregate 一次取窗；probe 测赛狐；离线 phase2 ingest 标明可选预热。见 [sellfox-ivyeaops-ondemand-fetch-parity.md](../../docs/solutions/architecture-patterns/sellfox-ivyeaops-ondemand-fetch-parity.md)。
+- **内置浏览器 E2E**：BJRYECLTD-US 运行优化引擎 → **候选 35**（含降/加 bid；加预算 0=阈值未达）。启动脚本默认不弹系统浏览器（`-OpenBrowser` 可选）；子进程显式注入 `SELLFOX_*`。
+- **ce-compound**：沉淀 [sellfox-ivyeaops-five-lever-ingest.md](../../docs/solutions/architecture-patterns/sellfox-ivyeaops-five-lever-ingest.md)；同步 handoff / roadmap / 缺口矩阵过时句。
+- **Phase2 ingest 落地**：`ingest_sellfox_phase2.ps1` → 实体(spKeyword/spCampaign/spAdProduct) + Targeting/Campaign/SearchTerm + asin_profit；`fetch_dataset` PoC 已读 cache。标定店 `run_store(596841)` 候选 35（含降/加 bid）。计划见 `docs/superpowers/plans/2026-07-28-phase2-sellfox-ingest.md`。
+- **词汇澄清**：五杠杆（IvyeaOps 否词/收割/降bid/加bid/加预算）≠ 五桶（advertise Harvest/Negate/Monitor/Protect/Ignore）；写入 `CONCEPTS.md` + `specs/phase2-dataset-gap.md`。
+- **煮湖**：领星 READ_DATASETS 全表 + 赛狐下载中心/manageData/利润全量目录映射；`monthProfit/asin` 权限重测 **OK**（`grossProfitRate` 可用，数值 caveat）。
+- **SP7 × IvyeaOps 缺口调研**：标定店 BJRYECLTD-US 七表独立复验；缺口矩阵 `specs/phase2-dataset-gap.md`（白话：报表 vs 实体）。
+
 ## 2026-07-27
 
 - **E2E 闭环**：浏览器实测 AI 问答；`deepseek-chat` 在 api.vilavi.cn 无渠道 → 503；默认模型改为 `deepseek-v4-flash` 后问答打通；资讯刷新约 60 条；知识库仍依赖未启动的 IvyeaAgent。

@@ -23,6 +23,15 @@ Open WebUI 里两套代码执行能力：Open Terminal = Docker Linux 沙箱（�
 - **IvyeaOps**：运营工作台 SPA（本仓库板 PoC 的主体验，fork 于 Hector-xue/IvyeaOps）。  
 - **IvyeaAgent**：独立本地 Agent 服务（常见 `:8765`，Hector-xue/ivyea-agent），服务知识库语义检索与部分 text chain。未启动时 `/assistant` 仍可直连 new-api；`/brain` 会降级为关键词检索。
 
+### 五杠杆（IvyeaOps optimizer）
+`lingxing_optimizer` 对**广告实体**可采取的五类动作候选（只读 PoC 只出候选、不写）：**否词**、**收割（加词）**、**降 bid**、**加 bid**、**加预算**。目标 ACOS（毛利推导）是共用阈值基准，不是第六个动作。依赖「表现报表 + 实体配置」两类数据。
+
+### 收割（关键词杠杆）
+五杠杆之一：把搜索词报表里达标的 **客户搜索词** 建议加成 **精准关键词**（只读 PoC 为 advisory）。不自动等于商品定向收割；报表里 ASIN 形「搜索词」仍可能进入该路径，直至过滤器落地。
+
+### 五桶分析法（advertise 搜索词分类）
+`advertise/analyze_search_term.py` 对**搜索词行**打的五个分析桶：**Harvest / Negate / Monitor / Protect / Ignore**（见 `advertise/AGENT_HANDOFF.md`「5 桶分类」）。这是报表分析标签，**不是** IvyeaOps 的五杠杆。对应关系：Harvest≈收割候选、Negate≈否词候选；Monitor/Protect/Ignore 在五杠杆里没有同名动作。
+
 ## Cross-border shipping (sellfox_shipping)
 
 ### Sellfox packageSn
@@ -77,3 +86,8 @@ The gap between the test ERPNext version and the production ERPNext version. Cur
 
 ### DingTalk Custom Robot (钉钉自定义机器人)
 A webhook-based DingTalk group messaging channel used by AI agents (WorkBuddy, Claude Code) in this project to send notifications and file download links. Uses HMAC-SHA256 signing. Distinct from DingTalk enterprise internal bots — custom robots do not require AppKey/AppSecret and are scoped to a single group, making them safe to share with non-developer agent users. Cannot send file attachments directly; file delivery uses ActionCard messages with download links hosted on ERPNext.
+
+## Flagged ambiguities
+
+- "'五桶' had been used as if it meant IvyeaOps 五杠杆 — they are distinct (search-term labels vs optimizer action candidates)."
+- "Amazon Auto/product/category reports often put ASINs in the customer search-term column — that is real report data, not a mapping bug; keyword 收割 must not treat those strings as exact keywords (filter deferred as of 2026-07-28)."

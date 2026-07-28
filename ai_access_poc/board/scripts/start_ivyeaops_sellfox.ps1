@@ -1,9 +1,14 @@
 # Start IvyeaOps-sellfox on :8001 with Sellfox read-only PoC env.
-# Uses uv-managed server\.venv (created via: uv venv + uv pip install).
-# Does NOT vendor AGPL sources into fzh-data.
+# Uses uv-managed server\.venv. Does NOT vendor AGPL into fzh-data.
 #
 # Usage:
 #   powershell -ExecutionPolicy Bypass -File ai_access_poc\board\scripts\start_ivyeaops_sellfox.ps1
+#   ... -OpenBrowser          # optional: open system Chrome/Edge
+# Agent / E2E: omit -OpenBrowser; use Cursor built-in browser only.
+
+param(
+    [switch]$OpenBrowser
+)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -29,7 +34,6 @@ if (-not (Test-Path (Join-Path $ServerDir ".env"))) {
     Write-Fail "Missing server\.env — generate admin password via install.ps1 or docs/hands-on checklist."
 }
 
-# Load Sellfox proxy key from open_webui .env if not already set (never print value).
 function Import-DotEnvKeys([string]$path, [string[]]$keys) {
     if (-not (Test-Path $path)) { return }
     Get-Content $path | ForEach-Object {
@@ -56,13 +60,12 @@ Import-DotEnvKeys (Join-Path $FzhRoot "SELLFOX_API\.env") @(
 $env:FZH_DATA_ROOT = $FzhRoot
 $env:SELLFOX_READONLY_POC = "1"
 $env:SELLFOX_WINDOW_MODE = "aggregate"
-if (-not $env:SELLFOX_POC_SHOP_NAME) { $env:SELLFOX_POC_SHOP_NAME = "TOODDLY-Daneey-US" }
+if (-not $env:SELLFOX_POC_SHOP_NAME) { $env:SELLFOX_POC_SHOP_NAME = "BJRYECLTD-US" }
 
 if (-not $env:SELLFOX_PROXY_API_KEY -and -not ($env:SELLFOX_APP_ID -and $env:SELLFOX_APP_SECRET)) {
     Write-Fail "No SELLFOX_PROXY_API_KEY (or AppId/Secret). Put key in ai_access_poc/open_webui/.env"
 }
 
-# Seed assistant_* (new-api) from open_webui/.env when Key present
 $SeedScript = Join-Path $PSScriptRoot "seed_ivyeaops_hub_from_owui.ps1"
 if (Test-Path $SeedScript) {
     try {
@@ -73,7 +76,6 @@ if (Test-Path $SeedScript) {
     }
 }
 
-# Ensure read on / operate off without wiping assistant keys
 New-Item -ItemType Directory -Force -Path (Join-Path $IvyRoot "data") | Out-Null
 $Hub = Join-Path $IvyRoot "data\hub_settings.json"
 & $VenvPy -c @"
@@ -91,11 +93,20 @@ print('hub patched', p)
 "@
 
 $url = "http://127.0.0.1:8001"
+function Open-SystemBrowserIfRequested {
+    if ($OpenBrowser) {
+        Write-Info "Opening system browser (-OpenBrowser)"
+        Start-Process $url | Out-Null
+    } else {
+        Write-Info "Skip system browser (Cursor built-in E2E). Pass -OpenBrowser if needed."
+    }
+}
+
 try {
     $r = Invoke-WebRequest "$url/api/health" -TimeoutSec 2 -UseBasicParsing
     if ($r.StatusCode -eq 200) {
         Write-Info "Already running at $url"
-        Start-Process $url | Out-Null
+        Open-SystemBrowserIfRequested
         exit 0
     }
 } catch {}
@@ -110,13 +121,33 @@ New-Item -ItemType Directory -Force -Path $LogsDir | Out-Null
 $OutLog = Join-Path $LogsDir "ivyeaops.out.log"
 $ErrLog = Join-Path $LogsDir "ivyeaops.err.log"
 
-$proc = Start-Process -FilePath $VenvPy `
-    -ArgumentList @("-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "8001", "--log-level", "info") `
-    -WorkingDirectory $ServerDir `
-    -WindowStyle Hidden `
-    -RedirectStandardOutput $OutLog `
-    -RedirectStandardError $ErrLog `
-    -PassThru
+# Pass PoC env explicitly into child (avoids missing SELLFOX_* after Start-Process)
+$psi = New-Object System.Diagnostics.ProcessStartInfo
+$psi.FileName = $VenvPy
+$psi.Arguments = "-m uvicorn app.main:app --host 127.0.0.1 --port 8001 --log-level info"
+$psi.WorkingDirectory = $ServerDir
+$psi.UseShellExecute = $false
+$psi.CreateNoWindow = $true
+$psi.RedirectStandardOutput = $true
+$psi.RedirectStandardError = $true
+# Copy current process env, then force PoC keys
+$psi.EnvironmentVariables["FZH_DATA_ROOT"] = $FzhRoot
+$psi.EnvironmentVariables["SELLFOX_READONLY_POC"] = "1"
+$psi.EnvironmentVariables["SELLFOX_WINDOW_MODE"] = "aggregate"
+$psi.EnvironmentVariables["SELLFOX_POC_SHOP_NAME"] = $env:SELLFOX_POC_SHOP_NAME
+foreach ($k in @("SELLFOX_PROXY_API_KEY","SELLFOX_PROXY_BASE_URL","SELLFOX_APP_ID","SELLFOX_APP_SECRET","SELLFOX_CLIENT_ID","SELLFOX_CLIENT_SECRET")) {
+    $v = [Environment]::GetEnvironmentVariable($k, "Process")
+    if (-not [string]::IsNullOrWhiteSpace($v)) { $psi.EnvironmentVariables[$k] = $v }
+}
+$psi.EnvironmentVariables["VIRTUAL_ENV"] = (Join-Path $ServerDir ".venv")
+
+$proc = [System.Diagnostics.Process]::Start($psi)
+# Fire-and-forget log pumps (best-effort; health check is the gate)
+Start-Job -ScriptBlock {
+    param($p, $out, $err)
+    $p.StandardOutput.ReadToEnd() | Set-Content -Path $out -Encoding UTF8
+    $p.StandardError.ReadToEnd() | Set-Content -Path $err -Encoding UTF8
+} -ArgumentList $proc, $OutLog, $ErrLog | Out-Null
 
 $pidFile = Join-Path $IvyRoot "data\ivyeaops.pid"
 $proc.Id | Set-Content $pidFile -Encoding ascii
@@ -132,5 +163,5 @@ for ($i = 0; $i -lt 40; $i++) {
 if (-not $ok) {
     Write-Fail "Health check failed. See $ErrLog"
 }
-Write-Info "OK $url  (login: admin / see server\.env setup docs)"
-Start-Process $url | Out-Null
+Write-Info "OK $url  pid=$($proc.Id)  (login: admin / see server\.env setup docs)"
+Open-SystemBrowserIfRequested
