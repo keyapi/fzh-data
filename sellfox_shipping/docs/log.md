@@ -56,6 +56,33 @@ updated: 2026-07-28
 - VITE 生产环境：FedEx Ground 创建成功（追踪号 874966964957），PDF 可下载，取消成功
 - 重复创建拦截：409 "已存在有效面单"
 
+### 2026-07-28（续）— VITE 双端点报价 + 历史报价表优化 + 交易流水页
+
+#### VITE 双端点报价 (`_get_vite_rate`)
+- 同时查询 GOFO 和 FedEx 两个端点（之前根据尺寸二选一），全部结果存入历史
+- 抽取 `_vite_rate_to_dict()` 统一转换
+- GOFO 超 22in 时 VITE API 返回 400，静默跳过（仅 FedEx 可用）
+
+#### 历史报价表优化
+- 列重组：时间、**承运商**、**产品**、运费、计费重、Zone、类型、最长边、原始数据
+- 承运商列：明确显示 VITE / 蜴国际 badge，不再混淆 GOFO/FedEx
+- 产品列：VITE 显示 GOFO Parcel / FedEx Ground + 服务描述；蜴国际显示 sm_code
+
+#### 交易流水页 (`/labels`)
+- 新页面 `/labels` + 模板 `labels_transaction.html`
+- 汇总卡片：按承运商分组统计笔数、金额、生成/取消数
+- 交易表格：时间、承运商、追踪号、服务、订单号、金额、状态
+- 天数筛选：1/2/7/14/30 天，默认 2 天
+- 数据来源：`shipping_labels` 表（每次 API 调用均有完整记录）
+- 导航栏所有页面新增「流水」入口
+- **VITE 无公开交易流水 API**（/shipment2/list 返回 403，仅 EEVEE 网页端可用）
+
+#### 测试
+- 全部 149 tests passed
+- 历史报价：单次点击拉取 VITE GOFO + VITE FedEx + 蜴国际全部产品
+- 该包裹 (66×56×5cm) 客观上只有 2 个可用产品（GOFO 尺寸限制 + 蜴国际 7/8 产品 total_charge=null）
+- 交易流水页：显示 8 笔 VITE 交易，合计 $99.52
+
 ## 2026-07-23 — EN 重尺 V2：sibling 借用 + 直连赛狐 + 筛选/分页修复
 
 ### 直连赛狐 API
