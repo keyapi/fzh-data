@@ -8,6 +8,7 @@ title: board PoC 变更日志
 
 ## 2026-07-28
 
+- **内置浏览器 E2E**：BJRYECLTD-US 运行优化引擎 → **候选 35**（含降/加 bid；加预算 0=阈值未达）。启动脚本默认不弹系统浏览器（`-OpenBrowser` 可选）；子进程显式注入 `SELLFOX_*`。
 - **ce-compound**：沉淀 [sellfox-ivyeaops-five-lever-ingest.md](../../docs/solutions/architecture-patterns/sellfox-ivyeaops-five-lever-ingest.md)；同步 handoff / roadmap / 缺口矩阵过时句。
 - **Phase2 ingest 落地**：`ingest_sellfox_phase2.ps1` → 实体(spKeyword/spCampaign/spAdProduct) + Targeting/Campaign/SearchTerm + asin_profit；`fetch_dataset` PoC 已读 cache。标定店 `run_store(596841)` 候选 35（含降/加 bid）。计划见 `docs/superpowers/plans/2026-07-28-phase2-sellfox-ingest.md`。
 - **词汇澄清**：五杠杆（IvyeaOps 否词/收割/降bid/加bid/加预算）≠ 五桶（advertise Harvest/Negate/Monitor/Protect/Ignore）；写入 `CONCEPTS.md` + `specs/phase2-dataset-gap.md`。

@@ -40,9 +40,11 @@ git merge upstream/main
 1. ~~实现 Targeting + keyword 实体 → 降/加 bid~~ **完成**  
 2. ~~Campaign + campaign 实体 → 加预算~~ **完成**  
 3. ~~asin_profit 接线~~ **完成**（数值 caveat）  
-4. `git fetch upstream` 合并 IvyeaOps（fork 内，不 vendoring）  
+4. `git fetch upstream` 合并 IvyeaOps（fork 内，不 vendoring）— 见 Phase3 计划  
 5. IvyeaAgent（知识库，与广告杠杆解耦）  
-6. 运营审简报 / 加预算阈值是否过严
+6. 运营审简报 / 加预算阈值：E2E 证实最高利用率 ~0.77&lt;0.85，**空候选属预期**  
+
+Phase3 计划：[`docs/superpowers/plans/2026-07-28-phase3-ops-merge-agent.md`](../../../../docs/superpowers/plans/2026-07-28-phase3-ops-merge-agent.md)
 
 ## 3. 百家之长（本地 overlay，不 PR 上游）
 

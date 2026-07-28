@@ -33,7 +33,7 @@ Python：**用 uv** 管理 IvyeaOps `server\.venv`（`setup_ivyeaops_uv.ps1`）�
 | 脚本 | 作用 |
 |------|------|
 | `scripts/setup_ivyeaops_uv.ps1` | uv venv + deps + 可选 npm build + `.env` |
-| `scripts/start_ivyeaops_sellfox.ps1` | 注入赛狐 env，启 `:8001`（启动时自动 seed hub） |
+| `scripts/start_ivyeaops_sellfox.ps1` | 注入赛狐 env，启 `:8001`（默认**不**弹系统浏览器；人手加 `-OpenBrowser`） |
 | `scripts/ingest_sellfox_phase2.ps1` | **推荐**：实体 + SearchTerm/Targeting/Campaign + asin_profit → cache |
 | `scripts/ingest_sellfox_for_ivyeaops.ps1` | 仅搜索词（Phase1） |
 | `scripts/seed_ivyeaops_hub_from_owui.ps1` | 从 `open_webui/.env` 写入 hub `assistant_*`（默认 `deepseek-v4-flash`） |
@@ -73,10 +73,9 @@ Python：**用 uv** 管理 IvyeaOps `server\.venv`（`setup_ivyeaops_uv.ps1`）�
 
 ## 下一步
 
-- 运营审 **DEFERRED**（候选已含 bid 类，阈值/家纺适用性仍要人审）。  
-- **上游 IvyeaOps merge**（fork 内，不 vendoring）。  
-- **IvyeaAgent**（知识库 `:8765`）。  
-- **Sorftime Key** 暂缓。  
-- 新规划：加预算阈值为何常为 0、运营审简报刷新、是否跟上游。
+- 运营审 **DEFERRED** → 用 Phase3 计划刷新简报（候选已含 bid 类）。  
+- **上游 IvyeaOps merge** / **IvyeaAgent**：见 [`docs/superpowers/plans/2026-07-28-phase3-ops-merge-agent.md`](../../docs/superpowers/plans/2026-07-28-phase3-ops-merge-agent.md)。  
+- **E2E**：只用 Cursor 内置浏览器；`start_ivyeaops_sellfox.ps1` 默认不弹 Chrome。  
+- **2026-07-28 内置浏览器 E2E**：BJRYECLTD-US → 运行优化引擎 → **候选 35**（否词/收割/降bid/加bid；加预算 0 因利用率&lt;85%）。  
 
 经验沉淀另见：[docs/solutions/integration-issues/ivyeaops-assistant-deepseek-v4-model-name.md](../../docs/solutions/integration-issues/ivyeaops-assistant-deepseek-v4-model-name.md)。
