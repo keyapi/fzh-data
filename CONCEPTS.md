@@ -16,6 +16,13 @@ Workspace Tool 拉取 xlsx 后返回的 JSON 文本摘要（`totals` + `top_by_s
 ### Open Terminal vs Code Interpreter
 Open WebUI 里两套代码执行能力：Open Terminal = Docker Linux 沙箱（推荐）；Code Interpreter 默认引擎 Pyodide（legacy，浏览器 WASM）。同一会话互斥。
 
+### api.vilavi.cn（公司 new-api 网关）
+上海阿里云 nginx 反代的公司 AI 网关：`/v1` 模型 API、`/sellfox` 赛狐代理、`/oidc` 钉钉 SSO。个人 Token 在后台「令牌管理」领取（`sk-…`）。生产渠道模型名以 `deepseek-v4-flash` / `deepseek-v4-pro` 为准；历史名 `deepseek-chat` 在默认组无渠道，会表现为 chat/completions **503**。
+
+### IvyeaOps vs IvyeaAgent
+- **IvyeaOps**：运营工作台 SPA（本仓库板 PoC 的主体验，fork 于 Hector-xue/IvyeaOps）。  
+- **IvyeaAgent**：独立本地 Agent 服务（常见 `:8765`，Hector-xue/ivyea-agent），服务知识库语义检索与部分 text chain。未启动时 `/assistant` 仍可直连 new-api；`/brain` 会降级为关键词检索。
+
 ## Cross-border shipping (sellfox_shipping)
 
 ### Sellfox packageSn

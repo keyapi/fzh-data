@@ -8,6 +8,7 @@ title: board PoC 变更日志
 
 ## 2026-07-27
 
+- **E2E 闭环**：浏览器实测 AI 问答；`deepseek-chat` 在 api.vilavi.cn 无渠道 → 503；默认模型改为 `deepseek-v4-flash` 后问答打通；资讯刷新约 60 条；知识库仍依赖未启动的 IvyeaAgent。
 - **品牌化 + 凭证 + 兜底 LLM**：侧栏「赛狐 ERP」；status Chip 显示赛狐 Proxy；默认 light；`seed_ivyeaops_hub_from_owui.ps1` → assistant_* = api.vilavi.cn。
 - **可体验工作台**：`uv` 装 IvyeaOps `server\.venv` + 构建 `client/dist`；启动/ingest 脚本；Optimizer 对 TOODDLY-Daneey-US 跑通；主体验 `:8001`。
 - 文档：`hands-on-ivyeaops-sellfox.md`、`phase2-backlog.md`。
