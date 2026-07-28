@@ -6,6 +6,10 @@ title: board PoC 变更日志
 
 # 变更日志
 
+## 2026-07-28
+
+- **SP7 × IvyeaOps 缺口调研**：标定店 BJRYECLTD-US 七表独立复验；缺口矩阵 `specs/phase2-dataset-gap.md`；D3 更新为「可拉未 ingest」。
+
 ## 2026-07-27
 
 - **E2E 闭环**：浏览器实测 AI 问答；`deepseek-chat` 在 api.vilavi.cn 无渠道 → 503；默认模型改为 `deepseek-v4-flash` 后问答打通；资讯刷新约 60 条；知识库仍依赖未启动的 IvyeaAgent。

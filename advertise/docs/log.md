@@ -8,7 +8,11 @@ tags: [amazon, advertising, changelog]
 
 # 变更日志
 
-- **OKF 合规**: 补齐 4 个 .md 文件 YAML frontmatter (AGENT_HANDOFF/README/amazon-bulk-negative-keyword-format/Daneey Chat) + 6 个目录 index.md + docs/index.md 更新导航
+## 2026-07-28
+
+- **SP7 独立复验（BJRYECLTD-US）**：Proxy 重拉 7 表全部成功；列对账与 analyze 验证包见 `docs/research/2026-07-28-report-verify/`；产物 `out/verify_2026-07-28/`。
+- **脚本**：新增 `scripts/pull_sp7_verify.py`、`scripts/verify_sp7_reports.py`；修复 `analyze_search_term.py` 对「无结束日期」的 DateParseError。
+- **文档纠偏**：一键 7 表用 pull_sp7；旧 `fetch_ad_reports` 仅 4 表。
 
 ## 2026-07-07 (v0.5.1) — P0-P3 改进
 

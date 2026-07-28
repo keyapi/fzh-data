@@ -26,19 +26,23 @@ Agent 会自动读文档、找文件、跑脚本、出报告。你只需验证�
 
 ## 快速开始
 
-### 1. 准备数据（推荐：赛狐 API 自动拉取）
+### 1. 准备数据（推荐：赛狐 API / Proxy 自动拉取）
 
-`ash
-# 拉取 7 种 SP 报告（需先在 SELLFOX_API/.env 配置凭证）
-uv run python SELLFOX_API/fetch_ad_reports.py --shop <店铺ID> --days 37
-uv run python SELLFOX_API/fetch_extra_reports.py
-`
+```bash
+# 一键拉 SP 核心 7 表（优先 Proxy：ai_access_poc/open_webui/.env 的 SELLFOX_PROXY_*）
+uv run python advertise/scripts/pull_sp7_verify.py --shop-id 596841 --days 30
 
-> 备选：手动从 Amazon 广告后台下载 7 份报告放入 数据源/，脚本自动识别中/英文文件名。
+# 旧路径：fetch_ad_reports.py 只拉 4 表；另 3 表需 fetch_extra_reports.py（且默认硬编码日期）
+# uv run python SELLFOX_API/fetch_ad_reports.py --shop <店铺ID> --days 30
+# uv run python SELLFOX_API/fetch_extra_reports.py
+```
+
+> 备选：手动从 Amazon 广告后台下载 7 份报告放入 数据源/，脚本自动识别中/英文文件名。  
+> 独立验证产物：`advertise/docs/research/2026-07-28-report-verify/`（勿信任旧 `advertise/out/` JSON）。
 
 ### 2. 运行分析
 
-`ash
+```bash
 # 7 维分析 + 跨报告集成 + 优化产出
 uv run python -m advertise.analyze_campaign
 uv run python -m advertise.analyze_targeting
@@ -51,7 +55,7 @@ uv run python -m advertise.analyze_cross
 uv run python -m advertise.build_full_report
 uv run python -m advertise.calibrate_thresholds
 uv run python -m advertise.generate_negatives
-`
+```
 
 ### 3. 查看报告
 
