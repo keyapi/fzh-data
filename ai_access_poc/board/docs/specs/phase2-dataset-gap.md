@@ -61,7 +61,7 @@ updated: 2026-07-28
 | `sp_campaign_report` | 加预算（花费） | `adCampaignReport` | **源已验证可映射未接线** | 291 行花费/订单齐全；无预算列（预期） |
 | `sp_campaigns` | 加预算（日预算） | `manageData/spCampaign.json` | **源已验证可映射未接线** | 实测 `budget`→`daily_budget` |
 | `sp_product_ads` | campaign→ASIN | `adProductReport` 或 `spAdProduct.json` | **源已验证可映射未接线** | 报表 604 行；实体返回 `campaignId/asin/sku` |
-| `asin_profit` | 目标 ACOS | `monthProfit/asin.json` | **权限或文档未证伪** | 曾 `40021`；用户称已加权限 → 煮湖轮重测 |
+| `asin_profit` | 目标 ACOS | `monthProfit/asin.json` | **源已验证可映射未接线** | **2026-07-28 重测 OK**（含 `grossProfit`/`grossProfitRate`）；映射 `grossProfitRate`→`grossRate`。Caveat：成本未落地时毛利可能不准 |
 | Placement / PurchasedItem / AdGroup | 非五杠杆必需 | 下载中心对应报表 | 辅助（advertise 侧） | SP7 验证 PASS |
 
 ## 实体 API 探测摘要（Proxy，只读）
@@ -72,7 +72,7 @@ updated: 2026-07-28
 | `spCampaign.json` | OK | `budget` → `daily_budget` |
 | `spAdProduct.json` | OK | → `sp_product_ads` |
 | `spProductAd.json` | 错路径 | 应用 `spAdProduct.json` |
-| `monthProfit/asin.json` | 曾 40021 | 煮湖轮重测 |
+| `monthProfit/asin.json` | **OK（2026-07-28 重测）** | `grossProfitRate` → `grossRate`；曾 40021 已解除 |
 
 ## 建议移植顺序（实现另开，本文件只调研）
 
@@ -82,4 +82,9 @@ updated: 2026-07-28
 
 ## 与 D3
 
-[`deviations.md`](../reference/deviations.md) D3：不是「赛狐拉不到」，是 **未 ingest + 实体未接线**。完整煮湖（不限 7 表）见后续 `2026-07-28-ivyeaops-lingxing-datasets.md` / 赛狐全量目录映射。
+[`deviations.md`](../reference/deviations.md) D3：不是「赛狐拉不到」，是 **未 ingest + 实体未接线**。
+
+**煮湖续篇（不限 7 表）**：
+
+- 领星侧：[2026-07-28-ivyeaops-lingxing-datasets.md](../research/2026-07-28-ivyeaops-lingxing-datasets.md)
+- 赛狐全量目录：[2026-07-28-sellfox-ad-catalog-map.md](../research/2026-07-28-sellfox-ad-catalog-map.md)

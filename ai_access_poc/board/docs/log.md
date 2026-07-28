@@ -8,7 +8,8 @@ title: board PoC 变更日志
 
 ## 2026-07-28
 
-- **SP7 × IvyeaOps 缺口调研**：标定店 BJRYECLTD-US 七表独立复验；缺口矩阵 `specs/phase2-dataset-gap.md`；D3 更新为「可拉未 ingest」。
+- **煮湖**：领星 READ_DATASETS 全表 + 赛狐下载中心/manageData/利润全量目录映射；`monthProfit/asin` 权限重测 **OK**（`grossProfitRate` 可用，数值 caveat）。
+- **SP7 × IvyeaOps 缺口调研**：标定店 BJRYECLTD-US 七表独立复验；缺口矩阵 `specs/phase2-dataset-gap.md`（白话：报表 vs 实体）；D3 更新为「可拉未 ingest」。
 
 ## 2026-07-27
 
