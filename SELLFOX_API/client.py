@@ -286,8 +286,41 @@ class SellfoxClient:
         for row in data.get("rows") or []:
             tid = row.get("id")
             state = row.get("reportState", "unknown")
-            result[tid] = (state, row)
+            # Sellfox may return id as int — normalize keys to str
+            result[str(tid)] = (state, row)
         return result
+
+    def download_ready_task(
+        self,
+        *,
+        shop_name: str,
+        report_type_code: str,
+        file_prefix: str,
+        start_date: str,
+        end_date: str,
+        row: dict,
+        out_dir: Path,
+    ) -> dict:
+        """Download a task that is already in 已生成 state."""
+        urls = row.get("downloadUrl") or []
+        if not urls:
+            raise RuntimeError(f"Task done but no downloadUrl: {row}")
+        safe_name = "".join(
+            c if c.isalnum() or c in "-_" else "_" for c in shop_name
+        )[:40]
+        filepath = out_dir / f"{file_prefix}_{safe_name}_{start_date}_{end_date}.xlsx"
+        size = self.download_file(urls[0], filepath)
+        return {
+            "ok": True,
+            "mode": self.config.mode,
+            "shop_name": shop_name,
+            "report_type_code": report_type_code,
+            "start_date": start_date,
+            "end_date": end_date,
+            "filepath": str(filepath),
+            "bytes": size,
+            "note": "Read-only pull.",
+        }
 
     @staticmethod
     def download_file(url: str, filepath: Path) -> int:
