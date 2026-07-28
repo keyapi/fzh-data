@@ -8,6 +8,14 @@ updated: 2026-07-28
 
 # sellfox_shipping — 变更日志
 
+## 2026-07-28 — SKU 背贴 PDF 生成分析
+
+- 深入分析 Google Colab notebook (148 cells) 中的背贴生成逻辑
+- 提取 PDF 生成核心参数：4×2" 页尺寸、reportlab Table + Code128 条形码 + 字体自适应缩放
+- 识别数据依赖：中文名称 + 西班牙语名称来自 Google Sheet "US SKU Name"（需 service account 权限）
+- 提出 3 种名称获取方案（ERPNext 优先、Google Sheets 兜底、赛狐商品 API 备用）
+- 产出：`docs/research/sku-label-back-sticker-analysis-2026-07-28.md`
+
 ## 2026-07-28 — 双承运商面单创建 + 取消 + PDF 下载
 
 ### VITE 面单 (vite/shipment.py)
