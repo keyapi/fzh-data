@@ -3,10 +3,58 @@ okf: v0.1
 type: Log
 module: sellfox_shipping
 created: 2026-07-15
-updated: 2026-07-23
+updated: 2026-07-28
 ---
 
 # sellfox_shipping — 变更日志
+
+## 2026-07-28 — 双承运商面单创建 + 取消 + PDF 下载
+
+### VITE 面单 (vite/shipment.py)
+- `ViteShipmentService.ship_package()`：构建请求体 → `POST /shipment2/gofo`(或 fedex) → 轮询 `GET /shipment2/label/{orderId}`(5s×36次) → 下载 PDF → `register_artifact()` → `insert_label()`
+- 服务类型由用户选择(GOFO_PARCEL / FEDEX_GROUND)，不做尺寸自动覆盖；GOFO 超过 22in 时 VITE API 返回 400 错误，用户可自行切换 FedEx
+- 单元注入 `fetch_bytes`/`sleep`/`monotonic`，不依赖真实 HTTP
+
+### 蜴国际面单 (label_service.py)
+- `_create_lizard_label()`：接入已有的 `LizardApiShipmentService`（createOrder → poll getLabel → PDF → artifact）
+- sm_code 优先级：用户选择 > 报价历史最近 lizard channel > 默认 FedEx-Ground-J-TX
+- 赛狐原始数据 `weight_grams` 为空时自动从 `shipping_package_dims` 填充
+
+### LabelService (label_service.py)
+- 承运商无关编排层：`create_label()` / `cancel_label()` / `download_label_pdf()` / `get_labels_for_package()`
+- 重复面单防护：存在 status≠cancelled 的面单时返回 409，提示先取消
+- VITE cancel：调用 `DELETE /shipment2/label/{orderId}` → 更新 label status=cancelled
+
+### 数据库 (package_repository.py + 0013 migration)
+- 新增 `shipping_labels` 表：tracking_number, carrier_order_id, artifact_id, status, total_amount 等
+- `ShippingLabelRow` ORM + `ShippingLabelRecord` dataclass
+- Repository 方法：`insert_label()` / `get_label()` / `list_labels_for_package()` / `update_label_status()`
+- 创建时间 UTC→UTC+8 转换，与历史报价一致（`%Y-%m-%d %H:%M:%S`）
+
+### Web UI (package_detail.html)
+- 「创建面单」面板：承运商选择器 + 动态服务类型(JavaScript 切换) + 操作者 + 创建按钮
+- 面单历史表格：创建时间、承运商、追踪号、服务、金额、状态、PDF 下载、取消按钮
+- 取消确认弹窗：`confirm('确认取消面单？取消后无法恢复。')`
+
+### API 端点 (app.py)
+| Method | Path | 功能 |
+|---|---|---|
+| POST | `/api/packages/{sn}/create-label` | 创建面单(JSON) |
+| POST | `/api/labels/{id}/cancel` | 取消面单(JSON) |
+| GET | `/api/labels/{id}/download` | 下载面单 PDF(FileResponse) |
+| GET | `/api/packages/{sn}/labels` | 查包裹面单列表 |
+| POST | `/packages/{sn}/create-label` | 创建面单(HTML form) |
+| POST | `/packages/{sn}/cancel-label/{id}` | 取消面单(HTML form) |
+
+### Bug 修复
+- 运费试算：移除 `_get_vite_rate()` 中的路由检查，蜴国际路由的包裹也能显示试算面板
+- `_package_detail_context`：`vite_rate` 从 fetch-rates 端点透传，避免硬编码 None
+- 时区：label `created_at`/`updated_at` UTC→UTC+8
+
+### 测试
+- 全部 149 tests passed
+- VITE 生产环境：FedEx Ground 创建成功（追踪号 874966964957），PDF 可下载，取消成功
+- 重复创建拦截：409 "已存在有效面单"
 
 ## 2026-07-23 — EN 重尺 V2：sibling 借用 + 直连赛狐 + 筛选/分页修复
 
