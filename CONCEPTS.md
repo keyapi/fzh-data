@@ -23,6 +23,12 @@ Open WebUI 里两套代码执行能力：Open Terminal = Docker Linux 沙箱（�
 - **IvyeaOps**：运营工作台 SPA（本仓库板 PoC 的主体验，fork 于 Hector-xue/IvyeaOps）。  
 - **IvyeaAgent**：独立本地 Agent 服务（常见 `:8765`，Hector-xue/ivyea-agent），服务知识库语义检索与部分 text chain。未启动时 `/assistant` 仍可直连 new-api；`/brain` 会降级为关键词检索。
 
+### 五杠杆（IvyeaOps optimizer）
+`lingxing_optimizer` 对**广告实体**可采取的五类动作候选（只读 PoC 只出候选、不写）：**否词**、**收割（加词）**、**降 bid**、**加 bid**、**加预算**。目标 ACOS（毛利推导）是共用阈值基准，不是第六个动作。依赖「表现报表 + 实体配置」两类数据。
+
+### 五桶分析法（advertise 搜索词分类）
+`advertise/analyze_search_term.py` 对**搜索词行**打的五个分析桶：**Harvest / Negate / Monitor / Protect / Ignore**（见 `advertise/AGENT_HANDOFF.md`「5 桶分类」）。这是报表分析标签，**不是** IvyeaOps 的五杠杆。对应关系：Harvest≈收割候选、Negate≈否词候选；Monitor/Protect/Ignore 在五杠杆里没有同名动作。
+
 ## Cross-border shipping (sellfox_shipping)
 
 ### Sellfox packageSn

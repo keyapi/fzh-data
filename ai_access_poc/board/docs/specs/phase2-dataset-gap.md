@@ -15,6 +15,15 @@ updated: 2026-07-28
 **写路径**: 仍硬禁（D6）  
 **验证包**: [advertise/docs/research/2026-07-28-report-verify/](../../../advertise/docs/research/2026-07-28-report-verify/index.md)
 
+## 五杠杆 ≠ 五桶（易混）
+
+| 名称 | 出处 | 是什么 |
+|------|------|--------|
+| **五杠杆** | IvyeaOps `lingxing_optimizer` | 对广告的五类**动作候选**：否词、收割、降 bid、加 bid、加预算 |
+| **五桶** | `advertise` 搜索词分析（约 2026-07） | 对搜索词的五类**标签**：Harvest / Negate / Monitor / Protect / Ignore |
+
+二者相关（Harvest↔收割、Negate↔否词）但**不是同一套体系**。详见根目录 `CONCEPTS.md`。
+
 ## 先读这段（纠正误解）
 
 **本表不是说「赛狐提供不了领星那种 Amazon 数据」。**

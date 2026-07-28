@@ -8,6 +8,7 @@ title: board PoC 变更日志
 
 ## 2026-07-28
 
+- **词汇澄清**：五杠杆（IvyeaOps 否词/收割/降bid/加bid/加预算）≠ 五桶（advertise Harvest/Negate/Monitor/Protect/Ignore）；写入 `CONCEPTS.md` + `specs/phase2-dataset-gap.md`。
 - **煮湖**：领星 READ_DATASETS 全表 + 赛狐下载中心/manageData/利润全量目录映射；`monthProfit/asin` 权限重测 **OK**（`grossProfitRate` 可用，数值 caveat）。
 - **SP7 × IvyeaOps 缺口调研**：标定店 BJRYECLTD-US 七表独立复验；缺口矩阵 `specs/phase2-dataset-gap.md`（白话：报表 vs 实体）；D3 更新为「可拉未 ingest」。
 
