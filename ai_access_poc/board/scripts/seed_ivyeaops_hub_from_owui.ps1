@@ -36,7 +36,7 @@ if (-not $key -or $key -match 'replace-me|sk-replace') {
     Write-Fail "OPENAI_API_KEY missing/placeholder in $OwuiEnv — get Token at https://api.vilavi.cn/"
 }
 
-$model = if ($env:IVYEA_ASSISTANT_MODEL) { $env:IVYEA_ASSISTANT_MODEL } else { "deepseek-chat" }
+$model = if ($env:IVYEA_ASSISTANT_MODEL) { $env:IVYEA_ASSISTANT_MODEL } else { "deepseek-v4-flash" }
 
 New-Item -ItemType Directory -Force -Path (Split-Path $HubPath) | Out-Null
 

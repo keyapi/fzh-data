@@ -129,7 +129,10 @@ powershell -ExecutionPolicy Bypass -File ai_access_poc\board\scripts\ingest_sell
 | 默认主题 light；侧栏 **赛狐 ERP** | PASS（需清旧 `ivyea-ops.theme=dark` 缓存） |
 | Chip **赛狐 Proxy 已配置** | PASS（`data_source=sellfox_proxy`） |
 | 选店 → 运行优化引擎 | PASS（既有） |
-| seed assistant → api.vilavi.cn / deepseek-chat | PASS（key 已写入 hub；问答冒烟视模型名） |
+| seed assistant → api.vilavi.cn / **deepseek-v4-flash** | PASS（`seed_ivyeaops_hub_from_owui.ps1` 默认 v4；`deepseek-chat` 网关无渠道会 503） |
+| AI 问答 `/assistant` 发消息收回复 | PASS（2026-07-27 E2E；约 15s 内返回） |
+| 资讯 `/news` 立即刷新 | PASS（约 60 条 digest） |
+| 知识库 `/brain` | PARTIAL（IvyeaAgent :8765 未起；fallback 关键词检索） |
 | 外部智能体 | 照搬；DeepSeek 不走此页 |
 
 ## 安全提醒
