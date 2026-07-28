@@ -76,12 +76,12 @@ IvyeaOps READ_DATASETS：**无对等键**（领星也未注册小时级）。状
 |----------|--------|------|
 | `sellers` | `shop/pageList` | **已接线** |
 | `sp_search_term_report` | `adSearchTermReport` | **已接线** |
-| `sp_keyword_report` | `adTargeringReport`（过滤关键词行） | **需拼表或过滤** |
-| `sp_keywords` | `manageData/spKeyword` | **源已验证可映射未接线** |
-| `sp_campaign_report` | `adCampaignReport` | **源已验证可映射未接线** |
-| `sp_campaigns` | `manageData/spCampaign` | **源已验证可映射未接线** |
-| `sp_product_ads` | `adProductReport` 或 `spAdProduct` | **源已验证可映射未接线** |
-| `asin_profit` | `monthProfit/asin`（`grossProfitRate`→`grossRate`） | **源已验证可映射未接线**（权限已通；数值 caveat） |
+| `sp_keyword_report` | `adTargeringReport`（过滤关键词行） | **已接线** |
+| `sp_keywords` | `manageData/spKeyword` | **已接线** |
+| `sp_campaign_report` | `adCampaignReport` | **已接线** |
+| `sp_campaigns` | `manageData/spCampaign` | **已接线** |
+| `sp_product_ads` | `adProductReport` 或 `spAdProduct` | **已接线**（实体 `spAdProduct`） |
+| `asin_profit` | `monthProfit/asin`（`grossProfitRate`→`grossRate`） | **已接线**（权限已通；数值 caveat） |
 | `sp_target_report` | Targeting 定向行 / `sdTargetListReport` | **需拼表或过滤**（优化器未消费） |
 | `sp_targets` / `sp_adgroups` | `spTarget` / `spGroup` | **源已验证可映射未接线**（写前置） |
 | `fba_stock` | FBA pageList | **权限或文档未证伪**（未本轮实拉） |

@@ -64,13 +64,13 @@ updated: 2026-07-28
 
 | IvyeaOps dataset | 杠杆 | 赛狐来源 | 状态 | 证据 |
 |------------------|------|----------|------|------|
-| `sp_search_term_report` | 否词 / 收割 | `adSearchTermReport` | **已接线** | PoC ingest；1226 行列对账+analyze PASS |
-| `sp_keyword_report` | 降/加 bid（表现） | `adTargeringReport` | **需拼表或过滤** | 1176 行；关键词行 `广告投放ID`=`keywordId`（5/5）；过滤商品定向；无 bid/state |
-| `sp_keywords` | 降/加 bid（当前竞价） | `manageData/spKeyword.json` | **源已验证可映射未接线** | 实测 `keywordId/bid/state`；`pageSize`∈[100,1000] |
-| `sp_campaign_report` | 加预算（花费） | `adCampaignReport` | **源已验证可映射未接线** | 291 行花费/订单齐全；无预算列（预期） |
-| `sp_campaigns` | 加预算（日预算） | `manageData/spCampaign.json` | **源已验证可映射未接线** | 实测 `budget`→`daily_budget` |
-| `sp_product_ads` | campaign→ASIN | `adProductReport` 或 `spAdProduct.json` | **源已验证可映射未接线** | 报表 604 行；实体返回 `campaignId/asin/sku` |
-| `asin_profit` | 目标 ACOS | `monthProfit/asin.json` | **源已验证可映射未接线** | **2026-07-28 重测 OK**（含 `grossProfit`/`grossProfitRate`）；映射 `grossProfitRate`→`grossRate`。Caveat：成本未落地时毛利可能不准 |
+| `sp_search_term_report` | 否词 / 收割 | `adSearchTermReport` | **已接线** | Phase2 ingest；1226 行 |
+| `sp_keyword_report` | 降/加 bid（表现） | `adTargeringReport` | **已接线** | 1176→1034 关键词行（跳过非关键词 142）；`广告投放ID`→`keyword_id` |
+| `sp_keywords` | 降/加 bid（当前竞价） | `manageData/spKeyword.json` | **已接线** | 611 行 `bid/state` |
+| `sp_campaign_report` | 加预算（花费） | `adCampaignReport` | **已接线** | 291 行 |
+| `sp_campaigns` | 加预算（日预算） | `manageData/spCampaign.json` | **已接线** | 94 行 `budget`→`daily_budget` |
+| `sp_product_ads` | campaign→ASIN | `spAdProduct.json` | **已接线** | 277 行实体 |
+| `asin_profit` | 目标 ACOS | `monthProfit/asin.json` | **已接线** | 24 行；`reportList`→`grossRate`；毛利率 caveat 仍在 |
 | Placement / PurchasedItem / AdGroup | 非五杠杆必需 | 下载中心对应报表 | 辅助（advertise 侧） | SP7 验证 PASS |
 
 ## 实体 API 探测摘要（Proxy，只读）
@@ -81,17 +81,18 @@ updated: 2026-07-28
 | `spCampaign.json` | OK | `budget` → `daily_budget` |
 | `spAdProduct.json` | OK | → `sp_product_ads` |
 | `spProductAd.json` | 错路径 | 应用 `spAdProduct.json` |
-| `monthProfit/asin.json` | **OK（2026-07-28 重测）** | `grossProfitRate` → `grossRate`；曾 40021 已解除 |
+| `monthProfit/asin.json` | **OK（2026-07-28 重测）** | `reportList` + `grossProfitRate` → `grossRate` |
 
-## 建议移植顺序（实现另开，本文件只调研）
+## 实现入口（2026-07-28）
 
-1. Targeting ingest + `spKeyword` 实体 → 降/加 bid  
-2. Campaign report + `spCampaign` 实体 → 加预算  
-3. 利润权限通过或 hub margin override → 目标 ACOS  
+- IvyeaOps：`sellfox_ingest.py` + `fetch_dataset` PoC 分支  
+- fzh-data：`ai_access_poc/board/scripts/ingest_sellfox_phase2.ps1`  
+- 标定店冒烟：`run_store(596841)` → 候选 35（否词 15 / 收割 2 / 降bid 17 / 加bid 1；加预算视阈值可能为 0）  
+- 计划：`docs/superpowers/plans/2026-07-28-phase2-sellfox-ingest.md`
 
 ## 与 D3
 
-[`deviations.md`](../reference/deviations.md) D3：不是「赛狐拉不到」，是 **未 ingest + 实体未接线**。
+[`deviations.md`](../reference/deviations.md) D3：报表+实体 **已 ingest**；写路径仍禁。
 
 **煮湖续篇（不限 7 表）**：
 

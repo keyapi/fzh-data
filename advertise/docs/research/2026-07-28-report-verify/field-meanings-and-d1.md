@@ -32,7 +32,7 @@ sources:
 | ROAS | `roas` | 派生 | 销售额/花费 |
 | （实体）bid | — | `bid` | 当前关键词竞价（`spKeyword.json`） |
 | （实体）budget | — | `daily_budget` | 活动日预算（`spCampaign.json` 的 `budget`） |
-| （财务）毛利率 | — | `grossRate` | 本账号 **无权限**；目标 ACOS = factor × margin |
+| （财务）毛利率 | — | `grossRate` | `monthProfit/asin` 的 `grossProfitRate`（已接线；成本未全时 caveat） |
 
 公式：
 

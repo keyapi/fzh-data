@@ -24,25 +24,25 @@ git merge upstream/main
 
 ## 2. 更多赛狐报表 → 五杠杆
 
-| 杠杆 | 需要的数据集 | Phase1 | 2026-07-28 调研 |
-|------|----------------|--------|-----------------|
-| 否词 / 收割 | `sp_search_term_report` | 已通 | **可顶替**（复验 PASS） |
-| 降 bid / 加 bid | `sp_keyword_report` (+ keywords 实体) | 未接 | Targeting **部分** + `spKeyword.json` **可顶替** |
-| 加预算 | `sp_campaign_report` + campaigns | 未接 | Campaign **部分** + `spCampaign.json` **可顶替** |
-| 目标 ACOS 按毛利 | `asin_profit` / product ads | 未接（现用默认 30%） | 产品广告可顶替；**财务 asin 利润 40021 无权限** |
+| 杠杆 | 需要的数据集 | Phase1 | 2026-07-28 |
+|------|----------------|--------|------------|
+| 否词 / 收割 | `sp_search_term_report` | 已通 | **已接线** |
+| 降 bid / 加 bid | `sp_keyword_report` (+ keywords 实体) | 未接 | **已接线**（Targeting 过滤 + `spKeyword`） |
+| 加预算 | `sp_campaign_report` + campaigns | 未接 | **已接线**（阈值严时候选可为 0） |
+| 目标 ACOS 按毛利 | `asin_profit` / product ads | 默认 30% | **已接线**（毛利 caveat；标定店已出 ~51% 均值） |
 
 完整缺口矩阵：[phase2-dataset-gap.md](phase2-dataset-gap.md)  
-报表验证包：`advertise/docs/research/2026-07-28-report-verify/`
+报表验证包：`advertise/docs/research/2026-07-28-report-verify/`  
+脚本：`board/scripts/ingest_sellfox_phase2.ps1`
 
-做法：扩展 `sellfox_ingest` → `fetch_dataset` 分支 → 再跑 Optimizer。仍保持 `confirm_ticket` 硬禁。
+### 下一步（ingest 已通）
 
-### 调研门禁已过 → 下一步用 superpowers（本轮不实现）
-
-1. 实现 Targeting + keyword 实体 → 降/加 bid  
-2. Campaign + campaign 实体 → 加预算  
-3. 开通财务权限或 hub margin override → 目标 ACOS  
-4. 再 `git fetch upstream` 合并 IvyeaOps（fork 内，不 vendoring）  
-5. 最后 IvyeaAgent（知识库，与广告杠杆解耦）
+1. ~~实现 Targeting + keyword 实体 → 降/加 bid~~ **完成**  
+2. ~~Campaign + campaign 实体 → 加预算~~ **完成**  
+3. ~~asin_profit 接线~~ **完成**（数值 caveat）  
+4. `git fetch upstream` 合并 IvyeaOps（fork 内，不 vendoring）  
+5. IvyeaAgent（知识库，与广告杠杆解耦）  
+6. 运营审简报 / 加预算阈值是否过严
 
 ## 3. 百家之长（本地 overlay，不 PR 上游）
 
