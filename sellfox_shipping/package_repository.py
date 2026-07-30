@@ -204,6 +204,7 @@ class CartonOverrideRow(Base):
     width_cm: Mapped[float] = mapped_column(Float, default=0)
     height_cm: Mapped[float] = mapped_column(Float, default=0)
     note: Mapped[str] = mapped_column(String, default="")
+    item_name: Mapped[str] = mapped_column(String, default="")
     updated_by: Mapped[str] = mapped_column(String, default="")
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.current_timestamp()
@@ -217,6 +218,7 @@ class CartonOverrideRecord:
     dims: CartonDims
     note: str = ""
     updated_by: str = ""
+    item_name: str = ""
 
 
 @dataclass(frozen=True)
@@ -854,6 +856,7 @@ class PackageRepository:
                 ),
                 note=row.note or "",
                 updated_by=row.updated_by or "",
+                item_name=row.item_name or "",
             )
 
     def set_carton_override(
@@ -906,6 +909,33 @@ class PackageRepository:
         record = self.get_carton_override(account_key, sku)
         assert record is not None
         return record
+
+    def upsert_carton_item_name(
+        self,
+        *,
+        account_key: str,
+        commodity_sku: str,
+        item_name: str,
+    ) -> None:
+        """Persist item_name for a commodity_sku without requiring dims."""
+        sku = (commodity_sku or "").strip()
+        if not sku:
+            return
+        with self._session_factory.begin() as session:
+            account = self._get_or_create_account(session, account_key)
+            row = session.scalar(
+                select(CartonOverrideRow).where(
+                    CartonOverrideRow.account_id == account.id,
+                    CartonOverrideRow.commodity_sku == sku,
+                )
+            )
+            if row is None:
+                row = CartonOverrideRow(
+                    account_id=account.id,
+                    commodity_sku=sku,
+                )
+                session.add(row)
+            row.item_name = item_name or ""
 
     def register_artifact(
         self,
@@ -1775,7 +1805,11 @@ class PackageRepository:
 
     def get_package_dims(self, package_db_id: int) -> PackageDimsRecord | None:
         with self._session_factory() as session:
-            row = session.get(PackageDimsRow, package_db_id)
+            row = (
+                session.query(PackageDimsRow)
+                .filter(PackageDimsRow.package_id == package_db_id)
+                .first()
+            )
             if row is None:
                 return None
             return PackageDimsRecord(

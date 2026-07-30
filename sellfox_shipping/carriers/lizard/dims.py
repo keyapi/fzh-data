@@ -42,3 +42,6 @@ class StaticDimsLookup:
         if dims is None or not dims.is_complete:
             return None
         return dims
+
+    def get_item_name(self, commodity_sku: str) -> str:
+        return ""

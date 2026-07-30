@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import os
 import sys
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 import yaml
@@ -570,14 +570,28 @@ def _carton_rows_for_package(account_key: str, record) -> list[dict]:
             resolved = lookup.get(sku)
         except Exception:
             resolved = None
+        # Resolve item_name: override first, then EN, else empty
+        item_name = (override.item_name if override else "") or ""
+        if not item_name:
+            item_name = lookup.get_item_name(sku)
+            if item_name:
+                try:
+                    repo.upsert_carton_item_name(
+                        account_key=account_key,
+                        commodity_sku=sku,
+                        item_name=item_name,
+                    )
+                except Exception:
+                    pass
         rows.append(
             {
                 "commodity_sku": sku,
                 "override": override,
                 "resolved": resolved,
+                "item_name": item_name,
                 "source": (
                     "override"
-                    if override is not None
+                    if (override is not None and override.dims.is_complete)
                     else ("cascade" if resolved is not None else "missing")
                 ),
             }
@@ -604,7 +618,11 @@ def _compute_package_dims(record, carton_rows: list[dict]) -> dict | None:
         cr = cr_by_sku.get(sku)
         if cr is None:
             continue
-        dims = cr["override"].dims if cr.get("override") else cr.get("resolved")
+        ov = cr.get("override")
+        if ov is not None and ov.dims.is_complete:
+            dims = ov.dims
+        else:
+            dims = cr.get("resolved")
         if dims is None or not dims.is_complete:
             continue
         qty = item.quantity or 1
@@ -1703,6 +1721,84 @@ async def lizard_artifact_download(artifact_id: int):
 
 
 # ── MCP mount — appended in main.py after FastMCP server is created ──
+
+
+@app.get("/packages/{package_sn}/sku-label")
+async def package_sku_label_download(package_sn: str):
+    """Download SKU back-sticker PDF for a package."""
+    import os, tempfile
+    from pathlib import Path
+    from sellfox_shipping.sku_label import SkuNameLookup, generate_sku_label_pdf
+    from sellfox_shipping.env_loader import load_dotenv
+
+    account_key = config["sellfox"]["proxy_account"]
+    repo = _get_package_repository()
+    record = repo.get(account_key, package_sn)
+    if record is None:
+        raise HTTPException(404, f"Package {package_sn} not found")
+
+    # Collect SKUs
+    items_data: list[dict] = []
+    skus: set[str] = set()
+    for item in record.items:
+        sku = (item.commodity_sku or "").strip()
+        if sku:
+            skus.add(sku)
+            items_data.append({"commodity_sku": sku, "qty": item.quantity or 1})
+
+    if not items_data:
+        raise HTTPException(400, "No commodity SKUs in this package")
+
+    # Lookup names
+    erp_base = os.getenv("ERP_URL", "https://erpnext.vilavi.cn")
+    erp_key = ""
+    erp_secret = ""
+    _env_path = Path(__file__).resolve().parents[1] / "EN_API" / ".env"
+    if _env_path.is_file():
+        for line in _env_path.read_text(encoding="utf-8-sig").splitlines():
+            line = line.strip()
+            if line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            if k.strip() == "PROD_ERP_API_KEY":
+                erp_key = v.strip().strip("'\"")
+            elif k.strip() == "PROD_ERP_API_SECRET":
+                erp_secret = v.strip().strip("'\"")
+    erp_key = erp_key or os.getenv("ERP_API_KEY", "")
+    erp_secret = erp_secret or os.getenv("ERP_API_SECRET", "")
+
+    lookup = SkuNameLookup(erpnext_base=erp_base, erpnext_api_key=erp_key, erpnext_api_secret=erp_secret)
+    lookup.prefetch(list(skus))
+
+    pdf_items: list[dict] = []
+    for item in items_data:
+        name = lookup.get(item["commodity_sku"])
+        pdf_items.append({
+            "sku": name["sku"],
+            "qty": item["qty"],
+            "cn_name": name["cn"],
+            "es_name": name["es"],
+        })
+    lookup.close()
+
+    warehouse = record.logistics.warehouse_name or ""
+    tmp = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
+    try:
+        generate_sku_label_pdf(
+            [{"package_sn": package_sn, "items": pdf_items}],
+            tmp.name,
+            timestamp=datetime.now().strftime("%Y-%m-%d"),
+            warehouse_class=warehouse,
+        )
+        return FileResponse(
+            tmp.name,
+            filename=f"sku_label_{package_sn}.pdf",
+            media_type="application/pdf",
+        )
+    except Exception:
+        Path(tmp.name).unlink(missing_ok=True)
+        raise
+
 
 def mount_mcp(mcp_app):
     """Mount FastMCP ASGI app. Called from main.py after MCP tools are defined."""

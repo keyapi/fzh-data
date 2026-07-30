@@ -288,6 +288,75 @@ def lizard_import_tracking(
         raise typer.Exit(2)
 
 
+@app.command("sku-label")
+def sku_label(
+    package_sn: str = typer.Option(..., "--package-sn", help="包裹号"),
+    output: str = typer.Option("sku_label.pdf", "--output", "-o", help="输出 PDF 路径"),
+):
+    """为一个包裹生成 SKU 背贴 PDF。"""
+    import os
+    from pathlib import Path
+    from sellfox_shipping.package_repository import PackageRepository
+    from sellfox_shipping.sku_label import SkuNameLookup, generate_sku_label_pdf
+    from sellfox_shipping.env_loader import load_dotenv
+
+    load_dotenv(Path(__file__).resolve().parents[1] / "EN_API" / ".env")
+    load_dotenv()
+
+    config = _load_config()
+    account_key = config["sellfox"]["proxy_account"]
+    repo = PackageRepository(BASE_DIR / config.get("store", {}).get("db_path", "data/shipping.db"))
+    record = repo.get(account_key, package_sn)
+    if record is None:
+        print(f"包裹 {package_sn} 未找到（请先运行 packages-sync）", file=sys.stderr)
+        raise typer.Exit(1)
+
+    # Collect SKUs from items
+    items_data: list[dict] = []
+    skus: set[str] = set()
+    for item in record.items:
+        sku = (item.commodity_sku or "").strip()
+        if sku:
+            skus.add(sku)
+            items_data.append({"commodity_sku": sku, "qty": item.quantity or 1})
+
+    if not items_data:
+        print("该包裹无商品 SKU", file=sys.stderr)
+        raise typer.Exit(1)
+
+    # Lookup names from ERPNext
+    erp_key = os.getenv("PROD_ERP_API_KEY") or os.getenv("ERP_API_KEY", "")
+    erp_secret = os.getenv("PROD_ERP_API_SECRET") or os.getenv("ERP_API_SECRET", "")
+    erp_base = os.getenv("ERP_URL", "https://erpnext.vilavi.cn")
+    if not erp_key or not erp_secret:
+        print("ERPNext 凭证未配置 (PROD_ERP_API_KEY / PROD_ERP_API_SECRET)", file=sys.stderr)
+        raise typer.Exit(1)
+
+    lookup = SkuNameLookup(erpnext_base=erp_base, erpnext_api_key=erp_key, erpnext_api_secret=erp_secret)
+    lookup.prefetch(list(skus))
+
+    # Build items for PDF
+    pdf_items: list[dict] = []
+    for item in items_data:
+        name = lookup.get(item["commodity_sku"])
+        pdf_items.append({
+            "sku": name["sku"],
+            "qty": item["qty"],
+            "cn_name": name["cn"],
+            "es_name": name["es"],
+        })
+    lookup.close()
+
+    warehouse = record.logistics.warehouse_name or ""
+    generate_sku_label_pdf(
+        [{"package_sn": package_sn, "items": pdf_items}],
+        output,
+        timestamp=datetime.now().strftime("%Y-%m-%d"),
+        warehouse_class=warehouse,
+    )
+    print(f"背贴 PDF 已生成: {output}")
+
+
 @app.command("packages-prepare-submit")
 def packages_prepare_submit(
     package_sn: str = typer.Option(..., "--package-sn", help="Sellfox packageSn"),

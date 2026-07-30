@@ -23,3 +23,11 @@ class CascadingDimsLookup:
             prefetch = getattr(lookup, "prefetch", None)
             if callable(prefetch):
                 prefetch(commodity_skus)
+
+    def get_item_name(self, commodity_sku: str) -> str:
+        """Return cached item_name from the first lookup that supports it."""
+        for lookup in self._lookups:
+            getter = getattr(lookup, "get_item_name", None)
+            if callable(getter):
+                return getter(commodity_sku)
+        return ""
