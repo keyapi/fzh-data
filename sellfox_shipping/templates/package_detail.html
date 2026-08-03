@@ -39,6 +39,7 @@
             <a href="/lizard/import">导入追踪号</a>
             <a href="/lizard/artifacts">制品</a>
             <a href="/lizard/batches">批次</a>
+            <a href="/labels">流水</a>
             <a href="/orders">订单 (legacy)</a>
         </div>
     </div>
@@ -157,7 +158,7 @@
             <table>
                 <thead>
                     <tr>
-                        <th>时间</th><th>渠道</th><th>运费</th><th>计费重(lbs)</th><th>Zone</th><th>类型</th><th>最长边(in)</th><th>原始数据</th>
+                        <th>时间</th><th>承运商</th><th>产品</th><th>运费</th><th>计费重(lbs)</th><th>Zone</th><th>类型</th><th>最长边(in)</th><th>原始数据</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -167,12 +168,19 @@
                         <td>
                             {% if rh.carrier == 'lizard' %}
                             <span class="badge" style="background:#d4edda;color:#155724;">蜴国际</span>
-                            {% elif rh.is_fedex %}
-                            <span class="badge" style="background:#ffeaa7;color:#6c5b00;">FedEx</span>
                             {% else %}
-                            <span class="badge" style="background:#d1ecf1;color:#0c5460;">GOFO</span>
+                            <span class="badge" style="background:#d1ecf1;color:#0c5460;">VITE</span>
                             {% endif %}
+                        </td>
+                        <td>
+                            {% if rh.carrier == 'lizard' %}
                             <code>{{ rh.channel or '—' }}</code>
+                            {% elif rh.is_fedex %}
+                            <span style="font-size:12px;">FedEx Ground</span>
+                            {% else %}
+                            <span style="font-size:12px;">GOFO Parcel</span>
+                            {% endif %}
+                            <div style="font-size:10px;color:#999;">{{ rh.service or '' }}</div>
                         </td>
                         <td><strong>${{ rh.total_amount if rh.total_amount is not none else '—' }}</strong> {{ rh.currency }}</td>
                         <td>{{ rh.billing_weight if rh.billing_weight is not none else '—' }}</td>

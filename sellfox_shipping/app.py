@@ -791,14 +791,13 @@ def _get_vite_rate(
     package_dims: dict | None,
     routing_result,
 ) -> dict | None:
-    """Fetch VITE rate quote (GOFO or FedEx) for all routable packages.
+    """Fetch VITE rate quotes — both GOFO and FedEx, always.
 
-    Converts kg/cm to lbs/inches. Routes to FedEx when longest side
-    exceeds the GOFO 22-inch limit, otherwise uses GOFO.
+    Converts kg/cm to lbs/inches. Queries both GOFO and FedEx endpoints
+    so users can compare pricing. All results are persisted to rate history.
     Excluded shops (platform logistics) are still skipped.
     """
     if routing_result is not None and not routing_result.matched:
-        # Platform logistics (excluded shops) — skip rate fetch
         return None
 
     if not package_dims:
@@ -807,89 +806,106 @@ def _get_vite_rate(
     try:
         from sellfox_shipping.carriers.vite import ViteGofoClient
 
-        # Unit conversion: kg → lbs, cm → inches
         weight_lb = round(package_dims["weight_kg"] * 2.20462, 2)
         length_in = round(package_dims["length_cm"] / 2.54, 1)
         width_in = round(package_dims["width_cm"] / 2.54, 1)
         height_in = round(package_dims["height_cm"] / 2.54, 1)
-
         max_side_in = max(length_in, width_in, height_in)
-        use_fedex = max_side_in > 22.0
 
         ship_from = _build_vite_ship_from(record)
         ship_to = _build_vite_ship_to(record)
+        dest_country = (
+            record.address.country_code or record.address.country or ""
+        ).upper()
 
-        body: dict = {
-            "shipDate": date.today().isoformat(),
-            "from": ship_from,
-            "to": ship_to,
-            "packages": [{
-                "weight": weight_lb,
-                "length": length_in,
-                "width": width_in,
-                "height": height_in,
-            }],
-        }
-
-        if use_fedex:
-            channel = VITE_FEDEX_CHANNEL
-            body["channel"] = channel
-            body["serviceType"] = "FEDEX_GROUND"
-            dest_country = (
-                record.address.country_code or record.address.country or ""
-            ).upper()
-        else:
-            channel = "GFUS"
-            body["channel"] = channel
-            body["serviceType"] = "GOFO_PARCEL"
+        packages = [{
+            "weight": weight_lb,
+            "length": length_in,
+            "width": width_in,
+            "height": height_in,
+        }]
 
         api_key = _read_env_key("VITE_API_KEY")
         if not api_key:
             return {"source": "vite", "error": "VITE_API_KEY not configured"}
         vite_base = _read_env_key("VITE_API_BASE_URL") or "https://test-api.vitedirect.com"
 
-        with ViteGofoClient(api_key=api_key, base_url=vite_base) as client:
-            if use_fedex:
-                if dest_country != "US":
-                    try:
-                        rate = client.rate_fedex_international(body)
-                    except Exception:
-                        # International FedEx endpoint unavailable; GOFO/FedEx
-                        # domestic only accept US state codes.
-                        return {
-                            "source": "vite",
-                            "error": (
-                                f"VITE does not support international destination "
-                                f"({dest_country}). FedEx international endpoint "
-                                f"returned 404."
-                            ),
-                        }
-                else:
-                    rate = client.rate_fedex(body)
-            else:
-                rate = client.rate_gofo(body)
+        results: list[dict] = []
+        best_rate: dict | None = None
 
-        ad = rate.get("amountDetails") or {}
-        result = {
-            "source": "vite_fedex" if use_fedex else "vite_gofo",
-            "service": rate.get("serviceDescription") or (
-                "FEDEX_GROUND" if use_fedex else "GOFO_PARCEL"
-            ),
-            "total_amount": rate.get("totalAmount"),
-            "currency": rate.get("currency", "USD"),
-            "billing_weight": rate.get("billingWeight"),
-            "zone": rate.get("zone"),
-            "address_type": str(rate.get("address_type_text", "")),
-            "channel": channel,
-            "max_side_in": max_side_in,
-            "weight_lb": weight_lb,
-            "use_fedex": use_fedex,
-        }
-        # Persist for historical tracking
-        _persist_rate(record, result, raw_response=rate)
-        return result
+        with ViteGofoClient(api_key=api_key, base_url=vite_base) as client:
+            # ── GOFO ──
+            try:
+                gofo_body = {
+                    "shipDate": date.today().isoformat(),
+                    "serviceType": "GOFO_PARCEL",
+                    "channel": "GFUS",
+                    "from": ship_from,
+                    "to": ship_to,
+                    "packages": packages,
+                }
+                gofo_rate = client.rate_gofo(gofo_body)
+                gofo_result = _vite_rate_to_dict(
+                    gofo_rate, source="vite_gofo", channel="GFUS",
+                    max_side_in=max_side_in, weight_lb=weight_lb,
+                )
+                results.append(gofo_result)
+                _persist_rate(record, gofo_result, raw_response=gofo_rate)
+                if best_rate is None:
+                    best_rate = gofo_result
+            except Exception:
+                pass
+
+            # ── FedEx Domestic ──
+            if dest_country == "US":
+                try:
+                    fedex_body = {
+                        "shipDate": date.today().isoformat(),
+                        "serviceType": "FEDEX_GROUND",
+                        "channel": VITE_FEDEX_CHANNEL,
+                        "from": ship_from,
+                        "to": ship_to,
+                        "packages": packages,
+                    }
+                    fedex_rate = client.rate_fedex(fedex_body)
+                    fedex_result = _vite_rate_to_dict(
+                        fedex_rate, source="vite_fedex", channel=VITE_FEDEX_CHANNEL,
+                        max_side_in=max_side_in, weight_lb=weight_lb,
+                    )
+                    results.append(fedex_result)
+                    _persist_rate(record, fedex_result, raw_response=fedex_rate)
+                    # Prefer FedEx for display if it's available
+                    if best_rate is None or best_rate.get("source") == "vite_gofo":
+                        best_rate = fedex_result
+                except Exception:
+                    pass
+
+        if best_rate is None:
+            return {"source": "vite", "error": "No VITE rates available"}
+        return best_rate
+
     except Exception as exc:
         return {"source": "vite", "error": f"VITE rate fetch failed: {exc}"}
+
+
+def _vite_rate_to_dict(
+    rate: dict, *, source: str, channel: str, max_side_in: float, weight_lb: float
+) -> dict:
+    """Convert a VITE rate API response to internal rate dict."""
+    ad = rate.get("amountDetails") or {}
+    return {
+        "source": source,
+        "service": rate.get("serviceDescription") or source,
+        "total_amount": rate.get("totalAmount"),
+        "currency": rate.get("currency", "USD"),
+        "billing_weight": rate.get("billingWeight"),
+        "zone": rate.get("zone"),
+        "address_type": str(rate.get("address_type_text", "")),
+        "channel": channel,
+        "max_side_in": max_side_in,
+        "weight_lb": weight_lb,
+        "is_fedex": source == "vite_fedex",
+    }
 
 
 # Lizard warehouse → ca_zone mapping (based on S0143 shipper registration)
@@ -1534,6 +1550,73 @@ async def lizard_import_form(
             "error": "",
             "default_actor": actor,
             "default_batch_id": result.batch_id or batch_raw,
+        },
+    )
+
+
+@app.get("/labels", response_class=HTMLResponse)
+async def labels_transaction_page(
+    request: Request,
+    days: int = Query(2, ge=1, le=30, description="Days to look back"),
+):
+    """Transaction history for financial reconciliation."""
+    from datetime import datetime, timedelta, timezone
+
+    account_key = config["sellfox"]["proxy_account"]
+    repo = _get_package_repository()
+
+    # Query labels from shipping_labels table for last N days
+    all_labels: list[dict] = []
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    # Get all packages, then their labels (keeping it simple)
+    try:
+        from sqlalchemy import text
+        with repo.engine.connect() as conn:
+            rows = conn.execute(
+                text("""
+                    SELECT l.id, l.carrier, l.service_level, l.tracking_number,
+                           l.carrier_order_id, l.total_amount, l.currency,
+                           l.status, l.created_by, l.created_at
+                    FROM shipping_labels l
+                    WHERE l.created_at >= :cutoff
+                    ORDER BY l.created_at DESC
+                    LIMIT 200
+                """),
+                {"cutoff": cutoff.strftime("%Y-%m-%d %H:%M:%S")},
+            )
+            for row in rows:
+                all_labels.append({
+                    "id": row[0], "carrier": row[1], "service_level": row[2],
+                    "tracking_number": row[3], "carrier_order_id": row[4],
+                    "total_amount": row[5], "currency": row[6] or "USD",
+                    "status": row[7], "created_by": row[8],
+                    "created_at": row[9],
+                })
+    except Exception:
+        pass
+
+    # Summary
+    summary: dict[str, dict] = {}
+    for lb in all_labels:
+        c = lb["carrier"]
+        if c not in summary:
+            summary[c] = {"count": 0, "total": 0.0, "generated": 0, "cancelled": 0}
+        summary[c]["count"] += 1
+        if lb["total_amount"]:
+            summary[c]["total"] += lb["total_amount"]
+        if lb["status"] == "generated":
+            summary[c]["generated"] += 1
+        elif lb["status"] == "cancelled":
+            summary[c]["cancelled"] += 1
+
+    return templates.TemplateResponse(
+        request,
+        "labels_transaction.html",
+        {
+            "labels": all_labels,
+            "summary": summary,
+            "days": days,
+            "account_key": account_key,
         },
     )
 
