@@ -49,6 +49,11 @@ updated: 2026-07-30
 - `StaticDimsLookup` 补 `get_item_name()` stub
 - 149 tests passed
 
+### 2026-08-03 — 模板 input value 回退修复
+
+- 修复 `package_detail.html` 中 4 个 dims input 的 value 表达式：`cr.override.dims.xxx if cr.override and cr.override.dims.is_complete else cr.resolved.xxx`
+- 与 07-30 的 `_compute_package_dims` 和 `_carton_rows_for_package` source 修复形成完整闭环（3 处均需检查 `is_complete`）
+
 ## 2026-07-28 — 双承运商面单创建 + 取消 + PDF 下载
 
 ### VITE 面单 (vite/shipment.py)

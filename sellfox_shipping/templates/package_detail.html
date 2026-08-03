@@ -366,16 +366,16 @@
                             {% endif %}
                         </td>
                         <td><input name="weight_kg" type="number" step="0.01" min="0.01"
-                                   value="{{ cr.override.dims.weight_kg if cr.override else (cr.resolved.weight_kg if cr.resolved else '') }}"
+                                   value="{{ cr.override.dims.weight_kg if (cr.override and cr.override.dims.is_complete) else (cr.resolved.weight_kg if cr.resolved else '') }}"
                                    style="width:60px;padding:3px 4px;border:1px solid #ddd;border-radius:3px;font-size:12px;" /></td>
                         <td><input name="length_cm" type="number" step="0.1" min="0.1"
-                                   value="{{ cr.override.dims.length_cm if cr.override else (cr.resolved.length_cm if cr.resolved else '') }}"
+                                   value="{{ cr.override.dims.length_cm if (cr.override and cr.override.dims.is_complete) else (cr.resolved.length_cm if cr.resolved else '') }}"
                                    style="width:55px;padding:3px 4px;border:1px solid #ddd;border-radius:3px;font-size:12px;" /></td>
                         <td><input name="width_cm" type="number" step="0.1" min="0.1"
-                                   value="{{ cr.override.dims.width_cm if cr.override else (cr.resolved.width_cm if cr.resolved else '') }}"
+                                   value="{{ cr.override.dims.width_cm if (cr.override and cr.override.dims.is_complete) else (cr.resolved.width_cm if cr.resolved else '') }}"
                                    style="width:55px;padding:3px 4px;border:1px solid #ddd;border-radius:3px;font-size:12px;" /></td>
                         <td><input name="height_cm" type="number" step="0.1" min="0.1"
-                                   value="{{ cr.override.dims.height_cm if cr.override else (cr.resolved.height_cm if cr.resolved else '') }}"
+                                   value="{{ cr.override.dims.height_cm if (cr.override and cr.override.dims.is_complete) else (cr.resolved.height_cm if cr.resolved else '') }}"
                                    style="width:55px;padding:3px 4px;border:1px solid #ddd;border-radius:3px;font-size:12px;" /></td>
                         {% else %}
                         <td colspan="6" style="color:#999;font-size:11px;">无商品 SKU</td>
