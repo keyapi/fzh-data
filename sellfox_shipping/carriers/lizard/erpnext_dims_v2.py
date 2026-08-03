@@ -32,6 +32,7 @@ _FIELDS = ",".join(
     [
         "name",
         "item_code",
+        "item_name",
         _FG_WEIGHT,
         _FG_LENGTH,
         _FG_WIDTH,
@@ -60,6 +61,8 @@ class ErpnextDimsLookupV2:
         self._headers = {"Authorization": f"token {api_key}:{api_secret}"}
         # Cache: commodity_sku → CartonDims | None (None = known-missing)
         self._cache: dict[str, CartonDims | None] = {}
+        # Name cache: commodity_sku → item_name
+        self._name_cache: dict[str, str] = {}
         # Sibling cache: (style, size) → list[dict] of sibling Item docs
         self._sibling_cache: dict[tuple[str, str], list[dict] | None] = {}
 
@@ -76,6 +79,15 @@ class ErpnextDimsLookupV2:
     def prefetch(self, commodity_skus: list[str]) -> None:
         for sku in commodity_skus:
             self.get(sku)
+
+    def get_item_name(self, commodity_sku: str) -> str:
+        """Return cached item_name for a commodity_sku (empty string if unknown)."""
+        sku = (commodity_sku or "").strip()
+        if not sku:
+            return ""
+        if sku not in self._cache:
+            self.get(sku)  # triggers _resolve which populates _name_cache
+        return self._name_cache.get(sku, "")
 
     def refresh(self, commodity_sku: str) -> CartonDims | None:
         """Force re-fetch (bypass cache)."""
@@ -95,6 +107,12 @@ class ErpnextDimsLookupV2:
         item = self._fetch_item(zlmb_name)
         if item is None:
             return None
+
+        # Cache item_name
+        item_name = (item.get("item_name") or "").strip()
+        if item_name:
+            self._name_cache[commodity_sku] = item_name
+
         siblings = self._fetch_siblings(parts["style"], parts["size"])
 
         weight_g = _resolve_weight(item, siblings)

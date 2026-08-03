@@ -3,7 +3,7 @@ okf: v0.1
 type: Log
 module: sellfox_shipping
 created: 2026-07-15
-updated: 2026-07-28
+updated: 2026-07-30
 ---
 
 # sellfox_shipping — 变更日志
@@ -15,6 +15,44 @@ updated: 2026-07-28
 - 识别数据依赖：中文名称 + 西班牙语名称来自 Google Sheet "US SKU Name"（需 service account 权限）
 - 提出 3 种名称获取方案（ERPNext 优先、Google Sheets 兜底、赛狐商品 API 备用）
 - 产出：`docs/research/sku-label-back-sticker-analysis-2026-07-28.md`
+
+## 2026-07-30 — SKU 背贴模块实现
+
+### 新增模块：`sku_label/`
+- `pdf_generator.py`：reportlab 4×2" 背贴标签 PDF — 包裹号 + Code128 条形码 + 表格（#/SKU/QTY/中文名/西语名），中英混排自适应字号
+- `name_lookup.py`：`SkuNameLookup` 通用工具类 — 查 ERPNext `item_languages` 子表获取 `tt_sku`(通途SKU)、`item_name_cn`(中文)、`item_name_es`(西语)
+- `__init__.py`：导出 `generate_sku_label_pdf` + `SkuNameLookup`
+
+### CLI + Web 集成
+- `cli.py`：新增 `sku-label` 命令（`--package-sn` + `--output`）
+- `app.py`：新增 `GET /packages/{sn}/sku-label` 端点，返回 PDF FileResponse
+- `package_detail.html`：商品行标题旁新增「下载背贴 PDF」链接
+- `pyproject.toml`：新增 `reportlab>=5.0.0` 依赖
+
+### 商品行「商品名称」列
+- 新增 migration `0014_carton_override_item_name`：`shipping_carton_overrides` 表添加 `item_name` 列
+- `CartonOverrideRow` / `CartonOverrideRecord`：新增 `item_name` 字段
+- `package_repository.py`：新增 `upsert_carton_item_name()` 方法（仅保存名称，不要求完整 dims）
+- `ErpnextDimsLookupV2`：`_FIELDS` 新增 `item_name`，新增 `_name_cache` + `get_item_name()` 方法
+- `CascadingDimsLookup`：新增 `get_item_name()` 代理
+- `StaticDimsLookup`：新增 `get_item_name()` stub（返回 ""）
+- `_carton_rows_for_package()`：查 EN 获取 item_name → 持久化到 carton_overrides → 渲染到模板
+- `package_detail.html`：表格新增 `<th>商品名称</th>` + `<td>` 列
+
+### Bug 修复
+- `get_package_dims()`：`session.get()` 按主键 id 查改为 `filter(package_id==)` 按外键查，修复面单创建 "no dimensions available" 错误
+- `_compute_package_dims()`：override 存在但 dims 不完整时回退到 EN ZLMB resolved dims
+- `_carton_rows_for_package()`：source 判断改为 `override.dims.is_complete` 才标「本地补录」
+
+### 测试
+- 5 个测试文件的 migration 版本断言从 `0013` 更新到 `0014`
+- `StaticDimsLookup` 补 `get_item_name()` stub
+- 149 tests passed
+
+### 2026-08-03 — 模板 input value 回退修复
+
+- 修复 `package_detail.html` 中 4 个 dims input 的 value 表达式：`cr.override.dims.xxx if cr.override and cr.override.dims.is_complete else cr.resolved.xxx`
+- 与 07-30 的 `_compute_package_dims` 和 `_carton_rows_for_package` source 修复形成完整闭环（3 处均需检查 `is_complete`）
 
 ## 2026-07-28 — 双承运商面单创建 + 取消 + PDF 下载
 
