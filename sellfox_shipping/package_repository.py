@@ -630,6 +630,26 @@ ACTIVE_LABEL_OPERATION_STATUSES = {
     "UNKNOWN_BLOCKED",
 }
 
+# SUCCEEDED / FAILED_* / CANCELLED are terminal for the unique active-op index.
+# SUCCEEDED is "done with an active label", not an in-flight claim slot.
+ALLOWED_LABEL_OPERATION_TRANSITIONS: dict[str, frozenset[str]] = {
+    "RESERVED": frozenset({"SENT", "FAILED_SAFE", "CANCELLED"}),
+    "SENT": frozenset(
+        {"ACCEPTED", "SUCCEEDED", "FAILED_SAFE", "FAILED_FINAL", "UNKNOWN_BLOCKED"}
+    ),
+    "ACCEPTED": frozenset(
+        {"LABEL_PENDING", "SUCCEEDED", "FAILED_FINAL", "UNKNOWN_BLOCKED", "CANCELLED"}
+    ),
+    "LABEL_PENDING": frozenset(
+        {"LABEL_PENDING", "SUCCEEDED", "FAILED_FINAL", "UNKNOWN_BLOCKED"}
+    ),
+    "SUCCEEDED": frozenset({"CANCELLED"}),
+    "FAILED_SAFE": frozenset(),
+    "FAILED_FINAL": frozenset(),
+    "UNKNOWN_BLOCKED": frozenset(),
+    "CANCELLED": frozenset(),
+}
+
 
 class LabelOperationRow(Base):
     """One logical carrier create-label operation with recovery state."""
@@ -2114,7 +2134,7 @@ class PackageRepository:
                 operation_id = connection.execute("SELECT last_insert_rowid()").fetchone()[0]
 
                 connection.commit()
-            except:
+            except Exception:
                 connection.rollback()
                 raise
 
@@ -2143,7 +2163,20 @@ class PackageRepository:
             row = session.get(LabelOperationRow, operation_id)
             if row is None:
                 return None
-            row.status = status
+            current = (row.status or "").strip()
+            target = (status or "").strip()
+            allowed = ALLOWED_LABEL_OPERATION_TRANSITIONS.get(current)
+            if allowed is None:
+                raise RuntimeError(
+                    f"invalid transition: unknown current status {current!r} "
+                    f"for operation_id={operation_id}"
+                )
+            if target not in allowed:
+                raise RuntimeError(
+                    f"invalid transition: {current} -> {target} "
+                    f"for operation_id={operation_id}"
+                )
+            row.status = target
             row.updated_at = now
             if provider_order_id:
                 row.provider_order_id = provider_order_id

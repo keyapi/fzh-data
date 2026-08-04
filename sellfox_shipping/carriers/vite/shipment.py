@@ -38,41 +38,88 @@ def _cm_to_in(cm: float) -> float:
 
 
 def _build_ship_from(warehouse_name: str, warehouses_cfg: dict) -> dict:
-    """Build VITE sender address from warehouse config."""
-    wh = warehouses_cfg.get(warehouse_name, {})
-    addr = wh.get("address", {})
-    if addr.get("address1"):
-        return {
-            "fullName": (addr.get("name") or "FZH Warehouse")[:35],
-            "company": (addr.get("company") or "")[:35],
-            "address1": addr["address1"][:50],
-            "address2": (addr.get("address2") or "")[:50],
-            "city": (addr.get("city") or "")[:28],
-            "state": (addr.get("state") or "")[:2],
-            "zipCode": (addr.get("postal_code") or "")[:10],
-            "phoneNumber": (addr.get("phone") or "0000000000")[:15],
-        }
+    """Build VITE sender address from warehouse config.
+
+    Refuses fictional fallbacks — incomplete warehouse config must fail closed.
+    """
+    name_key = (warehouse_name or "").strip()
+    if not name_key:
+        raise ValueError("warehouse_name is required for VITE ship-from")
+    wh = warehouses_cfg.get(name_key, {})
+    if not wh:
+        raise ValueError(f"Warehouse '{name_key}' not found in config")
+    addr = wh.get("address", {}) or {}
+    full_name = (addr.get("name") or "").strip()
+    address1 = (addr.get("address1") or "").strip()
+    city = (addr.get("city") or "").strip()
+    state = (addr.get("state") or "").strip()
+    zip_code = (addr.get("postal_code") or "").strip()
+    phone = (addr.get("phone") or "").strip()
+    missing = [
+        field
+        for field, value in (
+            ("name", full_name),
+            ("address1", address1),
+            ("city", city),
+            ("state", state),
+            ("postal_code", zip_code),
+            ("phone", phone),
+        )
+        if not value
+    ]
+    if missing:
+        raise ValueError(
+            "VITE warehouse address incomplete: missing "
+            + ", ".join(missing)
+        )
     return {
-        "fullName": "FZH Test",
-        "address1": "90 Chester rd",
-        "city": "Belmont",
-        "state": "MA",
-        "zipCode": "02478",
-        "phoneNumber": "1111111111",
+        "fullName": full_name[:35],
+        "company": (addr.get("company") or "")[:35],
+        "address1": address1[:50],
+        "address2": (addr.get("address2") or "")[:50],
+        "city": city[:28],
+        "state": state[:2],
+        "zipCode": zip_code[:10],
+        "phoneNumber": phone[:15],
     }
 
 
 def _build_ship_to(package: SellfoxPackageRecord) -> dict:
-    """Build VITE recipient address from package record."""
+    """Build VITE recipient address from package record.
+
+    Refuses fictional recipient fallbacks.
+    """
     addr = package.address
+    full_name = (addr.name or "").strip()
+    address1 = (addr.address_line_1 or "").strip()
+    city = (addr.city or "").strip()
+    state = (addr.state_or_region or "").strip()
+    zip_code = (addr.postal_code or "").strip()
+    phone = (addr.phone or addr.mobile or "").strip()
+    missing = [
+        field
+        for field, value in (
+            ("name", full_name),
+            ("address_line_1", address1),
+            ("city", city),
+            ("state_or_region", state),
+            ("postal_code", zip_code),
+            ("phone", phone),
+        )
+        if not value
+    ]
+    if missing:
+        raise ValueError(
+            "Recipient incomplete: missing " + ", ".join(missing)
+        )
     return {
-        "fullName": (addr.name or "Customer")[:35],
-        "address1": (addr.address_line_1 or "")[:50],
+        "fullName": full_name[:35],
+        "address1": address1[:50],
         "address2": (addr.address_line_2 or "")[:35],
-        "city": (addr.city or "")[:28],
-        "state": (addr.state_or_region or addr.city or "XX")[:2],
-        "zipCode": (addr.postal_code or "")[:10],
-        "phoneNumber": (addr.phone or addr.mobile or "0000000000")[:15],
+        "city": city[:28],
+        "state": state[:2],
+        "zipCode": zip_code[:10],
+        "phoneNumber": phone[:15],
     }
 
 
@@ -139,6 +186,7 @@ class ViteShipmentService:
         package_dims: dict[str, float] | None = None,
         poll_interval_s: float = 5.0,
         poll_timeout_s: float = 180.0,
+        operation_id: int | None = None,
     ) -> ViteShipmentResult:
         sn = (package.package_sn or "").strip()
         if not sn:
@@ -278,6 +326,7 @@ class ViteShipmentService:
             carrier_order_id=order_id,
             request_id=request_id,
             label_url=label_url,
+            operation_id=operation_id,
             artifact_id=artifact.id,
             total_amount=float(total_amount) if total_amount is not None else None,
             currency=created.get("currency", "USD"),

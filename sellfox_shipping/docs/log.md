@@ -8,6 +8,16 @@ updated: 2026-08-04
 
 # sellfox_shipping — 变更日志
 
+## 2026-08-04 — 购标安全接线 create_label
+
+- `LabelService.create_label()` 接入 preflight → claim → SENT → carrier → SUCCEEDED / FAILED_SAFE / FAILED_FINAL / UNKNOWN_BLOCKED
+- `transition_label_operation` 增加合法边表；取消确认后 operation → CANCELLED
+- Vite `_build_ship_from` / `_build_ship_to` 删除 Belmont / Customer / XX / 0000000000 虚构兜底
+- `ship_package` / lizard insert 传递 `operation_id`
+- 蓝图澄清：SUCCEEDED 不占活跃 operation 唯一槽；挡住再购的是活动 label
+- 测试：safety 扩至 11 例；全量 160 passed
+- 待做：resume CLI、细粒度 ACCEPTED/LABEL_PENDING、app.py 报价路径同类兜底
+
 ## 2026-08-04 — 生产可靠性蓝图与路线图
 
 - 独立调研 ShipStation、Sendcloud、Shipium、Metapack、EasyPost、Shippo、Karrio 等成熟方案，确定保留模块化单体和 API/Excel 双通道。
@@ -32,10 +42,9 @@ updated: 2026-08-04
 - 凭证扫描：零输出
 
 ### 待集成
-- preflight+claim 尚未接入 create_label() 调用链
-- ViteShipmentService 和 LizardApiShipmentService 尚未接收 operation_id 做状态联动
+- ~~preflight+claim 接入 create_label()~~ → 见「购标安全接线」条目
 - CLI 命令 label-operations-list / label-operation-resume 尚未实现
-- _build_ship_from 的 Belmont 兜底和 _build_ship_to 的 Customer/XX/0000000000 兜底尚未删除（preflight 已使此路径不可达）
+- app.py 报价路径 `_build_vite_ship_*` 同类虚构兜底尚未清理
 
 ## 2026-08-04 — 背贴 PDF 页内嵌入预览 + 批量打印
 

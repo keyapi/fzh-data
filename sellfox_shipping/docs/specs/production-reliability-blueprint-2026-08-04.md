@@ -49,12 +49,14 @@ LabelPreflightResult 在任何承运商 HTTP 前统一验证：
 - SENT：发送前已提交 operation；此后崩溃不能假设未创建。
 - ACCEPTED：已保存 provider order ID。
 - LABEL_PENDING：只允许查询标签、下载文件和本地落库。
-- SUCCEEDED：存在活动 label 和 artifact。
+- SUCCEEDED：存在活动 label 和 artifact。**SUCCEEDED 不占用**「活跃 operation」唯一索引槽（槽位给 in-flight + UNKNOWN_BLOCKED）；挡住再购标的是活动 label。
 - FAILED_SAFE：本地校验或明确未发送，可创建新 generation。
 - FAILED_FINAL：承运商确定性拒绝，需修改输入后创建新 generation。
 - UNKNOWN_BLOCKED：可能已创建但无足够证据，普通 create 永久阻断，转人工恢复。
+- CANCELLED：承运商取消确认后，由 SUCCEEDED（或未发送的 RESERVED）转入；释放后再购标开新 generation。
 
-活动状态为 RESERVED、SENT、ACCEPTED、LABEL_PENDING、UNKNOWN_BLOCKED、SUCCEEDED。数据库保证同一包裹最多一个活动 operation、最多一个活动 label。
+活动 **operation** 状态（占唯一索引）为 RESERVED、SENT、ACCEPTED、LABEL_PENDING、UNKNOWN_BLOCKED。  
+活动 **label** 由 `is_active=1` 唯一索引保证同一包裹最多一张。
 
 ## 数据模型
 

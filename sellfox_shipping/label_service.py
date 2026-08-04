@@ -7,6 +7,8 @@ and persists results to the shipping_labels table.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
+import json
 import os
 from typing import Any
 
@@ -192,54 +194,153 @@ class LabelService:
         Returns a dict with keys: id, tracking_number, carrier_order_id,
         label_url, artifact_id, status, total_amount, carrier, service_level.
         """
-        carrier = (carrier or "").strip().lower()
-        if not carrier:
-            raise LabelServiceError("carrier is required", http_status=400)
-        if carrier not in ("vite", "lizard"):
-            raise LabelServiceError(
-                f"Unknown carrier '{carrier}'. Available: vite, lizard",
-                http_status=400,
-            )
-
-        sn = package.package_sn
-
-        # Prevent duplicate active labels
-        existing = self._repo.list_labels_for_package(
-            account_key=account_key, package_sn=sn
+        preflight = self.preflight(
+            package=package,
+            account_key=account_key,
+            carrier=carrier,
+            actor=actor,
+            service_level=service_level,
         )
-        for lbl in existing:
-            if lbl.status != "cancelled":
-                raise LabelServiceError(
-                    f"已存在有效面单 (追踪号: {lbl.tracking_number}, 承运商: {lbl.carrier})。"
-                    f"请先取消现有面单后再创建新的。",
-                    http_status=409,
+        resolved_service = preflight.service_level or service_level or (
+            "GOFO_PARCEL" if preflight.carrier == "vite" else ""
+        )
+        request_hash = self._canonical_request_hash(
+            package=package,
+            account_key=account_key,
+            carrier=preflight.carrier,
+            service_level=resolved_service,
+            channel=channel,
+            weight_kg=preflight.weight_kg,
+            length_cm=preflight.length_cm,
+            width_cm=preflight.width_cm,
+            height_cm=preflight.height_cm,
+        )
+        idempotency_key = (
+            f"{package.package_sn}:{preflight.carrier}:"
+            f"{resolved_service}:{request_hash[:16]}"
+        )
+
+        try:
+            operation = self._repo.claim_label_operation(
+                account_key=account_key,
+                package_db_id=preflight.package_db_id,
+                carrier=preflight.carrier,
+                service_level=resolved_service,
+                idempotency_key=idempotency_key,
+                request_hash=request_hash,
+                actor=actor,
+            )
+        except RuntimeError as exc:
+            raise LabelServiceError(str(exc), http_status=409) from exc
+
+        self._repo.transition_label_operation(operation.id, status="SENT")
+
+        try:
+            if preflight.carrier == "vite":
+                result = self._create_vite_label(
+                    package=package,
+                    account_key=account_key,
+                    actor=actor,
+                    db_id=preflight.package_db_id,
+                    dims=self._repo.get_package_dims(preflight.package_db_id),
+                    service_level=resolved_service,
+                    channel=channel,
+                    operation_id=operation.id,
                 )
-
-        # Resolve dims
-        db_id = self._repo.get_package_db_id(account_key, sn)
-        if db_id is None:
-            raise LabelServiceError(
-                f"Package {sn} not found in local store", http_status=404
+            else:
+                result = self._create_lizard_label(
+                    package=package,
+                    account_key=account_key,
+                    actor=actor,
+                    service_level=resolved_service,
+                    operation_id=operation.id,
+                )
+        except LabelServiceError as exc:
+            self._fail_operation(operation.id, exc)
+            raise
+        except ValueError as exc:
+            self._repo.transition_label_operation(
+                operation.id,
+                status="FAILED_SAFE",
+                error_class="validation",
+                error_summary=str(exc)[:500],
             )
-        dims = self._repo.get_package_dims(db_id)
-
-        if carrier == "vite":
-            return self._create_vite_label(
-                package=package,
-                account_key=account_key,
-                actor=actor,
-                db_id=db_id,
-                dims=dims,
-                service_level=service_level,
-                channel=channel,
+            raise LabelServiceError(str(exc), http_status=400) from exc
+        except Exception as exc:
+            self._repo.transition_label_operation(
+                operation.id,
+                status="UNKNOWN_BLOCKED",
+                error_class="unexpected",
+                error_summary=str(exc)[:500],
             )
+            raise
+
+        self._repo.transition_label_operation(
+            operation.id,
+            status="SUCCEEDED",
+            provider_order_id=str(result.get("carrier_order_id") or ""),
+            tracking_number=str(result.get("tracking_number") or ""),
+        )
+        return result
+
+    @staticmethod
+    def _canonical_request_hash(
+        *,
+        package: SellfoxPackageRecord,
+        account_key: str,
+        carrier: str,
+        service_level: str,
+        channel: str,
+        weight_kg: float,
+        length_cm: float,
+        width_cm: float,
+        height_cm: float,
+    ) -> str:
+        addr = package.address
+        payload = {
+            "account_key": account_key,
+            "package_sn": package.package_sn,
+            "carrier": carrier,
+            "service_level": service_level,
+            "channel": channel,
+            "warehouse_name": package.logistics.warehouse_name,
+            "ship_to": {
+                "name": addr.name,
+                "address_line_1": addr.address_line_1,
+                "address_line_2": addr.address_line_2,
+                "city": addr.city,
+                "state_or_region": addr.state_or_region,
+                "postal_code": addr.postal_code,
+                "phone": addr.phone or addr.mobile,
+                "country_code": addr.country_code,
+            },
+            "dims": {
+                "weight_kg": weight_kg,
+                "length_cm": length_cm,
+                "width_cm": width_cm,
+                "height_cm": height_cm,
+            },
+        }
+        raw = json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+    def _fail_operation(self, operation_id: int, exc: LabelServiceError) -> None:
+        if exc.http_status in (400, 404, 503):
+            status = "FAILED_SAFE"
+            error_class = "validation" if exc.http_status != 503 else "config"
+        elif exc.http_status in (401, 403, 422):
+            status = "FAILED_FINAL"
+            error_class = "carrier_rejected"
         else:
-            return self._create_lizard_label(
-                package=package,
-                account_key=account_key,
-                actor=actor,
-                service_level=service_level,
-            )
+            # Already SENT — ambiguous carrier outcome must block blind retry.
+            status = "UNKNOWN_BLOCKED"
+            error_class = "network_unknown"
+        self._repo.transition_label_operation(
+            operation_id,
+            status=status,
+            error_class=error_class,
+            error_summary=str(exc)[:500],
+        )
 
     def get_labels_for_package(
         self, account_key: str, package_sn: str
@@ -290,12 +391,26 @@ class LabelService:
             raise LabelServiceError(f"Label {label_id} already cancelled", http_status=409)
 
         if label.carrier == "vite":
-            return self._cancel_vite_label(label, actor)
+            result = self._cancel_vite_label(label, actor)
         else:
             raise LabelServiceError(
                 f"Cancel not supported for carrier '{label.carrier}'",
                 http_status=501,
             )
+
+        if label.operation_id is not None:
+            try:
+                self._repo.transition_label_operation(
+                    label.operation_id,
+                    status="CANCELLED",
+                    error_class="cancelled",
+                    error_summary=f"label_id={label_id}",
+                )
+            except RuntimeError:
+                # Operation may already be CANCELLED or in a non-cancellable state
+                # (e.g. UNKNOWN_BLOCKED). Label deactivation still stands.
+                pass
+        return result
 
     def _cancel_vite_label(
         self, label: Any, actor: str
@@ -357,6 +472,7 @@ class LabelService:
         dims: Any,
         service_level: str,
         channel: str,
+        operation_id: int | None = None,
     ) -> dict[str, Any]:
         from sellfox_shipping.carriers.vite.client import (
             ViteGofoClient,
@@ -396,6 +512,7 @@ class LabelService:
                     service_type=service_level or "GOFO_PARCEL",
                     channel=channel or "GFUS",
                     package_dims=dims_dict,
+                    operation_id=operation_id,
                 )
             except ViteClientError as exc:
                 msg = str(exc)
@@ -434,6 +551,7 @@ class LabelService:
         account_key: str,
         actor: str,
         service_level: str,
+        operation_id: int | None = None,
     ) -> dict[str, Any]:
         from sellfox_shipping.carriers.lizard.api_client import LizardApiClient, LizardApiError
         from sellfox_shipping.carriers.lizard.api_shipment import LizardApiShipmentService
@@ -499,6 +617,7 @@ class LabelService:
             carrier_order_id=result.order_code,
             request_id="",
             label_url=result.label_url,
+            operation_id=operation_id,
             artifact_id=result.artifact_id,
             total_amount=None,
             currency="USD",
