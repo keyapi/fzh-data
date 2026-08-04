@@ -15,6 +15,28 @@ updated: 2026-08-04
 - 新增 Must/Should/Later 路线图和 Agent 任务包；首批开发锁定“购标安全核心”。
 - 明确短期不迁 PostgreSQL、不部署 Karrio Server、不开发装箱算法。
 
+
+## 2026-08-04 — 购标安全核心实现 (PR #134)
+
+- 新增 shipping_label_operations 表（migration 0015）与 LabelOperationRow/Record ORM 模型
+- claim_label_operation()：SQLite BEGIN IMMEDIATE 原子占用，并发安全；同一包裹同时最多一个活跃操作或标签
+- 	ransition_label_operation()：状态机流转，持久化 provider_order_id/tracking_number/error 信息
+- LabelService.preflight()：统一前置阻断——审核状态、重尺全正值、收件必填、VITE 仓库地址电话完备性
+- shipping_labels 增加 operation_id/is_active：生成默认活跃，取消设 is_active=false 释放约束
+- 部分唯一索引：uq_shipping_labels_one_active_per_package + uq_label_operations_one_active_per_package
+- LabelPreflightResult dataclass 用于 preflight 输出
+- 状态机：RESERVED → SENT → ACCEPTED → LABEL_PENDING → SUCCEEDED / FAILED_SAFE / FAILED_FINAL / UNKNOWN_BLOCKED
+- SUCCEEDED 不在活跃 operation 集合中（终端状态，不阻止后续购标）
+- 测试：新增 5 个 safety 测试；全量 154 passed
+- 版本断言：全部迁移测试更新到 0015_label_acquisition_safety
+- 凭证扫描：零输出
+
+### 待集成
+- preflight+claim 尚未接入 create_label() 调用链
+- ViteShipmentService 和 LizardApiShipmentService 尚未接收 operation_id 做状态联动
+- CLI 命令 label-operations-list / label-operation-resume 尚未实现
+- _build_ship_from 的 Belmont 兜底和 _build_ship_to 的 Customer/XX/0000000000 兜底尚未删除（preflight 已使此路径不可达）
+
 ## 2026-08-04 — 背贴 PDF 页内嵌入预览 + 批量打印
 
 ### 背贴预览

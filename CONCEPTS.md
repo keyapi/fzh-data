@@ -46,6 +46,18 @@ Open WebUI 里两套代码执行能力：Open Terminal = Docker Linux 沙箱（�
 ### ShippingBatch
 本模块对一次蜥蜴 Excel 导出/导入往返的批次登记（制品、对账计数）。与赛狐侧「提交平台」不是同一对象。
 
+### 购标操作 (Label Operation)
+代表一次逻辑上的承运商购标（create shipment/label）请求。由 claim_label_operation() 原子占用产生，拥有独立状态机，与最终标签（shipping_labels）通过 operation_id 关联。同一包裹同时最多存在一个活跃操作。
+
+### 前置校验 (Preflight)
+LabelService.preflight() 在调用任何外部 API 之前执行的统一阻断校验。验证审核状态（approved）、重尺完整性和正值、收件必填字段、以及 VITE 仓库配置的地址电话完备性。任何一条失败即返回 400 并拒绝外部调用。
+
+### UNKNOWN_BLOCKED
+购标操作的异常状态。表示请求已发出但无法确认承运商是否创建了订单（超时、连接中断、模糊 5xx、进程崩溃）。处于此状态时禁止再次创建；恢复命令仅允许有 provider_order_id 的操作回查承运商状态并下载标签。
+
+### 原子占用 (Atomic Claim)
+SQLite BEGIN IMMEDIATE 事务内完成活跃标签/操作冲突检查、generation 分配和 RESERVED 状态插入。并发请求中只有一个获得执行权，其他返回冲突错误。
+
 ## Development Environment
 
 ### 3P 模式 (Third-Party Provider Mode)
