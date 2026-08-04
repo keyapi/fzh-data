@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from sqlalchemy import (
+    Boolean,
     DateTime,
     Float,
     ForeignKey,
@@ -574,6 +575,10 @@ class ShippingLabelRow(Base):
     carrier_order_id: Mapped[str] = mapped_column(String, default="")
     request_id: Mapped[str] = mapped_column(String, default="")
     label_url: Mapped[str] = mapped_column(Text, default="")
+    operation_id: Mapped[int | None] = mapped_column(
+        ForeignKey("shipping_label_operations.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     artifact_id: Mapped[int | None] = mapped_column(
         ForeignKey("shipping_artifacts.id", ondelete="SET NULL"),
         nullable=True,
@@ -582,6 +587,7 @@ class ShippingLabelRow(Base):
     total_amount: Mapped[float | None] = mapped_column(Float, nullable=True)
     currency: Mapped[str] = mapped_column(String, default="USD")
     status: Mapped[str] = mapped_column(String, default="pending")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     carrier_response_json: Mapped[str] = mapped_column(Text, default="")
     created_by: Mapped[str] = mapped_column(String, default="")
     created_at: Mapped[datetime] = mapped_column(
@@ -603,12 +609,76 @@ class ShippingLabelRecord:
     carrier_order_id: str
     request_id: str
     label_url: str
+    operation_id: int | None
     artifact_id: int | None
     label_format: str
     total_amount: float | None
     currency: str
     status: str
+    is_active: bool
     carrier_response_json: str
+    created_by: str
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+ACTIVE_LABEL_OPERATION_STATUSES = {
+    "RESERVED",
+    "SENT",
+    "ACCEPTED",
+    "LABEL_PENDING",
+    "UNKNOWN_BLOCKED",
+}
+
+
+class LabelOperationRow(Base):
+    """One logical carrier create-label operation with recovery state."""
+
+    __tablename__ = "shipping_label_operations"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    account_id: Mapped[int] = mapped_column(
+        ForeignKey("shipping_accounts.id", ondelete="CASCADE")
+    )
+    package_id: Mapped[int] = mapped_column(
+        ForeignKey("shipping_packages.id", ondelete="CASCADE")
+    )
+    generation: Mapped[int] = mapped_column(Integer)
+    carrier: Mapped[str] = mapped_column(String, default="")
+    service_level: Mapped[str] = mapped_column(String, default="")
+    idempotency_key: Mapped[str] = mapped_column(String, default="")
+    request_hash: Mapped[str] = mapped_column(String, default="")
+    status: Mapped[str] = mapped_column(String, default="RESERVED")
+    provider_order_id: Mapped[str] = mapped_column(String, default="")
+    tracking_number: Mapped[str] = mapped_column(String, default="")
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0)
+    error_class: Mapped[str] = mapped_column(String, default="")
+    error_summary: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[str] = mapped_column(String, default="")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.current_timestamp()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.current_timestamp()
+    )
+
+
+@dataclass(frozen=True)
+class LabelOperationRecord:
+    id: int
+    account_key: str
+    package_id: int
+    generation: int
+    carrier: str
+    service_level: str
+    idempotency_key: str
+    request_hash: str
+    status: str
+    provider_order_id: str
+    tracking_number: str
+    attempt_count: int
+    error_class: str
+    error_summary: str
     created_by: str
     created_at: datetime | None = None
     updated_at: datetime | None = None
@@ -1957,6 +2027,173 @@ class PackageRepository:
 
     # ── shipping_labels ──────────────────────────────────────────
 
+    # -- label operation claim / transition / query --
+
+    def claim_label_operation(
+        self,
+        *,
+        account_key: str,
+        package_db_id: int,
+        carrier: str,
+        service_level: str,
+        idempotency_key: str,
+        request_hash: str,
+        actor: str,
+    ) -> LabelOperationRecord:
+        active_statuses = tuple(ACTIVE_LABEL_OPERATION_STATUSES)
+        now_iso = datetime.now(timezone.utc).replace(tzinfo=None).isoformat(sep=" ")
+        with sqlite3.connect(self._db_path, timeout=30) as connection:
+            connection.execute("PRAGMA busy_timeout=30000")
+            connection.execute("PRAGMA foreign_keys=ON")
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                account_row = connection.execute(
+                    "SELECT id FROM shipping_accounts WHERE account_key = ?",
+                    (account_key,),
+                ).fetchone()
+                if account_row is None:
+                    raise RuntimeError(f"account not found: {account_key}")
+                account_id = int(account_row[0])
+
+                package_row = connection.execute(
+                    "SELECT account_id FROM shipping_packages WHERE id = ?",
+                    (package_db_id,),
+                ).fetchone()
+                if package_row is None:
+                    raise RuntimeError(f"package not found: {package_db_id}")
+                if int(package_row[0]) != account_id:
+                    raise RuntimeError("package does not belong to account")
+
+                active_label = connection.execute(
+                    "SELECT id FROM shipping_labels WHERE package_id = ? AND is_active = 1 LIMIT 1",
+                    (package_db_id,),
+                ).fetchone()
+                if active_label is not None:
+                    raise RuntimeError(
+                        "active label exists for "
+                        f"package_id={package_db_id} label_id={active_label[0]}"
+                    )
+
+                placeholders = ",".join("?" for _ in active_statuses)
+                active_operation = connection.execute(
+                    f"SELECT id, status FROM shipping_label_operations "
+                    f"WHERE package_id = ? AND status IN ({placeholders}) LIMIT 1",
+                    (package_db_id, *active_statuses),
+                ).fetchone()
+                if active_operation is not None:
+                    raise RuntimeError(
+                        "active label operation exists for "
+                        f"package_id={package_db_id} op_id={active_operation[0]} "
+                        f"status={active_operation[1]}"
+                    )
+
+                max_gen = connection.execute(
+                    "SELECT coalesce(max(generation), 0) FROM shipping_label_operations WHERE package_id = ?",
+                    (package_db_id,),
+                ).fetchone()[0]
+                generation = int(max_gen) + 1
+
+                connection.execute(
+                    "INSERT INTO shipping_label_operations "
+                    "(account_id, package_id, generation, carrier, service_level, "
+                    "idempotency_key, request_hash, status, "
+                    "provider_order_id, tracking_number, attempt_count, "
+                    "error_class, error_summary, created_by, created_at, updated_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, 'RESERVED', '', '', 0, '', '', ?, ?, ?)",
+                    (account_id, package_db_id, generation, carrier, service_level,
+                     idempotency_key, request_hash, actor, now_iso, now_iso),
+                )
+                operation_id = connection.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+                connection.commit()
+            except:
+                connection.rollback()
+                raise
+
+        self.append_audit_event(
+            actor=actor,
+            action="label_operation.claim",
+            entity_type="shipping_label_operation",
+            entity_id=str(operation_id),
+            summary=f"carrier={carrier} generation={generation}",
+        )
+        return self.get_label_operation(operation_id)
+
+    def transition_label_operation(
+        self,
+        operation_id: int,
+        *,
+        status: str,
+        provider_order_id: str = "",
+        tracking_number: str = "",
+        error_class: str = "",
+        error_summary: str = "",
+        increment_attempt: bool = False,
+    ) -> LabelOperationRecord | None:
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        with self._session_factory.begin() as session:
+            row = session.get(LabelOperationRow, operation_id)
+            if row is None:
+                return None
+            row.status = status
+            row.updated_at = now
+            if provider_order_id:
+                row.provider_order_id = provider_order_id
+            if tracking_number:
+                row.tracking_number = tracking_number
+            if error_class:
+                row.error_class = error_class
+            if error_summary:
+                row.error_summary = error_summary
+            if increment_attempt:
+                row.attempt_count = (row.attempt_count or 0) + 1
+        self.append_audit_event(
+            actor="system",
+            action="label_operation.transition",
+            entity_type="shipping_label_operation",
+            entity_id=str(operation_id),
+            summary=f"status={status}",
+        )
+        return self.get_label_operation(operation_id)
+
+    def get_label_operation(self, operation_id: int) -> LabelOperationRecord:
+        with self._session_factory() as session:
+            row = session.get(LabelOperationRow, operation_id)
+            if row is None:
+                raise RuntimeError(f"label operation not found: {operation_id}")
+            account = session.get(ShippingAccountRow, row.account_id)
+            return _label_operation_to_record(
+                account.account_key if account else "", row
+            )
+
+    def list_label_operations(
+        self,
+        *,
+        package_sn: str | None = None,
+        status: str | None = None,
+        carrier: str | None = None,
+        limit: int = 50,
+    ) -> list[LabelOperationRecord]:
+        with self._session_factory() as session:
+            q = session.query(LabelOperationRow)
+            if package_sn:
+                q = q.join(PackageRow, PackageRow.id == LabelOperationRow.package_id)
+                q = q.where(PackageRow.package_sn == package_sn)
+            if status:
+                q = q.where(LabelOperationRow.status == status)
+            if carrier:
+                q = q.where(LabelOperationRow.carrier == carrier)
+            rows = q.order_by(LabelOperationRow.created_at.desc()).limit(limit).all()
+            result: list[LabelOperationRecord] = []
+            for row in rows:
+                account = session.get(ShippingAccountRow, row.account_id)
+                result.append(
+                    _label_operation_to_record(
+                        account.account_key if account else "", row
+                    )
+                )
+            return result
+
     def insert_label(
         self,
         *,
@@ -1968,6 +2205,7 @@ class PackageRepository:
         carrier_order_id: str,
         request_id: str,
         label_url: str,
+        operation_id: int | None = None,
         artifact_id: int | None,
         total_amount: float | None,
         currency: str,
@@ -1987,10 +2225,12 @@ class PackageRepository:
                 carrier_order_id=carrier_order_id,
                 request_id=request_id,
                 label_url=label_url,
+                operation_id=operation_id,
                 artifact_id=artifact_id,
                 total_amount=total_amount,
                 currency=currency,
                 status=status,
+                is_active=status != "cancelled",
                 carrier_response_json=carrier_response_json,
                 created_by=created_by,
                 created_at=now,
@@ -2059,6 +2299,8 @@ class PackageRepository:
             if row is None:
                 return None
             row.status = status
+            if status == "cancelled":
+                row.is_active = False
             row.updated_at = now
         self.append_audit_event(
             actor="system",
@@ -2376,12 +2618,46 @@ def _shipping_label_to_record(
         carrier_order_id=row.carrier_order_id or "",
         request_id=row.request_id or "",
         label_url=row.label_url or "",
+        operation_id=int(row.operation_id) if row.operation_id is not None else None,
         artifact_id=int(row.artifact_id) if row.artifact_id is not None else None,
         label_format=row.label_format or "PDF",
         total_amount=float(row.total_amount) if row.total_amount is not None else None,
         currency=row.currency or "USD",
         status=row.status or "pending",
+        is_active=bool(row.is_active),
         carrier_response_json=row.carrier_response_json or "",
+        created_by=row.created_by or "",
+    created_at=created_at,
+    updated_at=updated_at,
+)
+
+
+def _label_operation_to_record(
+    account_key: str, row: LabelOperationRow
+) -> LabelOperationRecord:
+    created_at = row.created_at
+    updated_at = row.updated_at
+    if created_at is not None:
+        from datetime import timedelta, timezone as tz
+        created_at = created_at.replace(tzinfo=tz.utc).astimezone(tz(timedelta(hours=8)))
+    if updated_at is not None:
+        from datetime import timedelta, timezone as tz
+        updated_at = updated_at.replace(tzinfo=tz.utc).astimezone(tz(timedelta(hours=8)))
+    return LabelOperationRecord(
+        id=int(row.id),
+        account_key=account_key,
+        package_id=int(row.package_id),
+        generation=int(row.generation or 0),
+        carrier=row.carrier or "",
+        service_level=row.service_level or "",
+        idempotency_key=row.idempotency_key or "",
+        request_hash=row.request_hash or "",
+        status=row.status or "RESERVED",
+        provider_order_id=row.provider_order_id or "",
+        tracking_number=row.tracking_number or "",
+        attempt_count=int(row.attempt_count or 0),
+        error_class=row.error_class or "",
+        error_summary=row.error_summary or "",
         created_by=row.created_by or "",
         created_at=created_at,
         updated_at=updated_at,

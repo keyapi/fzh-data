@@ -6,12 +6,24 @@ and persists results to the shipping_labels table.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import os
 from typing import Any
 
 from sellfox_shipping.package_models import SellfoxPackageRecord
 
 ARTIFACT_KIND = "vite_label"
+
+
+@dataclass(frozen=True)
+class LabelPreflightResult:
+    package_db_id: int
+    carrier: str
+    service_level: str
+    weight_kg: float
+    length_cm: float
+    width_cm: float
+    height_cm: float
 
 
 class LabelServiceError(RuntimeError):
@@ -59,6 +71,111 @@ class LabelService:
 
         self._repo: PackageRepository = repo
         self._cfg = _load_config()
+
+    def preflight(
+        self,
+        *,
+        package: SellfoxPackageRecord,
+        account_key: str,
+        carrier: str,
+        actor: str,
+        service_level: str = "",
+    ) -> LabelPreflightResult:
+        errors: list[str] = []
+
+        if not (actor or "").strip():
+            errors.append("actor is required")
+
+        carrier_norm = (carrier or "").strip().lower()
+        if carrier_norm not in ("vite", "lizard"):
+            errors.append(f"Unknown carrier '{carrier}'. Available: vite, lizard")
+
+        sn = (package.package_sn or "").strip()
+        if not sn:
+            errors.append("package_sn is required")
+
+        db_id = self._repo.get_package_db_id(account_key, sn)
+        if db_id is None:
+            errors.append(f"Package {sn} not found in local store")
+
+        local = self._repo.get(account_key, sn) if db_id is not None else None
+        if local is not None and (local.local_review_status or "").strip() != "approved":
+            errors.append(
+                "Package local_review_status must be 'approved' before creating a label"
+            )
+
+        if db_id is not None:
+            dims = self._repo.get_package_dims(db_id)
+            if dims is None:
+                errors.append("No dimensions available for package")
+            else:
+                w = dims.weight_kg or 0
+                l = dims.length_cm or 0
+                wd = dims.width_cm or 0
+                h = dims.height_cm or 0
+                if w <= 0 or l <= 0 or wd <= 0 or h <= 0:
+                    errors.append(
+                        f"Invalid dimensions: weight={w}kg length={l}cm "
+                        f"width={wd}cm height={h}cm"
+                    )
+        else:
+            dims = None
+
+        addr = package.address
+        if not (addr.name or "").strip():
+            errors.append("Recipient name is required")
+        if not (addr.address_line_1 or "").strip():
+            errors.append("Recipient address_line_1 is required")
+        if not (addr.city or "").strip():
+            errors.append("Recipient city is required")
+        if not (addr.state_or_region or "").strip():
+            errors.append("Recipient state_or_region is required")
+        if not (addr.postal_code or "").strip():
+            errors.append("Recipient postal_code is required")
+        phone = (addr.phone or addr.mobile or "").strip()
+        if not phone:
+            errors.append("Recipient phone is required")
+
+        if carrier_norm == "vite":
+            wh_name = (package.logistics.warehouse_name or "").strip()
+            warehouses = self._cfg.get("warehouses", {})
+            wh = warehouses.get(wh_name, {}) if wh_name else {}
+            if not wh:
+                errors.append(f"Warehouse '{wh_name}' not found in config")
+            else:
+                wh_addr = wh.get("address", {})
+                wh_name_val = (wh_addr.get("name") or "").strip()
+                wh_addr1 = (wh_addr.get("address1") or "").strip()
+                wh_city = (wh_addr.get("city") or "").strip()
+                wh_state = (wh_addr.get("state") or "").strip()
+                wh_zip = (wh_addr.get("postal_code") or "").strip()
+                wh_phone = (wh_addr.get("phone") or "").strip()
+                if not wh_name_val:
+                    errors.append("VITE warehouse address.name is required")
+                if not wh_addr1:
+                    errors.append("VITE warehouse address.address1 is required")
+                if not wh_city:
+                    errors.append("VITE warehouse address.city is required")
+                if not wh_state:
+                    errors.append("VITE warehouse address.state is required")
+                if not wh_zip:
+                    errors.append("VITE warehouse address.postal_code is required")
+                if not wh_phone:
+                    errors.append("VITE warehouse address.phone is required")
+
+        if errors:
+            raise LabelServiceError("; ".join(errors), http_status=400)
+
+        assert db_id is not None and dims is not None  # guarded above
+        return LabelPreflightResult(
+            package_db_id=db_id,
+            carrier=carrier_norm,
+            service_level=(service_level or "").strip(),
+            weight_kg=dims.weight_kg,
+            length_cm=dims.length_cm,
+            width_cm=dims.width_cm,
+            height_cm=dims.height_cm,
+        )
 
     def create_label(
         self,
