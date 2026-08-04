@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import os
 import sys
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import yaml
@@ -20,6 +20,7 @@ from fastapi.responses import (
     HTMLResponse,
     JSONResponse,
     RedirectResponse,
+    Response,
 )
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -415,6 +416,14 @@ async def list_warehouses():
     return config.get("warehouses", {})
 
 
+@app.get("/api/channels")
+async def list_channels():
+    """Return distinct channel names for filter dropdown."""
+    repo = _get_package_repository()
+    channels = repo.list_distinct_channels(config["sellfox"]["proxy_account"])
+    return {"channels": channels}
+
+
 @app.get("/api/carriers")
 async def list_carriers():
     return {
@@ -441,6 +450,9 @@ async def packages_page(
     status: str | None = Query(None),
     channel: str | None = Query(None),
     review: str | None = Query(None),
+    date_start: str | None = Query(None),
+    date_end: str | None = Query(None),
+    tab: str | None = Query(None),
     limit: int = Query(50, le=500),
     offset: int = Query(0, ge=0),
 ):
@@ -452,6 +464,8 @@ async def packages_page(
             package_status=status or None,
             channel_name=channel or None,
             local_review_status=review or None,
+            date_start=date_start or None,
+            date_end=date_end or None,
             limit=limit,
             offset=offset,
         )
@@ -464,6 +478,12 @@ async def packages_page(
             "status": status or "",
             "channel": channel or "",
             "review": review or "",
+            "date_start": date_start or "",
+            "date_end": date_end or "",
+            "tab": tab or "",
+            "today": date.today().isoformat(),
+            "d7": (date.today() - timedelta(days=7)).isoformat(),
+            "d30": (date.today() - timedelta(days=30)).isoformat(),
             "total": result.total,
             "items": result.items,
         },
@@ -1799,6 +1819,143 @@ async def package_sku_label_download(package_sn: str, inline: bool = False):
     except Exception:
         Path(tmp.name).unlink(missing_ok=True)
         raise
+
+
+@app.post("/api/packages/batch-print")
+async def batch_print_packages(request: Request):
+    """Merge label/sticker PDFs for selected packages into one preview."""
+    import io, tempfile, traceback
+    import fitz
+
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "Invalid JSON body")
+    package_sns: list[str] = body.get("package_sns", [])
+    doc_type: str = body.get("document_type", "both")
+    if not package_sns:
+        raise HTTPException(400, "No package_sns provided")
+
+    account_key = config["sellfox"]["proxy_account"]
+    repo = _get_package_repository()
+
+    merged = fitz.open()
+    skipped: list[str] = []
+
+    # ── Phase 1: collect all documents first ──
+    docs: list[dict] = []  # {sn, sticker_bytes, label_bytes}
+    for sn in package_sns:
+        record = repo.get(account_key, sn)
+        if record is None:
+            skipped.append(f"{sn}: 包裹不存在")
+            continue
+
+        sticker_bytes: bytes | None = None
+        label_bytes: bytes | None = None
+
+        # ── Sticker ──
+        if doc_type in ("sticker", "both"):
+            items_data: list[dict] = []
+            skus: set[str] = set()
+            for item in record.items:
+                sku = (item.commodity_sku or "").strip()
+                if sku:
+                    skus.add(sku)
+                    items_data.append({"commodity_sku": sku, "qty": item.quantity or 1})
+            if not items_data:
+                skipped.append(f"{sn}: 无商品SKU，无法生成背贴")
+            else:
+                erp_key = os.getenv("PROD_ERP_API_KEY") or os.getenv("ERP_API_KEY", "")
+                erp_secret = os.getenv("PROD_ERP_API_SECRET") or os.getenv("ERP_API_SECRET", "")
+                erp_base = os.getenv("ERP_URL", "https://erpnext.vilavi.cn")
+                try:
+                    from sellfox_shipping.sku_label import SkuNameLookup, generate_sku_label_pdf
+                    lookup = SkuNameLookup(erpnext_base=erp_base, erpnext_api_key=erp_key, erpnext_api_secret=erp_secret)
+                    lookup.prefetch(list(skus))
+                    pdf_items: list[dict] = []
+                    for it in items_data:
+                        name = lookup.get(it["commodity_sku"])
+                        pdf_items.append({
+                            "sku": name["sku"], "qty": it["qty"],
+                            "cn_name": name["cn"], "es_name": name["es"],
+                        })
+                    lookup.close()
+                    warehouse = record.logistics.warehouse_name or ""
+                    tmp = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
+                    tmp.close()
+                    try:
+                        generate_sku_label_pdf(
+                            [{"package_sn": sn, "items": pdf_items}], tmp.name,
+                            timestamp=datetime.now().strftime("%Y-%m-%d"),
+                            warehouse_class=warehouse,
+                        )
+                        sticker_bytes = Path(tmp.name).read_bytes()
+                    finally:
+                        Path(tmp.name).unlink(missing_ok=True)
+                except Exception:
+                    traceback.print_exc()
+                if not sticker_bytes:
+                    skipped.append(f"{sn}: 无法生成背贴")
+        if doc_type in ("sticker", "both") and not sticker_bytes:
+            continue  # skip this package entirely
+
+        # ── Label ──
+        if doc_type in ("label", "both"):
+            labels = repo.list_labels_for_package(account_key=account_key, package_sn=sn)
+            active = [lbl for lbl in labels if getattr(lbl, "status", None) != "cancelled"]
+            if active:
+                lbl = active[0]
+                if getattr(lbl, "artifact_id", None):
+                    artifact = repo.get_artifact(lbl.artifact_id)
+                    if artifact:
+                        path = repo.resolve_artifact_path(artifact)
+                        if path.is_file():
+                            label_bytes = path.read_bytes()
+            if not label_bytes:
+                skipped.append(f"{sn}: 无有效Label面单")
+        if doc_type in ("label", "both") and not label_bytes:
+            continue  # skip this package entirely
+
+        docs.append({"sn": sn, "sticker": sticker_bytes, "label": label_bytes})
+
+    # ── Hard validation: both mode requires both documents for every package ──
+    if skipped:
+        raise HTTPException(
+            422,
+            f"校验失败 — 以下包裹缺少文档，已拒绝打印:\n" + "\n".join(skipped),
+        )
+
+    # ── Phase 2: merge in strict order (sticker → label, per package) ──
+    for d in docs:
+        if doc_type == "both":
+            src_s = fitz.open(stream=d["sticker"], filetype="pdf")
+            merged.insert_pdf(src_s)
+            src_s.close()
+            src_l = fitz.open(stream=d["label"], filetype="pdf")
+            merged.insert_pdf(src_l)
+            src_l.close()
+        elif doc_type == "sticker":
+            src = fitz.open(stream=d["sticker"], filetype="pdf")
+            merged.insert_pdf(src)
+            src.close()
+        elif doc_type == "label":
+            src = fitz.open(stream=d["label"], filetype="pdf")
+            merged.insert_pdf(src)
+            src.close()
+
+    if len(merged) == 0:
+        raise HTTPException(400, f"无有效文档可合并。跳过: {'; '.join(skipped)}")
+
+    buf = io.BytesIO()
+    merged.save(buf)
+    merged.close()
+    buf.seek(0)
+
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/pdf",
+        headers={"Content-Disposition": "inline; filename=batch_print.pdf"},
+    )
 
 
 def mount_mcp(mcp_app):
