@@ -106,6 +106,8 @@ class PackageListRequest(BaseModel):
     package_status: str | None = None
     channel_name: str | None = None
     local_review_status: str | None = None
+    date_start: str | None = None
+    date_end: str | None = None
     limit: int = Field(default=50, ge=1, le=500)
     offset: int = Field(default=0, ge=0)
 
@@ -365,6 +367,8 @@ class ListPackagesService:
             package_status=request.package_status,
             channel_name=request.channel_name,
             local_review_status=request.local_review_status,
+            date_start=request.date_start,
+            date_end=request.date_end,
             limit=request.limit,
             offset=request.offset,
         )
@@ -373,6 +377,8 @@ class ListPackagesService:
             package_status=request.package_status,
             channel_name=request.channel_name,
             local_review_status=request.local_review_status,
+            date_start=request.date_start,
+            date_end=request.date_end,
         )
         return PackageListResult(total=total, items=items)
 

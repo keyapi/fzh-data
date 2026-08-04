@@ -1625,6 +1625,8 @@ class PackageRepository:
         package_status: str | None = None,
         channel_name: str | None = None,
         local_review_status: str | None = None,
+        date_start: str | None = None,
+        date_end: str | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[PackageListItem]:
@@ -1645,6 +1647,21 @@ class PackageRepository:
                 query = query.where(
                     PackageRow.local_review_status == local_review_status
                 )
+            if date_start is not None or date_end is not None:
+                query = query.join(
+                    ShippingLabelRow,
+                    ShippingLabelRow.package_id == PackageRow.id,
+                    isouter=True,
+                )
+                if date_start is not None:
+                    query = query.where(
+                        ShippingLabelRow.created_at >= date_start
+                    )
+                if date_end is not None:
+                    query = query.where(
+                        ShippingLabelRow.created_at < date_end + "T23:59:59"
+                    )
+                query = query.distinct()
             query = (
                 query.order_by(PackageRow.package_sn)
                 .offset(offset)
@@ -1693,6 +1710,8 @@ class PackageRepository:
         package_status: str | None = None,
         channel_name: str | None = None,
         local_review_status: str | None = None,
+        date_start: str | None = None,
+        date_end: str | None = None,
     ) -> int:
         with self._session_factory() as session:
             query = (
@@ -1712,7 +1731,38 @@ class PackageRepository:
                 query = query.where(
                     PackageRow.local_review_status == local_review_status
                 )
+            if date_start is not None or date_end is not None:
+                query = query.join(
+                    ShippingLabelRow,
+                    ShippingLabelRow.package_id == PackageRow.id,
+                    isouter=True,
+                )
+                if date_start is not None:
+                    query = query.where(ShippingLabelRow.created_at >= date_start)
+                if date_end is not None:
+                    query = query.where(ShippingLabelRow.created_at < date_end + "T23:59:59")
+                query = query.distinct()
             return session.scalar(query) or 0
+
+    def list_distinct_channels(self, account_key: str) -> list[str]:
+        with self._session_factory() as session:
+            rows = (
+                session.execute(
+                    select(PackageRow.channel_name)
+                    .join(
+                        ShippingAccountRow,
+                        ShippingAccountRow.id == PackageRow.account_id,
+                    )
+                    .where(ShippingAccountRow.account_key == account_key)
+                    .where(PackageRow.channel_name.isnot(None))
+                    .where(PackageRow.channel_name != "")
+                    .distinct()
+                    .order_by(PackageRow.channel_name)
+                )
+                .scalars()
+                .all()
+            )
+            return [r for r in rows if r]
 
     def append_audit_event(
         self,

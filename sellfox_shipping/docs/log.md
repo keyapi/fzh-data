@@ -3,10 +3,38 @@ okf: v0.1
 type: Log
 module: sellfox_shipping
 created: 2026-07-15
-updated: 2026-07-30
+updated: 2026-08-04
 ---
 
 # sellfox_shipping — 变更日志
+
+## 2026-08-04 — 背贴 PDF 页内嵌入预览 + 批量打印
+
+### 背贴预览
+- 新增 `GET /packages/{sn}/sku-label?inline=1` 参数：`Content-Disposition: inline`，浏览器原生 PDF 渲染
+- `package_detail.html`：商品行面板底部嵌入背贴预览（`<embed>`），默认显示，可关闭
+
+### Transactions 标签页
+- 包裹列表新增 Dashboard / Transactions 双标签页
+- Transactions：日期过滤（Custom Date Range 下拉面板 + 预设按钮）+ 状态/审核/渠道筛选
+- 渠道名筛选：新增 `/api/channels` 端点，`<datalist>` 下拉 + 模糊搜索
+- 表格新增复选框列 + 全选，选中后表内动态显示批量操作栏（🚚 货车图标）
+
+### 批量打印
+- 新增 `POST /api/packages/batch-print`：pymupdf 合并 PDF，支持 sticker / label / both 三种类型
+- 严格校验：任一包裹缺少文档 → 422 拒绝整个批次，逐条列出原因
+- 合并顺序：按包裹顺序，背贴 → 面单，不可错乱
+- 预览弹窗：全屏遮罩 + 文档类型标签页切换 + AbortController 防竞态
+- `package_repository.py`：`list_packages()` / `count_packages()` 支持按面单创建时间过滤
+- `list_distinct_channels()`：去重渠道名列表
+
+### 批量打印功能
+
+- 包裹列表页新增复选框列 + 全选 + 底部浮动操作栏（显示已选数量）
+- 新增日期过滤：预设按钮（今天/近7天/近30天/全部）+ 自定义日期范围，按面单创建时间过滤
+- 批量打印弹窗：选择打印类型（仅Label/仅背贴/面单+背贴），背贴在前、面单在后
+- 新增 `POST /api/packages/batch-print`：pymupdf 合并 PDF，缺文档的包裹自动跳过
+- `package_repository.py`：`list_packages()` / `count_packages()` 支持日期过滤
 
 ## 2026-07-28 — SKU 背贴 PDF 生成分析
 
