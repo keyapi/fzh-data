@@ -3,10 +3,16 @@ okf: v0.1
 type: Log
 module: sellfox_shipping
 created: 2026-07-15
-updated: 2026-07-30
+updated: 2026-08-04
 ---
 
 # sellfox_shipping — 变更日志
+
+## 2026-08-04 — 背贴 PDF 页内嵌入预览
+
+- 新增 `GET /packages/{sn}/sku-label?inline=1` 参数：设置 `Content-Disposition: inline`，浏览器原生 PDF 渲染
+- `package_detail.html`：商品行面板底部新增嵌入式背贴预览区（`<embed>` 标签），默认显示，带"✕ 关闭"按钮
+- 预览区宽度自适应父容器，高度 280px
 
 ## 2026-07-28 — SKU 背贴 PDF 生成分析
 

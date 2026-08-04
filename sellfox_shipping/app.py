@@ -1724,8 +1724,8 @@ async def lizard_artifact_download(artifact_id: int):
 
 
 @app.get("/packages/{package_sn}/sku-label")
-async def package_sku_label_download(package_sn: str):
-    """Download SKU back-sticker PDF for a package."""
+async def package_sku_label_download(package_sn: str, inline: bool = False):
+    """Download or preview SKU back-sticker PDF for a package."""
     import os, tempfile
     from pathlib import Path
     from sellfox_shipping.sku_label import SkuNameLookup, generate_sku_label_pdf
@@ -1794,6 +1794,7 @@ async def package_sku_label_download(package_sn: str):
             tmp.name,
             filename=f"sku_label_{package_sn}.pdf",
             media_type="application/pdf",
+            content_disposition_type="inline" if inline else "attachment",
         )
     except Exception:
         Path(tmp.name).unlink(missing_ok=True)
