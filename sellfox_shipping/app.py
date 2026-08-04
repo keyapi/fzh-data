@@ -1958,6 +1958,91 @@ async def batch_print_packages(request: Request):
     )
 
 
+@app.post("/api/packages/batch-export")
+async def batch_export_packages(request: Request):
+    """Export selected package data as CSV (Excel-compatible)."""
+    import csv, io
+
+    body = await request.json()
+    package_sns: list[str] = body.get("package_sns", [])
+    if not package_sns:
+        raise HTTPException(400, "No package_sns provided")
+
+    account_key = config["sellfox"]["proxy_account"]
+    repo = _get_package_repository()
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow([
+        "包裹号", "赛狐状态", "本地审核", "渠道", "店铺", "追踪号", "站点",
+        "建议承运商", "匹配规则", "路由状态",
+        "收货人", "电话", "城市/州", "邮编", "国家", "地址",
+    ])
+
+    for sn in package_sns:
+        record = repo.get(account_key, sn)
+        if record is None:
+            continue
+        addr = record.address
+        state_region = (addr.state_or_region or "").strip()
+        city_state = addr.city or ""
+        if state_region:
+            city_state = f"{city_state}/{state_region}" if city_state else state_region
+
+        phone = addr.phone or addr.mobile or ""
+        address_line = addr.address_line_1 or ""
+        if addr.address_line_2:
+            address_line += " " + addr.address_line_2
+
+        # Routing: cached first, compute on-the-fly if missing
+        route_label = route_rule = route_status = ""
+        db_id = repo.get_package_db_id(account_key, sn)
+        if db_id is not None:
+            routing = repo.get_package_routing(db_id)
+            if routing is not None:
+                route_label = routing.label
+                route_rule = routing.rule_name
+                route_status = "已匹配" if routing.matched else "已排除"
+        # Fallback: compute routing on-the-fly
+        if not route_label:
+            try:
+                carton_rows = _carton_rows_for_package(account_key, record)
+                computed = _compute_routing(record, carton_rows)
+                if computed:
+                    route_label = computed.get("label", "")
+                    route_rule = computed.get("rule_name", "")
+                    route_status = "已匹配" if computed.get("matched") else "已排除"
+            except Exception:
+                pass
+
+        writer.writerow([
+            record.package_sn,
+            record.package_status or "",
+            record.local_review_status or "",
+            record.logistics.channel_name or "",
+            record.shop_name or "",
+            record.logistics.tracking_number or "",
+            record.marketplace or "",
+            route_label,
+            route_rule,
+            route_status,
+            addr.name or "",
+            phone,
+            city_state,
+            addr.postal_code or "",
+            addr.country or "",
+            address_line.strip(),
+        ])
+
+    buf.seek(0)
+    csv_bytes = buf.getvalue().encode("utf-8-sig")
+    return Response(
+        content=csv_bytes,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": "attachment; filename=packages_export.csv"},
+    )
+
+
 def mount_mcp(mcp_app):
     """Mount FastMCP ASGI app. Called from main.py after MCP tools are defined."""
     app.mount("/mcp", mcp_app)

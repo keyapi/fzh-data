@@ -8,33 +8,35 @@ updated: 2026-08-04
 
 # sellfox_shipping — 变更日志
 
-## 2026-08-04 — 背贴 PDF 页内嵌入预览 + 批量打印
+## 2026-08-04 — 背贴预览 + 批量打印 + 路由预计算
 
 ### 背贴预览
-- 新增 `GET /packages/{sn}/sku-label?inline=1` 参数：`Content-Disposition: inline`，浏览器原生 PDF 渲染
-- `package_detail.html`：商品行面板底部嵌入背贴预览（`<embed>`），默认显示，可关闭
+- `GET /packages/{sn}/sku-label?inline=1`：`Content-Disposition: inline`，浏览器原生渲染
+- `package_detail.html`：商品行面板底部嵌入背贴预览（`<embed>`），默认显示可关闭
 
 ### Transactions 标签页
-- 包裹列表新增 Dashboard / Transactions 双标签页
-- Transactions：日期过滤（Custom Date Range 下拉面板 + 预设按钮）+ 状态/审核/渠道筛选
-- 渠道名筛选：新增 `/api/channels` 端点，`<datalist>` 下拉 + 模糊搜索
-- 表格新增复选框列 + 全选，选中后表内动态显示批量操作栏（🚚 货车图标）
+- 包裹列表新增 Dashboard / Transactions 双标签页，URL `?tab=` 持久化
+- Transactions：Custom Date Range 下拉面板 + 预设按钮 + 状态/审核/渠道筛选
+- `/api/channels` 端点 + `<datalist>` 下拉模糊搜索
+- 复选框列 + 全选 + 底部居中批量操作栏（🚚批量打印 / 📥导出Excel / 取消选中）
 
 ### 批量打印
-- 新增 `POST /api/packages/batch-print`：pymupdf 合并 PDF，支持 sticker / label / both 三种类型
-- 严格校验：任一包裹缺少文档 → 422 拒绝整个批次，逐条列出原因
-- 合并顺序：按包裹顺序，背贴 → 面单，不可错乱
-- 预览弹窗：全屏遮罩 + 文档类型标签页切换 + AbortController 防竞态
-- `package_repository.py`：`list_packages()` / `count_packages()` 支持按面单创建时间过滤
-- `list_distinct_channels()`：去重渠道名列表
+- `POST /api/packages/batch-print`：pymupdf 合并，三类型可选
+- **严格校验**：任一包裹缺文档 → 422 拒绝整个批次，逐条列出原因
+- **顺序锁定**：按包裹顺序 → 背贴→面单，不可错乱
+- 弹窗预览：文档类型标签页切换 + AbortController 防竞态
 
-### 批量打印功能
+### 批量导出
+- `POST /api/packages/batch-export`：16列 CSV（UTF-8 BOM），Excel 兼容
+- 路由缺失时实时回退计算，导出成功 toast 提示
 
-- 包裹列表页新增复选框列 + 全选 + 底部浮动操作栏（显示已选数量）
-- 新增日期过滤：预设按钮（今天/近7天/近30天/全部）+ 自定义日期范围，按面单创建时间过滤
-- 批量打印弹窗：选择打印类型（仅Label/仅背贴/面单+背贴），背贴在前、面单在后
-- 新增 `POST /api/packages/batch-print`：pymupdf 合并 PDF，缺文档的包裹自动跳过
-- `package_repository.py`：`list_packages()` / `count_packages()` 支持日期过滤
+### ORM Bug 修复
+- `get_package_dims`、`get_package_routing`、`upsert_package_routing` 三处 `session.get()` 按主键查询改为 `filter(package_id==)` 按外键查询
+
+### 路由预计算
+- `packages-sync` 同步时自动计算并持久化路由（`_on_upsert` 回调）
+- 复用共享 `ErpnextDimsLookupV2` 实例，同 SKU 只查一次 EN
+- `package_repository.py`：`list/count_packages()` 支持面单创建时间过滤；`list_distinct_channels()` 去重渠道名
 
 ## 2026-07-28 — SKU 背贴 PDF 生成分析
 

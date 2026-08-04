@@ -1884,7 +1884,11 @@ class PackageRepository:
     ) -> PackageRoutingRecord:
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         with self._session_factory.begin() as session:
-            row = session.get(PackageRoutingRow, package_db_id)
+            row = (
+                session.query(PackageRoutingRow)
+                .filter(PackageRoutingRow.package_id == package_db_id)
+                .first()
+            )
             if row is None:
                 row = PackageRoutingRow(package_id=package_db_id)
                 session.add(row)
@@ -1906,7 +1910,11 @@ class PackageRepository:
 
     def get_package_routing(self, package_db_id: int) -> PackageRoutingRecord | None:
         with self._session_factory() as session:
-            row = session.get(PackageRoutingRow, package_db_id)
+            row = (
+                session.query(PackageRoutingRow)
+                .filter(PackageRoutingRow.package_id == package_db_id)
+                .first()
+            )
             if row is None:
                 return None
             return PackageRoutingRecord(
