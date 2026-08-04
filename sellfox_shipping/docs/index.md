@@ -3,7 +3,7 @@ okf: v0.1
 type: Index
 module: sellfox_shipping
 created: 2026-07-15
-updated: 2026-07-28
+updated: 2026-08-04
 ---
 
 # sellfox_shipping — 文档索引
@@ -17,10 +17,13 @@ updated: 2026-07-28
 - [README.md](../README.md) — 项目概述与快速开始
 - [AGENT_HANDOFF.md](../AGENT_HANDOFF.md) — **默认接手入口**（全貌七块）
 - [log.md](log.md) — 变更日志
+- [roadmap.md](roadmap.md) — **生产化路线图与 Agent 任务包**
+- [specs/index.md](specs/index.md) — **生产可靠性设计规范**
 
 ## 调研 / 交接
 
 - [research/index.md](research/index.md) — 调研文档导航
+- [research/mature-shipping-systems-2026-08-04.md](research/mature-shipping-systems-2026-08-04.md) — 成熟商业系统、Karrio 与 API 方案调研
 - [research/session-progress-2026-07-16.md](research/session-progress-2026-07-16.md) — 过程日记（冷档案，勿当现状）
 - [research/research-synthesis-2026-07-16.md](research/research-synthesis-2026-07-16.md) — 规划底稿；先看文首裁决框，现行以 HANDOFF 为准
 - [research/lizard-p0-column-mapping-2026-07-17.md](research/lizard-p0-column-mapping-2026-07-17.md) — 蜴国际 P0 样例列映射（匹配键 / 单位）
