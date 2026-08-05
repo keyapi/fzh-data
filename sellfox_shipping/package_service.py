@@ -108,6 +108,7 @@ class PackageListRequest(BaseModel):
     local_review_status: str | None = None
     date_start: str | None = None
     date_end: str | None = None
+    date_field: str = "label"
     limit: int = Field(default=50, ge=1, le=500)
     offset: int = Field(default=0, ge=0)
 
@@ -377,6 +378,7 @@ class ListPackagesService:
             local_review_status=request.local_review_status,
             date_start=request.date_start,
             date_end=request.date_end,
+            date_field=request.date_field,
             limit=request.limit,
             offset=request.offset,
         )
@@ -387,6 +389,7 @@ class ListPackagesService:
             local_review_status=request.local_review_status,
             date_start=request.date_start,
             date_end=request.date_end,
+            date_field=request.date_field,
         )
         return PackageListResult(total=total, items=items)
 

@@ -59,15 +59,14 @@ updated: 2026-08-05
 
 - 独立调研 ShipStation、Sendcloud、Shipium、Metapack、EasyPost、Shippo、Karrio 等成熟方案，确定保留模块化单体和 API/Excel 双通道。
 - 新增生产可靠性 Spec：事实边界、preflight、购标 operation 状态机、SQLite 原子 claim、UNKNOWN_BLOCKED 和恢复契约。
-- 新增 Must/Should/Later 路线图和 Agent 任务包；首批开发锁定“购标安全核心”。
+- 新增 Must/Should/Later 路线图和 Agent 任务包；首批开发锁定”购标安全核心”。
 - 明确短期不迁 PostgreSQL、不部署 Karrio Server、不开发装箱算法。
-
 
 ## 2026-08-04 — 购标安全核心实现 (PR #134)
 
 - 新增 shipping_label_operations 表（migration 0015）与 LabelOperationRow/Record ORM 模型
 - claim_label_operation()：SQLite BEGIN IMMEDIATE 原子占用，并发安全；同一包裹同时最多一个活跃操作或标签
-- 	ransition_label_operation()：状态机流转，持久化 provider_order_id/tracking_number/error 信息
+- transition_label_operation()：状态机流转，持久化 provider_order_id/tracking_number/error 信息
 - LabelService.preflight()：统一前置阻断——审核状态、重尺全正值、收件必填、VITE 仓库地址电话完备性
 - shipping_labels 增加 operation_id/is_active：生成默认活跃，取消设 is_active=false 释放约束
 - 部分唯一索引：uq_shipping_labels_one_active_per_package + uq_label_operations_one_active_per_package
@@ -83,7 +82,33 @@ updated: 2026-08-05
 - CLI 命令 label-operations-list / label-operation-resume 尚未实现
 - app.py 报价路径 `_build_vite_ship_*` 同类虚构兜底尚未清理
 
-## 2026-08-04 — 背贴 PDF 页内嵌入预览 + 批量打印
+## 2026-08-05 — 赛狐下单时间 + 有效面单时间 + 分页 + 标签页持久化
+
+### 列表新增字段
+- **赛狐下单时间**：`shipping_orders.purchase_date`，取包裹内最早订单的下单时间，列表+详情页均显示
+- **有效面单时间**：`shipping_labels.created_at`，取 status≠cancelled 的最早面单时间，无则显示”—“
+
+### 日期过滤增强
+- Custom Date Range 新增日期类型切换：面单时间 / 下单时间
+- 面单时间过滤排除已取消面单（`status != “cancelled”`）
+- 下单时间按 `purchase_date` 过滤
+
+### 分页功能
+- 共 N 条 / < 1 2 3 ... > 翻页 / 20/50/100/200 条/页
+- “...” hover 显示 ◀◀/▶▶，点击快速跳页
+- 切换标签页自动重置到第 1 页
+
+### 标签页持久化
+- 切换标签页同步更新 URL `tab` 参数，翻页保持标签页状态
+- 详情页返回时 `history.back()` 保留完整过滤/分页状态
+
+### 修复
+- `package_repository.py`：`list/count_packages` 加 `date_field` 参数
+- `PackageListItem` 加 `purchase_date` / `label_created_at` 字段
+- `_build_pagination()` 辅助函数
+- `_apply_package_fields`：地址保护改为逐字段非空才写
+
+## 2026-08-04 — 背贴预览 + 批量打印 + 路由预计算
 
 ### 背贴预览
 - 新增 `GET /packages/{sn}/sku-label?inline=1` 参数：`Content-Disposition: inline`，浏览器原生 PDF 渲染

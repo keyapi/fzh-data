@@ -44,7 +44,7 @@
         </div>
     </div>
     <div class="container">
-        <a class="back" href="/packages">← 返回包裹列表</a>
+        <a class="back" href="/packages" onclick="if(document.referrer.includes('/packages')){history.back();return false}">← 返回包裹列表</a>
 
         {% if message %}
         <div class="panel" style="background:#eef8ee;">{{ message }}</div>
@@ -61,6 +61,7 @@
                 <div class="info-item"><div class="label">店铺</div><div class="value">{{ package.shop_name or '—' }}</div></div>
                 <div class="info-item"><div class="label">追踪号</div><div class="value">{{ package.logistics.tracking_number or '—' }}</div></div>
                 <div class="info-item"><div class="label">站点</div><div class="value">{{ package.marketplace or '—' }}</div></div>
+                <div class="info-item"><div class="label">赛狐下单时间</div><div class="value">{{ purchase_date.strftime('%Y-%m-%d %H:%M') if purchase_date else '—' }}</div></div>
             </div>
         </div>
 

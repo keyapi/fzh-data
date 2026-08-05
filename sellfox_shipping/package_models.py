@@ -105,6 +105,8 @@ class PackageListItem(BaseModel):
     order_count: int = 0
     item_count: int = 0
     fetched_at: datetime | None = None
+    purchase_date: datetime | None = None
+    label_created_at: datetime | None = None
 
 
 class PackageListResult(BaseModel):
