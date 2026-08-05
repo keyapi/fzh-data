@@ -22,6 +22,7 @@ from sqlalchemy import (
     delete,
     event,
     func,
+    or_,
     select,
 )
 from sqlalchemy.engine import Engine
@@ -1723,6 +1724,7 @@ class PackageRepository:
         local_review_status: str | None = None,
         date_start: str | None = None,
         date_end: str | None = None,
+        date_field: str = "label",
         limit: int = 50,
         offset: int = 0,
     ) -> list[PackageListItem]:
@@ -1744,19 +1746,38 @@ class PackageRepository:
                     PackageRow.local_review_status == local_review_status
                 )
             if date_start is not None or date_end is not None:
-                query = query.join(
-                    ShippingLabelRow,
-                    ShippingLabelRow.package_id == PackageRow.id,
-                    isouter=True,
-                )
-                if date_start is not None:
-                    query = query.where(
-                        ShippingLabelRow.created_at >= date_start
+                if date_field == "order":
+                    query = query.join(
+                        PackageOrderRow,
+                        PackageOrderRow.package_id == PackageRow.id,
+                    ).join(
+                        OrderRow,
+                        OrderRow.id == PackageOrderRow.order_id,
                     )
-                if date_end is not None:
-                    query = query.where(
-                        ShippingLabelRow.created_at < date_end + "T23:59:59"
+                    if date_start is not None:
+                        query = query.where(OrderRow.purchase_date >= date_start)
+                    if date_end is not None:
+                        query = query.where(OrderRow.purchase_date < date_end + "T23:59:59")
+                else:
+                    query = query.join(
+                        ShippingLabelRow,
+                        ShippingLabelRow.package_id == PackageRow.id,
+                        isouter=True,
                     )
+                    query = query.where(
+                        or_(
+                            ShippingLabelRow.id.is_(None),
+                            ShippingLabelRow.status != "cancelled",
+                        )
+                    )
+                    if date_start is not None:
+                        query = query.where(
+                            ShippingLabelRow.created_at >= date_start
+                        )
+                    if date_end is not None:
+                        query = query.where(
+                            ShippingLabelRow.created_at < date_end + "T23:59:59"
+                        )
                 query = query.distinct()
             query = (
                 query.order_by(PackageRow.package_sn)
@@ -1782,6 +1803,19 @@ class PackageRepository:
                     )
                     or 0
                 )
+                # Earliest purchase date among all orders
+                purchase_date = session.scalar(
+                    select(func.min(OrderRow.purchase_date))
+                    .select_from(PackageOrderRow)
+                    .join(OrderRow, OrderRow.id == PackageOrderRow.order_id)
+                    .where(PackageOrderRow.package_id == package.id)
+                )
+                # Earliest non-cancelled label creation time
+                label_created_at = session.scalar(
+                    select(func.min(ShippingLabelRow.created_at))
+                    .where(ShippingLabelRow.package_id == package.id)
+                    .where(ShippingLabelRow.status != "cancelled")
+                )
                 items.append(
                     PackageListItem(
                         account_key=account,
@@ -1795,6 +1829,8 @@ class PackageRepository:
                         order_count=order_count,
                         item_count=item_count,
                         fetched_at=package.fetched_at,
+                        purchase_date=purchase_date,
+                        label_created_at=label_created_at,
                     )
                 )
             return items
@@ -1808,6 +1844,7 @@ class PackageRepository:
         local_review_status: str | None = None,
         date_start: str | None = None,
         date_end: str | None = None,
+        date_field: str = "label",
     ) -> int:
         with self._session_factory() as session:
             query = (
@@ -1828,15 +1865,28 @@ class PackageRepository:
                     PackageRow.local_review_status == local_review_status
                 )
             if date_start is not None or date_end is not None:
-                query = query.join(
-                    ShippingLabelRow,
-                    ShippingLabelRow.package_id == PackageRow.id,
-                    isouter=True,
-                )
-                if date_start is not None:
-                    query = query.where(ShippingLabelRow.created_at >= date_start)
-                if date_end is not None:
-                    query = query.where(ShippingLabelRow.created_at < date_end + "T23:59:59")
+                if date_field == "order":
+                    query = query.join(
+                        PackageOrderRow, PackageOrderRow.package_id == PackageRow.id
+                    ).join(OrderRow, OrderRow.id == PackageOrderRow.order_id)
+                    if date_start is not None:
+                        query = query.where(OrderRow.purchase_date >= date_start)
+                    if date_end is not None:
+                        query = query.where(OrderRow.purchase_date < date_end + "T23:59:59")
+                else:
+                    query = query.join(
+                        ShippingLabelRow, ShippingLabelRow.package_id == PackageRow.id, isouter=True
+                    )
+                    query = query.where(
+                        or_(
+                            ShippingLabelRow.id.is_(None),
+                            ShippingLabelRow.status != "cancelled",
+                        )
+                    )
+                    if date_start is not None:
+                        query = query.where(ShippingLabelRow.created_at >= date_start)
+                    if date_end is not None:
+                        query = query.where(ShippingLabelRow.created_at < date_end + "T23:59:59")
                 query = query.distinct()
             return session.scalar(query) or 0
 
@@ -2636,18 +2686,31 @@ class PackageRepository:
         package.platform_name = record.platform_name
         package.marketplace = record.marketplace
         package.package_status = record.package_status
-        package.address_name = address.name
-        package.address_company = address.company
-        package.address_line_1 = address.address_line_1
-        package.address_line_2 = address.address_line_2
-        package.address_city = address.city
-        package.address_state_or_region = address.state_or_region
-        package.address_postal_code = address.postal_code
-        package.address_country = address.country
-        package.address_country_code = address.country_code
-        package.address_phone = address.phone
-        package.address_mobile = address.mobile
-        package.address_email = address.email
+        # Only overwrite address fields with non-empty incoming values
+        if address.name:
+            package.address_name = address.name
+        if address.company:
+            package.address_company = address.company
+        if address.address_line_1:
+            package.address_line_1 = address.address_line_1
+        if address.address_line_2:
+            package.address_line_2 = address.address_line_2
+        if address.city:
+            package.address_city = address.city
+        if address.state_or_region:
+            package.address_state_or_region = address.state_or_region
+        if address.postal_code:
+            package.address_postal_code = address.postal_code
+        if address.country:
+            package.address_country = address.country
+        if address.country_code:
+            package.address_country_code = address.country_code
+        if address.phone:
+            package.address_phone = address.phone
+        if address.mobile:
+            package.address_mobile = address.mobile
+        if address.email:
+            package.address_email = address.email
         package.warehouse_name = logistics.warehouse_name
         package.channel_name = logistics.channel_name
         package.tracking_number = logistics.tracking_number

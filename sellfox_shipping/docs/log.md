@@ -8,6 +8,32 @@ updated: 2026-08-05
 
 # sellfox_shipping — 变更日志
 
+## 2026-08-05 — 赛狐下单时间 + 有效面单时间 + 分页 + 标签页持久化
+
+### 列表新增字段
+- **赛狐下单时间**：`shipping_orders.purchase_date`，取包裹内最早订单的下单时间，列表+详情页均显示
+- **有效面单时间**：`shipping_labels.created_at`，取 status≠cancelled 的最早面单时间，无则显示"—"
+
+### 日期过滤增强
+- Custom Date Range 新增日期类型切换：面单时间 / 下单时间
+- 面单时间过滤排除已取消面单（`status != "cancelled"`）
+- 下单时间按 `purchase_date` 过滤
+
+### 分页功能
+- 共 N 条 / < 1 2 3 ... > 翻页 / 20/50/100/200 条/页
+- "..." hover 显示 ◀◀/▶▶，点击快速跳页
+- 切换标签页自动重置到第 1 页
+
+### 标签页持久化
+- 切换标签页同步更新 URL `tab` 参数，翻页保持标签页状态
+- 详情页返回时 `history.back()` 保留完整过滤/分页状态
+
+### 修复
+- `package_repository.py`：`list/count_packages` 加 `date_field` 参数
+- `PackageListItem` 加 `purchase_date` / `label_created_at` 字段
+- `_build_pagination()` 辅助函数
+- `_apply_package_fields`：地址保护改为逐字段非空才写
+
 ## 2026-08-05 — #139 补丁：蜴国际 resume 落库 + resolve 动作
 
 - `_resume_lizard_label`：`register_artifact` 后补 `insert_label`；失败保留 `LABEL_PENDING`，不误标 SUCCEEDED

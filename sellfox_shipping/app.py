@@ -452,6 +452,7 @@ async def packages_page(
     review: str | None = Query(None),
     date_start: str | None = Query(None),
     date_end: str | None = Query(None),
+    date_field: str = Query("label"),
     tab: str | None = Query(None),
     limit: int = Query(50, le=500),
     offset: int = Query(0, ge=0),
@@ -466,6 +467,7 @@ async def packages_page(
             local_review_status=review or None,
             date_start=date_start or None,
             date_end=date_end or None,
+            date_field=date_field,
             limit=limit,
             offset=offset,
         )
@@ -480,12 +482,19 @@ async def packages_page(
             "review": review or "",
             "date_start": date_start or "",
             "date_end": date_end or "",
+            "date_field": date_field,
             "tab": tab or "",
             "today": date.today().isoformat(),
             "d7": (date.today() - timedelta(days=7)).isoformat(),
             "d30": (date.today() - timedelta(days=30)).isoformat(),
             "total": result.total,
             "items": result.items,
+            "limit": limit,
+            "offset": offset,
+            "total_pages": max(1, (result.total + limit - 1) // limit) if result.total else 1,
+            "current_page": (offset // limit) + 1 if limit else 1,
+            "pagination": _build_pagination((offset // limit) + 1 if limit else 1,
+                                            max(1, (result.total + limit - 1) // limit) if result.total else 1),
         },
     )
 
@@ -533,6 +542,30 @@ async def package_fetch_rates(request: Request, package_sn: str):
     return templates.TemplateResponse(request, "package_detail.html", ctx)
 
 
+def _build_pagination(current: int, total: int) -> list[dict]:
+    """Build pagination items: {'kind':'page'|'gap','label':'1'|'...','page':int,'jump':int}"""
+    items: list[dict] = []
+    if total <= 7:
+        for p in range(1, total + 1):
+            items.append({"kind": "page", "label": str(p), "page": p, "current": p == current})
+        return items
+    items.append({"kind": "page", "label": "1", "page": 1, "current": current == 1})
+    if current > 4:
+        items.append({"kind": "gap", "label": "...", "jump": max(1, current - 5)})
+    start = max(2, current - 1)
+    end = min(total - 1, current + 1)
+    if current <= 4:
+        start = 2; end = max(end, 5)
+    if current >= total - 3:
+        end = total - 1; start = min(start, total - 4)
+    for p in range(start, end + 1):
+        items.append({"kind": "page", "label": str(p), "page": p, "current": p == current})
+    if current < total - 3:
+        items.append({"kind": "gap", "label": "...", "jump": min(total, current + 5)})
+    items.append({"kind": "page", "label": str(total), "page": total, "current": current == total})
+    return items
+
+
 def _package_detail_context(account_key: str, record, *, message: str, vite_rate_override: dict | None = None) -> dict:
     from sellfox_shipping.submission_state import aggregate_package_submission_state
 
@@ -559,6 +592,13 @@ def _package_detail_context(account_key: str, record, *, message: str, vite_rate
     # Use override from fetch-rates, or None for initial load (on-demand pattern)
     vite_rate = vite_rate_override
 
+    # Earliest purchase date from orders
+    purchase_date = None
+    for order in record.orders:
+        if order.purchase_date:
+            if purchase_date is None or order.purchase_date < purchase_date:
+                purchase_date = order.purchase_date
+
     return {
         "package": record,
         "message": message,
@@ -572,6 +612,7 @@ def _package_detail_context(account_key: str, record, *, message: str, vite_rate
         "labels": labels,
         "enabled_carriers": enabled_carriers,
         "lizard_services": lizard_services,
+        "purchase_date": purchase_date,
     }
 
 
