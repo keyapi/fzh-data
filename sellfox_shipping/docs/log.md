@@ -8,6 +8,13 @@ updated: 2026-08-04
 
 # sellfox_shipping — 变更日志
 
+## 2026-08-04 — 生产可靠性蓝图与路线图
+
+- 独立调研 ShipStation、Sendcloud、Shipium、Metapack、EasyPost、Shippo、Karrio 等成熟方案，确定保留模块化单体和 API/Excel 双通道。
+- 新增生产可靠性 Spec：事实边界、preflight、购标 operation 状态机、SQLite 原子 claim、UNKNOWN_BLOCKED 和恢复契约。
+- 新增 Must/Should/Later 路线图和 Agent 任务包；首批开发锁定“购标安全核心”。
+- 明确短期不迁 PostgreSQL、不部署 Karrio Server、不开发装箱算法。
+
 ## 2026-08-04 — 背贴 PDF 页内嵌入预览 + 批量打印
 
 ### 背贴预览

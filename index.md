@@ -27,7 +27,7 @@ generated: 2026-07-28 18:02
 | **pdf_to_md** | 6 | Index, Lesson, Log, Reference | [pdf_to_md/](pdf_to_md/) -> [pdf_to_md/docs/index.md](pdf_to_md/docs/index.md) |
 | **root** | 1 | Index | [root/](root/) -> [index.md](index.md) |
 | **sellfox-api-proxy** | 12 | Index, Lesson, Log, Research | [sellfox-api-proxy/](sellfox-api-proxy/) -> [sellfox-api-proxy/docs/index.md](sellfox-api-proxy/docs/index.md) |
-| **sellfox_shipping** | 31 | Guide, Handoff, Index, Log | [sellfox_shipping/](sellfox_shipping/) -> [sellfox_shipping/docs/index.md](sellfox_shipping/docs/index.md) |
+| **sellfox_shipping** | 34 | Guide, Handoff, Index, Log | [sellfox_shipping/](sellfox_shipping/) -> [sellfox_shipping/docs/index.md](sellfox_shipping/docs/index.md) |
 | **us_openai_api_proxy** | 9 | Explanation, Handoff, HowTo, Index | [us_openai_api_proxy/](us_openai_api_proxy/) -> [us_openai_api_proxy/docs/index.md](us_openai_api_proxy/docs/index.md) |
 | **vite-api** | 1 | Reference | [vite-api/](vite-api/) -> [vite-api/docs/test-guide/test-credentials.md](vite-api/docs/test-guide/test-credentials.md) |
 | **yiglobal-api** | 2 | Index, Log | [yiglobal-api/](yiglobal-api/) -> [yiglobal-api/docs/index.md](yiglobal-api/docs/index.md) |
@@ -262,6 +262,7 @@ generated: 2026-07-28 18:02
 | Guide | sellfox_shipping — 赛狐尾程打单系统 | [sellfox_shipping/README.md](sellfox_shipping/README.md) | 2026-07-24 |
 | Handoff | sellfox_shipping — Agent 交接说明 | [sellfox_shipping/AGENT_HANDOFF.md](sellfox_shipping/AGENT_HANDOFF.md) | 2026-07-28 |
 | Index | index.md | [sellfox_shipping/docs/index.md](sellfox_shipping/docs/index.md) | 2026-07-28 |
+| Index | sellfox_shipping 设计规范索引 | [sellfox_shipping/docs/specs/index.md](sellfox_shipping/docs/specs/index.md) | 2026-08-04 |
 | Index | 赛狐尾程打单 — 调研索引 | [sellfox_shipping/docs/research/index.md](sellfox_shipping/docs/research/index.md) | 2026-07-28 |
 | Log | log.md | [sellfox_shipping/docs/log.md](sellfox_shipping/docs/log.md) | 2026-07-28 |
 | Reference | 2026-07-16 会话进度与交接记录 | [sellfox_shipping/docs/research/session-progress-2026-07-16.md](sellfox_shipping/docs/research/session-progress-2026-07-16.md) | 2026-07-24 |
@@ -277,6 +278,7 @@ generated: 2026-07-28 18:02
 | Research | VITE spike 决策 — httpx adapter vs Karrio custom connector | [sellfox_shipping/docs/research/vite-httpx-vs-karrio-decision-2026-07-17.md](sellfox_shipping/docs/research/vite-httpx-vs-karrio-decision-2026-07-17.md) | 2026-07-24 |
 | Research | sellfox_shipping 长分支 PR 切片指南（2026-07-20） | [sellfox_shipping/docs/research/pr-slice-guide-2026-07-20.md](sellfox_shipping/docs/research/pr-slice-guide-2026-07-20.md) | 2026-07-24 |
 | Research | submitToPlatform 与自动推送 / 通途写回边界（2026-07-20） | [sellfox_shipping/docs/research/submit-to-platform-vs-autopush-2026-07-20.md](sellfox_shipping/docs/research/submit-to-platform-vs-autopush-2026-07-20.md) | 2026-07-24 |
+| Research | 成熟尾程打单系统与开源方案调研 | [sellfox_shipping/docs/research/mature-shipping-systems-2026-08-04.md](sellfox_shipping/docs/research/mature-shipping-systems-2026-08-04.md) | 2026-08-04 |
 | Research | 蜴国际 API（PR #90/#91）与现有 Excel 路径对照 | [sellfox_shipping/docs/research/lizard-api-vs-excel-2026-07-17.md](sellfox_shipping/docs/research/lizard-api-vs-excel-2026-07-17.md) | 2026-07-24 |
 | Research | 蜴国际 P0 样例列映射（2026-07-17） | [sellfox_shipping/docs/research/lizard-p0-column-mapping-2026-07-17.md](sellfox_shipping/docs/research/lizard-p0-column-mapping-2026-07-17.md) | 2026-07-24 |
 | Research | 规则引擎 V1 — YAML 驱动路由 | [sellfox_shipping/docs/research/routing-engine-v1-2026-07-24.md](sellfox_shipping/docs/research/routing-engine-v1-2026-07-24.md) | 2026-07-24 |
@@ -289,7 +291,9 @@ generated: 2026-07-28 18:02
 | Research | 通途 US 仓库实际承运商分析 — 路由规则数据基础 | [sellfox_shipping/docs/research/tongtool-carrier-analysis-2026-07-22.md](sellfox_shipping/docs/research/tongtool-carrier-analysis-2026-07-22.md) | 2026-07-24 |
 | Research | 钉钉 OIDC 与 submit 多实例限流（2026-07-17） | [sellfox_shipping/docs/research/oidc-and-submit-rate-gate-2026-07-17.md](sellfox_shipping/docs/research/oidc-and-submit-rate-gate-2026-07-17.md) | 2026-07-24 |
 | Research | 面单异步回传与 Webhook 口径（VITE / 蜴国际） | [sellfox_shipping/docs/research/async-label-and-webhook-2026-07-17.md](sellfox_shipping/docs/research/async-label-and-webhook-2026-07-17.md) | 2026-07-24 |
+| Roadmap | sellfox_shipping 生产化路线图 | [sellfox_shipping/docs/roadmap.md](sellfox_shipping/docs/roadmap.md) | 2026-08-04 |
 | Solution | ChatGPT UPS/FedEx Zone 分析与路由引擎架构参考 | [sellfox_shipping/docs/solutions/chatgpt-ups-fedex-analysis-reference-2026-07-22.md](sellfox_shipping/docs/solutions/chatgpt-ups-fedex-analysis-reference-2026-07-22.md) | 2026-07-24 |
+| Spec | sellfox_shipping 生产可靠性蓝图 | [sellfox_shipping/docs/specs/production-reliability-blueprint-2026-08-04.md](sellfox_shipping/docs/specs/production-reliability-blueprint-2026-08-04.md) | 2026-08-04 |
 
 ### us_openai_api_proxy
 
