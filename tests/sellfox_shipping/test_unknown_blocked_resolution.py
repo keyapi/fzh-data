@@ -75,16 +75,117 @@ def _ready_unknown_blocked(tmp_path, *, provider_order_id=""):
     return repo, package, op.id
 
 
-def _add_evidence(repo, op_id, evidence_type="ticket", external_ref="TICKET-1", note="investigated", actor="operator"):
+def _add_evidence(
+    repo,
+    op_id,
+    evidence_type="ticket",
+    conclusion="confirmed_not_created",
+    external_ref="TICKET-1",
+    note="investigated",
+    actor="operator",
+    provider_order_id="",
+):
     """Helper: add an investigation record and return its id."""
     inv = repo.add_investigation(
         operation_id=op_id,
         evidence_type=evidence_type,
+        conclusion=conclusion,
         external_ref=external_ref,
         note=note,
         actor=actor,
+        provider_order_id=(
+            provider_order_id
+            or ("ORDER-FOUND-ON-PORTAL" if conclusion == "confirmed_created" else "")
+        ),
     )
     return inv.id
+
+
+def test_resolve_rejects_blank_or_non_authoritative_evidence(tmp_path):
+    repo, _package, op_id = _ready_unknown_blocked(tmp_path)
+    service = LabelService(repo)
+    evidence_id = _add_evidence(
+        repo,
+        op_id,
+        evidence_type="other",
+        external_ref="",
+        note="",
+    )
+
+    with pytest.raises(LabelServiceError, match="authoritative external_ref"):
+        service.resolve_unknown_blocked(
+            op_id,
+            resolution="fail_safe",
+            confirm="fail_safe",
+            actor="operator",
+            evidence_id=evidence_id,
+        )
+
+    assert repo.get_label_operation(op_id).status == "UNKNOWN_BLOCKED"
+
+
+def test_resolve_rejects_evidence_conclusion_mismatch(tmp_path):
+    repo, _package, op_id = _ready_unknown_blocked(tmp_path)
+    service = LabelService(repo)
+    evidence_id = _add_evidence(
+        repo,
+        op_id,
+        conclusion="confirmed_created",
+    )
+
+    with pytest.raises(LabelServiceError, match="does not support resolution"):
+        service.resolve_unknown_blocked(
+            op_id,
+            resolution="fail_safe",
+            confirm="fail_safe",
+            actor="operator",
+            evidence_id=evidence_id,
+        )
+
+
+def test_resolution_persists_evidence_link_and_audit_reference(tmp_path):
+    repo, _package, op_id = _ready_unknown_blocked(tmp_path)
+    service = LabelService(repo)
+    evidence_id = _add_evidence(repo, op_id)
+
+    service.resolve_unknown_blocked(
+        op_id,
+        resolution="fail_safe",
+        confirm="fail_safe",
+        actor="operator",
+        evidence_id=evidence_id,
+    )
+
+    operation = repo.get_label_operation(op_id)
+    assert operation.resolution_evidence_id == evidence_id
+    events = repo.list_audit_events(limit=20)
+    resolution_event = next(
+        event
+        for event in events
+        if event.action == "label_operation.resolve_unknown_blocked"
+    )
+    assert f"evidence_id={evidence_id}" in resolution_event.summary
+
+
+def test_provide_known_id_rejects_provider_id_mismatch(tmp_path):
+    repo, _package, op_id = _ready_unknown_blocked(tmp_path)
+    service = LabelService(repo)
+    evidence_id = _add_evidence(
+        repo,
+        op_id,
+        conclusion="confirmed_created",
+        provider_order_id="ORDER-IN-EVIDENCE",
+    )
+
+    with pytest.raises(LabelServiceError, match="provider_order_id mismatch"):
+        service.resolve_unknown_blocked(
+            op_id,
+            resolution="provide_known_id",
+            confirm="provide_known_id",
+            provider_order_id="ORDER-FROM-CLI",
+            actor="operator",
+            evidence_id=evidence_id,
+        )
 
 
 # ── Reject non-UNKNOWN_BLOCKED ───────────────────────────────
@@ -165,7 +266,12 @@ def test_resolve_fail_final_permanent_rejection(tmp_path):
         confirm="fail_final",
         note="carrier confirmed: invalid address, no retry",
         actor="operator",
-        evidence_id=_add_evidence(repo, op_id, note="carrier confirmed: invalid address"),
+        evidence_id=_add_evidence(
+            repo,
+            op_id,
+            conclusion="confirmed_rejected",
+            note="carrier confirmed: invalid address",
+        ),
     )
 
     assert result["status"] == "FAILED_FINAL"
@@ -188,7 +294,12 @@ def test_resolve_provide_known_id_enables_resume(tmp_path):
         provider_order_id="ORDER-FOUND-ON-PORTAL",
         note="found in VITE dashboard, tracking=1Z9999",
         actor="operator",
-        evidence_id=_add_evidence(repo, op_id, note="found in VITE dashboard"),
+        evidence_id=_add_evidence(
+            repo,
+            op_id,
+            conclusion="confirmed_created",
+            note="found in VITE dashboard",
+        ),
     )
 
     assert result["status"] == "ACCEPTED"
@@ -209,7 +320,9 @@ def test_resolve_provide_known_id_requires_provider_order_id(tmp_path):
             confirm="provide_known_id",
             provider_order_id="",
             actor="operator",
-            evidence_id=_add_evidence(repo, op_id),
+            evidence_id=_add_evidence(
+                repo, op_id, conclusion="confirmed_created"
+            ),
         )
 
 

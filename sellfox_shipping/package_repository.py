@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -684,6 +685,11 @@ class LabelOperationRow(Base):
     created_by: Mapped[str] = mapped_column(String, default="")
     claimed_by: Mapped[str] = mapped_column(String, default="")
     claimed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    claim_token: Mapped[str] = mapped_column(String, default="")
+    resolution_evidence_id: Mapped[int | None] = mapped_column(
+        ForeignKey("shipping_label_investigations.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.current_timestamp()
     )
@@ -709,6 +715,7 @@ class LabelOperationRecord:
     error_class: str
     error_summary: str
     created_by: str
+    resolution_evidence_id: int | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -723,6 +730,8 @@ class InvestigationRow(Base):
         ForeignKey("shipping_label_operations.id", ondelete="CASCADE"),
     )
     evidence_type: Mapped[str] = mapped_column(String)
+    conclusion: Mapped[str] = mapped_column(String, default="")
+    provider_order_id: Mapped[str] = mapped_column(String, default="")
     external_ref: Mapped[str] = mapped_column(String, default="")
     private_artifact_id: Mapped[int | None] = mapped_column(
         ForeignKey("shipping_artifacts.id", ondelete="SET NULL"),
@@ -740,6 +749,8 @@ class InvestigationRecord:
     id: int
     operation_id: int
     evidence_type: str
+    conclusion: str
+    provider_order_id: str
     external_ref: str
     private_artifact_id: int | None
     note: str
@@ -2218,8 +2229,9 @@ class PackageRepository:
                     "(account_id, package_id, generation, carrier, service_level, "
                     "idempotency_key, request_hash, status, "
                     "provider_order_id, tracking_number, attempt_count, "
-                    "error_class, error_summary, created_by, claimed_by, created_at, updated_at) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, 'RESERVED', '', '', 0, '', '', ?, '', ?, ?)",
+                    "error_class, error_summary, created_by, claimed_by, claim_token, "
+                    "created_at, updated_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, 'RESERVED', '', '', 0, '', '', ?, '', '', ?, ?)",
                     (account_id, package_db_id, generation, carrier, service_level,
                      idempotency_key, request_hash, actor, now_iso, now_iso),
                 )
@@ -2249,12 +2261,20 @@ class PackageRepository:
         error_class: str = "",
         error_summary: str = "",
         increment_attempt: bool = False,
+        expected_claim_id: str | None = None,
     ) -> LabelOperationRecord | None:
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         with self._session_factory.begin() as session:
             row = session.get(LabelOperationRow, operation_id)
             if row is None:
                 return None
+            if (
+                expected_claim_id is not None
+                and row.claim_token != expected_claim_id
+            ):
+                raise RuntimeError(
+                    f"resume lease lost for operation_id={operation_id}"
+                )
             current = (row.status or "").strip()
             target = (status or "").strip()
             allowed = ALLOWED_LABEL_OPERATION_TRANSITIONS.get(current)
@@ -2314,6 +2334,8 @@ class PackageRepository:
         provider_order_id: str = "",
         note: str = "",
         actor: str = "",
+        evidence_id: int,
+        expected_conclusion: str,
     ) -> None:
         """Human-driven resolution: bypass state machine for UNKNOWN_BLOCKED operations.
 
@@ -2343,6 +2365,32 @@ class PackageRepository:
                     f"UNKNOWN_BLOCKED, got {current!r} for "
                     f"operation_id={operation_id}"
                 )
+            evidence = session.get(InvestigationRow, evidence_id)
+            if evidence is None:
+                raise RuntimeError(f"evidence not found: {evidence_id}")
+            if evidence.operation_id != operation_id:
+                raise RuntimeError(
+                    f"evidence {evidence_id} does not belong to operation {operation_id}"
+                )
+            if evidence.conclusion != expected_conclusion:
+                raise RuntimeError(
+                    f"evidence conclusion {evidence.conclusion!r} does not support "
+                    f"resolution {resolution!r}"
+                )
+            if (
+                resolution == "provide_known_id"
+                and evidence.provider_order_id.strip() != provider_order_id.strip()
+            ):
+                raise RuntimeError(
+                    "evidence provider_order_id mismatch for provide_known_id"
+                )
+            if not evidence.private_artifact_id and (
+                evidence.evidence_type == "other" or not evidence.external_ref.strip()
+            ):
+                raise RuntimeError(
+                    "resolution evidence requires an authoritative external_ref "
+                    "or private artifact"
+                )
 
             parts = [f"resolution={resolution}", f"actor={actor}"]
             if note.strip():
@@ -2355,6 +2403,7 @@ class PackageRepository:
             )[:500]
             row.error_class = f"human:{resolution}"
             row.status = target_status
+            row.resolution_evidence_id = evidence_id
             if provider_order_id.strip():
                 row.provider_order_id = provider_order_id.strip()
             row.updated_at = now
@@ -2366,7 +2415,7 @@ class PackageRepository:
             entity_type="shipping_label_operation",
             entity_id=str(operation_id),
             summary=(
-                f"resolution={resolution} target={target_status}"
+                f"resolution={resolution} target={target_status} evidence_id={evidence_id}"
                 + (f" provider_order_id={provider_order_id.strip()}"
                    if provider_order_id.strip() else "")
             )[:500],
@@ -2384,7 +2433,7 @@ class PackageRepository:
 
     def acquire_resume_lease(
         self, operation_id: int, *, actor: str, lease_seconds: int = 300
-    ) -> bool:
+    ) -> str | None:
         """Atomically acquire a lease on an existing operation for exclusive resume.
 
         Only succeeds when the operation is in ACCEPTED or LABEL_PENDING
@@ -2393,43 +2442,52 @@ class PackageRepository:
         """
         from datetime import timedelta
 
-        expiry = datetime.now(timezone.utc) - timedelta(seconds=lease_seconds)
-        with self._session_factory.begin() as session:
-            result = (
-                session.query(LabelOperationRow)
-                .where(LabelOperationRow.id == operation_id)
-                .where(
-                    LabelOperationRow.status.in_(["ACCEPTED", "LABEL_PENDING"])
-                )
-                .where(
-                    or_(
-                        LabelOperationRow.claimed_by == "",
-                        LabelOperationRow.claimed_by.is_(None),
-                        LabelOperationRow.claimed_at < expiry,
-                    )
-                )
-                .with_for_update()
-                .one_or_none()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        expiry = now - timedelta(seconds=lease_seconds)
+        now_iso = now.isoformat(sep=" ")
+        expiry_iso = expiry.isoformat(sep=" ")
+        token = uuid.uuid4().hex
+        connection = sqlite3.connect(self._db_path, timeout=30)
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            cursor = connection.execute(
+                "UPDATE shipping_label_operations "
+                "SET claimed_by = ?, claimed_at = ?, claim_token = ? "
+                "WHERE id = ? AND status IN ('ACCEPTED', 'LABEL_PENDING') "
+                "AND (claimed_by = '' OR claimed_by IS NULL OR claimed_at < ?)",
+                (actor, now_iso, token, operation_id, expiry_iso),
             )
-            if result is None:
-                return False
-            result.claimed_by = actor
-            result.claimed_at = datetime.now(timezone.utc)
-            return True
+            connection.commit()
+            return token if cursor.rowcount == 1 else None
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
 
-    def release_resume_lease(self, operation_id: int) -> None:
+    def release_resume_lease(self, operation_id: int, *, claim_id: str) -> bool:
         """Release the resume lease on a label operation."""
         with self._session_factory.begin() as session:
-            row = session.get(LabelOperationRow, operation_id)
-            if row is not None:
-                row.claimed_by = ""
-                row.claimed_at = None
+            result = session.query(LabelOperationRow).where(
+                LabelOperationRow.id == operation_id,
+                LabelOperationRow.claim_token == claim_id,
+            ).update(
+                {
+                    LabelOperationRow.claimed_by: "",
+                    LabelOperationRow.claimed_at: None,
+                    LabelOperationRow.claim_token: "",
+                },
+                synchronize_session=False,
+            )
+            return result == 1
 
     def add_investigation(
         self,
         *,
         operation_id: int,
         evidence_type: str,
+        conclusion: str,
+        provider_order_id: str = "",
         actor: str,
         external_ref: str = "",
         private_artifact_id: int | None = None,
@@ -2441,6 +2499,8 @@ class PackageRepository:
             inv = InvestigationRow(
                 operation_id=operation_id,
                 evidence_type=evidence_type,
+                conclusion=conclusion,
+                provider_order_id=provider_order_id,
                 external_ref=external_ref,
                 private_artifact_id=private_artifact_id,
                 note=note,
@@ -2453,6 +2513,8 @@ class PackageRepository:
                 id=inv.id,
                 operation_id=inv.operation_id,
                 evidence_type=inv.evidence_type,
+                conclusion=inv.conclusion,
+                provider_order_id=inv.provider_order_id,
                 external_ref=inv.external_ref,
                 private_artifact_id=inv.private_artifact_id,
                 note=inv.note,
@@ -2476,6 +2538,8 @@ class PackageRepository:
                     id=r.id,
                     operation_id=r.operation_id,
                     evidence_type=r.evidence_type,
+                    conclusion=r.conclusion,
+                    provider_order_id=r.provider_order_id,
                     external_ref=r.external_ref,
                     private_artifact_id=r.private_artifact_id,
                     note=r.note,
@@ -2495,6 +2559,8 @@ class PackageRepository:
                 id=row.id,
                 operation_id=row.operation_id,
                 evidence_type=row.evidence_type,
+                conclusion=row.conclusion,
+                provider_order_id=row.provider_order_id,
                 external_ref=row.external_ref,
                 private_artifact_id=row.private_artifact_id,
                 note=row.note,
@@ -2585,9 +2651,16 @@ class PackageRepository:
         status: str,
         carrier_response_json: str,
         created_by: str,
+        expected_claim_id: str | None = None,
     ) -> ShippingLabelRecord:
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         with self._session_factory.begin() as session:
+            if expected_claim_id is not None:
+                operation = session.get(LabelOperationRow, operation_id)
+                if operation is None or operation.claim_token != expected_claim_id:
+                    raise RuntimeError(
+                        f"resume lease lost for operation_id={operation_id}"
+                    )
             account = self._get_or_create_account(session, account_key)
             row = ShippingLabelRow(
                 account_id=account.id,
@@ -3114,6 +3187,7 @@ def _label_operation_to_record(
         error_class=row.error_class or "",
         error_summary=row.error_summary or "",
         created_by=row.created_by or "",
+        resolution_evidence_id=row.resolution_evidence_id,
         created_at=created_at,
         updated_at=updated_at,
     )

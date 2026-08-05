@@ -796,7 +796,8 @@ class LabelService:
             )
 
         # Claim for exclusive processing
-        if not self._repo.acquire_resume_lease(operation_id, actor=actor):
+        claim_id = self._repo.acquire_resume_lease(operation_id, actor=actor)
+        if claim_id is None:
             raise LabelServiceError(
                 f"operation {operation_id} is being processed by another agent",
                 http_status=409,
@@ -806,7 +807,7 @@ class LabelService:
         package_sn = self._repo.get_package_sn_by_db_id(op.package_id) or ""
         package = self._repo.get(op.account_key, package_sn)
         if package is None:
-            self._repo.release_resume_lease(operation_id)
+            self._repo.release_resume_lease(operation_id, claim_id=claim_id)
             raise LabelServiceError(
                 f"package not found for operation {operation_id}", http_status=404
             )
@@ -819,6 +820,7 @@ class LabelService:
                     actor=actor,
                     order_id=provider_order_id,
                     operation_id=operation_id,
+                    claim_id=claim_id,
                 )
             elif carrier == "lizard":
                 return self._resume_lizard_label(
@@ -828,13 +830,13 @@ class LabelService:
                     order_code=provider_order_id,
                     reference_no=package.package_sn,
                     operation_id=operation_id,
+                    claim_id=claim_id,
                 )
             else:
                 raise LabelServiceError(
                     f"unknown carrier {carrier} for resume", http_status=400
                 )
         except LabelServiceError:
-            self._repo.release_resume_lease(operation_id)
             raise
         except ViteClientError as exc:
             self._repo.transition_label_operation(
@@ -844,8 +846,8 @@ class LabelService:
                 error_class=exc.category,
                 error_summary=str(exc)[:500],
                 increment_attempt=True,
+                expected_claim_id=claim_id,
             )
-            self._repo.release_resume_lease(operation_id)
             raise LabelServiceError(
                 f"VITE resume error: {exc}", http_status=502, failure=exc
             ) from exc
@@ -857,8 +859,8 @@ class LabelService:
                 error_class=exc.category,
                 error_summary=str(exc)[:500],
                 increment_attempt=True,
+                expected_claim_id=claim_id,
             )
-            self._repo.release_resume_lease(operation_id)
             raise LabelServiceError(
                 f"Lizard resume error: {exc}", http_status=502, failure=exc
             ) from exc
@@ -870,12 +872,16 @@ class LabelService:
                 error_class="resume_internal",
                 error_summary=str(exc)[:500],
                 increment_attempt=True,
+                expected_claim_id=claim_id,
             )
-            self._repo.release_resume_lease(operation_id)
             raise LabelServiceError(
                 f"resume failed for operation {operation_id}: {exc}",
                 http_status=502,
             ) from exc
+        finally:
+            self._repo.release_resume_lease(
+                operation_id, claim_id=claim_id
+            )
 
     def _resume_vite_label(
         self,
@@ -885,6 +891,7 @@ class LabelService:
         actor: str,
         order_id: str,
         operation_id: int,
+        claim_id: str,
     ) -> dict[str, Any]:
         import time, random, json
         from sellfox_shipping.carriers.vite.shipment import (
@@ -949,6 +956,7 @@ class LabelService:
                 status="generated",
                 carrier_response_json=json.dumps(label_data),
                 created_by=actor,
+                expected_claim_id=claim_id,
             )
 
         result = {
@@ -965,6 +973,7 @@ class LabelService:
             status="SUCCEEDED",
             provider_order_id=order_id,
             tracking_number=tracking,
+            expected_claim_id=claim_id,
         )
 
         return result
@@ -978,6 +987,7 @@ class LabelService:
         order_code: str,
         reference_no: str,
         operation_id: int,
+        claim_id: str,
     ) -> dict[str, Any]:
         import time, json
         from sellfox_shipping.carriers.lizard.api_client import LizardApiClient
@@ -1050,6 +1060,7 @@ class LabelService:
                     status="generated",
                     carrier_response_json=json.dumps(lab),
                     created_by=actor,
+                    expected_claim_id=claim_id,
                 )
             except Exception as exc:
                 self._repo.transition_label_operation(
@@ -1060,6 +1071,7 @@ class LabelService:
                     error_class="label_pending",
                     error_summary=f"insert_label failed: {exc}"[:500],
                     increment_attempt=True,
+                    expected_claim_id=claim_id,
                 )
                 raise LabelServiceError(
                     f"Lizard label retrieved but local insert failed: {exc}",
@@ -1080,6 +1092,7 @@ class LabelService:
             status="SUCCEEDED",
             provider_order_id=order_code,
             tracking_number=tracking,
+            expected_claim_id=claim_id,
         )
 
         return result
@@ -1131,19 +1144,6 @@ class LabelService:
                 http_status=409,
             )
 
-        # Validate evidence belongs to this operation
-        try:
-            evidence = self._repo.get_investigation(evidence_id)
-        except RuntimeError:
-            raise LabelServiceError(
-                f"evidence {evidence_id} not found", http_status=404
-            )
-        if evidence.operation_id != operation_id:
-            raise LabelServiceError(
-                f"evidence {evidence_id} does not belong to operation {operation_id}",
-                http_status=400,
-            )
-
         if resolution == "provide_known_id":
             pid = (provider_order_id or "").strip()
             if not pid:
@@ -1152,14 +1152,19 @@ class LabelService:
                     http_status=400,
                 )
 
-            self._repo.resolve_unknown_blocked_operation(
-                operation_id,
-                target_status="ACCEPTED",
-                resolution=resolution,
-                provider_order_id=pid,
-                note=note,
-                actor=actor,
-            )
+            try:
+                self._repo.resolve_unknown_blocked_operation(
+                    operation_id,
+                    target_status="ACCEPTED",
+                    resolution=resolution,
+                    provider_order_id=pid,
+                    note=note,
+                    actor=actor,
+                    evidence_id=evidence_id,
+                    expected_conclusion="confirmed_created",
+                )
+            except RuntimeError as exc:
+                raise LabelServiceError(str(exc), http_status=409) from exc
             return {
                 "operation_id": operation_id,
                 "status": "ACCEPTED",
@@ -1170,13 +1175,23 @@ class LabelService:
             }
 
         target_status = "FAILED_SAFE" if resolution == "fail_safe" else "FAILED_FINAL"
-        self._repo.resolve_unknown_blocked_operation(
-            operation_id,
-            target_status=target_status,
-            resolution=resolution,
-            note=note,
-            actor=actor,
+        expected_conclusion = (
+            "confirmed_not_created"
+            if resolution == "fail_safe"
+            else "confirmed_rejected"
         )
+        try:
+            self._repo.resolve_unknown_blocked_operation(
+                operation_id,
+                target_status=target_status,
+                resolution=resolution,
+                note=note,
+                actor=actor,
+                evidence_id=evidence_id,
+                expected_conclusion=expected_conclusion,
+            )
+        except RuntimeError as exc:
+            raise LabelServiceError(str(exc), http_status=409) from exc
         result: dict[str, Any] = {
             "operation_id": operation_id,
             "status": target_status,
@@ -1192,6 +1207,8 @@ class LabelService:
         *,
         operation_id: int,
         evidence_type: str,
+        conclusion: str,
+        provider_order_id: str = "",
         actor: str,
         external_ref: str = "",
         note: str = "",
@@ -1202,10 +1219,26 @@ class LabelService:
         but does not change the operation status.
         """
         VALID_TYPES = {"ticket", "carrier_portal", "email", "other"}
+        VALID_CONCLUSIONS = {
+            "confirmed_not_created",
+            "confirmed_created",
+            "confirmed_rejected",
+        }
         if evidence_type not in VALID_TYPES:
             raise LabelServiceError(
                 f"invalid evidence_type {evidence_type!r}. "
                 f"Use: {', '.join(sorted(VALID_TYPES))}",
+                http_status=400,
+            )
+        if conclusion not in VALID_CONCLUSIONS:
+            raise LabelServiceError(
+                f"invalid conclusion {conclusion!r}. "
+                f"Use: {', '.join(sorted(VALID_CONCLUSIONS))}",
+                http_status=400,
+            )
+        if conclusion == "confirmed_created" and not provider_order_id.strip():
+            raise LabelServiceError(
+                "provider_order_id is required for confirmed_created evidence",
                 http_status=400,
             )
 
@@ -1218,6 +1251,8 @@ class LabelService:
         record = self._repo.add_investigation(
             operation_id=operation_id,
             evidence_type=evidence_type,
+            conclusion=conclusion,
+            provider_order_id=provider_order_id,
             external_ref=external_ref,
             note=note,
             actor=actor,
@@ -1226,6 +1261,8 @@ class LabelService:
             "investigation_id": record.id,
             "operation_id": operation_id,
             "evidence_type": record.evidence_type,
+            "conclusion": record.conclusion,
+            "provider_order_id": record.provider_order_id,
             "external_ref": record.external_ref,
             "note": record.note,
             "actor": record.actor,

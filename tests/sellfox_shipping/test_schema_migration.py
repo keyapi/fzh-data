@@ -17,11 +17,31 @@ def test_repository_applies_alembic_migration_on_empty_db(tmp_path) -> None:
         audit = connection.exec_driver_sql(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='shipping_audit_events'"
         ).scalar_one()
+        claim_fence_col = connection.exec_driver_sql(
+            "SELECT 1 FROM pragma_table_info('shipping_label_operations') "
+            "WHERE name='claim_token'"
+        ).scalar_one()
+        resolution_evidence = connection.exec_driver_sql(
+            "SELECT 1 FROM pragma_table_info('shipping_label_operations') "
+            "WHERE name='resolution_evidence_id'"
+        ).scalar_one()
+        conclusion = connection.exec_driver_sql(
+            "SELECT 1 FROM pragma_table_info('shipping_label_investigations') "
+            "WHERE name='conclusion'"
+        ).scalar_one()
+        evidence_provider_id = connection.exec_driver_sql(
+            "SELECT 1 FROM pragma_table_info('shipping_label_investigations') "
+            "WHERE name='provider_order_id'"
+        ).scalar_one()
 
-    assert version == "0017_shipping_label_investigations"
-    assert version == "0017_shipping_label_investigations"
+    assert version == "0018_resume_fencing_and_evidence_link"
+    assert version == "0018_resume_fencing_and_evidence_link"
     assert packages == "shipping_packages"
     assert audit == "shipping_audit_events"
+    assert claim_fence_col == 1
+    assert resolution_evidence == 1
+    assert conclusion == 1
+    assert evidence_provider_id == 1
 
 
 def test_repository_stamps_existing_create_all_database(tmp_path) -> None:
@@ -44,7 +64,7 @@ def test_repository_stamps_existing_create_all_database(tmp_path) -> None:
             "WHERE name='local_review_status'"
         ).scalar()
 
-    assert version == "0017_shipping_label_investigations"
-    assert version == "0017_shipping_label_investigations"
+    assert version == "0018_resume_fencing_and_evidence_link"
+    assert version == "0018_resume_fencing_and_evidence_link"
     assert review_col == 1
     assert repository.count_rows()["packages"] == 0

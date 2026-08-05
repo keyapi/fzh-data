@@ -391,8 +391,15 @@ def _get_label_service():
 def label_operation_investigate(
     operation_id: int = typer.Option(..., min=1, help="Label operation id"),
     evidence_type: str = typer.Option(..., help="ticket | carrier_portal | email | other"),
+    conclusion: str = typer.Option(
+        ...,
+        help="confirmed_not_created | confirmed_created | confirmed_rejected",
+    ),
     actor: str = typer.Option(..., help="Operator identity"),
     external_ref: str = typer.Option("", help="External ticket/order reference"),
+    provider_order_id: str = typer.Option(
+        "", help="Carrier order id when conclusion is confirmed_created"
+    ),
     note: str = typer.Option("", help="Investigation notes (what was checked, what was found)"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
 ):
@@ -407,8 +414,10 @@ def label_operation_investigate(
         result = service.add_investigation(
             operation_id=operation_id,
             evidence_type=evidence_type,
+            conclusion=conclusion,
             actor=actor,
             external_ref=external_ref,
+            provider_order_id=provider_order_id,
             note=note,
         )
         _output(
