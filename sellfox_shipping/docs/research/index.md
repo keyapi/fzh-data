@@ -3,7 +3,7 @@ okf: v0.1
 type: Index
 title: 赛狐尾程打单 — 调研索引
 description: 汇总尾程打单需求简报、既有调研与当前推荐的独立综合规划入口
-timestamp: 2026-07-23
+timestamp: 2026-08-04
 ---
 
 # 赛狐尾程打单 — 调研索引
@@ -14,6 +14,7 @@ timestamp: 2026-07-23
 |------------|------|
 | **接手继续实现**（新对话 / 换 Agent） | [AGENT_HANDOFF.md](../../AGENT_HANDOFF.md) → 细节经本 index / [docs/index.md](../index.md) |
 | **读目标架构与阶段规划** | [research-synthesis-2026-07-16.md](research-synthesis-2026-07-16.md) — **先看文首裁决框**；现行状态以 HANDOFF 为准 |
+| **读生产可靠性完成态** | [../specs/production-reliability-blueprint-2026-08-04.md](../specs/production-reliability-blueprint-2026-08-04.md) → [../roadmap.md](../roadmap.md) |
 | **过程日记（冷档案）** | [session-progress-2026-07-16.md](session-progress-2026-07-16.md) — 勿当现状 |
 | **从零独立再调研**（刻意不看结论） | [ONBOARDING.md](ONBOARDING.md) → [briefing-for-independent-agent.md](briefing-for-independent-agent.md) |
 
@@ -37,6 +38,7 @@ timestamp: 2026-07-23
 - [erpnext-zlmb-dims-v2-2026-07-23.md](erpnext-zlmb-dims-v2-2026-07-23.md) — EN ZLMB# 重尺 V2：跨面料 sibling 借用 + weight/dims 独立决策。
 - [routing-engine-v1-2026-07-24.md](routing-engine-v1-2026-07-24.md) — **规则引擎 V1**：YAML 驱动路由 + 10 种运算符 + 排除店铺。
 - [sku-label-back-sticker-analysis-2026-07-28.md](sku-label-back-sticker-analysis-2026-07-28.md) — **SKU 背贴 PDF 生成**：Colab notebook 逻辑拆解 + Google Sheets 中/西语名称获取 + sellfox_shipping 集成方案。
+- [mature-shipping-systems-2026-08-04.md](mature-shipping-systems-2026-08-04.md) — **成熟系统与开源方案调研**：商业工作流、Karrio/托管 API 比较和 FZH 采用结论。
 
 ## 全部调研文档
 

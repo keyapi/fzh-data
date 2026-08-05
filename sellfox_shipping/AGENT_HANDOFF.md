@@ -3,7 +3,7 @@ okf: v0.1
 type: Handoff
 title: sellfox_shipping — Agent 交接说明
 description: 包裹中心架构、当前实现、运行方式与后续阶段边界
-updated: 2026-07-22
+updated: 2026-08-04
 ---
 
 # sellfox_shipping — Agent 交接说明
@@ -11,6 +11,7 @@ updated: 2026-07-22
 > **赛狐尾程打单系统** — 包裹批次工作流  
 > 人读文档: [README.md](README.md)  
 > **新 Agent：只读本文件即可接手。** 细节经 [docs/index.md](docs/index.md) 按需深挖。  
+> 生产化开发先读：[生产可靠性蓝图](docs/specs/production-reliability-blueprint-2026-08-04.md) → [路线图](docs/roadmap.md)。
 > 过程日记 / 规划底稿（非默认入口）：[session-progress](docs/research/session-progress-2026-07-16.md)、[research-synthesis](docs/research/research-synthesis-2026-07-16.md)
 
 ## 新对话 / 换 Agent 接手（30 秒）
@@ -54,15 +55,18 @@ Excel 本地闭环（审核 → 导出 → 人工上传物流商 → 导入对�
 
 ### 6. 下一步（≤3）
 
-1. 修赛狐写权限 / 代理 401
-2. 新 `to_process` 测试包裹做 trackNo 可见性探针
-3. （可选）公网打开 OIDC
+1. 实现购标安全核心：preflight、SQLite 原子 claim、operation journal、UNKNOWN_BLOCKED 与恢复 CLI
+2. 实现标签落库后的赛狐 outbox 回写和回读核验
+3. 公网启用 OIDC/CSRF/RBAC，并建立每日三方对账
 
 ### 7. 重规划裁决
 
 - **不**整本作废 synthesis；修订 P1C 出口与承运人双通道（见 synthesis 文首裁决框）
 - **承运人双通道：** `SpreadsheetCarrierAdapter` 与 `ApiCarrierAdapter` 同等级；同一承运人可两者皆有；**生产默认 Excel**；有 API 另挂可选路径（蜴国际 API 已有，不替表）
 - 平台推送非本阶段默认；Intent/CLI 真调路径保留备用
+- 当前规模先强化 SQLite；出现持续写竞争或多实例恢复需求时再迁 PostgreSQL
+- 暂不采用 Karrio Server；约 5 个 API 承运商或至少两个标准 connector 可复用时再做独立服务 POC
+- 装箱算法延期，本阶段不改变现有尺寸公式
 
 ## 禁区
 
