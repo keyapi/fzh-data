@@ -97,7 +97,7 @@ def test_migration_head_includes_submission_tables(tmp_path: Path) -> None:
             "SELECT name FROM sqlite_master WHERE type='table' "
             "AND name='shipping_submission_intents'"
         ).scalar_one()
-    assert version == "0014_carton_override_item_name"
+    assert version == "0015_label_acquisition_safety"
 
     assert scopes == "shipping_submission_scopes"
     assert intents == "shipping_submission_intents"
