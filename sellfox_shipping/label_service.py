@@ -1003,13 +1003,52 @@ class LabelService:
                 summary=f"order_code={order_code} tracking={tracking}",
             )
 
+            op = self._repo.get_label_operation(operation_id)
+            service_level = (op.service_level if op else "") or "resumed"
+            package_db_id = (
+                self._repo.get_package_db_id(account_key, package.package_sn) or 0
+            )
+            # Local label row — failure here must stay LABEL_PENDING (provider known).
+            try:
+                self._repo.insert_label(
+                    account_key=account_key,
+                    package_db_id=package_db_id,
+                    carrier="lizard",
+                    service_level=service_level,
+                    tracking_number=tracking,
+                    carrier_order_id=order_code,
+                    request_id=f"resume-{int(time.time())}",
+                    label_url=label_url,
+                    operation_id=operation_id,
+                    artifact_id=artifact.id,
+                    total_amount=None,
+                    currency="USD",
+                    status="generated",
+                    carrier_response_json=json.dumps(lab),
+                    created_by=actor,
+                )
+            except Exception as exc:
+                self._repo.transition_label_operation(
+                    operation_id,
+                    status="LABEL_PENDING",
+                    provider_order_id=order_code,
+                    tracking_number=tracking or "",
+                    error_class="label_pending",
+                    error_summary=f"insert_label failed: {exc}"[:500],
+                    increment_attempt=True,
+                )
+                raise LabelServiceError(
+                    f"Lizard label retrieved but local insert failed: {exc}",
+                    http_status=502,
+                ) from exc
+
         result = {
             "status": "SUCCEEDED",
             "provider_order_id": order_code,
             "tracking_number": tracking,
             "label_url": label_url,
             "carrier": "lizard",
-            "service_level": "resumed",
+            "service_level": service_level,
         }
 
         self._repo.transition_label_operation(

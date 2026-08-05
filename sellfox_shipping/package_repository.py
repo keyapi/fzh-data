@@ -2274,6 +2274,18 @@ class PackageRepository:
             row.updated_at = now
             session.add(row)
 
+        self.append_audit_event(
+            actor=actor,
+            action="label_operation.resolve_unknown_blocked",
+            entity_type="shipping_label_operation",
+            entity_id=str(operation_id),
+            summary=(
+                f"resolution={resolution} target={target_status}"
+                + (f" provider_order_id={provider_order_id.strip()}"
+                   if provider_order_id.strip() else "")
+            )[:500],
+        )
+
     def get_label_operation(self, operation_id: int) -> LabelOperationRecord:
         with self._session_factory() as session:
             row = session.get(LabelOperationRow, operation_id)

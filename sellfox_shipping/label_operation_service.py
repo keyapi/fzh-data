@@ -111,7 +111,9 @@ def _allowed_actions(operation: LabelOperationRecord) -> list[str]:
         and operation.provider_order_id
     ):
         return ["resume"]
-    if operation.status in {"RESERVED", "SENT", "UNKNOWN_BLOCKED"}:
+    if operation.status == "UNKNOWN_BLOCKED":
+        return ["resolve"]
+    if operation.status in {"RESERVED", "SENT"}:
         return ["investigate"]
     if operation.status in {"ACCEPTED", "LABEL_PENDING"}:
         return ["investigate"]

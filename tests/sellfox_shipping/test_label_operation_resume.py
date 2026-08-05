@@ -18,11 +18,20 @@ from tests.sellfox_shipping.test_label_acquisition_safety import (
 )
 
 
-def _ready_repo_with_op(tmp_path, *, status="ACCEPTED", provider_order_id="ORDER-1"):
+def _ready_repo_with_op(
+    tmp_path,
+    *,
+    status="ACCEPTED",
+    provider_order_id="ORDER-1",
+    carrier="vite",
+    service_level="GOFO_PARCEL",
+    package_sn="P-RESUME-1",
+    idempotency_key="resume-1",
+):
     repo = PackageRepository(tmp_path / "shipping.db")
     package = SellfoxPackageRecord(
         account_key="sellfox-main",
-        package_sn="P-RESUME-1",
+        package_sn=package_sn,
         local_review_status="approved",
         address=SellfoxPackageAddress(
             name="Test Buyer",
@@ -60,9 +69,9 @@ def _ready_repo_with_op(tmp_path, *, status="ACCEPTED", provider_order_id="ORDER
     op = repo.claim_label_operation(
         account_key="sellfox-main",
         package_db_id=package_id,
-        carrier="vite",
-        service_level="GOFO_PARCEL",
-        idempotency_key="resume-1",
+        carrier=carrier,
+        service_level=service_level,
+        idempotency_key=idempotency_key,
         request_hash="hash-resume",
         actor="operator",
     )
@@ -188,6 +197,134 @@ def test_resume_vite_label_not_ready_stays_label_pending(tmp_path, monkeypatch):
     assert op.status == "LABEL_PENDING"
     assert op.provider_order_id == "ORDER-1"
     assert client.create_calls == 0
+
+
+# ── Lizard resume ────────────────────────────────────────────
+
+
+class _FakeLizardResumeClient:
+    def __init__(
+        self,
+        *,
+        label_ready=True,
+        label_url="https://cdn.example/l.pdf",
+        tracking="1ZRESUME",
+    ):
+        self.label_ready = label_ready
+        self.label_url = label_url
+        self.tracking = tracking
+        self.get_label_calls = 0
+        self.create_order_calls = 0
+
+    def create_order(self, body):
+        self.create_order_calls += 1
+        raise AssertionError("create_order must not be called during resume")
+
+    def get_label(self, *, order_code: str = "", reference_no: str = ""):
+        self.get_label_calls += 1
+        ready = self.label_ready
+        return {
+            "code": 200,
+            "result": {
+                "sync_service_status": 1 if ready else 0,
+                "order_status": "Success" if ready else "Pending",
+                "labels": {
+                    "tracking_number": self.tracking if ready else "",
+                    "label_url": self.label_url if ready else "",
+                },
+            },
+        }
+
+
+def test_resume_lizard_inserts_label_and_never_creates(tmp_path, monkeypatch):
+    from sellfox_shipping.carriers.lizard.api_client import LizardApiClient
+
+    repo, package, op_id = _ready_repo_with_op(
+        tmp_path,
+        carrier="lizard",
+        service_level="FedEx-Ground-J-TX",
+        provider_order_id="OC-RESUME-1",
+        package_sn="P-RESUME-LIZARD",
+        idempotency_key="resume-lizard-1",
+    )
+    client = _FakeLizardResumeClient()
+
+    monkeypatch.setattr(LizardApiClient, "__init__", lambda self, **kw: None)
+    monkeypatch.setattr(LizardApiClient, "__enter__", lambda self: client)
+    monkeypatch.setattr(LizardApiClient, "__exit__", lambda *a: False)
+    monkeypatch.setenv("YIGLOBAL_APP_TOKEN", "tok")
+    monkeypatch.setenv("YIGLOBAL_APP_KEY", "key")
+    monkeypatch.setattr(
+        "sellfox_shipping.label_service._default_fetch_bytes",
+        lambda url: b"%PDF-1.4",
+    )
+
+    service = LabelService(repo)
+    service._cfg = COMPLETE_WAREHOUSE_CFG
+    result = service.resume_label_acquisition(op_id, actor="operator")
+
+    assert result["status"] == "SUCCEEDED"
+    assert result["provider_order_id"] == "OC-RESUME-1"
+    assert client.create_order_calls == 0
+    assert client.get_label_calls > 0
+
+    op = repo.get_label_operation(op_id)
+    assert op.status == "SUCCEEDED"
+    labels = repo.list_labels_for_package(
+        account_key="sellfox-main", package_sn=package.package_sn
+    )
+    assert len(labels) == 1
+    assert labels[0].carrier == "lizard"
+    assert labels[0].carrier_order_id == "OC-RESUME-1"
+    assert labels[0].tracking_number == "1ZRESUME"
+    assert labels[0].operation_id == op_id
+    assert labels[0].artifact_id is not None
+
+
+def test_resume_lizard_insert_failure_stays_label_pending(tmp_path, monkeypatch):
+    from sellfox_shipping.carriers.lizard.api_client import LizardApiClient
+
+    repo, package, op_id = _ready_repo_with_op(
+        tmp_path,
+        carrier="lizard",
+        service_level="FedEx-Ground-J-TX",
+        provider_order_id="OC-RESUME-2",
+        package_sn="P-RESUME-LIZARD-2",
+        idempotency_key="resume-lizard-2",
+    )
+    client = _FakeLizardResumeClient()
+
+    monkeypatch.setattr(LizardApiClient, "__init__", lambda self, **kw: None)
+    monkeypatch.setattr(LizardApiClient, "__enter__", lambda self: client)
+    monkeypatch.setattr(LizardApiClient, "__exit__", lambda *a: False)
+    monkeypatch.setenv("YIGLOBAL_APP_TOKEN", "tok")
+    monkeypatch.setenv("YIGLOBAL_APP_KEY", "key")
+    monkeypatch.setattr(
+        "sellfox_shipping.label_service._default_fetch_bytes",
+        lambda url: b"%PDF-1.4",
+    )
+    monkeypatch.setattr(
+        repo,
+        "insert_label",
+        lambda **kwargs: (_ for _ in ()).throw(RuntimeError("db down")),
+    )
+
+    service = LabelService(repo)
+    service._cfg = COMPLETE_WAREHOUSE_CFG
+
+    with pytest.raises(LabelServiceError, match="local insert failed"):
+        service.resume_label_acquisition(op_id, actor="operator")
+
+    op = repo.get_label_operation(op_id)
+    assert op.status == "LABEL_PENDING"
+    assert op.provider_order_id == "OC-RESUME-2"
+    assert client.create_order_calls == 0
+    assert (
+        repo.list_labels_for_package(
+            account_key="sellfox-main", package_sn=package.package_sn
+        )
+        == []
+    )
 
 
 # ── CLI smoke test ───────────────────────────────────────────
