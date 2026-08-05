@@ -762,45 +762,18 @@ def _compute_routing(record, carton_rows: list[dict]):
 
 
 def _build_vite_ship_from(record) -> dict:
-    """Build VITE-compatible sender address from warehouse config."""
-    wh_name = (record.logistics.warehouse_name or "").strip()
-    if wh_name:
-        warehouses_cfg = config.get("warehouses", {})
-        wh = warehouses_cfg.get(wh_name, {})
-        addr = wh.get("address", {})
-        if addr.get("address1"):
-            return {
-                "fullName": (addr.get("name") or "FZH Warehouse")[:35],
-                "company": (addr.get("company") or "")[:35],
-                "address1": addr["address1"][:50],
-                "address2": (addr.get("address2") or "")[:50],
-                "city": (addr.get("city") or "")[:28],
-                "state": (addr.get("state") or "")[:2],
-                "zipCode": (addr.get("postal_code") or "")[:10],
-                "phoneNumber": (addr.get("phone") or addr.get("email") or "0000000000")[:15],
-            }
-    return {
-        "fullName": "FZH Test",
-        "address1": "90 Chester rd",
-        "city": "Belmont",
-        "state": "MA",
-        "zipCode": "02478",
-        "phoneNumber": "1111111111",
-    }
+    """Build VITE sender address — strict builder, no fictional fallbacks."""
+    from sellfox_shipping.carriers.vite.shipment import _build_ship_from
+
+    warehouses_cfg = config.get("warehouses", {})
+    return _build_ship_from(record.logistics.warehouse_name or "", warehouses_cfg)
 
 
 def _build_vite_ship_to(record) -> dict:
-    """Build VITE-compatible recipient address from package record."""
-    addr = record.address
-    return {
-        "fullName": (addr.name or "Customer")[:35],
-        "address1": (addr.address_line_1 or "")[:50],
-        "address2": (addr.address_line_2 or "")[:35],
-        "city": (addr.city or "")[:28],
-        "state": (addr.state_or_region or addr.city or "XX")[:2],
-        "zipCode": (addr.postal_code or "")[:10],
-        "phoneNumber": (addr.phone or addr.mobile or "0000000000")[:15],
-    }
+    """Build VITE recipient address — strict builder, no fictional fallbacks."""
+    from sellfox_shipping.carriers.vite.shipment import _build_ship_to
+
+    return _build_ship_to(record)
 
 
 VITE_FEDEX_CHANNEL = (os.getenv("VITE_FEDEX_CHANNEL") or "ODFC").strip()
@@ -850,8 +823,12 @@ def _get_vite_rate(
         height_in = round(package_dims["height_cm"] / 2.54, 1)
         max_side_in = max(length_in, width_in, height_in)
 
-        ship_from = _build_vite_ship_from(record)
-        ship_to = _build_vite_ship_to(record)
+        try:
+            ship_from = _build_vite_ship_from(record)
+            ship_to = _build_vite_ship_to(record)
+        except ValueError as exc:
+            return {"source": "vite", "error": str(exc)}
+
         dest_country = (
             record.address.country_code or record.address.country or ""
         ).upper()

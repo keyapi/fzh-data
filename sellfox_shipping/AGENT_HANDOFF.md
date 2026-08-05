@@ -55,14 +55,15 @@ Excel 本地闭环（审核 → 导出 → 人工上传物流商 → 导入对�
 
 ### 6. 下一步（≤3）
 
-> **已完成 1) 购标安全核心 (PR [#134](https://github.com/keyapi/fzh-data/pull/134), codex/sellfox-shipping-label-safety)**
-> - LabelService.preflight() 统一前置校验：审核状态、重尺完整性、收件必填字段、VITE 仓库配置完备性
-> - claim_label_operation() (SQLite BEGIN IMMEDIATE) 原子占用，并发安全
-> - shipping_label_operations 表 + 部分唯一索引（活跃 label + 活跃 operation）
-> - 状态机: RESERVED → SENT → ACCEPTED → LABEL_PENDING → SUCCEEDED / FAILED_SAFE / FAILED_FINAL / UNKNOWN_BLOCKED
-> - UNKNOWN_BLOCKED 阻止重复 create，取消 label 释放活跃约束
-> - **待做**: 将 preflight+claim 集成入 create_label() 调用链、承运商 service 操作状态联动、CLI 命令、_build_ship_from/to 删兜底值
-> - 测试: 154 passed（基线 149 + 5 个 safety 拉力）
+> **已完成 1a) 购标安全原语 (PR [#134](https://github.com/keyapi/fzh-data/pull/134))** — claim / preflight / migration 0015 / UNKNOWN_BLOCKED
+> **已完成 1b) 购标安全接线 + 恢复持久化 (PR [#135](https://github.com/keyapi/fzh-data/pull/135))**
+> - `create_label()`：preflight → claim → SENT → carrier
+> - 承运商适配层拿到 `order_id`/`order_code` 后立即 `SENT → ACCEPTED`（落 `provider_order_id`）
+> - poll/PDF/artifact 失败 → `LABEL_PENDING`（保留 provider ID + tracking）；create 只调一次
+> - 取消：`ACCEPTED/LABEL_PENDING/SUCCEEDED → CANCELLED`；崩溃窗口 `SENT + 已关联 label` 可释放；transition 失败不得静默成功
+> - Vite 购标与报价路径删除虚构地址兜底
+> - **待做 (follow-up)**: resume CLI（LABEL_PENDING 只查不 create）；carrier error taxonomy（勿仅靠 HTTP 状态推断 FAILED_FINAL）
+> - 测试: 全量 sellfox_shipping 见 PR #135
 
 1. 实现标签入库后的赛狐 outbox 回写和回读核验
 2. 公网启用 OIDC/CSRF/RBAC，并建立每日三方对账

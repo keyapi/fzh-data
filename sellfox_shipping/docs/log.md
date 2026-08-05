@@ -8,6 +8,33 @@ updated: 2026-08-04
 
 # sellfox_shipping — 变更日志
 
+## 2026-08-05 — PR #135 取消原子收口 + 蜴国际 insert→LABEL_PENDING
+
+- `finalize_label_cancellation()`：同一事务内 label inactive + operation CANCELLED
+- `cancel_label`：承运商确认后只调原子收口；label 已 cancelled 但 op 仍活跃时可本地 reconcile
+- 蜴国际 `insert_label` 失败 → `LABEL_PENDING`（保留 provider ID），不再误标 UNKNOWN_BLOCKED
+- 清 blueprint trailing whitespace
+
+## 2026-08-05 — PR #135 恢复闭环：ACCEPTED / LABEL_PENDING
+
+- VITE/蜴国际：拿到 provider order id 后立即 `SENT → ACCEPTED`（在适配层，不等 ship_package 返回）
+- poll 超时 / URL 缺失 / PDF 失败 / artifact 失败 → `LABEL_PENDING`，保留 provider_order_id 与 tracking；create 只调用一次
+- 取消边：`ACCEPTED/LABEL_PENDING/SUCCEEDED → CANCELLED`；崩溃窗口仅允许 `SENT → CANCELLED` 当已有关联 label
+- `cancel_label` 不再静默吞 transition 失败：审计 + 向操作者返回 409
+- `app.py` VITE 报价复用严格地址 builder；缺字段时零外部 rate 调用
+- Follow-up（未做）：resume CLI；carrier error taxonomy（勿仅靠 HTTP 状态）
+- 新增 recovery 测试 8 例
+
+## 2026-08-04 — 购标安全接线 create_label
+
+- `LabelService.create_label()` 接入 preflight → claim → SENT → carrier → SUCCEEDED / FAILED_SAFE / FAILED_FINAL / UNKNOWN_BLOCKED
+- `transition_label_operation` 增加合法边表；取消确认后 operation → CANCELLED
+- Vite `_build_ship_from` / `_build_ship_to` 删除 Belmont / Customer / XX / 0000000000 虚构兜底
+- `ship_package` / lizard insert 传递 `operation_id`
+- 蓝图澄清：SUCCEEDED 不占活跃 operation 唯一槽；挡住再购的是活动 label
+- 测试：safety 扩至 11 例；全量 160 passed
+- 待做：resume CLI、细粒度 ACCEPTED/LABEL_PENDING、app.py 报价路径同类兜底
+
 ## 2026-08-04 — 生产可靠性蓝图与路线图
 
 - 独立调研 ShipStation、Sendcloud、Shipium、Metapack、EasyPost、Shippo、Karrio 等成熟方案，确定保留模块化单体和 API/Excel 双通道。
@@ -32,10 +59,9 @@ updated: 2026-08-04
 - 凭证扫描：零输出
 
 ### 待集成
-- preflight+claim 尚未接入 create_label() 调用链
-- ViteShipmentService 和 LizardApiShipmentService 尚未接收 operation_id 做状态联动
+- ~~preflight+claim 接入 create_label()~~ → 见「购标安全接线」条目
 - CLI 命令 label-operations-list / label-operation-resume 尚未实现
-- _build_ship_from 的 Belmont 兜底和 _build_ship_to 的 Customer/XX/0000000000 兜底尚未删除（preflight 已使此路径不可达）
+- app.py 报价路径 `_build_vite_ship_*` 同类虚构兜底尚未清理
 
 ## 2026-08-04 — 背贴 PDF 页内嵌入预览 + 批量打印
 

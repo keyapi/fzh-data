@@ -38,41 +38,88 @@ def _cm_to_in(cm: float) -> float:
 
 
 def _build_ship_from(warehouse_name: str, warehouses_cfg: dict) -> dict:
-    """Build VITE sender address from warehouse config."""
-    wh = warehouses_cfg.get(warehouse_name, {})
-    addr = wh.get("address", {})
-    if addr.get("address1"):
-        return {
-            "fullName": (addr.get("name") or "FZH Warehouse")[:35],
-            "company": (addr.get("company") or "")[:35],
-            "address1": addr["address1"][:50],
-            "address2": (addr.get("address2") or "")[:50],
-            "city": (addr.get("city") or "")[:28],
-            "state": (addr.get("state") or "")[:2],
-            "zipCode": (addr.get("postal_code") or "")[:10],
-            "phoneNumber": (addr.get("phone") or "0000000000")[:15],
-        }
+    """Build VITE sender address from warehouse config.
+
+    Refuses fictional fallbacks — incomplete warehouse config must fail closed.
+    """
+    name_key = (warehouse_name or "").strip()
+    if not name_key:
+        raise ValueError("warehouse_name is required for VITE ship-from")
+    wh = warehouses_cfg.get(name_key, {})
+    if not wh:
+        raise ValueError(f"Warehouse '{name_key}' not found in config")
+    addr = wh.get("address", {}) or {}
+    full_name = (addr.get("name") or "").strip()
+    address1 = (addr.get("address1") or "").strip()
+    city = (addr.get("city") or "").strip()
+    state = (addr.get("state") or "").strip()
+    zip_code = (addr.get("postal_code") or "").strip()
+    phone = (addr.get("phone") or "").strip()
+    missing = [
+        field
+        for field, value in (
+            ("name", full_name),
+            ("address1", address1),
+            ("city", city),
+            ("state", state),
+            ("postal_code", zip_code),
+            ("phone", phone),
+        )
+        if not value
+    ]
+    if missing:
+        raise ValueError(
+            "VITE warehouse address incomplete: missing "
+            + ", ".join(missing)
+        )
     return {
-        "fullName": "FZH Test",
-        "address1": "90 Chester rd",
-        "city": "Belmont",
-        "state": "MA",
-        "zipCode": "02478",
-        "phoneNumber": "1111111111",
+        "fullName": full_name[:35],
+        "company": (addr.get("company") or "")[:35],
+        "address1": address1[:50],
+        "address2": (addr.get("address2") or "")[:50],
+        "city": city[:28],
+        "state": state[:2],
+        "zipCode": zip_code[:10],
+        "phoneNumber": phone[:15],
     }
 
 
 def _build_ship_to(package: SellfoxPackageRecord) -> dict:
-    """Build VITE recipient address from package record."""
+    """Build VITE recipient address from package record.
+
+    Refuses fictional recipient fallbacks.
+    """
     addr = package.address
+    full_name = (addr.name or "").strip()
+    address1 = (addr.address_line_1 or "").strip()
+    city = (addr.city or "").strip()
+    state = (addr.state_or_region or "").strip()
+    zip_code = (addr.postal_code or "").strip()
+    phone = (addr.phone or addr.mobile or "").strip()
+    missing = [
+        field
+        for field, value in (
+            ("name", full_name),
+            ("address_line_1", address1),
+            ("city", city),
+            ("state_or_region", state),
+            ("postal_code", zip_code),
+            ("phone", phone),
+        )
+        if not value
+    ]
+    if missing:
+        raise ValueError(
+            "Recipient incomplete: missing " + ", ".join(missing)
+        )
     return {
-        "fullName": (addr.name or "Customer")[:35],
-        "address1": (addr.address_line_1 or "")[:50],
+        "fullName": full_name[:35],
+        "address1": address1[:50],
         "address2": (addr.address_line_2 or "")[:35],
-        "city": (addr.city or "")[:28],
-        "state": (addr.state_or_region or addr.city or "XX")[:2],
-        "zipCode": (addr.postal_code or "")[:10],
-        "phoneNumber": (addr.phone or addr.mobile or "0000000000")[:15],
+        "city": city[:28],
+        "state": state[:2],
+        "zipCode": zip_code[:10],
+        "phoneNumber": phone[:15],
     }
 
 
@@ -139,6 +186,7 @@ class ViteShipmentService:
         package_dims: dict[str, float] | None = None,
         poll_interval_s: float = 5.0,
         poll_timeout_s: float = 180.0,
+        operation_id: int | None = None,
     ) -> ViteShipmentResult:
         sn = (package.package_sn or "").strip()
         if not sn:
@@ -202,89 +250,112 @@ class ViteShipmentService:
         if not order_id:
             raise RuntimeError(f"VITE create shipment missing orderId for {sn}")
 
+        # Persist provider id before any post-create work so poll/PDF/artifact
+        # failures remain recoverable without a second create.
+        if operation_id is not None:
+            self._repo.transition_label_operation(
+                operation_id,
+                status="ACCEPTED",
+                provider_order_id=order_id,
+            )
+
         total_amount = created.get("totalAmount")
         carrier_response_json = json.dumps(created, ensure_ascii=False)
-
-        # Poll for label readiness
-        deadline = self._monotonic() + max(poll_timeout_s, 0.0)
-        poll_count = 0
         tracking_number = ""
         label_url = ""
-        ready = False
+        poll_count = 0
 
-        while True:
-            poll_count += 1
-            try:
-                labels = self._client.get_label(order_id)
-            except ViteClientError:
-                raise
-            except Exception as exc:
-                raise ViteClientError(f"VITE get_label failed: {exc}") from exc
+        try:
+            # Poll for label readiness
+            deadline = self._monotonic() + max(poll_timeout_s, 0.0)
+            ready = False
 
-            if labels:
-                label_data = labels[0] if isinstance(labels, list) else labels
-                status = str(label_data.get("status") or "").upper()
-                if label_data.get("trackingNumber"):
-                    tracking_number = str(label_data["trackingNumber"])
-                if label_data.get("url"):
-                    label_url = str(label_data["url"])
-                if status == "OK":
-                    ready = True
+            while True:
+                poll_count += 1
+                try:
+                    labels = self._client.get_label(order_id)
+                except ViteClientError:
+                    raise
+                except Exception as exc:
+                    raise ViteClientError(f"VITE get_label failed: {exc}") from exc
+
+                if labels:
+                    label_data = labels[0] if isinstance(labels, list) else labels
+                    status = str(label_data.get("status") or "").upper()
+                    if label_data.get("trackingNumber"):
+                        tracking_number = str(label_data["trackingNumber"])
+                    if label_data.get("url"):
+                        label_url = str(label_data["url"])
+                    if status == "OK":
+                        ready = True
+                        break
+                    if status == "FAILED":
+                        err = label_data.get("errorMessage", "unknown error")
+                        raise RuntimeError(f"VITE label failed for {sn}: {err}")
+
+                if self._monotonic() >= deadline:
                     break
-                if status == "FAILED":
-                    err = label_data.get("errorMessage", "unknown error")
-                    raise RuntimeError(f"VITE label failed for {sn}: {err}")
+                interval = max(poll_interval_s, 0.0)
+                if interval > 0:
+                    self._sleep(interval)
 
-            if self._monotonic() >= deadline:
-                break
-            interval = max(poll_interval_s, 0.0)
-            if interval > 0:
-                self._sleep(interval)
+            if not ready:
+                raise ViteLabelNotReadyError(
+                    f"VITE label not ready for {sn} order_id={order_id} "
+                    f"after {poll_count} poll(s)"
+                )
+            if not label_url:
+                raise ViteLabelMissingUrlError(
+                    f"VITE label ready but missing url for {sn} order_id={order_id}"
+                )
 
-        if not ready:
-            raise ViteLabelNotReadyError(
-                f"VITE label not ready for {sn} order_id={order_id} "
-                f"after {poll_count} poll(s)"
+            # Download PDF
+            content = self._fetch_bytes(label_url)
+            if not content:
+                raise RuntimeError(f"empty label PDF for {sn}")
+
+            # Register artifact
+            artifact = self._repo.register_artifact(
+                account_key=account_key,
+                kind=ARTIFACT_KIND,
+                file_name=f"vite-label-{sn}.pdf",
+                content=content,
+                actor=actor,
+                mime_type="application/pdf",
+                virtual_folder="vite/labels",
+                summary=f"order_id={order_id} tracking={tracking_number}",
             )
-        if not label_url:
-            raise ViteLabelMissingUrlError(
-                f"VITE label ready but missing url for {sn} order_id={order_id}"
+
+            # Insert label record
+            self._repo.insert_label(
+                account_key=account_key,
+                package_db_id=self._repo.get_package_db_id(account_key, sn) or 0,
+                carrier="vite",
+                service_level=service_type,
+                tracking_number=tracking_number,
+                carrier_order_id=order_id,
+                request_id=request_id,
+                label_url=label_url,
+                operation_id=operation_id,
+                artifact_id=artifact.id,
+                total_amount=float(total_amount) if total_amount is not None else None,
+                currency=created.get("currency", "USD"),
+                status="generated",
+                carrier_response_json=carrier_response_json,
+                created_by=actor,
             )
-
-        # Download PDF
-        content = self._fetch_bytes(label_url)
-        if not content:
-            raise RuntimeError(f"empty label PDF for {sn}")
-
-        # Register artifact
-        artifact = self._repo.register_artifact(
-            account_key=account_key,
-            kind=ARTIFACT_KIND,
-            file_name=f"vite-label-{sn}.pdf",
-            content=content,
-            actor=actor,
-            mime_type="application/pdf",
-            virtual_folder="vite/labels",
-            summary=f"order_id={order_id} tracking={tracking_number}",
-        )
-
-        # Insert label record
-        label_record = self._repo.insert_label(
-            account_key=account_key,
-            package_db_id=self._repo.get_package_db_id(account_key, sn) or 0,
-            carrier="vite",
-            service_level=service_type,
-            tracking_number=tracking_number,
-            carrier_order_id=order_id,
-            request_id=request_id,
-            label_url=label_url,
-            artifact_id=artifact.id,
-            total_amount=float(total_amount) if total_amount is not None else None,
-            currency=created.get("currency", "USD"),
-            status="generated",
-            carrier_response_json=carrier_response_json,
-            created_by=actor,
-        )
+        except Exception as exc:
+            if operation_id is not None:
+                self._repo.transition_label_operation(
+                    operation_id,
+                    status="LABEL_PENDING",
+                    provider_order_id=order_id,
+                    tracking_number=tracking_number,
+                    error_class="label_pending",
+                    error_summary=str(exc)[:500],
+                    increment_attempt=True,
+                )
+            raise
 
         return ViteShipmentResult(
             package_sn=sn,
