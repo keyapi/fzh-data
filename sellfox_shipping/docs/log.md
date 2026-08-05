@@ -8,21 +8,20 @@ updated: 2026-08-05
 
 # sellfox_shipping — 变更日志
 
-
 ## 2026-08-05 — 赛狐下单时间 + 有效面单时间 + 分页 + 标签页持久化
 
 ### 列表新增字段
 - **赛狐下单时间**：`shipping_orders.purchase_date`，取包裹内最早订单的下单时间，列表+详情页均显示
-- **有效面单时间**：`shipping_labels.created_at`，取 status≠cancelled 的最早面单时间，无则显示”—“
+- **有效面单时间**：`shipping_labels.created_at`，取 status≠cancelled 的最早面单时间，无则显示"—"
 
 ### 日期过滤增强
 - Custom Date Range 新增日期类型切换：面单时间 / 下单时间
-- 面单时间过滤排除已取消面单（`status != “cancelled”`）
+- 面单时间过滤排除已取消面单（`status != "cancelled"`）
 - 下单时间按 `purchase_date` 过滤
 
 ### 分页功能
 - 共 N 条 / < 1 2 3 ... > 翻页 / 20/50/100/200 条/页
-- “...” hover 显示 ◀◀/▶▶，点击快速跳页
+- "..." hover 显示 ◀◀/▶▶，点击快速跳页
 - 切换标签页自动重置到第 1 页
 
 ### 标签页持久化
@@ -35,7 +34,82 @@ updated: 2026-08-05
 - `_build_pagination()` 辅助函数
 - `_apply_package_fields`：地址保护改为逐字段非空才写
 
-## 2026-08-04 — 背贴预览 + 批量打印 + 路由预计算
+## 2026-08-05 — #139 补丁：蜴国际 resume 落库 + resolve 动作
+
+- `_resume_lizard_label`：`register_artifact` 后补 `insert_label`；失败保留 `LABEL_PENDING`，不误标 SUCCEEDED
+- `allowed_actions`：`UNKNOWN_BLOCKED` → `resolve`（不再只显示 investigate）
+- `resolve_unknown_blocked_operation`：补 `append_audit_event`
+
+## 2026-08-05 — 购标 operation 只读 CLI
+
+- 新增 `label-operations-list`：按账户、包裹、状态、承运商过滤，输出稳定 JSON envelope
+- 新增 `label-operation-show`：展示 operation 与脱敏后的 label/artifact 摘要
+- `allowed_actions` 明确区分 `resume`、`resolve`、`investigate` 与终态无动作；不提供 retry_create
+- 查询路径不调用承运商 API，不输出原始 carrier response、label URL 或 error summary
+
+## 2026-08-05 — 恢复 CLI、错误分类与赛狐 Outbox 后续计划
+
+- 确认 PR #132-#136 已进入 main，购标安全核心与 create_label 恢复持久化闭环成为新基线
+- 新增实现级 Spec：AI 优先 CLI 契约、carrier error taxonomy、带 provider ID resume、UNKNOWN_BLOCKED 证据化人工结案
+- 赛狐回写采用现有 SubmissionIntent/scope guard + 新增 outbox lease/退避，不把购标与回写重试耦合
+- 真正的 submitToPlatform 默认关闭；后续由同事在用户确认的单个测试包裹范围内验证
+
+## 2026-08-05 — PR #135 取消原子收口 + 蜴国际 insert→LABEL_PENDING
+
+- `finalize_label_cancellation()`：同一事务内 label inactive + operation CANCELLED
+- `cancel_label`：承运商确认后只调原子收口；label 已 cancelled 但 op 仍活跃时可本地 reconcile
+- 蜴国际 `insert_label` 失败 → `LABEL_PENDING`（保留 provider ID），不再误标 UNKNOWN_BLOCKED
+- 清 blueprint trailing whitespace
+
+## 2026-08-05 — PR #135 恢复闭环：ACCEPTED / LABEL_PENDING
+
+- VITE/蜴国际：拿到 provider order id 后立即 `SENT → ACCEPTED`（在适配层，不等 ship_package 返回）
+- poll 超时 / URL 缺失 / PDF 失败 / artifact 失败 → `LABEL_PENDING`，保留 provider_order_id 与 tracking；create 只调用一次
+- 取消边：`ACCEPTED/LABEL_PENDING/SUCCEEDED → CANCELLED`；崩溃窗口仅允许 `SENT → CANCELLED` 当已有关联 label
+- `cancel_label` 不再静默吞 transition 失败：审计 + 向操作者返回 409
+- `app.py` VITE 报价复用严格地址 builder；缺字段时零外部 rate 调用
+- Follow-up（未做）：resume CLI；carrier error taxonomy（勿仅靠 HTTP 状态）
+- 新增 recovery 测试 8 例
+
+## 2026-08-04 — 购标安全接线 create_label
+
+- `LabelService.create_label()` 接入 preflight → claim → SENT → carrier → SUCCEEDED / FAILED_SAFE / FAILED_FINAL / UNKNOWN_BLOCKED
+- `transition_label_operation` 增加合法边表；取消确认后 operation → CANCELLED
+- Vite `_build_ship_from` / `_build_ship_to` 删除 Belmont / Customer / XX / 0000000000 虚构兜底
+- `ship_package` / lizard insert 传递 `operation_id`
+- 蓝图澄清：SUCCEEDED 不占活跃 operation 唯一槽；挡住再购的是活动 label
+- 测试：safety 扩至 11 例；全量 160 passed
+- 待做：resume CLI、细粒度 ACCEPTED/LABEL_PENDING、app.py 报价路径同类兜底
+
+## 2026-08-04 — 生产可靠性蓝图与路线图
+
+- 独立调研 ShipStation、Sendcloud、Shipium、Metapack、EasyPost、Shippo、Karrio 等成熟方案，确定保留模块化单体和 API/Excel 双通道。
+- 新增生产可靠性 Spec：事实边界、preflight、购标 operation 状态机、SQLite 原子 claim、UNKNOWN_BLOCKED 和恢复契约。
+- 新增 Must/Should/Later 路线图和 Agent 任务包；首批开发锁定“购标安全核心”。
+- 明确短期不迁 PostgreSQL、不部署 Karrio Server、不开发装箱算法。
+
+
+## 2026-08-04 — 购标安全核心实现 (PR #134)
+
+- 新增 shipping_label_operations 表（migration 0015）与 LabelOperationRow/Record ORM 模型
+- claim_label_operation()：SQLite BEGIN IMMEDIATE 原子占用，并发安全；同一包裹同时最多一个活跃操作或标签
+- 	ransition_label_operation()：状态机流转，持久化 provider_order_id/tracking_number/error 信息
+- LabelService.preflight()：统一前置阻断——审核状态、重尺全正值、收件必填、VITE 仓库地址电话完备性
+- shipping_labels 增加 operation_id/is_active：生成默认活跃，取消设 is_active=false 释放约束
+- 部分唯一索引：uq_shipping_labels_one_active_per_package + uq_label_operations_one_active_per_package
+- LabelPreflightResult dataclass 用于 preflight 输出
+- 状态机：RESERVED → SENT → ACCEPTED → LABEL_PENDING → SUCCEEDED / FAILED_SAFE / FAILED_FINAL / UNKNOWN_BLOCKED
+- SUCCEEDED 不在活跃 operation 集合中（终端状态，不阻止后续购标）
+- 测试：新增 5 个 safety 测试；全量 154 passed
+- 版本断言：全部迁移测试更新到 0015_label_acquisition_safety
+- 凭证扫描：零输出
+
+### 待集成
+- ~~preflight+claim 接入 create_label()~~ → 见「购标安全接线」条目
+- CLI 命令 label-operations-list / label-operation-resume 尚未实现
+- app.py 报价路径 `_build_vite_ship_*` 同类虚构兜底尚未清理
+
+## 2026-08-04 — 背贴 PDF 页内嵌入预览 + 批量打印
 
 ### 背贴预览
 - 新增 `GET /packages/{sn}/sku-label?inline=1` 参数：`Content-Disposition: inline`，浏览器原生 PDF 渲染
