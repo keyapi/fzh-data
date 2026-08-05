@@ -3,7 +3,7 @@ okf: v0.1
 type: Handoff
 title: sellfox_shipping — Agent 交接说明
 description: 包裹中心架构、当前实现、运行方式与后续阶段边界
-updated: 2026-08-04
+updated: 2026-08-05
 ---
 
 # sellfox_shipping — Agent 交接说明
@@ -62,11 +62,14 @@ Excel 本地闭环（审核 → 导出 → 人工上传物流商 → 导入对�
 > - poll/PDF/artifact 失败 → `LABEL_PENDING`（保留 provider ID + tracking）；create 只调一次
 > - 取消：`ACCEPTED/LABEL_PENDING/SUCCEEDED → CANCELLED`；崩溃窗口 `SENT + 已关联 label` 可释放；transition 失败不得静默成功
 > - Vite 购标与报价路径删除虚构地址兜底
-> - **待做 (follow-up)**: resume CLI（LABEL_PENDING 只查不 create）；carrier error taxonomy（勿仅靠 HTTP 状态推断 FAILED_FINAL）
+> - **下一实施入口**: [恢复 CLI、carrier error taxonomy、UNKNOWN 人工结案与赛狐 Outbox 计划](docs/specs/recovery-cli-error-taxonomy-outbox-plan-2026-08-05.md)
+> - 顺序：只读 `label-operations-list/show` → carrier error taxonomy → 带 provider ID 的 `label-operation-resume` → 无 provider ID 的证据化人工结案 → 赛狐 outbox
+> - CLI 是 AI Agent 第一操作面；resume 只 query/download/artifact，任何恢复路径禁止 carrier create
 > - 测试: 全量 sellfox_shipping 见 PR #135
 
-1. 实现标签入库后的赛狐 outbox 回写和回读核验
-2. 公网启用 OIDC/CSRF/RBAC，并建立每日三方对账
+1. 按恢复计划完成购标恢复控制面；无 provider ID 的 UNKNOWN_BLOCKED 无权威证据不得释放
+2. 实现标签入库后的赛狐 outbox 回写和回读核验；真实 submitToPlatform 留给同事按用户确认的单个测试包裹验证
+3. 公网启用 OIDC/CSRF/RBAC，并建立每日三方对账
 
 ### 7. 重规划裁决
 

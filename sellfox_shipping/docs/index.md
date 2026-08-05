@@ -3,7 +3,7 @@ okf: v0.1
 type: Index
 module: sellfox_shipping
 created: 2026-07-15
-updated: 2026-08-04
+updated: 2026-08-05
 ---
 
 # sellfox_shipping — 文档索引
@@ -19,6 +19,7 @@ updated: 2026-08-04
 - [log.md](log.md) — 变更日志
 - [roadmap.md](roadmap.md) — **生产化路线图与 Agent 任务包**
 - [specs/index.md](specs/index.md) — **生产可靠性设计规范**
+- [specs/recovery-cli-error-taxonomy-outbox-plan-2026-08-05.md](specs/recovery-cli-error-taxonomy-outbox-plan-2026-08-05.md) — **恢复 CLI、错误分类、UNKNOWN 人工结案与赛狐 Outbox 实施计划**
 
 ## 调研 / 交接
 

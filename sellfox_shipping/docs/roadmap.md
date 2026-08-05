@@ -12,13 +12,14 @@ timestamp: 2026-08-04
 
 | 顺序 | 任务包 | 完成标准 |
 |---|---|---|
-| 1 | 购标安全核心 | preflight、SQLite 原子 claim、operation journal、活动标签唯一约束、UNKNOWN_BLOCKED、ACCEPTED 即时持久化、LABEL_PENDING、取消一致性、并发和崩溃窗口测试。**仍缺**：只查询恢复 CLI、carrier error taxonomy |
-| 2 | 赛狐可靠回写 | 标签落库后 outbox 回写；失败只重试回写；回读核验；冲突进入人工队列 |
+| 1 | 购标恢复控制面 | 先交付只读 operation CLI，再落 carrier error taxonomy、带 provider ID 的 resume、无 provider ID 的证据化人工结案；任何恢复路径不得再次 create |
+| 2 | 赛狐可靠回写 | 复用 SubmissionIntent/scope guard，新增 outbox lease/退避；失败只重试回写；回读核验；冲突进入人工队列；真实测试默认单包 |
 | 3 | 取消与退款分离 | 标签失效、取消请求、承运商确认和退款到账分开记录 |
 | 4 | 认证与审计收口 | 公网 OIDC/CSRF/RBAC、PII 脱敏、所有危险操作审计 |
 | 5 | 每日三方对账 | 输入、标签、追踪号、赛狐回写逐项计数；未匹配和失败全部保留 |
 
 任务包 1 是当前开发范围。每个任务包独立分支、独立 PR，禁止直接 push main。
+实现级拆分、CLI 契约和验收场景见 [恢复 CLI、错误分类与 Outbox 计划](specs/recovery-cli-error-taxonomy-outbox-plan-2026-08-05.md)。
 
 ## Should
 
