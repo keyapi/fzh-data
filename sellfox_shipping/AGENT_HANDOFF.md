@@ -56,13 +56,14 @@ Excel 本地闭环（审核 → 导出 → 人工上传物流商 → 导入对�
 ### 6. 下一步（≤3）
 
 > **已完成 1a) 购标安全原语 (PR [#134](https://github.com/keyapi/fzh-data/pull/134))** — claim / preflight / migration 0015 / UNKNOWN_BLOCKED
-> **已完成 1b) 购标安全接线 (`feature/sellfox-shipping-wire-label-claim`)**
-> - `LabelService.create_label()`：preflight → claim → SENT → carrier → SUCCEEDED / FAILED_* / UNKNOWN_BLOCKED
-> - `transition_label_operation` 合法边表；取消确认后 operation → CANCELLED
-> - Vite `_build_ship_from/to` 删除虚构兜底（缺字段 raise）
-> - carrier insert 传入 `operation_id`
-> - **待做**: resume CLI（LABEL_PENDING / 带 provider_id 只查不 create）、承运商细粒度 ACCEPTED/LABEL_PENDING 联动、app.py 报价路径同类兜底清理
-> - 测试: 160 passed（基线 154 + 6 个接线/状态机/去兜底）
+> **已完成 1b) 购标安全接线 + 恢复持久化 (PR [#135](https://github.com/keyapi/fzh-data/pull/135))**
+> - `create_label()`：preflight → claim → SENT → carrier
+> - 承运商适配层拿到 `order_id`/`order_code` 后立即 `SENT → ACCEPTED`（落 `provider_order_id`）
+> - poll/PDF/artifact 失败 → `LABEL_PENDING`（保留 provider ID + tracking）；create 只调一次
+> - 取消：`ACCEPTED/LABEL_PENDING/SUCCEEDED → CANCELLED`；崩溃窗口 `SENT + 已关联 label` 可释放；transition 失败不得静默成功
+> - Vite 购标与报价路径删除虚构地址兜底
+> - **待做 (follow-up)**: resume CLI（LABEL_PENDING 只查不 create）；carrier error taxonomy（勿仅靠 HTTP 状态推断 FAILED_FINAL）
+> - 测试: 全量 sellfox_shipping 见 PR #135
 
 1. 实现标签入库后的赛狐 outbox 回写和回读核验
 2. 公网启用 OIDC/CSRF/RBAC，并建立每日三方对账

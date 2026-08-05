@@ -8,6 +8,16 @@ updated: 2026-08-04
 
 # sellfox_shipping — 变更日志
 
+## 2026-08-05 — PR #135 恢复闭环：ACCEPTED / LABEL_PENDING
+
+- VITE/蜴国际：拿到 provider order id 后立即 `SENT → ACCEPTED`（在适配层，不等 ship_package 返回）
+- poll 超时 / URL 缺失 / PDF 失败 / artifact 失败 → `LABEL_PENDING`，保留 provider_order_id 与 tracking；create 只调用一次
+- 取消边：`ACCEPTED/LABEL_PENDING/SUCCEEDED → CANCELLED`；崩溃窗口仅允许 `SENT → CANCELLED` 当已有关联 label
+- `cancel_label` 不再静默吞 transition 失败：审计 + 向操作者返回 409
+- `app.py` VITE 报价复用严格地址 builder；缺字段时零外部 rate 调用
+- Follow-up（未做）：resume CLI；carrier error taxonomy（勿仅靠 HTTP 状态）
+- 新增 recovery 测试 8 例
+
 ## 2026-08-04 — 购标安全接线 create_label
 
 - `LabelService.create_label()` 接入 preflight → claim → SENT → carrier → SUCCEEDED / FAILED_SAFE / FAILED_FINAL / UNKNOWN_BLOCKED

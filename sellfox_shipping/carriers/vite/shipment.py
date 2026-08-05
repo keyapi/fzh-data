@@ -250,90 +250,112 @@ class ViteShipmentService:
         if not order_id:
             raise RuntimeError(f"VITE create shipment missing orderId for {sn}")
 
+        # Persist provider id before any post-create work so poll/PDF/artifact
+        # failures remain recoverable without a second create.
+        if operation_id is not None:
+            self._repo.transition_label_operation(
+                operation_id,
+                status="ACCEPTED",
+                provider_order_id=order_id,
+            )
+
         total_amount = created.get("totalAmount")
         carrier_response_json = json.dumps(created, ensure_ascii=False)
-
-        # Poll for label readiness
-        deadline = self._monotonic() + max(poll_timeout_s, 0.0)
-        poll_count = 0
         tracking_number = ""
         label_url = ""
-        ready = False
+        poll_count = 0
 
-        while True:
-            poll_count += 1
-            try:
-                labels = self._client.get_label(order_id)
-            except ViteClientError:
-                raise
-            except Exception as exc:
-                raise ViteClientError(f"VITE get_label failed: {exc}") from exc
+        try:
+            # Poll for label readiness
+            deadline = self._monotonic() + max(poll_timeout_s, 0.0)
+            ready = False
 
-            if labels:
-                label_data = labels[0] if isinstance(labels, list) else labels
-                status = str(label_data.get("status") or "").upper()
-                if label_data.get("trackingNumber"):
-                    tracking_number = str(label_data["trackingNumber"])
-                if label_data.get("url"):
-                    label_url = str(label_data["url"])
-                if status == "OK":
-                    ready = True
+            while True:
+                poll_count += 1
+                try:
+                    labels = self._client.get_label(order_id)
+                except ViteClientError:
+                    raise
+                except Exception as exc:
+                    raise ViteClientError(f"VITE get_label failed: {exc}") from exc
+
+                if labels:
+                    label_data = labels[0] if isinstance(labels, list) else labels
+                    status = str(label_data.get("status") or "").upper()
+                    if label_data.get("trackingNumber"):
+                        tracking_number = str(label_data["trackingNumber"])
+                    if label_data.get("url"):
+                        label_url = str(label_data["url"])
+                    if status == "OK":
+                        ready = True
+                        break
+                    if status == "FAILED":
+                        err = label_data.get("errorMessage", "unknown error")
+                        raise RuntimeError(f"VITE label failed for {sn}: {err}")
+
+                if self._monotonic() >= deadline:
                     break
-                if status == "FAILED":
-                    err = label_data.get("errorMessage", "unknown error")
-                    raise RuntimeError(f"VITE label failed for {sn}: {err}")
+                interval = max(poll_interval_s, 0.0)
+                if interval > 0:
+                    self._sleep(interval)
 
-            if self._monotonic() >= deadline:
-                break
-            interval = max(poll_interval_s, 0.0)
-            if interval > 0:
-                self._sleep(interval)
+            if not ready:
+                raise ViteLabelNotReadyError(
+                    f"VITE label not ready for {sn} order_id={order_id} "
+                    f"after {poll_count} poll(s)"
+                )
+            if not label_url:
+                raise ViteLabelMissingUrlError(
+                    f"VITE label ready but missing url for {sn} order_id={order_id}"
+                )
 
-        if not ready:
-            raise ViteLabelNotReadyError(
-                f"VITE label not ready for {sn} order_id={order_id} "
-                f"after {poll_count} poll(s)"
+            # Download PDF
+            content = self._fetch_bytes(label_url)
+            if not content:
+                raise RuntimeError(f"empty label PDF for {sn}")
+
+            # Register artifact
+            artifact = self._repo.register_artifact(
+                account_key=account_key,
+                kind=ARTIFACT_KIND,
+                file_name=f"vite-label-{sn}.pdf",
+                content=content,
+                actor=actor,
+                mime_type="application/pdf",
+                virtual_folder="vite/labels",
+                summary=f"order_id={order_id} tracking={tracking_number}",
             )
-        if not label_url:
-            raise ViteLabelMissingUrlError(
-                f"VITE label ready but missing url for {sn} order_id={order_id}"
+
+            # Insert label record
+            self._repo.insert_label(
+                account_key=account_key,
+                package_db_id=self._repo.get_package_db_id(account_key, sn) or 0,
+                carrier="vite",
+                service_level=service_type,
+                tracking_number=tracking_number,
+                carrier_order_id=order_id,
+                request_id=request_id,
+                label_url=label_url,
+                operation_id=operation_id,
+                artifact_id=artifact.id,
+                total_amount=float(total_amount) if total_amount is not None else None,
+                currency=created.get("currency", "USD"),
+                status="generated",
+                carrier_response_json=carrier_response_json,
+                created_by=actor,
             )
-
-        # Download PDF
-        content = self._fetch_bytes(label_url)
-        if not content:
-            raise RuntimeError(f"empty label PDF for {sn}")
-
-        # Register artifact
-        artifact = self._repo.register_artifact(
-            account_key=account_key,
-            kind=ARTIFACT_KIND,
-            file_name=f"vite-label-{sn}.pdf",
-            content=content,
-            actor=actor,
-            mime_type="application/pdf",
-            virtual_folder="vite/labels",
-            summary=f"order_id={order_id} tracking={tracking_number}",
-        )
-
-        # Insert label record
-        label_record = self._repo.insert_label(
-            account_key=account_key,
-            package_db_id=self._repo.get_package_db_id(account_key, sn) or 0,
-            carrier="vite",
-            service_level=service_type,
-            tracking_number=tracking_number,
-            carrier_order_id=order_id,
-            request_id=request_id,
-            label_url=label_url,
-            operation_id=operation_id,
-            artifact_id=artifact.id,
-            total_amount=float(total_amount) if total_amount is not None else None,
-            currency=created.get("currency", "USD"),
-            status="generated",
-            carrier_response_json=carrier_response_json,
-            created_by=actor,
-        )
+        except Exception as exc:
+            if operation_id is not None:
+                self._repo.transition_label_operation(
+                    operation_id,
+                    status="LABEL_PENDING",
+                    provider_order_id=order_id,
+                    tracking_number=tracking_number,
+                    error_class="label_pending",
+                    error_summary=str(exc)[:500],
+                    increment_attempt=True,
+                )
+            raise
 
         return ViteShipmentResult(
             package_sn=sn,

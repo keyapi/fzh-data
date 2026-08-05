@@ -43,17 +43,17 @@ LabelPreflightResult 在任何承运商 HTTP 前统一验证：
 
 ## Label Acquisition 状态机
 
-主路径为 RESERVED → SENT → ACCEPTED → LABEL_PENDING → SUCCEEDED。异常状态为 FAILED_SAFE、FAILED_FINAL、UNKNOWN_BLOCKED。
+主路径为 RESERVED → SENT → ACCEPTED → (LABEL_PENDING?) → SUCCEEDED。异常状态为 FAILED_SAFE、FAILED_FINAL、UNKNOWN_BLOCKED、CANCELLED。
 
 - RESERVED：SQLite 原子 claim 成功，尚未发送。
 - SENT：发送前已提交 operation；此后崩溃不能假设未创建。
-- ACCEPTED：已保存 provider order ID。
-- LABEL_PENDING：只允许查询标签、下载文件和本地落库。
-- SUCCEEDED：存在活动 label 和 artifact。**SUCCEEDED 不占用**「活跃 operation」唯一索引槽（槽位给 in-flight + UNKNOWN_BLOCKED）；挡住再购标的是活动 label。
+- ACCEPTED：承运商返回 provider order ID 后**立即**落库（在适配层，不等 poll/PDF 完成）。
+- LABEL_PENDING：create 已成功但 poll/下载/artifact 未完成；只允许查询标签、下载文件和本地落库，**禁止再次 create**。
+- SUCCEEDED：存在活动 label 和 artifact。**SUCCEEDED 不占用**「活跃 operation」唯一索引槽；挡住再购标的是活动 label。
 - FAILED_SAFE：本地校验或明确未发送，可创建新 generation。
 - FAILED_FINAL：承运商确定性拒绝，需修改输入后创建新 generation。
-- UNKNOWN_BLOCKED：可能已创建但无足够证据，普通 create 永久阻断，转人工恢复。
-- CANCELLED：承运商取消确认后，由 SUCCEEDED（或未发送的 RESERVED）转入；释放后再购标开新 generation。
+- UNKNOWN_BLOCKED：可能已创建但无足够证据（尚无 provider ID），普通 create 永久阻断，转人工恢复。
+- CANCELLED：承运商取消确认后，由 ACCEPTED / LABEL_PENDING / SUCCEEDED 转入；崩溃窗口下仅当已有关联 label 时允许 SENT → CANCELLED。
 
 活动 **operation** 状态（占唯一索引）为 RESERVED、SENT、ACCEPTED、LABEL_PENDING、UNKNOWN_BLOCKED。  
 活动 **label** 由 `is_active=1` 唯一索引保证同一包裹最多一张。

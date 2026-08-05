@@ -256,17 +256,22 @@ class LabelService:
                     operation_id=operation.id,
                 )
         except LabelServiceError as exc:
-            self._fail_operation(operation.id, exc)
+            self._fail_or_preserve_pending(operation.id, exc)
             raise
         except ValueError as exc:
-            self._repo.transition_label_operation(
+            self._fail_or_preserve_pending(
                 operation.id,
-                status="FAILED_SAFE",
-                error_class="validation",
-                error_summary=str(exc)[:500],
+                LabelServiceError(str(exc), http_status=400),
             )
             raise LabelServiceError(str(exc), http_status=400) from exc
         except Exception as exc:
+            pending = self._repo.get_label_operation(operation.id)
+            if pending.status == "LABEL_PENDING":
+                raise LabelServiceError(
+                    f"Label acquisition pending recovery "
+                    f"(provider_order_id={pending.provider_order_id}): {exc}",
+                    http_status=502,
+                ) from exc
             self._repo.transition_label_operation(
                 operation.id,
                 status="UNKNOWN_BLOCKED",
@@ -282,6 +287,15 @@ class LabelService:
             tracking_number=str(result.get("tracking_number") or ""),
         )
         return result
+
+    def _fail_or_preserve_pending(
+        self, operation_id: int, exc: LabelServiceError
+    ) -> None:
+        """Classify failure unless adapter already parked the op in LABEL_PENDING."""
+        current = self._repo.get_label_operation(operation_id)
+        if current.status == "LABEL_PENDING":
+            return
+        self._fail_operation(operation_id, exc)
 
     @staticmethod
     def _canonical_request_hash(
@@ -406,10 +420,22 @@ class LabelService:
                     error_class="cancelled",
                     error_summary=f"label_id={label_id}",
                 )
-            except RuntimeError:
-                # Operation may already be CANCELLED or in a non-cancellable state
-                # (e.g. UNKNOWN_BLOCKED). Label deactivation still stands.
-                pass
+            except RuntimeError as exc:
+                self._repo.append_audit_event(
+                    actor=actor or "system",
+                    action="label_operation.cancel_inconsistency",
+                    entity_type="shipping_label_operation",
+                    entity_id=str(label.operation_id),
+                    summary=(
+                        f"label_id={label_id} cancelled but operation release failed: {exc}"
+                    ),
+                )
+                raise LabelServiceError(
+                    f"Label cancelled locally/carrier, but operation "
+                    f"{label.operation_id} could not be released ({exc}). "
+                    f"Manual repair required before reclaim.",
+                    http_status=409,
+                ) from exc
         return result
 
     def _cancel_vite_label(
@@ -601,6 +627,7 @@ class LabelService:
                     account_key=account_key,
                     actor=actor,
                     sm_code=sm_code,
+                    operation_id=operation_id,
                 )
             except (LizardApiError, TimeoutError, RuntimeError) as exc:
                 raise LabelServiceError(

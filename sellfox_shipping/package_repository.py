@@ -641,7 +641,13 @@ ALLOWED_LABEL_OPERATION_TRANSITIONS: dict[str, frozenset[str]] = {
         {"LABEL_PENDING", "SUCCEEDED", "FAILED_FINAL", "UNKNOWN_BLOCKED", "CANCELLED"}
     ),
     "LABEL_PENDING": frozenset(
-        {"LABEL_PENDING", "SUCCEEDED", "FAILED_FINAL", "UNKNOWN_BLOCKED"}
+        {
+            "LABEL_PENDING",
+            "SUCCEEDED",
+            "FAILED_FINAL",
+            "UNKNOWN_BLOCKED",
+            "CANCELLED",
+        }
     ),
     "SUCCEEDED": frozenset({"CANCELLED"}),
     "FAILED_SAFE": frozenset(),
@@ -2171,7 +2177,23 @@ class PackageRepository:
                     f"invalid transition: unknown current status {current!r} "
                     f"for operation_id={operation_id}"
                 )
-            if target not in allowed:
+            # Crash-window escape hatch only: SENT may become CANCELLED when a
+            # label row is already linked to this operation (insert succeeded,
+            # outer SUCCEEDED transition never ran). Do not allow bare SENT→CANCELLED.
+            if current == "SENT" and target == "CANCELLED":
+                linked = (
+                    session.query(ShippingLabelRow.id)
+                    .where(ShippingLabelRow.operation_id == operation_id)
+                    .limit(1)
+                    .first()
+                )
+                if linked is None:
+                    raise RuntimeError(
+                        f"invalid transition: {current} -> {target} "
+                        f"for operation_id={operation_id} "
+                        "(no linked label; refuse unconditional SENT→CANCELLED)"
+                    )
+            elif target not in allowed:
                 raise RuntimeError(
                     f"invalid transition: {current} -> {target} "
                     f"for operation_id={operation_id}"
