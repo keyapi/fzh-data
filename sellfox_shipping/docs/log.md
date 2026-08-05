@@ -6,7 +6,45 @@ created: 2026-07-15
 updated: 2026-08-05
 ---
 
-# sellfox_shipping — 变更日志
+# sellfox_shipping - 变更日志
+
+## 2026-08-05 - PR #143 可靠性复审修复
+
+- Migration 0018 为 resume claim 增加 `claim_token`，并将 lease 改为 SQLite `BEGIN IMMEDIATE` 条件更新。
+- lease 释放必须匹配 token，过期 worker 不能清除新 worker 的 claim。
+- investigation 增加结构化 `conclusion`；`confirmed_created` 同时保存并核对 `provider_order_id`。
+- UNKNOWN_BLOCKED 结案在同一事务内校验证据归属、结论和权威引用，并把 `resolution_evidence_id` 持久化到 operation。
+- `label-operation-investigate` 新增必填 `--conclusion`；空白 `other` 证据不能释放购标槽位。
+- 新增跨 repository 并发、lease fencing、证据错配和审计关联测试；测试基线更新为 217 passed。
+
+## 2026-08-05 — UNKNOWN_BLOCKED 证据化结案 (PR C：可靠性收口)
+
+- Migration 0017: 新增 `shipping_label_investigations` append-only 表
+- 新增 `InvestigationRow` 模型和 `InvestigationRecord` dataclass
+- `PackageRepository` 新增 `add_investigation()` / `get_investigations()` / `get_investigation()`
+- `LabelService` 新增 `add_investigation()` — 仅记录调查，不解除阻断
+- `resolve_unknown_blocked()` 增加必填 `evidence_id`，验证 evidence 归属同一 operation
+- 新增 CLI `label-operation-investigate` — 记录调查（evidence_type: ticket/carrier_portal/email/other）
+- `label-operation-resolve` CLI 增加必填 `--evidence-id`
+- 更新已有测试适配新参数；测试基线: 212 passed, 2 warnings
+
+## 2026-08-05 — resume 并发与幂等收口 (PR B：可靠性收口)
+
+- Migration 0016: `shipping_label_operations` 新增 `claimed_by` (String) 和 `claimed_at` (DateTime, nullable)
+- `PackageRepository` 新增 `acquire_resume_lease()` / `release_resume_lease()` — SQLite 原子 lease，同一 operation 仅一个恢复者
+- `resume_label_acquisition()` 增加 lease 保护：claim 失败返回 409；lease 在异常/完成时自动释放
+- SUCCEEDED 状态 resume 幂等返回已有结果（`idempotent: true`）
+- `label-operation-resume` CLI 增加必填 `--actor`（之前硬编码 `cli-resume`）
+- `label-operation-resolve` CLI 增加必填 `--actor`（之前硬编码 `cli-resolve`）
+- 更新已有测试适配新行为；测试基线: 212 passed, 2 warnings
+
+## 2026-08-05 — 分页计数修复 (PR A：可靠性收口)
+
+- `count_packages()` 改用 `count(distinct package_id)`，修复多订单/多标签场景下 JOIN 行膨胀导致总数放大
+- `list_packages()` 与 `count_packages()` 过滤语义一致（复用同一 date_field/isouter/status 逻辑）
+- 新增 9 个 repository 测试：多订单日期过滤、多标签（有效/取消/混合）、分页 offset/limit 一致性、order/label 日期边界
+- 浏览器验证：分页切换、Dashboard/Transactions 标签页重置、日期类型切换
+- 测试基线: 212 passed, 2 warnings
 
 ## 2026-08-05 — 赛狐下单时间 + 有效面单时间 + 分页 + 标签页持久化
 

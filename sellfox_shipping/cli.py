@@ -336,6 +336,7 @@ def label_operation_show(
 @app.command("label-operation-resume")
 def label_operation_resume(
     operation_id: int = typer.Option(..., min=1, help="Label operation id"),
+    actor: str = typer.Option(..., help="Operator identity"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
 ):
     """Resume label acquisition for an ACCEPTED or LABEL_PENDING operation.
@@ -345,7 +346,7 @@ def label_operation_resume(
     """
     service = _get_label_service()
     try:
-        result = service.resume_label_acquisition(operation_id, actor="cli-resume")
+        result = service.resume_label_acquisition(operation_id, actor=actor)
         _output(
             {
                 "command": "label-operation-resume",
@@ -386,13 +387,80 @@ def _get_label_service():
     from sellfox_shipping.label_service import LabelService
     return LabelService(_get_package_repository())
 
+@app.command("label-operation-investigate")
+def label_operation_investigate(
+    operation_id: int = typer.Option(..., min=1, help="Label operation id"),
+    evidence_type: str = typer.Option(..., help="ticket | carrier_portal | email | other"),
+    conclusion: str = typer.Option(
+        ...,
+        help="confirmed_not_created | confirmed_created | confirmed_rejected",
+    ),
+    actor: str = typer.Option(..., help="Operator identity"),
+    external_ref: str = typer.Option("", help="External ticket/order reference"),
+    provider_order_id: str = typer.Option(
+        "", help="Carrier order id when conclusion is confirmed_created"
+    ),
+    note: str = typer.Option("", help="Investigation notes (what was checked, what was found)"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Record an investigation for an UNKNOWN_BLOCKED operation.
+
+    This is append-only — it records what was checked but does NOT change
+    the operation status. Use label-operation-resolve after investigation
+    to resolve the block.
+    """
+    service = _get_label_service()
+    try:
+        result = service.add_investigation(
+            operation_id=operation_id,
+            evidence_type=evidence_type,
+            conclusion=conclusion,
+            actor=actor,
+            external_ref=external_ref,
+            provider_order_id=provider_order_id,
+            note=note,
+        )
+        _output(
+            {
+                "command": "label-operation-investigate",
+                "ok": True,
+                "counts": {"input": 1, "success": 1, "failed": 0},
+                "results": [result],
+                "errors": [],
+            },
+            json_output,
+        )
+    except Exception as exc:
+        msg = str(exc)
+        http_status = getattr(exc, "http_status", 500)
+        _output(
+            {
+                "command": "label-operation-investigate",
+                "ok": False,
+                "counts": {"input": 1, "success": 0, "failed": 1},
+                "results": [],
+                "errors": [
+                    {
+                        "code": "investigate_failed",
+                        "message": msg,
+                        "operation_id": operation_id,
+                    }
+                ],
+            },
+            json_output,
+        )
+        raise typer.Exit(2)
+
+
 @app.command("label-operation-resolve")
 def label_operation_resolve(
     operation_id: int = typer.Option(..., min=1, help="Label operation id"),
     resolution: str = typer.Option(..., help="fail_safe | fail_final | provide_known_id"),
     confirm: str = typer.Option(..., help="Must match resolution to proceed"),
+    evidence_id: int = typer.Option(..., min=1, help="Investigation evidence id for this operation"),
     provider_order_id: str = typer.Option("", help="Carrier order id (required for provide_known_id)"),
     note: str = typer.Option("", help="Investigation note (who checked, what was found)"),
+    actor: str = typer.Option(..., help="Operator identity"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
 ):
     """Resolve an UNKNOWN_BLOCKED operation after human investigation.
@@ -400,6 +468,7 @@ def label_operation_resolve(
     fail_safe: Carrier confirmed no order was created. Frees slot for retry.
     fail_final: Carrier confirmed permanent rejection.
     provide_known_id: Human found the order on carrier portal, supply the ID.
+    Requires --evidence-id from a prior label-operation-investigate.
     """
     service = _get_label_service()
     try:
@@ -409,7 +478,8 @@ def label_operation_resolve(
             confirm=confirm,
             provider_order_id=provider_order_id,
             note=note,
-            actor="cli-resolve",
+            actor=actor,
+            evidence_id=evidence_id,
         )
         _output(
             {

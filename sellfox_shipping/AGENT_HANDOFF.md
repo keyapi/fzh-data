@@ -62,14 +62,41 @@ Excel 本地闭环（审核 → 导出 → 人工上传物流商 → 导入对�
 > - poll/PDF/artifact 失败 → `LABEL_PENDING`（保留 provider ID + tracking）；create 只调一次
 > - 取消：`ACCEPTED/LABEL_PENDING/SUCCEEDED → CANCELLED`；崩溃窗口 `SENT + 已关联 label` 可释放；transition 失败不得静默成功
 > - Vite 购标与报价路径删除虚构地址兜底
-> - **下一实施入口**: [恢复 CLI、carrier error taxonomy、UNKNOWN 人工结案与赛狐 Outbox 计划](docs/specs/recovery-cli-error-taxonomy-outbox-plan-2026-08-05.md)
-> - 顺序：只读 `label-operations-list/show` → carrier error taxonomy → 带 provider ID 的 `label-operation-resume` → 无 provider ID 的证据化人工结案 → 赛狐 outbox
-> - CLI 是 AI Agent 第一操作面；resume 只 query/download/artifact，任何恢复路径禁止 carrier create
-> - 测试: 全量 sellfox_shipping 见 PR #135
-
-1. 按恢复计划完成购标恢复控制面；无 provider ID 的 UNKNOWN_BLOCKED 无权威证据不得释放
-2. 实现标签入库后的赛狐 outbox 回写和回读核验；真实 submitToPlatform 留给同事按用户确认的单个测试包裹验证
-3. 公网启用 OIDC/CSRF/RBAC，并建立每日三方对账
+> **已完成 1c) Operation CLI + carrier error taxonomy + resume + resolve (PR [#137](https://github.com/keyapi/fzh-data/pull/137), [#142](https://github.com/keyapi/fzh-data/pull/142))**
+> - `label-operations-list/show` 只读控制面
+> - carrier error taxonomy（Vite/Lizard 错误分类）
+> - `label-operation-resume`：带 provider ID 的恢复（仅 getLabel/PDF/artifact，禁止 create）
+> - `label-operation-resolve`：UNKNOWN_BLOCKED 人工结案（fail_safe / fail_final / provide_known_id）
+> **已完成 1d) 赛狐下单时间 + 有效面单时间 + 分页 (PR [#141](https://github.com/keyapi/fzh-data/pull/141))**
+> - 包裹列表新增"赛狐下单时间"和"有效面单时间"列
+> - Dashboard / Transactions 双标签页分页
+> **已完成 1e) 分页 count 修复 (PR A)**
+> - `count_packages()` 改用 `count(distinct package_id)`，修复多订单、多标签场景下总数放大
+> - 新增 9 个 repository 测试覆盖多订单/多标签/日期边界/分页语义一致性
+> - 浏览器验证通过：分页切换、标签页重置、日期类型切换
+> **已完成 1f) resume 并发与幂等收口 (PR B)**
+> - Migration 0016: `shipping_label_operations` 新增 `claimed_by`/`claimed_at`
+> - `acquire_resume_lease()` / `release_resume_lease()` — SQLite 原子 lease
+> - SUCCEEDED 操作 idempotent 返回既有结果
+> - `label-operation-resume` 和 `label-operation-resolve` 增加必填 `--actor`
+> **已完成 1g) UNKNOWN_BLOCKED 证据化结案 (PR C)**
+> - Migration 0017: 新增 `shipping_label_investigations` append-only 表
+> - `add_investigation()` — 仅记录调查，不解除阻断
+> - `resolve_unknown_blocked()` 增加必填 `evidence_id`，验证归属
+> - 新增 CLI `label-operation-investigate`（evidence_type: ticket/carrier_portal/email/other）
+> - `label-operation-resolve` 增加必填 `--evidence-id`
+> **PR #143 复审修复：lease fencing + 权威证据约束**
+> - Migration 0018 增加 `claim_token`、investigation `conclusion` 和 operation `resolution_evidence_id`
+> - resume claim 使用 SQLite `BEGIN IMMEDIATE`；只有持有同一 token 的 worker 可以释放 lease
+> - `label-operation-investigate` 必填 `--conclusion`：`confirmed_not_created` / `confirmed_created` / `confirmed_rejected`
+> - `confirmed_created` 必须同时传 `--provider-order-id`，结案时与 CLI 输入严格匹配
+> - `fail_safe`、`provide_known_id`、`fail_final` 分别只接受对应 conclusion
+> - 结案证据必须有外部引用或私有 artifact；`other` 类型不能直接作为权威结案证据
+> - 结案事务持久化 `resolution_evidence_id`，审计事件同时记录 evidence ID
+>
+> **待完成：**
+> 1. 赛狐 outbox 回写（标签成功后异步回写追踪号到赛狐；暂缓）
+> 2. 公网启用 OIDC/CSRF/RBAC
 
 ### 7. 重规划裁决
 
