@@ -3,10 +3,17 @@ okf: v0.1
 type: Log
 module: sellfox_shipping
 created: 2026-07-15
-updated: 2026-08-04
+updated: 2026-08-05
 ---
 
 # sellfox_shipping — 变更日志
+
+## 2026-08-05 — 恢复 CLI、错误分类与赛狐 Outbox 后续计划
+
+- 确认 PR #132-#136 已进入 main，购标安全核心与 create_label 恢复持久化闭环成为新基线
+- 新增实现级 Spec：AI 优先 CLI 契约、carrier error taxonomy、带 provider ID resume、UNKNOWN_BLOCKED 证据化人工结案
+- 赛狐回写采用现有 SubmissionIntent/scope guard + 新增 outbox lease/退避，不把购标与回写重试耦合
+- 真正的 submitToPlatform 默认关闭；后续由同事在用户确认的单个测试包裹范围内验证
 
 ## 2026-08-05 — PR #135 取消原子收口 + 蜴国际 insert→LABEL_PENDING
 
