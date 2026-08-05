@@ -78,6 +78,22 @@ def test_401_raises_vite_client_error():
         with pytest.raises(ViteClientError, match="invalid x-api-key") as exc:
             client.rate_gofo({})
     assert exc.value.status_code == 401
+    assert exc.value.phase == "query"
+    assert exc.value.outcome == "retryable_query"
+    assert exc.value.category == "provider_http"
+
+
+def test_create_429_is_ambiguous_and_not_safe_to_retry():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(429, text="rate limited")
+
+    with _client(handler) as client:
+        with pytest.raises(ViteClientError) as exc:
+            client.create_shipment_gofo({})
+    assert exc.value.phase == "create"
+    assert exc.value.outcome == "ambiguous"
+    assert exc.value.category == "rate_limited"
+    assert exc.value.safe_to_create_again is False
 
 
 def test_cancel_label_delete():

@@ -31,9 +31,10 @@ class LabelPreflightResult:
 class LabelServiceError(RuntimeError):
     """Label creation failed for a known reason (bad dims, missing creds, etc.)."""
 
-    def __init__(self, message: str, *, http_status: int = 502):
+    def __init__(self, message: str, *, http_status: int = 502, failure: Any = None):
         super().__init__(message)
         self.http_status = http_status
+        self.failure = failure
 
 
 def _read_env(key: str) -> str:
@@ -339,6 +340,28 @@ class LabelService:
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
     def _fail_operation(self, operation_id: int, exc: LabelServiceError) -> None:
+        from sellfox_shipping.carriers.errors import CarrierFailure
+
+        failure = exc.failure
+        if isinstance(failure, CarrierFailure):
+            if failure.outcome == "not_sent":
+                status = "FAILED_SAFE"
+            elif failure.outcome == "rejected":
+                status = "FAILED_FINAL"
+            elif failure.outcome in {"retryable_query", "accepted_pending"}:
+                status = "LABEL_PENDING"
+            else:
+                status = "UNKNOWN_BLOCKED"
+            self._repo.transition_label_operation(
+                operation_id,
+                status=status,
+                provider_order_id=failure.provider_order_id,
+                tracking_number=failure.tracking_number,
+                error_class=failure.category,
+                error_summary=str(failure)[:500],
+                increment_attempt=status == "LABEL_PENDING",
+            )
+            return
         if exc.http_status in (400, 404, 503):
             status = "FAILED_SAFE"
             error_class = "validation" if exc.http_status != 503 else "config"
@@ -531,12 +554,18 @@ class LabelService:
             ViteClientError,
         )
         from sellfox_shipping.carriers.vite.shipment import ViteShipmentService
+        from sellfox_shipping.carriers.errors import CarrierFailure
 
         api_key = _read_env("VITE_API_KEY")
         if not api_key:
-            raise LabelServiceError(
-                "VITE_API_KEY not configured. Set it in .env", http_status=503
+            failure = CarrierFailure(
+                "VITE_API_KEY not configured. Set it in .env",
+                phase="auth",
+                outcome="not_sent",
+                category="configuration",
+                safe_to_create_again=True,
             )
+            raise LabelServiceError(str(failure), http_status=503, failure=failure)
         vite_base = _read_env("VITE_API_BASE_URL") or "https://test-api.vitedirect.com"
 
         dims_dict = None
@@ -567,14 +596,10 @@ class LabelService:
                     operation_id=operation_id,
                 )
             except ViteClientError as exc:
-                msg = str(exc)
-                status = getattr(exc, "status_code", None) or 502
-                if status == 401:
-                    raise LabelServiceError(
-                        f"VITE authentication failed: {msg}", http_status=502
-                    ) from exc
                 raise LabelServiceError(
-                    f"VITE API error: {msg}", http_status=502
+                    f"VITE API error: {exc}",
+                    http_status=exc.http_status or 502,
+                    failure=exc,
                 ) from exc
 
         # Return the persisted label record
@@ -607,13 +632,19 @@ class LabelService:
     ) -> dict[str, Any]:
         from sellfox_shipping.carriers.lizard.api_client import LizardApiClient, LizardApiError
         from sellfox_shipping.carriers.lizard.api_shipment import LizardApiShipmentService
+        from sellfox_shipping.carriers.errors import CarrierFailure
 
         app_token = _read_env("YIGLOBAL_APP_TOKEN")
         app_key = _read_env("YIGLOBAL_APP_KEY")
         if not app_token or not app_key:
-            raise LabelServiceError(
-                "YIGLOBAL_APP_TOKEN / YIGLOBAL_APP_KEY not configured", http_status=503
+            failure = CarrierFailure(
+                "YIGLOBAL_APP_TOKEN / YIGLOBAL_APP_KEY not configured",
+                phase="auth",
+                outcome="not_sent",
+                category="configuration",
+                safe_to_create_again=True,
             )
+            raise LabelServiceError(str(failure), http_status=503, failure=failure)
         lizard_base = _read_env("YIGLOBAL_API_BASE_URL") or "http://47.106.72.196"
 
         # Determine sm_code: user selection > rate history > default
@@ -655,9 +686,21 @@ class LabelService:
                     sm_code=sm_code,
                     operation_id=operation_id,
                 )
-            except (LizardApiError, TimeoutError, RuntimeError) as exc:
+            except LizardApiError as exc:
                 raise LabelServiceError(
-                    f"Lizard API error: {exc}", http_status=502
+                    f"Lizard API error: {exc}",
+                    http_status=exc.http_status or 502,
+                    failure=exc,
+                ) from exc
+            except (TimeoutError, RuntimeError) as exc:
+                failure = CarrierFailure(
+                    f"Lizard API error: {exc}",
+                    phase="create",
+                    outcome="ambiguous",
+                    category="timeout" if isinstance(exc, TimeoutError) else "protocol",
+                )
+                raise LabelServiceError(
+                    str(failure), http_status=502, failure=failure
                 ) from exc
 
         # Local label row — failure here must stay LABEL_PENDING (provider known).
