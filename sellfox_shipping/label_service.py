@@ -756,7 +756,8 @@ class LabelService:
     ) -> dict[str, Any]:
         """Resume a label operation that has a provider_order_id.
 
-        Only valid for ACCEPTED or LABEL_PENDING operations.
+        Only valid for ACCEPTED, LABEL_PENDING, or SUCCEEDED operations.
+        SUCCEEDED operations return the existing result (idempotent).
         Never calls create — only getLabel/poll/PDF/artifact.
         """
         from sellfox_shipping.carriers.vite.client import ViteGofoClient, ViteClientError
@@ -769,6 +770,17 @@ class LabelService:
             raise LabelServiceError(
                 f"operation not found: {operation_id}", http_status=404
             )
+
+        # Idempotent: return existing result for already-succeeded operations
+        if op.status == "SUCCEEDED":
+            return {
+                "operation_id": operation_id,
+                "status": "SUCCEEDED",
+                "provider_order_id": op.provider_order_id,
+                "tracking_number": op.tracking_number,
+                "carrier": op.carrier,
+                "idempotent": True,
+            }
 
         if op.status not in {"ACCEPTED", "LABEL_PENDING"}:
             raise LabelServiceError(
@@ -783,10 +795,18 @@ class LabelService:
                 http_status=400,
             )
 
+        # Claim for exclusive processing
+        if not self._repo.acquire_resume_lease(operation_id, actor=actor):
+            raise LabelServiceError(
+                f"operation {operation_id} is being processed by another agent",
+                http_status=409,
+            )
+
         carrier = (op.carrier or "").strip().lower()
         package_sn = self._repo.get_package_sn_by_db_id(op.package_id) or ""
         package = self._repo.get(op.account_key, package_sn)
         if package is None:
+            self._repo.release_resume_lease(operation_id)
             raise LabelServiceError(
                 f"package not found for operation {operation_id}", http_status=404
             )
@@ -814,6 +834,7 @@ class LabelService:
                     f"unknown carrier {carrier} for resume", http_status=400
                 )
         except LabelServiceError:
+            self._repo.release_resume_lease(operation_id)
             raise
         except ViteClientError as exc:
             self._repo.transition_label_operation(
@@ -824,6 +845,7 @@ class LabelService:
                 error_summary=str(exc)[:500],
                 increment_attempt=True,
             )
+            self._repo.release_resume_lease(operation_id)
             raise LabelServiceError(
                 f"VITE resume error: {exc}", http_status=502, failure=exc
             ) from exc
@@ -836,6 +858,7 @@ class LabelService:
                 error_summary=str(exc)[:500],
                 increment_attempt=True,
             )
+            self._repo.release_resume_lease(operation_id)
             raise LabelServiceError(
                 f"Lizard resume error: {exc}", http_status=502, failure=exc
             ) from exc
@@ -848,6 +871,7 @@ class LabelService:
                 error_summary=str(exc)[:500],
                 increment_attempt=True,
             )
+            self._repo.release_resume_lease(operation_id)
             raise LabelServiceError(
                 f"resume failed for operation {operation_id}: {exc}",
                 http_status=502,
@@ -1073,12 +1097,14 @@ class LabelService:
         provider_order_id: str = "",
         note: str = "",
         actor: str,
+        evidence_id: int,
     ) -> dict[str, Any]:
         """Human-driven resolution of an UNKNOWN_BLOCKED operation.
 
         resolution must be one of: fail_safe, fail_final, provide_known_id.
         confirm must match resolution to prevent accidental execution.
         provide_known_id requires a non-empty provider_order_id.
+        evidence_id must reference an investigation record belonging to this operation.
         """
         VALID_RESOLUTIONS = {"fail_safe", "fail_final", "provide_known_id"}
         if resolution not in VALID_RESOLUTIONS:
@@ -1105,6 +1131,19 @@ class LabelService:
                 http_status=409,
             )
 
+        # Validate evidence belongs to this operation
+        try:
+            evidence = self._repo.get_investigation(evidence_id)
+        except RuntimeError:
+            raise LabelServiceError(
+                f"evidence {evidence_id} not found", http_status=404
+            )
+        if evidence.operation_id != operation_id:
+            raise LabelServiceError(
+                f"evidence {evidence_id} does not belong to operation {operation_id}",
+                http_status=400,
+            )
+
         if resolution == "provide_known_id":
             pid = (provider_order_id or "").strip()
             if not pid:
@@ -1127,6 +1166,7 @@ class LabelService:
                 "provider_order_id": pid,
                 "resolution": resolution,
                 "next_action": "resume",
+                "evidence_id": evidence_id,
             }
 
         target_status = "FAILED_SAFE" if resolution == "fail_safe" else "FAILED_FINAL"
@@ -1141,10 +1181,57 @@ class LabelService:
             "operation_id": operation_id,
             "status": target_status,
             "resolution": resolution,
+            "evidence_id": evidence_id,
         }
         if resolution == "fail_safe":
             result["next_action"] = "retry_create_new_generation"
         return result
+
+    def add_investigation(
+        self,
+        *,
+        operation_id: int,
+        evidence_type: str,
+        actor: str,
+        external_ref: str = "",
+        note: str = "",
+    ) -> dict[str, Any]:
+        """Add an investigation record without resolving the block.
+
+        This is append-only — it records what was checked and found,
+        but does not change the operation status.
+        """
+        VALID_TYPES = {"ticket", "carrier_portal", "email", "other"}
+        if evidence_type not in VALID_TYPES:
+            raise LabelServiceError(
+                f"invalid evidence_type {evidence_type!r}. "
+                f"Use: {', '.join(sorted(VALID_TYPES))}",
+                http_status=400,
+            )
+
+        op = self._repo.get_label_operation(operation_id)
+        if op is None:
+            raise LabelServiceError(
+                f"operation not found: {operation_id}", http_status=404
+            )
+
+        record = self._repo.add_investigation(
+            operation_id=operation_id,
+            evidence_type=evidence_type,
+            external_ref=external_ref,
+            note=note,
+            actor=actor,
+        )
+        return {
+            "investigation_id": record.id,
+            "operation_id": operation_id,
+            "evidence_type": record.evidence_type,
+            "external_ref": record.external_ref,
+            "note": record.note,
+            "actor": record.actor,
+            "created_at": record.created_at.isoformat() if record.created_at else None,
+            "operation_status": op.status,
+        }
 
 
 def _default_fetch_bytes(url: str) -> bytes:

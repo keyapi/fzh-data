@@ -140,6 +140,6 @@ def test_migration_head_includes_batches(tmp_path: Path) -> None:
             "SELECT name FROM sqlite_master WHERE type='table' "
             "AND name='shipping_batches'"
         ).scalar_one()
-    assert version == "0015_label_acquisition_safety"
+    assert version == "0017_shipping_label_investigations"
 
     assert table == "shipping_batches"

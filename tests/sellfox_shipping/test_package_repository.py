@@ -182,3 +182,254 @@ def test_append_and_list_audit_events(tmp_path) -> None:
     assert events[0].action == "packages.sync"
     assert events[0].entity_id == "sellfox-main"
     assert repository.count_rows()["audit_events"] == 1
+
+
+# ── count_packages / list_packages with date filters ──────────────
+
+from sellfox_shipping.package_repository import (
+    OrderRow,
+    PackageOrderRow,
+    PackageRow,
+    ShippingAccountRow,
+    ShippingLabelRow,
+)
+from datetime import datetime, timezone
+
+
+def _dt(s: str) -> datetime:
+    """Parse ISO datetime string."""
+    return datetime.fromisoformat(s)
+
+
+def _make_package(
+    repo: PackageRepository,
+    account_key: str = "sellfox-main",
+    package_sn: str = "P10001",
+    package_status: str = "to_audit",
+    channel_name: str = "蜴国际",
+) -> int:
+    """Upsert a package and return its db id."""
+    repo.upsert(
+        SellfoxPackageRecord(
+            account_key=account_key,
+            package_sn=package_sn,
+            shop_id="shop-1",
+            package_status=package_status,
+            logistics=SellfoxPackageLogistics(channel_name=channel_name),
+            orders=[SellfoxPackageOrderRecord(external_order_id=f"ORD-{package_sn}-1")],
+            items=[
+                SellfoxPackageItemRecord(
+                    external_order_id=f"ORD-{package_sn}-1",
+                    order_item_id=f"ITEM-{package_sn}-1",
+                    seller_sku="SKU-A",
+                    quantity=1,
+                )
+            ],
+        )
+    )
+    return repo.get_package_db_id(account_key, package_sn)
+
+
+def _add_label(
+    repo: PackageRepository,
+    package_db_id: int,
+    *,
+    status: str = "active",
+    created_at: str = "2026-07-15T10:00:00",
+    carrier: str = "lizard",
+    tracking_number: str = "",
+    is_active: bool = True,
+) -> int:
+    """Insert a label row directly and return its id."""
+    with repo._session_factory.begin() as session:
+        account = repo._get_or_create_account(session, "sellfox-main")
+        label = ShippingLabelRow(
+            account_id=account.id,
+            package_id=package_db_id,
+            carrier=carrier,
+            status=status,
+            created_at=_dt(created_at),
+            tracking_number=tracking_number or f"TRK-{package_db_id}",
+            is_active=is_active,
+        )
+        session.add(label)
+        session.flush()
+        return label.id
+
+
+def _add_order(
+    repo: PackageRepository,
+    package_db_id: int,
+    *,
+    external_order_id: str,
+    purchase_date: str = "2026-07-15T10:00:00",
+) -> None:
+    """Insert an order and link it to a package."""
+    with repo._session_factory.begin() as session:
+        account = repo._get_or_create_account(session, "sellfox-main")
+        order = OrderRow(
+            account_id=account.id,
+            external_order_id=external_order_id,
+            purchase_date=_dt(purchase_date),
+        )
+        session.add(order)
+        session.flush()
+        link = PackageOrderRow(package_id=package_db_id, order_id=order.id)
+        session.add(link)
+
+
+class TestPackageCountAndPagination:
+    def test_count_baseline_no_date_filter(self, tmp_path) -> None:
+        repo = PackageRepository(tmp_path / "shipping.db")
+        _make_package(repo, package_sn="P1")
+        _make_package(repo, package_sn="P2")
+        _make_package(repo, package_sn="P3")
+
+        count = repo.count_packages(account_key="sellfox-main")
+        assert count == 3
+
+    def test_count_multi_order_date_filter_no_duplicate(self, tmp_path) -> None:
+        """A package with 3 orders in range should count once, not 3 times."""
+        repo = PackageRepository(tmp_path / "shipping.db")
+        pkg_id = _make_package(repo, package_sn="P-MULTI")
+        _add_order(repo, pkg_id, external_order_id="ORD-2", purchase_date="2026-07-20")
+        _add_order(repo, pkg_id, external_order_id="ORD-3", purchase_date="2026-07-25")
+
+        _make_package(repo, package_sn="P-OUT", package_status="shipped")
+        out_id = repo.get_package_db_id("sellfox-main", "P-OUT")
+        _add_order(repo, out_id, external_order_id="ORD-OUT", purchase_date="2026-06-01")
+
+        count = repo.count_packages(
+            account_key="sellfox-main",
+            date_start="2026-07-01",
+            date_end="2026-07-31",
+            date_field="order",
+        )
+        assert count == 1, f"Expected 1 package with orders in July, got {count}"
+
+    def test_count_multi_label_date_filter_no_duplicate(self, tmp_path) -> None:
+        """A package with 2 non-cancelled labels (one active, one inactive) in range should count once."""
+        repo = PackageRepository(tmp_path / "shipping.db")
+        pkg_id = _make_package(repo, package_sn="P-LABELS")
+        _add_label(repo, pkg_id, status="active", created_at="2026-07-10", is_active=True)
+        _add_label(repo, pkg_id, status="active", created_at="2026-07-20", is_active=False)
+
+        count = repo.count_packages(
+            account_key="sellfox-main",
+            date_start="2026-07-01",
+            date_end="2026-07-31",
+            date_field="label",
+        )
+        assert count == 1, f"Expected 1 package, got {count}"
+
+    def test_count_only_cancelled_labels_zero(self, tmp_path) -> None:
+        """Package with only cancelled labels should not be counted with label date filter."""
+        repo = PackageRepository(tmp_path / "shipping.db")
+        pkg_id = _make_package(repo, package_sn="P-CANCELLED")
+        _add_label(repo, pkg_id, status="cancelled", created_at="2026-07-10", is_active=False)
+        _add_label(repo, pkg_id, status="cancelled", created_at="2026-07-20", is_active=False)
+
+        count = repo.count_packages(
+            account_key="sellfox-main",
+            date_start="2026-07-01",
+            date_end="2026-07-31",
+            date_field="label",
+        )
+        # All labels are cancelled: LEFT JOIN gives NULL label row (id IS NULL),
+        # but date filter on label.created_at excludes NULL rows.
+        assert count == 0, f"Expected 0 (all cancelled labels excluded), got {count}"
+
+    def test_count_active_and_cancelled_labels(self, tmp_path) -> None:
+        """Package with mix of cancelled (inactive) and active labels: count once."""
+        repo = PackageRepository(tmp_path / "shipping.db")
+        pkg_id = _make_package(repo, package_sn="P-MIX")
+        _add_label(repo, pkg_id, status="cancelled", created_at="2026-07-05", is_active=False)
+        _add_label(repo, pkg_id, status="active", created_at="2026-07-15", is_active=True)
+
+        count = repo.count_packages(
+            account_key="sellfox-main",
+            date_start="2026-07-01",
+            date_end="2026-07-31",
+            date_field="label",
+        )
+        assert count == 1, f"Expected 1, got {count}"
+
+    def test_list_count_consistency_with_pagination(self, tmp_path) -> None:
+        """list_packages and count_packages should agree on total."""
+        repo = PackageRepository(tmp_path / "shipping.db")
+        for i in range(5):
+            _make_package(repo, package_sn=f"P-{i:03d}")
+
+        count = repo.count_packages(account_key="sellfox-main")
+        page1 = repo.list_packages(account_key="sellfox-main", limit=2, offset=0)
+        page2 = repo.list_packages(account_key="sellfox-main", limit=2, offset=2)
+        page3 = repo.list_packages(account_key="sellfox-main", limit=2, offset=4)
+
+        assert count == 5
+        assert len(page1) == 2
+        assert len(page2) == 2
+        assert len(page3) == 1
+        all_sns = {r.package_sn for r in page1 + page2 + page3}
+        assert len(all_sns) == 5
+
+    def test_order_date_boundary_inclusive_start_exclusive_end(self, tmp_path) -> None:
+        """date_start is inclusive, date_end+T23:59:59 is inclusive end-of-day."""
+        repo = PackageRepository(tmp_path / "shipping.db")
+        pkg_id = _make_package(repo, package_sn="P-EDGE")
+        _add_order(repo, pkg_id, external_order_id="ORD-EDGE", purchase_date="2026-07-01T00:00:00")
+
+        # Boundary: date_start equals purchase_date
+        count = repo.count_packages(
+            account_key="sellfox-main",
+            date_start="2026-07-01",
+            date_end="2026-07-01",
+            date_field="order",
+        )
+        assert count == 1
+
+        # Just before: should be 0
+        count = repo.count_packages(
+            account_key="sellfox-main",
+            date_start="2026-07-02",
+            date_end="2026-07-02",
+            date_field="order",
+        )
+        assert count == 0
+
+    def test_label_date_boundary(self, tmp_path) -> None:
+        """Label date_start inclusive, date_end inclusive end-of-day."""
+        repo = PackageRepository(tmp_path / "shipping.db")
+        pkg_id = _make_package(repo, package_sn="P-EDGE")
+        _add_label(repo, pkg_id, status="active", created_at="2026-07-15T00:00:00")
+
+        count = repo.count_packages(
+            account_key="sellfox-main",
+            date_start="2026-07-15",
+            date_end="2026-07-15",
+            date_field="label",
+        )
+        assert count == 1
+
+        count = repo.count_packages(
+            account_key="sellfox-main",
+            date_start="2026-07-16",
+            date_end="2026-07-16",
+            date_field="label",
+        )
+        assert count == 0
+
+    def test_label_date_filter_with_no_labels_package(self, tmp_path) -> None:
+        """Package with zero labels: LEFT JOIN null path, date filter on label.created_at excludes NULL."""
+        repo = PackageRepository(tmp_path / "shipping.db")
+        _make_package(repo, package_sn="P-NO-LABEL")
+
+        count = repo.count_packages(
+            account_key="sellfox-main",
+            date_start="2026-07-01",
+            date_end="2026-07-31",
+            date_field="label",
+        )
+        assert count == 0, (
+            "Package with no labels: LEFT JOIN gives NULL label row, "
+            "but date filter on label.created_at excludes NULL values"
+        )

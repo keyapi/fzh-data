@@ -75,6 +75,18 @@ def _ready_unknown_blocked(tmp_path, *, provider_order_id=""):
     return repo, package, op.id
 
 
+def _add_evidence(repo, op_id, evidence_type="ticket", external_ref="TICKET-1", note="investigated", actor="operator"):
+    """Helper: add an investigation record and return its id."""
+    inv = repo.add_investigation(
+        operation_id=op_id,
+        evidence_type=evidence_type,
+        external_ref=external_ref,
+        note=note,
+        actor=actor,
+    )
+    return inv.id
+
+
 # ── Reject non-UNKNOWN_BLOCKED ───────────────────────────────
 
 
@@ -84,9 +96,10 @@ def test_resolve_rejects_non_unknown_blocked(tmp_path):
     service = LabelService(repo)
     service._cfg = COMPLETE_WAREHOUSE_CFG
 
+    # evidence_id doesn't matter here — resolve fails before checking it
     with pytest.raises(LabelServiceError, match="only UNKNOWN_BLOCKED"):
         service.resolve_unknown_blocked(
-            op_id, resolution="fail_safe", confirm="fail_safe", actor="operator"
+            op_id, resolution="fail_safe", confirm="fail_safe", actor="operator", evidence_id=99999
         )
 
 
@@ -95,9 +108,10 @@ def test_resolve_rejects_missing_confirm_match(tmp_path):
     service = LabelService(repo)
     service._cfg = COMPLETE_WAREHOUSE_CFG
 
+    # evidence_id doesn't matter — confirm check fails first
     with pytest.raises(LabelServiceError, match="confirm"):
         service.resolve_unknown_blocked(
-            op_id, resolution="fail_safe", confirm="wrong", actor="operator"
+            op_id, resolution="fail_safe", confirm="wrong", actor="operator", evidence_id=99999
         )
 
 
@@ -115,6 +129,7 @@ def test_resolve_fail_safe_frees_slot_for_new_generation(tmp_path):
         confirm="fail_safe",
         note="checked VITE portal: no order created",
         actor="operator",
+        evidence_id=_add_evidence(repo, op_id, note="checked VITE portal: no order created"),
     )
 
     assert result["status"] == "FAILED_SAFE"
@@ -150,6 +165,7 @@ def test_resolve_fail_final_permanent_rejection(tmp_path):
         confirm="fail_final",
         note="carrier confirmed: invalid address, no retry",
         actor="operator",
+        evidence_id=_add_evidence(repo, op_id, note="carrier confirmed: invalid address"),
     )
 
     assert result["status"] == "FAILED_FINAL"
@@ -172,6 +188,7 @@ def test_resolve_provide_known_id_enables_resume(tmp_path):
         provider_order_id="ORDER-FOUND-ON-PORTAL",
         note="found in VITE dashboard, tracking=1Z9999",
         actor="operator",
+        evidence_id=_add_evidence(repo, op_id, note="found in VITE dashboard"),
     )
 
     assert result["status"] == "ACCEPTED"
@@ -192,6 +209,7 @@ def test_resolve_provide_known_id_requires_provider_order_id(tmp_path):
             confirm="provide_known_id",
             provider_order_id="",
             actor="operator",
+            evidence_id=_add_evidence(repo, op_id),
         )
 
 
@@ -209,6 +227,8 @@ def test_cli_resolve_bad_operation_id(tmp_path):
             "--operation-id", "99999",
             "--resolution", "fail_safe",
             "--confirm", "fail_safe",
+            "--actor", "test-runner",
+            "--evidence-id", "1",
         ],
     )
     assert result.exit_code != 0
@@ -220,6 +240,7 @@ def test_cli_resolve_succeeds(tmp_path, monkeypatch):
     from sellfox_shipping.label_service import LabelService
 
     repo, _package, op_id = _ready_unknown_blocked(tmp_path)
+    evidence_id = _add_evidence(repo, op_id, note="checked via CLI")
     monkeypatch.setattr(
         "sellfox_shipping.cli._get_label_service",
         lambda: LabelService(repo),
@@ -234,6 +255,8 @@ def test_cli_resolve_succeeds(tmp_path, monkeypatch):
             "--resolution", "fail_safe",
             "--confirm", "fail_safe",
             "--note", "checked via CLI",
+            "--actor", "test-runner",
+            "--evidence-id", str(evidence_id),
         ],
     )
     assert result.exit_code == 0

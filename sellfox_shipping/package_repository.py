@@ -682,6 +682,8 @@ class LabelOperationRow(Base):
     error_class: Mapped[str] = mapped_column(String, default="")
     error_summary: Mapped[str] = mapped_column(Text, default="")
     created_by: Mapped[str] = mapped_column(String, default="")
+    claimed_by: Mapped[str] = mapped_column(String, default="")
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.current_timestamp()
     )
@@ -709,6 +711,40 @@ class LabelOperationRecord:
     created_by: str
     created_at: datetime | None = None
     updated_at: datetime | None = None
+
+
+class InvestigationRow(Base):
+    """Append-only investigation/evidence for UNKNOWN_BLOCKED resolution."""
+
+    __tablename__ = "shipping_label_investigations"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    operation_id: Mapped[int] = mapped_column(
+        ForeignKey("shipping_label_operations.id", ondelete="CASCADE"),
+    )
+    evidence_type: Mapped[str] = mapped_column(String)
+    external_ref: Mapped[str] = mapped_column(String, default="")
+    private_artifact_id: Mapped[int | None] = mapped_column(
+        ForeignKey("shipping_artifacts.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    note: Mapped[str] = mapped_column(Text, default="")
+    actor: Mapped[str] = mapped_column(String)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.current_timestamp()
+    )
+
+
+@dataclass(frozen=True)
+class InvestigationRecord:
+    id: int
+    operation_id: int
+    evidence_type: str
+    external_ref: str
+    private_artifact_id: int | None
+    note: str
+    actor: str
+    created_at: datetime | None = None
 
 
 class PackageRepository:
@@ -1848,7 +1884,7 @@ class PackageRepository:
     ) -> int:
         with self._session_factory() as session:
             query = (
-                select(func.count())
+                select(func.count(func.distinct(PackageRow.id)))
                 .select_from(PackageRow)
                 .join(
                     ShippingAccountRow,
@@ -2182,8 +2218,8 @@ class PackageRepository:
                     "(account_id, package_id, generation, carrier, service_level, "
                     "idempotency_key, request_hash, status, "
                     "provider_order_id, tracking_number, attempt_count, "
-                    "error_class, error_summary, created_by, created_at, updated_at) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, 'RESERVED', '', '', 0, '', '', ?, ?, ?)",
+                    "error_class, error_summary, created_by, claimed_by, created_at, updated_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, 'RESERVED', '', '', 0, '', '', ?, '', ?, ?)",
                     (account_id, package_db_id, generation, carrier, service_level,
                      idempotency_key, request_hash, actor, now_iso, now_iso),
                 )
@@ -2344,6 +2380,126 @@ class PackageRepository:
             account = session.get(ShippingAccountRow, row.account_id)
             return _label_operation_to_record(
                 account.account_key if account else "", row
+            )
+
+    def acquire_resume_lease(
+        self, operation_id: int, *, actor: str, lease_seconds: int = 300
+    ) -> bool:
+        """Atomically acquire a lease on an existing operation for exclusive resume.
+
+        Only succeeds when the operation is in ACCEPTED or LABEL_PENDING
+        and either unclaimed or the previous lease has expired.
+        Returns True if the lease was acquired, False otherwise.
+        """
+        from datetime import timedelta
+
+        expiry = datetime.now(timezone.utc) - timedelta(seconds=lease_seconds)
+        with self._session_factory.begin() as session:
+            result = (
+                session.query(LabelOperationRow)
+                .where(LabelOperationRow.id == operation_id)
+                .where(
+                    LabelOperationRow.status.in_(["ACCEPTED", "LABEL_PENDING"])
+                )
+                .where(
+                    or_(
+                        LabelOperationRow.claimed_by == "",
+                        LabelOperationRow.claimed_by.is_(None),
+                        LabelOperationRow.claimed_at < expiry,
+                    )
+                )
+                .with_for_update()
+                .one_or_none()
+            )
+            if result is None:
+                return False
+            result.claimed_by = actor
+            result.claimed_at = datetime.now(timezone.utc)
+            return True
+
+    def release_resume_lease(self, operation_id: int) -> None:
+        """Release the resume lease on a label operation."""
+        with self._session_factory.begin() as session:
+            row = session.get(LabelOperationRow, operation_id)
+            if row is not None:
+                row.claimed_by = ""
+                row.claimed_at = None
+
+    def add_investigation(
+        self,
+        *,
+        operation_id: int,
+        evidence_type: str,
+        actor: str,
+        external_ref: str = "",
+        private_artifact_id: int | None = None,
+        note: str = "",
+    ) -> InvestigationRecord:
+        """Append an investigation record. Append-only — cannot modify or delete."""
+        now = datetime.now(timezone.utc)
+        with self._session_factory.begin() as session:
+            inv = InvestigationRow(
+                operation_id=operation_id,
+                evidence_type=evidence_type,
+                external_ref=external_ref,
+                private_artifact_id=private_artifact_id,
+                note=note,
+                actor=actor,
+                created_at=now,
+            )
+            session.add(inv)
+            session.flush()
+            return InvestigationRecord(
+                id=inv.id,
+                operation_id=inv.operation_id,
+                evidence_type=inv.evidence_type,
+                external_ref=inv.external_ref,
+                private_artifact_id=inv.private_artifact_id,
+                note=inv.note,
+                actor=inv.actor,
+                created_at=inv.created_at,
+            )
+
+    def get_investigations(
+        self, operation_id: int
+    ) -> list[InvestigationRecord]:
+        """List all investigation records for an operation."""
+        with self._session_factory() as session:
+            rows = (
+                session.query(InvestigationRow)
+                .where(InvestigationRow.operation_id == operation_id)
+                .order_by(InvestigationRow.created_at.asc())
+                .all()
+            )
+            return [
+                InvestigationRecord(
+                    id=r.id,
+                    operation_id=r.operation_id,
+                    evidence_type=r.evidence_type,
+                    external_ref=r.external_ref,
+                    private_artifact_id=r.private_artifact_id,
+                    note=r.note,
+                    actor=r.actor,
+                    created_at=r.created_at,
+                )
+                for r in rows
+            ]
+
+    def get_investigation(self, investigation_id: int) -> InvestigationRecord:
+        """Get a single investigation record by id."""
+        with self._session_factory() as session:
+            row = session.get(InvestigationRow, investigation_id)
+            if row is None:
+                raise RuntimeError(f"investigation not found: {investigation_id}")
+            return InvestigationRecord(
+                id=row.id,
+                operation_id=row.operation_id,
+                evidence_type=row.evidence_type,
+                external_ref=row.external_ref,
+                private_artifact_id=row.private_artifact_id,
+                note=row.note,
+                actor=row.actor,
+                created_at=row.created_at,
             )
 
     def list_label_operations(

@@ -126,13 +126,15 @@ def test_resume_rejects_missing_provider_order_id(tmp_path):
         service.resume_label_acquisition(op_id, actor="operator")
 
 
-def test_resume_rejects_succeeded_status(tmp_path):
+def test_resume_returns_idempotent_for_succeeded_status(tmp_path):
+    """Resuming a SUCCEEDED operation returns the existing result (idempotent)."""
     repo, _package, op_id = _ready_repo_with_op(tmp_path, status="SUCCEEDED")
     service = LabelService(repo)
     service._cfg = COMPLETE_WAREHOUSE_CFG
 
-    with pytest.raises(LabelServiceError, match="cannot resume operation"):
-        service.resume_label_acquisition(op_id, actor="operator")
+    result = service.resume_label_acquisition(op_id, actor="operator")
+    assert result["status"] == "SUCCEEDED"
+    assert result["idempotent"] is True
 
 
 # ── Integration: resume succeeds ─────────────────────────────
