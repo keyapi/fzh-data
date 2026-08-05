@@ -397,50 +397,87 @@ class LabelService:
         return path.read_bytes(), artifact.file_name, artifact.mime_type or "application/pdf"
 
     def cancel_label(self, label_id: int, *, actor: str = "") -> dict[str, Any]:
-        """Cancel a label via carrier API and update local status."""
+        """Cancel a label via carrier API and atomically release local state."""
+        from sellfox_shipping.package_repository import ACTIVE_LABEL_OPERATION_STATUSES
+
         label = self._repo.get_label(label_id)
         if label is None:
             raise LabelServiceError(f"Label {label_id} not found", http_status=404)
+
         if label.status == "cancelled":
-            raise LabelServiceError(f"Label {label_id} already cancelled", http_status=409)
+            # Historical inconsistency: label inactive but operation still blocking.
+            if label.operation_id is not None:
+                op = self._repo.get_label_operation(label.operation_id)
+                if op.status in ACTIVE_LABEL_OPERATION_STATUSES:
+                    try:
+                        self._repo.finalize_label_cancellation(
+                            label_id, actor=actor or "system"
+                        )
+                    except RuntimeError as exc:
+                        self._repo.append_audit_event(
+                            actor=actor or "system",
+                            action="label_operation.cancel_inconsistency",
+                            entity_type="shipping_label_operation",
+                            entity_id=str(label.operation_id),
+                            summary=(
+                                f"label_id={label_id} reconcile release failed: {exc}"
+                            ),
+                        )
+                        raise LabelServiceError(
+                            f"Cancelled label operation {label.operation_id} "
+                            f"could not be released ({exc}). "
+                            f"Manual repair required before reclaim.",
+                            http_status=409,
+                        ) from exc
+                    return {
+                        "id": label_id,
+                        "status": "cancelled",
+                        "message": "Reconciled operation release for cancelled label",
+                    }
+            raise LabelServiceError(
+                f"Label {label_id} already cancelled", http_status=409
+            )
 
         if label.carrier == "vite":
-            result = self._cancel_vite_label(label, actor)
+            carrier_message = self._request_vite_cancel(label)
         else:
             raise LabelServiceError(
                 f"Cancel not supported for carrier '{label.carrier}'",
                 http_status=501,
             )
 
-        if label.operation_id is not None:
-            try:
-                self._repo.transition_label_operation(
-                    label.operation_id,
-                    status="CANCELLED",
-                    error_class="cancelled",
-                    error_summary=f"label_id={label_id}",
-                )
-            except RuntimeError as exc:
-                self._repo.append_audit_event(
-                    actor=actor or "system",
-                    action="label_operation.cancel_inconsistency",
-                    entity_type="shipping_label_operation",
-                    entity_id=str(label.operation_id),
-                    summary=(
-                        f"label_id={label_id} cancelled but operation release failed: {exc}"
-                    ),
-                )
-                raise LabelServiceError(
-                    f"Label cancelled locally/carrier, but operation "
-                    f"{label.operation_id} could not be released ({exc}). "
-                    f"Manual repair required before reclaim.",
-                    http_status=409,
-                ) from exc
-        return result
+        try:
+            self._repo.finalize_label_cancellation(label_id, actor=actor or "system")
+        except RuntimeError as exc:
+            self._repo.append_audit_event(
+                actor=actor or "system",
+                action="label_operation.cancel_inconsistency",
+                entity_type="shipping_label_operation",
+                entity_id=str(label.operation_id or ""),
+                summary=(
+                    f"label_id={label_id} carrier cancelled but local finalize failed: {exc}"
+                ),
+            )
+            raise LabelServiceError(
+                f"Carrier cancel succeeded, but local finalize failed ({exc}). "
+                f"Manual repair required before reclaim.",
+                http_status=409,
+            ) from exc
 
-    def _cancel_vite_label(
-        self, label: Any, actor: str
-    ) -> dict[str, Any]:
+        self._repo.append_audit_event(
+            actor=actor or "system",
+            action="labels.cancel",
+            entity_type="shipping_label",
+            entity_id=str(label_id),
+            summary=f"cancelled {label.carrier}",
+        )
+        return {
+            "id": label_id,
+            "status": "cancelled",
+            "message": carrier_message,
+        }
+
+    def _request_vite_cancel(self, label: Any) -> str:
         from sellfox_shipping.carriers.vite.client import ViteGofoClient, ViteClientError
 
         api_key = _read_env("VITE_API_KEY")
@@ -450,7 +487,9 @@ class LabelService:
 
         ref = label.carrier_order_id or label.request_id
         if not ref:
-            raise LabelServiceError("No carrier_order_id or request_id to cancel", http_status=400)
+            raise LabelServiceError(
+                "No carrier_order_id or request_id to cancel", http_status=400
+            )
 
         with ViteGofoClient(api_key=api_key, base_url=vite_base) as client:
             try:
@@ -459,20 +498,7 @@ class LabelService:
                 raise LabelServiceError(
                     f"VITE cancel failed: {exc}", http_status=502
                 ) from exc
-
-        self._repo.update_label_status(label.id, "cancelled")
-        self._repo.append_audit_event(
-            actor=actor or "system",
-            action="labels.cancel",
-            entity_type="shipping_label",
-            entity_id=str(label.id),
-            summary=f"cancelled {label.carrier} order={ref}",
-        )
-        return {
-            "id": label.id,
-            "status": "cancelled",
-            "message": result.get("message", "Cancelled"),
-        }
+        return str(result.get("message", "Cancelled"))
 
     def list_enabled_carriers(self) -> list[dict[str, str]]:
         """Return carriers with enabled=true from config."""
@@ -634,24 +660,40 @@ class LabelService:
                     f"Lizard API error: {exc}", http_status=502
                 ) from exc
 
-        # Insert label record (LizardApiShipmentService doesn't auto-insert)
-        label_rec = self._repo.insert_label(
-            account_key=account_key,
-            package_db_id=db_id or 0,
-            carrier="lizard",
-            service_level=sm_code,
-            tracking_number=result.tracking_number,
-            carrier_order_id=result.order_code,
-            request_id="",
-            label_url=result.label_url,
-            operation_id=operation_id,
-            artifact_id=result.artifact_id,
-            total_amount=None,
-            currency="USD",
-            status="generated",
-            carrier_response_json="",
-            created_by=actor,
-        )
+        # Local label row — failure here must stay LABEL_PENDING (provider known).
+        try:
+            label_rec = self._repo.insert_label(
+                account_key=account_key,
+                package_db_id=db_id or 0,
+                carrier="lizard",
+                service_level=sm_code,
+                tracking_number=result.tracking_number,
+                carrier_order_id=result.order_code,
+                request_id="",
+                label_url=result.label_url,
+                operation_id=operation_id,
+                artifact_id=result.artifact_id,
+                total_amount=None,
+                currency="USD",
+                status="generated",
+                carrier_response_json="",
+                created_by=actor,
+            )
+        except Exception as exc:
+            if operation_id is not None:
+                self._repo.transition_label_operation(
+                    operation_id,
+                    status="LABEL_PENDING",
+                    provider_order_id=result.order_code,
+                    tracking_number=result.tracking_number or "",
+                    error_class="label_pending",
+                    error_summary=f"insert_label failed: {exc}"[:500],
+                    increment_attempt=True,
+                )
+            raise LabelServiceError(
+                f"Lizard label created at carrier but local insert failed: {exc}",
+                http_status=502,
+            ) from exc
         return {
             "id": label_rec.id,
             "tracking_number": result.tracking_number,

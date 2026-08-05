@@ -319,8 +319,11 @@ def test_crash_window_sent_with_linked_label_cancel_allows_reclaim(tmp_path: Pat
     )
     assert repo.get_label_operation(op_id).status == "SENT"
 
-    repo.update_label_status(label.id, "cancelled")
-    repo.transition_label_operation(op_id, status="CANCELLED")
+    label_rec, op_rec = repo.finalize_label_cancellation(label.id, actor="operator")
+    assert label_rec.status == "cancelled"
+    assert label_rec.is_active is False
+    assert op_rec is not None
+    assert op_rec.status == "CANCELLED"
 
     replacement = repo.claim_label_operation(
         account_key="sellfox-main",
@@ -333,6 +336,58 @@ def test_crash_window_sent_with_linked_label_cancel_allows_reclaim(tmp_path: Pat
     )
     assert replacement.generation == 2
     assert package.package_sn == "P-SAFE-1"
+
+
+def test_reconcile_cancelled_label_with_active_operation(tmp_path: Path, monkeypatch) -> None:
+    """Simulate crash after label inactive write but before operation CANCELLED."""
+    repo, _ = _ready_repo(tmp_path)
+    package_id, op_id = _claim_sent(repo)
+    repo.transition_label_operation(
+        op_id, status="ACCEPTED", provider_order_id="ORDER-ORPHAN"
+    )
+    label = repo.insert_label(
+        account_key="sellfox-main",
+        package_db_id=package_id,
+        carrier="vite",
+        service_level="GOFO_PARCEL",
+        tracking_number="TRACK-ORPHAN",
+        carrier_order_id="ORDER-ORPHAN",
+        request_id="REQ-ORPHAN",
+        label_url="https://example.invalid/o.pdf",
+        artifact_id=None,
+        total_amount=1,
+        currency="USD",
+        status="generated",
+        carrier_response_json="{}",
+        created_by="operator",
+        operation_id=op_id,
+    )
+    # Only label side written — the old non-atomic cancel crash window.
+    repo.update_label_status(label.id, "cancelled")
+    assert repo.get_label_operation(op_id).status == "ACCEPTED"
+
+    service = LabelService(repo)
+    # Should not call carrier again; reconciliation is local.
+    monkeypatch.setattr(
+        service,
+        "_request_vite_cancel",
+        lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("carrier cancel must not run")),
+    )
+    out = service.cancel_label(label.id, actor="operator")
+    assert out["status"] == "cancelled"
+    assert "Reconciled" in out["message"]
+    assert repo.get_label_operation(op_id).status == "CANCELLED"
+
+    replacement = repo.claim_label_operation(
+        account_key="sellfox-main",
+        package_db_id=package_id,
+        carrier="vite",
+        service_level="GOFO_PARCEL",
+        idempotency_key="P-SAFE-1:after-reconcile",
+        request_hash="hash-reconcile",
+        actor="operator",
+    )
+    assert replacement.generation == 2
 
 
 def test_label_pending_to_cancelled_is_allowed(tmp_path: Path) -> None:
@@ -374,28 +429,93 @@ def test_cancel_label_surfaces_operation_transition_failure(
     )
 
     service = LabelService(repo)
+    monkeypatch.setenv("VITE_API_KEY", "test-key-not-real")
+    monkeypatch.setattr(
+        service,
+        "_request_vite_cancel",
+        lambda _label: "Cancelled",
+    )
 
-    class _CancelClient:
+    with pytest.raises(LabelServiceError, match="local finalize failed"):
+        service.cancel_label(label.id, actor="operator")
+
+    # Atomic finalize rolled back — label must still be active.
+    assert repo.get_label(label.id).status == "generated"
+    assert repo.get_label(label.id).is_active is True
+    assert repo.get_label_operation(op_id).status == "UNKNOWN_BLOCKED"
+
+
+def test_lizard_insert_label_failure_marks_label_pending(
+    tmp_path: Path, monkeypatch
+) -> None:
+    repo, package = _ready_repo(tmp_path)
+    service = LabelService(repo)
+    service._cfg = COMPLETE_WAREHOUSE_CFG
+
+    class _Result:
+        tracking_number = "1ZINSERT"
+        order_code = "OC-INSERT-1"
+        label_url = "https://cdn.example/liz.pdf"
+        artifact_id = 1
+
+    create_calls = {"n": 0}
+
+    def fake_ship(**kwargs):
+        create_calls["n"] += 1
+        assert kwargs.get("operation_id") is not None
+        # Adapter already ACCEPTED before returning.
+        repo.transition_label_operation(
+            kwargs["operation_id"],
+            status="ACCEPTED",
+            provider_order_id="OC-INSERT-1",
+        )
+        return _Result()
+
+    class _FakeLizardSvc:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def ship_package(self, package, *, account_key, actor, sm_code, operation_id=None, **kwargs):
+            return fake_ship(operation_id=operation_id)
+
+    class _FakeClient:
         def __enter__(self):
             return self
 
         def __exit__(self, *args):
             return False
 
-        def cancel_label(self, ref: str) -> dict:
-            return {"message": "Cancelled"}
-
-    monkeypatch.setenv("VITE_API_KEY", "test-key-not-real")
+    monkeypatch.setenv("YIGLOBAL_APP_TOKEN", "tok")
+    monkeypatch.setenv("YIGLOBAL_APP_KEY", "key")
     monkeypatch.setattr(
-        "sellfox_shipping.carriers.vite.client.ViteGofoClient",
-        lambda **_kwargs: _CancelClient(),
+        "sellfox_shipping.carriers.lizard.api_client.LizardApiClient",
+        lambda **_k: _FakeClient(),
+    )
+    monkeypatch.setattr(
+        "sellfox_shipping.carriers.lizard.api_shipment.LizardApiShipmentService",
+        _FakeLizardSvc,
     )
 
-    with pytest.raises(LabelServiceError, match="could not be released"):
-        service.cancel_label(label.id, actor="operator")
+    def boom_insert(**_kwargs):
+        raise RuntimeError("insert_label boom")
 
-    assert repo.get_label(label.id).status == "cancelled"
-    assert repo.get_label_operation(op_id).status == "UNKNOWN_BLOCKED"
+    monkeypatch.setattr(repo, "insert_label", boom_insert)
+
+    # create_label will claim+SENT then call _create_lizard_label
+    with pytest.raises(LabelServiceError, match="local insert failed"):
+        service.create_label(
+            package=package,
+            account_key="sellfox-main",
+            carrier="lizard",
+            actor="operator",
+            service_level="FedEx-Ground-J-TX",
+        )
+
+    ops = repo.list_label_operations(package_sn=package.package_sn)
+    assert len(ops) == 1
+    assert ops[0].status == "LABEL_PENDING"
+    assert ops[0].provider_order_id == "OC-INSERT-1"
+    assert create_calls["n"] == 1
 
 
 def test_vite_rate_skips_api_when_address_incomplete(monkeypatch) -> None:

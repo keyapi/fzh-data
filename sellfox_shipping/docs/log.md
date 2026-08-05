@@ -8,6 +8,13 @@ updated: 2026-08-04
 
 # sellfox_shipping — 变更日志
 
+## 2026-08-05 — PR #135 取消原子收口 + 蜴国际 insert→LABEL_PENDING
+
+- `finalize_label_cancellation()`：同一事务内 label inactive + operation CANCELLED
+- `cancel_label`：承运商确认后只调原子收口；label 已 cancelled 但 op 仍活跃时可本地 reconcile
+- 蜴国际 `insert_label` 失败 → `LABEL_PENDING`（保留 provider ID），不再误标 UNKNOWN_BLOCKED
+- 清 blueprint trailing whitespace
+
 ## 2026-08-05 — PR #135 恢复闭环：ACCEPTED / LABEL_PENDING
 
 - VITE/蜴国际：拿到 provider order id 后立即 `SENT → ACCEPTED`（在适配层，不等 ship_package 返回）

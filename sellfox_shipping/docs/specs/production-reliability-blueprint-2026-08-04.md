@@ -55,7 +55,7 @@ LabelPreflightResult 在任何承运商 HTTP 前统一验证：
 - UNKNOWN_BLOCKED：可能已创建但无足够证据（尚无 provider ID），普通 create 永久阻断，转人工恢复。
 - CANCELLED：承运商取消确认后，由 ACCEPTED / LABEL_PENDING / SUCCEEDED 转入；崩溃窗口下仅当已有关联 label 时允许 SENT → CANCELLED。
 
-活动 **operation** 状态（占唯一索引）为 RESERVED、SENT、ACCEPTED、LABEL_PENDING、UNKNOWN_BLOCKED。  
+活动 **operation** 状态（占唯一索引）为 RESERVED、SENT、ACCEPTED、LABEL_PENDING、UNKNOWN_BLOCKED。
 活动 **label** 由 `is_active=1` 唯一索引保证同一包裹最多一张。
 
 ## 数据模型

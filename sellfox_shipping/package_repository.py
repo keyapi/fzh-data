@@ -2374,6 +2374,75 @@ class PackageRepository:
         )
         return self.get_label(label_id)
 
+    def finalize_label_cancellation(
+        self,
+        label_id: int,
+        *,
+        actor: str = "",
+    ) -> tuple[ShippingLabelRecord, LabelOperationRecord | None]:
+        """Atomically mark label inactive and release linked operation to CANCELLED.
+
+        Carrier cancel must already be confirmed (or skipped for local
+        reconciliation of a previously cancelled label). Both writes share one
+        SQLite transaction so a crash cannot leave inactive label + active op.
+        """
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        operation_id: int | None = None
+        with self._session_factory.begin() as session:
+            label = session.get(ShippingLabelRow, label_id)
+            if label is None:
+                raise RuntimeError(f"label not found: {label_id}")
+
+            if label.operation_id is not None:
+                operation_id = int(label.operation_id)
+                op = session.get(LabelOperationRow, operation_id)
+                if op is None:
+                    raise RuntimeError(
+                        f"label operation not found: {operation_id}"
+                    )
+                current = (op.status or "").strip()
+                if current != "CANCELLED":
+                    allowed = ALLOWED_LABEL_OPERATION_TRANSITIONS.get(current)
+                    if allowed is None:
+                        raise RuntimeError(
+                            f"invalid transition: unknown current status "
+                            f"{current!r} for operation_id={operation_id}"
+                        )
+                    if current == "SENT":
+                        # Linked label is this row — crash-window release OK.
+                        pass
+                    elif "CANCELLED" not in allowed:
+                        raise RuntimeError(
+                            f"invalid transition: {current} -> CANCELLED "
+                            f"for operation_id={operation_id}"
+                        )
+                    op.status = "CANCELLED"
+                    op.error_class = "cancelled"
+                    op.error_summary = f"label_id={label_id}"
+                    op.updated_at = now
+
+            label.status = "cancelled"
+            label.is_active = False
+            label.updated_at = now
+
+        self.append_audit_event(
+            actor=actor or "system",
+            action="labels.finalize_cancellation",
+            entity_type="shipping_label",
+            entity_id=str(label_id),
+            summary=(
+                f"operation_id={operation_id}" if operation_id is not None else "no operation"
+            ),
+        )
+        label_rec = self.get_label(label_id)
+        assert label_rec is not None
+        op_rec = (
+            self.get_label_operation(operation_id)
+            if operation_id is not None
+            else None
+        )
+        return label_rec, op_rec
+
     @staticmethod
     def _get_or_create_account(
         session: Session,
