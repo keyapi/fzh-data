@@ -44,15 +44,20 @@ Python：**用 uv** 管理 IvyeaOps `server\.venv`（`setup_ivyeaops_uv.ps1`）�
 **已完成（可交接）**
 
 1. **Phase2 五杠杆 ingest 接线** — 报表 + manageData + 利润；标定店 `596841` 候选含降/加 bid。  
-2. **原生按需语义** — `fetch_dataset` miss/`force` → 赛狐 `ensure_dataset`；READ_DATASETS **12/12**；**禁止**回落领星；离线 phase2 仅预热。  
-3. **E2E** — Cursor 内置浏览器；BJRYECLTD-US 候选 35；Jalnoddsa-US `596837` 冷启动可浏览/优化。  
-4. **文档** — catalog-map、phase2-dataset-gap、solutions（五杠杆 ingest + 按需 parity + ASIN 收割坑）。
+2. **原生按需语义** — `fetch_dataset` miss/`force` → 赛狐；READ_DATASETS **12/12**；**禁止**回落领星。  
+3. **报表 Job 队列（ERPNext 风）** — `sellfox_report_jobs` + 单 worker：错开 create（≥2.1s）+ 合并 `pageList`；浏览 miss 与优化引擎共用 `ensure_report_bundle`；Targeting 单次双写。见 [sellfox-ivyeaops-report-job-queue.md](../../docs/solutions/architecture-patterns/sellfox-ivyeaops-report-job-queue.md)。  
+4. **E2E** — Centrade 热 cache 网页跑优化 → 261 候选；冷/过期 TTL 报表包约数十秒（fan-in）；热 `ensure` 亚秒；Jalnoddsa 报表包 ~19s。  
+5. **文档** — catalog-map、phase2、solutions（五杠杆 / 按需 / ASIN 收割 / **报表 job** / **空表分流**）。
 
 **已知未改逻辑（下一棒）**
 
 - **收割列表里的 ASIN 形搜索词**（如 TOODDLY `596737` 的 `b0…`）：报表真值，优化器未过滤。见 [sellfox-search-term-asin-as-keyword-harvest.md](../../docs/solutions/best-practices/sellfox-search-term-asin-as-keyword-harvest.md)。**先别改代码，除非产品明确要求。**
 
-**代码仓**：实现在 `IvyeaOps-sellfox` 分支 `sellfox-readonly-poc`（勿 vendoring 进本仓）。本仓只维护脚本与 OKF。
+**运营易混点（已文档化，非 bug）**
+
+- **VERCART-US `596789`**：搜索词下载中心真为空表；「SP 定向报表」空因 Targeting 全是关键词匹配（数据在关键词报表）。0 候选因点击未达阈值。见 [sellfox-empty-searchterm-vs-target-report-split.md](../../docs/solutions/best-practices/sellfox-empty-searchterm-vs-target-report-split.md)。
+
+**代码仓**：实现在 `IvyeaOps-sellfox` 分支 `sellfox-readonly-poc`（勿 vendoring 进本仓）。本仓只维护脚本与 OKF；`SELLFOX_API/client.py` 增 `download_ready_task`。
 
 ## 2026-07-28 阶段结论（按需拉取）
 
@@ -78,7 +83,9 @@ Python：**用 uv** 管理 IvyeaOps `server\.venv`（`setup_ivyeaops_uv.ps1`）�
 2. 表现报表 ≠ 实体配置；bid/预算杠杆两者都要 ingest。  
 3. 不要把 advertise「五桶」当成 IvyeaOps「五杠杆」。  
 4. optimizer 用 aggregate cache，禁止按日循环 createTask。  
-5. Auto/商品/类目报表里「用户搜索词」可为 ASIN — 不是映射 bug；关键词收割需另滤（未实施）。
+5. 多报表冷启动走 **报表 Job 队列**（错开 create + 合并轮询），不要串行傻等；进度文案用「报表：…」阶段，不要伪造 94 分母。  
+6. Auto/商品/类目报表里「用户搜索词」可为 ASIN — 不是映射 bug；关键词收割需另滤（未实施）。  
+7. 浏览「搜索词/定向」空表先核对 xlsx 真值与匹配类型分流，勿先判 Job/ingest 丢数（VERCART 案例）。
 
 ## 禁止
 

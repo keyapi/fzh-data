@@ -10,7 +10,9 @@ timestamp: 2026-07-28
 
 | 标题 | 文件 |
 |------|------|
+| 赛狐报表 Job 队列（错开 create + 合并轮询） | [sellfox-ivyeaops-report-job-queue.md](sellfox-ivyeaops-report-job-queue.md) |
 | 赛狐 Phase2 ingest — IvyeaOps 五杠杆 | [sellfox-ivyeaops-five-lever-ingest.md](sellfox-ivyeaops-five-lever-ingest.md) |
+| 赛狐对齐原生按需拉取 | [sellfox-ivyeaops-ondemand-fetch-parity.md](sellfox-ivyeaops-ondemand-fetch-parity.md) |
 | 赛狐 API 代理设计 | [sellfox-api-proxy-design.md](sellfox-api-proxy-design.md) |
 | 赛狐尾程调研与架构 | [sellfox-shipping-research-and-architecture.md](sellfox-shipping-research-and-architecture.md) |
 | trackNo 写路径 vs 本地导入 | [sellfox-trackno-write-path-vs-local-import.md](sellfox-trackno-write-path-vs-local-import.md) |

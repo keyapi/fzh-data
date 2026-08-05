@@ -50,6 +50,18 @@ systemd 配置了 `Restart=always`，崩溃自动重启，无需手动干预。
 
 ## 重新登录 ChatGPT OAuth (换账号时)
 
+### 账号历史
+
+| 日期 | 账号 | 类型 | 状态 |
+|------|------|------|------|
+| 2026-06-22 | fzhvickyjing@gmail.com | free | 已禁用 |
+| 2026-07-13 | @my.csun.edu (CSUN) | edu | 已禁用 (工作区禁生图) |
+| 2026-08-03 | @horizon.csueastbay.edu (CSU East Bay) | edu | ✅ 当前 |
+
+> 教育账号权限取决于学校 IT 管理员设置。CSUN 禁了 image-2/gpt-5.6-sol/luna/gpt-5.4；CSU East Bay 全开。
+
+### OAuth 登录步骤
+
 ```bash
 # 1. 在北京开 SSH 隧道 (新窗口, 保持不关)
 ssh -L 1455:127.0.0.1:1455 -D 1080 us-ubuntu-proxy
