@@ -8,6 +8,13 @@ updated: 2026-08-05
 
 # sellfox_shipping — 变更日志
 
+## 2026-08-05 — 购标 operation 只读 CLI
+
+- 新增 `label-operations-list`：按账户、包裹、状态、承运商过滤，输出稳定 JSON envelope
+- 新增 `label-operation-show`：展示 operation 与脱敏后的 label/artifact 摘要
+- `allowed_actions` 明确区分 `resume`、`investigate` 与终态无动作；不提供 retry_create
+- 查询路径不调用承运商 API，不输出原始 carrier response、label URL 或 error summary
+
 ## 2026-08-05 — 恢复 CLI、错误分类与赛狐 Outbox 后续计划
 
 - 确认 PR #132-#136 已进入 main，购标安全核心与 create_label 恢复持久化闭环成为新基线

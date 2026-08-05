@@ -161,6 +161,12 @@ def _get_package_list_service():
     return ListPackagesService(_get_package_repository())
 
 
+def _get_label_operation_query_service():
+    from sellfox_shipping.label_operation_service import LabelOperationQueryService
+
+    return LabelOperationQueryService(_get_package_repository())
+
+
 # ── Commands ──────────────────────────────────────────────────────
 
 @app.command()
@@ -249,6 +255,82 @@ def packages_list(
         )
     )
     _output(result.model_dump(mode="json"), json_output)
+
+
+@app.command("label-operations-list")
+def label_operations_list(
+    account_key: Optional[str] = typer.Option(None, help="Filter by account key"),
+    package_sn: Optional[str] = typer.Option(None, help="Filter by packageSn"),
+    status: Optional[str] = typer.Option(None, help="Filter by operation status"),
+    carrier: Optional[str] = typer.Option(None, help="Filter by carrier"),
+    limit: int = typer.Option(50, min=1, max=500, help="Max results"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """List label acquisition operations without carrier side effects."""
+    filters = {
+        "account_key": account_key,
+        "package_sn": package_sn,
+        "status": status,
+        "carrier": carrier,
+        "limit": limit,
+    }
+    results = _get_label_operation_query_service().list(**filters)
+    _output(
+        {
+            "command": "label-operations-list",
+            "ok": True,
+            "counts": {
+                "input": len(results),
+                "success": len(results),
+                "failed": 0,
+            },
+            "filters": filters,
+            "limit": limit,
+            "results": results,
+            "errors": [],
+        },
+        json_output,
+    )
+
+
+@app.command("label-operation-show")
+def label_operation_show(
+    operation_id: int = typer.Option(..., min=1, help="Label operation id"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Show one label operation and safe linked label/artifact summaries."""
+    try:
+        result = _get_label_operation_query_service().show(operation_id)
+    except LookupError as exc:
+        _output(
+            {
+                "command": "label-operation-show",
+                "ok": False,
+                "counts": {"input": 1, "success": 0, "failed": 1},
+                "results": [],
+                "errors": [
+                    {
+                        "code": "operation_not_found",
+                        "message": str(exc),
+                        "operation_id": operation_id,
+                        "package_sn": "",
+                        "recommended_action": "check_operation_id",
+                    }
+                ],
+            },
+            json_output,
+        )
+        raise typer.Exit(2)
+    _output(
+        {
+            "command": "label-operation-show",
+            "ok": True,
+            "counts": {"input": 1, "success": 1, "failed": 0},
+            "results": [result],
+            "errors": [],
+        },
+        json_output,
+    )
 
 
 def _get_lizard_dims_lookup():

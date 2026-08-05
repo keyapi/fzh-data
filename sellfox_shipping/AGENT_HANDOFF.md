@@ -112,6 +112,12 @@ uv run python -m sellfox_shipping.cli packages-sync \
 # 本地包裹列表（只读本地库）
 uv run python -m sellfox_shipping.cli packages-list --status to_audit --json
 
+# 购标 operation 只读控制面（无承运商 HTTP）
+uv run python -m sellfox_shipping.cli label-operations-list \
+  --status UNKNOWN_BLOCKED --carrier vite --json
+uv run python -m sellfox_shipping.cli label-operation-show \
+  --operation-id <N> --json
+
 # P1B：蜴国际上传 Excel（仅 local_review=approved 且渠道含「蜴」；重尺走 commodity pageList）
 uv run python -m sellfox_shipping.cli lizard-export -o out/lizard-upload.xlsx --actor <operator-id> --json
 

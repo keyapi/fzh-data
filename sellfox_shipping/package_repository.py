@@ -2232,6 +2232,7 @@ class PackageRepository:
     def list_label_operations(
         self,
         *,
+        account_key: str | None = None,
         package_sn: str | None = None,
         status: str | None = None,
         carrier: str | None = None,
@@ -2239,6 +2240,12 @@ class PackageRepository:
     ) -> list[LabelOperationRecord]:
         with self._session_factory() as session:
             q = session.query(LabelOperationRow)
+            if account_key:
+                q = q.join(
+                    ShippingAccountRow,
+                    ShippingAccountRow.id == LabelOperationRow.account_id,
+                )
+                q = q.where(ShippingAccountRow.account_key == account_key)
             if package_sn:
                 q = q.join(PackageRow, PackageRow.id == LabelOperationRow.package_id)
                 q = q.where(PackageRow.package_sn == package_sn)
@@ -2256,6 +2263,36 @@ class PackageRepository:
                     )
                 )
             return result
+
+    def get_package_sns_by_db_ids(
+        self, package_db_ids: set[int]
+    ) -> dict[int, str]:
+        if not package_db_ids:
+            return {}
+        with self._session_factory() as session:
+            rows = session.execute(
+                select(PackageRow.id, PackageRow.package_sn).where(
+                    PackageRow.id.in_(package_db_ids)
+                )
+            ).all()
+            return {int(package_id): str(package_sn) for package_id, package_sn in rows}
+
+    def get_label_for_operation(
+        self, operation_id: int
+    ) -> ShippingLabelRecord | None:
+        with self._session_factory() as session:
+            row = session.scalar(
+                select(ShippingLabelRow)
+                .where(ShippingLabelRow.operation_id == operation_id)
+                .order_by(ShippingLabelRow.id.desc())
+                .limit(1)
+            )
+            if row is None:
+                return None
+            account = session.get(ShippingAccountRow, row.account_id)
+            return _shipping_label_to_record(
+                account.account_key if account else "", row
+            )
 
     def insert_label(
         self,
