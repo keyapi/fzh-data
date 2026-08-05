@@ -2219,6 +2219,61 @@ class PackageRepository:
         )
         return self.get_label_operation(operation_id)
 
+    def resolve_unknown_blocked_operation(
+        self,
+        operation_id: int,
+        *,
+        target_status: str,
+        resolution: str,
+        provider_order_id: str = "",
+        note: str = "",
+        actor: str = "",
+    ) -> None:
+        """Human-driven resolution: bypass state machine for UNKNOWN_BLOCKED operations.
+
+        This is a controlled, audited transition. Only valid from UNKNOWN_BLOCKED.
+        Allowed targets: FAILED_SAFE, FAILED_FINAL, ACCEPTED.
+        """
+        from datetime import datetime, timezone
+
+        if not (actor or "").strip():
+            raise ValueError("actor is required for resolution")
+        if target_status not in {"FAILED_SAFE", "FAILED_FINAL", "ACCEPTED"}:
+            raise ValueError(
+                f"invalid resolution target {target_status!r}"
+            )
+
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        with self._session_factory.begin() as session:
+            row = session.get(LabelOperationRow, operation_id)
+            if row is None:
+                raise RuntimeError(
+                    f"label operation not found: {operation_id}"
+                )
+            current = (row.status or "").strip()
+            if current != "UNKNOWN_BLOCKED":
+                raise RuntimeError(
+                    f"resolve_unknown_blocked_operation requires "
+                    f"UNKNOWN_BLOCKED, got {current!r} for "
+                    f"operation_id={operation_id}"
+                )
+
+            parts = [f"resolution={resolution}", f"actor={actor}"]
+            if note.strip():
+                parts.append(f"note={note.strip()[:200]}")
+            audit = "; ".join(parts)
+
+            prior = (row.error_summary or "").strip()
+            row.error_summary = (
+                f"{prior} | {audit}" if prior else audit
+            )[:500]
+            row.error_class = f"human:{resolution}"
+            row.status = target_status
+            if provider_order_id.strip():
+                row.provider_order_id = provider_order_id.strip()
+            row.updated_at = now
+            session.add(row)
+
     def get_label_operation(self, operation_id: int) -> LabelOperationRecord:
         with self._session_factory() as session:
             row = session.get(LabelOperationRow, operation_id)

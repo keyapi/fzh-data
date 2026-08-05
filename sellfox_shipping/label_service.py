@@ -1022,6 +1022,92 @@ class LabelService:
         return result
 
 
+
+    # ── UNKNOWN_BLOCKED resolution ───────────────────────────
+
+    def resolve_unknown_blocked(
+        self,
+        operation_id: int,
+        *,
+        resolution: str,
+        confirm: str = "",
+        provider_order_id: str = "",
+        note: str = "",
+        actor: str,
+    ) -> dict[str, Any]:
+        """Human-driven resolution of an UNKNOWN_BLOCKED operation.
+
+        resolution must be one of: fail_safe, fail_final, provide_known_id.
+        confirm must match resolution to prevent accidental execution.
+        provide_known_id requires a non-empty provider_order_id.
+        """
+        VALID_RESOLUTIONS = {"fail_safe", "fail_final", "provide_known_id"}
+        if resolution not in VALID_RESOLUTIONS:
+            raise LabelServiceError(
+                f"invalid resolution {resolution!r}. "
+                f"Use: {', '.join(sorted(VALID_RESOLUTIONS))}",
+                http_status=400,
+            )
+        if confirm != resolution:
+            raise LabelServiceError(
+                f"confirm value must match resolution ({resolution!r})",
+                http_status=400,
+            )
+
+        op = self._repo.get_label_operation(operation_id)
+        if op is None:
+            raise LabelServiceError(
+                f"operation not found: {operation_id}", http_status=404
+            )
+        if op.status != "UNKNOWN_BLOCKED":
+            raise LabelServiceError(
+                f"operation {operation_id} is {op.status}, "
+                f"only UNKNOWN_BLOCKED can be manually resolved",
+                http_status=409,
+            )
+
+        if resolution == "provide_known_id":
+            pid = (provider_order_id or "").strip()
+            if not pid:
+                raise LabelServiceError(
+                    "provider_order_id is required for provide_known_id",
+                    http_status=400,
+                )
+
+            self._repo.resolve_unknown_blocked_operation(
+                operation_id,
+                target_status="ACCEPTED",
+                resolution=resolution,
+                provider_order_id=pid,
+                note=note,
+                actor=actor,
+            )
+            return {
+                "operation_id": operation_id,
+                "status": "ACCEPTED",
+                "provider_order_id": pid,
+                "resolution": resolution,
+                "next_action": "resume",
+            }
+
+        target_status = "FAILED_SAFE" if resolution == "fail_safe" else "FAILED_FINAL"
+        self._repo.resolve_unknown_blocked_operation(
+            operation_id,
+            target_status=target_status,
+            resolution=resolution,
+            note=note,
+            actor=actor,
+        )
+        result: dict[str, Any] = {
+            "operation_id": operation_id,
+            "status": target_status,
+            "resolution": resolution,
+        }
+        if resolution == "fail_safe":
+            result["next_action"] = "retry_create_new_generation"
+        return result
+
+
 def _default_fetch_bytes(url: str) -> bytes:
     import httpx
     resp = httpx.get(url, timeout=30.0)
