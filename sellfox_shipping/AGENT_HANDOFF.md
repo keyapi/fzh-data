@@ -85,6 +85,14 @@ Excel 本地闭环（审核 → 导出 → 人工上传物流商 → 导入对�
 > - `resolve_unknown_blocked()` 增加必填 `evidence_id`，验证归属
 > - 新增 CLI `label-operation-investigate`（evidence_type: ticket/carrier_portal/email/other）
 > - `label-operation-resolve` 增加必填 `--evidence-id`
+> **PR #143 复审修复：lease fencing + 权威证据约束**
+> - Migration 0018 增加 `claim_token`、investigation `conclusion` 和 operation `resolution_evidence_id`
+> - resume claim 使用 SQLite `BEGIN IMMEDIATE`；只有持有同一 token 的 worker 可以释放 lease
+> - `label-operation-investigate` 必填 `--conclusion`：`confirmed_not_created` / `confirmed_created` / `confirmed_rejected`
+> - `confirmed_created` 必须同时传 `--provider-order-id`，结案时与 CLI 输入严格匹配
+> - `fail_safe`、`provide_known_id`、`fail_final` 分别只接受对应 conclusion
+> - 结案证据必须有外部引用或私有 artifact；`other` 类型不能直接作为权威结案证据
+> - 结案事务持久化 `resolution_evidence_id`，审计事件同时记录 evidence ID
 >
 > **待完成：**
 > 1. 赛狐 outbox 回写（标签成功后异步回写追踪号到赛狐；暂缓）

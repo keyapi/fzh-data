@@ -6,7 +6,16 @@ created: 2026-07-15
 updated: 2026-08-05
 ---
 
-# sellfox_shipping — 变更日志
+# sellfox_shipping - 变更日志
+
+## 2026-08-05 - PR #143 可靠性复审修复
+
+- Migration 0018 为 resume claim 增加 `claim_token`，并将 lease 改为 SQLite `BEGIN IMMEDIATE` 条件更新。
+- lease 释放必须匹配 token，过期 worker 不能清除新 worker 的 claim。
+- investigation 增加结构化 `conclusion`；`confirmed_created` 同时保存并核对 `provider_order_id`。
+- UNKNOWN_BLOCKED 结案在同一事务内校验证据归属、结论和权威引用，并把 `resolution_evidence_id` 持久化到 operation。
+- `label-operation-investigate` 新增必填 `--conclusion`；空白 `other` 证据不能释放购标槽位。
+- 新增跨 repository 并发、lease fencing、证据错配和审计关联测试；测试基线更新为 217 passed。
 
 ## 2026-08-05 — UNKNOWN_BLOCKED 证据化结案 (PR C：可靠性收口)
 
