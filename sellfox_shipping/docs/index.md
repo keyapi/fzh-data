@@ -20,6 +20,7 @@ updated: 2026-08-05
 - [roadmap.md](roadmap.md) — **生产化路线图与 Agent 任务包**
 - [specs/index.md](specs/index.md) — **生产可靠性设计规范**
 - [specs/recovery-cli-error-taxonomy-outbox-plan-2026-08-05.md](specs/recovery-cli-error-taxonomy-outbox-plan-2026-08-05.md) — **恢复 CLI、错误分类、UNKNOWN 人工结案与赛狐 Outbox 实施计划**
+- [specs/production-acceptance-and-jack-handoff-2026-08-05.md](specs/production-acceptance-and-jack-handoff-2026-08-05.md) — **生产验收矩阵、剩余边界与 Jack Agent 接手规范**
 
 ## 调研 / 交接
 

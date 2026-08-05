@@ -94,9 +94,12 @@ Excel 本地闭环（审核 → 导出 → 人工上传物流商 → 导入对�
 > - 结案证据必须有外部引用或私有 artifact；`other` 类型不能直接作为权威结案证据
 > - 结案事务持久化 `resolution_evidence_id`，审计事件同时记录 evidence ID
 >
-> **待完成：**
-> 1. 赛狐 outbox 回写（标签成功后异步回写追踪号到赛狐；暂缓）
-> 2. 公网启用 OIDC/CSRF/RBAC
+> **当前接手裁决（2026-08-05）：**
+> 1. 先合入并验证 Migration 0019：修复历史 SQLite 库连续升级失败及半应用 0018 缺失外键。
+> 2. Jack Agent 第一阶段只做生产验收与缺口复核，按 [生产验收与交接规范](docs/specs/production-acceptance-and-jack-handoff-2026-08-05.md) 输出 readiness matrix。
+> 3. 赛狐 outbox 回写由用户明确暂缓；不要开发，也不要真实重放 `submitToPlatform`。
+> 4. 公网部署前仍需 OIDC/CSRF/RBAC、secure cookie 与 PII/log 脱敏审计。
+> 5. 当前自动化基线在 Migration 0019 修复分支为 **221 passed, 2 warnings**；仍不等于承运商沙箱或生产业务验收完成。
 
 ### 7. 重规划裁决
 

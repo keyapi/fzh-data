@@ -8,6 +8,15 @@ updated: 2026-08-05
 
 # sellfox_shipping - 变更日志
 
+## 2026-08-05 - Migration 0019 与生产验收交接
+
+- 合并后全量测试发现：历史 SQLite 库从 0015 连续升级时，0018 使用 `op.add_column(ForeignKey(...))` 会触发 SQLite 不支持的独立约束 ALTER。
+- Migration 0018 改为先新增普通列；Migration 0019 使用 Alembic batch copy-and-move 建立外键。
+- 0019 同时修复已被旧 0018 半应用并标记为 head、但 `resolution_evidence_id` 外键缺失的数据库。
+- 新增历史 0015 连续升级和半应用 0018 修复测试；自动化基线更新为 221 passed、2 个既有 warning。
+- 更新路线图：购标恢复核心标记完成，赛狐 outbox 标记为用户延期，下一阶段改为生产验收与三方对账评估。
+- 新增 Jack Agent 生产验收接手规范，明确禁止无授权真实购标、取消和赛狐回写。
+
 ## 2026-08-05 - PR #143 可靠性复审修复
 
 - Migration 0018 为 resume claim 增加 `claim_token`，并将 lease 改为 SQLite `BEGIN IMMEDIATE` 条件更新。

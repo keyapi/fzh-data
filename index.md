@@ -26,7 +26,7 @@ generated: 2026-08-05 17:31
 | **pdf_to_md** | 6 | Index, Lesson, Log, Reference | [pdf_to_md/](pdf_to_md/) -> [pdf_to_md/docs/index.md](pdf_to_md/docs/index.md) |
 | **root** | 1 | Index | [root/](root/) -> [index.md](index.md) |
 | **sellfox-api-proxy** | 12 | Index, Lesson, Log, Research | [sellfox-api-proxy/](sellfox-api-proxy/) -> [sellfox-api-proxy/docs/index.md](sellfox-api-proxy/docs/index.md) |
-| **sellfox_shipping** | 35 | Guide, Handoff, Index, Log | [sellfox_shipping/](sellfox_shipping/) -> [sellfox_shipping/docs/index.md](sellfox_shipping/docs/index.md) |
+| **sellfox_shipping** | 36 | Guide, Handoff, Index, Log | [sellfox_shipping/](sellfox_shipping/) -> [sellfox_shipping/docs/index.md](sellfox_shipping/docs/index.md) |
 | **us_openai_api_proxy** | 9 | Explanation, Handoff, HowTo, Index | [us_openai_api_proxy/](us_openai_api_proxy/) -> [us_openai_api_proxy/docs/index.md](us_openai_api_proxy/docs/index.md) |
 | **vite-api** | 1 | Reference | [vite-api/](vite-api/) -> [vite-api/docs/test-guide/test-credentials.md](vite-api/docs/test-guide/test-credentials.md) |
 | **yiglobal-api** | 2 | Index, Log | [yiglobal-api/](yiglobal-api/) -> [yiglobal-api/docs/index.md](yiglobal-api/docs/index.md) |
@@ -270,6 +270,7 @@ generated: 2026-08-05 17:31
 | Roadmap | sellfox_shipping 生产化路线图 | [sellfox_shipping/docs/roadmap.md](sellfox_shipping/docs/roadmap.md) | 2026-08-05 |
 | Solution | ChatGPT UPS/FedEx Zone 分析与路由引擎架构参考 | [sellfox_shipping/docs/solutions/chatgpt-ups-fedex-analysis-reference-2026-07-22.md](sellfox_shipping/docs/solutions/chatgpt-ups-fedex-analysis-reference-2026-07-22.md) | 2026-08-05 |
 | Spec | sellfox_shipping 恢复 CLI、错误分类与赛狐 Outbox 实施计划 | [sellfox_shipping/docs/specs/recovery-cli-error-taxonomy-outbox-plan-2026-08-05.md](sellfox_shipping/docs/specs/recovery-cli-error-taxonomy-outbox-plan-2026-08-05.md) | 2026-08-05 |
+| Spec | sellfox_shipping 生产验收与 Jack Agent 交接规范 | [sellfox_shipping/docs/specs/production-acceptance-and-jack-handoff-2026-08-05.md](sellfox_shipping/docs/specs/production-acceptance-and-jack-handoff-2026-08-05.md) | 2026-08-05 |
 | Spec | sellfox_shipping 生产可靠性蓝图 | [sellfox_shipping/docs/specs/production-reliability-blueprint-2026-08-04.md](sellfox_shipping/docs/specs/production-reliability-blueprint-2026-08-04.md) | 2026-08-05 |
 
 ### us_openai_api_proxy
