@@ -72,7 +72,7 @@ def test_label_operations_list_filters_account_and_reports_unknown_action(
     assert payload["counts"] == {"input": 1, "success": 1, "failed": 0}
     assert payload["filters"]["account_key"] == "account-a"
     assert [row["package_sn"] for row in payload["results"]] == ["P-A"]
-    assert payload["results"][0]["allowed_actions"] == ["investigate"]
+    assert payload["results"][0]["allowed_actions"] == ["resolve"]
     assert "T" in payload["results"][0]["created_at"]
     assert payload["results"][0]["created_at"].endswith("+08:00")
     assert "retry_create" not in result.output

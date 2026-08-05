@@ -134,6 +134,26 @@ def test_business_error_raises():
         with pytest.raises(LizardApiError, match="订单数据不存在") as exc:
             client.get_label(order_code="OC1", reference_no="WRONG")
     assert exc.value.business_code == 400
+    assert exc.value.phase == "query"
+    assert exc.value.outcome == "retryable_query"
+    assert exc.value.category == "service_rejected"
+
+
+def test_create_business_rejection_is_final_and_safe_for_new_generation():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("getToken"):
+            return httpx.Response(
+                200, json={"code": 200, "result": {"access_token": "jwt-1"}}
+            )
+        return httpx.Response(200, json={"code": 400, "msg": "invalid address"})
+
+    with _client(handler) as client:
+        with pytest.raises(LizardApiError) as exc:
+            client.create_order({"reference_no": "P1"})
+    assert exc.value.phase == "create"
+    assert exc.value.outcome == "rejected"
+    assert exc.value.category == "service_rejected"
+    assert exc.value.safe_to_create_again is True
 
 
 def test_missing_credentials():

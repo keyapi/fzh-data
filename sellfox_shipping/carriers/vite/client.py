@@ -12,13 +12,31 @@ from typing import Any
 
 import httpx
 
+from sellfox_shipping.carriers.errors import CarrierFailure, classify_http_failure
+
 
 DEFAULT_TEST_BASE = "https://test-api.vitedirect.com"
 
 
-class ViteClientError(RuntimeError):
-    def __init__(self, message: str, *, status_code: int | None = None):
-        super().__init__(message)
+class ViteClientError(CarrierFailure):
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: int | None = None,
+        phase: str = "create",
+    ):
+        outcome, category, safe = classify_http_failure(
+            phase=phase, status_code=status_code
+        )
+        super().__init__(
+            message,
+            phase=phase,
+            outcome=outcome,
+            category=category,
+            http_status=status_code,
+            safe_to_create_again=safe,
+        )
         self.status_code = status_code
 
 
@@ -64,24 +82,24 @@ class ViteGofoClient:
         )
 
     def rate_gofo(self, body: dict[str, Any]) -> dict[str, Any]:
-        return self._post_json("/rate2/gofo", body)
+        return self._post_json("/rate2/gofo", body, phase="query")
 
     def create_shipment_gofo(self, body: dict[str, Any]) -> dict[str, Any]:
-        return self._post_json("/shipment2/gofo", body)
+        return self._post_json("/shipment2/gofo", body, phase="create")
 
     # ── FedEx endpoints ──────────────────────────────────────────
 
     def rate_fedex(self, body: dict[str, Any]) -> dict[str, Any]:
         """POST /rate2/fedex — domestic FedEx rate query."""
-        return self._post_json("/rate2/fedex", body)
+        return self._post_json("/rate2/fedex", body, phase="query")
 
     def rate_fedex_international(self, body: dict[str, Any]) -> dict[str, Any]:
         """POST /rate2/fedex/international — international FedEx rate query."""
-        return self._post_json("/rate2/fedex/international", body)
+        return self._post_json("/rate2/fedex/international", body, phase="query")
 
     def create_shipment_fedex(self, body: dict[str, Any]) -> dict[str, Any]:
         """POST /shipment2/fedex — create domestic FedEx label (future use)."""
-        return self._post_json("/shipment2/fedex", body)
+        return self._post_json("/shipment2/fedex", body, phase="create")
 
     # ── Shared label endpoints ───────────────────────────────────
 
@@ -90,7 +108,9 @@ class ViteGofoClient:
         oid = (order_id or "").strip()
         if not oid:
             raise ValueError("order_id is required")
-        data = self._request_json("GET", f"/shipment2/label/{oid}")
+        data = self._request_json(
+            "GET", f"/shipment2/label/{oid}", phase="query"
+        )
         if isinstance(data, list):
             return [item for item in data if isinstance(item, dict)]
         if isinstance(data, dict):
@@ -102,13 +122,17 @@ class ViteGofoClient:
         ref = (label_ref or "").strip()
         if not ref:
             raise ValueError("label_ref is required")
-        data = self._request_json("DELETE", f"/shipment2/label/{ref}")
+        data = self._request_json(
+            "DELETE", f"/shipment2/label/{ref}", phase="cancel"
+        )
         if not isinstance(data, dict):
             raise ViteClientError("VITE cancel response is not a JSON object")
         return data
 
-    def _post_json(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
-        data = self._request_json("POST", path, body=body)
+    def _post_json(
+        self, path: str, body: dict[str, Any], *, phase: str
+    ) -> dict[str, Any]:
+        data = self._request_json("POST", path, body=body, phase=phase)
         if not isinstance(data, dict):
             raise ViteClientError("VITE response is not a JSON object")
         return data
@@ -119,16 +143,20 @@ class ViteGofoClient:
         path: str,
         *,
         body: dict[str, Any] | None = None,
+        phase: str,
     ) -> Any:
         kwargs: dict[str, Any] = {}
         if body is not None:
             kwargs["json"] = body
         resp = self._client.request(method, path, **kwargs)
         if resp.status_code == 401:
-            raise ViteClientError("invalid x-api-key", status_code=401)
+            raise ViteClientError(
+                "invalid x-api-key", status_code=401, phase=phase
+            )
         if resp.status_code >= 400:
             raise ViteClientError(
                 f"VITE HTTP {resp.status_code}: {resp.text[:500]}",
                 status_code=resp.status_code,
+                phase=phase,
             )
         return resp.json()
