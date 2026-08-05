@@ -12,7 +12,7 @@ timestamp: 2026-08-04
 
 | 顺序 | 任务包 | 完成标准 |
 |---|---|---|
-| 1 | 购标安全核心 | preflight、SQLite 原子 claim、operation journal、活动标签唯一约束、UNKNOWN_BLOCKED、只查询恢复 CLI、并发和崩溃测试 |
+| 1 | 购标安全核心 | preflight、SQLite 原子 claim、operation journal、活动标签唯一约束、UNKNOWN_BLOCKED、ACCEPTED 即时持久化、LABEL_PENDING、取消一致性、并发和崩溃窗口测试。**仍缺**：只查询恢复 CLI、carrier error taxonomy |
 | 2 | 赛狐可靠回写 | 标签落库后 outbox 回写；失败只重试回写；回读核验；冲突进入人工队列 |
 | 3 | 取消与退款分离 | 标签失效、取消请求、承运商确认和退款到账分开记录 |
 | 4 | 认证与审计收口 | 公网 OIDC/CSRF/RBAC、PII 脱敏、所有危险操作审计 |

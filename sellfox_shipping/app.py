@@ -762,45 +762,18 @@ def _compute_routing(record, carton_rows: list[dict]):
 
 
 def _build_vite_ship_from(record) -> dict:
-    """Build VITE-compatible sender address from warehouse config."""
-    wh_name = (record.logistics.warehouse_name or "").strip()
-    if wh_name:
-        warehouses_cfg = config.get("warehouses", {})
-        wh = warehouses_cfg.get(wh_name, {})
-        addr = wh.get("address", {})
-        if addr.get("address1"):
-            return {
-                "fullName": (addr.get("name") or "FZH Warehouse")[:35],
-                "company": (addr.get("company") or "")[:35],
-                "address1": addr["address1"][:50],
-                "address2": (addr.get("address2") or "")[:50],
-                "city": (addr.get("city") or "")[:28],
-                "state": (addr.get("state") or "")[:2],
-                "zipCode": (addr.get("postal_code") or "")[:10],
-                "phoneNumber": (addr.get("phone") or addr.get("email") or "0000000000")[:15],
-            }
-    return {
-        "fullName": "FZH Test",
-        "address1": "90 Chester rd",
-        "city": "Belmont",
-        "state": "MA",
-        "zipCode": "02478",
-        "phoneNumber": "1111111111",
-    }
+    """Build VITE sender address — strict builder, no fictional fallbacks."""
+    from sellfox_shipping.carriers.vite.shipment import _build_ship_from
+
+    warehouses_cfg = config.get("warehouses", {})
+    return _build_ship_from(record.logistics.warehouse_name or "", warehouses_cfg)
 
 
 def _build_vite_ship_to(record) -> dict:
-    """Build VITE-compatible recipient address from package record."""
-    addr = record.address
-    return {
-        "fullName": (addr.name or "Customer")[:35],
-        "address1": (addr.address_line_1 or "")[:50],
-        "address2": (addr.address_line_2 or "")[:35],
-        "city": (addr.city or "")[:28],
-        "state": (addr.state_or_region or addr.city or "XX")[:2],
-        "zipCode": (addr.postal_code or "")[:10],
-        "phoneNumber": (addr.phone or addr.mobile or "0000000000")[:15],
-    }
+    """Build VITE recipient address — strict builder, no fictional fallbacks."""
+    from sellfox_shipping.carriers.vite.shipment import _build_ship_to
+
+    return _build_ship_to(record)
 
 
 VITE_FEDEX_CHANNEL = (os.getenv("VITE_FEDEX_CHANNEL") or "ODFC").strip()
@@ -850,8 +823,12 @@ def _get_vite_rate(
         height_in = round(package_dims["height_cm"] / 2.54, 1)
         max_side_in = max(length_in, width_in, height_in)
 
-        ship_from = _build_vite_ship_from(record)
-        ship_to = _build_vite_ship_to(record)
+        try:
+            ship_from = _build_vite_ship_from(record)
+            ship_to = _build_vite_ship_to(record)
+        except ValueError as exc:
+            return {"source": "vite", "error": str(exc)}
+
         dest_country = (
             record.address.country_code or record.address.country or ""
         ).upper()
@@ -1955,6 +1932,91 @@ async def batch_print_packages(request: Request):
         content=buf.getvalue(),
         media_type="application/pdf",
         headers={"Content-Disposition": "inline; filename=batch_print.pdf"},
+    )
+
+
+@app.post("/api/packages/batch-export")
+async def batch_export_packages(request: Request):
+    """Export selected package data as CSV (Excel-compatible)."""
+    import csv, io
+
+    body = await request.json()
+    package_sns: list[str] = body.get("package_sns", [])
+    if not package_sns:
+        raise HTTPException(400, "No package_sns provided")
+
+    account_key = config["sellfox"]["proxy_account"]
+    repo = _get_package_repository()
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow([
+        "包裹号", "赛狐状态", "本地审核", "渠道", "店铺", "追踪号", "站点",
+        "建议承运商", "匹配规则", "路由状态",
+        "收货人", "电话", "城市/州", "邮编", "国家", "地址",
+    ])
+
+    for sn in package_sns:
+        record = repo.get(account_key, sn)
+        if record is None:
+            continue
+        addr = record.address
+        state_region = (addr.state_or_region or "").strip()
+        city_state = addr.city or ""
+        if state_region:
+            city_state = f"{city_state}/{state_region}" if city_state else state_region
+
+        phone = addr.phone or addr.mobile or ""
+        address_line = addr.address_line_1 or ""
+        if addr.address_line_2:
+            address_line += " " + addr.address_line_2
+
+        # Routing: cached first, compute on-the-fly if missing
+        route_label = route_rule = route_status = ""
+        db_id = repo.get_package_db_id(account_key, sn)
+        if db_id is not None:
+            routing = repo.get_package_routing(db_id)
+            if routing is not None:
+                route_label = routing.label
+                route_rule = routing.rule_name
+                route_status = "已匹配" if routing.matched else "已排除"
+        # Fallback: compute routing on-the-fly
+        if not route_label:
+            try:
+                carton_rows = _carton_rows_for_package(account_key, record)
+                computed = _compute_routing(record, carton_rows)
+                if computed:
+                    route_label = computed.get("label", "")
+                    route_rule = computed.get("rule_name", "")
+                    route_status = "已匹配" if computed.get("matched") else "已排除"
+            except Exception:
+                pass
+
+        writer.writerow([
+            record.package_sn,
+            record.package_status or "",
+            record.local_review_status or "",
+            record.logistics.channel_name or "",
+            record.shop_name or "",
+            record.logistics.tracking_number or "",
+            record.marketplace or "",
+            route_label,
+            route_rule,
+            route_status,
+            addr.name or "",
+            phone,
+            city_state,
+            addr.postal_code or "",
+            addr.country or "",
+            address_line.strip(),
+        ])
+
+    buf.seek(0)
+    csv_bytes = buf.getvalue().encode("utf-8-sig")
+    return Response(
+        content=csv_bytes,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": "attachment; filename=packages_export.csv"},
     )
 
 

@@ -83,6 +83,7 @@ class LizardApiShipmentService:
         shipper_code: str = SHIPPER_CODE_DEFAULT,
         poll_interval_s: float = 15.0,
         poll_timeout_s: float = 180.0,
+        operation_id: int | None = None,
     ) -> LizardApiShipmentResult:
         sn = (package.package_sn or "").strip()
         if not sn:
@@ -96,53 +97,75 @@ class LizardApiShipmentService:
         if not order_code:
             raise RuntimeError(f"createOrder missing order_code for {sn}")
 
-        deadline = self._monotonic() + max(poll_timeout_s, 0.0)
-        poll_count = 0
+        if operation_id is not None:
+            self._repo.transition_label_operation(
+                operation_id,
+                status="ACCEPTED",
+                provider_order_id=order_code,
+            )
+
         tracking = parsed_create.get("tracking_number") or ""
         label_url = parsed_create.get("label_url") or ""
-        ready = False
+        poll_count = 0
 
-        while True:
-            poll_count += 1
-            lab = self._client.get_label(order_code=order_code, reference_no=sn)
-            parsed = parse_get_label_result(lab)
-            if parsed.get("tracking_number"):
-                tracking = str(parsed["tracking_number"])
-            if parsed.get("label_url"):
-                label_url = str(parsed["label_url"])
-            if parsed.get("label_ready"):
-                ready = True
-                break
-            if self._monotonic() >= deadline:
-                break
-            interval = max(poll_interval_s, 0.0)
-            if interval > 0:
-                self._sleep(interval)
+        try:
+            deadline = self._monotonic() + max(poll_timeout_s, 0.0)
+            ready = False
 
-        if not ready:
-            raise LizardLabelNotReadyError(
-                f"getLabel not ready for {sn} order_code={order_code} "
-                f"after {poll_count} poll(s)"
+            while True:
+                poll_count += 1
+                lab = self._client.get_label(order_code=order_code, reference_no=sn)
+                parsed = parse_get_label_result(lab)
+                if parsed.get("tracking_number"):
+                    tracking = str(parsed["tracking_number"])
+                if parsed.get("label_url"):
+                    label_url = str(parsed["label_url"])
+                if parsed.get("label_ready"):
+                    ready = True
+                    break
+                if self._monotonic() >= deadline:
+                    break
+                interval = max(poll_interval_s, 0.0)
+                if interval > 0:
+                    self._sleep(interval)
+
+            if not ready:
+                raise LizardLabelNotReadyError(
+                    f"getLabel not ready for {sn} order_code={order_code} "
+                    f"after {poll_count} poll(s)"
+                )
+            if not label_url:
+                raise LizardLabelMissingUrlError(
+                    f"label ready but missing label_url for {sn} order_code={order_code}"
+                )
+
+            content = self._fetch_bytes(label_url)
+            if not content:
+                raise RuntimeError(f"empty label PDF for {sn}")
+
+            artifact = self._repo.register_artifact(
+                account_key=account_key,
+                kind=ARTIFACT_KIND,
+                file_name=f"lizard-label-{sn}.pdf",
+                content=content,
+                actor=actor,
+                mime_type="application/pdf",
+                virtual_folder="lizard/api-labels",
+                summary=f"order_code={order_code} tracking={tracking}",
             )
-        if not label_url:
-            raise LizardLabelMissingUrlError(
-                f"label ready but missing label_url for {sn} order_code={order_code}"
-            )
+        except Exception as exc:
+            if operation_id is not None:
+                self._repo.transition_label_operation(
+                    operation_id,
+                    status="LABEL_PENDING",
+                    provider_order_id=order_code,
+                    tracking_number=tracking,
+                    error_class="label_pending",
+                    error_summary=str(exc)[:500],
+                    increment_attempt=True,
+                )
+            raise
 
-        content = self._fetch_bytes(label_url)
-        if not content:
-            raise RuntimeError(f"empty label PDF for {sn}")
-
-        artifact = self._repo.register_artifact(
-            account_key=account_key,
-            kind=ARTIFACT_KIND,
-            file_name=f"lizard-label-{sn}.pdf",
-            content=content,
-            actor=actor,
-            mime_type="application/pdf",
-            virtual_folder="lizard/api-labels",
-            summary=f"order_code={order_code} tracking={tracking}",
-        )
         return LizardApiShipmentResult(
             package_sn=sn,
             order_code=order_code,
