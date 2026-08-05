@@ -1,0 +1,44 @@
+---
+okf: v0.1
+type: Roadmap
+title: 统一 AI 接入 C′ — PoC 路线图
+description: 壳 #113 + 板 #116 已合并；下一步运营审；Portal 待确认
+tags: [roadmap, open-webui, ivyeaops, sellfox]
+timestamp: 2026-07-24
+---
+
+# 路线图
+
+## 已完成（壳 PoC）
+
+- [x] S1–S4 + CI/Terminal 天花板实测
+- [x] PR [#113](https://github.com/keyapi/fzh-data/pull/113) 合并（2026-07-24）
+
+## 已完成（板 PoC 技术）
+
+- [x] B1 clone `IvyeaOps-sellfox` / `sellfox-readonly-poc`
+- [x] B2–B3 sellfox_openapi + sellers probe（99 店）
+- [x] B4 aggregate ingest（1922 行）
+- [x] B5 否词/收割候选 + 写路径硬禁
+- [x] B6 偏差清单 + candidates 导出
+- [x] PR [#116](https://github.com/keyapi/fzh-data/pull/116) 合并（2026-07-24）
+
+## 进行中 / 下一步
+
+- [x] **Phase2 五杠杆 ingest**（2026-07-28）：实体 + Targeting/Campaign/SearchTerm + asin_profit；标定店候选含降/加 bid。见 [board/docs/specs/phase2-dataset-gap.md](../board/docs/specs/phase2-dataset-gap.md)
+- [x] **按需拉取对齐原生**（2026-07-28）：READ_DATASETS 12/12；禁止回落领星；离线 ingest 可选预热。见 [sellfox-ivyeaops-ondemand-fetch-parity.md](../../docs/solutions/architecture-patterns/sellfox-ivyeaops-ondemand-fetch-parity.md)
+- [ ] **DEFERRED**：收割过滤 ASIN 形搜索词（仅文档，未改逻辑）— [sellfox-search-term-asin-as-keyword-harvest.md](../../docs/solutions/best-practices/sellfox-search-term-asin-as-keyword-harvest.md)
+- [ ] **运营审** `board/docs/reference/deviations.md` + 本地 candidates  
+  简报：[board/docs/specs/ops-review-brief.md](../board/docs/specs/ops-review-brief.md)  
+  三类标注：可直接用 / 阈值要改 / 不适用家纺 — **签字前不得自动执行**
+- [ ] **上游 IvyeaOps merge**（fork 内）
+- [ ] **IvyeaAgent**（知识库）
+
+## 之后（需确认启动）
+
+- [ ] Portal：nginx `/chat` `/ops` + 钉钉（新专题）
+- [ ] 赛狐广告写 API 后再谈 operate（当前硬禁）
+
+## 明确不做（当前阶段）
+
+广告写操作、全量看板、bare-metal Open Terminal、未验证 `advertise/` 当真理、IvyeaOps AGPL vendoring。

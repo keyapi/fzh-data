@@ -143,7 +143,8 @@ def analyze(all_reports):
             "roas": h.get("roas"),
             "clicks": h.get("clicks", 0),
             "action": "加入精准匹配活动",
-            "priority": "HIGH" if (h.get("orders", 0) or 0) >= 3 else "MEDIUM",
+            "priority": "P0" if (h.get("orders", 0) or 0) >= 3 and (h.get("acos") or 1) < 0.2 else ("P1" if (h.get("orders", 0) or 0) >= 2 and (h.get("acos") or 1) < 0.3 else "P2"),
+            "suggested_week": 1 if (h.get("orders", 0) or 0) >= 3 else (2 if (h.get("orders", 0) or 0) >= 2 else 3),
         })
     harvest_list.sort(key=lambda x: x.get("sales", 0) or 0, reverse=True)
 
@@ -153,7 +154,8 @@ def analyze(all_reports):
             "search_term": n.get("search_term", ""),
             "spend": n.get("spend", 0),
             "clicks": n.get("clicks", 0),
-            "priority": "HIGH" if (n.get("spend", 0) or 0) > 10 else "MEDIUM",
+            "priority": "P0" if (n.get("spend", 0) or 0) >= 50 else ("P1" if (n.get("spend", 0) or 0) >= 20 else "P2"),
+            "suggested_week": 1 if (n.get("spend", 0) or 0) >= 50 else (2 if (n.get("spend", 0) or 0) >= 20 else 3),
         })
     negate_list.sort(key=lambda x: x.get("spend", 0) or 0, reverse=True)
 
@@ -277,5 +279,19 @@ if __name__ == "__main__":
     for a in result["gateway_asin_final"]:
         if a["is_gateway"]:
             print(f"    {a['asin']} {a['sku'][:25]}: {a['action']} ({a['gateway_reason']})")
-    print(f"\n  关键词收割候选: {len(result['harvest_actions'])} 个")
+        print(f"\n  关键词收割候选: {len(result['harvest_actions'])} 个")
+    for ha in result['harvest_actions'][:5]:
+        st = ha.get('search_term','?')[:50]
+        o = ha.get('orders',0)
+        a = ha.get('acos')
+        p = ha.get('priority','?')
+        w = ha.get('suggested_week','?')
+        extra = f"orders={o} acos={a:.1%}" if a else f"orders={o}"
+        print(f"    [{p} W{w}] {st}: {extra}")
     print(f"  否定词候选: {len(result['negate_actions'])} 个")
+    for na in result['negate_actions'][:5]:
+        st = na.get('search_term','?')[:50]
+        s = na.get('spend',0)
+        p = na.get('priority','?')
+        w = na.get('suggested_week','?')
+        print(f"    [{p} W{w}] {st}: spend=${s:.2f}")

@@ -144,6 +144,75 @@ TOML 文件如果有语法错误（如非法字符、编码问题、重复 secti
 ## 相关文档
 
 - [AGENTS.md](../../AGENTS.md) — 项目总纲 + 环境搭建
-- [.codex/config.toml](../../.codex/config.toml) — MCP 服务器配置
-- [CONTRIBUTING.md](../../CONTRIBUTING.md) — 安全检查 チャプター
+- [.codex/config.toml](../../.codex/config.toml) — Codex MCP 服务器配置
+- [Claude-3p config](../../../AppData/Local/Packages/Claude_*/LocalCache/Roaming/Claude-3p/claude_desktop_config.json) — Claude Desktop 3P MCP 配置
+- [docs/fac-mcp-setup.md](../fac-mcp-setup.md) — FAC MCP 配置（记录了 3P 模式路径差异）
+- [CONTRIBUTING.md](../../CONTRIBUTING.md) — 安全检查
 - [docs/onboarding.md](../onboarding.md) — 非技术同事上手
+
+---
+
+## 踩坑 5：Claude Desktop 3P 模式配置路径不同（2026-07-14 新增）
+
+> **教训等级**：⚠️ 重要 — 之前 PR #84 曾错误断言 "Claude Desktop cannot load command+args MCP"，实为没找到正确的 3P 配置文件路径。
+
+### 背景
+
+PR #84 尝试在 Claude Desktop（3P 模式，外接 DeepSeek）配置 Tavily MCP，但修改了 `Claude\claude_desktop_config.json` 后无效果。当时错误地总结为 "Claude Desktop cannot load `command`+`args` format MCP servers"，并在 `docs/lessons/anysearch-tavily-dual-search-setup.md` 中建议用 curl 替代。
+
+**实际根因**：3P 模式有自己的独立配置文件路径：
+
+| 模式 | 配置文件 |
+|------|---------|
+| 普通模式 | `%LOCALAPPDATA%\Packages\Claude_*\LocalCache\Roaming\Claude\claude_desktop_config.json` |
+| **3P 模式** | `%LOCALAPPDATA%\Packages\Claude_*\LocalCache\Roaming\Claude-3p\claude_desktop_config.json` |
+
+### 现象
+- 修改了 `Claude\claude_desktop_config.json`，重启后 Tavily 不出现
+- Settings → Developer → Connector 中只有 `fac` 和 `playwright`，没有 `tavily-mcp`
+- `main.log` 显示 `LocalMcpServerManager Closing all (0 servers)` — 本地 MCP server 数量为 0
+
+### 正确做法
+
+编辑 **3P 模式**的配置文件，添加：
+
+```json
+{
+  "deploymentMode": "3p",
+  "mcpServers": {
+    "tavily-mcp": {
+      "command": "npx",
+      "args": ["-y", "tavily-mcp@0.1.2"],
+      "env": {
+        "TAVILY_API_KEY": "<your-api-key>"
+      }
+    }
+  }
+}
+```
+
+关键字段（来自 [Tavily 官方文档](https://docs.tavily.com/documentation/mcp#configuring-mcp-clients)）：
+- `"tavily-mcp"` — key 名**必须**与 npm 包名 `tavily-mcp` 一致，不能简写为 `"tavily"`
+- `"tavily-mcp@0.1.2"` — **固定版本号**，不要用 `@latest`。`@latest` 会安装最新版 `@0.2.21`，其依赖 `@modelcontextprotocol/sdk@1.26.0` 可能与 2026年4月版的 Claude Desktop 不兼容
+
+### 关于"Claude Desktop 不支持 command+args"的错误结论
+
+PR #84 在多次尝试失败后错误地总结为不支持。实际验证表明：
+- Claude Desktop 3P 模式**完全支持** `command`+`args` 格式的本地 MCP server
+- 项目中 `playwright` 和 `fac` MCP 都使用 `command`+`args` 格式，运行正常
+- 唯一的区别是**配置文件路径**，不是配置格式
+
+### 元教训：反复犯同样低级错误的原因
+
+这次 Tavily MCP 配置是一个典型案例，暴露了 Agent 工作流中的系统性缺陷：
+
+1. **官方文档没有成为第一步**：Tavily 官方文档明确写了正确的 key 名和版本号，但 Agent 没有主动搜索，是靠用户贴过来的
+2. **项目已有文档被忽视**：`docs/fac-mcp-setup.md` 早已记录了 3P 模式的配置路径差异（`Claude-3p\` vs `Claude\`），Agent 没有搜索就动手
+3. **错误的结论被固化**：PR #84 中 "Claude Desktop cannot load command+args MCP" 的错误断言留在了另一个 lesson 文档里，形成了错误的知识
+
+**改进措施**（已写入 `docs/solutions/workflow-issues/search-first-before-implementing.md`）：
+- 任何配置/MCP/工具安装任务，第一步搜索官方文档
+- 第二步搜索项目 `docs/` 下的已有记录（`grep -r "关键词" docs/`）
+- 只在确认没有现成方案后，才动手修改
+
+> **铁律**："先搜再造" — 官方文档 → 项目 `docs/` → 再动手。AGENTS.md Workflow Principle ①。

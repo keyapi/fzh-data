@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>包裹列表 — 赛狐尾程打单</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, 'Microsoft YaHei', sans-serif; background: #f5f5f5; color: #333; }
+        .header { background: #1a1a2e; color: #fff; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+        .header h1 { font-size: 18px; }
+        .nav a { color: #a0a0c0; text-decoration: none; margin-left: 20px; font-size: 14px; }
+        .nav a:hover, .nav a.active { color: #fff; }
+        .container { max-width: 1200px; margin: 24px auto; padding: 0 24px; }
+
+        .tabs { display: flex; gap: 0; margin-bottom: 16px; border-bottom: 2px solid #ddd; }
+        .tabs a { padding: 10px 24px; text-decoration: none; color: #666; font-size: 14px; font-weight: 500; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: .2s; }
+        .tabs a:hover { color: #1a1a2e; }
+        .tabs a.active { color: #1a1a2e; font-weight: 700; border-bottom-color: #1a1a2e; }
+
+        .panel { background: #fff; border-radius: 8px; padding: 24px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .panel h2 { font-size: 16px; margin-bottom: 16px; }
+
+        .filter-bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+        .filter-bar select, .filter-bar input, .filter-bar button { padding: 7px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; background: #fff; }
+        .filter-bar button { cursor: pointer; }
+        .filter-bar .btn-search { background: #1a1a2e; color: #fff; border: none; font-weight: 600; }
+        .filter-bar .btn-search:hover { background: #2a2a4e; }
+        .filter-bar .ch-wrap { position: relative; }
+        .filter-bar .ch-wrap input { padding-right: 28px; }
+        .filter-bar .ch-wrap .arrow { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 10px; color: #999; pointer-events: none; }
+
+        .date-range-wrap { position: relative; display: inline-block; }
+        .date-range-wrap .btn-date { background: #fff; border: 1px solid #ddd; padding: 7px 12px; border-radius: 4px; font-size: 13px; cursor: pointer; color: #333; white-space: nowrap; }
+        .date-range-wrap .btn-date:hover { border-color: #1a1a2e; }
+        .date-drop { display: none; position: absolute; top: 100%; left: 0; margin-top: 4px; background: #fff; border: 1px solid #ddd; border-radius: 6px; padding: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); z-index: 100; min-width: 280px; }
+        .date-drop.visible { display: block; }
+        .date-drop .presets { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+        .date-drop .presets button { padding: 4px 10px; border: 1px solid #ddd; border-radius: 12px; font-size: 12px; background: #f8f8f8; cursor: pointer; }
+        .date-drop .presets button:hover, .date-drop .presets button.active { background: #1a1a2e; color: #fff; border-color: #1a1a2e; }
+        .date-drop .range { display: flex; gap: 8px; align-items: center; font-size: 12px; color: #666; }
+        .date-drop .range input { width: 120px; padding: 5px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; }
+        .date-drop .actions { display: flex; gap: 6px; margin-top: 10px; justify-content: flex-end; }
+        .date-drop .actions button { padding: 5px 14px; border-radius: 4px; font-size: 12px; cursor: pointer; border: none; }
+        .date-drop .actions .apply { background: #1a1a2e; color: #fff; }
+        .date-drop .actions .clear { background: #f0f0f0; color: #333; }
+
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #eee; font-size: 13px; }
+        th { color: #888; font-weight: 600; font-size: 11px; text-transform: uppercase; }
+        tr:hover { background: #f9f9ff; }
+        td input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: #1a1a2e; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+        .badge-pending { background: #fff3cd; color: #856404; }
+        .badge-info { background: #d1ecf1; color: #0c5460; }
+        .badge-shipped { background: #d4edda; color: #155724; }
+        .badge-cancel { background: #f8d7da; color: #721c24; }
+        .empty { text-align: center; padding: 48px; color: #999; }
+        .meta { font-size: 12px; color: #888; margin-bottom: 12px; }
+        a.pkg { color: #1a1a2e; text-decoration: none; font-weight: 600; }
+        a.pkg:hover { text-decoration: underline; }
+
+        /* Print modal */
+        .print-modal-overlay {
+            display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+            z-index: 1001; align-items: center; justify-content: center;
+        }
+        .print-modal-overlay.visible { display: flex; }
+        .print-modal {
+            background: #fff; border-radius: 10px; width: 90vw; max-width: 1000px; max-height: 90vh;
+            display: flex; flex-direction: column; box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+        .print-modal .pm-header {
+            padding: 20px 24px; border-bottom: 1px solid #eee;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .print-modal .pm-header h3 { font-size: 18px; color: #1a1a2e; }
+        .print-modal .pm-header .pm-close { background: none; border: none; font-size: 22px; cursor: pointer; color: #999; padding: 4px 8px; }
+        .print-modal .pm-header .pm-close:hover { color: #333; }
+        .print-modal .pm-tabs { display: flex; gap: 0; border-bottom: 1px solid #eee; padding: 0 24px; }
+        .print-modal .pm-tabs button { padding: 10px 20px; border: none; background: none; font-size: 13px; color: #666; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: .2s; }
+        .print-modal .pm-tabs button:hover { color: #1a1a2e; }
+        .print-modal .pm-tabs button.active { color: #1a1a2e; font-weight: 700; border-bottom-color: #1a1a2e; }
+        .print-modal .pm-body { flex: 1; overflow: auto; padding: 16px 24px; min-height: 400px; background: #f5f5f5; }
+        .print-modal .pm-body .loading { text-align: center; padding: 80px; color: #999; }
+        .print-modal .pm-body embed { border: none; background: #fff; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+        .print-modal .pm-footer {
+            padding: 14px 24px; border-top: 1px solid #eee;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .print-modal .pm-footer .info { font-size: 12px; color: #999; }
+        .print-modal .pm-footer button { padding: 8px 20px; border-radius: 4px; font-size: 13px; cursor: pointer; border: none; }
+        .print-modal .pm-footer .btn-download { background: #f0f0f0; color: #333; border: 1px solid #ddd; }
+        .print-modal .pm-footer .btn-download:hover { background: #ddd; }
+        .print-modal .pm-footer .btn-print { background: #1a1a2e; color: #fff; font-weight: 600; }
+        .print-modal .pm-footer .btn-print:hover { background: #2a2a4e; }
+
+        /* Batch bar - inline below table */
+        #batch-bar {
+            display: none; align-items: center; justify-content: center; gap: 24px;
+            margin-top: 16px; padding: 14px 24px;
+            background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 8px;
+        }
+        #batch-bar.visible { display: flex; }
+        #batch-bar .count { font-size: 14px; color: #333; white-space: nowrap; }
+        #batch-bar .count strong { font-size: 16px; color: #1a1a2e; }
+        #batch-bar .truck-btn {
+            display: flex; align-items: center; gap: 6px;
+            padding: 8px 20px; background: #1a1a2e; color: #fff; border: none;
+            border-radius: 6px; font-size: 14px; cursor: pointer;
+        }
+        #batch-bar .truck-btn:hover { background: #2a2a4e; }
+        #batch-bar .truck-btn .icon { font-size: 22px; }
+        #batch-bar .cancel-link { font-size: 13px; color: #721c24; cursor: pointer; background: none; border: none; text-decoration: underline; white-space: nowrap; }
+        #batch-bar .cancel-link:hover { color: #a71d2a; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>赛狐尾程打单 — 包裹列表</h1>
+        <div class="nav">
+            <a href="/">首页</a>
+            <a href="/packages" class="active">包裹</a>
+            <a href="/lizard/export">导出</a>
+            <a href="/lizard/import">导入追踪号</a>
+            <a href="/lizard/artifacts">制品</a>
+            <a href="/lizard/batches">批次</a>
+            <a href="/labels">流水</a>
+            <a href="/orders">订单 (legacy)</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="tabs">
+            <a href="#dashboard" class="active" onclick="switchTab('dashboard', event)">Dashboard</a>
+            <a href="#transactions" onclick="switchTab('transactions', event)">Transactions</a>
+        </div>
+    </div>
+
+    <!-- Dashboard Tab -->
+    <div id="tab-dashboard" class="container">
+        <div class="panel">
+            <h2>本地包裹（只读）</h2>
+            <form class="filter-bar" method="get" action="/packages" id="dash-filter">
+                <input type="hidden" name="tab" value="dashboard" />
+                <select name="status">
+                    <option value="">全部状态</option>
+                    <option value="to_audit">待审核</option>
+                    <option value="to_process">待处理</option>
+                    <option value="to_print">待打单</option>
+                    <option value="has_shipped">已发货</option>
+                    <option value="has_canceled">已作废</option>
+                </select>
+                <select name="review">
+                    <option value="">全部审核</option>
+                    <option value="pending">待审</option>
+                    <option value="approved">已通过</option>
+                    <option value="rejected">已驳回</option>
+                </select>
+                <input type="text" name="channel" placeholder="渠道名" list="ch-list" />
+                <button type="submit" class="btn-search">筛选</button>
+            </form>
+            <div class="meta">共 {{ total }} 条 · 账户 {{ account_key }}</div>
+            <table>
+                <thead><tr><th>包裹号</th><th>状态</th><th>审核</th><th>渠道</th><th>店铺</th><th>订单数</th><th>商品行</th><th>追踪号</th></tr></thead>
+                <tbody>
+                    {% if items %}{% for item in items %}
+                    <tr>
+                        <td><a class="pkg" href="/packages/{{ item.package_sn }}">{{ item.package_sn }}</a></td>
+                        <td><span class="badge badge-info">{{ item.package_status or '—' }}</span></td>
+                        <td><span class="badge badge-pending">{{ item.local_review_status or 'pending' }}</span></td>
+                        <td>{{ item.channel_name or '—' }}</td>
+                        <td>{{ item.shop_name or '—' }}</td>
+                        <td>{{ item.order_count }}</td>
+                        <td>{{ item.item_count }}</td>
+                        <td>{{ item.tracking_number or '—' }}</td>
+                    </tr>
+                    {% endfor %}{% else %}
+                    <tr><td colspan="8" class="empty">暂无包裹</td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Transactions Tab -->
+    <div id="tab-transactions" class="container" style="display:none;">
+        <div class="panel">
+            <h2>Transactions</h2>
+            <form class="filter-bar" method="get" action="/packages" id="txn-filter" autocomplete="off">
+                <input type="hidden" name="tab" value="transactions" />
+                <div class="date-range-wrap">
+                    <button type="button" class="btn-date" onclick="toggleDateDrop()" id="btn-date-label">
+                        {% if date_start and date_end %}{{ date_start }} — {{ date_end }}{% else %}Custom Date Range ▾{% endif %}
+                    </button>
+                    <div class="date-drop" id="date-drop">
+                        <div class="presets">
+                            <button type="button" onclick="applyPreset('today')" class="{% if date_start == today and date_end == today %}active{% endif %}">Today</button>
+                            <button type="button" onclick="applyPreset('7d')" class="{% if date_start == d7 and date_end == today %}active{% endif %}">Last 7 Days</button>
+                            <button type="button" onclick="applyPreset('30d')" class="{% if date_start == d30 and date_end == today %}active{% endif %}">Last 30 Days</button>
+                        </div>
+                        <div class="range">
+                            <input type="date" name="date_start" id="txn-date-start" value="{{ date_start or '' }}" /> <span>to</span>
+                            <input type="date" name="date_end" id="txn-date-end" value="{{ date_end or '' }}" />
+                        </div>
+                        <div class="actions">
+                            <button type="button" class="clear" onclick="applyPreset('all')">Clear</button>
+                            <button type="submit" class="apply">Apply</button>
+                        </div>
+                    </div>
+                </div>
+                <select name="status">
+                    <option value="">All Statuses</option>
+                    <option value="to_audit" {% if status == 'to_audit' %}selected{% endif %}>待审核</option>
+                    <option value="to_process" {% if status == 'to_process' %}selected{% endif %}>待处理</option>
+                    <option value="to_print" {% if status == 'to_print' %}selected{% endif %}>待打单</option>
+                    <option value="has_shipped" {% if status == 'has_shipped' %}selected{% endif %}>已发货</option>
+                    <option value="has_canceled" {% if status == 'has_canceled' %}selected{% endif %}>已作废</option>
+                </select>
+                <select name="review">
+                    <option value="">All Reviews</option>
+                    <option value="pending" {% if review == 'pending' %}selected{% endif %}>待审</option>
+                    <option value="approved" {% if review == 'approved' %}selected{% endif %}>已通过</option>
+                    <option value="rejected" {% if review == 'rejected' %}selected{% endif %}>已驳回</option>
+                </select>
+                <div class="ch-wrap">
+                    <input type="text" name="channel" id="txn-channel" value="{{ channel or '' }}" placeholder="渠道名" list="ch-list" autocomplete="off" />
+                    <span class="arrow">▾</span>
+                </div>
+                <button type="submit" class="btn-search">筛选</button>
+            </form>
+            <datalist id="ch-list"></datalist>
+
+            <div class="meta">共 {{ total }} 条 · 账户 {{ account_key }}</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width:32px;"><input type="checkbox" id="select-all" onclick="toggleSelectAll(this)"></th>
+                        <th>包裹号</th><th>状态</th><th>审核</th><th>渠道</th><th>店铺</th><th>订单数</th><th>商品行</th><th>追踪号</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if items %}{% for item in items %}
+                    <tr>
+                        <td><input type="checkbox" class="pkg-check" value="{{ item.package_sn }}" onchange="updateBatchBar()"></td>
+                        <td><a class="pkg" href="/packages/{{ item.package_sn }}">{{ item.package_sn }}</a></td>
+                        <td><span class="badge {% if item.package_status == 'has_shipped' %}badge-shipped{% elif item.package_status == 'has_canceled' %}badge-cancel{% else %}badge-info{% endif %}">{{ item.package_status or '—' }}</span></td>
+                        <td><span class="badge badge-pending">{{ item.local_review_status or 'pending' }}</span></td>
+                        <td>{{ item.channel_name or '—' }}</td>
+                        <td>{{ item.shop_name or '—' }}</td>
+                        <td>{{ item.order_count }}</td>
+                        <td>{{ item.item_count }}</td>
+                        <td>{{ item.tracking_number or '—' }}</td>
+                    </tr>
+                    {% endfor %}{% else %}
+                    <tr><td colspan="9" class="empty">暂无包裹</td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+
+            <!-- Batch action bar -->
+            <div id="batch-bar">
+                <span class="count">已选 <strong id="selected-count">0</strong> 个包裹</span>
+                <button class="truck-btn" onclick="openPrintModal()"><span class="icon">🚚</span> 批量打印</button>
+                <button class="truck-btn" onclick="exportSelected()" style="background:#155724;"><span class="icon">📥</span> 导出 Excel</button>
+                <button class="cancel-link" onclick="clearSelection()">取消选中</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Print modal -->
+    <div id="print-modal" class="print-modal-overlay">
+        <div class="print-modal">
+            <div class="pm-header">
+                <h3>Print Shipping Documents — 已选 <span id="pm-count">0</span> 个包裹</h3>
+                <button class="pm-close" onclick="closePrintModal()">✕</button>
+            </div>
+            <div class="pm-tabs" id="pm-tabs">
+                <button data-type="sticker" onclick="switchDocType('sticker')">背贴</button>
+                <button data-type="label" onclick="switchDocType('label')">Label 面单</button>
+                <button data-type="both" class="active" onclick="switchDocType('both')">面单 + 背贴</button>
+            </div>
+            <div class="pm-body" id="pm-body">
+                <div class="loading">正在生成预览...</div>
+            </div>
+            <div class="pm-footer">
+                <span class="info" id="pm-skipped"></span>
+                <div>
+                    <button class="btn-download" onclick="downloadMerged()">下载 PDF</button>
+                    <button class="btn-print" onclick="printMerged()">打印</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        var selectedDocType = 'both';
+        var currentBlobUrl = null;
+        var channels = [];
+        var previewAborter = null;
+
+        // ── Init ──
+        (function() {
+            var params = new URLSearchParams(window.location.search);
+            var t = params.get('tab') || 'dashboard';
+            if (t === 'transactions') {
+                document.querySelectorAll('.tabs a').forEach(function(a) { a.classList.remove('active'); });
+                document.querySelector('.tabs a[href="#transactions"]').classList.add('active');
+                document.getElementById('tab-dashboard').style.display = 'none';
+                document.getElementById('tab-transactions').style.display = '';
+                document.getElementById('dash-filter').style.display = 'none';
+                loadChannels();
+            }
+        })();
+
+        function loadChannels() {
+            fetch('/api/channels')
+                .then(function(r) { return r.json(); })
+                .then(function(d) {
+                    channels = d.channels || [];
+                    document.getElementById('ch-list').innerHTML = channels.map(function(c) { return '<option value="' + c + '">'; }).join('');
+                });
+        }
+
+        function switchTab(name, e) {
+            if (e) e.preventDefault();
+            document.querySelectorAll('.tabs a').forEach(function(a) { a.classList.remove('active'); });
+            document.querySelector('.tabs a[href="#' + name + '"]').classList.add('active');
+            document.getElementById('tab-dashboard').style.display = name === 'dashboard' ? '' : 'none';
+            document.getElementById('tab-transactions').style.display = name === 'transactions' ? '' : 'none';
+            document.getElementById('dash-filter').style.display = name === 'dashboard' ? '' : 'none';
+            if (name === 'dashboard') document.getElementById('batch-bar').classList.remove('visible');
+            if (name === 'transactions' && channels.length === 0) loadChannels();
+        }
+
+        function toggleDateDrop() { document.getElementById('date-drop').classList.toggle('visible'); }
+        function applyPreset(preset) {
+            var today = new Date().toISOString().split('T')[0];
+            var ds = document.getElementById('txn-date-start');
+            var de = document.getElementById('txn-date-end');
+            if (preset === 'today') { ds.value = today; de.value = today; }
+            else if (preset === '7d') { var d = new Date(); d.setDate(d.getDate() - 7); ds.value = d.toISOString().split('T')[0]; de.value = today; }
+            else if (preset === '30d') { var d = new Date(); d.setDate(d.getDate() - 30); ds.value = d.toISOString().split('T')[0]; de.value = today; }
+            else { ds.value = ''; de.value = ''; }
+            document.getElementById('txn-filter').submit();
+        }
+        document.addEventListener('click', function(e) {
+            var wrap = document.querySelector('.date-range-wrap');
+            if (wrap && !wrap.contains(e.target)) document.getElementById('date-drop').classList.remove('visible');
+        });
+
+        function getSelected() {
+            return Array.from(document.querySelectorAll('.pkg-check:checked')).map(function(cb) { return cb.value; });
+        }
+        function toggleSelectAll(el) {
+            document.querySelectorAll('.pkg-check').forEach(function(cb) { cb.checked = el.checked; });
+            updateBatchBar();
+        }
+        function updateBatchBar() {
+            var selected = getSelected();
+            document.getElementById('selected-count').textContent = selected.length;
+            document.getElementById('batch-bar').classList.toggle('visible', selected.length > 0);
+        }
+        function clearSelection() {
+            document.querySelectorAll('.pkg-check').forEach(function(cb) { cb.checked = false; });
+            document.getElementById('select-all').checked = false;
+            updateBatchBar();
+        }
+
+        // ── Print modal ──
+        function openPrintModal() {
+            var sns = getSelected();
+            if (sns.length === 0) return;
+            document.getElementById('pm-count').textContent = sns.length;
+            document.getElementById('pm-body').innerHTML = '<div class="loading">正在生成预览...</div>';
+            document.getElementById('pm-skipped').textContent = '';
+            document.getElementById('print-modal').classList.add('visible');
+            loadPreview(sns);
+        }
+        function closePrintModal() {
+            document.getElementById('print-modal').classList.remove('visible');
+        }
+        function switchDocType(type) {
+            selectedDocType = type;
+            document.querySelectorAll('#pm-tabs button').forEach(function(b) { b.classList.toggle('active', b.getAttribute('data-type') === type); });
+            var sns = getSelected();
+            if (sns.length > 0) {
+                document.getElementById('pm-body').innerHTML = '<div class="loading">正在生成预览...</div>';
+                loadPreview(sns);
+            }
+        }
+        function loadPreview(sns) {
+            // Cancel any in-flight request
+            if (previewAborter) previewAborter.abort();
+            previewAborter = new AbortController();
+            var signal = previewAborter.signal;
+
+            fetch('/api/packages/batch-print', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ package_sns: sns, document_type: selectedDocType }),
+                signal: signal
+            })
+            .then(function(resp) {
+                if (!resp.ok) return resp.text().then(function(t) { throw new Error(t); });
+                return resp.blob();
+            })
+            .then(function(blob) {
+                if (currentBlobUrl) URL.revokeObjectURL(currentBlobUrl);
+                currentBlobUrl = URL.createObjectURL(blob);
+                document.getElementById('pm-body').innerHTML =
+                    '<embed src="' + currentBlobUrl + '" type="application/pdf" width="100%" height="600px">';
+            })
+            .catch(function(err) {
+                if (err.name === 'AbortError') return;
+                var msg = err.message;
+                try { var d = JSON.parse(msg); msg = d.detail || msg; } catch(e) {}
+                document.getElementById('pm-body').innerHTML =
+                    '<div class="loading" style="color:#721c24;white-space:pre-line;text-align:left;padding:20px;">' + msg.replace(/</g,'&lt;') + '</div>';
+            });
+        }
+        function downloadMerged() {
+            if (currentBlobUrl) { var a = document.createElement('a'); a.href = currentBlobUrl; a.download = 'batch_print.pdf'; a.click(); }
+        }
+        function printMerged() {
+            if (currentBlobUrl) window.open(currentBlobUrl, '_blank');
+        }
+        function exportSelected() {
+            var sns = getSelected();
+            if (sns.length === 0) return;
+            fetch('/api/packages/batch-export', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ package_sns: sns })
+            })
+            .then(function(resp) {
+                if (!resp.ok) return resp.text().then(function(t) { throw new Error(t); });
+                return resp.blob();
+            })
+            .then(function(blob) {
+                var url = URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                a.href = url; a.download = 'packages_export.csv';
+                document.body.appendChild(a); a.click(); a.remove();
+                URL.revokeObjectURL(url);
+                showToast('已导出 ' + sns.length + ' 个包裹');
+            })
+            .catch(function(err) {
+                showToast('导出失败: ' + err.message, true);
+            });
+        }
+        function showToast(msg, isError) {
+            var t = document.getElementById('toast') || document.createElement('div');
+            t.id = 'toast';
+            t.textContent = msg;
+            t.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);padding:10px 24px;border-radius:6px;font-size:14px;z-index:2000;color:#fff;' + (isError ? 'background:#721c24;' : 'background:#155724;');
+            document.body.appendChild(t);
+            setTimeout(function() { t.remove(); }, 3000);
+        }
+        document.getElementById('print-modal').addEventListener('click', function(e) {
+            if (e.target === this) closePrintModal();
+        });
+    </script>
+</body>
+</html>

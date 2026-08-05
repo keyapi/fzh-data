@@ -1,0 +1,63 @@
+---
+okf: v0.1
+type: Spec
+title: Phase2 待办 — 跟上游 / 五杠杆 / 规则包
+description: 体验优先 Phase1 之后的扩能力清单（写广告仍禁）
+tags: [ivyeaops, sellfox, phase2, backlog]
+timestamp: 2026-07-27
+---
+
+# Phase2 backlog（写路径仍硬禁）
+
+## 1. 紧跟上游 IvyeaOps
+
+```text
+cd d:\Work\赛狐\IvyeaOps-sellfox
+git remote add upstream https://github.com/Hector-xue/IvyeaOps.git   # 一次
+git fetch upstream
+git merge upstream/main
+```
+
+冲突优先落在：`lingxing_data.py` / `lingxing_optimizer.py` / `lingxing_operate.py`。  
+新文件 `sellfox_openapi.py` / `sellfox_ingest.py` 一般无冲突。  
+**不要**把 AGPL 整树 vendoring 进 fzh-data。
+
+## 2. 更多赛狐报表 → 五杠杆
+
+| 杠杆 | 需要的数据集 | Phase1 | 2026-07-28 |
+|------|----------------|--------|------------|
+| 否词 / 收割 | `sp_search_term_report` | 已通 | **已接线** |
+| 降 bid / 加 bid | `sp_keyword_report` (+ keywords 实体) | 未接 | **已接线**（Targeting 过滤 + `spKeyword`） |
+| 加预算 | `sp_campaign_report` + campaigns | 未接 | **已接线**（阈值严时候选可为 0） |
+| 目标 ACOS 按毛利 | `asin_profit` / product ads | 默认 30% | **已接线**（毛利 caveat；标定店已出 ~51% 均值） |
+
+完整缺口矩阵：[phase2-dataset-gap.md](phase2-dataset-gap.md)  
+报表验证包：`advertise/docs/research/2026-07-28-report-verify/`  
+脚本：`board/scripts/ingest_sellfox_phase2.ps1`
+
+### 下一步（ingest + 按需已通）
+
+1. ~~实现 Targeting + keyword 实体 → 降/加 bid~~ **完成**  
+2. ~~Campaign + campaign 实体 → 加预算~~ **完成**  
+3. ~~asin_profit 接线~~ **完成**（数值 caveat）  
+4. ~~对齐原生按需拉取 12/12；禁止回落领星~~ **完成**（离线 ingest = 可选预热）  
+5. **DEFERRED**：收割/否词过滤 ASIN 形「用户搜索词」（不改逻辑直至产品拍板）— [sellfox-search-term-asin-as-keyword-harvest.md](../../../../docs/solutions/best-practices/sellfox-search-term-asin-as-keyword-harvest.md)  
+6. `git fetch upstream` 合并 IvyeaOps（fork 内，不 vendoring）— 见 Phase3 计划  
+7. IvyeaAgent（知识库，与广告杠杆解耦）  
+8. 运营审简报 / 加预算阈值：E2E 证实最高利用率 ~0.77&lt;0.85，**空候选属预期**  
+
+Phase3 计划：[`docs/superpowers/plans/2026-07-28-phase3-ops-merge-agent.md`](../../../../docs/superpowers/plans/2026-07-28-phase3-ops-merge-agent.md)
+
+## 3. 百家之长（本地 overlay，不 PR 上游）
+
+放在 **fzh-data**（非 AGPL 公开仓义务）：
+
+- 老板提示词 / 运营原则 → `ai_access_poc/board/rules/`（YAML/JSON rule pack，待建）
+- 外部 skill 灵感（含 fork 内 `skills/amazon/zach-search-term-report-analyzer`）→ 提炼阈值，校准 `deviations.md`
+- Portal 落地页链到 `http://127.0.0.1:8001`（仍不嵌 SPA）
+
+## 4. 明确继续不做
+
+- 赛狐广告写 API 未开放前的自动否词/改价  
+- 运营审强制签字（仍 DEFERRED）  
+- DeepWiki 当唯一真相（以 GitHub / 本地 fork 为准）  

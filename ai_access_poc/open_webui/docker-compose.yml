@@ -1,0 +1,59 @@
+services:
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: fzh-open-webui
+    restart: unless-stopped
+    ports:
+      - "${OWUI_PORT:-3000}:8080"
+    environment:
+      # Model gateway (api.vilavi.cn OpenAI-compatible — DeepSeek V4 etc.)
+      OPENAI_API_BASE_URL: "${OPENAI_API_BASE_URL:-https://api.vilavi.cn/v1}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      WEBUI_NAME: "FZH AI Shell PoC"
+      # Sellfox: prefer corporate proxy; Tool Valves can override
+      SELLFOX_PROXY_API_KEY: "${SELLFOX_PROXY_API_KEY:-}"
+      SELLFOX_PROXY_BASE_URL: "${SELLFOX_PROXY_BASE_URL:-https://api.vilavi.cn/sellfox}"
+      SELLFOX_PROXY_ACCOUNT: "${SELLFOX_PROXY_ACCOUNT:-sellfox-main}"
+      SELLFOX_APP_ID: "${SELLFOX_APP_ID:-}"
+      SELLFOX_APP_SECRET: "${SELLFOX_APP_SECRET:-}"
+      # First-boot: local SentenceTransformers often stalls on HF in CN.
+      # Use OpenAI-compatible embeddings (same gateway) so UI can boot without HF.
+      HF_ENDPOINT: "${HF_ENDPOINT:-https://hf-mirror.com}"
+      RAG_EMBEDDING_ENGINE: "${RAG_EMBEDDING_ENGINE:-openai}"
+      RAG_EMBEDDING_MODEL: "${RAG_EMBEDDING_MODEL:-text-embedding-3-small}"
+      # Optional: pre-seed admin — change after first login
+      # WEBUI_ADMIN_EMAIL / password via UI on first run is fine for PoC
+    volumes:
+      - owui-data:/app/backend/data
+      - ./reports:/data/sellfox_reports
+      - ./tools:/data/fzh_tools:ro
+    networks:
+      - public
+      - internal
+    depends_on:
+      - open-terminal
+
+  open-terminal:
+    image: ghcr.io/open-webui/open-terminal:slim
+    container_name: fzh-open-terminal
+    restart: unless-stopped
+    # PoC: no host port by default (only reachable from open-webui on Docker network).
+    # Uncomment for local debug: ports: ["8000:8000"]
+    environment:
+      OPEN_TERMINAL_API_KEY: "${OPEN_TERMINAL_API_KEY:-change-me-open-terminal-key}"
+    volumes:
+      - terminal-home:/home/user
+      - ./reports:/data/sellfox_reports
+    networks:
+      - internal
+    mem_limit: 2g
+    cpus: 2.0
+
+networks:
+  public:
+  internal:
+    internal: true
+
+volumes:
+  owui-data:
+  terminal-home:

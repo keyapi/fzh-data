@@ -12,6 +12,12 @@
       "runtimeExecutable": "uv",
       "runtimeArgs": ["run", "python", "dam-prototype/main.py", "--no-browser"],
       "port": 8098
+    },
+    {
+      "name": "sellfox-shipping",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "python", "-m", "sellfox_shipping.cli", "serve", "--host", "0.0.0.0", "--port", "8401"],
+      "port": 8401
     }
   ]
 }

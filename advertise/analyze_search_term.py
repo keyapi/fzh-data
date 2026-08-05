@@ -71,6 +71,33 @@ def _serialize(val):
     return val
 
 
+
+def classify_strategic_tier(term, strategic_terms=None):
+    """Classify search term into strategic tier: defense / attack / long-tail."""
+    if not isinstance(term, str) or not term.strip():
+        return "general"
+    lower = term.lower().strip()
+    if strategic_terms is None:
+        try:
+            with open(os.path.join(os.path.dirname(__file__), "config", "bjryecltd-us.json"), "r", encoding="utf-8") as f:
+                config = json.load(f)
+            strategic_terms = config.get("strategic_terms", {})
+        except (FileNotFoundError, json.JSONDecodeError):
+            strategic_terms = {}
+    attack_roots = strategic_terms.get("differentiation", ["no assembly", "boneless", "frameless", "foam", "modular", "deep seating", "one-piece"])
+    scene_roots = strategic_terms.get("scene", ["backyard", "deck", "balcony", "poolside", "porch", "apartment", "small patio"])
+    defense_roots = strategic_terms.get("core", ["patio furniture", "outdoor couch", "outdoor sofa", "sectional", "conversation set"])
+    for root in attack_roots:
+        if root in lower:
+            return "attack"
+    for root in scene_roots:
+        if root in lower:
+            return "long_tail"
+    for root in defense_roots:
+        if root in lower:
+            return "defense"
+    return "general"
+
 def analyze(df):
     df = df.copy()
 
@@ -83,9 +110,11 @@ def analyze(df):
 
     report_days = None
     if "start_date" in df.columns and "end_date" in df.columns:
-        min_date = pd.to_datetime(df["start_date"]).min()
-        max_date = pd.to_datetime(df["end_date"]).max()
-        report_days = (max_date - min_date).days + 1
+        # API xlsx may use Chinese placeholders like "无结束日期"
+        min_date = pd.to_datetime(df["start_date"], errors="coerce").min()
+        max_date = pd.to_datetime(df["end_date"], errors="coerce").max()
+        if pd.notna(min_date) and pd.notna(max_date):
+            report_days = (max_date - min_date).days + 1
 
     # ── Step 1: 按 search_term 聚合 ─────────────────────
     if "search_term" not in df.columns:
@@ -128,6 +157,7 @@ def analyze(df):
 
     # 语义分类
     aggregated["term_category"] = aggregated.index.map(classify_term_category)
+    aggregated["strategic_tier"] = aggregated.index.map(lambda t: classify_strategic_tier(t))
 
     # ── Step 3: 5 桶分类 ────────────────────────────────
     terms = aggregated.reset_index()
@@ -183,7 +213,7 @@ def analyze(df):
 
     # ── Step 4: 输出序列化 ──────────────────────────────
     output_cols = [
-        "search_term", "bucket", "term_category",
+        "search_term", "bucket", "term_category", "strategic_tier",
         "spend", "sales", "orders", "clicks", "impressions",
         "acos", "roas", "ctr", "cpc", "cvr",
         "campaign_name", "match_type",
@@ -252,6 +282,12 @@ def analyze(df):
         },
     }
 
+    # Compute strategic tier distribution
+    strategic_tiers = {}
+    if "strategic_tier" in terms.columns:
+        tier_counts = terms["strategic_tier"].value_counts().to_dict()
+        strategic_tiers = {str(k): int(v) for k, v in tier_counts.items()}
+
     return {
         "summary": summary,
         "harvest_keywords": harvest_list,
@@ -259,6 +295,7 @@ def analyze(df):
         "monitor_list": monitor_list,
         "protect_list": protect_list,
         "category_distribution": category_list,
+        "strategic_tiers": strategic_tiers,
         "thresholds": {
             "min_orders_harvest": MIN_ORDERS_HARVEST,
             "max_acos_harvest": MAX_ACOS_HARVEST,
@@ -297,3 +334,13 @@ if __name__ == "__main__":
             extra += f" 销售${info['sales']:,.2f}"
         print(f"    {name}: {info['count']}个{extra}")
     print(f"  分类: {len(result['category_distribution'])}类")
+    
+    # Strategic tier summary
+    tier_counts = result.get("strategic_tiers", {})
+    if tier_counts:
+        tier_cn = {"attack": "主攻", "defense": "防守", "long_tail": "长尾", "general": "通用"}
+        for tier in ["attack", "defense", "long_tail", "general"]:
+            if tier in tier_counts:
+                count = tier_counts[tier]
+                pct = count / max(s["unique_search_terms"], 1) * 100
+                print(f"    {tier_cn.get(tier, tier)}({tier}): {count}个 ({pct:.1f}%)")

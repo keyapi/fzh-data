@@ -341,3 +341,67 @@ Host us-ubuntu-proxy-pub      ← 备：公网 IP，需要翻墙正常
 - new-api 仓库：https://github.com/Calcium-Ion/new-api
 - dingtalk-oidc（参考）：https://github.com/maggch97/dingtalk-oidc
 - 钉钉 OAuth2 文档：https://open.dingtalk.com/document/orgapp/obtain-user-token
+
+## Lesson 29: Tailscale MagicDNS 冷启动无上游导致全线 DNS 挂 (2026-07-27)
+
+**问题**：US Vultr 服务器内核升级重启后，所有 DNS 查询返回 SERVFAIL。`/etc/resolv.conf` 被 Tailscale 设为 `nameserver 100.100.100.100`，日志刷屏 `dns: resolver: forward: no upstream resolvers set, returning SERVFAIL`。
+
+**原因**：Tailscale MagicDNS 接管了系统 DNS，但 tailnet 未配置上游解析器。重启后 tailscaled 冷启动，尝试回退读取系统 DNS → systemd-resolved 返回 `500 Internal Server Error`（因 resolv.conf 被 Tailscale 自己设成 foreign 模式）→ 找不到上游 → 全部查询 SERVFAIL。
+
+重启前正常运行一个月未暴露，因长期运行的 tailscaled 缓存了 DNS 状态。重启后状态丢失才暴露。
+
+**修复**：
+1. `tailscale set --accept-dns=false` 禁用 MagicDNS
+2. systemd-resolved 配置持久化上游 DNS（Vultr DNS + Cloudflare 备用）
+3. `ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf`
+
+**教训**：不需要 MagicDNS 的节点（只用 IP 通信的出口节点）务必设 `--accept-dns=false`。即使服务器不在中国，MagicDNS 冷启动也可能失败。Tailscale 官方 Issue #15471 / #14252 记录了完全相同的问题。
+
+## Lesson 30: gpt-image-2 只能走 images 端点，不能聊天 (v0.6, 2026-08-03)
+
+**问题**：Codex/Codex++ 里选 gpt-image-2 模型发消息，报 503 `model gpt-image-2 is only supported on /v1/images/generations and /v1/images/edits`。
+
+**根因**：gpt-image-2 是专用生图模型，不接受 `/v1/chat/completions` 或 `/v1/responses` 请求。Codex 所有模型都走 `/v1/responses`，协议不兼容。
+
+**解决办法**：
+- 生图用聊天模型（gpt-5.4-mini / gpt-5.5），发自然语言 prompt，CLIProxyAPI 内部路由到 image-2
+- 直接 curl `/v1/images/generations` 端点（CLIProxyAPI 已代理）
+- 不能通过 new-api 中转给同事用——new-api 的渠道只转 chat completions
+
+**教训**：模型列表里有 ≠ 能聊天。gpt-image-2 在 new-api 渠道里单独标注。
+
+## Lesson 31: 订阅转 API 的定价策略——官方 API 价为锚，但不等同 (v0.6, 2026-08-03)
+
+**问题**：new-api 的 ModelRatio 该怎么填？直接用 OpenAI 官方 API 价格换算？
+
+**分析**：订阅制（edu/plus/pro）是固定月费，不是按量付费，不存在真正的"成本/M token"。DeepSeek 是真实 API Key 按量扣费。如果按官方 API 价填 ModelRatio，gpt-5.5 会是 deepseek-v4-pro 的 12 倍。
+
+**内部定价策略**：
+
+| 层级 | ModelRatio | 模型 | 逻辑 |
+|------|:--:|------|------|
+| 旗舰 | 0.41 | gpt-5.5, gpt-5.6-sol | 最好但贵 6× mini |
+| 中端 | 0.205 | gpt-5.6-terra, gpt-5.4, deepseek-v4-pro | 性价比主力 |
+| 轻量 | 0.15-0.062 | gpt-5.6-luna, gpt-5.4-mini | 日常便宜 |
+| 近乎免费 | 0.01 | codex-auto-review | Codex 内置 |
+
+**核心原则**：
+1. 订阅制模型的定价是引导行为（便宜模型多给，贵模型限制），不是成本回收
+2. 以 deepseek-v4-pro（真实成本 ¥3/1M）为基准锚点
+3. 同能力层级同价，差异分层
+4. 日限额 20 RMB 是真正的管控，ModelRatio 只是引导
+5. DeepSeek 按实际 API 成本不变
+
+## Lesson 32: 教育账号切换——工作区权限决定模型可用性 (v0.6, 2026-08-03)
+
+**问题**：CSUN 教育账号（@my.csun.edu）工作区禁了生图和 gpt-5.6-sol/luna/gpt-5.4。
+
+**切换**：CSU East Bay 教育账号（@horizon.csueastbay.edu）→ 7 聊天模型 + image-2 全通。
+
+**教训**：教育账号权限取决于学校 IT 管理员在 OpenAI 工作区的设置，同是 .edu 不代表权限相同。切换前先用网页版验证模型范围。账号历史见 `docs/operations.md`。
+
+**诊断命令**：
+```bash
+tailscale dns status                          # 查看 MagicDNS 状态和上游解析器
+journalctl -u tailscaled | grep -i "dns\|SERVFAIL"  # 查看 DNS 错误
+```

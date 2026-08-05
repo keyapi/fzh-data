@@ -13,6 +13,8 @@ Usage:
 """
 
 import json
+import os
+import sqlite3
 import subprocess
 import sys
 import urllib.request
@@ -25,6 +27,11 @@ MYSQL_CMD = [
     "mysql", "-uroot", "-pnew-api-root-pwd",
     "new_api", "-N", "-B",
 ]
+
+PROXY_DB_PATH = os.getenv(
+    "PROXY_DB_PATH",
+    "/data/sellfox-proxy/sellfox-proxy.db",
+)
 
 
 def run_mysql(query: str) -> str:
@@ -90,6 +97,28 @@ def check_user_active(union_id: str, app_token: str) -> bool | None:
     return result["result"].get("active", False)
 
 
+def disable_proxy_keys(union_id: str) -> int:
+    """Disable all active proxy API keys for a departed DingTalk user.
+    Returns the number of keys disabled.
+    """
+    try:
+        db = sqlite3.connect(PROXY_DB_PATH)
+        cur = db.execute(
+            "UPDATE api_keys SET is_active = 0 "
+            "WHERE dingtalk_union_id = ? AND is_active = 1",
+            (union_id,),
+        )
+        count = cur.rowcount
+        db.commit()
+        db.close()
+        if count:
+            print(f"  [PROXY] Disabled {count} proxy key(s) for {union_id[:16]}...")
+        return count
+    except Exception as e:
+        print(f"  [WARN] Failed to disable proxy keys: {e}")
+        return 0
+
+
 def main():
     # Get all DingTalk OAuth users from new-api
     output = run_mysql("""
@@ -136,6 +165,7 @@ def main():
         else:
             run_mysql(f"UPDATE users SET status = 2 WHERE id = {uid} AND status = 1")
             print(f"  [OFFBOARD] {username} (id={uid}) — departed, disabled")
+            disable_proxy_keys(union_id)
             disabled += 1
 
     print(f"Done. Disabled: {disabled}")

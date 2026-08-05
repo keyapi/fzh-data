@@ -103,18 +103,24 @@ uv sync
 | `warehouse-restock` | `warehouse_restock/` | EN BOM → 三成本拆分 → 海外仓备货单 |
 | `other-outbound` | `other_outbound/` | 赛狐库存明细 → 其他出库清零 |
 | `sellfox-api` | `SELLFOX_API/` | 赛狐 OpenAPI 文档镜像（419 端点）+ 连通性测试 |
+| `sellfox-shipping` | `sellfox_shipping/` | 赛狐尾程打单（订单获取→承运人标签→追踪回写）三界面架构 |
+| `vite-api` | `vite-api/` | VITE 多承运商打单 API 文档（测试环境默认） |
+| `yiglobal-api` | `yiglobal-api/` | 蜴国际打单 API 文档（原 `蜴国际-API/`；env：`YIGLOBAL_*`） |
 | `en-image-upload` | `EN_API/` | 图片上传（CLI + Web UI + 物料组主图） |
 | `nas-itemgroup-folders` | `nas_itemgroup_folders/` | NAS-ERPNext 物料组文件夹对账 + 叶子组 (LGKS) 管理 |
 | `us-openai-api-proxy` | `us_openai_api_proxy/` | US Vultr Tailscale + CLIProxyAPI → ChatGPT API 共享 |
 | `new-api-deployment` | `new-api-deployment/` | new-api 部署（上海阿里云）+ 订阅/配额管理 |
 | `new-api-dingtalk-oidc` | `new-api-dingtalk-oidc/` | 钉钉 OAuth → OIDC 桥接代理（FastAPI） |
 | `dam-prototype` | `dam-prototype/` | DAM 数字资产管理原型 |
+| `erpnext` | `erpnext/` | 工单排查 (setup→fetch→report 流水线) |
+| `erpnext-wo-audit` | `.agents/skills/erpnext-wo-audit/` | 工单排查 Skill，按触发词自动加载 |
 | `frappe-core-api` | — | ERPNext REST API 开发（外部 skill） |
 | `frappe-errors-api` | — | ERPNext API 错误处理（外部 skill） |
 
 > 每个模块有 `AGENT_HANDOFF.md`（Agent 参考）和 `README.md`（人读）。
 > Skill 文件在 `.agents/skills/<name>/SKILL.md`，Agent 按触发词自动加载。
 > **ERPNext 系统访问**: 生产 (`erpnext.vilavi.cn`) → REST API, 测试 (`ensh.vilavi.cn`) → FAC MCP + REST API. 详见 `EN_API/README.md`
+> **ERPNext API 凭证**: 从 `EN_API/.env` 读取 `ERP_API_KEY` / `ERP_API_SECRET`，认证头 `Authorization: token <key>:<secret>`
 
 ## 关键行为规则
 
@@ -128,20 +134,35 @@ uv sync
 8. **永远不直接 push main**：任何改动（包括文档）必须走 `feature/xxx` 分支 → 提交 → `git push -u origin feature/xxx` → GitHub 开 PR → 审批后合并。唯一例外：紧急 revert。
    **所有 Agent（Claude Code、Codex CLI 等）都必须遵守本条。**
    如果 Agent 不确定如何创建 PR，用 `gh pr create --title "..." --body "..."` 命令。
-9. **提交 PR 前扫描凭证**：`git diff origin/main...HEAD | grep -iE "(api_key|api_secret|password|token|ghp_|github_pat_)\s*=\s*['\"]?\w{8,}"` 必须有零输出。禁止硬编码密钥/token/密码，禁止提交 CSV 数据文件、PDF、图片到公开仓库。违反 PR 不得合并（详见 `CONTRIBUTING.md` 安全检查章节）
+9. **提交 PR 前扫描凭证**：以下命令必须全部零输出。禁止硬编码密钥/token/密码，禁止提交 CSV 数据文件、PDF、图片到公开仓库。违反 PR 不得合并（详见 `CONTRIBUTING.md` 安全检查章节）
+   ```bash
+   # 传统 key=value 格式
+   git diff origin/main...HEAD | grep -iE "(api_key|api_secret|password|token|ghp_|github_pat_)\s*=\s*['\"]?\w{8,}"
+   # curl header 中的凭证
+   git diff origin/main...HEAD | grep -iE '"[^"]*:\s*[A-Za-z0-9+/=_-]{20,}[^"]*"'
+   # Markdown 文档中的 token/key 表格
+   git diff origin/main...HEAD | grep -iE '(token|key|api_key)\s*[:|]\s*`?[A-Za-z0-9+/=_-]{20,}'
+   # x-api-key 头 / Bearer token
+   git diff origin/main...HEAD | grep -iE 'x-api-key:\s*[A-Za-z0-9]{20,}|Bearer\s+[A-Za-z0-9_-]{20,}'
+   ```
 10. **OKF 文档规范**：新建子项目/模块时，必须创建 `docs/` 目录，按 [OKF v0.1](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md) 规范编写文档。所有 `.md` 文件必须有 YAML frontmatter（`type` 字段必填），每个目录必须有 `index.md`，每个 bundle 必须有 `log.md`。参考示例：`advertise/docs/`。触发 `/okf` 或编辑 Markdown 时自动加载 OKF skill。
+11. **索引联动更新**: 修改或新建子项目 OKF 文档后，**必须**运行 `python scripts/update_index.py` 同步更新根目录 `index.md`。完成子项目文档更新后输出 "已同步更新根目录索引"。
 
 ## 文档体系
 
 ```
 AGENTS.md (< 200 lines)           ← 你正在读的，项目总纲 + 路由地图
+├── index.md                      ← 自动生成的子项目文档索引（scripts/update_index.py）
 ├── CONTRIBUTING.md               ← 技术开发贡献指南（B 类用户）
+├── CONCEPTS.md                    ← 共享领域词汇（实体、流程、状态概念）
 ├── docs/onboarding.md            ← 非技术同事快速上手（A 类用户）
 ├── docs/company-context.md       ← 公司背景、供应链、三系统 SKU 定义
 ├── docs/agent-guide.md           ← Skill 管理规则、代码约定、文档 checklist
-├── docs/solutions/               ← 已解决问题的记录（bug、最佳实践、架构模式）
+├── docs/solutions/               ← 已解决问题记录（bug、最佳实践、工作流），YAML frontmatter 可按 module/tags 搜索
+├── erpnext/docs/                  ← 工单排查 OKF 文档（方法论、经验教训、API 参考）
 ├── docs/codex_test_enapi_full.md ← Codex 测试 EN_API 全记录
 ├── EN_API/AGENT_HANDOFF.md       ← EN_API 模块详情（API 端点、压缩、启动）
+├── erpnext/AGENT_HANDOFF.md       ← 工单排查模块（setup→fetch→report）
 ├── warehouse_restock/AGENT_HANDOFF.md ← 备货单模块详情
 ├── (其他 6 个模块)/AGENT_HANDOFF.md   ← 各模块详情
 └── .agents/skills/*/SKILL.md     ← Agent Skill 入口（按触发词加载）

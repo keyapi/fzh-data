@@ -10,7 +10,7 @@ timestamp: 2026-06-25
 # 赛狐 API 接入踩坑记录
 
 > 何时读: 接入赛狐 API 遇到问题时、需要了解认证流程时、回顾架构决策时。
-> 最后更新: 2026-07-02 | 共 16 条教训
+> 最后更新: 2026-07-17 | 共 17 条教训
 
 ## Lesson 1: IP 白名单是硬门槛
 
@@ -254,12 +254,57 @@ safe_url = parts._replace(path=encoded_path).geturl()
 
 ---
 
+## Lesson 17: 商品重尺数据在 SKU 列表 API，不在包裹 API — 且覆盖不全
+
+**发现日期**: 2026-07-17
+
+**问题**: 需要计算包裹重量和体积用于尾程打单。直觉上应该从包裹 API 获取——但包裹 API 不返回重量/尺寸字段。
+
+**数据实际位置**: 赛狐商品 API `POST /api/commodity/pageList.json`（`skuType: "0"` 过滤非组合 SKU）。
+
+**数据字段**:
+| 字段 | 含义 | 单位 |
+|------|------|------|
+| `cartonWeight` | 单箱重量 | kg |
+| `cartonLength` | 外箱长 | cm |
+| `cartonWidth` | 外箱宽 | cm |
+| `cartonHeight` | 外箱高 | cm |
+
+V2 详情 API (`/api/commodity/v2/getCommodityDetail.json`) 的 `commoditySizeVOList[0]` 有更完整的数据（含 `wrapCartonWeight` 包装重量 g、`cartonQty` 装箱量、单位标注、英制转换），但扁平字段（`cartonWeight` 等）反而为 None。
+
+**覆盖率**: 非组合 SKU 约 70%（2200+ SKU 中 ~200 个采样）。新系列（KS024+、KS042+、KS050+）90%+ 有数据；老系列（KS000）几乎全空。报关重量 `declareWeight` 100% 有数据但多为同事临时填写，不可信。
+
+**兜底方案 — ERPNext 重量模板**: 当赛狐商品 API 返回全 0 时，从 ERPNext 生产系统查询 `ZLMB#` 前缀的重量模板 Item。
+
+查询路径（优先级递减）：
+```
+SKU: KS0002-DL-194-IVORY → ZLMB 编码 = ZLMB#KS0002-DL-194
+       ↑ 面料编码必须匹配（DL≠CMM！）
+```
+| 优先级 | ERPNext 字段 | 含义 | 示例(KS0002-DL-194) |
+|--------|-------------|------|---------------------|
+| 1 | `custom_finish_good_weight_per_unit` + `custom_fg_package_length/width/height` | 国外成品重尺 | 0.0 → 落到下一级 |
+| 2 | `custom_fg_weight_per_unit` + `custom_package_length/width/height` | 绍兴工厂重尺 | **4100g, 58×19×45cm** ✅ |
+| 3 | 同物料组+同尺寸、不同面料的 ZLMB 借用 | 兜底的兜底 | 暂无此需求 |
+
+> 字段名是完整的 `*_length/width/height`（不是 `*_L/W/H` 缩写）。重量单位为**克**。
+
+**实测验证 (2026-07-17)**:
+- `ZLMB#KS0002-DL-194`: 绍兴 4100g/58×19×45cm ✅（国外为空）
+- `ZLMB#KS0001-AHR-194`: 国外 6400g/76×17×57cm, 绍兴 6400g/76×17×57cm ✅
+- `ZLMB#KS0002-CMM-194`: 全空 ❌（面料编码不匹配，不应查询）
+
+**陷阱**: ZLMB 编码的面料段必须匹配 SKU 的面料段。`KS0002-DL-194` → `ZLMB#KS0002-DL-194`，不是 `ZLMB#KS0002-CMM-194`。编码不匹配会查错 Item 导致误判"无数据"。
+
+**来源**: Agent A/B/C 并行调研 + 实测验证。`sellfox_shipping/docs/research/` 下有完整抽样记录。
+
 ## 更新历史
 
 | 日期 | 变更 |
 |------|------|
 | 2026-06-25 | 初始 10 条教训（认证、IP、Playwright、架构决策） |
 | 2026-07-02 | 新增 6 条教训（编码、文件格式、参数、状态、URL、限流）— 基于 `fetch_ad_reports.py` 实战测试 |
+| 2026-07-17 | 新增 Lesson 17（重尺数据位置、覆盖率、兜底方案）— 基于 sellfox_shipping 调研 |
 
 ## See also
 - [赛狐 API 实践指南](../reference/2026-sellfox-api-guide.md)

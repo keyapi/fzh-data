@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<base href="/sellfox/admin/">
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<title>API Proxy — Key Management</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; color: #333; }
+.container { max-width: 960px; margin: 40px auto; padding: 0 20px; }
+.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+.header h1 { font-size: 20px; }
+.user-info { font-size: 13px; color: #666; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+.user-info .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.dot-admin { background: #1a73e8; }
+.dot-user { background: #34a853; }
+.btn { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; }
+.btn-primary { background: #1a73e8; color: #fff; }
+.btn-primary:hover { background: #1557b0; }
+.btn-danger { background: #dc3545; color: #fff; }
+.btn-danger:hover { background: #b02a37; }
+.btn-sm { padding: 4px 10px; font-size: 12px; }
+table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid #eee; font-size: 13px; }
+th { background: #fafafa; font-weight: 600; color: #666; }
+tr:hover { background: #f8f9ff; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; }
+.badge-active { background: #e6f4ea; color: #1e8e3e; }
+.badge-inactive { background: #fce8e6; color: #d93025; }
+code { background: #f1f3f4; padding: 2px 6px; border-radius: 4px; font-size: 12px; word-break: break-all; }
+.modal-mask { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 100; }
+.modal { background: #fff; border-radius: 12px; padding: 28px; width: 520px; max-width: 90vw; box-shadow: 0 8px 30px rgba(0,0,0,0.15); }
+.modal h2 { margin-bottom: 20px; font-size: 18px; }
+.form-group { margin-bottom: 14px; }
+.form-group label { display: block; font-size: 13px; color: #666; margin-bottom: 4px; }
+.form-group input, .form-group select { width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; }
+.form-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+.key-result { background: #f1f8e9; border: 1px solid #c8e6c9; border-radius: 8px; padding: 16px; margin-top: 16px; }
+.key-result strong { font-size: 13px; }
+.key-result code { font-size: 14px; display: block; margin: 8px 0; padding: 8px; background: #fff; }
+.usage-box { background: #263238; color: #aed581; border-radius: 8px; padding: 16px; margin-top: 12px; font-family: monospace; font-size: 12px; white-space: pre-wrap; overflow-x: auto; }
+.empty { text-align: center; padding: 40px; color: #999; }
+.empty p { margin-top: 8px; }
+.error { background: #fce8e6; color: #d93025; padding: 12px; border-radius: 6px; margin-bottom: 16px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="container">
+    <div class="header">
+      <h1>{{ isAdmin ? '🔑 API Keys' : 'My API Keys' }}</h1>
+      <div>
+        <form method="post" action="logout" style="display:inline;margin-right:12px">
+          <button class="btn btn-sm" type="submit">Logout</button>
+        </form>
+        <button class="btn btn-primary" @click="showCreate = true">+ New Key</button>
+      </div>
+    </div>
+
+    <div class="user-info">
+      <span :class="['dot', isAdmin ? 'dot-admin' : 'dot-user']"></span>
+      {{ user.name }} <span style="opacity:0.5">({{ isAdmin ? 'admin' : '钉钉' }})</span>
+    </div>
+
+    <div v-if="error" class="error">{{ error }}</div>
+
+    <table v-if="keys.length">
+      <thead>
+        <tr>
+          <th>密钥</th>
+          <th>名称</th>
+          <th v-if="isAdmin">用户</th>
+          <th>账号</th>
+          <th>限速</th>
+          <th>请求数</th>
+          <th>状态</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-for="k in keys" :key="k.id">
+          <td><code>{{ k.key_prefix }}...</code> <button class="btn btn-sm" @click="copyExistingKey(k)">复制</button></td>
+          <td>{{ k.name }}</td>
+          <td v-if="isAdmin">{{ k.dingtalk_user_name || 'admin' }}</td>
+          <td>{{ k.account }}</td>
+          <td>{{ k.rate_limit_rps }}/s</td>
+          <td>{{ k.request_count }}</td>
+          <td><span :class="['badge', k.is_active ? 'badge-active' : 'badge-inactive']">{{ k.is_active ? '启用' : '禁用' }}</span></td>
+          <td>
+            <button class="btn btn-sm" @click="toggleKey(k)">{{ k.is_active ? '禁用' : '启用' }}</button>
+            <button class="btn btn-sm btn-danger" @click="deleteKey(k)" style="margin-left:4px">删除</button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div v-else class="empty">
+      <p style="font-size:16px">暂无 API Key</p>
+      <p>点击 <strong>+ New Key</strong> 创建第一个 Key。</p>
+    </div>
+  </div>
+
+  <!-- Create Modal -->
+  <div v-if="showCreate" class="modal-mask" @click.self="resetForm(); showCreate = false">
+    <div class="modal">
+      <h2>Create API Key</h2>
+      <div class="form-group">
+        <label>Name</label>
+        <input v-model="form.name" placeholder="e.g. my-sellfox-key">
+      </div>
+      <div class="form-group">
+        <label>Account</label>
+        <select v-model="form.account" @change="onAccountChange">
+          <option v-for="(acc, key) in accounts" :value="key">{{ acc.name }}</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Rate Limit (rps)</label>
+        <input v-model.number="form.rate_limit_rps" type="number" min="0" max="10" step="0.1">
+      </div>
+
+      <div v-if="createdKey" class="key-result">
+        <strong>Key created — copy it now, it won't be shown again!</strong>
+        <code>{{ createdKey }}</code>
+        <button class="btn btn-primary btn-sm" @click="copyCreatedKey" style="margin-top:8px">{{ copied ? '✓ 已复制' : '复制' }}</button>
+        <div class="usage-box">{{ usageExample }}</div>
+      </div>
+
+      <div class="form-actions">
+        <button class="btn" @click="resetForm(); showCreate = false">关闭</button>
+        <button class="btn btn-primary" @click="createKey" :disabled="!form.name">创建</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="static/app.js"></script>
+</body>
+</html>

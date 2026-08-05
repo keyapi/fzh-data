@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>包裹 {{ package.package_sn }} — 赛狐尾程打单</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, 'Microsoft YaHei', sans-serif; background: #f5f5f5; color: #333; }
+        .header { background: #1a1a2e; color: #fff; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+        .header h1 { font-size: 18px; }
+        .nav a { color: #a0a0c0; text-decoration: none; margin-left: 20px; font-size: 14px; }
+        .nav a:hover, .nav a.active { color: #fff; }
+        .container { max-width: 1200px; margin: 24px auto; padding: 0 24px; }
+        .panel { background: #fff; border-radius: 8px; padding: 24px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .panel h2 { font-size: 16px; margin-bottom: 16px; }
+        .info-row { display: flex; gap: 24px; flex-wrap: wrap; }
+        .info-item { flex: 1; min-width: 180px; }
+        .info-item .label { font-size: 11px; color: #888; margin-bottom: 4px; }
+        .info-item .value { font-size: 14px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #eee; font-size: 13px; }
+        th { color: #888; font-weight: 600; font-size: 11px; text-transform: uppercase; }
+        .back { display: inline-block; margin-bottom: 16px; color: #1a1a2e; font-size: 13px; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; background: #d1ecf1; color: #0c5460; }
+        .route-card { border: 2px solid #c0d0f0; border-radius: 8px; padding: 16px; background: #f8faff; }
+        .route-card.excluded { border-color: #f0c0c0; background: #fff8f8; }
+        .route-card .carrier { font-size: 20px; font-weight: 700; }
+        .route-card .reason { font-size: 13px; color: #666; margin-top: 4px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>包裹 {{ package.package_sn }}</h1>
+        <div class="nav">
+            <a href="/">首页</a>
+            <a href="/packages" class="active">包裹</a>
+            <a href="/lizard/export">导出</a>
+            <a href="/lizard/import">导入追踪号</a>
+            <a href="/lizard/artifacts">制品</a>
+            <a href="/lizard/batches">批次</a>
+            <a href="/labels">流水</a>
+            <a href="/orders">订单 (legacy)</a>
+        </div>
+    </div>
+    <div class="container">
+        <a class="back" href="/packages">← 返回包裹列表</a>
+
+        {% if message %}
+        <div class="panel" style="background:#eef8ee;">{{ message }}</div>
+        {% endif %}
+
+        <!-- 1. 基本信息 -->
+        <div class="panel">
+            <h2>基本信息</h2>
+            <div class="info-row">
+                <div class="info-item"><div class="label">包裹号</div><div class="value">{{ package.package_sn }}</div></div>
+                <div class="info-item"><div class="label">赛狐状态</div><div class="value"><span class="badge">{{ package.package_status or '—' }}</span></div></div>
+                <div class="info-item"><div class="label">本地审核</div><div class="value"><span class="badge">{{ package.local_review_status or 'pending' }}</span></div></div>
+                <div class="info-item"><div class="label">渠道</div><div class="value">{{ package.logistics.channel_name or '—' }}</div></div>
+                <div class="info-item"><div class="label">店铺</div><div class="value">{{ package.shop_name or '—' }}</div></div>
+                <div class="info-item"><div class="label">追踪号</div><div class="value">{{ package.logistics.tracking_number or '—' }}</div></div>
+                <div class="info-item"><div class="label">站点</div><div class="value">{{ package.marketplace or '—' }}</div></div>
+            </div>
+        </div>
+
+        <!-- 2. 路由建议 -->
+        {% if routing_result %}
+        <div class="panel">
+            <h2>建议渠道方式</h2>
+            <div class="route-card {% if not routing_result.matched %}excluded{% endif %}">
+                <div class="info-row" style="align-items:center;">
+                    <div class="info-item" style="flex:2;">
+                        <div class="label">建议承运商</div>
+                        <div class="carrier" style="{% if not routing_result.matched %}color:#721c24;{% else %}color:#155724;{% endif %}">
+                            {{ routing_result.label }}
+                        </div>
+                        <div class="reason">{{ routing_result.reason }}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="label">匹配规则</div>
+                        <div class="value">{{ routing_result.rule_name or '—' }}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="label">状态</div>
+                        <div class="value">
+                            {% if routing_result.matched %}
+                            <span class="badge" style="background:#d4edda;color:#155724;">已匹配</span>
+                            {% else %}
+                            <span class="badge" style="background:#f8d7da;color:#721c24;">已排除</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <form method="post" action="/packages/{{ package.package_sn }}/fetch-rates" style="margin-top:12px;">
+                <button type="submit" style="padding:8px 18px;background:#1a1a2e;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:13px;">
+                    获取 VITE + 蜴国际 报价
+                </button>
+            </form>
+        </div>
+        {% endif %}
+
+        <!-- 2.5 运费试算 -->
+        {% if vite_rate %}
+        <div class="panel">
+            <h2>运费试算</h2>
+            {% if vite_rate.error %}
+            <div class="route-card excluded">
+                <div class="reason" style="color:#721c24;">{{ vite_rate.error }}</div>
+            </div>
+            {% else %}
+            <div class="route-card" style="border-color:#c0f0c0;background:#f8fff8;">
+                <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:center;">
+                    <div class="info-item">
+                        <div class="label">来源</div>
+                        <div class="value" style="font-weight:700;font-size:16px;">
+                            {% if vite_rate.source == 'lizard' %}
+                            <span class="badge" style="background:#d4edda;color:#155724;">蜴国际</span>
+                            {% else %}
+                            <span class="badge" style="background:#d1ecf1;color:#0c5460;">VITE</span>
+                            {% endif %}
+                            {{ vite_rate.service }}
+                        </div>
+                    </div>
+                    <div class="info-item">
+                        <div class="label">预估运费</div>
+                        <div class="value" style="font-weight:700;font-size:20px;color:#155724;">
+                            {{ vite_rate.total_amount or '—' }} {{ vite_rate.currency }}
+                        </div>
+                    </div>
+                    <div class="info-item">
+                        <div class="label">计费重（lbs）</div>
+                        <div class="value">{{ vite_rate.billing_weight or '—' }}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="label">Zone</div>
+                        <div class="value">{{ vite_rate.zone or '—' }}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="label">最长边（inches）</div>
+                        <div class="value">{{ vite_rate.max_side_in }} in</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="label">渠道</div>
+                        <div class="value"><code>{{ vite_rate.channel or '—' }}</code></div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- 2.6 历史报价 -->
+        {% if rate_history %}
+        <div class="panel">
+            <h2>历史报价 (最近 {{ rate_history|length }} 条)</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>时间</th><th>承运商</th><th>产品</th><th>运费</th><th>计费重(lbs)</th><th>Zone</th><th>类型</th><th>最长边(in)</th><th>原始数据</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for rh in rate_history %}
+                    <tr>
+                        <td style="font-size:11px;">{{ rh.fetched_at.strftime('%Y-%m-%d %H:%M:%S') if rh.fetched_at else '—' }}</td>
+                        <td>
+                            {% if rh.carrier == 'lizard' %}
+                            <span class="badge" style="background:#d4edda;color:#155724;">蜴国际</span>
+                            {% else %}
+                            <span class="badge" style="background:#d1ecf1;color:#0c5460;">VITE</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if rh.carrier == 'lizard' %}
+                            <code>{{ rh.channel or '—' }}</code>
+                            {% elif rh.is_fedex %}
+                            <span style="font-size:12px;">FedEx Ground</span>
+                            {% else %}
+                            <span style="font-size:12px;">GOFO Parcel</span>
+                            {% endif %}
+                            <div style="font-size:10px;color:#999;">{{ rh.service or '' }}</div>
+                        </td>
+                        <td><strong>${{ rh.total_amount if rh.total_amount is not none else '—' }}</strong> {{ rh.currency }}</td>
+                        <td>{{ rh.billing_weight if rh.billing_weight is not none else '—' }}</td>
+                        <td>{{ rh.zone or '—' }}</td>
+                        <td>{{ rh.address_type or '—' }}</td>
+                        <td>{{ rh.max_side_in if rh.max_side_in is not none else '—' }}</td>
+                        <td>
+                            {% if rh.raw_data %}
+                            <details style="font-size:11px;">
+                                <summary style="cursor:pointer;color:#1a1a2e;font-weight:600;">JSON ({{ rh.raw_data|length }} chars)</summary>
+                                <pre style="max-width:500px;max-height:300px;overflow:auto;background:#1e1e2e;color:#cdd6f4;padding:10px;border-radius:4px;margin-top:4px;font-size:11px;line-height:1.5;white-space:pre-wrap;word-break:break-all;">{{ rh.raw_data }}</pre>
+                            </details>
+                            {% else %}
+                            <span style="color:#ccc;">—</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+
+        <!-- 2.7 创建面单 -->
+        <div class="panel">
+            <h2>创建面单</h2>
+            {% if not package_dims %}
+            <p style="font-size:13px;color:#721c24;">包裹尺寸未计算，无法创建面单。请先在下方商品行中确保重尺数据完整。</p>
+            {% else %}
+            <form method="post" action="/packages/{{ package.package_sn }}/create-label">
+            <div class="info-row" style="align-items:flex-end;">
+                <div class="info-item">
+                    <div class="label">承运商</div>
+                    <select name="carrier" id="carrier-select" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;" onchange="switchServices()">
+                        {% for c in enabled_carriers or [] %}
+                        <option value="{{ c.name }}" {% if routing_result and routing_result.carrier == c.name %}selected{% endif %}>{{ c.label }}</option>
+                        {% else %}
+                        <option value="vite">VITE</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="info-item">
+                    <div class="label">服务类型</div>
+                    <select name="service_level" id="service-select" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;">
+                    </select>
+                </div>
+                <div class="info-item">
+                    <div class="label">操作者</div>
+                    <input name="actor" value="web-user" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;width:120px;" />
+                </div>
+                <div class="info-item">
+                    <button type="submit" style="padding:8px 18px;background:#1a1a2e;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:14px;">
+                        创建面单
+                    </button>
+                </div>
+            </div>
+            </form>
+            <script>
+            var carrierServices = {
+                'vite': [
+                    {value:'GOFO_PARCEL', label:'GOFO_PARCEL (≤22in)'},
+                    {value:'FEDEX_GROUND', label:'FEDEX_GROUND (>22in)'}
+                ],
+                'lizard': [
+                    {% for s in lizard_services or [] %}
+                    {value:'{{ s.value }}', label:'{{ s.label }}'},
+                    {% endfor %}
+                ]
+            };
+            function switchServices() {
+                var carrier = document.getElementById('carrier-select').value;
+                var sel = document.getElementById('service-select');
+                sel.innerHTML = '';
+                var services = carrierServices[carrier] || [];
+                services.forEach(function(s) {
+                    var opt = document.createElement('option');
+                    opt.value = s.value;
+                    opt.textContent = s.label;
+                    sel.appendChild(opt);
+                });
+            }
+            switchServices();  // init on page load
+            </script>
+            {% endif %}
+
+            {% if labels %}
+            <table style="margin-top:16px;">
+                <thead>
+                    <tr>
+                        <th>创建时间</th><th>承运商</th><th>追踪号</th><th>服务</th>
+                        <th>金额</th><th>状态</th><th>面单PDF</th><th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for label in labels %}
+                    <tr>
+                        <td style="font-size:11px;">{{ label.created_at.strftime('%Y-%m-%d %H:%M:%S') if label.created_at else '—' }}</td>
+                        <td><span class="badge" style="background:#d1ecf1;color:#0c5460;">{{ label.carrier }}</span></td>
+                        <td><code>{{ label.tracking_number or '—' }}</code></td>
+                        <td>{{ label.service_level or '—' }}</td>
+                        <td>{% if label.total_amount %}${{ label.total_amount }} {{ label.currency }}{% else %}—{% endif %}</td>
+                        <td><span class="badge" style="background:{% if label.status == 'generated' %}#d4edda;color:#155724;{% else %}#fff3cd;color:#856404;{% endif %}">{{ label.status }}</span></td>
+                        <td>
+                            {% if label.artifact_id %}
+                            <a href="/api/labels/{{ label.id }}/download" download style="font-size:12px;color:#1a1a2e;">下载 PDF</a>
+                            {% else %}—{% endif %}
+                        </td>
+                        <td>
+                            {% if label.status != 'cancelled' %}
+                            <form method="post" action="/packages/{{ package.package_sn }}/cancel-label/{{ label.id }}" style="display:inline;" onsubmit="return confirm('确认取消面单？取消后无法恢复。')">
+                                <input type="hidden" name="actor" value="web-user" />
+                                <button type="submit" style="padding:2px 8px;font-size:11px;background:#721c24;color:#fff;border:none;border-radius:3px;cursor:pointer;">取消</button>
+                            </form>
+                            {% else %}
+                            <span style="font-size:11px;color:#999;">已取消</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+        </div>
+
+        <!-- 3. 商品行 + 包裹重尺 -->
+        <div class="panel">
+            <h2>商品行 ({{ package.items|length }})
+            {% if package.items %}
+            <a href="/packages/{{ package.package_sn }}/sku-label" download style="font-size:12px;font-weight:400;margin-left:16px;color:#1a1a2e;text-decoration:underline;">下载背贴</a>
+            {% endif %}
+            </h2>
+            <p style="font-size:13px;color:#666;margin-bottom:12px;line-height:1.5;">
+                单位：重量 <strong>kg</strong>，长宽高 <strong>cm</strong>。补录优先于 EN ZLMB# 自动查询。
+            </p>
+            {% if package_dims %}
+            <div style="background:#f0f4ff;border:1px solid #c0d0f0;border-radius:6px;padding:12px;margin-bottom:16px;">
+                <table style="margin:0;">
+                    <thead>
+                        <tr>
+                            <th>包裹重量 kg</th><th>包裹长 cm</th><th>包裹宽 cm</th><th>包裹高 cm</th><th>SKU 数</th><th>合并规则</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>{{ package_dims.weight_kg }}</strong></td>
+                            <td><strong>{{ package_dims.length_cm }}</strong></td>
+                            <td><strong>{{ package_dims.width_cm }}</strong></td>
+                            <td><strong>{{ package_dims.height_cm }}</strong></td>
+                            <td>{{ package_dims.sku_count }}</td>
+                            <td style="font-size:11px;color:#888;">长=max · 宽=max · 高=sum · 重量=sum</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+            <form method="post" action="/packages/{{ package.package_sn }}/carton-override">
+            <table>
+                <thead>
+                    <tr>
+                        <th>订单号</th><th>行 ID</th><th>Seller SKU</th><th>商品 SKU</th><th>商品名称</th><th>数量</th><th>变体</th>
+                        <th>重尺来源</th><th>重量 kg</th><th>长 cm</th><th>宽 cm</th><th>高 cm</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in package.items %}
+                    {% set cr = carton_rows | selectattr('commodity_sku', 'equalto', item.commodity_sku) | list | first %}
+                    <tr>
+                        <td>{{ item.external_order_id }}</td>
+                        <td style="font-size:11px;max-width:140px;overflow:hidden;text-overflow:ellipsis;" title="{{ item.order_item_id }}">{{ item.order_item_id[:20] }}{% if item.order_item_id|length > 20 %}…{% endif %}</td>
+                        <td>{{ item.seller_sku or '—' }}</td>
+                        <td><code>{{ item.commodity_sku or '—' }}</code></td>
+                        <td>{{ cr.item_name if cr else '—' }}</td>
+                        <td>{{ item.quantity }}</td>
+                        <td>{{ item.variation or '—' }}</td>
+                        {% if cr %}
+                        <input type="hidden" name="commodity_sku" value="{{ cr.commodity_sku }}" />
+                        <td style="font-size:11px;">
+                            {% if cr.source == 'override' %}本地补录
+                            {% elif cr.source == 'cascade' %}EN ZLMB
+                            {% else %}<span style="color:#721c24;">缺失</span>{% endif %}
+                            {% if cr.resolved %}
+                            <br/><span style="color:#888;font-size:10px;">{{ cr.resolved.weight_kg }}kg {{ cr.resolved.length_cm }}×{{ cr.resolved.width_cm }}×{{ cr.resolved.height_cm }}</span>
+                            {% endif %}
+                        </td>
+                        <td><input name="weight_kg" type="number" step="0.01" min="0.01"
+                                   value="{{ cr.override.dims.weight_kg if (cr.override and cr.override.dims.is_complete) else (cr.resolved.weight_kg if cr.resolved else '') }}"
+                                   style="width:60px;padding:3px 4px;border:1px solid #ddd;border-radius:3px;font-size:12px;" /></td>
+                        <td><input name="length_cm" type="number" step="0.1" min="0.1"
+                                   value="{{ cr.override.dims.length_cm if (cr.override and cr.override.dims.is_complete) else (cr.resolved.length_cm if cr.resolved else '') }}"
+                                   style="width:55px;padding:3px 4px;border:1px solid #ddd;border-radius:3px;font-size:12px;" /></td>
+                        <td><input name="width_cm" type="number" step="0.1" min="0.1"
+                                   value="{{ cr.override.dims.width_cm if (cr.override and cr.override.dims.is_complete) else (cr.resolved.width_cm if cr.resolved else '') }}"
+                                   style="width:55px;padding:3px 4px;border:1px solid #ddd;border-radius:3px;font-size:12px;" /></td>
+                        <td><input name="height_cm" type="number" step="0.1" min="0.1"
+                                   value="{{ cr.override.dims.height_cm if (cr.override and cr.override.dims.is_complete) else (cr.resolved.height_cm if cr.resolved else '') }}"
+                                   style="width:55px;padding:3px 4px;border:1px solid #ddd;border-radius:3px;font-size:12px;" /></td>
+                        {% else %}
+                        <td colspan="6" style="color:#999;font-size:11px;">无商品 SKU</td>
+                        {% endif %}
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="12">无商品行</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% if package.items %}
+            <div style="margin-top:12px;display:flex;gap:12px;align-items:center;">
+                <div class="info-item"><div class="label" style="font-size:11px;">操作者</div>
+                    <input name="actor" value="web-user" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;width:120px;" /></div>
+                <button type="submit" style="padding:8px 18px;background:#1a1a2e;color:#fff;border:none;border-radius:4px;cursor:pointer;">保存全部重尺</button>
+            </div>
+            {% endif %}
+            </form>
+
+            {% if package.items %}
+            <div id="sku-label-preview" style="margin-top:16px;border:1px solid #ddd;border-radius:6px;overflow:hidden;">
+                <div style="background:#f5f5f5;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;">
+                    <span style="font-size:14px;font-weight:700;color:#1a1a2e;">📋 背贴预览 — {{ package.package_sn }}</span>
+                    <a href="#" onclick="toggleSkuLabel();return false;" style="font-size:12px;color:#721c24;text-decoration:none;">✕ 关闭</a>
+                </div>
+                <embed src="/packages/{{ package.package_sn }}/sku-label?inline=1" type="application/pdf" width="100%" height="280px" style="border:none;">
+            </div>
+            {% endif %}
+        </div>
+
+        <script>
+        function toggleSkuLabel() {
+            var el = document.getElementById('sku-label-preview');
+            if (el.style.display === 'none' || el.style.display === '') {
+                el.style.display = 'block';
+                el.scrollIntoView({behavior:'smooth'});
+            } else {
+                el.style.display = 'none';
+            }
+        }
+        </script>
+
+        <!-- 4. 本地审核 -->
+        <div class="panel">
+            <h2>本地审核（导出 Excel 前）</h2>
+            <form method="post" action="/packages/{{ package.package_sn }}/review" class="info-row" style="align-items:flex-end;">
+                <div class="info-item">
+                    <div class="label">操作者</div>
+                    <input name="actor" value="web-user" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;width:100%;" />
+                </div>
+                <div class="info-item">
+                    <div class="label">备注</div>
+                    <input name="note" placeholder="可选" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;width:100%;" />
+                </div>
+                <div class="info-item" style="display:flex;gap:8px;">
+                    <button name="decision" value="approved" type="submit" style="padding:8px 14px;background:#155724;color:#fff;border:none;border-radius:4px;cursor:pointer;">通过</button>
+                    <button name="decision" value="rejected" type="submit" style="padding:8px 14px;background:#721c24;color:#fff;border:none;border-radius:4px;cursor:pointer;">驳回</button>
+                    <button name="decision" value="pending" type="submit" style="padding:8px 14px;background:#856404;color:#fff;border:none;border-radius:4px;cursor:pointer;">重置待审</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- 5. 赛狐回写确认 -->
+        <div class="panel">
+            <h2>赛狐回写确认（P1C · 仅准备 / dry-run）</h2>
+            <p style="font-size:13px;color:#666;margin-bottom:12px;line-height:1.5;">
+                一包多单会生成多条 <code>SubmissionIntent</code>。本页<strong>不会</strong>调用
+                <code>submitToPlatform</code>。真调请用 CLI
+                <code>--no-dry-run --i-understand-side-effects</code>，且须确认测试包裹范围。
+                {% if package_submission_state %}
+                当前聚合状态：<span class="badge">{{ package_submission_state }}</span>
+                {% endif %}
+            </p>
+            <form method="post" action="/packages/{{ package.package_sn }}/prepare-submit"
+                  class="info-row" style="align-items:flex-end;margin-bottom:16px;">
+                <div class="info-item">
+                    <div class="label">操作者</div>
+                    <input name="actor" value="web-user" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;width:100%;" />
+                </div>
+                <div class="info-item">
+                    <div class="label">承运人（可空=渠道名）</div>
+                    <input name="carrier_name" placeholder="可选覆盖" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;width:100%;" />
+                </div>
+                <div class="info-item">
+                    <div class="label">服务</div>
+                    <input name="shipping_service" placeholder="可选" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;width:100%;" />
+                </div>
+                <div class="info-item">
+                    <button type="submit" style="padding:8px 14px;background:#1a1a2e;color:#fff;border:none;border-radius:4px;cursor:pointer;">
+                        准备 Intent
+                    </button>
+                </div>
+            </form>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Intent</th><th>订单</th><th>状态</th><th>request_hash</th><th>确认人</th><th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for intent in submission_intents or [] %}
+                    <tr>
+                        <td>#{{ intent.id }}</td>
+                        <td>{{ intent.external_order_id }}</td>
+                        <td><span class="badge">{{ intent.status }}</span></td>
+                        <td><code title="{{ intent.request_hash }}">{{ intent.request_hash[:12] }}…</code></td>
+                        <td>{{ intent.confirmed_by or '—' }}</td>
+                        <td>
+                            <form method="post" action="/packages/{{ package.package_sn }}/submit-intent/{{ intent.id }}" style="display:inline;">
+                                <input type="hidden" name="actor" value="web-user" />
+                                <button type="submit" style="padding:4px 10px;font-size:12px;cursor:pointer;">dry-run</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="6">尚无 Intent。需本地审核 approved + 真实追踪号后点「准备 Intent」。</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 6. 收货地址 -->
+        <div class="panel">
+            <h2>收货地址</h2>
+            <div class="info-row">
+                <div class="info-item"><div class="label">姓名</div><div class="value">{{ package.address.name or '—' }}</div></div>
+                <div class="info-item"><div class="label">电话</div><div class="value">{{ package.address.phone or package.address.mobile or '—' }}</div></div>
+                <div class="info-item"><div class="label">城市/州</div><div class="value">{{ package.address.city or '—' }} {{ package.address.state_or_region or '' }}</div></div>
+                <div class="info-item"><div class="label">邮编</div><div class="value">{{ package.address.postal_code or '—' }}</div></div>
+                <div class="info-item"><div class="label">国家</div><div class="value">{{ package.address.country_code or package.address.country or '—' }}</div></div>
+                <div class="info-item"><div class="label">地址</div><div class="value">{{ package.address.address_line_1 or '—' }} {{ package.address.address_line_2 or '' }}</div></div>
+            </div>
+        </div>
+
+        <!-- 7. 关联订单 -->
+        <div class="panel">
+            <h2>关联订单 ({{ package.orders|length }})</h2>
+            <table>
+                <thead>
+                    <tr><th>订单号</th><th>状态</th><th>金额</th><th>币种</th></tr>
+                </thead>
+                <tbody>
+                    {% for order in package.orders %}
+                    <tr>
+                        <td>{{ order.external_order_id }}</td>
+                        <td>{{ order.order_status or '—' }}</td>
+                        <td>{{ order.order_total }}</td>
+                        <td>{{ order.currency or '—' }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="4">无关联订单</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</body>
+</html>
