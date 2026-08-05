@@ -262,6 +262,7 @@
             <div id="batch-bar">
                 <span class="count">已选 <strong id="selected-count">0</strong> 个包裹</span>
                 <button class="truck-btn" onclick="openPrintModal()"><span class="icon">🚚</span> 批量打印</button>
+                <button class="truck-btn" onclick="exportSelected()" style="background:#155724;"><span class="icon">📥</span> 导出 Excel</button>
                 <button class="cancel-link" onclick="clearSelection()">取消选中</button>
             </div>
         </div>
@@ -423,6 +424,38 @@
         }
         function printMerged() {
             if (currentBlobUrl) window.open(currentBlobUrl, '_blank');
+        }
+        function exportSelected() {
+            var sns = getSelected();
+            if (sns.length === 0) return;
+            fetch('/api/packages/batch-export', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ package_sns: sns })
+            })
+            .then(function(resp) {
+                if (!resp.ok) return resp.text().then(function(t) { throw new Error(t); });
+                return resp.blob();
+            })
+            .then(function(blob) {
+                var url = URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                a.href = url; a.download = 'packages_export.csv';
+                document.body.appendChild(a); a.click(); a.remove();
+                URL.revokeObjectURL(url);
+                showToast('已导出 ' + sns.length + ' 个包裹');
+            })
+            .catch(function(err) {
+                showToast('导出失败: ' + err.message, true);
+            });
+        }
+        function showToast(msg, isError) {
+            var t = document.getElementById('toast') || document.createElement('div');
+            t.id = 'toast';
+            t.textContent = msg;
+            t.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);padding:10px 24px;border-radius:6px;font-size:14px;z-index:2000;color:#fff;' + (isError ? 'background:#721c24;' : 'background:#155724;');
+            document.body.appendChild(t);
+            setTimeout(function() { t.remove(); }, 3000);
         }
         document.getElementById('print-modal').addEventListener('click', function(e) {
             if (e.target === this) closePrintModal();

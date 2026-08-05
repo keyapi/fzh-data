@@ -201,9 +201,11 @@ class SyncPackagesService:
         self,
         gateway: PackagePageGateway,
         repository: PackageWriter,
+        on_package_upsert: object = None,
     ):
         self.gateway = gateway
         self.repository = repository
+        self._on_upsert = on_package_upsert
 
     def sync(self, request: PackageSyncRequest) -> PackageSyncReport:
         report = PackageSyncReport(
@@ -288,6 +290,12 @@ class SyncPackagesService:
                     report.created_count += 1
                 else:
                     report.updated_count += 1
+                # Post-upsert callback (e.g., compute routing)
+                if self._on_upsert is not None:
+                    try:
+                        self._on_upsert(record, request.account_key)
+                    except Exception:
+                        pass
                 report.row_results.append(
                     PackageSyncRowResult(
                         source_row_number=page_offset + source_row_index,

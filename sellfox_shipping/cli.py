@@ -84,11 +84,75 @@ def _get_package_repository():
 
 def _get_package_sync_service():
     from sellfox_shipping.package_service import SyncPackagesService
+    from sellfox_shipping import app as app_mod
+
+    # Shared dims lookup for the entire sync batch (reuses in-memory cache)
+    shared_lookup = app_mod._get_lizard_dims_lookup()
+
+    def _on_upsert(record, account_key):
+        """Compute and persist routing after package upsert."""
+        try:
+            repo = app_mod._get_package_repository()
+            carton_rows = _carton_rows_with_lookup(account_key, record, shared_lookup)
+            routing = app_mod._compute_routing(record, carton_rows)
+            if routing:
+                db_id = repo.get_package_db_id(account_key, record.package_sn)
+                if db_id is not None:
+                    repo.upsert_package_routing(
+                        package_db_id=db_id,
+                        carrier=routing.get("carrier", ""),
+                        label=routing.get("label", ""),
+                        reason=routing.get("reason", ""),
+                        rule_name=routing.get("rule_name", ""),
+                        matched=routing.get("matched", False),
+                    )
+        except Exception:
+            pass
 
     return SyncPackagesService(
         gateway=_get_client(),
         repository=_get_package_repository(),
+        on_package_upsert=_on_upsert,
     )
+
+
+def _carton_rows_with_lookup(account_key, record, lookup):
+    """Same as app._carton_rows_for_package but using a shared lookup."""
+    repo = _get_package_repository()
+    seen: set[str] = set()
+    rows: list[dict] = []
+    for item in record.items:
+        sku = (item.commodity_sku or "").strip()
+        if not sku or sku in seen:
+            continue
+        seen.add(sku)
+        override = repo.get_carton_override(account_key, sku)
+        try:
+            resolved = lookup.get(sku)
+        except Exception:
+            resolved = None
+        item_name = (override.item_name if override else "") or ""
+        if not item_name:
+            try:
+                item_name = lookup.get_item_name(sku)
+            except Exception:
+                item_name = ""
+            if item_name:
+                try:
+                    repo.upsert_carton_item_name(
+                        account_key=account_key, commodity_sku=sku, item_name=item_name
+                    )
+                except Exception:
+                    pass
+        rows.append({
+            "commodity_sku": sku, "override": override, "resolved": resolved,
+            "item_name": item_name,
+            "source": (
+                "override" if (override is not None and override.dims.is_complete)
+                else ("cascade" if resolved is not None else "missing")
+            ),
+        })
+    return rows
 
 
 def _get_package_list_service():
