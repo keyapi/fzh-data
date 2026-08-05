@@ -161,6 +161,12 @@ def _get_package_list_service():
     return ListPackagesService(_get_package_repository())
 
 
+def _get_label_operation_query_service():
+    from sellfox_shipping.label_operation_service import LabelOperationQueryService
+
+    return LabelOperationQueryService(_get_package_repository())
+
+
 # ── Commands ──────────────────────────────────────────────────────
 
 @app.command()
@@ -249,6 +255,192 @@ def packages_list(
         )
     )
     _output(result.model_dump(mode="json"), json_output)
+
+
+@app.command("label-operations-list")
+def label_operations_list(
+    account_key: Optional[str] = typer.Option(None, help="Filter by account key"),
+    package_sn: Optional[str] = typer.Option(None, help="Filter by packageSn"),
+    status: Optional[str] = typer.Option(None, help="Filter by operation status"),
+    carrier: Optional[str] = typer.Option(None, help="Filter by carrier"),
+    limit: int = typer.Option(50, min=1, max=500, help="Max results"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """List label acquisition operations without carrier side effects."""
+    filters = {
+        "account_key": account_key,
+        "package_sn": package_sn,
+        "status": status,
+        "carrier": carrier,
+        "limit": limit,
+    }
+    results = _get_label_operation_query_service().list(**filters)
+    _output(
+        {
+            "command": "label-operations-list",
+            "ok": True,
+            "counts": {
+                "input": len(results),
+                "success": len(results),
+                "failed": 0,
+            },
+            "filters": filters,
+            "limit": limit,
+            "results": results,
+            "errors": [],
+        },
+        json_output,
+    )
+
+
+@app.command("label-operation-show")
+def label_operation_show(
+    operation_id: int = typer.Option(..., min=1, help="Label operation id"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Show one label operation and safe linked label/artifact summaries."""
+    try:
+        result = _get_label_operation_query_service().show(operation_id)
+    except LookupError as exc:
+        _output(
+            {
+                "command": "label-operation-show",
+                "ok": False,
+                "counts": {"input": 1, "success": 0, "failed": 1},
+                "results": [],
+                "errors": [
+                    {
+                        "code": "operation_not_found",
+                        "message": str(exc),
+                        "operation_id": operation_id,
+                        "package_sn": "",
+                        "recommended_action": "check_operation_id",
+                    }
+                ],
+            },
+            json_output,
+        )
+        raise typer.Exit(2)
+    _output(
+        {
+            "command": "label-operation-show",
+            "ok": True,
+            "counts": {"input": 1, "success": 1, "failed": 0},
+            "results": [result],
+            "errors": [],
+        },
+            json_output,
+        )
+
+
+@app.command("label-operation-resume")
+def label_operation_resume(
+    operation_id: int = typer.Option(..., min=1, help="Label operation id"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Resume label acquisition for an ACCEPTED or LABEL_PENDING operation.
+
+    Only valid when the operation has a provider_order_id.
+    Calls getLabel (never create) and completes PDF download + artifact write.
+    """
+    service = _get_label_service()
+    try:
+        result = service.resume_label_acquisition(operation_id, actor="cli-resume")
+        _output(
+            {
+                "command": "label-operation-resume",
+                "ok": True,
+                "counts": {"input": 1, "success": 1, "failed": 0},
+                "results": [result],
+                "errors": [],
+            },
+            json_output,
+        )
+    except Exception as exc:
+        msg = str(exc)
+        http_status = getattr(exc, "http_status", 500)
+        _output(
+            {
+                "command": "label-operation-resume",
+                "ok": False,
+                "counts": {"input": 1, "success": 0, "failed": 1},
+                "results": [],
+                "errors": [
+                    {
+                        "code": (
+                            "not_found" if http_status == 404
+                            else "conflict" if http_status == 409
+                            else "resume_failed"
+                        ),
+                        "message": msg,
+                        "operation_id": operation_id,
+                    }
+                ],
+            },
+            json_output,
+        )
+        raise typer.Exit(1 if http_status == 404 else 2)
+
+
+def _get_label_service():
+    from sellfox_shipping.label_service import LabelService
+    return LabelService(_get_package_repository())
+
+@app.command("label-operation-resolve")
+def label_operation_resolve(
+    operation_id: int = typer.Option(..., min=1, help="Label operation id"),
+    resolution: str = typer.Option(..., help="fail_safe | fail_final | provide_known_id"),
+    confirm: str = typer.Option(..., help="Must match resolution to proceed"),
+    provider_order_id: str = typer.Option("", help="Carrier order id (required for provide_known_id)"),
+    note: str = typer.Option("", help="Investigation note (who checked, what was found)"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Resolve an UNKNOWN_BLOCKED operation after human investigation.
+
+    fail_safe: Carrier confirmed no order was created. Frees slot for retry.
+    fail_final: Carrier confirmed permanent rejection.
+    provide_known_id: Human found the order on carrier portal, supply the ID.
+    """
+    service = _get_label_service()
+    try:
+        result = service.resolve_unknown_blocked(
+            operation_id,
+            resolution=resolution,
+            confirm=confirm,
+            provider_order_id=provider_order_id,
+            note=note,
+            actor="cli-resolve",
+        )
+        _output(
+            {
+                "command": "label-operation-resolve",
+                "ok": True,
+                "counts": {"input": 1, "success": 1, "failed": 0},
+                "results": [result],
+                "errors": [],
+            },
+            json_output,
+        )
+    except Exception as exc:
+        msg = str(exc)
+        http_status = getattr(exc, "http_status", 500)
+        _output(
+            {
+                "command": "label-operation-resolve",
+                "ok": False,
+                "counts": {"input": 1, "success": 0, "failed": 1},
+                "results": [],
+                "errors": [
+                    {
+                        "code": "resolve_failed",
+                        "message": msg,
+                        "operation_id": operation_id,
+                    }
+                ],
+            },
+            json_output,
+        )
+        raise typer.Exit(2)
 
 
 def _get_lizard_dims_lookup():

@@ -2219,6 +2219,73 @@ class PackageRepository:
         )
         return self.get_label_operation(operation_id)
 
+    def resolve_unknown_blocked_operation(
+        self,
+        operation_id: int,
+        *,
+        target_status: str,
+        resolution: str,
+        provider_order_id: str = "",
+        note: str = "",
+        actor: str = "",
+    ) -> None:
+        """Human-driven resolution: bypass state machine for UNKNOWN_BLOCKED operations.
+
+        This is a controlled, audited transition. Only valid from UNKNOWN_BLOCKED.
+        Allowed targets: FAILED_SAFE, FAILED_FINAL, ACCEPTED.
+        """
+        from datetime import datetime, timezone
+
+        if not (actor or "").strip():
+            raise ValueError("actor is required for resolution")
+        if target_status not in {"FAILED_SAFE", "FAILED_FINAL", "ACCEPTED"}:
+            raise ValueError(
+                f"invalid resolution target {target_status!r}"
+            )
+
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        with self._session_factory.begin() as session:
+            row = session.get(LabelOperationRow, operation_id)
+            if row is None:
+                raise RuntimeError(
+                    f"label operation not found: {operation_id}"
+                )
+            current = (row.status or "").strip()
+            if current != "UNKNOWN_BLOCKED":
+                raise RuntimeError(
+                    f"resolve_unknown_blocked_operation requires "
+                    f"UNKNOWN_BLOCKED, got {current!r} for "
+                    f"operation_id={operation_id}"
+                )
+
+            parts = [f"resolution={resolution}", f"actor={actor}"]
+            if note.strip():
+                parts.append(f"note={note.strip()[:200]}")
+            audit = "; ".join(parts)
+
+            prior = (row.error_summary or "").strip()
+            row.error_summary = (
+                f"{prior} | {audit}" if prior else audit
+            )[:500]
+            row.error_class = f"human:{resolution}"
+            row.status = target_status
+            if provider_order_id.strip():
+                row.provider_order_id = provider_order_id.strip()
+            row.updated_at = now
+            session.add(row)
+
+        self.append_audit_event(
+            actor=actor,
+            action="label_operation.resolve_unknown_blocked",
+            entity_type="shipping_label_operation",
+            entity_id=str(operation_id),
+            summary=(
+                f"resolution={resolution} target={target_status}"
+                + (f" provider_order_id={provider_order_id.strip()}"
+                   if provider_order_id.strip() else "")
+            )[:500],
+        )
+
     def get_label_operation(self, operation_id: int) -> LabelOperationRecord:
         with self._session_factory() as session:
             row = session.get(LabelOperationRow, operation_id)
@@ -2232,6 +2299,7 @@ class PackageRepository:
     def list_label_operations(
         self,
         *,
+        account_key: str | None = None,
         package_sn: str | None = None,
         status: str | None = None,
         carrier: str | None = None,
@@ -2239,6 +2307,12 @@ class PackageRepository:
     ) -> list[LabelOperationRecord]:
         with self._session_factory() as session:
             q = session.query(LabelOperationRow)
+            if account_key:
+                q = q.join(
+                    ShippingAccountRow,
+                    ShippingAccountRow.id == LabelOperationRow.account_id,
+                )
+                q = q.where(ShippingAccountRow.account_key == account_key)
             if package_sn:
                 q = q.join(PackageRow, PackageRow.id == LabelOperationRow.package_id)
                 q = q.where(PackageRow.package_sn == package_sn)
@@ -2256,6 +2330,36 @@ class PackageRepository:
                     )
                 )
             return result
+
+    def get_package_sns_by_db_ids(
+        self, package_db_ids: set[int]
+    ) -> dict[int, str]:
+        if not package_db_ids:
+            return {}
+        with self._session_factory() as session:
+            rows = session.execute(
+                select(PackageRow.id, PackageRow.package_sn).where(
+                    PackageRow.id.in_(package_db_ids)
+                )
+            ).all()
+            return {int(package_id): str(package_sn) for package_id, package_sn in rows}
+
+    def get_label_for_operation(
+        self, operation_id: int
+    ) -> ShippingLabelRecord | None:
+        with self._session_factory() as session:
+            row = session.scalar(
+                select(ShippingLabelRow)
+                .where(ShippingLabelRow.operation_id == operation_id)
+                .order_by(ShippingLabelRow.id.desc())
+                .limit(1)
+            )
+            if row is None:
+                return None
+            account = session.get(ShippingAccountRow, row.account_id)
+            return _shipping_label_to_record(
+                account.account_key if account else "", row
+            )
 
     def insert_label(
         self,

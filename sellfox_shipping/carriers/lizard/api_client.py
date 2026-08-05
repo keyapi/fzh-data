@@ -13,6 +13,8 @@ from typing import Any
 
 import httpx
 
+from sellfox_shipping.carriers.errors import CarrierFailure, classify_http_failure
+
 
 DEFAULT_BASE = "http://47.106.72.196"
 
@@ -97,15 +99,34 @@ def parse_get_label_result(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-class LizardApiError(RuntimeError):
+class LizardApiError(CarrierFailure):
     def __init__(
         self,
         message: str,
         *,
         status_code: int | None = None,
         business_code: Any = None,
+        phase: str = "create",
+        outcome: str | None = None,
+        category: str | None = None,
+        safe_to_create_again: bool | None = None,
     ):
-        super().__init__(message)
+        inferred_outcome, inferred_category, inferred_safe = classify_http_failure(
+            phase=phase, status_code=status_code
+        )
+        super().__init__(
+            message,
+            phase=phase,
+            outcome=outcome or inferred_outcome,
+            category=category or inferred_category,
+            provider_code=str(business_code or ""),
+            http_status=status_code,
+            safe_to_create_again=(
+                inferred_safe
+                if safe_to_create_again is None
+                else safe_to_create_again
+            ),
+        )
         self.status_code = status_code
         self.business_code = business_code
 
@@ -166,21 +187,28 @@ class LizardApiClient:
             data={"app_token": self._app_token, "app_key": self._app_key},
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
-        data = self._parse_http(resp)
+        data = self._parse_http(resp, phase="auth")
         result = data.get("result") if isinstance(data, dict) else None
         access = ""
         if isinstance(result, dict):
             access = str(result.get("access_token") or "").strip()
         if not access:
-            raise LizardApiError("getToken missing access_token", business_code=data.get("code"))
+            raise LizardApiError(
+                "getToken missing access_token",
+                business_code=data.get("code"),
+                phase="auth",
+                outcome="not_sent",
+                category="authentication",
+                safe_to_create_again=True,
+            )
         self._access_token = access
         return access
 
     def ratesv2(self, body: dict[str, Any]) -> dict[str, Any]:
-        return self._post_auth_json("/api/svc/ratesv2", body)
+        return self._post_auth_json("/api/svc/ratesv2", body, phase="query")
 
     def create_order(self, body: dict[str, Any]) -> dict[str, Any]:
-        return self._post_auth_json("/api/svc/createOrder", body)
+        return self._post_auth_json("/api/svc/createOrder", body, phase="create")
 
     def get_label(self, *, order_code: str, reference_no: str) -> dict[str, Any]:
         """POST getLabel. reference_no must match createOrder exactly."""
@@ -191,6 +219,7 @@ class LizardApiClient:
         return self._post_auth_json(
             "/api/svc/getLabel",
             {"order_code": oc, "reference_no": ref},
+            phase="query",
         )
 
     def cancel_order(self, *, order_code: str, reference_no: str) -> dict[str, Any]:
@@ -201,9 +230,12 @@ class LizardApiClient:
         return self._post_auth_json(
             "/api/svc/cancelOrder",
             {"order_code": oc, "reference_no": ref},
+            phase="cancel",
         )
 
-    def _post_auth_json(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
+    def _post_auth_json(
+        self, path: str, body: dict[str, Any], *, phase: str
+    ) -> dict[str, Any]:
         access = self.get_token()
         resp = self._client.post(
             path,
@@ -224,21 +256,26 @@ class LizardApiClient:
                     "Content-Type": "application/json",
                 },
             )
-        return self._parse_business(resp)
+        return self._parse_business(resp, phase=phase)
 
-    def _parse_http(self, resp: httpx.Response) -> dict[str, Any]:
+    def _parse_http(self, resp: httpx.Response, *, phase: str) -> dict[str, Any]:
         if resp.status_code >= 400:
             raise LizardApiError(
                 f"Lizard HTTP {resp.status_code}: {resp.text[:500]}",
                 status_code=resp.status_code,
+                phase=phase,
             )
         data = resp.json()
         if not isinstance(data, dict):
-            raise LizardApiError("Lizard response is not a JSON object")
+            raise LizardApiError(
+                "Lizard response is not a JSON object", phase=phase
+            )
         return data
 
-    def _parse_business(self, resp: httpx.Response) -> dict[str, Any]:
-        data = self._parse_http(resp)
+    def _parse_business(
+        self, resp: httpx.Response, *, phase: str
+    ) -> dict[str, Any]:
+        data = self._parse_http(resp, phase=phase)
         code = data.get("code")
         # 200 success; 202 getLabel still processing (caller may poll).
         if code in (200, "200", 202, "202"):
@@ -248,9 +285,17 @@ class LizardApiClient:
                 f"Lizard auth error: {data.get('msg')!r}",
                 status_code=resp.status_code,
                 business_code=code,
+                phase=phase,
+                outcome="rejected" if phase == "create" else "retryable_query",
+                category="authentication",
+                safe_to_create_again=phase == "create",
             )
         raise LizardApiError(
             f"Lizard business error code={code!r} msg={data.get('msg')!r}",
             status_code=resp.status_code,
             business_code=code,
+            phase=phase,
+            outcome="rejected" if phase == "create" else "retryable_query",
+            category="service_rejected",
+            safe_to_create_again=phase == "create",
         )
