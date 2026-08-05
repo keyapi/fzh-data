@@ -748,3 +748,282 @@ class LabelService:
             "carrier": "lizard",
             "service_level": sm_code,
         }
+
+    # ── Resume ───────────────────────────────────────────────
+
+    def resume_label_acquisition(
+        self, operation_id: int, *, actor: str
+    ) -> dict[str, Any]:
+        """Resume a label operation that has a provider_order_id.
+
+        Only valid for ACCEPTED or LABEL_PENDING operations.
+        Never calls create — only getLabel/poll/PDF/artifact.
+        """
+        from sellfox_shipping.carriers.vite.client import ViteGofoClient, ViteClientError
+        from sellfox_shipping.carriers.vite.shipment import ViteShipmentService
+        from sellfox_shipping.carriers.lizard.api_client import LizardApiClient, LizardApiError
+        from sellfox_shipping.carriers.lizard.api_shipment import LizardApiShipmentService
+
+        op = self._repo.get_label_operation(operation_id)
+        if op is None:
+            raise LabelServiceError(
+                f"operation not found: {operation_id}", http_status=404
+            )
+
+        if op.status not in {"ACCEPTED", "LABEL_PENDING"}:
+            raise LabelServiceError(
+                f"cannot resume operation {operation_id} in status {op.status}",
+                http_status=409,
+            )
+
+        provider_order_id = (op.provider_order_id or "").strip()
+        if not provider_order_id:
+            raise LabelServiceError(
+                f"operation {operation_id} missing provider_order_id",
+                http_status=400,
+            )
+
+        carrier = (op.carrier or "").strip().lower()
+        package_sn = self._repo.get_package_sn_by_db_id(op.package_id) or ""
+        package = self._repo.get(op.account_key, package_sn)
+        if package is None:
+            raise LabelServiceError(
+                f"package not found for operation {operation_id}", http_status=404
+            )
+
+        try:
+            if carrier == "vite":
+                return self._resume_vite_label(
+                    package=package,
+                    account_key=op.account_key,
+                    actor=actor,
+                    order_id=provider_order_id,
+                    operation_id=operation_id,
+                )
+            elif carrier == "lizard":
+                return self._resume_lizard_label(
+                    package=package,
+                    account_key=op.account_key,
+                    actor=actor,
+                    order_code=provider_order_id,
+                    reference_no=package.package_sn,
+                    operation_id=operation_id,
+                )
+            else:
+                raise LabelServiceError(
+                    f"unknown carrier {carrier} for resume", http_status=400
+                )
+        except LabelServiceError:
+            raise
+        except ViteClientError as exc:
+            self._repo.transition_label_operation(
+                operation_id,
+                status="LABEL_PENDING",
+                provider_order_id=provider_order_id,
+                error_class=exc.category,
+                error_summary=str(exc)[:500],
+                increment_attempt=True,
+            )
+            raise LabelServiceError(
+                f"VITE resume error: {exc}", http_status=502, failure=exc
+            ) from exc
+        except LizardApiError as exc:
+            self._repo.transition_label_operation(
+                operation_id,
+                status="LABEL_PENDING",
+                provider_order_id=provider_order_id,
+                error_class=exc.category,
+                error_summary=str(exc)[:500],
+                increment_attempt=True,
+            )
+            raise LabelServiceError(
+                f"Lizard resume error: {exc}", http_status=502, failure=exc
+            ) from exc
+        except Exception as exc:
+            self._repo.transition_label_operation(
+                operation_id,
+                status="LABEL_PENDING",
+                provider_order_id=provider_order_id,
+                error_class="resume_internal",
+                error_summary=str(exc)[:500],
+                increment_attempt=True,
+            )
+            raise LabelServiceError(
+                f"resume failed for operation {operation_id}: {exc}",
+                http_status=502,
+            ) from exc
+
+    def _resume_vite_label(
+        self,
+        *,
+        package: SellfoxPackageRecord,
+        account_key: str,
+        actor: str,
+        order_id: str,
+        operation_id: int,
+    ) -> dict[str, Any]:
+        import time, random, json
+        from sellfox_shipping.carriers.vite.shipment import (
+            _kg_to_lb, _cm_to_in, _build_ship_from, _build_ship_to,
+            ViteLabelNotReadyError, ViteLabelMissingUrlError,
+            ARTIFACT_KIND,
+        )
+        from sellfox_shipping.carriers.vite.client import ViteGofoClient
+
+        api_key = _read_env("VITE_API_KEY")
+        if not api_key:
+            raise LabelServiceError("VITE_API_KEY not configured", http_status=503)
+        vite_base = _read_env("VITE_API_BASE_URL") or "https://test-api.vitedirect.com"
+
+        with ViteGofoClient(api_key=api_key, base_url=vite_base) as client:
+            labels = client.get_label(order_id)
+            if not labels:
+                raise ViteLabelNotReadyError(f"VITE label not ready for {order_id}")
+
+            label_data = labels[0] if isinstance(labels, list) else labels
+            status = str(label_data.get("status") or "").upper()
+            tracking = str(label_data.get("trackingNumber") or "")
+            label_url = str(label_data.get("url") or "")
+
+            if status != "OK":
+                raise ViteLabelNotReadyError(
+                    f"VITE label status={status} for {order_id}"
+                )
+            if not label_url:
+                raise ViteLabelMissingUrlError(f"VITE label missing url for {order_id}")
+
+            content = _default_fetch_bytes(label_url)
+            if not content:
+                raise RuntimeError(f"empty label PDF for {order_id}")
+
+            artifact = self._repo.register_artifact(
+                account_key=account_key,
+                kind=ARTIFACT_KIND,
+                file_name=f"vite-label-{package.package_sn}.pdf",
+                content=content,
+                actor=actor,
+                mime_type="application/pdf",
+                virtual_folder="vite/labels",
+                summary=f"order_id={order_id} tracking={tracking}",
+            )
+
+            self._repo.insert_label(
+                account_key=account_key,
+                package_db_id=self._repo.get_package_db_id(
+                    account_key, package.package_sn
+                ) or 0,
+                carrier="vite",
+                service_level="GOFO_PARCEL",
+                tracking_number=tracking,
+                carrier_order_id=order_id,
+                request_id=f"resume-{int(time.time())}",
+                label_url=label_url,
+                operation_id=operation_id,
+                artifact_id=artifact.id,
+                total_amount=None,
+                currency="USD",
+                status="generated",
+                carrier_response_json=json.dumps(label_data),
+                created_by=actor,
+            )
+
+        result = {
+            "status": "SUCCEEDED",
+            "provider_order_id": order_id,
+            "tracking_number": tracking,
+            "label_url": label_url,
+            "carrier": "vite",
+            "service_level": "GOFO_PARCEL",
+        }
+
+        self._repo.transition_label_operation(
+            operation_id,
+            status="SUCCEEDED",
+            provider_order_id=order_id,
+            tracking_number=tracking,
+        )
+
+        return result
+
+    def _resume_lizard_label(
+        self,
+        *,
+        package: SellfoxPackageRecord,
+        account_key: str,
+        actor: str,
+        order_code: str,
+        reference_no: str,
+        operation_id: int,
+    ) -> dict[str, Any]:
+        import time, json
+        from sellfox_shipping.carriers.lizard.api_client import LizardApiClient
+        from sellfox_shipping.carriers.lizard.api_shipment import (
+            LizardLabelNotReadyError, LizardLabelMissingUrlError,
+            ARTIFACT_KIND, parse_get_label_result,
+        )
+
+        app_token = _read_env("YIGLOBAL_APP_TOKEN")
+        app_key = _read_env("YIGLOBAL_APP_KEY")
+        if not app_token or not app_key:
+            raise LabelServiceError(
+                "YIGLOBAL_APP_TOKEN / YIGLOBAL_APP_KEY not configured",
+                http_status=503,
+            )
+        lizard_base = _read_env("YIGLOBAL_API_BASE_URL") or "http://47.106.72.196"
+
+        with LizardApiClient(
+            app_token=app_token, app_key=app_key, base_url=lizard_base
+        ) as client:
+            lab = client.get_label(order_code=order_code, reference_no=reference_no)
+            parsed = parse_get_label_result(lab)
+            tracking = parsed.get("tracking_number") or ""
+            label_url = parsed.get("label_url") or ""
+
+            if not parsed.get("label_ready"):
+                raise LizardLabelNotReadyError(
+                    f"Lizard label not ready for {order_code}"
+                )
+            if not label_url:
+                raise LizardLabelMissingUrlError(
+                    f"Lizard label missing url for {order_code}"
+                )
+
+            content = _default_fetch_bytes(label_url)
+            if not content:
+                raise RuntimeError(f"empty label PDF for {order_code}")
+
+            artifact = self._repo.register_artifact(
+                account_key=account_key,
+                kind=ARTIFACT_KIND,
+                file_name=f"lizard-label-{package.package_sn}.pdf",
+                content=content,
+                actor=actor,
+                mime_type="application/pdf",
+                virtual_folder="lizard/api-labels",
+                summary=f"order_code={order_code} tracking={tracking}",
+            )
+
+        result = {
+            "status": "SUCCEEDED",
+            "provider_order_id": order_code,
+            "tracking_number": tracking,
+            "label_url": label_url,
+            "carrier": "lizard",
+            "service_level": "resumed",
+        }
+
+        self._repo.transition_label_operation(
+            operation_id,
+            status="SUCCEEDED",
+            provider_order_id=order_code,
+            tracking_number=tracking,
+        )
+
+        return result
+
+
+def _default_fetch_bytes(url: str) -> bytes:
+    import httpx
+    resp = httpx.get(url, timeout=30.0)
+    resp.raise_for_status()
+    return resp.content
