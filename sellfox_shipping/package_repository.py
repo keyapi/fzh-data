@@ -2686,18 +2686,20 @@ class PackageRepository:
         package.platform_name = record.platform_name
         package.marketplace = record.marketplace
         package.package_status = record.package_status
-        package.address_name = address.name
-        package.address_company = address.company
-        package.address_line_1 = address.address_line_1
-        package.address_line_2 = address.address_line_2
-        package.address_city = address.city
-        package.address_state_or_region = address.state_or_region
-        package.address_postal_code = address.postal_code
-        package.address_country = address.country
-        package.address_country_code = address.country_code
-        package.address_phone = address.phone
-        package.address_mobile = address.mobile
-        package.address_email = address.email
+        # Only overwrite address if the incoming record has meaningful data
+        if address.name or address.address_line_1:
+            package.address_name = address.name
+            package.address_company = address.company
+            package.address_line_1 = address.address_line_1
+            package.address_line_2 = address.address_line_2
+            package.address_city = address.city
+            package.address_state_or_region = address.state_or_region
+            package.address_postal_code = address.postal_code
+            package.address_country = address.country
+            package.address_country_code = address.country_code
+            package.address_phone = address.phone
+            package.address_mobile = address.mobile
+            package.address_email = address.email
         package.warehouse_name = logistics.warehouse_name
         package.channel_name = logistics.channel_name
         package.tracking_number = logistics.tracking_number
