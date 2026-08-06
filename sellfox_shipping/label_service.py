@@ -531,14 +531,6 @@ class LabelService:
             LizardApiError,
         )
 
-        app_token = _read_env("YIGLOBAL_APP_TOKEN")
-        app_key = _read_env("YIGLOBAL_APP_KEY")
-        if not app_token or not app_key:
-            raise LabelServiceError(
-                "YIGLOBAL_APP_TOKEN / YIGLOBAL_APP_KEY not configured",
-                http_status=503,
-            )
-        lizard_base = _read_env("YIGLOBAL_API_BASE_URL") or "http://47.106.72.196"
 
         order_code = (label.carrier_order_id or "").strip()
         if not order_code:
@@ -552,6 +544,14 @@ class LabelService:
             raise LabelServiceError(
                 "Unable to resolve package_sn for Lizard cancel", http_status=400
             )
+        app_token = _read_env("YIGLOBAL_APP_TOKEN")
+        app_key = _read_env("YIGLOBAL_APP_KEY")
+        if not app_token or not app_key:
+            raise LabelServiceError(
+                "YIGLOBAL_APP_TOKEN / YIGLOBAL_APP_KEY not configured",
+                http_status=503,
+            )
+        lizard_base = _read_env("YIGLOBAL_API_BASE_URL") or "http://47.106.72.196"
 
         with LizardApiClient(
             app_token=app_token,
