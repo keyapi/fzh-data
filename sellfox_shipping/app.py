@@ -24,6 +24,7 @@ from fastapi.responses import (
 )
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.concurrency import run_in_threadpool
 
 from sellfox_shipping.models import Address, Order, PackageStatus
 from sellfox_shipping.package_service import (
@@ -526,8 +527,10 @@ async def package_fetch_rates(request: Request, package_sn: str):
     package_dims = _compute_package_dims(record, carton_rows)
     routing_result = _compute_routing(record, carton_rows)
 
-    vite_rate = _get_vite_rate(record, package_dims, routing_result)
-    lizard_rate = _get_lizard_rate(record, package_dims)
+    vite_rate = await run_in_threadpool(
+        _get_vite_rate, record, package_dims, routing_result
+    )
+    lizard_rate = await run_in_threadpool(_get_lizard_rate, record, package_dims)
 
     # Pick the routing-suggested carrier's rate for display
     if routing_result and routing_result.matched:
@@ -1365,7 +1368,8 @@ async def package_submit_label_tracking_form(request: Request, package_sn: str):
     repo = _get_package_repository()
     actor = _web_actor(request, str(form.get("actor") or "web-user"))
     try:
-        result = SubmissionService(repo, _get_client()).submit_label_tracking(
+        result = await run_in_threadpool(
+            SubmissionService(repo, _get_client()).submit_label_tracking,
             account_key=account_key,
             package_sn=package_sn,
             actor=actor,
@@ -1405,7 +1409,8 @@ async def package_create_label_form(request: Request, package_sn: str):
 
     try:
         svc = LabelService(repo)
-        result = svc.create_label(
+        result = await run_in_threadpool(
+            svc.create_label,
             carrier=carrier,
             package=record,
             account_key=account_key,
@@ -2168,7 +2173,8 @@ async def batch_create_labels(request: Request):
                 })
                 continue
         try:
-            result = svc.create_label(
+            result = await run_in_threadpool(
+                svc.create_label,
                 carrier=effective_carrier,
                 package=record,
                 account_key=account_key,
