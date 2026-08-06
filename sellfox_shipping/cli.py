@@ -167,6 +167,31 @@ def _get_label_operation_query_service():
     return LabelOperationQueryService(_get_package_repository())
 
 
+def _outbox_row_json(row) -> dict:
+    return {
+        "id": row.id,
+        "account_key": row.account_key,
+        "package_id": row.package_id,
+        "package_sn": row.package_sn,
+        "order_db_id": row.order_db_id,
+        "external_order_id": row.external_order_id,
+        "generation": row.generation,
+        "tracking_number": row.tracking_number,
+        "candidate_key": row.candidate_key,
+        "status": row.status,
+        "submission_intent_id": row.submission_intent_id,
+        "request_hash": row.request_hash,
+        "attempt_count": row.attempt_count,
+        "conflicts_with_outbox_id": row.conflicts_with_outbox_id,
+        "sources": [
+            {"source_type": source.source_type, "source_id": source.source_id}
+            for source in row.sources
+        ],
+        "created_at": row.created_at,
+        "updated_at": row.updated_at,
+    }
+
+
 # ── Commands ──────────────────────────────────────────────────────
 
 @app.command()
@@ -288,6 +313,106 @@ def label_operations_list(
             "limit": limit,
             "results": results,
             "errors": [],
+        },
+        json_output,
+    )
+
+
+@app.command("sellfox-outbox-list")
+def sellfox_outbox_list(
+    account_key: Optional[str] = typer.Option(None, help="Filter by account key"),
+    package_sn: Optional[str] = typer.Option(None, help="Filter by packageSn"),
+    status: Optional[str] = typer.Option(None, help="Filter by outbox status"),
+    limit: int = typer.Option(50, min=1, max=500, help="Max results"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """List Sellfox writeback candidates without external side effects."""
+    repo = _get_package_repository()
+    rows = repo.list_sellfox_outbox(
+        account_key=account_key, package_sn=package_sn, status=status, limit=limit
+    )
+    results = [_outbox_row_json(row) for row in rows]
+    _output(
+        {
+            "command": "sellfox-outbox-list",
+            "ok": True,
+            "counts": {"input": len(results), "success": len(results), "failed": 0},
+            "results": results,
+            "errors": [],
+            "recommended_action": "inspect_candidate_before_confirmation",
+        },
+        json_output,
+    )
+
+
+@app.command("sellfox-outbox-show")
+def sellfox_outbox_show(
+    outbox_id: int = typer.Option(..., min=1, help="Sellfox outbox id"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Show one Sellfox writeback candidate and its source evidence."""
+    row = _get_package_repository().get_sellfox_outbox(outbox_id)
+    if row is None:
+        _output(
+            {
+                "command": "sellfox-outbox-show",
+                "ok": False,
+                "counts": {"input": 1, "success": 0, "failed": 1},
+                "results": [],
+                "errors": [{"code": "outbox_not_found", "message": f"Sellfox outbox {outbox_id} not found", "recommended_action": "check_outbox_id"}],
+                "recommended_action": "check_outbox_id",
+            },
+            json_output,
+        )
+        raise typer.Exit(2)
+    _output(
+        {
+            "command": "sellfox-outbox-show",
+            "ok": True,
+            "counts": {"input": 1, "success": 1, "failed": 0},
+            "results": [_outbox_row_json(row)],
+            "errors": [],
+            "recommended_action": "inspect_candidate_before_confirmation",
+        },
+        json_output,
+    )
+
+
+@app.command("sellfox-outbox-scan-candidates")
+def sellfox_outbox_scan_candidates(
+    account_key: str = typer.Option(..., help="Sellfox account key"),
+    package_sn: str = typer.Option(..., help="Explicit packageSn scope"),
+    apply: bool = typer.Option(False, "--apply", help="Persist candidates"),
+    actor: str = typer.Option("", help="Operator identity required with --apply"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Scan one explicit historical package; defaults to dry-run."""
+    actor_name = (actor or "").strip()
+    if apply and not actor_name:
+        raise typer.BadParameter("--actor is required with --apply")
+    repo = _get_package_repository()
+    package = repo.get(account_key, package_sn)
+    tracking = package.logistics.tracking_number if package is not None else ""
+    report = repo.create_sellfox_outbox_candidates(
+        account_key=account_key,
+        package_sn=package_sn,
+        tracking_number=tracking,
+        source_type="excel_tracking_import",
+        source_id=f"historical-scan:{package_sn}",
+        actor=actor_name or "dry-run",
+        apply=apply,
+    )
+    _output(
+        {
+            "command": "sellfox-outbox-scan-candidates",
+            "ok": report.counts["failed"] == 0,
+            "dry_run": not apply,
+            "counts": report.counts,
+            "results": list(report.results),
+            "errors": [],
+            "recommended_action": (
+                "rerun_with_apply_and_actor" if not apply else "inspect_candidates"
+            ),
         },
         json_output,
     )

@@ -281,11 +281,10 @@ class LabelService:
             )
             raise
 
-        self._repo.transition_label_operation(
-            operation.id,
-            status="SUCCEEDED",
-            provider_order_id=str(result.get("carrier_order_id") or ""),
-            tracking_number=str(result.get("tracking_number") or ""),
+        self._repo.finalize_label_success_with_outbox(
+            operation_id=operation.id,
+            label_id=int(result["id"]),
+            actor=actor,
         )
         return result
 
@@ -938,7 +937,7 @@ class LabelService:
                 summary=f"order_id={order_id} tracking={tracking}",
             )
 
-            self._repo.insert_label(
+            label_rec = self._repo.insert_label(
                 account_key=account_key,
                 package_db_id=self._repo.get_package_db_id(
                     account_key, package.package_sn
@@ -968,11 +967,10 @@ class LabelService:
             "service_level": "GOFO_PARCEL",
         }
 
-        self._repo.transition_label_operation(
-            operation_id,
-            status="SUCCEEDED",
-            provider_order_id=order_id,
-            tracking_number=tracking,
+        self._repo.finalize_label_success_with_outbox(
+            operation_id=operation_id,
+            label_id=label_rec.id,
+            actor=actor,
             expected_claim_id=claim_id,
         )
 
@@ -1044,7 +1042,7 @@ class LabelService:
             )
             # Local label row — failure here must stay LABEL_PENDING (provider known).
             try:
-                self._repo.insert_label(
+                label_rec = self._repo.insert_label(
                     account_key=account_key,
                     package_db_id=package_db_id,
                     carrier="lizard",
@@ -1087,11 +1085,10 @@ class LabelService:
             "service_level": service_level,
         }
 
-        self._repo.transition_label_operation(
-            operation_id,
-            status="SUCCEEDED",
-            provider_order_id=order_code,
-            tracking_number=tracking,
+        self._repo.finalize_label_success_with_outbox(
+            operation_id=operation_id,
+            label_id=label_rec.id,
+            actor=actor,
             expected_claim_id=claim_id,
         )
 

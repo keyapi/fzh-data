@@ -126,6 +126,11 @@ def test_import_service_reconciles_known_sns(tmp_path: Path) -> None:
     assert saved is not None
     assert saved.logistics.tracking_number == "TN1"
     assert saved.logistics.estimated_cost == 12.5
+    outbox = repo.list_sellfox_outbox(package_sn="P2ATEST001")
+    assert len(outbox) == 1
+    assert outbox[0].tracking_number == "TN1"
+    assert outbox[0].sources[0].source_type == "excel_tracking_import"
+    assert "row:1" in outbox[0].sources[0].source_id
 
 
 def test_import_conflict_does_not_overwrite_different_tracking(tmp_path: Path) -> None:
@@ -190,3 +195,36 @@ def test_import_overwrites_package_sn_placeholder_tracking(tmp_path: Path) -> No
     saved = repo.get("sellfox-main", "P2ATEST001")
     assert saved is not None
     assert saved.logistics.tracking_number == "8822446688"
+
+
+def test_import_skips_unapproved_package_without_crash(tmp_path: Path) -> None:
+    repo = PackageRepository(tmp_path / "shipping.db")
+    _seed_approved(repo)
+    repo.set_local_review_status(
+        account_key="sellfox-main",
+        package_sn="P2ATEST001",
+        local_review_status="pending",
+    )
+    ret = tmp_path / "return.xlsx"
+    pd.DataFrame(
+        [
+            {
+                "参考编号/Reference Code": "P2ATEST001",
+                "物流单号": "TN-SKIP",
+                "订单号": "M1",
+            }
+        ]
+    ).to_excel(ret, index=False)
+    result = ImportLizardTrackingService(repo).import_file(
+        LizardImportRequest(
+            account_key="sellfox-main",
+            actor="user-1",
+            input_path=ret,
+        )
+    )
+    assert result.skipped == 1
+    assert result.persisted == 0
+    assert result.matched == 1
+    assert result.skipped_rows[0]["reason"] == "package_not_approved"
+    assert repo.get("sellfox-main", "P2ATEST001").logistics.tracking_number == ""
+    assert repo.list_sellfox_outbox(package_sn="P2ATEST001") == []

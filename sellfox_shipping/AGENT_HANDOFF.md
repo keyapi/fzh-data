@@ -3,7 +3,7 @@ okf: v0.1
 type: Handoff
 title: sellfox_shipping — Agent 交接说明
 description: 包裹中心架构、当前实现、运行方式与后续阶段边界
-updated: 2026-08-05
+updated: 2026-08-06
 ---
 
 # sellfox_shipping — Agent 交接说明
@@ -97,7 +97,7 @@ Excel 本地闭环（审核 → 导出 → 人工上传物流商 → 导入对�
 > **当前接手裁决（2026-08-05）：**
 > 1. 先合入并验证 Migration 0019：修复历史 SQLite 库连续升级失败及半应用 0018 缺失外键。
 > 2. Jack Agent 第一阶段只做生产验收与缺口复核，按 [生产验收与交接规范](docs/specs/production-acceptance-and-jack-handoff-2026-08-05.md) 输出 readiness matrix。
-> 3. 赛狐 outbox 回写由用户明确暂缓；不要开发，也不要真实重放 `submitToPlatform`。
+> 3. 赛狐 outbox 已开始实施：PR 1 只建立候选事实层，绝不调用 `submitToPlatform`；继续开发先读 [Outbox 设计](docs/specs/sellfox-writeback-outbox-2026-08-06.md)。
 > 4. 公网部署前仍需 OIDC/CSRF/RBAC、secure cookie 与 PII/log 脱敏审计。
 > 5. 当前自动化基线在 Migration 0019 修复分支为 **221 passed, 2 warnings**；仍不等于承运商沙箱或生产业务验收完成。
 
@@ -151,10 +151,16 @@ uv run python -m sellfox_shipping.cli label-operation-show \
 # P1B：蜴国际上传 Excel（仅 local_review=approved 且渠道含「蜴」；重尺走 commodity pageList）
 uv run python -m sellfox_shipping.cli lizard-export -o out/lizard-upload.xlsx --actor <operator-id> --json
 
-# P1B：解析蜴国际返回追踪号 Excel（按 package_sn 对账；尚未回写赛狐）
+# P1B：解析蜴国际返回追踪号 Excel（按 package_sn 对账；生成本地 Outbox 候选，尚未回写赛狐）
 # 可选 --batch-id：回写对应 ShippingBatch
 uv run python -m sellfox_shipping.cli lizard-import-tracking \
   -i path/to/return.xlsx --actor <operator-id> --batch-id <N> --json
+
+# Outbox 候选控制面（全部无赛狐 HTTP）
+uv run python -m sellfox_shipping.cli sellfox-outbox-list --json
+uv run python -m sellfox_shipping.cli sellfox-outbox-show --outbox-id <N> --json
+uv run python -m sellfox_shipping.cli sellfox-outbox-scan-candidates \
+  --account-key sellfox-main --package-sn <SN> --json
 
 # P1C：准备 submitToPlatform intents（无 HTTP）
 uv run python -m sellfox_shipping.cli packages-prepare-submit \

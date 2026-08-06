@@ -35,14 +35,25 @@ def test_repository_applies_alembic_migration_on_empty_db(tmp_path) -> None:
             "SELECT 1 FROM pragma_table_info('shipping_label_investigations') "
             "WHERE name='provider_order_id'"
         ).scalar_one()
+        outbox_ddl = connection.exec_driver_sql(
+            "SELECT sql FROM sqlite_master WHERE type='table' "
+            "AND name='shipping_sellfox_outbox'"
+        ).scalar_one()
+        policy_ddl = connection.exec_driver_sql(
+            "SELECT sql FROM sqlite_master WHERE type='table' "
+            "AND name='shipping_sellfox_writeback_policies'"
+        ).scalar_one()
 
-    assert version == "0019_repair_resolution_evidence_fk"
+    assert version == "0020_sellfox_writeback_outbox"
     assert packages == "shipping_packages"
     assert audit == "shipping_audit_events"
     assert claim_fence_col == 1
     assert resolution_evidence == 1
     assert conclusion == 1
     assert evidence_provider_id == 1
+    assert "ck_sellfox_outbox_status" in outbox_ddl
+    assert "ck_sellfox_outbox_generation_positive" in outbox_ddl
+    assert "ck_sellfox_writeback_policy_scope_gate" in policy_ddl
 
 
 def test_repository_upgrades_historical_0015_database_through_head(tmp_path) -> None:
@@ -109,7 +120,7 @@ def test_repository_upgrades_historical_0015_database_through_head(tmp_path) -> 
             "AND `unique`=1"
         ).scalar_one()
 
-    assert version == "0019_repair_resolution_evidence_fk"
+    assert version == "0020_sellfox_writeback_outbox"
     assert resolution_evidence == 1
     assert evidence_foreign_key == 1
     assert ("shipping_accounts", "account_id", "id", "CASCADE") in existing_foreign_keys
@@ -147,7 +158,7 @@ def test_repository_repairs_partially_applied_0018_foreign_key(tmp_path) -> None
             "AND on_delete='SET NULL'"
         ).scalar_one()
 
-    assert version == "0019_repair_resolution_evidence_fk"
+    assert version == "0020_sellfox_writeback_outbox"
     assert evidence_foreign_key == 1
 
 
@@ -171,6 +182,6 @@ def test_repository_stamps_existing_create_all_database(tmp_path) -> None:
             "WHERE name='local_review_status'"
         ).scalar()
 
-    assert version == "0019_repair_resolution_evidence_fk"
+    assert version == "0020_sellfox_writeback_outbox"
     assert review_col == 1
     assert repository.count_rows()["packages"] == 0

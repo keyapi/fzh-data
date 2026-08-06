@@ -177,7 +177,7 @@ def test_label_operation_show_includes_safe_label_and_artifact_summary(
         carrier_response_json='{"recipient_phone": "2815550100"}',
         created_by="operator",
     )
-    repo.transition_label_operation(operation.id, status="SUCCEEDED")
+    assert repo.get_label_operation(operation.id).status == "SUCCEEDED"
     monkeypatch.setattr(cli, "_get_package_repository", lambda: repo)
 
     result = CliRunner().invoke(

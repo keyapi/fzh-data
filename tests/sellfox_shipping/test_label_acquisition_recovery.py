@@ -317,6 +317,11 @@ def test_crash_window_sent_with_linked_label_cancel_allows_reclaim(tmp_path: Pat
         created_by="operator",
         operation_id=op_id,
     )
+    with repo.engine.begin() as connection:
+        connection.exec_driver_sql(
+            "UPDATE shipping_label_operations SET status='SENT' WHERE id=?",
+            (op_id,),
+        )
     assert repo.get_label_operation(op_id).status == "SENT"
 
     label_rec, op_rec = repo.finalize_label_cancellation(label.id, actor="operator")
@@ -364,6 +369,11 @@ def test_reconcile_cancelled_label_with_active_operation(tmp_path: Path, monkeyp
     )
     # Only label side written — the old non-atomic cancel crash window.
     repo.update_label_status(label.id, "cancelled")
+    with repo.engine.begin() as connection:
+        connection.exec_driver_sql(
+            "UPDATE shipping_label_operations SET status='ACCEPTED' WHERE id=?",
+            (op_id,),
+        )
     assert repo.get_label_operation(op_id).status == "ACCEPTED"
 
     service = LabelService(repo)
@@ -425,8 +435,13 @@ def test_cancel_label_surfaces_operation_transition_failure(
         status="generated",
         carrier_response_json="{}",
         created_by="operator",
-        operation_id=op_id,
+        operation_id=None,
     )
+    with repo.engine.begin() as connection:
+        connection.exec_driver_sql(
+            "UPDATE shipping_labels SET operation_id=? WHERE id=?",
+            (op_id, label.id),
+        )
 
     service = LabelService(repo)
     monkeypatch.setenv("VITE_API_KEY", "test-key-not-real")

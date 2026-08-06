@@ -3,7 +3,7 @@ okf: v0.1
 type: Index
 module: sellfox_shipping
 created: 2026-07-15
-updated: 2026-08-05
+updated: 2026-08-06
 ---
 
 # sellfox_shipping — 文档索引
@@ -21,11 +21,13 @@ updated: 2026-08-05
 - [specs/index.md](specs/index.md) — **生产可靠性设计规范**
 - [specs/recovery-cli-error-taxonomy-outbox-plan-2026-08-05.md](specs/recovery-cli-error-taxonomy-outbox-plan-2026-08-05.md) — **恢复 CLI、错误分类、UNKNOWN 人工结案与赛狐 Outbox 实施计划**
 - [specs/production-acceptance-and-jack-handoff-2026-08-05.md](specs/production-acceptance-and-jack-handoff-2026-08-05.md) — **生产验收矩阵、剩余边界与 Jack Agent 接手规范**
+- [specs/sellfox-writeback-outbox-2026-08-06.md](specs/sellfox-writeback-outbox-2026-08-06.md) — 订单级候选、事务边界和后续执行器规范。
 
 ## 调研 / 交接
 
 - [research/index.md](research/index.md) — 调研文档导航
 - [research/mature-shipping-systems-2026-08-04.md](research/mature-shipping-systems-2026-08-04.md) — 成熟商业系统、Karrio 与 API 方案调研
+- [research/sellfox-writeback-outbox-systems-2026-08-06.md](research/sellfox-writeback-outbox-systems-2026-08-06.md) — Outbox 成熟方案与采用结论。
 - [research/session-progress-2026-07-16.md](research/session-progress-2026-07-16.md) — 过程日记（冷档案，勿当现状）
 - [research/research-synthesis-2026-07-16.md](research/research-synthesis-2026-07-16.md) — 规划底稿；先看文首裁决框，现行以 HANDOFF 为准
 - [research/lizard-p0-column-mapping-2026-07-17.md](research/lizard-p0-column-mapping-2026-07-17.md) — 蜴国际 P0 样例列映射（匹配键 / 单位）
