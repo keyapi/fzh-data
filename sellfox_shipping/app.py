@@ -2119,6 +2119,82 @@ async def batch_export_packages(request: Request):
     )
 
 
+@app.post("/api/packages/batch-create-labels")
+async def batch_create_labels(request: Request):
+    """Create labels for selected packages.
+
+    Body: {"package_sns": [...], "carrier": "auto"|"vite"|"lizard", "actor": "..."}
+    carrier="auto" uses each package's routing-suggested carrier.
+    Each package is independent — failures are reported, not fatal.
+    """
+    from sellfox_shipping.label_service import LabelService, LabelServiceError
+
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "Invalid JSON body")
+    package_sns: list[str] = body.get("package_sns", [])
+    carrier: str = str(body.get("carrier") or "auto").strip().lower()
+    actor: str = str(body.get("actor") or "web-user").strip()
+    if not package_sns:
+        raise HTTPException(400, "No package_sns provided")
+    if carrier not in ("auto", "vite", "lizard"):
+        raise HTTPException(400, f"Invalid carrier '{carrier}'")
+
+    account_key = config["sellfox"]["proxy_account"]
+    repo = _get_package_repository()
+    svc = LabelService(repo)
+
+    results: list[dict] = []
+    success = 0
+    for sn in package_sns:
+        record = repo.get(account_key, sn)
+        if record is None:
+            results.append({"package_sn": sn, "ok": False, "error": "包裹不存在"})
+            continue
+        effective_carrier = carrier
+        if carrier == "auto":
+            try:
+                carton_rows = _carton_rows_for_package(account_key, record)
+                routing = _compute_routing(record, carton_rows)
+                effective_carrier = (routing.carrier or "").strip().lower() if routing else ""
+            except Exception:
+                effective_carrier = ""
+            if effective_carrier not in ("vite", "lizard"):
+                results.append({
+                    "package_sn": sn,
+                    "ok": False,
+                    "error": "无路由建议承运商（auto 模式）",
+                })
+                continue
+        try:
+            result = svc.create_label(
+                carrier=effective_carrier,
+                package=record,
+                account_key=account_key,
+                actor=actor,
+            )
+            success += 1
+            results.append({
+                "package_sn": sn,
+                "ok": True,
+                "carrier": effective_carrier,
+                "tracking_number": result.get("tracking_number", ""),
+                "carrier_order_id": result.get("carrier_order_id", ""),
+            })
+        except LabelServiceError as exc:
+            results.append({"package_sn": sn, "ok": False, "carrier": effective_carrier, "error": str(exc)})
+        except Exception as exc:  # noqa: BLE001
+            results.append({"package_sn": sn, "ok": False, "carrier": effective_carrier, "error": str(exc)})
+
+    return {
+        "results": results,
+        "success": success,
+        "failed": len(results) - success,
+        "total": len(package_sns),
+    }
+
+
 def mount_mcp(mcp_app):
     """Mount FastMCP ASGI app. Called from main.py after MCP tools are defined."""
     app.mount("/mcp", mcp_app)

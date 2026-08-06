@@ -334,7 +334,8 @@
             <div id="batch-bar">
                 <span class="count">已选 <strong id="selected-count">0</strong> 个包裹</span>
                 <button class="truck-btn" onclick="openPrintModal()"><span class="icon">🚚</span> 批量打印</button>
-                <button class="truck-btn" onclick="exportSelected()" style="background:#155724;"><span class="icon">📥</span> 导出 Excel</button>
+                <button class="truck-btn" onclick="openBatchCreateModal()" style="background:#155724;"><span class="icon">🏷️</span> 创建面单</button>
+                <button class="truck-btn" onclick="exportSelected()" style="background:#856404;"><span class="icon">📥</span> 导出 Excel</button>
                 <button class="cancel-link" onclick="clearSelection()">取消选中</button>
             </div>
         </div>
@@ -360,6 +361,40 @@
                 <div>
                     <button class="btn-download" onclick="downloadMerged()">下载 PDF</button>
                     <button class="btn-print" onclick="printMerged()">打印</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Batch create label modal -->
+    <div id="batch-create-modal" class="print-modal-overlay">
+        <div class="print-modal" style="max-width:640px;">
+            <div class="pm-header">
+                <h3>批量创建面单 — 已选 <span id="bc-count">0</span> 个包裹</h3>
+                <button class="pm-close" onclick="closeBatchCreateModal()">✕</button>
+            </div>
+            <div class="pm-body" style="padding:16px;">
+                <p style="font-size:13px;color:#666;margin-bottom:12px;line-height:1.5;">
+                    将逐个调用承运商 API 创建面单（真实产生费用）。未审核通过 / 无有效尺寸 / 已有活跃面单的包裹会报错跳过。
+                </p>
+                <div class="info-row" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
+                    <div class="info-item">
+                        <div class="label" style="font-size:12px;color:#666;">承运商</div>
+                        <select id="bc-carrier" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;">
+                            <option value="auto">按路由推荐 (auto)</option>
+                            <option value="vite">VITE</option>
+                            <option value="lizard">蜴国际</option>
+                        </select>
+                    </div>
+                    <div class="info-item">
+                        <div class="label" style="font-size:12px;color:#666;">操作者</div>
+                        <input id="bc-actor" value="web-user" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;width:120px;" />
+                    </div>
+                    <div class="info-item">
+                        <button onclick="runBatchCreate()" style="padding:8px 16px;background:#155724;color:#fff;border:none;border-radius:4px;cursor:pointer;">开始创建</button>
+                    </div>
+                </div>
+                <div id="bc-results" style="margin-top:14px;max-height:320px;overflow:auto;font-size:13px;font-family:monospace;">
                 </div>
             </div>
         </div>
@@ -542,6 +577,50 @@
             document.body.appendChild(t);
             setTimeout(function() { t.remove(); }, 3000);
         }
+
+        // ── Batch create labels ──
+        function openBatchCreateModal() {
+            var sns = getSelected();
+            if (sns.length === 0) return;
+            document.getElementById('bc-count').textContent = sns.length;
+            document.getElementById('bc-results').innerHTML = '';
+            document.getElementById('batch-create-modal').classList.add('visible');
+        }
+        function closeBatchCreateModal() {
+            document.getElementById('batch-create-modal').classList.remove('visible');
+        }
+        function runBatchCreate() {
+            var sns = getSelected();
+            if (sns.length === 0) { closeBatchCreateModal(); return; }
+            var carrier = document.getElementById('bc-carrier').value;
+            var actor = document.getElementById('bc-actor').value.trim() || 'web-user';
+            var resultsEl = document.getElementById('bc-results');
+            resultsEl.innerHTML = '<div class="loading">正在逐包创建面单...</div>';
+            fetch('/api/packages/batch-create-labels', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ package_sns: sns, carrier: carrier, actor: actor })
+            })
+            .then(function(resp) { return resp.json(); })
+            .then(function(d) {
+                var html = '';
+                (d.results || []).forEach(function(r) {
+                    if (r.ok) {
+                        html += '<div style="padding:6px 8px;border-bottom:1px solid #eee;color:#155724;">✅ ' + r.package_sn + ' — 追踪号 ' + (r.tracking_number || '—') + (r.carrier ? ' (' + r.carrier + ')' : '') + '</div>';
+                    } else {
+                        html += '<div style="padding:6px 8px;border-bottom:1px solid #eee;color:#721c24;">❌ ' + r.package_sn + ' — ' + (r.error || '失败').replace(/</g, '&lt;') + '</div>';
+                    }
+                });
+                html += '<div style="padding:8px;font-weight:700;">成功 ' + (d.success || 0) + ' / 失败 ' + (d.failed || 0) + ' / 共 ' + (d.total || 0) + '</div>';
+                resultsEl.innerHTML = html;
+            })
+            .catch(function(err) {
+                resultsEl.innerHTML = '<div class="loading" style="color:#721c24;">批量创建失败: ' + err.message.replace(/</g, '&lt;') + '</div>';
+            });
+        }
+        document.getElementById('batch-create-modal').addEventListener('click', function(e) {
+            if (e.target === this) closeBatchCreateModal();
+        });
         document.getElementById('print-modal').addEventListener('click', function(e) {
             if (e.target === this) closePrintModal();
         });
