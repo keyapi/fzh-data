@@ -126,7 +126,7 @@ def build_create_order_body(
     *,
     sm_code: str,
     shipper_code: str = SHIPPER_CODE_DEFAULT,
-    weight_unit_type: str = "1",
+    weight_unit_type: str = "2",  # 2=KG/CM per API doc
     parcel_declared_value: float = 10.0,
 ) -> dict[str, Any]:
     """Map a Sellfox package to 蜴国际 createOrder JSON (no HTTP).
