@@ -235,7 +235,8 @@ class OutboxService:
                 "allow_side_effects required for real writeback "
                 "(use --i-understand-side-effects)"
             )
-        self._repo.recover_stale_sellfox_outbox(actor=actor)
+        if not dry_run:
+            self._repo.recover_stale_sellfox_outbox(actor=actor)
 
         rows = self._select_rows(
             account_key=account_key, outbox_id=outbox_id, limit=limit

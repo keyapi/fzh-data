@@ -358,7 +358,19 @@ def test_recovery_moves_stale_in_flight_to_unknown_blocked(tmp_path: Path) -> No
     repo.set_sellfox_outbox_status(outbox_id, "IN_FLIGHT")
 
     service = OutboxService(repo)
-    result = service.run_once(actor="ops", account_key="sellfox-main", dry_run=True)
+    preview = service.run_once(actor="ops", account_key="sellfox-main", dry_run=True)
+    row = repo.get_sellfox_outbox(outbox_id)
+    assert row is not None
+    assert row.status == "IN_FLIGHT"
+    assert preview["counts"]["input"] == 0
+
+    result = service.run_once(
+        actor="ops",
+        account_key="sellfox-main",
+        dry_run=False,
+        allow_side_effects=True,
+        limit=1,
+    )
 
     row = repo.get_sellfox_outbox(outbox_id)
     assert row is not None
