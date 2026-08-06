@@ -8,6 +8,14 @@ updated: 2026-08-05
 
 # sellfox_shipping — 变更日志
 
+## 2026-08-06 — 蜴国际参考号 -N 后缀 + 派生包裹号列 + 会话问题文档
+
+- 蜴国际参考号改为 generation 作用域：generation 1 用基础号，后续 `-1/-2/-3`（取消订单仍占用参考号）
+- Migration 0018: `shipping_labels` 新增 `derived_reference_no` 列
+- 创建/恢复蜴国际面单时记录实际派生参考号
+- 面单记录表格新增"派生包裹号"列（Vite 留空）
+- 新增综合问题文档 `docs/solutions/reliability-hardening-and-lizard-chain-2026-08-06.md`（会话全部问题与修复）
+
 ## 2026-08-05 — UNKNOWN_BLOCKED 证据化结案 (PR C：可靠性收口)
 
 - Migration 0017: 新增 `shipping_label_investigations` append-only 表
