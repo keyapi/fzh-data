@@ -520,7 +520,7 @@
             }
         }
         var currentPreviewSns = [];
-        function loadPreview(sns, excludeMissing) {
+        function loadPreview(sns) {
             currentPreviewSns = sns;
             // Cancel any in-flight request
             if (previewAborter) previewAborter.abort();
@@ -530,19 +530,11 @@
             fetch('/api/packages/batch-print', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ package_sns: sns, document_type: selectedDocType, exclude_missing: !!excludeMissing }),
+                body: JSON.stringify({ package_sns: sns, document_type: selectedDocType }),
                 signal: signal
             })
             .then(function(resp) {
-                if (!resp.ok) return resp.json().then(function(j) {
-                    var inner = (j && typeof j.detail === 'object' && j.detail) ? j.detail : j;
-                    var e = new Error((inner && inner.detail) || inner || '打印失败');
-                    e.validation = inner;
-                    throw e;
-                }).catch(function(e2) {
-                    if (e2.validation) throw e2;
-                    return resp.text().then(function(t) { throw new Error(t); });
-                });
+                if (!resp.ok) return resp.text().then(function(t) { throw new Error(t); });
                 return resp.blob();
             })
             .then(function(blob) {
@@ -553,23 +545,10 @@
             })
             .catch(function(err) {
                 if (err.name === 'AbortError') return;
-                var msg = (err.message || '').toString();
-                var html;
-                if (err.validation && err.validation.skipped) {
-                    var skipped = err.validation.skipped || [];
-                    var valid = err.validation.valid || [];
-                    var skippedEsc = msg.replace(/</g, '&lt;').replace(/\n/g, '<br>');
-                    html = '<div style="color:#721c24;white-space:pre-line;text-align:left;padding:14px;">' + skippedEsc + '</div>';
-                    if (valid.length > 0) {
-                        html += '<div style="margin-top:12px;text-align:left;padding:0 14px;">' +
-                            '<button onclick="loadPreview(currentPreviewSns, true)" style="padding:8px 16px;background:#155724;color:#fff;border:none;border-radius:4px;cursor:pointer;">' +
-                            '仅打印有效包裹 (' + valid.length + ')</button>' +
-                            '</div>';
-                    }
-                } else {
-                    html = '<div class="loading" style="color:#721c24;white-space:pre-line;text-align:left;padding:20px;">' + msg.replace(/</g, '&lt;') + '</div>';
-                }
-                document.getElementById('pm-body').innerHTML = html;
+                var msg = err.message;
+                try { var d = JSON.parse(msg); msg = d.detail || msg; } catch(e) {}
+                document.getElementById('pm-body').innerHTML =
+                    '<div class="loading" style="color:#721c24;white-space:pre-line;text-align:left;padding:20px;">' + msg.replace(/</g,'&lt;') + '</div>';
             });
         }
         function downloadMerged() {

@@ -1915,7 +1915,6 @@ async def batch_print_packages(request: Request):
         raise HTTPException(400, "Invalid JSON body")
     package_sns: list[str] = body.get("package_sns", [])
     doc_type: str = body.get("document_type", "both")
-    exclude_missing: bool = bool(body.get("exclude_missing", False))
     if not package_sns:
         raise HTTPException(400, "No package_sns provided")
 
@@ -1923,20 +1922,34 @@ async def batch_print_packages(request: Request):
     repo = _get_package_repository()
 
     merged = fitz.open()
-    skipped: list[str] = []
+    missing_stickers: list[str] = []
 
-    # ── Phase 1: collect all documents first ──
+    # ── Phase 1: collect documents, anchored on valid labels ──
+    # The print count follows the number of packages that have a valid label.
+    # A package whose sticker cannot be generated gets a blank-page placeholder
+    # so sticker count always matches label count and ordering is preserved.
     docs: list[dict] = []  # {sn, sticker_bytes, label_bytes}
     for sn in package_sns:
         record = repo.get(account_key, sn)
         if record is None:
-            skipped.append(f"{sn}: 包裹不存在")
             continue
 
-        sticker_bytes: bytes | None = None
-        label_bytes: bytes | None = None
+        # Anchor: package must have a valid (non-cancelled) label to be printed
+        labels = repo.list_labels_for_package(account_key=account_key, package_sn=sn)
+        active = [lbl for lbl in labels if getattr(lbl, "status", None) != "cancelled"]
+        if not active:
+            continue
+        lbl = active[0]
 
-        # ── Sticker ──
+        label_bytes: bytes | None = None
+        if getattr(lbl, "artifact_id", None):
+            artifact = repo.get_artifact(lbl.artifact_id)
+            if artifact:
+                path = repo.resolve_artifact_path(artifact)
+                if path.is_file():
+                    label_bytes = path.read_bytes()
+
+        sticker_bytes: bytes | None = None
         if doc_type in ("sticker", "both"):
             items_data: list[dict] = []
             skus: set[str] = set()
@@ -1945,9 +1958,7 @@ async def batch_print_packages(request: Request):
                 if sku:
                     skus.add(sku)
                     items_data.append({"commodity_sku": sku, "qty": item.quantity or 1})
-            if not items_data:
-                skipped.append(f"{sn}: 无商品SKU，无法生成背贴")
-            else:
+            if items_data:
                 erp_key = os.getenv("PROD_ERP_API_KEY") or os.getenv("ERP_API_KEY", "")
                 erp_secret = os.getenv("PROD_ERP_API_SECRET") or os.getenv("ERP_API_SECRET", "")
                 erp_base = os.getenv("ERP_URL", "https://erpnext.vilavi.cn")
@@ -1977,62 +1988,39 @@ async def batch_print_packages(request: Request):
                         Path(tmp.name).unlink(missing_ok=True)
                 except Exception:
                     traceback.print_exc()
-                if not sticker_bytes:
-                    skipped.append(f"{sn}: 无法生成背贴")
-        if doc_type in ("sticker", "both") and not sticker_bytes:
-            continue  # skip this package entirely
-
-        # ── Label ──
-        if doc_type in ("label", "both"):
-            labels = repo.list_labels_for_package(account_key=account_key, package_sn=sn)
-            active = [lbl for lbl in labels if getattr(lbl, "status", None) != "cancelled"]
-            if active:
-                lbl = active[0]
-                if getattr(lbl, "artifact_id", None):
-                    artifact = repo.get_artifact(lbl.artifact_id)
-                    if artifact:
-                        path = repo.resolve_artifact_path(artifact)
-                        if path.is_file():
-                            label_bytes = path.read_bytes()
-            if not label_bytes:
-                skipped.append(f"{sn}: 无有效Label面单")
-        if doc_type in ("label", "both") and not label_bytes:
-            continue  # skip this package entirely
+            if not sticker_bytes:
+                missing_stickers.append(f"{sn}: 无有效背贴（已用空白页占位）")
 
         docs.append({"sn": sn, "sticker": sticker_bytes, "label": label_bytes})
 
-    # ── Hard validation: both mode requires both documents for every package ──
-    if skipped and not exclude_missing:
+    if not docs:
         raise HTTPException(
-            422,
-            detail={
-                "detail": "校验失败 — 以下包裹缺少文档，已拒绝打印:\n"
-                + "\n".join(skipped),
-                "skipped": skipped,
-                "valid": [d["sn"] for d in docs],
-            },
+            400,
+            "所选包裹均无有效面单，无法打印。请先为包裹创建面单。",
         )
 
-    # ── Phase 2: merge in strict order (sticker → label, per package) ──
+    # ── Phase 2: merge in order — sticker (or blank placeholder) → label ──
     for d in docs:
         if doc_type == "both":
-            src_s = fitz.open(stream=d["sticker"], filetype="pdf")
+            src_s = _blank_or_pdf(merged, d["sticker"])
             merged.insert_pdf(src_s)
             src_s.close()
             src_l = fitz.open(stream=d["label"], filetype="pdf")
             merged.insert_pdf(src_l)
             src_l.close()
         elif doc_type == "sticker":
-            src = fitz.open(stream=d["sticker"], filetype="pdf")
-            merged.insert_pdf(src)
-            src.close()
+            src_s = _blank_or_pdf(merged, d["sticker"])
+            merged.insert_pdf(src_s)
+            src_s.close()
         elif doc_type == "label":
+            if d["label"] is None:
+                continue
             src = fitz.open(stream=d["label"], filetype="pdf")
             merged.insert_pdf(src)
             src.close()
 
     if len(merged) == 0:
-        raise HTTPException(400, f"无有效文档可合并。跳过: {'; '.join(skipped)}")
+        raise HTTPException(400, "无有效文档可合并。")
 
     buf = io.BytesIO()
     merged.save(buf)
@@ -2040,14 +2028,25 @@ async def batch_print_packages(request: Request):
     buf.seek(0)
 
     headers = {"Content-Disposition": "inline; filename=batch_print.pdf"}
-    if exclude_missing and skipped:
-        headers["X-Skipped-Count"] = str(len(skipped))
+    if missing_stickers:
+        headers["X-Missing-Stickers"] = str(len(missing_stickers))
 
     return Response(
         content=buf.getvalue(),
         media_type="application/pdf",
         headers=headers,
     )
+
+
+def _blank_or_pdf(target, pdf_bytes: bytes | None):
+    """Return a fitz doc — the sticker PDF, or a blank placeholder page."""
+    import fitz
+
+    if pdf_bytes:
+        return fitz.open(stream=pdf_bytes, filetype="pdf")
+    blank = fitz.open()
+    blank.new_page(width=595, height=842)  # A4
+    return blank
 
 
 @app.post("/api/packages/batch-export")
