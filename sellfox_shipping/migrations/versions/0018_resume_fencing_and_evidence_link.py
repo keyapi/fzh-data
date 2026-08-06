@@ -34,14 +34,7 @@ def upgrade() -> None:
     if "resolution_evidence_id" not in operation_cols:
         op.add_column(
             "shipping_label_operations",
-            sa.Column(
-                "resolution_evidence_id",
-                sa.Integer(),
-                sa.ForeignKey(
-                    "shipping_label_investigations.id", ondelete="SET NULL"
-                ),
-                nullable=True,
-            ),
+            sa.Column("resolution_evidence_id", sa.Integer(), nullable=True),
         )
 
     investigation_cols = _columns(bind, "shipping_label_investigations")
