@@ -207,3 +207,33 @@ def test_run_once_real_cli_calls_http_once(tmp_path, monkeypatch) -> None:
     row = repo.get_sellfox_outbox(outbox_id)
     assert row is not None
     assert row.status == "VERIFIED"
+
+
+def test_run_once_cli_json_envelope_shape(tmp_path, monkeypatch) -> None:
+    repo = PackageRepository(tmp_path / "shipping.db")
+    outbox_id = _seed_candidate(repo)
+    OutboxService(repo).confirm(outbox_id=outbox_id, actor="ops")
+    monkeypatch.setattr(cli, "_get_package_repository", lambda: repo)
+
+    result = CliRunner().invoke(
+        cli.app,
+        [
+            "sellfox-outbox-run-once",
+            "--outbox-id",
+            str(outbox_id),
+            "--actor",
+            "ops",
+            "--json",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert {
+        "command",
+        "ok",
+        "counts",
+        "results",
+        "errors",
+        "recommended_action",
+    } <= set(payload)
+    assert payload["counts"] == {"input": 1, "success": 1, "failed": 0}

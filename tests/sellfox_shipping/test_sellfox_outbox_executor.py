@@ -591,3 +591,36 @@ def test_release_lease_restores_origin_status(tmp_path: Path) -> None:
     row = repo.get_sellfox_outbox(outbox_id)
     assert row is not None
     assert row.status == "VERIFY_PENDING"
+
+
+def test_auth_failure_stops_automatic_retry(tmp_path: Path) -> None:
+    repo = PackageRepository(tmp_path / "shipping.db")
+    _seed_package(repo)
+    outbox_id = _create_candidate(repo)
+    _confirm(repo, outbox_id)
+    _enable_probe(repo)
+    client = CountingClient()
+    client.submit_response = {"code": 401, "msg": "unauthorized"}
+    service = OutboxService(repo, submit_client=client)
+
+    first = service.run_once(
+        actor="ops",
+        outbox_id=outbox_id,
+        dry_run=False,
+        allow_side_effects=True,
+        limit=1,
+    )
+    assert first["results"][0]["status"] == "MANUAL_REVIEW"
+    row = repo.get_sellfox_outbox(outbox_id)
+    assert row is not None
+    assert row.status == "MANUAL_REVIEW"
+
+    second = service.run_once(
+        actor="ops",
+        outbox_id=outbox_id,
+        dry_run=False,
+        allow_side_effects=True,
+        limit=1,
+    )
+    assert second["counts"]["failed"] == 1
+    assert client.submit_calls == 1
