@@ -64,6 +64,17 @@ class SubmitIntentResult:
     rate_limited_wait_ms: int = 0
 
 
+@dataclass(frozen=True)
+class SubmitLabelTrackingResult:
+    package_sn: str
+    tracking_number: str
+    carrier_name: str
+    intent_ids: list[int]
+    intent_statuses: list[str]
+    http_called: bool
+    package_submission_state: str
+
+
 class SellfoxSubmitClient(Protocol):
     def submit_to_platform(self, wire_body: dict[str, object]) -> dict[str, object]:
         """POST submitToPlatform; returns parsed JSON body."""
@@ -170,13 +181,14 @@ class SubmissionService:
         actor: str,
         carrier_name: str = "",
         shipping_service: str = "",
+        tracking_number: str = "",
     ) -> PrepareSubmitResult:
         record = self._repo.get(account_key, package_sn)
         if record is None:
             raise LookupError(f"Package {package_sn} not found")
         if record.local_review_status != "approved":
             raise ValueError("package local_review_status must be approved")
-        tracking = (record.logistics.tracking_number or "").strip()
+        tracking = (tracking_number or record.logistics.tracking_number or "").strip()
         if not tracking or tracking == package_sn:
             raise ValueError("package must have a real tracking_number before submit")
         carrier = (carrier_name or record.logistics.channel_name or "").strip()
@@ -432,3 +444,65 @@ class SubmissionService:
             summary=f"packageDetail trackNo matched {expected_track_no}",
         )
         return True
+
+    def submit_label_tracking(
+        self,
+        *,
+        account_key: str,
+        package_sn: str,
+        actor: str,
+    ) -> SubmitLabelTrackingResult:
+        """Write a valid (non-cancelled) label's tracking number to Sellfox.
+
+        Finds the package's active label, prepares intents with that tracking,
+        then submits them for real via submitToPlatform.
+        """
+        labels = self._repo.list_labels_for_package(
+            account_key=account_key, package_sn=package_sn
+        )
+        valid = [
+            lb
+            for lb in labels
+            if (lb.status or "") != "cancelled" and (lb.tracking_number or "").strip()
+        ]
+        if not valid:
+            raise LookupError(
+                "no valid label with tracking number for "
+                f"{package_sn} (cancelled labels ignored)"
+            )
+        label = valid[0]
+        tracking = (label.tracking_number or "").strip()
+        carrier = (label.carrier or "").strip() or ""
+
+        prepared = self.prepare_intents_for_package(
+            account_key=account_key,
+            package_sn=package_sn,
+            actor=actor,
+            carrier_name=carrier,
+            tracking_number=tracking,
+        )
+        if not prepared.intent_ids:
+            raise RuntimeError("no submission intents prepared")
+
+        intent_statuses: list[str] = []
+        http_called = False
+        for intent_id in prepared.intent_ids:
+            result = self.submit_intent(
+                intent_id=intent_id,
+                actor=actor,
+                dry_run=False,
+                allow_side_effects=True,
+                verify_readback=False,
+            )
+            intent_statuses.append(result.intent_status)
+            http_called = http_called or result.http_called
+
+        return SubmitLabelTrackingResult(
+            package_sn=package_sn,
+            tracking_number=tracking,
+            carrier_name=carrier,
+            intent_ids=list(prepared.intent_ids),
+            intent_statuses=intent_statuses,
+            http_called=http_called,
+            package_submission_state=prepared.package_submission_state,
+        )

@@ -176,3 +176,26 @@ class DirectSellfoxClient:
             records=records,
             errors=errors,
         )
+
+    # ── Submit platform (write trackNo back to Sellfox) ───────
+
+    def submit_to_platform(self, wire_body: dict) -> dict:
+        """POST submitToPlatform with caller-built wire JSON."""
+        return self._post("/api/packageShip/submitToPlatform.json", wire_body)
+
+    def fetch_package_detail(self, package_sn: str) -> dict | None:
+        """POST packageDetail; returns data object or None on soft failure."""
+        sn = (package_sn or "").strip()
+        if not sn:
+            return None
+        try:
+            data = self._post(
+                "/api/packageShip/v1/packageDetail.json",
+                {"packageSn": sn},
+            )
+        except Exception:
+            return None
+        if data.get("code") != 0:
+            return None
+        return data.get("data") if isinstance(data, dict) else None
+

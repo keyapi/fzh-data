@@ -1350,6 +1350,43 @@ async def package_prepare_submit_form(request: Request, package_sn: str):
     )
 
 
+@app.post("/packages/{package_sn}/submit-label-tracking", response_class=HTMLResponse)
+async def package_submit_label_tracking_form(request: Request, package_sn: str):
+    """Write a valid label's tracking number back to Sellfox (real submitToPlatform).
+
+    Sources the tracking from the package's non-cancelled label record, prepares
+    intents with it, and submits them for real. The button click is the user's
+    explicit confirmation of this side-effecting call.
+    """
+    from sellfox_shipping.submission_service import SubmissionService
+
+    form = await request.form()
+    account_key = config["sellfox"]["proxy_account"]
+    repo = _get_package_repository()
+    actor = _web_actor(request, str(form.get("actor") or "web-user"))
+    try:
+        result = SubmissionService(repo, _get_client()).submit_label_tracking(
+            account_key=account_key,
+            package_sn=package_sn,
+            actor=actor,
+        )
+        message = (
+            f"已回写面单追踪号 {result.tracking_number} → 赛狐；"
+            f"意图 {result.intent_ids} 状态 {result.intent_statuses}；"
+            f"HTTP {'已调用' if result.http_called else '未调用'}"
+        )
+    except Exception as exc:  # noqa: BLE001
+        message = f"回写赛狐失败: {exc}"
+    record = repo.get(account_key, package_sn)
+    if record is None:
+        raise HTTPException(404, f"Package {package_sn} not found")
+    return templates.TemplateResponse(
+        request,
+        "package_detail.html",
+        _package_detail_context(account_key, record, message=message),
+    )
+
+
 @app.post("/packages/{package_sn}/create-label", response_class=HTMLResponse)
 async def package_create_label_form(request: Request, package_sn: str):
     """HTML form post to create a shipping label."""

@@ -470,6 +470,35 @@
                     </button>
                 </div>
             </form>
+            {% set valid_tracking = namespace(found='', carrier='', done=false) %}
+            {% for lb in labels or [] %}
+                {% if not valid_tracking.done and lb.status != 'cancelled' and lb.tracking_number %}
+                    {% set valid_tracking.found = lb.tracking_number %}
+                    {% set valid_tracking.carrier = lb.carrier %}
+                    {% set valid_tracking.done = true %}
+                {% endif %}
+            {% endfor %}
+            <form method="post" action="/packages/{{ package.package_sn }}/submit-label-tracking"
+                  class="info-row" style="align-items:flex-end;margin-bottom:16px;padding-top:12px;border-top:1px solid #eee;"
+                  onsubmit="return confirm('确认将面单追踪号{% if valid_tracking.found %} {{ valid_tracking.found }}{% endif %} 写回赛狐？此操作调用 submitToPlatform，可能影响履约状态。')">
+                <div class="info-item">
+                    <div class="label">操作者</div>
+                    <input name="actor" value="web-user" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;width:100%;" />
+                </div>
+                <div class="info-item" style="flex:2;">
+                    <div class="label">有效面单追踪号</div>
+                    {% if valid_tracking.found %}
+                    <div class="value"><code>{{ valid_tracking.found }}</code> <span style="color:#888;">({{ valid_tracking.carrier or '—' }})</span></div>
+                    {% else %}
+                    <div class="value" style="color:#999;">无有效面单（无未取消且有追踪号的面单）</div>
+                    {% endif %}
+                </div>
+                <div class="info-item">
+                    <button type="submit" style="padding:8px 14px;background:#856404;color:#fff;border:none;border-radius:4px;cursor:pointer;">
+                        回写面单追踪号到赛狐
+                    </button>
+                </div>
+            </form>
             <table>
                 <thead>
                     <tr>
