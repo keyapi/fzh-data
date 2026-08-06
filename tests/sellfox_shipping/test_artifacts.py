@@ -81,6 +81,6 @@ def test_migration_head_includes_artifacts(tmp_path: Path) -> None:
             "SELECT name FROM sqlite_master WHERE type='table' "
             "AND name='shipping_artifacts'"
         ).scalar_one()
-    assert version == "0020_sellfox_writeback_outbox"
+    assert version == "0021_sellfox_outbox_lease_origin"
 
     assert table == "shipping_artifacts"
