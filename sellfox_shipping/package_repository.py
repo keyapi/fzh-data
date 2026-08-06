@@ -591,6 +591,7 @@ class ShippingLabelRow(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     carrier_response_json: Mapped[str] = mapped_column(Text, default="")
     created_by: Mapped[str] = mapped_column(String, default="")
+    derived_reference_no: Mapped[str] = mapped_column(String, default="")
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.current_timestamp()
     )
@@ -619,6 +620,7 @@ class ShippingLabelRecord:
     is_active: bool
     carrier_response_json: str
     created_by: str
+    derived_reference_no: str = ""
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -2633,6 +2635,7 @@ class PackageRepository:
         status: str,
         carrier_response_json: str,
         created_by: str,
+        derived_reference_no: str = "",
     ) -> ShippingLabelRecord:
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         with self._session_factory.begin() as session:
@@ -2654,6 +2657,7 @@ class PackageRepository:
                 is_active=status != "cancelled",
                 carrier_response_json=carrier_response_json,
                 created_by=created_by,
+                derived_reference_no=derived_reference_no,
                 created_at=now,
                 updated_at=now,
             )
@@ -3130,6 +3134,7 @@ def _shipping_label_to_record(
         is_active=bool(row.is_active),
         carrier_response_json=row.carrier_response_json or "",
         created_by=row.created_by or "",
+        derived_reference_no=row.derived_reference_no or "",
     created_at=created_at,
     updated_at=updated_at,
 )

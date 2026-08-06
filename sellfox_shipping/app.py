@@ -1155,6 +1155,7 @@ def _get_labels_for_package(account_key: str, package_sn: str) -> list[dict]:
                 "carrier": r.carrier,
                 "service_level": r.service_level,
                 "tracking_number": r.tracking_number,
+                "derived_reference_no": r.derived_reference_no,
                 "carrier_order_id": r.carrier_order_id,
                 "total_amount": r.total_amount,
                 "currency": r.currency,

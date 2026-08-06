@@ -188,3 +188,51 @@ def test_create_label_blocks_when_valid_label_exists(tmp_path: Path) -> None:
             actor="operator",
             service_level="GOFO_PARCEL",
         )
+
+
+def test_lizard_reference_suffix_by_generation(tmp_path: Path) -> None:
+    """Generation 1 uses base reference; later generations append -N suffix."""
+    from sellfox_shipping.label_service import LabelService
+    repo = PackageRepository(tmp_path / "shipping.db")
+    service = LabelService(repo)
+
+    assert service._lizard_reference_no("P2B7A9T733766", None) == "P2B7A9T733766"
+
+    pid = _ready_pkg(repo, "P-REF1")
+    op1 = _claim_to(repo, pid, "P-REF1", "LABEL_PENDING", 0)
+    # op1 generation is 1 → base reference
+    assert service._lizard_reference_no("P-REF1", op1) == "P-REF1"
+
+    # Release op1 and claim a second op → generation 2 → -1 suffix
+    repo.release_active_label_operation(pid, actor="operator")
+    op2 = _claim_to(repo, pid, "P-REF1", "LABEL_PENDING", 1)
+    assert service._lizard_reference_no("P-REF1", op2) == "P-REF1-1"
+
+
+def test_insert_label_stores_derived_reference(tmp_path: Path) -> None:
+    """insert_label persists derived_reference_no on the label record."""
+    repo = PackageRepository(tmp_path / "shipping.db")
+    pid = _ready_pkg(repo, "P-DERIV1")
+    label = repo.insert_label(
+        account_key="sellfox-main",
+        package_db_id=pid,
+        carrier="lizard",
+        service_level="FedEx-Ground-J-TX",
+        tracking_number="1Z-DERIV",
+        carrier_order_id="ORD-DERIV",
+        request_id="",
+        label_url="https://example.invalid/l.pdf",
+        artifact_id=None,
+        total_amount=10.0,
+        currency="USD",
+        status="generated",
+        carrier_response_json="{}",
+        created_by="operator",
+        derived_reference_no="P-DERIV1-2",
+    )
+    assert label.derived_reference_no == "P-DERIV1-2"
+
+    fetched = repo.list_labels_for_package(
+        account_key="sellfox-main", package_sn="P-DERIV1"
+    )
+    assert fetched[0].derived_reference_no == "P-DERIV1-2"

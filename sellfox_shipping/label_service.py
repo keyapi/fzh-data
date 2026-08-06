@@ -608,9 +608,10 @@ class LabelService:
         """Build a unique 蜴国际 reference scoped by operation generation.
 
         蜴国际 keeps cancelled orders' reference_no reserved, so reusing the
-        bare package_sn fails with "参考号重复". Appending -G{generation} gives
-        each attempt a unique, deterministic reference used consistently by
-        createOrder / getLabel / cancelOrder.
+        bare package_sn fails with "参考号重复". Per ops guidance: first attempt
+        uses the base reference; each later attempt appends -1, -2, -3... The
+        suffix is derived deterministically from the operation generation so
+        createOrder / getLabel / cancelOrder all use the same value.
         """
         sn = (package_sn or "").strip()
         if not sn:
@@ -622,7 +623,9 @@ class LabelService:
                 gen = int(op.generation or 0)
             except Exception:
                 gen = 0
-        return f"{sn}-G{gen}" if gen > 0 else sn
+        if gen <= 1:
+            return sn
+        return f"{sn}-{gen - 1}"
 
     def list_enabled_carriers(self) -> list[dict[str, str]]:
         """Return carriers with enabled=true from config."""
@@ -826,6 +829,7 @@ class LabelService:
                 status="generated",
                 carrier_response_json="",
                 created_by=actor,
+                derived_reference_no=lizard_ref,
             )
         except Exception as exc:
             if operation_id is not None:
@@ -1155,6 +1159,7 @@ class LabelService:
                     status="generated",
                     carrier_response_json=json.dumps(lab),
                     created_by=actor,
+                    derived_reference_no=reference_no,
                 )
             except Exception as exc:
                 self._repo.transition_label_operation(

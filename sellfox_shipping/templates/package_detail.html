@@ -271,7 +271,7 @@
             <table style="margin-top:16px;">
                 <thead>
                     <tr>
-                        <th>创建时间</th><th>承运商</th><th>追踪号</th><th>服务</th>
+                        <th>创建时间</th><th>承运商</th><th>追踪号</th><th>派生包裹号</th><th>服务</th>
                         <th>金额</th><th>状态</th><th>面单PDF</th><th>操作</th>
                     </tr>
                 </thead>
@@ -281,6 +281,7 @@
                         <td style="font-size:11px;">{{ label.created_at.strftime('%Y-%m-%d %H:%M:%S') if label.created_at else '—' }}</td>
                         <td><span class="badge" style="background:#d1ecf1;color:#0c5460;">{{ label.carrier }}</span></td>
                         <td><code>{{ label.tracking_number or '—' }}</code></td>
+                        <td>{% if label.derived_reference_no %}<code>{{ label.derived_reference_no }}</code>{% else %}<span style="color:#ccc;">—</span>{% endif %}</td>
                         <td>{{ label.service_level or '—' }}</td>
                         <td>{% if label.total_amount %}${{ label.total_amount }} {{ label.currency }}{% else %}—{% endif %}</td>
                         <td><span class="badge" style="background:{% if label.status == 'generated' %}#d4edda;color:#155724;{% else %}#fff3cd;color:#856404;{% endif %}">{{ label.status }}</span></td>
