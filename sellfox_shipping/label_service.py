@@ -463,6 +463,8 @@ class LabelService:
 
         if label.carrier == "vite":
             carrier_message = self._request_vite_cancel(label)
+        elif label.carrier == "lizard":
+            carrier_message = self._request_lizard_cancel(label)
         else:
             raise LabelServiceError(
                 f"Cancel not supported for carrier '{label.carrier}'",
@@ -522,6 +524,50 @@ class LabelService:
                     f"VITE cancel failed: {exc}", http_status=502
                 ) from exc
         return str(result.get("message", "Cancelled"))
+
+    def _request_lizard_cancel(self, label: Any) -> str:
+        from sellfox_shipping.carriers.lizard.api_client import (
+            LizardApiClient,
+            LizardApiError,
+        )
+
+        app_token = _read_env("YIGLOBAL_APP_TOKEN")
+        app_key = _read_env("YIGLOBAL_APP_KEY")
+        if not app_token or not app_key:
+            raise LabelServiceError(
+                "YIGLOBAL_APP_TOKEN / YIGLOBAL_APP_KEY not configured",
+                http_status=503,
+            )
+        lizard_base = _read_env("YIGLOBAL_API_BASE_URL") or "http://47.106.72.196"
+
+        order_code = (label.carrier_order_id or "").strip()
+        if not order_code:
+            raise LabelServiceError(
+                "No carrier_order_id to cancel", http_status=400
+            )
+        reference_no = (
+            self._repo.get_package_sn_by_db_id(label.package_id) or ""
+        ).strip()
+        if not reference_no:
+            raise LabelServiceError(
+                "Unable to resolve package_sn for Lizard cancel", http_status=400
+            )
+
+        with LizardApiClient(
+            app_token=app_token,
+            app_key=app_key,
+            base_url=lizard_base,
+        ) as client:
+            try:
+                result = client.cancel_order(
+                    order_code=order_code, reference_no=reference_no
+                )
+            except LizardApiError as exc:
+                raise LabelServiceError(
+                    f"Lizard cancel failed: {exc}", http_status=502
+                ) from exc
+        msg = result.get("msg") or result.get("message") or "Cancelled"
+        return f"Cancelled Lizard order {order_code} ({msg})"
 
     def list_enabled_carriers(self) -> list[dict[str, str]]:
         """Return carriers with enabled=true from config."""
