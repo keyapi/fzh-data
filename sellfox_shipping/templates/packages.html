@@ -273,6 +273,15 @@
                     <input type="text" name="channel" id="txn-channel" value="{{ channel or '' }}" placeholder="渠道名" list="ch-list" autocomplete="off" />
                     <span class="arrow">▾</span>
                 </div>
+                <select name="has_label" title="有无面单">
+                    <option value="">全部面单</option>
+                    <option value="yes" {% if has_label == 'yes' %}selected{% endif %}>有面单</option>
+                    <option value="no" {% if has_label == 'no' %}selected{% endif %}>无面单</option>
+                </select>
+                <label style="font-size:13px;color:#333;white-space:nowrap;display:flex;align-items:center;gap:4px;cursor:pointer;">
+                    <input type="checkbox" name="exclude_shops" value="1" {% if exclude_shops_active %}checked{% endif %} onchange="this.form.submit()" />
+                    排除平台物流店铺{% if exclude_shops_list %}<span style="color:#888;font-size:11px;">({{ exclude_shops_list|join(', ') }})</span>{% endif %}
+                </label>
                 <button type="submit" class="btn-search">筛选</button>
             </form>
             <datalist id="ch-list"></datalist>

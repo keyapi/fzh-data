@@ -1763,6 +1763,8 @@ class PackageRepository:
         date_start: str | None = None,
         date_end: str | None = None,
         date_field: str = "label",
+        has_label: str | None = None,
+        exclude_shops: list[str] | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[PackageListItem]:
@@ -1782,6 +1784,18 @@ class PackageRepository:
             if local_review_status is not None:
                 query = query.where(
                     PackageRow.local_review_status == local_review_status
+                )
+            if has_label in ("yes", "no"):
+                label_exists = (
+                    select(ShippingLabelRow.id)
+                    .where(ShippingLabelRow.package_id == PackageRow.id)
+                    .where(ShippingLabelRow.status != "cancelled")
+                    .exists()
+                )
+                query = query.where(label_exists if has_label == "yes" else ~label_exists)
+            if exclude_shops:
+                query = query.where(
+                    PackageRow.shop_name.notin_(exclude_shops)
                 )
             if date_start is not None or date_end is not None:
                 if date_field == "order":
@@ -1883,6 +1897,8 @@ class PackageRepository:
         date_start: str | None = None,
         date_end: str | None = None,
         date_field: str = "label",
+        has_label: str | None = None,
+        exclude_shops: list[str] | None = None,
     ) -> int:
         with self._session_factory() as session:
             query = (
@@ -1901,6 +1917,18 @@ class PackageRepository:
             if local_review_status is not None:
                 query = query.where(
                     PackageRow.local_review_status == local_review_status
+                )
+            if has_label in ("yes", "no"):
+                label_exists = (
+                    select(ShippingLabelRow.id)
+                    .where(ShippingLabelRow.package_id == PackageRow.id)
+                    .where(ShippingLabelRow.status != "cancelled")
+                    .exists()
+                )
+                query = query.where(label_exists if has_label == "yes" else ~label_exists)
+            if exclude_shops:
+                query = query.where(
+                    PackageRow.shop_name.notin_(exclude_shops)
                 )
             if date_start is not None or date_end is not None:
                 if date_field == "order":

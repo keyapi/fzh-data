@@ -445,6 +445,22 @@ async def index(request: Request):
     return templates.TemplateResponse(request, "index.html")
 
 
+def _routing_exclude_shops() -> list[str]:
+    """Read the routing exclude_shops list (same source as 建议渠道方式)."""
+    from pathlib import Path
+
+    import yaml as _yaml
+
+    rules_path = Path(__file__).parent / "routing" / "routing_rules.yaml"
+    if not rules_path.exists():
+        return []
+    try:
+        raw = _yaml.safe_load(rules_path.read_text(encoding="utf-8"))
+        return list(raw.get("exclude_shops", []) or [])
+    except Exception:
+        return []
+
+
 @app.get("/packages", response_class=HTMLResponse)
 async def packages_page(
     request: Request,
@@ -455,11 +471,15 @@ async def packages_page(
     date_end: str | None = Query(None),
     date_field: str = Query("label"),
     tab: str | None = Query(None),
+    has_label: str | None = Query(None),
+    exclude_shops: str | None = Query(None),
     limit: int = Query(50, le=500),
     offset: int = Query(0, ge=0),
 ):
     """Server-rendered package list for review."""
     account_key = config["sellfox"]["proxy_account"]
+    exclude_list = _routing_exclude_shops()
+    exclude_active = bool(exclude_shops)
     result = _get_package_list_service().list(
         PackageListRequest(
             account_key=account_key,
@@ -469,6 +489,8 @@ async def packages_page(
             date_start=date_start or None,
             date_end=date_end or None,
             date_field=date_field,
+            has_label=has_label or None,
+            exclude_shops=exclude_list if exclude_active else [],
             limit=limit,
             offset=offset,
         )
@@ -485,6 +507,9 @@ async def packages_page(
             "date_end": date_end or "",
             "date_field": date_field,
             "tab": tab or "",
+            "has_label": has_label or "",
+            "exclude_shops_active": exclude_active,
+            "exclude_shops_list": exclude_list,
             "today": date.today().isoformat(),
             "d7": (date.today() - timedelta(days=7)).isoformat(),
             "d30": (date.today() - timedelta(days=30)).isoformat(),
