@@ -3,10 +3,18 @@ okf: v0.1
 type: Log
 module: sellfox_shipping
 created: 2026-07-15
-updated: 2026-08-05
+updated: 2026-08-06
 ---
 
 # sellfox_shipping - 变更日志
+
+## 2026-08-06 - 赛狐 Outbox PR 1 候选事实层
+
+- 新增 migration 0020、订单级 Outbox、来源表与账户 Policy 默认值。
+- API label 成功和 Excel tracking 导入统一通过事务 finalizer 生成候选。
+- 新增候选去重、来源合并、SUPERSEDED/CONFLICT 规则及显式历史扫描。
+- 新增 sellfox-outbox-list/show/scan-candidates，全部无赛狐 HTTP；扫描默认 dry-run。
+- 增加成熟方案调研与完整 Outbox 设计；PR 2/3 仍负责真实执行与能力门禁。
 
 ## 2026-08-05 - Migration 0019 与生产验收交接
 

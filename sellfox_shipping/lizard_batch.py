@@ -61,6 +61,18 @@ class PackageExportReader(Protocol):
         cost_currency: str | None = None,
     ) -> SellfoxPackageRecord: ...
 
+    def finalize_excel_tracking_with_outbox(
+        self,
+        *,
+        account_key: str,
+        package_sn: str,
+        tracking_number: str,
+        source_id: str,
+        actor: str,
+        estimated_cost: float | None = None,
+        cost_currency: str | None = None,
+    ): ...
+
     def register_artifact(
         self,
         *,
@@ -95,6 +107,7 @@ class PackageExportReader(Protocol):
         matched_sns: list[str],
         conflict_sns: list[str],
         unmatched_sns: list[str],
+        skipped_sns: list[str] | None = None,
         actor: str,
         summary: str = "",
     ): ...
@@ -240,6 +253,8 @@ class LizardImportResult(BaseModel):
     unmatched: int
     persisted: int = 0
     conflicts: int = 0
+    skipped: int = 0
+    skipped_rows: list[dict] = Field(default_factory=list)
     matched_rows: list[dict] = Field(default_factory=list)
     unmatched_rows: list[dict] = Field(default_factory=list)
     conflict_rows: list[dict] = Field(default_factory=list)
@@ -274,6 +289,7 @@ class ImportLizardTrackingService:
         )
         persisted = 0
         conflicts: list[dict] = []
+        skipped_rows: list[dict] = []
         matched_rows: list[dict] = []
         for row in parsed.rows:
             if not row.matched:
@@ -294,19 +310,44 @@ class ImportLizardTrackingService:
                 conflicts.append(entry)
                 matched_rows.append(entry)
                 continue
-            self._reader.set_tracking_number(
+            _, report = self._reader.finalize_excel_tracking_with_outbox(
                 account_key=request.account_key,
                 package_sn=row.package_sn,
                 tracking_number=row.tracking_number,
+                source_id=(
+                    f"batch:{request.batch_id}:row:{row.row_index}"
+                    if request.batch_id is not None
+                    else f"file:{hashlib.md5(content).hexdigest()}:row:{row.row_index}"
+                ),
+                actor=request.actor,
                 estimated_cost=row.freight,
             )
+            if report.counts["skipped"] > 0:
+                reason = next(
+                    (
+                        str(item.get("reason") or "outbox_candidates_skipped")
+                        for item in report.results
+                        if item.get("outcome") == "skipped"
+                    ),
+                    "outbox_candidates_skipped",
+                )
+                entry["reason"] = reason
+                skipped_rows.append(entry)
+                matched_rows.append(entry)
+                continue
+            if report.counts["conflict"] > 0:
+                entry["conflict_with"] = prior or ""
+                conflicts.append(entry)
+                matched_rows.append(entry)
+                continue
             persisted += 1
             entry["persisted"] = True
             matched_rows.append(entry)
 
         summary = (
             f"matched={parsed.matched} persisted={persisted} "
-            f"conflicts={len(conflicts)} unmatched={parsed.unmatched}"
+            f"conflicts={len(conflicts)} skipped={len(skipped_rows)} "
+            f"unmatched={parsed.unmatched}"
         )
         artifact = self._reader.register_artifact(
             account_key=request.account_key,
@@ -326,12 +367,14 @@ class ImportLizardTrackingService:
             ]
             conflict_sns = [r["package_sn"] for r in conflicts]
             unmatched_sns = [r.package_sn for r in parsed.unmatched_rows]
+            skipped_sns = [r["package_sn"] for r in skipped_rows]
             self._reader.apply_import_to_batch(
                 batch_id=batch_id,
                 import_artifact_id=artifact.id,
                 matched_sns=matched_sns,
                 conflict_sns=conflict_sns,
                 unmatched_sns=unmatched_sns,
+                skipped_sns=skipped_sns,
                 actor=request.actor,
                 summary=summary,
             )
@@ -341,6 +384,7 @@ class ImportLizardTrackingService:
             unmatched=parsed.unmatched,
             persisted=persisted,
             conflicts=len(conflicts),
+            skipped=len(skipped_rows),
             matched_rows=matched_rows,
             unmatched_rows=[
                 {
@@ -351,6 +395,7 @@ class ImportLizardTrackingService:
                 for r in parsed.unmatched_rows
             ],
             conflict_rows=conflicts,
+            skipped_rows=skipped_rows,
             parsed_at=datetime.now(timezone.utc).isoformat(),
             artifact_id=artifact.id,
             batch_id=batch_id,

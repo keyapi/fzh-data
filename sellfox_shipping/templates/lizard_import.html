@@ -75,6 +75,7 @@
                 <div class="stat"><div class="n">{{ result.matched }}</div><div class="l">匹配</div></div>
                 <div class="stat"><div class="n ok">{{ result.persisted }}</div><div class="l">已落库</div></div>
                 <div class="stat"><div class="n bad">{{ result.conflicts }}</div><div class="l">冲突</div></div>
+                <div class="stat"><div class="n bad">{{ result.skipped }}</div><div class="l">跳过</div></div>
                 <div class="stat"><div class="n bad">{{ result.unmatched }}</div><div class="l">未匹配</div></div>
             </div>
             <p class="hint">解析时间 {{ result.parsed_at }}
@@ -108,6 +109,8 @@
                             <span class="bad">冲突（已有 {{ row.conflict_with }}）</span>
                             {% elif row.get('persisted') %}
                             <span class="ok">已落库</span>
+                            {% elif row.get('reason') %}
+                            <span class="bad">跳过：{{ row.reason }}</span>
                             {% else %}
                             —
                             {% endif %}

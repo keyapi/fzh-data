@@ -39,6 +39,7 @@ timestamp: 2026-08-04
 - [routing-engine-v1-2026-07-24.md](routing-engine-v1-2026-07-24.md) — **规则引擎 V1**：YAML 驱动路由 + 10 种运算符 + 排除店铺。
 - [sku-label-back-sticker-analysis-2026-07-28.md](sku-label-back-sticker-analysis-2026-07-28.md) — **SKU 背贴 PDF 生成**：Colab notebook 逻辑拆解 + Google Sheets 中/西语名称获取 + sellfox_shipping 集成方案。
 - [mature-shipping-systems-2026-08-04.md](mature-shipping-systems-2026-08-04.md) — **成熟系统与开源方案调研**：商业工作流、Karrio/托管 API 比较和 FZH 采用结论。
+- [sellfox-writeback-outbox-systems-2026-08-06.md](sellfox-writeback-outbox-systems-2026-08-06.md) — Transactional Outbox、任务队列与开源方案采用结论。
 
 ## 全部调研文档
 
