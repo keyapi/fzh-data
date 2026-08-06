@@ -18,7 +18,7 @@ updated: 2026-08-06
 - 错误分类：`not_sent_retryable`、`configuration_blocked`、`rejected_final`、`ambiguous`、`accepted_verify_pending`；退避 1m/5m/15m/1h/6h，5 次后转人工。
 - 回读：tracking 匹配 → VERIFIED；暂空或占位 → VERIFY_PENDING；不同真实值 → CONFLICT。
 - 门禁：DISABLED 阻断真实发送；PROBE_ONLY 仅显式单包；SCOPED_BATCH 最多 50；只有 SAFE_TRACKNO_ONLY 证据可切换。
-- 测试基线：252 passed, 2 warnings；全部 mock，未真实调用赛狐。
+- 测试基线：258 passed, 2 warnings；全部 mock，未真实调用赛狐。
 
 ## 2026-08-06 - 赛狐 Outbox PR 1 候选事实层
 

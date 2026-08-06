@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from sellfox_shipping.outbox_service import OutboxService
+from sellfox_shipping.outbox_service import OutboxService, classify_submission_failure
 from sellfox_shipping.package_models import (
     SellfoxPackageItemRecord,
     SellfoxPackageLogistics,
@@ -271,6 +272,136 @@ def test_delayed_readback_enters_verify_pending_then_verified(tmp_path: Path) ->
     client.detail_track_no = "TN-EXEC-1"
     verified = service.verify(actor="ops", outbox_id=outbox_id)
     assert verified["results"][0]["status"] == "VERIFIED"
+
+
+def test_unconfirmed_candidate_cannot_be_leased_or_sent(tmp_path: Path) -> None:
+    repo = PackageRepository(tmp_path / "shipping.db")
+    _seed_package(repo)
+    outbox_id = _create_candidate(repo)
+    _enable_probe(repo)
+    client = CountingClient()
+    service = OutboxService(repo, submit_client=client)
+
+    assert not repo.claim_sellfox_outbox(
+        outbox_id=outbox_id, owner="ops", lease_token="token-x", lease_seconds=60
+    )
+    result = service.run_once(
+        actor="ops",
+        outbox_id=outbox_id,
+        dry_run=False,
+        allow_side_effects=True,
+        limit=1,
+    )
+    assert result["counts"]["failed"] == 1
+    assert client.submit_calls == 0
+    row = repo.get_sellfox_outbox(outbox_id)
+    assert row is not None
+    assert row.status == "AWAITING_CONFIRMATION"
+
+
+def test_probe_only_blocks_batch_without_explicit_outbox(tmp_path: Path) -> None:
+    repo = PackageRepository(tmp_path / "shipping.db")
+    _seed_package(repo)
+    outbox_id = _create_candidate(repo)
+    _confirm(repo, outbox_id)
+    _enable_probe(repo)
+    client = CountingClient()
+    service = OutboxService(repo, submit_client=client)
+
+    result = service.run_once(
+        actor="ops",
+        account_key="sellfox-main",
+        dry_run=False,
+        allow_side_effects=True,
+        limit=1,
+    )
+    assert result["counts"]["failed"] == 1
+    assert client.submit_calls == 0
+    row = repo.get_sellfox_outbox(outbox_id)
+    assert row is not None
+    assert row.status == "PENDING"
+
+
+def test_readback_conflict_blocks_without_overwrite(tmp_path: Path) -> None:
+    repo = PackageRepository(tmp_path / "shipping.db")
+    _seed_package(repo)
+    outbox_id = _create_candidate(repo)
+    _confirm(repo, outbox_id)
+    _enable_probe(repo)
+    client = CountingClient()
+    client.detail_track_no = "TN-EXEC-OTHER"
+    service = OutboxService(repo, submit_client=client)
+
+    first = service.run_once(
+        actor="ops",
+        outbox_id=outbox_id,
+        dry_run=False,
+        allow_side_effects=True,
+        limit=1,
+    )
+    assert first["results"][0]["status"] == "VERIFY_PENDING"
+    verified = service.verify(actor="ops", outbox_id=outbox_id)
+    assert verified["results"][0]["status"] == "CONFLICT"
+    row = repo.get_sellfox_outbox(outbox_id)
+    assert row is not None
+    assert row.status == "CONFLICT"
+    assert client.submit_calls == 1
+    package = repo.get("sellfox-main", "P-EXEC-1")
+    assert package is not None
+    assert package.logistics.tracking_number == "TN-EXEC-1"
+
+
+def test_stale_token_cannot_release_new_lease(tmp_path: Path) -> None:
+    repo = PackageRepository(tmp_path / "shipping.db")
+    _seed_package(repo)
+    outbox_id = _create_candidate(repo)
+    _confirm(repo, outbox_id)
+    assert repo.claim_sellfox_outbox(
+        outbox_id=outbox_id, owner="ops", lease_token="token-a", lease_seconds=60
+    )
+    assert not repo.release_sellfox_outbox_lease(
+        outbox_id=outbox_id, lease_token="stale-token"
+    )
+    assert repo.release_sellfox_outbox_lease(
+        outbox_id=outbox_id, lease_token="token-a"
+    )
+    row = repo.get_sellfox_outbox(outbox_id)
+    assert row is not None
+    assert row.status == "PENDING"
+
+
+def test_expired_lease_recovers_to_origin_status(tmp_path: Path) -> None:
+    repo = PackageRepository(tmp_path / "shipping.db")
+    _seed_package(repo)
+    outbox_id = _create_candidate(repo)
+    _confirm(repo, outbox_id)
+    repo.set_sellfox_outbox_status(outbox_id, "VERIFY_PENDING")
+    assert repo.claim_sellfox_outbox(
+        outbox_id=outbox_id, owner="ops", lease_token="token-exp", lease_seconds=60
+    )
+    with sqlite3.connect(tmp_path / "shipping.db") as connection:
+        connection.execute(
+            "UPDATE shipping_sellfox_outbox SET lease_expires_at=? WHERE id=?", 
+            ("2020-01-01 00:00:00", outbox_id),
+        )
+    repo.recover_stale_sellfox_outbox(actor="ops")
+    row = repo.get_sellfox_outbox(outbox_id)
+    assert row is not None
+    assert row.status == "VERIFY_PENDING"
+
+
+def test_submission_failure_classification() -> None:
+    assert classify_submission_failure(http_status=401).outbox_status == "MANUAL_REVIEW"
+    assert classify_submission_failure(http_status=429).outbox_status == "RETRYABLE"
+    assert classify_submission_failure(http_status=502).outbox_status == "UNKNOWN_BLOCKED"
+    assert (
+        classify_submission_failure(response_text="invalid sku").outbox_status
+        == "FAILED_FINAL"
+    )
+    assert (
+        classify_submission_failure(response_text="unexpected payload").outbox_status
+        == "UNKNOWN_BLOCKED"
+    )
 
 
 def test_unknown_failure_blocks_and_never_resubmits(tmp_path: Path) -> None:
