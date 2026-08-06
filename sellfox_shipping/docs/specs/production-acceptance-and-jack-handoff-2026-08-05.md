@@ -24,7 +24,7 @@ timestamp: 2026-08-05
 | SQLite migration | Migration 0019 修复中 | 验证空库、0015 历史库、0018 半应用库和现有库备份副本 |
 | Excel 导出/导入 | 已实现，需运营验收 | 验证文件哈希、重复导入、逐行成功/跳过/冲突/失败对账 |
 | VITE/蜴国际真实链路 | 未完整验收 | 仅用户指定测试包裹和环境后进行 |
-| 赛狐 trackNo 回写 | 未闭环，用户延期 | 不开发 outbox，不盲重放历史 401 请求 |
+| 赛狐 trackNo 回写 | 代码完成（Outbox PR 1/2），待单包能力探针 | 按 [单包能力探针运行手册](sellfox-writeback-probe-runbook-2026-08-06.md) 执行；先 PROBE_ONLY，SAFE_TRACKNO_ONLY 后才可 SCOPED_BATCH |
 | 公网安全 | 未完成 | 部署前完成 OIDC/CSRF/RBAC/secure cookie/PII 审计 |
 | 每日三方对账 | 未完成 | 评估为下一项独立 PR，不静默丢失任何差异 |
 | 取消与退款 | 部分完成 | 取消安全已完成；退款到账需独立状态和凭证 |
@@ -45,14 +45,14 @@ timestamp: 2026-08-05
 2. **每日三方对账报告**：运营开始前优先，覆盖本地包裹、承运商标签/追踪号、赛狐状态；未匹配必须保留。
 3. **公网安全收口**：仅在准备公网部署时升为阻塞项。
 4. **取消与退款分离、打印交接、成本对账**：根据实际运营痛点分别立项。
-5. **赛狐 outbox**：用户重新授权后再实施，并先做单包、可回读验证。
+5. **赛狐 outbox 能力探针**：代码已就绪，按 [运行手册](sellfox-writeback-probe-runbook-2026-08-06.md) 执行单包探针，记录能力结论后再开放批次。
 
 ## 禁止事项
 
 - 不直接 push `main`，不清理主工作区未跟踪文件。
 - 未经用户指定包裹和范围，不真实购标、取消、调用 `submitToPlatform` 或写回赛狐。
 - 不把本地 `lizard-import-tracking` 成功解释为赛狐 UI `trackNo` 已更新。
-- 不开发用户已延期的 outbox，也不提前引入 Karrio、PostgreSQL、消息代理或 cartonization。
+- 未经用户指定包裹和范围，不真实调用 `submitToPlatform` 或写回赛狐；不提前引入 Karrio、PostgreSQL、消息代理或 cartonization。
 - 不用自动化测试通过替代承运商沙箱证据和人工业务验收。
 
 ## 每个 PR 的门槛

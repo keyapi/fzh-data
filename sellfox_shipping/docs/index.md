@@ -22,6 +22,7 @@ updated: 2026-08-06
 - [specs/recovery-cli-error-taxonomy-outbox-plan-2026-08-05.md](specs/recovery-cli-error-taxonomy-outbox-plan-2026-08-05.md) — **恢复 CLI、错误分类、UNKNOWN 人工结案与赛狐 Outbox 实施计划**
 - [specs/production-acceptance-and-jack-handoff-2026-08-05.md](specs/production-acceptance-and-jack-handoff-2026-08-05.md) — **生产验收矩阵、剩余边界与 Jack Agent 接手规范**
 - [specs/sellfox-writeback-outbox-2026-08-06.md](specs/sellfox-writeback-outbox-2026-08-06.md) — 订单级候选、事务边界和后续执行器规范。
+- [specs/sellfox-writeback-probe-runbook-2026-08-06.md](specs/sellfox-writeback-probe-runbook-2026-08-06.md) — **单包能力探针执行手册、证据清单与能力结论门禁**。
 
 ## 调研 / 交接
 

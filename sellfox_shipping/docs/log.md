@@ -20,6 +20,13 @@ updated: 2026-08-06
 - 门禁：DISABLED 阻断真实发送；PROBE_ONLY 仅显式单包；SCOPED_BATCH 最多 50；只有 SAFE_TRACKNO_ONLY 证据可切换。
 - 测试基线：252 passed, 2 warnings；全部 mock，未真实调用赛狐。
 
+## 2026-08-06 - 赛狐 Outbox PR 3 能力探针运行手册
+
+- 新增 [单包能力探针运行手册](specs/sellfox-writeback-probe-runbook-2026-08-06.md)：前置条件、探针流程、回读核验、人工业务核验与停止条件。
+- 明确能力结论门禁：SAFE_TRACKNO_ONLY / UNSAFE_PLATFORM_SIDE_EFFECT / INEFFECTIVE，只有 SAFE_TRACKNO_ONLY 后才允许 SCOPED_BATCH。
+- 更新生产验收矩阵与 Jack 交接边界：代码已就绪，真实探针等待用户指定测试包裹。
+- 本 PR 不执行真实赛狐 HTTP，不含凭证和真实响应。
+
 ## 2026-08-06 - 赛狐 Outbox PR 1 候选事实层
 
 - 新增 migration 0020、订单级 Outbox、来源表与账户 Policy 默认值。
