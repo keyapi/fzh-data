@@ -31,6 +31,17 @@ timestamp: 2026-08-06
 - sellfox-outbox-list/show/scan-candidates；历史扫描必须指定账户和单个 package，默认 dry-run。
 - PR 1 不调用赛狐 HTTP，不确认 intent，不领取 lease。
 
+## PR 2 已实现边界
+
+- migration 0021 增加 `lease_origin_status`，过期 LEASED 恢复到 PENDING/RETRYABLE/VERIFY_PENDING 原状态。
+- `OutboxService`：确认、账户 Policy、能力证据、租约执行与 packageDetail 回读。
+- `BEGIN IMMEDIATE` 原子 claim + lease token fencing；发送前落 `IN_FLIGHT`；崩溃恢复一律 `UNKNOWN_BLOCKED`。
+- 错误分类 `SubmissionFailure`：`not_sent_retryable` / `configuration_blocked` / `rejected_final` / `ambiguous` / `accepted_verify_pending`。
+- 退避固定为 1m/5m/15m/1h/6h，5 次后进入 MANUAL_REVIEW；VERIFY_PENDING 回读间隔 30s/2m/5m/15m。
+- 回读匹配 → VERIFIED；暂空或 package_sn 占位 → VERIFY_PENDING；不同真实值 → CONFLICT。
+- 门禁：DISABLED 阻断真实发送；PROBE_ONLY 仅显式单包；SCOPED_BATCH 最多 50；SAFE_TRACKNO_ONLY 证据才可切换。
+- PR 2 全部测试使用 mock，不真实调用赛狐 HTTP；不修改 label operation、活动 label 或本地 tracking。
+
 ## 候选前置条件
 
 - tracking 非空且不等于 package_sn。
@@ -55,7 +66,15 @@ PR 1 命令：
 - uv run python -m sellfox_shipping.cli sellfox-outbox-show --outbox-id N --json
 - uv run python -m sellfox_shipping.cli sellfox-outbox-scan-candidates --account-key sellfox-main --package-sn SN --json
 
-扫描写入必须额外提供 --apply --actor operator。PR 2/3 才增加 confirm、run-once、verify、policy 与 capability 命令；在能力探针前不得真实发送。
+扫描写入必须额外提供 --apply --actor operator。PR 2 命令：
+
+- uv run python -m sellfox_shipping.cli sellfox-outbox-confirm --outbox-id N --actor operator --json
+- uv run python -m sellfox_shipping.cli sellfox-outbox-confirm-batch --outbox-ids 1,2,3 --actor operator --json
+- uv run python -m sellfox_shipping.cli sellfox-outbox-run-once --outbox-id N --actor operator --json（默认 dry-run）
+- uv run python -m sellfox_shipping.cli sellfox-outbox-verify --outbox-id N --actor operator --json（仅回读）
+- uv run python -m sellfox_shipping.cli sellfox-outbox-policy-show/set 与 sellfox-outbox-capability-record
+
+在能力探针完成前不得真实发送；真实发送必须显式 --no-dry-run --i-understand-side-effects 且账户模式允许。
 
 ## 验收不变量
 

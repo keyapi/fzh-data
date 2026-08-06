@@ -98,8 +98,9 @@ Excel 本地闭环（审核 → 导出 → 人工上传物流商 → 导入对�
 > 1. 先合入并验证 Migration 0019：修复历史 SQLite 库连续升级失败及半应用 0018 缺失外键。
 > 2. Jack Agent 第一阶段只做生产验收与缺口复核，按 [生产验收与交接规范](docs/specs/production-acceptance-and-jack-handoff-2026-08-05.md) 输出 readiness matrix。
 > 3. 赛狐 outbox 已开始实施：PR 1 只建立候选事实层，绝不调用 `submitToPlatform`；继续开发先读 [Outbox 设计](docs/specs/sellfox-writeback-outbox-2026-08-06.md)。
-> 4. 公网部署前仍需 OIDC/CSRF/RBAC、secure cookie 与 PII/log 脱敏审计。
-> 5. 当前自动化基线在 Migration 0019 修复分支为 **221 passed, 2 warnings**；仍不等于承运商沙箱或生产业务验收完成。
+> 4. 赛狐 outbox PR 2 已实现：confirm/run-once/verify/policy/capability CLI、`BEGIN IMMEDIATE` 租约、`IN_FLIGHT` 崩溃阻断与 packageDetail 回读均完成；全部测试 mock，未真实调用赛狐。
+> 5. 公网部署前仍需 OIDC/CSRF/RBAC、secure cookie 与 PII/log 脱敏审计。
+> 6. 当前自动化基线为 **260 passed, 2 warnings**；仍不等于承运商沙箱或生产业务验收完成。
 
 ### 7. 重规划裁决
 
@@ -162,6 +163,29 @@ uv run python -m sellfox_shipping.cli sellfox-outbox-show --outbox-id <N> --json
 uv run python -m sellfox_shipping.cli sellfox-outbox-scan-candidates \
   --account-key sellfox-main --package-sn <SN> --json
 
+# Outbox PR 2：确认单个候选（构建/复用 SubmissionIntent，无 HTTP）
+uv run python -m sellfox_shipping.cli sellfox-outbox-confirm \
+  --outbox-id <N> --actor <operator-id> --json
+
+# Outbox PR 2：dry-run 预览（无 HTTP、不领取 lease）
+uv run python -m sellfox_shipping.cli sellfox-outbox-run-once \
+  --outbox-id <N> --actor <operator-id> --json
+
+# Outbox PR 2：真实单包探针（需 PROBE_ONLY + 用户授权测试包裹）
+uv run python -m sellfox_shipping.cli sellfox-outbox-run-once \
+  --outbox-id <N> --actor <operator-id> --no-dry-run \
+  --i-understand-side-effects --limit 1 --json
+
+# Outbox PR 2：仅回读核验 VERIFY_PENDING（不重新 submit）
+uv run python -m sellfox_shipping.cli sellfox-outbox-verify \
+  --outbox-id <N> --actor <operator-id> --json
+
+# Outbox PR 2：Policy 与能力证据
+uv run python -m sellfox_shipping.cli sellfox-outbox-policy-show --account-key sellfox-main --json
+uv run python -m sellfox_shipping.cli sellfox-outbox-capability-record \
+  --account-key sellfox-main --capability-status SAFE_TRACKNO_ONLY \
+  --evidence-ref <ref> --actor <approver> --json
+
 # P1C：准备 submitToPlatform intents（无 HTTP）
 uv run python -m sellfox_shipping.cli packages-prepare-submit \
   --package-sn <packageSn> --actor <operator-id> --json
@@ -202,6 +226,7 @@ sellfox_shipping/
 ├── package_models.py     # 包裹领域模型（内部 snake_case）★
 ├── package_repository.py # SQLAlchemy 多对多持久化 ★
 ├── package_service.py    # 包裹分页同步与数量对账 ★
+├── outbox_service.py     # 赛狐回写 Outbox 确认/租约/执行/回读 ★
 ├── config.yaml           # proxy、仓库、承运人配置
 ├── carriers/lizard/      # 蜴国际 Excel 模板与重尺查找 ★
 ├── carriers/             # 其它承运人抽象（尚未接闭环）

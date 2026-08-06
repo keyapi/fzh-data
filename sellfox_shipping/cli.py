@@ -182,6 +182,13 @@ def _outbox_row_json(row) -> dict:
         "submission_intent_id": row.submission_intent_id,
         "request_hash": row.request_hash,
         "attempt_count": row.attempt_count,
+        "next_attempt_at": row.next_attempt_at,
+        "lease_owner": row.lease_owner,
+        "lease_expires_at": row.lease_expires_at,
+        "confirmed_by": row.confirmed_by,
+        "confirmed_at": row.confirmed_at,
+        "last_error_class": row.last_error_class,
+        "last_error_summary": row.last_error_summary,
         "conflicts_with_outbox_id": row.conflicts_with_outbox_id,
         "sources": [
             {"source_type": source.source_type, "source_id": source.source_id}
@@ -417,6 +424,185 @@ def sellfox_outbox_scan_candidates(
         json_output,
     )
 
+
+def _outbox_command_error(command, exc, json_output):
+    _output(
+        {
+            "command": command,
+            "ok": False,
+            "counts": {"input": 1, "success": 0, "failed": 1},
+            "results": [],
+            "errors": [
+                {
+                    "code": "command_failed",
+                    "message": str(exc),
+                    "recommended_action": "inspect_and_retry",
+                }
+            ],
+            "recommended_action": "inspect_and_retry",
+        },
+        json_output,
+    )
+    raise typer.Exit(2)
+
+
+@app.command("sellfox-outbox-confirm")
+def sellfox_outbox_confirm(
+    outbox_id: int = typer.Option(..., min=1, help="Sellfox outbox id"),
+    actor: str = typer.Option(..., help="Operator identity"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Confirm one candidate: build/reuse SubmissionIntent, then PENDING."""
+    from sellfox_shipping.outbox_service import OutboxService
+
+    service = OutboxService(_get_package_repository())
+    try:
+        result = service.confirm(outbox_id=outbox_id, actor=actor)
+    except (LookupError, RuntimeError, ValueError) as exc:
+        _outbox_command_error("sellfox-outbox-confirm", exc, json_output)
+    _output(
+        {
+            "command": "sellfox-outbox-confirm",
+            "ok": True,
+            "counts": {"input": 1, "success": 1, "failed": 0},
+            "results": [result],
+            "errors": [],
+            "recommended_action": "run_once_after_confirmation",
+        },
+        json_output,
+    )
+
+
+@app.command("sellfox-outbox-confirm-batch")
+def sellfox_outbox_confirm_batch(
+    outbox_ids: str = typer.Option(..., "--outbox-ids", help="Comma-separated outbox ids"),
+    actor: str = typer.Option(..., help="Operator identity"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Confirm a bounded, explicit set of candidates."""
+    from sellfox_shipping.outbox_service import OutboxService
+
+    ids = [int(part.strip()) for part in outbox_ids.split(",") if part.strip()]
+    if not ids or len(ids) > 50:
+        raise typer.BadParameter("--outbox-ids must contain 1..50 ids")
+    result = OutboxService(_get_package_repository()).confirm_batch(
+        outbox_ids=ids, actor=actor
+    )
+    _output(result, json_output)
+
+
+@app.command("sellfox-outbox-run-once")
+def sellfox_outbox_run_once(
+    actor: str = typer.Option("", help="Operator identity (required for real send)"),
+    outbox_id: Optional[int] = typer.Option(None, "--outbox-id", help="Explicit outbox id"),
+    account_key: Optional[str] = typer.Option(None, "--account-key", help="Account for due queue"),
+    limit: int = typer.Option(1, min=1, max=50, help="Max items processed"),
+    dry_run: bool = typer.Option(True, help="Preview only; no HTTP (default)"),
+    i_understand_side_effects: bool = typer.Option(
+        False,
+        "--i-understand-side-effects",
+        help="Allow real submitToPlatform (requires --no-dry-run)",
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Lease and execute due outbox items; dry-run by default."""
+    from sellfox_shipping.outbox_service import OutboxService
+
+    actor_name = (actor or "").strip()
+    if not dry_run and not actor_name:
+        raise typer.BadParameter("--actor is required for real writeback")
+    client = _get_client() if (not dry_run and i_understand_side_effects) else None
+    service = OutboxService(_get_package_repository(), submit_client=client)
+    try:
+        result = service.run_once(
+            actor=actor_name or "dry-run",
+            account_key=account_key,
+            outbox_id=outbox_id,
+            dry_run=dry_run,
+            allow_side_effects=i_understand_side_effects and not dry_run,
+            limit=limit,
+        )
+    except (LookupError, RuntimeError, ValueError) as exc:
+        _outbox_command_error("sellfox-outbox-run-once", exc, json_output)
+    _output(result, json_output)
+
+
+@app.command("sellfox-outbox-verify")
+def sellfox_outbox_verify(
+    actor: str = typer.Option(..., help="Operator identity"),
+    outbox_id: Optional[int] = typer.Option(None, "--outbox-id", help="Explicit outbox id"),
+    account_key: Optional[str] = typer.Option(None, "--account-key", help="Account for pending queue"),
+    limit: int = typer.Option(10, min=1, max=50, help="Max items verified"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Readback-only verification for VERIFY_PENDING outbox items."""
+    from sellfox_shipping.outbox_service import OutboxService
+
+    service = OutboxService(_get_package_repository(), submit_client=_get_client())
+    try:
+        result = service.verify(
+            actor=actor,
+            account_key=account_key,
+            outbox_id=outbox_id,
+            limit=limit,
+        )
+    except (LookupError, RuntimeError, ValueError) as exc:
+        _outbox_command_error("sellfox-outbox-verify", exc, json_output)
+    _output(result, json_output)
+
+
+@app.command("sellfox-outbox-policy-show")
+def sellfox_outbox_policy_show(
+    account_key: str = typer.Option(..., help="Sellfox account key"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Show writeback policy and capability evidence."""
+    from sellfox_shipping.outbox_service import OutboxService
+
+    result = OutboxService(_get_package_repository()).policy_show(account_key)
+    _output(result, json_output)
+
+
+@app.command("sellfox-outbox-policy-set")
+def sellfox_outbox_policy_set(
+    account_key: str = typer.Option(..., help="Sellfox account key"),
+    mode: str = typer.Option(..., help="DISABLED|PROBE_ONLY|SCOPED_BATCH"),
+    actor: str = typer.Option(..., help="Operator identity"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Set account writeback mode with audit."""
+    from sellfox_shipping.outbox_service import OutboxService
+
+    try:
+        result = OutboxService(_get_package_repository()).policy_set(
+            account_key=account_key, mode=mode, actor=actor
+        )
+    except (LookupError, RuntimeError, ValueError) as exc:
+        _outbox_command_error("sellfox-outbox-policy-set", exc, json_output)
+    _output(result, json_output)
+
+
+@app.command("sellfox-outbox-capability-record")
+def sellfox_outbox_capability_record(
+    account_key: str = typer.Option(..., help="Sellfox account key"),
+    capability_status: str = typer.Option(..., help="Capability conclusion"),
+    evidence_ref: str = typer.Option(..., help="Evidence document/artifact reference"),
+    actor: str = typer.Option(..., help="Approver identity"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Record capability probe conclusion with evidence reference."""
+    from sellfox_shipping.outbox_service import OutboxService
+
+    try:
+        result = OutboxService(_get_package_repository()).capability_record(
+            account_key=account_key,
+            capability_status=capability_status,
+            evidence_ref=evidence_ref,
+            actor=actor,
+        )
+    except (LookupError, RuntimeError, ValueError) as exc:
+        _outbox_command_error("sellfox-outbox-capability-record", exc, json_output)
+    _output(result, json_output)
 
 @app.command("label-operation-show")
 def label_operation_show(
