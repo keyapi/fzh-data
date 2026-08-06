@@ -527,17 +527,24 @@ async def package_fetch_rates(request: Request, package_sn: str):
     routing_result = _compute_routing(record, carton_rows)
 
     vite_rate = _get_vite_rate(record, package_dims, routing_result)
-    _get_lizard_rate(record, package_dims)
+    lizard_rate = _get_lizard_rate(record, package_dims)
 
-    if vite_rate and "error" not in vite_rate:
-        message = f"报价已更新 — {vite_rate.get('service', '')} ${vite_rate.get('total_amount', '—')}"
-    elif vite_rate and "error" in vite_rate:
-        message = f"报价失败: {vite_rate['error']}"
+    # Pick the routing-suggested carrier's rate for display
+    if routing_result and routing_result.matched:
+        suggested_carrier = (routing_result.carrier or "").strip().lower()
+    else:
+        suggested_carrier = ""
+    display_rate = vite_rate if suggested_carrier == "vite" else (lizard_rate if suggested_carrier == "lizard" else vite_rate)
+
+    if display_rate and "error" not in display_rate:
+        message = f"报价已更新 — {display_rate.get('service', '')} ${display_rate.get('total_amount', '—')}"
+    elif display_rate and "error" in display_rate:
+        message = f"报价失败: {display_rate['error']}"
     else:
         message = "报价完成（查看历史记录）"
 
     # Re-render with fresh context (live rate + updated history)
-    ctx = _package_detail_context(account_key, record, message=message, vite_rate_override=vite_rate)
+    ctx = _package_detail_context(account_key, record, message=message, vite_rate_override=vite_rate, lizard_rate_override=lizard_rate)
     ctx["rate_history"] = _get_rate_history(repo, record, account_key)
     return templates.TemplateResponse(request, "package_detail.html", ctx)
 
@@ -566,7 +573,7 @@ def _build_pagination(current: int, total: int) -> list[dict]:
     return items
 
 
-def _package_detail_context(account_key: str, record, *, message: str, vite_rate_override: dict | None = None) -> dict:
+def _package_detail_context(account_key: str, record, *, message: str, vite_rate_override: dict | None = None, lizard_rate_override: dict | None = None) -> dict:
     from sellfox_shipping.submission_state import aggregate_package_submission_state
 
     repo = _get_package_repository()
@@ -590,7 +597,15 @@ def _package_detail_context(account_key: str, record, *, message: str, vite_rate
     lizard_services = _get_lizard_services(repo, record, account_key)
 
     # Use override from fetch-rates, or None for initial load (on-demand pattern)
-    vite_rate = vite_rate_override
+    # Pick the routing-suggested carrier's rate for display
+    if routing_result and routing_result.matched:
+        suggested_carrier = (routing_result.carrier or "").strip().lower()
+    else:
+        suggested_carrier = ""
+    if suggested_carrier == "lizard":
+        vite_rate = lizard_rate_override
+    else:
+        vite_rate = vite_rate_override
 
     # Earliest purchase date from orders
     purchase_date = None
@@ -606,6 +621,7 @@ def _package_detail_context(account_key: str, record, *, message: str, vite_rate
         "package_dims": package_dims,
         "routing_result": routing_result,
         "vite_rate": vite_rate,
+        "lizard_rate": lizard_rate_override,
         "rate_history": rate_history,
         "submission_intents": intents,
         "package_submission_state": package_submission_state,
@@ -967,7 +983,7 @@ def _vite_rate_to_dict(
 # Lizard warehouse → ca_zone mapping (based on S0143 shipper registration)
 _LIZARD_CA_ZONE: dict[str, int] = {
     "CENTRADE": 1,  # NJ → 美东
-    "DANEEY": 1,    # TX → S0143 在系统归为美东
+    "DANEEY": 0,    # TX → S0143 not in CA zone
     "POLAND": 0,    # 全域
 }
 
@@ -1049,7 +1065,9 @@ def _get_lizard_rate(
         if not isinstance(result, dict) or not result:
             return {"source": "lizard", "error": "No rates returned from Lizard API"}
 
-        # Persist all products with valid total_charge
+        # Pick the best rate for live display (lowest total_charge)
+        best: dict | None = None
+        best_total = float("inf")
         for sm_code, item in result.items():
             if not isinstance(item, dict):
                 continue
@@ -1073,8 +1091,11 @@ def _get_lizard_rate(
                 "use_fedex": False,
             }
             _persist_rate(record, rate_record, raw_response=item)
+            if total < best_total:
+                best_total = total
+                best = rate_record
 
-        return None
+        return best
 
     except Exception:
         return None

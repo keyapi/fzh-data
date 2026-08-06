@@ -34,28 +34,28 @@ warehouses:
     address:
       name: "FZH USNJ Warehouse"
       company: "FZH Inc."
-      address1: ""
+      address1: "389 Route 10 Unit R"
       address2: ""
-      city: "Newark"
+      city: "East Hanover"
       state: "NJ"
-      postal_code: "07101"
+      postal_code: "07936"
       country: "US"
       country_code: "US"
-      phone: ""
+      phone: "1234567890"
       email: ""
   DANEEY:
     label: "USTX 美中仓"
     address:
       name: "FZH USTX Warehouse"
       company: "FZH Inc."
-      address1: ""
-      address2: ""
-      city: ""
+      address1: "10812 Fallstone Rd"
+      address2: "Suite 402"
+      city: "Houston"
       state: "TX"
-      postal_code: ""
+      postal_code: "77099"
       country: "US"
       country_code: "US"
-      phone: ""
+      phone: "2816770938"
       email: ""
   POLAND:
     label: "POLAND 波兰仓"
@@ -88,18 +88,13 @@ carriers:
       EU: FEDEX_INTERNATIONAL_ECONOMY
 
   vite:
-    enabled: true  # P5 启用
-    label: "VITE"
+    enabled: false  # P5 启用
     class: carriers.csv_polling.CSVPollingCarrier
     label_format: PDF
     csv_template: "数据源样例/vite_template.csv"
-    # FedEx rate API (P1C spike)
-    # channel env var: VITE_FEDEX_CHANNEL — TODO: confirm with VITE account manager
-    fedex_ground_service: "FEDEX_GROUND"
-    gofo_max_side_inches: 22
 
   lizard:
-    enabled: true  # P5 启用
+    enabled: false  # P5 启用
     label: "蜥蜴集团/蜴国际"
     class: carriers.csv_polling.CSVPollingCarrier
     label_format: PDF
