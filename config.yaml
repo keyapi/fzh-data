@@ -1,0 +1,165 @@
+# sellfox_shipping 配置文件
+# 仓库映射、承运人凭证、物流规则
+
+sellfox:
+  # Client appends /v1/{proxy_account}/... — do NOT include /v1/sellfox-main here
+  proxy_base_url: "https://api.vilavi.cn/sellfox"
+  proxy_account: "sellfox-main"
+  # Client-side throttle between submitToPlatform / packageDetail side-effect calls.
+  # - Official Sellfox OpenAPI: max 1 request/second → use 1.0 when pointing at official base URL.
+  # - Shared proxy https://api.vilavi.cn/sellfox (admin: /sellfox/admin): currently ~0.5 rps
+  #   to protect multi-user traffic; proxy ops may change server-side — keep this in sync.
+  # Default matches our proxy path (2.0s ≈ 0.5 rps).
+  submit_min_interval_seconds: 2.0
+
+# ── 认证（默认关闭；公网部署前必须打开）──────────────────────────
+# 复用公司钉钉 OIDC 桥 https://api.vilavi.cn/oidc（new-api-dingtalk-oidc）
+auth:
+  enabled: false
+  # session_secret: set via SELLFOX_SHIPPING_SESSION_SECRET
+  cookie_name: shipping_session
+  session_ttl_seconds: 28800
+
+oidc:
+  issuer: "https://api.vilavi.cn/oidc"
+  client_id: "sellfox-shipping"
+  # client_secret / redirect_uri: prefer env OIDC_CLIENT_SECRET / OIDC_REDIRECT_URI
+  redirect_uri: "http://127.0.0.1:8401/oidc-callback"
+
+# ── 仓库地址配置 ──────────────────────────────────────────────────
+
+warehouses:
+  CENTRADE:
+    label: "USNJ 美东仓"
+    address:
+      name: "FZH USNJ Warehouse"
+      company: "FZH Inc."
+      address1: "389 Route 10 Unit R"
+      address2: ""
+      city: "East Hanover"
+      state: "NJ"
+      postal_code: "07936"
+      country: "US"
+      country_code: "US"
+      phone: "1234567890"
+      email: ""
+  DANEEY:
+    label: "USTX 美中仓"
+    address:
+      name: "FZH USTX Warehouse"
+      company: "FZH Inc."
+      address1: "10812 Fallstone Rd"
+      address2: "Suite 402"
+      city: "Houston"
+      state: "TX"
+      postal_code: "77099"
+      country: "US"
+      country_code: "US"
+      phone: "2816770938"
+      email: ""
+  POLAND:
+    label: "POLAND 波兰仓"
+    address:
+      name: "FZH Poland Warehouse"
+      company: "FZH Sp. z o.o."
+      address1: ""
+      address2: ""
+      city: ""
+      state: ""
+      postal_code: ""
+      country: "PL"
+      country_code: "PL"
+      phone: ""
+      email: ""
+
+# ── 承运人配置 ────────────────────────────────────────────────────
+
+carriers:
+  fedex:
+    enabled: false  # P2 启用
+    class: carriers.fedex.FedExCarrier
+    label_format: ZPL
+    credentials:
+      api_key: ${FEDEX_API_KEY}
+      api_secret: ${FEDEX_SECRET_KEY}
+      account_number: ${FEDEX_ACCOUNT_NUMBER}
+    default_services:
+      US: FEDEX_GROUND
+      EU: FEDEX_INTERNATIONAL_ECONOMY
+
+  vite:
+    enabled: false  # P5 启用
+    class: carriers.csv_polling.CSVPollingCarrier
+    label_format: PDF
+    csv_template: "数据源样例/vite_template.csv"
+
+  lizard:
+    enabled: false  # P5 启用
+    label: "蜥蜴集团/蜴国际"
+    class: carriers.csv_polling.CSVPollingCarrier
+    label_format: PDF
+
+  qitiao:
+    enabled: false  # 待确认
+    label: "七条物流(待确认)"
+    class: carriers.csv_polling.CSVPollingCarrier
+    label_format: PDF
+
+  gls:
+    enabled: false  # P5 启用
+    class: carriers.gls.GLSCarrier
+    label_format: PDF
+    credentials:
+      customer_id: ${GLS_CUSTOMER_ID}
+      api_key: ${GLS_API_KEY}
+
+  dhl:
+    enabled: false  # P5 启用
+    class: carriers.dhl.DHLCarrier
+    label_format: PDF
+    credentials:
+      api_key: ${DHL_API_KEY}
+      api_secret: ${DHL_SECRET_KEY}
+      account_number: ${DHL_ACCOUNT_NUMBER}
+
+default_carrier: fedex
+
+# ── 物流规则（决策表，优先级升序）──────────────────────────────────
+
+rules:
+  - name: "US-Northeast-FedEx"
+    conditions:
+      destination_country: "US"
+      destination_state: ["NJ", "NY", "PA", "CT", "MA", "RI", "VT", "NH", "ME"]
+    carrier: fedex
+    service: FEDEX_GROUND
+    priority: 10
+
+  - name: "US-Default-FedEx"
+    conditions:
+      destination_country: "US"
+    carrier: fedex
+    service: FEDEX_GROUND
+    priority: 50
+
+  - name: "EU-Poland-GLS"
+    conditions:
+      destination_country: ["PL", "DE", "FR", "CZ", "AT", "SK"]
+      warehouse: POLAND
+    carrier: gls
+    priority: 10
+
+  - name: "EU-Default-DHL"
+    conditions:
+      destination_country: ["DE", "UK", "IT", "ES", "SE", "DK", "FI", "NO", "NL", "BE"]
+    carrier: dhl
+    priority: 20
+
+# ── 数据存储 ─────────────────────────────────────────────────────
+
+store:
+  db_path: "data/shipping.db"
+
+server:
+  host: "0.0.0.0"
+  port: 8401
