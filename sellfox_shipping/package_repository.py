@@ -2239,6 +2239,54 @@ class PackageRepository:
         )
         return self.get_label_operation(operation_id)
 
+    def release_active_label_operation(
+        self, package_db_id: int, *, actor: str
+    ) -> int:
+        """Cancel stuck active operations for a package so a new one can be claimed.
+
+        Only invoked when the caller has confirmed there is no valid active label
+        (the active-label guard still blocks duplicate creation).
+
+        Auto-releases RESERVED / ACCEPTED / LABEL_PENDING / SUCCEEDED → CANCELLED.
+        UNKNOWN_BLOCKED is deliberately NOT auto-released — its carrier outcome is
+        ambiguous and must go through the evidence-based resolve workflow.
+        Returns the number released.
+        """
+        released = 0
+        with self._session_factory() as session:
+            rows = (
+                session.query(LabelOperationRow)
+                .where(LabelOperationRow.package_id == package_db_id)
+                .all()
+            )
+            for row in rows:
+                current = (row.status or "").strip()
+                if current == "UNKNOWN_BLOCKED":
+                    continue
+                if current not in ACTIVE_LABEL_OPERATION_STATUSES and current != "SUCCEEDED":
+                    continue
+                try:
+                    self.transition_label_operation(
+                        row.id,
+                        status="CANCELLED",
+                        error_summary=(
+                            "auto-release: no valid label; reclaimed for new creation"
+                        ),
+                    )
+                    released += 1
+                except RuntimeError:
+                    # SENT without a linked label cannot be auto-released — skip.
+                    continue
+        if released:
+            self.append_audit_event(
+                actor=actor or "system",
+                action="label_operation.auto_release",
+                entity_type="shipping_package",
+                entity_id=str(package_db_id),
+                summary=f"released {released} active operation(s) for new label",
+            )
+        return released
+
     def transition_label_operation(
         self,
         operation_id: int,

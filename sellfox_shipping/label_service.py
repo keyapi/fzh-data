@@ -232,7 +232,35 @@ class LabelService:
                 actor=actor,
             )
         except RuntimeError as exc:
-            raise LabelServiceError(str(exc), http_status=409) from exc
+            msg = str(exc)
+            if "active label exists" in msg:
+                raise LabelServiceError(
+                    "已存在有效面单，不允许重复创建", http_status=409
+                ) from exc
+            if "active label operation exists" in msg:
+                # No valid label, but a stale operation is blocking the claim.
+                # Auto-release it and retry once so re-creation works without
+                # manual cleanup (carrier will still reject a true duplicate
+                # order via reference_no).
+                released = self._repo.release_active_label_operation(
+                    package_db_id=preflight.package_db_id, actor=actor
+                )
+                if released == 0:
+                    raise LabelServiceError(msg, http_status=409) from exc
+                try:
+                    operation = self._repo.claim_label_operation(
+                        account_key=account_key,
+                        package_db_id=preflight.package_db_id,
+                        carrier=preflight.carrier,
+                        service_level=resolved_service,
+                        idempotency_key=idempotency_key,
+                        request_hash=request_hash,
+                        actor=actor,
+                    )
+                except RuntimeError as exc2:
+                    raise LabelServiceError(str(exc2), http_status=409) from exc2
+            else:
+                raise LabelServiceError(msg, http_status=409) from exc
 
         self._repo.transition_label_operation(operation.id, status="SENT")
 
