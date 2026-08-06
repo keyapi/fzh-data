@@ -381,7 +381,7 @@ def test_expired_lease_recovers_to_origin_status(tmp_path: Path) -> None:
     )
     with sqlite3.connect(tmp_path / "shipping.db") as connection:
         connection.execute(
-            "UPDATE shipping_sellfox_outbox SET lease_expires_at=? WHERE id=?", 
+            "UPDATE shipping_sellfox_outbox SET lease_expires_at=? WHERE id=?",
             ("2020-01-01 00:00:00", outbox_id),
         )
     repo.recover_stale_sellfox_outbox(actor="ops")
