@@ -198,4 +198,3 @@ class DirectSellfoxClient:
         if data.get("code") != 0:
             return None
         return data.get("data") if isinstance(data, dict) else None
-
