@@ -97,7 +97,7 @@ Excel 本地闭环（审核 → 导出 → 人工上传物流商 → 导入对�
 > **当前接手裁决（2026-08-05）：**
 > 1. 先合入并验证 Migration 0019：修复历史 SQLite 库连续升级失败及半应用 0018 缺失外键。
 > 2. Jack Agent 第一阶段只做生产验收与缺口复核，按 [生产验收与交接规范](docs/specs/production-acceptance-and-jack-handoff-2026-08-05.md) 输出 readiness matrix。
-> 3. 赛狐 outbox 已开始实施：PR 1 只建立候选事实层，绝不调用 `submitToPlatform`；继续开发先读 [Outbox 设计](docs/specs/sellfox-writeback-outbox-2026-08-06.md)。
+> 3. 赛狐 outbox 已完成 PR 1 候选层与 PR 2 执行器/回读；真实发送前必须读 [Outbox 设计](docs/specs/sellfox-writeback-outbox-2026-08-06.md) 与 [单包能力探针运行手册](docs/specs/sellfox-writeback-probe-runbook-2026-08-06.md)，默认保持 DISABLED + UNVERIFIED。
 > 4. 赛狐 outbox PR 2 已实现：confirm/run-once/verify/policy/capability CLI、`BEGIN IMMEDIATE` 租约、`IN_FLIGHT` 崩溃阻断与 packageDetail 回读均完成；全部测试 mock，未真实调用赛狐。
 > 5. 公网部署前仍需 OIDC/CSRF/RBAC、secure cookie 与 PII/log 脱敏审计。
 > 6. 当前自动化基线为 **260 passed, 2 warnings**；仍不等于承运商沙箱或生产业务验收完成。
