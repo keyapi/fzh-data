@@ -1915,6 +1915,7 @@ async def batch_print_packages(request: Request):
         raise HTTPException(400, "Invalid JSON body")
     package_sns: list[str] = body.get("package_sns", [])
     doc_type: str = body.get("document_type", "both")
+    exclude_missing: bool = bool(body.get("exclude_missing", False))
     if not package_sns:
         raise HTTPException(400, "No package_sns provided")
 
@@ -2001,10 +2002,15 @@ async def batch_print_packages(request: Request):
         docs.append({"sn": sn, "sticker": sticker_bytes, "label": label_bytes})
 
     # ── Hard validation: both mode requires both documents for every package ──
-    if skipped:
+    if skipped and not exclude_missing:
         raise HTTPException(
             422,
-            f"校验失败 — 以下包裹缺少文档，已拒绝打印:\n" + "\n".join(skipped),
+            detail={
+                "detail": "校验失败 — 以下包裹缺少文档，已拒绝打印:\n"
+                + "\n".join(skipped),
+                "skipped": skipped,
+                "valid": [d["sn"] for d in docs],
+            },
         )
 
     # ── Phase 2: merge in strict order (sticker → label, per package) ──
@@ -2033,10 +2039,14 @@ async def batch_print_packages(request: Request):
     merged.close()
     buf.seek(0)
 
+    headers = {"Content-Disposition": "inline; filename=batch_print.pdf"}
+    if exclude_missing and skipped:
+        headers["X-Skipped-Count"] = str(len(skipped))
+
     return Response(
         content=buf.getvalue(),
         media_type="application/pdf",
-        headers={"Content-Disposition": "inline; filename=batch_print.pdf"},
+        headers=headers,
     )
 
 
