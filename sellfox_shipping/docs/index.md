@@ -45,3 +45,7 @@ updated: 2026-08-06
 - [research/routing-rules-design-2026-07-22.md](research/routing-rules-design-2026-07-22.md) — **路由规则设计方案**：5 层决策流 + 规则数据结构 + 集成方案
 - [research/erpnext-zlmb-dims-v2-2026-07-23.md](research/erpnext-zlmb-dims-v2-2026-07-23.md) — EN ZLMB# 重尺 V2：跨面料 sibling 借用
 - [research/sku-label-back-sticker-analysis-2026-07-28.md](research/sku-label-back-sticker-analysis-2026-07-28.md) — **SKU 背贴 PDF 生成**：Colab notebook 逻辑分析 + sellfox_shipping 集成方案
+
+## 已解决问题
+
+- [solutions/reliability-hardening-and-lizard-chain-2026-08-06.md](solutions/reliability-hardening-and-lizard-chain-2026-08-06.md) — **可靠性收口与蜴国际面单链路全部问题**：分页count、resume并发、证据化结案、蜴国际API、报价展示、赛狐回写、批量面单、async阻塞、参考号重复

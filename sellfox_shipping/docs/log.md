@@ -53,6 +53,22 @@ updated: 2026-08-06
 - `label-operation-investigate` 新增必填 `--conclusion`；空白 `other` 证据不能释放购标槽位。
 - 新增跨 repository 并发、lease fencing、证据错配和审计关联测试；测试基线更新为 217 passed。
 
+## 2026-08-06 — 批量打印锚定面单 + 批量操作栏优化
+
+- 批量操作栏按钮顺序：创建面单 → 批量打印 → 导出 Excel
+- 勾选包裹全部有有效面单时，创建面单按钮灰色禁用
+- 批量打印以面单数量为锚点：背贴/Label/双模式数量一致
+- 缺失背贴用 A4 空白页占位，保持顺序；无面单包裹不参与打印
+- 移除 422 硬拒绝与"仅打印有效包裹"回退（被空白占位取代）
+
+## 2026-08-06 — 蜴国际参考号 -N 后缀 + 派生包裹号列 + 会话问题文档
+
+- 蜴国际参考号改为 generation 作用域：generation 1 用基础号，后续 `-1/-2/-3`（取消订单仍占用参考号）
+- Migration 0018: `shipping_labels` 新增 `derived_reference_no` 列
+- 创建/恢复蜴国际面单时记录实际派生参考号
+- 面单记录表格新增"派生包裹号"列（Vite 留空）
+- 新增综合问题文档 `docs/solutions/reliability-hardening-and-lizard-chain-2026-08-06.md`（会话全部问题与修复）
+
 ## 2026-08-05 — UNKNOWN_BLOCKED 证据化结案 (PR C：可靠性收口)
 
 - Migration 0017: 新增 `shipping_label_investigations` append-only 表

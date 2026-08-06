@@ -24,6 +24,7 @@ from fastapi.responses import (
 )
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.concurrency import run_in_threadpool
 
 from sellfox_shipping.models import Address, Order, PackageStatus
 from sellfox_shipping.package_service import (
@@ -444,6 +445,22 @@ async def index(request: Request):
     return templates.TemplateResponse(request, "index.html")
 
 
+def _routing_exclude_shops() -> list[str]:
+    """Read the routing exclude_shops list (same source as 建议渠道方式)."""
+    from pathlib import Path
+
+    import yaml as _yaml
+
+    rules_path = Path(__file__).parent / "routing" / "routing_rules.yaml"
+    if not rules_path.exists():
+        return []
+    try:
+        raw = _yaml.safe_load(rules_path.read_text(encoding="utf-8"))
+        return list(raw.get("exclude_shops", []) or [])
+    except Exception:
+        return []
+
+
 @app.get("/packages", response_class=HTMLResponse)
 async def packages_page(
     request: Request,
@@ -454,11 +471,15 @@ async def packages_page(
     date_end: str | None = Query(None),
     date_field: str = Query("label"),
     tab: str | None = Query(None),
+    has_label: str | None = Query(None),
+    exclude_shops: str | None = Query(None),
     limit: int = Query(50, le=500),
     offset: int = Query(0, ge=0),
 ):
     """Server-rendered package list for review."""
     account_key = config["sellfox"]["proxy_account"]
+    exclude_list = _routing_exclude_shops()
+    exclude_active = bool(exclude_shops)
     result = _get_package_list_service().list(
         PackageListRequest(
             account_key=account_key,
@@ -468,6 +489,8 @@ async def packages_page(
             date_start=date_start or None,
             date_end=date_end or None,
             date_field=date_field,
+            has_label=has_label or None,
+            exclude_shops=exclude_list if exclude_active else [],
             limit=limit,
             offset=offset,
         )
@@ -484,6 +507,9 @@ async def packages_page(
             "date_end": date_end or "",
             "date_field": date_field,
             "tab": tab or "",
+            "has_label": has_label or "",
+            "exclude_shops_active": exclude_active,
+            "exclude_shops_list": exclude_list,
             "today": date.today().isoformat(),
             "d7": (date.today() - timedelta(days=7)).isoformat(),
             "d30": (date.today() - timedelta(days=30)).isoformat(),
@@ -526,18 +552,27 @@ async def package_fetch_rates(request: Request, package_sn: str):
     package_dims = _compute_package_dims(record, carton_rows)
     routing_result = _compute_routing(record, carton_rows)
 
-    vite_rate = _get_vite_rate(record, package_dims, routing_result)
-    _get_lizard_rate(record, package_dims)
+    vite_rate = await run_in_threadpool(
+        _get_vite_rate, record, package_dims, routing_result
+    )
+    lizard_rate = await run_in_threadpool(_get_lizard_rate, record, package_dims)
 
-    if vite_rate and "error" not in vite_rate:
-        message = f"报价已更新 — {vite_rate.get('service', '')} ${vite_rate.get('total_amount', '—')}"
-    elif vite_rate and "error" in vite_rate:
-        message = f"报价失败: {vite_rate['error']}"
+    # Pick the routing-suggested carrier's rate for display
+    if routing_result and routing_result.matched:
+        suggested_carrier = (routing_result.carrier or "").strip().lower()
+    else:
+        suggested_carrier = ""
+    display_rate = vite_rate if suggested_carrier == "vite" else (lizard_rate if suggested_carrier == "lizard" else vite_rate)
+
+    if display_rate and "error" not in display_rate:
+        message = f"报价已更新 — {display_rate.get('service', '')} ${display_rate.get('total_amount', '—')}"
+    elif display_rate and "error" in display_rate:
+        message = f"报价失败: {display_rate['error']}"
     else:
         message = "报价完成（查看历史记录）"
 
     # Re-render with fresh context (live rate + updated history)
-    ctx = _package_detail_context(account_key, record, message=message, vite_rate_override=vite_rate)
+    ctx = _package_detail_context(account_key, record, message=message, vite_rate_override=vite_rate, lizard_rate_override=lizard_rate)
     ctx["rate_history"] = _get_rate_history(repo, record, account_key)
     return templates.TemplateResponse(request, "package_detail.html", ctx)
 
@@ -566,7 +601,7 @@ def _build_pagination(current: int, total: int) -> list[dict]:
     return items
 
 
-def _package_detail_context(account_key: str, record, *, message: str, vite_rate_override: dict | None = None) -> dict:
+def _package_detail_context(account_key: str, record, *, message: str, vite_rate_override: dict | None = None, lizard_rate_override: dict | None = None) -> dict:
     from sellfox_shipping.submission_state import aggregate_package_submission_state
 
     repo = _get_package_repository()
@@ -590,7 +625,15 @@ def _package_detail_context(account_key: str, record, *, message: str, vite_rate
     lizard_services = _get_lizard_services(repo, record, account_key)
 
     # Use override from fetch-rates, or None for initial load (on-demand pattern)
-    vite_rate = vite_rate_override
+    # Pick the routing-suggested carrier's rate for display
+    if routing_result and routing_result.matched:
+        suggested_carrier = (routing_result.carrier or "").strip().lower()
+    else:
+        suggested_carrier = ""
+    if suggested_carrier == "lizard":
+        vite_rate = lizard_rate_override
+    else:
+        vite_rate = vite_rate_override
 
     # Earliest purchase date from orders
     purchase_date = None
@@ -606,6 +649,7 @@ def _package_detail_context(account_key: str, record, *, message: str, vite_rate
         "package_dims": package_dims,
         "routing_result": routing_result,
         "vite_rate": vite_rate,
+        "lizard_rate": lizard_rate_override,
         "rate_history": rate_history,
         "submission_intents": intents,
         "package_submission_state": package_submission_state,
@@ -967,7 +1011,7 @@ def _vite_rate_to_dict(
 # Lizard warehouse → ca_zone mapping (based on S0143 shipper registration)
 _LIZARD_CA_ZONE: dict[str, int] = {
     "CENTRADE": 1,  # NJ → 美东
-    "DANEEY": 1,    # TX → S0143 在系统归为美东
+    "DANEEY": 0,    # TX → S0143 not in CA zone
     "POLAND": 0,    # 全域
 }
 
@@ -1049,7 +1093,9 @@ def _get_lizard_rate(
         if not isinstance(result, dict) or not result:
             return {"source": "lizard", "error": "No rates returned from Lizard API"}
 
-        # Persist all products with valid total_charge
+        # Pick the best rate for live display (lowest total_charge)
+        best: dict | None = None
+        best_total = float("inf")
         for sm_code, item in result.items():
             if not isinstance(item, dict):
                 continue
@@ -1073,11 +1119,14 @@ def _get_lizard_rate(
                 "use_fedex": False,
             }
             _persist_rate(record, rate_record, raw_response=item)
+            if total < best_total:
+                best_total = total
+                best = rate_record
 
-        return None
+        return best
 
-    except Exception:
-        return None
+    except Exception as exc:  # noqa: BLE001 — surface the reason instead of hiding it
+        return {"source": "lizard", "error": f"Lizard rate fetch failed: {exc}"}
 
 
 def _persist_rate(record, rate_result: dict, raw_response: dict | None = None) -> None:
@@ -1131,6 +1180,7 @@ def _get_labels_for_package(account_key: str, package_sn: str) -> list[dict]:
                 "carrier": r.carrier,
                 "service_level": r.service_level,
                 "tracking_number": r.tracking_number,
+                "derived_reference_no": r.derived_reference_no,
                 "carrier_order_id": r.carrier_order_id,
                 "total_amount": r.total_amount,
                 "currency": r.currency,
@@ -1329,6 +1379,44 @@ async def package_prepare_submit_form(request: Request, package_sn: str):
     )
 
 
+@app.post("/packages/{package_sn}/submit-label-tracking", response_class=HTMLResponse)
+async def package_submit_label_tracking_form(request: Request, package_sn: str):
+    """Write a valid label's tracking number back to Sellfox (real submitToPlatform).
+
+    Sources the tracking from the package's non-cancelled label record, prepares
+    intents with it, and submits them for real. The button click is the user's
+    explicit confirmation of this side-effecting call.
+    """
+    from sellfox_shipping.submission_service import SubmissionService
+
+    form = await request.form()
+    account_key = config["sellfox"]["proxy_account"]
+    repo = _get_package_repository()
+    actor = _web_actor(request, str(form.get("actor") or "web-user"))
+    try:
+        result = await run_in_threadpool(
+            SubmissionService(repo, _get_client()).submit_label_tracking,
+            account_key=account_key,
+            package_sn=package_sn,
+            actor=actor,
+        )
+        message = (
+            f"已回写面单追踪号 {result.tracking_number} → 赛狐；"
+            f"意图 {result.intent_ids} 状态 {result.intent_statuses}；"
+            f"HTTP {'已调用' if result.http_called else '未调用'}"
+        )
+    except Exception as exc:  # noqa: BLE001
+        message = f"回写赛狐失败: {exc}"
+    record = repo.get(account_key, package_sn)
+    if record is None:
+        raise HTTPException(404, f"Package {package_sn} not found")
+    return templates.TemplateResponse(
+        request,
+        "package_detail.html",
+        _package_detail_context(account_key, record, message=message),
+    )
+
+
 @app.post("/packages/{package_sn}/create-label", response_class=HTMLResponse)
 async def package_create_label_form(request: Request, package_sn: str):
     """HTML form post to create a shipping label."""
@@ -1347,7 +1435,8 @@ async def package_create_label_form(request: Request, package_sn: str):
 
     try:
         svc = LabelService(repo)
-        result = svc.create_label(
+        result = await run_in_threadpool(
+            svc.create_label,
             carrier=carrier,
             package=record,
             account_key=account_key,
@@ -1858,20 +1947,34 @@ async def batch_print_packages(request: Request):
     repo = _get_package_repository()
 
     merged = fitz.open()
-    skipped: list[str] = []
+    missing_stickers: list[str] = []
 
-    # ── Phase 1: collect all documents first ──
+    # ── Phase 1: collect documents, anchored on valid labels ──
+    # The print count follows the number of packages that have a valid label.
+    # A package whose sticker cannot be generated gets a blank-page placeholder
+    # so sticker count always matches label count and ordering is preserved.
     docs: list[dict] = []  # {sn, sticker_bytes, label_bytes}
     for sn in package_sns:
         record = repo.get(account_key, sn)
         if record is None:
-            skipped.append(f"{sn}: 包裹不存在")
             continue
 
-        sticker_bytes: bytes | None = None
-        label_bytes: bytes | None = None
+        # Anchor: package must have a valid (non-cancelled) label to be printed
+        labels = repo.list_labels_for_package(account_key=account_key, package_sn=sn)
+        active = [lbl for lbl in labels if getattr(lbl, "status", None) != "cancelled"]
+        if not active:
+            continue
+        lbl = active[0]
 
-        # ── Sticker ──
+        label_bytes: bytes | None = None
+        if getattr(lbl, "artifact_id", None):
+            artifact = repo.get_artifact(lbl.artifact_id)
+            if artifact:
+                path = repo.resolve_artifact_path(artifact)
+                if path.is_file():
+                    label_bytes = path.read_bytes()
+
+        sticker_bytes: bytes | None = None
         if doc_type in ("sticker", "both"):
             items_data: list[dict] = []
             skus: set[str] = set()
@@ -1880,9 +1983,7 @@ async def batch_print_packages(request: Request):
                 if sku:
                     skus.add(sku)
                     items_data.append({"commodity_sku": sku, "qty": item.quantity or 1})
-            if not items_data:
-                skipped.append(f"{sn}: 无商品SKU，无法生成背贴")
-            else:
+            if items_data:
                 erp_key = os.getenv("PROD_ERP_API_KEY") or os.getenv("ERP_API_KEY", "")
                 erp_secret = os.getenv("PROD_ERP_API_SECRET") or os.getenv("ERP_API_SECRET", "")
                 erp_base = os.getenv("ERP_URL", "https://erpnext.vilavi.cn")
@@ -1912,68 +2013,65 @@ async def batch_print_packages(request: Request):
                         Path(tmp.name).unlink(missing_ok=True)
                 except Exception:
                     traceback.print_exc()
-                if not sticker_bytes:
-                    skipped.append(f"{sn}: 无法生成背贴")
-        if doc_type in ("sticker", "both") and not sticker_bytes:
-            continue  # skip this package entirely
-
-        # ── Label ──
-        if doc_type in ("label", "both"):
-            labels = repo.list_labels_for_package(account_key=account_key, package_sn=sn)
-            active = [lbl for lbl in labels if getattr(lbl, "status", None) != "cancelled"]
-            if active:
-                lbl = active[0]
-                if getattr(lbl, "artifact_id", None):
-                    artifact = repo.get_artifact(lbl.artifact_id)
-                    if artifact:
-                        path = repo.resolve_artifact_path(artifact)
-                        if path.is_file():
-                            label_bytes = path.read_bytes()
-            if not label_bytes:
-                skipped.append(f"{sn}: 无有效Label面单")
-        if doc_type in ("label", "both") and not label_bytes:
-            continue  # skip this package entirely
+            if not sticker_bytes:
+                missing_stickers.append(f"{sn}: 无有效背贴（已用空白页占位）")
 
         docs.append({"sn": sn, "sticker": sticker_bytes, "label": label_bytes})
 
-    # ── Hard validation: both mode requires both documents for every package ──
-    if skipped:
+    if not docs:
         raise HTTPException(
-            422,
-            f"校验失败 — 以下包裹缺少文档，已拒绝打印:\n" + "\n".join(skipped),
+            400,
+            "所选包裹均无有效面单，无法打印。请先为包裹创建面单。",
         )
 
-    # ── Phase 2: merge in strict order (sticker → label, per package) ──
+    # ── Phase 2: merge in order — sticker (or blank placeholder) → label ──
     for d in docs:
         if doc_type == "both":
-            src_s = fitz.open(stream=d["sticker"], filetype="pdf")
+            src_s = _blank_or_pdf(merged, d["sticker"])
             merged.insert_pdf(src_s)
             src_s.close()
             src_l = fitz.open(stream=d["label"], filetype="pdf")
             merged.insert_pdf(src_l)
             src_l.close()
         elif doc_type == "sticker":
-            src = fitz.open(stream=d["sticker"], filetype="pdf")
-            merged.insert_pdf(src)
-            src.close()
+            src_s = _blank_or_pdf(merged, d["sticker"])
+            merged.insert_pdf(src_s)
+            src_s.close()
         elif doc_type == "label":
+            if d["label"] is None:
+                continue
             src = fitz.open(stream=d["label"], filetype="pdf")
             merged.insert_pdf(src)
             src.close()
 
     if len(merged) == 0:
-        raise HTTPException(400, f"无有效文档可合并。跳过: {'; '.join(skipped)}")
+        raise HTTPException(400, "无有效文档可合并。")
 
     buf = io.BytesIO()
     merged.save(buf)
     merged.close()
     buf.seek(0)
 
+    headers = {"Content-Disposition": "inline; filename=batch_print.pdf"}
+    if missing_stickers:
+        headers["X-Missing-Stickers"] = str(len(missing_stickers))
+
     return Response(
         content=buf.getvalue(),
         media_type="application/pdf",
-        headers={"Content-Disposition": "inline; filename=batch_print.pdf"},
+        headers=headers,
     )
+
+
+def _blank_or_pdf(target, pdf_bytes: bytes | None):
+    """Return a fitz doc — the sticker PDF, or a blank placeholder page."""
+    import fitz
+
+    if pdf_bytes:
+        return fitz.open(stream=pdf_bytes, filetype="pdf")
+    blank = fitz.open()
+    blank.new_page(width=595, height=842)  # A4
+    return blank
 
 
 @app.post("/api/packages/batch-export")
@@ -2059,6 +2157,83 @@ async def batch_export_packages(request: Request):
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": "attachment; filename=packages_export.csv"},
     )
+
+
+@app.post("/api/packages/batch-create-labels")
+async def batch_create_labels(request: Request):
+    """Create labels for selected packages.
+
+    Body: {"package_sns": [...], "carrier": "auto"|"vite"|"lizard", "actor": "..."}
+    carrier="auto" uses each package's routing-suggested carrier.
+    Each package is independent — failures are reported, not fatal.
+    """
+    from sellfox_shipping.label_service import LabelService, LabelServiceError
+
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "Invalid JSON body")
+    package_sns: list[str] = body.get("package_sns", [])
+    carrier: str = str(body.get("carrier") or "auto").strip().lower()
+    actor: str = str(body.get("actor") or "web-user").strip()
+    if not package_sns:
+        raise HTTPException(400, "No package_sns provided")
+    if carrier not in ("auto", "vite", "lizard"):
+        raise HTTPException(400, f"Invalid carrier '{carrier}'")
+
+    account_key = config["sellfox"]["proxy_account"]
+    repo = _get_package_repository()
+    svc = LabelService(repo)
+
+    results: list[dict] = []
+    success = 0
+    for sn in package_sns:
+        record = repo.get(account_key, sn)
+        if record is None:
+            results.append({"package_sn": sn, "ok": False, "error": "包裹不存在"})
+            continue
+        effective_carrier = carrier
+        if carrier == "auto":
+            try:
+                carton_rows = _carton_rows_for_package(account_key, record)
+                routing = _compute_routing(record, carton_rows)
+                effective_carrier = (routing.carrier or "").strip().lower() if routing else ""
+            except Exception:
+                effective_carrier = ""
+            if effective_carrier not in ("vite", "lizard"):
+                results.append({
+                    "package_sn": sn,
+                    "ok": False,
+                    "error": "无路由建议承运商（auto 模式）",
+                })
+                continue
+        try:
+            result = await run_in_threadpool(
+                svc.create_label,
+                carrier=effective_carrier,
+                package=record,
+                account_key=account_key,
+                actor=actor,
+            )
+            success += 1
+            results.append({
+                "package_sn": sn,
+                "ok": True,
+                "carrier": effective_carrier,
+                "tracking_number": result.get("tracking_number", ""),
+                "carrier_order_id": result.get("carrier_order_id", ""),
+            })
+        except LabelServiceError as exc:
+            results.append({"package_sn": sn, "ok": False, "carrier": effective_carrier, "error": str(exc)})
+        except Exception as exc:  # noqa: BLE001
+            results.append({"package_sn": sn, "ok": False, "carrier": effective_carrier, "error": str(exc)})
+
+    return {
+        "results": results,
+        "success": success,
+        "failed": len(results) - success,
+        "total": len(package_sns),
+    }
 
 
 def mount_mcp(mcp_app):

@@ -35,6 +35,15 @@ def _as_dict(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
+def _labels_as_dict(value: Any) -> dict[str, Any]:
+    """Extract a single labels object — handles both object and array shapes."""
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, list) and value and isinstance(value[0], dict):
+        return value[0]
+    return {}
+
+
 def _pick_str(*candidates: Any) -> str:
     for c in candidates:
         if c is None:
@@ -55,7 +64,7 @@ def parse_create_order_result(payload: dict[str, Any]) -> dict[str, str]:
         result.labels.label_url
     """
     result = _as_dict(payload.get("result"))
-    labels = _as_dict(result.get("labels"))
+    labels = _labels_as_dict(result.get("labels"))
     return {
         "order_code": _pick_str(result.get("order_code"), payload.get("order_code")),
         "tracking_number": _pick_str(
@@ -77,7 +86,7 @@ def parse_get_label_result(payload: dict[str, Any]) -> dict[str, Any]:
     Also surfaces ``sync_service_status`` / ``order_status`` / ``logistics_err``.
     """
     result = _as_dict(payload.get("result"))
-    labels = _as_dict(result.get("labels"))
+    labels = _labels_as_dict(result.get("labels"))
     return {
         "code": payload.get("code"),
         "sync_service_status": result.get("sync_service_status"),

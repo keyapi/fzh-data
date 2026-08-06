@@ -207,6 +207,7 @@ def _make_package(
     package_sn: str = "P10001",
     package_status: str = "to_audit",
     channel_name: str = "蜴国际",
+    shop_name: str = "",
 ) -> int:
     """Upsert a package and return its db id."""
     repo.upsert(
@@ -214,6 +215,7 @@ def _make_package(
             account_key=account_key,
             package_sn=package_sn,
             shop_id="shop-1",
+            shop_name=shop_name,
             package_status=package_status,
             logistics=SellfoxPackageLogistics(channel_name=channel_name),
             orders=[SellfoxPackageOrderRecord(external_order_id=f"ORD-{package_sn}-1")],
@@ -433,3 +435,39 @@ class TestPackageCountAndPagination:
             "Package with no labels: LEFT JOIN gives NULL label row, "
             "but date filter on label.created_at excludes NULL values"
         )
+
+
+def test_has_label_filter_yes_and_no(tmp_path) -> None:
+    """has_label=yes filters to packages with a valid label; no to those without."""
+    repo = PackageRepository(tmp_path / "shipping.db")
+    pid_with = _make_package(repo, package_sn="P-LBL-YES")
+    _add_label(repo, pid_with, status="active")
+    pid_cancel = _make_package(repo, package_sn="P-LBL-CANCEL")
+    _add_label(repo, pid_cancel, status="cancelled", is_active=False)
+    _make_package(repo, package_sn="P-LBL-NO")
+
+    yes = repo.count_packages(account_key="sellfox-main", has_label="yes")
+    no = repo.count_packages(account_key="sellfox-main", has_label="no")
+
+    assert yes == 1  # only the one with an active (non-cancelled) label
+    assert no == 2  # cancelled-label package + no-label package
+
+
+def test_exclude_shops_filter(tmp_path) -> None:
+    """exclude_shops removes packages whose shop_name is in the list."""
+    repo = PackageRepository(tmp_path / "shipping.db")
+    _make_package(repo, package_sn="P-SHOP-A", shop_name="WFUS")
+    _make_package(repo, package_sn="P-SHOP-B", shop_name="OSTK")
+    _make_package(repo, package_sn="P-SHOP-C", shop_name="Daneey-LELEFIDO-US")
+
+    total = repo.count_packages(account_key="sellfox-main")
+    filtered = repo.count_packages(
+        account_key="sellfox-main", exclude_shops=["WFUS", "OSTK"]
+    )
+
+    assert total == 3
+    assert filtered == 1  # only P-SHOP-C remains
+    rows = repo.list_packages(
+        account_key="sellfox-main", exclude_shops=["WFUS", "OSTK"]
+    )
+    assert [r.package_sn for r in rows] == ["P-SHOP-C"]

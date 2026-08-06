@@ -88,14 +88,13 @@ carriers:
       EU: FEDEX_INTERNATIONAL_ECONOMY
 
   vite:
-    enabled: true  # P5 启用
-    label: "VITE"
+    enabled: false  # P5 启用
     class: carriers.csv_polling.CSVPollingCarrier
     label_format: PDF
     csv_template: "数据源样例/vite_template.csv"
 
   lizard:
-    enabled: true  # P5 启用
+    enabled: false  # P5 启用
     label: "蜥蜴集团/蜴国际"
     class: carriers.csv_polling.CSVPollingCarrier
     label_format: PDF

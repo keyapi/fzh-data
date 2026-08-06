@@ -109,6 +109,8 @@ class PackageListRequest(BaseModel):
     date_start: str | None = None
     date_end: str | None = None
     date_field: str = "label"
+    has_label: str | None = None
+    exclude_shops: list[str] = []
     limit: int = Field(default=50, ge=1, le=500)
     offset: int = Field(default=0, ge=0)
 
@@ -379,6 +381,8 @@ class ListPackagesService:
             date_start=request.date_start,
             date_end=request.date_end,
             date_field=request.date_field,
+            has_label=request.has_label,
+            exclude_shops=request.exclude_shops,
             limit=request.limit,
             offset=request.offset,
         )
@@ -390,6 +394,8 @@ class ListPackagesService:
             date_start=request.date_start,
             date_end=request.date_end,
             date_field=request.date_field,
+            has_label=request.has_label,
+            exclude_shops=request.exclude_shops,
         )
         return PackageListResult(total=total, items=items)
 

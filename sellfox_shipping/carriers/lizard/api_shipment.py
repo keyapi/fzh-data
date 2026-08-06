@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any, Callable
 import httpx
 
 from sellfox_shipping.carriers.lizard.api_client import (
+    LizardApiError,
     parse_create_order_result,
     parse_get_label_result,
 )
@@ -81,6 +82,7 @@ class LizardApiShipmentService:
         actor: str,
         sm_code: str,
         shipper_code: str = SHIPPER_CODE_DEFAULT,
+        reference_no: str = "",
         poll_interval_s: float = 15.0,
         poll_timeout_s: float = 180.0,
         operation_id: int | None = None,
@@ -88,8 +90,9 @@ class LizardApiShipmentService:
         sn = (package.package_sn or "").strip()
         if not sn:
             raise ValueError("missing package_sn")
+        ref = (reference_no or "").strip() or sn
         body = build_create_order_body(
-            package, sm_code=sm_code, shipper_code=shipper_code
+            package, sm_code=sm_code, shipper_code=shipper_code, reference_no=ref
         )
         created = self._client.create_order(body)
         parsed_create = parse_create_order_result(created)
@@ -114,8 +117,18 @@ class LizardApiShipmentService:
 
             while True:
                 poll_count += 1
-                lab = self._client.get_label(order_code=order_code, reference_no=sn)
+                lab = self._client.get_label(order_code=order_code, reference_no=ref)
                 parsed = parse_get_label_result(lab)
+                logistics_err = (parsed.get("logistics_err") or "").strip()
+                if logistics_err:
+                    # Order entered an error state (e.g. duplicate reference) —
+                    # do not keep polling; surface the carrier's message.
+                    raise LizardApiError(
+                        f"Lizard order {order_code} errored: {logistics_err}",
+                        status_code=lab.get("code") if isinstance(lab, dict) else None,
+                        business_code=parsed.get("code"),
+                        phase="create",
+                    )
                 if parsed.get("tracking_number"):
                     tracking = str(parsed["tracking_number"])
                 if parsed.get("label_url"):

@@ -181,3 +181,48 @@ def test_ship_timeout_raises_without_artifact(tmp_path: Path):
             poll_timeout_s=12.0,
         )
     assert repo.list_artifacts(account_key="sellfox-main") == []
+
+
+class _ErrorLizardClient:
+    """getLabel immediately reports a business error (e.g. duplicate reference)."""
+
+    def __init__(self):
+        self.get_label_calls = 0
+
+    def create_order(self, body: dict) -> dict:
+        return {
+            "code": 200,
+            "result": {"order_code": "OC-ERR", "labels": {}},
+        }
+
+    def get_label(self, *, order_code: str = "", reference_no: str = "") -> dict:
+        self.get_label_calls += 1
+        return {
+            "code": 202,
+            "result": {
+                "sync_service_status": 2,
+                "order_status": 1,
+                "logistics_err": "订单状态异常-[code] 400, [message] 参考号重复",
+            },
+        }
+
+
+def test_ship_polls_only_once_when_logistics_err_present(tmp_path: Path):
+    """An order in error state surfaces the carrier message instead of polling to timeout."""
+    from sellfox_shipping.carriers.lizard.api_client import LizardApiError
+
+    repo = PackageRepository(tmp_path / "shipping.db")
+    client = _ErrorLizardClient()
+    svc = LizardApiShipmentService(client, repo)
+
+    with pytest.raises(LizardApiError, match="参考号重复"):
+        svc.ship_package(
+            _pkg("P-API-ERR"),
+            account_key="sellfox-main",
+            actor="ops",
+            sm_code="FedEx-Ground-J-TX",
+            poll_interval_s=5.0,
+            poll_timeout_s=120.0,
+        )
+    # Should fail fast, not spin 120s
+    assert client.get_label_calls == 1

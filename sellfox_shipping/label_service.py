@@ -232,7 +232,35 @@ class LabelService:
                 actor=actor,
             )
         except RuntimeError as exc:
-            raise LabelServiceError(str(exc), http_status=409) from exc
+            msg = str(exc)
+            if "active label exists" in msg:
+                raise LabelServiceError(
+                    "已存在有效面单，不允许重复创建", http_status=409
+                ) from exc
+            if "active label operation exists" in msg:
+                # No valid label, but a stale operation is blocking the claim.
+                # Auto-release it and retry once so re-creation works without
+                # manual cleanup (carrier will still reject a true duplicate
+                # order via reference_no).
+                released = self._repo.release_active_label_operation(
+                    package_db_id=preflight.package_db_id, actor=actor
+                )
+                if released == 0:
+                    raise LabelServiceError(msg, http_status=409) from exc
+                try:
+                    operation = self._repo.claim_label_operation(
+                        account_key=account_key,
+                        package_db_id=preflight.package_db_id,
+                        carrier=preflight.carrier,
+                        service_level=resolved_service,
+                        idempotency_key=idempotency_key,
+                        request_hash=request_hash,
+                        actor=actor,
+                    )
+                except RuntimeError as exc2:
+                    raise LabelServiceError(str(exc2), http_status=409) from exc2
+            else:
+                raise LabelServiceError(msg, http_status=409) from exc
 
         self._repo.transition_label_operation(operation.id, status="SENT")
 
@@ -462,6 +490,8 @@ class LabelService:
 
         if label.carrier == "vite":
             carrier_message = self._request_vite_cancel(label)
+        elif label.carrier == "lizard":
+            carrier_message = self._request_lizard_cancel(label)
         else:
             raise LabelServiceError(
                 f"Cancel not supported for carrier '{label.carrier}'",
@@ -521,6 +551,80 @@ class LabelService:
                     f"VITE cancel failed: {exc}", http_status=502
                 ) from exc
         return str(result.get("message", "Cancelled"))
+
+    def _request_lizard_cancel(self, label: Any) -> str:
+        from sellfox_shipping.carriers.lizard.api_client import (
+            LizardApiClient,
+            LizardApiError,
+        )
+
+
+        order_code = (label.carrier_order_id or "").strip()
+        if not order_code:
+            raise LabelServiceError(
+                "No carrier_order_id to cancel", http_status=400
+            )
+        package_sn = (
+            self._repo.get_package_sn_by_db_id(label.package_id) or ""
+        ).strip()
+        if not package_sn:
+            raise LabelServiceError(
+                "Unable to resolve package_sn for Lizard cancel", http_status=400
+            )
+        reference_no = self._lizard_reference_no(package_sn, label.operation_id)
+        if not reference_no:
+            raise LabelServiceError(
+                "Unable to resolve reference_no for Lizard cancel", http_status=400
+            )
+        app_token = _read_env("YIGLOBAL_APP_TOKEN")
+        app_key = _read_env("YIGLOBAL_APP_KEY")
+        if not app_token or not app_key:
+            raise LabelServiceError(
+                "YIGLOBAL_APP_TOKEN / YIGLOBAL_APP_KEY not configured",
+                http_status=503,
+            )
+        lizard_base = _read_env("YIGLOBAL_API_BASE_URL") or "http://47.106.72.196"
+
+        with LizardApiClient(
+            app_token=app_token,
+            app_key=app_key,
+            base_url=lizard_base,
+        ) as client:
+            try:
+                result = client.cancel_order(
+                    order_code=order_code, reference_no=reference_no
+                )
+            except LizardApiError as exc:
+                raise LabelServiceError(
+                    f"Lizard cancel failed: {exc}", http_status=502
+                ) from exc
+        msg = result.get("msg") or result.get("message") or "Cancelled"
+        return f"Cancelled Lizard order {order_code} ({msg})"
+
+    def _lizard_reference_no(
+        self, package_sn: str, operation_id: int | None
+    ) -> str:
+        """Build a unique 蜴国际 reference scoped by operation generation.
+
+        蜴国际 keeps cancelled orders' reference_no reserved, so reusing the
+        bare package_sn fails with "参考号重复". Per ops guidance: first attempt
+        uses the base reference; each later attempt appends -1, -2, -3... The
+        suffix is derived deterministically from the operation generation so
+        createOrder / getLabel / cancelOrder all use the same value.
+        """
+        sn = (package_sn or "").strip()
+        if not sn:
+            return ""
+        gen = 0
+        if operation_id is not None:
+            try:
+                op = self._repo.get_label_operation(operation_id)
+                gen = int(op.generation or 0)
+            except Exception:
+                gen = 0
+        if gen <= 1:
+            return sn
+        return f"{sn}-{gen - 1}"
 
     def list_enabled_carriers(self) -> list[dict[str, str]]:
         """Return carriers with enabled=true from config."""
@@ -678,11 +782,15 @@ class LabelService:
         ) as client:
             svc = LizardApiShipmentService(client, self._repo)
             try:
+                # Unique reference: cancelled orders on 蜴国际 may keep the
+                # package_sn reference reserved, so scope each attempt by generation.
+                lizard_ref = self._lizard_reference_no(package.package_sn, operation_id)
                 result = svc.ship_package(
                     package,
                     account_key=account_key,
                     actor=actor,
                     sm_code=sm_code,
+                    reference_no=lizard_ref,
                     operation_id=operation_id,
                 )
             except LizardApiError as exc:
@@ -720,6 +828,7 @@ class LabelService:
                 status="generated",
                 carrier_response_json="",
                 created_by=actor,
+                derived_reference_no=lizard_ref,
             )
         except Exception as exc:
             if operation_id is not None:
@@ -827,7 +936,7 @@ class LabelService:
                     account_key=op.account_key,
                     actor=actor,
                     order_code=provider_order_id,
-                    reference_no=package.package_sn,
+                    reference_no=self._lizard_reference_no(package.package_sn, operation_id),
                     operation_id=operation_id,
                     claim_id=claim_id,
                 )
@@ -1058,6 +1167,7 @@ class LabelService:
                     status="generated",
                     carrier_response_json=json.dumps(lab),
                     created_by=actor,
+                    derived_reference_no=reference_no,
                     expected_claim_id=claim_id,
                 )
             except Exception as exc:

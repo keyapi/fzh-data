@@ -775,6 +775,7 @@ class ShippingLabelRow(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     carrier_response_json: Mapped[str] = mapped_column(Text, default="")
     created_by: Mapped[str] = mapped_column(String, default="")
+    derived_reference_no: Mapped[str] = mapped_column(String, default="")
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.current_timestamp()
     )
@@ -803,6 +804,7 @@ class ShippingLabelRecord:
     is_active: bool
     carrier_response_json: str
     created_by: str
+    derived_reference_no: str = ""
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -2217,6 +2219,8 @@ class PackageRepository:
         date_start: str | None = None,
         date_end: str | None = None,
         date_field: str = "label",
+        has_label: str | None = None,
+        exclude_shops: list[str] | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[PackageListItem]:
@@ -2236,6 +2240,18 @@ class PackageRepository:
             if local_review_status is not None:
                 query = query.where(
                     PackageRow.local_review_status == local_review_status
+                )
+            if has_label in ("yes", "no"):
+                label_exists = (
+                    select(ShippingLabelRow.id)
+                    .where(ShippingLabelRow.package_id == PackageRow.id)
+                    .where(ShippingLabelRow.status != "cancelled")
+                    .exists()
+                )
+                query = query.where(label_exists if has_label == "yes" else ~label_exists)
+            if exclude_shops:
+                query = query.where(
+                    PackageRow.shop_name.notin_(exclude_shops)
                 )
             if date_start is not None or date_end is not None:
                 if date_field == "order":
@@ -2337,6 +2353,8 @@ class PackageRepository:
         date_start: str | None = None,
         date_end: str | None = None,
         date_field: str = "label",
+        has_label: str | None = None,
+        exclude_shops: list[str] | None = None,
     ) -> int:
         with self._session_factory() as session:
             query = (
@@ -2355,6 +2373,18 @@ class PackageRepository:
             if local_review_status is not None:
                 query = query.where(
                     PackageRow.local_review_status == local_review_status
+                )
+            if has_label in ("yes", "no"):
+                label_exists = (
+                    select(ShippingLabelRow.id)
+                    .where(ShippingLabelRow.package_id == PackageRow.id)
+                    .where(ShippingLabelRow.status != "cancelled")
+                    .exists()
+                )
+                query = query.where(label_exists if has_label == "yes" else ~label_exists)
+            if exclude_shops:
+                query = query.where(
+                    PackageRow.shop_name.notin_(exclude_shops)
                 )
             if date_start is not None or date_end is not None:
                 if date_field == "order":
@@ -3575,6 +3605,54 @@ class PackageRepository:
         )
         return self.get_label_operation(operation_id)
 
+    def release_active_label_operation(
+        self, package_db_id: int, *, actor: str
+    ) -> int:
+        """Cancel stuck active operations for a package so a new one can be claimed.
+
+        Only invoked when the caller has confirmed there is no valid active label
+        (the active-label guard still blocks duplicate creation).
+
+        Auto-releases RESERVED / ACCEPTED / LABEL_PENDING / SUCCEEDED → CANCELLED.
+        UNKNOWN_BLOCKED is deliberately NOT auto-released — its carrier outcome is
+        ambiguous and must go through the evidence-based resolve workflow.
+        Returns the number released.
+        """
+        released = 0
+        with self._session_factory() as session:
+            rows = (
+                session.query(LabelOperationRow)
+                .where(LabelOperationRow.package_id == package_db_id)
+                .all()
+            )
+            for row in rows:
+                current = (row.status or "").strip()
+                if current == "UNKNOWN_BLOCKED":
+                    continue
+                if current not in ACTIVE_LABEL_OPERATION_STATUSES and current != "SUCCEEDED":
+                    continue
+                try:
+                    self.transition_label_operation(
+                        row.id,
+                        status="CANCELLED",
+                        error_summary=(
+                            "auto-release: no valid label; reclaimed for new creation"
+                        ),
+                    )
+                    released += 1
+                except RuntimeError:
+                    # SENT without a linked label cannot be auto-released — skip.
+                    continue
+        if released:
+            self.append_audit_event(
+                actor=actor or "system",
+                action="label_operation.auto_release",
+                entity_type="shipping_package",
+                entity_id=str(package_db_id),
+                summary=f"released {released} active operation(s) for new label",
+            )
+        return released
+
     def transition_label_operation(
         self,
         operation_id: int,
@@ -3975,6 +4053,7 @@ class PackageRepository:
         status: str,
         carrier_response_json: str,
         created_by: str,
+        derived_reference_no: str = "",
         expected_claim_id: str | None = None,
     ) -> ShippingLabelRecord:
         now = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -4023,6 +4102,7 @@ class PackageRepository:
                 is_active=status != "cancelled",
                 carrier_response_json=carrier_response_json,
                 created_by=created_by,
+                derived_reference_no=derived_reference_no,
                 created_at=now,
                 updated_at=now,
             )
@@ -4520,6 +4600,7 @@ def _shipping_label_to_record(
         is_active=bool(row.is_active),
         carrier_response_json=row.carrier_response_json or "",
         created_by=row.created_by or "",
+        derived_reference_no=row.derived_reference_no or "",
     created_at=created_at,
     updated_at=updated_at,
 )

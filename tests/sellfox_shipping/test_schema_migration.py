@@ -44,7 +44,7 @@ def test_repository_applies_alembic_migration_on_empty_db(tmp_path) -> None:
             "AND name='shipping_sellfox_writeback_policies'"
         ).scalar_one()
 
-    assert version == "0021_sellfox_outbox_lease_origin"
+    assert version == "0022_derived_reference_no"
     assert packages == "shipping_packages"
     assert audit == "shipping_audit_events"
     assert claim_fence_col == 1
@@ -65,6 +65,15 @@ def test_repository_upgrades_historical_0015_database_through_head(tmp_path) -> 
             INSERT INTO alembic_version VALUES ('0015_label_acquisition_safety');
             CREATE TABLE shipping_accounts (id INTEGER PRIMARY KEY);
             CREATE TABLE shipping_packages (id INTEGER PRIMARY KEY);
+            CREATE TABLE shipping_labels (
+                id INTEGER PRIMARY KEY,
+                package_id INTEGER,
+                status VARCHAR NOT NULL DEFAULT 'pending',
+                operation_id INTEGER,
+                is_active INTEGER NOT NULL DEFAULT 1
+            );
+            CREATE UNIQUE INDEX uq_shipping_labels_one_active_per_package
+            ON shipping_labels(package_id) WHERE is_active = 1;
             CREATE TABLE shipping_label_operations (
                 id INTEGER PRIMARY KEY,
                 account_id INTEGER NOT NULL,
@@ -120,7 +129,7 @@ def test_repository_upgrades_historical_0015_database_through_head(tmp_path) -> 
             "AND `unique`=1"
         ).scalar_one()
 
-    assert version == "0021_sellfox_outbox_lease_origin"
+    assert version == "0022_derived_reference_no"
     assert resolution_evidence == 1
     assert evidence_foreign_key == 1
     assert ("shipping_accounts", "account_id", "id", "CASCADE") in existing_foreign_keys
@@ -137,6 +146,13 @@ def test_repository_repairs_partially_applied_0018_foreign_key(tmp_path) -> None
             INSERT INTO alembic_version VALUES ('0018_resume_fencing_and_evidence_link');
             CREATE TABLE shipping_label_investigations (
                 id INTEGER PRIMARY KEY
+            );
+            CREATE TABLE shipping_labels (
+                id INTEGER PRIMARY KEY,
+                package_id INTEGER,
+                status VARCHAR NOT NULL DEFAULT 'pending',
+                operation_id INTEGER,
+                is_active INTEGER NOT NULL DEFAULT 1
             );
             CREATE TABLE shipping_label_operations (
                 id INTEGER PRIMARY KEY,
@@ -158,7 +174,7 @@ def test_repository_repairs_partially_applied_0018_foreign_key(tmp_path) -> None
             "AND on_delete='SET NULL'"
         ).scalar_one()
 
-    assert version == "0021_sellfox_outbox_lease_origin"
+    assert version == "0022_derived_reference_no"
     assert evidence_foreign_key == 1
 
 
@@ -182,6 +198,6 @@ def test_repository_stamps_existing_create_all_database(tmp_path) -> None:
             "WHERE name='local_review_status'"
         ).scalar()
 
-    assert version == "0021_sellfox_outbox_lease_origin"
+    assert version == "0022_derived_reference_no"
     assert review_col == 1
     assert repository.count_rows()["packages"] == 0
