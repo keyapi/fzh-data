@@ -1097,8 +1097,8 @@ def _get_lizard_rate(
 
         return best
 
-    except Exception:
-        return None
+    except Exception as exc:  # noqa: BLE001 — surface the reason instead of hiding it
+        return {"source": "lizard", "error": f"Lizard rate fetch failed: {exc}"}
 
 
 def _persist_rate(record, rate_result: dict, raw_response: dict | None = None) -> None:
