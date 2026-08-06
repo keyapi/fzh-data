@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any, Callable
 import httpx
 
 from sellfox_shipping.carriers.lizard.api_client import (
+    LizardApiError,
     parse_create_order_result,
     parse_get_label_result,
 )
@@ -116,6 +117,16 @@ class LizardApiShipmentService:
                 poll_count += 1
                 lab = self._client.get_label(order_code=order_code, reference_no=sn)
                 parsed = parse_get_label_result(lab)
+                logistics_err = (parsed.get("logistics_err") or "").strip()
+                if logistics_err:
+                    # Order entered an error state (e.g. duplicate reference) —
+                    # do not keep polling; surface the carrier's message.
+                    raise LizardApiError(
+                        f"Lizard order {order_code} errored: {logistics_err}",
+                        status_code=lab.get("code") if isinstance(lab, dict) else None,
+                        business_code=parsed.get("code"),
+                        phase="create",
+                    )
                 if parsed.get("tracking_number"):
                     tracking = str(parsed["tracking_number"])
                 if parsed.get("label_url"):
