@@ -1,7 +1,7 @@
 """Add derived_reference_no to shipping_labels for Lizard suffixed reference.
 
-Revision ID: 0018_derived_reference_no
-Revises: 0017_shipping_label_investigations
+Revision ID: 0022_derived_reference_no
+Revises: 0021_sellfox_outbox_lease_origin
 Create Date: 2026-08-06
 """
 
@@ -12,8 +12,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0018_derived_reference_no"
-down_revision: Union[str, Sequence[str], None] = "0017_shipping_label_investigations"
+revision: str = "0022_derived_reference_no"
+down_revision: Union[str, Sequence[str], None] = "0021_sellfox_outbox_lease_origin"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

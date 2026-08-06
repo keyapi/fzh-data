@@ -3,10 +3,55 @@ okf: v0.1
 type: Log
 module: sellfox_shipping
 created: 2026-07-15
-updated: 2026-08-05
+updated: 2026-08-06
 ---
 
-# sellfox_shipping — 变更日志
+# sellfox_shipping - 变更日志
+
+## 2026-08-06 - 赛狐 Outbox PR 2 执行器与回读
+
+- 新增 migration 0021：`shipping_sellfox_outbox.lease_origin_status`，过期 LEASED 恢复原状态。
+- 新增 `outbox_service.py`：确认、账户 Policy、能力证据、租约执行与 packageDetail 回读。
+- 新增 CLI：`sellfox-outbox-confirm/confirm-batch/run-once/verify/policy-show/policy-set/capability-record`。
+- 执行安全：`BEGIN IMMEDIATE` 原子 claim + lease token fencing；发送前落 `IN_FLIGHT`；崩溃恢复一律 `UNKNOWN_BLOCKED`，禁止再次 submit。
+- dry-run 不领取 lease、不触发恢复写库；崩溃恢复仅在真实执行路径运行。
+- 错误分类：`not_sent_retryable`、`configuration_blocked`、`rejected_final`、`ambiguous`、`accepted_verify_pending`；退避 1m/5m/15m/1h/6h，5 次后转人工。
+- 回读：tracking 匹配 → VERIFIED；暂空或占位 → VERIFY_PENDING；不同真实值 → CONFLICT。
+- 门禁：DISABLED 阻断真实发送；PROBE_ONLY 仅显式单包；SCOPED_BATCH 最多 50；只有 SAFE_TRACKNO_ONLY 证据可切换。
+- 测试基线：260 passed, 2 warnings；全部 mock，未真实调用赛狐。
+
+## 2026-08-06 - 赛狐 Outbox PR 3 能力探针运行手册
+
+- 新增 [单包能力探针运行手册](specs/sellfox-writeback-probe-runbook-2026-08-06.md)：前置条件、探针流程、回读核验、人工业务核验与停止条件。
+- 明确能力结论门禁：SAFE_TRACKNO_ONLY / UNSAFE_PLATFORM_SIDE_EFFECT / INEFFECTIVE，只有 SAFE_TRACKNO_ONLY 后才允许 SCOPED_BATCH。
+- 更新生产验收矩阵与 Jack 交接边界：代码已就绪，真实探针等待用户指定测试包裹。
+- 本 PR 不执行真实赛狐 HTTP，不含凭证和真实响应。
+
+## 2026-08-06 - 赛狐 Outbox PR 1 候选事实层
+
+- 新增 migration 0020、订单级 Outbox、来源表与账户 Policy 默认值。
+- API label 成功和 Excel tracking 导入统一通过事务 finalizer 生成候选。
+- 新增候选去重、来源合并、SUPERSEDED/CONFLICT 规则及显式历史扫描。
+- 新增 sellfox-outbox-list/show/scan-candidates，全部无赛狐 HTTP；扫描默认 dry-run。
+- 增加成熟方案调研与完整 Outbox 设计；PR 2/3 仍负责真实执行与能力门禁。
+
+## 2026-08-05 - Migration 0019 与生产验收交接
+
+- 合并后全量测试发现：历史 SQLite 库从 0015 连续升级时，0018 使用 `op.add_column(ForeignKey(...))` 会触发 SQLite 不支持的独立约束 ALTER。
+- Migration 0018 改为先新增普通列；Migration 0019 使用 Alembic batch copy-and-move 建立外键。
+- 0019 同时修复已被旧 0018 半应用并标记为 head、但 `resolution_evidence_id` 外键缺失的数据库。
+- 新增历史 0015 连续升级和半应用 0018 修复测试；自动化基线更新为 221 passed、2 个既有 warning。
+- 更新路线图：购标恢复核心标记完成，赛狐 outbox 标记为用户延期，下一阶段改为生产验收与三方对账评估。
+- 新增 Jack Agent 生产验收接手规范，明确禁止无授权真实购标、取消和赛狐回写。
+
+## 2026-08-05 - PR #143 可靠性复审修复
+
+- Migration 0018 为 resume claim 增加 `claim_token`，并将 lease 改为 SQLite `BEGIN IMMEDIATE` 条件更新。
+- lease 释放必须匹配 token，过期 worker 不能清除新 worker 的 claim。
+- investigation 增加结构化 `conclusion`；`confirmed_created` 同时保存并核对 `provider_order_id`。
+- UNKNOWN_BLOCKED 结案在同一事务内校验证据归属、结论和权威引用，并把 `resolution_evidence_id` 持久化到 operation。
+- `label-operation-investigate` 新增必填 `--conclusion`；空白 `other` 证据不能释放购标槽位。
+- 新增跨 repository 并发、lease fencing、证据错配和审计关联测试；测试基线更新为 217 passed。
 
 ## 2026-08-06 — 批量打印锚定面单 + 批量操作栏优化
 

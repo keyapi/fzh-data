@@ -3,22 +3,31 @@ okf: v0.1
 type: Roadmap
 title: sellfox_shipping 生产化路线图
 description: 从购标安全核心到回写、打印、对账和承运商扩展的任务包
-timestamp: 2026-08-04
+timestamp: 2026-08-06
 ---
 
 # sellfox_shipping 生产化路线图
 
+## 当前裁决
+
+- **购标安全与恢复核心已完成。** PR #132、#134、#136、#137、#142、#143、#144 已覆盖 preflight、原子 claim、provider ID 持久化、resume、carrier error taxonomy、UNKNOWN_BLOCKED 证据化结案和 resume fencing。
+- **Migration 0019 是合并后发现的必须修复项。** 它修复历史 SQLite 库从 0015 连续升级时 0018 直接新增外键失败，以及已被半应用 0018 标记但缺少外键的数据库。
+- **赛狐可靠回写按三 PR 串行实施。** PR 1 候选事实层与 PR 2 执行器/回读已完成；PR 3 能力探针与运营门禁待用户指定测试包裹后实施。
+- **PR 3 运营交接文档已就绪。** 单包能力探针运行手册与证据清单见 [sellfox-writeback-probe-runbook](specs/sellfox-writeback-probe-runbook-2026-08-06.md)；真实探针等待用户指定测试包裹。
+- **当前下一阶段是生产验收，不是继续扩功能。** 验收矩阵和 Jack Agent 接手步骤见 [生产验收与交接规范](specs/production-acceptance-and-jack-handoff-2026-08-05.md)。
+
 ## Must
 
-| 顺序 | 任务包 | 完成标准 |
-|---|---|---|
-| 1 | 购标恢复控制面 | 先交付只读 operation CLI，再落 carrier error taxonomy、带 provider ID 的 resume、无 provider ID 的证据化人工结案；任何恢复路径不得再次 create |
-| 2 | 赛狐可靠回写 | 复用 SubmissionIntent/scope guard，新增 outbox lease/退避；失败只重试回写；回读核验；冲突进入人工队列；真实测试默认单包 |
-| 3 | 取消与退款分离 | 标签失效、取消请求、承运商确认和退款到账分开记录 |
-| 4 | 认证与审计收口 | 公网 OIDC/CSRF/RBAC、PII 脱敏、所有危险操作审计 |
-| 5 | 每日三方对账 | 输入、标签、追踪号、赛狐回写逐项计数；未匹配和失败全部保留 |
+| 状态 | 顺序 | 任务包 | 完成标准 |
+|---|---:|---|---|
+| 完成 | 1 | 购标恢复控制面 | operation CLI、carrier error taxonomy、带 provider ID 的 resume、无 provider ID 的证据化人工结案；恢复路径不得再次 create |
+| 当前 | 2 | 生产验收与迁移可靠性 | 全量自动化测试；空库、历史库、半迁移库；CLI 契约；Excel 幂等；无副作用验收报告 |
+| 待规划 | 3 | 每日三方对账 | 输入、标签、追踪号、赛狐回写逐项计数；未匹配和失败全部保留 |
+| 部分完成 | 4 | 取消与退款分离 | 已有安全取消和活动槽释放；仍需把承运商取消确认与退款到账独立记录 |
+| 部署前 | 5 | 认证与审计收口 | 公网 OIDC/CSRF/RBAC、secure cookie、PII 脱敏、所有危险操作审计 |
+| PR 3 手册就绪 | 6 | 赛狐可靠回写 | PR 1 候选层 + PR 2 确认/租约/执行/回读完成；PR 3 探针手册就绪，待用户指定单包授权；默认 DISABLED + UNVERIFIED |
 
-任务包 1 是当前开发范围。每个任务包独立分支、独立 PR，禁止直接 push main。
+每个任务包独立分支、独立 PR，禁止直接 push main。
 实现级拆分、CLI 契约和验收场景见 [恢复 CLI、错误分类与 Outbox 计划](specs/recovery-cli-error-taxonomy-outbox-plan-2026-08-05.md)。
 
 ## Should
@@ -46,4 +55,4 @@ timestamp: 2026-08-04
 
 ## Agent 交接协议
 
-新 Agent 依次阅读 AGENT_HANDOFF.md、生产可靠性蓝图、本路线图。开始任务前 fetch origin/main、检查开放 PR 与文件重叠、建立独立 worktree。每个 PR 必须包含测试、对账报告契约、凭证扫描和文档日志更新。
+新 Agent 依次阅读 AGENT_HANDOFF.md、生产验收与交接规范、生产可靠性蓝图、本路线图。开始任务前 fetch origin/main、检查开放 PR 与文件重叠、建立独立 worktree。每个 PR 必须包含测试、对账报告契约、凭证扫描和文档日志更新。

@@ -5,8 +5,10 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from datetime import timedelta
 from pathlib import Path
 
 from sqlalchemy import (
@@ -18,6 +20,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    CheckConstraint,
     create_engine,
     delete,
     event,
@@ -423,6 +426,136 @@ class SubmissionAttemptRow(Base):
     )
 
 
+class SellfoxWritebackPolicyRow(Base):
+    __tablename__ = "shipping_sellfox_writeback_policies"
+    __table_args__ = (
+        UniqueConstraint("account_id", name="uq_sellfox_writeback_policy_account"),
+        CheckConstraint(
+            "mode IN ('DISABLED', 'PROBE_ONLY', 'SCOPED_BATCH')",
+            name="ck_sellfox_writeback_policy_mode",
+        ),
+        CheckConstraint(
+            "capability_status IN ('UNVERIFIED', 'SAFE_TRACKNO_ONLY', "
+            "'UNSAFE_PLATFORM_SIDE_EFFECT', 'INEFFECTIVE')",
+            name="ck_sellfox_writeback_policy_capability",
+        ),
+        CheckConstraint(
+            "mode <> 'SCOPED_BATCH' OR capability_status = 'SAFE_TRACKNO_ONLY'",
+            name="ck_sellfox_writeback_policy_scope_gate",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    account_id: Mapped[int] = mapped_column(
+        ForeignKey("shipping_accounts.id", ondelete="CASCADE")
+    )
+    mode: Mapped[str] = mapped_column(
+        String, nullable=False, server_default="DISABLED", default="DISABLED"
+    )
+    capability_status: Mapped[str] = mapped_column(
+        String, nullable=False, server_default="UNVERIFIED", default="UNVERIFIED"
+    )
+    evidence_ref: Mapped[str] = mapped_column(
+        Text, nullable=False, server_default="", default=""
+    )
+    approved_by: Mapped[str] = mapped_column(
+        String, nullable=False, server_default="", default=""
+    )
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.current_timestamp())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.current_timestamp())
+
+
+class SellfoxOutboxRow(Base):
+    __tablename__ = "shipping_sellfox_outbox"
+    __table_args__ = (
+        UniqueConstraint("candidate_key", name="uq_sellfox_outbox_candidate_key"),
+        UniqueConstraint(
+            "account_id",
+            "package_id",
+            "order_id",
+            "generation",
+            name="uq_sellfox_outbox_generation",
+        ),
+        CheckConstraint(
+            "status IN ('AWAITING_CONFIRMATION', 'PENDING', 'LEASED', "
+            "'IN_FLIGHT', 'VERIFY_PENDING', 'VERIFIED', 'RETRYABLE', "
+            "'MANUAL_REVIEW', 'UNKNOWN_BLOCKED', 'CONFLICT', 'FAILED_FINAL', 'SUPERSEDED')",
+            name="ck_sellfox_outbox_status",
+        ),
+        CheckConstraint(
+            "generation > 0", name="ck_sellfox_outbox_generation_positive"
+        ),
+        CheckConstraint(
+            "attempt_count >= 0", name="ck_sellfox_outbox_attempt_nonnegative"
+        ),
+        CheckConstraint(
+            "trim(tracking_number) <> ''", name="ck_sellfox_outbox_tracking_nonempty"
+        ),
+        CheckConstraint(
+            "length(candidate_key) = 64", name="ck_sellfox_outbox_candidate_key_sha256"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    account_id: Mapped[int] = mapped_column(ForeignKey("shipping_accounts.id", ondelete="CASCADE"))
+    package_id: Mapped[int] = mapped_column(ForeignKey("shipping_packages.id", ondelete="CASCADE"))
+    order_id: Mapped[int] = mapped_column(ForeignKey("shipping_orders.id", ondelete="CASCADE"))
+    generation: Mapped[int] = mapped_column(Integer)
+    tracking_number: Mapped[str] = mapped_column(String)
+    candidate_key: Mapped[str] = mapped_column(String)
+    submission_intent_id: Mapped[int | None] = mapped_column(ForeignKey("shipping_submission_intents.id", ondelete="SET NULL"), nullable=True)
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    lease_origin_status: Mapped[str] = mapped_column(
+        String, nullable=False, server_default="", default=""
+    )
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    status: Mapped[str] = mapped_column(
+        String,
+        nullable=False,
+        server_default="AWAITING_CONFIRMATION",
+        default="AWAITING_CONFIRMATION",
+    )
+    request_hash: Mapped[str] = mapped_column(
+        String, nullable=False, server_default="", default=""
+    )
+    attempt_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="0", default=0
+    )
+    lease_owner: Mapped[str] = mapped_column(
+        String, nullable=False, server_default="", default=""
+    )
+    lease_token: Mapped[str] = mapped_column(
+        String, nullable=False, server_default="", default=""
+    )
+    confirmed_by: Mapped[str] = mapped_column(
+        String, nullable=False, server_default="", default=""
+    )
+    last_error_class: Mapped[str] = mapped_column(
+        String, nullable=False, server_default="", default=""
+    )
+    last_error_summary: Mapped[str] = mapped_column(
+        Text, nullable=False, server_default="", default=""
+    )
+    conflicts_with_outbox_id: Mapped[int | None] = mapped_column(ForeignKey("shipping_sellfox_outbox.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.current_timestamp())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.current_timestamp())
+
+
+class SellfoxOutboxSourceRow(Base):
+    __tablename__ = "shipping_sellfox_outbox_sources"
+    __table_args__ = (
+        UniqueConstraint("outbox_id", "source_type", "source_id", name="uq_sellfox_outbox_source"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    outbox_id: Mapped[int] = mapped_column(ForeignKey("shipping_sellfox_outbox.id", ondelete="CASCADE"))
+    source_type: Mapped[str] = mapped_column(String)
+    source_id: Mapped[str] = mapped_column(String)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.current_timestamp())
+
+
 @dataclass(frozen=True)
 class SubmissionIntentRecord:
     id: int
@@ -447,6 +580,57 @@ class SubmissionAttemptRecord:
     actor: str = ""
     http_status: int | None = None
     http_summary: str = ""
+
+
+@dataclass(frozen=True)
+class SellfoxWritebackPolicyRecord:
+    account_key: str
+    mode: str
+    capability_status: str
+    evidence_ref: str = ""
+    approved_by: str = ""
+    approved_at: datetime | None = None
+
+
+@dataclass(frozen=True)
+class SellfoxOutboxSourceRecord:
+    source_type: str
+    source_id: str
+
+
+@dataclass(frozen=True)
+class SellfoxOutboxRecord:
+    id: int
+    account_key: str
+    package_id: int
+    package_sn: str
+    order_db_id: int
+    external_order_id: str
+    generation: int
+    tracking_number: str
+    candidate_key: str
+    status: str
+    submission_intent_id: int | None
+    request_hash: str
+    attempt_count: int
+    conflicts_with_outbox_id: int | None
+    next_attempt_at: datetime | None = None
+    lease_owner: str = ""
+    lease_token: str = ""
+    lease_expires_at: datetime | None = None
+    confirmed_by: str = ""
+    confirmed_at: datetime | None = None
+    last_error_class: str = ""
+    last_error_summary: str = ""
+    sources: tuple[SellfoxOutboxSourceRecord, ...] = ()
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+@dataclass(frozen=True)
+class SellfoxOutboxCandidateReport:
+    counts: dict[str, int]
+    results: tuple[dict[str, object], ...]
 
 
 @dataclass(frozen=True)
@@ -686,6 +870,11 @@ class LabelOperationRow(Base):
     created_by: Mapped[str] = mapped_column(String, default="")
     claimed_by: Mapped[str] = mapped_column(String, default="")
     claimed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    claim_token: Mapped[str] = mapped_column(String, default="")
+    resolution_evidence_id: Mapped[int | None] = mapped_column(
+        ForeignKey("shipping_label_investigations.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.current_timestamp()
     )
@@ -711,6 +900,7 @@ class LabelOperationRecord:
     error_class: str
     error_summary: str
     created_by: str
+    resolution_evidence_id: int | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -725,6 +915,8 @@ class InvestigationRow(Base):
         ForeignKey("shipping_label_operations.id", ondelete="CASCADE"),
     )
     evidence_type: Mapped[str] = mapped_column(String)
+    conclusion: Mapped[str] = mapped_column(String, default="")
+    provider_order_id: Mapped[str] = mapped_column(String, default="")
     external_ref: Mapped[str] = mapped_column(String, default="")
     private_artifact_id: Mapped[int | None] = mapped_column(
         ForeignKey("shipping_artifacts.id", ondelete="SET NULL"),
@@ -742,6 +934,8 @@ class InvestigationRecord:
     id: int
     operation_id: int
     evidence_type: str
+    conclusion: str
+    provider_order_id: str
     external_ref: str
     private_artifact_id: int | None
     note: str
@@ -959,6 +1153,262 @@ class PackageRepository:
                 .order_by(PackageItemRow.order_item_id)
             ).all()
             return self._to_record(account_key, package, order_rows, item_rows)
+
+    def finalize_excel_tracking_with_outbox(
+        self,
+        *,
+        account_key: str,
+        package_sn: str,
+        tracking_number: str,
+        source_id: str,
+        actor: str,
+        estimated_cost: float | None = None,
+        cost_currency: str | None = None,
+    ) -> tuple[SellfoxPackageRecord, SellfoxOutboxCandidateReport]:
+        report = self._finalize_tracking_with_outbox(
+            account_key=account_key,
+            package_sn=package_sn,
+            tracking_number=tracking_number,
+            source_type="excel_tracking_import",
+            source_id=source_id,
+            actor=actor,
+            estimated_cost=estimated_cost,
+            cost_currency=cost_currency,
+        )
+        package = self.get(account_key, package_sn)
+        assert package is not None
+        return package, report
+
+    def finalize_label_success_with_outbox(
+        self,
+        *,
+        operation_id: int,
+        label_id: int,
+        actor: str,
+        expected_claim_id: str | None = None,
+    ) -> SellfoxOutboxCandidateReport:
+        label = self.get_label(label_id)
+        if label is None:
+            raise LookupError(f"label not found: {label_id}")
+        package_sns = self.get_package_sns_by_db_ids({label.package_id})
+        package_sn = package_sns.get(label.package_id, "")
+        if not package_sn:
+            raise LookupError(f"package not found for label_id={label_id}")
+        return self._finalize_tracking_with_outbox(
+            account_key=label.account_key,
+            package_sn=package_sn,
+            tracking_number=label.tracking_number,
+            source_type="api_label",
+            source_id=f"label:{label_id}:operation:{operation_id}",
+            actor=actor,
+            operation_id=operation_id,
+            label_id=label_id,
+            expected_claim_id=expected_claim_id,
+        )
+
+    def _finalize_tracking_with_outbox(
+        self,
+        *,
+        account_key: str,
+        package_sn: str,
+        tracking_number: str,
+        source_type: str,
+        source_id: str,
+        actor: str,
+        estimated_cost: float | None = None,
+        cost_currency: str | None = None,
+        operation_id: int | None = None,
+        label_id: int | None = None,
+        expected_claim_id: str | None = None,
+    ) -> SellfoxOutboxCandidateReport:
+        tracking = (tracking_number or "").strip()
+        actor_name = (actor or "").strip()
+        if not actor_name:
+            raise ValueError("actor is required")
+        now = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
+        counts = {"input": 0, "created": 0, "existing": 0, "skipped": 0, "conflict": 0, "failed": 0}
+        results: list[dict[str, object]] = []
+        with sqlite3.connect(self._db_path, timeout=5) as connection:
+            connection.execute("PRAGMA foreign_keys=ON")
+            connection.execute("PRAGMA busy_timeout=5000")
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                package = connection.execute(
+                    "SELECT p.id, p.account_id, p.package_status, p.local_review_status "
+                    "FROM shipping_packages p JOIN shipping_accounts a ON a.id=p.account_id "
+                    "WHERE a.account_key=? AND p.package_sn=?",
+                    (account_key, package_sn),
+                ).fetchone()
+                if package is None:
+                    raise LookupError(f"Package {package_sn} not found")
+                package_id, account_id, package_status, review_status = package
+                skip_reason = ""
+                if not tracking or tracking == package_sn:
+                    skip_reason = "tracking_missing_or_placeholder"
+                elif review_status != "approved":
+                    skip_reason = "package_not_approved"
+                elif package_status in {"has_shipped", "has_canceled"}:
+                    skip_reason = "package_status_not_submittable"
+                if skip_reason:
+                    connection.rollback()
+                    counts["input"] = 1
+                    counts["skipped"] = 1
+                    results.append(
+                        {
+                            "package_sn": package_sn,
+                            "external_order_id": "",
+                            "outcome": "skipped",
+                            "reason": skip_reason,
+                        }
+                    )
+                    self.append_audit_event(
+                        actor=actor_name,
+                        action="sellfox_outbox.finalize_tracking_skipped",
+                        entity_type="shipping_package",
+                        entity_id=package_sn,
+                        summary=json.dumps(
+                            {"skipped": 1, "reason": skip_reason}, sort_keys=True
+                        ),
+                    )
+                    return SellfoxOutboxCandidateReport(
+                        counts=counts, results=tuple(results)
+                    )
+
+                if operation_id is not None:
+                    op_row = connection.execute(
+                        "SELECT status, claim_token FROM shipping_label_operations WHERE id=? AND package_id=?",
+                        (operation_id, package_id),
+                    ).fetchone()
+                    if op_row is None:
+                        raise LookupError(f"label operation not found: {operation_id}")
+                    if expected_claim_id is not None and op_row[1] != expected_claim_id:
+                        raise RuntimeError(f"resume lease lost for operation_id={operation_id}")
+                    if op_row[0] not in {"SENT", "ACCEPTED", "LABEL_PENDING", "SUCCEEDED"}:
+                        raise RuntimeError(f"invalid transition: {op_row[0]} -> SUCCEEDED for operation_id={operation_id}")
+                    linked = connection.execute(
+                        "SELECT id, is_active, status, tracking_number FROM shipping_labels WHERE id=? AND operation_id=? AND package_id=?",
+                        (label_id, operation_id, package_id),
+                    ).fetchone()
+                    if linked is None or not linked[1] or linked[2] == "cancelled":
+                        raise RuntimeError("active linked label required for API outbox finalization")
+                    if linked[3] != tracking:
+                        raise RuntimeError("label tracking does not match finalizer tracking")
+
+                connection.execute(
+                    "UPDATE shipping_packages SET tracking_number=?, estimated_cost=coalesce(?, estimated_cost), "
+                    "cost_currency=coalesce(?, cost_currency) WHERE id=?",
+                    (tracking, estimated_cost, cost_currency, package_id),
+                )
+                if operation_id is not None and op_row[0] != "SUCCEEDED":
+                    connection.execute(
+                        "UPDATE shipping_label_operations SET status='SUCCEEDED', tracking_number=?, updated_at=? WHERE id=?",
+                        (tracking, now, operation_id),
+                    )
+
+                orders = connection.execute(
+                    "SELECT o.id, o.external_order_id FROM shipping_orders o "
+                    "JOIN shipping_package_orders po ON po.order_id=o.id "
+                    "WHERE po.package_id=? ORDER BY o.external_order_id",
+                    (package_id,),
+                ).fetchall()
+                counts["input"] = max(1, len(orders))
+                if not orders:
+                    counts["skipped"] = 1
+                    results.append(
+                        {
+                            "package_sn": package_sn,
+                            "external_order_id": "",
+                            "outcome": "skipped",
+                            "reason": "package_has_no_orders",
+                        }
+                    )
+                for order_id, external_order_id in orders:
+                    item_count = connection.execute(
+                        "SELECT count(*) FROM shipping_package_items WHERE package_id=? "
+                        "AND external_order_id=? AND order_item_id<>'' AND quantity>0",
+                        (package_id, external_order_id),
+                    ).fetchone()[0]
+                    if not item_count:
+                        counts["skipped"] += 1
+                        results.append({"package_sn": package_sn, "external_order_id": external_order_id, "outcome": "skipped", "reason": "order_items_incomplete"})
+                        continue
+                    candidate_key = _sellfox_outbox_candidate_key(
+                        account_key=account_key, package_sn=package_sn,
+                        external_order_id=external_order_id, tracking_number=tracking,
+                    )
+                    existing = connection.execute(
+                        "SELECT id, status FROM shipping_sellfox_outbox WHERE candidate_key=?",
+                        (candidate_key,),
+                    ).fetchone()
+                    prior = connection.execute(
+                        "SELECT id, generation, tracking_number, status FROM shipping_sellfox_outbox "
+                        "WHERE account_id=? AND package_id=? AND order_id=? AND status<>'SUPERSEDED' "
+                        "ORDER BY generation DESC LIMIT 1",
+                        (account_id, package_id, order_id),
+                    ).fetchone()
+                    if existing is not None:
+                        outbox_id = existing[0]
+                        outcome = "existing"
+                        if existing[1] == "SUPERSEDED":
+                            if prior is not None and prior[0] != outbox_id:
+                                if prior[3] in {"AWAITING_CONFIRMATION", "PENDING", "RETRYABLE"}:
+                                    connection.execute(
+                                        "UPDATE shipping_sellfox_outbox SET status='SUPERSEDED', updated_at=? WHERE id=?", (now, prior[0])
+                                    )
+                                    connection.execute(
+                                        "UPDATE shipping_sellfox_outbox SET status='AWAITING_CONFIRMATION', "
+                                        "conflicts_with_outbox_id=NULL, updated_at=? WHERE id=?", (now, outbox_id)
+                                    )
+                                else:
+                                    connection.execute(
+                                        "UPDATE shipping_sellfox_outbox SET status='CONFLICT', "
+                                        "conflicts_with_outbox_id=?, updated_at=? WHERE id=?", (prior[0], now, outbox_id)
+                                    )
+                                    outcome = "conflict"
+                            else:
+                                connection.execute(
+                                    "UPDATE shipping_sellfox_outbox SET status='AWAITING_CONFIRMATION', "
+                                    "conflicts_with_outbox_id=NULL, updated_at=? WHERE id=?", (now, outbox_id)
+                                )
+                        counts[outcome] += 1
+                    else:
+                        generation = (prior[1] if prior else 0) + 1
+                        status = "AWAITING_CONFIRMATION"
+                        conflicts_with = None
+                        outcome = "created"
+                        if prior is not None and prior[2] != tracking:
+                            if prior[3] in {"AWAITING_CONFIRMATION", "PENDING", "RETRYABLE"}:
+                                connection.execute("UPDATE shipping_sellfox_outbox SET status='SUPERSEDED', updated_at=? WHERE id=?", (now, prior[0]))
+                            else:
+                                status = "CONFLICT"
+                                conflicts_with = prior[0]
+                                outcome = "conflict"
+                        connection.execute(
+                            "INSERT INTO shipping_sellfox_outbox "
+                            "(account_id, package_id, order_id, generation, tracking_number, candidate_key, status, "
+                            "request_hash, attempt_count, lease_owner, lease_token, confirmed_by, last_error_class, "
+                            "last_error_summary, conflicts_with_outbox_id, created_at, updated_at) "
+                            "VALUES (?, ?, ?, ?, ?, ?, ?, '', 0, '', '', '', '', '', ?, ?, ?)",
+                            (account_id, package_id, order_id, generation, tracking, candidate_key, status, conflicts_with, now, now),
+                        )
+                        outbox_id = connection.execute("SELECT last_insert_rowid()").fetchone()[0]
+                        counts[outcome] += 1
+                    connection.execute(
+                        "INSERT OR IGNORE INTO shipping_sellfox_outbox_sources "
+                        "(outbox_id, source_type, source_id, created_at) VALUES (?, ?, ?, ?)",
+                        (outbox_id, source_type, source_id, now),
+                    )
+                    results.append({"package_sn": package_sn, "external_order_id": external_order_id, "outbox_id": outbox_id, "outcome": outcome})
+                connection.commit()
+            except Exception:
+                connection.rollback()
+                raise
+        self.append_audit_event(
+            actor=actor_name, action="sellfox_outbox.finalize_tracking",
+            entity_type="shipping_package", entity_id=package_sn,
+            summary=json.dumps(counts, sort_keys=True),
+        )
+        return SellfoxOutboxCandidateReport(counts=counts, results=tuple(results))
 
     def get_carton_override(
         self, account_key: str, commodity_sku: str
@@ -1255,6 +1705,7 @@ class PackageRepository:
         matched_sns: list[str],
         conflict_sns: list[str],
         unmatched_sns: list[str],
+        skipped_sns: list[str] | None = None,
         actor: str,
         summary: str = "",
     ) -> ShippingBatchRecord:
@@ -1269,6 +1720,7 @@ class PackageRepository:
             batch.success_count = len(matched_sns)
             batch.failed_count = len(conflict_sns)
             batch.unmatched_count = len(unmatched_sns)
+            batch.skipped_count = len(skipped_sns or [])
             batch.summary = summary or batch.summary
             batch.updated_at = now
             for sn in matched_sns:
@@ -1280,6 +1732,10 @@ class PackageRepository:
             for sn in unmatched_sns:
                 self._upsert_batch_package(
                     session, batch_id, sn, "unmatched", "not in local DB"
+                )
+            for sn in (skipped_sns or []):
+                self._upsert_batch_package(
+                    session, batch_id, sn, "tracking_skipped", "outbox candidate skipped"
                 )
         self.append_audit_event(
             actor=actor_s,
@@ -2033,6 +2489,885 @@ class PackageRepository:
                 for name, model in tables.items()
             }
 
+    def get_sellfox_writeback_policy(
+        self, account_key: str, *, create: bool = True
+    ) -> SellfoxWritebackPolicyRecord:
+        with self._session_factory.begin() as session:
+            account = self._get_or_create_account(session, account_key)
+            row = session.scalar(
+                select(SellfoxWritebackPolicyRow).where(
+                    SellfoxWritebackPolicyRow.account_id == account.id
+                )
+            )
+            if row is None:
+                if not create:
+                    return SellfoxWritebackPolicyRecord(
+                        account_key=account.account_key,
+                        mode="DISABLED",
+                        capability_status="UNVERIFIED",
+                    )
+                row = SellfoxWritebackPolicyRow(
+                    account_id=account.id,
+                    mode="DISABLED",
+                    capability_status="UNVERIFIED",
+                )
+                session.add(row)
+                session.flush()
+            return SellfoxWritebackPolicyRecord(
+                account_key=account.account_key,
+                mode=row.mode,
+                capability_status=row.capability_status,
+                evidence_ref=row.evidence_ref or "",
+                approved_by=row.approved_by or "",
+                approved_at=row.approved_at,
+            )
+
+    def create_sellfox_outbox_candidates(
+        self,
+        *,
+        account_key: str,
+        package_sn: str,
+        tracking_number: str,
+        source_type: str,
+        source_id: str,
+        actor: str,
+        apply: bool = True,
+    ) -> SellfoxOutboxCandidateReport:
+        """Create order-level writeback candidates without external HTTP."""
+        source_type = (source_type or "").strip()
+        source_id = (source_id or "").strip()
+        actor = (actor or "").strip()
+        tracking = (tracking_number or "").strip()
+        if source_type not in {"api_label", "excel_tracking_import"}:
+            raise ValueError("unsupported Sellfox outbox source_type")
+        if not source_id:
+            raise ValueError("source_id is required")
+        if apply and not actor:
+            raise ValueError("actor is required when applying candidates")
+
+        counts = {
+            "input": 0,
+            "created": 0,
+            "existing": 0,
+            "skipped": 0,
+            "conflict": 0,
+            "failed": 0,
+        }
+        results: list[dict[str, object]] = []
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        session = self._session_factory()
+        try:
+            account = session.scalar(
+                select(ShippingAccountRow).where(
+                    ShippingAccountRow.account_key == account_key
+                )
+            )
+            package = (
+                session.scalar(
+                    select(PackageRow).where(
+                        PackageRow.account_id == account.id,
+                        PackageRow.package_sn == package_sn,
+                    )
+                )
+                if account is not None
+                else None
+            )
+            if package is None:
+                counts["input"] = 1
+                counts["failed"] = 1
+                results.append({"package_sn": package_sn, "outcome": "failed", "reason": "package_not_found"})
+            else:
+                report = self._create_sellfox_outbox_candidates_in_session(
+                    session,
+                    account=account,
+                    package=package,
+                    tracking_number=tracking,
+                    source_type=source_type,
+                    source_id=source_id,
+                    now=now,
+                    require_active_label=True,
+                )
+                counts = dict(report.counts)
+                results = [dict(item) for item in report.results]
+
+            if apply:
+                session.commit()
+            else:
+                session.rollback()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+        if apply and actor:
+            self.append_audit_event(
+                actor=actor,
+                action="sellfox_outbox.candidates_create",
+                entity_type="shipping_package",
+                entity_id=package_sn,
+                summary=json.dumps(counts, sort_keys=True),
+            )
+        return SellfoxOutboxCandidateReport(counts=counts, results=tuple(results))
+
+    @staticmethod
+    def _add_sellfox_outbox_source(
+        session: Session,
+        outbox_id: int,
+        source_type: str,
+        source_id: str,
+        created_at: datetime,
+    ) -> None:
+        session.execute(
+            sqlite_insert(SellfoxOutboxSourceRow)
+            .values(
+                outbox_id=outbox_id,
+                source_type=source_type,
+                source_id=source_id,
+                created_at=created_at,
+            )
+            .on_conflict_do_nothing(
+                index_elements=["outbox_id", "source_type", "source_id"]
+            )
+        )
+
+    def _create_sellfox_outbox_candidates_in_session(
+        self,
+        session: Session,
+        *,
+        account: ShippingAccountRow,
+        package: PackageRow,
+        tracking_number: str,
+        source_type: str,
+        source_id: str,
+        now: datetime,
+        require_active_label: bool = True,
+    ) -> SellfoxOutboxCandidateReport:
+        """Create candidates inside the caller's transaction."""
+        tracking = (tracking_number or "").strip()
+        counts = {
+            "input": 0,
+            "created": 0,
+            "existing": 0,
+            "skipped": 0,
+            "conflict": 0,
+            "failed": 0,
+        }
+        results: list[dict[str, object]] = []
+        order_rows = session.execute(
+            select(OrderRow.id, OrderRow.external_order_id)
+            .join(PackageOrderRow, PackageOrderRow.order_id == OrderRow.id)
+            .where(PackageOrderRow.package_id == package.id)
+            .order_by(OrderRow.external_order_id)
+        ).all()
+        counts["input"] = max(1, len(order_rows))
+
+        skip_reason = ""
+        if not tracking or tracking == package.package_sn:
+            skip_reason = "tracking_missing_or_placeholder"
+        elif package.local_review_status != "approved":
+            skip_reason = "package_not_approved"
+        elif package.package_status in {"has_shipped", "has_canceled"}:
+            skip_reason = "package_status_not_submittable"
+        elif source_type == "api_label" and require_active_label:
+            active_label = session.scalar(
+                select(ShippingLabelRow.id).where(
+                    ShippingLabelRow.package_id == package.id,
+                    ShippingLabelRow.is_active.is_(True),
+                    ShippingLabelRow.status != "cancelled",
+                    ShippingLabelRow.tracking_number == tracking,
+                )
+            )
+            if active_label is None:
+                skip_reason = "active_label_required"
+
+        if skip_reason:
+            counts["skipped"] = counts["input"]
+            results.extend(
+                {
+                    "package_sn": package.package_sn,
+                    "external_order_id": external_order_id,
+                    "outcome": "skipped",
+                    "reason": skip_reason,
+                }
+                for _, external_order_id in (order_rows or [(0, "")])
+            )
+            return SellfoxOutboxCandidateReport(
+                counts=counts, results=tuple(results)
+            )
+
+        if not order_rows:
+            counts["skipped"] = 1
+            results.append(
+                {
+                    "package_sn": package.package_sn,
+                    "external_order_id": "",
+                    "outcome": "skipped",
+                    "reason": "package_has_no_orders",
+                }
+            )
+            return SellfoxOutboxCandidateReport(
+                counts=counts, results=tuple(results)
+            )
+
+        for order_id, external_order_id in order_rows:
+            item_count = (
+                session.scalar(
+                    select(func.count())
+                    .select_from(PackageItemRow)
+                    .where(
+                        PackageItemRow.package_id == package.id,
+                        PackageItemRow.external_order_id == external_order_id,
+                        PackageItemRow.order_item_id != "",
+                        PackageItemRow.quantity > 0,
+                    )
+                )
+                or 0
+            )
+            if item_count == 0:
+                counts["skipped"] += 1
+                results.append(
+                    {
+                        "package_sn": package.package_sn,
+                        "external_order_id": external_order_id,
+                        "outcome": "skipped",
+                        "reason": "order_items_incomplete",
+                    }
+                )
+                continue
+
+            candidate_key = _sellfox_outbox_candidate_key(
+                account_key=account.account_key,
+                package_sn=package.package_sn,
+                external_order_id=external_order_id,
+                tracking_number=tracking,
+            )
+            existing = session.scalar(
+                select(SellfoxOutboxRow).where(
+                    SellfoxOutboxRow.candidate_key == candidate_key
+                )
+            )
+            prior = session.scalar(
+                select(SellfoxOutboxRow)
+                .where(
+                    SellfoxOutboxRow.account_id == account.id,
+                    SellfoxOutboxRow.package_id == package.id,
+                    SellfoxOutboxRow.order_id == order_id,
+                    SellfoxOutboxRow.status != "SUPERSEDED",
+                )
+                .order_by(SellfoxOutboxRow.generation.desc())
+                .limit(1)
+            )
+            if existing is not None:
+                if existing.status == "SUPERSEDED":
+                    if prior is not None and prior.id != existing.id:
+                        if prior.status in {
+                            "AWAITING_CONFIRMATION",
+                            "PENDING",
+                            "RETRYABLE",
+                        }:
+                            prior.status = "SUPERSEDED"
+                            prior.updated_at = now
+                            existing.status = "AWAITING_CONFIRMATION"
+                            existing.updated_at = now
+                            existing.conflicts_with_outbox_id = None
+                        else:
+                            existing.status = "CONFLICT"
+                            existing.conflicts_with_outbox_id = prior.id
+                            existing.updated_at = now
+                    else:
+                        existing.status = "AWAITING_CONFIRMATION"
+                        existing.updated_at = now
+                outcome = "existing"
+                if existing.status == "CONFLICT":
+                    outcome = "conflict"
+                self._add_sellfox_outbox_source(
+                    session, existing.id, source_type, source_id, now
+                )
+                counts[outcome] += 1
+                results.append(
+                    {
+                        "package_sn": package.package_sn,
+                        "external_order_id": external_order_id,
+                        "outbox_id": existing.id,
+                        "outcome": outcome,
+                    }
+                )
+                continue
+
+            generation = (prior.generation if prior is not None else 0) + 1
+            status = "AWAITING_CONFIRMATION"
+            conflicts_with = None
+            outcome = "created"
+            if prior is not None and prior.tracking_number != tracking:
+                if prior.status in {
+                    "AWAITING_CONFIRMATION",
+                    "PENDING",
+                    "RETRYABLE",
+                }:
+                    prior.status = "SUPERSEDED"
+                    prior.updated_at = now
+                else:
+                    status = "CONFLICT"
+                    conflicts_with = prior.id
+                    outcome = "conflict"
+
+            row = SellfoxOutboxRow(
+                account_id=account.id,
+                package_id=package.id,
+                order_id=order_id,
+                generation=generation,
+                tracking_number=tracking,
+                candidate_key=candidate_key,
+                status=status,
+                conflicts_with_outbox_id=conflicts_with,
+                created_at=now,
+                updated_at=now,
+            )
+            session.add(row)
+            session.flush()
+            self._add_sellfox_outbox_source(
+                session, row.id, source_type, source_id, now
+            )
+            counts[outcome] += 1
+            results.append(
+                {
+                    "package_sn": package.package_sn,
+                    "external_order_id": external_order_id,
+                    "outbox_id": row.id,
+                    "outcome": outcome,
+                }
+            )
+
+        return SellfoxOutboxCandidateReport(counts=counts, results=tuple(results))
+
+    def list_sellfox_outbox(
+        self,
+        *,
+        account_key: str | None = None,
+        package_sn: str | None = None,
+        status: str | None = None,
+        limit: int = 50,
+    ) -> list[SellfoxOutboxRecord]:
+        with self._session_factory() as session:
+            query = (
+                select(
+                    SellfoxOutboxRow,
+                    ShippingAccountRow.account_key,
+                    PackageRow.package_sn,
+                    OrderRow.external_order_id,
+                )
+                .join(ShippingAccountRow, ShippingAccountRow.id == SellfoxOutboxRow.account_id)
+                .join(PackageRow, PackageRow.id == SellfoxOutboxRow.package_id)
+                .join(OrderRow, OrderRow.id == SellfoxOutboxRow.order_id)
+            )
+            if account_key:
+                query = query.where(ShippingAccountRow.account_key == account_key)
+            if package_sn:
+                query = query.where(PackageRow.package_sn == package_sn)
+            if status:
+                query = query.where(SellfoxOutboxRow.status == status)
+            rows = session.execute(
+                query.order_by(
+                    SellfoxOutboxRow.generation.desc(),
+                    OrderRow.external_order_id,
+                    SellfoxOutboxRow.id.desc(),
+                ).limit(limit)
+            ).all()
+            return [
+                self._sellfox_outbox_to_record(session, row, key, sn, external)
+                for row, key, sn, external in rows
+            ]
+
+    def get_sellfox_outbox(self, outbox_id: int) -> SellfoxOutboxRecord | None:
+        with self._session_factory() as session:
+            result = session.execute(
+                select(
+                    SellfoxOutboxRow,
+                    ShippingAccountRow.account_key,
+                    PackageRow.package_sn,
+                    OrderRow.external_order_id,
+                )
+                .join(ShippingAccountRow, ShippingAccountRow.id == SellfoxOutboxRow.account_id)
+                .join(PackageRow, PackageRow.id == SellfoxOutboxRow.package_id)
+                .join(OrderRow, OrderRow.id == SellfoxOutboxRow.order_id)
+                .where(SellfoxOutboxRow.id == outbox_id)
+            ).one_or_none()
+            if result is None:
+                return None
+            row, account_key, package_sn, external_order_id = result
+            return self._sellfox_outbox_to_record(
+                session, row, account_key, package_sn, external_order_id
+            )
+
+    @staticmethod
+    def _sellfox_outbox_to_record(
+        session: Session,
+        row: SellfoxOutboxRow,
+        account_key: str,
+        package_sn: str,
+        external_order_id: str,
+    ) -> SellfoxOutboxRecord:
+        sources = session.scalars(
+            select(SellfoxOutboxSourceRow)
+            .where(SellfoxOutboxSourceRow.outbox_id == row.id)
+            .order_by(SellfoxOutboxSourceRow.id)
+        ).all()
+        return SellfoxOutboxRecord(
+            id=row.id,
+            account_key=account_key,
+            package_id=row.package_id,
+            package_sn=package_sn,
+            order_db_id=row.order_id,
+            external_order_id=external_order_id,
+            generation=row.generation,
+            tracking_number=row.tracking_number,
+            candidate_key=row.candidate_key,
+            status=row.status,
+            submission_intent_id=row.submission_intent_id,
+            request_hash=row.request_hash or "",
+            attempt_count=row.attempt_count or 0,
+            conflicts_with_outbox_id=row.conflicts_with_outbox_id,
+            next_attempt_at=row.next_attempt_at,
+            lease_owner=row.lease_owner or "",
+            lease_token=row.lease_token or "",
+            lease_expires_at=row.lease_expires_at,
+            confirmed_by=row.confirmed_by or "",
+            confirmed_at=row.confirmed_at,
+            last_error_class=row.last_error_class or "",
+            last_error_summary=row.last_error_summary or "",
+            sources=tuple(
+                SellfoxOutboxSourceRecord(
+                    source_type=source.source_type, source_id=source.source_id
+                )
+                for source in sources
+            ),
+            created_at=row.created_at,
+            updated_at=row.updated_at,
+        )
+
+    def set_sellfox_outbox_status(
+        self, outbox_id: int, status: str
+    ) -> SellfoxOutboxRecord:
+        with self._session_factory.begin() as session:
+            row = session.get(SellfoxOutboxRow, outbox_id)
+            if row is None:
+                raise LookupError(f"Sellfox outbox {outbox_id} not found")
+            row.status = status
+            row.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        result = self.get_sellfox_outbox(outbox_id)
+        assert result is not None
+        return result
+
+    def record_sellfox_writeback_capability(
+        self,
+        *,
+        account_key: str,
+        capability_status: str,
+        evidence_ref: str,
+        actor: str,
+    ) -> SellfoxWritebackPolicyRecord:
+        capability_status = (capability_status or "").strip().upper()
+        evidence_ref = (evidence_ref or "").strip()
+        actor = (actor or "").strip()
+        allowed = {
+            "UNVERIFIED",
+            "SAFE_TRACKNO_ONLY",
+            "UNSAFE_PLATFORM_SIDE_EFFECT",
+            "INEFFECTIVE",
+        }
+        if capability_status not in allowed:
+            raise ValueError("unsupported Sellfox writeback capability status")
+        if not evidence_ref:
+            raise ValueError("evidence_ref is required")
+        if not actor:
+            raise ValueError("actor is required")
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        with self._session_factory.begin() as session:
+            account = self._get_or_create_account(session, account_key)
+            row = session.scalar(
+                select(SellfoxWritebackPolicyRow).where(
+                    SellfoxWritebackPolicyRow.account_id == account.id
+                )
+            )
+            if row is None:
+                row = SellfoxWritebackPolicyRow(
+                    account_id=account.id,
+                    mode="DISABLED",
+                    capability_status="UNVERIFIED",
+                )
+                session.add(row)
+                session.flush()
+            if capability_status == "SAFE_TRACKNO_ONLY":
+                if row.mode not in {"PROBE_ONLY", "SCOPED_BATCH"}:
+                    row.mode = "PROBE_ONLY"
+            else:
+                row.mode = "DISABLED"
+            row.capability_status = capability_status
+            row.evidence_ref = evidence_ref
+            row.approved_by = actor
+            row.approved_at = now
+            row.updated_at = now
+        self.append_audit_event(
+            actor=actor,
+            action="sellfox_outbox.capability_record",
+            entity_type="shipping_account",
+            entity_id=account_key,
+            summary=f"capability={capability_status}",
+        )
+        return self.get_sellfox_writeback_policy(account_key)
+
+    def set_sellfox_writeback_policy(
+        self, *, account_key: str, mode: str, actor: str
+    ) -> SellfoxWritebackPolicyRecord:
+        mode = (mode or "").strip().upper()
+        actor = (actor or "").strip()
+        if mode not in {"DISABLED", "PROBE_ONLY", "SCOPED_BATCH"}:
+            raise ValueError("unsupported Sellfox writeback policy mode")
+        if not actor:
+            raise ValueError("actor is required")
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        with self._session_factory.begin() as session:
+            account = self._get_or_create_account(session, account_key)
+            row = session.scalar(
+                select(SellfoxWritebackPolicyRow).where(
+                    SellfoxWritebackPolicyRow.account_id == account.id
+                )
+            )
+            if row is None:
+                row = SellfoxWritebackPolicyRow(
+                    account_id=account.id,
+                    mode="DISABLED",
+                    capability_status="UNVERIFIED",
+                )
+                session.add(row)
+                session.flush()
+            if mode == "SCOPED_BATCH" and row.capability_status != "SAFE_TRACKNO_ONLY":
+                raise ValueError(
+                    "SCOPED_BATCH requires SAFE_TRACKNO_ONLY capability evidence"
+                )
+            row.mode = mode
+            row.approved_by = actor
+            row.updated_at = now
+        self.append_audit_event(
+            actor=actor,
+            action="sellfox_outbox.policy_set",
+            entity_type="shipping_account",
+            entity_id=account_key,
+            summary=f"mode={mode}",
+        )
+        return self.get_sellfox_writeback_policy(account_key)
+
+    def confirm_sellfox_outbox(
+        self,
+        *,
+        outbox_id: int,
+        submission_intent_id: int,
+        request_hash: str,
+        actor: str,
+    ) -> SellfoxOutboxRecord:
+        actor = (actor or "").strip()
+        if not actor:
+            raise ValueError("actor is required")
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        with self._session_factory.begin() as session:
+            row = session.get(SellfoxOutboxRow, outbox_id)
+            if row is None:
+                raise LookupError(f"Sellfox outbox {outbox_id} not found")
+            allowed = SELLFOX_OUTBOX_TRANSITIONS.get(row.status, frozenset())
+            if "PENDING" not in allowed:
+                raise RuntimeError(
+                    f"invalid transition: {row.status} -> PENDING for outbox {outbox_id}"
+                )
+            row.status = "PENDING"
+            row.submission_intent_id = submission_intent_id
+            row.request_hash = request_hash or ""
+            row.confirmed_by = actor
+            row.confirmed_at = now
+            row.updated_at = now
+            row.lease_owner = ""
+            row.lease_token = ""
+            row.lease_expires_at = None
+            row.lease_origin_status = ""
+        result = self.get_sellfox_outbox(outbox_id)
+        assert result is not None
+        return result
+
+    def claim_sellfox_outbox(
+        self,
+        *,
+        outbox_id: int,
+        owner: str,
+        lease_token: str,
+        lease_seconds: int = 60,
+    ) -> bool:
+        owner = (owner or "").strip()
+        lease_token = (lease_token or "").strip()
+        if not owner or not lease_token:
+            raise ValueError("owner and lease_token are required")
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        now_iso = now.isoformat(sep=" ")
+        expires_iso = (now + timedelta(seconds=max(1, lease_seconds))).isoformat(sep=" ")
+        with sqlite3.connect(self._db_path, timeout=5) as connection:
+            connection.execute("PRAGMA busy_timeout=5000")
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                row = connection.execute(
+                    "SELECT status, lease_expires_at FROM shipping_sellfox_outbox WHERE id=?", (outbox_id,),
+                ).fetchone()
+                if row is None:
+                    return False
+                status, lease_expires_at = row
+                if status not in SELLFOX_OUTBOX_CLAIMABLE_STATUSES:
+                    return False
+                if lease_expires_at and lease_expires_at >= now_iso:
+                    return False
+                placeholders = ",".join("?" for _ in SELLFOX_OUTBOX_CLAIMABLE_STATUSES)
+                cursor = connection.execute(
+                    f"UPDATE shipping_sellfox_outbox SET status='LEASED', lease_owner=?, lease_token=?, "
+                    f"lease_expires_at=?, lease_origin_status=?, updated_at=? "
+                    f"WHERE id=? AND status IN ({placeholders}) "
+                    f"AND (lease_expires_at IS NULL OR lease_expires_at < ?)",
+                    (
+                        owner,
+                        lease_token,
+                        expires_iso,
+                        status,
+                        now_iso,
+                        outbox_id,
+                        *tuple(SELLFOX_OUTBOX_CLAIMABLE_STATUSES),
+                        now_iso,
+                    ),
+                )
+                ok = cursor.rowcount == 1
+                connection.commit()
+                return ok
+            except Exception:
+                connection.rollback()
+                raise
+
+    def claim_due_sellfox_outbox(
+        self,
+        *,
+        account_key: str,
+        owner: str,
+        lease_token: str,
+        lease_seconds: int = 60,
+        limit: int = 1,
+    ) -> list[int]:
+        owner = (owner or "").strip()
+        lease_token = (lease_token or "").strip()
+        if not owner or not lease_token:
+            raise ValueError("owner and lease_token are required")
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        now_iso = now.isoformat(sep=" ")
+        expires_iso = (now + timedelta(seconds=max(1, lease_seconds))).isoformat(sep=" ")
+        claimed: list[int] = []
+        with sqlite3.connect(self._db_path, timeout=5) as connection:
+            connection.execute("PRAGMA busy_timeout=5000")
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                account_id = connection.execute(
+                    "SELECT id FROM shipping_accounts WHERE account_key=?", (account_key,),
+                ).fetchone()
+                if account_id is None:
+                    return []
+                placeholders = ",".join("?" for _ in SELLFOX_OUTBOX_CLAIMABLE_STATUSES)
+                rows = connection.execute(
+                    f"SELECT id, status FROM shipping_sellfox_outbox WHERE account_id=? AND status IN ({placeholders}) "
+                    f"AND (lease_expires_at IS NULL OR lease_expires_at < ?) "
+                    f"AND (next_attempt_at IS NULL OR next_attempt_at <= ?) "
+                    f"ORDER BY (next_attempt_at IS NULL) ASC, next_attempt_at ASC, id ASC LIMIT ?",
+                    (
+                        account_id[0],
+                        *tuple(SELLFOX_OUTBOX_CLAIMABLE_STATUSES),
+                        now_iso,
+                        now_iso,
+                        max(1, limit),
+                    ),
+                ).fetchall()
+                for outbox_id, status in rows:
+                    connection.execute(
+                        f"UPDATE shipping_sellfox_outbox SET status='LEASED', lease_owner=?, lease_token=?, "
+                        f"lease_expires_at=?, lease_origin_status=?, updated_at=? "
+                        f"WHERE id=? AND status IN ({placeholders})",
+                        (
+                            owner,
+                            lease_token,
+                            expires_iso,
+                            status,
+                            now_iso,
+                            outbox_id,
+                            *tuple(SELLFOX_OUTBOX_CLAIMABLE_STATUSES),
+                        ),
+                    )
+                    claimed.append(outbox_id)
+                connection.commit()
+                return claimed
+            except Exception:
+                connection.rollback()
+                raise
+
+    def mark_sellfox_outbox_in_flight(
+        self, *, outbox_id: int, lease_token: str
+    ) -> bool:
+        now_iso = datetime.now(timezone.utc).replace(tzinfo=None).isoformat(sep=" ")
+        with sqlite3.connect(self._db_path, timeout=5) as connection:
+            connection.execute("PRAGMA busy_timeout=5000")
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                cursor = connection.execute(
+                    "UPDATE shipping_sellfox_outbox SET status='IN_FLIGHT', updated_at=? "
+                    "WHERE id=? AND status='LEASED' AND lease_token=?", (now_iso, outbox_id, lease_token),
+                )
+                ok = cursor.rowcount == 1
+                connection.commit()
+                return ok
+            except Exception:
+                connection.rollback()
+                raise
+
+    def release_sellfox_outbox_lease(
+        self, *, outbox_id: int, lease_token: str
+    ) -> bool:
+        now_iso = datetime.now(timezone.utc).replace(tzinfo=None).isoformat(sep=" ")
+        with sqlite3.connect(self._db_path, timeout=5) as connection:
+            connection.execute("PRAGMA busy_timeout=5000")
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                cursor = connection.execute(
+                    "UPDATE shipping_sellfox_outbox SET "
+                    "status=CASE WHEN lease_origin_status='' THEN 'PENDING' ELSE lease_origin_status END, "
+                    "lease_owner='', lease_token='', lease_expires_at=NULL, lease_origin_status='', updated_at=? "
+                    "WHERE id=? AND status='LEASED' AND lease_token=?", (now_iso, outbox_id, lease_token),
+                )
+                ok = cursor.rowcount == 1
+                connection.commit()
+                return ok
+            except Exception:
+                connection.rollback()
+                raise
+
+    def finish_sellfox_outbox(
+        self,
+        *,
+        outbox_id: int,
+        lease_token: str,
+        status: str,
+        error_class: str = "",
+        error_summary: str = "",
+        increment_attempt: bool = True,
+        next_attempt_at: datetime | None = None,
+    ) -> bool:
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        now_iso = now.isoformat(sep=" ")
+        next_iso = next_attempt_at.isoformat(sep=" ") if next_attempt_at is not None else None
+        with sqlite3.connect(self._db_path, timeout=5) as connection:
+            connection.execute("PRAGMA busy_timeout=5000")
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                row = connection.execute(
+                    "SELECT status, lease_token FROM shipping_sellfox_outbox WHERE id=?", (outbox_id,),
+                ).fetchone()
+                if row is None:
+                    return False
+                current_status, current_token = row
+                allowed = SELLFOX_OUTBOX_TRANSITIONS.get(current_status, frozenset())
+                if status not in allowed:
+                    return False
+                if current_status in {"LEASED", "IN_FLIGHT"} and current_token != lease_token:
+                    return False
+                attempt_expr = "attempt_count + 1" if increment_attempt else "attempt_count"
+                connection.execute(
+                    "UPDATE shipping_sellfox_outbox SET status=?, last_error_class=?, last_error_summary=?, "
+                    f"next_attempt_at=?, lease_owner='', lease_token='', lease_expires_at=NULL, "
+                    f"lease_origin_status='', attempt_count={attempt_expr}, updated_at=? WHERE id=?",
+                    (status, error_class, error_summary, next_iso, now_iso, outbox_id),
+                )
+                connection.commit()
+                return True
+            except Exception:
+                connection.rollback()
+                raise
+
+    def recover_stale_sellfox_outbox(self, *, actor: str) -> int:
+        now_iso = datetime.now(timezone.utc).replace(tzinfo=None).isoformat(sep=" ")
+        recovered = 0
+        expired_leases = 0
+        with sqlite3.connect(self._db_path, timeout=5) as connection:
+            connection.execute("PRAGMA busy_timeout=5000")
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                cursor = connection.execute(
+                    "UPDATE shipping_sellfox_outbox SET status='UNKNOWN_BLOCKED', "
+                    "last_error_class='crash_recovery', last_error_summary='IN_FLIGHT found during recovery', "
+                    "lease_owner='', lease_token='', lease_expires_at=NULL, lease_origin_status='', updated_at=? "
+                    "WHERE status='IN_FLIGHT'",
+                    (now_iso,),
+                )
+                recovered = int(cursor.rowcount)
+                cursor = connection.execute(
+                    "UPDATE shipping_sellfox_outbox SET "
+                    "status=CASE WHEN lease_origin_status='' THEN 'PENDING' ELSE lease_origin_status END, "
+                    "lease_owner='', lease_token='', lease_expires_at=NULL, lease_origin_status='', updated_at=? "
+                    "WHERE status='LEASED' AND lease_expires_at IS NOT NULL AND lease_expires_at < ?",
+                    (now_iso, now_iso),
+                )
+                expired_leases = int(cursor.rowcount)
+                connection.commit()
+            except Exception:
+                connection.rollback()
+                raise
+        if recovered or expired_leases:
+            self.append_audit_event(
+                actor=actor or "system",
+                action="sellfox_outbox.recover",
+                entity_type="shipping_sellfox_outbox",
+                entity_id="*",
+                summary=f"recovered={recovered} expired_leases={expired_leases}",
+            )
+        return recovered
+
+    def list_due_sellfox_outbox(
+        self,
+        *,
+        account_key: str,
+        limit: int = 50,
+    ) -> list[SellfoxOutboxRecord]:
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        with self._session_factory() as session:
+            rows = session.execute(
+                select(
+                    SellfoxOutboxRow,
+                    ShippingAccountRow.account_key,
+                    PackageRow.package_sn,
+                    OrderRow.external_order_id,
+                )
+                .join(ShippingAccountRow, ShippingAccountRow.id == SellfoxOutboxRow.account_id)
+                .join(PackageRow, PackageRow.id == SellfoxOutboxRow.package_id)
+                .join(OrderRow, OrderRow.id == SellfoxOutboxRow.order_id)
+                .where(
+                    ShippingAccountRow.account_key == account_key,
+                    SellfoxOutboxRow.status.in_(tuple(SELLFOX_OUTBOX_CLAIMABLE_STATUSES)),
+                    or_(
+                        SellfoxOutboxRow.lease_expires_at.is_(None),
+                        SellfoxOutboxRow.lease_expires_at < now,
+                    ),
+                    or_(
+                        SellfoxOutboxRow.next_attempt_at.is_(None),
+                        SellfoxOutboxRow.next_attempt_at <= now,
+                    ),
+                )
+                .order_by(
+                    SellfoxOutboxRow.next_attempt_at.asc(), SellfoxOutboxRow.id.asc()
+                )
+                .limit(limit)
+            ).all()
+            return [
+                self._sellfox_outbox_to_record(session, row, key, sn, external)
+                for row, key, sn, external in rows
+            ]
+
     def upsert_package_dims(
         self,
         *,
@@ -2248,8 +3583,9 @@ class PackageRepository:
                     "(account_id, package_id, generation, carrier, service_level, "
                     "idempotency_key, request_hash, status, "
                     "provider_order_id, tracking_number, attempt_count, "
-                    "error_class, error_summary, created_by, claimed_by, created_at, updated_at) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, 'RESERVED', '', '', 0, '', '', ?, '', ?, ?)",
+                    "error_class, error_summary, created_by, claimed_by, claim_token, "
+                    "created_at, updated_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, 'RESERVED', '', '', 0, '', '', ?, '', '', ?, ?)",
                     (account_id, package_db_id, generation, carrier, service_level,
                      idempotency_key, request_hash, actor, now_iso, now_iso),
                 )
@@ -2327,12 +3663,20 @@ class PackageRepository:
         error_class: str = "",
         error_summary: str = "",
         increment_attempt: bool = False,
+        expected_claim_id: str | None = None,
     ) -> LabelOperationRecord | None:
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         with self._session_factory.begin() as session:
             row = session.get(LabelOperationRow, operation_id)
             if row is None:
                 return None
+            if (
+                expected_claim_id is not None
+                and row.claim_token != expected_claim_id
+            ):
+                raise RuntimeError(
+                    f"resume lease lost for operation_id={operation_id}"
+                )
             current = (row.status or "").strip()
             target = (status or "").strip()
             allowed = ALLOWED_LABEL_OPERATION_TRANSITIONS.get(current)
@@ -2392,6 +3736,8 @@ class PackageRepository:
         provider_order_id: str = "",
         note: str = "",
         actor: str = "",
+        evidence_id: int,
+        expected_conclusion: str,
     ) -> None:
         """Human-driven resolution: bypass state machine for UNKNOWN_BLOCKED operations.
 
@@ -2421,6 +3767,32 @@ class PackageRepository:
                     f"UNKNOWN_BLOCKED, got {current!r} for "
                     f"operation_id={operation_id}"
                 )
+            evidence = session.get(InvestigationRow, evidence_id)
+            if evidence is None:
+                raise RuntimeError(f"evidence not found: {evidence_id}")
+            if evidence.operation_id != operation_id:
+                raise RuntimeError(
+                    f"evidence {evidence_id} does not belong to operation {operation_id}"
+                )
+            if evidence.conclusion != expected_conclusion:
+                raise RuntimeError(
+                    f"evidence conclusion {evidence.conclusion!r} does not support "
+                    f"resolution {resolution!r}"
+                )
+            if (
+                resolution == "provide_known_id"
+                and evidence.provider_order_id.strip() != provider_order_id.strip()
+            ):
+                raise RuntimeError(
+                    "evidence provider_order_id mismatch for provide_known_id"
+                )
+            if not evidence.private_artifact_id and (
+                evidence.evidence_type == "other" or not evidence.external_ref.strip()
+            ):
+                raise RuntimeError(
+                    "resolution evidence requires an authoritative external_ref "
+                    "or private artifact"
+                )
 
             parts = [f"resolution={resolution}", f"actor={actor}"]
             if note.strip():
@@ -2433,6 +3805,7 @@ class PackageRepository:
             )[:500]
             row.error_class = f"human:{resolution}"
             row.status = target_status
+            row.resolution_evidence_id = evidence_id
             if provider_order_id.strip():
                 row.provider_order_id = provider_order_id.strip()
             row.updated_at = now
@@ -2444,7 +3817,7 @@ class PackageRepository:
             entity_type="shipping_label_operation",
             entity_id=str(operation_id),
             summary=(
-                f"resolution={resolution} target={target_status}"
+                f"resolution={resolution} target={target_status} evidence_id={evidence_id}"
                 + (f" provider_order_id={provider_order_id.strip()}"
                    if provider_order_id.strip() else "")
             )[:500],
@@ -2462,7 +3835,7 @@ class PackageRepository:
 
     def acquire_resume_lease(
         self, operation_id: int, *, actor: str, lease_seconds: int = 300
-    ) -> bool:
+    ) -> str | None:
         """Atomically acquire a lease on an existing operation for exclusive resume.
 
         Only succeeds when the operation is in ACCEPTED or LABEL_PENDING
@@ -2471,43 +3844,52 @@ class PackageRepository:
         """
         from datetime import timedelta
 
-        expiry = datetime.now(timezone.utc) - timedelta(seconds=lease_seconds)
-        with self._session_factory.begin() as session:
-            result = (
-                session.query(LabelOperationRow)
-                .where(LabelOperationRow.id == operation_id)
-                .where(
-                    LabelOperationRow.status.in_(["ACCEPTED", "LABEL_PENDING"])
-                )
-                .where(
-                    or_(
-                        LabelOperationRow.claimed_by == "",
-                        LabelOperationRow.claimed_by.is_(None),
-                        LabelOperationRow.claimed_at < expiry,
-                    )
-                )
-                .with_for_update()
-                .one_or_none()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        expiry = now - timedelta(seconds=lease_seconds)
+        now_iso = now.isoformat(sep=" ")
+        expiry_iso = expiry.isoformat(sep=" ")
+        token = uuid.uuid4().hex
+        connection = sqlite3.connect(self._db_path, timeout=30)
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            cursor = connection.execute(
+                "UPDATE shipping_label_operations "
+                "SET claimed_by = ?, claimed_at = ?, claim_token = ? "
+                "WHERE id = ? AND status IN ('ACCEPTED', 'LABEL_PENDING') "
+                "AND (claimed_by = '' OR claimed_by IS NULL OR claimed_at < ?)",
+                (actor, now_iso, token, operation_id, expiry_iso),
             )
-            if result is None:
-                return False
-            result.claimed_by = actor
-            result.claimed_at = datetime.now(timezone.utc)
-            return True
+            connection.commit()
+            return token if cursor.rowcount == 1 else None
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
 
-    def release_resume_lease(self, operation_id: int) -> None:
+    def release_resume_lease(self, operation_id: int, *, claim_id: str) -> bool:
         """Release the resume lease on a label operation."""
         with self._session_factory.begin() as session:
-            row = session.get(LabelOperationRow, operation_id)
-            if row is not None:
-                row.claimed_by = ""
-                row.claimed_at = None
+            result = session.query(LabelOperationRow).where(
+                LabelOperationRow.id == operation_id,
+                LabelOperationRow.claim_token == claim_id,
+            ).update(
+                {
+                    LabelOperationRow.claimed_by: "",
+                    LabelOperationRow.claimed_at: None,
+                    LabelOperationRow.claim_token: "",
+                },
+                synchronize_session=False,
+            )
+            return result == 1
 
     def add_investigation(
         self,
         *,
         operation_id: int,
         evidence_type: str,
+        conclusion: str,
+        provider_order_id: str = "",
         actor: str,
         external_ref: str = "",
         private_artifact_id: int | None = None,
@@ -2519,6 +3901,8 @@ class PackageRepository:
             inv = InvestigationRow(
                 operation_id=operation_id,
                 evidence_type=evidence_type,
+                conclusion=conclusion,
+                provider_order_id=provider_order_id,
                 external_ref=external_ref,
                 private_artifact_id=private_artifact_id,
                 note=note,
@@ -2531,6 +3915,8 @@ class PackageRepository:
                 id=inv.id,
                 operation_id=inv.operation_id,
                 evidence_type=inv.evidence_type,
+                conclusion=inv.conclusion,
+                provider_order_id=inv.provider_order_id,
                 external_ref=inv.external_ref,
                 private_artifact_id=inv.private_artifact_id,
                 note=inv.note,
@@ -2554,6 +3940,8 @@ class PackageRepository:
                     id=r.id,
                     operation_id=r.operation_id,
                     evidence_type=r.evidence_type,
+                    conclusion=r.conclusion,
+                    provider_order_id=r.provider_order_id,
                     external_ref=r.external_ref,
                     private_artifact_id=r.private_artifact_id,
                     note=r.note,
@@ -2573,6 +3961,8 @@ class PackageRepository:
                 id=row.id,
                 operation_id=row.operation_id,
                 evidence_type=row.evidence_type,
+                conclusion=row.conclusion,
+                provider_order_id=row.provider_order_id,
                 external_ref=row.external_ref,
                 private_artifact_id=row.private_artifact_id,
                 note=row.note,
@@ -2664,10 +4054,37 @@ class PackageRepository:
         carrier_response_json: str,
         created_by: str,
         derived_reference_no: str = "",
+        expected_claim_id: str | None = None,
     ) -> ShippingLabelRecord:
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         with self._session_factory.begin() as session:
             account = self._get_or_create_account(session, account_key)
+            package = session.get(PackageRow, package_db_id)
+            if package is None or package.account_id != account.id:
+                raise LookupError(f"package not found: {package_db_id}")
+
+            operation = None
+            if operation_id is not None:
+                operation = session.get(LabelOperationRow, operation_id)
+                if operation is None or operation.package_id != package_db_id:
+                    raise LookupError(f"label operation not found: {operation_id}")
+                if (
+                    expected_claim_id is not None
+                    and operation.claim_token != expected_claim_id
+                ):
+                    raise RuntimeError(
+                        f"resume lease lost for operation_id={operation_id}"
+                    )
+                if operation.status not in {
+                    "SENT",
+                    "ACCEPTED",
+                    "LABEL_PENDING",
+                    "SUCCEEDED",
+                }:
+                    raise RuntimeError(
+                        f"invalid transition: {operation.status} -> SUCCEEDED "
+                        f"for operation_id={operation_id}"
+                    )
             row = ShippingLabelRow(
                 account_id=account.id,
                 package_id=package_db_id,
@@ -2692,13 +4109,34 @@ class PackageRepository:
             session.add(row)
             session.flush()
             label_id = int(row.id)
-        self.append_audit_event(
-            actor=created_by,
-            action="labels.create",
-            entity_type="shipping_label",
-            entity_id=str(label_id),
-            summary=f"{carrier} tracking={tracking_number} order={carrier_order_id}",
-        )
+
+            if operation is not None:
+                package.tracking_number = tracking_number
+                operation.status = "SUCCEEDED"
+                operation.tracking_number = tracking_number
+                operation.updated_at = now
+                self._create_sellfox_outbox_candidates_in_session(
+                    session,
+                    account=account,
+                    package=package,
+                    tracking_number=tracking_number,
+                    source_type="api_label",
+                    source_id=f"label:{label_id}:operation:{operation_id}",
+                    now=now,
+                )
+            session.add(
+                AuditEventRow(
+                    actor=created_by,
+                    action="labels.create",
+                    entity_type="shipping_label",
+                    entity_id=str(label_id),
+                    summary=(
+                        f"{carrier} tracking={tracking_number} "
+                        f"order={carrier_order_id}"
+                    ),
+                    created_at=now,
+                )
+            )
         record = self.get_label(label_id)
         assert record is not None
         return record
@@ -3195,6 +4633,7 @@ def _label_operation_to_record(
         error_class=row.error_class or "",
         error_summary=row.error_summary or "",
         created_by=row.created_by or "",
+        resolution_evidence_id=row.resolution_evidence_id,
         created_at=created_at,
         updated_at=updated_at,
     )
@@ -3247,6 +4686,74 @@ def _auto_set_review_on_terminal_status(package: PackageRow) -> None:
     if current == "pending":
         package.local_review_status = target
 
+
+def _sellfox_outbox_candidate_key(
+    *,
+    account_key: str,
+    package_sn: str,
+    external_order_id: str,
+    tracking_number: str,
+) -> str:
+    canonical = json.dumps(
+        {
+            "account_key": account_key,
+            "package_sn": package_sn,
+            "external_order_id": external_order_id,
+            "tracking_number": tracking_number,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+SELLFOX_OUTBOX_CLAIMABLE_STATUSES = frozenset({
+    "PENDING",
+    "RETRYABLE",
+    "VERIFY_PENDING",
+})
+
+SELLFOX_OUTBOX_TRANSITIONS: dict[str, frozenset[str]] = {
+    "AWAITING_CONFIRMATION": frozenset({"PENDING"}),
+    "PENDING": frozenset({"LEASED", "MANUAL_REVIEW", "SUPERSEDED"}),
+    "RETRYABLE": frozenset({"LEASED", "MANUAL_REVIEW"}),
+    "VERIFY_PENDING": frozenset({
+        "VERIFY_PENDING",
+        "VERIFIED",
+        "CONFLICT",
+        "MANUAL_REVIEW",
+        "UNKNOWN_BLOCKED",
+    }),
+    "LEASED": frozenset({
+        "PENDING",
+        "IN_FLIGHT",
+        "VERIFY_PENDING",
+        "VERIFIED",
+        "RETRYABLE",
+        "MANUAL_REVIEW",
+        "UNKNOWN_BLOCKED",
+        "FAILED_FINAL",
+        "CONFLICT",
+    }),
+    "IN_FLIGHT": frozenset({
+        "VERIFY_PENDING",
+        "VERIFIED",
+        "RETRYABLE",
+        "MANUAL_REVIEW",
+        "UNKNOWN_BLOCKED",
+        "FAILED_FINAL",
+        "CONFLICT",
+    }),
+    "UNKNOWN_BLOCKED": frozenset(),
+    "MANUAL_REVIEW": frozenset(),
+    "FAILED_FINAL": frozenset(),
+    "VERIFIED": frozenset(),
+    "CONFLICT": frozenset(),
+    "SUPERSEDED": frozenset(),
+}
+
+SELLFOX_OUTBOX_RETRY_BACKOFF_SECONDS = (60, 300, 900, 3600, 21600)
+SELLFOX_OUTBOX_VERIFY_BACKOFF_SECONDS = (30, 120, 300, 900)
 
 def _configure_sqlite(dbapi_connection, _connection_record) -> None:
     cursor = dbapi_connection.cursor()

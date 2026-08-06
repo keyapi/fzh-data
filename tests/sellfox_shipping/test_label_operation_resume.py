@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 
 import pytest
 
@@ -135,6 +137,53 @@ def test_resume_returns_idempotent_for_succeeded_status(tmp_path):
     result = service.resume_label_acquisition(op_id, actor="operator")
     assert result["status"] == "SUCCEEDED"
     assert result["idempotent"] is True
+
+
+def test_resume_lease_allows_only_one_repository_to_claim(tmp_path):
+    repo_a, _package, op_id = _ready_repo_with_op(tmp_path)
+    repo_b = PackageRepository(tmp_path / "shipping.db")
+    barrier = Barrier(2)
+
+    def claim(repo, actor):
+        barrier.wait()
+        return repo.acquire_resume_lease(op_id, actor=actor)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        tokens = list(
+            executor.map(claim, (repo_a, repo_b), ("agent-a", "agent-b"))
+        )
+
+    assert sum(token is not None for token in tokens) == 1
+
+
+def test_stale_resume_owner_cannot_release_replacement_lease(tmp_path):
+    repo, _package, op_id = _ready_repo_with_op(tmp_path)
+
+    old_token = repo.acquire_resume_lease(op_id, actor="agent-old", lease_seconds=0)
+    assert old_token is not None
+    new_token = repo.acquire_resume_lease(op_id, actor="agent-new", lease_seconds=0)
+    assert new_token is not None
+
+    assert repo.release_resume_lease(op_id, claim_id=old_token) is False
+    assert repo.release_resume_lease(op_id, claim_id=new_token) is True
+
+
+def test_stale_resume_owner_cannot_transition_operation(tmp_path):
+    repo, _package, op_id = _ready_repo_with_op(tmp_path)
+
+    old_token = repo.acquire_resume_lease(op_id, actor="agent-old", lease_seconds=0)
+    assert old_token is not None
+    new_token = repo.acquire_resume_lease(op_id, actor="agent-new", lease_seconds=0)
+    assert new_token is not None
+
+    with pytest.raises(RuntimeError, match="resume lease lost"):
+        repo.transition_label_operation(
+            op_id,
+            status="LABEL_PENDING",
+            expected_claim_id=old_token,
+        )
+
+    assert repo.get_label_operation(op_id).status == "ACCEPTED"
 
 
 # ── Integration: resume succeeds ─────────────────────────────

@@ -122,8 +122,25 @@ def test_create_label_auto_releases_stuck_pending_and_succeeds(
 
     def fake_vite_create(**kwargs):
         calls["count"] += 1
+        label_rec = repo.insert_label(
+            account_key=kwargs["account_key"],
+            package_db_id=kwargs["db_id"],
+            carrier="vite",
+            service_level=kwargs["service_level"],
+            tracking_number="TRK-NEW",
+            carrier_order_id="ORDER-NEW",
+            request_id="",
+            label_url="https://example.invalid/new.pdf",
+            operation_id=kwargs["operation_id"],
+            artifact_id=None,
+            total_amount=4.2,
+            currency="USD",
+            status="generated",
+            carrier_response_json="{}",
+            created_by=kwargs["actor"],
+        )
         return {
-            "id": 99,
+            "id": label_rec.id,
             "tracking_number": "TRK-NEW",
             "carrier_order_id": "ORDER-NEW",
             "label_url": "https://example.invalid/new.pdf",

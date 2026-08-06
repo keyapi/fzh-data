@@ -3,7 +3,7 @@ okf: v0.1
 type: Handoff
 title: sellfox_shipping — Agent 交接说明
 description: 包裹中心架构、当前实现、运行方式与后续阶段边界
-updated: 2026-08-05
+updated: 2026-08-06
 ---
 
 # sellfox_shipping — Agent 交接说明
@@ -85,10 +85,22 @@ Excel 本地闭环（审核 → 导出 → 人工上传物流商 → 导入对�
 > - `resolve_unknown_blocked()` 增加必填 `evidence_id`，验证归属
 > - 新增 CLI `label-operation-investigate`（evidence_type: ticket/carrier_portal/email/other）
 > - `label-operation-resolve` 增加必填 `--evidence-id`
+> **PR #143 复审修复：lease fencing + 权威证据约束**
+> - Migration 0018 增加 `claim_token`、investigation `conclusion` 和 operation `resolution_evidence_id`
+> - resume claim 使用 SQLite `BEGIN IMMEDIATE`；只有持有同一 token 的 worker 可以释放 lease
+> - `label-operation-investigate` 必填 `--conclusion`：`confirmed_not_created` / `confirmed_created` / `confirmed_rejected`
+> - `confirmed_created` 必须同时传 `--provider-order-id`，结案时与 CLI 输入严格匹配
+> - `fail_safe`、`provide_known_id`、`fail_final` 分别只接受对应 conclusion
+> - 结案证据必须有外部引用或私有 artifact；`other` 类型不能直接作为权威结案证据
+> - 结案事务持久化 `resolution_evidence_id`，审计事件同时记录 evidence ID
 >
-> **待完成：**
-> 1. 赛狐 outbox 回写（标签成功后异步回写追踪号到赛狐；暂缓）
-> 2. 公网启用 OIDC/CSRF/RBAC
+> **当前接手裁决（2026-08-05）：**
+> 1. 先合入并验证 Migration 0019：修复历史 SQLite 库连续升级失败及半应用 0018 缺失外键。
+> 2. Jack Agent 第一阶段只做生产验收与缺口复核，按 [生产验收与交接规范](docs/specs/production-acceptance-and-jack-handoff-2026-08-05.md) 输出 readiness matrix。
+> 3. 赛狐 outbox 已完成 PR 1 候选层与 PR 2 执行器/回读；真实发送前必须读 [Outbox 设计](docs/specs/sellfox-writeback-outbox-2026-08-06.md) 与 [单包能力探针运行手册](docs/specs/sellfox-writeback-probe-runbook-2026-08-06.md)，默认保持 DISABLED + UNVERIFIED。
+> 4. 赛狐 outbox PR 2 已实现：confirm/run-once/verify/policy/capability CLI、`BEGIN IMMEDIATE` 租约、`IN_FLIGHT` 崩溃阻断与 packageDetail 回读均完成；全部测试 mock，未真实调用赛狐。
+> 5. 公网部署前仍需 OIDC/CSRF/RBAC、secure cookie 与 PII/log 脱敏审计。
+> 6. 当前自动化基线为 **260 passed, 2 warnings**；仍不等于承运商沙箱或生产业务验收完成。
 
 ### 7. 重规划裁决
 
@@ -140,10 +152,39 @@ uv run python -m sellfox_shipping.cli label-operation-show \
 # P1B：蜴国际上传 Excel（仅 local_review=approved 且渠道含「蜴」；重尺走 commodity pageList）
 uv run python -m sellfox_shipping.cli lizard-export -o out/lizard-upload.xlsx --actor <operator-id> --json
 
-# P1B：解析蜴国际返回追踪号 Excel（按 package_sn 对账；尚未回写赛狐）
+# P1B：解析蜴国际返回追踪号 Excel（按 package_sn 对账；生成本地 Outbox 候选，尚未回写赛狐）
 # 可选 --batch-id：回写对应 ShippingBatch
 uv run python -m sellfox_shipping.cli lizard-import-tracking \
   -i path/to/return.xlsx --actor <operator-id> --batch-id <N> --json
+
+# Outbox 候选控制面（全部无赛狐 HTTP）
+uv run python -m sellfox_shipping.cli sellfox-outbox-list --json
+uv run python -m sellfox_shipping.cli sellfox-outbox-show --outbox-id <N> --json
+uv run python -m sellfox_shipping.cli sellfox-outbox-scan-candidates \
+  --account-key sellfox-main --package-sn <SN> --json
+
+# Outbox PR 2：确认单个候选（构建/复用 SubmissionIntent，无 HTTP）
+uv run python -m sellfox_shipping.cli sellfox-outbox-confirm \
+  --outbox-id <N> --actor <operator-id> --json
+
+# Outbox PR 2：dry-run 预览（无 HTTP、不领取 lease）
+uv run python -m sellfox_shipping.cli sellfox-outbox-run-once \
+  --outbox-id <N> --actor <operator-id> --json
+
+# Outbox PR 2：真实单包探针（需 PROBE_ONLY + 用户授权测试包裹）
+uv run python -m sellfox_shipping.cli sellfox-outbox-run-once \
+  --outbox-id <N> --actor <operator-id> --no-dry-run \
+  --i-understand-side-effects --limit 1 --json
+
+# Outbox PR 2：仅回读核验 VERIFY_PENDING（不重新 submit）
+uv run python -m sellfox_shipping.cli sellfox-outbox-verify \
+  --outbox-id <N> --actor <operator-id> --json
+
+# Outbox PR 2：Policy 与能力证据
+uv run python -m sellfox_shipping.cli sellfox-outbox-policy-show --account-key sellfox-main --json
+uv run python -m sellfox_shipping.cli sellfox-outbox-capability-record \
+  --account-key sellfox-main --capability-status SAFE_TRACKNO_ONLY \
+  --evidence-ref <ref> --actor <approver> --json
 
 # P1C：准备 submitToPlatform intents（无 HTTP）
 uv run python -m sellfox_shipping.cli packages-prepare-submit \
@@ -185,6 +226,7 @@ sellfox_shipping/
 ├── package_models.py     # 包裹领域模型（内部 snake_case）★
 ├── package_repository.py # SQLAlchemy 多对多持久化 ★
 ├── package_service.py    # 包裹分页同步与数量对账 ★
+├── outbox_service.py     # 赛狐回写 Outbox 确认/租约/执行/回读 ★
 ├── config.yaml           # proxy、仓库、承运人配置
 ├── carriers/lizard/      # 蜴国际 Excel 模板与重尺查找 ★
 ├── carriers/             # 其它承运人抽象（尚未接闭环）
