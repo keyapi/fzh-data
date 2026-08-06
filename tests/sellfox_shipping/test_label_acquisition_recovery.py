@@ -501,7 +501,8 @@ def test_cancel_lizard_label_calls_lizard_cancel_order(
     out = service.cancel_label(label.id, actor="operator")
     assert out["status"] == "cancelled"
     assert calls.get("order_code") == "M6180-LIZARD-ORDER"
-    assert calls.get("reference_no") == "P-SAFE-1"
+    # reference_no is generation-scoped (unique per attempt)
+    assert calls.get("reference_no") == "P-SAFE-1-G1"
     assert repo.get_label(label.id).status == "cancelled"
     assert repo.get_label_operation(op_id).status == "CANCELLED"
 

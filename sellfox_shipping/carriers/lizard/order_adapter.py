@@ -128,10 +128,13 @@ def build_create_order_body(
     shipper_code: str = SHIPPER_CODE_DEFAULT,
     weight_unit_type: str = "2",  # 2=KG/CM per API doc
     parcel_declared_value: float = 10.0,
+    reference_no: str = "",
 ) -> dict[str, Any]:
     """Map a Sellfox package to 蜴国际 createOrder JSON (no HTTP).
 
     Does not replace Excel production path; use with ``LizardApiClient.create_order``.
+    ``reference_no`` defaults to ``package_sn``; pass a unique value when a
+    cancelled order still reserves the package_sn reference on 蜴国际.
     """
     sn = (package.package_sn or "").strip()
     if not sn:
@@ -162,7 +165,7 @@ def build_create_order_body(
 
     return {
         "sm_code": product,
-        "reference_no": sn,
+        "reference_no": (reference_no or "").strip() or sn,
         "weight_unit_type": weight_unit_type,
         "parcel_declared_value": parcel_declared_value,
         "parcel_quantity": 1,

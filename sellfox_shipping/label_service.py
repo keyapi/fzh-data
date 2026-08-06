@@ -565,12 +565,17 @@ class LabelService:
             raise LabelServiceError(
                 "No carrier_order_id to cancel", http_status=400
             )
-        reference_no = (
+        package_sn = (
             self._repo.get_package_sn_by_db_id(label.package_id) or ""
         ).strip()
-        if not reference_no:
+        if not package_sn:
             raise LabelServiceError(
                 "Unable to resolve package_sn for Lizard cancel", http_status=400
+            )
+        reference_no = self._lizard_reference_no(package_sn, label.operation_id)
+        if not reference_no:
+            raise LabelServiceError(
+                "Unable to resolve reference_no for Lizard cancel", http_status=400
             )
         app_token = _read_env("YIGLOBAL_APP_TOKEN")
         app_key = _read_env("YIGLOBAL_APP_KEY")
@@ -596,6 +601,28 @@ class LabelService:
                 ) from exc
         msg = result.get("msg") or result.get("message") or "Cancelled"
         return f"Cancelled Lizard order {order_code} ({msg})"
+
+    def _lizard_reference_no(
+        self, package_sn: str, operation_id: int | None
+    ) -> str:
+        """Build a unique 蜴国际 reference scoped by operation generation.
+
+        蜴国际 keeps cancelled orders' reference_no reserved, so reusing the
+        bare package_sn fails with "参考号重复". Appending -G{generation} gives
+        each attempt a unique, deterministic reference used consistently by
+        createOrder / getLabel / cancelOrder.
+        """
+        sn = (package_sn or "").strip()
+        if not sn:
+            return ""
+        gen = 0
+        if operation_id is not None:
+            try:
+                op = self._repo.get_label_operation(operation_id)
+                gen = int(op.generation or 0)
+            except Exception:
+                gen = 0
+        return f"{sn}-G{gen}" if gen > 0 else sn
 
     def list_enabled_carriers(self) -> list[dict[str, str]]:
         """Return carriers with enabled=true from config."""
@@ -753,11 +780,15 @@ class LabelService:
         ) as client:
             svc = LizardApiShipmentService(client, self._repo)
             try:
+                # Unique reference: cancelled orders on 蜴国际 may keep the
+                # package_sn reference reserved, so scope each attempt by generation.
+                lizard_ref = self._lizard_reference_no(package.package_sn, operation_id)
                 result = svc.ship_package(
                     package,
                     account_key=account_key,
                     actor=actor,
                     sm_code=sm_code,
+                    reference_no=lizard_ref,
                     operation_id=operation_id,
                 )
             except LizardApiError as exc:
@@ -900,7 +931,7 @@ class LabelService:
                     account_key=op.account_key,
                     actor=actor,
                     order_code=provider_order_id,
-                    reference_no=package.package_sn,
+                    reference_no=self._lizard_reference_no(package.package_sn, operation_id),
                     operation_id=operation_id,
                 )
             else:
