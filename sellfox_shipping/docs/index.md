@@ -28,6 +28,7 @@ updated: 2026-08-07
 
 - [research/index.md](research/index.md) — 调研文档导航
 - [research/mature-shipping-systems-2026-08-04.md](research/mature-shipping-systems-2026-08-04.md) — 成熟商业系统、Karrio 与 API 方案调研
+- [research/open-source-reuse-dossier-2026-08-07.md](research/open-source-reuse-dossier-2026-08-07.md) — **开源复用档案**：erpnext-shipping/Karrio/Huey/OCA/OpenBoxes 评估与 Search-before-Build 准入清单
 - [research/sellfox-writeback-outbox-systems-2026-08-06.md](research/sellfox-writeback-outbox-systems-2026-08-06.md) — Outbox 成熟方案与采用结论。
 - [research/session-progress-2026-07-16.md](research/session-progress-2026-07-16.md) — 过程日记（冷档案，勿当现状）
 - [research/research-synthesis-2026-07-16.md](research/research-synthesis-2026-07-16.md) — 规划底稿；先看文首裁决框，现行以 HANDOFF 为准

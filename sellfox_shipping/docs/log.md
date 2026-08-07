@@ -8,6 +8,13 @@ updated: 2026-08-07
 
 # sellfox_shipping - 变更日志
 
+## 2026-08-07 - 开源复用档案与 Search-before-Build 准入
+
+- 新增 [开源复用档案](research/open-source-reuse-dossier-2026-08-07.md)：严格评估 erpnext-shipping（MIT，v16.0.0）、Karrio、Huey、OCA delivery-carrier、OpenBoxes 与 outbox-streaming。
+- erpnext-shipping 结论：Adapt/Reference，借鉴适配器分层、报价聚合、服务别名、部分失败补偿与测试场景；不整体安装。
+- 后续每个核心任务包先产出候选项目/许可证/可复用模块/可移植测试/Adopt-Adapt-Reference-Reject 档案，再开始编码。
+
+
 ## 2026-08-07 - Submission scope 人工解除与审计
 
 - 新增 `submission-scope-resolve` CLI：仅当 scope 为 `UNKNOWN_BLOCKED` 且操作者确认无赛狐副作用后，将 scope 恢复 `OPEN`、UNKNOWN intent 恢复 `READY`，并写入审计。

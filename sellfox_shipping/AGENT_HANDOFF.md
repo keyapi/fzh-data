@@ -109,6 +109,7 @@ Excel 本地闭环（审核 → 导出 → 人工上传物流商 → 导入对�
 - 平台推送非本阶段默认；Intent/CLI 真调路径保留备用
 - 当前规模先强化 SQLite；出现持续写竞争或多实例恢复需求时再迁 PostgreSQL
 - 暂不采用 Karrio Server；约 5 个 API 承运商或至少两个标准 connector 可复用时再做独立服务 POC
+- 开源复用遵守 [开源复用档案](docs/research/open-source-reuse-dossier-2026-08-07.md)：每任务包先产出 Search-before-Build 档案，再决定 Adopt/Adapt/Reference/Reject；erpnext-shipping 作为参考而非依赖
 - 装箱算法延期，本阶段不改变现有尺寸公式
 
 ## 禁区
