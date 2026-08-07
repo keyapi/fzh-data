@@ -7,10 +7,13 @@ OAuth 2.0 token refresh, HMAC signing, and IP whitelist.
 from __future__ import annotations
 
 import copy
+import os
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 import httpx
+import yaml
 
 from sellfox_shipping.models import Address, Order, OrderItem, PackageStatus
 from sellfox_shipping.package_models import (
@@ -259,6 +262,29 @@ class SellfoxClient:
             return None
         detail = data.get("data")
         return detail if isinstance(detail, dict) else None
+
+
+def get_sellfox_client():
+    """Return the best Sellfox gateway for the current environment.
+
+    When SELLFOX_APP_ID/SECRET are set, talk directly to the official OpenAPI
+    (OAuth2 + HMAC signing); otherwise fall back to the shared proxy. Shared by
+    CLI and Web so the gateway choice stays in one place.
+    """
+    app_id = os.getenv("SELLFOX_APP_ID", "").strip()
+    app_secret = os.getenv("SELLFOX_APP_SECRET", "").strip()
+    if app_id and app_secret:
+        from sellfox_shipping.direct_sellfox_client import DirectSellfoxClient
+
+        return DirectSellfoxClient()
+
+    with open(Path(__file__).parent / "config.yaml", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+    return SellfoxClient(
+        proxy_base_url=config["sellfox"]["proxy_base_url"],
+        proxy_account=config["sellfox"]["proxy_account"],
+        proxy_api_key=os.getenv("SELLFOX_PROXY_API_KEY", ""),
+    )
 
 
 # ── Response parsers ──────────────────────────────────────────────

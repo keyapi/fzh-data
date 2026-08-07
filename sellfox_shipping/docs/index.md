@@ -48,4 +48,5 @@ updated: 2026-08-06
 
 ## 已解决问题
 
+- [solutions/sellfox-submit-tracking-nameerror-2026-08-07.md](solutions/sellfox-submit-tracking-nameerror-2026-08-07.md) — **回写赛狐 NameError**：Web 端点误用 cli.py 私有 `_get_client`；提取共享 `get_sellfox_client` 工厂
 - [solutions/reliability-hardening-and-lizard-chain-2026-08-06.md](solutions/reliability-hardening-and-lizard-chain-2026-08-06.md) — **可靠性收口与蜴国际面单链路全部问题**：分页count、resume并发、证据化结案、蜴国际API、报价展示、赛狐回写、批量面单、async阻塞、参考号重复
