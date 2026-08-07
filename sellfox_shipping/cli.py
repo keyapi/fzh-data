@@ -57,21 +57,9 @@ def _get_store():
 
 
 def _get_client():
-    import os
-    from sellfox_shipping.sellfox_client import SellfoxClient
+    from sellfox_shipping.sellfox_client import get_sellfox_client
 
-    app_id = os.getenv("SELLFOX_APP_ID", "").strip()
-    app_secret = os.getenv("SELLFOX_APP_SECRET", "").strip()
-    if app_id and app_secret:
-        from sellfox_shipping.direct_sellfox_client import DirectSellfoxClient
-        return DirectSellfoxClient()
-
-    config = _load_config()
-    return SellfoxClient(
-        proxy_base_url=config["sellfox"]["proxy_base_url"],
-        proxy_account=config["sellfox"]["proxy_account"],
-        proxy_api_key=os.getenv("SELLFOX_PROXY_API_KEY", ""),
-    )
+    return get_sellfox_client()
 
 
 def _get_package_repository():
@@ -1067,6 +1055,49 @@ def packages_verify_intent(
         actor=actor,
     )
     _output(result.__dict__, json_output)
+
+
+@app.command("submission-scope-resolve")
+def submission_scope_resolve(
+    intent_id: int = typer.Option(..., "--intent-id", help="SubmissionIntent id"),
+    actor: str = typer.Option(..., help="Operator identity"),
+    note: str = typer.Option(..., help="What was checked and why it is safe to retry"),
+    confirm: str = typer.Option(
+        ..., help="Must be exactly 'unblock' to proceed"
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Human-approved unblock of an UNKNOWN_BLOCKED submission scope."""
+    from sellfox_shipping.submission_service import SubmissionService
+
+    if confirm != "unblock":
+        raise typer.BadParameter("confirm must be exactly 'unblock'")
+    try:
+        result = SubmissionService(_get_package_repository()).resolve_unknown_blocked_scope(
+            intent_id=intent_id, actor=actor, note=note
+        )
+        _output(
+            {
+                "command": "submission-scope-resolve",
+                "ok": True,
+                "counts": {"input": 1, "success": 1, "failed": 0},
+                "results": [result],
+                "errors": [],
+            },
+            json_output,
+        )
+    except Exception as exc:
+        _output(
+            {
+                "command": "submission-scope-resolve",
+                "ok": False,
+                "counts": {"input": 1, "success": 0, "failed": 1},
+                "results": [],
+                "errors": [{"code": "resolve_failed", "message": str(exc)}],
+            },
+            json_output,
+        )
+        raise typer.Exit(2)
 
 
 @app.command()

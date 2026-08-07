@@ -14,6 +14,42 @@ updated: 2026-08-07
 - erpnext-shipping 结论：Adapt/Reference，借鉴适配器分层、报价聚合、服务别名、部分失败补偿与测试场景；不整体安装。
 - 后续每个核心任务包先产出候选项目/许可证/可复用模块/可移植测试/Adopt-Adapt-Reference-Reject 档案，再开始编码。
 
+
+## 2026-08-07 - Submission scope 人工解除与审计
+
+- 新增 `submission-scope-resolve` CLI：仅当 scope 为 `UNKNOWN_BLOCKED` 且操作者确认无赛狐副作用后，将 scope 恢复 `OPEN`、UNKNOWN intent 恢复 `READY`，并写入审计。
+- 旧 UNKNOWN attempt 保留作为审计；解除后允许再次调用 submit，不绕过 carrier 或赛狐状态机。
+- 解决真实探针 401 后 scope 永久锁死、新包裹被迫换票的问题；仍要求 `--confirm unblock` 与非空 note。
+
+
+## 2026-08-07 - 修复回写赛狐 NameError（_get_client 未定义）
+
+- Web 端点 `POST /packages/{sn}/submit-label-tracking`（回写面单追踪号到赛狐）调用 `_get_client()`，但该函数只定义在 `cli.py`，`app.py` 模块作用域不存在 → 点击即 `NameError: name '_get_client' is not defined`。
+- 潜伏原因：`test_submit_label_tracking.py` 只测 service 层（mock client），未覆盖 app.py Web 端点。
+- 修复：把"智能客户端工厂"逻辑（SELLFOX_APP_ID/SECRET 有则直连 OpenAPI，否则走代理）提取为共享函数 `get_sellfox_client()`（`sellfox_client.py`），`app.py` 端点与 `cli.py._get_client()` 共同复用，消除重复。
+- 新增 `test_sellfox_client_factory.py`（2 例）；全量 283 passed。
+- 验证：TestClient mock 客户端 POST 端点返回 200 无 NameError。
+
+
+## 2026-08-07 - 蜴国际报价 ca_zone 语义修复与 CENTRADE 遗留问题
+
+- 问题：CENTRADE 包裹点击「获取 VITE + 蜴国际 报价」时蜴国际报价不显示。
+- 根因：`_LIZARD_CA_ZONE["CENTRADE"]=1`（限定美东），而报价请求使用统一 S0143 TX 发件地址；ratesv2 返回「未匹配到可用线路」。
+- 修复：删除按仓库映射的 `_LIZARD_CA_ZONE`，统一使用 `_LIZARD_RATE_CA_ZONE = 0`（全域查询），并补 mock 回归测试锁定请求参数与报价持久化。
+- 展示决策：运费试算只显示路由建议承运商的报价，另一家仅写入历史报价表。
+
+## 2026-08-07 - 排除列表新增 TikTok 店铺（TT_Tooddly / TTCozydozy）
+
+- 通过赛狐 OpenAPI `/api/multiplatform/shop/list.json` 核实：`platformType=TIKTOK` 共 4 家店铺（TTCozydozy、TT_Tooddly、TTBNKC、DaneeyGo）。
+- 用户提到的 `TTTOODDLYUS` / `TTCozyDozyUS` 在系统中不存在，实际 `shop_name` 为 `TT_Tooddly` / `TTCozydozy`（API 与本地包裹数据一致）。
+- 按用户确认仅排除 2 家：`routing_rules.yaml` `exclude_shops` 追加 `TT_Tooddly`、`TTCozydozy`（现为 WFUS/OSTK/PotteryBarnUS/TT_Tooddly/TTCozydozy）。
+- 该列表同时驱动「Transactions 排除平台物流店铺」复选框与包裹详情「建议渠道方式」（`RuleEngine.from_yaml` 同一数据源），TTBNKC / DaneeyGo 保留。
+- 移除 `routing/models.py` 中冗余的 `is_excluded_shop` 硬编码属性，确认无运行时调用方后由 YAML 作为唯一事实来源。
+- 测试：新增 `test_routing_engine.py`，从真实 YAML 驱动 `RuleEngine.route()` 与 repository 过滤；`test_exclude_shops_filter` 扩展 TikTok 店铺场景。
+- 浏览器验证：勾选排除后 2898→2334 条（-564 = WFUS 325 + OSTK 186 + PotteryBarnUS 41 + TTCozydozy 11 + TT_Tooddly 1）；TTCozydozy 包裹详情建议渠道显示「排除（平台物流）」。
+
+
+
 ## 2026-08-06 - 赛狐 Outbox PR 2 执行器与回读
 
 - 新增 migration 0021：`shipping_sellfox_outbox.lease_origin_status`，过期 LEASED 恢复原状态。

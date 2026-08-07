@@ -6,6 +6,11 @@ from pathlib import Path
 
 import pytest
 
+import json
+
+from typer.testing import CliRunner
+
+from sellfox_shipping import cli
 from sellfox_shipping.package_models import (
     SellfoxPackageAddress,
     SellfoxPackageItemRecord,
@@ -118,3 +123,87 @@ def test_different_hash_after_tracking_change(tmp_path: Path) -> None:
         items=[{"order_item_id": "ITEM-B", "quantity": 1}],
     )
     assert new_hash != intent.request_hash
+
+
+class _ResolveCountingClient:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def submit_to_platform(self, wire_body: dict) -> dict:
+        self.calls += 1
+        return {"code": 0}
+
+    def fetch_package_detail(self, package_sn: str) -> dict | None:
+        return {"logistics": {"trackNo": "TN-BLOCK-1"}}
+
+
+def test_unknown_scope_can_be_resolved_after_human_check(tmp_path: Path) -> None:
+    repo = PackageRepository(tmp_path / "shipping.db")
+    intent_id = _seed(repo)
+    repo.mark_submission_unknown_and_block_scope(
+        attempt_id=repo.create_submission_attempt(intent_id=intent_id, actor="ops").id,
+        intent_id=intent_id,
+        http_summary="HTTP 401 before side effect",
+    )
+    assert repo.is_submission_scope_blocked_by_intent(intent_id)
+
+    svc = SubmissionService(repo)
+    result = svc.resolve_unknown_blocked_scope(
+        intent_id=intent_id,
+        actor="ops-lead",
+        note="401 confirmed before send; readback unchanged; safe to retry",
+    )
+    assert result["scope_status"] == "OPEN"
+    assert result["intent_status"] == "READY"
+    assert not repo.is_submission_scope_blocked_by_intent(intent_id)
+
+    client = _ResolveCountingClient()
+    submit = SubmissionService(repo, client).submit_intent(
+        intent_id=intent_id,
+        actor="ops-lead",
+        dry_run=False,
+        allow_side_effects=True,
+    )
+    assert client.calls == 1
+    assert submit.intent_status == "VERIFIED"
+
+
+def test_scope_resolve_rejects_non_blocked_scope(tmp_path: Path) -> None:
+    repo = PackageRepository(tmp_path / "shipping.db")
+    intent_id = _seed(repo)
+    svc = SubmissionService(repo)
+    with pytest.raises(RuntimeError, match="not UNKNOWN_BLOCKED"):
+        svc.resolve_unknown_blocked_scope(
+            intent_id=intent_id,
+            actor="ops-lead",
+            note="not blocked",
+        )
+
+
+def test_submission_scope_resolve_cli(tmp_path, monkeypatch) -> None:
+    repo = PackageRepository(tmp_path / "shipping.db")
+    intent_id = _seed(repo)
+    repo.mark_submission_unknown_and_block_scope(
+        attempt_id=repo.create_submission_attempt(intent_id=intent_id, actor="ops").id,
+        intent_id=intent_id,
+        http_summary="HTTP 401 before side effect",
+    )
+    monkeypatch.setattr(cli, "_get_package_repository", lambda: repo)
+
+    result = CliRunner().invoke(
+        cli.app,
+        [
+            "submission-scope-resolve",
+            "--intent-id",
+            str(intent_id),
+            "--actor", "ops-lead",
+            "--note", "401 before send; safe to retry",
+            "--confirm", "unblock",
+            "--json",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["ok"] is True
+    assert payload["results"][0]["scope_status"] == "OPEN"
+    assert payload["results"][0]["intent_status"] == "READY"

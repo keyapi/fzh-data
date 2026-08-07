@@ -199,6 +199,10 @@ uv run python -m sellfox_shipping.cli packages-submit-intent \
 uv run python -m sellfox_shipping.cli packages-verify-intent \
   --intent-id <N> --actor <operator-id> --json
 
+# UNKNOWN_BLOCKED submission scope：人工核验无副作用后解除（新 intent/attempt 才可提交）
+uv run python -m sellfox_shipping.cli submission-scope-resolve \
+  --intent-id <N> --actor <approver> --note "<checked what>" --confirm unblock --json
+
 # Web Server（FastAPI；本地开发请加 --reload）
 uv run python -m sellfox_shipping.cli serve --host 127.0.0.1 --port 8401 --reload
 # 打开 http://127.0.0.1:8401/packages
@@ -289,7 +293,7 @@ sellfox_shipping/
 | 功能 | 说明 |
 |------|------|
 | VITE 询价 | 最长边 ≤22" GOFO(GFUS), >22" FedEx(ODFC)；生产环境已验 |
-| 蜴国际询价 | ratesv2 全部产品，S0143 发件，ca_zone=1(美东) |
+| 蜴国际询价 | ratesv2 全部产品，S0143 发件，ca_zone=0（全域查询） |
 | 历史报价 | `shipping_package_rates` 表，VITE + 蜴国际共用，按需获取 |
 | 手动触发 | 点击按钮 → POST `/fetch-rates`，避免每次页面加载拉取 API |
 | 原始响应 | `raw_data` 列存储完整 API 返回 JSON（indent=2 格式化，暗色代码块可展开） |
