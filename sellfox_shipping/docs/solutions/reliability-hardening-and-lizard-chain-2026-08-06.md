@@ -2,7 +2,7 @@
 okf: v0.1
 type: Solution
 title: sellfox_shipping 可靠性收口与蜴国际面单链路修复（2026-08）
-description: 本次会话处理的全部问题记录——分页count、resume并发、证据化结案、蜴国际API、报价展示、赛狐回写、批量面单、async阻塞、参考号重复
+description: 本次会话处理的全部问题记录——分页count、resume并发、证据化结案、蜴国际API、报价展示、赛狐回写、批量面单、async阻塞、参考号重复；2026-08-07 跟进 CENTRADE ca_zone 遗留修复
 timestamp: 2026-08-06
 tags: [sellfox-shipping, lizard, vite, submitToPlatform, reliability]
 ---
@@ -79,6 +79,12 @@ tags: [sellfox-shipping, lizard, vite, submitToPlatform, reliability]
 - 保持路由逻辑：按 `routing_result` 展示建议承运商报价
 
 **教训**：改动前先确认原始设计意图（路由选承运商展示），不要轻易改成双列。
+
+**2026-08-07 跟进（CENTRADE 遗留修复）**：
+- 上述 DANEEY 修复遗漏了 `_LIZARD_CA_ZONE["CENTRADE"]`，它仍为 1 → CENTRADE 包裹蜴国际报价依然全返「未匹配到可用线路」（`_get_lizard_rate` 返回 None）。
+- 根因相同：`shipper_address` 硬编码 TX（S0143 发件人），ca_zone 必须匹配发件人注册地（=0），不能用仓库映射。
+- 修复：`_LIZARD_CA_ZONE["CENTRADE"]` 1→0（app.py）。
+- **展示决策确认**：运费试算**只显示路由建议承运商**的报价（用户明确选择），另一家存历史报价表；不采用双卡片方案。上一条教训应理解为「先确认设计意图」，双列方案经用户确认被否决。
 
 ### 6. 承运商未启用，下拉只有 VITE
 

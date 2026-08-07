@@ -557,7 +557,7 @@ async def package_fetch_rates(request: Request, package_sn: str):
     )
     lizard_rate = await run_in_threadpool(_get_lizard_rate, record, package_dims)
 
-    # Pick the routing-suggested carrier's rate for display
+    # 运费试算只展示路由建议承运商的报价；另一家存历史报价表
     if routing_result and routing_result.matched:
         suggested_carrier = (routing_result.carrier or "").strip().lower()
     else:
@@ -569,7 +569,7 @@ async def package_fetch_rates(request: Request, package_sn: str):
     elif display_rate and "error" in display_rate:
         message = f"报价失败: {display_rate['error']}"
     else:
-        message = "报价完成（查看历史记录）"
+        message = "报价完成（查看历史报价）"
 
     # Re-render with fresh context (live rate + updated history)
     ctx = _package_detail_context(account_key, record, message=message, vite_rate_override=vite_rate, lizard_rate_override=lizard_rate)
@@ -625,7 +625,7 @@ def _package_detail_context(account_key: str, record, *, message: str, vite_rate
     lizard_services = _get_lizard_services(repo, record, account_key)
 
     # Use override from fetch-rates, or None for initial load (on-demand pattern)
-    # Pick the routing-suggested carrier's rate for display
+    # 运费试算只展示路由建议承运商的报价（塞进 vite_rate 变量）；另一家仅存历史报价表
     if routing_result and routing_result.matched:
         suggested_carrier = (routing_result.carrier or "").strip().lower()
     else:
@@ -1008,9 +1008,11 @@ def _vite_rate_to_dict(
     }
 
 
-# Lizard warehouse → ca_zone mapping (based on S0143 shipper registration)
+# Lizard warehouse → ca_zone mapping (S0143 shipper is registered in TX, outside CA zone).
+# ca_zone must match the S0143 shipper registration — ca_zone=1 makes the API return
+# "未匹配到可用线路" for every product (see b4c3620 for the DANEEY fix).
 _LIZARD_CA_ZONE: dict[str, int] = {
-    "CENTRADE": 1,  # NJ → 美东
+    "CENTRADE": 0,  # shipper is S0143 (TX), not in CA zone
     "DANEEY": 0,    # TX → S0143 not in CA zone
     "POLAND": 0,    # 全域
 }
