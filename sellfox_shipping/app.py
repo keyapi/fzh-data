@@ -33,7 +33,7 @@ from sellfox_shipping.package_service import (
     PackageReviewRequest,
     ReviewPackageService,
 )
-from sellfox_shipping.sellfox_client import SellfoxClient
+from sellfox_shipping.sellfox_client import SellfoxClient, get_sellfox_client
 from sellfox_shipping.store import Store
 
 # ── Bootstrap ─────────────────────────────────────────────────────
@@ -1392,7 +1392,7 @@ async def package_submit_label_tracking_form(request: Request, package_sn: str):
     actor = _web_actor(request, str(form.get("actor") or "web-user"))
     try:
         result = await run_in_threadpool(
-            SubmissionService(repo, _get_client()).submit_label_tracking,
+            SubmissionService(repo, get_sellfox_client()).submit_label_tracking,
             account_key=account_key,
             package_sn=package_sn,
             actor=actor,

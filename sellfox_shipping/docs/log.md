@@ -8,6 +8,15 @@ updated: 2026-08-07
 
 # sellfox_shipping - 变更日志
 
+## 2026-08-07 - 修复回写赛狐 NameError（_get_client 未定义）
+
+- Web 端点 `POST /packages/{sn}/submit-label-tracking`（回写面单追踪号到赛狐）调用 `_get_client()`，但该函数只定义在 `cli.py`，`app.py` 模块作用域不存在 → 点击即 `NameError: name '_get_client' is not defined`。
+- 潜伏原因：`test_submit_label_tracking.py` 只测 service 层（mock client），未覆盖 app.py Web 端点。
+- 修复：把"智能客户端工厂"逻辑（SELLFOX_APP_ID/SECRET 有则直连 OpenAPI，否则走代理）提取为共享函数 `get_sellfox_client()`（`sellfox_client.py`），`app.py` 端点与 `cli.py._get_client()` 共同复用，消除重复。
+- 新增 `test_sellfox_client_factory.py`（2 例）；全量 283 passed。
+- 验证：TestClient mock 客户端 POST 端点返回 200 无 NameError。
+
+
 ## 2026-08-07 - 蜴国际报价 ca_zone 语义修复与 CENTRADE 遗留问题
 
 - 问题：CENTRADE 包裹点击「获取 VITE + 蜴国际 报价」时蜴国际报价不显示。
