@@ -8,6 +8,13 @@ updated: 2026-08-07
 
 # sellfox_shipping - 变更日志
 
+## 2026-08-07 - Submission scope 人工解除与审计
+
+- 新增 `submission-scope-resolve` CLI：仅当 scope 为 `UNKNOWN_BLOCKED` 且操作者确认无赛狐副作用后，将 scope 恢复 `OPEN`、UNKNOWN intent 恢复 `READY`，并写入审计。
+- 旧 UNKNOWN attempt 保留作为审计；解除后允许再次调用 submit，不绕过 carrier 或赛狐状态机。
+- 解决真实探针 401 后 scope 永久锁死、新包裹被迫换票的问题；仍要求 `--confirm unblock` 与非空 note。
+
+
 ## 2026-08-07 - 修复回写赛狐 NameError（_get_client 未定义）
 
 - Web 端点 `POST /packages/{sn}/submit-label-tracking`（回写面单追踪号到赛狐）调用 `_get_client()`，但该函数只定义在 `cli.py`，`app.py` 模块作用域不存在 → 点击即 `NameError: name '_get_client' is not defined`。

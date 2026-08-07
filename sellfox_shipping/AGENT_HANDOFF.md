@@ -198,6 +198,10 @@ uv run python -m sellfox_shipping.cli packages-submit-intent \
 uv run python -m sellfox_shipping.cli packages-verify-intent \
   --intent-id <N> --actor <operator-id> --json
 
+# UNKNOWN_BLOCKED submission scope：人工核验无副作用后解除（新 intent/attempt 才可提交）
+uv run python -m sellfox_shipping.cli submission-scope-resolve \
+  --intent-id <N> --actor <approver> --note "<checked what>" --confirm unblock --json
+
 # Web Server（FastAPI；本地开发请加 --reload）
 uv run python -m sellfox_shipping.cli serve --host 127.0.0.1 --port 8401 --reload
 # 打开 http://127.0.0.1:8401/packages
