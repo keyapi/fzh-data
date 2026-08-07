@@ -13,11 +13,13 @@
 #
 # 支持的运算符：eq, neq, gt, gte, lt, lte, in, not_in, contains, between
 
-# ── 排除店铺（走平台物流，不参与路由）──
+# ── 排除店铺（走平台物流/平台发货，不参与路由）──
 exclude_shops:
   - WFUS
   - OSTK
   - PotteryBarnUS
+  - TT_Tooddly
+  - TTCozydozy
 
 # ── 路由规则 ──
 rules:
