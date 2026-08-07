@@ -132,7 +132,9 @@ def canonical_to_wire_body(req: CanonicalSubmitRequest) -> dict[str, object]:
         "items": [
             {
                 "orderItemId": str(item["order_item_id"]),
-                "quantity": int(item["quantity"]),
+                # Official schema PackageSubmitToPlatformOpenQO.SubmitOrderItemOpenQO
+                # declares quantity as string ("数量，需为整数，0 < 提交数量 < 999999").
+                "quantity": str(int(item["quantity"])),
             }
             for item in req.items
         ],
@@ -339,11 +341,26 @@ class SubmissionService:
                     http_summary=json.dumps(resp, ensure_ascii=False)[:2000],
                 )
         except Exception as exc:  # noqa: BLE001
-            self._repo.mark_submission_unknown_and_block_scope(
-                attempt_id=attempt.id,
-                intent_id=intent_id,
-                http_summary=str(exc)[:2000],
-            )
+            status_code = getattr(exc, "status_code", None)
+            if isinstance(status_code, int) and 400 <= status_code < 500:
+                # 4xx = Sellfox definitively rejected the request (nothing applied).
+                # Mark FAILED and keep the scope OPEN so the caller can retry after
+                # fixing the request — not a genuinely-unknown outcome.
+                self._repo.mark_submission_attempt_result(
+                    attempt_id=attempt.id,
+                    intent_id=intent_id,
+                    attempt_status="FAILED",
+                    intent_status="FAILED",
+                    http_status=status_code,
+                    http_summary=str(exc)[:2000],
+                )
+            else:
+                # 5xx / timeout / network — outcome genuinely unknown → block scope.
+                self._repo.mark_submission_unknown_and_block_scope(
+                    attempt_id=attempt.id,
+                    intent_id=intent_id,
+                    http_summary=str(exc)[:2000],
+                )
 
         updated = self._repo.get_submission_intent(intent_id)
         assert updated is not None

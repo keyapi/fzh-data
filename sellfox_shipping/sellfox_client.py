@@ -24,6 +24,19 @@ from sellfox_shipping.package_models import (
 )
 
 
+class SellfoxApiError(RuntimeError):
+    """Sellfox HTTP-level rejection carrying the HTTP status code.
+
+    4xx means Sellfox definitively rejected the request (nothing applied);
+    5xx/network means the outcome is unknown. Callers use ``status_code``
+    to tell the two apart.
+    """
+
+    def __init__(self, message: str, *, status_code: int | None = None):
+        super().__init__(message)
+        self.status_code = status_code
+
+
 class SellfoxClient:
     """Thin wrapper over sellfox-api-proxy for order fetch + tracking write-back."""
 
@@ -49,7 +62,11 @@ class SellfoxClient:
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
         resp = self._client.post(url, json=body, headers=headers)
-        resp.raise_for_status()
+        if resp.status_code >= 400:
+            raise SellfoxApiError(
+                f"Sellfox HTTP {resp.status_code} on {path}: {(resp.text or '')[:1000]}",
+                status_code=resp.status_code,
+            )
         return resp.json()
 
     # ── Order fetching ──────────────────────────────────────────

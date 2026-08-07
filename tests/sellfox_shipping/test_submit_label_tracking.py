@@ -179,6 +179,8 @@ def test_submit_label_tracking_wire_body_shape(tmp_path: Path) -> None:
     assert wire["carrierName"] == "vite"
     assert isinstance(wire["items"], list)
     assert wire["items"][0]["orderItemId"] == "ITEM-1"
+    # Official schema declares quantity as string (0 < qty < 999999)
+    assert wire["items"][0]["quantity"] == "1"
 
 
 def test_direct_sellfox_client_submit_to_platform(monkeypatch) -> None:
@@ -202,3 +204,48 @@ def test_direct_sellfox_client_submit_to_platform(monkeypatch) -> None:
     assert result["code"] == 0
     assert captured["path"] == "/api/packageShip/submitToPlatform.json"
     assert captured["body"] == wire
+
+
+class _FakeResp:
+    def __init__(self, status_code: int, text: str) -> None:
+        self.status_code = status_code
+        self.text = text
+
+    def json(self) -> dict:
+        return {}
+
+
+class _FakeHttpClient:
+    def __init__(self, resp: _FakeResp) -> None:
+        self._resp = resp
+
+    def post(self, *args, **kwargs):
+        return self._resp
+
+
+def test_direct_client_ensure_http_ok_surfaces_error_body() -> None:
+    """DirectSellfoxClient surfaces the Sellfox error body on 4xx."""
+    from sellfox_shipping.direct_sellfox_client import DirectSellfoxClient
+
+    fake = _FakeResp(400, '{"code":40014,"msg":"参数异常"}')
+    with pytest.raises(RuntimeError) as ei:
+        DirectSellfoxClient._ensure_http_ok("/api/x.json", fake)
+    assert "400" in str(ei.value)
+    assert "参数异常" in str(ei.value)
+
+
+def test_proxy_client_post_raises_with_error_body() -> None:
+    """SellfoxClient._post includes the proxy/Sellfox error body on 4xx."""
+    from sellfox_shipping.sellfox_client import SellfoxClient
+
+    fake = _FakeResp(400, '{"code":40014,"msg":"参数异常"}')
+    client = SellfoxClient(
+        proxy_base_url="https://proxy.example",
+        proxy_account="acc",
+        proxy_api_key="key",
+        http_client=_FakeHttpClient(fake),  # type: ignore[arg-type]
+    )
+    with pytest.raises(RuntimeError) as ei:
+        client._post("/api/x.json", {})
+    assert "400" in str(ei.value)
+    assert "参数异常" in str(ei.value)

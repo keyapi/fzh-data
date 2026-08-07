@@ -18,6 +18,7 @@ from sellfox_shipping.package_models import (
     PackageRowError,
     SellfoxPackagePage,
 )
+from sellfox_shipping.sellfox_client import SellfoxApiError
 
 
 class DirectSellfoxClient:
@@ -106,7 +107,7 @@ class DirectSellfoxClient:
         url = f"{self.api_domain}{path}"
         query = self._compute_sign(path)
         resp = self._client.post(url, params=query, json=body, timeout=60)
-        resp.raise_for_status()
+        self._ensure_http_ok(path, resp)
         data = resp.json()
         # Retry once on token expiry
         if data.get("code") == 40001:
@@ -114,9 +115,18 @@ class DirectSellfoxClient:
                 self._token = None
             query = self._compute_sign(path)
             resp = self._client.post(url, params=query, json=body, timeout=60)
-            resp.raise_for_status()
+            self._ensure_http_ok(path, resp)
             data = resp.json()
         return data
+
+    @staticmethod
+    def _ensure_http_ok(path: str, resp: httpx.Response) -> None:
+        """Surface Sellfox's error body instead of losing it on raise_for_status()."""
+        if resp.status_code >= 400:
+            raise SellfoxApiError(
+                f"Sellfox HTTP {resp.status_code} on {path}: {(resp.text or '')[:1000]}",
+                status_code=resp.status_code,
+            )
 
     # ── Package page gateway ───────────────────────────────────
 
