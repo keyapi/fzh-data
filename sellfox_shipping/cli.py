@@ -1069,6 +1069,49 @@ def packages_verify_intent(
     _output(result.__dict__, json_output)
 
 
+@app.command("submission-scope-resolve")
+def submission_scope_resolve(
+    intent_id: int = typer.Option(..., "--intent-id", help="SubmissionIntent id"),
+    actor: str = typer.Option(..., help="Operator identity"),
+    note: str = typer.Option(..., help="What was checked and why it is safe to retry"),
+    confirm: str = typer.Option(
+        ..., help="Must be exactly 'unblock' to proceed"
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Human-approved unblock of an UNKNOWN_BLOCKED submission scope."""
+    from sellfox_shipping.submission_service import SubmissionService
+
+    if confirm != "unblock":
+        raise typer.BadParameter("confirm must be exactly 'unblock'")
+    try:
+        result = SubmissionService(_get_package_repository()).resolve_unknown_blocked_scope(
+            intent_id=intent_id, actor=actor, note=note
+        )
+        _output(
+            {
+                "command": "submission-scope-resolve",
+                "ok": True,
+                "counts": {"input": 1, "success": 1, "failed": 0},
+                "results": [result],
+                "errors": [],
+            },
+            json_output,
+        )
+    except Exception as exc:
+        _output(
+            {
+                "command": "submission-scope-resolve",
+                "ok": False,
+                "counts": {"input": 1, "success": 0, "failed": 1},
+                "results": [],
+                "errors": [{"code": "resolve_failed", "message": str(exc)}],
+            },
+            json_output,
+        )
+        raise typer.Exit(2)
+
+
 @app.command()
 def orders(
     status: Optional[str] = typer.Option(None, help="Filter by package_status"),

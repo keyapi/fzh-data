@@ -506,3 +506,17 @@ class SubmissionService:
             http_called=http_called,
             package_submission_state=prepared.package_submission_state,
         )
+
+    def resolve_unknown_blocked_scope(
+        self, *, intent_id: int, actor: str, note: str
+    ) -> dict:
+        """Human-approved unblock of an UNKNOWN_BLOCKED submission scope."""
+        intent = self._repo.resolve_submission_scope_block(
+            intent_id=intent_id, actor=actor, note=note
+        )
+        return {
+            "intent_id": intent.id,
+            "scope_id": intent.scope_id,
+            "intent_status": intent.status,
+            "scope_status": "OPEN",
+        }
