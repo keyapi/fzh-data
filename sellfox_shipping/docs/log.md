@@ -3,10 +3,28 @@ okf: v0.1
 type: Log
 module: sellfox_shipping
 created: 2026-07-15
-updated: 2026-08-06
+updated: 2026-08-07
 ---
 
 # sellfox_shipping - 变更日志
+
+## 2026-08-07 - 蜴国际报价无法获取 + 运费试算展示决策
+
+- 问题：点击「获取 VITE + 蜴国际 报价」，蜴国际报价不显示。
+- 根因 1（API 无有效报价）：`_LIZARD_CA_ZONE[CENTRADE]=1`（美东），但报价请求 `shipper_address` 硬编码 TX（S0143 发件人）；实测 ca_zone=1 → 蜴国际 ratesv2 全部产品返回「未匹配到可用线路」（`_get_lizard_rate` 返回 None），ca_zone=0 → 正常返回 2 个报价。b4c3620 只修了 DANEEY，漏了 CENTRADE。
+- 修复：`_LIZARD_CA_ZONE[CENTRADE]` 1→0（**保留**）。
+- 展示决策（用户确认）：运费试算**只显示路由建议承运商**的报价（b4c3620 设计）；另一家承运商的报价存入历史报价表。未采纳"两卡片同时展示"方案。
+- 测试：281 passed。浏览器验证：CENTRADE 包裹运费试算仅显示蜴国际 FedEx-Ground-20-OS-TX $12.48，历史报价同时积累两家记录。
+
+## 2026-08-07 - 排除列表新增 TikTok 店铺（TT_Tooddly / TTCozydozy）
+
+- 通过赛狐 OpenAPI `/api/multiplatform/shop/list.json` 核实：`platformType=TIKTOK` 共 4 家店铺（TTCozydozy、TT_Tooddly、TTBNKC、DaneeyGo）。
+- 用户提到的 `TTTOODDLYUS` / `TTCozyDozyUS` 在系统中不存在，实际 `shop_name` 为 `TT_Tooddly` / `TTCozydozy`（API 与本地包裹数据一致）。
+- 按用户确认仅排除 2 家：`routing_rules.yaml` `exclude_shops` 追加 `TT_Tooddly`、`TTCozydozy`（现为 WFUS/OSTK/PotteryBarnUS/TT_Tooddly/TTCozydozy）。
+- 该列表同时驱动「Transactions 排除平台物流店铺」复选框与包裹详情「建议渠道方式」（`RuleEngine.from_yaml` 同一数据源），TTBNKC / DaneeyGo 保留。
+- `routing/models.py` `is_excluded_shop` 同步更新，移除永不匹配的死值 `"TikTok"`。
+- 测试：`test_exclude_shops_filter` 扩展 TikTok 店铺场景；281 passed。
+- 浏览器验证：勾选排除后 2898→2334 条（-564 = WFUS 325 + OSTK 186 + PotteryBarnUS 41 + TTCozydozy 11 + TT_Tooddly 1）；TTCozydozy 包裹详情建议渠道显示「排除（平台物流）」。
 
 ## 2026-08-06 - 赛狐 Outbox PR 2 执行器与回读
 

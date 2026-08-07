@@ -55,4 +55,10 @@ class PackageRoutingData:
 
     @property
     def is_excluded_shop(self) -> bool:
-        return self.shop_name in {"WFUS", "OSTK", "PotteryBarnUS", "TikTok"}
+        return self.shop_name in {
+            "WFUS",
+            "OSTK",
+            "PotteryBarnUS",
+            "TT_Tooddly",
+            "TTCozydozy",
+        }
