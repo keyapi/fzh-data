@@ -52,13 +52,3 @@ class PackageRoutingData:
     weight_kg: float = 0.0
     total_quantity: int = 0
     channel_name: str = ""
-
-    @property
-    def is_excluded_shop(self) -> bool:
-        return self.shop_name in {
-            "WFUS",
-            "OSTK",
-            "PotteryBarnUS",
-            "TT_Tooddly",
-            "TTCozydozy",
-        }

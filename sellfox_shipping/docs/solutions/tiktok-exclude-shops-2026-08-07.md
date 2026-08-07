@@ -30,7 +30,7 @@ tags: [sellfox-shipping, tiktok, exclude-shops, routing]
 按用户确认只排除 2 家（TTBNKC / DaneeyGo 保留）：
 
 - `routing/routing_rules.yaml` 的 `exclude_shops` 追加 `TT_Tooddly`、`TTCozydozy`
-- `routing/models.py` 的 `is_excluded_shop` 同步更新（同时移除永不匹配的死值 `"TikTok"`）
+- `routing/models.py` 删除无运行时调用方的 `is_excluded_shop` 硬编码属性，避免配置漂移
 - `tests/sellfox_shipping/test_package_repository.py::test_exclude_shops_filter` 扩展 TikTok 场景
 
 ## 关键设计点
