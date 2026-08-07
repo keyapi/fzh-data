@@ -32,8 +32,8 @@ warehouses:
   CENTRADE:
     label: "USNJ 美东仓"
     address:
-      name: "FZH USNJ Warehouse"
-      company: "FZH Inc."
+      name: "Overstock.com, Centrade Inc."
+      company: "Centrade Inc."
       address1: "389 Route 10 Unit R"
       address2: ""
       city: "East Hanover"
@@ -41,7 +41,8 @@ warehouses:
       postal_code: "07936"
       country: "US"
       country_code: "US"
-      phone: "1234567890"
+      phone: "7327622442"
+      email: "service@icentrade.com"
       email: ""
   DANEEY:
     label: "USTX 美中仓"

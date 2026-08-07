@@ -208,3 +208,14 @@ class DirectSellfoxClient:
         if data.get("code") != 0:
             return None
         return data.get("data") if isinstance(data, dict) else None
+
+    def quick_outbound(self, package_list: list[dict]) -> dict:
+        """POST quickOutbound (快速出库): submit package tracking to platform.
+
+        Each package: {packageSn, carrier, trackNo, shipmentType(0=仅提交平台不扣库存),
+        warehouseId?, isOversea?}. Returns OpenResult«QuickOutboundOpenVO».
+        """
+        return self._post(
+            "/api/packageShip/quickOutbound.json",
+            {"packageList": package_list},
+        )

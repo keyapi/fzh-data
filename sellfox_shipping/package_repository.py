@@ -2151,7 +2151,7 @@ class PackageRepository:
         external_order_id: str,
         actor: str,
     ) -> int:
-        """Clear an UNKNOWN_BLOCKED submission scope for (package, order).
+        """Clear an UNKNOWN_BLOCKED submission scope and reset its UNKNOWN intents.
 
         A human confirms the prior ambiguous submit did NOT apply (e.g. a 4xx
         rejection), so the package can be re-submitted. Records an audit event.
@@ -2187,10 +2187,18 @@ class PackageRepository:
                 raise LookupError(
                     f"no submission scope for {package_sn} / {external_order_id}"
                 )
-            if scope.status != "UNKNOWN_BLOCKED":
-                return scope.id
-            scope.status = "OPEN"
-            scope.updated_at = now
+            if scope.status == "UNKNOWN_BLOCKED":
+                scope.status = "OPEN"
+                scope.updated_at = now
+            # Reset stale UNKNOWN intents back to READY so they can be re-submitted.
+            for intent in session.scalars(
+                select(SubmissionIntentRow).where(
+                    SubmissionIntentRow.scope_id == scope.id,
+                    SubmissionIntentRow.status == "UNKNOWN",
+                )
+            ):
+                intent.status = "READY"
+                intent.updated_at = now
             session.add(
                 AuditEventRow(
                     actor=actor,

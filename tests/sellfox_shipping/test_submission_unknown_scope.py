@@ -174,6 +174,7 @@ def test_resolve_submission_scope_block(tmp_path: Path) -> None:
         http_summary="timeout",
     )
     assert repo.is_submission_scope_blocked_by_intent(intent_id)
+    assert repo.get_submission_intent(intent_id).status == "UNKNOWN"
 
     scope_id = repo.resolve_submission_scope_block(
         account_key="sellfox-main",
@@ -183,3 +184,5 @@ def test_resolve_submission_scope_block(tmp_path: Path) -> None:
     )
     assert scope_id > 0
     assert not repo.is_submission_scope_blocked_by_intent(intent_id)
+    # Intent reset to READY so it can be re-submitted.
+    assert repo.get_submission_intent(intent_id).status == "READY"

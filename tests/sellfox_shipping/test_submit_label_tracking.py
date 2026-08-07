@@ -249,3 +249,66 @@ def test_proxy_client_post_raises_with_error_body() -> None:
         client._post("/api/x.json", {})
     assert "400" in str(ei.value)
     assert "参数异常" in str(ei.value)
+
+
+def test_direct_sellfox_client_quick_outbound(monkeypatch) -> None:
+    """DirectSellfoxClient.quick_outbound POSTs to quickOutbound with packageList."""
+    from sellfox_shipping.direct_sellfox_client import DirectSellfoxClient
+
+    client = DirectSellfoxClient(
+        app_id="test-app", app_secret="test-secret", api_domain="https://openapi.sellfox.com"
+    )
+    captured = {}
+
+    def _fake_post(path: str, body: dict) -> dict:
+        captured["path"] = path
+        captured["body"] = body
+        return {"code": 0, "data": {"successNum": 1, "failData": []}}
+
+    monkeypatch.setattr(client, "_post", _fake_post)
+    pkg_list = [{"packageSn": "P1", "carrier": "lizard", "trackNo": "TN", "shipmentType": 0}]
+    result = client.quick_outbound(pkg_list)
+
+    assert result["code"] == 0
+    assert captured["path"] == "/api/packageShip/quickOutbound.json"
+    assert captured["body"] == {"packageList": pkg_list}
+
+
+def test_quick_outbound_uses_label_and_parses_response(tmp_path: Path) -> None:
+    """submit_label_tracking_quick_outbound sends the valid label's tracking via quickOutbound."""
+    repo = PackageRepository(tmp_path / "shipping.db")
+    _seed(repo, "P2AQUICK1")
+    _insert_label(repo, "P2AQUICK1", tracking="1Z-QUICK", carrier="lizard")
+
+    class _FakeQuickClient:
+        def __init__(self) -> None:
+            self.calls = 0
+            self.last_pkg: dict | None = None
+
+        def quick_outbound(self, package_list: list[dict]) -> dict:
+            self.calls += 1
+            self.last_pkg = package_list[0] if package_list else None
+            return {"code": 0, "msg": "ok", "data": {"successNum": 1, "failData": []}}
+
+        def submit_to_platform(self, wire_body: dict) -> dict:
+            raise AssertionError("quick_outbound path must not call submitToPlatform")
+
+        def fetch_package_detail(self, package_sn: str) -> dict | None:
+            return None
+
+    client = _FakeQuickClient()
+    svc = SubmissionService(repo, client)
+    result = svc.submit_label_tracking_quick_outbound(
+        account_key="sellfox-main", package_sn="P2AQUICK1", actor="ops"
+    )
+
+    assert result.http_called is True
+    assert result.tracking_number == "1Z-QUICK"
+    assert result.code == 0
+    assert result.success_num == 1
+    assert client.calls == 1
+    assert client.last_pkg is not None
+    assert client.last_pkg["packageSn"] == "P2AQUICK1"
+    assert client.last_pkg["trackNo"] == "1Z-QUICK"
+    assert client.last_pkg["carrier"] == "lizard"
+    assert client.last_pkg["shipmentType"] == 0

@@ -249,6 +249,17 @@ class SellfoxClient:
             return {"code": -1, "raw": data}
         return data
 
+    def quick_outbound(self, package_list: list[dict]) -> dict:
+        """POST quickOutbound (快速出库): submit package tracking to platform.
+
+        Each package: {packageSn, carrier, trackNo, shipmentType(0=仅提交平台不扣库存),
+        warehouseId?, isOversea?}. Returns OpenResult«QuickOutboundOpenVO».
+        """
+        return self._post(
+            self._proxy_path("/api/packageShip/quickOutbound.json"),
+            {"packageList": package_list},
+        )
+
     def fetch_package_detail(self, package_sn: str) -> dict | None:
         """POST packageDetail; returns data object or None on soft failure."""
         sn = (package_sn or "").strip()

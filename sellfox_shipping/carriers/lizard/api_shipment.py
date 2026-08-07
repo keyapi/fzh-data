@@ -86,13 +86,18 @@ class LizardApiShipmentService:
         poll_interval_s: float = 15.0,
         poll_timeout_s: float = 180.0,
         operation_id: int | None = None,
+        shipper_address: dict[str, str] | None = None,
     ) -> LizardApiShipmentResult:
         sn = (package.package_sn or "").strip()
         if not sn:
             raise ValueError("missing package_sn")
         ref = (reference_no or "").strip() or sn
         body = build_create_order_body(
-            package, sm_code=sm_code, shipper_code=shipper_code, reference_no=ref
+            package,
+            sm_code=sm_code,
+            shipper_code=shipper_code,
+            reference_no=ref,
+            shipper_address=shipper_address,
         )
         created = self._client.create_order(body)
         parsed_create = parse_create_order_result(created)

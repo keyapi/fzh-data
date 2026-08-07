@@ -1085,6 +1085,34 @@ def submission_scope_unblock(
         raise typer.Exit(1)
 
 
+@app.command("packages-submit-quick-outbound")
+def packages_submit_quick_outbound(
+    package_sn: str = typer.Option(..., "--package-sn", help="Sellfox packageSn"),
+    actor: str = typer.Option("cli", help="Actor for audit"),
+    carrier_name: str = typer.Option("", help="Override carrier (default from valid label)"),
+    tracking_number: str = typer.Option("", help="Override tracking (default from valid label)"),
+    shipment_type: int = typer.Option(0, help="0=仅提交平台不扣库存(默认), 1=提交平台且扣库存"),
+    warehouse_id: int | None = typer.Option(None, help="发货仓库ID（仅提交平台时可空）"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Write a valid label's tracking to Sellfox via quickOutbound (快速出库)."""
+    from sellfox_shipping.submission_service import SubmissionService
+
+    config = _load_config()
+    result = SubmissionService(
+        _get_package_repository(), _get_client()
+    ).submit_label_tracking_quick_outbound(
+        account_key=config["sellfox"]["proxy_account"],
+        package_sn=package_sn,
+        actor=actor,
+        carrier_name=carrier_name or "",
+        tracking_number=tracking_number or "",
+        shipment_type=shipment_type,
+        warehouse_id=warehouse_id,
+    )
+    _output(result.__dict__, json_output)
+
+
 @app.command()
 def orders(
     status: Optional[str] = typer.Option(None, help="Filter by package_status"),
