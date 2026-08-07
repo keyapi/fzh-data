@@ -82,8 +82,8 @@ tags: [sellfox-shipping, lizard, vite, submitToPlatform, reliability]
 
 **2026-08-07 跟进（CENTRADE 遗留修复）**：
 - 上述 DANEEY 修复遗漏了 `_LIZARD_CA_ZONE["CENTRADE"]`，它仍为 1 → CENTRADE 包裹蜴国际报价依然全返「未匹配到可用线路」（`_get_lizard_rate` 返回 None）。
-- 根因相同：`shipper_address` 硬编码 TX（S0143 发件人），ca_zone 必须匹配发件人注册地（=0），不能用仓库映射。
-- 修复：`_LIZARD_CA_ZONE["CENTRADE"]` 1→0（app.py）。
+- 根因相同：`shipper_address` 硬编码 TX（S0143 发件人），ca_zone=1 限定美东线路导致无匹配；`ca_zone=0` 是「全域查询」，不是仓库或发件人区域映射。
+- 修复：报价统一改为 `_LIZARD_RATE_CA_ZONE = 0`（全域查询），删除按仓库映射 `_LIZARD_CA_ZONE` 的虚假抽象。
 - **展示决策确认**：运费试算**只显示路由建议承运商**的报价（用户明确选择），另一家存历史报价表；不采用双卡片方案。上一条教训应理解为「先确认设计意图」，双列方案经用户确认被否决。
 
 ### 6. 承运商未启用，下拉只有 VITE

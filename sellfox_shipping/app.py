@@ -1008,14 +1008,10 @@ def _vite_rate_to_dict(
     }
 
 
-# Lizard warehouse → ca_zone mapping (S0143 shipper is registered in TX, outside CA zone).
-# ca_zone must match the S0143 shipper registration — ca_zone=1 makes the API return
-# "未匹配到可用线路" for every product (see b4c3620 for the DANEEY fix).
-_LIZARD_CA_ZONE: dict[str, int] = {
-    "CENTRADE": 0,  # shipper is S0143 (TX), not in CA zone
-    "DANEEY": 0,    # TX → S0143 not in CA zone
-    "POLAND": 0,    # 全域
-}
+# ratesv2 ca_zone is a route-coverage selector, not a warehouse mapping.
+# 0 = query all zones; 1/2/3/4 = East/West/Central/South US. The current quote
+# always uses the S0143 TX shipper, so querying all zones is the intended behavior.
+_LIZARD_RATE_CA_ZONE = 0
 
 
 def _get_lizard_rate(
@@ -1042,8 +1038,7 @@ def _get_lizard_rate(
                 "error": "Lizard credentials not configured (YIGLOBAL_APP_TOKEN / YIGLOBAL_APP_KEY)",
             }
 
-        wh_name = (record.logistics.warehouse_name or "").strip()
-        ca_zone = _LIZARD_CA_ZONE.get(wh_name, 0)
+        ca_zone = _LIZARD_RATE_CA_ZONE
 
         addr = record.address
         body = {

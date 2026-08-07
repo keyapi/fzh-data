@@ -3,10 +3,17 @@ okf: v0.1
 type: Log
 module: sellfox_shipping
 created: 2026-07-15
-updated: 2026-08-06
+updated: 2026-08-07
 ---
 
 # sellfox_shipping - 变更日志
+
+## 2026-08-07 - 蜴国际报价 ca_zone 语义修复与 CENTRADE 遗留问题
+
+- 问题：CENTRADE 包裹点击「获取 VITE + 蜴国际 报价」时蜴国际报价不显示。
+- 根因：`_LIZARD_CA_ZONE["CENTRADE"]=1`（限定美东），而报价请求使用统一 S0143 TX 发件地址；ratesv2 返回「未匹配到可用线路」。
+- 修复：删除按仓库映射的 `_LIZARD_CA_ZONE`，统一使用 `_LIZARD_RATE_CA_ZONE = 0`（全域查询），并补 mock 回归测试锁定请求参数与报价持久化。
+- 展示决策：运费试算只显示路由建议承运商的报价，另一家仅写入历史报价表。
 
 ## 2026-08-06 - 赛狐 Outbox PR 2 执行器与回读
 
