@@ -8,6 +8,13 @@ updated: 2026-08-07
 
 # sellfox_shipping - 变更日志
 
+## 2026-08-07 - 蜴国际报价 ca_zone 语义修复与 CENTRADE 遗留问题
+
+- 问题：CENTRADE 包裹点击「获取 VITE + 蜴国际 报价」时蜴国际报价不显示。
+- 根因：`_LIZARD_CA_ZONE["CENTRADE"]=1`（限定美东），而报价请求使用统一 S0143 TX 发件地址；ratesv2 返回「未匹配到可用线路」。
+- 修复：删除按仓库映射的 `_LIZARD_CA_ZONE`，统一使用 `_LIZARD_RATE_CA_ZONE = 0`（全域查询），并补 mock 回归测试锁定请求参数与报价持久化。
+- 展示决策：运费试算只显示路由建议承运商的报价，另一家仅写入历史报价表。
+
 ## 2026-08-07 - 排除列表新增 TikTok 店铺（TT_Tooddly / TTCozydozy）
 
 - 通过赛狐 OpenAPI `/api/multiplatform/shop/list.json` 核实：`platformType=TIKTOK` 共 4 家店铺（TTCozydozy、TT_Tooddly、TTBNKC、DaneeyGo）。
@@ -17,6 +24,8 @@ updated: 2026-08-07
 - 移除 `routing/models.py` 中冗余的 `is_excluded_shop` 硬编码属性，确认无运行时调用方后由 YAML 作为唯一事实来源。
 - 测试：新增 `test_routing_engine.py`，从真实 YAML 驱动 `RuleEngine.route()` 与 repository 过滤；`test_exclude_shops_filter` 扩展 TikTok 店铺场景。
 - 浏览器验证：勾选排除后 2898→2334 条（-564 = WFUS 325 + OSTK 186 + PotteryBarnUS 41 + TTCozydozy 11 + TT_Tooddly 1）；TTCozydozy 包裹详情建议渠道显示「排除（平台物流）」。
+
+
 
 ## 2026-08-06 - 赛狐 Outbox PR 2 执行器与回读
 

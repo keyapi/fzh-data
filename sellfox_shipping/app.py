@@ -557,7 +557,7 @@ async def package_fetch_rates(request: Request, package_sn: str):
     )
     lizard_rate = await run_in_threadpool(_get_lizard_rate, record, package_dims)
 
-    # Pick the routing-suggested carrier's rate for display
+    # 运费试算只展示路由建议承运商的报价；另一家存历史报价表
     if routing_result and routing_result.matched:
         suggested_carrier = (routing_result.carrier or "").strip().lower()
     else:
@@ -569,7 +569,7 @@ async def package_fetch_rates(request: Request, package_sn: str):
     elif display_rate and "error" in display_rate:
         message = f"报价失败: {display_rate['error']}"
     else:
-        message = "报价完成（查看历史记录）"
+        message = "报价完成（查看历史报价）"
 
     # Re-render with fresh context (live rate + updated history)
     ctx = _package_detail_context(account_key, record, message=message, vite_rate_override=vite_rate, lizard_rate_override=lizard_rate)
@@ -625,7 +625,7 @@ def _package_detail_context(account_key: str, record, *, message: str, vite_rate
     lizard_services = _get_lizard_services(repo, record, account_key)
 
     # Use override from fetch-rates, or None for initial load (on-demand pattern)
-    # Pick the routing-suggested carrier's rate for display
+    # 运费试算只展示路由建议承运商的报价（塞进 vite_rate 变量）；另一家仅存历史报价表
     if routing_result and routing_result.matched:
         suggested_carrier = (routing_result.carrier or "").strip().lower()
     else:
@@ -1008,12 +1008,10 @@ def _vite_rate_to_dict(
     }
 
 
-# Lizard warehouse → ca_zone mapping (based on S0143 shipper registration)
-_LIZARD_CA_ZONE: dict[str, int] = {
-    "CENTRADE": 1,  # NJ → 美东
-    "DANEEY": 0,    # TX → S0143 not in CA zone
-    "POLAND": 0,    # 全域
-}
+# ratesv2 ca_zone is a route-coverage selector, not a warehouse mapping.
+# 0 = query all zones; 1/2/3/4 = East/West/Central/South US. The current quote
+# always uses the S0143 TX shipper, so querying all zones is the intended behavior.
+_LIZARD_RATE_CA_ZONE = 0
 
 
 def _get_lizard_rate(
@@ -1040,8 +1038,7 @@ def _get_lizard_rate(
                 "error": "Lizard credentials not configured (YIGLOBAL_APP_TOKEN / YIGLOBAL_APP_KEY)",
             }
 
-        wh_name = (record.logistics.warehouse_name or "").strip()
-        ca_zone = _LIZARD_CA_ZONE.get(wh_name, 0)
+        ca_zone = _LIZARD_RATE_CA_ZONE
 
         addr = record.address
         body = {
