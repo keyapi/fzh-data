@@ -94,6 +94,18 @@ ERPNext's stock auxiliary accounting system that adds extra tracking fields (e.g
 ### Version Drift (版本差异)
 The gap between the test ERPNext version and the production ERPNext version. Currently the test system runs ERPNext v15.59.0 while production runs v15.43.3. This drift means ERPNext internal APIs (such as `get_inventory_dimensions()`) may return different field sets between the two environments, causing custom app code to work on test but silently fail on production.
 
+### Item Attribute Value All X (底层值表)
+Custom doctypes in the `[Stock]` module that hold canonical attribute values for a domain — `Item Attribute Value All Fabric` (`FAB-*`, abbr+attribute_value), `Item Attribute Value All Color` (`CLR-*`, abbr+attribute_value+supplier_color_number), plus 46+ others (Size, Foam Size, Fiber Pad Size, etc.). Product-specific Item Attributes reference these via `custom_select_doctype`.
+
+### Item Attribute (物料属性) custom_select_doctype
+Convention: 面料/颜色 Item Attributes (e.g. 三角靠枕面料) set `custom_select_doctype` to an "All X" value table and `custom_select_from_all_attribute_values=1`; 尺寸 attributes leave `custom_select_from_all_attribute_values=0` (sizes lack cross-product generality). `custom_item_group` links the attribute to its owning item group.
+
+### 模板物料 (Template Item)
+An Item with `has_variants=1` that defines the attribute set; concrete SKUs are `variant_of` it (e.g. template `KS0001`, variants `KS0001-CMM-153-PURPLE`).
+
+### 配套物料 (Supporting Items)
+The semi-finished/auxiliary items generated from a product template via the「一键创建配套物料及变体」button (Client Script → `key_test.add_item_semi.create_supporting_items_and_variants`). 9 types: 皮壳# (same attrs as product), 内胆# (product size + inner fabric/color), 绍兴包装皮壳#/成品#/半成品# (size only), 波兰PL/美东USNJ/美中USTX包装成品# (size only), 重量模板# (fabric+size, no color). Not every SPU uses all 9.
+
 ## Integrations
 
 ### DingTalk Custom Robot (钉钉自定义机器人)
