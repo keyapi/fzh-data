@@ -43,5 +43,6 @@ uv run python identify_missing_products.py
 
 ## 文档
 
+- **新对话请先读 [AGENT_HANDOFF.md](AGENT_HANDOFF.md)** — 完整交接（背景/状态/下一步/技术细节）
 - [docs/index.md](docs/index.md) — 模块文档索引（OKF）
 - [docs/specs/old-product-completion-plan.md](docs/specs/old-product-completion-plan.md) — 三类老产品（星球/石头/张嘴熊）补齐计划 + 库存同步映射设计

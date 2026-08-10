@@ -468,56 +468,6 @@ def ensure_item_attribute(api: EN, attr: str, item_group: str, select_doctype: s
     return f"FAIL({code}): 建属性 {attr} {json.dumps(res, ensure_ascii=False)[:300]}"
 
 
-# ── Phase 5: 方形枕套 (窄边正方形抱枕 KS0014) ────────
-def phase5(api: EN, dry_run: bool):
-    print("\n===== Phase 5: 方形枕套 (窄边正方形抱枕 KS0014) =====")
-    # 1. 颜色属性（select All Color）+ 咖啡色
-    print(" ", ensure_item_attribute(api, "窄边正方形抱枕颜色", "窄边正方形抱枕",
-                                     "Item Attribute Value All Color", [("咖啡色", "COFFEE")], dry_run))
-    # 2. 尺寸加 80*80（现有 50*50*15）
-    print(" ", ensure_attribute_value(api, "窄边正方形抱枕尺寸", "80*80", "80", dry_run))
-    # 3. KS0014 模板物料
-    print(" ", ensure_item(api, "KS0014", {
-        "item_code": "KS0014", "item_name": "窄边正方形抱枕", "item_group": "窄边正方形抱枕",
-        "stock_uom": "个", "is_stock_item": 1, "include_item_in_manufacturing": 1, "is_sales_item": 1,
-        "has_variants": 1,
-        "attributes": [
-            {"attribute": "窄边正方形抱枕面料"}, {"attribute": "窄边正方形抱枕尺寸"}, {"attribute": "窄边正方形抱枕颜色"},
-        ],
-    }, dry_run))
-    # 4. 绍兴包装皮壳# 模板 + 80*80 变体（成本 15.44）
-    print(" ", ensure_item(api, "SXBZPK#KS0014", {
-        "item_code": "SXBZPK#KS0014", "item_name": "绍兴包装皮壳#窄边正方形抱枕",
-        "item_group": "绍兴包装皮壳#窄边正方形抱枕", "stock_uom": "个",
-        "is_stock_item": 1, "include_item_in_manufacturing": 1, "is_sales_item": 0, "has_variants": 1,
-        "attributes": [{"attribute": "窄边正方形抱枕尺寸"}],
-    }, dry_run))
-    print(" ", ensure_item(api, "SXBZPK#KS0014-80", {
-        "item_code": "SXBZPK#KS0014-80", "item_name": "绍兴包装皮壳#窄边正方形抱枕-80*80",
-        "item_group": "绍兴包装皮壳#窄边正方形抱枕", "stock_uom": "个",
-        "is_stock_item": 1, "include_item_in_manufacturing": 1, "is_sales_item": 0,
-        "variant_of": "SXBZPK#KS0014", "has_variants": 0,
-        "attributes": [{"attribute": "窄边正方形抱枕尺寸", "attribute_value": "80*80"}],
-    }, dry_run))
-    print(" ", ensure_item_price(api, "SXBZPK#KS0014-80", "标准采购", 15.44, dry_run))
-    # 5. 方形枕套 成品变体
-    print(" ", ensure_item(api, "KS0014-HLR-80-COFFEE", {
-        "item_code": "KS0014-HLR-80-COFFEE", "item_name": "窄边正方形抱枕-荷兰绒-80*80-咖啡色 枕套",
-        "item_group": "窄边正方形抱枕", "stock_uom": "个",
-        "is_stock_item": 1, "include_item_in_manufacturing": 1, "is_sales_item": 1,
-        "variant_of": "KS0014", "has_variants": 0,
-        "attributes": [
-            {"attribute": "窄边正方形抱枕面料", "attribute_value": "荷兰绒"},
-            {"attribute": "窄边正方形抱枕尺寸", "attribute_value": "80*80"},
-            {"attribute": "窄边正方形抱枕颜色", "attribute_value": "咖啡色"},
-        ],
-    }, dry_run))
-    # 6. 简化 BOM → 绍兴包装皮壳#（只卖皮壳）
-    print(" ", ensure_bom(api, "KS0014-HLR-80-COFFEE", [{"item_code": "SXBZPK#KS0014-80", "qty": 1.0, "uom": "个"}], dry_run))
-    # 7. 客户码
-    print(" ", ensure_customer_code(api, "KS0014-HLR-80-COFFEE", "TT0000779K0054313", "美国公司", dry_run))
-
-
 # ── Phase 6: 方形枕套 KS0013（宽边正方形枕头）────────
 def phase6(api: EN, dry_run: bool):
     print("\n===== Phase 6: 方形枕套 KS0013 (宽边正方形枕头) =====")
@@ -571,8 +521,6 @@ def main():
         phase3(api, args.dry_run)
     if args.phase is None or args.phase == 4:
         phase4(api, args.dry_run)
-    if args.phase is None or args.phase == 5:
-        phase5(api, args.dry_run)
     if args.phase is None or args.phase == 6:
         phase6(api, args.dry_run)
 
