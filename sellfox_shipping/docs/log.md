@@ -3,10 +3,17 @@ okf: v0.1
 type: Log
 module: sellfox_shipping
 created: 2026-07-15
-updated: 2026-08-07
+updated: 2026-08-10
 ---
 
 # sellfox_shipping - 变更日志
+
+## 2026-08-10 - quickOutbound 回写安全收口
+
+- 合并后审计发现 #158 的 `quickOutbound` service/CLI/Web 路径直接发真实 HTTP，未接入订单级 Outbox、能力 Policy、`IN_FLIGHT` 崩溃阻断或 packageDetail 回读；Web 端点现改为明确暂停提示。
+- CLI `packages-submit-quick-outbound` 仅保留单包 dry-run 请求预览，固定 `shipmentType=0`；真实发送必须等独立 quickOutbound Outbox endpoint 设计、单包 PROBE_ONLY 和能力证据。
+- 删除宽松的 `submission-scope-unblock` / `resolve_submission_scope_block` 入口；解除 UNKNOWN scope 统一使用带 intent、actor、note 和 confirm 的 `submission-scope-resolve`。
+- `submitToPlatform` 的 401、429 与 409 不再被 blanket 4xx 规则当作安全失败；只有明确的 400/404/422 请求拒绝可释放 scope，其余保守进入 UNKNOWN 阻断。
 
 ## 2026-08-07 - 开源复用档案与 Search-before-Build 准入
 

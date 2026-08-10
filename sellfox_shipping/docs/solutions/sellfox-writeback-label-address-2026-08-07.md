@@ -25,14 +25,14 @@ tags: [sellfox-shipping, submitToPlatform, quickOutbound, lizard, shipper-addres
 2. **HTTP 400 但看不到原因**：`DirectSellfoxClient._post` 用 `raise_for_status()` 丢失响应体 → 捕获 4xx 响应体，赛狐真实 `msg` 进 http_summary。
 3. **quantity 类型不符**：官方 schema 要求 string，代码发 int → 转 `str(int(...))`。
 4. **HTTP 400 全锁 scope**：任何异常都 `UNKNOWN_BLOCKED` → 4xx（赛狐明确拒绝，无副作用）= FAILED 不锁 scope；5xx/超时/网络 = UNKNOWN 锁 scope。
-5. **scope 永久锁死**：无解除路径 + 旧 UNKNOWN intent 卡「cannot submit」→ 新增 `submission-scope-unblock` CLI（解除 scope + 重置 intent 为 READY）。
+5. **scope 永久锁死**：无解除路径 + 旧 UNKNOWN intent 卡「cannot submit」→ 提供带 `intent_id + actor + note + confirm` 的人工解除；旧的宽松 package/order 解除入口已移除。
 6. **submitToPlatform 拒绝**：错误体显示 **`仅支持未发货订单提交平台`**（订单状态 Unshipped 但包裹 apply_track_no，赛狐判定口径不明）。
-7. **发现 quickOutbound**：`POST /api/packageShip/quickOutbound.json`（快速出库），入参 `packageSn+carrier+trackNo+shipmentType=0`（仅提交平台不扣库存），多平台订单写回。已接入客户端/service/CLI/Web。
+7. **发现 quickOutbound**：`POST /api/packageShip/quickOutbound.json`（快速出库），入参 `packageSn+carrier+trackNo+shipmentType=0`（仅提交平台不扣库存），可能是多平台订单写回路径。客户端协议封装和 dry-run 已保留；真实发送暂停，等待独立 Outbox endpoint 与单包能力探针。
 8. **quickOutbound 也拒**：`该订单不需要提交平台`（Amazon FBM 订单，非多平台订单）。
 
 ### 当前结论
 - **submitToPlatform**：Amazon/FBM 专属，但实测被拒（"仅支持未发货订单提交平台"）。
-- **quickOutbound**：多平台订单（Walmart/TikTok）写回路径。
+- **quickOutbound**：可能是多平台订单（Walmart/TikTok）写回路径，尚无成功真实探针，不能作为已验证生产通道。
 - 两类接口对这个 Amazon FBM 订单都返回"不需要提交平台"——需与赛狐确认正确写回方式（是否改用 applyTrackNo 物流下单发货，或订单类型确实无需提交）。
 
 ## 二、蜴国际面单发货地址错误
@@ -83,9 +83,9 @@ CENTRADE（美东/NJ 仓）包裹创建面单，打印标签显示 TX 地址（H
 - 测试基线：293 passed。
 
 ## 相关文件
-- `sellfox_shipping/submission_service.py` — quickOutbound / 4xx 分类
+- `sellfox_shipping/submission_service.py` — quickOutbound dry-run 预览 / 赛狐错误分类
 - `sellfox_shipping/carriers/lizard/order_adapter.py` — build_shipper_address_from_warehouse
 - `sellfox_shipping/carriers/lizard/api_shipment.py` — ship_package shipper_address
 - `sellfox_shipping/label_service.py` — create_label 蜴国际分支
-- `sellfox_shipping/package_repository.py` — resolve_submission_scope_block
+- `sellfox_shipping/package_repository.py` — resolve_unknown_blocked_scope
 - `SELLFOX_API/docs/api-reference/订单/订单处理/提交平台.md`、`多平台/订单/快速出库.md`

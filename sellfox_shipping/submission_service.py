@@ -358,7 +358,7 @@ class SubmissionService:
                 )
         except Exception as exc:  # noqa: BLE001
             status_code = getattr(exc, "status_code", None)
-            if isinstance(status_code, int) and 400 <= status_code < 500:
+            if status_code in {400, 404, 422}:
                 # 4xx = Sellfox definitively rejected the request (nothing applied).
                 # Mark FAILED and keep the scope OPEN so the caller can retry after
                 # fixing the request — not a genuinely-unknown outcome.
@@ -550,6 +550,7 @@ class SubmissionService:
         tracking_number: str = "",
         shipment_type: int = 0,
         warehouse_id: int | None = None,
+        dry_run: bool = True,
     ) -> QuickOutboundResult:
         """Write a valid label's tracking to Sellfox via quickOutbound (快速出库).
 
@@ -557,6 +558,28 @@ class SubmissionService:
         不扣库存). This is the multi-platform write path, as opposed to the
         Amazon-only submitToPlatform.
         """
+        if shipment_type != 0:
+            raise ValueError("quickOutbound only permits shipment_type=0")
+        record = self._repo.get(account_key, package_sn)
+        if record is None:
+            raise LookupError(f"Package {package_sn} not found")
+        if record.local_review_status != "approved":
+            raise ValueError("package local_review_status must be approved")
+        package_db_id = self._repo.get_package_db_id(account_key, package_sn)
+        if package_db_id is None:
+            raise LookupError(f"Package db id missing for {package_sn}")
+        for order_db_id, external_order_id in self._repo.list_package_order_db_ids(
+            account_key, package_sn
+        ):
+            if self._repo.is_submission_scope_blocked(
+                account_key=account_key,
+                package_db_id=package_db_id,
+                order_db_id=order_db_id,
+            ):
+                raise SubmissionScopeBlockedError(
+                    f"scope blocked for order {external_order_id}"
+                )
+
         labels = self._repo.list_labels_for_package(
             account_key=account_key, package_sn=package_sn
         )
@@ -577,8 +600,11 @@ class SubmissionService:
             raise ValueError("package must have a real tracking_number before submit")
         if not carrier:
             raise ValueError("carrier_name is required")
-        if self._client is None:
-            raise RuntimeError("submit client required for side effects")
+        if not dry_run:
+            raise RuntimeError(
+                "quickOutbound live send is disabled until an Outbox-backed "
+                "endpoint implementation is approved"
+            )
 
         pkg: dict[str, object] = {
             "packageSn": package_sn,
@@ -589,38 +615,16 @@ class SubmissionService:
         if warehouse_id is not None:
             pkg["warehouseId"] = warehouse_id
 
-        resp = self._client.quick_outbound([pkg])
-        code = resp.get("code")
-        msg = str(resp.get("msg") or "")
-        data = resp.get("data") if isinstance(resp.get("data"), dict) else {}
-        success_num = int(data.get("successNum") or 0)
-        fail_data = data.get("failData") if isinstance(data.get("failData"), list) else []
-
-        summary = (
-            f"quickOutbound {package_sn} code={code} success={success_num} "
-            f"fail={len(fail_data)} msg={msg}"
-        )
-        try:
-            self._repo.append_audit_event(
-                actor=actor,
-                action="submission.quick_outbound",
-                entity_type="package",
-                entity_id=package_sn,
-                summary=summary[:500],
-            )
-        except Exception:
-            pass
-
         return QuickOutboundResult(
             package_sn=package_sn,
             tracking_number=tracking,
             carrier_name=carrier,
-            http_called=True,
-            code=code,
-            msg=msg,
-            success_num=success_num,
-            fail_data=fail_data,
-            raw=resp,
+            http_called=False,
+            code=None,
+            msg="dry-run: quickOutbound live send disabled pending Outbox integration",
+            success_num=0,
+            fail_data=[],
+            raw={"packageList": [pkg]},
         )
 
     def resolve_unknown_blocked_scope(
