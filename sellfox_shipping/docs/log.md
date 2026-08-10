@@ -8,6 +8,15 @@ updated: 2026-08-10
 
 # sellfox_shipping - 变更日志
 
+## 2026-08-10 - 蜴国际面单发货地址：根因已与蜴国际确认（产品↔发件人绑定），代码尝试已还原
+
+- **决定性根因（已与蜴国际确认）**：蜴国际产品（sm_code）↔ 发件人（已备案地址）**关联绑定**；createOrder 的 `shipper_address` 字段无效，面单 FROM 地址由所选产品绑定的发件人决定。实测传 NJ 已备案地址仍打印 TX/CA——shipper_address 被完全忽略。
+- **产品绑定示例**：`FedEx-21-AHS-USEA`→East Hanover NJ；`FedEx-Ground-20-OS-TX`→Houston TX；`FedEx-Economy-10-USEA`→Ontario CA（非 NJ）。
+- **当前卡点**：`FedEx-21-AHS-USEA`（绑定 NJ 发件人的产品）**已下线（渠道已关闭）**，ratesv2 不再返回、createOrder 报 `400 物流渠道已关闭`。`FedEx-Economy-10-USEA` 可用但绑定 Ontario CA。**NJ 暂无可用产品，需蜴国际重新开通 NJ 产品或把 NJ 发件人绑定到可用美东产品。**
+- **代码侧尝试已还原（未提交）**：曾实现 `build_shipper_address_from_warehouse` 按仓库映射已备案地址 + 区域感知产品选择 + 下拉框区域过滤，但因①蜴国际忽略 shipper_address、②NJ 产品下线，无法解决，已 `git restore` 还原。下拉框保持列出全部产品、人工选择。
+- **待实现（后续，本次不做）**：仓库 → 下拉框固定服务类型（warehouse → fixed sm_code），等蜴国际开通 NJ 产品后；勿映射已下线的 `FedEx-21-AHS-USEA`。
+- 详见 [已解决问题：蜴国际面单发货地址](solutions/sellfox-writeback-label-address-2026-08-07.md)。
+
 ## 2026-08-10 - 修复面单创建 "No dimensions available"（upsert_package_dims 主键/外键混淆）
 
 - 现象：`P2B4A9T731770` 创建面单报 `No dimensions available for package`。`LabelService.preflight` 在 `get_package_dims(db_id)` 返回 `None` 时报错。

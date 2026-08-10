@@ -51,12 +51,29 @@ CENTRADE（美东/NJ 仓）包裹创建面单，打印标签显示 TX 地址（H
 - config `warehouses.CENTRADE` 更新为美东真实地址（Overstock.com, Centrade Inc / 389 Route 10 Unit R, East Hanover NJ 07936 / 7327622442 / service@icentrade.com）。
 - 包裹详情页显示「发货仓库」。
 
-### ⚠️ 仍未解决
-**实测蜴国际可能忽略请求内的 `shipper_address`，改用其账户/产品配置的发货地址**（打印仍显示 Missouri City TX 77489 = 蜴国际账户地址，与注册表 S1261 一致）。创建面单用 `sm_code="FedEx-Ground-J-TX"`（TX 产品）。
-→ **需要与蜴国际确认**：
-1. createOrder 的 `shipper_address` 是否生效？
-2. 是否有 CENTRADE/NJ 对应的产品（sm_code）？
-3. 蜴国际账户发货地址能否配置为 NJ？
+### 2026-08-10 已与蜴国际确认根因（决定性）
+**蜴国际产品（sm_code）↔ 发件人（已备案地址）关联绑定；createOrder 的 `shipper_address` 字段无效——面单 FROM 地址由所选产品绑定的发件人决定。**
+
+- 蜴国际后台「选择发件人」下拉框显示的绑定关系：
+  - `FedEx-21-AHS-USEA` → Qiang Ma, 389 STATE ROUTE 10 UNIT R, **East Hanover NJ 07936**（美东 NJ ✓）
+  - `FedEx-Ground-20-OS-TX` → A_TX_77091, 10812 Fallstone Rd, **Houston TX 77099**（德州 TX ✓）
+  - `FedEx-Economy-10-USEA` → EHN1#3232, 1450 Mission Blvd, **Ontario CA 91761**（加州 CA，非 NJ）
+- 实测验证：传 NJ 已备案地址（S0656），选 TX 产品打印 Missouri City TX；选 `FedEx-Economy-10-USEA` 打印 Ontario CA——均非所传地址。**shipper_address 被完全忽略。**
+- **代码无法控制 FROM 地址；正确做法是选对产品（产品决定发件人）。**
+
+**⚠️ 当前卡点：`FedEx-21-AHS-USEA`（绑定 NJ 发件人的产品）已下线（渠道已关闭），NJ 暂无可用产品。**
+- ratesv2 不再返回该产品；createOrder 报 `400 FedEx-21-AHS-USEA 物流渠道已关闭`（已与蜴国际确认，非代码问题）。
+- `FedEx-Economy-10-USEA` 可用但绑定 Ontario CA（非 NJ）。
+- **修复路径（蜴国际侧）**：① 重新开通 `FedEx-21-AHS-USEA`；或 ② 把 NJ 发件人（Overstock.com, Centrade Inc / 389 STATE ROUTE 10 UNIT R, EAST HANOVER NJ 07936 / 7327622442）绑定到另一个可用美东产品。
+
+**代码侧尝试（2026-08-10）已还原**：曾实现 `build_shipper_address_from_warehouse` 按仓库映射已备案地址 + 区域感知产品选择 + 下拉框区域过滤，但因 ① 蜴国际忽略 shipper_address、② NJ 产品下线，无法解决，已 `git restore` 还原，未提交。
+
+**待实现（后续，本次不做）：仓库 → 下拉框固定服务类型（warehouse → fixed sm_code）**。
+- 一旦蜴国际开通可用 NJ 产品，代码可按仓库映射默认产品：CENTRADE →（蜴国际确认后的 NJ 产品）、DANEEY → `FedEx-Ground-20-OS-TX`。
+- 注意 `FedEx-21-AHS-USEA` 已下线，勿再映射；`FedEx-Economy-10-USEA` 绑定 Ontario CA，不适合 NJ。
+- 当前保持下拉框列出全部产品、由人工选择；不做区域过滤（用户决策）。
+
+**备注**：S0656/S0795 备案人是 Qiang Ma/1234567890，与业务想要的 Overstock.com, Centrade Inc./7327622442 不同；若必须打印业务名字，需在 Lizard 后台把该地址备案成业务名（属 Lizard 侧）。
 
 ## 三、运费试算显示（用户决策）
 
@@ -76,9 +93,10 @@ CENTRADE（美东/NJ 仓）包裹创建面单，打印标签显示 TX 地址（H
 ## 五、当前状态与待办（给新对话）
 
 - **PR #158**（fix/sellfox-submit-quantity-errorbody）：本次全部改动已提交。PR #153/#154/#155 未合并（内容已被 #158 部分覆盖）。
+- **蜴国际发货地址事项（2026-08-10）已与蜴国际确认**：产品↔发件人关联绑定、`shipper_address` 无效、`FedEx-21-AHS-USEA` 已下线。**当前卡点：NJ 无可用产品，需蜴国际开通 NJ 产品后，再实现「仓库→固定服务类型」**（本次不做）。
 - **待办**：
   1. 与赛狐确认正确写回 API（submitToPlatform/quickOutbound/applyTrackNo）。
-  2. 与蜴国际确认 shipper_address 是否生效 + NJ 产品/账户配置。
+  2. 等蜴国际开通 NJ 产品 → 实现仓库→下拉框固定服务类型（见上节"待实现"）。
   3. 同步 8 月包裹，重新验证。
 - 测试基线：293 passed。
 
