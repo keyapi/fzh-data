@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
-
-import json
 
 from typer.testing import CliRunner
 
@@ -19,6 +18,7 @@ from sellfox_shipping.package_models import (
     SellfoxPackageRecord,
 )
 from sellfox_shipping.package_repository import PackageRepository
+from sellfox_shipping.sellfox_client import SellfoxApiError
 from sellfox_shipping.submission_service import (
     SubmissionScopeBlockedError,
     SubmissionService,
@@ -123,6 +123,73 @@ def test_different_hash_after_tracking_change(tmp_path: Path) -> None:
         items=[{"order_item_id": "ITEM-B", "quantity": 1}],
     )
     assert new_hash != intent.request_hash
+
+
+class _RaisingClient:
+    def __init__(self, exc: Exception) -> None:
+        self.exc = exc
+
+    def submit_to_platform(self, wire_body: dict) -> dict:
+        raise self.exc
+
+    def fetch_package_detail(self, package_sn: str) -> dict | None:
+        return None
+
+
+def test_4xx_marks_failed_not_unknown_scope(tmp_path: Path) -> None:
+    """A 4xx rejection is FAILED and leaves the scope OPEN (retryable)."""
+    repo = PackageRepository(tmp_path / "shipping.db")
+    intent_id = _seed(repo)
+    svc = SubmissionService(
+        repo,
+        _RaisingClient(SellfoxApiError("Sellfox HTTP 400: bad", status_code=400)),
+    )
+    result = svc.submit_intent(
+        intent_id=intent_id, actor="ops", dry_run=False, allow_side_effects=True
+    )
+    assert result.intent_status == "FAILED"
+    assert result.attempt_status == "FAILED"
+    assert not repo.is_submission_scope_blocked_by_intent(intent_id)
+
+
+def test_5xx_marks_unknown_and_blocks_scope(tmp_path: Path) -> None:
+    """A 5xx leaves the outcome unknown → UNKNOWN + scope blocked."""
+    repo = PackageRepository(tmp_path / "shipping.db")
+    intent_id = _seed(repo)
+    svc = SubmissionService(
+        repo,
+        _RaisingClient(SellfoxApiError("Sellfox HTTP 500: boom", status_code=500)),
+    )
+    result = svc.submit_intent(
+        intent_id=intent_id, actor="ops", dry_run=False, allow_side_effects=True
+    )
+    assert result.intent_status == "UNKNOWN"
+    assert result.attempt_status == "UNKNOWN"
+    assert repo.is_submission_scope_blocked_by_intent(intent_id)
+
+
+def test_resolve_submission_scope_block(tmp_path: Path) -> None:
+    """resolve_submission_scope_block clears the block so the package can retry."""
+    repo = PackageRepository(tmp_path / "shipping.db")
+    intent_id = _seed(repo)
+    repo.mark_submission_unknown_and_block_scope(
+        attempt_id=repo.create_submission_attempt(intent_id=intent_id, actor="ops").id,
+        intent_id=intent_id,
+        http_summary="timeout",
+    )
+    assert repo.is_submission_scope_blocked_by_intent(intent_id)
+    assert repo.get_submission_intent(intent_id).status == "UNKNOWN"
+
+    scope_id = repo.resolve_submission_scope_block(
+        account_key="sellfox-main",
+        package_sn="P2ABLOCK1",
+        external_order_id="ORD-B",
+        actor="ops",
+    )
+    assert scope_id > 0
+    assert not repo.is_submission_scope_blocked_by_intent(intent_id)
+    # Intent reset to READY so it can be re-submitted.
+    assert repo.get_submission_intent(intent_id).status == "READY"
 
 
 class _ResolveCountingClient:

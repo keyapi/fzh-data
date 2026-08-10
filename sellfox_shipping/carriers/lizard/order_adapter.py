@@ -112,6 +112,56 @@ def shipper_address_for_code(code: str) -> dict[str, str]:
     raise UnknownShipperCodeError(f"unknown shipper code: {code!r}")
 
 
+def build_shipper_address_from_warehouse(
+    warehouse_name: str, warehouses_cfg: dict
+) -> dict[str, str]:
+    """Build 蜴国际 shipper_address from config.warehouses[warehouse].address.
+
+    Fail-closed: a missing warehouse or incomplete address raises ValueError so a
+    label is never created with the wrong shipping address (lizard has no shipper
+    codes — the S0143 table was a VITE concept).
+    """
+    key = (warehouse_name or "").strip()
+    if not key:
+        raise ValueError("warehouse_name is required for lizard shipper_address")
+    wh = (warehouses_cfg or {}).get(key, {})
+    if not wh:
+        raise ValueError(f"warehouse '{key}' not found in config.warehouses")
+    addr = wh.get("address", {}) or {}
+    name = (addr.get("name") or "").strip()
+    address1 = (addr.get("address1") or "").strip()
+    city = (addr.get("city") or "").strip()
+    state = (addr.get("state") or "").strip()
+    postal = (addr.get("postal_code") or "").strip()
+    phone = (addr.get("phone") or "").strip()
+    missing = [
+        field
+        for field, value in (
+            ("name", name),
+            ("address1", address1),
+            ("city", city),
+            ("state", state),
+            ("postal_code", postal),
+            ("phone", phone),
+        )
+        if not value
+    ]
+    if missing:
+        raise ValueError(
+            f"warehouse '{key}' address incomplete: missing " + ", ".join(missing)
+        )
+    return {
+        "shipper_name": name[:35],
+        "shipper_postal_code": postal[:10],
+        "shipper_address1": address1[:50],
+        "shipper_address2": (addr.get("address2") or "")[:35],
+        "shipper_state_province": state[:2],
+        "shipper_city": city[:28],
+        "shipper_country": (addr.get("country_code") or addr.get("country") or "US").strip().upper(),
+        "shipper_telphone": phone[:15],
+    }
+
+
 def _oa_country(country: str, country_code: str) -> str:
     for key in (country_code, country):
         mapped = _COUNTRY_ISO2.get((key or "").strip())
@@ -129,12 +179,16 @@ def build_create_order_body(
     weight_unit_type: str = "2",  # 2=KG/CM per API doc
     parcel_declared_value: float = 10.0,
     reference_no: str = "",
+    shipper_address: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Map a Sellfox package to 蜴国际 createOrder JSON (no HTTP).
 
     Does not replace Excel production path; use with ``LizardApiClient.create_order``.
     ``reference_no`` defaults to ``package_sn``; pass a unique value when a
     cancelled order still reserves the package_sn reference on 蜴国际.
+
+    ``shipper_address`` (full address object) is preferred; when omitted it falls
+    back to ``shipper_address_for_code(shipper_code)`` for backwards compatibility.
     """
     sn = (package.package_sn or "").strip()
     if not sn:
@@ -194,5 +248,9 @@ def build_create_order_body(
         "oa_doorplate": "",
         "oa_phone_ext": "",
         "signature_service": "",
-        "shipper_address": shipper_address_for_code(shipper_code),
+        "shipper_address": (
+            shipper_address
+            if shipper_address is not None
+            else shipper_address_for_code(shipper_code)
+        ),
     }

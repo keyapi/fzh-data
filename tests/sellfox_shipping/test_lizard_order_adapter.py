@@ -97,3 +97,62 @@ def test_blank_package_sn_rejected():
             _pkg(package_sn="  "),
             sm_code="FedEx-Ground-J-TX",
         )
+
+
+def test_shipper_address_from_warehouse_centrade():
+    """蜴国际 shipper_address comes from config warehouse (fail-closed), not S0143."""
+    from sellfox_shipping.carriers.lizard.order_adapter import (
+        build_shipper_address_from_warehouse,
+    )
+
+    cfg = {
+        "CENTRADE": {
+            "address": {
+                "name": "FZH USNJ Warehouse",
+                "address1": "389 Route 10 Unit R",
+                "city": "East Hanover",
+                "state": "NJ",
+                "postal_code": "07936",
+                "country_code": "US",
+                "phone": "1234567890",
+            }
+        }
+    }
+    addr = build_shipper_address_from_warehouse("CENTRADE", cfg)
+    assert addr["shipper_name"] == "FZH USNJ Warehouse"
+    assert addr["shipper_postal_code"] == "07936"
+    assert addr["shipper_state_province"] == "NJ"
+    assert addr["shipper_city"] == "East Hanover"
+    assert addr["shipper_country"] == "US"
+
+
+def test_shipper_address_from_warehouse_unknown_fails_closed():
+    """Unknown warehouse → ValueError, never a silently-wrong address."""
+    from sellfox_shipping.carriers.lizard.order_adapter import (
+        build_shipper_address_from_warehouse,
+    )
+
+    with pytest.raises(ValueError, match="not found"):
+        build_shipper_address_from_warehouse("NOPE", {"CENTRADE": {"address": {}}})
+    with pytest.raises(ValueError, match="warehouse_name is required"):
+        build_shipper_address_from_warehouse("", {"CENTRADE": {"address": {}}})
+
+
+def test_build_create_order_body_uses_passed_shipper_address():
+    """build_create_order_body prefers the passed shipper_address over shipper_code."""
+    addr = {
+        "shipper_name": "FZH USNJ Warehouse",
+        "shipper_postal_code": "07936",
+        "shipper_address1": "389 Route 10 Unit R",
+        "shipper_address2": "",
+        "shipper_state_province": "NJ",
+        "shipper_city": "East Hanover",
+        "shipper_country": "US",
+        "shipper_telphone": "1234567890",
+    }
+    body = build_create_order_body(
+        _pkg(),
+        sm_code="FedEx-Ground-J-TX",
+        shipper_address=addr,
+    )
+    assert body["shipper_address"] == addr

@@ -63,4 +63,5 @@ def test_wire_body_uses_order_id_not_amazon_order_id() -> None:
     wire = canonical_to_wire_body(req)
     assert wire["orderId"] == "111-222"
     assert "amazonOrderId" not in wire
-    assert wire["items"] == [{"orderItemId": "item-1", "quantity": 3}]
+    # quantity is a string per PackageSubmitToPlatformOpenQO.SubmitOrderItemOpenQO
+    assert wire["items"] == [{"orderItemId": "item-1", "quantity": "3"}]

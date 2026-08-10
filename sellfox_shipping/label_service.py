@@ -601,6 +601,22 @@ class LabelService:
         msg = result.get("msg") or result.get("message") or "Cancelled"
         return f"Cancelled Lizard order {order_code} ({msg})"
 
+    def _load_warehouses_config(self) -> dict:
+        """Read config.yaml warehouses (shipper addresses for 蜴国际/VITE ship-from)."""
+        from pathlib import Path
+
+        import yaml
+
+        path = Path(__file__).parent / "config.yaml"
+        if not path.is_file():
+            return {}
+        try:
+            with open(path, encoding="utf-8") as f:
+                raw = yaml.safe_load(f)
+            return (raw or {}).get("warehouses", {}) or {}
+        except Exception:
+            return {}
+
     def _lizard_reference_no(
         self, package_sn: str, operation_id: int | None
     ) -> str:
@@ -775,6 +791,20 @@ class LabelService:
                     })
                 })
 
+        # Fail-closed shipper address from the package's warehouse (蜴国际 has no
+        # shipper codes — the S0143 table was a VITE concept). Never default to a
+        # fixed address that could be the wrong warehouse.
+        from sellfox_shipping.carriers.lizard.order_adapter import (
+            build_shipper_address_from_warehouse,
+        )
+
+        try:
+            shipper_address = build_shipper_address_from_warehouse(
+                package.logistics.warehouse_name or "", self._load_warehouses_config()
+            )
+        except ValueError as exc:
+            raise LabelServiceError(f"蜴国际发货仓库地址缺失: {exc}") from exc
+
         with LizardApiClient(
             app_token=app_token,
             app_key=app_key,
@@ -792,6 +822,7 @@ class LabelService:
                     sm_code=sm_code,
                     reference_no=lizard_ref,
                     operation_id=operation_id,
+                    shipper_address=shipper_address,
                 )
             except LizardApiError as exc:
                 raise LabelServiceError(

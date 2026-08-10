@@ -1120,7 +1120,18 @@ def _get_lizard_rate(
                 best_total = total
                 best = rate_record
 
-        return best
+        if best is not None:
+            return best
+        # No product returned a usable total_charge — surface why instead of None.
+        err_msgs = sorted(
+            {
+                str(item.get("err_msg", "")).strip()
+                for item in result.values()
+                if isinstance(item, dict) and item.get("err_msg")
+            }
+        )
+        reason = "；".join(err_msgs[:3]) if err_msgs else "无匹配线路"
+        return {"source": "lizard", "error": f"蜴国际无可用报价：{reason}"}
 
     except Exception as exc:  # noqa: BLE001 — surface the reason instead of hiding it
         return {"source": "lizard", "error": f"Lizard rate fetch failed: {exc}"}
@@ -1392,16 +1403,25 @@ async def package_submit_label_tracking_form(request: Request, package_sn: str):
     actor = _web_actor(request, str(form.get("actor") or "web-user"))
     try:
         result = await run_in_threadpool(
-            SubmissionService(repo, get_sellfox_client()).submit_label_tracking,
+            SubmissionService(repo, get_sellfox_client()).submit_label_tracking_quick_outbound,
             account_key=account_key,
             package_sn=package_sn,
             actor=actor,
         )
-        message = (
-            f"已回写面单追踪号 {result.tracking_number} → 赛狐；"
-            f"意图 {result.intent_ids} 状态 {result.intent_statuses}；"
-            f"HTTP {'已调用' if result.http_called else '未调用'}"
-        )
+        if result.code == 0 and result.success_num > 0:
+            message = (
+                f"已回写面单追踪号 {result.tracking_number} → 赛狐（quickOutbound）；"
+                f"成功 {result.success_num} 单"
+            )
+        else:
+            fails = "; ".join(
+                f"{d.get('packageSn', '')}: {d.get('msg', '')}"
+                for d in result.fail_data
+            )
+            detail = f"code={result.code} msg={result.msg}"
+            if fails:
+                detail += f" | {fails}"
+            message = f"回写赛狐失败: {detail}"
     except Exception as exc:  # noqa: BLE001
         message = f"回写赛狐失败: {exc}"
     record = repo.get(account_key, package_sn)

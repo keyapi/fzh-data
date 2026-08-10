@@ -2145,6 +2145,74 @@ class PackageRepository:
                 scope.updated_at = now
 
     def resolve_submission_scope_block(
+        self,
+        *,
+        account_key: str,
+        package_sn: str,
+        external_order_id: str,
+        actor: str,
+    ) -> int:
+        """Clear an UNKNOWN_BLOCKED submission scope and reset its UNKNOWN intents.
+
+        A human confirms the prior ambiguous submit did NOT apply (e.g. a 4xx
+        rejection), so the package can be re-submitted. Records an audit event.
+        Returns the scope id.
+        """
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        with self._session_factory.begin() as session:
+            account = self._get_or_create_account(session, account_key)
+            package = session.scalar(
+                select(PackageRow).where(
+                    PackageRow.account_id == account.id,
+                    PackageRow.package_sn == package_sn,
+                )
+            )
+            order = session.scalar(
+                select(OrderRow).where(
+                    OrderRow.account_id == account.id,
+                    OrderRow.external_order_id == external_order_id,
+                )
+            )
+            if package is None or order is None:
+                raise LookupError(
+                    f"package {package_sn} or order {external_order_id} not found"
+                )
+            scope = session.scalar(
+                select(SubmissionScopeRow).where(
+                    SubmissionScopeRow.account_id == account.id,
+                    SubmissionScopeRow.package_id == package.id,
+                    SubmissionScopeRow.order_id == order.id,
+                )
+            )
+            if scope is None:
+                raise LookupError(
+                    f"no submission scope for {package_sn} / {external_order_id}"
+                )
+            if scope.status == "UNKNOWN_BLOCKED":
+                scope.status = "OPEN"
+                scope.updated_at = now
+            # Reset stale UNKNOWN intents back to READY so they can be re-submitted.
+            for intent in session.scalars(
+                select(SubmissionIntentRow).where(
+                    SubmissionIntentRow.scope_id == scope.id,
+                    SubmissionIntentRow.status == "UNKNOWN",
+                )
+            ):
+                intent.status = "READY"
+                intent.updated_at = now
+            session.add(
+                AuditEventRow(
+                    actor=actor,
+                    action="submission.scope_unblock",
+                    entity_type="submission_scope",
+                    entity_id=str(scope.id),
+                    summary=f"unblock {package_sn} / {external_order_id}",
+                    created_at=now,
+                )
+            )
+            return scope.id
+
+    def resolve_unknown_blocked_scope(
         self, *, intent_id: int, actor: str, note: str
     ) -> SubmissionIntentRecord:
         """Human-approved, audited unblock of an UNKNOWN_BLOCKED submission scope.

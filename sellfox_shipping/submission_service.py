@@ -75,12 +75,28 @@ class SubmitLabelTrackingResult:
     package_submission_state: str
 
 
+@dataclass(frozen=True)
+class QuickOutboundResult:
+    package_sn: str
+    tracking_number: str
+    carrier_name: str
+    http_called: bool
+    code: int | None
+    msg: str
+    success_num: int
+    fail_data: list[dict]
+    raw: dict | None = None
+
+
 class SellfoxSubmitClient(Protocol):
     def submit_to_platform(self, wire_body: dict[str, object]) -> dict[str, object]:
         """POST submitToPlatform; returns parsed JSON body."""
 
     def fetch_package_detail(self, package_sn: str) -> dict | None:
         """POST packageDetail; returns data dict or None."""
+
+    def quick_outbound(self, package_list: list[dict]) -> dict:
+        """POST quickOutbound; returns OpenResult«QuickOutboundOpenVO» body."""
 
 
 def build_canonical_request(
@@ -132,7 +148,9 @@ def canonical_to_wire_body(req: CanonicalSubmitRequest) -> dict[str, object]:
         "items": [
             {
                 "orderItemId": str(item["order_item_id"]),
-                "quantity": int(item["quantity"]),
+                # Official schema PackageSubmitToPlatformOpenQO.SubmitOrderItemOpenQO
+                # declares quantity as string ("数量，需为整数，0 < 提交数量 < 999999").
+                "quantity": str(int(item["quantity"])),
             }
             for item in req.items
         ],
@@ -339,11 +357,26 @@ class SubmissionService:
                     http_summary=json.dumps(resp, ensure_ascii=False)[:2000],
                 )
         except Exception as exc:  # noqa: BLE001
-            self._repo.mark_submission_unknown_and_block_scope(
-                attempt_id=attempt.id,
-                intent_id=intent_id,
-                http_summary=str(exc)[:2000],
-            )
+            status_code = getattr(exc, "status_code", None)
+            if isinstance(status_code, int) and 400 <= status_code < 500:
+                # 4xx = Sellfox definitively rejected the request (nothing applied).
+                # Mark FAILED and keep the scope OPEN so the caller can retry after
+                # fixing the request — not a genuinely-unknown outcome.
+                self._repo.mark_submission_attempt_result(
+                    attempt_id=attempt.id,
+                    intent_id=intent_id,
+                    attempt_status="FAILED",
+                    intent_status="FAILED",
+                    http_status=status_code,
+                    http_summary=str(exc)[:2000],
+                )
+            else:
+                # 5xx / timeout / network — outcome genuinely unknown → block scope.
+                self._repo.mark_submission_unknown_and_block_scope(
+                    attempt_id=attempt.id,
+                    intent_id=intent_id,
+                    http_summary=str(exc)[:2000],
+                )
 
         updated = self._repo.get_submission_intent(intent_id)
         assert updated is not None
@@ -507,11 +540,94 @@ class SubmissionService:
             package_submission_state=prepared.package_submission_state,
         )
 
+    def submit_label_tracking_quick_outbound(
+        self,
+        *,
+        account_key: str,
+        package_sn: str,
+        actor: str,
+        carrier_name: str = "",
+        tracking_number: str = "",
+        shipment_type: int = 0,
+        warehouse_id: int | None = None,
+    ) -> QuickOutboundResult:
+        """Write a valid label's tracking to Sellfox via quickOutbound (快速出库).
+
+        Uses packageSn + carrier + trackNo + shipmentType (default 0 = 仅提交平台、
+        不扣库存). This is the multi-platform write path, as opposed to the
+        Amazon-only submitToPlatform.
+        """
+        labels = self._repo.list_labels_for_package(
+            account_key=account_key, package_sn=package_sn
+        )
+        valid = [
+            lb
+            for lb in labels
+            if (lb.status or "") != "cancelled" and (lb.tracking_number or "").strip()
+        ]
+        if not valid:
+            raise LookupError(
+                "no valid label with tracking number for "
+                f"{package_sn} (cancelled labels ignored)"
+            )
+        label = valid[0]
+        tracking = (tracking_number or label.tracking_number or "").strip()
+        carrier = (carrier_name or label.carrier or "").strip() or ""
+        if not tracking or tracking == package_sn:
+            raise ValueError("package must have a real tracking_number before submit")
+        if not carrier:
+            raise ValueError("carrier_name is required")
+        if self._client is None:
+            raise RuntimeError("submit client required for side effects")
+
+        pkg: dict[str, object] = {
+            "packageSn": package_sn,
+            "carrier": carrier,
+            "trackNo": tracking,
+            "shipmentType": shipment_type,
+        }
+        if warehouse_id is not None:
+            pkg["warehouseId"] = warehouse_id
+
+        resp = self._client.quick_outbound([pkg])
+        code = resp.get("code")
+        msg = str(resp.get("msg") or "")
+        data = resp.get("data") if isinstance(resp.get("data"), dict) else {}
+        success_num = int(data.get("successNum") or 0)
+        fail_data = data.get("failData") if isinstance(data.get("failData"), list) else []
+
+        summary = (
+            f"quickOutbound {package_sn} code={code} success={success_num} "
+            f"fail={len(fail_data)} msg={msg}"
+        )
+        try:
+            self._repo.append_audit_event(
+                actor=actor,
+                action="submission.quick_outbound",
+                entity_type="package",
+                entity_id=package_sn,
+                summary=summary[:500],
+            )
+        except Exception:
+            pass
+
+        return QuickOutboundResult(
+            package_sn=package_sn,
+            tracking_number=tracking,
+            carrier_name=carrier,
+            http_called=True,
+            code=code,
+            msg=msg,
+            success_num=success_num,
+            fail_data=fail_data,
+            raw=resp,
+        )
+
     def resolve_unknown_blocked_scope(
         self, *, intent_id: int, actor: str, note: str
     ) -> dict:
         """Human-approved unblock of an UNKNOWN_BLOCKED submission scope."""
-        intent = self._repo.resolve_submission_scope_block(
+        intent = self._repo.resolve_unknown_blocked_scope(
             intent_id=intent_id, actor=actor, note=note
         )
         return {

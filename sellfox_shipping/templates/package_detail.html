@@ -59,6 +59,7 @@
                 <div class="info-item"><div class="label">本地审核</div><div class="value"><span class="badge">{{ package.local_review_status or 'pending' }}</span></div></div>
                 <div class="info-item"><div class="label">渠道</div><div class="value">{{ package.logistics.channel_name or '—' }}</div></div>
                 <div class="info-item"><div class="label">店铺</div><div class="value">{{ package.shop_name or '—' }}</div></div>
+                <div class="info-item"><div class="label">发货仓库</div><div class="value">{{ package.logistics.warehouse_name or '—' }}</div></div>
                 <div class="info-item"><div class="label">追踪号</div><div class="value">{{ package.logistics.tracking_number or '—' }}</div></div>
                 <div class="info-item"><div class="label">站点</div><div class="value">{{ package.marketplace or '—' }}</div></div>
                 <div class="info-item"><div class="label">赛狐下单时间</div><div class="value">{{ purchase_date.strftime('%Y-%m-%d %H:%M') if purchase_date else '—' }}</div></div>
