@@ -40,7 +40,7 @@
 | **石头 KS0018** | 12 单石（浅灰1-6/深灰1-6）+ LSPPW03/04（14 变体 + valuation + BOM + 14 客户码）| valuation_rate（单石 7.85, LSPPW 47.036）|
 | **张嘴熊** | KS0026-TDR-340-LIGHTBROWN（153 = 2×76.5）| SXBZPK#KS0026-340 Item Price 153 |
 | **泰迪熊** | 7 个 TT 码 + 抱心泰迪(3) + 白色泰迪(1) 归类 | — |
-| **方形枕套 KS0013** | 宽边正方形枕头-荷兰绒-80*80*18（39.98 + 简化BOM）| SXBZPK#KS0013-80 Item Price 39.98 |
+| **方形枕套 KS0013** | 宽边正方形枕头-荷兰绒-80*80*18-**咖啡色**（KS0013-HLR-80-COFFEE，39.98 + 简化BOM）| SXBZPK#KS0013-80 Item Price 39.98 |
 
 **通途未匹配从 54 → 14**（仅剩杂项）。
 
@@ -53,9 +53,12 @@
 - 星球 KS0019：7 SKU（25cm/41cm × 木星/月球/黑月球/地球 + 12件套）
 - 石头 KS0018：14 SKU（12 单石 + LSPPW03/04）
 - 张嘴熊：1 SKU
-- 方形枕套 KS0013：1 SKU
+- 方形枕套 KS0013：**1 SKU（必须含颜色 = KS0013-HLR-80-COFFEE）**
 
 方法：用 `multi_attr_saihu/erpnext_to_saihu.py` 从 EN 纵向物料导出生成赛狐多属性导入文件，再导入赛狐。
+
+> ⚠️ **注意**：Codex 已把 `KS0013-HLR-80`（无颜色）建进赛狐（SPU ID 25064, SKU ID 3894655）。这是错误的，**需删除或重建为 `KS0013-HLR-80-COFFEE`（含颜色）**。
+> Codex 还发现：赛狐「属性管理」中 13 个缺失 SPU 无产品专属属性簇，需先确认赛狐属性簇创建接口。
 
 ### 3.2 库存同步（阶段 3）
 - 建映射表：`{通途SKU: {赛狐SKU, EN物料, 成本}}`
@@ -109,6 +112,54 @@ cd ~/frappe-bench && env/bin/python /tmp/gen_bom_xlsx2.py
 - 面料/颜色属性引用底层表（`custom_select_from_all_attribute_values=1`），尺寸独立（=0）
 - 9 类配套物料：皮壳#(同产品属性)、内胆#(尺寸+内胆面料/颜色)、绍兴包装皮壳#/成品#/半成品#(尺寸)、波兰PL/美东USNJ/美中USTX包装成品#(尺寸)、重量模板#(面料+尺寸)
 - 详细见 `docs/solutions/conventions/erpnext-item-variant-creation-convention.md`
+
+### 4.5 EN 核心原则（必读，避免犯错）
+
+> 这些原则是 EN 物料体系的「潜规则」，Codex 曾因不懂而犯错。新建/补全物料前必须逐条核对。
+
+1. **属性集必须完整（面料+尺寸+颜色是标配）**
+   - 绝大多数产品族属性集 = 面料+尺寸+颜色（三角靠枕/星球/石头/泰迪熊都是）
+   - **例外**：重量模板# 用 面料+尺寸（无颜色，减维护）；包装# 仅尺寸
+   - ⚠️ 若产品有颜色（如方形枕套是咖啡色），**变体必须含颜色**。若目标产品族缺颜色属性，**应先补颜色属性**，不能接受不完整属性集
+   - 教训：KS0013 宽边正方形枕头原本只有 面料+尺寸（历史不完整），直接建无颜色变体是错的，已修复为 `KS0013-HLR-80-COFFEE`
+
+2. **客户码全局唯一**
+   - 一个客户物料号只能登记在一个 EN 物料上（自定义 app 校验：`客户物料号已存在于其他物料`）
+   - 移动/重建时，必须先移除旧物料上的客户码，再登记到新物料
+
+3. **属性值必须先行**
+   - 创建变体前，属性（面料/尺寸/颜色）的值必须已存在
+   - 加属性值时**必须带 abbr**（ERPNext Server Script 校验 `abbr.lower()`，不带报 500）
+   - 若缺值：先 `PUT /api/resource/Item Attribute/{name}` 加 `{attribute_value, abbr}`
+
+4. **尺寸属性不引用底层表，面料/颜色引用**
+   - 尺寸 `custom_select_from_all_attribute_values=0`（独立定义）
+   - 面料/颜色 `=1` + `custom_select_doctype=Item Attribute Value All Fabric/Color`
+
+5. **变体命名规律**：`{模板}-{面料abbr}-{尺寸abbr}-{颜色abbr}`
+   - abbr 来自 All Fabric/All Color 的 `abbr`（如 荷兰绒=HLR, 咖啡色=COFFEE, 漂白荷兰绒=PBHLR）
+   - 尺寸 abbr 来自属性值（如 41cm=41, 80*80*18=80）
+
+6. **成本机制分产品族**（创建前先查同类已有变体的 BOM，不要套错）：
+   | 产品族 | 成本机制 |
+   |--------|---------|
+   | 星球/张嘴熊/方形枕套 | 成品 BOM 只套 `SXBZPK#`（绍兴包装皮壳），SXBZPK# 走 Item Price「标准采购」 |
+   | 石头 | valuation_rate + 自引用 BOM（无真实组件）|
+   | 三角靠枕 KS0001 | 全 BOM（皮壳#+内胆#，皮壳BOM 10 道工序，需 workstation）|
+
+7. **一键创建配套物料及变体**（EN UI 按钮）
+   - Client Script「物料 一键创建配套物料及变体 多选菜单」→ `key_test.add_item_semi.create_supporting_items_and_variants`
+   - 角色：Item Supporting Material Manager / System Manager
+   - ⚠️ 该函数创建变体但**不自动加颜色属性值**（星球 41cm 建完缺 月球/黑月球 颜色值，需手动补）
+
+8. **配套物料属性集**（9 类，不同产品族可能不同）：
+   | 配套物料 | 属性组合 |
+   |---------|---------|
+   | 皮壳# | 面料+尺寸+颜色（同产品）|
+   | 内胆# | 尺寸+内胆面料+内胆颜色 |
+   | 绍兴包装皮壳#/成品#/半成品# | 尺寸 |
+   | 波兰PL/美东USNJ/美中USTX包装成品# | 尺寸 |
+   | 重量模板# | 面料+尺寸 |
 
 ### 4.5 赛狐 API
 - `SELLFOX_API/client.py` → `SellfoxClient`（proxy 模式 `SELLFOX_PROXY_API_KEY`）
@@ -165,6 +216,9 @@ uv run python create_en_materials.py --phase 6
 6. **星球/张嘴熊/方形枕套用简化 BOM**（只套 SXBZPK#，无工序）；石头用 valuation_rate 自引用 BOM——不同产品族 BOM 模式不同，创建前先查同类已有变体
 7. **客户物料号错配**：XINGQIU-Moon-10(25cm月球) 曾被登记到 KS0018(印花石头)，已修复移回 KS0019
 8. **旧产品（dead products）**：成本不必 100% 精确（不再生产），简化处理优先，但 EN 物料+成本必须存在（库存价值用）
+9. **属性集完整性**：产品有颜色就必有颜色属性。KS0013 宽边正方形枕头原本缺颜色（历史不完整），建方形枕套时应先补颜色属性，不能接受无颜色变体
+10. **客户码唯一性**：一个客户码只能挂一个物料。重建/移动时先移除旧的再登记新的
+11. **交接文档必须含 EN 原则**：光列「建了什么」不够，必须写「为什么这么建、规则是什么」，否则另一个 AI（Codex）会照抄错误
 
 ---
 
