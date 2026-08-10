@@ -3495,7 +3495,11 @@ class PackageRepository:
     ) -> PackageDimsRecord:
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         with self._session_factory.begin() as session:
-            row = session.get(PackageDimsRow, package_db_id)
+            row = (
+                session.query(PackageDimsRow)
+                .filter(PackageDimsRow.package_id == package_db_id)
+                .first()
+            )
             if row is None:
                 row = PackageDimsRow(package_id=package_db_id)
                 session.add(row)
