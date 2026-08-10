@@ -622,3 +622,17 @@ class SubmissionService:
             fail_data=fail_data,
             raw=resp,
         )
+
+    def resolve_unknown_blocked_scope(
+        self, *, intent_id: int, actor: str, note: str
+    ) -> dict:
+        """Human-approved unblock of an UNKNOWN_BLOCKED submission scope."""
+        intent = self._repo.resolve_unknown_blocked_scope(
+            intent_id=intent_id, actor=actor, note=note
+        )
+        return {
+            "intent_id": intent.id,
+            "scope_id": intent.scope_id,
+            "intent_status": intent.status,
+            "scope_status": "OPEN",
+        }

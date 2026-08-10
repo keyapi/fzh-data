@@ -459,15 +459,20 @@ def test_exclude_shops_filter(tmp_path) -> None:
     _make_package(repo, package_sn="P-SHOP-A", shop_name="WFUS")
     _make_package(repo, package_sn="P-SHOP-B", shop_name="OSTK")
     _make_package(repo, package_sn="P-SHOP-C", shop_name="Daneey-LELEFIDO-US")
+    _make_package(repo, package_sn="P-SHOP-D", shop_name="TT_Tooddly")
+    _make_package(repo, package_sn="P-SHOP-E", shop_name="TTCozydozy")
+    _make_package(repo, package_sn="P-SHOP-F", shop_name="TTBNKC")
 
     total = repo.count_packages(account_key="sellfox-main")
     filtered = repo.count_packages(
-        account_key="sellfox-main", exclude_shops=["WFUS", "OSTK"]
+        account_key="sellfox-main",
+        exclude_shops=["WFUS", "OSTK", "TT_Tooddly", "TTCozydozy"],
     )
 
-    assert total == 3
-    assert filtered == 1  # only P-SHOP-C remains
+    assert total == 6
+    assert filtered == 2  # Daneey-LELEFIDO-US + TTBNKC remain
     rows = repo.list_packages(
-        account_key="sellfox-main", exclude_shops=["WFUS", "OSTK"]
+        account_key="sellfox-main",
+        exclude_shops=["WFUS", "OSTK", "TT_Tooddly", "TTCozydozy"],
     )
-    assert [r.package_sn for r in rows] == ["P-SHOP-C"]
+    assert [r.package_sn for r in rows] == ["P-SHOP-C", "P-SHOP-F"]

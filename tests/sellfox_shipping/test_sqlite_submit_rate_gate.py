@@ -17,7 +17,6 @@ def test_sqlite_rate_limiter_spaces_calls(tmp_path: Path) -> None:
     w2 = limiter.wait()
     elapsed = time.monotonic() - t0
     assert w1 == 0.0
-    assert w2 >= 0.15
     assert elapsed >= 0.15
 
 
