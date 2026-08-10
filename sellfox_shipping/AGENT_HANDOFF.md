@@ -112,9 +112,16 @@ Excel 本地闭环（审核 → 导出 → 人工上传物流商 → 导入对�
 > - 测试基线：**293 passed**。
 > - 凭证/服务器/同步步骤沿用文首「快速启动」。
 
+> **2026-08-10 补充（蜴国际面单发货地址 — 已与蜴国际确认）：**
+> - **决定性根因**：蜴国际产品（sm_code）↔ 发件人关联绑定，createOrder 的 `shipper_address` **无效**，FROM 由产品绑定的发件人决定。代码无法控制地址，只能选对产品。
+> - **当前卡点**：`FedEx-21-AHS-USEA`（绑定 NJ 发件人）**已下线（渠道已关闭）**；`FedEx-Economy-10-USEA` 可用但绑定 Ontario CA。**NJ 暂无可用产品**，需蜴国际开通 NJ 产品或把 NJ 发件人绑定到可用美东产品。
+> - **代码保持原状**：8-10 曾尝试按仓库映射已备案地址 + 区域过滤产品，已 `git restore` 还原（未提交）；下拉框列出全部产品、人工选择。
+> - **待实现（后续）**：仓库 → 下拉框固定服务类型（warehouse → fixed sm_code），等蜴国际开通 NJ 产品后；勿映射已下线的 `FedEx-21-AHS-USEA`。
+> - 全量测试基线 **302 passed, 2 warnings**。详见 [已解决问题](docs/solutions/sellfox-writeback-label-address-2026-08-07.md)。
+
 > **2026-08-10 补充（upsert_package_dims 尺寸写入修复）：**
 > - 修复面单创建报 `No dimensions available for package`：`upsert_package_dims` 用 `session.get`（按主键 id）查外键 `package_id`，`package_id` 撞上既有 dims 行 id 时错写别家、目标包裹尺寸永不落库。改为 `filter(package_id==)` 与读侧一致。
-> - 全量测试基线更新为 **302 passed, 2 warnings**。详见 [已解决问题](docs/solutions/upsert-package-dims-pk-fk-bug-2026-08-10.md)。
+> - 详见 [已解决问题](docs/solutions/upsert-package-dims-pk-fk-bug-2026-08-10.md)。
 
 ### 7. 重规划裁决
 
