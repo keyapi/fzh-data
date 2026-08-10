@@ -58,7 +58,8 @@
 方法：用 `multi_attr_saihu/erpnext_to_saihu.py` 从 EN 纵向物料导出生成赛狐多属性导入文件，再导入赛狐。
 
 > ⚠️ **注意**：Codex 已把 `KS0013-HLR-80`（无颜色）建进赛狐（SPU ID 25064, SKU ID 3894655）。这是错误的，**需删除或重建为 `KS0013-HLR-80-COFFEE`（含颜色）**。
-> Codex 还发现：赛狐「属性管理」中 13 个缺失 SPU 无产品专属属性簇，需先确认赛狐属性簇创建接口。
+> **赛狐属性簇创建**：OpenAPI **无**「创建属性簇/属性值」端点，需在赛狐 UI 用 **Excel 导入**新增属性（Codex 正在做）。属性建好后可用 `POST /api/commodity/pageList.json` 创建 SKU。
+> 赛狐 13 个缺失 SPU 属性簇已由 Codex 通过 Excel 导入补齐中。
 
 ### 3.2 库存同步（阶段 3）
 - 建映射表：`{通途SKU: {赛狐SKU, EN物料, 成本}}`
