@@ -1389,41 +1389,13 @@ async def package_prepare_submit_form(request: Request, package_sn: str):
 
 @app.post("/packages/{package_sn}/submit-label-tracking", response_class=HTMLResponse)
 async def package_submit_label_tracking_form(request: Request, package_sn: str):
-    """Write a valid label's tracking number back to Sellfox (real submitToPlatform).
+    """Keep the Web UI side-effect free until quickOutbound has Outbox support.
 
-    Sources the tracking from the package's non-cancelled label record, prepares
-    intents with it, and submits them for real. The button click is the user's
-    explicit confirmation of this side-effecting call.
+    The route remains so existing forms receive a clear message instead of a 404.
     """
-    from sellfox_shipping.submission_service import SubmissionService
-
-    form = await request.form()
     account_key = config["sellfox"]["proxy_account"]
     repo = _get_package_repository()
-    actor = _web_actor(request, str(form.get("actor") or "web-user"))
-    try:
-        result = await run_in_threadpool(
-            SubmissionService(repo, get_sellfox_client()).submit_label_tracking_quick_outbound,
-            account_key=account_key,
-            package_sn=package_sn,
-            actor=actor,
-        )
-        if result.code == 0 and result.success_num > 0:
-            message = (
-                f"已回写面单追踪号 {result.tracking_number} → 赛狐（quickOutbound）；"
-                f"成功 {result.success_num} 单"
-            )
-        else:
-            fails = "; ".join(
-                f"{d.get('packageSn', '')}: {d.get('msg', '')}"
-                for d in result.fail_data
-            )
-            detail = f"code={result.code} msg={result.msg}"
-            if fails:
-                detail += f" | {fails}"
-            message = f"回写赛狐失败: {detail}"
-    except Exception as exc:  # noqa: BLE001
-        message = f"回写赛狐失败: {exc}"
+    message = "赛狐回写已暂停：quickOutbound 尚未接入可靠 Outbox 流程。"
     record = repo.get(account_key, package_sn)
     if record is None:
         raise HTTPException(404, f"Package {package_sn} not found")

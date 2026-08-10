@@ -106,6 +106,24 @@ def test_lizard_import_page_get(tmp_path, monkeypatch) -> None:
     assert "submitToPlatform" in response.text or "不写回" in response.text
 
 
+def test_submit_label_tracking_web_route_is_side_effect_free(tmp_path, monkeypatch) -> None:
+    repo = _seed_approved(tmp_path, monkeypatch, sn="P2AWRITEBACKPAUSED")
+
+    class _UnexpectedClient:
+        def quick_outbound(self, package_list):
+            raise AssertionError("Web route must not call quickOutbound")
+
+    monkeypatch.setattr(app_module, "get_sellfox_client", lambda: _UnexpectedClient())
+    response = TestClient(app_module.app).post(
+        "/packages/P2AWRITEBACKPAUSED/submit-label-tracking",
+        data={"actor": "web-tester"},
+    )
+
+    assert response.status_code == 200
+    assert "quickOutbound" in response.text
+    assert repo.get("sellfox-main", "P2AWRITEBACKPAUSED") is not None
+
+
 def test_lizard_import_post_shows_reconciliation_report(tmp_path, monkeypatch) -> None:
     repo = _seed_approved(tmp_path, monkeypatch, sn="P2AWEBIMP")
     buf = BytesIO()

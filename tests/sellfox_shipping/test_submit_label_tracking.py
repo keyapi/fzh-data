@@ -274,8 +274,8 @@ def test_direct_sellfox_client_quick_outbound(monkeypatch) -> None:
     assert captured["body"] == {"packageList": pkg_list}
 
 
-def test_quick_outbound_uses_label_and_parses_response(tmp_path: Path) -> None:
-    """submit_label_tracking_quick_outbound sends the valid label's tracking via quickOutbound."""
+def test_quick_outbound_service_previews_valid_label_without_http(tmp_path: Path) -> None:
+    """The service previews quickOutbound until it has Outbox support."""
     repo = PackageRepository(tmp_path / "shipping.db")
     _seed(repo, "P2AQUICK1")
     _insert_label(repo, "P2AQUICK1", tracking="1Z-QUICK", carrier="lizard")
@@ -302,13 +302,111 @@ def test_quick_outbound_uses_label_and_parses_response(tmp_path: Path) -> None:
         account_key="sellfox-main", package_sn="P2AQUICK1", actor="ops"
     )
 
-    assert result.http_called is True
+    assert result.http_called is False
     assert result.tracking_number == "1Z-QUICK"
-    assert result.code == 0
-    assert result.success_num == 1
-    assert client.calls == 1
-    assert client.last_pkg is not None
-    assert client.last_pkg["packageSn"] == "P2AQUICK1"
-    assert client.last_pkg["trackNo"] == "1Z-QUICK"
-    assert client.last_pkg["carrier"] == "lizard"
-    assert client.last_pkg["shipmentType"] == 0
+    assert result.code is None
+    assert result.success_num == 0
+    assert client.calls == 0
+    assert result.raw["packageList"][0] == {
+        "packageSn": "P2AQUICK1",
+        "carrier": "lizard",
+        "trackNo": "1Z-QUICK",
+        "shipmentType": 0,
+    }
+    assert result.inventory_effect == "no_sellfox_inventory_deduction"
+
+
+def test_quick_outbound_inventory_deduction_preview_requires_warehouse_and_never_calls_http(
+    tmp_path: Path,
+) -> None:
+    """shipmentType=1 is inspectable, but cannot be sent or previewed without a warehouse."""
+    repo = PackageRepository(tmp_path / "shipping.db")
+    _seed(repo, "P2AQUICK-STOCK")
+    _insert_label(repo, "P2AQUICK-STOCK", tracking="1Z-STOCK")
+
+    class _Client:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def quick_outbound(self, package_list: list[dict]) -> dict:
+            self.calls += 1
+            return {"code": 0}
+
+    client = _Client()
+    service = SubmissionService(repo, client)
+
+    with pytest.raises(ValueError, match="warehouse_id is required"):
+        service.submit_label_tracking_quick_outbound(
+            account_key="sellfox-main",
+            package_sn="P2AQUICK-STOCK",
+            actor="ops",
+            shipment_type=1,
+        )
+
+    result = service.submit_label_tracking_quick_outbound(
+        account_key="sellfox-main",
+        package_sn="P2AQUICK-STOCK",
+        actor="ops",
+        shipment_type=1,
+        warehouse_id=42,
+    )
+
+    assert client.calls == 0
+    assert result.http_called is False
+    assert result.shipment_type == 1
+    assert result.inventory_effect == "may_deduct_sellfox_inventory_unverified"
+    assert result.raw["packageList"][0]["warehouseId"] == 42
+
+
+def test_quick_outbound_live_send_is_disabled_before_http(tmp_path: Path) -> None:
+    repo = PackageRepository(tmp_path / "shipping.db")
+    _seed(repo, "P2AQUICK-LIVE")
+    _insert_label(repo, "P2AQUICK-LIVE")
+
+    class _Client:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def quick_outbound(self, package_list: list[dict]) -> dict:
+            self.calls += 1
+            return {"code": 0}
+
+    client = _Client()
+    with pytest.raises(RuntimeError, match="live send is disabled"):
+        SubmissionService(repo, client).submit_label_tracking_quick_outbound(
+            account_key="sellfox-main",
+            package_sn="P2AQUICK-LIVE",
+            actor="ops",
+            dry_run=False,
+        )
+
+    assert client.calls == 0
+
+
+def test_quick_outbound_rejects_unapproved_package_before_http(tmp_path: Path) -> None:
+    repo = PackageRepository(tmp_path / "shipping.db")
+    _seed(repo, "P2AQUICK-UNAPPROVED")
+    _insert_label(repo, "P2AQUICK-UNAPPROVED")
+    repo.set_local_review_status(
+        account_key="sellfox-main",
+        package_sn="P2AQUICK-UNAPPROVED",
+        local_review_status="pending",
+    )
+
+    class _Client:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def quick_outbound(self, package_list: list[dict]) -> dict:
+            self.calls += 1
+            return {"code": 0, "data": {"successNum": 1}}
+
+    client = _Client()
+    with pytest.raises(ValueError, match="approved"):
+        SubmissionService(repo, client).submit_label_tracking_quick_outbound(
+            account_key="sellfox-main",
+            package_sn="P2AQUICK-UNAPPROVED",
+            actor="ops",
+        )
+
+    assert client.calls == 0

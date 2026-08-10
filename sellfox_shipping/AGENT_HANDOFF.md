@@ -102,14 +102,19 @@ Excel 本地闭环（审核 → 导出 → 人工上传物流商 → 导入对�
 > 5. 公网部署前仍需 OIDC/CSRF/RBAC、secure cookie 与 PII/log 脱敏审计。
 > 6. 当前自动化基线为 **260 passed, 2 warnings**；仍不等于承运商沙箱或生产业务验收完成。
 
-> **2026-08-07 新对话接手补充：**
-> - **当前分支/PR**：`fix/sellfox-submit-quantity-errorbody` → **PR #158**（本次全部改动已提交：quickOutbound 写回、蜴国际发货地址按仓库推导、4xx=FAILED、scope unblock、quantity string、ca_zone CENTRADE=0）。PR #153/#154/#155 未合并（内容已被 #158 覆盖部分）。
+> **2026-08-10 交接补充：**
+> - PR #153 至 #158 均已合入 `main`；当前真实基线以 `origin/main` 为准。
+> - **会议确认的系统分工：通途是实物库存、入出库、实际发货和平台回传权威；赛狐是销售侧库存镜像。** 两边扣减不是天然错误，但要按赛狐仓库、SKU、数量、时点与通途逐项对账。
+> - `quickOutbound` 客户端协议封装与 dry-run 预览已存在，但 **应用层真实发送已暂停**：它尚未接入订单级 Outbox、能力 Policy、IN_FLIGHT 崩溃阻断和 packageDetail 回读。普通 Web/CLI 不得恢复直接 HTTP 调用。
+> - `packages-submit-quick-outbound --shipment-type 0` 可预览文档所称的"不扣赛狐库存"请求；`--shipment-type 1 --warehouse-id <id>` 可预览潜在库存扣减请求，但没有真实验证。Friday 的口头测试不是能力结论。详见 [库存镜像与 quickOutbound 探针](docs/specs/sellfox-inventory-mirror-and-quickoutbound-probe-2026-08-10.md)。
+> - 后续若赛狐确认 quickOutbound 是正确路径，独立实现 `quickOutbound` Outbox endpoint 类型，复用候选/租约/Policy/回读框架，并先执行单包 PROBE_ONLY；必须验证是否重复推送 Amazon、扣减哪个赛狐仓以及 SKU/数量是否正确。
+> - 解除 `UNKNOWN_BLOCKED` submission scope 只使用 `submission-scope-resolve --intent-id --actor --note --confirm unblock`；旧的 package/order `submission-scope-unblock` 已移除。
 > - **本次完整问题记录**：先读 [docs/solutions/sellfox-writeback-label-address-2026-08-07.md](docs/solutions/sellfox-writeback-label-address-2026-08-07.md)。
 > - **优先任务（新对话第一步）**：
 >   1. 同步 8 月包裹（`packages-sync --date-start 2026-08-01 --date-end <今天> --actor cli`）。
 >   2. **修复蜴国际面单打印发货地址错误**：实测蜴国际可能忽略 createOrder 的 `shipper_address`，改用其账户/产品（FedEx-Ground-J-TX）配置地址（Missouri City TX）。美东正确地址已写入 config `warehouses.CENTRADE`（Overstock.com, Centrade Inc / 389 Route 10 Unit R, East Hanover NJ 07936 / 7327622442）。需与蜴国际确认 `shipper_address` 是否生效、是否有 NJ 产品/账户配置。
 >   3. 与赛狐确认正确写回 API（submitToPlatform/quickOutbound 均被拒"不需要提交平台"；候选 `applyTrackNo` 物流下单发货）。
-> - 测试基线：**293 passed**。
+> - 测试基线由本 PR 的完整验证更新；自动化通过不等于赛狐真实写回已验证。
 > - 凭证/服务器/同步步骤沿用文首「快速启动」。
 
 ### 7. 重规划裁决

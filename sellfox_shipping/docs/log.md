@@ -3,10 +3,18 @@ okf: v0.1
 type: Log
 module: sellfox_shipping
 created: 2026-07-15
-updated: 2026-08-07
+updated: 2026-08-10
 ---
 
 # sellfox_shipping - 变更日志
+
+## 2026-08-10 - quickOutbound 安全预览与库存镜像探针边界
+
+- 合并后审计发现 #158 的 `quickOutbound` service/CLI/Web 路径直接发真实 HTTP，未接入订单级 Outbox、能力 Policy、`IN_FLIGHT` 崩溃阻断或 packageDetail 回读；Web 端点现改为明确暂停提示。
+- CLI `packages-submit-quick-outbound` 仅保留单包 dry-run 请求预览：`shipmentType=0` 表示文档声称的不扣赛狐库存，`shipmentType=1` 可预览但强制传赛狐仓库 ID，并标记为未验证的可能库存扣减；两者均不发 HTTP。
+- 记录会议确认的目标：通途继续是实物库存/入出库/实际发货权威，赛狐是销售侧库存镜像；双账扣减可接受但必须按仓库/SKU/数量/时点对账。新增 [库存镜像与 quickOutbound 单包探针](specs/sellfox-inventory-mirror-and-quickoutbound-probe-2026-08-10.md)，明确 Friday 口头"成功"尚无可复核证据，且不得由 submitToPlatform 推断 quickOutbound 语义。
+- 删除宽松的 `submission-scope-unblock` / `resolve_submission_scope_block` 入口；解除 UNKNOWN scope 统一使用带 intent、actor、note 和 confirm 的 `submission-scope-resolve`。
+- `submitToPlatform` 的 401、429 与 409 不再被 blanket 4xx 规则当作安全失败；只有明确的 400/404/422 请求拒绝可释放 scope，其余保守进入 UNKNOWN 阻断。
 
 ## 2026-08-07 - 开源复用档案与 Search-before-Build 准入
 

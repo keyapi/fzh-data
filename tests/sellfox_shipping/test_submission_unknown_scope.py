@@ -168,28 +168,29 @@ def test_5xx_marks_unknown_and_blocks_scope(tmp_path: Path) -> None:
     assert repo.is_submission_scope_blocked_by_intent(intent_id)
 
 
-def test_resolve_submission_scope_block(tmp_path: Path) -> None:
-    """resolve_submission_scope_block clears the block so the package can retry."""
+@pytest.mark.parametrize("status_code", [401, 429])
+def test_ambiguous_4xx_blocks_scope_instead_of_permitting_resubmit(
+    tmp_path: Path, status_code: int
+) -> None:
     repo = PackageRepository(tmp_path / "shipping.db")
     intent_id = _seed(repo)
-    repo.mark_submission_unknown_and_block_scope(
-        attempt_id=repo.create_submission_attempt(intent_id=intent_id, actor="ops").id,
-        intent_id=intent_id,
-        http_summary="timeout",
+    svc = SubmissionService(
+        repo,
+        _RaisingClient(SellfoxApiError("ambiguous", status_code=status_code)),
     )
-    assert repo.is_submission_scope_blocked_by_intent(intent_id)
-    assert repo.get_submission_intent(intent_id).status == "UNKNOWN"
 
-    scope_id = repo.resolve_submission_scope_block(
-        account_key="sellfox-main",
-        package_sn="P2ABLOCK1",
-        external_order_id="ORD-B",
-        actor="ops",
+    result = svc.submit_intent(
+        intent_id=intent_id, actor="ops", dry_run=False, allow_side_effects=True
     )
-    assert scope_id > 0
-    assert not repo.is_submission_scope_blocked_by_intent(intent_id)
-    # Intent reset to READY so it can be re-submitted.
-    assert repo.get_submission_intent(intent_id).status == "READY"
+
+    assert result.intent_status == "UNKNOWN"
+    assert result.attempt_status == "UNKNOWN"
+    assert repo.is_submission_scope_blocked_by_intent(intent_id)
+
+
+def test_legacy_scope_unblock_api_is_not_available(tmp_path: Path) -> None:
+    repo = PackageRepository(tmp_path / "shipping.db")
+    assert not hasattr(repo, "resolve_submission_scope_block")
 
 
 class _ResolveCountingClient:

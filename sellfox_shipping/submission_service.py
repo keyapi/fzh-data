@@ -80,6 +80,8 @@ class QuickOutboundResult:
     package_sn: str
     tracking_number: str
     carrier_name: str
+    shipment_type: int
+    inventory_effect: str
     http_called: bool
     code: int | None
     msg: str
@@ -358,7 +360,7 @@ class SubmissionService:
                 )
         except Exception as exc:  # noqa: BLE001
             status_code = getattr(exc, "status_code", None)
-            if isinstance(status_code, int) and 400 <= status_code < 500:
+            if status_code in {400, 404, 422}:
                 # 4xx = Sellfox definitively rejected the request (nothing applied).
                 # Mark FAILED and keep the scope OPEN so the caller can retry after
                 # fixing the request — not a genuinely-unknown outcome.
@@ -550,13 +552,39 @@ class SubmissionService:
         tracking_number: str = "",
         shipment_type: int = 0,
         warehouse_id: int | None = None,
+        dry_run: bool = True,
     ) -> QuickOutboundResult:
         """Write a valid label's tracking to Sellfox via quickOutbound (快速出库).
 
-        Uses packageSn + carrier + trackNo + shipmentType (default 0 = 仅提交平台、
-        不扣库存). This is the multi-platform write path, as opposed to the
-        Amazon-only submitToPlatform.
+        Builds a side-effect-free preview for quickOutbound. ``shipment_type=0``
+        means no Sellfox inventory deduction according to the API documentation;
+        ``shipment_type=1`` is an unverified Sellfox inventory-deduction probe
+        and therefore requires an explicit warehouse.
         """
+        if shipment_type not in (0, 1):
+            raise ValueError("quickOutbound shipment_type must be 0 or 1")
+        if shipment_type == 1 and warehouse_id is None:
+            raise ValueError("warehouse_id is required for shipment_type=1 preview")
+        record = self._repo.get(account_key, package_sn)
+        if record is None:
+            raise LookupError(f"Package {package_sn} not found")
+        if record.local_review_status != "approved":
+            raise ValueError("package local_review_status must be approved")
+        package_db_id = self._repo.get_package_db_id(account_key, package_sn)
+        if package_db_id is None:
+            raise LookupError(f"Package db id missing for {package_sn}")
+        for order_db_id, external_order_id in self._repo.list_package_order_db_ids(
+            account_key, package_sn
+        ):
+            if self._repo.is_submission_scope_blocked(
+                account_key=account_key,
+                package_db_id=package_db_id,
+                order_db_id=order_db_id,
+            ):
+                raise SubmissionScopeBlockedError(
+                    f"scope blocked for order {external_order_id}"
+                )
+
         labels = self._repo.list_labels_for_package(
             account_key=account_key, package_sn=package_sn
         )
@@ -577,8 +605,11 @@ class SubmissionService:
             raise ValueError("package must have a real tracking_number before submit")
         if not carrier:
             raise ValueError("carrier_name is required")
-        if self._client is None:
-            raise RuntimeError("submit client required for side effects")
+        if not dry_run:
+            raise RuntimeError(
+                "quickOutbound live send is disabled until an Outbox-backed "
+                "endpoint implementation is approved"
+            )
 
         pkg: dict[str, object] = {
             "packageSn": package_sn,
@@ -589,38 +620,28 @@ class SubmissionService:
         if warehouse_id is not None:
             pkg["warehouseId"] = warehouse_id
 
-        resp = self._client.quick_outbound([pkg])
-        code = resp.get("code")
-        msg = str(resp.get("msg") or "")
-        data = resp.get("data") if isinstance(resp.get("data"), dict) else {}
-        success_num = int(data.get("successNum") or 0)
-        fail_data = data.get("failData") if isinstance(data.get("failData"), list) else []
-
-        summary = (
-            f"quickOutbound {package_sn} code={code} success={success_num} "
-            f"fail={len(fail_data)} msg={msg}"
-        )
-        try:
-            self._repo.append_audit_event(
-                actor=actor,
-                action="submission.quick_outbound",
-                entity_type="package",
-                entity_id=package_sn,
-                summary=summary[:500],
-            )
-        except Exception:
-            pass
-
         return QuickOutboundResult(
             package_sn=package_sn,
             tracking_number=tracking,
             carrier_name=carrier,
-            http_called=True,
-            code=code,
-            msg=msg,
-            success_num=success_num,
-            fail_data=fail_data,
-            raw=resp,
+            shipment_type=shipment_type,
+            inventory_effect=(
+                "no_sellfox_inventory_deduction"
+                if shipment_type == 0
+                else "may_deduct_sellfox_inventory_unverified"
+            ),
+            http_called=False,
+            code=None,
+            msg=(
+                "dry-run: shipmentType=0 preview; no Sellfox inventory deduction "
+                "according to API documentation"
+                if shipment_type == 0
+                else "dry-run: shipmentType=1 may deduct Sellfox inventory; "
+                "real send remains disabled pending a single-package Outbox probe"
+            ),
+            success_num=0,
+            fail_data=[],
+            raw={"packageList": [pkg]},
         )
 
     def resolve_unknown_blocked_scope(
