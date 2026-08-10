@@ -72,6 +72,7 @@ uv run python -c "..."   # 参考 docs/solutions/conventions/erpnext-item-varian
 
 ### 其他约束
 
+- **item_code 必须用 abbr**（不用中文属性值）：`{模板}-{面料abbr}-{尺寸abbr}-{颜色abbr}`。颜色段用 `LIGHTGREY1` 不用 `浅灰1号`。REST 不能改 item_code，需 SSH `frappe.rename_doc`
 - 属性值必须先存在，否则创建变体报错
 - **加属性值必须带 abbr**（ERPNext Server Script 校验 `abbr.lower()`，不带报 500）
 - 客户码全局唯一（一个客户物料号只能挂一个物料；移动时先移除旧的）

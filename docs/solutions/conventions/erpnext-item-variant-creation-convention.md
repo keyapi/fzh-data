@@ -167,6 +167,9 @@ POST /api/resource/Item
 - 重量模板 item_code = `ZLMB#{产品SPU}-{面料abbr}-{尺寸}`
 - 包装# item_code = `{前缀}#{产品SPU}-{尺寸}`
 
+> ⚠️ **item_code 必须用 abbr，不能用中文属性值**（如颜色段用 `LIGHTGREY1` 不是 `浅灰1号`）。赛狐 SKU 只能英文+英文符号，且库存同步需三端编号一致。**反例教训**：石头 12 单石曾用 `KS0018-LSRBS-25cm-浅灰1号`（中文），已用服务器 `frappe.rename_doc` 改为 `KS0018-LSRBS-25cm-LIGHTGREY1` 等。
+> ⚠️ **注意**：REST API 不能直接改 item_code（`frappe.rename_doc` 未白名单），需 **SSH + `frappe.rename_doc('Item', old, new)`**（自动更新 BOM/ItemPrice 引用）。改前先移除客户码（客户码全局唯一），改后重加。
+
 ## 一键创建配套物料（Client Script + key_test app）
 
 模板物料右上角按钮「一键创建配套物料及变体」，逻辑：
