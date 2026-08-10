@@ -40,3 +40,8 @@ uv run python identify_missing_products.py
 ## 排查出的缺失物料补建
 
 若需补建 EN 缺失物料，参见 `.agents/skills/erpnext-item-create/` 和 `docs/solutions/conventions/erpnext-item-variant-creation-convention.md`。
+
+## 文档
+
+- [docs/index.md](docs/index.md) — 模块文档索引（OKF）
+- [docs/specs/old-product-completion-plan.md](docs/specs/old-product-completion-plan.md) — 三类老产品（星球/石头/张嘴熊）补齐计划 + 库存同步映射设计
