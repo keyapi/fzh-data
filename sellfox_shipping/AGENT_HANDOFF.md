@@ -112,6 +112,10 @@ Excel 本地闭环（审核 → 导出 → 人工上传物流商 → 导入对�
 > - 测试基线：**293 passed**。
 > - 凭证/服务器/同步步骤沿用文首「快速启动」。
 
+> **2026-08-10 补充（upsert_package_dims 尺寸写入修复）：**
+> - 修复面单创建报 `No dimensions available for package`：`upsert_package_dims` 用 `session.get`（按主键 id）查外键 `package_id`，`package_id` 撞上既有 dims 行 id 时错写别家、目标包裹尺寸永不落库。改为 `filter(package_id==)` 与读侧一致。
+> - 全量测试基线更新为 **302 passed, 2 warnings**。详见 [已解决问题](docs/solutions/upsert-package-dims-pk-fk-bug-2026-08-10.md)。
+
 ### 7. 重规划裁决
 
 - **不**整本作废 synthesis；修订 P1C 出口与承运人双通道（见 synthesis 文首裁决框）

@@ -3,10 +3,19 @@ okf: v0.1
 type: Log
 module: sellfox_shipping
 created: 2026-07-15
-updated: 2026-08-07
+updated: 2026-08-10
 ---
 
 # sellfox_shipping - 变更日志
+
+## 2026-08-10 - 修复面单创建 "No dimensions available"（upsert_package_dims 主键/外键混淆）
+
+- 现象：`P2B4A9T731770` 创建面单报 `No dimensions available for package`。`LabelService.preflight` 在 `get_package_dims(db_id)` 返回 `None` 时报错。
+- 根因：`upsert_package_dims` 用 `session.get(PackageDimsRow, package_db_id)` —— 按**自增主键 `id`** 查，但 `package_db_id` 是**外键 `package_id`**。当某包裹的 `package_id` 撞上既有 dims 行的 `id`（本例 id=2 属于 `P2BAA9T734992`），尺寸被错写到别家行，目标包裹的 `package_id` 行永不创建；读侧 `get_package_dims` 早已改用 `filter(package_id==)`，所以读回永远 `None`。写侧漏同步修复。
+- 修复：`upsert_package_dims` 改为 `session.query(PackageDimsRow).filter(PackageDimsRow.package_id == package_db_id).first()`，与读侧/`upsert_package_routing` 一致。
+- 新增回归测试 2 例（碰撞 + 重复 upsert 不重复）；全量 `tests/sellfox_shipping` **302 passed, 2 warnings**。
+- 数据修复：重新计算 `P2B4A9T731770`（3.6kg, 66×56×5cm）与 `P2BAA9T734992`（4.98kg, 76×56×7.8cm）尺寸，清理诊断时误写行。
+- 详见 [已解决问题：upsert_package_dims 主键/外键查询混淆](solutions/upsert-package-dims-pk-fk-bug-2026-08-10.md)。
 
 ## 2026-08-07 - 开源复用档案与 Search-before-Build 准入
 
