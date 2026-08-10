@@ -80,6 +80,8 @@ class QuickOutboundResult:
     package_sn: str
     tracking_number: str
     carrier_name: str
+    shipment_type: int
+    inventory_effect: str
     http_called: bool
     code: int | None
     msg: str
@@ -554,12 +556,15 @@ class SubmissionService:
     ) -> QuickOutboundResult:
         """Write a valid label's tracking to Sellfox via quickOutbound (快速出库).
 
-        Uses packageSn + carrier + trackNo + shipmentType (default 0 = 仅提交平台、
-        不扣库存). This is the multi-platform write path, as opposed to the
-        Amazon-only submitToPlatform.
+        Builds a side-effect-free preview for quickOutbound. ``shipment_type=0``
+        means no Sellfox inventory deduction according to the API documentation;
+        ``shipment_type=1`` is an unverified Sellfox inventory-deduction probe
+        and therefore requires an explicit warehouse.
         """
-        if shipment_type != 0:
-            raise ValueError("quickOutbound only permits shipment_type=0")
+        if shipment_type not in (0, 1):
+            raise ValueError("quickOutbound shipment_type must be 0 or 1")
+        if shipment_type == 1 and warehouse_id is None:
+            raise ValueError("warehouse_id is required for shipment_type=1 preview")
         record = self._repo.get(account_key, package_sn)
         if record is None:
             raise LookupError(f"Package {package_sn} not found")
@@ -619,9 +624,21 @@ class SubmissionService:
             package_sn=package_sn,
             tracking_number=tracking,
             carrier_name=carrier,
+            shipment_type=shipment_type,
+            inventory_effect=(
+                "no_sellfox_inventory_deduction"
+                if shipment_type == 0
+                else "may_deduct_sellfox_inventory_unverified"
+            ),
             http_called=False,
             code=None,
-            msg="dry-run: quickOutbound live send disabled pending Outbox integration",
+            msg=(
+                "dry-run: shipmentType=0 preview; no Sellfox inventory deduction "
+                "according to API documentation"
+                if shipment_type == 0
+                else "dry-run: shipmentType=1 may deduct Sellfox inventory; "
+                "real send remains disabled pending a single-package Outbox probe"
+            ),
             success_num=0,
             fail_data=[],
             raw={"packageList": [pkg]},

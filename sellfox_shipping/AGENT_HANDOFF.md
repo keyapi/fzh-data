@@ -104,8 +104,10 @@ Excel 本地闭环（审核 → 导出 → 人工上传物流商 → 导入对�
 
 > **2026-08-10 交接补充：**
 > - PR #153 至 #158 均已合入 `main`；当前真实基线以 `origin/main` 为准。
-> - `quickOutbound` 客户端协议封装与 dry-run 预览已存在，但 **应用层真实发送已暂停**：它尚未接入订单级 Outbox、能力 Policy、IN_FLIGHT 崩溃阻断和 packageDetail 回读。不得恢复 Web 按钮或直接 HTTP 调用。
-> - 后续若赛狐确认 quickOutbound 是非 Amazon 正确写回路径，独立实现 `quickOutbound` Outbox endpoint 类型，复用候选/租约/Policy/回读框架，并先执行单包 PROBE_ONLY。
+> - **会议确认的系统分工：通途是实物库存、入出库、实际发货和平台回传权威；赛狐是销售侧库存镜像。** 两边扣减不是天然错误，但要按赛狐仓库、SKU、数量、时点与通途逐项对账。
+> - `quickOutbound` 客户端协议封装与 dry-run 预览已存在，但 **应用层真实发送已暂停**：它尚未接入订单级 Outbox、能力 Policy、IN_FLIGHT 崩溃阻断和 packageDetail 回读。普通 Web/CLI 不得恢复直接 HTTP 调用。
+> - `packages-submit-quick-outbound --shipment-type 0` 可预览文档所称的"不扣赛狐库存"请求；`--shipment-type 1 --warehouse-id <id>` 可预览潜在库存扣减请求，但没有真实验证。Friday 的口头测试不是能力结论。详见 [库存镜像与 quickOutbound 探针](docs/specs/sellfox-inventory-mirror-and-quickoutbound-probe-2026-08-10.md)。
+> - 后续若赛狐确认 quickOutbound 是正确路径，独立实现 `quickOutbound` Outbox endpoint 类型，复用候选/租约/Policy/回读框架，并先执行单包 PROBE_ONLY；必须验证是否重复推送 Amazon、扣减哪个赛狐仓以及 SKU/数量是否正确。
 > - 解除 `UNKNOWN_BLOCKED` submission scope 只使用 `submission-scope-resolve --intent-id --actor --note --confirm unblock`；旧的 package/order `submission-scope-unblock` 已移除。
 > - **本次完整问题记录**：先读 [docs/solutions/sellfox-writeback-label-address-2026-08-07.md](docs/solutions/sellfox-writeback-label-address-2026-08-07.md)。
 > - **优先任务（新对话第一步）**：

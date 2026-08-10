@@ -12,7 +12,7 @@ timestamp: 2026-08-06
 
 - **购标安全与恢复核心已完成。** PR #132、#134、#136、#137、#142、#143、#144 已覆盖 preflight、原子 claim、provider ID 持久化、resume、carrier error taxonomy、UNKNOWN_BLOCKED 证据化结案和 resume fencing。
 - **Migration 0019 是合并后发现的必须修复项。** 它修复历史 SQLite 库从 0015 连续升级时 0018 直接新增外键失败，以及已被半应用 0018 标记但缺少外键的数据库。
-- **赛狐可靠回写按三 PR 串行实施。** PR 1 候选事实层与 PR 2 执行器/回读已完成；PR 3 能力探针与运营门禁待用户指定测试包裹后实施。
+- **赛狐可靠回写按三 PR 串行实施。** PR 1 候选事实层与 PR 2 执行器/回读已完成；PR 3 能力探针与运营门禁待用户指定测试包裹后实施。`quickOutbound` 的库存扣减语义另见 [库存镜像与 quickOutbound 探针](specs/sellfox-inventory-mirror-and-quickoutbound-probe-2026-08-10.md)，不得从 `submitToPlatform` 结论外推。
 - **PR 3 运营交接文档已就绪。** 单包能力探针运行手册与证据清单见 [sellfox-writeback-probe-runbook](specs/sellfox-writeback-probe-runbook-2026-08-06.md)；真实探针等待用户指定测试包裹。
 - **当前下一阶段是生产验收，不是继续扩功能。** 验收矩阵和 Jack Agent 接手步骤见 [生产验收与交接规范](specs/production-acceptance-and-jack-handoff-2026-08-05.md)。
 
@@ -26,6 +26,7 @@ timestamp: 2026-08-06
 | 部分完成 | 4 | 取消与退款分离 | 已有安全取消和活动槽释放；仍需把承运商取消确认与退款到账独立记录 |
 | 部署前 | 5 | 认证与审计收口 | 公网 OIDC/CSRF/RBAC、secure cookie、PII 脱敏、所有危险操作审计 |
 | PR 3 手册就绪 | 6 | 赛狐可靠回写 | PR 1 候选层 + PR 2 确认/租约/执行/回读完成；PR 3 探针手册就绪，待用户指定单包授权；默认 DISABLED + UNVERIFIED |
+| 待证据 | 7 | 通途-赛狐库存镜像与 quickOutbound | 通途仍是实物权威；先验证 shipmentType 0/1 的赛狐仓/SKU/数量/平台副作用，再做每日只读对账和受控 Outbox 接入 |
 
 每个任务包独立分支、独立 PR，禁止直接 push main。
 实现级拆分、CLI 契约和验收场景见 [恢复 CLI、错误分类与 Outbox 计划](specs/recovery-cli-error-taxonomy-outbox-plan-2026-08-05.md)。

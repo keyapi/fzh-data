@@ -313,6 +313,49 @@ def test_quick_outbound_service_previews_valid_label_without_http(tmp_path: Path
         "trackNo": "1Z-QUICK",
         "shipmentType": 0,
     }
+    assert result.inventory_effect == "no_sellfox_inventory_deduction"
+
+
+def test_quick_outbound_inventory_deduction_preview_requires_warehouse_and_never_calls_http(
+    tmp_path: Path,
+) -> None:
+    """shipmentType=1 is inspectable, but cannot be sent or previewed without a warehouse."""
+    repo = PackageRepository(tmp_path / "shipping.db")
+    _seed(repo, "P2AQUICK-STOCK")
+    _insert_label(repo, "P2AQUICK-STOCK", tracking="1Z-STOCK")
+
+    class _Client:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def quick_outbound(self, package_list: list[dict]) -> dict:
+            self.calls += 1
+            return {"code": 0}
+
+    client = _Client()
+    service = SubmissionService(repo, client)
+
+    with pytest.raises(ValueError, match="warehouse_id is required"):
+        service.submit_label_tracking_quick_outbound(
+            account_key="sellfox-main",
+            package_sn="P2AQUICK-STOCK",
+            actor="ops",
+            shipment_type=1,
+        )
+
+    result = service.submit_label_tracking_quick_outbound(
+        account_key="sellfox-main",
+        package_sn="P2AQUICK-STOCK",
+        actor="ops",
+        shipment_type=1,
+        warehouse_id=42,
+    )
+
+    assert client.calls == 0
+    assert result.http_called is False
+    assert result.shipment_type == 1
+    assert result.inventory_effect == "may_deduct_sellfox_inventory_unverified"
+    assert result.raw["packageList"][0]["warehouseId"] == 42
 
 
 def test_quick_outbound_live_send_is_disabled_before_http(tmp_path: Path) -> None:

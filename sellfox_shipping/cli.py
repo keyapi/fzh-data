@@ -1063,7 +1063,14 @@ def packages_submit_quick_outbound(
     actor: str = typer.Option(..., help="Actor for audit"),
     carrier_name: str = typer.Option("", help="Override carrier (default from valid label)"),
     tracking_number: str = typer.Option("", help="Override tracking (default from valid label)"),
-    warehouse_id: int | None = typer.Option(None, help="发货仓库ID（仅提交平台时可空）"),
+    shipment_type: int = typer.Option(
+        0,
+        "--shipment-type",
+        help="0=不扣赛狐库存；1=可能扣赛狐库存（仅安全预览，必须带仓库）",
+    ),
+    warehouse_id: int | None = typer.Option(
+        None, help="赛狐发货仓库ID（shipment-type=1 必填）"
+    ),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
 ):
     """Preview a quickOutbound request; live send is disabled pending Outbox support."""
@@ -1076,6 +1083,7 @@ def packages_submit_quick_outbound(
         actor=actor,
         carrier_name=carrier_name or "",
         tracking_number=tracking_number or "",
+        shipment_type=shipment_type,
         warehouse_id=warehouse_id,
     )
     _output(result.__dict__, json_output)
