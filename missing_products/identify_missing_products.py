@@ -338,13 +338,20 @@ def analyze(df_tt, df_bom, en_leaves, saihu_spu_map, saihu_sku_map, all_saihu_sk
 
     # Phase 2: Tongtu unmatched
     for sk in sorted(tt_sku_stock):
-        cln = _clean(sk); en_m = cust_to_en.get(cln.lower(),[]) or cust_to_en.get(sk.lower(),[])
+        cln = _clean(sk)
+        exact_en = cust_to_en.get(sk.lower(), [])
+        candidate_en = cust_to_en.get(cln.lower(), []) if cln.lower() != sk.lower() else []
+        en_m = exact_en or candidate_en
         in_sx_sku = sk in all_saihu_skus or cln in all_saihu_skus
-        if en_m or in_sx_sku: continue
+        sfx = _suffix(sk)
+        semi = sk.lower().endswith(("-cover", "-foam")) or sfx
+        if exact_en or (not semi and in_sx_sku):
+            continue
         q = tt_sku_stock[sk]; whs = ", ".join(sorted(tt_sku_wh[sk]))
-        cls = _classify_tt_unmatched(sk); sfx = _suffix(sk)
+        cls = _classify_tt_unmatched(sk) if not semi else "皮壳/海绵半成品待评估"
         tt_unmatched.append({
             "通途SKU":sk,"清理后SKU":cln,"后缀类型":sfx,
+            "匹配EN成品(清洗后)": ",".join(candidate_en) if semi else "",
             "SPU":_spu(sk),"仓库":whs,"可用库存":q,
             "货品名称":tt_sku_name.get(sk,""),"分类":cls,
             "匹配EN客户物料号":"否","在赛狐SKU":"否",
@@ -363,6 +370,7 @@ def analyze(df_tt, df_bom, en_leaves, saihu_spu_map, saihu_sku_map, all_saihu_sk
     # Stats
     nc_spus = len(set(r["EN_SPU"] for r in need_create))
     tt_c = {c:sum(1 for r in tt_unmatched if r["分类"]==c) for c in ["辅料/耗材类","疑似Amazon ASIN","TT编码(需核实)","淘汰旧编码","其他未分类"]}
+    tt_c["皮壳/海绵半成品待评估"] = sum(1 for r in tt_unmatched if r["分类"]=="皮壳/海绵半成品待评估")
     summ = [
         {"指标":"EN SPU总数(产品子树)","值":len(en_spu_set)},
         {"指标":"已在赛狐","值":len([r for r in spu_all if r.get("分类")=="已存在赛狐"])+len(in_saihu_extra)},
