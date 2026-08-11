@@ -459,15 +459,80 @@ def test_exclude_shops_filter(tmp_path) -> None:
     _make_package(repo, package_sn="P-SHOP-A", shop_name="WFUS")
     _make_package(repo, package_sn="P-SHOP-B", shop_name="OSTK")
     _make_package(repo, package_sn="P-SHOP-C", shop_name="Daneey-LELEFIDO-US")
+    _make_package(repo, package_sn="P-SHOP-D", shop_name="TT_Tooddly")
+    _make_package(repo, package_sn="P-SHOP-E", shop_name="TTCozydozy")
+    _make_package(repo, package_sn="P-SHOP-F", shop_name="TTBNKC")
 
     total = repo.count_packages(account_key="sellfox-main")
     filtered = repo.count_packages(
-        account_key="sellfox-main", exclude_shops=["WFUS", "OSTK"]
+        account_key="sellfox-main",
+        exclude_shops=["WFUS", "OSTK", "TT_Tooddly", "TTCozydozy"],
     )
 
-    assert total == 3
-    assert filtered == 1  # only P-SHOP-C remains
+    assert total == 6
+    assert filtered == 2  # Daneey-LELEFIDO-US + TTBNKC remain
     rows = repo.list_packages(
-        account_key="sellfox-main", exclude_shops=["WFUS", "OSTK"]
+        account_key="sellfox-main",
+        exclude_shops=["WFUS", "OSTK", "TT_Tooddly", "TTCozydozy"],
     )
-    assert [r.package_sn for r in rows] == ["P-SHOP-C"]
+    assert [r.package_sn for r in rows] == ["P-SHOP-C", "P-SHOP-F"]
+
+
+def test_upsert_package_dims_keys_by_package_id_not_row_id(tmp_path) -> None:
+    """upsert_package_dims must address rows by package_id FK, never by dims row id.
+
+    Regression: it used session.get(PackageDimsRow, package_db_id), which queries
+    by the auto-increment primary key. When a package's package_id collides with an
+    existing dims row's id (different package), the upsert clobbered the wrong row
+    and the intended package ended up with no dims -> label preflight "No
+    dimensions available for package".
+    """
+    repo = PackageRepository(tmp_path / "shipping.db")
+    pid_a = _make_package(repo, package_sn="P-DIMS-A")
+    _make_package(repo, package_sn="P-DIMS-B")
+    pid_c = _make_package(repo, package_sn="P-DIMS-C")
+
+    # Insert C first: with a fresh DB this yields dims row id=1, package_id=pid_c.
+    repo.upsert_package_dims(
+        package_db_id=pid_c, weight_kg=3, length_cm=30, width_cm=20, height_cm=10, sku_count=1
+    )
+    # Now upsert A: package_db_id=pid_a collides with the dims row's id (1).
+    repo.upsert_package_dims(
+        package_db_id=pid_a, weight_kg=1, length_cm=10, width_cm=5, height_cm=2, sku_count=1
+    )
+
+    dims_a = repo.get_package_dims(pid_a)
+    dims_c = repo.get_package_dims(pid_c)
+
+    assert dims_a is not None and dims_a.weight_kg == 1.0
+    assert dims_a.length_cm == 10.0
+    assert dims_c is not None and dims_c.weight_kg == 3.0
+    assert dims_c.length_cm == 30.0
+
+
+def test_upsert_package_dims_updates_existing_row_in_place(tmp_path) -> None:
+    """Re-upserting a package updates its own row instead of creating a duplicate."""
+    repo = PackageRepository(tmp_path / "shipping.db")
+    pid = _make_package(repo, package_sn="P-DIMS-UPDATE")
+
+    repo.upsert_package_dims(
+        package_db_id=pid, weight_kg=2, length_cm=20, width_cm=10, height_cm=5, sku_count=1
+    )
+    repo.upsert_package_dims(
+        package_db_id=pid, weight_kg=4, length_cm=40, width_cm=20, height_cm=10, sku_count=2
+    )
+
+    dims = repo.get_package_dims(pid)
+    assert dims is not None and dims.weight_kg == 4.0
+    assert dims.length_cm == 40.0
+    assert dims.sku_count == 2
+    assert repo.count_rows()["packages"] == 1
+    with repo._session_factory() as session:
+        from sellfox_shipping.package_repository import PackageDimsRow
+
+        count = (
+            session.query(PackageDimsRow)
+            .filter(PackageDimsRow.package_id == pid)
+            .count()
+        )
+    assert count == 1

@@ -568,6 +568,7 @@ class SubmissionIntentRecord:
     status: str
     version: int
     confirmed_by: str = ""
+    scope_id: int = 0
 
 
 @dataclass(frozen=True)
@@ -2143,6 +2144,120 @@ class PackageRepository:
                 scope.status = "UNKNOWN_BLOCKED"
                 scope.updated_at = now
 
+    def resolve_submission_scope_block(
+        self,
+        *,
+        account_key: str,
+        package_sn: str,
+        external_order_id: str,
+        actor: str,
+    ) -> int:
+        """Clear an UNKNOWN_BLOCKED submission scope and reset its UNKNOWN intents.
+
+        A human confirms the prior ambiguous submit did NOT apply (e.g. a 4xx
+        rejection), so the package can be re-submitted. Records an audit event.
+        Returns the scope id.
+        """
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        with self._session_factory.begin() as session:
+            account = self._get_or_create_account(session, account_key)
+            package = session.scalar(
+                select(PackageRow).where(
+                    PackageRow.account_id == account.id,
+                    PackageRow.package_sn == package_sn,
+                )
+            )
+            order = session.scalar(
+                select(OrderRow).where(
+                    OrderRow.account_id == account.id,
+                    OrderRow.external_order_id == external_order_id,
+                )
+            )
+            if package is None or order is None:
+                raise LookupError(
+                    f"package {package_sn} or order {external_order_id} not found"
+                )
+            scope = session.scalar(
+                select(SubmissionScopeRow).where(
+                    SubmissionScopeRow.account_id == account.id,
+                    SubmissionScopeRow.package_id == package.id,
+                    SubmissionScopeRow.order_id == order.id,
+                )
+            )
+            if scope is None:
+                raise LookupError(
+                    f"no submission scope for {package_sn} / {external_order_id}"
+                )
+            if scope.status == "UNKNOWN_BLOCKED":
+                scope.status = "OPEN"
+                scope.updated_at = now
+            # Reset stale UNKNOWN intents back to READY so they can be re-submitted.
+            for intent in session.scalars(
+                select(SubmissionIntentRow).where(
+                    SubmissionIntentRow.scope_id == scope.id,
+                    SubmissionIntentRow.status == "UNKNOWN",
+                )
+            ):
+                intent.status = "READY"
+                intent.updated_at = now
+            session.add(
+                AuditEventRow(
+                    actor=actor,
+                    action="submission.scope_unblock",
+                    entity_type="submission_scope",
+                    entity_id=str(scope.id),
+                    summary=f"unblock {package_sn} / {external_order_id}",
+                    created_at=now,
+                )
+            )
+            return scope.id
+
+    def resolve_unknown_blocked_scope(
+        self, *, intent_id: int, actor: str, note: str
+    ) -> SubmissionIntentRecord:
+        """Human-approved, audited unblock of an UNKNOWN_BLOCKED submission scope.
+
+        Only call after checking that the failed attempt had no Sellfox side
+        effect (for example a 401/403 before send, or readback confirms trackNo
+        unchanged). The old UNKNOWN attempt remains as audit; the intent is
+        returned to READY so the same request can be submitted again.
+        """
+        actor_s = (actor or "").strip()
+        note_s = (note or "").strip()
+        if not actor_s:
+            raise ValueError("actor is required")
+        if not note_s:
+            raise ValueError("note is required")
+        now = datetime.now(timezone.utc)
+        with self._session_factory.begin() as session:
+            intent = session.get(SubmissionIntentRow, intent_id)
+            if intent is None:
+                raise LookupError(f"Intent {intent_id} not found")
+            scope = session.get(SubmissionScopeRow, intent.scope_id)
+            if scope is None or scope.status != "UNKNOWN_BLOCKED":
+                raise RuntimeError(
+                    f"scope for intent {intent_id} is not UNKNOWN_BLOCKED"
+                )
+            if intent.status not in {"UNKNOWN", "READY", "FAILED"}:
+                raise RuntimeError(
+                    f"intent {intent_id} status {intent.status} cannot be safely reset"
+                )
+            scope.status = "OPEN"
+            scope.updated_at = now
+            if intent.status == "UNKNOWN":
+                intent.status = "READY"
+            intent.updated_at = now
+        self.append_audit_event(
+            actor=actor_s,
+            action="submission.scope.resolve_unknown_blocked",
+            entity_type="submission_intent",
+            entity_id=str(intent_id),
+            summary=note_s,
+        )
+        record = self.get_submission_intent(intent_id)
+        assert record is not None
+        return record
+
     def recover_stale_submission_in_flight(self, *, actor: str) -> int:
         now = datetime.now(timezone.utc)
         recovered = 0
@@ -3380,7 +3495,11 @@ class PackageRepository:
     ) -> PackageDimsRecord:
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         with self._session_factory.begin() as session:
-            row = session.get(PackageDimsRow, package_db_id)
+            row = (
+                session.query(PackageDimsRow)
+                .filter(PackageDimsRow.package_id == package_db_id)
+                .first()
+            )
             if row is None:
                 row = PackageDimsRow(package_id=package_db_id)
                 session.add(row)
@@ -4523,6 +4642,7 @@ def _intent_to_record(account_key: str, row: SubmissionIntentRow) -> SubmissionI
         status=row.status or "",
         version=int(row.version or 0),
         confirmed_by=row.confirmed_by or "",
+        scope_id=int(row.scope_id or 0),
     )
 
 

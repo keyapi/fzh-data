@@ -33,7 +33,7 @@ from sellfox_shipping.package_service import (
     PackageReviewRequest,
     ReviewPackageService,
 )
-from sellfox_shipping.sellfox_client import SellfoxClient
+from sellfox_shipping.sellfox_client import SellfoxClient, get_sellfox_client
 from sellfox_shipping.store import Store
 
 # ── Bootstrap ─────────────────────────────────────────────────────
@@ -557,7 +557,7 @@ async def package_fetch_rates(request: Request, package_sn: str):
     )
     lizard_rate = await run_in_threadpool(_get_lizard_rate, record, package_dims)
 
-    # Pick the routing-suggested carrier's rate for display
+    # 运费试算只展示路由建议承运商的报价；另一家存历史报价表
     if routing_result and routing_result.matched:
         suggested_carrier = (routing_result.carrier or "").strip().lower()
     else:
@@ -569,7 +569,7 @@ async def package_fetch_rates(request: Request, package_sn: str):
     elif display_rate and "error" in display_rate:
         message = f"报价失败: {display_rate['error']}"
     else:
-        message = "报价完成（查看历史记录）"
+        message = "报价完成（查看历史报价）"
 
     # Re-render with fresh context (live rate + updated history)
     ctx = _package_detail_context(account_key, record, message=message, vite_rate_override=vite_rate, lizard_rate_override=lizard_rate)
@@ -625,7 +625,7 @@ def _package_detail_context(account_key: str, record, *, message: str, vite_rate
     lizard_services = _get_lizard_services(repo, record, account_key)
 
     # Use override from fetch-rates, or None for initial load (on-demand pattern)
-    # Pick the routing-suggested carrier's rate for display
+    # 运费试算只展示路由建议承运商的报价（塞进 vite_rate 变量）；另一家仅存历史报价表
     if routing_result and routing_result.matched:
         suggested_carrier = (routing_result.carrier or "").strip().lower()
     else:
@@ -1008,12 +1008,10 @@ def _vite_rate_to_dict(
     }
 
 
-# Lizard warehouse → ca_zone mapping (based on S0143 shipper registration)
-_LIZARD_CA_ZONE: dict[str, int] = {
-    "CENTRADE": 1,  # NJ → 美东
-    "DANEEY": 0,    # TX → S0143 not in CA zone
-    "POLAND": 0,    # 全域
-}
+# ratesv2 ca_zone is a route-coverage selector, not a warehouse mapping.
+# 0 = query all zones; 1/2/3/4 = East/West/Central/South US. The current quote
+# always uses the S0143 TX shipper, so querying all zones is the intended behavior.
+_LIZARD_RATE_CA_ZONE = 0
 
 
 def _get_lizard_rate(
@@ -1040,8 +1038,7 @@ def _get_lizard_rate(
                 "error": "Lizard credentials not configured (YIGLOBAL_APP_TOKEN / YIGLOBAL_APP_KEY)",
             }
 
-        wh_name = (record.logistics.warehouse_name or "").strip()
-        ca_zone = _LIZARD_CA_ZONE.get(wh_name, 0)
+        ca_zone = _LIZARD_RATE_CA_ZONE
 
         addr = record.address
         body = {
@@ -1123,7 +1120,18 @@ def _get_lizard_rate(
                 best_total = total
                 best = rate_record
 
-        return best
+        if best is not None:
+            return best
+        # No product returned a usable total_charge — surface why instead of None.
+        err_msgs = sorted(
+            {
+                str(item.get("err_msg", "")).strip()
+                for item in result.values()
+                if isinstance(item, dict) and item.get("err_msg")
+            }
+        )
+        reason = "；".join(err_msgs[:3]) if err_msgs else "无匹配线路"
+        return {"source": "lizard", "error": f"蜴国际无可用报价：{reason}"}
 
     except Exception as exc:  # noqa: BLE001 — surface the reason instead of hiding it
         return {"source": "lizard", "error": f"Lizard rate fetch failed: {exc}"}
@@ -1395,16 +1403,25 @@ async def package_submit_label_tracking_form(request: Request, package_sn: str):
     actor = _web_actor(request, str(form.get("actor") or "web-user"))
     try:
         result = await run_in_threadpool(
-            SubmissionService(repo, _get_client()).submit_label_tracking,
+            SubmissionService(repo, get_sellfox_client()).submit_label_tracking_quick_outbound,
             account_key=account_key,
             package_sn=package_sn,
             actor=actor,
         )
-        message = (
-            f"已回写面单追踪号 {result.tracking_number} → 赛狐；"
-            f"意图 {result.intent_ids} 状态 {result.intent_statuses}；"
-            f"HTTP {'已调用' if result.http_called else '未调用'}"
-        )
+        if result.code == 0 and result.success_num > 0:
+            message = (
+                f"已回写面单追踪号 {result.tracking_number} → 赛狐（quickOutbound）；"
+                f"成功 {result.success_num} 单"
+            )
+        else:
+            fails = "; ".join(
+                f"{d.get('packageSn', '')}: {d.get('msg', '')}"
+                for d in result.fail_data
+            )
+            detail = f"code={result.code} msg={result.msg}"
+            if fails:
+                detail += f" | {fails}"
+            message = f"回写赛狐失败: {detail}"
     except Exception as exc:  # noqa: BLE001
         message = f"回写赛狐失败: {exc}"
     record = repo.get(account_key, package_sn)

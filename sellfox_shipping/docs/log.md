@@ -3,10 +3,70 @@ okf: v0.1
 type: Log
 module: sellfox_shipping
 created: 2026-07-15
-updated: 2026-08-06
+updated: 2026-08-10
 ---
 
 # sellfox_shipping - 变更日志
+
+## 2026-08-10 - 蜴国际面单发货地址：根因已与蜴国际确认（产品↔发件人绑定），代码尝试已还原
+
+- **决定性根因（已与蜴国际确认）**：蜴国际产品（sm_code）↔ 发件人（已备案地址）**关联绑定**；createOrder 的 `shipper_address` 字段无效，面单 FROM 地址由所选产品绑定的发件人决定。实测传 NJ 已备案地址仍打印 TX/CA——shipper_address 被完全忽略。
+- **产品绑定示例**：`FedEx-21-AHS-USEA`→East Hanover NJ；`FedEx-Ground-20-OS-TX`→Houston TX；`FedEx-Economy-10-USEA`→Ontario CA（非 NJ）。
+- **当前卡点**：`FedEx-21-AHS-USEA`（绑定 NJ 发件人的产品）**已下线（渠道已关闭）**，ratesv2 不再返回、createOrder 报 `400 物流渠道已关闭`。`FedEx-Economy-10-USEA` 可用但绑定 Ontario CA。**NJ 暂无可用产品，需蜴国际重新开通 NJ 产品或把 NJ 发件人绑定到可用美东产品。**
+- **代码侧尝试已还原（未提交）**：曾实现 `build_shipper_address_from_warehouse` 按仓库映射已备案地址 + 区域感知产品选择 + 下拉框区域过滤，但因①蜴国际忽略 shipper_address、②NJ 产品下线，无法解决，已 `git restore` 还原。下拉框保持列出全部产品、人工选择。
+- **待实现（后续，本次不做）**：仓库 → 下拉框固定服务类型（warehouse → fixed sm_code），等蜴国际开通 NJ 产品后；勿映射已下线的 `FedEx-21-AHS-USEA`。
+- 详见 [已解决问题：蜴国际面单发货地址](solutions/sellfox-writeback-label-address-2026-08-07.md)。
+
+## 2026-08-10 - 修复面单创建 "No dimensions available"（upsert_package_dims 主键/外键混淆）
+
+- 现象：`P2B4A9T731770` 创建面单报 `No dimensions available for package`。`LabelService.preflight` 在 `get_package_dims(db_id)` 返回 `None` 时报错。
+- 根因：`upsert_package_dims` 用 `session.get(PackageDimsRow, package_db_id)` —— 按**自增主键 `id`** 查，但 `package_db_id` 是**外键 `package_id`**。当某包裹的 `package_id` 撞上既有 dims 行的 `id`（本例 id=2 属于 `P2BAA9T734992`），尺寸被错写到别家行，目标包裹的 `package_id` 行永不创建；读侧 `get_package_dims` 早已改用 `filter(package_id==)`，所以读回永远 `None`。写侧漏同步修复。
+- 修复：`upsert_package_dims` 改为 `session.query(PackageDimsRow).filter(PackageDimsRow.package_id == package_db_id).first()`，与读侧/`upsert_package_routing` 一致。
+- 新增回归测试 2 例（碰撞 + 重复 upsert 不重复）；全量 `tests/sellfox_shipping` **302 passed, 2 warnings**。
+- 数据修复：重新计算 `P2B4A9T731770`（3.6kg, 66×56×5cm）与 `P2BAA9T734992`（4.98kg, 76×56×7.8cm）尺寸，清理诊断时误写行。
+- 详见 [已解决问题：upsert_package_dims 主键/外键查询混淆](solutions/upsert-package-dims-pk-fk-bug-2026-08-10.md)。
+
+## 2026-08-07 - 开源复用档案与 Search-before-Build 准入
+
+- 新增 [开源复用档案](research/open-source-reuse-dossier-2026-08-07.md)：严格评估 erpnext-shipping（MIT，v16.0.0）、Karrio、Huey、OCA delivery-carrier、OpenBoxes 与 outbox-streaming。
+- erpnext-shipping 结论：Adapt/Reference，借鉴适配器分层、报价聚合、服务别名、部分失败补偿与测试场景；不整体安装。
+- 后续每个核心任务包先产出候选项目/许可证/可复用模块/可移植测试/Adopt-Adapt-Reference-Reject 档案，再开始编码。
+
+
+## 2026-08-07 - Submission scope 人工解除与审计
+
+- 新增 `submission-scope-resolve` CLI：仅当 scope 为 `UNKNOWN_BLOCKED` 且操作者确认无赛狐副作用后，将 scope 恢复 `OPEN`、UNKNOWN intent 恢复 `READY`，并写入审计。
+- 旧 UNKNOWN attempt 保留作为审计；解除后允许再次调用 submit，不绕过 carrier 或赛狐状态机。
+- 解决真实探针 401 后 scope 永久锁死、新包裹被迫换票的问题；仍要求 `--confirm unblock` 与非空 note。
+
+
+## 2026-08-07 - 修复回写赛狐 NameError（_get_client 未定义）
+
+- Web 端点 `POST /packages/{sn}/submit-label-tracking`（回写面单追踪号到赛狐）调用 `_get_client()`，但该函数只定义在 `cli.py`，`app.py` 模块作用域不存在 → 点击即 `NameError: name '_get_client' is not defined`。
+- 潜伏原因：`test_submit_label_tracking.py` 只测 service 层（mock client），未覆盖 app.py Web 端点。
+- 修复：把"智能客户端工厂"逻辑（SELLFOX_APP_ID/SECRET 有则直连 OpenAPI，否则走代理）提取为共享函数 `get_sellfox_client()`（`sellfox_client.py`），`app.py` 端点与 `cli.py._get_client()` 共同复用，消除重复。
+- 新增 `test_sellfox_client_factory.py`（2 例）；全量 283 passed。
+- 验证：TestClient mock 客户端 POST 端点返回 200 无 NameError。
+
+
+## 2026-08-07 - 蜴国际报价 ca_zone 语义修复与 CENTRADE 遗留问题
+
+- 问题：CENTRADE 包裹点击「获取 VITE + 蜴国际 报价」时蜴国际报价不显示。
+- 根因：`_LIZARD_CA_ZONE["CENTRADE"]=1`（限定美东），而报价请求使用统一 S0143 TX 发件地址；ratesv2 返回「未匹配到可用线路」。
+- 修复：删除按仓库映射的 `_LIZARD_CA_ZONE`，统一使用 `_LIZARD_RATE_CA_ZONE = 0`（全域查询），并补 mock 回归测试锁定请求参数与报价持久化。
+- 展示决策：运费试算只显示路由建议承运商的报价，另一家仅写入历史报价表。
+
+## 2026-08-07 - 排除列表新增 TikTok 店铺（TT_Tooddly / TTCozydozy）
+
+- 通过赛狐 OpenAPI `/api/multiplatform/shop/list.json` 核实：`platformType=TIKTOK` 共 4 家店铺（TTCozydozy、TT_Tooddly、TTBNKC、DaneeyGo）。
+- 用户提到的 `TTTOODDLYUS` / `TTCozyDozyUS` 在系统中不存在，实际 `shop_name` 为 `TT_Tooddly` / `TTCozydozy`（API 与本地包裹数据一致）。
+- 按用户确认仅排除 2 家：`routing_rules.yaml` `exclude_shops` 追加 `TT_Tooddly`、`TTCozydozy`（现为 WFUS/OSTK/PotteryBarnUS/TT_Tooddly/TTCozydozy）。
+- 该列表同时驱动「Transactions 排除平台物流店铺」复选框与包裹详情「建议渠道方式」（`RuleEngine.from_yaml` 同一数据源），TTBNKC / DaneeyGo 保留。
+- 移除 `routing/models.py` 中冗余的 `is_excluded_shop` 硬编码属性，确认无运行时调用方后由 YAML 作为唯一事实来源。
+- 测试：新增 `test_routing_engine.py`，从真实 YAML 驱动 `RuleEngine.route()` 与 repository 过滤；`test_exclude_shops_filter` 扩展 TikTok 店铺场景。
+- 浏览器验证：勾选排除后 2898→2334 条（-564 = WFUS 325 + OSTK 186 + PotteryBarnUS 41 + TTCozydozy 11 + TT_Tooddly 1）；TTCozydozy 包裹详情建议渠道显示「排除（平台物流）」。
+
+
 
 ## 2026-08-06 - 赛狐 Outbox PR 2 执行器与回读
 

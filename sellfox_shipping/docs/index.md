@@ -3,7 +3,7 @@ okf: v0.1
 type: Index
 module: sellfox_shipping
 created: 2026-07-15
-updated: 2026-08-06
+updated: 2026-08-07
 ---
 
 # sellfox_shipping — 文档索引
@@ -28,6 +28,7 @@ updated: 2026-08-06
 
 - [research/index.md](research/index.md) — 调研文档导航
 - [research/mature-shipping-systems-2026-08-04.md](research/mature-shipping-systems-2026-08-04.md) — 成熟商业系统、Karrio 与 API 方案调研
+- [research/open-source-reuse-dossier-2026-08-07.md](research/open-source-reuse-dossier-2026-08-07.md) — **开源复用档案**：erpnext-shipping/Karrio/Huey/OCA/OpenBoxes 评估与 Search-before-Build 准入清单
 - [research/sellfox-writeback-outbox-systems-2026-08-06.md](research/sellfox-writeback-outbox-systems-2026-08-06.md) — Outbox 成熟方案与采用结论。
 - [research/session-progress-2026-07-16.md](research/session-progress-2026-07-16.md) — 过程日记（冷档案，勿当现状）
 - [research/research-synthesis-2026-07-16.md](research/research-synthesis-2026-07-16.md) — 规划底稿；先看文首裁决框，现行以 HANDOFF 为准
@@ -47,5 +48,10 @@ updated: 2026-08-06
 - [research/sku-label-back-sticker-analysis-2026-07-28.md](research/sku-label-back-sticker-analysis-2026-07-28.md) — **SKU 背贴 PDF 生成**：Colab notebook 逻辑分析 + sellfox_shipping 集成方案
 
 ## 已解决问题
+
+- [solutions/sellfox-writeback-label-address-2026-08-07.md](solutions/sellfox-writeback-label-address-2026-08-07.md) — **回写赛狐 + 蜴国际发货地址全链路**：submitToPlatform/quickOutbound 被拒原因、蜴国际面单发货地址错误（S0143 借用→按仓库推导→蜴国际可能忽略）、4xx 分类、scope 解除、分支叠加教训
+- [solutions/sellfox-submit-tracking-nameerror-2026-08-07.md](solutions/sellfox-submit-tracking-nameerror-2026-08-07.md) — **回写赛狐 NameError**：Web 端点误用 cli.py 私有 `_get_client`；提取共享 `get_sellfox_client` 工厂
+- [solutions/index.md](solutions/index.md) — 已解决问题索引
+- [solutions/tiktok-exclude-shops-2026-08-07.md](solutions/tiktok-exclude-shops-2026-08-07.md) — **TikTok 排除店铺**：赛狐 API 核实真实 shop_name + `exclude_shops` 单点配置驱动列表过滤与路由建议
 
 - [solutions/reliability-hardening-and-lizard-chain-2026-08-06.md](solutions/reliability-hardening-and-lizard-chain-2026-08-06.md) — **可靠性收口与蜴国际面单链路全部问题**：分页count、resume并发、证据化结案、蜴国际API、报价展示、赛狐回写、批量面单、async阻塞、参考号重复

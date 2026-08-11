@@ -20,6 +20,14 @@ tags: [sellfox-shipping, submitToPlatform, trackNo, autopush]
 
 OpenAPI「订单处理」下**无**单独「只改物流、不提交平台」接口。要让赛狐 UI/详情出现运单号，文档化写入口目前只有 `submitToPlatform`。
 
+## 2026-08-07 平台边界补充（代码/API 可检索）
+
+- `submitToPlatform` 位于「订单 > 订单处理 > FBM」，响应 DTO 为 `PackageSubmitAmazonResultDTO`，请求粒度是 `shopId + orderId + items[]`；目前可视为 Amazon/FBM 主链路。
+- 多平台非 Amazon 通道另有 [`快速出库`](https://sellfoxapi.apifox.cn/api-422323126.md)（`POST /api/packageShip/quickOutbound.json`）：按 `packageSn + carrier + trackNo` 提交，`shipmentType=0` 表示“仅提交平台，不扣库存”，响应按 packageSn 返回逐条失败原因。
+- `applyTrackNo.json` 的「物流下单发货」只传 `packageIds/packageSns`，不是本系统需要的“写入既有 tracking”回写请求体，勿混淆。
+- 赛狐未对接的平台无法通过这两个接口写回；应由同事按各平台支持的 Excel/CSV/API 格式处理，本系统只保留本地对账与交接证据。
+- 代码尚未实现 `quickOutbound` 客户端；真实探针先验证 Amazon `submitToPlatform`，非 Amazon 回写作为后续独立任务包。
+
 ## 当初为何规划这一步
 
 [`research-synthesis-2026-07-16.md`](research-synthesis-2026-07-16.md) 按**赛狐原生全闭环**设计：

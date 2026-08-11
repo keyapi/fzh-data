@@ -102,6 +102,27 @@ Excel 本地闭环（审核 → 导出 → 人工上传物流商 → 导入对�
 > 5. 公网部署前仍需 OIDC/CSRF/RBAC、secure cookie 与 PII/log 脱敏审计。
 > 6. 当前自动化基线为 **260 passed, 2 warnings**；仍不等于承运商沙箱或生产业务验收完成。
 
+> **2026-08-07 新对话接手补充：**
+> - **当前分支/PR**：`fix/sellfox-submit-quantity-errorbody` → **PR #158**（本次全部改动已提交：quickOutbound 写回、蜴国际发货地址按仓库推导、4xx=FAILED、scope unblock、quantity string、ca_zone CENTRADE=0）。PR #153/#154/#155 未合并（内容已被 #158 覆盖部分）。
+> - **本次完整问题记录**：先读 [docs/solutions/sellfox-writeback-label-address-2026-08-07.md](docs/solutions/sellfox-writeback-label-address-2026-08-07.md)。
+> - **优先任务（新对话第一步）**：
+>   1. 同步 8 月包裹（`packages-sync --date-start 2026-08-01 --date-end <今天> --actor cli`）。
+>   2. **修复蜴国际面单打印发货地址错误**：实测蜴国际可能忽略 createOrder 的 `shipper_address`，改用其账户/产品（FedEx-Ground-J-TX）配置地址（Missouri City TX）。美东正确地址已写入 config `warehouses.CENTRADE`（Overstock.com, Centrade Inc / 389 Route 10 Unit R, East Hanover NJ 07936 / 7327622442）。需与蜴国际确认 `shipper_address` 是否生效、是否有 NJ 产品/账户配置。
+>   3. 与赛狐确认正确写回 API（submitToPlatform/quickOutbound 均被拒"不需要提交平台"；候选 `applyTrackNo` 物流下单发货）。
+> - 测试基线：**293 passed**。
+> - 凭证/服务器/同步步骤沿用文首「快速启动」。
+
+> **2026-08-10 补充（蜴国际面单发货地址 — 已与蜴国际确认）：**
+> - **决定性根因**：蜴国际产品（sm_code）↔ 发件人关联绑定，createOrder 的 `shipper_address` **无效**，FROM 由产品绑定的发件人决定。代码无法控制地址，只能选对产品。
+> - **当前卡点**：`FedEx-21-AHS-USEA`（绑定 NJ 发件人）**已下线（渠道已关闭）**；`FedEx-Economy-10-USEA` 可用但绑定 Ontario CA。**NJ 暂无可用产品**，需蜴国际开通 NJ 产品或把 NJ 发件人绑定到可用美东产品。
+> - **代码保持原状**：8-10 曾尝试按仓库映射已备案地址 + 区域过滤产品，已 `git restore` 还原（未提交）；下拉框列出全部产品、人工选择。
+> - **待实现（后续）**：仓库 → 下拉框固定服务类型（warehouse → fixed sm_code），等蜴国际开通 NJ 产品后；勿映射已下线的 `FedEx-21-AHS-USEA`。
+> - 全量测试基线 **302 passed, 2 warnings**。详见 [已解决问题](docs/solutions/sellfox-writeback-label-address-2026-08-07.md)。
+
+> **2026-08-10 补充（upsert_package_dims 尺寸写入修复）：**
+> - 修复面单创建报 `No dimensions available for package`：`upsert_package_dims` 用 `session.get`（按主键 id）查外键 `package_id`，`package_id` 撞上既有 dims 行 id 时错写别家、目标包裹尺寸永不落库。改为 `filter(package_id==)` 与读侧一致。
+> - 详见 [已解决问题](docs/solutions/upsert-package-dims-pk-fk-bug-2026-08-10.md)。
+
 ### 7. 重规划裁决
 
 - **不**整本作废 synthesis；修订 P1C 出口与承运人双通道（见 synthesis 文首裁决框）
@@ -109,6 +130,7 @@ Excel 本地闭环（审核 → 导出 → 人工上传物流商 → 导入对�
 - 平台推送非本阶段默认；Intent/CLI 真调路径保留备用
 - 当前规模先强化 SQLite；出现持续写竞争或多实例恢复需求时再迁 PostgreSQL
 - 暂不采用 Karrio Server；约 5 个 API 承运商或至少两个标准 connector 可复用时再做独立服务 POC
+- 开源复用遵守 [开源复用档案](docs/research/open-source-reuse-dossier-2026-08-07.md)：每任务包先产出 Search-before-Build 档案，再决定 Adopt/Adapt/Reference/Reject；erpnext-shipping 作为参考而非依赖
 - 装箱算法延期，本阶段不改变现有尺寸公式
 
 ## 禁区
@@ -197,6 +219,10 @@ uv run python -m sellfox_shipping.cli packages-submit-intent \
 # P1C：SUCCESS → VERIFIED（仅 packageDetail 回读，不重新 submit）
 uv run python -m sellfox_shipping.cli packages-verify-intent \
   --intent-id <N> --actor <operator-id> --json
+
+# UNKNOWN_BLOCKED submission scope：人工核验无副作用后解除（新 intent/attempt 才可提交）
+uv run python -m sellfox_shipping.cli submission-scope-resolve \
+  --intent-id <N> --actor <approver> --note "<checked what>" --confirm unblock --json
 
 # Web Server（FastAPI；本地开发请加 --reload）
 uv run python -m sellfox_shipping.cli serve --host 127.0.0.1 --port 8401 --reload
@@ -288,7 +314,7 @@ sellfox_shipping/
 | 功能 | 说明 |
 |------|------|
 | VITE 询价 | 最长边 ≤22" GOFO(GFUS), >22" FedEx(ODFC)；生产环境已验 |
-| 蜴国际询价 | ratesv2 全部产品，S0143 发件，ca_zone=1(美东) |
+| 蜴国际询价 | ratesv2 全部产品，S0143 发件，ca_zone=0（全域查询） |
 | 历史报价 | `shipping_package_rates` 表，VITE + 蜴国际共用，按需获取 |
 | 手动触发 | 点击按钮 → POST `/fetch-rates`，避免每次页面加载拉取 API |
 | 原始响应 | `raw_data` 列存储完整 API 返回 JSON（indent=2 格式化，暗色代码块可展开） |
