@@ -114,6 +114,7 @@ uv sync
 | `dam-prototype` | `dam-prototype/` | DAM 数字资产管理原型 |
 | `erpnext` | `erpnext/` | 工单排查 (setup→fetch→report 流水线) |
 | `erpnext-wo-audit` | `.agents/skills/erpnext-wo-audit/` | 工单排查 Skill，按触发词自动加载 |
+| `missing-products` | `.agents/skills/missing-products/` | 通途有库存 SKU → EN 产品客户码 → 赛狐产品 SKU 三方主线补齐/审计 |
 | `frappe-core-api` | — | ERPNext REST API 开发（外部 skill） |
 | `frappe-errors-api` | — | ERPNext API 错误处理（外部 skill） |
 
