@@ -42,6 +42,16 @@ uv run python identify_missing_products.py
 
 若需补建 EN 缺失物料，参见 `.agents/skills/erpnext-item-create/` 和 `docs/solutions/conventions/erpnext-item-variant-creation-convention.md`。
 
+
+## 只读交付脚本（2026-08-11）
+
+| 脚本 | 输出 | 说明 |
+|------|------|------|
+| `build_mapping_workbook.py` | `out/通途EN赛狐映射表_*.xlsx` | 1411 行有库存 SKU 的 通途→EN→赛狐 映射，含一对多/多对一/暂缓 |
+| `build_foam_status_workbook.py` | `out/海绵通途SKU现状_*.xlsx` | 25 条海绵 SKU 现状 + HM1510 历史登记参考，不写 HM1510 |
+| `fetch_sellfox_pairing.py` | `out/赛狐配对盘点_*.xlsx` | Amazon 在线产品配对 + 多平台配对只读盘点；原始数据缓存于 `out/pairing_cache/`，`--refresh` 强制重拉 |
+
+赛狐配对分 **Amazon 在线产品配对** 与 **多平台配对** 两套机制，接口、模板和现状详见 AGENT_HANDOFF §3.5。
 ## 文档
 
 - **新对话请先读 [AGENT_HANDOFF.md](AGENT_HANDOFF.md)** — 完整交接（背景/状态/下一步/技术细节）

@@ -2,7 +2,7 @@
 
 > **用途**：新对话接手本项目的入口。读完本文档可完整理解「通途→EN→赛狐 老产品补齐」的前因后果、当前状态、下一步与全部技术细节。
 > **代码位置**：`missing_products/` 目录（识别脚本 + 创建脚本 + 文档）。
-> **最后更新**：2026-08-11
+> **最后更新**：2026-08-11（第二批只读交付）
 
 ---
 
@@ -71,6 +71,23 @@
 - 全量调查 `PK#` 与 `HM1510` 是否已有客户物料号，以及同一通途 SKU 在产品、皮壳和海绵中的重复关系。
 - 结合销售订单导入、BOM、生产和库存研究拉链款弧形靠枕的共用皮壳、通用海绵和一对多维护方式。
 - 调研完成前不迁移、不删除配套物料上的客户码；主体骨架也留到后续单独范围。
+
+### 3.5 本批只读交付物（2026-08-11，均不写生产）
+
+三个只读脚本输出到 `missing_products/out/`，不做任何 EN/HM1510/赛狐写入：
+
+| 交付物 | 脚本 | 输出 | 关键内容 |
+|--------|------|------|---------|
+| 三方映射表 | `build_mapping_workbook.py` | `通途EN赛狐映射表_*.xlsx` | 1411 行有库存 SKU；一对多 7、多对一 128、暂缓 14；含通途别名、EN 产品/名称/成本、赛狐 SPU/SKU、关系类型 |
+| 海绵现状 | `build_foam_status_workbook.py` | `海绵通途SKU现状_*.xlsx` | 25 条海绵 SKU 均已登记 EN 产品；HM1510 物料 223、历史客户码 75 条全部带“删除”前缀、活跃登记 0；本阶段不写 HM1510、不设计登记标准 |
+| 赛狐配对盘点 | `fetch_sellfox_pairing.py` | `赛狐配对盘点_*.xlsx` | Amazon 在线产品 50,169（已配对 26,100 / 未配对 24,069）；多平台配对 3,285 且 Amazon/Amazon_VC 为 0；通途别名/EN 差异与待确认 |
+
+**赛狐配对是两套机制，不能混用：**
+
+- **Amazon 在线产品配对**：读取 `/api/order/api/product/pageList.json`（`match=true/false` 区分配对状态）；写入 `matchByMsku`/`matchByAsin`；导入模板 `import_product_msku_match`（`*MSKU、店铺名称、*商品SKU`）。
+- **多平台配对**：读取 `/api/multiplatform/match/getList.json`；写入 `save.json`；导入模板 `importMatchTemplate`（`*店铺、*MSKU、*SKU`），平台列表含 Amazon/Amazon_VC 等 20+ 平台，但当前数据里 Amazon/Amazon_VC 配对数均为 0。
+- API 支持精确小查询：`pageList` 支持 `searchType`（sku/msku/asin/parentAsin/title/fnsku/commodityName）、`searchContent`、`onlineStatusList`（active/inActive/delete）、`match`、`shopIdList`、`marketplaceIdList`；分页 `pageSize` 上限 200。
+- 全量 API 拉取约 9 分钟；原始数据缓存在 `out/pairing_cache/`，重跑默认读缓存，`--refresh` 强制重新拉取。若运营从赛狐 UI 下载在线商品导出文件，也可更快获得同一批数据。
 
 ---
 
@@ -187,6 +204,9 @@ cd ~/frappe-bench && env/bin/python /tmp/gen_bom_xlsx2.py
 | `missing_products/register_product_customer_codes.py` | 仅对审计确认的候选写入 EN 产品客户码；默认 dry-run，`--apply` 后回读 |
 | `missing_products/build_mainline_report.mjs` | 生成面向业务复核的主线工作簿（分类、赛狐状态、一对多历史关系） |
 | `missing_products/investigate_supporting_customer_codes.py` | 只读调查 `PK#`/`HM1510` 客户码，禁止用于本轮迁移或清理 |
+| `missing_products/build_mapping_workbook.py` | 生成通途→EN→赛狐映射表（1411 行，只读）|
+| `missing_products/build_foam_status_workbook.py` | 生成海绵通途 SKU 现状说明（只读，不写 HM1510）|
+| `missing_products/fetch_sellfox_pairing.py` | 赛狐 Amazon/多平台配对只读盘点（带本地缓存，`--refresh` 强制重拉）|
 | `missing_products/create_en_materials.py` | 幂等创建 EN 物料（--dry-run / --phase 1-6）|
 | `missing_products/docs/specs/old-product-completion-plan.md` | 老产品补齐计划（OKF Spec）|
 | `docs/solutions/conventions/tongtu-en-sellfox-instock-sku-mainline.md` | 三方主线完整规则、设计过程、错误做法、验证清单 |
@@ -206,6 +226,11 @@ node missing_products/build_mainline_report.mjs
 
 # 只读调查配套物料客户码
 uv run python missing_products/investigate_supporting_customer_codes.py
+
+# 本批只读交付物：映射表 / 海绵现状 / 赛狐配对盘点
+uv run python missing_products/build_mapping_workbook.py
+uv run python missing_products/build_foam_status_workbook.py
+uv run python missing_products/fetch_sellfox_pairing.py   # 默认读缓存；--refresh 强制重拉
 
 # 主线三方审计与业务工作簿（先只读；写入前必须检查 dry-run 报告）
 uv run python audit_three_systems.py
