@@ -14,8 +14,9 @@ description: >
 1. `missing_products/AGENT_HANDOFF.md` — 当前状态、历史例外和数据源。
 2. `docs/solutions/conventions/tongtu-en-sellfox-instock-sku-mainline.md` — 主线规则、设计过程、写入边界和验证清单。
 3. `missing_products/docs/lessons/2026-08-11-tongtu-en-sellfox-mainline-completion.md` — 完整复盘、失败模式和防护。
-4. 需要新增 EN 变体时再读 `.agents/skills/erpnext-item-create/SKILL.md` 和 `docs/solutions/conventions/erpnext-item-variant-creation-convention.md`。
-5. 需要赛狐 API 时再读 `.agents/skills/sellfox-api/SKILL.md` 和 `.agents/skills/multi-attr/SKILL.md`。
+4. 用户提到 Amazon 在线商品、MSKU、配对建议、未配对或别名匹配时，先读 `amazon_pairing/AGENT_HANDOFF.md` 和 `docs/solutions/conventions/amazon-online-product-pairing-candidate-workflow.md`。
+5. 需要新增 EN 变体时再读 `.agents/skills/erpnext-item-create/SKILL.md` 和 `docs/solutions/conventions/erpnext-item-variant-creation-convention.md`。
+6. 需要赛狐 API 时再读 `.agents/skills/sellfox-api/SKILL.md` 和 `.agents/skills/multi-attr/SKILL.md`。
 
 不要根据旧 xlsx、单个 BOM 报表列、SPU 名称或记忆直接下结论；先重新取数。
 
@@ -28,6 +29,7 @@ description: >
 - 赛狐对象是映射后的 EN 产品 `item_code`；不要用通途 `-Cover/-Foam` 原码、`PK#` 或 `HM1510` 创建赛狐商品。
 - 一个通途码已正确挂在多个 EN 产品时，保留全部关系并报告；本流程不清理历史一对多。
 - 不修改既有赛狐 SKU 的在售/停售状态；赛狐属性缺失时先生成导入 Excel，等用户确认导入成功后才 API 创建 SKU。
+- Amazon 配对属于独立的在线商品机制；先输出并审阅候选，只有用户批准明确的 MSKU/店铺/赛狐 SKU 范围后才可导入或调用写接口。
 - 套件、其他非产品项、主体骨架，以及配套物料上的既有客户码都属于暂缓/只读范围；除非用户明确授权，不迁移、不删除、不纳入本轮写入。
 
 ## 标准流程

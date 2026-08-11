@@ -10,6 +10,9 @@ timestamp: 2026-08-11
 
 > 本子项目用于解决赛狐 Amazon 在线商品“在售但未配对”的自动建议问题。当前只完成只读调研、数据盘点和第一阶段规则建议，未实现 ML 训练，未调用任何赛狐配对写入接口。
 
+> **先读**：[Amazon 在线商品配对的分层候选与运营确认流程](../docs/solutions/conventions/amazon-online-product-pairing-candidate-workflow.md)。
+> 它是 Amazon/多平台机制区分、快照时效、人工确认和禁止写入边界的规范来源；本文件保留当前脚本、数据源和交接清单。
+
 ## 1. 目标
 
 - 输入：赛狐 Amazon 在线商品（已配对/未配对）、通途最新导出（SKU + SKU别名）、EN 物料/客户物料号、赛狐商品 SKU。
@@ -32,7 +35,7 @@ timestamp: 2026-08-11
 | 别名命中中需人工核对 | 133 |
 | 本地SKU与EN映射不一致 | 65 |
 
-数据来源：`missing_products/out/pairing_cache/*.json`（赛狐 API 原始缓存），`D:/Work/赛狐/配对/通途商品导出_20260811_1200.zip`，`missing_products/out/通途EN赛狐映射表_20260811_145635.xlsx`。
+数据来源：`missing_products/out/pairing_cache/*.json`（赛狐 API 原始缓存），`D:/Work/赛狐/配对/通途商品导出_20260811_1200.zip`，`missing_products/out/通途EN赛狐映射表_20260811_145635.xlsx`。这是 2026-08-11 快照；后续建议前必须重新确认通途导出和赛狐缓存时效。
 
 ## 3. 赛狐配对机制（已核实）
 
@@ -80,6 +83,7 @@ timestamp: 2026-08-11
 - 一个别名可能对应多个通途 SKU 或多个 EN 产品（一对多），不能自动去重。
 - HM1510 海绵：EN REST 校验“客户物料号只能添加到 产品/套件# 物料组”，无法通过 API 给 HM1510 加客户码；且 `TT0031247K0064095-Foam` 没有 218x115x55 的 HM1510 物料。本子项目暂不处理。
 - 是否允许调用 `matchByMsku` API 批量写入，还是坚持运营上传 Excel 导入，需业务确认。
+- 直到用户明确批准具体店铺、MSKU 和赛狐 SKU 的导入范围前，本项目不得调用 `matchByMsku`、`matchByAsin` 或任何多平台写接口。
 
 ## 7. 交接清单
 

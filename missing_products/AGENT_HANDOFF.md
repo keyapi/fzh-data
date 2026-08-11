@@ -64,6 +64,10 @@
 - 同步扣减 + 定期校准脚本（每天/每周）
 - 参考 `missing_products/docs/specs/old-product-completion-plan.md` 的「库存同步设计」
 
+映射事实表已在 PR #162 后的只读交付中生成：`通途EN赛狐映射表_20260811_145635.xlsx`
+覆盖 1411 条有库存 SKU（一对多 7、多对一 128、暂缓 14）。它是库存归属设计的输入，
+不是自动同步或扣减库存的授权；一对多/多对一的实际库存归属仍需业务审批。
+
 ### 3.3 剩余 14 个未匹配（用户已确认暂缓）
 见 §6 列表。
 
@@ -82,12 +86,18 @@
 | 海绵现状 | `build_foam_status_workbook.py` | `海绵通途SKU现状_*.xlsx` | 25 条海绵 SKU 均已登记 EN 产品；HM1510 物料 223、历史客户码 75 条全部带“删除”前缀、活跃登记 0；本阶段不写 HM1510、不设计登记标准 |
 | 赛狐配对盘点 | `fetch_sellfox_pairing.py` | `赛狐配对盘点_*.xlsx` | Amazon 在线产品 50,169（已配对 26,100 / 未配对 24,069）；多平台配对 3,285 且 Amazon/Amazon_VC 为 0；通途别名/EN 差异与待确认 |
 
+**HM1510 冻结结论**：产品登记已满足主线。`Curve-Pillow-50-Foam` 和
+`TT0031247K0064095-Foam` 尝试补入 HM1510 客户码时，被 EN REST 以 HTTP 417 拦截
+（只允许产品/套件#物料组）；本轮不走 SSH 绕过，不新建 218x115x55 海绵物料，也不恢复任何
+“删除”前缀历史客户码。详细边界见三方主线惯例。
+
 **赛狐配对是两套机制，不能混用：**
 
 - **Amazon 在线产品配对**：读取 `/api/order/api/product/pageList.json`（`match=true/false` 区分配对状态）；写入 `matchByMsku`/`matchByAsin`；导入模板 `import_product_msku_match`（`*MSKU、店铺名称、*商品SKU`）。
 - **多平台配对**：读取 `/api/multiplatform/match/getList.json`；写入 `save.json`；导入模板 `importMatchTemplate`（`*店铺、*MSKU、*SKU`），平台列表含 Amazon/Amazon_VC 等 20+ 平台，但当前数据里 Amazon/Amazon_VC 配对数均为 0。
 - API 支持精确小查询：`pageList` 支持 `searchType`（sku/msku/asin/parentAsin/title/fnsku/commodityName）、`searchContent`、`onlineStatusList`（active/inActive/delete）、`match`、`shopIdList`、`marketplaceIdList`；分页 `pageSize` 上限 200。
 - 全量 API 拉取约 9 分钟；原始数据缓存在 `out/pairing_cache/`，重跑默认读缓存，`--refresh` 强制重新拉取。若运营从赛狐 UI 下载在线商品导出文件，也可更快获得同一批数据。
+- Amazon 未配对建议、91 条可导入候选、133 条人工核对、275 条三角靠枕低置信候选和 65 条不一致分析已移交给 `amazon_pairing/AGENT_HANDOFF.md`；该子项目当前只读，不得直接调用配对写接口。
 
 ---
 

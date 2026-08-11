@@ -11,4 +11,5 @@ timestamp: 2026-08-11
 | 你需要... | 读这个 |
 |----------|--------|
 | 完整交接与方案 | [../AGENT_HANDOFF.md](../AGENT_HANDOFF.md) |
+| Amazon/多平台机制、候选分层与运营确认边界 | [../../docs/solutions/conventions/amazon-online-product-pairing-candidate-workflow.md](../../docs/solutions/conventions/amazon-online-product-pairing-candidate-workflow.md) |
 | 模块说明 | [../README.md](../README.md) |

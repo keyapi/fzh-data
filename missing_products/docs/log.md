@@ -8,6 +8,8 @@ tags: [missing_products, log]
 # 变更日志
 
 ## 2026-08-11
+- **交接补充**: PR #162 后映射表明确为库存同步设计输入而非同步写入授权；HM1510 25 条产品登记已完成，历史“删除”客户码冻结，两个 HM1510 候选受 EN REST HTTP 417 拦截，本轮不绕过、不新建海绵物料。
+- **路由**: Amazon 在线商品配对的候选和运营确认流程移交 `amazon_pairing`，并由根级 conventions 文档定义其与多平台配对的边界。
 - **知识沉淀**: 新增根级解决方案 `docs/solutions/conventions/tongtu-en-sellfox-instock-sku-mainline.md`、`missing-products` Skill 和 `docs/lessons` 全流程复盘；将完整码精确登记、赛狐产品映射、半成品边界及回读验证固化为可触发流程。
 - **修正**: 三方审计改为完整通途 SKU 精确匹配，`-Cover/-Foam` 基码只作候选
 - **更新**: 从 EN 产品 Item 完整 `customer_items` 回读，保留一码多产品关系
