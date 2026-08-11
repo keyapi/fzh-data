@@ -132,6 +132,26 @@ status = (
 
 因此该轮主线不需要新建赛狐属性或 SKU。这个结论只针对当时刷新过的四个数据源；有库存、EN 或赛狐数据发生变化后，必须重新审计。
 
+## PR #162 后的映射快照与 HM1510 冻结
+
+PR #162 合并后的只读交付以最新通途导出
+`D:/Work/赛狐/配对/通途商品导出_20260811_1200.zip` 为别名基线，
+并生成 `missing_products/out/通途EN赛狐映射表_20260811_145635.xlsx`。
+这是一份 1411 条有库存完整通途 SKU 的事实表：7 条一对多、128 条多对一、14 条暂缓。
+关系必须完整保留，供库存同步的归属设计使用；它不是库存同步脚本的授权，也不能据此自动扣减库存。
+
+海绵部分已单独输出 `海绵通途SKU现状_*.xlsx`。25 条有库存 `-Foam` 完整码
+均已精确登记到 EN 产品，因此主线完成条件已满足。HM1510 的客户码维护冻结在现状记录：
+
+- 223 个 HM1510 物料中有 75 条历史客户码子表行，均带“删除”前缀，当前活跃登记为 0。
+- `Curve-Pillow-50-Foam` 和 `TT0031247K0064095-Foam` 曾作为 HM1510 候选补码验证；
+  EN REST 返回 HTTP 417，规则为客户物料号只能添加到“产品/套件#”物料组。
+- 本轮不通过 SSH 绕过该校验，不新建 `218x115x55` HM1510 物料，也不把 HM1510 客户码
+  当作产品登记或库存同步的前置条件。
+
+后续只有在销售订单、BOM、库存和生产的长期维护方案获用户明确批准后，才能重新讨论
+HM1510 的登记标准。此前，“删除”前缀只是一段历史事实，不是待恢复的客户码。
+
 ## Failed Approaches And Their Replacement
 
 | 旧做法 | 为什么错误 | 替代做法 |
@@ -172,3 +192,4 @@ status = (
 - [三方审计脚本](../../../missing_products/audit_three_systems.py)
 - [产品客户码写入脚本](../../../missing_products/register_product_customer_codes.py)
 - [配套物料只读调查脚本](../../../missing_products/investigate_supporting_customer_codes.py)
+- [Amazon 在线商品配对分层候选与运营确认](amazon-online-product-pairing-candidate-workflow.md)
