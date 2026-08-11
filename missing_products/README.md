@@ -26,7 +26,7 @@ uv run python identify_missing_products.py
 |-------|------|
 | 汇总 | 全量统计 |
 | 需创建赛狐商品 | 通途有货+EN有产品+赛狐无SPU（含 EN 产品明细、通途库存）|
-| 通途有货但EN未登记 | 通途有库存但匹配不到 EN 客户物料号（按分类：辅料/TT编码/其他）|
+| 通途有货但EN未登记 | 通途有库存但完整 SKU 未登记到 EN 产品物料 |
 | 不在售无库存 | 属性表在售=0 且无库存（无需操作）|
 | SPU比对全量 | EN SPU ↔ 赛狐 SPU 全量比对 |
 | 仅赛狐有EN无 | 赛狐存在但 EN 产品子树无此 SPU |
@@ -34,7 +34,8 @@ uv run python identify_missing_products.py
 ## 关键逻辑
 
 - **大小写不敏感匹配**：通途 SKU ↔ EN 客户物料号统一小写比对（历史上有 `KDHY-...-60CM` vs `-60cm` 差异）
-- **SKU 后缀清理**：匹配时剥离 `-淘汰`/`-out`/`-Cover`/`-Foam`（`warehouse_restock` 的 `_clean_sku`）
+- **完整 SKU 精确匹配**：`-Cover`/`-Foam` 必须以完整编号登记到 EN 产品变体；去后缀基码只用于推荐候选，不代表已登记
+- **产品物料是必需索引**：EN 销售订单 Excel 使用通途 SKU 找产品物料，再结合“皮壳/成品/半成品”列处理交付形态；`PK#`/`HM1510` 登记不能替代产品登记
 - **SPU 库存按 EN 客户物料号聚合**：不能直接用通途 SKU 前缀当 SPU（通途 `PPL-*` ↔ EN `KS0018-*`）
 
 ## 排查出的缺失物料补建
@@ -44,5 +45,7 @@ uv run python identify_missing_products.py
 ## 文档
 
 - **新对话请先读 [AGENT_HANDOFF.md](AGENT_HANDOFF.md)** — 完整交接（背景/状态/下一步/技术细节）
+- **主线规则与完整复盘**：[通途有库存 SKU 三方主线补齐惯例](../docs/solutions/conventions/tongtu-en-sellfox-instock-sku-mainline.md) — 完整码精确登记、半成品边界、赛狐创建与验证
+- **自动触发 Skill**：[missing-products](../.agents/skills/missing-products/SKILL.md) — 新对话提到三方一致性/通途有库存/Cover/Foam/赛狐缺SKU 时自动加载
 - [docs/index.md](docs/index.md) — 模块文档索引（OKF）
 - [docs/specs/old-product-completion-plan.md](docs/specs/old-product-completion-plan.md) — 三类老产品（星球/石头/张嘴熊）补齐计划 + 库存同步映射设计

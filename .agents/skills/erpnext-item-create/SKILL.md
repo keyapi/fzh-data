@@ -76,6 +76,7 @@ uv run python -c "..."   # 参考 docs/solutions/conventions/erpnext-item-varian
 - 属性值必须先存在，否则创建变体报错
 - **加属性值必须带 abbr**（ERPNext Server Script 校验 `abbr.lower()`，不带报 500）
 - 客户码全局唯一（一个客户物料号只能挂一个物料；移动时先移除旧的）
+- **三方主线登记目标**：完整通途 SKU（含 `-Cover`/`-Foam`）必须登记到 `KS` 产品成品变体；`PK#`/`HM1510` 不能替代。三方审计与补齐使用 `.agents/skills/missing-products/SKILL.md`
 - BOM operations 必须带 `workstation`/`workstation_type`，否则 417
 - `stock_uom`：面料用 `米`，成品/皮壳/内胆用 `个`（不是 `Nos`）
 - URL 含中文/`#` 需 URL 编码

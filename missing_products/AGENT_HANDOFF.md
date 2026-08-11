@@ -2,7 +2,7 @@
 
 > **用途**：新对话接手本项目的入口。读完本文档可完整理解「通途→EN→赛狐 老产品补齐」的前因后果、当前状态、下一步与全部技术细节。
 > **代码位置**：`missing_products/` 目录（识别脚本 + 创建脚本 + 文档）。
-> **最后更新**：2026-08-10
+> **最后更新**：2026-08-11
 
 ---
 
@@ -19,19 +19,20 @@
 
 | 阶段 | 目标 | 状态 |
 |------|------|------|
-| 1 | EN 物料 + 成本存在 | ✅ 已完成（老产品）|
-| 2 | 赛狐商品完整 | ⏳ **下一步** |
-| 3 | 通途↔赛狐库存同步 + 定期校准 | 📋 待做 |
+| 1 | EN 物料 + 成本存在 | ✅ 已完成（老产品与本轮主线）|
+| 2 | 有库存产品对应的赛狐商品完整 | ✅ 已完成（2026-08-11 回读验证）|
+| 3 | 通途↔赛狐库存同步 + 定期校准 | 📋 待做；先设计映射与审批范围 |
 | 4 | 几何链条/攀岩块（套件）| ⏸️ 暂缓 |
 
 ---
 
-## 2. 当前状态（2026-08-10）
+## 2. 当前状态（2026-08-11）
 
 ### 缺口分析结果
 - 通途有库存 SKU：**1411 个**
-- 匹配 EN 客户物料号：1397 个
-- **未匹配：14 个**（全部为非优先级杂项，见 §6）
+- 精确登记 EN 产品成品：**1397 个**
+- **未精确登记：14 个**（2 个套件 + 12 个已知非产品项，均暂缓，见 §6）
+- 皮壳完整 SKU 108 个、海绵完整 SKU 25 个均已精确登记 EN 产品；这些产品 SKU 已从赛狐列表 API 回读存在
 
 ### 已完成：EN 老产品补齐
 | 产品族 | 创建内容 | 成本机制 |
@@ -48,18 +49,15 @@
 
 ## 3. 下一步工作
 
-### 3.1 赛狐侧补齐（最高优先）
-缺口分析显示需创建约 23 个赛狐 SKU（按 SPU 去重后）：
-- 星球 KS0019：7 SKU（25cm/41cm × 木星/月球/黑月球/地球 + 12件套）
-- 石头 KS0018：14 SKU（12 单石 + LSPPW03/04）
-- 张嘴熊：1 SKU
-- 方形枕套 KS0013：**1 SKU（必须含颜色 = KS0013-HLR-80-COFFEE）**
+### 3.1 主线已完成：先刷新证据，禁止照旧报告重复创建
+2026-08-11 的刷新审计确认：有库存通途 SKU 1411 个，其中 1397 个已把**完整**码精确登记到 EN 产品成品，余下 14 个是用户确认暂缓项；皮壳 108 个、海绵 25 个对应的 EN 产品 SKU 在赛狐均已存在。
 
-方法：用 `multi_attr_saihu/erpnext_to_saihu.py` 从 EN 纵向物料导出生成赛狐多属性导入文件，再导入赛狐。
+后续遇到新缺口时，先运行 `audit_three_systems.py` 刷新四方数据，再判断。`-Cover/-Foam` 去尾缀基码只作为候选，不能当作已登记；赛狐创建目标是 EN 产品 `item_code`，不是通途半成品原码。完整流程与反例见：
 
-> ⚠️ **注意**：Codex 已把 `KS0013-HLR-80`（无颜色）建进赛狐（SPU ID 25064, SKU ID 3894655）。这是错误的，**需删除或重建为 `KS0013-HLR-80-COFFEE`（含颜色）**。
-> **赛狐属性簇创建**：OpenAPI **无**「创建属性簇/属性值」端点，需在赛狐 UI 用 **Excel 导入**新增属性（Codex 正在做）。属性建好后可用 `POST /api/commodity/pageList.json` 创建 SKU。
-> 赛狐 13 个缺失 SPU 属性簇已由 Codex 通过 Excel 导入补齐中。
+- `docs/solutions/conventions/tongtu-en-sellfox-instock-sku-mainline.md`
+- `.agents/skills/missing-products/SKILL.md`
+
+赛狐属性簇/属性值仍不能由 OpenAPI 创建：缺属性时要按模板生成 Excel，由用户导入并确认成功，再 API 创建产品 SKU 并从列表回读。不得为本轮核验修改已有商品的在售状态。
 
 ### 3.2 库存同步（阶段 3）
 - 建映射表：`{通途SKU: {赛狐SKU, EN物料, 成本}}`
@@ -69,7 +67,18 @@
 ### 3.3 剩余 14 个未匹配（用户已确认暂缓）
 见 §6 列表。
 
+### 3.4 主线之后的只读调研（不写入）
+- 全量调查 `PK#` 与 `HM1510` 是否已有客户物料号，以及同一通途 SKU 在产品、皮壳和海绵中的重复关系。
+- 结合销售订单导入、BOM、生产和库存研究拉链款弧形靠枕的共用皮壳、通用海绵和一对多维护方式。
+- 调研完成前不迁移、不删除配套物料上的客户码；主体骨架也留到后续单独范围。
+
 ---
+
+> **2026-08-11 状态修正（优先于本节上方遗留的历史计划）**：赛狐产品 SKU 补齐已完成。错误的无颜色 `KS0013-HLR-80` 已由用户在赛狐后台删除，正确对象为 `KS0013-HLR-80-COFFEE`。赛狐 OpenAPI 能读取 SPU/SKU 并创建产品 SKU，但不能创建属性簇或属性值；缺属性时必须先由用户在赛狐 UI 导入属性 Excel，确认成功后才可 API 创建 SKU。
+>
+> 最新主线回读：108 条有库存皮壳通途 SKU、25 条有库存海绵通途 SKU 均已以**完整 SKU**登记到至少一个 EN 产品变体，且对应 EN 产品 `item_code` 均已存在于赛狐。不得依据上方的旧计划重复创建赛狐 SKU；先拉取最新三方数据，再运行 `audit_three_systems.py`。
+>
+> 现在的下一步是库存同步设计：先审阅 `{通途完整SKU: {EN产品物料, 赛狐产品SKU, 成本}}` 映射，明确一对多/多对一的库存归属，获得用户确认后再实施同步。`PK#` 与 `HM1510` 的客户码只做只读研究，不能替代 EN 产品登记，也不得在主线中迁移或删除。
 
 ## 4. 关键技术细节
 
@@ -174,17 +183,34 @@ cd ~/frappe-bench && env/bin/python /tmp/gen_bom_xlsx2.py
 | 文件 | 用途 |
 |------|------|
 | `missing_products/identify_missing_products.py` | 三系统缺口分析（4 数据源交叉比对）→ 报告 xlsx |
+| `missing_products/audit_three_systems.py` | 主线审计：完整通途 SKU → EN 产品精确登记 → 赛狐产品 SKU 回读 |
+| `missing_products/register_product_customer_codes.py` | 仅对审计确认的候选写入 EN 产品客户码；默认 dry-run，`--apply` 后回读 |
+| `missing_products/build_mainline_report.mjs` | 生成面向业务复核的主线工作簿（分类、赛狐状态、一对多历史关系） |
+| `missing_products/investigate_supporting_customer_codes.py` | 只读调查 `PK#`/`HM1510` 客户码，禁止用于本轮迁移或清理 |
 | `missing_products/create_en_materials.py` | 幂等创建 EN 物料（--dry-run / --phase 1-6）|
 | `missing_products/docs/specs/old-product-completion-plan.md` | 老产品补齐计划（OKF Spec）|
+| `docs/solutions/conventions/tongtu-en-sellfox-instock-sku-mainline.md` | 三方主线完整规则、设计过程、错误做法、验证清单 |
 | `docs/solutions/conventions/erpnext-item-variant-creation-convention.md` | EN 物料创建惯例（OKF Reference）|
+| `.agents/skills/missing-products/SKILL.md` | 通途有库存 SKU 三方主线自动触发入口 |
 | `.agents/skills/erpnext-item-create/SKILL.md` | 新建 EN 物料 skill |
 | `SELLFOX_API/client.py` | 赛狐 OpenAPI 客户端 |
 | `D:/Work/赛狐/网页自动化/tongtu_auto_export.py` | 通途 6 仓库存导出（浏览器自动化）|
 
 ### 常用命令
 ```bash
-# 缺口分析
-cd missing_products && uv run python identify_missing_products.py
+# 当前主审计（先运行，后讨论写生产）
+uv run python missing_products/audit_three_systems.py
+
+# 业务报告（审计后运行）
+node missing_products/build_mainline_report.mjs
+
+# 只读调查配套物料客户码
+uv run python missing_products/investigate_supporting_customer_codes.py
+
+# 主线三方审计与业务工作簿（先只读；写入前必须检查 dry-run 报告）
+uv run python audit_three_systems.py
+node build_mainline_report.mjs
+uv run python register_product_customer_codes.py
 
 # 创建 EN 物料（dry-run 预览 → 分 phase 执行）
 uv run python create_en_materials.py --dry-run
@@ -223,6 +249,9 @@ uv run python create_en_materials.py --phase 6
 12. **属性完整性审计**：创建后必须逐变体查 `attributes` 是否含 面料/尺寸/颜色。2026-08-10 创建的全部物料已审计：**仅 KS0013-HLR-80 缺颜色（已删）**，其余正确。根因：宽边正方形枕头 KS0013 历史属性集不完整（只有 面料+尺寸），我直接跟随模板建了无颜色变体，未先补颜色属性
 13. **item_code 必须用 abbr**（不用中文）：石头 12 单石曾用 `KS0018-LSRBS-25cm-浅灰1号`（中文），赛狐要求英文编号，已用 SSH `frappe.rename_doc` 改为 `KS0018-LSRBS-25cm-LIGHTGREY1` 等。REST 不能改 item_code（rename_doc 未白名单），需 SSH
 14. **客户端码全局唯一 + 编号改动影响**：重建/重命名物料会牵动客户码（须先移除旧的）、BOM（rename_doc 自动更新）、Item Price（可能需重加）
+15. **半成品通途 SKU 必须精确登记到 EN 产品**：`-Cover`/`-Foam` 去后缀基码只能用来找候选产品，不能当作已登记。完整 SKU 必须出现在至少一个 `KS` 产品变体的 `customer_items.ref_code`。原因：EN 销售订单 Excel 先用通途 SKU 找产品物料，再按“皮壳/成品/半成品”列决定交付形态；`PK#` 或 `HM1510` 上的登记不能替代产品登记。
+16. **2026-08-11 主线对账结果**：通途有库存 1411 SKU，1397 已精确登记 EN 产品，剩余 14 为 2 套件 + 12 已知非产品项，全部暂缓。皮壳 108 条、海绵 25 条均已精确登记 EN 产品，并且其对应 EN 产品 SKU 在赛狐全部存在。本轮新增 3 条完整 `-Cover` 登记：`C/Linen-Coffee-194-661-WOW-Cover`、`C/Linen-Natural-183-688-wow-Cover`、`TT0000750K0063009-Cover`。
+17. **配套物料客户码只读调查**：`PK#` 当前 0 条客户码；`HM1510` 有 75 个原始子表行、53 个唯一“物料+客户码”组合、52 个唯一客户码，大量值带“删除”前缀。唯一跨物料重复是 `删除Curve-Pillow-Foam-50`，本轮未修改。
 
 ---
 
@@ -235,15 +264,18 @@ f420693 feat(missing_products): EN 老产品补齐脚本 — 星球/石头/张�
 727c86a feat(missing_products): 赛狐缺失商品排查 + EN物料创建惯例文档/skill
 ```
 
+> 上表只列出早期基础提交。2026-08-10 至 2026-08-11 的赛狐创建、属性导入、主线精确审计和 EN 客户码补齐包含在当前未合并工作区；提交前以 `git log` 与本次 PR diff 为准，不能据此判断尚未完成。
+
 分支：`claude/awesome-satoshi-c903d5`（feature 分支，遵循「不直接提交 main」规则）
 
 ---
 
 ## 9. 新对话快速上手
 
-1. 读本文档（你已经读了）
-2. 确认 EN 状态：跑 `identify_missing_products.py` 看未匹配（应 14）
-3. 做**赛狐侧补齐**：从 EN 导出纵向物料 → `erpnext_to_saihu.py` 生成赛狐导入文件
-4. 若需新建 EN 物料：`create_en_materials.py --dry-run` 预览 → 执行
-5. 若需重新生成 BOM Cost List：SSH 服务器跑 `/tmp/gen_bom_xlsx2.py`（见 §4.2）
-6. 库存同步：参考计划文档 §库存同步设计
+1. 读本文档，再读最新主线工作簿与三方审计输出，确认数据时间戳。
+2. 先只读运行 `audit_three_systems.py`：应对账为 1411 = 1397 精确登记 + 14 暂缓项；不要直接依据旧的「需创建赛狐商品」页写数据。
+3. 对任何新缺口，先检查 EN 产品模板属性、完整 `customer_items`、赛狐 SPU/属性/SKU；缺赛狐属性时生成 Excel，待用户导入确认后才 API 创建产品 SKU。
+4. 对 `-Cover`/`-Foam`，完整通途 SKU 必须挂至至少一个产品变体；去后缀基码只用来找候选。候选不唯一时列为待确认，不写入。
+5. 若需新建 EN 物料，先运行 `create_en_materials.py --dry-run` 并按 §4.5 属性完整性原则审计。
+6. 若需重新生成 BOM Cost List，SSH 服务器跑 `/tmp/gen_bom_xlsx2.py`（见 §4.2）；完成后再审计。
+7. 库存同步属于下一阶段，先经用户审阅映射和范围。

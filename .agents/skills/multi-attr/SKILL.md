@@ -42,6 +42,7 @@ python erp_tongtu_bridge.py [ERP通途SKU.xlsx] -t 通途SKU别名炸开.xlsx --
 - 属性列固定顺序：面料 → 尺寸 → 颜色
 - 输出按 `*SKU` 纯字符串序（非自然数序）
 - 安全库存和头程报关费**留空( None )**，禁止填 0（0 会覆盖通途现有数据）
+- 赛狐 SKU 必须对应 EN 产品 `item_code`，不要用通途 `-Cover/-Foam` 原码、`PK#` 或 `HM1510` 创建赛狐商品；三方主线先读 `.agents/skills/missing-products/SKILL.md`
 
 ## 输出
 

@@ -106,6 +106,15 @@ An Item with `has_variants=1` that defines the attribute set; concrete SKUs are 
 ### 配套物料 (Supporting Items)
 The semi-finished/auxiliary items generated from a product template via the「一键创建配套物料及变体」button (Client Script → `key_test.add_item_semi.create_supporting_items_and_variants`). 9 types: 皮壳# (same attrs as product), 内胆# (product size + inner fabric/color), 绍兴包装皮壳#/成品#/半成品# (size only), 波兰PL/美东USNJ/美中USTX包装成品# (size only), 重量模板# (fabric+size, no color). Not every SPU uses all 9.
 
+### 产品成品登记 (Product-Finished-Good Registration)
+三方库存主线中的映射规则：有库存通途完整 SKU（包括 `-Cover`/`-Foam`）必须作为 `customer_items.ref_code` 至少存在于一个 EN `KS` 产品成品变体。`PK#` 皮壳和 `HM1510` 海绵的登记不能替代它，因为 EN 销售订单 Excel 先用通途 SKU 找产品物料，再由交付形态列决定皮壳、成品或半成品的实际处理。
+
+### 精确登记 / 仅基码匹配 (Exact Registration / Base-Code Candidate)
+通途 SKU 和 EN 产品客户码的两阶段状态。完整 SKU（大小写不敏感）命中 `customer_items.ref_code` 才是“已精确登记”；剥离 `-Cover`/`-Foam` 后只命中基码是“仅基码匹配”，只能作为补登候选，不能用于完成率或赛狐覆盖率。
+
+### 三方主线 (Tongtu-EN-Sellfox Mainline)
+从通途有库存 SKU 到 EN 产品成品变体、再到同编号的赛狐产品 SKU 的闭环。赛狐对象始终是 EN 产品 `item_code`，而非通途半成品原码；套件、非产品项、主体骨架和 PK#/HM1510 维护都必须在报告中单列，不得静默忽略或擅自写入。
+
 ## Integrations
 
 ### DingTalk Custom Robot (钉钉自定义机器人)
