@@ -13,7 +13,7 @@ import pandas as pd
 HERE = Path(__file__).resolve().parent
 MAIN = Path(r"D:\Work\赛狐\Cursor")
 OUT = HERE / "out"
-TONGTU_ZIP_DIR = Path(r"D:\Work\赛狐\商品")
+TONGTU_ZIP_DIRS = (Path(r"D:\Work\赛狐\商品"), Path(r"D:\Work\赛狐\配对"))
 
 
 def norm(value) -> str:
@@ -43,7 +43,12 @@ def latest_bom_path() -> Optional[Path]:
 
 
 def latest_tongtu_zip_path() -> Optional[Path]:
-    return latest_file(TONGTU_ZIP_DIR, "通途商品导出_*.zip")
+    candidates = []
+    for directory in TONGTU_ZIP_DIRS:
+        path = latest_file(directory, "通途商品导出_*.zip")
+        if path:
+            candidates.append(path)
+    return max(candidates, key=lambda p: p.stat().st_mtime) if candidates else None
 
 
 def load_mainline_mapping(audit_path: Path) -> pd.DataFrame:

@@ -18,6 +18,7 @@ tags: [missing_products, log]
 - **新增只读交付**: `build_mapping_workbook.py`（1411 行映射表，一对多 7 / 多对一 128 / 暂缓 14）、`build_foam_status_workbook.py`（25 条海绵现状，HM1510 223/75/0，不写登记）、`fetch_sellfox_pairing.py`（赛狐配对只读盘点）
 - **赛狐配对机制**: Amazon 在线产品配对与多平台配对是两套机制；实测 Amazon 50,169 = 26,100 已配对 + 24,069 未配对；多平台 3,285 且 Amazon/Amazon_VC 为 0
 - **API 过滤**: `pageList` 支持 searchType/searchContent/onlineStatusList/match/shopIdList/marketplaceIdList；pageSize 上限 200；全量拉取约 9 分钟，缓存于 out/pairing_cache/
+- **新增**: `amazon_pairing` 子项目交接；Amazon 在售未配对 4,407、别名命中 442、可导入 91、人工核对 133、三角靠枕候选 275、不一致 65；建议表补标题/中文提示/双方名称；HM1510 客户码写入被 EN REST 校验（仅产品/套件#物料组）拦截。
 
 ## 2026-08-10
 - **更新**: `docs/solutions/conventions/erpnext-item-variant-creation-convention.md` — 新增「属性集完整性」「客户码唯一」「abbr 必带」「变体命名」等坑 + 审计确认（仅 KS0013 缺颜色已修复）

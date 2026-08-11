@@ -18,3 +18,4 @@ timestamp: 2026-08-11
 | 自动触发 Skill（三方一致性/Cover/Foam/赛狐缺SKU） | [../../.agents/skills/missing-products/SKILL.md](../../.agents/skills/missing-products/SKILL.md) |
 | 三方主线完整设计、过程与验证 | [../../docs/solutions/conventions/tongtu-en-sellfox-instock-sku-mainline.md](../../docs/solutions/conventions/tongtu-en-sellfox-instock-sku-mainline.md) |
 | 本批只读交付物（映射表/海绵现状/赛狐配对盘点） | [../AGENT_HANDOFF.md](../AGENT_HANDOFF.md) §3.5 |
+| Amazon 在售未配对自动匹配建议子项目 | [../../amazon_pairing/AGENT_HANDOFF.md](../../amazon_pairing/AGENT_HANDOFF.md) |
