@@ -551,7 +551,7 @@ async def tongtool_upload_form(request: Request):
         return templates.TemplateResponse(
             request, "tongtool_upload.html", {"error": "未选择文件"}
         )
-    tmp = Path(BASE_DIR) / "data" / f"tongtool-upload-{upload.filename}"
+    tmp = Path(BASE_DIR) / "data" / f"tongtool-upload-{Path(upload.filename).name}"
     tmp.parent.mkdir(exist_ok=True)
     content = await upload.read()
     tmp.write_bytes(content)

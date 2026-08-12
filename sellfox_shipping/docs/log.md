@@ -8,6 +8,12 @@ updated: 2026-08-12
 
 # sellfox_shipping - 变更日志
 
+
+
+## 2026-08-12 - 安全加固：通途上传端点路径穿越修复
+
+- `POST /tongtool/upload` 临时文件路径曾直接用 `upload.filename` 拼接，恶意文件名（如 `../../../x`）可路径穿越写出 `BASE_DIR/data/`；已改为 `Path(upload.filename).name` 只取 basename，并补回归测试 `test_tongtool_upload_filename_is_sanitized`。
+
 ## 2026-08-12 - 通途订单标记功能（上传 xls → EN 匹配 → 赛狐包裹标记）+ 回写接口改动
 
 **通途订单标记（新功能，已完成）：**

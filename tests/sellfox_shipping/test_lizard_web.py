@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from io import BytesIO
+from pathlib import Path
 
 import pandas as pd
 from fastapi.testclient import TestClient
@@ -16,6 +17,7 @@ from sellfox_shipping.package_models import (
     SellfoxPackageRecord,
 )
 from sellfox_shipping.package_repository import PackageRepository
+from sellfox_shipping.tongtool_service import TongtoolMatchResult
 
 
 def _seed_approved(tmp_path, monkeypatch, sn: str = "P2AWEB001") -> PackageRepository:
@@ -346,3 +348,34 @@ def test_batches_page_lists_export_batch(tmp_path, monkeypatch) -> None:
     assert detail.status_code == 200
     assert "P2ABATCHWEB" in detail.text
     assert "exported" in detail.text
+
+
+def test_tongtool_upload_filename_is_sanitized(tmp_path, monkeypatch) -> None:
+    """Upload filename must not escape BASE_DIR/data (path traversal guard)."""
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    monkeypatch.setattr(app_module, "BASE_DIR", tmp_path)
+
+    from sellfox_shipping.tongtool_service import match_and_mark as _real
+
+    def _fake_match_and_mark(repo, **kwargs):
+        return TongtoolMatchResult()
+
+    monkeypatch.setattr(
+        "sellfox_shipping.tongtool_service.match_and_mark", _fake_match_and_mark
+    )
+    monkeypatch.setattr(app_module, "_get_package_repository", lambda: _real and None)
+
+    # Crafted filename with traversal segments. Sanitized path must stay in data/.
+    crafted = "../../../evil-tongtool.xls"
+    resp = TestClient(app_module.app).post(
+        "/tongtool/upload",
+        files={"file": (crafted, BytesIO(b"dummy"), "application/vnd.ms-excel")},
+    )
+    assert resp.status_code == 200
+    # Nothing may be written outside data/ (the evil file must not exist at tmp root).
+    assert not (tmp_path / "evil-tongtool.xls").exists()
+    assert not (tmp_path.parent / "evil-tongtool.xls").exists()
+    # Whatever was written inside data/ was cleaned up by the endpoint's finally.
+    leftovers = [p for p in data_dir.iterdir() if p.name.startswith("tongtool-upload-")]
+    assert leftovers == []
