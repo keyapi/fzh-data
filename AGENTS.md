@@ -113,6 +113,7 @@ uv sync
 | `new-api-dingtalk-oidc` | `new-api-dingtalk-oidc/` | 钉钉 OAuth → OIDC 桥接代理（FastAPI） |
 | `dam-prototype` | `dam-prototype/` | DAM 数字资产管理原型 |
 | `erpnext` | `erpnext/` | 工单排查 (setup→fetch→report 流水线) |
+| `tongtool-order-cost` | `tongtool_order_cost/` | 通途订单特殊规则 1.7.0 本地引擎 + 穿透审计 |
 | `erpnext-wo-audit` | `.agents/skills/erpnext-wo-audit/` | 工单排查 Skill，按触发词自动加载 |
 | `missing-products` | `.agents/skills/missing-products/` | 通途有库存 SKU → EN 产品客户码 → 赛狐产品 SKU 三方主线补齐/审计 |
 | `frappe-core-api` | — | ERPNext REST API 开发（外部 skill） |
