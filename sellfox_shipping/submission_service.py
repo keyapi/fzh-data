@@ -206,7 +206,20 @@ class SubmissionService:
             raise LookupError(f"Package {package_sn} not found")
         if record.local_review_status != "approved":
             raise ValueError("package local_review_status must be approved")
-        tracking = (tracking_number or record.logistics.tracking_number or "").strip()
+        tracking = (tracking_number or "").strip()
+        if not tracking:
+            # 统一从有效面单记录取追踪号（而非包裹自带 trackNo），与 quickOutbound
+            # 写回路径一致：写回的是本次面单生成的追踪号，不是赛狐已有的 trackNo。
+            for lb in self._repo.list_labels_for_package(
+                account_key=account_key, package_sn=package_sn
+            ):
+                if (lb.status or "") != "cancelled" and (
+                    lb.tracking_number or ""
+                ).strip():
+                    tracking = (lb.tracking_number or "").strip()
+                    break
+        if not tracking:
+            tracking = (record.logistics.tracking_number or "").strip()
         if not tracking or tracking == package_sn:
             raise ValueError("package must have a real tracking_number before submit")
         carrier = (carrier_name or record.logistics.channel_name or "").strip()
@@ -550,12 +563,14 @@ class SubmissionService:
         tracking_number: str = "",
         shipment_type: int = 0,
         warehouse_id: int | None = None,
+        is_oversea: int | None = None,
     ) -> QuickOutboundResult:
         """Write a valid label's tracking to Sellfox via quickOutbound (快速出库).
 
-        Uses packageSn + carrier + trackNo + shipmentType (default 0 = 仅提交平台、
-        不扣库存). This is the multi-platform write path, as opposed to the
-        Amazon-only submitToPlatform.
+        Uses packageSn + carrier + trackNo + shipmentType. ``shipment_type=0`` is
+        仅提交平台、不扣库存; ``shipment_type=1`` 提交平台且扣库存，此时必须传
+        ``warehouse_id``（发货仓库ID）和 ``is_oversea``（海外仓标识，从查询仓库
+        列表接口的 type 字段获取：0默认/1国内/2FBA/3海外）。
         """
         labels = self._repo.list_labels_for_package(
             account_key=account_key, package_sn=package_sn
@@ -577,6 +592,16 @@ class SubmissionService:
             raise ValueError("package must have a real tracking_number before submit")
         if not carrier:
             raise ValueError("carrier_name is required")
+        if shipment_type not in (0, 1):
+            raise ValueError("quickOutbound shipment_type must be 0 or 1")
+        if shipment_type == 1 and warehouse_id is None:
+            raise ValueError(
+                "warehouse_id is required for shipment_type=1 (inventory deduction)"
+            )
+        if shipment_type == 1 and is_oversea is None:
+            raise ValueError(
+                "is_oversea is required for shipment_type=1 (inventory deduction)"
+            )
         if self._client is None:
             raise RuntimeError("submit client required for side effects")
 
@@ -588,6 +613,8 @@ class SubmissionService:
         }
         if warehouse_id is not None:
             pkg["warehouseId"] = warehouse_id
+        if is_oversea is not None:
+            pkg["isOversea"] = is_oversea
 
         resp = self._client.quick_outbound([pkg])
         code = resp.get("code")

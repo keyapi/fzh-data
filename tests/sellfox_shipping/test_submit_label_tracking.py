@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -183,6 +184,48 @@ def test_submit_label_tracking_wire_body_shape(tmp_path: Path) -> None:
     assert wire["items"][0]["quantity"] == "1"
 
 
+def test_prepare_intents_uses_valid_label_tracking_over_package_trackno(
+    tmp_path: Path,
+) -> None:
+    """prepare_intents_for_package prefers the valid label's tracking over the
+    Sellfox package's own trackNo (writeback source is the label record)."""
+    repo = PackageRepository(tmp_path / "shipping.db")
+    _seed(repo, "P2ALABELSRC")  # logistics.tracking_number = "TN-SELLFOX"
+    _insert_label(repo, "P2ALABELSRC", tracking="1Z-LABEL-SRC", carrier="lizard")
+    svc = SubmissionService(repo)
+
+    result = svc.prepare_intents_for_package(
+        account_key="sellfox-main", package_sn="P2ALABELSRC", actor="ops"
+    )
+
+    assert result.intent_ids
+    intent_id = result.intent_ids[0]
+    intent = repo.get_submission_intent(intent_id)
+    assert intent is not None
+    canonical = json.loads(intent.canonical_request)
+    assert canonical["tracking_number"] == "1Z-LABEL-SRC"
+
+
+def test_prepare_intents_falls_back_to_package_trackno_when_no_label(
+    tmp_path: Path,
+) -> None:
+    """Without a valid label, prepare_intents falls back to the package's own
+    logistics.tracking_number."""
+    repo = PackageRepository(tmp_path / "shipping.db")
+    _seed(repo, "P2ANOLBL")  # logistics.tracking_number = "TN-SELLFOX", no label
+    svc = SubmissionService(repo)
+
+    result = svc.prepare_intents_for_package(
+        account_key="sellfox-main", package_sn="P2ANOLBL", actor="ops"
+    )
+
+    assert result.intent_ids
+    intent = repo.get_submission_intent(result.intent_ids[0])
+    assert intent is not None
+    canonical = json.loads(intent.canonical_request)
+    assert canonical["tracking_number"] == "TN-SELLFOX"
+
+
 def test_direct_sellfox_client_submit_to_platform(monkeypatch) -> None:
     """DirectSellfoxClient.submit_to_platform POSTs to the right endpoint."""
     from sellfox_shipping.direct_sellfox_client import DirectSellfoxClient
@@ -312,3 +355,40 @@ def test_quick_outbound_uses_label_and_parses_response(tmp_path: Path) -> None:
     assert client.last_pkg["trackNo"] == "1Z-QUICK"
     assert client.last_pkg["carrier"] == "lizard"
     assert client.last_pkg["shipmentType"] == 0
+
+
+def test_quick_outbound_inventory_deduction_requires_warehouse_and_oversea(tmp_path: Path) -> None:
+    """shipmentType=1 (inventory deduction) must include warehouse_id + is_oversea."""
+    repo = PackageRepository(tmp_path / "shipping.db")
+    _seed(repo, "P2AQSTOCK")
+    _insert_label(repo, "P2AQSTOCK", tracking="1Z-STOCK", carrier="lizard")
+
+    class _FakeQuickClient:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def quick_outbound(self, package_list: list[dict]) -> dict:
+            self.calls += 1
+            return {"code": 0, "data": {"successNum": 1, "failData": []}}
+
+    client = _FakeQuickClient()
+    svc = SubmissionService(repo, client)
+
+    with pytest.raises(ValueError, match="warehouse_id is required"):
+        svc.submit_label_tracking_quick_outbound(
+            account_key="sellfox-main", package_sn="P2AQSTOCK", actor="ops",
+            shipment_type=1,
+        )
+    with pytest.raises(ValueError, match="is_oversea is required"):
+        svc.submit_label_tracking_quick_outbound(
+            account_key="sellfox-main", package_sn="P2AQSTOCK", actor="ops",
+            shipment_type=1, warehouse_id=274390,
+        )
+    assert client.calls == 0  # rejected before HTTP
+
+    result = svc.submit_label_tracking_quick_outbound(
+        account_key="sellfox-main", package_sn="P2AQSTOCK", actor="ops",
+        shipment_type=1, warehouse_id=274390, is_oversea=2,
+    )
+    assert result.http_called is True
+    assert client.calls == 1

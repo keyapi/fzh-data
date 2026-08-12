@@ -3,10 +3,40 @@ okf: v0.1
 type: Log
 module: sellfox_shipping
 created: 2026-07-15
-updated: 2026-08-10
+updated: 2026-08-12
 ---
 
 # sellfox_shipping - 变更日志
+
+## 2026-08-12 - 通途订单标记功能（上传 xls → EN 匹配 → 赛狐包裹标记）+ 回写接口改动
+
+**通途订单标记（新功能，已完成）：**
+- 需求：`D:\美东100.xls` 参考编号（通途包裹号 P 号）→ EN ERPNext Tongtool Package → Amazon 订单号 → 本地赛狐包裹匹配 → 持久化 `is_tongtool` 标记。
+- 实测 114/114 全部匹配（0 未匹配）。链路与实现详见 [已解决问题：通途订单标记](solutions/tongtool-order-mark-2026-08-12.md)。
+- Web `/tongtool` 上传页 + CLI `packages-mark-tongtool` 共用 `tongtool_service`；Transactions 增加通途过滤（仅该 tab 生效）；详情页显示「✓ 通途 (P号)」。
+- 迁移 `0023_tongtool_mark`；EN 查询并行化（114 个 ~7s）。
+
+**赛狐回写接口改动（测试期间实现）：**
+- Web「回写」表单加接口选择（submitToPlatform / quickOutbound）、扣库存方式（shipmentType 0/1）、仓库ID、海外仓标识（自动解析）。
+- `prepare_intents_for_package` 追踪号来源改为优先**有效面单记录**；CLI 新增 `packages-submit-label-tracking`。
+- quickOutbound shipmentType=1 会触发发货确认副作用（即使 trackNo 未写入），测试纯写追踪号应用 shipmentType=0。
+- 赛狐确认中：Amazon FBM 订单写追踪号的正确接口（详见 solutions/send-to-sellfox-trackno-writeback-2026-08-11.md）。
+
+**测试基线：311 passed。**
+
+## 2026-08-11 - 赛狐 Amazon FBM 追踪号写回测试发现（待赛狐确认）+ Web 回写接口选择器
+
+**测试发现（P2BAA9T735007，Amazon FBM 订单）：**
+- `submitToPlatform`：返回 `code=0, data=null`，packageDetail 回读 `logistics.trackNo` 仍 null——**追踪号未写入**（空成功）。
+- `quickOutbound`（shipmentType=0 与 1 均试）：返回 `code=0`，per-package 失败 **"该订单不需要提交平台"**——**未写入**。
+- **异常副作用**：测试后订单从 Unshipped 变 **Shipped（已发货）**、shipTime 被设置，但 trackNo 仍空——疑似 quickOutbound shipmentType=1（确认发货/扣库存）的副作用，即使平台提交失败仍触发发货状态变更。
+- **补充（用户确认）**：此前有测试记录显示追踪号**曾正常写入**，但当时未确认用哪个接口（推测也是 quickOutbound），情况复杂，待赛狐确认正确写入口。
+- 已整理发给赛狐的反馈文档：[send-to-sellfox-trackno-writeback-2026-08-11.md](solutions/send-to-sellfox-trackno-writeback-2026-08-11.md)；详细测试记录：[sellfox-trackno-writeback-test-2026-08-10.md](solutions/sellfox-trackno-writeback-test-2026-08-10.md)。
+
+**Web 回写功能（本次测试期间实现，未提交）：**
+- Web「回写面单追踪号到赛狐」表单新增「写回接口」选择（submitToPlatform / quickOutbound）、「扣库存方式」（shipmentType 0/1）、「仓库ID」「海外仓标识」字段，并自动解析填充（`_resolve_sellfox_warehouse`，从赛狐仓库列表按 shop 匹配 warehouseId + type/isOversea）。
+- CLI 新增 `packages-submit-label-tracking`（读有效面单追踪号 → submitToPlatform）；`prepare_intents_for_package` 追踪号来源改为优先**有效面单记录**（与 quickOutbound 一致），不再用包裹自带 trackNo。
+- **风险警示**：quickOutbound shipmentType=1 会触发发货确认/可能扣库存，即使追踪号未写入；测试纯写追踪号应用 shipmentType=0。
 
 ## 2026-08-10 - 蜴国际面单发货地址：根因已与蜴国际确认（产品↔发件人绑定），代码尝试已还原
 

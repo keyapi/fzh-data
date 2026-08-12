@@ -123,6 +123,13 @@ Excel 本地闭环（审核 → 导出 → 人工上传物流商 → 导入对�
 > - 修复面单创建报 `No dimensions available for package`：`upsert_package_dims` 用 `session.get`（按主键 id）查外键 `package_id`，`package_id` 撞上既有 dims 行 id 时错写别家、目标包裹尺寸永不落库。改为 `filter(package_id==)` 与读侧一致。
 > - 详见 [已解决问题](docs/solutions/upsert-package-dims-pk-fk-bug-2026-08-10.md)。
 
+> **2026-08-12 交接（新对话必读）：**
+> - **工作位置与数据持久化（关键！）**：在**主 checkout `D:\Claude Demo\fzh-data`** 的**持久分支 `dev/sellfox-shipping`** 上开发，**不要新开 worktree/分支**（新 worktree 会有独立的 `data/shipping.db`，导致已同步的包裹/通途标记丢失、需重新拉取）。DB 位置：`D:\Claude Demo\fzh-data\sellfox_shipping\data\shipping.db`（已同步 4526 包裹 + 114 通途标记）。接手第一件事：`cd D:\Claude Demo\fzh-data && git checkout dev/sellfox-shipping && git pull origin main`。
+> - **通途订单标记（已完成，见 [已解决问题：通途订单标记](docs/solutions/tongtool-order-mark-2026-08-12.md)）**：`/tongtool` 上传 `D:\美东100.xls` → EN 匹配 → 标记 `is_tongtool`；Transactions 过滤。
+> - **赛狐回写（待赛狐确认）**：submitToPlatform/quickOutbound 对 Amazon FBM 订单都写不进 trackNo；quickOutbound shipmentType=1 会触发发货副作用。已发赛狐反馈：[send-to-sellfox-trackno-writeback-2026-08-11.md](docs/solutions/send-to-sellfox-trackno-writeback-2026-08-11.md)。**等赛狐确认正确写入口后**再继续。
+> - **测试基线：311 passed。** 服务器：`uv run python -m sellfox_shipping.cli serve --host 127.0.0.1 --port 8401`。
+> - **优先任务**：① 等赛狐确认写回 API；② 等蜴国际开通 NJ 产品后实现仓库→固定服务类型；③ 后续通途清单重新上传可考虑「清除旧标记再重建」。
+
 ### 7. 重规划裁决
 
 - **不**整本作废 synthesis；修订 P1C 出口与承运人双通道（见 synthesis 文首裁决框）

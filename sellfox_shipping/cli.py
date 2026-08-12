@@ -253,6 +253,30 @@ def packages_sync(
         raise typer.Exit(1)
 
 
+@app.command("packages-mark-tongtool")
+def packages_mark_tongtool(
+    xls: str = typer.Option(..., "--xls", help="美东100.xls 路径（含 参考编号/Reference Code 列）"),
+    actor: str = typer.Option("cli", help="Actor for audit"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """读通途 xls，经 EN(Tongtool Package) 匹配本地赛狐包裹并持久化 is_tongtool 标记。
+
+    未匹配的 P 号会单独列出（不静默丢弃），便于核对。与 Web 上传共用 tongtool_service。
+    """
+    from sellfox_shipping.tongtool_service import match_and_mark
+
+    config = _load_config()
+    result = match_and_mark(
+        _get_package_repository(),
+        account_key=config["sellfox"]["proxy_account"],
+        xls_path=xls,
+        actor=actor,
+    )
+    _output(result.to_dict(), json_output)
+    if result.unmatched_count > 0:
+        raise typer.Exit(2)
+
+
 @app.command("packages-list")
 def packages_list(
     status: Optional[str] = typer.Option(None, help="Filter by package_status"),
@@ -1083,6 +1107,30 @@ def submission_scope_unblock(
     except LookupError as exc:
         _output({"ok": False, "error": str(exc)}, json_output)
         raise typer.Exit(1)
+
+
+@app.command("packages-submit-label-tracking")
+def packages_submit_label_tracking(
+    package_sn: str = typer.Option(..., "--package-sn", help="Sellfox packageSn"),
+    actor: str = typer.Option("cli", help="Actor for audit"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Write a valid label's tracking to Sellfox via submitToPlatform (Amazon/FBM).
+
+    Reads the tracking from the package's valid (non-cancelled, has-tracking) label
+    record — the same source as the Web 回写 button and the quickOutbound path.
+    """
+    from sellfox_shipping.submission_service import SubmissionService
+
+    config = _load_config()
+    result = SubmissionService(
+        _get_package_repository(), _get_client()
+    ).submit_label_tracking(
+        account_key=config["sellfox"]["proxy_account"],
+        package_sn=package_sn,
+        actor=actor,
+    )
+    _output(result.__dict__, json_output)
 
 
 @app.command("packages-submit-quick-outbound")

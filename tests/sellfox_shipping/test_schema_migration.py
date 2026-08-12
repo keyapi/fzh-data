@@ -44,7 +44,7 @@ def test_repository_applies_alembic_migration_on_empty_db(tmp_path) -> None:
             "AND name='shipping_sellfox_writeback_policies'"
         ).scalar_one()
 
-    assert version == "0022_derived_reference_no"
+    assert version == "0023_tongtool_mark"
     assert packages == "shipping_packages"
     assert audit == "shipping_audit_events"
     assert claim_fence_col == 1
@@ -129,7 +129,7 @@ def test_repository_upgrades_historical_0015_database_through_head(tmp_path) -> 
             "AND `unique`=1"
         ).scalar_one()
 
-    assert version == "0022_derived_reference_no"
+    assert version == "0023_tongtool_mark"
     assert resolution_evidence == 1
     assert evidence_foreign_key == 1
     assert ("shipping_accounts", "account_id", "id", "CASCADE") in existing_foreign_keys
@@ -174,7 +174,7 @@ def test_repository_repairs_partially_applied_0018_foreign_key(tmp_path) -> None
             "AND on_delete='SET NULL'"
         ).scalar_one()
 
-    assert version == "0022_derived_reference_no"
+    assert version == "0023_tongtool_mark"
     assert evidence_foreign_key == 1
 
 
@@ -198,6 +198,6 @@ def test_repository_stamps_existing_create_all_database(tmp_path) -> None:
             "WHERE name='local_review_status'"
         ).scalar()
 
-    assert version == "0022_derived_reference_no"
+    assert version == "0023_tongtool_mark"
     assert review_col == 1
     assert repository.count_rows()["packages"] == 0

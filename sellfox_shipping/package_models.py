@@ -107,6 +107,8 @@ class PackageListItem(BaseModel):
     fetched_at: datetime | None = None
     purchase_date: datetime | None = None
     label_created_at: datetime | None = None
+    is_tongtool: bool = False
+    tongtool_p_numbers: str = ""
 
 
 class PackageListResult(BaseModel):

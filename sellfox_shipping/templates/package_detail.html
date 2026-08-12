@@ -41,6 +41,7 @@
             <a href="/lizard/batches">批次</a>
             <a href="/labels">流水</a>
             <a href="/orders">订单 (legacy)</a>
+            <a href="/tongtool">通途订单</a>
         </div>
     </div>
     <div class="container">
@@ -62,6 +63,11 @@
                 <div class="info-item"><div class="label">发货仓库</div><div class="value">{{ package.logistics.warehouse_name or '—' }}</div></div>
                 <div class="info-item"><div class="label">追踪号</div><div class="value">{{ package.logistics.tracking_number or '—' }}</div></div>
                 <div class="info-item"><div class="label">站点</div><div class="value">{{ package.marketplace or '—' }}</div></div>
+                <div class="info-item"><div class="label">通途订单</div><div class="value">
+                    {% if tongtool_mark and tongtool_mark.is_tongtool %}
+                    <span class="badge" style="background:#d4edda;color:#155724;">✓ 通途{% if tongtool_mark.tongtool_p_numbers %} ({{ tongtool_mark.tongtool_p_numbers }}){% endif %}</span>
+                    {% else %}—{% endif %}
+                </div></div>
                 <div class="info-item"><div class="label">赛狐下单时间</div><div class="value">{{ purchase_date.strftime('%Y-%m-%d %H:%M') if purchase_date else '—' }}</div></div>
             </div>
         </div>
@@ -481,24 +487,50 @@
                 {% endif %}
             {% endfor %}
             <form method="post" action="/packages/{{ package.package_sn }}/submit-label-tracking"
-                  class="info-row" style="align-items:flex-end;margin-bottom:16px;padding-top:12px;border-top:1px solid #eee;"
-                  onsubmit="return confirm('确认将面单追踪号{% if valid_tracking.found %} {{ valid_tracking.found }}{% endif %} 写回赛狐？此操作调用 submitToPlatform，可能影响履约状态。')">
-                <div class="info-item">
-                    <div class="label">操作者</div>
-                    <input name="actor" value="web-user" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;width:100%;" />
+                  onsubmit="return confirm('确认将面单追踪号{% if valid_tracking.found %} {{ valid_tracking.found }}{% endif %} 写回赛狐？此操作调用所选接口，可能影响履约状态/库存。')">
+                <div class="info-row" style="margin-bottom:10px;padding-top:12px;border-top:1px solid #eee;">
+                    <div class="info-item" style="flex:3;">
+                        <div class="label">有效面单追踪号</div>
+                        {% if valid_tracking.found %}
+                        <div class="value"><code>{{ valid_tracking.found }}</code> <span style="color:#888;">({{ valid_tracking.carrier or '—' }})</span></div>
+                        {% else %}
+                        <div class="value" style="color:#999;">无有效面单（无未取消且有追踪号的面单）</div>
+                        {% endif %}
+                    </div>
                 </div>
-                <div class="info-item" style="flex:2;">
-                    <div class="label">有效面单追踪号</div>
-                    {% if valid_tracking.found %}
-                    <div class="value"><code>{{ valid_tracking.found }}</code> <span style="color:#888;">({{ valid_tracking.carrier or '—' }})</span></div>
-                    {% else %}
-                    <div class="value" style="color:#999;">无有效面单（无未取消且有追踪号的面单）</div>
-                    {% endif %}
-                </div>
-                <div class="info-item">
-                    <button type="submit" style="padding:8px 14px;background:#856404;color:#fff;border:none;border-radius:4px;cursor:pointer;">
-                        回写面单追踪号到赛狐
-                    </button>
+                <div class="info-row" style="align-items:flex-end;">
+                    <div class="info-item">
+                        <div class="label">操作者</div>
+                        <input name="actor" value="web-user" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;width:100%;" />
+                    </div>
+                    <div class="info-item">
+                        <div class="label">写回接口</div>
+                        <select name="writeback_api" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;width:100%;">
+                            <option value="submitToPlatform">submitToPlatform（Amazon/FBM）</option>
+                            <option value="quickOutbound">quickOutbound（多平台）</option>
+                        </select>
+                    </div>
+                    <div class="info-item">
+                        <div class="label">扣库存方式</div>
+                        <select name="shipment_type" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;width:100%;">
+                            <option value="1">1=扣库存</option>
+                            <option value="0" selected>0=不扣库存</option>
+                        </select>
+                    </div>
+                    <div class="info-item">
+                        <div class="label">仓库ID（扣库存必填）</div>
+                        <input name="warehouse_id" value="{% if sellfox_warehouse_id %}{{ sellfox_warehouse_id }}{% endif %}" placeholder="如 274390" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;width:100%;" />
+                    </div>
+                    <div class="info-item">
+                        <div class="label">海外仓标识（扣库存必填）</div>
+                        <input name="is_oversea" value="{% if sellfox_is_oversea %}{{ sellfox_is_oversea }}{% endif %}" placeholder="0默认/1国内/2FBA/3海外" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;width:100%;" />
+                    </div>
+                    <div class="info-item">
+                        <div class="label">&nbsp;</div>
+                        <button type="submit" style="padding:8px 14px;background:#856404;color:#fff;border:none;border-radius:4px;cursor:pointer;width:100%;">
+                            回写面单追踪号到赛狐
+                        </button>
+                    </div>
                 </div>
             </form>
             <table>
