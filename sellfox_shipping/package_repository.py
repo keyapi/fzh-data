@@ -127,6 +127,11 @@ class PackageRow(Base):
     fetched_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.current_timestamp()
     )
+    # 通途订单标记：由 美东100.xls 上传后经 EN(Tongtool Package) 匹配得到。
+    # is_tongtool=1 表示该包裹在通途订单清单中；tongtool_p_numbers 记录命中的
+    # 通途包裹号（逗号分隔，便于追溯）。
+    is_tongtool: Mapped[bool] = mapped_column(Boolean, default=False)
+    tongtool_p_numbers: Mapped[str] = mapped_column(String, default="")
 
 
 class PackageOrderRow(Base):
@@ -2336,6 +2341,7 @@ class PackageRepository:
         date_field: str = "label",
         has_label: str | None = None,
         exclude_shops: list[str] | None = None,
+        tongtool: str | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[PackageListItem]:
@@ -2355,6 +2361,10 @@ class PackageRepository:
             if local_review_status is not None:
                 query = query.where(
                     PackageRow.local_review_status == local_review_status
+                )
+            if tongtool in ("yes", "no"):
+                query = query.where(
+                    PackageRow.is_tongtool == (True if tongtool == "yes" else False)
                 )
             if has_label in ("yes", "no"):
                 label_exists = (
@@ -2454,6 +2464,8 @@ class PackageRepository:
                         fetched_at=package.fetched_at,
                         purchase_date=purchase_date,
                         label_created_at=label_created_at,
+                        is_tongtool=bool(package.is_tongtool),
+                        tongtool_p_numbers=package.tongtool_p_numbers or "",
                     )
                 )
             return items
@@ -2470,6 +2482,7 @@ class PackageRepository:
         date_field: str = "label",
         has_label: str | None = None,
         exclude_shops: list[str] | None = None,
+        tongtool: str | None = None,
     ) -> int:
         with self._session_factory() as session:
             query = (
@@ -2488,6 +2501,10 @@ class PackageRepository:
             if local_review_status is not None:
                 query = query.where(
                     PackageRow.local_review_status == local_review_status
+                )
+            if tongtool in ("yes", "no"):
+                query = query.where(
+                    PackageRow.is_tongtool == (True if tongtool == "yes" else False)
                 )
             if has_label in ("yes", "no"):
                 label_exists = (
@@ -2526,6 +2543,112 @@ class PackageRepository:
                         query = query.where(ShippingLabelRow.created_at < date_end + "T23:59:59")
                 query = query.distinct()
             return session.scalar(query) or 0
+
+    def mark_tongtool(
+        self,
+        *,
+        account_key: str,
+        package_sn: str,
+        p_numbers: list[str] | None = None,
+    ) -> bool:
+        """Persist the 通途订单 mark on a package (matched via EN Tongtool Package)."""
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        with self._session_factory.begin() as session:
+            account = self._get_or_create_account(session, account_key)
+            row = session.scalar(
+                select(PackageRow).where(
+                    PackageRow.account_id == account.id,
+                    PackageRow.package_sn == package_sn,
+                )
+            )
+            if row is None:
+                return False
+            row.is_tongtool = True
+            row.tongtool_p_numbers = ",".join(
+                dict.fromkeys(p for p in (p_numbers or []) if p)
+            )
+            session.add(
+                AuditEventRow(
+                    actor="tongtool",
+                    action="package.tongtool_mark",
+                    entity_type="shipping_package",
+                    entity_id=package_sn,
+                    summary=f"mark tongtool p_numbers={row.tongtool_p_numbers}",
+                    created_at=now,
+                )
+            )
+            return True
+
+    def clear_tongtool(self, *, account_key: str, package_sn: str) -> bool:
+        """Clear the 通途订单 mark on a package."""
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        with self._session_factory.begin() as session:
+            account = self._get_or_create_account(session, account_key)
+            row = session.scalar(
+                select(PackageRow).where(
+                    PackageRow.account_id == account.id,
+                    PackageRow.package_sn == package_sn,
+                )
+            )
+            if row is None:
+                return False
+            row.is_tongtool = False
+            row.tongtool_p_numbers = ""
+            session.add(
+                AuditEventRow(
+                    actor="tongtool",
+                    action="package.tongtool_unmark",
+                    entity_type="shipping_package",
+                    entity_id=package_sn,
+                    summary="clear tongtool mark",
+                    created_at=now,
+                )
+            )
+            return True
+
+    def get_tongtool_mark(
+        self, *, account_key: str, package_sn: str
+    ) -> dict:
+        """Return the 通途订单 mark for a package (for detail page)."""
+        with self._session_factory() as session:
+            account = self._get_or_create_account(session, account_key)
+            row = session.scalar(
+                select(PackageRow).where(
+                    PackageRow.account_id == account.id,
+                    PackageRow.package_sn == package_sn,
+                )
+            )
+            if row is None:
+                return {"is_tongtool": False, "tongtool_p_numbers": ""}
+            return {
+                "is_tongtool": bool(row.is_tongtool),
+                "tongtool_p_numbers": row.tongtool_p_numbers or "",
+            }
+
+    def index_packages_by_external_order(
+        self, account_key: str
+    ) -> dict[str, list[str]]:
+        """external_order_id (Amazon 订单号) -> [package_sn, ...] 索引，供通途匹配。"""
+        with self._session_factory() as session:
+            account = self._get_or_create_account(session, account_key)
+            rows = (
+                session.execute(
+                    select(PackageRow.package_sn, OrderRow.external_order_id)
+                    .select_from(PackageRow)
+                    .join(
+                        PackageOrderRow,
+                        PackageOrderRow.package_id == PackageRow.id,
+                    )
+                    .join(OrderRow, OrderRow.id == PackageOrderRow.order_id)
+                    .where(PackageRow.account_id == account.id)
+                )
+                .all()
+            )
+            index: dict[str, list[str]] = {}
+            for package_sn, ext_id in rows:
+                if ext_id:
+                    index.setdefault(ext_id, []).append(package_sn)
+            return index
 
     def list_distinct_channels(self, account_key: str) -> list[str]:
         with self._session_factory() as session:

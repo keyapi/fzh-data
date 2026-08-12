@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 import sys
 from datetime import date, datetime, timedelta
+from functools import lru_cache
 from pathlib import Path
 
 import yaml
@@ -473,6 +474,7 @@ async def packages_page(
     tab: str | None = Query(None),
     has_label: str | None = Query(None),
     exclude_shops: str | None = Query(None),
+    tongtool: str | None = Query(None),
     limit: int = Query(50, le=500),
     offset: int = Query(0, ge=0),
 ):
@@ -480,6 +482,9 @@ async def packages_page(
     account_key = config["sellfox"]["proxy_account"]
     exclude_list = _routing_exclude_shops()
     exclude_active = bool(exclude_shops)
+    # tongtool 过滤只在 Transactions tab 生效；Dashboard / 包裹 tab 默认显示全部，
+    # 避免 URL 残留的 tongtool=yes 误过滤其他页签。
+    effective_tongtool = tongtool if tab == "transactions" else None
     result = _get_package_list_service().list(
         PackageListRequest(
             account_key=account_key,
@@ -490,6 +495,7 @@ async def packages_page(
             date_end=date_end or None,
             date_field=date_field,
             has_label=has_label or None,
+            tongtool=effective_tongtool,
             exclude_shops=exclude_list if exclude_active else [],
             limit=limit,
             offset=offset,
@@ -508,6 +514,7 @@ async def packages_page(
             "date_field": date_field,
             "tab": tab or "",
             "has_label": has_label or "",
+            "tongtool": tongtool or "",
             "exclude_shops_active": exclude_active,
             "exclude_shops_list": exclude_list,
             "today": date.today().isoformat(),
@@ -523,6 +530,53 @@ async def packages_page(
                                             max(1, (result.total + limit - 1) // limit) if result.total else 1),
         },
     )
+
+
+@app.get("/tongtool", response_class=HTMLResponse)
+async def tongtool_upload_page(request: Request):
+    """通途订单标记上传页。"""
+    return templates.TemplateResponse(request, "tongtool_upload.html", {})
+
+
+@app.post("/tongtool/upload", response_class=HTMLResponse)
+async def tongtool_upload_form(request: Request):
+    """上传 美东100.xls → 匹配本地包裹并持久化 is_tongtool 标记（与 CLI 共用 tongtool_service）。"""
+    from sellfox_shipping.tongtool_service import match_and_mark
+
+    account_key = config["sellfox"]["proxy_account"]
+    actor = _web_actor(request, "web-user")
+    form = await request.form()
+    upload = form.get("file")
+    if upload is None or not getattr(upload, "filename", ""):
+        return templates.TemplateResponse(
+            request, "tongtool_upload.html", {"error": "未选择文件"}
+        )
+    tmp = Path(BASE_DIR) / "data" / f"tongtool-upload-{Path(upload.filename).name}"
+    tmp.parent.mkdir(exist_ok=True)
+    content = await upload.read()
+    tmp.write_bytes(content)
+    try:
+        report = await run_in_threadpool(
+            match_and_mark,
+            _get_package_repository(),
+            account_key=account_key,
+            xls_path=tmp,
+            actor=actor,
+        )
+        return templates.TemplateResponse(
+            request, "tongtool_upload.html", {"report": report.to_dict()}
+        )
+    except Exception as exc:  # noqa: BLE001
+        return templates.TemplateResponse(
+            request,
+            "tongtool_upload.html",
+            {"error": f"上传/匹配失败: {exc}"},
+        )
+    finally:
+        try:
+            tmp.unlink(missing_ok=True)
+        except Exception:
+            pass
 
 
 @app.get("/packages/{package_sn}", response_class=HTMLResponse)
@@ -642,6 +696,10 @@ def _package_detail_context(account_key: str, record, *, message: str, vite_rate
             if purchase_date is None or order.purchase_date < purchase_date:
                 purchase_date = order.purchase_date
 
+    _wh = _resolve_sellfox_warehouse(record.shop_name or "")
+    _tt = _get_package_repository().get_tongtool_mark(
+        account_key=account_key, package_sn=record.package_sn
+    )
     return {
         "package": record,
         "message": message,
@@ -657,6 +715,9 @@ def _package_detail_context(account_key: str, record, *, message: str, vite_rate
         "enabled_carriers": enabled_carriers,
         "lizard_services": lizard_services,
         "purchase_date": purchase_date,
+        "sellfox_warehouse_id": (_wh or {}).get("warehouse_id"),
+        "sellfox_is_oversea": (_wh or {}).get("is_oversea"),
+        "tongtool_mark": _tt,
     }
 
 
@@ -1241,6 +1302,42 @@ def _get_lizard_services(repo, record, account_key: str) -> list[dict]:
     return services
 
 
+@lru_cache(maxsize=1)
+def _resolve_sellfox_warehouse(shop_name: str) -> dict | None:
+    """Best-effort map of a Sellfox shop name to its 北美仓 warehouse.
+
+    Returns ``{"warehouse_id": int, "is_oversea": int}`` where is_oversea is the
+    warehouse list ``type`` (0默认/1国内/2FBA/3海外). Used to pre-fill the
+    quickOutbound shipmentType=1 (inventory deduction) form which requires both
+    ``warehouseId`` and ``isOversea``. Cached per process; returns None on API
+    failure so the form falls back to manual entry.
+    """
+    if not (shop_name or "").strip():
+        return None
+    from sellfox_shipping.sellfox_client import get_sellfox_client
+
+    try:
+        client = get_sellfox_client()
+        resp = client._post(
+            "/api/warehouseManage/warehouseList.json",
+            {"pageNo": "1", "pageSize": "100"},
+        )
+        rows = (resp.get("data") or {}).get("rows") or []
+        for w in rows:
+            name = (w.get("name") or "").strip()
+            if shop_name in name:
+                try:
+                    return {
+                        "warehouse_id": int(w.get("id")),
+                        "is_oversea": int(w.get("type") or 0),
+                    }
+                except (TypeError, ValueError):
+                    return None
+    except Exception:
+        return None
+    return None
+
+
 @app.post("/packages/{package_sn}/review", response_class=HTMLResponse)
 async def package_review_form(request: Request, package_sn: str):
     """HTML form post for local review decision."""
@@ -1389,11 +1486,14 @@ async def package_prepare_submit_form(request: Request, package_sn: str):
 
 @app.post("/packages/{package_sn}/submit-label-tracking", response_class=HTMLResponse)
 async def package_submit_label_tracking_form(request: Request, package_sn: str):
-    """Write a valid label's tracking number back to Sellfox (real submitToPlatform).
+    """Write a valid label's tracking number back to Sellfox.
 
-    Sources the tracking from the package's non-cancelled label record, prepares
-    intents with it, and submits them for real. The button click is the user's
-    explicit confirmation of this side-effecting call.
+    The form's ``writeback_api`` selects the endpoint:
+    - ``submitToPlatform`` → Amazon/FBM write path (intents + submitToPlatform).
+    - ``quickOutbound``   → multi-platform write path (shipmentType=0, no
+      inventory deduction).
+    Both source the tracking from the package's valid (non-cancelled, has-tracking)
+    label record. The button click is the user's explicit confirmation.
     """
     from sellfox_shipping.submission_service import SubmissionService
 
@@ -1401,27 +1501,54 @@ async def package_submit_label_tracking_form(request: Request, package_sn: str):
     account_key = config["sellfox"]["proxy_account"]
     repo = _get_package_repository()
     actor = _web_actor(request, str(form.get("actor") or "web-user"))
+    writeback_api = str(form.get("writeback_api") or "submitToPlatform").strip()
+    svc = SubmissionService(repo, get_sellfox_client())
     try:
-        result = await run_in_threadpool(
-            SubmissionService(repo, get_sellfox_client()).submit_label_tracking_quick_outbound,
-            account_key=account_key,
-            package_sn=package_sn,
-            actor=actor,
-        )
-        if result.code == 0 and result.success_num > 0:
-            message = (
-                f"已回写面单追踪号 {result.tracking_number} → 赛狐（quickOutbound）；"
-                f"成功 {result.success_num} 单"
+        if writeback_api == "quickOutbound":
+            shipment_type_raw = str(form.get("shipment_type") or "0").strip()
+            try:
+                shipment_type = int(shipment_type_raw)
+            except ValueError:
+                shipment_type = 0
+            warehouse_raw = str(form.get("warehouse_id") or "").strip()
+            warehouse_id = int(warehouse_raw) if warehouse_raw else None
+            is_oversea_raw = str(form.get("is_oversea") or "").strip()
+            is_oversea = int(is_oversea_raw) if is_oversea_raw else None
+            result = await run_in_threadpool(
+                svc.submit_label_tracking_quick_outbound,
+                account_key=account_key,
+                package_sn=package_sn,
+                actor=actor,
+                shipment_type=shipment_type,
+                warehouse_id=warehouse_id,
+                is_oversea=is_oversea,
             )
+            if result.code == 0 and result.success_num > 0:
+                message = (
+                    f"已回写面单追踪号 {result.tracking_number} → 赛狐（quickOutbound，"
+                    f"shipmentType={shipment_type} warehouseId={warehouse_id} "
+                    f"isOversea={is_oversea}）；成功 {result.success_num} 单"
+                )
+            else:
+                fails = "; ".join(
+                    f"{d.get('packageSn', '')}: {d.get('msg', '')}"
+                    for d in result.fail_data
+                )
+                detail = f"code={result.code} msg={result.msg}"
+                if fails:
+                    detail += f" | {fails}"
+                message = f"回写赛狐失败: {detail}"
         else:
-            fails = "; ".join(
-                f"{d.get('packageSn', '')}: {d.get('msg', '')}"
-                for d in result.fail_data
+            result = await run_in_threadpool(
+                svc.submit_label_tracking,
+                account_key=account_key,
+                package_sn=package_sn,
+                actor=actor,
             )
-            detail = f"code={result.code} msg={result.msg}"
-            if fails:
-                detail += f" | {fails}"
-            message = f"回写赛狐失败: {detail}"
+            message = (
+                f"已回写面单追踪号 {result.tracking_number} → 赛狐（submitToPlatform）；"
+                f"intents: {result.intent_statuses}"
+            )
     except Exception as exc:  # noqa: BLE001
         message = f"回写赛狐失败: {exc}"
     record = repo.get(account_key, package_sn)

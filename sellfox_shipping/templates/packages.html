@@ -142,6 +142,7 @@
             <a href="/lizard/batches">批次</a>
             <a href="/labels">流水</a>
             <a href="/orders">订单 (legacy)</a>
+            <a href="/tongtool">通途订单</a>
         </div>
     </div>
 
@@ -278,6 +279,11 @@
                     <option value="yes" {% if has_label == 'yes' %}selected{% endif %}>有面单</option>
                     <option value="no" {% if has_label == 'no' %}selected{% endif %}>无面单</option>
                 </select>
+                <select name="tongtool" title="通途订单">
+                    <option value="">全部通途</option>
+                    <option value="yes" {% if tongtool == 'yes' %}selected{% endif %}>是通途订单</option>
+                    <option value="no" {% if tongtool == 'no' %}selected{% endif %}>非通途订单</option>
+                </select>
                 <label style="font-size:13px;color:#333;white-space:nowrap;display:flex;align-items:center;gap:4px;cursor:pointer;">
                     <input type="checkbox" name="exclude_shops" value="1" {% if exclude_shops_active %}checked{% endif %} onchange="this.form.submit()" />
                     排除平台物流店铺{% if exclude_shops_list %}<span style="color:#888;font-size:11px;">({{ exclude_shops_list|join(', ') }})</span>{% endif %}
@@ -291,7 +297,7 @@
                 <thead>
                     <tr>
                         <th style="width:32px;"><input type="checkbox" id="select-all" onclick="toggleSelectAll(this)"></th>
-                        <th>包裹号</th><th>状态</th><th>审核</th><th>渠道</th><th>店铺</th><th>赛狐下单时间</th><th>订单数</th><th>商品行</th><th>有效面单时间</th><th>追踪号</th>
+                        <th>包裹号</th><th>状态</th><th>审核</th><th>渠道</th><th>店铺</th><th>赛狐下单时间</th><th>订单数</th><th>商品行</th><th>有效面单时间</th><th>追踪号</th><th>通途订单</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -306,9 +312,10 @@
                         <td style="font-size:12px;">{{ item.purchase_date.strftime('%Y-%m-%d') if item.purchase_date else '—' }}</td><td>{{ item.order_count }}</td>
                         <td>{{ item.item_count }}</td>
                         <td style="font-size:12px;">{{ item.label_created_at.strftime('%Y-%m-%d %H:%M') if item.label_created_at else '—' }}</td><td>{{ item.tracking_number or '—' }}</td>
+                        <td>{% if item.is_tongtool %}<span style="color:#155724;font-weight:600;">通途</span>{% else %}—{% endif %}</td>
                     </tr>
                     {% endfor %}{% else %}
-                    <tr><td colspan="13" class="empty">暂无包裹</td></tr>
+                    <tr><td colspan="14" class="empty">暂无包裹</td></tr>
                     {% endif %}
                 </tbody>
             </table>
