@@ -192,6 +192,7 @@ generated: 2026-08-18 14:52
 | Plan | Wire label claim into create_label | [docs/superpowers/plans/2026-08-04-wire-label-claim.md](docs/superpowers/plans/2026-08-04-wire-label-claim.md) | 2026-08-18 |
 | Reference | Amazon 在线商品配对的分层候选与运营确认流程 | [docs/solutions/conventions/amazon-online-product-pairing-candidate-workflow.md](docs/solutions/conventions/amazon-online-product-pairing-candidate-workflow.md) | 2026-08-18 |
 | Reference | EN 物料/变体创建惯例 — 四层属性体系与配套物料 | [docs/solutions/conventions/erpnext-item-variant-creation-convention.md](docs/solutions/conventions/erpnext-item-variant-creation-convention.md) | 2026-08-18 |
+| Reference | 赛狐组合商品/套件 SKU 创建与配对工作流 | [docs/solutions/conventions/sellfox-combo-sku-create-pairing-workflow.md](docs/solutions/conventions/sellfox-combo-sku-create-pairing-workflow.md) | 2026-08-19 |
 | Reference | OSTKUS 账期与 EN Tongtool Order 对账 | [docs/solutions/workflow-issues/ostkus-account-reconciliation.md](docs/solutions/workflow-issues/ostkus-account-reconciliation.md) | 2026-08-18 |
 | Reference | PB 对账表月度更新 — 脚本自动化 + UPS 交付核查 | [docs/solutions/workflow-issues/pb-reconciliation-monthly-update.md](docs/solutions/workflow-issues/pb-reconciliation-monthly-update.md) | 2026-08-18 |
 | Reference | 通途主档 SKU 改名后用本地 gspread 对齐订单 Google Sheet | [docs/solutions/workflow-issues/tongtool-sku-rename-gsheet-remap.md](docs/solutions/workflow-issues/tongtool-sku-rename-gsheet-remap.md) | 2026-08-18 |

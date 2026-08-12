@@ -129,6 +129,15 @@ The semi-finished/auxiliary items generated from a product template via the「�
 ### 三方主线 (Tongtu-EN-Sellfox Mainline)
 从通途有库存 SKU 到 EN 产品成品变体、再到同编号的赛狐产品 SKU 的闭环。赛狐对象始终是 EN 产品 `item_code`，而非通途半成品原码；套件、非产品项、主体骨架和 PK#/HM1510 维护都必须在报告中单列，不得静默忽略或擅自写入。
 
+
+### Product Bundle / EN 套件 (TJ#)
+ERPNext 用原生 Product Bundle 表示组合销售对象；work_order_task 扩展会在保存时自动生成上层物料 `TJ#<前缀1>x<数量>_<前缀2>x<数量>-001`，物料组 `套件#`，单位 `套`，`is_stock_item=0`，并导出赛狐「导入组合商品」Excel 模板。REST 创建只需传真实存在的 items，服务端负责编号；不要传临时 new_item_code，创建后组成不可改。
+
+### 套件# 分类 / 赛狐组合 SKU
+赛狐镜像 EN 的 `套件#` 一级分类（2026-08-11 已建，`fullCid=428697-`）。组合 SKU 在赛狐用 `isGroup=1` + `childSkus` 表示；创建时必须带上底层商品的 `childId`、`sku`、`num`。赛狐组合 SKU、EN Product Bundle、上层 Item 三者编码和名称必须一致。
+
+### 在线产品配对 vs 订单包裹配对
+在线产品配对（`matchByMsku`/`matchByAsin`）决定未来订单 MSKU 映射，可用正确组合 SKU 覆盖；订单包裹配对（`updateMatch`）只改存在包裹的明细，且已发货包裹会被赛狐拒绝（`已发货状态，不能修改商品配对`）。
 ## 通途订单成本核算
 
 ### 特殊规则（订单改销售额成本）
