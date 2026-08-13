@@ -100,6 +100,7 @@ class PackageListItem(BaseModel):
     local_review_status: str = "pending"
     channel_name: str = ""
     shop_name: str = ""
+    warehouse_name: str = ""
     marketplace: str = ""
     tracking_number: str = ""
     order_count: int = 0

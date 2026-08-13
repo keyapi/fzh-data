@@ -10,6 +10,15 @@ updated: 2026-08-13
 
 
 
+## 2026-08-13 - 发货仓库过滤 + 多文件上传 + 跨页勾选 + 按仓库分组批量面单
+
+- **发货仓库过滤**：Transactions 新增「发货仓库」下拉（美东/美中/波兰/虚拟仓库），过滤 `warehouse_name`。
+- **多文件通途上传**：`/tongtool/upload` 支持一次多选多个 xls，逐文件匹配，多文件时显示分文件统计。
+- **跨页勾选持久化**：勾选用 sessionStorage 持久化（`{sn: warehouse}` 映射），切页不丢、跨页累加。
+- **按仓库分组批量面单**：批量创建面单弹窗按仓库分组，每个仓库独立选择承运商 + 服务类型；美中默认 `FedEx-Ground-J-TX`、美东默认 `FedEx-Economy-10-USEA`。
+- **浮动栏遮挡修复**：留白从 `.container` 移到 `body`，避免标签容器被下推。
+- 详见 [已解决问题](solutions/warehouse-filter-multiupload-selection-batchlabel-2026-08-13.md)。
+
 ## 2026-08-13 - 通途发货仓库/方式标记 + 批量面单增强 + 导出增列
 
 - **通途发货仓库/方式**：上传通途 xls 时从文件名提取发货仓库（皮壳/退货/半成品/成品）与发货方式（蜴国际，可扩展），持久化 `tongtool_shipping_warehouse` / `tongtool_shipping_method`，Transactions 支持过滤，详情页显示。迁移 `0024`/`0025`。
