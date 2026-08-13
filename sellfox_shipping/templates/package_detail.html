@@ -68,6 +68,16 @@
                     <span class="badge" style="background:#d4edda;color:#155724;">✓ 通途{% if tongtool_mark.tongtool_p_numbers %} ({{ tongtool_mark.tongtool_p_numbers }}){% endif %}</span>
                     {% else %}—{% endif %}
                 </div></div>
+                <div class="info-item"><div class="label">通途发货仓库</div><div class="value">
+                    {% if tongtool_mark and tongtool_mark.tongtool_shipping_warehouse %}
+                    <span class="badge" style="background:#cce5ff;color:#004085;">{{ tongtool_mark.tongtool_shipping_warehouse }}</span>
+                    {% else %}—{% endif %}
+                </div></div>
+                <div class="info-item"><div class="label">通途发货方式</div><div class="value">
+                    {% if tongtool_mark and tongtool_mark.tongtool_shipping_method %}
+                    <span class="badge" style="background:#fff3cd;color:#856404;">{{ tongtool_mark.tongtool_shipping_method }}</span>
+                    {% else %}—{% endif %}
+                </div></div>
                 <div class="info-item"><div class="label">赛狐下单时间</div><div class="value">{{ purchase_date.strftime('%Y-%m-%d %H:%M') if purchase_date else '—' }}</div></div>
             </div>
         </div>

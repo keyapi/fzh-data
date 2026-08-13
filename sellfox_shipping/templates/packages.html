@@ -95,11 +95,14 @@
         .print-modal .pm-footer .btn-print { background: #1a1a2e; color: #fff; font-weight: 600; }
         .print-modal .pm-footer .btn-print:hover { background: #2a2a4e; }
 
-        /* Batch bar - inline below table */
+        /* Batch bar - floating at viewport bottom */
         #batch-bar {
             display: none; align-items: center; justify-content: center; gap: 24px;
-            margin-top: 16px; padding: 14px 24px;
-            background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 8px;
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            z-index: 999; max-width: calc(100vw - 32px);
+            padding: 14px 24px;
+            background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 10px;
+            box-shadow: 0 6px 24px rgba(0, 0, 0, 0.15);
         }
         #batch-bar.visible { display: flex; }
         #batch-bar .count { font-size: 14px; color: #333; white-space: nowrap; }
@@ -284,6 +287,17 @@
                     <option value="yes" {% if tongtool == 'yes' %}selected{% endif %}>是通途订单</option>
                     <option value="no" {% if tongtool == 'no' %}selected{% endif %}>非通途订单</option>
                 </select>
+                <select name="tongtool_warehouse" title="通途发货仓库">
+                    <option value="">全部仓库</option>
+                    <option value="FZH-DANEEY-皮壳仓库" {% if tongtool_warehouse == 'FZH-DANEEY-皮壳仓库' %}selected{% endif %}>皮壳仓库</option>
+                    <option value="FZH-DANEEY-退货产品仓" {% if tongtool_warehouse == 'FZH-DANEEY-退货产品仓' %}selected{% endif %}>退货产品仓</option>
+                    <option value="FZH-DANEEY-半成品仓" {% if tongtool_warehouse == 'FZH-DANEEY-半成品仓' %}selected{% endif %}>半成品仓</option>
+                    <option value="FZH-DANEEY-成品仓" {% if tongtool_warehouse == 'FZH-DANEEY-成品仓' %}selected{% endif %}>成品仓</option>
+                </select>
+                <select name="tongtool_method" title="通途发货方式">
+                    <option value="">全部方式</option>
+                    <option value="蜴国际" {% if tongtool_method == '蜴国际' %}selected{% endif %}>蜴国际</option>
+                </select>
                 <label style="font-size:13px;color:#333;white-space:nowrap;display:flex;align-items:center;gap:4px;cursor:pointer;">
                     <input type="checkbox" name="exclude_shops" value="1" {% if exclude_shops_active %}checked{% endif %} onchange="this.form.submit()" />
                     排除平台物流店铺{% if exclude_shops_list %}<span style="color:#888;font-size:11px;">({{ exclude_shops_list|join(', ') }})</span>{% endif %}
@@ -297,7 +311,7 @@
                 <thead>
                     <tr>
                         <th style="width:32px;"><input type="checkbox" id="select-all" onclick="toggleSelectAll(this)"></th>
-                        <th>包裹号</th><th>状态</th><th>审核</th><th>渠道</th><th>店铺</th><th>赛狐下单时间</th><th>订单数</th><th>商品行</th><th>有效面单时间</th><th>追踪号</th><th>通途订单</th>
+                        <th>包裹号</th><th>状态</th><th>审核</th><th>渠道</th><th>店铺</th><th>赛狐下单时间</th><th>订单数</th><th>商品行</th><th>有效面单时间</th><th>追踪号</th><th>通途订单</th><th>通途发货仓库</th><th>通途发货方式</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -313,6 +327,8 @@
                         <td>{{ item.item_count }}</td>
                         <td style="font-size:12px;">{{ item.label_created_at.strftime('%Y-%m-%d %H:%M') if item.label_created_at else '—' }}</td><td>{{ item.tracking_number or '—' }}</td>
                         <td>{% if item.is_tongtool %}<span style="color:#155724;font-weight:600;">通途</span>{% else %}—{% endif %}</td>
+                        <td>{{ item.tongtool_shipping_warehouse or '—' }}</td>
+                        <td>{{ item.tongtool_shipping_method or '—' }}</td>
                     </tr>
                     {% endfor %}{% else %}
                     <tr><td colspan="14" class="empty">暂无包裹</td></tr>
@@ -396,10 +412,16 @@
                 <div class="info-row" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
                     <div class="info-item">
                         <div class="label" style="font-size:12px;color:#666;">承运商</div>
-                        <select id="bc-carrier" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;">
+                        <select id="bc-carrier" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;" onchange="switchBcServices()">
                             <option value="auto">按路由推荐 (auto)</option>
                             <option value="vite">VITE</option>
                             <option value="lizard">蜴国际</option>
+                        </select>
+                    </div>
+                    <div class="info-item">
+                        <div class="label" style="font-size:12px;color:#666;">服务类型</div>
+                        <select id="bc-service-level" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;">
+                            <option value="">（自动）</option>
                         </select>
                     </div>
                     <div class="info-item">
@@ -617,35 +639,119 @@
         function closeBatchCreateModal() {
             document.getElementById('batch-create-modal').classList.remove('visible');
         }
-        function runBatchCreate() {
-            var sns = getSelected();
-            if (sns.length === 0) { closeBatchCreateModal(); return; }
-            var carrier = document.getElementById('bc-carrier').value;
-            var actor = document.getElementById('bc-actor').value.trim() || 'web-user';
-            var resultsEl = document.getElementById('bc-results');
-            resultsEl.innerHTML = '<div class="loading">正在逐包创建面单...</div>';
+        var _bcSns = [];
+        var _bcCarrier = '';
+        var _bcServiceLevel = '';
+        var _bcActor = 'web-user';
+        var _bcNeedApprove = [];
+
+        function doBatchCreate(sns, carrier, serviceLevel, actor, cb) {
             fetch('/api/packages/batch-create-labels', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ package_sns: sns, carrier: carrier, actor: actor })
+                body: JSON.stringify({ package_sns: sns, carrier: carrier, service_level: serviceLevel, actor: actor })
+            })
+            .then(function(resp) { return resp.json(); })
+            .then(function(d) { cb(d); })
+            .catch(function(err) {
+                document.getElementById('bc-results').innerHTML = '<div class="loading" style="color:#721c24;">批量创建失败: ' + err.message.replace(/</g, '&lt;') + '</div>';
+            });
+        }
+
+        function renderBatchResults(d, showApprove) {
+            var resultsEl = document.getElementById('bc-results');
+            var html = '';
+            var needApprove = [];
+            (d.results || []).forEach(function(r) {
+                if (r.ok) {
+                    html += '<div style="padding:6px 8px;border-bottom:1px solid #eee;color:#155724;">✅ ' + r.package_sn + ' — 追踪号 ' + (r.tracking_number || '—') + (r.carrier ? ' (' + r.carrier + ')' : '') + '</div>';
+                } else {
+                    var err = r.error || '失败';
+                    html += '<div style="padding:6px 8px;border-bottom:1px solid #eee;color:#721c24;">❌ ' + r.package_sn + ' — ' + err.replace(/</g, '&lt;') + '</div>';
+                    if (err.indexOf('approved') !== -1) needApprove.push(r.package_sn);
+                }
+            });
+            html += '<div style="padding:8px;font-weight:700;">成功 ' + (d.success || 0) + ' / 失败 ' + (d.failed || 0) + ' / 共 ' + (d.total || 0) + '</div>';
+            if (showApprove && needApprove.length > 0) {
+                _bcNeedApprove = needApprove;
+                html += '<div style="margin-top:8px;padding:8px;background:#fff3cd;border-radius:4px;font-size:13px;">'
+                    + '<span>' + needApprove.length + ' 个包裹审核未通过。</span>'
+                    + '<button onclick="batchApproveAndRetry()" '
+                    + 'style="margin-left:8px;padding:4px 12px;background:#155724;color:#fff;border:none;border-radius:4px;cursor:pointer;">'
+                    + '一键通过并重试</button></div>';
+            }
+            resultsEl.innerHTML = html;
+        }
+
+        function runBatchCreate() {
+            var sns = getSelected();
+            if (sns.length === 0) { closeBatchCreateModal(); return; }
+            _bcSns = sns;
+            _bcCarrier = document.getElementById('bc-carrier').value;
+            _bcServiceLevel = document.getElementById('bc-service-level').value;
+            _bcActor = document.getElementById('bc-actor').value.trim() || 'web-user';
+            var resultsEl = document.getElementById('bc-results');
+            resultsEl.innerHTML = '<div class="loading">正在逐包创建面单...</div>';
+            doBatchCreate(_bcSns, _bcCarrier, _bcServiceLevel, _bcActor, function(d) {
+                renderBatchResults(d, true);
+            });
+        }
+
+        function batchApproveAndRetry() {
+            var needApprove = _bcNeedApprove;
+            if (!needApprove || needApprove.length === 0) return;
+            var resultsEl = document.getElementById('bc-results');
+            resultsEl.innerHTML = '<div class="loading">正在一键通过 ' + needApprove.length + ' 个包裹...</div>';
+            fetch('/api/packages/batch-review', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ package_sns: needApprove, actor: _bcActor })
             })
             .then(function(resp) { return resp.json(); })
             .then(function(d) {
-                var html = '';
-                (d.results || []).forEach(function(r) {
-                    if (r.ok) {
-                        html += '<div style="padding:6px 8px;border-bottom:1px solid #eee;color:#155724;">✅ ' + r.package_sn + ' — 追踪号 ' + (r.tracking_number || '—') + (r.carrier ? ' (' + r.carrier + ')' : '') + '</div>';
-                    } else {
-                        html += '<div style="padding:6px 8px;border-bottom:1px solid #eee;color:#721c24;">❌ ' + r.package_sn + ' — ' + (r.error || '失败').replace(/</g, '&lt;') + '</div>';
-                    }
+                resultsEl.innerHTML = '<div class="loading">已通过 ' + (d.approved || 0) + ' 个，重新创建面单...</div>';
+                doBatchCreate(_bcSns, _bcCarrier, _bcServiceLevel, _bcActor, function(d2) {
+                    renderBatchResults(d2, true);
                 });
-                html += '<div style="padding:8px;font-weight:700;">成功 ' + (d.success || 0) + ' / 失败 ' + (d.failed || 0) + ' / 共 ' + (d.total || 0) + '</div>';
-                resultsEl.innerHTML = html;
             })
             .catch(function(err) {
-                resultsEl.innerHTML = '<div class="loading" style="color:#721c24;">批量创建失败: ' + err.message.replace(/</g, '&lt;') + '</div>';
+                resultsEl.innerHTML = '<div class="loading" style="color:#721c24;">批量通过失败: ' + err.message.replace(/</g, '&lt;') + '</div>';
             });
         }
+        // Batch create service type switcher — matches package_detail.html pattern
+        var bcCarrierServices = {
+            'vite': [
+                {value:'', label:'（自动）'},
+                {value:'GOFO_PARCEL', label:'GOFO_PARCEL (≤22in)'},
+                {value:'FEDEX_GROUND', label:'FEDEX_GROUND (>22in)'}
+            ],
+            'lizard': [{value:'', label:'（自动）'}],
+            'auto': [{value:'', label:'（自动）'}]
+        };
+        function switchBcServices() {
+            var carrier = document.getElementById('bc-carrier').value;
+            var sel = document.getElementById('bc-service-level');
+            sel.innerHTML = '';
+            var services = bcCarrierServices[carrier] || [{value:'', label:'（自动）'}];
+            services.forEach(function(s) {
+                var opt = document.createElement('option');
+                opt.value = s.value;
+                opt.textContent = s.label;
+                sel.appendChild(opt);
+            });
+        }
+        // Load lizard services from API
+        fetch('/api/lizard-services')
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                var svc = (d.services || []).map(function(s) {
+                    return {value: s.value, label: s.label};
+                });
+                bcCarrierServices['lizard'] = [{value:'', label:'（自动）'}].concat(svc);
+            })
+            .catch(function() { /* keep defaults */ });
+        switchBcServices();  // init
+
         document.getElementById('batch-create-modal').addEventListener('click', function(e) {
             if (e.target === this) closeBatchCreateModal();
         });

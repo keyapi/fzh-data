@@ -132,6 +132,8 @@ class PackageRow(Base):
     # 通途包裹号（逗号分隔，便于追溯）。
     is_tongtool: Mapped[bool] = mapped_column(Boolean, default=False)
     tongtool_p_numbers: Mapped[str] = mapped_column(String, default="")
+    tongtool_shipping_warehouse: Mapped[str] = mapped_column(String, default="")
+    tongtool_shipping_method: Mapped[str] = mapped_column(String, default="")
 
 
 class PackageOrderRow(Base):
@@ -2342,6 +2344,8 @@ class PackageRepository:
         has_label: str | None = None,
         exclude_shops: list[str] | None = None,
         tongtool: str | None = None,
+        tongtool_warehouse: str | None = None,
+        tongtool_method: str | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[PackageListItem]:
@@ -2365,6 +2369,14 @@ class PackageRepository:
             if tongtool in ("yes", "no"):
                 query = query.where(
                     PackageRow.is_tongtool == (True if tongtool == "yes" else False)
+                )
+            if tongtool_warehouse:
+                query = query.where(
+                    PackageRow.tongtool_shipping_warehouse == tongtool_warehouse
+                )
+            if tongtool_method:
+                query = query.where(
+                    PackageRow.tongtool_shipping_method == tongtool_method
                 )
             if has_label in ("yes", "no"):
                 label_exists = (
@@ -2466,6 +2478,8 @@ class PackageRepository:
                         label_created_at=label_created_at,
                         is_tongtool=bool(package.is_tongtool),
                         tongtool_p_numbers=package.tongtool_p_numbers or "",
+                        tongtool_shipping_warehouse=package.tongtool_shipping_warehouse or "",
+                        tongtool_shipping_method=package.tongtool_shipping_method or "",
                     )
                 )
             return items
@@ -2483,6 +2497,8 @@ class PackageRepository:
         has_label: str | None = None,
         exclude_shops: list[str] | None = None,
         tongtool: str | None = None,
+        tongtool_warehouse: str | None = None,
+        tongtool_method: str | None = None,
     ) -> int:
         with self._session_factory() as session:
             query = (
@@ -2505,6 +2521,14 @@ class PackageRepository:
             if tongtool in ("yes", "no"):
                 query = query.where(
                     PackageRow.is_tongtool == (True if tongtool == "yes" else False)
+                )
+            if tongtool_warehouse:
+                query = query.where(
+                    PackageRow.tongtool_shipping_warehouse == tongtool_warehouse
+                )
+            if tongtool_method:
+                query = query.where(
+                    PackageRow.tongtool_shipping_method == tongtool_method
                 )
             if has_label in ("yes", "no"):
                 label_exists = (
@@ -2550,6 +2574,8 @@ class PackageRepository:
         account_key: str,
         package_sn: str,
         p_numbers: list[str] | None = None,
+        shipping_warehouse: str = "",
+        shipping_method: str = "",
     ) -> bool:
         """Persist the 通途订单 mark on a package (matched via EN Tongtool Package)."""
         now = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -2567,13 +2593,17 @@ class PackageRepository:
             row.tongtool_p_numbers = ",".join(
                 dict.fromkeys(p for p in (p_numbers or []) if p)
             )
+            if shipping_warehouse:
+                row.tongtool_shipping_warehouse = shipping_warehouse
+            if shipping_method:
+                row.tongtool_shipping_method = shipping_method
             session.add(
                 AuditEventRow(
                     actor="tongtool",
                     action="package.tongtool_mark",
                     entity_type="shipping_package",
                     entity_id=package_sn,
-                    summary=f"mark tongtool p_numbers={row.tongtool_p_numbers}",
+                    summary=f"mark tongtool p_numbers={row.tongtool_p_numbers} warehouse={shipping_warehouse} method={shipping_method}",
                     created_at=now,
                 )
             )
@@ -2594,6 +2624,8 @@ class PackageRepository:
                 return False
             row.is_tongtool = False
             row.tongtool_p_numbers = ""
+            row.tongtool_shipping_warehouse = ""
+            row.tongtool_shipping_method = ""
             session.add(
                 AuditEventRow(
                     actor="tongtool",
@@ -2619,10 +2651,12 @@ class PackageRepository:
                 )
             )
             if row is None:
-                return {"is_tongtool": False, "tongtool_p_numbers": ""}
+                return {"is_tongtool": False, "tongtool_p_numbers": "", "tongtool_shipping_warehouse": "", "tongtool_shipping_method": ""}
             return {
                 "is_tongtool": bool(row.is_tongtool),
                 "tongtool_p_numbers": row.tongtool_p_numbers or "",
+                "tongtool_shipping_warehouse": row.tongtool_shipping_warehouse or "",
+                "tongtool_shipping_method": row.tongtool_shipping_method or "",
             }
 
     def index_packages_by_external_order(

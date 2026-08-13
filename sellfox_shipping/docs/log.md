@@ -3,12 +3,19 @@ okf: v0.1
 type: Log
 module: sellfox_shipping
 created: 2026-07-15
-updated: 2026-08-12
+updated: 2026-08-13
 ---
 
 # sellfox_shipping - 变更日志
 
 
+
+## 2026-08-13 - 通途发货仓库/方式标记 + 批量面单增强 + 导出增列
+
+- **通途发货仓库/方式**：上传通途 xls 时从文件名提取发货仓库（皮壳/退货/半成品/成品）与发货方式（蜴国际，可扩展），持久化 `tongtool_shipping_warehouse` / `tongtool_shipping_method`，Transactions 支持过滤，详情页显示。迁移 `0024`/`0025`。
+- **批量创建面单增强**：弹窗新增服务类型下拉（按承运商动态切换）；审核未通过的包裹显示「一键通过并重试」；操作栏改为视口底部浮动。
+- **导出 Excel 增列**：新增赛狐追踪号、通途包裹号、通途发货仓库、通途发货方式；「追踪号」列改为取面单记录中的有效追踪号。
+- 详见 [已解决问题](solutions/tongtool-warehouse-method-batch-label-2026-08-13.md)。
 
 ## 2026-08-12 - 安全加固：通途上传端点路径穿越修复
 
