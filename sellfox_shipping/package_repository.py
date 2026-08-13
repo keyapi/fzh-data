@@ -2337,6 +2337,7 @@ class PackageRepository:
         account_key: str,
         package_status: str | None = None,
         channel_name: str | None = None,
+        warehouse_name: str | None = None,
         local_review_status: str | None = None,
         date_start: str | None = None,
         date_end: str | None = None,
@@ -2362,6 +2363,8 @@ class PackageRepository:
                 query = query.where(PackageRow.package_status == package_status)
             if channel_name is not None:
                 query = query.where(PackageRow.channel_name == channel_name)
+            if warehouse_name is not None:
+                query = query.where(PackageRow.warehouse_name == warehouse_name)
             if local_review_status is not None:
                 query = query.where(
                     PackageRow.local_review_status == local_review_status
@@ -2469,6 +2472,7 @@ class PackageRepository:
                         local_review_status=package.local_review_status or "pending",
                         channel_name=package.channel_name,
                         shop_name=package.shop_name,
+                        warehouse_name=package.warehouse_name or "",
                         marketplace=package.marketplace,
                         tracking_number=package.tracking_number,
                         order_count=order_count,
@@ -2490,6 +2494,7 @@ class PackageRepository:
         account_key: str,
         package_status: str | None = None,
         channel_name: str | None = None,
+        warehouse_name: str | None = None,
         local_review_status: str | None = None,
         date_start: str | None = None,
         date_end: str | None = None,
@@ -2514,6 +2519,8 @@ class PackageRepository:
                 query = query.where(PackageRow.package_status == package_status)
             if channel_name is not None:
                 query = query.where(PackageRow.channel_name == channel_name)
+            if warehouse_name is not None:
+                query = query.where(PackageRow.warehouse_name == warehouse_name)
             if local_review_status is not None:
                 query = query.where(
                     PackageRow.local_review_status == local_review_status

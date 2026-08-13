@@ -478,6 +478,7 @@ async def packages_page(
     request: Request,
     status: str | None = Query(None),
     channel: str | None = Query(None),
+    warehouse: str | None = Query(None),
     review: str | None = Query(None),
     date_start: str | None = Query(None),
     date_end: str | None = Query(None),
@@ -505,6 +506,7 @@ async def packages_page(
             account_key=account_key,
             package_status=status or None,
             channel_name=channel or None,
+            warehouse_name=warehouse or None,
             local_review_status=review or None,
             date_start=date_start or None,
             date_end=date_end or None,
@@ -525,6 +527,7 @@ async def packages_page(
             "account_key": account_key,
             "status": status or "",
             "channel": channel or "",
+            "warehouse": warehouse or "",
             "review": review or "",
             "date_start": date_start or "",
             "date_end": date_end or "",
@@ -559,31 +562,59 @@ async def tongtool_upload_page(request: Request):
 
 @app.post("/tongtool/upload", response_class=HTMLResponse)
 async def tongtool_upload_form(request: Request):
-    """上传 美东100.xls → 匹配本地包裹并持久化 is_tongtool 标记（与 CLI 共用 tongtool_service）。"""
+    """上传一个或多个 通途 xls → 匹配本地包裹并持久化 is_tongtool 标记（与 CLI 共用 tongtool_service）。"""
     from sellfox_shipping.tongtool_service import match_and_mark
 
     account_key = config["sellfox"]["proxy_account"]
     actor = _web_actor(request, "web-user")
     form = await request.form()
-    upload = form.get("file")
-    if upload is None or not getattr(upload, "filename", ""):
+    uploads = form.getlist("file")
+    uploads = [u for u in uploads if getattr(u, "filename", "")]
+    if not uploads:
         return templates.TemplateResponse(
             request, "tongtool_upload.html", {"error": "未选择文件"}
         )
-    tmp = Path(BASE_DIR) / "data" / f"tongtool-upload-{Path(upload.filename).name}"
-    tmp.parent.mkdir(exist_ok=True)
-    content = await upload.read()
-    tmp.write_bytes(content)
+
+    agg = {
+        "total": 0,
+        "matched": 0,
+        "unmatched_count": 0,
+        "skipped_duplicates": 0,
+        "matched_rows": [],
+        "unmatched_rows": [],
+        "files": [],
+    }
+    tmp_paths: list[Path] = []
     try:
-        report = await run_in_threadpool(
-            match_and_mark,
-            _get_package_repository(),
-            account_key=account_key,
-            xls_path=tmp,
-            actor=actor,
-        )
+        for upload in uploads:
+            tmp = Path(BASE_DIR) / "data" / f"tongtool-upload-{Path(upload.filename).name}"
+            tmp.parent.mkdir(exist_ok=True)
+            content = await upload.read()
+            tmp.write_bytes(content)
+            tmp_paths.append(tmp)
+
+            report = await run_in_threadpool(
+                match_and_mark,
+                _get_package_repository(),
+                account_key=account_key,
+                xls_path=tmp,
+                actor=actor,
+            )
+            d = report.to_dict()
+            agg["total"] += d.get("total", 0)
+            agg["matched"] += d.get("matched", 0)
+            agg["unmatched_count"] += d.get("unmatched_count", 0)
+            agg["skipped_duplicates"] += d.get("skipped_duplicates", 0)
+            agg["matched_rows"].extend(d.get("matched_rows", []))
+            agg["unmatched_rows"].extend(d.get("unmatched_rows", []))
+            agg["files"].append({
+                "filename": Path(upload.filename).name,
+                "total": d.get("total", 0),
+                "matched": d.get("matched", 0),
+                "unmatched_count": d.get("unmatched_count", 0),
+            })
         return templates.TemplateResponse(
-            request, "tongtool_upload.html", {"report": report.to_dict()}
+            request, "tongtool_upload.html", {"report": agg}
         )
     except Exception as exc:  # noqa: BLE001
         return templates.TemplateResponse(
@@ -592,10 +623,11 @@ async def tongtool_upload_form(request: Request):
             {"error": f"上传/匹配失败: {exc}"},
         )
     finally:
-        try:
-            tmp.unlink(missing_ok=True)
-        except Exception:
-            pass
+        for tmp in tmp_paths:
+            try:
+                tmp.unlink(missing_ok=True)
+            except Exception:
+                pass
 
 
 @app.get("/packages/{package_sn}", response_class=HTMLResponse)
@@ -2385,7 +2417,8 @@ async def batch_review(request: Request):
 async def batch_create_labels(request: Request):
     """Create labels for selected packages.
 
-    Body: {"package_sns": [...], "carrier": "auto"|"vite"|"lizard", "actor": "..."}
+    Body (per-warehouse): {"groups": [{"carrier": "auto"|"vite"|"lizard", "service_level": "...", "package_sns": [...]}], "actor": "..."}
+    Backward-compat flat: {"package_sns": [...], "carrier": "...", "service_level": "...", "actor": "..."}
     carrier="auto" uses each package's routing-suggested carrier.
     Each package is independent — failures are reported, not fatal.
     """
@@ -2395,68 +2428,92 @@ async def batch_create_labels(request: Request):
         body = await request.json()
     except Exception:
         raise HTTPException(400, "Invalid JSON body")
-    package_sns: list[str] = body.get("package_sns", [])
-    carrier: str = str(body.get("carrier") or "auto").strip().lower()
-    service_level: str = str(body.get("service_level") or "").strip()
-    actor: str = str(body.get("actor") or "web-user").strip()
-    if not package_sns:
-        raise HTTPException(400, "No package_sns provided")
-    if carrier not in ("auto", "vite", "lizard"):
-        raise HTTPException(400, f"Invalid carrier '{carrier}'")
 
     account_key = config["sellfox"]["proxy_account"]
     repo = _get_package_repository()
     svc = LabelService(repo)
+    actor: str = str(body.get("actor") or "web-user").strip()
+
+    # Normalize into groups: [{carrier, service_level, package_sns}]
+    raw_groups = body.get("groups")
+    if raw_groups:
+        groups = []
+        for g in raw_groups:
+            carrier = str(g.get("carrier") or "auto").strip().lower()
+            if carrier not in ("auto", "vite", "lizard"):
+                raise HTTPException(400, f"Invalid carrier '{carrier}'")
+            groups.append({
+                "carrier": carrier,
+                "service_level": str(g.get("service_level") or "").strip(),
+                "package_sns": [str(s) for s in (g.get("package_sns") or [])],
+            })
+    else:
+        carrier: str = str(body.get("carrier") or "auto").strip().lower()
+        if carrier not in ("auto", "vite", "lizard"):
+            raise HTTPException(400, f"Invalid carrier '{carrier}'")
+        groups = [{
+            "carrier": carrier,
+            "service_level": str(body.get("service_level") or "").strip(),
+            "package_sns": [str(s) for s in (body.get("package_sns") or [])],
+        }]
+
+    if not any(g["package_sns"] for g in groups):
+        raise HTTPException(400, "No package_sns provided")
 
     results: list[dict] = []
     success = 0
-    for sn in package_sns:
-        record = repo.get(account_key, sn)
-        if record is None:
-            results.append({"package_sn": sn, "ok": False, "error": "包裹不存在"})
-            continue
-        effective_carrier = carrier
-        if carrier == "auto":
+    total = 0
+    for group in groups:
+        carrier = group["carrier"]
+        service_level = group["service_level"]
+        for sn in group["package_sns"]:
+            total += 1
+            record = repo.get(account_key, sn)
+            if record is None:
+                results.append({"package_sn": sn, "ok": False, "error": "包裹不存在"})
+                continue
+            effective_carrier = carrier
+            if carrier == "auto":
+                try:
+                    carton_rows = _carton_rows_for_package(account_key, record)
+                    routing = _compute_routing(record, carton_rows)
+                    effective_carrier = (routing.carrier or "").strip().lower() if routing else ""
+                except Exception:
+                    effective_carrier = ""
+                if effective_carrier not in ("vite", "lizard"):
+                    results.append({
+                        "package_sn": sn,
+                        "ok": False,
+                        "error": "无路由建议承运商（auto 模式）",
+                    })
+                    continue
             try:
-                carton_rows = _carton_rows_for_package(account_key, record)
-                routing = _compute_routing(record, carton_rows)
-                effective_carrier = (routing.carrier or "").strip().lower() if routing else ""
-            except Exception:
-                effective_carrier = ""
-            if effective_carrier not in ("vite", "lizard"):
+                result = await run_in_threadpool(
+                    svc.create_label,
+                    carrier=effective_carrier,
+                    package=record,
+                    account_key=account_key,
+                    actor=actor,
+                    service_level=service_level,
+                )
+                success += 1
                 results.append({
                     "package_sn": sn,
-                    "ok": False,
-                    "error": "无路由建议承运商（auto 模式）",
+                    "ok": True,
+                    "carrier": effective_carrier,
+                    "tracking_number": result.get("tracking_number", ""),
+                    "carrier_order_id": result.get("carrier_order_id", ""),
                 })
-                continue
-        try:
-            result = await run_in_threadpool(
-                svc.create_label,
-                carrier=effective_carrier,
-                package=record,
-                account_key=account_key,
-                actor=actor,
-                service_level=service_level,
-            )
-            success += 1
-            results.append({
-                "package_sn": sn,
-                "ok": True,
-                "carrier": effective_carrier,
-                "tracking_number": result.get("tracking_number", ""),
-                "carrier_order_id": result.get("carrier_order_id", ""),
-            })
-        except LabelServiceError as exc:
-            results.append({"package_sn": sn, "ok": False, "carrier": effective_carrier, "error": str(exc)})
-        except Exception as exc:  # noqa: BLE001
-            results.append({"package_sn": sn, "ok": False, "carrier": effective_carrier, "error": str(exc)})
+            except LabelServiceError as exc:
+                results.append({"package_sn": sn, "ok": False, "carrier": effective_carrier, "error": str(exc)})
+            except Exception as exc:  # noqa: BLE001
+                results.append({"package_sn": sn, "ok": False, "carrier": effective_carrier, "error": str(exc)})
 
     return {
         "results": results,
         "success": success,
         "failed": len(results) - success,
-        "total": len(package_sns),
+        "total": total,
     }
 
 

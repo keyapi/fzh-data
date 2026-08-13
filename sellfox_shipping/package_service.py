@@ -105,6 +105,7 @@ class PackageListRequest(BaseModel):
     account_key: str
     package_status: str | None = None
     channel_name: str | None = None
+    warehouse_name: str | None = None
     local_review_status: str | None = None
     date_start: str | None = None
     date_end: str | None = None
@@ -380,6 +381,7 @@ class ListPackagesService:
             account_key=request.account_key,
             package_status=request.package_status,
             channel_name=request.channel_name,
+            warehouse_name=request.warehouse_name,
             local_review_status=request.local_review_status,
             date_start=request.date_start,
             date_end=request.date_end,
@@ -396,6 +398,7 @@ class ListPackagesService:
             account_key=request.account_key,
             package_status=request.package_status,
             channel_name=request.channel_name,
+            warehouse_name=request.warehouse_name,
             local_review_status=request.local_review_status,
             date_start=request.date_start,
             date_end=request.date_end,

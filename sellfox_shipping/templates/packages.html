@@ -6,7 +6,7 @@
     <title>包裹列表 — 赛狐尾程打单</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, 'Microsoft YaHei', sans-serif; background: #f5f5f5; color: #333; }
+        body { font-family: -apple-system, 'Microsoft YaHei', sans-serif; background: #f5f5f5; color: #333; padding-bottom: 110px; }
         .header { background: #1a1a2e; color: #fff; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
         .header h1 { font-size: 18px; }
         .nav a { color: #a0a0c0; text-decoration: none; margin-left: 20px; font-size: 14px; }
@@ -277,6 +277,13 @@
                     <input type="text" name="channel" id="txn-channel" value="{{ channel or '' }}" placeholder="渠道名" list="ch-list" autocomplete="off" />
                     <span class="arrow">▾</span>
                 </div>
+                <select name="warehouse" title="发货仓库">
+                    <option value="">全部仓库</option>
+                    <option value="CENTRADE" {% if warehouse == 'CENTRADE' %}selected{% endif %}>美东仓 (USNJ)</option>
+                    <option value="DANEEY" {% if warehouse == 'DANEEY' %}selected{% endif %}>美中仓 (USTX)</option>
+                    <option value="POLAND" {% if warehouse == 'POLAND' %}selected{% endif %}>波兰仓</option>
+                    <option value="虚拟仓库" {% if warehouse == '虚拟仓库' %}selected{% endif %}>虚拟仓库</option>
+                </select>
                 <select name="has_label" title="有无面单">
                     <option value="">全部面单</option>
                     <option value="yes" {% if has_label == 'yes' %}selected{% endif %}>有面单</option>
@@ -317,7 +324,7 @@
                 <tbody>
                     {% if items %}{% for item in items %}
                     <tr>
-                        <td><input type="checkbox" class="pkg-check" value="{{ item.package_sn }}" data-has-label="{{ '1' if item.label_created_at else '0' }}" onchange="updateBatchBar()"></td>
+                        <td><input type="checkbox" class="pkg-check" value="{{ item.package_sn }}" data-has-label="{{ '1' if item.label_created_at else '0' }}" data-warehouse="{{ item.warehouse_name or '' }}" onchange="onCheckboxChange(this)"></td>
                         <td><a class="pkg" href="/packages/{{ item.package_sn }}">{{ item.package_sn }}</a></td>
                         <td><span class="badge {% if item.package_status == 'has_shipped' %}badge-shipped{% elif item.package_status == 'has_canceled' %}badge-cancel{% else %}badge-info{% endif %}">{{ item.package_status or '—' }}</span></td>
                         <td><span class="badge badge-pending">{{ item.local_review_status or 'pending' }}</span></td>
@@ -400,30 +407,17 @@
 
     <!-- Batch create label modal -->
     <div id="batch-create-modal" class="print-modal-overlay">
-        <div class="print-modal" style="max-width:640px;">
+        <div class="print-modal" style="max-width:760px;">
             <div class="pm-header">
                 <h3>批量创建面单 — 已选 <span id="bc-count">0</span> 个包裹</h3>
                 <button class="pm-close" onclick="closeBatchCreateModal()">✕</button>
             </div>
             <div class="pm-body" style="padding:16px;">
                 <p style="font-size:13px;color:#666;margin-bottom:12px;line-height:1.5;">
-                    将逐个调用承运商 API 创建面单（真实产生费用）。未审核通过 / 无有效尺寸 / 已有活跃面单的包裹会报错跳过。
+                    将逐个调用承运商 API 创建面单（真实产生费用）。未审核通过 / 无有效尺寸 / 已有活跃面单的包裹会报错跳过。不同仓库可分别指定承运商与服务类型。
                 </p>
+                <div id="bc-warehouse-groups" style="margin-bottom:12px;"></div>
                 <div class="info-row" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
-                    <div class="info-item">
-                        <div class="label" style="font-size:12px;color:#666;">承运商</div>
-                        <select id="bc-carrier" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;" onchange="switchBcServices()">
-                            <option value="auto">按路由推荐 (auto)</option>
-                            <option value="vite">VITE</option>
-                            <option value="lizard">蜴国际</option>
-                        </select>
-                    </div>
-                    <div class="info-item">
-                        <div class="label" style="font-size:12px;color:#666;">服务类型</div>
-                        <select id="bc-service-level" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;">
-                            <option value="">（自动）</option>
-                        </select>
-                    </div>
                     <div class="info-item">
                         <div class="label" style="font-size:12px;color:#666;">操作者</div>
                         <input id="bc-actor" value="web-user" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;width:120px;" />
@@ -443,6 +437,7 @@
         var currentBlobUrl = null;
         var channels = [];
         var previewAborter = null;
+        var selectedStorageKey = 'sellfox_selected_packages_v2';
 
         function goPage(pageIndex, pageSize) {
             var p = new URLSearchParams(location.search);
@@ -462,6 +457,7 @@
                 document.getElementById('tab-transactions').style.display = '';
                 document.getElementById('dash-filter').style.display = 'none';
                 loadChannels();
+                restoreSelection();
             }
         })();
 
@@ -507,24 +503,73 @@
             if (wrap && !wrap.contains(e.target)) document.getElementById('date-drop').classList.remove('visible');
         });
 
+        // 选择存储：{ package_sn: warehouse_name } 映射，跨页累加
+        function getSavedSelection() {
+            var raw;
+            try { raw = JSON.parse(sessionStorage.getItem(selectedStorageKey) || '{}'); } catch (e) { return {}; }
+            // 防御旧版数组格式或异常数据，统一按空映射处理
+            if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+            return raw;
+        }
+        function saveSelection(map) {
+            try { sessionStorage.setItem(selectedStorageKey, JSON.stringify(map)); } catch (e) {}
+        }
+        // 跨页累加的全量选中包裹号（供打印/批量面单/导出使用）
         function getSelected() {
-            return Array.from(document.querySelectorAll('.pkg-check:checked')).map(function(cb) { return cb.value; });
+            return Object.keys(getSavedSelection());
+        }
+        // 按仓库分组选中包裹：{ warehouse: [sn, ...] }
+        function getSelectedByWarehouse() {
+            var map = getSavedSelection();
+            var groups = {};
+            Object.keys(map).forEach(function(sn) {
+                var wh = map[sn] || '未知仓库';
+                if (!groups[wh]) groups[wh] = [];
+                groups[wh].push(sn);
+            });
+            return groups;
+        }
+        function onCheckboxChange(cb) {
+            var map = getSavedSelection();
+            if (cb.checked) map[cb.value] = cb.getAttribute('data-warehouse') || '';
+            else delete map[cb.value];
+            saveSelection(map);
+            updateBatchBar();
+        }
+        function restoreSelection() {
+            var map = getSavedSelection();
+            if (Object.keys(map).length === 0) return;
+            document.querySelectorAll('.pkg-check').forEach(function(cb) {
+                cb.checked = (cb.value in map);
+            });
+            updateBatchBar();
         }
         function toggleSelectAll(el) {
-            document.querySelectorAll('.pkg-check').forEach(function(cb) { cb.checked = el.checked; });
+            var map = getSavedSelection();
+            document.querySelectorAll('.pkg-check').forEach(function(cb) {
+                cb.checked = el.checked;
+                if (el.checked) map[cb.value] = cb.getAttribute('data-warehouse') || '';
+                else delete map[cb.value];
+            });
+            saveSelection(map);
             updateBatchBar();
         }
         function updateBatchBar() {
             var selected = getSelected();
             document.getElementById('selected-count').textContent = selected.length;
             document.getElementById('batch-bar').classList.toggle('visible', selected.length > 0);
-            // Disable 创建面单 when every selected package already has a valid label
-            var allHaveLabels = true;
-            document.querySelectorAll('.pkg-check:checked').forEach(function(cb) {
+            // 全选复选框状态：仅反映当前页是否全部勾选
+            var all = document.querySelectorAll('.pkg-check');
+            var checkedOnPage = document.querySelectorAll('.pkg-check:checked');
+            var selectAll = document.getElementById('select-all');
+            if (selectAll && all.length > 0) selectAll.checked = (checkedOnPage.length === all.length);
+            // 创建面单按钮：仅当当前页所有已勾选包裹都有有效面单时禁用
+            var allHaveLabels = checkedOnPage.length > 0;
+            checkedOnPage.forEach(function(cb) {
                 if (cb.getAttribute('data-has-label') !== '1') allHaveLabels = false;
             });
             var createBtn = document.getElementById('batch-create-btn');
-            createBtn.disabled = selected.length > 0 && allHaveLabels;
+            createBtn.disabled = checkedOnPage.length > 0 && allHaveLabels;
             createBtn.style.opacity = createBtn.disabled ? '0.5' : '1';
             createBtn.style.cursor = createBtn.disabled ? 'not-allowed' : 'pointer';
             createBtn.title = createBtn.disabled ? '所选包裹均已有有效面单' : '';
@@ -532,6 +577,7 @@
         function clearSelection() {
             document.querySelectorAll('.pkg-check').forEach(function(cb) { cb.checked = false; });
             document.getElementById('select-all').checked = false;
+            saveSelection({});
             updateBatchBar();
         }
 
@@ -629,27 +675,90 @@
         }
 
         // ── Batch create labels ──
+        var warehouseLabelMap = {
+            'DANEEY': '美中仓 (USTX)',
+            'CENTRADE': '美东仓 (USNJ)',
+            'POLAND': '波兰仓',
+            '虚拟仓库': '虚拟仓库'
+        };
+        function warehouseDisplayName(wh) {
+            return warehouseLabelMap[wh] || (wh || '未知仓库');
+        }
+        // 各仓库默认服务类型（蜴国际）；其余仓库留空走「（自动）」
+        var warehouseDefaultService = {
+            'DANEEY': 'FedEx-Ground-J-TX',
+            'CENTRADE': 'FedEx-Economy-10-USEA'
+        };
+        var bcCarrierServices = {
+            'vite': [
+                {value:'', label:'（自动）'},
+                {value:'GOFO_PARCEL', label:'GOFO_PARCEL (≤22in)'},
+                {value:'FEDEX_GROUND', label:'FEDEX_GROUND (>22in)'}
+            ],
+            'lizard': [{value:'', label:'（自动）'}],
+            'auto': [{value:'', label:'（自动）'}]
+        };
+        function switchBcServices(idx) {
+            var carrier = document.getElementById('bc-carrier-' + idx).value;
+            var sel = document.getElementById('bc-service-' + idx);
+            if (!sel) return;
+            sel.innerHTML = '';
+            var services = bcCarrierServices[carrier] || [{value:'', label:'（自动）'}];
+            services.forEach(function(s) {
+                var opt = document.createElement('option');
+                opt.value = s.value;
+                opt.textContent = s.label;
+                sel.appendChild(opt);
+            });
+        }
         function openBatchCreateModal() {
-            var sns = getSelected();
-            if (sns.length === 0) return;
-            document.getElementById('bc-count').textContent = sns.length;
+            var groups = getSelectedByWarehouse();
+            var whs = Object.keys(groups);
+            if (whs.length === 0) return;
+            document.getElementById('bc-count').textContent = getSelected().length;
             document.getElementById('bc-results').innerHTML = '';
+            var container = document.getElementById('bc-warehouse-groups');
+            var html = '';
+            whs.forEach(function(wh, idx) {
+                var sns = groups[wh];
+                html += '<div style="border:1px solid #e0e0e0;border-radius:6px;padding:10px 12px;margin-bottom:10px;background:#fafbfc;">'
+                    + '<div style="font-size:13px;font-weight:600;margin-bottom:8px;">' + warehouseDisplayName(wh) + ' — ' + sns.length + ' 个包裹</div>'
+                    + '<div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">'
+                    + '<div><div style="font-size:12px;color:#666;margin-bottom:4px;">承运商</div>'
+                    + '<select id="bc-carrier-' + idx + '" onchange="switchBcServices(' + idx + ')" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;">'
+                    + '<option value="auto">按路由推荐 (auto)</option>'
+                    + '<option value="vite">VITE</option>'
+                    + '<option value="lizard" selected>蜴国际</option>'
+                    + '</select></div>'
+                    + '<div><div style="font-size:12px;color:#666;margin-bottom:4px;">服务类型</div>'
+                    + '<select id="bc-service-' + idx + '" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;"></select></div>'
+                    + '</div></div>';
+            });
+            container.innerHTML = html;
+            for (var i = 0; i < whs.length; i++) {
+                switchBcServices(i);
+                var defService = warehouseDefaultService[whs[i]] || '';
+                if (defService) {
+                    var svcSel = document.getElementById('bc-service-' + i);
+                    if (svcSel.querySelector('option[value="' + defService + '"]')) {
+                        svcSel.value = defService;
+                    }
+                }
+            }
             document.getElementById('batch-create-modal').classList.add('visible');
         }
         function closeBatchCreateModal() {
             document.getElementById('batch-create-modal').classList.remove('visible');
         }
-        var _bcSns = [];
-        var _bcCarrier = '';
-        var _bcServiceLevel = '';
+        var _bcGroupsPayload = [];
         var _bcActor = 'web-user';
         var _bcNeedApprove = [];
 
-        function doBatchCreate(sns, carrier, serviceLevel, actor, cb) {
+        function doBatchCreate(groups, actor, cb) {
             fetch('/api/packages/batch-create-labels', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ package_sns: sns, carrier: carrier, service_level: serviceLevel, actor: actor })
+                body: JSON.stringify({ groups: groups, actor: actor })
             })
             .then(function(resp) { return resp.json(); })
             .then(function(d) { cb(d); })
@@ -684,15 +793,24 @@
         }
 
         function runBatchCreate() {
-            var sns = getSelected();
-            if (sns.length === 0) { closeBatchCreateModal(); return; }
-            _bcSns = sns;
-            _bcCarrier = document.getElementById('bc-carrier').value;
-            _bcServiceLevel = document.getElementById('bc-service-level').value;
+            var groups = getSelectedByWarehouse();
+            var whs = Object.keys(groups);
+            if (whs.length === 0) { closeBatchCreateModal(); return; }
             _bcActor = document.getElementById('bc-actor').value.trim() || 'web-user';
+            var groupsPayload = [];
+            whs.forEach(function(wh, idx) {
+                var carrier = document.getElementById('bc-carrier-' + idx).value;
+                var serviceLevel = document.getElementById('bc-service-' + idx).value;
+                groupsPayload.push({
+                    carrier: carrier,
+                    service_level: serviceLevel,
+                    package_sns: groups[wh]
+                });
+            });
+            _bcGroupsPayload = groupsPayload;
             var resultsEl = document.getElementById('bc-results');
             resultsEl.innerHTML = '<div class="loading">正在逐包创建面单...</div>';
-            doBatchCreate(_bcSns, _bcCarrier, _bcServiceLevel, _bcActor, function(d) {
+            doBatchCreate(groupsPayload, _bcActor, function(d) {
                 renderBatchResults(d, true);
             });
         }
@@ -710,34 +828,12 @@
             .then(function(resp) { return resp.json(); })
             .then(function(d) {
                 resultsEl.innerHTML = '<div class="loading">已通过 ' + (d.approved || 0) + ' 个，重新创建面单...</div>';
-                doBatchCreate(_bcSns, _bcCarrier, _bcServiceLevel, _bcActor, function(d2) {
+                doBatchCreate(_bcGroupsPayload, _bcActor, function(d2) {
                     renderBatchResults(d2, true);
                 });
             })
             .catch(function(err) {
                 resultsEl.innerHTML = '<div class="loading" style="color:#721c24;">批量通过失败: ' + err.message.replace(/</g, '&lt;') + '</div>';
-            });
-        }
-        // Batch create service type switcher — matches package_detail.html pattern
-        var bcCarrierServices = {
-            'vite': [
-                {value:'', label:'（自动）'},
-                {value:'GOFO_PARCEL', label:'GOFO_PARCEL (≤22in)'},
-                {value:'FEDEX_GROUND', label:'FEDEX_GROUND (>22in)'}
-            ],
-            'lizard': [{value:'', label:'（自动）'}],
-            'auto': [{value:'', label:'（自动）'}]
-        };
-        function switchBcServices() {
-            var carrier = document.getElementById('bc-carrier').value;
-            var sel = document.getElementById('bc-service-level');
-            sel.innerHTML = '';
-            var services = bcCarrierServices[carrier] || [{value:'', label:'（自动）'}];
-            services.forEach(function(s) {
-                var opt = document.createElement('option');
-                opt.value = s.value;
-                opt.textContent = s.label;
-                sel.appendChild(opt);
             });
         }
         // Load lizard services from API
@@ -750,7 +846,6 @@
                 bcCarrierServices['lizard'] = [{value:'', label:'（自动）'}].concat(svc);
             })
             .catch(function() { /* keep defaults */ });
-        switchBcServices();  // init
 
         document.getElementById('batch-create-modal').addEventListener('click', function(e) {
             if (e.target === this) closeBatchCreateModal();
