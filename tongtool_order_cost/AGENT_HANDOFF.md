@@ -24,7 +24,9 @@
 | `tongtool_order_cost/engine_170.py` | 与 notebook Cell 22 对齐的应用引擎 |
 | `tongtool_order_cost/audit.py` | 事件 → 审计簿 |
 | `tongtool_order_cost/io_loaders.py` | 订单/规则/汇率加载 |
-| `scripts/run_audit_170.py` | CLI |
+| `tongtool_order_cost/pp_cotton.py` | 美中 DANEEY 订单 × BOM Cost List → PP 棉 kg 估算 |
+| `scripts/run_audit_170.py` | 1.7.0 特殊规则审计 CLI |
+| `scripts/estimate_pp_cotton.py` | PP 棉用量估算 CLI |
 
 ## 去重键（6 列）
 
