@@ -10,6 +10,7 @@ updated: 2026-08-13
 
 ## 2026-08
 
+- [batch-print-warehouse-tabs-2026-08-13.md](batch-print-warehouse-tabs-2026-08-13.md) — 批量打印按仓库两级页签（仓库→文档类型）+ 下载动态命名
 - [warehouse-filter-multiupload-selection-batchlabel-2026-08-13.md](warehouse-filter-multiupload-selection-batchlabel-2026-08-13.md) — 发货仓库过滤 + 多文件通途上传 + 跨页勾选持久化 + 按仓库分组批量面单（默认服务填充）
 - [tongtool-warehouse-method-batch-label-2026-08-13.md](tongtool-warehouse-method-batch-label-2026-08-13.md) — 通途发货仓库/方式标记（文件名提取）+ 批量面单服务类型选择 + 一键审核通过重试 + 浮动操作栏 + 导出增列
 - [tongtool-order-mark-2026-08-12.md](tongtool-order-mark-2026-08-12.md) — 通途订单标记：美东100.xls 参考编号 → EN Tongtool Package → Amazon 订单号 → 本地包裹匹配 → is_tongtool 持久化 + Transactions 过滤（114/114 匹配）

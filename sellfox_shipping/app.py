@@ -2123,9 +2123,81 @@ async def package_sku_label_download(package_sn: str, inline: bool = False):
         raise
 
 
+def _print_group_meta(warehouse_name: str, tongtool_warehouse: str):
+    """返回 (group_key, label, has_sticker) 或 None（不支持分组的包裹）。
+
+    美东只打面单（无背贴）；美中按通途发货仓库分成品仓/其他仓，均含背贴。
+    """
+    if warehouse_name == "CENTRADE":
+        return ("east", "美东", False)
+    if warehouse_name == "DANEEY":
+        if tongtool_warehouse == "FZH-DANEEY-成品仓":
+            return ("meizhong_chengpin", "美中-成品仓", True)
+        if tongtool_warehouse in (
+            "FZH-DANEEY-皮壳仓库",
+            "FZH-DANEEY-退货产品仓",
+            "FZH-DANEEY-半成品仓",
+        ):
+            return ("meizhong_qita", "美中-其他仓", True)
+        return None
+    return None
+
+
+@app.post("/api/packages/batch-print-groups")
+async def batch_print_groups(request: Request):
+    """返回所选包裹的仓库分组信息（供打印弹窗一级 tab）。"""
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "Invalid JSON body")
+    package_sns: list[str] = body.get("package_sns", [])
+    if not package_sns:
+        raise HTTPException(400, "No package_sns provided")
+
+    account_key = config["sellfox"]["proxy_account"]
+    repo = _get_package_repository()
+
+    groups: dict[str, dict] = {}
+    skipped: list[dict] = []
+    for sn in package_sns:
+        record = repo.get(account_key, sn)
+        if record is None:
+            skipped.append({"package_sn": sn, "reason": "包裹不存在"})
+            continue
+        warehouse_name = record.logistics.warehouse_name or ""
+        tongtool_mark = repo.get_tongtool_mark(account_key=account_key, package_sn=sn) or {}
+        tongtool_warehouse = tongtool_mark.get("tongtool_shipping_warehouse") or ""
+
+        meta = _print_group_meta(warehouse_name, tongtool_warehouse)
+        if meta is None:
+            if warehouse_name == "DANEEY":
+                skipped.append({"package_sn": sn, "reason": "通途发货仓库为空"})
+            else:
+                skipped.append({
+                    "package_sn": sn,
+                    "reason": f"仓库 {warehouse_name or '未知'} 暂不支持分仓打印",
+                })
+            continue
+        group_key, label, has_sticker = meta
+        if group_key not in groups:
+            groups[group_key] = {
+                "key": group_key,
+                "label": label,
+                "count": 0,
+                "has_sticker": has_sticker,
+            }
+        groups[group_key]["count"] += 1
+
+    return {"groups": list(groups.values()), "skipped": skipped}
+
+
 @app.post("/api/packages/batch-print")
 async def batch_print_packages(request: Request):
-    """Merge label/sticker PDFs for selected packages into one preview."""
+    """Merge label/sticker PDFs for selected packages into one preview.
+
+    Body: {"package_sns": [...], "document_type": "sticker"|"label"|"both", "group_key": optional}
+    group_key 用于按仓库过滤（east / meizhong_chengpin / meizhong_qita）。
+    """
     import io, tempfile, traceback
     import fitz
 
@@ -2135,6 +2207,7 @@ async def batch_print_packages(request: Request):
         raise HTTPException(400, "Invalid JSON body")
     package_sns: list[str] = body.get("package_sns", [])
     doc_type: str = body.get("document_type", "both")
+    group_key: str | None = body.get("group_key")
     if not package_sns:
         raise HTTPException(400, "No package_sns provided")
 
@@ -2153,6 +2226,15 @@ async def batch_print_packages(request: Request):
         record = repo.get(account_key, sn)
         if record is None:
             continue
+
+        # 按仓库过滤（可选）
+        if group_key:
+            warehouse_name = record.logistics.warehouse_name or ""
+            tongtool_mark = repo.get_tongtool_mark(account_key=account_key, package_sn=sn) or {}
+            tongtool_warehouse = tongtool_mark.get("tongtool_shipping_warehouse") or ""
+            meta = _print_group_meta(warehouse_name, tongtool_warehouse)
+            if meta is None or meta[0] != group_key:
+                continue
 
         # Anchor: package must have a valid (non-cancelled) label to be printed
         labels = repo.list_labels_for_package(account_key=account_key, package_sn=sn)
