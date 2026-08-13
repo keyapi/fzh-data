@@ -117,6 +117,10 @@ The semi-finished/auxiliary items generated from a product template via the「�
 
 ## Integrations
 
+### Tongtool ERP2 Shared Rate Bucket
+
+通途 ERP2.0 的同一商户上游调用预算。2026-08-13 实测：两个独立 App 经 MCP 调用仍共用每分钟 5 次额度；主 App 连续 5 次成功后，第二 App 的首个同端点调用返回业务码 526。这不是每 App 独立额度。524 表示细粒度接口未授权，不能当作限流；所有 ERP2 自动化应合并计数、缓存和退避。
+
 ### DingTalk Custom Robot (钉钉自定义机器人)
 A webhook-based DingTalk group messaging channel used by AI agents (WorkBuddy, Claude Code) in this project to send notifications and file download links. Uses HMAC-SHA256 signing. Distinct from DingTalk enterprise internal bots — custom robots do not require AppKey/AppSecret and are scoped to a single group, making them safe to share with non-developer agent users. Cannot send file attachments directly; file delivery uses ActionCard messages with download links hosted on ERPNext.
 
