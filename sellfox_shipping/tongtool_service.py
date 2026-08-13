@@ -117,6 +117,39 @@ def _order_index(repo, account_key: str) -> dict[str, list[str]]:
     return repo.index_packages_by_external_order(account_key)
 
 
+def _warehouse_from_filename(filename: str) -> str:
+    """从通途上传文件名中提取发货仓库标识。
+
+    半成品必须在成品之前检查，因为"半成品"包含"成品"二字。
+    """
+    name = (filename or "").strip()
+    if not name:
+        return ""
+    if "皮壳" in name:
+        return "FZH-DANEEY-皮壳仓库"
+    if "退货" in name:
+        return "FZH-DANEEY-退货产品仓"
+    if "半成品" in name:
+        return "FZH-DANEEY-半成品仓"
+    if "成品" in name:
+        return "FZH-DANEEY-成品仓"
+    return ""
+
+
+def _shipping_method_from_filename(filename: str) -> str:
+    """从通途上传文件名中提取发货方式/承运商。
+
+    后续可扩展：尾程七条、vite、usps 等。
+    """
+    name = (filename or "").strip()
+    if not name:
+        return ""
+    if "蜴国际" in name:
+        return "蜴国际"
+    # 后续扩展点：尾程七条、vite、usps
+    return ""
+
+
 def match_and_mark(
     repo,
     *,
@@ -125,6 +158,7 @@ def match_and_mark(
     actor: str = "cli",
     en_interval_s: float = 0.0,
     max_workers: int = 4,
+    shipping_warehouse: str = "",
 ) -> TongtoolMatchResult:
     """读 xls → EN 查通途订单 → 匹配本地包裹 → 持久化 is_tongtool 标记。
 
@@ -137,6 +171,8 @@ def match_and_mark(
     result = TongtoolMatchResult(total=len(p_numbers))
     index = _order_index(repo, account_key)
     marked_sns: set[str] = set()
+    wh = shipping_warehouse or _warehouse_from_filename(str(xls_path))
+    sm = _shipping_method_from_filename(str(xls_path))
 
     def _lookup(p: str):
         order_id, status = lookup_tongtool_order(p)
@@ -182,6 +218,8 @@ def match_and_mark(
                     account_key=account_key,
                     package_sn=pkg_sn,
                     p_numbers=[p],
+                    shipping_warehouse=wh,
+                    shipping_method=sm,
                 )
                 marked_sns.add(pkg_sn)
 

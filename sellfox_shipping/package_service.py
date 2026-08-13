@@ -111,6 +111,8 @@ class PackageListRequest(BaseModel):
     date_field: str = "label"
     has_label: str | None = None
     tongtool: str | None = None
+    tongtool_warehouse: str | None = None
+    tongtool_method: str | None = None
     exclude_shops: list[str] = []
     limit: int = Field(default=50, ge=1, le=500)
     offset: int = Field(default=0, ge=0)
@@ -384,6 +386,8 @@ class ListPackagesService:
             date_field=request.date_field,
             has_label=request.has_label,
             tongtool=request.tongtool,
+            tongtool_warehouse=request.tongtool_warehouse,
+            tongtool_method=request.tongtool_method,
             exclude_shops=request.exclude_shops,
             limit=request.limit,
             offset=request.offset,
@@ -398,6 +402,8 @@ class ListPackagesService:
             date_field=request.date_field,
             has_label=request.has_label,
             tongtool=request.tongtool,
+            tongtool_warehouse=request.tongtool_warehouse,
+            tongtool_method=request.tongtool_method,
             exclude_shops=request.exclude_shops,
         )
         return PackageListResult(total=total, items=items)

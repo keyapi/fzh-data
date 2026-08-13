@@ -434,6 +434,17 @@ async def list_carriers():
     }
 
 
+@app.get("/api/lizard-services")
+async def list_lizard_services():
+    """Return known 蜴国际 service codes (sm_code) for dropdown selectors."""
+    _known = [
+        "FedEx-Ground-J-TX", "FedEx-21-AHS-TX", "FedEx-21-AHS-USEA",
+        "FedEx-Eco-21-TX", "FedEx-Economy-10-HOU", "FedEx-Economy-10-USEA",
+        "FedEx-Ground-20-OS-TX", "FedEx-Ground-J-USWE",
+    ]
+    return {"services": [{"value": s, "label": s} for s in _known]}
+
+
 @app.get("/api/rules")
 async def list_rules():
     return config.get("rules", [])
@@ -475,6 +486,8 @@ async def packages_page(
     has_label: str | None = Query(None),
     exclude_shops: str | None = Query(None),
     tongtool: str | None = Query(None),
+    tongtool_warehouse: str | None = Query(None),
+    tongtool_method: str | None = Query(None),
     limit: int = Query(50, le=500),
     offset: int = Query(0, ge=0),
 ):
@@ -485,6 +498,8 @@ async def packages_page(
     # tongtool 过滤只在 Transactions tab 生效；Dashboard / 包裹 tab 默认显示全部，
     # 避免 URL 残留的 tongtool=yes 误过滤其他页签。
     effective_tongtool = tongtool if tab == "transactions" else None
+    effective_tongtool_warehouse = tongtool_warehouse if tab == "transactions" else None
+    effective_tongtool_method = tongtool_method if tab == "transactions" else None
     result = _get_package_list_service().list(
         PackageListRequest(
             account_key=account_key,
@@ -496,6 +511,8 @@ async def packages_page(
             date_field=date_field,
             has_label=has_label or None,
             tongtool=effective_tongtool,
+            tongtool_warehouse=effective_tongtool_warehouse,
+            tongtool_method=effective_tongtool_method,
             exclude_shops=exclude_list if exclude_active else [],
             limit=limit,
             offset=offset,
@@ -515,6 +532,8 @@ async def packages_page(
             "tab": tab or "",
             "has_label": has_label or "",
             "tongtool": tongtool or "",
+            "tongtool_warehouse": tongtool_warehouse or "",
+            "tongtool_method": tongtool_method or "",
             "exclude_shops_active": exclude_active,
             "exclude_shops_list": exclude_list,
             "today": date.today().isoformat(),
@@ -2234,8 +2253,9 @@ async def batch_export_packages(request: Request):
     buf = io.StringIO()
     writer = csv.writer(buf)
     writer.writerow([
-        "包裹号", "赛狐状态", "本地审核", "渠道", "店铺", "追踪号", "站点",
+        "包裹号", "赛狐状态", "本地审核", "渠道", "店铺", "追踪号", "赛狐追踪号", "站点",
         "建议承运商", "匹配规则", "路由状态",
+        "通途包裹号", "通途发货仓库", "通途发货方式",
         "收货人", "电话", "城市/州", "邮编", "国家", "地址",
     ])
 
@@ -2253,6 +2273,30 @@ async def batch_export_packages(request: Request):
         address_line = addr.address_line_1 or ""
         if addr.address_line_2:
             address_line += " " + addr.address_line_2
+
+        # 通途标记（包裹号 / 发货仓库 / 发货方式）
+        tongtool_mark = repo.get_tongtool_mark(account_key=account_key, package_sn=sn) or {}
+        tongtool_p_numbers = tongtool_mark.get("tongtool_p_numbers") or ""
+        tongtool_warehouse = tongtool_mark.get("tongtool_shipping_warehouse") or ""
+        tongtool_method = tongtool_mark.get("tongtool_shipping_method") or ""
+
+        # 有效追踪号：优先取面单记录中非取消且带追踪号的最近一条；
+        # 赛狐追踪号：取基本信息中赛狐拉下来的原始追踪号。
+        sellfox_tracking = record.logistics.tracking_number or ""
+        effective_tracking = ""
+        try:
+            labels = repo.list_labels_for_package(
+                account_key=account_key, package_sn=sn
+            )
+            for lbl in labels:
+                if getattr(lbl, "status", None) == "cancelled":
+                    continue
+                t = (getattr(lbl, "tracking_number", "") or "").strip()
+                if t:
+                    effective_tracking = t
+                    break
+        except Exception:
+            pass
 
         # Routing: cached first, compute on-the-fly if missing
         route_label = route_rule = route_status = ""
@@ -2281,11 +2325,15 @@ async def batch_export_packages(request: Request):
             record.local_review_status or "",
             record.logistics.channel_name or "",
             record.shop_name or "",
-            record.logistics.tracking_number or "",
+            effective_tracking,
+            sellfox_tracking,
             record.marketplace or "",
             route_label,
             route_rule,
             route_status,
+            tongtool_p_numbers,
+            tongtool_warehouse,
+            tongtool_method,
             addr.name or "",
             phone,
             city_state,
@@ -2301,6 +2349,36 @@ async def batch_export_packages(request: Request):
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": "attachment; filename=packages_export.csv"},
     )
+
+
+@app.post("/api/packages/batch-review")
+async def batch_review(request: Request):
+    """Batch approve packages. Body: {"package_sns": [...], "actor": "..."}"""
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "Invalid JSON body")
+    package_sns: list[str] = body.get("package_sns", [])
+    actor: str = str(body.get("actor") or "web-user").strip()
+    if not package_sns:
+        raise HTTPException(400, "No package_sns provided")
+
+    account_key = config["sellfox"]["proxy_account"]
+    svc = _get_package_review_service()
+    results: list[dict] = []
+    for sn in package_sns:
+        try:
+            svc.review(PackageReviewRequest(
+                account_key=account_key,
+                package_sn=sn,
+                actor=actor,
+                decision="approved",
+                note="batch approved via UI",
+            ))
+            results.append({"package_sn": sn, "ok": True})
+        except Exception as exc:
+            results.append({"package_sn": sn, "ok": False, "error": str(exc)})
+    return {"results": results, "approved": sum(1 for r in results if r["ok"]), "total": len(package_sns)}
 
 
 @app.post("/api/packages/batch-create-labels")
@@ -2319,6 +2397,7 @@ async def batch_create_labels(request: Request):
         raise HTTPException(400, "Invalid JSON body")
     package_sns: list[str] = body.get("package_sns", [])
     carrier: str = str(body.get("carrier") or "auto").strip().lower()
+    service_level: str = str(body.get("service_level") or "").strip()
     actor: str = str(body.get("actor") or "web-user").strip()
     if not package_sns:
         raise HTTPException(400, "No package_sns provided")
@@ -2358,6 +2437,7 @@ async def batch_create_labels(request: Request):
                 package=record,
                 account_key=account_key,
                 actor=actor,
+                service_level=service_level,
             )
             success += 1
             results.append({

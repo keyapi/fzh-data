@@ -109,6 +109,8 @@ class PackageListItem(BaseModel):
     label_created_at: datetime | None = None
     is_tongtool: bool = False
     tongtool_p_numbers: str = ""
+    tongtool_shipping_warehouse: str = ""
+    tongtool_shipping_method: str = ""
 
 
 class PackageListResult(BaseModel):
