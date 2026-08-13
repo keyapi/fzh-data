@@ -2,6 +2,17 @@
 
 Shared domain vocabulary for this project — entities, named processes, and status concepts with project-specific meaning. Seeded with core domain vocabulary, then accretes as ce-compound and ce-compound-refresh process learnings; direct edits are fine. Glossary only, not a spec or catch-all.
 
+## Agent environment (Windows tooling)
+
+### Windows PowerShell 5.1
+系统自带的 Desktop 版 PowerShell（`powershell.exe`）。不支持 `&&`/`||`；在代码页 936（GBK）下默认 `Get-Content` 会把无 BOM 的 UTF-8 中文读乱；`Set-Content -Encoding UTF8` 会写入 UTF-8 **BOM**。
+
+### PowerShell 7 / pwsh
+跨平台 PowerShell（`pwsh.exe`），与 5.1 并存。支持 `&&`；默认更适合 UTF-8。本项目推荐 winget 安装稳定版 `Microsoft.PowerShell`（不要 Preview）。Agent 有 `pwsh` 时应优先使用。
+
+### env_doctor
+根目录脚本 `scripts/env_doctor.py`：按 OS 检测 Git/uv/node、PS 5.1/pwsh、代码页与 `windows-agent-shell` skill，**默认只打印建议**；`--probe` 跑 `&&`/UTF-8/BOM 对照；`--apply-ps7` 仅在用户明确同意后装 PS7。
+
 ## Unified AI access (ai_access_poc)
 
 ### 壳 PoC (Shell PoC)
