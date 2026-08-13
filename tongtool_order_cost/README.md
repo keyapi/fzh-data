@@ -4,7 +4,7 @@
 
 ## 做什么 / 不做什么
 
-- **做**：按规则时间窗、去重、系数/参考值写入、FBA 跳过尾程、衍生列重算；导出 before/after/Δ。
+- **做**：按规则时间窗、去重、系数/参考值写入、FBA 正数尾程跳过（负数账期差异写入）、衍生列重算；导出 before/after/Δ。
 - **不做**：完整复刻 1.4–1.5；不改 Google Sheet；不裁决「参考成本是否合理」。
 
 ## 快速开始
@@ -14,7 +14,7 @@ cd tongtool_order_cost
 
 uv run python scripts/run_audit_170.py \
   --orders "D:/Work/王忠于/成本核算/特殊规则AMZBAINAUS_2026年6月FBA订单和非FBA订单_order_cost_2026-08-06_15-00-53.xlsx" \
-  --rules "D:/Work/王忠于/成本核算/Jeck特殊规则-订单改销售额成本 20260812.xlsx" \
+  --rules "D:/Work/王忠于/成本核算/Jeck特殊规则-订单改销售额成本 20260813.xlsx" \
   --month 202606 \
   --account AMZBAINAUS \
   --fx-usd 6.8167 \
@@ -22,6 +22,8 @@ uv run python scripts/run_audit_170.py \
 ```
 
 汇率优先级：`--fx-file` > `--fx-usd` > 订单表 `汇率` 众数（会 WARN）。
+
+FBA 尾程：参考值 `>0`/`=0` 跳过；`<0` 按账期差异写入 `运费`（与 Colab 1.7.0 一致）。
 
 ## 审计簿 Sheet
 
