@@ -33,6 +33,7 @@ cookie.txt
 out/*
 missing_products/out/**
 !out/.gitkeep
+scripts/out/
 数据源/*
 !数据源/.gitkeep
 !数据源/README.txt
