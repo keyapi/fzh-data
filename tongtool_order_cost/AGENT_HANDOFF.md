@@ -12,7 +12,7 @@
 ```
 订单xlsx(未改成本) + 规则xlsx + FX
   → 时间窗过滤 → 6列去重 → attach FX → ￥参考值
-  → backup_* → coeff/ref 写入（FBA 跳过尾程）
+  → backup_* → coeff/ref 写入（FBA 正数尾程跳过；负数账期差异写入）
   → 重算产品成本/订单总成本/利润
   → change_events → 多 Sheet 审计 xlsx
 ```

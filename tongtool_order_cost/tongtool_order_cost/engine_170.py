@@ -478,11 +478,25 @@ def apply_special_rules(
                     continue
                 ref_usd = float(rule.get(ref_col))
                 if ref_col == "发货数量1订单尾程运费":
-                    f_tail = f & (~fba)
+                    # 正数尾程已含在 Amazon FBA 账期，FBA 行跳过以免重复计入。
+                    # 负数 = 账期差异冲减，FBA 也写入 运费。
+                    # 0 = 无差异占位，FBA 仍跳过（不覆盖已有尾程）。
+                    n_fba = int((f & fba).sum())
+                    if ref_usd < 0:
+                        f_tail = f
+                        if verbose and n_fba > 0:
+                            print(
+                                f"  FBA {n_fba} 行写入尾程差异 "
+                                f"(ref={ref_usd})"
+                            )
+                    else:
+                        f_tail = f & (~fba)
+                        if verbose and n_fba > 0:
+                            print(
+                                f"  FBA {n_fba} 行跳过尾程"
+                                f"（参考值 {ref_usd}，账期已含或无差异）"
+                            )
                     n_tail = int(f_tail.sum())
-                    n_fba_skip = int((f & fba).sum())
-                    if verbose and n_fba_skip > 0:
-                        print(f"  FBA {n_fba_skip} 行跳过尾程")
                     if n_tail == 0:
                         continue
                     apply_ref_per_unit(

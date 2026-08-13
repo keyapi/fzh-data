@@ -158,3 +158,33 @@ def test_unmatched_rule_recorded():
     )
     assert result.meta["n_applied"] == 0
     assert result.meta["n_unmatched"] == 1
+
+
+def test_fba_negative_lastmile_applies():
+    """FBA 尾程参考值为负数时写入 运费 = ref × 汇率 × 数量。"""
+    orders = _sample_orders()
+    rules = _sample_rules()
+    rules.loc[0, "发货数量1订单尾程运费"] = -5.59
+    fx, src = load_fx_table(fx_usd=7.0)
+    result = apply_special_rules(
+        orders, rules, "202606", fx, fx_source=src, verbose=False
+    )
+    df = result.orders
+    expected_fba = -5.59 * 7.0 * 1
+    expected_non_fba = -5.59 * 7.0 * 2
+    assert abs(float(df.loc[1, "运费"]) - expected_fba) < 1e-6
+    assert abs(float(df.loc[0, "运费"]) - expected_non_fba) < 1e-6
+
+
+def test_fba_zero_lastmile_still_skipped():
+    """FBA 尾程参考值 0 仍跳过，不覆盖已有运费。"""
+    orders = _sample_orders()
+    rules = _sample_rules()
+    rules.loc[0, "发货数量1订单尾程运费"] = 0.0
+    fx, src = load_fx_table(fx_usd=7.0)
+    result = apply_special_rules(
+        orders, rules, "202606", fx, fx_source=src, verbose=False
+    )
+    df = result.orders
+    assert abs(float(df.loc[1, "运费"]) - 9.0) < 1e-6
+    assert abs(float(df.loc[0, "运费"]) - 0.0) < 1e-6
