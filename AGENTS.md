@@ -75,17 +75,20 @@ uv sync
 # 4c. Tavily（AI 优化搜索，1000 次/月免费，推荐装）
 #     uv pip install mcp-tavily
 #     注册 → https://app.tavily.com/home → 获取 Key → 改 .codex/config.toml 里的 TAVILY_API_KEY
+# 4d. 通途 ERP2 MCP：填 tongtool_api/.env 后按宿主分别注册（clone 不会自动出现）
+#     Codex:  powershell -File tongtool_api/setup_codex_mcp.ps1（完全退出再开）
+#     Cursor: uv run python tongtool_api/setup_cursor_mcp.py（Customize→MCP 启用；未出现则重载窗口）
 
 # 5. 初始化 symlink（仅 Claude Desktop 需要；Codex 用户跳过此步）
 #    powershell -ExecutionPolicy Bypass -File setup.ps1
 
-# ⚠️ MCP 装完后必须重启 Codex（或 Claude Desktop），配置才会生效！
+# ⚠️ 通途 MCP：Codex 与 Cursor 要分别注册。仓库 `.cursor/` gitignore，没有可点的 Cursor 安装提示。
 ```
 
 
 > **首次打开项目时，Codex 弹窗问「是否信任此项目」→ 务必选「是」！**
 > 选「否」会导致 `.codex/config.toml` 里的 MCP 和 `.agents/skills/` 全部不加载。
-> MCP 安装完成后**必须重启 Codex**（不是新建对话，是完全退出再打开）。
+> MCP 安装完成后：**Codex 必须完全退出再打开**；**Cursor** 写完 `~/.cursor/mcp.json` 后先看工具目录，没有再 Customize → MCP 并重载窗口。
 >
 > 所有脚本通过 `uv run python <script.py>` 运行，不需要全局 Python / conda。
 > 如果 `uv` 不是命令，重新打开终端或手动加 `$env:Path += ";$env:USERPROFILE\.cargo\bin"`（Windows）或 `export PATH="$HOME/.cargo/bin:$PATH"`（Mac/Linux）。
@@ -122,7 +125,7 @@ uv sync
 | `new-api-dingtalk-oidc` | `new-api-dingtalk-oidc/` | 钉钉 OAuth → OIDC 桥接代理（FastAPI） |
 | `dam-prototype` | `dam-prototype/` | DAM 数字资产管理原型 |
 | `erpnext` | `erpnext/` | 工单排查 (setup→fetch→report 流水线) |
-| `tongtool-order-cost` | `tongtool_order_cost/` | 通途订单特殊规则 1.7.0 本地引擎 + 穿透审计 |
+| `tongtool-order-cost` | `tongtool_order_cost/` | 通途订单特殊规则 1.7.0 本地引擎 + Google Sheet SKU 改名 |
 | `erpnext-wo-audit` | `.agents/skills/erpnext-wo-audit/` | 工单排查 Skill，按触发词自动加载 |
 | `missing-products` | `.agents/skills/missing-products/` | 通途有库存 SKU → EN 产品客户码 → 赛狐产品 SKU 三方主线补齐/审计 |
 | `windows-agent-shell` | `.agents/skills/windows-agent-shell/` | Windows Agent shell：优先 pwsh、禁 bash/`&&`（5.1）、UTF-8 无 BOM |

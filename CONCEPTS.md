@@ -126,7 +126,21 @@ The semi-finished/auxiliary items generated from a product template via the「�
 ### 三方主线 (Tongtu-EN-Sellfox Mainline)
 从通途有库存 SKU 到 EN 产品成品变体、再到同编号的赛狐产品 SKU 的闭环。赛狐对象始终是 EN 产品 `item_code`，而非通途半成品原码；套件、非产品项、主体骨架和 PK#/HM1510 维护都必须在报告中单列，不得静默忽略或擅自写入。
 
+## 通途订单成本核算
+
+### 特殊规则（订单改销售额成本）
+运营在共享 Google Sheet 里按通途 SKU 改订单销售额或成本科目的规则。当前 notebook 1.7.0 读「和财务部共享」里的 Jeck 工作表。一行里系数模式与参考值模式不能共存；参考值按收款币种乘汇率再乘发货数量写入目标列。
+
+### 通途主档 SKU 改名
+通途允许修改货品主档上的 SKU 字符串。改名后，历史订单导出仍保留导出当时的名字，而规则表通常已是新名。精确匹配管道必须改订单侧旧名去对齐新名，而不是把规则改回旧名。
+
+### FBA 账期尾程差
+Amazon FBA 账期费用里已经包含平台履约尾程。特殊规则里对 FBA 填的负数尾程参考值表示「账期尾程减去目标尾程」的冲减，不是再加一笔正的尾程。零或正数对 FBA 仍应跳过，以免重复计入。
+
 ## Integrations
+
+### Cursor MCP vs Codex MCP
+通途官方 MCP 在两个宿主上要**分别注册**。Codex 写 `~/.codex/config.toml`（`setup_codex_mcp.ps1`）；Cursor 写 `~/.cursor/mcp.json`（`setup_cursor_mcp.py`）。仓库 `.cursor/` 整目录 gitignore，clone 不会带上项目级 `mcp.json`。通途不在 Cursor Marketplace，Agent 也没有可调用的「安装 MCP」对话框。Cursor 用户级服务器在工具目录里叫 `user-<mcp.json 键名>`。
 
 ### Tongtool ERP2 Shared Rate Bucket
 
@@ -139,3 +153,4 @@ A webhook-based DingTalk group messaging channel used by AI agents (WorkBuddy, C
 
 - "'五桶' had been used as if it meant IvyeaOps 五杠杆 — they are distinct (search-term labels vs optimizer action candidates)."
 - "Amazon Auto/product/category reports often put ASINs in the customer search-term column — that is real report data, not a mapping bug; keyword 收割 must not treat those strings as exact keywords (filter deferred as of 2026-07-28)."
+- "通途主档 SKU 改名后的旧名，与规则笔误（例如 Foam FBA BLACK-97），不是同一类问题；像旧名的字符串要先查主档。"

@@ -9,6 +9,10 @@ timestamp: 2026-08-13
 
 # Change Log
 
+## 2026-08-14
+- Added Cursor MCP registration: `setup_cursor_mcp.py` writes user-level `~/.cursor/mcp.json`. Same-chat `erp2_product_goodsquery` returned business 200. Secondary with the same URL did not appear in Cursor Available servers. No Marketplace install prompt.
+- HTTP `mcp_http.py` remains the CLI/script channel, not a silent substitute when Cursor MCP tools are missing.
+
 ## 2026-08-13 - Initial Foundation
 
 - Added dual-App local credential pattern and Codex MCP setup guidance.
