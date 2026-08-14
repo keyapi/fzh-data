@@ -57,7 +57,7 @@ resource: ../reconcile_pb.py
 - **样式继承被清空**：先捕获单元格引用再清空单元格，会连带清掉 fill。必须**显式**给区块填色，不靠继承。
 - **CSV 数值是文本**：按 `NUMERIC_COLS` 转数字，否则 `SUMIF`/CH 公式把文本当 0。
 - **NotUsed 文件夹**：递归 glob 会扫到 `NotUsed/invoice*.csv`（作废/重复），必须排除。
-- **发票日期错位**：批次 E 列是 PB 侧日期（按 UPS 实际发货），CSV 发货日可能差数天到数周；判定按 CSV 侧（SPS 发货日）。
+- **发票日期错位**：批次 E 列是 PB 侧发票日期（按 UPS 实际发货确认），**只可能等于或晚于我方 SPS 发票日期，不可能早**；判定按 CSV 侧（SPS 发货日）。
 - **PayPal/银行到账 vs 表格**：财务拿对账单查银行流水，表里只做账证一致性。
 
 ## 7. 参数配置（脚本顶部）
@@ -70,3 +70,15 @@ resource: ../reconcile_pb.py
 | `REMAP` | 双开票映射 `{批次发票号: CSV留用号}` |
 | `UNPAID_NOTES` | 本轮未付发票备注（UPS 核查结果） |
 | `DIFF_NOTE` | 差额说明模板（含历史多付常数） |
+
+## 8. TM 佣金结算表（tm_commission.py）
+
+每月 19-18 号账期给中间人 TM 结算 5% 佣金（英文 Excel）。从给财务表生成：
+
+- **PB Remittance Advice**：过滤 `Payment Date ∈ [账期]`（A-J + K 公式）。
+- **Invoice to PB**：发票日范围 = [首个有付款的发票日, 最后一个]（**含整天无付款日**）；取范围内 H 行发票号的**全部 H/D 行**（勿只按日期过滤，D 行日期列为空）。
+- **Notes**：A2-F2 日期、G2/H2 金额、I2=5%、J2=`=H2*I2`、K2 英文说明、E3/F3 Actual PB Payment Start/End（=账期首末付款日）、两个未付区块 + Difference。
+- **未付区块**：`Unpaid in last period, paid in this period`（上轮 TM 文件未付且本账期已付，空时 Total=0 勿写 SUM 空范围）；`Unpaid in this period`（范围内未付）。
+- **硬校验**：付款总额须与财务确认一致（`EXPECTED`）。
+- 关键事实：PB 邮件发票日期（E 列）按 UPS 实际发货确认，只可能等于或晚于我方，不可能早。
+

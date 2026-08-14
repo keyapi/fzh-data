@@ -32,7 +32,7 @@ Pottery Barn (PB) 通过 SPS 系统下单/发货。每月需要把 PB 邮件付�
    - 写公式无缓存值 → `wb.calculation.fullCalcOnLoad = True` 强制重算（Notes G2/H2/H86、K/CG/CH）。
    - 先捕获单元格引用再清空会连带清掉 fill → 显式填色（本轮未付黄 `FFFFFF00`、已付绿 `FF92D050`）。
    - CSV 数值是文本 → `NUMERIC_COLS` 里转数字，否则 SUMIF/CH 把文本当 0。
-6. **UPS 交付核查**。批次 E 列是 PB 侧日期（按 UPS 实际发货），与 CSV 发货日可能差数天到数周。未付发票 → invoice CSV 拿 PO → 日文件夹 `shipment*.csv` 拿 UPS 跟踪号 → 浏览器查 `ups.com/track`（"We Have Your Package" = 仓库实际发货，PB 按此付款）→ 校验交付地址与收货地址一致 → 交付晚于账期截止 = 迟发顺延下账期，非 PB 漏结算。
+6. **UPS 交付核查**。批次 E 列是 PB 侧发票日期（按 UPS 实际发货确认，**只可能等于或晚于我方 SPS 发票日期**）。未付发票 → invoice CSV 拿 PO → 日文件夹 `shipment*.csv` 拿 UPS 跟踪号 → 浏览器查 `ups.com/track`（"We Have Your Package" = 仓库实际发货，PB 按此付款）→ 校验交付地址与收货地址一致 → 交付晚于账期截止 = 迟发顺延下账期，非 PB 漏结算。
 
 ## Why This Matters
 
