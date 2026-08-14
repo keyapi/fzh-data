@@ -31,3 +31,5 @@ metadata:
 - MCP -32602: 工具输入未通过 MCP schema。
 
 当前按同一商户合计最多 5 次 ERP2 业务调用/分钟限流；2026-08-13 已通过双 App MCP 判别实验确认：主 App 的 5 次成功后，第二 App 第 1 次即触发 526。MCP 不会绕开通途 API 限额。完整证据见 tongtool_api/docs/research/2026-08-13-rate-limit-experiment.md。
+
+**Cursor 当前未注册通途 MCP。** Codex 可用 `tongtool_api/setup_codex_mcp.ps1` 写入 `~/.codex/config.toml`。在 Cursor 里查货品/订单：用 `tongtool_api/.env` + `tongtool_api/mcp_http.py`（或 `tongtool_order_cost/scripts/lookup_tongtool_sku.py`）。把 MCP 装进 Cursor 是后续独立 PR；触发词：「给 Cursor 安装通途 MCP」「Cursor 没有 tongtool MCP」。

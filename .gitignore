@@ -24,6 +24,7 @@ venv/
 
 # env files (secrets)
 .env
+secrets/*.json
 *.cookie.txt
 cookie.txt
 **/docs/api-reference/llms_parsed.json
@@ -33,6 +34,7 @@ cookie.txt
 out/*
 missing_products/out/**
 !out/.gitkeep
+tongtool_order_cost/out/
 scripts/out/
 数据源/*
 !数据源/.gitkeep

@@ -4,8 +4,8 @@
 
 ## 做什么 / 不做什么
 
-- **做**：按规则时间窗、去重、系数/参考值写入、FBA 正数尾程跳过（负数账期差异写入）、衍生列重算；导出 before/after/Δ。
-- **不做**：完整复刻 1.4–1.5；不改 Google Sheet；不裁决「参考成本是否合理」。
+- **做**：按规则时间窗、去重、系数/参考值写入、FBA 正数尾程跳过（负数账期差异写入）、衍生列重算；导出 before/after/Δ。通途主档改名后，可把订单 Google Sheet 的旧 SKU 改成井维护的新名（须 dry-run + 用户确认）。
+- **不做**：完整复刻 1.4–1.5；不裁决「参考成本是否合理」；不把规则表改回旧 SKU 名。
 
 ## 快速开始
 
@@ -41,12 +41,24 @@ FBA 尾程：参考值 `>0`/`=0` 跳过；`<0` 按账期差异写入 `运费`（
 
 ```bash
 cd tongtool_order_cost
-uv run pytest tests/test_engine_170_ref.py -q
+uv run pytest tests/test_engine_170_ref.py tests/test_sku_map.py -q
 ```
+
+## Google Sheet SKU 改名
+
+```bash
+uv run python tongtool_order_cost/scripts/bootstrap_gsheets_credentials.py
+uv run python tongtool_order_cost/scripts/remap_gsheet_sku.py --sheet 通途订单202606
+uv run python tongtool_order_cost/scripts/remap_gsheet_sku.py --sheet 通途订单202606 --apply
+uv run python tongtool_order_cost/scripts/lookup_tongtool_sku.py BNFBAvelvetgray60
+```
+
+凭证见 [docs/reference/gsheets-credentials.md](docs/reference/gsheets-credentials.md)。
 
 ## 数据文件
 
 `数据源/` 与 `out/` 默认 gitignore，大 xlsx **不要**提交进仓库。用 CLI 绝对路径即可。
+`secrets/*.json` 与 `tongtool_order_cost/.env` 也 gitignore。
 
 ## Agent 入口
 

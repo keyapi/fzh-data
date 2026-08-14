@@ -23,6 +23,8 @@ dependencies = [
     "alembic>=1.18.5",
     "pymupdf>=1.28.0",
     "reportlab>=5.0.0",
+    "gspread>=6.2.1",
+    "google-auth>=2.56.3",
 ]
 
 [tool.hatch.build.targets.wheel]

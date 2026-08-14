@@ -10,6 +10,7 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-08-14 | 通途主档 SKU 改名后用本地 gspread 对齐订单 Google Sheet | [workflow-issues/tongtool-sku-rename-gsheet-remap.md](workflow-issues/tongtool-sku-rename-gsheet-remap.md) |
 | 2026-08-13 | Windows Codex/Cursor：PowerShell 5.1 && 与 GBK/UTF-8 对照及 env_doctor | [developer-experience/windows-codex-powershell-utf8.md](developer-experience/windows-codex-powershell-utf8.md) |
 | 2026-08-11 | 通途有库存 SKU 三方主线补齐惯例 | [conventions/tongtu-en-sellfox-instock-sku-mainline.md](conventions/tongtu-en-sellfox-instock-sku-mainline.md) |
 | 2026-08-11 | Amazon 在线商品配对的分层候选与运营确认流程 | [conventions/amazon-online-product-pairing-candidate-workflow.md](conventions/amazon-online-product-pairing-candidate-workflow.md) |

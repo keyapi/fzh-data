@@ -4,7 +4,7 @@ type: Guide
 title: Tongtool MCP Setup
 description: Secure local and team setup for two Tongtool ERP2.0 MCP applications in Codex.
 tags: [tongtool, mcp, codex, credentials]
-timestamp: 2026-08-13
+timestamp: 2026-08-14
 ---
 
 # Tongtool MCP Setup
@@ -30,3 +30,7 @@ The script manages a marked block in user-level ~/.codex/config.toml. Credential
 - Headers: x-tongtool-access-key and x-tongtool-secret-key
 
 Do not add real headers to project .codex/config.toml. Project config is committed and shared.
+
+## Cursor vs Codex
+
+`setup_codex_mcp.ps1` only writes Codex user config (`~/.codex/config.toml`). Cursor IDE MCP is a separate registration (not done as of 2026-08-14). Until a Cursor MCP PR lands, agents in Cursor should call `https://mcp.tongtool.com/mcp` via `tongtool_api/mcp_http.py` using `tongtool_api/.env`. Trigger for that follow-up: 「给 Cursor 安装通途 MCP」.
