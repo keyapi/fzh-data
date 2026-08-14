@@ -55,7 +55,7 @@ def decide_v2(
         top = ranked[0]
         if top.score >= 80 and top.hard_conflicts == 0 and not top.is_strong_conflict:
             bucket = "strong_single"
-        elif top.evidence == ("family_candidate",) and top.score < 10:
+        elif set(top.evidence) <= {"family_candidate", "msku_affinity"} and top.score < 70:
             bucket = "low_candidate"
         else:
             bucket = "candidate"

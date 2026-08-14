@@ -4,6 +4,7 @@ import json
 import os
 import re
 from dataclasses import dataclass
+from pathlib import Path
 
 import requests
 
@@ -97,6 +98,18 @@ def build_judge_prompt(
     )
 
 
+def _dashscope_api_key() -> str | None:
+    key = os.getenv("DASHSCOPE_API_KEY")
+    if key:
+        return key
+    env_path = Path(__file__).resolve().parents[1] / ".env"
+    if env_path.exists():
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            if line.startswith("DASHSCOPE_API_KEY="):
+                return line.split("=", 1)[1].strip().strip('"').strip("'")
+    return None
+
+
 def judge_via_dashscope(
     prompt: str,
     listing_id: str,
@@ -104,7 +117,7 @@ def judge_via_dashscope(
     api_key: str | None = None,
     model: str = "qwen3.7-flash",
 ) -> JudgeResult | None:
-    key = api_key or os.getenv("DASHSCOPE_API_KEY")
+    key = api_key or _dashscope_api_key()
     if not key:
         return None
     response = requests.post(

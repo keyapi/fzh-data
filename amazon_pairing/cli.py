@@ -20,7 +20,8 @@ from missing_products.audit_three_systems import (
 from SELLFOX_API.client import SellfoxClient, SellfoxConfig
 
 from .catalog import build_candidate_catalog, load_catalog, save_catalog
-from .evidence import EvidenceIndex
+from .evidence import EvidenceIndex, merge_evidence
+from .identifiers import IdentifierAffinityIndex
 from .v2 import decide_v2
 from .fallback import build_fallback_evidence
 from .v2_report import write_v2_workbook
@@ -243,6 +244,36 @@ def train_pilot(args: argparse.Namespace) -> int:
     print(json.dumps(report, ensure_ascii=False, indent=2))
     return 0
 
+def train_family(args: argparse.Namespace) -> int:
+    labels = pd.read_csv(args.labels, dtype=str).fillna("")
+    labels = labels[labels["usable_for_training"].astype(str).str.lower() == "true"]
+    catalog = load_catalog(args.catalog)
+    valid_skus = {product.sku for product in catalog}
+    rows = [
+        TrainingListing(
+            msku=str(row.get("msku") or ""),
+            title=str(row.get("title") or ""),
+            asin=str(row.get("asin") or ""),
+            target_sku=str(row.get("target_sku") or ""),
+            family=str(row.get("target_sku") or "").split("-", 1)[0],
+        )
+        for _, row in labels.drop_duplicates(subset=["msku", "target_sku"]).iterrows()
+        if row.get("target_sku") in valid_skus
+    ]
+    classifier = FamilyClassifier(seed=args.seed).fit(rows)
+    args.output.mkdir(parents=True, exist_ok=True)
+    classifier.save(args.output / "family_classifier_all.joblib")
+    summary = {
+        "listings": len(rows),
+        "families": len(set(row.family for row in rows)),
+        "seed": args.seed,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    (args.output / "family_summary.json").write_text(
+        json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    print(json.dumps(summary, ensure_ascii=False, indent=2))
+    return 0
 
 def suggest_active(args: argparse.Namespace) -> int:
     main = args.main_workspace.resolve()
@@ -396,18 +427,31 @@ def suggest_v2(args: argparse.Namespace) -> int:
         [unmatched[position].raw for position in fallback_positions],
         catalog,
     ) if fallback_positions else []
-    if fallback_positions and args.family_model.exists():
-        family_model = FamilyClassifier.load(args.family_model)
-        predicted_families = [
-            tuple(name for name, _ in family_model.predict(row.msku, row.title, top_k=2))
-            for row in (unmatched[position] for position in fallback_positions)
-        ]
-        fallback_maps = build_fallback_evidence(
-            [unmatched[position].raw for position in fallback_positions],
-            catalog,
-            predicted_families=predicted_families,
+    if fallback_positions:
+        model_path = args.family_model
+        if not model_path.exists():
+            legacy_model = ROOT / "amazon_pairing/out/model/family_classifier.joblib"
+            if legacy_model.exists():
+                model_path = legacy_model
+        if model_path.exists():
+            family_model = FamilyClassifier.load(model_path)
+            predicted_families = [
+                tuple(name for name, _ in family_model.predict(row.msku, row.title, top_k=5))
+                for row in (unmatched[position] for position in fallback_positions)
+            ]
+            fallback_maps = build_fallback_evidence(
+                [unmatched[position].raw for position in fallback_positions],
+                catalog,
+                predicted_families=predicted_families,
+            )
+    affinity_index = IdentifierAffinityIndex.build([row.raw for row in matched])
+    fallback_indexes = {
+        position: merge_evidence(
+            affinity_index.candidates_for_listing(unmatched[position].raw, max_targets=20),
+            fallback_maps[map_position],
         )
-    fallback_indexes = dict(zip(fallback_positions, fallback_maps))
+        for map_position, position in enumerate(fallback_positions)
+    }
     decisions = [
         (
             row.raw,
@@ -493,6 +537,12 @@ def build_parser() -> argparse.ArgumentParser:
     train.add_argument("--validation-fraction", type=float, default=0.2)
     train.add_argument("--seed", type=int, default=42)
     train.set_defaults(func=train_pilot)
+    train_all = sub.add_parser("train-family", help="Train the all-family candidate classifier")
+    train_all.add_argument("--labels", type=Path, default=ROOT / "amazon_pairing/out/labels/historical_label_audit.csv")
+    train_all.add_argument("--catalog", type=Path, default=ROOT / "amazon_pairing/out/catalog/candidate_catalog.json")
+    train_all.add_argument("--output", type=Path, default=ROOT / "amazon_pairing/out/model")
+    train_all.add_argument("--seed", type=int, default=42)
+    train_all.set_defaults(func=train_family)
     suggest = sub.add_parser("suggest-active", help="Build the read-only active-unpaired review workbook")
     suggest.add_argument("--main-workspace", type=Path, default=DEFAULT_MAIN)
     suggest.add_argument("--unmatched-cache", type=Path)
@@ -510,7 +560,7 @@ def build_parser() -> argparse.ArgumentParser:
     v2.add_argument("--unmatched-cache", type=Path)
     v2.add_argument("--matched-cache", type=Path)
     v2.add_argument("--catalog", type=Path, default=ROOT / "amazon_pairing/out/catalog/candidate_catalog.json")
-    v2.add_argument("--family-model", type=Path, default=ROOT / "amazon_pairing/out/model/family_classifier.joblib")
+    v2.add_argument("--family-model", type=Path, default=ROOT / "amazon_pairing/out/model/family_classifier_all.joblib")
     v2.add_argument("--output", type=Path, default=ROOT / f"amazon_pairing/out/Amazon在售未配对证据图审核_{datetime.now():%Y%m%d_%H%M%S}.xlsx")
     v2.set_defaults(func=suggest_v2)
     feedback = sub.add_parser("import-feedback", help="Validate and append human review feedback")

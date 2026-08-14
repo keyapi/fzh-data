@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from .attributes import extract_attributes
+from .attributes import extract_attributes, merge_attributes
 from .candidates import CandidateProduct
 from .evidence import EVIDENCE_ORDER, STRONG_EVIDENCE
 from .ontology import ObjectClassification, classify_listing_object, normalize_size_terms
@@ -14,6 +14,7 @@ EVIDENCE_SCORE = {
     "asin_shop": 105,
     "asin": 100,
     "fnsku": 90,
+    "msku_affinity": 55,
     "main_image": 85,
     "title_exact": 60,
     "parent_asin": 40,
@@ -105,10 +106,17 @@ def rank_candidates(
         fulfillment=listing.get("switchFulfillmentTo", listing.get("fulfillment", "")),
     )
     text = f"{listing.get('sku', '')} {listing.get('title', '')}"
-    attrs = extract_attributes(text)
-    size_terms = tuple(normalize_size_terms(text))
+    attrs = merge_attributes(
+        extract_attributes(listing.get("title", "")),
+        extract_attributes(listing.get("sku", ""), word_boundaries=False),
+    )
+    size_terms = tuple(normalize_size_terms(listing.get("title", "")))
+    agreement_size_terms = tuple(
+        normalize_size_terms(listing.get("sku", ""), allow_bare=True)
+    )
     reliable_size = attrs.size.values if attrs.size.reliable else ()
     sizes = tuple(dict.fromkeys((*reliable_size, *size_terms)))
+    agreement_sizes = tuple(dict.fromkeys((*sizes, *agreement_size_terms)))
 
     strong_targets = {
         sku
@@ -135,7 +143,7 @@ def rank_candidates(
         base = max(EVIDENCE_SCORE.get(reason, 0) for reason in reasons)
         base += sum(1 for reason in reasons if reason not in {"parent_asin", "parent_sku"})
         agreements = 0
-        if sizes and _agreement(sizes, product.attributes.size.values):
+        if agreement_sizes and _agreement(agreement_sizes, product.attributes.size.values):
             agreements += 1
         if _color_agreement(attrs.color.values, product.attributes.color.values):
             agreements += 1

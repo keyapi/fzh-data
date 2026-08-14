@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .attributes import extract_attributes
+from .attributes import extract_attributes, merge_attributes
 from .candidates import CandidateProduct
 from .ontology import classify_listing_object
 from .training import CandidateRetriever
@@ -62,7 +62,10 @@ def build_fallback_evidence(
                     row.get("sku", ""),
                     row.get("title", ""),
                     families,
-                    extract_attributes(f"{row.get('sku', '')} {row.get('title', '')}"),
+                    merge_attributes(
+                        extract_attributes(row.get("title", "")),
+                        extract_attributes(row.get("sku", ""), word_boundaries=False),
+                    ),
                 ),
             )
         )

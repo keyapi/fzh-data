@@ -102,7 +102,7 @@ def _decimal(value: Decimal) -> str:
     return format(rounded, "f").rstrip("0").rstrip(".")
 
 
-def normalize_size_terms(text: str) -> list[str]:
+def normalize_size_terms(text: str, allow_bare: bool = False) -> list[str]:
     lowered = _text(text).lower().replace("×", "x").replace("*", "x")
     values: list[str] = []
 
@@ -123,4 +123,11 @@ def normalize_size_terms(text: str) -> list[str]:
             values.append(size)
             lowered = lowered.replace(term, " ")
 
+    if allow_bare and not values:
+        values.extend(
+            value
+            for value in re.findall(r"\d+", lowered)
+            if len(value) in (2, 3)
+            if value not in values
+        )
     return list(dict.fromkeys(values))

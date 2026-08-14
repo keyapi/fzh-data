@@ -18,6 +18,13 @@ EVIDENCE_ORDER = (
 
 STRONG_EVIDENCE = {"msku", "asin_shop", "asin", "fnsku"}
 
+def merge_evidence(*maps: dict[str, tuple[str, ...]]) -> dict[str, tuple[str, ...]]:
+    merged: dict[str, tuple[str, ...]] = {}
+    for evidence in maps:
+        for target, reasons in evidence.items():
+            merged[target] = tuple(dict.fromkeys((*merged.get(target, ()), *reasons)))
+    return merged
+
 
 def _text(value) -> str:
     if value is None:

@@ -64,18 +64,45 @@ def _decimal_text(value: Decimal) -> str:
     return format(rounded, "f").rstrip("0").rstrip(".")
 
 
-def _terms(text: str, terms: tuple[tuple[str, str], ...]) -> tuple[str, ...]:
+def _terms(
+    text: str,
+    terms: tuple[tuple[str, str], ...],
+    word_boundaries: bool = True,
+) -> tuple[str, ...]:
     found: list[str] = []
     remaining = text
     for token, normalized in terms:
-        pattern = rf"(?<![a-z0-9]){re.escape(token)}(?![a-z0-9])"
+        escaped = re.escape(token)
+        pattern = (
+            rf"(?<![a-z0-9]){escaped}(?![a-z0-9])"
+            if word_boundaries
+            else escaped
+        )
         if re.search(pattern, remaining) and normalized not in found:
             found.append(normalized)
             remaining = re.sub(pattern, " ", remaining)
     return tuple(found)
 
 
-def extract_attributes(text: str) -> ListingAttributes:
+def merge_attributes(
+    base: ListingAttributes,
+    extra: ListingAttributes,
+) -> ListingAttributes:
+    def merge_value(left: AttributeValue, right: AttributeValue) -> AttributeValue:
+        return AttributeValue(
+            tuple(dict.fromkeys((*left.values, *right.values))),
+            left.reliable or right.reliable,
+        )
+
+    return ListingAttributes(
+        size=merge_value(base.size, extra.size),
+        color=merge_value(base.color, extra.color),
+        fabric=merge_value(base.fabric, extra.fabric),
+        count=merge_value(base.count, extra.count),
+    )
+
+
+def extract_attributes(text: str, word_boundaries: bool = True) -> ListingAttributes:
     lowered = text.lower().replace("×", "x")
     size_values: tuple[str, ...] = ()
     size_reliable = False
@@ -108,8 +135,11 @@ def extract_attributes(text: str) -> ListingAttributes:
 
     count = re.search(r"\b(\d+)\s*(?:piece|pack|pcs?)\b", lowered)
     count_value = AttributeValue((count.group(1),), True) if count else AttributeValue()
-    colors = _terms(lowered, COLOR_TERMS)
-    fabrics = tuple(normalize_fabric(value) for value in _terms(lowered, FABRIC_TERMS))
+    colors = _terms(lowered, COLOR_TERMS, word_boundaries)
+    fabrics = tuple(
+        normalize_fabric(value)
+        for value in _terms(lowered, FABRIC_TERMS, word_boundaries)
+    )
     return ListingAttributes(
         size=AttributeValue(size_values, size_reliable),
         color=AttributeValue(colors, bool(colors)),

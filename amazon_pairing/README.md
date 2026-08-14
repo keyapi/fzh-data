@@ -13,9 +13,8 @@ timestamp: 2026-08-14
 ## 运行
 
 ```powershell
+uv run python -m amazon_pairing.cli train-family
 uv run python -m amazon_pairing.cli suggest-v2 --output amazon_pairing/out/Amazon在售未配对证据图审核_YYYYMMDD_HHMMSS.xlsx
 ```
-
-V1 的 `build-labels`、`snapshot-catalog`、`train-pilot`、`suggest-active` 仍保留。V2 会读取 `missing_products/out/pairing_cache` 和 `amazon_pairing/out/catalog`。
 
 模型、缓存、工作簿和反馈保存在 `amazon_pairing/out/`，该目录已忽略。完整口径和已验证快照见 [AGENT_HANDOFF.md](AGENT_HANDOFF.md)。
