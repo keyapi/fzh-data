@@ -42,6 +42,15 @@ REMAP = {"INV0580626000011541": "INV0580626000011530"}
 REMAP_NOTE = "PB重复 弃用1541 留用1530"
 # 差额说明模板（{} 填本轮未付合计）；-195/-32.5 为历史多付常数，见 Notes 相关区块
 DIFF_NOTE = "多付的 -195  -  多付的32.5 = -227.50 + 未付{}"
+# 本轮未付发票备注（写在 Notes"本轮未付"区块 N 列）：
+# 实际发货日 = UPS "We Have Your Package" 日期（仓库实际发货日，PB 按此付款）；跟踪号来自 shipment CSV
+UNPAID_NOTES = {
+    "INV0580626000011362": "UPS实际发货07/30 交付08/04 跟踪1ZC0019E0301406005",
+    "INV0580626000011507": "UPS实际发货07/20 交付07/23 跟踪1ZC0019E0314557560",
+    "INV0580626000011521": "UPS实际发货07/20 交付07/23 跟踪1ZC0019E0318578736",
+    "INV0580626000011528": "UPS实际发货07/20 交付07/23 跟踪1ZC0019E0327032370",
+    "INV0580626000011535": "UPS实际发货07/20 交付07/23 跟踪1ZC0019E0329334504",
+}
 # ==============================================================
 
 # 颜色标记：黄 = 本轮未付；绿 = 之前未付本轮已付（浅绿）
@@ -424,6 +433,9 @@ def main():
             put(r, 12, d, data_font, YELLOW)
         if amt is not None:
             put(r, 13, amt, data_font, YELLOW, amt_fmt)
+        note = UNPAID_NOTES.get(inv)
+        if note:
+            put(r, 14, note, data_font, YELLOW)
         r += 1
     unpaid_total_row = r
     put(unpaid_total_row, 11, "金额合计", data_font, YELLOW)
