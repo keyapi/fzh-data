@@ -34,6 +34,7 @@ out/*
 missing_products/out/**
 amazon_pairing/out/**
 !out/.gitkeep
+scripts/out/
 数据源/*
 !数据源/.gitkeep
 !数据源/README.txt

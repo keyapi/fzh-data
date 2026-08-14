@@ -387,17 +387,14 @@
                 <h3>Print Shipping Documents — 已选 <span id="pm-count">0</span> 个包裹</h3>
                 <button class="pm-close" onclick="closePrintModal()">✕</button>
             </div>
-            <div class="pm-tabs" id="pm-tabs">
-                <button data-type="sticker" onclick="switchDocType('sticker')">背贴</button>
-                <button data-type="label" onclick="switchDocType('label')">Label 面单</button>
-                <button data-type="both" class="active" onclick="switchDocType('both')">面单 + 背贴</button>
-            </div>
+            <div class="pm-tabs" id="pm-warehouse-tabs" style="border-bottom:none;"></div>
+            <div class="pm-tabs" id="pm-doctype-tabs"></div>
             <div class="pm-body" id="pm-body">
                 <div class="loading">正在生成预览...</div>
             </div>
             <div class="pm-footer">
                 <span class="info" id="pm-skipped"></span>
-                <div>
+                <div id="pm-footer-buttons">
                     <button class="btn-download" onclick="downloadMerged()">下载 PDF</button>
                     <button class="btn-print" onclick="printMerged()">打印</button>
                 </div>
@@ -581,40 +578,99 @@
             updateBatchBar();
         }
 
-        // ── Print modal ──
+        // ── Print modal（两级页签：仓库 → 文档类型） ──
+        var printGroups = [];
+        var selectedGroupKey = '';
         function openPrintModal() {
             var sns = getSelected();
             if (sns.length === 0) return;
             document.getElementById('pm-count').textContent = sns.length;
-            document.getElementById('pm-body').innerHTML = '<div class="loading">正在生成预览...</div>';
             document.getElementById('pm-skipped').textContent = '';
             document.getElementById('print-modal').classList.add('visible');
-            loadPreview(sns);
+            loadPrintGroups(sns);
         }
         function closePrintModal() {
             document.getElementById('print-modal').classList.remove('visible');
         }
-        function switchDocType(type) {
-            selectedDocType = type;
-            document.querySelectorAll('#pm-tabs button').forEach(function(b) { b.classList.toggle('active', b.getAttribute('data-type') === type); });
-            var sns = getSelected();
-            if (sns.length > 0) {
-                document.getElementById('pm-body').innerHTML = '<div class="loading">正在生成预览...</div>';
-                loadPreview(sns);
+        function loadPrintGroups(sns) {
+            fetch('/api/packages/batch-print-groups', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ package_sns: sns })
+            })
+            .then(function(resp) {
+                if (!resp.ok) return resp.text().then(function(t) { throw new Error(t); });
+                return resp.json();
+            })
+            .then(function(d) {
+                printGroups = d.groups || [];
+                var skipped = d.skipped || [];
+                if (skipped.length > 0) {
+                    document.getElementById('pm-skipped').textContent = '跳过 ' + skipped.length + ' 个包裹（无有效面单或仓库不支持）';
+                }
+                renderWarehouseTabs();
+            })
+            .catch(function(err) {
+                var msg = err.message;
+                try { var j = JSON.parse(msg); msg = j.detail || msg; } catch (e) {}
+                document.getElementById('pm-body').innerHTML = '<div class="loading" style="color:#721c24;">' + msg.replace(/</g, '&lt;') + '</div>';
+            });
+        }
+        function currentGroup() {
+            for (var i = 0; i < printGroups.length; i++) {
+                if (printGroups[i].key === selectedGroupKey) return printGroups[i];
+            }
+            return null;
+        }
+        function renderWarehouseTabs() {
+            var container = document.getElementById('pm-warehouse-tabs');
+            var html = '';
+            printGroups.forEach(function(g) {
+                html += '<button data-key="' + g.key + '" onclick="selectWarehouse(\'' + g.key + '\')">' + g.label + ' (' + g.count + ')</button>';
+            });
+            container.innerHTML = html;
+            if (printGroups.length > 0) {
+                selectWarehouse(printGroups[0].key);
+            } else {
+                document.getElementById('pm-doctype-tabs').innerHTML = '';
+                document.getElementById('pm-body').innerHTML = '<div class="loading">无可打印的包裹（均无有效面单）</div>';
+                document.getElementById('pm-footer-buttons').style.display = 'none';
             }
         }
-        var currentPreviewSns = [];
-        function loadPreview(sns) {
-            currentPreviewSns = sns;
-            // Cancel any in-flight request
+        function selectWarehouse(key) {
+            selectedGroupKey = key;
+            document.querySelectorAll('#pm-warehouse-tabs button').forEach(function(b) {
+                b.classList.toggle('active', b.getAttribute('data-key') === key);
+            });
+            renderDocTypeTabs();
+        }
+        function renderDocTypeTabs() {
+            var container = document.getElementById('pm-doctype-tabs');
+            var html = '';
+            html += '<button data-type="sticker" onclick="selectDocType(\'sticker\')">背贴</button>';
+            html += '<button data-type="label" onclick="selectDocType(\'label\')">Label 面单</button>';
+            html += '<button data-type="both" onclick="selectDocType(\'both\')">面单 + 背贴</button>';
+            container.innerHTML = html;
+            selectDocType('both');
+        }
+        function selectDocType(type) {
+            selectedDocType = type;
+            document.querySelectorAll('#pm-doctype-tabs button').forEach(function(b) {
+                b.classList.toggle('active', b.getAttribute('data-type') === type);
+            });
+            document.getElementById('pm-footer-buttons').style.display = '';
+            document.getElementById('pm-body').innerHTML = '<div class="loading">正在生成预览...</div>';
+            loadPreview();
+        }
+        function loadPreview() {
+            var sns = getSelected();
             if (previewAborter) previewAborter.abort();
             previewAborter = new AbortController();
             var signal = previewAborter.signal;
-
             fetch('/api/packages/batch-print', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ package_sns: sns, document_type: selectedDocType }),
+                body: JSON.stringify({ package_sns: sns, document_type: selectedDocType, group_key: selectedGroupKey }),
                 signal: signal
             })
             .then(function(resp) {
@@ -635,8 +691,19 @@
                     '<div class="loading" style="color:#721c24;white-space:pre-line;text-align:left;padding:20px;">' + msg.replace(/</g,'&lt;') + '</div>';
             });
         }
+        function currentDownloadFilename() {
+            var g = currentGroup();
+            var base = g ? g.label : '打印';
+            if (selectedDocType === 'sticker') {
+                return base + '_背贴.pdf';
+            }
+            if (base === '美东') {
+                return '美东-面单.pdf';
+            }
+            return base + '.pdf';
+        }
         function downloadMerged() {
-            if (currentBlobUrl) { var a = document.createElement('a'); a.href = currentBlobUrl; a.download = 'batch_print.pdf'; a.click(); }
+            if (currentBlobUrl) { var a = document.createElement('a'); a.href = currentBlobUrl; a.download = currentDownloadFilename(); a.click(); }
         }
         function printMerged() {
             if (currentBlobUrl) window.open(currentBlobUrl, '_blank');

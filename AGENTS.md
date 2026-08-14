@@ -52,6 +52,13 @@
 # 2. 安装项目依赖
 uv sync
 
+# 2.5 环境体检（按本机 OS 打印建议；默认不自动装软件）
+#     uv run python scripts/env_doctor.py
+#     Windows 常见建议：安装 PowerShell 7 稳定版（winget id Microsoft.PowerShell）、
+#     加载 windows-agent-shell skill，避免 && ParserError 与 GBK/UTF-8 乱码。
+#     需要对照探针时：uv run python scripts/env_doctor.py --probe
+#     ⚠️ 用户主权：把建议告诉用户，确认后再 winget / 改系统设置。不要擅自全量导入。
+
 # 3. 检查并安装 Node.js（如未安装则自动装）
 #    Agent 执行：先 `node --version` 检查，若不存在则：
 #    Windows:  winget install OpenJS.NodeJS.LTS --silent --accept-package-agreements
@@ -82,6 +89,8 @@ uv sync
 >
 > 所有脚本通过 `uv run python <script.py>` 运行，不需要全局 Python / conda。
 > 如果 `uv` 不是命令，重新打开终端或手动加 `$env:Path += ";$env:USERPROFILE\.cargo\bin"`（Windows）或 `export PATH="$HOME/.cargo/bin:$PATH"`（Mac/Linux）。
+>
+> Windows Agent：跑 shell 前加载 `.agents/skills/windows-agent-shell/SKILL.md`；优先 `pwsh`；禁止 PS 5.1 `Set-Content -Encoding UTF8`（BOM）。
 >
 > 如果同事 agent clone 后不知道怎么做，让它读本项目 AGENTS.md 的本节。
 ### 运行环境
@@ -116,6 +125,7 @@ uv sync
 | `tongtool-order-cost` | `tongtool_order_cost/` | 通途订单特殊规则 1.7.0 本地引擎 + 穿透审计 |
 | `erpnext-wo-audit` | `.agents/skills/erpnext-wo-audit/` | 工单排查 Skill，按触发词自动加载 |
 | `missing-products` | `.agents/skills/missing-products/` | 通途有库存 SKU → EN 产品客户码 → 赛狐产品 SKU 三方主线补齐/审计 |
+| `windows-agent-shell` | `.agents/skills/windows-agent-shell/` | Windows Agent shell：优先 pwsh、禁 bash/`&&`（5.1）、UTF-8 无 BOM |
 | `frappe-core-api` | — | ERPNext REST API 开发（外部 skill） |
 | `frappe-errors-api` | — | ERPNext API 错误处理（外部 skill） |
 

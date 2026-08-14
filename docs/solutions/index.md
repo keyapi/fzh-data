@@ -10,6 +10,7 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-08-13 | Windows Codex/Cursor：PowerShell 5.1 && 与 GBK/UTF-8 对照及 env_doctor | [developer-experience/windows-codex-powershell-utf8.md](developer-experience/windows-codex-powershell-utf8.md) |
 | 2026-08-11 | 通途有库存 SKU 三方主线补齐惯例 | [conventions/tongtu-en-sellfox-instock-sku-mainline.md](conventions/tongtu-en-sellfox-instock-sku-mainline.md) |
 | 2026-08-11 | Amazon 在线商品配对的分层候选与运营确认流程 | [conventions/amazon-online-product-pairing-candidate-workflow.md](conventions/amazon-online-product-pairing-candidate-workflow.md) |
 | 2026-08-07 | EN 物料/变体创建惯例 — 四层属性体系与配套物料 | [conventions/erpnext-item-variant-creation-convention.md](conventions/erpnext-item-variant-creation-convention.md) |
