@@ -374,10 +374,12 @@ def main():
             abn_rows.append((nws.cell(r, 11).value, nws.cell(r, 12).value, nws.cell(r, 13).value))
             r += 1
 
-    # 捕获样式（头行 + 数据行），再清空
-    hdr_k, hdr_l, hdr_m = nws["K46"], nws["L46"], nws["M46"]
-    data_k = nws["K52"] if nws["K52"].value else hdr_k
-    data_m = nws["M52"] if nws["M52"].value else hdr_m
+    # 捕获字体/格式（拷贝，避免清空时被改动），再清空
+    hdr_font = copy(nws["K46"].font)
+    data_font = copy(nws["K52"].font) if nws["K52"].value else copy(nws["K46"].font)
+    amt_fmt = nws["M52"].number_format
+    base_border = copy(nws["K46"].border)
+    base_align = copy(nws["K46"].alignment)
     no_fill = PatternFill(fill_type=None)
     for r in range(47, 87):
         for c in range(1, 16):
@@ -385,66 +387,66 @@ def main():
             cell.value = None
             cell.fill = no_fill
 
-    def put(r, col, val, style):
+    def put(r, col, val, font, fill=None, numfmt=None):
         cell = nws.cell(r, col)
         cell.value = val
-        cell.font = copy(style.font)
-        cell.fill = copy(style.fill)
-        cell.border = copy(style.border)
-        cell.number_format = style.number_format
-        cell.alignment = copy(style.alignment)
+        cell.font = copy(font)
+        cell.fill = copy(fill) if fill is not None else no_fill
+        cell.border = copy(base_border)
+        cell.number_format = numfmt if numfmt is not None else "General"
+        cell.alignment = copy(base_align)
         return cell
 
-    # 上轮未付 本轮已付
+    # 上轮未付 本轮已付（绿底）
     r = 47
     for inv in green_invs:
         d, amt = inv_detail(inv)
-        put(r, 11, inv, data_k)
+        put(r, 11, inv, data_font, GREEN)
         if d:
-            put(r, 12, d, hdr_l)
+            put(r, 12, d, data_font, GREEN)
         if amt is not None:
-            put(r, 13, amt, data_m)
+            put(r, 13, amt, data_font, GREEN, amt_fmt)
         r += 1
     paid_total_row = r
-    put(paid_total_row, 11, "金额合计", data_k)
-    put(paid_total_row, 13, f"=SUM(M47:M{paid_total_row - 1})", data_m)
+    put(paid_total_row, 11, "金额合计", data_font, GREEN)
+    put(paid_total_row, 13, f"=SUM(M47:M{paid_total_row - 1})", data_font, GREEN, amt_fmt)
 
-    # 本轮未付
+    # 本轮未付（黄底）
     hu = paid_total_row + 2
-    put(hu, 11, "本轮未付账单号", hdr_k)
-    put(hu, 12, "订单日期", hdr_l)
-    put(hu, 13, "账单金额", hdr_m)
+    put(hu, 11, "本轮未付账单号", hdr_font)
+    put(hu, 12, "订单日期", hdr_font)
+    put(hu, 13, "账单金额", hdr_font)
     r = hu + 1
     for inv in yellow_invs:
         d, amt = inv_detail(inv)
-        put(r, 11, inv, data_k)
+        put(r, 11, inv, data_font, YELLOW)
         if d:
-            put(r, 12, d, hdr_l)
+            put(r, 12, d, data_font, YELLOW)
         if amt is not None:
-            put(r, 13, amt, data_m)
+            put(r, 13, amt, data_font, YELLOW, amt_fmt)
         r += 1
     unpaid_total_row = r
-    put(unpaid_total_row, 11, "金额合计", data_k)
-    put(unpaid_total_row, 13, f"=SUM(M{hu + 1}:M{unpaid_total_row - 1})", data_m)
+    put(unpaid_total_row, 11, "金额合计", data_font, YELLOW)
+    put(unpaid_total_row, 13, f"=SUM(M{hu + 1}:M{unpaid_total_row - 1})", data_font, YELLOW, amt_fmt)
 
-    # 异常（保留历史）
+    # 异常（保留历史，无填充）
     he = unpaid_total_row + 2
-    put(he, 11, abn_header, hdr_k)
-    put(he, 12, "订单日期", hdr_l)
-    put(he, 13, "账单金额", hdr_m)
+    put(he, 11, abn_header, hdr_font)
+    put(he, 12, "订单日期", hdr_font)
+    put(he, 13, "账单金额", hdr_font)
     for i, (k, l, m) in enumerate(abn_rows):
-        put(he + 1 + i, 11, k, data_k)
+        put(he + 1 + i, 11, k, data_font)
         if l:
-            put(he + 1 + i, 12, l, hdr_l)
+            put(he + 1 + i, 12, l, data_font)
         if m is not None:
-            put(he + 1 + i, 13, m, data_m)
+            put(he + 1 + i, 13, m, data_font, None, amt_fmt)
 
     # 差额
     unpaid_total = round(sum((inv_detail(i)[1] or 0) for i in yellow_invs), 2)
     green_total = round(sum((inv_detail(i)[1] or 0) for i in green_invs), 2)
-    put(86, 8, "=G2-H2", nws["H86"])
-    put(86, 9, "差额", nws["I86"])
-    put(86, 11, DIFF_NOTE.format(unpaid_total), nws["K86"])
+    put(86, 8, "=G2-H2", data_font)
+    put(86, 9, "差额", data_font)
+    put(86, 11, DIFF_NOTE.format(unpaid_total), data_font)
     print(f"      Notes：绿(已付) {len(green_invs)} 张 合计 {green_total}，黄(未付) {len(yellow_invs)} 张 合计 {unpaid_total}")
 
     wb.calculation.fullCalcOnLoad = True
