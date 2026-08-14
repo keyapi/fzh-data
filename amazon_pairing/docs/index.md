@@ -14,3 +14,4 @@ timestamp: 2026-08-11
 | Amazon/多平台机制、候选分层与运营确认边界 | [../../docs/solutions/conventions/amazon-online-product-pairing-candidate-workflow.md](../../docs/solutions/conventions/amazon-online-product-pairing-candidate-workflow.md) |
 | 模块说明 | [../README.md](../README.md) |
 | 多系统证据清单、失败模式和证据层级 | [research/2026-08-14-evidence-sources-and-failure-modes.md](research/2026-08-14-evidence-sources-and-failure-modes.md) |
+| V2 证据图、对象/属性本体和 LLM 裁判设计 | [specs/2026-08-14-evidence-graph-matching-v2.md](specs/2026-08-14-evidence-graph-matching-v2.md) |
