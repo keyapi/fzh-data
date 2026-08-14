@@ -8,36 +8,47 @@ timestamp: 2026-08-14
 
 # Amazon 在售未配对自动匹配建议
 
-> 本子项目用于解决赛狐 Amazon 在线商品“在售但未配对”的人工审核辅助问题。现已实现历史标签审计、四家族分类与排序试点、分层弃权工作簿和人工反馈导入；未调用任何赛狐配对写入接口。
+> 本子项目用于解决赛狐 Amazon 在线商品“在售但未配对”的人工审核辅助问题。当前分支是 **证据传播**（`feature/amazon-pairing-evidence`），以 `origin/main` 为底并入 PR 173 远端 `a64e6e0` 后继续；**不往 PR 173 推送**。只出建议工作簿，未调用任何赛狐配对写入接口。
 
 > **先读**：[Amazon 在线商品配对的分层候选与运营确认流程](../docs/solutions/conventions/amazon-online-product-pairing-candidate-workflow.md)。
-> 它是 Amazon/多平台机制区分、快照时效、人工确认和禁止写入边界的规范来源；本文件保留当前脚本、数据源和交接清单。
+> 共享知识包（本 Agent / Codex 只读）：[docs/reference/](docs/reference/) 与 [knowledge/](knowledge/)。
+
+## 0. 本分支 vs PR 173
+
+| | PR 173 `feature/amazon-pairing-ltr` | 本分支 `feature/amazon-pairing-evidence` |
+|---|---|---|
+| 目标 | Gold/Silver 标签 + 四家族 LTR 试点 | 把已配对当活证据传播；可解释，不重训 LTR |
+| 高可信门槛 | 只认 Gold A（通途别名唯一且与 EN 一致） | 当前已配对唯一目标（含 Silver）；冲突降级审核 |
+| 本轮不做 | — | 不训练 LightGBM / embedding；不写赛狐 |
+
+Codex 可继续占着 LTR worktree。缓存、catalog、模型文件在 gitignore 里，本机可从原 clone / LTR worktree 只读引用。
+
+CLI 的 `--cache-workspace`（旧名 `--main-workspace`）指向**原 clone 目录**里的 gitignore 缓存（`missing_products/out/pairing_cache/`、映射表），**不是**要在 git `main` 上改代码。
 
 ## 1. 目标
 
 - 输入：赛狐 Amazon 在线商品（已配对/未配对）、通途最新导出（SKU + SKU别名）、EN 物料/客户物料号、赛狐商品 SKU。
 - 输出：给运营人员的配对建议表，尽量可导入赛狐（`import_product_msku_match` 模板），无法唯一确定的进入人工核对。
-- 长期目标：用已配对数据训练匹配模型，覆盖通途别名登记不全的 FBA/MSKU。
+- 配对对象是**可销售在线商品**，不是 EN 生产主线；有库存半成品不必都有 listing。
 
-## 2. 2026-08-13/14 新鲜快照
+## 2. 2026-08-14 快照
 
-| 指标 | 数量 |
-|------|------|
-| 历史已配对审计 | 26,999 |
-| Gold A 可训练标签 | 14,021 |
-| Silver / Quarantine | 12,918 / 60 |
-| Gold A 唯一 MSKU-目标 | 4,070 |
-| EN 产品明细 / 明细错误 | 2,317 / 0 |
-| 普通赛狐候选产品 | 2,259 |
-| 当前在售未配对 | 3,557 |
-| 高可信精确证据 | 87 |
-| 四家族实验候选 | 550 |
-| 特殊对象暂缓 | 434 |
-| 无可靠候选 | 2,486 |
+| 指标 | PR 173（Gold A） | 证据传播（活证据） |
+|------|------|------|
+| 当前在售未配对 | 3,557 | 3,557 |
+| 高可信精确证据 | 87 | **722** |
+| 智能候选审核 | 550 | **766** |
+| 特殊对象暂缓 | 434 | **145** |
+| 无可靠候选 | 2,486 | **1924** |
+| 传播审计 | — | 入 3557 = 唯一 758 + 冲突 453 + 未覆盖 2346 |
 
-3,557 条严格对账：`87 + 550 + 434 + 2,486 = 3,557`。特殊对象包含 cover 244、combo 76、unknown 59、foam 55。所有源文件哈希写入标签摘要；后续建议前仍必须重新确认通途导出和赛狐缓存时效。
+3,557 条必须对账：`高可信 + 智能候选 + 特殊暂缓 + 无可靠候选 = 3,557`。不要和 8-11 快照的 4,407 混用。
 
-## 3. 模型结论
+活证据唯一来源（审计 `unique_by_evidence`）：customer_code 263、live_image 133、near_msku 119、live_asin 97、live_msku 73、live_parent_sku 56、live_parent_asin 17。Gold A 只用于训练清洗，**不是**高可信门槛。高可信 722 少于审计唯一 758，因为 combo 等仍进特殊暂缓。
+
+黄金回归：`knowledge/golden-cases.yaml` + `tests/amazon_pairing/test_evidence.py`。`Danpinse-KS0388-blue-FBA`（Top1 `KS0388-HLRJLGBL-62x68x38-LIGHTBLUE`）/ `CEN665-Leaves-Grey-66-2`（`KS0244-CMGDTH-66x50-GREY`）/ `DanCA1534D9-Blue-153`（`KS0001-HLR-153-DEEPBLUE`）进高可信；`BAI31038N0A62927SX-2pcs-us` 进特殊暂缓。`LongHuxing-Foam-Lbai-100` 进无可靠候选：parent 全家未配对，禁止编造高可信。
+
+## 3. 模型结论（PR 173 试点，本轮未重训）
 
 试点家族为 `KS0001`、`KS0002`、`KS0248`、`KS0007`，按 MSKU/ASIN 连通分组切分，固定 seed 42。最终诚实评估为：
 
@@ -49,7 +60,7 @@ timestamp: 2026-08-14
 | MRR | 52.58% |
 | production_ready | `false` |
 
-排序评估中的 Recall@20 为 100%，是因为训练/评估排序器时注入了正样本，不能冒充原始候选召回率。真正决定能否自动化的是 32.25% 的原始 Candidate Recall@20；因此当前只能辅助人工收集候选，不能自动配对。修复颜色词子串误命中后分数下降，例如 `red` 不再从 `reading` 中被抽出；较低结果更可信。
+排序评估中的 Recall@20 为 100%，是因为训练/评估排序器时注入了正样本。真正决定能否自动化的是 32.25% 的原始 Candidate Recall@20。LTR 只给「智能候选」打分，不能单独把行送进高可信。
 
 ## 4. 赛狐配对机制（已核实）
 
@@ -57,63 +68,47 @@ timestamp: 2026-08-14
   - 读取：`POST /api/order/api/product/pageList.json`，`match=true/false` 区分配对状态。
   - 写入：`POST /api/order/api/product/matchByMsku.json`、`matchByAsin.json`。
   - 导入模板：`import_product_msku_match`（列 `*MSKU、店铺名称、*商品SKU`）。
-- **多平台配对**是另一套机制：
-  - 读取：`POST /api/multiplatform/match/getList.json`。
-  - 写入：`POST /api/multiplatform/match/save.json`。
-  - 导入模板：`importMatchTemplate`（列 `*店铺、*MSKU、*SKU`）。
-  - 当前多平台配对 3,285 条，Amazon/Amazon_VC 均为 0，Amazon 不走这套。
-- `pageList` 支持精确过滤：`searchType`（sku/msku/asin/parentAsin/title/fnsku/commodityName）、`searchContent`、`onlineStatusList`（active/inActive/delete）、`match`、`shopIdList`、`marketplaceIdList`；`pageSize` 上限 200。
+- **多平台配对**是另一套机制，Amazon 不走这套。
+- `pageList` 支持精确过滤：`searchType`（sku/msku/asin/parentAsin/title/fnsku/commodityName）、`searchContent`、`onlineStatusList`、`match`、`shopIdList`、`marketplaceIdList`；`pageSize` 上限 200。
 
 ## 5. 现有入口
 
 | 脚本 | 职责 |
 |------|------|
-| `missing_products/fetch_sellfox_pairing.py` | 拉取 Amazon + 多平台配对，缓存到 `out/pairing_cache/`，`--refresh` 强制重拉 |
-| `missing_products/analyze_amazon_unmatched.py` | 在售未配对分析：别名命中、FBA/MFN、三角靠枕候选 |
-| `missing_products/build_amazon_pairing_suggestions.py` | 生成可导入建议、需人工核对、三角靠枕建议、65 条不一致分析 |
-| `missing_products/tongtu_data.py` | 通途 zip / 映射底表 / 别名读取 |
-| `missing_products/build_mapping_workbook.py` | 生成通途→EN→赛狐映射表 |
-| `python -m amazon_pairing.cli build-labels` | 清洗历史已配对数据，生成 Gold/Silver/Quarantine 标签审计 |
-| `python -m amazon_pairing.cli snapshot-catalog` | 拉取 EN 与赛狐普通产品候选快照 |
-| `python -m amazon_pairing.cli train-pilot` | 训练四家族分类器与 LightGBM LambdaRank，并输出独立指标 |
-| `python -m amazon_pairing.cli suggest-active` | 生成八工作表的只读人工审核工作簿 |
-| `python -m amazon_pairing.cli import-feedback <xlsx>` | 校验人工结论，追加含模型/来源哈希的 JSONL 反馈 |
+| `python -m amazon_pairing.cli audit-propagation` | 只读：活证据覆盖率（入 N / 唯一 / 冲突 / 未覆盖） |
+| `python -m amazon_pairing.cli suggest-active` | 四页只读审核工作簿（高可信=唯一硬证据） |
+| `python -m amazon_pairing.cli build-labels` | Gold/Silver/Quarantine 标签审计（训练用） |
+| `python -m amazon_pairing.cli snapshot-catalog` | EN 与赛狐普通产品候选快照 |
+| `python -m amazon_pairing.cli train-pilot` | 四家族分类器与 LightGBM（本轮不要跑） |
+| `python -m amazon_pairing.cli import-feedback <xlsx>` | 校验人工结论 |
+| `missing_products/fetch_sellfox_pairing.py` | 拉取 Amazon + 多平台配对缓存 |
 
-关键产物（`missing_products/out/`）：
+建议工作簿仍四页：高可信精确证据、智能候选审核、特殊对象暂缓、无可靠候选。
 
-- `Amazon在售未配对分析_*.xlsx`：汇总 / 在售未配对全量 / 三角靠枕候选。
-- `Amazon配对导入建议_*.xlsx`：可导入建议 / 需人工核对 / 三角靠枕建议 / 65条不一致分析 / 说明。
-- `赛狐配对盘点_*.xlsx`：Amazon 已配对/未配对、多平台配对、通途别名_EN差异、待确认。
+缓存默认：`--cache-workspace D:\Work\赛狐\Cursor` 下的 `missing_products/out/pairing_cache/`（2026-08-13）。catalog/labels/models 可指向 LTR worktree 的 `amazon_pairing/out/`。
 
 ## 6. 已落地分层方案
 
-1. **阶段 0 别名精确匹配（已做）**：平台SKU/MSKU 精确命中通途主SKU/别名，再经通途→EN→赛狐映射生成导入建议。覆盖 442/4,407，其中 91 条可直接生成导入，133 条因一对多或无 EN 映射需人工核对。
-   - “无EN映射”含义：平台SKU命中了通途主SKU/别名，但该通途主SKU未出现在1411有库存EN映射中（未精确登记EN产品成品，或不在本轮有库存范围）；不是通途没有该SKU。
-   - 建议表已含：平台标题(原文)、标题中文提示(粗略字典)、通途主SKU、EN产品编号/名称、赛狐SKU；65 条不一致表另含本地/期望双方SKU与中文名称。
-2. **严格历史证据**：Gold A 要求通途主 SKU/别名唯一映射到 EN/赛狐目标，并与当前历史配对一致；唯一站点+ASIN 历史目标也可进入高可信页，但仍需人工确认。
-3. **对象路由**：ordinary 才进入普通候选；cover、foam、combo 与 unknown 单独暂缓。Combo Listing 路由到 `TJ#` 套件流程，绝不强配普通 KS 产品。
-4. **实验模型**：字符 TF-IDF 家族分类、属性冲突过滤、字符 TF-IDF 候选检索和 LightGBM LambdaRank 只在四个家族试点；可靠尺寸/颜色/面料冲突的候选不得出现在审核 Top-3。
-5. **主动弃权**：family 置信度不足或候选全部存在可靠冲突时进入“无可靠候选”，不为提高覆盖率降低门槛。
-6. **反馈闭环**：工作簿只允许固定结论枚举；手填 SKU 必须存在于候选 catalog。导入反馈时记录工作簿、catalog、family model、ranker 和 evaluation 的 SHA-256。
+1. **活证据（本分支）**：同 MSKU 当前已配对（跨店跨站，含 Silver）→ 同 ASIN（默认跨站）→ parentSku/parentAsin 家族唯一 → 近邻 MSKU / EN 客户码（去 `NB/`、去 `-FBA`/`-us`/`-2`）→ 同 mainImage URL。多目标不一致 → 智能候选，不静默丢。
+2. **意图分类**：`cover`/`foam` 禁止子串误杀。`with Removable Velvet Cover`、Foam 靠枕成品、KS0244 枕套族走 ordinary。真 `cover only` / `foam only` / 真套件才特殊暂缓。AFN 弱信号走成品先验。
+3. **属性**：颜色/面料 + 美国床型/英寸/近寸（97≈100、152≈153）；床型/近寸与 EN `100x22x55` 这类三维尺寸兼容，不算可靠冲突。
+4. **严格历史证据 / LTR**：Gold A 仍用于训练清洗。实验模型只在活证据用尽后给普通单品 Top-3；`production_ready=false`。
+5. **主动弃权**：穷尽后仍空才进「无可靠候选」。
+6. **反馈闭环**：工作簿只允许固定结论枚举。写入赛狐必须用户批准明确店铺/MSKU/赛狐 SKU 范围。
 
-## 7. 下一步研究重点
+图片感知哈希 / VL / LLM 本轮只留接口说明，不进高可信。
 
-- Amazon 标题是英文，EN 名称是中文，需要建立面料/颜色/尺寸双语词典。
-- 已配对数据存在错误（例如 65 条不一致中多个 TT SKU 错配到同一个 `KS0437-MSTWBHLR-120x200x45-LIGHT...`），训练前必须清洗。
-- 通途别名登记不全，尤其 FBA；别名精确匹配只能覆盖约 10%。
-- 一个别名可能对应多个通途 SKU 或多个 EN 产品（一对多），不能自动去重。
-- HM1510 海绵：EN REST 校验“客户物料号只能添加到 产品/套件# 物料组”，无法通过 API 给 HM1510 加客户码；且 `TT0031247K0064095-Foam` 没有 218x115x55 的 HM1510 物料。本子项目暂不处理。
-- 先让运营审阅 87 条高可信证据和 550 条实验候选，积累剔除疑问后的人工 Gold 标签。
-- 优先为四个家族补充专用结构化解析器和同款变体约束，改善原始 Candidate Recall@20；现阶段不应先引入通用 embedding 来掩盖属性冲突。
-- 按家族分别评估，尤其 `KS0002` Top-1 只有 28.24%，不能被总体指标掩盖。
-- 达到候选召回门槛前不讨论自动写入；即使未来达到门槛，仍需用户批准明确店铺/MSKU/赛狐 SKU 范围。
-- 直到用户明确批准具体店铺、MSKU 和赛狐 SKU 的导入范围前，本项目不得调用 `matchByMsku`、`matchByAsin` 或任何多平台写接口。
+## 7. 下一步
+
+- 先让运营审阅高可信页和黄金 5 条；冲突页人工选一个。
+- parent 全家未配对的 listing（如 LongHuxing-Foam 族）需要图片或人工，不能假装高可信。
+- 达到候选召回门槛前不讨论自动写入。
+- 直到用户明确批准具体店铺、MSKU 和赛狐 SKU 的导入范围前，不得调用 `matchByMsku`、`matchByAsin` 或任何多平台写接口。
 
 ## 8. 交接清单
 
-1. 读本文档 + `missing_products/AGENT_HANDOFF.md`。
-2. 如有新的通途导出，放到 `D:/Work/赛狐/商品/` 或 `D:/Work/赛狐/配对/`，脚本自动取最新。
-3. 重跑 `fetch_sellfox_pairing.py --refresh` 前先确认 API 配额；日常分析默认用缓存。
-4. 最新验证工作簿为 `amazon_pairing/out/Amazon在售未配对智能审核_20260814_090429.xlsx`，业务产物不提交 Git。
-5. 反馈导入后重新训练前，先剔除“暂不确定”“对象类型错误”和其他疑问记录。
-6. 所有写入赛狐/EN 的动作必须先经用户确认，禁止直接调写接口。
+1. 读本文档 + `docs/reference/evidence-sources.md` + `knowledge/golden-cases.yaml`。
+2. 代码在 `D:\Work\赛狐\Cursor-amazon-pairing-evidence`（分支 `feature/amazon-pairing-evidence`）。不要 checkout 到已占用 `main` 的原 clone。
+3. 日常分析默认用缓存；`--refresh` 前确认赛狐 API 配额。通途 MCP 禁止扫全库（5 次/分钟）。
+4. 重跑：`uv run python -m amazon_pairing.cli audit-propagation` 再 `suggest-active`；黄金 MSKU 必须落在正确页。
+5. 所有写入赛狐/EN 的动作必须先经用户确认。

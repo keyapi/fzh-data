@@ -9,6 +9,11 @@ tags: [amazon_pairing, log]
 
 ## 2026-08-14
 
+- **实现**: sibling 分支 `feature/amazon-pairing-evidence` 并入 PR 173 远端后，高可信改为当前已配对唯一目标（含 Silver），同 MSKU 跨店、同 ASIN 跨站、parentSku/parentAsin、近邻 MSKU、EN 客户码前后缀可传播；cover/foam 改为意图分类；美国床型/近寸不再当冲突。
+- **验证**: `uv run pytest tests/amazon_pairing -q`。在售未配对 3,557 = 722 高可信 + 766 智能候选 + 145 特殊暂缓 + 1924 无可靠候选。传播审计：唯一 758 / 冲突 453 / 未覆盖 2346。黄金 5 条：3 高可信、1 套件暂缓、LongHuxing 因 parent 全家未配对留在无可靠候选。
+- **知识包**: `docs/reference/` + `knowledge/*.yaml`，供本分支与 PR 173 只读共享。本轮不训练 LTR，不调用配对写接口。
+- **纠错**: 上一版把高可信只认 Gold A，丢掉 FBA 已配对；`cover`/`foam` 子串把成品靠枕和 KS0244 枕套族打进特殊暂缓。
+
 - **实现**: 新增 Gold/Silver/Quarantine 历史标签审计、普通/皮壳/海绵/套件路由、四家族 TF-IDF + LightGBM LambdaRank 试点、八工作表审核报告和带来源哈希的反馈导入。
 - **验证**: 3,557 条在售未配对全部对账；87 条高可信证据、550 条实验候选、434 条特殊对象、2,486 条主动弃权。最终模型 `production_ready=false`，原始 Candidate Recall@20 为 32.25%，禁止自动配对。
 - **纠错**: 修复 `red` 命中 `reading`、`in` 被误作 inch、纯 pillow cover 路由以及同 MSKU 多 Listing family 预测覆盖风险。

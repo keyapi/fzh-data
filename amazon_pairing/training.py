@@ -10,7 +10,7 @@ from sklearn.metrics.pairwise import linear_kernel
 import numpy as np
 
 from .attributes import extract_attributes
-from .candidates import CandidateProduct, ListingQuery
+from .candidates import CandidateProduct, ListingQuery, _size_compatible
 from .features import build_pair_features
 from .ranking import PairExample
 
@@ -71,15 +71,20 @@ class CandidateRetriever:
             return 0, 0
         agreements = 0
         conflicts = 0
-        for query_value, product_value in (
-            (attributes.size, product.attributes.size),
-            (attributes.color, product.attributes.color),
-            (attributes.fabric, product.attributes.fabric),
-            (attributes.count, product.attributes.count),
+        for query_value, product_value, is_size in (
+            (attributes.size, product.attributes.size, True),
+            (attributes.color, product.attributes.color, False),
+            (attributes.fabric, product.attributes.fabric, False),
+            (attributes.count, product.attributes.count, False),
         ):
             if not query_value.reliable or not query_value.values or not product_value.values:
                 continue
-            if set(query_value.values).isdisjoint(product_value.values):
+            if is_size:
+                if _size_compatible(query_value, product_value):
+                    agreements += 1
+                else:
+                    conflicts += 1
+            elif set(query_value.values).isdisjoint(product_value.values):
                 conflicts += 1
             else:
                 agreements += 1

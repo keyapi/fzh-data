@@ -3,6 +3,10 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP
+from functools import lru_cache
+from pathlib import Path
+
+import yaml
 
 
 @dataclass(frozen=True)
@@ -52,6 +56,12 @@ FABRIC_TERMS = (
 )
 
 
+@lru_cache(maxsize=1)
+def load_us_size_map() -> dict:
+    path = Path(__file__).resolve().parent / "knowledge" / "us-size-map.yaml"
+    return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+
+
 def normalize_fabric(value: str) -> str:
     lowered = value.lower()
     if any(token in lowered for token in ("velvet", "荷兰绒", "暗花绒")):
@@ -75,8 +85,33 @@ def _terms(text: str, terms: tuple[tuple[str, str], ...]) -> tuple[str, ...]:
     return tuple(found)
 
 
+def _expand_near_cm(values: tuple[str, ...], near: dict) -> tuple[str, ...]:
+    expanded: list[str] = []
+    for value in values:
+        if value not in expanded:
+            expanded.append(value)
+        for alias in near.get(value, []) or []:
+            if alias not in expanded:
+                expanded.append(alias)
+    return tuple(expanded)
+
+
+def _bed_sizes(text: str, size_map: dict) -> tuple[str, ...]:
+    beds = size_map.get("bed") or {}
+    found: list[str] = []
+    for token, cms in sorted(beds.items(), key=lambda item: -len(item[0])):
+        pattern = rf"(?<![a-z0-9]){re.escape(token)}(?![a-z0-9])"
+        if re.search(pattern, text):
+            for cm in cms:
+                if cm not in found:
+                    found.append(str(cm))
+    return tuple(found)
+
+
 def extract_attributes(text: str) -> ListingAttributes:
     lowered = text.lower().replace("×", "x")
+    size_map = load_us_size_map()
+    near = {str(key): list(value) for key, value in (size_map.get("near_cm") or {}).items()}
     size_values: tuple[str, ...] = ()
     size_reliable = False
     dimensions = re.search(
@@ -105,7 +140,14 @@ def extract_attributes(text: str) -> ListingAttributes:
             single = re.search(r"(?<!\d)(\d{2,3})(?!\d)", lowered)
             if single:
                 size_values = (single.group(1),)
+        bed = _bed_sizes(lowered, size_map)
+        if bed:
+            extra = size_values if size_reliable else ()
+            size_values = tuple(dict.fromkeys(tuple(bed) + extra))
+            size_reliable = True
 
+    if size_reliable:
+        size_values = _expand_near_cm(size_values, near)
     count = re.search(r"\b(\d+)\s*(?:piece|pack|pcs?)\b", lowered)
     count_value = AttributeValue((count.group(1),), True) if count else AttributeValue()
     colors = _terms(lowered, COLOR_TERMS)

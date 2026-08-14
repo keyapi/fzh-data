@@ -24,6 +24,8 @@ class AmazonListing:
     online_status: str
     fulfillment: str
     parent_sku: str
+    fnsku: str = ""
+    is_variation: str = ""
 
 
 def _text(value) -> str:
@@ -56,6 +58,8 @@ def load_amazon_cache(path: Path) -> list[AmazonListing]:
             online_status=_text(row.get("onlineStatus")),
             fulfillment=_text(row.get("switchFulfillmentTo")),
             parent_sku=_text(row.get("parentSku")),
+            fnsku=_text(row.get("fnsku")),
+            is_variation=_text(row.get("isVariation")),
         )
         for row in rows
     ]

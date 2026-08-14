@@ -55,6 +55,27 @@ def test_candidate_generation_does_not_filter_on_soft_size():
     }
 
 
+def test_bed_size_matches_3d_product_dimension():
+    catalog = CATALOG + (
+        CandidateProduct(
+            "KS0120-X-100x22x55-WHITE",
+            "KS0120",
+            "弧形靠枕",
+            attrs(["100x22x55"], ["白色"]),
+        ),
+    )
+    result = generate_candidates(
+        ListingQuery(
+            msku="LongHuxing-Foam-Lbai-100",
+            title="Foam Headboard Pillow Twin White",
+            predicted_families=("KS0120",),
+            attributes=attrs(["97", "100"], ["白色"]),
+        ),
+        catalog,
+    )
+    assert "KS0120-X-100x22x55-WHITE" in {candidate.product.sku for candidate in result.candidates}
+
+
 def test_candidate_generation_falls_back_when_reliable_filters_empty_pool():
     result = generate_candidates(
         ListingQuery(

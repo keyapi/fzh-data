@@ -37,6 +37,18 @@ class CandidateResult:
     warnings: tuple[str, ...] = ()
 
 
+def _size_compatible(query_value, product_value) -> bool:
+    if not (query_value.reliable and query_value.values and product_value.values):
+        return True
+    query_set = set(query_value.values)
+    product_set = set(product_value.values)
+    if not query_set.isdisjoint(product_set):
+        return True
+    query_tokens = {token for value in query_set for token in value.split("x") if token}
+    product_tokens = {token for value in product_set for token in value.split("x") if token}
+    return not query_tokens.isdisjoint(product_tokens)
+
+
 def _reliable_conflict(query_value, product_value) -> bool:
     return bool(
         query_value.reliable
@@ -47,10 +59,11 @@ def _reliable_conflict(query_value, product_value) -> bool:
 
 
 def _has_reliable_conflict(query: ListingQuery, product: CandidateProduct) -> bool:
+    if not _size_compatible(query.attributes.size, product.attributes.size):
+        return True
     return any(
         _reliable_conflict(query_value, product_value)
         for query_value, product_value in (
-            (query.attributes.size, product.attributes.size),
             (query.attributes.color, product.attributes.color),
             (query.attributes.fabric, product.attributes.fabric),
             (query.attributes.count, product.attributes.count),

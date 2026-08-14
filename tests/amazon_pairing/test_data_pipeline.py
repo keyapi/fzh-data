@@ -16,10 +16,15 @@ def test_load_amazon_cache_keeps_required_listing_fields(tmp_path: Path):
                     "marketplaceId": "US",
                     "sku": "MSKU-1",
                     "asin": "B001",
+                    "parentAsin": "P001",
+                    "parentSku": "PARENT-1",
                     "title": "Pillow",
                     "commoditySku": "KS0001-A",
                     "mainImage": "https://example.invalid/a.jpg",
                     "onlineStatus": "Active",
+                    "switchFulfillmentTo": "AFN",
+                    "fnsku": "X001",
+                    "isVariation": "true",
                 }
             ]
         ),
@@ -31,6 +36,11 @@ def test_load_amazon_cache_keeps_required_listing_fields(tmp_path: Path):
     assert rows[0].msku == "MSKU-1"
     assert rows[0].target_sku == "KS0001-A"
     assert rows[0].image_url.endswith("a.jpg")
+    assert rows[0].parent_sku == "PARENT-1"
+    assert rows[0].parent_asin == "P001"
+    assert rows[0].fulfillment == "AFN"
+    assert rows[0].fnsku == "X001"
+    assert rows[0].is_variation == "true"
 
 
 def test_label_audit_uses_unique_alias_mapping_agreement():

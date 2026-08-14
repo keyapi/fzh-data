@@ -29,10 +29,24 @@ from .report import ReviewRecord, write_review_workbook
 from .feedback import validate_feedback
 from .training import CandidateRetriever, FamilyClassifier, TrainingListing, build_pair_examples
 from .data import build_label_audit, load_amazon_cache
+from .evidence import build_live_maps, load_customer_code_index, resolve_live_targets, summarize_propagation
 
 
 ROOT = Path(__file__).resolve().parents[1]
+# Filesystem path to the original clone that holds gitignored pairing caches.
+# Not "work on the git branch named main".
 DEFAULT_MAIN = Path(r"D:\Work\赛狐\Cursor")
+CACHE_WS_HELP = (
+    "Original clone with gitignored pairing caches "
+    "(missing_products/out); not the git branch named main"
+)
+
+
+def _read_mapping(path: Path) -> pd.DataFrame:
+    try:
+        return pd.read_excel(path, sheet_name="映射全量", dtype=str).fillna("")
+    except ValueError:
+        return pd.read_excel(path, dtype=str).fillna("")
 
 
 def _latest(directory: Path, pattern: str) -> Path:
@@ -253,42 +267,52 @@ def suggest_active(args: argparse.Namespace) -> int:
     evaluation = json.loads(args.evaluation.read_text(encoding="utf-8"))
 
     labels = pd.read_csv(args.labels, dtype=str).fillna("")
-    exact_map: dict[str, set[str]] = {}
-    for _, row in labels[labels["tier"] == "gold_a"].iterrows():
-        exact_map.setdefault(str(row["msku"]).casefold(), set()).add(str(row["target_sku"]))
-    asin_map: dict[tuple[str, str], set[str]] = {}
-    for row in matched:
-        if row.asin and row.target_sku:
-            asin_map.setdefault((row.marketplace_id, row.asin), set()).add(row.target_sku)
+    customer_index = {}
+    if args.mapping:
+        mapping_frame = _read_mapping(args.mapping)
+        customer_index = load_customer_code_index(mapping_frame)
+    maps = build_live_maps(matched, customer_index)
 
     exact_records: list[ReviewRecord] = []
+    model_records: list[ReviewRecord] = []
     model_pending = []
     specials = []
     no_candidates = []
     for row in unmatched:
-        route = route_listing(row.msku, row.title, row.parent_sku)
-        if route.object_type != "ordinary":
+        route = route_listing(row.msku, row.title, row.parent_sku, row.fulfillment)
+        match = resolve_live_targets(row, maps, set(catalog_by_sku))
+        if route.object_type == "combo" or (route.object_type != "ordinary" and not match.unique):
             specials.append({
                 "MSKU": row.msku, "ASIN": row.asin, "标题": row.title,
                 "对象类型": route.object_type, "原因": " | ".join(route.reasons),
             })
             continue
-        exact_targets = {sku for sku in exact_map.get(row.msku.casefold(), set()) if sku in catalog_by_sku}
-        asin_targets = {
-            sku for sku in asin_map.get((row.marketplace_id, row.asin), set()) if sku in catalog_by_sku
-        } if row.asin else set()
-        strong_targets = exact_targets or (asin_targets if len(asin_targets) == 1 else set())
-        if len(strong_targets) == 1:
-            product = catalog_by_sku[next(iter(strong_targets))]
-            evidence = "strict_alias" if exact_targets else "unique_marketplace_asin_history"
+        if match.unique:
+            product = catalog_by_sku[match.targets[0]]
             exact_records.append(
                 ReviewRecord(
                     shop=row.shop_id, marketplace=row.marketplace_id, msku=row.msku, asin=row.asin,
                     title=row.title, image_url=row.image_url, route="ordinary",
-                    candidates=((product.sku, product.name, 1.0, evidence),), warnings="仍需人工确认",
+                    candidates=((product.sku, product.name, 1.0, match.evidence),),
+                    warnings="活证据唯一，仍需人工确认",
                 )
             )
             continue
+        if match.targets:
+            candidates = tuple(
+                (sku, catalog_by_sku[sku].name, 1.0, match.evidence)
+                for sku in match.targets[:3]
+                if sku in catalog_by_sku
+            )
+            if candidates:
+                model_records.append(
+                    ReviewRecord(
+                        shop=row.shop_id, marketplace=row.marketplace_id, msku=row.msku, asin=row.asin,
+                        title=row.title, image_url=row.image_url, route="ordinary",
+                        candidates=candidates, warnings="活证据冲突，需人工选择",
+                    )
+                )
+                continue
         predictions = family.predict(row.msku, row.title, top_k=2)
         if not predictions or predictions[0][1] < args.min_family_score:
             no_candidates.append({"MSKU": row.msku, "ASIN": row.asin, "标题": row.title, "原因": "family_confidence_low"})
@@ -301,7 +325,6 @@ def suggest_active(args: argparse.Namespace) -> int:
         [(row.msku, row.title, tuple(name for name, _ in predictions), attributes) for row, predictions, attributes in model_pending],
         20,
     )
-    model_records: list[ReviewRecord] = []
     for (row, predictions, attributes), selected in zip(model_pending, selected_many):
         query = ListingQuery(
             row.msku, row.title, tuple(name for name, _ in predictions), attributes
@@ -375,6 +398,30 @@ def suggest_active(args: argparse.Namespace) -> int:
     return 0
 
 
+def audit_propagation(args: argparse.Namespace) -> int:
+    main = args.main_workspace.resolve()
+    unmatched_path = args.unmatched_cache or main / "missing_products/out/pairing_cache/amazon_unmatched.json"
+    matched_path = args.matched_cache or main / "missing_products/out/pairing_cache/amazon_matched.json"
+    unmatched = [row for row in load_amazon_cache(unmatched_path) if row.online_status.upper() == "ACTIVE"]
+    matched = load_amazon_cache(matched_path)
+    catalog_skus: set[str] = set()
+    if args.catalog and args.catalog.exists():
+        catalog_skus = {product.sku for product in load_catalog(args.catalog)}
+    customer_index = {}
+    if args.mapping:
+        customer_index = load_customer_code_index(_read_mapping(args.mapping))
+    maps = build_live_maps(matched, customer_index)
+    report = summarize_propagation(unmatched, maps, catalog_skus)
+    report["matched_rows"] = len(matched)
+    report["generated_at"] = datetime.now(timezone.utc).isoformat()
+    output = args.output.resolve()
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+    print(f"audit={output}")
+    return 0
+
+
 def import_feedback(args: argparse.Namespace) -> int:
     catalog = load_catalog(args.catalog)
     summary_frame = pd.read_excel(args.workbook, sheet_name="运行汇总", dtype=str).fillna("")
@@ -409,14 +456,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Amazon pairing assistance pipeline")
     sub = parser.add_subparsers(dest="command", required=True)
     labels = sub.add_parser("build-labels", help="Audit historical matched listings")
-    labels.add_argument("--main-workspace", type=Path, default=DEFAULT_MAIN)
+    labels.add_argument("--cache-workspace", "--main-workspace", dest="main_workspace", type=Path, default=DEFAULT_MAIN, help=CACHE_WS_HELP)
     labels.add_argument("--matched-cache", type=Path)
     labels.add_argument("--mapping", type=Path)
     labels.add_argument("--tongtu-zip", type=Path)
     labels.add_argument("--output", type=Path, default=ROOT / "amazon_pairing/out/labels")
     labels.set_defaults(func=build_labels)
     catalog = sub.add_parser("snapshot-catalog", help="Snapshot EN/Sellfox ordinary products")
-    catalog.add_argument("--main-workspace", type=Path, default=DEFAULT_MAIN)
+    catalog.add_argument("--cache-workspace", "--main-workspace", dest="main_workspace", type=Path, default=DEFAULT_MAIN, help=CACHE_WS_HELP)
     catalog.add_argument("--output", type=Path, default=ROOT / "amazon_pairing/out/catalog")
     catalog.set_defaults(func=snapshot_catalog)
     train = sub.add_parser("train-pilot", help="Train and evaluate the four-family pilot")
@@ -427,7 +474,7 @@ def build_parser() -> argparse.ArgumentParser:
     train.add_argument("--seed", type=int, default=42)
     train.set_defaults(func=train_pilot)
     suggest = sub.add_parser("suggest-active", help="Build the read-only active-unpaired review workbook")
-    suggest.add_argument("--main-workspace", type=Path, default=DEFAULT_MAIN)
+    suggest.add_argument("--cache-workspace", "--main-workspace", dest="main_workspace", type=Path, default=DEFAULT_MAIN, help=CACHE_WS_HELP)
     suggest.add_argument("--unmatched-cache", type=Path)
     suggest.add_argument("--matched-cache", type=Path)
     suggest.add_argument("--labels", type=Path, default=ROOT / "amazon_pairing/out/labels/historical_label_audit.csv")
@@ -436,8 +483,17 @@ def build_parser() -> argparse.ArgumentParser:
     suggest.add_argument("--ranker-model", type=Path, default=ROOT / "amazon_pairing/out/model/ranker.txt")
     suggest.add_argument("--evaluation", type=Path, default=ROOT / "amazon_pairing/out/model/evaluation.json")
     suggest.add_argument("--min-family-score", type=float, default=0.5)
+    suggest.add_argument("--mapping", type=Path)
     suggest.add_argument("--output", type=Path, default=ROOT / f"amazon_pairing/out/Amazon在售未配对智能审核_{datetime.now():%Y%m%d_%H%M%S}.xlsx")
     suggest.set_defaults(func=suggest_active)
+    audit = sub.add_parser("audit-propagation", help="Quantify live-evidence coverage on active unmatched listings")
+    audit.add_argument("--cache-workspace", "--main-workspace", dest="main_workspace", type=Path, default=DEFAULT_MAIN, help=CACHE_WS_HELP)
+    audit.add_argument("--unmatched-cache", type=Path)
+    audit.add_argument("--matched-cache", type=Path)
+    audit.add_argument("--catalog", type=Path, default=ROOT / "amazon_pairing/out/catalog/candidate_catalog.json")
+    audit.add_argument("--mapping", type=Path)
+    audit.add_argument("--output", type=Path, default=ROOT / "amazon_pairing/out/propagation_audit.json")
+    audit.set_defaults(func=audit_propagation)
     feedback = sub.add_parser("import-feedback", help="Validate and append human review feedback")
     feedback.add_argument("workbook", type=Path)
     feedback.add_argument("--catalog", type=Path, default=ROOT / "amazon_pairing/out/catalog/candidate_catalog.json")
