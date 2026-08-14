@@ -20,6 +20,10 @@ from missing_products.audit_three_systems import (
 from SELLFOX_API.client import SellfoxClient, SellfoxConfig
 
 from .catalog import build_candidate_catalog, load_catalog, save_catalog
+from .evidence import EvidenceIndex
+from .v2 import decide_v2
+from .fallback import build_fallback_evidence
+from .v2_report import write_v2_workbook
 from .ranking import PairExample, RankingModel, evaluate_rankings, grouped_split
 from .routing import route_listing
 from .features import build_pair_features
@@ -374,6 +378,69 @@ def suggest_active(args: argparse.Namespace) -> int:
     print(f"workbook={output}")
     return 0
 
+def suggest_v2(args: argparse.Namespace) -> int:
+    main = args.main_workspace.resolve()
+    unmatched_path = args.unmatched_cache or main / "missing_products/out/pairing_cache/amazon_unmatched.json"
+    matched_path = args.matched_cache or main / "missing_products/out/pairing_cache/amazon_matched.json"
+    matched = load_amazon_cache(matched_path)
+    unmatched = [row for row in load_amazon_cache(unmatched_path) if row.online_status.upper() == "ACTIVE"]
+    catalog = load_catalog(args.catalog)
+    catalog_by_sku = {product.sku: product for product in catalog}
+    index = EvidenceIndex.build([row.raw for row in matched])
+    fallback_positions = [
+        position
+        for position, row in enumerate(unmatched)
+        if not index.candidates_for_listing(row.raw)
+    ]
+    fallback_maps = build_fallback_evidence(
+        [unmatched[position].raw for position in fallback_positions],
+        catalog,
+    ) if fallback_positions else []
+    if fallback_positions and args.family_model.exists():
+        family_model = FamilyClassifier.load(args.family_model)
+        predicted_families = [
+            tuple(name for name, _ in family_model.predict(row.msku, row.title, top_k=2))
+            for row in (unmatched[position] for position in fallback_positions)
+        ]
+        fallback_maps = build_fallback_evidence(
+            [unmatched[position].raw for position in fallback_positions],
+            catalog,
+            predicted_families=predicted_families,
+        )
+    fallback_indexes = dict(zip(fallback_positions, fallback_maps))
+    decisions = [
+        (
+            row.raw,
+            decide_v2(
+                row.raw,
+                index,
+                catalog_by_sku,
+                fallback_evidence=fallback_indexes.get(position),
+            ),
+        )
+        for position, row in enumerate(unmatched)
+    ]
+    buckets = Counter(decision.bucket for _, decision in decisions)
+    summary = {
+        "输入在售未配对": len(unmatched),
+        "强证据建议": buckets.get("strong_single", 0),
+        "Top候选审核": buckets.get("candidate", 0),
+        "低证据候选": buckets.get("low_candidate", 0),
+        "冲突候选审核": buckets.get("conflict", 0),
+        "对象专项": buckets.get("special", 0) + buckets.get("special_with_candidate", 0),
+        "无候选": buckets.get("no_candidate", 0),
+        "数量对账": len(decisions),
+        "模型可生产使用": False,
+        "写入赛狐": "禁止，本工作簿仅审核建议",
+        "unmatched_cache_sha256": _sha256(unmatched_path),
+        "matched_cache_sha256": _sha256(matched_path),
+        "catalog_sha256": _sha256(args.catalog),
+    }
+    output = args.output.resolve()
+    write_v2_workbook(output, decisions, summary)
+    print(json.dumps(summary, ensure_ascii=False, indent=2))
+    print(f"workbook={output}")
+    return 0
 
 def import_feedback(args: argparse.Namespace) -> int:
     catalog = load_catalog(args.catalog)
@@ -438,6 +505,14 @@ def build_parser() -> argparse.ArgumentParser:
     suggest.add_argument("--min-family-score", type=float, default=0.5)
     suggest.add_argument("--output", type=Path, default=ROOT / f"amazon_pairing/out/Amazon在售未配对智能审核_{datetime.now():%Y%m%d_%H%M%S}.xlsx")
     suggest.set_defaults(func=suggest_active)
+    v2 = sub.add_parser("suggest-v2", help="Build the evidence-graph V2 review workbook")
+    v2.add_argument("--main-workspace", type=Path, default=DEFAULT_MAIN)
+    v2.add_argument("--unmatched-cache", type=Path)
+    v2.add_argument("--matched-cache", type=Path)
+    v2.add_argument("--catalog", type=Path, default=ROOT / "amazon_pairing/out/catalog/candidate_catalog.json")
+    v2.add_argument("--family-model", type=Path, default=ROOT / "amazon_pairing/out/model/family_classifier.joblib")
+    v2.add_argument("--output", type=Path, default=ROOT / f"amazon_pairing/out/Amazon在售未配对证据图审核_{datetime.now():%Y%m%d_%H%M%S}.xlsx")
+    v2.set_defaults(func=suggest_v2)
     feedback = sub.add_parser("import-feedback", help="Validate and append human review feedback")
     feedback.add_argument("workbook", type=Path)
     feedback.add_argument("--catalog", type=Path, default=ROOT / "amazon_pairing/out/catalog/candidate_catalog.json")

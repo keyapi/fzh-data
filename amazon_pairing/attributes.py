@@ -48,7 +48,7 @@ FABRIC_TERMS = (
     ("chenille", "雪尼尔"),
     ("boucle", "圈圈呢"),
     ("velvet", "绒布"),
-    ("linen", "亚麻"),
+    ("linen", "涤麻"),
 )
 
 

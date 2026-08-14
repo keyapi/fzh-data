@@ -14,6 +14,7 @@ tags: [amazon_pairing, log]
 - **纠错**: 修复 `red` 命中 `reading`、`in` 被误作 inch、纯 pillow cover 路由以及同 MSKU 多 Listing family 预测覆盖风险。
 - **新增**: `docs/research/2026-08-14-evidence-sources-and-failure-modes.md`，沉淀赛狐/EN/通途/Google Sheet/NAS/图片证据清单、上一版失败模式、量化证据传播和五层证据草案。
 - **新增**: `docs/specs/2026-08-14-evidence-graph-matching-v2.md`，定义证据图、对象/属性本体、候选阻塞、可选 LLM 裁判和分层审核工作簿。
+- **实现**: V2 新增证据图、对象/属性本体、family 回退检索、固定 schema LLM 裁判和九表工作簿；当前快照 `237 + 904 + 2,335 + 2 + 79 + 0 = 3,557`，仍不写赛狐。
 
 ## 2026-08-11
 

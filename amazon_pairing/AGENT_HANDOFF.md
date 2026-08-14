@@ -34,8 +34,15 @@ timestamp: 2026-08-14
 | 四家族实验候选 | 550 |
 | 特殊对象暂缓 | 434 |
 | 无可靠候选 | 2,486 |
+| V2 强证据建议 | 237 |
+| V2 Top候选审核 | 904 |
+| V2 低证据候选 | 2,335 |
+| V2 冲突候选审核 | 2 |
+| V2 对象专项 | 79 |
+| V2 无候选 | 0 |
 
 3,557 条严格对账：`87 + 550 + 434 + 2,486 = 3,557`。特殊对象包含 cover 244、combo 76、unknown 59、foam 55。所有源文件哈希写入标签摘要；后续建议前仍必须重新确认通途导出和赛狐缓存时效。
+V2 严格对账：`237 + 904 + 2,335 + 2 + 79 + 0 = 3,557`。V2 已用证据图、对象本体、跨市场 ASIN 传播和 family 检索替代上一版窄匹配，仍不写赛狐。
 
 ## 3. 模型结论
 
@@ -77,6 +84,7 @@ timestamp: 2026-08-14
 | `python -m amazon_pairing.cli snapshot-catalog` | 拉取 EN 与赛狐普通产品候选快照 |
 | `python -m amazon_pairing.cli train-pilot` | 训练四家族分类器与 LightGBM LambdaRank，并输出独立指标 |
 | `python -m amazon_pairing.cli suggest-active` | 生成八工作表的只读人工审核工作簿 |
+| `python -m amazon_pairing.cli suggest-v2` | 生成证据图 V2 工作簿；可选 `--family-model`，使用低证据候选分层 |
 | `python -m amazon_pairing.cli import-feedback <xlsx>` | 校验人工结论，追加含模型/来源哈希的 JSONL 反馈 |
 
 关键产物（`missing_products/out/`）：
