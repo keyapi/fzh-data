@@ -36,15 +36,15 @@ CLI 的 `--cache-workspace`（旧名 `--main-workspace`）指向**原 clone 目�
 | 指标 | PR 173（Gold A） | 证据传播（活证据） |
 |------|------|------|
 | 当前在售未配对 | 3,557 | 3,557 |
-| 高可信精确证据 | 87 | **722** |
-| 智能候选审核 | 550 | **766** |
-| 特殊对象暂缓 | 434 | **145** |
-| 无可靠候选 | 2,486 | **1924** |
-| 传播审计 | — | 入 3557 = 唯一 758 + 冲突 453 + 未覆盖 2346 |
+| 高可信精确证据 | 87 | **541**（抽查后收紧，去掉虚假唯一） |
+| 智能候选审核 | 550 | **884** |
+| 特殊对象暂缓 | 434 | **244** |
+| 无可靠候选 | 2,486 | **1888** |
+| 传播审计 | — | 入 3557 = 唯一 577 + 冲突 634 + 未覆盖 2346 |
 
 3,557 条必须对账：`高可信 + 智能候选 + 特殊暂缓 + 无可靠候选 = 3,557`。不要和 8-11 快照的 4,407 混用。
 
-活证据唯一来源（审计 `unique_by_evidence`）：customer_code 263、live_image 133、near_msku 119、live_asin 97、live_msku 73、live_parent_sku 56、live_parent_asin 17。Gold A 只用于训练清洗，**不是**高可信门槛。高可信 722 少于审计唯一 758，因为 combo 等仍进特殊暂缓。
+活证据唯一必须按**原始已配对目标**计，不能先用 catalog 滤成一个再当高可信。同图/客户码还要过尺寸颜色；`-Cover` 后缀在 parent 拼接后仍能识别。Gold A 只清洗训练标签。
 
 黄金回归：`knowledge/golden-cases.yaml` + `tests/amazon_pairing/test_evidence.py`。`Danpinse-KS0388-blue-FBA`（Top1 `KS0388-HLRJLGBL-62x68x38-LIGHTBLUE`）/ `CEN665-Leaves-Grey-66-2`（`KS0244-CMGDTH-66x50-GREY`）/ `DanCA1534D9-Blue-153`（`KS0001-HLR-153-DEEPBLUE`）进高可信；`BAI31038N0A62927SX-2pcs-us` 进特殊暂缓。`LongHuxing-Foam-Lbai-100` 进无可靠候选：parent 全家未配对，禁止编造高可信。
 

@@ -29,7 +29,14 @@ from .report import ReviewRecord, write_review_workbook
 from .feedback import validate_feedback
 from .training import CandidateRetriever, FamilyClassifier, TrainingListing, build_pair_examples
 from .data import build_label_audit, load_amazon_cache
-from .evidence import build_live_maps, load_customer_code_index, resolve_live_targets, summarize_propagation
+from .evidence import (
+    build_live_maps,
+    load_customer_code_index,
+    refine_live_match,
+    resolve_live_targets,
+    summarize_propagation,
+    target_allows_nonordinary_override,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -280,13 +287,33 @@ def suggest_active(args: argparse.Namespace) -> int:
     no_candidates = []
     for row in unmatched:
         route = route_listing(row.msku, row.title, row.parent_sku, row.fulfillment)
-        match = resolve_live_targets(row, maps, set(catalog_by_sku))
-        if route.object_type == "combo" or (route.object_type != "ordinary" and not match.unique):
+        match = refine_live_match(
+            row, resolve_live_targets(row, maps, set(catalog_by_sku)), catalog_by_sku
+        )
+        if route.object_type == "combo":
             specials.append({
                 "MSKU": row.msku, "ASIN": row.asin, "标题": row.title,
                 "对象类型": route.object_type, "原因": " | ".join(route.reasons),
             })
             continue
+        if route.object_type in {"cover", "foam"}:
+            allow_override = (
+                match.unique
+                and match.targets
+                and match.targets[0] in catalog_by_sku
+                and (
+                    match.evidence in {"live_msku", "live_asin"}
+                    or target_allows_nonordinary_override(
+                        route.object_type, match.targets[0], catalog_by_sku[match.targets[0]].name
+                    )
+                )
+            )
+            if not allow_override:
+                specials.append({
+                    "MSKU": row.msku, "ASIN": row.asin, "标题": row.title,
+                    "对象类型": route.object_type, "原因": " | ".join(route.reasons),
+                })
+                continue
         if match.unique:
             product = catalog_by_sku[match.targets[0]]
             exact_records.append(
@@ -404,14 +431,16 @@ def audit_propagation(args: argparse.Namespace) -> int:
     matched_path = args.matched_cache or main / "missing_products/out/pairing_cache/amazon_matched.json"
     unmatched = [row for row in load_amazon_cache(unmatched_path) if row.online_status.upper() == "ACTIVE"]
     matched = load_amazon_cache(matched_path)
+    catalog_by_sku = {}
     catalog_skus: set[str] = set()
     if args.catalog and args.catalog.exists():
-        catalog_skus = {product.sku for product in load_catalog(args.catalog)}
+        catalog_by_sku = {product.sku: product for product in load_catalog(args.catalog)}
+        catalog_skus = set(catalog_by_sku)
     customer_index = {}
     if args.mapping:
         customer_index = load_customer_code_index(_read_mapping(args.mapping))
     maps = build_live_maps(matched, customer_index)
-    report = summarize_propagation(unmatched, maps, catalog_skus)
+    report = summarize_propagation(unmatched, maps, catalog_skus, catalog_by_sku)
     report["matched_rows"] = len(matched)
     report["generated_at"] = datetime.now(timezone.utc).isoformat()
     output = args.output.resolve()

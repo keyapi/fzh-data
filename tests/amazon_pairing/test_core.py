@@ -166,3 +166,11 @@ def test_historical_pairing_quarantines_non_ordinary_target():
 
     assert result.tier == "quarantine"
     assert "non_ordinary_target" in result.reasons
+
+def test_sku_suffix_cover_is_detected_even_with_parent_sku():
+    result = route_listing(
+        msku="CENL661-Brown-194-Cover",
+        title="Wedge Pillow Cover Pillow Cases (Just Cover), Brown",
+        parent_sku="LinenCover-pp",
+    )
+    assert result.object_type == "cover"

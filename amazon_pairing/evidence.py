@@ -4,6 +4,8 @@ import re
 from collections import defaultdict
 from dataclasses import dataclass, field
 
+from .attributes import extract_attributes
+from .candidates import _size_compatible
 from .data import AmazonListing, _key, _text
 
 
@@ -23,6 +25,11 @@ MSKU_SUFFIXES = (
 )
 CUSTOMER_PREFIX = re.compile(r"^(?:nb[/_\-]?)?", re.IGNORECASE)
 TRAILING_INDEX = re.compile(r"-\d+$")
+MIN_CUSTOMER_CODE_LEN = 10
+HARD_EVIDENCE = {"live_msku", "live_asin"}
+COVER_TARGET = re.compile(r"枕套|皮壳|床笠|sham|pillow.?cover|cushion.?cover", re.I)
+FOAM_TARGET = re.compile(r"海绵|foam", re.I)
+COLOR_GROUPS = (frozenset({"棕色", "咖啡色", "褐色"}),)
 
 
 def normalize_customer_code(value: str) -> str:
@@ -76,8 +83,11 @@ def build_live_maps(
     maps = LiveEvidenceMaps()
     if customer_code_index:
         for code, skus in customer_code_index.items():
+            normalized = normalize_customer_code(code)
+            if len(normalized) < MIN_CUSTOMER_CODE_LEN:
+                continue
             for sku in skus:
-                add_target(maps.customer_code, normalize_customer_code(code), sku)
+                add_target(maps.customer_code, normalized, sku)
     for row in matched:
         sku = row.target_sku
         if not sku:
@@ -89,9 +99,6 @@ def build_live_maps(
         add_target(maps.image, row.image_url, sku)
         for variant in msku_variants(row.msku):
             add_target(maps.near_msku, variant, sku)
-        add_target(maps.customer_code, normalize_customer_code(row.msku), sku)
-        for variant in msku_variants(row.msku):
-            add_target(maps.customer_code, normalize_customer_code(variant), sku)
     return maps
 
 
@@ -102,10 +109,16 @@ class EvidenceMatch:
     unique: bool
 
 
-def _catalog_targets(raw: set[str] | None, catalog_skus: set[str]) -> tuple[str, ...]:
+def _raw_targets(raw: set[str] | None) -> tuple[str, ...]:
     if not raw:
         return ()
-    return tuple(sorted(sku for sku in raw if not catalog_skus or sku in catalog_skus))
+    return tuple(sorted(raw))
+
+
+def _in_catalog(targets: tuple[str, ...], catalog_skus: set[str]) -> tuple[str, ...]:
+    if not catalog_skus:
+        return targets
+    return tuple(sku for sku in targets if sku in catalog_skus)
 
 
 def resolve_live_targets(
@@ -116,9 +129,6 @@ def resolve_live_targets(
     checks = (
         ("live_msku", maps.msku.get(_key(listing.msku))),
         ("live_asin", maps.asin.get(listing.asin) if listing.asin else None),
-        ("live_parent_sku", maps.parent_sku.get(_key(listing.parent_sku)) if listing.parent_sku else None),
-        ("live_parent_asin", maps.parent_asin.get(listing.parent_asin) if listing.parent_asin else None),
-        ("live_image", maps.image.get(listing.image_url) if listing.image_url else None),
         (
             "near_msku",
             set().union(*(maps.near_msku.get(variant, set()) for variant in msku_variants(listing.msku)))
@@ -131,27 +141,76 @@ def resolve_live_targets(
                 *(
                     maps.customer_code.get(normalize_customer_code(variant), set())
                     for variant in (listing.msku,) + msku_variants(listing.msku)
+                    if len(normalize_customer_code(variant)) >= MIN_CUSTOMER_CODE_LEN
                 )
             )
             if listing.msku
             else None,
         ),
+        ("live_parent_sku", maps.parent_sku.get(_key(listing.parent_sku)) if listing.parent_sku else None),
+        ("live_parent_asin", maps.parent_asin.get(listing.parent_asin) if listing.parent_asin else None),
+        ("live_image", maps.image.get(listing.image_url) if listing.image_url else None),
     )
     first_conflict: EvidenceMatch | None = None
     for name, raw in checks:
-        targets = _catalog_targets(set(raw) if raw else None, catalog_skus)
-        if len(targets) == 1:
-            return EvidenceMatch(targets, name, True)
-        if len(targets) > 1 and first_conflict is None:
-            first_conflict = EvidenceMatch(targets, f"{name}_conflict", False)
+        all_targets = _raw_targets(set(raw) if raw else None)
+        if not all_targets:
+            continue
+        catalog_targets = _in_catalog(all_targets, catalog_skus)
+        if len(all_targets) == 1:
+            if catalog_targets:
+                return EvidenceMatch(catalog_targets, name, True)
+            continue
+        if first_conflict is None:
+            display = catalog_targets or all_targets
+            first_conflict = EvidenceMatch(display, f"{name}_conflict", False)
     if first_conflict:
         return first_conflict
     return EvidenceMatch((), "", False)
 
 
-def load_customer_code_index(mapping) -> dict[str, set[str]]:
-    import pandas as pd
+def _color_tokens(values: tuple[str, ...]) -> set[str]:
+    expanded = set(values)
+    for group in COLOR_GROUPS:
+        if expanded & group:
+            expanded |= set(group)
+    return expanded
 
+
+def _colors_compatible(query_values, product_values) -> bool:
+    if not query_values.values or not product_values.values:
+        return True
+    if not query_values.reliable:
+        return True
+    return not _color_tokens(query_values.values).isdisjoint(_color_tokens(product_values.values))
+
+
+def refine_live_match(listing: AmazonListing, match: EvidenceMatch, catalog_by_sku: dict) -> EvidenceMatch:
+    if not match.targets or not match.unique:
+        return match
+    product = catalog_by_sku.get(match.targets[0])
+    if product is None:
+        return EvidenceMatch((), "", False)
+    if match.evidence in HARD_EVIDENCE:
+        return match
+    query = extract_attributes(f"{listing.msku} {listing.title}")
+    if not _size_compatible(query.size, product.attributes.size):
+        return EvidenceMatch(match.targets, f"{match.evidence}_size_conflict", False)
+    if not _colors_compatible(query.color, product.attributes.color):
+        return EvidenceMatch(match.targets, f"{match.evidence}_color_conflict", False)
+    return match
+
+
+def target_allows_nonordinary_override(object_type: str, sku: str, name: str) -> bool:
+    blob = f"{sku} {name}"
+    if object_type == "cover":
+        return sku.upper().startswith("KS0244") or bool(COVER_TARGET.search(blob))
+    if object_type == "foam":
+        return bool(FOAM_TARGET.search(blob)) or sku.upper().startswith("HM")
+    return False
+
+
+def load_customer_code_index(mapping) -> dict[str, set[str]]:
     if mapping is None or getattr(mapping, "empty", True):
         return {}
     sku_cols = [col for col in mapping.columns if col in ("赛狐SKU", "赛狐已存在SKU", "EN产品编号", "产品编号")]
@@ -171,7 +230,7 @@ def load_customer_code_index(mapping) -> dict[str, set[str]]:
         for col in code_cols:
             for part in re.split(r"[|;,，；]", _text(row.get(col))):
                 code = normalize_customer_code(part)
-                if code:
+                if len(code) >= MIN_CUSTOMER_CODE_LEN:
                     index[code].update(skus)
     return dict(index)
 
@@ -180,19 +239,20 @@ def summarize_propagation(
     unmatched: list[AmazonListing],
     maps: LiveEvidenceMaps,
     catalog_skus: set[str],
+    catalog_by_sku: dict | None = None,
 ) -> dict:
     counts = defaultdict(int)
     unique_by = defaultdict(int)
     conflict_by = defaultdict(int)
-    covered: list[str] = []
     for row in unmatched:
         match = resolve_live_targets(row, maps, catalog_skus)
+        if catalog_by_sku:
+            match = refine_live_match(row, match, catalog_by_sku)
         counts["input"] += 1
         if not match.targets:
             counts["uncovered"] += 1
             continue
         counts["covered"] += 1
-        covered.append(row.msku)
         if match.unique:
             counts["unique"] += 1
             unique_by[match.evidence] += 1

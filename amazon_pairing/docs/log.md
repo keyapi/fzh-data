@@ -10,7 +10,7 @@ tags: [amazon_pairing, log]
 ## 2026-08-14
 
 - **实现**: sibling 分支 `feature/amazon-pairing-evidence` 并入 PR 173 远端后，高可信改为当前已配对唯一目标（含 Silver），同 MSKU 跨店、同 ASIN 跨站、parentSku/parentAsin、近邻 MSKU、EN 客户码前后缀可传播；cover/foam 改为意图分类；美国床型/近寸不再当冲突。
-- **验证**: `uv run pytest tests/amazon_pairing -q`。在售未配对 3,557 = 722 高可信 + 766 智能候选 + 145 特殊暂缓 + 1924 无可靠候选。传播审计：唯一 758 / 冲突 453 / 未覆盖 2346。黄金 5 条：3 高可信、1 套件暂缓、LongHuxing 因 parent 全家未配对留在无可靠候选。
+- **验证**: 自检发现虚假高可信（catalog 过滤把家族多目标收成唯一、同图跨尺码、皮壳 listing 配成品）。收紧后 3,557 = 541 高可信 + 884 智能候选 + 244 特殊暂缓 + 1888 无可靠候选。黄金 5 条仍正确；先前错配已降到审核/暂缓。
 - **知识包**: `docs/reference/` + `knowledge/*.yaml`，供本分支与 PR 173 只读共享。本轮不训练 LTR，不调用配对写接口。
 - **纠错**: 上一版把高可信只认 Gold A，丢掉 FBA 已配对；`cover`/`foam` 子串把成品靠枕和 KS0244 枕套族打进特殊暂缓。
 

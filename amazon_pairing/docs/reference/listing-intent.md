@@ -24,7 +24,7 @@ timestamp: 2026-08-14
 
 - `cover only` / `just pillow cover` / `no filler`
 - `pillow covers` / `cushion covers` 作为主商品
-- MSKU 或 parentSku 含 `-cover-` 标记
+- MSKU 或 parentSku 含 `-cover-` 标记（分别检查，不要拼成一个字符串，否则末尾 `-Cover` 会被空格吃掉）
 
 ## 真海绵 foam
 

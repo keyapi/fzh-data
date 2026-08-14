@@ -146,3 +146,44 @@ def test_golden_routes():
         "Couch Cushion Support 2 PCS, High-Density Foam",
         "BN-Sofa-Support",
     ).object_type == "combo"
+
+from amazon_pairing.attributes import extract_attributes
+from amazon_pairing.candidates import CandidateProduct
+from amazon_pairing.evidence import refine_live_match, target_allows_nonordinary_override
+
+
+def test_parent_multi_target_is_conflict_even_if_catalog_has_one():
+    matched = [
+        listing(parent_sku="SANJIAO-Bolster", msku="a", target_sku="KS0001-DM-100-GRASSGREEN"),
+        listing(parent_sku="SANJIAO-Bolster", msku="b", target_sku="KS0001-HLR-100-GINGER-ALL"),
+    ]
+    unmatched = listing(msku="child", parent_sku="SANJIAO-Bolster", title="bolster pillow")
+    maps = build_live_maps(matched)
+    match = resolve_live_targets(unmatched, maps, {"KS0001-DM-100-GRASSGREEN"})
+    assert match.unique is False
+    assert "conflict" in match.evidence
+
+
+def test_image_size_mismatch_is_demoted():
+    matched = [listing(image_url="http://img/a.jpg", target_sku="KS0001-PR-194-GREY")]
+    unmatched = listing(
+        msku="CENVel1612-hui-100-Cover",
+        title="Triangular Pillow Covers 100 cm Grey",
+        image_url="http://img/a.jpg",
+    )
+    maps = build_live_maps(matched)
+    product = CandidateProduct(
+        "KS0001-PR-194-GREY",
+        "KS0001",
+        "三角靠枕-平绒-194-灰色",
+        extract_attributes("KS0001-PR-194-GREY 三角靠枕-平绒-194-灰色"),
+    )
+    match = resolve_live_targets(unmatched, maps, {product.sku})
+    match = refine_live_match(unmatched, match, {product.sku: product})
+    assert match.unique is False
+    assert "size_conflict" in match.evidence
+
+
+def test_cover_override_only_for_sham_sku():
+    assert target_allows_nonordinary_override("cover", "KS0244-CMGDTH-66x50-GREY", "枕套")
+    assert not target_allows_nonordinary_override("cover", "KS0001-PR-194-GREY", "三角靠枕-平绒-194-灰色")

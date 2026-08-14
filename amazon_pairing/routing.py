@@ -18,9 +18,10 @@ FEATURE_COVER = re.compile(
 STRONG_COVER_TITLE = (
     "cover only",
     "just pillow cover",
+    "just cover",
     "no filler",
 )
-PILLOW_COVERS = re.compile(r"\b(?:pillow|cushion) covers\b", re.IGNORECASE)
+PILLOW_COVERS = re.compile(r"\b(?:pillow|cushion) covers?\b", re.IGNORECASE)
 SKU_COVER = re.compile(r"(?:^|[-_])cover(?:$|[-_])", re.IGNORECASE)
 SKU_FOAM = re.compile(r"(?:^|[-_])foam(?:$|[-_])", re.IGNORECASE)
 FINISHED_NOUN = re.compile(
@@ -34,8 +35,7 @@ COMBO = re.compile(
 
 
 def _true_cover(msku: str, title: str, parent_sku: str) -> bool:
-    sku_blob = f"{msku} {parent_sku}"
-    if SKU_COVER.search(sku_blob):
+    if SKU_COVER.search(msku) or SKU_COVER.search(parent_sku):
         return True
     lowered = title.lower()
     if any(token in lowered for token in STRONG_COVER_TITLE):
@@ -53,7 +53,7 @@ def _true_foam(msku: str, title: str, parent_sku: str) -> bool:
         return True
     if FINISHED_NOUN.search(title):
         return False
-    return bool(SKU_FOAM.search(f"{msku} {parent_sku}"))
+    return bool(SKU_FOAM.search(msku) or SKU_FOAM.search(parent_sku))
 
 
 def route_listing(

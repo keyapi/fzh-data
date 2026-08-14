@@ -43,7 +43,9 @@ COLOR_TERMS = (
     ("green", "绿色"),
     ("yellow", "黄色"),
     ("purple", "紫色"),
-    ("brown", "棕色"),
+    ("brown", "咖啡色"),
+    ("marron", "咖啡色"),
+    ("braun", "咖啡色"),
     ("coffee", "咖啡色"),
     ("cream", "奶油色"),
 )
