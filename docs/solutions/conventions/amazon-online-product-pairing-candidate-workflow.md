@@ -1,5 +1,6 @@
 ---
 title: Amazon 在线商品配对的分层候选与运营确认流程
+type: Reference
 date: 2026-08-11
 category: conventions
 module: amazon_pairing
@@ -69,6 +70,14 @@ Amazon 应走第一行的在线商品机制。
    候选赛狐 SKU 和名称、置信度及匹配依据。运营确认范围后才生成或导入 Amazon 模板，
    并从 `pageList` 回读验证结果。
 
+## 2026-08-14 Pilot Result
+
+现已实现 `amazon_pairing` 只读流水线。历史 26,999 条已配对记录中，只有 14,021 条满足 Gold A；12,918 条 Silver 和 60 条 Quarantine 不作为正例。候选 catalog 含 2,259 个 EN/赛狐普通产品。
+
+四家族试点的 family Top-1 为 94.79%，但原始 Candidate Recall@20 仅 32.25%，排序 Top-1/Top-3 为 41.37%/55.05%，因此 `production_ready=false`。排序 Recall@20 的 100% 来自评估时正样本注入，只衡量排序器，不代表真实候选召回。
+
+最新 3,557 条在售未配对分为 87 条高可信精确证据、550 条实验候选、434 条特殊对象暂缓和 2,486 条无可靠候选，数量完全对账。这个结果确认：当前最合适的自动化不是直接写配对，而是保守缩小人工搜索范围并积累经人工确认、剔除疑问的反馈标签。
+
 ## Non-Negotiable Boundaries
 
 - 本子项目当前只读取、分析并生成 Excel 建议，不调用任何赛狐配对写接口。
@@ -77,6 +86,9 @@ Amazon 应走第一行的在线商品机制。
 - 不用配对任务修正 EN 产品、客户物料号或赛狐商品状态。此类缺口回到
   `missing_products` 主线，按完整通途 SKU 精确登记规则处理。
 - FBA 别名覆盖较低是已知数据质量问题，不以补全率压力促成猜测性写入。
+- 候选检索必须先做可靠属性冲突过滤；若所有候选冲突或家族置信度不足，必须主动弃权。
+- cover、foam、combo、主体骨架及其他配套物料不得强配普通 KS 产品；combo 转到 `TJ#` 套件流程。
+- 人工反馈必须保存来源工作簿与模型文件哈希，疑问反馈不得回流为 Gold 标签。
 
 ## Outputs And Handoff
 
