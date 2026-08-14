@@ -10,3 +10,5 @@ tags: [reference, index]
 | 文档 | 说明 |
 |------|------|
 | [rule-columns.md](rule-columns.md) | 系数列 / 参考值列 / 目标订单列 |
+| [gsheets-credentials.md](gsheets-credentials.md) | gspread 本地 SA JSON |
+| [sku-remap.md](sku-remap.md) | 订单旧 SKU → 井新名 |
