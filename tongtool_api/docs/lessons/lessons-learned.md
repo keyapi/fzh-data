@@ -17,4 +17,4 @@ timestamp: 2026-08-13
 6. Cache and bounded pagination reduce API load, but cache keys must include all query parameters.
 7. Raw order/package responses contain PII. Commit schemas, counts, and redacted findings only.
 8. Mutation tools require explicit scope confirmation even when the App has permission.
-9. Date every live-behavior claim because Tongtool docs and generated schemas can change.
+10. Cursor 和 Codex 的通途 MCP 是两套注册。通途不在 Marketplace，Agent 弹不出安装提示；仓库 `.cursor/` gitignore。Cursor 用 `setup_cursor_mcp.py` 写 `~/.cursor/mcp.json`，工具名带 `user-` 前缀。未出现时不要假装已接通并静默 HTTP。

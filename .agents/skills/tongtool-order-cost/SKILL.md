@@ -37,7 +37,7 @@ metadata:
 - `BNFBAvelvetgray60` 是 60CM 独立货，不是 gray-100 笔误。
 - `FoamFBAKZ159410287-BLACK-97` 是规则笔误，订单侧是 `...-BLACK-100`。`CENKZ159410287-BLACK-97` 是自发货 CEN，不要改。
 - 只改 SKU 列（`通途SKU` 优先，否则 `SKU`）。不改 MSKU / 平台 SKU / 成本列。
-- Cursor 当前**未**注册通途 MCP；用 `tongtool_api/.env` + `tongtool_api/mcp_http.py`。MCP 装进 Cursor 是后续独立 PR。
+- Cursor Agent 查主档：用 MCP `user-tongtool_erp2_primary` / `erp2_product_goodsquery`。工具目录没有通途 MCP 时先跑 `uv run python tongtool_api/setup_cursor_mcp.py`，不要静默 HTTP。CLI `lookup_tongtool_sku.py` 仍走 `mcp_http.py`。
 
 ## 不要做
 

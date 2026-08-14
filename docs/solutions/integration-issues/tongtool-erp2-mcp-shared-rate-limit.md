@@ -55,8 +55,8 @@ related_components: [tongtool_api, codex-mcp, erpnext]
 
 ### 1. 将 MCP 配置和真实凭证分层
 
-- 提交项目文档、Skill、`.env.example` 与 [安装脚本](../../../tongtool_api/setup_codex_mcp.ps1)。
-- 忽略 `tongtool_api/.env`，真实凭证只进入用户级 Codex 配置。
+- 提交项目文档、Skill、`.env.example` 与安装脚本：[Codex](../../../tongtool_api/setup_codex_mcp.ps1)、[Cursor](../../../tongtool_api/setup_cursor_mcp.py)。
+- 忽略 `tongtool_api/.env`，真实凭证只进入用户级 Codex `config.toml` 或 Cursor `mcp.json`。
 - 同事 clone 并信任项目后获得相同的安装流程与 Skill，但必须自行获得可授权凭证。
 
 ### 2. 先探测权限，再运行业务查询

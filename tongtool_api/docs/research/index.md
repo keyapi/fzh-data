@@ -9,5 +9,6 @@ timestamp: 2026-08-13
 
 # Research
 
+- 2026-08-14-cursor-mcp-install.md
 - 2026-08-13-source-audit.md
 - 2026-08-13-rate-limit-experiment.md

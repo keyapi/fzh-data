@@ -92,7 +92,7 @@ Workbook 标题：`通途订单202606-特殊规则`（1.7.0 用）、`通途订�
 | Google Sheet | `secrets/gsheets-service-account.json` + `tongtool_order_cost/.env` | 忽略 |
 | 通途 ERP2 | `tongtool_api/.env` | 忽略 |
 
-Cursor **没有**注册 `tongtool_erp2_*` MCP。当前用 `tongtool_api/mcp_http.py` 直连 `https://mcp.tongtool.com/mcp`。限流仍是商户合计 5 次/分钟。把 MCP 装进 Cursor 是后续独立 PR。
+Cursor Agent 用用户级 MCP `user-tongtool_erp2_primary`（`~/.cursor/mcp.json`，由 `tongtool_api/setup_cursor_mcp.py` 写入）。CLI 脚本仍用 `tongtool_api/mcp_http.py`。限流仍是商户合计 5 次/分钟。
 
 ## 禁止
 
