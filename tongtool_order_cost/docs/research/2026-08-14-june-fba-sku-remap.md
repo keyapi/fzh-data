@@ -38,5 +38,5 @@ FBA 尾程：Amazon 账期已含 FBA fulfillment。井在规则里填的是**负
 
 ## 后续
 
-- Cursor 未装通途 MCP；SKU 校验走 `tongtool_api/mcp_http.py`。MCP 安装提示作为独立 PR。
+- 当时 Cursor 未装通途 MCP，SKU 校验走 `tongtool_api/mcp_http.py`。Cursor MCP 安装见 `tongtool_api/docs/research/2026-08-14-cursor-mcp-install.md`。
 - 长期：通途改名会打断精确匹配管道，需要别名表或「按导出日 SKU」约定。

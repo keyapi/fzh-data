@@ -139,6 +139,9 @@ Amazon FBA 账期费用里已经包含平台履约尾程。特殊规则里对 FB
 
 ## Integrations
 
+### Cursor MCP vs Codex MCP
+通途官方 MCP 在两个宿主上要**分别注册**。Codex 写 `~/.codex/config.toml`（`setup_codex_mcp.ps1`）；Cursor 写 `~/.cursor/mcp.json`（`setup_cursor_mcp.py`）。仓库 `.cursor/` 整目录 gitignore，clone 不会带上项目级 `mcp.json`。通途不在 Cursor Marketplace，Agent 也没有可调用的「安装 MCP」对话框。Cursor 用户级服务器在工具目录里叫 `user-<mcp.json 键名>`。
+
 ### Tongtool ERP2 Shared Rate Bucket
 
 通途 ERP2.0 的同一商户上游调用预算。2026-08-13 实测：两个独立 App 经 MCP 调用仍共用每分钟 5 次额度；主 App 连续 5 次成功后，第二 App 的首个同端点调用返回业务码 526。这不是每 App 独立额度。524 表示细粒度接口未授权，不能当作限流；所有 ERP2 自动化应合并计数、缓存和退避。

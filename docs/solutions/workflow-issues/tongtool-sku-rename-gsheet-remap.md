@@ -27,7 +27,7 @@ Colab **1.7.0** 对订单 `通途SKU` 与规则表做精确匹配。通途允许
 1. **不要改井的新名迁就导出。** 把订单 Google Sheet（以及如需的 1.4 xlsx）旧名换成新名。
 2. **凭证按项目分层。** 从 notebook cell 0 抽出 service account 到 `secrets/gsheets-service-account.json`（gitignore），路径写在 `tongtool_order_cost/.env`。不要把私钥提交进 git 或写进 SKILL。
 3. **先 dry-run 再 `--apply`。** 只改 SKU 列（优先 `通途SKU`，否则 `SKU`）。不改 MSKU、平台 SKU、成本列。
-4. **像旧名的字符串先查通途主档。** 用 `erp2_product_goodsquery`（`tongtool_order_cost/scripts/lookup_tongtool_sku.py`）。Cursor 当前未注册通途 MCP，走 `tongtool_api/.env` + `tongtool_api/mcp_http.py`。配额仍是商户合计 5 次/分钟。
+4. **像旧名的字符串先查通途主档。** Agent 用 Cursor MCP `erp2_product_goodsquery`；CLI 用 `lookup_tongtool_sku.py`（`mcp_http.py`）。配额仍是商户合计 5 次/分钟。
 5. **笔误和真 SKU 分开。** `BNFBAvelvetgray60` 是 60CM 真货；`FoamFBA…BLACK-97` 是规则笔误（订单是 100）；`CENKZ…BLACK-97` 是自发货 CEN。
 
 已确认的 2026-06 Velvet 四对映射在 `tongtool_order_cost/tongtool_order_cost/sku_map.py`。
