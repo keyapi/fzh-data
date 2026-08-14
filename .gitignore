@@ -32,6 +32,7 @@ cookie.txt
 .gh-token
 out/*
 missing_products/out/**
+amazon_pairing/out/**
 !out/.gitkeep
 数据源/*
 !数据源/.gitkeep
