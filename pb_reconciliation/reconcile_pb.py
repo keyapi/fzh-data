@@ -5,8 +5,9 @@
 从 PB 邮件付款批次 + 发票 CSV 更新给财务的对账表：
 1) 追加付款到 "PB Remittance Advice" 表（校验不重不漏）
 2) 追加发票到 "Invoice to PB" 表（截至首个 0 付款的文件夹，校验不重不漏）
-3) 更新 Notes 汇总日期（金额是公式，由 fullCalcOnLoad 触发重算）
-4) 双开票映射：批次里的废用发票号改写为 CSV 留用号，便于公式 VLOOKUP
+3) 更新 Notes 汇总日期 + 重写"上轮未付本轮已付/本轮未付"区块 + 差额说明
+4) 颜色标记：本轮未付发票黄底，之前未付本轮已付发票绿底
+5) 双开票映射：批次里的废用发票号改写为 CSV 留用号，便于公式 VLOOKUP
 
 用法：
     python reconcile_pb.py --dry-run   # 只读+校验+打印报告，不写文件
@@ -23,6 +24,7 @@ import os
 from copy import copy
 
 import openpyxl
+from openpyxl.styles import PatternFill
 
 # ================= 本月参数（下月复用只改这里） =================
 BASE_DIR = r"D:\Work\美国\Tracy Miller\PB orders"
@@ -38,7 +40,15 @@ SCAN_FOLDERS = ["202605", "202606", "202607"]
 # 双开票映射：批次里的发票号 -> CSV 留用的发票号
 REMAP = {"INV0580626000011541": "INV0580626000011530"}
 REMAP_NOTE = "PB重复 弃用1541 留用1530"
+# 差额说明模板（{} 填本轮未付合计）；-195/-32.5 为历史多付常数，见 Notes 相关区块
+DIFF_NOTE = "多付的 -195  -  多付的32.5 = -227.50 + 未付{}"
 # ==============================================================
+
+# 颜色标记：黄 = 本轮未付；绿 = 之前未付本轮已付（浅绿）
+YELLOW = PatternFill(start_color="FFFFFF00", end_color="FFFFFF00", fill_type="solid")
+GREEN = PatternFill(start_color="FF92D050", end_color="FF92D050", fill_type="solid")
+# 与现有黄色标记一致的填充列（H 头行信息 + 校验列）
+FILL_COLS = [1, 2, 3, 5, 7, 8, 24, 25, 28, 31, 33, 34, 52, 53, 55, 56, 57, 58, 60, 61, 63, 64, 65, 66, 79, 85, 86]
 
 PB_SHEET = "PB Remittance Advice"
 INV_SHEET = "Invoice to PB"
@@ -137,7 +147,7 @@ def detect_cutoff(folders_with_csv, batch_set):
     return included
 
 
-def build_report(batch_rows, include_folders, wb, invoice_rows, added_set, existing_pay_invs):
+def build_report(batch_rows, include_folders, wb, invoice_rows, added_set, existing_pay_invs, old_sheet_set, green_invs, yellow_invs):
     """汇总报告 + 不重不漏校验。返回 (report_lines, errors)。"""
     lines = []
     errors = []
@@ -153,19 +163,13 @@ def build_report(batch_rows, include_folders, wb, invoice_rows, added_set, exist
         errors.append(f"付款重复：{sorted(dup_pay)[:10]}")
 
     # 2) 付款不漏：批次每张发票都必须在 Invoice to PB 命中
-    iws = wb[INV_SHEET]
-    inv_sheet_set = set()
-    for r in range(2, iws.max_row + 1):
-        v = iws.cell(r, 1).value
-        if v:
-            inv_sheet_set.add(normalize_inv(v))
-    missing = batch_set - (inv_sheet_set | added_set)
+    missing = batch_set - (old_sheet_set | added_set)
     lines.append(f"[付款] 批次每张发票在 Invoice to PB 命中：缺少 {len(missing)} 张")
     if missing:
         errors.append(f"付款无对应发票：{sorted(missing)[:10]}")
 
     # 3) 发票不重：CSV 发票不得与表内重复
-    dup_inv = added_set & inv_sheet_set
+    dup_inv = added_set & old_sheet_set
     lines.append(f"[发票] 新增 {len(added_set)} 张；与表内重叠 {len(dup_inv)} 张")
     if dup_inv:
         errors.append(f"发票与表内重复：{sorted(dup_inv)[:10]}")
@@ -184,11 +188,11 @@ def build_report(batch_rows, include_folders, wb, invoice_rows, added_set, exist
     # 5) 发票不漏：全文件夹纳入、数据行数统计
     total_files = sum(len(f) for _, f in include_folders)
     lines.append(f"[发票] 纳入文件夹 {len(include_folders)} 个，CSV 文件 {total_files} 个，数据行 {len(invoice_rows)} 行")
-    lines.append(f"[发票] 新增后 Invoice to PB 预计总发票数 {len(inv_sheet_set | added_set)}")
+    lines.append(f"[发票] 新增后 Invoice to PB 预计总发票数 {len(old_sheet_set | added_set)}")
 
-    # 6) 未付清单（新增发票中批次未命中的）
-    unpaid = sorted(added_set - batch_set)
-    lines.append(f"[对账] 新增发票中未付款 {len(unpaid)} 张：{unpaid}")
+    # 6) 未付清单（新增发票中批次未命中的）+ 颜色
+    lines.append(f"[对账] 本轮未付（黄底）{len(yellow_invs)} 张：{yellow_invs}")
+    lines.append(f"[对账] 之前未付本轮已付（绿底）{len(green_invs)} 张")
 
     # 7) 双开票映射记录
     mapped = [(a, b) for a, b in zip(batch_invs_raw, batch_invs) if a != b]
@@ -236,9 +240,22 @@ def main():
         v = pws.cell(r, 3).value
         if v:
             existing_pay_invs.add(normalize_inv(v))
+    iws_base = wb[INV_SHEET]
+    old_sheet_set = set()
+    for r in range(2, iws_base.max_row + 1):
+        v = iws_base.cell(r, 1).value
+        if v:
+            old_sheet_set.add(normalize_inv(v))
+
+    # 颜色集合：绿=之前未付本轮已付（批次 ∩ 旧表），黄=本轮未付（新加未付）
+    green_invs = sorted(batch_set & old_sheet_set)
+    yellow_invs = sorted(added_set - batch_set)
 
     # ---- 校验 + 报告 ----
-    lines, errors = build_report(batch_rows, include_folders, wb, invoice_rows, added_set, existing_pay_invs)
+    lines, errors = build_report(
+        batch_rows, include_folders, wb, invoice_rows, added_set, existing_pay_invs,
+        old_sheet_set, green_invs, yellow_invs,
+    )
     print("[4/5] 对账报告:")
     for ln in lines:
         print("      " + ln)
@@ -295,6 +312,20 @@ def main():
             iws.cell(r, c)._style = copy(itpl[c - 1])
     print(f"      发票追加 {len(invoice_rows)} 行 (Invoice to PB R{inv_start}-{inv_start + len(invoice_rows) - 1})")
 
+    # 颜色标记：黄=本轮未付，绿=之前未付本轮已付（只标 H 头行）
+    def inv_h_rows(inv):
+        return [r for r in range(2, iws.max_row + 1) if iws.cell(r, 1).value == inv and iws.cell(r, 24).value == "H"]
+
+    for inv in green_invs:
+        for r in inv_h_rows(inv):
+            for c in FILL_COLS:
+                iws.cell(r, c).fill = GREEN
+    for inv in yellow_invs:
+        for r in inv_h_rows(inv):
+            for c in FILL_COLS:
+                iws.cell(r, c).fill = YELLOW
+    print(f"      颜色：黄(未付) {len(yellow_invs)} 张，绿(本轮已付) {len(green_invs)} 张")
+
     # Notes 汇总日期
     nws = wb[NOTES_SHEET]
     # B2 = 新加发票最大日期（CSV 文本 MM/DD/YYYY）
@@ -325,6 +356,96 @@ def main():
         if new is not None:
             nws.cell(2, col).value = datetime.datetime(new.year, new.month, new.day)
             print(f"      Notes {nws.cell(2, col).coordinate} -> {new}")
+
+    # ---- Notes 区块重写（R46-86）：上轮未付本轮已付 + 本轮未付 + 异常 + 差额 ----
+    def inv_detail(inv):
+        for r in range(2, iws.max_row + 1):
+            if iws.cell(r, 1).value == inv and iws.cell(r, 24).value == "H":
+                return iws.cell(r, 2).value, iws.cell(r, 79).value
+        return None, None
+
+    # 读取基础文件里的"异常"区块（历史数据，保留原样）
+    abn_header = "异常 已加入Invoice to PB"
+    abn_start = next((r for r in range(44, 87) if nws.cell(r, 11).value == abn_header), None)
+    abn_rows = []
+    if abn_start:
+        r = abn_start + 1
+        while r <= 86 and nws.cell(r, 11).value not in (None, ""):
+            abn_rows.append((nws.cell(r, 11).value, nws.cell(r, 12).value, nws.cell(r, 13).value))
+            r += 1
+
+    # 捕获样式（头行 + 数据行），再清空
+    hdr_k, hdr_l, hdr_m = nws["K46"], nws["L46"], nws["M46"]
+    data_k = nws["K52"] if nws["K52"].value else hdr_k
+    data_m = nws["M52"] if nws["M52"].value else hdr_m
+    no_fill = PatternFill(fill_type=None)
+    for r in range(47, 87):
+        for c in range(1, 16):
+            cell = nws.cell(r, c)
+            cell.value = None
+            cell.fill = no_fill
+
+    def put(r, col, val, style):
+        cell = nws.cell(r, col)
+        cell.value = val
+        cell.font = copy(style.font)
+        cell.fill = copy(style.fill)
+        cell.border = copy(style.border)
+        cell.number_format = style.number_format
+        cell.alignment = copy(style.alignment)
+        return cell
+
+    # 上轮未付 本轮已付
+    r = 47
+    for inv in green_invs:
+        d, amt = inv_detail(inv)
+        put(r, 11, inv, data_k)
+        if d:
+            put(r, 12, d, hdr_l)
+        if amt is not None:
+            put(r, 13, amt, data_m)
+        r += 1
+    paid_total_row = r
+    put(paid_total_row, 11, "金额合计", data_k)
+    put(paid_total_row, 13, f"=SUM(M47:M{paid_total_row - 1})", data_m)
+
+    # 本轮未付
+    hu = paid_total_row + 2
+    put(hu, 11, "本轮未付账单号", hdr_k)
+    put(hu, 12, "订单日期", hdr_l)
+    put(hu, 13, "账单金额", hdr_m)
+    r = hu + 1
+    for inv in yellow_invs:
+        d, amt = inv_detail(inv)
+        put(r, 11, inv, data_k)
+        if d:
+            put(r, 12, d, hdr_l)
+        if amt is not None:
+            put(r, 13, amt, data_m)
+        r += 1
+    unpaid_total_row = r
+    put(unpaid_total_row, 11, "金额合计", data_k)
+    put(unpaid_total_row, 13, f"=SUM(M{hu + 1}:M{unpaid_total_row - 1})", data_m)
+
+    # 异常（保留历史）
+    he = unpaid_total_row + 2
+    put(he, 11, abn_header, hdr_k)
+    put(he, 12, "订单日期", hdr_l)
+    put(he, 13, "账单金额", hdr_m)
+    for i, (k, l, m) in enumerate(abn_rows):
+        put(he + 1 + i, 11, k, data_k)
+        if l:
+            put(he + 1 + i, 12, l, hdr_l)
+        if m is not None:
+            put(he + 1 + i, 13, m, data_m)
+
+    # 差额
+    unpaid_total = round(sum((inv_detail(i)[1] or 0) for i in yellow_invs), 2)
+    green_total = round(sum((inv_detail(i)[1] or 0) for i in green_invs), 2)
+    put(86, 8, "=G2-H2", nws["H86"])
+    put(86, 9, "差额", nws["I86"])
+    put(86, 11, DIFF_NOTE.format(unpaid_total), nws["K86"])
+    print(f"      Notes：绿(已付) {len(green_invs)} 张 合计 {green_total}，黄(未付) {len(yellow_invs)} 张 合计 {unpaid_total}")
 
     wb.calculation.fullCalcOnLoad = True
     wb.save(out_path)
