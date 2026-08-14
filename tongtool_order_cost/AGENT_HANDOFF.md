@@ -1,7 +1,7 @@
 # tongtool_order_cost — Agent 交接
 
-> **CLI**: `scripts/run_audit_170.py` · `scripts/remap_gsheet_sku.py` · `scripts/lookup_tongtool_sku.py`  
-> **人读**: [README.md](README.md)  
+> **CLI**: `scripts/run_audit_170.py` · `scripts/remap_gsheet_sku.py` · `scripts/lookup_tongtool_sku.py`
+> **人读**: [README.md](README.md)
 > **Skill**: `.agents/skills/tongtool-order-cost/SKILL.md`
 
 ## 业务背景
@@ -49,7 +49,7 @@ lookup_tongtool_sku.py <SKU...>             # 主档是否存在
 
 ## Notebook / Google Sheet 约定（2026-08-14 核实）
 
-1.7.0 读 gs **和财务部共享** → ws **Jeck特殊规则-订单改销售额成本**（`use_local_rule_csv_170 = NO`）。  
+1.7.0 读 gs **和财务部共享** → ws **Jeck特殊规则-订单改销售额成本**（`use_local_rule_csv_170 = NO`）。
 旧 ws **特殊规则-订单改销售额成本** notebook 已不用。
 
 六月订单两份 workbook 都有这 3 张 FBA 相关表（列名不完全一样）：
@@ -71,7 +71,7 @@ Workbook 标题：`通途订单202606-特殊规则`（1.7.0 用）、`通途订�
 | `BNUSFBA-vel-grey153` | `BNUSFBA-Velvet-Grey-153` |
 | `BNvelvetblack-153fba` | `BNUSFBA-Velvet-Black-153` |
 
-**不要替换：** `BNFBAvelvetgray60`（通途主档存在：三角无扣 60CM）；`CENKZ159410287-BLACK-97`（自发货 CEN）。  
+**不要替换：** `BNFBAvelvetgray60`（通途主档存在：三角无扣 60CM）；`CENKZ159410287-BLACK-97`（自发货 CEN）。
 **规则笔误：** `FoamFBAKZ159410287-BLACK-97` → 应写 `FoamFBAKZ159410287-BLACK-100`（改规则，不改订单 100→97）。
 
 ## 去重键（6 列）
@@ -80,9 +80,9 @@ Workbook 标题：`通途订单202606-特殊规则`（1.7.0 用）、`通途订�
 
 ## 验证要点
 
-1. `ref_usd × fx × 发货数量` = 数量列 after  
+1. `ref_usd × fx × 发货数量` = 数量列 after
 2. FBA 尾程：参考值 **>0 或 =0** 不改 `运费`；参考值 **<0** 按账期差异写入 `运费`
-3. `01_科目瀑布` 各科 Δ 与总览一致  
+3. `01_科目瀑布` 各科 Δ 与总览一致
 4. SKU 替换：apply 后旧名计数为 0，新名计数 = 原旧名计数，gray60 计数不变
 
 ## 凭证
@@ -96,6 +96,6 @@ Cursor **没有**注册 `tongtool_erp2_*` MCP。当前用 `tongtool_api/mcp_http
 
 ## 禁止
 
-- 不要把订单/规则大 xlsx 提交进 git  
-- 不要提交 service account JSON / notebook 私钥  
-- 不要直接 push main；走 `feature/...` + PR  
+- 不要把订单/规则大 xlsx 提交进 git
+- 不要提交 service account JSON / notebook 私钥
+- 不要直接 push main；走 `feature/...` + PR
