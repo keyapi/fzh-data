@@ -26,8 +26,7 @@ OUT_DIR = r"D:\Work\美国\Tracy Miller\PB orders\payment advice\To Tracy Miller
 # 账期列表：(start, end) 格式 YYYYMMDD。默认每月两个独立账期；
 # 如需一次合并结算（如 2026-08 付 05/19-07/18 两期），可临时改为 [("20260519","20260718")]
 PERIODS = [("20260519", "20260618"), ("20260619", "20260718")]
-# 各账期预计付款总额（硬校验，来自财务确认）；如需一次合并结算可加
-# ("20260519", "20260718") -> 23028.46
+# 各账期预计付款总额（硬校验，来自财务确认）；如需一次合并结算可加 ("20260519","20260718") -> 23028.46
 EXPECTED = {"20260519-20260618": 14185.71, "20260619-20260718": 8842.75}
 # 上轮账期 TM 文件（供 P1 的"上轮未付本轮已付"）；未列出的账期自动衔接上一期的未付清单
 PREV_SOURCE = {
@@ -95,91 +94,121 @@ def read_prev_unpaid(file):
 
 def build_notes(nws, period_start, period_end, inv_start, inv_end, pay_start, pay_end,
                 actual_pay_start, actual_pay_end, unpaid_last_paid, unpaid_this):
-    """写 Notes sheet（结构对照示例 20260419-20260518）。"""
-    from openpyxl.styles import Font
-    bold = Font(bold=True)
+    """写 Notes sheet（结构/样式对照示例 20260419-20260518）。"""
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    f10 = Font(name="Arial", size=10)
+    f10b = Font(name="Arial", size=10, bold=True)
+    f11 = Font(name="Arial", size=11)
+    f11b = Font(name="Arial", size=11, bold=True)
+    fill_purple = PatternFill("solid", start_color="FFE5DFEC", end_color="FFE5DFEC")
+    fill_orange = PatternFill("solid", start_color="FFFFC000", end_color="FFFFC000")
+    fill_green = PatternFill("solid", start_color="FF92D050", end_color="FF92D050")
+    fill_yellow = PatternFill("solid", start_color="FFFFFF00", end_color="FFFFFF00")
     no_fill = PatternFill(fill_type=None)
+    thin = Side(style="thin")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    date_fmt = "m/d/yyyy;@"
+    amt_fmt = "\\$#,##0.00;\\-\\$#,##0.00"
+    wrap = Alignment(wrap_text=True, vertical="top")
+    center = Alignment(horizontal="center", vertical="center")
 
-    def put(r, c, val, font=None, numfmt=None):
+    # 列宽
+    for col, w in {"A": 10.5, "F": 12.875, "G": 15.0, "I": 11.125, "J": 16.375,
+                   "K": 67.875, "L": 12.875, "M": 13.375, "N": 15.625}.items():
+        nws.column_dimensions[col].width = w
+    # 行高
+    nws.row_dimensions[1].height = 39
+    nws.row_dimensions[2].height = 153.75
+    nws.row_dimensions[3].height = 51
+    nws.row_dimensions[4].height = 13.5
+
+    def put(r, c, val, font=f11, fill=None, numfmt="General", align=None):
         cell = nws.cell(r, c)
         cell.value = val
-        cell.font = copy(font) if font else Font()
-        cell.fill = no_fill
-        cell.border = copy(nws["A1"].border)
-        cell.number_format = numfmt if numfmt else "General"
-        cell.alignment = copy(nws["A1"].alignment)
+        cell.font = copy(font)
+        cell.fill = fill if fill else no_fill
+        cell.border = border
+        cell.number_format = numfmt
+        cell.alignment = align if align else (wrap if c == 11 else Alignment())
         return cell
 
-    # Row 1 headers
+    # Row 1 headers（A1-F1 浅紫底，居中）
     for c, h in [(1, "Invoice To PB Start Date"), (2, "Invoice To PB End Date"),
                  (3, "PB Invoice Start Date"), (4, "PB Invoice End Date"),
                  (5, "PB Payment Start Date"), (6, "PB Payment End Date"),
                  (7, "Invoice Amount"), (8, "Payment Amount"), (9, "Commission Rate"),
                  (10, "Commission Amount"), (11, "Notes")]:
-        put(1, c, h, bold)
+        put(1, c, h, f10b, fill_purple if c <= 6 else None, align=center)
 
-    # Row 2 dates + formulas
+    # Row 2 dates + formulas（A2-F2 橙底，日期 m/d/yyyy）
     def dt(v):
         return datetime.datetime(v.year, v.month, v.day)
-    put(2, 1, dt(inv_start))
-    put(2, 2, dt(inv_end))
-    put(2, 3, dt(inv_start))
-    put(2, 4, dt(inv_end))
-    put(2, 5, dt(pay_start))
-    put(2, 6, dt(pay_end))
+    put(2, 1, dt(inv_start), f11, fill_orange, date_fmt)
+    put(2, 2, dt(inv_end), f11, fill_orange, date_fmt)
+    put(2, 3, dt(inv_start), f11, fill_orange, date_fmt)
+    put(2, 4, dt(inv_end), f11, fill_orange, date_fmt)
+    put(2, 5, dt(pay_start), f11, fill_orange, date_fmt)
+    put(2, 6, dt(pay_end), f11, fill_orange, date_fmt)
     put(2, 7, f"=SUMIF('{INV_SHEET}'!X:X,\"H\",'{INV_SHEET}'!CA:CA)")
     put(2, 8, f"=SUM('{PB_SHEET}'!I:I)")
     put(2, 9, COMMISSION_RATE)
     put(2, 10, "=H2*I2")
-    put(2, 11, K2_NOTE)
+    put(2, 11, K2_NOTE, f10)
 
     # Row 3 actual dates（实际首末付款日，非账期边界）
-    put(3, 5, f"Actual PB Payment Start Date: {actual_pay_start.month}/{actual_pay_start.day}/{actual_pay_start.year}")
-    put(3, 6, f"Actual PB Payment End Date: {actual_pay_end.month}/{actual_pay_end.day}/{actual_pay_end.year}")
+    put(3, 5, f"Actual PB Payment Start Date: {actual_pay_start.month}/{actual_pay_start.day}/{actual_pay_start.year}", f10)
+    put(3, 6, f"Actual PB Payment End Date: {actual_pay_end.month}/{actual_pay_end.day}/{actual_pay_end.year}", f10)
 
-    # Unpaid in last period, paid in this period
+    # Unpaid in last period, paid in this period（绿底）
     r = 5
-    put(r, 11, "Unpaid in last period, paid in this period", bold)
-    put(r, 12, "Invoice Date", bold)
-    put(r, 13, "Invoice Total", bold)
+    nws.row_dimensions[r].height = 15
+    put(r, 11, "Unpaid in last period, paid in this period", f11b)
+    put(r, 12, "Invoice Date", f11b)
+    put(r, 13, "Invoice Total", f11b)
     r += 1
     for inv, (d, amt) in sorted(unpaid_last_paid.items()):
-        put(r, 11, inv)
+        nws.row_dimensions[r].height = 14.25
+        put(r, 11, inv, f11, fill_green)
         if d:
-            put(r, 12, d)
+            put(r, 12, d, f11, fill_green)
         if amt is not None:
-            put(r, 13, amt)
+            put(r, 13, amt, f11, fill_green, amt_fmt)
         r += 1
     last_total_row = r
-    put(last_total_row, 11, "Total:", bold)
+    nws.row_dimensions[r].height = 15
+    put(last_total_row, 11, "Total:", f11b, fill_green)
     if unpaid_last_paid:
-        put(last_total_row, 13, f"=SUM(M6:M{last_total_row - 1})")
+        put(last_total_row, 13, f"=SUM(M6:M{last_total_row - 1})", f11b, fill_green, amt_fmt)
     else:
-        put(last_total_row, 13, 0)
+        put(last_total_row, 13, 0, f11b, fill_green, amt_fmt)
 
-    # Unpaid in this period
+    # Unpaid in this period（黄底）
     hu = last_total_row + 3  # 隔 2 行
-    put(hu, 11, "Unpaid in this period", bold)
-    put(hu, 12, "Invoice Date", bold)
-    put(hu, 13, "Invoice Total", bold)
+    nws.row_dimensions[hu].height = 15
+    nws.row_dimensions[hu + 1].height = 14.25 if unpaid_this else 15
+    put(hu, 11, "Unpaid in this period", f11b)
+    put(hu, 12, "Invoice Date", f11b)
+    put(hu, 13, "Invoice Total", f11b)
     r = hu + 1
     for inv, (d, amt) in sorted(unpaid_this.items()):
-        put(r, 11, inv)
+        nws.row_dimensions[r].height = 14.25
+        put(r, 11, inv, f11, fill_yellow)
         if d:
-            put(r, 12, d)
+            put(r, 12, d, f11, fill_yellow)
         if amt is not None:
-            put(r, 13, amt)
+            put(r, 13, amt, f11, fill_yellow, amt_fmt)
         r += 1
     this_total_row = r
-    put(this_total_row, 11, "Total:", bold)
+    nws.row_dimensions[r].height = 15.75
+    put(this_total_row, 11, "Total:", f11b, fill_yellow)
     if unpaid_this:
-        put(this_total_row, 13, f"=SUM(M{hu + 1}:M{this_total_row - 1})")
+        put(this_total_row, 13, f"=SUM(M{hu + 1}:M{this_total_row - 1})", f11b, fill_yellow, amt_fmt)
     else:
-        put(this_total_row, 13, 0)
+        put(this_total_row, 13, 0, f11b, fill_yellow, amt_fmt)
 
     # Difference
-    put(this_total_row, 7, "Difference", bold)
-    put(this_total_row, 8, f"=G2-H2")
+    put(this_total_row, 7, "Difference", f11b)
+    put(this_total_row, 8, "=G2-H2", f11b, None, amt_fmt)
     return this_total_row
 
 
