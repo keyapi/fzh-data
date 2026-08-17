@@ -76,9 +76,9 @@ resource: ../reconcile_pb.py
 每月 19-18 号账期给中间人 TM 结算 5% 佣金（英文 Excel）。从给财务表生成：
 
 - **PB Remittance Advice**：过滤 `Payment Date ∈ [账期]`（A-J + K 公式）。
-- **Invoice to PB**：发票日范围 = [首个有付款的发票日, 最后一个]（**含整天无付款日**）；取范围内 H 行发票号的**全部 H/D 行**（勿只按日期过滤，D 行日期列为空）。
-- **Notes**：A2-F2 日期、G2/H2 金额、I2=5%、J2=`=H2*I2`、K2 英文说明、E3/F3 Actual PB Payment Start/End（=账期首末付款日）、两个未付区块 + Difference。
-- **未付区块**：`Unpaid in last period, paid in this period`（上轮 TM 文件未付且本账期已付，空时 Total=0 勿写 SUM 空范围）；`Unpaid in this period`（范围内未付）。
+- **Invoice to PB（结转模型）**：发票日范围 = [min(上轮未付结转日, 本账期首个付款日), 本账期最后付款日]（含整天无付款日），**排除上轮已付（已结算）的发票**；上轮未付结转的必须全保留。每周期只发一次，不重复列已结算发票。
+- **Notes**：A2-F2 日期、G2/H2 金额、I2=5%、J2=`=H2*I2`、K2 英文说明、E3/F3 Actual PB Payment Start/End（=账期**实际首末付款日**，非边界）、两个未付区块 + Difference。
+- **未付区块**：`Unpaid in last period, paid in this period`（上轮未付且本账期已付，空时 Total=0 勿写 SUM 空范围）；`Unpaid in this period`（账期内未付，含结转仍未付的，空时 Total=0）。
 - **硬校验**：付款总额须与财务确认一致（`EXPECTED`）。
 - 关键事实：PB 邮件发票日期（E 列）按 UPS 实际发货确认，只可能等于或晚于我方，不可能早。
 

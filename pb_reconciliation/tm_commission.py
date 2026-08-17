@@ -26,10 +26,9 @@ OUT_DIR = r"D:\Work\美国\Tracy Miller\PB orders\payment advice\To Tracy Miller
 # 账期列表：(start, end) 格式 YYYYMMDD。默认每月两个独立账期；
 # 如需一次合并结算（如 2026-08 付 05/19-07/18 两期），可临时改为 [("20260519","20260718")]
 PERIODS = [("20260519", "20260618"), ("20260619", "20260718")]
-# 各账期预计付款总额（硬校验，来自财务确认）
-EXPECTED = {"20260519-20260618": 14185.71, "20260619-20260718": 8842.75,
-            # "20260519-20260718": 23028.46  # 合并账期（一次性）
-            }
+# 各账期预计付款总额（硬校验，来自财务确认）；如需一次合并结算可加
+# ("20260519", "20260718") -> 23028.46
+EXPECTED = {"20260519-20260618": 14185.71, "20260619-20260718": 8842.75}
 # 上轮账期 TM 文件（供 P1 的"上轮未付本轮已付"）；未列出的账期自动衔接上一期的未付清单
 PREV_SOURCE = {
     "20260519": r"D:\Work\美国\Tracy Miller\PB orders\payment advice\To Tracy Miller\PB Remittance Advice Payment Date 20260419-20260518.xlsx",
@@ -203,17 +202,31 @@ def build_tm_file(fin_wb_values, fin_wb_styles, period, prev_unpaid):
             paid_inv.add(str(vals[2]).strip())
     pay_dates = sorted({to_date(p[1]) for p in pay_rows})
 
-    # 2) 发票日范围 = [首个有付款的发票日, 最后]
-    inv_days = sorted({to_date(p[4]) for p in pay_rows if p[4]})
-    inv_start, inv_end = inv_days[0], inv_days[-1]
+    # 2) 已结算（本账期开始前已付款）与已付集合
+    settled_before = set()
+    for r in range(2, fp.max_row + 1):
+        b = fp.cell(r, 2).value
+        c = fp.cell(r, 3).value
+        if b and c and to_date(b) < start:
+            settled_before.add(str(c).strip())
 
-    # 3) 过滤发票：先取范围内 H 行的发票号集合，再复制这些发票的全部 H/D 行
-    included_inv = set()
+    # 3) 发票日范围（结转模型）：ledger = [min(上轮未付结转日, 本账期首个付款日), 本账期最后付款日]
+    inv_date = {}
     for r in range(2, fi.max_row + 1):
-        if fi.cell(r, X_COL).value == "H" and fi.cell(r, 1).value:
-            d = to_date(fi.cell(r, 2).value) if fi.cell(r, 2).value else None
-            if d and inv_start <= d <= inv_end:
-                included_inv.add(str(fi.cell(r, 1).value).strip())
+        if fi.cell(r, X_COL).value == "H" and fi.cell(r, 1).value and fi.cell(r, 2).value:
+            inv_date[str(fi.cell(r, 1).value).strip()] = to_date(fi.cell(r, 2).value)
+    paid_days = {inv_date[i] for i in paid_inv if i in inv_date}
+    carry_days = {inv_date[i] for i in prev_unpaid if i in inv_date}
+    ledger_start = min(paid_days)
+    if carry_days:
+        ledger_start = min(ledger_start, min(carry_days))
+    ledger_end = max(paid_days)
+    inv_start, inv_end = ledger_start, ledger_end
+
+    # 4) 纳入发票 = 范围内 H 行发票号 - 已结算；上轮未付结转必须全保留
+    included_inv = {i for i in inv_date if ledger_start <= inv_date[i] <= ledger_end and i not in settled_before}
+    included_inv |= {i for i in prev_unpaid if i in inv_date}  # 结转安全网
+
     inv_rows = []
     for r in range(2, fi.max_row + 1):
         a = fi.cell(r, 1).value
@@ -221,7 +234,7 @@ def build_tm_file(fin_wb_values, fin_wb_styles, period, prev_unpaid):
             vals = [fi.cell(r, c).value for c in range(1, 85)]  # A..CF
             inv_rows.append(vals)
 
-    # 4) 未付清单
+    # 5) 未付清单
     unpaid_this = {}
     for inv in sorted(included_inv - paid_inv):
         d = amt = None
