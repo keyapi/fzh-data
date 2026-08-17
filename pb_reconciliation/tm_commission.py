@@ -101,16 +101,17 @@ def build_notes(nws, period_start, period_end, inv_start, inv_end, pay_start, pa
     f11 = Font(name="Arial", size=11)
     f11b = Font(name="Arial", size=11, bold=True)
     fill_purple = PatternFill("solid", start_color="FFE5DFEC", end_color="FFE5DFEC")
-    fill_orange = PatternFill("solid", start_color="FFFFC000", end_color="FFFFC000")
-    fill_green = PatternFill("solid", start_color="FF92D050", end_color="FF92D050")
     fill_yellow = PatternFill("solid", start_color="FFFFFF00", end_color="FFFFFF00")
+    fill_green = PatternFill("solid", start_color="FF92D050", end_color="FF92D050")
+    fill_red = PatternFill("solid", start_color="FFFF0000", end_color="FFFF0000")
     no_fill = PatternFill(fill_type=None)
     thin = Side(style="thin")
     border = Border(left=thin, right=thin, top=thin, bottom=thin)
     date_fmt = "m/d/yyyy;@"
     amt_fmt = "\\$#,##0.00;\\-\\$#,##0.00"
-    wrap = Alignment(wrap_text=True, vertical="top")
-    center = Alignment(horizontal="center", vertical="center")
+    wrap = Alignment(wrap_text=True, vertical="center")
+    center = Alignment(wrap_text=True, horizontal="center", vertical="center")
+    right = Alignment(horizontal="right", vertical="center")
 
     # 列宽
     for col, w in {"A": 10.5, "F": 12.875, "G": 15.0, "I": 11.125, "J": 16.375,
@@ -128,7 +129,7 @@ def build_notes(nws, period_start, period_end, inv_start, inv_end, pay_start, pa
         cell.font = copy(font)
         cell.fill = fill if fill else no_fill
         cell.border = border
-        cell.number_format = numfmt
+        cell.number_format = numfmt if numfmt else "General"
         cell.alignment = align if align else (wrap if c == 11 else Alignment())
         return cell
 
@@ -140,24 +141,24 @@ def build_notes(nws, period_start, period_end, inv_start, inv_end, pay_start, pa
                  (10, "Commission Amount"), (11, "Notes")]:
         put(1, c, h, f10b, fill_purple if c <= 6 else None, align=center)
 
-    # Row 2 dates + formulas（A2-F2 橙底，日期 m/d/yyyy）
+    # Row 2 dates + formulas（A2-F2 无背景色，右对齐；G2 黄底、H2 红底，金额 $ 格式）
     def dt(v):
         return datetime.datetime(v.year, v.month, v.day)
-    put(2, 1, dt(inv_start), f11, fill_orange, date_fmt)
-    put(2, 2, dt(inv_end), f11, fill_orange, date_fmt)
-    put(2, 3, dt(inv_start), f11, fill_orange, date_fmt)
-    put(2, 4, dt(inv_end), f11, fill_orange, date_fmt)
-    put(2, 5, dt(pay_start), f11, fill_orange, date_fmt)
-    put(2, 6, dt(pay_end), f11, fill_orange, date_fmt)
-    put(2, 7, f"=SUMIF('{INV_SHEET}'!X:X,\"H\",'{INV_SHEET}'!CA:CA)")
-    put(2, 8, f"=SUM('{PB_SHEET}'!I:I)")
-    put(2, 9, COMMISSION_RATE)
-    put(2, 10, "=H2*I2")
-    put(2, 11, K2_NOTE, f10)
+    put(2, 1, dt(inv_start), f11, None, date_fmt, right)
+    put(2, 2, dt(inv_end), f11, None, date_fmt, right)
+    put(2, 3, dt(inv_start), f11, None, date_fmt, right)
+    put(2, 4, dt(inv_end), f11, None, date_fmt, right)
+    put(2, 5, dt(pay_start), f11, None, date_fmt, right)
+    put(2, 6, dt(pay_end), f11, None, date_fmt, right)
+    put(2, 7, f"=SUMIF('{INV_SHEET}'!X:X,\"H\",'{INV_SHEET}'!CA:CA)", f10, fill_yellow, amt_fmt)
+    put(2, 8, f"=SUM('{PB_SHEET}'!I:I)", f10, fill_red, amt_fmt)
+    put(2, 9, COMMISSION_RATE, f10)
+    put(2, 10, "=H2*I2", f10, None, amt_fmt)
+    put(2, 11, K2_NOTE, f10, None, None, wrap)
 
     # Row 3 actual dates（实际首末付款日，非账期边界）
-    put(3, 5, f"Actual PB Payment Start Date: {actual_pay_start.month}/{actual_pay_start.day}/{actual_pay_start.year}", f10)
-    put(3, 6, f"Actual PB Payment End Date: {actual_pay_end.month}/{actual_pay_end.day}/{actual_pay_end.year}", f10)
+    put(3, 5, f"Actual PB Payment Start Date: {actual_pay_start.month}/{actual_pay_start.day}/{actual_pay_start.year}", f10, None, None, wrap)
+    put(3, 6, f"Actual PB Payment End Date: {actual_pay_end.month}/{actual_pay_end.day}/{actual_pay_end.year}", f10, None, None, wrap)
 
     # Unpaid in last period, paid in this period（绿底）
     r = 5
