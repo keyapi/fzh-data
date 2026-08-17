@@ -10,6 +10,7 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-08-17 | OSTKUS 账期与 EN Tongtool Order 对账 | [workflow-issues/ostkus-account-reconciliation.md](workflow-issues/ostkus-account-reconciliation.md) |
 | 2026-08-14 | Cursor 通途 MCP 不会自动出现，必须写用户级 mcp.json | [developer-experience/cursor-tongtool-mcp-registration.md](developer-experience/cursor-tongtool-mcp-registration.md) |
 | 2026-08-14 | 通途主档 SKU 改名后用本地 gspread 对齐订单 Google Sheet | [workflow-issues/tongtool-sku-rename-gsheet-remap.md](workflow-issues/tongtool-sku-rename-gsheet-remap.md) |
 | 2026-08-13 | Windows Codex/Cursor：PowerShell 5.1 && 与 GBK/UTF-8 对照及 env_doctor | [developer-experience/windows-codex-powershell-utf8.md](developer-experience/windows-codex-powershell-utf8.md) |
