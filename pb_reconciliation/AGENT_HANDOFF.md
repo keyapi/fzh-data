@@ -61,6 +61,15 @@ python tm_commission.py --write     # 生成 To Tracy Miller 目录账期文件
 - **硬校验**：付款总额须与财务确认一致（当前账期：05/19-06/18 = $14,185.71，06/19-07/18 = $8,842.75）。
 - 2026-08-14 已生成：`PB Remittance Advice Payment Date 20260519-20260618.xlsx`（佣金 $709.29）、`...20260619-20260718.xlsx`（佣金 $442.14）、合并 `...20260519-20260718.xlsx`（佣金 $1,151.42）。
 
+## 4c. 视觉自查（visual_check.py）
+
+非多模态模型（如 deepseek-v4-flash）下，用项目视觉模型自查 Excel 渲染格式：
+```bash
+set DASHSCOPE_API_KEY=sk-...   # 或 AI_API_KEY（sk-or-v1- 走 OpenRouter）
+python visual_check.py <xlsx> [sheet名] ["自定义提示"]
+```
+渲染 sheet → PNG → qwen-vl-plus 描述背景色/字体/换行/截断。需 openai 包 + LibreOffice + PyMuPDF。**API key 不提交 git，需会话环境变量**。
+
 ## 5. 关键逻辑与校验（脚本内，改前必读）
 
 - **截止判定**：按日文件夹日期序扫描发票 CSV，**首个 0 付款的文件夹即停止**（自动）；8 月发票未收集在 `202608` 文件夹时，下月收集后再扫描。
