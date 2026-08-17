@@ -141,19 +141,19 @@ def build_notes(nws, period_start, period_end, inv_start, inv_end, pay_start, pa
                  (10, "Commission Amount"), (11, "Notes")]:
         put(1, c, h, f10b, fill_purple if c <= 6 else None, align=center)
 
-    # Row 2 dates + formulas（A2-F2 无背景色，右对齐；G2 黄底、H2 红底，金额 $ 格式）
+    # Row 2 dates + formulas（A2-F2 无背景色居中；G2 黄底、H2 红底，金额 $ 格式；I2 5%）
     def dt(v):
         return datetime.datetime(v.year, v.month, v.day)
-    put(2, 1, dt(inv_start), f11, None, date_fmt, right)
-    put(2, 2, dt(inv_end), f11, None, date_fmt, right)
-    put(2, 3, dt(inv_start), f11, None, date_fmt, right)
-    put(2, 4, dt(inv_end), f11, None, date_fmt, right)
-    put(2, 5, dt(pay_start), f11, None, date_fmt, right)
-    put(2, 6, dt(pay_end), f11, None, date_fmt, right)
-    put(2, 7, f"=SUMIF('{INV_SHEET}'!X:X,\"H\",'{INV_SHEET}'!CA:CA)", f10, fill_yellow, amt_fmt)
-    put(2, 8, f"=SUM('{PB_SHEET}'!I:I)", f10, fill_red, amt_fmt)
-    put(2, 9, COMMISSION_RATE, f10)
-    put(2, 10, "=H2*I2", f10, None, amt_fmt)
+    put(2, 1, dt(inv_start), f11, None, date_fmt, center)
+    put(2, 2, dt(inv_end), f11, None, date_fmt, center)
+    put(2, 3, dt(inv_start), f11, None, date_fmt, center)
+    put(2, 4, dt(inv_end), f11, None, date_fmt, center)
+    put(2, 5, dt(pay_start), f11, None, date_fmt, center)
+    put(2, 6, dt(pay_end), f11, None, date_fmt, center)
+    put(2, 7, f"=SUMIF('{INV_SHEET}'!X:X,\"H\",'{INV_SHEET}'!CA:CA)", f10, fill_yellow, amt_fmt, center)
+    put(2, 8, f"=SUM('{PB_SHEET}'!I:I)", f10, fill_red, amt_fmt, center)
+    put(2, 9, COMMISSION_RATE, f10, None, "0%", center)
+    put(2, 10, "=H2*I2", f10, None, amt_fmt, center)
     put(2, 11, K2_NOTE, f10, None, None, wrap)
 
     # Row 3 actual dates（实际首末付款日，非账期边界）
@@ -315,6 +315,23 @@ def build_tm_file(fin_wb_values, fin_wb_styles, period, prev_unpaid):
         cell = ws_i.cell(r, CH_COL)
         cell.value = f"=CA{r}-CG{r}"
         copy_style(cell, tpl_i.cell(2, CH_COL))
+
+    # 未付发票 H 头行黄底标记
+    from openpyxl.styles import PatternFill as _PF
+    fill_yellow = _PF("solid", start_color="FFFFFF00", end_color="FFFFFF00")
+    FILL_COLS = [1, 2, 3, 5, 7, 8, 24, 25, 28, 31, 33, 34, 52, 53, 55, 56, 57, 58, 60, 61, 63, 64, 65, 66, 79, 85, 86]
+    for inv in unpaid_this:
+        for r in range(2, ws_i.max_row + 1):
+            if str(ws_i.cell(r, 1).value).strip() == inv and ws_i.cell(r, X_COL).value == "H":
+                for c in FILL_COLS:
+                    ws_i.cell(r, c).fill = fill_yellow
+
+    # 首行加筛选，Record Type(X列) 过滤为 "H"（隐藏 D 重复行，方便查 Invoice Total / Check Payment Amount）
+    ws_i.auto_filter.ref = f"A1:CH{ws_i.max_row}"
+    from openpyxl.worksheet.filters import FilterColumn, CustomFilters, CustomFilter
+    _fc = FilterColumn(colId=X_COL - 1)
+    _fc.customFilters = CustomFilters(customFilter=[CustomFilter(val="H")])
+    ws_i.auto_filter.filterColumn.append(_fc)
 
     # Notes
     build_notes(ws_n, start, end, inv_start, inv_end, start, end,

@@ -9,6 +9,7 @@ timestamp: 2026-08-14
 # 变更日志
 
 ## 2026-08-14
+- **修正**: `tm_commission.py` Notes G2-J2 水平居中、I2 佣金率显示 5%（0% 格式）；Invoice to PB 首行加筛选（Record Type X列 过滤为 H，隐藏 D 重复行）、未付发票 H 头行黄底标记。
 - **新增**: `visual_check.py` — Excel 渲染视觉自查工具（xlsx sheet → PNG → qwen-vl-plus/OpenRouter VL 描述），供非多模态模型（如 deepseek-v4-flash）自查格式。需 `DASHSCOPE_API_KEY` 或 `AI_API_KEY` 环境变量。
 - **修正**: `tm_commission.py` Notes 样式——表头 A1-F1 浅紫底+自动换行、A2-F2 无背景右对齐、**G2 黄底/H2 红底**（金额 $ 格式）、已付区块绿底、未付区块黄底、全 Arial、参考列宽行高。
 - **修正**: `tm_commission.py` Invoice to PB 改为**结转模型**——排除上轮已付（已结算）发票，上轮未付结转全保留；发票范围 [min(结转日, 首付款日), 末付款日]。P1 本轮未付=0（04/09/04/17 上轮已付不再列）。生成合并账期 `20260519-20260718`（佣金 $1,151.42）。
