@@ -23,10 +23,13 @@ from openpyxl.styles import PatternFill
 # ================= 本月参数（下月复用只改这里） =================
 FINANCE_FILE = r"D:\Work\美国\Tracy Miller\PB orders\payment advice\给财务\PB Remittance Advice Payment Date 20240430-20260813_差5单未付 20260814_171350.xlsx"
 OUT_DIR = r"D:\Work\美国\Tracy Miller\PB orders\payment advice\To Tracy Miller"
-# 账期列表：(start, end) 格式 YYYYMMDD
+# 账期列表：(start, end) 格式 YYYYMMDD。默认每月两个独立账期；
+# 如需一次合并结算（如 2026-08 付 05/19-07/18 两期），可临时改为 [("20260519","20260718")]
 PERIODS = [("20260519", "20260618"), ("20260619", "20260718")]
 # 各账期预计付款总额（硬校验，来自财务确认）
-EXPECTED = {"20260519-20260618": 14185.71, "20260619-20260718": 8842.75}
+EXPECTED = {"20260519-20260618": 14185.71, "20260619-20260718": 8842.75,
+            # "20260519-20260718": 23028.46  # 合并账期（一次性）
+            }
 # 上轮账期 TM 文件（供 P1 的"上轮未付本轮已付"）；未列出的账期自动衔接上一期的未付清单
 PREV_SOURCE = {
     "20260519": r"D:\Work\美国\Tracy Miller\PB orders\payment advice\To Tracy Miller\PB Remittance Advice Payment Date 20260419-20260518.xlsx",
@@ -92,7 +95,7 @@ def read_prev_unpaid(file):
 
 
 def build_notes(nws, period_start, period_end, inv_start, inv_end, pay_start, pay_end,
-                unpaid_last_paid, unpaid_this):
+                actual_pay_start, actual_pay_end, unpaid_last_paid, unpaid_this):
     """写 Notes sheet（结构对照示例 20260419-20260518）。"""
     from openpyxl.styles import Font
     bold = Font(bold=True)
@@ -131,9 +134,9 @@ def build_notes(nws, period_start, period_end, inv_start, inv_end, pay_start, pa
     put(2, 10, "=H2*I2")
     put(2, 11, K2_NOTE)
 
-    # Row 3 actual dates
-    put(3, 5, f"Actual PB Payment Start Date: {pay_start.month}/{pay_start.day}/{pay_start.year}")
-    put(3, 6, f"Actual PB Payment End Date: {pay_end.month}/{pay_end.day}/{pay_end.year}")
+    # Row 3 actual dates（实际首末付款日，非账期边界）
+    put(3, 5, f"Actual PB Payment Start Date: {actual_pay_start.month}/{actual_pay_start.day}/{actual_pay_start.year}")
+    put(3, 6, f"Actual PB Payment End Date: {actual_pay_end.month}/{actual_pay_end.day}/{actual_pay_end.year}")
 
     # Unpaid in last period, paid in this period
     r = 5
@@ -271,7 +274,8 @@ def build_tm_file(fin_wb_values, fin_wb_styles, period, prev_unpaid):
         copy_style(cell, tpl_i.cell(2, CH_COL))
 
     # Notes
-    build_notes(ws_n, start, end, inv_start, inv_end, start, end, unpaid_last_paid, unpaid_this)
+    build_notes(ws_n, start, end, inv_start, inv_end, start, end,
+                pay_dates[0], pay_dates[-1], unpaid_last_paid, unpaid_this)
 
     wb.calculation.fullCalcOnLoad = True
     return wb, pay_rows, unpaid_this, inv_start, inv_end
