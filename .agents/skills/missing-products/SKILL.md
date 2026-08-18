@@ -14,7 +14,7 @@ description: >
 1. `missing_products/AGENT_HANDOFF.md` — 当前状态、历史例外和数据源。
 2. `docs/solutions/conventions/tongtu-en-sellfox-instock-sku-mainline.md` — 主线规则、设计过程、写入边界和验证清单。
 3. `missing_products/docs/lessons/2026-08-11-tongtu-en-sellfox-mainline-completion.md` — 完整复盘、失败模式和防护。
-4. 用户提到 Amazon 在线商品、MSKU、配对建议、未配对或别名匹配时，先读 `amazon_pairing/AGENT_HANDOFF.md` 和 `docs/solutions/conventions/amazon-online-product-pairing-candidate-workflow.md`。
+4. 用户提到 Amazon 在线商品、MSKU、配对建议、未配对或别名匹配时，先读 `amazon_pairing/AGENT_HANDOFF.md` 和 `docs/solutions/conventions/amazon-online-product-pairing-candidate-workflow.md`。证据传播分支再读 `amazon_pairing/docs/reference/` 与 `amazon_pairing/knowledge/golden-cases.yaml`。PR 173（LTR）与 `feature/amazon-pairing-evidence` 是 sibling：本轮高可信用当前已配对唯一目标，不重训 LTR，不调用配对写接口。
 5. 需要新增 EN 变体时再读 `.agents/skills/erpnext-item-create/SKILL.md` 和 `docs/solutions/conventions/erpnext-item-variant-creation-convention.md`。
 6. 需要赛狐 API 时再读 `.agents/skills/sellfox-api/SKILL.md` 和 `.agents/skills/multi-attr/SKILL.md`。
 

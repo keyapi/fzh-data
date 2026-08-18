@@ -137,6 +137,20 @@ The semi-finished/auxiliary items generated from a product template via the「�
 ### FBA 账期尾程差
 Amazon FBA 账期费用里已经包含平台履约尾程。特殊规则里对 FBA 填的负数尾程参考值表示「账期尾程减去目标尾程」的冲减，不是再加一笔正的尾程。零或正数对 FBA 仍应跳过，以免重复计入。
 
+## Amazon 在线商品配对
+
+### AFN / MFN
+赛狐 Amazon 在线商品字段 `switchFulfillmentTo`：`AFN` = FBA（亚马逊仓发），`MFN` = FBM（卖家自发）。FBA listing 多数是绍兴压缩包装的成品，也有套件；单独卖皮壳/海绵的概率低，但不能用“库存缺 SKU”当不能配对。
+
+### 在线商品配对 vs 多平台配对
+赛狐两套独立机制。Amazon MSKU↔赛狐 SKU 走在线商品（`pageList` / `matchByMsku` / `matchByAsin` / 模板 `import_product_msku_match`）。多平台配对（`getList` / `save` / `importMatchTemplate`）即使注册了 Amazon 也不走这条。不要混用接口或模板。
+
+### listing 意图 vs 库存主线
+配对问的是「这条在售 listing 对应哪个可销售赛狐 SKU」。通途有库存 SKU 必须登记 EN 客户码，是另一条主线。标题含 Cover/Foam 不等于 listing 在卖皮壳或海绵；KS0244 等枕套成品本来就叫 cover。有库存半成品不必都有 Amazon listing。
+
+### Gold A vs 活证据
+Gold A：历史已配对 ∩ 通途别名唯一 ∩ EN/赛狐一致，只用于训练清洗。活证据：当前已配对的 `commoditySku`（含无别名的 Silver），按同 MSKU/ASIN/parent 传播。高可信看活证据是否唯一，不看是不是 Gold A。
+
 ## Integrations
 
 ### Cursor MCP vs Codex MCP

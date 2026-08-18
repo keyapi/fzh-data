@@ -81,4 +81,3 @@ resource: ../reconcile_pb.py
 - **未付区块**：`Unpaid in last period, paid in this period`（上轮未付且本账期已付，空时 Total=0 勿写 SUM 空范围）；`Unpaid in this period`（账期内未付，含结转仍未付的，空时 Total=0）。
 - **硬校验**：付款总额须与财务确认一致（`EXPECTED`）。
 - 关键事实：PB 邮件发票日期（E 列）按 UPS 实际发货确认，只可能等于或晚于我方，不可能早。
-

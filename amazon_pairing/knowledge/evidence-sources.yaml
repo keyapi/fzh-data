@@ -1,0 +1,61 @@
+sources:
+  - id: sellfox-pageList-cache
+    path: missing_products/out/pairing_cache/amazon_{matched,unmatched}.json
+    access: file-cache
+    refresh: uv run python missing_products/fetch_sellfox_pairing.py --refresh
+    freshness: 2026-08-13
+    quota: full pull ~9 min; pageSize 200
+    fields:
+      - sku # MSKU
+      - asin
+      - parentAsin
+      - parentSku
+      - isVariation
+      - switchFulfillmentTo # AFN=FBA, MFN=FBM
+      - fnsku
+      - mainImage
+      - title
+      - commoditySku
+      - commodityName
+      - onlineStatus
+      - shopId
+      - marketplaceId
+    pairing_use: 活证据主源。高可信用当前已配对唯一目标，不要求 Gold A。
+
+  - id: sellfox-pairing-write
+    path: SELLFOX_API/docs/api-reference/销售/在线产品配对/
+    access: API-write-blocked
+    fields: [msku, sku, shopId]
+    pairing_use: 用户批准范围前禁止调用 matchByMsku / matchByAsin。
+
+  - id: tongtu-alias-zip
+    path: D:/Work/赛狐/商品/通途商品导出_*.zip
+    access: file
+    fields: [SKU, SKU别名]
+    pairing_use: 精确别名；一对多进审核。
+
+  - id: tongtu-goodsquery
+    access: MCP erp2_product_goodsquery
+    quota: 5 ERP2 calls/min merchant-wide; skus<=10 per call
+    pairing_use: 抽查通途主档是否存在。禁止扫全库。
+
+  - id: en-customer-items
+    access: REST Item.customer_items.ref_code
+    pairing_use: 允许 NB/ 前缀和去尾缀 -2 的前缀命中；目标永远是 KS 成品 item_code。
+
+  - id: en-sellfox-catalog
+    path: amazon_pairing/out/catalog/candidate_catalog.json
+    pairing_use: 可配对的赛狐普通产品（排除 TJ# 套件）。
+
+  - id: sku-remap
+    path: tongtool_order_cost/tongtool_order_cost/sku_map.py
+    pairing_use: 旧名→新名；97/100 近寸例外。
+
+  - id: nas-product-photos
+    path: /产品信息/{KSxxxx_*}/图片
+    access: NAS_API
+    pairing_use: 后续图片证据；本轮只记录接口。
+
+  - id: qwen-vl-new-api
+    access: DashScope / company new-api
+    pairing_use: 剩余难例最后一档，默认不进高可信。

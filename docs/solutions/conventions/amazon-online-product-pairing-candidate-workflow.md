@@ -1,5 +1,6 @@
 ---
 title: Amazon 在线商品配对的分层候选与运营确认流程
+type: Reference
 date: 2026-08-11
 category: conventions
 module: amazon_pairing
@@ -69,6 +70,27 @@ Amazon 应走第一行的在线商品机制。
    候选赛狐 SKU 和名称、置信度及匹配依据。运营确认范围后才生成或导入 Amazon 模板，
    并从 `pageList` 回读验证结果。
 
+## 2026-08-14 Pilot Result
+
+现已实现 `amazon_pairing` 只读流水线。历史 26,999 条已配对记录中，只有 14,021 条满足 Gold A；12,918 条 Silver 和 60 条 Quarantine 不作为正例。候选 catalog 含 2,259 个 EN/赛狐普通产品。
+
+四家族试点的 family Top-1 为 94.79%，但原始 Candidate Recall@20 仅 32.25%，排序 Top-1/Top-3 为 41.37%/55.05%，因此 `production_ready=false`。排序 Recall@20 的 100% 来自评估时正样本注入，只衡量排序器，不代表真实候选召回。
+
+最新 3,557 条在售未配对分为 87 条高可信精确证据、550 条实验候选、434 条特殊对象暂缓和 2,486 条无可靠候选，数量完全对账。这个结果确认：当时最合适的自动化不是直接写配对，而是保守缩小人工搜索范围。
+
+## 2026-08-14 Evidence Propagation
+
+PR 173 把高可信只认 Gold A（通途别名唯一且与 EN 一致），所以 FBA/无别名的已配对（Silver）被丢掉。`feature/amazon-pairing-evidence` 改为：
+
+- **活证据 ≠ Gold A。** 高可信用「当前已配对的唯一赛狐 SKU」，含 Silver；Gold A 只清洗训练标签。
+- **跨店同 MSKU、跨站同 ASIN** 都传播；`parentSku` / `parentAsin` 家族目标唯一才升高可信，冲突进智能候选。
+- **意图 ≠ 子串。** `cover` / `foam` 出现在标题里不等于在卖皮壳或海绵；配件短语和成品材料词走 ordinary。KS0244 本身是枕套商品。
+- **配对 ≠ 库存主线。** 赛狐对象是可销售在线商品；不必每个有库存半成品都有 listing。缺 SKU 不能当成“不能配对”。
+- **AFN/FBA** 先验偏向绍兴压缩成品；弱 cover/foam 信号不得把 AFN listing 打进特殊暂缓。
+- 覆盖率必须出审计：入 N / 唯一 / 冲突 / 未覆盖，差数可追溯。冲突不静默丢。
+
+共享知识：`amazon_pairing/docs/reference/` 与 `amazon_pairing/knowledge/*.yaml`。本轮不重训 LTR。
+
 ## Non-Negotiable Boundaries
 
 - 本子项目当前只读取、分析并生成 Excel 建议，不调用任何赛狐配对写接口。
@@ -77,6 +99,10 @@ Amazon 应走第一行的在线商品机制。
 - 不用配对任务修正 EN 产品、客户物料号或赛狐商品状态。此类缺口回到
   `missing_products` 主线，按完整通途 SKU 精确登记规则处理。
 - FBA 别名覆盖较低是已知数据质量问题，不以补全率压力促成猜测性写入。
+- 候选检索必须先做可靠属性冲突过滤；若所有候选冲突或家族置信度不足，必须主动弃权。
+- cover、foam、combo、主体骨架及其他配套物料不得强配普通 KS 产品；combo 转到 `TJ#` 套件流程。真套件保留在特殊暂缓；标题里的 cover/foam 必须先做意图分类。
+- 已配对 Silver 记录是活证据，不得因为缺少通途别名而丢弃。
+- 人工反馈必须保存来源工作簿与模型文件哈希，疑问反馈不得回流为 Gold 标签。
 
 ## Outputs And Handoff
 
