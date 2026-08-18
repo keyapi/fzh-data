@@ -46,7 +46,5 @@ approval_mode = "approve"
 [mcp_servers.tavily]
 command = "uv"
 args = ["run", "python", "-m", "mcp_server_tavily"]
+env_vars = ["TAVILY_API_KEY"]
 startup_timeout_sec = 60
-
-[mcp_servers.tavily.env]
-TAVILY_API_KEY = "<your-tavily-api-key>"
