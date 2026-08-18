@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import re
 from collections import defaultdict
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 import pandas as pd
@@ -24,8 +24,12 @@ class AmazonListing:
     online_status: str
     fulfillment: str
     parent_sku: str
+    listing_id: str = ""
     fnsku: str = ""
     is_variation: str = ""
+    quantity: str = ""
+    currency: str = ""
+    raw: dict = field(default_factory=dict)
 
 
 def _text(value) -> str:
@@ -58,8 +62,12 @@ def load_amazon_cache(path: Path) -> list[AmazonListing]:
             online_status=_text(row.get("onlineStatus")),
             fulfillment=_text(row.get("switchFulfillmentTo")),
             parent_sku=_text(row.get("parentSku")),
+            listing_id=_text(row.get("listingId")),
             fnsku=_text(row.get("fnsku")),
             is_variation=_text(row.get("isVariation")),
+            quantity=_text(row.get("quantity")),
+            currency=_text(row.get("currency")),
+            raw=row,
         )
         for row in rows
     ]

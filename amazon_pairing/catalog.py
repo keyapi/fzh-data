@@ -9,6 +9,15 @@ from .attributes import AttributeValue, ListingAttributes, normalize_fabric
 from .candidates import CandidateProduct
 
 
+def infer_product_object_type(item_name: str, item_group: str = "") -> str:
+    text = f"{item_group} {item_name}"
+    if any(token in text for token in ("套件", "套装", "组合商品", "件套", "套组")):
+        return "combo"
+    if any(token in text for token in ("枕套", "枕皮", "皮壳", "靠垫套", "沙发套", "套子", "外罩", "罩子")):
+        return "cover"
+    return "finished_product"
+
+
 def _text(value) -> str:
     return str(value or "").strip()
 
@@ -68,6 +77,9 @@ def build_candidate_catalog(
                 family=family,
                 name=_text(item.get("item_name")) or _text(sellfox_row.get("name")),
                 attributes=_en_attributes(item),
+                object_type=infer_product_object_type(
+                    _text(item.get("item_name")), _text(item.get("item_group"))
+                ),
             )
         )
     return catalog, excluded
@@ -86,10 +98,15 @@ def load_catalog(path: Path) -> list[CandidateProduct]:
         attributes = ListingAttributes(
             **{name: AttributeValue(tuple(value["values"]), value["reliable"]) for name, value in attrs.items()}
         )
+        stored_type = row.get("object_type", "ordinary")
+        object_type = infer_product_object_type(row["name"]) if stored_type == "ordinary" else stored_type
         result.append(
             CandidateProduct(
-                sku=row["sku"], family=row["family"], name=row["name"],
-                attributes=attributes, object_type=row.get("object_type", "ordinary")
+                sku=row["sku"],
+                family=row["family"],
+                name=row["name"],
+                attributes=attributes,
+                object_type=object_type,
             )
         )
     return result
