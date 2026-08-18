@@ -1,5 +1,6 @@
 from amazon_pairing.data import AmazonListing
 from amazon_pairing.evidence import (
+    EvidenceIndex,
     build_live_maps,
     load_customer_code_index,
     msku_variants,
@@ -26,6 +27,24 @@ def listing(**kwargs) -> AmazonListing:
     )
     values.update(kwargs)
     return AmazonListing(**values)
+
+
+def matched_row(**overrides) -> dict:
+    row = {
+        "shopId": "596737",
+        "marketplaceId": "ATVPDKIKX0DER",
+        "asin": "B000TEST",
+        "parentAsin": "B000PARENT",
+        "parentSku": "PARENT",
+        "sku": "LISTING",
+        "title": "Test listing",
+        "mainImage": "https://example.invalid/main.jpg",
+        "fnsku": "X000TEST",
+        "commoditySku": "KS0001-HLR-153-BLUE",
+        "commodityName": "三角靠枕",
+    }
+    row.update(overrides)
+    return row
 
 
 def test_same_msku_live_pairing_is_used_without_gold_a():

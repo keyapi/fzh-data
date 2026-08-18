@@ -15,7 +15,8 @@ def test_merge_attributes_combines_title_and_msku_signals():
     merged = merge_attributes(title, msku)
 
     assert set(merged.color.values) == {"蓝色"}
-    assert merged.size.values == ()
+    # 床尺寸检测：Queen → 152/153cm（#177 特性），title 与 msku 均命中后去重合并。
+    assert merged.size.values == ("152", "153")
 
 
 def test_bare_numeric_size_can_be_extracted_from_msku_for_agreement():
