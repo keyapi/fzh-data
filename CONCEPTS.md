@@ -168,3 +168,10 @@ A webhook-based DingTalk group messaging channel used by AI agents (WorkBuddy, C
 - "'五桶' had been used as if it meant IvyeaOps 五杠杆 — they are distinct (search-term labels vs optimizer action candidates)."
 - "Amazon Auto/product/category reports often put ASINs in the customer search-term column — that is real report data, not a mapping bug; keyword 收割 must not treat those strings as exact keywords (filter deferred as of 2026-07-28)."
 - "通途主档 SKU 改名后的旧名，与规则笔误（例如 Foam FBA BLACK-97），不是同一类问题；像旧名的字符串要先查主档。"
+
+## 平台账期对账
+
+- **账期文件**: Overstock `OSTKUS-*.xlsx` 含 `Payment Summary` + `Detail` + `Mozart Reports`，是结算文件，不是平台订单导出。
+- **Tongtool Order**: EN 生产系统里的通途订单快照；Overstock 单据名通常为 `OS-{platform_order_id}`，另一账号 `OSTK02US` 使用 `OSFD-` 前缀。
+- **拆单后缀**: 多 SKU/多件订单在通途/EN 会拆成 `_1/_2/_3` 子单，`platform_order_id` 保留后缀；汇总时需排除金额相同的“无后缀重复主单”。
+- **对账金额口径**: 用 `order_amount` / `products_total_price` 对账；`order_items.transaction_price` 是组件行，不能加总；`actual_total_price` 在退货订单上可能为 0。
