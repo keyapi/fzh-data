@@ -33,6 +33,7 @@ cookie.txt
 .gh-token
 out/*
 missing_products/out/**
+amazon_pairing/out/**
 !out/.gitkeep
 tongtool_order_cost/out/
 scripts/out/
