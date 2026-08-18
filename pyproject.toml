@@ -23,10 +23,10 @@ dependencies = [
     "alembic>=1.18.5",
     "pymupdf>=1.28.0",
     "reportlab>=5.0.0",
-    "lightgbm>=4.7.0",
-    "scikit-learn>=1.7.2",
     "gspread>=6.2.1",
     "google-auth>=2.56.3",
+    "lightgbm>=4.7.0",
+    "scikit-learn>=1.7.2",
 ]
 
 [tool.hatch.build.targets.wheel]

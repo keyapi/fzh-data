@@ -55,7 +55,7 @@ def test_attribute_extraction_keeps_ambiguous_single_number_soft():
 def test_attribute_extraction_treats_single_dimension_with_unit_as_reliable():
     attrs = extract_attributes("Grey triangle pillow 153 cm")
 
-    assert attrs.size.values == ("153",)
+    assert attrs.size.values == ("153", "152")
     assert attrs.size.reliable is True
 
 
@@ -65,6 +65,16 @@ def test_single_inch_height_is_soft_not_a_product_size():
     assert attrs.size.values == ("55.9",)
     assert attrs.size.reliable is False
     assert attrs.color.values == ("粉色",)
+
+
+def test_bed_size_does_not_absorb_inch_height():
+    attrs = extract_attributes(
+        "Daneey Foam Headboard Pillow Twin, 22IN Tall Curve Pillow Headboard, White"
+    )
+    assert "97" in attrs.size.values
+    assert "100" in attrs.size.values
+    assert "55.9" not in attrs.size.values
+    assert attrs.size.reliable is True
 
 
 def test_router_recognizes_pillow_cover_listing_but_not_removable_cover_product():
@@ -79,6 +89,33 @@ def test_router_recognizes_pillow_cover_listing_but_not_removable_cover_product(
 
     assert cover.object_type == "cover"
     assert product.object_type == "ordinary"
+
+
+def test_router_treats_parenthetical_removable_cover_as_ordinary():
+    result = route_listing(
+        msku="DanCA1534D9-Blue-153",
+        title="Wedge Pillow Headboard with Removable Velvet Cover (Blue, Queen)",
+        parent_sku="DanVEL-Triangle-CA",
+    )
+    assert result.object_type == "ordinary"
+
+
+def test_router_treats_foam_headboard_pillow_as_ordinary():
+    result = route_listing(
+        msku="LongHuxing-Foam-Lbai-100",
+        title="Daneey Foam Headboard Pillow Twin, 22IN Tall Curve Pillow Headboard, White",
+        parent_sku="LongDanHuxing-Foam",
+        fulfillment="AFN",
+    )
+    assert result.object_type == "ordinary"
+    assert "cover" not in result.reasons
+
+
+def test_attribute_extraction_maps_queen_to_en_near_cm():
+    attrs = extract_attributes("Headboard wedge pillow (Blue, Queen)")
+    assert "153" in attrs.size.values
+    assert "152" in attrs.size.values
+    assert attrs.size.reliable is True
 
 
 def test_color_terms_do_not_match_inside_other_words():
@@ -129,3 +166,11 @@ def test_historical_pairing_quarantines_non_ordinary_target():
 
     assert result.tier == "quarantine"
     assert "non_ordinary_target" in result.reasons
+
+def test_sku_suffix_cover_is_detected_even_with_parent_sku():
+    result = route_listing(
+        msku="CENL661-Brown-194-Cover",
+        title="Wedge Pillow Cover Pillow Cases (Just Cover), Brown",
+        parent_sku="LinenCover-pp",
+    )
+    assert result.object_type == "cover"

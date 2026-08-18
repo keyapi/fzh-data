@@ -26,6 +26,7 @@ class AmazonListing:
     parent_sku: str
     listing_id: str = ""
     fnsku: str = ""
+    is_variation: str = ""
     quantity: str = ""
     currency: str = ""
     raw: dict = field(default_factory=dict)
@@ -63,6 +64,7 @@ def load_amazon_cache(path: Path) -> list[AmazonListing]:
             parent_sku=_text(row.get("parentSku")),
             listing_id=_text(row.get("listingId")),
             fnsku=_text(row.get("fnsku")),
+            is_variation=_text(row.get("isVariation")),
             quantity=_text(row.get("quantity")),
             currency=_text(row.get("currency")),
             raw=row,
