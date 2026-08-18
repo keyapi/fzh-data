@@ -46,11 +46,17 @@ python probe.py                      # 列 Transaction API 根目录
 python probe.py out/PO/              # 列目录（如样例订单）
 python probe.py out/PO/ --download   # 下载第一个文件到 downloads/
 python probe.py --token-only         # 只拿 token
+
+# 读 SPS 相关邮件（腾讯企业邮箱 IMAP，凭据走环境变量，不写进代码）
+IMAP_USER='...' IMAP_PASS='...' IMAP_SERVER='imap.exmail.qq.com' \
+  python read_sps_mail.py --sender amkudrle@spscommerce.com   # 列出匹配邮件
+# 注：腾讯 IMAP 对 FROM/SUBJECT 服务端搜索失效，须用日期窗口 + 客户端过滤（见 docs/reference/tencent-imap.md）
 ```
 
 - `config.py` — 从 `.env` 读凭据/端点（SPS_TOKEN_URL / SPS_API_BASE / SPS_AUDIENCE）。
 - `oauth.py` — M2M client_credentials + token 缓存复用（官方要求缓存避免限流）。
 - `probe.py` — 只读探测/下载（列目录、下载）。
+- `read_sps_mail.py` — IMAP 读邮件（`--sender` / `--since/--before` / `--full N`），凭据从环境变量读。
 - 端点速查（base `https://api.spscommerce.com`）：
   - `POST /transactions/v5/data/{file-path}` — 发文件（`Content-Type: application/octet-stream`）
   - `GET /transactions/v5/data/{directory}/` — 列目录
@@ -90,7 +96,8 @@ python probe.py --token-only         # 只拿 token
 
 - [x] 调研 + POC（沙盒全链路） ✅
 - [x] 生产只读探测（未开通，根目录空）
-- [ ] **联系 SPS account team**：签约 Transaction API + 实施团队开通生产访问 + 配置 PB 交易路由（`out/`/`in/` + 850/856/810/846 映射）
+- [x] **邮件已发给 Alison**（2026-08-18，`us@mxdeals.com`）：确认是否仍负责 iCenTrade 账号 + 自己对接 API 是否额外收费，等回复
+- [ ] 等 Alison 回复后：若推进，请其提供文档（Transaction API/RSX/PB mapping）+ 开通生产数据访问与交易路由
 - [ ] 拿到 PB 的 RSX/EDI 规格后设计流水线：轮询 `out/PO/` → 解析订单 → 对接 ERPNext/赛狐 → 生成 ASN/发票 → POST `in/`
 - [ ] 库存上报用 `POST in/IA` 替代 Selenium（`SPS_Selenium_Local/`）
 - [ ] 迁移到生产 M2M App（沙盒 M2M 已建）

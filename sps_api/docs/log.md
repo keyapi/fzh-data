@@ -8,6 +8,15 @@ tags: [sps-api, changelog]
 
 # 变更日志
 
+## 2026-08-18（第二次）
+
+- **新增脚本** `read_sps_mail.py`：IMAP 读邮件，凭据从环境变量读，不写进代码。
+- **新增 reference/tencent-imap.md**：腾讯企业邮箱 IMAP 检索特性 —— FROM/SUBJECT 被服务端静默忽略、日期条件可用；正确姿势 = 服务端日期过滤 + 客户端字段过滤；记录序号/UID、范围 fetch、文件夹引号、登录频率限制等坑。
+- **新增 research/2026-08-18-sps-alison-email-thread.md**：与 SPS Account Executive Alison Kudrle 的完整邮件线程（2025-06/07）+ 2026-08-18 已发回复要点。
+- **邮件已发送**：给 Alison 的回复已发出（确认是否仍负责 + 自己对接 API 是否额外收费）。
+- **状态澄清**：`pb@icentrade.com` 仅用于接收 PB 对账邮件（Google Colab 上脚本可跑）；SPS 往来邮件在 `us@mxdeals.com`。
+- **更新** docs/index.md（新增 reference/research 导航）、AGENT_HANDOFF.md（脚本与状态）。
+
 ## 2026-08-18
 
 - **初始化 OKF bundle**：`docs/index.md` + `docs/log.md`，子项目文档按 OKF v0.1 维护。
