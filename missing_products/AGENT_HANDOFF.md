@@ -110,7 +110,7 @@
 > 套件补齐：TT0031192K0063867 -> TJ#KS0334x1_KS0335x1_KS0336x1-001；TT0031102-zuhe-all -> TJ#KS0238x1_KS0240x1_KS0241x1_KS0242x1_KS0243x1-001 (旧 TJ0001-ALL5PCS 已禁用)。EN Product Bundle/Item、customer_items 与赛狐组合 SKU 均已完成并回读验证。
 >
 > EN 套件 REST 规则：创建 Product Bundle 只传 `items`，服务端生成编号/名称；禁止临时 `new_item_code`，禁止先建空单再 PUT 补子表，禁止 PUT 改组成。赛狐组合 SKU 只能使用 EN 回读确认的 `TJ#...-NNN`。
-> 2026-08-19 生产已部署 e2ee454 并重建 KS0443 12 个套件；赛狐 24 个旧组合已删，12 个正式组合待按 sellfox-combo-create 重建。`FXLSSF3030` 与 4 条 KS0003/KS0395 残留是审计误报/历史残留，不要纳入本次清理。
+> 2026-08-19 生产已部署 e2ee454 并重建 KS0443 12 个套件；赛狐 24 个旧组合已删，12 个正式组合已按 sellfox-combo-create 重建并回读。`FXLSSF3030` 与 4 条 KS0003/KS0395 残留是审计误报/历史残留，不要纳入本次清理。
 
 ## 4. 关键技术细节
 
