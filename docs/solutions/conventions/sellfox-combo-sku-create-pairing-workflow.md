@@ -33,6 +33,17 @@ tags: [sellfox, combo, sku, bundle, pairing, tj, category, erpnext, product-bund
 
 本次操作完成了一条可复用的链路：EN Product Bundle → 赛狐组合 SKU → `套件#` 分类 → 在线商品配对 → 订单包裹配对（已发货被拒）。
 
+同事 Agent 日常不要手写 REST。用 `SELLFOX_API/sellfox_combo_ops.py`：
+
+```bash
+cd SELLFOX_API
+uv run --project .. python sellfox_combo_ops.py en-preview --child "SKU:qty"
+uv run --project .. python sellfox_combo_ops.py en-create --child "SKU:qty"          # 默认 dry-run
+uv run --project .. python sellfox_combo_ops.py sync-combos --like "TJ#KS0443%"     # 默认 dry-run
+```
+
+`sync-combos` 必须带 `--like` 或 `--sku`。计划动作见 [combo-ops.md](../../../SELLFOX_API/docs/reference/combo-ops.md)。`--apply` 只执行 `create` / `set_category`；组成 mismatch 只报告、不 PUT。创建后脚本断言 `isGroup`、分类、`childSkus`，不再只打印回读。
+
 ## Guidance
 
 ### 1. EN 侧先登记 Product Bundle
@@ -233,15 +244,17 @@ sudo docker restart sellfox-api-proxy
 ## Verification Checklist
 
 1. 底层 SKU 全部从 `pageList.json` 回读存在，并取得 `childId`。
-2. 组合 SKU 不存在时才创建；已存在时校验 `childSkus` 和分类。
-3. 创建后回读 `isGroup=1`、`fullCid=428697-`、`childSkus` 三项一致。
-4. 在线商品回读 `commoditySku` 等于组合 SKU。
-5. 订单包裹若已发货，如实报告 `已发货状态，不能修改商品配对`。
-6. 属性缺失时先走 Excel 导入，用户确认后才创建 SKU。
+2. 组合 SKU 不存在时才创建；已存在时**断言** `childSkus` 和分类，不一致则失败而不是跳过。
+3. 创建后回读断言 `isGroup=1`、`fullCid=428697-`、`childSkus` 三项一致。
+4. `sync-combos` 报告 `input_en == output_rows`，未匹配行留在 `unmatched`。
+5. 在线商品回读 `commoditySku` 等于组合 SKU。
+6. 订单包裹若已发货，如实报告 `已发货状态，不能修改商品配对`。
+7. 属性缺失时先走 Excel 导入，用户确认后才创建 SKU。
 
 ## Related
 
 - [赛狐组合 SKU 操作脚本](../../../SELLFOX_API/sellfox_combo_ops.py)
+- [combo-ops CLI 参考](../../../SELLFOX_API/docs/reference/combo-ops.md)
 - [sellfox-combo-create Skill](../../../.agents/skills/sellfox-combo-create/SKILL.md)
 - [赛狐 API Skill](../../../.agents/skills/sellfox-api/SKILL.md)
 - [通途有库存 SKU 三方主线补齐惯例](tongtu-en-sellfox-instock-sku-mainline.md)
