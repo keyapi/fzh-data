@@ -221,6 +221,15 @@ sudo docker restart sellfox-api-proxy
 
 重启后重新获取 token，新权限立即生效。代理只在赛狐返回 `40001` 时自动刷新 token，`40021` 不会触发。
 
+## 生产修复记录（2026-08-19）
+
+- EN `work_order_task` 已部署 `e2ee454`，生产执行了 `migrate`、`clear-cache`、`bench restart`。
+- KS0443 历史事故数据已清理并重建 12 个 Product Bundle：`TJ#KS0443x{2,3,4,5}-{001,002,003}`，草绿/象牙白/骆驼色各 4 个数量档。
+- 重建后 `name = new_item_code = Item.item_code`，`new_item_code_name = Item.item_name`，子表 parent 均正确，新上层 Item 的 `do_not_create_auto_machine_part=1`。
+- 赛狐 24 个旧组合商品已由用户手动删除；12 个正式组合 SKU 尚未重建，必须以本工作流 dry-run -> 用户确认 -> `--apply` 创建。
+- `FXLSSF3030` 是历史非 `TJ#` 套件，审计会误报，不要按新规则改它。
+- 4 条 `KS0003/KS0395` 子行无主 Bundle/Item，属历史残留，暂不清理，待用户确认。
+
 ## Verification Checklist
 
 1. 底层 SKU 全部从 `pageList.json` 回读存在，并取得 `childId`。
