@@ -9,6 +9,7 @@ tags: [workflow-issues, index]
 
 | 文档 | 说明 |
 |------|------|
+| [tongtu-warehouse-rename-reconciliation.md](tongtu-warehouse-rename-reconciliation.md) | 通途发货仓库改名后三处对账登记（通途→ERPNext→财务共享表） |
 | [ostkus-account-reconciliation.md](ostkus-account-reconciliation.md) | OSTKUS 账期与 EN Tongtool Order 对账 |
 | [pb-reconciliation-monthly-update.md](pb-reconciliation-monthly-update.md) | PB 对账表月度更新脚本化 + UPS 交付核查 |
 | [tongtool-sku-rename-gsheet-remap.md](tongtool-sku-rename-gsheet-remap.md) | 通途主档改名后对齐订单 Google Sheet |

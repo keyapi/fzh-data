@@ -74,6 +74,9 @@ SQLite BEGIN IMMEDIATE 事务内完成活跃标签/操作冲突检查、generati
 ### 3P 模式 (Third-Party Provider Mode)
 Claude Desktop 的第三方 API 模式，允许连接非 Anthropic 模型（如 DeepSeek）。此模式有独立的配置文件路径 `Claude-3p\claude_desktop_config.json`（区别于普通模式的 `Claude\` 路径），配置中包含 `"deploymentMode": "3p"` 字段。MCP 服务器的配置格式与普通模式相同。
 
+### 凭证在父仓库不在 worktree
+本项目常开 git worktree（`.claude/worktrees/...`）。gitignore 的凭证只存在于**父仓库** `D:\Work\赛狐\Cursor`：`EN_API/.env`（生产 ERPNext API）、`tongtool_api/.env`（通途 MCP）、`secrets/gsheets-service-account.json`（Google Sheet gspread）。worktree 里找不到这些文件；跑脚本要把相关 env 指到父仓库路径（如 `GSPREAD_SERVICE_ACCOUNT_FILE=D:\Work\赛狐\Cursor\secrets\gsheets-service-account.json`），或从父仓库 cwd 运行。
+
 ## Manufacturing
 
 ### 一键完工 (One-Click Complete)
@@ -136,6 +139,15 @@ The semi-finished/auxiliary items generated from a product template via the「�
 
 ### FBA 账期尾程差
 Amazon FBA 账期费用里已经包含平台履约尾程。特殊规则里对 FBA 填的负数尾程参考值表示「账期尾程减去目标尾程」的冲减，不是再加一笔正的尾程。零或正数对 FBA 仍应跳过，以免重复计入。
+
+### 通途发货仓库（Tongtu Shipping Warehouse）
+生产 ERPNext doctype，登记通途自发货仓库。字段：`warehouse_name`（Data）、`warehouse_classification`（**Link → Tongtu Shipping Warehouse Classification**，如 USNJ美东分公司/USTX美中分公司/PL波兰分公司）、`shipping_region`、`warehouse_code`（USNJ/USTX/PL/…）、以及皮壳/绍兴半成品/成品/总成本/加工/头程运费的成本列名。仓库改名后**旧名保留**给历史订单，新前缀名按分公司分类+成本列照抄补登记。
+
+### 发货仓库前缀改名（美东-/美中-/波兰-）
+通途自发货仓库最近把主仓名加上分公司前缀：`CENTRADE`→`美东-CENTRADE`、`FZH-DANEEY`→`美中-FZH-DANEEY`、`FZHPoland-covers`→`波兰-FZHPoland-covers`，并新增美东/波兰退货仓。原则是 3 家国外分公司各保留 1 普通仓 + 1 退货仓。生产订单仍大量引用旧名，所以两套名字都要在 ERPNext 登记。
+
+### 订单发货仓库对应成本来源
+财务共享表「和财务部共享」里的 ws，8 列把发货仓库映射到成本：`发货仓库 | 对应成本工作簿 | 成本来源编码 | 发货仓分类 | 头程运费来源编码 | 二次加工成本来源编码 | 发货区域 | 发货仓按销售汇总分类`。编码口径：CENTRADE→HEAD-US/2CJG-US；FZH-DANEEY 主仓与皮壳→HEAD-USTX-PK/2CJG-SX；成品/半成品/退货→HEAD-USTX/2CJG-SX；FZHPoland-covers→HEAD-PL/2CJG-PL；FZHPoland-finished→HEAD-EUHWC/2CJG-SX。
 
 ## Amazon 在线商品配对
 

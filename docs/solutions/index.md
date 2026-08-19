@@ -10,6 +10,7 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-08-19 | 通途发货仓库改名后三处对账登记（通途→ERPNext→财务共享表） | [workflow-issues/tongtu-warehouse-rename-reconciliation.md](workflow-issues/tongtu-warehouse-rename-reconciliation.md) |
 | 2026-08-17 | OSTKUS 账期与 EN Tongtool Order 对账 | [workflow-issues/ostkus-account-reconciliation.md](workflow-issues/ostkus-account-reconciliation.md) |
 | 2026-08-14 | PB 对账表月度更新 — 脚本自动化 + UPS 交付核查 | [workflow-issues/pb-reconciliation-monthly-update.md](workflow-issues/pb-reconciliation-monthly-update.md) |
 | 2026-08-14 | Cursor 通途 MCP 不会自动出现，必须写用户级 mcp.json | [developer-experience/cursor-tongtool-mcp-registration.md](developer-experience/cursor-tongtool-mcp-registration.md) |
