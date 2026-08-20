@@ -81,11 +81,11 @@ def validate_warehouse(warehouse: dict[str, Any] | None, name: str) -> list[str]
 
 
 def warehouse_cautions(name: str) -> list[str]:
-    """Flag branch main/finished warehouses that may not be the cover pool.
+    """Flag branch warehouses that are not the confirmed cover pool.
 
-    Match by substring so Sellfox/Tongtu renames (DANEEY-主仓, 美中-DANEEY,
-    POLAND vs FZHPoland-finished) still warn. Names that already say cover
-    (皮壳 / cover) or return/defective are out of scope.
+    USTX: names containing DANEEY without 皮壳/cover may be main/finished.
+    Poland: Sellfox POLAND maps to Tongtu covers, not finished; only warn
+    when the name looks like the finished warehouse.
     """
     raw = (name or "").strip()
     if not raw:
@@ -100,9 +100,11 @@ def warehouse_cautions(name: str) -> list[str]:
         notes.append(
             "USTX/DANEEY 主仓或成品仓未必存放三角皮壳；通途另有皮壳仓库，须用户确认后再当共享池"
         )
-    if "poland" in lower or "fzhpoland" in lower:
+    if ("poland" in lower or "fzhpoland" in lower) and (
+        "finished" in lower or "成品" in raw
+    ):
         notes.append(
-            "波兰通途拆了 FZHPoland-covers 与 FZHPoland-finished；赛狐 POLAND 映射未确认，须用户确认后再当共享池"
+            "波兰成品仓 FZHPoland-finished 不是皮壳共享池；赛狐 POLAND 对应通途 covers 仓"
         )
     return notes
 

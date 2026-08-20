@@ -27,7 +27,8 @@ metadata:
 - 赛狐 `KS` 为普通有库存商品；`PK#` 为 `KS x1` 组合商品。
 - 该关系仅是销售库存代理，不是 EN BOM/Product Bundle。
 - 加工商品会产生独立库存和加工单，本阶段不用。
-- 美中通途另有皮壳仓库；波兰通途拆了 covers/finished。不要默认用 DANEEY / FZH-DANEEY / POLAND 主仓当三角皮壳共享池。
+- 美中通途另有皮壳仓库；不要默认用 DANEEY / FZH-DANEEY 主仓当三角皮壳共享池。
+- 赛狐 `POLAND` 对应通途 covers 仓，不对应 `FZHPoland-finished`。
 - 先验证一个 SKU、一个已确认仓、一条皮壳 Listing；用户确认前不扩大。
 - FBA、名称含退货/不良的仓，只读审计会 blocked。
 

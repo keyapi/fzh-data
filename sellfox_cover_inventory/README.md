@@ -9,7 +9,7 @@ description: 单 SKU 沙盒审计脚本的运行入口。
 
 该模块为三角类皮壳共享库存方案提供文档和只读沙盒审计。决策依据见 [canonical 记录](../docs/solutions/conventions/sellfox-cover-shared-inventory-transition.md)。
 
-`warehouse_name` 必须是用户确认的 **赛狐仓名**。示例里的 `CENTRADE` 只是占位；美中不要默认填 `DANEEY` / `FZH-DANEEY` 主仓，波兰不要默认填 `POLAND`（通途另有皮壳/covers 与成品仓）。FBA、名称含退货/不良的仓会被脚本 blocked。
+`warehouse_name` 必须是用户确认的 **赛狐仓名**。示例里的 `CENTRADE` 只是占位；美中不要默认填 `DANEEY` / `FZH-DANEEY` 主仓（通途另有皮壳仓库）。波兰赛狐仓 `POLAND` 对应通途 covers，不要填 `FZHPoland-finished`。FBA、名称含退货/不良的仓会被脚本 blocked。
 
 先复制并修改 `sandbox.example.json`，配置只允许一个映射：
 

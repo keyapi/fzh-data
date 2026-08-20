@@ -77,13 +77,13 @@ tags: [sellfox, tongtool, erpnext, cover, combo, processing, shared-inventory, t
 | 美东主仓（赛狐名如 `CENTRADE`） | 三角类通常是皮壳 | 用户确认实物后可进入共享池 |
 | 美中主仓 / 成品仓（名称含 `DANEEY` 且不含皮壳/cover） | 可能是成品或混放 | **不默认**当皮壳共享池；只读审计会 `cautions` |
 | 美中皮壳仓（通途 `FZH-DANEEY-皮壳仓库` / `美中-FZH-DANEEY-皮壳仓库`） | 皮壳 | 若赛狐有对应仓且用户确认，优先于主仓 |
-| 波兰主仓（赛狐名如 `POLAND`） | 通途拆了 `FZHPoland-covers` 与 `FZHPoland-finished`，赛狐映射未确认 | 只读审计会 `cautions`；未确认前不写死“通常是皮壳” |
-| 波兰皮壳仓（通途 `波兰-FZHPoland-covers` / `FZHPoland-covers`） | 皮壳 | 若赛狐仓名含 cover/covers/皮壳且用户确认，优先于 `POLAND` |
+| 波兰赛狐仓 `POLAND` | 对应通途皮壳仓 `FZHPoland-covers` / `波兰-FZHPoland-covers` | 可作为三角皮壳共享池（2026-08-20 用户确认） |
+| 波兰成品仓（通途 `FZHPoland-finished`，名称含 finished/成品） | 成品 | 不是皮壳共享池；只读审计会 `cautions` |
 | FBA | 绍兴发出的成品 | 保持成品库存，不与皮壳共享；审计 `type=2` 会 blocked |
 | 退货仓 | 可能是成品、皮壳或混合 | 名称含「退货」会 blocked |
 | 不良品仓 | 不可售或待处理 | 名称含「不良」会 blocked |
 
-2026-08-20 赛狐只读回读确认 `CENTRADE`、`DANEEY`、`POLAND` 普通仓及三地退货仓/不良品仓均已存在。新增退货和不良品仓当时库存字段为空。该快照只证明仓库对象存在，不证明实物分类已经完成。
+2026-08-20 赛狐只读回读确认 `CENTRADE`、`DANEEY`、`POLAND` 普通仓及三地退货仓/不良品仓均已存在。新增退货和不良品仓当时库存字段为空。该快照只证明仓库对象存在。同日用户确认：赛狐 `POLAND` 对应通途 covers 仓，不对应 `FZHPoland-finished`。
 
 ## 组合商品与加工商品的实际差异
 
@@ -181,7 +181,7 @@ SKU: PK#KS0001-DM-194-GREY
 ### 停手条件
 
 - `PK#` 已是普通/加工商品或子项不是唯一 `KS x1`。
-- 普通仓实物分类不确定，或美中/波兰误用主仓/成品仓而未确认皮壳（covers）仓。
+- 普通仓实物分类不确定，或美中误用主仓/成品仓而未确认皮壳仓，或波兰误用 `FZHPoland-finished`。
 - 所选赛狐仓为 FBA，或名称含退货/不良。
 - 同步公式无法解释占用、待发货或 `TT123-Cover`。
 - 利润报表仍取成品成本。
