@@ -78,3 +78,13 @@ def test_ustx_main_warehouse_is_caution_not_cover_warehouse():
     assert "皮壳" in notes[0]
     assert warehouse_cautions("FZH-DANEEY-皮壳仓库") == []
     assert warehouse_cautions("CENTRADE") == []
+
+
+def test_poland_and_daneey_variants_caution_unless_named_cover():
+    assert warehouse_cautions("POLAND")
+    assert warehouse_cautions("FZHPoland-finished")
+    assert warehouse_cautions("DANEEY-主仓")
+    assert warehouse_cautions("美中-DANEEY")
+    assert warehouse_cautions("FZHPoland-covers") == []
+    assert warehouse_cautions("波兰-FZHPoland-covers") == []
+    assert warehouse_cautions("POLAND-covers") == []

@@ -81,20 +81,30 @@ def validate_warehouse(warehouse: dict[str, Any] | None, name: str) -> list[str]
 
 
 def warehouse_cautions(name: str) -> list[str]:
-    """USTX main/finished warehouses are not the default triangle cover pool."""
-    n = (name or "").strip()
-    main_aliases = {
-        "DANEEY",
-        "FZH-DANEEY",
-        "美中-FZH-DANEEY",
-        "FZH-DANEEY-成品仓",
-        "美中-FZH-DANEEY-成品仓",
-    }
-    if n in main_aliases:
-        return [
+    """Flag branch main/finished warehouses that may not be the cover pool.
+
+    Match by substring so Sellfox/Tongtu renames (DANEEY-主仓, 美中-DANEEY,
+    POLAND vs FZHPoland-finished) still warn. Names that already say cover
+    (皮壳 / cover) or return/defective are out of scope.
+    """
+    raw = (name or "").strip()
+    if not raw:
+        return []
+    lower = raw.casefold()
+    if any(token in raw for token in ("皮壳", "退货", "不良")):
+        return []
+    if "cover" in lower:
+        return []
+    notes: list[str] = []
+    if "daneey" in lower:
+        notes.append(
             "USTX/DANEEY 主仓或成品仓未必存放三角皮壳；通途另有皮壳仓库，须用户确认后再当共享池"
-        ]
-    return []
+        )
+    if "poland" in lower or "fzhpoland" in lower:
+        notes.append(
+            "波兰通途拆了 FZHPoland-covers 与 FZHPoland-finished；赛狐 POLAND 映射未确认，须用户确认后再当共享池"
+        )
+    return notes
 
 
 def rows_from_page(data: Any) -> list[dict[str, Any]]:

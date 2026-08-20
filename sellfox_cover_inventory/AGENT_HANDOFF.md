@@ -33,14 +33,14 @@ description: 三角类皮壳组合商品方案的快速接手入口、冻结边�
 - 不改 EN 客户物料号登记和销售订单交付形态脚本。
 - 不创建 EN Product Bundle。
 - 不把 FBA、退货仓、不良品仓并入普通仓共享池；只读审计会 blocked。
-- 不把美中 `DANEEY` / `FZH-DANEEY` 主仓或成品仓默认当成三角皮壳共享池；通途另有皮壳仓库，须用户确认。
+- 不把美中 `DANEEY` / `FZH-DANEEY` 主仓或成品仓、以及赛狐 `POLAND` 默认当成三角皮壳共享池；通途美中另有皮壳仓、波兰另有 covers/finished，须用户确认。只读审计对名称含 DANEEY/POLAND 且不含皮壳/cover 的仓给 `cautions`。
 - 不假定 `TT123 + TT123-Cover` 就是同步公式；先验证占用和时序。
 - 不承诺利润成本正确；必须用真实测试订单验证。
 - 不调用 `SELLFOX_API/sellfox_combo_ops.py sync-combos` 创建本方案对象，该命令面向 EN TJ# 套件。
 
 ## 代码地图
 
-- `audit_sandbox.py`：默认无写入；`--live` 只调用赛狐查询接口。FBA/退货/不良仓 blocked；DANEEY 主仓写入 `cautions`。加工商品计数读 `totalSize`。
+- `audit_sandbox.py`：默认无写入；`--live` 只调用赛狐查询接口。FBA/退货/不良仓 blocked；名称含 DANEEY/POLAND 且不含皮壳/cover 的仓写入 `cautions`。加工商品计数读 `totalSize`。
 - `tests/test_audit_sandbox.py`：配置和组合关系纯函数测试。
 - `SELLFOX_API/client.py`：复用认证、签名和限流。
 - `.agents/skills/sellfox-cover-inventory/SKILL.md`：触发词和路由。
