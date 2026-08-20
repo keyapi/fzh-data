@@ -20,12 +20,15 @@ from combo_reconcile import (  # noqa: E402
     PlanRow,
     SellfoxCombo,
     assert_combo_row,
+    collect_page_rows,
     composition_key,
     duplicate_skus,
     index_sellfox_combos,
+    page_count,
     parse_child_specs,
     parse_sellfox_children,
     plan_sync,
+    require_positive_int,
     summarize_plan,
     validate_en_bundle,
     writable_actions,
@@ -185,6 +188,18 @@ def test_plan_blocked_duplicate_sellfox_sku():
         duplicate_skus={"TJ#KS0443x2-001"},
     )
     assert plan.rows[0].action == "blocked_duplicate"
+    assert "create" not in writable_actions(plan)
+
+
+def test_plan_blocked_duplicate_bottom_sku():
+    plan = plan_sync(
+        [_bundle()],
+        sellfox_by_sku={},
+        bottoms_present={"KS0443-DM-70x70x25-GRASSGREEN"},
+        duplicate_bottom_skus={"KS0443-DM-70x70x25-GRASSGREEN"},
+    )
+    assert plan.rows[0].action == "blocked_duplicate"
+    assert plan.rows[0].reason == "sellfox_bottom_duplicated"
     assert "create" not in writable_actions(plan)
 
 
@@ -534,3 +549,80 @@ def test_cmd_create_duplicate_sku_is_blocked():
         assert "重复" in str(exc)
     else:
         raise AssertionError("expected SystemExit")
+
+
+def test_page_count_uses_total_page_or_total_size():
+    assert page_count({"totalPage": 2}) == 2
+    assert page_count({"totalSize": 51}, page_size=50) == 2
+    assert page_count({}) == 1
+    assert collect_page_rows({"rows": [{"sku": "A"}, {}]}) == [{"sku": "A"}]
+
+
+def test_query_sku_rows_paginates_until_duplicate_visible():
+    from sellfox_combo_ops import query_sku_rows, query_skus
+
+    class PagedClient:
+        def signed_post(self, url, payload):
+            page = str(payload.get("pageNo"))
+            assert payload.get("pageSize") == "50"
+            if page == "1":
+                return {
+                    "pageNo": 1,
+                    "pageSize": 50,
+                    "totalPage": 2,
+                    "totalSize": 2,
+                    "rows": [
+                        {
+                            "sku": "TJ#KS0443x2-001",
+                            "id": "1",
+                            "name": "A",
+                            "isGroup": "1",
+                        }
+                    ],
+                }
+            return {
+                "pageNo": 2,
+                "pageSize": 50,
+                "totalPage": 2,
+                "totalSize": 2,
+                "rows": [
+                    {
+                        "sku": "TJ#KS0443x2-001",
+                        "id": "2",
+                        "name": "B",
+                        "isGroup": "1",
+                    }
+                ],
+            }
+
+    rows = query_sku_rows(PagedClient(), ["TJ#KS0443x2-001"])
+    assert len(rows) == 2
+    assert duplicate_skus(rows) == {"TJ#KS0443x2-001"}
+    try:
+        query_skus(PagedClient(), ["TJ#KS0443x2-001"])
+    except SystemExit as exc:
+        assert "重复" in str(exc)
+    else:
+        raise AssertionError("expected SystemExit")
+
+
+def test_en_create_payload_rejects_float_bool_and_string():
+    try:
+        en_create_payload((("KS1", 1.5),))
+    except ValueError as exc:
+        assert "正整数" in str(exc)
+    else:
+        raise AssertionError("expected ValueError for float")
+    try:
+        en_create_payload((("KS1", True),))
+    except ValueError as exc:
+        assert "正整数" in str(exc)
+    else:
+        raise AssertionError("expected ValueError for bool")
+    try:
+        en_create_payload((("KS1", "2"),))
+    except ValueError as exc:
+        assert "正整数" in str(exc)
+    else:
+        raise AssertionError("expected ValueError for str")
+    assert require_positive_int(2, label="KS1") == 2

@@ -32,9 +32,12 @@ from combo_en import (
 )
 from combo_reconcile import (
     DEFAULT_FULL_CID,
+    PAGE_SIZE,
     assert_combo_row,
+    collect_page_rows,
     duplicate_skus,
     index_sellfox_combos,
+    page_count,
     parse_child_specs,
     plan_sync,
     summarize_plan,
@@ -66,21 +69,33 @@ def make_en_client(env_name: str) -> EnRestClient:
 def query_sku_rows(client: SellfoxClient, skus: list[str]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     unique = [sku for sku in dict.fromkeys(skus) if sku]
-    for offset in range(0, len(unique), 50):
-        chunk = unique[offset : offset + 50]
-        data = client.signed_post(
-            "/api/commodity/pageList.json",
-            {"pageNo": "1", "pageSize": str(max(len(chunk), 1)), "skus": chunk},
-        )
-        for row in data.get("rows") or []:
-            if row.get("sku"):
-                rows.append(row)
+    for offset in range(0, len(unique), PAGE_SIZE):
+        chunk = unique[offset : offset + PAGE_SIZE]
+        page_no = 1
+        while True:
+            data = client.signed_post(
+                "/api/commodity/pageList.json",
+                {"pageNo": str(page_no), "pageSize": str(PAGE_SIZE), "skus": chunk},
+            )
+            rows.extend(collect_page_rows(data if isinstance(data, dict) else {}))
+            total_pages = page_count(
+                data if isinstance(data, dict) else {}, page_size=PAGE_SIZE
+            )
+            if page_no >= total_pages:
+                break
+            page_no += 1
+            if page_no > 100:
+                raise SystemExit("赛狐 pageList 分页超过 100 页，停止以免空转")
     return rows
 
 
 def query_skus(client: SellfoxClient, skus: list[str]) -> dict[str, dict[str, Any]]:
+    rows = query_sku_rows(client, skus)
+    dups = duplicate_skus(rows)
+    if dups:
+        raise SystemExit(f"赛狐同 SKU 重复记录: {', '.join(sorted(dups))}")
     found: dict[str, dict[str, Any]] = {}
-    for row in query_sku_rows(client, skus):
+    for row in rows:
         sku = str(row.get("sku") or "")
         if sku:
             found[sku] = row
@@ -324,15 +339,17 @@ def cmd_sync_combos(client: SellfoxClient, args: argparse.Namespace) -> int:
         }
     )
     combo_skus = [bundle.new_item_code or bundle.name for bundle in bundles]
-    bottoms = query_skus(client, child_skus)
+    bottom_rows = query_sku_rows(client, child_skus)
+    bottoms_by_sku, bottom_dups = index_sellfox_combos(bottom_rows)
     combo_rows = query_sku_rows(client, combo_skus)
     sellfox_by_sku, dups = index_sellfox_combos(combo_rows)
     plan = plan_sync(
         bundles,
         sellfox_by_sku,
-        set(bottoms),
+        set(bottoms_by_sku),
         expected_full_cid=args.full_cid or DEFAULT_FULL_CID,
         duplicate_skus=dups,
+        duplicate_bottom_skus=bottom_dups,
     )
     summary = summarize_plan(plan)
     summary["en_env"] = args.env

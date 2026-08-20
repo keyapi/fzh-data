@@ -20,6 +20,7 @@
 2. 读本节 **冻结表**。
 3. `cd SELLFOX_API` → dry-run（如 `sync-combos --like "TJ#KSxxxx%"`）→ 把 JSON 计划给用户 → 用户确认范围后 `--apply`。
 4. 改脚本后：`uv run pytest tests/sellfox_api/test_combo_reconcile.py -q`。
+5. dry-run 出现 `mismatch` / `blocked_*`（含 `blocked_duplicate`）必须停手，不要 `--apply`。
 
 凭证：赛狐代理 Key → 根 `.env` 的 `SELLFOX_PROXY_API_KEY`；EN → `EN_API/.env`。EN `--env` 默认 **prod**。
 

@@ -14,6 +14,7 @@ DEFAULT_FULL_CID = "428697-"
 TJ_SERIAL_RE = re.compile(r"^TJ#.+\-\d{3}$")
 HISTORICAL_SKIP_SKUS = frozenset({"FXLSSF3030"})
 WRITABLE = frozenset({"create", "set_category"})
+PAGE_SIZE = 50
 
 
 @dataclass(frozen=True)
@@ -73,6 +74,14 @@ def composition_key(
     return tuple(sorted(normalized))
 
 
+def require_positive_int(qty: Any, *, label: str) -> int:
+    if isinstance(qty, bool) or not isinstance(qty, int):
+        raise ValueError(f"子件数量必须是正整数: {label}:{qty!r}")
+    if qty <= 0:
+        raise ValueError(f"子件数量必须是正整数: {label}:{qty}")
+    return qty
+
+
 def parse_child_specs(specs: Sequence[str]) -> tuple[tuple[str, int], ...]:
     result: list[tuple[str, int]] = []
     for spec in specs:
@@ -88,8 +97,9 @@ def parse_child_specs(specs: Sequence[str]) -> tuple[tuple[str, int], ...]:
             qty = int(num)
         except ValueError as exc:
             raise ValueError(f"子件数量必须是整数: {raw!r}") from exc
-        if qty <= 0:
+        if str(qty) != num:
             raise ValueError(f"子件数量必须是正整数: {raw!r}")
+        qty = require_positive_int(qty, label=sku)
         result.append((sku, qty))
     if not result:
         raise ValueError("至少需要一个 SKU:qty 子件")
@@ -189,9 +199,11 @@ def plan_sync(
     expected_full_cid: str = DEFAULT_FULL_CID,
     skip_skus: Iterable[str] = HISTORICAL_SKIP_SKUS,
     duplicate_skus: Iterable[str] = (),
+    duplicate_bottom_skus: Iterable[str] = (),
 ) -> SyncPlan:
     skip = set(skip_skus)
     dups = set(duplicate_skus)
+    bottom_dups = set(duplicate_bottom_skus)
     rows: list[PlanRow] = []
     for bundle in en_bundles:
         sku = bundle.new_item_code or bundle.name
@@ -240,6 +252,23 @@ def plan_sync(
             for child in bundle.items
             if child.item_code not in bottoms_present
         )
+        duplicate_bottoms = tuple(
+            child.item_code
+            for child in bundle.items
+            if child.item_code in bottom_dups
+        )
+        if combo is None and duplicate_bottoms:
+            rows.append(
+                PlanRow(
+                    sku=sku,
+                    action="blocked_duplicate",
+                    reason="sellfox_bottom_duplicated",
+                    name=bundle.new_item_code_name,
+                    expected_children=expected,
+                    problems=duplicate_bottoms,
+                )
+            )
+            continue
         if combo is None and missing_bottoms:
             rows.append(
                 PlanRow(
@@ -332,6 +361,31 @@ def index_sellfox_combos(
             continue
         by_sku[sku] = sellfox_combo_from_row(row)
     return by_sku, dups
+
+
+def page_count(payload: Mapping[str, Any], *, page_size: int = PAGE_SIZE) -> int:
+    raw_pages = payload.get("totalPage")
+    if raw_pages not in (None, ""):
+        try:
+            pages = int(raw_pages)
+            if pages > 0:
+                return pages
+        except (TypeError, ValueError):
+            pass
+    raw_total = payload.get("totalSize")
+    if raw_total not in (None, ""):
+        try:
+            total = int(raw_total)
+            if total <= 0:
+                return 1
+            return max(1, (total + page_size - 1) // page_size)
+        except (TypeError, ValueError):
+            pass
+    return 1
+
+
+def collect_page_rows(payload: Mapping[str, Any]) -> list[dict[str, Any]]:
+    return [row for row in (payload.get("rows") or []) if row.get("sku")]
 
 
 def writable_actions(plan: SyncPlan) -> set[str]:

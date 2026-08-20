@@ -72,7 +72,7 @@ uv run --project .. python sellfox_combo_ops.py <command>
 | `mismatch` | 赛狐已有但组成、`isGroup` 或名称不同 | **永不自动改组成/名称** |
 | `blocked_en` | EN `name/new_item_code/Item` 或子表不合法（含空名称） | 否 |
 | `blocked_bottoms` | 要创建但赛狐缺底层 SKU | 否 |
-| `blocked_duplicate` | 赛狐同 SKU 出现多条记录 | 否 |
+| `blocked_duplicate` | 赛狐组合 SKU 或多条底层 SKU 重复 | 否 |
 | `skip_historical` | 如 `FXLSSF3030` | 否 |
 
 已存在组合如果组成不一致，**不再当成功跳过**；`create` 会断言失败退出。
@@ -119,6 +119,7 @@ uv run --project .. python sellfox_combo_ops.py <command>
 立即停止并报告（附 EN/赛狐回读 JSON）：
 
 - `mismatch` / `blocked_en` / `blocked_bottoms` / `blocked_duplicate`
+- 赛狐 `pageList` 同 SKU 跨页重复、底层 SKU 重复（不得任选 childId）
 - 预览重复、底层缺失、权限 40021（代理 token 缓存，见工作流 Proxy 章节）
 - 已发货配对拒绝、文档与脚本未覆盖的 API 行为
 
