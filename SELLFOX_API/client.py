@@ -14,6 +14,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import math
 import os
 import random
 import time
@@ -38,9 +39,9 @@ class RateLimitPolicy:
     def __post_init__(self) -> None:
         if self.max_retries < 1:
             self.max_retries = 6
-        if self.default_wait_s < 0:
+        if not math.isfinite(self.default_wait_s) or self.default_wait_s < 0:
             self.default_wait_s = 10.0
-        if self.jitter_s < 0:
+        if not math.isfinite(self.jitter_s) or self.jitter_s < 0:
             self.jitter_s = 0.0
 
     @classmethod

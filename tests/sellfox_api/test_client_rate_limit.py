@@ -151,6 +151,23 @@ def test_rate_limit_policy_from_env_clamps_invalid(monkeypatch):
     assert policy.jitter_s == 0.0
 
 
+def test_rate_limit_policy_rejects_nan_and_inf():
+    policy = RateLimitPolicy(default_wait_s=float("nan"), jitter_s=float("inf"))
+    assert policy.default_wait_s == 10.0
+    assert policy.jitter_s == 0.0
+    policy_neg_inf = RateLimitPolicy(default_wait_s=float("-inf"), jitter_s=float("-inf"))
+    assert policy_neg_inf.default_wait_s == 10.0
+    assert policy_neg_inf.jitter_s == 0.0
+
+
+def test_rate_limit_policy_from_env_rejects_nan_and_inf(monkeypatch):
+    monkeypatch.setenv("SELLFOX_RATE_LIMIT_WAIT_S", "nan")
+    monkeypatch.setenv("SELLFOX_RATE_LIMIT_JITTER_S", "inf")
+    policy = RateLimitPolicy.from_env()
+    assert policy.default_wait_s == 10.0
+    assert policy.jitter_s == 0.0
+
+
 def test_direct_mode_honors_retry_after_header(monkeypatch):
     calls: list[int] = []
 
