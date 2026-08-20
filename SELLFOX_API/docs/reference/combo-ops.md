@@ -89,8 +89,18 @@ uv run --project .. python sellfox_combo_ops.py <command>
 | `rows` | 每条 SKU 的 action / reason / children / problems |
 | `unmatched` | 非 ok/create/set_category 的行，不得丢弃 |
 | `--apply` 后 `applied` / `failed` / `assertion_failures` / `blocked` | 部分失败清单 |
+| `--report` 同名的 `.checkpoint.json` | apply 过程中增量进度（applied/failed/pending/counts） |
 
 数量对账：入 N 行必须出 N 行；差数只能出现在 `unmatched` 的 reason 里。
+
+## 限流与续跑（Issue #188）
+
+- 赛狐 envelope `code=40019` 与代理 `Rate limited` 由 `client.py` **统一自动重试**（默认约 10s + jitter；优先 `Retry-After`）。
+- 环境变量（可选）：`SELLFOX_RATE_LIMIT_MAX_RETRIES`（默认 6）、`SELLFOX_RATE_LIMIT_WAIT_S`（默认 10）、`SELLFOX_RATE_LIMIT_JITTER_S`（默认 0.5）。
+- **只重试明确限流**，不对创建/编辑的网络异常做泛化重试，避免重复写入。
+- `sync-combos --apply` 一次运行内**缓存分类**与**底层 childId 预查**；每条 create 前仍即时查重组合 SKU，create 后仍回读断言。
+- 中断后**同一 `--like`/`--sku` 范围重跑**：已完成项自然变 `ok`，只执行剩余 `create`/`set_category`。**不要**手工拼「剩余 SKU」或跳过查重。
+- 项目根目录：脚本从 `SELLFOX_API` 向上遍历找 `.env` + `EN_API/.env`（支持 `E:\FZH-AI\SELLFOX_API` 等浅路径）；找不到则报错并列出已检查路径。
 
 ## EN 创建禁令
 
@@ -121,6 +131,7 @@ uv run --project .. python sellfox_combo_ops.py <command>
 - `mismatch` / `blocked_en` / `blocked_bottoms` / `blocked_duplicate`
 - 赛狐 `pageList` 同 SKU 跨页重复、底层 SKU 重复（不得任选 childId）
 - 预览重复、底层缺失、权限 40021（代理 token 缓存，见工作流 Proxy 章节）
+- 赛狐/代理 **40019 限流**：脚本会自动重试；若仍失败，等待后**同范围重跑**（见 combo-ops「限流与续跑」），不要跳过查重
 - 已发货配对拒绝、文档与脚本未覆盖的 API 行为
 
 不要 PUT 修组成、不要临时编号、不要无范围扫描、不要猜。
@@ -134,5 +145,9 @@ uv run --project .. python sellfox_combo_ops.py <command>
 | `sellfox_combo_ops.py` | CLI：`sync-combos`、`en-preview`、`en-create`、`create`、`set-category` |
 | `combo_reconcile.py` | 纯对账：`plan_sync`、action 枚举、`HISTORICAL_SKIP_SKUS` |
 | `combo_en.py` | EN REST：items-only 创建、预览、拉 Bundle |
-| `client.py` | 赛狐代理 API |
+| `client.py` | 赛狐代理/直连 API；40019 与代理 Rate limited 统一重试 |
+| `repo_root.py` | 安全查找项目根（`.env` + `EN_API/.env`） |
+| `combo_ops_context.py` | sync-combos 分类/底层缓存与 apply checkpoint |
 | `tests/sellfox_api/test_combo_reconcile.py` | 对账逻辑单测 |
+| `tests/sellfox_api/test_client_rate_limit.py` | 限流重试单测 |
+| `tests/sellfox_api/test_repo_root.py` | 浅路径根目录查找单测 |

@@ -22,6 +22,12 @@ from pathlib import Path
 from typing import Any
 
 from client import SellfoxClient, SellfoxConfig
+from combo_ops_context import (
+    ComboOpsCache,
+    checkpoint_path,
+    index_raw_rows,
+    write_checkpoint,
+)
 from combo_en import (
     EnRestClient,
     assert_en_create_payload,
@@ -43,26 +49,24 @@ from combo_reconcile import (
     summarize_plan,
     validate_en_bundle,
 )
-
-
-def find_main_root() -> Path:
-    """Find repo root containing .env and EN_API/.env (works in worktrees)."""
-    here = Path(__file__).resolve().parent
-    candidates = [here.parent, here.parents[1], here.parents[2], here.parents[3]]
-    for root in candidates:
-        if (root / ".env").exists() and (root / "EN_API" / ".env").exists():
-            return root
-    return here.parent
+from repo_root import find_main_root
 
 
 def make_client() -> SellfoxClient:
-    root = find_main_root()
+    try:
+        root = find_main_root(start=Path(__file__).resolve().parent)
+    except FileNotFoundError as exc:
+        raise SystemExit(str(exc)) from exc
     cfg = SellfoxConfig.from_env(root / ".env", root / "EN_API" / ".env")
     return SellfoxClient(cfg)
 
 
 def make_en_client(env_name: str) -> EnRestClient:
-    base, session = make_en_session(find_main_root(), env_name)
+    try:
+        root = find_main_root(start=Path(__file__).resolve().parent)
+    except FileNotFoundError as exc:
+        raise SystemExit(str(exc)) from exc
+    base, session = make_en_session(root, env_name)
     return EnRestClient(base, session)
 
 
@@ -112,29 +116,48 @@ def require_unique_sku(rows: list[dict[str, Any]], sku: str) -> dict[str, Any] |
     return None
 
 
-def find_category(client: SellfoxClient, full_cid: str) -> dict[str, Any] | None:
-    categories = client.signed_post("/api/category/getList.json", {}) or []
+def find_category(
+    client: SellfoxClient,
+    full_cid: str,
+    *,
+    cache: ComboOpsCache | None = None,
+) -> dict[str, Any] | None:
+    def fetch() -> dict[str, Any] | None:
+        categories = client.signed_post("/api/category/getList.json", {}) or []
 
-    def walk(items: list[dict[str, Any]]) -> dict[str, Any] | None:
-        for cat in items or []:
-            if str(cat.get("fullCid")) == full_cid or str(cat.get("id")) == full_cid:
-                return cat
-            found = walk(cat.get("childVo") or [])
-            if found:
-                return found
-        return None
+        def walk(items: list[dict[str, Any]]) -> dict[str, Any] | None:
+            for cat in items or []:
+                if str(cat.get("fullCid")) == full_cid or str(cat.get("id")) == full_cid:
+                    return cat
+                found = walk(cat.get("childVo") or [])
+                if found:
+                    return found
+            return None
 
-    return walk(categories)
+        return walk(categories)
+
+    if cache is None:
+        return fetch()
+    return cache.get_category(full_cid, fetch)
 
 
 def resolve_child_skus(
-    client: SellfoxClient, specs: list[tuple[str, int]]
+    client: SellfoxClient,
+    specs: list[tuple[str, int]],
+    *,
+    bottom_cache: dict[str, dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     skus = [sku for sku, _ in specs]
-    existing = query_skus(client, skus)
-    missing = [sku for sku, _ in specs if sku not in existing]
-    if missing:
-        raise SystemExit(f"赛狐底层商品缺失: {', '.join(missing)}")
+    if bottom_cache is not None:
+        missing = [sku for sku in skus if sku not in bottom_cache]
+        if missing:
+            raise SystemExit(f"赛狐底层商品缺失: {', '.join(missing)}")
+        existing = bottom_cache
+    else:
+        existing = query_skus(client, skus)
+        missing = [sku for sku, _ in specs if sku not in existing]
+        if missing:
+            raise SystemExit(f"赛狐底层商品缺失: {', '.join(missing)}")
 
     result = []
     for sku, num in specs:
@@ -210,6 +233,8 @@ def cmd_create(client: SellfoxClient, args: argparse.Namespace) -> int:
     child_specs = list(parse_child_specs(args.child))
     raw = query_sku_rows(client, [args.sku])
     existing_row = require_unique_sku(raw, args.sku)
+    cache: ComboOpsCache | None = getattr(args, "ops_cache", None)
+    bottom_cache: dict[str, dict[str, Any]] | None = getattr(args, "bottom_cache", None)
     if existing_row:
         print("组合 SKU 已存在，跳过创建，执行回读断言")
         print_combo_row("组合 SKU", existing_row)
@@ -223,7 +248,9 @@ def cmd_create(client: SellfoxClient, args: argparse.Namespace) -> int:
         print("回读断言通过")
         return 0
 
-    child_skus = resolve_child_skus(client, child_specs)
+    child_skus = resolve_child_skus(
+        client, child_specs, bottom_cache=bottom_cache
+    )
     payload = {
         "name": args.name,
         "sku": args.sku,
@@ -232,7 +259,7 @@ def cmd_create(client: SellfoxClient, args: argparse.Namespace) -> int:
         "childSkus": child_skus,
     }
     if args.full_cid:
-        category = find_category(client, args.full_cid)
+        category = find_category(client, args.full_cid, cache=cache)
         if not category:
             raise SystemExit(f"分类不存在: {args.full_cid}")
         payload["fullCid"] = str(category.get("fullCid"))
@@ -264,7 +291,8 @@ def cmd_set_category(client: SellfoxClient, args: argparse.Namespace) -> int:
     row = require_unique_sku(raw, args.sku)
     if not row:
         raise SystemExit(f"组合 SKU 不存在: {args.sku}")
-    category = find_category(client, args.full_cid)
+    cache: ComboOpsCache | None = getattr(args, "ops_cache", None)
+    category = find_category(client, args.full_cid, cache=cache)
     if not category:
         raise SystemExit(f"分类不存在: {args.full_cid}")
 
@@ -361,9 +389,14 @@ def cmd_sync_combos(client: SellfoxClient, args: argparse.Namespace) -> int:
         print("dry-run，未写入。确认计划后加 --apply。mismatch/blocked 永远不会自动修。")
         return 1 if blocked else 0
 
+    ops_cache = ComboOpsCache()
+    ops_cache.set_bottom_rows(index_raw_rows(bottom_rows))
+    ckpt_path = checkpoint_path(args.report)
+    writable_rows = [row for row in plan.rows if row.action in {"create", "set_category"}]
     applied: list[dict[str, Any]] = []
     failed: list[dict[str, Any]] = []
-    for row in plan.rows:
+    for index, row in enumerate(writable_rows, start=1):
+        pending = [item.sku for item in writable_rows[index:]]
         if row.action == "create":
             ns = argparse.Namespace(
                 sku=row.sku,
@@ -372,23 +405,45 @@ def cmd_sync_combos(client: SellfoxClient, args: argparse.Namespace) -> int:
                 full_cid=args.full_cid or DEFAULT_FULL_CID,
                 auto_calc_weight="true",
                 apply=True,
+                ops_cache=ops_cache,
+                bottom_cache=ops_cache.bottom_rows,
             )
             try:
                 cmd_create(client, ns)
                 applied.append({"sku": row.sku, "action": "create"})
-            except SystemExit as exc:
+            except (SystemExit, RuntimeError) as exc:
                 failed.append({"sku": row.sku, "action": "create", "error": str(exc)})
         elif row.action == "set_category":
             ns = argparse.Namespace(
                 sku=row.sku,
                 full_cid=args.full_cid or DEFAULT_FULL_CID,
                 apply=True,
+                ops_cache=ops_cache,
             )
             try:
                 cmd_set_category(client, ns)
                 applied.append({"sku": row.sku, "action": "set_category"})
-            except SystemExit as exc:
+            except (SystemExit, RuntimeError) as exc:
                 failed.append({"sku": row.sku, "action": "set_category", "error": str(exc)})
+        write_checkpoint(
+            ckpt_path,
+            {
+                "applied": applied,
+                "failed": failed,
+                "pending": pending,
+                "counts": {
+                    "applied": len(applied),
+                    "failed": len(failed),
+                    "pending": len(pending),
+                    "planned": len(writable_rows),
+                },
+                "plan_counts": plan.counts,
+                "cache": {
+                    "category_fetch_calls": ops_cache.category_fetch_calls,
+                    "category_cache_hits": ops_cache.category_cache_hits,
+                },
+            },
+        )
 
     final_rows = query_sku_rows(client, combo_skus)
     final_by_sku, final_dups = index_sellfox_combos(final_rows)
@@ -428,6 +483,10 @@ def cmd_sync_combos(client: SellfoxClient, args: argparse.Namespace) -> int:
             {"sku": row.sku, "action": row.action, "reason": row.reason, "problems": list(row.problems)}
             for row in blocked
         ],
+        "cache": {
+            "category_fetch_calls": ops_cache.category_fetch_calls,
+            "category_cache_hits": ops_cache.category_cache_hits,
+        },
     }
     print(json.dumps(result, ensure_ascii=False, indent=2))
     if failed or assertion_failures or blocked:

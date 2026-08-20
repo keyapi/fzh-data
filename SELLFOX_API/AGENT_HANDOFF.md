@@ -19,8 +19,9 @@
 1. 读 [combo-ops.md](docs/reference/combo-ops.md) — 默认命令、硬规则、停手、代码地图。
 2. 读本节 **冻结表**。
 3. `cd SELLFOX_API` → dry-run（如 `sync-combos --like "TJ#KSxxxx%"`）→ 把 JSON 计划给用户 → 用户确认范围后 `--apply`。
-4. 改脚本后：`uv run pytest tests/sellfox_api/test_combo_reconcile.py -q`。
+4. 改脚本后：`uv run pytest tests/sellfox_api/ -q`。
 5. dry-run 出现 `mismatch` / `blocked_*`（含 `blocked_duplicate`）必须停手，不要 `--apply`。
+6. 批量 apply 遇 **40019**：脚本自动重试；仍失败则同范围重跑（见 combo-ops「限流与续跑」）。`--report` 会写 `.checkpoint.json` 追踪 applied/pending。
 
 凭证：赛狐代理 Key → 根 `.env` 的 `SELLFOX_PROXY_API_KEY`；EN → `EN_API/.env`。EN `--env` 默认 **prod**。
 
