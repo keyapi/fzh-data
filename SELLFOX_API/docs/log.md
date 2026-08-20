@@ -9,6 +9,11 @@ timestamp: 2026-07-02
 
 # 变更日志
 
+## 2026-08-19
+
+- **变更描述**: 增加 EN Product Bundle ↔ 赛狐组合商品对账命令 `sync-combos`、EN `en-preview`/`en-create`（只传 items）、创建后程序化回读断言，以及纯逻辑测试。同事 Agent 默认走 Skill `sellfox-combo-create`，禁止无范围全量和 PUT 改组成。
+
+
 ## v0.2 — 2026-07-02: API 实战验证 + 新脚本
 
 - 创建 `fetch_ad_reports.py` — 纯 stdlib 脚本，通过赛狐 OpenAPI 拉取 4 种 SP 广告报告

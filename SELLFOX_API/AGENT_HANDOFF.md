@@ -7,6 +7,8 @@
 
 赛狐 (Sellfox) 开放平台的 API 文档本地镜像 + 连通性测试脚本。从 Apifox (`sellfoxapi.apifox.cn`) 下载全部 API Markdown 文档，按原始结构组织，方便 Agent 离线查阅和搜索。
 
+**组合商品/EN 套件**不走文档下载脚本，走 `sellfox_combo_ops.py` + Skill `sellfox-combo-create`。详见 [docs/reference/combo-ops.md](docs/reference/combo-ops.md)。
+
 ## 快速启动
 
 ```bash
@@ -40,6 +42,7 @@ python fetch_ad_reports.py --shop-name "MyStore" --days 30
 | 你需要... | 读这个 |
 |----------|--------|
 | Agent 接手总览 | 本文件 |
+| EN 套件 / 赛狐组合商品 | [docs/reference/combo-ops.md](docs/reference/combo-ops.md) 与 `.agents/skills/sellfox-combo-create/SKILL.md` |
 | 查找具体 API 端点 | `docs/api-reference/` 下按模块浏览 |
 | 了解 API 接入过程 + 踩坑 | [docs/lessons/2026-06-25-sellfox-integration-lessons.md](docs/lessons/2026-06-25-sellfox-integration-lessons.md) |
 | 了解探索历史 + 架构发现 | [docs/research/2026-06-25-sellfox-api-exploration.md](docs/research/2026-06-25-sellfox-api-exploration.md) |
