@@ -120,7 +120,8 @@ def test_rate_limit_retries_exhausted(monkeypatch):
     def fake_once(_self, url_path, body):
         return {"code": SELLFOX_RATE_LIMIT_CODE, "msg": "调用超过限制"}, None
 
-    monkeypatch.setattr("client.time.sleep", lambda _s: None)
+    sleeps: list[float] = []
+    monkeypatch.setattr("client.time.sleep", lambda s: sleeps.append(s))
     monkeypatch.setattr(SellfoxClient, "_post_once_proxy", fake_once)
     monkeypatch.setattr("client.random.uniform", lambda _a, _b: 0.0)
 
@@ -130,3 +131,60 @@ def test_rate_limit_retries_exhausted(monkeypatch):
     )
     with pytest.raises(RuntimeError, match="Rate limited"):
         client.signed_post("/api/x.json", {})
+    assert sleeps == [1.0]
+
+
+def test_rate_limit_policy_clamps_invalid_values():
+    policy = RateLimitPolicy(max_retries=0, default_wait_s=-1.0, jitter_s=-1.0)
+    assert policy.max_retries == 6
+    assert policy.default_wait_s == 10.0
+    assert policy.jitter_s == 0.0
+
+
+def test_rate_limit_policy_from_env_clamps_invalid(monkeypatch):
+    monkeypatch.setenv("SELLFOX_RATE_LIMIT_MAX_RETRIES", "0")
+    monkeypatch.setenv("SELLFOX_RATE_LIMIT_WAIT_S", "-1")
+    monkeypatch.setenv("SELLFOX_RATE_LIMIT_JITTER_S", "-1")
+    policy = RateLimitPolicy.from_env()
+    assert policy.max_retries == 6
+    assert policy.default_wait_s == 10.0
+    assert policy.jitter_s == 0.0
+
+
+def test_rate_limit_policy_rejects_nan_and_inf():
+    policy = RateLimitPolicy(default_wait_s=float("nan"), jitter_s=float("inf"))
+    assert policy.default_wait_s == 10.0
+    assert policy.jitter_s == 0.0
+    policy_neg_inf = RateLimitPolicy(default_wait_s=float("-inf"), jitter_s=float("-inf"))
+    assert policy_neg_inf.default_wait_s == 10.0
+    assert policy_neg_inf.jitter_s == 0.0
+
+
+def test_rate_limit_policy_from_env_rejects_nan_and_inf(monkeypatch):
+    monkeypatch.setenv("SELLFOX_RATE_LIMIT_WAIT_S", "nan")
+    monkeypatch.setenv("SELLFOX_RATE_LIMIT_JITTER_S", "inf")
+    policy = RateLimitPolicy.from_env()
+    assert policy.default_wait_s == 10.0
+    assert policy.jitter_s == 0.0
+
+
+def test_direct_mode_honors_retry_after_header(monkeypatch):
+    calls: list[int] = []
+
+    def fake_once(_self, url_path, body):
+        calls.append(1)
+        if len(calls) == 1:
+            return {"code": SELLFOX_RATE_LIMIT_CODE, "msg": "调用超过限制"}, "6"
+        return {"code": 0, "data": {"ok": True}}, None
+
+    sleeps: list[float] = []
+    monkeypatch.setattr("client.time.sleep", lambda s: sleeps.append(s))
+    monkeypatch.setattr(SellfoxClient, "_post_once_direct", fake_once)
+    monkeypatch.setattr("client.random.uniform", lambda _a, _b: 0.0)
+
+    client = SellfoxClient(
+        SellfoxConfig(mode="direct", app_id="id", app_secret="secret"),
+        rate_limit=RateLimitPolicy(max_retries=3, default_wait_s=10.0, jitter_s=0.0),
+    )
+    assert client.signed_post("/api/x.json", {}) == {"ok": True}
+    assert sleeps == [6.0]
