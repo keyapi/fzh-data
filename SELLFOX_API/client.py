@@ -23,7 +23,84 @@ import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
+
+
+SELLFOX_RATE_LIMIT_CODE = 40019
+
+
+@dataclass
+class RateLimitPolicy:
+    max_retries: int = 6
+    default_wait_s: float = 10.0
+    jitter_s: float = 0.5
+
+    @classmethod
+    def from_env(cls) -> "RateLimitPolicy":
+        def _int(name: str, default: int) -> int:
+            raw = os.environ.get(name, "").strip()
+            return int(raw) if raw.isdigit() else default
+
+        def _float(name: str, default: float) -> float:
+            raw = os.environ.get(name, "").strip()
+            if not raw:
+                return default
+            try:
+                return float(raw)
+            except ValueError:
+                return default
+
+        return cls(
+            max_retries=_int("SELLFOX_RATE_LIMIT_MAX_RETRIES", 6),
+            default_wait_s=_float("SELLFOX_RATE_LIMIT_WAIT_S", 10.0),
+            jitter_s=_float("SELLFOX_RATE_LIMIT_JITTER_S", 0.5),
+        )
+
+
+def parse_retry_after_seconds(
+    *,
+    detail: str | None = None,
+    header: str | None = None,
+) -> float | None:
+    """Parse Retry-After from proxy detail text or HTTP header."""
+    if header:
+        header = header.strip()
+        if header.isdigit():
+            return max(float(header), 0.5)
+        try:
+            return max(
+                (datetime.strptime(header, "%a, %d %b %Y %H:%M:%S GMT") - datetime.utcnow()).total_seconds(),
+                0.5,
+            )
+        except ValueError:
+            pass
+    if detail and "Retry after" in detail:
+        try:
+            return max(float(detail.split("Retry after")[-1].strip().rstrip("s")), 0.5)
+        except ValueError:
+            pass
+    return None
+
+
+def is_rate_limited_response(result: dict[str, Any]) -> bool:
+    detail = result.get("detail") if isinstance(result, dict) else None
+    if isinstance(detail, str) and "Rate limited" in detail:
+        return True
+    return result.get("code") == SELLFOX_RATE_LIMIT_CODE
+
+
+def rate_limit_sleep_seconds(
+    result: dict[str, Any],
+    *,
+    attempt: int,
+    policy: RateLimitPolicy,
+    retry_after_header: str | None = None,
+) -> float:
+    detail = result.get("detail") if isinstance(result.get("detail"), str) else None
+    retry_after = parse_retry_after_seconds(detail=detail, header=retry_after_header)
+    if retry_after is not None:
+        return retry_after + random.uniform(0, policy.jitter_s)
+    return policy.default_wait_s + random.uniform(0, policy.jitter_s)
 
 
 def load_env(paths: List[Path]) -> Dict[str, str]:
@@ -103,9 +180,10 @@ class SellfoxConfig:
 class SellfoxClient:
     """Minimal Sellfox client for read/report flows (proxy or direct)."""
 
-    def __init__(self, config: SellfoxConfig):
+    def __init__(self, config: SellfoxConfig, *, rate_limit: RateLimitPolicy | None = None):
         self.config = config
         self.access_token: Optional[str] = None
+        self.rate_limit = rate_limit or RateLimitPolicy.from_env()
 
     def authenticate(self) -> Optional[str]:
         """Direct mode only. Proxy mode is a no-op (Bearer key is enough)."""
@@ -125,55 +203,43 @@ class SellfoxClient:
         self.access_token = data["data"]["access_token"]
         return self.access_token
 
-    def _proxy_post(self, url_path: str, body: Optional[dict] = None) -> Any:
+    def _post_once_proxy(
+        self, url_path: str, body: Optional[dict]
+    ) -> tuple[dict[str, Any], str | None]:
         if not url_path.startswith("/"):
             url_path = "/" + url_path
         full_url = (
             f"{self.config.proxy_base_url}/v1/{self.config.proxy_account}{url_path}"
         )
         payload = json.dumps(body or {}).encode("utf-8")
-        last_err: Optional[Exception] = None
-        for attempt in range(6):
-            req = urllib.request.Request(
-                full_url,
-                data=payload,
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {self.config.proxy_api_key}",
-                },
-                method="POST",
-            )
-            try:
-                with urllib.request.urlopen(req, timeout=60) as resp:
-                    raw = resp.read().decode("utf-8")
-            except urllib.error.HTTPError as e:
-                raw = e.read().decode("utf-8")
-            try:
-                result = json.loads(raw)
-            except json.JSONDecodeError as e:
-                raise RuntimeError(f"Non-JSON proxy response on {url_path}: {raw[:200]}") from e
-            # Corporate proxy rate limit (FastAPI detail) — not Sellfox envelope
-            detail = result.get("detail") if isinstance(result, dict) else None
-            if isinstance(detail, str) and "Rate limited" in detail:
-                wait_s = 1.0 + attempt
-                if "Retry after" in detail:
-                    try:
-                        wait_s = float(detail.split("Retry after")[-1].strip().rstrip("s"))
-                        wait_s = max(wait_s, 0.5) + 0.2
-                    except ValueError:
-                        pass
-                time.sleep(wait_s)
-                last_err = RuntimeError(f"Rate limited on {url_path}: {detail}")
-                continue
-            if result.get("code") != 0:
-                raise RuntimeError(
-                    f"API error on {url_path}: code={result.get('code')} "
-                    f"msg={result.get('msg', result)}"
-                )
-            return result["data"]
-        raise last_err or RuntimeError(f"Rate limited on {url_path} after retries")
+        req = urllib.request.Request(
+            full_url,
+            data=payload,
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self.config.proxy_api_key}",
+            },
+            method="POST",
+        )
+        retry_after_header: str | None = None
+        try:
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                raw = resp.read().decode("utf-8")
+                retry_after_header = resp.headers.get("Retry-After")
+        except urllib.error.HTTPError as e:
+            raw = e.read().decode("utf-8")
+            retry_after_header = e.headers.get("Retry-After")
+        try:
+            result = json.loads(raw)
+        except json.JSONDecodeError as e:
+            raise RuntimeError(
+                f"Non-JSON proxy response on {url_path}: {raw[:200]}"
+            ) from e
+        if not isinstance(result, dict):
+            raise RuntimeError(f"Non-object proxy response on {url_path}: {raw[:200]}")
+        return result, retry_after_header
 
-    def _direct_post(self, url_path: str, body: Optional[dict] = None) -> Any:
+    def _post_once_direct(self, url_path: str, body: Optional[dict]) -> dict[str, Any]:
         if not self.access_token:
             self.authenticate()
         ts = str(int(time.time() * 1000))
@@ -210,12 +276,56 @@ class SellfoxClient:
         except urllib.error.HTTPError as e:
             raw = e.read().decode("utf-8")
         result = json.loads(raw)
-        if result.get("code") != 0:
-            raise RuntimeError(
-                f"API error on {url_path}: code={result.get('code')} "
-                f"msg={result.get('msg', result)}"
-            )
-        return result["data"]
+        if not isinstance(result, dict):
+            raise RuntimeError(f"Non-object direct response on {url_path}: {raw[:200]}")
+        return result
+
+    def _post_with_rate_limit_retry(
+        self,
+        url_path: str,
+        body: Optional[dict],
+        *,
+        once: Callable[[], tuple[dict[str, Any], str | None] | dict[str, Any]],
+    ) -> Any:
+        last_err: Exception | None = None
+        for attempt in range(self.rate_limit.max_retries):
+            outcome = once()
+            if isinstance(outcome, dict):
+                result, retry_after_header = outcome, None
+            else:
+                result, retry_after_header = outcome
+            if is_rate_limited_response(result):
+                wait_s = rate_limit_sleep_seconds(
+                    result,
+                    attempt=attempt,
+                    policy=self.rate_limit,
+                    retry_after_header=retry_after_header,
+                )
+                time.sleep(wait_s)
+                detail = result.get("detail") or result.get("msg") or result
+                last_err = RuntimeError(f"Rate limited on {url_path}: {detail}")
+                continue
+            if result.get("code") != 0:
+                raise RuntimeError(
+                    f"API error on {url_path}: code={result.get('code')} "
+                    f"msg={result.get('msg', result)}"
+                )
+            return result["data"]
+        raise last_err or RuntimeError(f"Rate limited on {url_path} after retries")
+
+    def _proxy_post(self, url_path: str, body: Optional[dict] = None) -> Any:
+        return self._post_with_rate_limit_retry(
+            url_path,
+            body,
+            once=lambda: self._post_once_proxy(url_path, body),
+        )
+
+    def _direct_post(self, url_path: str, body: Optional[dict] = None) -> Any:
+        return self._post_with_rate_limit_retry(
+            url_path,
+            body,
+            once=lambda: self._post_once_direct(url_path, body),
+        )
 
     def signed_post(self, url_path: str, body: Optional[dict] = None) -> Any:
         """POST to Sellfox path (proxy Bearer or direct signed)."""
