@@ -7,6 +7,11 @@ tags: [missing_products, log]
 
 # 变更日志
 
+## 2026-08-20
+- **修复**: 三角靠枕/无扣成品缺皮壳变体 6 条已按多规格补齐（`PK#KS0001-CMM-153-PURPLE` 因 `variant_of` 不可改而取消 BOM 后重建）。脚本 `fix_missing_cover_variants.py`。
+- **记录**: cover-only 暂缓（KS0001 176 / KS0248 27），不补成品。Lesson：`docs/solutions/conventions/erpnext-product-cover-variant-pairing.md`。
+- **根因**: 2026-08-07 惯例 REST 示例漏了 `variant_of`/`attributes`；一键配套是复制已有变体而非笛卡尔积。
+
 ## 2026-08-11
 - **交接补充**: PR #162 后映射表明确为库存同步设计输入而非同步写入授权；HM1510 25 条产品登记已完成，历史“删除”客户码冻结，两个 HM1510 候选受 EN REST HTTP 417 拦截，本轮不绕过、不新建海绵物料。
 - **路由**: Amazon 在线商品配对的候选和运营确认流程移交 `amazon_pairing`，并由根级 conventions 文档定义其与多平台配对的边界。

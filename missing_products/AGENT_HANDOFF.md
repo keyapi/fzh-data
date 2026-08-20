@@ -2,7 +2,7 @@
 
 > **用途**：新对话接手本项目的入口。读完本文档可完整理解「通途→EN→赛狐 老产品补齐」的前因后果、当前状态、下一步与全部技术细节。
 > **代码位置**：`missing_products/` 目录（识别脚本 + 创建脚本 + 文档）。
-> **最后更新**：2026-08-11（第二批只读交付）
+> **最后更新**：2026-08-20（三角靠枕成品缺皮壳变体已补；cover-only 暂缓）
 
 ---
 
@@ -26,9 +26,14 @@
 
 ---
 
-## 2. 当前状态（2026-08-11）
+## 2. 当前状态（2026-08-20）
 
-### 缺口分析结果
+### 三角靠枕 / 无扣皮壳变体（生产已写）
+- KS0001 / KS0248 **成品缺皮壳** 6 条已按 `PK#{SPU}` 多规格变体补齐（含重建独立物料 `PK#KS0001-CMM-153-PURPLE`）。
+- **cover-only 暂缓**：KS0001 176 条、KS0248 27 条只有皮壳没有成品，**不补成品**。详见 `docs/solutions/conventions/erpnext-product-cover-variant-pairing.md`。
+- 脚本：`fix_missing_cover_variants.py`（默认 dry-run）；规则 `cover_variant_rules.py`。
+
+### 缺口分析结果（2026-08-11 主线快照）
 - 通途有库存 SKU：**1411 个**
 - 精确登记 EN 产品成品：**1397 个**
 - **未精确登记：14 个**（2 个套件 + 12 个已知非产品项，均暂缓，见 §6）
@@ -222,7 +227,9 @@ cd ~/frappe-bench && env/bin/python /tmp/gen_bom_xlsx2.py
 | `missing_products/build_mapping_workbook.py` | 生成通途→EN→赛狐映射表（1411 行，只读）|
 | `missing_products/build_foam_status_workbook.py` | 生成海绵通途 SKU 现状说明（只读，不写 HM1510）|
 | `missing_products/fetch_sellfox_pairing.py` | 赛狐 Amazon/多平台配对只读盘点（带本地缓存，`--refresh` 强制重拉）|
-| `missing_products/create_en_materials.py` | 幂等创建 EN 物料（--dry-run / --phase 1-6）|
+| `missing_products/create_en_materials.py` | 幂等创建 EN 物料（--dry-run / --phase 1-6）；PK# 必须带 variant_of |
+| `missing_products/fix_missing_cover_variants.py` | 成品缺皮壳变体：挂模板或重建为 PK# 变体（默认 dry-run，`--apply` 写生产） |
+| `missing_products/cover_variant_rules.py` | 皮壳变体编码/名称/payload 校验（禁止独立 PK#） |
 | `missing_products/docs/specs/old-product-completion-plan.md` | 老产品补齐计划（OKF Spec）|
 | `docs/solutions/conventions/tongtu-en-sellfox-instock-sku-mainline.md` | 三方主线完整规则、设计过程、错误做法、验证清单 |
 | `docs/solutions/conventions/erpnext-item-variant-creation-convention.md` | EN 物料创建惯例（OKF Reference）|

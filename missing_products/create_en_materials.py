@@ -126,6 +126,9 @@ def ensure_attribute_value(api: EN, attr: str, value: str, abbr: str, dry_run: b
 
 def ensure_item(api: EN, code: str, payload: dict, dry_run: bool) -> str:
     """Create item if not exists."""
+    from missing_products.cover_variant_rules import validate_supporting_item_payload
+
+    validate_supporting_item_payload(payload)
     d = api.get("Item", code)
     if d:
         return f"SKIP (已存在): {code}"

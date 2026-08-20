@@ -120,6 +120,10 @@ An Item with `has_variants=1` that defines the attribute set; concrete SKUs are 
 ### 配套物料 (Supporting Items)
 The semi-finished/auxiliary items generated from a product template via the「一键创建配套物料及变体」button (Client Script → `key_test.add_item_semi.create_supporting_items_and_variants`). 9 types: 皮壳# (same attrs as product), 内胆# (product size + inner fabric/color), 绍兴包装皮壳#/成品#/半成品# (size only), 波兰PL/美东USNJ/美中USTX包装成品# (size only), 重量模板# (fabric+size, no color). Not every SPU uses all 9.
 
+The button copies **existing product variants** onto supporting templates. It is not a cartesian product of every attribute value. Extra cover SKUs with no matching finished-good variant are leftovers from other generation paths, not the one-click workflow.
+
+皮壳 SKU 必须是 `PK#{SPU}` 模板的变体（`variant_of` 加上与成品相同的 attributes）。`variant_of` is set once at insert; a standalone cover cannot be attached later and must be recreated.
+
 ### 产品成品登记 (Product-Finished-Good Registration)
 三方库存主线中的映射规则：有库存通途完整 SKU（包括 `-Cover`/`-Foam`）必须作为 `customer_items.ref_code` 至少存在于一个 EN `KS` 产品成品变体。`PK#` 皮壳和 `HM1510` 海绵的登记不能替代它，因为 EN 销售订单 Excel 先用通途 SKU 找产品物料，再由交付形态列决定皮壳、成品或半成品的实际处理。
 

@@ -72,6 +72,8 @@ uv run python -c "..."   # 参考 docs/solutions/conventions/erpnext-item-varian
 
 ### 其他约束
 
+- **皮壳/配套 SKU 必须是模板变体**：`PK#…` 必须 `variant_of=PK#{SPU}` 且带与成品相同的 `attributes`。禁止 POST 成独立物料（2026-08-07 `PK#KS0001-CMM-153-PURPLE` 反例）。**不要 PUT `variant_of`**（set-once，`CannotChangeConstantError`）；无库存时取消 BOM → 删 Item → 按变体重建。脚本 `missing_products/fix_missing_cover_variants.py`；审计见 `docs/solutions/conventions/erpnext-product-cover-variant-pairing.md`
+- **一键创建配套物料及变体**：复制成品模板**已有变体**，不是属性值笛卡尔积。cover-only 皮壳不要据此去补成品
 - **item_code 必须用 abbr**（不用中文属性值）：`{模板}-{面料abbr}-{尺寸abbr}-{颜色abbr}`。颜色段用 `LIGHTGREY1` 不用 `浅灰1号`。REST 不能改 item_code，需 SSH `frappe.rename_doc`
 - 属性值必须先存在，否则创建变体报错
 - **加属性值必须带 abbr**（ERPNext Server Script 校验 `abbr.lower()`，不带报 500）
@@ -81,7 +83,7 @@ uv run python -c "..."   # 参考 docs/solutions/conventions/erpnext-item-varian
 - `stock_uom`：面料用 `米`，成品/皮壳/内胆用 `个`（不是 `Nos`）
 - URL 含中文/`#` 需 URL 编码
 - 生产服务器 SSH 不可达（IP 白名单），改从 REST API 操作
-- 一键生成按钮：模板物料页「一键创建配套物料及变体」→ `key_test.add_item_semi.create_supporting_items_and_variants`（角色 Item Supporting Material Manager/System Manager）—— **该函数不自动加颜色属性值，需手动补**
+- 一键生成按钮：模板物料页「一键创建配套物料及变体」→ `key_test.add_item_semi.create_supporting_items_and_variants`（角色 Item Supporting Material Manager/System Manager）—— **该函数不自动加颜色属性值，需手动补**；复制已有成品变体，不是属性笛卡尔积
 
 ## 赛狐侧（属性管理）
 

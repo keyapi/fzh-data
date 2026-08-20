@@ -3,7 +3,8 @@ name: missing-products
 description: >
   通途有库存 SKU 的 EN/ERPNext/赛狐三方一致性审计、客户物料号补登和赛狐多属性 SKU 补齐。
   当用户提到"缺失商品"、"missing_products"、"通途有库存"、"通途SKU未登记"、
-  "三方一致性"、"Cover"、"Foam"、"赛狐缺SKU"、"EN赛狐核对"或库存同步映射时触发。
+  "三方一致性"、"Cover"、"Foam"、"赛狐缺SKU"、"EN赛狐核对"、库存同步映射、
+  "皮壳变体"、"成品缺皮壳"、"一键创建配套物料"时触发。
   不用于只计算采购成本、商品重尺或把 PK#/HM1510 配套物料直接创建为赛狐商品。
 ---
 
@@ -16,6 +17,7 @@ description: >
 3. `missing_products/docs/lessons/2026-08-11-tongtu-en-sellfox-mainline-completion.md` — 完整复盘、失败模式和防护。
 4. 用户提到 Amazon 在线商品、MSKU、配对建议、未配对或别名匹配时，先读 `amazon_pairing/AGENT_HANDOFF.md` 和 `docs/solutions/conventions/amazon-online-product-pairing-candidate-workflow.md`。证据传播分支再读 `amazon_pairing/docs/reference/` 与 `amazon_pairing/knowledge/golden-cases.yaml`。PR 173（LTR）与 `feature/amazon-pairing-evidence` 是 sibling：本轮高可信用当前已配对唯一目标，不重训 LTR，不调用配对写接口。
 5. 需要新增 EN 变体时再读 `.agents/skills/erpnext-item-create/SKILL.md` 和 `docs/solutions/conventions/erpnext-item-variant-creation-convention.md`。
+5b. 成品↔皮壳 1:1 审计、独立 `PK#` 重建、cover-only 暂缓：`docs/solutions/conventions/erpnext-product-cover-variant-pairing.md`；脚本 `missing_products/fix_missing_cover_variants.py`（默认 dry-run）。
 6. 需要赛狐 API 时再读 `.agents/skills/sellfox-api/SKILL.md` 和 `.agents/skills/multi-attr/SKILL.md`。
 
 不要根据旧 xlsx、单个 BOM 报表列、SPU 名称或记忆直接下结论；先重新取数。
