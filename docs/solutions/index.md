@@ -10,6 +10,7 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-08-20 | 三角类皮壳在通途与赛狐并行期的共享库存代理 | [conventions/sellfox-cover-shared-inventory-transition.md](conventions/sellfox-cover-shared-inventory-transition.md) |
 | 2026-08-20 | EN 成品与皮壳 1:1 配对审计与孤儿皮壳重建 | [conventions/erpnext-product-cover-variant-pairing.md](conventions/erpnext-product-cover-variant-pairing.md) |
 | 2026-08-19 | 通途发货仓库改名后三处对账登记（通途→ERPNext→财务共享表） | [workflow-issues/tongtu-warehouse-rename-reconciliation.md](workflow-issues/tongtu-warehouse-rename-reconciliation.md) |
 | 2026-08-17 | OSTKUS 账期与 EN Tongtool Order 对账 | [workflow-issues/ostkus-account-reconciliation.md](workflow-issues/ostkus-account-reconciliation.md) |

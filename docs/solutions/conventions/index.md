@@ -10,6 +10,7 @@ timestamp: 2026-08-20
 
 | 标题 | 文件 |
 |------|------|
+| 三角类皮壳在通途与赛狐并行期的共享库存代理 | [sellfox-cover-shared-inventory-transition.md](sellfox-cover-shared-inventory-transition.md) |
 | EN 物料/变体创建惯例 — 四层属性体系与配套物料 | [erpnext-item-variant-creation-convention.md](erpnext-item-variant-creation-convention.md) |
 | EN 成品与皮壳 1:1 配对审计与孤儿皮壳重建 | [erpnext-product-cover-variant-pairing.md](erpnext-product-cover-variant-pairing.md) |
 | 通途有库存 SKU 三方主线补齐惯例 | [tongtu-en-sellfox-instock-sku-mainline.md](tongtu-en-sellfox-instock-sku-mainline.md) |

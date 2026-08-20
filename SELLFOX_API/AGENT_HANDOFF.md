@@ -9,6 +9,8 @@
 
 **组合商品/EN 套件**不走文档下载脚本，走 `sellfox_combo_ops.py` + Skill `sellfox-combo-create`。分层见下文 **「EN 套件 / 赛狐组合商品（热区）」**；稳定命令/硬规则 → [docs/reference/combo-ops.md](docs/reference/combo-ops.md)。
 
+**三角类皮壳 listing / 赛狐皮壳商品** 是另一条线，不等同 EN `TJ#` 套件：先读 [sellfox-cover-shared-inventory-transition.md](../docs/solutions/conventions/sellfox-cover-shared-inventory-transition.md) 和 Skill `sellfox-cover-inventory`。当前阶段结论是先用 1 个 SKU 沙盒验证“赛狐组合商品作为皮壳销售别名”，不要用 `sync-combos` 扫 `PK#` 或默认启用加工商品。
+
 ## EN 套件 / 赛狐组合商品（热区）
 
 > **会变的内容放这里**（冻结对象、读哪、接手顺序）。稳定操作手册 → [combo-ops.md](docs/reference/combo-ops.md)（OKF Reference）。

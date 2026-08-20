@@ -140,6 +140,15 @@ ERPNext 用原生 Product Bundle 表示组合销售对象；work_order_task 扩�
 ### 套件# 分类 / 赛狐组合 SKU
 赛狐镜像 EN 的 `套件#` 一级分类（2026-08-11 已建，`fullCid=428697-`）。组合 SKU 在赛狐用 `isGroup=1` + `childSkus` 表示；创建时必须带上底层商品的 `childId`、`sku`、`num`。赛狐组合 SKU、EN Product Bundle、上层 Item 三者编码和名称必须一致。日常对账用 `sellfox_combo_ops.py sync-combos`，不要手写 REST 或临时编号。
 
+### 皮壳共享库存代理（赛狐组合商品）
+三角类皮壳 Listing 在通途/赛狐并行期的销售层关系：赛狐 `KS` 是有库存普通商品，`PK#` 是 `isGroup=1` 的无独立库存组合商品，唯一子项为 `KS x1`。它让成品与皮壳 Listing 扣同一个分公司普通仓库存池，但不表达物理组成、生产 BOM 或 EN Product Bundle，不属于 `套件#`，也不得进入 `TJ#` 同步链。上线前必须按 1 个 SKU、1 个普通仓、1 条 Listing 验证订单扣减、库存展示和利润取成本。
+
+### 赛狐加工 SKU
+赛狐商品类型 `isGroup=2`。加工 SKU 有自身库存，支持 `needAssembleProcess`、`processCost` 和 `childSkus`，库存流水里有加工单/拆分单事件。取消“开启加工过程”只缩短状态流，不等于无库存别名。适合未来赛狐接管库存且需要 `PK#` 独立库存时评估；当前通途/赛狐并行阶段不默认启用。
+
+### 库存事实源（Inventory Source of Truth）
+多个系统都展示库存时，被选为校准基准的系统。当前通途/赛狐并行期，三角类分公司普通仓以通途为事实源，定期只校准赛狐底层 `KS`。同步必须处理“赛狐订单已扣、通途尚未标记发货”的时间差，避免旧快照把库存加回。FBA、退货仓和不良品仓不因 SKU 相同自动加入共享池。
+
 ### 在线产品配对 vs 订单包裹配对
 在线产品配对（`matchByMsku`/`matchByAsin`）决定未来订单 MSKU 映射，可用正确组合 SKU 覆盖；订单包裹配对（`updateMatch`）只改存在包裹的明细，且已发货包裹会被赛狐拒绝（`已发货状态，不能修改商品配对`）。
 ## 通途订单成本核算

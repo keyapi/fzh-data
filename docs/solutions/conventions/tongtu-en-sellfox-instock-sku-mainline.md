@@ -26,7 +26,7 @@ tags: [tongtu, erpnext, sellfox, customer-items, semifinished, sku-audit]
   -> 该 EN 产品 item_code 在赛狐存在同编号、同名称、同属性的 SKU
 ```
 
-销售订单 Excel 先以通途 SKU 找到 EN 的产品成品变体，再由 Excel 的“皮壳/成品/半成品”列确定实际交付形态。因此 `PK#` 皮壳和 `HM1510` 海绵可保留其自身维护信息，但其 `customer_items` 不能替代产品成品的登记。赛狐本阶段也以 EN 产品 `item_code` 为商品 SKU，不为 `PK#` 或 `HM1510` 创建商品。
+销售订单 Excel 先以通途 SKU 找到 EN 的产品成品变体，再由 Excel 的“皮壳/成品/半成品”列确定实际交付形态。因此 `PK#` 皮壳和 `HM1510` 海绵可保留其自身维护信息，但其 `customer_items` 不能替代产品成品的登记。赛狐本阶段的三方库存主线仍以 EN 产品 `item_code` 为底层商品 SKU，不用 `PK#` 或 `HM1510` 替代该主线。三角类确有皮壳 Listing 时，可另建无独立库存的 `PK# -> KS x1` 组合商品作为销售库存代理；它不改变本主线登记目标，详见 [三角类皮壳共享库存代理](sellfox-cover-shared-inventory-transition.md)。
 
 这条规则是对早期审计误判的修正：旧逻辑剥离 `-Cover`/`-Foam` 后缀后发现基码已登记，便把完整半成品 SKU 算作已登记，遗漏了销售订单实际需要的完整码。
 
