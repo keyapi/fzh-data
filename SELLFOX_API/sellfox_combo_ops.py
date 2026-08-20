@@ -32,10 +32,14 @@ from combo_en import (
 )
 from combo_reconcile import (
     DEFAULT_FULL_CID,
+    PAGE_SIZE,
     assert_combo_row,
+    collect_page_rows,
+    duplicate_skus,
+    index_sellfox_combos,
+    page_count,
     parse_child_specs,
     plan_sync,
-    sellfox_combo_from_row,
     summarize_plan,
     validate_en_bundle,
 )
@@ -62,20 +66,50 @@ def make_en_client(env_name: str) -> EnRestClient:
     return EnRestClient(base, session)
 
 
-def query_skus(client: SellfoxClient, skus: list[str]) -> dict[str, dict[str, Any]]:
-    found: dict[str, dict[str, Any]] = {}
+def query_sku_rows(client: SellfoxClient, skus: list[str]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
     unique = [sku for sku in dict.fromkeys(skus) if sku]
-    for offset in range(0, len(unique), 50):
-        chunk = unique[offset : offset + 50]
-        data = client.signed_post(
-            "/api/commodity/pageList.json",
-            {"pageNo": "1", "pageSize": str(max(len(chunk), 1)), "skus": chunk},
-        )
-        for row in data.get("rows") or []:
-            sku = str(row.get("sku") or "")
-            if sku:
-                found[sku] = row
+    for offset in range(0, len(unique), PAGE_SIZE):
+        chunk = unique[offset : offset + PAGE_SIZE]
+        page_no = 1
+        while True:
+            data = client.signed_post(
+                "/api/commodity/pageList.json",
+                {"pageNo": str(page_no), "pageSize": str(PAGE_SIZE), "skus": chunk},
+            )
+            rows.extend(collect_page_rows(data if isinstance(data, dict) else {}))
+            total_pages = page_count(
+                data if isinstance(data, dict) else {}, page_size=PAGE_SIZE
+            )
+            if page_no >= total_pages:
+                break
+            page_no += 1
+            if page_no > 100:
+                raise SystemExit("赛狐 pageList 分页超过 100 页，停止以免空转")
+    return rows
+
+
+def query_skus(client: SellfoxClient, skus: list[str]) -> dict[str, dict[str, Any]]:
+    rows = query_sku_rows(client, skus)
+    dups = duplicate_skus(rows)
+    if dups:
+        raise SystemExit(f"赛狐同 SKU 重复记录: {', '.join(sorted(dups))}")
+    found: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        sku = str(row.get("sku") or "")
+        if sku:
+            found[sku] = row
     return found
+
+
+def require_unique_sku(rows: list[dict[str, Any]], sku: str) -> dict[str, Any] | None:
+    dups = duplicate_skus(rows)
+    if sku in dups:
+        raise SystemExit(f"赛狐同 SKU 重复记录: {sku}")
+    for row in rows:
+        if str(row.get("sku") or "") == sku:
+            return row
+    return None
 
 
 def find_category(client: SellfoxClient, full_cid: str) -> dict[str, Any] | None:
@@ -166,19 +200,21 @@ def cmd_check_bottoms(client: SellfoxClient, args: argparse.Namespace) -> int:
 
 
 def cmd_check_combo(client: SellfoxClient, args: argparse.Namespace) -> int:
-    rows = query_skus(client, [args.sku])
-    print_combo_row("组合 SKU", rows.get(args.sku))
-    return 0 if rows.get(args.sku) else 1
+    raw = query_sku_rows(client, [args.sku])
+    row = require_unique_sku(raw, args.sku)
+    print_combo_row("组合 SKU", row)
+    return 0 if row else 1
 
 
 def cmd_create(client: SellfoxClient, args: argparse.Namespace) -> int:
     child_specs = list(parse_child_specs(args.child))
-    existing = query_skus(client, [args.sku])
-    if args.sku in existing:
+    raw = query_sku_rows(client, [args.sku])
+    existing_row = require_unique_sku(raw, args.sku)
+    if existing_row:
         print("组合 SKU 已存在，跳过创建，执行回读断言")
-        print_combo_row("组合 SKU", existing[args.sku])
+        print_combo_row("组合 SKU", existing_row)
         require_combo_match(
-            existing[args.sku],
+            existing_row,
             sku=args.sku,
             name=args.name,
             children=child_specs,
@@ -209,10 +245,11 @@ def cmd_create(client: SellfoxClient, args: argparse.Namespace) -> int:
 
     data = client.signed_post("/api/commodity/create.json", payload)
     print("创建成功:", json.dumps(data, ensure_ascii=False))
-    rows = query_skus(client, [args.sku])
-    print_combo_row("回读验证", rows.get(args.sku))
+    raw = query_sku_rows(client, [args.sku])
+    row = require_unique_sku(raw, args.sku)
+    print_combo_row("回读验证", row)
     require_combo_match(
-        rows.get(args.sku),
+        row,
         sku=args.sku,
         name=args.name,
         children=child_specs,
@@ -223,8 +260,8 @@ def cmd_create(client: SellfoxClient, args: argparse.Namespace) -> int:
 
 
 def cmd_set_category(client: SellfoxClient, args: argparse.Namespace) -> int:
-    rows = query_skus(client, [args.sku])
-    row = rows.get(args.sku)
+    raw = query_sku_rows(client, [args.sku])
+    row = require_unique_sku(raw, args.sku)
     if not row:
         raise SystemExit(f"组合 SKU 不存在: {args.sku}")
     category = find_category(client, args.full_cid)
@@ -247,14 +284,15 @@ def cmd_set_category(client: SellfoxClient, args: argparse.Namespace) -> int:
 
     data = client.signed_post("/api/commodity/edit.json", payload)
     print("修改成功:", json.dumps(data, ensure_ascii=False))
-    rows = query_skus(client, [args.sku])
-    print_combo_row("回读验证", rows.get(args.sku))
+    raw = query_sku_rows(client, [args.sku])
+    verified = require_unique_sku(raw, args.sku)
+    print_combo_row("回读验证", verified)
     children = [
         (str(child.get("sku")), int(child.get("num") or 0))
         for child in (row.get("childSkus") or [])
     ]
     require_combo_match(
-        rows.get(args.sku),
+        verified,
         sku=args.sku,
         name=str(row.get("name") or ""),
         children=children,
@@ -301,16 +339,17 @@ def cmd_sync_combos(client: SellfoxClient, args: argparse.Namespace) -> int:
         }
     )
     combo_skus = [bundle.new_item_code or bundle.name for bundle in bundles]
-    bottoms = query_skus(client, child_skus)
-    sellfox_rows = query_skus(client, combo_skus)
-    sellfox_by_sku = {
-        sku: sellfox_combo_from_row(row) for sku, row in sellfox_rows.items()
-    }
+    bottom_rows = query_sku_rows(client, child_skus)
+    bottoms_by_sku, bottom_dups = index_sellfox_combos(bottom_rows)
+    combo_rows = query_sku_rows(client, combo_skus)
+    sellfox_by_sku, dups = index_sellfox_combos(combo_rows)
     plan = plan_sync(
         bundles,
         sellfox_by_sku,
-        set(bottoms),
+        set(bottoms_by_sku),
         expected_full_cid=args.full_cid or DEFAULT_FULL_CID,
+        duplicate_skus=dups,
+        duplicate_bottom_skus=bottom_dups,
     )
     summary = summarize_plan(plan)
     summary["en_env"] = args.env
@@ -351,14 +390,27 @@ def cmd_sync_combos(client: SellfoxClient, args: argparse.Namespace) -> int:
             except SystemExit as exc:
                 failed.append({"sku": row.sku, "action": "set_category", "error": str(exc)})
 
-    final_rows = query_skus(client, combo_skus)
+    final_rows = query_sku_rows(client, combo_skus)
+    final_by_sku, final_dups = index_sellfox_combos(final_rows)
     assertion_failures: list[dict[str, Any]] = []
     for row in plan.rows:
         if row.action not in {"ok", "create", "set_category"}:
             continue
+        if row.sku in final_dups:
+            assertion_failures.append({"sku": row.sku, "failures": ["duplicate_sku"]})
+            continue
         expected_cid = args.full_cid or DEFAULT_FULL_CID
+        combo = final_by_sku.get(row.sku)
         failures = assert_combo_row(
-            final_rows.get(row.sku),
+            {
+                "sku": combo.sku,
+                "name": combo.name,
+                "isGroup": combo.is_group,
+                "fullCid": combo.full_cid,
+                "childSkus": [{"sku": sku, "num": num} for sku, num in combo.child_skus],
+            }
+            if combo
+            else None,
             sku=row.sku,
             name=row.name,
             children=row.expected_children,

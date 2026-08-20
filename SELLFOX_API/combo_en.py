@@ -12,7 +12,7 @@ from urllib.parse import quote
 
 import requests
 
-from combo_reconcile import BundleChild, EnBundle
+from combo_reconcile import BundleChild, EnBundle, require_positive_int
 
 PROD_URL = "https://erpnext.vilavi.cn"
 TEST_URL = "https://ensh.vilavi.cn"
@@ -35,11 +35,14 @@ def load_env_file(path: Path) -> dict[str, str]:
 def en_create_payload(children: Sequence[tuple[str, int]]) -> dict[str, Any]:
     if not children:
         raise ValueError("EN Product Bundle 创建必须带 items")
-    return {
-        "items": [
-            {"item_code": sku, "qty": int(qty)} for sku, qty in children if sku and int(qty) > 0
-        ]
-    }
+    items: list[dict[str, Any]] = []
+    for sku, qty in children:
+        code = str(sku).strip()
+        if not code:
+            raise ValueError("EN 创建禁止空 item_code")
+        number = require_positive_int(qty, label=code)
+        items.append({"item_code": code, "qty": number})
+    return {"items": items}
 
 
 def assert_en_create_payload(payload: dict[str, Any]) -> None:
