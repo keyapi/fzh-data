@@ -11,7 +11,7 @@ timestamp: 2026-07-02
 
 ## 2026-08-20
 
-- **变更描述（三角皮壳共享库存代理）**：新增三角类皮壳 Listing 的赛狐建模交接提示；该场景不等同 EN `TJ#` 套件，当前只允许按 1 个 SKU 沙盒验证 `KS` 库存池 + `PK# -> KS x1` 组合代理，不默认启用加工商品或 `sync-combos` 创建。
+- **变更描述（三角皮壳共享库存代理）**：新增三角类皮壳 Listing 的赛狐建模交接提示；该场景不等同 EN `TJ#` 套件。禁止的是把 `PK#` 建成有库存普通商品；组合代理走 `sellfox-cover-inventory`。美中主仓不默认当皮壳共享池。
 - **变更描述（限流策略精修）**：`RateLimitPolicy` 校验 env 边界（max_retries≥1、等待非负）；重试耗尽前不再多 sleep 一次；直连模式采集 HTTP Retry-After。
 - **变更描述（#188 限流与浅路径）**：`repo_root.find_main_root` 安全遍历祖先目录；`client.py` 统一重试赛狐 `40019` 与代理 Rate limited（Retry-After / 默认 10s+jitter）；`sync-combos --apply` 缓存分类与底层 childId、增量 checkpoint；66 项单测。
 - **变更描述（hardening #187）**：dry-run 名称不一致 → `mismatch`；组合/底层同 SKU 多条（含跨页 pageList）→ `blocked_duplicate`；`--child` 与 `en_create_payload` 拒绝非正整数。

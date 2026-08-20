@@ -51,6 +51,52 @@ def parse_config(raw: Any) -> SandboxConfig:
     return cfg
 
 
+def is_combo_group(value: Any) -> bool:
+    return str(value).strip().lower() in {"1", "true"}
+
+
+def is_normal_group(value: Any) -> bool:
+    return str(value).strip().lower() in {"0", "false"}
+
+
+def page_total(data: Any) -> Any:
+    if not isinstance(data, dict):
+        return None
+    for key in ("totalSize", "total", "totalCount"):
+        if data.get(key) is not None:
+            return data[key]
+    return None
+
+
+def validate_warehouse(warehouse: dict[str, Any] | None, name: str) -> list[str]:
+    if warehouse is None:
+        return []
+    problems: list[str] = []
+    wh_type = str(warehouse.get("type") if warehouse.get("type") is not None else "")
+    if wh_type == "2":
+        problems.append(f"warehouse {name!r} is FBA (type=2); cover shared pool cannot use FBA")
+    if "退货" in name or "不良" in name:
+        problems.append(f"warehouse {name!r} looks like a return/defective warehouse")
+    return problems
+
+
+def warehouse_cautions(name: str) -> list[str]:
+    """USTX main/finished warehouses are not the default triangle cover pool."""
+    n = (name or "").strip()
+    main_aliases = {
+        "DANEEY",
+        "FZH-DANEEY",
+        "美中-FZH-DANEEY",
+        "FZH-DANEEY-成品仓",
+        "美中-FZH-DANEEY-成品仓",
+    }
+    if n in main_aliases:
+        return [
+            "USTX/DANEEY 主仓或成品仓未必存放三角皮壳；通途另有皮壳仓库，须用户确认后再当共享池"
+        ]
+    return []
+
+
 def rows_from_page(data: Any) -> list[dict[str, Any]]:
     if isinstance(data, list):
         return [row for row in data if isinstance(row, dict)]
@@ -78,7 +124,7 @@ def validate_cover_relation(
     if cover is None:
         return ["cover SKU does not exist; creation requires separate user approval"]
     problems: list[str] = []
-    if str(cover.get("isGroup")) != "1":
+    if not is_combo_group(cover.get("isGroup")):
         problems.append(f"cover isGroup must be 1, got {cover.get('isGroup')!r}")
     children = cover.get("childSkus")
     if not isinstance(children, list) or len(children) != 1:
@@ -110,6 +156,7 @@ def make_plan(cfg: SandboxConfig) -> dict[str, Any]:
         "matched": 0,
         "missing": 0,
         "blocked": 0,
+        "cautions": warehouse_cautions(cfg.warehouse_name),
         "notes": [
             "No production reads or writes were performed.",
             "Tongtool target-pool arithmetic is intentionally not inferred.",
@@ -144,22 +191,25 @@ def live_audit(cfg: SandboxConfig) -> dict[str, Any]:
     bottom_status, bottom = find_unique(products, "sku", cfg.sellfox_bottom_sku)
     cover_status, cover = find_unique(products, "sku", cfg.sellfox_cover_sku)
     problems = validate_cover_relation(cover, cfg.sellfox_bottom_sku)
-    if bottom is not None and str(bottom.get("isGroup")) != "0":
+    problems.extend(validate_warehouse(warehouse, cfg.warehouse_name))
+    if bottom is not None and not is_normal_group(bottom.get("isGroup")):
         problems.append(f"bottom isGroup must be 0, got {bottom.get('isGroup')!r}")
     if warehouse_status.startswith("blocked") or bottom_status.startswith("blocked") or cover_status.startswith("blocked"):
         problems.append("duplicate Sellfox records block the sandbox")
 
     missing = sum(status == "missing" for status in (warehouse_status, bottom_status, cover_status))
-    processing_total = None
-    if isinstance(processing_data, dict):
-        processing_total = processing_data.get("total", processing_data.get("totalCount"))
+    processing_total = page_total(processing_data)
 
     return {
         "input": 1,
         "mode": "sellfox_read_only",
         "config": asdict(cfg),
         "checks": {
-            "warehouse": {"status": warehouse_status, "id": (warehouse or {}).get("id")},
+            "warehouse": {
+                "status": warehouse_status,
+                "id": (warehouse or {}).get("id"),
+                "type": (warehouse or {}).get("type"),
+            },
             "bottom_sku": {"status": bottom_status, "isGroup": (bottom or {}).get("isGroup")},
             "cover_sku": {"status": cover_status, "isGroup": (cover or {}).get("isGroup")},
             "processing_product_account_count": processing_total,
@@ -168,6 +218,7 @@ def live_audit(cfg: SandboxConfig) -> dict[str, Any]:
         "missing": missing,
         "blocked": len(problems),
         "blocked_reasons": problems,
+        "cautions": warehouse_cautions(cfg.warehouse_name),
         "next_actions": [
             "Confirm the ordinary warehouse contains saleable covers.",
             "Confirm Tongtool available-stock reservation and synchronization timing.",
@@ -197,7 +248,7 @@ def main() -> int:
     cfg = parse_config(json.loads(args.config.read_text(encoding="utf-8-sig")))
     report = live_audit(cfg) if args.live else make_plan(cfg)
     path = write_report(report, args.output)
-    print(json.dumps({"report": str(path), **{k: report[k] for k in ("input", "matched", "missing", "blocked")}}, ensure_ascii=False))
+    print(json.dumps({"report": str(path), **{k: report[k] for k in ("input", "matched", "missing", "blocked") if k in report}, "cautions": len(report.get("cautions") or [])}, ensure_ascii=False))
     return 2 if report["blocked"] else 0
 
 

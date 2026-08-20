@@ -138,10 +138,10 @@ The button copies **existing product variants** onto supporting templates. It is
 ERPNext 用原生 Product Bundle 表示组合销售对象；work_order_task 扩展会在保存时自动生成上层物料 `TJ#<前缀1>x<数量>_<前缀2>x<数量>-001`，物料组 `套件#`，单位 `套`，`is_stock_item=0`，并导出赛狐「导入组合商品」Excel 模板。REST 创建只需传真实存在的 items，服务端负责编号；不要传临时 new_item_code，创建后组成不可改。
 
 ### 套件# 分类 / 赛狐组合 SKU
-赛狐镜像 EN 的 `套件#` 一级分类（2026-08-11 已建，`fullCid=428697-`）。组合 SKU 在赛狐用 `isGroup=1` + `childSkus` 表示；创建时必须带上底层商品的 `childId`、`sku`、`num`。赛狐组合 SKU、EN Product Bundle、上层 Item 三者编码和名称必须一致。日常对账用 `sellfox_combo_ops.py sync-combos`，不要手写 REST 或临时编号。
+赛狐镜像 EN 的 `套件#` 一级分类（2026-08-11 已建，`fullCid=428697-`）。组合 SKU 在赛狐用 `isGroup=1` + `childSkus` 表示；创建时必须带上底层商品的 `childId`、`sku`、`num`。**TJ# / Product Bundle 镜像**要求赛狐组合 SKU、EN Product Bundle、上层 Item 三者编码和名称必须一致，日常对账用 `sellfox_combo_ops.py sync-combos`。三角类 `PK# -> KS x1` 是销售库存代理，不属于 `套件#`，不得进入该同步链；见「皮壳共享库存代理」。
 
 ### 皮壳共享库存代理（赛狐组合商品）
-三角类皮壳 Listing 在通途/赛狐并行期的销售层关系：赛狐 `KS` 是有库存普通商品，`PK#` 是 `isGroup=1` 的无独立库存组合商品，唯一子项为 `KS x1`。它让成品与皮壳 Listing 扣同一个分公司普通仓库存池，但不表达物理组成、生产 BOM 或 EN Product Bundle，不属于 `套件#`，也不得进入 `TJ#` 同步链。上线前必须按 1 个 SKU、1 个普通仓、1 条 Listing 验证订单扣减、库存展示和利润取成本。
+三角类皮壳 Listing 在通途/赛狐并行期的销售层关系：赛狐 `KS` 是有库存普通商品，`PK#` 是 `isGroup=1` 的无独立库存组合商品，唯一子项为 `KS x1`。它让成品与皮壳 Listing 扣同一个**用户确认的**分公司仓库存池，但不表达物理组成、生产 BOM 或 EN Product Bundle，不属于 `套件#`，也不得进入 `TJ#` 同步链。美中通途另有皮壳仓库，不得默认把 DANEEY 主仓当共享池。上线前必须按 1 个 SKU、1 个仓、1 条 Listing 验证订单扣减、库存展示和利润取成本。
 
 ### 赛狐加工 SKU
 赛狐商品类型 `isGroup=2`。加工 SKU 有自身库存，支持 `needAssembleProcess`、`processCost` 和 `childSkus`，库存流水里有加工单/拆分单事件。取消“开启加工过程”只缩短状态流，不等于无库存别名。适合未来赛狐接管库存且需要 `PK#` 独立库存时评估；当前通途/赛狐并行阶段不默认启用。

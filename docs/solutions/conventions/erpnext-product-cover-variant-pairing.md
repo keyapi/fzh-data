@@ -162,6 +162,7 @@ uv run pytest tests/missing_products/test_cover_variant_rules.py -q
 
 - [EN 物料/变体创建惯例](erpnext-item-variant-creation-convention.md) — REST 创建链、配套 9 类、一键按钮入参、坑 10
 - [通途有库存 SKU 三方主线](tongtu-en-sellfox-instock-sku-mainline.md) — 完整通途码登记到 **KS 成品**；`PK#` 客户码不能替代
+- [三角类皮壳共享库存代理](sellfox-cover-shared-inventory-transition.md) — 赛狐销售层 `PK# -> KS x1`，不是 EN 生产配对
 - `missing_products/AGENT_HANDOFF.md`、`.agents/skills/erpnext-item-create/SKILL.md`、`.agents/skills/missing-products/SKILL.md`
 - `missing_products/cover_variant_rules.py`、`missing_products/fix_missing_cover_variants.py`、`tests/missing_products/test_cover_variant_rules.py`
 - `CONCEPTS.md`「模板物料」「配套物料」

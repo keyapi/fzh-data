@@ -10,6 +10,7 @@ tags: [missing_products, log]
 ## 2026-08-20
 - **修复**: 三角靠枕/无扣成品缺皮壳变体 6 条已按多规格补齐（`PK#KS0001-CMM-153-PURPLE` 因 `variant_of` 不可改而取消 BOM 后重建）。脚本 `fix_missing_cover_variants.py`。
 - **记录**: cover-only 暂缓（KS0001 176 / KS0248 27），不补成品。Lesson：`docs/solutions/conventions/erpnext-product-cover-variant-pairing.md`。
+- **路由**: 赛狐皮壳 Listing 共享库存代理不走本模块创建有库存 `PK#`，见 `sellfox-cover-inventory`。
 - **根因**: 2026-08-07 惯例 REST 示例漏了 `variant_of`/`attributes`；一键配套是复制已有变体而非笛卡尔积。
 
 ## 2026-08-11

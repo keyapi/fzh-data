@@ -32,6 +32,7 @@
 - KS0001 / KS0248 **成品缺皮壳** 6 条已按 `PK#{SPU}` 多规格变体补齐（含重建独立物料 `PK#KS0001-CMM-153-PURPLE`）。
 - **cover-only 暂缓**：KS0001 176 条、KS0248 27 条只有皮壳没有成品，**不补成品**。详见 `docs/solutions/conventions/erpnext-product-cover-variant-pairing.md`。
 - 脚本：`fix_missing_cover_variants.py`（默认 dry-run）；规则 `cover_variant_rules.py`。
+- 赛狐皮壳 Listing 共享库存（`PK# -> KS x1` 组合代理）不走本模块创建有库存 `PK#`，见 `docs/solutions/conventions/sellfox-cover-shared-inventory-transition.md`。
 
 ### 缺口分析结果（2026-08-11 主线快照）
 - 通途有库存 SKU：**1411 个**
