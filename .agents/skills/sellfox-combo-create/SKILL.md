@@ -21,9 +21,9 @@ metadata:
 
 ## Read First（按顺序）
 
-1. **`SELLFOX_API/AGENT_HANDOFF.md` →「EN 套件 / 赛狐组合商品」** — 同事 Agent 唯一操作入口：默认命令、硬规则、冻结范围、停手条件、Issue/PR。
-2. `SELLFOX_API/docs/reference/combo-ops.md` — CLI 命令表、对账 action、报告字段。
-3. `docs/solutions/conventions/sellfox-combo-sku-create-pairing-workflow.md` — 背景、配对 API、生产修复记录。
+1. **`SELLFOX_API/docs/reference/combo-ops.md`** — 稳定操作手册：默认命令、硬规则、action 表、停手、代码地图。
+2. **`SELLFOX_API/AGENT_HANDOFF.md` →「EN 套件 / 赛狐组合商品（热区）」** — 当前冻结对象、读哪、接手 30 秒。
+3. `docs/solutions/conventions/sellfox-combo-sku-create-pairing-workflow.md` — 背景、配对 API、生产修复记录（按需）。
 4. 缺底层 SKU → `missing-products` / `multi-attr`；赛狐连通性 → `sellfox-api`。
 
 先跑脚本拿当前事实。不要凭聊天记忆、旧 Excel 或临时编号写 EN/赛狐。
@@ -34,7 +34,7 @@ metadata:
 - EN REST 创建 **只传 `items`**；禁止临时编号、空单 PUT、PUT 改组成。
 - `sync-combos` **必须** `--like` 或 `--sku`；禁止无范围全量。
 - 写操作默认 dry-run；`--apply` 须用户确认范围。EN 默认 **prod**。
-- `mismatch` / `blocked_*` 只报告，不自动修组成。
+- `mismatch` / `blocked_*` 只报告，不自动修组成；遵守 HANDOFF 热区冻结表。
 
 ## 日常三步（概要）
 
@@ -44,7 +44,7 @@ metadata:
 2. **对账赛狐（主路径）**：`sync-combos --like "TJ#KSxxxx%"` → 用户确认 JSON 计划 → `--apply --report …`。
 3. **配对**（不自动跑）：见工作流文档；写配对前单独确认。
 
-细节命令、冻结对象、完成关口、Issue 模板 → **HANDOFF 章节**，不在此重复。
+命令细节与完成关口 → **combo-ops.md**；冻结对象 → **HANDOFF 热区**。
 
 ## 自主边界
 
