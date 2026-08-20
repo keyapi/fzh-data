@@ -96,7 +96,7 @@ uv run --project .. python sellfox_combo_ops.py <command>
 ## 限流与续跑（Issue #188）
 
 - 赛狐 envelope `code=40019` 与代理 `Rate limited` 由 `client.py` **统一自动重试**（默认约 10s + jitter；优先 `Retry-After`）。
-- 环境变量（可选）：`SELLFOX_RATE_LIMIT_MAX_RETRIES`（默认 6）、`SELLFOX_RATE_LIMIT_WAIT_S`（默认 10）、`SELLFOX_RATE_LIMIT_JITTER_S`（默认 0.5）。
+- 环境变量（可选）：`SELLFOX_RATE_LIMIT_MAX_RETRIES`（默认 6，最小 1）、`SELLFOX_RATE_LIMIT_WAIT_S`（默认 10，非负）、`SELLFOX_RATE_LIMIT_JITTER_S`（默认 0.5，非负）。非法值回退默认。
 - **只重试明确限流**，不对创建/编辑的网络异常做泛化重试，避免重复写入。
 - `sync-combos --apply` 一次运行内**缓存分类**与**底层 childId 预查**；每条 create 前仍即时查重组合 SKU，create 后仍回读断言。
 - 中断后**同一 `--like`/`--sku` 范围重跑**：已完成项自然变 `ok`，只执行剩余 `create`/`set_category`。**不要**手工拼「剩余 SKU」或跳过查重。

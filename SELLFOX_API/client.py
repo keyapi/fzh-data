@@ -35,11 +35,21 @@ class RateLimitPolicy:
     default_wait_s: float = 10.0
     jitter_s: float = 0.5
 
+    def __post_init__(self) -> None:
+        if self.max_retries < 1:
+            self.max_retries = 6
+        if self.default_wait_s < 0:
+            self.default_wait_s = 10.0
+        if self.jitter_s < 0:
+            self.jitter_s = 0.0
+
     @classmethod
     def from_env(cls) -> "RateLimitPolicy":
         def _int(name: str, default: int) -> int:
             raw = os.environ.get(name, "").strip()
-            return int(raw) if raw.isdigit() else default
+            if not raw.lstrip("-").isdigit():
+                return default
+            return int(raw)
 
         def _float(name: str, default: float) -> float:
             raw = os.environ.get(name, "").strip()
@@ -239,7 +249,9 @@ class SellfoxClient:
             raise RuntimeError(f"Non-object proxy response on {url_path}: {raw[:200]}")
         return result, retry_after_header
 
-    def _post_once_direct(self, url_path: str, body: Optional[dict]) -> dict[str, Any]:
+    def _post_once_direct(
+        self, url_path: str, body: Optional[dict]
+    ) -> tuple[dict[str, Any], str | None]:
         if not self.access_token:
             self.authenticate()
         ts = str(int(time.time() * 1000))
@@ -270,15 +282,18 @@ class SellfoxClient:
             headers={"Content-Type": "application/json"},
             method="POST",
         )
+        retry_after_header: str | None = None
         try:
             with urllib.request.urlopen(req, timeout=30) as resp:
                 raw = resp.read().decode("utf-8")
+                retry_after_header = resp.headers.get("Retry-After")
         except urllib.error.HTTPError as e:
             raw = e.read().decode("utf-8")
+            retry_after_header = e.headers.get("Retry-After")
         result = json.loads(raw)
         if not isinstance(result, dict):
             raise RuntimeError(f"Non-object direct response on {url_path}: {raw[:200]}")
-        return result
+        return result, retry_after_header
 
     def _post_with_rate_limit_retry(
         self,
@@ -295,6 +310,10 @@ class SellfoxClient:
             else:
                 result, retry_after_header = outcome
             if is_rate_limited_response(result):
+                detail = result.get("detail") or result.get("msg") or result
+                last_err = RuntimeError(f"Rate limited on {url_path}: {detail}")
+                if attempt + 1 >= self.rate_limit.max_retries:
+                    raise last_err
                 wait_s = rate_limit_sleep_seconds(
                     result,
                     attempt=attempt,
@@ -302,8 +321,6 @@ class SellfoxClient:
                     retry_after_header=retry_after_header,
                 )
                 time.sleep(wait_s)
-                detail = result.get("detail") or result.get("msg") or result
-                last_err = RuntimeError(f"Rate limited on {url_path}: {detail}")
                 continue
             if result.get("code") != 0:
                 raise RuntimeError(

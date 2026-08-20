@@ -11,6 +11,7 @@ timestamp: 2026-07-02
 
 ## 2026-08-20
 
+- **变更描述（限流策略精修）**：`RateLimitPolicy` 校验 env 边界（max_retries≥1、等待非负）；重试耗尽前不再多 sleep 一次；直连模式采集 HTTP Retry-After。
 - **变更描述（#188 限流与浅路径）**：`repo_root.find_main_root` 安全遍历祖先目录；`client.py` 统一重试赛狐 `40019` 与代理 Rate limited（Retry-After / 默认 10s+jitter）；`sync-combos --apply` 缓存分类与底层 childId、增量 checkpoint；66 项单测。
 - **变更描述（hardening #187）**：dry-run 名称不一致 → `mismatch`；组合/底层同 SKU 多条（含跨页 pageList）→ `blocked_duplicate`；`--child` 与 `en_create_payload` 拒绝非正整数。
 - **变更描述（#185）**：SKILL 瘦身；`AGENT_HANDOFF.md` 新增组合章节；更新 workflow 生产记录。
