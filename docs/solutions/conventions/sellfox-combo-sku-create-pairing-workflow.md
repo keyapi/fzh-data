@@ -33,7 +33,7 @@ tags: [sellfox, combo, sku, bundle, pairing, tj, category, erpnext, product-bund
 
 本次操作完成了一条可复用的链路：EN Product Bundle → 赛狐组合 SKU → `套件#` 分类 → 在线商品配对 → 订单包裹配对（已发货被拒）。
 
-同事 Agent **不要手写 REST**。操作入口 → [SELLFOX_API/AGENT_HANDOFF.md](../../../SELLFOX_API/AGENT_HANDOFF.md)「EN 套件 / 赛狐组合商品」；CLI 表 → [combo-ops.md](../../../SELLFOX_API/docs/reference/combo-ops.md)。`sync-combos` 必须带 `--like` 或 `--sku`；`--apply` 只执行 `create` / `set_category`；组成 mismatch 只报告、不 PUT。
+同事 Agent **不要手写 REST**。操作手册 → [combo-ops.md](../../../SELLFOX_API/docs/reference/combo-ops.md)；冻结对象 → [AGENT_HANDOFF.md](../../../SELLFOX_API/AGENT_HANDOFF.md)「EN 套件 / 赛狐组合商品（热区）」。
 
 ## Guidance
 

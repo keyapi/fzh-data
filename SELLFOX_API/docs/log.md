@@ -11,7 +11,8 @@ timestamp: 2026-07-02
 
 ## 2026-08-20
 
-- **变更描述**: 按 `docs/agent-guide.md` 分层：`sellfox-combo-create` SKILL 瘦身为触发+摘要；`SELLFOX_API/AGENT_HANDOFF.md` 新增「EN 套件 / 赛狐组合商品」作为同事 Agent 唯一操作入口（默认命令、硬规则、冻结表、停手/Issue）。更新 workflow 生产记录：`FXLSSF3030` 暂不重建、`KS0003/KS0395` 已关闭。
+- **变更描述（#185）**：SKILL 瘦身；`AGENT_HANDOFF.md` 新增组合章节；更新 workflow 生产记录。
+- **变更描述（OKF 四层对齐）**：`combo-ops.md` 升格为稳定操作手册；HANDOFF 组合章节收成热区（冻结 + 读哪）；Skill Read First 改为 combo-ops → HANDOFF 热区。
 
 ## 2026-08-19
 
