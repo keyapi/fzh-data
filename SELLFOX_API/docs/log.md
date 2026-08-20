@@ -11,6 +11,7 @@ timestamp: 2026-07-02
 
 ## 2026-08-20
 
+- **变更描述（hardening）**：dry-run 把赛狐名称不一致标为 `mismatch`；同 SKU 多条标 `blocked_duplicate`；`--child` 非法数量/缺冒号报错不静默丢弃；EN 空 `new_item_code_name` 标 `blocked_en`。
 - **变更描述（#185）**：SKILL 瘦身；`AGENT_HANDOFF.md` 新增组合章节；更新 workflow 生产记录。
 - **变更描述（OKF 四层对齐）**：`combo-ops.md` 升格为稳定操作手册；HANDOFF 组合章节收成热区（冻结 + 读哪）；Skill Read First 改为 combo-ops → HANDOFF 热区。
 

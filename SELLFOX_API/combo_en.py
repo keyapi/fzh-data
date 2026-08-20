@@ -35,11 +35,16 @@ def load_env_file(path: Path) -> dict[str, str]:
 def en_create_payload(children: Sequence[tuple[str, int]]) -> dict[str, Any]:
     if not children:
         raise ValueError("EN Product Bundle 创建必须带 items")
-    return {
-        "items": [
-            {"item_code": sku, "qty": int(qty)} for sku, qty in children if sku and int(qty) > 0
-        ]
-    }
+    items: list[dict[str, Any]] = []
+    for sku, qty in children:
+        code = str(sku).strip()
+        number = int(qty)
+        if not code:
+            raise ValueError("EN 创建禁止空 item_code")
+        if number <= 0:
+            raise ValueError(f"子件数量必须是正整数: {code}:{qty}")
+        items.append({"item_code": code, "qty": number})
+    return {"items": items}
 
 
 def assert_en_create_payload(payload: dict[str, Any]) -> None:

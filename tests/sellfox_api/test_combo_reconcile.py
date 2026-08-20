@@ -21,6 +21,8 @@ from combo_reconcile import (  # noqa: E402
     SellfoxCombo,
     assert_combo_row,
     composition_key,
+    duplicate_skus,
+    index_sellfox_combos,
     parse_child_specs,
     parse_sellfox_children,
     plan_sync,
@@ -54,6 +56,33 @@ def test_parse_child_specs_from_cli():
     assert parse_child_specs(["KS1:2", "KS2:1"]) == (("KS1", 2), ("KS2", 1))
 
 
+def test_parse_child_specs_rejects_missing_colon():
+    try:
+        parse_child_specs(["KS1"])
+    except ValueError as exc:
+        assert "SKU:qty" in str(exc)
+    else:
+        raise AssertionError("expected ValueError")
+
+
+def test_parse_child_specs_rejects_non_integer_qty():
+    try:
+        parse_child_specs(["KS1:x"])
+    except ValueError as exc:
+        assert "整数" in str(exc)
+    else:
+        raise AssertionError("expected ValueError")
+
+
+def test_parse_child_specs_rejects_zero_qty():
+    try:
+        parse_child_specs(["KS1:0", "KS2:1"])
+    except ValueError as exc:
+        assert "正整数" in str(exc)
+    else:
+        raise AssertionError("expected ValueError")
+
+
 def test_parse_sellfox_children_accepts_string_nums():
     children = parse_sellfox_children(
         [{"sku": "KS1", "num": "2", "childId": "1"}, {"sku": "KS2", "num": 1}]
@@ -82,6 +111,11 @@ def test_validate_item_name_mismatch():
     assert "item_name_ne_new_item_code_name" in problems
 
 
+def test_validate_missing_new_item_code_name():
+    problems = validate_en_bundle(_bundle(new_item_code_name=""))
+    assert "missing_new_item_code_name" in problems
+
+
 def test_validate_zero_qty():
     problems = validate_en_bundle(
         _bundle(items=(BundleChild("KS0443-DM-70x70x25-GRASSGREEN", 0),))
@@ -108,6 +142,64 @@ def test_plan_create_when_sellfox_missing_and_bottoms_exist():
     assert plan.counts["create"] == 1
 
 
+def test_plan_mismatch_when_sellfox_name_differs():
+    combo = SellfoxCombo(
+        sku="TJ#KS0443x2-001",
+        name="错误名称-001",
+        is_group="1",
+        full_cid="428697-",
+        child_skus=(("KS0443-DM-70x70x25-GRASSGREEN", 2),),
+    )
+    plan = plan_sync(
+        [_bundle()],
+        sellfox_by_sku={"TJ#KS0443x2-001": combo},
+        bottoms_present={"KS0443-DM-70x70x25-GRASSGREEN"},
+    )
+    assert plan.rows[0].action == "mismatch"
+    assert "name" in plan.rows[0].problems
+    assert "create" not in writable_actions(plan)
+
+
+def test_plan_blocked_en_when_new_item_code_name_empty():
+    plan = plan_sync(
+        [_bundle(new_item_code_name="")],
+        sellfox_by_sku={},
+        bottoms_present={"KS0443-DM-70x70x25-GRASSGREEN"},
+    )
+    assert plan.rows[0].action == "blocked_en"
+    assert "missing_new_item_code_name" in plan.rows[0].problems
+
+
+def test_plan_blocked_duplicate_sellfox_sku():
+    combo = SellfoxCombo(
+        sku="TJ#KS0443x2-001",
+        name="套件#麻将沙发纯色版-涤麻-70x70x25cm-草绿色x2件-001",
+        is_group="1",
+        full_cid="428697-",
+        child_skus=(("KS0443-DM-70x70x25-GRASSGREEN", 2),),
+    )
+    plan = plan_sync(
+        [_bundle()],
+        sellfox_by_sku={"TJ#KS0443x2-001": combo},
+        bottoms_present={"KS0443-DM-70x70x25-GRASSGREEN"},
+        duplicate_skus={"TJ#KS0443x2-001"},
+    )
+    assert plan.rows[0].action == "blocked_duplicate"
+    assert "create" not in writable_actions(plan)
+
+
+def test_index_sellfox_combos_keeps_duplicate_skus():
+    rows = [
+        {"sku": "TJ#KS0443x2-001", "name": "A", "isGroup": "1", "fullCid": "428697-", "childSkus": []},
+        {"sku": "TJ#KS0443x2-001", "name": "B", "isGroup": "1", "fullCid": "428697-", "childSkus": []},
+        {"sku": "TJ#OTHER-001", "name": "C", "isGroup": "1", "fullCid": "428697-", "childSkus": []},
+    ]
+    by_sku, dups = index_sellfox_combos(rows)
+    assert duplicate_skus(rows) == {"TJ#KS0443x2-001"}
+    assert dups == {"TJ#KS0443x2-001"}
+    assert set(by_sku) == {"TJ#KS0443x2-001", "TJ#OTHER-001"}
+
+
 def test_plan_ok_when_children_and_category_match():
     combo = SellfoxCombo(
         sku="TJ#KS0443x2-001",
@@ -127,6 +219,7 @@ def test_plan_ok_when_children_and_category_match():
 def test_plan_set_category_when_only_category_wrong():
     combo = SellfoxCombo(
         sku="TJ#KS0443x2-001",
+        name="套件#麻将沙发纯色版-涤麻-70x70x25cm-草绿色x2件-001",
         is_group="1",
         full_cid="",
         child_skus=(("KS0443-DM-70x70x25-GRASSGREEN", 2),),
@@ -338,6 +431,33 @@ def test_en_create_payload_rejects_empty_items():
         raise AssertionError("expected ValueError")
 
 
+def test_en_create_payload_rejects_zero_qty_instead_of_dropping():
+    try:
+        en_create_payload((("KS1", 0), ("KS2", 1)))
+    except ValueError as exc:
+        assert "正整数" in str(exc)
+    else:
+        raise AssertionError("expected ValueError")
+
+
+def test_assert_combo_row_requires_name_when_expected():
+    row = {
+        "sku": "TJ#KS0443x2-001",
+        "name": "",
+        "isGroup": "1",
+        "fullCid": "428697-",
+        "childSkus": [{"sku": "KS0443-DM-70x70x25-GRASSGREEN", "num": "2"}],
+    }
+    failures = assert_combo_row(
+        row,
+        sku="TJ#KS0443x2-001",
+        name="套件#麻将沙发纯色版-涤麻-70x70x25cm-草绿色x2件-001",
+        children=(("KS0443-DM-70x70x25-GRASSGREEN", 2),),
+        full_cid="428697-",
+    )
+    assert "name" in failures
+
+
 def test_en_list_requires_explicit_scope():
     client = EnRestClient("https://example.invalid", requests.Session())
     try:
@@ -381,5 +501,36 @@ def test_cmd_create_existing_mismatch_is_not_silent_skip():
     except SystemExit as exc:
         assert "回读断言失败" in str(exc)
         assert "childSkus" in str(exc)
+    else:
+        raise AssertionError("expected SystemExit")
+
+
+def test_cmd_create_duplicate_sku_is_blocked():
+    import argparse
+    from sellfox_combo_ops import cmd_create
+
+    class DupClient:
+        def signed_post(self, url, payload):
+            row = {
+                "sku": "TJ#KS0443x2-001",
+                "name": "套件#麻将沙发纯色版-涤麻-70x70x25cm-草绿色x2件-001",
+                "isGroup": "1",
+                "fullCid": "428697-",
+                "childSkus": [{"sku": "KS0443-DM-70x70x25-GRASSGREEN", "num": "2"}],
+            }
+            return {"rows": [row, dict(row)]}
+
+    args = argparse.Namespace(
+        sku="TJ#KS0443x2-001",
+        name="套件#麻将沙发纯色版-涤麻-70x70x25cm-草绿色x2件-001",
+        child=["KS0443-DM-70x70x25-GRASSGREEN:2"],
+        full_cid="428697-",
+        auto_calc_weight="true",
+        apply=False,
+    )
+    try:
+        cmd_create(DupClient(), args)
+    except SystemExit as exc:
+        assert "重复" in str(exc)
     else:
         raise AssertionError("expected SystemExit")

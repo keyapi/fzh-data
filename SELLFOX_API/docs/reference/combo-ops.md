@@ -56,7 +56,7 @@ uv run --project .. python sellfox_combo_ops.py <command>
 3. **去重**以完整 `(item_code, qty)` 为准；编号与名称保留 `-001/-002/-003` 后缀。预览 `is_duplicate=true` → 停止，使用 `existing_bundle`。
 4. **写操作默认 dry-run。** `--apply` 仅在用户明确授权范围后使用。
 5. **赛狐分类 `套件#` 已存在**（`fullCid=428697-`），不要重复建分类。`edit.json` 改分类必须带原 `childSkus`。
-6. **`sync-combos --apply` 只执行** `create` 与 `set_category`。`mismatch` / `blocked_en` / `blocked_bottoms` **永不自动改组成**。
+6. **`sync-combos --apply` 只执行** `create` 与 `set_category`。`mismatch` / `blocked_en` / `blocked_bottoms` / `blocked_duplicate` **永不自动改组成或名称**。
 7. **已存在组合若组成不一致**，`create` 断言失败退出，不当成功跳过。
 8. **已发货订单包裹** `updateMatch.json` 会被拒；如实报告，不绕过。
 9. **底层 SKU 缺失** → 停，走 `missing-products` / `multi-attr`，不要继续创建组合。
@@ -67,11 +67,12 @@ uv run --project .. python sellfox_combo_ops.py <command>
 | action | 含义 | `--apply` 会不会写 |
 |--------|------|-------------------|
 | `create` | EN 合法，赛狐没有，底层 SKU 都在 | 创建组合 SKU |
-| `ok` | 组成、`isGroup`、分类都一致 | 否 |
-| `set_category` | 组成一致，分类不是 `428697-` | `edit.json` 改分类 |
-| `mismatch` | 赛狐已有但组成或 `isGroup` 不同 | **永不自动改组成** |
-| `blocked_en` | EN `name/new_item_code/Item` 或子表不合法 | 否 |
+| `ok` | 组成、`isGroup`、名称、分类都一致 | 否 |
+| `set_category` | 组成与名称一致，分类不是 `428697-` | `edit.json` 改分类 |
+| `mismatch` | 赛狐已有但组成、`isGroup` 或名称不同 | **永不自动改组成/名称** |
+| `blocked_en` | EN `name/new_item_code/Item` 或子表不合法（含空名称） | 否 |
 | `blocked_bottoms` | 要创建但赛狐缺底层 SKU | 否 |
+| `blocked_duplicate` | 赛狐同 SKU 出现多条记录 | 否 |
 | `skip_historical` | 如 `FXLSSF3030` | 否 |
 
 已存在组合如果组成不一致，**不再当成功跳过**；`create` 会断言失败退出。
@@ -117,7 +118,7 @@ uv run --project .. python sellfox_combo_ops.py <command>
 
 立即停止并报告（附 EN/赛狐回读 JSON）：
 
-- `mismatch` / `blocked_en` / `blocked_bottoms`
+- `mismatch` / `blocked_en` / `blocked_bottoms` / `blocked_duplicate`
 - 预览重复、底层缺失、权限 40021（代理 token 缓存，见工作流 Proxy 章节）
 - 已发货配对拒绝、文档与脚本未覆盖的 API 行为
 
