@@ -2,7 +2,7 @@
 okf: v0.1
 type: Reference
 title: EN 套件 / 赛狐组合商品 CLI 与对账动作
-date: 2026-08-19
+date: 2026-08-20
 module: SELLFOX_API
 tags: [sellfox, combo, product-bundle, tj, sync-combos]
 resource: SELLFOX_API/sellfox_combo_ops.py
@@ -85,3 +85,5 @@ uv run --project .. python sellfox_combo_ops.py <command>
 ## 停手
 
 遇到 mismatch、blocked、预览重复、底层缺失、已发货配对拒绝、或文档未覆盖的 API 行为：打印回读证据，不要猜，不要发明调用。需要改脚本时走 `feature/` 分支 + PR。
+
+操作入口、冻结对象（KS0443 / FXLSSF3030 / KS0003·KS0395）、Issue 模板 → [AGENT_HANDOFF.md](../../AGENT_HANDOFF.md)「EN 套件 / 赛狐组合商品」。

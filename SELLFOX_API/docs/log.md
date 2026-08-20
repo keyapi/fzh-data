@@ -9,6 +9,10 @@ timestamp: 2026-07-02
 
 # 变更日志
 
+## 2026-08-20
+
+- **变更描述**: 按 `docs/agent-guide.md` 分层：`sellfox-combo-create` SKILL 瘦身为触发+摘要；`SELLFOX_API/AGENT_HANDOFF.md` 新增「EN 套件 / 赛狐组合商品」作为同事 Agent 唯一操作入口（默认命令、硬规则、冻结表、停手/Issue）。更新 workflow 生产记录：`FXLSSF3030` 暂不重建、`KS0003/KS0395` 已关闭。
+
 ## 2026-08-19
 
 - **变更描述**: 增加 EN Product Bundle ↔ 赛狐组合商品对账命令 `sync-combos`、EN `en-preview`/`en-create`（只传 items）、创建后程序化回读断言，以及纯逻辑测试。同事 Agent 默认走 Skill `sellfox-combo-create`，禁止无范围全量和 PUT 改组成。

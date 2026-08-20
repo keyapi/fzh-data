@@ -2,7 +2,7 @@
 okf: v0.1
 type: Reference
 title: 赛狐组合商品/套件 SKU 创建与配对工作流
-date: 2026-08-19
+date: 2026-08-20
 category: conventions
 module: SELLFOX_API
 problem_type: convention
@@ -33,16 +33,7 @@ tags: [sellfox, combo, sku, bundle, pairing, tj, category, erpnext, product-bund
 
 本次操作完成了一条可复用的链路：EN Product Bundle → 赛狐组合 SKU → `套件#` 分类 → 在线商品配对 → 订单包裹配对（已发货被拒）。
 
-同事 Agent 日常不要手写 REST。用 `SELLFOX_API/sellfox_combo_ops.py`：
-
-```bash
-cd SELLFOX_API
-uv run --project .. python sellfox_combo_ops.py en-preview --child "SKU:qty"
-uv run --project .. python sellfox_combo_ops.py en-create --child "SKU:qty"          # 默认 dry-run
-uv run --project .. python sellfox_combo_ops.py sync-combos --like "TJ#KS0443%"     # 默认 dry-run
-```
-
-`sync-combos` 必须带 `--like` 或 `--sku`。计划动作见 [combo-ops.md](../../../SELLFOX_API/docs/reference/combo-ops.md)。`--apply` 只执行 `create` / `set_category`；组成 mismatch 只报告、不 PUT。创建后脚本断言 `isGroup`、分类、`childSkus`，不再只打印回读。
+同事 Agent **不要手写 REST**。操作入口 → [SELLFOX_API/AGENT_HANDOFF.md](../../../SELLFOX_API/AGENT_HANDOFF.md)「EN 套件 / 赛狐组合商品」；CLI 表 → [combo-ops.md](../../../SELLFOX_API/docs/reference/combo-ops.md)。`sync-combos` 必须带 `--like` 或 `--sku`；`--apply` 只执行 `create` / `set_category`；组成 mismatch 只报告、不 PUT。
 
 ## Guidance
 
@@ -238,8 +229,8 @@ sudo docker restart sellfox-api-proxy
 - KS0443 历史事故数据已清理并重建 12 个 Product Bundle：`TJ#KS0443x{2,3,4,5}-{001,002,003}`，草绿/象牙白/骆驼色各 4 个数量档。
 - 重建后 `name = new_item_code = Item.item_code`，`new_item_code_name = Item.item_name`，子表 parent 均正确，新上层 Item 的 `do_not_create_auto_machine_part=1`。
 - 赛狐 24 个旧组合商品已由用户手动删除；12 个正式组合 SKU 已按本工作流 dry-run -> 用户确认 -> `--apply` 创建并回读，ID `3916249-3916257`、`3916259-3916261`。
-- `FXLSSF3030` 是历史非 `TJ#` 套件，审计会误报，不要按新规则改它。
-- 4 条 `KS0003/KS0395` 子行无主 Bundle/Item，属历史残留，暂不清理，待用户确认。
+- **`FXLSSF3030`**：历史非 `TJ#` 海绵套件（子表 3× HM1510 白色模块；上层 Item 已 `disabled=1`）。脚本 `skip_historical`。**2026-08-20 用户决定暂不重建**；不要改名或按新规则迁移，除非另行授权。
+- **KS0003 / KS0395**：2026-08-20 用户确认无问题，不纳入清理待办。
 
 ## Verification Checklist
 
@@ -255,7 +246,8 @@ sudo docker restart sellfox-api-proxy
 
 - [赛狐组合 SKU 操作脚本](../../../SELLFOX_API/sellfox_combo_ops.py)
 - [combo-ops CLI 参考](../../../SELLFOX_API/docs/reference/combo-ops.md)
-- [sellfox-combo-create Skill](../../../.agents/skills/sellfox-combo-create/SKILL.md)
+- [SELLFOX_API AGENT_HANDOFF（操作入口）](../../../SELLFOX_API/AGENT_HANDOFF.md)
+- [sellfox-combo-create Skill（触发词）](../../../.agents/skills/sellfox-combo-create/SKILL.md)
 - [赛狐 API Skill](../../../.agents/skills/sellfox-api/SKILL.md)
 - [通途有库存 SKU 三方主线补齐惯例](tongtu-en-sellfox-instock-sku-mainline.md)
 - [赛狐创建属性与 SKU 复盘](../../../missing_products/docs/lessons/2026-08-11-tongtu-en-sellfox-mainline-completion.md)
