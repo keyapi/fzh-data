@@ -203,6 +203,48 @@ def test_plan_blocked_duplicate_bottom_sku():
     assert "create" not in writable_actions(plan)
 
 
+def test_plan_blocked_duplicate_bottom_when_combo_exists_and_matches():
+    combo = SellfoxCombo(
+        sku="TJ#KS0443x2-001",
+        name="套件#麻将沙发纯色版-涤麻-70x70x25cm-草绿色x2件-001",
+        is_group="1",
+        full_cid="428697-",
+        child_skus=(("KS0443-DM-70x70x25-GRASSGREEN", 2),),
+    )
+    plan = plan_sync(
+        [_bundle()],
+        sellfox_by_sku={"TJ#KS0443x2-001": combo},
+        bottoms_present={"KS0443-DM-70x70x25-GRASSGREEN"},
+        duplicate_bottom_skus={"KS0443-DM-70x70x25-GRASSGREEN"},
+    )
+    row = plan.rows[0]
+    assert row.action == "blocked_duplicate"
+    assert row.reason == "sellfox_bottom_duplicated"
+    assert row.actual_children == combo.child_skus
+    assert "ok" not in plan.counts
+    assert "set_category" not in writable_actions(plan)
+
+
+def test_plan_blocked_duplicate_bottom_when_combo_only_category_wrong():
+    combo = SellfoxCombo(
+        sku="TJ#KS0443x2-001",
+        name="套件#麻将沙发纯色版-涤麻-70x70x25cm-草绿色x2件-001",
+        is_group="1",
+        full_cid="",
+        child_skus=(("KS0443-DM-70x70x25-GRASSGREEN", 2),),
+    )
+    plan = plan_sync(
+        [_bundle()],
+        sellfox_by_sku={"TJ#KS0443x2-001": combo},
+        bottoms_present={"KS0443-DM-70x70x25-GRASSGREEN"},
+        duplicate_bottom_skus={"KS0443-DM-70x70x25-GRASSGREEN"},
+    )
+    row = plan.rows[0]
+    assert row.action == "blocked_duplicate"
+    assert row.reason == "sellfox_bottom_duplicated"
+    assert "set_category" not in writable_actions(plan)
+
+
 def test_index_sellfox_combos_keeps_duplicate_skus():
     rows = [
         {"sku": "TJ#KS0443x2-001", "name": "A", "isGroup": "1", "fullCid": "428697-", "childSkus": []},

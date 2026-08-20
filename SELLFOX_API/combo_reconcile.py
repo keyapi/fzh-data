@@ -257,7 +257,7 @@ def plan_sync(
             for child in bundle.items
             if child.item_code in bottom_dups
         )
-        if combo is None and duplicate_bottoms:
+        if duplicate_bottoms:
             rows.append(
                 PlanRow(
                     sku=sku,
@@ -265,6 +265,7 @@ def plan_sync(
                     reason="sellfox_bottom_duplicated",
                     name=bundle.new_item_code_name,
                     expected_children=expected,
+                    actual_children=combo.child_skus if combo else (),
                     problems=duplicate_bottoms,
                 )
             )
