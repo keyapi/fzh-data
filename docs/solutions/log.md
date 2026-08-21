@@ -21,6 +21,7 @@ tags: [solutions, log]
 - **新增**: `workflow-issues/deep-sofa-combo-batch-staging.md` + `SELLFOX_API/deep_sofa_stage.py` — 深卧单人沙发椅双色组合 3 个全部创建并回读（`sync-combos` `ok=3`）；`client.py` 增加代理嵌套 detail 限流识别与单测。
 - **新增**: `workflow-issues/retro-sofa-combo-batch-staging.md` + `SELLFOX_API/retro_sofa_stage.py` — 复古造型大体量沙发四模块组合 1 个创建并回读（`sync-combos` `ok=1`）。
 - **新增**: `workflow-issues/outdoor-pad-combo-batch-staging.md` + `SELLFOX_API/outdoor_pad_stage.py` — 户外托盘垫 6 个套装按确认组成创建并回读（`sync-combos` `ok=6`）。
+- **新增**: `workflow-issues/fringe-sofa-combo-batch-staging.md` + `SELLFOX_API/fringe_sofa_stage.py` — 弧形流苏沙发单件整沙发组合创建并回读（`sync-combos` `ok=1`）。
 - **更新**: `workflow-issues/index.md`、`docs/solutions/index.md`、`CONCEPTS.md`
 
 ## 2026-08-19

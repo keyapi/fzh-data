@@ -18,6 +18,7 @@ tags: [solutions, index]
 | 2026-08-21 | 深卧单人沙发椅双色组合套件批量创建 | [workflow-issues/deep-sofa-combo-batch-staging.md](workflow-issues/deep-sofa-combo-batch-staging.md) |
 | 2026-08-21 | 复古造型大体量沙发四模块组合套件创建 | [workflow-issues/retro-sofa-combo-batch-staging.md](workflow-issues/retro-sofa-combo-batch-staging.md) |
 | 2026-08-21 | 户外托盘垫套装组合批量创建 | [workflow-issues/outdoor-pad-combo-batch-staging.md](workflow-issues/outdoor-pad-combo-batch-staging.md) |
+| 2026-08-21 | 弧形流苏沙发单件整沙发组合创建 | [workflow-issues/fringe-sofa-combo-batch-staging.md](workflow-issues/fringe-sofa-combo-batch-staging.md) |
 | 2026-08-19 | 通途发货仓库改名后三处对账登记（通途→ERPNext→财务共享表） | [workflow-issues/tongtu-warehouse-rename-reconciliation.md](workflow-issues/tongtu-warehouse-rename-reconciliation.md) |
 | 2026-08-17 | OSTKUS 账期与 EN Tongtool Order 对账 | [workflow-issues/ostkus-account-reconciliation.md](workflow-issues/ostkus-account-reconciliation.md) |
 | 2026-08-14 | PB 对账表月度更新 — 脚本自动化 + UPS 交付核查 | [workflow-issues/pb-reconciliation-monthly-update.md](workflow-issues/pb-reconciliation-monthly-update.md) |
