@@ -39,6 +39,7 @@
 | 可组合扶手沙发 4 个组合（`TJ#KS0245x2-001`、`TJ#KS0245x2_KS0246x1/2-001`、`TJ#KS0245x3_KS0246x1-001`） | **已创建并回读**（2026-08-21） | 不要重复创建；双子件合成SKU 规则见批量文档 |
 | 深卧单人沙发椅 3 个组合（`TJ#KS0483x1_KS0483x1-001/002/003`） | **已创建并回读**（2026-08-21） | 不要重复创建；双色组合规则见批量文档 |
 | 复古造型大体量沙发 1 个组合（`TJ#KS0387x1_KS0391x1_KS0392x1_KS0393x1-001`） | **已创建并回读**（2026-08-21） | 不要重复创建；四模块规则见批量文档 |
+| 户外托盘垫 6 个套装（`TJ#KS0459x1_KS0460x1_KS0461x1_KS0462x1-001~006`） | **已创建并回读**（2026-08-21） | 不要重复创建；组成按 120x60/120x80 确认 |
 
 ### 读哪（热 → 冷）
 
@@ -54,6 +55,7 @@
 | 双子件组合批量创建（可组合扶手沙发 4 个） | [combinable-sofa-combo-batch-staging.md](../docs/solutions/workflow-issues/combinable-sofa-combo-batch-staging.md) |
 | 同SPU双色组合（深卧单人沙发椅 3 个） | [deep-sofa-combo-batch-staging.md](../docs/solutions/workflow-issues/deep-sofa-combo-batch-staging.md) |
 | 四模块组合（复古造型大体量沙发 1 个） | [retro-sofa-combo-batch-staging.md](../docs/solutions/workflow-issues/retro-sofa-combo-batch-staging.md) |
+| 套装组成需确认（户外托盘垫 6 个） | [outdoor-pad-combo-batch-staging.md](../docs/solutions/workflow-issues/outdoor-pad-combo-batch-staging.md) |
 | 领域词汇（TJ#、套件#） | 根 [CONCEPTS.md](../CONCEPTS.md) |
 | 模块变更历史 | [docs/log.md](docs/log.md) |
 | Skill 触发词与三步概要 | `.agents/skills/sellfox-combo-create/SKILL.md` |

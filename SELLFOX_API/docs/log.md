@@ -18,6 +18,7 @@ timestamp: 2026-07-02
 - **变更描述（可组合扶手沙发双子件）**：新增 `combinable_sofa_stage.py`，按 `基码x数量_基码x数量` 合成通途SKU，4 个组合全部创建并回读，`sync-combos` `ok=4`。
 - **变更描述（深卧单人沙发椅双色组合）**：新增 `deep_sofa_stage.py`；3 个双色组合全部创建并回读，`sync-combos` `ok=3`。`client.py` 支持代理嵌套 `detail` 限流识别与 Retry-after 解析。
 - **变更描述（复古造型大体量沙发四模块）**：新增 `retro_sofa_stage.py`；1 个四模块组合创建并回读，`sync-combos` `ok=1`。
+- **变更描述（户外托盘垫套装）**：新增 `outdoor_pad_stage.py`；6 个套装按用户确认组成创建并回读，`sync-combos` `ok=6`。
 
 ## 2026-08-20
 

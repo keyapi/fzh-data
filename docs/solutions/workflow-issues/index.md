@@ -16,6 +16,7 @@ tags: [workflow-issues, index]
 | [combinable-sofa-combo-batch-staging.md](combinable-sofa-combo-batch-staging.md) | 可组合扶手沙发双子件套件批量创建 |
 | [deep-sofa-combo-batch-staging.md](deep-sofa-combo-batch-staging.md) | 深卧单人沙发椅双色组合套件批量创建 |
 | [retro-sofa-combo-batch-staging.md](retro-sofa-combo-batch-staging.md) | 复古造型大体量沙发四模块组合套件创建 |
+| [outdoor-pad-combo-batch-staging.md](outdoor-pad-combo-batch-staging.md) | 户外托盘垫套装组合批量创建 |
 | [tongtu-warehouse-rename-reconciliation.md](tongtu-warehouse-rename-reconciliation.md) | 通途发货仓库改名后三处对账登记（通途→ERPNext→财务共享表） |
 | [ostkus-account-reconciliation.md](ostkus-account-reconciliation.md) | OSTKUS 账期与 EN Tongtool Order 对账 |
 | [pb-reconciliation-monthly-update.md](pb-reconciliation-monthly-update.md) | PB 对账表月度更新脚本化 + UPS 交付核查 |

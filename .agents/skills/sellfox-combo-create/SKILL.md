@@ -32,6 +32,7 @@ metadata:
 9. `docs/solutions/workflow-issues/combinable-sofa-combo-batch-staging.md` — 双子件组合合成通途SKU 批量创建。
 10. `docs/solutions/workflow-issues/deep-sofa-combo-batch-staging.md` — 同SPU双色组合批量创建。
 11. `docs/solutions/workflow-issues/retro-sofa-combo-batch-staging.md` — 四模块组合批量创建。
+12. `docs/solutions/workflow-issues/outdoor-pad-combo-batch-staging.md` — 套装组成需确认的四模块批量创建。
 
 先跑脚本拿当前事实。不要凭聊天记忆、旧 Excel 或临时编号写 EN/赛狐。
 
