@@ -28,6 +28,7 @@ uv run --project .. python sellfox_combo_ops.py <command>
 | 场景 | 命令 | 写入 |
 |------|------|------|
 | 还没有 EN Bundle | `en-preview --child "SKU:qty"` 然后 `en-create --child "SKU:qty"` | `--apply` 才写 EN |
+| EN Bundle 已建，登记通途客户物料号 | `register-customer-code --sku TJ#... --ref-code TT...` | `--apply` 才写 EN |
 | 已有 EN Bundle，对账赛狐 | `sync-combos --like "TJ#KS0525%"` 或 `--sku TJ#...` | `--apply` 才写赛狐 |
 | 确认计划并落盘 | 同上 + `--apply --report sync_report.json` | 是 |
 | 单条赛狐创建（已有 EN 回读 TJ#） | `create --sku --name --child --full-cid 428697-` | `--apply` |
@@ -40,6 +41,7 @@ uv run --project .. python sellfox_combo_ops.py <command>
 |------|------|------|
 | `en-preview --child SKU:qty` | 调 `get_bundle_serial_preview`，查是否重复、下一序号 | 否 |
 | `en-create --child SKU:qty` | POST Product Bundle，**body 只有 `items`** | `--apply` |
+| `register-customer-code --sku TJ#... --ref-code TT...` | 完整通途SKU登记到 EN 套件上层 Item `customer_items`，只追加 | `--apply` |
 | `sync-combos --like TJ#KS0443%` | 拉 EN Bundle → 对账赛狐 → 计划 → 可选执行 | `--apply` |
 | `sync-combos --sku TJ#...` | 同上，精确 SKU，可重复 | `--apply` |
 | `check-bottoms --sku ...` | 底层 SKU 是否存在 | 否 |
@@ -61,6 +63,7 @@ uv run --project .. python sellfox_combo_ops.py <command>
 8. **已发货订单包裹** `updateMatch.json` 会被拒；如实报告，不绕过。
 9. **底层 SKU 缺失** → 停，走 `missing-products` / `multi-attr`，不要继续创建组合。
 10. **在线/订单配对**不自动跑；写配对前用户单独确认（见工作流文档）。
+11. **EN 套件上层 Item 必须登记完整通途SKU 客户物料号**（`customer_items.ref_code`，客户组默认 `美国公司`）后再建赛狐组合；`register-customer-code` 默认 dry-run，写入后回读。
 
 ## 对账动作
 
@@ -142,12 +145,15 @@ uv run --project .. python sellfox_combo_ops.py <command>
 
 | 文件 | 职责 |
 |------|------|
-| `sellfox_combo_ops.py` | CLI：`sync-combos`、`en-preview`、`en-create`、`create`、`set-category` |
+| `sellfox_combo_ops.py` | CLI：`sync-combos`、`en-preview`、`en-create`、`register-customer-code`、`create`、`set-category` |
 | `combo_reconcile.py` | 纯对账：`plan_sync`、action 枚举、`HISTORICAL_SKIP_SKUS` |
 | `combo_en.py` | EN REST：items-only 创建、预览、拉 Bundle |
 | `client.py` | 赛狐代理/直连 API；40019 与代理 Rate limited 统一重试 |
-| `repo_root.py` | 安全查找项目根（`.env` + `EN_API/.env`） |
+| `repo_root.py` | 安全查找项目根（`.env` + `EN_API/.env`，或根 `.env` 含 EN 凭证） |
 | `combo_ops_context.py` | sync-combos 分类/底层缓存与 apply checkpoint |
+| `soft_wall_lookup.py` | 软包墙围 EN/赛狐只读快照 |
+| `soft_wall_stage.py` | 软包墙围登记表计划/预览/状态/结果追踪 |
+| `zipper_stage.py` | 拉链款无捆绑SKU 合成、计划/预览/状态/结果追踪 |
 | `tests/sellfox_api/test_combo_reconcile.py` | 对账逻辑单测 |
 | `tests/sellfox_api/test_client_rate_limit.py` | 限流重试单测 |
 | `tests/sellfox_api/test_repo_root.py` | 浅路径根目录查找单测 |
