@@ -27,6 +27,7 @@ metadata:
 4. `docs/solutions/workflow-issues/soft-wall-combo-batch-staging.md` — 批量分阶段创建（软包墙围 6×4 等登记表场景）。
 5. `docs/solutions/workflow-issues/zipper-combo-batch-staging.md` — 无捆绑SKU 时合成唯一客户物料号（`基码-EN物料码-Npcs`）。
 6. 缺底层 SKU → `missing-products` / `multi-attr`；赛狐连通性 → `sellfox-api`。
+7. `docs/solutions/workflow-issues/flex-headboard-combo-batch-staging.md` — 单变体多数量档批量创建示例。
 
 先跑脚本拿当前事实。不要凭聊天记忆、旧 Excel 或临时编号写 EN/赛狐。
 
