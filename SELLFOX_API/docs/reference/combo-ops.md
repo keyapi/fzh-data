@@ -158,6 +158,7 @@ uv run --project .. python sellfox_combo_ops.py <command>
 | `support_pad_stage.py` | 沙发支撑垫存量套件阶段记录（复用 soft_wall_stage 框架） |
 | `combinable_sofa_stage.py` | 可组合扶手沙发双子件计划/状态/结果追踪 |
 | `deep_sofa_stage.py` | 深卧单人沙发椅双色组合计划/状态/结果追踪 |
+| `retro_sofa_stage.py` | 复古造型大体量沙发四模块计划/状态/结果追踪 |
 | `tests/sellfox_api/test_combo_reconcile.py` | 对账逻辑单测 |
 | `tests/sellfox_api/test_client_rate_limit.py` | 限流重试单测 |
 | `tests/sellfox_api/test_repo_root.py` | 浅路径根目录查找单测 |

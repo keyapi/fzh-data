@@ -38,6 +38,7 @@
 | 沙发支撑垫 3 个组合（`TJ#KS0156x2-001`、`TJ#KS0156x3-001/002`） | **已补齐并回读**（2026-08-21） | EN 已存在，只补客户物料号与缺失赛狐组合 |
 | 可组合扶手沙发 4 个组合（`TJ#KS0245x2-001`、`TJ#KS0245x2_KS0246x1/2-001`、`TJ#KS0245x3_KS0246x1-001`） | **已创建并回读**（2026-08-21） | 不要重复创建；双子件合成SKU 规则见批量文档 |
 | 深卧单人沙发椅 3 个组合（`TJ#KS0483x1_KS0483x1-001/002/003`） | **已创建并回读**（2026-08-21） | 不要重复创建；双色组合规则见批量文档 |
+| 复古造型大体量沙发 1 个组合（`TJ#KS0387x1_KS0391x1_KS0392x1_KS0393x1-001`） | **已创建并回读**（2026-08-21） | 不要重复创建；四模块规则见批量文档 |
 
 ### 读哪（热 → 冷）
 
@@ -52,6 +53,7 @@
 | 存量 EN 套件补齐（沙发支撑垫 3 个） | [support-pad-combo-reconcile.md](../docs/solutions/workflow-issues/support-pad-combo-reconcile.md) |
 | 双子件组合批量创建（可组合扶手沙发 4 个） | [combinable-sofa-combo-batch-staging.md](../docs/solutions/workflow-issues/combinable-sofa-combo-batch-staging.md) |
 | 同SPU双色组合（深卧单人沙发椅 3 个） | [deep-sofa-combo-batch-staging.md](../docs/solutions/workflow-issues/deep-sofa-combo-batch-staging.md) |
+| 四模块组合（复古造型大体量沙发 1 个） | [retro-sofa-combo-batch-staging.md](../docs/solutions/workflow-issues/retro-sofa-combo-batch-staging.md) |
 | 领域词汇（TJ#、套件#） | 根 [CONCEPTS.md](../CONCEPTS.md) |
 | 模块变更历史 | [docs/log.md](docs/log.md) |
 | Skill 触发词与三步概要 | `.agents/skills/sellfox-combo-create/SKILL.md` |
