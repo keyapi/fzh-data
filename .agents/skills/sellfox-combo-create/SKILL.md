@@ -29,6 +29,7 @@ metadata:
 6. 缺底层 SKU → `missing-products` / `multi-attr`；赛狐连通性 → `sellfox-api`。
 7. `docs/solutions/workflow-issues/flex-headboard-combo-batch-staging.md` — 单变体多数量档批量创建示例。
 8. `docs/solutions/workflow-issues/support-pad-combo-reconcile.md` — 存量 EN 套件补齐客户物料号与缺失赛狐组合。
+9. `docs/solutions/workflow-issues/combinable-sofa-combo-batch-staging.md` — 双子件组合合成通途SKU 批量创建。
 
 先跑脚本拿当前事实。不要凭聊天记忆、旧 Excel 或临时编号写 EN/赛狐。
 

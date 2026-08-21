@@ -14,6 +14,7 @@ tags: [solutions, index]
 | 2026-08-21 | 拉链款无捆绑SKU 合成客户物料号并批量创建组合 | [workflow-issues/zipper-combo-batch-staging.md](workflow-issues/zipper-combo-batch-staging.md) |
 | 2026-08-21 | 灵活拼接床头板单变体多数量档批量创建组合 | [workflow-issues/flex-headboard-combo-batch-staging.md](workflow-issues/flex-headboard-combo-batch-staging.md) |
 | 2026-08-21 | 沙发支撑垫存量 EN 套件补齐客户物料号与赛狐组合 | [workflow-issues/support-pad-combo-reconcile.md](workflow-issues/support-pad-combo-reconcile.md) |
+| 2026-08-21 | 可组合扶手沙发双子件套件批量创建 | [workflow-issues/combinable-sofa-combo-batch-staging.md](workflow-issues/combinable-sofa-combo-batch-staging.md) |
 | 2026-08-19 | 通途发货仓库改名后三处对账登记（通途→ERPNext→财务共享表） | [workflow-issues/tongtu-warehouse-rename-reconciliation.md](workflow-issues/tongtu-warehouse-rename-reconciliation.md) |
 | 2026-08-17 | OSTKUS 账期与 EN Tongtool Order 对账 | [workflow-issues/ostkus-account-reconciliation.md](workflow-issues/ostkus-account-reconciliation.md) |
 | 2026-08-14 | PB 对账表月度更新 — 脚本自动化 + UPS 交付核查 | [workflow-issues/pb-reconciliation-monthly-update.md](workflow-issues/pb-reconciliation-monthly-update.md) |

@@ -15,6 +15,7 @@ timestamp: 2026-07-02
 - **变更描述（拉链款无捆绑SKU 合成）**：`soft_wall_lookup.py` 支持 `--product`；新增 `zipper_stage.py`，按 `基码-EN物料码-Npcs` 合成唯一通途SKU，完成 40 个 EN 套件/赛狐组合，`sync-combos` `ok=40`。
 - **变更描述（灵活拼接床头板）**：新增 `flex_headboard_stage.py`，完成单变体 4 个数量档 EN 套件/赛狐组合，`sync-combos` `ok=4`。
 - **变更描述（沙发支撑垫存量补齐）**：新增 `support_pad_stage.py`；确认 EN 存量套件后补 3 个上层 Item 客户物料号，补建 2 个缺失赛狐组合，`sync-combos` `ok=3`。
+- **变更描述（可组合扶手沙发双子件）**：新增 `combinable_sofa_stage.py`，按 `基码x数量_基码x数量` 合成通途SKU，4 个组合全部创建并回读，`sync-combos` `ok=4`。
 
 ## 2026-08-20
 
