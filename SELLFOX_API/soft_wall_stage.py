@@ -191,7 +191,7 @@ def build_plan_rows(*, full: bool = False) -> list[dict]:
                     "客户物料号结果": "",
                     "赛狐结果": "",
                     "完成时间": "",
-                    "备注": "全量补齐：登记表无此通途SKU", 
+                    "备注": "全量补齐：登记表无此通途SKU",
                 }
     return list(rows.values())
 
