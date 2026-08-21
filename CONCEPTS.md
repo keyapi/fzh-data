@@ -165,7 +165,7 @@ ERPNext 用原生 Product Bundle 表示组合销售对象；work_order_task 扩�
 EN（测试与生产）侧的订单成本核算，用户确认依据通途完整 SKU 后缀（至少 `-Cover`、`-Foam`、`-1`、`-2`）和销售订单「皮壳/成品/半成品」交付形态，从 BOM 选**局部**成本。完整选路源码不在本仓库，Agent 不得用本地文件杜撰公式。赛狐组合商品扣子件批次不能复现这套逻辑。
 
 ### 特殊规则 1.7.0 引擎（engine_170.py）
-本仓库 `tongtool_order_cost/engine_170.py` 可验证会重写皮壳/产品、绍兴加工、国外二次加工、头程、海外仓和尾程等分量，再重算产品成本、订单总成本与利润。它**不是** Tongtool Cost Review，而是本地对共享 Google Sheet Jeck 规则的落地；不能拿它当 Cost Review 的实现，也不能用它解释赛狐原生成本。
+本仓库 `tongtool_order_cost/tongtool_order_cost/engine_170.py` 可验证会重写皮壳/产品、绍兴加工、国外二次加工、头程、海外仓和尾程等分量，再重算产品成本、订单总成本与利润。它**不是** Tongtool Cost Review，而是本地对共享 Google Sheet Jeck 规则的落地；不能拿它当 Cost Review 的实现，也不能用它解释赛狐原生成本。
 
 ### 特殊规则（订单改销售额成本）
 运营在共享 Google Sheet 里按通途 SKU 改订单销售额或成本科目的规则。当前 notebook 1.7.0 读「和财务部共享」里的 Jeck 工作表。一行里系数模式与参考值模式不能共存；参考值按收款币种乘汇率再乘发货数量写入目标列。本地落地见「特殊规则 1.7.0 引擎（engine_170.py）」，与 EN Tongtool Cost Review 是两套东西。
