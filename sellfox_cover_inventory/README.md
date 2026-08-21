@@ -7,7 +7,7 @@ description: 单 SKU 沙盒审计脚本的运行入口。
 
 # 赛狐皮壳共享库存代理
 
-该模块为三角类皮壳共享库存方案提供文档和只读沙盒审计。决策依据见 [canonical 记录](../docs/solutions/conventions/sellfox-cover-shared-inventory-transition.md)。
+该模块为三角类皮壳库存模型提供文档和只读沙盒审计。当前组合代理是并行期默认策略，不是永久强制模型；决策依据见 [canonical 记录](../docs/solutions/conventions/sellfox-cover-shared-inventory-transition.md)。
 
 `warehouse_name` 必须是用户确认的 **赛狐仓名**。示例里的 `CENTRADE` 只是占位；美中不要默认填 `DANEEY` / `FZH-DANEEY` 主仓（通途另有皮壳仓库）。波兰赛狐仓 `POLAND` 对应通途 covers，不要填 `FZHPoland-finished`。FBA、名称含退货/不良的仓会被脚本 blocked。
 
@@ -30,4 +30,4 @@ uv run python sellfox_cover_inventory/audit_sandbox.py --config path/to/sandbox.
 uv run python sellfox_cover_inventory/audit_sandbox.py --config path/to/sandbox.json --live
 ```
 
-第一条只校验配置并输出计划；第二条读取赛狐仓库和两个商品 SKU。两者都不会创建商品、配对 Listing、调整库存或下单。`listing_msku` / `shop_name` 对 `--live` 不是查询条件。报告不判断利润是否等于 EN Cost Review。报告写入 `sellfox_cover_inventory/out/`。
+第一条只校验配置并输出计划；第二条读取赛狐仓库和两个商品 SKU。两者都不会创建商品、配对 Listing、调整库存或下单。`listing_msku` / `shop_name` 对 `--live` 不是查询条件。报告只回答商品与仓库现状，不决定 `PK#` 永久类型，也不判断利润。后续成本验证应单独下载「导入 FBM 采购成本」模板，用真实皮壳订单回读 `mergePurchaseCost`。报告写入 `sellfox_cover_inventory/out/`。

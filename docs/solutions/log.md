@@ -8,7 +8,8 @@ tags: [solutions, log]
 # 变更日志
 
 ## 2026-08-21
-- **更新**: `conventions/sellfox-cover-shared-inventory-transition.md` — [#191](https://github.com/keyapi/fzh-data/pull/191) 在波兰 covers 确认之后：组合采购成本复选框只改商品主数据；子件 `KS` 仓 FIFO 仍不是皮壳部分成本；EN Tongtool Cost Review 按 `-Cover`/`-Foam`/`-1`/`-2` 与交付形态切片，赛狐无对等定制；沙盒分阶段，现在不要请运营下测试单。
+- **更新**: `conventions/sellfox-cover-shared-inventory-transition.md` — `PK#` 组合从永久/冻结模型降为并行期单一实物池下的推荐默认；补充独立普通商品、外部共享池分配器、重复 ATP 风险及一对多/多对一库存守恒。成本路线改为验证 FBM 订单采购成本导入覆盖，记录 `mergePurchaseCost`、调整单 API 与加工单写链缺口，沙盒拆为库存和成本两条。
+- **更新（早期阶段，已由上一条继续收敛）**: `conventions/sellfox-cover-shared-inventory-transition.md` — [#191](https://github.com/keyapi/fzh-data/pull/191) 在波兰 covers 确认之后：组合采购成本复选框只改商品主数据；子件 `KS` 仓 FIFO 仍不是皮壳部分成本；EN Tongtool Cost Review 按 `-Cover`/`-Foam`/`-1`/`-2` 与交付形态切片，赛狐无对等定制；当时先暂停新测试单，后续改为可用已有皮壳 FBM 订单验证成本覆盖。
 
 ## 2026-08-20
 - **新增**: `conventions/sellfox-cover-shared-inventory-transition.md` — 固化三角类在通途/赛狐并行期以 `KS` 普通商品承接库存、`PK# -> KS x1` 组合商品承接皮壳 Listing 的共享库存代理；明确不是 EN Product Bundle/BOM，加工商品留待通途退役后评估，并定义单 SKU 沙盒三项验收。
