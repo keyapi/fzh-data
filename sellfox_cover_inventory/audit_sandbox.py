@@ -235,7 +235,7 @@ def live_audit(cfg: SandboxConfig) -> dict[str, Any]:
             "Confirm the ordinary warehouse contains saleable covers.",
             "Confirm Tongtool available-stock reservation and synchronization timing.",
             "Obtain approval before any create, pairing, inventory adjustment, or test order.",
-            "Do not treat child KS warehouse FIFO or PK# purchaseCostLock as cover profit; EN Cost Review suffix slices are out of scope for this audit.",
+            "Native child KS FIFO or PK# purchaseCostLock is not EN Cost Review; validate order-cost override (4B) with an existing cover FBM order before trusting Sellfox profit.",
         ],
         "write_operations": 0,
     }
