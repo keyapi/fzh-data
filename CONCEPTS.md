@@ -141,17 +141,22 @@ ERPNext 用原生 Product Bundle 表示组合销售对象；work_order_task 扩�
 赛狐镜像 EN 的 `套件#` 一级分类（2026-08-11 已建，`fullCid=428697-`）。组合 SKU 在赛狐用 `isGroup=1` + `childSkus` 表示；创建时必须带上底层商品的 `childId`、`sku`、`num`。**TJ# / Product Bundle 镜像**要求赛狐组合 SKU、EN Product Bundle、上层 Item 三者编码和名称必须一致，日常对账用 `sellfox_combo_ops.py sync-combos`。三角类 `PK# -> KS x1` 是销售库存代理，不属于 `套件#`，不得进入该同步链；见「皮壳共享库存代理」。
 
 ### 皮壳共享库存代理（赛狐组合商品）
-三角类皮壳 Listing 在通途/赛狐并行期的销售层关系：赛狐 `KS` 是有库存普通商品，`PK#` 是 `isGroup=1` 的无独立库存组合商品，唯一子项为 `KS x1`。它让成品与皮壳 Listing 扣同一个**用户确认的**分公司仓库存池，但不表达物理组成、生产 BOM 或 EN Product Bundle，不属于 `套件#`，也不得进入 `TJ#` 同步链。美中通途另有皮壳仓库，不得默认把 DANEEY 主仓当共享池。赛狐 `POLAND` 对应通途 covers 仓，不对应 `FZHPoland-finished`。上线前必须按 1 个 SKU、1 个仓、1 条 Listing 验证订单扣减、库存展示和利润取成本。
+三角类皮壳 Listing 在通途/赛狐并行期的销售层关系：赛狐 `KS` 是有库存普通商品，`PK#` 是 `isGroup=1` 的无独立库存组合商品，唯一子项为 `KS x1`。它让成品与皮壳 Listing 扣同一个**用户确认的**分公司仓库存池，但不表达物理组成、生产 BOM 或 EN Product Bundle，不属于 `套件#`，也不得进入 `TJ#` 同步链。美中通途另有皮壳仓库，不得默认把 DANEEY 主仓当共享池。赛狐 `POLAND` 对应通途 covers 仓，不对应 `FZHPoland-finished`。
+
+组合代理只共享数量。赛狐「采购成本」至少三层（商品主数据绍兴发货、期初仓+SKU 尾程前、备货单指定采购单价+头程），与 EN Tongtool Cost Review 按通途后缀和交付形态切的局部成本不是同一件事。子件仓 FIFO 被订单吃到，对皮壳 Listing 仍不算利润通过。
 
 ### 赛狐加工 SKU
 赛狐商品类型 `isGroup=2`。加工 SKU 有自身库存，支持 `needAssembleProcess`、`processCost` 和 `childSkus`，库存流水里有加工单/拆分单事件。取消“开启加工过程”只缩短状态流，不等于无库存别名。适合未来赛狐接管库存且需要 `PK#` 独立库存时评估；当前通途/赛狐并行阶段不默认启用。
 
 ### 库存事实源（Inventory Source of Truth）
-多个系统都展示库存时，被选为校准基准的系统。当前通途/赛狐并行期，三角类分公司普通仓以通途为事实源，定期只校准赛狐底层 `KS`。同步必须处理“赛狐订单已扣、通途尚未标记发货”的时间差，避免旧快照把库存加回。FBA、退货仓和不良品仓不因 SKU 相同自动加入共享池。
+多个系统都展示库存时，被选为校准基准的系统。当前通途/赛狐并行期，三角类分公司普通仓以通途为事实源，定期只校准赛狐底层 `KS`。同步必须处理“赛狐订单已扣、通途尚未标记发货”的时间差，避免旧快照把库存加回。FBA、退货仓和不良品仓不因 SKU 相同自动加入共享池。库存事实源不等于利润事实源：皮壳 Listing 的利润仍以 EN Tongtool Cost Review 为准。
 
 ### 在线产品配对 vs 订单包裹配对
 在线产品配对（`matchByMsku`/`matchByAsin`）决定未来订单 MSKU 映射，可用正确组合 SKU 覆盖；订单包裹配对（`updateMatch`）只改存在包裹的明细，且已发货包裹会被赛狐拒绝（`已发货状态，不能修改商品配对`）。
 ## 通途订单成本核算
+
+### Tongtool Cost Review
+EN（测试与生产）上按通途完整 SKU 后缀（至少 `-Cover`、`-Foam`、`-1`、`-2`）和销售订单「皮壳/成品/半成品」交付形态，从 BOM 取**局部**成本的核算。赛狐没有对等定制；组合商品扣子件库存时，订单成本跟该仓 `KS` 批次走，不能复现这套切片。
 
 ### 特殊规则（订单改销售额成本）
 运营在共享 Google Sheet 里按通途 SKU 改订单销售额或成本科目的规则。当前 notebook 1.7.0 读「和财务部共享」里的 Jeck 工作表。一行里系数模式与参考值模式不能共存；参考值按收款币种乘汇率再乘发货数量写入目标列。
@@ -202,6 +207,7 @@ A webhook-based DingTalk group messaging channel used by AI agents (WorkBuddy, C
 - "'五桶' had been used as if it meant IvyeaOps 五杠杆 — they are distinct (search-term labels vs optimizer action candidates)."
 - "Amazon Auto/product/category reports often put ASINs in the customer search-term column — that is real report data, not a mapping bug; keyword 收割 must not treat those strings as exact keywords (filter deferred as of 2026-07-28)."
 - "通途主档 SKU 改名后的旧名，与规则笔误（例如 Foam FBA BLACK-97），不是同一类问题；像旧名的字符串要先查主档。"
+- "赛狐「采购成本」曾被用来同时指商品主数据绍兴发货、期初仓+SKU 尾程前、备货单指定采购单价+头程；三者不可互换，也都不等于 EN Tongtool Cost Review 的皮壳切片。"
 
 ## 平台账期对账
 

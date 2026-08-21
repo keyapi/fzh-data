@@ -10,7 +10,7 @@ metadata:
   module: sellfox_cover_inventory
   scripts: sellfox_cover_inventory/audit_sandbox.py
   compatibility: SELLFOX_API/client.py；默认只读
-  updated: 2026-08-20
+  updated: 2026-08-21
 ---
 
 # 赛狐皮壳共享库存代理
@@ -29,12 +29,15 @@ metadata:
 - 加工商品会产生独立库存和加工单，本阶段不用。
 - 美中通途另有皮壳仓库；不要默认用 DANEEY / FZH-DANEEY 主仓当三角皮壳共享池。
 - 赛狐 `POLAND` 对应通途 covers 仓，不对应 `FZHPoland-finished`。
-- 先验证一个 SKU、一个已确认仓、一条皮壳 Listing；用户确认前不扩大。
+- 组合商品「关联子商品采购成本」复选框 / `purchaseCostLock` 只改 `PK#` 商品主数据，不能按仓、不能按 `-Cover` 切片。
+- 订单若吃到子件 `KS` 仓批次，对皮壳 Listing 仍不是 EN Tongtool Cost Review 的部分成本。赛狐没有后缀/交付形态定制。利润与库存代理分开验收；vanilla 赛狐利润项预期失败。
+- `--live` 只查仓库和两个 SKU，不查 Listing，不创建、不配对。现在不要请运营下测试单。
+- 先验证一个 SKU、一个已确认仓；用户确认前不扩大。
 - FBA、名称含退货/不良的仓，只读审计会 blocked。
 
 ## 默认动作
 
-运行只读审计并报告 `input/matched/missing/blocked`。任何创建组合商品、配对、调整库存或改同步任务都须另行确认。
+运行只读审计并报告 `input/matched/missing/blocked`。任何创建组合商品、配对、调整库存、改同步任务或请人下测试单都须另行确认。利润不得用「子件成本已出现」或「已锁定组合采购成本」当作通过。
 
 ## 路由排除
 

@@ -234,8 +234,8 @@ def live_audit(cfg: SandboxConfig) -> dict[str, Any]:
         "next_actions": [
             "Confirm the ordinary warehouse contains saleable covers.",
             "Confirm Tongtool available-stock reservation and synchronization timing.",
-            "Obtain approval before any create, pairing, or inventory adjustment.",
-            "Validate order deduction, inventory display, and cover profit cost with one test order.",
+            "Obtain approval before any create, pairing, inventory adjustment, or test order.",
+            "Do not treat child KS warehouse FIFO or PK# purchaseCostLock as cover profit; EN Cost Review suffix slices are out of scope for this audit.",
         ],
         "write_operations": 0,
     }

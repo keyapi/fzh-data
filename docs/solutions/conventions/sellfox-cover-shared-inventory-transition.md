@@ -2,8 +2,9 @@
 okf: v0.1
 type: Reference
 title: 三角类皮壳在通途与赛狐并行期的共享库存代理
-description: 记录 EN、通途、赛狐对成品与皮壳的不同语义，比较组合商品和加工商品，并冻结过渡期方案及单 SKU 沙盒验收标准。
+description: 记录 EN、通途、赛狐对成品与皮壳的不同语义，比较组合商品和加工商品，冻结过渡期共享库存方案，并明确组合商品只解决库存别名、不能替代 Cost Review 利润切片。
 date: 2026-08-20
+last_updated: 2026-08-21
 category: conventions
 module: sellfox_cover_inventory
 problem_type: convention
@@ -14,6 +15,7 @@ applies_when:
   - "讨论 PK# 应建组合商品还是加工商品"
   - "通途与赛狐并行期间需要让成品和皮壳订单共享库存"
   - "规划通途退役后赛狐独立管理皮壳和成品库存"
+  - "用组合商品采购成本勾选或子件 KS 批次成本解释赛狐皮壳订单利润"
 tags: [sellfox, tongtool, erpnext, cover, combo, processing, shared-inventory, triangle-wedge]
 ---
 
@@ -41,7 +43,7 @@ tags: [sellfox, tongtool, erpnext, cover, combo, processing, shared-inventory, t
 
 加工商品暂不采用。它有独立库存，必须通过加工单消耗子商品、增加加工商品库存；取消“开启加工过程”只缩短加工单状态流，不会取消加工单和库存转换。这会重新引入北京或海外仓人工操作，不能解决当前共享库存需求。
 
-本结论是阶段性架构决定，正式扩大前必须先完成“一个 SKU、一个普通仓、一条皮壳 Listing”的沙盒验证。
+本结论是阶段性架构决定。数量共享可以按「一个 SKU、一个已确认皮壳仓、一条皮壳 Listing」沙盒验证；**利润不能按同一套验收放行**（见「成本与利润风险」）。[#191](https://github.com/keyapi/fzh-data/pull/191) 未合并前，本文与只读审计脚本的波兰 covers **语义**视为 pending；通途 `FZHPoland-covers` → 赛狐 `POLAND` 的期初/备货单仓库映射本身已在主线。
 
 ## 为什么三个系统不能共用同一套物料语义
 
@@ -130,11 +132,46 @@ SKU: PK#KS0001-DM-194-GREY
 
 ## 成本与利润风险
 
-共享数量不代表共享成本。皮壳订单不能继承包含海外二次加工的成品完整成本。
+2026-08-21 补记（[#191](https://github.com/keyapi/fzh-data/pull/191) 在波兰 covers 确认之后的会话）：共享数量不代表共享成本。组合商品复选框和「子件 `KS` 仓批次被订单吃到」都**不能**当成皮壳利润通过。EN Tongtool Cost Review 按通途后缀与交付形态切 BOM 局部成本；赛狐没有对等定制。
 
-- `PK#` 组合商品需关闭或锁定自动按子商品汇总成本的机制，并维护皮壳销售口径成本。
-- 必须在沙盒中确认利润报表最终取 `PK#` 上层手工成本，还是仍取底层 `KS` 批次成本。赛狐文档不足以直接下结论。
-- 如果无法让皮壳订单取得正确成本，即使库存扣减验证通过，也不能扩大上线；可暂时只用于库存配对，利润另行修正或换方案。
+### 三层赛狐「采购成本」不得混用
+
+界面和导入模板多处都叫采购成本，本仓库三条管道写入的对象不同：
+
+| 层 | 管道 | 粒度 | 实际写入 |
+| --- | --- | --- | --- |
+| 商品主数据 | `item-cost` | 只有 SKU，不分仓 | **绍兴发货成本**（皮壳成本 / 皮壳+包装 / 绍兴总成本）。备注前缀 `EN绍兴发货成本-`，避免当成完整采购成本 |
+| 期初库存 | `stock-init` | **仓库 + SKU** | 按发货方式选黄列：皮壳/半成品 → `发皮壳尾程前成本`；成品 → `发成品尾程前成本`。通途 `FZHPoland-covers` 映射赛狐 `POLAND` |
+| 海外仓备货单 | `warehouse-restock` 默认格式 2 | **收货仓库 + SKU** | 赛狐只有两格：`指定采购单价` = 绍兴发货 + 国外加工；`单个头程费用` = 头程。销售负责人要求头程单独看 |
+
+黄列拆解见 [BOM 成本读取说明](../../bom_cost_explanation.md)。该文**不解释**通途尾缀（`-Cover`/`-Foam`/`-1` 等）造成的成本拆分。
+
+期初曾按仓写入约 1000 件安全冗余数量（不追求与通途数量一致）。备货单后来把格式 1 的三格费用收成格式 2 的两格，因为赛狐海外仓备货单界面只有这两个可维护位。
+
+用户寄希望于：订单从某仓扣 `KS`，利润取**该仓这批库存**（期初或备货单），而不是商品列表上的绍兴发货成本。对组合商品，扣的正是子件 `KS` 的仓批次。**即便这一希望成立，对皮壳 Listing 仍然不够**（下一小节）。
+
+### 组合复选框只改 `PK#` 主数据采购成本
+
+赛狐帮助中心 [商品列表 §2.2 添加组合商品](https://www.sellfox.com/help/features/product-list)：采购信息**默认勾选**「关联子商品采购成本」时，组合采购成本 = 子商品采购成本 × 数量，子商品变更会连带修改；取消勾选后手工编辑，不再联动。OpenAPI `purchaseCostLock`：`1` = 不锁定、允许自动关联；`0` = 锁定、只允许手动改（`SELLFOX_API/docs/api-reference/商品/商品列表/创建SKU.md`）。这与「自动计算重量」`autoCalcWeight` 不是一回事。
+
+取消勾选 / `purchaseCostLock=0` 仍是主数据卫生（避免默认加总成品 `KS` 的商品采购成本），**不会**按仓生成皮壳成本，**不会**按 `-Cover` 切片，也**不会**改写 `KS` 的期初/备货单批次。
+
+### 子件 FIFO 批次对皮壳销售仍然是错的
+
+组合商品自身无库存，出库扣子商品。赛狐同一仓库 + SKU 按 FIFO 消耗批次（`docs/company-context.md`）。皮壳 Listing 配到 `PK#` 后，订单吃到的是该仓 `KS` 现存批次——通常是成品口径，或「发皮壳尾程前成本」整段黄列（含该仓加工），而不是 EN 的皮壳部分成本。
+
+EN 测试/生产上的 **Tongtool Cost Review**（用户确认；本仓库没有公式源文件，不得杜撰加项）按通途完整 SKU 后缀（至少 `-Cover`、`-Foam`、`-1`、`-2`）和销售订单「皮壳/成品/半成品」交付形态，从 BOM 取**局部**成本。赛狐没有后缀规则，也没有交付形态列去改同一仓同一 `KS` 批次的取值。
+
+因此：库存扣减可以通过（`PK#` 无独立库存、指定仓 `KS` 恰扣 1），同时利润验收预期失败。不要把「成功吃到子件仓成本」写成通过。
+
+### 结构不兼容与实务分工
+
+一个普通仓里，同一 `KS` 只有一套 FIFO 队列。共享库存要求成品单和皮壳单都从这套队列扣数量；Cost Review 要求皮壳单读另一套金额。vanilla 赛狐不能同时满足。不要在赛狐里发明一套没有定制入口的「部分成本」。
+
+- **赛狐**：库存可见性与 Listing 配对（数量代理）。
+- **EN / 通途**：利润与订单成本（Cost Review / 特殊规则）。
+
+并行期「赛狐只用来获取订单成本」不能理解成「FIFO 批次已经等于 EN 皮壳切片」。若利润对不上，即使扣减通过也不能扩大上线；可暂时只用于库存配对。
 
 ## 已讨论并排除的方案
 
@@ -156,23 +193,35 @@ SKU: PK#KS0001-DM-194-GREY
 
 ## 单 SKU 沙盒计划
 
-范围必须由用户确认：一个三角 SKU、一个已确认的分公司仓、一条明确卖皮壳的 Listing。不要从示例仓库名自动扩大。生产写入前先运行 `sellfox_cover_inventory/audit_sandbox.py` 生成只读证据。
+范围必须由用户点名。不要从示例仓名或「赛狐里已有某个 `KS0001`」自动扩大。`POLAND` 已确认为通途 covers 仓。生产写入前先跑 `sellfox_cover_inventory/audit_sandbox.py`。
+
+### 阶段（写操作必须另批）
+
+| 阶段 | 做什么 | 现在是否执行 |
+| --- | --- | --- |
+| 0 点名 | 赛狐仓 + 通途基码 + 底层 `KS` + 皮壳 `PK#`。店铺/MSKU 对当前 `--live` **不是必填**（脚本不查 Listing） | 等用户点名 |
+| 1 只读 | 无 `--live` 只校验配置；`--live` 查仓库和两个商品 SKU。`PK#` missing 记缺口，不创建。已是有库存普通商品则 blocked | 可跑；不创建、不配对 |
+| 2 创建组合 | `PK#` = `KS x1`，`isGroup=1`。不走 `sync-combos` | 须再确认 |
+| 3 配对 | 皮壳 Listing → `PK#`，不是 → `KS` | 须再确认 |
+| 4 测试单 | 只验证扣减与页面展示。利润项预期失败 | **现在不要请井下单** |
+
+找到已有三角 `KS` 只覆盖阶段 1 的「底层存在」，不是成本接受，也不能跳到阶段 4。
 
 ### 前置证据
 
-1. 选定通途基码、可选 `-Cover` 码、赛狐底层 `KS`、上层 `PK#`、普通仓、店铺和皮壳 MSKU。
-2. 确认普通仓实物是可售皮壳；排除 FBA、退货和不良品。
+1. 选定通途基码、可选 `-Cover` 码、赛狐底层 `KS`、上层 `PK#`、已确认皮壳仓。店铺和皮壳 MSKU 是阶段 3–4 才必须。
+2. 确认普通仓实物是可售皮壳；排除 FBA、退货和不良品。波兰不要填 `FZHPoland-finished`。
 3. 回读赛狐底层商品存在且为普通商品。
-4. 若 `PK#` 已存在，断言它为组合商品且只有 `KS x1` 一个子项；不一致则阻断，不自动修改。
-5. 记录通途同步前水位、赛狐底层水位和在途/待发订单。
+4. 若 `PK#` 已存在，断言它为组合商品且只有 `KS x1`；不一致则阻断，不自动修改。
+5. 记录通途同步前水位、赛狐底层水位和在途/待发订单（阶段 4 之前）。
 
 ### 三项核心验收
 
 | 验收 | 操作 | 通过标准 |
 | --- | --- | --- |
-| 订单扣减 | 用皮壳 Listing 产生一笔测试订单并完成必要配对/发货状态 | `PK#` 无独立库存，指定仓 `KS` 可用库存恰好扣 1，无需人工调拨 |
-| 库存展示 | 运营查看皮壳商品、成品商品和仓库库存 | 能理解两条 Listing 共享一个池；页面不误导为两份可售库存 |
-| 利润成本 | 查看订单和利润报表 | 皮壳订单采用皮壳成本，不含成品海外加工成本 |
+| 订单扣减 | 皮壳 Listing 测试单（阶段 4，另批） | `PK#` 无独立库存，指定仓 `KS` 可用恰好扣 1，无需人工调拨 |
+| 库存展示 | 运营查看皮壳/成品商品和仓库库存 | 能理解两条 Listing 共享一个池，页面不显示两份可售库存 |
+| 利润成本 | 对照 EN Tongtool Cost Review 对该仓该 SKU 的 `-Cover` 切片 | **不是**「已锁定 `PK#` 采购成本」，**不是**「`KS` 仓批次已出现」。vanilla 赛狐**预期失败** |
 
 ### 同步回归
 
@@ -184,8 +233,9 @@ SKU: PK#KS0001-DM-194-GREY
 - 普通仓实物分类不确定，或美中误用主仓/成品仓而未确认皮壳仓，或波兰误用 `FZHPoland-finished`。
 - 所选赛狐仓为 FBA，或名称含退货/不良。
 - 同步公式无法解释占用、待发货或 `TT123-Cover`。
-- 利润报表仍取成品成本。
-- 需要扩大到第二个 SKU、仓库或 Listing，但首个沙盒尚未书面验收。
+- 利润不等于该仓 Cost Review `-Cover` 切片（即使报表走的是「发皮壳尾程前」整段黄列，对皮壳 Listing 仍不算通过）。
+- 有人要用赛狐复选框或子件 FIFO 替代 Cost Review，或要在赛狐发明后缀部分成本。
+- 需要扩大到第二个 SKU、仓库或 Listing，但数量沙盒尚未书面验收；利润项失败时不得以库存通过为由扩大。
 
 ## 未来状态
 
@@ -201,10 +251,16 @@ PK# + 其他组件 + 加工单 -> KS
 
 ## 调研证据与相关规则
 
-- 赛狐帮助中心：[商品列表](https://www.sellfox.com/help/features/product-list)、[加工单](https://www.sellfox.com/help/features/processing-order)、[采购单](https://www.sellfox.com/help/features/purchase-order)
+- 赛狐帮助中心：[商品列表 §2.2 添加组合商品](https://www.sellfox.com/help/features/product-list)、[加工单](https://www.sellfox.com/help/features/processing-order)、[采购单](https://www.sellfox.com/help/features/purchase-order)
+- OpenAPI：`SELLFOX_API/docs/api-reference/商品/商品列表/创建SKU.md` 字段 `purchaseCostLock`
+- [BOM 成本读取说明](../../bom_cost_explanation.md) — 黄列三分解；通途后缀拆分不在该文范围内
+- 三层成本管道：`.agents/skills/item-cost/SKILL.md`；`stock_init/build_saihu_stock_init.py`（`WAREHOUSE_MAP` / `COST_COLUMN_MAP`）；`warehouse_restock/AGENT_HANDOFF.md` 格式 2
+- 并行期 FIFO 与定位：`docs/company-context.md`「赛狐库存核心策略」
+- Tongtool Cost Review 按 `-Cover`/`-Foam`/`-1`/`-2` 与交付形态切局部成本：用户在 EN 测试/生产确认；本仓库无公式源文件
 - [EN 成品与皮壳 1:1 配对](erpnext-product-cover-variant-pairing.md)
 - [通途有库存 SKU 三方主线](tongtu-en-sellfox-instock-sku-mainline.md)
 - [赛狐组合商品/EN 套件工作流](sellfox-combo-sku-create-pairing-workflow.md) — 仅用于理解赛狐组合机制；本方案不得进入其 TJ# 同步链
 - [通途仓库改名对账](../workflow-issues/tongtu-warehouse-rename-reconciliation.md)
 - [模块 Handoff](../../../sellfox_cover_inventory/AGENT_HANDOFF.md)
 - [只读沙盒审计](../../../sellfox_cover_inventory/audit_sandbox.py)
+- 合并状态：本文成本边界与只读审计语义 pending on [#191](https://github.com/keyapi/fzh-data/pull/191)（截至撰写时 PR 未合并）

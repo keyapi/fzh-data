@@ -30,4 +30,4 @@ uv run python sellfox_cover_inventory/audit_sandbox.py --config path/to/sandbox.
 uv run python sellfox_cover_inventory/audit_sandbox.py --config path/to/sandbox.json --live
 ```
 
-第一条只校验配置并输出计划；第二条读取赛狐仓库和商品。两者都不会创建商品、配对 Listing 或调整库存。报告写入 `sellfox_cover_inventory/out/`。
+第一条只校验配置并输出计划；第二条读取赛狐仓库和两个商品 SKU。两者都不会创建商品、配对 Listing、调整库存或下单。`listing_msku` / `shop_name` 对 `--live` 不是查询条件。报告不判断利润是否等于 EN Cost Review。报告写入 `sellfox_cover_inventory/out/`。
