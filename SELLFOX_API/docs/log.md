@@ -20,6 +20,8 @@ timestamp: 2026-07-02
 - **变更描述（复古造型大体量沙发四模块）**：新增 `retro_sofa_stage.py`；1 个四模块组合创建并回读，`sync-combos` `ok=1`。
 - **变更描述（户外托盘垫套装）**：新增 `outdoor_pad_stage.py`；6 个套装按用户确认组成创建并回读，`sync-combos` `ok=6`。
 - **变更描述（弧形流苏沙发单件）**：新增 `fringe_sofa_stage.py`；1 个单件整沙发组合创建并回读，`sync-combos` `ok=1`。
+- **变更描述（逗号组合沙发三模块）**：新增 `comma_sofa_stage.py`；2 个三模块组合创建并回读，`sync-combos` `ok=2`。
+- **变更描述（三角有扣套装）**：新增 `triangle_set_stage.py` / `triangle_set_apply.py`；13 个三角靠枕+50cm圆枕套装创建并回读，`sync-combos` `ok=13`。
 
 ## 2026-08-20
 

@@ -160,6 +160,10 @@ uv run --project .. python sellfox_combo_ops.py <command>
 | `deep_sofa_stage.py` | 深卧单人沙发椅双色组合计划/状态/结果追踪 |
 | `retro_sofa_stage.py` | 复古造型大体量沙发四模块计划/状态/结果追踪 |
 | `outdoor_pad_stage.py` | 户外托盘垫套装计划/状态/结果追踪 |
+| `fringe_sofa_stage.py` | 弧形流苏沙发单件整沙发组合计划/状态/结果追踪 |
+| `comma_sofa_stage.py` | 逗号组合沙发三模块组合计划/状态/结果追踪 |
+| `triangle_set_stage.py` | 三角有扣套装计划/状态/结果追踪 |
+| `triangle_set_apply.py` | 三角有扣套装批量执行（EN→客户码→赛狐回读） |
 | `tests/sellfox_api/test_combo_reconcile.py` | 对账逻辑单测 |
 | `tests/sellfox_api/test_client_rate_limit.py` | 限流重试单测 |
 | `tests/sellfox_api/test_repo_root.py` | 浅路径根目录查找单测 |
