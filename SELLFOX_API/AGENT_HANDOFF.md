@@ -35,6 +35,7 @@
 | 软包墙围 24 个组合（`TJ#KS0211x4/6/9/12-001~006`） | **已创建并回读**（2026-08-21） | 不要重复创建；后续如需在线/订单配对再单独确认 |
 | 拉链款 40 个组合（`TJ#KS0340x2-001~010`、`x3-001~009`、`x4-001~009`、`TJ#KS0342x2/3/4-001~004`） | **已创建并回读**（2026-08-21） | 不要重复创建；合成通途SKU 规则见批量文档 |
 | 灵活拼接床头板 4 个组合（`TJ#KS0453x3/4/5/6-001`） | **已创建并回读**（2026-08-21） | 不要重复创建；阶段记录见对应 xlsx |
+| 沙发支撑垫 3 个组合（`TJ#KS0156x2-001`、`TJ#KS0156x3-001/002`） | **已补齐并回读**（2026-08-21） | EN 已存在，只补客户物料号与缺失赛狐组合 |
 
 ### 读哪（热 → 冷）
 
@@ -46,6 +47,7 @@
 | 批量分阶段创建与阶段记录（软包墙围 6×4） | [soft-wall-combo-batch-staging.md](../docs/solutions/workflow-issues/soft-wall-combo-batch-staging.md) |
 | 无捆绑SKU 合成客户物料号（拉链款 40 个） | [zipper-combo-batch-staging.md](../docs/solutions/workflow-issues/zipper-combo-batch-staging.md) |
 | 单变体多数量档批量创建（灵活拼接床头板 4 个） | [flex-headboard-combo-batch-staging.md](../docs/solutions/workflow-issues/flex-headboard-combo-batch-staging.md) |
+| 存量 EN 套件补齐（沙发支撑垫 3 个） | [support-pad-combo-reconcile.md](../docs/solutions/workflow-issues/support-pad-combo-reconcile.md) |
 | 领域词汇（TJ#、套件#） | 根 [CONCEPTS.md](../CONCEPTS.md) |
 | 模块变更历史 | [docs/log.md](docs/log.md) |
 | Skill 触发词与三步概要 | `.agents/skills/sellfox-combo-create/SKILL.md` |

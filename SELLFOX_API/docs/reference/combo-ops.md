@@ -155,6 +155,7 @@ uv run --project .. python sellfox_combo_ops.py <command>
 | `soft_wall_stage.py` | 软包墙围登记表计划/预览/状态/结果追踪 |
 | `zipper_stage.py` | 拉链款无捆绑SKU 合成、计划/预览/状态/结果追踪 |
 | `flex_headboard_stage.py` | 灵活拼接床头板单变体多数量档计划/预览/状态/结果追踪 |
+| `support_pad_stage.py` | 沙发支撑垫存量套件阶段记录（复用 soft_wall_stage 框架） |
 | `tests/sellfox_api/test_combo_reconcile.py` | 对账逻辑单测 |
 | `tests/sellfox_api/test_client_rate_limit.py` | 限流重试单测 |
 | `tests/sellfox_api/test_repo_root.py` | 浅路径根目录查找单测 |
