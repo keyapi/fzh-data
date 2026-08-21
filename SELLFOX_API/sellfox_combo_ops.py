@@ -551,6 +551,37 @@ def cmd_en_create(_client: SellfoxClient, args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_register_customer_code(_client: SellfoxClient, args: argparse.Namespace) -> int:
+    en = make_en_client(args.env)
+    item = en.get_item_customer_items(args.sku)
+    if not item:
+        raise SystemExit(f"EN Item 不存在: {args.sku}")
+    ref_code = str(args.ref_code).strip()
+    if not ref_code:
+        raise SystemExit("--ref-code 不能为空")
+    existing = list(item.get("customer_items") or [])
+    existing_refs = {str(c.get("ref_code") or "").casefold() for c in existing}
+    if ref_code.casefold() in existing_refs:
+        print(f"客户物料号已登记: {args.sku} -> {ref_code}")
+        return 0
+    new_row = {"customer_group": args.customer_group, "ref_code": ref_code}
+    print("客户物料号登记请求（只追加，不改已有）:")
+    print(json.dumps({
+        "item_code": args.sku,
+        "customer_items": [*existing, new_row],
+    }, ensure_ascii=False, indent=2))
+    if not args.apply:
+        print("dry-run，未写入。确认后加 --apply。")
+        return 0
+    en.put_customer_items(args.sku, [*existing, new_row])
+    verified = en.get_item_customer_items(args.sku)
+    verified_refs = {str(c.get("ref_code") or "").casefold() for c in (verified.get("customer_items") or [])}
+    if ref_code.casefold() not in verified_refs:
+        raise SystemExit(f"客户物料号回读失败: {args.sku} -> {ref_code}")
+    print(f"客户物料号登记并回读成功: {args.sku} -> {ref_code}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -598,12 +629,20 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--apply", action="store_true", help="实际写入 EN")
     p.set_defaults(func=cmd_en_create)
 
+    p = sub.add_parser("register-customer-code", help="把完整通途SKU登记到EN套件上层物料客户物料号（默认 dry-run）")
+    p.add_argument("--sku", required=True, help="EN 上层 Item / TJ# SKU")
+    p.add_argument("--ref-code", required=True, help="完整通途 SKU")
+    p.add_argument("--customer-group", default="美国公司", help="客户组，默认 美国公司")
+    p.add_argument("--env", default="prod", choices=["prod", "test"], help="EN 环境，默认 prod")
+    p.add_argument("--apply", action="store_true", help="实际写入 EN")
+    p.set_defaults(func=cmd_register_customer_code)
+
     return parser
 
 
 def main() -> int:
     args = build_parser().parse_args()
-    if args.command in {"en-preview", "en-create"}:
+    if args.command in {"en-preview", "en-create", "register-customer-code"}:
         print(f"EN 环境: {args.env}")
         return args.func(None, args)
     client = make_client()

@@ -140,6 +140,44 @@ class EnRestClient:
         response.raise_for_status()
         return response.json().get("data") or {}
 
+    def get_item_customer_items(self, item_code: str) -> dict[str, Any]:
+        if not item_code:
+            return {}
+        encoded = quote(item_code, safe="")
+        response = self.session.get(
+            f"{self.base}/api/resource/Item/{encoded}",
+            params={
+                "fields": json.dumps(
+                    ["item_code", "item_name", "item_group", "customer_items"]
+                )
+            },
+            timeout=120,
+        )
+        response.raise_for_status()
+        return response.json().get("data") or {}
+
+    def put_customer_items(
+        self, item_code: str, customer_items: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        encoded = quote(item_code, safe="")
+        payload = {
+            "customer_items": [
+                {
+                    "customer_group": row.get("customer_group") or "美国公司",
+                    "ref_code": row.get("ref_code"),
+                }
+                for row in customer_items
+                if row.get("ref_code")
+            ]
+        }
+        response = self.session.put(
+            f"{self.base}/api/resource/Item/{encoded}",
+            json=payload,
+            timeout=120,
+        )
+        response.raise_for_status()
+        return response.json().get("data") or {}
+
     def preview(self, children: Sequence[tuple[str, int]]) -> dict[str, Any]:
         items = [{"item_code": sku, "qty": int(qty)} for sku, qty in children]
         data = self._post(

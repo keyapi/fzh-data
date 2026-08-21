@@ -9,6 +9,11 @@ timestamp: 2026-07-02
 
 # 变更日志
 
+## 2026-08-21
+
+- **变更描述（软包墙围批量分阶段）**：新增 `soft_wall_lookup.py`（EN/赛狐只读快照）、`soft_wall_stage.py`（plan/preview/status/record/apply）；`sellfox_combo_ops.py` 新增 `register-customer-code`；`combo_en.py` 增加客户物料号 GET/PUT；`repo_root.py` 支持根 `.env` 含 EN 凭证。完成 6 底层 × 4 数量 = 24 个 EN 套件/赛狐组合，阶段记录 xlsx 24/24。
+- **变更描述（拉链款无捆绑SKU 合成）**：`soft_wall_lookup.py` 支持 `--product`；新增 `zipper_stage.py`，按 `基码-EN物料码-Npcs` 合成唯一通途SKU，完成 40 个 EN 套件/赛狐组合，`sync-combos` `ok=40`。
+
 ## 2026-08-20
 
 - **变更描述（限流策略精修）**：`RateLimitPolicy` 校验 env 边界（max_retries≥1、等待非负）；重试耗尽前不再多 sleep 一次；直连模式采集 HTTP Retry-After。

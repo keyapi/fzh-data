@@ -23,7 +23,7 @@
 5. dry-run 出现 `mismatch` / `blocked_*`（含 `blocked_duplicate`）必须停手，不要 `--apply`。
 6. 批量 apply 遇 **40019**：脚本自动重试；仍失败则同范围重跑（见 combo-ops「限流与续跑」）。`--report` 会写 `.checkpoint.json` 追踪 applied/pending。
 
-凭证：赛狐代理 Key → 根 `.env` 的 `SELLFOX_PROXY_API_KEY`；EN → `EN_API/.env`。EN `--env` 默认 **prod**。
+凭证：赛狐代理 Key → 根 `.env` 的 `SELLFOX_PROXY_API_KEY`；EN → `EN_API/.env` 或根 `.env` 含 EN 凭证均可（`repo_root` 两者兼容）。EN `--env` 默认 **prod**。
 
 ### 冻结与跳过（2026-08-20）
 
@@ -32,6 +32,8 @@
 | KS0443 共 12 个 EN Bundle + 12 个赛狐组合（`TJ#KS0443%`） | **日期冻结**（2026-08-19 已重建并回读） | 不要重跑 `sync-combos --like "TJ#KS0443%"` 除非用户明确授权 |
 | `FXLSSF3030` | **长期跳过**（历史非 `TJ#` 海绵套件；上层 Item 已 disabled） | 脚本标 `skip_historical`；**不要**按新规则改名/重建，除非用户另行授权 |
 | KS0003 / KS0395 | **已关闭**（2026-08-20 用户确认无问题） | 不要纳入清理或审计待办 |
+| 软包墙围 24 个组合（`TJ#KS0211x4/6/9/12-001~006`） | **已创建并回读**（2026-08-21） | 不要重复创建；后续如需在线/订单配对再单独确认 |
+| 拉链款 40 个组合（`TJ#KS0340x2-001~010`、`x3-001~009`、`x4-001~009`、`TJ#KS0342x2/3/4-001~004`） | **已创建并回读**（2026-08-21） | 不要重复创建；合成通途SKU 规则见批量文档 |
 
 ### 读哪（热 → 冷）
 
@@ -40,6 +42,8 @@
 | 默认命令、硬规则、action 表、报告字段、停手、代码地图 | [docs/reference/combo-ops.md](docs/reference/combo-ops.md) |
 | **当前冻结对象**（本节，随生产决策更新） | 本节 |
 | 配对 API、Proxy 踩坑、KS0443 事故记录 | [sellfox-combo-sku-create-pairing-workflow.md](../docs/solutions/conventions/sellfox-combo-sku-create-pairing-workflow.md) |
+| 批量分阶段创建与阶段记录（软包墙围 6×4） | [soft-wall-combo-batch-staging.md](../docs/solutions/workflow-issues/soft-wall-combo-batch-staging.md) |
+| 无捆绑SKU 合成客户物料号（拉链款 40 个） | [zipper-combo-batch-staging.md](../docs/solutions/workflow-issues/zipper-combo-batch-staging.md) |
 | 领域词汇（TJ#、套件#） | 根 [CONCEPTS.md](../CONCEPTS.md) |
 | 模块变更历史 | [docs/log.md](docs/log.md) |
 | Skill 触发词与三步概要 | `.agents/skills/sellfox-combo-create/SKILL.md` |

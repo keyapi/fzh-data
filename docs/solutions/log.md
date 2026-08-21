@@ -7,6 +7,16 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-08-21
+- **新增**: `workflow-issues/soft-wall-combo-batch-staging.md` — 软包墙围 6 底层物料 × 4 数量 = 24 个 EN 套件/赛狐组合商品批量分阶段创建；登记表去重、`plan --full`、`apply` 三步写入、阶段记录 Excel 续跑。
+- **新增**: `SELLFOX_API/soft_wall_stage.py` / `soft_wall_lookup.py` — 软包墙围计划/预览/状态/结果追踪与 EN/赛狐只读快照。
+- **更新**: `SELLFOX_API/sellfox_combo_ops.py` 新增 `register-customer-code`；`combo_en.py` 增加客户物料号读写；`repo_root.py` 支持根 `.env` 含 EN 凭证；`combo-ops.md` 命令表/代码地图同步。
+- **结果**: 24 个组合全部创建并回读，`sync-combos` `input_en=24 / output_rows=24 / ok=24`；新补齐通途SKU 统一小写 `pcs` 登记客户物料号。
+- **新增**: `workflow-issues/zipper-combo-batch-staging.md` — 拉链款 41 行全部“无捆绑SKU”，按 `基码-EN物料码-Npcs` 合成唯一客户物料号，40 个组合全部创建并回读（`sync-combos` `ok=40`）。
+- **新增**: `SELLFOX_API/zipper_stage.py` — 拉链款登记表名称自动匹配 EN 底层物料、合成通途SKU、批量 apply 与阶段记录。
+- **更新**: `soft_wall_lookup.py` 支持 `--product` 通用快照；`soft_wall_stage.py` 支持 `configure(product)` 复用框架。
+- **更新**: `workflow-issues/index.md`、`docs/solutions/index.md`、`CONCEPTS.md`
+
 ## 2026-08-19
 - **新增**: `workflow-issues/tongtu-warehouse-rename-reconciliation.md` — 通途自发货仓库改名（美东-/美中-/波兰- 前缀）后的三处对账登记：通途清单 → 生产 ERPNext `Tongtu Shipping Warehouse`（新建照抄分公司成本列）→ 财务共享表「订单发货仓库对应成本来源」（参考旧名行、美东/波兰退货仓按主仓口径推断并确认）。含凭证在父仓库/worktree、uv、控制台编码、dry-run 等经验教训。
 - **新增**: `.agents/skills/tongtool-warehouse-sync/SKILL.md` — 仓库改名/登记触发词 skill，handoff 指向上述文档。
