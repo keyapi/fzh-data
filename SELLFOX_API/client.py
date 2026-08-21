@@ -95,7 +95,9 @@ def parse_retry_after_seconds(
 
 def is_rate_limited_response(result: dict[str, Any]) -> bool:
     detail = result.get("detail") if isinstance(result, dict) else None
-    if isinstance(detail, str) and "Rate limited" in detail:
+    if isinstance(detail, dict):
+        detail = detail.get("detail")
+    if isinstance(detail, str) and "rate limited" in detail.casefold():
         return True
     return result.get("code") == SELLFOX_RATE_LIMIT_CODE
 
@@ -107,7 +109,11 @@ def rate_limit_sleep_seconds(
     policy: RateLimitPolicy,
     retry_after_header: str | None = None,
 ) -> float:
-    detail = result.get("detail") if isinstance(result.get("detail"), str) else None
+    detail = result.get("detail") if isinstance(result, dict) else None
+    if isinstance(detail, dict):
+        detail = detail.get("detail")
+    if not isinstance(detail, str):
+        detail = None
     retry_after = parse_retry_after_seconds(detail=detail, header=retry_after_header)
     if retry_after is not None:
         return retry_after + random.uniform(0, policy.jitter_s)
