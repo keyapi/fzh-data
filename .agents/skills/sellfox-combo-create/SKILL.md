@@ -6,7 +6,8 @@ description: >
   "TJ#"、"childSkus"、"sync-combos"、"赛狐创建套件"、"底层商品检测"、
   "套件#分类"或"订单配对错误"时触发。
   不要用于普通多属性 SPU 创建（用 multi-attr），不要用于通途有库存三方主线
-  （用 missing-products），不要直接改已发货订单包裹配对（API 会拒绝）。
+  （用 missing-products），不要把三角皮壳 `PK# -> KS x1` 库存代理当成套件
+  （用 sellfox-cover-inventory / cover_combo_ops.py），不要直接改已发货订单包裹配对（API 会拒绝）。
 compatibility: >
   SELLFOX_API/sellfox_combo_ops.py、combo_reconcile.py、combo_en.py；
   代理 Key 在根 .env 的 SELLFOX_PROXY_API_KEY；EN 凭证在 EN_API/.env。
@@ -14,7 +15,7 @@ compatibility: >
 metadata:
   module: SELLFOX_API
   scripts: SELLFOX_API/sellfox_combo_ops.py
-  updated: 2026-08-20
+  updated: 2026-08-24
 ---
 
 # EN 套件 / 赛狐组合商品
@@ -27,6 +28,7 @@ metadata:
 4. `docs/solutions/workflow-issues/soft-wall-combo-batch-staging.md` — 批量分阶段创建（软包墙围 6×4 等登记表场景）。
 5. `docs/solutions/workflow-issues/zipper-combo-batch-staging.md` — 无捆绑SKU 时合成唯一客户物料号（`基码-EN物料码-Npcs`）。
 6. 缺底层 SKU → `missing-products` / `multi-attr`；赛狐连通性 → `sellfox-api`。
+7. 三角皮壳 `PK#` 组合代理 → `sellfox-cover-inventory` + `cover-combo-ops.md`，禁止对本手册 `sync-combos`。
 
 先跑脚本拿当前事实。不要凭聊天记忆、旧 Excel 或临时编号写 EN/赛狐。
 

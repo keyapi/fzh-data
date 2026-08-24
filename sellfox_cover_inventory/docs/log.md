@@ -6,6 +6,10 @@ title: 赛狐皮壳共享库存代理 — 变更日志
 
 # 变更日志
 
+## 2026-08-24
+
+- **组合落地**: 生产已创建 KS0001/KS0248 的 `PK#` 组合代理（957 个 `isGroup=1`）。操作改走 `SELLFOX_API/cover_combo_ops.py`；只读配对候选已交给业务，未写 `matchByMsku`。
+
 ## 2026-08-21
 
 - **评审修正**: Cursor 审查后拆分 EN Tongtool Cost Review 与特殊规则 1.7.0 引擎（`engine_170.py`），审计脚本 `next_actions` 指向 4B 成本覆盖，missing-products 路由补充已有独立普通 `PK#` 的评估边界；引擎路径补齐为 `tongtool_order_cost/tongtool_order_cost/engine_170.py`，扣减规则明确仅组合代理适用。

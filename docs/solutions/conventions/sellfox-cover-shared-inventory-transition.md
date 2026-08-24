@@ -4,7 +4,7 @@ type: Reference
 title: 三角类皮壳在通途与赛狐并行期的共享库存代理
 description: 记录 EN、通途、赛狐对成品与皮壳的不同语义，比较组合、独立库存与加工转换模型，形成按生命周期选择的过渡方案，并明确库存代理与订单成本修正必须分开设计。
 date: 2026-08-20
-last_updated: 2026-08-21
+last_updated: 2026-08-24
 category: conventions
 module: sellfox_cover_inventory
 problem_type: convention
@@ -254,8 +254,8 @@ SKU: PK#KS0001-DM-194-GREY
 | --- | --- | --- |
 | 0 点名 | 赛狐仓 + 通途基码 + 底层 `KS` + 皮壳 `PK#`。店铺/MSKU 对当前 `--live` **不是必填**（脚本不查 Listing） | 等用户点名 |
 | 1 只读 | 无 `--live` 只校验配置；`--live` 查仓库和两个商品 SKU。`PK#` missing 记缺口，不创建。已是有库存普通商品则对**本次组合候选** blocked，须转入独立库存评估，不能自动改类型 | 可跑；不创建、不配对 |
-| 2 创建组合 | `PK#` = `KS x1`，`isGroup=1`。不走 `sync-combos` | 须再确认 |
-| 3 配对 | 皮壳 Listing → `PK#`，不是 → `KS` | 须再确认 |
+| 2 创建组合 | `PK#` = `KS x1`，`isGroup=1`。不走 `sync-combos` | **KS0001 / KS0248 已完成**（2026-08-21 生产 `status`：957 个 `isGroup=1`）。命令见 [cover-combo-ops.md](../../../SELLFOX_API/docs/reference/cover-combo-ops.md)。其他 SPU 须另批 |
+| 3 配对 | 皮壳 Listing → `PK#`，不是 → `KS` | 只读候选已出；**写配对须再确认**，不要调 `matchByMsku` |
 | 4A 库存测试 | 皮壳 Listing 测试单只验证指定仓 `KS x1` 扣减和运营页面展示 | 关系建好后另批；不以原生成本验收 |
 | 4B 成本覆盖 | 找一条已能确认身份的皮壳 FBM 订单，下载模板、导入外部计算成本并回读 `mergePurchaseCost` / 利润 | 可优先用已有订单，不必先请井新下单 |
 
@@ -324,4 +324,6 @@ PK# + 其他组件 + 加工单 -> KS
 - [通途仓库改名对账](../workflow-issues/tongtu-warehouse-rename-reconciliation.md)
 - [模块 Handoff](../../../sellfox_cover_inventory/AGENT_HANDOFF.md)
 - [只读沙盒审计](../../../sellfox_cover_inventory/audit_sandbox.py)
-- 合并状态：本文成本边界与只读审计语义 pending on [#191](https://github.com/keyapi/fzh-data/pull/191)（截至撰写时 PR 未合并）
+- [PK# 组合代理批量创建](../workflow-issues/sellfox-cover-combo-create-ops.md)
+- [cover-combo-ops.md](../../../SELLFOX_API/docs/reference/cover-combo-ops.md)
+- 合并状态：本文与只读审计语义 pending on [#191](https://github.com/keyapi/fzh-data/pull/191)（截至 2026-08-24 PR 仍开着）。KS0001/KS0248 组合创建已在生产落地，见上表阶段 2。

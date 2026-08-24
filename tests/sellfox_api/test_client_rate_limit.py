@@ -22,6 +22,9 @@ from client import (  # noqa: E402
 
 def test_is_rate_limited_response_proxy_detail():
     assert is_rate_limited_response({"detail": "Rate limited for account"})
+    assert is_rate_limited_response(
+        {"code": None, "msg": {"detail": "Global rate limited. Retry after 0.8s"}}
+    )
     assert not is_rate_limited_response({"code": 0, "data": {}})
 
 
@@ -32,11 +35,12 @@ def test_is_rate_limited_response_sellfox_40019():
 
 def test_parse_retry_after_from_detail_and_header():
     assert parse_retry_after_seconds(detail="Rate limited. Retry after 7s") == 7.0
+    assert parse_retry_after_seconds(detail="Global rate limited. Retry after 0.8s") == 0.8
     assert parse_retry_after_seconds(header="12") == 12.0
 
 
 def test_rate_limit_sleep_prefers_retry_after(monkeypatch):
-    policy = RateLimitPolicy(default_wait_s=10.0, jitter_s=0.0)
+    policy = RateLimitPolicy(default_wait_s=2.0, max_wait_s=10.0, jitter_s=0.0)
     monkeypatch.setattr("client.random.uniform", lambda _a, _b: 0.0)
     wait = rate_limit_sleep_seconds(
         {"detail": "Rate limited. Retry after 5s"},
@@ -46,11 +50,22 @@ def test_rate_limit_sleep_prefers_retry_after(monkeypatch):
     assert wait == 5.0
 
 
+def test_rate_limit_sleep_caps_at_max_wait(monkeypatch):
+    policy = RateLimitPolicy(default_wait_s=2.0, max_wait_s=10.0, jitter_s=0.0)
+    monkeypatch.setattr("client.random.uniform", lambda _a, _b: 0.0)
+    wait = rate_limit_sleep_seconds(
+        {"detail": "Global rate limited. Retry after 30s"},
+        attempt=0,
+        policy=policy,
+    )
+    assert wait == 10.0
+
+
 def test_rate_limit_sleep_default_with_jitter(monkeypatch):
-    policy = RateLimitPolicy(default_wait_s=10.0, jitter_s=0.5)
+    policy = RateLimitPolicy(default_wait_s=2.0, max_wait_s=10.0, jitter_s=0.5)
     monkeypatch.setattr("client.random.uniform", lambda _a, b: b)
     wait = rate_limit_sleep_seconds({"code": SELLFOX_RATE_LIMIT_CODE}, attempt=0, policy=policy)
-    assert wait == 10.5
+    assert wait == 2.5
 
 
 def test_proxy_retries_sellfox_40019_then_succeeds(monkeypatch):
@@ -69,12 +84,14 @@ def test_proxy_retries_sellfox_40019_then_succeeds(monkeypatch):
 
     client = SellfoxClient(
         SellfoxConfig(mode="proxy", proxy_api_key="sk-test"),
-        rate_limit=RateLimitPolicy(max_retries=5, default_wait_s=10.0, jitter_s=0.0),
+        rate_limit=RateLimitPolicy(
+            max_retries=5, default_wait_s=2.0, max_wait_s=10.0, jitter_s=0.0, min_interval_s=0.0
+        ),
     )
     data = client.signed_post("/api/commodity/pageList.json", {})
     assert data == {"rows": []}
     assert len(calls) == 3
-    assert sleeps == [10.0, 10.0]
+    assert sleeps == [2.0, 2.0]
 
 
 def test_proxy_honors_retry_after_header(monkeypatch):
@@ -93,7 +110,9 @@ def test_proxy_honors_retry_after_header(monkeypatch):
 
     client = SellfoxClient(
         SellfoxConfig(mode="proxy", proxy_api_key="sk-test"),
-        rate_limit=RateLimitPolicy(max_retries=3, default_wait_s=10.0, jitter_s=0.0),
+        rate_limit=RateLimitPolicy(
+            max_retries=3, default_wait_s=2.0, max_wait_s=10.0, jitter_s=0.0, min_interval_s=0.0
+        ),
     )
     assert client.signed_post("/api/x.json", {}) == {"ok": True}
     assert sleeps == [8.0]
@@ -109,7 +128,7 @@ def test_non_rate_limit_error_is_not_retried(monkeypatch):
     monkeypatch.setattr(SellfoxClient, "_post_once_proxy", fake_once)
     client = SellfoxClient(
         SellfoxConfig(mode="proxy", proxy_api_key="sk-test"),
-        rate_limit=RateLimitPolicy(max_retries=5, default_wait_s=10.0, jitter_s=0.0),
+        rate_limit=RateLimitPolicy(max_retries=5, default_wait_s=2.0, jitter_s=0.0, min_interval_s=0.0),
     )
     with pytest.raises(RuntimeError, match="40021"):
         client.signed_post("/api/commodity/create.json", {"sku": "X"})
@@ -127,7 +146,9 @@ def test_rate_limit_retries_exhausted(monkeypatch):
 
     client = SellfoxClient(
         SellfoxConfig(mode="proxy", proxy_api_key="sk-test"),
-        rate_limit=RateLimitPolicy(max_retries=2, default_wait_s=1.0, jitter_s=0.0),
+        rate_limit=RateLimitPolicy(
+            max_retries=2, default_wait_s=1.0, max_wait_s=10.0, jitter_s=0.0, min_interval_s=0.0
+        ),
     )
     with pytest.raises(RuntimeError, match="Rate limited"):
         client.signed_post("/api/x.json", {})
@@ -137,7 +158,7 @@ def test_rate_limit_retries_exhausted(monkeypatch):
 def test_rate_limit_policy_clamps_invalid_values():
     policy = RateLimitPolicy(max_retries=0, default_wait_s=-1.0, jitter_s=-1.0)
     assert policy.max_retries == 6
-    assert policy.default_wait_s == 10.0
+    assert policy.default_wait_s == 2.0
     assert policy.jitter_s == 0.0
 
 
@@ -147,16 +168,16 @@ def test_rate_limit_policy_from_env_clamps_invalid(monkeypatch):
     monkeypatch.setenv("SELLFOX_RATE_LIMIT_JITTER_S", "-1")
     policy = RateLimitPolicy.from_env()
     assert policy.max_retries == 6
-    assert policy.default_wait_s == 10.0
+    assert policy.default_wait_s == 2.0
     assert policy.jitter_s == 0.0
 
 
 def test_rate_limit_policy_rejects_nan_and_inf():
     policy = RateLimitPolicy(default_wait_s=float("nan"), jitter_s=float("inf"))
-    assert policy.default_wait_s == 10.0
+    assert policy.default_wait_s == 2.0
     assert policy.jitter_s == 0.0
     policy_neg_inf = RateLimitPolicy(default_wait_s=float("-inf"), jitter_s=float("-inf"))
-    assert policy_neg_inf.default_wait_s == 10.0
+    assert policy_neg_inf.default_wait_s == 2.0
     assert policy_neg_inf.jitter_s == 0.0
 
 
@@ -164,7 +185,7 @@ def test_rate_limit_policy_from_env_rejects_nan_and_inf(monkeypatch):
     monkeypatch.setenv("SELLFOX_RATE_LIMIT_WAIT_S", "nan")
     monkeypatch.setenv("SELLFOX_RATE_LIMIT_JITTER_S", "inf")
     policy = RateLimitPolicy.from_env()
-    assert policy.default_wait_s == 10.0
+    assert policy.default_wait_s == 2.0
     assert policy.jitter_s == 0.0
 
 
@@ -184,7 +205,9 @@ def test_direct_mode_honors_retry_after_header(monkeypatch):
 
     client = SellfoxClient(
         SellfoxConfig(mode="direct", app_id="id", app_secret="secret"),
-        rate_limit=RateLimitPolicy(max_retries=3, default_wait_s=10.0, jitter_s=0.0),
+        rate_limit=RateLimitPolicy(
+            max_retries=3, default_wait_s=2.0, max_wait_s=10.0, jitter_s=0.0, min_interval_s=0.0
+        ),
     )
     assert client.signed_post("/api/x.json", {}) == {"ok": True}
     assert sleeps == [6.0]

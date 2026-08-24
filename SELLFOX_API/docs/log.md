@@ -9,6 +9,10 @@ timestamp: 2026-07-02
 
 # 变更日志
 
+## 2026-08-24
+
+- **变更描述（皮壳 PK# 组合代理落地）**：新增 `cover_combo_ops.py` / `cover_combo_plan.py`（plan/status/apply/pairing-candidates）；生产已建 `KS0001`/`KS0248` 共 957 个 `isGroup=1` 组合。操作手册 [cover-combo-ops.md](reference/cover-combo-ops.md)。禁止用 `sync-combos` 建这些 SKU；配对只出候选。
+
 ## 2026-08-21
 
 - **变更描述（软包墙围批量分阶段）**：新增 `soft_wall_lookup.py`（EN/赛狐只读快照）、`soft_wall_stage.py`（plan/preview/status/record/apply）；`sellfox_combo_ops.py` 新增 `register-customer-code`；`combo_en.py` 增加客户物料号 GET/PUT；`repo_root.py` 支持根 `.env` 含 EN 凭证。完成 6 底层 × 4 数量 = 24 个 EN 套件/赛狐组合，阶段记录 xlsx 24/24。

@@ -9,7 +9,7 @@
 
 **组合商品/EN 套件**不走文档下载脚本，走 `sellfox_combo_ops.py` + Skill `sellfox-combo-create`。分层见下文 **「EN 套件 / 赛狐组合商品（热区）」**；稳定命令/硬规则 → [docs/reference/combo-ops.md](docs/reference/combo-ops.md)。
 
-**三角类皮壳 listing / 赛狐皮壳商品** 是另一条线，不等同 EN `TJ#` 套件：先读 [sellfox-cover-shared-inventory-transition.md](../docs/solutions/conventions/sellfox-cover-shared-inventory-transition.md) 和 Skill `sellfox-cover-inventory`。当前阶段结论是先用 1 个 SKU 沙盒验证“赛狐组合商品作为皮壳销售别名”，不要用 `sync-combos` 扫 `PK#` 或默认启用加工商品。
+**三角类皮壳 listing / 赛狐皮壳商品** 是另一条线，不等同 EN `TJ#` 套件：先读 [sellfox-cover-shared-inventory-transition.md](../docs/solutions/conventions/sellfox-cover-shared-inventory-transition.md)、[cover-combo-ops.md](docs/reference/cover-combo-ops.md) 和 Skill `sellfox-cover-inventory`。`KS0001` / `KS0248` 的 `PK# -> KS x1` 组合已在生产建完；不要用 `sync-combos` 扫 `PK#`，不要默认启用加工商品。库存扣减沙盒与写配对仍须用户另批。
 
 ## EN 套件 / 赛狐组合商品（热区）
 
@@ -36,6 +36,7 @@
 | KS0003 / KS0395 | **已关闭**（2026-08-20 用户确认无问题） | 不要纳入清理或审计待办 |
 | 软包墙围 24 个组合（`TJ#KS0211x4/6/9/12-001~006`） | **已创建并回读**（2026-08-21） | 不要重复创建；后续如需在线/订单配对再单独确认 |
 | 拉链款 40 个组合（`TJ#KS0340x2-001~010`、`x3-001~009`、`x4-001~009`、`TJ#KS0342x2/3/4-001~004`） | **已创建并回读**（2026-08-21） | 不要重复创建；合成通途SKU 规则见批量文档 |
+| KS0001 / KS0248 皮壳组合代理（`PK#KS…` → 成品 `KS ×1`） | **已创建**（2026-08-21，线上 957 个 `isGroup=1`） | 不要再全量 `cover_combo_ops apply`；不要 `sync-combos`。写配对须另批 |
 
 ### 读哪（热 → 冷）
 
@@ -46,7 +47,9 @@
 | 配对 API、Proxy 踩坑、KS0443 事故记录 | [sellfox-combo-sku-create-pairing-workflow.md](../docs/solutions/conventions/sellfox-combo-sku-create-pairing-workflow.md) |
 | 批量分阶段创建与阶段记录（软包墙围 6×4） | [soft-wall-combo-batch-staging.md](../docs/solutions/workflow-issues/soft-wall-combo-batch-staging.md) |
 | 无捆绑SKU 合成客户物料号（拉链款 40 个） | [zipper-combo-batch-staging.md](../docs/solutions/workflow-issues/zipper-combo-batch-staging.md) |
-| 领域词汇（TJ#、套件#） | 根 [CONCEPTS.md](../CONCEPTS.md) |
+| 三角皮壳 PK# 组合代理（不是套件） | [cover-combo-ops.md](docs/reference/cover-combo-ops.md) |
+| 皮壳组合创建踩坑与生产计数 | [sellfox-cover-combo-create-ops.md](../docs/solutions/workflow-issues/sellfox-cover-combo-create-ops.md) |
+| 领域词汇（TJ#、套件#、皮壳共享库存代理） | 根 [CONCEPTS.md](../CONCEPTS.md) |
 | 模块变更历史 | [docs/log.md](docs/log.md) |
 | Skill 触发词与三步概要 | `.agents/skills/sellfox-combo-create/SKILL.md` |
 | 改脚本、开 PR | [CONTRIBUTING.md](../CONTRIBUTING.md) |

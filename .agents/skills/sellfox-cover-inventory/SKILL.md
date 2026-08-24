@@ -1,47 +1,46 @@
 ---
 name: sellfox-cover-inventory
 description: >
-  三角类皮壳在通途与赛狐并行期的共享库存代理、PK# 组合/加工商品选型与单 SKU 沙盒。
+  三角类皮壳在通途与赛狐并行期的共享库存代理、PK# 组合/加工商品选型、
+  PK#->KS x1 组合创建与只读配对候选、单 SKU 沙盒。
   当用户提到“赛狐皮壳商品”、“PK# 商品”、“Cover 共享库存”、“皮壳组合商品”、
-  “皮壳加工商品”、“三角靠枕库存”、“通途赛狐库存校准”、shared inventory 或 inventory alias 时触发。
+  “皮壳加工商品”、“三角靠枕库存”、“通途赛狐库存校准”、shared inventory、
+  inventory alias、“创建皮壳组合”或“PK#KS0001”时触发。
   EN Product Bundle/TJ# 套件同步用 sellfox-combo-create；普通三方缺失登记用 missing-products；
   全量库存初始化用 stock-init。
 metadata:
   module: sellfox_cover_inventory
-  scripts: sellfox_cover_inventory/audit_sandbox.py
-  compatibility: SELLFOX_API/client.py；默认只读
-  updated: 2026-08-21
+  scripts: >
+    sellfox_cover_inventory/audit_sandbox.py;
+    SELLFOX_API/cover_combo_ops.py
+  compatibility: SELLFOX_API/client.py；审计默认只读；组合创建须 --apply
+  updated: 2026-08-24
 ---
 
 # 赛狐皮壳共享库存代理
 
 ## Read First
 
-1. `docs/solutions/conventions/sellfox-cover-shared-inventory-transition.md` — 唯一完整事实源。
-2. `sellfox_cover_inventory/AGENT_HANDOFF.md` — 接手顺序、决策边界、代码地图。
-3. `sellfox_cover_inventory/README.md` — 单 SKU 配置与命令。
+1. `docs/solutions/conventions/sellfox-cover-shared-inventory-transition.md` — 架构事实源。
+2. `SELLFOX_API/docs/reference/cover-combo-ops.md` — 创建/对账/只读配对命令。
+3. `docs/solutions/workflow-issues/sellfox-cover-combo-create-ops.md` — 生产踩坑（普通商品搜不到、禁止并行 apply）。
+4. `sellfox_cover_inventory/AGENT_HANDOFF.md` — 接手顺序与冻结边界。
+5. `sellfox_cover_inventory/README.md` — 单 SKU 库存沙盒。
 
 ## 当前决定
 
 - 通途仍是并行期库存事实源；共享池仓库必须由用户点名，不能从示例抄。
-- `PK#` 不天然必须是组合商品；当前通途并行且现场只有一个未拆分数量池，所以默认推荐 `KS` 普通库存 + `PK# -> KS x1` 组合代理。
-- 该关系仅是销售库存代理，不是 EN BOM/Product Bundle。
-- 加工商品会产生独立库存和加工单，本阶段不用。
-- 美中通途另有皮壳仓库；不要默认用 DANEEY / FZH-DANEEY 主仓当三角皮壳共享池。
-- 赛狐 `POLAND` 对应通途 covers 仓，不对应 `FZHPoland-finished`。
-- 组合商品「关联子商品采购成本」复选框 / `purchaseCostLock` 只改 `PK#` 商品主数据，不能按仓、不能按 `-Cover` 切片。
-- 订单若吃到子件 `KS` 仓批次，对皮壳 Listing 仍不是 EN Tongtool Cost Review 的部分成本。赛狐没有后缀/交付形态定制。利润与库存代理分开验收；vanilla 赛狐利润项预期失败。
-- 禁止把同一通途库存完整复制给赛狐普通 `KS` 和普通 `PK#`；一对多目标 ATP 总和不得超过物理池。多属性商品也不提供共享库存。
-- FBM 智能推荐优先采用导入采购成本；公开 OpenAPI 未找到对应写端点。优先验证 Excel/UI 订单成本覆盖，再评估 Playwright 或私有请求。
-- 公开 API 支持数量调整、灰度 SKU 调整和批量确认；加工单没有完整创建/分配/完成写链，不能承诺无人值守转换。
-- `--live` 只查仓库和两个 SKU，不查 Listing，不创建、不配对。库存测试单等关系建好后另批；成本覆盖可先找已有皮壳 FBM 订单，不必请运营新下单。
-- 先验证一个 SKU、一个已确认仓；用户确认前不扩大。
-- FBA、名称含退货/不良的仓，只读审计会 blocked。
-- 审计发现 `PK#` 已是普通/加工商品时，只阻断当前组合候选自动写入；应转入独立库存模型评估，不得解释成该类型永久非法。
+- 默认推荐 `KS` 普通库存 + `PK# -> KS x1` 组合代理。不是 EN BOM / Product Bundle，禁止 `sync-combos`。
+- `KS0001` / `KS0248` 组合已在 2026-08-21 生产建完（957 个 `isGroup=1`）。不要再全量 apply。界面搜**组合商品** / SKU `PK#`，不是普通商品、不是名称「皮壳#」。
+- 写配对（`matchByMsku`）须用户另批；`pairing-candidates` 只出表。
+- 加工商品本阶段不用。FBA/退货/不良仓不进共享池。美中不要默认 DANEEY 主仓。赛狐 `POLAND` = 通途 covers。
+- 库存扣减沙盒与利润覆盖仍是两条链；`--live` 审计不创建、不配对。
 
 ## 默认动作
 
-运行只读审计并报告 `input/matched/missing/blocked`。任何创建组合商品、配对、调整库存、改同步任务或请人下测试单都须另行确认。库存沙盒只验数量代理；成本沙盒另用真实皮壳 FBM 订单验证导入采购成本、`mergePurchaseCost` 和利润更新。
+- **查库存模型 / 单 SKU 沙盒**：跑 `audit_sandbox.py`，报告 `input/matched/missing/blocked`。
+- **查或补 PK# 组合**：`cover_combo_ops.py status`；仅当 `need_create>0` 且用户确认范围后 `--apply`。
+- **配对**：只跑 `pairing-candidates`，把 xlsx 交给业务；不要写配对接口。
 
 ## 路由排除
 
