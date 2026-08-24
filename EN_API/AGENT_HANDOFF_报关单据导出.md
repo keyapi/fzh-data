@@ -416,3 +416,43 @@
 
 - **一致性**：报关品名要求同一物料每次导出英文一致（海关核验）。当前为每次实时翻译，同一中文可能偶发措辞漂移（如 `Triangle Cushion` vs `Triangular Cushion`）。如需严格一致，可后续加缓存/固化存储（Item 新增 `item_name_en`）。
 - **品名粒度**：当前按「款式-面料-尺寸」整段翻译；是否需要精简为款式级（如 `Triangle Pillow`）由业务确认。
+
+---
+
+## 14. 交接信息（2026-08-24，供新对话接手）
+
+### 工作方式（重要）
+- 仓库根：`D:/Claude Demo/fzh-data`（git）。**在主检出使用持久分支 `feature/customs-export`，不要新建 worktree / 分支。**
+- 继续前先切分支：`git checkout feature/customs-export`
+- 改完直接提交 + `git push`，PR #193 自动更新
+- 凭证：`EN_API/.env` 有 `PROD_ERP_API_KEY/SECRET` + `DEEPSEEK_API_KEY`（gitignored，磁盘上已有）
+
+### 当前状态
+- 分支 `feature/customs-export` 已提交（首提 `6607a99`），已推送，PR #193（base: main）
+- 文件：`EN_API/customs_export.py`（主脚本）+ 本文档
+- 模板：`EN_API/数据源/ZJ26DZJR0403-报关单据.xlsx`
+- 已测输出：`EN_API/out/报关单据_DN-{24-00575,26-00056,26-00063}.xlsx`
+- 主检出上 `.claude/launch.json` 的修改已 stash（非本功能相关，回 dev 可 pop）
+
+### 功能概述
+销售出库(DN) → 4-sheet 报关 Excel：去色聚合 → 并行 DeepSeek 英文翻译（发票/装箱单/合同品名列 + 报关单NEW D 列英文，C 列中文）→ 装箱组合(混装)算每物料箱数/毛净重/体积 → 超 16 行自动插行。价格 = bom_rate/bom_cost ÷ 6.8(USD)，小数 3 位。
+
+### 审查结论（PR #193 同事 Agent 已评审：装箱组合模型可行，但当前不能作正式报关依据）
+- **P0-1 逐物料数量硬对账**：`packed_qty[item] = Σ(group.carton_qty × item.qty_per_carton)` 必须与 DN 数量一致（生产 DN-26-00056 差 35 件，19 物料仅 5 个一致）。未装/超装/方案有而 DN 没有/DN 有而方案未覆盖 → 禁止生成正式文件（只允许草稿）。
+- **P0-2 物料"箱数"语义**：`c_cartons[code] += c` 是「涉及箱数」非「独占箱数」，混装相加 > 物理总箱（DN-26-00056：295 vs 实际 95）。应改为 `involved_cartons` 或输出箱号/箱号范围，明细行箱数禁止用于总箱数，总箱数只从 `sum(group.carton_qty)`，混装行标 `MIXED/SHARED`，装箱单建议按组合/箱号展示。
+- **P1-3 重量分摊**：净重优先按实际单重加权（理论重=qty×单重），数量占比仅作 fallback；单重缺失需黄警 + 记录 `allocation_method`；箱皮重单独分摊；处理 3 位小数尾差。
+- **业务待确认（最大未决风险）**：皮壳+内胆如何申报 —— A 完整成品（用皮壳数作套数） vs B 分别申报。需报关行确认，**当前不要固化"隐藏内胆"**。
+- **架构**：建议「物理装箱层」（记录含内胆的全部实物）与「报关商品映射层」（物理组件→申报商品/HS/申报要素）解耦。
+- **Frappe 模型**（部署到 EN 时）：`Customs Packing Plan`(DN/状态/版本/确认人) → `Customs Packing Group`(组合/箱号范围/每箱毛净重/CBM) → `Customs Packing Group Item`(物料/每箱数量/单重来源/分摊结果)，后续加 `Customs Declaration Mapping`。弹窗交互：左侧组合、右侧物料、固定显示 `DN数量/已装/剩余/超装`、红(阻断)/黄(警告)分开、草稿与确认分离、DN 修改后方案失效重确认。
+
+### 建议下一步（P0）
+1. 实现逐物料数量硬对账门槛（`packed_qty` vs DN 数量，未装/超装阻止正式导出）
+2. 修复箱数语义/按组合展示（involved_cartons、箱号范围、MIXED 标记）
+3. （P1）净重按实际单重加权分摊
+
+### 验证命令
+```bash
+cd "D:/Claude Demo/fzh-data/EN_API"
+python customs_export.py --dn DN-26-00056   # 生产，19 项并行翻译约 1-2 分钟
+# 输出 out/报关单据_DN-26-00056.xlsx，逐 sheet 核对
+```
