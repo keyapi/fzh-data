@@ -10,6 +10,9 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-08-24 | 三角皮壳 PK# 组合代理批量创建（不是 EN 套件） | [workflow-issues/sellfox-cover-combo-create-ops.md](workflow-issues/sellfox-cover-combo-create-ops.md) |
+| 2026-08-21 | 软包墙围 EN 套件/赛狐组合商品批量分阶段创建 | [workflow-issues/soft-wall-combo-batch-staging.md](workflow-issues/soft-wall-combo-batch-staging.md) |
+| 2026-08-21 | 拉链款无捆绑SKU 合成客户物料号并批量创建组合 | [workflow-issues/zipper-combo-batch-staging.md](workflow-issues/zipper-combo-batch-staging.md) |
 | 2026-08-20 | 三角类皮壳在通途与赛狐并行期的共享库存代理 | [conventions/sellfox-cover-shared-inventory-transition.md](conventions/sellfox-cover-shared-inventory-transition.md) |
 | 2026-08-20 | EN 成品与皮壳 1:1 配对审计与孤儿皮壳重建 | [conventions/erpnext-product-cover-variant-pairing.md](conventions/erpnext-product-cover-variant-pairing.md) |
 | 2026-08-19 | 通途发货仓库改名后三处对账登记（通途→ERPNext→财务共享表） | [workflow-issues/tongtu-warehouse-rename-reconciliation.md](workflow-issues/tongtu-warehouse-rename-reconciliation.md) |

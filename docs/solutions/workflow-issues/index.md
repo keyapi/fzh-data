@@ -9,6 +9,8 @@ tags: [workflow-issues, index]
 
 | 文档 | 说明 |
 |------|------|
+| [soft-wall-combo-batch-staging.md](soft-wall-combo-batch-staging.md) | 软包墙围 EN 套件/赛狐组合商品批量分阶段创建 |
+| [zipper-combo-batch-staging.md](zipper-combo-batch-staging.md) | 拉链款无捆绑SKU 合成客户物料号并批量创建组合 |
 | [tongtu-warehouse-rename-reconciliation.md](tongtu-warehouse-rename-reconciliation.md) | 通途发货仓库改名后三处对账登记（通途→ERPNext→财务共享表） |
 | [ostkus-account-reconciliation.md](ostkus-account-reconciliation.md) | OSTKUS 账期与 EN Tongtool Order 对账 |
 | [pb-reconciliation-monthly-update.md](pb-reconciliation-monthly-update.md) | PB 对账表月度更新脚本化 + UPS 交付核查 |

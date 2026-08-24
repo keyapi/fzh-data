@@ -33,6 +33,17 @@ def test_find_main_root_from_worktree_depth(tmp_path: Path):
     assert find_main_root(start=deep) == repo.resolve()
 
 
+def test_find_main_root_accepts_combined_root_env(tmp_path: Path):
+    repo = tmp_path / "fzh-data"
+    sellfox = repo / "SELLFOX_API"
+    sellfox.mkdir(parents=True)
+    (repo / ".env").write_text(
+        "PROD_ERP_API_KEY=k\nPROD_ERP_API_SECRET=s\n", encoding="utf-8"
+    )
+
+    assert find_main_root(start=sellfox) == repo.resolve()
+
+
 def test_find_main_root_raises_with_checked_paths(tmp_path: Path):
     shallow = tmp_path / "orphan" / "SELLFOX_API"
     shallow.mkdir(parents=True)

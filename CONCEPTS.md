@@ -136,12 +136,15 @@ The button copies **existing product variants** onto supporting templates. It is
 
 ### Product Bundle / EN 套件 (TJ#)
 ERPNext 用原生 Product Bundle 表示组合销售对象；work_order_task 扩展会在保存时自动生成上层物料 `TJ#<前缀1>x<数量>_<前缀2>x<数量>-001`，物料组 `套件#`，单位 `套`，`is_stock_item=0`，并导出赛狐「导入组合商品」Excel 模板。REST 创建只需传真实存在的 items，服务端负责编号；不要传临时 new_item_code，创建后组成不可改。
+完整通途SKU 必须作为客户物料号登记到上层 Item `customer_items.ref_code`（客户组默认美国公司）；同一 SPU 同数量下不同面料/颜色/尺寸变体通过 `-001/-002/...` 序号区分。
 
 ### 套件# 分类 / 赛狐组合 SKU
-赛狐镜像 EN 的 `套件#` 一级分类（2026-08-11 已建，`fullCid=428697-`）。组合 SKU 在赛狐用 `isGroup=1` + `childSkus` 表示；创建时必须带上底层商品的 `childId`、`sku`、`num`。**TJ# / Product Bundle 镜像**要求赛狐组合 SKU、EN Product Bundle、上层 Item 三者编码和名称必须一致，日常对账用 `sellfox_combo_ops.py sync-combos`。三角类 `PK# -> KS x1` 是销售库存代理，不属于 `套件#`，不得进入该同步链；见「皮壳共享库存代理」。
+赛狐镜像 EN 的 `套件#` 一级分类（2026-08-11 已建，`fullCid=428697-`）。组合 SKU 在赛狐用 `isGroup=1` + `childSkus` 表示；创建时必须带上底层商品的 `childId`、`sku`、`num`。**TJ# / Product Bundle 镜像**要求赛狐组合 SKU、EN Product Bundle、上层 Item 三者编码和名称必须一致，日常对账用 `sellfox_combo_ops.py sync-combos`，不要手写 REST 或临时编号。三角类 `PK# -> KS x1` 是销售库存代理，不属于 `套件#`，不得进入该同步链；见「皮壳共享库存代理」。
+通途客户物料号匹配按大小写不敏感处理；批量场景可先生成“底层物料 × 数量档”全量计划，再按阶段执行并记录进度。
+登记表整批为“无捆绑SKU”时，可按 `基码-EN物料码-Npcs` 合成唯一客户物料号并提前登记，基码来源（直接/-Cover去尾/同款借用）写入阶段记录备注。
 
 ### 皮壳共享库存代理（赛狐组合商品）
-三角类皮壳 Listing 在通途/赛狐并行期、现场只有一个未拆分实物池时的销售层默认关系：赛狐 `KS` 是有库存普通商品，`PK#` 是 `isGroup=1` 的无独立库存组合商品，唯一子项为 `KS x1`。它让成品与皮壳 Listing 扣同一个**用户确认的**分公司仓库存池，但不表达物理组成、生产 BOM 或 EN Product Bundle，不属于 `套件#`，也不得进入 `TJ#` 同步链。`PK#` 并非永久必须为组合商品；只有仓库分别盘点皮壳/成品并记录转换时，独立普通库存才成立。美中通途另有皮壳仓库，不得默认把 DANEEY 主仓当共享池。赛狐 `POLAND` 对应通途 covers 仓，不对应 `FZHPoland-finished`。
+三角类皮壳 Listing 在通途/赛狐并行期、现场只有一个未拆分实物池时的销售层默认关系：赛狐 `KS` 是有库存普通商品，`PK#` 是 `isGroup=1` 的无独立库存组合商品，唯一子项为 `KS x1`。它让成品与皮壳 Listing 扣同一个**用户确认的**分公司仓库存池，但不表达物理组成、生产 BOM 或 EN Product Bundle，不属于 `套件#`，也不得进入 `TJ#` 同步链。运营在赛狐按**组合商品**、SKU `PK#` 查找；它们不会出现在「普通商品」筛选里，也不要用商品名称「皮壳#」当普通商品搜索词。`PK#` 并非永久必须为组合商品；只有仓库分别盘点皮壳/成品并记录转换时，独立普通库存才成立。美中通途另有皮壳仓库，不得默认把 DANEEY 主仓当共享池。赛狐 `POLAND` 对应通途 covers 仓，不对应 `FZHPoland-finished`。
 
 组合代理只共享数量。赛狐「采购成本」至少三层（商品主数据绍兴发货、期初仓+SKU 尾程前、备货单指定采购单价+头程），与 EN Tongtool Cost Review 按通途后缀和交付形态切的局部成本不是同一件事。子件仓 FIFO 被订单吃到，对皮壳 Listing 仍不算利润通过。
 
