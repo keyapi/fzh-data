@@ -97,23 +97,6 @@ The first production operation that issues raw fabric and cuts it to size. The q
 ### 虚拟员工 (Virtual Employee)
 Employee ID `HR-EMP-00001`, used exclusively by the 一键完工 feature. All Job Cards assigned to this employee are synthetic and reflect planned quantities, not actual production. Detected by checking `time_logs[].employee` on individual Job Card records.
 
-## Channel Account (EN)
-
-### Channel Account
-EN 生产里一条销售店铺记录，`name` 由 `account_id` 自动命名，通常是渠道代码 + 店铺码 + 两字母地区。运营日常改的是 Google「渠道账号」表；EN 按该表追加，不删历史负责人。
-
-### Sales Channel
-Channel Account 所挂的销售渠道主数据。渠道**名称**可以较长；渠道**代码**更短，会拼进账号 ID。同一渠道可有多个国家账号。
-
-### Channel Account Owner
-账号负责人子表。一行代表一段负责人，而不是一个日历月。现网 `user` 存中文名（可含 `&` 组合名和「待分配」），不是登录邮箱。
-
-### 待分配（渠道账号）
-店铺已经开卖、该月表上却没有具体运营人员时，仍要落一条 Owner，人名写「待分配」。开卖前的空月不写。
-
-### Amazon 国家站
-Amazon 店铺只建到国家（DE/ES/FR/IT/UK/PL/NL/BE/SE 等）。没有欧洲聚合账号；旧名 EUR 最多当某个国家站的别名。非 Amazon 渠道仍可以使用 EU 地区码。
-
 ## ERPNext Platform
 
 ### Custom App
@@ -205,10 +188,16 @@ Amazon FBA 账期费用里已经包含平台履约尾程。特殊规则里对 FB
 ## Channel Account（vilavi_pim）
 
 ### Channel Account（渠道账号）
-生产 EN 里一条销售渠道店铺主数据。名称由销售渠道代码 + 账号码 + 区域拼成；允许空账号码时只有渠道代码+区域（如 `KFLAT`、`ILLIOSPL`、`WFEU`）。运营事实源是 Google 表「和运营部共享」的「渠道账号」页，不是 EN 自己。
+生产 EN 里一条销售渠道店铺主数据。名称由销售渠道代码 + 账号码 + 区域拼成（`account_id` 自动命名）；允许空账号码时只有渠道代码+区域（如 `KFLAT`、`ILLIOSPL`、`WFEU`）。运营事实源是 Google 表「和运营部共享」的「渠道账号」页；EN 按该表追加，不删历史负责人。
+
+### Sales Channel
+Channel Account 所挂的销售渠道主数据。渠道**名称**可以较长；渠道**代码**更短，会拼进账号 ID。同一渠道可有多个国家账号。`Illiosenergy` 是名称，`ILLIOS` 是代码。
 
 ### Channel Account Owner
-渠道账号上的负责人时间轴。`user` 存中文名（可含 `&` 组合名和占位「待分配」），不是 User 邮箱。只在负责人相对上一段发生变化时新增一行，连续同名月份折叠为一段，`from_date` 取该段第一个月 1 号。店铺已开卖后的空月也登记为待分配。
+渠道账号上的负责人时间轴。一行代表一段负责人，不是一个日历月。`user` 存中文名（可含 `&` 组合名和占位「待分配」），不是 User 邮箱。只在负责人相对上一段发生变化时新增一行，连续同名月份折叠为一段，`from_date` 取该段第一个月 1 号。
+
+### 待分配（渠道账号）
+店铺已经开卖、该月表上却没有具体运营人员时，仍要落一条 Owner，人名写「待分配」。开卖前的空月不写。
 
 ### Channel Account Alias
 同一店铺的其它写法。规范名本身也是一条别名。Amazon 欧洲旧名只挂在对应国家账号上，避免九国重复挂同一个旧名。

@@ -27,7 +27,14 @@ timestamp: 2026-08-25
 
 `DE ES FR IT UK PL NL BE SE`
 
-FZHSX 旧名 `AMZFZHSXEUR` **只**作为 `AMZFZHSXDE` 的别名。
+FZHSX 旧名 `AMZFZHSXEUR` **只**作为 `AMZFZHSXDE` 的别名，其它八国不要重复挂。2026-08-25 表上约第 72–80 行：
+
+| 账号 | 别名 |
+|------|------|
+| AMZFZHSXDE | FZHSXDE, FZHSX欧洲, AMZFZHSXEUR |
+| AMZFZHSXES/FR/IT/UK/PL/NL/BE/SE | FZHSX{国家} |
+
+运营分组仍是事业四部；九国负责人时间轴从原 EUR 行原样带过来（当时：202608 陈立彬 / 202607 林俊彪 / 此前于彬）。
 
 ## Illiosenergy
 
