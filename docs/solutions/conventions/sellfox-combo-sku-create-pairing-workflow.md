@@ -20,6 +20,8 @@ tags: [sellfox, combo, sku, bundle, pairing, tj, category, erpnext, product-bund
 
 ## Context
 
+> 边界：本文组合商品只镜像 EN Product Bundle / `TJ#` 套件。三角类 `PK# -> KS x1` 是通途并行期的销售库存代理，不创建 EN Product Bundle，也不得由 `sync-combos` 管理；创建命令见 [cover-combo-ops.md](../../../SELLFOX_API/docs/reference/cover-combo-ops.md)，踩坑见 [sellfox-cover-combo-create-ops.md](../workflow-issues/sellfox-cover-combo-create-ops.md)。
+
 订单 `111-5169196-2273828` 的 MSKU `KS0527-Modular Patio Sofa Sets-Darkgray` 原本应卖一个由转角、靠背、脚踏组成的组合式户外沙发套件，但赛狐只把它配到了 `KS0526-QQFSB-80x80x65-DEEPGREY`（靠背单品）。
 
 排查确认：

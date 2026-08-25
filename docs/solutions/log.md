@@ -7,6 +7,12 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-08-24
+- **新增**: `workflow-issues/sellfox-cover-combo-create-ops.md` — 三角皮壳 `PK# -> KS x1` 组合代理批量创建；与 EN `TJ#`/`sync-combos` 分流；`pageList total=0` 翻页、禁止并行 apply、组合商品不在普通商品。
+- **新增**: `SELLFOX_API/cover_combo_ops.py` / `cover_combo_plan.py` 与 `docs/reference/cover-combo-ops.md`。
+- **生产结果**: 2026-08-21 `status` 计划 955、线上 957 全 `isGroup=1`、`need_create=0`；只读配对候选 604（Active 91），未写 `matchByMsku`。
+- **更新**: 共享库存代理 convention 阶段 2 对 KS0001/KS0248 标已完成；Skill / HANDOFF / CONCEPTS 分流。
+
 ## 2026-08-21
 - **新增**: `workflow-issues/soft-wall-combo-batch-staging.md` — 软包墙围 6 底层物料 × 4 数量 = 24 个 EN 套件/赛狐组合商品批量分阶段创建；登记表去重、`plan --full`、`apply` 三步写入、阶段记录 Excel 续跑。
 - **新增**: `SELLFOX_API/soft_wall_stage.py` / `soft_wall_lookup.py` — 软包墙围计划/预览/状态/结果追踪与 EN/赛狐只读快照。
@@ -25,6 +31,17 @@ tags: [solutions, log]
 - **新增**: `workflow-issues/comma-sofa-combo-batch-staging.md` + `SELLFOX_API/comma_sofa_stage.py` — 逗号组合沙发 2 个组合创建并回读（`TJ#KS0369x1_KS0378x1_KS0379x1-001/002`，赛狐 3924081/3924082）。
 - **新增**: `workflow-issues/triangle-set-combo-batch-staging.md` + `SELLFOX_API/triangle_set_stage.py` / `triangle_set_apply.py` — 三角有扣套装 13 个组合创建并回读（`TJ#KS0001x1_KS0260x1-001~003`、`x2-001~010`，赛狐 3924083~3924095）。
 - **更新**: `workflow-issues/index.md`、`docs/solutions/index.md`、`CONCEPTS.md`
+- **评审修正**: Cursor 审查后拆分 EN Tongtool Cost Review 与特殊规则 1.7.0 引擎（`engine_170.py`），禁止把本地特殊规则当 Cost Review 实现；修正库存模型/核心验收标题和阶段编号；不可破坏规则限定为组合代理模型；审计脚本 next_actions 指向 4B 成本覆盖；missing-products 补充已有独立普通 `PK#` 的评估路由；CONCEPTS 引擎路径修正为完整 `tongtool_order_cost/tongtool_order_cost/engine_170.py`，扣减规则明确仅组合代理适用。
+- **更新**: `conventions/sellfox-cover-shared-inventory-transition.md` — `PK#` 组合从永久/冻结模型降为并行期单一实物池下的推荐默认；补充独立普通商品、外部共享池分配器、重复 ATP 风险及一对多/多对一库存守恒。成本路线改为验证 FBM 订单采购成本导入覆盖，记录 `mergePurchaseCost`、调整单 API 与加工单写链缺口，沙盒拆为库存和成本两条。
+- **更新（早期阶段，已由上一条继续收敛）**: `conventions/sellfox-cover-shared-inventory-transition.md` — [#191](https://github.com/keyapi/fzh-data/pull/191) 在波兰 covers 确认之后：组合采购成本复选框只改商品主数据；子件 `KS` 仓 FIFO 仍不是皮壳部分成本；EN Tongtool Cost Review 按 `-Cover`/`-Foam`/`-1`/`-2` 与交付形态切片，赛狐无对等定制；当时先暂停新测试单，后续改为可用已有皮壳 FBM 订单验证成本覆盖。
+
+## 2026-08-20
+- **新增**: `conventions/sellfox-cover-shared-inventory-transition.md` — 固化三角类在通途/赛狐并行期以 `KS` 普通商品承接库存、`PK# -> KS x1` 组合商品承接皮壳 Listing 的共享库存代理；明确不是 EN Product Bundle/BOM，加工商品留待通途退役后评估，并定义单 SKU 沙盒三项验收。
+- **新增**: `sellfox_cover_inventory/` 与 `.agents/skills/sellfox-cover-inventory/` — OKF bundle、Handoff、只读审计脚本及触发路由。
+- **更新**: `conventions/sellfox-cover-shared-inventory-transition.md` — 美中皮壳仓 vs DANEEY 主仓；FBA/退货审计 blocked；missing-products 禁止的是有库存 `PK#` 普通商品。
+- **更新**: 用户确认赛狐 `POLAND` 对应通途 covers 仓、不对应 `FZHPoland-finished`；只读审计仅对波兰成品仓名 `cautions`。
+- **新增**: `conventions/erpnext-product-cover-variant-pairing.md` — 三角靠枕/无扣成品↔皮壳 suffix 审计、一键配套复制而非笛卡尔、独立 PK# 须重建（CannotChangeConstantError）、cover-only 176/27 暂缓。
+- **更新**: `conventions/erpnext-item-variant-creation-convention.md` — 独立皮壳禁止 PUT `variant_of`，改为无库存重建。
 
 ## 2026-08-19
 - **新增**: `workflow-issues/tongtu-warehouse-rename-reconciliation.md` — 通途自发货仓库改名（美东-/美中-/波兰- 前缀）后的三处对账登记：通途清单 → 生产 ERPNext `Tongtu Shipping Warehouse`（新建照抄分公司成本列）→ 财务共享表「订单发货仓库对应成本来源」（参考旧名行、美东/波兰退货仓按主仓口径推断并确认）。含凭证在父仓库/worktree、uv、控制台编码、dry-run 等经验教训。

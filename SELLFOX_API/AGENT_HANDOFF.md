@@ -9,6 +9,8 @@
 
 **组合商品/EN 套件**不走文档下载脚本，走 `sellfox_combo_ops.py` + Skill `sellfox-combo-create`。分层见下文 **「EN 套件 / 赛狐组合商品（热区）」**；稳定命令/硬规则 → [docs/reference/combo-ops.md](docs/reference/combo-ops.md)。
 
+**三角类皮壳 listing / 赛狐皮壳商品** 是另一条线，不等同 EN `TJ#` 套件：先读 [sellfox-cover-shared-inventory-transition.md](../docs/solutions/conventions/sellfox-cover-shared-inventory-transition.md)、[cover-combo-ops.md](docs/reference/cover-combo-ops.md) 和 Skill `sellfox-cover-inventory`。`KS0001` / `KS0248` 的 `PK# -> KS x1` 组合已在生产建完；不要用 `sync-combos` 扫 `PK#`，不要默认启用加工商品。库存扣减沙盒与写配对仍须用户另批。
+
 ## EN 套件 / 赛狐组合商品（热区）
 
 > **会变的内容放这里**（冻结对象、读哪、接手顺序）。稳定操作手册 → [combo-ops.md](docs/reference/combo-ops.md)（OKF Reference）。
@@ -43,6 +45,7 @@
 | 弧形流苏沙发 1 个组合（`TJ#KS0402x1-001`） | **已创建并回读**（2026-08-21） | 单件整沙发组合，不要拆模块重建 |
 | 逗号组合沙发 2 个组合（`TJ#KS0369x1_KS0378x1_KS0379x1-001/002`） | **已创建并回读**（2026-08-22） | 不要重复创建；三模块组成规则见批量文档 |
 | 三角有扣套装 13 个组合（`TJ#KS0001x1_KS0260x1-001~003`、`x2-001~010`） | **已创建并回读**（2026-08-22） | 不要重复创建；138/圆枕近似规则见批量文档 |
+| KS0001 / KS0248 皮壳组合代理（`PK#KS…` → 成品 `KS ×1`） | **已创建**（2026-08-21，线上 957 个 `isGroup=1`） | 不要再全量 `cover_combo_ops apply`；不要 `sync-combos`。写配对须另批 |
 
 ### 读哪（热 → 冷）
 
@@ -63,6 +66,9 @@
 | 三模块组合（逗号组合沙发 2 个） | [comma-sofa-combo-batch-staging.md](../docs/solutions/workflow-issues/comma-sofa-combo-batch-staging.md) |
 | 三角靠枕+圆枕套装（三角有扣 13 个） | [triangle-set-combo-batch-staging.md](../docs/solutions/workflow-issues/triangle-set-combo-batch-staging.md) |
 | 领域词汇（TJ#、套件#） | 根 [CONCEPTS.md](../CONCEPTS.md) |
+| 三角皮壳 PK# 组合代理（不是套件） | [cover-combo-ops.md](docs/reference/cover-combo-ops.md) |
+| 皮壳组合创建踩坑与生产计数 | [sellfox-cover-combo-create-ops.md](../docs/solutions/workflow-issues/sellfox-cover-combo-create-ops.md) |
+| 领域词汇（TJ#、套件#、皮壳共享库存代理） | 根 [CONCEPTS.md](../CONCEPTS.md) |
 | 模块变更历史 | [docs/log.md](docs/log.md) |
 | Skill 触发词与三步概要 | `.agents/skills/sellfox-combo-create/SKILL.md` |
 | 改脚本、开 PR | [CONTRIBUTING.md](../CONTRIBUTING.md) |

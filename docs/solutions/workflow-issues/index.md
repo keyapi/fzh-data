@@ -9,6 +9,7 @@ tags: [workflow-issues, index]
 
 | 文档 | 说明 |
 |------|------|
+| [sellfox-cover-combo-create-ops.md](sellfox-cover-combo-create-ops.md) | 三角皮壳 PK# 组合代理批量创建（不是 EN 套件） |
 | [soft-wall-combo-batch-staging.md](soft-wall-combo-batch-staging.md) | 软包墙围 EN 套件/赛狐组合商品批量分阶段创建 |
 | [zipper-combo-batch-staging.md](zipper-combo-batch-staging.md) | 拉链款无捆绑SKU 合成客户物料号并批量创建组合 |
 | [flex-headboard-combo-batch-staging.md](flex-headboard-combo-batch-staging.md) | 灵活拼接床头板单变体多数量档批量创建组合 |

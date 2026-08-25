@@ -120,6 +120,10 @@ An Item with `has_variants=1` that defines the attribute set; concrete SKUs are 
 ### 配套物料 (Supporting Items)
 The semi-finished/auxiliary items generated from a product template via the「一键创建配套物料及变体」button (Client Script → `key_test.add_item_semi.create_supporting_items_and_variants`). 9 types: 皮壳# (same attrs as product), 内胆# (product size + inner fabric/color), 绍兴包装皮壳#/成品#/半成品# (size only), 波兰PL/美东USNJ/美中USTX包装成品# (size only), 重量模板# (fabric+size, no color). Not every SPU uses all 9.
 
+The button copies **existing product variants** onto supporting templates. It is not a cartesian product of every attribute value. Extra cover SKUs with no matching finished-good variant are leftovers from other generation paths, not the one-click workflow.
+
+皮壳 SKU 必须是 `PK#{SPU}` 模板的变体（`variant_of` 加上与成品相同的 attributes）。`variant_of` is set once at insert; a standalone cover cannot be attached later and must be recreated.
+
 ### 产品成品登记 (Product-Finished-Good Registration)
 三方库存主线中的映射规则：有库存通途完整 SKU（包括 `-Cover`/`-Foam`）必须作为 `customer_items.ref_code` 至少存在于一个 EN `KS` 产品成品变体。`PK#` 皮壳和 `HM1510` 海绵的登记不能替代它，因为 EN 销售订单 Excel 先用通途 SKU 找产品物料，再由交付形态列决定皮壳、成品或半成品的实际处理。
 
@@ -135,16 +139,39 @@ ERPNext 用原生 Product Bundle 表示组合销售对象；work_order_task 扩�
 完整通途SKU 必须作为客户物料号登记到上层 Item `customer_items.ref_code`（客户组默认美国公司）；同一 SPU 同数量下不同面料/颜色/尺寸变体通过 `-001/-002/...` 序号区分。
 
 ### 套件# 分类 / 赛狐组合 SKU
-赛狐镜像 EN 的 `套件#` 一级分类（2026-08-11 已建，`fullCid=428697-`）。组合 SKU 在赛狐用 `isGroup=1` + `childSkus` 表示；创建时必须带上底层商品的 `childId`、`sku`、`num`。赛狐组合 SKU、EN Product Bundle、上层 Item 三者编码和名称必须一致。日常对账用 `sellfox_combo_ops.py sync-combos`，不要手写 REST 或临时编号。
+赛狐镜像 EN 的 `套件#` 一级分类（2026-08-11 已建，`fullCid=428697-`）。组合 SKU 在赛狐用 `isGroup=1` + `childSkus` 表示；创建时必须带上底层商品的 `childId`、`sku`、`num`。**TJ# / Product Bundle 镜像**要求赛狐组合 SKU、EN Product Bundle、上层 Item 三者编码和名称必须一致，日常对账用 `sellfox_combo_ops.py sync-combos`，不要手写 REST 或临时编号。三角类 `PK# -> KS x1` 是销售库存代理，不属于 `套件#`，不得进入该同步链；见「皮壳共享库存代理」。
 通途客户物料号匹配按大小写不敏感处理；批量场景可先生成“底层物料 × 数量档”全量计划，再按阶段执行并记录进度。
 登记表整批为“无捆绑SKU”时，可按 `基码-EN物料码-Npcs` 合成唯一客户物料号并提前登记，基码来源（直接/-Cover去尾/同款借用）写入阶段记录备注。
+
+### 皮壳共享库存代理（赛狐组合商品）
+三角类皮壳 Listing 在通途/赛狐并行期、现场只有一个未拆分实物池时的销售层默认关系：赛狐 `KS` 是有库存普通商品，`PK#` 是 `isGroup=1` 的无独立库存组合商品，唯一子项为 `KS x1`。它让成品与皮壳 Listing 扣同一个**用户确认的**分公司仓库存池，但不表达物理组成、生产 BOM 或 EN Product Bundle，不属于 `套件#`，也不得进入 `TJ#` 同步链。运营在赛狐按**组合商品**、SKU `PK#` 查找；它们不会出现在「普通商品」筛选里，也不要用商品名称「皮壳#」当普通商品搜索词。`PK#` 并非永久必须为组合商品；只有仓库分别盘点皮壳/成品并记录转换时，独立普通库存才成立。美中通途另有皮壳仓库，不得默认把 DANEEY 主仓当共享池。赛狐 `POLAND` 对应通途 covers 仓，不对应 `FZHPoland-finished`。
+
+组合代理只共享数量。赛狐「采购成本」至少三层（商品主数据绍兴发货、期初仓+SKU 尾程前、备货单指定采购单价+头程），与 EN Tongtool Cost Review 按通途后缀和交付形态切的局部成本不是同一件事。子件仓 FIFO 被订单吃到，对皮壳 Listing 仍不算利润通过。
+
+### 库存重复承诺（Duplicate ATP）
+同一物理池的数量被完整写给多个独立销售 SKU，导致系统可售量总和大于实物。例如通途 `TT123=100` 同时写成赛狐 `KS=100`、`PK#=100`，会暴露 200 件可售量。一对多映射不能直接复制数量；必须只选一个持有池、守恒拆分、记录身份转换，或由外部共享池分配器计算 ATP。
+
+### 赛狐订单成本覆盖层
+用 EN 订单成本口径（Cost Review 与特殊规则分开计算，不得混用）在订单层计算皮壳等交付形态的产品成本，再通过赛狐「导入 FBM 采购成本」覆盖原生商品/FIFO 成本。FBM 智能推荐优先采用导入采购成本；订单 API 的 `mergePurchaseCost` 可用于回读导入、手改和退款成本的合并值。公开 OpenAPI 暂未发现写端点；FBA 发货单创建里的「单位采购成本（导入）」是头程发货单字段，不是 FBM 订单成本覆盖。当前稳定入口是 Excel/UI，自动化应先生成模板，再评估 Playwright。
+
+### 赛狐加工 SKU
+赛狐商品类型 `isGroup=2`。加工 SKU 有自身库存，支持 `needAssembleProcess`、`processCost` 和 `childSkus`，库存流水里有加工单/拆分单事件。取消“开启加工过程”只缩短状态流，不等于无库存别名。适合未来赛狐接管库存且需要 `PK#` 独立库存时评估；当前通途/赛狐并行阶段不默认启用。
+
+### 库存事实源（Inventory Source of Truth）
+多个系统都展示库存时，被选为校准基准的系统。当前通途/赛狐并行期，三角类分公司普通仓以通途为事实源，定期只校准赛狐底层 `KS`。同步必须处理“赛狐订单已扣、通途尚未标记发货”的时间差，避免旧快照把库存加回。FBA、退货仓和不良品仓不因 SKU 相同自动加入共享池。库存事实源不等于利润事实源：皮壳 Listing 的利润仍以 EN Tongtool Cost Review 为准。
 
 ### 在线产品配对 vs 订单包裹配对
 在线产品配对（`matchByMsku`/`matchByAsin`）决定未来订单 MSKU 映射，可用正确组合 SKU 覆盖；订单包裹配对（`updateMatch`）只改存在包裹的明细，且已发货包裹会被赛狐拒绝（`已发货状态，不能修改商品配对`）。
 ## 通途订单成本核算
 
+### Tongtool Cost Review
+EN（测试与生产）侧的订单成本核算，用户确认依据通途完整 SKU 后缀（至少 `-Cover`、`-Foam`、`-1`、`-2`）和销售订单「皮壳/成品/半成品」交付形态，从 BOM 选**局部**成本。完整选路源码不在本仓库，Agent 不得用本地文件杜撰公式。赛狐组合商品扣子件批次不能复现这套逻辑。
+
+### 特殊规则 1.7.0 引擎（engine_170.py）
+本仓库 `tongtool_order_cost/tongtool_order_cost/engine_170.py` 可验证会重写皮壳/产品、绍兴加工、国外二次加工、头程、海外仓和尾程等分量，再重算产品成本、订单总成本与利润。它**不是** Tongtool Cost Review，而是本地对共享 Google Sheet Jeck 规则的落地；不能拿它当 Cost Review 的实现，也不能用它解释赛狐原生成本。
+
 ### 特殊规则（订单改销售额成本）
-运营在共享 Google Sheet 里按通途 SKU 改订单销售额或成本科目的规则。当前 notebook 1.7.0 读「和财务部共享」里的 Jeck 工作表。一行里系数模式与参考值模式不能共存；参考值按收款币种乘汇率再乘发货数量写入目标列。
+运营在共享 Google Sheet 里按通途 SKU 改订单销售额或成本科目的规则。当前 notebook 1.7.0 读「和财务部共享」里的 Jeck 工作表。一行里系数模式与参考值模式不能共存；参考值按收款币种乘汇率再乘发货数量写入目标列。本地落地见「特殊规则 1.7.0 引擎（engine_170.py）」，与 EN Tongtool Cost Review 是两套东西。
 
 ### 通途主档 SKU 改名
 通途允许修改货品主档上的 SKU 字符串。改名后，历史订单导出仍保留导出当时的名字，而规则表通常已是新名。精确匹配管道必须改订单侧旧名去对齐新名，而不是把规则改回旧名。
@@ -192,6 +219,7 @@ A webhook-based DingTalk group messaging channel used by AI agents (WorkBuddy, C
 - "'五桶' had been used as if it meant IvyeaOps 五杠杆 — they are distinct (search-term labels vs optimizer action candidates)."
 - "Amazon Auto/product/category reports often put ASINs in the customer search-term column — that is real report data, not a mapping bug; keyword 收割 must not treat those strings as exact keywords (filter deferred as of 2026-07-28)."
 - "通途主档 SKU 改名后的旧名，与规则笔误（例如 Foam FBA BLACK-97），不是同一类问题；像旧名的字符串要先查主档。"
+- "赛狐「采购成本」曾被用来同时指商品主数据绍兴发货、期初仓+SKU 尾程前、备货单指定采购单价+头程；三者不可互换，也都不等于 EN Tongtool Cost Review 的皮壳切片。"
 
 ## 平台账期对账
 

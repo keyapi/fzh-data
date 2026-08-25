@@ -9,6 +9,10 @@ timestamp: 2026-07-02
 
 # 变更日志
 
+## 2026-08-24
+
+- **变更描述（皮壳 PK# 组合代理落地）**：新增 `cover_combo_ops.py` / `cover_combo_plan.py`（plan/status/apply/pairing-candidates）；生产已建 `KS0001`/`KS0248` 共 957 个 `isGroup=1` 组合。操作手册 [cover-combo-ops.md](reference/cover-combo-ops.md)。禁止用 `sync-combos` 建这些 SKU；配对只出候选。
+
 ## 2026-08-21
 
 - **变更描述（软包墙围批量分阶段）**：新增 `soft_wall_lookup.py`（EN/赛狐只读快照）、`soft_wall_stage.py`（plan/preview/status/record/apply）；`sellfox_combo_ops.py` 新增 `register-customer-code`；`combo_en.py` 增加客户物料号 GET/PUT；`repo_root.py` 支持根 `.env` 含 EN 凭证。完成 6 底层 × 4 数量 = 24 个 EN 套件/赛狐组合，阶段记录 xlsx 24/24。
@@ -25,6 +29,7 @@ timestamp: 2026-07-02
 
 ## 2026-08-20
 
+- **变更描述（三角皮壳共享库存代理）**：新增三角类皮壳 Listing 的赛狐建模交接提示；该场景不等同 EN `TJ#` 套件。禁止的是把 `PK#` 建成有库存普通商品；组合代理走 `sellfox-cover-inventory`。美中主仓不默认当皮壳共享池。
 - **变更描述（限流策略精修）**：`RateLimitPolicy` 校验 env 边界（max_retries≥1、等待非负）；重试耗尽前不再多 sleep 一次；直连模式采集 HTTP Retry-After。
 - **变更描述（#188 限流与浅路径）**：`repo_root.find_main_root` 安全遍历祖先目录；`client.py` 统一重试赛狐 `40019` 与代理 Rate limited（Retry-After / 默认 10s+jitter）；`sync-combos --apply` 缓存分类与底层 childId、增量 checkpoint；66 项单测。
 - **变更描述（hardening #187）**：dry-run 名称不一致 → `mismatch`；组合/底层同 SKU 多条（含跨页 pageList）→ `blocked_duplicate`；`--child` 与 `en_create_payload` 拒绝非正整数。
