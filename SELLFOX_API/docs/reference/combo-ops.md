@@ -13,6 +13,7 @@ description: 稳定操作参考：默认命令、硬规则、对账 action、报
 
 > **OKF Reference（稳定，随脚本变）。** 当前冻结对象（KS0443 / FXLSSF3030 等）→ [AGENT_HANDOFF.md](../../AGENT_HANDOFF.md)「EN 套件 / 赛狐组合商品（热区）」。
 > 背景与配对 API → [sellfox-combo-sku-create-pairing-workflow.md](../../../docs/solutions/conventions/sellfox-combo-sku-create-pairing-workflow.md)。
+> **皮壳库存代理 `PK# -> KS x1` 不走本手册。** 用 [cover-combo-ops.md](cover-combo-ops.md)，禁止 `sync-combos --like "PK#%"`。
 
 脚本：`SELLFOX_API/sellfox_combo_ops.py`；对账 `combo_reconcile.py`；EN REST `combo_en.py`。
 
@@ -98,8 +99,8 @@ uv run --project .. python sellfox_combo_ops.py <command>
 
 ## 限流与续跑（Issue #188）
 
-- 赛狐 envelope `code=40019` 与代理 `Rate limited` 由 `client.py` **统一自动重试**（默认约 10s + jitter；优先 `Retry-After`）。
-- 环境变量（可选）：`SELLFOX_RATE_LIMIT_MAX_RETRIES`（默认 6，最小 1）、`SELLFOX_RATE_LIMIT_WAIT_S`（默认 10，非负）、`SELLFOX_RATE_LIMIT_JITTER_S`（默认 0.5，非负）。非法值回退默认。
+- 赛狐 envelope `code=40019` 与代理 `Rate limited` 由 `client.py` **统一自动重试**。代理默认 **2 秒 1 次**；重试等待优先 `Retry-After`，上限 **10 秒**。
+- 环境变量（可选）：`SELLFOX_RATE_LIMIT_MAX_RETRIES`（默认 6）、`SELLFOX_RATE_LIMIT_WAIT_S`（默认 2）、`SELLFOX_RATE_LIMIT_MAX_WAIT_S`（默认 10）、`SELLFOX_RATE_LIMIT_MIN_INTERVAL_S`（默认 2）、`SELLFOX_RATE_LIMIT_JITTER_S`（默认 0.3）。非法值回退默认。
 - **只重试明确限流**，不对创建/编辑的网络异常做泛化重试，避免重复写入。
 - `sync-combos --apply` 一次运行内**缓存分类**与**底层 childId 预查**；每条 create 前仍即时查重组合 SKU，create 后仍回读断言。
 - 中断后**同一 `--like`/`--sku` 范围重跑**：已完成项自然变 `ok`，只执行剩余 `create`/`set_category`。**不要**手工拼「剩余 SKU」或跳过查重。
@@ -146,6 +147,7 @@ uv run --project .. python sellfox_combo_ops.py <command>
 | 文件 | 职责 |
 |------|------|
 | `sellfox_combo_ops.py` | CLI：`sync-combos`、`en-preview`、`en-create`、`register-customer-code`、`create`、`set-category` |
+| `cover_combo_ops.py` | 皮壳 PK# 库存代理（**不是**本手册的 EN 套件路径） |
 | `combo_reconcile.py` | 纯对账：`plan_sync`、action 枚举、`HISTORICAL_SKIP_SKUS` |
 | `combo_en.py` | EN REST：items-only 创建、预览、拉 Bundle |
 | `client.py` | 赛狐代理/直连 API；40019 与代理 Rate limited 统一重试 |

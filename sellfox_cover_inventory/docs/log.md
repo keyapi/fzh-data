@@ -1,0 +1,26 @@
+---
+okf: v0.1
+type: Log
+title: 赛狐皮壳共享库存代理 — 变更日志
+---
+
+# 变更日志
+
+## 2026-08-24
+
+- **组合落地**: 生产已创建 KS0001/KS0248 的 `PK#` 组合代理（957 个 `isGroup=1`）。操作改走 `SELLFOX_API/cover_combo_ops.py`；只读配对候选已交给业务，未写 `matchByMsku`。
+
+## 2026-08-21
+
+- **评审修正**: Cursor 审查后拆分 EN Tongtool Cost Review 与特殊规则 1.7.0 引擎（`engine_170.py`），审计脚本 `next_actions` 指向 4B 成本覆盖，missing-products 路由补充已有独立普通 `PK#` 的评估边界；引擎路径补齐为 `tongtool_order_cost/tongtool_order_cost/engine_170.py`，扣减规则明确仅组合代理适用。
+- **生命周期决策**: `PK#` 组合商品从“冻结模型”修正为通途并行、单一实物池条件下的推荐默认；独立普通/多属性商品仅在仓库分开盘点并记录转换时成立。
+- **库存守恒**: 禁止把同一通途数量完整复制到赛狐普通 `KS` 与普通 `PK#`；一对多目标 ATP 总和不得超过物理池，多对一先确定聚合与归属。
+- **成本覆盖**: 原生组合/FIFO 不再作为利润放行目标；新增 FBM 导入采购成本优先级、`mergePurchaseCost` 回读和模板/UI/Playwright 自动化边界。
+- **API 边界**: 调整单支持数量、灰度 SKU 调整和批量确认；加工单公开镜像没有完整创建/分配/完成写链。沙盒拆成库存扣减与订单成本覆盖两条。
+
+## 2026-08-20
+
+- **初始化**: 建立 OKF bundle、Agent Handoff、运行说明及单 SKU 只读审计脚本。
+- **当时阶段结论（已由 2026-08-21 更新收敛）**: 通途并行期使用 `KS` 普通商品库存池 + `PK# -> KS x1` 组合商品代理；后续讨论明确它是单一实物池条件下的推荐默认，不是永久冻结模型。
+- **审计硬化**: FBA/退货/不良仓 blocked；DANEEY 主仓 `cautions`；赛狐 `POLAND` 对应通途 covers（成品仓名才 caution）；`isGroup` 接受 `true`；加工商品计数用 `totalSize`。missing-products 路由改为禁止有库存 `PK#` 普通商品，组合代理走本模块。
+- **成本边界（历史阶段）**: 组合采购成本复选框与子件仓 FIFO 都不能替代 EN Tongtool Cost Review；`--live` 不查 Listing、不验收利润。2026-08-21 后续将成本验证改为优先使用已有皮壳 FBM 订单测试导入覆盖。

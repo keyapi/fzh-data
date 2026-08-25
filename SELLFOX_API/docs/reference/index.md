@@ -11,3 +11,4 @@ timestamp: 2026-08-20
 | 标题 | 文件 |
 |------|------|
 | EN 套件 / 赛狐组合商品操作手册（CLI·硬规则·停手） | [combo-ops.md](combo-ops.md) |
+| 皮壳 PK# 组合代理操作手册 | [cover-combo-ops.md](cover-combo-ops.md) |

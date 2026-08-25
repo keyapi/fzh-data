@@ -3,8 +3,10 @@ name: missing-products
 description: >
   通途有库存 SKU 的 EN/ERPNext/赛狐三方一致性审计、客户物料号补登和赛狐多属性 SKU 补齐。
   当用户提到"缺失商品"、"missing_products"、"通途有库存"、"通途SKU未登记"、
-  "三方一致性"、"Cover"、"Foam"、"赛狐缺SKU"、"EN赛狐核对"或库存同步映射时触发。
-  不用于只计算采购成本、商品重尺或把 PK#/HM1510 配套物料直接创建为赛狐商品。
+  "三方一致性"、"Cover"、"Foam"、"赛狐缺SKU"、"EN赛狐核对"、库存同步映射、
+  "皮壳变体"、"成品缺皮壳"、"一键创建配套物料"时触发。
+  不用于只计算采购成本、商品重尺。
+  不把 PK#/HM1510 建成赛狐**有库存普通商品**；三角皮壳 Listing 的共享库存代理走 sellfox-cover-inventory，已有独立普通 PK# 的评估也走该模块。
 ---
 
 # 通途有库存 SKU 三方补齐
@@ -16,6 +18,8 @@ description: >
 3. `missing_products/docs/lessons/2026-08-11-tongtu-en-sellfox-mainline-completion.md` — 完整复盘、失败模式和防护。
 4. 用户提到 Amazon 在线商品、MSKU、配对建议、未配对或别名匹配时，先读 `amazon_pairing/AGENT_HANDOFF.md` 和 `docs/solutions/conventions/amazon-online-product-pairing-candidate-workflow.md`。证据传播分支再读 `amazon_pairing/docs/reference/` 与 `amazon_pairing/knowledge/golden-cases.yaml`。PR 173（LTR）与 `feature/amazon-pairing-evidence` 是 sibling：本轮高可信用当前已配对唯一目标，不重训 LTR，不调用配对写接口。
 5. 需要新增 EN 变体时再读 `.agents/skills/erpnext-item-create/SKILL.md` 和 `docs/solutions/conventions/erpnext-item-variant-creation-convention.md`。
+5b. 成品↔皮壳 1:1 审计、独立 `PK#` 重建、cover-only 暂缓：`docs/solutions/conventions/erpnext-product-cover-variant-pairing.md`；脚本 `missing_products/fix_missing_cover_variants.py`（默认 dry-run）。
+5c. 赛狐皮壳 Listing / `PK#` 组合代理 / 通途并行期共享库存：改走 `.agents/skills/sellfox-cover-inventory/SKILL.md`，不要在本流程创建赛狐 `PK#` 普通商品。
 6. 需要赛狐 API 时再读 `.agents/skills/sellfox-api/SKILL.md` 和 `.agents/skills/multi-attr/SKILL.md`。
 
 不要根据旧 xlsx、单个 BOM 报表列、SPU 名称或记忆直接下结论；先重新取数。
@@ -26,7 +30,7 @@ description: >
 - 去尾缀后的基码只能找候选，绝不能把“仅基码匹配”报告为“已登记”。
 - `PK#` 皮壳、`HM1510` 海绵、BOM 组件或辅料上的客户码不能替代产品成品登记。
 - 原因：EN 销售订单 Excel 先用通途 SKU 找到 EN 产品，再由“皮壳/成品/半成品”列决定交付形态。
-- 赛狐对象是映射后的 EN 产品 `item_code`；不要用通途 `-Cover/-Foam` 原码、`PK#` 或 `HM1510` 创建赛狐商品。
+- 赛狐三方主线对象仍是 EN 产品 `item_code`（`KS` 普通商品）。不要用通途 `-Cover/-Foam` 原码、`HM1510` 或把 `PK#` 建成**有库存普通商品**。该禁止针对本流程的创建主线；三角类确有皮壳 Listing 时的 `PK# -> KS x1` 组合代理不走本流程，见 `sellfox-cover-inventory`。若赛狐已有独立普通 `PK#` 且业务确认独立数量池，也由 `sellfox-cover-inventory` 评估，不在本流程创建或自动改类型。
 - 一个通途码已正确挂在多个 EN 产品时，保留全部关系并报告；本流程不清理历史一对多。
 - 不修改既有赛狐 SKU 的在售/停售状态；赛狐属性缺失时先生成导入 Excel，等用户确认导入成功后才 API 创建 SKU。
 - Amazon 配对属于独立的在线商品机制；先输出并审阅候选，只有用户批准明确的 MSKU/店铺/赛狐 SKU 范围后才可导入或调用写接口。

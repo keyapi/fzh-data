@@ -6,6 +6,7 @@ description: ERPNext 从底层值表到物料属性、模板物料、变体、�
 tags: [erpnext, item, variant, item-attribute, supporting-items, convention, 物料, 变体, 配套物料]
 module: en_item_create
 timestamp: 2026-08-07
+last_updated: 2026-08-20
 ---
 
 # EN 物料/变体创建惯例
@@ -89,19 +90,29 @@ POST /api/resource/Item
 }
 ```
 
-### 3. 创建皮壳 item
+### 3. 创建皮壳变体（必须挂皮壳模板，禁止独立物料）
 ```http
 POST /api/resource/Item
 {
   "item_code": "PK#KS0001-CMM-153-PURPLE",
   "item_name": "皮壳#三角靠枕-纯棉麻-153-紫色",
   "item_group": "皮壳#三角靠枕",
+  "variant_of": "PK#KS0001",
+  "has_variants": 0,
   "stock_uom": "个",
   "is_stock_item": 1,
   "include_item_in_manufacturing": 1,
-  "is_sales_item": 0
+  "is_sales_item": 1,
+  "attributes": [
+    {"attribute": "三角靠枕面料", "attribute_value": "纯棉麻"},
+    {"attribute": "三角靠枕尺寸", "attribute_value": "153"},
+    {"attribute": "三角靠枕颜色", "attribute_value": "紫色"}
+  ]
 }
 ```
+> **反例（2026-08-07）**：补 `KS0001-CMM-153-PURPLE` 时 REST 建了无 `variant_of`、无 `attributes` 的独立皮壳 `PK#KS0001-CMM-153-PURPLE`。产品要求多规格：成品挂 `KS0001`，皮壳挂 `PK#KS0001`，属性从成品变体复制。
+>
+> **不要 PUT `variant_of`**。ERPNext 把它当 set-once 常量，PUT 会 `CannotChangeConstantError`。无库存时：取消/删除相关 BOM → 删除独立 Item → 按上列 payload POST 成 `PK#{SPU}` 变体 → 重建 BOM。脚本：`missing_products/fix_missing_cover_variants.py`。审计与 cover-only 暂缓见 [成品与皮壳 1:1 配对](erpnext-product-cover-variant-pairing.md)。
 
 ### 4. 创建皮壳 BOM（复制同尺寸变体，换面料）
 ```http
@@ -179,7 +190,9 @@ POST /api/resource/Item
 4. 弹窗勾选 9 类配套物料
 5. 调 `key_test.add_item_semi.create_supporting_items_and_variants`，参数：`item_group`、`item_template_name`、`custom_model_id`、`attributes`(JSON)、`prefixes`(JSON)
 
-> 服务器端函数在 `key_test` app（`add_item_semi.py` / `update_variant_valuation_rate.py`）。生产服务器 SSH 不可达（IP 白名单），无法直接读源码；本逻辑由 Client Script + 手动流程推断。
+> 服务器端函数在 `key_test` app（`add_item_semi.py`）。生产 SSH 不可达。Client Script 只传**属性名列表**和勾选的配套前缀，不传具体 SKU。属性全组合笛卡尔积对 KS0001 约 2 万条，而皮壳变体只有 987，因此一键创建不是「属性值全展开」，而是按产品模板已有变体去**复制**配套变体（测试环境另有停用脚本「物料 检查新建 配套物料组 物料模板 复制变体」）。
+>
+> 「只有皮壳没有成品」因此不是一键按钮的正常产物：多半是后来有人在 `PK#` 模板上用系统自带「生成变体」多做了组合、或成品变体被删而皮壳留下。本次**不**为这 176/27 条补成品。补成品缺皮壳用 `missing_products/fix_missing_cover_variants.py`。
 
 ## 已知坑
 
@@ -192,6 +205,7 @@ POST /api/resource/Item
 7. **客户码全局唯一**：一个客户物料号只能登记在一个 EN 物料（自定义 app 校验「客户物料号已存在于其他物料」）。重建/移动时先移除旧物料上的客户码，再登记到新物料。
 8. **加属性值必须带 abbr**：ERPNext Server Script 校验 `abbr.lower()`，不带报 500。abbr 来自 All Fabric/All Color 的 `abbr`（如 荷兰绒=HLR, 咖啡色=COFFEE）。
 9. **变体命名规律**：`{模板}-{面料abbr}-{尺寸abbr}-{颜色abbr}`；尺寸 abbr 来自属性值（如 41cm=41, 80*80*18=80）。
+10. **配套物料禁止独立 SKU**：皮壳必须 `variant_of=PK#{SPU}` 且 `attributes` 与成品变体相同。2026-08-07 按本文件旧示例 POST 的 `PK#KS0001-CMM-153-PURPLE` 未挂模板。`variant_of` 创建后不可改，须重建而非 PUT。补缺口用 `missing_products/fix_missing_cover_variants.py`（默认 dry-run）。配对审计与 cover-only 暂缓见 [成品与皮壳 1:1 配对](erpnext-product-cover-variant-pairing.md)。
 
 ## When to Apply
 

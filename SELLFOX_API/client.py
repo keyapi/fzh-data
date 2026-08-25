@@ -32,17 +32,25 @@ SELLFOX_RATE_LIMIT_CODE = 40019
 
 @dataclass
 class RateLimitPolicy:
+    """Proxy pacing + retry. Vilavi Sellfox proxy ≈ 1 req / 2s; retries cap at 10s."""
+
     max_retries: int = 6
-    default_wait_s: float = 10.0
-    jitter_s: float = 0.5
+    default_wait_s: float = 2.0
+    max_wait_s: float = 10.0
+    jitter_s: float = 0.3
+    min_interval_s: float = 2.0
 
     def __post_init__(self) -> None:
         if self.max_retries < 1:
             self.max_retries = 6
         if not math.isfinite(self.default_wait_s) or self.default_wait_s < 0:
-            self.default_wait_s = 10.0
+            self.default_wait_s = 2.0
+        if not math.isfinite(self.max_wait_s) or self.max_wait_s < 0:
+            self.max_wait_s = 10.0
         if not math.isfinite(self.jitter_s) or self.jitter_s < 0:
             self.jitter_s = 0.0
+        if not math.isfinite(self.min_interval_s) or self.min_interval_s < 0:
+            self.min_interval_s = 2.0
 
     @classmethod
     def from_env(cls) -> "RateLimitPolicy":
@@ -63,8 +71,10 @@ class RateLimitPolicy:
 
         return cls(
             max_retries=_int("SELLFOX_RATE_LIMIT_MAX_RETRIES", 6),
-            default_wait_s=_float("SELLFOX_RATE_LIMIT_WAIT_S", 10.0),
-            jitter_s=_float("SELLFOX_RATE_LIMIT_JITTER_S", 0.5),
+            default_wait_s=_float("SELLFOX_RATE_LIMIT_WAIT_S", 2.0),
+            max_wait_s=_float("SELLFOX_RATE_LIMIT_MAX_WAIT_S", 10.0),
+            jitter_s=_float("SELLFOX_RATE_LIMIT_JITTER_S", 0.3),
+            min_interval_s=_float("SELLFOX_RATE_LIMIT_MIN_INTERVAL_S", 2.0),
         )
 
 
@@ -85,19 +95,47 @@ def parse_retry_after_seconds(
             )
         except ValueError:
             pass
-    if detail and "Retry after" in detail:
-        try:
-            return max(float(detail.split("Retry after")[-1].strip().rstrip("s")), 0.5)
-        except ValueError:
-            pass
+    if detail:
+        lowered = detail.lower()
+        marker = "retry after"
+        if marker in lowered:
+            try:
+                tail = detail[lowered.index(marker) + len(marker) :].strip().rstrip("s")
+                return max(float(tail), 0.5)
+            except ValueError:
+                pass
     return None
 
 
+def _looks_rate_limited_text(text: str | None) -> bool:
+    return isinstance(text, str) and "rate limited" in text.lower()
+
+
 def is_rate_limited_response(result: dict[str, Any]) -> bool:
-    detail = result.get("detail") if isinstance(result, dict) else None
-    if isinstance(detail, str) and "Rate limited" in detail:
+    if not isinstance(result, dict):
+        return False
+    if _looks_rate_limited_text(result.get("detail") if isinstance(result.get("detail"), str) else None):
+        return True
+    msg = result.get("msg")
+    if isinstance(msg, str) and _looks_rate_limited_text(msg):
+        return True
+    if isinstance(msg, dict) and _looks_rate_limited_text(
+        msg.get("detail") if isinstance(msg.get("detail"), str) else None
+    ):
         return True
     return result.get("code") == SELLFOX_RATE_LIMIT_CODE
+
+
+def _rate_limit_detail_text(result: dict[str, Any]) -> str | None:
+    detail = result.get("detail")
+    if isinstance(detail, str):
+        return detail
+    msg = result.get("msg")
+    if isinstance(msg, str):
+        return msg
+    if isinstance(msg, dict) and isinstance(msg.get("detail"), str):
+        return str(msg.get("detail"))
+    return None
 
 
 def rate_limit_sleep_seconds(
@@ -107,11 +145,12 @@ def rate_limit_sleep_seconds(
     policy: RateLimitPolicy,
     retry_after_header: str | None = None,
 ) -> float:
-    detail = result.get("detail") if isinstance(result.get("detail"), str) else None
+    detail = _rate_limit_detail_text(result)
     retry_after = parse_retry_after_seconds(detail=detail, header=retry_after_header)
-    if retry_after is not None:
-        return retry_after + random.uniform(0, policy.jitter_s)
-    return policy.default_wait_s + random.uniform(0, policy.jitter_s)
+    if retry_after is None:
+        retry_after = policy.default_wait_s
+    wait = min(float(retry_after), policy.max_wait_s) + random.uniform(0, policy.jitter_s)
+    return wait
 
 
 def load_env(paths: List[Path]) -> Dict[str, str]:
@@ -195,6 +234,19 @@ class SellfoxClient:
         self.config = config
         self.access_token: Optional[str] = None
         self.rate_limit = rate_limit or RateLimitPolicy.from_env()
+        self._last_request_mono: float = 0.0
+
+    def _pace(self) -> None:
+        """Enforce proxy min interval (default 2s) between outbound POSTs."""
+        interval = self.rate_limit.min_interval_s
+        if interval <= 0:
+            return
+        if self._last_request_mono <= 0:
+            return
+        elapsed = time.monotonic() - self._last_request_mono
+        remain = interval - elapsed
+        if remain > 0:
+            time.sleep(remain)
 
     def authenticate(self) -> Optional[str]:
         """Direct mode only. Proxy mode is a no-op (Bearer key is enough)."""
@@ -305,7 +357,9 @@ class SellfoxClient:
     ) -> Any:
         last_err: Exception | None = None
         for attempt in range(self.rate_limit.max_retries):
+            self._pace()
             outcome = once()
+            self._last_request_mono = time.monotonic()
             if isinstance(outcome, dict):
                 result, retry_after_header = outcome, None
             else:
