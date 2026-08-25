@@ -28,6 +28,14 @@ metadata:
 4. `docs/solutions/workflow-issues/soft-wall-combo-batch-staging.md` — 批量分阶段创建（软包墙围 6×4 等登记表场景）。
 5. `docs/solutions/workflow-issues/zipper-combo-batch-staging.md` — 无捆绑SKU 时合成唯一客户物料号（`基码-EN物料码-Npcs`）。
 6. 缺底层 SKU → `missing-products` / `multi-attr`；赛狐连通性 → `sellfox-api`。
+7. `docs/solutions/workflow-issues/flex-headboard-combo-batch-staging.md` — 单变体多数量档批量创建示例。
+8. `docs/solutions/workflow-issues/support-pad-combo-reconcile.md` — 存量 EN 套件补齐客户物料号与缺失赛狐组合。
+9. `docs/solutions/workflow-issues/combinable-sofa-combo-batch-staging.md` — 双子件组合合成通途SKU 批量创建。
+10. `docs/solutions/workflow-issues/deep-sofa-combo-batch-staging.md` — 同SPU双色组合批量创建。
+11. `docs/solutions/workflow-issues/retro-sofa-combo-batch-staging.md` — 四模块组合批量创建。
+12. `docs/solutions/workflow-issues/outdoor-pad-combo-batch-staging.md` — 套装组成需确认的四模块批量创建。
+13. `docs/solutions/workflow-issues/comma-sofa-combo-batch-staging.md` — 三模块组合无捆绑SKU 批量创建（逗号组合沙发）。
+14. `docs/solutions/workflow-issues/triangle-set-combo-batch-staging.md` — 三角靠枕+50cm圆枕套装映射与批量创建。
 7. 三角皮壳 `PK#` 组合代理 → `sellfox-cover-inventory` + `cover-combo-ops.md`，禁止对本手册 `sync-combos`。
 
 先跑脚本拿当前事实。不要凭聊天记忆、旧 Excel 或临时编号写 EN/赛狐。

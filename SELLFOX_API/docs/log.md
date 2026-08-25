@@ -17,6 +17,15 @@ timestamp: 2026-07-02
 
 - **变更描述（软包墙围批量分阶段）**：新增 `soft_wall_lookup.py`（EN/赛狐只读快照）、`soft_wall_stage.py`（plan/preview/status/record/apply）；`sellfox_combo_ops.py` 新增 `register-customer-code`；`combo_en.py` 增加客户物料号 GET/PUT；`repo_root.py` 支持根 `.env` 含 EN 凭证。完成 6 底层 × 4 数量 = 24 个 EN 套件/赛狐组合，阶段记录 xlsx 24/24。
 - **变更描述（拉链款无捆绑SKU 合成）**：`soft_wall_lookup.py` 支持 `--product`；新增 `zipper_stage.py`，按 `基码-EN物料码-Npcs` 合成唯一通途SKU，完成 40 个 EN 套件/赛狐组合，`sync-combos` `ok=40`。
+- **变更描述（灵活拼接床头板）**：新增 `flex_headboard_stage.py`，完成单变体 4 个数量档 EN 套件/赛狐组合，`sync-combos` `ok=4`。
+- **变更描述（沙发支撑垫存量补齐）**：新增 `support_pad_stage.py`；确认 EN 存量套件后补 3 个上层 Item 客户物料号，补建 2 个缺失赛狐组合，`sync-combos` `ok=3`。
+- **变更描述（可组合扶手沙发双子件）**：新增 `combinable_sofa_stage.py`，按 `基码x数量_基码x数量` 合成通途SKU，4 个组合全部创建并回读，`sync-combos` `ok=4`。
+- **变更描述（深卧单人沙发椅双色组合）**：新增 `deep_sofa_stage.py`；3 个双色组合全部创建并回读，`sync-combos` `ok=3`。`client.py` 支持代理嵌套 `detail` 限流识别与 Retry-after 解析。
+- **变更描述（复古造型大体量沙发四模块）**：新增 `retro_sofa_stage.py`；1 个四模块组合创建并回读，`sync-combos` `ok=1`。
+- **变更描述（户外托盘垫套装）**：新增 `outdoor_pad_stage.py`；6 个套装按用户确认组成创建并回读，`sync-combos` `ok=6`。
+- **变更描述（弧形流苏沙发单件）**：新增 `fringe_sofa_stage.py`；1 个单件整沙发组合创建并回读，`sync-combos` `ok=1`。
+- **变更描述（逗号组合沙发三模块）**：新增 `comma_sofa_stage.py`；2 个三模块组合创建并回读，`sync-combos` `ok=2`。
+- **变更描述（三角有扣套装）**：新增 `triangle_set_stage.py` / `triangle_set_apply.py`；13 个三角靠枕+50cm圆枕套装创建并回读，`sync-combos` `ok=13`。
 
 ## 2026-08-20
 

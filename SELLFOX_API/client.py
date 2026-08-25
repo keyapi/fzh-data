@@ -114,14 +114,7 @@ def _looks_rate_limited_text(text: str | None) -> bool:
 def is_rate_limited_response(result: dict[str, Any]) -> bool:
     if not isinstance(result, dict):
         return False
-    if _looks_rate_limited_text(result.get("detail") if isinstance(result.get("detail"), str) else None):
-        return True
-    msg = result.get("msg")
-    if isinstance(msg, str) and _looks_rate_limited_text(msg):
-        return True
-    if isinstance(msg, dict) and _looks_rate_limited_text(
-        msg.get("detail") if isinstance(msg.get("detail"), str) else None
-    ):
+    if _looks_rate_limited_text(_rate_limit_detail_text(result)):
         return True
     return result.get("code") == SELLFOX_RATE_LIMIT_CODE
 
@@ -130,6 +123,10 @@ def _rate_limit_detail_text(result: dict[str, Any]) -> str | None:
     detail = result.get("detail")
     if isinstance(detail, str):
         return detail
+    if isinstance(detail, dict):
+        nested = detail.get("detail")
+        if isinstance(nested, str):
+            return nested
     msg = result.get("msg")
     if isinstance(msg, str):
         return msg

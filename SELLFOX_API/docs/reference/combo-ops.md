@@ -156,6 +156,16 @@ uv run --project .. python sellfox_combo_ops.py <command>
 | `soft_wall_lookup.py` | 软包墙围 EN/赛狐只读快照 |
 | `soft_wall_stage.py` | 软包墙围登记表计划/预览/状态/结果追踪 |
 | `zipper_stage.py` | 拉链款无捆绑SKU 合成、计划/预览/状态/结果追踪 |
+| `flex_headboard_stage.py` | 灵活拼接床头板单变体多数量档计划/预览/状态/结果追踪 |
+| `support_pad_stage.py` | 沙发支撑垫存量套件阶段记录（复用 soft_wall_stage 框架） |
+| `combinable_sofa_stage.py` | 可组合扶手沙发双子件计划/状态/结果追踪 |
+| `deep_sofa_stage.py` | 深卧单人沙发椅双色组合计划/状态/结果追踪 |
+| `retro_sofa_stage.py` | 复古造型大体量沙发四模块计划/状态/结果追踪 |
+| `outdoor_pad_stage.py` | 户外托盘垫套装计划/状态/结果追踪 |
+| `fringe_sofa_stage.py` | 弧形流苏沙发单件整沙发组合计划/状态/结果追踪 |
+| `comma_sofa_stage.py` | 逗号组合沙发三模块组合计划/状态/结果追踪 |
+| `triangle_set_stage.py` | 三角有扣套装计划/状态/结果追踪 |
+| `triangle_set_apply.py` | 三角有扣套装批量执行（EN→客户码→赛狐回读） |
 | `tests/sellfox_api/test_combo_reconcile.py` | 对账逻辑单测 |
 | `tests/sellfox_api/test_client_rate_limit.py` | 限流重试单测 |
 | `tests/sellfox_api/test_repo_root.py` | 浅路径根目录查找单测 |

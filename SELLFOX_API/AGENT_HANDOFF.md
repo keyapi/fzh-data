@@ -36,6 +36,15 @@
 | KS0003 / KS0395 | **已关闭**（2026-08-20 用户确认无问题） | 不要纳入清理或审计待办 |
 | 软包墙围 24 个组合（`TJ#KS0211x4/6/9/12-001~006`） | **已创建并回读**（2026-08-21） | 不要重复创建；后续如需在线/订单配对再单独确认 |
 | 拉链款 40 个组合（`TJ#KS0340x2-001~010`、`x3-001~009`、`x4-001~009`、`TJ#KS0342x2/3/4-001~004`） | **已创建并回读**（2026-08-21） | 不要重复创建；合成通途SKU 规则见批量文档 |
+| 灵活拼接床头板 4 个组合（`TJ#KS0453x3/4/5/6-001`） | **已创建并回读**（2026-08-21） | 不要重复创建；阶段记录见对应 xlsx |
+| 沙发支撑垫 3 个组合（`TJ#KS0156x2-001`、`TJ#KS0156x3-001/002`） | **已补齐并回读**（2026-08-21） | EN 已存在，只补客户物料号与缺失赛狐组合 |
+| 可组合扶手沙发 4 个组合（`TJ#KS0245x2-001`、`TJ#KS0245x2_KS0246x1/2-001`、`TJ#KS0245x3_KS0246x1-001`） | **已创建并回读**（2026-08-21） | 不要重复创建；双子件合成SKU 规则见批量文档 |
+| 深卧单人沙发椅 3 个组合（`TJ#KS0483x1_KS0483x1-001/002/003`） | **已创建并回读**（2026-08-21） | 不要重复创建；双色组合规则见批量文档 |
+| 复古造型大体量沙发 1 个组合（`TJ#KS0387x1_KS0391x1_KS0392x1_KS0393x1-001`） | **已创建并回读**（2026-08-21） | 不要重复创建；四模块规则见批量文档 |
+| 户外托盘垫 6 个套装（`TJ#KS0459x1_KS0460x1_KS0461x1_KS0462x1-001~006`） | **已创建并回读**（2026-08-21） | 不要重复创建；组成按 120x60/120x80 确认 |
+| 弧形流苏沙发 1 个组合（`TJ#KS0402x1-001`） | **已创建并回读**（2026-08-21） | 单件整沙发组合，不要拆模块重建 |
+| 逗号组合沙发 2 个组合（`TJ#KS0369x1_KS0378x1_KS0379x1-001/002`） | **已创建并回读**（2026-08-22） | 不要重复创建；三模块组成规则见批量文档 |
+| 三角有扣套装 13 个组合（`TJ#KS0001x1_KS0260x1-001~003`、`x2-001~010`） | **已创建并回读**（2026-08-22） | 不要重复创建；138/圆枕近似规则见批量文档 |
 | KS0001 / KS0248 皮壳组合代理（`PK#KS…` → 成品 `KS ×1`） | **已创建**（2026-08-21，线上 957 个 `isGroup=1`） | 不要再全量 `cover_combo_ops apply`；不要 `sync-combos`。写配对须另批 |
 
 ### 读哪（热 → 冷）
@@ -47,6 +56,16 @@
 | 配对 API、Proxy 踩坑、KS0443 事故记录 | [sellfox-combo-sku-create-pairing-workflow.md](../docs/solutions/conventions/sellfox-combo-sku-create-pairing-workflow.md) |
 | 批量分阶段创建与阶段记录（软包墙围 6×4） | [soft-wall-combo-batch-staging.md](../docs/solutions/workflow-issues/soft-wall-combo-batch-staging.md) |
 | 无捆绑SKU 合成客户物料号（拉链款 40 个） | [zipper-combo-batch-staging.md](../docs/solutions/workflow-issues/zipper-combo-batch-staging.md) |
+| 单变体多数量档批量创建（灵活拼接床头板 4 个） | [flex-headboard-combo-batch-staging.md](../docs/solutions/workflow-issues/flex-headboard-combo-batch-staging.md) |
+| 存量 EN 套件补齐（沙发支撑垫 3 个） | [support-pad-combo-reconcile.md](../docs/solutions/workflow-issues/support-pad-combo-reconcile.md) |
+| 双子件组合批量创建（可组合扶手沙发 4 个） | [combinable-sofa-combo-batch-staging.md](../docs/solutions/workflow-issues/combinable-sofa-combo-batch-staging.md) |
+| 同SPU双色组合（深卧单人沙发椅 3 个） | [deep-sofa-combo-batch-staging.md](../docs/solutions/workflow-issues/deep-sofa-combo-batch-staging.md) |
+| 四模块组合（复古造型大体量沙发 1 个） | [retro-sofa-combo-batch-staging.md](../docs/solutions/workflow-issues/retro-sofa-combo-batch-staging.md) |
+| 套装组成需确认（户外托盘垫 6 个） | [outdoor-pad-combo-batch-staging.md](../docs/solutions/workflow-issues/outdoor-pad-combo-batch-staging.md) |
+| 单件整沙发组合（弧形流苏沙发 1 个） | [fringe-sofa-combo-batch-staging.md](../docs/solutions/workflow-issues/fringe-sofa-combo-batch-staging.md) |
+| 三模块组合（逗号组合沙发 2 个） | [comma-sofa-combo-batch-staging.md](../docs/solutions/workflow-issues/comma-sofa-combo-batch-staging.md) |
+| 三角靠枕+圆枕套装（三角有扣 13 个） | [triangle-set-combo-batch-staging.md](../docs/solutions/workflow-issues/triangle-set-combo-batch-staging.md) |
+| 领域词汇（TJ#、套件#） | 根 [CONCEPTS.md](../CONCEPTS.md) |
 | 三角皮壳 PK# 组合代理（不是套件） | [cover-combo-ops.md](docs/reference/cover-combo-ops.md) |
 | 皮壳组合创建踩坑与生产计数 | [sellfox-cover-combo-create-ops.md](../docs/solutions/workflow-issues/sellfox-cover-combo-create-ops.md) |
 | 领域词汇（TJ#、套件#、皮壳共享库存代理） | 根 [CONCEPTS.md](../CONCEPTS.md) |

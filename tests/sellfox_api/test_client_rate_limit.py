@@ -28,6 +28,20 @@ def test_is_rate_limited_response_proxy_detail():
     assert not is_rate_limited_response({"code": 0, "data": {}})
 
 
+def test_is_rate_limited_response_nested_proxy_detail(monkeypatch):
+    assert is_rate_limited_response(
+        {"detail": {"detail": "Global rate limited. Retry after 0.7s"}}
+    )
+    policy = RateLimitPolicy(default_wait_s=10.0, jitter_s=0.0)
+    monkeypatch.setattr("client.random.uniform", lambda _a, _b: 0.0)
+    wait = rate_limit_sleep_seconds(
+        {"detail": {"detail": "Global rate limited. Retry after 0.7s"}},
+        attempt=0,
+        policy=policy,
+    )
+    assert wait == 0.7
+
+
 def test_is_rate_limited_response_sellfox_40019():
     assert is_rate_limited_response({"code": SELLFOX_RATE_LIMIT_CODE, "msg": "调用超过限制"})
     assert not is_rate_limited_response({"code": 40021, "msg": "permission"})

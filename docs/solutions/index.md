@@ -13,6 +13,15 @@ tags: [solutions, index]
 | 2026-08-24 | 三角皮壳 PK# 组合代理批量创建（不是 EN 套件） | [workflow-issues/sellfox-cover-combo-create-ops.md](workflow-issues/sellfox-cover-combo-create-ops.md) |
 | 2026-08-21 | 软包墙围 EN 套件/赛狐组合商品批量分阶段创建 | [workflow-issues/soft-wall-combo-batch-staging.md](workflow-issues/soft-wall-combo-batch-staging.md) |
 | 2026-08-21 | 拉链款无捆绑SKU 合成客户物料号并批量创建组合 | [workflow-issues/zipper-combo-batch-staging.md](workflow-issues/zipper-combo-batch-staging.md) |
+| 2026-08-21 | 灵活拼接床头板单变体多数量档批量创建组合 | [workflow-issues/flex-headboard-combo-batch-staging.md](workflow-issues/flex-headboard-combo-batch-staging.md) |
+| 2026-08-21 | 沙发支撑垫存量 EN 套件补齐客户物料号与赛狐组合 | [workflow-issues/support-pad-combo-reconcile.md](workflow-issues/support-pad-combo-reconcile.md) |
+| 2026-08-21 | 可组合扶手沙发双子件套件批量创建 | [workflow-issues/combinable-sofa-combo-batch-staging.md](workflow-issues/combinable-sofa-combo-batch-staging.md) |
+| 2026-08-21 | 深卧单人沙发椅双色组合套件批量创建 | [workflow-issues/deep-sofa-combo-batch-staging.md](workflow-issues/deep-sofa-combo-batch-staging.md) |
+| 2026-08-21 | 复古造型大体量沙发四模块组合套件创建 | [workflow-issues/retro-sofa-combo-batch-staging.md](workflow-issues/retro-sofa-combo-batch-staging.md) |
+| 2026-08-21 | 户外托盘垫套装组合批量创建 | [workflow-issues/outdoor-pad-combo-batch-staging.md](workflow-issues/outdoor-pad-combo-batch-staging.md) |
+| 2026-08-21 | 弧形流苏沙发单件整沙发组合创建 | [workflow-issues/fringe-sofa-combo-batch-staging.md](workflow-issues/fringe-sofa-combo-batch-staging.md) |
+| 2026-08-22 | 逗号组合沙发三模块组合套件批量创建 | [workflow-issues/comma-sofa-combo-batch-staging.md](workflow-issues/comma-sofa-combo-batch-staging.md) |
+| 2026-08-22 | 三角有扣套装（三角靠枕 + 50cm 圆枕）组合批量创建 | [workflow-issues/triangle-set-combo-batch-staging.md](workflow-issues/triangle-set-combo-batch-staging.md) |
 | 2026-08-20 | 三角类皮壳在通途与赛狐并行期的共享库存代理 | [conventions/sellfox-cover-shared-inventory-transition.md](conventions/sellfox-cover-shared-inventory-transition.md) |
 | 2026-08-20 | EN 成品与皮壳 1:1 配对审计与孤儿皮壳重建 | [conventions/erpnext-product-cover-variant-pairing.md](conventions/erpnext-product-cover-variant-pairing.md) |
 | 2026-08-19 | 通途发货仓库改名后三处对账登记（通途→ERPNext→财务共享表） | [workflow-issues/tongtu-warehouse-rename-reconciliation.md](workflow-issues/tongtu-warehouse-rename-reconciliation.md) |

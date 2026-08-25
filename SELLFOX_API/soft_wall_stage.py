@@ -104,7 +104,14 @@ def build_plan_rows(*, full: bool = False) -> list[dict]:
     base_names: dict[str, str] = {}
     base_infos: dict[str, list[str]] = {}
     for item in snapshot.get("en_items") or []:
-        if str(item.get("item_group") or "") != "软包墙围":
+        if KEYWORD not in str(item.get("item_name") or ""):
+            continue
+        item_group = str(item.get("item_group") or "")
+        if item_group.startswith(
+            ("皮壳#", "内胆#", "重量模板#", "套件#", "绍兴", "波兰", "美东", "美中", "包装")
+        ):
+            continue
+        if not item.get("variant_of"):
             continue
         code = str(item.get("item_code") or "")
         base_names[code] = str(item.get("item_name") or "")

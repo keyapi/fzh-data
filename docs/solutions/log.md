@@ -21,6 +21,15 @@ tags: [solutions, log]
 - **新增**: `workflow-issues/zipper-combo-batch-staging.md` — 拉链款 41 行全部“无捆绑SKU”，按 `基码-EN物料码-Npcs` 合成唯一客户物料号，40 个组合全部创建并回读（`sync-combos` `ok=40`）。
 - **新增**: `SELLFOX_API/zipper_stage.py` — 拉链款登记表名称自动匹配 EN 底层物料、合成通途SKU、批量 apply 与阶段记录。
 - **更新**: `soft_wall_lookup.py` 支持 `--product` 通用快照；`soft_wall_stage.py` 支持 `configure(product)` 复用框架。
+- **新增**: `workflow-issues/flex-headboard-combo-batch-staging.md` + `SELLFOX_API/flex_headboard_stage.py` — 灵活拼接床头板单变体 4 个数量档全部创建并回读（`sync-combos` `ok=4`）。
+- **新增**: `workflow-issues/support-pad-combo-reconcile.md` + `SELLFOX_API/support_pad_stage.py` — 沙发支撑垫存量 EN 套件补齐客户物料号与缺失赛狐组合（`sync-combos` `ok=3`）。
+- **新增**: `workflow-issues/combinable-sofa-combo-batch-staging.md` + `SELLFOX_API/combinable_sofa_stage.py` — 可组合扶手沙发双子件组合按 `基码x数量_基码x数量` 合成通途SKU，4 个组合全部创建并回读（`sync-combos` `ok=4`）。
+- **新增**: `workflow-issues/deep-sofa-combo-batch-staging.md` + `SELLFOX_API/deep_sofa_stage.py` — 深卧单人沙发椅双色组合 3 个全部创建并回读（`sync-combos` `ok=3`）；`client.py` 增加代理嵌套 detail 限流识别与单测。
+- **新增**: `workflow-issues/retro-sofa-combo-batch-staging.md` + `SELLFOX_API/retro_sofa_stage.py` — 复古造型大体量沙发四模块组合 1 个创建并回读（`sync-combos` `ok=1`）。
+- **新增**: `workflow-issues/outdoor-pad-combo-batch-staging.md` + `SELLFOX_API/outdoor_pad_stage.py` — 户外托盘垫 6 个套装按确认组成创建并回读（`sync-combos` `ok=6`）。
+- **新增**: `workflow-issues/fringe-sofa-combo-batch-staging.md` + `SELLFOX_API/fringe_sofa_stage.py` — 弧形流苏沙发单件整沙发组合创建并回读（`sync-combos` `ok=1`）。
+- **新增**: `workflow-issues/comma-sofa-combo-batch-staging.md` + `SELLFOX_API/comma_sofa_stage.py` — 逗号组合沙发 2 个组合创建并回读（`TJ#KS0369x1_KS0378x1_KS0379x1-001/002`，赛狐 3924081/3924082）。
+- **新增**: `workflow-issues/triangle-set-combo-batch-staging.md` + `SELLFOX_API/triangle_set_stage.py` / `triangle_set_apply.py` — 三角有扣套装 13 个组合创建并回读（`TJ#KS0001x1_KS0260x1-001~003`、`x2-001~010`，赛狐 3924083~3924095）。
 - **更新**: `workflow-issues/index.md`、`docs/solutions/index.md`、`CONCEPTS.md`
 - **评审修正**: Cursor 审查后拆分 EN Tongtool Cost Review 与特殊规则 1.7.0 引擎（`engine_170.py`），禁止把本地特殊规则当 Cost Review 实现；修正库存模型/核心验收标题和阶段编号；不可破坏规则限定为组合代理模型；审计脚本 next_actions 指向 4B 成本覆盖；missing-products 补充已有独立普通 `PK#` 的评估路由；CONCEPTS 引擎路径修正为完整 `tongtool_order_cost/tongtool_order_cost/engine_170.py`，扣减规则明确仅组合代理适用。
 - **更新**: `conventions/sellfox-cover-shared-inventory-transition.md` — `PK#` 组合从永久/冻结模型降为并行期单一实物池下的推荐默认；补充独立普通商品、外部共享池分配器、重复 ATP 风险及一对多/多对一库存守恒。成本路线改为验证 FBM 订单采购成本导入覆盖，记录 `mergePurchaseCost`、调整单 API 与加工单写链缺口，沙盒拆为库存和成本两条。
