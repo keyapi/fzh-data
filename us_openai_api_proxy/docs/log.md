@@ -53,6 +53,8 @@ tags: [openai, api-proxy, changelog]
 - **v0.14**: 验证通过：`cursor.com` / `claude.ai` / `api2.cursor.sh` 走 `GeoSite(category-ai-chat-!cn) → 自动选择[日本07]`
 - **v0.14**: Emergency 兜底保留（SH-Tailscale-US + DIRECT），SSRDog 配置文件暂留至 BoostNet 试用通过后清理
 - **v0.14**: 延迟 100ms+ 属新供应商常态，持续验证 ChatGPT/Cursor 实际稳定性中
+- **v0.14-fix**: DNS 故障修复 — BoostNet 订阅的 `nameserver-policy` 把 google/github/openai 等强制指向 Cloudflare DoH（大陆被墙），导致外网域名解析全挂；替换为 `223.5.5.5` 后恢复（见 Lesson 31）
+- **v0.14-fix**: DNS 修复持久化 — `openclash_custom_overwrite.sh` 新增 `fix_dns_cloudflare()`，订阅更新/重启后自动把 Cloudflare DoH 换成 223.5.5.5；已端到端测试（source 恢复 Cloudflare 版模拟订阅更新 → 脚本自动修复 → DNS 恢复）
 
 ## 后续规划
 
