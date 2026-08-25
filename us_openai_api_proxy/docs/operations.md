@@ -356,6 +356,46 @@ ssh -i ~/.ssh/id_rsa_openwrt root@192.168.100.1 \
   "tail -10 /tmp/openclash.log | grep -oE 'Emergency\[|SSRDOG\[' | sort | uniq -c"
 ```
 
+## 翻墙流量机制与额度 (2026-08-25)
+
+### 什么流量走代理 / 直连
+
+办公室翻墙路由由 **OpenClash 规则**决定，与机场（SSRDog/BoostNet）无关：
+
+```
+国内 IP（china_ip_route）→ iptables 直连，不进 Clash（不耗额度）
+国外 IP → 重定向进 Clash
+  ↓ Clash 规则逐条匹配
+  ChinaMax / 钉钉 / sellfox 等 → DIRECT（不耗额度）
+  其余 → Match → 代理组（BoostNet）→ 消耗额度
+```
+
+- 钉钉、国内视频会议、国内网站 → DIRECT，**不消耗机场额度**
+- YouTube / Google / ChatGPT / 国外网站 → 走代理，**消耗额度**
+- 国内服务的国外 CDN（如某些 .com 域名解析到国外 IP）→ 规则上无法区分，会走代理（属正常，不是故障）
+
+### 机场额度怎么算
+
+- 机场（BoostNet/SSRDog）按**经过其节点的字节数**计费，OpenClash 决定发什么给节点
+- 不同机场只是"账户额度 + 节点"不同，**路由规则完全一样**（同一份 OpenClash 配置）
+
+### 实测结果 (2026-08-25, BoostNet)
+
+- 启用 2 小时内消耗约 840MB（上行 141MB + 下行 698MB），**属正常偏高**；主要被 **YouTube 视频流**吃掉（活动连接快照 ~30%），其次 Wayfair 工作平台（~21%）
+- 活动连接快照分析：**未发现国内 IP 误走代理**，国内流量正确直连
+- 历史参照：SSRDog 每月约 280G（同一套规则）→ BoostNet 400G/月 有 ~40% 余量
+- **若额度消耗异常快，优先排查 YouTube/视频用量**（最大头）
+
+### 查看当前流量构成
+
+```bash
+# 当前活动连接（每个连接的 host / 出口策略 / 上下行字节）
+ssh -i ~/.ssh/id_rsa_openwrt root@192.168.100.1 \
+  "wget -qO- --header='Authorization: Bearer 123456' http://127.0.0.1:9090/connections"
+```
+
+> 把返回的 JSON 下载到本地，用 python 按 `metadata.host` / `chains[0]` / `upload` / `download` 聚合，即可得到按域名和策略的流量占比。
+
 ## 见也
 
 - [../AGENT_HANDOFF.md](../AGENT_HANDOFF.md) — Agent 参考
