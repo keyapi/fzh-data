@@ -362,3 +362,18 @@ Host us-ubuntu-proxy-pub      ← 备：公网 IP，需要翻墙正常
 tailscale dns status                          # 查看 MagicDNS 状态和上游解析器
 journalctl -u tailscaled | grep -i "dns\|SERVFAIL"  # 查看 DNS 错误
 ```
+
+## Lesson 30: 切换机场后自定义规则必须映射到新配置的策略组名 (2026-08-25)
+
+**问题**：从 SSRDog 切换到 BoostNet 后，OpenClash 自定义覆写规则仍指向旧配置的 `Auto` 策略组。BoostNet 没有 `Auto`，实际组名是 `自动选择`(url-test)、`故障转移`(fallback) 和主组 `BoostNet`(select)，规则目标组名不匹配。
+
+**原因**：自定义覆写规则里的策略组名是写死的，切换订阅后不会自动跟随。OpenClash 覆写机制只做配置结构合并，不校验组名是否存在；组名不一致时规则要么找不到目标组，要么回落到 `MATCH`。
+
+**解决**：读取新配置的 proxy-groups 组名后，把自定义规则中所有 `,Auto` 统一替换为 BoostNet 实际的 `,自动选择`。AI 规则从"固定国家组"改为"自动选择"，让 ChatGPT/Cursor/Claude 在可用节点间自动择优，避免写死某个国家组导致节点失效时全线不可用。
+
+**教训**：
+1. 切换机场后第一件事：读新配置的 proxy-groups 组名，确认覆写规则里的每个目标组都存在。
+2. 用 `自动选择`(url-test) 比写死国家组更稳：延迟/可用性变化时自动切换；写死国家组会重演"日本节点失效 → ChatGPT/Cursor 全挂"的问题。
+3. 验证标准是"实际服务能持续用"（ChatGPT 网页、Cursor 长连接），不是测速数值或 Google 语言重定向。
+4. 测速 URL 默认 `http://www.gstatic.com/generate_204`，部分节点测速超时但实际可用，可用 `http://cp.cloudflare.com/generate_204` 交叉验证。
+5. 后台提示"订阅 URL 已重置请重新导入"可能是通用自助排障文案，已在多客户端重新导入仍失败时应转向排查线路/供应商，而非反复粘贴订阅。

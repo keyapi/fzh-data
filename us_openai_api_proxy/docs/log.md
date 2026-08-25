@@ -45,14 +45,24 @@ tags: [openai, api-proxy, changelog]
 - **v0.13**: 修复：`tailscale set --accept-dns=false` + systemd-resolved 配置持久化（Vultr DNS 108.61.10.10 + Cloudflare 1.1.1.1 备用）
 - **v0.13**: 应急线路验证恢复：上海 SOCKS5 → US → Google 200 / YouTube 200
 
+## 2026-08-25 (v0.14)
+
+- **v0.14**: 主翻墙供应商切换 — SSRDog 不续约（8/28 到期），OpenClash 切换到 BoostNet 订阅
+- **v0.14**: BoostNet 策略组结构：主组 `BoostNet`(select) → `自动选择`(url-test) / `故障转移`(fallback)，另有香港/日本/台湾/新加坡/美国区域组
+- **v0.14**: 自定义覆写规则全部 `Auto` → `自动选择`（BoostNet 无 `Auto` 组，SSRDog 遗留组名失效）
+- **v0.14**: 验证通过：`cursor.com` / `claude.ai` / `api2.cursor.sh` 走 `GeoSite(category-ai-chat-!cn) → 自动选择[日本07]`
+- **v0.14**: Emergency 兜底保留（SH-Tailscale-US + DIRECT），SSRDog 配置文件暂留至 BoostNet 试用通过后清理
+- **v0.14**: 延迟 100ms+ 属新供应商常态，持续验证 ChatGPT/Cursor 实际稳定性中
+
 ## 后续规划
 
-- **Phase 2 (待 SSRDog 恢复后)**：在 Vultr 部署 VLESS+Reality 作为独立备份线路
+- **Phase 2 (独立备份线路)**：在 Vultr 部署 VLESS+Reality 作为不依赖订阅的备份出口
   - 协议：VLESS + XTLS Vision + Reality（当前 GFW 环境下最抗封锁）
-  - 目标：不依赖任何第三方订阅，SSRDog 挂掉也有自己的翻墙出口
-  - OpenClash 双线路：SSRDog 优先，Reality fallback
+  - 目标：不依赖任何第三方订阅，机场挂掉也有自己的翻墙出口
+  - OpenClash 双线路：BoostNet 优先，Reality fallback（参考当前 Emergency 兜底结构）
 - **短期优化**：上海 SSH 隧道添加健康检查 cron（每 60s curl 测试，失败告警）
 - **密钥安全**：上海服务器上的 `id_ed25519_us_proxy_tunnel` 用完可删，或创建受限专用密钥
+- **清理**：BoostNet 试用稳定后删除 SSRDog 相关配置文件（`config/SSRDogAnyTLS.yaml*`）与备用配置（`meta.yaml` / `ssrdog.yaml` / `laoda_metaglide.yaml`）
 
 ## 2026-06-25 (v0.10)
 
