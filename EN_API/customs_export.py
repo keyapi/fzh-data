@@ -21,6 +21,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from openpyxl import load_workbook
+from openpyxl.styles import Alignment
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.cell_range import CellRange
 
@@ -52,7 +53,8 @@ CONFIG = {
     "port_discharge": "LONG BEACH,UNITED STATES",  # 指运港
     "supervision_mode": "一般贸易",        # 监管方式
     "origin_place": "绍兴市（33069）",      # 境内货源地（常量）
-    "declaration_unit": "宁波市鸿欣报关有限公司",   # TODO: 确认申报单位
+    "declaration_unit": "宁波市鸿欣报关有限公司",   # 申报单位（弹窗可传，未传则保留模板原值）
+    "production_unit": "绍兴雪雁针纺有限公司",       # 生产销售单位（固定值，不在弹窗体现）
     # 单位映射：EN 的 uom → (英文单位, 中文单位)
     "uom_map": {
         "个": ("PIECES", "个"),
@@ -70,6 +72,15 @@ DEST_COUNTRY = {
 }
 US_CUSTOMERS = {"DANEEY", "CENTRADE"}   # 美国客户（含美国FBA仓，具体客户名待补充）
 PL_CUSTOMERS = set()                     # 波兰公司（具体客户名待补充）
+
+# 境外收货人预设（与 EN 弹窗下拉同源；导出时填 C5 境外收货人：名称 + 地址）。
+# 新增/修改收货人只改这一处。
+CONSIGNEE_DATA = {
+    "centrade": {"name": "Centrade Inc", "addr": "389 Route 10 Unit R, East Hanover, NJ 07936 U.S.A."},
+    "daneey":   {"name": "Daneey LLC", "addr": "10812 Fallstone Rd, Suite 402, Houston TX 77099 U.S.A."},
+    "poland":   {"name": "SHAOXING XUEYAN ZHENGFANG Sp. z o.o.", "addr": "ul. Prosta 2 95-035 Ozorków Poland"},
+}
+DEFAULT_CONSIGNEE = "centrade"           # 弹窗默认选中项（EN 侧）；本脚本按客户自动映射
 
 # 装箱组合（混装版）：key = DN 单号 → 组合列表。装箱信息完全由用户确认，不用外箱子表。
 # 每个组合:
@@ -281,6 +292,36 @@ def resolve_country(customer: str) -> tuple[str, str]:
     return "", ""
 
 
+def resolve_consignee(args, customer: str) -> dict | None:
+    """境外收货人：优先 CLI --consignee 指定，否则按客户自动映射。
+
+    返回 {"name": ..., "addr": ...}；无法解析返回 None（保留模板原值）。
+    """
+    choice = (args.consignee or "").strip().lower()
+    if choice == "custom":
+        if args.consignee_name or args.consignee_addr:
+            return {"name": args.consignee_name or "", "addr": args.consignee_addr or ""}
+        return None
+    if choice in CONSIGNEE_DATA:
+        info = dict(CONSIGNEE_DATA[choice])
+        if args.consignee_name:
+            info["name"] = args.consignee_name
+        if args.consignee_addr:
+            info["addr"] = args.consignee_addr
+        return info
+    cust = (customer or "").lower()
+    if "daneey" in cust:
+        return dict(CONSIGNEE_DATA["daneey"])
+    if "centrade" in cust:
+        return dict(CONSIGNEE_DATA["centrade"])
+    for key in PL_CUSTOMERS:
+        if key.lower() in cust:
+            return dict(CONSIGNEE_DATA["poland"])
+    if args.consignee_name or args.consignee_addr:
+        return {"name": args.consignee_name or "", "addr": args.consignee_addr or ""}
+    return None
+
+
 def _n3(ws, coord: str, value):
     """写入数值并强制保留 3 位小数（补零对齐）。"""
     ws[coord] = round(float(value), 3)
@@ -487,7 +528,8 @@ def fill_contract(ws, dn, agg, totals):
     ws[f"H{48+k}"] = None                   # 底部 BUYERS 留空
 
 
-def fill_declaration(ws, dn, agg, totals, country):
+def fill_declaration(ws, dn, agg, totals, country,
+                     consignee_name="", consignee_addr="", declaration_unit="", production_unit=""):
     c = CONFIG
     ex = c["exchange_rate"]
     country_en, country_cn = country
@@ -495,9 +537,11 @@ def fill_declaration(ws, dn, agg, totals, country):
     ws["I2"] = None                        # 发票号 留空
     ws["A4"] = c["shipper_cn"]             # 境内发货人
     ws["G4"] = None                        # 出境关别 留空
-    ws["C5"] = None                        # 境外收货人 留空
+    if consignee_name or consignee_addr:
+        ws["C5"] = "\n".join(x for x in (consignee_name, consignee_addr) if x)   # 境外收货人：名称 + 地址
+        ws["C5"].alignment = Alignment(wrap_text=True, vertical="center")
     ws["G6"] = None                        # 运输方式 留空
-    ws["A8"] = None                        # 生产销售单位 留空
+    ws["A8"] = production_unit or None     # 生产销售单位（固定值）
     ws["G8"] = c["supervision_mode"]       # 监管方式
     ws["A10"] = dn["name"]                 # 合同协议号
     ws["D10"] = None                       # 贸易国（地区） 留空
@@ -536,7 +580,8 @@ def fill_declaration(ws, dn, agg, totals, country):
             ws[f"C{row + 1}"] = None
     tr = 51 + k
     ws[f"A{tr}"] = f"TOTAL：{c['currency']} {totals['bom_cost'] / ex:.3f}"
-    ws[f"A{54+k}"] = None                   # 申报单位 留空
+    if declaration_unit:                    # 申报单位：仅当传入才写入，否则保留模板原值
+        ws[f"A{54+k}"] = f"申报单位  {declaration_unit}"
 
 
 def main():
@@ -544,6 +589,10 @@ def main():
     ap.add_argument("--dn", required=True, help="DN 单号，如 DN-26-00063")
     ap.add_argument("--test", action="store_true", help="使用测试环境")
     ap.add_argument("--output", "-o", help="输出路径")
+    ap.add_argument("--consignee", help="境外收货人预设: centrade/daneey/poland/custom（缺省按客户自动映射）")
+    ap.add_argument("--consignee-name", help="境外收货人名称（覆盖预设/自定义）")
+    ap.add_argument("--consignee-addr", help="境外收货人地址（覆盖预设/自定义）")
+    ap.add_argument("--declaration-unit", help="申报单位（缺省保留模板原值）")
     args = ap.parse_args()
 
     env = "test" if args.test else "prod"
@@ -585,6 +634,13 @@ def main():
     country = resolve_country(dn.get("customer", ""))
     print(f"客户: {dn.get('customer')} ({dn.get('customer_name')}) → 目的国: {country}")
 
+    # 境外收货人（CLI 指定或按客户自动映射）
+    consignee = resolve_consignee(args, dn.get("customer", ""))
+    if consignee:
+        print(f"境外收货人: {consignee['name']} / {consignee['addr']}")
+    else:
+        print("境外收货人: 未匹配预设，保留模板原值（可用 --consignee 指定）")
+
     # 装箱数据：仅用用户确认的装箱组合(CARTON_GROUPS_BY_DN)，不用外箱子表(outer_box_summary/item_weight_cats)
     groups = CARTON_GROUPS_BY_DN.get(args.dn, []) or []
     if groups:
@@ -623,12 +679,65 @@ def main():
     fill_invoice(wb["报关发票 "], dn, agg, totals)
     fill_packing(wb["装箱单"], dn, agg, totals)
     fill_contract(wb["报关合同 "], dn, agg, totals)
-    fill_declaration(wb["报关单NEW "], dn, agg, totals, country)
+    fill_declaration(wb["报关单NEW "], dn, agg, totals, country,
+                     consignee_name=(consignee or {}).get("name", ""),
+                     consignee_addr=(consignee or {}).get("addr", ""),
+                     declaration_unit=args.declaration_unit or "",
+                     production_unit=CONFIG.get("production_unit", ""))
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     out = Path(args.output) if args.output else OUT_DIR / f"报关单据_{args.dn}.xlsx"
     wb.save(str(out))
     print(f"OK: {out}")
+
+
+# ──────────────────────────────────────────────────────────────
+# BOM 成本参照实现（与 EN delivery_plan/doc_event.py 的 _get_nd_cost 逻辑一致）
+# 用于内胆(ND#) bom_rate 取 BOM内胆成本 cost_nd 列；皮壳(PK#) 取 cost_pk 列。
+# ──────────────────────────────────────────────────────────────
+BOM_COST_FILE = _DIR / "数据源" / "bom_cost_list_v2_2026-57-25-15-8.json.gz"
+
+
+def _load_bom_cost_report() -> list[dict]:
+    """读取 BOM 成本报表(gzip JSON)，返回 result 行列表（键=item_fg 成品编码）。"""
+    import gzip
+    import json as _json
+    if not BOM_COST_FILE.is_file():
+        print(f"✗ 未找到 BOM 成本报表: {BOM_COST_FILE}", file=sys.stderr)
+        return []
+    with gzip.open(BOM_COST_FILE, "rt", encoding="utf-8") as f:
+        return _json.load(f).get("result", [])
+
+
+def _get_nd_cost_ref(item_nd: str, bom_rows: list[dict]) -> tuple[float | None, dict | None]:
+    """按内胆物料编码反向查找 BOM 内胆成本 cost_nd（参照实现）。
+
+    匹配逻辑（membership-based，不依赖颜色词表）：
+      1. 去掉 ND# 前缀，按 '-' 切分：段[0]=KS号，段[1]=尺寸；
+      2. 遍历 BOM 成品行，item_fg 不去色直接按 '-' 切分，
+         匹配条件 = 首段==KS号 且 尺寸出现在任一字段段
+         （不用「最后一段=尺寸」，因成品可能带颜色/不带颜色，段位不固定）；
+      3. 命中取该行 cost_nd；cost_nd 为 0/缺失则继续找有值的行。
+    返回 (cost_nd, matched_row)；未命中返回 (None, None)。
+    """
+    if not item_nd or not item_nd.startswith("ND#"):
+        return None, None
+    parts = item_nd[3:].split("-")
+    if len(parts) < 2:
+        return None, None
+    ks, size = parts[0], parts[1]
+    for row in bom_rows:
+        item_fg = (row.get("item_fg") or "").strip()
+        if not item_fg:
+            continue
+        fg_parts = item_fg.split("-")
+        if len(fg_parts) < 2:
+            continue
+        if fg_parts[0] == ks and size in fg_parts:
+            cost_nd = row.get("cost_nd")
+            if cost_nd is not None and cost_nd != 0:
+                return cost_nd, row
+    return None, None
 
 
 if __name__ == "__main__":
