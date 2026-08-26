@@ -44,6 +44,7 @@ CONFIG = {
     "shipper_addr": "Room 1910, 16th Floor, Building 1, Cuijing Beili, Tongzhou District, Beijing, China",
     "currency": "USD",            # 报关币制
     "exchange_rate": 6.8,         # 人民币 → 美元（暂定，后续换汇率表）
+    "price_markup": 1.45,         # 报关单价加成系数：报关单价 = BOM成本 ÷ 汇率 × 1.45
     "trade_term": "FOB",
     "trade_term_full": "FOB NINGBO,CHINA",
     "payment_term": "BY T/T 90 DAYS",
@@ -322,6 +323,11 @@ def resolve_consignee(args, customer: str) -> dict | None:
     return None
 
 
+def usd_price(rmb: float) -> float:
+    """RMB → USD 报关价：BOM成本 ÷ 汇率 × 加成系数，保留 3 位小数。"""
+    return round(float(rmb) / CONFIG["exchange_rate"] * CONFIG["price_markup"], 3)
+
+
 def _n3(ws, coord: str, value):
     """写入数值并强制保留 3 位小数（补零对齐）。"""
     ws[coord] = round(float(value), 3)
@@ -424,7 +430,6 @@ def expand_sheets(wb, n_items: int):
 # ──────────────────────────────────────────────────────────────
 def fill_invoice(ws, dn, agg, totals):
     c = CONFIG
-    ex = c["exchange_rate"]
     k = max(0, len(agg) - 16)   # 扩展行偏移
     ws["B2"] = c["shipper_cn"]
     ws["B3"] = c["shipper_en"]
@@ -442,8 +447,8 @@ def fill_invoice(ws, dn, agg, totals):
             ws[f"C{row}"] = it["name_en"]                    # 品名(英文)
             ws[f"D{row}"] = it["qty"]
             ws[f"E{row}"] = uom_en(it["uom"])
-            _n3(ws, f"F{row}", it["bom_rate"] / ex)          # 单价(USD)
-            _n3(ws, f"G{row}", it["bom_cost"] / ex)          # 总金额(USD)
+            _n3(ws, f"F{row}", usd_price(it["bom_rate"]))    # 单价(USD)
+            _n3(ws, f"G{row}", usd_price(it["bom_cost"]))    # 总金额(USD)
         else:
             for col in "CDEFG":
                 ws[f"{col}{row}"] = None
@@ -451,7 +456,7 @@ def fill_invoice(ws, dn, agg, totals):
     ws[f"C{tr}"] = "TOTAL:"
     ws[f"D{tr}"] = totals["qty"]
     ws[f"F{tr}"] = c["currency"]
-    _n3(ws, f"G{tr}", totals["bom_cost"] / ex)
+    _n3(ws, f"G{tr}", usd_price(totals["bom_cost"]))
     nr = 35 + k
     ws[f"C{nr}"] = f"TOTAL PACKED IN {num_to_words(totals['cartons'])} CTNS"
 
@@ -498,7 +503,6 @@ def fill_packing(ws, dn, agg, totals):
 
 def fill_contract(ws, dn, agg, totals):
     c = CONFIG
-    ex = c["exchange_rate"]
     k = max(0, len(agg) - 16)   # 扩展行偏移
     ws["B2"] = c["shipper_cn"]
     ws["B3"] = c["shipper_en"]
@@ -513,16 +517,16 @@ def fill_contract(ws, dn, agg, totals):
             ws[f"B{row}"] = it["name_en"]
             ws[f"F{row}"] = it["qty"]
             ws[f"G{row}"] = uom_en(it["uom"])
-            _n3(ws, f"H{row}", it["bom_rate"] / ex)
+            _n3(ws, f"H{row}", usd_price(it["bom_rate"]))
             ws[f"I{row}"] = f"/{uom_en(it['uom'])}"
-            _n3(ws, f"J{row}", it["bom_cost"] / ex)
+            _n3(ws, f"J{row}", usd_price(it["bom_cost"]))
         else:
             for col in "BFGHIJ":
                 ws[f"{col}{row}"] = None
     tr = 33 + k
     ws[f"B{tr}"] = "TOTAL:"
     ws[f"F{tr}"] = totals["qty"]
-    _n3(ws, f"J{tr}", totals["bom_cost"] / ex)
+    _n3(ws, f"J{tr}", usd_price(totals["bom_cost"]))
     ws[f"E{39+k}"] = None                   # Time of Shipment(装运期) 留空
     ws[f"E{43+k}"] = None                   # TERMS OF PAYMENT 留空
     ws[f"H{48+k}"] = None                   # 底部 BUYERS 留空
@@ -531,7 +535,6 @@ def fill_contract(ws, dn, agg, totals):
 def fill_declaration(ws, dn, agg, totals, country,
                      consignee_name="", consignee_addr="", declaration_unit="", production_unit=""):
     c = CONFIG
-    ex = c["exchange_rate"]
     country_en, country_cn = country
     k = 2 * max(0, len(agg) - 16)   # 扩展行偏移（每物料 2 行）
     ws["I2"] = None                        # 发票号 留空
@@ -562,8 +565,8 @@ def fill_declaration(ws, dn, agg, totals, country,
             ws[f"C{row}"] = it["name_agg"]              # 中文名称（保留）
             ws[f"D{row}"] = it["name_en"]               # 英文名称
             ws[f"E{row}"] = f"{int(it['qty'])}{uom_cn(it['uom'])}"
-            _n3(ws, f"G{row}", it["bom_rate"] / ex)     # 单价 = BOM成本 / 汇率
-            _n3(ws, f"H{row}", it["bom_cost"] / ex)     # 总价 = BOM成本 / 汇率
+            _n3(ws, f"G{row}", usd_price(it["bom_rate"]))     # 单价 = BOM成本 ÷ 汇率 × 加成
+            _n3(ws, f"H{row}", usd_price(it["bom_cost"]))     # 总价 = BOM成本 ÷ 汇率 × 加成
             ws[f"I{row}"] = c["currency"]
             ws[f"J{row}"] = "中国"
             ws[f"K{row}"] = country_cn                  # 最终目的国（地区）
@@ -579,7 +582,7 @@ def fill_declaration(ws, dn, agg, totals, country,
                 ws[f"{col}{row}"] = None
             ws[f"C{row + 1}"] = None
     tr = 51 + k
-    ws[f"A{tr}"] = f"TOTAL：{c['currency']} {totals['bom_cost'] / ex:.3f}"
+    ws[f"A{tr}"] = f"TOTAL：{c['currency']} {usd_price(totals['bom_cost']):.3f}"
     if declaration_unit:                    # 申报单位：仅当传入才写入，否则保留模板原值
         ws[f"A{54+k}"] = f"申报单位  {declaration_unit}"
 
