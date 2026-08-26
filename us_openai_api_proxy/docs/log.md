@@ -57,6 +57,7 @@ tags: [openai, api-proxy, changelog]
 - **v0.14-fix**: DNS 修复持久化 — `openclash_custom_overwrite.sh` 新增 `fix_dns_cloudflare()`，订阅更新/重启后自动把 Cloudflare DoH 换成 223.5.5.5；已端到端测试（source 恢复 Cloudflare 版模拟订阅更新 → 脚本自动修复 → DNS 恢复）
 - **v0.14**: 流量机制核实 — 路由完全由 OpenClash 规则决定（国内IP直连 + Clash规则→DIRECT/代理），与供应商无关；实测无国内IP误走代理，YouTube 视频是最大流量来源（~30%）；基于 SSRDog ~280G/月历史，BoostNet 400G/月 有 ~40% 余量（详见 operations.md「翻墙流量机制与额度」）
 - **v0.14**: AI 出口按国家分组 — BoostNet 无按国家分组，覆写脚本新增 `add_country_groups()` 动态生成 香港/日本/美国/新加坡/台湾 select 组 + `AI 出口` 主组，14 条 AI 规则指向 AI 出口（默认自动选择）；老板 ChatGPT 在香港出口打不开时切 AI 出口 → 日本（详见 operations.md「AI 出口切换」）。踩坑：AI 规则不能放自定义规则文件（合并阶段校验目标组存在会丢弃），改由脚本注入
+- **v0.14-fix**: RDP 直连规则 — BoostNet 对 45.63.1.166:3389 的 RDP 不通（香港/美国节点都试过，普通网页正常，疑似 BoostNet 屏蔽 RDP），自定义规则加 `IP-CIDR,45.63.1.166/32,DIRECT` 直连后 RDP 恢复正常；已用 RDP X.224 握手探测验证
 
 ## 后续规划
 

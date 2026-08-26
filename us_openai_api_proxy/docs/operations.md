@@ -374,6 +374,10 @@ ssh -i ~/.ssh/id_rsa_openwrt root@192.168.100.1 \
 - YouTube / Google / ChatGPT / 国外网站 → 走代理，**消耗额度**
 - 国内服务的国外 CDN（如某些 .com 域名解析到国外 IP）→ 规则上无法区分，会走代理（属正常，不是故障）
 
+### 已知 DIRECT 例外
+
+- **`45.63.1.166`（Vultr RDP 服务器）→ DIRECT**：BoostNet 对该服务器 3389 的 RDP 不通（香港/美国节点都试过，普通网页正常，疑似 BoostNet 屏蔽 RDP；直连光猫/US 服务器/应急线路都能正常 RDP）。故自定义规则加 `IP-CIDR,45.63.1.166/32,DIRECT` 直连。若以后换机场后 RDP 正常，可移除此规则。
+
 ### 机场额度怎么算
 
 - 机场（BoostNet/SSRDog）按**经过其节点的字节数**计费，OpenClash 决定发什么给节点
