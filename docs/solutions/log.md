@@ -7,6 +7,10 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-08-28
+- **新增**: `integration-issues/nas-multi-domain-access-openwrt-quickconnect.md` — NAS 多域名（nas.daneey.com / nas.vilavi.cn）、OpenWrt ACME 第二张证、DSM 反代铁律、QC 直连/cn4、联通 443 限制；政策保留 `fangzhouhui.quickconnect.cn` 统一入口。
+- **新增**: `NAS_API/` OKF bundle、`AGENT_HANDOFF.md`、`.agents/skills/nas-access/`。
+
 ## 2026-08-24
 - **新增**: `workflow-issues/sellfox-cover-combo-create-ops.md` — 三角皮壳 `PK# -> KS x1` 组合代理批量创建；与 EN `TJ#`/`sync-combos` 分流；`pageList total=0` 翻页、禁止并行 apply、组合商品不在普通商品。
 - **新增**: `SELLFOX_API/cover_combo_ops.py` / `cover_combo_plan.py` 与 `docs/reference/cover-combo-ops.md`。

@@ -10,6 +10,7 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-08-28 | 群晖 NAS 多域名访问 — OpenWrt ACME、DSM 反代与 QuickConnect | [integration-issues/nas-multi-domain-access-openwrt-quickconnect.md](integration-issues/nas-multi-domain-access-openwrt-quickconnect.md) |
 | 2026-08-24 | 三角皮壳 PK# 组合代理批量创建（不是 EN 套件） | [workflow-issues/sellfox-cover-combo-create-ops.md](workflow-issues/sellfox-cover-combo-create-ops.md) |
 | 2026-08-21 | 软包墙围 EN 套件/赛狐组合商品批量分阶段创建 | [workflow-issues/soft-wall-combo-batch-staging.md](workflow-issues/soft-wall-combo-batch-staging.md) |
 | 2026-08-21 | 拉链款无捆绑SKU 合成客户物料号并批量创建组合 | [workflow-issues/zipper-combo-batch-staging.md](workflow-issues/zipper-combo-batch-staging.md) |

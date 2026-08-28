@@ -122,6 +122,7 @@ uv sync
 | `yiglobal-api` | `yiglobal-api/` | 蜴国际打单 API 文档（原 `蜴国际-API/`；env：`YIGLOBAL_*`） |
 | `en-image-upload` | `EN_API/` | 图片上传（CLI + Web UI + 物料组主图） |
 | `nas-itemgroup-folders` | `nas_itemgroup_folders/` | NAS-ERPNext 物料组文件夹对账 + 叶子组 (LGKS) 管理 |
+| `nas-access` | `NAS_API/` | 群晖多域名访问、QC 选路、OpenWrt ACME+反代、DSM 第二张证 |
 | `us-openai-api-proxy` | `us_openai_api_proxy/` | US Vultr Tailscale + CLIProxyAPI → ChatGPT API 共享 |
 | `new-api-deployment` | `new-api-deployment/` | new-api 部署（上海阿里云）+ 订阅/配额管理 |
 | `new-api-dingtalk-oidc` | `new-api-dingtalk-oidc/` | 钉钉 OAuth → OIDC 桥接代理（FastAPI） |
