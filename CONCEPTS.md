@@ -253,3 +253,21 @@ A webhook-based DingTalk group messaging channel used by AI agents (WorkBuddy, C
 - **Tongtool Order**: EN 生产系统里的通途订单快照；Overstock 单据名通常为 `OS-{platform_order_id}`，另一账号 `OSTK02US` 使用 `OSFD-` 前缀。
 - **拆单后缀**: 多 SKU/多件订单在通途/EN 会拆成 `_1/_2/_3` 子单，`platform_order_id` 保留后缀；汇总时需排除金额相同的“无后缀重复主单”。
 - **对账金额口径**: 用 `order_amount` / `products_total_price` 对账；`order_items.transaction_price` 是组件行，不能加总；`actual_total_price` 在退货订单上可能为 0。
+
+## 群晖 NAS 外网访问
+
+### QuickConnect 统一入口
+对外宣传 `https://fangzhouhui.quickconnect.cn/`。群晖在浏览器侧探测网络后自动选择直连（`fzh.myds.me:11024`）或中国中继（`fangzhouhui.cn4.quickconnect.cn`）。用户政策：不因自定义域名而替换此入口，以免失去中继兜底。
+
+### DSM 第二张证书
+除默认 `fzh.myds.me`（`RmB4St`）外，通过 OpenWrt ACME 签发的 Let's Encrypt 导入 DSM，仅绑定 ReverseProxy 服务（如 `nas.daneey.com`、`nas.vilavi.cn`）。禁止改绑「DSM 桌面服务」默认证。
+
+### OpenWrt 域名劫持
+北京办公室 OpenWrt dnsmasq 将指定 FQDN 解析到 NAS LAN IP（`192.168.100.242`），使局域网访问公网域名不经 NAT 回环。客户端若启用 Chrome 安全 DNS / Private DNS 会绕过劫持。
+
+### NAS 外网高位端口
+联通光猫当前公网仅稳定转发 **11024**；443/80 外网不通。外网访问自定义域名须带 `:11024`，除非日后打通 443。
+
+### OpenWrt 自定义域路径 vs QC 登记路径
+- **路径 A**：`nas.daneey.com` / `nas.vilavi.cn` — OpenWrt 管 DDNS 与 ACME，DSM 仅导入第二张证并反代；**不**写入 DSM「外部访问→DDNS」；用户手动输入 URL；QC 不会自动跳转。
+- **路径 B**：`fangzhouhui.quickconnect.cn` → 群晖登记 `fzh.myds.me`；QC 浏览器探测后跳 myds 直连或 `cn4` 中继。勿删 myds；DSM 无 DDNS 优先级开关，不能靠改外部访问列表让 QC 改跳 mxdeals/daneey。
