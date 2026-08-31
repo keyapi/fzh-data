@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 import sys
 from datetime import date, datetime, timedelta
+from functools import lru_cache
 from pathlib import Path
 
 import yaml
@@ -24,6 +25,7 @@ from fastapi.responses import (
 )
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.concurrency import run_in_threadpool
 
 from sellfox_shipping.models import Address, Order, PackageStatus
 from sellfox_shipping.package_service import (
@@ -32,7 +34,7 @@ from sellfox_shipping.package_service import (
     PackageReviewRequest,
     ReviewPackageService,
 )
-from sellfox_shipping.sellfox_client import SellfoxClient
+from sellfox_shipping.sellfox_client import SellfoxClient, get_sellfox_client
 from sellfox_shipping.store import Store
 
 # ── Bootstrap ─────────────────────────────────────────────────────
@@ -432,6 +434,17 @@ async def list_carriers():
     }
 
 
+@app.get("/api/lizard-services")
+async def list_lizard_services():
+    """Return known 蜴国际 service codes (sm_code) for dropdown selectors."""
+    _known = [
+        "FedEx-Ground-J-TX", "FedEx-21-AHS-TX", "FedEx-21-AHS-USEA",
+        "FedEx-Eco-21-TX", "FedEx-Economy-10-HOU", "FedEx-Economy-10-USEA",
+        "FedEx-Ground-20-OS-TX", "FedEx-Ground-J-USWE",
+    ]
+    return {"services": [{"value": s, "label": s} for s in _known]}
+
+
 @app.get("/api/rules")
 async def list_rules():
     return config.get("rules", [])
@@ -444,28 +457,65 @@ async def index(request: Request):
     return templates.TemplateResponse(request, "index.html")
 
 
+def _routing_exclude_shops() -> list[str]:
+    """Read the routing exclude_shops list (same source as 建议渠道方式)."""
+    from pathlib import Path
+
+    import yaml as _yaml
+
+    rules_path = Path(__file__).parent / "routing" / "routing_rules.yaml"
+    if not rules_path.exists():
+        return []
+    try:
+        raw = _yaml.safe_load(rules_path.read_text(encoding="utf-8"))
+        return list(raw.get("exclude_shops", []) or [])
+    except Exception:
+        return []
+
+
 @app.get("/packages", response_class=HTMLResponse)
 async def packages_page(
     request: Request,
     status: str | None = Query(None),
     channel: str | None = Query(None),
+    warehouse: str | None = Query(None),
     review: str | None = Query(None),
     date_start: str | None = Query(None),
     date_end: str | None = Query(None),
+    date_field: str = Query("label"),
     tab: str | None = Query(None),
+    has_label: str | None = Query(None),
+    exclude_shops: str | None = Query(None),
+    tongtool: str | None = Query(None),
+    tongtool_warehouse: str | None = Query(None),
+    tongtool_method: str | None = Query(None),
     limit: int = Query(50, le=500),
     offset: int = Query(0, ge=0),
 ):
     """Server-rendered package list for review."""
     account_key = config["sellfox"]["proxy_account"]
+    exclude_list = _routing_exclude_shops()
+    exclude_active = bool(exclude_shops)
+    # tongtool 过滤只在 Transactions tab 生效；Dashboard / 包裹 tab 默认显示全部，
+    # 避免 URL 残留的 tongtool=yes 误过滤其他页签。
+    effective_tongtool = tongtool if tab == "transactions" else None
+    effective_tongtool_warehouse = tongtool_warehouse if tab == "transactions" else None
+    effective_tongtool_method = tongtool_method if tab == "transactions" else None
     result = _get_package_list_service().list(
         PackageListRequest(
             account_key=account_key,
             package_status=status or None,
             channel_name=channel or None,
+            warehouse_name=warehouse or None,
             local_review_status=review or None,
             date_start=date_start or None,
             date_end=date_end or None,
+            date_field=date_field,
+            has_label=has_label or None,
+            tongtool=effective_tongtool,
+            tongtool_warehouse=effective_tongtool_warehouse,
+            tongtool_method=effective_tongtool_method,
+            exclude_shops=exclude_list if exclude_active else [],
             limit=limit,
             offset=offset,
         )
@@ -477,17 +527,107 @@ async def packages_page(
             "account_key": account_key,
             "status": status or "",
             "channel": channel or "",
+            "warehouse": warehouse or "",
             "review": review or "",
             "date_start": date_start or "",
             "date_end": date_end or "",
+            "date_field": date_field,
             "tab": tab or "",
+            "has_label": has_label or "",
+            "tongtool": tongtool or "",
+            "tongtool_warehouse": tongtool_warehouse or "",
+            "tongtool_method": tongtool_method or "",
+            "exclude_shops_active": exclude_active,
+            "exclude_shops_list": exclude_list,
             "today": date.today().isoformat(),
             "d7": (date.today() - timedelta(days=7)).isoformat(),
             "d30": (date.today() - timedelta(days=30)).isoformat(),
             "total": result.total,
             "items": result.items,
+            "limit": limit,
+            "offset": offset,
+            "total_pages": max(1, (result.total + limit - 1) // limit) if result.total else 1,
+            "current_page": (offset // limit) + 1 if limit else 1,
+            "pagination": _build_pagination((offset // limit) + 1 if limit else 1,
+                                            max(1, (result.total + limit - 1) // limit) if result.total else 1),
         },
     )
+
+
+@app.get("/tongtool", response_class=HTMLResponse)
+async def tongtool_upload_page(request: Request):
+    """通途订单标记上传页。"""
+    return templates.TemplateResponse(request, "tongtool_upload.html", {})
+
+
+@app.post("/tongtool/upload", response_class=HTMLResponse)
+async def tongtool_upload_form(request: Request):
+    """上传一个或多个 通途 xls → 匹配本地包裹并持久化 is_tongtool 标记（与 CLI 共用 tongtool_service）。"""
+    from sellfox_shipping.tongtool_service import match_and_mark
+
+    account_key = config["sellfox"]["proxy_account"]
+    actor = _web_actor(request, "web-user")
+    form = await request.form()
+    uploads = form.getlist("file")
+    uploads = [u for u in uploads if getattr(u, "filename", "")]
+    if not uploads:
+        return templates.TemplateResponse(
+            request, "tongtool_upload.html", {"error": "未选择文件"}
+        )
+
+    agg = {
+        "total": 0,
+        "matched": 0,
+        "unmatched_count": 0,
+        "skipped_duplicates": 0,
+        "matched_rows": [],
+        "unmatched_rows": [],
+        "files": [],
+    }
+    tmp_paths: list[Path] = []
+    try:
+        for upload in uploads:
+            tmp = Path(BASE_DIR) / "data" / f"tongtool-upload-{Path(upload.filename).name}"
+            tmp.parent.mkdir(exist_ok=True)
+            content = await upload.read()
+            tmp.write_bytes(content)
+            tmp_paths.append(tmp)
+
+            report = await run_in_threadpool(
+                match_and_mark,
+                _get_package_repository(),
+                account_key=account_key,
+                xls_path=tmp,
+                actor=actor,
+            )
+            d = report.to_dict()
+            agg["total"] += d.get("total", 0)
+            agg["matched"] += d.get("matched", 0)
+            agg["unmatched_count"] += d.get("unmatched_count", 0)
+            agg["skipped_duplicates"] += d.get("skipped_duplicates", 0)
+            agg["matched_rows"].extend(d.get("matched_rows", []))
+            agg["unmatched_rows"].extend(d.get("unmatched_rows", []))
+            agg["files"].append({
+                "filename": Path(upload.filename).name,
+                "total": d.get("total", 0),
+                "matched": d.get("matched", 0),
+                "unmatched_count": d.get("unmatched_count", 0),
+            })
+        return templates.TemplateResponse(
+            request, "tongtool_upload.html", {"report": agg}
+        )
+    except Exception as exc:  # noqa: BLE001
+        return templates.TemplateResponse(
+            request,
+            "tongtool_upload.html",
+            {"error": f"上传/匹配失败: {exc}"},
+        )
+    finally:
+        for tmp in tmp_paths:
+            try:
+                tmp.unlink(missing_ok=True)
+            except Exception:
+                pass
 
 
 @app.get("/packages/{package_sn}", response_class=HTMLResponse)
@@ -517,23 +657,56 @@ async def package_fetch_rates(request: Request, package_sn: str):
     package_dims = _compute_package_dims(record, carton_rows)
     routing_result = _compute_routing(record, carton_rows)
 
-    vite_rate = _get_vite_rate(record, package_dims, routing_result)
-    _get_lizard_rate(record, package_dims)
+    vite_rate = await run_in_threadpool(
+        _get_vite_rate, record, package_dims, routing_result
+    )
+    lizard_rate = await run_in_threadpool(_get_lizard_rate, record, package_dims)
 
-    if vite_rate and "error" not in vite_rate:
-        message = f"报价已更新 — {vite_rate.get('service', '')} ${vite_rate.get('total_amount', '—')}"
-    elif vite_rate and "error" in vite_rate:
-        message = f"报价失败: {vite_rate['error']}"
+    # 运费试算只展示路由建议承运商的报价；另一家存历史报价表
+    if routing_result and routing_result.matched:
+        suggested_carrier = (routing_result.carrier or "").strip().lower()
     else:
-        message = "报价完成（查看历史记录）"
+        suggested_carrier = ""
+    display_rate = vite_rate if suggested_carrier == "vite" else (lizard_rate if suggested_carrier == "lizard" else vite_rate)
+
+    if display_rate and "error" not in display_rate:
+        message = f"报价已更新 — {display_rate.get('service', '')} ${display_rate.get('total_amount', '—')}"
+    elif display_rate and "error" in display_rate:
+        message = f"报价失败: {display_rate['error']}"
+    else:
+        message = "报价完成（查看历史报价）"
 
     # Re-render with fresh context (live rate + updated history)
-    ctx = _package_detail_context(account_key, record, message=message, vite_rate_override=vite_rate)
+    ctx = _package_detail_context(account_key, record, message=message, vite_rate_override=vite_rate, lizard_rate_override=lizard_rate)
     ctx["rate_history"] = _get_rate_history(repo, record, account_key)
     return templates.TemplateResponse(request, "package_detail.html", ctx)
 
 
-def _package_detail_context(account_key: str, record, *, message: str, vite_rate_override: dict | None = None) -> dict:
+def _build_pagination(current: int, total: int) -> list[dict]:
+    """Build pagination items: {'kind':'page'|'gap','label':'1'|'...','page':int,'jump':int}"""
+    items: list[dict] = []
+    if total <= 7:
+        for p in range(1, total + 1):
+            items.append({"kind": "page", "label": str(p), "page": p, "current": p == current})
+        return items
+    items.append({"kind": "page", "label": "1", "page": 1, "current": current == 1})
+    if current > 4:
+        items.append({"kind": "gap", "label": "...", "jump": max(1, current - 5)})
+    start = max(2, current - 1)
+    end = min(total - 1, current + 1)
+    if current <= 4:
+        start = 2; end = max(end, 5)
+    if current >= total - 3:
+        end = total - 1; start = min(start, total - 4)
+    for p in range(start, end + 1):
+        items.append({"kind": "page", "label": str(p), "page": p, "current": p == current})
+    if current < total - 3:
+        items.append({"kind": "gap", "label": "...", "jump": min(total, current + 5)})
+    items.append({"kind": "page", "label": str(total), "page": total, "current": current == total})
+    return items
+
+
+def _package_detail_context(account_key: str, record, *, message: str, vite_rate_override: dict | None = None, lizard_rate_override: dict | None = None) -> dict:
     from sellfox_shipping.submission_state import aggregate_package_submission_state
 
     repo = _get_package_repository()
@@ -557,8 +730,27 @@ def _package_detail_context(account_key: str, record, *, message: str, vite_rate
     lizard_services = _get_lizard_services(repo, record, account_key)
 
     # Use override from fetch-rates, or None for initial load (on-demand pattern)
-    vite_rate = vite_rate_override
+    # 运费试算只展示路由建议承运商的报价（塞进 vite_rate 变量）；另一家仅存历史报价表
+    if routing_result and routing_result.matched:
+        suggested_carrier = (routing_result.carrier or "").strip().lower()
+    else:
+        suggested_carrier = ""
+    if suggested_carrier == "lizard":
+        vite_rate = lizard_rate_override
+    else:
+        vite_rate = vite_rate_override
 
+    # Earliest purchase date from orders
+    purchase_date = None
+    for order in record.orders:
+        if order.purchase_date:
+            if purchase_date is None or order.purchase_date < purchase_date:
+                purchase_date = order.purchase_date
+
+    _wh = _resolve_sellfox_warehouse(record.shop_name or "")
+    _tt = _get_package_repository().get_tongtool_mark(
+        account_key=account_key, package_sn=record.package_sn
+    )
     return {
         "package": record,
         "message": message,
@@ -566,12 +758,17 @@ def _package_detail_context(account_key: str, record, *, message: str, vite_rate
         "package_dims": package_dims,
         "routing_result": routing_result,
         "vite_rate": vite_rate,
+        "lizard_rate": lizard_rate_override,
         "rate_history": rate_history,
         "submission_intents": intents,
         "package_submission_state": package_submission_state,
         "labels": labels,
         "enabled_carriers": enabled_carriers,
         "lizard_services": lizard_services,
+        "purchase_date": purchase_date,
+        "sellfox_warehouse_id": (_wh or {}).get("warehouse_id"),
+        "sellfox_is_oversea": (_wh or {}).get("is_oversea"),
+        "tongtool_mark": _tt,
     }
 
 
@@ -923,12 +1120,10 @@ def _vite_rate_to_dict(
     }
 
 
-# Lizard warehouse → ca_zone mapping (based on S0143 shipper registration)
-_LIZARD_CA_ZONE: dict[str, int] = {
-    "CENTRADE": 1,  # NJ → 美东
-    "DANEEY": 1,    # TX → S0143 在系统归为美东
-    "POLAND": 0,    # 全域
-}
+# ratesv2 ca_zone is a route-coverage selector, not a warehouse mapping.
+# 0 = query all zones; 1/2/3/4 = East/West/Central/South US. The current quote
+# always uses the S0143 TX shipper, so querying all zones is the intended behavior.
+_LIZARD_RATE_CA_ZONE = 0
 
 
 def _get_lizard_rate(
@@ -955,8 +1150,7 @@ def _get_lizard_rate(
                 "error": "Lizard credentials not configured (YIGLOBAL_APP_TOKEN / YIGLOBAL_APP_KEY)",
             }
 
-        wh_name = (record.logistics.warehouse_name or "").strip()
-        ca_zone = _LIZARD_CA_ZONE.get(wh_name, 0)
+        ca_zone = _LIZARD_RATE_CA_ZONE
 
         addr = record.address
         body = {
@@ -1008,7 +1202,9 @@ def _get_lizard_rate(
         if not isinstance(result, dict) or not result:
             return {"source": "lizard", "error": "No rates returned from Lizard API"}
 
-        # Persist all products with valid total_charge
+        # Pick the best rate for live display (lowest total_charge)
+        best: dict | None = None
+        best_total = float("inf")
         for sm_code, item in result.items():
             if not isinstance(item, dict):
                 continue
@@ -1032,11 +1228,25 @@ def _get_lizard_rate(
                 "use_fedex": False,
             }
             _persist_rate(record, rate_record, raw_response=item)
+            if total < best_total:
+                best_total = total
+                best = rate_record
 
-        return None
+        if best is not None:
+            return best
+        # No product returned a usable total_charge — surface why instead of None.
+        err_msgs = sorted(
+            {
+                str(item.get("err_msg", "")).strip()
+                for item in result.values()
+                if isinstance(item, dict) and item.get("err_msg")
+            }
+        )
+        reason = "；".join(err_msgs[:3]) if err_msgs else "无匹配线路"
+        return {"source": "lizard", "error": f"蜴国际无可用报价：{reason}"}
 
-    except Exception:
-        return None
+    except Exception as exc:  # noqa: BLE001 — surface the reason instead of hiding it
+        return {"source": "lizard", "error": f"Lizard rate fetch failed: {exc}"}
 
 
 def _persist_rate(record, rate_result: dict, raw_response: dict | None = None) -> None:
@@ -1090,6 +1300,7 @@ def _get_labels_for_package(account_key: str, package_sn: str) -> list[dict]:
                 "carrier": r.carrier,
                 "service_level": r.service_level,
                 "tracking_number": r.tracking_number,
+                "derived_reference_no": r.derived_reference_no,
                 "carrier_order_id": r.carrier_order_id,
                 "total_amount": r.total_amount,
                 "currency": r.currency,
@@ -1140,6 +1351,42 @@ def _get_lizard_services(repo, record, account_key: str) -> list[dict]:
         if sm not in seen:
             services.append({"value": sm, "label": sm})
     return services
+
+
+@lru_cache(maxsize=1)
+def _resolve_sellfox_warehouse(shop_name: str) -> dict | None:
+    """Best-effort map of a Sellfox shop name to its 北美仓 warehouse.
+
+    Returns ``{"warehouse_id": int, "is_oversea": int}`` where is_oversea is the
+    warehouse list ``type`` (0默认/1国内/2FBA/3海外). Used to pre-fill the
+    quickOutbound shipmentType=1 (inventory deduction) form which requires both
+    ``warehouseId`` and ``isOversea``. Cached per process; returns None on API
+    failure so the form falls back to manual entry.
+    """
+    if not (shop_name or "").strip():
+        return None
+    from sellfox_shipping.sellfox_client import get_sellfox_client
+
+    try:
+        client = get_sellfox_client()
+        resp = client._post(
+            "/api/warehouseManage/warehouseList.json",
+            {"pageNo": "1", "pageSize": "100"},
+        )
+        rows = (resp.get("data") or {}).get("rows") or []
+        for w in rows:
+            name = (w.get("name") or "").strip()
+            if shop_name in name:
+                try:
+                    return {
+                        "warehouse_id": int(w.get("id")),
+                        "is_oversea": int(w.get("type") or 0),
+                    }
+                except (TypeError, ValueError):
+                    return None
+    except Exception:
+        return None
+    return None
 
 
 @app.post("/packages/{package_sn}/review", response_class=HTMLResponse)
@@ -1288,6 +1535,83 @@ async def package_prepare_submit_form(request: Request, package_sn: str):
     )
 
 
+@app.post("/packages/{package_sn}/submit-label-tracking", response_class=HTMLResponse)
+async def package_submit_label_tracking_form(request: Request, package_sn: str):
+    """Write a valid label's tracking number back to Sellfox.
+
+    The form's ``writeback_api`` selects the endpoint:
+    - ``submitToPlatform`` → Amazon/FBM write path (intents + submitToPlatform).
+    - ``quickOutbound``   → multi-platform write path (shipmentType=0, no
+      inventory deduction).
+    Both source the tracking from the package's valid (non-cancelled, has-tracking)
+    label record. The button click is the user's explicit confirmation.
+    """
+    from sellfox_shipping.submission_service import SubmissionService
+
+    form = await request.form()
+    account_key = config["sellfox"]["proxy_account"]
+    repo = _get_package_repository()
+    actor = _web_actor(request, str(form.get("actor") or "web-user"))
+    writeback_api = str(form.get("writeback_api") or "submitToPlatform").strip()
+    svc = SubmissionService(repo, get_sellfox_client())
+    try:
+        if writeback_api == "quickOutbound":
+            shipment_type_raw = str(form.get("shipment_type") or "0").strip()
+            try:
+                shipment_type = int(shipment_type_raw)
+            except ValueError:
+                shipment_type = 0
+            warehouse_raw = str(form.get("warehouse_id") or "").strip()
+            warehouse_id = int(warehouse_raw) if warehouse_raw else None
+            is_oversea_raw = str(form.get("is_oversea") or "").strip()
+            is_oversea = int(is_oversea_raw) if is_oversea_raw else None
+            result = await run_in_threadpool(
+                svc.submit_label_tracking_quick_outbound,
+                account_key=account_key,
+                package_sn=package_sn,
+                actor=actor,
+                shipment_type=shipment_type,
+                warehouse_id=warehouse_id,
+                is_oversea=is_oversea,
+            )
+            if result.code == 0 and result.success_num > 0:
+                message = (
+                    f"已回写面单追踪号 {result.tracking_number} → 赛狐（quickOutbound，"
+                    f"shipmentType={shipment_type} warehouseId={warehouse_id} "
+                    f"isOversea={is_oversea}）；成功 {result.success_num} 单"
+                )
+            else:
+                fails = "; ".join(
+                    f"{d.get('packageSn', '')}: {d.get('msg', '')}"
+                    for d in result.fail_data
+                )
+                detail = f"code={result.code} msg={result.msg}"
+                if fails:
+                    detail += f" | {fails}"
+                message = f"回写赛狐失败: {detail}"
+        else:
+            result = await run_in_threadpool(
+                svc.submit_label_tracking,
+                account_key=account_key,
+                package_sn=package_sn,
+                actor=actor,
+            )
+            message = (
+                f"已回写面单追踪号 {result.tracking_number} → 赛狐（submitToPlatform）；"
+                f"intents: {result.intent_statuses}"
+            )
+    except Exception as exc:  # noqa: BLE001
+        message = f"回写赛狐失败: {exc}"
+    record = repo.get(account_key, package_sn)
+    if record is None:
+        raise HTTPException(404, f"Package {package_sn} not found")
+    return templates.TemplateResponse(
+        request,
+        "package_detail.html",
+        _package_detail_context(account_key, record, message=message),
+    )
+
+
 @app.post("/packages/{package_sn}/create-label", response_class=HTMLResponse)
 async def package_create_label_form(request: Request, package_sn: str):
     """HTML form post to create a shipping label."""
@@ -1306,7 +1630,8 @@ async def package_create_label_form(request: Request, package_sn: str):
 
     try:
         svc = LabelService(repo)
-        result = svc.create_label(
+        result = await run_in_threadpool(
+            svc.create_label,
             carrier=carrier,
             package=record,
             account_key=account_key,
@@ -1798,9 +2123,81 @@ async def package_sku_label_download(package_sn: str, inline: bool = False):
         raise
 
 
+def _print_group_meta(warehouse_name: str, tongtool_warehouse: str):
+    """返回 (group_key, label, has_sticker) 或 None（不支持分组的包裹）。
+
+    美东只打面单（无背贴）；美中按通途发货仓库分成品仓/其他仓，均含背贴。
+    """
+    if warehouse_name == "CENTRADE":
+        return ("east", "美东", False)
+    if warehouse_name == "DANEEY":
+        if tongtool_warehouse == "FZH-DANEEY-成品仓":
+            return ("meizhong_chengpin", "美中-成品仓", True)
+        if tongtool_warehouse in (
+            "FZH-DANEEY-皮壳仓库",
+            "FZH-DANEEY-退货产品仓",
+            "FZH-DANEEY-半成品仓",
+        ):
+            return ("meizhong_qita", "美中-其他仓", True)
+        return None
+    return None
+
+
+@app.post("/api/packages/batch-print-groups")
+async def batch_print_groups(request: Request):
+    """返回所选包裹的仓库分组信息（供打印弹窗一级 tab）。"""
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "Invalid JSON body")
+    package_sns: list[str] = body.get("package_sns", [])
+    if not package_sns:
+        raise HTTPException(400, "No package_sns provided")
+
+    account_key = config["sellfox"]["proxy_account"]
+    repo = _get_package_repository()
+
+    groups: dict[str, dict] = {}
+    skipped: list[dict] = []
+    for sn in package_sns:
+        record = repo.get(account_key, sn)
+        if record is None:
+            skipped.append({"package_sn": sn, "reason": "包裹不存在"})
+            continue
+        warehouse_name = record.logistics.warehouse_name or ""
+        tongtool_mark = repo.get_tongtool_mark(account_key=account_key, package_sn=sn) or {}
+        tongtool_warehouse = tongtool_mark.get("tongtool_shipping_warehouse") or ""
+
+        meta = _print_group_meta(warehouse_name, tongtool_warehouse)
+        if meta is None:
+            if warehouse_name == "DANEEY":
+                skipped.append({"package_sn": sn, "reason": "通途发货仓库为空"})
+            else:
+                skipped.append({
+                    "package_sn": sn,
+                    "reason": f"仓库 {warehouse_name or '未知'} 暂不支持分仓打印",
+                })
+            continue
+        group_key, label, has_sticker = meta
+        if group_key not in groups:
+            groups[group_key] = {
+                "key": group_key,
+                "label": label,
+                "count": 0,
+                "has_sticker": has_sticker,
+            }
+        groups[group_key]["count"] += 1
+
+    return {"groups": list(groups.values()), "skipped": skipped}
+
+
 @app.post("/api/packages/batch-print")
 async def batch_print_packages(request: Request):
-    """Merge label/sticker PDFs for selected packages into one preview."""
+    """Merge label/sticker PDFs for selected packages into one preview.
+
+    Body: {"package_sns": [...], "document_type": "sticker"|"label"|"both", "group_key": optional}
+    group_key 用于按仓库过滤（east / meizhong_chengpin / meizhong_qita）。
+    """
     import io, tempfile, traceback
     import fitz
 
@@ -1810,6 +2207,7 @@ async def batch_print_packages(request: Request):
         raise HTTPException(400, "Invalid JSON body")
     package_sns: list[str] = body.get("package_sns", [])
     doc_type: str = body.get("document_type", "both")
+    group_key: str | None = body.get("group_key")
     if not package_sns:
         raise HTTPException(400, "No package_sns provided")
 
@@ -1817,20 +2215,43 @@ async def batch_print_packages(request: Request):
     repo = _get_package_repository()
 
     merged = fitz.open()
-    skipped: list[str] = []
+    missing_stickers: list[str] = []
 
-    # ── Phase 1: collect all documents first ──
+    # ── Phase 1: collect documents, anchored on valid labels ──
+    # The print count follows the number of packages that have a valid label.
+    # A package whose sticker cannot be generated gets a blank-page placeholder
+    # so sticker count always matches label count and ordering is preserved.
     docs: list[dict] = []  # {sn, sticker_bytes, label_bytes}
     for sn in package_sns:
         record = repo.get(account_key, sn)
         if record is None:
-            skipped.append(f"{sn}: 包裹不存在")
             continue
 
-        sticker_bytes: bytes | None = None
-        label_bytes: bytes | None = None
+        # 按仓库过滤（可选）
+        if group_key:
+            warehouse_name = record.logistics.warehouse_name or ""
+            tongtool_mark = repo.get_tongtool_mark(account_key=account_key, package_sn=sn) or {}
+            tongtool_warehouse = tongtool_mark.get("tongtool_shipping_warehouse") or ""
+            meta = _print_group_meta(warehouse_name, tongtool_warehouse)
+            if meta is None or meta[0] != group_key:
+                continue
 
-        # ── Sticker ──
+        # Anchor: package must have a valid (non-cancelled) label to be printed
+        labels = repo.list_labels_for_package(account_key=account_key, package_sn=sn)
+        active = [lbl for lbl in labels if getattr(lbl, "status", None) != "cancelled"]
+        if not active:
+            continue
+        lbl = active[0]
+
+        label_bytes: bytes | None = None
+        if getattr(lbl, "artifact_id", None):
+            artifact = repo.get_artifact(lbl.artifact_id)
+            if artifact:
+                path = repo.resolve_artifact_path(artifact)
+                if path.is_file():
+                    label_bytes = path.read_bytes()
+
+        sticker_bytes: bytes | None = None
         if doc_type in ("sticker", "both"):
             items_data: list[dict] = []
             skus: set[str] = set()
@@ -1839,9 +2260,7 @@ async def batch_print_packages(request: Request):
                 if sku:
                     skus.add(sku)
                     items_data.append({"commodity_sku": sku, "qty": item.quantity or 1})
-            if not items_data:
-                skipped.append(f"{sn}: 无商品SKU，无法生成背贴")
-            else:
+            if items_data:
                 erp_key = os.getenv("PROD_ERP_API_KEY") or os.getenv("ERP_API_KEY", "")
                 erp_secret = os.getenv("PROD_ERP_API_SECRET") or os.getenv("ERP_API_SECRET", "")
                 erp_base = os.getenv("ERP_URL", "https://erpnext.vilavi.cn")
@@ -1871,68 +2290,65 @@ async def batch_print_packages(request: Request):
                         Path(tmp.name).unlink(missing_ok=True)
                 except Exception:
                     traceback.print_exc()
-                if not sticker_bytes:
-                    skipped.append(f"{sn}: 无法生成背贴")
-        if doc_type in ("sticker", "both") and not sticker_bytes:
-            continue  # skip this package entirely
-
-        # ── Label ──
-        if doc_type in ("label", "both"):
-            labels = repo.list_labels_for_package(account_key=account_key, package_sn=sn)
-            active = [lbl for lbl in labels if getattr(lbl, "status", None) != "cancelled"]
-            if active:
-                lbl = active[0]
-                if getattr(lbl, "artifact_id", None):
-                    artifact = repo.get_artifact(lbl.artifact_id)
-                    if artifact:
-                        path = repo.resolve_artifact_path(artifact)
-                        if path.is_file():
-                            label_bytes = path.read_bytes()
-            if not label_bytes:
-                skipped.append(f"{sn}: 无有效Label面单")
-        if doc_type in ("label", "both") and not label_bytes:
-            continue  # skip this package entirely
+            if not sticker_bytes:
+                missing_stickers.append(f"{sn}: 无有效背贴（已用空白页占位）")
 
         docs.append({"sn": sn, "sticker": sticker_bytes, "label": label_bytes})
 
-    # ── Hard validation: both mode requires both documents for every package ──
-    if skipped:
+    if not docs:
         raise HTTPException(
-            422,
-            f"校验失败 — 以下包裹缺少文档，已拒绝打印:\n" + "\n".join(skipped),
+            400,
+            "所选包裹均无有效面单，无法打印。请先为包裹创建面单。",
         )
 
-    # ── Phase 2: merge in strict order (sticker → label, per package) ──
+    # ── Phase 2: merge in order — sticker (or blank placeholder) → label ──
     for d in docs:
         if doc_type == "both":
-            src_s = fitz.open(stream=d["sticker"], filetype="pdf")
+            src_s = _blank_or_pdf(merged, d["sticker"])
             merged.insert_pdf(src_s)
             src_s.close()
             src_l = fitz.open(stream=d["label"], filetype="pdf")
             merged.insert_pdf(src_l)
             src_l.close()
         elif doc_type == "sticker":
-            src = fitz.open(stream=d["sticker"], filetype="pdf")
-            merged.insert_pdf(src)
-            src.close()
+            src_s = _blank_or_pdf(merged, d["sticker"])
+            merged.insert_pdf(src_s)
+            src_s.close()
         elif doc_type == "label":
+            if d["label"] is None:
+                continue
             src = fitz.open(stream=d["label"], filetype="pdf")
             merged.insert_pdf(src)
             src.close()
 
     if len(merged) == 0:
-        raise HTTPException(400, f"无有效文档可合并。跳过: {'; '.join(skipped)}")
+        raise HTTPException(400, "无有效文档可合并。")
 
     buf = io.BytesIO()
     merged.save(buf)
     merged.close()
     buf.seek(0)
 
+    headers = {"Content-Disposition": "inline; filename=batch_print.pdf"}
+    if missing_stickers:
+        headers["X-Missing-Stickers"] = str(len(missing_stickers))
+
     return Response(
         content=buf.getvalue(),
         media_type="application/pdf",
-        headers={"Content-Disposition": "inline; filename=batch_print.pdf"},
+        headers=headers,
     )
+
+
+def _blank_or_pdf(target, pdf_bytes: bytes | None):
+    """Return a fitz doc — the sticker PDF, or a blank placeholder page."""
+    import fitz
+
+    if pdf_bytes:
+        return fitz.open(stream=pdf_bytes, filetype="pdf")
+    blank = fitz.open()
+    blank.new_page(width=595, height=842)  # A4
+    return blank
 
 
 @app.post("/api/packages/batch-export")
@@ -1951,8 +2367,9 @@ async def batch_export_packages(request: Request):
     buf = io.StringIO()
     writer = csv.writer(buf)
     writer.writerow([
-        "包裹号", "赛狐状态", "本地审核", "渠道", "店铺", "追踪号", "站点",
+        "包裹号", "赛狐状态", "本地审核", "渠道", "店铺", "追踪号", "赛狐追踪号", "站点",
         "建议承运商", "匹配规则", "路由状态",
+        "通途包裹号", "通途发货仓库", "通途发货方式",
         "收货人", "电话", "城市/州", "邮编", "国家", "地址",
     ])
 
@@ -1970,6 +2387,30 @@ async def batch_export_packages(request: Request):
         address_line = addr.address_line_1 or ""
         if addr.address_line_2:
             address_line += " " + addr.address_line_2
+
+        # 通途标记（包裹号 / 发货仓库 / 发货方式）
+        tongtool_mark = repo.get_tongtool_mark(account_key=account_key, package_sn=sn) or {}
+        tongtool_p_numbers = tongtool_mark.get("tongtool_p_numbers") or ""
+        tongtool_warehouse = tongtool_mark.get("tongtool_shipping_warehouse") or ""
+        tongtool_method = tongtool_mark.get("tongtool_shipping_method") or ""
+
+        # 有效追踪号：优先取面单记录中非取消且带追踪号的最近一条；
+        # 赛狐追踪号：取基本信息中赛狐拉下来的原始追踪号。
+        sellfox_tracking = record.logistics.tracking_number or ""
+        effective_tracking = ""
+        try:
+            labels = repo.list_labels_for_package(
+                account_key=account_key, package_sn=sn
+            )
+            for lbl in labels:
+                if getattr(lbl, "status", None) == "cancelled":
+                    continue
+                t = (getattr(lbl, "tracking_number", "") or "").strip()
+                if t:
+                    effective_tracking = t
+                    break
+        except Exception:
+            pass
 
         # Routing: cached first, compute on-the-fly if missing
         route_label = route_rule = route_status = ""
@@ -1998,11 +2439,15 @@ async def batch_export_packages(request: Request):
             record.local_review_status or "",
             record.logistics.channel_name or "",
             record.shop_name or "",
-            record.logistics.tracking_number or "",
+            effective_tracking,
+            sellfox_tracking,
             record.marketplace or "",
             route_label,
             route_rule,
             route_status,
+            tongtool_p_numbers,
+            tongtool_warehouse,
+            tongtool_method,
             addr.name or "",
             phone,
             city_state,
@@ -2018,6 +2463,140 @@ async def batch_export_packages(request: Request):
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": "attachment; filename=packages_export.csv"},
     )
+
+
+@app.post("/api/packages/batch-review")
+async def batch_review(request: Request):
+    """Batch approve packages. Body: {"package_sns": [...], "actor": "..."}"""
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "Invalid JSON body")
+    package_sns: list[str] = body.get("package_sns", [])
+    actor: str = str(body.get("actor") or "web-user").strip()
+    if not package_sns:
+        raise HTTPException(400, "No package_sns provided")
+
+    account_key = config["sellfox"]["proxy_account"]
+    svc = _get_package_review_service()
+    results: list[dict] = []
+    for sn in package_sns:
+        try:
+            svc.review(PackageReviewRequest(
+                account_key=account_key,
+                package_sn=sn,
+                actor=actor,
+                decision="approved",
+                note="batch approved via UI",
+            ))
+            results.append({"package_sn": sn, "ok": True})
+        except Exception as exc:
+            results.append({"package_sn": sn, "ok": False, "error": str(exc)})
+    return {"results": results, "approved": sum(1 for r in results if r["ok"]), "total": len(package_sns)}
+
+
+@app.post("/api/packages/batch-create-labels")
+async def batch_create_labels(request: Request):
+    """Create labels for selected packages.
+
+    Body (per-warehouse): {"groups": [{"carrier": "auto"|"vite"|"lizard", "service_level": "...", "package_sns": [...]}], "actor": "..."}
+    Backward-compat flat: {"package_sns": [...], "carrier": "...", "service_level": "...", "actor": "..."}
+    carrier="auto" uses each package's routing-suggested carrier.
+    Each package is independent — failures are reported, not fatal.
+    """
+    from sellfox_shipping.label_service import LabelService, LabelServiceError
+
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "Invalid JSON body")
+
+    account_key = config["sellfox"]["proxy_account"]
+    repo = _get_package_repository()
+    svc = LabelService(repo)
+    actor: str = str(body.get("actor") or "web-user").strip()
+
+    # Normalize into groups: [{carrier, service_level, package_sns}]
+    raw_groups = body.get("groups")
+    if raw_groups:
+        groups = []
+        for g in raw_groups:
+            carrier = str(g.get("carrier") or "auto").strip().lower()
+            if carrier not in ("auto", "vite", "lizard"):
+                raise HTTPException(400, f"Invalid carrier '{carrier}'")
+            groups.append({
+                "carrier": carrier,
+                "service_level": str(g.get("service_level") or "").strip(),
+                "package_sns": [str(s) for s in (g.get("package_sns") or [])],
+            })
+    else:
+        carrier: str = str(body.get("carrier") or "auto").strip().lower()
+        if carrier not in ("auto", "vite", "lizard"):
+            raise HTTPException(400, f"Invalid carrier '{carrier}'")
+        groups = [{
+            "carrier": carrier,
+            "service_level": str(body.get("service_level") or "").strip(),
+            "package_sns": [str(s) for s in (body.get("package_sns") or [])],
+        }]
+
+    if not any(g["package_sns"] for g in groups):
+        raise HTTPException(400, "No package_sns provided")
+
+    results: list[dict] = []
+    success = 0
+    total = 0
+    for group in groups:
+        carrier = group["carrier"]
+        service_level = group["service_level"]
+        for sn in group["package_sns"]:
+            total += 1
+            record = repo.get(account_key, sn)
+            if record is None:
+                results.append({"package_sn": sn, "ok": False, "error": "包裹不存在"})
+                continue
+            effective_carrier = carrier
+            if carrier == "auto":
+                try:
+                    carton_rows = _carton_rows_for_package(account_key, record)
+                    routing = _compute_routing(record, carton_rows)
+                    effective_carrier = (routing.carrier or "").strip().lower() if routing else ""
+                except Exception:
+                    effective_carrier = ""
+                if effective_carrier not in ("vite", "lizard"):
+                    results.append({
+                        "package_sn": sn,
+                        "ok": False,
+                        "error": "无路由建议承运商（auto 模式）",
+                    })
+                    continue
+            try:
+                result = await run_in_threadpool(
+                    svc.create_label,
+                    carrier=effective_carrier,
+                    package=record,
+                    account_key=account_key,
+                    actor=actor,
+                    service_level=service_level,
+                )
+                success += 1
+                results.append({
+                    "package_sn": sn,
+                    "ok": True,
+                    "carrier": effective_carrier,
+                    "tracking_number": result.get("tracking_number", ""),
+                    "carrier_order_id": result.get("carrier_order_id", ""),
+                })
+            except LabelServiceError as exc:
+                results.append({"package_sn": sn, "ok": False, "carrier": effective_carrier, "error": str(exc)})
+            except Exception as exc:  # noqa: BLE001
+                results.append({"package_sn": sn, "ok": False, "carrier": effective_carrier, "error": str(exc)})
+
+    return {
+        "results": results,
+        "success": success,
+        "failed": len(results) - success,
+        "total": total,
+    }
 
 
 def mount_mcp(mcp_app):

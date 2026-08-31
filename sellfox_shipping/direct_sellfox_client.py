@@ -18,6 +18,7 @@ from sellfox_shipping.package_models import (
     PackageRowError,
     SellfoxPackagePage,
 )
+from sellfox_shipping.sellfox_client import SellfoxApiError
 
 
 class DirectSellfoxClient:
@@ -106,7 +107,7 @@ class DirectSellfoxClient:
         url = f"{self.api_domain}{path}"
         query = self._compute_sign(path)
         resp = self._client.post(url, params=query, json=body, timeout=60)
-        resp.raise_for_status()
+        self._ensure_http_ok(path, resp)
         data = resp.json()
         # Retry once on token expiry
         if data.get("code") == 40001:
@@ -114,9 +115,18 @@ class DirectSellfoxClient:
                 self._token = None
             query = self._compute_sign(path)
             resp = self._client.post(url, params=query, json=body, timeout=60)
-            resp.raise_for_status()
+            self._ensure_http_ok(path, resp)
             data = resp.json()
         return data
+
+    @staticmethod
+    def _ensure_http_ok(path: str, resp: httpx.Response) -> None:
+        """Surface Sellfox's error body instead of losing it on raise_for_status()."""
+        if resp.status_code >= 400:
+            raise SellfoxApiError(
+                f"Sellfox HTTP {resp.status_code} on {path}: {(resp.text or '')[:1000]}",
+                status_code=resp.status_code,
+            )
 
     # ── Package page gateway ───────────────────────────────────
 
@@ -175,4 +185,37 @@ class DirectSellfoxClient:
             total_size=int(page.get("totalSize") or 0),
             records=records,
             errors=errors,
+        )
+
+    # ── Submit platform (write trackNo back to Sellfox) ───────
+
+    def submit_to_platform(self, wire_body: dict) -> dict:
+        """POST submitToPlatform with caller-built wire JSON."""
+        return self._post("/api/packageShip/submitToPlatform.json", wire_body)
+
+    def fetch_package_detail(self, package_sn: str) -> dict | None:
+        """POST packageDetail; returns data object or None on soft failure."""
+        sn = (package_sn or "").strip()
+        if not sn:
+            return None
+        try:
+            data = self._post(
+                "/api/packageShip/v1/packageDetail.json",
+                {"packageSn": sn},
+            )
+        except Exception:
+            return None
+        if data.get("code") != 0:
+            return None
+        return data.get("data") if isinstance(data, dict) else None
+
+    def quick_outbound(self, package_list: list[dict]) -> dict:
+        """POST quickOutbound (快速出库): submit package tracking to platform.
+
+        Each package: {packageSn, carrier, trackNo, shipmentType(0=仅提交平台不扣库存),
+        warehouseId?, isOversea?}. Returns OpenResult«QuickOutboundOpenVO».
+        """
+        return self._post(
+            "/api/packageShip/quickOutbound.json",
+            {"packageList": package_list},
         )

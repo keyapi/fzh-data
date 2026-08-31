@@ -315,13 +315,15 @@ cron 切换：`0 9/12/14/18 * * 1-5` + `0 0 * * 0,6` 保险 + `*/30 * * * *` 兜
 
 ## 六、数据库常用查询
 
-> **生产（上海服务器）**: 数据库是 MySQL，经 `docker exec new-api-mysql mysql -uroot -pnew-api-root-pwd --default-character-set=utf8mb4 new_api -N -B -e "<SQL>"`。
+> **生产（上海服务器）**: 数据库是 MySQL。**MySQL root 密码不硬编码在文档/脚本里**，存于服务器 `/opt/new-api/.secrets.env`（环境变量 `MYSQL_ROOT_PASSWORD`）。执行查询前先 `source /opt/new-api/.secrets.env`。
 > **本地开发**: 用 sqlite3 `/data/one-api.db`（Git Bash 下加 `MSYS2_ARG_CONV_EXCL="*"` 前缀）。
 > 以下给出生产 MySQL 写法。
 
 ```bash
-# 生产 MySQL 查询模板
-MYSQL() { docker exec new-api-mysql mysql -uroot -pnew-api-root-pwd --default-character-set=utf8mb4 new_api -N -B -e "$1"; }
+# 生产 MySQL 查询模板（密码来自 .secrets.env，不经命令行）
+source /opt/new-api/.secrets.env
+MYSQL() { docker exec -e "MYSQL_PWD=$MYSQL_ROOT_PASSWORD" new-api-mysql \
+            mysql -uroot --default-character-set=utf8mb4 new_api -N -B -e "$1"; }
 
 # 用户
 MYSQL "SELECT id, username, display_name, role, quota, used_quota FROM users;"
@@ -347,6 +349,8 @@ MYSQL "SELECT value FROM options WHERE \`key\`='ModelRatio';"
 # 更新定价（手动，一般由分时脚本自动做）
 MYSQL "UPDATE options SET value='{\"...\":...}' WHERE \`key\`='ModelRatio';"
 ```
+
+> **⚠️ 凭证安全**: 曾误将 MySQL root 密码与钉钉 APP_SECRET 硬编码进脚本并提交到公开仓库（PR 审查发现）。修复后脚本统一从 `/opt/new-api/.secrets.env` 读取（`MYSQL_ROOT_PASSWORD`、`DINGTALK_APP_KEY`、`DINGTALK_APP_SECRET`）。新脚本禁止硬编码凭证。
 
 本地 SQLite 写法参考（历史，仅本地开发）：`docker exec new-api sqlite3 /data/one-api.db "..."`，Git Bash 需 `MSYS2_ARG_CONV_EXCL="*"` 前缀。
 

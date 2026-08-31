@@ -7,10 +7,13 @@ OAuth 2.0 token refresh, HMAC signing, and IP whitelist.
 from __future__ import annotations
 
 import copy
+import os
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 import httpx
+import yaml
 
 from sellfox_shipping.models import Address, Order, OrderItem, PackageStatus
 from sellfox_shipping.package_models import (
@@ -22,6 +25,19 @@ from sellfox_shipping.package_models import (
     SellfoxPackagePage,
     SellfoxPackageRecord,
 )
+
+
+class SellfoxApiError(RuntimeError):
+    """Sellfox HTTP-level rejection carrying the HTTP status code.
+
+    4xx means Sellfox definitively rejected the request (nothing applied);
+    5xx/network means the outcome is unknown. Callers use ``status_code``
+    to tell the two apart.
+    """
+
+    def __init__(self, message: str, *, status_code: int | None = None):
+        super().__init__(message)
+        self.status_code = status_code
 
 
 class SellfoxClient:
@@ -49,7 +65,11 @@ class SellfoxClient:
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
         resp = self._client.post(url, json=body, headers=headers)
-        resp.raise_for_status()
+        if resp.status_code >= 400:
+            raise SellfoxApiError(
+                f"Sellfox HTTP {resp.status_code} on {path}: {(resp.text or '')[:1000]}",
+                status_code=resp.status_code,
+            )
         return resp.json()
 
     # ── Order fetching ──────────────────────────────────────────
@@ -229,6 +249,17 @@ class SellfoxClient:
             return {"code": -1, "raw": data}
         return data
 
+    def quick_outbound(self, package_list: list[dict]) -> dict:
+        """POST quickOutbound (快速出库): submit package tracking to platform.
+
+        Each package: {packageSn, carrier, trackNo, shipmentType(0=仅提交平台不扣库存),
+        warehouseId?, isOversea?}. Returns OpenResult«QuickOutboundOpenVO».
+        """
+        return self._post(
+            self._proxy_path("/api/packageShip/quickOutbound.json"),
+            {"packageList": package_list},
+        )
+
     def fetch_package_detail(self, package_sn: str) -> dict | None:
         """POST packageDetail; returns data object or None on soft failure."""
         sn = (package_sn or "").strip()
@@ -242,6 +273,29 @@ class SellfoxClient:
             return None
         detail = data.get("data")
         return detail if isinstance(detail, dict) else None
+
+
+def get_sellfox_client():
+    """Return the best Sellfox gateway for the current environment.
+
+    When SELLFOX_APP_ID/SECRET are set, talk directly to the official OpenAPI
+    (OAuth2 + HMAC signing); otherwise fall back to the shared proxy. Shared by
+    CLI and Web so the gateway choice stays in one place.
+    """
+    app_id = os.getenv("SELLFOX_APP_ID", "").strip()
+    app_secret = os.getenv("SELLFOX_APP_SECRET", "").strip()
+    if app_id and app_secret:
+        from sellfox_shipping.direct_sellfox_client import DirectSellfoxClient
+
+        return DirectSellfoxClient()
+
+    with open(Path(__file__).parent / "config.yaml", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+    return SellfoxClient(
+        proxy_base_url=config["sellfox"]["proxy_base_url"],
+        proxy_account=config["sellfox"]["proxy_account"],
+        proxy_api_key=os.getenv("SELLFOX_PROXY_API_KEY", ""),
+    )
 
 
 # ── Response parsers ──────────────────────────────────────────────

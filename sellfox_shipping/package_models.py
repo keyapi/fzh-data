@@ -100,11 +100,18 @@ class PackageListItem(BaseModel):
     local_review_status: str = "pending"
     channel_name: str = ""
     shop_name: str = ""
+    warehouse_name: str = ""
     marketplace: str = ""
     tracking_number: str = ""
     order_count: int = 0
     item_count: int = 0
     fetched_at: datetime | None = None
+    purchase_date: datetime | None = None
+    label_created_at: datetime | None = None
+    is_tongtool: bool = False
+    tongtool_p_numbers: str = ""
+    tongtool_shipping_warehouse: str = ""
+    tongtool_shipping_method: str = ""
 
 
 class PackageListResult(BaseModel):

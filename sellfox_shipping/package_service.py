@@ -105,9 +105,16 @@ class PackageListRequest(BaseModel):
     account_key: str
     package_status: str | None = None
     channel_name: str | None = None
+    warehouse_name: str | None = None
     local_review_status: str | None = None
     date_start: str | None = None
     date_end: str | None = None
+    date_field: str = "label"
+    has_label: str | None = None
+    tongtool: str | None = None
+    tongtool_warehouse: str | None = None
+    tongtool_method: str | None = None
+    exclude_shops: list[str] = []
     limit: int = Field(default=50, ge=1, le=500)
     offset: int = Field(default=0, ge=0)
 
@@ -374,9 +381,16 @@ class ListPackagesService:
             account_key=request.account_key,
             package_status=request.package_status,
             channel_name=request.channel_name,
+            warehouse_name=request.warehouse_name,
             local_review_status=request.local_review_status,
             date_start=request.date_start,
             date_end=request.date_end,
+            date_field=request.date_field,
+            has_label=request.has_label,
+            tongtool=request.tongtool,
+            tongtool_warehouse=request.tongtool_warehouse,
+            tongtool_method=request.tongtool_method,
+            exclude_shops=request.exclude_shops,
             limit=request.limit,
             offset=request.offset,
         )
@@ -384,9 +398,16 @@ class ListPackagesService:
             account_key=request.account_key,
             package_status=request.package_status,
             channel_name=request.channel_name,
+            warehouse_name=request.warehouse_name,
             local_review_status=request.local_review_status,
             date_start=request.date_start,
             date_end=request.date_end,
+            date_field=request.date_field,
+            has_label=request.has_label,
+            tongtool=request.tongtool,
+            tongtool_warehouse=request.tongtool_warehouse,
+            tongtool_method=request.tongtool_method,
+            exclude_shops=request.exclude_shops,
         )
         return PackageListResult(total=total, items=items)
 

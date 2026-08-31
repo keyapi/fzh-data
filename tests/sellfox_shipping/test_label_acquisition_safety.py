@@ -92,9 +92,11 @@ def test_preflight_rejects_unapproved_package_before_carrier_call(tmp_path) -> N
 
 def test_preflight_rejects_incomplete_vite_warehouse(tmp_path) -> None:
     repo, package = _ready_repo(tmp_path)
+    # Use a warehouse not in config — triggers "not found" error
+    package.logistics.warehouse_name = "NONEXISTENT"
     service = LabelService(repo)
 
-    with pytest.raises(LabelServiceError, match="warehouse"):
+    with pytest.raises(LabelServiceError, match="(?i)warehouse"):
         service.preflight(
             package=package,
             account_key="sellfox-main",

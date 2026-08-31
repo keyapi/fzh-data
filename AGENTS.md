@@ -52,6 +52,13 @@
 # 2. 安装项目依赖
 uv sync
 
+# 2.5 环境体检（按本机 OS 打印建议；默认不自动装软件）
+#     uv run python scripts/env_doctor.py
+#     Windows 常见建议：安装 PowerShell 7 稳定版（winget id Microsoft.PowerShell）、
+#     加载 windows-agent-shell skill，避免 && ParserError 与 GBK/UTF-8 乱码。
+#     需要对照探针时：uv run python scripts/env_doctor.py --probe
+#     ⚠️ 用户主权：把建议告诉用户，确认后再 winget / 改系统设置。不要擅自全量导入。
+
 # 3. 检查并安装 Node.js（如未安装则自动装）
 #    Agent 执行：先 `node --version` 检查，若不存在则：
 #    Windows:  winget install OpenJS.NodeJS.LTS --silent --accept-package-agreements
@@ -68,20 +75,25 @@ uv sync
 # 4c. Tavily（AI 优化搜索，1000 次/月免费，推荐装）
 #     uv pip install mcp-tavily
 #     注册 → https://app.tavily.com/home → 获取 Key → 改 .codex/config.toml 里的 TAVILY_API_KEY
+# 4d. 通途 ERP2 MCP：填 tongtool_api/.env 后按宿主分别注册（clone 不会自动出现）
+#     Codex:  powershell -File tongtool_api/setup_codex_mcp.ps1（完全退出再开）
+#     Cursor: uv run python tongtool_api/setup_cursor_mcp.py（Customize→MCP 启用；未出现则重载窗口）
 
 # 5. 初始化 symlink（仅 Claude Desktop 需要；Codex 用户跳过此步）
 #    powershell -ExecutionPolicy Bypass -File setup.ps1
 
-# ⚠️ MCP 装完后必须重启 Codex（或 Claude Desktop），配置才会生效！
+# ⚠️ 通途 MCP：Codex 与 Cursor 要分别注册。仓库 `.cursor/` gitignore，没有可点的 Cursor 安装提示。
 ```
 
 
 > **首次打开项目时，Codex 弹窗问「是否信任此项目」→ 务必选「是」！**
 > 选「否」会导致 `.codex/config.toml` 里的 MCP 和 `.agents/skills/` 全部不加载。
-> MCP 安装完成后**必须重启 Codex**（不是新建对话，是完全退出再打开）。
+> MCP 安装完成后：**Codex 必须完全退出再打开**；**Cursor** 写完 `~/.cursor/mcp.json` 后先看工具目录，没有再 Customize → MCP 并重载窗口。
 >
 > 所有脚本通过 `uv run python <script.py>` 运行，不需要全局 Python / conda。
 > 如果 `uv` 不是命令，重新打开终端或手动加 `$env:Path += ";$env:USERPROFILE\.cargo\bin"`（Windows）或 `export PATH="$HOME/.cargo/bin:$PATH"`（Mac/Linux）。
+>
+> Windows Agent：跑 shell 前加载 `.agents/skills/windows-agent-shell/SKILL.md`；优先 `pwsh`；禁止 PS 5.1 `Set-Content -Encoding UTF8`（BOM）。
 >
 > 如果同事 agent clone 后不知道怎么做，让它读本项目 AGENTS.md 的本节。
 ### 运行环境
@@ -103,17 +115,25 @@ uv sync
 | `warehouse-restock` | `warehouse_restock/` | EN BOM → 三成本拆分 → 海外仓备货单 |
 | `other-outbound` | `other_outbound/` | 赛狐库存明细 → 其他出库清零 |
 | `sellfox-api` | `SELLFOX_API/` | 赛狐 OpenAPI 文档镜像（419 端点）+ 连通性测试 |
+| `sellfox-combo-create` | `SELLFOX_API/` | EN 套件 Product Bundle ↔ 赛狐组合商品：sync-combos 对账/创建/回读断言 |
+| `sellfox-cover-inventory` | `sellfox_cover_inventory/` | 三角类皮壳共享库存代理：KS 库存池 + PK# 组合 + cover_combo_ops 创建/对账 |
 | `sellfox-shipping` | `sellfox_shipping/` | 赛狐尾程打单（订单获取→承运人标签→追踪回写）三界面架构 |
 | `vite-api` | `vite-api/` | VITE 多承运商打单 API 文档（测试环境默认） |
 | `yiglobal-api` | `yiglobal-api/` | 蜴国际打单 API 文档（原 `蜴国际-API/`；env：`YIGLOBAL_*`） |
 | `en-image-upload` | `EN_API/` | 图片上传（CLI + Web UI + 物料组主图） |
 | `nas-itemgroup-folders` | `nas_itemgroup_folders/` | NAS-ERPNext 物料组文件夹对账 + 叶子组 (LGKS) 管理 |
+| `nas-access` | `NAS_API/` | 群晖多域名访问、QC 选路、OpenWrt ACME+反代、DSM 第二张证 |
 | `us-openai-api-proxy` | `us_openai_api_proxy/` | US Vultr Tailscale + CLIProxyAPI → ChatGPT API 共享 |
 | `new-api-deployment` | `new-api-deployment/` | new-api 部署（上海阿里云）+ 订阅/配额管理 |
 | `new-api-dingtalk-oidc` | `new-api-dingtalk-oidc/` | 钉钉 OAuth → OIDC 桥接代理（FastAPI） |
 | `dam-prototype` | `dam-prototype/` | DAM 数字资产管理原型 |
 | `erpnext` | `erpnext/` | 工单排查 (setup→fetch→report 流水线) |
+| `tongtool-order-cost` | `tongtool_order_cost/` | 通途订单特殊规则 1.7.0 本地引擎 + Google Sheet SKU 改名 |
 | `erpnext-wo-audit` | `.agents/skills/erpnext-wo-audit/` | 工单排查 Skill，按触发词自动加载 |
+| `missing-products` | `.agents/skills/missing-products/` | 通途有库存 SKU → EN 产品客户码 → 赛狐产品 SKU 三方主线补齐/审计 |
+| `platform-account-reconciliation` | `platform_account_reconciliation/` | OSTKUS/Wayfair 账期费用级对账 + EN Tongtool Order 匹配 |
+| `channel-account-sync` | `channel_account_sync/` | Google 表渠道账号 → EN Channel Account（人变才加行，Amazon 按国家站） |
+| `windows-agent-shell` | `.agents/skills/windows-agent-shell/` | Windows Agent shell：优先 pwsh、禁 bash/`&&`（5.1）、UTF-8 无 BOM |
 | `frappe-core-api` | — | ERPNext REST API 开发（外部 skill） |
 | `frappe-errors-api` | — | ERPNext API 错误处理（外部 skill） |
 

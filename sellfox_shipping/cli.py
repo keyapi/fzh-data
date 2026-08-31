@@ -57,21 +57,9 @@ def _get_store():
 
 
 def _get_client():
-    import os
-    from sellfox_shipping.sellfox_client import SellfoxClient
+    from sellfox_shipping.sellfox_client import get_sellfox_client
 
-    app_id = os.getenv("SELLFOX_APP_ID", "").strip()
-    app_secret = os.getenv("SELLFOX_APP_SECRET", "").strip()
-    if app_id and app_secret:
-        from sellfox_shipping.direct_sellfox_client import DirectSellfoxClient
-        return DirectSellfoxClient()
-
-    config = _load_config()
-    return SellfoxClient(
-        proxy_base_url=config["sellfox"]["proxy_base_url"],
-        proxy_account=config["sellfox"]["proxy_account"],
-        proxy_api_key=os.getenv("SELLFOX_PROXY_API_KEY", ""),
-    )
+    return get_sellfox_client()
 
 
 def _get_package_repository():
@@ -161,6 +149,44 @@ def _get_package_list_service():
     return ListPackagesService(_get_package_repository())
 
 
+def _get_label_operation_query_service():
+    from sellfox_shipping.label_operation_service import LabelOperationQueryService
+
+    return LabelOperationQueryService(_get_package_repository())
+
+
+def _outbox_row_json(row) -> dict:
+    return {
+        "id": row.id,
+        "account_key": row.account_key,
+        "package_id": row.package_id,
+        "package_sn": row.package_sn,
+        "order_db_id": row.order_db_id,
+        "external_order_id": row.external_order_id,
+        "generation": row.generation,
+        "tracking_number": row.tracking_number,
+        "candidate_key": row.candidate_key,
+        "status": row.status,
+        "submission_intent_id": row.submission_intent_id,
+        "request_hash": row.request_hash,
+        "attempt_count": row.attempt_count,
+        "next_attempt_at": row.next_attempt_at,
+        "lease_owner": row.lease_owner,
+        "lease_expires_at": row.lease_expires_at,
+        "confirmed_by": row.confirmed_by,
+        "confirmed_at": row.confirmed_at,
+        "last_error_class": row.last_error_class,
+        "last_error_summary": row.last_error_summary,
+        "conflicts_with_outbox_id": row.conflicts_with_outbox_id,
+        "sources": [
+            {"source_type": source.source_type, "source_id": source.source_id}
+            for source in row.sources
+        ],
+        "created_at": row.created_at,
+        "updated_at": row.updated_at,
+    }
+
+
 # ── Commands ──────────────────────────────────────────────────────
 
 @app.command()
@@ -227,6 +253,30 @@ def packages_sync(
         raise typer.Exit(1)
 
 
+@app.command("packages-mark-tongtool")
+def packages_mark_tongtool(
+    xls: str = typer.Option(..., "--xls", help="美东100.xls 路径（含 参考编号/Reference Code 列）"),
+    actor: str = typer.Option("cli", help="Actor for audit"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """读通途 xls，经 EN(Tongtool Package) 匹配本地赛狐包裹并持久化 is_tongtool 标记。
+
+    未匹配的 P 号会单独列出（不静默丢弃），便于核对。与 Web 上传共用 tongtool_service。
+    """
+    from sellfox_shipping.tongtool_service import match_and_mark
+
+    config = _load_config()
+    result = match_and_mark(
+        _get_package_repository(),
+        account_key=config["sellfox"]["proxy_account"],
+        xls_path=xls,
+        actor=actor,
+    )
+    _output(result.to_dict(), json_output)
+    if result.unmatched_count > 0:
+        raise typer.Exit(2)
+
+
 @app.command("packages-list")
 def packages_list(
     status: Optional[str] = typer.Option(None, help="Filter by package_status"),
@@ -249,6 +299,541 @@ def packages_list(
         )
     )
     _output(result.model_dump(mode="json"), json_output)
+
+
+@app.command("label-operations-list")
+def label_operations_list(
+    account_key: Optional[str] = typer.Option(None, help="Filter by account key"),
+    package_sn: Optional[str] = typer.Option(None, help="Filter by packageSn"),
+    status: Optional[str] = typer.Option(None, help="Filter by operation status"),
+    carrier: Optional[str] = typer.Option(None, help="Filter by carrier"),
+    limit: int = typer.Option(50, min=1, max=500, help="Max results"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """List label acquisition operations without carrier side effects."""
+    filters = {
+        "account_key": account_key,
+        "package_sn": package_sn,
+        "status": status,
+        "carrier": carrier,
+        "limit": limit,
+    }
+    results = _get_label_operation_query_service().list(**filters)
+    _output(
+        {
+            "command": "label-operations-list",
+            "ok": True,
+            "counts": {
+                "input": len(results),
+                "success": len(results),
+                "failed": 0,
+            },
+            "filters": filters,
+            "limit": limit,
+            "results": results,
+            "errors": [],
+        },
+        json_output,
+    )
+
+
+@app.command("sellfox-outbox-list")
+def sellfox_outbox_list(
+    account_key: Optional[str] = typer.Option(None, help="Filter by account key"),
+    package_sn: Optional[str] = typer.Option(None, help="Filter by packageSn"),
+    status: Optional[str] = typer.Option(None, help="Filter by outbox status"),
+    limit: int = typer.Option(50, min=1, max=500, help="Max results"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """List Sellfox writeback candidates without external side effects."""
+    repo = _get_package_repository()
+    rows = repo.list_sellfox_outbox(
+        account_key=account_key, package_sn=package_sn, status=status, limit=limit
+    )
+    results = [_outbox_row_json(row) for row in rows]
+    _output(
+        {
+            "command": "sellfox-outbox-list",
+            "ok": True,
+            "counts": {"input": len(results), "success": len(results), "failed": 0},
+            "results": results,
+            "errors": [],
+            "recommended_action": "inspect_candidate_before_confirmation",
+        },
+        json_output,
+    )
+
+
+@app.command("sellfox-outbox-show")
+def sellfox_outbox_show(
+    outbox_id: int = typer.Option(..., min=1, help="Sellfox outbox id"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Show one Sellfox writeback candidate and its source evidence."""
+    row = _get_package_repository().get_sellfox_outbox(outbox_id)
+    if row is None:
+        _output(
+            {
+                "command": "sellfox-outbox-show",
+                "ok": False,
+                "counts": {"input": 1, "success": 0, "failed": 1},
+                "results": [],
+                "errors": [{"code": "outbox_not_found", "message": f"Sellfox outbox {outbox_id} not found", "recommended_action": "check_outbox_id"}],
+                "recommended_action": "check_outbox_id",
+            },
+            json_output,
+        )
+        raise typer.Exit(2)
+    _output(
+        {
+            "command": "sellfox-outbox-show",
+            "ok": True,
+            "counts": {"input": 1, "success": 1, "failed": 0},
+            "results": [_outbox_row_json(row)],
+            "errors": [],
+            "recommended_action": "inspect_candidate_before_confirmation",
+        },
+        json_output,
+    )
+
+
+@app.command("sellfox-outbox-scan-candidates")
+def sellfox_outbox_scan_candidates(
+    account_key: str = typer.Option(..., help="Sellfox account key"),
+    package_sn: str = typer.Option(..., help="Explicit packageSn scope"),
+    apply: bool = typer.Option(False, "--apply", help="Persist candidates"),
+    actor: str = typer.Option("", help="Operator identity required with --apply"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Scan one explicit historical package; defaults to dry-run."""
+    actor_name = (actor or "").strip()
+    if apply and not actor_name:
+        raise typer.BadParameter("--actor is required with --apply")
+    repo = _get_package_repository()
+    package = repo.get(account_key, package_sn)
+    tracking = package.logistics.tracking_number if package is not None else ""
+    report = repo.create_sellfox_outbox_candidates(
+        account_key=account_key,
+        package_sn=package_sn,
+        tracking_number=tracking,
+        source_type="excel_tracking_import",
+        source_id=f"historical-scan:{package_sn}",
+        actor=actor_name or "dry-run",
+        apply=apply,
+    )
+    _output(
+        {
+            "command": "sellfox-outbox-scan-candidates",
+            "ok": report.counts["failed"] == 0,
+            "dry_run": not apply,
+            "counts": report.counts,
+            "results": list(report.results),
+            "errors": [],
+            "recommended_action": (
+                "rerun_with_apply_and_actor" if not apply else "inspect_candidates"
+            ),
+        },
+        json_output,
+    )
+
+
+def _outbox_command_error(command, exc, json_output):
+    _output(
+        {
+            "command": command,
+            "ok": False,
+            "counts": {"input": 1, "success": 0, "failed": 1},
+            "results": [],
+            "errors": [
+                {
+                    "code": "command_failed",
+                    "message": str(exc),
+                    "recommended_action": "inspect_and_retry",
+                }
+            ],
+            "recommended_action": "inspect_and_retry",
+        },
+        json_output,
+    )
+    raise typer.Exit(2)
+
+
+@app.command("sellfox-outbox-confirm")
+def sellfox_outbox_confirm(
+    outbox_id: int = typer.Option(..., min=1, help="Sellfox outbox id"),
+    actor: str = typer.Option(..., help="Operator identity"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Confirm one candidate: build/reuse SubmissionIntent, then PENDING."""
+    from sellfox_shipping.outbox_service import OutboxService
+
+    service = OutboxService(_get_package_repository())
+    try:
+        result = service.confirm(outbox_id=outbox_id, actor=actor)
+    except (LookupError, RuntimeError, ValueError) as exc:
+        _outbox_command_error("sellfox-outbox-confirm", exc, json_output)
+    _output(
+        {
+            "command": "sellfox-outbox-confirm",
+            "ok": True,
+            "counts": {"input": 1, "success": 1, "failed": 0},
+            "results": [result],
+            "errors": [],
+            "recommended_action": "run_once_after_confirmation",
+        },
+        json_output,
+    )
+
+
+@app.command("sellfox-outbox-confirm-batch")
+def sellfox_outbox_confirm_batch(
+    outbox_ids: str = typer.Option(..., "--outbox-ids", help="Comma-separated outbox ids"),
+    actor: str = typer.Option(..., help="Operator identity"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Confirm a bounded, explicit set of candidates."""
+    from sellfox_shipping.outbox_service import OutboxService
+
+    ids = [int(part.strip()) for part in outbox_ids.split(",") if part.strip()]
+    if not ids or len(ids) > 50:
+        raise typer.BadParameter("--outbox-ids must contain 1..50 ids")
+    result = OutboxService(_get_package_repository()).confirm_batch(
+        outbox_ids=ids, actor=actor
+    )
+    _output(result, json_output)
+
+
+@app.command("sellfox-outbox-run-once")
+def sellfox_outbox_run_once(
+    actor: str = typer.Option("", help="Operator identity (required for real send)"),
+    outbox_id: Optional[int] = typer.Option(None, "--outbox-id", help="Explicit outbox id"),
+    account_key: Optional[str] = typer.Option(None, "--account-key", help="Account for due queue"),
+    limit: int = typer.Option(1, min=1, max=50, help="Max items processed"),
+    dry_run: bool = typer.Option(True, help="Preview only; no HTTP (default)"),
+    i_understand_side_effects: bool = typer.Option(
+        False,
+        "--i-understand-side-effects",
+        help="Allow real submitToPlatform (requires --no-dry-run)",
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Lease and execute due outbox items; dry-run by default."""
+    from sellfox_shipping.outbox_service import OutboxService
+
+    actor_name = (actor or "").strip()
+    if not dry_run and not actor_name:
+        raise typer.BadParameter("--actor is required for real writeback")
+    client = _get_client() if (not dry_run and i_understand_side_effects) else None
+    service = OutboxService(_get_package_repository(), submit_client=client)
+    try:
+        result = service.run_once(
+            actor=actor_name or "dry-run",
+            account_key=account_key,
+            outbox_id=outbox_id,
+            dry_run=dry_run,
+            allow_side_effects=i_understand_side_effects and not dry_run,
+            limit=limit,
+        )
+    except (LookupError, RuntimeError, ValueError) as exc:
+        _outbox_command_error("sellfox-outbox-run-once", exc, json_output)
+    _output(result, json_output)
+
+
+@app.command("sellfox-outbox-verify")
+def sellfox_outbox_verify(
+    actor: str = typer.Option(..., help="Operator identity"),
+    outbox_id: Optional[int] = typer.Option(None, "--outbox-id", help="Explicit outbox id"),
+    account_key: Optional[str] = typer.Option(None, "--account-key", help="Account for pending queue"),
+    limit: int = typer.Option(10, min=1, max=50, help="Max items verified"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Readback-only verification for VERIFY_PENDING outbox items."""
+    from sellfox_shipping.outbox_service import OutboxService
+
+    service = OutboxService(_get_package_repository(), submit_client=_get_client())
+    try:
+        result = service.verify(
+            actor=actor,
+            account_key=account_key,
+            outbox_id=outbox_id,
+            limit=limit,
+        )
+    except (LookupError, RuntimeError, ValueError) as exc:
+        _outbox_command_error("sellfox-outbox-verify", exc, json_output)
+    _output(result, json_output)
+
+
+@app.command("sellfox-outbox-policy-show")
+def sellfox_outbox_policy_show(
+    account_key: str = typer.Option(..., help="Sellfox account key"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Show writeback policy and capability evidence."""
+    from sellfox_shipping.outbox_service import OutboxService
+
+    result = OutboxService(_get_package_repository()).policy_show(account_key)
+    _output(result, json_output)
+
+
+@app.command("sellfox-outbox-policy-set")
+def sellfox_outbox_policy_set(
+    account_key: str = typer.Option(..., help="Sellfox account key"),
+    mode: str = typer.Option(..., help="DISABLED|PROBE_ONLY|SCOPED_BATCH"),
+    actor: str = typer.Option(..., help="Operator identity"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Set account writeback mode with audit."""
+    from sellfox_shipping.outbox_service import OutboxService
+
+    try:
+        result = OutboxService(_get_package_repository()).policy_set(
+            account_key=account_key, mode=mode, actor=actor
+        )
+    except (LookupError, RuntimeError, ValueError) as exc:
+        _outbox_command_error("sellfox-outbox-policy-set", exc, json_output)
+    _output(result, json_output)
+
+
+@app.command("sellfox-outbox-capability-record")
+def sellfox_outbox_capability_record(
+    account_key: str = typer.Option(..., help="Sellfox account key"),
+    capability_status: str = typer.Option(..., help="Capability conclusion"),
+    evidence_ref: str = typer.Option(..., help="Evidence document/artifact reference"),
+    actor: str = typer.Option(..., help="Approver identity"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Record capability probe conclusion with evidence reference."""
+    from sellfox_shipping.outbox_service import OutboxService
+
+    try:
+        result = OutboxService(_get_package_repository()).capability_record(
+            account_key=account_key,
+            capability_status=capability_status,
+            evidence_ref=evidence_ref,
+            actor=actor,
+        )
+    except (LookupError, RuntimeError, ValueError) as exc:
+        _outbox_command_error("sellfox-outbox-capability-record", exc, json_output)
+    _output(result, json_output)
+
+@app.command("label-operation-show")
+def label_operation_show(
+    operation_id: int = typer.Option(..., min=1, help="Label operation id"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Show one label operation and safe linked label/artifact summaries."""
+    try:
+        result = _get_label_operation_query_service().show(operation_id)
+    except LookupError as exc:
+        _output(
+            {
+                "command": "label-operation-show",
+                "ok": False,
+                "counts": {"input": 1, "success": 0, "failed": 1},
+                "results": [],
+                "errors": [
+                    {
+                        "code": "operation_not_found",
+                        "message": str(exc),
+                        "operation_id": operation_id,
+                        "package_sn": "",
+                        "recommended_action": "check_operation_id",
+                    }
+                ],
+            },
+            json_output,
+        )
+        raise typer.Exit(2)
+    _output(
+        {
+            "command": "label-operation-show",
+            "ok": True,
+            "counts": {"input": 1, "success": 1, "failed": 0},
+            "results": [result],
+            "errors": [],
+        },
+            json_output,
+        )
+
+
+@app.command("label-operation-resume")
+def label_operation_resume(
+    operation_id: int = typer.Option(..., min=1, help="Label operation id"),
+    actor: str = typer.Option(..., help="Operator identity"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Resume label acquisition for an ACCEPTED or LABEL_PENDING operation.
+
+    Only valid when the operation has a provider_order_id.
+    Calls getLabel (never create) and completes PDF download + artifact write.
+    """
+    service = _get_label_service()
+    try:
+        result = service.resume_label_acquisition(operation_id, actor=actor)
+        _output(
+            {
+                "command": "label-operation-resume",
+                "ok": True,
+                "counts": {"input": 1, "success": 1, "failed": 0},
+                "results": [result],
+                "errors": [],
+            },
+            json_output,
+        )
+    except Exception as exc:
+        msg = str(exc)
+        http_status = getattr(exc, "http_status", 500)
+        _output(
+            {
+                "command": "label-operation-resume",
+                "ok": False,
+                "counts": {"input": 1, "success": 0, "failed": 1},
+                "results": [],
+                "errors": [
+                    {
+                        "code": (
+                            "not_found" if http_status == 404
+                            else "conflict" if http_status == 409
+                            else "resume_failed"
+                        ),
+                        "message": msg,
+                        "operation_id": operation_id,
+                    }
+                ],
+            },
+            json_output,
+        )
+        raise typer.Exit(1 if http_status == 404 else 2)
+
+
+def _get_label_service():
+    from sellfox_shipping.label_service import LabelService
+    return LabelService(_get_package_repository())
+
+@app.command("label-operation-investigate")
+def label_operation_investigate(
+    operation_id: int = typer.Option(..., min=1, help="Label operation id"),
+    evidence_type: str = typer.Option(..., help="ticket | carrier_portal | email | other"),
+    conclusion: str = typer.Option(
+        ...,
+        help="confirmed_not_created | confirmed_created | confirmed_rejected",
+    ),
+    actor: str = typer.Option(..., help="Operator identity"),
+    external_ref: str = typer.Option("", help="External ticket/order reference"),
+    provider_order_id: str = typer.Option(
+        "", help="Carrier order id when conclusion is confirmed_created"
+    ),
+    note: str = typer.Option("", help="Investigation notes (what was checked, what was found)"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Record an investigation for an UNKNOWN_BLOCKED operation.
+
+    This is append-only — it records what was checked but does NOT change
+    the operation status. Use label-operation-resolve after investigation
+    to resolve the block.
+    """
+    service = _get_label_service()
+    try:
+        result = service.add_investigation(
+            operation_id=operation_id,
+            evidence_type=evidence_type,
+            conclusion=conclusion,
+            actor=actor,
+            external_ref=external_ref,
+            provider_order_id=provider_order_id,
+            note=note,
+        )
+        _output(
+            {
+                "command": "label-operation-investigate",
+                "ok": True,
+                "counts": {"input": 1, "success": 1, "failed": 0},
+                "results": [result],
+                "errors": [],
+            },
+            json_output,
+        )
+    except Exception as exc:
+        msg = str(exc)
+        http_status = getattr(exc, "http_status", 500)
+        _output(
+            {
+                "command": "label-operation-investigate",
+                "ok": False,
+                "counts": {"input": 1, "success": 0, "failed": 1},
+                "results": [],
+                "errors": [
+                    {
+                        "code": "investigate_failed",
+                        "message": msg,
+                        "operation_id": operation_id,
+                    }
+                ],
+            },
+            json_output,
+        )
+        raise typer.Exit(2)
+
+
+@app.command("label-operation-resolve")
+def label_operation_resolve(
+    operation_id: int = typer.Option(..., min=1, help="Label operation id"),
+    resolution: str = typer.Option(..., help="fail_safe | fail_final | provide_known_id"),
+    confirm: str = typer.Option(..., help="Must match resolution to proceed"),
+    evidence_id: int = typer.Option(..., min=1, help="Investigation evidence id for this operation"),
+    provider_order_id: str = typer.Option("", help="Carrier order id (required for provide_known_id)"),
+    note: str = typer.Option("", help="Investigation note (who checked, what was found)"),
+    actor: str = typer.Option(..., help="Operator identity"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Resolve an UNKNOWN_BLOCKED operation after human investigation.
+
+    fail_safe: Carrier confirmed no order was created. Frees slot for retry.
+    fail_final: Carrier confirmed permanent rejection.
+    provide_known_id: Human found the order on carrier portal, supply the ID.
+    Requires --evidence-id from a prior label-operation-investigate.
+    """
+    service = _get_label_service()
+    try:
+        result = service.resolve_unknown_blocked(
+            operation_id,
+            resolution=resolution,
+            confirm=confirm,
+            provider_order_id=provider_order_id,
+            note=note,
+            actor=actor,
+            evidence_id=evidence_id,
+        )
+        _output(
+            {
+                "command": "label-operation-resolve",
+                "ok": True,
+                "counts": {"input": 1, "success": 1, "failed": 0},
+                "results": [result],
+                "errors": [],
+            },
+            json_output,
+        )
+    except Exception as exc:
+        msg = str(exc)
+        http_status = getattr(exc, "http_status", 500)
+        _output(
+            {
+                "command": "label-operation-resolve",
+                "ok": False,
+                "counts": {"input": 1, "success": 0, "failed": 1},
+                "results": [],
+                "errors": [
+                    {
+                        "code": "resolve_failed",
+                        "message": msg,
+                        "operation_id": operation_id,
+                    }
+                ],
+            },
+            json_output,
+        )
+        raise typer.Exit(2)
 
 
 def _get_lizard_dims_lookup():
@@ -494,6 +1079,129 @@ def packages_verify_intent(
         actor=actor,
     )
     _output(result.__dict__, json_output)
+
+
+@app.command("submission-scope-unblock")
+def submission_scope_unblock(
+    package_sn: str = typer.Option(..., "--package-sn", help="Sellfox packageSn"),
+    order_id: str = typer.Option(..., "--order-id", help="External order id"),
+    actor: str = typer.Option(..., "--actor", help="Operator id for audit"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Clear an UNKNOWN_BLOCKED submission scope so a package can be re-submitted.
+
+    Use only after confirming a prior 4xx/unknown submit did NOT apply to Sellfox.
+    """
+    config = _load_config()
+    try:
+        scope_id = _get_package_repository().resolve_submission_scope_block(
+            account_key=config["sellfox"]["proxy_account"],
+            package_sn=package_sn,
+            external_order_id=order_id,
+            actor=actor,
+        )
+        _output(
+            {"ok": True, "scope_id": scope_id, "package_sn": package_sn, "order_id": order_id},
+            json_output,
+        )
+    except LookupError as exc:
+        _output({"ok": False, "error": str(exc)}, json_output)
+        raise typer.Exit(1)
+
+
+@app.command("packages-submit-label-tracking")
+def packages_submit_label_tracking(
+    package_sn: str = typer.Option(..., "--package-sn", help="Sellfox packageSn"),
+    actor: str = typer.Option("cli", help="Actor for audit"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Write a valid label's tracking to Sellfox via submitToPlatform (Amazon/FBM).
+
+    Reads the tracking from the package's valid (non-cancelled, has-tracking) label
+    record — the same source as the Web 回写 button and the quickOutbound path.
+    """
+    from sellfox_shipping.submission_service import SubmissionService
+
+    config = _load_config()
+    result = SubmissionService(
+        _get_package_repository(), _get_client()
+    ).submit_label_tracking(
+        account_key=config["sellfox"]["proxy_account"],
+        package_sn=package_sn,
+        actor=actor,
+    )
+    _output(result.__dict__, json_output)
+
+
+@app.command("packages-submit-quick-outbound")
+def packages_submit_quick_outbound(
+    package_sn: str = typer.Option(..., "--package-sn", help="Sellfox packageSn"),
+    actor: str = typer.Option("cli", help="Actor for audit"),
+    carrier_name: str = typer.Option("", help="Override carrier (default from valid label)"),
+    tracking_number: str = typer.Option("", help="Override tracking (default from valid label)"),
+    shipment_type: int = typer.Option(0, help="0=仅提交平台不扣库存(默认), 1=提交平台且扣库存"),
+    warehouse_id: int | None = typer.Option(None, help="发货仓库ID（仅提交平台时可空）"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Write a valid label's tracking to Sellfox via quickOutbound (快速出库)."""
+    from sellfox_shipping.submission_service import SubmissionService
+
+    config = _load_config()
+    result = SubmissionService(
+        _get_package_repository(), _get_client()
+    ).submit_label_tracking_quick_outbound(
+        account_key=config["sellfox"]["proxy_account"],
+        package_sn=package_sn,
+        actor=actor,
+        carrier_name=carrier_name or "",
+        tracking_number=tracking_number or "",
+        shipment_type=shipment_type,
+        warehouse_id=warehouse_id,
+    )
+    _output(result.__dict__, json_output)
+
+
+@app.command("submission-scope-resolve")
+def submission_scope_resolve(
+    intent_id: int = typer.Option(..., "--intent-id", help="SubmissionIntent id"),
+    actor: str = typer.Option(..., help="Operator identity"),
+    note: str = typer.Option(..., help="What was checked and why it is safe to retry"),
+    confirm: str = typer.Option(
+        ..., help="Must be exactly 'unblock' to proceed"
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Human-approved unblock of an UNKNOWN_BLOCKED submission scope."""
+    from sellfox_shipping.submission_service import SubmissionService
+
+    if confirm != "unblock":
+        raise typer.BadParameter("confirm must be exactly 'unblock'")
+    try:
+        result = SubmissionService(_get_package_repository()).resolve_unknown_blocked_scope(
+            intent_id=intent_id, actor=actor, note=note
+        )
+        _output(
+            {
+                "command": "submission-scope-resolve",
+                "ok": True,
+                "counts": {"input": 1, "success": 1, "failed": 0},
+                "results": [result],
+                "errors": [],
+            },
+            json_output,
+        )
+    except Exception as exc:
+        _output(
+            {
+                "command": "submission-scope-resolve",
+                "ok": False,
+                "counts": {"input": 1, "success": 0, "failed": 1},
+                "results": [],
+                "errors": [{"code": "resolve_failed", "message": str(exc)}],
+            },
+            json_output,
+        )
+        raise typer.Exit(2)
 
 
 @app.command()

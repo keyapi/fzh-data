@@ -24,6 +24,7 @@ venv/
 
 # env files (secrets)
 .env
+secrets/*.json
 *.cookie.txt
 cookie.txt
 **/docs/api-reference/llms_parsed.json
@@ -31,7 +32,14 @@ cookie.txt
 .env.local
 .gh-token
 out/*
+missing_products/out/**
+amazon_pairing/out/**
+sellfox_cover_inventory/out/**
+channel_account_sync/out/**
+!channel_account_sync/out/.gitkeep
 !out/.gitkeep
+tongtool_order_cost/out/
+scripts/out/
 数据源/*
 !数据源/.gitkeep
 !数据源/README.txt

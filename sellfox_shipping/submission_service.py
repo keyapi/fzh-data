@@ -64,12 +64,39 @@ class SubmitIntentResult:
     rate_limited_wait_ms: int = 0
 
 
+@dataclass(frozen=True)
+class SubmitLabelTrackingResult:
+    package_sn: str
+    tracking_number: str
+    carrier_name: str
+    intent_ids: list[int]
+    intent_statuses: list[str]
+    http_called: bool
+    package_submission_state: str
+
+
+@dataclass(frozen=True)
+class QuickOutboundResult:
+    package_sn: str
+    tracking_number: str
+    carrier_name: str
+    http_called: bool
+    code: int | None
+    msg: str
+    success_num: int
+    fail_data: list[dict]
+    raw: dict | None = None
+
+
 class SellfoxSubmitClient(Protocol):
     def submit_to_platform(self, wire_body: dict[str, object]) -> dict[str, object]:
         """POST submitToPlatform; returns parsed JSON body."""
 
     def fetch_package_detail(self, package_sn: str) -> dict | None:
         """POST packageDetail; returns data dict or None."""
+
+    def quick_outbound(self, package_list: list[dict]) -> dict:
+        """POST quickOutbound; returns OpenResult«QuickOutboundOpenVO» body."""
 
 
 def build_canonical_request(
@@ -121,7 +148,9 @@ def canonical_to_wire_body(req: CanonicalSubmitRequest) -> dict[str, object]:
         "items": [
             {
                 "orderItemId": str(item["order_item_id"]),
-                "quantity": int(item["quantity"]),
+                # Official schema PackageSubmitToPlatformOpenQO.SubmitOrderItemOpenQO
+                # declares quantity as string ("数量，需为整数，0 < 提交数量 < 999999").
+                "quantity": str(int(item["quantity"])),
             }
             for item in req.items
         ],
@@ -170,13 +199,27 @@ class SubmissionService:
         actor: str,
         carrier_name: str = "",
         shipping_service: str = "",
+        tracking_number: str = "",
     ) -> PrepareSubmitResult:
         record = self._repo.get(account_key, package_sn)
         if record is None:
             raise LookupError(f"Package {package_sn} not found")
         if record.local_review_status != "approved":
             raise ValueError("package local_review_status must be approved")
-        tracking = (record.logistics.tracking_number or "").strip()
+        tracking = (tracking_number or "").strip()
+        if not tracking:
+            # 统一从有效面单记录取追踪号（而非包裹自带 trackNo），与 quickOutbound
+            # 写回路径一致：写回的是本次面单生成的追踪号，不是赛狐已有的 trackNo。
+            for lb in self._repo.list_labels_for_package(
+                account_key=account_key, package_sn=package_sn
+            ):
+                if (lb.status or "") != "cancelled" and (
+                    lb.tracking_number or ""
+                ).strip():
+                    tracking = (lb.tracking_number or "").strip()
+                    break
+        if not tracking:
+            tracking = (record.logistics.tracking_number or "").strip()
         if not tracking or tracking == package_sn:
             raise ValueError("package must have a real tracking_number before submit")
         carrier = (carrier_name or record.logistics.channel_name or "").strip()
@@ -327,11 +370,26 @@ class SubmissionService:
                     http_summary=json.dumps(resp, ensure_ascii=False)[:2000],
                 )
         except Exception as exc:  # noqa: BLE001
-            self._repo.mark_submission_unknown_and_block_scope(
-                attempt_id=attempt.id,
-                intent_id=intent_id,
-                http_summary=str(exc)[:2000],
-            )
+            status_code = getattr(exc, "status_code", None)
+            if isinstance(status_code, int) and 400 <= status_code < 500:
+                # 4xx = Sellfox definitively rejected the request (nothing applied).
+                # Mark FAILED and keep the scope OPEN so the caller can retry after
+                # fixing the request — not a genuinely-unknown outcome.
+                self._repo.mark_submission_attempt_result(
+                    attempt_id=attempt.id,
+                    intent_id=intent_id,
+                    attempt_status="FAILED",
+                    intent_status="FAILED",
+                    http_status=status_code,
+                    http_summary=str(exc)[:2000],
+                )
+            else:
+                # 5xx / timeout / network — outcome genuinely unknown → block scope.
+                self._repo.mark_submission_unknown_and_block_scope(
+                    attempt_id=attempt.id,
+                    intent_id=intent_id,
+                    http_summary=str(exc)[:2000],
+                )
 
         updated = self._repo.get_submission_intent(intent_id)
         assert updated is not None
@@ -432,3 +490,176 @@ class SubmissionService:
             summary=f"packageDetail trackNo matched {expected_track_no}",
         )
         return True
+
+    def submit_label_tracking(
+        self,
+        *,
+        account_key: str,
+        package_sn: str,
+        actor: str,
+    ) -> SubmitLabelTrackingResult:
+        """Write a valid (non-cancelled) label's tracking number to Sellfox.
+
+        Finds the package's active label, prepares intents with that tracking,
+        then submits them for real via submitToPlatform.
+        """
+        labels = self._repo.list_labels_for_package(
+            account_key=account_key, package_sn=package_sn
+        )
+        valid = [
+            lb
+            for lb in labels
+            if (lb.status or "") != "cancelled" and (lb.tracking_number or "").strip()
+        ]
+        if not valid:
+            raise LookupError(
+                "no valid label with tracking number for "
+                f"{package_sn} (cancelled labels ignored)"
+            )
+        label = valid[0]
+        tracking = (label.tracking_number or "").strip()
+        carrier = (label.carrier or "").strip() or ""
+
+        prepared = self.prepare_intents_for_package(
+            account_key=account_key,
+            package_sn=package_sn,
+            actor=actor,
+            carrier_name=carrier,
+            tracking_number=tracking,
+        )
+        if not prepared.intent_ids:
+            raise RuntimeError("no submission intents prepared")
+
+        intent_statuses: list[str] = []
+        http_called = False
+        for intent_id in prepared.intent_ids:
+            result = self.submit_intent(
+                intent_id=intent_id,
+                actor=actor,
+                dry_run=False,
+                allow_side_effects=True,
+                verify_readback=False,
+            )
+            intent_statuses.append(result.intent_status)
+            http_called = http_called or result.http_called
+
+        return SubmitLabelTrackingResult(
+            package_sn=package_sn,
+            tracking_number=tracking,
+            carrier_name=carrier,
+            intent_ids=list(prepared.intent_ids),
+            intent_statuses=intent_statuses,
+            http_called=http_called,
+            package_submission_state=prepared.package_submission_state,
+        )
+
+    def submit_label_tracking_quick_outbound(
+        self,
+        *,
+        account_key: str,
+        package_sn: str,
+        actor: str,
+        carrier_name: str = "",
+        tracking_number: str = "",
+        shipment_type: int = 0,
+        warehouse_id: int | None = None,
+        is_oversea: int | None = None,
+    ) -> QuickOutboundResult:
+        """Write a valid label's tracking to Sellfox via quickOutbound (快速出库).
+
+        Uses packageSn + carrier + trackNo + shipmentType. ``shipment_type=0`` is
+        仅提交平台、不扣库存; ``shipment_type=1`` 提交平台且扣库存，此时必须传
+        ``warehouse_id``（发货仓库ID）和 ``is_oversea``（海外仓标识，从查询仓库
+        列表接口的 type 字段获取：0默认/1国内/2FBA/3海外）。
+        """
+        labels = self._repo.list_labels_for_package(
+            account_key=account_key, package_sn=package_sn
+        )
+        valid = [
+            lb
+            for lb in labels
+            if (lb.status or "") != "cancelled" and (lb.tracking_number or "").strip()
+        ]
+        if not valid:
+            raise LookupError(
+                "no valid label with tracking number for "
+                f"{package_sn} (cancelled labels ignored)"
+            )
+        label = valid[0]
+        tracking = (tracking_number or label.tracking_number or "").strip()
+        carrier = (carrier_name or label.carrier or "").strip() or ""
+        if not tracking or tracking == package_sn:
+            raise ValueError("package must have a real tracking_number before submit")
+        if not carrier:
+            raise ValueError("carrier_name is required")
+        if shipment_type not in (0, 1):
+            raise ValueError("quickOutbound shipment_type must be 0 or 1")
+        if shipment_type == 1 and warehouse_id is None:
+            raise ValueError(
+                "warehouse_id is required for shipment_type=1 (inventory deduction)"
+            )
+        if shipment_type == 1 and is_oversea is None:
+            raise ValueError(
+                "is_oversea is required for shipment_type=1 (inventory deduction)"
+            )
+        if self._client is None:
+            raise RuntimeError("submit client required for side effects")
+
+        pkg: dict[str, object] = {
+            "packageSn": package_sn,
+            "carrier": carrier,
+            "trackNo": tracking,
+            "shipmentType": shipment_type,
+        }
+        if warehouse_id is not None:
+            pkg["warehouseId"] = warehouse_id
+        if is_oversea is not None:
+            pkg["isOversea"] = is_oversea
+
+        resp = self._client.quick_outbound([pkg])
+        code = resp.get("code")
+        msg = str(resp.get("msg") or "")
+        data = resp.get("data") if isinstance(resp.get("data"), dict) else {}
+        success_num = int(data.get("successNum") or 0)
+        fail_data = data.get("failData") if isinstance(data.get("failData"), list) else []
+
+        summary = (
+            f"quickOutbound {package_sn} code={code} success={success_num} "
+            f"fail={len(fail_data)} msg={msg}"
+        )
+        try:
+            self._repo.append_audit_event(
+                actor=actor,
+                action="submission.quick_outbound",
+                entity_type="package",
+                entity_id=package_sn,
+                summary=summary[:500],
+            )
+        except Exception:
+            pass
+
+        return QuickOutboundResult(
+            package_sn=package_sn,
+            tracking_number=tracking,
+            carrier_name=carrier,
+            http_called=True,
+            code=code,
+            msg=msg,
+            success_num=success_num,
+            fail_data=fail_data,
+            raw=resp,
+        )
+
+    def resolve_unknown_blocked_scope(
+        self, *, intent_id: int, actor: str, note: str
+    ) -> dict:
+        """Human-approved unblock of an UNKNOWN_BLOCKED submission scope."""
+        intent = self._repo.resolve_unknown_blocked_scope(
+            intent_id=intent_id, actor=actor, note=note
+        )
+        return {
+            "intent_id": intent.id,
+            "scope_id": intent.scope_id,
+            "intent_status": intent.status,
+            "scope_status": "OPEN",
+        }

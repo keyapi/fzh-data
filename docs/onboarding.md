@@ -16,12 +16,14 @@
 > 1. 检查 Git 是否安装——没装的话按系统装（Windows: winget, Mac: brew, Linux: apt-get）
 > 2. git clone https://github.com/keyapi/fzh-data.git ~/fzh-data
 > 3. 进目录读 AGENTS.md，按里面「Agent 新机器首次 clone 后必做」的步骤初始化所有依赖
-> 4. 装完后提醒我重启 Codex
+> 4. 跑 `uv run python scripts/env_doctor.py`，按本机打印的建议告诉我（Windows 常见：装 PowerShell 7 稳定版、注意 UTF-8）。不要擅自安装软件或全量导入赛狐，先问我确认
+> 5. 装完后提醒我重启 Codex
 
-Codex 会自动检测系统、安装 Git/uv/Node.js/MCP、拉代码。装完后**重启 Codex**（完全退出再打开），MCP 服务器（网页搜索等）才会生效。
+Codex 会自动检测系统、安装 Git/uv/Node.js/MCP、拉代码，并按电脑环境给出建议。装完后**重启 Codex**（完全退出再打开），MCP 服务器（网页搜索等）才会生效。
 
 > **Mac 用户**：如果 ~/fzh-data 不习惯，可以换成其他路径，比如 ~/Desktop/fzh-data。
 > **Linux 用户**：同上，路径随意。
+> **Windows 用户**：若 Agent 思考流里出现 `&&` 报错或中文乱码，先按 `env_doctor` 建议装 PowerShell 7，并让 Agent 加载 `windows-agent-shell` skill。
 
 ### 3. 信任项目
 

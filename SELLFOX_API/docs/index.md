@@ -16,6 +16,9 @@ timestamp: 2026-07-02
 | 你需要... | 读这个 |
 |----------|--------|
 | Agent 接手总览 | [AGENT_HANDOFF.md](../AGENT_HANDOFF.md) |
+| EN 套件 / 赛狐组合商品（操作入口） | [AGENT_HANDOFF.md](../AGENT_HANDOFF.md) →「EN 套件 / 赛狐组合商品（热区）」 |
+| EN 套件操作手册（CLI / 硬规则） | [reference/combo-ops.md](reference/combo-ops.md) |
+| 皮壳 PK# 组合代理（不是套件） | [reference/cover-combo-ops.md](reference/cover-combo-ops.md) |
 | 搜索具体 API 端点 | [api-reference/](api-reference/) — 419 个 API Markdown |
 | 了解 API 接入过程 | [lessons/2026-06-25-sellfox-integration-lessons.md](lessons/2026-06-25-sellfox-integration-lessons.md) |
 | 查看探索记录 | [research/2026-06-25-sellfox-api-exploration.md](research/2026-06-25-sellfox-api-exploration.md) |
@@ -50,6 +53,8 @@ timestamp: 2026-07-02
 ```
 SELLFOX_API/
 ├── AGENT_HANDOFF.md          ← Agent 入口
+├── sellfox_combo_ops.py      ← EN 套件 / 赛狐组合对账与创建
+├── cover_combo_ops.py        ← 皮壳 PK# -> KS x1 库存代理（非 TJ#）
 ├── download_docs.py          ← 文档下载/更新脚本
 ├── test_api.py               ← 连通性测试
 ├── fetch_ad_reports.py       ← SP 4 种核心报告拉取
@@ -60,6 +65,7 @@ SELLFOX_API/
 └── docs/                     ← OKF v0.1 bundle
     ├── index.md              ← 本文件
     ├── log.md
+    ├── reference/            ← 组合商品 CLI
     ├── research/
     ├── lessons/
     └── api-reference/        ← 下载的 419 个 API .md

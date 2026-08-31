@@ -6,7 +6,7 @@
     <title>包裹列表 — 赛狐尾程打单</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, 'Microsoft YaHei', sans-serif; background: #f5f5f5; color: #333; }
+        body { font-family: -apple-system, 'Microsoft YaHei', sans-serif; background: #f5f5f5; color: #333; padding-bottom: 110px; }
         .header { background: #1a1a2e; color: #fff; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
         .header h1 { font-size: 18px; }
         .nav a { color: #a0a0c0; text-decoration: none; margin-left: 20px; font-size: 14px; }
@@ -95,11 +95,14 @@
         .print-modal .pm-footer .btn-print { background: #1a1a2e; color: #fff; font-weight: 600; }
         .print-modal .pm-footer .btn-print:hover { background: #2a2a4e; }
 
-        /* Batch bar - inline below table */
+        /* Batch bar - floating at viewport bottom */
         #batch-bar {
             display: none; align-items: center; justify-content: center; gap: 24px;
-            margin-top: 16px; padding: 14px 24px;
-            background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 8px;
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            z-index: 999; max-width: calc(100vw - 32px);
+            padding: 14px 24px;
+            background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 10px;
+            box-shadow: 0 6px 24px rgba(0, 0, 0, 0.15);
         }
         #batch-bar.visible { display: flex; }
         #batch-bar .count { font-size: 14px; color: #333; white-space: nowrap; }
@@ -113,6 +116,21 @@
         #batch-bar .truck-btn .icon { font-size: 22px; }
         #batch-bar .cancel-link { font-size: 13px; color: #721c24; cursor: pointer; background: none; border: none; text-decoration: underline; white-space: nowrap; }
         #batch-bar .cancel-link:hover { color: #a71d2a; }
+
+        /* Pagination */
+        .pager { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 16px; font-size: 13px; color: #333; }
+        .pager a, .pager span { padding: 6px 12px; border: 1px solid #ddd; border-radius: 4px; text-decoration: none; color: #1a1a2e; cursor: pointer; background: #fff; }
+        .pager a:hover { background: #1a1a2e; color: #fff; border-color: #1a1a2e; }
+        .pager .active { background: #1a1a2e; color: #fff; border-color: #1a1a2e; font-weight: 600; }
+        .pager .disabled { color: #ccc; cursor: default; }
+        .pager .disabled:hover { background: #fff; color: #ccc; border-color: #ddd; }
+        .pager select, .pager input { padding: 5px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; }
+        .pager .goto { width: 50px; text-align: center; }
+        .pager .page-gap { position: relative; min-width: 36px; }
+        .pager .page-gap .gap-dots { display: inline; }
+        .pager .page-gap .gap-icon { display: none; font-size: 10px; }
+        .pager .page-gap:hover .gap-dots { display: none; }
+        .pager .page-gap:hover .gap-icon { display: inline; }
     </style>
 </head>
 <body>
@@ -127,6 +145,7 @@
             <a href="/lizard/batches">批次</a>
             <a href="/labels">流水</a>
             <a href="/orders">订单 (legacy)</a>
+            <a href="/tongtool">通途订单</a>
         </div>
     </div>
 
@@ -162,7 +181,7 @@
             </form>
             <div class="meta">共 {{ total }} 条 · 账户 {{ account_key }}</div>
             <table>
-                <thead><tr><th>包裹号</th><th>状态</th><th>审核</th><th>渠道</th><th>店铺</th><th>订单数</th><th>商品行</th><th>追踪号</th></tr></thead>
+                <thead><tr><th>包裹号</th><th>状态</th><th>审核</th><th>渠道</th><th>店铺</th><th>赛狐下单时间</th><th>订单数</th><th>商品行</th><th>有效面单时间</th><th>追踪号</th></tr></thead>
                 <tbody>
                     {% if items %}{% for item in items %}
                     <tr>
@@ -171,15 +190,41 @@
                         <td><span class="badge badge-pending">{{ item.local_review_status or 'pending' }}</span></td>
                         <td>{{ item.channel_name or '—' }}</td>
                         <td>{{ item.shop_name or '—' }}</td>
-                        <td>{{ item.order_count }}</td>
+                        <td style="font-size:12px;">{{ item.purchase_date.strftime('%Y-%m-%d') if item.purchase_date else '—' }}</td><td>{{ item.order_count }}</td>
                         <td>{{ item.item_count }}</td>
-                        <td>{{ item.tracking_number or '—' }}</td>
+                        <td style="font-size:12px;">{{ item.label_created_at.strftime('%Y-%m-%d %H:%M') if item.label_created_at else '—' }}</td><td>{{ item.tracking_number or '—' }}</td>
                     </tr>
                     {% endfor %}{% else %}
-                    <tr><td colspan="8" class="empty">暂无包裹</td></tr>
+                    <tr><td colspan="12" class="empty">暂无包裹</td></tr>
                     {% endif %}
                 </tbody>
             </table>
+            <!-- Pagination -->
+            {% if total_pages > 0 %}
+            <div class="pager">
+                <span>共 {{ total }} 条</span>
+                {% if current_page > 1 %}
+                <a href="#" onclick="goPage({{ current_page - 2 }})">&lt;</a>
+                {% else %}<span class="disabled">&lt;</span>{% endif %}
+                {% for pg in pagination %}
+                {% if pg.kind == 'gap' %}
+                <a href="#" class="page-gap" onclick="goPage({{ pg.jump - 1 }})"><span class="gap-dots">...</span><span class="gap-icon">{{ '◀◀' if pg.jump < current_page else '▶▶' }}</span></a>
+                {% elif pg.current %}
+                <span class="active">{{ pg.label }}</span>
+                {% else %}
+                <a href="#" onclick="goPage({{ pg.page - 1 }})">{{ pg.label }}</a>
+                {% endif %}
+                {% endfor %}
+                {% if current_page < total_pages %}
+                <a href="#" onclick="goPage({{ current_page }})">&gt;</a>
+                {% else %}<span class="disabled">&gt;</span>{% endif %}
+                <select onchange="var l=this.value;goPage(0,l)">
+                    {% for s in [20,50,100,200] %}
+                    <option value="{{ s }}" {% if limit==s %}selected{% endif %}>{{ s }}条/页</option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
         </div>
     </div>
 
@@ -189,6 +234,7 @@
             <h2>Transactions</h2>
             <form class="filter-bar" method="get" action="/packages" id="txn-filter" autocomplete="off">
                 <input type="hidden" name="tab" value="transactions" />
+                <input type="hidden" name="date_field" id="date-field-input" value="{{ date_field or 'label' }}" />
                 <div class="date-range-wrap">
                     <button type="button" class="btn-date" onclick="toggleDateDrop()" id="btn-date-label">
                         {% if date_start and date_end %}{{ date_start }} — {{ date_end }}{% else %}Custom Date Range ▾{% endif %}
@@ -202,6 +248,10 @@
                         <div class="range">
                             <input type="date" name="date_start" id="txn-date-start" value="{{ date_start or '' }}" /> <span>to</span>
                             <input type="date" name="date_end" id="txn-date-end" value="{{ date_end or '' }}" />
+                        </div>
+                        <div style="font-size:12px;color:#666;margin-top:8px;">
+                            <label style="margin-right:12px;"><input type="radio" name="_date_field" value="label" onchange="document.getElementById('date-field-input').value=this.value" {% if date_field != 'order' %}checked{% endif %}> 面单时间</label>
+                            <label><input type="radio" name="_date_field" value="order" onchange="document.getElementById('date-field-input').value=this.value" {% if date_field == 'order' %}checked{% endif %}> 下单时间</label>
                         </div>
                         <div class="actions">
                             <button type="button" class="clear" onclick="applyPreset('all')">Clear</button>
@@ -227,6 +277,38 @@
                     <input type="text" name="channel" id="txn-channel" value="{{ channel or '' }}" placeholder="渠道名" list="ch-list" autocomplete="off" />
                     <span class="arrow">▾</span>
                 </div>
+                <select name="warehouse" title="发货仓库">
+                    <option value="">全部仓库</option>
+                    <option value="CENTRADE" {% if warehouse == 'CENTRADE' %}selected{% endif %}>美东仓 (USNJ)</option>
+                    <option value="DANEEY" {% if warehouse == 'DANEEY' %}selected{% endif %}>美中仓 (USTX)</option>
+                    <option value="POLAND" {% if warehouse == 'POLAND' %}selected{% endif %}>波兰仓</option>
+                    <option value="虚拟仓库" {% if warehouse == '虚拟仓库' %}selected{% endif %}>虚拟仓库</option>
+                </select>
+                <select name="has_label" title="有无面单">
+                    <option value="">全部面单</option>
+                    <option value="yes" {% if has_label == 'yes' %}selected{% endif %}>有面单</option>
+                    <option value="no" {% if has_label == 'no' %}selected{% endif %}>无面单</option>
+                </select>
+                <select name="tongtool" title="通途订单">
+                    <option value="">全部通途</option>
+                    <option value="yes" {% if tongtool == 'yes' %}selected{% endif %}>是通途订单</option>
+                    <option value="no" {% if tongtool == 'no' %}selected{% endif %}>非通途订单</option>
+                </select>
+                <select name="tongtool_warehouse" title="通途发货仓库">
+                    <option value="">全部仓库</option>
+                    <option value="FZH-DANEEY-皮壳仓库" {% if tongtool_warehouse == 'FZH-DANEEY-皮壳仓库' %}selected{% endif %}>皮壳仓库</option>
+                    <option value="FZH-DANEEY-退货产品仓" {% if tongtool_warehouse == 'FZH-DANEEY-退货产品仓' %}selected{% endif %}>退货产品仓</option>
+                    <option value="FZH-DANEEY-半成品仓" {% if tongtool_warehouse == 'FZH-DANEEY-半成品仓' %}selected{% endif %}>半成品仓</option>
+                    <option value="FZH-DANEEY-成品仓" {% if tongtool_warehouse == 'FZH-DANEEY-成品仓' %}selected{% endif %}>成品仓</option>
+                </select>
+                <select name="tongtool_method" title="通途发货方式">
+                    <option value="">全部方式</option>
+                    <option value="蜴国际" {% if tongtool_method == '蜴国际' %}selected{% endif %}>蜴国际</option>
+                </select>
+                <label style="font-size:13px;color:#333;white-space:nowrap;display:flex;align-items:center;gap:4px;cursor:pointer;">
+                    <input type="checkbox" name="exclude_shops" value="1" {% if exclude_shops_active %}checked{% endif %} onchange="this.form.submit()" />
+                    排除平台物流店铺{% if exclude_shops_list %}<span style="color:#888;font-size:11px;">({{ exclude_shops_list|join(', ') }})</span>{% endif %}
+                </label>
                 <button type="submit" class="btn-search">筛选</button>
             </form>
             <datalist id="ch-list"></datalist>
@@ -236,33 +318,63 @@
                 <thead>
                     <tr>
                         <th style="width:32px;"><input type="checkbox" id="select-all" onclick="toggleSelectAll(this)"></th>
-                        <th>包裹号</th><th>状态</th><th>审核</th><th>渠道</th><th>店铺</th><th>订单数</th><th>商品行</th><th>追踪号</th>
+                        <th>包裹号</th><th>状态</th><th>审核</th><th>渠道</th><th>店铺</th><th>赛狐下单时间</th><th>订单数</th><th>商品行</th><th>有效面单时间</th><th>追踪号</th><th>通途订单</th><th>通途发货仓库</th><th>通途发货方式</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% if items %}{% for item in items %}
                     <tr>
-                        <td><input type="checkbox" class="pkg-check" value="{{ item.package_sn }}" onchange="updateBatchBar()"></td>
+                        <td><input type="checkbox" class="pkg-check" value="{{ item.package_sn }}" data-has-label="{{ '1' if item.label_created_at else '0' }}" data-warehouse="{{ item.warehouse_name or '' }}" onchange="onCheckboxChange(this)"></td>
                         <td><a class="pkg" href="/packages/{{ item.package_sn }}">{{ item.package_sn }}</a></td>
                         <td><span class="badge {% if item.package_status == 'has_shipped' %}badge-shipped{% elif item.package_status == 'has_canceled' %}badge-cancel{% else %}badge-info{% endif %}">{{ item.package_status or '—' }}</span></td>
                         <td><span class="badge badge-pending">{{ item.local_review_status or 'pending' }}</span></td>
                         <td>{{ item.channel_name or '—' }}</td>
                         <td>{{ item.shop_name or '—' }}</td>
-                        <td>{{ item.order_count }}</td>
+                        <td style="font-size:12px;">{{ item.purchase_date.strftime('%Y-%m-%d') if item.purchase_date else '—' }}</td><td>{{ item.order_count }}</td>
                         <td>{{ item.item_count }}</td>
-                        <td>{{ item.tracking_number or '—' }}</td>
+                        <td style="font-size:12px;">{{ item.label_created_at.strftime('%Y-%m-%d %H:%M') if item.label_created_at else '—' }}</td><td>{{ item.tracking_number or '—' }}</td>
+                        <td>{% if item.is_tongtool %}<span style="color:#155724;font-weight:600;">通途</span>{% else %}—{% endif %}</td>
+                        <td>{{ item.tongtool_shipping_warehouse or '—' }}</td>
+                        <td>{{ item.tongtool_shipping_method or '—' }}</td>
                     </tr>
                     {% endfor %}{% else %}
-                    <tr><td colspan="9" class="empty">暂无包裹</td></tr>
+                    <tr><td colspan="14" class="empty">暂无包裹</td></tr>
                     {% endif %}
                 </tbody>
             </table>
+            <!-- Pagination -->
+            {% if total_pages > 0 %}
+            <div class="pager">
+                <span>共 {{ total }} 条</span>
+                {% if current_page > 1 %}
+                <a href="#" onclick="goPage({{ current_page - 2 }})">&lt;</a>
+                {% else %}<span class="disabled">&lt;</span>{% endif %}
+                {% for pg in pagination %}
+                {% if pg.kind == 'gap' %}
+                <a href="#" class="page-gap" onclick="goPage({{ pg.jump - 1 }})"><span class="gap-dots">...</span><span class="gap-icon">{{ '◀◀' if pg.jump < current_page else '▶▶' }}</span></a>
+                {% elif pg.current %}
+                <span class="active">{{ pg.label }}</span>
+                {% else %}
+                <a href="#" onclick="goPage({{ pg.page - 1 }})">{{ pg.label }}</a>
+                {% endif %}
+                {% endfor %}
+                {% if current_page < total_pages %}
+                <a href="#" onclick="goPage({{ current_page }})">&gt;</a>
+                {% else %}<span class="disabled">&gt;</span>{% endif %}
+                <select onchange="var l=this.value;goPage(0,l)">
+                    {% for s in [20,50,100,200] %}
+                    <option value="{{ s }}" {% if limit==s %}selected{% endif %}>{{ s }}条/页</option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
 
             <!-- Batch action bar -->
             <div id="batch-bar">
                 <span class="count">已选 <strong id="selected-count">0</strong> 个包裹</span>
+                <button id="batch-create-btn" class="truck-btn" onclick="openBatchCreateModal()" style="background:#155724;"><span class="icon">🏷️</span> 创建面单</button>
                 <button class="truck-btn" onclick="openPrintModal()"><span class="icon">🚚</span> 批量打印</button>
-                <button class="truck-btn" onclick="exportSelected()" style="background:#155724;"><span class="icon">📥</span> 导出 Excel</button>
+                <button class="truck-btn" onclick="exportSelected()" style="background:#856404;"><span class="icon">📥</span> 导出 Excel</button>
                 <button class="cancel-link" onclick="clearSelection()">取消选中</button>
             </div>
         </div>
@@ -275,19 +387,43 @@
                 <h3>Print Shipping Documents — 已选 <span id="pm-count">0</span> 个包裹</h3>
                 <button class="pm-close" onclick="closePrintModal()">✕</button>
             </div>
-            <div class="pm-tabs" id="pm-tabs">
-                <button data-type="sticker" onclick="switchDocType('sticker')">背贴</button>
-                <button data-type="label" onclick="switchDocType('label')">Label 面单</button>
-                <button data-type="both" class="active" onclick="switchDocType('both')">面单 + 背贴</button>
-            </div>
+            <div class="pm-tabs" id="pm-warehouse-tabs" style="border-bottom:none;"></div>
+            <div class="pm-tabs" id="pm-doctype-tabs"></div>
             <div class="pm-body" id="pm-body">
                 <div class="loading">正在生成预览...</div>
             </div>
             <div class="pm-footer">
                 <span class="info" id="pm-skipped"></span>
-                <div>
+                <div id="pm-footer-buttons">
                     <button class="btn-download" onclick="downloadMerged()">下载 PDF</button>
                     <button class="btn-print" onclick="printMerged()">打印</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Batch create label modal -->
+    <div id="batch-create-modal" class="print-modal-overlay">
+        <div class="print-modal" style="max-width:760px;">
+            <div class="pm-header">
+                <h3>批量创建面单 — 已选 <span id="bc-count">0</span> 个包裹</h3>
+                <button class="pm-close" onclick="closeBatchCreateModal()">✕</button>
+            </div>
+            <div class="pm-body" style="padding:16px;">
+                <p style="font-size:13px;color:#666;margin-bottom:12px;line-height:1.5;">
+                    将逐个调用承运商 API 创建面单（真实产生费用）。未审核通过 / 无有效尺寸 / 已有活跃面单的包裹会报错跳过。不同仓库可分别指定承运商与服务类型。
+                </p>
+                <div id="bc-warehouse-groups" style="margin-bottom:12px;"></div>
+                <div class="info-row" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
+                    <div class="info-item">
+                        <div class="label" style="font-size:12px;color:#666;">操作者</div>
+                        <input id="bc-actor" value="web-user" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;width:120px;" />
+                    </div>
+                    <div class="info-item">
+                        <button onclick="runBatchCreate()" style="padding:8px 16px;background:#155724;color:#fff;border:none;border-radius:4px;cursor:pointer;">开始创建</button>
+                    </div>
+                </div>
+                <div id="bc-results" style="margin-top:14px;max-height:320px;overflow:auto;font-size:13px;font-family:monospace;">
                 </div>
             </div>
         </div>
@@ -298,6 +434,14 @@
         var currentBlobUrl = null;
         var channels = [];
         var previewAborter = null;
+        var selectedStorageKey = 'sellfox_selected_packages_v2';
+
+        function goPage(pageIndex, pageSize) {
+            var p = new URLSearchParams(location.search);
+            p.set('offset', (pageIndex * (pageSize || {{ limit }})).toString());
+            if (pageSize) p.set('limit', pageSize.toString());
+            location.search = p.toString();
+        }
 
         // ── Init ──
         (function() {
@@ -310,6 +454,7 @@
                 document.getElementById('tab-transactions').style.display = '';
                 document.getElementById('dash-filter').style.display = 'none';
                 loadChannels();
+                restoreSelection();
             }
         })();
 
@@ -331,6 +476,12 @@
             document.getElementById('dash-filter').style.display = name === 'dashboard' ? '' : 'none';
             if (name === 'dashboard') document.getElementById('batch-bar').classList.remove('visible');
             if (name === 'transactions' && channels.length === 0) loadChannels();
+            // Navigate to new tab URL, resetting page
+            var p = new URLSearchParams(location.search);
+            p.set('tab', name);
+            p.delete('offset');
+            p.delete('limit');
+            location.href = location.pathname + '?' + p.toString();
         }
 
         function toggleDateDrop() { document.getElementById('date-drop').classList.toggle('visible'); }
@@ -349,56 +500,177 @@
             if (wrap && !wrap.contains(e.target)) document.getElementById('date-drop').classList.remove('visible');
         });
 
+        // 选择存储：{ package_sn: warehouse_name } 映射，跨页累加
+        function getSavedSelection() {
+            var raw;
+            try { raw = JSON.parse(sessionStorage.getItem(selectedStorageKey) || '{}'); } catch (e) { return {}; }
+            // 防御旧版数组格式或异常数据，统一按空映射处理
+            if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+            return raw;
+        }
+        function saveSelection(map) {
+            try { sessionStorage.setItem(selectedStorageKey, JSON.stringify(map)); } catch (e) {}
+        }
+        // 跨页累加的全量选中包裹号（供打印/批量面单/导出使用）
         function getSelected() {
-            return Array.from(document.querySelectorAll('.pkg-check:checked')).map(function(cb) { return cb.value; });
+            return Object.keys(getSavedSelection());
+        }
+        // 按仓库分组选中包裹：{ warehouse: [sn, ...] }
+        function getSelectedByWarehouse() {
+            var map = getSavedSelection();
+            var groups = {};
+            Object.keys(map).forEach(function(sn) {
+                var wh = map[sn] || '未知仓库';
+                if (!groups[wh]) groups[wh] = [];
+                groups[wh].push(sn);
+            });
+            return groups;
+        }
+        function onCheckboxChange(cb) {
+            var map = getSavedSelection();
+            if (cb.checked) map[cb.value] = cb.getAttribute('data-warehouse') || '';
+            else delete map[cb.value];
+            saveSelection(map);
+            updateBatchBar();
+        }
+        function restoreSelection() {
+            var map = getSavedSelection();
+            if (Object.keys(map).length === 0) return;
+            document.querySelectorAll('.pkg-check').forEach(function(cb) {
+                cb.checked = (cb.value in map);
+            });
+            updateBatchBar();
         }
         function toggleSelectAll(el) {
-            document.querySelectorAll('.pkg-check').forEach(function(cb) { cb.checked = el.checked; });
+            var map = getSavedSelection();
+            document.querySelectorAll('.pkg-check').forEach(function(cb) {
+                cb.checked = el.checked;
+                if (el.checked) map[cb.value] = cb.getAttribute('data-warehouse') || '';
+                else delete map[cb.value];
+            });
+            saveSelection(map);
             updateBatchBar();
         }
         function updateBatchBar() {
             var selected = getSelected();
             document.getElementById('selected-count').textContent = selected.length;
             document.getElementById('batch-bar').classList.toggle('visible', selected.length > 0);
+            // 全选复选框状态：仅反映当前页是否全部勾选
+            var all = document.querySelectorAll('.pkg-check');
+            var checkedOnPage = document.querySelectorAll('.pkg-check:checked');
+            var selectAll = document.getElementById('select-all');
+            if (selectAll && all.length > 0) selectAll.checked = (checkedOnPage.length === all.length);
+            // 创建面单按钮：仅当当前页所有已勾选包裹都有有效面单时禁用
+            var allHaveLabels = checkedOnPage.length > 0;
+            checkedOnPage.forEach(function(cb) {
+                if (cb.getAttribute('data-has-label') !== '1') allHaveLabels = false;
+            });
+            var createBtn = document.getElementById('batch-create-btn');
+            createBtn.disabled = checkedOnPage.length > 0 && allHaveLabels;
+            createBtn.style.opacity = createBtn.disabled ? '0.5' : '1';
+            createBtn.style.cursor = createBtn.disabled ? 'not-allowed' : 'pointer';
+            createBtn.title = createBtn.disabled ? '所选包裹均已有有效面单' : '';
         }
         function clearSelection() {
             document.querySelectorAll('.pkg-check').forEach(function(cb) { cb.checked = false; });
             document.getElementById('select-all').checked = false;
+            saveSelection({});
             updateBatchBar();
         }
 
-        // ── Print modal ──
+        // ── Print modal（两级页签：仓库 → 文档类型） ──
+        var printGroups = [];
+        var selectedGroupKey = '';
         function openPrintModal() {
             var sns = getSelected();
             if (sns.length === 0) return;
             document.getElementById('pm-count').textContent = sns.length;
-            document.getElementById('pm-body').innerHTML = '<div class="loading">正在生成预览...</div>';
             document.getElementById('pm-skipped').textContent = '';
             document.getElementById('print-modal').classList.add('visible');
-            loadPreview(sns);
+            loadPrintGroups(sns);
         }
         function closePrintModal() {
             document.getElementById('print-modal').classList.remove('visible');
         }
-        function switchDocType(type) {
-            selectedDocType = type;
-            document.querySelectorAll('#pm-tabs button').forEach(function(b) { b.classList.toggle('active', b.getAttribute('data-type') === type); });
-            var sns = getSelected();
-            if (sns.length > 0) {
-                document.getElementById('pm-body').innerHTML = '<div class="loading">正在生成预览...</div>';
-                loadPreview(sns);
+        function loadPrintGroups(sns) {
+            fetch('/api/packages/batch-print-groups', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ package_sns: sns })
+            })
+            .then(function(resp) {
+                if (!resp.ok) return resp.text().then(function(t) { throw new Error(t); });
+                return resp.json();
+            })
+            .then(function(d) {
+                printGroups = d.groups || [];
+                var skipped = d.skipped || [];
+                if (skipped.length > 0) {
+                    document.getElementById('pm-skipped').textContent = '跳过 ' + skipped.length + ' 个包裹（无有效面单或仓库不支持）';
+                }
+                renderWarehouseTabs();
+            })
+            .catch(function(err) {
+                var msg = err.message;
+                try { var j = JSON.parse(msg); msg = j.detail || msg; } catch (e) {}
+                document.getElementById('pm-body').innerHTML = '<div class="loading" style="color:#721c24;">' + msg.replace(/</g, '&lt;') + '</div>';
+            });
+        }
+        function currentGroup() {
+            for (var i = 0; i < printGroups.length; i++) {
+                if (printGroups[i].key === selectedGroupKey) return printGroups[i];
+            }
+            return null;
+        }
+        function renderWarehouseTabs() {
+            var container = document.getElementById('pm-warehouse-tabs');
+            var html = '';
+            printGroups.forEach(function(g) {
+                html += '<button data-key="' + g.key + '" onclick="selectWarehouse(\'' + g.key + '\')">' + g.label + ' (' + g.count + ')</button>';
+            });
+            container.innerHTML = html;
+            if (printGroups.length > 0) {
+                selectWarehouse(printGroups[0].key);
+            } else {
+                document.getElementById('pm-doctype-tabs').innerHTML = '';
+                document.getElementById('pm-body').innerHTML = '<div class="loading">无可打印的包裹（均无有效面单）</div>';
+                document.getElementById('pm-footer-buttons').style.display = 'none';
             }
         }
-        function loadPreview(sns) {
-            // Cancel any in-flight request
+        function selectWarehouse(key) {
+            selectedGroupKey = key;
+            document.querySelectorAll('#pm-warehouse-tabs button').forEach(function(b) {
+                b.classList.toggle('active', b.getAttribute('data-key') === key);
+            });
+            renderDocTypeTabs();
+        }
+        function renderDocTypeTabs() {
+            var container = document.getElementById('pm-doctype-tabs');
+            var html = '';
+            html += '<button data-type="sticker" onclick="selectDocType(\'sticker\')">背贴</button>';
+            html += '<button data-type="label" onclick="selectDocType(\'label\')">Label 面单</button>';
+            html += '<button data-type="both" onclick="selectDocType(\'both\')">面单 + 背贴</button>';
+            container.innerHTML = html;
+            selectDocType('both');
+        }
+        function selectDocType(type) {
+            selectedDocType = type;
+            document.querySelectorAll('#pm-doctype-tabs button').forEach(function(b) {
+                b.classList.toggle('active', b.getAttribute('data-type') === type);
+            });
+            document.getElementById('pm-footer-buttons').style.display = '';
+            document.getElementById('pm-body').innerHTML = '<div class="loading">正在生成预览...</div>';
+            loadPreview();
+        }
+        function loadPreview() {
+            var sns = getSelected();
             if (previewAborter) previewAborter.abort();
             previewAborter = new AbortController();
             var signal = previewAborter.signal;
-
             fetch('/api/packages/batch-print', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ package_sns: sns, document_type: selectedDocType }),
+                body: JSON.stringify({ package_sns: sns, document_type: selectedDocType, group_key: selectedGroupKey }),
                 signal: signal
             })
             .then(function(resp) {
@@ -419,8 +691,19 @@
                     '<div class="loading" style="color:#721c24;white-space:pre-line;text-align:left;padding:20px;">' + msg.replace(/</g,'&lt;') + '</div>';
             });
         }
+        function currentDownloadFilename() {
+            var g = currentGroup();
+            var base = g ? g.label : '打印';
+            if (selectedDocType === 'sticker') {
+                return base + '_背贴.pdf';
+            }
+            if (base === '美东') {
+                return '美东-面单.pdf';
+            }
+            return base + '.pdf';
+        }
         function downloadMerged() {
-            if (currentBlobUrl) { var a = document.createElement('a'); a.href = currentBlobUrl; a.download = 'batch_print.pdf'; a.click(); }
+            if (currentBlobUrl) { var a = document.createElement('a'); a.href = currentBlobUrl; a.download = currentDownloadFilename(); a.click(); }
         }
         function printMerged() {
             if (currentBlobUrl) window.open(currentBlobUrl, '_blank');
@@ -457,6 +740,183 @@
             document.body.appendChild(t);
             setTimeout(function() { t.remove(); }, 3000);
         }
+
+        // ── Batch create labels ──
+        var warehouseLabelMap = {
+            'DANEEY': '美中仓 (USTX)',
+            'CENTRADE': '美东仓 (USNJ)',
+            'POLAND': '波兰仓',
+            '虚拟仓库': '虚拟仓库'
+        };
+        function warehouseDisplayName(wh) {
+            return warehouseLabelMap[wh] || (wh || '未知仓库');
+        }
+        // 各仓库默认服务类型（蜴国际）；其余仓库留空走「（自动）」
+        var warehouseDefaultService = {
+            'DANEEY': 'FedEx-Ground-J-TX',
+            'CENTRADE': 'FedEx-Economy-10-USEA'
+        };
+        var bcCarrierServices = {
+            'vite': [
+                {value:'', label:'（自动）'},
+                {value:'GOFO_PARCEL', label:'GOFO_PARCEL (≤22in)'},
+                {value:'FEDEX_GROUND', label:'FEDEX_GROUND (>22in)'}
+            ],
+            'lizard': [{value:'', label:'（自动）'}],
+            'auto': [{value:'', label:'（自动）'}]
+        };
+        function switchBcServices(idx) {
+            var carrier = document.getElementById('bc-carrier-' + idx).value;
+            var sel = document.getElementById('bc-service-' + idx);
+            if (!sel) return;
+            sel.innerHTML = '';
+            var services = bcCarrierServices[carrier] || [{value:'', label:'（自动）'}];
+            services.forEach(function(s) {
+                var opt = document.createElement('option');
+                opt.value = s.value;
+                opt.textContent = s.label;
+                sel.appendChild(opt);
+            });
+        }
+        function openBatchCreateModal() {
+            var groups = getSelectedByWarehouse();
+            var whs = Object.keys(groups);
+            if (whs.length === 0) return;
+            document.getElementById('bc-count').textContent = getSelected().length;
+            document.getElementById('bc-results').innerHTML = '';
+            var container = document.getElementById('bc-warehouse-groups');
+            var html = '';
+            whs.forEach(function(wh, idx) {
+                var sns = groups[wh];
+                html += '<div style="border:1px solid #e0e0e0;border-radius:6px;padding:10px 12px;margin-bottom:10px;background:#fafbfc;">'
+                    + '<div style="font-size:13px;font-weight:600;margin-bottom:8px;">' + warehouseDisplayName(wh) + ' — ' + sns.length + ' 个包裹</div>'
+                    + '<div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">'
+                    + '<div><div style="font-size:12px;color:#666;margin-bottom:4px;">承运商</div>'
+                    + '<select id="bc-carrier-' + idx + '" onchange="switchBcServices(' + idx + ')" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;">'
+                    + '<option value="auto">按路由推荐 (auto)</option>'
+                    + '<option value="vite">VITE</option>'
+                    + '<option value="lizard" selected>蜴国际</option>'
+                    + '</select></div>'
+                    + '<div><div style="font-size:12px;color:#666;margin-bottom:4px;">服务类型</div>'
+                    + '<select id="bc-service-' + idx + '" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;"></select></div>'
+                    + '</div></div>';
+            });
+            container.innerHTML = html;
+            for (var i = 0; i < whs.length; i++) {
+                switchBcServices(i);
+                var defService = warehouseDefaultService[whs[i]] || '';
+                if (defService) {
+                    var svcSel = document.getElementById('bc-service-' + i);
+                    if (svcSel.querySelector('option[value="' + defService + '"]')) {
+                        svcSel.value = defService;
+                    }
+                }
+            }
+            document.getElementById('batch-create-modal').classList.add('visible');
+        }
+        function closeBatchCreateModal() {
+            document.getElementById('batch-create-modal').classList.remove('visible');
+        }
+        var _bcGroupsPayload = [];
+        var _bcActor = 'web-user';
+        var _bcNeedApprove = [];
+
+        function doBatchCreate(groups, actor, cb) {
+            fetch('/api/packages/batch-create-labels', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ groups: groups, actor: actor })
+            })
+            .then(function(resp) { return resp.json(); })
+            .then(function(d) { cb(d); })
+            .catch(function(err) {
+                document.getElementById('bc-results').innerHTML = '<div class="loading" style="color:#721c24;">批量创建失败: ' + err.message.replace(/</g, '&lt;') + '</div>';
+            });
+        }
+
+        function renderBatchResults(d, showApprove) {
+            var resultsEl = document.getElementById('bc-results');
+            var html = '';
+            var needApprove = [];
+            (d.results || []).forEach(function(r) {
+                if (r.ok) {
+                    html += '<div style="padding:6px 8px;border-bottom:1px solid #eee;color:#155724;">✅ ' + r.package_sn + ' — 追踪号 ' + (r.tracking_number || '—') + (r.carrier ? ' (' + r.carrier + ')' : '') + '</div>';
+                } else {
+                    var err = r.error || '失败';
+                    html += '<div style="padding:6px 8px;border-bottom:1px solid #eee;color:#721c24;">❌ ' + r.package_sn + ' — ' + err.replace(/</g, '&lt;') + '</div>';
+                    if (err.indexOf('approved') !== -1) needApprove.push(r.package_sn);
+                }
+            });
+            html += '<div style="padding:8px;font-weight:700;">成功 ' + (d.success || 0) + ' / 失败 ' + (d.failed || 0) + ' / 共 ' + (d.total || 0) + '</div>';
+            if (showApprove && needApprove.length > 0) {
+                _bcNeedApprove = needApprove;
+                html += '<div style="margin-top:8px;padding:8px;background:#fff3cd;border-radius:4px;font-size:13px;">'
+                    + '<span>' + needApprove.length + ' 个包裹审核未通过。</span>'
+                    + '<button onclick="batchApproveAndRetry()" '
+                    + 'style="margin-left:8px;padding:4px 12px;background:#155724;color:#fff;border:none;border-radius:4px;cursor:pointer;">'
+                    + '一键通过并重试</button></div>';
+            }
+            resultsEl.innerHTML = html;
+        }
+
+        function runBatchCreate() {
+            var groups = getSelectedByWarehouse();
+            var whs = Object.keys(groups);
+            if (whs.length === 0) { closeBatchCreateModal(); return; }
+            _bcActor = document.getElementById('bc-actor').value.trim() || 'web-user';
+            var groupsPayload = [];
+            whs.forEach(function(wh, idx) {
+                var carrier = document.getElementById('bc-carrier-' + idx).value;
+                var serviceLevel = document.getElementById('bc-service-' + idx).value;
+                groupsPayload.push({
+                    carrier: carrier,
+                    service_level: serviceLevel,
+                    package_sns: groups[wh]
+                });
+            });
+            _bcGroupsPayload = groupsPayload;
+            var resultsEl = document.getElementById('bc-results');
+            resultsEl.innerHTML = '<div class="loading">正在逐包创建面单...</div>';
+            doBatchCreate(groupsPayload, _bcActor, function(d) {
+                renderBatchResults(d, true);
+            });
+        }
+
+        function batchApproveAndRetry() {
+            var needApprove = _bcNeedApprove;
+            if (!needApprove || needApprove.length === 0) return;
+            var resultsEl = document.getElementById('bc-results');
+            resultsEl.innerHTML = '<div class="loading">正在一键通过 ' + needApprove.length + ' 个包裹...</div>';
+            fetch('/api/packages/batch-review', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ package_sns: needApprove, actor: _bcActor })
+            })
+            .then(function(resp) { return resp.json(); })
+            .then(function(d) {
+                resultsEl.innerHTML = '<div class="loading">已通过 ' + (d.approved || 0) + ' 个，重新创建面单...</div>';
+                doBatchCreate(_bcGroupsPayload, _bcActor, function(d2) {
+                    renderBatchResults(d2, true);
+                });
+            })
+            .catch(function(err) {
+                resultsEl.innerHTML = '<div class="loading" style="color:#721c24;">批量通过失败: ' + err.message.replace(/</g, '&lt;') + '</div>';
+            });
+        }
+        // Load lizard services from API
+        fetch('/api/lizard-services')
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                var svc = (d.services || []).map(function(s) {
+                    return {value: s.value, label: s.label};
+                });
+                bcCarrierServices['lizard'] = [{value:'', label:'（自动）'}].concat(svc);
+            })
+            .catch(function() { /* keep defaults */ });
+
+        document.getElementById('batch-create-modal').addEventListener('click', function(e) {
+            if (e.target === this) closeBatchCreateModal();
+        });
         document.getElementById('print-modal').addEventListener('click', function(e) {
             if (e.target === this) closePrintModal();
         });

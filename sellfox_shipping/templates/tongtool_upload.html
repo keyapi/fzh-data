@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>通途订单标记</title>
+    <style>
+        body { font-family: system-ui, sans-serif; background:#f5f6fa; margin:0; padding:24px; color:#333; }
+        .panel { background:#fff; border:1px solid #e3e6ef; border-radius:8px; padding:20px; margin-bottom:16px; }
+        h2 { margin-top:0; }
+        .nav a { color:#1a1a2e; margin-right:14px; text-decoration:none; font-size:14px; }
+        .label { font-size:12px; color:#888; margin-bottom:4px; }
+        input[type=file], input[type=text] { padding:6px 10px; border:1px solid #ddd; border-radius:4px; }
+        button { padding:8px 16px; background:#1a1a2e; color:#fff; border:none; border-radius:4px; cursor:pointer; }
+        table { border-collapse:collapse; width:100%; font-size:13px; }
+        th, td { border:1px solid #e3e6ef; padding:6px 8px; text-align:left; }
+        th { background:#f8f9fc; }
+        .ok { color:#155724; } .bad { color:#721c24; }
+        .meta { font-size:13px; color:#555; margin:10px 0; }
+    </style>
+</head>
+<body>
+    <div class="nav">
+        <a href="/packages">包裹列表</a>
+        <a href="/tongtool">通途订单标记</a>
+    </div>
+
+    <div class="panel">
+        <h2>通途订单标记（美东100.xls）</h2>
+        <form method="post" action="/tongtool/upload" enctype="multipart/form-data"
+              onsubmit="this.querySelector('button').disabled=true; this.querySelector('button').textContent='正在处理，请稍候…'; document.getElementById('upload-hint').style.display='';">
+            <div style="margin-bottom:10px;">
+                <div class="label">上传 xls（含「参考编号/Reference Code」列 = 通途包裹号），支持一次多选</div>
+                <input type="file" name="file" accept=".xls,.xlsx" multiple required>
+                <input type="text" name="actor" value="web-user" placeholder="操作者">
+                <button type="submit">上传并匹配</button>
+                <span id="upload-hint" style="display:none;color:#856404;font-size:13px;margin-left:8px;">正在逐条查询通途订单并匹配，文件较多时约 1-3 分钟，请勿关闭页面…</span>
+            </div>
+        </form>
+    </div>
+
+    {% if report %}
+    <div class="panel">
+        <h3>匹配结果</h3>
+        <div class="meta">
+            唯一通途包裹号 {{ report.total }} 个 ·
+            匹配到本地包裹 <span class="ok">{{ report.matched }}</span> ·
+            未匹配 <span class="bad">{{ report.unmatched_count }}</span>
+            {% if report.skipped_duplicates %} · 跳过重复 {{ report.skipped_duplicates }}{% endif %}
+        </div>
+        {% if report.files and report.files|length > 1 %}
+        <h4>分文件统计</h4>
+        <table>
+            <thead><tr><th>文件名</th><th>包裹号数</th><th>匹配</th><th>未匹配</th></tr></thead>
+            <tbody>
+            {% for f in report.files %}
+                <tr><td>{{ f.filename }}</td><td>{{ f.total }}</td><td class="ok">{{ f.matched }}</td><td class="bad">{{ f.unmatched_count }}</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+        {% if report.matched_rows %}
+        <table>
+            <thead><tr><th>通途包裹号(P)</th><th>通途订单号</th><th>Amazon 订单号</th><th>本地包裹</th></tr></thead>
+            <tbody>
+            {% for row in report.matched_rows %}
+                <tr><td>{{ row.p_number }}</td><td>{{ row.order_id }}</td><td>{{ row.amazon_order_id }}</td>
+                    <td><a href="/packages/{{ row.package_sn }}">{{ row.package_sn }}</a></td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+        {% if report.unmatched_rows %}
+        <h4 style="color:#721c24;">未匹配（不静默丢弃）</h4>
+        <table>
+            <thead><tr><th>通途包裹号(P)</th><th>原因</th><th>详情</th></tr></thead>
+            <tbody>
+            {% for row in report.unmatched_rows %}
+                <tr><td>{{ row.p_number }}</td><td>{{ row.reason }}</td><td>{{ row.detail }}</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% if error %}
+    <div class="panel" style="color:#721c24;">{{ error }}</div>
+    {% endif %}
+</body>
+</html>

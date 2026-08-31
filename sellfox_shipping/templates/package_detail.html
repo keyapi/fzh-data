@@ -41,10 +41,11 @@
             <a href="/lizard/batches">批次</a>
             <a href="/labels">流水</a>
             <a href="/orders">订单 (legacy)</a>
+            <a href="/tongtool">通途订单</a>
         </div>
     </div>
     <div class="container">
-        <a class="back" href="/packages">← 返回包裹列表</a>
+        <a class="back" href="/packages" onclick="if(document.referrer.includes('/packages')){history.back();return false}">← 返回包裹列表</a>
 
         {% if message %}
         <div class="panel" style="background:#eef8ee;">{{ message }}</div>
@@ -59,8 +60,25 @@
                 <div class="info-item"><div class="label">本地审核</div><div class="value"><span class="badge">{{ package.local_review_status or 'pending' }}</span></div></div>
                 <div class="info-item"><div class="label">渠道</div><div class="value">{{ package.logistics.channel_name or '—' }}</div></div>
                 <div class="info-item"><div class="label">店铺</div><div class="value">{{ package.shop_name or '—' }}</div></div>
+                <div class="info-item"><div class="label">发货仓库</div><div class="value">{{ package.logistics.warehouse_name or '—' }}</div></div>
                 <div class="info-item"><div class="label">追踪号</div><div class="value">{{ package.logistics.tracking_number or '—' }}</div></div>
                 <div class="info-item"><div class="label">站点</div><div class="value">{{ package.marketplace or '—' }}</div></div>
+                <div class="info-item"><div class="label">通途订单</div><div class="value">
+                    {% if tongtool_mark and tongtool_mark.is_tongtool %}
+                    <span class="badge" style="background:#d4edda;color:#155724;">✓ 通途{% if tongtool_mark.tongtool_p_numbers %} ({{ tongtool_mark.tongtool_p_numbers }}){% endif %}</span>
+                    {% else %}—{% endif %}
+                </div></div>
+                <div class="info-item"><div class="label">通途发货仓库</div><div class="value">
+                    {% if tongtool_mark and tongtool_mark.tongtool_shipping_warehouse %}
+                    <span class="badge" style="background:#cce5ff;color:#004085;">{{ tongtool_mark.tongtool_shipping_warehouse }}</span>
+                    {% else %}—{% endif %}
+                </div></div>
+                <div class="info-item"><div class="label">通途发货方式</div><div class="value">
+                    {% if tongtool_mark and tongtool_mark.tongtool_shipping_method %}
+                    <span class="badge" style="background:#fff3cd;color:#856404;">{{ tongtool_mark.tongtool_shipping_method }}</span>
+                    {% else %}—{% endif %}
+                </div></div>
+                <div class="info-item"><div class="label">赛狐下单时间</div><div class="value">{{ purchase_date.strftime('%Y-%m-%d %H:%M') if purchase_date else '—' }}</div></div>
             </div>
         </div>
 
@@ -101,7 +119,7 @@
         </div>
         {% endif %}
 
-        <!-- 2.5 运费试算 -->
+        <!-- 2.5 运费试算（仅路由建议承运商） -->
         {% if vite_rate %}
         <div class="panel">
             <h2>运费试算</h2>
@@ -270,7 +288,7 @@
             <table style="margin-top:16px;">
                 <thead>
                     <tr>
-                        <th>创建时间</th><th>承运商</th><th>追踪号</th><th>服务</th>
+                        <th>创建时间</th><th>承运商</th><th>追踪号</th><th>派生包裹号</th><th>服务</th>
                         <th>金额</th><th>状态</th><th>面单PDF</th><th>操作</th>
                     </tr>
                 </thead>
@@ -280,6 +298,7 @@
                         <td style="font-size:11px;">{{ label.created_at.strftime('%Y-%m-%d %H:%M:%S') if label.created_at else '—' }}</td>
                         <td><span class="badge" style="background:#d1ecf1;color:#0c5460;">{{ label.carrier }}</span></td>
                         <td><code>{{ label.tracking_number or '—' }}</code></td>
+                        <td>{% if label.derived_reference_no %}<code>{{ label.derived_reference_no }}</code>{% else %}<span style="color:#ccc;">—</span>{% endif %}</td>
                         <td>{{ label.service_level or '—' }}</td>
                         <td>{% if label.total_amount %}${{ label.total_amount }} {{ label.currency }}{% else %}—{% endif %}</td>
                         <td><span class="badge" style="background:{% if label.status == 'generated' %}#d4edda;color:#155724;{% else %}#fff3cd;color:#856404;{% endif %}">{{ label.status }}</span></td>
@@ -467,6 +486,61 @@
                     <button type="submit" style="padding:8px 14px;background:#1a1a2e;color:#fff;border:none;border-radius:4px;cursor:pointer;">
                         准备 Intent
                     </button>
+                </div>
+            </form>
+            {% set valid_tracking = namespace(found='', carrier='', done=false) %}
+            {% for lb in labels or [] %}
+                {% if not valid_tracking.done and lb.status != 'cancelled' and lb.tracking_number %}
+                    {% set valid_tracking.found = lb.tracking_number %}
+                    {% set valid_tracking.carrier = lb.carrier %}
+                    {% set valid_tracking.done = true %}
+                {% endif %}
+            {% endfor %}
+            <form method="post" action="/packages/{{ package.package_sn }}/submit-label-tracking"
+                  onsubmit="return confirm('确认将面单追踪号{% if valid_tracking.found %} {{ valid_tracking.found }}{% endif %} 写回赛狐？此操作调用所选接口，可能影响履约状态/库存。')">
+                <div class="info-row" style="margin-bottom:10px;padding-top:12px;border-top:1px solid #eee;">
+                    <div class="info-item" style="flex:3;">
+                        <div class="label">有效面单追踪号</div>
+                        {% if valid_tracking.found %}
+                        <div class="value"><code>{{ valid_tracking.found }}</code> <span style="color:#888;">({{ valid_tracking.carrier or '—' }})</span></div>
+                        {% else %}
+                        <div class="value" style="color:#999;">无有效面单（无未取消且有追踪号的面单）</div>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="info-row" style="align-items:flex-end;">
+                    <div class="info-item">
+                        <div class="label">操作者</div>
+                        <input name="actor" value="web-user" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;width:100%;" />
+                    </div>
+                    <div class="info-item">
+                        <div class="label">写回接口</div>
+                        <select name="writeback_api" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;width:100%;">
+                            <option value="submitToPlatform">submitToPlatform（Amazon/FBM）</option>
+                            <option value="quickOutbound">quickOutbound（多平台）</option>
+                        </select>
+                    </div>
+                    <div class="info-item">
+                        <div class="label">扣库存方式</div>
+                        <select name="shipment_type" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;width:100%;">
+                            <option value="1">1=扣库存</option>
+                            <option value="0" selected>0=不扣库存</option>
+                        </select>
+                    </div>
+                    <div class="info-item">
+                        <div class="label">仓库ID（扣库存必填）</div>
+                        <input name="warehouse_id" value="{% if sellfox_warehouse_id %}{{ sellfox_warehouse_id }}{% endif %}" placeholder="如 274390" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;width:100%;" />
+                    </div>
+                    <div class="info-item">
+                        <div class="label">海外仓标识（扣库存必填）</div>
+                        <input name="is_oversea" value="{% if sellfox_is_oversea %}{{ sellfox_is_oversea }}{% endif %}" placeholder="0默认/1国内/2FBA/3海外" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;width:100%;" />
+                    </div>
+                    <div class="info-item">
+                        <div class="label">&nbsp;</div>
+                        <button type="submit" style="padding:8px 14px;background:#856404;color:#fff;border:none;border-radius:4px;cursor:pointer;width:100%;">
+                            回写面单追踪号到赛狐
+                        </button>
+                    </div>
                 </div>
             </form>
             <table>

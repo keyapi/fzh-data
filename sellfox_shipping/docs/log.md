@@ -3,10 +3,265 @@ okf: v0.1
 type: Log
 module: sellfox_shipping
 created: 2026-07-15
-updated: 2026-08-04
+updated: 2026-08-13
 ---
 
-# sellfox_shipping — 变更日志
+# sellfox_shipping - 变更日志
+
+
+
+## 2026-08-13 - 批量打印按仓库两级页签（仓库 → 文档类型）
+
+- **两级页签**：打印弹窗一级选仓库（美东/美中-成品仓/美中-其他仓），二级选文档类型（背贴/Label 面单/面单+背贴，固定三项）。
+- **后端**：提取 `_print_group_meta` 分组；`batch-print` 加 `group_key` 过滤；新增 `batch-print-groups` 返回分组。
+- **下载命名**：按「仓库 + 文档类型」命名（美东-面单 / 美中-成品仓 / 美中-成品仓_背贴 / 美中-其他仓 / 美中-其他仓_背贴）。
+- 详见 [已解决问题](solutions/batch-print-warehouse-tabs-2026-08-13.md)。
+
+## 2026-08-13 - 发货仓库过滤 + 多文件上传 + 跨页勾选 + 按仓库分组批量面单
+
+- **发货仓库过滤**：Transactions 新增「发货仓库」下拉（美东/美中/波兰/虚拟仓库），过滤 `warehouse_name`。
+- **多文件通途上传**：`/tongtool/upload` 支持一次多选多个 xls，逐文件匹配，多文件时显示分文件统计。
+- **跨页勾选持久化**：勾选用 sessionStorage 持久化（`{sn: warehouse}` 映射），切页不丢、跨页累加。
+- **按仓库分组批量面单**：批量创建面单弹窗按仓库分组，每个仓库独立选择承运商 + 服务类型；美中默认 `FedEx-Ground-J-TX`、美东默认 `FedEx-Economy-10-USEA`。
+- **浮动栏遮挡修复**：留白从 `.container` 移到 `body`，避免标签容器被下推。
+- 详见 [已解决问题](solutions/warehouse-filter-multiupload-selection-batchlabel-2026-08-13.md)。
+
+## 2026-08-13 - 通途发货仓库/方式标记 + 批量面单增强 + 导出增列
+
+- **通途发货仓库/方式**：上传通途 xls 时从文件名提取发货仓库（皮壳/退货/半成品/成品）与发货方式（蜴国际，可扩展），持久化 `tongtool_shipping_warehouse` / `tongtool_shipping_method`，Transactions 支持过滤，详情页显示。迁移 `0024`/`0025`。
+- **批量创建面单增强**：弹窗新增服务类型下拉（按承运商动态切换）；审核未通过的包裹显示「一键通过并重试」；操作栏改为视口底部浮动。
+- **导出 Excel 增列**：新增赛狐追踪号、通途包裹号、通途发货仓库、通途发货方式；「追踪号」列改为取面单记录中的有效追踪号。
+- 详见 [已解决问题](solutions/tongtool-warehouse-method-batch-label-2026-08-13.md)。
+
+## 2026-08-12 - 安全加固：通途上传端点路径穿越修复
+
+- `POST /tongtool/upload` 临时文件路径曾直接用 `upload.filename` 拼接，恶意文件名（如 `../../../x`）可路径穿越写出 `BASE_DIR/data/`；已改为 `Path(upload.filename).name` 只取 basename，并补回归测试 `test_tongtool_upload_filename_is_sanitized`。
+
+## 2026-08-12 - 通途订单标记功能（上传 xls → EN 匹配 → 赛狐包裹标记）+ 回写接口改动
+
+**通途订单标记（新功能，已完成）：**
+- 需求：`D:\美东100.xls` 参考编号（通途包裹号 P 号）→ EN ERPNext Tongtool Package → Amazon 订单号 → 本地赛狐包裹匹配 → 持久化 `is_tongtool` 标记。
+- 实测 114/114 全部匹配（0 未匹配）。链路与实现详见 [已解决问题：通途订单标记](solutions/tongtool-order-mark-2026-08-12.md)。
+- Web `/tongtool` 上传页 + CLI `packages-mark-tongtool` 共用 `tongtool_service`；Transactions 增加通途过滤（仅该 tab 生效）；详情页显示「✓ 通途 (P号)」。
+- 迁移 `0023_tongtool_mark`；EN 查询并行化（114 个 ~7s）。
+
+**赛狐回写接口改动（测试期间实现）：**
+- Web「回写」表单加接口选择（submitToPlatform / quickOutbound）、扣库存方式（shipmentType 0/1）、仓库ID、海外仓标识（自动解析）。
+- `prepare_intents_for_package` 追踪号来源改为优先**有效面单记录**；CLI 新增 `packages-submit-label-tracking`。
+- quickOutbound shipmentType=1 会触发发货确认副作用（即使 trackNo 未写入），测试纯写追踪号应用 shipmentType=0。
+- 赛狐确认中：Amazon FBM 订单写追踪号的正确接口（详见 solutions/send-to-sellfox-trackno-writeback-2026-08-11.md）。
+
+**测试基线：311 passed。**
+
+## 2026-08-11 - 赛狐 Amazon FBM 追踪号写回测试发现（待赛狐确认）+ Web 回写接口选择器
+
+**测试发现（P2BAA9T735007，Amazon FBM 订单）：**
+- `submitToPlatform`：返回 `code=0, data=null`，packageDetail 回读 `logistics.trackNo` 仍 null——**追踪号未写入**（空成功）。
+- `quickOutbound`（shipmentType=0 与 1 均试）：返回 `code=0`，per-package 失败 **"该订单不需要提交平台"**——**未写入**。
+- **异常副作用**：测试后订单从 Unshipped 变 **Shipped（已发货）**、shipTime 被设置，但 trackNo 仍空——疑似 quickOutbound shipmentType=1（确认发货/扣库存）的副作用，即使平台提交失败仍触发发货状态变更。
+- **补充（用户确认）**：此前有测试记录显示追踪号**曾正常写入**，但当时未确认用哪个接口（推测也是 quickOutbound），情况复杂，待赛狐确认正确写入口。
+- 已整理发给赛狐的反馈文档：[send-to-sellfox-trackno-writeback-2026-08-11.md](solutions/send-to-sellfox-trackno-writeback-2026-08-11.md)；详细测试记录：[sellfox-trackno-writeback-test-2026-08-10.md](solutions/sellfox-trackno-writeback-test-2026-08-10.md)。
+
+**Web 回写功能（本次测试期间实现，未提交）：**
+- Web「回写面单追踪号到赛狐」表单新增「写回接口」选择（submitToPlatform / quickOutbound）、「扣库存方式」（shipmentType 0/1）、「仓库ID」「海外仓标识」字段，并自动解析填充（`_resolve_sellfox_warehouse`，从赛狐仓库列表按 shop 匹配 warehouseId + type/isOversea）。
+- CLI 新增 `packages-submit-label-tracking`（读有效面单追踪号 → submitToPlatform）；`prepare_intents_for_package` 追踪号来源改为优先**有效面单记录**（与 quickOutbound 一致），不再用包裹自带 trackNo。
+- **风险警示**：quickOutbound shipmentType=1 会触发发货确认/可能扣库存，即使追踪号未写入；测试纯写追踪号应用 shipmentType=0。
+
+## 2026-08-10 - 蜴国际面单发货地址：根因已与蜴国际确认（产品↔发件人绑定），代码尝试已还原
+
+- **决定性根因（已与蜴国际确认）**：蜴国际产品（sm_code）↔ 发件人（已备案地址）**关联绑定**；createOrder 的 `shipper_address` 字段无效，面单 FROM 地址由所选产品绑定的发件人决定。实测传 NJ 已备案地址仍打印 TX/CA——shipper_address 被完全忽略。
+- **产品绑定示例**：`FedEx-21-AHS-USEA`→East Hanover NJ；`FedEx-Ground-20-OS-TX`→Houston TX；`FedEx-Economy-10-USEA`→Ontario CA（非 NJ）。
+- **当前卡点**：`FedEx-21-AHS-USEA`（绑定 NJ 发件人的产品）**已下线（渠道已关闭）**，ratesv2 不再返回、createOrder 报 `400 物流渠道已关闭`。`FedEx-Economy-10-USEA` 可用但绑定 Ontario CA。**NJ 暂无可用产品，需蜴国际重新开通 NJ 产品或把 NJ 发件人绑定到可用美东产品。**
+- **代码侧尝试已还原（未提交）**：曾实现 `build_shipper_address_from_warehouse` 按仓库映射已备案地址 + 区域感知产品选择 + 下拉框区域过滤，但因①蜴国际忽略 shipper_address、②NJ 产品下线，无法解决，已 `git restore` 还原。下拉框保持列出全部产品、人工选择。
+- **待实现（后续，本次不做）**：仓库 → 下拉框固定服务类型（warehouse → fixed sm_code），等蜴国际开通 NJ 产品后；勿映射已下线的 `FedEx-21-AHS-USEA`。
+- 详见 [已解决问题：蜴国际面单发货地址](solutions/sellfox-writeback-label-address-2026-08-07.md)。
+
+## 2026-08-10 - 修复面单创建 "No dimensions available"（upsert_package_dims 主键/外键混淆）
+
+- 现象：`P2B4A9T731770` 创建面单报 `No dimensions available for package`。`LabelService.preflight` 在 `get_package_dims(db_id)` 返回 `None` 时报错。
+- 根因：`upsert_package_dims` 用 `session.get(PackageDimsRow, package_db_id)` —— 按**自增主键 `id`** 查，但 `package_db_id` 是**外键 `package_id`**。当某包裹的 `package_id` 撞上既有 dims 行的 `id`（本例 id=2 属于 `P2BAA9T734992`），尺寸被错写到别家行，目标包裹的 `package_id` 行永不创建；读侧 `get_package_dims` 早已改用 `filter(package_id==)`，所以读回永远 `None`。写侧漏同步修复。
+- 修复：`upsert_package_dims` 改为 `session.query(PackageDimsRow).filter(PackageDimsRow.package_id == package_db_id).first()`，与读侧/`upsert_package_routing` 一致。
+- 新增回归测试 2 例（碰撞 + 重复 upsert 不重复）；全量 `tests/sellfox_shipping` **302 passed, 2 warnings**。
+- 数据修复：重新计算 `P2B4A9T731770`（3.6kg, 66×56×5cm）与 `P2BAA9T734992`（4.98kg, 76×56×7.8cm）尺寸，清理诊断时误写行。
+- 详见 [已解决问题：upsert_package_dims 主键/外键查询混淆](solutions/upsert-package-dims-pk-fk-bug-2026-08-10.md)。
+
+## 2026-08-07 - 开源复用档案与 Search-before-Build 准入
+
+- 新增 [开源复用档案](research/open-source-reuse-dossier-2026-08-07.md)：严格评估 erpnext-shipping（MIT，v16.0.0）、Karrio、Huey、OCA delivery-carrier、OpenBoxes 与 outbox-streaming。
+- erpnext-shipping 结论：Adapt/Reference，借鉴适配器分层、报价聚合、服务别名、部分失败补偿与测试场景；不整体安装。
+- 后续每个核心任务包先产出候选项目/许可证/可复用模块/可移植测试/Adopt-Adapt-Reference-Reject 档案，再开始编码。
+
+
+## 2026-08-07 - Submission scope 人工解除与审计
+
+- 新增 `submission-scope-resolve` CLI：仅当 scope 为 `UNKNOWN_BLOCKED` 且操作者确认无赛狐副作用后，将 scope 恢复 `OPEN`、UNKNOWN intent 恢复 `READY`，并写入审计。
+- 旧 UNKNOWN attempt 保留作为审计；解除后允许再次调用 submit，不绕过 carrier 或赛狐状态机。
+- 解决真实探针 401 后 scope 永久锁死、新包裹被迫换票的问题；仍要求 `--confirm unblock` 与非空 note。
+
+
+## 2026-08-07 - 修复回写赛狐 NameError（_get_client 未定义）
+
+- Web 端点 `POST /packages/{sn}/submit-label-tracking`（回写面单追踪号到赛狐）调用 `_get_client()`，但该函数只定义在 `cli.py`，`app.py` 模块作用域不存在 → 点击即 `NameError: name '_get_client' is not defined`。
+- 潜伏原因：`test_submit_label_tracking.py` 只测 service 层（mock client），未覆盖 app.py Web 端点。
+- 修复：把"智能客户端工厂"逻辑（SELLFOX_APP_ID/SECRET 有则直连 OpenAPI，否则走代理）提取为共享函数 `get_sellfox_client()`（`sellfox_client.py`），`app.py` 端点与 `cli.py._get_client()` 共同复用，消除重复。
+- 新增 `test_sellfox_client_factory.py`（2 例）；全量 283 passed。
+- 验证：TestClient mock 客户端 POST 端点返回 200 无 NameError。
+
+
+## 2026-08-07 - 蜴国际报价 ca_zone 语义修复与 CENTRADE 遗留问题
+
+- 问题：CENTRADE 包裹点击「获取 VITE + 蜴国际 报价」时蜴国际报价不显示。
+- 根因：`_LIZARD_CA_ZONE["CENTRADE"]=1`（限定美东），而报价请求使用统一 S0143 TX 发件地址；ratesv2 返回「未匹配到可用线路」。
+- 修复：删除按仓库映射的 `_LIZARD_CA_ZONE`，统一使用 `_LIZARD_RATE_CA_ZONE = 0`（全域查询），并补 mock 回归测试锁定请求参数与报价持久化。
+- 展示决策：运费试算只显示路由建议承运商的报价，另一家仅写入历史报价表。
+
+## 2026-08-07 - 排除列表新增 TikTok 店铺（TT_Tooddly / TTCozydozy）
+
+- 通过赛狐 OpenAPI `/api/multiplatform/shop/list.json` 核实：`platformType=TIKTOK` 共 4 家店铺（TTCozydozy、TT_Tooddly、TTBNKC、DaneeyGo）。
+- 用户提到的 `TTTOODDLYUS` / `TTCozyDozyUS` 在系统中不存在，实际 `shop_name` 为 `TT_Tooddly` / `TTCozydozy`（API 与本地包裹数据一致）。
+- 按用户确认仅排除 2 家：`routing_rules.yaml` `exclude_shops` 追加 `TT_Tooddly`、`TTCozydozy`（现为 WFUS/OSTK/PotteryBarnUS/TT_Tooddly/TTCozydozy）。
+- 该列表同时驱动「Transactions 排除平台物流店铺」复选框与包裹详情「建议渠道方式」（`RuleEngine.from_yaml` 同一数据源），TTBNKC / DaneeyGo 保留。
+- 移除 `routing/models.py` 中冗余的 `is_excluded_shop` 硬编码属性，确认无运行时调用方后由 YAML 作为唯一事实来源。
+- 测试：新增 `test_routing_engine.py`，从真实 YAML 驱动 `RuleEngine.route()` 与 repository 过滤；`test_exclude_shops_filter` 扩展 TikTok 店铺场景。
+- 浏览器验证：勾选排除后 2898→2334 条（-564 = WFUS 325 + OSTK 186 + PotteryBarnUS 41 + TTCozydozy 11 + TT_Tooddly 1）；TTCozydozy 包裹详情建议渠道显示「排除（平台物流）」。
+
+
+
+## 2026-08-06 - 赛狐 Outbox PR 2 执行器与回读
+
+- 新增 migration 0021：`shipping_sellfox_outbox.lease_origin_status`，过期 LEASED 恢复原状态。
+- 新增 `outbox_service.py`：确认、账户 Policy、能力证据、租约执行与 packageDetail 回读。
+- 新增 CLI：`sellfox-outbox-confirm/confirm-batch/run-once/verify/policy-show/policy-set/capability-record`。
+- 执行安全：`BEGIN IMMEDIATE` 原子 claim + lease token fencing；发送前落 `IN_FLIGHT`；崩溃恢复一律 `UNKNOWN_BLOCKED`，禁止再次 submit。
+- dry-run 不领取 lease、不触发恢复写库；崩溃恢复仅在真实执行路径运行。
+- 错误分类：`not_sent_retryable`、`configuration_blocked`、`rejected_final`、`ambiguous`、`accepted_verify_pending`；退避 1m/5m/15m/1h/6h，5 次后转人工。
+- 回读：tracking 匹配 → VERIFIED；暂空或占位 → VERIFY_PENDING；不同真实值 → CONFLICT。
+- 门禁：DISABLED 阻断真实发送；PROBE_ONLY 仅显式单包；SCOPED_BATCH 最多 50；只有 SAFE_TRACKNO_ONLY 证据可切换。
+- 测试基线：260 passed, 2 warnings；全部 mock，未真实调用赛狐。
+
+## 2026-08-06 - 赛狐 Outbox PR 3 能力探针运行手册
+
+- 新增 [单包能力探针运行手册](specs/sellfox-writeback-probe-runbook-2026-08-06.md)：前置条件、探针流程、回读核验、人工业务核验与停止条件。
+- 明确能力结论门禁：SAFE_TRACKNO_ONLY / UNSAFE_PLATFORM_SIDE_EFFECT / INEFFECTIVE，只有 SAFE_TRACKNO_ONLY 后才允许 SCOPED_BATCH。
+- 更新生产验收矩阵与 Jack 交接边界：代码已就绪，真实探针等待用户指定测试包裹。
+- 本 PR 不执行真实赛狐 HTTP，不含凭证和真实响应。
+
+## 2026-08-06 - 赛狐 Outbox PR 1 候选事实层
+
+- 新增 migration 0020、订单级 Outbox、来源表与账户 Policy 默认值。
+- API label 成功和 Excel tracking 导入统一通过事务 finalizer 生成候选。
+- 新增候选去重、来源合并、SUPERSEDED/CONFLICT 规则及显式历史扫描。
+- 新增 sellfox-outbox-list/show/scan-candidates，全部无赛狐 HTTP；扫描默认 dry-run。
+- 增加成熟方案调研与完整 Outbox 设计；PR 2/3 仍负责真实执行与能力门禁。
+
+## 2026-08-05 - Migration 0019 与生产验收交接
+
+- 合并后全量测试发现：历史 SQLite 库从 0015 连续升级时，0018 使用 `op.add_column(ForeignKey(...))` 会触发 SQLite 不支持的独立约束 ALTER。
+- Migration 0018 改为先新增普通列；Migration 0019 使用 Alembic batch copy-and-move 建立外键。
+- 0019 同时修复已被旧 0018 半应用并标记为 head、但 `resolution_evidence_id` 外键缺失的数据库。
+- 新增历史 0015 连续升级和半应用 0018 修复测试；自动化基线更新为 221 passed、2 个既有 warning。
+- 更新路线图：购标恢复核心标记完成，赛狐 outbox 标记为用户延期，下一阶段改为生产验收与三方对账评估。
+- 新增 Jack Agent 生产验收接手规范，明确禁止无授权真实购标、取消和赛狐回写。
+
+## 2026-08-05 - PR #143 可靠性复审修复
+
+- Migration 0018 为 resume claim 增加 `claim_token`，并将 lease 改为 SQLite `BEGIN IMMEDIATE` 条件更新。
+- lease 释放必须匹配 token，过期 worker 不能清除新 worker 的 claim。
+- investigation 增加结构化 `conclusion`；`confirmed_created` 同时保存并核对 `provider_order_id`。
+- UNKNOWN_BLOCKED 结案在同一事务内校验证据归属、结论和权威引用，并把 `resolution_evidence_id` 持久化到 operation。
+- `label-operation-investigate` 新增必填 `--conclusion`；空白 `other` 证据不能释放购标槽位。
+- 新增跨 repository 并发、lease fencing、证据错配和审计关联测试；测试基线更新为 217 passed。
+
+## 2026-08-06 — 批量打印锚定面单 + 批量操作栏优化
+
+- 批量操作栏按钮顺序：创建面单 → 批量打印 → 导出 Excel
+- 勾选包裹全部有有效面单时，创建面单按钮灰色禁用
+- 批量打印以面单数量为锚点：背贴/Label/双模式数量一致
+- 缺失背贴用 A4 空白页占位，保持顺序；无面单包裹不参与打印
+- 移除 422 硬拒绝与"仅打印有效包裹"回退（被空白占位取代）
+
+## 2026-08-06 — 蜴国际参考号 -N 后缀 + 派生包裹号列 + 会话问题文档
+
+- 蜴国际参考号改为 generation 作用域：generation 1 用基础号，后续 `-1/-2/-3`（取消订单仍占用参考号）
+- Migration 0018: `shipping_labels` 新增 `derived_reference_no` 列
+- 创建/恢复蜴国际面单时记录实际派生参考号
+- 面单记录表格新增"派生包裹号"列（Vite 留空）
+- 新增综合问题文档 `docs/solutions/reliability-hardening-and-lizard-chain-2026-08-06.md`（会话全部问题与修复）
+
+## 2026-08-05 — UNKNOWN_BLOCKED 证据化结案 (PR C：可靠性收口)
+
+- Migration 0017: 新增 `shipping_label_investigations` append-only 表
+- 新增 `InvestigationRow` 模型和 `InvestigationRecord` dataclass
+- `PackageRepository` 新增 `add_investigation()` / `get_investigations()` / `get_investigation()`
+- `LabelService` 新增 `add_investigation()` — 仅记录调查，不解除阻断
+- `resolve_unknown_blocked()` 增加必填 `evidence_id`，验证 evidence 归属同一 operation
+- 新增 CLI `label-operation-investigate` — 记录调查（evidence_type: ticket/carrier_portal/email/other）
+- `label-operation-resolve` CLI 增加必填 `--evidence-id`
+- 更新已有测试适配新参数；测试基线: 212 passed, 2 warnings
+
+## 2026-08-05 — resume 并发与幂等收口 (PR B：可靠性收口)
+
+- Migration 0016: `shipping_label_operations` 新增 `claimed_by` (String) 和 `claimed_at` (DateTime, nullable)
+- `PackageRepository` 新增 `acquire_resume_lease()` / `release_resume_lease()` — SQLite 原子 lease，同一 operation 仅一个恢复者
+- `resume_label_acquisition()` 增加 lease 保护：claim 失败返回 409；lease 在异常/完成时自动释放
+- SUCCEEDED 状态 resume 幂等返回已有结果（`idempotent: true`）
+- `label-operation-resume` CLI 增加必填 `--actor`（之前硬编码 `cli-resume`）
+- `label-operation-resolve` CLI 增加必填 `--actor`（之前硬编码 `cli-resolve`）
+- 更新已有测试适配新行为；测试基线: 212 passed, 2 warnings
+
+## 2026-08-05 — 分页计数修复 (PR A：可靠性收口)
+
+- `count_packages()` 改用 `count(distinct package_id)`，修复多订单/多标签场景下 JOIN 行膨胀导致总数放大
+- `list_packages()` 与 `count_packages()` 过滤语义一致（复用同一 date_field/isouter/status 逻辑）
+- 新增 9 个 repository 测试：多订单日期过滤、多标签（有效/取消/混合）、分页 offset/limit 一致性、order/label 日期边界
+- 浏览器验证：分页切换、Dashboard/Transactions 标签页重置、日期类型切换
+- 测试基线: 212 passed, 2 warnings
+
+## 2026-08-05 — 赛狐下单时间 + 有效面单时间 + 分页 + 标签页持久化
+
+### 列表新增字段
+- **赛狐下单时间**：`shipping_orders.purchase_date`，取包裹内最早订单的下单时间，列表+详情页均显示
+- **有效面单时间**：`shipping_labels.created_at`，取 status≠cancelled 的最早面单时间，无则显示"—"
+
+### 日期过滤增强
+- Custom Date Range 新增日期类型切换：面单时间 / 下单时间
+- 面单时间过滤排除已取消面单（`status != "cancelled"`）
+- 下单时间按 `purchase_date` 过滤
+
+### 分页功能
+- 共 N 条 / < 1 2 3 ... > 翻页 / 20/50/100/200 条/页
+- "..." hover 显示 ◀◀/▶▶，点击快速跳页
+- 切换标签页自动重置到第 1 页
+
+### 标签页持久化
+- 切换标签页同步更新 URL `tab` 参数，翻页保持标签页状态
+- 详情页返回时 `history.back()` 保留完整过滤/分页状态
+
+### 修复
+- `package_repository.py`：`list/count_packages` 加 `date_field` 参数
+- `PackageListItem` 加 `purchase_date` / `label_created_at` 字段
+- `_build_pagination()` 辅助函数
+- `_apply_package_fields`：地址保护改为逐字段非空才写
+
+## 2026-08-05 — #139 补丁：蜴国际 resume 落库 + resolve 动作
+
+- `_resume_lizard_label`：`register_artifact` 后补 `insert_label`；失败保留 `LABEL_PENDING`，不误标 SUCCEEDED
+- `allowed_actions`：`UNKNOWN_BLOCKED` → `resolve`（不再只显示 investigate）
+- `resolve_unknown_blocked_operation`：补 `append_audit_event`
+
+## 2026-08-05 — 购标 operation 只读 CLI
+
+- 新增 `label-operations-list`：按账户、包裹、状态、承运商过滤，输出稳定 JSON envelope
+- 新增 `label-operation-show`：展示 operation 与脱敏后的 label/artifact 摘要
+- `allowed_actions` 明确区分 `resume`、`resolve`、`investigate` 与终态无动作；不提供 retry_create
+- 查询路径不调用承运商 API，不输出原始 carrier response、label URL 或 error summary
+
+## 2026-08-05 — 恢复 CLI、错误分类与赛狐 Outbox 后续计划
+
+- 确认 PR #132-#136 已进入 main，购标安全核心与 create_label 恢复持久化闭环成为新基线
+- 新增实现级 Spec：AI 优先 CLI 契约、carrier error taxonomy、带 provider ID resume、UNKNOWN_BLOCKED 证据化人工结案
+- 赛狐回写采用现有 SubmissionIntent/scope guard + 新增 outbox lease/退避，不把购标与回写重试耦合
+- 真正的 submitToPlatform 默认关闭；后续由同事在用户确认的单个测试包裹范围内验证
 
 ## 2026-08-05 — PR #135 取消原子收口 + 蜴国际 insert→LABEL_PENDING
 

@@ -317,6 +317,11 @@ def test_crash_window_sent_with_linked_label_cancel_allows_reclaim(tmp_path: Pat
         created_by="operator",
         operation_id=op_id,
     )
+    with repo.engine.begin() as connection:
+        connection.exec_driver_sql(
+            "UPDATE shipping_label_operations SET status='SENT' WHERE id=?",
+            (op_id,),
+        )
     assert repo.get_label_operation(op_id).status == "SENT"
 
     label_rec, op_rec = repo.finalize_label_cancellation(label.id, actor="operator")
@@ -364,6 +369,11 @@ def test_reconcile_cancelled_label_with_active_operation(tmp_path: Path, monkeyp
     )
     # Only label side written — the old non-atomic cancel crash window.
     repo.update_label_status(label.id, "cancelled")
+    with repo.engine.begin() as connection:
+        connection.exec_driver_sql(
+            "UPDATE shipping_label_operations SET status='ACCEPTED' WHERE id=?",
+            (op_id,),
+        )
     assert repo.get_label_operation(op_id).status == "ACCEPTED"
 
     service = LabelService(repo)
@@ -425,8 +435,13 @@ def test_cancel_label_surfaces_operation_transition_failure(
         status="generated",
         carrier_response_json="{}",
         created_by="operator",
-        operation_id=op_id,
+        operation_id=None,
     )
+    with repo.engine.begin() as connection:
+        connection.exec_driver_sql(
+            "UPDATE shipping_labels SET operation_id=? WHERE id=?",
+            (op_id, label.id),
+        )
 
     service = LabelService(repo)
     monkeypatch.setenv("VITE_API_KEY", "test-key-not-real")
@@ -443,6 +458,97 @@ def test_cancel_label_surfaces_operation_transition_failure(
     assert repo.get_label(label.id).status == "generated"
     assert repo.get_label(label.id).is_active is True
     assert repo.get_label_operation(op_id).status == "UNKNOWN_BLOCKED"
+
+
+def test_cancel_lizard_label_calls_lizard_cancel_order(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Cancelling a Lizard label must call the Lizard cancelOrder API."""
+    repo, _ = _ready_repo(tmp_path)
+    package_id, op_id = _claim_sent(repo)
+    repo.transition_label_operation(
+        op_id, status="ACCEPTED", provider_order_id="M6180-LIZARD-ORDER"
+    )
+    repo.transition_label_operation(op_id, status="SUCCEEDED")
+    label = repo.insert_label(
+        account_key="sellfox-main",
+        package_db_id=package_id,
+        carrier="lizard",
+        service_level="FedEx-Ground-J-TX",
+        tracking_number="1Z-LIZARD",
+        carrier_order_id="M6180-LIZARD-ORDER",
+        request_id="REQ-LIZARD",
+        label_url="https://example.invalid/l.pdf",
+        artifact_id=None,
+        total_amount=12.48,
+        currency="USD",
+        status="generated",
+        carrier_response_json="{}",
+        created_by="operator",
+        operation_id=op_id,
+    )
+
+    service = LabelService(repo)
+    monkeypatch.setenv("YIGLOBAL_APP_TOKEN", "test-token")
+    monkeypatch.setenv("YIGLOBAL_APP_KEY", "test-key")
+    monkeypatch.setenv("YIGLOBAL_API_BASE_URL", "http://localhost:9999")
+
+    calls = {}
+
+    class _FakeLizardClient:
+        def __init__(self, *a, **kw):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def cancel_order(self, *, order_code, reference_no):
+            calls["order_code"] = order_code
+            calls["reference_no"] = reference_no
+            return {"code": 200, "msg": "Success", "result": {}}
+
+    import sellfox_shipping.carriers.lizard.api_client as lizard_client_mod
+    monkeypatch.setattr(lizard_client_mod, "LizardApiClient", _FakeLizardClient)
+
+    out = service.cancel_label(label.id, actor="operator")
+    assert out["status"] == "cancelled"
+    assert calls.get("order_code") == "M6180-LIZARD-ORDER"
+    # generation 1 uses the base reference (no suffix)
+    assert calls.get("reference_no") == "P-SAFE-1"
+    assert repo.get_label(label.id).status == "cancelled"
+    assert repo.get_label_operation(op_id).status == "CANCELLED"
+
+
+def test_cancel_lizard_label_missing_order_id_rejected(tmp_path: Path) -> None:
+    """A Lizard label without carrier_order_id must be rejected before API call."""
+    repo, _ = _ready_repo(tmp_path)
+    package_id, op_id = _claim_sent(repo)
+    repo.transition_label_operation(op_id, status="SUCCEEDED")
+    label = repo.insert_label(
+        account_key="sellfox-main",
+        package_db_id=package_id,
+        carrier="lizard",
+        service_level="FedEx-Ground-J-TX",
+        tracking_number="1Z-NO-ORDER",
+        carrier_order_id="",
+        request_id="",
+        label_url="https://example.invalid/l.pdf",
+        artifact_id=None,
+        total_amount=12.48,
+        currency="USD",
+        status="generated",
+        carrier_response_json="{}",
+        created_by="operator",
+        operation_id=op_id,
+    )
+
+    service = LabelService(repo)
+    monkeypatch_env = None
+    with pytest.raises(LabelServiceError, match="No carrier_order_id"):
+        service.cancel_label(label.id, actor="operator")
 
 
 def test_lizard_insert_label_failure_marks_label_pending(
