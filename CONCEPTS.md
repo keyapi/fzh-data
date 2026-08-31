@@ -241,3 +241,7 @@ A webhook-based DingTalk group messaging channel used by AI agents (WorkBuddy, C
 
 ### NAS 外网高位端口
 联通光猫当前公网仅稳定转发 **11024**；443/80 外网不通。外网访问自定义域名须带 `:11024`，除非日后打通 443。
+
+### OpenWrt 自定义域路径 vs QC 登记路径
+- **路径 A**：`nas.daneey.com` / `nas.vilavi.cn` — OpenWrt 管 DDNS 与 ACME，DSM 仅导入第二张证并反代；**不**写入 DSM「外部访问→DDNS」；用户手动输入 URL；QC 不会自动跳转。
+- **路径 B**：`fangzhouhui.quickconnect.cn` → 群晖登记 `fzh.myds.me`；QC 浏览器探测后跳 myds 直连或 `cn4` 中继。勿删 myds；DSM 无 DDNS 优先级开关，不能靠改外部访问列表让 QC 改跳 mxdeals/daneey。

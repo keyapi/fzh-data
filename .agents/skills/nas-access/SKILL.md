@@ -28,6 +28,8 @@ description: |
 4. Cloudflare `nas.vilavi.cn` 必须**灰云**。
 5. 外网 URL 默认带 `:11024`（443 公网未通）。
 6. 统一入口仍是 `fangzhouhui.quickconnect.cn`（用户政策）；自定义域名是补充。
+7. daneey/vilavi **不要**写进 DSM「外部访问→DDNS」；QC **不会**自动跳它们。
+8. **勿删** `fzh.myds.me`（默认证 + QC 登记）；无 mxdeals 优先选项。
 
 ## 凭证
 

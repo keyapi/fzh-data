@@ -21,10 +21,21 @@
 | `fzh.myds.me` | 群晖 Synology DDNS | DSM 默认 Let's Encrypt | 官方 DDNS；QC 直连目标 |
 | `nas.daneey.com` | 阿里云（OpenWrt DDNS） | OpenWrt ACME `dns_ali` → DSM 第二张证 `aJodgl` | 深圳/外网备用；**推荐** |
 | `nas.vilavi.cn` | Cloudflare 灰云 A（OpenWrt DDNS） | OpenWrt ACME `dns_cf` → DSM 第二张证 `orAHAw` | 深圳/外网备用 |
-| `nas.mxdeals.com` | 公网解析 | 无独立证（仍出示 `fzh.myds.me`） | 仅 OpenWrt 劫持到 LAN；未签独立证 |
+| `nas.mxdeals.com` | 公网解析 | 无独立证（仍出示 `fzh.myds.me`） | 仅 OpenWrt 劫持到 LAN；未签独立证；**未**进 DSM 外部访问 DDNS |
 | `fangzhouhui.quickconnect.cn` | 群晖 CDN | — | **统一入口**；自动选直连或 `cn4` 中继 |
 
 **政策（用户确认）：** 对外仍宣传 `https://fangzhouhui.quickconnect.cn/` 作为统一入口（群晖中继兜底）。自定义域名是补充，不能替代 QC 的「环境自适应」能力。
+
+## 两条路径（勿混）
+
+| | OpenWrt 自定义域（daneey/vilavi） | QC 登记域（myds） |
+|--|-----------------------------------|-------------------|
+| DNS | OpenWrt DDNS | DSM 外部访问 Synology DDNS |
+| 证+反代 | OpenWrt ACME → DSM 第二张证 | 默认证 `RmB4St` |
+| QC 自动跳 | **否** — 用户手动 `:11024` | **是** — 探测 myds 或 cn4 |
+| DSM 外部访问 DDNS | **故意不写** | `fzh.myds.me` 保留，**勿删** |
+
+改 DSM DDNS 列表**不能**让 QC 跳 daneey/vilavi；无「mxdeals 优先」开关。
 
 ## OpenWrt（北京办公室）
 

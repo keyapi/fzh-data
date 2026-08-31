@@ -4,7 +4,7 @@ type: Reference
 title: 群晖 NAS 多域名访问与 QuickConnect 选路
 description: 北京办公室 OpenWrt 劫持、OpenWrt ACME 第二张证、DSM 反代、Cloudflare/阿里云 DDNS、联通端口与 QC 直连/中继
 tags: [nas, synology, quickconnect, openwrt, dsm, acme, cloudflare, daneey, vilavi]
-timestamp: 2026-08-28
+timestamp: 2026-08-31
 resource: NAS_API/AGENT_HANDOFF.md
 ---
 
@@ -50,7 +50,27 @@ OpenWrt 192.168.100.1
 | `fzh.myds.me` | Synology | — | `RmB4St`（**默认**） | 原生 11024 |
 | `nas.daneey.com` | 阿里云 | — | `aJodgl` | 443 + 11024 |
 | `nas.vilavi.cn` | Cloudflare | **灰云** | `orAHAw` | 443 + 11024 |
-| `nas.mxdeals.com` | — | — | 无（仍 `fzh.myds.me` 证） | 仅劫持，未签证 |
+| `nas.mxdeals.com` | 公网解析 | — | 无（仍 `fzh.myds.me` 证） | 仅劫持，未签证；**未**进 DSM 外部访问 DDNS |
+
+### 两条路径：OpenWrt 自定义域 vs QC 登记域
+
+```
+路径 A（手动备用 URL）          路径 B（QC 统一入口）
+─────────────────────          ─────────────────────
+nas.daneey.com / vilavi.cn     fangzhouhui.quickconnect.cn
+        │                                │
+ OpenWrt DDNS + ACME              群晖 QC 云端 + myds.me
+        │                                │
+ DSM 第二张证 + 反代               默认证 RmB4St
+        │                                │
+ 用户手动输入 :11024              自动跳 myds:11024 或 cn4
+        │                                │
+ QC 不会自动跳这里 ◄──────────► QC 只探测群晖登记主机名
+```
+
+- **路径 A** 故意**不**写入 DSM「控制面板 → 外部访问 → DDNS」，避免 NAS 与 OpenWrt 重复更新同一记录。
+- **路径 B** 的 `fzh.myds.me` 是用户在 DSM 外部访问里配置的 **Synology 提供商** DDNS，与路径 A 无关。
+- **不能**通过删除 myds 或「让 mxdeals 优先」使 QC 只跳自定义域；DSM 无 DDNS 优先级 UI。
 
 ### 证书流程（新域名标准做法）
 
@@ -100,20 +120,34 @@ OpenWrt 192.168.100.1
 
 **验证（2026-08-28）：** 手机 FZH-5G 与手机流量均 QC → `fzh.myds.me:11024`；台式机 Chrome 仍 cn4，`ipconfig /flushdns` 无效，换 Edge 正常。
 
+### DSM 外部访问 DDNS 常见问题（2026-08-31）
+
+| 问题 | 答案 |
+|------|------|
+| daneey/vilavi 是否只在 NAS 加了证？ | 否。OpenWrt DDNS + ACME + DSM 反代全栈；证只是其中一步。 |
+| 改外部访问 DDNS 能否让 QC 跳 daneey？ | 不能指望；当前未写入 DSM DDNS，QC 也不跳它们。 |
+| 删 `fzh.myds.me` 或 mxdeals 优先？ | 无优先开关；删 myds 高风险，不会可靠变成只跳 mxdeals。 |
+| 深圳 QC 打不开？ | QC 仍跳 myds；用路径 A 书签 `nas.daneey.com:11024` 等。 |
+
+### 中国区 QC（调研摘要）
+
+2023 年起国内 `*.direct.quickconnect.cn` 关闭 IPv4 公网解析，外网 QC 多经中继；官方建议有公网 IP 时用 **自建 DDNS + 端口转发**（路径 A），而非依赖 QC 直连。
+
 ## 阶段性成果
 
 - [x] `nas.daneey.com` 外网 + 办公室 HTTPS（独立 LE 证）
 - [x] `nas.vilavi.cn` 外网 + 办公室 HTTPS（Cloudflare + LE 证）
 - [x] OpenWrt 劫持四域名
 - [x] 默认 `fzh.myds.me` 证书未破坏
-- [ ] 深圳 `fzh.myds.me` / QC 统一入口后的可达性
+- [ ] 深圳 `fzh.myds.me` / QC 统一入口后的可达性（备用路径 A 书签）
 - [ ] 公网 443（联通）
 - [ ] 台式机 Chrome QC 直连
-- [ ] `nas.mxdeals.com` 独立证书
+- [ ] `nas.mxdeals.com` 独立证书（全栈后仍不保证 QC 改跳）
 
-## 未决议题（下一话题）
+## 未决议题
 
-`https://fangzhouhui.quickconnect.cn/` 在部分桌面浏览器自动指向 cn4 的修复（Chrome 安全 DNS、缓存、实名状态）。
+- `fangzhouhui.quickconnect.cn` 办公室 Chrome → cn4（安全 DNS）
+- 是否在**不删 myds** 前提下做 QC 跳转对照实验（改 DSM DDNS 前）
 
 ## 相关文件
 
