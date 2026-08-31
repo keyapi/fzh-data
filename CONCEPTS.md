@@ -231,6 +231,12 @@ SPS 偶发同一货生成两个 INV#。我方钉钉留一个，PB 可能付另�
 ### Placeholder remittance ID
 PB 补付时对账单偶发不用 INV#、改用含年份的数字串。给 PB 仍写该占位号；内部财务表可能已手工改成本地 INV#。
 
+### True-up freeze PO
+活动价改回合同批发之后，第一张按合同价开出的新 PO。那之前的活动价票才冻结成给 Diane 的索赔集。某日发票 CSV 扫描截止不是冻结点。
+
+### Flagged order CSV
+SPS 日文件夹里的订单导出，只用来交叉核 PO Date 和单价。索赔宇宙是已开票的发票 CSV；未开票 PO 不进差额清单。
+
 ## Flagged ambiguities
 
 - "'五桶' had been used as if it meant IvyeaOps 五杠杆 — they are distinct (search-term labels vs optimizer action candidates)."
@@ -239,6 +245,9 @@ PB 补付时对账单偶发不用 INV#、改用含年份的数字串。给 PB �
 - "赛狐「采购成本」曾被用来同时指商品主数据绍兴发货、期初仓+SKU 尾程前、备货单指定采购单价+头程；三者不可互换，也都不等于 EN Tongtool Cost Review 的皮壳切片。"
 - "PB 索赔窗口用 PO Date，不是 SPS 开票日，也不是对账单 UPS 发票日；后两者滞后不能当成活动结束日。"
 - "给财务 / To Tracy Miller 里的发票号可能已被改成本地号，不能当作 PB 付款号发给 Diane。"
+- "某日 invoice x* 扫描截止不是 True-up freeze PO；冻结是改价后第一张合同价新 PO。"
+- "SPS 订单 CSV 只核 PO Date / 单价，不是索赔宇宙；没开票的 PO 不向 PB 要。"
+- "对账单短收或 credit 不冲活动供货价差额，另账处理。"
 
 ## 平台账期对账
 

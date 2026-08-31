@@ -9,6 +9,7 @@ tags: [solutions, log]
 
 ## 2026-08-31
 - **新增**: `workflow-issues/pb-2025-promo-cost-not-restored.md` + `pb_promo_trueup/` OKF — Vendor 5806 Early BF 供货价未恢复；PO Date 窗口、`来自Email` 发票号、禁止给 PB 写佣金/$28k。
+- **更新**: 同上 — 锁定双侧对账：订单 CSV 非索赔宇宙、Diane 一行一张、来自Email 付款日+INV# 去重、短收不冲差额、扫描截止 ≠ 冻结 PO。
 
 ## 2026-08-24
 - **新增**: `workflow-issues/sellfox-cover-combo-create-ops.md` — 三角皮壳 `PK# -> KS x1` 组合代理批量创建；与 EN `TJ#`/`sync-combos` 分流；`pageList total=0` 翻页、禁止并行 apply、组合商品不在普通商品。

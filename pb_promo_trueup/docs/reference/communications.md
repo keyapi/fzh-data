@@ -27,7 +27,7 @@ Tracy 是中间人。Key 从未单独绕过她找一圈 PB Brand。Diane 说 “
 ## 附件策略
 
 - **第一封（已发）**：SKU 列表 + 价梯 + PO 日期对照 + 少数例子。不是借记通知。可转发 Tracy 的批准 eml。
-- **第二封（改价后）**：逐票清单，INV# 用 `来自Email`。
+- **第二封（改价后、冻结 PO 出现后）**：逐票清单，**一行一张**，INV# 用 `来自Email`。冻结前的内部表不要当索赔发出。
 - 不要把已发给 Tracy 的 `PB_2025_promo_cost_not_restored_evidence.xlsx` 转给 Diane（有佣金和 $28k）。
 
 ## 拉单日期
