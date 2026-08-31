@@ -1,0 +1,57 @@
+# 路由规则配置文件
+# 优先级升序（数字越小越先匹配），匹配到第一条即返回。
+# 新增/修改规则只需编辑此文件，无需改代码。
+#
+# 可用字段（来自包裹数据）：
+#   longest_side_cm, second_side_cm, third_side_cm  — 包裹三边（降序）
+#   weight_kg                                        — 包裹合并重量
+#   total_quantity                                   — 商品总数累加
+#   shop_name, warehouse_name                        — 店铺/仓库
+#   destination_country, destination_state           — 目的国/州
+#   postal_code                                      — 邮编
+#   channel_name                                     — 赛狐渠道名
+#
+# 支持的运算符：eq, neq, gt, gte, lt, lte, in, not_in, contains, between
+
+# ── 排除店铺（走平台物流/平台发货，不参与路由）──
+exclude_shops:
+  - WFUS
+  - OSTK
+  - PotteryBarnUS
+  - TT_Tooddly
+  - TTCozydozy
+
+# ── 路由规则 ──
+rules:
+  - name: "蜴国际-小件标准"
+    priority: 10
+    conditions:
+      - field: longest_side_cm
+        op: lte
+        value: 68
+      - field: second_side_cm
+        op: lte
+        value: 43
+      - field: third_side_cm
+        op: lte
+        value: 43
+      - field: weight_kg
+        op: lte
+        value: 15
+      - field: total_quantity
+        op: lte
+        value: 1
+    match: all
+    action:
+      carrier: lizard
+      label: "蜴国际"
+      reason: "小件标准：三边≤68×43×43cm 重量≤15kg 数量≤1"
+
+  - name: "VITE-默认"
+    priority: 100
+    conditions: []
+    match: any
+    action:
+      carrier: vite
+      label: "VITE-FedEx"
+      reason: "不满足蜴国际小件标准，默认走 VITE"

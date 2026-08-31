@@ -1,0 +1,4 @@
+screenshots/*.png
+!screenshots/.gitkeep
+# machine E2E snapshot may contain local paths only — keep for agents, no secrets
+# docs/specs/_e2e_last.json is safe (no credentials)

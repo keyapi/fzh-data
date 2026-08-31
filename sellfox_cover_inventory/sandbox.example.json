@@ -1,0 +1,9 @@
+{
+  "warehouse_name": "CENTRADE",
+  "tongtool_base_sku": "TT123",
+  "tongtool_cover_sku": "TT123-Cover",
+  "sellfox_bottom_sku": "KS0001-DM-194-GREY",
+  "sellfox_cover_sku": "PK#KS0001-DM-194-GREY",
+  "listing_msku": "replace-with-confirmed-cover-msku",
+  "shop_name": "replace-with-confirmed-shop"
+}

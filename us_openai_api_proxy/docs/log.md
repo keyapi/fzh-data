@@ -92,6 +92,14 @@ tags: [openai, api-proxy, changelog]
 - **v0.8**: 验证新版 iptables 规则 — ts-forward MARK 方向未变化, 手工 MASQUERADE 仍需保留
 - **v0.8**: 升级后重新认证, 所有节点正常, 手机 new-api + 翻墙正常
 
+## 2026-08-03 (v0.8)
+
+- **v0.8**: 切换 CSU East Bay 教育账号 (@horizon.csueastbay.edu) — 7 聊天模型 + image-2 全通
+- **v0.8**: 新模型定价: gpt-5.6-sol=0.41, gpt-5.4=0.205, gpt-5.6-luna=0.15
+- **v0.8**: Lesson 30-32: gpt-image-2 不能聊天 / 定价策略逻辑 / 教育账号切换
+- **v0.8**: CSUN 账号 (@my.csun.edu) 已禁用
+- **v0.8**: operations.md 新增账号历史表
+
 ## 2026-06-23 (v0.7)
 
 - **v0.7**: 方案 A 实施完成 — 办公室全员可通过路由器访问 Tailscale 网络

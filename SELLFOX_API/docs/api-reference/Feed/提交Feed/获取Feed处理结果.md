@@ -1,0 +1,208 @@
+# 获取Feed处理结果
+
+## OpenAPI Specification
+
+```yaml
+openapi: 3.0.1
+info:
+  title: ''
+  description: ''
+  version: 1.0.0
+paths:
+  /api/feed/getFeedResult.json:
+    post:
+      summary: 获取Feed处理结果
+      deprecated: false
+      description: ''
+      operationId: getFeedResultUsingPOST
+      tags:
+        - Feed/提交Feed
+        - Feed接口
+      parameters:
+        - name: access_token
+          in: query
+          description: 通过获取token接口获得的token，详见 [获取 Access Token](doc-1589130)
+          required: true
+          example: '{{access_token}}'
+          schema:
+            type: string
+        - name: client_id
+          in: query
+          description: client_id, 获取方式详见 [申请API权限](1748360)
+          required: true
+          example: '{{client_id}}'
+          schema:
+            type: string
+        - name: timestamp
+          in: query
+          description: 13位毫秒时间戳，与当前时间差异不超过正负15分钟，示例：1668153260508
+          required: true
+          example: '121212'
+          schema:
+            type: string
+        - name: nonce
+          in: query
+          description: '随机整数值，保证每个请求唯一，示例：11251 '
+          required: true
+          example: '121212'
+          schema:
+            type: string
+        - name: sign
+          in: query
+          description: 请求签名，详见  [生成sign（签名）](doc-1749562)
+          required: true
+          example: '121212121'
+          schema:
+            type: string
+        - name: Content-Type
+          in: header
+          description: 固定再header位置加入Content-Type:application/json
+          example: application/json
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GetFeedResultOpenVo'
+            example: ''
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenResult%C2%ABFeedResultOpenVo%C2%BB'
+          headers: {}
+          x-apifox-name: OK
+        '201':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: {}
+                x-apifox-orders: []
+                x-apifox-ignore-properties: []
+          headers: {}
+          x-apifox-name: Created
+        '401':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: {}
+                x-apifox-orders: []
+                x-apifox-ignore-properties: []
+          headers: {}
+          x-apifox-name: Unauthorized
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: {}
+                x-apifox-orders: []
+                x-apifox-ignore-properties: []
+          headers: {}
+          x-apifox-name: Forbidden
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: {}
+                x-apifox-orders: []
+                x-apifox-ignore-properties: []
+          headers: {}
+          x-apifox-name: Not Found
+      security: []
+      x-apifox-folder: Feed/提交Feed
+      x-apifox-status: released
+      x-run-in-apifox: https://app.apifox.com/web/project/1827046/apis/api-86977619-run
+components:
+  schemas:
+    GetFeedResultOpenVo:
+      type: object
+      properties:
+        feedDocumentId:
+          type: string
+        shopId:
+          type: string
+      title: GetFeedResultOpenVo
+      x-apifox-orders:
+        - feedDocumentId
+        - shopId
+      x-apifox-ignore-properties: []
+      x-apifox-folder: ''
+    OpenResult«FeedResultOpenVo»:
+      type: object
+      properties:
+        requestId:
+          type: string
+        code:
+          type: integer
+          format: int32
+          description: code(默认0代表成功)
+        msg:
+          type: string
+          description: 错误信息
+        data:
+          $ref: '#/components/schemas/FeedResultOpenVo'
+        ts:
+          type: integer
+          format: int64
+          description: 响应时间戳
+      title: OpenResult«FeedResultOpenVo»
+      x-apifox-orders:
+        - requestId
+        - code
+        - msg
+        - data
+        - ts
+      x-apifox-ignore-properties: []
+      x-apifox-folder: ''
+    FeedResultOpenVo:
+      type: object
+      properties:
+        content:
+          type: string
+          description: 返回内容
+        errors:
+          type: array
+          description: 平台返回的异常信息
+          items:
+            $ref: '#/components/schemas/ApiErrorOpenVo'
+      title: FeedResultOpenVo
+      x-apifox-orders:
+        - content
+        - errors
+      x-apifox-ignore-properties: []
+      x-apifox-folder: ''
+    ApiErrorOpenVo:
+      type: object
+      properties:
+        code:
+          type: string
+          description: code
+        message:
+          type: string
+          description: message
+        details:
+          type: string
+          description: details
+      title: ApiErrorOpenVo
+      x-apifox-orders:
+        - code
+        - message
+        - details
+      x-apifox-ignore-properties: []
+      x-apifox-folder: ''
+  securitySchemes: {}
+servers: []
+security: []
+
+```

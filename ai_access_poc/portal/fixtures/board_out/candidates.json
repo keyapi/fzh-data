@@ -1,0 +1,29 @@
+{
+  "summary": {
+    "shop_name": "TOODDLY-Daneey-US",
+    "unique_terms": 1389,
+    "candidates": 2,
+    "by_lever": {"否词": 1, "收割": 1},
+    "write_path": "DISABLED — NotImplemented / export CSV only",
+    "thresholds": {"neg_clicks": 15, "harvest_orders": 3, "target_acos": 0.3},
+    "note": "Fixture sample for Portal PoC — replace by mounting real board/out"
+  },
+  "candidates": [
+    {
+      "lever": "否词",
+      "op_type": "negate_keyword",
+      "advisory_only": true,
+      "target_name": "example negate term",
+      "campaign_id": "0",
+      "metrics": {"spend": 1.0, "sales": 0.0, "orders": 0, "clicks": 20}
+    },
+    {
+      "lever": "收割",
+      "op_type": "harvest_keyword",
+      "advisory_only": true,
+      "target_name": "example harvest term",
+      "campaign_id": "0",
+      "metrics": {"spend": 5.0, "sales": 50.0, "orders": 5, "clicks": 30}
+    }
+  ]
+}

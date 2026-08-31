@@ -1,0 +1,79 @@
+{
+  "brand": "北京如泱",
+  "marketplace": "US",
+  "category": "Home & Kitchen / Pillows",
+  "gross_margin": 0.45,
+  "brand_terms": [
+    "daneey",
+    "senight",
+    "snight",
+    "rucen"
+  ],
+  "competitor_brands": [
+    "tempur",
+    "sealy",
+    "simmons",
+    "serta",
+    "purple",
+    "casper",
+    "nectar",
+    "tuft & needle",
+    "leesa",
+    "layla",
+    "bear",
+    "helix",
+    "brooklyn bedding",
+    "saatva",
+    "avocado",
+    "boll & branch",
+    "parachute",
+    "brooklinen",
+    "linenspa",
+    "zinus",
+    "classic brands",
+    "sleep number"
+  ],
+  "protected_terms": [
+    "daneey",
+    "senight",
+    "rucen",
+    "bjryecltd",
+    "rucener"
+  ],
+  "thresholds": {
+    "high_acos": 0.4,
+    "low_roas": 2.5,
+    "winner_acos": 0.15,
+    "min_orders_harvest": 2,
+    "max_acos_harvest": 0.3,
+    "min_clicks_negate": 15,
+    "min_spend_negate": 2.0
+  },
+  "strategic_terms": {
+    "differentiation": [
+      "no assembly",
+      "boneless",
+      "frameless",
+      "foam",
+      "modular",
+      "deep seating",
+      "one-piece"
+    ],
+    "scene": [
+      "backyard",
+      "deck",
+      "balcony",
+      "poolside",
+      "porch",
+      "apartment",
+      "small patio"
+    ],
+    "core": [
+      "patio furniture",
+      "outdoor couch",
+      "outdoor sofa",
+      "sectional",
+      "conversation set"
+    ]
+  }
+}

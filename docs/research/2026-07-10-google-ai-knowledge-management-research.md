@@ -1,0 +1,524 @@
+---
+okf: v0.1
+type: Research
+title: Google AI — 知识库管理方案调研（OKF 替代方案 + 银行级知识库设计）
+date: 2026-07-10
+tags: [okf, knowledge-management, ai-agent, monorepo, documentation, rag, banking]
+source: Google AI Mode shared conversation (internal link)
+---
+
+# 与 Google AI 关于知识库管理方案的完整对话
+
+> 来源：Google AI Mode shared conversation.
+> 对话时间：2026-07-10
+
+---
+
+## Q1: OKF 标准有没有更好的替代？
+
+**答：**
+
+OKF（开放知识格式）提供了一套极简的「Markdown + YAML」标准，方便 AI Agent 读取。然而，它缺乏深度的语义结构。根据你的具体使用场景，目前有以下几种更专业或更普及的替代方案。
+
+### 1. 知识图谱标准（适合强逻辑、复杂关系的知识管理）
+
+- **RDF / SPARQL**: 语义网的黄金标准。能够精准定义实体与实体之间的关系，适合合规要求高、逻辑严密的专业领域。
+- **Knowledge Graph (图数据)**: 如 Neo4j 标准，适合多跳推理（Hop），避免 Agent 在文件间漫游导致逻辑跑偏。
+
+### 2. 传统企业文档标准（适合需要人类深度阅读的场景）
+
+- **DITA**: 结构化信息标准标记语言。历史悠久，在制造业和大型科技公司非常成熟。非常适合传统文档管理，但对 AI 原生支持不如 OKF。
+
+### 3. AI Agent 指令/上下文标准（适合给特定 AI 喂系统级 Prompt）
+
+- **AICodingRules** (.ai.yml / AICodingRules.org): 专门针对编程智能体（AI Coding Agent）的代码规范和行为约束标准，比零散的 OKF 文件更有针对性。
+- **AGENT.md / SPEC.md**: 许多开发者社区推广的单文件 Agent 配置文件，比 OKF 更加轻量，专注于"如何使用该代码库"。
+
+### 4. 高级文档整理工具（直接对标 OKF 的想法）
+
+- **LLM Wiki (Karpathy 原型)**: 由 AI 先驱 Andrej Karpathy 提出，通过大模型自我编译，自动去重、更新和连接 Markdown 维基，很多开源项目（如 SamurAIGPT/llm-wiki-agent）基于此构建。
+- **Markform**: 使用带特定注释的 Markdown 格式管理数据架构、文档和表单，也是 Agent 生态中常用的替代方案。
+
+### 5. 什么时候该用什么？
+
+- 如果要给企业业务系统（如 BigQuery）定义规则，推荐继续使用 **OKF** 或企业级知识框架 (EKF)。
+- 如果是复杂的行业本体论和术语表，**RDF** 是更好的替代。
+- 如果是 AI 编程助手或工作流配置，使用 **.ai.yml** 标准更加高效。
+
+Sources:
+- [1] https://www.linkedin.com/posts/ganesh-selvaraj-phd-87559844_how-the-open-knowledge-format-can-improve-activity-7476533022771830784-zsA_
+- [2] https://www.theaiera.cn/blogs/google-open-knowledge-format
+- [3] https://www.linkedin.com/posts/arunkumargofficial_okf-openknowledgeformat-enterpriseai-activity-7474058066649436160-ioHy
+- [4] https://www.linkedin.com/posts/sawdeepa_okf-genai-llm-activity-7477214754000924672-8g4F
+- [5] https://www.linkedin.com/posts/stevearrants_google-released-the-open-knowledge-format-activity-7477030975663783937-Q37O
+- [6] https://gist.github.com/0xdevalias/f40bc5a6f84c4c5ad862e314894b2fa6
+- [7] https://aicodingrules.org
+- [8] https://github.com/SamurAIGPT/llm-wiki-agent
+- [9] https://www.switas.com/articles/google-open-knowledge-format-and-the-future-of-agentic-search-optimization
+- [10] https://github.com/jlevy/markform
+
+---
+
+## Q2: 我一边用 Claude 操作软件（比如 API 查询内部软件），一边想把部分功能落实到代码编程，一边把期间的经验教训、操作经验整理不断更新为企业内部知识库。这种三合一场景怎么设计？
+
+**答：**
+
+针对你这种"AI操作软件（Agent） + 辅助写代码（Coding） + 沉淀企业知识库（Knowledge）"的三合一混合场景，OKF 确实显得有些单薄，因为它把配置、代码约束和业务知识混在了一起。
+
+为实现高效替代，建议你采用**"三层分离、相互联动"**的架构标准。这是目前最成熟的替代方案：
+
+### 1. 软件操作层（替代 OKF 定义 API 和工具）
+
+不要再用 OKF 写长篇的 Markdown 来告诉 Claude 怎么调 内部软件 或内部软件。
+
+- **OpenAPI / Swagger 标准 (JSON/YAML)**：直接把 内部软件 和内部软件的 API 导出为标准 OpenAPI 规范文件。Claude 等主流大模型对 OpenAPI 的原生解析能力远超 OKF，能自动生成准确的工具调用（Tool Calling）参数。
+- **MCP (Model Context Protocol)**：由 Anthropic（Claude 官方）推出的模型上下文协议。你可以搭建一个 MCP 服务端，把内部软件的查询功能封装进去。Claude 可以实时、安全地连接并操作你的内部系统，无需在 Prompt 里塞满操作说明。
+
+### 2. 代码编程层（替代 OKF 的规则约束）
+
+将你在开发和调试过程中总结的"坑"和"代码规范"，通过以下标准固化：
+
+- **MDC / .cursorrules 文件**：如果你或 Claude 使用 Cursor/VS Code 等工具写代码，将编程规范、框架要求、内部软件 专属 API 限制写进这个文件。AI 编码时会自动加载，避免重复犯错。
+- **AI_RULES.md / SPEC.md**：在代码仓库根目录建立一个专属的 AI 指引文件，只写针对代码生成的"硬性约束"（例如：禁止使用某旧版 API、必须包含异常捕获等）。
+
+### 3. 企业内部知识库层（替代 OKF 的文档管理）
+
+你和 Claude 共同总结的操作经验、业务逻辑和教训，需要高频更新且易于检索：
+
+- **双链 Markdown (Obsidian / Logseq 规范)**：知识库继续保持轻量级的 Markdown 格式，但引入双向链接（`[[知识点]]`）标准。例如，在"内部软件订单同步失败"的经验文档里，链接到 `[[内部软件 API 报错码 401]]`。这种图谱结构可以让 Claude 在检索（RAG）时，顺着链接找到相关的所有上下游经验。
+- **Front Matter 元数据规范**：在每篇 Markdown 顶部使用标准的 YAML 格式标注元数据。这能让知识库既方便人类阅读，又方便 AI 自动归类和更新。
+
+### 最佳实践落地建议
+
+你可以将这套替代方案组合成一个项目标准结构：
+
+```
+your-project/
+├── .cursorrules               ← 告诉 Claude 怎么帮你写代码（代码层）
+├── mcp-server/                ← 帮 Claude 实时连接 内部软件/内部软件的通道（操作层）
+└── docs-knowledge/            ← 你们的操作经验知识库（知识层）
+    ├── README.md              ← 知识库的总索引
+    └── 01-erpnext-auth.md     ← 带有 YAML 头部的双链经验文档
+```
+
+这种结构的优势在于，你在开发和操作过程中沉淀的 docs-knowledge（知识层），可以随时被转化为 .cursorrules（代码层）的规则，或者转化为 mcp-server（操作层）的新功能，形成闭环。
+
+---
+
+## Q3: 我知道 OpenAPI 和 MCP，但只是我工作的一个例子。还有很多不用 API 的操作。代码编程层不仅仅是规范这么简单，很多是用户需求背景、bug 分析过程、调研过程、安装各种依赖的经验教训——只是代码远远不够。OKF 标准里是不是也有代码引用？我用 Claude Desktop 和 Codex Desktop，中间操作分析过程的文档似乎更重要。不想搞过于复杂，用 Git 仓库，暂时没用 Obsidian。LLM Wiki 用 Obsidian 我之前了解过，暂时不需要如此复杂交错的网络。目前很多实践反而就是类似传统操作手册或者图书馆式的管理方式最简单可控。RDF 和企业级知识框架 (EKF) 我还没了解过。
+
+**答：**
+
+理解了，你的核心诉求是"轻量、实用、基于 Git 仓库，像传统图书馆一样清晰、条理化地管理操作和研发经验，不搞复杂的网络和学术化概念（如 RDF/EKF）"。
+
+在回答你的疑问之前，先直接确认一点：**是的，OKF（Open Knowledge Format）标准里原生支持、而且非常鼓励代码引用。** OKF 的本质就是「YAML 元数据 + Markdown 文本」，你完全可以在其中自由地嵌入 Markdown 代码块（例如 `\`\`\`python`）。
+
+既然你目前在使用 Claude Desktop 和 Codex Desktop，并且托管在 Git 仓库里，那么不需要引入任何外部新标准。你完全可以将现有的 OKF 结构"微调"成一个经典的、图书馆式的"行业操作手册"分类法。
+
+以下是为你量身定制的、最简单且可控的 Git 知识库目录结构和文档规范：
+
+### 推荐的 Git 知识库结构（图书馆式分类）
+
+在你的 Git 仓库中，不需要任何交错的脑图，只需按工作流和模块像抽屉一样存放：
+
+```
+company-knowledge-base/
+├── README.md                  # 知识库总目录（图书大厅索引）
+├── 01_User_Demands/           # 1号柜：用户需求与背景调研
+│   ├── 内部软件_custom_print.md
+│   └── Tongtu_order_sync_need.md
+├── 02_Bug_Analysis/           # 2号柜：Bug 分析与排查全记录
+│   ├── bug_20260710_erp_timeout.md
+│   └── bug_tongtu_401_auth.md
+├── 03_Dev_Environment/        # 3号柜：安装、依赖与踩坑经验
+│   ├── erpnext_frappe_install.md
+│   └── codex_desktop_config.md
+└── 04_Manual_Operations/      # 4号柜：纯人工无API的操作指南
+    ├── tongtu_monthly_export.md
+    └── erpnext_inventory_check.md
+```
+
+### 单个文档的编写规范（"带代码与分析过程"的 OKF 实践）
+
+既然不搞复杂的图谱，那就让每一个 Markdown 文件都成为一篇独立、连贯、包含前因后果的"复盘技术文章"。通过顶部的 OKF 标准 YAML，让 Claude 和 Codex 能一眼看懂背景。
+
+**一个典型的「Bug 分析 + 安装依赖 + 附带代码」的文档范例：**
+
+```markdown
+---
+type: knowledge-artifact
+category: Bug_Analysis
+system: 内部软件
+tags: [API超时, 依赖安装, 内部软件框架]
+last_updated: 2026-07-10
+status: resolved
+---
+
+# 修复 内部软件 在内部软件订单同步时的超时 Bug
+
+## 1. 业务背景与用户需求
+
+财务需要每天下午 4 点从内部软件同步前一天的账单数据。由于近期内部软件修改了导出格式，
+内部软件 的旧脚本无法正确解析，导致大量数据积压。
+
+## 2. 调研与排查过程
+
+通过 Claude Desktop 调试时发现，内部软件框架的 Python 请求库在等待内部软件响应时
+超过了 120 秒，触发了系统层面的网关超时（Gateway Timeout）。
+
+## 3. 依赖与安装教训（踩坑点）
+
+在尝试升级 Python 的 `requests` 库时，发现 内部软件 依赖的某个旧版组件与新版
+`requests` 冲突，导致系统崩溃。
+
+**正确安装步骤：**
+1. 必须先激活虚拟环境：`bench env`
+2. 严禁直接 `pip install --upgrade`
+3. 必须指定安全版本：`pip install requests==2.31.0`
+
+## 4. 解决方案与核心代码
+
+修改了 `tongtu_sync.py` 脚本，增加了分批次（Batch）请求的逻辑，并且将单次
+Timeout 设置为 60 秒。
+
+```python
+import requests
+
+def fetch_tongtu_data(api_url, payload, headers):
+    # 修复点：显式增加 timeout 参数，防止 内部软件框架 进程死锁
+    try:
+        response = requests.post(api_url, json=payload, headers=headers,
+                                 timeout=(10, 60))
+        return response.json()
+    except requests.exceptions.Timeout:
+        print("内部软件 API 响应超时，正在准备重试...")
+        # 具体的重试逻辑代码...
+```
+
+## 5. 后续人工校验（非 API 操作）
+
+脚本跑完后，API 无法自动校对金额。**必须由人工登录内部软件后台**：
+1. 点击"财务管理" -> "月度对账单"
+2. 导出 PDF，与 内部软件 的 `General Ledger` 进行人工核对
+```
+
+### 为什么这种方式最适合你目前的 Claude/Codex 工作流？
+
+1. **AI 读取无压力**：当你使用 Claude Desktop 里的项目上下文、或者在 Codex Desktop 终端中工作时，你只需要直接把对应的 .md 文件塞给它（或者让他们直接索引这个 Git 目录）。顶部的 YAML 能瞬间让 AI 明白这是哪个系统、什么类型的文档。
+2. **纯粹的"线性阅读"**：不搞复杂的双链，人类和 AI 都是从头读到尾。背景、坑、命令行指令、源码，全在同一个文件里，这完全符合传统的"操作手册/图书馆"式管理。
+3. **沉淀极其自然**：你在和 Claude/Codex 聊天分析 Bug 时，可以直接对它说："把我们刚才分析的这个 Bug 原因、安装这个特定依赖的命令，以及刚才改好的代码片段，合并写成一个标准格式的 Markdown，放到 02_Bug_Analysis/ 目录下。" AI 会自动帮你生成符合上面格式的文件，你直接 Git Commit 即可。
+
+Sources:
+- [1] https://okf.md/spec/
+- [2] https://okf.md
+- [3] https://www.reddit.com/r/codex/comments/1s8oskb/now_that_both_are_open_source_time_for_a_claude/
+- [4] https://www.reddit.com/r/ClaudeAI/comments/1u9rbs8/googles_new_open_knowledge_format_is_basically/
+
+---
+
+## Q4: 我创建这些文档之后，我的 Agent 读取操作似乎问题不大。但是新开对话或者别人 Agent git clone 之后，说同样的话，未必能跑得顺。
+
+**答：**
+
+你遇到了 AI Agent 落地时最核心的痛点：**"上下文漂移"与"知识无法泛化"**。
+
+你当前的 Agent 跑得顺，是因为你和它在同一个 Context（对话历史）里，它带有你调教它的记忆。而一旦新开对话，或者别人 git clone 知识库，新 Agent 面对一堆"操作手册"，它只知道"发生过什么"，却不知道"现在遇到这个问题，我该去哪个抽屉里拿哪本书"。
+
+既然你希望保持 Git 仓库的"图书馆/操作手册"式结构，不想搞复杂的交错网络，那么要解决"新 Agent 跑不顺"的问题，最核心的秘诀是：**为图书馆配一个"AI 专属图书管理员（Index & Routing）"**，并把文档从"日记体"升级为**"标准作业程序（SOP）"**。
+
+以下是具体、可控的落地改造方案：
+
+### 1. 建立"图书大厅索引"（README.md 的特殊写法）
+
+新 Agent 刚进你的 Git 仓库时，它不可能把几百个 Markdown 全读一遍（Token 会爆，且容易混淆）。它第一步只会读 README.md。
+
+你必须在 README.md 里写明**"寻宝指南"**，告诉新 Agent 在什么场景下、去读哪个目录的什么文件。
+
+**针对 AI 的 README.md 示范：**
+
+```markdown
+# 企业内部操作与研发知识库（AI 寻宝指南）
+
+【AI Agent 请注意】：当你面临以下任务时，请务必先读取对应的专属文档，严禁盲目猜测。
+
+### 🚨 1. 场景：排查系统报错与 Bug
+- **内部软件 API 401/超时问题** -> 优先读取 `02_Bug_Analysis/bug_tongtu_401_auth.md`
+- **内部软件 财务对账对不上** -> 优先读取 `02_Bug_Analysis/bug_20260710_erp_timeout.md`
+
+### 🛠️ 2. 场景：安装依赖、部署环境或写代码
+- **涉及 内部软件框架 / 内部软件 的依赖安装** -> 必须先看 `03_Dev_Environment/erpnext_frappe_install.md`，严禁直接使用 upgrade 命令。
+- **涉及内部软件或 内部软件 软件人工后台操作（无API）** -> 必须看 `04_Manual_Operations/` 目录。
+```
+
+当别人新开对话，把这个 README.md 喂给 Claude 时，Claude 看到用户的提问，就能精准地去 git clone 出来的目录里定向读取那个对的文件。
+
+### 2. 文档编写从"日记体"改为"断言式（SOP）"
+
+别人或新 Agent 跑不顺，往往是因为文档里写了太多当时的"碎碎念"和"故事背景"，AI 抓不住核心。图书馆式的文档，必须像菜谱一样明确。
+
+- ❌ 不好（日记体）： "那天我们测试内部软件同步，发现有个报错，后来小张试了换依赖，最后发现指定 2.31.0 版本才跑通……"（新 Agent 容易把中间错误的尝试也学过去）
+- ✅ 好（断言式/SOP）： 直接在文档最显眼的地方，用 `⚠️ 核心强约束` 框起来
+
+```markdown
+## ⚠️ 核心强约束（AI 必须遵守）
+
+1. **环境限制**：严禁在未激活 `bench env` 时执行 pip。
+2. **版本死锁**：内部软件模块强制绑定 `requests==2.31.0`，升级会导致核心依赖崩溃。
+3. **人工兜底**：脚本运行完毕后，AI 无法验证金额，必须提示人类去内部软件后台导出 PDF 进行【人工月度对账】。
+```
+
+### 3. 利用元数据（YAML Front Matter）进行"硬检索"
+
+你提到 OKF 里有元数据，既然你用的是 Git，可以写一个非常简单的 Python 脚本（或者直接让 Claude 网页端/Claude Code 写一个），在别人 git clone 完之后运行一下。
+
+这个脚本的作用是：扫描所有 .md 文件的 YAML 头部，自动生成一个 JSON 字典（知识地图）。
+
+例如，新 Agent 拿到了这个生成的 `knowledge_map.json`：
+
+```json
+{
+  "内部软件": ["02_Bug_Analysis/bug_20260710_erp_timeout.md", "03_Dev_Environment/erpnext_frappe_install.md"],
+  "内部软件": ["04_Manual_Operations/tongtu_monthly_export.md"]
+}
+```
+
+当新对话开始，用户说："帮我查一下内部软件的数据"，Agent 只要先瞟一眼这个 JSON，就会立刻知道："哦，内部软件无 API 操作在 `04_Manual_Operations/tongtu_monthly_export.md`，我得先去读它。"
+
+### 总结你的落地三步走
+
+1. **别换标准**：继续用你的 OKF（Markdown + YAML），它在 Git 里最干净。
+2. **重写 README**：把它改成"如果遇到 A 场景，就去读 B 文件"的 AI 路由指南。
+3. **固化 SOP**：让 Claude 在帮你写文档时，把"错误尝试"删掉，只保留"前置条件"、"核心代码/步骤"和"强约束"。
+
+---
+
+## Q5: 我在一个 repo 里维护很多子文件夹，一个子文件夹通常是一个子项目。我一个子项目完成或者过程中一直提醒 Agent 用 OKF 标准更新文档。上层有 AGENTS.md 或者 CLAUDE.md，好像还有 index，不知道上层的 index 是否及时更新。请你网上调研一下。
+
+**答：**
+
+你的直觉非常敏锐，而且抓住了当前 AI Agent 原生工作流中一个非常经典的技术痛点：**"上层索引（Index）严重滞后"**。
+
+经过对目前主流 AI 编程助手（如 Claude Code, Cursor, Codex）在多子项目仓库（Monorepo）下的最新技术调研，你的担忧是完全成立的。
+
+### 调研核心发现：为什么上层的 index 无法自动及时更新？
+
+1. **Agent 的"近视眼"特性（Grep & Read 机制）**：现在的 AI 工具（例如 Claude Code）并没有像搜索引擎那样的全局"实时向量预索引"机制。当你在某个子文件夹里工作时，Agent 使用的是局部文件读取工具（Read/Grep）。它能记住在当前子项目中用 OKF 格式去更新文档，但它默认不会主动"跳出"当前文件夹去修改根目录的 index 或 AGENTS.md。
+
+2. **上下文的层级继承（Cascading Rules）**：根据最新的 AGENTS.md 和 CLAUDE.md 官方规范：Agent 启动时，会从当前子文件夹向上遍历直到根目录，把沿途的 CLAUDE.md / AGENTS.md 全部加载（下级配置会覆盖或叠加在上级配置上）。这意味着，Agent 在子项目里能"看到"上层的索引，但它在结束对话或提交 Git 时，绝对不会主动去帮你维护上层的总索引，除非你每次都明确命令它。
+
+### 解决方案：如何确保上层索引永远"保鲜"？
+
+既然用人力（或天天提醒 Agent）去更新上层索引不可靠，可以采用以下三种目前社区最推荐的自动化与半自动化最佳实践：
+
+#### 方案 A：让 Agent 自主使用"联动双写"指令（目前最直观）
+
+不要只对 Agent 说"更新当前文档"，在你的上层 AGENTS.md 或 CLAUDE.md 根规则中，直接写入一条"死命令"（强约束）。
+
+在根目录的 AGENTS.md 末尾加上这一段：
+
+> ⚠️ 知识库联动更新规范 (Strict Multi-File Write Rule)
+>
+> 1. 无论何时只要修改或新建了子项目中的 OKF 格式文档，**必须**同步更新根目录的 `index.md` 或 `README.md` 中的"子项目状态/目录列表"。
+> 2. 禁止只更新局部而遗漏全局索引。完成子项目更新后，必须输出：*"已同步更新根目录索引"*。
+
+效果：AI 在开始工作前读取了根目录的这行字，它在完成子项目后，会自动顺手把根目录的 index 也改了。
+
+#### 方案 B：编写一个自动化"图书管理员"脚本（最彻底、最可控）
+
+既然你的仓库完全托管在 Git 里，别指望 AI 的自觉性。写一个极其简单的自动化脚本（例如 `update_index.py`）放在根目录。
+
+这个脚本只做一件事：扫描所有子文件夹，读取里面 OKF 标准文档的 YAML 头部（如 title, status, last_updated），然后自动覆写重写根目录的 `index.md`。
+
+脚本运行后的 index.md 效果：
+
+```
+# 仓库子项目自动索引（由脚本生成，请勿手动修改）
+- [子项目A](./sub-project-a/README.md) | 状态：进行中 | 更新时间：2026-07-10
+- [子项目B](./sub-project-b/README.md) | 状态：已完成 | 更新时间：2026-07-08
+```
+
+你只需要在 Git 的 pre-commit 钩子里加上它，或者每次想通盘检查时，让 Claude 运行一下：`python update_index.py`。索引百分之百永远是最新的。
+
+#### 方案 C：采用"去中心化"结构（放弃上层 Index）
+
+如果你的子项目彼此独立，最新的 AI 架构实践（如 Microsoft 提出的 AGENTS.md 规范）认为：Monorepo 仓库其实不需要一个频繁变动的局部索引。
+
+你可以选择：
+
+- 根目录的 AGENTS.md / CLAUDE.md 只写通用的大原则（例如："我们用 Git 管理，每个子项都有独立文档，你进去后自己看"）。
+- 让每个子文件夹完全自治。当人或新 Agent 切换到 sub-project-a 时，它自然会去读那个文件夹下的 OKF 文档，根本不需要上层 index 的指引。上层的 index 只需要充当一个静态的"子项目名称列表"即可。
+
+### 针对你现状的落地动作建议
+
+既然你正在使用 Claude Desktop 和 Codex Desktop 配合 Git，你可以直接尝试以下操作：
+
+1. 打开你根目录的 AGENTS.md / CLAUDE.md。
+2. 检查里面是否有一句："当你完成一个阶段，请使用脚本/或手动将成果同步到根目录的 index 中"。如果没有，把上面的方案 A 的规范贴进去。
+3. 如果子项目超过 10 个，强烈建议让 Claude 帮你写个 `update_index.py`，每次有代码提交时跑一下，彻底解放你作为管理者的精力。
+
+Sources:
+- [1] https://asdlc.io/practices/agents-md-spec/
+- [2] https://github.com/danielrosehill/Claude-Code-Repos-Index/blob/main/CLAUDE.md
+- [3] https://daplab.cs.columbia.edu/general/2026/03/31/your-ai-agent-doesnt-care-about-your-readme.html
+- [4] https://vadim.blog/claude-code-no-indexing/
+- [5] https://hannahstulberg.substack.com/p/claude-code-for-everything-the-best-personal-assistant-remembers-everything-about-you
+- [6] https://elite-ai-assisted-coding.dev/p/context-from-internal-git-repos
+- [7] https://github.com/microsoft/skills/blob/main/.github/plugins/deep-wiki/skills/wiki-agents-md/SKILL.md
+- [8] https://codewithmukesh.com/blog/claude-md-mastery-dotnet/
+
+---
+
+## Q6: 如果一个银行科技子公司的运营部门想自己搞一套知识库，比如把之前实施过程中的规则、经验教训都记录，并且之后接入 Agent 能自主发现，应该如何设计？
+
+**答：**
+
+银行科技子公司的运营部门，通常处于"既要面对复杂的金融合规/业务流程，又要面对频繁升级的IT系统"的夹击之中。此前实施过程中的规则和经验教训（比如"某核心系统批量开户报错怎么处理"、"某股份行报文联调的特殊坑"），是极其宝贵的资产。
+
+要让这些知识在未来能被 Agent 自主发现（Proactive Discovery）、甚至在遇到问题前就主动预警，整个方案的设计必须跳出传统的"静态网盘"思维。
+
+由于涉及金融科技子公司的安全与架构，建议采用以下**"四层演进"**的落地设计方案：
+
+---
+
+### 一、知识源头层：设计"结构化断言"的 OKF/SOP 规范
+
+银行运营的教训不能写成故事，必须是**"场景触发器 + 强约束声明"**。继续沿用你熟悉的 Markdown + YAML Front Matter 格式，但对字段进行"银行金融场景"的针对性定制。
+
+每一篇运营经验/规则文档，必须包含以下 YAML 元数据：
+
+```yaml
+---
+id: BANK-OPS-2026-004
+type: incident-lesson       # 知识类型：事故教训/变更规则/日常SOP
+domain: clearing-system     # 业务域：大额清算/网贷/双录/ERP
+trigger_condition:          # 🌟【最核心】触发场景（让Agent自主发现的依据）
+  - "系统升级"
+  - "报文解析错误"
+  - "夜间批量运行失败"
+impact_level: High          # 影响等级
+last_verified: 2026-07-10   # 最后验证时间（金融科技要求时效性）
+---
+```
+
+文档正文包含：现象与教训 → 强约束与自主防御规则 → 依赖限制。
+
+**关键设计**：`trigger_condition` 字段是 Agent 自主发现的核心——未来只要检测到目标场景匹配，Agent 必须在调用前主动提醒相关历史教训。
+
+---
+
+### 二、存储与检索层：图书馆式 Git 仓库 + 本地轻量向量化
+
+鉴于银行对数据隐私和合规的严苛要求，千万不要把知识库放到公有云（如 Notion）。
+
+- **Git 仓库作为单一事实来源（Single Source of Truth）**：运营部门内部建立一个私有的 GitLab 仓库，采用你目前使用的"图书馆/抽屉式"目录管理。
+- **无感知向量化（RAG）嵌入**：在部门内网服务器上部署一个轻量的嵌入服务（如基于开源的 BGE-Large 模型）。编写一个简单的自动化流水线（CI/CD）：只要有人往 Git 提交了一篇新的经验文档，系统自动将其转化为向量，存入内网的向量数据库（如 Milvus 或 PGVector）。
+
+---
+
+### 三、消费与发现层：如何让 Agent "自主发现"？
+
+这是本方案最核心的设计。Agent 怎么知道什么时候该去读哪条教训？不能等出了问题才去查，要让 Agent 在三个阶段做到"自主发现"：
+
+#### 1. 静态代码与配置阶段（主动静态扫描）
+
+当科技公司的开发或运维人员在提交流水线、或者在 Cursor / Claude Desktop 里写变更脚本时：
+
+- 本地的 Agent 插件会自动扫描当前项目的文件名、依赖库和 API 端点。
+- Agent 会将当前上下文（例如："我正在写一个关于大额清算的 Shell 脚本"）与知识库的 `trigger_condition` 进行比对。
+- **自主发现表现**：Claude 会直接在控制台弹窗："检测到你正在修改外汇清算模块，根据 BANK-OPS-2026-004 的历史教训，请务必检查字段长度是否超过 128 位。"
+
+#### 2. 动态运行与日志监控阶段（主动动态拦截）
+
+运营部门通常需要盯盘、看系统监控（如 Kibana 日志、Prometheus 告警）。
+
+- 给监控系统外接一个 Log Agent（可由 Claude Code 编写的脚本运行）。
+- 当系统日志中一旦出现 Timeout、NullPointerException 或特定错误码。
+- Log Agent 拿着错误日志去向量知识库进行模糊检索。
+- **自主发现表现**：Agent 自动在企业微信/钉钉运营群里发消息："刚刚系统报出外汇队列阻塞。我检索了知识库，这与 2026 年 7 月 X 银行变更导致的死锁现象一致，建议立刻检查中间件 varchar 字段。当年解决方案请看文档：[链接]。"
+
+#### 3. 需求与实施前置调研阶段（上下文对齐）
+
+当运营部门要提一个新的业务需求、或者准备做一次系统实施搬迁时，在 Claude 里新开一个对话。
+
+- 第一步永远是丢给它那个由 Git 自动生成的全量 index.json（包含所有文档的摘要和触发条件）。
+- **自主发现表现**：Claude 读取完索引后，会主动告诉运营人员："关于你提到的这次搬迁，我发现 2 号柜里有 3 篇前几年实施类似项目时的踩坑记录，涉及到网络策略隔离问题，我已经全部调取并整理成了清单，请你在写实施方案时注意。"
+
+---
+
+### 四、运营与防腐层：防止知识库"烂掉"
+
+银行科技公司的系统更迭极快，去年的教训在今年系统重构后可能就失效了。如果塞满过期知识，Agent 就会"胡言乱语"（幻觉）。
+
+1. **引入"知识半衰期"机制**：在 YAML 中增加 `status: verified` 和 `review_due: 2027-01-10`。
+2. **AI 辅助审阅**：每半年，让一个专门的"知识审计 Agent"扫描整个 Git 仓库，挑出那些超过 6 个月没更新的文档，自动给当年的负责人（根据 Git Commit 记录）发邮件或提 Issue："请确认 BANK-OPS-2026-004 中的外汇接口限制在当前 3.0 系统中是否依然有效？"如果失效，自动归档到 `09_Archive_History/`（废弃抽屉），防止干扰现役 Agent 的判断。
+
+### 部门落地的第一步建议
+
+作为运营部门，可以先不要上任何复杂的 AI 系统。
+
+1. 先在内网开一个 GitLab 仓库。
+2. 规定大家从今天起，把所有的排故复盘、实施准备、规则变更，全部用统一的 Markdown（带 YAML 头部）规范写成文件放进去。
+3. 只要有了这批结构化、干净的资产（Data Assets），后面不管是接入 Claude Desktop 还是公司内网的 RAG 平台，AI 都能瞬间激活它们。
+
+---
+
+## Q7: （1）如果是内部公开的数据需要排除敏感数据和真实名称等；（2）如何处理已有的文档，可能是规范一类的文档；（3）目前没有工单系统，很多实施运营过程中产生的人脑子里的经验教训没有文档记录。
+
+**答：**
+
+针对这三个非常接地气、且在银行科技子公司普遍存在的现实痛点，以下是具体、安全且可控的操作指南。
+
+---
+
+### 1. 敏感数据与真实名称的脱敏机制（Data Masking）
+
+银行科技子公司对合规有着天然的红线。要想知识库内部公开，必须建立一套**"AI辅助脱敏 ➕ 人工终审 commit"**的流水线。
+
+- **制定明确的"替换字典"规范**：在根目录的 AGENTS.md 中规定硬性脱敏原则。禁止出现真实客户姓名、卡号、银行内部敏感环境 IP（如生产机房真实 IP）、以及外部合作行的真实高管名称。
+- **利用 Claude/Codex 自动洗数据**：在将实施文档提交进 Git 仓库之前，把原始记录丢给 Claude 网页端或桌面端，使用特定的 Prompt 让它清洗：
+
+> "请帮我把以下实施运营记录转换为标准的 OKF Markdown 格式。在此过程中，必须进行金融级脱敏：将所有真实卡号替换为 622202\*\*\*\*\*\*1234，所有真实行名替换为'某国有大行/某股份行A'，所有生产IP替换为 10.x.x.x，真实人名替换为'张工/李工'。确认无误后输出。"
+
+- **Git 权限隔离（终极防线）**：运营部门的 GitLab 仓库可以分为两个分支（Branch）。`main` 分支是脱敏后的"内部公开版"，开放给所有 Agent 和全员克隆；`dev-raw` 分支只有少数核心骨干有权限，用于存放带有部分上下文、尚未清洗的原始记录。
+
+---
+
+### 2. 如何处理已有的规范类旧文档？（知识的结构化升级）
+
+已有的规范文档（如《XX系统操作指引2024版》、《某业务联调规范》）通常篇幅极长、内容宽泛。直接喂给 Agent，由于缺乏上面提到的 "Trigger Condition（触发条件）"，新 Agent 很难自主发现它。
+
+你不需要人工去重写它们，可以让 Agent 扮演"图书摘录员"，用以下三步批量处理：
+
+1. **分段切片（Chunking）**：长篇规范不需要合成一个大文件，按业务模块或功能点，拆分成一个个独立的、短小的 Markdown 文件（例如将一本大手册拆成 20 个独立的小 SOP 文件）。
+2. **AI 自动加装"OKF 铠甲"（注入元数据）**：写一个 Prompt，让 Claude 批量读取这些旧文档，不改变原文主体，但帮它自动总结并生成顶部的 YAML 头部。AI 的任务是提取出：这段规范是针对哪个系统的？在什么场景下（触发条件）应该被遵守？
+3. **旧规范从"躺在网盘里没人看的死文件"，变成了"带有触发标签、能被 Agent 随时检索到"的活资产。**
+
+---
+
+### 3. 没有工单系统，人脑中的经验教训如何沉淀？
+
+这是最难的一步。没有工单系统的强制约束，指望员工每天写"日记"是不现实的。既然你目前正在使用 Claude Desktop / Codex Desktop，最好的解法是**"以聊代写，让 AI 陪练顺手做会议记录"**。
+
+推行以下三种无痛沉淀机制：
+
+#### ① "复盘式聊天"——下班前的人机对话（最推荐）
+
+运营或实施人员在处理完一个棘手的生产问题、或者完成一次痛苦的搬迁后，在 Claude Desktop 里新开一个对话。不需要他们自己写文档，直接用语音输入或大白话跟 Claude 倾诉：
+
+> 员工："今天跟 XX 银行调接口快烦死了，搞了 4 个小时。最后发现原来他们内网防火墙策略没开，而且他们给的那个 SDK 里面有个变量名字拼写错了。我们换了个 1.2 版本的包才跑通。你帮我把今天这个坑记一下，免得以后别人再踩。"
+>
+> Claude："收到。我已经把这次'XX银行SDK版本拼写错误及防火墙策略'的教训整理成了标准的 OKF Markdown 格式。包含触发条件、依赖包版本限制（1.2版）。请检查，确认无误后我将直接将其保存到 02_Bug_Analysis/ 目录下。"
+
+#### ② 定期"捕获"即时通讯群聊（复用现有的沟通）
+
+既然没有工单，大家遇到生产问题一定是在企业微信、钉钉或大群里沟通排查的。
+
+- 每周或每次大事件结束后，负责人直接把群聊里的关键排故聊天记录（复制文本）打包丢给 Claude。
+- 对 Claude 说："这是我们今天排查核心系统死锁的群聊记录。里面有很多零散的信息，请帮我梳理出：1. 故障现象 2. 最终解决根因 3. 以后遇到同类问题的应急 SOP。生成一个 OKF 文档。"
+
+#### ③ 建立"有奖挑刺"机制
+
+在部门内部，谁通过跟 Claude 聊天沉淀了一篇高质量的、带有 trigger_condition 且被验证能帮到别人的文档，在周会上进行小额奖励或绩效加分。在金融科技子公司，一篇能阻止一次生产事故的经验文档，其价值远大于写 1000 行普通代码。
+
+---
+

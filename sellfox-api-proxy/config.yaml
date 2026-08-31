@@ -1,0 +1,28 @@
+# sellfox-api-proxy account configuration
+# Each account = one upstream API credential set with its own rate limit
+
+default_account: sellfox-main
+
+account_overrides: {}
+  # "dingtalk-union-id": "sellfox-backup"
+
+accounts:
+  sellfox-main:
+    name: "赛狐 ERP"
+    upstream: https://openapi.sellfox.com
+    auth_type: oauth2_cc
+    signing_type: sellfox_hmac
+    credentials:
+      app_id: ${SELLFOX_APP_ID}
+      app_secret: ${SELLFOX_APP_SECRET}
+    oauth:
+      token_url: /api/oauth/v2/token.json
+    rate_limit:
+      global_rps: 1.0
+      default_key_rps: 0.5
+
+oidc:
+  issuer: https://api.vilavi.cn/oidc
+  client_id: sellfox-api-proxy
+  client_secret: sellfox-proxy-oidc-secret
+  redirect_uri: https://api.vilavi.cn/sellfox/admin/oidc-callback

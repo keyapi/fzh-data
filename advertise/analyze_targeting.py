@@ -1,95 +1,99 @@
 """
-投放层分析 — 匹配类型表现、关键词vs商品投放、顶部搜索份额、光环效应。
+Targeting analysis — match type performance, keyword vs ASIN targeting, halo effect.
 """
+import pandas as pd
 import numpy as np
 from advertise import load_data, save_json
-
-
-def _safe_num(series):
-    import pandas as pd
-    return pd.to_numeric(series, errors="coerce")
+from advertise.utils import safe_num, numeric_cols, round_record
+from advertise.thresholds import TARGETING_MIN_SPEND, TARGETING_TOP_N
 
 
 def analyze(df):
-    import pandas as pd
     df = df.copy()
-    for col in ("spend", "sales_7d", "orders_7d", "units_7d", "clicks", "impressions",
-                "acos", "roas", "ctr", "cpc", "top_search_is", "conversion_rate_7d",
-                "advertised_sku_units_7d", "other_sku_units_7d",
-                "advertised_sku_sales_7d", "other_sku_sales_7d"):
-        if col in df.columns:
-            df[col] = _safe_num(df[col])
+    numeric_cols(df, ["spend", "sales", "orders", "clicks", "impressions",
+                       "acos", "roas", "ctr", "cpc", "conversion_rate",
+                       "same_sku_orders", "same_sku_sales", "same_sku_units",
+                       "other_sku_orders", "other_sku_sales", "other_sku_units"])
 
-    # ── 匹配类型表现 ──────────────────────────────────
-    match_cols = ["match_type", "spend", "sales_7d", "orders_7d", "clicks",
-                   "impressions", "ctr", "cpc"]
-    mcols = [c for c in match_cols if c in df.columns and c != "match_type"]
+    # ── Match type performance ────────────────────────────────
     if "match_type" in df.columns:
-        match = df.groupby("match_type")[mcols].sum()
-        match["acos"] = match["spend"] / match["sales_7d"].replace(0, np.nan)
-        match["roas"] = match["sales_7d"] / match["spend"].replace(0, np.nan)
-        match["ctr_calc"] = match["clicks"] / match["impressions"].replace(0, np.nan)
-        match["cpc_avg"] = match["spend"] / match["clicks"].replace(0, np.nan)
-        match_list = match.reset_index().to_dict(orient="records")
-        for r in match_list:
-            for k in r:
-                if isinstance(r[k], (np.floating,)):
-                    r[k] = round(float(r[k]), 4)
-                elif pd.isna(r[k]):
-                    r[k] = None
+        gcols = ["match_type"]
+        agg = {"spend": "sum", "sales": "sum", "orders": "sum",
+               "clicks": "sum", "impressions": "sum"}
+        available_a = {k: v for k, v in agg.items() if k in df.columns}
+        mt = df.groupby(gcols).agg(available_a).reset_index()
+        mt["acos"] = mt["spend"] / mt["sales"].replace(0, np.nan)
+        mt["roas"] = mt["sales"] / mt["spend"].replace(0, np.nan)
+        mt["ctr"] = mt["clicks"] / mt["impressions"].replace(0, np.nan)
+        mt["cvr"] = mt["orders"] / mt["clicks"].replace(0, np.nan)
+        mt["cpc"] = mt["spend"] / mt["clicks"].replace(0, np.nan)
+        match_type_list = []
+        for _, row in mt.iterrows():
+            match_type_list.append({
+                "match_type": str(row["match_type"]),
+                "spend": round(float(row["spend"]), 2),
+                "sales": round(float(row["sales"]), 2),
+                "orders": int(row.get("orders", 0) or 0),
+                "clicks": int(row.get("clicks", 0) or 0),
+                "impressions": int(row.get("impressions", 0) or 0),
+                "acos": round(float(row["acos"]), 4) if pd.notna(row["acos"]) else None,
+                "roas": round(float(row["roas"]), 2) if pd.notna(row["roas"]) else None,
+                "ctr": round(float(row["ctr"]), 4) if pd.notna(row["ctr"]) else None,
+                "cvr": round(float(row["cvr"]), 4) if pd.notna(row["cvr"]) else None,
+                "cpc": round(float(row["cpc"]), 4) if pd.notna(row["cpc"]) else None,
+            })
     else:
-        match_list = []
+        match_type_list = []
 
-    # ── 投放对象 TOP/BOTTOM ────────────────────────────
-    target_cols = ["targeting", "match_type", "campaign_name", "spend", "sales_7d",
-                    "orders_7d", "clicks", "impressions", "acos", "roas", "ctr", "cpc",
-                    "top_search_is"]
-    tcols = [c for c in target_cols if c in df.columns]
-    targeting_ranking = df[tcols].sort_values("spend", ascending=False)
-    top_targets = targeting_ranking.head(20).to_dict(orient="records")
-    # 最差投放: 有花费但零销售
-    if "sales_7d" in df.columns:
-        bottom = df[(df["spend"] > 1) & (df["sales_7d"].fillna(0) == 0)]
-        bottom = bottom.sort_values("spend", ascending=False)
-        bottom_targets = bottom[tcols].head(20).to_dict(orient="records")
-    else:
-        bottom_targets = []
+    # ── Top/bottom targets ────────────────────────────────────
+    tcols = ["targeting", "match_type", "campaign_name", "ad_group_name",
+             "spend", "sales", "orders", "clicks", "impressions",
+             "acos", "roas", "ctr", "cpc", "conversion_rate",
+             "same_sku_sales", "other_sku_sales"]
+    available_t = [c for c in tcols if c in df.columns]
+    targets = df[available_t].copy()
+    targets = targets.sort_values("spend", ascending=False)
 
-    # ── 光环效应 ──────────────────────────────────────
-    halo = {}
-    if all(c in df.columns for c in ("advertised_sku_sales_7d", "other_sku_sales_7d")):
-        adv_sales = df["advertised_sku_sales_7d"].sum()
-        other_sales = df["other_sku_sales_7d"].sum()
-        total = adv_sales + other_sales
-        halo = {
-            "advertised_sku_sales": round(float(adv_sales), 2),
-            "other_sku_sales": round(float(other_sales), 2),
-            "total": round(float(total), 2),
-            "halo_ratio": round(float(other_sales / adv_sales), 4) if adv_sales > 0 else None,
-        }
-    if all(c in df.columns for c in ("advertised_sku_units_7d", "other_sku_units_7d")):
-        adv_units = df["advertised_sku_units_7d"].sum()
-        other_units = df["other_sku_units_7d"].sum()
-        halo["advertised_sku_units"] = int(adv_units)
-        halo["other_sku_units"] = int(other_units)
+    top_list = []
+    for _, row in targets.head(TARGETING_TOP_N).iterrows():
+        r = {c: row[c] for c in available_t if c in row.index}
+        round_record(r)
+        top_list.append(r)
 
-    # ── 汇总 ──────────────────────────────────────────
-    total_spend = df["spend"].sum()
-    total_sales = df["sales_7d"].sum()
-    summary = {
-        "target_count": len(df),
-        "total_spend": round(float(total_spend), 2),
-        "total_sales_7d": round(float(total_sales), 2),
-        "total_orders_7d": int(df["orders_7d"].sum()) if "orders_7d" in df.columns else 0,
-        "total_clicks": int(df["clicks"].sum()) if "clicks" in df.columns else 0,
-        "total_impressions": int(df["impressions"].sum()) if "impressions" in df.columns else 0,
+    bottom_list = []
+    zero_conv = targets[(targets["spend"] > TARGETING_MIN_SPEND) & (targets["sales"].fillna(0) == 0)]
+    zero_conv = zero_conv.sort_values("spend", ascending=False).head(TARGETING_TOP_N)
+    for _, row in zero_conv.iterrows():
+        r = {c: row[c] for c in available_t if c in row.index}
+        round_record(r)
+        bottom_list.append(r)
+
+    # ── Halo effect (advertised SKU vs other SKU) ──────────────
+    same_sku_sales = df["same_sku_sales"].sum() if "same_sku_sales" in df.columns else 0
+    other_sku_sales = df["other_sku_sales"].sum() if "other_sku_sales" in df.columns else 0
+    halo_ratio = other_sku_sales / same_sku_sales if same_sku_sales > 0 else None
+
+    halo = {
+        "same_sku_sales": round(float(same_sku_sales), 2),
+        "other_sku_sales": round(float(other_sku_sales), 2),
+        "total_attributed": round(float(same_sku_sales + other_sku_sales), 2),
+        "halo_ratio": round(float(halo_ratio), 4) if halo_ratio is not None else None,
     }
 
+    # ── Summary ────────────────────────────────────────────────
+    total_spend = df["spend"].sum()
+    total_sales = df["sales"].sum()
+
     return {
-        "summary": summary,
-        "by_match_type": match_list,
-        "top_targets": top_targets,
-        "bottom_targets": bottom_targets,
+        "summary": {
+            "total_spend": round(float(total_spend), 2),
+            "total_sales": round(float(total_sales), 2),
+            "overall_acos": round(float(total_spend / total_sales), 4) if total_sales > 0 else None,
+            "target_count": len(df),
+        },
+        "match_type": match_type_list,
+        "top_targets": top_list,
+        "bottom_targets": bottom_list,
         "halo_effect": halo,
     }
 
@@ -101,11 +105,13 @@ if __name__ == "__main__":
         exit(1)
     result = analyze(reports["targeting"])
     save_json(result, "targeting_analysis.json")
-    print(f"\n投放分析:")
-    print(f"  投放数: {result['summary']['target_count']}")
-    print(f"  总花费: ${result['summary']['total_spend']:,.2f}")
-    print(f"  匹配类型数: {len(result['by_match_type'])}")
-    print(f"  零转化投放: {len(result['bottom_targets'])}个")
-    if result["halo_effect"]:
-        h = result["halo_effect"]
-        print(f"  光环效应: 广告SKU ${h['advertised_sku_sales']:,.2f} + 其他SKU ${h['other_sku_sales']:,.2f}")
+    s = result["summary"]
+    print(f"\n投放分析: 总花费 ${s['total_spend']:,.2f}  总销售额 ${s['total_sales']:,.2f}")
+    if s['overall_acos']: print(f"  整体ACOS: {s['overall_acos']:.2%}")
+    if result["match_type"]:
+        print(f"\n匹配类型:")
+        for m in result["match_type"]:
+            print(f"  {m['match_type']}: ACOS={m['acos']:.1%}  ROAS={m['roas']:.1f}x  CVR={m['cvr']:.1%}" if m['cvr'] else f"  {m['match_type']}: {m['spend']}")
+    h = result["halo_effect"]
+    print(f"\n光环效应: SameSKU=${h['same_sku_sales']:,.2f} + OtherSKU=${h['other_sku_sales']:,.2f} = ${h['total_attributed']:,.2f} (光环比 {h['halo_ratio']:.2f}x)" if h['halo_ratio'] else "")
+    print(f"\n零转化投放 (花费>${TARGETING_MIN_SPEND}, 0销售): {len(result['bottom_targets'])} 个")

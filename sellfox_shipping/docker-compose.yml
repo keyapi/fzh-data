@@ -1,0 +1,28 @@
+# docker-compose.yml — 上海测试服务器
+# 与其他服务 (sellfox-api-proxy, new-api, dingtalk-oidc) 共用 nginx
+
+version: "3.8"
+
+services:
+  sellfox-shipping:
+    build:
+      context: ..
+      dockerfile: sellfox_shipping/Dockerfile
+    container_name: sellfox-shipping
+    ports:
+      - "8401:8401"
+    volumes:
+      - ./sellfox_shipping/data:/app/sellfox_shipping/data
+      - ./sellfox_shipping/out:/app/sellfox_shipping/out
+      - ./sellfox_shipping/config.yaml:/app/sellfox_shipping/config.yaml:ro
+    environment:
+      - SELLFOX_PROXY_API_KEY=${SELLFOX_PROXY_API_KEY:-}
+      - FEDEX_API_KEY=${FEDEX_API_KEY:-}
+      - FEDEX_SECRET_KEY=${FEDEX_SECRET_KEY:-}
+    restart: unless-stopped
+    networks:
+      - shipping-net
+
+networks:
+  shipping-net:
+    external: true  # 共用已有 network

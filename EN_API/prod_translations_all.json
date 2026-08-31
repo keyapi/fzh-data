@@ -1,0 +1,1143 @@
+[
+  {
+    "name": "01r9faoktc",
+    "source_text": "SFG Weight Per Unit",
+    "translated_text": "半成品单重(g)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "0589476160",
+    "source_text": "Wash Care Instruction Usage",
+    "translated_text": "洗护说明用途",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "05c31087ef",
+    "source_text": "Item Attribute Value All Carton Layer",
+    "translated_text": "物料属性值所有纸箱层数",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "062m42am6o",
+    "source_text": "TongTool Item Name",
+    "translated_text": "通途产品名称",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "06fcs2prvu",
+    "source_text": "Outer Package Width",
+    "translated_text": "外包装宽(cm)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "096f1cfad7",
+    "source_text": "Item Attribute Value All PP Cotton Siliconized",
+    "translated_text": "物料属性值所有PP棉是否加硅",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "0e152345b3",
+    "source_text": "Item Attribute Value All Spray Bonded Cotton Weight",
+    "translated_text": "物料属性值所有喷胶棉克重(g/m2)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "0e639e63e8",
+    "source_text": "Item Attribute Value All Fiber Pad Density",
+    "translated_text": "物料属性值所有纤维垫密度",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "0f3t8e39nb",
+    "source_text": "SFG Outer Package Height",
+    "translated_text": "半成品外包装高(cm)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "0u10kgm0i0",
+    "source_text": "SFG Outer Package Width",
+    "translated_text": "半成品外包装宽(cm)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "11ffe2167d",
+    "source_text": "Item Attribute Value All Fabric Width",
+    "translated_text": "物料属性值所有面料门幅(cm)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "126883dcf8",
+    "source_text": "Hex Color",
+    "translated_text": "16进制色值",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "150bd50367",
+    "source_text": "Optimize",
+    "translated_text": "优化!上传图片务必勾选",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "15k4r0t282",
+    "source_text": "SFG Outer Package Length",
+    "translated_text": "半成品外包装长(cm)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "177241c949",
+    "source_text": "Item Attribute Value All Fabric Weight",
+    "translated_text": "物料属性值所有面料克重(g/m2)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "1d8b6d393c",
+    "source_text": "Item Attribute Value All Consumable Model",
+    "translated_text": "物料属性值所有耗材型号",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "1g8i4phk66",
+    "source_text": "SFG Package Height",
+    "translated_text": "半成品单个包装高(cm)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "1r7hjsl04d",
+    "source_text": "Include filters",
+    "translated_text": "包含过滤条件",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "1uoojagb9i",
+    "source_text": "NAS Path",
+    "translated_text": "NAS存储路径",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "23775e9a65",
+    "source_text": "Item Attribute Value All PP Cotton Condition",
+    "translated_text": "物料属性值所有PP棉新旧",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "24d9403cc7",
+    "source_text": "Wash Care Instruction",
+    "translated_text": "洗护说明",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "26db98b712",
+    "source_text": "Item Attribute Value All Accessory Size",
+    "translated_text": "物料属性值所有配件尺寸",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "26tu6ku841",
+    "source_text": "SFG Package Width",
+    "translated_text": "半成品单个包装宽(cm)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "29435ddq2q",
+    "source_text": "1-Invoice Required",
+    "translated_text": "是",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "2973a19502",
+    "source_text": "Item Attribute Value All PP Cotton Model",
+    "translated_text": "物料属性值所有PP棉型号",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "2bb4295320",
+    "source_text": "Item Attribute Value All Button Model",
+    "translated_text": "物料属性值所有扣子型号",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "2be2897b02",
+    "source_text": "Chief Financial Officer",
+    "translated_text": "审批流-财务总监",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "2c7442a30c",
+    "source_text": "Select Attribute Value",
+    "translated_text": "选择属性值",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "2e1815526c",
+    "source_text": "Brand Abbreviation",
+    "translated_text": "品牌缩写",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "2e351bba28",
+    "source_text": "Item Attribute Value All Color",
+    "translated_text": "物料属性值所有颜色",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "2e53df5db6",
+    "source_text": "Item Attribute Value All Button Additional Attribute",
+    "translated_text": "物料属性值所有扣子附加属性",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "2q5v3nocaj",
+    "source_text": "Item Supporting Material Manager",
+    "translated_text": "物料配套物料管理员",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "31d9oeiabf",
+    "source_text": "FG Package Height",
+    "translated_text": "成品单个包装高(cm)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "36266a21bd",
+    "source_text": "Item Attribute Value All Tape Wrap Size",
+    "translated_text": "物料属性值所有胶带缠膜热敏纸尺寸(cm)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "3a3e8bdfb1",
+    "source_text": "This will be appended to the Item Code of the variant. For example, if your abbreviation is \"SM\", and the item code is \"T-SHIRT\", the item code of the variant will be \"T-SHIRT-SM\"",
+    "translated_text": "注意！请勿添加空格等特殊字符！这将附加到多规格物料编码上。例如，如果您的缩写是 \"SM\"，而物料组编码是 \"T-SHIRT\"，那么多规格物料编码就是 \"T-SHIRT-SM\"。",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "3cf6ea2f1b",
+    "source_text": "Material Controller",
+    "translated_text": "审批流-物料控制",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "3dnhu6mu09",
+    "source_text": "Cover Weight Per Unit",
+    "translated_text": "皮壳单重(g)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "403016df8e",
+    "source_text": "Process File Customer Item Code",
+    "translated_text": "点击转换 客户物料编号 加物料明细行",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "40b9b88a75",
+    "source_text": "Item Attribute Value All Textile Label Size",
+    "translated_text": "物料属性值所有纺织品标签尺寸",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "449b7227b5",
+    "source_text": "Developer Name",
+    "translated_text": "开发人员",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "45f900c3da",
+    "source_text": "Product Release Date",
+    "translated_text": "新品发布时间",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "46ba9672f4",
+    "source_text": "Item Attribute Value All Spray Bonded Cotton Length",
+    "translated_text": "物料属性值所有喷胶棉长度(cm)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "49660bbf3b",
+    "source_text": "Shaoxing General Manager",
+    "translated_text": "审批流-绍兴总经理",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "4c7ea8466f",
+    "source_text": "Brand Label Abbreviation",
+    "translated_text": "品牌标缩写",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "57262e0fb4",
+    "source_text": "Item Attribute Value All Cut Strip Size",
+    "translated_text": "物料属性值所有切条尺寸  ",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "5b3c585dd2",
+    "source_text": "Wash Label Abbreviation",
+    "translated_text": "水洗标缩写",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "5chgt9gt29",
+    "source_text": "FG Package Volume",
+    "translated_text": "成品单个包装体积(cm³)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "5d54daea4a",
+    "source_text": "Item Attribute Value All Foam Size",
+    "translated_text": "物料属性值所有海绵尺寸(cm)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "5qcjpfe618",
+    "source_text": "SFG Quantity per Outer Package",
+    "translated_text": "半成品外包装内数量",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "626d3eb644",
+    "source_text": "Brand Label Name",
+    "translated_text": "品牌标名称",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "64d91aa599",
+    "source_text": "Supplier Color Number",
+    "translated_text": "供应商色号",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "656702877d",
+    "source_text": "Item Attribute Value All Button Hole Quantity",
+    "translated_text": "物料属性值所有扣子孔数",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "66ee113ea7",
+    "source_text": "Item Attribute Value All Needle Size",
+    "translated_text": "物料属性值所有针尺寸",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "67ad57cfac",
+    "source_text": "Item Attribute Value All Button Material",
+    "translated_text": "物料属性值所有扣子材质",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "68efe73150",
+    "source_text": "Shaoxing Factory Director",
+    "translated_text": "审批流-绍兴厂长",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "6aa47730b2",
+    "source_text": "Item Attribute Value All Needle Additional Attribute",
+    "translated_text": "物料属性值所有针附加属性",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "6d8752dd34",
+    "source_text": "The abbreviation can only contain uppercase English letters and no spaces or special characters.",
+    "translated_text": "此简称只能包含大写英文字母，不能有空格或特殊字符。",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "6e8a5dcd78",
+    "source_text": "Wash Label Usage",
+    "translated_text": "水洗标用途",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "71f5b0a54f",
+    "source_text": "Wash Label",
+    "translated_text": "水洗标",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "73m3gkc336",
+    "source_text": "Finish Good Weight",
+    "translated_text": "成品重尺(国外)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "79f459deee",
+    "source_text": "Item Attribute Value All Pearl Cotton Additional Attribute",
+    "translated_text": "物料属性值所有EPE珍珠棉附加属性",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "7adb58455b",
+    "source_text": "Upload Blueprint",
+    "translated_text": "上传打样图",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "7c5543a1cd",
+    "source_text": "Item Attribute Value All Spray Bonded Cotton Width",
+    "translated_text": "物料属性值所有喷胶棉门幅(cm)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "7v43t5q14d",
+    "source_text": "SFG Package Volume",
+    "translated_text": "半成品单个包装体积(cm³)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "8656c496ec",
+    "source_text": "Item Attribute Value All Fabric Pattern",
+    "translated_text": "物料属性值所有面料花型",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "8a4e5b247b",
+    "source_text": "Item Attribute Value All Zipper Size",
+    "translated_text": "物料属性值所有拉链尺寸",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "8glvmr168f",
+    "source_text": "Replaced By Other Item Group",
+    "translated_text": "被替代为其他物料组",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "8lhln0u6qk",
+    "source_text": "SFG Outer Package Volume",
+    "translated_text": "半成品外包装体积(cm³)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "8n1bdqib5g",
+    "source_text": "SFG Item Width",
+    "translated_text": "半成品物料宽(cm)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "8sk9clficp",
+    "source_text": "Package Height",
+    "translated_text": "单个包装高(cm)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "905330e4b9",
+    "source_text": "Item Attribute Value All Bag Thickness",
+    "translated_text": "物料属性值所有包装袋厚度(mm)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "90ea327372",
+    "source_text": "Upload Market Research Report",
+    "translated_text": "上传市场调研报告",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "9232c1c2cd",
+    "source_text": "Item Attribute Value All Zipper Model",
+    "translated_text": "物料属性值所有拉链型号",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "93a1ad3729",
+    "source_text": "For Sale",
+    "translated_text": "在售",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "9b74b6d89a",
+    "source_text": "Item Attribute Value All Bag Size",
+    "translated_text": "物料属性值所有包装袋尺寸(cm)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "9e00206feb",
+    "source_text": "Item Attribute Value All Corduroy Wale Number",
+    "translated_text": "物料属性值所有条绒条纹数(条/英寸)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "9lq9lg0nm0",
+    "source_text": "Package Width",
+    "translated_text": "单个包装宽(cm)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "9nrot67vga",
+    "source_text": "Internal Transfer Receipt",
+    "translated_text": "内部调拨入库",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "a0hblp0hs8",
+    "source_text": "Item Length",
+    "translated_text": "物料长(cm)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "a37719c8c4",
+    "source_text": "Item Attribute Value All Fiber Pad Material",
+    "translated_text": "物料属性值所有纤维垫材质",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "a67c6dfb39",
+    "source_text": "Item Attribute Value All Accessory Additional Attribute",
+    "translated_text": "物料属性值所有配件附加属性",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "a687af03f2",
+    "source_text": "Wash Care Instruction Abbreviation",
+    "translated_text": "洗护说明缩写",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "a7408c2563",
+    "source_text": "Item Attribute Value All Bag Additional Attribute",
+    "translated_text": "物料属性值所有包装袋附加属性",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "aa26f64e12",
+    "source_text": "Item Group Code",
+    "translated_text": "产品开发编码",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "aca50e7275",
+    "source_text": "Item Attribute Value All Rope Thread Size",
+    "translated_text": "物料属性值所有绳线尺寸",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "adb924c348",
+    "source_text": "First Arrival Date",
+    "translated_text": "上架时间",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "aede58b0ba",
+    "source_text": "Item Attribute Value All Fabric",
+    "translated_text": "物料属性值所有面料(此处为\"虚拟\"面料,仅用于成品属性,如:三角-涤麻。采购,库存,生产用的\"实际\"面料种类通过物料组维护。)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "akldgutn05",
+    "source_text": "Workflow Stock User",
+    "translated_text": "审批流-仓管员",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "b199e60ea0",
+    "source_text": "Item Operator",
+    "translated_text": "物料主数据操作员",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "b4e44a4e97",
+    "source_text": "Item Attribute Value All Textile Label Material",
+    "translated_text": "物料属性值所有纺织品标签材质",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "b97d2e7140",
+    "source_text": "Model ID",
+    "translated_text": "款式ID",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "be0ec7c7d5",
+    "source_text": "General Manager",
+    "translated_text": "审批流-总经理",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "bf519a5acf",
+    "source_text": "Item Attribute Value All Tape Wrap Additional Attribute",
+    "translated_text": "物料属性值所有胶带缠膜热敏纸附加属性",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "c10b4f6e7e",
+    "source_text": "Item Attribute Value All Foam Model",
+    "translated_text": "物料属性值所有海绵型号",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "c442effc54",
+    "source_text": "Item Attribute Value All Zipper Pull Type",
+    "translated_text": "物料属性值所有拉链拉头规格(单头/双头)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "c4kj3ch31l",
+    "source_text": "Internal Transfer Dispatch",
+    "translated_text": "内部调拨发货",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "ca76685259",
+    "source_text": "Select From All Attribute Values",
+    "translated_text": "从(某个)物料属性值所有值中选择",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "cauc2dqr7t",
+    "source_text": "Purchase Order Supplier Selector",
+    "translated_text": "审批流-供应商选择",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "cb0a3a75ff",
+    "source_text": "Item Attribute Value All Rope Thread Additional Attribute",
+    "translated_text": "物料属性值所有绳线附加属性",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "ccc9bcca0e",
+    "source_text": "Work Order Merge Same Material",
+    "translated_text": "生产工单按尺寸合并原材料",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "ccf69459fa",
+    "source_text": "This file is public. It can be accessed without authentication.",
+    "translated_text": "！该文件是公共文件。外部无需验证即可访问！注意文件泄露风险！",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "cd51083ae7",
+    "source_text": "Material Requester",
+    "translated_text": "审批流-物料需求者",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "cda0f387c2",
+    "source_text": "Attach File Customer Item Code",
+    "translated_text": "上传Excel 客户物料编号",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "d014e6c73d",
+    "source_text": "Color Number",
+    "translated_text": "内部色号",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "d175102ad4",
+    "source_text": "Usage",
+    "translated_text": "用途",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "d27jvcjjtt",
+    "source_text": "SFG Item Height",
+    "translated_text": "半成品物料高(cm)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "d3b1675510",
+    "source_text": "Item Attribute Value All Textile Label Model",
+    "translated_text": "物料属性值所有纺织品标签型号",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "d5tvg6ks07",
+    "source_text": "Skip Available Assembly Items",
+    "translated_text": "考虑装配件可用库存",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "d6789f922e",
+    "source_text": "Item Attribute Value All Consumable Additional Attribute",
+    "translated_text": "物料属性值所有耗材附加属性",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "dac69a3d5f",
+    "source_text": "Brand Label",
+    "translated_text": "品牌标",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "dc17016223",
+    "source_text": "Product Develop Method",
+    "translated_text": "产品开发方式",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "dcea002793",
+    "source_text": "Item Attribute Value All Carton Size",
+    "translated_text": "物料属性值所有纸箱尺寸(cm)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "djnb8crkl5",
+    "source_text": "SFG Weight",
+    "translated_text": "半成品重量",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "dp9l8oob9b",
+    "source_text": "Outer Package Volume",
+    "translated_text": "外包装体积(cm³)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "drghvckhce",
+    "source_text": "Purchase Receipt Operator",
+    "translated_text": "审批流-采购入库操作",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "du0srbdt2h",
+    "source_text": "Finance Supervisor",
+    "translated_text": "审批流-财务主管",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "e39e90231e",
+    "source_text": "Item Attribute Value All Fiber Pad Size",
+    "translated_text": "物料属性值所有纤维垫尺寸(cm)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "e479shn1mj",
+    "source_text": "FG Weight UOM",
+    "translated_text": "成品重量单位",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "e549b7ead8",
+    "source_text": "Item Attribute Value All Fabric Additional Attribute",
+    "translated_text": "物料属性值所有面料附加属性",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "e555c9d8fd",
+    "source_text": "Load more",
+    "translated_text": "加载更多",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "eae3968d82",
+    "source_text": "Item Attribute Value All Tape Wrap Thickness",
+    "translated_text": "物料属性值所有胶带缠膜热敏纸厚度(mm)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "ecd741b65f",
+    "source_text": "Item Attribute Value All Pearl Cotton Size",
+    "translated_text": "物料属性值所有EPE珍珠棉尺寸(cm)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "f4a8u6ggj1",
+    "source_text": "Tax Withholding Category",
+    "translated_text": "开票税点",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "f5c6c6e008",
+    "source_text": "Purchase Order Operator",
+    "translated_text": "审批流-采购订单操作",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "f5ce00f3f8",
+    "source_text": "Label Combination",
+    "translated_text": "标签组合",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "fd19f5b4d4",
+    "source_text": "Item Attribute Value All Button Size",
+    "translated_text": "物料属性值所有扣子尺寸",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "fsgbqmolni",
+    "source_text": "NAS Path Link",
+    "translated_text": "NAS存储路径链接",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "g1pdgvkc0c",
+    "source_text": "Workflow Manufacturing Manager",
+    "translated_text": "审批流-生产经理",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "ged9kofu03",
+    "source_text": "SFG Item Length",
+    "translated_text": "半成品物料长(cm)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "gs0f6j1p54",
+    "source_text": "SFG Weight UOM",
+    "translated_text": "半成品重量单位",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "h5rd0otj69",
+    "source_text": "0-No Invoice Required",
+    "translated_text": "否",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "hkovsi0bn5",
+    "source_text": "FG Outer Package Height",
+    "translated_text": "成品外包装高(cm)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "hntiu3o933",
+    "source_text": "SFG Size",
+    "translated_text": "半成品尺寸",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "hro5jgftev",
+    "source_text": "Package Volume",
+    "translated_text": "单个包装体积(cm³)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "i37ee4c1sd",
+    "source_text": "Finish Good Weight Per Unit",
+    "translated_text": "国外分公司成品包装后实重(g)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "je7rdfmdfl",
+    "source_text": "Purchase Order Approver",
+    "translated_text": "审批流-采购经理",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "jibuqlgpvm",
+    "source_text": "Outer Package Height",
+    "translated_text": "外包装高(cm)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "k2jsqg7h0o",
+    "source_text": "Size",
+    "translated_text": "尺寸",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "k3ef887hgc",
+    "source_text": "Item Volume",
+    "translated_text": "物料体积(cm³)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "kbpn4g9s15",
+    "source_text": "Workflow Stock Manager",
+    "translated_text": "审批流-仓库经理",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "klhajc2n8h",
+    "source_text": "BOM Cost List",
+    "translated_text": "产品BOM成本列表",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "kq34pp7npn",
+    "source_text": "SFG Package Length",
+    "translated_text": "半成品单个包装长(cm)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "kt179h6pau",
+    "source_text": "Include Zero Stock Items",
+    "translated_text": "包含0库存物料",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "ljeipkho23",
+    "source_text": "Item Height",
+    "translated_text": "物料高(cm)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "lpet1irrd0",
+    "source_text": "FG Outer Package Length",
+    "translated_text": "成品外包装长(cm)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "lrcbdv8lar",
+    "source_text": "FG Outer Package Volume",
+    "translated_text": "成品外包装体积(cm³)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "m8q4sa6pqa",
+    "source_text": "FG Weight Per Unit",
+    "translated_text": "成品单重(g)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "m9tqnhp3ua",
+    "source_text": "SFG Item Volume",
+    "translated_text": "半成品物料体积(cm³)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "nag8dg5imf",
+    "source_text": "System consider the projected quantity to check available or will be available assembly items",
+    "translated_text": "勾选后，计划数量=需求-可用库存，可用足够时装配件被删除",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "ncedg29dro",
+    "source_text": "Quantity per Outer Package",
+    "translated_text": "外包装内数量",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "ojie5cp5r2",
+    "source_text": "Workflow Manufacturing User",
+    "translated_text": "审批流-生产用户",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "p6rdc3pk4p",
+    "source_text": "FG Outer Package Width",
+    "translated_text": "成品外包装宽(cm)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "pj7vnmmo2f",
+    "source_text": "If Invoice Required",
+    "translated_text": "是否开票",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "plf38ntuue",
+    "source_text": "Item Width",
+    "translated_text": "物料宽(cm)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "qrud82akk8",
+    "source_text": "FG Package Length",
+    "translated_text": "成品单个包装长(cm)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "r04umcq878",
+    "source_text": "FG Package Width",
+    "translated_text": "成品单个包装宽(cm)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "r7caen95pi",
+    "source_text": "Package Length",
+    "translated_text": "单个包装长(cm)",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "sao7nsffov",
+    "source_text": "Default Receipt Warehouse",
+    "translated_text": "默认收货仓库",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "sbb487ke0c",
+    "source_text": "Shipment Type To Branch",
+    "translated_text": "绍兴发货类型",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "sgfauseskh",
+    "source_text": "Purchase Master Operator",
+    "translated_text": "采购主数据操作员",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "sp4p42002q",
+    "source_text": "Developer Username",
+    "translated_text": "开发人员姓名",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "ullub6egmu",
+    "source_text": "Cover Weight UOM",
+    "translated_text": "皮壳重量单位",
+    "language": "zh",
+    "context": null
+  },
+  {
+    "name": "v79ai6f530",
+    "source_text": "FG Quantity per Outer Package",
+    "translated_text": "成品外包装内数量",
+    "language": "zh",
+    "context": null
+  }
+]

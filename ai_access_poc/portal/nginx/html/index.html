@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FZH AI Portal</title>
+  <style>
+    :root {
+      --ink: #102033;
+      --muted: #5a6b7d;
+      --panel: rgba(255, 255, 255, 0.78);
+      --line: rgba(16, 32, 51, 0.12);
+      --chat: #1f6feb;
+      --ops: #0f7b6c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "IBM Plex Sans", "Segoe UI", "PingFang SC", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(900px 480px at 85% -10%, rgba(31, 111, 235, 0.22), transparent 55%),
+        radial-gradient(700px 420px at -5% 100%, rgba(15, 123, 108, 0.18), transparent 50%),
+        linear-gradient(165deg, #eef3f8 0%, #d9e4ef 45%, #c9d7e6 100%);
+    }
+    .wrap {
+      max-width: 820px;
+      margin: 0 auto;
+      padding: 4.5rem 1.5rem 3rem;
+    }
+    .brand {
+      font-size: clamp(2.4rem, 6vw, 3.4rem);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      margin: 0 0 0.6rem;
+      line-height: 1.05;
+    }
+    .lead {
+      margin: 0 0 2.2rem;
+      color: var(--muted);
+      font-size: 1.05rem;
+      max-width: 38rem;
+      line-height: 1.55;
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.85rem;
+      margin-bottom: 2.5rem;
+    }
+    a.btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      padding: 0.85rem 1.25rem;
+      border-radius: 10px;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 1rem;
+      border: 1px solid transparent;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    a.btn:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(16, 32, 51, 0.12); }
+    a.chat { background: var(--chat); color: #fff; }
+    a.ops { background: var(--ops); color: #fff; }
+    a.ghost { background: var(--panel); color: var(--ink); border-color: var(--line); }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 1.15rem 1.25rem;
+      backdrop-filter: blur(8px);
+    }
+    .panel h2 {
+      margin: 0 0 0.6rem;
+      font-size: 0.95rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      font-weight: 650;
+    }
+    ul { margin: 0; padding-left: 1.15rem; color: var(--muted); line-height: 1.65; }
+    code {
+      font-family: "IBM Plex Mono", Consolas, monospace;
+      font-size: 0.9em;
+      background: rgba(16, 32, 51, 0.06);
+      padding: 0.1em 0.35em;
+      border-radius: 4px;
+    }
+    footer {
+      margin-top: 2rem;
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1 class="brand">FZH AI Portal</h1>
+    <p class="lead">
+      C′ 门户融合 PoC：同域 nginx 把 <code>/chat</code> 接到 Open WebUI 壳，
+      <code>/ops</code> 接到板 PoC（候选只读 stub）。钉钉 OIDC 可选；运营审已延期。
+    </p>
+    <div class="actions">
+      <a class="btn chat" href="/chat/">打开 Chat 壳</a>
+      <a class="btn ops" href="/ops/">打开 Ops 板</a>
+      <a class="btn ghost" href="/health">/health</a>
+      <a class="btn ghost" href="/ops/api/auth/status">钉钉状态</a>
+    </div>
+    <div class="panel">
+      <h2>路由</h2>
+      <ul>
+        <li><code>/</code> — 本页</li>
+        <li><code>/chat/</code> → Open WebUI（需壳 compose 已起；资产走根路径劫持）</li>
+        <li><code>/ops/</code> → 板 PoC stub（candidates / sellers）</li>
+        <li><code>/oidc/</code> → 钉钉 OIDC 桥（<code>--profile dingtalk</code>）</li>
+      </ul>
+    </div>
+    <footer>
+      一键启动：<code>cd ai_access_poc/portal && docker compose up -d --build</code>
+      （先保证 <code>ai_access_poc/open_webui</code> 在跑）
+    </footer>
+  </div>
+</body>
+</html>

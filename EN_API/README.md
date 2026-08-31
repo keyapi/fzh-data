@@ -1,6 +1,6 @@
 # EN_API — ERPNext REST API 工具
 
-通过 ERPNext REST API 上传图片、更新物料组 (Item Group) 主图。
+通过 ERPNext REST API 上传图片、更新物料组 (Item Group) 主图、生成销售出库追溯报表。
 
 ## 脚本列表
 

@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>蜴国际导入追踪号 — 赛狐尾程打单</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, 'Microsoft YaHei', sans-serif; background: #f5f5f5; color: #333; }
+        .header { background: #1a1a2e; color: #fff; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+        .header h1 { font-size: 18px; }
+        .nav a { color: #a0a0c0; text-decoration: none; margin-left: 20px; font-size: 14px; }
+        .nav a:hover, .nav a.active { color: #fff; }
+        .container { max-width: 960px; margin: 24px auto; padding: 0 24px; }
+        .panel { background: #fff; border-radius: 8px; padding: 24px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .panel h2 { font-size: 16px; margin-bottom: 8px; }
+        .hint { font-size: 13px; color: #666; margin-bottom: 16px; line-height: 1.5; }
+        label { display: block; font-size: 12px; color: #888; margin-bottom: 4px; margin-top: 12px; }
+        input { width: 100%; padding: 8px 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+        button { margin-top: 20px; background: #1a1a2e; color: #fff; border: none; padding: 10px 18px; border-radius: 4px; cursor: pointer; font-size: 14px; }
+        button:hover { background: #2a2a4e; }
+        .error { background: #f8d7da; color: #721c24; padding: 12px; border-radius: 6px; margin-bottom: 16px; font-size: 13px; }
+        .warn { background: #fff3cd; color: #856404; padding: 12px; border-radius: 6px; margin-bottom: 16px; font-size: 13px; }
+        .stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin: 16px 0; }
+        .stat { background: #f8f8fc; border-radius: 6px; padding: 12px; text-align: center; }
+        .stat .n { font-size: 22px; font-weight: 700; }
+        .stat .l { font-size: 11px; color: #888; margin-top: 4px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; }
+        th, td { text-align: left; padding: 8px; border-bottom: 1px solid #eee; }
+        th { color: #888; font-size: 11px; }
+        .ok { color: #155724; }
+        .bad { color: #721c24; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>蜴国际 — 导入追踪号</h1>
+        <div class="nav">
+            <a href="/">首页</a>
+            <a href="/packages">包裹</a>
+            <a href="/lizard/export">导出</a>
+            <a href="/lizard/import" class="active">导入追踪号</a>
+            <a href="/lizard/artifacts">制品</a>
+            <a href="/lizard/batches">批次</a>
+        </div>
+    </div>
+    <div class="container">
+        <div class="panel">
+            <h2>导入返回 Excel 并对账</h2>
+            <p class="hint">
+                按「参考编号/Reference Code」= 赛狐 <code>packageSn</code> 匹配。
+                结果<strong>只写入本地库</strong>，<strong>不写回赛狐</strong>，不会调用 <strong>submitToPlatform</strong>。
+                若填写批次 ID，会把匹配结果回写到该 <code>ShippingBatch</code>。
+            </p>
+            <div class="warn">可用夹具 <code>sellfox-native-fixture/03-sellfox-lizard-tracking-return.xlsx</code> 做本地验证。</div>
+            {% if error %}
+            <div class="error">{{ error }}</div>
+            {% endif %}
+            <form method="post" action="/lizard/import" enctype="multipart/form-data">
+                <label for="actor">操作人（审计）</label>
+                <input id="actor" name="actor" value="{{ default_actor }}" required />
+                <label for="batch_id">批次 ID（可选，关联导出批）</label>
+                <input id="batch_id" name="batch_id" value="{{ default_batch_id }}" placeholder="例如 3" />
+                <label for="file">蜴国际返回 Excel（.xlsx）</label>
+                <input id="file" name="file" type="file" accept=".xlsx,.xls" required />
+                <button type="submit">导入并对账</button>
+            </form>
+        </div>
+
+        {% if result %}
+        <div class="panel">
+            <h2>对账报告</h2>
+            <div class="stats">
+                <div class="stat"><div class="n">{{ result.total }}</div><div class="l">总行数</div></div>
+                <div class="stat"><div class="n">{{ result.matched }}</div><div class="l">匹配</div></div>
+                <div class="stat"><div class="n ok">{{ result.persisted }}</div><div class="l">已落库</div></div>
+                <div class="stat"><div class="n bad">{{ result.conflicts }}</div><div class="l">冲突</div></div>
+                <div class="stat"><div class="n bad">{{ result.skipped }}</div><div class="l">跳过</div></div>
+                <div class="stat"><div class="n bad">{{ result.unmatched }}</div><div class="l">未匹配</div></div>
+            </div>
+            <p class="hint">解析时间 {{ result.parsed_at }}
+                {% if result.artifact_id %}
+                · 制品 <a href="/lizard/artifacts">#{{ result.artifact_id }}</a>
+                {% endif %}
+                {% if result.batch_id %}
+                · 批次 <a href="/lizard/batches/{{ result.batch_id }}">#{{ result.batch_id }}</a>
+                {% endif %}
+            </p>
+
+            {% if result.matched_rows %}
+            <h2>匹配行</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>包裹号</th>
+                        <th>物流单号</th>
+                        <th>运费</th>
+                        <th>状态</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for row in result.matched_rows %}
+                    <tr>
+                        <td><a href="/packages/{{ row.package_sn }}">{{ row.package_sn }}</a></td>
+                        <td>{{ row.tracking_number }}</td>
+                        <td>{{ row.freight if row.freight is not none else '—' }}</td>
+                        <td>
+                            {% if row.get('conflict_with') %}
+                            <span class="bad">冲突（已有 {{ row.conflict_with }}）</span>
+                            {% elif row.get('persisted') %}
+                            <span class="ok">已落库</span>
+                            {% elif row.get('reason') %}
+                            <span class="bad">跳过：{{ row.reason }}</span>
+                            {% else %}
+                            —
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+
+            {% if result.unmatched_rows %}
+            <h2 style="margin-top:20px">未匹配行</h2>
+            <table>
+                <thead><tr><th>参考编号</th><th>物流单号</th><th>行号</th></tr></thead>
+                <tbody>
+                {% for row in result.unmatched_rows %}
+                    <tr>
+                        <td class="bad">{{ row.package_sn }}</td>
+                        <td>{{ row.tracking_number }}</td>
+                        <td>{{ row.row_index }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>

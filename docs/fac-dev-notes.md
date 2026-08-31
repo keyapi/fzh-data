@@ -154,9 +154,102 @@ print(f"Readable: {os.access(js_path, os.R_OK)}")
 
 ---
 
+---
+
+## Lesson 67: 工作流复制四层依赖
+
+**现象**：试图在测试系统创建与生产相同的工作流时，FAC `create_document("Workflow", ...)` 可能因引用不存在的 State / Action / Role 而失败。
+
+**根因**：Workflow 的 `states` 子表中的 `state` 字段是 Link → Workflow State，`allow_edit` 是 Link → Role。`transitions` 子表中的 `action` 是 Link → Workflow Action Master，`allowed` 是 Link → Role。所有引用的记录必须先在目标系统存在。
+
+**依赖创建顺序**：
+1. Workflow State（独立 DocType）
+2. Workflow Action Master（独立 DocType）
+3. Role
+4. Workflow（引用前三者）
+
+**缺失检查方法**：
+```python
+states_needed = {s["state"] for s in wf["states"]}
+actions_needed = {t["action"] for t in wf["transitions"]}
+roles_needed = {s["allow_edit"] for s in wf["states"]} | {t["allowed"] for t in wf["transitions"]}
+```
+
+---
+
+## Lesson 68: FAC MCP vs REST API 分工
+
+**双系统现状**：
+
+| 操作 | FAC MCP (测试) | REST API (生产) |
+|------|:-:|:-:|
+| 查询 Workflow | ✅ | ✅ |
+| 创建 Workflow (含子表) | ✅ | ✅ |
+| 创建依赖记录 | ✅ | ✅ |
+| 工作流激活互斥 | 手动处理 | 手动处理 |
+
+**教训**：
+- 生产系统未部署 FAC App → 只能用 REST API
+- 测试系统有 FAC MCP → 优先用 MCP 操作
+- 两个系统当前共享 API 凭证，`.env.example` 已支持 `PROD_`/`TEST_` 前缀分离
+
+---
+
+## Lesson 69: workflow_data 和 workflow_builder_id 非必需
+
+**现象**：生产工作流的 `workflow_data` 字段包含大量画布坐标 JSON，`workflow_builder_id` 在每个子表行中。测试系统复制时这些字段为空/null——但工作流功能完全正常。
+
+**原因**：这些字段仅服务于可视化工作流构建器 UI 的画布渲染，与审批逻辑、状态转换、权限控制毫无关系。
+
+**教训**：复制工作流时不需要复制 `workflow_data` 和 `workflow_builder_id`。如果需要在构建器中可视化编辑，可以在测试系统用构建器重新拖拽布局。
+
+---
+
+## Lesson 70: 激活互斥 — 同 DocType 只能有一个活跃工作流
+
+**现象**：当创建同 DocType 的新工作流并设为 `is_active=1` 时，ERPNext Workflow 的 `save()` 方法会自动将旧的活跃工作流 deactivate。
+
+**守则**：
+- 创建前先检查目标 DocType 是否已有活跃工作流
+- 如果要保留旧工作流作为参考，先手动设 `is_active=0`
+- 永远只激活一个版本
+
+---
+
+## Lesson 71: REST API 中文 URL 编码
+
+**现象**：用 curl 查询中文名称工作流时报 404。
+
+**原因**：curl 不会自动对 URL 路径中的中文进行百分号编码。
+
+**解决**：Python `requests` 库自动处理 URL 编码，不需要手动 `urllib.parse.quote()`。如果用 curl，需要 `--data-urlencode` 或手动编码。
+
+**建议**：在脚本中查工作流，用 Python requests 而非 curl，避免编码问题。
+
+---
+
+## Lesson 72: 跨系统工作流复制检查清单
+
+```
+□ 1. 用 REST API 从生产拉取 Workflow JSON
+□ 2. 提取 states/transitions 中引用的 State/Action/Role
+□ 3. 在目标系统检查缺失项
+     □ Workflow State 是否全有
+     □ Workflow Action Master 是否全有
+     □ Role 是否全有
+     □ DocType 是否存在且支持 workflow
+□ 4. 按顺序创建: State → Action → Role → Workflow
+□ 5. 验证: fetch 回来逐条对比
+□ 6. (可选) 设置 is_active=1
+```
+
+---
+
 ## 相关文档
 
 - [FAC MCP 部署指南](fac-mcp-setup.md) — 如何连接测试站
+- [ERPNext 工作流配置完整指南](solutions/erpnext-workflow-configuration.md) — Workflow 所有字段和行为规则
+- [生产→测试工作流复制实录](solutions/workflow-copy-prod-to-test.md) — 本次完整操作记录
 - [Agent 开发指南](agent-guide.md) — Agent 行为规则和代码约定
 - [FAC GitHub](https://github.com/buildswithpaul/Frappe_Assistant_Core) — 源码 + Issues
 - [FAC Issue #203](https://github.com/buildswithpaul/Frappe_Assistant_Core/issues/203) — 自定义报表 filter 自动发现 Bug

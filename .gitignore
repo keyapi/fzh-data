@@ -24,10 +24,29 @@ venv/
 
 # env files (secrets)
 .env
+secrets/*.json
+*.cookie.txt
+cookie.txt
+**/docs/api-reference/llms_parsed.json
+**/docs/api-reference/download_log.json
 .env.local
 .gh-token
 out/*
+missing_products/out/**
+amazon_pairing/out/**
+sellfox_cover_inventory/out/**
+channel_account_sync/out/**
+!channel_account_sync/out/.gitkeep
 !out/.gitkeep
+tongtool_order_cost/out/
+scripts/out/
 数据源/*
 !数据源/.gitkeep
 !数据源/README.txt
+
+# sellfox_shipping 原始业务样例（可含 PII，不入仓）
+sellfox_shipping/数据源/**
+!sellfox_shipping/数据源/.gitkeep
+
+# sellfox_shipping local DB
+sellfox_shipping/data/

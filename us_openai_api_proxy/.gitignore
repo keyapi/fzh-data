@@ -4,3 +4,5 @@
 # CLIProxyAPI 凭证
 auth/
 backups
+inject_csun_auth.py
+csun_auth.json

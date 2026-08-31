@@ -1,0 +1,56 @@
+# Executable golden cases for Amazon listing pairing.
+# sheet: 高可信精确证据 | 智能候选审核 | 特殊对象暂缓 | 无可靠候选
+cases:
+  - id: same-msku-already-paired
+    msku: Danpinse-KS0388-blue-FBA
+    title: "Daneey Back Pillow for Sitting in Bed, Reading Pillow with Support and Cylinder Cushion – Backrest Pillow for Couch, Home Comfort Cushion, Light Blue"
+    parent_sku: Danpinse-KS0388
+    expected_route: ordinary
+    expected_sheet: 高可信精确证据
+    expected_sku: KS0388-HLRJLGBL-62x68x38-LIGHTBLUE
+    evidence: live_msku
+    notes: 同 MSKU 另一条已配对；不要求 Gold A 通途别名。
+
+  - id: customer-code-prefix-pillow-sham
+    msku: CEN665-Leaves-Grey-66-2
+    title: "Leaves Grey Pillow Sham Cover 66"
+    parent_sku: ""
+    expected_route: ordinary
+    expected_sheet: 高可信精确证据
+    expected_sku: KS0244-CMGDTH-66x50-GREY
+    evidence: customer_code_or_near_msku
+    notes: KS0244 本身是枕套商品；标题 cover 不是“只卖皮壳”。EN 客户码 NB/CEN665-Leaves-Grey-66。
+
+  - id: removable-cover-is-feature
+    msku: DanCA1534D9-Blue-153
+    title: "Daneey Headboard Wedge Pillow Bed Wedge Pillow for Headboard Bolster Reading Pillow for Bed Back Pillow for Sitting in Bed Wedge Pillow Headboard with Removable Velvet Cover (Blue, Queen)"
+    parent_sku: DanVEL-Triangle-CA
+    expected_route: ordinary
+    expected_sheet: 高可信精确证据
+    expected_sku: null
+    evidence: live_parent_sku
+    notes: with Removable Velvet Cover 是成品卖点，不是 Cover 商品。
+
+  - id: foam-headboard-is-finished
+    msku: LongHuxing-Foam-Lbai-100
+    title: "Daneey Foam Headboard Pillow Twin, 22IN Tall Curve Pillow Headboard, Linen-Textured Wedge Foam Headboard Pillow for Bed Sofa, Daybed Pillows for Sitting Up, Reading or Working, White"
+    parent_sku: LongDanHuxing-Foam
+    fulfillment: MFN
+    expected_route: ordinary
+    expected_sheet: 无可靠候选
+    expected_sku: null
+    evidence: none
+    notes: >
+      意图 ordinary（Foam 是材料，不是卖海绵）。缓存里本条是 MFN。
+      parent LongDanHuxing-Foam 共 42 条全部未配对，没有 live_parent_sku 可传播。
+      四家族模型把它打成 KS0001（三角），真实更接近 KS0007 弧形；不能编造高可信。
+
+  - id: two-piece-set-stays-combo
+    msku: BAI31038N0A62927SX-2pcs-us
+    title: "BNCKTRD Couch Cushion Support for Sagging Seat 2 PCS, Arched Furniture Seat Under Cushion Sag Repair with High-Density Foam, Non-Slip, for Living Room Sofa Chair Loveseat"
+    parent_sku: BN-Sofa-Support
+    expected_route: combo
+    expected_sheet: 特殊对象暂缓
+    expected_sku: null
+    evidence: set_count
+    notes: 真 2 件套，不自动配单品。
