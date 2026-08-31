@@ -185,6 +185,30 @@ Amazon FBA 账期费用里已经包含平台履约尾程。特殊规则里对 FB
 ### 发货仓库前缀改名（美东-/美中-/波兰-）
 通途自发货仓库最近把主仓名加上分公司前缀：`CENTRADE`→`美东-CENTRADE`、`FZH-DANEEY`→`美中-FZH-DANEEY`、`FZHPoland-covers`→`波兰-FZHPoland-covers`，并新增美东/波兰退货仓。原则是 3 家国外分公司各保留 1 普通仓 + 1 退货仓。生产订单仍大量引用旧名，所以两套名字都要在 ERPNext 登记。
 
+## Channel Account（vilavi_pim）
+
+### Channel Account（渠道账号）
+生产 EN 里一条销售渠道店铺主数据。名称由销售渠道代码 + 账号码 + 区域拼成（`account_id` 自动命名）；允许空账号码时只有渠道代码+区域（如 `KFLAT`、`ILLIOSPL`、`WFEU`）。运营事实源是 Google 表「和运营部共享」的「渠道账号」页；EN 按该表追加，不删历史负责人。
+
+### Sales Channel
+Channel Account 所挂的销售渠道主数据。渠道**名称**可以较长；渠道**代码**更短，会拼进账号 ID。同一渠道可有多个国家账号。`Illiosenergy` 是名称，`ILLIOS` 是代码。
+
+### Channel Account Owner
+渠道账号上的负责人时间轴。一行代表一段负责人，不是一个日历月。`user` 存中文名（可含 `&` 组合名和占位「待分配」），不是 User 邮箱。只在负责人相对上一段发生变化时新增一行，连续同名月份折叠为一段，`from_date` 取该段第一个月 1 号。
+
+### 待分配（渠道账号）
+店铺已经开卖、该月表上却没有具体运营人员时，仍要落一条 Owner，人名写「待分配」。开卖前的空月不写。
+
+### Channel Account Alias
+同一店铺的其它写法。规范名本身也是一条别名。Amazon 欧洲旧名只挂在对应国家账号上，避免九国重复挂同一个旧名。
+
+### Amazon 国家站
+Amazon 店铺按国家区域建 Channel Account，没有合法的 EUR/EU 聚合账号。欧洲九国站点与 Johna 对齐。Wayfair 等非 Amazon 渠道仍可以有 EU 区域。
+*Avoid:* AMZFZHSXEUR 当作独立账号
+
+### 渠道账号表（和运营部共享）
+运营维护渠道、账号、别名、运营分组和按月运营人员的 Google 表。写入 EN 前以该表为准；表上的样品/`null` 行不建账号。
+
 ### 订单发货仓库对应成本来源
 财务共享表「和财务部共享」里的 ws，8 列把发货仓库映射到成本：`发货仓库 | 对应成本工作簿 | 成本来源编码 | 发货仓分类 | 头程运费来源编码 | 二次加工成本来源编码 | 发货区域 | 发货仓按销售汇总分类`。编码口径：CENTRADE→HEAD-US/2CJG-US；FZH-DANEEY 主仓与皮壳→HEAD-USTX-PK/2CJG-SX；成品/半成品/退货→HEAD-USTX/2CJG-SX；FZHPoland-covers→HEAD-PL/2CJG-PL；FZHPoland-finished→HEAD-EUHWC/2CJG-SX。
 
@@ -216,6 +240,8 @@ A webhook-based DingTalk group messaging channel used by AI agents (WorkBuddy, C
 
 ## Flagged ambiguities
 
+- "'AMZFZHSXEUR' 曾被当成欧洲聚合店 — Amazon 只有国家站，旧名只挂在 AMZFZHSXDE 别名。"
+- "'WFDANEEYUS' 与 'WFDaneeyUS' 不是同一条 Channel Account，大小写店铺码都保留。Channel Account Owner.user 存中文名；DingTalk/Frappe User.name 常是邮箱，同步时继续写中文。"
 - "'五桶' had been used as if it meant IvyeaOps 五杠杆 — they are distinct (search-term labels vs optimizer action candidates)."
 - "Amazon Auto/product/category reports often put ASINs in the customer search-term column — that is real report data, not a mapping bug; keyword 收割 must not treat those strings as exact keywords (filter deferred as of 2026-07-28)."
 - "通途主档 SKU 改名后的旧名，与规则笔误（例如 Foam FBA BLACK-97），不是同一类问题；像旧名的字符串要先查主档。"
