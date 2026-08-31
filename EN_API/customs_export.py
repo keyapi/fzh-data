@@ -324,8 +324,8 @@ def resolve_consignee(args, customer: str) -> dict | None:
 
 
 def usd_price(rmb: float) -> float:
-    """RMB → USD 报关价：BOM成本 ÷ 汇率 × 加成系数，保留 3 位小数。"""
-    return round(float(rmb) / CONFIG["exchange_rate"] * CONFIG["price_markup"], 3)
+    """RMB → USD 报关价：BOM成本 × 加成系数 ÷ 汇率（先涨价、后换汇），保留 3 位小数。"""
+    return round(float(rmb) * CONFIG["price_markup"] / CONFIG["exchange_rate"], 3)
 
 
 def _n3(ws, coord: str, value):
@@ -380,11 +380,23 @@ def compute_packing(agg, groups):
     }
 
 
-def _expand_rows(ws, at_row: int, k: int, extend_ranges: list[str]):
-    """在 at_row 前插入 k 行，修复合并单元格。
+def _copy_row_style(ws, from_row: int, to_row: int, max_col: int):
+    """把 from_row 单元格样式（字体/边框/填充/对齐/数字格式）复制到 to_row（insert_rows 不继承样式）。"""
+    import copy
+    for col in range(1, max_col + 1):
+        src = ws.cell(row=from_row, column=col)
+        dst = ws.cell(row=to_row, column=col)
+        if src.has_style:
+            dst._style = copy.copy(src._style)
+
+
+def _expand_rows(ws, at_row: int, k: int, extend_ranges: list[str], ref_rows: list[int] | None = None):
+    """在 at_row 前插入 k 行，修复合并单元格，并复制样式。
 
     - at_row 及以下的合并整体下移 k 行
     - extend_ranges（如 marks 竖列）下边界 + k
+    - 复制模板数据行样式到插入行（insert_rows 不继承样式，否则新行字体/边框缺失）
+    - ref_rows：插入行对应的样式参考行（缺省取 at_row-1）；报关单NEW 每物料 2 行交替传 [item行, element行]
     """
     if k <= 0:
         return
@@ -405,24 +417,82 @@ def _expand_rows(ws, at_row: int, k: int, extend_ranges: list[str]):
         ws.merged_cells.add(
             f"{get_column_letter(r.min_col)}{r.min_row}:{get_column_letter(r.max_col)}{r.max_row + k}"
         )
+    ref_rows = ref_rows or [at_row - 1]
+    max_col = ws.max_column
+    for j in range(k):
+        _copy_row_style(ws, ref_rows[j % len(ref_rows)], at_row + j, max_col)
 
 
 def expand_sheets(wb, n_items: int):
     """按聚合物料数扩展 4 个 sheet 的数据行（模板默认 16 行）。"""
-    # (sheet名, 插入位置, marks列延长区间)
+    # (sheet名, 插入位置, marks列延长区间, 样式参考行)
     specs = [
-        ("报关发票 ", 32, ["B15:B33"]),
-        ("装箱单", 33, ["B16:B34"]),
-        ("报关合同 ", 32, []),
+        ("报关发票 ", 32, ["B15:B33"], [31]),
+        ("装箱单", 33, ["B16:B34"], [32]),
+        ("报关合同 ", 32, [], [31]),
     ]
-    for name, at_row, ext in specs:
+    for name, at_row, ext, ref in specs:
         ws = wb[name]
         k = n_items - 16
-        _expand_rows(ws, at_row, k, ext)
-    # 报关单NEW：每物料 2 行，插在第 50 行（分隔线）之前
+        _expand_rows(ws, at_row, k, ext, ref)
+    # 报关单NEW：每物料 2 行，插在第 50 行（分隔线）之前；item/element 交替参考 48/49
     ws = wb["报关单NEW "]
     k = 2 * (n_items - 16)
-    _expand_rows(ws, 50, k, [])
+    _expand_rows(ws, 50, k, [], [48, 49])
+
+
+def _delete_rows_safe(ws, start_row: int, count: int):
+    """整行删除数据区末尾的多余行，并正确处理合并单元格。
+
+    - 完全在删除区内 → 移除
+    - 跨越删除区边界 → 收缩到边界（保留删除区外部分）
+    - 完全在删除区下方 → 整体上移 count 行（openpyxl 的 delete_rows 不会平移合并区）
+    - 完全在删除区上方 → 不动
+    """
+    if count <= 0:
+        return
+    end = start_row + count - 1
+    for rng in list(ws.merged_cells.ranges):
+        rmin, rmax = rng.min_row, rng.max_row
+        if rmax < start_row:
+            continue                       # 完全在上方，不动
+        if rmin >= start_row and rmax <= end:
+            ws.merged_cells.remove(rng)    # 完全在删除区内，移除
+            continue
+        keep_min, keep_max = rmin, rmax
+        if rmin < start_row <= rmax:
+            keep_max = start_row - 1       # 跨越上边界，保留上方部分
+        elif rmin <= end < rmax:
+            keep_min = end + 1             # 跨越下边界，保留下方部分
+        new_min, new_max = keep_min, keep_max
+        if keep_min > end:
+            new_min, new_max = keep_min - count, keep_max - count   # 删除区下方整体上移
+        if new_min > new_max:
+            continue
+        ws.merged_cells.remove(rng)
+        ws.merged_cells.add(
+            f"{get_column_letter(rng.min_col)}{new_min}:{get_column_letter(rng.max_col)}{new_max}"
+        )
+    ws.delete_rows(start_row, count)
+
+
+def delete_extra_rows(wb, n_items: int):
+    """按实际导出的物料数 N 删除数据区末尾的多余整行。
+
+    模板默认 16 行数据；当 N < 16 时删除 N 之后的多余行，合计行/页脚随之上移。
+    发票/装箱单/报关合同/报关单NEW 都处理。N >= 16 时由 expand_sheets 扩展，无需删除。
+    """
+    if n_items >= 16:
+        return
+    # 报关发票：数据行 16..31（16 行），TOTAL 33
+    _delete_rows_safe(wb["报关发票 "], 16 + n_items, 16 - n_items)
+    # 装箱单：数据行 17..32，TOTAL 34
+    _delete_rows_safe(wb["装箱单"], 17 + n_items, 16 - n_items)
+    # 报关合同：数据行 16..31（16 行），TOTAL 33
+    _delete_rows_safe(wb["报关合同 "], 16 + n_items, 16 - n_items)
+    # 报关单NEW：每物料 2 行（项号+申报要素），数据 18..49，TOTAL 51
+    _delete_rows_safe(wb["报关单NEW "], 18 + 2 * n_items, 2 * (16 - n_items))
+    # 报关合同：不处理
 
 
 # ──────────────────────────────────────────────────────────────
@@ -687,6 +757,9 @@ def main():
                      consignee_addr=(consignee or {}).get("addr", ""),
                      declaration_unit=args.declaration_unit or "",
                      production_unit=CONFIG.get("production_unit", ""))
+
+    # 按实际物料数删除数据区多余整行（发票/装箱单/报关单NEW，报关合同不动）
+    delete_extra_rows(wb, len(agg))
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     out = Path(args.output) if args.output else OUT_DIR / f"报关单据_{args.dn}.xlsx"

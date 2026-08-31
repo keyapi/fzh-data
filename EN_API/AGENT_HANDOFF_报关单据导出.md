@@ -21,7 +21,7 @@
 3. **境外收货人**：报关单NEW C5 按收货人预设填充**名称+地址**（`CONSIGNEE_DATA`，CLI `--consignee`/弹窗下拉选择；未解析则保留模板原值）。发票/装箱单/合同的「To Messrs / 买方」仍留空（如需区分可配置）。
 4. **生产销售单位**：报关单NEW A8 填固定值 `绍兴雪雁针纺有限公司`（`CONFIG["production_unit"]`，不在弹窗体现）；A4「境内发货人」仍填发货方中文名。
 5. **目的国（地区）按客户映射**：DANEEY / CENTRADE / 美国FBA仓 → `UNITED STATES(502)`；波兰公司 → `PL(327)`；后续新增在 `US_CUSTOMERS` / `PL_CUSTOMERS` 里加。**注意**：贸易国(D10)/运抵国(G10) 现已**留空**，该映射目前只用于「最终目的国(K列)」填中文（美国→`美国(502)`）。
-6. **单价/总价统一 = BOM 成本 × 加成**：**4 个 sheet 全部**用 BOM 成本，即单价 = `bom_rate` ÷ 6.8 × 1.45、总价 = `bom_cost` ÷ 6.8 × 1.45、TOTAL = `Σbom_cost` ÷ 6.8 × 1.45（`usd_price()` 封装）。汇率暂定 6.8、加成系数 `price_markup=1.45`（均暂定，后续换汇率表/确认加成）。
+6. **单价/总价统一 = BOM 成本 × 加成 ÷ 汇率**：**4 个 sheet 全部**用 BOM 成本，即单价 = `bom_rate` × 1.45 ÷ 6.8、总价 = `bom_cost` × 1.45 ÷ 6.8、TOTAL = `Σbom_cost` × 1.45 ÷ 6.8（`usd_price()` 封装，**先 ×1.45 涨价、最后 ÷ 汇率，仅最终一步取整 3 位**）。汇率暂定 6.8、加成系数 `price_markup=1.45`（均暂定，后续换汇率表/确认加成）。
 7. **境内货源地 = 常量** `绍兴市（33069）`。
 8. **装箱单 Package 列 = 用户填写**：当前通过 `PACKAGE_BY_DN[DN单号]` 字典按物料编码写死（DN-26-00063、DN-24-00575 已录入），后续改为弹窗让用户填写确认。
 9. **内胆等零价值/零重量物料暂搁置**：内胆 `bom_rate=0`、`bom_cost=0`、毛净重/体积=0（EN 未维护内胆成本与重量），当前导出为 0，**暂不处理**；待后续确认后再调整这些字段的取值来源。
@@ -510,3 +510,74 @@ python customs_export.py --dn DN-26-00056   # 生产，19 项并行翻译约 1-2
 3. 修复后保证：`pkg_map` 只含主物料箱数；`totals["cartons"]` = Σ用户填 packages（装箱单 TOTAL = 弹窗箱数合计）；混合装箱次要物料走 `exclude_codes` 不显示。
 
 **验证（本仓库）**：`usd_price(49.1878)=10.489`；发票/合同/报关单NEW 的单价、总价、TOTAL 均为原值 ×1.45，守恒成立（总价 = 单价 × 数量）。
+
+### 混合装箱合并导出（2026-08-26，EN 侧，取代"优先级排除"）
+
+> 本逻辑**取代**了上一版"主物料优先级修正"（`EXPORT_PRIORITY_MAP` 按 成品>皮壳>内胆 选主 + 全局排除次要物料）。现改为：**按 qty 最大选主物料 + 次要数量并入主物料合并导出 + 排除仅限同箱组**。
+
+**改动文件**：`delivery_plan/public/js/delivery_note.js`（do_export）+ `delivery_plan/api/customs_export_api.py`（`_merge_dn_items(dn_items, packages_list)` + `_accumulate`）。
+
+1. **可编辑行/主物料选择**：按弹窗展示的物料 qty，**选数量最大的那一行**；平局取第一行（`it.qty > max_qty` 严格大于）。
+2. **数量累加合并**：主物料导出数量 = 组内所有物料 qty 之和（`total_qty`）；`amount/bom_cost` 按比例缩放（qty 增加，金额/成本同比例放大）。
+3. **排除仅限同箱组**：后端按 `carton_group + outer_carton_no` 把 DN items 分桶，多物料组只跳过**同组内**次要物料（`secondary_codes`）——**不同箱组的同名物料互不影响**，各自参与导出。
+4. **单物料箱组**：直接聚合，无排除。
+5. **loose 组**（无箱号、按物料分组、单物料）：不受影响，正常导出（packages=0）。
+6. **导出数据**：每组只推 `main_code / total_qty / packages / secondary_codes`；不再传全局 `exclude_codes`。
+7. **价格**：`usd_price = round(rmb × 1.45 ÷ 6.8, 3)`（先涨价后换汇，仅最终一步取整）。
+
+**修复的两个问题**：① 混合组次要物料（disabled 行）不再导出冗余 0 数量行；② 次要物料不再被全局排除导致其他箱组同名物料误杀。
+
+> ⚠️ 业务提示：合并导出后主物料数量 = 整箱总件数（皮壳+内胆等折叠为一个商品项），接近"皮壳+内胆申报口径"里"报一种物料、隐藏其余"的取向，**仍未获报关行确认**（见"未决业务问题"），勿固化。皮壳成本 `cost_pk` / 内胆成本 `cost_nd` 的 BOM 取值逻辑不受影响。
+
+### 申报要素页签 + loose 分组键修复 + 三页签弹窗（2026-08-27，EN 侧）
+
+**改动文件**：`delivery_plan/api/customs_export_api.py`（新增 `get_aggregated_items` / `get_items_hierarchy` / `get_editable_items_hierarchy` / `_merge_dn_items` / `_accumulate`）、`delivery_plan/utils/customs_export.py`（`CustomsExporter.export()` 新增 `merged_dn_items` / `declaration_elements` 参数 + `safe_write`）、`delivery_plan/public/js/delivery_note.js`（三页签弹窗）。无新增 DocType/表。
+
+1. **loose 分组键修复**：散件组键由 `__none` 改为 `loose__<drop_color(code)>`——旧版 `__none` 导致主物料 code 匹配不上 → 散件导出 0 物料。
+2. **合并函数**：`_merge_dn_items(dn_items, packages_list)` 按 `group_key` 分桶；单物料组直接聚合；混合组只留 `main_code` 行，`qty=total_qty`，`amount/bom_cost` 按 `scale=total_qty/qty` 缩放（保单价）；次要物料跳过不写 Excel。
+3. **三页签弹窗**：①装箱方案（qty 最大行为可编辑行、次要行 disabled+灰显、同步箱数）②报关信息（收货人/目的国/申报单位）③申报要素（见下）。
+4. **申报要素**：对每个可编辑物料填 5 段 → `seg1|seg2|seg3|seg4|seg5|||`；seg1 品牌类型(0-4)、seg2 出口享惠(0-2)、seg3 物料组名称(自动)、seg4 品牌(无/有)、seg5 型号(无/有)。写入报关单NEW 该物料申报要素行 `C{row+1}`（用 `safe_write` 规避 MergedCell 报错）；未填写降级 `0|0|||无品牌|无型号|||`。
+5. **seg3 物料组层级口径（已最终确认）**：取「**根的直接子级 = 第 1 层**」（根=第0层，直接子级=第1层）；无第 1 层则取物料组自身。⚠️ 先后纠正过「第2层」「倒数第2层」，最终口径为第 1 层，已发修正给 EN Agent。
+
+### EN 侧 BUG 修复交接（2026-08-28）
+
+1. **混合装箱数量重复乘 bug（`_merge_dn_items`）**：主物料行被「每条都按 `target_qty` 累加」→ 同色 3 条 × 3 = 9。修复：单物料组 qty=total_qty；混合组只找 `main_code` 那一行累加一次 `target_qty`，次要物料跳过。
+2. **`UnboundLocalError: totals`**：`[exporter_agg]` 调试日志在 `totals` 定义前引用 → 日志块下移到 `totals` 定义之后。
+3. **皮壳/内胆净重归类**：`cat_map={皮壳:PK, 内胆:ND}` 按 code 前缀从 `item_weight_cats` 取净重（克→kg）。建议后续：cat_map 配置化、净重换算抽工具函数、`outer_carton_weight` 单位统一核对。
+
+### 英文品名翻译改为查表组装（2026-08-28，EN 侧，替代 DeepSeek API）
+
+废弃 DeepSeek API 翻译（响应慢/不稳/措辞漂移），改为**查表组装**——确定性翻译，同物料永远一致，解决评审提的"报关翻译一致性"问题。
+
+- **规则**（按编码前缀）：
+  - 成品 `KS0001-DM-194` → 物料组翻译 + 面料翻译 + 尺寸
+  - 皮壳 `PK#KS0001-HLR-194` → `pillow cover for ` + 物料组翻译 + 面料翻译 + 尺寸
+  - 内胆 `ND#KS0001-194` → `Inner liner for ` + 物料组翻译 + 面料翻译 + 尺寸
+  - 扣类 `KZ1050-5#` → 物料组翻译 + 尺寸（无面料）
+- **查询逻辑**：
+  - 物料组翻译：优先用编码前缀（KS0001）查 `Item Group.custom_model_id → item_group_translation`；查不到再用中文品名第一段（三角靠枕）模糊匹配物料组名称
+  - 面料翻译：编码第二段（DM/HLR）→ `Item Attribute Value All Fabric.abbr → fabric_translation`
+  - 尺寸：编码第三段（194）或第二段（5#），颜色不参与
+- **数据依赖**：Item Group 需有 `custom_model_id` + `item_group_translation`；面料表需有 `abbr` + `fabric_translation`
+- **扩展**：新增物料类型（如 `BJ#`）只需在 `translate_by_lookup()` 加 `elif` 分支定义固定前缀翻译，其余逻辑复用
+- **待确认**：物料组+面料+尺寸的**拼接格式**（分隔符/顺序）未明示；面料/翻译字段缺失时的回退（是否降级为中文原文）
+
+### 多余整行删除（2026-08-28，本仓库与 EN 测试服务器均已实现 `delete_extra_rows`）
+
+最终 Excel 按实际导出的物料数 N **删除数据区末尾的多余整行**（不是清空单元格、不是从中间删）。范围：报关发票 / 装箱单 / **报关合同** / 报关单NEW（用户最终确认 4 张表都要删）。
+
+- **数据区行范围**（模板默认 16 物料）：发票 16..31（TOTAL 33）；装箱单 17..32（TOTAL 34）；**报关合同 16..31（TOTAL 33）**；报关单NEW 每物料 2 行 18..49（TOTAL 51）。
+- **删除规则**：N < 16 时删除数据起始行+N 起的连续整行——发票/装箱单/合同各 `16-N` 行；报关单NEW `2×(16-N)` 行（含申报要素行）。N ≥ 16 由 `expand_sheets` 扩展，不删。
+- **合并单元格处理（关键）**：`_delete_rows_safe(ws, start_row, count)` 用 `ws.delete_rows` 整行删；删除前处理合并——删除区内完全包含的移除、跨越边界的收缩到边界（如唛头列 B15:B33→B15:B(15+N)）、**删除区下方（TOTAL/页脚行）的整体上移 count 行**（openpyxl 的 delete_rows 不会平移合并区，须手动处理，否则 TOTAL 合并会变"孤儿合并"失去样式）。
+- 已在 EN 测试服务器部署（`utils/customs_export.py`，备份 `customs_export.py.bak_20260828`）+ 本仓库参考实现，均验证通过（N=3：发票 max_row 22、合同 TOTAL 合并 B20:E20、报关单NEW TOTAL 合并 A25:H25）。
+
+### 物料 >16 自动加行（2026-08-28，EN 服务器补齐）
+
+服务器原 fill 函数固定 `for i in range(16)`，>16 物料会被静默丢弃。已移植参考脚本的 `expand_sheets`/`_expand_rows`（insert_rows + 合并修复），并修正 4 个 fill 函数：
+
+- 循环 `range(16)` → `range(max(16, len(agg)))`
+- 发票/装箱单/合同 TOTAL 与页脚写死坐标（C33/C34/B33/D36 等）→ 加 `+k` 偏移（`k = max(0, len(agg)-16)`）
+- 报关单NEW TOTAL `A51`/`A54` 写死 → `A{51+k}`/`A{54+k}`（`k = 2*max(0, len(agg)-16)`），并为扩展出的申报要素行**自动创建 A:B / C:N 合并**
+- `export()` 填表前调用 `expand_sheets(wb, len(agg))`（N>16 才插入行；N<16 时 `delete_extra_rows` 删多余行，两者互斥互补）
+- 已验证 N=20：发票数据 16..35/TOTAL C37、报关单NEW 项号 1..20/TOTAL A59/末行申报要素合并 C57:N57
+- **样式继承修复（2026-08-31）**：`insert_rows` 不继承样式，>16 扩展出的新行字体/边框缺失（实测发票 R32-33 变宋体12、应微软雅黑10）。新增 `_copy_row_style`，`_expand_rows` 插入行后从模板数据行复制样式——发票/装箱单/合同参考 `at_row-1`，报关单NEW 每物料 2 行交替参考 item 48 / element 49。已验证 N=18 扩展行字体与模板一致。
