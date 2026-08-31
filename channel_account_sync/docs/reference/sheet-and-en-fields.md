@@ -6,7 +6,7 @@ timestamp: 2026-08-25
 ---
 # 表列与 EN 字段
 
-Workbook：`和运营部共享`（id `1nbMO-wf-Oj7HIuYlPOtrC7F8QtsEPDE80BmXo8G6O3Y`）。  
+Workbook：`和运营部共享`（id `1nbMO-wf-Oj7HIuYlPOtrC7F8QtsEPDE80BmXo8G6O3Y`）。
 Tab：`渠道账号（20260521起在此维护）`（gid `763421711`）。
 
 | 表列 | EN |

@@ -46,7 +46,7 @@ uv run python channel_account_sync/apply.py
 uv run python channel_account_sync/apply.py --apply
 ```
 
-Sheet：https://docs.google.com/spreadsheets/d/1nbMO-wf-Oj7HIuYlPOtrC7F8QtsEPDE80BmXo8G6O3Y/edit?gid=763421711  
+Sheet：https://docs.google.com/spreadsheets/d/1nbMO-wf-Oj7HIuYlPOtrC7F8QtsEPDE80BmXo8G6O3Y/edit?gid=763421711
 EN token：父仓库 `EN_API/.env` 的 `PROD_ERP_API_KEY` / `PROD_ERP_API_SECRET`。gspread：`secrets/gsheets-service-account.json`。
 
 2. **Amazon 只建国家站。** 禁止 `AMZFZHSXEUR` / `EUR` / `EU`。欧洲九国与 Johna 对齐：`DE ES FR IT UK PL NL BE SE`。旧名 `AMZFZHSXEUR` 只作为 **DE** 的别名。
