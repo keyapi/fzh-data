@@ -131,6 +131,8 @@ uv sync
 | `erpnext-wo-audit` | `.agents/skills/erpnext-wo-audit/` | 工单排查 Skill，按触发词自动加载 |
 | `missing-products` | `.agents/skills/missing-products/` | 通途有库存 SKU → EN 产品客户码 → 赛狐产品 SKU 三方主线补齐/审计 |
 | `platform-account-reconciliation` | `platform_account_reconciliation/` | OSTKUS/Wayfair 账期费用级对账 + EN Tongtool Order 匹配 |
+| `pb-reconciliation` | `pb_reconciliation/` | PB 月度付款对账（给财务）+ Tracy 佣金表 + UPS 未付核查 |
+| `pb-promo-cost` | `pb_promo_trueup/` | Vendor 5806 Early BF 供货价未恢复：改 item cost + 历史票 true-up |
 | `windows-agent-shell` | `.agents/skills/windows-agent-shell/` | Windows Agent shell：优先 pwsh、禁 bash/`&&`（5.1）、UTF-8 无 BOM |
 | `frappe-core-api` | — | ERPNext REST API 开发（外部 skill） |
 | `frappe-errors-api` | — | ERPNext API 错误处理（外部 skill） |

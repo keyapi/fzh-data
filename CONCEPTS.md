@@ -214,12 +214,31 @@ Gold A：历史已配对 ∩ 通途别名唯一 ∩ EN/赛狐一致，只用于�
 ### DingTalk Custom Robot (钉钉自定义机器人)
 A webhook-based DingTalk group messaging channel used by AI agents (WorkBuddy, Claude Code) in this project to send notifications and file download links. Uses HMAC-SHA256 signing. Distinct from DingTalk enterprise internal bots — custom robots do not require AppKey/AppSecret and are scoped to a single group, making them safe to share with non-developer agent users. Cannot send file attachments directly; file delivery uses ActionCard messages with download links hosted on ERPNext.
 
+## Pottery Barn remittance
+
+### SPS Invoice Date
+我方在 SPS 点发货生成发票的日期（钉钉提交的日文件夹发票 CSV）。
+
+### PB Remittance Invoice Date
+PB 付款对账单上的发票日期，按 UPS「We Have Your Package」（仓库实际交运）认定，只可能等于或晚于 SPS Invoice Date。
+
+### 来自Email remittance
+脚本从 PB 付款邮件解析出的原始对账单。上面的 Invoice Number 是对方付款键；给 PB 的差额清单用这个号，不用已加工的「给财务」或 To Tracy Miller 表。
+
+### Dual invoice number
+SPS 偶发同一货生成两个 INV#。我方钉钉留一个，PB 可能付另一个。月度对账把付款号映射成本地号；向 PB 索赔时用付款号。
+
+### Placeholder remittance ID
+PB 补付时对账单偶发不用 INV#、改用含年份的数字串。给 PB 仍写该占位号；内部财务表可能已手工改成本地 INV#。
+
 ## Flagged ambiguities
 
 - "'五桶' had been used as if it meant IvyeaOps 五杠杆 — they are distinct (search-term labels vs optimizer action candidates)."
 - "Amazon Auto/product/category reports often put ASINs in the customer search-term column — that is real report data, not a mapping bug; keyword 收割 must not treat those strings as exact keywords (filter deferred as of 2026-07-28)."
 - "通途主档 SKU 改名后的旧名，与规则笔误（例如 Foam FBA BLACK-97），不是同一类问题；像旧名的字符串要先查主档。"
 - "赛狐「采购成本」曾被用来同时指商品主数据绍兴发货、期初仓+SKU 尾程前、备货单指定采购单价+头程；三者不可互换，也都不等于 EN Tongtool Cost Review 的皮壳切片。"
+- "PB 索赔窗口用 PO Date，不是 SPS 开票日，也不是对账单 UPS 发票日；后两者滞后不能当成活动结束日。"
+- "给财务 / To Tracy Miller 里的发票号可能已被改成本地号，不能当作 PB 付款号发给 Diane。"
 
 ## 平台账期对账
 
