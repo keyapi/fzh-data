@@ -13,6 +13,10 @@ tags: [solutions, log]
 ## 2026-08-28
 - **新增**: `integration-issues/nas-multi-domain-access-openwrt-quickconnect.md` — NAS 多域名（nas.daneey.com / nas.vilavi.cn）、OpenWrt ACME 第二张证、DSM 反代铁律、QC 直连/cn4、联通 443 限制；政策保留 `fangzhouhui.quickconnect.cn` 统一入口。
 - **新增**: `NAS_API/` OKF bundle、`AGENT_HANDOFF.md`、`.agents/skills/nas-access/`。
+## 2026-08-25
+- **新增**: `workflow-issues/en-channel-account-gsheet-sync.md` — Google 表渠道账号 → 生产 EN Channel Account；人变才加行；Amazon 禁止 EUR、按 Johna 九国拆；Illiosenergy/`ILLIOSPL`。
+- **新增**: `channel_account_sync/` 折叠/命名库、fetch/compare/apply、OKF、Skill。
+- **生产结果**: 2026-08-25 新建 18 账号、10 别名、122 个已有账号补负责人，Kaufland 补 AT/IT/FR；未建 `AMZFZHSXEUR`。
 
 ## 2026-08-24
 - **新增**: `workflow-issues/sellfox-cover-combo-create-ops.md` — 三角皮壳 `PK# -> KS x1` 组合代理批量创建；与 EN `TJ#`/`sync-combos` 分流；`pageList total=0` 翻页、禁止并行 apply、组合商品不在普通商品。

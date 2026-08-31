@@ -368,6 +368,95 @@ ssh -i ~/.ssh/id_rsa_openwrt root@192.168.100.1 \
   "tail -10 /tmp/openclash.log | grep -oE 'Emergency\[|SSRDOG\[' | sort | uniq -c"
 ```
 
+## 翻墙流量机制与额度 (2026-08-25)
+
+### 什么流量走代理 / 直连
+
+办公室翻墙路由由 **OpenClash 规则**决定，与机场（SSRDog/BoostNet）无关：
+
+```
+国内 IP（china_ip_route）→ iptables 直连，不进 Clash（不耗额度）
+国外 IP → 重定向进 Clash
+  ↓ Clash 规则逐条匹配
+  ChinaMax / 钉钉 / sellfox 等 → DIRECT（不耗额度）
+  其余 → Match → 代理组（BoostNet）→ 消耗额度
+```
+
+- 钉钉、国内视频会议、国内网站 → DIRECT，**不消耗机场额度**
+- YouTube / Google / ChatGPT / 国外网站 → 走代理，**消耗额度**
+- 国内服务的国外 CDN（如某些 .com 域名解析到国外 IP）→ 规则上无法区分，会走代理（属正常，不是故障）
+
+### 已知 DIRECT 例外
+
+- **`45.63.1.166`（Vultr RDP 服务器）→ DIRECT**：BoostNet 对该服务器 3389 的 RDP 不通（香港/美国节点都试过，普通网页正常，疑似 BoostNet 屏蔽 RDP；直连光猫/US 服务器/应急线路都能正常 RDP）。故自定义规则加 `IP-CIDR,45.63.1.166/32,DIRECT` 直连。若以后换机场后 RDP 正常，可移除此规则。
+
+### 机场额度怎么算
+
+- 机场（BoostNet/SSRDog）按**经过其节点的字节数**计费，OpenClash 决定发什么给节点
+- 不同机场只是"账户额度 + 节点"不同，**路由规则完全一样**（同一份 OpenClash 配置）
+
+### 实测结果 (2026-08-25, BoostNet)
+
+- 启用 2 小时内消耗约 840MB（上行 141MB + 下行 698MB），**属正常偏高**；主要被 **YouTube 视频流**吃掉（活动连接快照 ~30%），其次 Wayfair 工作平台（~21%）
+- 活动连接快照分析：**未发现国内 IP 误走代理**，国内流量正确直连
+- 历史参照：SSRDog 每月约 280G（同一套规则）→ BoostNet 400G/月 有 ~40% 余量
+- **若额度消耗异常快，优先排查 YouTube/视频用量**（最大头）
+
+### 查看当前流量构成
+
+```bash
+# 当前活动连接（每个连接的 host / 出口策略 / 上下行字节）
+ssh -i ~/.ssh/id_rsa_openwrt root@192.168.100.1 \
+  "wget -qO- --header='Authorization: Bearer 123456' http://127.0.0.1:9090/connections"
+```
+
+> 把返回的 JSON 下载到本地，用 python 按 `metadata.host` / `chains[0]` / `upload` / `download` 聚合，即可得到按域名和策略的流量占比。
+
+## AI 出口切换（按国家分组，2026-08-25）
+
+### 为什么加
+
+老板 ChatGPT 网页在香港出口打不开（同一个香港节点，不同 OpenAI 账号结果不同——OpenAI 按账号/地区/风控判定），而日本/美国出口对大多数账号都友好。BoostNet 订阅**没有**按国家分组（只有 `自动选择`/`故障转移`/全节点扁平列表），所以通过覆写脚本动态生成了国家组 + AI 出口主组。
+
+### 结构
+
+```
+AI 规则（GEOSITE,openai / chatgpt.com 等 14 条）→ AI 出口
+AI 出口（select）: 自动选择 / 日本 / 美国 / 香港 / 新加坡 / 台湾 / 故障转移
+  ├── 自动选择（url-test，BoostNet 原生）
+  ├── 日本（select: 日本01-08）
+  ├── 美国（select: 美国01-04）
+  ├── 香港（select: 香港01-012）
+  ├── 新加坡 / 台湾（select）
+  └── 故障转移（fallback，BoostNet 原生）
+```
+
+- 默认 `AI 出口 → 自动选择`（通常选到香港07），日常体验不变
+- 需要日本/美国出口时，把 `AI 出口` 切到对应国家组
+
+### 如何切换
+
+**Zashboard / OpenClash 面板**：代理组 → `AI 出口` → 选择 `日本`（或 `美国`）。
+
+**API 方式**：
+```bash
+# 查看当前 AI 出口
+ssh root@192.168.100.1 "wget -qO- --header='Authorization: Bearer 123456' http://127.0.0.1:9090/proxies/AI%20%E5%87%BA%E5%8F%A3 | grep -o '\"now\":\"[^\"]*\"'"
+
+# 切到日本
+ssh root@192.168.100.1 "curl -s -X PUT 'http://127.0.0.1:9090/proxies/AI%20%E5%87%BA%E5%8F%A3' -H 'Authorization: Bearer 123456' -d '{\"name\":\"日本\"}' -o /dev/null -w '%{http_code}'"
+
+# 切回自动选择
+ssh root@192.168.100.1 "curl -s -X PUT 'http://127.0.0.1:9090/proxies/AI%20%E5%87%BA%E5%8F%A3' -H 'Authorization: Bearer 123456' -d '{\"name\":\"自动选择\"}' -o /dev/null -w '%{http_code}'"
+```
+
+### 持久化与注意
+
+- 国家组 + AI 出口 + 14 条 AI 规则都由 `openclash_custom_overwrite.sh` 的 `add_country_groups()` 注入，**订阅更新/重启不覆盖**（节点名变化时按前缀自动跟随）
+- **AI 规则不放自定义规则文件**：OpenClash 合并自定义规则时会校验目标组是否存在，`AI 出口` 组由覆写脚本后创建，放规则文件会被丢弃（实测）。所以 AI 规则在脚本里注入
+- 切换是**全局**的（所有 AI 流量都走同一出口），无法只让老板走日本、其他人走香港
+- 重启后 `AI 出口` 会重置为默认（自动选择）——若需要记住手动选择，可开启 `store-selected`（未启用）
+
 ## 见也
 
 - [../AGENT_HANDOFF.md](../AGENT_HANDOFF.md) — Agent 参考

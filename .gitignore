@@ -35,6 +35,8 @@ out/*
 missing_products/out/**
 amazon_pairing/out/**
 sellfox_cover_inventory/out/**
+channel_account_sync/out/**
+!channel_account_sync/out/.gitkeep
 !out/.gitkeep
 tongtool_order_cost/out/
 scripts/out/

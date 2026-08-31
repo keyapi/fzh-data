@@ -21,6 +21,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from openpyxl import load_workbook
+from openpyxl.styles import Alignment
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.cell_range import CellRange
 
@@ -43,6 +44,7 @@ CONFIG = {
     "shipper_addr": "Room 1910, 16th Floor, Building 1, Cuijing Beili, Tongzhou District, Beijing, China",
     "currency": "USD",            # 报关币制
     "exchange_rate": 6.8,         # 人民币 → 美元（暂定，后续换汇率表）
+    "price_markup": 1.45,         # 报关单价加成系数：报关单价 = BOM成本 ÷ 汇率 × 1.45
     "trade_term": "FOB",
     "trade_term_full": "FOB NINGBO,CHINA",
     "payment_term": "BY T/T 90 DAYS",
@@ -52,7 +54,8 @@ CONFIG = {
     "port_discharge": "LONG BEACH,UNITED STATES",  # 指运港
     "supervision_mode": "一般贸易",        # 监管方式
     "origin_place": "绍兴市（33069）",      # 境内货源地（常量）
-    "declaration_unit": "宁波市鸿欣报关有限公司",   # TODO: 确认申报单位
+    "declaration_unit": "宁波市鸿欣报关有限公司",   # 申报单位（弹窗可传，未传则保留模板原值）
+    "production_unit": "绍兴雪雁针纺有限公司",       # 生产销售单位（固定值，不在弹窗体现）
     # 单位映射：EN 的 uom → (英文单位, 中文单位)
     "uom_map": {
         "个": ("PIECES", "个"),
@@ -70,6 +73,15 @@ DEST_COUNTRY = {
 }
 US_CUSTOMERS = {"DANEEY", "CENTRADE"}   # 美国客户（含美国FBA仓，具体客户名待补充）
 PL_CUSTOMERS = set()                     # 波兰公司（具体客户名待补充）
+
+# 境外收货人预设（与 EN 弹窗下拉同源；导出时填 C5 境外收货人：名称 + 地址）。
+# 新增/修改收货人只改这一处。
+CONSIGNEE_DATA = {
+    "centrade": {"name": "Centrade Inc", "addr": "389 Route 10 Unit R, East Hanover, NJ 07936 U.S.A."},
+    "daneey":   {"name": "Daneey LLC", "addr": "10812 Fallstone Rd, Suite 402, Houston TX 77099 U.S.A."},
+    "poland":   {"name": "SHAOXING XUEYAN ZHENGFANG Sp. z o.o.", "addr": "ul. Prosta 2 95-035 Ozorków Poland"},
+}
+DEFAULT_CONSIGNEE = "centrade"           # 弹窗默认选中项（EN 侧）；本脚本按客户自动映射
 
 # 装箱组合（混装版）：key = DN 单号 → 组合列表。装箱信息完全由用户确认，不用外箱子表。
 # 每个组合:
@@ -281,6 +293,41 @@ def resolve_country(customer: str) -> tuple[str, str]:
     return "", ""
 
 
+def resolve_consignee(args, customer: str) -> dict | None:
+    """境外收货人：优先 CLI --consignee 指定，否则按客户自动映射。
+
+    返回 {"name": ..., "addr": ...}；无法解析返回 None（保留模板原值）。
+    """
+    choice = (args.consignee or "").strip().lower()
+    if choice == "custom":
+        if args.consignee_name or args.consignee_addr:
+            return {"name": args.consignee_name or "", "addr": args.consignee_addr or ""}
+        return None
+    if choice in CONSIGNEE_DATA:
+        info = dict(CONSIGNEE_DATA[choice])
+        if args.consignee_name:
+            info["name"] = args.consignee_name
+        if args.consignee_addr:
+            info["addr"] = args.consignee_addr
+        return info
+    cust = (customer or "").lower()
+    if "daneey" in cust:
+        return dict(CONSIGNEE_DATA["daneey"])
+    if "centrade" in cust:
+        return dict(CONSIGNEE_DATA["centrade"])
+    for key in PL_CUSTOMERS:
+        if key.lower() in cust:
+            return dict(CONSIGNEE_DATA["poland"])
+    if args.consignee_name or args.consignee_addr:
+        return {"name": args.consignee_name or "", "addr": args.consignee_addr or ""}
+    return None
+
+
+def usd_price(rmb: float) -> float:
+    """RMB → USD 报关价：BOM成本 × 加成系数 ÷ 汇率（先涨价、后换汇），保留 3 位小数。"""
+    return round(float(rmb) * CONFIG["price_markup"] / CONFIG["exchange_rate"], 3)
+
+
 def _n3(ws, coord: str, value):
     """写入数值并强制保留 3 位小数（补零对齐）。"""
     ws[coord] = round(float(value), 3)
@@ -333,11 +380,23 @@ def compute_packing(agg, groups):
     }
 
 
-def _expand_rows(ws, at_row: int, k: int, extend_ranges: list[str]):
-    """在 at_row 前插入 k 行，修复合并单元格。
+def _copy_row_style(ws, from_row: int, to_row: int, max_col: int):
+    """把 from_row 单元格样式（字体/边框/填充/对齐/数字格式）复制到 to_row（insert_rows 不继承样式）。"""
+    import copy
+    for col in range(1, max_col + 1):
+        src = ws.cell(row=from_row, column=col)
+        dst = ws.cell(row=to_row, column=col)
+        if src.has_style:
+            dst._style = copy.copy(src._style)
+
+
+def _expand_rows(ws, at_row: int, k: int, extend_ranges: list[str], ref_rows: list[int] | None = None):
+    """在 at_row 前插入 k 行，修复合并单元格，并复制样式。
 
     - at_row 及以下的合并整体下移 k 行
     - extend_ranges（如 marks 竖列）下边界 + k
+    - 复制模板数据行样式到插入行（insert_rows 不继承样式，否则新行字体/边框缺失）
+    - ref_rows：插入行对应的样式参考行（缺省取 at_row-1）；报关单NEW 每物料 2 行交替传 [item行, element行]
     """
     if k <= 0:
         return
@@ -358,24 +417,82 @@ def _expand_rows(ws, at_row: int, k: int, extend_ranges: list[str]):
         ws.merged_cells.add(
             f"{get_column_letter(r.min_col)}{r.min_row}:{get_column_letter(r.max_col)}{r.max_row + k}"
         )
+    ref_rows = ref_rows or [at_row - 1]
+    max_col = ws.max_column
+    for j in range(k):
+        _copy_row_style(ws, ref_rows[j % len(ref_rows)], at_row + j, max_col)
 
 
 def expand_sheets(wb, n_items: int):
     """按聚合物料数扩展 4 个 sheet 的数据行（模板默认 16 行）。"""
-    # (sheet名, 插入位置, marks列延长区间)
+    # (sheet名, 插入位置, marks列延长区间, 样式参考行)
     specs = [
-        ("报关发票 ", 32, ["B15:B33"]),
-        ("装箱单", 33, ["B16:B34"]),
-        ("报关合同 ", 32, []),
+        ("报关发票 ", 32, ["B15:B33"], [31]),
+        ("装箱单", 33, ["B16:B34"], [32]),
+        ("报关合同 ", 32, [], [31]),
     ]
-    for name, at_row, ext in specs:
+    for name, at_row, ext, ref in specs:
         ws = wb[name]
         k = n_items - 16
-        _expand_rows(ws, at_row, k, ext)
-    # 报关单NEW：每物料 2 行，插在第 50 行（分隔线）之前
+        _expand_rows(ws, at_row, k, ext, ref)
+    # 报关单NEW：每物料 2 行，插在第 50 行（分隔线）之前；item/element 交替参考 48/49
     ws = wb["报关单NEW "]
     k = 2 * (n_items - 16)
-    _expand_rows(ws, 50, k, [])
+    _expand_rows(ws, 50, k, [], [48, 49])
+
+
+def _delete_rows_safe(ws, start_row: int, count: int):
+    """整行删除数据区末尾的多余行，并正确处理合并单元格。
+
+    - 完全在删除区内 → 移除
+    - 跨越删除区边界 → 收缩到边界（保留删除区外部分）
+    - 完全在删除区下方 → 整体上移 count 行（openpyxl 的 delete_rows 不会平移合并区）
+    - 完全在删除区上方 → 不动
+    """
+    if count <= 0:
+        return
+    end = start_row + count - 1
+    for rng in list(ws.merged_cells.ranges):
+        rmin, rmax = rng.min_row, rng.max_row
+        if rmax < start_row:
+            continue                       # 完全在上方，不动
+        if rmin >= start_row and rmax <= end:
+            ws.merged_cells.remove(rng)    # 完全在删除区内，移除
+            continue
+        keep_min, keep_max = rmin, rmax
+        if rmin < start_row <= rmax:
+            keep_max = start_row - 1       # 跨越上边界，保留上方部分
+        elif rmin <= end < rmax:
+            keep_min = end + 1             # 跨越下边界，保留下方部分
+        new_min, new_max = keep_min, keep_max
+        if keep_min > end:
+            new_min, new_max = keep_min - count, keep_max - count   # 删除区下方整体上移
+        if new_min > new_max:
+            continue
+        ws.merged_cells.remove(rng)
+        ws.merged_cells.add(
+            f"{get_column_letter(rng.min_col)}{new_min}:{get_column_letter(rng.max_col)}{new_max}"
+        )
+    ws.delete_rows(start_row, count)
+
+
+def delete_extra_rows(wb, n_items: int):
+    """按实际导出的物料数 N 删除数据区末尾的多余整行。
+
+    模板默认 16 行数据；当 N < 16 时删除 N 之后的多余行，合计行/页脚随之上移。
+    发票/装箱单/报关合同/报关单NEW 都处理。N >= 16 时由 expand_sheets 扩展，无需删除。
+    """
+    if n_items >= 16:
+        return
+    # 报关发票：数据行 16..31（16 行），TOTAL 33
+    _delete_rows_safe(wb["报关发票 "], 16 + n_items, 16 - n_items)
+    # 装箱单：数据行 17..32，TOTAL 34
+    _delete_rows_safe(wb["装箱单"], 17 + n_items, 16 - n_items)
+    # 报关合同：数据行 16..31（16 行），TOTAL 33
+    _delete_rows_safe(wb["报关合同 "], 16 + n_items, 16 - n_items)
+    # 报关单NEW：每物料 2 行（项号+申报要素），数据 18..49，TOTAL 51
+    _delete_rows_safe(wb["报关单NEW "], 18 + 2 * n_items, 2 * (16 - n_items))
+    # 报关合同：不处理
 
 
 # ──────────────────────────────────────────────────────────────
@@ -383,7 +500,6 @@ def expand_sheets(wb, n_items: int):
 # ──────────────────────────────────────────────────────────────
 def fill_invoice(ws, dn, agg, totals):
     c = CONFIG
-    ex = c["exchange_rate"]
     k = max(0, len(agg) - 16)   # 扩展行偏移
     ws["B2"] = c["shipper_cn"]
     ws["B3"] = c["shipper_en"]
@@ -401,8 +517,8 @@ def fill_invoice(ws, dn, agg, totals):
             ws[f"C{row}"] = it["name_en"]                    # 品名(英文)
             ws[f"D{row}"] = it["qty"]
             ws[f"E{row}"] = uom_en(it["uom"])
-            _n3(ws, f"F{row}", it["bom_rate"] / ex)          # 单价(USD)
-            _n3(ws, f"G{row}", it["bom_cost"] / ex)          # 总金额(USD)
+            _n3(ws, f"F{row}", usd_price(it["bom_rate"]))    # 单价(USD)
+            _n3(ws, f"G{row}", usd_price(it["bom_cost"]))    # 总金额(USD)
         else:
             for col in "CDEFG":
                 ws[f"{col}{row}"] = None
@@ -410,7 +526,7 @@ def fill_invoice(ws, dn, agg, totals):
     ws[f"C{tr}"] = "TOTAL:"
     ws[f"D{tr}"] = totals["qty"]
     ws[f"F{tr}"] = c["currency"]
-    _n3(ws, f"G{tr}", totals["bom_cost"] / ex)
+    _n3(ws, f"G{tr}", usd_price(totals["bom_cost"]))
     nr = 35 + k
     ws[f"C{nr}"] = f"TOTAL PACKED IN {num_to_words(totals['cartons'])} CTNS"
 
@@ -457,7 +573,6 @@ def fill_packing(ws, dn, agg, totals):
 
 def fill_contract(ws, dn, agg, totals):
     c = CONFIG
-    ex = c["exchange_rate"]
     k = max(0, len(agg) - 16)   # 扩展行偏移
     ws["B2"] = c["shipper_cn"]
     ws["B3"] = c["shipper_en"]
@@ -472,32 +587,34 @@ def fill_contract(ws, dn, agg, totals):
             ws[f"B{row}"] = it["name_en"]
             ws[f"F{row}"] = it["qty"]
             ws[f"G{row}"] = uom_en(it["uom"])
-            _n3(ws, f"H{row}", it["bom_rate"] / ex)
+            _n3(ws, f"H{row}", usd_price(it["bom_rate"]))
             ws[f"I{row}"] = f"/{uom_en(it['uom'])}"
-            _n3(ws, f"J{row}", it["bom_cost"] / ex)
+            _n3(ws, f"J{row}", usd_price(it["bom_cost"]))
         else:
             for col in "BFGHIJ":
                 ws[f"{col}{row}"] = None
     tr = 33 + k
     ws[f"B{tr}"] = "TOTAL:"
     ws[f"F{tr}"] = totals["qty"]
-    _n3(ws, f"J{tr}", totals["bom_cost"] / ex)
+    _n3(ws, f"J{tr}", usd_price(totals["bom_cost"]))
     ws[f"E{39+k}"] = None                   # Time of Shipment(装运期) 留空
     ws[f"E{43+k}"] = None                   # TERMS OF PAYMENT 留空
     ws[f"H{48+k}"] = None                   # 底部 BUYERS 留空
 
 
-def fill_declaration(ws, dn, agg, totals, country):
+def fill_declaration(ws, dn, agg, totals, country,
+                     consignee_name="", consignee_addr="", declaration_unit="", production_unit=""):
     c = CONFIG
-    ex = c["exchange_rate"]
     country_en, country_cn = country
     k = 2 * max(0, len(agg) - 16)   # 扩展行偏移（每物料 2 行）
     ws["I2"] = None                        # 发票号 留空
     ws["A4"] = c["shipper_cn"]             # 境内发货人
     ws["G4"] = None                        # 出境关别 留空
-    ws["C5"] = None                        # 境外收货人 留空
+    if consignee_name or consignee_addr:
+        ws["C5"] = "\n".join(x for x in (consignee_name, consignee_addr) if x)   # 境外收货人：名称 + 地址
+        ws["C5"].alignment = Alignment(wrap_text=True, vertical="center")
     ws["G6"] = None                        # 运输方式 留空
-    ws["A8"] = None                        # 生产销售单位 留空
+    ws["A8"] = production_unit or None     # 生产销售单位（固定值）
     ws["G8"] = c["supervision_mode"]       # 监管方式
     ws["A10"] = dn["name"]                 # 合同协议号
     ws["D10"] = None                       # 贸易国（地区） 留空
@@ -518,8 +635,8 @@ def fill_declaration(ws, dn, agg, totals, country):
             ws[f"C{row}"] = it["name_agg"]              # 中文名称（保留）
             ws[f"D{row}"] = it["name_en"]               # 英文名称
             ws[f"E{row}"] = f"{int(it['qty'])}{uom_cn(it['uom'])}"
-            _n3(ws, f"G{row}", it["bom_rate"] / ex)     # 单价 = BOM成本 / 汇率
-            _n3(ws, f"H{row}", it["bom_cost"] / ex)     # 总价 = BOM成本 / 汇率
+            _n3(ws, f"G{row}", usd_price(it["bom_rate"]))     # 单价 = BOM成本 ÷ 汇率 × 加成
+            _n3(ws, f"H{row}", usd_price(it["bom_cost"]))     # 总价 = BOM成本 ÷ 汇率 × 加成
             ws[f"I{row}"] = c["currency"]
             ws[f"J{row}"] = "中国"
             ws[f"K{row}"] = country_cn                  # 最终目的国（地区）
@@ -535,8 +652,9 @@ def fill_declaration(ws, dn, agg, totals, country):
                 ws[f"{col}{row}"] = None
             ws[f"C{row + 1}"] = None
     tr = 51 + k
-    ws[f"A{tr}"] = f"TOTAL：{c['currency']} {totals['bom_cost'] / ex:.3f}"
-    ws[f"A{54+k}"] = None                   # 申报单位 留空
+    ws[f"A{tr}"] = f"TOTAL：{c['currency']} {usd_price(totals['bom_cost']):.3f}"
+    if declaration_unit:                    # 申报单位：仅当传入才写入，否则保留模板原值
+        ws[f"A{54+k}"] = f"申报单位  {declaration_unit}"
 
 
 def main():
@@ -544,6 +662,10 @@ def main():
     ap.add_argument("--dn", required=True, help="DN 单号，如 DN-26-00063")
     ap.add_argument("--test", action="store_true", help="使用测试环境")
     ap.add_argument("--output", "-o", help="输出路径")
+    ap.add_argument("--consignee", help="境外收货人预设: centrade/daneey/poland/custom（缺省按客户自动映射）")
+    ap.add_argument("--consignee-name", help="境外收货人名称（覆盖预设/自定义）")
+    ap.add_argument("--consignee-addr", help="境外收货人地址（覆盖预设/自定义）")
+    ap.add_argument("--declaration-unit", help="申报单位（缺省保留模板原值）")
     args = ap.parse_args()
 
     env = "test" if args.test else "prod"
@@ -585,6 +707,13 @@ def main():
     country = resolve_country(dn.get("customer", ""))
     print(f"客户: {dn.get('customer')} ({dn.get('customer_name')}) → 目的国: {country}")
 
+    # 境外收货人（CLI 指定或按客户自动映射）
+    consignee = resolve_consignee(args, dn.get("customer", ""))
+    if consignee:
+        print(f"境外收货人: {consignee['name']} / {consignee['addr']}")
+    else:
+        print("境外收货人: 未匹配预设，保留模板原值（可用 --consignee 指定）")
+
     # 装箱数据：仅用用户确认的装箱组合(CARTON_GROUPS_BY_DN)，不用外箱子表(outer_box_summary/item_weight_cats)
     groups = CARTON_GROUPS_BY_DN.get(args.dn, []) or []
     if groups:
@@ -623,12 +752,68 @@ def main():
     fill_invoice(wb["报关发票 "], dn, agg, totals)
     fill_packing(wb["装箱单"], dn, agg, totals)
     fill_contract(wb["报关合同 "], dn, agg, totals)
-    fill_declaration(wb["报关单NEW "], dn, agg, totals, country)
+    fill_declaration(wb["报关单NEW "], dn, agg, totals, country,
+                     consignee_name=(consignee or {}).get("name", ""),
+                     consignee_addr=(consignee or {}).get("addr", ""),
+                     declaration_unit=args.declaration_unit or "",
+                     production_unit=CONFIG.get("production_unit", ""))
+
+    # 按实际物料数删除数据区多余整行（发票/装箱单/报关单NEW，报关合同不动）
+    delete_extra_rows(wb, len(agg))
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     out = Path(args.output) if args.output else OUT_DIR / f"报关单据_{args.dn}.xlsx"
     wb.save(str(out))
     print(f"OK: {out}")
+
+
+# ──────────────────────────────────────────────────────────────
+# BOM 成本参照实现（与 EN delivery_plan/doc_event.py 的 _get_nd_cost 逻辑一致）
+# 用于内胆(ND#) bom_rate 取 BOM内胆成本 cost_nd 列；皮壳(PK#) 取 cost_pk 列。
+# ──────────────────────────────────────────────────────────────
+BOM_COST_FILE = _DIR / "数据源" / "bom_cost_list_v2_2026-57-25-15-8.json.gz"
+
+
+def _load_bom_cost_report() -> list[dict]:
+    """读取 BOM 成本报表(gzip JSON)，返回 result 行列表（键=item_fg 成品编码）。"""
+    import gzip
+    import json as _json
+    if not BOM_COST_FILE.is_file():
+        print(f"✗ 未找到 BOM 成本报表: {BOM_COST_FILE}", file=sys.stderr)
+        return []
+    with gzip.open(BOM_COST_FILE, "rt", encoding="utf-8") as f:
+        return _json.load(f).get("result", [])
+
+
+def _get_nd_cost_ref(item_nd: str, bom_rows: list[dict]) -> tuple[float | None, dict | None]:
+    """按内胆物料编码反向查找 BOM 内胆成本 cost_nd（参照实现）。
+
+    匹配逻辑（membership-based，不依赖颜色词表）：
+      1. 去掉 ND# 前缀，按 '-' 切分：段[0]=KS号，段[1]=尺寸；
+      2. 遍历 BOM 成品行，item_fg 不去色直接按 '-' 切分，
+         匹配条件 = 首段==KS号 且 尺寸出现在任一字段段
+         （不用「最后一段=尺寸」，因成品可能带颜色/不带颜色，段位不固定）；
+      3. 命中取该行 cost_nd；cost_nd 为 0/缺失则继续找有值的行。
+    返回 (cost_nd, matched_row)；未命中返回 (None, None)。
+    """
+    if not item_nd or not item_nd.startswith("ND#"):
+        return None, None
+    parts = item_nd[3:].split("-")
+    if len(parts) < 2:
+        return None, None
+    ks, size = parts[0], parts[1]
+    for row in bom_rows:
+        item_fg = (row.get("item_fg") or "").strip()
+        if not item_fg:
+            continue
+        fg_parts = item_fg.split("-")
+        if len(fg_parts) < 2:
+            continue
+        if fg_parts[0] == ks and size in fg_parts:
+            cost_nd = row.get("cost_nd")
+            if cost_nd is not None and cost_nd != 0:
+                return cost_nd, row
+    return None, None
 
 
 if __name__ == "__main__":
