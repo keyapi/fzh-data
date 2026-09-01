@@ -39,6 +39,9 @@ Open WebUI 里两套代码执行能力：Open Terminal = Docker Linux 沙箱（�
 ### api.vilavi.cn（公司 new-api 网关）
 上海阿里云 nginx 反代的公司 AI 网关：`/v1` 模型 API、`/sellfox` 赛狐代理、`/oidc` 钉钉 SSO。个人 Token 在后台「令牌管理」领取（`sk-…`）。生产渠道模型名以 `deepseek-v4-flash` / `deepseek-v4-pro` 为准；历史名 `deepseek-chat` 在默认组无渠道，会表现为 chat/completions **503**。
 
+### 峰谷分时计价 (DeepSeek time-based pricing)
+DeepSeek API 自 2026-08 起按北京时间分时计费：周一至周五工作日高峰时段（日间两段）价格为闲时（夜间、周末、节假日）的 2 倍。new-api 的定价参数是**静态值**，无法原生跟随时段切换，须靠外部 cron 脚本在边界时刻改写定价参数（实现见 `docs/solutions/tooling-decisions/new-api-deepseek-time-based-pricing-automation.md`）。闲时段多收一倍是"未做分时调价"的典型症状。
+
 ### IvyeaOps vs IvyeaAgent
 - **IvyeaOps**：运营工作台 SPA（本仓库板 PoC 的主体验，fork 于 Hector-xue/IvyeaOps）。  
 - **IvyeaAgent**：独立本地 Agent 服务（常见 `:8765`，Hector-xue/ivyea-agent），服务知识库语义检索与部分 text chain。未启动时 `/assistant` 仍可直连 new-api；`/brain` 会降级为关键词检索。
@@ -123,6 +126,9 @@ Custom doctypes in the `[Stock]` module that hold canonical attribute values for
 ### Item Attribute (物料属性) custom_select_doctype
 Convention: 面料/颜色 Item Attributes (e.g. 三角靠枕面料) set `custom_select_doctype` to an "All X" value table and `custom_select_from_all_attribute_values=1`; 尺寸 attributes leave `custom_select_from_all_attribute_values=0` (sizes lack cross-product generality). `custom_item_group` links the attribute to its owning item group.
 
+### item_group_translation (物料组翻译)
+Custom Data field on Item Group storing the English style-level name for customs/export. Source text is the Chinese `item_group_name`. Batch maintenance via `EN_API/translate_item_group_names.py` (Tencent TMT); distinct from material-level English names in `customs_export.py` (DeepSeek on DN line items).
+
 ### 模板物料 (Template Item)
 An Item with `has_variants=1` that defines the attribute set; concrete SKUs are `variant_of` it (e.g. template `KS0001`, variants `KS0001-CMM-153-PURPLE`).
 
@@ -194,6 +200,30 @@ Amazon FBA 账期费用里已经包含平台履约尾程。特殊规则里对 FB
 ### 发货仓库前缀改名（美东-/美中-/波兰-）
 通途自发货仓库最近把主仓名加上分公司前缀：`CENTRADE`→`美东-CENTRADE`、`FZH-DANEEY`→`美中-FZH-DANEEY`、`FZHPoland-covers`→`波兰-FZHPoland-covers`，并新增美东/波兰退货仓。原则是 3 家国外分公司各保留 1 普通仓 + 1 退货仓。生产订单仍大量引用旧名，所以两套名字都要在 ERPNext 登记。
 
+## Channel Account（vilavi_pim）
+
+### Channel Account（渠道账号）
+生产 EN 里一条销售渠道店铺主数据。名称由销售渠道代码 + 账号码 + 区域拼成（`account_id` 自动命名）；允许空账号码时只有渠道代码+区域（如 `KFLAT`、`ILLIOSPL`、`WFEU`）。运营事实源是 Google 表「和运营部共享」的「渠道账号」页；EN 按该表追加，不删历史负责人。
+
+### Sales Channel
+Channel Account 所挂的销售渠道主数据。渠道**名称**可以较长；渠道**代码**更短，会拼进账号 ID。同一渠道可有多个国家账号。`Illiosenergy` 是名称，`ILLIOS` 是代码。
+
+### Channel Account Owner
+渠道账号上的负责人时间轴。一行代表一段负责人，不是一个日历月。`user` 存中文名（可含 `&` 组合名和占位「待分配」），不是 User 邮箱。只在负责人相对上一段发生变化时新增一行，连续同名月份折叠为一段，`from_date` 取该段第一个月 1 号。
+
+### 待分配（渠道账号）
+店铺已经开卖、该月表上却没有具体运营人员时，仍要落一条 Owner，人名写「待分配」。开卖前的空月不写。
+
+### Channel Account Alias
+同一店铺的其它写法。规范名本身也是一条别名。Amazon 欧洲旧名只挂在对应国家账号上，避免九国重复挂同一个旧名。
+
+### Amazon 国家站
+Amazon 店铺按国家区域建 Channel Account，没有合法的 EUR/EU 聚合账号。欧洲九国站点与 Johna 对齐。Wayfair 等非 Amazon 渠道仍可以有 EU 区域。
+*Avoid:* AMZFZHSXEUR 当作独立账号
+
+### 渠道账号表（和运营部共享）
+运营维护渠道、账号、别名、运营分组和按月运营人员的 Google 表。写入 EN 前以该表为准；表上的样品/`null` 行不建账号。
+
 ### 订单发货仓库对应成本来源
 财务共享表「和财务部共享」里的 ws，8 列把发货仓库映射到成本：`发货仓库 | 对应成本工作簿 | 成本来源编码 | 发货仓分类 | 头程运费来源编码 | 二次加工成本来源编码 | 发货区域 | 发货仓按销售汇总分类`。编码口径：CENTRADE→HEAD-US/2CJG-US；FZH-DANEEY 主仓与皮壳→HEAD-USTX-PK/2CJG-SX；成品/半成品/退货→HEAD-USTX/2CJG-SX；FZHPoland-covers→HEAD-PL/2CJG-PL；FZHPoland-finished→HEAD-EUHWC/2CJG-SX。
 
@@ -223,12 +253,42 @@ Gold A：历史已配对 ∩ 通途别名唯一 ∩ EN/赛狐一致，只用于�
 ### DingTalk Custom Robot (钉钉自定义机器人)
 A webhook-based DingTalk group messaging channel used by AI agents (WorkBuddy, Claude Code) in this project to send notifications and file download links. Uses HMAC-SHA256 signing. Distinct from DingTalk enterprise internal bots — custom robots do not require AppKey/AppSecret and are scoped to a single group, making them safe to share with non-developer agent users. Cannot send file attachments directly; file delivery uses ActionCard messages with download links hosted on ERPNext.
 
+## Pottery Barn remittance
+
+### SPS Invoice Date
+我方在 SPS 点发货生成发票的日期（钉钉提交的日文件夹发票 CSV）。
+
+### PB Remittance Invoice Date
+PB 付款对账单上的发票日期，按 UPS「We Have Your Package」（仓库实际交运）认定，只可能等于或晚于 SPS Invoice Date。
+
+### 来自Email remittance
+脚本从 PB 付款邮件解析出的原始对账单。上面的 Invoice Number 是对方付款键；给 PB 的差额清单用这个号，不用已加工的「给财务」或 To Tracy Miller 表。
+
+### Dual invoice number
+SPS 偶发同一货生成两个 INV#。我方钉钉留一个，PB 可能付另一个。月度对账把付款号映射成本地号；向 PB 索赔时用付款号。
+
+### Placeholder remittance ID
+PB 补付时对账单偶发不用 INV#、改用含年份的数字串。给 PB 仍写该占位号；内部财务表可能已手工改成本地 INV#。
+
+### True-up freeze PO
+活动价改回合同批发之后，第一张按合同价开出的新 PO。那之前的活动价票才冻结成给 Diane 的索赔集。某日发票 CSV 扫描截止不是冻结点。
+
+### Flagged order CSV
+SPS 日文件夹里的订单导出，只用来交叉核 PO Date 和单价。索赔宇宙是已开票的发票 CSV；未开票 PO 不进差额清单。
+
 ## Flagged ambiguities
 
+- "'AMZFZHSXEUR' 曾被当成欧洲聚合店 — Amazon 只有国家站，旧名只挂在 AMZFZHSXDE 别名。"
+- "'WFDANEEYUS' 与 'WFDaneeyUS' 不是同一条 Channel Account，大小写店铺码都保留。Channel Account Owner.user 存中文名；DingTalk/Frappe User.name 常是邮箱，同步时继续写中文。"
 - "'五桶' had been used as if it meant IvyeaOps 五杠杆 — they are distinct (search-term labels vs optimizer action candidates)."
 - "Amazon Auto/product/category reports often put ASINs in the customer search-term column — that is real report data, not a mapping bug; keyword 收割 must not treat those strings as exact keywords (filter deferred as of 2026-07-28)."
 - "通途主档 SKU 改名后的旧名，与规则笔误（例如 Foam FBA BLACK-97），不是同一类问题；像旧名的字符串要先查主档。"
 - "赛狐「采购成本」曾被用来同时指商品主数据绍兴发货、期初仓+SKU 尾程前、备货单指定采购单价+头程；三者不可互换，也都不等于 EN Tongtool Cost Review 的皮壳切片。"
+- "PB 索赔窗口用 PO Date，不是 SPS 开票日，也不是对账单 UPS 发票日；后两者滞后不能当成活动结束日。"
+- "给财务 / To Tracy Miller 里的发票号可能已被改成本地号，不能当作 PB 付款号发给 Diane。"
+- "某日 invoice x* 扫描截止不是 True-up freeze PO；冻结是改价后第一张合同价新 PO。"
+- "SPS 订单 CSV 只核 PO Date / 单价，不是索赔宇宙；没开票的 PO 不向 PB 要。"
+- "对账单短收或 credit 不冲活动供货价差额，另账处理。"
 
 ## 平台账期对账
 
@@ -236,3 +296,21 @@ A webhook-based DingTalk group messaging channel used by AI agents (WorkBuddy, C
 - **Tongtool Order**: EN 生产系统里的通途订单快照；Overstock 单据名通常为 `OS-{platform_order_id}`，另一账号 `OSTK02US` 使用 `OSFD-` 前缀。
 - **拆单后缀**: 多 SKU/多件订单在通途/EN 会拆成 `_1/_2/_3` 子单，`platform_order_id` 保留后缀；汇总时需排除金额相同的“无后缀重复主单”。
 - **对账金额口径**: 用 `order_amount` / `products_total_price` 对账；`order_items.transaction_price` 是组件行，不能加总；`actual_total_price` 在退货订单上可能为 0。
+
+## 群晖 NAS 外网访问
+
+### QuickConnect 统一入口
+对外宣传 `https://fangzhouhui.quickconnect.cn/`。群晖在浏览器侧探测网络后自动选择直连（`fzh.myds.me:11024`）或中国中继（`fangzhouhui.cn4.quickconnect.cn`）。用户政策：不因自定义域名而替换此入口，以免失去中继兜底。
+
+### DSM 第二张证书
+除默认 `fzh.myds.me`（`RmB4St`）外，通过 OpenWrt ACME 签发的 Let's Encrypt 导入 DSM，仅绑定 ReverseProxy 服务（如 `nas.daneey.com`、`nas.vilavi.cn`）。禁止改绑「DSM 桌面服务」默认证。
+
+### OpenWrt 域名劫持
+北京办公室 OpenWrt dnsmasq 将指定 FQDN 解析到 NAS LAN IP（`192.168.100.242`），使局域网访问公网域名不经 NAT 回环。客户端若启用 Chrome 安全 DNS / Private DNS 会绕过劫持。
+
+### NAS 外网高位端口
+联通光猫当前公网仅稳定转发 **11024**；443/80 外网不通。外网访问自定义域名须带 `:11024`，除非日后打通 443。
+
+### OpenWrt 自定义域路径 vs QC 登记路径
+- **路径 A**：`nas.daneey.com` / `nas.vilavi.cn` — OpenWrt 管 DDNS 与 ACME，DSM 仅导入第二张证并反代；**不**写入 DSM「外部访问→DDNS」；用户手动输入 URL；QC 不会自动跳转。
+- **路径 B**：`fangzhouhui.quickconnect.cn` → 群晖登记 `fzh.myds.me`；QC 浏览器探测后跳 myds 直连或 `cn4` 中继。勿删 myds；DSM 无 DDNS 优先级开关，不能靠改外部访问列表让 QC 改跳 mxdeals/daneey。

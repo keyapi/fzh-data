@@ -12,6 +12,8 @@ timestamp: 2026-08-14
 
 > **先读**：[工作流参考](docs/reference/workflow.md) 和 [UPS 交付核查](docs/reference/ups-delivery-check.md)。
 > 本文件是入口：背景、文件位置、运行方式、本次会话成果、交接清单。
+>
+> **不是** 2025 Early BF 供货价未恢复 / Diane·Christine 改价：那是 [`pb_promo_trueup/AGENT_HANDOFF.md`](../pb_promo_trueup/AGENT_HANDOFF.md)。两边共用 `invoice x*` 和 `来自Email`，但月度 `REMAP` 是付款号→本地号；活动价索赔对外是本地号→付款号。
 
 ## 1. 业务背景
 
@@ -88,6 +90,10 @@ python visual_check.py <xlsx> [sheet名] ["自定义提示"]
   - Notes 两个区块重写、差额更新（H86=-47.56）。
 - **5 张未付发票 UPS 核查结论**：不是 PB 漏结算，是我们**迟发**——标签在发货日创建，但包裹 1-7 周后才交给 UPS（07/20–07/30），交付 07/23–08/04 晚于 8/13 账期截止，顺延下账期（~09/13）。详见 [ups-delivery-check.md](docs/reference/ups-delivery-check.md)。
 - git：分支 `claude/quirky-thompson-8f788b`，提交 `b77861c` `da494c5` `46f00df` `2465b21`。
+
+## 6b. 活动价未恢复（另一模块）
+
+2025 Early BF 三角枕供货价未在 12/02 后改回合同价，见 `pb_promo_trueup/AGENT_HANDOFF.md`。与本模块共用 `invoice x*` 和 `来自Email`，但给 PB 的发票号方向相反（用付款号，不用本脚本 `REMAP` 后的本地号）。不要把本模块的佣金表发给 WSI。
 
 ## 7. 交接清单（下次/新 Agent 接手）
 

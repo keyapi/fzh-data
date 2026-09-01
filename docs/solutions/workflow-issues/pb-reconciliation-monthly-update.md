@@ -67,3 +67,5 @@ UNPAID_NOTES = {
 ```
 
 完整文档见 `pb_reconciliation/AGENT_HANDOFF.md`（交接）与 `pb_reconciliation/docs/`（OKF）。
+
+活动供货价未恢复（另一工作流）：[pb-2025-promo-cost-not-restored.md](pb-2025-promo-cost-not-restored.md)。

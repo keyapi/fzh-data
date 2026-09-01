@@ -213,5 +213,5 @@ POST /api/subscription/admin/users/{id}/subscriptions
 - [docs/architecture.md](./docs/architecture.md) — 架构详解
 - [docs/operations.md](./docs/operations.md) — 运维手册
 - [docs/log.md](./docs/log.md) — 变更日志
-- [docs/lessons/lessons-learned.md](./docs/lessons/lessons-learned.md) — 32 条经验教训
+- [docs/lessons/lessons-learned.md](./docs/lessons/lessons-learned.md) — 35 条经验教训
 - [docs/lan-gateway.md](./docs/lan-gateway.md) — LAN 网关
