@@ -24,7 +24,6 @@ tags: [workflow-issues, index]
 | [en-channel-account-gsheet-sync.md](en-channel-account-gsheet-sync.md) | Google 表渠道账号同步到 EN Channel Account（人变才加行，Amazon 九国） |
 | [tongtu-warehouse-rename-reconciliation.md](tongtu-warehouse-rename-reconciliation.md) | 通途发货仓库改名后三处对账登记（通途→ERPNext→财务共享表） |
 | [ostkus-account-reconciliation.md](ostkus-account-reconciliation.md) | OSTKUS 账期与 EN Tongtool Order 对账 |
-| [pb-2025-promo-cost-not-restored.md](pb-2025-promo-cost-not-restored.md) | Vendor 5806 Early BF 供货价未恢复：沟通口径与逐票对账 |
 | [pb-reconciliation-monthly-update.md](pb-reconciliation-monthly-update.md) | PB 对账表月度更新脚本化 + UPS 交付核查 |
 | [tongtool-sku-rename-gsheet-remap.md](tongtool-sku-rename-gsheet-remap.md) | 通途主档改名后对齐订单 Google Sheet |
 | [search-first-before-implementing.md](search-first-before-implementing.md) | 改之前先搜官方与项目文档 |
