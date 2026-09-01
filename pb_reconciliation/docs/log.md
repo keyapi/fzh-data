@@ -8,9 +8,6 @@ timestamp: 2026-08-14
 
 # 变更日志
 
-## 2026-08-31
-- **交叉引用**: Vendor 5806 活动价 true-up 见 `pb_promo_trueup/`（给 PB 用 `来自Email` 发票号，与本模块 REMAP 方向相反）。
-
 ## 2026-08-14
 - **修正**: `tm_commission.py` Notes G2-J2 水平居中、I2 佣金率显示 5%（0% 格式）；Invoice to PB 首行加筛选（Record Type X列 过滤为 H，隐藏 D 重复行）、未付发票 H 头行黄底标记。
 - **新增**: `visual_check.py` — Excel 渲染视觉自查工具（xlsx sheet → PNG → qwen-vl-plus/OpenRouter VL 描述），供非多模态模型（如 deepseek-v4-flash）自查格式。需 `DASHSCOPE_API_KEY` 或 `AI_API_KEY` 环境变量。

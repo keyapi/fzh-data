@@ -8,8 +8,6 @@ tags: [solutions, log]
 # 变更日志
 
 ## 2026-08-31
-- **新增**: `workflow-issues/pb-2025-promo-cost-not-restored.md` + `pb_promo_trueup/` OKF — Vendor 5806 Early BF 供货价未恢复；PO Date 窗口、`来自Email` 发票号、禁止给 PB 写佣金/$28k。
-- **更新**: 同上 — 锁定双侧对账：订单 CSV 非索赔宇宙、Diane 一行一张、来自Email 付款日+INV# 去重、短收不冲差额、扫描截止 ≠ 冻结 PO。
 - **更新**: `integration-issues/nas-multi-domain-access-openwrt-quickconnect.md` — QC 与 DSM 外部访问 DDNS 架构澄清；路径 A（OpenWrt 自定义域）vs 路径 B（QC/myds）；勿删 myds、无 DDNS 优先开关。
 
 ## 2026-08-28
