@@ -10,6 +10,7 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-09-01 | Cursor state.vscdb 膨胀 + Synology Drive 连续备份吃光 C 盘 | [integration-issues/cursor-state-vscdb-synology-cdrive-backup.md](integration-issues/cursor-state-vscdb-synology-cdrive-backup.md) |
 | 2026-08-31 | PB 2025 Early BF 供货价未恢复 — 沟通与逐票对账 | [workflow-issues/pb-2025-promo-cost-not-restored.md](workflow-issues/pb-2025-promo-cost-not-restored.md) |
 | 2026-09-01 | 服务器暴露面审计与安全加固（数据库远程 root、端口瘦身、凭证轮换） | [best-practices/server-exposure-audit-and-hardening.md](best-practices/server-exposure-audit-and-hardening.md) |
 | 2026-08-31 | DeepSeek 峰谷分时定价 — new-api 静态 ModelRatio 的 cron 定时切换 | [tooling-decisions/new-api-deepseek-time-based-pricing-automation.md](tooling-decisions/new-api-deepseek-time-based-pricing-automation.md) |

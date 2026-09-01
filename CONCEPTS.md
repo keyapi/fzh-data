@@ -13,6 +13,15 @@ Shared domain vocabulary for this project — entities, named processes, and sta
 ### env_doctor
 根目录脚本 `scripts/env_doctor.py`：按 OS 检测 Git/uv/node、PS 5.1/pwsh、代码页与 `windows-agent-shell` skill，**默认只打印建议**；`--probe` 跑 `&&`/UTF-8/BOM 对照；`--apply-ps7` 仅在用户明确同意后装 PS7。
 
+### Cursor 本地数据库与磁盘
+Cursor（IDE）在 `%APPDATA%\Cursor\User\globalStorage` 存全局 SQLite 库 `state.vscdb`（聊天 + Agent KV）。已知会无限膨胀（2026-08 已到 31.8GB）。**`Developer: GC Agent KV Blobs` 只清"孤儿"agent 数据，对全 live 的库删不动**（0 deleted），且大库压缩需要 2~3 倍空闲空间（否则 SQLITE_FULL）。膨胀主因是 `bubbleId:task-*`（agent 任务气泡）累积，不是聊天文本。
+
+### state.vscdb
+Cursor 的全局状态库（聊天记录 + Agent KV blob 都在里面）。膨胀是 Cursor 已知 bug，官方不自动清理。**备份必须在 Cursor 关闭时快照**（如 `sqlite3 .backup` 或直接拷贝到 `D:\CursorBackup`），绝不能由 Synology 连续备份——连续备份大而高频变化的库会把 C 盘暂存写爆。
+
+### Synology Drive 连续备份 (continuous backup)
+群晖 Drive Client 的备份模式。若备份目标含 Cursor 的 `globalStorage`/`state.vscdb` 这类高频变化大文件，会在 `%LOCALAPPDATA%\SynologyDrive\temp\N\.SynologyWorkingDirectory` 反复暂存上传副本，C 盘空间被吃光（2026-08 事件根因）。诊断脚本：`scripts/check_cursor_cdrive_health.py`。
+
 ## Unified AI access (ai_access_poc)
 
 ### 壳 PoC (Shell PoC)
