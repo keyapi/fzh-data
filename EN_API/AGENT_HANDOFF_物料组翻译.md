@@ -1,6 +1,6 @@
 # EN 物料组英文翻译 — Agent 交接
 
-> **脚本**: `translate_item_group_names.py`、`test_tmt_connectivity.py`  
+> **脚本**: `translate_item_group_names.py`、`test_tmt_connectivity.py`
 > **人读**: [README.md](README.md) · OKF: [docs/](docs/)
 
 ## 1. 业务背景
