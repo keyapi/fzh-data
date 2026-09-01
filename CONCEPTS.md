@@ -117,6 +117,9 @@ Custom doctypes in the `[Stock]` module that hold canonical attribute values for
 ### Item Attribute (物料属性) custom_select_doctype
 Convention: 面料/颜色 Item Attributes (e.g. 三角靠枕面料) set `custom_select_doctype` to an "All X" value table and `custom_select_from_all_attribute_values=1`; 尺寸 attributes leave `custom_select_from_all_attribute_values=0` (sizes lack cross-product generality). `custom_item_group` links the attribute to its owning item group.
 
+### item_group_translation (物料组翻译)
+Custom Data field on Item Group storing the English style-level name for customs/export. Source text is the Chinese `item_group_name`. Batch maintenance via `EN_API/translate_item_group_names.py` (Tencent TMT); distinct from material-level English names in `customs_export.py` (DeepSeek on DN line items).
+
 ### 模板物料 (Template Item)
 An Item with `has_variants=1` that defines the attribute set; concrete SKUs are `variant_of` it (e.g. template `KS0001`, variants `KS0001-CMM-153-PURPLE`).
 
