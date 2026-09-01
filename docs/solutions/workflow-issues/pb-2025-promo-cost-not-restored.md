@@ -3,7 +3,7 @@ okf: v0.1
 type: Reference
 title: PB 2025 Early BF 供货价未恢复 — 沟通与逐票对账
 date: 2026-08-31
-last_updated: 2026-08-31
+last_updated: 2026-09-01
 category: workflow-issues
 module: pb_promo_trueup
 problem_type: workflow_issue
@@ -13,7 +13,7 @@ applies_when:
   - "Vendor 5806 活动供货价在约定窗口结束后仍停在 PO/item 上"
   - "要把 SPS 发票、来自Email 对账单、给财务/Tracy 表对成可给 PB 的差额清单"
   - "给 Diane/Christine 写信且不能出现中间人佣金或双发票号解释"
-  - "要把扫描截止和 True-up 冻结 PO 分开，避免把未冻结清单发给 Diane"
+  - "Christine 已改 item master 但 Diane 尚未改 open PO，需要扣货并区分已开票与未开票"
 tags: [pb, potterybarn, promo, wholesale, trueup, remittance]
 related_components: [pb_reconciliation, documentation]
 ---
@@ -24,7 +24,7 @@ related_components: [pb_reconciliation, documentation]
 
 Centrade Inc（Vendor **#5806**）经 Tracy Miller 供 Pottery Barn 三角枕。2025 Early BF 约定 11/07–12/02、20% off headboard。窗口结束后网站/PO 零售已回 149/159/169/199，供货价仍是 51.7/57.6/60.5/70.4。像是活动价没设结束日。2024 测试窗按 **PO Date** 在次日已自动回合同价。
 
-会话在 Tracy 确认 Christine 改价表、Diane 尚未改主档时暂停。需要把口径、附件策略和四数据源边界写下来，避免下一任 Agent 再用 $28k 粗算、把订单 CSV 当索赔宇宙、或把财务表发票号发给 PB。四条匹配规则已锁（订单 CSV 只核 PO Date；Diane 一行一张；来自Email 按付款日+INV# 去重；短收不冲差额）；新情况再改，不要静默扩索赔集。
+会话在 Christine 2026-08-31 确认 item master updated、Diane 仍须改 current orders 时暂停。9/1 实测：6 张未开票 PO（PO Date 8/31）仍活动价；8/31 北京 `invoice x34` 21 张三角枕已开票进 true-up；**冻结 PO 尚未出现**。需要把 item master vs open PO 滞后、已开票 leave as billed、以及四数据源未来深度对齐写下来。
 
 ## Guidance
 
@@ -43,7 +43,9 @@ Centrade Inc（Vendor **#5806**）经 Tracy Miller 供 Pottery Barn 三角枕。
 11. **给 Diane 一行一张 INV#**。同一票多 SKU 先汇总。
 12. **`来自Email` 去重 = 付款日 + PB INV#**（文件跨账期重叠）。
 13. **短收 / credit 不冲活动价差额**；未付请对方改应付。
-14. **扫描截止 ≠ 冻结 PO**。某日 `invoice x*` 只说明内部表扫到哪（08-24 快照、08-27 待重跑）。冻结 = 改价后第一张合同价新 PO。未冻结清单不发给 Diane。
+14. **扫描截止 ≠ 冻结 PO**。冻结 = 改价后第一张合同价新 PO。未冻结清单不发给 Diane。
+15. **Item master ≠ open PO cost。** Christine 改主档后 Diane 仍须改未开票 PO；扣货至合同价出现。
+16. **已开票 and transmitted：leave as billed。** 用 invoiced vs not-invoiced 切分，不说 through 8/31。8/31 batch PO Date 至 8/30 进 true-up。
 
 ## Why This Matters
 
@@ -51,7 +53,7 @@ Centrade Inc（Vendor **#5806**）经 Tracy Miller 供 Pottery Barn 三角枕。
 
 ## When to Apply
 
-- 本 case 从 Tracy 确认 Christine 表起继续。改价前可重扫发票，不可把未冻结清单发给 Diane。
+- 本 case 从 Diane 改 open PO、出现冻结 PO 起继续。Christine 主档已更新。
 - 任何「SPS 发票 vs PB remittance vs 已加工财务表」三方对票；订单 CSV 只做交叉核。
 - 给 PB 写活动价/PO cost 邮件。
 
@@ -60,7 +62,8 @@ Centrade Inc（Vendor **#5806**）经 Tracy Miller 供 Pottery Barn 三角枕。
 - 2024：PO 131000475 dated **12/04** 已是 $64.58；INV 开在 12/06 只是操作日。
 - 双号：PB `INV…1541` ↔ 本地 `INV…1530`（`pb_reconciliation` `REMAP` 同一对）。
 - Christine 表 37 行：24 个三角枕 Correct wholesale = 合同价；其余 Correct = Current。Coffee 不在她的文件里。
-- 08-24 内部快照：1,425 张 / ~$23,586.17；1 双号、1 占位、173 未付（开票 7/27–8/24）。08-27 发货后必须重跑。这是扫描截止，等冻结 PO 才能外发。
+- 08-24 内部快照：1,425 张 / ~$23,586.17；1 双号、1 占位、173 未付。8/31 `invoice x34` +21 张三角枕待并入重跑。
+- 2026-09-01：6 open PO PO Date 8/31 仍活动价；Christine 主档已改、Diane open PO 待改；冻结 PO 未出现。
 
 ## Related
 

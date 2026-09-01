@@ -23,3 +23,5 @@ timestamp: 2026-08-31
 13. **给 Diane 必须票级一行。** 同一 INV# 多 SKU 行先汇总，否则她后台 pull 对不上张数。
 14. **来自Email 文件会重叠。** 去重键是付款日 + PB INV#，不是文件名。
 15. **短收不冲活动价差额。** 运费扣、以前的 credit、少付，另账；不要在 true-up 里净额化。
+16. **Item master 更新 ≠ open PO 已改价。** Christine 2026-08-31 改主档后，9/1 下载的 PO Date 8/31 订单仍活动价 — Diane 还要改 current orders。扣货直到 SPS 打出合同批发。
+17. **已开票 leave as billed。** 8/31 北京 `invoice x34`（PO Date 至 8/30）进 true-up，不要请 Diane 改已传发票。切分用 invoiced vs not-invoiced，不说 through 8/31。

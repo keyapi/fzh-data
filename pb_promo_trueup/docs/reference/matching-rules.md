@@ -28,6 +28,14 @@ A 是「我们账上是哪张票」。B 是「对方系统认哪张票」。C �
 - **True-up 冻结 PO**：Diane/Christine 改回合同价之后，**第一张按合同批发开出的新 PO**。那之前的活动价票才冻结成给 Diane 的索赔集。
 - **08-27 不是冻结点。** 不要把「扫描到哪一天」写成「历史票已封账」。未冻结清单不要发给 Diane。
 
+## Item master vs open PO cost（2026-09-01）
+
+Christine 2026-08-31 确认 **item master updated**；Christine @Diane 改 **current orders**。实测两者不同步：
+
+- **已开票且已传输**（例 8/31 北京 `invoice x34`，21 张三角枕，PO Date 至 8/30）：金额已是活动价 → 进 true-up；**勿请 Diane 改已传发票**。
+- **未开票 open PO**（例 9/1 下载 6 单，PO Date 8/31，仍 51.7/60.5/57.6）：等 Diane 改 PO unit cost；我方扣货直到看到 64.58 / 71.96 / 75.65 / 87.95。
+- **切分口径**：用 **invoiced and transmitted vs not yet invoiced**，不要用日历「through 8/31」。若 Diane 无法改旧 open PO，请她确认从哪个 **PO Date** 起 forward PO 必打合同价。
+
 ## A. 发票 CSV 怎么取
 
 日文件夹 `\invoice\` 经常有多份。
@@ -69,6 +77,8 @@ A 是「我们账上是哪张票」。B 是「对方系统认哪张票」。C �
 8. **给 Diane：一行一张发票。** A 里同一 INV# 多 SKU/多行先按票汇总。她后台 pull 也是票级；不要把组件行当多张票。
 9. **B 去重键 = 付款日 + PB INV#。**
 10. **短收 / credit 不冲活动价差额。** remittance 少付、运费扣、以前的 credit，都不拿来抵本次 20% 未恢复。另账处理。未付票请对方改应付，不要靠短收私下抹平。
+11. **已开票且已传输**：leave as billed；true-up 另 reconciled。不说 through 8/31。
+12. **Item master 更新 ≠ open PO 已改价**；扣货至 open PO 打印合同批发。
 
 ## 边界情况与处理
 

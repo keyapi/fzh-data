@@ -3,25 +3,31 @@ okf: v0.1
 type: Spec
 title: 先改后台价，再逐票 true-up
 tags: [pb, promo, spec]
-timestamp: 2026-08-31
+timestamp: 2026-09-01
 ---
 
 # 两步方案
 
 Christine 改完 item/PO cost 之后，**从下一张新 PO 起金额应对**。那张合同价新 PO 就是 **True-up 冻结 PO**；那之前的历史票才能冻结，集中交给 Diane。
 
-**扫描截止 ≠ 冻结点。** 08-27 只是当前已操作发货、内部表应扫到的日子。等 Tracy/Christine 期间仍可把匹配规则跑完整（含 08-27+ `invoice x*`），但**不要把未冻结清单当索赔发出**。新边界发现后再改规则，不要静默扩索赔集。
+**扫描截止 ≠ 冻结点。** 08-31 北京 `invoice x34` 是已开票 batch，不是冻结点。等 Diane 改 open PO 期间仍可重扫内部表，但**不要把未冻结清单当索赔发出**。
 
-## 第一步 — 立刻改价（进行中）
+## 第一步 — 改价（2026-09-01 进度）
 
-1. Tracy 确认 `_filled_for_Tracy.xlsx` 的 Correct Wholesale（24 个三角枕回到合同价；Gap Filler / 23.5" / orthopedic = Current）。
-2. Tracy 在 Christine 线程 Reply All 授权更新。
-3. Christine 改系统。Coffee 不在她的表里（无订单）；若 PB 仍要维护主档，用同一合同价梯。
-4. Centrade 抽下一张 SPS PO/发票，确认 64.58 / 71.96 / 75.65 / 87.95。
+| 子步 | 状态 |
+|------|------|
+| Tracy 确认 `_filled_for_Tracy.xlsx` Correct Wholesale | ✅ 2026-08-28 |
+| Tracy Reply All Christine 线程 | ✅ |
+| Christine **item master updated** | ✅ 2026-08-31 |
+| Diane **update current orders**（未开票 PO） | ⏳ open PO 仍活动价 |
+| 第一张合同价 SPS PO/发票（冻结 PO） | ❌ 尚未出现 |
+| 扣货至 open PO 显示 64.58 / 71.96 / 75.65 / 87.95 | ✅ 2026-09-01 起 |
 
-## 第二步 — 历史票
+Coffee 不在 Christine 37 行里（无订单）；若 PB 仍要维护主档，用同一合同价梯。
 
-内部表 `PB_2025_promo_trueup_internal.xlsx`（截止约 08-24 工作数 ~$23,586）需重跑覆盖 08-27+，再与 Diane 的 24 色 report 对。
+## 第二步 — 历史票（冻结 PO 之后）
+
+内部表 `PB_2025_promo_trueup_internal.xlsx`（截止约 08-24 工作数 ~$23,586）需重跑覆盖 8/31 `invoice x34`，再与 Diane 的 24 色 report 对。
 
 请对方明确：
 
@@ -29,3 +35,7 @@ Christine 改完 item/PO cost 之后，**从下一张新 PO 起金额应对**。
 - 未付款：下一张 remittance 前改应付。
 - 时限：改价数个工作日；已付差额例如 30 天出 memo。
 - 不要要求我们改已经进钉钉的历史发票号。
+
+## 待深度研究
+
+见 [AGENT_HANDOFF.md §9](../AGENT_HANDOFF.md) — PO CSV + invoice x* + 来自Email + 给财务 Excel 四套源对齐与手工调整边界。

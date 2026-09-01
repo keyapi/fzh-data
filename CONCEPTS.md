@@ -264,6 +264,9 @@ PB 补付时对账单偶发不用 INV#、改用含年份的数字串。给 PB �
 ### Flagged order CSV
 SPS 日文件夹里的订单导出，只用来交叉核 PO Date 和单价。索赔宇宙是已开票的发票 CSV；未开票 PO 不进差额清单。
 
+### Item master vs open PO cost
+Christine 侧商品主档批发价与 Diane 侧已有未开票 PO 行上的 unit cost 是两层。主档更新后，open PO 可能仍显示活动价，直到供应链改 current orders；我方应扣货直到 SPS 打出合同批发。
+
 ## Flagged ambiguities
 
 - "'AMZFZHSXEUR' 曾被当成欧洲聚合店 — Amazon 只有国家站，旧名只挂在 AMZFZHSXDE 别名。"
@@ -277,6 +280,7 @@ SPS 日文件夹里的订单导出，只用来交叉核 PO Date 和单价。索�
 - "某日 invoice x* 扫描截止不是 True-up freeze PO；冻结是改价后第一张合同价新 PO。"
 - "SPS 订单 CSV 只核 PO Date / 单价，不是索赔宇宙；没开票的 PO 不向 PB 要。"
 - "对账单短收或 credit 不冲活动供货价差额，另账处理。"
+- "Christine item master 更新不等于 open PO 已改价；未开票 PO 仍可能显示活动价直到 Diane 改 current orders。"
 
 ## 平台账期对账
 
