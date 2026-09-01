@@ -1,9 +1,12 @@
 # New API 部署项目 — 完整交接文档
 
-> 最终更新: 2026-06-22
+> 最终更新: 2026-08-31
 > 目标: 在本地 Windows 机器上部署 New API（大模型网关），实现 API Key 分发、多用户额度管控、用量统计、订阅自动重置
 >
 > **⚠️ 敏感信息**: 密码、Token、API Key 等已移入 `.secrets.env`，请勿提交到 Git
+
+> **⚠️ 本地上/生产双环境**: 本文档主体描述**本地开发部署**（Docker Desktop + SQLite）。
+> **生产环境已迁移到上海阿里云服务器**（`api.vilavi.cn`）：Docker Compose 4 服务（new-api / mysql / redis / dingtalk-oidc bridge），数据库为 **MySQL**（`new_api`），SQLite 仅本地开发用。生产服务器操作用 `ssh sh-erpnext-test`，容器管理见下文「九、钉钉 SSO 系统架构」的服管理系统。
 
 ---
 
@@ -241,7 +244,12 @@ Web 后台 → 设置 → 运营设置 → 勾选**合规确认**（`payment_set
 
 ## 四、定价配置
 
-### DeepSeek V4 官方价格映射
+> **⚠️ 2026-08-17 起 DeepSeek 实行峰谷分时计价，DeepSeek 的 ModelRatio 不再是静态值。**
+> 生产环境由 `deepseek_time_pricing.py`（cron 准点触发）按北京时间在高峰/空闲两档间自动切换。
+> 详见 [docs/solutions/tooling-decisions/new-api-deepseek-time-based-pricing-automation.md](../docs/solutions/tooling-decisions/new-api-deepseek-time-based-pricing-automation.md)。
+> 本节以下静态值为历史参考（分时切换前的定价），不可作为当前生产值。
+
+### DeepSeek V4 官方价格映射（分时计价前，历史参考）
 
 **DeepSeek-V4-Flash:**
 | 项目 | 官方价格 | New API 参数 |
@@ -257,6 +265,18 @@ Web 后台 → 设置 → 运营设置 → 勾选**合规确认**（`payment_set
 | 输出 | ¥6.00 / 1M tokens | CompletionRatio = 2 |
 | 输入（缓存命中） | ¥0.025 / 1M tokens | CacheRatio = 0.008333 |
 
+### 峰谷分时定价（当前生产生效）
+
+DeepSeek 官方 2026-08-17 起：高峰（周一至周五 9-12/14-18 北京）为闲时的 2 倍。
+
+| 模型 | 高峰 ModelRatio | 闲时 ModelRatio | CompletionRatio | CacheRatio |
+|------|----------------|----------------|-----------------|-----------|
+| deepseek-v4-flash | 0.205479 | 0.102740 | 3.0 | 0.033333 |
+| deepseek-v4-flash-vision-exp | 0.205479 | 0.102740 | 3.0 | 0.033333 |
+| deepseek-v4-pro | 0.616438 | 0.308219 | 3.0 | 0.033333 |
+
+cron 切换：`0 9/12/14/18 * * 1-5` + `0 0 * * 0,6` 保险 + `*/30 * * * *` 兜底。脚本幂等，只 patch DeepSeek 三个模型。
+
 ### 计算公式
 ```
 显示价格(¥/1M) = ModelRatio × 1,000,000 / 500,000 × 7.3
@@ -269,21 +289,22 @@ Web 后台 → 设置 → 运营设置 → 勾选**合规确认**（`payment_set
 - `CacheRatio` — options 表，key=`CacheRatio`
 
 ### 更新方式
-**后台**: 设置 → 运营设置 → 模型定价 / 缓存读取比例 / 缓存创建比例
-**数据库直接更新**: 用 `docker cp` 传入 JSON 文件 + `readfile()` 写回
+**生产（分时自动）**: `/opt/new-api/deepseek_time_pricing.py`，cron 触发，直写 MySQL options 表（Redis 无缓存，即时生效）。
+**手动**: 后台 设置 → 运营设置 → 模型定价；或直接 UPDATE MySQL options 表。
 
 ### 同步脚本
-`sync_pricing.py` — 修改顶部定价数字后运行
+- `deepseek_time_pricing.py` — **分时定价自动切换**（当前生产核心脚本）
+- `sync_pricing.py` — 修改顶部定价数字后运行（只 PRINT 计算结果，不写库；分时脚本内部已复用其公式）
 
 ---
 
 ## 五、价格相关配置项详解
 
-| 配置项 | 作用 | 当前 deepseek 值 |
+| 配置项 | 作用 | 当前 deepseek 值（分时） |
 |--------|------|-----------------|
-| `ModelRatio` | 输入 token 基础单价 | flash=0.068493, pro=0.205479 |
-| `CompletionRatio` | 输出 token 相对输入的倍率 | flash=2, pro=2 |
-| `CacheRatio` | 缓存命中 token 相对输入的倍率 | flash=0.02, pro=0.008333 |
+| `ModelRatio` | 输入 token 基础单价 | flash=0.205479(高峰)/0.102740(闲时), pro=0.616438(高峰)/0.308219(闲时) |
+| `CompletionRatio` | 输出 token 相对输入的倍率 | flash=3, pro=3 |
+| `CacheRatio` | 缓存命中 token 相对输入的倍率 | flash=0.033333, pro=0.033333 |
 | `CreateCacheRatio` | 创建缓存时的倍率 | （未设，用默认） |
 | `ImageRatio` | 图片 token 倍率 | （无关） |
 | `AudioRatio` | 音频 token 倍率 | （无关） |
@@ -294,41 +315,44 @@ Web 后台 → 设置 → 运营设置 → 勾选**合规确认**（`payment_set
 
 ## 六、数据库常用查询
 
-> 注意：Git Bash 下需加 `MSYS2_ARG_CONV_EXCL="*"` 前缀
+> **生产（上海服务器）**: 数据库是 MySQL。**MySQL root 密码不硬编码在文档/脚本里**，存于服务器 `/opt/new-api/.secrets.env`（环境变量 `MYSQL_ROOT_PASSWORD`）。执行查询前先 `source /opt/new-api/.secrets.env`。
+> **本地开发**: 用 sqlite3 `/data/one-api.db`（Git Bash 下加 `MSYS2_ARG_CONV_EXCL="*"` 前缀）。
+> 以下给出生产 MySQL 写法。
 
 ```bash
+# 生产 MySQL 查询模板（密码来自 .secrets.env，不经命令行）
+source /opt/new-api/.secrets.env
+MYSQL() { docker exec -e "MYSQL_PWD=$MYSQL_ROOT_PASSWORD" new-api-mysql \
+            mysql -uroot --default-character-set=utf8mb4 new_api -N -B -e "$1"; }
+
 # 用户
-MSYS2_ARG_CONV_EXCL="*" docker exec new-api sqlite3 /data/one-api.db \
-  "SELECT id, username, role, quota, used_quota FROM users;"
+MYSQL "SELECT id, username, display_name, role, quota, used_quota FROM users;"
 
-# 令牌（key 是保留字，要用 [] 包围）
-MSYS2_ARG_CONV_EXCL="*" docker exec new-api sqlite3 /data/one-api.db \
-  "SELECT id, user_id, name, [key], remain_quota, unlimited_quota FROM tokens;"
+# 令牌（key 是保留字，用反引号包围）
+MYSQL "SELECT id, user_id, name, \`key\`, remain_quota, unlimited_quota FROM tokens;"
 
-# 订阅
-MSYS2_ARG_CONV_EXCL="*" docker exec new-api sqlite3 -separator " | " /data/one-api.db \
-  "SELECT u.username, p.title, s.amount_total, s.amount_used,
-          datetime(s.next_reset_time,'unixepoch')
-   FROM user_subscriptions s
-   JOIN users u ON s.user_id=u.id
-   JOIN subscription_plans p ON s.plan_id=p.id;"
+# 订阅（含套餐名）
+MYSQL "SELECT u.username, p.title, s.amount_total, s.amount_used,
+              FROM_UNIXTIME(s.next_reset_time)
+       FROM user_subscriptions s
+       JOIN users u ON s.user_id=u.id
+       JOIN subscription_plans p ON s.plan_id=p.id;"
 
-# 日志
-MSYS2_ARG_CONV_EXCL="*" docker exec new-api sqlite3 -separator " | " /data/one-api.db \
-  "SELECT datetime(created_at,'unixepoch'), username, token_name,
-          model_name, prompt_tokens, completion_tokens, quota
-   FROM logs ORDER BY id DESC LIMIT 10;"
+# 日志（最近 10 条）
+MYSQL "SELECT FROM_UNIXTIME(created_at), username, token_name,
+              model_name, prompt_tokens, completion_tokens, quota
+       FROM logs ORDER BY id DESC LIMIT 10;"
 
-# 定价
-MSYS2_ARG_CONV_EXCL="*" docker exec new-api sqlite3 /data/one-api.db \
-  "SELECT json_extract(value, '$.deepseek-v4-flash'),
-          json_extract(value, '$.deepseek-v4-pro')
-   FROM options WHERE key='ModelRatio';"
+# 定价（ModelRatio JSON，含全模型）
+MYSQL "SELECT value FROM options WHERE \`key\`='ModelRatio';"
 
-# 写回 JSON 文件到配置（文件需提前 docker cp 到容器内 /tmp/）
-MSYS2_ARG_CONV_EXCL="*" docker exec new-api sqlite3 /data/one-api.db \
-  "UPDATE options SET value=readfile('/tmp/filename.json') WHERE key='ConfigKey';"
+# 更新定价（手动，一般由分时脚本自动做）
+MYSQL "UPDATE options SET value='{\"...\":...}' WHERE \`key\`='ModelRatio';"
 ```
+
+> **⚠️ 凭证安全**: 曾误将 MySQL root 密码与钉钉 APP_SECRET 硬编码进脚本并提交到公开仓库（PR 审查发现）。修复后脚本统一从 `/opt/new-api/.secrets.env` 读取（`MYSQL_ROOT_PASSWORD`、`DINGTALK_APP_KEY`、`DINGTALK_APP_SECRET`）。新脚本禁止硬编码凭证。
+
+本地 SQLite 写法参考（历史，仅本地开发）：`docker exec new-api sqlite3 /data/one-api.db "..."`，Git Bash 需 `MSYS2_ARG_CONV_EXCL="*"` 前缀。
 
 ---
 
@@ -353,9 +377,10 @@ docker cp 本地文件路径 new-api:/tmp/
 ## 八、后续待办
 
 - [x] **钉钉 SSO 登录**: 已通过 OIDC Bridge 实现，见 `new-api-dingtalk-oidc/`
-- [x] **新用户自动配置**: 登录后自动绑 Daily-20RMB + 创建 Default 令牌
+- [x] **新用户自动配置**: 登录后自动绑 Daily-20RMB + 创建 Default 令牌（套餐现含 Daily-20/30/50RMB）
 - [x] **离职自动封号**: Stream 模式实时 + 每日兜底检查
 - [x] **Docker Compose 统一管理**: 4 个服务由一个 compose 文件管理
+- [x] **DeepSeek 峰谷分时定价**: `deepseek_time_pricing.py` cron 自动切换（2026-08-28 部署）
 - [ ] **修改默认密码**: 生产环境前务必修改默认密码
 - [ ] **添加更多渠道**: 可按需添加 OpenAI、Claude、通义千问等
 
@@ -371,6 +396,7 @@ docker cp 本地文件路径 new-api:/tmp/
 
 cron 每分钟 → auto-bind: 绑套餐 + 建令牌
 cron 每日 3 点 → offboarding-check: 离职兜底
+cron 0 9/12/14/18 工作日 + 0 0 周末 + */30 → deepseek_time_pricing: 分时切价
 Stream 实时 → user_leave_org → 即刻封号
 ```
 
@@ -398,7 +424,8 @@ crontab -l  # 查看定时任务
 - 官方文档: https://docs.newapi.pro/zh/docs
 - Docker Hub: https://hub.docker.com/r/calciumion/new-api
 - DeepSeek 定价: https://api-docs.deepseek.com/zh-cn/quick_start/pricing
-- 本地脚本: `sync_pricing.py`, `auto-bind-subscription.py`, `offboarding-check.py`
+- 本地脚本: `sync_pricing.py`, `deepseek_time_pricing.py`, `auto-bind-subscription.py`, `offboarding-check.py`
 - 桥接器: `../new-api-dingtalk-oidc/main.py` + `stream_listener.py`
 - 方案文档: `../docs/solutions/integration-issues/dingtalk-sso-new-api-oidc-bridge.md`
+- 方案文档: `../docs/solutions/tooling-decisions/new-api-deepseek-time-based-pricing-automation.md`（分时定价）
 - 本地敏感信息: `.secrets.env`（请勿提交）

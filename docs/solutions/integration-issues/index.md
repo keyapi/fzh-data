@@ -11,5 +11,6 @@ tags: [integration, solutions, index]
 | 日期 | 标题 | 文件 |
 |------|------|------|
 | 2026-08-13 | Tongtool ERP2 MCP 接入与双 App 共享限流验证 | [tongtool-erp2-mcp-shared-rate-limit.md](tongtool-erp2-mcp-shared-rate-limit.md) |
+| 2026-08-28 | 群晖 NAS 多域名访问 — OpenWrt ACME、DSM 反代与 QuickConnect | [nas-multi-domain-access-openwrt-quickconnect.md](nas-multi-domain-access-openwrt-quickconnect.md) |
 | 2026-07-27 | IvyeaOps AI 问答 503 — deepseek-v4-flash | [ivyeaops-assistant-deepseek-v4-model-name.md](ivyeaops-assistant-deepseek-v4-model-name.md) |
 | 2026-07-24 | FZH 统一 AI 接入方案 — 选型结论 | [fzh-unified-ai-access-conclusion.md](fzh-unified-ai-access-conclusion.md) |

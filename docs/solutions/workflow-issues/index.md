@@ -21,6 +21,7 @@ tags: [workflow-issues, index]
 | [fringe-sofa-combo-batch-staging.md](fringe-sofa-combo-batch-staging.md) | 弧形流苏沙发单件整沙发组合创建 |
 | [comma-sofa-combo-batch-staging.md](comma-sofa-combo-batch-staging.md) | 逗号组合沙发三模块组合套件批量创建 |
 | [triangle-set-combo-batch-staging.md](triangle-set-combo-batch-staging.md) | 三角有扣套装（三角靠枕 + 50cm 圆枕）组合批量创建 |
+| [en-channel-account-gsheet-sync.md](en-channel-account-gsheet-sync.md) | Google 表渠道账号同步到 EN Channel Account（人变才加行，Amazon 九国） |
 | [tongtu-warehouse-rename-reconciliation.md](tongtu-warehouse-rename-reconciliation.md) | 通途发货仓库改名后三处对账登记（通途→ERPNext→财务共享表） |
 | [ostkus-account-reconciliation.md](ostkus-account-reconciliation.md) | OSTKUS 账期与 EN Tongtool Order 对账 |
 | [pb-2025-promo-cost-not-restored.md](pb-2025-promo-cost-not-restored.md) | Vendor 5806 Early BF 供货价未恢复：沟通口径与逐票对账 |
