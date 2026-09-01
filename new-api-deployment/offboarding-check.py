@@ -18,15 +18,26 @@ import sqlite3
 import subprocess
 import sys
 import urllib.request
+from pathlib import Path
 
-APP_KEY = "dingb0z8d4yzrl3mjqkr"
-APP_SECRET = "QWD8XTsjEDs-KVaXev1OoM13Y71ILCzVQqaKgWeyLJbl_cUedu4S9kolIPkSrbK7"
+# 凭证不硬编码：从环境变量或 /opt/new-api/.secrets.env 读取
+SECRETS_FILE = Path("/opt/new-api/.secrets.env")
 
-MYSQL_CMD = [
-    "docker", "exec", "-i", "new-api-mysql",
-    "mysql", "-uroot", "-pnew-api-root-pwd",
-    "new_api", "-N", "-B",
-]
+
+def _load_secret(key: str) -> str:
+    v = os.environ.get(key, "").strip()
+    if v:
+        return v
+    if SECRETS_FILE.is_file():
+        for line in SECRETS_FILE.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line.startswith(f"{key}="):
+                return line.split("=", 1)[1].strip()
+    raise RuntimeError(f"{key} 未配置：请设环境变量或写 /opt/new-api/.secrets.env")
+
+
+APP_KEY = _load_secret("DINGTALK_APP_KEY")
+APP_SECRET = _load_secret("DINGTALK_APP_SECRET")
 
 PROXY_DB_PATH = os.getenv(
     "PROXY_DB_PATH",
@@ -35,10 +46,13 @@ PROXY_DB_PATH = os.getenv(
 
 
 def run_mysql(query: str) -> str:
-    proc = subprocess.run(
-        MYSQL_CMD + ["-e", query],
-        capture_output=True, text=True, timeout=30,
-    )
+    cmd = [
+        "docker", "exec", "-e", f"MYSQL_PWD={_load_secret('MYSQL_ROOT_PASSWORD')}",
+        "-i", "new-api-mysql",
+        "mysql", "-uroot", "new_api", "-N", "-B",
+        "-e", query,
+    ]
+    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
     if proc.returncode != 0:
         raise RuntimeError(f"MySQL error: {proc.stderr}")
     return proc.stdout.strip()
