@@ -405,3 +405,58 @@ Host us-ubuntu-proxy-pub      ← 备：公网 IP，需要翻墙正常
 tailscale dns status                          # 查看 MagicDNS 状态和上游解析器
 journalctl -u tailscaled | grep -i "dns\|SERVFAIL"  # 查看 DNS 错误
 ```
+
+## Lesson 30: 切换机场后自定义规则必须映射到新配置的策略组名 (2026-08-25)
+
+**问题**：从 SSRDog 切换到 BoostNet 后，OpenClash 自定义覆写规则仍指向旧配置的 `Auto` 策略组。BoostNet 没有 `Auto`，实际组名是 `自动选择`(url-test)、`故障转移`(fallback) 和主组 `BoostNet`(select)，规则目标组名不匹配。
+
+**原因**：自定义覆写规则里的策略组名是写死的，切换订阅后不会自动跟随。OpenClash 覆写机制只做配置结构合并，不校验组名是否存在；组名不一致时规则要么找不到目标组，要么回落到 `MATCH`。
+
+**解决**：读取新配置的 proxy-groups 组名后，把自定义规则中所有 `,Auto` 统一替换为 BoostNet 实际的 `,自动选择`。AI 规则从"固定国家组"改为"自动选择"，让 ChatGPT/Cursor/Claude 在可用节点间自动择优，避免写死某个国家组导致节点失效时全线不可用。
+
+**教训**：
+1. 切换机场后第一件事：读新配置的 proxy-groups 组名，确认覆写规则里的每个目标组都存在。
+2. 用 `自动选择`(url-test) 比写死国家组更稳：延迟/可用性变化时自动切换；写死国家组会重演"日本节点失效 → ChatGPT/Cursor 全挂"的问题。
+3. 验证标准是"实际服务能持续用"（ChatGPT 网页、Cursor 长连接），不是测速数值或 Google 语言重定向。
+4. 测速 URL 默认 `http://www.gstatic.com/generate_204`，部分节点测速超时但实际可用，可用 `http://cp.cloudflare.com/generate_204` 交叉验证。
+5. 后台提示"订阅 URL 已重置请重新导入"可能是通用自助排障文案，已在多客户端重新导入仍失败时应转向排查线路/供应商，而非反复粘贴订阅。
+
+## Lesson 31: 订阅里的 Cloudflare DoH 分流在国内被墙导致外网域名解析全挂 (2026-08-25)
+
+**问题**：切换到 BoostNet 订阅后，办公室全员 google/github/openai/chatgpt 打不开，但国内域名（baidu/qq）和部分国外域名（microsoft）正常。同事同 WiFi 也全挂。
+
+**根因**：BoostNet 订阅的 DNS 配置用 `nameserver-policy` 把 google/github/openai/chatgpt/anthropic 等强制指向 `https://dns.cloudflare.com/dns-query`（Cloudflare DoH）。Cloudflare DoH 自 2025 年起在大陆被 GFW 阻断/干扰（SNI 阻断 + 运营商封 `.1` 结尾 IP），这些域名解析返回 "No answer"。不在 policy 里的域名走 doh.pub/alidns 反而正常。
+
+**诊断证据**（全链路，非猜测）：
+- dnsmasq → Clash DNS(7874) 解析 baidu/qq/microsoft 正常
+- 同上解析 google/github/openai 返回 "No answer"（恰好都在 Cloudflare policy 里）
+- 路由器直连 `223.5.5.5` 解析 google 正常
+- 修复后（Cloudflare→223.5.5.5）全部恢复
+
+**为什么订阅作者用 Cloudflare DoH（有其道理）**：国内公共 DNS 会对 GFW 封锁域名返回污染 IP；Cloudflare DoH 提供加密、不被污染的解析。但悖论在于 Cloudflare DoH 本身在国内也被墙，"为了防污染"反而变成"完全不可用"。
+
+**修复（当前权宜）**：把 nameserver-policy 里的 Cloudflare DoH 全部替换为 `223.5.5.5`（阿里 DNS，国内可达，已验证可解析 google/github/openai）。同时改运行配置和 source 配置，已备份。
+
+**为什么之前用 SSRDog 没这问题**（SSRDog 旧配置对照）：
+```yaml
+dns:
+  enhanced-mode: redir-host
+  nameserver: [223.5.5.5, 223.6.6.6]   # 主解析 = 阿里 DNS（国内可达，稳定）
+  fallback: [1.1.1.1, 8.8.8.8]          # 仅作防污染纠偏
+  fallback-filter: { geoip: true, geoip-code: CN }
+```
+SSRDog 用"国内 DNS 为主 + 国外 DNS 兜底防污染"，且**没有**任何 `nameserver-policy` 强制指向 Cloudflare DoH；BoostNet 恰恰相反，把国外 DoH 当主解析，国内被墙 → 解析失败。
+
+**持久化修复（2026-08-25）**：已把 DNS 修复加进 `openclash_custom_overwrite.sh` 覆写脚本的 `fix_dns_cloudflare()`，每次 OpenClash 重新生成配置（含订阅更新）后自动把 `https://dns.cloudflare.com/dns-query` 替换为 `223.5.5.5`。已端到端测试：把 source 恢复成 Cloudflare 版（模拟订阅更新）→ 重启 → 脚本自动修复运行配置 → DNS 恢复。当前 source 和运行配置都已是干净的 `223.5.5.5`，脚本作为第二道防线。
+
+**更稳健的长期方案**：
+1. **fake-ip 模式**：域名解析放到代理出口完成，彻底绕开国内 DNS 污染（Mihomo 推荐）
+2. **境外 DNS 走代理**：fallback 加代理组标签，或 Mihomo `dns.proxy: true`
+3. 国内域名用国内 DoH（doh.pub/alidns），境外域名走代理解析
+
+**参考**：
+- [V2EX: 国内 1.1.1.1 的 doh 服务好像被墙了](https://global.v2ex.co/t/1164043)
+- [LINUX DO: cloudflare 在中国大陆快大结局](https://linux.do/t/topic/771266)
+- [Clash DNS nameserver/fallback 分步设置](https://clashsurge.com/zh-CN/blog/articles/clash-dns-nameserver-fallback-setup-2026.html)
+- [openwrt-clash Issue #116: 如何正确设置 DNS](https://github.com/chandelures/openwrt-clash/issues/116)
+- [V2EX: 江苏电信劫持公共 DNS](https://global.v2ex.co/t/1139109)

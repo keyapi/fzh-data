@@ -89,5 +89,5 @@ Tailscale P2P 打洞成功时直连（~260ms），失败时 DERP relay 兜底（
 ## 见也
 
 - [reference/tools-index.md](reference/tools-index.md) — 工具和术语
-- [lessons/lessons-learned.md](lessons/lessons-learned.md) — 经验教训 (15 条)
+- [lessons/lessons-learned.md](lessons/lessons-learned.md) — 经验教训 (30 条)
 - [lan-gateway.md](lan-gateway.md) — LAN 网关部署

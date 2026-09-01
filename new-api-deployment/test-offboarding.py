@@ -12,22 +12,36 @@ Usage:
     python3 test-offboarding.py
 """
 
+import os
 import subprocess
 import sys
 import time
+from pathlib import Path
 
-MYSQL_CMD = [
-    "docker", "exec", "-i", "new-api-mysql",
-    "mysql", "-uroot", "-pnew-api-root-pwd",
-    "new_api", "-N", "-B",
-]
+# MySQL root 密码不硬编码：从环境变量 MYSQL_ROOT_PASSWORD 或 /opt/new-api/.secrets.env 读取
+SECRETS_FILE = Path("/opt/new-api/.secrets.env")
+
+
+def _mysql_password() -> str:
+    pwd = os.environ.get("MYSQL_ROOT_PASSWORD", "").strip()
+    if pwd:
+        return pwd
+    if SECRETS_FILE.is_file():
+        for line in SECRETS_FILE.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line.startswith("MYSQL_ROOT_PASSWORD="):
+                return line.split("=", 1)[1].strip()
+    raise RuntimeError("MYSQL_ROOT_PASSWORD 未配置：请设环境变量或写 /opt/new-api/.secrets.env")
 
 
 def mysql(query: str) -> str:
-    proc = subprocess.run(
-        MYSQL_CMD + ["-e", query],
-        capture_output=True, text=True, timeout=30,
-    )
+    cmd = [
+        "docker", "exec", "-e", f"MYSQL_PWD={_mysql_password()}",
+        "-i", "new-api-mysql",
+        "mysql", "-uroot", "new_api", "-N", "-B",
+        "-e", query,
+    ]
+    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
     if proc.returncode != 0:
         print(f"  MySQL ERROR: {proc.stderr}")
         sys.exit(1)
