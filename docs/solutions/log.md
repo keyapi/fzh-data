@@ -7,6 +7,9 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-09-02
+- **更新**: `workflow-issues/pb-2025-promo-cost-not-restored.md` + `pb_promo_trueup/` — Diane re-upload / SPS PO Change、PO Date 9/1 合同价新单、3 张 8/31 待补。
+
 ## 2026-09-01
 - **更新**: `workflow-issues/pb-2025-promo-cost-not-restored.md` + `pb_promo_trueup/` — Christine 改主档、Diane open PO 待改、扣货、8/31 invoice batch、冻结 PO 未出现；§9 四套源待深度研究。
 

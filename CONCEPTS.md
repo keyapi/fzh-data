@@ -259,13 +259,16 @@ SPS 偶发同一货生成两个 INV#。我方钉钉留一个，PB 可能付另�
 PB 补付时对账单偶发不用 INV#、改用含年份的数字串。给 PB 仍写该占位号；内部财务表可能已手工改成本地 INV#。
 
 ### True-up freeze PO
-活动价改回合同批发之后，第一张按合同价开出的新 PO。那之前的活动价票才冻结成给 Diane 的索赔集。某日发票 CSV 扫描截止不是冻结点。
+活动价改回合同批发之后，第一张按合同价开出的**新 PO**（本 case 候选：PO Date 2026-09-01 的 New 三角枕）。那之前的活动价票才冻结成索赔集。某日发票 CSV 扫描截止不是冻结点。冻结**确认**看第一张合同价发票。
 
 ### Flagged order CSV
 SPS 日文件夹里的订单导出，只用来交叉核 PO Date 和单价。索赔宇宙是已开票的发票 CSV；未开票 PO 不进差额清单。
 
 ### Item master vs open PO cost
 Christine 侧商品主档批发价与 Diane 侧已有未开票 PO 行上的 unit cost 是两层。主档更新后，open PO 可能仍显示活动价，直到供应链改 current orders；我方应扣货直到 SPS 打出合同批发。
+
+### SPS PO Change
+Diane 改已有 open PO 后，SPS 向供应商推送的改价单据。必须在后台 Accept 后，order CSV 的 Unit Price 才会变成合同批发。新 PO Date 的订单若已按主档开价，不会出现 Change。
 
 ## Flagged ambiguities
 
@@ -281,6 +284,7 @@ Christine 侧商品主档批发价与 Diane 侧已有未开票 PO 行上的 unit
 - "SPS 订单 CSV 只核 PO Date / 单价，不是索赔宇宙；没开票的 PO 不向 PB 要。"
 - "对账单短收或 credit 不冲活动供货价差额，另账处理。"
 - "Christine item master 更新不等于 open PO 已改价；未开票 PO 仍可能显示活动价直到 Diane 改 current orders。"
+- "同一份 New order CSV 里，新 PO Date 可能已是合同价，更早的 open PO 仍活动价，直到接受 SPS PO Change。"
 
 ## 平台账期对账
 

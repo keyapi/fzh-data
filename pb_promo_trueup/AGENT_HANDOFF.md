@@ -3,14 +3,14 @@ okf: v0.1
 type: Handoff
 title: PB 2025 Early BF 供货价未恢复 — Agent 交接
 tags: [pb, potterybarn, promo, wholesale, trueup, handoff]
-timestamp: 2026-09-01
+timestamp: 2026-09-02
 ---
 
 # PB 2025 Early BF 供货价未恢复
 
 > Agent 接手先读本文，再按需打开 [docs/](docs/)。xlsx/CSV 在仓库外，禁止提交 git。给 PB 的邮件**禁止出现 Tracy 佣金**、**禁止解释双发票号**。
 
-## 1. 现状（2026-09-01 暂停点）
+## 1. 现状（2026-09-02 暂停点）
 
 | 步骤 | 状态 |
 |------|------|
@@ -22,18 +22,20 @@ timestamp: 2026-09-01
 | Key 填 Correct 批发价，微信+单独邮件给 Tracy（不抄 WSI） | 已发 2026-08-28 |
 | Tracy → Christine 确认改价（Reply All 附 filled 表） | **已完成** 2026-08-28 |
 | Christine：**item master 已更新**（2026-08-31 邮件 "The system has been updated"） | **已完成** |
-| Christine → Diane：**update any current orders** | **进行中** — 未开票 PO 仍显示活动价 |
-| 我方扣货，等 open PO 打出合同批发后再发 | **2026-09-01 起** |
-| 抽第一张 **合同价** 新 PO/发票（True-up 冻结 PO） | **尚未出现** |
-| 8/31 北京下午已开票 batch（`invoice x34`，21 张三角枕，PO Date 至 8/30） | 进 true-up；**勿请 Diane 改已传发票** |
-| 9/1 检查：6 张未开票 PO（PO Date 8/31）仍活动价 | 等 Diane 改 open PO |
-| 历史票冻结后交给 Diane（debit memo / AP 调整） | **未发**；冻结 PO 出现后再做 |
-| 内部逐票表 | **待重跑**（含 8/31 `invoice x34` + 9/1 前快照） |
+| Diane 2026-09-01：re-upload 4 张 open PO；已打 UPS 标的不能再改；23.5"/Gap Filler 无需改 | **已核实** |
+| 我方接受 4 张 SPS **PO Change** 后 CSV 已是合同价 | **已完成** 2026-09-02 |
+| PO Date **09/01/2026** 的 New 三角枕 PO | **已是合同价**（冻结点候选） |
+| 仍待 Diane：3 张 PO Date 8/31 未开票三角枕（无 PO Change） | **137803269 / 137804289 / 137804323** |
+| 我方扣货，等这 3 单改完再发 | **继续** |
+| 抽第一张 **合同价** 新发票（True-up 冻结确认） | 新 PO 已对；**尚未发货开票** |
+| 8/31 北京 `invoice x34`（21 张三角枕 + Diane UPS-locked 对得上） | 进 true-up；**勿请 Diane 改已传发票** |
+| 历史票冻结后交给 Diane（debit memo / AP 调整） | **未发** |
+| 内部逐票表 | **待重跑**（含 8/31 `invoice x34`） |
 
-**Christine 改的是商品主档；Diane 还要改已有未开票 PO。** 两者不同步时，下载的 order CSV 仍会显示 51.7/57.6/60.5/70.4。
+**Diane 改 open PO 会在 SPS 生成 PO Change，必须点接受后 CSV 才变。** 新 PO（PO Date 9/1）已按主档合同价开出，不必再 Change。
 
 本地工作目录：`D:\Work\美国\Tracy Miller\打折活动Promotion\`。
-草稿邮件（仓库外）：`Email_ReplyAll_Diane_open_vs_invoiced.txt`（已开票 vs 未开票切分；**不说 through 8/31**）。
+草稿（仓库外）：`Email_ReplyAll_Diane_open_vs_invoiced.txt`；`Email_ReplyAll_Diane_three_open_pos.txt`（提醒漏改 3 单）。
 
 ## 2. 业务口径（已锁定）
 
@@ -112,9 +114,11 @@ Diane 2024-12-06「PO costs have been updated」改的是不该打折的 23.5"�
 
 - [x] Tracy Reply All 确认 Christine 的 Correct 列（2026-08-28）
 - [x] Christine 确认 item master updated（2026-08-31）
-- [ ] Diane 更新未开票 open PO 至合同批发
-- [ ] 未开票 PO 上出现 64.58 / 71.96 / 75.65 / 87.95 后再发货
-- [ ] 记录第一张合同价新 PO/发票 = **冻结 PO**
+- [x] Diane re-upload 4 张 + Key 接受 PO Change（2026-09-02 核实）
+- [x] PO Date 9/1 New 三角枕已是合同价（冻结点候选）
+- [ ] Diane 补 3 张：137803269 71.96 / 137804289 75.65 / 137804323 64.58
+- [ ] 这 3 单 CSV 合同价后再发货
+- [ ] 开出第一张合同价发票 = **冻结确认**
 - [ ] 重跑内部 true-up（含 8/31 `invoice x34`）
 - [ ] 可选：Reply All Diane（已开票 leave as billed / open PO update）；先微信 Tracy
 - [ ] 冻结 PO 出现后，用户过目金额再发第二封给 Diane
@@ -130,6 +134,7 @@ xlsx/CSV **不入 git**。会话里的分析/填表是一次性 `uv run python`�
 | `Christine download Centrade retail and costs 20260828_filled_for_Tracy.xlsx` | 给 Tracy：Correct wholesale；24 个三角枕 = 合同价，其余 = Current |
 | `PB_2025_promo_trueup_internal.xlsx` | 内部逐票；约到 08-24，须含 8/31 `invoice x34` 后重跑 |
 | `Email_ReplyAll_Diane_open_vs_invoiced.txt` | Diane 草稿：已开票 leave / open PO update（勿写 through 8/31） |
+| `Email_ReplyAll_Diane_three_open_pos.txt` | 2026-09-02：提醒漏改 3 单 |
 | `WeChat_to_Tracy_system_updated_EN.txt` | Tracy 微信草稿（佣金补差仅私下说） |
 | `_archive_drafts\` | 旧 evidence / $28k / filled v1–v3 |
 

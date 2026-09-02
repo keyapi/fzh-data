@@ -25,7 +25,7 @@ A 是「我们账上是哪张票」。B 是「对方系统认哪张票」。C �
 ## 扫描截止 ≠ 冻结点
 
 - **扫描截止**：当前已扫到的最新 `invoice x*` 日（工作快照约到 **2026-08-24**；用户 **08-27** 又发过货，重跑时把该日及之后扫进去）。等 Tracy 期间可以反复重扫，不必等改价。
-- **True-up 冻结 PO**：Diane/Christine 改回合同价之后，**第一张按合同批发开出的新 PO**。那之前的活动价票才冻结成给 Diane 的索赔集。
+- **True-up 冻结 PO**：改回合同价之后，**第一张按合同批发开出的新 PO**（本 case 候选：PO Date **2026-09-01**）。那之前的活动价票才冻结。冻结确认看第一张合同价发票。
 - **08-27 不是冻结点。** 不要把「扫描到哪一天」写成「历史票已封账」。未冻结清单不要发给 Diane。
 
 ## Item master vs open PO cost（2026-09-01）
@@ -35,6 +35,21 @@ Christine 2026-08-31 确认 **item master updated**；Christine @Diane 改 **cur
 - **已开票且已传输**（例 8/31 北京 `invoice x34`，21 张三角枕，PO Date 至 8/30）：金额已是活动价 → 进 true-up；**勿请 Diane 改已传发票**。
 - **未开票 open PO**（例 9/1 下载 6 单，PO Date 8/31，仍 51.7/60.5/57.6）：等 Diane 改 PO unit cost；我方扣货直到看到 64.58 / 71.96 / 75.65 / 87.95。
 - **切分口径**：用 **invoiced and transmitted vs not yet invoiced**，不要用日历「through 8/31」。若 Diane 无法改旧 open PO，请她确认从哪个 **PO Date** 起 forward PO 必打合同价。
+
+## SPS PO Change（2026-09-02 核实）
+
+Diane re-upload open PO 后，SPS 会出现 **PO Change**，我方必须 **Accept** 后 order CSV 才变价。
+
+2026-09-02 对照 Diane 邮件 vs New CSV：
+
+| Diane 表 | 核实 |
+|----------|------|
+| Re-upload 4 单 | 接受 PO Change 后：137643228 **75.65**（Queen 3800829，PO Date 8/06，PO Box 未发）；137801822 **64.58**；137802524 **75.65**；137794732 **64.58**（SkyBlue Twin） |
+| UPS 标已打、不能改 22 单 | 21/22 在 `invoice x34` 活动价；**137682252** 在 8/14 invoice x18（无货未发）— 都进 true-up，勿改已传发票 |
+| No action 13 单 | 全在 x34：23.5" 32.50 / Gap Filler 37.99 或 34.99 — 价对 |
+| SKU 主档对照 | Updated 列 = 合同价梯；current PO Cost = 当时未改完的旧 open PO |
+| PO Date **09/01/2026** New 三角枕 | **全部合同价**（冻结点候选）；含 Yellow Twin `4602235` 64.58 |
+| Diane **漏了** 3 单（PO Date 8/31，未开票，无 PO Change） | **137803269** 57.60→71.96；**137804289** 60.50→75.65；**137804323** 51.70→64.58。扣货等这 3 单。137808049 23.5" 32.50 不用改 |
 
 ## A. 发票 CSV 怎么取
 

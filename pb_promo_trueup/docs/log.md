@@ -8,6 +8,10 @@ timestamp: 2026-09-01
 
 # 变更日志
 
+## 2026-09-02
+- **核实 Diane 邮件**：4 张 PO Change 接受后合同价；PO Date 9/1 新单已合同价（冻结点候选）；漏 3 张 8/31 open PO 待提醒；UPS-locked 21/22 = invoice x34。
+- **状态**：扣货等 137803269 / 137804289 / 137804323。
+
 ## 2026-09-01
 - **Christine 改主档**：2026-08-31 邮件 "The system has been updated"；@Diane update current orders。
 - **实测**：open PO（PO Date 8/31）仍活动价；8/31 北京 `invoice x34` 21 张三角枕进 true-up；冻结 PO 未出现；扣货。

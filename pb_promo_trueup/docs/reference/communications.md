@@ -30,6 +30,7 @@ Tracy 是中间人。Key 从未单独绕过她找一圈 PB Brand。Diane 说 “
 - **第一封（已发）**：SKU 列表 + 价梯 + PO 日期对照 + 少数例子。不是借记通知。可转发 Tracy 的批准 eml。
 - **Christine 改主档后（2026-08-31）**：可选短 Reply All 给 Diane — 操作切分，不是 true-up 清单。草稿：`Email_ReplyAll_Diane_open_vs_invoiced.txt`（仓库外）。
 - **第二封（冻结 PO 出现后）**：逐票清单，**一行一张**，INV# 用 `来自Email`。冻结前的内部表不要当索赔发出。
+- **2026-09-02**：Diane 漏 3 张 8/31 open PO 时，短 Reply All 只列 PO# / SKU / 现价 / 应对合同价。草稿：`Email_ReplyAll_Diane_three_open_pos.txt`。
 - 不要把已发给 Tracy 的 `PB_2025_promo_cost_not_restored_evidence.xlsx` 转给 Diane（有佣金和 $28k）。
 
 ## Diane Reply All 要点（2026-09-01 锁定）
@@ -42,6 +43,8 @@ Christine 已改 item master；Diane 仍须改 open PO。Key 可补一句 **if h
 4. If older open POs cannot be changed, ask what **PO Date cutoff** Diane can apply going forward.
 
 不要写金额、借记、佣金。先发 Tracy 微信再 Reply All 亦可。
+
+2026-09-02：4 张已接受 PO Change；提醒漏改 3 张即可，不要发明细。
 
 ## Tracy 微信（私下）
 

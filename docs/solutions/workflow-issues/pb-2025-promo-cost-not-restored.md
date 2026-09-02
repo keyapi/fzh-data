@@ -3,7 +3,7 @@ okf: v0.1
 type: Reference
 title: PB 2025 Early BF 供货价未恢复 — 沟通与逐票对账
 date: 2026-08-31
-last_updated: 2026-09-01
+last_updated: 2026-09-02
 category: workflow-issues
 module: pb_promo_trueup
 problem_type: workflow_issue
@@ -24,7 +24,7 @@ related_components: [pb_reconciliation, documentation]
 
 Centrade Inc（Vendor **#5806**）经 Tracy Miller 供 Pottery Barn 三角枕。2025 Early BF 约定 11/07–12/02、20% off headboard。窗口结束后网站/PO 零售已回 149/159/169/199，供货价仍是 51.7/57.6/60.5/70.4。像是活动价没设结束日。2024 测试窗按 **PO Date** 在次日已自动回合同价。
 
-会话在 Christine 2026-08-31 确认 item master updated、Diane 仍须改 current orders 时暂停。9/1 实测：6 张未开票 PO（PO Date 8/31）仍活动价；8/31 北京 `invoice x34` 21 张三角枕已开票进 true-up；**冻结 PO 尚未出现**。需要把 item master vs open PO 滞后、已开票 leave as billed、以及四数据源未来深度对齐写下来。
+会话在 Christine 2026-08-31 确认 item master updated、Diane 改 current orders 后继续。2026-09-02 核实：Diane re-upload 4 张经 SPS **PO Change 接受**后已是合同价；PO Date **9/1** New 三角枕全部合同价（冻结点候选）；**3 张 PO Date 8/31 未开票**（137803269 / 137804289 / 137804323）Diane 邮件未列、仍活动价。8/31 `invoice x34` 与 Diane「已打 UPS 标不能改」21/22 对得上，进 true-up。未冻结清单仍不发给 Diane。
 
 ## Guidance
 
@@ -46,6 +46,7 @@ Centrade Inc（Vendor **#5806**）经 Tracy Miller 供 Pottery Barn 三角枕。
 14. **扫描截止 ≠ 冻结 PO**。冻结 = 改价后第一张合同价新 PO。未冻结清单不发给 Diane。
 15. **Item master ≠ open PO cost。** Christine 改主档后 Diane 仍须改未开票 PO；扣货至合同价出现。
 16. **已开票 and transmitted：leave as billed。** 用 invoiced vs not-invoiced 切分，不说 through 8/31。8/31 batch PO Date 至 8/30 进 true-up。
+17. **SPS PO Change 必须 Accept** 后 CSV 才变。PO Date 9/1 新单已合同价；漏改的 8/31 open PO 单独提醒 Diane。
 
 ## Why This Matters
 
@@ -53,7 +54,7 @@ Centrade Inc（Vendor **#5806**）经 Tracy Miller 供 Pottery Barn 三角枕。
 
 ## When to Apply
 
-- 本 case 从 Diane 改 open PO、出现冻结 PO 起继续。Christine 主档已更新。
+- 本 case 从 Diane 补 3 张 8/31 open PO、开出合同价发票确认冻结起继续。
 - 任何「SPS 发票 vs PB remittance vs 已加工财务表」三方对票；订单 CSV 只做交叉核。
 - 给 PB 写活动价/PO cost 邮件。
 
@@ -63,7 +64,7 @@ Centrade Inc（Vendor **#5806**）经 Tracy Miller 供 Pottery Barn 三角枕。
 - 双号：PB `INV…1541` ↔ 本地 `INV…1530`（`pb_reconciliation` `REMAP` 同一对）。
 - Christine 表 37 行：24 个三角枕 Correct wholesale = 合同价；其余 Correct = Current。Coffee 不在她的文件里。
 - 08-24 内部快照：1,425 张 / ~$23,586.17；1 双号、1 占位、173 未付。8/31 `invoice x34` +21 张三角枕待并入重跑。
-- 2026-09-01：6 open PO PO Date 8/31 仍活动价；Christine 主档已改、Diane open PO 待改；冻结 PO 未出现。
+- 2026-09-02：PO Date 9/1 New 三角枕全部合同价；Diane 4 张 PO Change 已接受；漏 3 张 8/31（137803269 Full / 137804289 Queen / 137804323 Twin）。UPS-locked 21/22 = invoice x34；137682252 = 8/14 无货未发发票。
 
 ## Related
 

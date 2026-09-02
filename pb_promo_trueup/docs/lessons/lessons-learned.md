@@ -25,3 +25,5 @@ timestamp: 2026-08-31
 15. **短收不冲活动价差额。** 运费扣、以前的 credit、少付，另账；不要在 true-up 里净额化。
 16. **Item master 更新 ≠ open PO 已改价。** Christine 2026-08-31 改主档后，9/1 下载的 PO Date 8/31 订单仍活动价 — Diane 还要改 current orders。扣货直到 SPS 打出合同批发。
 17. **已开票 leave as billed。** 8/31 北京 `invoice x34`（PO Date 至 8/30）进 true-up，不要请 Diane 改已传发票。切分用 invoiced vs not-invoiced，不说 through 8/31。
+18. **Diane re-upload 后要在 SPS 点 Accept PO Change**，否则 New CSV 仍是旧价。
+19. **新 PO Date 与旧 open PO 会分叉。** 2026-09-02：PO Date 9/1 已是合同价；同文件里 8/31 未改的 3 单仍活动价。不要把「主档已改」当成每一张 open PO 都已改。

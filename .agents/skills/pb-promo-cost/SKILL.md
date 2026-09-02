@@ -25,12 +25,12 @@ description: >
 - 索赔窗口：**PO Date ≥ 2025-12-03**，不是我方开票日。
 - 给 PB 的 INV#：以 `来自Email` 原始对账单为准，不是「给财务」/「To Tracy Miller」。
 - 发票 CSV：只认日文件夹 `invoice x*`。
-- **Item master ≠ open PO cost。** Christine 改主档后 Diane 仍须改未开票 PO；扣货至合同价出现。
+- **Item master ≠ open PO cost。** Christine 改主档后 Diane 仍须改未开票 PO；SPS **PO Change 要点接受**。
 - **已开票 and transmitted：leave as billed。** 切分用 invoiced vs not-invoiced，不说 through 8/31。
 - 冻结 PO = 第一张合同价新 PO/发票。未冻结清单不发给 Diane。
 - 订单 CSV 只核 PO Date / 单价；`来自Email` 按付款日+PB INV# 去重；短收不冲差额。
 - 月度对账用 `pb-reconciliation` skill。
 
-## 当前等待（2026-09-01）
+## 当前等待（2026-09-02）
 
-Christine item master ✅ → Diane 改 open PO ⏳ → 冻结 PO ❌ → 重跑 true-up → 第二封给 Diane。
+Christine item master ✅ → Diane 4 张 PO Change 已接受 ✅ → PO Date 9/1 新单合同价 ✅ → **3 张 8/31 待 Diane**（137803269 / 137804289 / 137804323）→ 合同价发票确认冻结 → 重跑 true-up。
