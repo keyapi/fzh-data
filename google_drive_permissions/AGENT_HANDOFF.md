@@ -10,7 +10,9 @@
 | 用户 OAuth | `GSPREAD_USER_OAUTH_FILE`，默认 `secrets/gsheets-user-oauth.json` | 全局审计 |
 | Desktop client_secret | 本机 Google Cloud OAuth 客户端 JSON（勿提交、勿写死路径） | 重新授权用户 OAuth |
 
-> worktree 里通常没有这些文件。从仓库根运行：`uv run python google_drive_permissions/scripts/<script>.py`（`uv run` 会把仓库根加进 sys.path）。
+> worktree 里通常没有这些文件。**从脚本目录运行**（脚本间用 `from sheet_ledger import ...` / `from paths import ...` 相对 import，需 `scripts/` 在 sys.path）：
+> `cd google_drive_permissions/scripts/ && uv run python <script>.py`
+> 若坚持从仓库根跑：`PYTHONPATH=google_drive_permissions/scripts uv run python google_drive_permissions/scripts/<script>.py`（否则会 `ModuleNotFoundError: sheet_ledger/paths`）。
 > 加载用户 OAuth：`Credentials.from_authorized_user_file(user_oauth_path())` + `refresh(Request())`。
 
 ## 2. Google Sheet 台账（权威源）
