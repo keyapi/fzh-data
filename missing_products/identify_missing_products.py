@@ -28,10 +28,11 @@ from requests.adapters import HTTPAdapter
 
 # ── Paths ──────────────────────────────────────────────────────
 _HERE   = Path(__file__).resolve().parent
+_ROOT   = _HERE.parent
 _MAIN   = Path(r"D:\Work\赛狐\Cursor")
-_WEB    = Path(r"D:\Work\赛狐\网页自动化")
+_WEB    = _ROOT / "web_automation"
 
-for _p in [_HERE.parent, _MAIN]:
+for _p in [_ROOT, _MAIN]:
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
