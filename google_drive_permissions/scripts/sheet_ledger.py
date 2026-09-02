@@ -4,9 +4,11 @@
 台账「账号主清单」worksheet 列：
   [0]状态  [1]账号  [2]识别/备注  [3]处理方式  [4]当前文件数
   状态 = 自己 / SA / 在职 / 离职 / 待确认
-  处理方式 = 不取消 / 保留 / 已清理 / 已清(遗留)
+  处理方式 = 不取消 / 保留 / 清理 / 已清理 / 已清(遗留)
 
 供 audit / cleanup / build 脚本按需取「离职账号 / 在职账号 / 全部账号」。
+「清理」= 待执行；「已清理」「已清(遗留)」= 已处理，仍列入移除集以便幂等补漏。
+「保留」「不取消」即使状态=离职也不删。
 """
 from __future__ import annotations
 
@@ -14,6 +16,7 @@ import gspread
 
 SHEET_ID = "1TTVVHQOe5VCmdLZynGFAKXSPUVIvtlB6kOOqgszIqD0"
 MASTER_WS = "账号主清单"
+PROTECTED_HANDLING = frozenset({"保留", "不取消"})
 
 
 def load_accounts(gc: gspread.Client) -> list[dict]:
@@ -36,10 +39,20 @@ def load_accounts(gc: gspread.Client) -> list[dict]:
     return out
 
 
+def is_removed_row(row: dict) -> bool:
+    """是否应列入 cleanup 移除名单。"""
+    handling = (row.get("handling") or "").strip()
+    status = (row.get("status") or "").strip()
+    if handling in PROTECTED_HANDLING:
+        return False
+    if handling == "清理" or handling.startswith("已清"):
+        return True
+    return status == "离职"
+
+
 def removed_accounts(gc: gspread.Client) -> list[str]:
-    """「处理方式」含 已清 或 状态=离职 的账号 → 用于 cleanup 移除。"""
-    return [a["account"] for a in load_accounts(gc)
-            if a["status"] == "离职" or a["handling"].startswith("已清")]
+    """处理方式=清理/已清*，或状态=离职且未标保留/不取消。"""
+    return [a["account"] for a in load_accounts(gc) if is_removed_row(a)]
 
 
 def kept_accounts(gc: gspread.Client) -> list[str]:

@@ -26,7 +26,7 @@ description: 踩坑记录：writersCanShare vs capabilities.canShare、权限接
 ## Lesson 3：服务账号 vs 用户 OAuth 的可见范围天差地别
 
 - **服务账号**：独立身份（`colab-gsheets@gsheets-351101.iam.gserviceaccount.com`），只能看到**显式共享给它**的文件（本项目约 130）。
-- **用户 OAuth**（kyzh2022）：看到该用户可访问的**全部**（989 表 + 134 Colab ≈ 1123 文件）。
+- **用户 OAuth**（属主账号）：看到该用户可访问的**全部**（989 表 + 134 Colab ≈ 1123 文件）。
 - **要全局审计/清理**必须用**用户 OAuth**；服务账号只适合固定共享给它的业务表。
 - 这条解释了「为什么之前 Sheets 一直能用（服务账号私钥）但看不到全盘」。
 

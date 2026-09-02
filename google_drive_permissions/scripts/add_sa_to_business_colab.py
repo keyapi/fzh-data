@@ -3,7 +3,7 @@
 
 默认 dry-run 只打印计划 + 每个文件的 SA canShare 状态；
 加 --apply 才真正新增权限（sendNotificationEmail=false，不发邮件）。
-用用户级凭证(kyzh2022, 属主)授权，避免 SA 自身因"仅属主可改共享"被 403。
+用用户级凭证(属主)授权，避免 SA 自身因"仅属主可改共享"被 403。
 """
 from __future__ import annotations
 
@@ -14,7 +14,9 @@ import requests
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 
-TOKEN_FILE = r"D:\Work\赛狐\Cursor\secrets\gsheets-user-oauth.json"
+from paths import user_oauth_path
+
+TOKEN_FILE = str(user_oauth_path())
 SA_EMAIL = "colab-gsheets@gsheets-351101.iam.gserviceaccount.com"
 BASE = "https://www.googleapis.com/drive/v3"
 

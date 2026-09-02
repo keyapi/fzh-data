@@ -1,14 +1,16 @@
 # -*- coding: utf-8 -*-
-"""检查 15 个业务 Colab 的 sharing 能力（capabilities），确认 SA 能否改共享/操作用户身份。
-用用户级凭证读取，但用 GET capabilities 看的是文件全局权限设置，与谁调用无关。
+"""检查 15 个业务 Colab 的 sharing 能力（capabilities），确认 SA 能否改共享。
+
+capabilities.canShare 是调用者视角：必须用服务账号 token 查，用属主 OAuth 会永远 True。
 """
 from __future__ import annotations
 
 import requests
 from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
+from google.oauth2 import service_account
 
-TOKEN_FILE = r"D:\Work\赛狐\Cursor\secrets\gsheets-user-oauth.json"
+from tongtool_order_cost.tongtool_order_cost.gsheets import service_account_path
+
 BASE = "https://www.googleapis.com/drive/v3"
 
 NOTEBOOKS = {
@@ -31,25 +33,31 @@ NOTEBOOKS = {
 
 
 def main():
-    creds = Credentials.from_authorized_user_file(TOKEN_FILE, scopes=["https://www.googleapis.com/auth/drive"])
-    if creds.expired or not creds.token:
-        creds.refresh(Request())
+    creds = service_account.Credentials.from_service_account_file(
+        service_account_path(), scopes=["https://www.googleapis.com/auth/drive"]
+    )
+    creds.refresh(Request())
     token = creds.token
 
-    print(f"{'NOT共享权限设置':40s} canShare")
+    print("using service-account token (canShare is caller-specific)")
+    failed = 0
     for name, fid in NOTEBOOKS.items():
         r = requests.get(
             f"{BASE}/files/{fid}",
-            params={"fields": "capabilities(canShare,canEdit),sharingUser(emailAddress)", "supportsAllDrives": "true"},
+            params={"fields": "capabilities(canShare,canEdit)", "supportsAllDrives": "true"},
             headers={"Authorization": f"Bearer {token}"}, timeout=60,
         )
         if r.status_code != 200:
             print(f"  [ERR] {name}: HTTP {r.status_code} {r.text[:80]}")
+            failed += 1
             continue
-        d = r.json()
-        cap = d.get("capabilities", {})
-        sharing_user = (d.get("sharingUser") or {}).get("emailAddress", "")
-        print(f"  canShare={cap.get('canShare')!s:5s} canEdit={cap.get('canEdit')!s:5s} {name}  (impersonating: {sharing_user})")
+        cap = r.json().get("capabilities", {})
+        can_share = cap.get("canShare")
+        if can_share is not True:
+            failed += 1
+        print(f"  canShare={can_share!s:5s} canEdit={cap.get('canEdit')!s:5s} {name}")
+    if failed:
+        raise SystemExit(f"{failed} notebook(s) SA cannot share or read")
 
 
 if __name__ == "__main__":

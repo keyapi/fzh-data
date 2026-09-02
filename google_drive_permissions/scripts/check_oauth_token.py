@@ -8,7 +8,9 @@ from datetime import datetime, timezone
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 
-TOKEN_FILE = r"D:\Work\赛狐\Cursor\secrets\gsheets-user-oauth.json"
+from paths import user_oauth_path
+
+TOKEN_FILE = str(user_oauth_path())
 
 
 def main() -> None:

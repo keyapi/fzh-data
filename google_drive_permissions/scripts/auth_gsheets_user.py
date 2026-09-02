@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-"""用户级 OAuth 一次性授权：在浏览器完成本人的 Google 账号授权后，
-把 refresh token 存到 D:\\Work\\赛狐\\Cursor\\secrets\\gsheets-user-oauth.json。
+"""用户级 OAuth 一次性授权：浏览器登录后把 refresh token 存到 secrets/gsheets-user-oauth.json。
 用法: uv run python auth_gsheets_user.py <client_secret.json路径>
+输出路径可用 GSPREAD_USER_OAUTH_FILE 覆盖。
 """
 from __future__ import annotations
 
@@ -11,8 +11,10 @@ import sys
 
 from google_auth_oauthlib.flow import InstalledAppFlow
 
+from paths import user_oauth_path
+
 CLIENT_SECRET = sys.argv[1]
-OUT = r"D:\Work\赛狐\Cursor\secrets\gsheets-user-oauth.json"
+OUT = str(user_oauth_path())
 SCOPES = ["https://www.googleapis.com/auth/drive"]
 
 flow = InstalledAppFlow.from_client_secrets_file(CLIENT_SECRET, SCOPES)

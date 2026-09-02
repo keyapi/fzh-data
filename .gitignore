@@ -58,3 +58,4 @@ accounts_master.csv
 drive_permission_ledger.csv
 colab_permission_ledger.csv
 gsheet_permission_audit.csv
+google_drive_permissions/_init_local/

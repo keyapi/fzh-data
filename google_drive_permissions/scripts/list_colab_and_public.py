@@ -12,7 +12,9 @@ from collections import defaultdict
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 
-TOKEN_FILE = r"D:\Work\赛狐\Cursor\secrets\gsheets-user-oauth.json"
+from paths import user_oauth_path
+
+TOKEN_FILE = str(user_oauth_path())
 SA_EMAIL = "colab-gsheets@gsheets-351101.iam.gserviceaccount.com"
 BASE = "https://www.googleapis.com/drive/v3"
 

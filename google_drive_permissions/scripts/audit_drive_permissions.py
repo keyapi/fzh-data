@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""用用户级凭证(kyzh2022)全量盘点 Drive 权限：
+"""用用户级凭证(属主)全量盘点 Drive 权限：
 电子表格 + Colab notebook 每个文件的共享账号 → 扁平 ledger CSV + 汇总。
 
 离职账号标记列表从 Google Sheet 台账读（不在脚本里硬编码邮箱 PII）。
@@ -16,7 +16,9 @@ from google.oauth2.credentials import Credentials
 from tongtool_order_cost.tongtool_order_cost.gsheets import client
 from sheet_ledger import removed_accounts
 
-TOKEN_FILE = r"D:\Work\赛狐\Cursor\secrets\gsheets-user-oauth.json"
+from paths import user_oauth_path
+
+TOKEN_FILE = str(user_oauth_path())
 OUT_CSV = "drive_permission_ledger.csv"
 COLAB_LEDGER_CSV = "colab_permission_ledger.csv"
 

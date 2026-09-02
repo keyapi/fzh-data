@@ -22,7 +22,9 @@ import requests
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 
-TOKEN_FILE = r"D:\Work\赛狐\Cursor\secrets\gsheets-user-oauth.json"
+from paths import user_oauth_path
+
+TOKEN_FILE = str(user_oauth_path())
 SHEET_ID = "1TTVVHQOe5VCmdLZynGFAKXSPUVIvtlB6kOOqgszIqD0"
 MASTER_WS = "账号主清单"
 SA_SUFFIX = "iam.gserviceaccount.com"
@@ -53,10 +55,12 @@ def list_sharer_accounts(token: str, self_acct: str) -> Counter:
             }
             if page:
                 params["pageToken"] = page
-            d = requests.get(
+            r = requests.get(
                 "https://www.googleapis.com/drive/v3/files", params=params,
                 headers={"Authorization": f"Bearer {token}"}, timeout=60,
-            ).json()
+            )
+            r.raise_for_status()
+            d = r.json()
             for f in d.get("files", []):
                 for p in f.get("permissions", []):
                     email = p.get("emailAddress", "")
@@ -92,6 +96,8 @@ def main() -> None:
     # Drive 现状
     drive_counts = list_sharer_accounts(token, self_acct)
     print(f"Drive 现状有权限的账号: {len(drive_counts)}")
+    if apply and not drive_counts:
+        raise SystemExit("refuse --apply: Drive 扫描为空，避免把台账文件数刷成 0")
 
     to_add = []      # 台账没有的
     to_update = []   # 台账有的，刷新文件数
