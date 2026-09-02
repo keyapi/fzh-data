@@ -1,11 +1,4 @@
----
-okf: v0.1
-type: Handoff
-title: Google Sheet 权限运维 — Agent 参考
-description: 凭证路径、Google Sheet 台账 sheet_id、脚本函数表、Drive/Sheets API 机制、边界条件
----
-
-# Agent Handoff — Google Sheet 权限运维
+# Agent Handoff — Google Drive 权限管理
 
 > 给 Agent（Claude Code / Codex）快速上手用。**不含任何员工邮箱/账号明文的硬编码**（一律从 Google Sheet 台账读）。
 
@@ -31,16 +24,16 @@ description: 凭证路径、Google Sheet 台账 sheet_id、脚本函数表、Dri
 
 > **数据源约定**：所有账号邮箱（离职名单、现任/前任财务、在职保留等）**一律从本台账读**（见 `scripts/sheet_ledger.py`），脚本内**不硬编码任何邮箱**（PII 治理）。用「识别/备注」列找现任财务负责人等语义账号。
 
-## 3. 脚本（docs/gsheet-permissions/scripts/）
+## 3. 脚本（google_drive_permissions/scripts/）
 
-全部从**脚本所在目录运行**：`cd docs/gsheet-permissions/scripts/ && uv run python <script>.py`。
+全部从**脚本所在目录运行**：`cd google_drive_permissions/scripts/ && uv run python <script>.py`。
 运行需 `GSPREAD_SERVICE_ACCOUNT_FILE` 环境变量（SA 类）或用用户 OAuth token 文件。
 
 | 脚本 | 用途 | 凭证 | 幂等 | CSV 产物 |
 |------|------|------|------|---------|
 | `audit_gsheet_permissions.py` | 只读盘点 spreadsheet 权限（Drive files.list 一次拉全，快） | SA | 只读 | gsheet_permission_audit.csv |
 | `audit_drive_permissions.py` | 用户级全量盘点 spreadsheet+Colab 权限 | 用户OAuth | 只读 | drive_permission_ledger.csv + colab_permission_ledger.csv |
-| `cleanup_gsheet_permissions.py` | 补 zj 到含 zhongyu 的表 + 移除离职账号 | SA | dry-run 默认 | — |
+| `cleanup_gsheet_permissions.py` | 补现任财务到含前任财务的表 + 移除离职账号 | SA | dry-run 默认 | — |
 | `add_sa_to_business_colab.py` | 给业务 Colab 补 SA writer（幂等） | 用户OAuth | 是 | — |
 | `check_oauth_token.py` | 验证用户 OAuth token 可 refresh + Drive about | 用户OAuth | 只读 | — |
 | `check_colab_capabilities.py` | 检查 Colab canShare/canEdit | 用户OAuth | 只读 | — |
@@ -48,8 +41,10 @@ description: 凭证路径、Google Sheet 台账 sheet_id、脚本函数表、Dri
 | `list_colab_and_public.py` | 收集全部 Colab 状态 + 公开链接表 | 用户OAuth | 只读 | — |
 | `auth_gsheets_user.py` | 一次性授权：浏览器登录后把 refresh token 存到 secrets | 用户 | — | — |
 | `sheet_ledger.py` | **共享模块**：从台账读账号列表（removed/kept/all） | SA | 只读 | — |
+| `build_accounts_master.py` | **对账式刷新「账号主清单」**：Drive 现状 vs 台账，新增标待确认、刷新文件数，不覆盖人工填的列 | 用户OAuth | dry-run 默认 | — |
+| `create_permissions_ledger_sheet.py` | **扫描 Drive 现状刷新「现状明细」**：幂等重写为当前快照 | 用户OAuth | 是 | — |
 
-> **归档/初期脚本（含 PII，不入仓，仅供本地参考）**：`build_accounts_master.py`（建台账，内含离职/在职+姓名备注）、`create_permissions_ledger_sheet.py`（建台账）。已移至 `docs/gsheet-permissions/_init_local/`（gitignore）。
+> **数据以台账为准**：账号主清单的「离职/在职 + 姓名备注」由人工/Agent 直接在 Google Sheet 台账填（Drive 推导不出姓名）；`build_accounts_master.py` 只做对账（新增=待确认、刷新文件数），`create_permissions_ledger_sheet.py` 只刷新现状明细，都不覆盖人工填的状态/备注列。
 
 ## 4. API 机制
 

@@ -1,10 +1,10 @@
 ---
 okf: v0.1
 type: Index
-title: Google Sheet 权限运维 — 文档索引
+title: Google Drive 权限管理 — 文档索引
 ---
 
-# Google Sheet 权限运维（gsheet-permissions）
+# Google Drive 权限管理（google_drive_permissions）
 
 > 本项目**不是一个业务模块**，而是一套**跨领域的 Google Drive / Google Sheet 权限管理能力**。
 > 用于：审计现有共享、给同事加/取消权限、清理离职账号、把文件托管给服务账号以解绑「7 天过期」的用户 OAuth。
@@ -22,11 +22,11 @@ title: Google Sheet 权限运维 — 文档索引
 
 | 你想了解... | 读这个 |
 |-------------|--------|
-| 这套能力怎么用（人读指南） | [README.md](README.md) |
-| Agent 快速上手（凭证、sheet_id、脚本函数表、API 机制、边界） | [handoff.md](handoff.md) |
+| 这套能力怎么用（人读指南） | [../README.md](../README.md) |
+| Agent 快速上手（凭证、sheet_id、脚本函数表、API 机制、边界） | [../AGENT_HANDOFF.md](../AGENT_HANDOFF.md) |
 | 踩过的坑与正确姿势 | [lessons.md](lessons.md) |
 | 本次操作时间线（背景/过程/结果/残留） | [log.md](log.md) |
-| 可复用脚本 | [scripts/](scripts/) |
+| 可复用脚本 | [../scripts/](../scripts/) |
 
 ## 关键结论速览
 

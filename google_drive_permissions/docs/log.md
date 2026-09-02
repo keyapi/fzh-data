@@ -1,7 +1,7 @@
 ---
 okf: v0.1
 type: Log
-title: Google Sheet 权限运维 — 操作时间线（2026-09）
+title: Google Drive 权限管理 — 操作时间线（2026-09）
 ---
 
 # 操作日志

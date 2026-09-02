@@ -1,13 +1,6 @@
----
-okf: v0.1
-type: Guide
-title: Google Sheet 权限运维 — 使用指南
-description: 人读：这套权限管理能力怎么用，给谁加/取消权限、怎么查、怎么自动化
----
+# Google Drive 权限管理 — 使用指南
 
-# Google Sheet 权限运维 — 使用指南
-
-> 本文给人（非 Agent）看。Agent 请直接读 [handoff.md](handoff.md)。
+> 本文给人（非 Agent）看。Agent 请直接读 [AGENT_HANDOFF.md](AGENT_HANDOFF.md)。
 
 ## 这是什么
 

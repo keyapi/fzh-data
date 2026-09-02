@@ -53,11 +53,8 @@ sellfox_shipping/数据源/**
 # sellfox_shipping local DB
 sellfox_shipping/data/
 
-# Google Sheet 权限台账 — 含员工邮箱 PII，不入仓（数据以 Google Sheet 为准）
+# Google Drive 权限管理 — 含员工邮箱 PII 的 CSV 不入仓（数据以 Google Sheet 台账为准）
 accounts_master.csv
 drive_permission_ledger.csv
 colab_permission_ledger.csv
 gsheet_permission_audit.csv
-
-# 建台账的一次性初始化脚本（内含离职/在职+姓名 PII，不入仓，仅本地参考）
-docs/gsheet-permissions/_init_local/

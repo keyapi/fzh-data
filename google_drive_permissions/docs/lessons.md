@@ -1,7 +1,7 @@
 ---
 okf: v0.1
 type: Lesson
-title: Google Sheet 权限运维 — 经验教训
+title: Google Drive 权限管理 — 经验教训
 description: 踩坑记录：writersCanShare vs capabilities.canShare、权限接口 vs 内容接口、SA vs 用户 OAuth、Testing 7天、invalid_scope、PII 治理
 ---
 
