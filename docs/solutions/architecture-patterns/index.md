@@ -20,3 +20,4 @@ timestamp: 2026-07-28
 | ERPNext 工作流操作指南 | [erpnext-workflow-operations-guide.md](erpnext-workflow-operations-guide.md) |
 | Agent 钉钉文件桥 | [agent-dingtalk-file-bridge-via-erpnext.md](agent-dingtalk-file-bridge-via-erpnext.md) |
 | Workflow builder 布局算法 | [workflow-builder-layout-algorithm.md](workflow-builder-layout-algorithm.md) |
+| 网页自动化迁入 fzh-data（独立 uv 能力舱 + dispatcher） | [web-automation-capability-pod-monorepo.md](web-automation-capability-pod-monorepo.md) |
