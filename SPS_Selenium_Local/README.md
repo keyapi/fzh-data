@@ -39,7 +39,7 @@ build_image.bat
 
 ### 3. 配置凭据
 
-创建 `.env` 文件（可选，默认使用 config.py 中的值）：
+创建 `.env` 文件并填真实凭据（config.py 只读 env，不内置默认值）：
 
 ```env
 SPS_EMAIL=your_email@example.com
@@ -110,7 +110,7 @@ SPS_Selenium_Local/
 
 ```env
 # 登录凭据
-SPS_EMAIL=us@mxdeals.com
+SPS_EMAIL=your_sps_email@example.com
 SPS_PASSWORD=your_password
 
 # 浏览器设置
