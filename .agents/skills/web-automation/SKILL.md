@@ -29,6 +29,7 @@ metadata:
 3. **不直接运行 `web_automation/legacy-compatible/*.py`**，除非 dispatcher 明确给出了该命令。
 4. OCR（ddddocr）不是默认安装；只有用户明确要"全自动登录/识别验证码"才加 `--with-ocr`。
 5. 新页面/新功能先用 Playwright MCP 探路（snapshot + evaluate），确认选择器后再沉淀 Python。
+6. **失败码必须打 stdout**：子脚本用独立一行 `print("FAILURE_CODE=CODE")`（不要 `file=sys.stderr`）。dispatcher 解析 stdout 最后一处标记；只打到 stderr 不算合同。
 
 ## 常用命令模板
 

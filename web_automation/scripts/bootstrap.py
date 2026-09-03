@@ -59,7 +59,8 @@ def _chromium_present(web_root: Path) -> bool:
             capture_output=True, text=True,
             encoding="utf-8", errors="replace", timeout=60,
         )
-        path = (cp.stdout or "").strip().splitlines()[-1] if cp.stdout.strip() else ""
+        text = (cp.stdout or "").strip()
+        path = text.splitlines()[-1] if text else ""
         return bool(path) and Path(path).is_file()
     except (OSError, subprocess.TimeoutExpired, IndexError):
         return False

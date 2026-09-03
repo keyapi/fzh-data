@@ -51,3 +51,10 @@ def test_browser_skills_state_check_first():
 def test_write_rules_carry_confirm_scope():
     text = _read(".agents/skills/sellfox-automation/SKILL.md")
     assert "confirm-scope" in text or "NEED_USER_CONFIRMATION" in text
+
+
+def test_failure_codes_must_go_to_stdout():
+    text = _read(".agents/skills/web-automation/SKILL.md")
+    assert "FAILURE_CODE=" in text
+    assert "stdout" in text
+    assert "stderr" in text
