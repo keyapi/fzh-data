@@ -355,15 +355,19 @@ def _try_login(page, auto_login: bool, *, show_expired: bool = False) -> bool:
     if auto_login:
         ocr_ok, reason = ensure_ocr()
         if ocr_ok:
-            print("[信息] 尝试 OCR 自动识别验证码登录...")
-            try:
-                from tongtu_login_ocr import login as ocr_login
-                if ocr_login(page):
-                    print("[OK] OCR 自动登录成功")
-                    return True
-                print("[信息] OCR 多次识别失败，降级人工输码")
-            except ImportError:
-                pass
+            if not (os.getenv("TONGTU_USER") and os.getenv("TONGTU_PASSWORD")):
+                print("[信息] OCR 自动登录需要账号密码：请在 web_automation/.env 配置")
+                print("       TONGTU_USER / TONGTU_PASSWORD，否则只能人工输码登录")
+            else:
+                print("[信息] 尝试 OCR 自动识别验证码登录...")
+                try:
+                    from tongtu_login_ocr import login as ocr_login
+                    if ocr_login(page):
+                        print("[OK] OCR 自动登录成功")
+                        return True
+                    print("[信息] OCR 识别多次失败，降级人工输码")
+                except ImportError:
+                    pass
         else:
             print(f"[信息] OCR 不可用（{reason}），改人工登录")
     return _semi_auto_login(page, show_expired=show_expired)
