@@ -39,6 +39,9 @@ Open WebUI 里两套代码执行能力：Open Terminal = Docker Linux 沙箱（�
 ### api.vilavi.cn（公司 new-api 网关）
 上海阿里云 nginx 反代的公司 AI 网关：`/v1` 模型 API、`/sellfox` 赛狐代理、`/oidc` 钉钉 SSO。个人 Token 在后台「令牌管理」领取（`sk-…`）。生产渠道模型名以 `deepseek-v4-flash` / `deepseek-v4-pro` 为准；历史名 `deepseek-chat` 在默认组无渠道，会表现为 chat/completions **503**。
 
+### WorkBuddy（CodeBuddy Code 桌面壳）
+腾讯桌面 Agent（Electron，底层 CLI 为 CodeBuddy Code）。第三方模型走 `%USERPROFILE%\.workbuddy\models.json`，与 Codex++/Codex Desktop 配置体系无关。关键字段 `useCustomProtocol`：`true` = URL 透传（不补 `/chat/completions`），`false` = 自动补 `/chat/completions`。接 `api.vilavi.cn` 需 `url` 带 `/v1` 且 `useCustomProtocol=false`，否则「任务完成」无正文（`empty response output from model`）。见 `docs/solutions/developer-experience/workbuddy-custom-model-newapi-config.md`。
+
 ### 峰谷分时计价 (DeepSeek time-based pricing)
 DeepSeek API 自 2026-08 起按北京时间分时计费：周一至周五工作日高峰时段（日间两段）价格为闲时（夜间、周末、节假日）的 2 倍。new-api 的定价参数是**静态值**，无法原生跟随时段切换，须靠外部 cron 脚本在边界时刻改写定价参数（实现见 `docs/solutions/tooling-decisions/new-api-deepseek-time-based-pricing-automation.md`）。闲时段多收一倍是"未做分时调价"的典型症状。
 

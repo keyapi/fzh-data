@@ -23,7 +23,7 @@ generated: 2026-09-01 14:56
 | **amazon_pairing** | 12 | Handoff, Index, Log, Reference | [amazon_pairing/](amazon_pairing/) -> [amazon_pairing/docs/index.md](amazon_pairing/docs/index.md) |
 | **channel_account_sync** | 13 | Index, Lesson, Log, Reference | [channel_account_sync/](channel_account_sync/) -> [channel_account_sync/docs/index.md](channel_account_sync/docs/index.md) |
 | **dingtalk** | 2 | index, log | [dingtalk/](dingtalk/) -> [dingtalk/dingtalk_robot/docs/index.md](dingtalk/dingtalk_robot/docs/index.md) |
-| **docs** | 78 | ?, Handoff, Index, Lesson | [docs/](docs/) -> [docs/research/index.md](docs/research/index.md) |
+| **docs** | 79 | ?, Handoff, Index, Lesson | [docs/](docs/) -> [docs/research/index.md](docs/research/index.md) |
 | **erpnext** | 5 | Index, Log | [erpnext/](erpnext/) -> [erpnext/docs/index.md](erpnext/docs/index.md) |
 | **missing_products** | 5 | Index, Lesson, Log, Spec | [missing_products/](missing_products/) -> [missing_products/docs/index.md](missing_products/docs/index.md) |
 | **nas_product_visuals** | 2 | Index, Log | [nas_product_visuals/](nas_product_visuals/) -> [nas_product_visuals/docs/index.md](nas_product_visuals/docs/index.md) |
@@ -275,6 +275,7 @@ generated: 2026-09-01 14:56
 | Solution | Sellfox 对齐原生按需拉取 — READ_DATASETS 12/12 | [docs/solutions/architecture-patterns/sellfox-ivyeaops-ondemand-fetch-parity.md](docs/solutions/architecture-patterns/sellfox-ivyeaops-ondemand-fetch-parity.md) | 2026-09-01 |
 | Solution | Sellfox 报表 Job 队列（错开 create + 合并轮询） | [docs/solutions/architecture-patterns/sellfox-ivyeaops-report-job-queue.md](docs/solutions/architecture-patterns/sellfox-ivyeaops-report-job-queue.md) | 2026-09-01 |
 | Solution | Tongtool ERP2 MCP 接入与双 App 共享限流验证 | [docs/solutions/integration-issues/tongtool-erp2-mcp-shared-rate-limit.md](docs/solutions/integration-issues/tongtool-erp2-mcp-shared-rate-limit.md) | 2026-09-01 |
+| Solution | WorkBuddy 接公司 new-api 自定义模型：useCustomProtocol 必须 false 且 url 带 /v1 | [docs/solutions/developer-experience/workbuddy-custom-model-newapi-config.md](docs/solutions/developer-experience/workbuddy-custom-model-newapi-config.md) | 2026-09-03 |
 | Solution | 浏览空表 ≠ 拉取失败 — VERCART 搜索词/定向复验 | [docs/solutions/best-practices/sellfox-empty-searchterm-vs-target-report-split.md](docs/solutions/best-practices/sellfox-empty-searchterm-vs-target-report-split.md) | 2026-09-01 |
 | Solution | 群晖 NAS 多域名访问 — OpenWrt ACME、DSM 反代与 QuickConnect 选路 | [docs/solutions/integration-issues/nas-multi-domain-access-openwrt-quickconnect.md](docs/solutions/integration-issues/nas-multi-domain-access-openwrt-quickconnect.md) | 2026-09-01 |
 | Solution | 赛狐 Phase2 ingest — IvyeaOps 五杠杆优化器数据接线 | [docs/solutions/architecture-patterns/sellfox-ivyeaops-five-lever-ingest.md](docs/solutions/architecture-patterns/sellfox-ivyeaops-five-lever-ingest.md) | 2026-09-01 |
