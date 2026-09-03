@@ -2,8 +2,8 @@
 """
 销售及库存报表处理：解压 → 按仓库分表 → 输出多 sheet Excel
 
-FZH-DANEEY-* 系列仓库合并到同一个工作表 "FZH-DANEEY"
-其他仓库各自独立工作表
+3 主仓 + 3 退货仓（6 个主线仓）各一个工作表；其余仓库（成品/半成品/Wayfair/
+星链/大件/多渠道等非主线）合并进"其他"工作表，不丢数据。
 
 用法:
   uv run python process_sales_report.py <zip_path>                    # 指定 zip 路径
@@ -22,8 +22,17 @@ WEB_ROOT = SCRIPT_DIR.parent
 DOWNLOADS_DIR = WEB_ROOT / "downloads"
 OUTPUT_DIR = WEB_ROOT / "output"
 
-DANEEY_PREFIX = "FZH-DANEEY"
-DANEEY_SHEET_NAME = "FZH-DANEEY"
+# 6 个主线仓（与 tongtu_auto_export.WAREHOUSES 对齐，2026-09 通途改名后）。
+# 其余仓库（成品/半成品/Wayfair/星链/大件/多渠道等）归入"其他"表。
+MAIN_SHEETS = {
+    "美东-CENTRADE",
+    "波兰-FZHPoland-covers",
+    "美中-FZH-DANEEY",
+    "美东-CENTRADE-退货产品仓",
+    "波兰-FZHPoland-退货产品仓",
+    "美中-FZH-DANEEY-退货产品仓",
+}
+OTHER_SHEET_NAME = "其他"
 
 # 需要跳过的汇总行关键词（精确匹配仓库列的值）
 SKIP_WAREHOUSE_VALUES = {"数量总计", "金额总计"}
@@ -65,22 +74,19 @@ def read_data(xlsx_path):
 
 
 def split_by_warehouse(df):
-    """按仓库分组，FZH-DANEEY 系列合并"""
+    """按仓库分组：6 个主线仓各一表，其余归入"其他"（不丢数据）。"""
     sheets = {}
-
-    daneey_dfs = []
+    other_dfs = []
     for wh, group in df.groupby("仓库", sort=False):
-        if wh.startswith(DANEEY_PREFIX):
-            daneey_dfs.append(group)
-        else:
+        if wh in MAIN_SHEETS:
             sheets[wh] = group.reset_index(drop=True)
-
-    if daneey_dfs:
-        merged = pd.concat(daneey_dfs, ignore_index=True)
-        sheets[DANEEY_SHEET_NAME] = merged
-        wh_names = [str(df.iloc[0]["仓库"]) for df in daneey_dfs]
-        print(f"  [合并] FZH-DANEEY: {', '.join(wh_names)} → {len(merged)} 行")
-
+        else:
+            other_dfs.append(group)
+    if other_dfs:
+        merged = pd.concat(other_dfs, ignore_index=True)
+        sheets[OTHER_SHEET_NAME] = merged
+        wh_names = sorted({str(g.iloc[0]["仓库"]) for g in other_dfs})
+        print(f"  [归入其他] {', '.join(wh_names)} → {len(merged)} 行")
     return sheets
 
 
