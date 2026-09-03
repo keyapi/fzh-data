@@ -1,0 +1,101 @@
+version: 1
+capabilities:
+  tongtu.stock.export:
+    platform: tongtu
+    mode: BROWSER_ONLY
+    risk: read
+    primary: browser
+    fallback: null
+    allowed_fallback_codes: []
+    blocked_fallback_codes: [AUTH_FAILED, PERMISSION_DENIED, INVALID_ARGUMENT, BUSINESS_VALIDATION]
+    verify: xlsx_exists_and_has_sku_column
+    implementation:
+      browser: legacy-compatible/tongtu_auto_export.py
+    contract: ui
+    last_verified: "2026-08-26"
+
+  tongtu.sales.export:
+    platform: tongtu
+    mode: BROWSER_ONLY
+    risk: read
+    primary: browser
+    fallback: null
+    allowed_fallback_codes: []
+    blocked_fallback_codes: [AUTH_FAILED, PERMISSION_DENIED, INVALID_ARGUMENT, BUSINESS_VALIDATION]
+    verify: xlsx_exists_and_nonempty
+    implementation:
+      browser: legacy-compatible/tongtu_sales_report.py
+    contract: ui
+    last_verified: "2026-08-26"
+
+  sellfox.stock.export:
+    platform: sellfox
+    mode: API_FIRST_BROWSER_FALLBACK
+    risk: read
+    primary: api
+    fallback: browser
+    allowed_fallback_codes: [ENDPOINT_MISSING, ENDPOINT_UNSUPPORTED, SERVICE_UNAVAILABLE]
+    blocked_fallback_codes: [AUTH_FAILED, PERMISSION_DENIED, INVALID_ARGUMENT, BUSINESS_VALIDATION]
+    verify: warehouse_item_xlsx_exists
+    implementation:
+      api: legacy-compatible/sellfox_auto_export.py
+      api_args: [--api]
+      browser: legacy-compatible/sellfox_auto_export.py
+    contract: private-cookie-api
+    last_verified: "2026-08-26"
+
+  sellfox.other-inbound.import:
+    platform: sellfox
+    mode: MANUAL_CONFIRM
+    risk: write
+    primary: browser
+    fallback: null
+    allowed_fallback_codes: []
+    blocked_fallback_codes: [AUTH_FAILED, PERMISSION_DENIED, INVALID_ARGUMENT, BUSINESS_VALIDATION]
+    verify: import_result_and_scope_summary
+    implementation:
+      browser: click-based/sellfox_import_other_inbound.py
+    contract: ui
+    last_verified: "2026-08-26"
+
+  sellfox.other-outbound.import:
+    platform: sellfox
+    mode: MANUAL_CONFIRM
+    risk: write
+    primary: browser
+    fallback: null
+    allowed_fallback_codes: []
+    blocked_fallback_codes: [AUTH_FAILED, PERMISSION_DENIED, INVALID_ARGUMENT, BUSINESS_VALIDATION]
+    verify: import_result_and_scope_summary
+    implementation:
+      browser: click-based/sellfox_import_other_outbound.py
+    contract: ui
+    last_verified: "2026-08-26"
+
+  sellfox.restock.import:
+    platform: sellfox
+    mode: MANUAL_CONFIRM
+    risk: write
+    primary: browser
+    fallback: null
+    allowed_fallback_codes: []
+    blocked_fallback_codes: [AUTH_FAILED, PERMISSION_DENIED, INVALID_ARGUMENT, BUSINESS_VALIDATION]
+    verify: import_result_and_scope_summary
+    implementation:
+      browser: click-based/sellfox_import_warehouse_restock.py
+    contract: ui
+    last_verified: "2026-08-26"
+
+  web.generic.explore:
+    platform: generic
+    mode: BROWSER_ONLY
+    risk: interactive
+    primary: mcp
+    fallback: null
+    allowed_fallback_codes: []
+    blocked_fallback_codes: [AUTH_FAILED, PERMISSION_DENIED]
+    verify: agent_defined_closed_loop
+    implementation:
+      mcp: playwright
+    contract: ui
+    last_verified: "2026-08-26"
