@@ -20,6 +20,8 @@ venv/
 # Claude session / worktrees
 .claude/worktrees/
 .claude/settings.local.json
+.claude/scheduled_tasks.json
+.claude/scheduled_tasks.lock
 .playwright-mcp/
 
 # env files (secrets)
@@ -50,6 +52,13 @@ sellfox_shipping/数据源/**
 
 # sellfox_shipping local DB
 sellfox_shipping/data/
+
+# Google Drive 权限管理 — 含员工邮箱 PII 的 CSV 不入仓（数据以 Google Sheet 台账为准）
+accounts_master.csv
+drive_permission_ledger.csv
+colab_permission_ledger.csv
+gsheet_permission_audit.csv
+google_drive_permissions/_init_local/
 
 # web_automation 能力舱：浏览器 profile / cookies / 下载输出（运行时状态）
 web_automation/.venv/
