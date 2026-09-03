@@ -19,7 +19,7 @@ metadata:
 ## 硬规则（Agent 必须遵守）
 
 1. **任何网页任务先跑 dispatcher 的 `--check`**，不要自己猜 Python 环境、脚本路径或 venv。
-2. dispatcher 输出状态字面执行：
+2. dispatcher `--check` 输出状态字面执行（`--check` 会看子环境 / Chromium / 登录 profile，不是只报路由）：
    - `READY` → 继续下一步 / 直接执行；
    - `NEED_BROWSER` → 运行 `uv run python web_automation/scripts/bootstrap.py` 建子环境 + Chromium；
    - `NEED_LOGIN` → 浏览器打开后人手动登录（首次登录优先人工并持久化 profile）；

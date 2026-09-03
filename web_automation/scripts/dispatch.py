@@ -23,6 +23,8 @@ from web_automation.scripts.runtime import (
     build_script_command,
     classify_failure,
     load_capabilities,
+    platform_profile_present,
+    run_result_from_output,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -31,7 +33,10 @@ MATRIX_PATH = REPO_ROOT / "web_automation" / "capabilities.yaml"
 EXIT_READY = 0
 EXIT_EXEC_FAILED = 1
 EXIT_BLOCKED = 2
-EXIT_NEED_CONFIRM = 3
+EXIT_NEED_ACTION = 3
+NEED_STATUSES = frozenset(
+    {"NEED_USER_CONFIRMATION", "NEED_BROWSER", "NEED_OCR", "NEED_LOGIN"}
+)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -59,6 +64,8 @@ def dispatch(
     confirm_scope: str | None,
     passthrough: list[str],
     runner: object,
+    env_facts: dict[str, object] | None = None,
+    profile_present: bool | None = None,
 ) -> DispatchResult:
     matrix = load_capabilities(MATRIX_PATH)
     if task not in matrix:
@@ -87,10 +94,9 @@ def dispatch(
         build_script_command(REPO_ROOT, cap, passthrough, channel=channel)
     )
     if check:
-        return DispatchResult(
-            status="READY", task=task, mode=cap.mode, channel=channel,
-            risk=cap.risk, command=command,
-            reason=f"route ok (mode={cap.mode}, channel={channel})",
+        return _check_env(
+            cap, command, with_ocr=with_ocr,
+            env_facts=env_facts, profile_present=profile_present,
         )
 
     result: RunResult = runner(command, with_ocr=with_ocr)
@@ -135,6 +141,55 @@ def dispatch(
     )
 
 
+def _check_env(
+    cap,
+    command: tuple[str, ...],
+    *,
+    with_ocr: bool,
+    env_facts: dict[str, object] | None,
+    profile_present: bool | None,
+) -> DispatchResult:
+    facts = env_facts
+    if facts is None:
+        from web_automation.scripts.bootstrap import collect_web_facts
+
+        raw = collect_web_facts(REPO_ROOT)
+        facts = {**raw, "env_ready": raw["child_env_ready"]}
+    if not facts.get("uv_present", True):
+        return DispatchResult(
+            status="BLOCKED", task=cap.task, mode=cap.mode, channel=cap.primary,
+            risk=cap.risk, command=(), reason="uv not found; install uv first",
+        )
+    if not facts.get("env_ready") or not facts.get("chromium_ready"):
+        return DispatchResult(
+            status="NEED_BROWSER", task=cap.task, mode=cap.mode, channel=cap.primary,
+            risk=cap.risk, command=command,
+            reason="子环境或 Chromium 未就绪：先跑 uv run python web_automation/scripts/bootstrap.py",
+        )
+    if with_ocr and not facts.get("ocr_ready"):
+        return DispatchResult(
+            status="NEED_OCR", task=cap.task, mode=cap.mode, channel=cap.primary,
+            risk=cap.risk, command=command,
+            reason="OCR 未安装：先问用户，需要才 bootstrap --with-ocr",
+        )
+    present = profile_present
+    if present is None:
+        present = platform_profile_present(
+            cap.platform, REPO_ROOT / "web_automation",
+        )
+    if not present:
+        return DispatchResult(
+            status="NEED_LOGIN", task=cap.task, mode=cap.mode, channel=cap.primary,
+            risk=cap.risk, command=command,
+            reason="尚无持久化登录 profile：先在浏览器里人工登录一次",
+        )
+    return DispatchResult(
+        status="READY", task=cap.task, mode=cap.mode, channel=cap.primary,
+        risk=cap.risk, command=command,
+        reason=f"route ok (mode={cap.mode}, channel={cap.primary})",
+    )
+
+
 # ---------------------------------------------------------------------------
 # CLI orchestration (bootstrap + subprocess)
 # ---------------------------------------------------------------------------
@@ -148,18 +203,27 @@ def _real_runner(command: tuple[str, ...], *, with_ocr: bool) -> RunResult:
     facts["env_ready"] = facts["child_env_ready"]
     if run_install_commands(facts, with_ocr) != 0:
         return RunResult(returncode=2, failure_code="BOOTSTRAP_FAILED")
-    cp = subprocess.run(
+    proc = subprocess.Popen(
         list(command), cwd=REPO_ROOT,
         env={**os.environ, "PYTHONIOENCODING": "utf-8"},
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        text=True, encoding="utf-8", errors="replace",
     )
-    return RunResult(returncode=cp.returncode, failure_code=None)
+    chunks: list[str] = []
+    assert proc.stdout is not None
+    for line in proc.stdout:
+        print(line, end="")
+        chunks.append(line)
+    proc.wait()
+    parsed = run_result_from_output(proc.returncode or 0, "".join(chunks))
+    return RunResult(parsed.returncode, parsed.failure_code)
 
 
 def _cli_exit_code(result: DispatchResult) -> int:
     if result.status == "READY":
         return EXIT_READY
-    if result.status == "NEED_USER_CONFIRMATION":
-        return EXIT_NEED_CONFIRM
+    if result.status in NEED_STATUSES:
+        return EXIT_NEED_ACTION
     return EXIT_BLOCKED
 
 

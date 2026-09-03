@@ -39,7 +39,7 @@ from playwright.sync_api import sync_playwright
 SCRIPT_DIR = Path(__file__).resolve().parent
 WEB_ROOT = SCRIPT_DIR.parent
 PROFILE_DIR = WEB_ROOT / "sellfox-profile"
-GEN_SCRIPT = Path("D:/Work/赛狐/Cursor/warehouse_restock/build_saihu_warehouse_restock.py")
+GEN_SCRIPT = WEB_ROOT.parent / "warehouse_restock" / "build_saihu_warehouse_restock.py"
 
 API_BASE = "https://www.sellfox.com/api"
 PAGE_URL = "https://www.sellfox.com/amzup-web-main/web/warehouse/stockOrder/index.html"

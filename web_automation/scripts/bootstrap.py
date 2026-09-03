@@ -11,7 +11,6 @@ optionally the OCR dependency group. Runs from the repo root environment:
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import json
 import os
 import shutil
@@ -30,10 +29,6 @@ CHROMIUM_INSTALL = [
     "python", "-m", "playwright", "install", "chromium",
 ]
 OCR_SYNC = ["uv", "sync", PROJECT_FLAG, PROJECT_PATH, "--group", "ocr"]
-
-
-def _find_spec(name: str) -> bool:
-    return importlib.util.find_spec(name) is not None
 
 
 def _venv_python(web_root: Path) -> Path:
@@ -58,6 +53,26 @@ def _chromium_present(web_root: Path) -> bool:
         return False
 
 
+def probe_modules(python_exe: Path, names: tuple[str, ...]) -> bool:
+    """Return True if *all* modules import in the given interpreter (not this process)."""
+    if not python_exe.is_file() or not names:
+        return False
+    quoted = ", ".join(repr(n) for n in names)
+    code = (
+        "import importlib.util as i;"
+        f"print('ok' if all(i.find_spec(n) for n in ({quoted},)) else 'no')"
+    )
+    try:
+        cp = subprocess.run(
+            [str(python_exe), "-c", code],
+            capture_output=True, text=True,
+            encoding="utf-8", errors="replace", timeout=60,
+        )
+        return (cp.stdout or "").strip() == "ok"
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
 def collect_web_facts(root: Path) -> dict[str, object]:
     web_root = root / "web_automation"
     facts = {
@@ -69,22 +84,10 @@ def collect_web_facts(root: Path) -> dict[str, object]:
     }
     if facts["child_env_ready"]:
         py = _venv_python(web_root)
-        # Detect Playwright presence without importing inside this process.
-        code = (
-            "import importlib.util as i;"
-            "print('ok' if i.find_spec('playwright') else 'no')"
-        )
-        try:
-            cp = subprocess.run(
-                [str(py), "-c", code], capture_output=True, text=True,
-                encoding="utf-8", errors="replace", timeout=60,
-            )
-            facts["playwright_installed"] = (cp.stdout or "").strip() == "ok"
-        except (OSError, subprocess.TimeoutExpired):
-            pass
+        facts["playwright_installed"] = probe_modules(py, ("playwright",))
         if facts["playwright_installed"]:
             facts["chromium_ready"] = _chromium_present(web_root)
-            facts["ocr_ready"] = _find_spec("ddddocr") and _find_spec("onnxruntime")
+            facts["ocr_ready"] = probe_modules(py, ("ddddocr", "onnxruntime"))
     return facts
 
 

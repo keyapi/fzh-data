@@ -48,6 +48,26 @@ PAGE_COUNT_API = "https://www.sellfox.com/api/gw/sellfox/sellfox-warehouse/sellf
 HEAD_FIELD_API = "https://www.sellfox.com/api/excel/getHeadField.json"
 
 
+def emit_failure(code: str, detail: str = "") -> None:
+    if detail:
+        print(detail)
+    print(f"FAILURE_CODE={code}")
+
+
+def failure_code_for_http(status_code: int) -> str:
+    if status_code == 401:
+        return "AUTH_FAILED"
+    if status_code == 403:
+        return "PERMISSION_DENIED"
+    if status_code == 404:
+        return "ENDPOINT_MISSING"
+    if status_code in (405, 501):
+        return "ENDPOINT_UNSUPPORTED"
+    if status_code in (502, 503, 504):
+        return "SERVICE_UNAVAILABLE"
+    return "UNCLASSIFIED_FAILURE"
+
+
 # ─── 工具函数 ───────────────────────────────────────────────
 
 def is_logged_in(page):
@@ -363,7 +383,7 @@ def run_browser(headless=False, demo_search=False, auto_login=False):
 def get_api_cookies():
     """从 sellfox-profile 提取 cookies 用于 API 调用"""
     if not PROFILE_DIR.exists():
-        print("sellfox-profile/ 不存在，请先用浏览器模式登录一次")
+        emit_failure("AUTH_FAILED", "sellfox-profile/ 不存在，请先用浏览器模式登录一次")
         return None
 
     with sync_playwright() as p:
@@ -376,7 +396,7 @@ def get_api_cookies():
 
     sellfox_cookies = [c for c in cookies if "sellfox" in c.get("domain", "")]
     if not sellfox_cookies:
-        print("未找到 sellfox cookies，请先用浏览器模式登录")
+        emit_failure("AUTH_FAILED", "未找到 sellfox cookies，请先用浏览器模式登录")
         return None
 
     result = {}
@@ -424,10 +444,25 @@ def api_export_flow(cookies):
         "shopInfoList": [], "includeList": fields, "isHidden": False,
         "dangerStock": False, "pageNo": 1, "pageSize": 20,
     }
-    r = session.post(EXPORT_API, json=export_body,
-                     headers={"content-type": "application/json"})
-    if r.json().get("code") != 0:
-        print(f"  [失败] {r.json()}")
+    try:
+        r = session.post(EXPORT_API, json=export_body,
+                         headers={"content-type": "application/json"})
+    except Exception as exc:
+        emit_failure("SERVICE_UNAVAILABLE", f"  [失败] 网络错误: {exc}")
+        return None
+    if r.status_code != 200:
+        emit_failure(
+            failure_code_for_http(r.status_code),
+            f"  [失败] HTTP {r.status_code}",
+        )
+        return None
+    try:
+        payload = r.json()
+    except Exception:
+        emit_failure("UNCLASSIFIED_FAILURE", "  [失败] 非 JSON 响应")
+        return None
+    if payload.get("code") != 0:
+        emit_failure("UNCLASSIFIED_FAILURE", f"  [失败] {payload}")
         return None
     print(f"     OK")
 

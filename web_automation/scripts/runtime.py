@@ -6,6 +6,7 @@ light. Capabilities and routing decisions live in web_automation/capabilities.ya
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, Union
@@ -24,6 +25,35 @@ BLOCKING_STATES = frozenset(
 )
 
 _CURRENT_SCHEMA = 1
+_FAILURE_CODE_RE = re.compile(r"^FAILURE_CODE=([A-Z][A-Z0-9_]+)\s*$", re.M)
+_PROFILE_DIRS = {
+    "tongtu": ("chrome-profile", "tongtu-profile-login"),
+    "sellfox": ("sellfox-profile", "sellfox-profile-login"),
+}
+
+
+@dataclass(frozen=True)
+class ProcResult:
+    returncode: int
+    failure_code: str | None
+
+
+def parse_failure_code(output: str) -> str | None:
+    matches = _FAILURE_CODE_RE.findall(output)
+    return matches[-1] if matches else None
+
+
+def run_result_from_output(returncode: int, output: str) -> ProcResult:
+    if returncode == 0:
+        return ProcResult(0, None)
+    return ProcResult(returncode, parse_failure_code(output) or "UNCLASSIFIED_FAILURE")
+
+
+def platform_profile_present(platform: str, web_root: Path) -> bool:
+    names = _PROFILE_DIRS.get(platform)
+    if not names:
+        return True
+    return any((web_root / name).is_dir() for name in names)
 
 
 def _schema_version() -> int:
@@ -134,9 +164,13 @@ __all__ = [
     "MODES",
     "RISKS",
     "Capability",
+    "ProcResult",
     "build_script_command",
     "classify_failure",
     "load_capabilities",
+    "parse_failure_code",
+    "platform_profile_present",
     "resolve_capability",
+    "run_result_from_output",
     "_schema_version",
 ]

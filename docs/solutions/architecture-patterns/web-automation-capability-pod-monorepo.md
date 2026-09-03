@@ -53,7 +53,8 @@ Python 环境、脚本路径、API/网页边界。
 ### 入口契约：Agent 只表达业务目标
 
 `web_automation/capabilities.yaml` 是版本化能力矩阵（`platform.action` → mode/risk/通道/回退）。
-`scripts/dispatch.py <task> --check` 输出确定状态：
+`scripts/dispatch.py <task> --check` **不只报路由**：它聚合 bootstrap 事实（子 `.venv` / Chromium / OCR）
+和平台 profile 目录是否存在，再输出确定状态：
 
 | 状态 | 含义 | 处理 |
 |------|------|------|
@@ -71,7 +72,9 @@ Python 环境、脚本路径、API/网页边界。
 四类 mode：`API_ONLY` / `API_FIRST_BROWSER_FALLBACK` / `BROWSER_ONLY` / `MANUAL_CONFIRM`。
 - 认证/权限/参数/业务校验错误**命中即 BLOCKED**，绝不静默回退浏览器掩盖。
 - 仅显式列出的"端点缺失/不支持/服务不可用"允许回退。
-- 旧脚本只回普通非零码 → 映射 `UNCLASSIFIED_FAILURE` → BLOCKED，不猜。
+- 子脚本用独立一行 `FAILURE_CODE=CODE` 报告；dispatcher 真实 runner 解析最后一处。
+  非零退出且无标记 → `UNCLASSIFIED_FAILURE` → BLOCKED，不猜。
+- OCR 是否就绪必须问**子 `.venv` 的 python**，不能用 dispatcher 进程自己的 `find_spec`。
 - `sellfox_auto_export.py --api` / `sellfox_restock_api.py` 属**私有网页 cookie API**
   （`contract: private-cookie-api`），与正式 `SELLFOX_API` OpenAPI 合同稳定性不同，不可混用。
 

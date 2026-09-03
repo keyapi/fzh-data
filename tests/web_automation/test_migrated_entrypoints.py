@@ -64,3 +64,12 @@ def test_capability_implementations_exist():
             if not target.is_file():
                 missing.append(f"{task}: {impl}")
     assert not missing, f"capability impl missing: {missing}"
+
+
+def test_sellfox_auto_export_emits_parseable_failure_codes():
+    text = (WEB_AUTO / "legacy-compatible" / "sellfox_auto_export.py").read_text(
+        encoding="utf-8"
+    )
+    assert "FAILURE_CODE=" in text
+    for code in ("ENDPOINT_MISSING", "ENDPOINT_UNSUPPORTED", "SERVICE_UNAVAILABLE", "AUTH_FAILED"):
+        assert code in text, code

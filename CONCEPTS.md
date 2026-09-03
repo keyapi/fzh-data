@@ -260,7 +260,8 @@ Gold A：历史已配对 ∩ 通途别名唯一 ∩ EN/赛狐一致，只用于�
 ### dispatcher（网页任务路由入口）
 网页自动化能力舱的**固定 Agent 入口**：任何网页任务先经它输出确定状态
 （`READY` / `NEED_BROWSER` / `NEED_LOGIN` / `NEED_OCR` / `NEED_USER_CONFIRMATION` / `BLOCKED`），
-弱模型按状态字面执行、不猜环境或脚本路径。写操作无范围确认时返回 `NEED_USER_CONFIRMATION`，
+弱模型按状态字面执行、不猜环境或脚本路径。`--check` 会聚合子环境/Chromium/OCR 与登录 profile
+是否存在（不是只报路由）。写操作无范围确认时返回 `NEED_USER_CONFIRMATION`，
 杜绝擅自扩大到全量。路由、风险、API/浏览器回退规则由 `capabilities.yaml` 能力矩阵声明
 （认证/权限/参数/业务校验错误禁止静默回退浏览器；仅显式列出的端点缺失/不可用才允许）。
 

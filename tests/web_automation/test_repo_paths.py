@@ -58,3 +58,14 @@ def test_specific_root_integrators_clean():
         assert "D:\\Work\\赛狐\\网页自动化" not in text, rel
         assert "D:/Work/赛狐/网页自动化" not in text, rel
         assert "WEB_AUTO = Path" not in text, f"{rel} still has WEB_AUTO"
+
+
+def test_web_automation_py_has_no_machine_cursor_path():
+    """迁入脚本不得写死本仓库在开发机上的绝对路径。"""
+    offenders = []
+    web = ROOT / "web_automation"
+    for py in web.rglob("*.py"):
+        text = py.read_text(encoding="utf-8", errors="replace")
+        if "D:/Work/赛狐/Cursor" in text or "D:\\Work\\赛狐\\Cursor" in text:
+            offenders.append(str(py.relative_to(ROOT)))
+    assert not offenders, f"machine path in web_automation: {offenders}"
