@@ -105,4 +105,3 @@ python -m ups_track.cli query --input x34_in.csv --env prod --out x34_result --w
 | 产物 | `x34_result.summary.csv / .timeline.csv / .raw.json` + `x34_check.csv`（核对表，含 跟踪号/ASN/状态/交付/三时点/期望收件城市/异常列） |
 
 > 结论：**含多包（同单多个跟踪号）的批量场景可用同一命令处理**；逐件核对表可直接对回源文件。
-
