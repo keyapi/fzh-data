@@ -59,19 +59,72 @@ DOWNLOADS_DIR = WEB_ROOT / "downloads"
 OUTPUT_DIR = WEB_ROOT / "output"
 LOGIN_TIMEOUT_SECS = 300
 
-# 依次导出的仓库列表
+# 导出的仓库列表（2026-09-03 通途仓名统一为 美东-/波兰-/美中- 前缀）
+# 结构 = 3 分公司主仓 + 3 对应退货仓。皮壳库存已并入「美中-FZH-DANEEY」主仓；
+# 成品仓 / 半成品仓 / Wayfair / 星链 / 大件 / 多渠道 已停用或非库存主线，一律不导出。
+# 若通途再次改名/加仓：跑 `uv run python tongtu_auto_export.py --list-warehouses` 对照更新本清单。
 WAREHOUSES = [
-    "CENTRADE",
-    "FZHPoland-covers",
-    "FZH-DANEEY-皮壳仓库",
-    "FZH-DANEEY-退货产品仓",
-    "FZH-DANEEY-成品仓",
-    "FZH-DANEEY-半成品仓",
+    "美东-CENTRADE",
+    "波兰-FZHPoland-covers",
+    "美中-FZH-DANEEY",
+    "美东-CENTRADE-退货产品仓",
+    "波兰-FZHPoland-退货产品仓",
+    "美中-FZH-DANEEY-退货产品仓",
 ]
 
 # 仓库名称 → 文件名安全前缀（不能有特殊字符）
 def safe_prefix(name):
     return name.replace("/", "-").replace("\\", "-").replace(":", "-")
+
+
+def _venv_python() -> Path:
+    if sys.platform.startswith("win"):
+        return WEB_ROOT / ".venv" / "Scripts" / "python.exe"
+    return WEB_ROOT / ".venv" / "bin" / "python"
+
+
+def ensure_ocr() -> tuple[bool, str]:
+    """确保子环境可加载 ddddocr+onnxruntime（懒惰试装，不询问用户）。
+
+    用户表达了"全自动登录"意图才调用：先探测，缺则自动 `uv sync --group ocr`
+    装到 web_automation 子环境（幂等）。返回 (ok, reason)，reason 供失败降级提示。
+    """
+    py = _venv_python()
+    probe_code = (
+        "import importlib.util as i;"
+        "print('ok' if all(i.find_spec(n) for n in ('ddddocr', 'onnxruntime')) else 'no')"
+    )
+
+    def probe() -> bool:
+        if not py.is_file():
+            return False
+        try:
+            cp = subprocess.run(
+                [str(py), "-c", probe_code], capture_output=True, text=True,
+                encoding="utf-8", errors="replace", timeout=60,
+            )
+            return (cp.stdout or "").strip() == "ok"
+        except (OSError, subprocess.TimeoutExpired):
+            return False
+
+    if probe():
+        return True, "OCR 已就绪"
+    print("[信息] 全自动登录需要 OCR 组件（识别图形验证码），首次将自动安装（约 50MB，仅一次）...")
+    try:
+        cp = subprocess.run(
+            ["uv", "sync", "--project", str(WEB_ROOT), "--group", "ocr"],
+            cwd=str(WEB_ROOT.parent), capture_output=True, text=True,
+            encoding="utf-8", errors="replace", timeout=600,
+        )
+    except OSError as e:
+        return False, f"无法执行 uv: {e}"
+    if cp.returncode != 0:
+        detail = (cp.stderr or cp.stdout or "安装失败").strip()
+        return False, f"OCR 安装失败: {detail[-300:]}"
+    if probe():
+        print("[OK] OCR 组件安装完成")
+        return True, "OCR 已就绪"
+    return False, "OCR 已安装但无法加载（Windows 常缺 VC++ 2019+ 运行库，请安装后重试）"
 
 
 def is_already_logged_in(page):
@@ -152,11 +205,36 @@ def _pick_other_warehouse(current, all_warehouses):
     return "FZHPoland-covers"  # fallback
 
 
+def list_warehouses_on_page(page):
+    """抓取库存结存页仓库区所有可切换仓库名并打印（供对照更新 WAREHOUSES）。
+
+    仓库 toggle 在 `#warehouseDisableDiv` 下，`a.toggle_btn`(未选)/`a.toggle_btn_down`(已选)。
+    """
+    names = page.eval_on_selector_all(
+        "#warehouseDisableDiv a.toggle_btn, #warehouseDisableDiv a.toggle_btn_down",
+        "els => els.map(e => e.textContent.trim()).filter(Boolean)",
+    )
+    print("\n" + "=" * 50)
+    print(f"页面仓库清单（{len(names)} 个，含选中态）:")
+    print("=" * 50)
+    for i, name in enumerate(names, 1):
+        print(f"  {i}. {name}")
+    return names
+
+
 def click_export(page, warehouse_name):
-    """点击导出按钮并等待下载（MCP 实测 click 有效，需确保数据表格已渲染）"""
-    with page.expect_download(timeout=60000) as download_info:
-        page.locator('a[onclick="exportExcelPage()"]').first.click()
-        print(f"  [OK] 已点击导出，等待下载...")
+    """点击导出按钮并等待下载（MCP 实测 click 有效，需确保数据表格已渲染）。
+
+    返回保存的 Path；若 60s 未等到下载（空仓无可导数据等）返回 None，
+    由调用方记录跳过而不是炸掉整轮。
+    """
+    try:
+        with page.expect_download(timeout=60000) as download_info:
+            page.locator('a[onclick="exportExcelPage()"]').first.click()
+            print(f"  [OK] 已点击导出，等待下载...")
+    except Exception as e:
+        print(f"  [跳过] {warehouse_name}: 导出超时/失败（可能该仓无可导出数据）: {type(e).__name__}")
+        return None
 
     download = download_info.value
     prefix = safe_prefix(warehouse_name)
@@ -247,6 +325,50 @@ def export_cookies():
     print(f"       但 passport 的记住密码 cookie 可触发自动登录。")
 
 
+def _semi_auto_login(page, *, show_expired: bool = False) -> bool:
+    """半自动登录：有 .env 凭据就自动填账号+勾 7 天，验证码留给用户在浏览器输入。
+
+    无凭据则纯手动（现状）。返回登录是否成功。
+    """
+    if show_expired:
+        print("[信息] 登录会话已过期，请重新登录")
+    from tongtu_login_ocr import fill_credentials
+
+    try:
+        page.wait_for_selector('input[name="username"]', state="attached", timeout=15000)
+    except Exception:
+        pass  # 已登录或被其它跳转接管，交由 wait_for_login 判定
+    if fill_credentials(page):
+        print("  已自动填好账号密码（勾选 7 天内自动登录）。")
+        print("  请在浏览器窗口输入【图形验证码】并点击登录...")
+    else:
+        print("  请在浏览器中登录通途（账号 / 密码 / 验证码）...")
+    return wait_for_login(page)
+
+
+def _try_login(page, auto_login: bool, *, show_expired: bool = False) -> bool:
+    """未登录时的分层登录：用户要全自动 → 试装 OCR 识别；不可用即降级半自动。
+
+    用户主权：绝不问"要不要装 ddddocr/onnxruntime"，只在用户已表达"全自动登录"
+    （--auto-login）时自动试装，装不上自动落到人工输码。
+    """
+    if auto_login:
+        ocr_ok, reason = ensure_ocr()
+        if ocr_ok:
+            print("[信息] 尝试 OCR 自动识别验证码登录...")
+            try:
+                from tongtu_login_ocr import login as ocr_login
+                if ocr_login(page):
+                    print("[OK] OCR 自动登录成功")
+                    return True
+                print("[信息] OCR 多次识别失败，降级人工输码")
+            except ImportError:
+                pass
+        else:
+            print(f"[信息] OCR 不可用（{reason}），改人工登录")
+    return _semi_auto_login(page, show_expired=show_expired)
+
+
 def run():
     # --export-cookies: 提取 cookies 供 MCP 注入使用
     if "--export-cookies" in sys.argv:
@@ -284,50 +406,52 @@ def run():
 
         if is_already_logged_in(page):
             print("[OK] 检测到已登录会话，自动继续...")
-        elif auto_login:
-            print("[信息] 尝试 ddddocr 自动登录...")
-            try:
-                from tongtu_login_ocr import login as auto_login_fn
-                if auto_login_fn(page):
-                    print("[OK] ddddocr 自动登录成功")
-                else:
-                    print("[信息] 自动登录失败，切换到手动登录...")
-                    if not wait_for_login(page):
-                        print("[错误] 登录超时，请重试")
-                        context.close()
-                        sys.exit(1)
-            except ImportError:
-                print("[信息] ddddocr 未安装，切换到手动登录...")
-                print("[提示] 安装后可自动登录: uv add ddddocr onnxruntime")
-                if not wait_for_login(page):
-                    print("[错误] 登录超时，请重试")
-                    context.close()
-                    sys.exit(1)
-        else:
-            if not first_run:
-                print("[信息] 登录会话已过期，请重新登录")
-            if not wait_for_login(page):
-                print("[错误] 登录超时，请重试")
-                context.close()
-                sys.exit(1)
+        elif not _try_login(page, auto_login=auto_login, show_expired=not first_run):
+            print("[错误] 登录超时，请重试")
+            context.close()
+            sys.exit(1)
 
         # 确保筛选项正确
         print("\n[信息] 确认筛选条件...")
         ensure_toggle(page, "allWarehouseTypeBtn", "全部(非FBA)")
         ensure_toggle(page, "statusBtn", "已启用")
 
+        # --list-warehouses: 只列页面仓库，供对照更新 WAREHOUSES
+        if "--list-warehouses" in sys.argv:
+            list_warehouses_on_page(page)
+            context.close()
+            return
+
         # 依次导出每个仓库
         total = len(WAREHOUSES)
+        failed_warehouses: list[str] = []
         for idx, wh in enumerate(WAREHOUSES, 1):
             print(f"\n{'='*50}")
             print(f"[{idx}/{total}] 处理仓库: {wh}")
             print(f"{'='*50}")
 
-            select_warehouse(page, wh, WAREHOUSES)
+            # 选仓失败绝不能继续导出——否则会导出"当前仍选中"的上一仓库，
+            # 却冠以目标仓库文件名，静默混入合并清单（2026-09-03 实测踩中）。
+            # ExtJS toggle 渲染慢会 5s 超时，先重试一次再判定失败。
+            selected = select_warehouse(page, wh, WAREHOUSES)
+            if not selected:
+                print(f"  [重试] {wh}: 首次选仓失败，再试一次...")
+                selected = select_warehouse(page, wh, WAREHOUSES)
+            if not selected:
+                print(f"  [跳过] {wh}: 两次选仓均失败，本次不导出该仓（避免串仓错数据）")
+                failed_warehouses.append(wh)
+                continue
             inv_path = click_export(page, wh)
+            if inv_path is None:
+                failed_warehouses.append(f"{wh}（导出超时/无数据）")
+                continue
             run_generate(inv_path, wh)
 
         context.close()
+
+    if failed_warehouses:
+        print(f"\n[警告] 以下仓库导出失败/被跳过: {', '.join(failed_warehouses)}")
+        print("        请人工确认其库存，避免合并清单缺仓或串仓。")
 
     print(f"\n{'='*50}")
     print(f"[完成] 全部 {total} 个仓库已处理！")

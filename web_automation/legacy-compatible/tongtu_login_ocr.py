@@ -105,6 +105,34 @@ def _check_ddddocr() -> bool:
         return False
 
 
+def fill_credentials(page) -> bool:
+    """当前已停在通途登录页时：自动填账号密码 + 勾选"7天内自动登录"。
+
+    仅依赖 Playwright（不碰 ddddocr/onnxruntime），供半自动登录复用——
+    主脚本未登录时填好账号，验证码留给用户在浏览器输入。缺账号或定位失败返回 False。
+    """
+    if not USERNAME or not PASSWORD:
+        logger.info("未配置 TONGTU_USER/PASSWORD，跳过自动填充")
+        return False
+    try:
+        page.wait_for_selector(SELECTORS["username"], state="attached", timeout=15000)
+    except Exception as e:
+        logger.warning("定位用户名框失败: %s", e)
+        return False
+    page.wait_for_timeout(500)
+    try:
+        cb = page.locator(SELECTORS["auto_login_cb"]).first
+        cb.wait_for(state="visible", timeout=8000)
+        if not cb.is_checked():
+            cb.check()
+    except Exception as e:
+        logger.warning("勾选自动登录失败: %s", e)
+    page.fill(SELECTORS["username"], USERNAME)
+    page.fill(SELECTORS["password"], PASSWORD)
+    logger.info("已自动填入账号密码并勾选 7 天内自动登录，等待用户输入验证码")
+    return True
+
+
 def login(page) -> bool:
     if not USERNAME or not PASSWORD:
         logger.error("请设置环境变量 TONGTU_USER 和 TONGTU_PASSWORD，或在 .env 文件中配置")
