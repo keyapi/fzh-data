@@ -9,6 +9,7 @@ tags: [solutions, log]
 
 ## 2026-09-03
 - **新增**: `developer-experience/workbuddy-custom-model-newapi-config.md` — WorkBuddy 接公司 new-api 自定义模型，`useCustomProtocol` 必须 `false` 且 `url` 带 `/v1`，否则发消息只回「任务完成」无正文。
+- **新增**: `.agents/skills/workbuddy-config/SKILL.md` — WorkBuddy 接公司 new-api 的自动配置 skill（要 key → 备份 → 合并写 `~/.workbuddy/models.json` → 提示重启 → 可选 curl 验证）。
 
 ## 2026-08-31
 - **更新**: `integration-issues/nas-multi-domain-access-openwrt-quickconnect.md` — QC 与 DSM 外部访问 DDNS 架构澄清；路径 A（OpenWrt 自定义域）vs 路径 B（QC/myds）；勿删 myds、无 DDNS 优先开关。
