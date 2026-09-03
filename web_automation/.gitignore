@@ -1,0 +1,33 @@
+# Python virtual environment
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Playwright persistent browser profiles (cookies, localStorage)
+chrome-profile/
+chrome-profile-test/
+sellfox-profile/
+sellfox-profile-login/
+tongtu-profile-login/
+profiles/
+
+# Downloads / outputs / business Excel / screenshots
+downloads/
+output/
+*.xlsx
+*.xls
+*.png
+*.jpg
+*.jpeg
+
+# Cookies and env (credentials)
+*.cookie.txt
+mcp_cookies.json
+sellfox_cookies.json
+.env
+.env.local
+
+# Debug temporary DOM/JSON dumps
+debug_*.json

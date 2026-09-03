@@ -10,8 +10,8 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-09-03 | WorkBuddy 接公司 new-api 自定义模型 — useCustomProtocol=false + url 带 /v1 | [developer-experience/workbuddy-custom-model-newapi-config.md](developer-experience/workbuddy-custom-model-newapi-config.md) |
 | 2026-09-01 | Cursor state.vscdb 膨胀 + Synology Drive 连续备份吃光 C 盘 | [integration-issues/cursor-state-vscdb-synology-cdrive-backup.md](integration-issues/cursor-state-vscdb-synology-cdrive-backup.md) |
->>>>>> parent of 9637f52 (Merge pull request #201 from keyapi/feature/pb-promo-trueup-handoff)
 | 2026-09-01 | 服务器暴露面审计与安全加固（数据库远程 root、端口瘦身、凭证轮换） | [best-practices/server-exposure-audit-and-hardening.md](best-practices/server-exposure-audit-and-hardening.md) |
 | 2026-08-31 | DeepSeek 峰谷分时定价 — new-api 静态 ModelRatio 的 cron 定时切换 | [tooling-decisions/new-api-deepseek-time-based-pricing-automation.md](tooling-decisions/new-api-deepseek-time-based-pricing-automation.md) |
 | 2026-08-28 | 群晖 NAS 多域名访问 — OpenWrt ACME、DSM 反代与 QuickConnect | [integration-issues/nas-multi-domain-access-openwrt-quickconnect.md](integration-issues/nas-multi-domain-access-openwrt-quickconnect.md) |

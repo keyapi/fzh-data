@@ -27,11 +27,12 @@ from pathlib import Path
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
-CURSOR_ROOT = Path(__file__).resolve().parent.parent
-WEB_AUTO = Path(r"D:\Work\赛狐\网页自动化")
-CURSOR_VENV = CURSOR_ROOT / ".venv" / "Scripts" / "python.exe"
-WEB_VENV = WEB_AUTO / ".venv" / "Scripts" / "python.exe"
+REPO_ROOT = Path(__file__).resolve().parent.parent
+WEB_AUTO = REPO_ROOT / "web_automation"
+DISPATCH = WEB_AUTO / "scripts" / "dispatch.py"
 DOWNLOADS_DIR = WEB_AUTO / "downloads"
+RESTOCK_OUT_DIR = WEB_AUTO / "restock"
+OUTBOUND_OUT_DIR = WEB_AUTO / "outbound"
 
 # 测试参数
 TEST_SKU = "test001-white"
@@ -41,14 +42,36 @@ TEST_PRICE = 1.0
 
 # ── 子进程调用 ─────────────────────────────────────────────
 
-def run_script(script: Path, cwd: Path, venv: Path, *extra_args) -> int:
-    args = [str(venv), str(script)] + list(extra_args)
-    name = script.name
-    print(f"\n  [{name}] 执行中...")
-    result = subprocess.run(args, cwd=str(cwd), encoding="utf-8",
+def run_root(script: Path, *extra_args) -> int:
+    """在仓库根运行数据管道脚本（根 .venv）。"""
+    args = ["uv", "run", "python", str(script)] + list(extra_args)
+    print(f"\n  [{script.name}] 执行中...")
+    result = subprocess.run(args, cwd=str(REPO_ROOT), encoding="utf-8",
                             errors="replace", env={**os.environ, "PYTHONIOENCODING": "utf-8"})
     if result.returncode != 0:
-        print(f"  [{name}] 返回码={result.returncode}")
+        print(f"  [{script.name}] 返回码={result.returncode}")
+    return result.returncode
+
+
+def run_web_task(task: str, *passthrough, confirm_scope: str | None = None) -> int:
+    """通过网页能力舱 dispatcher 执行赛狐/通途浏览器任务。
+
+    透传参数永远放在 `--` 之后交给底层脚本；--headless 也一并透传，
+    因为底层 click-based 脚本自行解析它。
+    """
+    args = ["uv", "run", "python", str(DISPATCH), task]
+    if confirm_scope:
+        args.extend(["--confirm-scope", confirm_scope])
+    passthrough = list(passthrough)
+    if "--headless" in sys.argv:
+        passthrough.append("--headless")
+    if passthrough:
+        args.extend(["--", *passthrough])
+    print(f"\n  [dispatcher:{task}] 执行中...")
+    result = subprocess.run(args, cwd=str(REPO_ROOT), encoding="utf-8",
+                            errors="replace", env={**os.environ, "PYTHONIOENCODING": "utf-8"})
+    if result.returncode != 0:
+        print(f"  [dispatcher:{task}] 返回码={result.returncode}")
     return result.returncode
 
 
@@ -100,21 +123,19 @@ def check_test_sku_in_export(expected_qty: int | None = None) -> dict:
 # ── 各步骤 ────────────────────────────────────────────────
 
 def step_1_inbound(qty: int = TEST_QTY):
-    """Step 1: 其他入库 test001-white。"""
+    """Step 1: 其他入库 test001-white（dispatcher，写操作需范围确认）。"""
     print("\n" + "=" * 60)
     print(f"Step 1: 其他入库 {TEST_SKU} x{qty} → {TEST_WH}")
     print("=" * 60)
 
-    headless = "--headless" in sys.argv
     args = [
         "--sku", TEST_SKU, "--wh", TEST_WH, "--qty", str(qty),
         "--price", str(TEST_PRICE), "--note", "E2E自动化测试"
     ]
-    if headless:
-        args.append("--headless")
-
-    script = WEB_AUTO / "sellfox_import_other_inbound.py"
-    ret = run_script(script, WEB_AUTO, WEB_VENV, *args)
+    ret = run_web_task(
+        "sellfox.other-inbound.import", *args,
+        confirm_scope=f"E2E 其他入库 {TEST_SKU} x{qty} → {TEST_WH} (test001 测试商品)",
+    )
     return ret == 0
 
 
@@ -128,8 +149,7 @@ def step_2_export_and_verify(expected_available: int = None):
     print("=" * 60)
 
     # 导出
-    script = WEB_AUTO / "sellfox_auto_export.py"
-    ret = run_script(script, WEB_AUTO, WEB_VENV, "--headless")
+    ret = run_web_task("sellfox.stock.export")
     if ret != 0:
         return False
 
@@ -183,7 +203,7 @@ def step_3_outbound(available_qty: int = None):
     outbound_dir.mkdir(exist_ok=True)
     out_path = outbound_dir / f"test_outbound_{TEST_SKU}_{stamp}.xlsx"
 
-    template = CURSOR_ROOT / "other_outbound" / "数据源样例" / "赛狐_其他出库_模板.xlsx"
+    template = REPO_ROOT / "other_outbound" / "数据源样例" / "赛狐_其他出库_模板.xlsx"
     if template.exists():
         shutil.copy(template, out_path)
         wb = openpyxl.load_workbook(out_path)
@@ -203,11 +223,11 @@ def step_3_outbound(available_qty: int = None):
     wb.save(out_path)
     print(f"  出库文件: {out_path.name}")
 
-    # 导入
-    headless = "--headless" in sys.argv
-    headless_args = ["--headless"] if headless else []
-    script = WEB_AUTO / "sellfox_import_other_outbound.py"
-    ret = run_script(script, WEB_AUTO, WEB_VENV, str(out_path), *headless_args)
+    # 导入（文件已在 web_automation/outbound/，无参时导入脚本扫描该目录）
+    ret = run_web_task(
+        "sellfox.other-outbound.import",
+        confirm_scope=f"E2E 其他出库清零 {TEST_SKU} x{available_qty} → {TEST_WH} (test001 测试商品)",
+    )
     if ret != 0:
         return False
 
@@ -221,8 +241,7 @@ def step_4_export_and_verify_zero():
     print(f"Step 4: 导出验证 {TEST_SKU} 库存=0")
     print("=" * 60)
 
-    script = WEB_AUTO / "sellfox_auto_export.py"
-    ret = run_script(script, WEB_AUTO, WEB_VENV, "--headless")
+    ret = run_web_task("sellfox.stock.export")
     if ret != 0:
         return False
 
@@ -250,14 +269,8 @@ def step_5_warehouse_restock():
     print("=" * 60)
 
     # 生成备货单（已有完整脚本生成全部数据，test001-white 包含在内）
-    ret = run_script(
-        Path(__file__).resolve(),
-        Path(__file__).resolve().parent,
-        CURSOR_VENV
-    )
-    # 上面调用的是自己，不合理。改用 build_saihu_warehouse_restock.py
     gen_script = Path(__file__).resolve().parent / "build_saihu_warehouse_restock.py"
-    ret = run_script(gen_script, gen_script.parent, CURSOR_VENV)
+    ret = run_root(gen_script)
     if ret != 0:
         # 备货单生成内部已有所有验证
         return False
@@ -287,16 +300,15 @@ def step_5_warehouse_restock():
 
     print(f"  找到备货单文件: {test_file.name}")
 
-    # 复制到 restock/ 并导入
-    restock_dir = WEB_AUTO / "restock"
-    restock_dir.mkdir(exist_ok=True)
-    dst = restock_dir / test_file.name
+    # 复制到 restock/ 并导入（无参时导入脚本扫描该目录）
+    RESTOCK_OUT_DIR.mkdir(exist_ok=True)
+    dst = RESTOCK_OUT_DIR / test_file.name
     shutil.copy(test_file, dst)
 
-    headless = "--headless" in sys.argv
-    headless_args = ["--headless"] if headless else []
-    script = WEB_AUTO / "sellfox_import_warehouse_restock.py"
-    ret = run_script(script, WEB_AUTO, WEB_VENV, str(dst), *headless_args)
+    ret = run_web_task(
+        "sellfox.restock.import",
+        confirm_scope=f"E2E 海外仓备货单导入 {test_file.name} (test001 测试商品)",
+    )
     return ret == 0
 
 

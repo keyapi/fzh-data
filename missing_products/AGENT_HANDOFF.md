@@ -237,7 +237,7 @@ cd ~/frappe-bench && env/bin/python /tmp/gen_bom_xlsx2.py
 | `.agents/skills/missing-products/SKILL.md` | 通途有库存 SKU 三方主线自动触发入口 |
 | `.agents/skills/erpnext-item-create/SKILL.md` | 新建 EN 物料 skill |
 | `SELLFOX_API/client.py` | 赛狐 OpenAPI 客户端 |
-| `D:/Work/赛狐/网页自动化/tongtu_auto_export.py` | 通途 6 仓库存导出（浏览器自动化）|
+| `web_automation/scripts/dispatch.py tongtu.stock.export` | 通途 6 仓库存导出（仓库内浏览器能力舱；合并文件在 `web_automation/output/`）|
 
 ### 常用命令
 ```bash

@@ -6,7 +6,7 @@
 
 | # | 数据 | 来源 | 方式 |
 |---|------|------|------|
-| 1 | 通途库存 | 通途 ERP | `D:\Work\赛狐\网页自动化\tongtu_auto_export.py` + `merge_inventory.py` |
+| 1 | 通途库存 | 通途 ERP | `web_automation/scripts/dispatch.py tongtu.stock.export`（合并文件在 `web_automation/output/`） |
 | 2 | EN BOM 成本 | 本地 xlsx | `warehouse_restock\数据源\EN产品BOM成本列表*.xlsx` |
 | 3 | 赛狐商品 | 赛狐 OpenAPI | `SellfoxClient` 拉 SPU + SKU 列表 |
 | 4 | EN 物料组 | EN REST API | 产品子树下 `custom_model_id` 非空的 Item Group |
