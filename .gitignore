@@ -59,3 +59,20 @@ drive_permission_ledger.csv
 colab_permission_ledger.csv
 gsheet_permission_audit.csv
 google_drive_permissions/_init_local/
+
+# web_automation 能力舱：浏览器 profile / cookies / 下载输出（运行时状态）
+web_automation/.venv/
+web_automation/**/chrome-profile/
+web_automation/**/sellfox-profile/
+web_automation/**/profiles/
+web_automation/downloads/
+web_automation/output/
+web_automation/.env
+web_automation/*.cookie.txt
+web_automation/mcp_cookies.json
+web_automation/sellfox_cookies.json
+web_automation/debug_*.json
+# 但要跟踪子项目锁文件与配置
+!web_automation/uv.lock
+!web_automation/.env.example
+!web_automation/.mcp.json

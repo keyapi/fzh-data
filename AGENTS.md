@@ -133,9 +133,18 @@ uv sync
 | `missing-products` | `.agents/skills/missing-products/` | 通途有库存 SKU → EN 产品客户码 → 赛狐产品 SKU 三方主线补齐/审计 |
 | `platform-account-reconciliation` | `platform_account_reconciliation/` | OSTKUS/Wayfair 账期费用级对账 + EN Tongtool Order 匹配 |
 | `channel-account-sync` | `channel_account_sync/` | Google 表渠道账号 → EN Channel Account（人变才加行，Amazon 按国家站） |
+| `web-automation` | `.agents/skills/{web-automation,playwright-setup,tongtu-automation,sellfox-automation}/` | 网页自动化能力舱（通途/赛狐浏览器 + 通用 Playwright），子项目在 `web_automation/` |
 | `windows-agent-shell` | `.agents/skills/windows-agent-shell/` | Windows Agent shell：优先 pwsh、禁 bash/`&&`（5.1）、UTF-8 无 BOM |
 | `frappe-core-api` | — | ERPNext REST API 开发（外部 skill） |
 | `frappe-errors-api` | — | ERPNext API 错误处理（外部 skill） |
+
+> **网页任务路由（弱模型/新同事也必须遵守）**：任何通途/赛狐/通用浏览器任务，
+> Agent **不得**自己拼外部绝对路径、选 venv 或直接装 OCR。
+> 一律先跑 `uv run python web_automation/scripts/dispatch.py <task> --check`，
+> 按输出状态字面执行：`READY` 继续 / `NEED_BROWSER` 跑 bootstrap / `NEED_LOGIN` 让人手动登录
+> / `NEED_OCR` 先问用户 / `NEED_USER_CONFIRMATION` 先确认范围带 `--confirm-scope`
+> / `BLOCKED` 报告停止。写操作默认只许确认范围内商品，绝不扩大到全量。
+> 环境体检：`uv run python web_automation/scripts/doctor.py`。
 
 > 每个模块有 `AGENT_HANDOFF.md`（Agent 参考）和 `README.md`（人读）。
 > Skill 文件在 `.agents/skills/<name>/SKILL.md`，Agent 按触发词自动加载。

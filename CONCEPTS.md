@@ -39,6 +39,9 @@ Open WebUI 里两套代码执行能力：Open Terminal = Docker Linux 沙箱（�
 ### api.vilavi.cn（公司 new-api 网关）
 上海阿里云 nginx 反代的公司 AI 网关：`/v1` 模型 API、`/sellfox` 赛狐代理、`/oidc` 钉钉 SSO。个人 Token 在后台「令牌管理」领取（`sk-…`）。生产渠道模型名以 `deepseek-v4-flash` / `deepseek-v4-pro` 为准；历史名 `deepseek-chat` 在默认组无渠道，会表现为 chat/completions **503**。
 
+### WorkBuddy（CodeBuddy Code 桌面壳）
+腾讯桌面 Agent（Electron，底层 CLI 为 CodeBuddy Code）。第三方模型走 `%USERPROFILE%\.workbuddy\models.json`，与 Codex++/Codex Desktop 配置体系无关。关键字段 `useCustomProtocol`：`true` = URL 透传（不补 `/chat/completions`），`false` = 自动补 `/chat/completions`。接 `api.vilavi.cn` 需 `url` 带 `/v1` 且 `useCustomProtocol=false`，否则「任务完成」无正文（`empty response output from model`）。见 `docs/solutions/developer-experience/workbuddy-custom-model-newapi-config.md`。
+
 ### 峰谷分时计价 (DeepSeek time-based pricing)
 DeepSeek API 自 2026-08 起按北京时间分时计费：周一至周五工作日高峰时段（日间两段）价格为闲时（夜间、周末、节假日）的 2 倍。new-api 的定价参数是**静态值**，无法原生跟随时段切换，须靠外部 cron 脚本在边界时刻改写定价参数（实现见 `docs/solutions/tooling-decisions/new-api-deepseek-time-based-pricing-automation.md`）。闲时段多收一倍是"未做分时调价"的典型症状。
 
@@ -249,6 +252,21 @@ Gold A：历史已配对 ∩ 通途别名唯一 ∩ EN/赛狐一致，只用于�
 ### Tongtool ERP2 Shared Rate Bucket
 
 通途 ERP2.0 的同一商户上游调用预算。2026-08-13 实测：两个独立 App 经 MCP 调用仍共用每分钟 5 次额度；主 App 连续 5 次成功后，第二 App 的首个同端点调用返回业务码 526。这不是每 App 独立额度。524 表示细粒度接口未授权，不能当作限流；所有 ERP2 自动化应合并计数、缓存和退避。
+
+### 网页自动化能力舱（web automation capability pod）
+`fzh-data` 内嵌的**独立 uv 子项目**（自带 `.venv`/`uv.lock`，不加入根 workspace、不进根
+`uv sync`），承载通途/赛狐等需要浏览器自动化的平台操作与通用 Playwright。它把"何时用 API、
+何时浏览器、验证码 OCR 是否可装、写操作范围"固化为能力矩阵与固定入口，使同事只 clone 一个
+仓库即可使用，且默认不给所有人安装 Playwright/Chromium/OCR。普通 `uv sync` 不含它；网页任务
+触发时才按需初始化子环境与浏览器（profile/cookie/downloads 均 gitignored）。
+
+### dispatcher（网页任务路由入口）
+网页自动化能力舱的**固定 Agent 入口**：任何网页任务先经它输出确定状态
+（`READY` / `NEED_BROWSER` / `NEED_LOGIN` / `NEED_OCR` / `NEED_USER_CONFIRMATION` / `BLOCKED`），
+弱模型按状态字面执行、不猜环境或脚本路径。`--check` 会聚合子环境/Chromium/OCR 与登录 profile
+是否存在（不是只报路由）。写操作无范围确认时返回 `NEED_USER_CONFIRMATION`，
+杜绝擅自扩大到全量。路由、风险、API/浏览器回退规则由 `capabilities.yaml` 能力矩阵声明
+（认证/权限/参数/业务校验错误禁止静默回退浏览器；仅显式列出的端点缺失/不可用才允许）。
 
 ### DingTalk Custom Robot (钉钉自定义机器人)
 A webhook-based DingTalk group messaging channel used by AI agents (WorkBuddy, Claude Code) in this project to send notifications and file download links. Uses HMAC-SHA256 signing. Distinct from DingTalk enterprise internal bots — custom robots do not require AppKey/AppSecret and are scoped to a single group, making them safe to share with non-developer agent users. Cannot send file attachments directly; file delivery uses ActionCard messages with download links hosted on ERPNext.

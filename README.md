@@ -66,7 +66,17 @@ flowchart LR
     ├── build_saihu_stock_init.py
     ├── README.md
     └── AGENT_HANDOFF.md
+
+web_automation/               # 网页自动化能力舱（独立 uv 子项目）
+    ├── pyproject.toml + uv.lock  # 自带 .venv，不参与根 uv sync
+    ├── capabilities.yaml         # 能力矩阵（路由/风险/回退）
+    ├── scripts/dispatch.py       # 固定 Agent 入口（先 --check）
+    ├── legacy-compatible/        # 兼容脚本（通途/赛狐导出、OCR 登录）
+    ├── click-based/              # 赛狐导入/备货点击式脚本
+    └── docs/                     # OKF 文档
 ```
+
+> 网页任务（通途/赛狐导出、出入库、备货单导入）由 `web_automation/scripts/dispatch.py` 统一路由：首次自动建浏览器环境，写操作需先确认范围。
 
 ## 模块概览
 
@@ -79,9 +89,11 @@ flowchart LR
 | `stock_init` | 库存初始值（数量+成本）导入 | 通途库存、BOM 成本、商品导出 | 赛狐库存初始值导入 + 差异报告 |
 | `warehouse_restock` | 海外仓备货单导入（三成本拆分） | EN BOM 成本列表、通途库存、商品导出 | 赛狐海外仓备货单导入 + 问题报告 |
 | `other_outbound` | 库存清零其他出库导入 | 赛狐库存明细导出 | 赛狐其他出库导入（按仓拆分） |
+| `web_automation` | 网页自动化能力舱（通途/赛狐浏览器 + 通用 Playwright） | 通途/赛狐登录态 | 通途库存/销售导出、赛狐出入库与备货单导入 |
 | `EN_API` | ERPNext 物料组主图上传 | 赛狐图片链接 Excel | ERPNext File + Item Group image 更新 |
 
-八个业务模块**相互独立**（`category` 仅动态导入 `multi_attr_saihu` 的 `_default_spu_from_sku` 函数）。
+业务模块**相互独立**（`category` 仅动态导入 `multi_attr_saihu` 的 `_default_spu_from_sku` 函数）。
+`web_automation/` 是**独立 uv 子项目**（自带 `.venv`），不参与根 `uv sync`；首个网页任务由 `web_automation/scripts/dispatch.py` 自动初始化浏览器环境。
 
 ## 快速开始
 
