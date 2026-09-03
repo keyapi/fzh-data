@@ -1,4 +1,6 @@
-# SPS Selenium automation - pinned versions
+# SPS Commerce Selenium 自动化依赖（sps_automation.py / run_simple.bat）
+# 本目录同时存在赛狐网页登录脚本（sellfox_login.py 等），其 ddddocr/onnxruntime
+# 依赖已随子项目迁移到 web_automation（PR #208），不再放这里。
 selenium==4.34.2
 typing_extensions==4.14.1
 trio==0.30.0
@@ -11,20 +13,13 @@ attrs==23.2.0
 wsproto==1.2.0
 certifi>=2025.6.15
 
-# Logging / config
+# ChromeDriver 自动管理（sps_automation.py 与 sellfox 登录共用）
+webdriver-manager>=4.0.0
+
+# Logging / config（config.py 从 .env 读取凭据）
 python-dotenv==1.0.0
 
 # Retry
 tenacity==8.2.3
-
-# Sellfox login (sellfox_login.py) + ddddocr/onnxruntime
-# On Windows: onnxruntime 1.23.x may fail to load native DLLs; 1.16.3 + numpy<2 works with ddddocr.
-# If you use opencv 4.13+ it wants numpy>=2; use a venv for Sellfox or downgrade opencv if needed.
-numpy>=1.21.6,<2
-onnxruntime==1.16.3
-webdriver-manager>=4.0.0
-ddddocr>=1.4.11
-Pillow>=9.5.0,<11
-pytesseract>=0.3.10
 
 # zoneinfo is stdlib on Python 3.9+
