@@ -38,18 +38,30 @@ def _venv_python(web_root: Path) -> Path:
 
 
 def _chromium_present(web_root: Path) -> bool:
+    """True iff the Chromium executable Playwright expects actually exists.
+
+    Playwright's install dry-run mode lists install locations and exits 0 even
+    when Chromium is missing, so it cannot serve as a readiness probe. Resolve
+    the expected executable in the *child* interpreter and stat it instead.
+    """
     py = _venv_python(web_root)
     if not py.is_file():
         return False
+    code = (
+        "from playwright.sync_api import sync_playwright;"
+        "p = sync_playwright().start();"
+        "print(p.chromium.executable_path);"
+        "p.stop()"
+    )
     try:
         cp = subprocess.run(
-            [str(py), "-m", "playwright", "install", "--dry-run", "chromium"],
-            capture_output=True, text=True, encoding="utf-8", errors="replace",
-            timeout=60,
+            [str(py), "-c", code],
+            capture_output=True, text=True,
+            encoding="utf-8", errors="replace", timeout=60,
         )
-        text = (cp.stdout or "") + (cp.stderr or "")
-        return "install" not in text or "No installs are required" in text
-    except (OSError, subprocess.TimeoutExpired):
+        path = (cp.stdout or "").strip().splitlines()[-1] if cp.stdout.strip() else ""
+        return bool(path) and Path(path).is_file()
+    except (OSError, subprocess.TimeoutExpired, IndexError):
         return False
 
 

@@ -47,3 +47,17 @@ def test_ocr_ready_assignment_does_not_use_parent_find_spec():
     ).read_text(encoding="utf-8")
     assert 'facts["ocr_ready"] = _find_spec("ddddocr")' not in text
     assert "probe_modules" in text
+
+
+def test_chromium_detection_is_not_dry_run_text_heuristic():
+    """Playwright `install --dry-run` lists install locations and exits 0 even
+    when Chromium is missing, so it must NOT be the readiness probe. The probe
+    should resolve the real executable via executable_path and stat it."""
+    src = Path(__file__).resolve().parents[2].joinpath(
+        "web_automation", "scripts", "bootstrap.py"
+    )
+    body = src.read_text(encoding="utf-8").split("def _chromium_present")[1]
+    assert '"-m", "playwright", "install"' not in body
+    assert "--dry-run" not in body
+    assert "executable_path" in body
+    assert ".is_file()" in body
