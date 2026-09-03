@@ -19,14 +19,20 @@ metadata:
 
 ## 数据准备
 
-**通途库存需先从通途 ERP 自动下载**，脚本在外部项目 `fzh-web-automation`（`D:\Work\赛狐\网页自动化\`，GitHub: `keyapi/fzh-web-automation`）：
+**通途库存需先从通途 ERP 自动下载**，用仓库内 dispatcher（首次会自动建浏览器子环境；下载落在 `web_automation/downloads/`，合并文件在 `web_automation/output/`）：
 
 ```bash
-cd D:\Work\赛狐\网页自动化
-uv run python tongtu_auto_export.py
+# 0) 只检查状态（是否需要装浏览器/登录）
+uv run python web_automation/scripts/dispatch.py tongtu.stock.export --check
+
+# 1) 正式导出（状态 READY 或 NEED_LOGIN 时执行；NEED_LOGIN 会打开浏览器等人手动登录）
+uv run python web_automation/scripts/dispatch.py tongtu.stock.export
+
+# 仅在用户明确要全自动登录（ddddocr）时追加 --with-ocr：
+uv run python web_automation/scripts/dispatch.py tongtu.stock.export --with-ocr
 ```
 
-下载的 `通途合并库存结存清单*.xlsx` 放入 `stock_init/数据源/` 目录。
+把 `web_automation/output/` 下最新的 `通途合并库存结存清单*.xlsx` 放入 `stock_init/数据源/` 目录。
 
 ## 快速启动
 

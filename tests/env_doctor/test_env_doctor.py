@@ -35,6 +35,7 @@ def test_recommend_windows_ps51_only_suggests_pwsh_and_gbk():
         "python_stdout_encoding": "cp936",
         "skill_windows_agent_shell": True,
         "tools": {"git": True, "uv": True, "node": True},
+        "web_automation": {"available": True, "ready": True},
     }
     recs = env_doctor.build_recommendations(facts)
     codes = {r["code"] for r in recs}
@@ -56,6 +57,7 @@ def test_recommend_windows_with_pwsh_skips_install():
         "python_stdout_encoding": "utf-8",
         "skill_windows_agent_shell": True,
         "tools": {"git": True, "uv": True, "node": True},
+        "web_automation": {"available": True, "ready": True},
     }
     recs = env_doctor.build_recommendations(facts)
     codes = {r["code"] for r in recs}
@@ -74,6 +76,7 @@ def test_recommend_posix_skips_windows_items():
         "python_stdout_encoding": "utf-8",
         "skill_windows_agent_shell": True,
         "tools": {"git": True, "uv": True, "node": True},
+        "web_automation": {"available": True, "ready": True},
     }
     recs = env_doctor.build_recommendations(facts)
     codes = {r["code"] for r in recs}
@@ -98,6 +101,47 @@ def test_recommend_missing_tools():
     assert "install_git" in codes
     assert "install_uv" in codes
     assert "install_node" not in codes
+
+
+def _windows_facts(**overrides):
+    facts = {
+        "os": "Windows",
+        "is_windows": True,
+        "powershell_51": {"present": True, "version": "5.1.26100.9168"},
+        "pwsh": {"present": True, "version": "7.5.2"},
+        "console_codepage": 65001,
+        "python_stdout_encoding": "utf-8",
+        "skill_windows_agent_shell": True,
+        "tools": {"git": True, "uv": True, "node": True},
+        "web_automation": {"available": True, "ready": False},
+    }
+    facts.update(overrides)
+    return facts
+
+
+def test_web_automation_available_not_ready_reports_on_demand():
+    recs = env_doctor.build_recommendations(_windows_facts())
+    codes = {r["code"] for r in recs}
+    assert "web_automation_on_demand" in codes
+    assert "web_automation_ready" not in codes
+
+
+def test_web_automation_ready_reports_ready_only():
+    recs = env_doctor.build_recommendations(
+        _windows_facts(web_automation={"available": True, "ready": True})
+    )
+    codes = {r["code"] for r in recs}
+    assert "web_automation_ready" in codes
+    assert "web_automation_on_demand" not in codes
+
+
+def test_web_automation_absent_no_rec():
+    recs = env_doctor.build_recommendations(
+        _windows_facts(web_automation={"available": False, "ready": False})
+    )
+    codes = {r["code"] for r in recs}
+    assert "web_automation_on_demand" not in codes
+    assert "web_automation_ready" not in codes
 
 
 # ---------------------------------------------------------------------------
@@ -187,6 +231,7 @@ def test_format_report_contains_chinese_headers():
             "python_stdout_encoding": "cp936",
             "skill_windows_agent_shell": True,
             "tools": {"git": True, "uv": True, "node": True},
+            "web_automation": {"available": True, "ready": True},
         },
         "recommendations": env_doctor.build_recommendations(
             {
@@ -198,6 +243,7 @@ def test_format_report_contains_chinese_headers():
                 "python_stdout_encoding": "cp936",
                 "skill_windows_agent_shell": True,
                 "tools": {"git": True, "uv": True, "node": True},
+                "web_automation": {"available": True, "ready": True},
             }
         ),
         "probes": None,

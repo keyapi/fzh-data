@@ -22,14 +22,16 @@ EN BOM Cost List → 三成本拆分（绍兴/头程/加工）→ 赛狐海外�
 
 ## 数据准备
 
-**通途库存数据需先从通途 ERP 自动下载**，脚本在外部项目 `fzh-web-automation`（`D:\Work\赛狐\网页自动化\`，GitHub: `keyapi/fzh-web-automation`）：
+**通途库存数据需先从通途 ERP 自动下载**，用仓库内 dispatcher（首次会自动建浏览器子环境；下载落在 `web_automation/downloads/`，合并文件在 `web_automation/output/`）：
 
 ```bash
-cd D:\Work\赛狐\网页自动化
-uv run python tongtu_auto_export.py
+# 0) 只检查状态
+uv run python web_automation/scripts/dispatch.py tongtu.stock.export --check
+# 1) 正式导出（NEED_LOGIN 时打开浏览器等人手动登录；OCR 仅用户明确要求时加 --with-ocr）
+uv run python web_automation/scripts/dispatch.py tongtu.stock.export
 ```
 
-下载的 `通途合并库存结存清单*.xlsx` 放入 `warehouse_restock/数据源/` 目录。
+把 `web_automation/output/` 下最新的 `通途合并库存结存清单*.xlsx` 放入 `warehouse_restock/数据源/` 目录。
 
 ## 两种使用方式
 
@@ -51,7 +53,7 @@ uv run python run_full_restock_flow.py --skip-zero-out --yes   # 导出+生成+�
 uv run python run_full_restock_flow.py --yes                   # 全部步骤(含清零)
 ```
 
-调度器依赖 `D:\Work\赛狐\网页自动化\` 下的 Playwright 脚本（自动导出/导入）。
+调度器改为调用仓库内 dispatcher（`run_full_restock_flow.py` 已去掉外部路径）。赛狐写操作由 dispatcher 强制范围确认后才执行。
 
 ## 管道概要
 
@@ -92,12 +94,12 @@ EN BOM成本列表 → 成本借用(同重量模板) → 三成本拆分 → 通
 ## 完整工作流
 
 ```
-Step 1: 导出库存明细 → sellfox_auto_export.py --headless (自动)
-Step 2: (可选) 其他出库清零 → build_saihu_other_outbound.py → sellfox_import_other_outbound.py
-Step 3: 备货单入库 → build_saihu_warehouse_restock.py → sellfox_import_warehouse_restock.py
+Step 1: 导出库存明细 → web_automation/scripts/dispatch.py sellfox.stock.export
+Step 2: (可选) 其他出库清零 → build_saihu_other_outbound.py → dispatch.py sellfox.other-outbound.import
+Step 3: 备货单入库 → build_saihu_warehouse_restock.py → dispatch.py sellfox.restock.import
 ```
 
-所有导入脚本在 `D:\Work\赛狐\网页自动化\`，均使用 Playwright 持久化会话（sellfox-profile）。
+Step 1 是 API 优先（失败仅在明确允许时才回退浏览器）；Step 2/3 是写操作，dispatcher 必须先返回 `NEED_USER_CONFIRMATION`，用用户确认的文件/SKU/仓库范围带 `--confirm-scope` 才执行。导入前会先导出库存备份、导入后再导出对照。写操作只许用用户确认范围内的测试/目标商品，绝不扩大到全量。
 
 ## 输出
 
