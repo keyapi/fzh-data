@@ -23,14 +23,14 @@ print("Result:", result)
 if result and "result" in result:
     src = result["result"]
     print(f"验证码 src: {src[:100]}...")
-    
+
     # 如果是 data URI，直接解码
     if src.startswith("data:image"):
         base64_data = src.split(",")[1]
         img_bytes = base64.b64decode(base64_data)
         with open("/workspace/fzh-web-automation/captcha_img.png", "wb") as f:
             f.write(img_bytes)
-        
+
         ocr = ddddocr.DdddOcr()
         captcha = ocr.classification(img_bytes)
         print(f"识别结果: {captcha}")

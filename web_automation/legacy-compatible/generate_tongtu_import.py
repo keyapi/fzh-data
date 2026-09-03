@@ -14,21 +14,21 @@ TEMPLATE_COLS = ['SKU/SKU别名(必填)', '安全库存', '头程报关费（CNY
 def read_inventory(path):
     """读取库存结存清单，返回 (sku_list, first_leg_list, other_fee_list)"""
     df = pd.read_excel(path, header=None)
-    
+
     # 找到真正表头行（第1列为'SKU'的行）
     header_idx = df[df.iloc[:, 0].astype(str).str.strip() == 'SKU'].index[0]
     df.columns = df.iloc[header_idx].astype(str).str.replace('\n', '').str.strip()
     df = df.iloc[header_idx + 1:]  # 数据从表头下一行开始
-    
+
     # 找到目标列
     sku_col = 'SKU'
     freight_col = [c for c in df.columns if '头程运费' in c][0]
     other_col = [c for c in df.columns if '头程其它费' in c or '其他费用' in c or '其它费用' in c][0]
-    
+
     # 提取数据，跳过汇总行
     df = df[~df[sku_col].astype(str).str.strip().isin(['数量总计', '金额总计', '', 'nan'])]
     df = df[df[sku_col].notna()]
-    
+
     return df[sku_col].tolist(), df[freight_col].tolist(), df[other_col].tolist()
 
 
@@ -49,15 +49,15 @@ def main():
     folder = os.path.dirname(os.path.abspath(__file__))
     inv_path = sys.argv[1] if len(sys.argv) > 1 else os.path.join(folder, "库存结存清单2026-04-2911_36_40.xlsx")
     out_path = sys.argv[2] if len(sys.argv) > 2 else os.path.join(folder, "通途导入_头程运费_其他费用.xlsx")
-    
+
     skus, freights, others = read_inventory(inv_path)
-    
+
     print(f"共 {len(skus)} 个 SKU")
     for s, f, o in zip(skus[:5], freights[:5], others[:5]):
         print(f"  {s}  运费={f}  其他={o}")
-    
+
     generate_import(skus, freights, others, out_path)
-    
+
     # 快速校验
     check = pd.read_excel(out_path)
     assert list(check.columns) == TEMPLATE_COLS, "表头不匹配！"

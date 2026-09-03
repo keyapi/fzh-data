@@ -21,38 +21,38 @@ result = run_tool("browser_eval", expression='document.querySelector("img[alt=�
 if result and "result" in result:
     captcha_url = result["result"]
     print(f"验证码URL: {captcha_url}")
-    
+
     # 从浏览器获取 cookies
     cookies_result = run_tool("browser_eval", expression='document.cookie')
     cookies = cookies_result.get("result", "") if cookies_result else ""
     print(f"Cookies: {cookies[:100]}...")
-    
+
     # 用 requests 下载（需要带 cookies）
     session = requests.Session()
     headers = {
         "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36",
         "Referer": "https://passport.tongtool.com/"
     }
-    
+
     # 从 CDP 获取 cookies 并设置
     if cookies:
         for c in cookies.split(";"):
             if "=" in c:
                 k, v = c.strip().split("=", 1)
                 session.cookies.set(k, v)
-    
+
     resp = session.get(captcha_url, headers=headers)
     print(f"下载状态: {resp.status_code}, 大小: {len(resp.content)}")
-    
+
     if resp.status_code == 200:
         with open("/workspace/fzh-web-automation/captcha.jpg", "wb") as f:
             f.write(resp.content)
-        
+
         # ddddocr 识别
         ocr = ddddocr.DdddOcr()
         result_text = ocr.classification(resp.content)
         print(f"ddddocr 识别结果: {result_text}")
-        
+
         # 也试试从截图截取验证码区域
         img = Image.open(BytesIO(resp.content))
         print(f"图片尺寸: {img.size}")

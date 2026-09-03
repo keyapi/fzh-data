@@ -119,42 +119,42 @@ def login():
     print("导航到登录页面...")
     goto(TONGTU_LOGIN)
     time.sleep(3)
-    
+
     # 填入账号密码
     print("填入账号密码...")
     fill_field('input[name="username"]', USERNAME)
     fill_field('input[name="password"]', PASSWORD)
     time.sleep(1)
-    
+
     # 最多尝试 5 次验证码
     for attempt in range(5):
         print(f"\n第 {attempt+1} 次尝试登录...")
-        
+
         # 截图并识别验证码
         img_bytes = get_captcha_image()
         if not img_bytes:
             print("  截图失败")
             continue
-        
+
         captcha = recognize_captcha(img_bytes)
         print(f"  ddddocr 识别验证码: {captcha}")
-        
+
         # 填入验证码
         fill_field('input[name="captcha"]', captcha)
         time.sleep(0.5)
-        
+
         # 点击登录
         click_login()
         time.sleep(3)
-        
+
         # 检查是否登录成功
         url = get_url()
         print(f"  当前URL: {url}")
-        
+
         if "erp102" in url and "passport" not in url:
             print("登录成功！")
             return True
-        
+
         if "check" in url and "captcha" not in url.lower():
             print("  验证码错误，重试...")
             # 重新填密码（可能被清空）
@@ -165,7 +165,7 @@ def login():
             if "erp102" in url:
                 print("登录成功！")
                 return True
-    
+
     print("登录失败！")
     return False
 
@@ -174,28 +174,28 @@ def export_all():
     print("导航到库存结存页面...")
     goto(INVENTORY_URL)
     time.sleep(5)
-    
+
     # 先切到非 CENTRADE 仓库再切回来（通途 Bug 规避）
     print("触发数据表格加载...")
     click_warehouse(1)  # FZHPoland-covers
     time.sleep(3)
     click_warehouse(0)  # CENTRADE
     time.sleep(5)
-    
+
     # 仓库索引映射
     wh_indices = {0, 1, 3, 4, 5, 6}  # 对应的 6 个仓库
-    
+
     for idx in sorted(wh_indices):
         wh_name = WAREHOUSES[sorted(wh_indices).index(idx)]
         print(f"\n导出仓库: {wh_name} (索引 {idx})")
-        
+
         if idx != 0:
             click_warehouse(idx)
             time.sleep(5)
-        
+
         click_export()
         time.sleep(3)
-        
+
         saved = save_download(wh_name)
         if saved:
             print(f"  已保存: {saved.name} ({saved.stat().st_size/1024:.0f} KB)")
@@ -211,10 +211,10 @@ def main():
     if not login():
         print("无法登录，退出")
         sys.exit(1)
-    
+
     export_all()
     merge()
-    
+
     print(f"\n完成！文件在: {DOWNLOADS_DIR} 和 {OUTPUT_DIR}")
 
 if __name__ == "__main__":

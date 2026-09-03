@@ -18,6 +18,6 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("用法: python3 test_ocr.py <验证码图片路径>")
         sys.exit(1)
-    
+
     result = recognize_captcha(sys.argv[1])
     print(f"识别结果: {result}")
