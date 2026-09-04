@@ -23,7 +23,12 @@ import subprocess, sys, time, shutil, json
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 
-from tongtu_warehouses import WAREHOUSES, inventory_download_matches_warehouse, safe_prefix
+from tongtu_warehouses import (
+    WAREHOUSES,
+    inventory_download_matches_warehouse,
+    safe_prefix,
+    should_exit_after_export_run,
+)
 
 sys.stdout.reconfigure(encoding='utf-8')
 import os
@@ -196,6 +201,17 @@ def click_export(page, warehouse_name):
     download.save_as(str(target))
     print(f"  [OK] 已保存: {new_name}")
     return target
+
+
+def export_inventory_with_retry(page, warehouse_name, *, attempts: int = 2):
+    """Try export up to `attempts` times; None means likely empty warehouse after retries."""
+    for attempt in range(1, attempts + 1):
+        inv_path = click_export(page, warehouse_name)
+        if inv_path is not None:
+            return inv_path
+        if attempt < attempts:
+            print(f"  [重试] {warehouse_name}: 导出超时，再试一次 ({attempt}/{attempts})...")
+    return None
 
 
 def run_generate(inventory_path, warehouse_name):
@@ -378,6 +394,7 @@ def run():
         # 依次导出每个仓库
         total = len(WAREHOUSES)
         failed_warehouses: list[str] = []
+        skipped_empty: list[str] = []
         for idx, wh in enumerate(WAREHOUSES, 1):
             print(f"\n{'='*50}")
             print(f"[{idx}/{total}] 处理仓库: {wh}")
@@ -394,24 +411,36 @@ def run():
                 print(f"  [跳过] {wh}: 两次选仓均失败，本次不导出该仓（避免串仓错数据）")
                 failed_warehouses.append(wh)
                 continue
-            inv_path = click_export(page, wh)
+            inv_path = export_inventory_with_retry(page, wh)
             if inv_path is None:
-                failed_warehouses.append(f"{wh}（导出超时/无数据）")
+                skipped_empty.append(f"{wh}（可能空仓/无导出文件）")
                 continue
-            run_generate(inv_path, wh)
+            if not run_generate(inv_path, wh):
+                failed_warehouses.append(f"{wh}（生成导入文件失败）")
+                continue
 
         context.close()
 
-    if failed_warehouses:
-        print(f"\n[警告] 以下仓库导出失败/被跳过: {', '.join(failed_warehouses)}")
+    if skipped_empty:
+        print(f"\n[信息] 以下仓库可能空仓已跳过（不计入失败）: {', '.join(skipped_empty)}")
+
+    if should_exit_after_export_run(failed_warehouses):
+        print(f"\n[警告] 以下仓库导出失败: {', '.join(failed_warehouses)}")
         print("        请人工确认其库存，避免合并清单缺仓或串仓。")
         merge_all_inventory()
-        ok = total - len(failed_warehouses)
-        print(f"\n[失败] 成功 {ok}/{total} 个仓库，退出码 1（定时任务可据此告警）")
+        ok = total - len(failed_warehouses) - len(skipped_empty)
+        print(
+            f"\n[失败] 成功 {ok}/{total} 个仓库"
+            f"（跳过可能空仓 {len(skipped_empty)}），退出码 1（定时任务可据此告警）"
+        )
         sys.exit(1)
 
     print(f"\n{'='*50}")
-    print(f"[完成] 全部 {total} 个仓库已处理！")
+    if skipped_empty:
+        ok = total - len(skipped_empty)
+        print(f"[完成] {ok}/{total} 个仓库已导出，{len(skipped_empty)} 个可能空仓已跳过")
+    else:
+        print(f"[完成] 全部 {total} 个仓库已处理！")
     print(f"  下载文件: {DOWNLOADS_DIR}")
     print(f"  导入文件: {OUTPUT_DIR}")
 

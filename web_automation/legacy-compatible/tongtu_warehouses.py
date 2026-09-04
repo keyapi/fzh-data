@@ -21,3 +21,8 @@ def inventory_download_matches_warehouse(filename: str, warehouse_name: str) -> 
     if not filename.endswith(".xlsx"):
         return False
     return filename.startswith(f"{safe_prefix(warehouse_name)}_")
+
+
+def should_exit_after_export_run(failed_warehouses: list[str]) -> bool:
+    """True when stock export should exit non-zero (skipped empty warehouses do not count)."""
+    return bool(failed_warehouses)

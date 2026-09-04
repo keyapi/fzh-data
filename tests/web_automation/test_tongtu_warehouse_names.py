@@ -8,7 +8,11 @@ from pathlib import Path
 LEGACY = Path(__file__).resolve().parents[2] / "web_automation" / "legacy-compatible"
 sys.path.insert(0, str(LEGACY))
 
-from tongtu_warehouses import WAREHOUSES, inventory_download_matches_warehouse  # noqa: E402
+from tongtu_warehouses import (
+    WAREHOUSES,
+    inventory_download_matches_warehouse,
+    should_exit_after_export_run,
+)  # noqa: E402
 
 
 def test_inventory_download_distinguishes_main_and_return_warehouse():
@@ -25,3 +29,8 @@ def test_inventory_download_distinguishes_main_and_return_warehouse():
 
 def test_warehouses_has_six_mainline_entries():
     assert len(WAREHOUSES) == 6
+
+
+def test_skipped_empty_does_not_fail_scheduled_run():
+    assert not should_exit_after_export_run([])
+    assert should_exit_after_export_run(["美中-FZH-DANEEY（选仓失败）"])
