@@ -10,7 +10,7 @@ import json
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable, Sequence
 
 from .client import FedexTrackError, MAX_NUMBERS_PER_REQUEST
@@ -39,56 +39,85 @@ class BatchItem:
 
 @dataclass
 class Record:
-    """单号一次查询的结果（输入顺序保持）。"""
+    """单号一次查询的结果（输入顺序保持）。FedEx 复用跟踪号时一个号可能有多票。"""
 
     number: str
     remark: str = ""
     ok: bool = False
-    info: Any = None  # FdxTrackInfo | None
+    infos: list[Any] = field(default_factory=list)  # list[FdxTrackInfo]
     error: str | None = None
     attempts: int = 1
 
-    def to_summary_row(self) -> dict[str, Any]:
-        info = self.info
-        status = ""
+    @property
+    def info(self) -> Any:
+        return self.infos[0] if self.infos else None
+
+    @property
+    def multi(self) -> bool:
+        return self.ok and len(self.infos) > 1
+
+    def _num_disp(self, i: int, total: int) -> str:
+        return f"{self.number}[{i + 1}]" if total > 1 else self.number
+
+    def to_summary_rows(self) -> list[dict[str, Any]]:
+        if not (self.ok and self.infos):
+            return [self._row(None, 0, 1)]
+        return [self._row(info, i, len(self.infos)) for i, info in enumerate(self.infos)]
+
+    def _row(self, info: Any, i: int, total: int) -> dict[str, Any]:
+        disp = self._num_disp(i, total)
+        dup = str(len(self.infos)) if self.multi else ""
         if self.ok and info:
-            status = "查无此号" if info.not_found else (info.current_status or "")
+            return {
+                "跟踪号": disp, "备注": self.remark, "成功": "是", "多票": dup,
+                "已交付": "是" if info.delivered else "否",
+                "已取消": "是" if info.cancelled else "否",
+                "当前状态": "查无此号" if info.not_found else (info.current_status or ""),
+                "状态码": info.current_status_code or "",
+                "建标时间": _fmt_dt(info.label_created_dt),
+                "站点收件时间": _fmt_dt(info.picked_up_dt),
+                "交付时间": _fmt_dt(info.delivery_dt),
+                "交付城市": info.delivery_city or "",
+                "交付州": info.delivery_state or "",
+                "最近节点时间": _fmt_dt(info.last_event_dt),
+                "节点数": len(info.events),
+                "错误": self.error or "",
+                "尝试次数": self.attempts,
+            }
+        info = info or (self.infos[0] if self.infos else None)
         return {
-            "跟踪号": self.number,
-            "备注": self.remark,
-            "成功": "是" if self.ok else "否",
-            "已交付": "是" if (self.ok and info and info.delivered) else ("否" if self.ok else ""),
-            "已取消": "是" if (self.ok and info and info.cancelled) else ("否" if self.ok else ""),
-            "当前状态": status,
-            "状态码": info.current_status_code if (self.ok and info) else "",
-            "建标时间": _fmt_dt(info.label_created_dt) if (self.ok and info) else "",
-            "站点收件时间": _fmt_dt(info.picked_up_dt) if (self.ok and info) else "",
-            "交付时间": _fmt_dt(info.delivery_dt) if (self.ok and info) else "",
-            "交付城市": info.delivery_city if (self.ok and info) else "",
-            "交付州": info.delivery_state if (self.ok and info) else "",
-            "最近节点时间": _fmt_dt(info.last_event_dt) if (self.ok and info) else "",
-            "节点数": len(info.events) if (self.ok and info) else "",
+            "跟踪号": disp, "备注": self.remark, "成功": "是" if self.ok else "否", "多票": dup,
+            "已交付": ("是" if (info and info.delivered) else ("否" if info else "")),
+            "已取消": ("是" if (info and info.cancelled) else ("否" if info else "")),
+            "当前状态": ("查无此号" if (info and info.not_found) else (info.current_status if info else "")),
+            "状态码": info.current_status_code if info else "",
+            "建标时间": _fmt_dt(info.label_created_dt) if info else "",
+            "站点收件时间": _fmt_dt(info.picked_up_dt) if info else "",
+            "交付时间": _fmt_dt(info.delivery_dt) if info else "",
+            "交付城市": info.delivery_city if info else "",
+            "交付州": info.delivery_state if info else "",
+            "最近节点时间": _fmt_dt(info.last_event_dt) if info else "",
+            "节点数": len(info.events) if info else "",
             "错误": self.error or "",
             "尝试次数": self.attempts,
         }
 
     def timeline_rows(self) -> list[dict[str, Any]]:
-        if not (self.ok and self.info):
+        if not (self.ok and self.infos):
             return []
+        total = len(self.infos)
         rows = []
-        for ev in self.info.events:
-            rows.append({
-                "跟踪号": self.number,
-                "备注": self.remark,
-                "节点时间": _fmt_dt(ev.dt),
-                "事件码": ev.event_type or "",
-                "描述": ev.description or "",
-                "派生状态": ev.derived_status or "",
-                "城市": ev.city or "",
-                "州": ev.state or "",
-                "邮编": ev.postal or "",
-                "国家": ev.country or "",
-            })
+        for i, info in enumerate(self.infos):
+            disp = self._num_disp(i, total)
+            for ev in info.events:
+                rows.append({
+                    "跟踪号": disp, "备注": self.remark,
+                    "分票": str(total) if total > 1 else "",
+                    "节点时间": _fmt_dt(ev.dt), "事件码": ev.event_type or "",
+                    "描述": ev.description or "", "派生状态": ev.derived_status or "",
+                    "城市": ev.city or "", "州": ev.state or "", "邮编": ev.postal or "",
+                    "国家": ev.country or "",
+                })
         return rows
 
     def to_raw_entry(self) -> dict[str, Any]:
@@ -97,7 +126,8 @@ class Record:
             "remark": self.remark,
             "ok": self.ok,
             "error": self.error,
-            "raw": self.info.raw if (self.ok and self.info) else None,
+            "raw": {"trackingNumber": self.number,
+                   "trackResults": [i.raw for i in self.infos if i.raw]},
         }
 
 
@@ -217,7 +247,7 @@ def _read_done(raw_path: str) -> set[str]:
 
 
 def run_batch(
-    batch_query: Callable[[list[str]], dict[str, FdxTrackInfo]],
+    batch_query: Callable[[list[str]], dict[str, list[FdxTrackInfo]]],
     items: Sequence[BatchItem],
     *,
     chunk: int = MAX_NUMBERS_PER_REQUEST,
@@ -258,10 +288,12 @@ def run_batch(
             try:
                 info_map = batch_query([it.number for it in chunk_items])
                 for it in chunk_items:
-                    rec = Record(number=it.number, remark=it.remark, ok=True, info=info_map.get(it.number), attempts=attempts)
-                    if rec.info is None:
-                        rec.ok = False
-                        rec.error = "未在响应中找到该号"
+                    infos = info_map.get(it.number) or []
+                    if not infos:
+                        rec = Record(number=it.number, remark=it.remark, ok=False,
+                                     error="未在响应中找到该号", attempts=attempts)
+                    else:
+                        rec = Record(number=it.number, remark=it.remark, ok=True, infos=infos, attempts=attempts)
                     chunk_result[it.number] = rec
                 break
             except FedexTrackError as exc:
@@ -328,6 +360,6 @@ def merge_resumed_done(ordered: list[Record], resume_from: str | None) -> list[R
         if not (isinstance(entry, dict) and entry.get("ok")):
             continue
         raw = entry.get("raw")
-        info = parse_track_payload(number, raw) if isinstance(raw, dict) else None
-        ordered.append(Record(number=number, remark=entry.get("remark", ""), ok=True, info=info, attempts=0))
+        infos = parse_track_payload(number, {"output": {"completeTrackResults": [raw]}}) if isinstance(raw, dict) else []
+        ordered.append(Record(number=number, remark=entry.get("remark", ""), ok=True, infos=infos, attempts=0))
     return ordered

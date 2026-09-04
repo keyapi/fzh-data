@@ -91,11 +91,11 @@ def _mock_payload(number: str) -> dict[str, Any]:
     }
 
 
-def _mock_query(number: str) -> FdxTrackInfo:
+def _mock_query(number: str) -> list[FdxTrackInfo]:
     return parse_track_payload(number, _mock_payload(number))
 
 
-def _mock_many(numbers: list[str]) -> dict[str, FdxTrackInfo]:
+def _mock_many(numbers: list[str]) -> dict[str, list[FdxTrackInfo]]:
     return {n.strip().upper(): _mock_query(n) for n in numbers}
 
 
@@ -132,19 +132,22 @@ def _out_prefix(args: argparse.Namespace) -> str:
 
 
 def _write_summary(path: str, records: list[Record]) -> None:
-    fieldnames = list(records[0].to_summary_row().keys()) if records else [
-        "跟踪号", "备注", "成功", "已交付", "已取消", "当前状态", "状态码", "建标时间",
-        "站点收件时间", "交付时间", "交付城市", "交付州", "最近节点时间", "节点数", "错误", "尝试次数",
-    ]
+    rows = [row for rec in records for row in rec.to_summary_rows()]
+    if rows:
+        fieldnames = list(rows[0].keys())
+    else:
+        fieldnames = ["跟踪号", "备注", "成功", "多票", "已交付", "已取消", "当前状态", "状态码",
+                      "建标时间", "站点收件时间", "交付时间", "交付城市", "交付州", "最近节点时间",
+                      "节点数", "错误", "尝试次数"]
     with open(path, "w", encoding="utf-8-sig", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=fieldnames)
         writer.writeheader()
-        for r in records:
-            writer.writerow(r.to_summary_row())
+        for row in rows:
+            writer.writerow(row)
 
 
 def _write_timeline(path: str, records: list[Record]) -> None:
-    fieldnames = ["跟踪号", "备注", "节点时间", "事件码", "描述", "派生状态", "城市", "州", "邮编", "国家"]
+    fieldnames = ["跟踪号", "备注", "分票", "节点时间", "事件码", "描述", "派生状态", "城市", "州", "邮编", "国家"]
     with open(path, "w", encoding="utf-8-sig", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=fieldnames)
         writer.writeheader()
@@ -162,14 +165,26 @@ def _write_raw(path: str, records: list[Record]) -> None:
 
 
 def _report(records: list[Record]) -> None:
-    total = len(records)
+    numbers = len(records)
     ok = sum(1 for r in records if r.ok)
-    failed = total - ok
-    delivered = sum(1 for r in records if r.ok and r.info and r.info.delivered)
-    cancelled = sum(1 for r in records if r.ok and r.info and r.info.cancelled)
-    in_transit = sum(1 for r in records if r.ok and r.info and not r.info.delivered and not r.info.cancelled and not r.info.not_found)
-    not_found = sum(1 for r in records if r.ok and r.info and r.info.not_found)
-    print(f"共 {total}：成功 {ok}（已交付 {delivered} / 已取消 {cancelled} / 在途 {in_transit} / 查无此号 {not_found}）失败 {failed}")
+    failed = numbers - ok
+    delivered = cancelled = in_transit = not_found = 0
+    multi = sum(1 for r in records if r.multi)
+    for r in records:
+        if not r.ok:
+            continue
+        for info in r.infos:
+            if info.not_found:
+                not_found += 1
+            elif info.delivered:
+                delivered += 1
+            elif info.cancelled:
+                cancelled += 1
+            else:
+                in_transit += 1
+    print(f"跟踪号 {numbers}（成功 {ok} / 失败 {failed}）："
+          f"已交付 {delivered} / 已取消 {cancelled} / 在途 {in_transit} / 查无此号 {not_found}；"
+          f"复用跟踪号(多票) {multi} 个")
 
 
 def _on_progress(done: int, total: int, item: Any, _ok: bool) -> None:

@@ -14,6 +14,7 @@ description: FedEx 官方 Track API 批量查询，输出完整状态历史 + �
 - **保留完整 `scanEvents`**（FedEx 响应为倒序，模块按升序全量保留）。
 - 关键时点关键字提取：建标(Label created / Shipment information sent)、站点收件(Picked up / Arrived at FedEx location)、交付(Delivered / eventType DL)、取消(CA)。
 - 只查号、不关心号是否属自有账号 → 跨渠道(VITE/蜴国际)出的 FedEx 单可查。
+- **同号多票**：FedEx 复用跟踪号（约 4–6 年一轮回，号码前段/SCC 常数段常绑指定发件账号），同一号可能对应多票。模块对每个号**保留全部 trackResult**；summary/timeline 用 `[n]` 后缀区分、加 `多票`/`分票` 列。判断归属：按**建标/交付时间**落在该单所属发货窗口的那一票。
 
 ## 凭证
 

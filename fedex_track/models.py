@@ -214,11 +214,18 @@ def parse_track_result(number: str, track_result: dict[str, Any]) -> FdxTrackInf
     return info
 
 
-def parse_track_payload(number: str, payload: dict[str, Any]) -> FdxTrackInfo:
-    """从完整响应里按 trackingNumber 取出对应 trackResult 解析；找不到则 not_found。"""
+def parse_track_results(number: str, track_results: list[dict[str, Any]]) -> list[FdxTrackInfo]:
+    """一个跟踪号可能对应**多票**（FedEx 复用跟踪号，约 4–6 年一轮回），逐条解析。"""
+    return [parse_track_result(number, tr) for tr in track_results or []]
+
+
+def parse_track_payload(number: str, payload: dict[str, Any]) -> list[FdxTrackInfo]:
+    """从完整响应里按 trackingNumber 取出**全部** trackResult 解析；找不到则一条 not_found。"""
+    results: list[FdxTrackInfo] = []
     for ctr in _dig(payload, "output", "completeTrackResults", default=[]) or []:
         if _text(ctr.get("trackingNumber")) == number:
             for tr in _dig(ctr, "trackResults", default=[]) or []:
-                return parse_track_result(number, tr)
-    info = FdxTrackInfo(tracking_number=number, not_found=True, raw=payload)
-    return info
+                results.append(parse_track_result(number, tr))
+    if results:
+        return results
+    return [FdxTrackInfo(tracking_number=number, not_found=True, raw=payload)]

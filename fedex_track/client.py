@@ -15,7 +15,7 @@ from typing import Any
 
 import httpx
 
-from .models import FdxTrackInfo, parse_track_result
+from .models import FdxTrackInfo, parse_track_results
 
 DEFAULT_PROD_BASE = "https://apis.fedex.com"
 DEFAULT_SANDBOX_BASE = "https://apis-sandbox.fedex.com"
@@ -164,10 +164,11 @@ class FedexTrackClient:
             return self._access_token or ""
 
     # ── Track 批量 ───────────────────────────────────────────
-    def track_many(self, numbers: list[str], *, include_detailed: bool = True) -> dict[str, FdxTrackInfo]:
-        """一次 POST 查询 ≤30 个跟踪号，返回 {号: FdxTrackInfo}。
+    def track_many(self, numbers: list[str], *, include_detailed: bool = True) -> dict[str, list[FdxTrackInfo]]:
+        """一次 POST 查询 ≤30 个跟踪号，返回 {号: [FdxTrackInfo, ...]}。
 
-        单个号失踪（未在响应中）会作为 not_found 返回；HTTP/限流类错误抛 FedexTrackError。
+        FedEx 会**复用跟踪号**（约 4–6 年一轮回），同一号可能对应多票，故每个号是列表。
+        单个号失踪（未在响应中）会作为一条 not_found 返回；HTTP/限流类错误抛 FedexTrackError。
         """
         nums = [str(n).strip().upper() for n in numbers if str(n).strip()]
         if not nums:
@@ -191,26 +192,23 @@ class FedexTrackClient:
             raise FedexTrackError(
                 f"FedEx track 失败: {message or _text(code) or f'HTTP {resp.status_code}'}",
                 http_status=resp.status_code, code=code, category=category, retriable=retriable)
-        # 解析每个号
-        result: dict[str, FdxTrackInfo] = {}
+        # 解析每个号（保留同号的多票）
+        result: dict[str, list[FdxTrackInfo]] = {}
         seen: set[str] = set()
         for ctr in (payload.get("output", {}).get("completeTrackResults") or []):
             tn = _text(ctr.get("trackingNumber"))
             if not tn:
                 continue
             seen.add(tn)
-            for tr in (ctr.get("trackResults") or []):
-                result[tn] = parse_track_result(tn, tr)
-                break
-            else:
-                result[tn] = FdxTrackInfo(tracking_number=tn, not_found=True, raw=ctr)
+            trs = parse_track_results(tn, ctr.get("trackResults") or [])
+            result[tn] = trs if trs else [FdxTrackInfo(tracking_number=tn, not_found=True, raw=ctr)]
         for n in nums:
             if n not in seen:
-                result[n] = FdxTrackInfo(tracking_number=n, not_found=True, raw=payload)
+                result[n] = [FdxTrackInfo(tracking_number=n, not_found=True, raw=payload)]
         return result
 
     def track(self, number: str) -> FdxTrackInfo:
-        return self.track_many([number])[number.strip().upper()]
+        return self.track_many([number])[number.strip().upper()][0]
 
     def _json_body(self, resp: httpx.Response) -> Any:
         try:
