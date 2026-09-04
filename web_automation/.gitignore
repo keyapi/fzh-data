@@ -17,6 +17,7 @@ profiles/
 downloads/
 output/
 logs/
+scripts/run_tongtu_scheduled-*.cmd
 *.xlsx
 *.xls
 *.png

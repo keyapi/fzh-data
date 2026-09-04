@@ -22,16 +22,7 @@ WEB_ROOT = SCRIPT_DIR.parent
 DOWNLOADS_DIR = WEB_ROOT / "downloads"
 OUTPUT_DIR = WEB_ROOT / "output"
 
-# 6 个主线仓（与 tongtu_auto_export.WAREHOUSES 对齐，2026-09 通途改名后）。
-# 其余仓库（成品/半成品/Wayfair/星链/大件/多渠道等）归入"其他"表。
-MAIN_SHEETS = {
-    "美东-CENTRADE",
-    "波兰-FZHPoland-covers",
-    "美中-FZH-DANEEY",
-    "美东-CENTRADE-退货产品仓",
-    "波兰-FZHPoland-退货产品仓",
-    "美中-FZH-DANEEY-退货产品仓",
-}
+from tongtu_warehouses import MAIN_SHEETS
 OTHER_SHEET_NAME = "其他"
 
 # 需要跳过的汇总行关键词（精确匹配仓库列的值）

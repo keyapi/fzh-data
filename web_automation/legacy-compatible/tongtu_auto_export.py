@@ -18,9 +18,12 @@ MCP 模式经验:
   - 但 session cookie (JSESSIONID) 无法持久化，需要 passport 的记住密码 cookie
   - 参考 PROJECT.md "八、MCP 调试记录" 章节了解详情
 """
+import re
 import subprocess, sys, time, shutil, json
 from pathlib import Path
 from playwright.sync_api import sync_playwright
+
+from tongtu_warehouses import WAREHOUSES, inventory_download_matches_warehouse, safe_prefix
 
 sys.stdout.reconfigure(encoding='utf-8')
 import os
@@ -62,19 +65,14 @@ LOGIN_TIMEOUT_SECS = 300
 # 导出的仓库列表（2026-09-03 通途仓名统一为 美东-/波兰-/美中- 前缀）
 # 结构 = 3 分公司主仓 + 3 对应退货仓。皮壳库存已并入「美中-FZH-DANEEY」主仓；
 # 成品仓 / 半成品仓 / Wayfair / 星链 / 大件 / 多渠道 已停用或非库存主线，一律不导出。
-# 若通途再次改名/加仓：跑 `uv run python tongtu_auto_export.py --list-warehouses` 对照更新本清单。
-WAREHOUSES = [
-    "美东-CENTRADE",
-    "波兰-FZHPoland-covers",
-    "美中-FZH-DANEEY",
-    "美东-CENTRADE-退货产品仓",
-    "波兰-FZHPoland-退货产品仓",
-    "美中-FZH-DANEEY-退货产品仓",
-]
+# 若通途再次改名/加仓：跑 `uv run python tongtu_auto_export.py --list-warehouses` 对照更新 tongtu_warehouses.py。
 
-# 仓库名称 → 文件名安全前缀（不能有特殊字符）
-def safe_prefix(name):
-    return name.replace("/", "-").replace("\\", "-").replace(":", "-")
+
+def _warehouse_toggle(page, name: str):
+    pattern = re.compile(rf"^{re.escape(name)}$")
+    return page.locator(
+        "#warehouseDisableDiv a.toggle_btn, #warehouseDisableDiv a.toggle_btn_down"
+    ).filter(has_text=pattern).first
 
 
 def ensure_ocr() -> tuple[bool, str]:
@@ -128,10 +126,7 @@ def select_warehouse(page, name, all_warehouses=None):
 
     通途 Bug 处理: 页面加载时 togglebutton 显示已选中，但 ExtJS 数据表格未实际渲染。
     必须"先切到其他仓库再切回来"才能触发数据加载。"""
-    target = page.locator(
-        "#warehouseDisableDiv a.toggle_btn, #warehouseDisableDiv a.toggle_btn_down",
-        has_text=name,
-    ).first
+    target = _warehouse_toggle(page, name)
     try:
         target.wait_for(state="visible", timeout=5000)
         current_class = target.get_attribute("class") or ""
@@ -139,10 +134,7 @@ def select_warehouse(page, name, all_warehouses=None):
             # 通途 Bug: 显示选中但数据可能没加载 → 先切走再切回来
             other = _pick_other_warehouse(name, all_warehouses or [])
             print(f"  [操作] 通途 Bug 规避: 先切 {other} 再切回 {name}")
-            page.locator(
-                "#warehouseDisableDiv a.toggle_btn, #warehouseDisableDiv a.toggle_btn_down",
-                has_text=other,
-            ).first.click()
+            _warehouse_toggle(page, other).click()
             page.wait_for_timeout(3000)
         else:
             print(f"  [操作] 切换至: {name}")
@@ -159,7 +151,7 @@ def _pick_other_warehouse(current, all_warehouses):
     for w in all_warehouses:
         if w != current:
             return w
-    return "FZHPoland-covers"  # fallback
+    return all_warehouses[0] if all_warehouses else current
 
 
 def list_warehouses_on_page(page):
@@ -413,6 +405,10 @@ def run():
     if failed_warehouses:
         print(f"\n[警告] 以下仓库导出失败/被跳过: {', '.join(failed_warehouses)}")
         print("        请人工确认其库存，避免合并清单缺仓或串仓。")
+        merge_all_inventory()
+        ok = total - len(failed_warehouses)
+        print(f"\n[失败] 成功 {ok}/{total} 个仓库，退出码 1（定时任务可据此告警）")
+        sys.exit(1)
 
     print(f"\n{'='*50}")
     print(f"[完成] 全部 {total} 个仓库已处理！")
@@ -440,8 +436,7 @@ def merge_all_inventory():
         # 因此不能用中文关键词匹配，改为前缀 + .xlsx 后缀匹配。
         all_files = list(DOWNLOADS_DIR.iterdir())
         files = sorted(
-            [f for f in all_files
-             if f.name.startswith(prefix) and f.suffix == ".xlsx"],
+            [f for f in all_files if inventory_download_matches_warehouse(f.name, wh)],
             key=lambda p: p.stat().st_mtime,
             reverse=True,
         )

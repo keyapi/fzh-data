@@ -18,6 +18,7 @@
 #     at that local time). If both given, IntervalHours wins.
 #   - The scheduled job runs as the current interactive user, so the PC must be
 #     powered on and that user logged in at trigger time.
+#   - Writes web_automation\scripts\run_tongtu_scheduled-<task>.cmd (ASCII, per clone).
 #   - Logs append to <repo>\web_automation\logs\export-<task>.log
 
 param(
@@ -29,17 +30,30 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-function New-DispatchCommand($repo, $taskName) {
-  $cmd = "cmd.exe /c cd /d `"$repo`" && uv run python web_automation\scripts\dispatch.py tongtu.$taskName.export -- --auto-login >> `"$repo\web_automation\logs\export-$taskName.log`" 2>&1"
-  return $cmd
+function Write-ScheduleWrapper($repo, $taskName) {
+  $wrapper = Join-Path $repo "web_automation\scripts\run_tongtu_scheduled-$taskName.cmd"
+  $content = @(
+    '@echo off'
+    'setlocal'
+    'set "PATH=%USERPROFILE%\.local\bin;%USERPROFILE%\.cargo\bin;%PATH%"'
+    'cd /d "%~dp0..\.."'
+    "uv run python web_automation\scripts\dispatch.py tongtu.$taskName.export -- --auto-login >> `"%~dp0..\logs\export-$taskName.log`" 2>&1"
+  ) -join "`r`n"
+  [System.IO.File]::WriteAllText($wrapper, $content + "`r`n")
+  return $wrapper
 }
 
 function Register-One($repo, $taskName, $scheduleArgs) {
   $taskNameFull = "FZH-TongtuAutoExport-$taskName"
-  $action = New-DispatchCommand $repo $taskName
-  $args = @("/Create", "/F", "/TN", $taskNameFull, "/TR", $action) + $scheduleArgs
+  $wrapper = Write-ScheduleWrapper $repo $taskName
+  $tr = "`"$wrapper`""
+  $args = @("/Create", "/F", "/TN", $taskNameFull, "/TR", $tr) + $scheduleArgs
   & schtasks $args
   if ($LASTEXITCODE -ne 0) { throw "schtasks failed for $taskNameFull" }
+  $query = & schtasks /Query /TN $taskNameFull /V /FO LIST 2>&1 | Out-String
+  if ($query -notmatch 'dispatch\.py') {
+    throw "Task $taskNameFull registered but Task To Run does not contain dispatch.py"
+  }
   Write-Host "Registered: $taskNameFull"
 }
 
@@ -75,5 +89,5 @@ if ($IntervalHours -gt 0) {
 foreach ($t in $tasks) { Register-One $repo $t $sched }
 
 Write-Host ""
-Write-Host "Done. Review with:  schtasks /Query /TN FZH-TongtuAutoExport-$($tasks[0])"
+Write-Host "Done. Review with:  schtasks /Query /TN FZH-TongtuAutoExport-$($tasks[0]) /V /FO LIST"
 Write-Host "Logs: $logDir"

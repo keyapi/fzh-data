@@ -47,12 +47,32 @@ mkdir -p "$LOGDIR"
 TASKS=()
 if [ "$TASK" = "both" ]; then TASKS=(stock sales); else TASKS=("$TASK"); fi
 
+resolve_uv() {
+  if command -v uv >/dev/null 2>&1; then
+    command -v uv
+    return
+  fi
+  for candidate in "$HOME/.local/bin/uv" "$HOME/.cargo/bin/uv"; do
+    if [ -x "$candidate" ]; then
+      echo "$candidate"
+      return
+    fi
+  done
+  echo "uv not found in PATH or ~/.local/bin / ~/.cargo/bin" >&2
+  exit 2
+}
+
+UV_BIN="$(resolve_uv)"
+REPO_Q=$(printf '%q' "$REPO")
+LOGDIR_Q=$(printf '%q' "$LOGDIR")
+UV_Q=$(printf '%q' "$UV_BIN")
+PATH_PREFIX_Q=$(printf '%q' "$HOME/.local/bin:$HOME/.cargo/bin:/usr/local/bin:/usr/bin:/bin")
+
 # Build minute/hour fields.
 MIN=0; HOUR=""
 if [ "$EVERY" -gt 0 ]; then
   HOUR="*/$EVERY"
 elif [ -n "$AT" ]; then
-  # expects HH:MM
   HOUR="${AT%%:*}"
   MIN="${AT##*:}"
 else
@@ -62,25 +82,35 @@ fi
 
 cron_line() {
   local t="$1"
-  # minute hour dom month dow command ; the trailing comment is the marker we
-  # grep to replace on re-register / remove.
-  printf '%s %s * * * cd %s && uv run python web_automation/scripts/dispatch.py tongtu.%s.export -- --auto-login >> %s/export-%s.log 2>&1  # FZH-TongtuAutoExport-%s\n' \
-    "$MIN" "$HOUR" "$REPO" "$t" "$LOGDIR" "$t" "$t"
+  local marker="FZH-TongtuAutoExport-$t"
+  # shellcheck disable=SC2059
+  printf '%s %s * * * PATH=%s cd %s && %s run python web_automation/scripts/dispatch.py tongtu.%s.export -- --auto-login >> %s/export-%s.log 2>&1 # %s\n' \
+    "$MIN" "$HOUR" "$PATH_PREFIX_Q" "$REPO_Q" "$UV_Q" "$t" "$LOGDIR_Q" "$t" "$marker"
 }
 
 reg_one() {
   local t="$1" marker="FZH-TongtuAutoExport-$t"
-  local line; line="$(cron_line "$t")"
-  # Remove any prior line carrying this marker, then append the new one.
-  crontab -l 2>/dev/null | grep -v "# $marker" | crontab -
-  ( crontab -l 2>/dev/null; printf '%s' "$line" ) | crontab -
+  local line
+  line="$(cron_line "$t")"
+  { crontab -l 2>/dev/null || true; printf '%s' "$line"; } | crontab -
+  if ! crontab -l | grep -F "# $marker" >/dev/null; then
+    echo "Failed to register crontab for $marker" >&2
+    exit 1
+  fi
   echo "Registered crontab for $marker"
 }
 
 remove_all() {
   for t in "${TASKS[@]}"; do
-    crontab -l 2>/dev/null | grep -v "# FZH-TongtuAutoExport-$t" | crontab -
-    echo "Removed (if existed): FZH-TongtuAutoExport-$t"
+    local marker="FZH-TongtuAutoExport-$t"
+    local current
+    current="$(crontab -l 2>/dev/null || true)"
+    if [ -z "$current" ]; then
+      echo "Removed (if existed): $marker"
+      continue
+    fi
+    printf '%s\n' "$current" | grep -vF "# $marker" | crontab -
+    echo "Removed (if existed): $marker"
   done
 }
 

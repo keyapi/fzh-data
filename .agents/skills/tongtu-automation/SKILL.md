@@ -50,15 +50,19 @@ uv run python web_automation/scripts/dispatch.py tongtu.stock.export
 
 1. **判断是一次性还是定时**：句子里有"以后 / 每天 / 每 N 小时 / 定时 / 重复 / 每隔" → 定时；否则一次性走 dispatcher。
 2. **定时前置自检**：跑 `uv run python web_automation/scripts/doctor.py`，确认子环境与 Chromium。定时要无人值守（7 天 cookie 过期后自动续登），**OCR 是必需的**——未装时告诉用户"要自动定期跑，得先装个自动识别验证码的小组件（约几十 MB），我帮你装"，然后 `uv sync --project web_automation --group ocr`；装不上（缺 VC++ 运行库等）如实说明并建议仍保持手动登录习惯。
-3. **问清参数**：一次问清——导哪个（库存 / 销售 / 都要）+ 频率：每 N 小时（整数小时）或 每天几点（HH:MM）。自然语言转参数：
-   - "每 8 小时" → `--every 8`；"每天凌晨 2 点" → `--at 02:00`。
+3. **问清参数**：一次问清——导哪个（库存 / 销售 / 都要）+ 频率：每 N 小时（整数小时）或 每天几点（HH:MM）。自然语言转参数（**按 OS 分开，不要混用**）：
+   - Windows："每 8 小时" → `-IntervalHours 8`；"每天凌晨 2 点" → `-AtTime "02:00"`。
+   - Linux/macOS："每 8 小时" → `--every 8`；"每天凌晨 2 点" → `--at 02:00`。
    - 销售报表有"提交互斥"（提交后到生成前不能再提交），间隔建议 ≥ 1 小时，太短会撞车失败。
 4. **注册**（在仓库根执行）：
-   - Windows：`powershell -ExecutionPolicy Bypass -File web_automation/scripts/install_tongtu_schedule.ps1 -Task <stock|sales|both> <-every N | -at HH:MM>`
-   - Linux/macOS：`./web_automation/scripts/install_tongtu_schedule.sh --task <stock|sales|both> [--every N | --at HH:MM]`
-5. **改频 / 取消**：用户说"改成每天 3 点"→ 用新参数重跑一次脚本（会覆盖）；说"取消定时"→ Windows 加 `-Remove`、Linux/macOS 加 `--remove`。
-6. **收尾反馈**：告诉用户——任务名（`FZH-TongtuAutoExport-<task>`）、下次运行时刻、日志在 `web_automation/logs/`、以及"电脑要开机并登录才会跑"。
-7. **首次 profile**：若还没有登录 profile（`web_automation/chrome-profile/` 不存在），先让用户跑一次一次性导出并登录，再注册定时，避免定时首跑卡在登录。
+   - Windows：`powershell -ExecutionPolicy Bypass -File web_automation/scripts/install_tongtu_schedule.ps1 -Task <stock|sales|both> <-IntervalHours N | -AtTime "HH:MM">`
+   - Linux/macOS：`bash web_automation/scripts/install_tongtu_schedule.sh --task <stock|sales|both> [--every N | --at HH:MM]`
+5. **改频 / 取消**：用户说"改成每天 3 点"→ 用新参数重跑一次脚本（会覆盖）；说"取消通途定时"→ 若曾注册过 stock+sales 两边，用 `-Task both -Remove` / `--task both --remove`，否则只删当前 task。
+6. **注册后核对**（必须做，再告诉用户成功）：
+   - Windows：`schtasks /Query /TN FZH-TongtuAutoExport-<task> /V /FO LIST`，确认 **Task To Run** 含 `dispatch.py`。
+   - Linux/macOS：`crontab -l | grep FZH-Tongtu`，确认有对应 marker 行。
+7. **收尾反馈**：任务名（`FZH-TongtuAutoExport-<task>`）、核对到的下次运行时刻、日志在 `web_automation/logs/`、以及"电脑要开机并登录才会跑"。
+8. **首次 profile**：若还没有登录 profile（`web_automation/chrome-profile/` 不存在），先让用户跑一次一次性导出并登录，再注册定时，避免定时首跑卡在登录。
 
 > 详细见 `web_automation/docs/reference/scheduling-exports.md`。
 
