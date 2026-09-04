@@ -7,6 +7,10 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-09-04
+- **新增**: `workflow-issues/fedex-track-batch-query.md` — FedEx 官方批量 Track（≤30/请求、配额按请求、不需自有账号）+ 账号/组织恢复路径（879197228 在 2023 组织 Centrade(10548976)，腾讯企业邮箱收重置码）+ `fedex_track` 模块 + 三条教训（反爬假报错需多源核实、按方法关键词统计会漏、配额按请求不计费）。
+- **背景**: 打通 FedEx 官方跟踪需先理账号/组织碎片；headless 探针曾误判"FedEx 查无此号"，实则反爬假报错，真实浏览器可查。
+
 ## 2026-09-03
 - **新增**: `developer-experience/workbuddy-custom-model-newapi-config.md` — WorkBuddy 接公司 new-api 自定义模型，`useCustomProtocol` 必须 `false` 且 `url` 带 `/v1`，否则发消息只回「任务完成」无正文。
 - **新增**: `.agents/skills/workbuddy-config/SKILL.md` — WorkBuddy 接公司 new-api 的自动配置 skill（要 key → 备份 → 合并写 `~/.workbuddy/models.json` → 提示重启 → 可选 curl 验证）。

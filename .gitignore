@@ -76,3 +76,6 @@ web_automation/debug_*.json
 !web_automation/uv.lock
 !web_automation/.env.example
 !web_automation/.mcp.json
+
+# fedex_track 运行产物（大，不入库）
+fedex_track_output/
