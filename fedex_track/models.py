@@ -183,7 +183,8 @@ def parse_track_result(number: str, track_result: dict[str, Any]) -> FdxTrackInf
     sl = _dig(latest, "scanLocation", default={}) or {}
     info.current_status_scan_location = _text(_dig(sl, "city")) or ""
 
-    # 已交付 / 取消（事件码或描述）
+    # 已交付 / 取消：FedEx 事件流里可能出现一条 CA(取消)节点，但包裹实际已交付；
+    # 故名"取消"仅当**最终状态**为取消且未交付（latestStatusDetail.code in CA/CAF 且未 delivered）。
     deliv_events = [
         e for e in events
         if e.event_type == "DL" or _match_kw(e.description, _DELIVERED_KEYWORDS)
@@ -197,8 +198,10 @@ def parse_track_result(number: str, track_result: dict[str, Any]) -> FdxTrackInf
             info.delivery_city = last_d.city
             info.delivery_state = last_d.state
 
-    canc = [e for e in events if e.event_type in ("CA", "CAF") or _match_kw(e.description, _CANCELLED_KEYWORDS)]
-    if canc or (info.current_status_code in ("CA", "CAF")):
+    if not info.delivered and (
+        info.current_status_code in ("CA", "CAF")
+        or _match_kw(info.current_status, _CANCELLED_KEYWORDS)
+    ):
         info.cancelled = True
 
     # 建标（最早的 Label created / Shipment information sent）

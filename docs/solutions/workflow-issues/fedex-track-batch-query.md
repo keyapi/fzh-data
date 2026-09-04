@@ -32,7 +32,7 @@ related_components: [ups_track, sellfox_shipping, vite-api, yiglobal-api]
    - 其他组织：Centrade2=Paula→CENTRADE INC(10695072，无账号)；daneey=Eric→CENTRADE INC(10879188，无账号，有 `fzh_fedex_track` 项目仅 TEST)；leonzhao@daneey.com 登录失败。
    - 在 Centrade(10548976) 内新建项目（勾 **Basic Integrated Visibility = formerly Track API**，国家 United States，接受 DPLA + 超额费用条款）→ **Production Key** tab → 填 key name、选 `CentradeFedex01`→ 生成 prod key，**secret 只在那一屏显示一次，马上存 `.env`**。
 4. **模块 `fedex_track/`（仿 ups_track）**：`client.py`(OAuth2 + `track_many` 批量≤30) / `models.py`(保留**完整 `scanEvents`** 升序 + 三时点：建标/站点收件/交付/取消) / `batch.py`(分块并发/重试/断点续跑；清单支持 txt/csv/**xlsx**，自动找跟踪号列) / `cli.py`(输出 summary.csv / timeline.csv=完整历史 / raw.json=每号原始响应)。`--filter-carrier fedex` 从混合单号里只留 FedEx；默认按号**去重**。
-5. **关键时点用"事件码+描述关键字"提取**（词表在 `models.py`）：建标 `Label created`/`Shipment information sent to FedEx`；站点收件 `Picked up`/`Arrived at FedEx location`；交付 `eventType=DL`；取消 `CA`。销售核查：**站点收件时间** 对比 备注里的 **发货日期/发货时间** → 有发货时间但一直无站点收件 = 漏发；站点收件比发货日晚很多 = 迟发；status=在途 超天数 = 卡件。
+5. **关键时点用"事件码+描述关键字"提取**（词表在 `models.py`）：建标 `Label created`/`Shipment information sent to FedEx`；站点收件 `Picked up`/`Arrived at FedEx location`；交付 `eventType=DL`。**"已取消"= 仅当最终状态为取消(CA/CAF)且未交付**——FedEx 事件流里可能**残留一条 CA(cancelled) 节点但包裹实际已交付**（本次 4 个单被误标，已修正）。销售核查：**站点收件时间** 对比 备注里的 **发货日期/发货时间** → 有发货时间但一直无站点收件 = 漏发；站点收件比发货日晚很多 = 迟发；status=在途 超天数 = 卡件。
 6. **同号多票（FedEx 复用跟踪号）**：FedEx 号码约 4–6 年一轮回、前段/SCC 常数段常绑指定发件账号，同一 12 位号可能对应两票（如 `382954490594`：6 月一票 Venus,TX 已交付 + 8 月一票 Sioux Falls,SD 已交付）。`fedex_track` 对每个号**保留全部 trackResult**，summary/timeline 用 `[n]` 后缀加 `多票`/`分票` 列区分；**判归属按建标/交付时间落在该单所属发货窗口的那一票**。机器生成的 pickup（如 `12:00 AM Picked up` 无前序建标）通常是旧票复用，注意与真实发货区分。
 
 ## Why This Matters
