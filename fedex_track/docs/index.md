@@ -22,7 +22,12 @@ description: FedEx 官方 Track API 批量查询，输出完整状态历史 + �
 
 ## 结构
 
-`fedex_track/{client.py, models.py, batch.py, cli.py}`，参照 `ups_track`。输出 summary.csv / timeline.csv(完整历史) / raw.json。
+`fedex_track/{client.py, models.py, batch.py, cli.py, ops_report.py, README.md, AGENT_HANDOFF.md}`，参照 `ups_track`。输出 summary.csv / timeline.csv(完整历史) / raw.json。
+
+- **交接**：见 `AGENT_HANDOFF.md`（Agent 入口），skill 见 `.agents/skills/fedex-track/SKILL.md`。
+- **运营报表**：`ops_report.py` 生成多 Sheet 异常 Excel，runbook 见 `docs/ops-report-runbook.md`。
+- **背景/教训**：`docs/solutions/workflow-issues/fedex-track-batch-query.md`、`docs/research/2026-09-04-fedex-track-account-investigation.md`。
+- 已知坑：同号多票(复用号)、"已取消"仅当最终为取消且未交付、FedEx 反爬假报错需第二来源、配额按请求不按号。
 
 ## 环境/依赖
 

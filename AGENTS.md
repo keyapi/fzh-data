@@ -119,6 +119,7 @@ uv sync
 | `sellfox-cover-inventory` | `sellfox_cover_inventory/` | 三角类皮壳共享库存代理：KS 库存池 + PK# 组合 + cover_combo_ops 创建/对账 |
 | `sellfox-shipping` | `sellfox_shipping/` | 赛狐尾程打单（订单获取→承运人标签→追踪回写）三界面架构 |
 | `vite-api` | `vite-api/` | VITE 多承运商打单 API 文档（测试环境默认） |
+| `fedex-track` | `.agents/skills/fedex-track/` | FedEx 官方 Track API 批量查询 + 运营异常报表(仿 ups_track；多Sheet/Amazon营业日口径；复用跟踪号多票) |
 | `yiglobal-api` | `yiglobal-api/` | 蜴国际打单 API 文档（原 `蜴国际-API/`；env：`YIGLOBAL_*`） |
 | `en-image-upload` | `EN_API/` | 图片上传（CLI + Web UI + 物料组主图） |
 | `nas-itemgroup-folders` | `nas_itemgroup_folders/` | NAS-ERPNext 物料组文件夹对账 + 叶子组 (LGKS) 管理 |

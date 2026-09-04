@@ -7,6 +7,11 @@ tags: [fedex, track, module]
 
 # 变更日志
 
+## 2026-09-04（续）
+- **新增**: `ops_report.py` 运营异常报表生成器（多Sheet/配色/中文/EN/Amazon营业日口径）；`docs/ops-report-runbook.md`；`AGENT_HANDOFF.md`；skill `.agents/skills/fedex-track/SKILL.md`。
+- **修正**: "已取消"仅当最终状态为取消且未交付（FedEx 事件流可能残留 CA 节点但已交付）；支持同号多票(复用跟踪号)。
+- **背景**: 全量 6752 FedEx 号重跑(v2)；Python 异常分类计数与报表阈值见 docs/ops-report-runbook.md。
+
 ## 2026-09-04
 - **新增**: `fedex_track` 模块（仿 ups_track）— client/models/batch/cli，官方 Track API OAuth2 批量（≤30/请求），保留完整 `scanEvents` 历史 + 三时点（建标/站点收件/交付）。输出 summary.csv / timeline.csv / raw.json。
 - **新增**: `docs/index.md`（模块说明）、`.env.example`（FEDEX_* 凭证）。
