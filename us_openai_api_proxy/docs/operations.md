@@ -389,6 +389,7 @@ ssh -i ~/.ssh/id_rsa_openwrt root@192.168.100.1 \
 ### 已知 DIRECT 例外
 
 - **`45.63.1.166`（Vultr RDP 服务器）→ DIRECT**：BoostNet 对该服务器 3389 的 RDP 不通（香港/美国节点都试过，普通网页正常，疑似 BoostNet 屏蔽 RDP；直连光猫/US 服务器/应急线路都能正常 RDP）。故自定义规则加 `IP-CIDR,45.63.1.166/32,DIRECT` 直连。若以后换机场后 RDP 正常，可移除此规则。
+- **`groupe-rueducommerce.fr`（Mirakl 法国后台）→ DIRECT**：BoostNet 的日本/美国节点 TLS 被该站 Cloudflare 重置，仅香港节点能通；但自定义规则无法引用覆写脚本创建的 `香港` 组（合并阶段校验目标组存在会丢弃），而直连稳定快速（实测 6/6 全通，0.76-1.28s，与直连光猫一致）。故加 `DOMAIN-SUFFIX,groupe-rueducommerce.fr,DIRECT`。若以后换机场后该站走代理正常，可移除此规则。
 
 ### 机场额度怎么算
 
