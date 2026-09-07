@@ -1,5 +1,6 @@
 ---
-type: Module
+okf: v0.1
+type: Index
 title: fedex_track
 description: FedEx 官方 Track API 批量查询，输出完整状态历史 + 建标/站点收件/交付关键时点
 ---

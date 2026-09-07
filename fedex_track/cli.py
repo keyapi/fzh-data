@@ -3,13 +3,13 @@
 示例::
 
     # 离线演示（无凭证也能看流程与输出格式）
-    python -m fedex_track.cli query --input tracking.txt --out result --mock
+    uv run python -m fedex_track.cli query --input tracking.txt --out result --mock
 
     # 真实查询（凭证来自 env：FEDEX_API_KEY / FEDEX_SECRET_KEY / FEDEX_ENV）
-    python -m fedex_track.cli query --input 通途非FBA订单202608.xlsx --env production --out result --filter-carrier fedex
+    uv run python -m fedex_track.cli query --input 通途非FBA订单202608.xlsx --env production --out result --filter-carrier fedex
 
 产出三件套（同一前缀）：
-    <out>.summary.csv    每号一行：当前状态/已交付/已取消/建标时间/站点收件时间/交付时间/错误
+    <out>.summary.csv    每票一行：当前状态/已交付/已取消/建标时间/站点收件时间/交付时间/错误
     <out>.timeline.csv   每号每个节点一行（**完整状态历史**）
     <out>.raw.json       每号原始响应（留档 / 断点续跑依据）
 """
@@ -26,7 +26,7 @@ from typing import Any
 
 from . import __version__
 from .batch import Record, load_input_file, merge_resumed_done, run_batch
-from .client import DEFAULT_PROD_BASE, DEFAULT_SANDBOX_BASE, FedexTrackClient
+from .client import FedexTrackClient, resolve_base_url
 from .models import FdxTrackInfo, parse_track_payload
 
 
@@ -64,13 +64,13 @@ def _mock_payload(number: str) -> dict[str, Any]:
         {"date": iso(0), "eventType": "OC", "eventDescription": "Shipment information sent to FedEx",
          "derivedStatus": "Label created", "derivedStatusCode": "IN",
          "scanLocation": {"city": "East Hanover", "stateOrProvinceCode": "NJ", "postalCode": "07936"}},
-        {"date": iso(-600), "eventType": "PU", "eventDescription": "Picked up",
+        {"date": iso(600), "eventType": "PU", "eventDescription": "Picked up",
          "derivedStatus": "Picked up", "derivedStatusCode": "PU",
          "scanLocation": {"city": "East Hanover", "stateOrProvinceCode": "NJ", "postalCode": "07936"}},
     ]
     latest = {"code": "PU", "description": "Picked up", "scanLocation": {"city": "East Hanover", "stateOrProvinceCode": "NJ"}}
     if delivered:
-        ev.append({"date": iso(-1200), "eventType": "DL", "eventDescription": "Delivered",
+        ev.append({"date": iso(1200), "eventType": "DL", "eventDescription": "Delivered",
                    "derivedStatus": "Delivered", "derivedStatusCode": "DL",
                    "scanLocation": {"city": "Newark", "stateOrProvinceCode": "DE", "postalCode": "19702"}})
         latest = {"code": "DL", "description": "Delivered", "scanLocation": {"city": "Newark", "stateOrProvinceCode": "DE"}}
@@ -100,14 +100,7 @@ def _mock_many(numbers: list[str]) -> dict[str, list[FdxTrackInfo]]:
 
 
 def _base_for(args: argparse.Namespace) -> str:
-    if args.base_url:
-        return args.base_url
-    env_mode = (os.getenv("FEDEX_ENV") or "production").strip().lower()
-    mode = args.env or ("production" if env_mode in ("production", "prod") else "sandbox")
-    base = os.getenv("FEDEX_BASE_URL")
-    if base:
-        return base
-    return DEFAULT_PROD_BASE if mode == "production" else DEFAULT_SANDBOX_BASE
+    return resolve_base_url(env=args.env, explicit_base=args.base_url)
 
 
 def _build_query(args: argparse.Namespace):
@@ -225,8 +218,6 @@ def main(argv: list[str] | None = None) -> int:
     if not items:
         print(f"清单为空(或全被过滤): {args.input}", file=sys.stderr)
         return 2
-    if args.limit and args.limit > 0:
-        items = items[: args.limit]
     print(f"待查 {len(items)} 个跟踪号 → 输出前缀 {prefix}", file=sys.stderr)
 
     client, query = _build_query(args)
@@ -236,7 +227,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         resume_from = raw_path if args.resume else None
         results = run_batch(query, items, workers=args.workers, retries=args.retries,
-                            resume_from=resume_from, delay=args.delay, on_progress=_on_progress)
+                            resume_from=resume_from, delay=args.delay, limit=args.limit or 0,
+                            on_progress=_on_progress)
         results = merge_resumed_done(results, resume_from)
     finally:
         if client is not None:

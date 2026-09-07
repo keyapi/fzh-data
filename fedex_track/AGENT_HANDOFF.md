@@ -20,14 +20,21 @@
 
 ## 快速开始
 
+凭证在仓库根 `.env`（`FEDEX_API_KEY` / `FEDEX_SECRET_KEY` / `FEDEX_ENV`）。Windows（pwsh）：
+
+```powershell
+Get-Content .env -Encoding UTF8 | ForEach-Object {
+  if ($_ -match '^\s*#' -or $_ -notmatch '=') { return }
+  $k,$v = $_.Split('=',2); Set-Item -Path "Env:$k" -Value $v.Trim()
+}
+```
+
 ```bash
-set -a && . ./.env && set +a   # 凭证从根 .env 读
+# 批量查询前先确认范围（--limit 冒烟；全量须用户明确同意）
+uv run python -m fedex_track.cli query --input <清单> --env production [--filter-carrier fedex] --limit 10 --out fedex_track_output/sample
 
-# 批量查询（txt/csv/xlsx 清单，自动识别跟踪号列；--filter-carrier fedex 只留 FedEx）
-uv run python -m fedex_track.cli query --input <清单> --env production [--filter-carrier fedex] [--limit N] --out <前缀>
-
-# 生成运营异常报表（多 Sheet + 配色 + 汇总）
-uv run python -m fedex_track.ops_report --out fedex_track_output/fedex_ops_report_<date>.xlsx
+# 生成运营异常报表（--summary / --tt / --out 均必填）
+uv run python -m fedex_track.ops_report --summary <summary.csv> --tt <通途.xlsx> --out fedex_track_output/fedex_ops_report_<date>.xlsx
 ```
 
 输出三件套（query）：`<前缀>.summary.csv`（每票一行：当前状态/已交付/已取消/建标/站点收件/交付）、`<前缀>.timeline.csv`（每节点一行，完整历史）、`<前缀>.raw.json`（每号完整原始响应，可归档）。
@@ -40,7 +47,8 @@ uv run python -m fedex_track.ops_report --out fedex_track_output/fedex_ops_repor
 - **配额按请求次数**：Track 能力 **10 万次/日**、限速 **1400 次/10 秒**，且**每请求 ≤30 号**。几万号也就几百次请求，远低于配额，**不会触发超额收费**（超额的"overage 费用"条款在 10 万次/日之上，量级碰不到；收费的 AIV 是另一付费产品）。
 - **迟发口径（ops_report）**：起点=**建标时间**，确认发货=**站点收件时间**；延迟 = 建标→收件的**营业日**数 − 处理时间(默认 1 天)。营业日**排除周末 + 美国联邦节假日**，贴近 Amazon LSR（ship-by = 下单日 + 处理时间，只算工作日）。
 - **`发货日期`列含义要核实**：通途表"发货日期"(第 0 列) 是"标记发货日"，未必是真实出库/交接时间；报表已改用**建标时间**为基准，`发货日期`仅作参考。
-- **运营报表阈值在 `ops_report.py` 顶部**（`HANDLING_DAYS`/`TRANSIT_SLOW_DAYS`/`STUCK_DAYS`/`MISSING_AFTER_DAYS`/`US_HOLIDAYS`），可按实际调整。
+- **生产全量前确认范围**：默认 `--limit` 冒烟；全量查询须用户明确同意。`--limit` 作用在 `--resume` 跳过已成功号之后的 pending 上。
+- **`--env sandbox`**：不要在根 `.env` 写死生产 `FEDEX_BASE_URL`（会让人以为 `--env sandbox` 已切沙箱；现已改为 sandbox 走 `FEDEX_SANDBOX_BASE_URL` / 默认沙箱 host）。覆盖 host 用 `--base-url`。
 
 ## 结构
 

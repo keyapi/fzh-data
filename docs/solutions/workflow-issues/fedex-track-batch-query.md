@@ -50,12 +50,10 @@ related_components: [ups_track, sellfox_shipping, vite-api, yiglobal-api]
 
 ## Examples
 
-```bash
-set -a && . ./.env && set +a   # .env 含 FEDEX_API_KEY/SECRET/ACCOUNT/FEDEX_ENV=production
-uv run python -m fedex_track.cli query \
-  --input "通途非FBA订单202608.xlsx" \
-  --env production --filter-carrier fedex --limit 100 --out result
-# 输出 result.summary.csv（每号：当前状态/建标/站点收件/交付时间）result.timeline.csv（完整历史）result.raw.json
+```text
+# 凭证从根 .env 读；Windows 加载方式见 fedex_track/AGENT_HANDOFF.md
+uv run python -m fedex_track.cli query --input <通途xlsx> --env production --filter-carrier fedex --limit 100 --out fedex_track_output/sample
+# 输出 sample.summary.csv（每票一行：当前状态/建标/站点收件/交付）sample.timeline.csv（完整历史）sample.raw.json
 ```
 
 summary 片段（`站点收件时间`=FedEx Picked up）：

@@ -27,14 +27,16 @@ uv run python -m fedex_track.cli query --input tracking.txt --out result --mock
 
 # 生产：读 xlsx，只留 FedEx，查前 10 个
 uv run python -m fedex_track.cli query \
-  --input "D:\Work\王忠于\成本核算\通途非FBA订单202608 202609030947 无需填0售价 加预估尾程.xlsx" \
-  --env production --filter-carrier fedex --limit 10 --out result
+  --input <通途xlsx> \
+  --env production --filter-carrier fedex --limit 10 --out fedex_track_output/sample
 ```
 
 输出三件套（同前缀）：
-- `result.summary.csv` — 每号一行：当前状态/已交付/已取消/建标/站点收件/交付时间
-- `result.timeline.csv` — 每号每个节点一行（**完整历史**）
+- `result.summary.csv` — **每票一行**（复用号带 `[n]`）：当前状态/已交付/已取消/建标/站点收件/交付时间
+- `result.timeline.csv` — 每票每个节点一行（**完整历史**）
 - `result.raw.json` — 每号原始响应（断点续跑依据）
+
+运营报表：`uv run python -m fedex_track.ops_report --summary <summary.csv> --tt <通途.xlsx> --out <xlsx>`（三参数均必填）。
 
 ## 结构
 

@@ -11,11 +11,11 @@ description: 生成 FedEx 运营异常 Excel（多Sheet/配色/Amazon营业日�
 
 ## 生成
 
-```bash
-set -a && . ./.env && set +a
-uv run python -m fedex_track.ops_report \
-  --summary fedex_track_output/fedex_full_20260904_v2.summary.csv \
-  --tt "D:\Work\王忠于\成本核算\通途非FBA订单202608 202609030947 无需填0售价 加预估尾程.xlsx" \
+```powershell
+# Windows pwsh：根 .env 已加载后再跑；--summary/--tt/--out 均必填
+uv run python -m fedex_track.ops_report `
+  --summary fedex_track_output/fedex_full_20260904_v2.summary.csv `
+  --tt <通途非FBA订单.xlsx> `
   --out fedex_track_output/fedex_ops_report_<date>.xlsx
 ```
 

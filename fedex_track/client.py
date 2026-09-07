@@ -23,6 +23,16 @@ TOKEN_REFRESH_MARGIN = 300
 MAX_NUMBERS_PER_REQUEST = 30
 
 
+def resolve_base_url(*, env: str | None = None, explicit_base: str | None = None) -> str:
+    """``--base-url`` / explicit_base 最高优先；sandbox 不读生产 ``FEDEX_BASE_URL``。"""
+    if explicit_base:
+        return explicit_base.rstrip("/")
+    mode = (env or os.getenv("FEDEX_ENV") or "production").strip().lower()
+    if mode in ("sandbox", "test"):
+        return (os.getenv("FEDEX_SANDBOX_BASE_URL") or DEFAULT_SANDBOX_BASE).rstrip("/")
+    return (os.getenv("FEDEX_BASE_URL") or DEFAULT_PROD_BASE).rstrip("/")
+
+
 def _text(v: Any) -> str | None:
     if v is None:
         return None
@@ -97,7 +107,7 @@ class FedexTrackClient:
         self._key = key
         self._secret = sec
         self._base = (base_url or DEFAULT_PROD_BASE).rstrip("/")
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._access_token: str | None = None
         self._expires_at: float = 0.0
         kw: dict[str, Any] = {"timeout": timeout}
@@ -118,14 +128,10 @@ class FedexTrackClient:
 
     @classmethod
     def from_env(cls) -> "FedexTrackClient":
-        env_mode = (os.getenv("FEDEX_ENV") or "production").strip().lower()
-        base = os.getenv("FEDEX_BASE_URL")
-        if not base:
-            base = DEFAULT_PROD_BASE if env_mode in ("production", "prod") else DEFAULT_SANDBOX_BASE
         return cls(
             api_key=os.getenv("FEDEX_API_KEY", ""),
             secret_key=os.getenv("FEDEX_SECRET_KEY", ""),
-            base_url=base,
+            base_url=resolve_base_url(),
             proxy=os.getenv("FEDEX_HTTP_PROXY") or None,
         )
 
@@ -159,9 +165,13 @@ class FedexTrackClient:
         with self._lock:
             if self._access_token and time.time() < self._expires_at:
                 return self._access_token
-        self._obtain_token()
-        with self._lock:
+            self._obtain_token()
             return self._access_token or ""
+
+    def _invalidate_token(self) -> None:
+        with self._lock:
+            self._access_token = None
+            self._expires_at = 0.0
 
     # ── Track 批量 ───────────────────────────────────────────
     def track_many(self, numbers: list[str], *, include_detailed: bool = True) -> dict[str, list[FdxTrackInfo]]:
@@ -175,28 +185,44 @@ class FedexTrackClient:
             return {}
         if len(nums) > MAX_NUMBERS_PER_REQUEST:
             raise ValueError(f"一次最多 {MAX_NUMBERS_PER_REQUEST} 个跟踪号，收到 {len(nums)}")
-        token = self._ensure_token()
         body = {
             "trackingInfo": [{"trackingNumberInfo": {"trackingNumber": n}} for n in nums],
             "includeDetailedScans": include_detailed,
         }
-        try:
-            resp = self._client.post(f"{self._base}/track/v1/trackingnumbers", json=body,
-                headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json", "X-locale": "en_US"})
-        except httpx.HTTPError as exc:
-            raise FedexTrackError(f"FedEx track 请求失败: {exc}", category="transport", retriable=True) from exc
-        payload = self._json_body(resp)
-        if resp.status_code != 200:
+        payload = None
+        resp = None
+        last_error: FedexTrackError | None = None
+        for attempt in range(2):
+            token = self._ensure_token()
+            try:
+                resp = self._client.post(
+                    f"{self._base}/track/v1/trackingnumbers", json=body,
+                    headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json", "X-locale": "en_US"},
+                )
+            except httpx.HTTPError as exc:
+                raise FedexTrackError(f"FedEx track 请求失败: {exc}", category="transport", retriable=True) from exc
+            payload = self._json_body(resp)
+            if resp.status_code == 200:
+                break
             code, message = _first_error(payload)
             category, retriable = classify_http_error(resp.status_code, code)
+            if attempt == 0 and resp.status_code == 401 and code == "AUTH.TOKEN.INVALID":
+                self._invalidate_token()
+                last_error = FedexTrackError(
+                    f"FedEx track 失败: {message or _text(code) or f'HTTP {resp.status_code}'}",
+                    http_status=resp.status_code, code=code, category=category, retriable=True)
+                continue
             raise FedexTrackError(
                 f"FedEx track 失败: {message or _text(code) or f'HTTP {resp.status_code}'}",
                 http_status=resp.status_code, code=code, category=category, retriable=retriable)
-        # 解析每个号（保留同号的多票）
+        else:
+            raise last_error or FedexTrackError("FedEx track 失败", category="auth")
+        output = payload.get("output") if isinstance(payload, dict) else None
+        complete = (output or {}).get("completeTrackResults") if isinstance(output, dict) else []
         result: dict[str, list[FdxTrackInfo]] = {}
         seen: set[str] = set()
-        for ctr in (payload.get("output", {}).get("completeTrackResults") or []):
-            tn = _text(ctr.get("trackingNumber"))
+        for ctr in complete or []:
+            tn = (_text(ctr.get("trackingNumber")) or "").upper()
             if not tn:
                 continue
             seen.add(tn)
@@ -204,11 +230,14 @@ class FedexTrackClient:
             result[tn] = trs if trs else [FdxTrackInfo(tracking_number=tn, not_found=True, raw=ctr)]
         for n in nums:
             if n not in seen:
-                result[n] = [FdxTrackInfo(tracking_number=n, not_found=True, raw=payload)]
+                result[n] = [FdxTrackInfo(tracking_number=n, not_found=True, raw={"trackingNumber": n})]
         return result
 
     def track(self, number: str) -> FdxTrackInfo:
-        return self.track_many([number])[number.strip().upper()][0]
+        n = (number or "").strip().upper()
+        if not n:
+            raise ValueError("tracking number is required")
+        return self.track_many([n])[n][0]
 
     def _json_body(self, resp: httpx.Response) -> Any:
         try:

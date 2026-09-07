@@ -7,6 +7,12 @@ tags: [fedex, track, module]
 
 # 变更日志
 
+## 2026-09-04（审阅修复）
+- **修正**: `ops_report._cat` 对齐 runbook（建标→收件营业日、收件→交付营业日、卡件看最近扫描）；多票 `[n]` strip 后再 join 通途身份。
+- **修正**: `--env sandbox` 不再被生产 `FEDEX_BASE_URL` 盖掉；`--limit` 作用在 resume pending；并行路径也应用 `--delay`；401 AUTH.TOKEN.INVALID 清 token 后重试一次。
+- **修正**: 取消仅 CA/CAF；pickup 兜底仅已交付；OKF `type: Index`；AGENTS.md 目录改为 `fedex_track/`；ops_report `--summary/--tt/--out` 必填。
+- **新增**: `fedex_track/tests/`（models / ops_report / batch / client）。
+
 ## 2026-09-04（续）
 - **新增**: `ops_report.py` 运营异常报表生成器（多Sheet/配色/中文/EN/Amazon营业日口径）；`docs/ops-report-runbook.md`；`AGENT_HANDOFF.md`；skill `.agents/skills/fedex-track/SKILL.md`。
 - **修正**: "已取消"仅当最终状态为取消且未交付（FedEx 事件流可能残留 CA 节点但已交付）；支持同号多票(复用跟踪号)。

@@ -1,6 +1,6 @@
 """FedEx 批量查询编排：读清单(txt/csv/xlsx) → 按 ≤30/请求分块查询 → 局部失败隔离/重试/断点续跑。
 
-业务无关：只关心"输入一批跟踪号 → 得到每个号的 FdxTrackInfo 或错误"。文件形态由 cli.py 负责。
+业务无关：只关心"输入一批跟踪号 → 得到每个号的 list[FdxTrackInfo] 或错误"。文件形态由 cli.py 负责。
 """
 
 from __future__ import annotations
@@ -255,17 +255,21 @@ def run_batch(
     retries: int = 1,
     resume_from: str | None = None,
     delay: float = 0.0,
+    limit: int = 0,
     on_progress: Callable[[int, int, BatchItem, bool], None] | None = None,
 ) -> list[Record]:
     """按 ≤chunk 分块并发查询，返回按输入顺序的 Record 列表。单块失败不中断。
 
-    ``batch_query`` 形如 ``client.track_many``（输入号列表 → {号: FdxTrackInfo}）。
+    ``batch_query`` 形如 ``client.track_many``（输入号列表 → {号: list[FdxTrackInfo]}）。
     FedEx 每请求 ≤30 号。块内的号若响应缺该号则标记 not_found；块级 HTTP/限流错误则整块标记失败并可重试。
+    ``limit`` 作用在 resume 跳过之后的 pending 上。
     """
     done: set[str] = set()
     if resume_from:
         done = _read_done(resume_from)
     pending = [i for i in items if i.number not in done]
+    if limit and limit > 0:
+        pending = pending[:limit]
     total = len(pending)
     if total == 0:
         return []
@@ -328,6 +332,8 @@ def run_batch(
             futs = [pool.submit(_run_chunk, c) for c in chunks]
             for f in as_completed(futs):
                 f.result()
+                if delay:
+                    time.sleep(delay)
 
     # 按输入顺序输出（去重）
     ordered: list[Record] = []

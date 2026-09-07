@@ -111,8 +111,24 @@ def load_tt_identity(xlsx: str) -> dict[str, dict]:
     return out
 
 
-def _cat(dev, pu, label, ship, now):
-    """返回分类 key。"""
+def _bare_tracking(n: str) -> str:
+    return re.sub(r"\[\d+\]$", "", str(n or "").strip())
+
+
+def _late_level(overdue) -> str:
+    if overdue is None:
+        return "迟发"
+    if overdue <= 0:
+        return "准时"
+    if overdue <= 2:
+        return "轻度迟发"
+    if overdue <= 5:
+        return "中度迟发"
+    return "重度迟发"
+
+
+def _cat(dev, pu, label, ship, now, last_event=None):
+    """返回分类 key。对齐 ops-report-runbook：建标→收件营业日、收件→交付营业日、卡件看最近扫描；延误优先于迟发。"""
     if pu is pd.NaT:
         if dev is not pd.NaT:
             return "reused_no_label" if label is pd.NaT else "delivered_ok"
@@ -121,11 +137,22 @@ def _cat(dev, pu, label, ship, now):
         return "fresh_no_pickup"
     if label is pd.NaT:
         return "reused_no_label"
+
+    late = False
+    bd = bizdays(label, pu)
+    if bd is not None and (bd - HANDLING_DAYS) > 0:
+        late = True
+
     if dev is pd.NaT:
-        return "stuck" if (now - label).days > STUCK_DAYS else "in_transit"
-    if (dev - pu).total_seconds() / 86400 > 7:
+        scan = last_event if last_event is not pd.NaT and last_event is not None else label
+        if scan is not pd.NaT and (now - scan).days > STUCK_DAYS:
+            return "stuck"
+        return "late_handover" if late else "in_transit"
+
+    trans = bizdays(pu, dev)
+    if trans is not None and trans > TRANSIT_SLOW_DAYS:
         return "fedex_slow"
-    if ship is not pd.NaT and (pu.date() - ship.date()).days > 2:
+    if late:
         return "late_handover"
     return "delivered_ok"
 
@@ -147,30 +174,32 @@ def build(summary_csv: str, tt_xlsx: str, out_xlsx: str):
     rows = []
     for _, r in S.iterrows():
         n = r["跟踪号"]; dev = _to_ts(r["交付时间"]); pu = _to_ts(r["站点收件时间"]); label = _to_ts(r["建标时间"])
+        last_event = _to_ts(r["最近节点时间"]) if "最近节点时间" in r.index else pd.NaT
+        ident = tt.get(_bare_tracking(n), tt.get(n, {}))
         ship = pd.NaT
         m = re.search(r"发货日期=([0-9-]+)", r["备注"])
         if m:
             ship = pd.to_datetime(m.group(1), errors="coerce")
-        cat_key = _cat(dev, pu, label, ship, now)
+        if (ship is pd.NaT or pd.isna(ship)) and ident.get("发货日期"):
+            ship = pd.to_datetime(ident.get("发货日期"), errors="coerce")
+        cat_key = _cat(dev, pu, label, ship, now, last_event=last_event)
         if r["已取消"] == "是" and dev is pd.NaT:
             cat_key = "cancelled"
         if r["当前状态"] == "查无此号":
             cat_key = "not_found"
         zh, en, base = CLASS[cat_key]
         overdue = None
+        bd = bizdays(label, pu)
+        if bd is not None:
+            overdue = bd - HANDLING_DAYS
+        trans = bizdays(pu, dev) if (dev is not pd.NaT and pu is not pd.NaT) else None
         if cat_key == "late_handover":
-            bd = bizdays(label, pu)
-            overdue = bd - HANDLING_DAYS if bd is not None else None
-        trans = bizdays(pu, dev) if (cat_key == "fedex_slow" and dev is not pd.NaT and pu is not pd.NaT) else None
-        # 等级
-        if cat_key == "late_handover":
-            level = "准时" if (overdue is not None and overdue <= 0) else ("轻度迟发" if overdue <= 2 else ("中度迟发" if overdue <= 5 else "重度迟发"))
+            level = _late_level(overdue)
         elif cat_key == "fedex_slow":
-            level = "严重延误" if (trans and trans > TRANSIT_SEVERE_DAYS) else "FedEx延误"
+            level = "严重延误" if (trans is not None and trans > TRANSIT_SEVERE_DAYS) else "FedEx延误"
         else:
             level = zh
         amazon = "" if overdue is None else ("是" if overdue > 0 else "否")
-        ident = tt.get(n, {})
         caldays = int((pu - label).days) if (pu is not pd.NaT and label is not pd.NaT) else ""
         rows.append({
             "跟踪号": n, "分类(EN)": en, "分类(中文)": zh, "等级": level,
@@ -317,9 +346,9 @@ def build(summary_csv: str, tt_xlsx: str, out_xlsx: str):
 if __name__ == "__main__":
     import argparse
     p = argparse.ArgumentParser()
-    p.add_argument("--summary", default="fedex_track_output/fedex_full_20260904_v2.summary.csv")
-    p.add_argument("--tt", default="D:\\Work\\王忠于\\成本核算\\通途非FBA订单202608 202609030947 无需填0售价 加预估尾程.xlsx")
-    p.add_argument("--out", default="fedex_track_output/fedex_ops_report_20260904.xlsx")
+    p.add_argument("--summary", required=True, help="cli query 产出的 summary.csv")
+    p.add_argument("--tt", required=True, help="通途原始 xlsx（订单号/包裹号/渠道账号等）")
+    p.add_argument("--out", required=True, help="输出 Excel 路径")
     a = p.parse_args()
     df = build(a.summary, a.tt, a.out)
     print("total rows", len(df))

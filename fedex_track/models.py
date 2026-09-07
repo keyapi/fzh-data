@@ -187,8 +187,8 @@ def parse_track_result(number: str, track_result: dict[str, Any]) -> FdxTrackInf
     # 故名"取消"仅当**最终状态**为取消且未交付（latestStatusDetail.code in CA/CAF 且未 delivered）。
     deliv_events = [
         e for e in events
-        if e.event_type == "DL" or _match_kw(e.description, _DELIVERED_KEYWORDS)
-        or _match_kw(e.derived_status, _DELIVERED_KEYWORDS)
+        if e.event_type == "DL" or e.derived_status_code == "DL"
+        or (e.derived_status or "").strip().lower() == "delivered"
     ]
     if deliv_events:
         info.delivered = True
@@ -198,17 +198,14 @@ def parse_track_result(number: str, track_result: dict[str, Any]) -> FdxTrackInf
             info.delivery_city = last_d.city
             info.delivery_state = last_d.state
 
-    if not info.delivered and (
-        info.current_status_code in ("CA", "CAF")
-        or _match_kw(info.current_status, _CANCELLED_KEYWORDS)
-    ):
+    if not info.delivered and info.current_status_code in ("CA", "CAF"):
         info.cancelled = True
 
     # 建标（最早的 Label created / Shipment information sent）
     info.label_created_dt = _first_dt(events, _LABEL_KEYWORDS)
     # 站点收件（Picked up / Arrived at FedEx location）
     info.picked_up_dt = _first_dt(events, _PICKUP_KEYWORDS)
-    if info.picked_up_dt is None:
+    if info.delivered and info.picked_up_dt is None:
         # 兜底：已交付但找不到 pickup 节点 → 用首条非"建标"节点
         non_label = [e for e in events if e.dt is not None and not _match_kw(e.description, _LABEL_KEYWORDS)]
         if non_label:
