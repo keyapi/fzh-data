@@ -312,3 +312,9 @@ FedEx 开发者门户里"基本综合可见性"对外的 API 名，即官方 Tra
 
 ### 站点收件时间 (FedEx Picked up)
 FedEx 首次收到包裹的扫描；`fedex_track` 用它在销售核查里对比"发货日期"判断**迟发/漏发**。
+
+### GLS 公开跟踪 (gls_track，免开发者账号)
+GLS 波兰自发货单号批量跟踪走 gls-group.com **公开无鉴权 REST**（`rstt029` 摘要 / `rstt028` 明细需**目的邮编**），不用开发者账号/波兰 GLS 登录；官方 ShipIT/MyGLS 则要 GLS 波兰客户 + WebAPI 开通（要"客户账号"不是"纯开发者账号"）。模块 `gls_track/`，月报 `python -m gls_track.cli monthly`。
+
+### 交接GLS时间 = GLS 收件首扫；数据录入 = GLS 建标
+`gls_track` 把 GLS history "was handed over to GLS"（须排除文案里的 "not yet handed over"）≈ FedEx 的"站点收件"；"data was entered into the GLS IT system" ≈ 建标。GLS 口径独立：`HANDLING_DAYS=2`、营业日用**波兰**假日（起运/交接在 GLS 波兰，勿沿用 FedEx 美国联邦假日）。
