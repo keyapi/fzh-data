@@ -5,7 +5,8 @@
 
 输入：
   - .xlsx/.xls：通途导出；自动按 邮寄方式 前缀(默认 gls-poland) 筛出 GLS 行、
-    按 跟踪号 去重、取 邮编（目的邮编，明细需要）。无邮编的行只出摘要（状态）。
+    **一格多号自动拆分**(逗号/空格)、按 跟踪号 去重、取 邮编（目的邮编，明细需要）。
+    无邮编的行只出摘要（状态）。非 GLS 号(UPS 1Z/allegro …U/碎片)会照查并 404 → 报表落「数据异常/查无」待清源。
   - .txt：每行一个跟踪号，可后接目的邮编（空格分隔）；无邮编只出摘要。
   - .csv：表头含 跟踪号（+可选 邮编）；否则按 txt 处理。
 
@@ -34,6 +35,12 @@ SUMMARY_COLS = [
 TIMELINE_COLS = ["跟踪号", "事件时间", "事件", "城市", "国家代码"]
 
 
+def _split_cell(v: str) -> list[str]:
+    """拆 跟踪号 单元格：一格可能塞多号(逗号/空格分隔)，逐个拆开。"""
+    import re as _re
+    return [t for t in _re.split(r"[,，;；\s]+", str(v).strip()) if t]
+
+
 def _load_records(input_path: str, carrier_prefix: str, limit: int | None) -> list[dict]:
     p = Path(input_path)
     ext = p.suffix.lower()
@@ -46,21 +53,19 @@ def _load_records(input_path: str, carrier_prefix: str, limit: int | None) -> li
         df["跟踪号"] = df["跟踪号"].fillna("").astype(str).str.strip()
         df = df[df["邮寄方式"].str.lower().str.startswith(carrier_prefix.lower())]
         df = df[df["跟踪号"] != ""]
-        keep = ["跟踪号"]
-        out_cols = {"邮编": "邮编", "国家/地区": "国家/地区"}
-        extra: dict[str, str] = {}
-        for src in ("邮编", "国家/地区"):
-            if src in df.columns:
-                extra[src] = src
-        sub = df[["跟踪号"] + list(extra)].drop_duplicates("跟踪号")
-        records = [
-            {
-                "跟踪号": str(r["跟踪号"]),
-                "邮编": str(r["邮编"]).strip() if "邮编" in extra and pd.notna(r["邮编"]) else "",
-                "国家/地区": str(r["国家/地区"]).strip() if "国家/地区" in extra and pd.notna(r["国家/地区"]) else "",
-            }
-            for r in sub.to_dict("records")
-        ]
+        has_postal = "邮编" in df.columns
+        has_country = "国家/地区" in df.columns
+        # 一格多号 → 逐号拆开（同包裹/订单多号不再整格 404），按号去重
+        seen: set[str] = set()
+        records: list[dict] = []
+        for _, row in df.iterrows():
+            postal = str(row["邮编"]).strip() if has_postal and pd.notna(row["邮编"]) else ""
+            country = str(row["国家/地区"]).strip() if has_country and pd.notna(row["国家/地区"]) else ""
+            for tok in _split_cell(row["跟踪号"]):
+                if tok in seen:
+                    continue
+                seen.add(tok)
+                records.append({"跟踪号": tok, "邮编": postal, "国家/地区": country})
     else:
         records = []
         text = p.read_text(encoding="utf-8", errors="replace")
