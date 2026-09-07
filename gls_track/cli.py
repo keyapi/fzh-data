@@ -23,6 +23,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 from .client import DEFAULT_BASE, GlsTrackClient, GlsTrackError
 
 SUMMARY_COLS = [
@@ -87,23 +89,43 @@ def _run_query(args: argparse.Namespace) -> int:
     if not records:
         print(f"no records to query from {args.input}", file=sys.stderr)
         return 1
-    print(f"parcels to query: {len(records)}")
+
+    # --resume：跳过已产出 summary 里已有的号（断点续跑，避免整月重查）
+    out = Path(args.out)
+    summary_path = Path(f"{out}.summary.csv")
+    if args.resume and summary_path.exists():
+        prev = pd.read_csv(summary_path, encoding="utf-8-sig", dtype={"跟踪号": str})
+        skip = {str(x).strip() for x in prev["跟踪号"] if pd.notna(x)}
+        records = [r for r in records if r["跟踪号"] not in skip]
+        print(f"resume: skip {len(skip)} already-queried; remaining {len(records)}")
+    if not records:
+        print("no new records to query")
+        return 0
 
     summary_rows: list[dict] = []
     timeline_rows: list[dict] = []
     ok = 0
+
+    # 共享连接池（httpx.Client 线程安全）；限流调研：≤8 并发无 429/403，默认保守 4
     with GlsTrackClient(base_url=args.base_url) as client:
-        for i, rec in enumerate(records, 1):
+
+        def one(rec: dict) -> tuple[dict, list[dict]]:
             no = rec["跟踪号"]
             postal = rec.get("邮编", "")
-            try:
-                p = client.track(no, postal or None)
-                err = ""
-                ok += 1
-            except GlsTrackError as exc:
-                p = None
-                err = str(exc)
-            summary_rows.append({
+            p = None
+            err = ""
+            for attempt in range(2):
+                try:
+                    p = client.track(no, postal or None)
+                    err = ""
+                    break
+                except GlsTrackError as exc:
+                    err = str(exc)
+                    if attempt == 0 and exc.retriable:
+                        time.sleep(1.0)
+                        continue
+                    break
+            row = {
                 "跟踪号": no,
                 "国家/地区": rec.get("国家/地区", ""),
                 "邮编": postal,
@@ -117,24 +139,50 @@ def _run_query(args: argparse.Namespace) -> int:
                 "客户引用": getattr(p, "cust_ref", "") or "",
                 "事件数": len(getattr(p, "events", []) or []),
                 "错误": err,
-            })
+            }
+            tls = []
             if p is not None and p.events:
                 for e in p.events:
-                    timeline_rows.append({
+                    tls.append({
                         "跟踪号": no,
                         "事件时间": _fmt(e.dt),
                         "事件": e.description or "",
                         "城市": e.city or "",
                         "国家代码": e.country_code or "",
                     })
-            print(f"[{i}/{len(records)}] {no} -> {p.current_status if p else 'ERROR'} "
-                  f"({err or f'{len(p.events)} events'})")
-            if args.delay and i < len(records):
-                time.sleep(args.delay)
+            return row, tls
 
-    out = Path(args.out)
-    pd.DataFrame(summary_rows, columns=SUMMARY_COLS).to_csv(f"{out}.summary.csv", index=False, encoding="utf-8-sig")
-    pd.DataFrame(timeline_rows, columns=TIMELINE_COLS).to_csv(f"{out}.timeline.csv", index=False, encoding="utf-8-sig")
+        def emit(row: dict, tls: list[dict], i: int) -> None:
+            nonlocal ok
+            summary_rows.append(row)
+            timeline_rows.extend(tls)
+            if not row["错误"]:
+                ok += 1
+            detail = row["错误"] or f"{row['事件数']} events"
+            print(f"[{i}/{len(records)}] {row['跟踪号']} -> {row['当前状态'] or 'ERROR'} ({detail})")
+
+        if args.workers > 1:
+            with ThreadPoolExecutor(max_workers=args.workers) as ex:
+                futs = {ex.submit(one, r): r for r in records}
+                for i, fut in enumerate(as_completed(futs), 1):
+                    rec = futs[fut]
+                    try:
+                        row, tls = fut.result()
+                    except Exception as exc:  # 兜底：未知异常记为该号错误
+                        row, tls = {
+                            "跟踪号": rec["跟踪号"], "国家/地区": rec.get("国家/地区", ""), "邮编": rec.get("邮编", ""),
+                            "当前状态": "", "状态说明": "", "已交付": "", "交付时间": "", "数据录入时间": "",
+                            "交接GLS时间": "", "最近事件时间": "", "客户引用": "", "事件数": 0,
+                            "错误": f"unexpected: {type(exc).__name__}: {exc}"}, []
+                    emit(row, tls, i)
+        else:
+            for i, rec in enumerate(records, 1):
+                emit(*one(rec), i)
+                if args.delay and i < len(records):
+                    time.sleep(args.delay)
+
+    pd.DataFrame(summary_rows, columns=SUMMARY_COLS).to_csv(summary_path, index=False, encoding="utf-8-sig")
+    pd.DataFrame(timeline_rows, columns=TIMELINE_COLS).to_csv(Path(f"{out}.timeline.csv"), index=False, encoding="utf-8-sig")
     print(f"wrote {out}.summary.csv ({len(summary_rows)} rows) + {out}.timeline.csv ({len(timeline_rows)} rows); ok={ok} err={len(summary_rows) - ok}")
     return 0 if ok else 1
 
@@ -149,7 +197,9 @@ def main(argv: list[str] | None = None) -> int:
     q.add_argument("--out", required=True, help="输出前缀，生成 .summary.csv/.timeline.csv")
     q.add_argument("--carrier-prefix", default="gls-poland", help="xlsx 按 邮寄方式 前缀筛选（默认 gls-poland）")
     q.add_argument("--limit", type=int, default=0, help="只查前 N 个包裹（调试/小样本）")
-    q.add_argument("--delay", type=float, default=0.2, help="每号间隔秒数（公开接口请温和节流）")
+    q.add_argument("--workers", type=int, default=4, help="并发线程数（实测 ≤8 无 429/403；公开接口无 SLA，默认 4 保守）")
+    q.add_argument("--delay", type=float, default=0.2, help="每号间隔秒数（仅串行 workers=1 生效；公开接口请温和节流）")
+    q.add_argument("--resume", action="store_true", help="跳过 {out}.summary.csv 里已有的号（断点续跑）")
     q.set_defaults(func=_run_query)
 
     args = ap.parse_args(argv)

@@ -98,6 +98,8 @@ detail 还含 `references`（含 `CUSTREF` P8… = 发货时客户引用，可�
 
 **FedEx 风格运营异常表（2026-09-07 生成）**：`gls_track/ops_report.py`（仿 fedex_track.ops_report 版式；判定结构同 PR#215 共享 classify；显示 generic「承运延误」→ 待 PR#215 合入后 GLS adapter 改走 parcel_track 共享 classify）。判定映射：建标≈数据录入 GLS IT、收件≈交接 GLS、交付=delivered。**GLS 口径与 FedEx 表的差异**：`HANDLING_DAYS=2`（FedEx=1）；营业日排除用**波兰 2026 公共假日**（起运/交接在 GLS 波兰），不用美国联邦假日；周末由 `np.busday_count` 天然排除；「Amazon是否判迟」仅对 Amazon 渠道(含中文 亚马逊)标记，Mirakl/allegro 等不判。输出到 `D:\Work\王忠于\成本核算\通途非FBA订单202608 GLS运营异常表 20260907.xlsx`：8 Sheet；1187 行：正常交付 1058 / 在途 39 / 数据异常·查无 39 / 承运延误 30 / 漏发·未交接 11 / 迟发 9 / 卡件 1。`HANDLING_DAYS=1`(FedEx 沿用)时迟发 147，多为周四录入→下周一交接的 2 营业日边界；改 2 后收敛到 9（多为周一录入→周四交接/真慢交接）。
 
+**限流/并发（2026-09-07 有界实测）**：公开 REST 响应头无 `X-RateLimit-*`/`Retry-After`，GLS 对该消费级接口无公开限流文档。办公室 IP 有界探针：共享 httpx 连接池、workers 1/4/8 各一批，全部 200、无 429/403/5xx/验证码，单请求中位 ~0.6s（p95 偶达 ~3s，服务端波动）。注意：**每请求新建 TLS 连接**曾出现零星 transport 失败，改共享连接池后干净。结论：≤8 并发实测安全；接口无 SLA，默认并发 4 保守、不建议无上限。CLI 已加 `--workers`（共享连接+transport 重试 1 次）与 `--resume`。
+
 **口径来源（2026-09-07 复核，含修正）**：波兰 2026 法定公共假日清单最初按模型知识初编，**未先联网核**；复核后确认日期无误，但**遗漏 12/24(Wigilia)——2025 年起波兰新增法定假日，已补入** `PL_HOLIDAYS_2026`。来源：
 - Poland 2026 holidays：https://www.timeanddate.com/holidays/poland/2026
 - Public holidays in Poland 2026（含 12/24 变更、周末假日规则）：https://getsix.eu/human-resources-payroll-in-poland/public-holidays-in-poland-in-2026

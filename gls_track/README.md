@@ -15,8 +15,14 @@ python -m gls_track.cli query --input <通途非FBA订单….xlsx> --out result
 # 或 txt：每行 `跟踪号 [目的邮编]`；有邮编才出明细，无邮编只出摘要(状态)
 python -m gls_track.cli query --input nos.txt --out result
 
-# 小样本试跑
-python -m gls_track.cli query --input <….xlsx> --out result --limit 20 --delay 0.2
+# 小样本试跑 / 并发 / 断点续跑
+python -m gls_track.cli query --input <….xlsx> --out result --limit 20 --workers 4
+python -m gls_track.cli query --input <….xlsx> --out result --workers 6   # 整月 ~1200 号约几分钟
+python -m gls_track.cli query --input <….xlsx> --out result --resume      # 跳过已查的号
+
+并发/限流（2026-09-07 实测 gls-group.com 公开 REST）：接口**无速率头、无公开限流文档**；有界探针
+workers 1/4/8 全部 200、无 429/403/验证码，单请求中位 ~0.6s。属消费级接口**无 SLA**，默认 `--workers 4`
+保守；不建议无上限并发。已用共享 httpx 连接池 + transport 错误重试 1 次。
 ```
 
 输出（同一前缀）：`result.summary.csv`（每包裹一行）+ `result.timeline.csv`（每节点一行）。
