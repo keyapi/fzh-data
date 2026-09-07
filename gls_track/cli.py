@@ -1,0 +1,160 @@
+"""gls_track CLI — GLS 单号批量查轨迹（公开 REST，免登录）。
+
+用法：
+  python -m gls_track.cli query --input <tongtu.xlsx|number.txt|number.csv> --out result
+
+输入：
+  - .xlsx/.xls：通途导出；自动按 邮寄方式 前缀(默认 gls-poland) 筛出 GLS 行、
+    按 跟踪号 去重、取 邮编（目的邮编，明细需要）。无邮编的行只出摘要（状态）。
+  - .txt：每行一个跟踪号，可后接目的邮编（空格分隔）；无邮编只出摘要。
+  - .csv：表头含 跟踪号（+可选 邮编）；否则按 txt 处理。
+
+输出（同前缀）：
+  - {out}.summary.csv ：每包裹一行：状态/是否交付/交付·数据录入·交接GLS·最近事件时间/错误
+  - {out}.timeline.csv：每事件一行（有邮编+明细时）
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+import time
+from pathlib import Path
+
+import pandas as pd
+
+from .client import DEFAULT_BASE, GlsTrackClient, GlsTrackError
+
+SUMMARY_COLS = [
+    "跟踪号", "国家/地区", "邮编", "当前状态", "状态说明", "已交付",
+    "交付时间", "数据录入时间", "交接GLS时间", "最近事件时间", "客户引用", "事件数", "错误",
+]
+TIMELINE_COLS = ["跟踪号", "事件时间", "事件", "城市", "国家代码"]
+
+
+def _load_records(input_path: str, carrier_prefix: str, limit: int | None) -> list[dict]:
+    p = Path(input_path)
+    ext = p.suffix.lower()
+    if ext in (".xlsx", ".xls"):
+        df = pd.read_excel(p)
+        for col in ("邮寄方式", "跟踪号"):
+            if col not in df.columns:
+                raise SystemExit(f"xlsx 缺列 {col!r}（需要 邮寄方式/跟踪号；可给 邮编/国家/地区）")
+        df["邮寄方式"] = df["邮寄方式"].fillna("").astype(str)
+        df["跟踪号"] = df["跟踪号"].fillna("").astype(str).str.strip()
+        df = df[df["邮寄方式"].str.lower().str.startswith(carrier_prefix.lower())]
+        df = df[df["跟踪号"] != ""]
+        keep = ["跟踪号"]
+        out_cols = {"邮编": "邮编", "国家/地区": "国家/地区"}
+        extra: dict[str, str] = {}
+        for src in ("邮编", "国家/地区"):
+            if src in df.columns:
+                extra[src] = src
+        sub = df[["跟踪号"] + list(extra)].drop_duplicates("跟踪号")
+        records = [
+            {
+                "跟踪号": str(r["跟踪号"]),
+                "邮编": str(r["邮编"]).strip() if "邮编" in extra and pd.notna(r["邮编"]) else "",
+                "国家/地区": str(r["国家/地区"]).strip() if "国家/地区" in extra and pd.notna(r["国家/地区"]) else "",
+            }
+            for r in sub.to_dict("records")
+        ]
+    else:
+        records = []
+        text = p.read_text(encoding="utf-8", errors="replace")
+        for line in text.splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            toks = line.split()
+            rec = {"跟踪号": toks[0], "邮编": "", "国家/地区": ""}
+            if len(toks) > 1:
+                rec["邮编"] = toks[1]
+            records.append(rec)
+        if ext == ".csv" and records and records[0]["跟踪号"].lower() in ("tracking", "跟踪号"):
+            records = records[1:]
+    if limit and limit > 0:
+        records = records[:limit]
+    return records
+
+
+def _fmt(dt) -> str:
+    return dt.isoformat(sep=" ") if dt is not None else ""
+
+
+def _run_query(args: argparse.Namespace) -> int:
+    records = _load_records(args.input, args.carrier_prefix, args.limit)
+    if not records:
+        print(f"no records to query from {args.input}", file=sys.stderr)
+        return 1
+    print(f"parcels to query: {len(records)}")
+
+    summary_rows: list[dict] = []
+    timeline_rows: list[dict] = []
+    ok = 0
+    with GlsTrackClient(base_url=args.base_url) as client:
+        for i, rec in enumerate(records, 1):
+            no = rec["跟踪号"]
+            postal = rec.get("邮编", "")
+            try:
+                p = client.track(no, postal or None)
+                err = ""
+                ok += 1
+            except GlsTrackError as exc:
+                p = None
+                err = str(exc)
+            summary_rows.append({
+                "跟踪号": no,
+                "国家/地区": rec.get("国家/地区", ""),
+                "邮编": postal,
+                "当前状态": getattr(p, "current_status", "") or "",
+                "状态说明": getattr(p, "current_status_text", "") or "",
+                "已交付": "是" if getattr(p, "delivered", False) else ("否" if p else ""),
+                "交付时间": _fmt(getattr(p, "delivered_dt", None)),
+                "数据录入时间": _fmt(getattr(p, "data_entered_dt", None)),
+                "交接GLS时间": _fmt(getattr(p, "handed_dt", None)),
+                "最近事件时间": _fmt(getattr(p, "last_event_dt", None)),
+                "客户引用": getattr(p, "cust_ref", "") or "",
+                "事件数": len(getattr(p, "events", []) or []),
+                "错误": err,
+            })
+            if p is not None and p.events:
+                for e in p.events:
+                    timeline_rows.append({
+                        "跟踪号": no,
+                        "事件时间": _fmt(e.dt),
+                        "事件": e.description or "",
+                        "城市": e.city or "",
+                        "国家代码": e.country_code or "",
+                    })
+            print(f"[{i}/{len(records)}] {no} -> {p.current_status if p else 'ERROR'} "
+                  f"({err or f'{len(p.events)} events'})")
+            if args.delay and i < len(records):
+                time.sleep(args.delay)
+
+    out = Path(args.out)
+    pd.DataFrame(summary_rows, columns=SUMMARY_COLS).to_csv(f"{out}.summary.csv", index=False, encoding="utf-8-sig")
+    pd.DataFrame(timeline_rows, columns=TIMELINE_COLS).to_csv(f"{out}.timeline.csv", index=False, encoding="utf-8-sig")
+    print(f"wrote {out}.summary.csv ({len(summary_rows)} rows) + {out}.timeline.csv ({len(timeline_rows)} rows); ok={ok} err={len(summary_rows) - ok}")
+    return 0 if ok else 1
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(prog="python -m gls_track.cli", description=__doc__)
+    ap.add_argument("--base-url", default=DEFAULT_BASE, help="GLS 公开 REST 前缀")
+    sub = ap.add_subparsers(dest="command", required=True)
+
+    q = sub.add_parser("query", help="批量查 GLS 轨迹")
+    q.add_argument("--input", required=True, help="通途 xlsx 或 txt/csv（每行: 号 [邮编]）")
+    q.add_argument("--out", required=True, help="输出前缀，生成 .summary.csv/.timeline.csv")
+    q.add_argument("--carrier-prefix", default="gls-poland", help="xlsx 按 邮寄方式 前缀筛选（默认 gls-poland）")
+    q.add_argument("--limit", type=int, default=0, help="只查前 N 个包裹（调试/小样本）")
+    q.add_argument("--delay", type=float, default=0.2, help="每号间隔秒数（公开接口请温和节流）")
+    q.set_defaults(func=_run_query)
+
+    args = ap.parse_args(argv)
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
