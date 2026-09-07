@@ -1,7 +1,9 @@
 """gls_track CLI — GLS 单号批量查轨迹（公开 REST，免登录）。
 
 用法：
-  python -m gls_track.cli query --input <tongtu.xlsx|number.txt|number.csv> --out result
+  python -m gls_track.cli query   --input <tongtu.xlsx|number.txt|number.csv> --out result
+  python -m gls_track.cli monthly --input <当月tongtu.xlsx> --out gls_202608 [--workers 4]
+                                     # 一步：批量查 + 出 FedEx 风格运营异常表 {out}_ops.xlsx
 
 输入：
   - .xlsx/.xls：通途导出；自动按 邮寄方式 前缀(默认 gls-poland) 筛出 GLS 行、
@@ -13,6 +15,7 @@
 输出（同前缀）：
   - {out}.summary.csv ：每包裹一行：状态/是否交付/交付·数据录入·交接GLS·最近事件时间/错误
   - {out}.timeline.csv：每事件一行（有邮编+明细时）
+  - monthly 另出 {out}_ops.xlsx（8-Sheet 运营异常表，口径见 ops_report）
 """
 
 from __future__ import annotations
@@ -192,6 +195,27 @@ def _run_query(args: argparse.Namespace) -> int:
     return 0 if ok else 1
 
 
+def _run_monthly(args: argparse.Namespace) -> int:
+    """整月：批量查（同 query）→ 直接出 FedEx 风格运营异常表 {out}_ops.xlsx。"""
+    from .ops_report import build as build_ops
+
+    qns = argparse.Namespace(
+        input=args.input, out=args.out, carrier_prefix=args.carrier_prefix,
+        limit=0, workers=args.workers, delay=0.0, resume=False, base_url=args.base_url,
+    )
+    rc = _run_query(qns)
+    summary_path = Path(f"{args.out}.summary.csv")
+    if not summary_path.exists():
+        print(f"no summary produced: {summary_path}", file=sys.stderr)
+        return rc or 1
+    out_xlsx = f"{args.out}_ops.xlsx"
+    df = build_ops(str(summary_path), args.input, out_xlsx)
+    print("monthly total rows", len(df))
+    print(df["分类(中文)"].value_counts().to_dict())
+    print("ops workbook:", out_xlsx)
+    return rc
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m gls_track.cli", description=__doc__)
     ap.add_argument("--base-url", default=DEFAULT_BASE, help="GLS 公开 REST 前缀")
@@ -206,6 +230,13 @@ def main(argv: list[str] | None = None) -> int:
     q.add_argument("--delay", type=float, default=0.2, help="每号间隔秒数（仅串行 workers=1 生效；公开接口请温和节流）")
     q.add_argument("--resume", action="store_true", help="跳过 {out}.summary.csv 里已有的号（断点续跑）")
     q.set_defaults(func=_run_query)
+
+    m = sub.add_parser("monthly", help="整月：批量查 + 直接出 FedEx 风格运营异常表")
+    m.add_argument("--input", required=True, help="通途当月 xlsx")
+    m.add_argument("--out", required=True, help="前缀：{out}.summary.csv/.timeline.csv + {out}_ops.xlsx")
+    m.add_argument("--carrier-prefix", default="gls-poland", help="xlsx 按 邮寄方式 前缀筛选")
+    m.add_argument("--workers", type=int, default=4, help="并发线程数（默认 4）")
+    m.set_defaults(func=_run_monthly)
 
     args = ap.parse_args(argv)
     return args.func(args)
