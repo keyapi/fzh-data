@@ -304,3 +304,11 @@ A webhook-based DingTalk group messaging channel used by AI agents (WorkBuddy, C
 ### OpenWrt 自定义域路径 vs QC 登记路径
 - **路径 A**：`nas.daneey.com` / `nas.vilavi.cn` — OpenWrt 管 DDNS 与 ACME，DSM 仅导入第二张证并反代；**不**写入 DSM「外部访问→DDNS」；用户手动输入 URL；QC 不会自动跳转。
 - **路径 B**：`fangzhouhui.quickconnect.cn` → 群晖登记 `fzh.myds.me`；QC 浏览器探测后跳 myds 直连或 `cn4` 中继。勿删 myds；DSM 无 DDNS 优先级开关，不能靠改外部访问列表让 QC 改跳 mxdeals/daneey。
+
+## 尾程跟踪 (fedex_track / ups_track)
+
+### Basic Integrated Visibility (formerly Track API)
+FedEx 开发者门户里"基本综合可见性"对外的 API 名，即官方 Track。项目用它在 `fedex_track` 里批量查 FedEx 轨迹；配额按**请求次数**（10万次/日/项目，≤30号/请求），不是按跟踪号个数。
+
+### 站点收件时间 (FedEx Picked up)
+FedEx 首次收到包裹的扫描；`fedex_track` 用它在销售核查里对比"发货日期"判断**迟发/漏发**。
