@@ -21,6 +21,17 @@ python -m gls_track.cli query --input <….xlsx> --out result --limit 20 --delay
 
 输出（同一前缀）：`result.summary.csv`（每包裹一行）+ `result.timeline.csv`（每节点一行）。
 
+## 运营异常报表（FedEx 风格）
+
+大批量查完后生成与 FedEx 运营异常表同版式（Amazon 口径 · 营业日）的多 Sheet Excel：
+
+```bash
+python -m gls_track.ops_report --summary result.summary.csv --tt <通途非FBA订单….xlsx> --out gls_ops.xlsx
+```
+
+判定对标 FedEx（时点映射见 `ops_report.py` docstring；阈值/日历复用 `fedex_track.ops_report` 常量）：
+建标≈数据录入 GLS IT、收件≈交接 GLS、交付=delivered；迟发 / 承运延误 / 卡件 / 漏发未交接 等分类与「总览 / 异常处理 / 漏发未交接 / 迟发 / 承运异常 / 取消·其他 / 全部明细 / 口径说明」Sheet 与 FedEx 表一致（承运延误用 generic 显示，同 PR#215 共享 classify；待其合入后 gls adapter 改走 parcel_track）。
+
 ## 端点（实测 2026-09-07）
 
 - 摘要（无邮编，状态/交付时间）：`GET https://gls-group.com/app/service/open/rest/PL/en/rstt029?match={号}&type=&caller=witt002&millis={ms}`
