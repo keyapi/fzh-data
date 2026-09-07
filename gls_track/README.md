@@ -29,8 +29,7 @@ python -m gls_track.cli query --input <….xlsx> --out result --limit 20 --delay
 python -m gls_track.ops_report --summary result.summary.csv --tt <通途非FBA订单….xlsx> --out gls_ops.xlsx
 ```
 
-判定对标 FedEx（时点映射见 `ops_report.py` docstring；阈值/日历复用 `fedex_track.ops_report` 常量）：
-建标≈数据录入 GLS IT、收件≈交接 GLS、交付=delivered；迟发 / 承运延误 / 卡件 / 漏发未交接 等分类与「总览 / 异常处理 / 漏发未交接 / 迟发 / 承运异常 / 取消·其他 / 全部明细 / 口径说明」Sheet 与 FedEx 表一致（承运延误用 generic 显示，同 PR#215 共享 classify；待其合入后 gls adapter 改走 parcel_track）。
+判定对标 FedEx（时点映射见 `ops_report.py` docstring）：建标≈数据录入 GLS IT、收件≈交接 GLS、交付=delivered；迟发 / 承运延误 / 卡件 / 漏发未交接 等分类与「总览 / 异常处理 / 漏发未交接 / 迟发 / 承运异常 / 取消·其他 / 全部明细 / 口径说明」Sheet 与 FedEx 表一致。**GLS 口径参数（区别于 FedEx 表）**：`HANDLING_DAYS=2`；营业日排除用**波兰 2026 公共假日**（数据录入/交接都在 GLS 波兰；`PL_HOLIDAYS_2026`）；周末天然不计；「Amazon是否判迟」仅对 Amazon/亚马逊 渠道标记。改顶部常量即可重跑（同 FedEx 表用法）。待 PR#215 合入后 gls adapter 改走 parcel_track 共享 classify。
 
 ## 端点（实测 2026-09-07）
 

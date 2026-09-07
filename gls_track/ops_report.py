@@ -8,8 +8,10 @@ GLS 时点映射（对标 FedEx 建标/收件/交付）：
 - 站点收件 ≈ **交接 GLS**（"was handed over to GLS"）
 - 交付 = delivered 事件 / arrivalTime
 
-> 定位：GLS 先行版，复用 fedex_track.ops_report 的日历/阈值函数；待 PR#215 (parcel_track)
-> 合入后，GLS adapter 应改走 parcel_track 共享 classify + ops_excel，本文件届时降为薄壳或删除。
+> 定位：GLS 先行版。判定结构/版式仿 fedex_track.ops_report，但**日历/阈值独立**：
+> HANDLING_DAYS=2、营业日按波兰 2026 公共假日（起运/交接在 GLS 波兰，不用美国联邦假日）。
+> 待 PR#215 (parcel_track) 合入后，GLS adapter 应改走 parcel_track 共享 classify + ops_excel，
+> 本文件届时降为薄壳或删除。
 """
 
 from __future__ import annotations
@@ -23,19 +25,48 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
-# 复用 FedEx 日历/阈值/身份提取（单一来源；PR#215 抽到 parcel_track 后换 import）
-from fedex_track.ops_report import (  # noqa: N801  (口径常量)
-    HANDLING_DAYS,
-    MISSING_AFTER_DAYS,
-    STUCK_DAYS,
-    TRANSIT_SEVERE_DAYS,
-    TRANSIT_SLOW_DAYS,
-    _bare_tracking,
-    _late_level,
-    _to_ts,
-    bizdays,
-    load_tt_identity,
-)
+# ── GLS 口径（可调）─────────────────────────────────────────
+# 迟发允许处理时间：数据录入→交接 GLS，允许 2 个营业日（周末/假日顺延）。
+# FedEx 表用 1（美国市场）；GLS 起运/交接都在波兰，仓库+GLS 排程按波兰，定 2。
+HANDLING_DAYS = 2
+TRANSIT_SLOW_DAYS = 6
+TRANSIT_SEVERE_DAYS = 12
+STUCK_DAYS = 7
+STUCK_SEVERE_DAYS = 14
+MISSING_AFTER_DAYS = 3
+# 日历：数据录入/交接发生在 GLS 波兰(货主国/起运国) → 用波兰 2026 公共假日；
+# 周末由 np.busday_count 天然排除。欧盟无统一假日、未按目的国拆分（口径近似，见「口径说明」）。
+PL_HOLIDAYS_2026 = [
+    "2026-01-01", "2026-01-06", "2026-04-06", "2026-05-01", "2026-05-03",
+    "2026-06-04", "2026-08-15", "2026-11-01", "2026-11-11", "2026-12-25", "2026-12-26",
+]
+
+
+def bizdays(d1, d2, holidays=None):
+    """d1→d2 的营业日数（默认波兰 2026 公共假日；周末不计）。解析失败返回 None。"""
+    if pd.isna(d1) or pd.isna(d2):
+        return None
+    try:
+        return int(np.busday_count(np.datetime64(d1.date()), np.datetime64(d2.date()),
+                                   holidays=holidays or PL_HOLIDAYS_2026))
+    except Exception:
+        return None
+
+
+def _late_level(overdue):
+    if overdue is None:
+        return "迟发"
+    if overdue <= 0:
+        return "准时"
+    if overdue <= 2:
+        return "轻度迟发"
+    if overdue <= 5:
+        return "中度迟发"
+    return "重度迟发"
+
+
+# 身份提取等跨模块复用（与通途列名一致，单一来源；无日历耦合）
+from fedex_track.ops_report import _bare_tracking, _to_ts, load_tt_identity  # noqa: E402
 
 COLOR = {"green": "C6EFCE", "yellow": "FFEB9C", "orange": "FCD5B4", "red": "FFC7CE",
          "gray": "D9D9D9", "blue": "DDEBF7", "dark": "404040", "header": "2F5597"}
@@ -125,6 +156,7 @@ def build(summary_csv: str, tt_xlsx: str, out_xlsx: str):
         last_event = _to_ts(r.get("最近事件时间"))
         status = str(r.get("当前状态") or "").strip().upper()
         ident = tt.get(n, tt.get(r["跟踪号"], {}))
+        ch = "{} {}".format(ident.get("渠道", ""), ident.get("销售站点", "")).lower()
         ship = _to_ts(ident.get("发货日期"))
 
         cat_key = _cat(dev, pu, label, ship, now, last_event=last_event)
@@ -149,7 +181,14 @@ def build(summary_csv: str, tt_xlsx: str, out_xlsx: str):
             level = "严重延误" if (trans is not None and trans > TRANSIT_SEVERE_DAYS) else "承运延误"
         else:
             level = zh
-        amazon = "" if overdue is None else ("是" if overdue > 0 else "否")
+        # Amazon是否判迟：仅 Amazon 渠道有意义（PR#215 口径）；非 Amazon 渠道不填"是"
+        is_amz = any(k in ch for k in ("amazon", "amz", "亚马逊"))
+        if overdue is None:
+            amazon = ""
+        elif is_amz:
+            amazon = "是" if overdue > 0 else "否"
+        else:
+            amazon = "否" if overdue <= 0 else ""
         caldays = int((pu - label).days) if (pu is not pd.NaT and label is not pd.NaT) else ""
 
         rows.append({
@@ -267,14 +306,15 @@ def build(summary_csv: str, tt_xlsx: str, out_xlsx: str):
     notes = [
         ("GLS 运营异常报表口径说明（v0.1）", ""),
         ("1. 时点", "建标≈数据录入 GLS IT（history 首条 data entered）；收件≈交接 GLS（handed over）；交付=delivered/arrivalTime。"),
-        ("2. 迟发(Amazon口径)", "ship-by=发货日期+处理时间(营业日)；周末与美国联邦假日不计入。营业日延迟=数据录入→交接 营业日数-处理时间(默认1天)。"),
-        ("3. 处理时间", f"默认 {HANDLING_DAYS} 个营业日，请按实际改口径常量。"),
-        ("4. 营业日排除", "周六日 + 2026美国联邦假日（沿用 FedEx 表口径；欧盟单也先按此口径，后续可改欧盟日历）。"),
-        ("5. 判定定义", f"漏发/未交接=有发货日期但无交接且>{MISSING_AFTER_DAYS}天；建标未收件=有数据录入但近期无交接；迟发=录入→交接营业日>处理时间；承运延误=交接→交付营业日>{TRANSIT_SLOW_DAYS}；卡件=在途且>{STUCK_DAYS}天无扫描；数据异常=rstt 接口无此单(如 allegro …U 行非 GLS 号)。"),
+        ("2. 迟发(Amazon口径)", "ship-by=发货日期+处理时间(营业日)；周末与公共假日不计入。营业日延迟=数据录入→交接 营业日数-处理时间(默认2天)。"),
+        ("3. 处理时间", f"默认 {HANDLING_DAYS} 个营业日（GLS 定 2；FedEx 表为 1），请按实际改脚本顶部 HANDLING_DAYS。"),
+        ("4. 营业日排除", "周六日（np.busday_count 天然排除）+ **2026 波兰公共假日**：1/1,1/6,4/6,5/1,5/3,6/4,8/15,11/1,11/11,12/25,12/26。因数据录入/交接都发生在 GLS 波兰(起运国)，迟发判定用波兰历；美国联邦假日不适用，故未沿用 FedEx 表日历。"),
+        ("5. 判定定义", f"漏发/未交接=有发货日期但无交接且>{MISSING_AFTER_DAYS}天；建标未收件=有数据录入但近期无交接；迟发=录入→交接营业日>处理时间({HANDLING_DAYS})；承运延误=交接→交付营业日>{TRANSIT_SLOW_DAYS}；卡件=在途且>{STUCK_DAYS}天无扫描；数据异常=rstt 接口无此单(如 allegro …U 行非 GLS 号)。"),
         ("6. 返件", "少数包裹先 DELIVERED 又回退(如 29626350320 08-10 派送→08-14 回 Strykow)，头条状态 INTRANSIT——本表按“先交付后回退+头条非DELIVERED”归为在途，不误标正常交付；请在通途/仓库侧按返件处理。"),
         ("7. 数据来源", "gls_full_202608.summary.csv（gls_track 公开无鉴权 REST，2026-09-07 跑 8 月通途 GLS 单）+ 通途非FBA订单202608.xlsx。"),
         ("8. 动作", "漏发/建标未收件→通知仓库核查；迟发→SLA复盘+安抚；承运延误→记录/严重开trace；卡件→开GLS trace/索赔；查无→核查源数据。"),
         ("9. 追踪", "GLS 单行先去重（同包裹多订单行）；无邮编只出摘要；明细需目的邮编。"),
+        ("10. 日历边界", "欧盟无统一假日；Amazon 判迟本身按各站点国家历(amazon.de→德国、.fr→法国…)，无一套统一的 Amazon-EU 假日。本表口径=波兰(起运/交接国)一份日历作近似；承运延误(交接→交付)跨多国也只按同一历计。要逐站点精确，需按订单目的国/站点分别取假日再重算。"),
     ]
     for i, (k, v) in enumerate(notes, 1):
         ws3.cell(row=i, column=1, value=k).font = Font(bold=True)

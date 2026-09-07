@@ -96,7 +96,7 @@ detail 还含 `references`（含 `CUSTREF` P8… = 发货时客户引用，可�
 
 **全量验证（2026-09-07，8 月全部 1176 个去重 GLS 号）**：直接查询 **1140 成功**；36 个 404 里多为**合并/脏单元格**（一个格含多个号、或混入 UPS `1Z…`、allegro `…U`、截断碎片）。拆分后另 **8 个真 GLS 号补查成功** → 净 **1148 个 GLS 包裹成功取回轨迹**（9900+ timeline 事件，中位 8/单）。剩余 **39 个 token 停放**：19 个源数据非 GLS（`1Z`/`…U`/碎片）+ 20 个形似 GLS 但公开接口查无（`1303…`/`1049…` 等，疑非 GLS 号段）→ 报表里落「数据异常/查无」，供清源数据。状态分布（成功集）：DELIVERED 1079 / INTRANSIT 44 / PREADVICE 11 / INWAREHOUSE 4 等。
 
-**FedEx 风格运营异常表（2026-09-07 生成）**：`gls_track/ops_report.py`（仿 fedex_track.ops_report 版式；口径复用其日历/阈值，显示改 generic「承运延误」→ 待 PR#215 合入后 gls adapter 改走 parcel_track 共享 classify）。判定映射：建标≈数据录入 GLS IT、收件≈交接 GLS、交付=delivered。输出到 `D:\Work\王忠于\成本核算\通途非FBA订单202608 GLS运营异常表 20260907.xlsx`：8 Sheet（总览/异常处理/漏发未交接/迟发/承运异常/取消·其他/全部明细/口径说明）；1187 行：正常交付 921 / 迟发 147 / 数据异常·查无 39 / 在途 38 / 承运延误 30 / 漏发·未交接 11 / 卡件 1。迟发多为跨周末轻度（录入周四→周一交接），需按 GLS 实际处理时间校准 HANDLING。
+**FedEx 风格运营异常表（2026-09-07 生成）**：`gls_track/ops_report.py`（仿 fedex_track.ops_report 版式；判定结构同 PR#215 共享 classify；显示 generic「承运延误」→ 待 PR#215 合入后 GLS adapter 改走 parcel_track 共享 classify）。判定映射：建标≈数据录入 GLS IT、收件≈交接 GLS、交付=delivered。**GLS 口径与 FedEx 表的差异**：`HANDLING_DAYS=2`（FedEx=1）；营业日排除用**波兰 2026 公共假日**（起运/交接在 GLS 波兰），不用美国联邦假日；周末由 `np.busday_count` 天然排除；「Amazon是否判迟」仅对 Amazon 渠道(含中文 亚马逊)标记，Mirakl/allegro 等不判。输出到 `D:\Work\王忠于\成本核算\通途非FBA订单202608 GLS运营异常表 20260907.xlsx`：8 Sheet；1187 行：正常交付 1058 / 在途 39 / 数据异常·查无 39 / 承运延误 30 / 漏发·未交接 11 / 迟发 9 / 卡件 1。`HANDLING_DAYS=1`(FedEx 沿用)时迟发 147，多为周四录入→下周一交接的 2 营业日边界；改 2 后收敛到 9（多为周一录入→周四交接/真慢交接）。
 
 ## 未决 / 风险
 
