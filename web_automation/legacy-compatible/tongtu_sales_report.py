@@ -18,7 +18,7 @@
   uv run python tongtu_sales_report.py           # 持久化会话，自动导出
   uv run python tongtu_sales_report.py --fresh    # 强制重新登录
 """
-import sys, time, io
+import sys, os, time, io, shutil
 from pathlib import Path
 from datetime import datetime
 import subprocess
@@ -185,6 +185,49 @@ def run_process(zip_path):
         print(result.stderr)
 
 
+def _semi_auto_login(page, *, show_expired: bool = False) -> bool:
+    """半自动登录：有 .env 凭据就自动填账号+勾 7 天，验证码留给用户在浏览器输入。"""
+    if show_expired:
+        print("[信息] 登录会话已过期，请重新登录")
+    from tongtu_login_ocr import fill_credentials
+
+    try:
+        page.wait_for_selector('input[name="username"]', state="attached", timeout=15000)
+    except Exception:
+        pass  # 已登录或被跳转接管，交由 wait_for_login 判定
+    if fill_credentials(page):
+        print("  已自动填好账号密码（勾选 7 天内自动登录）。")
+        print("  请在浏览器窗口输入【图形验证码】并点击登录...")
+    else:
+        print("  请在浏览器中登录通途（账号 / 密码 / 验证码）...")
+    return wait_for_login(page)
+
+
+def _try_login(page, auto_login: bool, *, show_expired: bool = False) -> bool:
+    """未登录时的分层登录：用户要全自动 → ensure_ocr 试装 → OCR 识别；不可用即降级半自动。"""
+    if auto_login:
+        from tongtu_login_ocr import ensure_ocr
+
+        ocr_ok, reason = ensure_ocr()
+        if ocr_ok:
+            if not (os.getenv("TONGTU_USER") and os.getenv("TONGTU_PASSWORD")):
+                print("[信息] OCR 自动登录需要账号密码：请在 web_automation/.env 配置")
+                print("       TONGTU_USER / TONGTU_PASSWORD，否则只能人工输码登录")
+            else:
+                print("[信息] 尝试 OCR 自动识别验证码登录...")
+                try:
+                    from tongtu_login_ocr import login as ocr_login
+                    if ocr_login(page):
+                        print("[OK] OCR 自动登录成功")
+                        return True
+                    print("[信息] OCR 识别多次失败，降级人工输码")
+                except ImportError:
+                    pass
+        else:
+            print(f"[信息] OCR 不可用（{reason}），改人工登录")
+    return _semi_auto_login(page, show_expired=show_expired)
+
+
 def run(first_run=False, auto_login=False):
     """主入口"""
     print("=" * 50)
@@ -207,32 +250,10 @@ def run(first_run=False, auto_login=False):
 
         if is_logged_in(page):
             print("[OK] 检测到已登录会话，自动继续...")
-        elif auto_login:
-            print("[信息] 尝试 ddddocr 自动登录...")
-            try:
-                from tongtu_login_ocr import login as auto_login_fn
-                if auto_login_fn(page):
-                    print("[OK] ddddocr 自动登录成功")
-                else:
-                    print("[信息] 自动登录失败，切换到手动登录...")
-                    if not wait_for_login(page):
-                        print("[错误] 登录超时，请重试")
-                        context.close()
-                        sys.exit(1)
-            except ImportError:
-                print("[信息] ddddocr 未安装，切换到手动登录...")
-                print("[提示] 安装后可自动登录: uv add ddddocr onnxruntime")
-                if not wait_for_login(page):
-                    print("[错误] 登录超时，请重试")
-                    context.close()
-                    sys.exit(1)
-        else:
-            if not first_run:
-                print("[信息] 登录会话已过期，请重新登录")
-            if not wait_for_login(page):
-                print("[错误] 登录超时，请重试")
-                context.close()
-                sys.exit(1)
+        elif not _try_login(page, auto_login=auto_login, show_expired=not first_run):
+            print("[错误] 登录超时，请重试")
+            context.close()
+            sys.exit(1)
 
         print("\n[步骤 1] 设置筛选条件...")
         ensure_checkbox(page, "isHideStockEmpty", "隐藏所有库存为0的货品")

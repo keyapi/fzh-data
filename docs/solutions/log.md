@@ -7,6 +7,9 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-09-07
+- **新增**: `best-practices/adobe-genuine-prompts-office-openclash.md` — 办公室 OpenClash 屏蔽 Adobe 授权校验域名（AGS 弹窗）的处理与教训：hosts 无法通配 `*.adobe.io` 随机子域（lreXXXX）、三层 NAT 下 OpenClash 无法按单设备隔离、最终用 `DOMAIN-SUFFIX,adobe.io/adobegenuine.com,REJECT` 全局屏蔽模拟断网。
+
 ## 2026-09-04
 - **新增**: `workflow-issues/fedex-track-batch-query.md` — FedEx 官方批量 Track（≤30/请求、配额按请求、不需自有账号）+ 账号/组织恢复路径（879197228 在 2023 组织 Centrade(10548976)，腾讯企业邮箱收重置码）+ `fedex_track` 模块 + 三条教训（反爬假报错需多源核实、按方法关键词统计会漏、配额按请求不计费）。
 - **背景**: 打通 FedEx 官方跟踪需先理账号/组织碎片；headless 探针曾误判"FedEx 查无此号"，实则反爬假报错，真实浏览器可查。

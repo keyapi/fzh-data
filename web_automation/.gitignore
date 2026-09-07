@@ -13,9 +13,11 @@ sellfox-profile-login/
 tongtu-profile-login/
 profiles/
 
-# Downloads / outputs / business Excel / screenshots
+# Downloads / outputs / business Excel / screenshots / schedule logs
 downloads/
 output/
+logs/
+scripts/run_tongtu_scheduled-*.cmd
 *.xlsx
 *.xls
 *.png

@@ -24,6 +24,7 @@ def _load_env():
 _load_env()
 import sys
 import time
+import subprocess
 
 import requests
 from ddddocr_login import DdddocrLogin, _normalize_captcha_text
@@ -31,6 +32,8 @@ from ddddocr_login import DdddocrLogin, _normalize_captcha_text
 sys.stdout.reconfigure(encoding='utf-8')
 
 logger = logging.getLogger(__name__)
+
+WEB_ROOT = Path(__file__).resolve().parent.parent
 
 LOGIN_URL = (
     "https://passport.tongtool.com/"
@@ -103,6 +106,84 @@ def _check_ddddocr() -> bool:
         logger.warning("ddddocr 加载失败（可能缺少 VC++ 运行库）: %s", e)
         logger.warning("修复: 安装 Microsoft Visual C++ Redistributable")
         return False
+
+
+def _venv_python() -> Path:
+    if sys.platform.startswith("win"):
+        return WEB_ROOT / ".venv" / "Scripts" / "python.exe"
+    return WEB_ROOT / ".venv" / "bin" / "python"
+
+
+def ensure_ocr() -> tuple[bool, str]:
+    """确保子环境可加载 ddddocr+onnxruntime（懒惰试装，不询问用户）。
+
+    用户表达"全自动登录"意图才调用：先探测子环境，缺则自动 `uv sync --group ocr`
+    装到 web_automation 子环境（幂等）。返回 (ok, reason)，reason 供失败降级提示。
+    """
+    py = _venv_python()
+    probe_code = (
+        "import importlib.util as i;"
+        "print('ok' if all(i.find_spec(n) for n in ('ddddocr', 'onnxruntime')) else 'no')"
+    )
+
+    def probe() -> bool:
+        if not py.is_file():
+            return False
+        try:
+            cp = subprocess.run(
+                [str(py), "-c", probe_code], capture_output=True, text=True,
+                encoding="utf-8", errors="replace", timeout=60,
+            )
+            return (cp.stdout or "").strip() == "ok"
+        except (OSError, subprocess.TimeoutExpired):
+            return False
+
+    if probe():
+        return True, "OCR 已就绪"
+    print("[信息] 全自动登录需要 OCR 组件（识别图形验证码），首次将自动安装（约 50MB，仅一次）...")
+    try:
+        cp = subprocess.run(
+            ["uv", "sync", "--project", str(WEB_ROOT), "--group", "ocr"],
+            cwd=str(WEB_ROOT.parent), capture_output=True, text=True,
+            encoding="utf-8", errors="replace", timeout=600,
+        )
+    except OSError as e:
+        return False, f"无法执行 uv: {e}"
+    if cp.returncode != 0:
+        detail = (cp.stderr or cp.stdout or "安装失败").strip()
+        return False, f"OCR 安装失败: {detail[-300:]}"
+    if probe():
+        print("[OK] OCR 组件安装完成")
+        return True, "OCR 已就绪"
+    return False, "OCR 已安装但无法加载（Windows 常缺 VC++ 2019+ 运行库，请安装后重试）"
+
+
+def fill_credentials(page) -> bool:
+    """当前已停在通途登录页时：自动填账号密码 + 勾选"7天内自动登录"。
+
+    仅依赖 Playwright（不碰 ddddocr/onnxruntime），供半自动登录复用——
+    主脚本未登录时填好账号，验证码留给用户在浏览器输入。缺账号或定位失败返回 False。
+    """
+    if not USERNAME or not PASSWORD:
+        logger.info("未配置 TONGTU_USER/PASSWORD，跳过自动填充")
+        return False
+    try:
+        page.wait_for_selector(SELECTORS["username"], state="attached", timeout=15000)
+    except Exception as e:
+        logger.warning("定位用户名框失败: %s", e)
+        return False
+    page.wait_for_timeout(500)
+    try:
+        cb = page.locator(SELECTORS["auto_login_cb"]).first
+        cb.wait_for(state="visible", timeout=8000)
+        if not cb.is_checked():
+            cb.check()
+    except Exception as e:
+        logger.warning("勾选自动登录失败: %s", e)
+    page.fill(SELECTORS["username"], USERNAME)
+    page.fill(SELECTORS["password"], PASSWORD)
+    logger.info("已自动填入账号密码并勾选 7 天内自动登录，等待用户输入验证码")
+    return True
 
 
 def login(page) -> bool:

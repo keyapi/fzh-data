@@ -10,6 +10,7 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-09-07 | 办公室 OpenClash 屏蔽 Adobe 授权校验域名 | [best-practices/adobe-genuine-prompts-office-openclash.md](best-practices/adobe-genuine-prompts-office-openclash.md) |
 | 2026-09-04 | FedEx 官方批量 Track 查询 + 账号/组织恢复路径 | [workflow-issues/fedex-track-batch-query.md](workflow-issues/fedex-track-batch-query.md) |
 | 2026-09-03 | WorkBuddy 接公司 new-api 自定义模型 — useCustomProtocol=false + url 带 /v1 | [developer-experience/workbuddy-custom-model-newapi-config.md](developer-experience/workbuddy-custom-model-newapi-config.md) |
 | 2026-09-01 | Cursor state.vscdb 膨胀 + Synology Drive 连续备份吃光 C 盘 | [integration-issues/cursor-state-vscdb-synology-cdrive-backup.md](integration-issues/cursor-state-vscdb-synology-cdrive-backup.md) |
