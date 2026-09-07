@@ -98,6 +98,13 @@ detail 还含 `references`（含 `CUSTREF` P8… = 发货时客户引用，可�
 
 **FedEx 风格运营异常表（2026-09-07 生成）**：`gls_track/ops_report.py`（仿 fedex_track.ops_report 版式；判定结构同 PR#215 共享 classify；显示 generic「承运延误」→ 待 PR#215 合入后 GLS adapter 改走 parcel_track 共享 classify）。判定映射：建标≈数据录入 GLS IT、收件≈交接 GLS、交付=delivered。**GLS 口径与 FedEx 表的差异**：`HANDLING_DAYS=2`（FedEx=1）；营业日排除用**波兰 2026 公共假日**（起运/交接在 GLS 波兰），不用美国联邦假日；周末由 `np.busday_count` 天然排除；「Amazon是否判迟」仅对 Amazon 渠道(含中文 亚马逊)标记，Mirakl/allegro 等不判。输出到 `D:\Work\王忠于\成本核算\通途非FBA订单202608 GLS运营异常表 20260907.xlsx`：8 Sheet；1187 行：正常交付 1058 / 在途 39 / 数据异常·查无 39 / 承运延误 30 / 漏发·未交接 11 / 迟发 9 / 卡件 1。`HANDLING_DAYS=1`(FedEx 沿用)时迟发 147，多为周四录入→下周一交接的 2 营业日边界；改 2 后收敛到 9（多为周一录入→周四交接/真慢交接）。
 
+**口径来源（2026-09-07 复核，含修正）**：波兰 2026 法定公共假日清单最初按模型知识初编，**未先联网核**；复核后确认日期无误，但**遗漏 12/24(Wigilia)——2025 年起波兰新增法定假日，已补入** `PL_HOLIDAYS_2026`。来源：
+- Poland 2026 holidays：https://www.timeanddate.com/holidays/poland/2026
+- Public holidays in Poland 2026（含 12/24 变更、周末假日规则）：https://getsix.eu/human-resources-payroll-in-poland/public-holidays-in-poland-in-2026
+- Dni wolne od pracy 2026（法定清单）：https://kadry.infor.pl/kadry/indywidualne_prawo_pracy/czas_pracy/7319232,dni-wolne-2026-kalendarz-dni-wolnych-od-pracy-wszystkie-swieta.html
+
+**Amazon 判迟口径澄清**：无统一的 "Amazon-EU 假日表"；Amazon 各站点按其国家历，且部分指标按自然日计（周末/假日照算，非纯营业日，如 sellercentral 论坛 "Does Amazon count the weekend..." 讨论）。故本表「Amazon是否判迟」仅为**内部 ops 近似标记**（已 gate 到 Amazon/亚马逊 渠道），不是 Amazon 官方迟发指标；要贴近站点口径需按目的国各自重算。
+
 ## 未决 / 风险
 
 - 公开接口限流/反爬规模未压测；ToS 未细读（页面「可一次输入多号」暗示批量是被允许用法，仍建议低频+缓存）。

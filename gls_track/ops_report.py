@@ -34,11 +34,16 @@ TRANSIT_SEVERE_DAYS = 12
 STUCK_DAYS = 7
 STUCK_SEVERE_DAYS = 14
 MISSING_AFTER_DAYS = 3
-# 日历：数据录入/交接发生在 GLS 波兰(货主国/起运国) → 用波兰 2026 公共假日；
-# 周末由 np.busday_count 天然排除。欧盟无统一假日、未按目的国拆分（口径近似，见「口径说明」）。
+# 日历：数据录入/交接发生在 GLS 波兰(货主国/起运国) → 用波兰 2026 法定公共假日；
+# 周末由 np.busday_count 天然排除，故周日型假日(Easter 4/5、5/3、Pentecost 5/24、11/1、8/15六、12/26六)
+# 无需重复列入。12/24(Wigilia)自 2025 起为波兰法定假日，须列入。
+# 来源(2026-09-07 复核)：https://www.timeanddate.com/holidays/poland/2026 、
+# https://getsix.eu/human-resources-payroll-in-poland/public-holidays-in-poland-in-2026 、
+# https://kadry.infor.pl/...（Ustawa o dniach wolnych od pracy 法定清单）。
 PL_HOLIDAYS_2026 = [
     "2026-01-01", "2026-01-06", "2026-04-06", "2026-05-01", "2026-05-03",
-    "2026-06-04", "2026-08-15", "2026-11-01", "2026-11-11", "2026-12-25", "2026-12-26",
+    "2026-06-04", "2026-08-15", "2026-11-01", "2026-11-11",
+    "2026-12-24", "2026-12-25", "2026-12-26",
 ]
 
 
@@ -308,13 +313,14 @@ def build(summary_csv: str, tt_xlsx: str, out_xlsx: str):
         ("1. 时点", "建标≈数据录入 GLS IT（history 首条 data entered）；收件≈交接 GLS（handed over）；交付=delivered/arrivalTime。"),
         ("2. 迟发(Amazon口径)", "ship-by=发货日期+处理时间(营业日)；周末与公共假日不计入。营业日延迟=数据录入→交接 营业日数-处理时间(默认2天)。"),
         ("3. 处理时间", f"默认 {HANDLING_DAYS} 个营业日（GLS 定 2；FedEx 表为 1），请按实际改脚本顶部 HANDLING_DAYS。"),
-        ("4. 营业日排除", "周六日（np.busday_count 天然排除）+ **2026 波兰公共假日**：1/1,1/6,4/6,5/1,5/3,6/4,8/15,11/1,11/11,12/25,12/26。因数据录入/交接都发生在 GLS 波兰(起运国)，迟发判定用波兰历；美国联邦假日不适用，故未沿用 FedEx 表日历。"),
+        ("4. 营业日排除", "周六日（np.busday_count 天然排除）+ **2026 波兰法定公共假日**：1/1,1/6,4/6,5/1,5/3,6/4,8/15,11/1,11/11,12/24,12/25,12/26（周日型假日 Easter4/5、Pentecost5/24 已被周末排除）。因数据录入/交接都发生在 GLS 波兰(起运国)，迟发判定用波兰历；美国联邦假日不适用，故未沿用 FedEx 表日历。"),
         ("5. 判定定义", f"漏发/未交接=有发货日期但无交接且>{MISSING_AFTER_DAYS}天；建标未收件=有数据录入但近期无交接；迟发=录入→交接营业日>处理时间({HANDLING_DAYS})；承运延误=交接→交付营业日>{TRANSIT_SLOW_DAYS}；卡件=在途且>{STUCK_DAYS}天无扫描；数据异常=rstt 接口无此单(如 allegro …U 行非 GLS 号)。"),
         ("6. 返件", "少数包裹先 DELIVERED 又回退(如 29626350320 08-10 派送→08-14 回 Strykow)，头条状态 INTRANSIT——本表按“先交付后回退+头条非DELIVERED”归为在途，不误标正常交付；请在通途/仓库侧按返件处理。"),
         ("7. 数据来源", "gls_full_202608.summary.csv（gls_track 公开无鉴权 REST，2026-09-07 跑 8 月通途 GLS 单）+ 通途非FBA订单202608.xlsx。"),
         ("8. 动作", "漏发/建标未收件→通知仓库核查；迟发→SLA复盘+安抚；承运延误→记录/严重开trace；卡件→开GLS trace/索赔；查无→核查源数据。"),
         ("9. 追踪", "GLS 单行先去重（同包裹多订单行）；无邮编只出摘要；明细需目的邮编。"),
         ("10. 日历边界", "欧盟无统一假日；Amazon 判迟本身按各站点国家历(amazon.de→德国、.fr→法国…)，无一套统一的 Amazon-EU 假日。本表口径=波兰(起运/交接国)一份日历作近似；承运延误(交接→交付)跨多国也只按同一历计。要逐站点精确，需按订单目的国/站点分别取假日再重算。"),
+        ("11. 日历来源(2026-09-07 复核)", "波兰 2026 法定假日：timeanddate.com/holidays/poland/2026、getsix.eu/…/public-holidays-in-poland-in-2026、kadry.infor.pl（Dni wolne 2026）。12/24(Wigilia)自 2025 起为法定假日。Amazon 判迟为内部近似标记(非 Amazon 官方指标)：Amazon 是否按工作日计迟发口径不一(部分指标按自然日计，如 sellercentral 论坛 GD…)，仅作 ops 参考。"),
     ]
     for i, (k, v) in enumerate(notes, 1):
         ws3.cell(row=i, column=1, value=k).font = Font(bold=True)
