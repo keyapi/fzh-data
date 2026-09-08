@@ -8,6 +8,7 @@ title: 集成问题 — 变更日志
 
 | 日期 | 操作 | 文档 | 说明 |
 |------|------|------|------|
+| 2026-09-08 | 新增 | [cliproxyapi-auth-unavailable-oauth-recovery.md](cliproxyapi-auth-unavailable-oauth-recovery.md) | CLIProxyAPI `503 auth_unavailable`：区分进程健康与上游授权可用性，固化升级、浏览器 OAuth、失效认证记录隔离和目标模型真实请求验收；全程使用占位符。 |
 | 2026-09-01 | 新增 | [cursor-state-vscdb-synology-cdrive-backup.md](cursor-state-vscdb-synology-cdrive-backup.md) | Cursor state.vscdb 膨胀 + Synology 连续备份吃 C 盘：根因、诊断方法、GC 局限、预防；附 `scripts/check_cursor_cdrive_health.py` |
 | 2026-08-31 | 更新 | [nas-multi-domain-access-openwrt-quickconnect.md](nas-multi-domain-access-openwrt-quickconnect.md) | 路径 A/B（OpenWrt 自定义域 vs QC/myds）；DSM 外部访问 DDNS 不能改 QC 目标；勿删 myds |
 | 2026-08-28 | 新增 | [nas-multi-domain-access-openwrt-quickconnect.md](nas-multi-domain-access-openwrt-quickconnect.md) | NAS 多域名（daneey/vilavi）、OpenWrt ACME+反代、QC 直连/中继、联通 443 与深圳未决 |
