@@ -350,6 +350,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
     if bool(args.range_start) != bool(args.range_end):
         parser.error("--range-start 与 --range-end 必须同时使用")
+    try:
+        _resolve_range(args)  # 提前校验格式/先后，CLI 期报错而非裸 traceback
+    except ValueError as e:
+        parser.error(str(e))
 
     if args.fresh and PROFILE_DIR.exists():
         print("[信息] --fresh: 清除旧的登录会话...")

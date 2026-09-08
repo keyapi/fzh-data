@@ -1,9 +1,9 @@
 ---
 okf: v0.1
 type: Log
-title: web_automation 迁移日志
-description: fzh-web-automation → fzh-data/web_automation 独立能力舱迁移的 boil-the-lake 对账日志
-tags: [web-automation, migration, log]
+title: web_automation 变更日志
+description: web_automation 能力舱 OKF 变更日志（迁移 + 能力新增与审查修补）
+tags: [web-automation, tongtu, sellfox, playwright, log]
 ---
 
 # 迁移日志
