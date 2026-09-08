@@ -1,4 +1,6 @@
 ---
+okf: v0.1
+type: Solution
 title: CLIProxyAPI `auth_unavailable`：升级、浏览器 OAuth 与真实模型验收
 date: 2026-09-08
 category: integration-issues

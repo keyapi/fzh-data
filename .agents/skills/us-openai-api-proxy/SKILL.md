@@ -26,7 +26,13 @@ triggers:
 - 服务 `active` 或基础 health check 成功，不等于目标模型有可用上游授权；恢复验收必须是
   对目标模型的最小真实请求。
 - 升级、OAuth、认证记录隔离、重启或服务器配置修改均会影响共享服务，执行前必须取得用户授权。
+- 占位符从 `us_openai_api_proxy/.env`（gitignored）解析，对照 `.env.example`：
+  `<PROXY_SSH_ALIAS>` → `UBUNTU_SSH_ALIAS`，`<PROXY_BINARY>` →
+  `$CLIPROXYAPI_INSTALL_DIR/cli-proxy-api`，`<API_KEY>` → `CLIPROXYAPI_API_KEY`，
+  `<AUTH_DIR>` 以服务器配置为准（通常在 `CLIPROXYAPI_INSTALL_DIR` 下）。禁止从旧 markdown
+  或 `office-lan-access.md` 抄地址。
+- 浏览器 OAuth 命令只在人机 TTY 运行，不要经 Agent 会话捕获授权页 URL。
 - 浏览器 OAuth URL、callback 参数、授权码、认证文件名/内容、账号、token、API key、私有地址和
-  网络拓扑均不得输出到仓库、日志或对话摘要。
+  网络拓扑均不得输出到仓库、日志或对话摘要。认证目录 listing 不得贴进聊天。
 - 认证记录仅可在服务器上受控检查；先备份、再隔离已确认失效的条目，并保留恢复路径。
 - 设备代码登录若被策略禁用，不绕过策略；改用经授权的浏览器 OAuth。

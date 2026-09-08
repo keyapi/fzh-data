@@ -12,6 +12,16 @@ tags: [operations, monitoring, health-check, ssh, authentication]
 - 本模块服务共享 API 使用者。升级、认证恢复、认证记录隔离、重启或配置修改前，必须取得用户授权。
 - 文档、终端回显和 issue 中只用占位符；不得记录账号、OAuth URL 或回调参数、授权码、认证文件名和内容、token、API key、私有地址或完整请求体。
 - 真实配置和认证材料仅留在受控服务器与 gitignored 配置中，不上传、不复制到仓库。
+- 占位符从 `us_openai_api_proxy/.env`（对照 `.env.example`）解析，不要从旧 markdown 抄地址：
+
+| 占位符 | `.env.example` |
+|--------|----------------|
+| `<PROXY_SSH_ALIAS>` | `UBUNTU_SSH_ALIAS` |
+| `<PROXY_BINARY>` | `$CLIPROXYAPI_INSTALL_DIR/cli-proxy-api` |
+| `<API_KEY>` | `CLIPROXYAPI_API_KEY` |
+| `<CONFIGURED_LISTENER>` | 受控配置中的实际监听地址（端口见 `CLIPROXYAPI_PORT`） |
+| `<AUTH_DIR>` | 服务器上的认证目录（通常在 `CLIPROXYAPI_INSTALL_DIR` 下，以配置为准） |
+| `<TARGET_MODEL>` | 返回 `503 auth_unavailable` 的那个模型 id，不要从 `GET /v1/models` 另选 |
 
 ## 快速登录与服务检查
 
@@ -43,6 +53,7 @@ curl --fail-with-body --max-time 30 \
 ```
 
 成功的验收标准是目标模型返回正常 completion，而不是仅返回模型列表或 HTTP 200。
+浏览器 OAuth 成功、新认证文件出现、或 CLI 退出码 0，都还不能标记恢复。
 
 ## 授权恢复：升级、浏览器 OAuth 与验证
 
@@ -68,23 +79,33 @@ ssh -N -o ServerAliveInterval=30 -o ExitOnForwardFailure=yes \
   -D <LOCAL_SOCKS_PORT> <PROXY_SSH_ALIAS>
 ```
 
-在另一受控会话中启动 CLIProxyAPI 的浏览器 OAuth 命令。仅在浏览器中打开该次命令即时输出的授权页，不要把 URL、state、code 或 callback 复制到文档、聊天记录或日志。
+在**人机 TTY**（不要经 Agent 会话）中停服并启动浏览器 OAuth。登录 flag 以 `<PROXY_BINARY> --help` 为准；当前上游为 `--codex-login`。仅在浏览器中打开该次命令即时输出的授权页，不要把 URL、state、code 或 callback 复制到文档、聊天记录或日志。
+
+```bash
+ssh <PROXY_SSH_ALIAS> "<PROXY_BINARY> --help | head"
+ssh <PROXY_SSH_ALIAS> systemctl stop cliproxyapi
+ssh <PROXY_SSH_ALIAS> "<PROXY_BINARY> --codex-login"
+```
 
 - OAuth 会话是短时效的；认证耗时过长或链接失效时，重新生成新会话，不能复用旧链接。
 - 设备代码登录可能被工作区管理员策略禁用；出现该限制时不要尝试绕过，改用受支持的浏览器流程。
+- 浏览器流程成功后不要立刻验收；先完成本节第 3 步的隔离与重启，再跑目标模型请求。
 
 ### 3. 认证记录整理与重启
 
-先仅列出认证目录的元数据，确认哪些条目明确过期或无效；不要输出文件内容。将确认无效的条目移动到受控、可恢复的隔离位置，而不是直接删除。
+先仅列出认证目录的时间与大小（不要打印文件名或内容）。在服务器本机 TTY 上将确认无效的条目 `mv` 到受控、可恢复的隔离目录，而不是直接删除；不要把文件名贴进聊天或仓库。
 
 ```bash
-ssh <PROXY_SSH_ALIAS> "find <AUTH_DIR> -maxdepth 1 -type f -printf '%f %TY-%Tm-%Td %TH:%TM\n'"
-ssh <PROXY_SSH_ALIAS> systemctl restart cliproxyapi
+ssh <PROXY_SSH_ALIAS> "test -d <AUTH_DIR> && find <AUTH_DIR> -maxdepth 1 -type f -printf '%TY-%Tm-%Td %TH:%TM %s\n'"
+ssh <PROXY_SSH_ALIAS> "mkdir -p <AUTH_QUARANTINE_DIR>"
+ssh <PROXY_SSH_ALIAS> systemctl start cliproxyapi
 ```
 
-重启后立即按上节对目标模型做最小真实请求。成功后再清理到期的隔离备份；失败时恢复隔离条目或升级前工件，并根据日志继续排查。
+启动服务后立即按上节对目标模型做最小真实请求。成功后再清理到期的隔离备份；失败时恢复隔离条目或升级前工件，并根据日志继续排查。
 
 ## 日常重启与资源检查
+
+重启前必须取得用户授权。`systemctl restart` 不能修复失效的上游授权。
 
 ```bash
 ssh <PROXY_SSH_ALIAS> systemctl restart cliproxyapi
