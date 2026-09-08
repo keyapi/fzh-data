@@ -8,6 +8,17 @@ tags: [sellfox, api-proxy, gateway, log]
 
 # 变更日志
 
+## 2026-09-08
+
+- **离职封号侧加固联动**: 跨模块封号脚本（`new-api-deployment/offboarding-check.py`、
+  `new-api-dingtalk-oidc/stream_listener.py`）重写检测逻辑并加 `offboarding_audit` 审计。
+  对 proxy 的影响：proxy 不再参与预检（不阻断 new-api 封号），改为每个被封用户单独关 Key，
+  失败记 `proxy_pending` + 保留 identity_map 供次日补关，daily 结尾 `sys.exit(2)` 报警；
+  stream 通道 `STATUS_LATER` 重投。不再静默 0 行。proxy 侧无需改代码，但部署
+  时须在 `.secrets.env` 显式配 `PROXY_DB_PATH` 指到真实 sqlite 挂载点，且两个脚本默认路径
+  与 proxy `config.py` 的 `/data/sellfox-proxy.db` 不同（默认 `/data/sellfox-proxy/sellfox-proxy.db`），
+  需按实际部署核对。详见 `docs/solutions/integration-issues/dingtalk-offboarding-hardening.md`
+
 ## 2026-07-09
 
 - **v0.4.3 离职封号集成 + 冒烟测试 + OIDC 刷新修复**:

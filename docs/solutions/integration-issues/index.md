@@ -10,6 +10,7 @@ tags: [integration, solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-09-08 | new-api/sellfox-proxy 离职自动封号不可靠——双通道检测加固 | [dingtalk-offboarding-hardening.md](dingtalk-offboarding-hardening.md) |
 | 2026-09-07 | GLS 波兰自发货跟踪——公开无鉴权 REST 免账号可行 + 口径坑(日历/脏单元格/返件) | [gls-track-public-rest-calendar.md](gls-track-public-rest-calendar.md) |
 | 2026-09-01 | Cursor state.vscdb 膨胀 + Synology Drive 连续备份吃光 C 盘 | [cursor-state-vscdb-synology-cdrive-backup.md](cursor-state-vscdb-synology-cdrive-backup.md) |
 | 2026-08-13 | Tongtool ERP2 MCP 接入与双 App 共享限流验证 | [tongtool-erp2-mcp-shared-rate-limit.md](tongtool-erp2-mcp-shared-rate-limit.md) |

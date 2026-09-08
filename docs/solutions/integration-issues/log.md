@@ -8,6 +8,7 @@ title: 集成问题 — 变更日志
 
 | 日期 | 操作 | 文档 | 说明 |
 |------|------|------|------|
+| 2026-09-08 | 新增 | [dingtalk-offboarding-hardening.md](dingtalk-offboarding-hardening.md) | new-api/sellfox-proxy 离职自动封号加固：60121 判离职替代 active、本地 identity_map(unionId↔userId)、provider slug 解析、proxy DB 预检、offboarding_audit 心跳/明细、--dry-run；真实离职场景之前会漏(移出组织→[SKIP])会误伤(在职未激活) |
 | 2026-09-01 | 新增 | [cursor-state-vscdb-synology-cdrive-backup.md](cursor-state-vscdb-synology-cdrive-backup.md) | Cursor state.vscdb 膨胀 + Synology 连续备份吃 C 盘：根因、诊断方法、GC 局限、预防；附 `scripts/check_cursor_cdrive_health.py` |
 | 2026-08-31 | 更新 | [nas-multi-domain-access-openwrt-quickconnect.md](nas-multi-domain-access-openwrt-quickconnect.md) | 路径 A/B（OpenWrt 自定义域 vs QC/myds）；DSM 外部访问 DDNS 不能改 QC 目标；勿删 myds |
 | 2026-08-28 | 新增 | [nas-multi-domain-access-openwrt-quickconnect.md](nas-multi-domain-access-openwrt-quickconnect.md) | NAS 多域名（daneey/vilavi）、OpenWrt ACME+反代、QC 直连/中继、联通 443 与深圳未决 |
