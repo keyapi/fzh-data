@@ -74,8 +74,9 @@ unionId↔数字userId 映射沉淀到本地，事件通道优先走本地映射
    `STATUS_LATER`（DingTalk 重投），不吞错。
 3. **本地映射持续刷新**：登录回调（`main.py`）后台线程 `record_login_identity`；每日检查对
    每个 OK 用户 upsert；事件命中回填。三处共用同一 MySQL 表。
-4. **一致性修复**：`provider_id=1` 换成 `slug='dingtalk'` 子查询解析，解析不到预检退出非 0；
-   proxy DB 路径加 `preflight`，连不上/缺表 → `sys.exit(2)`，不再静默 0 行。
+4. **一致性修复**：`provider_id=1` 换成 `slug='dingtalk'` 子查询解析，解析不到预检退出非 0。
+   proxy 不参与预检（不阻断 new-api 封号）：每个被封用户单独关 Key，失败记 `proxy_pending`
+   审计行并**保留 identity_map**，结尾 `sys.exit(2)` 供 cron 报警，次日对该 status=2 用户补关。
 5. **审计与可执行证明**：幂等建表 `dingtalk_identity_map` + `offboarding_audit`
    （表 DDL 由脚本自身 `CREATE TABLE IF NOT EXISTS`）。每次运行写心跳行；每次封号写明细行
    （unionId/userId/username/proxy_key 数/结果）。新增 `--dry-run`（只记不封）、

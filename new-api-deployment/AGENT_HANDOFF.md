@@ -403,8 +403,10 @@ Stream 实时 → user_leave_org → 即刻封号
 > ⚠️ **离职封号双通道（2026-09-08 起）**：每日检查用 `getbyunionid` 60121 判定离职
 > （不是旧逻辑的 `active` 字段）；实时事件优先查本地 `dingtalk_identity_map`(unionId↔userId)
 > 定位账号，员工已被移出组织也能封。幂等建表 `dingtalk_identity_map` + `offboarding_audit`
-> （后者每次运行写心跳 + 每次封号写明细，可证明脚本确实跑过）。proxy 封号失败会
-> `STATUS_LATER` 重投，不再静默 0 行。上线前必先 `offboarding-check.py --dry-run` 演练。
+> （后者每次运行写心跳 + 每次封号写明细，可证明脚本确实跑过）。proxy 封号失败不再静默 0 行：
+> 每日通道记 `proxy_pending` + 保留 identity_map 供次日补关，结尾 `sys.exit(2)` 报警；
+> 实时通道 `STATUS_LATER` 重投。全员 60121 且人数≥3 会熔断（疑似钉钉 token/权限故障，
+> 真批量离职用 `--force`）。上线前必先 `offboarding-check.py --dry-run` 演练。
 > ⚠️ **仓库内无 cron 工件**：cron 条目只在生产服务器 `/opt/new-api` 上，本仓库没有落地文件
 > 也无线下执行日志——接手时先 `crontab -l` 确认每日 3 点条目存在，别只信本文档的 `[x]`。
 

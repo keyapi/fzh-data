@@ -8,7 +8,7 @@ tags: [solutions, log]
 # 变更日志
 
 ## 2026-09-08
-- **新增**: `integration-issues/dingtalk-offboarding-hardening.md` — new-api/sellfox-proxy 离职自动封号双通道加固：60121 判离职替代 active、本地 `dingtalk_identity_map`(unionId↔userId)、provider slug 解析、proxy DB 预检(退出非0)、`offboarding_audit` 心跳/明细、`--dry-run`。背景：真实离职场景(员工移出组织→getbyunionid 60121)原代码当 [SKIP] 永不封；active=false 误伤在职未激活员工。改动：`offboarding-check.py`(classify/preflight/dry-run)、`stream_listener.py`(本地映射优先+proxy 失败重投)、`main.py`(登录回填映射)；单测 15 条见 `tests/new_api_offboarding/`。
+- **新增**: `integration-issues/dingtalk-offboarding-hardening.md` — new-api/sellfox-proxy 离职自动封号双通道加固：60121 判离职替代 active、本地 `dingtalk_identity_map`(unionId↔userId)、provider slug 解析、proxy 失败记 `proxy_pending` 保留映射次日补关、`offboarding_audit` 心跳/明细、`--dry-run`/`--force`。背景：真实离职场景(员工移出组织→getbyunionid 60121)原代码当 [SKIP] 永不封；active=false 误伤在职未激活员工。改动：`offboarding-check.py`(classify/熔断/retry)、`stream_listener.py`(本地映射优先+proxy 失败重投)、`main.py`(登录回填映射)；单测见 `tests/new_api_offboarding/`。
 
 ## 2026-09-07
 - **新增**: `best-practices/adobe-genuine-prompts-office-openclash.md` — 办公室 OpenClash 屏蔽 Adobe 授权校验域名（AGS 弹窗）的处理与教训：hosts 无法通配 `*.adobe.io` 随机子域（lreXXXX）、三层 NAT 下 OpenClash 无法按单设备隔离、最终用 `DOMAIN-SUFFIX,adobe.io/adobegenuine.com,REJECT` 全局屏蔽模拟断网。

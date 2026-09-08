@@ -234,22 +234,6 @@ def disable_proxy_keys(union_id: str) -> int:
         db.close()
 
 
-def preflight_proxy():
-    """Verify the proxy sqlite is reachable and has an api_keys table."""
-    db_path = _proxy_db_path()
-    if not os.path.exists(db_path):
-        raise RuntimeError(f"proxy DB not found: {db_path}")
-    db = sqlite3.connect(db_path)
-    try:
-        row = db.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='api_keys'"
-        ).fetchone()
-        if not row:
-            raise RuntimeError(f"proxy DB {db_path} 中没有 api_keys 表")
-    finally:
-        db.close()
-
-
 # ── 主流程 ────────────────────────────────────────────────────────────
 
 def should_abort_mass_depart(departed_count: int, classified_count: int) -> bool:
