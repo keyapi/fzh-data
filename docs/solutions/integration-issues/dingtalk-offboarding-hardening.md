@@ -112,17 +112,20 @@ CREATE TABLE IF NOT EXISTS offboarding_audit (
   现在当成「封号」，正是把判断方向扶正。瞬时错误（-1 系统繁忙/网络）走 RETRY 不误封。
 - `user_leave_org` 事件本身权威；本地 unionId↔userId 映射让事件处理不依赖离职后再问钉钉，
   解决「userId 已被移除 → 反查失败」的死结。映射在登录/每日跑批时（人在组织内）持续刷新。
-- new-api 封号先于 proxy：即使 proxy DB 暂不可达，最关键的新-api 权限收回已生效，事件重投
-  直到 proxy 也封成功——两处都不会静默失败。
-- `offboarding_audit` 心跳行让「到底跑没跑」有证明；`--dry-run` 上线前先演练不碰生产。
+- new-api 封号先于 proxy：即使 proxy DB 暂不可达，最关键的新-api 权限收回已生效。实时通道
+  `STATUS_LATER` 重投；每日通道写 `proxy_pending`、**不删** identity_map，次日对 status=2
+  仍留在 map 里的人只补关 Key。全员 60121 且人数≥3 则熔断（`--force` 可越过）。
+- `offboarding_audit` 心跳行让「到底跑没跑」有证明；`--dry-run` 只写 audit，不改
+  users / proxy / identity_map。
 
 ## Prevention
 
 - **不要用 user/get 的 `active` 字段判断离职**——它只表示是否激活钉钉。权威信号是
   `user_leave_org` 事件与 `getbyunionid` 的 60121。
 - 事件处理**先查本地映射再实时兜底**，映射必须在用户仍在组织时持续回填（登录 + 每日）。
-- 跨系统封号脚本（本仓库 Python + docker exec）**失败要大声**：provider/DB 预检不过就退出
-  非 0，proxy 关不掉就 STATUS_LATER 重投，禁止 catch 后返回 0 静默。
+- 跨系统封号脚本（本仓库 Python + docker exec）**失败要大声**：provider/钉钉 token 预检
+  不过就退出非 0；proxy 关不掉就 STATUS_LATER / `proxy_pending` 重试，禁止 catch 后当成功。
+  实时兜底读 `user/get` 时要用官方字段 `unionid`（兼 `unionId`）。
 - 每新增一个自动运维 cron，仓库里要能拿出「会跑 + 真跑过」的证据：cron 条目、日志落盘、
   审计心跳行——文档自述的 `[x]` 不算数。
 - 单测固定行为（见 `tests/new_api_offboarding/`）：60121→封、瞬时错→不封、本地映射命中仍

@@ -96,7 +96,11 @@ def get_app_access_token() -> str:
 
 
 def get_user_by_id(user_id: str, access_token: str) -> dict | None:
-    """Look up a DingTalk user by userId via old API. Returns user info dict or None."""
+    """Look up a DingTalk user by userId via old API.
+
+    Returns user info dict, None if the user is gone (60121/60111),
+    and raises on transient / permission errors so the event is redelivered.
+    """
     resp = httpx.post(
         f"https://oapi.dingtalk.com/topapi/v2/user/get?access_token={access_token}",
         json={"userid": user_id},
@@ -104,9 +108,16 @@ def get_user_by_id(user_id: str, access_token: str) -> dict | None:
         timeout=15,
     )
     data = resp.json()
-    if data.get("errcode") != 0:
+    errcode = data.get("errcode")
+    try:
+        errcode_i = int(errcode)
+    except (TypeError, ValueError):
+        raise RuntimeError(f"user/get bad errcode={errcode!r}") from None
+    if errcode_i == 0:
+        return data.get("result") or {}
+    if errcode_i in (60121, 60111):
         return None
-    return data.get("result", {})
+    raise RuntimeError(f"user/get errcode={errcode_i} {data.get('errmsg')}")
 
 
 def get_user_id_by_union_id(union_id: str, access_token: str) -> str | None:
@@ -366,6 +377,7 @@ class OffboardingHandler(dingtalk_stream.EventHandler):
                 needs_retry = True
             except Exception as e:
                 logger.error("error processing userId=%s: %s", uid, e)
+                needs_retry = True
 
         if needs_retry:
             return dingtalk_stream.AckMessage.STATUS_LATER, "proxy_retry"
@@ -388,7 +400,7 @@ class OffboardingHandler(dingtalk_stream.EventHandler):
                     user_id,
                 )
                 return
-            union_id = user_info.get("unionId")
+            union_id = user_info.get("unionId") or user_info.get("unionid")
             display_name = user_info.get("name")
             if not union_id:
                 logger.warning("no unionId for userId=%s", user_id)

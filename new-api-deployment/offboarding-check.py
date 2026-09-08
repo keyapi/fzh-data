@@ -10,8 +10,9 @@ Requires: qyapi_get_member permission
 
 Usage:
     python3 offboarding-check.py
-    python3 offboarding-check.py --dry-run              # 只记录将封谁，不改库
+    python3 offboarding-check.py --dry-run              # 只记不封（仍写 audit；不改 users/proxy/identity_map）
     python3 offboarding-check.py --union-id <unionId>    # 只看某一个人（含已封用户）
+    python3 offboarding-check.py --force                 # 跳过「全员 60121」熔断
 """
 
 import argparse
@@ -29,6 +30,8 @@ SECRETS_FILE = Path("/opt/new-api/.secrets.env")
 
 # getbyunionid: 该 unionId 在当前企业通讯录范围内查不到对应员工（已移出组织）
 ERRCODE_USER_NOT_FOUND = 60121
+# 一次跑批里「全部都是 60121」且人数达到此阈值 → 更像 token/通讯录权限故障，熔断不封
+MASS_DEPART_MIN = 3
 
 
 def _secret(key: str) -> str:
@@ -194,7 +197,10 @@ def classify_employment(union_id: str, app_token: str) -> tuple[str, str | None,
         )
     except Exception as e:
         return "RETRY", None, f"getbyunionid network error: {e}"
-    errcode = result.get("errcode")
+    try:
+        errcode = int(result.get("errcode"))
+    except (TypeError, ValueError):
+        return "RETRY", None, f"getbyunionid bad errcode={result.get('errcode')!r}"
     if errcode == ERRCODE_USER_NOT_FOUND:
         return "DEPARTED", None, "getbyunionid 60121 (not in org)"
     if errcode != 0:
@@ -246,10 +252,16 @@ def preflight_proxy():
 
 # ── 主流程 ────────────────────────────────────────────────────────────
 
-def fetch_bound_users(provider_id: int, union_id_filter: str | None) -> list[dict]:
-    """查询所有钉钉 OAuth 绑定的 new-api 用户。
+def should_abort_mass_depart(departed_count: int, classified_count: int) -> bool:
+    """全员 60121 且人数足够多 → 更像钉钉权限/token 故障，不要一次封光。"""
+    return classified_count >= MASS_DEPART_MIN and departed_count == classified_count
 
-    带 --union-id 时不受 status=1 限制，便于对（可能已被封的）指定用户做 dry-run。
+
+def fetch_bound_users(provider_id: int, union_id_filter: str | None) -> list[dict]:
+    """查询钉钉 OAuth 绑定的 new-api 用户。
+
+    默认：status=1（待判定）以及 status=2 但仍留在 identity_map 的人
+    （proxy 上次没关成功，必须重试）。带 --union-id 时不限 status。
     """
     if union_id_filter:
         query = (
@@ -262,7 +274,11 @@ def fetch_bound_users(provider_id: int, union_id_filter: str | None) -> list[dic
         query = (
             "SELECT u.id, u.username, u.status, b.provider_user_id "
             "FROM users u JOIN user_oauth_bindings b ON u.id = b.user_id "
-            f"WHERE b.provider_id = {provider_id} AND u.status = 1"
+            f"WHERE b.provider_id = {provider_id} AND ("
+            "u.status = 1 OR ("
+            "u.status = 2 AND EXISTS ("
+            "SELECT 1 FROM dingtalk_identity_map m "
+            "WHERE m.union_id = b.provider_user_id)))"
         )
     output = run_mysql(query)
     if not output:
@@ -281,21 +297,73 @@ def fetch_bound_users(provider_id: int, union_id_filter: str | None) -> list[dic
     return users
 
 
+def _retry_proxy_only(user: dict, channel: str, dry_run: bool) -> str:
+    """new-api 已是 status=2，只补关 proxy。成功才删 identity_map。"""
+    uid = user["id"]
+    username = user["username"]
+    union_id = user["union_id"]
+    if dry_run:
+        insert_audit("dryrun", "proxy_pending", union_id=union_id, new_api_user_id=uid,
+                     username=username)
+        print(f"  [DRYRUN] {username} (id={uid}) — would retry proxy keys")
+        return "proxy_pending"
+    try:
+        proxy_count = disable_proxy_keys(union_id)
+    except Exception as e:
+        print(f"  [WARN] 禁用 proxy key 失败（new-api 已封，下次重试）: {e}")
+        insert_audit(channel, "proxy_pending", union_id=union_id, new_api_user_id=uid,
+                     username=username)
+        return "proxy_pending"
+    insert_audit(channel, "disabled", union_id=union_id, new_api_user_id=uid,
+                 username=username, proxy_keys_disabled=proxy_count)
+    delete_identity_map(union_id)
+    print(f"  [PROXY-RETRY] {username} (id={uid}) — proxy keys disabled={proxy_count}")
+    return "disabled"
+
+
+def _disable_departed(user: dict, userid: str | None, channel: str, dry_run: bool) -> str:
+    """封 new-api；proxy 失败则保留 identity_map 供次日重试。"""
+    uid = user["id"]
+    username = user["username"]
+    union_id = user["union_id"]
+    if dry_run:
+        insert_audit("dryrun", "departed", union_id=union_id, new_api_user_id=uid,
+                     username=username, dingtalk_user_id=userid)
+        print(f"  [DRYRUN] {username} (id={uid}) — would disable (departed)")
+        return "departed"
+
+    run_mysql(f"UPDATE users SET status = 2 WHERE id = {uid} AND status = 1")
+    print(f"  [OFFBOARD] {username} (id={uid}) — departed, disabled")
+    try:
+        proxy_count = disable_proxy_keys(union_id)
+    except Exception as e:
+        print(f"  [WARN] 禁用 proxy key 失败（new-api 已封，下次重试）: {e}")
+        insert_audit(channel, "proxy_pending", union_id=union_id, new_api_user_id=uid,
+                     username=username, dingtalk_user_id=userid)
+        return "proxy_pending"
+    insert_audit(channel, "disabled", union_id=union_id, new_api_user_id=uid,
+                 username=username, dingtalk_user_id=userid,
+                 proxy_keys_disabled=proxy_count)
+    delete_identity_map(union_id)
+    return "disabled"
+
+
 def main():
     parser = argparse.ArgumentParser(description="离职兜底检查（每日 cron）")
     parser.add_argument("--dry-run", action="store_true",
-                        help="只记录将封谁（channel=dryrun），不改任何库")
+                        help="只记不封（仍写 audit；不改 users/proxy/identity_map）")
     parser.add_argument("--union-id", default=None,
                         help="只检查指定 unionId 的绑定用户（含已封用户）")
+    parser.add_argument("--force", action="store_true",
+                        help="跳过全员 60121 熔断（确认是真批量离职时再用）")
     args = parser.parse_args()
 
     channel = "dryrun" if args.dry_run else "daily"
 
-    # ── 预检：跑过但失败要有证据，而不是静默空转 ──
+    # 预检只要 schema / provider / 钉钉 token。proxy sqlite 挂了仍先封 new-api。
     try:
         ensure_schema()
         provider_id = resolve_provider_id()
-        preflight_proxy()
         app_token = get_app_token()
     except Exception as e:
         print(f"[FATAL] 预检失败，本次不执行封号: {e}", file=sys.stderr)
@@ -303,7 +371,6 @@ def main():
 
     users = fetch_bound_users(provider_id, args.union_id)
     if not users:
-        # 心跳行：证明 cron 跑过（即使 0 用户也要留痕）
         insert_audit(channel, "ok")
         suffix = f" unionId={args.union_id}" if args.union_id else ""
         print(f"[OK] No active DingTalk OAuth users to check{suffix}")
@@ -311,17 +378,48 @@ def main():
 
     print(f"Checking {len(users)} DingTalk user(s)...")
 
+    to_classify = [u for u in users if u["status"] != 2]
+    classified: list[tuple[dict, str, str | None, str]] = []
+    for user in to_classify:
+        try:
+            state, userid, reason = classify_employment(user["union_id"], app_token)
+        except Exception as e:
+            state, userid, reason = "RETRY", None, f"classify error: {e}"
+        classified.append((user, state, userid, reason))
+
+    departed_n = sum(1 for _, state, __, ___ in classified if state == "DEPARTED")
+    if (
+        not args.force
+        and not args.union_id
+        and should_abort_mass_depart(departed_n, len(classified))
+    ):
+        print(
+            f"[FATAL] 全员 {departed_n}/{len(classified)} 均为 60121，疑似钉钉权限/token 故障，"
+            "本次不封号。确认是真批量离职后加 --force。",
+            file=sys.stderr,
+        )
+        insert_audit(channel, "abort")
+        sys.exit(2)
+
     disabled_total = 0
+    proxy_failed = False
+
     for user in users:
-        uid = user["id"]
+        if user["status"] == 2:
+            result = _retry_proxy_only(user, channel, args.dry_run)
+            if result == "proxy_pending" and not args.dry_run:
+                proxy_failed = True
+            elif result == "disabled":
+                disabled_total += 1
+            continue
+
+        match = next((c for c in classified if c[0] is user), None)
+        if match is None:
+            continue
+        _, state, userid, reason = match
         username = user["username"]
         union_id = user["union_id"]
-
-        try:
-            state, userid, reason = classify_employment(union_id, app_token)
-        except Exception as e:
-            print(f"  [RETRY] {username} — classify error: {e}")
-            continue
+        uid = user["id"]
 
         if state == "RETRY":
             print(f"  [SKIP] {username} — {reason}")
@@ -330,35 +428,22 @@ def main():
             continue
 
         if state == "OK":
-            if userid:
+            if userid and not args.dry_run:
                 upsert_identity_map(union_id, userid, username)
             print(f"  [OK] {username} — active")
             continue
 
-        # DEPARTED
-        if args.dry_run:
-            insert_audit("dryrun", "departed", union_id=union_id, new_api_user_id=uid,
-                         username=username, dingtalk_user_id=userid)
-            print(f"  [DRYRUN] {username} (id={uid}) — would disable (departed)")
+        result = _disable_departed(user, userid, channel, args.dry_run)
+        if result == "proxy_pending":
+            proxy_failed = True
             disabled_total += 1
-            continue
+        else:
+            disabled_total += 1
 
-        run_mysql(f"UPDATE users SET status = 2 WHERE id = {uid} AND status = 1")
-        print(f"  [OFFBOARD] {username} (id={uid}) — departed, disabled")
-        proxy_count = 0
-        try:
-            proxy_count = disable_proxy_keys(union_id)
-        except Exception as e:
-            print(f"  [WARN] 禁用 proxy key 失败（new-api 已封）: {e}")
-        insert_audit("daily", "disabled", union_id=union_id, new_api_user_id=uid,
-                     username=username, dingtalk_user_id=userid,
-                     proxy_keys_disabled=proxy_count)
-        delete_identity_map(union_id)
-        disabled_total += 1
-
-    # 心跳行：本次运行留痕（disabled/offboarded 明细已在各分支单独记录）
     insert_audit(channel, "ok", proxy_keys_disabled=disabled_total)
     print(f"Done. Disabled: {disabled_total}")
+    if proxy_failed:
+        sys.exit(2)
 
 if __name__ == "__main__":
     main()

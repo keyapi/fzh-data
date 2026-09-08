@@ -104,3 +104,60 @@ def test_no_local_map_and_user_gone_logs_error_not_silent(monkeypatch, caplog):
         status, _ = asyncio.run(handler.process(_fake_event(["0147gone"])))
     assert status == dingtalk_stream.AckMessage.STATUS_OK
     assert "no local mapping" in caplog.text
+
+
+def test_live_fallback_reads_official_unionid(monkeypatch):
+    """映射未命中时走 user/get；官方字段是 unionid（不是 unionId）。"""
+    handler = sl.OffboardingHandler()
+    monkeypatch.setattr(sl, "get_app_access_token", lambda: "tok")
+    monkeypatch.setattr(sl, "ensure_schema", lambda: None)
+    monkeypatch.setattr(sl, "lookup_union_id_by_user_id", lambda uid: None)
+    monkeypatch.setattr(
+        sl, "get_user_by_id",
+        lambda uid, tok: {"unionid": "union-from-api", "name": "离职测试员工"},
+    )
+    upserts = []
+    monkeypatch.setattr(sl, "upsert_identity_map", lambda *a: upserts.append(a))
+    monkeypatch.setattr(sl, "find_user_by_unionid", lambda u: 42)
+    monkeypatch.setattr(sl, "find_username_by_unionid", lambda u: "离职测试员工")
+    disabled = {}
+    monkeypatch.setattr(sl, "disable_new_api_user", lambda uid: disabled.update(user=uid) or True)
+    monkeypatch.setattr(sl, "disable_proxy_keys", lambda u: 1)
+    monkeypatch.setattr(sl, "insert_audit", lambda *a, **k: None)
+    monkeypatch.setattr(sl, "delete_identity_map", lambda u: None)
+
+    status, _ = asyncio.run(handler.process(_fake_event(["0147live"])))
+    assert disabled.get("user") == 42
+    assert status == dingtalk_stream.AckMessage.STATUS_OK
+    assert upserts and upserts[0][0] == "union-from-api"
+
+
+def test_generic_exception_returns_later(monkeypatch):
+    """disable_new_api_user 抛错不能 ACK OK，否则钉钉不再投递。"""
+    handler = sl.OffboardingHandler()
+    _patch_handler_ok(monkeypatch)
+    monkeypatch.setattr(
+        sl, "disable_new_api_user",
+        lambda uid: (_ for _ in ()).throw(RuntimeError("mysql down")),
+    )
+    monkeypatch.setattr(sl, "disable_proxy_keys", lambda u: 1)
+    monkeypatch.setattr(sl, "insert_audit", lambda *a, **k: None)
+    monkeypatch.setattr(sl, "delete_identity_map", lambda u: None)
+
+    status, _ = asyncio.run(handler.process(_fake_event(["0147local"])))
+    assert status == dingtalk_stream.AckMessage.STATUS_LATER
+
+
+def test_user_get_transient_error_returns_later(monkeypatch):
+    handler = sl.OffboardingHandler()
+    monkeypatch.setattr(sl, "get_app_access_token", lambda: "tok")
+    monkeypatch.setattr(sl, "ensure_schema", lambda: None)
+    monkeypatch.setattr(sl, "lookup_union_id_by_user_id", lambda uid: None)
+    monkeypatch.setattr(
+        sl, "get_user_by_id",
+        lambda uid, tok: (_ for _ in ()).throw(RuntimeError("user/get errcode=-1 busy")),
+    )
+    monkeypatch.setattr(sl, "disable_new_api_user", lambda uid: False)
+
+    status, _ = asyncio.run(handler.process(_fake_event(["0147busy"])))
+    assert status == dingtalk_stream.AckMessage.STATUS_LATER

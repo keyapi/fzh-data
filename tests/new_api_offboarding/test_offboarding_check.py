@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import sqlite3
+import sys
 
 import pytest
 
@@ -118,3 +119,122 @@ def test_ddl_tables_cover_both_tables():
     ddl = " ".join(oc.DDL_TABLES)
     assert "dingtalk_identity_map" in ddl
     assert "offboarding_audit" in ddl
+
+
+def test_string_errcode_60121_is_departed(monkeypatch):
+    monkeypatch.setattr(oc, "api_post", lambda url, body: {
+        "errcode": "60121", "errmsg": "not found",
+    })
+    state, _, reason = oc.classify_employment("union-1", "tok")
+    assert state == "DEPARTED"
+    assert "60121" in reason
+
+
+def test_should_abort_mass_depart():
+    assert oc.should_abort_mass_depart(3, 3) is True
+    assert oc.should_abort_mass_depart(2, 2) is False
+    assert oc.should_abort_mass_depart(3, 10) is False
+    assert oc.should_abort_mass_depart(0, 0) is False
+
+
+def test_fetch_bound_users_sql_retries_status2_with_map(monkeypatch):
+    captured = {}
+
+    def fake(q):
+        captured["q"] = q
+        return ""
+
+    monkeypatch.setattr(oc, "run_mysql", fake)
+    oc.fetch_bound_users(1, None)
+    assert "u.status = 2" in captured["q"]
+    assert "dingtalk_identity_map" in captured["q"]
+
+
+def _user(**over):
+    row = {"id": 7, "username": "离职测试员工", "status": 1, "union_id": "union-1"}
+    row.update(over)
+    return row
+
+
+def _patch_main(monkeypatch, users, *, argv=None, classify=None, proxy=None):
+    monkeypatch.setattr(sys, "argv", argv or ["offboarding-check.py"])
+    monkeypatch.setattr(oc, "ensure_schema", lambda: None)
+    monkeypatch.setattr(oc, "resolve_provider_id", lambda: 1)
+    monkeypatch.setattr(oc, "get_app_token", lambda: "tok")
+    monkeypatch.setattr(oc, "fetch_bound_users", lambda *a, **k: users)
+    monkeypatch.setattr(
+        oc, "classify_employment",
+        classify or (lambda union, tok: ("DEPARTED", None, "60121")),
+    )
+    sql: list[str] = []
+    monkeypatch.setattr(oc, "run_mysql", lambda q: sql.append(q) or "")
+    audits: list = []
+    monkeypatch.setattr(oc, "insert_audit", lambda *a, **k: audits.append((a, k)))
+    deleted: list[str] = []
+    monkeypatch.setattr(oc, "delete_identity_map", lambda u: deleted.append(u))
+    upserts: list = []
+    monkeypatch.setattr(oc, "upsert_identity_map", lambda *a: upserts.append(a))
+    if proxy is None:
+        monkeypatch.setattr(oc, "disable_proxy_keys", lambda u: 1)
+    else:
+        monkeypatch.setattr(oc, "disable_proxy_keys", proxy)
+    return sql, audits, deleted, upserts
+
+
+def test_main_departed_updates_and_deletes_map(monkeypatch):
+    sql, audits, deleted, _ = _patch_main(monkeypatch, [_user()])
+    oc.main()
+    assert any("UPDATE users SET status = 2" in q for q in sql)
+    assert deleted == ["union-1"]
+    assert any(a[0][1] == "disabled" for a in audits)
+
+
+def test_main_proxy_fail_keeps_map_and_exits_2(monkeypatch):
+    def boom(union):
+        raise RuntimeError("proxy db missing")
+    sql, audits, deleted, _ = _patch_main(monkeypatch, [_user()], proxy=boom)
+    with pytest.raises(SystemExit) as ei:
+        oc.main()
+    assert ei.value.code == 2
+    assert any("UPDATE users SET status = 2" in q for q in sql)
+    assert deleted == []
+    assert any(a[0][1] == "proxy_pending" for a in audits)
+
+
+def test_main_dry_run_does_not_mutate_accounts(monkeypatch):
+    sql, _, deleted, upserts = _patch_main(
+        monkeypatch, [_user()],
+        argv=["offboarding-check.py", "--dry-run"],
+        classify=lambda union, tok: ("OK", "0147xxx", ""),
+    )
+    oc.main()
+    assert not any("UPDATE users" in q for q in sql)
+    assert deleted == []
+    assert upserts == []
+
+
+def test_main_mass_depart_aborts_without_disable(monkeypatch):
+    users = [_user(id=i, union_id=f"u{i}") for i in (1, 2, 3)]
+    sql, audits, deleted, _ = _patch_main(monkeypatch, users)
+    with pytest.raises(SystemExit) as ei:
+        oc.main()
+    assert ei.value.code == 2
+    assert not any("UPDATE users" in q for q in sql)
+    assert deleted == []
+    assert any(a[0][1] == "abort" for a in audits)
+
+
+def test_main_status2_retries_proxy_without_reclassify(monkeypatch):
+    called = {"classify": 0}
+
+    def classify(union, tok):
+        called["classify"] += 1
+        return "DEPARTED", None, "60121"
+
+    sql, _, deleted, _ = _patch_main(
+        monkeypatch, [_user(status=2)], classify=classify,
+    )
+    oc.main()
+    assert called["classify"] == 0
+    assert not any("UPDATE users" in q for q in sql)
+    assert deleted == ["union-1"]
