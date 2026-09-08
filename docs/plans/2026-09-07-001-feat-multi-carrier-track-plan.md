@@ -284,4 +284,3 @@ U1 ingest+route tests → U2 classify extract + FedEx wrapper → U3 orchestrate
 - No Karrio/AfterShip dependency in `pyproject.toml`.
 - Abandoned experimental files removed from the diff.
 - Branch + PR, not direct push to main.
-
