@@ -37,7 +37,7 @@ def _mock_gls(number: str, postal: str | None = None):
 
 
 def _load_env() -> None:
-    """加载工作树/仓库 .env（不覆盖已有变量）；缺 FedEx 时再试旧 worktree。"""
+    """依次加载 .env（override=False，只补未设变量）：工作树 → 仓库根 → sibling worktree。"""
     try:
         from dotenv import load_dotenv
     except ImportError:

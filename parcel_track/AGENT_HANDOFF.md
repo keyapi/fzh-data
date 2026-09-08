@@ -24,7 +24,7 @@ python -m parcel_track.cli report --tt <xlsx> --out parcel_track_output/ops.xlsx
 python -m pytest parcel_track/tests fedex_track/tests/test_ops_report.py gls_track/tests -q
 ```
 
-工作树内不要 `uv run`（会另建 `.venv`）；用父仓库 `.venv\Scripts\python.exe`，并设 `PYTHONPATH` 为工作树根。凭证：CLI 自动加载工作树/仓库 `.env`（`override=False`）；缺 FedEx 再试 sibling worktree `.env`。禁止把 key 写入文档或 commit。
+工作树内不要 `uv run`（会另建 `.venv`）；用父仓库 `.venv\Scripts\python.exe`，并设 `PYTHONPATH` 为工作树根。凭证：CLI 依次加载工作树/仓库/sibling worktree 的 `.env`（`override=False`，只补未 export 的变量）。禁止把 key 写入文档或 commit。
 
 ## 口径
 

@@ -44,7 +44,7 @@ tags:
 
 GLS 单承运商 `gls_track/ops_report.py` 顶部 `HANDLING_DAYS` 与混合口径对齐为 3；假日历仍用波兰法定假日。Excel「口径说明」写给读表的人：三家统一 3 个营业日，假日历不同（`parcel_track/ops_excel.py`）。
 
-改 handling 只改 `HANDLING_DAYS`（让 GLS 别名跟着走）。禁止把波兰历套到 UPS/FedEx，也禁止把美国联邦历套到 GLS。
+改 handling：混合报表改 `parcel_track/classify.py` 的 `HANDLING_DAYS`；GLS 单承运商月报还须同步 `gls_track/ops_report.py` 顶部常量（两处独立，无 import 别名）。
 
 **2. `--workers N` = 每个承运商 N 个 worker；三家顺序跑，峰值 ≈ N。**
 
@@ -54,7 +54,7 @@ CLI 默认 `--workers` 为 4；`--mock` 强制 1。FedEx 内部仍按官方 Trac
 
 **3. 凭证与运行环境。**
 
-非 mock 时 CLI `_load_env()`：`load_dotenv(..., override=False)`，先工作树 `.env`，再含 `AGENTS.md` 的仓库根 `.env`，缺 FedEx 时再试 sibling worktree `.env`。文档只写变量名，禁止粘贴 key。本 PR worktree 用父仓库 `.venv` 的 `python -m parcel_track.cli`，不要在 worktree 里 `uv run`（会另建 venv）。
+非 mock 时 CLI `_load_env()`：`load_dotenv(..., override=False)`，依次尝试工作树 `.env`、仓库根 `.env`、sibling worktree `.env`（文件存在则加载；只补尚未设置的环境变量，不覆盖已 export 的值）。文档只写变量名，禁止粘贴 key。本 PR worktree 用父仓库 `.venv` 的 `python -m parcel_track.cli`，不要在 worktree 里 `uv run`（会另建 venv）。
 
 **4. 合入状态。** 上述行为在当前树可核对，产品入口仍挂 **未合入的 PR #215**。对外写 pending，不要写成已在 main。
 
