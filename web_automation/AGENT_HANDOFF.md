@@ -45,8 +45,9 @@ Agent 参考（OKF 文档见 [docs/index.md](docs/index.md)；`click-based/AGENT
 - 日期域 My97：`.fill()` 后**勿按 Enter**（整页刷新重置）；填值弹出日历 iframe 会拦截点击 → 需先关闭。
 - 「查询」`a[onclick='queryInfo()']` 只在 **数据查询** tab 可见 → 先切 tab。
 - 统计页结果不自动刷新 → 提交后往返 数据查询/统计导出 两 tab 轮询。
-- 下载链接基线**提交后**再采集（避免把历史旧任务误当新结果）；文件名自带（不信 suggested_filename 的 GBK）。
-- 统计任务提交互斥（生成中不能再提交）。
+- 下载链接基线：等「统计导出」历史表稳定后、**提交前**采集（表未加载完会误认旧任务；提交后再采会吞掉快任务）；文件名自带（不信 suggested_filename 的 GBK）。
+- 「查询」失败必须中止（`FAILURE_CODE=QUERY_FAILED`），勿带默认日期继续提交。
+- 统计任务提交互斥（生成中不能再提交）；非互斥打不开弹窗用 `SUBMIT_FAILED`。
 
 ## 文档指针
 

@@ -93,22 +93,41 @@ def switch_tab(page, tab_text):
         print(f"  [信息] 已在 {tab_text} tab")
 
 
+def _dismiss_my97(page):
+    """fill 后 My97 日历 iframe 会拦住「查询」；Escape + 点页面空白处收起。"""
+    try:
+        page.keyboard.press("Escape")
+    except Exception:
+        pass
+    try:
+        page.locator("body").click(position={"x": 8, "y": 8}, timeout=2000)
+    except Exception:
+        pass
+    page.wait_for_timeout(400)
+
+
 def set_ship_date_range(page, d_from: str, d_to: str):
     """发货时间起止。日期控件与「查询」只在 数据查询 tab 可见，先切过去；
-    My97 文本域直接填值即可，勿按 Enter（会触发整页刷新重置）。"""
+    My97 文本域直接填值即可，勿按 Enter（会触发整页刷新重置）。
+    「查询」失败必须中止：统计条件依赖 queryInfo()，zip 名却用 CLI 月份。"""
     print(f"\n[步骤 1] 设置发货时间范围: {d_from} ~ {d_to}")
     switch_tab(page, TAB_QUERY)
     page.locator(DATE_FROM).wait_for(state="visible", timeout=10000)
     page.locator(DATE_FROM).fill(d_from)
     page.locator(DATE_TO).fill(d_to)
-    print(f"  [信息] 起止已填: {page.locator(DATE_FROM).input_value()} ~ {page.locator(DATE_TO).input_value()}")
-    # 点击「查询」把筛选落到统计条件（也完成失焦）
+    filled = (
+        f"{page.locator(DATE_FROM).input_value()} ~ {page.locator(DATE_TO).input_value()}"
+    )
+    print(f"  [信息] 起止已填: {filled}")
+    _dismiss_my97(page)
     try:
         page.locator(QUERY_BTN).first.click(timeout=5000)
         page.wait_for_timeout(3000)
         print("  [信息] 已点击「查询」")
     except Exception as e:
-        print(f"  [警告] 点击查询失败（{e}），继续尝试统计导出")
+        print("FAILURE_CODE=QUERY_FAILED")
+        print(f"[错误] 点击查询失败（{e}），未提交统计，避免导出错月份")
+        sys.exit(1)
 
 
 def get_existing_download_hrefs(page):
@@ -121,29 +140,64 @@ def get_existing_download_hrefs(page):
     return hrefs
 
 
-def submit_statistic(page) -> bool:
-    """切到统计导出 → 点「统计」→ 弹窗点「提交」。受互斥保护，重试直到能提交。"""
+def _looks_like_mutex(page) -> bool:
+    try:
+        text = page.locator("body").inner_text(timeout=2000)
+    except Exception:
+        return False
+    return any(s in text for s in ("正在生成", "正在统计", "请稍后再", "任务正在"))
+
+
+def snapshot_download_hrefs(page):
+    """等「统计导出」历史表渲染稳定后再采 href（提交前）。表未加载完时 count 会变化。"""
+    switch_tab(page, TAB_EXPORT)
+    page.locator(STAT_BTN).wait_for(state="visible", timeout=8000)
+    last = -1
+    stable = 0
+    for _ in range(12):
+        n = page.locator(DOWNLOAD_LINK).count()
+        if n == last:
+            stable += 1
+            if stable >= 2:
+                break
+        else:
+            stable = 0
+            last = n
+        page.wait_for_timeout(400)
+    return get_existing_download_hrefs(page)
+
+
+def submit_statistic(page) -> str:
+    """切到统计导出 → 点「统计」→ 弹窗点「提交」。
+    返回 'ok' / 'busy'（互斥） / 'submit_failed'（打不开弹窗等）。
+    提交链接已可见时不再点「统计」。"""
     print("\n[步骤 2] 切换统计导出并提交统计任务...")
     switch_tab(page, TAB_EXPORT)
 
     submit_link = page.get_by_role("link", name="提交", exact=True)
     for attempt in range(1, 4):
         try:
+            if submit_link.count() and submit_link.first.is_visible():
+                print("  [信息] 提交弹窗已打开，不再点「统计」")
+                break
             page.locator(STAT_BTN).wait_for(state="visible", timeout=8000)
             print(f"  [操作] 点击「统计」（第 {attempt} 次）...")
             page.locator(STAT_BTN).first.click()
             submit_link.wait_for(state="visible", timeout=8000)
             break
-        except Exception:
-            print(f"  [警告] 未能打开提交弹窗（可能上一次统计仍在生成，互斥），{10 * attempt}s 后重试...")
-            time.sleep(10 * attempt)
+        except Exception as e:
+            wait = 10 * attempt
+            mutex = _looks_like_mutex(page)
+            hint = "，疑似互斥" if mutex else ""
+            print(f"  [警告] 未能打开提交弹窗（{e}）{hint}，{wait}s 后重试...")
+            time.sleep(wait)
     else:
-        return False
+        return "busy" if _looks_like_mutex(page) else "submit_failed"
 
     print("  [操作] 点击「提交」...")
     submit_link.click()
     page.wait_for_timeout(2000)
-    return True
+    return "ok"
 
 
 def wait_for_new_download(page, existing_hrefs):
@@ -188,8 +242,12 @@ def download_file(page, href, stamp: str):
 def _resolve_range(args):
     """返回 (from_str, to_str)，格式 yyyy-MM-dd HH:mm:ss。"""
     if args.range_start or args.range_end:
+        if not (args.range_start and args.range_end):
+            raise ValueError("--range-start 与 --range-end 必须同时使用")
         d1 = datetime.strptime(args.range_start, "%Y-%m-%d").date()
         d2 = datetime.strptime(args.range_end, "%Y-%m-%d").date()
+        if d1 > d2:
+            raise ValueError("--range-start 不能晚于 --range-end")
         return f"{d1} 00:00:00", f"{d2} 23:59:59"
     ym = args.month or datetime.now().strftime("%Y-%m")
     y, m = (int(x) for x in ym.split("-"))
@@ -236,17 +294,17 @@ def run(args):
         set_ship_date_range(page, d_from, d_to)
 
         print("\n[步骤 3] 提交统计任务...")
-        if not submit_statistic(page):
-            print("FAILURE_CODE=BUSY")
-            print("[错误] 统计任务无法提交（可能持续互斥），请稍后重试")
+        existing_hrefs = snapshot_download_hrefs(page)
+        print(f"  [信息] 提交前已有 {len(existing_hrefs)} 条下载记录")
+        submit_code = submit_statistic(page)
+        if submit_code != "ok":
+            code = "BUSY" if submit_code == "busy" else "SUBMIT_FAILED"
+            print(f"FAILURE_CODE={code}")
+            print("[错误] 统计任务无法提交，请稍后重试")
             context.close()
             sys.exit(1)
 
         print("\n[步骤 4] 等待统计完成...")
-        # 提交后历史表才刷新完成，此时记录已有下载链接，避免把旧任务误当新结果
-        page.wait_for_timeout(3000)
-        existing_hrefs = get_existing_download_hrefs(page)
-        print(f"  [信息] 提交后已有 {len(existing_hrefs)} 条下载记录")
 
         download_url = wait_for_new_download(page, existing_hrefs)
         if not download_url:
@@ -290,6 +348,8 @@ if __name__ == "__main__":
     parser.add_argument("--fresh", action="store_true", help="清除旧登录会话")
     parser.add_argument("--auto-login", action="store_true", help="ddddocr 自动登录")
     args = parser.parse_args()
+    if bool(args.range_start) != bool(args.range_end):
+        parser.error("--range-start 与 --range-end 必须同时使用")
 
     if args.fresh and PROFILE_DIR.exists():
         print("[信息] --fresh: 清除旧的登录会话...")

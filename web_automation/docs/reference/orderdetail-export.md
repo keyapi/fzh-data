@@ -26,14 +26,14 @@ resource: web_automation/legacy-compatible/tongtu_orderdetail_report.py
 ## 用法
 
 ```bash
-# 一键整月（先跑 dispatch 拿状态；--auto-login = ddddocr 全自动登录）
+# 0) 状态检查（安全）
+uv run python web_automation/scripts/dispatch.py tongtu.orderdetail.export --check
+
+# 1) 一键整月（--auto-login = ddddocr 全自动登录）
 uv run python web_automation/scripts/dispatch.py tongtu.orderdetail.export -- --month 2026-07 --auto-login
 
-# 小范围验证（覆盖 --month）
-uv run python .../tongtu_orderdetail_report.py --range-start 2026-07-01 --range-end 2026-07-01
-
-# 直接跑脚本（等价，等价于 dispatcher 的命令）
-uv run --project web_automation python web_automation/legacy-compatible/tongtu_orderdetail_report.py --month 2026-07
+# 小范围验证（覆盖 --month；须同时给起止）
+uv run python web_automation/scripts/dispatch.py tongtu.orderdetail.export -- --range-start 2026-07-01 --range-end 2026-07-01
 ```
 
 - 首次运行建 `web_automation/chrome-profile/`（cookie 持久化）；cookie 过期后 `--auto-login` 用 OCR 自动续登
@@ -60,7 +60,7 @@ uv run --project web_automation python web_automation/legacy-compatible/tongtu_o
 | 日期 从/到 | `input[name='shipTimeFrom']` / `input[name='shipTimeTo']`，直接 `.fill()`，**不按 Enter** |
 | 应用过滤 | 切到「数据查询」tab 后点 `a[onclick='queryInfo()']` |
 | 提交统计 | 切「统计导出」→ 点 `a[onclick='openConfirmWin()']`（「统计」）→ 弹窗里点 `提交` |
-| 轮询新结果 | 记录提交前/后已有 `a:has-text('点击下载统计结果')` 的 href → 往返 数据查询/统计导出 tab 强制刷新 → 出现新 href 即完成 |
+| 轮询新结果 | 先等「统计导出」历史表稳定后采集已有 href，再提交；往返 数据查询/统计导出 tab 强制刷新 → 出现新 href 即完成 |
 | 下载 | 对 href 用 `page.expect_download()`（大 timeout）点链接 `save_as` |
 
 登录检测：`body` 含 `编号：`。跳转离开报表页（如刚登录落在首页）需重开 ORDERDETAIL_URL 再设筛选。
@@ -71,10 +71,11 @@ uv run --project web_automation python web_automation/legacy-compatible/tongtu_o
 2. **填日期会弹出 My97 日历 iframe，拦截后续点击**（如「查询」）——填完先让日历收起再点查询。
 3. **「查询」按钮只在「数据查询」tab 可见**——先 `switch_tab('数据查询')` 再点 `queryInfo()`；统计导出 tab 下该按钮隐藏。
 4. **统计任务状态不自动刷新**——提交后需往返 数据查询/统计导出 两 tab 强制刷新，新结果才会出现。
-5. **下载基线要在提交后采集**：提交前历史表可能还没加载完（曾拿到 0 条，把历史里旧任务误当新结果）。改为提交后等 ~3s 再取现有 href 集合。
-6. 提交互斥：同页面统计生成中不能再提交（脚本最多重试 3 次）。
-7. 网格（数据查询）不要滚动全量加载；只操作「统计导出」列表。
-8. 文件名自己带（`订单详情统计_<月>_<时间>.zip`），不信 `suggested_filename`（GBK 乱码坑）。
+5. **下载基线：等历史表加载稳定后再采，然后提交**（提交前表未渲染完会拿到 0 条，把旧任务误当新结果；提交后再等 3s 采基线则快任务会被当成已有，小范围验证会 `DOWNLOAD_TIMEOUT`）。
+6. 提交互斥：同页面统计生成中不能再提交（脚本最多重试 3 次；打不开弹窗且无互斥文案时 `FAILURE_CODE=SUBMIT_FAILED`，互斥才是 `BUSY`）。
+7. 「查询」失败必须中止（`FAILURE_CODE=QUERY_FAILED`），不要继续提交——zip 文件名用 CLI 月份，统计条件却可能仍是页面默认日期。
+8. 网格（数据查询）不要滚动全量加载；只操作「统计导出」列表。
+9. 文件名自己带（`订单详情统计_<月>_<时间>.zip`），不信 `suggested_filename`（GBK 乱码坑）。
 
 ## 结果核验（2026-07 实测）
 

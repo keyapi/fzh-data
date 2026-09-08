@@ -52,7 +52,11 @@ tags: [web-automation, migration, log]
 - 新增 `web_automation/AGENT_HANDOFF.md`（模块级 Agent 参考）与 `docs/reference/orderdetail-export.md`（专题：背景/MCP 探路过程/选择器/踩坑/核验）
 - `tests/web_automation/test_migrated_entrypoints.py` 登记新脚本入口
 
-**过程要点（MCP 探路确认）**：日期框为 My97，`.fill()` 后勿按 Enter（会整页刷新重置）；「查询」`a[onclick='queryInfo()']` 仅在数据查询 tab 可见；统计结果不自动刷新需往返 tab 轮询；下载基线在提交后采集避免误认旧任务；统计任务提交互斥。
+**过程要点（MCP 探路确认）**：日期框为 My97，`.fill()` 后勿按 Enter（会整页刷新重置）；「查询」`a[onclick='queryInfo()']` 仅在数据查询 tab 可见，失败须中止；统计结果不自动刷新需往返 tab 轮询；下载基线在历史表稳定后、提交前采集；统计任务提交互斥。
 
 **核验（2026-07 实测）**：`downloads/订单详情统计_202607_*.zip` ≈4.85 MB；xlsx 表头自第 30 行 91 列；9604 行；发货日期 07-01~07-31；数据来源=自发货订单。`uv run pytest tests/web_automation -q` → 48 passed。
+
+## 2026-09-08 — 审查修补（PR #220）
+
+**交付**：查询失败中止（`QUERY_FAILED`）+ 先等历史表稳定再 snapshot 再提交；`--range-start/--range-end` 必须成对；提交打不开弹窗区分 `BUSY`/`SUBMIT_FAILED`；OKF 用法只保留 dispatcher（含 `--check`）。
 

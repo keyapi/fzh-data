@@ -48,7 +48,9 @@ uv run python web_automation/scripts/dispatch.py tongtu.stock.export
 销售报表同理：task = `tongtu.sales.export`。导出文件落在 `web_automation/downloads/`，合并/导入文件在 `web_automation/output/`。
 
 **订单详情统计（月度）**：task = `tongtu.orderdetail.export`。过滤默认全部渠道/账号/销售模式/是否JIT备货、数据来源=自发货订单，
-脚本按月设置发货时间。示例：`uv run python web_automation/scripts/dispatch.py tongtu.orderdetail.export -- --month 2026-07`。
+脚本按月设置发货时间。先 `--check`，再执行：
+`uv run python web_automation/scripts/dispatch.py tongtu.orderdetail.export --check`
+`uv run python web_automation/scripts/dispatch.py tongtu.orderdetail.export -- --month 2026-07`。
 产出 `web_automation/downloads/订单详情统计_YYYYMM_*.zip`（内含全月订单明细，不分渠道拆分）。
 选择器/踩坑/核验见 `web_automation/docs/reference/orderdetail-export.md`。
 
