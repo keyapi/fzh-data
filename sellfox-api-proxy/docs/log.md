@@ -8,6 +8,16 @@ tags: [sellfox, api-proxy, gateway, log]
 
 # 变更日志
 
+## 2026-09-08
+
+- **离职封号侧加固联动**: 跨模块封号脚本（`new-api-deployment/offboarding-check.py`、
+  `new-api-dingtalk-oidc/stream_listener.py`）重写检测逻辑并加 `offboarding_audit` 审计。
+  对 proxy 的影响：proxy sqlite 路径不可达/缺 `api_keys` 表现在**预检失败退出非 0**
+  （daily）或 `STATUS_LATER` 重投（stream），不再静默 0 行。proxy 侧无需改代码，但部署
+  时须在 `.secrets.env` 显式配 `PROXY_DB_PATH` 指到真实 sqlite 挂载点，且两个脚本默认路径
+  与 proxy `config.py` 的 `/data/sellfox-proxy.db` 不同（默认 `/data/sellfox-proxy/sellfox-proxy.db`），
+  需按实际部署核对。详见 `docs/solutions/integration-issues/dingtalk-offboarding-hardening.md`
+
 ## 2026-07-09
 
 - **v0.4.3 离职封号集成 + 冒烟测试 + OIDC 刷新修复**:

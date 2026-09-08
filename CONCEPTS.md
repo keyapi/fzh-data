@@ -39,6 +39,9 @@ Open WebUI 里两套代码执行能力：Open Terminal = Docker Linux 沙箱（�
 ### api.vilavi.cn（公司 new-api 网关）
 上海阿里云 nginx 反代的公司 AI 网关：`/v1` 模型 API、`/sellfox` 赛狐代理、`/oidc` 钉钉 SSO。个人 Token 在后台「令牌管理」领取（`sk-…`）。生产渠道模型名以 `deepseek-v4-flash` / `deepseek-v4-pro` 为准；历史名 `deepseek-chat` 在默认组无渠道，会表现为 chat/completions **503**。
 
+### 离职自动封号（DingTalk offboarding）
+员工从钉钉组织离职/移出后，自动禁用其 new-api 网关账号与赛狐 API 代理 Key 的双通道机制。权威离职信号是 `user_leave_org` Stream 事件和 `getbyunionid` 的「未找到对应员工」(60121)——不是用户资料里的 `active` 字段（那只表示是否激活了钉钉，在职但未激活/长期未登录会被误封）。系统靠本地「unionId ↔ 数字 userId」映射在员工仍在组织时持续回填，事件到达时即使人已被移除也能定位账号。参见 `docs/solutions/integration-issues/dingtalk-offboarding-hardening.md`。
+
 ### WorkBuddy（CodeBuddy Code 桌面壳）
 腾讯桌面 Agent（Electron，底层 CLI 为 CodeBuddy Code）。第三方模型走 `%USERPROFILE%\.workbuddy\models.json`，与 Codex++/Codex Desktop 配置体系无关。关键字段 `useCustomProtocol`：`true` = URL 透传（不补 `/chat/completions`），`false` = 自动补 `/chat/completions`。接 `api.vilavi.cn` 需 `url` 带 `/v1` 且 `useCustomProtocol=false`，否则「任务完成」无正文（`empty response output from model`）。见 `docs/solutions/developer-experience/workbuddy-custom-model-newapi-config.md`。
 

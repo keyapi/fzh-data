@@ -7,6 +7,20 @@ summary: 开发与部署记录
 
 # new-api-dingtalk-oidc — 变更日志
 
+## 2026-09-08
+
+### v0.3.0 — 离职自动封号加固（检测盲区修复）
+
+- 修复：真实离职（员工从组织移出 → `getbyunionid` 60121）原逻辑会 [SKIP] 永不封号；
+  改用 60121 判 DEPARTED（瞬时错误仍 RETRY，不误封）
+- 新增本地 `dingtalk_identity_map`(unionId↔userId)：`user_leave_org` 事件优先查本地映射，
+  员工已被移除也能定位账号；登录回调/每日跑批/事件命中三处回填
+- `user_leave_org` 事件处理不再依赖离职后实时反查 userId→unionId
+- proxy key 禁用失败抛异常 → `STATUS_LATER` 重投，不静默吞错（new-api 封号先无条件执行）
+- 新增 `offboarding_audit` 审计表（心跳 + 明细），幂等建表
+- 单测：`tests/new_api_offboarding/`（60121→封 / 瞬时错→不封 / 本地映射命中仍封 / proxy 不可达重投）
+- 详：`docs/solutions/integration-issues/dingtalk-offboarding-hardening.md`
+
 ## 2026-06-26
 
 - 初始版本 v0.1.0
