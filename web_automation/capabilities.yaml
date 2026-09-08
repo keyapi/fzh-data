@@ -28,6 +28,20 @@ capabilities:
     contract: ui
     last_verified: "2026-08-26"
 
+  tongtu.orderdetail.export:
+    platform: tongtu
+    mode: BROWSER_ONLY
+    risk: read
+    primary: browser
+    fallback: null
+    allowed_fallback_codes: []
+    blocked_fallback_codes: [AUTH_FAILED, PERMISSION_DENIED, INVALID_ARGUMENT, BUSINESS_VALIDATION]
+    verify: xlsx_exists_and_nonempty
+    implementation:
+      browser: legacy-compatible/tongtu_orderdetail_report.py
+    contract: ui
+    last_verified: "2026-09-08"
+
   sellfox.stock.export:
     platform: sellfox
     mode: API_FIRST_BROWSER_FALLBACK

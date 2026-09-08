@@ -45,8 +45,8 @@ uv run python web_automation/scripts/doctor.py
 ```
 
 任务名（`web_automation/capabilities.yaml`）：
-`tongtu.stock.export` / `tongtu.sales.export` / `sellfox.stock.export` /
-`sellfox.other-inbound.import` / `sellfox.other-outbound.import` /
+`tongtu.stock.export` / `tongtu.sales.export` / `tongtu.orderdetail.export`（月度：`dispatch.py tongtu.orderdetail.export -- --month YYYY-MM`）/
+`sellfox.stock.export` / `sellfox.other-inbound.import` / `sellfox.other-outbound.import` /
 `sellfox.restock.import` / `web.generic.explore`。
 
 ## 通用浏览器模式

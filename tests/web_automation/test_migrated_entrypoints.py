@@ -11,6 +11,7 @@ WEB_AUTO = ROOT / "web_automation"
 EXPECTED = [
     "legacy-compatible/tongtu_auto_export.py",
     "legacy-compatible/tongtu_sales_report.py",
+    "legacy-compatible/tongtu_orderdetail_report.py",
     "legacy-compatible/process_sales_report.py",
     "legacy-compatible/generate_tongtu_import.py",
     "legacy-compatible/merge_inventory.py",
