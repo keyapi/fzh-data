@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from parcel_track.route import detect_carrier
+from parcel_track.route import detect_carrier, split_tracking_cell
 
 
 def test_column_beats_numeric_looking_number():
@@ -18,10 +18,20 @@ def test_fedex_hint():
     assert r.carrier == "fedex"
 
 
-def test_gls_parked():
-    r = detect_carrier("1234567890", {"邮寄方式": "GLS"})
+def test_gls_routed():
+    r = detect_carrier("29626585597", {"邮寄方式": "GLS-Poland>>GLS-Poland"})
+    assert r.carrier == "gls"
+
+
+def test_gls_cell_1z_goes_ups():
+    r = detect_carrier("1ZE935936893803162", {"邮寄方式": "GLS-Poland>>GLS-Poland"})
+    assert r.carrier == "ups"
+
+
+def test_gls_allegro_u_parked():
+    r = detect_carrier("ABC123U", {"邮寄方式": "GLS-Poland"})
     assert r.carrier is None
-    assert r.reason == "unsupported:gls"
+    assert r.reason == "not_gls_number"
 
 
 def test_gofo_prefix_parked():
@@ -30,6 +40,17 @@ def test_gofo_prefix_parked():
     assert r.reason == "unsupported:gofo"
 
 
+def test_tiktok_parked():
+    r = detect_carrier("9234690390471506916903", {"邮寄方式": "Tiktok物流>>Tiktok派送"})
+    assert r.carrier is None
+    assert r.reason == "unsupported:tiktok"
+
+
 def test_missing_tracking():
     r = detect_carrier("  ", {})
     assert r.reason == "missing_tracking"
+
+
+def test_split_cell():
+    toks = split_tracking_cell("29626585597, 1ZE935936893803162")
+    assert toks == ["29626585597", "1ZE935936893803162"]

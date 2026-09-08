@@ -7,11 +7,11 @@ from typing import Any
 import pandas as pd
 
 from parcel_track.classify import (
-    HANDLING_DAYS,
     TRANSIT_SEVERE_DAYS,
     _late_level,
     _to_ts,
     bizdays,
+    policy_for,
 )
 from parcel_track.classify import CLASS
 from parcel_track.classify import _cat as _cat_shared
@@ -28,7 +28,7 @@ ACTION = {
     "reused_no_label": "复用号旧票，以有建标那票为准",
     "delivered_ok": "—",
     "in_transit": "—",
-    "parked": "v1 不查询；配 GLS 账号或 GOFO/VITE 跟踪后再纳入",
+    "parked": "v1 不查询；GOFO/TikTok/USPS 等无官方自助 Track 时停放",
 }
 SHEET = {
     "missing_not_handed": "漏发未交接",
@@ -60,26 +60,72 @@ def fedex_record_to_summaries(rec: Any) -> list[dict]:
     return rows
 
 
+def _fmt_dt(dt: Any) -> str:
+    if dt is None:
+        return ""
+    try:
+        return dt.isoformat(sep=" ")
+    except Exception:
+        return str(dt)
+
+
+def gls_record_to_summaries(rec: Any) -> list[dict]:
+    """gls_track GlsParcel 或查询失败记录 → 统一 summary。建标=数据录入，收件=交接 GLS。"""
+    number = getattr(rec, "number", "") or ""
+    err = getattr(rec, "error", "") or ""
+    p = getattr(rec, "parcel", None)
+    if not getattr(rec, "ok", False) or p is None:
+        return [{
+            "跟踪号": number,
+            "承运商": "gls",
+            "当前状态": "查无此号",
+            "已交付": "",
+            "交付时间": "",
+            "建标时间": "",
+            "站点收件时间": "",
+            "最近节点时间": "",
+            "错误": err,
+        }]
+    status = p.current_status or ""
+    return [{
+        "跟踪号": p.parcel_no or number,
+        "承运商": "gls",
+        "当前状态": status,
+        "已交付": "是" if p.delivered else "否",
+        "交付时间": _fmt_dt(p.delivered_dt),
+        "建标时间": _fmt_dt(p.data_entered_dt),
+        "站点收件时间": _fmt_dt(p.handed_dt),
+        "最近节点时间": _fmt_dt(p.last_event_dt),
+        "错误": "",
+    }]
+
+
 def classified_row(summary: dict, ident: dict, now, carrier: str) -> dict:
     n = summary.get("跟踪号") or ""
+    handling, holidays = policy_for(carrier)
     dev = _to_ts(summary.get("交付时间") or summary.get("交付日期"))
-    pu = _to_ts(summary.get("站点收件时间") or summary.get("实际发货时间"))
-    label = _to_ts(summary.get("建标时间"))
-    last_event = _to_ts(summary.get("最近节点时间"))
+    pu = _to_ts(summary.get("站点收件时间") or summary.get("实际发货时间") or summary.get("交接GLS时间"))
+    label = _to_ts(summary.get("建标时间") or summary.get("数据录入时间"))
+    last_event = _to_ts(summary.get("最近节点时间") or summary.get("最近事件时间"))
     ship = _to_ts(ident.get("发货日期"))
-    cat_key = _cat_shared(dev, pu, label, ship, now, last_event=last_event)
+    cat_key = _cat_shared(dev, pu, label, ship, now, last_event=last_event, handling_days=handling, holidays=holidays)
     if str(summary.get("已取消") or "") == "是" and pd.isna(dev):
         cat_key = "cancelled"
-    if summary.get("当前状态") == "查无此号":
+    status = str(summary.get("当前状态") or "").strip()
+    err = str(summary.get("错误") or "").strip()
+    if status == "查无此号" or err:
         cat_key = "not_found"
+    elif cat_key == "delivered_ok" and status.upper() not in ("DELIVERED", "") and not pd.isna(dev) \
+            and not pd.isna(last_event) and last_event > dev:
+        cat_key = "in_transit"
     zh, en, _ = CLASS[cat_key]
     overdue = None
-    bd = bizdays(label, pu)
+    bd = bizdays(label, pu, holidays=holidays)
     if bd is not None:
-        overdue = bd - HANDLING_DAYS
+        overdue = bd - handling
     trans = None
     if not pd.isna(pu) and not pd.isna(dev):
-        trans = bizdays(pu, dev)
+        trans = bizdays(pu, dev, holidays=holidays)
     if cat_key == "late_handover":
         level = _late_level(overdue)
     elif cat_key == "carrier_slow":
@@ -87,8 +133,9 @@ def classified_row(summary: dict, ident: dict, now, carrier: str) -> dict:
     else:
         level = zh
     amazon = ""
-    ch = (ident.get("渠道") or ident.get("销售站点") or "").lower()
-    if overdue is not None and ("amazon" in ch or "amz" in ch):
+    ch = f"{ident.get('渠道') or ''} {ident.get('销售站点') or ''}".lower()
+    is_amz = any(k in ch for k in ("amazon", "amz", "亚马逊"))
+    if overdue is not None and is_amz:
         amazon = "是" if overdue > 0 else "否"
     elif overdue is not None:
         amazon = "否" if overdue <= 0 else ""

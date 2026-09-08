@@ -22,6 +22,20 @@ US_HOLIDAYS = [
     "2026-01-01", "2026-01-19", "2026-02-16", "2026-05-25", "2026-06-19",
     "2026-07-03", "2026-09-07", "2026-10-12", "2026-11-11", "2026-11-26", "2026-12-25",
 ]
+# GLS 起运/交接在波兰；12/24 Wigilia 自 2025 起法定。来源见 gls_track/ops_report.py。
+PL_HOLIDAYS_2026 = [
+    "2026-01-01", "2026-01-06", "2026-04-06", "2026-05-01", "2026-05-03",
+    "2026-06-04", "2026-08-15", "2026-11-01", "2026-11-11",
+    "2026-12-24", "2026-12-25", "2026-12-26",
+]
+GLS_HANDLING_DAYS = 2
+
+
+def policy_for(carrier: str) -> tuple[int, list[str]]:
+    """(handling_days, holidays)。UPS/FedEx 用美国联邦历 + 1；GLS 用波兰历 + 2。"""
+    if (carrier or "").lower() == "gls":
+        return GLS_HANDLING_DAYS, PL_HOLIDAYS_2026
+    return HANDLING_DAYS, US_HOLIDAYS
 
 CLASS = {
     "missing_not_handed": ("漏发/未交接", "not_handed", "red"),
@@ -48,11 +62,12 @@ TT_PICK = {
 }
 
 
-def bizdays(d1, d2):
+def bizdays(d1, d2, holidays=None):
     if pd.isna(d1) or pd.isna(d2):
         return None
+    hols = US_HOLIDAYS if holidays is None else holidays
     try:
-        return int(np.busday_count(np.datetime64(d1.date()), np.datetime64(d2.date()), holidays=US_HOLIDAYS))
+        return int(np.busday_count(np.datetime64(d1.date()), np.datetime64(d2.date()), holidays=hols))
     except Exception:
         return None
 
@@ -96,8 +111,9 @@ def _late_level(overdue) -> str:
     return "重度迟发"
 
 
-def _cat(dev, pu, label, ship, now, last_event=None):
+def _cat(dev, pu, label, ship, now, last_event=None, *, handling_days: int | None = None, holidays=None):
     """分类 key。迟发=建标→收件营业日；承运延误=收件→交付；卡件看最近扫描；延误优先于迟发。"""
+    handling = HANDLING_DAYS if handling_days is None else handling_days
     if pu is pd.NaT:
         if dev is not pd.NaT:
             return "reused_no_label" if label is pd.NaT else "delivered_ok"
@@ -108,8 +124,8 @@ def _cat(dev, pu, label, ship, now, last_event=None):
         return "reused_no_label"
 
     late = False
-    bd = bizdays(label, pu)
-    if bd is not None and (bd - HANDLING_DAYS) > 0:
+    bd = bizdays(label, pu, holidays=holidays)
+    if bd is not None and (bd - handling) > 0:
         late = True
 
     if dev is pd.NaT:
@@ -118,7 +134,7 @@ def _cat(dev, pu, label, ship, now, last_event=None):
             return "stuck"
         return "late_handover" if late else "in_transit"
 
-    trans = bizdays(pu, dev)
+    trans = bizdays(pu, dev, holidays=holidays)
     if trans is not None and trans > TRANSIT_SLOW_DAYS:
         return "carrier_slow"
     if late:

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from parcel_track.classify import (
     CLASS,
-    HANDLING_DAYS,
     MISSING_AFTER_DAYS,
     STUCK_DAYS,
     TRANSIT_SLOW_DAYS,
@@ -145,11 +144,11 @@ def write_ops_workbook(df, out_xlsx: str, *, title: str, slow_label: str, notes_
     notes = [
         (notes_title, ""),
         ("1. 起点与确认", "起点=建标时间；确认发货=站点收件/首次取件扫描（UPS 用实际发货时间）。"),
-        ("2. 迟发", "营业日延迟=建标→收件营业日−处理时间。周末与美国联邦假日不计。"),
-        ("3. 处理时间", f"默认 {HANDLING_DAYS} 个营业日（UPS/FedEx 同日历；UPS 在途阈值未单独校准）。"),
+        ("2. 迟发", "营业日延迟=建标→收件营业日−处理时间。周末不计；UPS/FedEx 另排除美国联邦假日，GLS 排除波兰法定假日。"),
+        ("3. 处理时间", "UPS/FedEx 默认 1 个营业日（美国联邦假日）；GLS 默认 2 个营业日（波兰法定假日，含 Wigilia 12/24）。"),
         ("4. 承运延误", f"收件→交付营业日 > {TRANSIT_SLOW_DAYS}。一单既迟发又延误时主分类为承运延误。"),
         ("5. 卡件", f"未交付且最近扫描超过 {STUCK_DAYS} 天。漏发/未交接：有发货日期超过 {MISSING_AFTER_DAYS} 天无收件。"),
-        ("6. 停放", "GLS/GOFO/无法识别承运商的行不查询，计入停放，不丢弃。"),
+        ("6. 停放", "GOFO / TikTok 派送 / USPS / 无法识别的行不查询，计入停放，不丢弃。GLS 走公开 REST（需目的邮编）。"),
     ]
     for i, (k, v) in enumerate(notes, 1):
         ws3.cell(row=i, column=1, value=k).font = Font(bold=True)

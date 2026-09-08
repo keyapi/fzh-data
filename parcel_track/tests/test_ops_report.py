@@ -47,3 +47,35 @@ def test_mixed_sheets(tmp_path: Path):
     assert "迟发" in names
     assert "承运异常" in names
     assert "未支持停放" in names
+
+
+def test_gls_amazon_zh_channel_and_return():
+    now = pd.Timestamp(_dt.datetime(2026, 9, 20, 12, 0))
+    row = classified_row(
+        {
+            "跟踪号": "29626585597",
+            "建标时间": "2026-08-27 10:00:00",
+            "站点收件时间": "2026-08-31 10:00:00",
+            "交付时间": "2026-09-01 10:00:00",
+            "当前状态": "DELIVERED",
+        },
+        {"渠道": "亚马逊", "订单号": "O9"},
+        now,
+        "gls",
+    )
+    assert row["_key"] == "delivered_ok"
+    assert row["Amazon是否判迟"] == "否"
+    ret = classified_row(
+        {
+            "跟踪号": "GLSRET",
+            "建标时间": "2026-08-03 07:00:00",
+            "站点收件时间": "2026-08-04 18:00:00",
+            "交付时间": "2026-08-10 09:54:00",
+            "最近节点时间": "2026-08-14 04:55:00",
+            "当前状态": "INTRANSIT",
+        },
+        {"渠道": "亚马逊"},
+        now,
+        "gls",
+    )
+    assert ret["_key"] == "in_transit"

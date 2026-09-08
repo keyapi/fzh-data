@@ -59,6 +59,6 @@ python -m gls_track.ops_report --summary result.summary.csv --tt <通途xlsx> --
 
 ## 与 parcel_track(PR #215, Cursor 统一多承运商)的关系
 
-- 统一的多承运商 runner 由 **Cursor 在 parcel_track** 做；届时把 `gls_track` 当 GLS adapter 接入。
-- 接 parcel_track 需对齐的归一字段（UPS/FedEx 同款）：`跟踪号 / 承运商=gls / 交付时间 / 站点收件时间(=交接GLS时间) / 建标时间(=数据录入时间) / 最近节点时间 / 当前状态 / 已取消`。
-- GLS 给统一侧的**可选改进点**：① 日历要能按 承运商/区域 配置（US 联邦 vs 波兰，FedEx 表硬编码 US 假日；GLS 用波兰）；② GOFO 无官方自服务 Track，仍停放待 VITE/聚合；③ 单号形态过滤（`…U`/`1Z`/`1303…`/`1049…` 不是 GLS 号段）；④ 区域(欧洲/美国)分类若做，建议以收货国为主、货主仓兜底。
+- 统一 runner 在 `parcel_track`：GLS 行走本模块 `GlsTrackClient.track(号, 邮编)`，分类用共享 `parcel_track.classify`（波兰历 + HANDLING=2）。
+- 本模块 `ops_report.py` / `cli monthly` 仍可单独出 GLS 月报；长期可降为薄壳。
+- 归一字段：`跟踪号 / 承运商=gls / 交付时间 / 站点收件时间(=交接GLS时间) / 建标时间(=数据录入时间) / 最近节点时间 / 当前状态`。

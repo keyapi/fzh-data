@@ -1,8 +1,9 @@
-"""parcel_track CLI：通途订单 → UPS/FedEx 查询 → 运营异常 Excel。"""
+"""parcel_track CLI：通途订单 → UPS/FedEx/GLS 查询 → 运营异常 Excel。"""
 
 from __future__ import annotations
 
 import argparse
+import datetime as _dt
 import os
 import sys
 
@@ -16,8 +17,21 @@ def _make_parser() -> argparse.ArgumentParser:
     r.add_argument("--tt", required=True, help="通途非FBA订单 xlsx")
     r.add_argument("--out", required=True, help="输出 Excel")
     r.add_argument("--prefix", help="summary 前缀，默认与 --out 同目录同名")
-    r.add_argument("--mock", action="store_true", help="离线 mock，不打官方 API")
+    r.add_argument("--mock", action="store_true", help="离线 mock，不打官方 API / GLS 公开 REST")
     r.add_argument("--limit", type=int, default=0, help="每个承运商最多查 N 个")
+    return p
+
+
+def _mock_gls(number: str, postal: str | None = None):
+    """离线 GLS：形状对齐 gls_track.models.GlsParcel，供 classify 使用。"""
+    from gls_track.models import GlsParcel
+
+    p = GlsParcel(parcel_no=number, current_status="DELIVERED", delivered=True)
+    base = _dt.datetime.now() - _dt.timedelta(days=5)
+    p.data_entered_dt = base
+    p.handed_dt = base + _dt.timedelta(days=1)
+    p.delivered_dt = base + _dt.timedelta(days=2)
+    p.last_event_dt = p.delivered_dt
     return p
 
 
@@ -42,6 +56,14 @@ def _fedex_query(mock: bool):
     return _build_query(args)
 
 
+def _gls_query(mock: bool):
+    if mock:
+        return None, _mock_gls
+    from gls_track.client import GlsTrackClient
+    client = GlsTrackClient.from_env()
+    return client, client.track
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _make_parser().parse_args(argv)
     if args.command != "report":
@@ -52,19 +74,22 @@ def main(argv: list[str] | None = None) -> int:
         prefix = base
     uc, uq = _ups_query(args.mock)
     fc, fq = _fedex_query(args.mock)
+    gc, gq = _gls_query(args.mock)
     try:
         stats = run_report(
             args.tt, args.out, prefix=prefix, mock=args.mock,
-            ups_query=uq, fedex_query=fq, limit=args.limit or 0,
+            ups_query=uq, fedex_query=fq, gls_query=gq, limit=args.limit or 0,
         )
     finally:
         if uc is not None:
             uc.close()
         if fc is not None:
             fc.close()
+        if gc is not None:
+            gc.close()
     print(
-        f"入 {stats['in']} → UPS {stats['ups']} / FedEx {stats['fedex']} / 停放 {stats['parked']} "
-        f"→ 分类 {stats['classified']}\nwritten {stats['out']}"
+        f"入 {stats['in']} → UPS {stats['ups']} / FedEx {stats['fedex']} / GLS {stats['gls']} "
+        f"/ 停放 {stats['parked']} → 分类 {stats['classified']}\nwritten {stats['out']}"
     )
     return 0
 

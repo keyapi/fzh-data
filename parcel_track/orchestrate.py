@@ -1,10 +1,10 @@
-"""通途 xlsx → 分流查询 UPS/FedEx → 共享异常表。"""
+"""通途 xlsx → 分流查询 UPS/FedEx/GLS → 共享异常表。"""
 
 from __future__ import annotations
 
 import csv
 import datetime as _dt
-import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
@@ -17,8 +17,8 @@ from ups_track.batch import BatchItem as UpsItem
 from ups_track.batch import Record as UpsRecord
 from ups_track.batch import run_batch as run_ups
 
-from .ingest import IngestReport, ingest_tongtu
-from .normalize import classified_row, fedex_record_to_summaries, ups_record_to_summaries
+from .ingest import IngestReport, TongtuRow, ingest_tongtu
+from .normalize import classified_row, fedex_record_to_summaries, gls_record_to_summaries, ups_record_to_summaries
 from .ops_excel import write_ops_workbook
 
 
@@ -42,6 +42,41 @@ def _ident_map(report: IngestReport) -> dict[str, dict]:
     return out
 
 
+def _unique_rows(rows: list[TongtuRow]) -> list[TongtuRow]:
+    seen: set[str] = set()
+    out: list[TongtuRow] = []
+    for r in rows:
+        if not r.number or r.number in seen:
+            continue
+        seen.add(r.number)
+        out.append(r)
+    return out
+
+
+@dataclass
+class GlsQueryResult:
+    number: str
+    ok: bool
+    error: str = ""
+    parcel: Any = None
+
+
+def _query_gls(query: Callable, rows: list[TongtuRow]) -> list[GlsQueryResult]:
+    from gls_track.client import GlsTrackError
+
+    recs: list[GlsQueryResult] = []
+    for r in rows:
+        postal = (r.ident.get("邮编") or "").strip() or None
+        try:
+            parcel = query(r.number, postal)
+            recs.append(GlsQueryResult(number=r.number, ok=True, parcel=parcel))
+        except GlsTrackError as exc:
+            recs.append(GlsQueryResult(number=r.number, ok=False, error=str(exc)))
+        except Exception as exc:
+            recs.append(GlsQueryResult(number=r.number, ok=False, error=f"{type(exc).__name__}: {exc}"))
+    return recs
+
+
 def run_report(
     tt_xlsx: str,
     out_xlsx: str,
@@ -50,18 +85,22 @@ def run_report(
     mock: bool = False,
     ups_query: Callable | None = None,
     fedex_query: Callable | None = None,
+    gls_query: Callable | None = None,
     limit: int = 0,
     now: pd.Timestamp | None = None,
 ) -> dict[str, Any]:
     report = ingest_tongtu(tt_xlsx)
-    ups_rows = report.ups
-    fdx_rows = report.fedex
+    ups_rows = _unique_rows(report.ups)
+    fdx_rows = _unique_rows(report.fedex)
+    gls_rows = _unique_rows(report.gls)
     if limit:
         ups_rows = ups_rows[:limit]
         fdx_rows = fdx_rows[:limit]
-    called = {"ups": False, "fedex": False}
+        gls_rows = gls_rows[:limit]
+    called = {"ups": False, "fedex": False, "gls": False}
     ups_recs: list[UpsRecord] = []
     fdx_recs: list[FdxRecord] = []
+    gls_recs: list[GlsQueryResult] = []
     if ups_rows:
         called["ups"] = True
         items = [UpsItem(number=r.number, remark=r.ident.get("邮寄方式", "")) for r in ups_rows]
@@ -74,10 +113,15 @@ def run_report(
         if fedex_query is None:
             raise ValueError("缺少 FedEx query")
         fdx_recs = run_fedex(fedex_query, items, workers=1, retries=0)
+    if gls_rows:
+        called["gls"] = True
+        if gls_query is None:
+            raise ValueError("缺少 GLS query")
+        gls_recs = _query_gls(gls_query, gls_rows)
     ident = _ident_map(report)
     now = now or pd.Timestamp(_dt.datetime.now())
     classified = []
-    ups_sum, fdx_sum = [], []
+    ups_sum, fdx_sum, gls_sum = [], [], []
     for rec in ups_recs:
         for s in ups_record_to_summaries(rec):
             ups_sum.append(s)
@@ -86,6 +130,10 @@ def run_report(
         for s in fedex_record_to_summaries(rec):
             fdx_sum.append(s)
             classified.append(classified_row(s, ident.get(rec.number, {}), now, "fedex"))
+    for rec in gls_recs:
+        for s in gls_record_to_summaries(rec):
+            gls_sum.append(s)
+            classified.append(classified_row(s, ident.get(rec.number, {}), now, "gls"))
     parked_rows = []
     for r in report.parked:
         parked_rows.append({
@@ -98,6 +146,7 @@ def run_report(
         })
     _write_csv(f"{prefix}-ups.summary.csv", ups_sum)
     _write_csv(f"{prefix}-fedex.summary.csv", fdx_sum)
+    _write_csv(f"{prefix}-gls.summary.csv", gls_sum)
     merged = [{k: v for k, v in row.items() if k != "_key"} for row in classified]
     _write_csv(f"{prefix}.summary.csv", merged)
     df = pd.DataFrame(classified)
@@ -114,6 +163,7 @@ def run_report(
         "in": len(report.rows),
         "ups": len(ups_rows),
         "fedex": len(fdx_rows),
+        "gls": len(gls_rows),
         "parked": len(report.parked),
         "classified": len(classified),
         "called": called,
