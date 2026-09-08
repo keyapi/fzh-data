@@ -9,6 +9,18 @@ summary: 开发与部署记录
 
 ## 2026-09-08
 
+### v0.3.1 — 加固版已部署生产（实测）
+
+- **已部署**：`stream_listener.py` + `main.py` 新版拷入 `/opt/new-api-dingtalk-oidc/` →
+  `docker build -t new-api-dingtalk-oidc:latest .` → `cd /opt/new-api && docker compose up -d --no-deps bridge`。
+- **⚠️ 部署前提**：bridge 容器默认看不到 proxy DB。必须给 bridge 服务挂 proxy DB volume
+  （`- /data/sellfox-proxy:/data/sellfox-proxy`）+ 设 `PROXY_DB_PATH=/data/sellfox-proxy/sellfox-proxy.db`，
+  否则容器内 `disable_proxy_keys` 找不到 sqlite 抛 `ProxyDisableError` → `STATUS_LATER` 无限重投。
+  compose 改前备份 `/opt/new-api/docker-compose.yml.bak-<ts>`。
+- **实测**：stream 连上 `wss-open-connection-union.dingtalk.com`，bridge health `{"status":"ok"}`；
+  容器内对临时测试 key 调 `disable_proxy_keys` 真实置 `is_active=0`（返回 1），测试 key 已清理，
+  真实在职 key 不受影响。旧文件备份 `stream_listener.py.bak-<ts>` / `main.py.bak-<ts>`。
+
 ### v0.3.0 — 离职自动封号加固（检测盲区修复）
 
 - 修复：真实离职（员工从组织移出 → `getbyunionid` 60121）原逻辑会 [SKIP] 永不封号；

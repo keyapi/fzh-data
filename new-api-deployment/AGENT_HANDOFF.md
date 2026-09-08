@@ -400,15 +400,22 @@ cron 0 9/12/14/18 工作日 + 0 0 周末 + */30 → deepseek_time_pricing: 分�
 Stream 实时 → user_leave_org → 即刻封号
 ```
 
-> ⚠️ **离职封号双通道（2026-09-08 起）**：每日检查用 `getbyunionid` 60121 判定离职
-> （不是旧逻辑的 `active` 字段）；实时事件优先查本地 `dingtalk_identity_map`(unionId↔userId)
+> ⚠️ **离职封号双通道（2026-09-08 加固 + 当日已部署生产）**：每日检查用 `getbyunionid` 60121
+> 判定离职（不是旧逻辑的 `active` 字段）；实时事件优先查本地 `dingtalk_identity_map`(unionId↔userId)
 > 定位账号，员工已被移出组织也能封。幂等建表 `dingtalk_identity_map` + `offboarding_audit`
 > （后者每次运行写心跳 + 每次封号写明细，可证明脚本确实跑过）。proxy 封号失败不再静默 0 行：
 > 每日通道记 `proxy_pending` + 保留 identity_map 供次日补关，结尾 `sys.exit(2)` 报警；
 > 实时通道 `STATUS_LATER` 重投。全员 60121 且人数≥3 会熔断（疑似钉钉 token/权限故障，
 > 真批量离职用 `--force`）。上线前必先 `offboarding-check.py --dry-run` 演练。
-> ⚠️ **仓库内无 cron 工件**：cron 条目只在生产服务器 `/opt/new-api` 上，本仓库没有落地文件
-> 也无线下执行日志——接手时先 `crontab -l` 确认每日 3 点条目存在，别只信本文档的 `[x]`。
+> **部署要点（2026-09-08 实测）**：`offboarding-check.py` 直接覆盖
+> `/opt/new-api/offboarding-check.py`（cron `0 3 * * *` 已存在，无需改 crontab）；bridge
+> 改 `stream_listener.py`/`main.py` 后 `docker build -t new-api-dingtalk-oidc:latest .` 再
+> `docker compose up -d --no-deps bridge`。**bridge 容器必须挂 proxy DB volume +
+> `PROXY_DB_PATH` env**，否则容器内 `disable_proxy_keys` 找不到 sqlite 抛错 → `STATUS_LATER`
+> 无限重投。改 compose 前先备份（均有 `.bak-<ts>`）。实测 3 名离职者被每日通道自动封
+> （users.status=2），proxy 关 key 链路容器内函数级验证通过。
+> ⚠️ **cron 实测存在**：生产 crontab 已有 `0 3 * * * offboarding-check.py`（本仓库无工件，
+> 以服务器 `crontab -l` 为准）。
 
 ### 钉钉应用配置
 

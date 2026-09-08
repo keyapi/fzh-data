@@ -1,6 +1,7 @@
 ---
 title: new-api/sellfox-proxy 离职自动封号不可靠 —— 双通道检测加固
 date: 2026-09-08
+last_updated: 2026-09-08
 category: integration-issues
 module: new-api-deployment
 problem_type: integration_issue
@@ -118,6 +119,45 @@ CREATE TABLE IF NOT EXISTS offboarding_audit (
   仍留在 map 里的人只补关 Key。全员 60121 且人数≥3 则熔断（`--force` 可越过）。
 - `offboarding_audit` 心跳行让「到底跑没跑」有证明；`--dry-run` 只写 audit，不改
   users / proxy / identity_map。
+
+## 生产部署与实测（2026-09-08）
+
+修复已在上海生产（`api.vilavi.cn`，SSH `sh-erpnext-test`）部署并实测通过。以下为可直接
+复现的运维步骤与实测结果（不涉及真实员工姓名；被测人员均为确认离职者，用 id/unionId 指代）。
+
+### 部署（双通道，均有 `*.bak-时间戳` 备份在对应目录）
+
+1. **每日兜底**：新版 `new-api-deployment/offboarding-check.py` → `/opt/new-api/offboarding-check.py`
+   （cron `0 3 * * *` 已存在，脚本覆盖即生效，无需改 crontab）。旧版备份
+   `/opt/new-api/offboarding-check.py.bak-<ts>`。
+2. **实时通道**：新版 `new-api-dingtalk-oidc/{stream_listener.py,main.py}` →
+   `/opt/new-api-dingtalk-oidc/`（bridge build 目录），`docker build -t new-api-dingtalk-oidc:latest .`
+   后 `cd /opt/new-api && docker compose up -d --no-deps bridge` 重建容器。旧文件备份同目录。
+3. **bridge 必须能访问 proxy DB**（否则容器内 `disable_proxy_keys` 抛错 → `STATUS_LATER`
+   无限重投）：在 compose 的 bridge 服务 `volumes` 加 `- /data/sellfox-proxy:/data/sellfox-proxy`，
+   `environment` 加 `- PROXY_DB_PATH=/data/sellfox-proxy/sellfox-proxy.db`，再 `compose up -d`。
+   compose 改前备份 `/opt/new-api/docker-compose.yml.bak-<ts>`。
+
+### 实测
+
+- **`offboarding-check.py --dry-run`**：17 个钉钉绑定用户里标出 3 个 DEPARTED（id=9/15/17），
+  其余 14 人 OK，熔断未触发（3≠17）。dry-run 只写 `offboarding_audit`（`dryrun/departed` 3 条
+  + `dryrun/ok` 心跳），不动 users/proxy/identity_map。
+- **真实跑批**：3 人 `users.status` → `2`；`offboarding_audit` 记 3 条 `daily/disabled`；exit 0。
+- **proxy key**：这 3 人在 sellfox-proxy **从未申请过 key**（proxy DB 15 个 key 全属在职员工），
+  故 `proxy_keys_disabled=0` 是正确结果而非漏关。若员工有 key，同一脚本会一并关。
+- **实时通道 disable_proxy_keys 端到端**：bridge 容器内对临时插入的测试 key 调用
+  `stream_listener.disable_proxy_keys(union_id)` → 真实 `is_active=0`（返回 1），测试 key 已清理，
+  15 个真实在职 key 不受影响。stream 连上 `wss-open-connection-union.dingtalk.com`，bridge health ok。
+- **结论**：真实离职（本例 3 人）能被每日兜底自动发现并封号；实时通道依赖钉钉主动推送
+  `user_leave_org` 事件（无法人工伪造），其 proxy 关 key 链路经函数级实测打通。
+
+### Prevention（补充）
+
+- bridge 容器**默认看不到 proxy DB**：容器内 `disable_proxy_keys` 找不到 sqlite 会抛错致
+  `STATUS_LATER` 无限重投——给 bridge 挂 proxy DB volume + 设 `PROXY_DB_PATH` 是部署前提，别漏。
+- 实测用真实离职员工当验收对象时，**先 `--dry-run` 确认标谁**，再真实跑批；结果查
+  `offboarding_audit` + `users.status`，不靠肉眼。
 
 ## Prevention
 
