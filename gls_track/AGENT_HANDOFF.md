@@ -45,7 +45,7 @@ python -m gls_track.ops_report --summary result.summary.csv --tt <通途xlsx> --
 
 ## GLS 口径（区别于 FedEx 表，见 ops_report.py 顶部可调）
 
-- `HANDLING_DAYS = 2`（FedEx 表为 1；GLS 周四录入→周一交接不再误判迟发）
+- `HANDLING_DAYS = 3`（与 parcel_track UPS/FedEx 统一；假日历仍用波兰法定假日）
 - 营业日 = 排除周末（`np.busday_count` 天然）+ **波兰 2026 法定假日** `PL_HOLIDAYS_2026`（起运/交接在 GLS 波兰；**勿沿用 FedEx 美国联邦假日**；12/24 Wigilia 自 2025 起法定）
 - 「Amazon是否判迟」**仅 Amazon/亚马逊 渠道**标（非 Amazon 渠道不判）
 
@@ -59,6 +59,6 @@ python -m gls_track.ops_report --summary result.summary.csv --tt <通途xlsx> --
 
 ## 与 parcel_track(PR #215, Cursor 统一多承运商)的关系
 
-- 统一 runner 在 `parcel_track`：GLS 行走本模块 `GlsTrackClient.track(号, 邮编)`，分类用共享 `parcel_track.classify`（波兰历 + HANDLING=2）。
+- 统一 runner 在 `parcel_track`：GLS 行走本模块 `GlsTrackClient.track(号, 邮编)`，分类用共享 `parcel_track.classify`（波兰历 + HANDLING=3）。
 - 本模块 `ops_report.py` / `cli monthly` 仍可单独出 GLS 月报；长期可降为薄壳。
 - 归一字段：`跟踪号 / 承运商=gls / 交付时间 / 站点收件时间(=交接GLS时间) / 建标时间(=数据录入时间) / 最近节点时间 / 当前状态`。

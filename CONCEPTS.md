@@ -329,4 +329,7 @@ FedEx 首次收到包裹的扫描；`fedex_track` 用它在销售核查里对比
 GLS 波兰自发货单号批量跟踪走 gls-group.com **公开无鉴权 REST**（`rstt029` 摘要 / `rstt028` 明细需**目的邮编**），不用开发者账号/波兰 GLS 登录；官方 ShipIT/MyGLS 则要 GLS 波兰客户 + WebAPI 开通（要"客户账号"不是"纯开发者账号"）。模块 `gls_track/`，月报 `python -m gls_track.cli monthly`。
 
 ### 交接GLS时间 = GLS 收件首扫；数据录入 = GLS 建标
-`gls_track` 把 GLS history "was handed over to GLS"（须排除文案里的 "not yet handed over"）≈ FedEx 的"站点收件"；"data was entered into the GLS IT system" ≈ 建标。GLS 口径独立：`HANDLING_DAYS=2`、营业日用**波兰**假日（起运/交接在 GLS 波兰，勿沿用 FedEx 美国联邦假日）。
+`gls_track` 把 GLS history "was handed over to GLS"（须排除文案里的 "not yet handed over"）≈ FedEx 的"站点收件"；"data was entered into the GLS IT system" ≈ 建标。迟发处理时间与 UPS/FedEx **共用同一营业日阈值**；GLS 营业日用**波兰**假日（起运/交接在 GLS 波兰，勿沿用 FedEx 美国联邦假日）。
+
+### 处理时间（尾程迟发窗口）
+建标（面单创建 / GLS 数据录入）到站点收件（FedEx/UPS 首扫 / 交接 GLS）之间、允许占用的**营业日**窗口；超出则分类为迟发。UPS / FedEx / GLS 共用同一阈值；假日表仍按承运商（美国联邦 vs 波兰法定）。不要与承运延误（收件之后的在途慢）混为一谈。

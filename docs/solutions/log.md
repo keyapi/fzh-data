@@ -7,6 +7,9 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-09-08
+- **新增**: `conventions/parcel-track-handling-days-sequential-workers.md` — UPS/FedEx/GLS 迟发处理时间统一 3 个营业日（假日历仍分美国联邦 vs 波兰）；`--workers N` 是每家 N 路、三家串行（峰值 N 不是 3N）；8 月 live 全量分类合计（无单号/买家）。
+
 ## 2026-09-07
 - **新增**: `best-practices/adobe-genuine-prompts-office-openclash.md` — 办公室 OpenClash 屏蔽 Adobe 授权校验域名（AGS 弹窗）的处理与教训：hosts 无法通配 `*.adobe.io` 随机子域（lreXXXX）、三层 NAT 下 OpenClash 无法按单设备隔离、最终用 `DOMAIN-SUFFIX,adobe.io/adobegenuine.com,REJECT` 全局屏蔽模拟断网。
 

@@ -61,20 +61,29 @@ class GlsQueryResult:
     parcel: Any = None
 
 
-def _query_gls(query: Callable, rows: list[TongtuRow]) -> list[GlsQueryResult]:
+def _query_gls(query: Callable, rows: list[TongtuRow], workers: int = 1) -> list[GlsQueryResult]:
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
     from gls_track.client import GlsTrackError
 
-    recs: list[GlsQueryResult] = []
-    for r in rows:
+    def _one(r: TongtuRow) -> GlsQueryResult:
         postal = (r.ident.get("邮编") or "").strip() or None
         try:
             parcel = query(r.number, postal)
-            recs.append(GlsQueryResult(number=r.number, ok=True, parcel=parcel))
+            return GlsQueryResult(number=r.number, ok=True, parcel=parcel)
         except GlsTrackError as exc:
-            recs.append(GlsQueryResult(number=r.number, ok=False, error=str(exc)))
+            return GlsQueryResult(number=r.number, ok=False, error=str(exc))
         except Exception as exc:
-            recs.append(GlsQueryResult(number=r.number, ok=False, error=f"{type(exc).__name__}: {exc}"))
-    return recs
+            return GlsQueryResult(number=r.number, ok=False, error=f"{type(exc).__name__}: {exc}")
+
+    if workers <= 1 or len(rows) <= 1:
+        return [_one(r) for r in rows]
+    recs: list[GlsQueryResult | None] = [None] * len(rows)
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futs = {pool.submit(_one, r): i for i, r in enumerate(rows)}
+        for fut in as_completed(futs):
+            recs[futs[fut]] = fut.result()
+    return [r for r in recs if r is not None]
 
 
 def run_report(
@@ -87,6 +96,7 @@ def run_report(
     fedex_query: Callable | None = None,
     gls_query: Callable | None = None,
     limit: int = 0,
+    workers: int = 1,
     now: pd.Timestamp | None = None,
 ) -> dict[str, Any]:
     report = ingest_tongtu(tt_xlsx)
@@ -101,23 +111,33 @@ def run_report(
     ups_recs: list[UpsRecord] = []
     fdx_recs: list[FdxRecord] = []
     gls_recs: list[GlsQueryResult] = []
+    w = 1 if mock else max(1, workers)
+    retries = 0 if mock else 1
+    print(
+        f"query UPS {len(ups_rows)} / FedEx {len(fdx_rows)} / GLS {len(gls_rows)} "
+        f"workers={w} retries={retries}",
+        flush=True,
+    )
     if ups_rows:
         called["ups"] = True
         items = [UpsItem(number=r.number, remark=r.ident.get("邮寄方式", "")) for r in ups_rows]
         if ups_query is None:
             raise ValueError("缺少 UPS query")
-        ups_recs = run_ups(ups_query, items, workers=1, retries=0)
+        ups_recs = run_ups(ups_query, items, workers=w, retries=retries)
+        print(f"UPS done {sum(1 for r in ups_recs if r.ok)}/{len(ups_recs)}", flush=True)
     if fdx_rows:
         called["fedex"] = True
         items = [FdxItem(number=r.number, remark=r.ident.get("邮寄方式", "")) for r in fdx_rows]
         if fedex_query is None:
             raise ValueError("缺少 FedEx query")
-        fdx_recs = run_fedex(fedex_query, items, workers=1, retries=0)
+        fdx_recs = run_fedex(fedex_query, items, workers=w, retries=retries)
+        print(f"FedEx done {sum(1 for r in fdx_recs if r.ok)}/{len(fdx_recs)}", flush=True)
     if gls_rows:
         called["gls"] = True
         if gls_query is None:
             raise ValueError("缺少 GLS query")
-        gls_recs = _query_gls(gls_query, gls_rows)
+        gls_recs = _query_gls(gls_query, gls_rows, workers=w)
+        print(f"GLS done {sum(1 for r in gls_recs if r.ok)}/{len(gls_recs)}", flush=True)
     ident = _ident_map(report)
     now = now or pd.Timestamp(_dt.datetime.now())
     classified = []

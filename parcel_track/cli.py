@@ -19,6 +19,7 @@ def _make_parser() -> argparse.ArgumentParser:
     r.add_argument("--prefix", help="summary 前缀，默认与 --out 同目录同名")
     r.add_argument("--mock", action="store_true", help="离线 mock，不打官方 API / GLS 公开 REST")
     r.add_argument("--limit", type=int, default=0, help="每个承运商最多查 N 个")
+    r.add_argument("--workers", type=int, default=4, help="UPS/FedEx/GLS 并发（--mock 时强制 1）")
     return p
 
 
@@ -33,6 +34,34 @@ def _mock_gls(number: str, postal: str | None = None):
     p.delivered_dt = base + _dt.timedelta(days=2)
     p.last_event_dt = p.delivered_dt
     return p
+
+
+def _load_env() -> None:
+    """加载工作树/仓库 .env（不覆盖已有变量）；缺 FedEx 时再试旧 worktree。"""
+    try:
+        from dotenv import load_dotenv
+    except ImportError:
+        return
+    start = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    seen: set[str] = set()
+
+    def _one(path: str) -> None:
+        if os.path.isfile(path) and path not in seen:
+            load_dotenv(path, override=False)
+            seen.add(path)
+
+    _one(os.path.join(start, ".env"))
+    cur = start
+    while True:
+        if os.path.isfile(os.path.join(cur, "AGENTS.md")):
+            _one(os.path.join(cur, ".env"))
+            break
+        parent = os.path.dirname(cur)
+        if parent == cur:
+            break
+        cur = parent
+    extra = os.path.join(os.path.dirname(start), "vigorous-shaw-b00a50", ".env")
+    _one(extra)
 
 
 def _ups_query(mock: bool):
@@ -68,6 +97,8 @@ def main(argv: list[str] | None = None) -> int:
     args = _make_parser().parse_args(argv)
     if args.command != "report":
         return 2
+    if not args.mock:
+        _load_env()
     prefix = args.prefix
     if not prefix:
         base = os.path.splitext(args.out)[0]
@@ -79,6 +110,7 @@ def main(argv: list[str] | None = None) -> int:
         stats = run_report(
             args.tt, args.out, prefix=prefix, mock=args.mock,
             ups_query=uq, fedex_query=fq, gls_query=gq, limit=args.limit or 0,
+            workers=1 if args.mock else args.workers,
         )
     finally:
         if uc is not None:

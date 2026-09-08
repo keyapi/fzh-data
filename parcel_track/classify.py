@@ -12,7 +12,7 @@ import re
 import numpy as np
 import pandas as pd
 
-HANDLING_DAYS = 1
+HANDLING_DAYS = 3
 TRANSIT_SLOW_DAYS = 6
 TRANSIT_SEVERE_DAYS = 12
 STUCK_DAYS = 7
@@ -28,11 +28,11 @@ PL_HOLIDAYS_2026 = [
     "2026-06-04", "2026-08-15", "2026-11-01", "2026-11-11",
     "2026-12-24", "2026-12-25", "2026-12-26",
 ]
-GLS_HANDLING_DAYS = 2
+GLS_HANDLING_DAYS = HANDLING_DAYS
 
 
 def policy_for(carrier: str) -> tuple[int, list[str]]:
-    """(handling_days, holidays)。UPS/FedEx 用美国联邦历 + 1；GLS 用波兰历 + 2。"""
+    """(handling_days, holidays)。处理天数 UPS/FedEx/GLS 均为 3；假日历仍按承运商。"""
     if (carrier or "").lower() == "gls":
         return GLS_HANDLING_DAYS, PL_HOLIDAYS_2026
     return HANDLING_DAYS, US_HOLIDAYS

@@ -7,7 +7,6 @@ import pandas as pd
 from parcel_track.classify import (
     GLS_HANDLING_DAYS,
     HANDLING_DAYS,
-    PL_HOLIDAYS_2026,
     STUCK_DAYS,
     TRANSIT_SLOW_DAYS,
     _cat,
@@ -21,9 +20,9 @@ def _ts(*ymd):
 
 def test_late_handover_only():
     now = _ts(2026, 9, 10, 12, 0)
-    label = _ts(2026, 9, 1, 10, 0)
-    pu = _ts(2026, 9, 4, 10, 0)
-    dev = _ts(2026, 9, 5, 10, 0)
+    label = _ts(2026, 9, 1, 10, 0)  # 周二
+    pu = _ts(2026, 9, 8, 10, 0)     # 下周二；含 Labor Day，营业日=4 > HANDLING 3
+    dev = _ts(2026, 9, 9, 10, 0)
     assert _cat(dev, pu, label, pd.NaT, now, last_event=dev) == "late_handover"
 
 
@@ -50,18 +49,17 @@ def test_friday_monday_not_late():
     label = _ts(2026, 9, 4, 10, 0)
     pu = _ts(2026, 9, 7, 9, 0)
     dev = _ts(2026, 9, 8, 15, 0)
-    assert HANDLING_DAYS == 1
+    assert HANDLING_DAYS == 3
     assert _cat(dev, pu, label, pd.NaT, now, last_event=dev) == "delivered_ok"
 
 
-def test_gls_handling_2_thursday_monday_not_late():
-    """Thu 录入 → Mon 交接：美国历 HANDLING=1 会迟发；GLS HANDLING=2 不算迟。"""
+def test_handling_unified_3_calendars_differ():
+    h_ups, hol_us = policy_for("ups")
+    h_gls, hol_pl = policy_for("gls")
+    assert h_ups == h_gls == GLS_HANDLING_DAYS == HANDLING_DAYS == 3
+    assert hol_us != hol_pl
     now = _ts(2026, 9, 10, 12, 0)
     label = _ts(2026, 8, 27, 10, 0)  # Thursday
-    pu = _ts(2026, 8, 31, 10, 0)     # Monday
+    pu = _ts(2026, 8, 31, 10, 0)     # Monday → 2 营业日，3 天阈值下不算迟
     dev = _ts(2026, 9, 1, 10, 0)
-    handling, holidays = policy_for("gls")
-    assert handling == GLS_HANDLING_DAYS == 2
-    assert holidays == PL_HOLIDAYS_2026
-    assert _cat(dev, pu, label, pd.NaT, now, last_event=dev, handling_days=1, holidays=holidays) == "late_handover"
-    assert _cat(dev, pu, label, pd.NaT, now, last_event=dev, handling_days=handling, holidays=holidays) == "delivered_ok"
+    assert _cat(dev, pu, label, pd.NaT, now, last_event=dev, handling_days=h_gls, holidays=hol_pl) == "delivered_ok"

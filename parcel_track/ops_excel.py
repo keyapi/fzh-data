@@ -145,7 +145,7 @@ def write_ops_workbook(df, out_xlsx: str, *, title: str, slow_label: str, notes_
         (notes_title, ""),
         ("1. 起点与确认", "起点=建标时间；确认发货=站点收件/首次取件扫描（UPS 用实际发货时间）。"),
         ("2. 迟发", "营业日延迟=建标→收件营业日−处理时间。周末不计；UPS/FedEx 另排除美国联邦假日，GLS 排除波兰法定假日。"),
-        ("3. 处理时间", "UPS/FedEx 默认 1 个营业日（美国联邦假日）；GLS 默认 2 个营业日（波兰法定假日，含 Wigilia 12/24）。"),
+        ("3. 处理时间", "UPS / FedEx / GLS 统一 3 个营业日。假日历不同：UPS/FedEx 用美国联邦假日，GLS 用波兰法定假日（含 Wigilia 12/24）。"),
         ("4. 承运延误", f"收件→交付营业日 > {TRANSIT_SLOW_DAYS}。一单既迟发又延误时主分类为承运延误。"),
         ("5. 卡件", f"未交付且最近扫描超过 {STUCK_DAYS} 天。漏发/未交接：有发货日期超过 {MISSING_AFTER_DAYS} 天无收件。"),
         ("6. 停放", "GOFO / TikTok 派送 / USPS / 无法识别的行不查询，计入停放，不丢弃。GLS 走公开 REST（需目的邮编）。"),
