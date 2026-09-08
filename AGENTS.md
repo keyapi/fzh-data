@@ -120,7 +120,8 @@ uv sync
 | `sellfox-shipping` | `sellfox_shipping/` | 赛狐尾程打单（订单获取→承运人标签→追踪回写）三界面架构 |
 | `vite-api` | `vite-api/` | VITE 多承运商打单 API 文档（测试环境默认） |
 | `fedex-track` | `fedex_track/` | FedEx 官方 Track API 批量查询 + 运营异常报表(仿 ups_track；多Sheet/Amazon营业日口径；复用跟踪号多票) |
-| `parcel-track` | `parcel_track/` | 通途订单分流 UPS/FedEx 官方 Track + 共享迟发/承运延误/卡件运营表 |
+| `gls-track` | `gls_track/` | GLS 波兰自发货批量跟踪(公开无鉴权 REST **免开发者账号**) + FedEx 风格异常表；loader 拆一格多号；monthly 一步整月。统一多承运商由 `parcel_track`(PR#215) 接入 |
+| `parcel-track` | `parcel_track/` | 通途混合订单分流 UPS/FedEx/GLS + 共享迟发/承运延误/卡件运营表（GLS 波兰历、HANDLING=2） |
 | `yiglobal-api` | `yiglobal-api/` | 蜴国际打单 API 文档（原 `蜴国际-API/`；env：`YIGLOBAL_*`） |
 | `en-image-upload` | `EN_API/` | 图片上传（CLI + Web UI + 物料组主图） |
 | `nas-itemgroup-folders` | `nas_itemgroup_folders/` | NAS-ERPNext 物料组文件夹对账 + 叶子组 (LGKS) 管理 |
