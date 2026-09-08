@@ -40,3 +40,19 @@ tags: [web-automation, migration, log]
 - 凭证扫描：改动文件新增行 4 regex 全部 zero；命中仅为 diff 中其它既有文件上下文/占位符
 - 索引：`update_index.py --check` → `OK: index.md is up to date`（24 modules / 328 docs）
 - dispatcher 路由：读任务 `--check` → READY；写任务无 `--confirm-scope` → NEED_USER_CONFIRMATION
+
+## 2026-09-08 — 新增 tongtu.orderdetail.export（订单详情统计月度导出）
+
+**背景**：财务/运营按月导出通途「订单详情统计」全量自发货订单（全渠道全账号、按发货时间整月）。原纯人工、无脚本。
+
+**交付**：
+- `legacy-compatible/tongtu_orderdetail_report.py` — 仿 `tongtu_sales_report.py`：登录（含 ddddocr `--auto-login`）→ 设发货时间范围 → 「统计导出」提交 → 往返 数据查询/统计导出 tab 轮询新「点击下载统计结果」→ 下载 zip
+- `capabilities.yaml` + `docs/reference/capability-matrix.md` 注册 `tongtu.orderdetail.export`（BROWSER_ONLY/read）
+- `.agents/skills/{web-automation,tongtu-automation}/SKILL.md` 触发词/任务清单
+- 新增 `web_automation/AGENT_HANDOFF.md`（模块级 Agent 参考）与 `docs/reference/orderdetail-export.md`（专题：背景/MCP 探路过程/选择器/踩坑/核验）
+- `tests/web_automation/test_migrated_entrypoints.py` 登记新脚本入口
+
+**过程要点（MCP 探路确认）**：日期框为 My97，`.fill()` 后勿按 Enter（会整页刷新重置）；「查询」`a[onclick='queryInfo()']` 仅在数据查询 tab 可见；统计结果不自动刷新需往返 tab 轮询；下载基线在提交后采集避免误认旧任务；统计任务提交互斥。
+
+**核验（2026-07 实测）**：`downloads/订单详情统计_202607_*.zip` ≈4.85 MB；xlsx 表头自第 30 行 91 列；9604 行；发货日期 07-01~07-31；数据来源=自发货订单。`uv run pytest tests/web_automation -q` → 48 passed。
+
