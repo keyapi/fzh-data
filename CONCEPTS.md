@@ -69,6 +69,18 @@ DeepSeek API 自 2026-08 起按北京时间分时计费：周一至周五工作�
 ### Local tracking import
 本模块把物流商返回的运单号写入**本地** SQLite（`lizard-import`）。这只更新本地库，**不会**自动改变赛狐包裹详情里的 `trackNo`。
 
+### 迟发（尾程跟踪）
+已建标但仓库/货代交接晚：Amazon 营业日下，建标→首次取件扫描的营业日数减去约定处理天数后仍大于 0。周末不计；公共假日按承运商（UPS/FedEx 美国联邦，GLS 波兰法定，见下文「处理时间」）。已交付但只是交接晚，仍归迟发。
+
+### 承运延误（尾程跟踪）
+承运商在途慢：首次取件扫描→交付的营业日超过该承运商阈值。一单既迟发又承运延误时，**主分类归承运延误**（延误优先）。
+
+### 卡件（尾程跟踪）
+尚未交付，且距离最近一次扫描已超过卡住阈值（日历日），视为在途丢失扫描/停滞。
+
+### 漏发/未交接（尾程跟踪）
+通途已有发货标记或已建标，但超过阈值仍无站点收件扫描。与迟发的差别是「还没交到承运商」vs「交了但交晚了」。
+
 ### submitToPlatform
 赛狐 OpenAPI「提交平台」写接口：请求可带 `trackNo` 等字段。公开文档下目前未见单独的「只改物流、不提交平台」接口。业务上销售平台运单仍可由通途写回；赛狐自动推送可关闭。能否用该接口在关自动推送时「只填赛狐可见号」须 live 验证，且只读代理权限不等于可写。
 
@@ -320,4 +332,7 @@ FedEx 首次收到包裹的扫描；`fedex_track` 用它在销售核查里对比
 GLS 波兰自发货单号批量跟踪走 gls-group.com **公开无鉴权 REST**（`rstt029` 摘要 / `rstt028` 明细需**目的邮编**），不用开发者账号/波兰 GLS 登录；官方 ShipIT/MyGLS 则要 GLS 波兰客户 + WebAPI 开通（要"客户账号"不是"纯开发者账号"）。模块 `gls_track/`，月报 `python -m gls_track.cli monthly`。
 
 ### 交接GLS时间 = GLS 收件首扫；数据录入 = GLS 建标
-`gls_track` 把 GLS history "was handed over to GLS"（须排除文案里的 "not yet handed over"）≈ FedEx 的"站点收件"；"data was entered into the GLS IT system" ≈ 建标。GLS 口径独立：`HANDLING_DAYS=2`、营业日用**波兰**假日（起运/交接在 GLS 波兰，勿沿用 FedEx 美国联邦假日）。
+`gls_track` 把 GLS history "was handed over to GLS"（须排除文案里的 "not yet handed over"）≈ FedEx 的"站点收件"；"data was entered into the GLS IT system" ≈ 建标。迟发处理时间与 UPS/FedEx **共用同一营业日阈值**；GLS 营业日用**波兰**假日（起运/交接在 GLS 波兰，勿沿用 FedEx 美国联邦假日）。
+
+### 处理时间（尾程迟发窗口）
+建标（面单创建 / GLS 数据录入）到站点收件（FedEx/UPS 首扫 / 交接 GLS）之间、允许占用的**营业日**窗口；超出则分类为迟发。UPS / FedEx / GLS 共用同一阈值；假日表仍按承运商（美国联邦 vs 波兰法定）。不要与承运延误（收件之后的在途慢）混为一谈。
