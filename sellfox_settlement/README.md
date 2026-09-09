@@ -37,6 +37,15 @@ uv run python sellfox_settlement/reconcile_amazon.py reconcile \
     --month 202606 --out out/amazon_compare_202606.xlsx
 ```
 
+## 账期「提交异常/迟交」审计（可跨月、可复跑）
+```bash
+# 单文件多 sheet、跨多月；按 账期日期自然月 归属账期月、按 发起时间 4号~下月3号 归提交桶，自动去重；--platform 分流
+uv run python sellfox_settlement/audit_late_submission.py \
+    "D:/Work/王忠于/成本核算/Amazon&新平台成本 20260101-20260908 销售收款确认单-20260909140003.xlsx" \
+    --out out/late_submission_audit_all --platform 亚马逊
+```
+> 规则详见 `docs/solutions/workflow-issues/amazon-account-period-late-submission-audit.md`；最新状态多账期结果见文档「最新状态·多账期审计」。
+
 ## 科目映射（SUBJ，需实跑校准）
 | 钉钉科目 | 赛狐匹配线索（初步） |
 |---|---|
