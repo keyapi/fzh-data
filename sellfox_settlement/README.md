@@ -1,8 +1,15 @@
 # sellfox_settlement — 赛狐自动拉取 Amazon 结算（试点）
 
-用赛狐 OpenAPI「财务/结算中心V2」取回 Amazon 结算，与运营钉钉提交的收款确认单做比对，评估能否替代人工提交。
+用赛狐 OpenAPI「财务/结算中心V2」+ 紫鸟/赛狐插件列式报表取回 Amazon 结算，与运营钉钉提交的收款确认单比对，评估能否替代人工提交。
 
 > 只做 **Amazon**；账期月归属 = 结算周期结束日(`groupEndStr`)所在自然月。目前为试点原型。
+
+## 文档入口
+- **交接** → [AGENT_HANDOFF.md](AGENT_HANDOFF.md)（背景/数据源/关键结论/文件位置/运行/交接清单）
+- **深度调研** → [docs/research/saihu-amazon-settlement-autofetch-2026-09-09.md](docs/research/saihu-amazon-settlement-autofetch-2026-09-09.md)
+- **端点/字段** → [docs/reference/settlement-v2-endpoints.md](docs/reference/settlement-v2-endpoints.md)；**科目映射** → [docs/reference/column-mapping.md](docs/reference/column-mapping.md)
+- **技能**（Repo `.agents/skills/`，跨会话发现）：`sellfox-amazon-settlement`
+- 全模块文档索引 → [docs/index.md](docs/index.md)
 
 ## 前置
 - 赛狐 API Key：在 `D:\Work\赛狐\Cursor\.env` 写 `SELLFOX_API_KEY=sk-xxx`（代理）或 `SELLFOX_APP_ID/APP_SECRET`（VPS 直连）。

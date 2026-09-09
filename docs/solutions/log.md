@@ -8,7 +8,7 @@ tags: [solutions, log]
 # 变更日志
 
 ## 2026-09-09
-- **新增**: `tooling-decisions/amazon-settlement-autofetch-sellfox.md` — 赛狐自动拉取 Amazon 账期：结算中心V2(汇总+明细, `currency` 取原币, 默认 CNY) vs 紫鸟/赛狐插件列式报表(`报告中心 getPlugPageList type=3/4`, 已实测拿到 32 列 Custom Transaction CSV)；两报表口径(payout vs activity/posted)取舍、科目映射、赛狐店名↔渠道账号交叉表(写入共享表「和运营部共享/渠道账号」`赛狐店铺` 列, VERCART=AMZVer, 北京熙锦=AMZBJXJ, Daneey-CA=AMZDANEEYCA, 如泱-CA=AMZBJRYECLTDCA, 北京固祥未启用排除)。产出 `sellfox_settlement/reconcile_amazon.py`(+`fetch-custom`) 与 `docs/research/saihu-amazon-settlement-autofetch-2026-09-09.md`(§10-13)。背景: 财务全靠运营钉钉手动提交 Amazon 账期金额, 依赖人工、金额易错、txt 只能解析 tax。
+- **新增**: `tooling-decisions/amazon-settlement-autofetch-sellfox.md` — 赛狐自动拉取 Amazon 账期：结算中心V2(汇总+明细, `currency` 取原币, 默认 CNY) vs 紫鸟/赛狐插件列式报表(`报告中心 getPlugPageList type=3/4`, 已实测拿到 32 列 Custom Transaction CSV)；两报表口径(payout vs activity/posted)取舍、科目映射、赛狐店名↔渠道账号交叉表(写入共享表「和运营部共享/渠道账号」`赛狐店铺` 列, VERCART=AMZVer, 北京熙锦=AMZBJXJ, Daneey-CA=AMZDANEEYCA, 如泱-CA=AMZBJRYECLTDCA, 北京固祥未启用排除)。产出 `sellfox_settlement/reconcile_amazon.py`(+`fetch-custom`) 与 `sellfox_settlement/docs/research/saihu-amazon-settlement-autofetch-2026-09-09.md`(§10-13) + `sellfox_settlement/AGENT_HANDOFF.md` + `.agents/skills/sellfox-amazon-settlement/`。背景: 财务全靠运营钉钉手动提交 Amazon 账期金额, 依赖人工、金额易错、txt 只能解析 tax。
 
 ## 2026-09-08
 - **更新**: `integration-issues/dingtalk-offboarding-hardening.md` — 补「生产部署与实测」：上海生产已部署双通道（每日 `offboarding-check.py` cron `0 3 * * *` + 实时 bridge 重建），实测 3 名离职者被每日通道自动封号（`users.status=2`）；bridge 容器需挂 proxy DB volume + `PROXY_DB_PATH` 否则 `STATUS_LATER` 无限重投；proxy key 关 key 链路经容器内函数级测试打通。

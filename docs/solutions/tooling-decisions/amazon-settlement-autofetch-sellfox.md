@@ -100,7 +100,7 @@ uv run python sellfox_settlement/reconcile_amazon.py reconcile --settlement data
 
 ## Handoff / 下一步（留给后续继续做「V2 报表解析+比对」）
 
-背景/调研/结果全录见 `docs/research/saihu-amazon-settlement-autofetch-2026-09-09.md`（§10 试点实测、§11 科目/币种/自定义表、§12 赛狐可否拿 + storeName 落地、§13 实测+两表对比+gsheet）。可直接接手点：
+背景/调研/结果全录见 `sellfox_settlement/docs/research/saihu-amazon-settlement-autofetch-2026-09-09.md`（§10 试点实测、§11 科目/币种/自定义表、§12 赛狐可否拿 + storeName 落地、§13 实测+两表对比+gsheet）。可直接接手点：
 
 1. **V2 明细 → 钉钉列（含人民币列）**：V2 明细已是 CNY 或 `currency` 原币；把 `amountType/amountDescription`→钉钉科目映射做成**表驱动**（放 gsheet `附加费&Tax` 或本地 constants，勿硬编码），优先用列式 CustomTransaction 的列直给做核对。
 2. **逐账号比对**：核心依赖已具备（`sellfox_settlement/out/storeName_to_account_candidates.csv` + gsheet `赛狐店铺` 列），可把两表 join 到 `渠道账号` 做逐账号差异（赛狐 vs 运营提交）。
@@ -111,6 +111,6 @@ uv run python sellfox_settlement/reconcile_amazon.py reconcile --settlement data
 
 ## Related
 
-- 调研全录：`docs/research/saihu-amazon-settlement-autofetch-2026-09-09.md`
+- 调研全录：`sellfox_settlement/docs/research/saihu-amazon-settlement-autofetch-2026-09-09.md`；子项目入口/交接：`sellfox_settlement/AGENT_HANDOFF.md`
 - 脚本/交叉表：`sellfox_settlement/`（`reconcile_amazon.py`、`out/*.csv|xlsx`、`data/saihu_amazon_202606/`）
 - 官方来源：SP-API [Report Type Values — Settlement](https://developer-docs.amazon.com/sp-api/docs/report-type-values-settlement)、[Report Type Values](https://developer-docs.amazon.com/sp-api/docs/report-type-values)、[Reports API](https://developer-docs.amazon.com/sp-api/docs/reports-api-v2021-06-30)、[弃用公告](https://developer-docs.amazon.com/sp-api/lang-zh_CN/changelog/deprecation-reminders-december-2025)、[Seller Central Date Range 报表](https://sellercentral.amazon.ie/help/hub/reference/external/G200989190)、[Seller 论坛-无 SP-API 替代](https://sellercentral.amazon.com/seller-forums/discussions/t/0e7773720b46d9bf166068ee6d85e1e8)、[积加插件(紫鸟/Chrome)](https://help.jijiaerp.com/docs/t90yg8Sf)、[Amazon Ads API](https://advertising.amazon.com/API/docs)
