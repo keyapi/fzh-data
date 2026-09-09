@@ -69,3 +69,14 @@ uv run python sellfox_settlement/reconcile_amazon.py reconcile --settlement data
 
 ## 8. 需 YB 确认
 - 新增 `AMZDANEEYCA`/`AMZBJRYECLTDCA` 两行的 别名/运营分组/运营人员（已按同族填 事业三部/荆春雨、事业二部/刘小菁）；是否补「通途有订单但无赛狐店名」的账号（通途未在手，未做）。
+
+## 9. 数据/报表刷新建议（回复「下载钉钉新后台报表」）
+- **不需要**下载新的跨月钉钉报表来完成本子项目：现有 `D:\Work\王忠于\成本核算` 里的 `_合并汇率&账号_` 定稿文件已覆盖 2026-03~08 各月做对照基线；赛狐取回用 `fetch`/`fetch-custom` 直接拉。
+- **但建议**（若要看最新提交/避免迟改）：当要**逐账号对账**或**月结**时，重新从钉钉后台导出**当月**「销售收款确认单」（`发起时间 4号~下月3号` 窗口）作为最新基线；并把「运营撤回/拒绝后重新提交」的单用 `approval_filter=(审批状态∈[完成,审批中]) & 审批结果≠拒绝` 过滤。
+- 首次跨多月的「迟交审计」已在 `docs/solutions/workflow-issues/amazon-account-period-late-submission-audit.md` 记录（含 2026-03~08 各桶 正常/迟交/遗档/早交 + 关键发现）。
+
+## 10. 本次用到的技能/工具（供后续复用）
+- **技能**：`okf`（OKF v0.1 文档规范：frontmatter `type`、每目录 index.md、每 bundle log.md）、`ce-compound`（docs/solutions 知识沉淀）、`sellfox-api`（赛狐 OpenAPI 访问/凭证/限流）。**不适用**：category/multi-attr/item-cost 等赛狐 Excel 导入类。
+- **库/凭证**：`SELLFOX_API/client.py`(`SellfoxClient`, 代理/直连/限流/重试)、gspread + `secrets/gsheets-service-account.json`(谷歌表)、`tongtool_order_cost.tongtool_order_cost.gsheets`。运行建议用**父仓库 `.venv`**。
+- **相关既有模块/技能**：`platform-account-reconciliation`(OSTKUS/账期对账)、`pb-reconciliation`(PB 对账)、`channel_account_sync`(渠道账号命名/同步)、`en-channel-account-gsheet-sync`(渠道账号 gsheet→EN)。
+

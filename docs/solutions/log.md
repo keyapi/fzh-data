@@ -8,6 +8,7 @@ tags: [solutions, log]
 # 变更日志
 
 ## 2026-09-09
+- **新增**: `workflow-issues/amazon-account-period-late-submission-audit.md` — Amazon&新平台账期「提交异常/迟交」审计方法与规则：账期归属=账期日期自然月、提交窗口 4号~下月3号(先 8号~下月7号)、发起时间=提交、`账期月Z` vs `桶B` 判 正常/迟交/遗档/早交；跨文件去重 + `选择平台==亚马逊` 分流；2026-03~08 各桶 正常/迟交/遗档/早交 实测表(8月桶 40 行账期7月、7月桶 40 行完成>08-03+13 未办结、3月桶 6 行 2025 遗档)；产物在 `D:\Work\王忠于\成本核算\`。
 - **新增**: `tooling-decisions/amazon-settlement-autofetch-sellfox.md` — 赛狐自动拉取 Amazon 账期：结算中心V2(汇总+明细, `currency` 取原币, 默认 CNY) vs 紫鸟/赛狐插件列式报表(`报告中心 getPlugPageList type=3/4`, 已实测拿到 32 列 Custom Transaction CSV)；两报表口径(payout vs activity/posted)取舍、科目映射、赛狐店名↔渠道账号交叉表(写入共享表「和运营部共享/渠道账号」`赛狐店铺` 列, VERCART=AMZVer, 北京熙锦=AMZBJXJ, Daneey-CA=AMZDANEEYCA, 如泱-CA=AMZBJRYECLTDCA, 北京固祥未启用排除)。产出 `sellfox_settlement/reconcile_amazon.py`(+`fetch-custom`) 与 `sellfox_settlement/docs/research/saihu-amazon-settlement-autofetch-2026-09-09.md`(§10-13) + `sellfox_settlement/AGENT_HANDOFF.md` + `.agents/skills/sellfox-amazon-settlement/`。背景: 财务全靠运营钉钉手动提交 Amazon 账期金额, 依赖人工、金额易错、txt 只能解析 tax。
 
 ## 2026-09-08
