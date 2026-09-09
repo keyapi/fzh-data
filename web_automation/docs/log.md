@@ -60,3 +60,15 @@ tags: [web-automation, tongtu, sellfox, playwright, log]
 
 **交付**：查询失败中止（`QUERY_FAILED`）+ 先等历史表稳定再 snapshot 再提交；`--range-start/--range-end` 必须成对；提交打不开弹窗区分 `BUSY`/`SUBMIT_FAILED`；OKF 用法只保留 dispatcher（含 `--check`）。
 
+## 2026-09-09 — 下载识别改为「最上行 = 本次提交」锚定（并入 PR #220）
+
+**为什么**：href 基线差集法在“历史表晚渲染（误认旧任务）”与“小范围快任务（基线含新链接被吞）”两端都有竞态；改成按行身份识别本次任务，两端一并消除。
+
+**改动**（`legacy-compatible/tongtu_orderdetail_report.py`）：
+- 去掉 `snapshot_download_hrefs`/`get_existing_download_hrefs`；新增 `capture_prev_top_ts` + `wait_for_my_download`
+- 历史表为 fixedHeadFoot 滚动表格：数据表是 header（含「统计条件」th）后 `following::table[1]`（非 sibling），首行空 spacer 须跳过；行文本最后一个 `YYYY-MM-DD HH:MM:SS` = 提交时间
+- 提交前记最上行提交时间 → 提交后往返 tab → 最上行提交时间一变锁本次行 → 等该行下载链接
+
+**核验**：单日 2026-07-15 实测 306 行、发货日期全 07-15，RUN_EXIT=0；`uv run pytest tests/web_automation -q` → 48 passed。
+
+
