@@ -21,6 +21,7 @@ metadata:
 - `docs/solutions/tooling-decisions/amazon-settlement-autofetch-sellfox.md`（知识沉淀+交接：口径/科目/风险/后续）
 - `sellfox_settlement/docs/research/saihu-amazon-settlement-autofetch-2026-09-09.md`（§10 试点实测、§11 科目/币种/自定义表、§12 赛狐可否拿+storeName 落地、§13 实测+两表对比+gsheet）
 - `sellfox_settlement/AGENT_HANDOFF.md`（子项目入口/交接）；脚本：`sellfox_settlement/reconcile_amazon.py`；交叉表：`sellfox_settlement/out/storeName_to_account_candidates.csv`
+- 可复跑测试手册：`sellfox_settlement/docs/reference/how-we-tested-2026-09.md`；踩坑：`sellfox_settlement/docs/lessons/lessons-learned.md`
 - 脚本：`sellfox_settlement/reconcile_amazon.py`；交叉表：`sellfox_settlement/out/storeName_to_account_candidates.csv`
 
 ## 关键事实（速查，别再踩）

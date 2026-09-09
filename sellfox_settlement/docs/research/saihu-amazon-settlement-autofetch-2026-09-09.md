@@ -1,3 +1,13 @@
+---
+okf: v0.1
+type: Research
+title: 赛狐自动拉取 Amazon 账期 — 现状与试点可行性调研
+description: 背景/可行性/两报表口径/科目映射/试点实测/SP-API与紫鸟路径/风险与短中长期；供后续 V2 解析与三方比对接手
+tags: [sellfox, amazon, settlement, research, custom-transaction, dingtalk]
+timestamp: 2026-09-09
+resource: sellfox_settlement/reconcile_amazon.py
+---
+
 # 赛狐自动拉取 Amazon 账期（收费/税/费用）—— 现状 + 试点可行性调研
 
 日期：2026-09-09

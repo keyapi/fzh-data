@@ -8,6 +8,7 @@ tags: [sellfox, amazon, settlement, okf, log]
 # 变更日志
 
 ## 2026-09-09
+- **补齐发现链与 OKF**：调研文加 YAML `type: Research`；新建 `docs/lessons/`（踩坑 Lesson）；`docs/reference/how-we-tested-2026-09.md`（可复跑测试方法+断言）；AGENT_HANDOFF §9 更正钉钉跨月导出已落地事实；AGENTS.md 模块索引 + skill 触发词（迟交/错位/钉钉账期等）；CONCEPTS 钉清两套「账期月」归属；根 `index.md` 经 `scripts/update_index.py` 同步。
 - **初始化 OKF bundle**: 建 `docs/`（index.md/log.md）`docs/research/` `docs/reference/`；`AGENT_HANDOFF.md`；`docs/research/saihu-amazon-settlement-autofetch-2026-09-09.md`（从 `docs/research/` 移入）。
 - **新增** `docs/reference/settlement-v2-endpoints.md`、`docs/reference/column-mapping.md`、`docs/reference/gsheet-access-and-channel-account.md`——端点/字段、科目映射、谷歌表访问+渠道账号别名规则。
 - **文档沉淀**：`docs/solutions/tooling-decisions/amazon-settlement-autofetch-sellfox.md`（ce-compound 知识沉淀+交接）；`docs/solutions/architecture-patterns/account-period-revenue-reconciliation-ecosystem.md`（账期/收款核算生态地图）；`docs/solutions/workflow-issues/amazon-account-period-late-submission-audit.md`（账期迟交审计+规则+最新状态多账期结果）；`CONCEPTS.md` 增「账期/回款核算」术语簇；技能 `sellfox-amazon-settlement` 入 `.agents/skills/`。
