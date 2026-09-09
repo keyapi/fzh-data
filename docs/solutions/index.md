@@ -10,6 +10,7 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-09-09 | 账期/收款核算 生态地图（各平台账期 → 汇率/税/附加费 → 回款归属/回款率 → 归集给财务） | [architecture-patterns/account-period-revenue-reconciliation-ecosystem.md](architecture-patterns/account-period-revenue-reconciliation-ecosystem.md) |
 | 2026-09-09 | Amazon&新平台账期「提交异常/迟交」审计方法与规则 | [workflow-issues/amazon-account-period-late-submission-audit.md](workflow-issues/amazon-account-period-late-submission-audit.md) |
 | 2026-09-09 | 赛狐自动拉取 Amazon 账期（结算中心V2 + 紫鸟插件列式报表）与两报表口径取舍 | [tooling-decisions/amazon-settlement-autofetch-sellfox.md](tooling-decisions/amazon-settlement-autofetch-sellfox.md) |
 | 2026-09-08 | new-api/sellfox-proxy 离职自动封号不可靠——双通道检测加固（60121 + identity_map + audit） | [integration-issues/dingtalk-offboarding-hardening.md](integration-issues/dingtalk-offboarding-hardening.md) |

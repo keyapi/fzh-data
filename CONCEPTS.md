@@ -283,6 +283,23 @@ A webhook-based DingTalk group messaging channel used by AI agents (WorkBuddy, C
 - "通途主档 SKU 改名后的旧名，与规则笔误（例如 Foam FBA BLACK-97），不是同一类问题；像旧名的字符串要先查主档。"
 - "赛狐「采购成本」曾被用来同时指商品主数据绍兴发货、期初仓+SKU 尾程前、备货单指定采购单价+头程；三者不可互换，也都不等于 EN Tongtool Cost Review 的皮壳切片。"
 
+## 账期/回款核算（Amazon/多平台）
+
+### 账期月
+一笔平台回款归属的会计月份。Amazon 按「结算周期结束日」所在自然月归属（日历月 1~月末）；多平台按账期/回款日自然月。区别于「提交月」或「打款日」，是费用归集的最小记账单位。
+
+### 账期窗口
+运营须在钉钉提交某月账期的起止：**该账期月 4 号 ~ 下月 3 号**（原为 8 号~下月 7 号；多留 3 天处理月底账期）。超出即「迟交/错位混入下月桶」。
+
+### 回款率
+回款效率考核 = 该渠道账号（按回款归属）**应收金额 / 销售额**。只统计未撤销且未拒绝的收款单。
+
+### 回款归属
+渠道账号对应的收款主体（如 欧洲公司/绍兴工厂/各分公司），决定该笔回款计入哪个核算主体；同一账号多币种要分别折算。
+
+### 结算报告 vs 日期范围报告
+Amazon 财务数据两种口径：**结算报告（settlement）= 打款(payout)口径**，逐交易行 amount-type/amount-description；**日期范围报告（date-range/transaction）= 活动(activity/posted)口径**，含 deferred、列式（product sales/tax/selling fees/fba fees/other/total）。二者**总额不同、不能对等**；做费用/科目用列式、做回款率/打款用结算。注意：税净≈0（代收代缴）、off-account 广告不进结算→TACoS 低估。
+
 ## 平台账期对账
 
 - **账期文件**: Overstock `OSTKUS-*.xlsx` 含 `Payment Summary` + `Detail` + `Mozart Reports`，是结算文件，不是平台订单导出。
