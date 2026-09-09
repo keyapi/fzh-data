@@ -21,20 +21,20 @@ def _ts(*ymd):
 
 
 def test_friday_label_monday_pickup_not_late():
-    # 2026-09-04 周五建标，2026-09-07 周一收件：营业日=1，减 HANDLING 1 → 不判迟
+    # 2026-09-04 周五建标，2026-09-07 周一收件：营业日=1，减 HANDLING 3 → 不判迟
     now = _ts(2026, 9, 10, 12, 0)
     label = _ts(2026, 9, 4, 10, 0)
     pu = _ts(2026, 9, 7, 9, 0)
     dev = _ts(2026, 9, 8, 15, 0)
-    assert HANDLING_DAYS == 1
+    assert HANDLING_DAYS == 3
     assert _cat(dev, pu, label, pd.NaT, now, last_event=dev) == "delivered_ok"
 
 
 def test_late_handover_uses_label_to_pickup_bizdays():
     now = _ts(2026, 9, 10, 12, 0)
     label = _ts(2026, 9, 1, 10, 0)  # 周二
-    pu = _ts(2026, 9, 4, 10, 0)     # 周五 → 3 个营业日
-    dev = _ts(2026, 9, 5, 10, 0)
+    pu = _ts(2026, 9, 8, 10, 0)     # 下周二；含 Labor Day，营业日=4 > HANDLING 3
+    dev = _ts(2026, 9, 9, 10, 0)
     assert _cat(dev, pu, label, pd.NaT, now, last_event=dev) == "late_handover"
 
 

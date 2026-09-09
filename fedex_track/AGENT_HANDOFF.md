@@ -45,7 +45,7 @@ uv run python -m fedex_track.ops_report --summary <summary.csv> --tt <通途.xls
 - **"已取消"**：**仅当**最终状态(`latestStatusDetail.code in CA/CAF`)**且未交付**才算取消。FedEx 事件流可能**残留一条 `CA cancel` 节点但包裹实际已交付**（曾误标 4 单，已修）。`fedex_slow`、`reused_no_label` 等分类勿与取消混淆。
 - **反爬假报错**：FedEx(Akamai) 对 headless/自动化返回**假的** `system-error` + "can't find that tracking number"。下"查无/不行"结论前**至少第二来源**（真实 Chrome / 官方 API / 用户实测 / 文档）；对反爬站，**同会话先暖机（访问几页、接受 cookie）再重试**往往就过。**不要**把自动化一次的 `can't find` 当铁证。
 - **配额按请求次数**：Track 能力 **10 万次/日**、限速 **1400 次/10 秒**，且**每请求 ≤30 号**。几万号也就几百次请求，远低于配额，**不会触发超额收费**（超额的"overage 费用"条款在 10 万次/日之上，量级碰不到；收费的 AIV 是另一付费产品）。
-- **迟发口径（ops_report）**：起点=**建标时间**，确认发货=**站点收件时间**；延迟 = 建标→收件的**营业日**数 − 处理时间(默认 1 天)。营业日**排除周末 + 美国联邦节假日**，贴近 Amazon LSR（ship-by = 下单日 + 处理时间，只算工作日）。
+- **迟发口径（ops_report）**：起点=**建标时间**，确认发货=**站点收件时间**；延迟 = 建标→收件的**营业日**数 − 处理时间(默认 3 天，与 UPS/GLS 统一)。营业日**排除周末 + 美国联邦节假日**，贴近 Amazon LSR（ship-by = 下单日 + 处理时间，只算工作日）。
 - **`发货日期`列含义要核实**：通途表"发货日期"(第 0 列) 是"标记发货日"，未必是真实出库/交接时间；报表已改用**建标时间**为基准，`发货日期`仅作参考。
 - **生产全量前确认范围**：默认 `--limit` 冒烟；全量查询须用户明确同意。`--limit` 作用在 `--resume` 跳过已成功号之后的 pending 上。
 - **`--env sandbox`**：不要在根 `.env` 写死生产 `FEDEX_BASE_URL`（会让人以为 `--env sandbox` 已切沙箱；现已改为 sandbox 走 `FEDEX_SANDBOX_BASE_URL` / 默认沙箱 host）。覆盖 host 用 `--base-url`。

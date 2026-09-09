@@ -11,6 +11,8 @@ tags: [solutions, index]
 | 日期 | 标题 | 文件 |
 |------|------|------|
 | 2026-09-08 | CLIProxyAPI `auth_unavailable`：升级、浏览器 OAuth 与真实模型验收 | [integration-issues/cliproxyapi-auth-unavailable-oauth-recovery.md](integration-issues/cliproxyapi-auth-unavailable-oauth-recovery.md) |
+| 2026-09-08 | parcel_track 处理天数统一 3 个营业日与 per-carrier 顺序并发 | [conventions/parcel-track-handling-days-sequential-workers.md](conventions/parcel-track-handling-days-sequential-workers.md) |
+| 2026-09-08 | new-api/sellfox-proxy 离职自动封号不可靠——双通道检测加固（60121 + identity_map + audit） | [integration-issues/dingtalk-offboarding-hardening.md](integration-issues/dingtalk-offboarding-hardening.md) |
 | 2026-09-07 | 办公室 OpenClash 屏蔽 Adobe 授权校验域名 | [best-practices/adobe-genuine-prompts-office-openclash.md](best-practices/adobe-genuine-prompts-office-openclash.md) |
 | 2026-09-04 | FedEx 官方批量 Track 查询 + 账号/组织恢复路径 | [workflow-issues/fedex-track-batch-query.md](workflow-issues/fedex-track-batch-query.md) |
 | 2026-09-03 | WorkBuddy 接公司 new-api 自定义模型 — useCustomProtocol=false + url 带 /v1 | [developer-experience/workbuddy-custom-model-newapi-config.md](developer-experience/workbuddy-custom-model-newapi-config.md) |

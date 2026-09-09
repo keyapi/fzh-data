@@ -10,6 +10,9 @@ tags: [solutions, log]
 ## 2026-09-08
 - **新增**: `integration-issues/cliproxyapi-auth-unavailable-oauth-recovery.md` — CLIProxyAPI `503 auth_unavailable` 恢复：服务健康不等于目标模型具备上游授权；按升级、浏览器 OAuth、失效认证记录隔离、重启和真实模型请求验收处理。
 - **同步**: `us_openai_api_proxy/` 的 runbook、handoff、README、lesson 和受控运维 skill；不记录账号、OAuth URL/代码、认证材料、私有地址或 API key。
+- **新增**: `conventions/parcel-track-handling-days-sequential-workers.md` — UPS/FedEx/GLS 迟发处理时间统一 3 个营业日（假日历仍分美国联邦 vs 波兰）；`--workers N` 是每家 N 路、三家串行（峰值 N 不是 3N）；8 月 live 全量分类合计（无单号/买家）。
+- **更新**: `integration-issues/dingtalk-offboarding-hardening.md` — 补「生产部署与实测」：上海生产已部署双通道（每日 `offboarding-check.py` cron `0 3 * * *` + 实时 bridge 重建），实测 3 名离职者被每日通道自动封号（`users.status=2`）；bridge 容器需挂 proxy DB volume + `PROXY_DB_PATH` 否则 `STATUS_LATER` 无限重投；proxy key 关 key 链路经容器内函数级测试打通。
+- **新增**: `integration-issues/dingtalk-offboarding-hardening.md` — new-api/sellfox-proxy 离职自动封号双通道加固：60121 判离职替代 active、本地 `dingtalk_identity_map`(unionId↔userId)、provider slug 解析、proxy 失败记 `proxy_pending` 保留映射次日补关、`offboarding_audit` 心跳/明细、`--dry-run`/`--force`。背景：真实离职场景(员工移出组织→getbyunionid 60121)原代码当 [SKIP] 永不封；active=false 误伤在职未激活员工。改动：`offboarding-check.py`(classify/熔断/retry)、`stream_listener.py`(本地映射优先+proxy 失败重投)、`main.py`(登录回填映射)；单测见 `tests/new_api_offboarding/`。
 
 ## 2026-09-07
 - **新增**: `best-practices/adobe-genuine-prompts-office-openclash.md` — 办公室 OpenClash 屏蔽 Adobe 授权校验域名（AGS 弹窗）的处理与教训：hosts 无法通配 `*.adobe.io` 随机子域（lreXXXX）、三层 NAT 下 OpenClash 无法按单设备隔离、最终用 `DOMAIN-SUFFIX,adobe.io/adobegenuine.com,REJECT` 全局屏蔽模拟断网。
