@@ -2,9 +2,10 @@
 name: tongtu-automation
 description: >
   操控通途 ERP (erp102.tongtool.com) 库存结存/销售报表导出与仓库切换，
-  以及把导出挂成定时任务（每天/每 N 小时自动跑）。
+  以及月度「订单详情统计」导出、把导出挂成定时任务（每天/每 N 小时自动跑）。
   当用户提到"通途"、"Tongtu"、"tongtool"、"库存结存"、"导出库存"、"6个仓库"、
   "CENTRADE"、"exportExcelPage"、"togglebutton"、"通途销售报表"、
+  "订单详情统计"、"月度订单导出"、"自发货订单统计"、
   "通途导出 cookie"、"定时导出"、"每天导出"、"自动定时"、"每 8 小时"、
   "多久导一次"等时触发。命令走 dispatcher / 调度脚本。
 compatibility: >
@@ -16,8 +17,9 @@ metadata:
   platform: Tongtu ERP (ExtJS)
   task_stock: tongtu.stock.export
   task_sales: tongtu.sales.export
+  task_orderdetail: tongtu.orderdetail.export
   profile_dir: web_automation/chrome-profile/
-  updated: 2026-09-03
+  updated: 2026-09-08
 ---
 
 # 通途 ERP 库存/销售自动化
@@ -28,6 +30,7 @@ metadata:
 |-----------|------|
 | 导出全部 6 仓库存 | "**通途导出库存**" |
 | 导出销售报表 | "**通途销售报表**" |
+| 导出某月订单详情统计 | "**通途导 2026年7月 订单详情**" |
 | 以后自动定期导 | "**以后每天导一次通途库存**" / "**每 8 小时自动导销售**" / "**每天凌晨 2 点导库存**" |
 | 改频率 / 取消定时 | "**改成每天 3 点**" / "**取消通途定时**" |
 | 强制重新登录 | "**通途重新登录**" |
@@ -43,6 +46,13 @@ uv run python web_automation/scripts/dispatch.py tongtu.stock.export
 ```
 
 销售报表同理：task = `tongtu.sales.export`。导出文件落在 `web_automation/downloads/`，合并/导入文件在 `web_automation/output/`。
+
+**订单详情统计（月度）**：task = `tongtu.orderdetail.export`。过滤默认全部渠道/账号/销售模式/是否JIT备货、数据来源=自发货订单，
+脚本按月设置发货时间。先 `--check`，再执行：
+`uv run python web_automation/scripts/dispatch.py tongtu.orderdetail.export --check`
+`uv run python web_automation/scripts/dispatch.py tongtu.orderdetail.export -- --month 2026-07`。
+产出 `web_automation/downloads/订单详情统计_YYYYMM_*.zip`（内含全月订单明细，不分渠道拆分）。
+选择器/踩坑/核验见 `web_automation/docs/reference/orderdetail-export.md`。
 
 ## 定时 / 重复导出（非技术同事说人话即可）
 
