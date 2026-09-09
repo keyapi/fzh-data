@@ -4,7 +4,8 @@
 
 仿 tongtu_sales_report.py：登录 → 设发货时间范围（默认全部渠道/账号/销售模式/
 是否JIT备货，数据来源=自发货订单，均为页面默认值）→ 切「统计导出」提交统计任务 →
-往返 数据查询/统计导出 两 tab 轮询新「点击下载统计结果」→ 下载 zip 到 downloads/。
+按“最上行=本次提交”锚定（以行提交时间识别本次任务，非 href 基线差集），
+往返 数据查询/统计导出 两 tab 轮询该行出现下载链接 → 下载 zip 到 downloads/。
 
 用法:
   uv run python tongtu_orderdetail_report.py --month 2026-07       # 导出指定月
@@ -14,6 +15,7 @@
   uv run python tongtu_orderdetail_report.py --auto-login           # ddddocr 自动登录
 """
 import sys, os, time, io, shutil, calendar
+import re
 from pathlib import Path
 from datetime import datetime
 from playwright.sync_api import sync_playwright
@@ -39,6 +41,10 @@ TAB_EXPORT = "统计导出"
 STAT_BTN = "a[onclick='openConfirmWin()']"          # 「统计」按钮
 DOWNLOAD_LINK = "a:has-text('点击下载统计结果')"
 PREFIX = "订单详情统计"
+
+# 统计导出历史表按提交时间倒序；行内条件列在前、提交时间在状态列前。
+# 取行文本最后一个 'YYYY-MM-DD HH:MM:SS' 即该行提交时间。
+DT_RE = re.compile(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}")
 
 
 def is_logged_in(page):
@@ -130,14 +136,62 @@ def set_ship_date_range(page, d_from: str, d_to: str):
         sys.exit(1)
 
 
-def get_existing_download_hrefs(page):
-    hrefs = set()
-    links = page.locator(DOWNLOAD_LINK)
-    for i in range(links.count()):
-        href = links.nth(i).get_attribute("href")
-        if href:
-            hrefs.add(href)
-    return hrefs
+def _export_body_table(page):
+    """统计导出历史表：header 表（含「统计条件」th）之后按文档序紧随的 <table> 为数据表
+    （fixedHeadFoot 滚动表格：header 与 body 分属两个块，非 sibling）。"""
+    header = page.locator("table:has(th:text-is('统计条件'))").first
+    return header.locator("xpath=following::table[1]").first
+
+
+def _first_data_row(page):
+    """数据表第一条非空行（跳过空 spacer 行）。列表按提交时间倒序，即最新提交。"""
+    rows = _export_body_table(page).locator("tr")
+    for i in range(min(rows.count(), 4)):
+        try:
+            txt = (rows.nth(i).inner_text(timeout=1500) or "").strip()
+        except Exception:
+            continue
+        if len(txt) > 20:
+            return rows.nth(i)
+    return rows.first
+
+
+def _row_datetime(text):
+    """行文本最后一个 'YYYY-MM-DD HH:MM:SS' = 提交时间（条件列在其前，状态列无此格式）。"""
+    m = DT_RE.findall(text)
+    return m[-1] if m else None
+
+
+def _top_row_state(page):
+    """返回 (submit_time, download_href_or_None)——数据表第一行（最新提交）状态。"""
+    try:
+        row = _first_data_row(page)
+        text = row.inner_text(timeout=3000)
+        ts = _row_datetime(text)
+    except Exception:
+        return None, None
+    href = None
+    try:
+        a = row.locator(DOWNLOAD_LINK).first
+        if a.count():
+            href = a.get_attribute("href")
+    except Exception:
+        pass
+    return ts, href
+
+
+def capture_prev_top_ts(page):
+    """提交前：切统计导出、等最上行提交时间稳定，返回当前最上行(旧最新)的提交时间。"""
+    switch_tab(page, TAB_EXPORT)
+    page.locator(STAT_BTN).wait_for(state="visible", timeout=8000)
+    last = None
+    for _ in range(12):
+        ts, _ = _top_row_state(page)
+        if ts == last:
+            break
+        last = ts
+        page.wait_for_timeout(400)
+    return last
 
 
 def _looks_like_mutex(page) -> bool:
@@ -146,25 +200,6 @@ def _looks_like_mutex(page) -> bool:
     except Exception:
         return False
     return any(s in text for s in ("正在生成", "正在统计", "请稍后再", "任务正在"))
-
-
-def snapshot_download_hrefs(page):
-    """等「统计导出」历史表渲染稳定后再采 href（提交前）。表未加载完时 count 会变化。"""
-    switch_tab(page, TAB_EXPORT)
-    page.locator(STAT_BTN).wait_for(state="visible", timeout=8000)
-    last = -1
-    stable = 0
-    for _ in range(12):
-        n = page.locator(DOWNLOAD_LINK).count()
-        if n == last:
-            stable += 1
-            if stable >= 2:
-                break
-        else:
-            stable = 0
-            last = n
-        page.wait_for_timeout(400)
-    return get_existing_download_hrefs(page)
 
 
 def submit_statistic(page) -> str:
@@ -200,29 +235,46 @@ def submit_statistic(page) -> str:
     return "ok"
 
 
-def wait_for_new_download(page, existing_hrefs):
-    print(f"\n[信息] 等待统计任务完成（最长 {POLL_TIMEOUT_SECS} 秒）...")
+def wait_for_my_download(page, prev_top_ts):
+    """按行身份锚定本次提交：列表按提交时间倒序，最上行 = 本次刚提交任务。
+    先等最上行提交时间变为新值（锁行），再等该行出现下载链接。
+    不依赖 href 基线，旧行晚渲染/快任务都不会被误判。"""
+    print(f"\n[信息] 等待本次统计任务完成（最长 {POLL_TIMEOUT_SECS} 秒）...")
     start_time = time.time()
+    settled = False
+    my_ts = None
 
     while time.time() - start_time < POLL_TIMEOUT_SECS:
-        links = page.locator(DOWNLOAD_LINK)
-        for i in range(links.count()):
-            href = links.nth(i).get_attribute("href")
-            if href and href not in existing_hrefs:
-                print(f"  [OK] 发现新下载记录！链接: {href}")
-                return href
-
-        # 通途统计页不会自动刷新状态，需往返两 tab 强制刷新
+        # 通途统计页不会自动刷新，需往返两 tab 强制刷新
         switch_tab(page, TAB_QUERY)
-        page.wait_for_timeout(1000)
+        page.wait_for_timeout(800)
         switch_tab(page, TAB_EXPORT)
+
+        ts, href = _top_row_state(page)
+        if not settled:
+            if ts is None:
+                pass  # 历史表仍空/加载中
+            elif prev_top_ts is None or ts != prev_top_ts:
+                my_ts = ts
+                settled = True
+                print(f"  [OK] 已锁定本次任务行（提交时间 {ts}）")
+            else:
+                print(f"  [信息] 最上行仍是旧任务（{ts}），等待本次行出现...")
+        else:
+            if ts and ts != my_ts:
+                # 极少数：被更新的任务顶上（异账号并发），重新锚定
+                my_ts = ts
+
+        if settled and href:
+            print(f"  [OK] 本次任务统计完成！链接: {href}")
+            return href
 
         elapsed = int(time.time() - start_time)
         if elapsed % 30 < POLL_INTERVAL_SECS:
             print(f"  等待中... ({elapsed}s)")
         time.sleep(POLL_INTERVAL_SECS)
 
-    print("[错误] 等待下载记录超时！")
+    print("[错误] 等待本次下载记录超时！")
     return None
 
 
@@ -293,9 +345,9 @@ def run(args):
 
         set_ship_date_range(page, d_from, d_to)
 
-        print("\n[步骤 3] 提交统计任务...")
-        existing_hrefs = snapshot_download_hrefs(page)
-        print(f"  [信息] 提交前已有 {len(existing_hrefs)} 条下载记录")
+        print("\n[步骤 3] 记录提交前最上行提交时间并提交统计任务...")
+        prev_top_ts = capture_prev_top_ts(page)
+        print(f"  [信息] 提交前最新行提交时间: {prev_top_ts}")
         submit_code = submit_statistic(page)
         if submit_code != "ok":
             code = "BUSY" if submit_code == "busy" else "SUBMIT_FAILED"
@@ -304,9 +356,9 @@ def run(args):
             context.close()
             sys.exit(1)
 
-        print("\n[步骤 4] 等待统计完成...")
+        print("\n[步骤 4] 等待本次统计完成...")
 
-        download_url = wait_for_new_download(page, existing_hrefs)
+        download_url = wait_for_my_download(page, prev_top_ts)
         if not download_url:
             print("FAILURE_CODE=DOWNLOAD_TIMEOUT")
             context.close()
