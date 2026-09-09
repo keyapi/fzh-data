@@ -79,8 +79,12 @@
 # 查看 API 文档
 ls docs/api-reference/
 
-# 下载/更新 API 文档
-python download_docs.py --all
+# 下载/更新 API 文档（有变化时用 --force 覆盖）
+uv run python download_docs.py --all --force
+
+# 操作手册
+# docs/reference/api-docs-mirror.md
+# docs/solutions/conventions/sellfox-apifox-api-docs-mirror-refresh.md
 
 # 测试 OpenAPI 连通性（需在白名单 IP）
 python test_api.py
@@ -97,9 +101,10 @@ python fetch_ad_reports.py --shop-name "MyStore" --days 30
 | 项目 | 位置 |
 |------|------|
 | App ID / Secret | `SELLFOX_API/.env`（优先），`advertise/.env`（备用） |
-| API 文档密码 | `.env` 中的 `SELLFOX_API_DOC_KEY` |
+| API 文档密码 | 本机 `.env` 的 `SELLFOX_API_DOC_KEY`（勿写入仓库） |
 | 生产环境 | `https://openapi.sellfox.com/` |
 | API 文档 | `https://sellfoxapi.apifox.cn/` |
+| 镜像刷新手册 | [docs/reference/api-docs-mirror.md](docs/reference/api-docs-mirror.md) |
 
 ## 文档地图
 
@@ -115,7 +120,7 @@ python fetch_ad_reports.py --shop-name "MyStore" --days 30
 | 查看 API 文档全文索引 | [docs/api-reference/llms.txt](docs/api-reference/llms.txt) |
 | 查看变更记录 | [docs/log.md](docs/log.md) |
 
-## API 模块速查 (419 个端点)
+## API 模块速查 (443 个端点)
 
 | 模块 | 端点数 | 目录 |
 |------|--------|------|
@@ -123,12 +128,12 @@ python fetch_ad_reports.py --shop-name "MyStore" --days 30
 | 销售 | 8 | `docs/api-reference/销售/` |
 | 订单 | 9 | `docs/api-reference/订单/` |
 | 广告 | 37 | `docs/api-reference/广告/` |
-| FBA | 44 | `docs/api-reference/FBA/` |
-| 采购 | 25 | `docs/api-reference/采购/` |
-| 仓库 | 46 | `docs/api-reference/仓库/` |
-| 数据 | 18 | `docs/api-reference/数据/` |
-| 财务 | 68 | `docs/api-reference/财务/` |
-| 多平台 | 115 | `docs/api-reference/多平台/` |
+| FBA | 48 | `docs/api-reference/FBA/` |
+| 采购 | 28 | `docs/api-reference/采购/` |
+| 仓库 | 48 | `docs/api-reference/仓库/` |
+| 数据 | 19 | `docs/api-reference/数据/` |
+| 财务 | 71 | `docs/api-reference/财务/` |
+| 多平台 | 126 | `docs/api-reference/多平台/` |
 | 报告中心 | 10 | `docs/api-reference/报告中心/` |
 | Feed | 3 | `docs/api-reference/Feed/` |
 | 客服 | 1 | `docs/api-reference/客服/` |
@@ -148,7 +153,7 @@ python fetch_ad_reports.py --shop-name "MyStore" --days 30
 1. 确认要查的 API 属于哪个模块
 2. 进入 `docs/api-reference/<模块>/` 找对应 `.md` 文件
 3. 文档内包含 OpenAPI YAML spec（请求参数、返回格式）
-4. 如需更新文档: `python download_docs.py --all`
+4. 如需更新文档: `uv run python download_docs.py --all --force`（先读 [docs/reference/api-docs-mirror.md](docs/reference/api-docs-mirror.md)）
 
 ## Selenium 脚本
 

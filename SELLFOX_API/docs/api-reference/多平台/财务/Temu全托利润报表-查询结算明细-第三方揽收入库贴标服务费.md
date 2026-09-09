@@ -163,16 +163,7 @@ components:
         - desc
         - pageNo
         - pageSize
-      x--orders:
-        - currency
-        - shopIds
-        - startDate
-        - endDate
-        - orderBy
-        - desc
-        - pageNo
-        - pageSize
-      x--ignore-properties: []
+      x-apifox-ignore-properties: []
       x-apifox-folder: ''
     OpenResult«FinAggSettlementThirdServiceFeeTemuAllOpenVO»:
       type: object
@@ -199,13 +190,7 @@ components:
         - msg
         - data
         - ts
-      x--orders:
-        - requestId
-        - code
-        - msg
-        - data
-        - ts
-      x--ignore-properties: []
+      x-apifox-ignore-properties: []
       x-apifox-folder: ''
     FinAggSettlementThirdServiceFeeTemuAllOpenVO:
       type: object
@@ -228,11 +213,7 @@ components:
         - rows
         - totalPage
         - totalSize
-      x--orders:
-        - rows
-        - totalPage
-        - totalSize
-      x--ignore-properties: []
+      x-apifox-ignore-properties: []
       x-apifox-folder: ''
     FinAggSettlementThirdServiceFeeTemuAllPageOpenVO:
       type: object
@@ -289,20 +270,7 @@ components:
         - labelingTime
         - amount
         - accountTime
-      x--orders:
-        - currency
-        - shopId
-        - shopName
-        - accountType
-        - feeName
-        - chargeFinishTime
-        - chargeCreateTime
-        - accountingMonth
-        - msku
-        - labelingTime
-        - amount
-        - accountTime
-      x--ignore-properties: []
+      x-apifox-ignore-properties: []
       x-apifox-folder: ''
   securitySchemes: {}
 servers: []

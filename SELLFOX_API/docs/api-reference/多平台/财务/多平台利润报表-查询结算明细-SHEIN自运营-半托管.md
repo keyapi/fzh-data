@@ -357,7 +357,24 @@ components:
         - desc
         - pageNo
         - pageSize
-      x-apifox-ignore-properties: []
+      x--orders:
+        - shopIdList
+        - dateQueryType
+        - startDate
+        - endDate
+        - settlementStatusList
+        - billTypeList
+        - incomeExpendTypeList
+        - shopTypeList
+        - checkStatusList
+        - searchType
+        - searchMode
+        - searchContents
+        - orderBy
+        - desc
+        - pageNo
+        - pageSize
+      x--ignore-properties: []
       x-apifox-folder: ''
     OpenResult«FinAggSettlementSheinHalfOpenVO»:
       type: object
@@ -384,7 +401,13 @@ components:
         - msg
         - data
         - ts
-      x-apifox-ignore-properties: []
+      x--orders:
+        - requestId
+        - code
+        - msg
+        - data
+        - ts
+      x--ignore-properties: []
       x-apifox-folder: ''
     FinAggSettlementSheinHalfOpenVO:
       type: object
@@ -406,7 +429,11 @@ components:
         - rows
         - totalPage
         - totalSize
-      x-apifox-ignore-properties: []
+      x--orders:
+        - rows
+        - totalPage
+        - totalSize
+      x--ignore-properties: []
       x-apifox-folder: ''
     FinAggSettlementSheinHalfPageOpenVO:
       type: object
@@ -554,7 +581,42 @@ components:
         - returnHrrUnitFee
         - receivableAmount
         - receivableTotalAmount
-      x-apifox-ignore-properties: []
+      x--orders:
+        - currency
+        - shopId
+        - shopName
+        - shopType
+        - shopTypeName
+        - orderId
+        - bizOrderNo
+        - marketplaceCode
+        - checkOrderNo
+        - checkStatus
+        - checkStatusName
+        - platformSku
+        - sku
+        - msku
+        - salesNum
+        - refundNum
+        - bizDayOrigin
+        - orderSignTime
+        - billType
+        - billTypeName
+        - commodityPriceSum
+        - costPrice
+        - sellerCurrencyPromotionPrice
+        - settleCurrencyPromotionPrice
+        - shopCouponAmount
+        - serviceAmount
+        - sellerRealTax
+        - commission
+        - commissionTax
+        - performanceServiceFee
+        - stockingOptFee
+        - returnHrrUnitFee
+        - receivableAmount
+        - receivableTotalAmount
+      x--ignore-properties: []
       x-apifox-folder: ''
   securitySchemes: {}
 servers: []

@@ -216,6 +216,12 @@ components:
           description: 每页条数，默认20 最大支持200
           examples:
             - 20
+        profitCaliberType:
+          type: string
+          description: 利润口径：settlement-结算口径（默认），shipment-发货口径
+          enum:
+            - settlement
+            - shipment
       title: FinAmzMonthProfitParentAsinOpenParam
       x-apifox-orders:
         - dateType
@@ -241,6 +247,7 @@ components:
         - pageNo
         - selectAllLabel
         - pageSize
+        - profitCaliberType
       x-apifox-ignore-properties: []
       x-apifox-folder: ''
     OpenResult«FinAmzProfitReportPageOpenV3VO»:

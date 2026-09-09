@@ -119,6 +119,12 @@ components:
         needMergeShare:
           type: string
           description: 是否需要合并共享仓数据
+        history:
+          type: string
+          description: 是否查询历史库存数据, 可选值true,false
+        dataMonth:
+          type: string
+          description: 历史库存月份, 格式yyyyMM
         productDevIds:
           type: string
           description: productDevIds
@@ -158,6 +164,8 @@ components:
         - hideZero
         - hideDeletedPrd
         - needMergeShare
+        - history
+        - dataMonth
         - productDevIds
         - commodityDevIds
         - skus
