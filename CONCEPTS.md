@@ -190,6 +190,9 @@ ERPNext 用原生 Product Bundle 表示组合销售对象；work_order_task 扩�
 ### 赛狐加工 SKU
 赛狐商品类型 `isGroup=2`。加工 SKU 有自身库存，支持 `needAssembleProcess`、`processCost` 和 `childSkus`，库存流水里有加工单/拆分单事件。取消“开启加工过程”只缩短状态流，不等于无库存别名。适合未来赛狐接管库存且需要 `PK#` 独立库存时评估；当前通途/赛狐并行阶段不默认启用。
 
+### 赛狐 Apifox API 文档镜像
+密码保护的赛狐开放平台文档站（Apifox）在本地的 Markdown 快照，按模块三级目录存放，附 `llms.txt` 索引。用于 Agent 离线查端点 schema。刷新须浏览器登录拿 Cookie 再跑下载脚本；密钥只在本机环境变量，不进仓库。镜像只能证明文档是否更新，不能单独证明线上接口行为。
+
 ### 库存事实源（Inventory Source of Truth）
 多个系统都展示库存时，被选为校准基准的系统。当前通途/赛狐并行期，三角类分公司普通仓以通途为事实源，定期只校准赛狐底层 `KS`。同步必须处理“赛狐订单已扣、通途尚未标记发货”的时间差，避免旧快照把库存加回。FBA、退货仓和不良品仓不因 SKU 相同自动加入共享池。库存事实源不等于利润事实源：皮壳 Listing 的利润仍以 EN Tongtool Cost Review 为准。
 

@@ -121,7 +121,11 @@ components:
         - pageNo
         - pageSize
         - shopIdList
-      x-apifox-ignore-properties: []
+      x--orders:
+        - pageNo
+        - pageSize
+        - shopIdList
+      x--ignore-properties: []
       x-apifox-folder: ''
     OpenResult«Page«SheinProductParentPageListOpenVO»»:
       type: object
@@ -149,7 +153,13 @@ components:
         - msg
         - data
         - ts
-      x-apifox-ignore-properties: []
+      x--orders:
+        - requestId
+        - code
+        - msg
+        - data
+        - ts
+      x--ignore-properties: []
       x-apifox-folder: ''
     Page«SheinProductParentPageListOpenVO»:
       type: object
@@ -182,7 +192,13 @@ components:
         - totalPage
         - totalSize
         - rows
-      x-apifox-ignore-properties: []
+      x--orders:
+        - pageNo
+        - pageSize
+        - totalPage
+        - totalSize
+        - rows
+      x--ignore-properties: []
       x-apifox-folder: ''
     SheinProductParentPageListOpenVO:
       type: object
@@ -241,7 +257,20 @@ components:
         - skc
         - createTime
         - updateTime
-      x-apifox-ignore-properties: []
+      x--orders:
+        - parentId
+        - shopId
+        - shopName
+        - shopType
+        - marketplaceCodeList
+        - marketplaceNameList
+        - name
+        - supplierCode
+        - spu
+        - skc
+        - createTime
+        - updateTime
+      x--ignore-properties: []
       x-apifox-folder: ''
   securitySchemes: {}
 servers: []

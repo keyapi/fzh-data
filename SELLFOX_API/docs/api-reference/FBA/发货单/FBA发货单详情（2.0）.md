@@ -1,4 +1,4 @@
-# FBA发货单详情
+# FBA发货单详情（2.0）
 
 ## OpenAPI Specification
 
@@ -9,12 +9,12 @@ info:
   description: ''
   version: 1.0.0
 paths:
-  /api/fba/shippingOrder/detailByShipSn.json:
+  /api/fba/shippingOrder/detailByShipSn/v2.json:
     post:
-      summary: FBA发货单详情
+      summary: FBA发货单详情（2.0）
       deprecated: false
       description: ''
-      operationId: detailByShipSnUsingPOST
+      operationId: detailByShipSnV2UsingPOST
       tags:
         - FBA/发货单
         - FBA
@@ -65,65 +65,37 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/ShippingOrderItemsOpenQo'
-            example: ''
       responses:
         '200':
-          description: ''
+          description: OK
           content:
-            application/json:
+            '*/*':
               schema:
                 $ref: >-
-                  #/components/schemas/OpenResult%C2%ABShippingOrderDetailOpenVo%C2%BB
+                  #/components/schemas/OpenResult%C2%ABShippingOrderDetailOpenV2Vo%C2%BB
           headers: {}
-          x-apifox-name: OK
+          x-apifox-name: ''
         '201':
-          description: ''
-          content:
-            application/json:
-              schema:
-                type: object
-                properties: {}
-                x-apifox-orders: []
-                x-apifox-ignore-properties: []
+          description: Created
           headers: {}
-          x-apifox-name: Created
+          x-apifox-name: ''
         '401':
-          description: ''
-          content:
-            application/json:
-              schema:
-                type: object
-                properties: {}
-                x-apifox-orders: []
-                x-apifox-ignore-properties: []
+          description: Unauthorized
           headers: {}
-          x-apifox-name: Unauthorized
+          x-apifox-name: ''
         '403':
-          description: ''
-          content:
-            application/json:
-              schema:
-                type: object
-                properties: {}
-                x-apifox-orders: []
-                x-apifox-ignore-properties: []
+          description: Forbidden
           headers: {}
-          x-apifox-name: Forbidden
+          x-apifox-name: ''
         '404':
-          description: ''
-          content:
-            application/json:
-              schema:
-                type: object
-                properties: {}
-                x-apifox-orders: []
-                x-apifox-ignore-properties: []
+          description: Not Found
           headers: {}
-          x-apifox-name: Not Found
+          x-apifox-name: ''
       security: []
+      x-order: '2147483647'
       x-apifox-folder: FBA/发货单
       x-apifox-status: released
-      x-run-in-apifox: https://app.apifox.com/web/project/1827046/apis/api-188252058-run
+      x-run-in-apifox: https://app.apifox.com/web/project/1827046/apis/api-484693169-run
 components:
   schemas:
     ShippingOrderItemsOpenQo:
@@ -137,7 +109,7 @@ components:
         - shipSn
       x-apifox-ignore-properties: []
       x-apifox-folder: ''
-    OpenResult«ShippingOrderDetailOpenVo»:
+    OpenResult«ShippingOrderDetailOpenV2Vo»:
       type: object
       properties:
         requestId:
@@ -150,12 +122,12 @@ components:
           type: string
           description: 错误信息
         data:
-          $ref: '#/components/schemas/ShippingOrderDetailOpenVo'
+          $ref: '#/components/schemas/ShippingOrderDetailOpenV2Vo'
         ts:
           type: integer
           format: int64
           description: 响应时间戳
-      title: OpenResult«ShippingOrderDetailOpenVo»
+      title: OpenResult«ShippingOrderDetailOpenV2Vo»
       x-apifox-orders:
         - requestId
         - code
@@ -164,7 +136,7 @@ components:
         - ts
       x-apifox-ignore-properties: []
       x-apifox-folder: ''
-    ShippingOrderDetailOpenVo:
+    ShippingOrderDetailOpenV2Vo:
       type: object
       properties:
         shippingOrderId:
@@ -246,7 +218,7 @@ components:
           type: array
           description: 物流信息
           items:
-            $ref: '#/components/schemas/ShippingOrderLogisticOpenVo'
+            $ref: '#/components/schemas/ShippingOrderLogisticOpenV2Vo'
         logisticsTotalSize:
           type: string
           description: 物流总数量
@@ -315,7 +287,7 @@ components:
           description: 标记付款 0未付款，1已付款
         isSelectShelf:
           type: string
-          description: 是否勾选了手动选择货架位
+          description: 是否勾选了手动选择货架位 0否1是
         isExpediting:
           type: string
           description: 是否加急 1加急
@@ -357,7 +329,7 @@ components:
         reviewOpinion:
           type: string
           description: 审核建议、意见
-      title: ShippingOrderDetailOpenVo
+      title: ShippingOrderDetailOpenV2Vo
       x-apifox-orders:
         - shippingOrderId
         - shipSn
@@ -759,9 +731,12 @@ components:
         - stockWait
       x-apifox-ignore-properties: []
       x-apifox-folder: ''
-    ShippingOrderLogisticOpenVo:
+    ShippingOrderLogisticOpenV2Vo:
       type: object
       properties:
+        estimateLogisticsCostCreateTime:
+          type: string
+          description: 预估物流费用创建时间 yyyy-MM-dd HH:mm:ss
         logisticsId:
           type: string
           description: 主键ID
@@ -769,39 +744,72 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/FbaShippingOrderLogisticRateDto'
+        estimateLogisticsCostUpdateTime:
+          type: string
+          description: 预估物流费用更新时间 yyyy-MM-dd HH:mm:ss
         logisticsNo:
           type: string
           description: 物流商单号
+        estimateOtherCostCreateTime:
+          type: string
+          description: 预估其它费用创建时间 yyyy-MM-dd HH:mm:ss
         trackingNo:
           type: string
           description: 物流跟踪号
+        estimateOtherCostUpdateTime:
+          type: string
+          description: 预估其它费用更新时间 yyyy-MM-dd HH:mm:ss
         isVolumeWeight:
           type: string
           description: 是否体积重
+        estimateTaxCostCreateTime:
+          type: string
+          description: 预估报关税费创建时间 yyyy-MM-dd HH:mm:ss
         volumeWeight:
           type: string
           description: 体积重
+        estimateTaxCostUpdateTime:
+          type: string
+          description: 预估报关税费更新时间 yyyy-MM-dd HH:mm:ss
         logisticsCost:
           type: string
           description: 物流费用
+        logisticsCostCreateTime:
+          type: string
+          description: 物流费用创建时间 yyyy-MM-dd HH:mm:ss
         logisticsCostCurrency:
           type: string
           description: 物流费用单位
+        logisticsCostUpdateTime:
+          type: string
+          description: 物流费用更新时间 yyyy-MM-dd HH:mm:ss
         otherCost:
           type: string
           description: 其他费用
+        otherCostCreateTime:
+          type: string
+          description: 其他费用创建时间 yyyy-MM-dd HH:mm:ss
         otherCostCurrency:
           type: string
           description: 其他费用单位
+        otherCostUpdateTime:
+          type: string
+          description: 其他费用更新时间 yyyy-MM-dd HH:mm:ss
         taxCost:
           type: string
           description: 税费
+        taxCostCreateTime:
+          type: string
+          description: 报关税费创建时间 yyyy-MM-dd HH:mm:ss
         taxCostCurrency:
           type: string
           description: 税费单位
         singleLogisticsCost:
           type: string
           description: 实际物流单价
+        taxCostUpdateTime:
+          type: string
+          description: 报关税费更新时间 yyyy-MM-dd HH:mm:ss
         estimateLogisticsCost:
           type: string
           description: 预估物流费用
@@ -826,21 +834,33 @@ components:
         rate:
           type: string
           description: 汇率
-      title: ShippingOrderLogisticOpenVo
+      title: ShippingOrderLogisticOpenV2Vo
       x-apifox-orders:
+        - estimateLogisticsCostCreateTime
         - logisticsId
         - rateList
+        - estimateLogisticsCostUpdateTime
         - logisticsNo
+        - estimateOtherCostCreateTime
         - trackingNo
+        - estimateOtherCostUpdateTime
         - isVolumeWeight
+        - estimateTaxCostCreateTime
         - volumeWeight
+        - estimateTaxCostUpdateTime
         - logisticsCost
+        - logisticsCostCreateTime
         - logisticsCostCurrency
+        - logisticsCostUpdateTime
         - otherCost
+        - otherCostCreateTime
         - otherCostCurrency
+        - otherCostUpdateTime
         - taxCost
+        - taxCostCreateTime
         - taxCostCurrency
         - singleLogisticsCost
+        - taxCostUpdateTime
         - estimateLogisticsCost
         - estimateLogisticsCostCurrency
         - estimateOtherCost

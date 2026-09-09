@@ -163,7 +163,16 @@ components:
         - desc
         - pageNo
         - pageSize
-      x-apifox-ignore-properties: []
+      x--orders:
+        - currency
+        - shopIds
+        - startDate
+        - endDate
+        - orderBy
+        - desc
+        - pageNo
+        - pageSize
+      x--ignore-properties: []
       x-apifox-folder: ''
     OpenResult«FinAggSettlementTaxesWithholdTemuHalfOpenVO»:
       type: object
@@ -190,7 +199,13 @@ components:
         - msg
         - data
         - ts
-      x-apifox-ignore-properties: []
+      x--orders:
+        - requestId
+        - code
+        - msg
+        - data
+        - ts
+      x--ignore-properties: []
       x-apifox-folder: ''
     FinAggSettlementTaxesWithholdTemuHalfOpenVO:
       type: object
@@ -213,7 +228,11 @@ components:
         - rows
         - totalPage
         - totalSize
-      x-apifox-ignore-properties: []
+      x--orders:
+        - rows
+        - totalPage
+        - totalSize
+      x--ignore-properties: []
       x-apifox-folder: ''
     FinAggSettlementTaxesWithholdTemuHalfPageOpenVO:
       type: object
@@ -252,7 +271,16 @@ components:
         - parentOrderSn
         - amount
         - accountTime
-      x-apifox-ignore-properties: []
+      x--orders:
+        - currency
+        - shopId
+        - shopName
+        - accountType
+        - feeName
+        - parentOrderSn
+        - amount
+        - accountTime
+      x--ignore-properties: []
       x-apifox-folder: ''
   securitySchemes: {}
 servers: []

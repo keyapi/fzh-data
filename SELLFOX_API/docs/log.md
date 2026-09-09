@@ -4,10 +4,15 @@ type: Log
 title: SELLFOX_API 变更日志
 description: 赛狐 API 模块的所有变更记录
 tags: [sellfox, saihu, API]
-timestamp: 2026-07-02
+timestamp: 2026-09-09
 ---
 
 # 变更日志
+
+## 2026-09-09
+
+- **变更描述（Apifox 文档镜像核对/全量刷新）**：对照线上 `llms.txt`，本地索引由 **419 → 443**（+25 新增 / −1 删除 / 17 标题变更 / 2 路径变更）。更新公告已含 **2026-07 / 08 / 09** 条目（旧快照止于 2026-06-25；线上最新至 **2026-09-07**）。`download_docs.py` 新增 `--force`；全量重下 **443/443**；清理改名孤儿 `.md`。操作手册 [`reference/api-docs-mirror.md`](reference/api-docs-mirror.md)；学习记录 [`docs/solutions/conventions/sellfox-apifox-api-docs-mirror-refresh.md`](../../docs/solutions/conventions/sellfox-apifox-api-docs-mirror-refresh.md)。同步清理历史 log 中的明文密码引用。
+- **结论**：赛狐 Apifox 文档自 2026-07-01 镜像后确有持续更新；本地镜像已同步到 2026-09-09。
 
 ## 2026-08-24
 
@@ -71,12 +76,13 @@ timestamp: 2026-07-02
 ### 数据源
 
 - llms.txt: `https://sellfoxapi.apifox.cn/llms.txt` (77,594 字符, 858 行)
-- 认证方式: Apifox 密码 (VZKGdd0Q) → browser cookie → requests
+- 认证方式: Apifox 共享站密码（仅本机 `.env` 的 `SELLFOX_API_DOC_KEY`）→ browser cookie → requests
 - 下载时间: 2026-07-01T03:09:45Z
 - 成功率: 419/419
 
 ### 已知限制
 
-- Cookie 有时效性，重新下载需先更新 cookie
+- Cookie 有时效性，重新下载需先更新 cookie（`cookie.txt` gitignore，勿提交）
 - 部分文档极短（如 `申请API权限` 仅一行提示），属 Apifox 原文内容
 - `?nav=` 参数对 .md 内容无影响，llms.txt 中有大量重复链接
+- **禁止**在 log / PR / Skill 中写明文密码或 Cookie

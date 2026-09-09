@@ -170,7 +170,18 @@ components:
         - pageNo
         - pageSize
         - developers
-      x-apifox-ignore-properties: []
+      x--orders:
+        - transactionPostedStartDate
+        - transactionPostedEndDate
+        - shopId
+        - marketplaceCode
+        - currency
+        - orderField
+        - orderValue
+        - pageNo
+        - pageSize
+        - developers
+      x--ignore-properties: []
       x-apifox-folder: ''
     OpenResult«WalmartReportPageDeveloperOpenVo»:
       type: object
@@ -197,7 +208,13 @@ components:
         - msg
         - data
         - ts
-      x-apifox-ignore-properties: []
+      x--orders:
+        - requestId
+        - code
+        - msg
+        - data
+        - ts
+      x--ignore-properties: []
       x-apifox-folder: ''
     WalmartReportPageDeveloperOpenVo:
       type: object
@@ -219,7 +236,11 @@ components:
         - rows
         - totalPage
         - totalSize
-      x-apifox-ignore-properties: []
+      x--orders:
+        - rows
+        - totalPage
+        - totalSize
+      x--ignore-properties: []
       x-apifox-folder: ''
     WalmartMskuDaySummaryDeveloperOpenVo:
       type: object
@@ -514,7 +535,79 @@ components:
         - evaluationPrincipal
         - evaluationCommission
         - evaluationFee
-      x-apifox-ignore-properties: []
+      x--orders:
+        - developerNameList
+        - shopId
+        - salesQty
+        - refundQty
+        - grossProfit
+        - grossRate
+        - totalCollectionAmount
+        - totalIncomeAmount
+        - salesAmount
+        - productTax
+        - productWithheldTax
+        - buyerShippingFee
+        - buyerShippingFeeTax
+        - buyerShippingFeeTaxPay
+        - buyerShippingFeeCommission
+        - commissionAmount
+        - promotionSaving
+        - walmartFundedSaving
+        - otherTax
+        - extraDiscountSaving
+        - totalRefundAmount
+        - salesRefundAmount
+        - refundProductTax
+        - refundProductWithheldTax
+        - buyerShippingFeeRefund
+        - buyerShippingFeeTaxRefund
+        - buyerShippingFeeTaxPayRefund
+        - buyerShippingFeeCommissionRefund
+        - refundCommissionAmount
+        - promotionDiscountRefund
+        - extraRefundDiscountAmount
+        - walmartFundedSavingAmount
+        - excessRefundAdjustmentAmount
+        - refundOtherTax
+        - totalAdjustmentAmount
+        - wfsDamageWarehouseAmount
+        - wfsRefundAmount
+        - wfsLostInventoryAmount
+        - wfsFoundInventoryAmount
+        - wfsChargeAmount
+        - wfsReturnShippingAmount
+        - wfsFulfillmentAmount
+        - commissionAdjustmentAmount
+        - businessCompensateAmount
+        - returnReversalAdjustmentAmount
+        - swwInternationalShippingFee
+        - totalServiceAmount
+        - wfsStorageAmount
+        - wfsPrepServiceAmount
+        - wfsInventoryTransferAmount
+        - wfsRemoveFee
+        - wfsLongTermStorageFee
+        - advertisingAmount
+        - spAmount
+        - advertisingDiffAmount
+        - advertisingCreditsAmount
+        - reviewAcceleratorAmount
+        - marketingAmount
+        - wfsDisposalAmount
+        - returnReversalAmount
+        - otherIncomeAmount
+        - otherExpendAmount
+        - costAmount
+        - headTripAmount
+        - freightAmount
+        - shopOtherFee
+        - productOtherFee
+        - currency
+        - evaluationPrincipal
+        - evaluationCommission
+        - evaluationFee
+      x--ignore-properties: []
       x-apifox-folder: ''
   securitySchemes: {}
 servers: []

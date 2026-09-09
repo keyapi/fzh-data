@@ -3,11 +3,12 @@
 从 llms.txt 解析文档结构，用 cookie 认证后下载所有 .md 文件，按原文结构保存。
 
 用法:
-  python download_sellfox_docs.py --dry-run          # 仅下载前 10 个（默认）
-  python download_sellfox_docs.py --max 10            # 下载前 N 个
-  python download_sellfox_docs.py --all               # 下载全部
-  python download_sellfox_docs.py --parse-only        # 仅解析 llms.txt，不下载
-  python download_sellfox_docs.py --cookie-file PATH  # 指定 cookie 文件路径
+  python download_docs.py --dry-run          # 仅下载前 10 个（默认）
+  python download_docs.py --max 10            # 下载前 N 个
+  python download_docs.py --all               # 下载全部（已存在则跳过）
+  python download_docs.py --all --force       # 全量覆盖重下
+  python download_docs.py --parse-only        # 仅解析 llms.txt，不下载
+  python download_docs.py --cookie-file PATH  # 指定 cookie 文件路径
 """
 
 from __future__ import annotations
@@ -234,6 +235,7 @@ def download_all(
     output_dir: Path,
     max_count: Optional[int] = None,
     delay: float = 1.0,
+    force: bool = False,
 ) -> list:
     """Download all documents from flat_list. Records results to download_log."""
     log: list = []
@@ -266,7 +268,7 @@ def download_all(
         }
 
         # Skip if already downloaded (optional: could re-download)
-        if out_path.exists():
+        if out_path.exists() and not force:
             entry["status"] = "skipped"
             entry["size"] = out_path.stat().st_size
             skipped += 1
@@ -326,6 +328,8 @@ def main():
                         help="Output directory")
     parser.add_argument("--delay", type=float, default=1.0,
                         help="Delay between requests in seconds (default: 1.0)")
+    parser.add_argument("--force", action="store_true",
+                        help="Re-download and overwrite existing markdown files")
     args = parser.parse_args()
 
     # Determine cookie path
@@ -370,7 +374,14 @@ def main():
     print(f"Output: {output_dir}")
     print(f"Delay: {args.delay}s between requests\n")
 
-    download_all(parsed["flat_list"], cookie, output_dir, max_count, args.delay)
+    download_all(
+        parsed["flat_list"],
+        cookie,
+        output_dir,
+        max_count,
+        args.delay,
+        force=args.force,
+    )
 
 
 if __name__ == "__main__":

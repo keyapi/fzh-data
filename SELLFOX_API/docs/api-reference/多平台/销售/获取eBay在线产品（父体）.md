@@ -146,7 +146,14 @@ components:
         - dateType
         - startDate
         - endDate
-      x-apifox-ignore-properties: []
+      x--orders:
+        - pageNo
+        - pageSize
+        - shopIdList
+        - dateType
+        - startDate
+        - endDate
+      x--ignore-properties: []
       x-apifox-folder: ''
     OpenResult«Page«EbayProductParentPageListOpenVo»»:
       type: object
@@ -173,7 +180,13 @@ components:
         - msg
         - data
         - ts
-      x-apifox-ignore-properties: []
+      x--orders:
+        - requestId
+        - code
+        - msg
+        - data
+        - ts
+      x--ignore-properties: []
       x-apifox-folder: ''
     Page«EbayProductParentPageListOpenVo»:
       type: object
@@ -206,7 +219,13 @@ components:
         - totalPage
         - totalSize
         - rows
-      x-apifox-ignore-properties: []
+      x--orders:
+        - pageNo
+        - pageSize
+        - totalPage
+        - totalSize
+        - rows
+      x--ignore-properties: []
       x-apifox-folder: ''
     EbayProductParentPageListOpenVo:
       type: object
@@ -220,6 +239,9 @@ components:
         shopName:
           type: string
           description: 店铺名称
+        itemId:
+          type: string
+          description: 父体（业务）
         hasVariation:
           type: string
           description: 是否有变种
@@ -249,6 +271,7 @@ components:
         - parentId
         - shopId
         - shopName
+        - itemId
         - hasVariation
         - listingStatus
         - imageUrls
@@ -257,7 +280,20 @@ components:
         - isFixedPrice
         - createTime
         - updateTime
-      x-apifox-ignore-properties: []
+      x--orders:
+        - parentId
+        - shopId
+        - shopName
+        - itemId
+        - hasVariation
+        - listingStatus
+        - imageUrls
+        - title
+        - site
+        - isFixedPrice
+        - createTime
+        - updateTime
+      x--ignore-properties: []
       x-apifox-folder: ''
   securitySchemes: {}
 servers: []
