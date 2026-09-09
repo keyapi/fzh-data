@@ -10,6 +10,7 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-09-09 | 赛狐自动拉取 Amazon 账期（结算中心V2 + 紫鸟插件列式报表）与两报表口径取舍 | [tooling-decisions/amazon-settlement-autofetch-sellfox.md](tooling-decisions/amazon-settlement-autofetch-sellfox.md) |
 | 2026-09-08 | new-api/sellfox-proxy 离职自动封号不可靠——双通道检测加固（60121 + identity_map + audit） | [integration-issues/dingtalk-offboarding-hardening.md](integration-issues/dingtalk-offboarding-hardening.md) |
 | 2026-09-07 | 办公室 OpenClash 屏蔽 Adobe 授权校验域名 | [best-practices/adobe-genuine-prompts-office-openclash.md](best-practices/adobe-genuine-prompts-office-openclash.md) |
 | 2026-09-04 | FedEx 官方批量 Track 查询 + 账号/组织恢复路径 | [workflow-issues/fedex-track-batch-query.md](workflow-issues/fedex-track-batch-query.md) |
