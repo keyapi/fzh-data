@@ -115,6 +115,7 @@ uv sync
 | `warehouse-restock` | `warehouse_restock/` | EN BOM → 三成本拆分 → 海外仓备货单 |
 | `other-outbound` | `other_outbound/` | 赛狐库存明细 → 其他出库清零 |
 | `sellfox-api` | `SELLFOX_API/` | 赛狐 OpenAPI 文档镜像（419 端点）+ 连通性测试 |
+| `sellfox-amazon-settlement` | `sellfox_settlement/` | 赛狐结算中心V2 + 紫鸟列式报表自动取回 Amazon 账期；钉钉迟交/错位审计；店名↔渠道账号 |
 | `sellfox-combo-create` | `SELLFOX_API/` | EN 套件 Product Bundle ↔ 赛狐组合商品：sync-combos 对账/创建/回读断言 |
 | `sellfox-cover-inventory` | `sellfox_cover_inventory/` | 三角类皮壳共享库存代理：KS 库存池 + PK# 组合 + cover_combo_ops 创建/对账 |
 | `sellfox-shipping` | `sellfox_shipping/` | 赛狐尾程打单（订单获取→承运人标签→追踪回写）三界面架构 |

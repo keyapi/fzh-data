@@ -2,10 +2,12 @@
 name: sellfox-amazon-settlement
 description: >
   赛狐自动拉取 Amazon 账期（结算中心V2 + 紫鸟/赛狐插件列式报表）与两报表口径取舍、科目映射、
-  赛狐店名↔渠道账号交叉表。当用户提到"赛狐账期"、"Amazon结算"、"settlement"、"结算中心V2"、
-  "Custom Transaction"、"列式报表"、"紫鸟插件报表"、"科目映射"、"两报表对比"、"账期费用自动取回"、
-  "回款率"、"赛狐店铺↔渠道账号"、"sellfox settlement"、"账期对账"时触发。
-  不要用于赛狐Excel导入(category/item-cost/item-weight/stock-init/warehouse-restock/multi-attr/other-outbound)或纯广告报告(fetch_ad_reports)。
+  赛狐店名↔渠道账号交叉表、钉钉销售收款确认单迟交/错位审计。当用户提到"赛狐账期"、"Amazon结算"、
+  "settlement"、"结算中心V2"、"Custom Transaction"、"列式报表"、"紫鸟插件报表"、"科目映射"、
+  "两报表对比"、"账期费用自动取回"、"回款率"、"赛狐店铺↔渠道账号"、"sellfox settlement"、
+  "账期对账"、"账期错位"、"迟交"、"钉钉账期"、"销售收款确认单"、"账期窗口"时触发。
+  不要用于赛狐Excel导入(category/item-cost/item-weight/stock-init/warehouse-restock/multi-attr/other-outbound)或纯广告报告(fetch_ad_reports)；
+  也不用于 OSTKUS/Wayfair 平台账期对账(platform-account-reconciliation)。
 metadata:
   module: sellfox_settlement
   updated: 2026-09-09
