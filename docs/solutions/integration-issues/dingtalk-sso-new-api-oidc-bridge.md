@@ -1,7 +1,7 @@
 ---
 title: 钉钉 SSO 登录 new-api（OIDC Bridge 桥接方案）
 date: 2026-06-26
-last_updated: 2026-08-31
+last_updated: 2026-09-08
 category: integration-issues
 module: new-api-deployment
 problem_type: architecture_pattern
@@ -166,6 +166,11 @@ VALUES
 ---
 
 ## 离职自动封号
+
+> ⚠️ **2026-09-08 检测逻辑已加固**：下文「查 active 状态 → 不活跃则禁用」为旧逻辑，
+> 已被 [dingtalk-offboarding-hardening.md](dingtalk-offboarding-hardening.md) 取代——
+> 真实离职(员工移出组织 → getbyunionid 60121)原逻辑会 [SKIP] 永不封，active=false 还会
+> 误伤在职未激活员工。新逻辑：60121 判离职 + 本地 identity_map(unionId↔userId) + 审计表。
 
 ### 权限配置
 

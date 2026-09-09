@@ -70,5 +70,3 @@ tags: [web-automation, tongtu, sellfox, playwright, log]
 - 提交前记最上行提交时间 → 提交后往返 tab → 最上行提交时间一变锁本次行 → 等该行下载链接
 
 **核验**：单日 2026-07-15 实测 306 行、发货日期全 07-15，RUN_EXIT=0；`uv run pytest tests/web_automation -q` → 48 passed。
-
-

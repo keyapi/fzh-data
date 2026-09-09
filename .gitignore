@@ -79,3 +79,4 @@ web_automation/debug_*.json
 
 # fedex_track 运行产物（大，不入库）
 fedex_track_output/
+parcel_track_output/
