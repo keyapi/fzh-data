@@ -7,6 +7,10 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-09-10
+- **新增**: `tooling-decisions/deepseek-flash-price-cut-2026-09-10-openrouter-evaluation.md` — DeepSeek flash 系列 9/10 12:00 降价（空闲 ¥0.02/¥1/¥4，高峰 2 倍；pro 不变）+ 9/14 12:00 V4 Pro 下线路由到 V4.1 Flash；按账单**行单价反解**峰谷占比（flash 高峰 79.4%）与缓存命中占比（97.2%），实测 24 天 flash 家族 ¥620.82 → ¥358.07（-42.3%）；逐上游对比 OpenRouter（因缓存单价不占优，除 pin StreamLake 外均更贵或打平）→ **结论不迁移**；含 new-api `ChannelTypeOpenRouter=20`、OpenRouter 默认自动路由 vs new-api 多渠道回退、中国用户代理/支付/账单地址/封号/数据留存掣肘。
+- **更新**: `new-api-deployment/deepseek_time_pricing.py`（新价 + `PRO_EOL` + `--at` dry-run）、`sync_pricing.py`（同步新价）、`AGENT_HANDOFF.md`（第四节定价配置）— 已部署生产 `/opt/new-api/`。
+
 ## 2026-09-08
 - **新增**: `integration-issues/cliproxyapi-auth-unavailable-oauth-recovery.md` — CLIProxyAPI `503 auth_unavailable` 恢复：服务健康不等于目标模型具备上游授权；按升级、浏览器 OAuth、失效认证记录隔离、重启和真实模型请求验收处理。
 - **同步**: `us_openai_api_proxy/` 的 runbook、handoff、README、lesson 和受控运维 skill；不记录账号、OAuth URL/代码、认证材料、私有地址或 API key。
