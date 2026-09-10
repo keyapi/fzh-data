@@ -42,6 +42,13 @@ Agent 参考（OKF 文档见 [docs/index.md](docs/index.md)；`click-based/AGENT
 - **结果（2026-09-10 实测核验）**：窗口 2026-07-04~09-09 → **405 行 / 265 单据**（单据数按唯一 `数据id` 计），
   发起时间全在窗口内；产物 232 KB；`数据id` 与 API `instance_ids.json` **265/265 重合**。
 - **用法**：`uv run python web_automation/scripts/dispatch.py dingtalk.aflow.receipt.export -- --from 2026-07-04 --to 2026-09-09`
+- **登录**：凭据从 `web_automation/.env` 的 `DINGTALK_USER`/`DINGTALK_PASSWORD` 读（gitignore，**不入命令行**）。
+  流程 `账号登录 tab → 手机号 → 下一步 → 密码 → 登录`，**无图形验证码**（用不上 ddddocr）。
+  `.env` 没配则回退「一键头像 / 扫码」人工登录。密码只试一次，避免触发风控。
+  - ⚠️ **陌生设备/profile 首次登录会要一次短信验证码**，必须人工在浏览器窗口输入（无法自动化）；
+    脚本会检测并明确提示。**同一 profile 之后再跑不需要**（登录态已持久化）。
+    同一账号在**别的** profile 重登可能让原会话失效 → 建议**固定用一个 profile**。
+  - ⚠️ 默认 `--channel chrome`（用本机 Chrome）：Playwright 自带 Chromium 上该登录页会崩。
 - **附件**：`--mode attachments` 按导出表补**离职发起人**附件
   （`dispatch.py dingtalk.aflow.receipt.attachments`）。
   走 `pchomepage.htm#/plainapproval?procInstId=<数据id>` 详情页点文件名下载；
@@ -49,6 +56,9 @@ Agent 参考（OKF 文档见 [docs/index.md](docs/index.md)；`click-based/AGENT
   **注意**：批量附件（hover「仅导出审批单附件」）产物进钉盘、取不回本地；
   导出表里的 `#/previewAttachments` 深链**需钉钉客户端**，浏览器里打不开 —— 别走错。
   实测对 39 个离职单据 39/39 成功，其中 **38 单是 API `userNotExist`** 的。
+- **与 API 路径的关系**：`dingtalk/dingtalk_oa_approval/`（API，`API_ONLY`）与这条（浏览器，`BROWSER_ONLY`）
+  是**两条独立路径**，不给彼此兜底。API 覆盖全量且能取图，但离职发起人 `userNotExist`；
+  aflow 以在职身份访问，正好补这个盲区。
 
 ## 订单详情统计导出（背景/过程/结果摘要）
 

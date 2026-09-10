@@ -1,17 +1,18 @@
 ---
 name: web-automation
 description: >
-  仓库内网页自动化能力舱统一入口：通途/赛狐/通用浏览器任务都先跑
+  仓库内网页自动化能力舱统一入口：通途/赛狐/钉钉/通用浏览器任务都先跑
   web_automation/scripts/dispatch.py 拿确定状态，再按状态执行。
   当用户提到"浏览器自动化"、"Playwright"、"通途导出"、"赛狐导出"、"备货单导入"、
-  "库存导出"、"自动登录"、"验证码"、"cookie"、"下载文件"、"浏览器"等时触发。
+  "库存导出"、"自动登录"、"验证码"、"cookie"、"下载文件"、"浏览器"、
+  "钉钉导出"、"aflow"、"OA审批管理后台"、"销售收款确认单"、"离职附件"等时触发。
   本 skill 是路由总纲；平台专项见 tongtu-automation / sellfox-automation。
 compatibility: >
   依赖 fzh-data 仓库结构：web_automation/ 是独立 uv 子项目，root uv sync 不会装浏览器。
   首次网页任务由 dispatcher/bootstrap 自动建子环境 + Chromium。
 metadata:
   module: web-automation
-  updated: 2026-09-02
+  updated: 2026-09-10
 ---
 
 # 网页自动化统一入口
@@ -47,15 +48,25 @@ uv run python web_automation/scripts/doctor.py
 任务名（`web_automation/capabilities.yaml`）：
 `tongtu.stock.export` / `tongtu.sales.export` / `tongtu.orderdetail.export`（月度：`dispatch.py tongtu.orderdetail.export -- --month YYYY-MM`）/
 `sellfox.stock.export` / `sellfox.other-inbound.import` / `sellfox.other-outbound.import` /
-`sellfox.restock.import` / `web.generic.explore`。
+`sellfox.restock.import` /
+`dingtalk.aflow.receipt.export`（钉钉 aflow 销售收款确认单导出 Excel）/
+`dingtalk.aflow.receipt.attachments`（按导出表补**离职发起人**附件；API `userNotExist` 那批）/
+`web.generic.explore`。
 
 ## 通用浏览器模式
 
 - **选择器优先级**：CSS 属性选择器 > ID+文字 > ref > 纯文字。
+- **选择器必须限定作用域**：目标站点常在一页塞几十个同名控件（隐藏面板也占位，
+  `is_visible()` 对"被遮住"的照样返回 True）。用容器类名收窄，否则可能点到别的面板的按钮
+  —— 钉钉 aflow 上点到扫码登录的「登录」会触发客户端跳转并把页面**搞崩**。
+  判断"哪个才真的能点"用 Playwright `click()` 的可点击性检查逐个试，别信可见性启发式。
+- **SPA 里 `goto` 同一个 URL（只差 hash）不是重载**：不会重新请求，会读到旧 DOM。
+  需要新数据时 `page.reload()`。
 - **登录检测**：找仅在登录后出现的特征元素（通途 `#warehouseDisableDiv`、赛狐 URL 离开 login）。
-- **下载**：Python 用 `page.expect_download()`；MCP 下载落在 `.playwright-mcp/`。
+- **下载**：Python 用 `page.expect_download()`；MCP 下载落在 `.playwright-mcp/`（MCP server 的 cwd，不是你的工作目录）。
 - **批量操作**：每步切仓库/翻页后等 5–8 秒（ExtJS/Vue 渲染慢）。
-- 详细踩坑见 tongtu-automation / sellfox-automation 及其 references。
+- 详细踩坑见 tongtu-automation / sellfox-automation 及其 references；
+  钉钉见 `web_automation/docs/reference/aflow-receipt-export.md`。
 
 ## 参考
 

@@ -146,5 +146,24 @@ tags: [web-automation, tongtu, sellfox, playwright, log]
 **交付**：`--channel`（默认 chrome）、`.env.example` 增 `DINGTALK_*` 占位、文档补该路径与上述坑。
 
 **核验（2026-09-10）**：全新 profile 跑 `--mode excel` → 手机号+密码自动提交 → **需人工输一次短信验证码** →
-`已选择组织：方州汇国际` → 导出成功 232 KB；**紧接着再跑一次，无需任何登录/验证码**，直接导出成功
+`已选择组织`（公司主组织）→ 导出成功 232 KB；**紧接着再跑一次，无需任何登录/验证码**，直接导出成功
 （证明登录态持久化生效）。
+
+## 2026-09-10 — 文档补齐与脱敏（aflow 三件事的交接面）
+
+**做了什么**：按 OKF 补齐本次钉钉 aflow 工作的交接面，并对安全区做隐私脱敏。
+
+- `AGENT_HANDOFF.md`：aflow 段补上**登录机制**（`.env` 账号密码 → 头像/扫码回退；
+  陌生设备**短信验证码**需人工一次；默认 `--channel chrome`）与**与 API 路径的关系**（两条独立路径）
+- `docs/lessons/index.md`：补上漏登记的 `login-fallback-design.md`，并注明它只覆盖**图形**验证码，
+  钉钉是**短信**验证码（机制不同）
+- `docs/reference/aflow-receipt-export.md`：修正 frontmatter（原 `description` 还写着"尚未沉淀为脚本"，
+  与 `status: scripted-and-verified` 自相矛盾）、补附件/登录的验证记录、新增「相关文档与边界」一节
+- **脱敏**：安全区内**已无个人姓名**；引用的日志里组织名改为泛称。
+  凭据只在 `web_automation/.env`（gitignore，**未被跟踪**，已 `git grep` 复核）。
+
+**边界（重要）**：本轮**只写 `web_automation/**` + `.agents/skills/web-automation/**` + `tests/**`**。
+`docs/solutions/**`、`CONCEPTS.md`、`AGENTS.md`、根 `index.md`、`dingtalk/**`、`.gitignore` **一律没碰** ——
+它们正在 PR #226（`feature/dingtalk-july-amz-reconcile-docs`）里改，碰了必冲突。
+**待 #226 合并后**再补：docs/solutions 条目、CONCEPTS.md 术语、`dingtalk/dingtalk_oa_approval/AGENT_HANDOFF.md`
+的反向交叉链接。另注意 #226 带了 `docs/research/browser-admin-download.md`，与本文件**主题相邻，需对齐**。

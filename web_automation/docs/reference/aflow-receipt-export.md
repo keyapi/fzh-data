@@ -1,14 +1,14 @@
 ---
 okf: v0.1
 type: Reference
-title: 钉钉 aflow「销售收款确认单」单据与附件导出
-description: aflow 数据管理控制台的选择器、导出流程（异步任务→操作记录→下载）、产物结构、附件路径与踩坑。MCP 探路记录，尚未沉淀为脚本。
-tags: [dingtalk, aflow, oa审批, 销售收款确认单, 导出, 附件, 选择器, 探路]
+title: 钉钉 aflow「销售收款确认单」单据导出与离职发起人附件
+description: aflow（OA审批管理后台）的登录方式、选择器、Excel 导出流程（异步任务→操作记录→下载）、产物结构、离职发起人附件取法、以及批量附件取不回本地的证伪。已沉淀为 legacy-compatible/dingtalk_aflow_receipt.py 两个 capability。
+tags: [dingtalk, aflow, oa审批, 销售收款确认单, 导出, 附件, 离职发起人, 登录, 选择器]
 timestamp: 2026-09-10
 status: scripted-and-verified
 ---
 
-# aflow「销售收款确认单」导出探路
+# 钉钉 aflow「销售收款确认单」导出与附件
 
 **状态：已沉淀并端到端跑通**（`legacy-compatible/dingtalk_aflow_receipt.py`，2026-09-10）：
 - `dingtalk.aflow.receipt.export`（`--mode excel`）→ `status=READY`
@@ -24,12 +24,14 @@ status: scripted-and-verified
 - 正确入口是 **先走 `oa.dingtalk.com`**：
   1. `https://oa.dingtalk.com/index.htm`
   2. 302 到 `https://login.dingtalk.com/oauth2/challenge.htm?...&client_id=dingoaltcsv4vlgoefhpec&scope=openid+corpid&org_type=management`
-  3. 默认 **扫码登录** tab（`tablist` 里 `账号登录` / `扫码登录`）
-  4. 扫码后出现**组织选择页** `.app-page-curr`（"选择你管理的组织"），点组织名（本环境：**方州汇国际** / 新华三路由器测试）
+  3. 登录页有两个 tab：`账号登录` / `扫码登录`（默认选中扫码）。
+     **脚本走的是 `账号登录`（手机号+密码），见下面「账号密码登录」一节**；扫码是人工回退路径。
+  4. 登录后出现**组织选择页** `.app-page-curr`（"选择你管理的组织"），点目标组织名
+     （脚本用 `--org` 指定，默认值见脚本常量；本环境是公司主组织）
   5. 落到 `oa.dingtalk.com/index.htm#/welcome`
 - 登录后 **SSO 覆盖 aflow**：再打开 aflow URL 即正常渲染。
 - **一键头像登录（"点击头像授权登录"）不可用**：登录页轮询 `http://127.0.0.1:8441|8442|8443/check_state`，而本机钉钉客户端只监听 **`127.0.0.1:8440`** → 三个请求全部 `ERR_CONNECTION_REFUSED`，头像点击后停在"登录中"然后静默回落。要用一键登录需把钉钉客户端升到与登录页匹配的版本。
-  - 但**头像能显示出来**（页面确实拿到了账号 张克勇），说明本地客户端通道部分可用；最终成功仍走的是扫码。
+  - 但**头像能显示出来**（页面确实拿到了登录账号），说明本地客户端通道部分可用；最终成功仍走的是扫码。
 
 > 选择器定位坑：登录页是 SPA，DOM 里**同时存在几十个隐藏面板**，且隐藏面板的子元素 `getBoundingClientRect()` 仍然非零，"可见性"自检会误判。
 > 唯一可靠的活面板是 **`.app-qr-login-page`**（类含 `app-page-curr`）。改版后要按这个思路重新定位。
@@ -90,7 +92,7 @@ status: scripted-and-verified
 好消息是它**按 profile 记住**，只需点一次；点过之后本机钉钉客户端通道打开，头像才会出现。
 
 实测：`web_automation/dingtalk-profile` 建好并点过一次允许后，
-脚本第二次运行**全程零人工**（`已勾选自动登录并点击头像` → `已选择组织：方州汇国际` → 直接导出）。
+脚本第二次运行**无需任何人工介入**（`已勾选自动登录并点击头像` → 自动选中组织 → 直接导出）。
 
 ## 表单筛选（数据管理 → 数据查看）
 
@@ -172,7 +174,7 @@ Playwright MCP 的下载写在 **MCP server 进程的 cwd** 下的 `.playwright-
 
 - `pan.dingtalk.com` **不解析**（`ERR_NAME_NOT_RESOLVED`）。
 - 钉盘/团队文件网页版入口是 **`https://alidocs.dingtalk.com/`**（"钉钉文档"），
-  左侧导航有 `首页 / 我的文档 / 团队文件 / 知识库`；右上角能显示组织 `方州汇国际` 与头像，说明会话有效。
+  左侧导航有 `首页 / 我的文档 / 团队文件 / 知识库`；右上角能显示组织名与头像，说明会话有效。
 - 但**点 `团队文件` 不切换视图**：试过 `text=团队文件 >> nth=0`、
   `.nav-title-text:text-is("团队文件")`、`div.nav-item-box:has-text("团队文件")`（最后一个直接 no match），
   页面都停在 `#/i/desktop` 的"最近"。**未能进入团队文件**，故没看到这次批量下载产出的文件夹。
@@ -275,7 +277,7 @@ https://aflow.dingtalk.com/dingtalk/pc/pages/dynamic/formservice.htm?corpid=<cor
 | 盲区 | **离职发起人 `userNotExist`** | 能覆盖离职发起人 |
 | 单调 | `API_ONLY`，快 | `BROWSER_ONLY`，慢、`contract: ui` 易碎 |
 
-**离职缺口实测**：API manifest 里对该 6 人（李雨欣/丁艳蕾/李娜/汪震/吴浩然/李婷婷）共 **199 条 `userNotExist`**，
+**离职缺口实测**：API manifest 里对 **6 名离职发起人**共 **199 条 `userNotExist`**，
 而这 62 行**都在 aflow 导出里** —— 这正是 aflow 路径的存在理由。
 
 ## 踩坑速查
@@ -297,7 +299,28 @@ https://aflow.dingtalk.com/dingtalk/pc/pages/dynamic/formservice.htm?corpid=<cor
 
 ## 验证记录（2026-09-10）
 
-- 窗口 `出发时间 2026-07-04 ~ 2026-09-09`，查询返回 **405 行 / 265 单据**；
+**Excel 导出**
+- 窗口 `发起时间 2026-07-04 ~ 2026-09-09`，查询返回 **405 行 / 265 单据**；
   `发起时间` 实测 `2026-07-06 10:05:07` ~ `2026-09-09 12:25:30`，**全部落在窗口内** → 筛选生效。
-- 落地：`D:\Work\王忠于\成本核算\Amazon&新平台成本 20260704-20260909 销售收款确认单-20260910152730.xlsx`（237,155 B）。
-- 与 API `instance_ids.json` 交叉验证 **265/265 重合**。
+- 落地 `<out>/Amazon&新平台成本 20260704-20260909 销售收款确认单-<导出时间戳>.xlsx`（约 232 KB）。
+- 与 API `instance_ids.json` 交叉验证 **265/265 重合**（`数据id` == `processInstanceId`）。
+
+**离职发起人附件（`--mode attachments`）**
+- 读导出表 → 筛离职发起人 **39 单** → **39/39 成功、0 失败、39 个文件 / 2.8 MB**。
+- 与 API manifest 交叉比对：这 39 单里 **38 单 API 侧是 `userNotExist`**（仅 1 单 API 已成功）
+  → 补回了 38 个 API 无解的单据。
+
+**登录**
+- 全新 profile：手机号+密码自动提交 → 人工输一次短信验证码 → 选组织 → 导出成功。
+- 紧接着再跑一次：**无需任何登录/验证码**，直接导出成功（登录态持久化生效）。
+
+## 相关文档与边界
+
+- **与 API 路径**：`dingtalk/dingtalk_oa_approval/`（`fetch_attachments.py` 等）是独立的 API 路径，
+  本文件只描述浏览器路径。两者**互补不互相兜底**，详见上面「与 API 路径的分工」。
+- **与 lessons**：`docs/lessons/login-fallback-design.md` 只覆盖通途/赛狐的**图形**验证码 OCR；
+  钉钉是账号密码 + **短信**验证码，机制不同（该文件已加适用范围说明）。
+- **⚠️ 与 PR #226 可能重叠**：PR #226（`feature/dingtalk-july-amz-reconcile-docs`）带了
+  `dingtalk/dingtalk_oa_approval/docs/research/browser-admin-download.md`，从标题看覆盖**相邻主题**
+  （浏览器管理后台下载）。**该 PR 合并后需与本文对齐**，避免两处各说一套。
+  本文只落在 `web_automation/**`，未触碰 `dingtalk/**` 以免冲突。
