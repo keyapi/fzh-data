@@ -246,34 +246,36 @@ Web 后台 → 设置 → 运营设置 → 勾选**合规确认**（`payment_set
 
 > **⚠️ 2026-08-17 起 DeepSeek 实行峰谷分时计价，DeepSeek 的 ModelRatio 不再是静态值。**
 > 生产环境由 `deepseek_time_pricing.py`（cron 准点触发）按北京时间在高峰/空闲两档间自动切换。
-> 详见 [docs/solutions/tooling-decisions/new-api-deepseek-time-based-pricing-automation.md](../docs/solutions/tooling-decisions/new-api-deepseek-time-based-pricing-automation.md)。
-> 本节以下静态值为历史参考（分时切换前的定价），不可作为当前生产值。
+> **2026-09-10 12:00 起 flash 系列降价；2026-09-14 12:00 起 V4 Pro 下线（路由到 V4.1 Flash 并按 flash 价计费）。**
+> 详见 [docs/solutions/tooling-decisions/new-api-deepseek-time-based-pricing-automation.md](../docs/solutions/tooling-decisions/new-api-deepseek-time-based-pricing-automation.md)
+> 与 [docs/solutions/tooling-decisions/deepseek-flash-price-cut-2026-09-10-openrouter-evaluation.md](../docs/solutions/tooling-decisions/deepseek-flash-price-cut-2026-09-10-openrouter-evaluation.md)。
 
-### DeepSeek V4 官方价格映射（分时计价前，历史参考）
+### 当前生产生效价目（2026-09-10 12:00 起）
 
-**DeepSeek-V4-Flash:**
-| 项目 | 官方价格 | New API 参数 |
-|-----|---------|-------------|
-| 输入（缓存未命中） | ¥1.00 / 1M tokens | ModelRatio = 0.068493 |
-| 输出 | ¥2.00 / 1M tokens | CompletionRatio = 2 |
-| 输入（缓存命中） | ¥0.02 / 1M tokens | CacheRatio = 0.02 |
+DeepSeek 官方闲时为高峰的一半；高峰 = 周一至周五 9-12 / 14-18（北京）。
 
-**DeepSeek-V4-Pro:**
-| 项目 | 官方价格 | New API 参数 |
-|-----|---------|-------------|
-| 输入（缓存未命中） | ¥3.00 / 1M tokens | ModelRatio = 0.205479 |
-| 输出 | ¥6.00 / 1M tokens | CompletionRatio = 2 |
-| 输入（缓存命中） | ¥0.025 / 1M tokens | CacheRatio = 0.008333 |
+| 模型 | 档位 | 输入(未命中) | 输出 | 输入(命中) | ModelRatio | CompletionRatio | CacheRatio |
+|------|------|------------|------|-----------|-----------|-----------------|-----------|
+| deepseek-v4-flash | 高峰 | ¥2.00 | ¥8.00 | ¥0.04 | 0.136986 | 4.0 | 0.02 |
+| deepseek-v4-flash | 闲时 | ¥1.00 | ¥4.00 | ¥0.02 | 0.068493 | 4.0 | 0.02 |
+| deepseek-v4-flash-vision-exp | 高峰 | ¥2.00 | ¥8.00 | ¥0.04 | 0.136986 | 4.0 | 0.02 |
+| deepseek-v4-flash-vision-exp | 闲时 | ¥1.00 | ¥4.00 | ¥0.02 | 0.068493 | 4.0 | 0.02 |
+| deepseek-v4-pro | 高峰 | ¥9.00 | ¥27.00 | ¥0.30 | 0.616438 | 3.0 | 0.033333 |
+| deepseek-v4-pro | 闲时 | ¥4.50 | ¥13.50 | ¥0.15 | 0.308219 | 3.0 | 0.033333 |
 
-### 峰谷分时定价（当前生产生效）
+> **2026-09-14 12:00 起**：`deepseek-v4-pro` 下线，请求路由到 V4.1 Flash 并按 V4.1 Flash 计费。
+> 脚本以 `PRO_EOL` 常量自动切换——该时刻后 pro 的三个 ratio 被写成与 flash 相同的值。
+> **V4.1 Flash 单价官方未单独公布，暂等同 flash 系列，9/14 后必须用真实账单核对。**
 
-DeepSeek 官方 2026-08-17 起：高峰（周一至周五 9-12/14-18 北京）为闲时的 2 倍。
+### 历史价（2026-08-17 ~ 2026-09-10 12:00，仅供对账旧账单）
 
 | 模型 | 高峰 ModelRatio | 闲时 ModelRatio | CompletionRatio | CacheRatio |
 |------|----------------|----------------|-----------------|-----------|
 | deepseek-v4-flash | 0.205479 | 0.102740 | 3.0 | 0.033333 |
 | deepseek-v4-flash-vision-exp | 0.205479 | 0.102740 | 3.0 | 0.033333 |
 | deepseek-v4-pro | 0.616438 | 0.308219 | 3.0 | 0.033333 |
+
+更早（2026-08-17 分时计价前，flash 扁平价）：input ¥1.00 → ModelRatio 0.068493、output ¥2.00 → CompletionRatio 2、cache ¥0.02 → CacheRatio 0.02。
 
 cron 切换：`0 9/12/14/18 * * 1-5` + `0 0 * * 0,6` 保险 + `*/30 * * * *` 兜底。脚本幂等，只 patch DeepSeek 三个模型。
 
@@ -294,6 +296,8 @@ cron 切换：`0 9/12/14/18 * * 1-5` + `0 0 * * 0,6` 保险 + `*/30 * * * *` 兜
 
 ### 同步脚本
 - `deepseek_time_pricing.py` — **分时定价自动切换**（当前生产核心脚本）
+  - `--simulate peak|off` 强制时段（会写库）
+  - `--at "YYYY-MM-DD HH:MM"` 覆盖当前时间，**只打印不写库**，用于演练 9/14 Pro 下线分支
 - `sync_pricing.py` — 修改顶部定价数字后运行（只 PRINT 计算结果，不写库；分时脚本内部已复用其公式）
 
 ---
