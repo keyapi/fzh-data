@@ -56,11 +56,12 @@ DEFAULT_FORM = "销售收款确认单"
 FILE_PREFIX = "Amazon&新平台成本"
 
 LOGIN_HINT = (
-    "[信息] 未检测到登录态。已在浏览器里打开钉钉登录页，脚本会自动尝试一键头像授权。\n"
+    "[信息] 未检测到登录态。已在浏览器里打开钉钉登录页。\n"
+    "       登录优先级：账号密码（.env 配了就优先）→ 一键头像 → 人工扫码。\n"
     "       若需要你介入：\n"
-    "       1) Chrome 左上角若弹「访问此设备上的其它应用和服务」→ 点【允许】\n"
+    "       1) 账号密码登录失败时会自动回退，可手动扫码\n"
+    "       2) Chrome 左上角若弹「访问此设备上的其它应用和服务」→ 点【允许】\n"
     "          （原生气泡，脚本点不到；按 profile 只问一次）\n"
-    "       2) 头像没出来时改用手机钉钉扫码\n"
     f"       3) 登录态持久化到 {DEFAULT_PROFILE}，之后不再需要\n"
 )
 
@@ -145,8 +146,108 @@ def pick_org(page: Page, org: str) -> bool:
     return False
 
 
-def wait_for_login(page: Page, timeout_s: int, org: str) -> bool:
-    """开 oa.dingtalk.com 触发统一身份认证，自动尝试一键头像；失败则等用户扫码。"""
+def load_env() -> dict:
+    """读 web_automation/.env（已被 .gitignore 排除）。凭据只从这里来，不走命令行。"""
+    vals: dict[str, str] = {}
+    env_path = WEB_ROOT / ".env"
+    if not env_path.is_file():
+        return vals
+    for raw in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        vals[k.strip()] = v.strip().strip('"').strip("'")
+    return vals
+
+
+def _click_in(page: Page, scope: str, text: str, attempt_each_ms: int = 1500, rounds: int = 10) -> bool:
+    """在 scope 内点「文本相等且真的可点」的按钮。
+
+    **必须限定 scope**：整页有 3 个文本为「登录」的按钮（另两个是扫码登录的
+    `module-qrscan-login-btn`/`module-localscan-login-btn`），点到它们会触发
+    钉钉客户端跳转并把页面搞崩（实测 page crashed）。
+    `is_visible()` 也不够——被遮住的元素它照样返回 True，只有 Playwright 的
+    click 可点击性检查（visible+stable+receives events）才靠谱，所以逐个试。
+    """
+    for _ in range(rounds):
+        for el in page.locator(f"{scope} .base-comp-button").all():
+            try:
+                if (el.inner_text() or "").strip() != text:
+                    continue
+                el.click(timeout=attempt_each_ms)
+                return True
+            except Exception:
+                continue
+        page.wait_for_timeout(800)
+    return False
+
+
+def _fill_in(page: Page, scope: str, selector: str, value: str,
+             attempt_each_ms: int = 1500, rounds: int = 10) -> bool:
+    """在 scope 内填「真的能填」的输入框。"""
+    for _ in range(rounds):
+        for el in page.locator(f"{scope} {selector}").all():
+            try:
+                el.fill(value, timeout=attempt_each_ms)
+                if el.input_value():
+                    return True
+            except Exception:
+                continue
+        page.wait_for_timeout(800)
+    return False
+
+
+def login_with_password(page: Page, user: str, password: str) -> bool:
+    """钉钉「账号登录」：手机号 → 下一步 → 密码 → 登录。
+
+    实测（2026-09-10）这一步**没有验证码、没有短信**，可直接脚本化。
+    所有控件都限定在 `.module-pass-login` 作用域内 —— 该容器恰好只含本流程的
+    手机号/密码框与「下一步/登录」两个按钮，能避开整页几十个同名控件。
+    """
+    scope = ".module-pass-login"
+    try:
+        for el in page.locator("[role=tab]").all():
+            try:
+                if "账号登录" in (el.inner_text() or "") and el.is_visible():
+                    el.click(timeout=3000)
+                    page.wait_for_timeout(1500)
+                    break
+            except Exception:
+                continue
+
+        if not _fill_in(page, scope, 'input[type=tel][placeholder="请输入手机号码"]', user):
+            print("[警告] 没填上手机号，回退人工登录")
+            return False
+        page.wait_for_timeout(800)
+
+        if not _click_in(page, scope, "下一步"):
+            print("[警告] 点不动「下一步」")
+            return False
+        page.wait_for_timeout(2500)
+
+        if not _fill_in(page, scope, 'input[type=password][placeholder="请输入密码"]', password):
+            print("[警告] 没填上密码（可能被要求验证码/短信验证）")
+            return False
+        page.wait_for_timeout(800)
+
+        if not _click_in(page, scope, "登录"):
+            print("[警告] 点不动「登录」")
+            return False
+        page.wait_for_timeout(4000)
+        print("[信息] 已用账号密码提交登录")
+        return True
+    except Exception as e:
+        print(f"[警告] 账号密码登录异常（{type(e).__name__}）：{str(e)[:150]}")
+        return False
+
+
+def wait_for_login(page: Page, timeout_s: int, org: str, user: str = "", password: str = "") -> bool:
+    """开 oa.dingtalk.com 触发统一身份认证。
+
+    登录方式优先级：账号密码（.env 有就优先）→ 一键头像 → 等用户扫码。
+    账号密码**只尝试一次**：错了就交给人工，避免连续失败触发风控/锁定。
+    """
     if is_logged_in(page):
         return True
     print(LOGIN_HINT)
@@ -156,12 +257,16 @@ def wait_for_login(page: Page, timeout_s: int, org: str) -> bool:
         pass
     page.wait_for_timeout(3000)
     waited = 0
+    pwd_tried = False
     avatar_done = False
     while waited < timeout_s:
         if page.url.startswith("https://oa.dingtalk.com/index.htm") and "welcome" in page.url:
             break
         if "login.dingtalk.com" in page.url:
-            if not avatar_done and try_avatar_login(page):
+            if user and password and not pwd_tried:
+                pwd_tried = True
+                login_with_password(page, user, password)
+            elif not avatar_done and try_avatar_login(page):
                 avatar_done = True
                 print("[信息] 已勾选自动登录并点击头像，等待授权…")
             pick_org(page, org)
@@ -465,6 +570,8 @@ def main() -> int:
     ap.add_argument("--out", default=str(DEFAULT_OUT))
     ap.add_argument("--profile", default=str(DEFAULT_PROFILE))
     ap.add_argument("--headless", action="store_true")
+    ap.add_argument("--channel", default="chrome",
+                    help="浏览器通道；默认本机 Chrome（钉钉登录页在自带 Chromium 上会崩）。传空串则强制自带 Chromium")
     ap.add_argument("--login-timeout", type=int, default=300)
     ap.add_argument("--export-timeout", type=int, default=600)
     # 附件模式（--mode attachments）
@@ -491,20 +598,43 @@ def main() -> int:
     profile_dir = Path(args.profile)
     profile_dir.mkdir(parents=True, exist_ok=True)
 
+    # 凭据只从 web_automation/.env 读（gitignore），不进命令行、不进日志
+    env = load_env()
+    dt_user = env.get("DINGTALK_USER", "").strip()
+    dt_pwd = env.get("DINGTALK_PASSWORD", "").strip()
+    if dt_user and dt_pwd:
+        print(f"[信息] 已从 .env 读到钉钉账号（{dt_user[:3]}****{dt_user[-4:]}），登录时优先用账号密码")
+    else:
+        print("[信息] .env 未配置 DINGTALK_USER/DINGTALK_PASSWORD，将用手动登录（一键头像/扫码）")
+
     with sync_playwright() as p:
-        ctx = p.chromium.launch_persistent_context(
+        ctx = None
+        # 优先用本机安装的 Chrome：钉钉登录页在 Playwright 自带 Chromium 上会崩（实测 page crashed），
+        # 而 MCP 用的就是本机 Chrome，登录页在那边正常。
+        launch_kw = dict(
             user_data_dir=str(profile_dir),
             headless=args.headless,
             accept_downloads=True,
             viewport={"width": 1500, "height": 950},
             args=["--disable-blink-features=AutomationControlled"],
         )
+        if args.channel:
+            try:
+                ctx = p.chromium.launch_persistent_context(channel=args.channel, **launch_kw)
+                print(f"[信息] 浏览器通道：{args.channel}")
+            except Exception as e:
+                print(f"[警告] 打不开 {args.channel} 通道（{str(e)[:80]}），回退自带 Chromium")
+        if ctx is None:
+            ctx = p.chromium.launch_persistent_context(**launch_kw)
+            print("[信息] 浏览器通道：自带 Chromium")
         page = ctx.pages[0] if ctx.pages else ctx.new_page()
         try:
             page.goto(AFLOW_URL, wait_until="domcontentloaded", timeout=60000)
             page.wait_for_timeout(3000)
 
-            if not is_logged_in(page) and not wait_for_login(page, args.login_timeout, args.org):
+            if not is_logged_in(page) and not wait_for_login(
+                page, args.login_timeout, args.org, dt_user, dt_pwd
+            ):
                 emit_failure("LOGIN_TIMEOUT", "[错误] 登录未完成，请手动登录后重试")
                 return 1
 

@@ -34,9 +34,36 @@ status: scripted-and-verified
 > 选择器定位坑：登录页是 SPA，DOM 里**同时存在几十个隐藏面板**，且隐藏面板的子元素 `getBoundingClientRect()` 仍然非零，"可见性"自检会误判。
 > 唯一可靠的活面板是 **`.app-qr-login-page`**（类含 `app-page-curr`）。改版后要按这个思路重新定位。
 
-### 一键头像授权可以脚本化（2026-09-10 实测跑通）
+### ✅ 账号密码登录（推荐，2026-09-10 实测跑通，全程零人工）
 
-脚本里已实现（`try_avatar_login` + `pick_org`）：
+登录页的「**账号登录**」tab 是两步式，**没有验证码、没有短信**：
+
+```
+点 [role=tab] 账号登录  →  手机号  →  下一步  →  密码  →  登录
+```
+
+- 凭据放 `web_automation/.env`（已被 gitignore）：
+  `DINGTALK_USER` / `DINGTALK_PASSWORD`，**不走命令行**（避免进 shell 历史和日志）。
+- 脚本优先用账号密码；`.env` 没配则回退「一键头像 / 扫码」人工登录。
+- **密码只尝试一次**：失败就交给人工，避免连续失败触发风控/锁定。
+
+**⚠️ 最大的坑：所有控件必须限定在 `.module-pass-login` 作用域内。**
+
+整页 DOM 里有 **3 个文本为「登录」的按钮** —— 另两个是
+`module-qrscan-login-btn` / `module-localscan-login-btn`（扫码登录）。遍历时点到它们会触发
+**钉钉客户端跳转，直接把页面搞崩**（实测 `Page crashed`，连试两次）。
+
+而 `.module-pass-login` 容器里**恰好只有本流程要的控件**：
+手机号/密码框 + 「下一步」「登录」两个按钮。收窄作用域后一次通过。
+
+另外两点：
+- `is_visible()` **不够**：被遮住的元素它照样返回 True。只有 Playwright 的
+  `click()` 可点击性检查（visible + stable + receives events）靠谱 → 逐个试着重试，谁点得动就是谁。
+- 用 `.filter(has_text=/^下一步$/)` **匹配不到**：按钮文本常被包在子 span 里并带空白，正则锚定会失败。
+
+### 一键头像授权（备用路径）
+
+脚本里也实现了（`try_avatar_login` + `pick_org`），在 `.env` 未配凭据时使用：
 
 1. 勾选 `.app-qr-login-page .base-comp-check-box-rememberme-box`（第 0 个 = 自动登录）
 2. 点 `.app-qr-login-page .module-qrcode-user-avatar`

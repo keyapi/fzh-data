@@ -117,3 +117,26 @@ tags: [web-automation, tongtu, sellfox, playwright, log]
 **核验（2026-09-10 实测）**：39 个离职发起人单据 → **39/39 成功、0 失败、39 文件 / 2.8 MB**。
 与 API manifest 交叉比对：这 39 单里 **38 单 API 侧是 `userNotExist`**，仅 1 单 API 已成功
 → 该路径补回了 38 个 API 无解的单据。
+
+## 2026-09-10 — 钉钉登录改为账号密码（免扫码），凭据入 .env
+
+**为什么**：一键头像要依赖钉钉客户端端口（8441-8443，本机是 8440 所以走不通）；扫码要人参与。
+账号密码登录可全自动。
+
+**流程（实测）**：`账号登录` tab → 手机号 → 下一步 → 密码 → 登录。**无验证码、无短信。**
+凭据放 `web_automation/.env`（`DINGTALK_USER`/`DINGTALK_PASSWORD`，已 gitignore，**不入命令行**）；
+`.env` 未配则回退一键头像/扫码。密码**只尝试一次**，避免连续失败触发风控。
+
+**踩坑（重要）**：
+1. **所有控件必须限定 `.module-pass-login` 作用域**。整页有 **3 个「登录」按钮**，另两个是
+   `module-qrscan-login-btn`/`module-localscan-login-btn`（扫码）—— 遍历时点到会把页面**搞崩**
+   （`Page crashed`，连崩两次）。该容器里恰好只有本流程的手机号/密码框与「下一步/登录」。
+2. `is_visible()` **不够**：被遮住的元素照样返回 True；要用 Playwright `click()` 的可点击性检查
+   （visible+stable+receives events）逐个试。
+3. `.filter(has_text=/^下一步$/)` **匹配不到**：按钮文本被包在子 span 里且带空白，正则锚定失效。
+4. Playwright 自带 Chromium 上该登录页会崩；改用本机 Chrome 通道（`--channel chrome`，默认）。
+
+**交付**：`--channel`（默认 chrome）、`.env.example` 增 `DINGTALK_*` 占位、文档补该路径与三条坑。
+
+**核验（2026-09-10 实测）**：**全新 profile** 跑 `--mode excel` → `已用账号密码提交登录` →
+`已选择组织：方州汇国际` → 导出成功 232 KB。**全程零人工**（无扫码、无头像、无权限气泡）。

@@ -15,7 +15,8 @@ Agent 参考（OKF 文档见 [docs/index.md](docs/index.md)；`click-based/AGENT
 
 - 独立 uv 子项目：子环境 `web_automation/.venv`；首次 `uv run python web_automation/scripts/bootstrap.py`（建环境+Chromium），体检 `doctor.py`。
 - OCR 全自动登录（ddddocr）：`uv sync --project web_automation --group ocr`；脚本加 `--auto-login`。
-- 凭据只放 `web_automation/.env`（gitignored）→ `TONGTU_USER`/`TONGTU_PASSWORD`（通途），绝不入库。
+- 凭据只放 `web_automation/.env`（gitignored）→ `TONGTU_USER`/`TONGTU_PASSWORD`（通途）、
+  `DINGTALK_USER`/`DINGTALK_PASSWORD`（钉钉 aflow，账号密码登录免扫码），绝不入库、不进命令行。
 - 持久化登录 cookie：`web_automation/chrome-profile/`（gitignored）。登录识别：body 含 `编号：`。
 - OCR 不可用自动降级半自动：自动填账号密码，验证码留人工在窗口输入。
 
