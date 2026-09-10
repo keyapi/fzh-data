@@ -2,7 +2,7 @@
 """对照钉钉缓存 vs DRM 本地两月账期桶，并整理一份本地副本（不写 NAS 同步盘）。"""
 from __future__ import annotations
 
-from paths import LOCAL_NAS_PERIOD, OA_DATA
+from paths import OA_DATA, local_nas_period
 
 import json
 import re
@@ -30,7 +30,6 @@ from person_folders import mentions
 
 DATA = OA_DATA
 MANIFEST = DATA / "manifest.jsonl"
-LOCAL_ROOT = LOCAL_NAS_PERIOD
 JUL = "账期20260704-20260803"
 AUG = "账期20260804-20260903"
 SEP = "账期20260904-20261003"
@@ -84,7 +83,7 @@ def classify_suffix(name: str) -> str:
 
 
 def index_drm(bucket: str) -> list[dict]:
-    root = LOCAL_ROOT / bucket
+    root = local_nas_period() / bucket
     out = []
     if not root.exists():
         return out

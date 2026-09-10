@@ -169,7 +169,7 @@ def main() -> None:
     for b in (JUL, AUG):
         people = [x["name"] for x in nas.get_file_list(f"{ROOT}/{b}", limit=500) if x.get("is_dir")]
         verify[b] = {}
-        for person in mapped_folder_names() + ["Cici"]:
+        for person in mapped_folder_names():
             if person not in people:
                 verify[b][person] = []
                 continue

@@ -35,7 +35,17 @@ OA_DATA = _env_path("DINGTALK_OA_DATA", MODULE_DIR / "data")
 OA_REPORTS = OA_DATA / "reports"
 OA_TOOLS = _env_path("DINGTALK_OA_TOOLS", MODULE_DIR)
 OA_WORK = _env_path("DINGTALK_OA_WORK", OA_DATA.parent)
-LOCAL_NAS_PERIOD = _env_path("LOCAL_NAS_PERIOD_ROOT", Path(r"D:\NAS与我共享\2023年度账期资料"))
+
+
+def local_nas_period() -> Path:
+    """本地同步盘账期资料根（只读对照；禁止往这里写）。未设置即报错，不内置本机默认路径。"""
+    raw = os.environ.get("LOCAL_NAS_PERIOD_ROOT", "").strip()
+    if not raw:
+        raise RuntimeError(
+            "未设置 LOCAL_NAS_PERIOD_ROOT。在模块 .env 或 NAS_API/.env 填本地同步盘账期资料根"
+            "（只读对照；禁止往这里写）。不要把本机路径写进 git。"
+        )
+    return Path(raw)
 
 
 def finance_period_roots() -> list[str]:

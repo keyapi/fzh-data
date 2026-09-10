@@ -14,6 +14,7 @@ applies_when:
   - "用赛狐结算组对照钉钉销售收款确认单"
   - "渠道账号表店名与账期文件名前缀对不上"
   - "离职发起人附件 API 返回 userNotExist"
+  - "算某月账期时需要剔除上月迟交登记的行"
 tags:
   - "amazon-settlement"
   - "dingtalk-oa"
@@ -57,7 +58,19 @@ NAS `{账期桶}/{人名}/` 是钉钉**提交人**。店负责人是 Google 表�
 
 **8. 21 位审批编号当文本。** Excel 会收成科学计数或错号。
 
-**9. 本机路径和真名不进 git。** 缓存/核算目录用 `DINGTALK_OA_DATA`、`DINGTALK_OA_WORK`；NAS 根用 `NAS_FINANCE_PERIOD_ROOT`。不要把含人名的磁盘路径或 FileStation 路径写进脚本。
+**9. 本机路径和真名不进 git。** 缓存/核算目录用 `DINGTALK_OA_DATA`、`DINGTALK_OA_WORK`；NAS 根用 `NAS_FINANCE_PERIOD_ROOT`；本地同步盘账期根用 `LOCAL_NAS_PERIOD_ROOT`（未设即报错）。不要把含人名的磁盘路径或 FileStation 路径写进脚本。
+
+**10. 算新月前先跨月剔除。** 钉钉只能按**发起时间**导出，迟交单会混进下个月的导出。财务共享表「钉钉账期提交时间不对挪动记录」登记这些行；算某个账期月时，先按**唯一键** `审批编号|账期日期|销售账户|销售额` 把 `后续账期须剔除` 命中该月的行从当月导出里去掉，否则同一笔会被算两次。规范：[late-submission-registry.md](../../dingtalk/dingtalk_oa_approval/docs/reference/late-submission-registry.md)。
+
+## 结算周期基线
+
+判断「这个店这个月该有几期」要有基线，不能凭感觉：
+
+- Amazon 专业卖家结算一般 **14 天一期**；自然月通常 **2 期**，对齐到月末会变 **3 期**。
+- 某月只有 **1 期甚至 0 期**的常见原因：该期余额 ≤ 0 未打款、新店前 30 天、或漏交。**只有银行到账次数不能证明**，要看赛狐结算组。
+- 因此漏交只落在**有打款**的结算组上；打款为 0 的组先不当漏交。
+- 制度沿革：早年要求「账期产生后 **7 天内**交钉钉」（故 7 号前提交、8 号导出）；后改为 **3 号前提交、4 号导出**，提交窗 = 4 号～下月 3 号。大量历史迟交（8/6、8/7 才交）正是旧制度的残留，不是当天才想起来。
+- **不要把这个节奏套到别的平台**：Walmart 多为双周，eBay 可日结。
 
 ## Why This Matters
 
@@ -85,7 +98,9 @@ NAS `{账期桶}/{人名}/` 是钉钉**提交人**。店负责人是 Google 表�
 ## Related
 
 - [离职发起人附件 userNotExist](../../dingtalk/dingtalk_oa_approval/docs/research/departed-originator-download.md)
+- [迟交挪动登记与跨月剔除](../../dingtalk/dingtalk_oa_approval/docs/reference/late-submission-registry.md)
 - [2026-09-10 7 月对照过程](../../dingtalk/dingtalk_oa_approval/docs/research/2026-09-10-july-amazon-period-reconcile.md)
+- [2026-09-09 附件拉取与 DRM 对照审计](../../dingtalk/dingtalk_oa_approval/docs/research/2026-09-09-attachment-fetch-and-drm-audit.md)
 - [浏览器补下载钉钉管理后台](../../dingtalk/dingtalk_oa_approval/docs/research/browser-admin-download.md)
 - [渠道账号表同步 EN](../workflow-issues/en-channel-account-gsheet-sync.md)
 - [网页任务必须先 dispatch --check](../workflow-issues/search-first-before-implementing.md)

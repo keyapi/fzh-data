@@ -10,7 +10,7 @@ resource: dingtalk/dingtalk_oa_approval/july_amz_by_account.py
 
 # 2026-09-10 7 月 Amazon 账期对照
 
-公开仓库用人名**拼音大写首字母**。NAS 文件夹真名只在 gitignore 的 `person_folders.local.json`（从 `person_folders.example.json` 复制后填真实文件夹名）。不要把核算缓存盘路径、NAS 密码、token 写进 git。`NAS_FINANCE_PERIOD_ROOT` / `DINGTALK_OA_DATA` / `DINGTALK_OA_WORK` 见 `.env.example`。
+公开仓库用人名**拼音大写首字母**。NAS 文件夹真名只在 gitignore 的 `person_folders.local.json`（从 `person_folders.example.json` 复制后填真实文件夹名）。不要把核算缓存盘路径、NAS 密码、token 写进 git。`NAS_FINANCE_PERIOD_ROOT` / `LOCAL_NAS_PERIOD_ROOT` / `DINGTALK_OA_DATA` / `DINGTALK_OA_WORK` 见 `.env.example`。
 
 | 首字母 | 角色（7 月相关） |
 |--------|------------------|
@@ -23,7 +23,7 @@ resource: dingtalk/dingtalk_oa_approval/july_amz_by_account.py
 | LN | 已离职提交人；夹里有 JHP 名下店 7 月第一期 txt |
 | CLB | Johnear-FR 等；核算补行（含 9/9 六张） |
 | HWH | Johnear-US 202607 表负责人；实际 7 月 txt 由 LTZ 交 |
-| LXJ | 钉钉名 Cici；结算周期 csv 不算 Amazon txt |
+| LXJ | 结算周期 csv 不算 Amazon txt；人名夹别名曾与其重复，已去重 |
 | WLR | `AMZYTHDUS` 更早历史夹 |
 | YTQ | 大量 invoice PDF，核算 Amazon txt 用不上 |
 | ZKY | 审批中 csv 综合集可跳过 |
@@ -71,6 +71,24 @@ resource: dingtalk/dingtalk_oa_approval/july_amz_by_account.py
 
 如森 7 月 txt 多在 LYX 夹，8 月起多见 SYX 夹。云途 US：表负责人和 NAS 夹是 LTT，该笔核算发起人却是 LYX。
 
+## 7 月定稿怎么来的（方法 1 vs 方法 2）
+
+起因：7 月定稿一开始用的是「按提交窗导出」的那份（文件 1），后来发现迟交的单不在里面。
+
+| | 定义 | 行数 |
+|---|---|---|
+| 文件 1 | 7 月提交窗导出（按发起时间；用于核对是否有未提交） | 129 = 6 月 3 + 7 月 124 + 8 月 2 |
+| 文件 2 | 跨月导出（含 8、9 月账期，截至 9/8） | 396 |
+| 方法 1 | 文件 1 + 迟交行 | 172 = 6 月 3 + 7 月 167 + 8 月 2 |
+| **方法 2（采用）** | 文件 2 剔除账期日期在 8/9 月的行 | **170 = 6 月 3 + 7 月 167** |
+
+- 文件 1 的全部行都在文件 2 里。
+- 方法 1 会把 **2 条早交**（账期日期 8/3、8/4，发起落在 7 月窗口）留在 7 月文件里；方法 2 把它们拿掉。那 2 条要在 8 月核算里保留。
+- 6 月遗留的 3 行按「木已成舟」**保留在 7 月文件**里，两种方法一致。
+- 迟交行的登记与跨月剔除见 [late-submission-registry.md](../reference/late-submission-registry.md)。
+
+**陷阱（关键）**：方法 2 里 21 位审批编号已被 Excel 收成数字，会对不上原文（例：`202608071142000210210` 变成 `202608071142000197632`），用编号会以为某行没进 7 月。**不要用方法 2 按审批编号对账**；改用编号为文本的 `核算_账期日期2026-07_销售收款确认单_20260910.xlsx`（170 行，含 Johnear）。8 月同理用 `核算_账期日期2026-08_销售收款确认单_20260910.xlsx`（**不含** Johnear）。
+
 ## 脚本（仓库内）
 
 | 脚本 | 用途 |
@@ -83,6 +101,8 @@ resource: dingtalk/dingtalk_oa_approval/july_amz_by_account.py
 | `fetch_attachments.py` | 标准下载；离职常失败 |
 
 对照 xlsx 在仓库外核算缓存，**不要 commit**。
+
+`DINGTALK_OA_TOOLS` 里的 `patch_july_2026.py` **没入库**，`export_period_excels.py` / `fill_aug_from_oa.py` / `july_amz_by_account.py` 都 import 它，新克隆直接跑会 `ModuleNotFoundError`。
 
 ## 下一步（给后续 Agent）
 

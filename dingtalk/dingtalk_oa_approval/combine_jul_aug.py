@@ -13,7 +13,6 @@ if str(_HERE) not in sys.path:
 from audit_vs_drm import (
     AUG,
     JUL,
-    LOCAL_ROOT,
     DATA,
     MANIFEST,
     SKIP_NAMES,

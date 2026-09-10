@@ -14,5 +14,7 @@ timestamp: 2026-09-10
 | 7 月 Amazon 对照 | [research/2026-09-10-july-amazon-period-reconcile.md](research/2026-09-10-july-amazon-period-reconcile.md) |
 | 浏览器补下载（下一任） | [research/browser-admin-download.md](research/browser-admin-download.md) |
 | 附件 API 与 Excel 字段 | [reference/oa-attachment-api.md](reference/oa-attachment-api.md) |
+| 迟交挪动登记 / 跨月剔除 | [reference/late-submission-registry.md](reference/late-submission-registry.md) |
+| 附件拉取与 DRM 审计数字 | [research/2026-09-09-attachment-fetch-and-drm-audit.md](research/2026-09-09-attachment-fetch-and-drm-audit.md) |
 | 离职发起人下载 | [research/departed-originator-download.md](research/departed-originator-download.md) |
 | 变更 | [log.md](log.md) |

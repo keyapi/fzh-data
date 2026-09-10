@@ -14,8 +14,9 @@ timestamp: 2026-09-10
 ## 凭证
 
 - 使用 new-api 那套**企业内部应用**（Client ID = 原 AppKey）。`.env` gitignore。
+- ⚠️ 这套应用是**临时**借用的（原为钉钉登录 / 离职打通），权限面偏大。读**后台原生模板**（销售收款确认单）建议另开一个**企业内部应用**，只开下面 3 个 workflow 权限；`qyapi_aflow`（审批流数据管理）对读原生 OA 单没有用，可以从 new-api 应用拿掉。详见 [docs/reference/oa-attachment-api.md](docs/reference/oa-attachment-api.md)。
 - 公开仓库用人名拼音首字母。真名文件夹映射：复制 `person_folders.example.json` 为 `person_folders.local.json`（gitignore）后填 NAS 真实文件夹名。
-- 可设 `DINGTALK_OA_ENV` 指向仓库外 env（gitignore）。缓存目录 `DINGTALK_OA_DATA`（默认模块 `data/`）。核算导出 Excel 所在目录 `DINGTALK_OA_WORK`。NAS FileStation 账期根 `NAS_FINANCE_PERIOD_ROOT`（可分号分隔候选）。都不要把含人名的路径写进 git。
+- 可设 `DINGTALK_OA_ENV` 指向仓库外 env（gitignore）。缓存目录 `DINGTALK_OA_DATA`（默认模块 `data/`）。核算导出 Excel 所在目录 `DINGTALK_OA_WORK`。NAS FileStation 账期根 `NAS_FINANCE_PERIOD_ROOT`（可分号分隔候选）。本地同步盘账期根 `LOCAL_NAS_PERIOD_ROOT`（**未设即报错**，不再内置本机默认路径）。都不要把含人名的路径写进 git。
 - 权限：`Workflow.Instance.Read`、`Workflow.Instance.Write`（下载接口要写权限）、`Workflow.Form.Read`。
 - 模板：销售收款确认单 `PROC-FB234439-0642-451E-A514-20FBEF4A4241`。Excel「数据id」= `processInstanceId`，「审批编号」= `businessId`。
 
@@ -44,10 +45,11 @@ DRM 在 NAS 上按 **发起人姓名** 分子文件夹。这只表示谁提交�
 - 离职附件标准 API 常 `userNotExist`：先综合 DRM 已归档与核算 Excel；专享接口见 docs/research。实例详情仍可读，附件可能已在单上只是下不下来。
 - 财务 NAS FileStation 用管理员 `fzh.nas`（密码只在 `NAS_API/.env`），不要用看不到财务部的测试账号。
 - 未开的新月桶等 DRM 日切后再下；迟交件按账期月进已有桶，不预建空人名夹。
+- 算某个账期月之前，先按[迟交挪动登记](docs/reference/late-submission-registry.md)的**唯一键** `审批编号|账期日期|销售账户|销售额`，从当月导出里剔除 `后续账期须剔除` 命中该月的行，否则迟交单会被算两次。
 
 ## 7 月 Amazon 对账结论（2026-09-10）
 
-完整过程与剩余缺口：[docs/research/2026-09-10-july-amazon-period-reconcile.md](docs/research/2026-09-10-july-amazon-period-reconcile.md)。惯例：[docs/solutions/conventions/amazon-period-file-reconcile.md](../../docs/solutions/conventions/amazon-period-file-reconcile.md)。
+完整过程与剩余缺口：[docs/research/2026-09-10-july-amazon-period-reconcile.md](docs/research/2026-09-10-july-amazon-period-reconcile.md)。惯例：[docs/solutions/conventions/amazon-period-file-reconcile.md](../../docs/solutions/conventions/amazon-period-file-reconcile.md)。附件拉取与 DRM 对照数字：[docs/research/2026-09-09-attachment-fetch-and-drm-audit.md](docs/research/2026-09-09-attachment-fetch-and-drm-audit.md)。
 
 - 按**账号**对，不按人名夹。赛狐店名经 `赛狐店铺` / 别名对到 `AMZRosoon*`、`AMZYTHDUS`。
 - 赛狐 `groupPage` 95 个 7 月结算组 ≠ Amazon txt 原件。「有 NAS 或核算」≠「这一期钉钉且附件都齐」。
@@ -67,3 +69,5 @@ uv run python dingtalk/dingtalk_oa_approval/combine_jul_aug.py
 uv run python dingtalk/dingtalk_oa_approval/nas_upload_api21.py
 uv run python dingtalk/dingtalk_oa_approval/july_amz_by_account.py
 ```
+
+`DINGTALK_OA_TOOLS`（默认模块目录）里的 `patch_july_2026.py` **没入库**，但 `export_period_excels.py`、`fill_aug_from_oa.py`、`july_amz_by_account.py` 都 import 它 —— 新克隆直接跑这三个会 `ModuleNotFoundError`，要先自己准备该文件。

@@ -5,7 +5,7 @@
 """
 from __future__ import annotations
 
-from paths import LOCAL_NAS_PERIOD, OA_DATA, finance_period_roots
+from paths import OA_DATA, finance_period_roots, local_nas_period
 
 import json
 import sys
@@ -24,7 +24,6 @@ from NAS_API.synology import get_nas
 MODULE = Path(__file__).resolve().parent
 DATA = OA_DATA
 MANIFEST = DATA / "manifest.jsonl"
-LOCAL_ROOT = LOCAL_NAS_PERIOD
 JUL = "账期20260704-20260803"
 AUG = "账期20260804-20260903"
 SEP = "账期20260904-20261003"  # DRM 未下
@@ -47,7 +46,7 @@ def load_manifest() -> list[dict]:
 
 
 def index_local(bucket: str) -> list[dict]:
-    root = LOCAL_ROOT / bucket
+    root = local_nas_period() / bucket
     out = []
     if not root.exists():
         return out
@@ -206,11 +205,12 @@ def main() -> None:
             miss = detail[detail["本地命中桶"] == "未在本地7/8月桶找到"]
             miss.to_excel(xw, sheet_name="明细本地未找到", index=False)
         pd.DataFrame(ding_collisions).to_excel(xw, sheet_name="钉钉侧文件名重名", index=False)
+        local_root = local_nas_period()
         pd.DataFrame(
             [
-                {"桶": JUL, "本地文件数": len(local_jul), "存在": (LOCAL_ROOT / JUL).exists()},
-                {"桶": AUG, "本地文件数": len(local_aug), "存在": (LOCAL_ROOT / AUG).exists()},
-                {"桶": SEP, "本地文件数": len(local_sep), "存在": (LOCAL_ROOT / SEP).exists(), "备注": "DRM按提交窗10月4日后才下"},
+                {"桶": JUL, "本地文件数": len(local_jul), "存在": (local_root / JUL).exists()},
+                {"桶": AUG, "本地文件数": len(local_aug), "存在": (local_root / AUG).exists()},
+                {"桶": SEP, "本地文件数": len(local_sep), "存在": (local_root / SEP).exists(), "备注": "DRM按提交窗10月4日后才下"},
             ]
         ).to_excel(xw, sheet_name="本地桶汇总", index=False)
 

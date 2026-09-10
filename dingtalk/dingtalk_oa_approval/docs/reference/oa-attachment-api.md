@@ -17,6 +17,24 @@ timestamp: 2026-09-09
 
 列实例 `POST /v1.0/workflow/processes/instanceIds/query` 文档写明仅**企业内部应用**。new-api 应用虽显示 Client ID，原 AgentId 仍按内部应用拿 token，已实测可列、可读、可下。
 
+## 应用与权限选型
+
+| 权限 | 要/不要 | 说明 |
+|------|---------|------|
+| `Workflow.Instance.Read` | **要** | 读实例详情、按 processCode 列实例 |
+| `Workflow.Instance.Write` | **要** | 下载附件（下载接口虽然只读，官方仍要求写权限） |
+| `Workflow.Form.Read` | 建议留 | 列可见模板、核对 processCode |
+| `qyapi_aflow`（审批流数据管理） | **不要** | 那是流程中心待办（把自有审批同步进钉钉），与读后台**原生** OA 单无关 |
+
+当时这几个权限是**临时**加在 new-api 那套应用上的，注意两点：
+
+- 登录应用（第三方企业应用）同时拿「写 + 下附件」权限，权限面过大。
+- `instanceIds/query`（按提交窗自动扫全量）**只支持企业内部应用**。将来想按窗口自动扫，挂在第三方应用上会卡住。
+
+**建议**：OA 附件单独用一个**企业内部 H5 微应用**（或已有的内部应用），只开上面 3 个 `Workflow.*` 权限；new-api 登录应用保持员工相关权限，并把 `qyapi_aflow` 拿掉。
+
+加权限后通常还需要：**发布新版本 + 管理员重新授权**；内部应用有时要在 OA 里把该应用**关联到「销售收款确认单」模板**，否则实例详情/下载报 `noPermission` / `processGetFailedByParameter`。
+
 ## 端点
 
 1. `POST /v1.0/oauth2/accessToken`

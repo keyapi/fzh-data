@@ -6,7 +6,7 @@
 """
 from __future__ import annotations
 
-from paths import LOCAL_NAS_PERIOD, OA_REPORTS, OA_TOOLS
+from paths import OA_REPORTS, OA_TOOLS, local_nas_period
 
 import json
 import re
@@ -34,9 +34,6 @@ from person_folders import folder_for_initials, nas_person_folder  # noqa: E402
 from sellfox_amz_settlements import ding_brand_site  # noqa: E402
 
 OUT = OA_REPORTS
-NAS_JUL = LOCAL_NAS_PERIOD / "账期20260704-20260803"
-NAS_JUN = LOCAL_NAS_PERIOD / "账期20260604-20260703"
-NAS_AUG = LOCAL_NAS_PERIOD / "账期20260804-20260903"
 JUL_XLSX = OUT / "核算_账期日期2026-07_销售收款确认单_20260910.xlsx"
 SF_XLSX = OUT / "赛狐Amazon结算组_7-8月.xlsx"
 SITES = "US|UK|DE|FR|IT|ES|CA|MX|BE|NL|SE|PL|AU|JP|IN|IE|AT"
@@ -178,10 +175,11 @@ def gsheet_amz_owners() -> pd.DataFrame:
 def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8")
     owners = gsheet_amz_owners()
+    nas_root = local_nas_period()
     nas = pd.DataFrame(
-        walk_nas_amz(NAS_JUL, "账期20260704-20260803")
-        + walk_nas_amz(NAS_JUN, "账期20260604-20260703")
-        + walk_nas_amz(NAS_AUG, "账期20260804-20260903")
+        walk_nas_amz(nas_root / "账期20260704-20260803", "账期20260704-20260803")
+        + walk_nas_amz(nas_root / "账期20260604-20260703", "账期20260604-20260703")
+        + walk_nas_amz(nas_root / "账期20260804-20260903", "账期20260804-20260903")
     )
     nas7 = nas[nas["文件名账期月"] == "2026-07"].copy() if not nas.empty else nas
     excel = excel_amz_rows()

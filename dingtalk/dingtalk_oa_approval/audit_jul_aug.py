@@ -137,10 +137,10 @@ def main() -> None:
     A(f"- 钉钉: {json.dumps(ding_hits, ensure_ascii=False)}")
 
     lxj = folder_for_initials("LXJ")
-    A("\n## LXJ / Cici")
-    cici_jobs = [j for j in jobs if lxj and j["NAS人"] == lxj]
+    A("\n## LXJ")
+    lxj_jobs = [j for j in jobs if lxj and j["NAS人"] == lxj]
     for ym in ("2026-07", "2026-08"):
-        sub = [j for j in cici_jobs if ym in (j["账期月"] or "")]
+        sub = [j for j in lxj_jobs if ym in (j["账期月"] or "")]
         A(f"- 钉钉账期月 {ym}：{len(sub)} 个附件 / {len({j['审批编号'] for j in sub})} 张单")
         for j in sub:
             A(f"  {j['审批编号']} {j['发起时间']} 平台={j['平台']} {j['原始文件名']} → {j['核算桶']}")
