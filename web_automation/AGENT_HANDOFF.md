@@ -27,7 +27,23 @@ Agent 参考（OKF 文档见 [docs/index.md](docs/index.md)；`click-based/AGENT
 | `tongtu.sales.export` | `legacy-compatible/tongtu_sales_report.py` | 销售及库存报表导出 + 按仓分表 |
 | **`tongtu.orderdetail.export`** | `legacy-compatible/tongtu_orderdetail_report.py` | 订单详情统计月度导出（详情见下） |
 | `sellfox.stock.export` | `legacy-compatible/sellfox_auto_export.py --api` | 赛狐库存（API-first） |
+| **`dingtalk.aflow.receipt.export`** | `legacy-compatible/dingtalk_aflow_receipt.py` | 钉钉 aflow 销售收款确认单导出 Excel（详情见下） |
 | `web.generic.explore` | Playwright MCP | 新页面探路（snapshot+evaluate 后沉淀 Python） |
+
+## 钉钉 aflow 销售收款确认单导出（背景/过程/结果摘要）
+
+- **背景/为什么**：财务每期要从钉钉 aflow「OA审批管理后台」手工导出销售收款确认单单据为 Excel。
+  附件侧已有 API 路径（`dingtalk/dingtalk_oa_approval/fetch_attachments.py`），唯一盲区是离职发起人
+  （标准下载接口 `userNotExist`），aflow 以在职管理员身份访问可覆盖。
+- **过程**：MCP 探路 → 沉淀脚本 → 注册 `dingtalk.aflow.receipt.export`。选择器/动作/踩坑见
+  `docs/reference/aflow-receipt-export.md`。
+- **结果（2026-09-10 实测核验）**：窗口 2026-07-04~09-09 → **405 行 / 265 单据**（单据数按唯一 `数据id` 计），
+  发起时间全在窗口内；产物 232 KB；`数据id` 与 API `instance_ids.json` **265/265 重合**。
+- **用法**：`uv run python web_automation/scripts/dispatch.py dingtalk.aflow.receipt.export -- --from 2026-07-04 --to 2026-09-09`
+- **附件（重要）**：aflow **没有**可取回本地的批量附件下载 —— `导出全部` **hover** 出「仅导出审批单附件」，
+  产物进**钉盘【云盘-团队文件】**，且该行 `下载` 会 redirect loop。
+  `oa.dingtalk.com` 与 `aflow.dingtalk.com` 是**同一个 SPA**，不存在可退的"老控制台"。
+  附件请走 API；离职发起人走导出 Excel 里的 `previewAttachments` 深链。
 
 ## 订单详情统计导出（背景/过程/结果摘要）
 

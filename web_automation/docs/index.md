@@ -12,6 +12,7 @@ tags: [web-automation, tongtu, sellfox, playwright, index]
 
 - **能力矩阵与路由** → [capability-matrix](reference/capability-matrix.md)
 - **订单详情统计月度导出** → [orderdetail-export](reference/orderdetail-export.md)
+- **钉钉 aflow 销售收款确认单导出** → [aflow-receipt-export](reference/aflow-receipt-export.md)
 - **安全与本地状态** → [security-and-local-state](reference/security-and-local-state.md)
 - **Phase B 退役门槛** → [phase-b-retirement-gates](reference/phase-b-retirement-gates.md)
 - **架构选型** → [technical-decisions](reference/technical-decisions.md)

@@ -26,6 +26,7 @@ EXPECTED = [
     "legacy-compatible/sellfox_login_ocr.py",
     "legacy-compatible/tongtu_export_ocr.py",
     "legacy-compatible/test_ocr.py",
+    "legacy-compatible/dingtalk_aflow_receipt.py",
     "click-based/sellfox_import_other_inbound.py",
     "click-based/sellfox_import_other_outbound.py",
     "click-based/sellfox_import_warehouse_restock.py",

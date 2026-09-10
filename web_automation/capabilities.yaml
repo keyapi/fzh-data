@@ -113,3 +113,18 @@ capabilities:
       mcp: playwright
     contract: ui
     last_verified: "2026-08-26"
+
+  dingtalk.aflow.receipt.export:
+    platform: dingtalk
+    mode: BROWSER_ONLY
+    risk: read
+    primary: browser
+    fallback: null
+    allowed_fallback_codes: []
+    blocked_fallback_codes: [AUTH_FAILED, PERMISSION_DENIED, INVALID_ARGUMENT, BUSINESS_VALIDATION]
+    verify: xlsx_exists_and_has_two_row_header
+    implementation:
+      browser: legacy-compatible/dingtalk_aflow_receipt.py
+      browser_args: ["--mode", "excel"]
+    contract: ui
+    last_verified: "2026-09-10"

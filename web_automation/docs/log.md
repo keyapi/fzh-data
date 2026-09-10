@@ -70,3 +70,28 @@ tags: [web-automation, tongtu, sellfox, playwright, log]
 - 提交前记最上行提交时间 → 提交后往返 tab → 最上行提交时间一变锁本次行 → 等该行下载链接
 
 **核验**：单日 2026-07-15 实测 306 行、发货日期全 07-15，RUN_EXIT=0；`uv run pytest tests/web_automation -q` → 48 passed。
+
+## 2026-09-10 — 新增钉钉 aflow 销售收款确认单导出（`dingtalk.aflow.receipt.export`）
+
+**为什么**：财务每期手工从钉钉 aflow「OA审批管理后台」导出销售收款确认单单据 Excel。附件侧 API 路径已跑通，
+唯一盲区是离职发起人（`userNotExist`）。本次先把 Excel 这条链沉淀成能力。
+
+**MCP 探路关键结论**（详见 `docs/reference/aflow-receipt-export.md`）：
+- 直接开 aflow 会落到**没有任何登录控件**的 `error.vm`；必须先走 `oa.dingtalk.com` 触发统一身份认证 + **选组织**，SSO 才覆盖 aflow。
+- 「一键头像登录」依赖钉钉客户端 8441-8443 端口，本机客户端在 **8440** → 不通，最终走扫码。
+- 表单名称是 **antd 二级级联**（状态→表单），有多个近似名，必须 `:text-is` 精确匹配。
+- 发起时间输入框 **readOnly**，只能走 dtd RangePicker 日历面板；同页有**两对**「开始/结束日期」，用 `nth` 消歧。
+- `导出全部` **点按钮本体 = 立即异步导出**；附件选项藏在 **hover** 出来的下拉里（`仅导出审批单附件`）。
+- **导出产物是 2 行表头**（行1 审批元数据+合并组标题，行2 明细子字段），数据自第 3 行起；
+  **同一单据因明细表重复成多行 → 单据数按唯一 `数据id` 计**。
+- **`goto` 同一个 URL（只差 hash）不是重载** —— SPA 不会重新请求，会把旧进度看成"卡住"（本次曾被 96% 误导）。
+
+**附件：证伪**。aflow 无「批量下载附件」；`仅导出审批单附件` 的产物进**钉盘【云盘-团队文件】**，
+该行 `下载` 报 `ERR_TOO_MANY_REDIRECTS`；`oa.dingtalk.com` 与 `aflow.dingtalk.com` 是**同一个 SPA**，
+不存在可退的"老控制台"。附件维持 API 路径，离职发起人走 Excel 内 `previewAttachments` 深链。
+
+**交付**：`legacy-compatible/dingtalk_aflow_receipt.py`、`capabilities.yaml` 注册、`runtime._PROFILE_DIRS` 加 `dingtalk`、
+`.gitignore` 加 profile、`docs/reference/aflow-receipt-export.md`、索引/handoff/capability-matrix 同步、入口测试登记。
+
+**核验（2026-09-10 实测）**：窗口 2026-07-04~09-09 → 405 行 / **265 单据**，发起时间全在窗口内；
+产物 232 KB；`数据id` 与 API `instance_ids.json` **265/265 重合**；API manifest 对 6 名离职发起人共 **199 条 `userNotExist`**。
