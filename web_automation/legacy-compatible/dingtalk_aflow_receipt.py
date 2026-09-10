@@ -60,9 +60,11 @@ LOGIN_HINT = (
     "       登录优先级：账号密码（.env 配了就优先）→ 一键头像 → 人工扫码。\n"
     "       若需要你介入：\n"
     "       1) 账号密码登录失败时会自动回退，可手动扫码\n"
-    "       2) Chrome 左上角若弹「访问此设备上的其它应用和服务」→ 点【允许】\n"
+    "       2) 钉钉对**陌生设备**可能再要一次短信验证码 —— 脚本会提示，请在弹出的\n"
+    "          浏览器窗口里输入（同 profile 只需一次）\n"
+    "       3) Chrome 左上角若弹「访问此设备上的其它应用和服务」→ 点【允许】\n"
     "          （原生气泡，脚本点不到；按 profile 只问一次）\n"
-    f"       3) 登录态持久化到 {DEFAULT_PROFILE}，之后不再需要\n"
+    f"       4) 登录态持久化到 {DEFAULT_PROFILE}，之后不再需要\n"
 )
 
 
@@ -198,6 +200,32 @@ def _fill_in(page: Page, scope: str, selector: str, value: str,
     return False
 
 
+def _check_remember_me(page: Page, scope: str = ".module-pass-login") -> bool:
+    """勾上「自动登录」。
+
+    **必须勾**：不勾的话钉钉只发短期会话，profile 里留不住登录态，
+    下次运行又要重新登录（还会再触发一次短信验证码）。
+    """
+    try:
+        for box in page.locator(f"{scope} .base-comp-check-box-rememberme-box").all():
+            try:
+                parent_txt = box.evaluate(
+                    "el => (el.parentElement && el.parentElement.innerText) || ''"
+                ) or ""
+            except Exception:
+                continue
+            if "自动登录" not in parent_txt:
+                continue
+            if "checkbox-done" in (box.get_attribute("class") or ""):
+                return True
+            box.click(timeout=3000)
+            page.wait_for_timeout(400)
+            return True
+    except Exception:
+        pass
+    return False
+
+
 def login_with_password(page: Page, user: str, password: str) -> bool:
     """钉钉「账号登录」：手机号 → 下一步 → 密码 → 登录。
 
@@ -231,15 +259,35 @@ def login_with_password(page: Page, user: str, password: str) -> bool:
             return False
         page.wait_for_timeout(800)
 
+        if _check_remember_me(page, scope):
+            print("[信息] 已勾选「自动登录」（保证登录态能持久化到 profile）")
+        else:
+            print("[警告] 没能勾上「自动登录」——登录态可能不持久，下次还要重登")
+
         if not _click_in(page, scope, "登录"):
             print("[警告] 点不动「登录」")
             return False
         page.wait_for_timeout(4000)
-        print("[信息] 已用账号密码提交登录")
+        print("[信息] 已提交手机号+密码；钉钉可能再要求短信验证码（见下方提示）")
         return True
     except Exception as e:
         print(f"[警告] 账号密码登录异常（{type(e).__name__}）：{str(e)[:150]}")
         return False
+
+
+def _sms_step_present(page: Page) -> bool:
+    """是否停在「短信验证码」这一步。
+
+    钉钉对陌生设备/风控会插一道短信验证码（`.module-verify-code-input`）。
+    这是**预期内的**，不是脚本 bug；同 profile 登录成功一次后就不再需要。
+    """
+    try:
+        for el in page.locator(".module-verify-code-input").all():
+            if el.is_visible():
+                return True
+    except Exception:
+        pass
+    return False
 
 
 def wait_for_login(page: Page, timeout_s: int, org: str, user: str = "", password: str = "") -> bool:
@@ -247,6 +295,7 @@ def wait_for_login(page: Page, timeout_s: int, org: str, user: str = "", passwor
 
     登录方式优先级：账号密码（.env 有就优先）→ 一键头像 → 等用户扫码。
     账号密码**只尝试一次**：错了就交给人工，避免连续失败触发风控/锁定。
+    中途若出现短信验证码，会**明确提示**并等用户输入（这一步无法自动化）。
     """
     if is_logged_in(page):
         return True
@@ -259,6 +308,7 @@ def wait_for_login(page: Page, timeout_s: int, org: str, user: str = "", passwor
     waited = 0
     pwd_tried = False
     avatar_done = False
+    sms_reported = False
     while waited < timeout_s:
         if page.url.startswith("https://oa.dingtalk.com/index.htm") and "welcome" in page.url:
             break
@@ -269,6 +319,16 @@ def wait_for_login(page: Page, timeout_s: int, org: str, user: str = "", passwor
             elif not avatar_done and try_avatar_login(page):
                 avatar_done = True
                 print("[信息] 已勾选自动登录并点击头像，等待授权…")
+            if not sms_reported and _sms_step_present(page):
+                sms_reported = True
+                print(
+                    "\n" + "=" * 66 + "\n"
+                    "[需要你介入] 钉钉要求**短信验证码**（陌生设备/风控触发，正常现象）。\n"
+                    "             请在浏览器窗口里填入手机收到的验证码，输完脚本会自动继续。\n"
+                    "[说明] 这一步无法自动化（短信只有你手机上有）。\n"
+                    "       同一个 profile 登录成功一次后不再需要——登录态已持久化。\n"
+                    + "=" * 66 + "\n"
+                )
             pick_org(page, org)
         page.wait_for_timeout(2000)
         waited += 2
