@@ -1,26 +1,34 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""钉钉 aflow「销售收款确认单」单据导出为 Excel（浏览器，持久化登录）。
+"""钉钉 aflow「销售收款确认单」单据导出为 Excel + 离职发起人附件补齐（浏览器，持久化登录）。
 
 用法:
+  # 1) 导出单据表
   uv run python web_automation/legacy-compatible/dingtalk_aflow_receipt.py \
       --from 2026-07-04 --to 2026-09-09
+  # 2) 按导出表补离职发起人的附件（API userNotExist 的那批）
+  uv run python web_automation/legacy-compatible/dingtalk_aflow_receipt.py \
+      --mode attachments
 
 产出:
-  <out>/Amazon&新平台成本 {from}-{to} 销售收款确认单-{导出时间戳}.xlsx
+  excel        <out>/Amazon&新平台成本 {from}-{to} 销售收款确认单-{导出时间戳}.xlsx
+  attachments  <out>/dingtalk_oa_approval_data/aflow_attachments/<数据id>/<原名>
+               + aflow_attachments_manifest.jsonl（按 数据id 一行，断点续传）
 
 流程（选择器与踩坑详见 web_automation/docs/reference/aflow-receipt-export.md）:
-  登录 → 表单名称级联(已启用→销售收款确认单) → 发起时间 → 查询
-  → 导出全部(异步任务) → 操作记录/导出记录 轮询 → 下载 → 落盘
+  excel:       登录 → 表单名称级联(已启用→销售收款确认单) → 发起时间 → 查询
+               → 导出全部(异步任务) → 操作记录/导出记录 轮询 → 下载 → 落盘
+  attachments: 读导出表 → 筛离职发起人 → 逐单开 plainapproval 详情页 → 点文件名下载
 
 约定:
-  - 默认 headed：cookie 失效时用户可在窗口里现场登录（脚本会先开 oa.dingtalk.com 触发登录流）。
+  - 默认 headed：cookie 失效时用户可在窗口里现场登录（脚本会自动尝试一键头像授权）。
   - 文件名自构造，不用 download.suggested_filename。
   - 只写 <out>（仓库外）与 gitignore 的 profile 目录，不写仓库内任何目录。
 """
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from datetime import datetime
@@ -264,6 +272,188 @@ def goto_records(page: Page) -> None:
     page.wait_for_timeout(4000)
 
 
+# ---------------------------------------------------------------------------
+# 附件模式：按单据走 plainapproval 详情页取附件
+#
+# 背景：批量附件导出（「导出全部」hover 的"仅导出审批单附件"）产物进钉盘【云盘-团队文件】，
+# aflow 侧取不回本地；而导出表里的 #/previewAttachments 深链**需要钉钉客户端**才能打开。
+# 浏览器里能走通的是「查看」对应的详情页：
+#   .../pchomepage.htm?from=oflow&op=true&corpid=<corp>#/plainapproval?procInstId=<数据id>
+# 页面上附件卡片虽然带 `file-list disabled`（"预览"动作不可见），但点**文件名**仍会触发真实下载。
+# 这条正是离职发起人（API `userNotExist`）唯一的取件路径。
+# ---------------------------------------------------------------------------
+
+CORP_DEFAULT = "dingb0f80e79aafefc8635c2f4657eb6378f"
+DETAIL_URL = (
+    "https://aflow.dingtalk.com/dingtalk/web/query/pchomepage.htm"
+    "?from=oflow&op=true&corpid={corp}#/plainapproval?procInstId={pid}"
+)
+
+
+def safe_name(name: str) -> str:
+    return re.sub(r'[\\/:*?"<>|]', "_", (name or "file").strip()) or "file"
+
+
+def read_export_records(xlsx: Path) -> tuple[list[dict], str]:
+    """从导出表读 (数据id, 发起人姓名, 审批编号)，并从超链接里取 corpid。
+
+    导出表是 2 行表头、数据自第 3 行；同一单据会因明细表重复成多行 → 按 数据id 去重。
+    """
+    import openpyxl
+
+    wb = openpyxl.load_workbook(xlsx)
+    recs: list[dict] = []
+    seen: set[str] = set()
+    corp = ""
+    for sn in wb.sheetnames:
+        ws = wb[sn]
+        h1 = [ws.cell(row=1, column=c).value for c in range(1, ws.max_column + 1)]
+        ix = {h: i for i, h in enumerate(h1) if h}
+        if "数据id" not in ix:
+            continue
+        c_id = ix["数据id"] + 1
+        c_name = ix.get("发起人姓名", ix["数据id"]) + 1
+        c_bid = ix.get("审批编号", ix["数据id"]) + 1
+        for r in range(3, ws.max_row + 1):
+            pid = ws.cell(row=r, column=c_id).value
+            if not pid:
+                continue
+            pid = str(pid)
+            if pid in seen:
+                continue
+            seen.add(pid)
+            recs.append({
+                "pid": pid,
+                "name": str(ws.cell(row=r, column=c_name).value or ""),
+                "bid": ws.cell(row=r, column=c_bid).value,
+            })
+            if not corp:
+                hl = ws.cell(row=r, column=102).hyperlink
+                if hl and hl.target:
+                    m = re.search(r"corpid=([A-Za-z0-9]+)", hl.target)
+                    if m:
+                        corp = m.group(1)
+    return recs, (corp or CORP_DEFAULT)
+
+
+def list_record_files(page: Page, corp: str, pid: str, fields: list[str]) -> list[dict]:
+    """打开某单据详情页，列出要下载的附件（只取指定字段标签，天然跳过图片控件）。"""
+    page.goto(DETAIL_URL.format(corp=corp, pid=pid), wait_until="domcontentloaded", timeout=60000)
+    page.reload(wait_until="domcontentloaded")  # 只改 hash 的 goto 不重渲染
+    page.wait_for_timeout(5000)
+    try:
+        return page.evaluate(
+            """(fields) => {
+                const out = [];
+                document.querySelectorAll('.m-field-view').forEach(v => {
+                    const lab = v.querySelector('.m-field-view-label');
+                    const label = lab ? lab.innerText.trim() : '';
+                    if (!fields.includes(label)) return;
+                    v.querySelectorAll('.file-list-item').forEach((it, i) => {
+                        const n = it.querySelector('.item-name');
+                        const s = it.querySelector('.item-size');
+                        out.push({
+                            label,
+                            idx: i,
+                            name: n ? n.innerText.trim() : '',
+                            size: s ? s.innerText.trim() : '',
+                        });
+                    });
+                });
+                return out;
+            }""",
+            fields,
+        )
+    except Exception as e:
+        print(f"    [警告] 读取附件列表失败: {str(e)[:120]}")
+        return []
+
+
+def fetch_record(page: Page, corp: str, pid: str, fields: list[str], dest_dir: Path) -> dict:
+    """取某单据的附件。已存在且非空的跳过（断点续传）。"""
+    files = list_record_files(page, corp, pid, fields)
+    saved: list[dict] = []
+    errors: list[dict] = []
+    for f in files:
+        dest = dest_dir / safe_name(f["name"])
+        try:
+            if dest.exists() and dest.stat().st_size > 0:
+                saved.append({**f, "path": dest.name, "skipped": True})
+                continue
+            scope = page.locator(f'.m-field-view:has(label:text-is("{f["label"]}"))').first
+            name_el = scope.locator(".file-list-item").nth(f["idx"]).locator(".item-name")
+            with page.expect_download(timeout=60000) as dl_info:
+                name_el.click(force=True, timeout=15000)
+            dl = dl_info.value
+            dl.save_as(str(dest))
+            saved.append({**f, "path": dest.name, "bytes": dest.stat().st_size})
+            page.wait_for_timeout(400)
+        except Exception as e:
+            errors.append({**f, "reason": str(e)[:200]})
+    return {"files": saved, "errors": errors}
+
+
+def run_attachments(page: Page, args, base_out: Path, att_out: Path) -> int:
+    xlsx = Path(args.from_xlsx) if args.from_xlsx else _newest_export(base_out, args.form)
+    if not xlsx or not xlsx.is_file():
+        emit_failure("INVALID_ARGUMENT",
+                     f"[错误] 找不到导出表，请用 --from-xlsx 指定（默认在 {base_out} 找最新的）")
+        return 1
+    recs, corp = read_export_records(xlsx)
+    if args.only_departed:
+        targets = [r for r in recs if "离职" in r["name"]]
+    else:
+        targets = recs
+    fields = [s.strip() for s in args.fields.split(",") if s.strip()]
+    print(f"[信息] 导出表 {xlsx.name}：{len(recs)} 单 → 目标 {len(targets)} 单"
+          f"（{'仅离职发起人' if args.only_departed else '全部'}），字段={fields}，corpId={corp}")
+    if not targets:
+        print("[信息] 没有符合条件的单据")
+        return 0
+
+    manifest = att_out / "aflow_attachments_manifest.jsonl"
+    n_ok = n_err = n_skip = n_files = 0
+    with manifest.open("a", encoding="utf-8") as fh:
+        for i, rec in enumerate(targets, 1):
+            dest_dir = att_out / rec["pid"]
+            try:
+                res = fetch_record(page, corp, rec["pid"], fields, dest_dir)
+            except Exception as e:
+                res = {"files": [], "errors": [{"reason": f"{type(e).__name__}: {str(e)[:200]}"}]}
+            got = [f for f in res["files"] if not f.get("skipped")]
+            skipped = [f for f in res["files"] if f.get("skipped")]
+            n_files += len(res["files"])
+            n_skip += len(skipped)
+            if res["errors"]:
+                n_err += 1
+            else:
+                n_ok += 1
+            rec_out = {**rec, "corp": corp, **res, "ok": not res["errors"]}
+            fh.write(json.dumps(rec_out, ensure_ascii=False) + "\n")
+            fh.flush()
+            print(f"[{i}/{len(targets)}] {rec['name']} {rec['bid']} "
+                  f"取到={len(got)} 已存在={len(skipped)} 失败={len(res['errors'])}")
+            if res["errors"]:
+                for e in res["errors"]:
+                    print(f"    [错误] {e.get('name')}: {e.get('reason')}")
+    print(f"[汇总] 目标单据 {len(targets)}：成功 {n_ok} / 有失败 {n_err}；"
+          f"文件 {n_files}（新下载 {n_files - n_skip}，已存在跳过 {n_skip}）")
+    print(f"[汇总] 落盘 {att_out}；manifest {manifest.name}")
+    if n_err:
+        emit_failure("PARTIAL_FAILURE", f"[警告] {n_err} 个单据有附件未取到，详见 manifest")
+        return 1
+    return 0
+
+
+def _newest_export(out_dir: Path, form: str) -> Path | None:
+    cands = sorted(
+        out_dir.glob(f"{FILE_PREFIX} *{form}-*.xlsx"),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+    return cands[0] if cands else None
+
+
 def main() -> int:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser(description="钉钉 aflow 销售收款确认单导出")
@@ -277,18 +467,21 @@ def main() -> int:
     ap.add_argument("--headless", action="store_true")
     ap.add_argument("--login-timeout", type=int, default=300)
     ap.add_argument("--export-timeout", type=int, default=600)
+    # 附件模式（--mode attachments）
+    ap.add_argument("--from-xlsx", default="",
+                    help="附件模式：从哪张导出表读 数据id/发起人；默认取 --out 下最新的")
+    ap.add_argument("--fields", default="账期明细",
+                    help="附件模式：要取哪些字段标签（逗号分隔）；默认只取账期明细，图片控件不取")
+    ap.add_argument("--only-departed", dest="only_departed", action="store_true", default=True,
+                    help="附件模式：只取离职发起人的单据（默认开）")
+    ap.add_argument("--all-originators", dest="only_departed", action="store_false",
+                    help="附件模式：不限离职，取导出表里全部单据")
     ap.add_argument("--auto-login", action="store_true",
                     help="仅为 dispatcher/CLI 对齐保留；钉钉网页是扫码/SSO，非图形验证码，本参数是 no-op")
     args = ap.parse_args()
 
-    if args.mode != "excel":
-        # 附件批量导出的产物进钉盘、aflow 侧取不回本地 —— 见参考文档
-        emit_failure(
-            "ATTACHMENT_MANUAL_REQUIRED",
-            "[错误] aflow 未提供可取回本地的批量附件下载：产物落【云盘-团队文件】且无入口。\n"
-            "       请改用 dingtalk/dingtalk_oa_approval/fetch_attachments.py（API），"
-            "离职发起人走 previewAttachments 深链。",
-        )
+    if args.mode not in ("excel", "attachments"):
+        emit_failure("INVALID_ARGUMENT", f"[错误] 未知 mode: {args.mode}")
         return 1
     if args.auto_login:
         print("[信息] --auto-login 对钉钉无意义（非验证码登录），已忽略")
@@ -314,6 +507,11 @@ def main() -> int:
             if not is_logged_in(page) and not wait_for_login(page, args.login_timeout, args.org):
                 emit_failure("LOGIN_TIMEOUT", "[错误] 登录未完成，请手动登录后重试")
                 return 1
+
+            if args.mode == "attachments":
+                att_out = out_dir / "dingtalk_oa_approval_data" / "aflow_attachments"
+                att_out.mkdir(parents=True, exist_ok=True)
+                return run_attachments(page, args, out_dir, att_out)
 
             dismiss_modals(page)
 

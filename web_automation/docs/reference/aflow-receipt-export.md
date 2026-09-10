@@ -10,8 +10,10 @@ status: scripted-and-verified
 
 # aflow「销售收款确认单」导出探路
 
-**状态：已沉淀并端到端跑通**（`dingtalk.aflow.receipt.export`，
-`legacy-compatible/dingtalk_aflow_receipt.py`，2026-09-10 实测 `status=READY`）。
+**状态：已沉淀并端到端跑通**（`legacy-compatible/dingtalk_aflow_receipt.py`，2026-09-10）：
+- `dingtalk.aflow.receipt.export`（`--mode excel`）→ `status=READY`
+- `dingtalk.aflow.receipt.attachments`（`--mode attachments`）→ 39/39 单、0 失败
+
 本文件是耐久产物；`.playwright-mcp/` 里的截图/DOM dump 是临时的。
 
 ## 入口与登录
@@ -151,7 +153,43 @@ https://oa.dingtalk.com/dingtalk/web/query/dashboard?dinghash=aflowSetting#/aflo
 补充：直接深链到 oa 域名下的操作记录页**打不开列表**（需要 `code=` 参数；
 不带参数时页面停在未初始化的空壳，`a.export-file-download` 数量为 0）。
 
-**结论**：aflow 批量附件这条路**取不回本地**。附件走下面「API + 深链」。
+**结论**：aflow 的**批量**附件下载取不回本地（产物进钉盘）。但**按单据逐条**可以取 —— 走下面这条。
+
+### ✅ 可用路径：`plainapproval` 详情页（`--mode attachments`）
+
+数据查看里每行的「**查看**」会**新开一个标签页**，URL 可构造：
+
+```
+https://aflow.dingtalk.com/dingtalk/web/query/pchomepage.htm?from=oflow&op=true
+  &corpid=<corpId>#/plainapproval?procInstId=<数据id>
+```
+
+页面在浏览器里**能正常渲染**（不需要客户端）。附件卡片长这样：
+
+```html
+<div class="m-field-view">
+  <label class="m-field-view-label">账期明细</label>
+  <div class="file-list disabled">            <!-- 注意 disabled -->
+    <div class="file-list-item">
+      <div class="item-content">
+        <div class="item-name">AMZRosoonES-2026-08-05.txt</div>
+        <div class="item-size">901B</div>
+        <div class="item-action"><span>预览</span></div>   <!-- 不可见 -->
+```
+
+**关键点：虽然容器带 `disabled`、`预览` 动作不可见，但点「文件名」（`.item-name`）仍会触发真实下载。**
+
+要点：
+- `goto` 之后**必须 `page.reload()`** —— 只改 hash 的导航在 SPA 里不会重渲染，会读到上一条单据
+- 点击要 `force=True`（元素被 `disabled` 样式挡住常规点击）
+- 用字段标签定位：`.m-field-view:has(label:text-is("账期明细"))` → 天然**跳过图片控件**（那是 `图片` 字段）
+- 落盘自构造文件名（同 excel 模式的教训）
+
+**踩坑**：`previewAttachments` 深链 → 需客户端，不能用；`plainapproval` → 可用。两者容易混，别走错。
+
+**实测（2026-09-10）**：对导出表里 **39 个离职发起人单据**跑一遍 → **39/39 成功、0 失败、39 个文件 / 2.8 MB**。
+与 API manifest 交叉比对：这 39 单里 **38 单在 API 侧是 `userNotExist`**（API 根本拿不到），
+只有 1 单 API 已成功 —— **这就是本路径的全部价值：补 API 无解的离职发起人**。
 
 ### 单条：Excel 里的深链
 
@@ -174,6 +212,10 @@ https://aflow.dingtalk.com/dingtalk/pc/pages/dynamic/formservice.htm?corpid=<cor
 | 所有附件汇总 | （不带 componentId） |
 
 用 openpyxl `cell.hyperlink.target` 读；pandas 读不到超链接。
+
+> ⚠️ **这个 `#/previewAttachments` 深链在浏览器里打不开**：直接访问会被自己重定向成
+> `#/goToDingtalk?url=…&ddtab=true`，页面只剩「**该页面需要在钉钉客户端内打开**」+
+> 「打开钉钉 / 下载钉钉」。**它是客户端专用路由，不能用于 Playwright**。
 
 ### aflow 页面**没有**「批量下载附件」
 

@@ -95,3 +95,25 @@ tags: [web-automation, tongtu, sellfox, playwright, log]
 
 **核验（2026-09-10 实测）**：窗口 2026-07-04~09-09 → 405 行 / **265 单据**，发起时间全在窗口内；
 产物 232 KB；`数据id` 与 API `instance_ids.json` **265/265 重合**；API manifest 对 6 名离职发起人共 **199 条 `userNotExist`**。
+
+## 2026-09-10 — 补 `dingtalk.aflow.receipt.attachments`：离职发起人附件可取了
+
+**为什么**：上一轮回溯结论是"aflow 批量附件取不回本地"。但离职发起人（API `userNotExist`）**必须**从 UI 拿，
+需要一条真正可用的浏览器路径。
+
+**探路（两条路，只通一条）**：
+- ❌ 导出表里的 `#/previewAttachments` 深链 → 浏览器访问会被重定向到 `#/goToDingtalk`，
+  页面只剩「该页面需要在钉钉客户端内打开」→ **客户端专用，Playwright 用不了**。
+- ✅ 数据查看行内「**查看**」→ 新标签页 `pchomepage.htm?...&corpid=<corp>#/plainapproval?procInstId=<数据id>`，
+  **浏览器能正常渲染**。附件卡片虽带 `file-list disabled`、`预览` 动作不可见，
+  **但点 `.item-name`（force）会触发真实下载**。
+
+**踩坑**：`goto` 同一 URL 只改 hash **不是重载**，会读到上一条单据 → 必须 `page.reload()`（这坑当天踩了两次）。
+
+**交付**：`--mode attachments`（读导出表 → 筛离职 → 逐单开详情页 → 点文件名下载），
+落 `<out>/dingtalk_oa_approval_data/aflow_attachments/<数据id>/` + `aflow_attachments_manifest.jsonl`（按 数据id 一行，可续传）；
+`capabilities.yaml` 注册 `dingtalk.aflow.receipt.attachments`。
+
+**核验（2026-09-10 实测）**：39 个离职发起人单据 → **39/39 成功、0 失败、39 文件 / 2.8 MB**。
+与 API manifest 交叉比对：这 39 单里 **38 单 API 侧是 `userNotExist`**，仅 1 单 API 已成功
+→ 该路径补回了 38 个 API 无解的单据。

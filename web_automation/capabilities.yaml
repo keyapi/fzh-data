@@ -128,3 +128,18 @@ capabilities:
       browser_args: ["--mode", "excel"]
     contract: ui
     last_verified: "2026-09-10"
+
+  dingtalk.aflow.receipt.attachments:
+    platform: dingtalk
+    mode: BROWSER_ONLY
+    risk: read
+    primary: browser
+    fallback: null
+    allowed_fallback_codes: []
+    blocked_fallback_codes: [AUTH_FAILED, PERMISSION_DENIED, INVALID_ARGUMENT, BUSINESS_VALIDATION]
+    verify: per_instance_files_and_manifest
+    implementation:
+      browser: legacy-compatible/dingtalk_aflow_receipt.py
+      browser_args: ["--mode", "attachments"]
+    contract: ui
+    last_verified: "2026-09-10"
