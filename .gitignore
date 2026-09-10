@@ -27,6 +27,8 @@ venv/
 # env files (secrets)
 .env
 secrets/*.json
+dingtalk/dingtalk_oa_approval/data/
+dingtalk/dingtalk_oa_approval/person_folders.local.json
 *.cookie.txt
 cookie.txt
 **/docs/api-reference/llms_parsed.json

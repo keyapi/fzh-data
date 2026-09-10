@@ -3,13 +3,14 @@ okf: v0.1
 type: Index
 title: conventions — 索引
 tags: [solutions, conventions]
-timestamp: 2026-08-20
+timestamp: 2026-09-10
 ---
 
 # conventions
 
 | 标题 | 文件 |
 |------|------|
+| Amazon 账期按账号对 NAS/钉钉/赛狐结算组 | [amazon-period-file-reconcile.md](amazon-period-file-reconcile.md) |
 | parcel_track 处理天数统一 3 个营业日与 per-carrier 顺序并发 | [parcel-track-handling-days-sequential-workers.md](parcel-track-handling-days-sequential-workers.md) |
 | 三角类皮壳在通途与赛狐并行期的共享库存代理 | [sellfox-cover-shared-inventory-transition.md](sellfox-cover-shared-inventory-transition.md) |
 | EN 物料/变体创建惯例 — 四层属性体系与配套物料 | [erpnext-item-variant-creation-convention.md](erpnext-item-variant-creation-convention.md) |

@@ -7,6 +7,10 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-09-10
+- **更新**: `conventions/amazon-period-file-reconcile.md` — 补浏览器补下载路径、env/人名不上 git；公开叙述仍用拼音首字母。
+- **新增**: `conventions/amazon-period-file-reconcile.md` — Amazon 账期按账号对 NAS/钉钉/赛狐结算组：负责人≠人名夹、店名经别名、groupPage≠txt 原件、「或」≠「钉钉且附件」；公开叙述用人名首字母。
+
 ## 2026-09-08
 - **新增**: `integration-issues/cliproxyapi-auth-unavailable-oauth-recovery.md` — CLIProxyAPI `503 auth_unavailable` 恢复：服务健康不等于目标模型具备上游授权；按升级、浏览器 OAuth、失效认证记录隔离、重启和真实模型请求验收处理。
 - **同步**: `us_openai_api_proxy/` 的 runbook、handoff、README、lesson 和受控运维 skill；不记录账号、OAuth URL/代码、认证材料、私有地址或 API key。

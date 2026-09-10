@@ -1,0 +1,22 @@
+{
+  "_comment": "复制为 person_folders.local.json（已 gitignore）。values 必须是 NAS 上真实人名文件夹，不要把 local 文件提交 git。公开文档只用拼音大写首字母。",
+  "originator_to_folder": {
+    "Cici": "LXJ"
+  },
+  "initials_to_folder": {
+    "LXJ": "LXJ",
+    "LTZ": "LTZ",
+    "CLB": "CLB",
+    "JHP": "JHP",
+    "LN": "LN",
+    "LYX": "LYX",
+    "SYX": "SYX",
+    "LTT": "LTT",
+    "WHR": "WHR",
+    "WZ": "WZ",
+    "YTQ": "YTQ",
+    "ZKY": "ZKY",
+    "YB": "YB",
+    "SWY": "SWY"
+  }
+}
