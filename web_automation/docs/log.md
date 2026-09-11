@@ -70,3 +70,109 @@ tags: [web-automation, tongtu, sellfox, playwright, log]
 - 提交前记最上行提交时间 → 提交后往返 tab → 最上行提交时间一变锁本次行 → 等该行下载链接
 
 **核验**：单日 2026-07-15 实测 306 行、发货日期全 07-15，RUN_EXIT=0；`uv run pytest tests/web_automation -q` → 48 passed。
+
+## 2026-09-10 — 新增钉钉 aflow 销售收款确认单导出（`dingtalk.aflow.receipt.export`）
+
+**为什么**：财务每期手工从钉钉 aflow「OA审批管理后台」导出销售收款确认单单据 Excel。附件侧 API 路径已跑通，
+唯一盲区是离职发起人（`userNotExist`）。本次先把 Excel 这条链沉淀成能力。
+
+**MCP 探路关键结论**（详见 `docs/reference/aflow-receipt-export.md`）：
+- 直接开 aflow 会落到**没有任何登录控件**的 `error.vm`；必须先走 `oa.dingtalk.com` 触发统一身份认证 + **选组织**，SSO 才覆盖 aflow。
+- 「一键头像登录」依赖钉钉客户端 8441-8443 端口，本机客户端在 **8440** → 不通，最终走扫码。
+- 表单名称是 **antd 二级级联**（状态→表单），有多个近似名，必须 `:text-is` 精确匹配。
+- 发起时间输入框 **readOnly**，只能走 dtd RangePicker 日历面板；同页有**两对**「开始/结束日期」，用 `nth` 消歧。
+- `导出全部` **点按钮本体 = 立即异步导出**；附件选项藏在 **hover** 出来的下拉里（`仅导出审批单附件`）。
+- **导出产物是 2 行表头**（行1 审批元数据+合并组标题，行2 明细子字段），数据自第 3 行起；
+  **同一单据因明细表重复成多行 → 单据数按唯一 `数据id` 计**。
+- **`goto` 同一个 URL（只差 hash）不是重载** —— SPA 不会重新请求，会把旧进度看成"卡住"（本次曾被 96% 误导）。
+
+**附件：证伪**。aflow 无「批量下载附件」；`仅导出审批单附件` 的产物进**钉盘【云盘-团队文件】**，
+该行 `下载` 报 `ERR_TOO_MANY_REDIRECTS`；`oa.dingtalk.com` 与 `aflow.dingtalk.com` 是**同一个 SPA**，
+不存在可退的"老控制台"。附件维持 API 路径，离职发起人走 Excel 内 `previewAttachments` 深链。
+
+**交付**：`legacy-compatible/dingtalk_aflow_receipt.py`、`capabilities.yaml` 注册、`runtime._PROFILE_DIRS` 加 `dingtalk`、
+`.gitignore` 加 profile、`docs/reference/aflow-receipt-export.md`、索引/handoff/capability-matrix 同步、入口测试登记。
+
+**核验（2026-09-10 实测）**：窗口 2026-07-04~09-09 → 405 行 / **265 单据**，发起时间全在窗口内；
+产物 232 KB；`数据id` 与 API `instance_ids.json` **265/265 重合**；API manifest 对 6 名离职发起人共 **199 条 `userNotExist`**。
+
+## 2026-09-10 — 补 `dingtalk.aflow.receipt.attachments`：离职发起人附件可取了
+
+**为什么**：上一轮回溯结论是"aflow 批量附件取不回本地"。但离职发起人（API `userNotExist`）**必须**从 UI 拿，
+需要一条真正可用的浏览器路径。
+
+**探路（两条路，只通一条）**：
+- ❌ 导出表里的 `#/previewAttachments` 深链 → 浏览器访问会被重定向到 `#/goToDingtalk`，
+  页面只剩「该页面需要在钉钉客户端内打开」→ **客户端专用，Playwright 用不了**。
+- ✅ 数据查看行内「**查看**」→ 新标签页 `pchomepage.htm?...&corpid=<corp>#/plainapproval?procInstId=<数据id>`，
+  **浏览器能正常渲染**。附件卡片虽带 `file-list disabled`、`预览` 动作不可见，
+  **但点 `.item-name`（force）会触发真实下载**。
+
+**踩坑**：`goto` 同一 URL 只改 hash **不是重载**，会读到上一条单据 → 必须 `page.reload()`（这坑当天踩了两次）。
+
+**交付**：`--mode attachments`（读导出表 → 筛离职 → 逐单开详情页 → 点文件名下载），
+落 `<out>/dingtalk_oa_approval_data/aflow_attachments/<数据id>/` + `aflow_attachments_manifest.jsonl`（按 数据id 一行，可续传）；
+`capabilities.yaml` 注册 `dingtalk.aflow.receipt.attachments`。
+
+**核验（2026-09-10 实测）**：39 个离职发起人单据 → **39/39 成功、0 失败、39 文件 / 2.8 MB**。
+与 API manifest 交叉比对：这 39 单里 **38 单 API 侧是 `userNotExist`**，仅 1 单 API 已成功
+→ 该路径补回了 38 个 API 无解的单据。
+
+## 2026-09-10 — 钉钉登录改为账号密码（免扫码），凭据入 .env
+
+**为什么**：一键头像要依赖钉钉客户端端口（8441-8443，本机是 8440 所以走不通）；扫码要人参与。
+账号密码登录可免扫码。
+
+**流程（实测）**：`账号登录` tab → 手机号 → 下一步 → 密码 → 登录。
+凭据放 `web_automation/.env`（`DINGTALK_USER`/`DINGTALK_PASSWORD`，已 gitignore，**不入命令行**）；
+`.env` 未配则回退一键头像/扫码。密码**只尝试一次**，避免连续失败触发风控。
+
+**⚠️ 更正一处先前结论**：起初记为「无验证码、全程零人工」——**不准确**。
+钉钉对**陌生设备/profile** 会插一道**短信验证码**，必须人工输一次（无法自动化）。
+实测：全新 profile 首次登录**要**验证码；同一 profile 之后再跑**不要**（登录态已持久化，直接进导出）。
+另注：同一账号在别的 profile 重新登录可能让原 profile 会话失效 → 再触发一次验证码，所以**固定用一个 profile**。
+脚本已检测该步骤（`.module-verify-code-input`）并明确提示用户。
+
+**踩坑（重要）**：
+1. **所有控件必须限定 `.module-pass-login` 作用域**。整页有 **3 个「登录」按钮**，另两个是
+   `module-qrscan-login-btn`/`module-localscan-login-btn`（扫码）—— 遍历时点到会把页面**搞崩**
+   （`Page crashed`，连崩两次）。该容器里恰好只有本流程的手机号/密码框与「下一步/登录」。
+2. `is_visible()` **不够**：被遮住的元素照样返回 True；要用 Playwright `click()` 的可点击性检查
+   （visible+stable+receives events）逐个试。
+3. `.filter(has_text=/^下一步$/)` **匹配不到**：按钮文本被包在子 span 里且带空白，正则锚定失效。
+4. Playwright 自带 Chromium 上该登录页会崩；改用本机 Chrome 通道（`--channel chrome`，默认）。
+5. 必须勾「**自动登录**」，否则登录态留不住（脚本已自动勾）。
+
+**交付**：`--channel`（默认 chrome）、`.env.example` 增 `DINGTALK_*` 占位、文档补该路径与上述坑。
+
+**核验（2026-09-10）**：全新 profile 跑 `--mode excel` → 手机号+密码自动提交 → **需人工输一次短信验证码** →
+`已选择组织`（公司主组织）→ 导出成功 232 KB；**紧接着再跑一次，无需任何登录/验证码**，直接导出成功
+（证明登录态持久化生效）。
+
+## 2026-09-10 — 文档补齐与脱敏（aflow 三件事的交接面）
+
+**做了什么**：按 OKF 补齐本次钉钉 aflow 工作的交接面，并对安全区做隐私脱敏。
+
+- `AGENT_HANDOFF.md`：aflow 段补上**登录机制**（`.env` 账号密码 → 头像/扫码回退；
+  陌生设备**短信验证码**需人工一次；默认 `--channel chrome`）与**与 API 路径的关系**（两条独立路径）
+- `docs/lessons/index.md`：补上漏登记的 `login-fallback-design.md`，并注明它只覆盖**图形**验证码，
+  钉钉是**短信**验证码（机制不同）
+- `docs/reference/aflow-receipt-export.md`：修正 frontmatter（原 `description` 还写着"尚未沉淀为脚本"，
+  与 `status: scripted-and-verified` 自相矛盾）、补附件/登录的验证记录、新增「相关文档与边界」一节
+- **脱敏**：安全区内**已无个人姓名**；引用的日志里组织名改为泛称。
+  凭据只在 `web_automation/.env`（gitignore，**未被跟踪**，已 `git grep` 复核）。
+
+**边界（重要）**：本轮**只写 `web_automation/**` + `.agents/skills/web-automation/**` + `tests/**`**。
+`docs/solutions/**`、`CONCEPTS.md`、`AGENTS.md`、根 `index.md`、`dingtalk/**`、`.gitignore` **一律没碰** ——
+它们正在 PR #226（`feature/dingtalk-july-amz-reconcile-docs`）里改，碰了必冲突。
+**待 #226 合并后**再补：docs/solutions 条目、CONCEPTS.md 术语、`dingtalk/dingtalk_oa_approval/AGENT_HANDOFF.md`
+的反向交叉链接。另注意 #226 带了 `docs/research/browser-admin-download.md`，与本文件**主题相邻，需对齐**。
+
+## 2026-09-11 — 输出目录/组织名改 env，和 226 手册对齐
+
+**为什么**：默认 `--out` 写死了本机人名核算目录，和 226「路径不进 git」冲突；GitHub 正文还停在「附件 ATTACHMENT_MANUAL_REQUIRED」。
+
+**改动**：`--out` 读 `DINGTALK_OA_WORK`（未设即报错）；`--org` 读 `DINGTALK_ORG`；`--to` 默认今天。
+`.env.example` 更正短信验证码。测试禁止脚本再出现人名路径。
+浏览器下载之后的账期月过滤 / NAS 归档以 226 手册为准；`--only-departed` 盖不住在职补交。
+

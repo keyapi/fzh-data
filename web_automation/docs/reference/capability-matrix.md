@@ -48,3 +48,5 @@ tags: [capability-matrix, routing, api, browser, fallback]
 | sellfox.other-outbound.import | MANUAL_CONFIRM | browser | write |
 | sellfox.restock.import | MANUAL_CONFIRM | browser | write |
 | web.generic.explore | BROWSER_ONLY | mcp | interactive |
+| dingtalk.aflow.receipt.export | BROWSER_ONLY | browser | read |
+| dingtalk.aflow.receipt.attachments | BROWSER_ONLY | browser | read |
