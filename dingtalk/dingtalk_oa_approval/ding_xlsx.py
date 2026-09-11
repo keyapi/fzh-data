@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 import warnings
 from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 import pandas as pd
@@ -156,15 +157,54 @@ def classify(z: str, b: str, initiated) -> tuple[str, object]:
     return "正常", None
 
 
+def norm_amount(v) -> str:
+    """金额规范化。Excel 读进来可能是 int / float / str，`0` 与 `0.0` 必须归一到同一个键。"""
+    s = "" if v is None else str(v).strip()
+    if s.lower() in {"", "nan", "none"}:
+        return ""
+    try:
+        d = Decimal(s).normalize()
+    except (InvalidOperation, ValueError):
+        return s
+    try:
+        if d == d.to_integral_value():
+            return str(d.quantize(Decimal(1)))
+    except InvalidOperation:
+        return s
+    return format(d, "f")
+
+
+def norm_date(v) -> str:
+    d = pd.to_datetime(v, errors="coerce")
+    return d.strftime("%Y-%m-%d") if pd.notna(d) else ""
+
+
+def build_key(pid, period_date, account, amount) -> str:
+    """迟交挪动登记唯一键：`审批编号|账期日期|销售账户|销售额`。
+
+    登记表侧和导出侧**必须**调同一个函数，否则金额/日期写法差一点就会静默漏剔除。
+    """
+    return "|".join([id_text(pid), norm_date(period_date), str(account or "").strip(), norm_amount(amount)])
+
+
+def pick_amount(r) -> str:
+    """唯一键里的金额口径：销售额优先，其次应收账款 / 应收金额。空单元格视为缺失。"""
+    for col in ("销售额", "应收账款", "应收金额"):
+        v = r.get(col)
+        if v is None or (isinstance(v, float) and pd.isna(v)):
+            continue
+        s = str(v).strip()
+        if s and s.lower() not in {"nan", "none"}:
+            return v
+    return ""
+
+
 def unique_key(r: pd.Series) -> str:
     """迟交挪动登记唯一键：审批编号|账期日期|销售账户|销售额。"""
     acct = str(r.get("销售账户_展开") or "").strip()
     if not acct:
         acct, _ = flatten_sale_account(r)
-    amt = r.get("销售额", r.get("应收账款", r.get("应收金额", "")))
-    d = pd.to_datetime(r.get("账期日期"), errors="coerce")
-    ds = d.strftime("%Y-%m-%d") if pd.notna(d) else ""
-    return "|".join([id_text(r.get("审批编号", "")), ds, acct, str(amt).strip()])
+    return build_key(r.get("审批编号", ""), r.get("账期日期"), acct, pick_amount(r))
 
 
 def enrich(df: pd.DataFrame) -> pd.DataFrame:

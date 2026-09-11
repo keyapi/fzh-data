@@ -40,7 +40,7 @@ resource: web_automation/scripts/dispatch.py
 |--------|------|------|----------------|
 | 1 | `AMZRosoonIT` 7/8 | **2026-09-10 SYX 已补交钉钉**。此前缺单；浏览器解决不了「没交」。现在单已在，发起人在职。 | `fetch_attachments.py --start 2026-07-04`（`--end` 默认今天，必须盖过 9/10）。再 `nas_upload_api21.py --dry-run`。 |
 | 2 | 审批 `202607231544000528489` / `AMZRosoonSE-2026-07-18.txt` | LYX 离职发起，API `userNotExist`，7 月桶只有 7/4。 | aflow `--mode attachments`（默认 `--only-departed`）。下到 `DINGTALK_OA_WORK` 后 `archive_aflow_to_nas.py --dry-run`。 |
-| 3 | 7 月核算 Excel | 钉钉只能按发起时间导出。要「只保留 7 月账期」必须宽窗再过滤。SYX 9/10 补交会落在 9 月发起窗。 | export `--from 2026-07-04 --to <今天>` → `filter_export_by_period.py --period 2026-07`。迟交行按[登记表](../reference/late-submission-registry.md)唯一键剔除。 |
+| 3 | 7 月核算 Excel | 钉钉只能按发起时间导出。要「只保留 7 月账期」必须宽窗再过滤。SYX 9/10 补交会落在 9 月发起窗。 | export `--from 2026-07-04 --to <今天>` → `filter_export_by_period.py --period 2026-07`。迟交行用 `late_submission_keys.py --period 2026-07` 生成剔除集后 `--exclude-keys`（见[登记表](../reference/late-submission-registry.md)）。 |
 
 不要把「有核算行」当成「NAS 已有 txt」。SE 7/18 就是反例。IT 7/8 补交之后仍要核对 **NAS 7 月桶**里是否出现对应 txt。
 
@@ -72,7 +72,8 @@ uv run python dingtalk/dingtalk_oa_approval/fetch_attachments.py --start 2026-07
 uv run python web_automation/scripts/dispatch.py dingtalk.aflow.receipt.export --check
 uv run python web_automation/scripts/dispatch.py dingtalk.aflow.receipt.export -- --from 2026-07-04 --to 2026-09-11
 
-uv run python dingtalk/dingtalk_oa_approval/filter_export_by_period.py --in "<DINGTALK_OA_WORK 下刚下的 xlsx>" --period 2026-07 --out "<DINGTALK_OA_DATA>/reports/核算_账期日期2026-07_销售收款确认单_今日.xlsx"
+uv run python dingtalk/dingtalk_oa_approval/late_submission_keys.py --period 2026-07 --out "<DINGTALK_OA_DATA>/reports/exclude_2026-07.txt"
+uv run python dingtalk/dingtalk_oa_approval/filter_export_by_period.py --in "<DINGTALK_OA_WORK 下刚下的 xlsx>" --period 2026-07 --exclude-keys "<上一步的 exclude 文件>" --out "<DINGTALK_OA_DATA>/reports/核算_账期日期2026-07_销售收款确认单_今日.xlsx"
 
 uv run python web_automation/scripts/dispatch.py dingtalk.aflow.receipt.attachments --check
 uv run python web_automation/scripts/dispatch.py dingtalk.aflow.receipt.attachments -- --from-xlsx "<上面那份导出>"

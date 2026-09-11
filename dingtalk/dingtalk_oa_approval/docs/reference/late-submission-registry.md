@@ -60,11 +60,28 @@ Google 表「和财务部共享」→ worksheet **钉钉账期提交时间不对
 1. 用**最新一次**钉钉导出（不要用提交窗截止日之前导出的旧表）。
 2. 按 `账期日期` 自然月切出本月；上月遗留可按「木已成舟」保留。
 3. `发起时间 ≥ 下月 4 号` 且账期在本月的行 → 追加到同一张 worksheet，`批次` 写新标签，`后续账期须剔除` 写**下月、下下月**。
-4. 算下一月账期时，先按**唯一键**从当月导出里剔除登记表命中的行。
+4. 算下一月账期时，先导出剔除键再切开：
+   ```text
+   uv run python dingtalk/dingtalk_oa_approval/late_submission_keys.py --period 2026-08 --out "<DINGTALK_OA_DATA>/reports/exclude_2026-08.txt"
+   uv run python dingtalk/dingtalk_oa_approval/filter_export_by_period.py --in "<宽窗导出xlsx>" --period 2026-08 --exclude-keys "<上面那个文件>" --out "<定稿xlsx>"
+   ```
+   脚本只读 Google 表，不写回；`后续账期须剔除` 含该月的行才会进剔除集，早交行（该列留空）自动保留。
 5. Amazon txt 因按发起时间被下载到错误桶的：凭登记表与 NAS 对照表交 DRM 审核，再在 **NAS 上**用 FileStation 把附件从提交窗桶移到 `账期日期` 自然月对应的桶。**不要改本地 `D:\NAS与我共享\`**（单向同步，改了 NAS 不会跟着变）。
+
+## 唯一键必须两端同源
+
+登记表里自带的「唯一键」列**只作人工核对**，不要直接拿去喂 `--exclude-keys`。两端都由 `ding_xlsx.build_key()` 现算：
+
+- 导出侧：`filter_export_by_period.py` → `ding_xlsx.unique_key()`
+- 登记表侧：`late_submission_keys.py` → 同一个 `build_key()`
+
+原因是金额的写法不稳定：Excel 读进来可能是 `int` / `float` / `str`，同一个 0 会写成 `0` 也可能写成 `0.0`。2026-09-11 实测就踩到——`202608041508000385990|2026-07-06|eBay（US）|0.0`（表里存的）对不上导出侧算出的 `…|0`，那一笔会被静默漏剔除。现在 `norm_amount()` 在两端统一把金额规范化（去尾零、整数值不带小数点）。
 
 ## 关联
 
 - 归档口径与「木已成舟」：[Amazon 账期按账号对账](../../../../docs/solutions/conventions/amazon-period-file-reconcile.md)
 - 7 月定稿怎么来的（方法 1/方法 2）：[2026-09-10 7 月 Amazon 账期对照](../research/2026-09-10-july-amazon-period-reconcile.md)
-- 月度切表：`filter_export_by_period.py`（`ding_xlsx.unique_key` / `exclude_keys`）。登记表本身仍在 Google 表；仓库外 `patch_july_2026.py` 只负责当初那次写入，不必再被核算脚本 import。
+- 账期月切开：`filter_export_by_period.py`（`ding_xlsx.unique_key` / `exclude_keys`）
+- 剔除键生成：`late_submission_keys.py`（读本表 → 键文件）
+- 登记表本身仍在 Google 表；仓库外 `patch_july_2026.py` 只负责当初那次写入，不必再被核算脚本 import。
+

@@ -6,6 +6,14 @@ title: dingtalk_oa_approval 变更日志
 
 # 变更日志
 
+## 2026-09-11（跨月剔除补上生成端 + 修键不对称）
+
+- **新增** `late_submission_keys.py`：读 Google 表「钉钉账期提交时间不对挪动记录」→ 按 `--period` 生成 `--exclude-keys` 文件。此前只有消费端（`filter_export_by_period.py`），从表里导出键这一步是手工的。
+- **修** 唯一键金额不对称：表里存的 `…|eBay（US）|0.0` 对不上导出侧算的 `…|0`（`str()` 取决于 dtype），那笔会被静默漏剔除。新增 `ding_xlsx.norm_amount()` / `build_key()`，两端同源；`unique_key()` 改为调它，并让销售额为空时回落应收账款。
+- 实测（2026-09-08 登记的 2026-07 批次）：`--period 2026-08` → 42 个剔除键（43 行含 1 条重复键，会在输出里点名），早交的 2 行因剔除列为空自动保留。
+- 新增 `tests/test_late_submission_keys.py`（11 项）；模块测试 16 → 27。
+- 文档：`reference/late-submission-registry.md` 补「唯一键必须两端同源」与命令；handoff / 惯例文档同步。
+
 ## 2026-09-11（226/227 拼图：env、账期月过滤、NAS 归档）
 
 - NAS 管理员账号不再写进模块明文，改读 `NAS_API/.env` 的 `NAS_ADMIN_USER`（或 `NAS_SSH_USER` / `NAS_USERNAME`）。
