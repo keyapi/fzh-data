@@ -86,6 +86,33 @@ def test_nas_credentials_require_env(monkeypatch, tmp_path):
         nas_credentials()
 
 
+def test_nas_credentials_does_not_fall_back_to_dsm_api_user(monkeypatch, tmp_path):
+    """NAS_USERNAME 是 DSM API 账号（看不见「财务部」），不能被当成管理员账号静默采用。"""
+    env = tmp_path / ".env"
+    env.write_text(
+        "NAS_USERNAME=fzh.test\nNAS_SSH_PASSWORD=pw\nNAS_URL=https://nas.invalid\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("nas_admin.NAS_ENV", env)
+    for k in ("NAS_ADMIN_USER", "NAS_SSH_USER", "NAS_SSH_PASSWORD", "NAS_PASSWORD", "NAS_URL"):
+        monkeypatch.delenv(k, raising=False)
+    with pytest.raises(RuntimeError, match="NAS_ADMIN_USER"):
+        nas_credentials()
+
+
+def test_nas_credentials_reads_admin_user(monkeypatch, tmp_path):
+    env = tmp_path / ".env"
+    env.write_text(
+        "NAS_ADMIN_USER=someadmin\nNAS_SSH_PASSWORD=pw\nNAS_URL=https://nas.invalid\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("nas_admin.NAS_ENV", env)
+    for k in ("NAS_ADMIN_USER", "NAS_SSH_USER", "NAS_SSH_PASSWORD", "NAS_PASSWORD", "NAS_URL"):
+        monkeypatch.delenv(k, raising=False)
+    url, user, pwd = nas_credentials()
+    assert (url, user, pwd) == ("https://nas.invalid", "someadmin", "pw")
+
+
 def test_module_has_no_literal_nas_admin_or_personal_path():
     root = Path(__file__).resolve().parents[1]
     offenders = []

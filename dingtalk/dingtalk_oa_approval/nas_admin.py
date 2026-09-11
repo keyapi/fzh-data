@@ -43,20 +43,19 @@ ROOT = _LazyRoot()
 
 
 def nas_credentials() -> tuple[str, str, str]:
-    """返回 (url, username, password)。账号不要写进代码。"""
+    """返回 (url, username, password)。账号不要写进代码。
+
+    **只认** NAS_ADMIN_USER / NAS_SSH_USER。不要回退到 `NAS_USERNAME` —— 那是 NAS_API 的
+    DSM API 账号（fzh.test 之类），看不见「财务部」共享；静默用它会以为权限没问题。
+    """
     _load_dotenv([NAS_ENV])
-    user = (
-        os.getenv("NAS_ADMIN_USER")
-        or os.getenv("NAS_SSH_USER")
-        or os.getenv("NAS_USERNAME")
-        or ""
-    ).strip()
+    user = (os.getenv("NAS_ADMIN_USER") or os.getenv("NAS_SSH_USER") or "").strip()
     pwd = (os.getenv("NAS_SSH_PASSWORD") or os.getenv("NAS_PASSWORD") or "").strip()
     url = (os.getenv("NAS_URL") or "").strip()
     if not user:
         raise RuntimeError(
-            "NAS_API/.env 缺少 NAS_ADMIN_USER（或 NAS_SSH_USER / NAS_USERNAME）。"
-            "不要把 NAS 账号写进 git。"
+            "NAS_API/.env 缺少 NAS_ADMIN_USER（或 NAS_SSH_USER）—— 要填能看见「财务部」共享的"
+            "管理员账号。不要用只做 API 的 NAS_USERNAME，也不要把账号写进 git。"
         )
     if not pwd:
         raise RuntimeError("NAS_API/.env 缺少 NAS_SSH_PASSWORD（或 NAS_PASSWORD）")
