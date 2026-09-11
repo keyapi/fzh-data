@@ -233,7 +233,43 @@ Channel Account 所挂的销售渠道主数据。渠道**名称**可以较长；
 店铺已经开卖、该月表上却没有具体运营人员时，仍要落一条 Owner，人名写「待分配」。开卖前的空月不写。
 
 ### Channel Account Alias
-同一店铺的其它写法。规范名本身也是一条别名。Amazon 欧洲旧名只挂在对应国家账号上，避免九国重复挂同一个旧名。
+同一店铺的其它写法。规范名本身也是一条别名。Amazon 欧洲旧名只挂在对应国家账号上，避免九国重复挂同一个旧名。赛狐 ERP 店名（表列「赛狐店铺」）可以和 Amazon 账期 txt 文件名前缀不是同一个词，必须经别名才能对上。
+
+### 账期桶
+财务 NAS 上按「每月 4 日到下月 3 日」切开的归档文件夹。钉钉按发起时间进提交窗；核算按表单「账期日期」自然月进对应桶。两套「应该放哪」不是同一件事。
+
+### 木已成舟（账期归档）
+已经在上一提交窗里核算过的销售收款确认单，即使账期日期或文件名落在本月，也不再改归本月桶。误传到本月的副本删掉，上月原件保留。
+
+### 迟交挪动登记
+钉钉只能按**发起时间**导出，所以迟交单会落进下个月的提交窗导出。财务共享表「钉钉账期提交时间不对挪动记录」把「账期日期在本月、发起时间在 ≥ 下月 4 号」的单登记下来，含审批编号、账期日期、销售账户、销售额、审批状态，以及人工复审列。规范见 `dingtalk/dingtalk_oa_approval/docs/reference/late-submission-registry.md`。
+
+### 跨月剔除
+按【迟交挪动登记】的**唯一键** `审批编号|账期日期|销售账户|销售额`，在算某个账期月时先把它从当月导出里去掉，避免同一笔既算上月又算本月。登记行的 `后续账期须剔除` 列出需要剔除的账期月。实现：`dingtalk/dingtalk_oa_approval/ding_xlsx.py` 的 `unique_key` / `exclude_keys`，切月用 `filter_export_by_period.py`。
+
+### 销售收款确认单
+钉钉 OA 原生模板，财务用来交各平台账期。Excel「数据id」= `processInstanceId`，「审批编号」= `businessId`（21 位，必须当文本）。Amazon 账期附件只认 `.txt`。
+
+### aflow
+钉钉 OA 审批管理后台。`oa.dingtalk.com` 与 `aflow.dingtalk.com` 是**同一个 SPA**。浏览器导出/离职附件走 `web_automation` 任务 `dingtalk.aflow.receipt.export` 与 `dingtalk.aflow.receipt.attachments`。批量「仅导出审批单附件」进钉盘，不能当本地下载。下载目录用 `DINGTALK_OA_WORK`，不要写本机人名路径。
+
+### 离职发起人附件
+标准 OA 下载按发起人钉盘授权，离职常 `userNotExist`；不能把这个错误当成「没交钉钉」。在职补交走 API。离职附件走 aflow 详情页点文件名。落盘之后还要用 FileStation 按账期月进 NAS 桶。
+
+### Amazon 结算周期
+Amazon 专业卖家结算一般 14 天一期，自然月通常 2 期，对齐到月末会变 3 期。某月只有 1 期甚至 0 期的常见原因是该期余额 ≤ 0 未打款、新店前 30 天、或漏交。判断漏交要落在**有打款**的结算组上；银行到账次数本身不能证明。别的平台不能套这个节奏（Walmart 多为双周，eBay 可日结）。
+
+### 提交人 vs 渠道负责人
+NAS 人名文件夹记录谁在钉钉发起；店的月度负责人是渠道账号表 `运营人员YYYYMM`。助手、离职交接、换人会使同一渠道账号的附件出现在多个人名夹。按现任负责人文件夹判断漏交会漏掉前任已交的期。
+
+### 赛狐结算组
+赛狐 OpenAPI 按结算结束日列出的站点结算汇总，不是 Amazon 后台结算报告 txt 原件。可以有打款金额为 0 的组。没有结算组的渠道账号不会出现在该窗口的对照清单里。
+
+### Amazon txt 账期
+Amazon 销售收款确认单只把 `.txt` 当账期明细。结算周期 csv、以及桶里已有同茎 csv 时的 zip，不算 Amazon 账期文件。
+
+### 账期漏交（Amazon）
+有打款的赛狐结算组，在对照窗内既无核算行也无 NAS `.txt`，才优先当漏交（要催现任渠道负责人补钉钉）。有核算行但标准 API 下不来、NAS 也没有文件，是下载/归档缺口，不是忘传。打款为 0 的结算组先不当漏交，除非财务确认「出账期 N 天内必须交」连 0 打款也算。按店名硬拆 brand 对不上 txt，是匹配失败，不要写成漏交。
 
 ### Amazon 国家站
 Amazon 店铺按国家区域建 Channel Account，没有合法的 EUR/EU 聚合账号。欧洲九国站点与 Johna 对齐。Wayfair 等非 Amazon 渠道仍可以有 EU 区域。
@@ -288,6 +324,7 @@ A webhook-based DingTalk group messaging channel used by AI agents (WorkBuddy, C
 
 ## Flagged ambiguities
 
+- "'漏交' 曾被用来指赛狐有结算组但按店名拆 brand 对不上 txt——那是匹配失败。真漏交是有打款且钉钉无行、NAS 无对应 txt。有核算行但 API/NAS 无文件是下载缺口。打款 0 是否也算漏交，要财务确认 7 天规则是否覆盖 $0。"
 - "'AMZFZHSXEUR' 曾被当成欧洲聚合店 — Amazon 只有国家站，旧名只挂在 AMZFZHSXDE 别名。"
 - "'WFDANEEYUS' 与 'WFDaneeyUS' 不是同一条 Channel Account，大小写店铺码都保留。Channel Account Owner.user 存中文名；DingTalk/Frappe User.name 常是邮箱，同步时继续写中文。"
 - "'五桶' had been used as if it meant IvyeaOps 五杠杆 — they are distinct (search-term labels vs optimizer action candidates)."

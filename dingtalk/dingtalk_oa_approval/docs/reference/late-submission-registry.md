@@ -1,0 +1,87 @@
+---
+okf: v0.1
+type: Reference
+title: 迟交挪动登记与跨月剔除
+description: 账期日期在本月、发起时间却落在下月提交窗的单子，登记到共享表，后续账期按唯一键剔除，避免同一笔被算两次。
+tags: [dingtalk, oa, 账期, 迟交, gsheet, 跨月剔除]
+resource: dingtalk/dingtalk_oa_approval/export_period_excels.py
+timestamp: 2026-09-10
+---
+
+# 迟交挪动登记与跨月剔除
+
+## 要解决的问题
+
+钉钉后台按**发起时间**导出销售收款确认单。运营迟交时，7 月账期的单会落在 8/4–9/3 的导出里，混进 8 月桶；算 8 月账期时若不去掉，同一笔就被算两遍（Amazon 侧还会连带影响 Colab1 按账期 txt 算 Tax）。
+
+制度上是 4 号～下月 3 号提交窗，但现场新人多、迟交常见。所以用一张登记表把「提交时间不对」的单记录下来，供后续月份剔除与人工审核。
+
+## 表位置
+
+Google 表「和财务部共享」→ worksheet **钉钉账期提交时间不对挪动记录**：
+
+<https://docs.google.com/spreadsheets/d/1UhFiMF9tLmndoOaz7PaEP_Fz1ZGYK9GVT6hiIYLM8Go>
+
+链接只是共享表地址，**不含凭证**。读写走 `secrets/gsheets-service-account.json` + gspread，用法见 `channel_account_sync` 模块；不要把服务账号 JSON 提交进 git。
+
+## 表结构
+
+| 列 | 说明 |
+|----|------|
+| `批次` | 一次登记一个标签，如 `2026-07-补迟交-20260909`。后续每月一批。 |
+| 明细列 | 审批编号、账期日期、销售账户、销售额、发起时间、审批状态、审批结果、选择平台/渠道、提交人、账期月、提交窗桶 等，够 DRM 复核即可。 |
+| `后续账期须剔除` | 该笔之后不能被重复算入的账期月，逗号分隔，如 `2026-08,2026-09`；无则留空。 |
+| `DRM审核` | 人工列。建议取值：`同意补入` / `审批中暂缓` / `撤销不计入`。 |
+| `DRM备注` | 人工备注。 |
+
+**唯一键 = `审批编号|账期日期|销售账户|销售额`**。算某个账期月时，先按该键从当月导出里剔除登记表中 `后续账期须剔除` 含该月的行。
+
+## 入表条件
+
+- **迟交**：`账期日期` 的本月 且 `发起时间` ≥ 下月 4 号。
+- **早交**（也要记）：`账期日期` 在下月、`发起时间` 却落在本月提交窗内。方法 2 已把它们从本月定稿中拿掉，**下月核算要保留**。
+
+## 金额口径
+
+- 已撤销：建议不计入。
+- 审批中：沿用既有过滤口径（`审批状态 ∈ {完成, 审批中}` 且 `审批结果 ≠ 拒绝`）可以进，但请在 `DRM审核` 勾选确认。
+
+## 2026-07 批次实况
+
+批次 `2026-07-补迟交-20260909`：
+
+- **43 行 / 27 张审批单**，昨日那份 7 月提交窗导出里**一条都没有**。
+- 平台构成：亚马逊 **25**（对后续 Amazon 账期 txt / Colab1 Tax 影响最大）、独立站 11、新平台 7。
+- 状态：完成 37、审批中 5、已撤销 1。
+- 另有 **2 条早交**（账期日期 8 月、发起在本月窗口）。
+
+## 每月操作流程
+
+1. 用**最新一次**钉钉导出（不要用提交窗截止日之前导出的旧表）。
+2. 按 `账期日期` 自然月切出本月；上月遗留可按「木已成舟」保留。
+3. `发起时间 ≥ 下月 4 号` 且账期在本月的行 → 追加到同一张 worksheet，`批次` 写新标签，`后续账期须剔除` 写**下月、下下月**。
+4. 算下一月账期时，先导出剔除键再切开：
+   ```text
+   uv run python dingtalk/dingtalk_oa_approval/late_submission_keys.py --period 2026-08 --out "<DINGTALK_OA_DATA>/reports/exclude_2026-08.txt"
+   uv run python dingtalk/dingtalk_oa_approval/filter_export_by_period.py --in "<宽窗导出xlsx>" --period 2026-08 --exclude-keys "<上面那个文件>" --out "<定稿xlsx>"
+   ```
+   脚本只读 Google 表，不写回；`后续账期须剔除` 含该月的行才会进剔除集，早交行（该列留空）自动保留。
+5. Amazon txt 因按发起时间被下载到错误桶的：凭登记表与 NAS 对照表交 DRM 审核，再在 **NAS 上**用 FileStation 把附件从提交窗桶移到 `账期日期` 自然月对应的桶。**不要改本地 `D:\NAS与我共享\`**（单向同步，改了 NAS 不会跟着变）。
+
+## 唯一键必须两端同源
+
+登记表里自带的「唯一键」列**只作人工核对**，不要直接拿去喂 `--exclude-keys`。两端都由 `ding_xlsx.build_key()` 现算：
+
+- 导出侧：`filter_export_by_period.py` → `ding_xlsx.unique_key()`
+- 登记表侧：`late_submission_keys.py` → 同一个 `build_key()`
+
+原因是金额的写法不稳定：Excel 读进来可能是 `int` / `float` / `str`，同一个 0 会写成 `0` 也可能写成 `0.0`。2026-09-11 实测就踩到——`202608041508000385990|2026-07-06|eBay（US）|0.0`（表里存的）对不上导出侧算出的 `…|0`，那一笔会被静默漏剔除。现在 `norm_amount()` 在两端统一把金额规范化（去尾零、整数值不带小数点）。
+
+## 关联
+
+- 归档口径与「木已成舟」：[Amazon 账期按账号对账](../../../../docs/solutions/conventions/amazon-period-file-reconcile.md)
+- 7 月定稿怎么来的（方法 1/方法 2）：[2026-09-10 7 月 Amazon 账期对照](../research/2026-09-10-july-amazon-period-reconcile.md)
+- 账期月切开：`filter_export_by_period.py`（`ding_xlsx.unique_key` / `exclude_keys`）
+- 剔除键生成：`late_submission_keys.py`（读本表 → 键文件）
+- 登记表本身仍在 Google 表；仓库外 `patch_july_2026.py` 只负责当初那次写入，不必再被核算脚本 import。
+
