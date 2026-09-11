@@ -80,6 +80,39 @@ def test_skips_test_paths_when_asked():
     assert scan_text(line, "tests/test_x.py", scan_tests=True) != []
 
 
+def test_flags_getenv_default_literal():
+    """os.getenv("SPS_PASSWORD", "明文") —— 默认值本身就是漏洞。"""
+    line = f"    'password': os.getenv('SPS_PASSWORD', '{BAD_PASSWORD}'),\n"
+    findings = scan_text(line, "config.py")
+    assert "env-default" in [f.kind for f in findings]
+
+
+def test_non_secret_getenv_default_is_ignored():
+    """非密钥类 key 的字面默认值（URL/路径/端口）不该报。"""
+    for line in (
+        'HOST = os.getenv("HOST", "https://api.example.com")\n',
+        'DB_PATH = os.getenv("PROXY_DB_PATH", "/data/x/y.db")\n',
+        'PORT = os.getenv("PORT", "8080")\n',
+    ):
+        assert scan_text(line, "cfg.py") == [], line
+
+
+def test_flags_dict_style_literal():
+    findings = scan_text(f"'password': '{BAD_PASSWORD}',\n", "cfg.py")
+    assert [f.kind for f in findings] == ["literal"]
+
+
+def test_flags_markdown_backtick_value():
+    findings = scan_text(f"- Password: `{BAD_PASSWORD}` (见 .env)\n", "note.md", scan_tests=True)
+    assert [f.kind for f in findings] == ["md-literal"]
+    assert BAD_PASSWORD not in str(findings[0])
+
+
+def test_protocol_constants_are_ignored():
+    for line in ('token_type = "Bearer"\n', 'token_type = "Bearer",\n'):
+        assert scan_text(line, "oidc.py") == [], line
+
+
 def test_scans_real_tree_for_a_planted_file(tmp_path):
     bad = tmp_path / "planted.py"
     bad.write_text(f'PASSWORD = "{BAD_PASSWORD}"\n', encoding="utf-8")

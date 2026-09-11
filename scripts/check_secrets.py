@@ -62,12 +62,18 @@ SCAN_SUFFIXES = {
     ".toml",
     ".json",
 }
+# 文档默认**不**扫：API 文档里 `token_type = Bearer`、`credentials = include`、
+# `nextToken = string` 这类示例值会把信噪比打没。要查文档加 --docs。
+DOC_SUFFIXES = {".md", ".rst", ".txt"}
 
 # key 名字里出现这些词，就要求它的值不能是字面量
 SECRET_KEY_TOKENS = ("pass", "pwd", "secret", "token", "apikey", "api_key", "credential")
 
+# 用于 markdown / 表格形态的 key 名
+_KEY = r"(?:password|passwd|pwd|secret|token|api[_-]?key|credential)"
+
 # 这些后缀说明值是位置/名字，不是密钥本体
-NON_SECRET_KEY_SUFFIXES = ("_path", "_file", "_dir", "_name", "_url", "_header", "_env")
+NON_SECRET_KEY_SUFFIXES = ("_path", "_file", "_dir", "_name", "_url", "_header", "_env", "_type")
 
 # 模板文件名（要入库的示例），不是真凭证文件
 TEMPLATE_SUFFIXES = (".example", ".sample", ".template", ".dist")
@@ -88,7 +94,17 @@ _PLACEHOLDER_WORDS = (
     "redact",
 )
 
-ASSIGN = re.compile(r"""(?i)([A-Za-z_][A-Za-z0-9_]*)\s*[:=]\s*(['"])([^'"\n]{6,})\2""")
+# 赋值形态：password = "x" / 'password': "x" / password: "x"
+ASSIGN = re.compile(
+    r"""(?i)(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1\s*[:=]\s*(['"])([^'"\n]{6,})\3"""
+)
+# os.getenv("KEY", "硬编码默认值") —— 默认值本身就是明文凭证（只对 secret 类 key 报）
+ENV_DEFAULT = re.compile(
+    r"""(?i)(?:getenv|environ\.get)\(\s*['"]([A-Za-z_][A-Za-z0-9_]*)['"]\s*,"""
+    r"""\s*(['"])([^'"\n]{6,})\2"""
+)
+# markdown / 表格：`- Password: \`xxxx\``
+MD_VALUE = re.compile(r"""(?i)""" + _KEY + r"""\s*[:=|]\s*`([^`\n]{6,})`""")
 SSHPASS = re.compile(r"""(?i)sshpass\s+-p\s*['"]?([^\s'"]{4,})""")
 PRIVATE_KEY = re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----")
 ENVISH = re.compile(r"^[A-Z][A-Z0-9_]{3,}$")
@@ -137,14 +153,22 @@ def scan_text(text: str, path: str = "<text>", *, scan_tests: bool = True) -> li
         if PRIVATE_KEY.search(line):
             out.append(Finding(path, n, "private-key", "内联私钥"))
             continue
+        # `os.getenv("KEY", "literal")`：默认值就是明文，先于 INDIRECT 判断
+        m = ENV_DEFAULT.search(line)
+        if m and _key_is_secret(m.group(1)) and not _is_placeholder(m.group(3)):
+            out.append(Finding(path, n, "env-default", f"{m.group(1)} 默认值 = {_mask(m.group(3))}"))
+            continue
         if INDIRECT.search(line):
             continue
         m = SSHPASS.search(line)
         if m and not _is_placeholder(m.group(1)):
             out.append(Finding(path, n, "sshpass", f"明文密码 {_mask(m.group(1))}"))
             continue
+        m = MD_VALUE.search(line)
+        if m and not _is_placeholder(m.group(1)):
+            out.append(Finding(path, n, "md-literal", f"文档里的值 = {_mask(m.group(1))}"))
         for km in ASSIGN.finditer(line):
-            key, value = km.group(1), km.group(3)
+            key, value = km.group(2), km.group(4)
             if not _key_is_secret(key):
                 continue
             if ENVISH.match(value) or _is_placeholder(value):
@@ -172,13 +196,19 @@ def _mask(v: str, head: int = 2) -> str:
     return v[:head] + "*" * (len(v) - head)
 
 
-def iter_files(root: Path, *, include_tests: bool):
+SELF = Path(__file__).resolve()
+
+
+def iter_files(root: Path, *, include_tests: bool, include_docs: bool = False):
     """os.walk + 原地剪枝；rglob 会走进 .git/.venv 再过滤，太慢。"""
+    suffixes = SCAN_SUFFIXES | DOC_SUFFIXES if include_docs else SCAN_SUFFIXES
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = sorted(d for d in dirnames if d not in SKIP_DIRS)
         for name in sorted(filenames):
             p = Path(dirpath) / name
-            if p.suffix.lower() not in SCAN_SUFFIXES:
+            if p.name == SELF.name and p.resolve() == SELF:
+                continue  # 本文件里的正则源码含示例串，别自报
+            if p.suffix.lower() not in suffixes:
                 continue
             if not include_tests and _is_test_path(str(p.relative_to(root))):
                 continue
@@ -253,13 +283,14 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="扫描明文凭证")
     ap.add_argument("--path", default=str(ROOT), help="要扫的根目录")
     ap.add_argument("--include-tests", action="store_true", help="连 tests/ 一起扫（默认跳过，测试常含假密钥）")
+    ap.add_argument("--docs", action="store_true", help="连 .md/.rst/.txt 一起扫（默认跳过：API 文档示例噪声大）")
     ap.add_argument("--quiet", action="store_true")
     args = ap.parse_args()
 
     root = Path(args.path).resolve()
     findings: list[Finding] = []
     scanned = 0
-    for p in iter_files(root, include_tests=args.include_tests):
+    for p in iter_files(root, include_tests=args.include_tests, include_docs=args.docs):
         rel = p.relative_to(root).as_posix()
         try:
             text = p.read_text(encoding="utf-8", errors="replace")
