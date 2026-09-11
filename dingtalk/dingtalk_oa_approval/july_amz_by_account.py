@@ -26,10 +26,9 @@ sys.path.insert(0, str(_REPO))
 from audit_vs_drm import load_manifest  # noqa: E402
 from channel_account_sync.fetch_sources import fetch_sheet  # noqa: E402
 from channel_account_sync.plan import sheet_records  # noqa: E402
-from export_period_excels import id_text  # noqa: E402
+from ding_xlsx import flatten_sale_account, id_text, read_dingtalk_xlsx  # noqa: E402
 from july_amz_txt_vs_sellfox import file_date, parse_end, shop_key  # noqa: E402
 from parse import parse_amz_channel, ym  # noqa: E402
-from patch_july_2026 import flatten_sale_account, read_dingtalk_xlsx  # noqa: E402
 from person_folders import folder_for_initials, nas_person_folder  # noqa: E402
 from sellfox_amz_settlements import ding_brand_site  # noqa: E402
 

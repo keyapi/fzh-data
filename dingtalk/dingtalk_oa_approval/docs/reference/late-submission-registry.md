@@ -67,4 +67,4 @@ Google 表「和财务部共享」→ worksheet **钉钉账期提交时间不对
 
 - 归档口径与「木已成舟」：[Amazon 账期按账号对账](../../../../docs/solutions/conventions/amazon-period-file-reconcile.md)
 - 7 月定稿怎么来的（方法 1/方法 2）：[2026-09-10 7 月 Amazon 账期对照](../research/2026-09-10-july-amazon-period-reconcile.md)
-- 月度清单生成脚本当时在**仓库外**（核算缓存目录的 `_tools/`），未入库。本文件记录的是**规范与流程**；若要产品化，按上表结构与唯一键实现即可。
+- 月度切表：`filter_export_by_period.py`（`ding_xlsx.unique_key` / `exclude_keys`）。登记表本身仍在 Google 表；仓库外 `patch_july_2026.py` 只负责当初那次写入，不必再被核算脚本 import。

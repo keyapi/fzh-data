@@ -22,9 +22,9 @@ sys.path.insert(0, str(_TOOLS))
 sys.path.insert(0, str(_REPO))
 
 from client import get_access_token, get_instance  # noqa: E402
-from export_period_excels import id_text, write_xlsx  # noqa: E402
+from ding_xlsx import F2, id_text, read_dingtalk_xlsx  # noqa: E402
+from export_period_excels import write_xlsx  # noqa: E402
 from parse import collect_dd_attachments, keep_attachment, parse_table_rows, result_cn, status_cn, ym  # noqa: E402
-from patch_july_2026 import F2, enrich, read_dingtalk_xlsx  # noqa: E402
 
 OUT_DIR = OA_REPORTS
 AUG_PATH = OUT_DIR / "核算_账期日期2026-08_销售收款确认单_20260910.xlsx"

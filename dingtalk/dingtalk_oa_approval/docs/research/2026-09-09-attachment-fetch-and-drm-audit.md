@@ -60,4 +60,5 @@ DRM 的 7/8 月桶合计 **230** 个文件：txt **107** / csv **85** / xlsx+xls
 
 - 失败根因与官方替代接口：[departed-originator-download.md](departed-originator-download.md)
 - 7 月 Amazon 对账结论：[2026-09-10-july-amazon-period-reconcile.md](2026-09-10-july-amazon-period-reconcile.md)
+- 收口流水线（API + aflow + NAS）：[browser-admin-download.md](browser-admin-download.md)
 - 审计脚本：`audit_vs_drm.py`（对照 + 本地整理，不动 NAS）、`compare_local_nas.py`（三方只读）、`combine_jul_aug.py`（生成综合集）

@@ -37,7 +37,7 @@ resource: dingtalk/dingtalk_oa_approval/july_amz_by_account.py
 
 - 归档看钉钉「账期日期」自然月；跨月一张单才拆文件名。
 - **木已成舟**：发起日 ≤ 2026-07-03 已进 6 月的，不再改归 7 月。
-- 不写本地 `D:\NAS与我共享\`；搬文件只走 NAS FileStation（`fzh.nas`）。
+- 不写本地 `D:\NAS与我共享\`；搬文件只走 NAS FileStation（管理员账号在 `NAS_API/.env`）。
 - Amazon 账期只认 `.txt`。
 - 21 位审批编号必须当文本。
 - 9 月账期文件暂留 8 月桶。
@@ -62,7 +62,7 @@ resource: dingtalk/dingtalk_oa_approval/july_amz_by_account.py
 
 | 项 | 结论 |
 |----|------|
-| 如森-IT 7/8 打款 69.85，`AMZRosoonIT` | **缺钉钉**（故无附件）。NAS 该站最后一份在 2026-04 桶。202607 LYX，现任 SYX |
+| 如森-IT 7/8 打款 69.85，`AMZRosoonIT` | 对照当日**缺钉钉**（故无附件）。NAS 该站最后一份在 2026-04 桶。202607 LYX，现任 SYX。**2026-09-10 SYX 已补交**；收口见 [browser-admin-download.md](browser-admin-download.md)（API 拉附件 → 7 月桶） |
 | 如森-SE 7/18 | **不是忘传**。审批 `202607231544000528489`（LYX，7/23，账期日期 7/18），附件 `AMZRosoonSE-2026-07-18.txt`；标准下载 `userNotExist`；单曾为 RUNNING；7 月桶只有 7/4 那份 |
 | 君缘-Johnear-US 7/10 | 核算 `202608061717000057610`（LTZ）已进 7 月表；NAS 7 月桶有 `AMZJohnaUS-7.13.txt`（人工名，差几天） |
 | Strusery-ES 7/15 | 同一张 `202608061654000326702`（LTZ）附 `AMZStruseryES-2026-7-16.txt`，已在 7 月桶；表单账期日期 7/16 |
@@ -102,10 +102,10 @@ resource: dingtalk/dingtalk_oa_approval/july_amz_by_account.py
 
 对照 xlsx 在仓库外核算缓存，**不要 commit**。
 
-`DINGTALK_OA_TOOLS` 里的 `patch_july_2026.py` **没入库**，`export_period_excels.py` / `fill_aug_from_oa.py` / `july_amz_by_account.py` 都 import 它，新克隆直接跑会 `ModuleNotFoundError`。
+`export_period_excels.py` / `fill_aug_from_oa.py` / `july_amz_by_account.py` / `filter_export_by_period.py` 读导出走 `ding_xlsx.py`（已入库）。仓库外 `patch_july_2026.py` 不再被这些脚本 import。
 
-## 下一步（给后续 Agent）
+## 下一步（2026-09-11 收口）
 
-用户打算让 Claude **浏览器自动化**：进钉钉管理后台直接下销售收款确认单 Excel 和附件（尤其离职发起人、标准 API `userNotExist` 的单，如 SE 7/18）。
+IT 7/8 已由 SYX 补交。用 [browser-admin-download.md](browser-admin-download.md) 的流水线：API 拉新附件、aflow 宽窗导出后按账期月切 7 月、离职附件走 aflow、dry-run 后再进 NAS。不要再写「仓库里没有钉钉 capability」。
 
-操作手册：[browser-admin-download.md](browser-admin-download.md)。必须先 `dispatch.py <task> --check`。仓库里当时还没有钉钉管理后台 capability，缺能力就停，不要绕过。
+操作手册必须先 `dispatch.py dingtalk.aflow.receipt.export --check`（附件任务 `dingtalk.aflow.receipt.attachments`）。

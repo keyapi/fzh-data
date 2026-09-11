@@ -245,7 +245,16 @@ Channel Account 所挂的销售渠道主数据。渠道**名称**可以较长；
 钉钉只能按**发起时间**导出，所以迟交单会落进下个月的提交窗导出。财务共享表「钉钉账期提交时间不对挪动记录」把「账期日期在本月、发起时间在 ≥ 下月 4 号」的单登记下来，含审批编号、账期日期、销售账户、销售额、审批状态，以及人工复审列。规范见 `dingtalk/dingtalk_oa_approval/docs/reference/late-submission-registry.md`。
 
 ### 跨月剔除
-按【迟交挪动登记】的**唯一键** `审批编号|账期日期|销售账户|销售额`，在算某个账期月时先把它从当月导出里去掉，避免同一笔既算上月又算本月。登记行的 `后续账期须剔除` 列出需要剔除的账期月。
+按【迟交挪动登记】的**唯一键** `审批编号|账期日期|销售账户|销售额`，在算某个账期月时先把它从当月导出里去掉，避免同一笔既算上月又算本月。登记行的 `后续账期须剔除` 列出需要剔除的账期月。实现：`dingtalk/dingtalk_oa_approval/ding_xlsx.py` 的 `unique_key` / `exclude_keys`，切月用 `filter_export_by_period.py`。
+
+### 销售收款确认单
+钉钉 OA 原生模板，财务用来交各平台账期。Excel「数据id」= `processInstanceId`，「审批编号」= `businessId`（21 位，必须当文本）。Amazon 账期附件只认 `.txt`。
+
+### aflow
+钉钉 OA 审批管理后台。`oa.dingtalk.com` 与 `aflow.dingtalk.com` 是**同一个 SPA**。浏览器导出/离职附件走 `web_automation` 任务 `dingtalk.aflow.receipt.export` 与 `dingtalk.aflow.receipt.attachments`。批量「仅导出审批单附件」进钉盘，不能当本地下载。下载目录用 `DINGTALK_OA_WORK`，不要写本机人名路径。
+
+### 离职发起人附件
+标准 OA 下载按发起人钉盘授权，离职常 `userNotExist`；不能把这个错误当成「没交钉钉」。在职补交走 API。离职附件走 aflow 详情页点文件名。落盘之后还要用 FileStation 按账期月进 NAS 桶。
 
 ### Amazon 结算周期
 Amazon 专业卖家结算一般 14 天一期，自然月通常 2 期，对齐到月末会变 3 期。某月只有 1 期甚至 0 期的常见原因是该期余额 ≤ 0 未打款、新店前 30 天、或漏交。判断漏交要落在**有打款**的结算组上；银行到账次数本身不能证明。别的平台不能套这个节奏（Walmart 多为双周，eBay 可日结）。

@@ -17,16 +17,10 @@ sys.path.insert(0, str(_TOOLS := OA_TOOLS))
 sys.path.insert(0, str(_REPO))
 
 from audit_vs_drm import load_manifest  # noqa: E402
+from ding_xlsx import F2, OUT_JULY, enrich, id_text, read_dingtalk_xlsx  # noqa: E402
 from nas_upload_api21 import dest_bucket  # noqa: E402
 from parse import keep_approval, keep_attachment  # noqa: E402
 from person_folders import folder_for_initials, nas_person_folder  # noqa: E402
-from patch_july_2026 import (  # noqa: E402
-    F2,
-    OUT_JULY,
-    enrich,
-    flatten_sale_account,
-    read_dingtalk_xlsx,
-)
 
 BASE = OA_WORK
 AUG_EXPORT = BASE / "Amazon&新平台成本 20260804-20260903 销售收款确认单-20260907092400_合并汇率&账号_2026-09-07_09-36-15.xlsx"
@@ -34,25 +28,6 @@ OUT_DIR = OA_REPORTS
 JOHNEAR_ID = "202608071142000210210"
 JUL_YM = "2026-07"
 AUG_YM = "2026-08"
-
-
-def id_text(v) -> str:
-    """21 位审批编号必须当文本。已经变成 float 的无法还原，原样转成最短十进制。"""
-    if v is None or (isinstance(v, float) and pd.isna(v)):
-        return ""
-    if isinstance(v, int):
-        return str(v)
-    s = str(v).strip()
-    if s.lower() in {"", "nan", "none"}:
-        return ""
-    if "e+" in s.lower() or "e-" in s.lower():
-        try:
-            return f"{int(float(s))}"
-        except ValueError:
-            return s
-    if s.endswith(".0") and s[:-2].isdigit():
-        return s[:-2]
-    return s
 
 
 def locate_id(df: pd.DataFrame, bid: str) -> pd.DataFrame:

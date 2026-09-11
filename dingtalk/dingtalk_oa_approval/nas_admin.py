@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""用 NAS 管理员 fzh.nas 连 FileStation（密码来自 NAS_API/.env 的 NAS_SSH_PASSWORD，不写入本模块）。"""
+"""用 NAS 管理员账号连 FileStation。账号/密码/URL 只从 .env 读，不要写进 git。"""
 from __future__ import annotations
 
 import os
@@ -42,13 +42,31 @@ FINANCE_CANDIDATES = _LazyCandidates()
 ROOT = _LazyRoot()
 
 
-def nas_admin() -> SynologyNAS:
+def nas_credentials() -> tuple[str, str, str]:
+    """返回 (url, username, password)。账号不要写进代码。"""
     _load_dotenv([NAS_ENV])
-    user = os.getenv("NAS_ADMIN_USER") or "fzh.nas"
-    pwd = os.getenv("NAS_SSH_PASSWORD") or ""
-    url = os.getenv("NAS_URL") or ""
+    user = (
+        os.getenv("NAS_ADMIN_USER")
+        or os.getenv("NAS_SSH_USER")
+        or os.getenv("NAS_USERNAME")
+        or ""
+    ).strip()
+    pwd = (os.getenv("NAS_SSH_PASSWORD") or os.getenv("NAS_PASSWORD") or "").strip()
+    url = (os.getenv("NAS_URL") or "").strip()
+    if not user:
+        raise RuntimeError(
+            "NAS_API/.env 缺少 NAS_ADMIN_USER（或 NAS_SSH_USER / NAS_USERNAME）。"
+            "不要把 NAS 账号写进 git。"
+        )
     if not pwd:
-        raise RuntimeError("NAS_API/.env 缺少 NAS_SSH_PASSWORD")
+        raise RuntimeError("NAS_API/.env 缺少 NAS_SSH_PASSWORD（或 NAS_PASSWORD）")
+    if not url:
+        raise RuntimeError("NAS_API/.env 缺少 NAS_URL")
+    return url, user, pwd
+
+
+def nas_admin() -> SynologyNAS:
+    url, user, pwd = nas_credentials()
     return SynologyNAS(base_url=url, username=user, password=pwd, root_folder="/")
 
 

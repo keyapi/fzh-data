@@ -54,11 +54,11 @@ NAS `{账期桶}/{人名}/` 是钉钉**提交人**。店负责人是 Google 表�
 
 **6. 木已成舟。** 已经在上一提交窗核算过的单（例如发起日 ≤ 该月 3 日且已进上月桶），不要再改归本月。误传到本月桶的副本删掉，上月原件保留。
 
-**7. 离职发起人：实例可读，标准下载常 `userNotExist`。** 先看 NAS 全员扫描和核算 Excel。钉钉上可能已经传了 txt，只是 API 拿不下来（7 月如森 SE 第二期：单上有 `AMZRosoonSE-2026-07-18.txt`，标准 Grant 失败）。专享下载见模块 research；未开通时下一步是浏览器走管理后台。操作手册：`dingtalk/dingtalk_oa_approval/docs/research/browser-admin-download.md`。必须先 `web_automation/scripts/dispatch.py <task> --check`；当时没有钉钉 capability 就停，不要绕过。
+**7. 离职发起人：实例可读，标准下载常 `userNotExist`。** 先看 NAS 全员扫描和核算 Excel。钉钉上可能已经传了 txt，只是 API 拿不下来（7 月如森 SE 第二期：单上有 `AMZRosoonSE-2026-07-18.txt`，标准 Grant 失败）。**在职补交走 API**，不要用 aflow `--only-departed`。未开通专享时离职附件走 `dingtalk.aflow.receipt.attachments`。下载之后用本模块 `archive_aflow_to_nas.py` 进账期桶；下载成功 ≠ 已入桶。操作手册：`dingtalk/dingtalk_oa_approval/docs/research/browser-admin-download.md`。必须先 `web_automation/scripts/dispatch.py dingtalk.aflow.receipt.export --check`。
 
 **8. 21 位审批编号当文本。** Excel 会收成科学计数或错号。
 
-**9. 本机路径和真名不进 git。** 缓存/核算目录用 `DINGTALK_OA_DATA`、`DINGTALK_OA_WORK`；NAS 根用 `NAS_FINANCE_PERIOD_ROOT`；本地同步盘账期根用 `LOCAL_NAS_PERIOD_ROOT`（未设即报错）。不要把含人名的磁盘路径或 FileStation 路径写进脚本。
+**9. 本机路径和真名不进 git。** 缓存/核算目录用 `DINGTALK_OA_DATA`、`DINGTALK_OA_WORK`；NAS 根用 `NAS_FINANCE_PERIOD_ROOT`；本地同步盘账期根用 `LOCAL_NAS_PERIOD_ROOT`（未设即报错）。NAS 管理员账号用 `NAS_ADMIN_USER`（或 `NAS_SSH_USER` / `NAS_USERNAME`），只写在 `NAS_API/.env`。不要把含人名的磁盘路径、FileStation 路径或 NAS 账号写进脚本。
 
 **10. 算新月前先跨月剔除。** 钉钉只能按**发起时间**导出，迟交单会混进下个月的导出。财务共享表「钉钉账期提交时间不对挪动记录」登记这些行；算某个账期月时，先按**唯一键** `审批编号|账期日期|销售账户|销售额` 把 `后续账期须剔除` 命中该月的行从当月导出里去掉，否则同一笔会被算两次。规范：[late-submission-registry.md](../../dingtalk/dingtalk_oa_approval/docs/reference/late-submission-registry.md)。
 
@@ -87,7 +87,7 @@ NAS `{账期桶}/{人名}/` 是钉钉**提交人**。店负责人是 Google 表�
 
 **假漏交（匹配洞）。** 赛狐 `北京如森-Rucener-US` 结算结束 7/6、7/20 有打款；NAS 与核算都是 `AMZRosoonUS`，提交人 LYX。对上别名后不是漏交。
 
-**真漏交。** `AMZRosoonIT` / 赛狐如森-IT / 结算结束 2026-07-08 有打款；7 月核算无行、NAS 5–8 月桶无该站 txt。缺钉钉提交。202607 表负责人 LYX（已离职），202608 是 SYX，补交找现任。
+**真漏交（对照当日）。** `AMZRosoonIT` / 赛狐如森-IT / 结算结束 2026-07-08 有打款；7 月核算无行、NAS 5–8 月桶无该站 txt。缺钉钉提交。202607 表负责人 LYX（已离职），202608 是 SYX。**2026-09-10 SYX 已补交**；下一任拉附件并归档到 7 月桶，不要再当「钉钉上没有单」。
 
 **钉钉有、NAS 无。** 审批 `202607231544000528489`，账期日期 2026-07-18，账户 `AMZRosoonSE`，附件名 `AMZRosoonSE-2026-07-18.txt`；标准 API `userNotExist`；7 月桶只有 7/4 那份。不是忘传。
 

@@ -125,14 +125,16 @@ def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8")
     p = argparse.ArgumentParser()
     p.add_argument("--start", default="2026-06-01")
-    p.add_argument("--end", default="2026-09-09")
+    p.add_argument("--end", default="", help="YYYY-MM-DD（含当天）；默认今天，以免漏掉截止日后补交")
     p.add_argument("--process-code", default="")
-    p.add_argument("--out", default=str(DEFAULT_OUT), help="附件缓存目录（默认仓库外成本核算）")
+    p.add_argument("--out", default=str(DEFAULT_OUT), help="附件缓存目录（DINGTALK_OA_DATA，默认模块 data/）")
     p.add_argument("--limit", type=int, default=0, help="调试：最多拉 N 个实例")
     p.add_argument("--env", default="", help="dingtalk_oa.env 路径")
     p.add_argument("--sleep", type=float, default=0.12, help="实例之间间隔秒；钉钉应用维度约 20 QPS")
     p.add_argument("--workers", type=int, default=1, help="保留：>1 需共享限速，默认串行以免打到 QPS")
     args = p.parse_args()
+    if not args.end:
+        args.end = datetime.now().strftime("%Y-%m-%d")
     if args.workers > 1:
         print("workers>1 暂未启用：同一 appKey 共享约 20 QPS，串行已接近安全上限", file=sys.stderr)
     set_out(Path(args.out))

@@ -33,13 +33,13 @@ resource: dingtalk/dingtalk_oa_approval/probe_premium_download.py
 
 用户 `userAccessToken` **无官方保证**可绕过；标准 Grant 没有查看者字段。重新入职且 UserID 必须与旧 `originatorUserId` 完全相同才可能救标准接口，再入职默认可能换 ID，不是推荐路径。
 
-未开通专享时：综合 DRM 已归档 + 在职人员 API 下载。
+未开通专享时：综合 DRM 已归档 + 在职人员 API 下载；离职附件走 `dingtalk.aflow.receipt.attachments`，再 `archive_aflow_to_nas.py` 进账期桶。
 
 对照实验：`uv run python dingtalk/dingtalk_oa_approval/probe_premium_download.py`（只看是否有 `downloadUri`，不 GET 文件）。
 
 2026-09-09 对一张失败单实测：标准接口仍 `userNotExist`；专享接口 `403 Forbidden.AccessDenied.AccessTokenPermissionDenied`，需开通权限 `Premium.Workflow.ReadWrite.All`（以及 OA 高级版权益）。申请入口在钉钉开放平台应用权限。
 
-2026-09-10 实例：审批 `202607231544000528489` 账期日期 2026-07-18，附件名 `AMZRosoonSE-2026-07-18.txt` 已在表单「账期明细」；标准 Grant `userNotExist`；NAS 对应月桶无该文件。说明「核算有行」不等于「API 或 NAS 已有 txt」。未开通专享时用 DRM 已归档，或经 `web_automation` dispatch 走管理后台（人在职会话下载）。
+2026-09-10 实例：审批 `202607231544000528489` 账期日期 2026-07-18，附件名 `AMZRosoonSE-2026-07-18.txt` 已在表单「账期明细」；标准 Grant `userNotExist`；NAS 对应月桶无该文件。说明「核算有行」不等于「API 或 NAS 已有 txt」。未开通专享时经 `web_automation` 任务 `dingtalk.aflow.receipt.attachments` 用人在职会话下载，再归档 NAS。
 
 ## 文档
 

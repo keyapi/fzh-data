@@ -16,7 +16,7 @@ timestamp: 2026-09-10
 - 使用 new-api 那套**企业内部应用**（Client ID = 原 AppKey）。`.env` gitignore。
 - ⚠️ 这套应用是**临时**借用的（原为钉钉登录 / 离职打通），权限面偏大。读**后台原生模板**（销售收款确认单）建议另开一个**企业内部应用**，只开下面 3 个 workflow 权限；`qyapi_aflow`（审批流数据管理）对读原生 OA 单没有用，可以从 new-api 应用拿掉。详见 [docs/reference/oa-attachment-api.md](docs/reference/oa-attachment-api.md)。
 - 公开仓库用人名拼音首字母。真名文件夹映射：复制 `person_folders.example.json` 为 `person_folders.local.json`（gitignore）后填 NAS 真实文件夹名。
-- 可设 `DINGTALK_OA_ENV` 指向仓库外 env（gitignore）。缓存目录 `DINGTALK_OA_DATA`（默认模块 `data/`）。核算导出 Excel 所在目录 `DINGTALK_OA_WORK`。NAS FileStation 账期根 `NAS_FINANCE_PERIOD_ROOT`（可分号分隔候选）。本地同步盘账期根 `LOCAL_NAS_PERIOD_ROOT`（**未设即报错**，不再内置本机默认路径）。都不要把含人名的路径写进 git。
+- 可设 `DINGTALK_OA_ENV` 指向仓库外 env（gitignore）。缓存目录 `DINGTALK_OA_DATA`（默认模块 `data/`）。核算导出 Excel / aflow 下载目录 `DINGTALK_OA_WORK`（**未设路径时脚本不得默认同事人名目录**）。NAS FileStation 账期根 `NAS_FINANCE_PERIOD_ROOT`（可分号分隔候选）。本地同步盘账期根 `LOCAL_NAS_PERIOD_ROOT`（**未设即报错**）。财务 NAS 账号读 `NAS_API/.env` 的 `NAS_ADMIN_USER`（或 `NAS_SSH_USER` / `NAS_USERNAME`），密码 `NAS_SSH_PASSWORD`，**不要把账号写进 git**。都不要把含人名的路径写进 git。
 - 权限：`Workflow.Instance.Read`、`Workflow.Instance.Write`（下载接口要写权限）、`Workflow.Form.Read`。
 - 模板：销售收款确认单 `PROC-FB234439-0642-451E-A514-20FBEF4A4241`。Excel「数据id」= `processInstanceId`，「审批编号」= `businessId`。
 
@@ -43,7 +43,7 @@ DRM 在 NAS 上按 **发起人姓名** 分子文件夹。这只表示谁提交�
 - **不下** 已撤销 / 拒绝（`keep_approval`：完成或审批中，且结果≠拒绝）。
 - **不下图片**。部分 PDF / 审批中 csv 可不纳入综合集。
 - 离职附件标准 API 常 `userNotExist`：先综合 DRM 已归档与核算 Excel；专享接口见 docs/research。实例详情仍可读，附件可能已在单上只是下不下来。
-- 财务 NAS FileStation 用管理员 `fzh.nas`（密码只在 `NAS_API/.env`），不要用看不到财务部的测试账号。
+- 财务 NAS FileStation 用 `NAS_API/.env` 里的管理员账号（要能看见财务部共享），不要用看不到财务部的测试账号。
 - 未开的新月桶等 DRM 日切后再下；迟交件按账期月进已有桶，不预建空人名夹。
 - 算某个账期月之前，先按[迟交挪动登记](docs/reference/late-submission-registry.md)的**唯一键** `审批编号|账期日期|销售账户|销售额`，从当月导出里剔除 `后续账期须剔除` 命中该月的行，否则迟交单会被算两次。
 
@@ -53,21 +53,23 @@ DRM 在 NAS 上按 **发起人姓名** 分子文件夹。这只表示谁提交�
 
 - 按**账号**对，不按人名夹。赛狐店名经 `赛狐店铺` / 别名对到 `AMZRosoon*`、`AMZYTHDUS`。
 - 赛狐 `groupPage` 95 个 7 月结算组 ≠ Amazon txt 原件。「有 NAS 或核算」≠「这一期钉钉且附件都齐」。
-- 打款非 0 仍缺钉钉：`AMZRosoonIT` 结算结束 2026-07-08。补交找 202608 负责人 SYX。
-- 钉钉有附件、标准 API 下不来、NAS 缺对应 txt：`AMZRosoonSE-2026-07-18.txt`，审批 `202607231544000528489`。
+- `AMZRosoonIT` 结算结束 2026-07-08：2026-09-10 起 SYX **已补交钉钉**。下一步是 API 拉取附件 + 按账期月进 7 月 NAS 桶，不是再催交。
+- 钉钉有附件、标准 API 下不来、NAS 缺对应 txt：`AMZRosoonSE-2026-07-18.txt`，审批 `202607231544000528489`（LYX 离职发起）→ aflow `--mode attachments` 后再 `archive_aflow_to_nas.py`。
 - 6 月已核算的 7/1 文件（Daneey-ES、VERCART-SE 等）本轮不管。
 
-后续若用**浏览器**进钉钉管理后台下 Excel/附件：读 [docs/research/browser-admin-download.md](docs/research/browser-admin-download.md)，先 `uv run python web_automation/scripts/dispatch.py <task> --check`，确认范围，不改本地 NAS 同步盘。
+浏览器 + API + 账期月过滤 + NAS 是同一条流水线：[docs/research/browser-admin-download.md](docs/research/browser-admin-download.md)。先 `uv run python web_automation/scripts/dispatch.py dingtalk.aflow.receipt.export --check`（附件任务同理）。确认范围，不改本地 NAS 同步盘。
 
 ## 命令
 
 ```text
-uv run python dingtalk/dingtalk_oa_approval/fetch_attachments.py --start 2026-06-01 --end 2026-09-09
+uv run python dingtalk/dingtalk_oa_approval/fetch_attachments.py --start 2026-07-04
+uv run python dingtalk/dingtalk_oa_approval/filter_export_by_period.py --in <导出xlsx> --period 2026-07 --out <7月定稿xlsx>
 uv run python dingtalk/dingtalk_oa_approval/compare_local_nas.py
 uv run python dingtalk/dingtalk_oa_approval/audit_vs_drm.py
 uv run python dingtalk/dingtalk_oa_approval/combine_jul_aug.py
-uv run python dingtalk/dingtalk_oa_approval/nas_upload_api21.py
+uv run python dingtalk/dingtalk_oa_approval/nas_upload_api21.py --dry-run
+uv run python dingtalk/dingtalk_oa_approval/archive_aflow_to_nas.py --dry-run
 uv run python dingtalk/dingtalk_oa_approval/july_amz_by_account.py
 ```
 
-`DINGTALK_OA_TOOLS`（默认模块目录）里的 `patch_july_2026.py` **没入库**，但 `export_period_excels.py`、`fill_aug_from_oa.py`、`july_amz_by_account.py` 都 import 它 —— 新克隆直接跑这三个会 `ModuleNotFoundError`，要先自己准备该文件。
+读导出 / 展开销售账户 / 21 位审批编号文本在 `ding_xlsx.py`（已入库）。仓库外 `patch_july_2026.py` 只剩一次性 Google 表写入等，不再被上面这些脚本 import。

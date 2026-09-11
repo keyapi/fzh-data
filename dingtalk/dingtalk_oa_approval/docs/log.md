@@ -6,6 +6,14 @@ title: dingtalk_oa_approval 变更日志
 
 # 变更日志
 
+## 2026-09-11（226/227 拼图：env、账期月过滤、NAS 归档）
+
+- NAS 管理员账号不再写进模块明文，改读 `NAS_API/.env` 的 `NAS_ADMIN_USER`（或 `NAS_SSH_USER` / `NAS_USERNAME`）。
+- `ding_xlsx.py` 入库：读导出、展开销售账户、21 位审批编号文本、迟交唯一键。`export_period_excels.py` / `fill_aug_from_oa.py` / `july_amz_by_account.py` 不再依赖仓库外 `patch_july_2026.py`。
+- 新增 `filter_export_by_period.py`（发起时间导出 → 按账期月切定稿）和 `archive_aflow_to_nas.py`（浏览器附件 dry-run 后进账期桶）。
+- `AMZRosoonIT` 7/8：SYX 于 2026-09-10 已补交；下一任走 API + 7 月桶，不用 `--only-departed`。
+- 手册 `research/browser-admin-download.md` 改为 API + aflow + 过滤 + NAS 一条流水线，指向 `dingtalk.aflow.receipt.export` / `.attachments`。
+
 ## 2026-09-10（补齐 7 月对话里未落地的部分）
 
 - **新增** `reference/late-submission-registry.md`：迟交挪动登记表（Google 表「和财务部共享」→「钉钉账期提交时间不对挪动记录」）、唯一键 `审批编号|账期日期|销售账户|销售额`、`后续账期须剔除` 列、2026-07 批次 43 行/27 单、每月剔除流程。这是算 8/9 月时避免同一笔重复核算的机制。
@@ -22,7 +30,7 @@ title: dingtalk_oa_approval 变更日志
 - `AMZRosoonSE` 7/18：审批 `202607231544000528489` 已附 txt，标准 API `userNotExist`，NAS 7 月桶无对应文件。
 - 匹配脚本：`sellfox_amz_settlements.py` `BRAND_ALIASES`；`july_amz_by_account.py`。核算金额以 Excel 为准；离职 txt 以 NAS 全员扫描为准。
 - 木已成舟：发起日≤2026-07-03 已进 6 月的（如 Daneey-ES 7/1）不再改归 7 月。Amazon 只认 `.txt`。审批编号当文本。不写本地 NAS 同步盘。
-- 下一步：浏览器经 `web_automation` dispatch 进钉钉管理后台补 Excel/离职附件，见 `docs/research/browser-admin-download.md`。当时还没有钉钉 capability，缺能力先停。
+- 下一步：浏览器经 `web_automation` dispatch 进钉钉管理后台补 Excel/离职附件，见 `docs/research/browser-admin-download.md`。能力名 `dingtalk.aflow.receipt.export` / `.attachments`（PR 227）。
 - 隐私：公开叙述用人名拼音首字母；NAS 真名映射改到 gitignore 的 `person_folders.local.json`；缓存/NAS 根路径走 `paths.py` 环境变量，不再写本机人名目录。
 
 ## 2026-09-10（归档与 NAS 操作）
@@ -35,7 +43,7 @@ title: dingtalk_oa_approval 变更日志
 
 - NAS 补入：独立站 csv、PKO pdf、Johna-US 7 月 txt 等；钉钉英文名/错别字与财务文件夹不一致会造成假缺口，映射见 `person_folders.local.json`。
 - 8 月桶内文件名属 7 月账期的已移到 7 月对应提交人夹，避免两月重复计算。桶里已有同茎 csv 则不再加 zip。
-- 财务 NAS：`fzh.nas` 可见 `/财务部/.../2023年度账期资料`。综合副本排除部分 PDF / 审批中 csv。
+- 财务 NAS：`NAS_API/.env` 管理员账号可见财务部账期资料根。综合副本排除部分 PDF / 审批中 csv。
 - 离职下载调研：标准 Grant 按发起人授权；官方出路 OA 高级版 `.../premium/.../urls/download`。
 - 下载过滤：只保留完成/审批中且结果≠拒绝；跳过图片控件。离职发起人附件接口 `userNotExist`，对照 DRM 已归档（不写 NAS 同步盘）。
 - 初始化子项目：只读拉取销售收款确认单附件、`fileId__原名` 防重名、对照账期桶、NAS FileStation 只读探测。
