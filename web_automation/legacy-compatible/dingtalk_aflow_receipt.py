@@ -5,7 +5,8 @@
 用法:
   # 1) 导出单据表
   uv run python web_automation/legacy-compatible/dingtalk_aflow_receipt.py \
-      --from 2026-07-04 --to 2026-09-09
+      --from 2026-07-04 --to 2026-09-11
+  # 输出目录读 DINGTALK_OA_WORK，组织名读 DINGTALK_ORG；不要把本机人名路径写进 git。
   # 2) 按导出表补离职发起人的附件（API userNotExist 的那批）
   uv run python web_automation/legacy-compatible/dingtalk_aflow_receipt.py \
       --mode attachments
@@ -29,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from datetime import datetime
@@ -38,8 +40,8 @@ from playwright.sync_api import Page, TimeoutError as PWTimeout, sync_playwright
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 WEB_ROOT = SCRIPT_DIR.parent
+REPO_ROOT = WEB_ROOT.parent
 DEFAULT_PROFILE = WEB_ROOT / "dingtalk-profile"
-DEFAULT_OUT = Path(r"D:\Work\王忠于\成本核算")
 
 # 直接开 aflow 未登录会落到一个没有任何登录控件的 error.vm；
 # 必须先走 oa.dingtalk.com 才能触发钉钉统一身份认证 + 选组织。
@@ -149,18 +151,45 @@ def pick_org(page: Page, org: str) -> bool:
 
 
 def load_env() -> dict:
-    """读 web_automation/.env（已被 .gitignore 排除）。凭据只从这里来，不走命令行。"""
+    """读 web_automation/.env 以及钉钉/NAS 模块 env（均 gitignore）。凭据不走命令行。"""
     vals: dict[str, str] = {}
-    env_path = WEB_ROOT / ".env"
-    if not env_path.is_file():
-        return vals
-    for raw in env_path.read_text(encoding="utf-8").splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#") or "=" not in line:
+    paths = [
+        WEB_ROOT / ".env",
+        REPO_ROOT / "dingtalk" / "dingtalk_oa_approval" / ".env",
+        REPO_ROOT / "NAS_API" / ".env",
+    ]
+    extra = os.environ.get("DINGTALK_OA_ENV", "").strip()
+    if extra:
+        paths.append(Path(extra))
+    for env_path in paths:
+        if not env_path.is_file():
             continue
-        k, v = line.split("=", 1)
-        vals[k.strip()] = v.strip().strip('"').strip("'")
+        for raw in env_path.read_text(encoding="utf-8").splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            key, val = k.strip(), v.strip().strip('"').strip("'")
+            vals.setdefault(key, val)
+            os.environ.setdefault(key, val)
     return vals
+
+
+def resolve_out(cli: str, env: dict) -> Path:
+    raw = (cli or "").strip() or (env.get("DINGTALK_OA_WORK") or os.environ.get("DINGTALK_OA_WORK") or env.get("DINGTALK_AFLOW_OUT") or "").strip()
+    if not raw:
+        raise RuntimeError(
+            "未设置输出目录。设 DINGTALK_OA_WORK（或 DINGTALK_AFLOW_OUT）或传 --out。"
+            "不要把本机人名路径写进 git。"
+        )
+    return Path(raw)
+
+
+def resolve_org(cli: str, env: dict) -> str:
+    raw = (cli or "").strip() or (env.get("DINGTALK_ORG") or os.environ.get("DINGTALK_ORG") or "").strip()
+    if not raw:
+        raise RuntimeError("未设置钉钉组织名。设 DINGTALK_ORG 或传 --org。不要把组织全称写进 git 默认值。")
+    return raw
 
 
 def _click_in(page: Page, scope: str, text: str, attempt_each_ms: int = 1500, rounds: int = 10) -> bool:
@@ -229,7 +258,8 @@ def _check_remember_me(page: Page, scope: str = ".module-pass-login") -> bool:
 def login_with_password(page: Page, user: str, password: str) -> bool:
     """钉钉「账号登录」：手机号 → 下一步 → 密码 → 登录。
 
-    实测（2026-09-10）这一步**没有验证码、没有短信**，可直接脚本化。
+    密码这一步没有图形验证码。陌生设备/新 profile 在登录提交之后可能还要一次短信验证码
+    （见 `_sms_step_present`，必须人工输入，无法自动化）。
     所有控件都限定在 `.module-pass-login` 作用域内 —— 该容器恰好只含本流程的
     手机号/密码框与「下一步/登录」两个按钮，能避开整页几十个同名控件。
     """
@@ -623,11 +653,13 @@ def main() -> int:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser(description="钉钉 aflow 销售收款确认单导出")
     ap.add_argument("--mode", default="excel", choices=["excel", "attachments"])
-    ap.add_argument("--from", dest="d_from", default="2026-07-04")
-    ap.add_argument("--to", dest="d_to", default="2026-09-09")
+    ap.add_argument("--from", dest="d_from", default="2026-07-04",
+                    help="发起时间起（含）。钉钉只能按发起时间筛；要「只留某月账期」导出后用 dingtalk_oa_approval/filter_export_by_period.py")
+    ap.add_argument("--to", dest="d_to", default="",
+                    help="发起时间止（含）；默认今天，以免漏掉窗口截止后的补交")
     ap.add_argument("--form", default=DEFAULT_FORM)
-    ap.add_argument("--org", default="方州汇国际", help="登录后要选择的组织名")
-    ap.add_argument("--out", default=str(DEFAULT_OUT))
+    ap.add_argument("--org", default="", help="登录后要选择的组织名；默认读 DINGTALK_ORG")
+    ap.add_argument("--out", default="", help="下载目录；默认读 DINGTALK_OA_WORK")
     ap.add_argument("--profile", default=str(DEFAULT_PROFILE))
     ap.add_argument("--headless", action="store_true")
     ap.add_argument("--channel", default="chrome",
@@ -640,7 +672,7 @@ def main() -> int:
     ap.add_argument("--fields", default="账期明细",
                     help="附件模式：要取哪些字段标签（逗号分隔）；默认只取账期明细，图片控件不取")
     ap.add_argument("--only-departed", dest="only_departed", action="store_true", default=True,
-                    help="附件模式：只取离职发起人的单据（默认开）")
+                    help="附件模式：只取离职发起人的单据（默认开）。在职补交（如 SYX）请用 OA API，或加 --all-originators")
     ap.add_argument("--all-originators", dest="only_departed", action="store_false",
                     help="附件模式：不限离职，取导出表里全部单据")
     ap.add_argument("--auto-login", action="store_true",
@@ -653,13 +685,20 @@ def main() -> int:
     if args.auto_login:
         print("[信息] --auto-login 对钉钉无意义（非验证码登录），已忽略")
 
-    out_dir = Path(args.out)
+    env = load_env()
+    try:
+        out_dir = resolve_out(args.out, env)
+        args.org = resolve_org(args.org, env)
+    except RuntimeError as e:
+        emit_failure("INVALID_ARGUMENT", f"[错误] {e}")
+        return 1
+    if not args.d_to:
+        args.d_to = datetime.now().strftime("%Y-%m-%d")
     out_dir.mkdir(parents=True, exist_ok=True)
     profile_dir = Path(args.profile)
     profile_dir.mkdir(parents=True, exist_ok=True)
 
-    # 凭据只从 web_automation/.env 读（gitignore），不进命令行、不进日志
-    env = load_env()
+    # 凭据只从 .env 读（gitignore），不进命令行、不进日志
     dt_user = env.get("DINGTALK_USER", "").strip()
     dt_pwd = env.get("DINGTALK_PASSWORD", "").strip()
     if dt_user and dt_pwd:

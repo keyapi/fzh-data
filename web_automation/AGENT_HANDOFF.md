@@ -16,7 +16,8 @@ Agent 参考（OKF 文档见 [docs/index.md](docs/index.md)；`click-based/AGENT
 - 独立 uv 子项目：子环境 `web_automation/.venv`；首次 `uv run python web_automation/scripts/bootstrap.py`（建环境+Chromium），体检 `doctor.py`。
 - OCR 全自动登录（ddddocr）：`uv sync --project web_automation --group ocr`；脚本加 `--auto-login`。
 - 凭据只放 `web_automation/.env`（gitignored）→ `TONGTU_USER`/`TONGTU_PASSWORD`（通途）、
-  `DINGTALK_USER`/`DINGTALK_PASSWORD`（钉钉 aflow，账号密码登录免扫码），绝不入库、不进命令行。
+  `DINGTALK_USER`/`DINGTALK_PASSWORD`/`DINGTALK_ORG`（钉钉 aflow），绝不入库、不进命令行。
+  导出目录与 OA 模块共用 `DINGTALK_OA_WORK`（未设即报错，不要写本机人名路径）。
 - 持久化登录 cookie：`web_automation/chrome-profile/`（gitignored）。登录识别：body 含 `编号：`。
 - OCR 不可用自动降级半自动：自动填账号密码，验证码留人工在窗口输入。
 
@@ -41,7 +42,11 @@ Agent 参考（OKF 文档见 [docs/index.md](docs/index.md)；`click-based/AGENT
   `docs/reference/aflow-receipt-export.md`。
 - **结果（2026-09-10 实测核验）**：窗口 2026-07-04~09-09 → **405 行 / 265 单据**（单据数按唯一 `数据id` 计），
   发起时间全在窗口内；产物 232 KB；`数据id` 与 API `instance_ids.json` **265/265 重合**。
-- **用法**：`uv run python web_automation/scripts/dispatch.py dingtalk.aflow.receipt.export -- --from 2026-07-04 --to 2026-09-09`
+- **用法**：先 `--check`。`uv run python web_automation/scripts/dispatch.py dingtalk.aflow.receipt.export -- --from 2026-07-04 --to 2026-09-11`
+  `--to` 默认今天。落盘目录 `DINGTALK_OA_WORK`。要「只留 7 月账期」导出后跑
+  `dingtalk/dingtalk_oa_approval/filter_export_by_period.py --period 2026-07`。
+  整条收口（API 拉在职补交、NAS 归档、IT 7/8 / SE 7/18）见
+  `dingtalk/dingtalk_oa_approval/docs/research/browser-admin-download.md`。
 - **登录**：凭据从 `web_automation/.env` 的 `DINGTALK_USER`/`DINGTALK_PASSWORD` 读（gitignore，**不入命令行**）。
   流程 `账号登录 tab → 手机号 → 下一步 → 密码 → 登录`，**无图形验证码**（用不上 ddddocr）。
   `.env` 没配则回退「一键头像 / 扫码」人工登录。密码只试一次，避免触发风控。
@@ -56,9 +61,11 @@ Agent 参考（OKF 文档见 [docs/index.md](docs/index.md)；`click-based/AGENT
   **注意**：批量附件（hover「仅导出审批单附件」）产物进钉盘、取不回本地；
   导出表里的 `#/previewAttachments` 深链**需钉钉客户端**，浏览器里打不开 —— 别走错。
   实测对 39 个离职单据 39/39 成功，其中 **38 单是 API `userNotExist`** 的。
-- **与 API 路径的关系**：`dingtalk/dingtalk_oa_approval/`（API，`API_ONLY`）与这条（浏览器，`BROWSER_ONLY`）
-  是**两条独立路径**，不给彼此兜底。API 覆盖全量且能取图，但离职发起人 `userNotExist`；
-  aflow 以在职身份访问，正好补这个盲区。
+  **这不能代替**「SE 7/18 那张 txt 已进 7 月 NAS 桶」。归档用
+  `dingtalk/dingtalk_oa_approval/archive_aflow_to_nas.py --dry-run`。
+  在职补交（SYX 的 IT 7/8）不要走 `--only-departed`，用 OA `fetch_attachments.py`。
+- **与 API 路径的关系**：`dingtalk/dingtalk_oa_approval/`（API）与这条（浏览器）互补。
+  API 覆盖在职发起人；离职 `userNotExist` 走 aflow attachments。两边下载成功都 **≠ 已入账期桶**。
 
 ## 订单详情统计导出（背景/过程/结果摘要）
 
@@ -85,6 +92,7 @@ Agent 参考（OKF 文档见 [docs/index.md](docs/index.md)；`click-based/AGENT
 
 - `docs/index.md` — 模块文档导航
 - `docs/reference/capability-matrix.md` — 能力矩阵/风险/回退/验证
-- `docs/reference/orderdetail-export.md` — 订单详情统计导出专题（选择器/流程/踩坑/核验）
+- `docs/reference/aflow-receipt-export.md` — 钉钉 aflow 选择器/登录/导出/离职附件
+- 与 OA/NAS 拼图：`dingtalk/dingtalk_oa_approval/docs/research/browser-admin-download.md`
 - `docs/reference/tongtu-pitfalls.md` · `sellfox-pitfalls.md` — 平台踩坑
 - `scripts/scheduling-exports` 见 `docs/reference/scheduling-exports.md`

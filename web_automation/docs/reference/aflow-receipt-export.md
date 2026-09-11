@@ -316,11 +316,13 @@ https://aflow.dingtalk.com/dingtalk/pc/pages/dynamic/formservice.htm?corpid=<cor
 
 ## 相关文档与边界
 
-- **与 API 路径**：`dingtalk/dingtalk_oa_approval/`（`fetch_attachments.py` 等）是独立的 API 路径，
-  本文件只描述浏览器路径。两者**互补不互相兜底**，详见上面「与 API 路径的分工」。
+- **与 API / NAS 拼图**：浏览器只负责导出 Excel 和离职附件落地。
+  在职补交走 `fetch_attachments.py`；按账期月切表走 `filter_export_by_period.py`；
+  进财务桶走 `archive_aflow_to_nas.py` / `nas_upload_api21.py`（都要 dry-run）。
+  操作手册：`dingtalk/dingtalk_oa_approval/docs/research/browser-admin-download.md`。
+  **下载成功 ≠ 已入 7 月桶**。39/39 离职附件也不能代替 SE 7/18 那张 txt 已在 NAS。
+- **`--only-departed` 默认开**：在职补交（如 SYX 的 `AMZRosoonIT` 7/8，2026-09-10 已交）不会出现在这 39 里，用 API。
+- **落盘**：`DINGTALK_OA_WORK`（或 `--out`），不要写本机人名路径。组织名 `DINGTALK_ORG`。
 - **与 lessons**：`docs/lessons/login-fallback-design.md` 只覆盖通途/赛狐的**图形**验证码 OCR；
-  钉钉是账号密码 + **短信**验证码，机制不同（该文件已加适用范围说明）。
-- **⚠️ 与 PR #226 可能重叠**：PR #226（`feature/dingtalk-july-amz-reconcile-docs`）带了
-  `dingtalk/dingtalk_oa_approval/docs/research/browser-admin-download.md`，从标题看覆盖**相邻主题**
-  （浏览器管理后台下载）。**该 PR 合并后需与本文对齐**，避免两处各说一套。
-  本文只落在 `web_automation/**`，未触碰 `dingtalk/**` 以免冲突。
+  钉钉是账号密码 + **短信**验证码，机制不同。
+- 本文只落在 `web_automation/**`，避免和 PR 226 的 `dingtalk/**` 同文件冲突。口径以 226 手册为准。

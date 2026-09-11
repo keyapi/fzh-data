@@ -50,7 +50,18 @@ def test_no_python_file_references_external_repo():
         text = py.read_text(encoding="utf-8", errors="replace")
         if "D:\\Work\\赛狐\\网页自动化" in text or "D:/Work/赛狐/网页自动化" in text:
             offenders.append(str(py.relative_to(ROOT)))
+        if "王" + "忠于" in text:
+            offenders.append(str(py.relative_to(ROOT)) + ":personal-name-path")
     assert not offenders, f"external path references: {offenders}"
+
+
+def test_aflow_receipt_uses_env_for_out_and_org():
+    text = (WEB_AUTO / "legacy-compatible" / "dingtalk_aflow_receipt.py").read_text(
+        encoding="utf-8"
+    )
+    assert "DINGTALK_OA_WORK" in text
+    assert "DINGTALK_ORG" in text
+    assert "DEFAULT_OUT" not in text
 
 
 def test_capability_implementations_exist():

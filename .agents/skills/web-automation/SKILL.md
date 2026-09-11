@@ -50,8 +50,11 @@ uv run python web_automation/scripts/doctor.py
 `sellfox.stock.export` / `sellfox.other-inbound.import` / `sellfox.other-outbound.import` /
 `sellfox.restock.import` /
 `dingtalk.aflow.receipt.export`（钉钉 aflow 销售收款确认单导出 Excel）/
-`dingtalk.aflow.receipt.attachments`（按导出表补**离职发起人**附件；API `userNotExist` 那批）/
+`dingtalk.aflow.receipt.attachments`（按导出表补**离职发起人**附件；在职补交走 OA API）/
 `web.generic.explore`。
+
+钉钉落盘目录用 `DINGTALK_OA_WORK`，组织名 `DINGTALK_ORG`，不要把本机人名路径写进脚本。
+下载成功 ≠ 已入 NAS 账期桶。整条流水线见 `dingtalk/dingtalk_oa_approval/docs/research/browser-admin-download.md`。
 
 ## 通用浏览器模式
 

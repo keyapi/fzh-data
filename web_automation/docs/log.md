@@ -167,3 +167,12 @@ tags: [web-automation, tongtu, sellfox, playwright, log]
 它们正在 PR #226（`feature/dingtalk-july-amz-reconcile-docs`）里改，碰了必冲突。
 **待 #226 合并后**再补：docs/solutions 条目、CONCEPTS.md 术语、`dingtalk/dingtalk_oa_approval/AGENT_HANDOFF.md`
 的反向交叉链接。另注意 #226 带了 `docs/research/browser-admin-download.md`，与本文件**主题相邻，需对齐**。
+
+## 2026-09-11 — 输出目录/组织名改 env，和 226 手册对齐
+
+**为什么**：默认 `--out` 写死了本机人名核算目录，和 226「路径不进 git」冲突；GitHub 正文还停在「附件 ATTACHMENT_MANUAL_REQUIRED」。
+
+**改动**：`--out` 读 `DINGTALK_OA_WORK`（未设即报错）；`--org` 读 `DINGTALK_ORG`；`--to` 默认今天。
+`.env.example` 更正短信验证码。测试禁止脚本再出现人名路径。
+浏览器下载之后的账期月过滤 / NAS 归档以 226 手册为准；`--only-departed` 盖不住在职补交。
+
