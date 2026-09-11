@@ -60,7 +60,7 @@ uv run python web_automation/scripts/dispatch.py tongtu.orderdetail.export -- --
 | 日期 从/到 | `input[name='shipTimeFrom']` / `input[name='shipTimeTo']`，直接 `.fill()`，**不按 Enter** |
 | 应用过滤 | 切到「数据查询」tab 后点 `a[onclick='queryInfo()']` |
 | 提交统计 | 切「统计导出」→ 点 `a[onclick='openConfirmWin()']`（「统计」）→ 弹窗里点 `提交` |
-| 轮询新结果 | 提交前记数据表最上行(旧最新)提交时间；提交后往返 数据查询/统计导出 tab 强制刷新 → 最上行提交时间一变即锁本次任务行 → 等该行出现下载链接 |
+| 轮询新结果 | 提交前记数据表最上行(旧最新)提交时间；提交后**先读后切**(未完成才往返 数据查询/统计导出 刷新) → 最上行提交时间一变即锁本次任务行 → 等该行出现下载链接 |
 | 下载 | 对 href 用 `page.expect_download()`（大 timeout）点链接 `save_as` |
 
 登录检测：`body` 含 `编号：`。跳转离开报表页（如刚登录落在首页）需重开 ORDERDETAIL_URL 再设筛选。
@@ -70,7 +70,7 @@ uv run python web_automation/scripts/dispatch.py tongtu.orderdetail.export -- --
 1. **日期框 My97：`.fill()` 后按 Enter 会整页刷新并重置为默认日期**——只 fill，不要按 Enter。
 2. **填日期会弹出 My97 日历 iframe，拦截后续点击**（如「查询」）——填完先让日历收起再点查询。
 3. **「查询」按钮只在「数据查询」tab 可见**——先 `switch_tab('数据查询')` 再点 `queryInfo()`；统计导出 tab 下该按钮隐藏。
-4. **统计任务状态不自动刷新**——提交后需往返 数据查询/统计导出 两 tab 强制刷新，新结果才会出现。
+4. **统计任务状态不自动刷新**——需往返 数据查询/统计导出 两 tab 强制刷新；脚本采用**先读后切**（只有未锁定/未完成才切换），减少无谓切换与检测延迟。
 5. **下载结果识别：按「最上行 = 本次提交」锚定，不采 href 基线**。历史表按提交时间倒序，数据表第一行即本次刚提交任务。结构坑：本页是 fixedHeadFoot 滚动表格，header（含「统计条件」th）后 `following::table[1]` 才是数据表（两者非 sibling），且数据表首行是空 spacer（须跳过）；行文本最后一个 `YYYY-MM-DD HH:MM:SS` 即该行提交时间。做法：提交前记最上行提交时间 → 提交后往返 tab 刷新 → 最上行提交时间一变即锁本次行 → 等该行出现下载链接。旧行晚渲染不会误认，小范围快任务也不会被吞（href 基线法在“表晚渲染/快任务”两端各有坑）。
 6. 提交互斥：同页面统计生成中不能再提交（脚本最多重试 3 次；打不开弹窗且无互斥文案时 `FAILURE_CODE=SUBMIT_FAILED`，互斥才是 `BUSY`）。
 7. 「查询」失败必须中止（`FAILURE_CODE=QUERY_FAILED`），不要继续提交——zip 文件名用 CLI 月份，统计条件却可能仍是页面默认日期。

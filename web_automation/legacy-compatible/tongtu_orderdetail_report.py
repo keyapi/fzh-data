@@ -245,11 +245,7 @@ def wait_for_my_download(page, prev_top_ts):
     my_ts = None
 
     while time.time() - start_time < POLL_TIMEOUT_SECS:
-        # 通途统计页不会自动刷新，需往返两 tab 强制刷新
-        switch_tab(page, TAB_QUERY)
-        page.wait_for_timeout(800)
-        switch_tab(page, TAB_EXPORT)
-
+        # 先读当前状态；只有没拿到结果才往返两 tab 强制刷新（页面不自动刷新）
         ts, href = _top_row_state(page)
         if not settled:
             if ts is None:
@@ -268,6 +264,11 @@ def wait_for_my_download(page, prev_top_ts):
         if settled and href:
             print(f"  [OK] 本次任务统计完成！链接: {href}")
             return href
+
+        # 未完成/未锁定 → 刷新列表再等
+        switch_tab(page, TAB_QUERY)
+        page.wait_for_timeout(800)
+        switch_tab(page, TAB_EXPORT)
 
         elapsed = int(time.time() - start_time)
         if elapsed % 30 < POLL_INTERVAL_SECS:
