@@ -100,6 +100,8 @@ def main(argv=None) -> int:
     ap.add_argument("--columns", default="物流商运费", help="要写回的列（逗号分隔），默认 物流商运费")
     ap.add_argument("--archive", help="旧 ws 归档名，默认 弃用<ws> <YYYYMMDD>")
     ap.add_argument("--chunk", type=int, default=5000, help="单次写入行数（默认 5000）")
+    ap.add_argument("--in-place", action="store_true",
+                    help="直接覆盖目标 ws 的指定列（不复制旧 ws、不归档）；用于纯列更新")
     ap.add_argument("--dry-run", action="store_true", help="只打印计划与差异，不写入")
     args = ap.parse_args(argv)
 
@@ -143,21 +145,24 @@ def main(argv=None) -> int:
         print("[dry-run] 未做任何写入。")
         return 0
 
-    # 1) 复制旧 ws 到原索引（保留格式/人工改动），随后旧 ws 归档
-    taken = {w.title for w in sp.worksheets()}
-    dup_title = unique_title(taken, f"{ws_name}__new")
-    dup = sp.duplicate_sheet(old.id, insert_sheet_index=old.index, new_sheet_name=dup_title)
-    arch = args.archive or default_archive_name(ws_name)
-    old.update_title(unique_title(taken - {ws_name}, arch))
-    dup.update_title(ws_name)
-    print(f"已复制并归档: 新 {ws_name}（原索引） / 旧 {arch}")
+    if args.in_place:
+        print(f"in-place 模式：直接覆盖 {ws_name} 的指定列（不复制、不归档）")
+    else:
+        # 复制旧 ws 到原索引（保留格式/人工改动），随后旧 ws 归档
+        taken = {w.title for w in sp.worksheets()}
+        dup_title = unique_title(taken, f"{ws_name}__new")
+        dup = sp.duplicate_sheet(old.id, insert_sheet_index=old.index, new_sheet_name=dup_title)
+        arch = args.archive or default_archive_name(ws_name)
+        old.update_title(unique_title(taken - {ws_name}, arch))
+        dup.update_title(ws_name)
+        print(f"已复制并归档: 新 {ws_name}（原索引） / 旧 {arch}")
 
     # 2) 只覆盖指定列
+    ws_new = sp.worksheet(ws_name)
     for col, idx, vals, _ in plans:
         L = column_letter(idx)
         for s in range(0, len(vals), args.chunk):
             chunk = [[v] for v in vals[s:s + args.chunk]]
-            ws_new = sp.worksheet(ws_name)
             ws_new.update(values=chunk, range_name=f"{L}{s + 2}", value_input_option="RAW")
             print(f"  {col}: 写入 {min(s + args.chunk, len(vals))}/{len(vals)}")
 

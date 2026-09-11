@@ -27,6 +27,8 @@ export GSPREAD_SERVICE_ACCOUNT_FILE='<父仓库>/secrets/gsheets-service-account
 export PYTHONPATH=tongtool_order_cost
 uv run python tongtool_order_cost/scripts/upload_monthly_order_sheet.py --xlsx "<xlsx>" --month 202607 --dry-run
 uv run python tongtool_order_cost/scripts/upload_monthly_order_sheet.py --xlsx "<xlsx>" --month 202607
+# 只要覆盖列、不复制/不归档：
+uv run python tongtool_order_cost/scripts/upload_monthly_order_sheet.py --xlsx "<xlsx>" --month 202607 --in-place
 ```
 
 ## 硬规则

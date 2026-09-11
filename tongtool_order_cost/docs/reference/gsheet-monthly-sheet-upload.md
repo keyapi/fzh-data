@@ -34,6 +34,10 @@ uv run python tongtool_order_cost/scripts/upload_monthly_order_sheet.py \
 
 可选：`--sheet/--ws`（默认由 `--month` 推导）、`--columns`（默认 `物流商运费`，可逗号多列）、
 `--archive`、`--chunk`（默认 5000 行/次）。
+`--in-place`：目标 ws 名与位置已正确、只需覆盖列时，**不复制/不归档**，直接覆盖该 ws 的指定列（本次 202607 即用此模式）。
+
+> 写法对比与官方限制出处见 [research/2026-09-11-gsheet-write-efficiency.md](../research/2026-09-11-gsheet-write-efficiency.md)：
+> 官方**无硬上限、建议 payload ≤2MB**；读写 300/min/项目、60/min/用户；batch 计 1 次；请求原子。
 
 ## 为什么这样做（vs 旧 Colab 写法）
 
