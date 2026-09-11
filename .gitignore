@@ -26,12 +26,19 @@ venv/
 
 # env files (secrets)
 .env
+# env 变体（备份 / 本地覆盖）；模板要入库，见下面的 ! 例外
+.env.*
+!.env.example
+!.env.sample
+!.env.template
 secrets/*.json
 *.cookie.txt
 cookie.txt
 **/docs/api-reference/llms_parsed.json
 **/docs/api-reference/download_log.json
 .env.local
+# Agent/Codex 临时工作区（可能含从别处拷来的脚本与明文凭证）
+.codex_tmp/
 .gh-token
 out/*
 missing_products/out/**

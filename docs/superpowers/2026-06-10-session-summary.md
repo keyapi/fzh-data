@@ -351,7 +351,7 @@ d1c81db fix(dam): NAS thumbnail path quoting + setup return missing variables
 **NAS 凭证** (从 ERPNext PIM Settings 获取):
 - URL: `https://fzh.myds.me:11024`
 - Username: `fzh.test`
-- Password: `Fzh,1023` (由用户提供，已写入 `.env`)
+- Password: 见 `.env` / `frappe.conf`（**不在这里记明文**）
 
 ### 实现
 

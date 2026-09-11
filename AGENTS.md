@@ -168,6 +168,8 @@ uv sync
    如果 Agent 不确定如何创建 PR，用 `gh pr create --title "..." --body "..."` 命令。
 9. **提交 PR 前扫描凭证**：以下命令必须全部零输出。禁止硬编码密钥/token/密码，禁止提交 CSV 数据文件、PDF、图片到公开仓库。违反 PR 不得合并（详见 `CONTRIBUTING.md` 安全检查章节）
    ```bash
+   # 0. 工作区全量扫描（含还没 git add 的脚本；上面的 diff 扫描看不到这些）
+   uv run python scripts/check_secrets.py
    # 传统 key=value 格式
    git diff origin/main...HEAD | grep -iE "(api_key|api_secret|password|token|ghp_|github_pat_)\s*=\s*['\"]?\w{8,}"
    # curl header 中的凭证
