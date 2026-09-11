@@ -10,3 +10,4 @@ tags: [research, index]
 | 文档 | 说明 |
 |------|------|
 | [2026-08-14-june-fba-sku-remap.md](2026-08-14-june-fba-sku-remap.md) | 六月 FBA 尾程缺口与 SKU 改名过程 |
+| [2026-09-11-gsheet-write-efficiency.md](2026-09-11-gsheet-write-efficiency.md) | Google Sheet 大批量写入：旧 Colab 写法 vs 只写变化列/服务端 copy（含官方限制与出处） |

@@ -132,6 +132,7 @@ uv sync
 | `dam-prototype` | `dam-prototype/` | DAM 数字资产管理原型 |
 | `erpnext` | `erpnext/` | 工单排查 (setup→fetch→report 流水线) |
 | `tongtool-order-cost` | `tongtool_order_cost/` | 通途订单特殊规则 1.7.0 本地引擎 + Google Sheet SKU 改名 |
+| `gsheet-monthly-order` | `.agents/skills/gsheet-monthly-order/` | 月度成品 xlsx → 固定 gsheet 月度 ws（复制/归档/只覆盖变化列） |
 | `erpnext-wo-audit` | `.agents/skills/erpnext-wo-audit/` | 工单排查 Skill，按触发词自动加载 |
 | `missing-products` | `.agents/skills/missing-products/` | 通途有库存 SKU → EN 产品客户码 → 赛狐产品 SKU 三方主线补齐/审计 |
 | `platform-account-reconciliation` | `platform_account_reconciliation/` | OSTKUS/Wayfair 账期费用级对账 + EN Tongtool Order 匹配 |
