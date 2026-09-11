@@ -3,6 +3,11 @@
 
 查找顺序：模块 `.env`（从 `.env.example` 复制）→ 仓库级 `NAS_API/.env` → 进程环境变量。
 两处 `.env` 都已被 `.gitignore` 排除。
+
+账号只认 `NAS_SSH_USER` / `NAS_ADMIN_USER`，**不回退** `NAS_USERNAME`：
+SSH 和 DSM（FileStation / API）是两条不同的认证路径，`NAS_USERNAME` 那个账号
+不一定允许 SSH。SSH 只有管理员偶尔用，所以要求显式配一个 SSH 账号是可接受的。
+（FileStation 侧的 `nas_admin.nas_credentials()` 是另一回事，那里允许回退并会警告。）
 """
 from __future__ import annotations
 
