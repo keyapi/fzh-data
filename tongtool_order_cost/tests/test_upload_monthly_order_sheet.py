@@ -37,3 +37,7 @@ def test_norm_compare():
     assert m.norm("1,234.50") == m.norm(1234.5)
     assert m.norm("") == m.norm(None) == ("empty",)
     assert m.norm("08:53") != m.norm("0853")
+
+
+def test_col_numeric_sum():
+    assert m.col_numeric_sum(["1", "2.5", "", None, "x", "1,000"]) == 1003.5

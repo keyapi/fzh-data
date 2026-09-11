@@ -47,7 +47,9 @@ resource: tongtool_order_cost/scripts/upload_monthly_order_sheet.py
 
 - 日常：`scripts/upload_monthly_order_sheet.py` —— `duplicate_sheet`（留原索引，FBA 左侧）+ 归档旧 ws + **只覆盖变化列**（默认 `物流商运费`）+ 回读校验。
 - 何时 `--in-place`：目标 ws 名与位置已正确、只需覆盖列、不想产生新 ws/归档时（本分支已支持）。
-- 何时改用 copyTo（未实现，按需加）：某月多列同时变化 / 想“像手工导入一样整表替换”。实现路径 = Drive 把 xlsx 转临时 Google 表格 → `sheets.copyTo` 到目标表 → 改名/定索引 → 删临时表。
+- 何时改用 copyTo：某月**多列同时变化** / 想“像手工导入一样整表替换”时，用脚本的 `--replace-sheet`
+  （Drive 把 xlsx 转临时 Google 表格 → `sheets.copyTo` 到目标表 → 改名/定索引 → 删临时表）。
+  **已实现并在临时试跑表格中端到端验证**（9604 行/表头/列合计一致，临时表自动删除）。
 
 ## 注意
 

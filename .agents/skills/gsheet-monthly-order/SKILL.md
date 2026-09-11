@@ -29,6 +29,8 @@ uv run python tongtool_order_cost/scripts/upload_monthly_order_sheet.py --xlsx "
 uv run python tongtool_order_cost/scripts/upload_monthly_order_sheet.py --xlsx "<xlsx>" --month 202607
 # 只要覆盖列、不复制/不归档：
 uv run python tongtool_order_cost/scripts/upload_monthly_order_sheet.py --xlsx "<xlsx>" --month 202607 --in-place
+# 整表替换（多列变化 / 想“像导入一样”整张换）：
+uv run python tongtool_order_cost/scripts/upload_monthly_order_sheet.py --xlsx "<xlsx>" --month 202607 --replace-sheet
 ```
 
 ## 硬规则

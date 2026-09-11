@@ -36,6 +36,11 @@ uv run python tongtool_order_cost/scripts/upload_monthly_order_sheet.py \
 `--archive`、`--chunk`（默认 5000 行/次）。
 `--in-place`：目标 ws 名与位置已正确、只需覆盖列时，**不复制/不归档**，直接覆盖该 ws 的指定列（本次 202607 即用此模式）。
 
+`--replace-sheet`（整表替换，多列变化时用）：把 xlsx 交给 Drive 转成**临时 Google 表格** → 用
+`spreadsheets.sheets.copyTo` **一次拷入**目标表 → 改名 `YYYY年M月订单`、放回原索引 → 删除临时表。
+旧 ws 同样归档为 `弃用…`。已在**临时试跑表格**中端到端验证（9604 行、表头一致、列合计一致、临时表自动删除）。
+加 `--spreadsheet-id <id>` 可指定目标表（试跑/脚本化用）。
+
 > 写法对比与官方限制出处见 [research/2026-09-11-gsheet-write-efficiency.md](../research/2026-09-11-gsheet-write-efficiency.md)：
 > 官方**无硬上限、建议 payload ≤2MB**；读写 300/min/项目、60/min/用户；batch 计 1 次；请求原子。
 

@@ -91,6 +91,71 @@ def load_column_values(xlsx_path: str, column: str) -> list:
     return df[column].astype(object).where(pd.notna(df[column]), "").tolist()
 
 
+# ---------------------------------------------------------------------------
+# 整表替换（Drive 转换 xlsx→Google 表格 + sheets.copyTo）
+# 说明见 docs/reference/gsheet-monthly-sheet-upload.md / docs/research/2026-09-11-gsheet-write-efficiency.md
+# ---------------------------------------------------------------------------
+
+def _google_creds():
+    from google.oauth2.service_account import Credentials
+    from tongtool_order_cost.gsheets import load_credentials
+
+    return Credentials.from_service_account_info(
+        load_credentials(),
+        scopes=["https://www.googleapis.com/auth/spreadsheets",
+                "https://www.googleapis.com/auth/drive"],
+    )
+
+
+def _svc(name: str, version: str):
+    from googleapiclient.discovery import build
+
+    return build(name, version, credentials=_google_creds(), cache_discovery=False)
+
+
+def convert_xlsx_to_temp_spreadsheet(drive, xlsx_path: str, name: str) -> str:
+    """上传 xlsx 并让 Drive 转成原生 Google 表格，返回临时 spreadsheetId。"""
+    from googleapiclient.http import MediaFileUpload
+
+    media = MediaFileUpload(
+        xlsx_path,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        resumable=False,
+    )
+    body = {"name": name, "mimeType": "application/vnd.google-apps.spreadsheet"}
+    return drive.files().create(body=body, media_body=media, fields="id").execute()["id"]
+
+
+def first_sheet_id(sheets, spreadsheet_id: str) -> int:
+    meta = sheets.spreadsheets().get(
+        spreadsheetId=spreadsheet_id, fields="sheets.properties"
+    ).execute()
+    return meta["sheets"][0]["properties"]["sheetId"]
+
+
+def copy_sheet_into(sheets, src_id: str, src_sheet_id: int, dest_id: str) -> int:
+    """把 src 表里的某张 sheet 拷进 dest 表，返回 dest 中新建 sheet 的 sheetId。"""
+    res = sheets.spreadsheets().sheets().copyTo(
+        spreadsheetId=src_id, sheetId=src_sheet_id,
+        body={"destinationSpreadsheetId": dest_id},
+    ).execute()
+    return res["sheetId"]
+
+
+def delete_drive_file(drive, file_id: str) -> None:
+    drive.files().delete(fileId=file_id).execute()
+
+
+def col_numeric_sum(vals: list) -> float:
+    s = 0.0
+    for v in vals:
+        try:
+            s += float(str(v).replace(",", "")) if str(v).strip() else 0.0
+        except ValueError:
+            pass
+    return s
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="月度成品 xlsx → 固定 gsheet 月度 ws（patch 模式）")
     ap.add_argument("--xlsx", required=True)
@@ -102,6 +167,9 @@ def main(argv=None) -> int:
     ap.add_argument("--chunk", type=int, default=5000, help="单次写入行数（默认 5000）")
     ap.add_argument("--in-place", action="store_true",
                     help="直接覆盖目标 ws 的指定列（不复制旧 ws、不归档）；用于纯列更新")
+    ap.add_argument("--replace-sheet", action="store_true",
+                    help="整表替换：Drive 转换 xlsx→Google 表格 + sheets.copyTo 拷入（多列变化时用）")
+    ap.add_argument("--spreadsheet-id", help="直接按 ID 打开目标表（试跑/脚本化用）")
     ap.add_argument("--dry-run", action="store_true", help="只打印计划与差异，不写入")
     args = ap.parse_args(argv)
 
@@ -121,7 +189,7 @@ def main(argv=None) -> int:
     from tongtool_order_cost.gsheets import client  # 延迟导入，便于纯函数测试
 
     gc = client()
-    sp = open_spreadsheet(gc, sheet_name)
+    sp = gc.open_by_key(args.spreadsheet_id) if args.spreadsheet_id else open_spreadsheet(gc, sheet_name)
     old = sp.worksheet(ws_name)
     hdr = old.row_values(1)
     df_cols = [str(c) for c in pd.read_excel(args.xlsx, nrows=0).columns]
@@ -144,6 +212,40 @@ def main(argv=None) -> int:
     if args.dry_run:
         print("[dry-run] 未做任何写入。")
         return 0
+
+    if args.replace_sheet:
+        # 整表替换：Drive 转换 xlsx→临时 Google 表格 → copyTo 到目标表 → 改名/定索引 → 删临时表
+        drive, sheets = _svc("drive", "v3"), _svc("sheets", "v4")
+        tmp_id = None
+        try:
+            tmp_id = convert_xlsx_to_temp_spreadsheet(drive, args.xlsx, f"tmp_{ws_name}")
+            tmp_hdr = gc.open_by_key(tmp_id).sheet1.row_values(1)
+            if tmp_hdr != df_cols:
+                raise SystemExit(f"转换后表头与 xlsx 不一致，中止。\n  临时: {tmp_hdr[:6]}…")
+            old_index = old.index
+            arch = args.archive or default_archive_name(ws_name)
+            old.update_title(unique_title({w.title for w in sp.worksheets()} - {ws_name}, arch))
+            new_id = copy_sheet_into(sheets, tmp_id, first_sheet_id(sheets, tmp_id), sp.id)
+            new_ws = sp.get_worksheet_by_id(new_id)
+            new_ws.update_title(ws_name)
+            new_ws.update_index(old_index)
+            print(f"整表替换完成: 新 {ws_name}（原索引 {old_index}） / 旧 {arch}")
+            # 回读校验：表头 + 行数 + 指定列数值合计
+            check = sp.worksheet(ws_name)
+            ok = check.row_values(1) == df_cols and len(check.get_all_values()) - 1 == len(plans[0][2])
+            for col, idx, vals, _ in plans:
+                same = abs(col_numeric_sum(check.col_values(idx)[1:]) - col_numeric_sum(vals)) < 0.01
+                ok = ok and same
+                print(f"  校验 {col}: 数值合计 {'一致' if same else '不一致!'}")
+            print("完成。" if ok else "完成（有校验不一致，请人工核对）。")
+            return 0 if ok else 1
+        finally:
+            if tmp_id:
+                try:
+                    delete_drive_file(drive, tmp_id)
+                    print(f"  已删除临时表 {tmp_id}")
+                except Exception as e:
+                    print(f"  [警告] 删除临时表失败: {e}")
 
     if args.in_place:
         print(f"in-place 模式：直接覆盖 {ws_name} 的指定列（不复制、不归档）")
