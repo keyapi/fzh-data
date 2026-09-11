@@ -6,14 +6,14 @@ title: dingtalk_oa_approval 变更日志
 
 # 变更日志
 
-## 2026-09-11（跨月剔除补上生成端 + 修键不对称 + NAS 账号不回退）
+## 2026-09-11（跨月剔除补上生成端 + 修键不对称 + NAS 账号出声）
 
 - **新增** `late_submission_keys.py`：读 Google 表「钉钉账期提交时间不对挪动记录」→ 按 `--period` 生成 `--exclude-keys` 文件。此前只有消费端（`filter_export_by_period.py`），从表里导出键这一步是手工的。
 - **修** 唯一键金额不对称：表里存的 `…|eBay（US）|0.0` 对不上导出侧算的 `…|0`（`str()` 取决于 dtype），那笔会被静默漏剔除。新增 `ding_xlsx.norm_amount()` / `build_key()`，两端同源；`unique_key()` 改为调它，并让销售额为空时回落应收账款。
 - 实测（2026-09-08 登记的 2026-07 批次）：`--period 2026-08` → 42 个剔除键（43 行含 1 条重复键，会在输出里点名），早交的 2 行因剔除列为空自动保留。
 - 新增 `tests/test_late_submission_keys.py`（11 项）；模块测试 16 → 27。
 - 文档：`reference/late-submission-registry.md` 补「唯一键必须两端同源」与命令；handoff / 惯例文档同步。
-- **修** NAS 管理员账号解析（`nas_admin.nas_credentials`）不再回退到 `NAS_USERNAME`：实测 `NAS_API/.env` 里只有 `NAS_USERNAME`（= 只做 API 的 DSM 账号，看不见「财务部」），旧写法会**静默**选到它并配上 `NAS_SSH_PASSWORD`，看起来"成功"其实权限不对。现在缺 `NAS_ADMIN_USER`/`NAS_SSH_USER` 直接报错并点名要填哪个键。
+- **修** NAS 账号解析（`nas_admin.nas_credentials`）出错时不再沉默：账号取 `NAS_ADMIN_USER` → `NAS_SSH_USER` → `NAS_USERNAME`。最后那个通常是只做 API 的账号（`NAS_API/.env` 当前就是 `fzh.test`），权限**有时就够用**，所以仍允许回退，但会 `warnings.warn` 提示——它可能看不见「财务部」共享，那时在 .env 加 `NAS_ADMIN_USER=<管理员账号>` 即可，不用改代码。原问题是**静默**：选错账号却看起来"连上了"。
 - 新增 `scripts/check_secrets.py`：扫**整个工作区**的明文凭证（含未 `git add` 的脚本），补上 AGENTS.md 第 9 条只看 `git diff` 的盲区——`nas_product_visuals/nas_cmd.py` 就是那样漏过的。
 
 ## 2026-09-11（226/227 拼图：env、账期月过滤、NAS 归档）

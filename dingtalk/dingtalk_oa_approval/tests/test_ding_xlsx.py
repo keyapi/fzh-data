@@ -1,4 +1,5 @@
 from pathlib import Path
+import warnings
 
 import pandas as pd
 import pytest
@@ -86,8 +87,8 @@ def test_nas_credentials_require_env(monkeypatch, tmp_path):
         nas_credentials()
 
 
-def test_nas_credentials_does_not_fall_back_to_dsm_api_user(monkeypatch, tmp_path):
-    """NAS_USERNAME 是 DSM API 账号（看不见「财务部」），不能被当成管理员账号静默采用。"""
+def test_nas_credentials_falls_back_to_nas_username_but_warns(monkeypatch, tmp_path):
+    """NAS_USERNAME（只做 API 的账号）有时权限就够用，所以允许回退——但必须出声。"""
     env = tmp_path / ".env"
     env.write_text(
         "NAS_USERNAME=fzh.test\nNAS_SSH_PASSWORD=pw\nNAS_URL=https://nas.invalid\n",
@@ -96,8 +97,26 @@ def test_nas_credentials_does_not_fall_back_to_dsm_api_user(monkeypatch, tmp_pat
     monkeypatch.setattr("nas_admin.NAS_ENV", env)
     for k in ("NAS_ADMIN_USER", "NAS_SSH_USER", "NAS_SSH_PASSWORD", "NAS_PASSWORD", "NAS_URL"):
         monkeypatch.delenv(k, raising=False)
-    with pytest.raises(RuntimeError, match="NAS_ADMIN_USER"):
-        nas_credentials()
+    with pytest.warns(UserWarning, match="NAS_ADMIN_USER"):
+        url, user, pwd = nas_credentials()
+    assert user == "fzh.test"
+
+
+def test_nas_credentials_prefers_admin_keys(monkeypatch, tmp_path):
+    """有管理员账号就用管理员，且不报警告。"""
+    env = tmp_path / ".env"
+    env.write_text(
+        "NAS_USERNAME=someapi\nNAS_ADMIN_USER=someadmin\n"
+        "NAS_SSH_PASSWORD=pw\nNAS_URL=https://nas.invalid\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("nas_admin.NAS_ENV", env)
+    for k in ("NAS_ADMIN_USER", "NAS_SSH_USER", "NAS_USERNAME", "NAS_SSH_PASSWORD", "NAS_PASSWORD", "NAS_URL"):
+        monkeypatch.delenv(k, raising=False)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")  # 有管理员账号时不该发警告
+        url, user, pwd = nas_credentials()
+    assert user == "someadmin"
 
 
 def test_nas_credentials_reads_admin_user(monkeypatch, tmp_path):

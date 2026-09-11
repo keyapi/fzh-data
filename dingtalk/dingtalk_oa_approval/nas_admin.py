@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import sys
+import warnings
 from pathlib import Path
 
 _REPO = Path(__file__).resolve().parents[2]
@@ -42,25 +43,41 @@ FINANCE_CANDIDATES = _LazyCandidates()
 ROOT = _LazyRoot()
 
 
+_USER_KEYS = ("NAS_ADMIN_USER", "NAS_SSH_USER", "NAS_USERNAME")
+
+
 def nas_credentials() -> tuple[str, str, str]:
     """返回 (url, username, password)。账号不要写进代码。
 
-    **只认** NAS_ADMIN_USER / NAS_SSH_USER。不要回退到 `NAS_USERNAME` —— 那是 NAS_API 的
-    DSM API 账号（fzh.test 之类），看不见「财务部」共享；静默用它会以为权限没问题。
+    账号取 `NAS_ADMIN_USER` → `NAS_SSH_USER` → `NAS_USERNAME`。前两个是管理员；
+    `NAS_USERNAME` 通常是只做 API 的账号（如 fzh.test）——**有时权限就够用**，
+    所以仍允许，但会发一条警告：它可能看不见「财务部」共享，那时在
+    `NAS_API/.env` 设 `NAS_ADMIN_USER=<管理员账号>` 即可，不需要改代码。
     """
     _load_dotenv([NAS_ENV])
-    user = (os.getenv("NAS_ADMIN_USER") or os.getenv("NAS_SSH_USER") or "").strip()
+    user, source = "", ""
+    for key in _USER_KEYS:
+        value = (os.getenv(key) or "").strip()
+        if value:
+            user, source = value, key
+            break
     pwd = (os.getenv("NAS_SSH_PASSWORD") or os.getenv("NAS_PASSWORD") or "").strip()
     url = (os.getenv("NAS_URL") or "").strip()
     if not user:
         raise RuntimeError(
-            "NAS_API/.env 缺少 NAS_ADMIN_USER（或 NAS_SSH_USER）—— 要填能看见「财务部」共享的"
-            "管理员账号。不要用只做 API 的 NAS_USERNAME，也不要把账号写进 git。"
+            "NAS_API/.env 缺少 NAS_ADMIN_USER（或 NAS_SSH_USER / NAS_USERNAME）。"
+            "账号只写进 .env，不要写进 git。"
         )
     if not pwd:
         raise RuntimeError("NAS_API/.env 缺少 NAS_SSH_PASSWORD（或 NAS_PASSWORD）")
     if not url:
         raise RuntimeError("NAS_API/.env 缺少 NAS_URL")
+    if source == "NAS_USERNAME":
+        warnings.warn(
+            f"NAS FileStation 用 NAS_USERNAME={user} 登录。该账号可能看不见「财务部」共享；"
+            "需要管理员权限时，在 NAS_API/.env 加 NAS_ADMIN_USER=<管理员账号>（不用改代码）。",
+            stacklevel=2,
+        )
     return url, user, pwd
 
 

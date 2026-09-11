@@ -58,7 +58,7 @@ NAS `{账期桶}/{人名}/` 是钉钉**提交人**。店负责人是 Google 表�
 
 **8. 21 位审批编号当文本。** Excel 会收成科学计数或错号。
 
-**9. 本机路径和真名不进 git。** 缓存/核算目录用 `DINGTALK_OA_DATA`、`DINGTALK_OA_WORK`；NAS 根用 `NAS_FINANCE_PERIOD_ROOT`；本地同步盘账期根用 `LOCAL_NAS_PERIOD_ROOT`（未设即报错）。NAS 管理员账号用 `NAS_ADMIN_USER`（或 `NAS_SSH_USER`，**不要**回退到只做 API 的 `NAS_USERNAME`），只写在 `NAS_API/.env`。不要把含人名的磁盘路径、FileStation 路径或 NAS 账号写进脚本。
+**9. 本机路径和真名不进 git。** 缓存/核算目录用 `DINGTALK_OA_DATA`、`DINGTALK_OA_WORK`；NAS 根用 `NAS_FINANCE_PERIOD_ROOT`；本地同步盘账期根用 `LOCAL_NAS_PERIOD_ROOT`（未设即报错）。NAS 账号用 `NAS_ADMIN_USER` / `NAS_SSH_USER` / `NAS_USERNAME`（只用最后一个会警告，它可能看不见「财务部」共享），只写在 `NAS_API/.env`。不要把含人名的磁盘路径、FileStation 路径或 NAS 账号写进脚本。
 
 **10. 算新月前先跨月剔除。** 钉钉只能按**发起时间**导出，迟交单会混进下个月的导出。财务共享表「钉钉账期提交时间不对挪动记录」登记这些行；算某个账期月时，用 `late_submission_keys.py --period <YYYY-MM>` 生成剔除集，再交给 `filter_export_by_period.py --exclude-keys`。两端都由 `ding_xlsx.build_key()` 现算唯一键 `审批编号|账期日期|销售账户|销售额`，**不要**直接用表里那列「唯一键」——金额 `str()` 出来是 `0` 还是 `0.0` 取决于 dtype，会静默漏剔除。规范：[late-submission-registry.md](../../dingtalk/dingtalk_oa_approval/docs/reference/late-submission-registry.md)。
 

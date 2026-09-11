@@ -55,7 +55,7 @@ uv run python web_automation/scripts/dispatch.py dingtalk.aflow.receipt.attachme
 
 按输出状态字面执行：`READY` / `NEED_BROWSER` / `NEED_LOGIN` / `NEED_OCR` / `NEED_USER_CONFIRMATION` / `BLOCKED`。
 
-**不要**自己拼 Playwright 脚本路径或本机人名目录。`--out` 读 `DINGTALK_OA_WORK`（未设即报错）。组织名读 `DINGTALK_ORG`。NAS 管理员账号读 `NAS_ADMIN_USER`（或 `NAS_SSH_USER`，**不要**回退到只做 API 的 `NAS_USERNAME`），不要写进 git。
+**不要**自己拼 Playwright 脚本路径或本机人名目录。`--out` 读 `DINGTALK_OA_WORK`（未设即报错）。组织名读 `DINGTALK_ORG`。NAS 账号读 `NAS_ADMIN_USER` / `NAS_SSH_USER` / `NAS_USERNAME`（只用最后一个会警告：可能看不见「财务部」），不要写进 git。
 
 写 NAS 无范围确认时必须停。本任务默认范围：
 

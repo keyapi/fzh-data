@@ -16,7 +16,7 @@ timestamp: 2026-09-10
 - 使用 new-api 那套**企业内部应用**（Client ID = 原 AppKey）。`.env` gitignore。
 - ⚠️ 这套应用是**临时**借用的（原为钉钉登录 / 离职打通），权限面偏大。读**后台原生模板**（销售收款确认单）建议另开一个**企业内部应用**，只开下面 3 个 workflow 权限；`qyapi_aflow`（审批流数据管理）对读原生 OA 单没有用，可以从 new-api 应用拿掉。详见 [docs/reference/oa-attachment-api.md](docs/reference/oa-attachment-api.md)。
 - 公开仓库用人名拼音首字母。真名文件夹映射：复制 `person_folders.example.json` 为 `person_folders.local.json`（gitignore）后填 NAS 真实文件夹名。
-- 可设 `DINGTALK_OA_ENV` 指向仓库外 env（gitignore）。缓存目录 `DINGTALK_OA_DATA`（默认模块 `data/`）。核算导出 Excel / aflow 下载目录 `DINGTALK_OA_WORK`（**未设路径时脚本不得默认同事人名目录**）。NAS FileStation 账期根 `NAS_FINANCE_PERIOD_ROOT`（可分号分隔候选）。本地同步盘账期根 `LOCAL_NAS_PERIOD_ROOT`（**未设即报错**）。财务 NAS 账号读 `NAS_API/.env` 的 `NAS_ADMIN_USER`（或 `NAS_SSH_USER`），密码 `NAS_SSH_PASSWORD`，**不要把账号写进 git**。**不要**让它回退到 `NAS_USERNAME`——那是只做 API 的 DSM 账号，看不见「财务部」共享，静默用它会以为权限没问题。都不要把含人名的路径写进 git。
+- 可设 `DINGTALK_OA_ENV` 指向仓库外 env（gitignore）。缓存目录 `DINGTALK_OA_DATA`（默认模块 `data/`）。核算导出 Excel / aflow 下载目录 `DINGTALK_OA_WORK`（**未设路径时脚本不得默认同事人名目录**）。NAS FileStation 账期根 `NAS_FINANCE_PERIOD_ROOT`（可分号分隔候选）。本地同步盘账期根 `LOCAL_NAS_PERIOD_ROOT`（**未设即报错**）。财务 NAS 账号读 `NAS_API/.env` 的 `NAS_ADMIN_USER`（或 `NAS_SSH_USER` / `NAS_USERNAME`），密码 `NAS_SSH_PASSWORD`，**不要把账号写进 git**。只用 `NAS_USERNAME`（通常是只做 API 的账号，有时权限就够用）时脚本会发警告——它可能看不见「财务部」共享，那时在 .env 加 `NAS_ADMIN_USER=<管理员账号>` 即可，不用改代码。都不要把含人名的路径写进 git。
 - 权限：`Workflow.Instance.Read`、`Workflow.Instance.Write`（下载接口要写权限）、`Workflow.Form.Read`。
 - 模板：销售收款确认单 `PROC-FB234439-0642-451E-A514-20FBEF4A4241`。Excel「数据id」= `processInstanceId`，「审批编号」= `businessId`。
 
