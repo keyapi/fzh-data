@@ -15,6 +15,7 @@ timestamp: 2026-08-14
 | 列映射 / 规则模式 | [reference/](reference/) |
 | Google Sheet 凭证 | [reference/gsheets-credentials.md](reference/gsheets-credentials.md) |
 | SKU 旧名→新名 | [reference/sku-remap.md](reference/sku-remap.md) |
+| 历史尾程升级调研 | [research/2026-09-11-history-last-leg-field-profiling.md](research/2026-09-11-history-last-leg-field-profiling.md) |
 | 六月 FBA 过程 | [research/](research/) |
 | 经验教训 | [lessons/](lessons/) |
 | 变更历史 | [log.md](log.md) |
