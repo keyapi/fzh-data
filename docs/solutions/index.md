@@ -10,6 +10,7 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-09-14 | EN 销售订单「已关闭未发货」死单与工单进度不可信 — 子表反查父单的 API 铁律 | [workflow-issues/erpnext-so-closed-unshipped-and-unstarted-work-orders.md](workflow-issues/erpnext-so-closed-unshipped-and-unstarted-work-orders.md) |
 | 2026-09-08 | CLIProxyAPI `auth_unavailable`：升级、浏览器 OAuth 与真实模型验收 | [integration-issues/cliproxyapi-auth-unavailable-oauth-recovery.md](integration-issues/cliproxyapi-auth-unavailable-oauth-recovery.md) |
 | 2026-09-08 | parcel_track 处理天数统一 3 个营业日与 per-carrier 顺序并发 | [conventions/parcel-track-handling-days-sequential-workers.md](conventions/parcel-track-handling-days-sequential-workers.md) |
 | 2026-09-08 | new-api/sellfox-proxy 离职自动封号不可靠——双通道检测加固（60121 + identity_map + audit） | [integration-issues/dingtalk-offboarding-hardening.md](integration-issues/dingtalk-offboarding-hardening.md) |
