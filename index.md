@@ -23,7 +23,7 @@ generated: 2026-09-09 09:49
 | **amazon_pairing** | 12 | Handoff, Index, Log, Reference | [amazon_pairing/](amazon_pairing/) -> [amazon_pairing/docs/index.md](amazon_pairing/docs/index.md) |
 | **channel_account_sync** | 13 | Index, Lesson, Log, Reference | [channel_account_sync/](channel_account_sync/) -> [channel_account_sync/docs/index.md](channel_account_sync/docs/index.md) |
 | **dingtalk** | 2 | index, log | [dingtalk/](dingtalk/) -> [dingtalk/dingtalk_robot/docs/index.md](dingtalk/dingtalk_robot/docs/index.md) |
-| **docs** | 91 | ?, Handoff, ImplementationPlan, Index | [docs/](docs/) -> [docs/research/index.md](docs/research/index.md) |
+| **docs** | 92 | ?, Handoff, ImplementationPlan, Index | [docs/](docs/) -> [docs/research/index.md](docs/research/index.md) |
 | **erpnext** | 5 | Index, Log | [erpnext/](erpnext/) -> [erpnext/docs/index.md](erpnext/docs/index.md) |
 | **fedex_track** | 3 | Index, Log, Reference | [fedex_track/](fedex_track/) -> [fedex_track/docs/index.md](fedex_track/docs/index.md) |
 | **gls_track** | 2 | Index, Log | [gls_track/](gls_track/) -> [gls_track/docs/index.md](gls_track/docs/index.md) |
@@ -257,6 +257,7 @@ generated: 2026-09-09 09:49
 | Reference | Amazon 在线商品配对的分层候选与运营确认流程 | [docs/solutions/conventions/amazon-online-product-pairing-candidate-workflow.md](docs/solutions/conventions/amazon-online-product-pairing-candidate-workflow.md) | 2026-09-08 |
 | Reference | Cursor state.vscdb 膨胀 + Synology Drive 连续备份吃光 C 盘 | [docs/solutions/integration-issues/cursor-state-vscdb-synology-cdrive-backup.md](docs/solutions/integration-issues/cursor-state-vscdb-synology-cdrive-backup.md) | 2026-09-08 |
 | Reference | EN 物料/变体创建惯例 — 四层属性体系与配套物料 | [docs/solutions/conventions/erpnext-item-variant-creation-convention.md](docs/solutions/conventions/erpnext-item-variant-creation-convention.md) | 2026-09-08 |
+| Reference | EN 销售订单「已关闭未发货」死单与工单进度不可信 — 子表反查父单的 API 铁律 | [docs/solutions/workflow-issues/erpnext-so-closed-unshipped-and-unstarted-work-orders.md](docs/solutions/workflow-issues/erpnext-so-closed-unshipped-and-unstarted-work-orders.md) | 2026-09-14 |
 | Reference | FedEx 官方批量 Track 查询 + 账号/组织恢复路径 | [docs/solutions/workflow-issues/fedex-track-batch-query.md](docs/solutions/workflow-issues/fedex-track-batch-query.md) | 2026-09-08 |
 | Reference | GLS 波兰自发货跟踪——公开无鉴权 REST 免账号可行 + 口径坑（日历/脏单元格/返件） | [docs/solutions/integration-issues/gls-track-public-rest-calendar.md](docs/solutions/integration-issues/gls-track-public-rest-calendar.md) | 2026-09-09 |
 | Reference | Google 表渠道账号同步到 EN Channel Account | [docs/solutions/workflow-issues/en-channel-account-gsheet-sync.md](docs/solutions/workflow-issues/en-channel-account-gsheet-sync.md) | 2026-09-08 |

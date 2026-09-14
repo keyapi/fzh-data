@@ -28,3 +28,4 @@ tags: [workflow-issues, index]
 | [tongtool-sku-rename-gsheet-remap.md](tongtool-sku-rename-gsheet-remap.md) | 通途主档改名后对齐订单 Google Sheet |
 | [search-first-before-implementing.md](search-first-before-implementing.md) | 改之前先搜官方与项目文档 |
 | [erpnext-version-api-compatibility.md](erpnext-version-api-compatibility.md) | ERPNext 跨版本 API 兼容 |
+| [erpnext-so-closed-unshipped-and-unstarted-work-orders.md](erpnext-so-closed-unshipped-and-unstarted-work-orders.md) | 已关闭却未发货的死单 + 工单进度不可信（子表反查父单的 API 铁律） |
