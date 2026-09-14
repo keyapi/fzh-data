@@ -238,6 +238,11 @@ def build_package_observations(rows: pd.DataFrame) -> pd.DataFrame:
         package_meta.loc[target, "建模状态"] = "跳过"
         package_meta.loc[target, "跳过原因"] = reason
     package_meta["SKU精确层可用"] = (package_meta["建模状态"] == "可建模") & (package_meta["SKU数"] == 1)
+    # 目的地分区代理：ZIP5 首位（10 个地理带）。ZIP3 太细（单层最多 47 样本），
+    # 因此同时保留首位档作为更稳的粗分区维度。
+    package_meta["目的地邮编首位"] = (
+        package_meta["美国ZIP3"].astype("string").str[0].fillna("")
+    )
     return package_meta
 
 
