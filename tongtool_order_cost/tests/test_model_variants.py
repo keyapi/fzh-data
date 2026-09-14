@@ -136,6 +136,30 @@ def test_nonexclusive_publishing_keeps_fine_and_coarse_rows():
     assert (exclusive["匹配层级"] == "L8_国家").sum() <= (inclusive["匹配层级"] == "L8_国家").sum()
 
 
+def test_coverage_months_counts_months_not_distinct_fees():
+    """回归测试：`覆盖月份数` 曾误取被聚合列的去重数，使月份门槛失效。"""
+    from tongtool_order_cost.model_variants import _stats_for
+
+    # 两个月、每月费用完全相同（不同费用值只有 1 个）→ 覆盖月份数必须是 2
+    observations = grid(
+        [{"包裹号": f"P{i}", "通途SKU": "SKU-A", "邮编": "07001", "物流商运费": "120"}
+         for i in range(20)]
+    )
+    stats = _stats_for(observations[observations["建模状态"] == "可建模"], ["国家", "通途SKU"])
+    assert int(stats.loc[0, "覆盖月份数"]) == 2
+
+    # 月份门槛必须真的卡住只有 1 个月覆盖的层
+    single = add_outlier_flags(
+        build_package_observations(prepare_order_rows(order_rows(
+            [{"包裹号": f"Q{i}", "通途SKU": "SKU-A", "邮编": "07001", "物流商运费": "120"}
+             for i in range(20)]), "202601"))
+    )
+    assert build_variant_tiers(single, min_samples=5, min_months=2,
+                               exclusive=False)[0].empty
+    assert not build_variant_tiers(single, min_samples=5, min_months=1,
+                                   exclusive=False)[0].empty
+
+
 def test_lower_threshold_publishes_more_layers():
     rows = [
         {"包裹号": f"P{i}", "通途SKU": f"SKU-{i % 7}", "邮编": f"0700{i % 9}",

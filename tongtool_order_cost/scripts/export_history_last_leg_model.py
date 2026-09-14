@@ -25,7 +25,6 @@ if str(ROOT) not in sys.path:
 from tongtool_order_cost.history_last_leg_analysis import (  # noqa: E402
     add_outlier_flags,
     build_package_observations,
-    build_publishable_tiers,
     prepare_order_rows,
     summarize_publish_coverage,
 )
@@ -33,6 +32,10 @@ from tongtool_order_cost.history_last_leg_export import (  # noqa: E402
     ExportContract,
     build_import_rows,
     write_import_rows,
+)
+from tongtool_order_cost.model_variants import (  # noqa: E402
+    RECOMMENDED_VARIANT,
+    build_recommended_tiers,
 )
 
 DEFAULT_MONTHS = ("202511", "202512", "202601", "202602", "202603", "202604", "202605", "202606")
@@ -66,12 +69,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--from-sheets", action="store_true", help="忽略缓存，重新读取 Google Sheet")
     parser.add_argument("--months", nargs="+", default=list(DEFAULT_MONTHS))
     parser.add_argument("--train-end", default="", help="只用于训练的截止月份 YYYYMM；留空=全量")
-    parser.add_argument("--min-samples", type=int, default=30)
-    parser.add_argument("--min-months", type=int, default=2)
-    parser.add_argument("--fee-column", default="去异常中位数", help="写入 avg_per_shipping_cost 的稳健估计列")
+    parser.add_argument("--min-samples", type=int, default=RECOMMENDED_VARIANT["min_samples"])
+    parser.add_argument("--min-months", type=int, default=RECOMMENDED_VARIANT["min_months"])
+    parser.add_argument("--fee-column", default="中位数", help="写入 avg_per_shipping_cost 的稳健估计列")
     parser.add_argument("--model-version", default="2026.09")
     parser.add_argument("--out", default=str(ROOT / "out" / "history_last_leg_model_import.csv"))
-    parser.add_argument("--backtest", default=str(ROOT / "out" / "history_last_leg_backtest.xlsx"))
+    parser.add_argument("--variants", default=str(ROOT / "out" / "history_last_leg_variants.xlsx"))
     args = parser.parse_args(argv)
 
     if args.from_sheets:
@@ -87,7 +90,7 @@ def main(argv: list[str] | None = None) -> int:
     training = observations
     if args.train_end.strip():
         training = observations[observations["月份"].astype(str) <= args.train_end.strip()]
-    publishable = build_publishable_tiers(
+    publishable = build_recommended_tiers(
         training, min_samples=args.min_samples, min_months=args.min_months
     )
     coverage = summarize_publish_coverage(observations, publishable)
@@ -100,7 +103,7 @@ def main(argv: list[str] | None = None) -> int:
         applicable_from=f"{args.months[0][:4]}-{args.months[0][4:]}-01",
         applicable_to="",
     )
-    metrics = _load_backtest_metrics(Path(args.backtest))
+    metrics = _load_variant_metrics(Path(args.variants), RECOMMENDED_VARIANT["name"])
     contract = ExportContract(**{**contract.__dict__, **metrics}) if metrics else contract
 
     out_path = write_import_rows(import_rows, args.out)
@@ -116,23 +119,23 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def _load_backtest_metrics(path: Path) -> dict[str, float]:
-    """从回测工作簿取「渠道自适应」方案的指标，作为发布契约的一部分。"""
+def _load_variant_metrics(path: Path, variant_name: str) -> dict[str, float]:
+    """从多变体对比工作簿取该变体的 Holdout 指标，作为发布契约的一部分。"""
     if not path.exists():
         return {}
     try:
-        summary = pd.read_excel(path, sheet_name="10_Holdout方案")
+        summary = pd.read_excel(path, sheet_name="00_Holdout总体")
     except Exception:
         return {}
-    preferred = summary[summary["方案"] == "渠道自适应"]
-    if preferred.empty:
+    picked = summary[summary["变体"] == variant_name]
+    if picked.empty:
         return {}
-    row = preferred.iloc[0]
+    row = picked.iloc[0]
     return {
         "backtest_mae": float(row.get("MAE") or 0),
         "backtest_mdae": float(row.get("MdAE") or 0),
         "backtest_bias": float(row.get("偏差") or 0),
-        "backtest_p90": float(row.get("P90绝对误差") or 0),
+        "backtest_p90": float(row.get("P90") or 0),
         "backtest_coverage_percent": float(row.get("覆盖率%") or 0),
     }
 

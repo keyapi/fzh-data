@@ -24,6 +24,7 @@ IMPORT_COLUMNS: tuple[str, ...] = (
     "origin_warehouse",
     "origin_zip",
     "destination_zip3",
+    "destination_zip1",
     "destination_zone",
     "carrier",
     "shipping_channel",
@@ -43,17 +44,42 @@ IMPORT_COLUMNS: tuple[str, ...] = (
     "fee_source",
 )
 
+# 线上解析器使用的层级名（必须与 tongtool_integration.history_last_leg_fee 完全一致）
+LEVEL_NAMES: tuple[str, ...] = (
+    "L1_SKU_ZIP3_重量",
+    "L1b_SKU_ZIP1_重量",
+    "L2_SKU_重量",
+    "L3_ZIP3_重量",
+    "L3b_ZIP1_重量",
+    "L4_ZIP3",
+    "L5_重量",
+    "L5b_国家重量",
+    "L6_仓库渠道",
+    "L7_仓库",
+    "L8_国家",
+)
+
 _TIER_PATTERN = re.compile(r"^\(\s*([\d.]+)\s*,\s*([\d.]+)\s*\]kg$")
 
 
+def _is_missing(value: Any) -> bool:
+    """统一识别 None / NaN / pandas.NA / NaT，避免把 "<NA>" 当成文本写进导入文件。"""
+    if value is None:
+        return True
+    try:
+        return bool(pd.isna(value))
+    except (TypeError, ValueError):
+        return False
+
+
 def _as_text(value: Any) -> str:
-    if value is None or (isinstance(value, float) and pd.isna(value)):
+    if _is_missing(value):
         return ""
     return str(value).strip()
 
 
 def _as_float(value: Any) -> float:
-    if value is None or (isinstance(value, float) and pd.isna(value)):
+    if _is_missing(value):
         return 0.0
     try:
         return float(value)
@@ -77,6 +103,7 @@ def build_model_key(row: dict[str, Any]) -> str:
         str(row.get("tongtool_sku") or "").strip().upper(),
         str(row.get("origin_warehouse") or "").strip().upper(),
         str(row.get("destination_zip3") or "").strip().upper(),
+        str(row.get("destination_zip1") or "").strip().upper(),
         str(row.get("carrier") or "").strip().upper(),
         str(row.get("shipping_channel") or "").strip().upper(),
         str(row.get("carrier_service") or "").strip().upper(),
@@ -120,7 +147,7 @@ class ExportContract:
         }
 
 
-def build_import_rows(publishable: pd.DataFrame, *, fee_column: str = "去异常中位数") -> pd.DataFrame:
+def build_import_rows(publishable: pd.DataFrame, *, fee_column: str = "中位数") -> pd.DataFrame:
     """把可发布费率层转成线上子表行；样本不足的层不在此处出现（已由分析层合并）。
 
     线上报价字段 `avg_per_shipping_cost` 取稳健估计（默认去异常中位数），
@@ -144,6 +171,7 @@ def build_import_rows(publishable: pd.DataFrame, *, fee_column: str = "去异常
             "origin_warehouse": warehouse,
             "origin_zip": ORIGIN_ZIP5.get(warehouse, ""),
             "destination_zip3": _as_text(source.get("美国ZIP3")),
+            "destination_zip1": _as_text(source.get("目的地邮编首位")),
             "destination_zone": "",
             "carrier": "",
             "shipping_channel": _as_text(source.get("标准渠道")),
@@ -152,7 +180,7 @@ def build_import_rows(publishable: pd.DataFrame, *, fee_column: str = "去异常
             "weight_upper_kg": round(upper, 3),
             "avg_per_shipping_cost": round(_as_float(estimate), 4),
             "median_cost": round(_as_float(source.get("中位数")), 4),
-            "trimmed_mean_cost": round(_as_float(source.get("截尾均值")), 4),
+            "trimmed_mean_cost": round(_as_float(source.get("截尾均值", source.get("平均值"))), 4),
             "p25_cost": round(_as_float(source.get("P25")), 4),
             "p75_cost": round(_as_float(source.get("P75")), 4),
             "sample_count": int(_as_float(source.get("样本数"))),
@@ -166,6 +194,11 @@ def build_import_rows(publishable: pd.DataFrame, *, fee_column: str = "去异常
         rows.append(row)
 
     frame = pd.DataFrame(rows, columns=columns)
+    unknown = sorted(set(frame["match_level"]) - set(LEVEL_NAMES))
+    if unknown:
+        raise ValueError(
+            "出现线上解析器不认识的匹配层级，导入前必须对齐契约: " + ", ".join(unknown)
+        )
     duplicates = frame["model_key"].duplicated(keep=False)
     if duplicates.any():
         raise ValueError(

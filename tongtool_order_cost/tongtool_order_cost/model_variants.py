@@ -116,18 +116,17 @@ def _credibility_weight(n: float, k: float) -> float:
 # 发布层构建
 # --------------------------------------------------------------------------- #
 def _stats_for(data: pd.DataFrame, cols: Sequence[str]) -> pd.DataFrame:
-    stats = (
-        data.groupby(list(cols), dropna=False)["观察费用"]
-        .agg(
-            样本数="size",
-            覆盖月份数="nunique",
-            中位数="median",
-            P25=lambda s: float(s.quantile(0.25)),
-            P75=lambda s: float(s.quantile(0.75)),
-            平均值="mean",
-        )
-        .reset_index()
-    )
+    """按分组给出稳健统计。注意 `覆盖月份数` 必须取 `月份` 的去重数，
+    不能取被聚合列（观察费用）的 nunique，否则月份门槛会失效。"""
+    grouped = data.groupby(list(cols), dropna=False)
+    stats = grouped.agg(
+        样本数=("观察费用", "size"),
+        中位数=("观察费用", "median"),
+        P25=("观察费用", lambda s: float(s.quantile(0.25))),
+        P75=("观察费用", lambda s: float(s.quantile(0.75))),
+        平均值=("观察费用", "mean"),
+        覆盖月份数=("月份", "nunique"),
+    ).reset_index()
     return stats
 
 
@@ -433,3 +432,40 @@ VARIANTS: tuple[dict[str, Any], ...] = (
     {"name": "V4_排平坦_可信度", "exclusive": False, "scheme": "zone_first",
      "credibility": True, "drop_flat_months": True},
 )
+
+# 定稿推荐配置：见 docs/research/2026-09-14-rate-table-training-methodology.md 第 9.6 节。
+# 结构修复（独立分层 + ZIP 首位档 + 非美国阶梯补全）+ 分区优先 + 10 样本 / 2 月门槛。
+# 不加可信度加权、不排除平坦月份（实测增益≈0，见第 9.6 节）。
+RECOMMENDED_VARIANT: dict[str, Any] = {
+    "name": "V3c_门槛10",
+    "exclusive": False,
+    "scheme": "zone_first",
+    "min_samples": 10,
+    "min_months": 2,
+    "credibility": False,
+    "drop_flat_months": False,
+}
+
+
+def build_recommended_tiers(
+    observations: pd.DataFrame,
+    *,
+    min_samples: int | None = None,
+    min_months: int | None = None,
+) -> pd.DataFrame:
+    """按定稿推荐配置发布费率层（导出给线上模型的唯一入口）。"""
+    config = dict(RECOMMENDED_VARIANT)
+    if min_samples is not None:
+        config["min_samples"] = min_samples
+    if min_months is not None:
+        config["min_months"] = min_months
+    tiers, _ = build_variant_tiers(
+        observations,
+        levels=MODERN_LEVELS,
+        exclusive=config["exclusive"],
+        credibility=config["credibility"],
+        drop_flat_months=config["drop_flat_months"],
+        min_samples=config["min_samples"],
+        min_months=config["min_months"],
+    )
+    return tiers

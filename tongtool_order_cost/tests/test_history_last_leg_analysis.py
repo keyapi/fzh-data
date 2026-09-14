@@ -28,6 +28,7 @@ from tongtool_order_cost.history_last_leg_analysis import (
 
 
 from tongtool_order_cost.history_last_leg_export import (
+    LEVEL_NAMES,
     build_import_rows,
     build_model_key,
     parse_weight_tier,
@@ -263,6 +264,8 @@ def test_weight_tier_bounds_match_observed_semantics():
 
 
 def test_import_rows_use_kg_bounds_and_stable_model_keys():
+    from tongtool_order_cost.model_variants import build_recommended_tiers
+
     rows = prepare_order_rows(
         order_rows(
             [
@@ -270,8 +273,8 @@ def test_import_rows_use_kg_bounds_and_stable_model_keys():
                     "包裹号": f"P{i}",
                     "通途SKU": f"TT-{i:03d}",
                     "邮编": "07001",
-                    "包裹总运费": str(110 + i % 5),
-                    "物流商运费": "0",
+                    "包裹总运费": "0",
+                    "物流商运费": str(110 + i % 5),
                 }
                 for i in range(60)
             ]
@@ -279,24 +282,61 @@ def test_import_rows_use_kg_bounds_and_stable_model_keys():
         "202601",
     )
     observations = add_outlier_flags(build_package_observations(rows))
-    publishable = build_publishable_tiers(observations, min_samples=30, min_months=1)
+    publishable = build_recommended_tiers(observations, min_samples=5, min_months=1)
     import_rows = build_import_rows(publishable)
 
     assert list(import_rows.columns)[:3] == ["model_key", "match_level", "nation"]
-    assert set(import_rows["match_level"]) == {"L3_分区_重量"}
+    assert set(import_rows["match_level"]) <= set(LEVEL_NAMES)
     assert import_rows["model_key"].is_unique
     assert import_rows["avg_per_shipping_cost"].gt(0).all()
-    assert import_rows["weight_lower_kg"].eq(4.0).all()
-    assert import_rows["weight_upper_kg"].eq(5.0).all()
-    assert import_rows["origin_zip"].eq("07936").all()
+    # 带重量维度的层是 (4,5]kg；不带重量维度的粗层下上界都是 0
+    bounds = set(zip(import_rows["weight_lower_kg"], import_rows["weight_upper_kg"]))
+    assert bounds <= {(0.0, 0.0), (4.0, 5.0)}
+    assert (4.0, 5.0) in bounds
+    # 起运仓非空的层必须带起运邮编；国家层等粗层起运仓为空
+    with_warehouse = import_rows[import_rows["origin_warehouse"] != ""]
+    assert with_warehouse["origin_zip"].eq("07936").all()
+    assert with_warehouse["origin_warehouse"].eq("USNJ").all()
+    # 带 ZIP3 维度的层写 destination_zip3，带 ZIP1 维度的层写 destination_zip1
+    zip3_rows = import_rows[import_rows["match_level"].str.contains("ZIP3")]
+    zip1_rows = import_rows[import_rows["match_level"].str.contains("ZIP1")]
+    assert zip3_rows["destination_zip3"].eq("070").all()
+    assert zip3_rows["destination_zip1"].eq("").all()
+    assert zip1_rows["destination_zip1"].eq("0").all()
+    assert zip1_rows["destination_zip3"].eq("").all()
     assert import_rows["quality_status"].eq("Eligible").all()
-    assert import_rows["sample_count"].sum() == 60
+    assert import_rows["sample_count"].sum() >= 60
 
     # 同一输入重复导出必须得到相同模型键，导入才能幂等
     again = build_import_rows(publishable)
     assert import_rows["model_key"].tolist() == again["model_key"].tolist()
     assert build_model_key(import_rows.iloc[0].to_dict()) == import_rows.loc[0, "model_key"]
     assert build_import_rows(pd.DataFrame()).empty
+
+
+def test_export_level_names_match_analysis_levels():
+    """导出契约的层级名必须与分析层完全一致，防止两处漂移。"""
+    from tongtool_order_cost.model_variants import MODERN_LEVELS
+
+    assert LEVEL_NAMES == tuple(name for name, _ in MODERN_LEVELS)
+
+
+def test_import_rows_reject_unknown_level_name():
+    publishable = pd.DataFrame(
+        [
+            {
+                "匹配层级": "L9_不存在的层",
+                "国家": "US",
+                "标准仓库": "USNJ",
+                "标准渠道": "VITE",
+                "样本数": 40,
+                "覆盖月份数": 3,
+                "中位数": 120.0,
+            },
+        ]
+    )
+    with pytest.raises(ValueError, match="不认识的匹配层级"):
+        build_import_rows(publishable)
 
 
 def test_import_rows_reject_duplicate_model_keys():
