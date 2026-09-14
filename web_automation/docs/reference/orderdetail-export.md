@@ -76,6 +76,8 @@ uv run python web_automation/scripts/dispatch.py tongtu.orderdetail.export -- --
 7. 「查询」失败必须中止（`FAILURE_CODE=QUERY_FAILED`），不要继续提交——zip 文件名用 CLI 月份，统计条件却可能仍是页面默认日期。
 8. 网格（数据查询）不要滚动全量加载；只操作「统计导出」列表。
 9. 文件名自己带（`订单详情统计_<月>_<时间>.zip`），不信 `suggested_filename`（GBK 乱码坑）。
+10. **通途对报表生成有限流**：短时间反复生成可能被限制。脚本默认**复用今日已完成的同范围结果**（最上行=统计完成+含本次发货时间+提交于今日），不再重复生成；确需强制新生成用 `--no-reuse`。
+11. **提交后等“最上行变新”只有 90s 窗口**（`LOCK_WAIT_SECS`）：窗口内最上行未变新 → 判定提交未生效/被限流，输出 `FAILURE_CODE=RATE_LIMITED`（页面有“限额/频繁/排队/稍后再试”等提示时）或 `NO_NEW_JOB` 并退出，不再无限往返切换。
 
 ## 结果核验（实测）
 

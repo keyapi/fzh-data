@@ -49,6 +49,7 @@ Agent 参考（OKF 文档见 [docs/index.md](docs/index.md)；`click-based/AGENT
 - 文件名自带（不信 suggested_filename 的 GBK）。
 - 「查询」失败必须中止（`FAILURE_CODE=QUERY_FAILED`），勿带默认日期继续提交。
 - 统计任务提交互斥（生成中不能再提交）；非互斥打不开弹窗用 `SUBMIT_FAILED`。
+- **限流与复用**：短时间反复生成会被限流；脚本默认复用「今日同范围已完成」结果（`--no-reuse` 强制新生成）；提交后 90s 内最上行未变新 → `RATE_LIMITED`/`NO_NEW_JOB` 退出（不死等）。
 
 ## 文档指针
 
