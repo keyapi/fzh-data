@@ -421,11 +421,15 @@ VARIANTS: tuple[dict[str, Any], ...] = (
     {"name": "V1b_结构_分区优先", "exclusive": False, "scheme": "zone_first"},
     {"name": "V1c_结构_SKU优先", "exclusive": False, "scheme": "sku_first"},
     {"name": "V2_可信度_30", "exclusive": False, "scheme": "zone_first", "credibility": True},
-    # 低门槛 + 可信度：可信度的价值在于「替代硬阈值」，而不是叠加在 30 样本门槛之上
-    {"name": "V3_低门槛5", "exclusive": False, "scheme": "zone_first",
-     "min_samples": 5, "min_months": 1},
-    {"name": "V3b_低门槛5_可信度", "exclusive": False, "scheme": "zone_first",
-     "min_samples": 5, "min_months": 1, "credibility": True},
+    # 门槛扫掠：月份门槛 1 与 2 结果相同（≥5 样本的层天然跨 ≥2 月），故保留更保守的 2 月
+    {"name": "V3_门槛5", "exclusive": False, "scheme": "zone_first",
+     "min_samples": 5, "min_months": 2},
+    {"name": "V3b_门槛5_可信度", "exclusive": False, "scheme": "zone_first",
+     "min_samples": 5, "min_months": 2, "credibility": True},
+    {"name": "V3c_门槛10", "exclusive": False, "scheme": "zone_first",
+     "min_samples": 10, "min_months": 2},
+    {"name": "V3d_门槛20", "exclusive": False, "scheme": "zone_first",
+     "min_samples": 20, "min_months": 2},
     {"name": "V4_排平坦_可信度", "exclusive": False, "scheme": "zone_first",
      "credibility": True, "drop_flat_months": True},
 )
