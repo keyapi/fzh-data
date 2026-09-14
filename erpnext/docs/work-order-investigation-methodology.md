@@ -102,6 +102,28 @@ GET /api/resource/Stock Entry/{name} → items[].qty (t_warehouse 有值、s_war
 
 几个真实数据源 (JC/SE/open_mat) 应大致一致，如有差异取合理范围。
 
+## 一键完工痕迹链 (确认特征)
+
+以上分步只能做到「疑似」。**同时满足**以下条件才确认一键完工（AND 门，不是出现过某一条就算）：
+
+1. Version 记录中 owner=yangyisen92
+2. status 变更: 草稿 → 未开始
+3. custom_label_combination 被设置 (如 "PP001-SX003-XH00...")
+4. actual_start_date 和 actual_end_date 在 1-2 秒内完成设置
+5. actual_end_date 被多次迭代更新 (间隔 ~0.017-0.25s，程序化)
+
+### 示例: WO-26-00082（混合真实+虚拟）
+
+| 数据源 | 数量 | 可信度 |
+|--------|------|--------|
+| 真实 JC（李清君分 9 批扫码） | ~185 | 真实下限 |
+| SE 入库（yj0_wq85xz6km，10 批） | 216 | 真实 |
+| open_material_qty | 298 | 真实上限 |
+| 虚拟 JC（HR-EMP-00001） | 300 | 伪造 |
+| produced_qty | 285 | 碰巧接近真实 |
+
+结论：实际产量约 285。不能只看 `produced_qty` 或跨工序把 JC 加总。
+
 ## ⚠ Job Card 完成量怎么算
 
 **按工序分别算，不要跨工序求和。** 同一批件数会在**每道工序各生成一张 Job Card**，
@@ -110,7 +132,7 @@ GET /api/resource/Stock Entry/{name} → items[].qty (t_warehouse 有值、s_war
 - 问"这批做了多少件" → 取**第一道工序（裁剪/开料）**的完成量
 - 问"某道工序做了多少" → 才取那道工序的完成量
 - 实测：某工单 2 批 × 22 件 = **44 件**；把 裁剪/皮壳整件/锁扣眼/拷边 四道工序的
-  `for_quantity` 相加会算成 176，虚高 4 倍
+  `total_completed_qty`（空则 `for_quantity`）相加会算成 176，虚高 4 倍
 
 ## ⚠ Work Order.status / produced_qty 可能没回写
 

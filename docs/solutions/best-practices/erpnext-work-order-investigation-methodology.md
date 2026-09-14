@@ -48,6 +48,9 @@ Query `Version` doctype for `ref_doctype = "Work Order"` and `owner = "yangyisen
 - `actual_end_date` iterated at ~17ms intervals (programmatic, not human)
 - `custom_label_combination` being set
 
+These signatures are a **conjunction** (all together confirm 一键完工; a single trace is only
+"suspected"). The Chinese methodology keeps this AND-gate as its own section after Step 8.
+
 ### Step 4: Open Material Quantity Analysis
 
 - **Semi-finished (PK#/ND#)**: `open_material_qty = 0` is **abnormal**. Cutting must issue material. Zero means production data is unreliable.
@@ -62,7 +65,7 @@ Fetch individual Job Card → check `time_logs[].employee`:
 **API**: `GET /api/resource/Job Card/{name}` → `time_logs[]` child table
 
 **Aggregating quantities — do NOT sum across operations.** The same batch of pieces gets its own
-Job Card *per operation*, so summing `for_quantity` across operations multiplies the output by the
+Job Card *per operation*, so summing `total_completed_qty` (fallback `for_quantity`) across operations multiplies the output by the
 number of operations. Observed: one Work Order ran 2 batches × 22 pieces = **44 pieces**; summing
 裁剪 / 皮壳整件 / 锁扣眼 / 拷边 (four operations) yields 176 — 4× inflated. To answer "how many
 pieces did this batch produce", take the **first operation** in the routing (裁剪 / 开料). To answer

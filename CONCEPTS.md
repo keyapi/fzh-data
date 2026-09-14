@@ -136,7 +136,7 @@ operations. Genuinely not-started means zero Job Cards and every operation still
 
 One batch of pieces yields one Job Card *per operation*, so completed quantity must be read per
 operation: the first operation in the routing answers "how many pieces did this batch make", and
-summing `for_quantity` across operations multiplies the batch size by the operation count.
+summing `total_completed_qty` (falling back to `for_quantity`) across operations multiplies the batch size by the operation count.
 
 ## 订单交付 (Order Fulfillment)
 
@@ -147,11 +147,10 @@ read as system data, and it moves when planning policy is revised, so state the 
 than the number.
 
 ### 死单 (Dead Order)
-A Sales Order that is `Closed` in the ERP yet still carries undelivered quantity. `Closed` records
-an administrative close, not full delivery: an order can be `Closed` with its entire quantity
-unshipped and no production plan behind it. Read `Closed` as "nobody will ship this" rather than
-"this was delivered" — the two diverge often enough that any status-only report will present dead
-orders as complete.
+A Sales Order that is `Closed` in the ERP yet still carries undelivered quantity. `Closed` is an
+administrative close, **not** a fulfillment state: remaining qty is neither "fully shipped" nor
+reliably "will never ship" (a duplicate may have been Closed instead of Cancelled). Status-only
+reports treat `Closed` as complete; confirm with planning before treating leftover qty as dead.
 
 ## ERPNext Platform
 

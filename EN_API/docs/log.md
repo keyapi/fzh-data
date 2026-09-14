@@ -12,6 +12,7 @@ title: EN_API 文档变更日志
 - **文档**: 新增 `../AGENT_HANDOFF_物料发货状态.md`；本索引补登该 handoff 与既有的 `../AGENT_HANDOFF_DN追溯报表.md`（此前只登了物料组翻译专题）
 - **沉淀**: `docs/solutions/workflow-issues/erpnext-so-closed-unshipped-and-unstarted-work-orders.md` — 子表反查父单的 API 铁律（子表直查 403 / 父单直查子字段 417 / 子表过滤"一行一子行"须按父单去重 / `in` 列表超 4094 字节请求行须分块），以及两条反直觉结论：`Closed` ≠ 已发完、`Work Order.status` 不可信（进度看工序卡）
 - **背景**: 排查某客户物料号的销售订单发货情况；实测 10 张 SO / 330 件，已发 126 / 未发 184
+- **评审修正**: 订单行 `item_code` 改为精确匹配（避免 `--item KS…` 带上 `PK#`/`ND#` 同行）；工序卡/工单取消件不计入进度；工单按 SO×物料挂行；完成量优先 `total_completed_qty`；超产跟工序卡比 `WO.qty`；`--assert-fixture` 只认客户码入口；list 查询 HTTP 失败不再当空结果；中文工单方法论收回「一键完工痕迹链」AND 门；主 `AGENT_HANDOFF.md` 补登发货状态 / DN 追溯
 
 ## 2026-08-31
 

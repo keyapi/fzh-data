@@ -82,6 +82,8 @@ uv run python EN_API/item_shipment_status.py --customer-code X --test
      补一轮（抓订单行客户码为空的单）。
    - `--item`：直接按物料码找单，**不限客户**，所以结果通常是 `--customer-code` 的超集。
      实测本例：`--item` 18 张 SO（含其它客户），`--customer-code` 10 张。
+   - **订单行物料码是精确匹配**（大小写不敏感）。`KS0001-…` 不能命中同单的 `PK#KS0001-…`
+     或 `ND#…` 行。客户码才走子串/`like`。
 
 2. **订单行 → 生产计划行的连接键是 `Sales Order Item.name` == `Production Plan Item.sales_order_item`**。
    不要用 `Production Plan Item.work_order`（这些行该字段为空）。
@@ -105,15 +107,20 @@ uv run python EN_API/item_shipment_status.py --customer-code X --test
 
 ## ⚠ Work Order.status 不可信
 
-实测：`WO-26-02609` 头部 `status = Not Started`、`produced_qty = 0`，但 14 张工序卡显示
-44 件（2 批 × 22）已完成 `裁剪 / 皮壳整件 / 锁扣眼 / 拷边`（皮壳整件 2026-09-14 11:56 完工），
-只剩 `检查皮壳扭筋 / 翻面 / 质检`。**判断进度只看 `WO.status` 会把在产的工单误判成"未开工"。**
+实测：`WO-26-02609` 头部 `status = Not Started`、`produced_qty = 0`，但工序卡显示
+44 件（2 批 × 22）。**截至 2026-09-14 下界**已完成 `裁剪 / 皮壳整件 / 锁扣眼 / 拷边`；
+当天现场 `翻面` 从 Pending 变成 Completed，所以不要把「4 道」和「5 道」当成两份文档打架。
+fixture 对在产工序只用下界（`⊇ 前 4 道` + `质检仍未完成`）。
+**判断进度只看 `WO.status` 会把在产的工单误判成"未开工"。**
 
 脚本因此：
 - 报「**工单状态未回写**」：`WO.status ∈ {Not Started, Draft, Pending}` 但有已完成工序卡。
 - 报「**工单未开工**」：0 张工序卡 + 工序全 Pending（如 `WO-26-03264`）。
-- **完成件数取第一道工序（裁剪）的完工量，不是各工序求和** —— 每道工序都有自己的工序卡，
-  求和会把同一批件数按工序数重复累加（WO-26-02609 会算成 4×44=176，实际 44）。
+- **完成件数取第一道工序（裁剪）的 `total_completed_qty`（空则退回 `for_quantity`），
+  不是各工序求和** —— 每道工序都有自己的工序卡，求和会把同一批件数按工序数重复累加
+  （WO-26-02609 会算成 4×44=176，实际 44）。
+- 工单挂到「本 SO × 本物料」这一行；取消件（`docstatus>=2` / `Cancelled`）不计入进度。
+- 超产跟工序卡完成量比 `WO.qty`，不看会停在 0 的头部 `produced_qty`。
 
 `Job Card.time_logs` 只在**单文档**查询返回，列表查询没有；本脚本不需要。
 
@@ -137,9 +144,10 @@ uv run python EN_API/item_shipment_status.py --customer-code X --test
 - **退货未抵扣**：退货型 DN / `Sales Invoice` 退货未从已发量净掉。
 - **疑似重复下单是启发式**：同物料 + 同量 + 交货日相差 ≤ 3 天，仅 `warn`，绝不自动处置。
 - **`--customer-code` 里的 `%`/`_` 会被当 LIKE 通配符**（ERPNext `like` 无转义钩子）。
-- **`--assert-fixture` 是时点快照**：fixture 数字取自 2026-09-14。若断言失败，**先确认是不是
-  生产真的推进了**（实测当天 `翻面` 就从 Pending 变 Completed），不要直接改 fixture 数字。
-  对在产的工序卡只用下界断言（`⊇ 前 4 道` + `质检仍未完成`）。
+- **`--assert-fixture` 只认 `--customer-code CENKZ1325-Yellow-138`**：`--item` 是不限客户的超集
+  （本例 18 张 vs 10 张），对不上 fixture 的 `so_count`。数字取自 2026-09-14；若断言失败，
+  **先确认是不是生产真的推进了**，不要直接改 fixture。list 查询 HTTP ≠ 200 会 `QueryError` 退出，
+  不当空结果继续算。
 
 ## 实测结论 (2026-09-14)
 
@@ -156,4 +164,5 @@ uv run python EN_API/item_shipment_status.py --customer-code X --test
 
 **两条核心洞察**
 1. **ERPNext 的 `Closed` ≠ 已发完** —— 10 张 SO 里 3 张 `Closed` 却仍有未发量。
-2. **`Work Order.status` 不可信** —— `WO-26-02609` 写 `Not Started`，实际 44 件已过 5 道工序。
+2. **`Work Order.status` 不可信** —— `WO-26-02609` 写 `Not Started`，实际 44 件已过裁剪等前道工序
+   （2026-09-14 下界 4 道；当天 `翻面` 后来也 Completed）。

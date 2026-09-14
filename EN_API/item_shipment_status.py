@@ -123,7 +123,7 @@ def slugify(s: str) -> str:
 
 
 def code_in(haystack, needles, ci=True) -> bool:
-    """大小写不敏感匹配 (实测客户码 -60CM 与 -60cm 并存)。"""
+    """客户码子串匹配 (实测客户码 -60CM 与 -60cm 并存)。不要用于 item_code。"""
     if not haystack:
         return False
     h = haystack.lower() if ci else haystack
@@ -133,6 +133,30 @@ def code_in(haystack, needles, ci=True) -> bool:
         if (n.lower() if ci else n) in h:
             return True
     return False
+
+
+def item_code_equals(haystack, needles, ci=True) -> bool:
+    """物料码精确匹配。KS0001-… 不能命中 PK#KS0001-… / ND#… 同行。"""
+    if not haystack:
+        return False
+    h = haystack.lower() if ci else haystack
+    for n in needles:
+        if not n:
+            continue
+        if (n.lower() if ci else n) == h:
+            return True
+    return False
+
+
+def is_active_doc(d) -> bool:
+    """取消件 (docstatus=2 或 status=Cancelled) 不计入进度。"""
+    if num(d.get("docstatus")) >= 2:
+        return False
+    return (d.get("status") or "") != "Cancelled"
+
+
+class QueryError(RuntimeError):
+    """ERPNext list 查询失败。不能当空结果吞掉, 否则已发/工单会少算。"""
 
 
 def dedupe_by(rows, key="name"):
@@ -177,8 +201,8 @@ def load_credentials(env_name="prod", env_files=None):
     if key and secret:
         return key, secret
 
-    wanted = ("TEST_ERP_API_KEY", "TEST_ERP_API_SECRET") if env_name == "test" \
-        else ("PROD_ERP_API_KEY", "PROD_ERP_API_SECRET")
+    key_name, secret_name = (("TEST_ERP_API_KEY", "TEST_ERP_API_SECRET") if env_name == "test"
+                             else ("PROD_ERP_API_KEY", "PROD_ERP_API_SECRET"))
     for path in (env_files or resolve_env_files()):
         with open(path, encoding="utf-8-sig") as f:
             for line in f:
@@ -187,9 +211,9 @@ def load_credentials(env_name="prod", env_files=None):
                     continue
                 k, v = line.split("=", 1)
                 k, v = k.strip(), v.strip().strip("'\"")
-                if not key and k in wanted:
+                if not key and k == key_name:
                     key = v
-                elif not secret and k in wanted:
+                elif not secret and k == secret_name:
                     secret = v
                 elif not key and k == "ERP_API_KEY":
                     key = v
@@ -260,8 +284,9 @@ def paginated_get(resource, base_url, key, secret, filters, fields,
             return paginated_get(resource, base_url, key, secret, filters,
                                  fallback_fields, page_size, order_by, None, label)
         if status != 200:
-            print(f"  ✗ {label or resource}: HTTP {status} {str(body)[:140]}", file=sys.stderr)
-            break
+            msg = f"{label or resource}: HTTP {status} {str(body)[:140]}"
+            print(f"  ✗ {msg}", file=sys.stderr)
+            raise QueryError(msg)
         data = body.get("data", []) or []
         if not data:
             break
@@ -384,7 +409,7 @@ def find_sales_orders_by_items(item_codes, base_url, key, secret, customers=None
 
 
 def line_matches(line, item_codes, customer_code) -> bool:
-    if code_in(line.get("item_code"), item_codes):
+    if item_code_equals(line.get("item_code"), item_codes):
         return True
     return bool(customer_code) and code_in(line.get("customer_item_code"), [customer_code])
 
@@ -446,7 +471,7 @@ def fetch_delivery_notes(so_names, item_codes, customer_code, base_url, key, sec
             so = line.get("against_sales_order")
             if so not in so_set:
                 continue
-            by_item = line.get("item_code") in item_set
+            by_item = item_code_equals(line.get("item_code"), item_set)
             by_code = code_in(line.get("customer_item_code"), [customer_code]) if customer_code else False
             if not (by_item or by_code):
                 continue
@@ -500,14 +525,14 @@ def fetch_work_order_details(wos, base_url, key, secret, sleep_s):
 
 
 def fetch_job_cards(wo_names, base_url, key, secret):
-    """Q8: 工序卡 = 真实进度。只查本物料的工单, 且分块 (约束 4)。"""
+    """Q8: 工序卡 = 真实进度。只查本物料的工单, 且分块 (约束 4)。取消件不计入。"""
     out = []
     for chunk in chunks(wo_names):
         out.extend(paginated_get("Job Card", base_url, key, secret,
-                                 [["work_order", "in", chunk]], JC_FIELDS,
+                                 [["work_order", "in", chunk], ["docstatus", "<", 2]], JC_FIELDS,
                                  fallback_fields=["name", "work_order", "operation", "status"],
                                  label="JobCard"))
-    return out
+    return [j for j in out if is_active_doc(j)]
 
 
 def fetch_production_plans(so_names, item_codes, base_url, key, secret, sleep_s):
@@ -583,20 +608,37 @@ def jobcards_by_wo(job_cards):
     return m
 
 
+def jc_completed_qty(j) -> float:
+    """Completed 工序卡的完工量: 优先 total_completed_qty, 空则退回 for_quantity。"""
+    if j.get("status") != "Completed":
+        return 0.0
+    completed = num(j.get("total_completed_qty"))
+    return completed if completed > 0 else num(j.get("for_quantity"))
+
+
+def wos_for_line(wos, so, item_code):
+    """工单挂到「本 SO × 本物料」这一行, 不把同单其它物料的 WO 摊过来。"""
+    so, item_code = so or "", item_code or ""
+    return [w for w in wos
+            if is_active_doc(w)
+            and (w.get("sales_order") or "") == so
+            and (w.get("production_item") or "") == item_code]
+
+
 def op_progress(wo, jcs):
     """单个工单的工序进度。
 
     done_qty 取"已完成件数"而非各工序完成量之和 —— 每道工序都有自己的工序卡,
     求和会把同一批件数按工序数重复累加 (实测 WO-26-02609 会算成 4×44=176)。
     首选第一道工序 (裁剪/开料) 的完成量, 退化时取各工序最大值。
+    完工量用 total_completed_qty, 没有才退回 for_quantity。
     """
     routing = wo.get("operations") or []
     done_ops, open_ops = set(), set()
     last_end = ""
 
     def op_done_qty(opname):
-        return sum(num(j.get("for_quantity")) for j in jcs
-                   if j.get("operation") == opname and j.get("status") == "Completed")
+        return sum(jc_completed_qty(j) for j in jcs if j.get("operation") == opname)
 
     for j in jcs:
         op = j.get("operation")
@@ -620,6 +662,7 @@ def op_progress(wo, jcs):
         "done_qty": done_qty, "last_end": last_end,
         "jc_count": len(jcs),
         "any_pending_op": any((o.get("status") or "") not in ("Completed",) for o in routing),
+        "over_plan": done_qty > num(wo.get("qty")) + 1e-6,
     }
 
 
@@ -700,9 +743,6 @@ def build_context(args, base_url, key, secret):
     pp_rows = fetch_production_plans(so_names, item_codes, base_url, key, secret, args.sleep)
 
     # ── 每行补: 出库 / 工单 / 生产计划 ──
-    wo_by_so = {}
-    for w in wos:
-        wo_by_so.setdefault(w.get("sales_order") or "", []).append(w)
     pp_by_line, pp_by_so = {}, {}
     for p in pp_rows:
         if p.get("so_line_id"):
@@ -718,7 +758,7 @@ def build_context(args, base_url, key, secret):
         r["shipped_dn"] = sum(d["qty"] for d in line_dns if d["dn_docstatus"] == 1 and not d["is_return"])
         r["draft_dn"] = sum(d["qty"] for d in line_dns if d["dn_docstatus"] == 0)
         r["open_qty"] = r["qty"] - r["delivered_qty"]
-        r["wos"] = wo_by_so.get(r["so"], [])
+        r["wos"] = wos_for_line(wos, r["so"], r["item_code"])
         r["pps"] = pp_by_line.get(r["line_id"]) or pp_by_so.get(r["so"], [])
         r["progress"] = progress_text(r["wos"], jc_map)
         r["master_item"] = master_text
@@ -813,7 +853,7 @@ def classify_anomalies(ctx):
                 f"{', '.join(w['name'] for w in r['wos'])} 0 张工序卡, 工序全 Pending "
                 f"(交货日 {r['delivery_date']})")
 
-        # 规则 5: WO.status 未回写
+        # 规则 5: WO.status 未回写 / 工序完成量超计划 (头部 produced_qty 可能仍是 0)
         for w, p in zip(r["wos"], pros):
             if (w.get("status") in ("Not Started", "Draft", "Pending")
                     and p["jc_count"] > 0 and p["done_jc"] > 0):
@@ -821,6 +861,11 @@ def classify_anomalies(ctx):
                 add("warn", "工单状态未回写", w["name"],
                     f"[工单状态未回写] {w['name']} 头部 {w.get('status')}/produced={fmt_qty(w.get('produced_qty'))}, "
                     f"但 {fmt_qty(p['done_qty'])} 件已完成 {'/'.join(sorted(p['done_ops']))}")
+            if p["over_plan"]:
+                r["anomalies"].append("工序完成量超计划")
+                add("warn", "工序完成量超计划", w["name"],
+                    f"[工序完成量超计划] {w['name']} 工序卡完成 {fmt_qty(p['done_qty'])} 件 "
+                    f"> 工单计划 {fmt_qty(w.get('qty'))}（头部 produced={fmt_qty(w.get('produced_qty'))} 可能未回写）")
 
         # 规则 7: 超出交付约定
         ld = parse_date(r["lead_date"])
@@ -1012,7 +1057,8 @@ def build_sheets(ctx):
                 notes.append("工单无SO")
             if w.get("status") == "Cancelled":
                 notes.append("工单已取消")
-            if num(w.get("produced_qty")) > num(w.get("qty")):
+            p = op_progress(w, jcs)
+            if p["over_plan"] or num(w.get("produced_qty")) > num(w.get("qty")):
                 notes.append("已产>计划(超产)")
             rows3.append([
                 w["name"], w.get("status"), w["qty"], w.get("produced_qty"),
@@ -1129,7 +1175,11 @@ def main():
     base_url = ENV_URLS[env]
     print(f"系统: {base_url} (env: {env})")
 
-    ctx = build_context(args, base_url, key, secret)
+    try:
+        ctx = build_context(args, base_url, key, secret)
+    except QueryError as e:
+        print(f"✗ 查询中断 (部分结果不可信): {e}", file=sys.stderr)
+        sys.exit(1)
     if ctx.get("empty"):
         print("\n无匹配的销售订单。")
         sys.exit(0)
@@ -1137,8 +1187,10 @@ def main():
     render_console(ctx, args, base_url)
 
     if args.assert_fixture:
-        if not (args.customer_code == FIXTURE["customer_code"] or args.item == FIXTURE["item"]):
-            print("\n⚠ --assert-fixture 只对 FIXTURE 中的物料有效, 跳过。", file=sys.stderr)
+        if args.customer_code != FIXTURE["customer_code"]:
+            print("\n⚠ --assert-fixture 只对 "
+                  f"--customer-code {FIXTURE['customer_code']} 有效 "
+                  "(--item 是不限客户的超集, 张数对不上)。", file=sys.stderr)
             sys.exit(2)
         sys.exit(0 if assert_fixture(ctx) else 1)
 
