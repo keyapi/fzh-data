@@ -147,3 +147,51 @@ def test_classify_over_plan_uses_job_card_qty_not_header():
     kinds = {a["kind"] for a in ctx["anomalies"]}
     assert "工序完成量超计划" in kinds
     assert "工单状态未回写" in kinds
+
+
+def _over_plan_ctx(produced_qty):
+    wo = {
+        "name": "WO-X", "qty": 40, "produced_qty": produced_qty,
+        "status": "Completed", "sales_order": "SO-1",
+        "operations": [{"operation": "裁剪", "sequence_id": 1, "status": "Completed"}],
+    }
+    jcs = [{"operation": "裁剪", "status": "Completed", "for_quantity": 22,
+            "total_completed_qty": 22} for _ in range(2)]
+    return {
+        "so_rows": [{
+            "so": "SO-1", "so_status": "To Deliver and Bill", "so_docstatus": 1,
+            "qty": 40, "delivered_qty": 0, "open_qty": 40, "draft_dn": 0,
+            "item_code": PK, "delivery_date": "2026-08-30",
+            "transaction_date": "2026-08-17", "amended_from": None,
+            "wos": [wo], "pps": [{"pp": "PP-1"}],
+        }],
+        "jc_map": {"WO-X": jcs},
+        "lead_months": 3, "dup_window": 3,
+    }
+
+
+def test_over_plan_message_silent_when_header_caught_up():
+    """头部 produced_qty 已等于工序卡完工量时, 不能再说"尚未跟上" —— 否则消息自相矛盾。"""
+    ctx = _over_plan_ctx(produced_qty=44)
+    iss.classify_anomalies(ctx)
+    msgs = [a["message"] for a in ctx["anomalies"] if a["kind"] == "工序完成量超计划"]
+    assert msgs, "超产应当仍被报出"
+    assert "尚未跟上" not in msgs[0]
+    assert "44" in msgs[0]
+
+
+def test_over_plan_message_flags_lagging_header():
+    """头部还是 0 (未回写) 时要提示出来。"""
+    ctx = _over_plan_ctx(produced_qty=0)
+    iss.classify_anomalies(ctx)
+    msgs = [a["message"] for a in ctx["anomalies"] if a["kind"] == "工序完成量超计划"]
+    assert msgs and "尚未跟上" in msgs[0]
+
+
+def test_fixture_buckets_disjoint_and_live_values_stay_out_of_fatal():
+    """稳定档/在产档不能重叠。会随发货推进而变的值必须只在 LIVE —— 否则活数据一 drift 就 exit 1。"""
+    assert not (set(iss.FIXTURE) & set(iss.LIVE))
+    for k in ("open_qty", "in_progress_qty", "shipped_qty", "dead_qty",
+              "wo_count", "dead_sos"):
+        assert k not in iss.FIXTURE, f"{k} 会随经营推进而变, 不能进稳定档"
+        assert k in iss.LIVE, f"{k} 应当留在在产档"

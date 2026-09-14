@@ -863,9 +863,12 @@ def classify_anomalies(ctx):
                     f"但 {fmt_qty(p['done_qty'])} 件已完成 {'/'.join(sorted(p['done_ops']))}")
             if p["over_plan"]:
                 r["anomalies"].append("工序完成量超计划")
+                # 头部 produced_qty 跟上了就别再写"可能未回写", 否则消息自相矛盾
+                catchup = "" if close(num(w.get("produced_qty")), p["done_qty"]) \
+                    else f"（头部 produced={fmt_qty(w.get('produced_qty'))} 尚未跟上）"
                 add("warn", "工序完成量超计划", w["name"],
                     f"[工序完成量超计划] {w['name']} 工序卡完成 {fmt_qty(p['done_qty'])} 件 "
-                    f"> 工单计划 {fmt_qty(w.get('qty'))}（头部 produced={fmt_qty(w.get('produced_qty'))} 可能未回写）")
+                    f"> 工单计划 {fmt_qty(w.get('qty'))}{catchup}")
 
         # 规则 7: 超出交付约定
         ld = parse_date(r["lead_date"])
@@ -1074,72 +1077,100 @@ def build_sheets(ctx):
 
 
 # ── fixture 断言 ──────────────────────────────────────
+# 分两档, 因为这是个活业务对象 —— 正常经营(生产推进、订单发货)就会改数:
+#   FIXTURE (fatal) = 正常经营下不变的: 订单结构事实 + 推导逻辑 + 不可变的历史单据行。
+#                     这些变了一定量级 = 回归。
+#   LIVE    (warn)  = 会随生产/发货推进而变的状态快照, 只报漂移, 不影响退出码。
+#                     ⚠ 本工具监控的"发货"一旦成功, open_qty/in_progress_qty 必然变 ——
+#                     所以这些绝不能当断言, 否则工具会因为它要监控的事做成了而变红。
 FIXTURE = {
     "customer_code": "CENKZ1325-Yellow-138",
     "item": "PK#KS0001-DM-140-YELLOW",
-    # ── --customer-code CENKZ1325-Yellow-138 (10 张 SO / 330 件) ──
-    "so_count": 10,
-    "order_qty": 330, "valid_qty": 310, "voided_qty": 20, "cancelled_qty": 0,
-    "shipped_qty": 126, "open_qty": 184, "dead_qty": 64, "in_progress_qty": 120,
+    # ── 稳定档 ──
+    "so_count": 10,          # 本客户码下的订单集合
+    "order_qty": 330,        # 这 10 张 SO 的总订购量
     "dns": {"DN-25-00043": 20, "DN-25-00138": 60, "DN-26-00003": 26, "DN-26-00039": 20},
-    "wo_count": 18,
-    # 待产的生产计划 (其余为历史计划, 同一 PP 会覆盖多个 SO)
-    "pp_names_pending": {"PP-26-00033", "PP-26-00036"},
-    "dead_sos": {"SO-25-00198", "SO-26-00003", "SO-26-00099"},
     "voided_sos": {"SO-26-00053"},
     # 客户码注册在成品 KS 上, 订单行卖的是 PK# 皮壳 —— 两者不是同一 item_code
     "master_item": "KS0001-DM-140-YELLOW",
     "lead": {"SO-26-00101": "2026-11-17", "SO-26-00110": "2026-12-02",
              "SO-26-00099": "2026-11-13", "SO-26-00003": "2026-04-09"},
-    # ── 工序卡 (真实进度, WO.status 不可信) ──
-    # 生产在进行中, 所以"已完成工序"只做下界断言 —— 实测 2026-09-14 当天
-    # 翻面 就从 Pending 变 Completed。
+    # 待产的生产计划 (其余为历史计划, 同一 PP 会覆盖多个 SO)
+    "pp_names_pending": {"PP-26-00033", "PP-26-00036"},
+    # 工序是只增不减的下界 —— 生产只会往前走, 不会退回 Pending
     "jc_done_ops_min": {"裁剪", "皮壳整件", "锁扣眼", "拷边"},
-    "jc_not_done": {"质检"},
+}
+
+# 2026-09-14 的状态快照, 仅用于报告漂移 (实测当天下班前后 质检 就完工了, 这些数会动)
+LIVE_BASELINE = "2026-09-14"
+LIVE = {
+    "valid_qty": 310, "cancelled_qty": 0, "shipped_qty": 126,
+    "open_qty": 184, "dead_qty": 64, "in_progress_qty": 120,
+    "wo_count": 18,
+    "dead_sos": {"SO-25-00198", "SO-26-00003", "SO-26-00099"},
+    "jc_wo": "WO-26-02609",
     "jc_done_qty": 44,
-    "jc_not_started_wo": "WO-26-03264",
+    "jc_pending_ops": {"通用返工", "质检发现问题"},   # 正常批不走的返工分支
+    "not_started_wo": "WO-26-03264",
 }
 
 
 def assert_fixture(ctx):
-    f = FIXTURE
-    t = ctx["totals"]
-    checks = []
+    """稳定档失败 → exit 1; 在产档只报漂移。"""
+    f, L, t = FIXTURE, LIVE, ctx["totals"]
+    stable, drift = [], []
 
-    def ck(name, got, want):
+    def ck(name, got, want, bucket):
         ok = close(got, want) if isinstance(want, (int, float)) else got == want
-        checks.append((ok, name, got, want))
+        bucket.append((ok, name, got, want))
 
-    ck("SO 张数", len({r["so"] for r in ctx["so_rows"]}), f["so_count"])
-    for k in ("order_qty", "valid_qty", "voided_qty", "cancelled_qty", "shipped_qty",
-              "open_qty", "dead_qty", "in_progress_qty"):
-        ck(f"合计 {k}", t[k], f[k])
+    # ── 稳定档 (fatal) ──
+    ck("SO 张数", len({r["so"] for r in ctx["so_rows"]}), f["so_count"], stable)
+    ck("订单总量", t["order_qty"], f["order_qty"], stable)
     for dn, q in f["dns"].items():
         ck(f"{dn} 已发量", sum(d["qty"] for d in ctx["dn_rows"]
-                              if d["dn"] == dn and d["dn_docstatus"] == 1), q)
-    ck("工单张数", len(ctx["wos"]), f["wo_count"])
-    ck("生产计划 ⊇ 待产两张", f["pp_names_pending"] <= {p["pp"] for p in ctx["pp_rows"]}, True)
-    ck("死单集合", {r["so"] for r in ctx["so_rows"] if "死单(Closed未发)" in r["anomalies"]}, f["dead_sos"])
-    ck("作废集合", {r["so"] for r in ctx["so_rows"] if r.get("voided")}, f["voided_sos"])
-    ck("客户码注册物料", {m["name"] for m in ctx["master_items"]}, {f["master_item"]})
+                             if d["dn"] == dn and d["dn_docstatus"] == 1), q, stable)
+    ck("作废集合", {r["so"] for r in ctx["so_rows"] if r.get("voided")}, f["voided_sos"], stable)
+    ck("客户码注册物料", {m["name"] for m in ctx["master_items"]}, {f["master_item"]}, stable)
+    ck("生产计划 ⊇ 待产两张", f["pp_names_pending"] <= {p["pp"] for p in ctx["pp_rows"]}, True, stable)
     for so, want in f["lead"].items():
-        got = next((r["lead_date"] for r in ctx["so_rows"] if r["so"] == so), None)
-        ck(f"{so} 预估可发", got, want)
-    jc = ctx["jc_map"].get("WO-26-02609", [])
-    _done = {j["operation"] for j in jc if j["status"] == "Completed"}
-    ck("WO-26-02609 已完成工序 ⊇ 前4道", f["jc_done_ops_min"] <= _done, True)
-    ck("WO-26-02609 质检仍未完成", not (f["jc_not_done"] & _done), True)
-    _wo = next((w for w in ctx["wos"] if w["name"] == "WO-26-02609"), None)
-    ck("WO-26-02609 完成件数(非各工序求和)", op_progress(_wo, jc)["done_qty"] if _wo else 0, f["jc_done_qty"])
-    ck(f"{f['jc_not_started_wo']} 工序卡数", len(ctx["jc_map"].get(f["jc_not_started_wo"], [])), 0)
+        ck(f"{so} 预估可发",
+           next((r["lead_date"] for r in ctx["so_rows"] if r["so"] == so), None), want, stable)
+    jc = ctx["jc_map"].get(L["jc_wo"], [])
+    done_ops = {j["operation"] for j in jc if j["status"] == "Completed"}
+    ck(f"{L['jc_wo']} 已完成工序 ⊇ 基线", f["jc_done_ops_min"] <= done_ops, True, stable)
 
-    print("\n── fixture 断言 ──")
-    bad = 0
-    for ok, name, got, want in checks:
-        if not ok:
-            bad += 1
+    # ── 在产档 (仅漂移报告) ──
+    for k in ("valid_qty", "cancelled_qty", "shipped_qty", "open_qty",
+              "dead_qty", "in_progress_qty"):
+        ck(f"合计 {k}", t[k], L[k], drift)
+    ck("工单张数", len(ctx["wos"]), L["wo_count"], drift)
+    ck("死单集合", {r["so"] for r in ctx["so_rows"] if "死单(Closed未发)" in r["anomalies"]},
+       L["dead_sos"], drift)
+    _wo = next((w for w in ctx["wos"] if w["name"] == L["jc_wo"]), None)
+    ck(f"{L['jc_wo']} 完成件数", op_progress(_wo, jc)["done_qty"] if _wo else 0,
+       L["jc_done_qty"], drift)
+    pending = {o.get("operation") for o in (_wo.get("operations") if _wo else []) or []
+               if (o.get("status") or "") != "Completed"}
+    ck(f"{L['jc_wo']} 剩余工序", pending, L["jc_pending_ops"], drift)
+    ck(f"{L['not_started_wo']} 工序卡数",
+       len(ctx["jc_map"].get(L["not_started_wo"], [])), 0, drift)
+
+    print("\n── fixture 稳定档 (失败 = 回归, 影响退出码) ──")
+    bad = sum(1 for ok, *_ in stable if not ok)
+    for ok, name, got, want in stable:
         print(f"  [{'OK' if ok else 'FAIL'}] {name}: {got!r} (期望 {want!r})")
-    print(f"  {len(checks) - bad}/{len(checks)} 通过")
+    print(f"  {len(stable) - bad}/{len(stable)} 通过")
+
+    moved = [c for c in drift if not c[0]]
+    print(f"\n── 在产快照 (基线 {LIVE_BASELINE}, 只报漂移, 不影响退出码) ──")
+    for ok, name, got, want in drift:
+        print(f"  [{'OK  ' if ok else '漂移'}] {name}: {got!r} (基线 {want!r})")
+    if moved:
+        print(f"  {len(moved)} 项偏离基线 —— 生产推进/订单发货后就会这样, 属预期；"
+              "先核实数据再考虑更新基线，不要为了让它变绿直接改数字。")
+    else:
+        print("  全部与基线一致。")
     return bad == 0
 
 
