@@ -4,7 +4,7 @@ type: Index
 title: tongtool_order_cost 文档索引
 description: 通途订单特殊规则 1.7.0 本地审计与 Google Sheet SKU 改名
 tags: [tongtool, special-rule, audit, index]
-timestamp: 2026-08-14
+timestamp: 2026-09-14
 ---
 # tongtool_order_cost — 文档索引
 
@@ -15,7 +15,9 @@ timestamp: 2026-08-14
 | 列映射 / 规则模式 | [reference/](reference/) |
 | Google Sheet 凭证 | [reference/gsheets-credentials.md](reference/gsheets-credentials.md) |
 | SKU 旧名→新名 | [reference/sku-remap.md](reference/sku-remap.md) |
-| 历史尾程升级调研 | [research/2026-09-11-history-last-leg-field-profiling.md](research/2026-09-11-history-last-leg-field-profiling.md) |
+| 历史尾程字段剖析 | [research/2026-09-11-history-last-leg-field-profiling.md](research/2026-09-11-history-last-leg-field-profiling.md) |
+| 费率表训练口径调研 + 实测 | [research/2026-09-14-rate-table-training-methodology.md](research/2026-09-14-rate-table-training-methodology.md) |
 | 六月 FBA 过程 | [research/](research/) |
+| 历史尾程缺陷与方法选择经验 | [solutions/](solutions/) |
 | 经验教训 | [lessons/](lessons/) |
 | 变更历史 | [log.md](log.md) |

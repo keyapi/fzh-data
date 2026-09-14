@@ -1,6 +1,7 @@
 # tongtool_order_cost — Agent 交接
 
-> **CLI**: `scripts/run_audit_170.py` · `scripts/remap_gsheet_sku.py` · `scripts/lookup_tongtool_sku.py` · `scripts/analyze_history_last_leg.py` · `scripts/backtest_history_last_leg.py` · `scripts/export_history_last_leg_model.py`
+> **CLI**: `scripts/run_audit_170.py` · `scripts/remap_gsheet_sku.py` · `scripts/lookup_tongtool_sku.py`
+> **历史尾程 CLI**: `scripts/analyze_history_last_leg.py` · `scripts/backtest_history_last_leg.py` · `scripts/compare_history_last_leg_variants.py` · `scripts/verify_history_last_leg_model.py` · `scripts/sweep_history_last_leg_thresholds.py` · `scripts/export_history_last_leg_model.py`
 > **人读**: [README.md](README.md)
 > **Skill**: `.agents/skills/tongtool-order-cost/SKILL.md`
 
@@ -50,7 +51,11 @@ lookup_tongtool_sku.py <SKU...>             # 主档是否存在
 | `tongtool_order_cost/history_last_leg_export.py` | 分层费率 → EN 子表导入行（字段契约、kg 上下界、稳定 `model_key`） |
 | `scripts/analyze_history_last_leg.py` | 历史尾程只读分析 CLI（月度 Google Sheet → 多 Sheet 报告 + 本地缓存） |
 | `scripts/backtest_history_last_leg.py` | HLF0001 vs 分层模型回测 CLI（全量对照 + 严格时间 Holdout） |
+| `tongtool_order_cost/model_variants.py` | 多方案费率模型：层级集合、可信度加权、定稿配置 `RECOMMENDED_VARIANT` |
 | `scripts/export_history_last_leg_model.py` | 生成 EN 候选导入 CSV + parent 契约 JSON（只读，不写线） |
+| `scripts/compare_history_last_leg_variants.py` | 多变体对比（Holdout + 真实月初工件） |
+| `scripts/verify_history_last_leg_model.py` | 定稿结论的对抗性自检 |
+| `scripts/sweep_history_last_leg_thresholds.py` | 样本/月份门槛扫掠 |
 
 ## 历史尾程升级（只读，2026-09-11）
 
@@ -104,14 +109,15 @@ lookup_tongtool_sku.py <SKU...>             # 主档是否存在
 `scripts/sweep_history_last_leg_thresholds.py`（门槛扫掠）。
 
 
-仓库 `keyapi/tongtool_integration` 分支 `feature/history-last-leg-v2`（独立 clone 于
-`D:/Work/赛狐/Cursor-worktrees/tongtool-integration-history-last-leg`）：
+### 线上仓库落地
+
+`keyapi/tongtool_integration` 分支 `feature/history-last-leg-v2`（本地独立 clone，未随本仓库版本管理）：
 
 - `tongtool_integration/tongtool_integration/history_last_leg_fee.py`：唯一解析器
   （Active parent 确定性选择、渠道自适应层级、`HLF0001` 兜底、缺列自动降级）
 - parent/child DocType JSON 扩展；控制器校验 + 幂等导入 + 激活/停用按钮
 - `order_sync`、`tongtool_cost_review`、`excel_tongtool_order` 改为共用解析器，内联历史 SQL 清零
-- 测试 `tongtool_integration/tests/test_history_last_leg_fee.py`（30 项）：
+- 测试 `tongtool_integration/tests/test_history_last_leg_fee.py`（34 项）：
   `uv run python -m unittest discover -s tongtool_integration/tests -t .`
 - 文档 `docs/history_last_leg_model.md`
 
@@ -169,6 +175,8 @@ Cursor Agent 用用户级 MCP `user-tongtool_erp2_primary`（`~/.cursor/mcp.json
 - 不要把订单/规则大 xlsx 提交进 git
 - 不要提交 service account JSON / notebook 私钥
 - 不要直接 push main；走 `feature/...` + PR
+- 不要把个人姓名/同事姓名/个人绝对路径写进文档或提交（用角色称谓与相对路径）
+- 不要把月初占位值（旧预估）当训练标签——会形成循环训练
 
 ## EN 侧落地（2026-09-14，未部署未激活）
 
