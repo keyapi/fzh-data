@@ -12,6 +12,8 @@
 | `upload_pim_images.py` | 上传图片到物料组 custom_pim_images 子表 | 本地图片目录 | PIM图片上传报告 |
 | `translate_item_group_names.py` | 物料组中文名 → `item_group_translation`（TMT） | 生产 EN API + 腾讯云 TMT | `out/物料组翻译_*.xlsx` |
 | `test_tmt_connectivity.py` | TMT API 连通性冒烟（3 条样例） | `TENCENT_SECRET_*` | 终端输出 |
+| `item_shipment_status.py` | **物料发货状态报表** | 客户物料号 或 EN 物料号 | `out/{码}_发货状态_*.xlsx` |
+| `dn_trace_report.py` | 销售出库 → 物料移动追溯 | 月份 或 DN 单号 | `out/{month}_DN追溯报表_*.xlsx` |
 
 ## 前置条件
 

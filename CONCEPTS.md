@@ -127,6 +127,32 @@ The first production operation that issues raw fabric and cuts it to size. The q
 ### 虚拟员工 (Virtual Employee)
 Employee ID `HR-EMP-00001`, used exclusively by the 一键完工 feature. All Job Cards assigned to this employee are synthetic and reflect planned quantities, not actual production. Detected by checking `time_logs[].employee` on individual Job Card records.
 
+### 工序卡 (Job Card)
+The per-operation production record, created either by a worker scanning at an operation station
+(扫码报工) or programmatically by 一键完工. It is the source of truth for whether production has
+actually started and how far it has progressed — a Work Order's own `status` and `produced_qty`
+can lag behind reality, reading `Not Started` while the shop floor has already cleared several
+operations. Genuinely not-started means zero Job Cards and every operation still pending.
+
+One batch of pieces yields one Job Card *per operation*, so completed quantity must be read per
+operation: the first operation in the routing answers "how many pieces did this batch make", and
+summing `for_quantity` across operations multiplies the batch size by the operation count.
+
+## 订单交付 (Order Fulfillment)
+
+### 预估可发 (Estimated Ship Date)
+The date a Sales Order is expected to ship, derived as the order date plus a lead-time window. The
+window length is a planning-side business convention, **not** a field in the ERP — it must never be
+read as system data, and it moves when planning policy is revised, so state the derivation rather
+than the number.
+
+### 死单 (Dead Order)
+A Sales Order that is `Closed` in the ERP yet still carries undelivered quantity. `Closed` records
+an administrative close, not full delivery: an order can be `Closed` with its entire quantity
+unshipped and no production plan behind it. Read `Closed` as "nobody will ship this" rather than
+"this was delivered" — the two diverge often enough that any status-only report will present dead
+orders as complete.
+
 ## ERPNext Platform
 
 ### Custom App
