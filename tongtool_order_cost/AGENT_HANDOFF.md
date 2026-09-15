@@ -76,6 +76,7 @@ lookup_tongtool_sku.py <SKU...>             # 主档是否存在
 精确匹配 `LIMIT 1` 无 `ORDER BY`。三处已在 EN 侧共用解析器中修复。
 另有第四处：旧代码 `预估 × 发货数量`，而运费本质是**整包价**（2 件高估约 37%、3 件约 121%），
 **`×件数` 贡献了老方式几乎全部系统性偏差**（月初工件偏差 +11.88 → 去掉后 +1.10）。
+分析侧已不再乘件数；EN 调用方（Cost Review / `order_sync`）必须同步去掉乘法，否则月初 Excel 仍会高估。
 
 `analyze_history_last_leg.py` 只读，输出到 gitignore 的 `out/`；不写回源表。
 

@@ -217,3 +217,25 @@ def test_predict_prefers_finest_published_level_then_returns_zero():
     assert prediction.iloc[0] > 0          # 细层命中
     assert prediction.iloc[2] == 0         # 无任何候选 → 0，不静默编造
     assert set(MODERN_LEVELS[0][1]) >= {"国家", "通途SKU", "美国ZIP3", "观察重量阶梯"}
+
+
+def test_prediction_does_not_scale_with_quantity():
+    """历史预估是整包价：发货数量 1/2/3 必须得到同一费用。"""
+    rows = [
+        {"包裹号": f"P{i}", "通途SKU": "SKU-A", "邮编": "07001", "物流商运费": "150"}
+        for i in range(60)
+    ]
+    observations = grid(rows)
+    tiers, _ = build_variant_tiers(observations, min_samples=5, min_months=1, exclusive=False)
+    base = {
+        "国家": "US", "标准仓库": "USNJ", "标准渠道": "VITE", "通途SKU": "SKU-A",
+        "美国ZIP3": "070", "目的地邮编首位": "0", "观察重量阶梯": "(4,5]kg",
+    }
+    target = pd.DataFrame([
+        {**base, "发货数量": 1},
+        {**base, "发货数量": 2},
+        {**base, "发货数量": 3},
+    ])
+    prediction = predict_with_variant(target, tiers, scheme="zone_first")
+    assert prediction.iloc[0] > 0
+    assert prediction.iloc[0] == prediction.iloc[1] == prediction.iloc[2]
