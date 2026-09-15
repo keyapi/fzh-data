@@ -13,8 +13,8 @@
 cd tongtool_order_cost
 
 uv run python scripts/run_audit_170.py \
-  --orders "D:/Work/王忠于/成本核算/特殊规则AMZBAINAUS_2026年6月FBA订单和非FBA订单_order_cost_2026-08-06_15-00-53.xlsx" \
-  --rules "D:/Work/王忠于/成本核算/Jeck特殊规则-订单改销售额成本 20260813.xlsx" \
+  --orders "<成本核算归档目录>/特殊规则AMZBAINAUS_2026年6月FBA订单和非FBA订单_order_cost_2026-08-06_15-00-53.xlsx" \
+  --rules "<成本核算归档目录>/Jeck特殊规则-订单改销售额成本 20260813.xlsx" \
   --month 202606 \
   --account AMZBAINAUS \
   --fx-usd 6.8167 \

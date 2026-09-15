@@ -10,3 +10,4 @@ tags: [research, index]
 | 文档 | 说明 |
 |------|------|
 | [2026-08-14-june-fba-sku-remap.md](2026-08-14-june-fba-sku-remap.md) | 六月 FBA 尾程缺口与 SKU 改名过程 |
+| [2026-09-11-history-last-leg-field-profiling.md](2026-09-11-history-last-leg-field-profiling.md) | 历史尾程升级前置：源字段契约、费用口径、仓库×ZIP3×重量层统计 |
