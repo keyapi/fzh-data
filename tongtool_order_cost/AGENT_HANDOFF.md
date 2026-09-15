@@ -76,7 +76,12 @@ lookup_tongtool_sku.py <SKU...>             # 主档是否存在
 精确匹配 `LIMIT 1` 无 `ORDER BY`。三处已在 EN 侧共用解析器中修复。
 另有第四处：旧代码 `预估 × 发货数量`，而运费本质是**整包价**（2 件高估约 37%、3 件约 121%），
 **`×件数` 贡献了老方式几乎全部系统性偏差**（月初工件偏差 +11.88 → 去掉后 +1.10）。
-分析侧已不再乘件数；EN 调用方（Cost Review / `order_sync`）必须同步去掉乘法，否则月初 Excel 仍会高估。
+**发布层费率是整包价**，调用方必须「按整包计费重量查一次 + 按行权重分摊」，既不能 `× 件数`，
+也不能把整包价直接写给每一行（后者在多明细包裹上重复计费）。EN 侧已落地：
+`_get_hist_predict_fee(..., billing_weight_kg=…)` + `allocate_package_fee(...)`，
+写入收敛到 `_apply_history_last_leg_fee`；Excel 走 `通途重量`、同步走 `Tongtool Package.weight`。
+实测（2026-05 月初工件，113 个多明细包裹，vs 实际 14,633.78 元）：老 `×件数` +67.2% →
+逐行写整包价 +84.8% → 按整包分摊 **−2.4%**。
 
 `analyze_history_last_leg.py` 只读，输出到 gitignore 的 `out/`；不写回源表。
 
