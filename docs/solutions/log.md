@@ -7,6 +7,10 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-09-15
+- **新增**: `documentation-gaps/module-current-config-source-of-truth.md` — 判断模块「当前配置」的可信来源顺序。背景：一次调研中 Agent 把 `.codex_tmp/sellfox-suite-pairing-audit/.../operations.md`（迁移前快照）里的订阅供应商当成北京办公室现值，被用户当场纠正。根因是结构性陷阱——快照未脱敏且详尽，而现值 `docs/log.md` 刻意脱敏（只写「订阅换了」不写换成什么），导致「越详尽的文档越可能是过期的」。规则：现值 docs/log（日期可信）+ `AGENT_HANDOFF.md` + gitignored `.env` 为权威；`.codex_tmp/` 与「被当成完整文档读的脱敏文档」是陷阱；`docs/solutions/` 的交叉引用可作桥梁但需二次确认。**本文按模块隐私边界不复述供应商名、私有地址与隧道拓扑。**
+- **补齐 OKF**: 新建 `documentation-gaps/index.md`（该目录此前缺 index.md，违反 AGENTS.md 规则 10）。
+
 ## 2026-09-08
 - **新增**: `integration-issues/cliproxyapi-auth-unavailable-oauth-recovery.md` — CLIProxyAPI `503 auth_unavailable` 恢复：服务健康不等于目标模型具备上游授权；按升级、浏览器 OAuth、失效认证记录隔离、重启和真实模型请求验收处理。
 - **同步**: `us_openai_api_proxy/` 的 runbook、handoff、README、lesson 和受控运维 skill；不记录账号、OAuth URL/代码、认证材料、私有地址或 API key。

@@ -10,6 +10,7 @@ tags: [research, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-09-15 | 深圳海外出口 + ChatGPT Business — 封号风险实证：共享出口是首要扣分项且一人违规全段连坐；"各自翻墙"在封号维度不劣于统一出口，放设备的理由应是管控而非封号 | [2026-09-15-shenzhen-office-egress-and-chatgpt-business.md](2026-09-15-shenzhen-office-egress-and-chatgpt-business.md) |
 | 2026-09-07 | GLS 跟踪可行性 — 公开无鉴权 API 免登录实测可行（明细需目的邮编）；官方 ShipIT/MyGLS 需 GLS 波兰客户号 + WebAPI 开通，纯开发者账号替代不了 | [2026-09-07-gls-poland-track-feasibility.md](2026-09-07-gls-poland-track-feasibility.md) |
 | 2026-08-18 | SPS Commerce API 自动化可行性（Pottery Barn）— 走 Transaction API + M2M，已实测读/写/删 | [2026-08-18-sps-commerce-api-feasibility.md](2026-08-18-sps-commerce-api-feasibility.md) |
 | 2026-07-24 | 统一 AI 接入 C′ — 双 PoC 实施计划（壳 OWUI + 板 IvyeaOps 赛狐只读） | [2026-07-24-unified-ai-access-poc-plan.md](2026-07-24-unified-ai-access-poc-plan.md) |

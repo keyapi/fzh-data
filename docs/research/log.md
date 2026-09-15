@@ -7,6 +7,14 @@ description: docs/research 目录变更历史
 
 # 变更日志
 
+## 2026-09-15
+
+- **新增**: [2026-09-15-shenzhen-office-egress-and-chatgpt-business.md](2026-09-15-shenzhen-office-egress-and-chatgpt-business.md) — 深圳办公室海外出口 + ChatGPT Business。读取并复核 ChatGPT 分享对话（`chatgpt.com/share/6aa8d85e-…`），结合项目实际网络资产调研。
+- **关键结论**: ① 封号角度"公司统一出口"**比**"各自翻墙"更危险——"共享代理出口"是 OpenAI 风控首要扣分项且**一人违规全段连坐**（北京 8 人共用出口 IP 正命中）；② ChatGPT 与 Codex **共用同一账号体系**，"Codex 走近端 + 网页版走翻墙"不能隔离风险；③ 因此"深圳放设备"的理由只能是**管控**，不是封号；④ ①官方网页版 + ②不发凭证给员工 + ③不上设备 三者不可兼得。
+- **纠正既有文档**: 翻墙主线路在 **2026-08 更换过订阅供应商**（`us_openai_api_proxy/docs/log.md` v0.14）；`.codex_tmp/sellfox-suite-pairing-audit/` 下的 `operations.md` 记载的是**迁移前的旧供应商**，是**历史快照**，勿当现值。供应商名/私有地址/隧道拓扑按模块隐私边界不入库。
+- **实证来源**: 2023-04 与 2026-06 两次大规模封号记录、2026 三层风控机制、扣分项清单（含"美国住宅宽带 + 苹果内购仍被封"的被动污染案例）、V2EX 企业版讨论（"正常企业即使被 ban 也可以恢复"）。**诚实空白**：未找到中国公司 Business workspace 被封的公开案例。
+- **落点**: 接受现状（深圳各自翻墙）+ 五条纪律（线路固定不跨国跳 / 非 AI 流量不走 AI 出口 / 一人一号 / 美国分公司实体卡一卡一号 / 邮箱避开 Outlook+共享 IP），¥0 当天可做。
+
 ## 2026-09-07
 
 - **新增**: [2026-09-07-gls-poland-track-feasibility.md](2026-09-07-gls-poland-track-feasibility.md) — GLS（波兰分公司自发货）跟踪可行性。结论：读轨迹**不需开发者账号**——公开无鉴权 REST `gls-group.com/app/service/open/rest/PL/en/rstt029`(摘要) / `rstt028/{no}?postalCode=…`(全量明细) 免登录实测 200(样本 `29626585597`/邮编 21706，history 10 条覆盖建标/收件/交付)；官方 ShipIT/MyGLS 走 GLS 波兰客户(ADE plus/Uni-Portal) + office@gls-poland.com 开通 WebAPI，纯 dev portal 注册替代不了。分支 `feature/gls-track-research`。

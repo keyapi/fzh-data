@@ -1,8 +1,8 @@
 ---
 type: skill
 name: us-openai-api-proxy
-description: CLIProxyAPI 的可用性、认证恢复和受控运维入口
-version: 0.1.0
+description: CLIProxyAPI 的可用性、认证恢复和受控运维入口；含办公室网络现值来源优先级
+version: 0.2.0
 triggers:
   - "CLIProxyAPI"
   - "auth_unavailable"
@@ -10,16 +10,28 @@ triggers:
   - "OpenAI API Proxy"
   - "US AI Proxy"
   - "模型授权失败"
+  - "办公室网络"
+  - "深圳办公室出口"
+  - "OpenClash 订阅"
 ---
 
 # US OpenAI API Proxy Skill
 
 ## 新对话必读
 
-1. `us_openai_api_proxy/AGENT_HANDOFF.md`：模块状态、升级与升级后的验收入口。
+1. `us_openai_api_proxy/AGENT_HANDOFF.md`：模块状态、「判断当前配置的可信来源顺序」、升级与验收入口。
 2. `us_openai_api_proxy/docs/operations.md`：脱敏运维 runbook。
 3. `docs/solutions/integration-issues/cliproxyapi-auth-unavailable-oauth-recovery.md`：
    `503 auth_unavailable` 的诊断和恢复边界。
+4. 需要「办公室现在用什么供应商/端点」时，先读
+   `docs/solutions/documentation-gaps/module-current-config-source-of-truth.md`。
+
+## 判断当前配置（本模块的高频坑）
+
+- **`.codex_tmp/` 下的一切是历史快照，不是现值。** 曾有一次调研把其中的旧订阅供应商当成办公室现值。
+- `docs/log.md` 是刻意的脱敏日志：**日期与变更描述可信，细节被隐去是有意的**，不要拿它去别处「补名字」。
+- 被隐去的具体值可能出现在 `docs/solutions/` 其他文档的交叉引用里，但那是二手信息，需二次确认。
+- 当前值属于**要向用户或受控环境（模块 `.env`，在父仓库）确认的未决项**。
 
 ## 处理规则
 

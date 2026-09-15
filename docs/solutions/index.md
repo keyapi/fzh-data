@@ -10,6 +10,7 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-09-15 | 判断模块「当前配置」的可信来源顺序 — `.codex_tmp/` 快照与脱敏文档都不是现值 | [documentation-gaps/module-current-config-source-of-truth.md](documentation-gaps/module-current-config-source-of-truth.md) |
 | 2026-09-08 | CLIProxyAPI `auth_unavailable`：升级、浏览器 OAuth 与真实模型验收 | [integration-issues/cliproxyapi-auth-unavailable-oauth-recovery.md](integration-issues/cliproxyapi-auth-unavailable-oauth-recovery.md) |
 | 2026-09-08 | parcel_track 处理天数统一 3 个营业日与 per-carrier 顺序并发 | [conventions/parcel-track-handling-days-sequential-workers.md](conventions/parcel-track-handling-days-sequential-workers.md) |
 | 2026-09-08 | new-api/sellfox-proxy 离职自动封号不可靠——双通道检测加固（60121 + identity_map + audit） | [integration-issues/dingtalk-offboarding-hardening.md](integration-issues/dingtalk-offboarding-hardening.md) |
