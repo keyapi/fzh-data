@@ -40,6 +40,28 @@ tags: [openai, api-proxy, handoff, authentication]
 
 设备代码授权可能受工作区管理员策略禁用；不得尝试绕过策略。
 
+## 判断「当前配置」的可信来源顺序
+
+需要本模块**现在**是怎么配的时候（供应商、端点、拓扑），按此顺序取信，别拿快照当现值：
+
+| 层 | 内容 |
+|---|---|
+| **权威** | 模块现值 `docs/`、`docs/log.md`（日期与变更描述可信，细节可能刻意隐去）、本 `AGENT_HANDOFF.md`、gitignored `.env`（在父仓库） |
+| **陷阱** | `.codex_tmp/` 下的一切（历史快照，其中供应商已停用）；以及**把脱敏文档当成完整文档来读** |
+| **桥梁** | `docs/solutions/` 中其他文档的交叉引用常点名被隐去的具体值，但是二手信息，需二次确认 |
+| **未决项** | `docs/log.md` 记录了细节被隐去的变更时，「当前值是什么」是要向用户/受控环境确认的未决项，**不能从旧快照还原** |
+
+完整推理与实例见 [docs/solutions/documentation-gaps/module-current-config-source-of-truth.md](../docs/solutions/documentation-gaps/module-current-config-source-of-truth.md)。
+
+## 办公室网络相关
+
+本模块同时承载**北京办公室网络**的现状记录（该主题不属于 CLIProxyAPI 服务本身）：
+
+- [docs/office-lan-access.md](docs/office-lan-access.md) — 北京办公室拓扑、Tailscale 实施、深圳/外网访问方案
+- [docs/lan-gateway.md](docs/lan-gateway.md) — 局域网网关（同事零安装共享 CLIProxyAPI）
+- 深圳办公室海外出口的调研结论（**方案未落地，仍待决策**）见
+  [docs/research/2026-09-15-shenzhen-office-egress-and-chatgpt-business.md](../docs/research/2026-09-15-shenzhen-office-egress-and-chatgpt-business.md)
+
 ## 隐私与变更边界
 
 - 不输出或提交账号、OAuth URL/callback/state/code、认证文件名或内容、token、API key、私有地址和完整请求体。

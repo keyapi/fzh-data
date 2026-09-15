@@ -9,6 +9,12 @@ tags: [openai, api-proxy, changelog]
 
 > 此日志只记录可公开复用的结论。服务器、账号、授权材料、私有地址、订阅与访问凭据均不入库。
 
+## 2026-09-15 (v0.16)
+
+- 补充「判断当前配置的可信来源顺序」：现值 `docs/` 与 `docs/log.md`（日期可信、细节可能刻意隐去）+ `AGENT_HANDOFF.md` + gitignored `.env` 为权威来源；`.codex_tmp/` 下的一切是历史快照、不是现值；脱敏文档不可当完整文档读。起因：一次调研把迁移前的快照当成办公室当前订阅供应商。
+- 记录办公室网络主题在本模块的入口（`office-lan-access.md`、`lan-gateway.md`）与深圳海外出口调研的未决结论。
+- 依然不记录供应商名、私有地址、隧道拓扑与订阅凭据。
+
 ## 2026-09-08 (v0.15)
 
 - 处理 CLIProxyAPI `503 auth_unavailable`：确认 systemd active 与基础健康检查不等于目标模型有可用上游授权。
