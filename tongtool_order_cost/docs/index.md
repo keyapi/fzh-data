@@ -19,5 +19,6 @@ timestamp: 2026-09-14
 | 费率表训练口径调研 + 实测 | [research/2026-09-14-rate-table-training-methodology.md](research/2026-09-14-rate-table-training-methodology.md) |
 | 六月 FBA 过程 | [research/](research/) |
 | 历史尾程缺陷与方法选择经验 | [solutions/](solutions/) |
+| 整包价分摊的前后对比（可复算） | `scripts/verify_package_allocation.py` |
 | 经验教训 | [lessons/](lessons/) |
 | 变更历史 | [log.md](log.md) |
