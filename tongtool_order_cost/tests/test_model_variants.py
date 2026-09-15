@@ -219,23 +219,17 @@ def test_predict_prefers_finest_published_level_then_returns_zero():
     assert set(MODERN_LEVELS[0][1]) >= {"国家", "通途SKU", "美国ZIP3", "观察重量阶梯"}
 
 
-def test_prediction_does_not_scale_with_quantity():
-    """历史预估是整包价：发货数量 1/2/3 必须得到同一费用。"""
-    rows = [
-        {"包裹号": f"P{i}", "通途SKU": "SKU-A", "邮编": "07001", "物流商运费": "150"}
-        for i in range(60)
-    ]
-    observations = grid(rows)
-    tiers, _ = build_variant_tiers(observations, min_samples=5, min_months=1, exclusive=False)
-    base = {
-        "国家": "US", "标准仓库": "USNJ", "标准渠道": "VITE", "通途SKU": "SKU-A",
-        "美国ZIP3": "070", "目的地邮编首位": "0", "观察重量阶梯": "(4,5]kg",
-    }
-    target = pd.DataFrame([
-        {**base, "发货数量": 1},
-        {**base, "发货数量": 2},
-        {**base, "发货数量": 3},
-    ])
-    prediction = predict_with_variant(target, tiers, scheme="zone_first")
-    assert prediction.iloc[0] > 0
-    assert prediction.iloc[0] == prediction.iloc[1] == prediction.iloc[2]
+def test_observation_fee_is_package_total_not_per_unit():
+    """回归：`观察费用` 必须是整包总额。若有人把它按件数折成单价，此测试会失败。
+
+    注：这条性质无法在 `predict_with_variant` 上验证（该函数不读件数，断言会永真），
+    必须在「观察值构造」这一层锁定。
+    """
+    observations = add_outlier_flags(
+        build_package_observations(prepare_order_rows(order_rows([
+            {"包裹号": "P1", "通途SKU": "SKU-A", "发货数量": "3", "物流商运费": "120"},
+        ]), "202601"))
+    )
+    assert int(observations.loc[0, "发货数量"]) == 3
+    assert observations.loc[0, "观察费用"] == pytest.approx(120.0)
+    assert observations.loc[0, "费用来源"] == "物流商运费"
