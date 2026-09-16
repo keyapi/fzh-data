@@ -7,6 +7,23 @@ description: docs/ai-ops-pilot 目录变更历史
 
 # 变更日志
 
+## 2026-09-16（夜）新增 Workspace Agent 能力边界调研（工程下钻）
+
+- **新增 `workspace-agent-capability-boundary-2026-09.md`**：回答 `brief-for-boss.md` **R1** 点名的五个工程问题——创建/编辑形态、上传物与代码执行、工具接入（含私网）、权限治理、可维护性，并逐项与仓库 Git 化方式对比。
+- **方法**：`help.openai.com` 对自动化抓取返回 403，改用公开 reader 代理按原 URL 读正文；另从 `developers.openai.com`、`cdn.openai.com`（安全白皮书 PDF，经 PyMuPDF 抽取）直取。结论只取可逐句引用的官方表述。
+- **五项结论**：
+  1. **创建/编辑 = 平台内表单 + 对话式生成，无可导入/导出的定义文件**，进不了版本控制。程序化路径只有 Codex Workspace Agents 插件（beta），且**不能碰已有文件与 skill 文件**。
+  2. **唯一可双向进出的载体是 Skill**（可上传、管理员可 Download）；**GitHub 插件市场**是「GitHub → 平台」单方向、按天同步的 JSON 目录，且只同步插件包、不同步 agent 定义。
+  3. **工具必须 MCP 且必须远程**；私网走 **Secure MCP Tunnel**（出站单向、不用开公网、需常驻 `tunnel-client`）。Business 档位**只有 Admin/Owner** 能开 developer mode 与发布 app，且 **app 发布后不能原地改，只能重建**。
+  4. Agent **可原地更新**（草稿→发布）且有**版本历史可回滚**；但 **Business 无 diff**，**完整审计（Compliance Platform/API）只在 Enterprise/Edu**。
+  5. **多人协作无实时合并**（Save conflict 覆盖本地草稿）；**定义不可导出 → 环境迁移=手工重建**；**锁定风险高**。
+- **对 R1 的回填**：给出「载体形式 / 输入输出边界 / 发布权限」的确定答案（见新文档 §10.4）。
+- **新增三条操作约束**：① 用 Skill 当 Git↔平台的同步物；② Agent instructions 必须回写 Git（平台无导出，否则重建即丢失）；③ 首期只发只读 MCP 工具。
+- **时间敏感项**：Custom GPT 退役时间表（09-25 停止创建、12-11 退役）**正落在试点窗口内**，且迁移不带走 custom actions 与模型选择。
+- **发现 1 处官方口径不一致**（Business 档位 RBAC 粒度：agent 层 vs plugin/app 层），已单列不做平均。
+- **8 项明示「未核实」**，其中最关键的是「上传的代码是否执行、在何沙箱」——官方文档未记载，故不作「上传脚本即可运行」的假设。
+- **未修改 `brief-for-boss.md`**：逐条核对后未发现与该调研冲突的事实错误。
+
 ## 2026-09-16（夜）对外件 v1.3.1 — 删去 Q3
 
 - **删除 Q3（席位按月/按年、能否退出）**：用户确认席位「肯定能退」，ChatGPT Business 每席 $25/月 或 $20/年。这不是问题。
