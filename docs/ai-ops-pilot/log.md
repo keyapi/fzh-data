@@ -7,6 +7,19 @@ description: docs/ai-ops-pilot 目录变更历史
 
 # 变更日志
 
+## 2026-09-16（下午）对外件
+
+- **新增对外件**：`brief-for-boss.md`（v1.0）——「双层单文件」格式：第 1 节人读（打印版只有这一节，已出 A4 一页 PDF），第 2 节起为 R1–R4 编号条目供老板的 Agent 逐条核对，第 3 节为回执协议（接受 / 需讨论 / 不接受）。
+- **口径转变**：从「反提案（挑错）」改为「配套建议（让计划自己的 G2/G4 关口能判达标）」。同一批事实，不同立场。
+- **对外版剔除三处**（经用户判断）：
+  - 不提项目既有 `ai_access_poc/`（老板倾向重新搭建）
+  - 不提「AI 负责人专职/兼职、助手 4 个降到 2 个」（无实益）
+  - 不提「第 30 天绑定可量化业务指标」（对 AI 负责人不利，赛狐无写 API 时无法达成）
+- **责任边界改写**：不再用「我不认领」的表述，改为 R4「每个助手要有业务 Owner，且落到具体的人」，通过治理设计自然划出边界。
+- **`counter-proposal.md` 降级为内部底稿**：加醒目警示，frontmatter 标注「不上会」，对外改指 `brief-for-boss.md`。
+- **交付形式依据**（2026 业界现状）：Markdown + YAML frontmatter 是 Agent 原生格式（AGENTS.md 2025-12 已捐入 Linux Foundation 的 Agentic AI Foundation；Vercel 基准：内联文档通过率 100% vs 工具检索 53%）；llms.txt 面向网站爬虫、97% 零抓取，不适用单 Agent 交付。PDF 仅用于人读。
+- **PDF 不入库**：受 AGENTS.md 第 9 条限制，一页纸输出到仓库外的 `D:\Work\AI\`（与老板原计划 PDF 同目录）。
+
 ## 2026-09-16
 
 - **新增平台调研**：`assistant-platform-research-2026-09.md`，基于官方资料复核 ChatGPT Business Workspace Agents、Company Knowledge、远程 MCP app，以及 Dify、n8n、Copilot Studio、Google Agent Platform、Open WebUI 的能力边界。

@@ -1,13 +1,18 @@
 ---
 okf: v0.1
 type: Spec
-title: AI 运营试点计划 — 三处修改建议（一页纸）
-description: 面谈用的 A4 一页纸反提案：三处最小修改 + 五个问题 + 角色边界
-tags: [ai-pilot, counter-proposal, one-pager]
+title: AI 运营试点计划 — 三处修改建议（内部底稿）
+description: 【内部参考，不上会】面谈前的对抗性底稿：三处修改 + 五个问题 + 角色边界。对外请用 brief-for-boss.md
+tags: [ai-pilot, counter-proposal, internal-only]
 timestamp: 2026-09-15
 depends_on:
   - docs/ai-ops-pilot/assessment.md
 ---
+
+> **⚠️ 内部底稿，不要递给老板。**
+> 本文是面谈前的思考底稿，语气偏「反提案」（挑错式），且含三处已决定不出现在对外的内容
+> （项目既有 PoC、专职/兼职与助手数量、可量化指标判据）。
+> **对外请使用 [brief-for-boss.md](brief-for-boss.md)** —— 同样是那三条建议，但改成了「让计划自己的关口能判达标」的协作口径。
 
 # AI 运营试点计划 — 三处修改建议
 

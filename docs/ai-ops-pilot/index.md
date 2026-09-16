@@ -12,9 +12,10 @@ tags: [ai-pilot, assessment, ops, index]
 
 | 你需要… | 读这个 |
 |---------|--------|
-| 带去开会的一页纸 | [counter-proposal.md](counter-proposal.md) |
-| 完整评估（逐章点评 + 项目现状证据） | [assessment.md](assessment.md) |
+| **递给老板和老板 Agent 的（对外）** | [brief-for-boss.md](brief-for-boss.md) |
 | 2026-09 企业助手/Agent 载体与架构调研 | [assistant-platform-research-2026-09.md](assistant-platform-research-2026-09.md) |
+| 完整评估（逐章点评 + 项目现状证据） | [assessment.md](assessment.md) |
+| 内部底稿（不上会） | [counter-proposal.md](counter-proposal.md) |
 | 变更历史 | [log.md](log.md) |
 
 ## 本 bundle 与其他文档的关系

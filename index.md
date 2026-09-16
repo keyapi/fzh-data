@@ -23,7 +23,7 @@ generated: 2026-09-16
 | **amazon_pairing** | 12 | Handoff, Index, Log, Reference | [amazon_pairing/](amazon_pairing/) -> [amazon_pairing/docs/index.md](amazon_pairing/docs/index.md) |
 | **channel_account_sync** | 13 | Index, Lesson, Log, Reference | [channel_account_sync/](channel_account_sync/) -> [channel_account_sync/docs/index.md](channel_account_sync/docs/index.md) |
 | **dingtalk** | 2 | index, log | [dingtalk/](dingtalk/) -> [dingtalk/dingtalk_robot/docs/index.md](dingtalk/dingtalk_robot/docs/index.md) |
-| **docs** | 96 | ?, Handoff, ImplementationPlan, Index | [docs/](docs/) -> [docs/research/index.md](docs/research/index.md) |
+| **docs** | 97 | ?, Handoff, ImplementationPlan, Index | [docs/](docs/) -> [docs/research/index.md](docs/research/index.md) |
 | **erpnext** | 5 | Index, Log | [erpnext/](erpnext/) -> [erpnext/docs/index.md](erpnext/docs/index.md) |
 | **fedex_track** | 3 | Index, Log, Reference | [fedex_track/](fedex_track/) -> [fedex_track/docs/index.md](fedex_track/docs/index.md) |
 | **gls_track** | 2 | Index, Log | [gls_track/](gls_track/) -> [gls_track/docs/index.md](gls_track/docs/index.md) |
@@ -300,7 +300,8 @@ generated: 2026-09-16
 | Solution | 浏览空表 ≠ 拉取失败 — VERCART 搜索词/定向复验 | [docs/solutions/best-practices/sellfox-empty-searchterm-vs-target-report-split.md](docs/solutions/best-practices/sellfox-empty-searchterm-vs-target-report-split.md) | 2026-07-28 |
 | Solution | 群晖 NAS 多域名访问 — OpenWrt ACME、DSM 反代与 QuickConnect 选路 | [docs/solutions/integration-issues/nas-multi-domain-access-openwrt-quickconnect.md](docs/solutions/integration-issues/nas-multi-domain-access-openwrt-quickconnect.md) | 2026-08-31 |
 | Solution | 赛狐 Phase2 ingest — IvyeaOps 五杠杆优化器数据接线 | [docs/solutions/architecture-patterns/sellfox-ivyeaops-five-lever-ingest.md](docs/solutions/architecture-patterns/sellfox-ivyeaops-five-lever-ingest.md) | 2026-07-28 |
-| Spec | AI 运营试点计划 — 三处修改建议（一页纸） | [docs/ai-ops-pilot/counter-proposal.md](docs/ai-ops-pilot/counter-proposal.md) | 2026-09-16 |
+| Spec | AI 运营试点计划 — 三处修改建议（内部底稿） | [docs/ai-ops-pilot/counter-proposal.md](docs/ai-ops-pilot/counter-proposal.md) | 2026-09-16 |
+| Spec | AI 运营试点计划 — 落地配套建议 | [docs/ai-ops-pilot/brief-for-boss.md](docs/ai-ops-pilot/brief-for-boss.md) | 2026-09-16 |
 | Spec | 统一 AI 接入 C′ — 双 PoC 实施计划 | [docs/research/2026-07-24-unified-ai-access-poc-plan.md](docs/research/2026-07-24-unified-ai-access-poc-plan.md) | 2026-07-24 |
 | feat | Multi-Carrier Parcel Track - Plan | [docs/plans/2026-09-07-001-feat-multi-carrier-track-plan.md](docs/plans/2026-09-07-001-feat-multi-carrier-track-plan.md) | 2026-09-08 |
 | solution | erpnext-workflow-configuration.md | [docs/solutions/erpnext-workflow-configuration.md](docs/solutions/erpnext-workflow-configuration.md) | 2026-07-03 |
@@ -413,7 +414,7 @@ generated: 2026-09-16
 
 | Type | Title | Path | Updated |
 |------|-------|------|---------|
-| Index | fzh-data - Project Doc Index | [index.md](index.md) | 2026-09-09 |
+| Index | fzh-data - Project Doc Index | [index.md](index.md) | 2026-09-16 |
 
 ### sellfox-api-proxy
 
