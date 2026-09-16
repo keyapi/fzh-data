@@ -99,18 +99,60 @@ meeting-follow-up/
 
 → **所以：我们可以把「说明类 skill」按 OpenAI 的格式另做一份导出，但不能指望现有 Claude 插件原样搬到 ChatGPT。**
 
-## 4. 赛狐 API 拉广告报告，在共享 Project 里可行吗
+## 4. 赛狐 API 拉广告报告：三条路的准确比较（v2 更正）
 
-**先厘清 v2 那条限制的准确含义**：我用词不够精确。「共享项目里用不了 Google Drive / Slack 链接源」指的是 **ChatGPT 内置的项目「链接源」连接器**（官方文档说这些源在 **private project** 里打开）。**赛狐 API 不是 ChatGPT 的连接器**，所以它既不属于「能用」也不属于「不能用」——它是**另一条路**。
+**先更正 v1 的建议。** v1 说「先走『脚本产出→手动上传文件』」——**这个建议是错的**：那样等于没有自动化，用户指出「一个账号十几个报告，今天下载明天更新，谁一天到晚手动下载」完全成立。正确认识是：**本地桌面路径本来就能真正自动跑**（详见 [work-vs-codex-and-local-automation-2026-09.md](work-vs-codex-and-local-automation-2026-09.md)）。
 
-**实际可走的两条路**：
+### 4.1 三条路
 
-| 路线 | 可行性 | 代价 |
-|------|--------|------|
-| **离线跑脚本 → 把输出文件传进项目** | ✅ 可行。脚本在我们自己的机器/服务器跑，产物（CSV/Excel/MD）上传到共享 Project，ChatGPT 就能 `draw from` 它 | 手动或半自动，非实时 |
-| **把赛狐包成自定义 MCP app** | ⚠️ 技术上可行，但 Business 下**只有 Admin/Owner 能开 developer mode、只能由 Admin/Owner 发布**；必须**远程 MCP**（内网走 Secure MCP Tunnel）；声明 MCP 的插件**仅桌面端** | 需要常驻隧道客户端 + 管理员操作 + 只读工具设计 |
+| 路径 | 自动化程度 | 前提 | Business 可用？ |
+|------|-----------|------|----------------|
+| **A. 本地桌面 + 定时任务** | **高**（每日本机自动跑） | 网络开、目录 trusted、无人值守审批关、机器常开 | ✅ **首选** |
+| **B. 公网 HTTPS MCP server** | 高（workspace 级，无需开机） | 服务器公网可达；管理员开 developer mode 并发布 | ✅ 可行 |
+| **C. Secure MCP Tunnel** | 高 | 需 Platform 组织 + Tunnels 权限 + 常驻守护进程 | ❌ **实测不可用**（见 4.3） |
+| ~~D. 手动上传文件进 Project~~ | 无 | — | ✅ 但**不叫自动化**，只作「给人看的交付物」 |
 
-→ **对试点的建议：先走第一条路。** 广告报告本来就是离线脚本产物，上传文件即可，不需要为了「实时」付出 MCP 的全部运维代价。
+### 4.2 「Desktop only」标记是什么意思
+
+官方原文（help 20001256 FAQ）：
+
+> `A plugin marked **Desktop only** cannot run in ChatGPT on the web. **Imported plugins can receive this label when they declare MCP servers, such as in mcp.json or .mcp.json, even if a server uses a remote HTTPS URL.**`
+
+- 触发条件：**导入的插件声明了 MCP server**——**就算 URL 是远程 HTTPS 也照样被标**。
+- 原因（推断）：web 端只能连远程 MCP，而 MCP 进程通常要由桌面端拉起；打包期无法判定你的 MCP 实际跑在哪，于是**保守判定为需要桌面运行时**。引用 `.app.json` 也**不能**解除。
+- → 对你们的含义：**这不是坑，反而说明「要跑脚本就该走桌面端」**。
+
+### 4.3 Secure MCP Tunnel 在 Business 上不可用（更正 v1）
+
+- 官方 changelog 原文只说：`Released Secure MCP Tunnel for **enterprise** customers.`
+- **Business 发布说明里 "tunnel" 出现 0 次**（全文检索）。
+- 社区大量 Business/Plus 用户报告 tunnel 下拉为空、403 `tunnel_principal_association_unverified`。
+- 权限门槛也高：**Platform 组织级**（`Tunnel permissions are organization-level, not project-level`），建/改需 Tunnels **Read+Manage**，运行客户端需 **Read+Use**。
+- 且**掉线即全断**：`If the client is not connected, requests through the tunnel fail until tunnel-client reconnects.`
+
+→ **结论：隧道这条路的公开文档口径是 Enterprise 专属，Business 支持属「未核实」，实战上不可用。** v1 把它当作可选路径是错的。
+
+### 4.4 「常驻隧道 + 管理员操作」白话解释
+
+- **常驻组件** = `tunnel-client`，一个**你们自己跑的开源进程**，放在能访问内网 MCP 的机器上，**出站长轮询**向 OpenAI 取活、转发给内网服务、再把结果回传。**不需要入站、不用开公网。**
+- **管理员操作** = Business 下**只有 Admin/Owner 能开 developer mode、能发布 app**，普通成员连 app 都建不了。
+- 两者叠加意味着：**走这条路要同时付出「一台常驻机器」+「管理员全程操作」两个代价**——所以在 Business 上不划算（且隧道本身用不了）。
+
+### 4.5 凭证到底放哪（`.env` 类比一半对）
+
+| 方式 | 密钥位置 | 谁能读 |
+|------|---------|--------|
+| (a) 本地 `.env` + gitignore | **你本机磁盘** | 本机进程 |
+| (b) MCP server 持有 | **我方服务器** | 我方服务 |
+| (c) 把 API key 填进 ChatGPT 插件配置 | **此通道不存在** | — |
+
+**平台不支持**机器对机器凭证：官方明确 `does not support machine-to-machine OAuth grants such as client credentials, service accounts, or JWT bearer assertions, **nor can it present custom API keys** or customer-provided mTLS certificates.` ChatGPT 侧唯一的一等公民是 **OAuth**。
+
+- **桌面/Codex 侧**才允许静态凭证：`mcp_servers.<id>.bearer_token_env_var`（`token 从环境变量读取，不落文件`）、`env_http_headers`、`mcp_oauth_credentials_store = auto|file|keyring`。
+- **你们类比对的部分**：密钥不进 git、不暴露给模型。
+- **错的部分**：位置是反的——MCP 模式下 secret 在**服务端**，ChatGPT 只拿 OAuth token；而且**没有**「把 key 贴进 ChatGPT 配置」这种官方入口。
+
+→ **实务结论**：沿用 `(a)` 最简单——**凭证留本机 `.env`，脚本在本机跑**（路径 A）。需要 workspace 级共用时再上 `(b)` 自建公网 MCP server，**别指望隧道**。
 
 ## 5. 自托管方案：qm 与替代品
 
@@ -161,9 +203,10 @@ meeting-follow-up/
    - **执行类 skill**（要跑脚本、用凭证）→ 留在本地/服务器 + MCP，或继续走 Git + Claude Code，**不要指望搬进 ChatGPT Web**。
 2. **私有仓库可以用**，但**用组织级专用 GitHub 账号导入**，不要用个人号。
 3. **版本冻结用 commit pinning**；需要跟进更新再用 branch。
-4. **赛狐报告先走「脚本产出 → 上传文件」**，不要为实时性先上 MCP + Tunnel。
+4. **赛狐广告报告走「本地桌面 + 定时任务」**，不是手动上传，也不要上隧道（Business 不可用）。凭证留本机 `.env`。
 5. **自托管（qm 等）暂不作为试点方案**：它解决的是「多人共享 skill」，付出的是一台常驻基础设施 + 专职运维。**等试点跑出真实需求轮廓再评估。**
 6. **若要找托管版的对口方案**，先去看 **LangSmith Context Hub**（确认是否有企业自托管）。
+7. **【已排除】Open WebUI 路线**：用户此前已简短测试并在项目中有记录，也给老板演示过 5 分钟。排除理由（用户提供）：老板**不关心 skill**、项目侧用 DeepSeek API **效果打折扣**、GPT 官方 API **贵**、非正规渠道**不敢用**。**老板本人熟悉且偏好 ChatGPT Plus** → 本次试点的合理起点就是 ChatGPT Business，不必再绕自建前台。
 
 ## 7. 未核实清单
 

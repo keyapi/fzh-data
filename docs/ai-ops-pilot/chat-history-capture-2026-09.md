@@ -157,10 +157,24 @@ Codex 的 `local ↔ cloud` 交接确实存在，但**只在 Codex 内部**（�
 | Enterprise Privacy 页（Business FAQ） | **法务/承诺页** | 管理员**可以**查看、访问、导出、删除 |
 | Managed Account Notice 20001067 | **法务/承诺页** | 管理员**可能可以**访问、导出、审计、保留、删除（含会话历史），**若组织配置与法律允许** |
 
-**v3 处置**：
-- 产品文档说「不会自动可见」，法务文档说「有权利」——层级不同，后者带 `where enabled` 限定语。
-- **Business 后台是否真有可点的「查看成员会话」入口，官方文档未描述 → 未核实。**
-- **行动项（重要）：采购前把这个问题书面提给 OpenAI 销售/支持，拿到明确答复再决定。** 不要靠推测排期，也不要在上会材料里写成「能实现」。
+**v4 结论（用户追问「网上肯定有标准答案」后，追加一轮取证）**：
+
+> **判定：Business 的 owner 在后台看不到成员对话内容，也没有任何导出成员对话的途径。置信度约 85%。**
+> 「管理员可查看/导出」的措辞**极可能是法律权利语言，而非已上线的产品功能**。
+
+支撑「不能」的证据（更具体、更新）：
+
+- **官方定价对比页** `Compliance API Logs Platform`：**Business = No / Enterprise = Yes**；同页 Business 为 No 的还有 **SCIM、RBAC、Analytics dashboard、IP allowlisting、数据驻留**——且**没有任何一行**涉及对话查看/导出。
+- **`learn.chatgpt.com/work-admin-faq`**：`For **eligible Enterprise and Edu** workspaces, the Compliance Logs Platform provides Work user prompts and agent responses.`
+- **微软 Purview 文档**（强旁证）：前置条件是 `**ChatGPT Enterprise plan** — the connector support applies to the enterprise version`，**未提 Business**。
+- **17 家 eDiscovery/DLP 合作方**全部命名为「ChatGPT Enterprise」。
+- **The Register（2026-07-23，独立媒体）**：`**Business users have no built-in alternative.**`
+
+判定「能」的两条**只给结论、不给机制**：Enterprise Privacy 页（Business FAQ）与 Managed Account Notice 20001067。判为法律语言的四条理由：① 同页 Enterprise 条目**点名了机制**（Compliance API），Business 条目没有；② 20001067 是一揽子法务告知，必须覆盖 Enterprise，取最宽表述并加 `where enabled` 限定；③ 产品对比页明标 No，若是已上线功能不可能标 No；④ 媒体与工具商实测均无此功能。
+
+**仍未闭环的一点（如实记录）**：社区（LINUX DO，2026-08-03）有人称在 Business 后台**看到过导出选项**（点了等邮件），但**无人确认邮件是否送达、也未确认导出的是否为成员对话**（可能只是自身数据或串味）。距 The Register 报道仅 11 天，**可能是灰度**。官方文档间的矛盾至今未澄清。
+
+→ **行动建议**：按「不能」规划；若老板坚持，用 owner 账号**实测**一次导出路径即可闭环。
 
 ## 6. Enterprise 到底怎么实现（已核实）
 

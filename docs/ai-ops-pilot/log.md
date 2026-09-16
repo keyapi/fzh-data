@@ -7,6 +7,38 @@ description: docs/ai-ops-pilot 目录变更历史
 
 # 变更日志
 
+## 2026-09-16（凌晨）v4 — 修正三处、新增本地自动化方案
+
+**背景**：用户对 v3 提出多组追问（离职能否保席位改密码、Work 是不是 Codex 改名、额度到底共不共享、手动上传不叫 Agent、MCP/隧道/Desktop only 是什么、Business 管理员能不能看会话到底有没有标准答案）。用 5 个并行 subagent 核实。
+
+### 修正的三处（都是我此前说得不准）
+
+1. **额度不是「跨席位共享」**。`shared allowance and credit pool` 里的 shared 指**同一席位内跨产品共用**（Codex/Work/Excel/Agents 共用一份，用爆 Codex 就没 Work）；**每席位的内含额度不跨席位共享**。工作区 credit pool 是另一回事，**订阅不含免费余额，只能买**。→ 用户「2 个席位 = 2 份额度」的直觉**是对的**。
+2. **「脚本产出→手动上传」不该作为主路径**。用户指出这不算自动化，**成立**。正确路径是**本地桌面 + 定时任务**（详见下）。v1/v2 的建议已作废。
+3. **Secure MCP Tunnel 在 Business 上不可用**。官方 changelog 只说 `Released Secure MCP Tunnel for **enterprise** customers`，Business 发布说明全文 0 次提及；社区实测下拉为空/403。v1 把它列为可选路径是错的。
+
+### 新增 `work-vs-codex-and-local-automation-2026-09.md`
+
+- **Work ≠ Codex 改名**：`ChatGPT includes Chat and Work, plus Codex in the desktop app`；桌面端是**三个并列体验**，Codex 仍是独立视图、独立历史、独立管理开关（Work Cloud / Work Local / Codex Local）。用户说对的是**独立 Codex App 确实并入了新桌面应用**。
+- **本地能跑脚本、能调 API**（沙箱三档，可 `run routine local commands`）；但**三处硬约束**：① 网络**默认关闭**，需 `network_access = true`；② 目录须 `trust_level = "trusted"`，否则降级只读、写不出文件；③ 无人值守需 `approval_policy = "never"`，否则半夜挂起等人确认。
+- **定时任务支持本地执行**（最高每小时，Business 上限 10 个），但 `Keep the computer on and the app running`。**限制是绑定某台机器，不是服务端常驻。**
+- 给出广告报告的正确架构（本地优先），并替换掉此前的手动上传建议。
+
+### 更新 `business-seat-account-and-usage-2026-09.md`
+
+- **§3 离职交接大幅扩写**：「保席位改密码」**不可行且违规**——账号归个人不归公司（官方无 workspace 拥有账号的表述）；Owner **没有改密码/强制登出能力**；Business Terms 3.1/3.2 明文禁止共享凭证，帮助中心警告可能 `workspace deactivation or account suspension`。即便硬做，MFA 在离职者手机上、邮箱能改回密码、还会连带暴露其个人工作区。
+- 明确**唯一合规路径**：移除成员 + 席位转继任者 + **离职前要求本人整理交接文档**。补充 **SCIM 不含在 Business 内**。
+- **§5.4/5.5 重写**：credits **完全可选**，不买则用尽即 block、等重置；无强制超额扣费；autoreload 默认关；**可把 credit maximum 设为 0**（物理零超支）。补上公开数字（Standard 含 **15 Pro messages/月**；5 小时窗口估算 Astra 5–45 / Sol 10–100）。
+
+### 更新 `chat-history-capture-2026-09.md`
+
+- **§5 给出判定**：Business owner **看不到**成员对话、**无导出途径**，置信度 ~85%。「管理员可查看/导出」的措辞判为**法律权利语言而非已上线功能**（四条理由）。新增旁证：定价页 Business 的 SCIM/RBAC/Analytics/IP allowlisting/数据驻留**同为 No**；微软 Purview 要求 Enterprise；17 家 eDiscovery 合作方全为 Enterprise；The Register 报道。**如实保留未闭环项**（LINUX DO 社区有人称见过导出选项，未证实，可能是灰度）。
+
+### 更新 `skill-distribution-and-selfhost-options-2026-09.md`
+
+- **§4 重写**：三条路准确比较（本地优先 / 公网 MCP / 隧道不可用 / 手动上传不算自动化）；解释 **Desktop only** 触发条件（声明 MCP 的导入插件，**即使远程 HTTPS 也标**）；**凭证机制**（平台 `nor can it present custom API keys`，ChatGPT 只认 OAuth；桌面侧才可用 `bearer_token_env_var` 从环境变量读）——用户 `.env` 类比**一半对**（位置是反的）。
+- **新增已排除项**：Open WebUI（用户已测过、老板不关心 skill、DeepSeek 效果打折、官方 GPT API 贵、非正规渠道不敢用）→ 试点起点就是 ChatGPT Business。
+
 ## 2026-09-16（深夜）新增席位/账号模型与 skill 分发调研（v3）
 
 **背景**：用户准备买 2 个 Business 席位，提出一组实操问题（怎么分配、要不要先有个人账号、默认几个 workspace、离职怎么交接、积分池与 5 小时限制、Astra/Sol、GitHub 发布 skill、qm 硬件）。用 5 个并行 subagent 分头核实。
