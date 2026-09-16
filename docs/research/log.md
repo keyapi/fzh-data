@@ -7,6 +7,10 @@ description: docs/research 目录变更历史
 
 # 变更日志
 
+## 2026-09-16
+
+- **新增**: [2026-09-16-webcodex-chatgpt-web-mcp-verification.md](2026-09-16-webcodex-chatgpt-web-mcp-verification.md) — 核实 YouTube 所传 "webcodex"。结论：项目真实但无唯一同名仓库，最匹配 `miuuyy/codex-chatgpt-web`（7,615★/MIT/TS，gh api 实测）；机制 = Electron 浏览器自动化驱动 ChatGPT 网页版 + 官方 `openai/tunnel-client` Secure MCP Tunnel 把工具调用回灌本地 Codex（需 ChatGPT 订阅 + 免费 Tunnel API Key，非纯 API key）。**5 小时限制纠偏**：OpenAI 2026-08-25 为 Plus 恢复 Codex/Work 5h 滚动窗；该项目把负载挪到 Chat 独立额度桶（作者 Discussion #309 引官方「Chat/Work/Codex 独立 allowance」），是换桶不是免单。**ToS 风险中高**：Terms of Use 第 35/37 行 "programmatically extract" + "circumvent any rate limits" 字面命中；封号报告仅轶事级（Gate 广场，无一手证据）。替代路径：官方 Developer Mode + 自建 MCP app（Business/Enterprise beta）。
+
 ## 2026-09-07
 
 - **新增**: [2026-09-07-gls-poland-track-feasibility.md](2026-09-07-gls-poland-track-feasibility.md) — GLS（波兰分公司自发货）跟踪可行性。结论：读轨迹**不需开发者账号**——公开无鉴权 REST `gls-group.com/app/service/open/rest/PL/en/rstt029`(摘要) / `rstt028/{no}?postalCode=…`(全量明细) 免登录实测 200(样本 `29626585597`/邮编 21706，history 10 条覆盖建标/收件/交付)；官方 ShipIT/MyGLS 走 GLS 波兰客户(ADE plus/Uni-Portal) + office@gls-poland.com 开通 WebAPI，纯 dev portal 注册替代不了。分支 `feature/gls-track-research`。

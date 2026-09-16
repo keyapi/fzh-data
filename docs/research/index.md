@@ -10,6 +10,7 @@ tags: [research, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-09-16 | "webcodex" 核实 — 真实项目是 miuuyy/codex-chatgpt-web（7.6k star）；"绕过 5 小时限制"实为把负载换到 Chat 额度桶，非破解；浏览器自动化撞 OpenAI ToS | [2026-09-16-webcodex-chatgpt-web-mcp-verification.md](2026-09-16-webcodex-chatgpt-web-mcp-verification.md) |
 | 2026-09-07 | GLS 跟踪可行性 — 公开无鉴权 API 免登录实测可行（明细需目的邮编）；官方 ShipIT/MyGLS 需 GLS 波兰客户号 + WebAPI 开通，纯开发者账号替代不了 | [2026-09-07-gls-poland-track-feasibility.md](2026-09-07-gls-poland-track-feasibility.md) |
 | 2026-08-18 | SPS Commerce API 自动化可行性（Pottery Barn）— 走 Transaction API + M2M，已实测读/写/删 | [2026-08-18-sps-commerce-api-feasibility.md](2026-08-18-sps-commerce-api-feasibility.md) |
 | 2026-07-24 | 统一 AI 接入 C′ — 双 PoC 实施计划（壳 OWUI + 板 IvyeaOps 赛狐只读） | [2026-07-24-unified-ai-access-poc-plan.md](2026-07-24-unified-ai-access-poc-plan.md) |

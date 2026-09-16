@@ -7,6 +7,57 @@ description: docs/ai-ops-pilot 目录变更历史
 
 # 变更日志
 
+## 2026-09-16 v7 — 新增 SSO / 域名验证 / 离职回收调研
+
+**背景**：公司准备买 ChatGPT Business（2 席位），唯一顾虑是**离职没法干净断权**，并明确说「要是能像 new-api 的钉钉 SSO 那样就好了」。
+
+**新增 `sso-offboarding-and-domain-2026-09.md`**：
+
+- **结论：做不到「IdP 停用即断权」**。Business **支持** SAML + OIDC：`SSO and domain verification are included with ChatGPT Business. Business supports Security Assertion Markup Language (SAML) and OpenID Connect (OIDC).` 但 SSO 只管登录：`SSO controls how someone signs in; it does not invite them to your workspace ... Workspace owners or admins must manage invitations, members, and available seats separately in ChatGPT.`
+- **最关键的一句**：`A user added to the workspace can consume a seat even if their identity-provider access prevents sign-in.` → IdP 停用只挡登录，成员与席位都还在。
+- **无 SCIM（双重证据）**：help/11489188 `A standalone ChatGPT Business plan does not include SCIM, synchronized groups, or automatic directory provisioning.`；help/10011769 适用范围表把 Business 列为 `Not available`；定价对比表 `SCIM` Business=No/Enterprise=Yes。生命周期文档能力表：`Directory synchronization through SCIM | ChatGPT Enterprise, Edu, and Healthcare`。
+- **IdP 清单无固定名单**：设置流程为 `Choose one of the providers shown, such as Okta, Entra, or Custom SAML when available.` SCIM 的长名单（含 Google Workspace）**不可外推到 Business SSO**。
+- **域名验证 ≠ 认领域名**：`Domain verification and domain claiming are different. Verifying a domain does not claim it. Domain claiming is available only for approved use cases and requires a separate request through OpenAI Support or your account team.` → 「验证后员工就不能用公司邮箱开个人号」在 Business 上**不成立**。
+- **会话不可控**：`Active sessions ... is not available for accounts linked to an organization's SSO sign-in, including SAML or OIDC.` 官方只说「改 SSO 策略会踢人」，不说「IdP 停用会踢人」。
+- **真正的即时断权**：`Removing a member ends their workspace access immediately, but will not remove their ChatGPT seat from the workspace's billable seat count.` → 手动两步：移除成员 + 释放席位。另需单独吊销 Codex access token（`suspends existing tokens but doesn't revoke them`）。
+- **「改密码」担忧可放下**：SSO/社交登录建号的账号本就无 OpenAI 密码可改。
+- **3 项未核实**：IdP 停用后已有会话的存活时长；Google Workspace 是否为 Business SSO 原生选项；个人密码账号加入 SSO 工作区后是否仍保留密码登录路径。
+- **旧引文已失效**：搜索引擎缓存的 `No SCIM / AD group sync on the Business plan, so all user provisioning and de-provisioning is manual.` 已不在现行 11489188 页面，**勿再引用**。
+
+## 2026-09-16 v6 — 新增「15 条 Pro 消息」与「个人账号共享 Project」调研
+
+**背景**：用户对两件事提出澄清要求 —— ① `Business Standard includes 15 Pro messages per month` 中的「Pro 消息」指哪个模型、是月度还是 5 小时窗、用尽后降级还是阻断；② 能否用个人账号（尤其个人 Pro）共享 Project 替代 Business 给小组用。
+
+**新增 `pro-messages-and-personal-project-sharing-2026-09.md`**：
+
+- **定义**：`Note that Pro is a model option, not another name for a Premium seat.` Pro 档 = `GPT-5.6 Sol Pro or GPT-6 Pro`，两者**共用**同一份 15 条/月：`Switching between them does not increase or reset that shared allowance.` 一条消息 = 一问一答（`One prompt and response form a single message.`）。
+- **澄清用户的困惑**：`月度额度` 与 `5 小时窗` **两套系统并存但作用域不同**。15 条/月是 **Chat 的 Pro 档**配额；5 小时窗（Astra 5–45 / Sol 10–100 / Terra 25–200 / Luna 250–2,000）是 **Work/Codex 的本地消息估算**，官方标注 `These estimates are not fixed message limits`。二者官方明确分开：`These Chat allowances are separate from usage in Work and Codex.`
+- **用尽后**：**不是自动降级**（官方只为 Pro $200 个人档写了自动降至 `GPT-5.6 Thinking at Medium`）。Business 通用规则是 `If no credits are available in the workspace pool, the feature is blocked`；三条出路 = 走 credits（rate card：GPT-6 Pro / Sol Pro 均 `50 credits` per Chat message）、换 Sol、等重置。
+- **与个人档对齐**（官方原表）：Plus **无 Pro 档**（`Not included`）；Pro $100 = 50 条/周；Pro $200 = 200 条/周 + Sol Pro 170 条/天；Business Standard = **15 条/月 ≈ 3.5 条/周**。
+- **个人共享 Project 全部核实**：`ChatGPT Free, Plus, Pro, and Go users can invite individuals by using the **Only those** setting.`；上限 **Pro 40 文件·100 人 / Plus·Go 25·10 / Free 5·5**（用户给的数字**全部正确**）。
+- **跨账号可行**：`If set to "Anyone with a link," any logged-in ChatGPT user who has the link can join` → 不限同工作区、不限同套餐。
+- **⚠️ 同页自相矛盾**：同一篇《Projects in ChatGPT》仍留着旧句 `You can only invite members within your workspace.`，与上两条**直接冲突**；判为 2025-10 放开共享前的残留文本（同段还留着 `until October 23, 2025` 的早期访问表述）。
+- **账号共享红线**：Terms of Use `You may not share your account credentials or make your account available to anyone else`；Services Agreement 3.1 `will not share Account access credentials or individual login credentials between multiple users`；3.2 `End User Accounts may only be provisioned to, registered for, and used by, a single End User.` → **全队共用一个个人 Pro 账号明确违规，不可采用。**
+- **结论**：个人 Pro 路线**共享能力上与 Business 等价**（同为 100 人/40 文件），但在**账号归属、管理台、数据训练、离职交接**四维全面缺失，**不作为试点承载方案**。
+- **4 项未核实**：Business Standard 用尽是否自动降级；credits 能否续 Chat 的 Pro 消息（费率已公布但无明文）；Plus/Go 美元月费（定价页价格未在文本渲染）；个人 Pro 共享项目里 owner 对成员移出对话的可见性。
+
+## 2026-09-16（下午）v5 — 新增纯网页路径可行性判定
+
+**背景**：用户把问题收敛成一个决定性判断——**大部分运营装不了本地工具**（Win10 装不上 Codex、`git clone` 都难、退回 workbuddy），**本地桌面方案对本团队不可接受**。于是要回答：本地被排除后，老板的「网页 + Workspace Agent」架构到底能不能做「每日拉赛狐广告报告」。
+
+### 新增 `web-only-ad-report-feasibility-2026-09.md`
+
+六问逐一给判定：
+
+1. **能调自有 HTTPS API，但必须包成 MCP server 且公网可达**。Business 上隧道这条路已排除（本次补充两条硬证据：隧道文档**全文未出现 Business**、以 `Enterprise/Edu` 工作区表述；changelog 只写 `for enterprise customers`）。官方对"服务要保持私有"给的合法形态是 **公网 HTTPS 反代 + OpenAI 托管 mTLS + 出口 IP 白名单**。
+2. **执行在云端**（白皮书 `They can run in the cloud, work on schedules`），运营纯网页、零安装。
+3. **代价**：Business 下**只有 Admin/Owner** 能开 developer mode 与发布 app；**app 发布后不能原地改只能重建**（`recreate and republish`）+ 冻结快照；**认证是本次最关键发现**——官方原文 `ChatGPT does not support machine-to-machine OAuth grants such as client credentials, service accounts, or JWT bearer assertions, nor can it present custom API keys or customer-provided mTLS certificates.` → **赛狐密钥必须藏在自有 MCP server**，`securitySchemes` 只有 `noauth` / `oauth2` 两种。
+4. **定时支持**（`Add schedule` / `run every`），云端调度不依赖开机；API trigger 只能点火（`202 Accepted`，`the agent's response cannot currently be retrieved through the API`）。
+5. **产出**：对话 + Slack + artifacts（`documents, slides, or spreadsheets`），Files 512 MB/10 GB。
+6. **底线**：架构成立；要新增的唯一组件是**我们自己服务器上的只读 MCP server**（包住赛狐广告 API，服务端持有凭证，对外只开一个 `/mcp`）。运营侧动作 = 打开网页看结果。另提示 credits 已于 **2026-07-06** 开始计费，每日定时是持续成本。
+
+**与既有文档的关系**：不推翻 [work-vs-codex-and-local-automation-2026-09.md](work-vs-codex-and-local-automation-2026-09.md) 的本地优先结论，而是补齐其被排除后的替代路径，并把该文 §5 表格里「云端 MCP server」一行从"可选"提升为**本团队的主路径**。
+
 ## 2026-09-16（凌晨）v4 — 修正三处、新增本地自动化方案
 
 **背景**：用户对 v3 提出多组追问（离职能否保席位改密码、Work 是不是 Codex 改名、额度到底共不共享、手动上传不叫 Agent、MCP/隧道/Desktop only 是什么、Business 管理员能不能看会话到底有没有标准答案）。用 5 个并行 subagent 核实。

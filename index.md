@@ -23,7 +23,7 @@ generated: 2026-09-16
 | **amazon_pairing** | 12 | Handoff, Index, Log, Reference | [amazon_pairing/](amazon_pairing/) -> [amazon_pairing/docs/index.md](amazon_pairing/docs/index.md) |
 | **channel_account_sync** | 13 | Index, Lesson, Log, Reference | [channel_account_sync/](channel_account_sync/) -> [channel_account_sync/docs/index.md](channel_account_sync/docs/index.md) |
 | **dingtalk** | 2 | index, log | [dingtalk/](dingtalk/) -> [dingtalk/dingtalk_robot/docs/index.md](dingtalk/dingtalk_robot/docs/index.md) |
-| **docs** | 102 | ?, Handoff, ImplementationPlan, Index | [docs/](docs/) -> [docs/research/index.md](docs/research/index.md) |
+| **docs** | 106 | ?, Handoff, ImplementationPlan, Index | [docs/](docs/) -> [docs/research/index.md](docs/research/index.md) |
 | **erpnext** | 5 | Index, Log | [erpnext/](erpnext/) -> [erpnext/docs/index.md](erpnext/docs/index.md) |
 | **fedex_track** | 3 | Index, Log, Reference | [fedex_track/](fedex_track/) -> [fedex_track/docs/index.md](fedex_track/docs/index.md) |
 | **gls_track** | 2 | Index, Log | [gls_track/](gls_track/) -> [gls_track/docs/index.md](gls_track/docs/index.md) |
@@ -284,6 +284,7 @@ generated: 2026-09-16
 | Research | 2026-09 企业 AI 助手与 Agent 载体调研 | [docs/ai-ops-pilot/assistant-platform-research-2026-09.md](docs/ai-ops-pilot/assistant-platform-research-2026-09.md) | 2026-09-16 |
 | Research | AI Agent 平台深度对比 — Open WebUI vs Hermes vs Pi vs 其他 | [docs/research/web-agent-platform-comparison-2026.md](docs/research/web-agent-platform-comparison-2026.md) | 2026-07-24 |
 | Research | ChatGPT Business 席位、账号与用量模型 | [docs/ai-ops-pilot/business-seat-account-and-usage-2026-09.md](docs/ai-ops-pilot/business-seat-account-and-usage-2026-09.md) | 2026-09-16 |
+| Research | ChatGPT Business 的 SSO、域名验证与离职回收 | [docs/ai-ops-pilot/sso-offboarding-and-domain-2026-09.md](docs/ai-ops-pilot/sso-offboarding-and-domain-2026-09.md) | 2026-09-16 |
 | Research | ChatGPT Work 与 Codex 的产品关系及本地自动化能力 | [docs/ai-ops-pilot/work-vs-codex-and-local-automation-2026-09.md](docs/ai-ops-pilot/work-vs-codex-and-local-automation-2026-09.md) | 2026-09-16 |
 | Research | ChatGPT Workspace Agent 能力边界与 Git 化方式对比 | [docs/ai-ops-pilot/workspace-agent-capability-boundary-2026-09.md](docs/ai-ops-pilot/workspace-agent-capability-boundary-2026-09.md) | 2026-09-16 |
 | Research | ChatGPT 聊天记录沉淀能力与团队知识方案调研 | [docs/ai-ops-pilot/chat-history-capture-2026-09.md](docs/ai-ops-pilot/chat-history-capture-2026-09.md) | 2026-09-16 |
@@ -292,8 +293,11 @@ generated: 2026-09-16
 | Research | FedEx 官方批量 Track 能力与账号组织勘查 | [docs/research/2026-09-04-fedex-track-account-investigation.md](docs/research/2026-09-04-fedex-track-account-investigation.md) | 2026-09-04 |
 | Research | GLS 跟踪可行性 — 公开无鉴权 API 无需开发者账号；官方 API 需波兰 GLS 客户开通 | [docs/research/2026-09-07-gls-poland-track-feasibility.md](docs/research/2026-09-07-gls-poland-track-feasibility.md) | 2026-09-07 |
 | Research | Google AI — 知识库管理方案调研（OKF 替代方案 + 银行级知识库设计） | [docs/research/2026-07-10-google-ai-knowledge-management-research.md](docs/research/2026-07-10-google-ai-knowledge-management-research.md) | 2026-07-10 |
+| Research | Pro 消息 15 条/月" 到底指什么 + 个人账号能不能共享 Project | [docs/ai-ops-pilot/pro-messages-and-personal-project-sharing-2026-09.md](docs/ai-ops-pilot/pro-messages-and-personal-project-sharing-2026-09.md) | 2026-09-16 |
 | Research | SPS Commerce API 自动化可行性调研（Pottery Barn） | [docs/research/2026-08-18-sps-commerce-api-feasibility.md](docs/research/2026-08-18-sps-commerce-api-feasibility.md) | 2026-08-18 |
 | Research | Skill 分发路径与自托管方案对比 | [docs/ai-ops-pilot/skill-distribution-and-selfhost-options-2026-09.md](docs/ai-ops-pilot/skill-distribution-and-selfhost-options-2026-09.md) | 2026-09-16 |
+| Research | webcodex" 核实 — ChatGPT 网页版 + MCP 驱动本地 runner，是否绕过 5 小时额度 | [docs/research/2026-09-16-webcodex-chatgpt-web-mcp-verification.md](docs/research/2026-09-16-webcodex-chatgpt-web-mcp-verification.md) | 2026-09-16 |
+| Research | 纯网页路径可行性判定 — Workspace Agent 每日拉赛狐广告报告 | [docs/ai-ops-pilot/web-only-ad-report-feasibility-2026-09.md](docs/ai-ops-pilot/web-only-ad-report-feasibility-2026-09.md) | 2026-09-16 |
 | Research | 黄总《FZH AI运营试点计划 1.0》评估 | [docs/ai-ops-pilot/assessment.md](docs/ai-ops-pilot/assessment.md) | 2026-09-16 |
 | Solution | CLIProxyAPI `auth_unavailable`：升级、浏览器 OAuth 与真实模型验收 | [docs/solutions/integration-issues/cliproxyapi-auth-unavailable-oauth-recovery.md](docs/solutions/integration-issues/cliproxyapi-auth-unavailable-oauth-recovery.md) | 2026-09-08 |
 | Solution | FZH 统一 AI 接入方案 — 调研阶段性总结 | [docs/solutions/integration-issues/fzh-unified-ai-access-conclusion.md](docs/solutions/integration-issues/fzh-unified-ai-access-conclusion.md) | 2026-07-24 |
