@@ -7,6 +7,21 @@ description: docs/ai-ops-pilot 目录变更历史
 
 # 变更日志
 
+## 2026-09-16（深夜）聊天记录调研 v2 — 补机制细节、修正两处、新增替代方案
+
+**背景**：用户指出 v1 结论过于压缩（workspace 为何要选、Codex 本地记录如何、额度是不是按席位固定），并要求深挖共享 Project 的实际限制与替代方案。用 4 个并行 subagent 分头核实。
+
+- **新增 workspace 机制**：工作区是**按会话显式选择**的（`users can select which workspace is active for the current session`）；个人与公司工作区可**合并但不可逆**，且会**删除个人插件与自定义指令**。→ **新增一条试点风险：成员不切换工作区，聊天就留在个人空间，公司拿不到。**
+- **新增 Codex 数据位置**：本地会话存在成员机器上的 `history.jsonl`（配置项 `history.persistence`）；管理员可强制绑定工作区（`forced_chatgpt_workspace_id`），用量进 Compliance API，但**内容不共享**。
+- **修正 v1 的额度说法**：不是「一个席位固定额度」，而是**两层**——每席位包含额度 + **工作区共享积分池**；且 `Codex, ChatGPT Work, ChatGPT for Excel, and Workspace Agents use a shared allowance and credit pool`（跨功能共用），默认**无上限**需管理员主动设。
+- **强化 Enterprise 判据**：官方**定价对比页**逐特性标出 `Compliance API Logs Platform` —— **Business `No` / Enterprise `Yes`**，比 v1 的证据更硬。补充实现机制（Admin key + `Conversation messages` 权限仅 owner 可授；`/logs` NDJSON 端点；旧 stateful 路由已于 2026-06-05 下线）、30 天滚动留存须自建归档、Enterprise 价格不公开。
+- **共享 Project 深挖（用户质疑项，均已确认）**：**40 文件/项目**对 Business 适用（Free 5 / Go·Plus 25）；**100 人**仅 Pro·Business·Enterprise·Edu（Plus·Go 仅 10）；项目数无上限；单文件 512MB。
+  **新增四个硬伤**：① `branched, not collaborated on synchronously`（无同步共编）；② 成员可把对话移出/删除，owner 之后也看不到；③ **共享项目内用不了 Google Drive/Slack 等链接源**（仅 private project 可用）；④ 成员离职时项目转交 owner，但**项目内对话按保留策略标记删除且 owner 原本看不见**。
+- **新增替代方案**：`yc-software/qm`（Multiplayer agent harness，2026-07-29 建，≈15k stars，**挂在 YC org 而非 Garry Tan 个人账号**；`Skills are scope-owned and shareable by grant`；自托管）；**OpenAI 工作区插件市场可直接消费 `.claude-plugin/marketplace.json`**（GitHub-only、支持 commit pinning、每日同步、绑定导入者 GitHub 连接）——这是「Git 真源 + 平台分发」的现成桥；另有 Claude Code Plugin Marketplace 与 LangSmith Context Hub。
+- **顺带核实**：`AGENTS.md` 三原则来源 `garrytan/gstack` 确认存在；其 team mode 与本仓库做法同构；ETHOS.md 原文为 **"Boil the Ocean"**，本仓库译作「把湖煮干 (Boil the Lake)」属改写。
+- **建议重心转移**：从「收聊天」改为「收产出」——聊天是过程、skill 是产物。
+- **未核实清单扩至 9 项**。
+
 ## 2026-09-16（夜）新增聊天记录沉淀能力调研
 
 - **背景**：老板 2026-09-16 会上提出「第一步把工作区里所有人的聊天记录都沉淀下来，之后整理成资料 / skill」。用户问：workspace 里的聊天是否自动算在工作区内、本地 Codex 登录算不算。

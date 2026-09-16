@@ -1,168 +1,288 @@
 ---
 okf: v0.1
 type: Research
-title: ChatGPT Business 聊天记录沉淀能力调研
-description: 核实 Business 工作区里成员聊天记录谁能看到、能否导出、Codex 是否计入，以及官方支持的「聊天沉淀为资料/skill」路径；含两份官方文档的口径冲突
-tags: [ai-pilot, chatgpt-business, chat-history, retention, compliance-api, codex, shared-projects, plugins]
+title: ChatGPT 聊天记录沉淀能力与团队知识方案调研
+description: 核实 workspace 选择机制、Codex 数据归属、额度模型、Business vs Enterprise 的会话可见性、共享 Project 的真实限制，并比较 qm / 插件市场 / LangSmith 等替代方案
+tags: [ai-pilot, chatgpt-business, workspace, chat-history, compliance-api, codex, shared-projects, credits, qm, plugin-marketplace]
 timestamp: 2026-09-16
+version: 2
 sources:
   - https://help.openai.com/en/articles/8798634-managing-data-sharing-and-privacy-in-chatgpt-business
-  - https://openai.com/enterprise-privacy/
-  - https://help.openai.com/en/articles/9261474-compliance-platform-for-enterprise-and-edu
+  - https://help.openai.com/en/articles/8542216-managing-members-seat-types-and-roles-in-chatgpt-business
+  - https://help.openai.com/en/articles/8801890-managing-workspace-lifecycle-and-migration-in-chatgpt-business
+  - https://help.openai.com/en/articles/20001155-managing-credits-and-spend-controls-in-chatgpt-business
   - https://help.openai.com/en/articles/11369540-using-codex-with-your-chatgpt-plan
   - https://help.openai.com/en/articles/10169521-projects-in-chatgpt
-  - https://help.openai.com/en/articles/12289294-managing-your-tenant-in-admin-console
-  - https://help.openai.com/en/articles/8542216-managing-members-seat-types-and-roles-in-chatgpt-business
-  - https://help.openai.com/en/articles/20001143-chatgpt-workspace-agents-for-enterprise-and-business
-  - https://help.openai.com/en/articles/11391654-chatgpt-business-release-notes
-  - https://developers.openai.com/codex/plugins/build
+  - https://help.openai.com/en/articles/8266418-data-retention-when-a-member-is-removed-from-a-workspace
+  - https://help.openai.com/en/articles/8555545-file-uploads-faq
+  - https://help.openai.com/en/articles/9261474-compliance-platform-for-enterprise-and-edu
+  - https://help.openai.com/en/articles/20001407-managing-admin-api-keys
+  - https://openai.com/enterprise-privacy/
+  - https://openai.com/business/pricing/
+  - https://developers.openai.com/codex/config-file/config-reference
+  - https://github.com/yc-software/qm
+  - https://github.com/garrytan/gstack
 ---
 
-# ChatGPT Business 聊天记录沉淀能力调研
+# ChatGPT 聊天记录沉淀能力与团队知识方案调研
 
-> 调研日期：2026-09-16。缘起：老板希望「第一步把工作区里所有人的聊天记录都沉淀下来，之后整理成资料文档 / skill」。
-> 结论对**该设想的可行性**做了直接回答，并指出**两份官方文档在关键问题上口径冲突**——这一冲突必须在上会前解决，不能取平均。
+> 调研日期：2026-09-16（v2）。缘起：老板希望「第一步把工作区里所有人的聊天记录都沉淀下来，之后整理成资料文档 / skill」。
+> v2 补充：workspace 选择机制、Codex 数据归属、额度模型、Enterprise 实现细节与价格、共享 Project 的真实限制、以及若干替代方案。
+> 只写能在官方资料中核验的结论；第三方报告单独标注；无法核实的标「未核实」。
 
 ## 1. 结论先行
 
-### 1.1 直接回答老板的设想
+### 1.1 对老板诉求的判定
 
-> **「所有人的聊天记录自动沉淀到一处」在 Business 档位下，按产品文档的口径是做不到的。**
-> 不是配置问题，是档位能力问题：**成员之间默认互相看不到聊天；管理员没有「读取全部成员会话」的产品入口；Business 工作区没有数据导出**。
+> **「自动收集全员聊天」在 ChatGPT Business 上做不到。** 这不是配置问题，是档位问题——官方定价对比表上 Business 的 `Compliance API Logs Platform` 一栏直接标 **`No`**，Enterprise 才是 `Yes`。
+>
+> 更重要的是：**即使升到 Enterprise 能拿到全量会话，也不等于能得到 skill。** 聊天记录是「过程」不是「产物」；从一堆对话里蒸馏出可复用规则，本身是一份不比「直接写」更轻的人工工作。**方向应该从「收聊天」改成「收产出」。**
 
-能做的是另外三件事，都需要**成员主动配合**，而不是管理员后台收：
+### 1.2 但有一条必须提前堵住的坑
 
-| 想要的效果 | 官方可行路径 | 需要谁动手 |
-|-----------|-------------|-----------|
-| 把有价值的讨论**沉淀成团队资料** | **共享 Project**（Business 可用，可放 chats + 文件 + instructions） | 成员主动把内容放进共享项目 |
-| 把沉淀的东西**变成可复用的能力** | 打包成 **Plugin / Skill**，由工作区管理员发布到工作区（按角色授权） | 工程打包 + 管理员发布 |
-| 事后**审计追溯**（合规用途） | **Compliance API** —— **仅 Enterprise/Edu** | 需升级档位 |
+**成员「加入了 Business 工作区」不等于「聊天落在 Business 工作区里」。** 工作区是按会话显式选择的，用户可以随时切回个人工作区聊天。**在个人工作区里产生的对话，公司看不到、也不算工作区数据。** 试点若不明确要求，很可能出现「以为在用公司账号、实际聊天都在个人空间」的情况。
 
-### 1.2 三个具体问题的答案
+## 2. workspace 到底是什么
 
-| 问题 | 答案 |
+### 2.1 必须显式选择，不是自动的
+
+官方原文：`When logging into their ChatGPT accounts, users can select which workspace is active for the current session. On ChatGPT web, workspaces are available from the profile menu. On mobile, workspaces are available in the sidebar.`
+
+- 工作区是**账号级容器**（`A workspace is a unique ChatGPT environment with its own settings, members, and resources`）。
+- 用户**可同时属于多个工作区**（个人 + 公司），通过 profile menu / 侧边栏切换。**「选工作区」这个动作之所以存在，就是因为一个人可能属于多个。**
+- **聊天归属「当前激活的那个工作区」**，按会话生效。
+- **未核实**：不主动选择时默认激活哪个工作区（官方未写明）。
+
+### 2.2 个人工作区与公司工作区可以合并——但不可逆，且要慎用
+
+官方明确：`Merging workspaces is permanent and cannot be undone.`
+
+- 合并后**个人工作区被删除**，聊天历史与 GPTs 迁入 Business 工作区。
+- **`Plugins are deleted`、`Custom instructions are deleted`** —— 个人插件与自定义指令不迁移。
+- 个人订阅被自动取消退款（移动端订阅需自行取消）。
+- 合并后数据算公司的；**离开工作区即失去访问**。
+- **Business 管理员不能强制员工合并，也不能强制删除员工的个人工作区。**
+
+→ **对试点的含义**：如果想「保证大家的聊天都在公司工作区里」，**唯一可靠的办法是要求成员登录时切到公司工作区**，而不是指望合并（合并不可逆，不该轻率动员）。这也意味着**必须给运营一条明确的操作纪律**，否则数据会漏。
+
+### 2.3 合并后成员的 GPTs/Projects 归属
+
+官方（成员被移出工作区时）：`On removal, a member's projects and GPTs are reassigned to a workspace owner, and are not flagged for deletion.`
+
+**但紧接一句很关键**：`Conversations held within projects and GPTs are flagged for deletion in accordance with the workspace's data-retention policy.` 且 `Conversations and files created by the removed member are not transferred, and are not visible to the workspace owner.`
+
+→ **「项目被转交给 owner」不等于「项目里的对话也被保留」**。人一走，**项目容器留下了，对话内容按保留策略标记删除、且 owner 原本也看不见**。把团队知识押在某个成员的个人项目里是危险的。
+
+## 3. Codex 的数据在哪
+
+Codex 是本地软件，但**「在哪跑」和「在哪记账/管控」是两件事**：
+
+| 维度 | 事实 |
 |------|------|
-| 一个 workspace 里聊天，网页端都自动算在这个 workspace 里吗？ | **是。** 工作区是账号级容器：登录时选择工作区，在该工作区里产生的 Chat 与 Codex 记录都归属该工作区，跨网页/桌面/移动/Codex 一致。**但「归属工作区」≠「别人看得见」**。 |
-| 别人（含管理员）能看到吗？ | **默认看不到。** 官方原文：每个用户有自己的 chat 与 Codex 历史，「其他成员不会自动看到这些聊天或 Codex 活动」。用量分析与花费控制**不等于**会话访问权（官方 FAQ 明确回答 `No`）。 |
-| 用本地 Codex 登录就不算了吗？ | **算在治理与计量内，但内容同样不共享。** Codex local（CLI / IDE 扩展 / 桌面）受工作区开关管控、计费进工作区额度，其使用记录进 **Compliance API（Enterprise/Edu）**；但**其他成员看不到 Codex 活动**。 |
+| 登录 | 与 ChatGPT 同一个账号（`Sign in with your ChatGPT account`） |
+| 执行位置 | Local = 你自己的设备；Cloud = OpenAI 托管环境。官方：`Managed workspaces can control Codex local use and Codex cloud tasks separately.` |
+| **本地会话记录** | **存在本地**。官方配置项 `history.persistence = save-all \| none`，作用是 `Control whether Codex saves session transcripts to history.jsonl` → 会话记录落在成员机器上的 `history.jsonl` |
+| 是否同时上云 | **未核实**（官方未明确说明本地会话是否同步到云端） |
+| 管理员可见性 | 内容上：`Other members do not automatically see those chats or Codex activity.`（**看不到**）。治理上：可强制绑定工作区（`forced_chatgpt_workspace_id`）、可控制 Codex local 是否启用、用量进 Compliance API（Enterprise/Edu） |
 
-## 2. 最重要的发现：两份官方文档口径冲突
+→ **回答「本地 Codex 登录算不算」**：**算在管控和计费里，不算在可见内容里，而且它的会话记录本身就在成员自己的电脑上。**
 
-这是本次调研**最需要提请注意**的一点。同一个问题上，OpenAI 两处官方页面说法不一致：
+## 4. 额度模型：不是「一个席位固定额度」
 
-| 来源 | 表述 |
-|------|------|
-| **A. 帮助中心**《Managing data, sharing, and privacy in ChatGPT Business》 | 「在一个 ChatGPT Business 工作区里，**每个用户有自己的 chat 与 Codex 历史。其他成员不会自动看到这些聊天或 Codex 活动**。」FAQ：`Does usage analytics let admins read all user chats?` → **`No.`** / `Can I export my data from a Business workspace?` → **`No. Data export is not available in a ChatGPT Business workspace.`** |
-| **B. 官方隐私页** [openai.com/enterprise-privacy](https://openai.com/enterprise-privacy/)（Business FAQ） | 「在工作区内，终端用户可查看自己的会话。**工作区管理员对工作区有控制权，可以查看、访问、导出和删除工作区中终端用户的会话**（`can view, access, export, and delete end user conversations in the workspace`）。」 |
+用户的理解只对了一半。官方是**两层**：
 
-**两处都是 OpenAI 官方域名，但一个说「不能看、不能导出」，另一个说「能看、能导出、能删」。**
+1. **每席位包含额度**：`Included usage is evaluated for the paid ChatGPT seat assigned to each member.`
+2. **超出后走工作区共享积分池**：`After that included usage is consumed, eligible activity may draw from the workspace credit pool...`
+3. **共用口径**：`Codex, ChatGPT Work, ChatGPT for Excel, and Workspace Agents use a shared allowance and credit pool.` —— 也就是说，**广告复盘 Agent 跑得多，会消耗掉别人 Codex 的额度**。
+4. 管理员可为按**席位类型**设置每月积分上限，并支持 **per-user override（优先级更高）**；`By default, all seats and users have no limits specified.`；仅 owner 可购买积分/自动充值。
 
-几点观察（不做平均，只陈述事实）：
+→ **对试点的含义**：预算要按「一个共享池」来管，不能按「每人固定额度」估。而且**默认没有上限**，需要管理员主动设。
 
-1. **B 的 Enterprise 条目点名了具体机制**（`workspace admins can access an audit log of conversations and GPTs through the Enterprise Compliance API`），而 **B 的 Business 条目只说「能」，没给任何机制**。而 Compliance API 官方明确是 Enterprise/Edu 专属（§3.2）。**一个没有机制支撑的能力声明，不该被当作可依赖的产品功能。**
-2. **A 是产品行为文档**（告诉管理员界面里有什么），**B 是法律/承诺文档**（界定数据权属与责任）。两者层级不同：B 更可能在陈述「数据归工作区所有、管理方有权处置」的**法律立场**，而非「今天界面上有这个按钮」。
-3. 有第三方政策追踪站记录该页在 **2026-05-28** 前后有过措辞改动，并指出存在歧义。
+## 5. 谁能看到聊天：Business vs Enterprise
 
-**处置建议（不要取平均）**：
+| 能力 | Business | Enterprise / Edu |
+|------|----------|-----------------|
+| 成员各自历史 | ✅ | ✅ |
+| 其他成员看你的聊天 | ❌ 默认不可见 | ❌ 默认不可见 |
+| 共享单个会话（成员主动） | ✅ 共享链接 | ✅ |
+| **管理员读取全部会话** | ❌ **无此能力** | ✅ Compliance Platform |
+| **数据导出** | ❌ `Data export is not available in a ChatGPT Business workspace.` | ✅ |
+| 禁用共享链接（全员） | ❌ 明确没有该开关 | ✅ Enterprise 专属 |
 
-- **不要把「管理员能导出全员聊天」当作既定前提去排期。** 若要依赖它，必须**在真实工作区里实测**（owner 账号登录 → 找有无会话访问/导出入口），或向 OpenAI 销售/支持书面确认。
-- 上会时应当把这条**单列为「待确认风险」**，而不是写进「能实现」清单。
+**官方证据（最强的一条）**：官方定价对比页 [openai.com/business/pricing](https://openai.com/business/pricing/) 逐特性列出 `Compliance API Logs Platform` —— **Business: `No`；Enterprise: `Yes`**。
 
-## 3. 逐项核实
+帮助中心旁证：`Because each user has their own chat history. A Business workspace allows collaboration, but chats are not automatically visible to other members.` / `Does usage analytics let admins read all user chats? No.`
 
-### 3.1 workspace 是什么：账号级容器
+### ⚠️ 仍存在一处口径冲突（v1 已报告，v2 复核后维持）
 
-- 工作区是账号级的独立环境（有自己的设置、成员、资源）；用户登录时**选择当前会话用哪个工作区**，可在个人工作区与 Business 工作区之间切换，也可以合并。
-- 该工作区内的 Chat 与 Codex 记录都归属该工作区。
-- **关键区分**：「数据归属工作区」与「成员可见性」是两件事。前者成立，后者默认不成立。
+官网 [enterprise-privacy](https://openai.com/enterprise-privacy/) 的 Business FAQ 仍写着管理员「**可以查看、访问、导出和删除**工作区中终端用户的会话」。这与上面帮助中心 + 定价页的证据**直接矛盾**。
 
-### 3.2 谁能看到会话：Business vs Enterprise
+**v2 的处置**：证据天平已明显偏向「Business 做不到」——因为**定价对比表是产品能力表，且逐特性标了 No**，而隐私页那条**依旧没有给出任何机制**（Enterprise 那条点名了 Compliance API，Business 这条没有）。**建议按「做不到」决策**，若老板坚持要，让 owner 账号实测或向销售书面确认。
 
-| 能力 | Business | Enterprise / Edu | 依据 |
-|------|----------|------------------|------|
-| 成员各自的历史 | ✅ 各自可见 | ✅ 各自可见 | A |
-| 其他成员看你的聊天 | ❌ 默认不可见 | ❌ 默认不可见 | A |
-| 共享单个会话 | ✅ 共享链接（用户主动） | ✅ 共享链接 | A |
-| **管理员读取全部会话** | ❌ 产品文档无此入口（隐私页有相反声明，见 §2） | ✅ **Compliance API**（需 Admin key + `Conversation messages` 权限，仅 owner 可授予） | A / 9261474 |
-| **数据导出** | ❌ **明确不支持** | ✅ Compliance Logs Platform | A / 9261474 |
-| 禁用共享链接（全员） | ❌ 明确没有该开关 | ✅ Enterprise 专属开关 | A |
-| 合规日志保留期 | — | **30 天**，要更长须自行持续下载 | 9261474 |
+## 6. Enterprise 到底怎么实现（已核实）
 
-补充：Compliance Logs Platform 为不可变 JSONL、约 10 分钟窗口、p99 < 30 分钟、至少一次投递、`event_id` 去重；日志保留 **30 天**，**过期不可恢复**，需自建持续下载才能长期留存。
+### 6.1 机制
 
-### 3.3 Codex 的情况
+1. 在 Admin Console → **Credentials → Admin keys** 建**工作区级** Admin key（`Each Admin key applies to one ChatGPT workspace.`）。
+2. **权限门槛高**：`Only a workspace owner can grant broad compliance access or the Conversation messages permission.` 普通 admin 只能拿单个日志类目（audit / auth / app）。
+3. 调用（base `https://api.chatgpt.com/v1/compliance`）：
+   - `GET /workspaces/{id}/logs?event_type=CONVERSATION_MESSAGE&limit=N&after=<ISO8601>`
+   - `GET /workspaces/{id}/max_event_time`（新鲜度水位）
+   - `GET /workspaces/{id}/logs/{log_file_id}`（下载 NDJSON）
+4. **返回含消息正文**：`message.content.value`，另含 `conversation.id`、`message.author.type`、`tools_used`、`skills_used`、`annotations.urls` 等。
+5. **旧的 stateful 查询路由已于 2026-06-05 下线**，现在只能走文件式日志。
 
-- 官方原文：**「每个用户有自己的 chat 与 Codex 历史。其他成员不会自动看到这些聊天或 Codex 活动。」** → **Codex 内容同样不共享。**
-- 但 Codex **在治理范围内**：`The Codex app follows the same admin controls as Codex local and Codex cloud. Codex local must be enabled for members to use the Codex app.` 管理员可在 工作区设置 → Permissions & roles 控制 Codex 访问。
-- Codex 的**使用记录**（含 local CLI / IDE 扩展 / 云端）进 **Compliance API**（Enterprise/Edu）。另有 `Codex Enterprise Analytics`（Enterprise）。
-- Codex 的**策略与配置变更**记录在工作区审计日志，管理员可在 Admin Console 查看。
-- **未核实**：Codex 本地会话文件在成员机器上的存储位置与生命周期（官方本次核验页面未描述）。
+### 6.2 工程现实（这是隐藏成本）
 
-### 3.4 Business 的管理入口在哪里
+- **只保留 30 天**：`The Compliance Logs Platform retains data for 30 days. If longer retention is desired then consumers should implement a system to continuously download all logs and retain them according to their policies.`
+- **删除不可恢复**：`Deleted data is not recoverable.`
+- 所有调用本身被记录用于审计。
+- **也就是说：要变成「长期知识资产」，必须自建定时轮询 + 下载 + 落库 + 去重**，这是一条真正的数据管道，不是开个开关。
 
-- **成员与组管理**：Business 的成员/组在 **ChatGPT 里**管理（`Manage Enterprise and Edu workspace members and groups in Admin Console, Business workspace members and groups in ChatGPT`）。
-- 全局 Admin Console 的多数能力面向 Enterprise/Edu；工作区审计日志「仅对有资格的 workspace owner 或 admin 开放」，具体检索走 Compliance Platform（Enterprise/Edu）。
-- Business 能拿到的是**用量与活动分析**（含 `exportable activity`、Codex 用量、credits），**不是会话正文**。
+### 6.3 官方定位是合规，不是知识管理
 
-## 4. 官方支持的「沉淀」路径（这才是能落地的）
+该能力官方定位为 **eDiscovery / DLP / SIEM**，并列了 Purview、CrowdStrike、Netskope、Zscaler、Relativity、Smarsh 等 18 家合作伙伴。**「把聊天蒸馏成内部文档/skill」在官方文档中既无背书也未禁止——属于灰区（未核实）。** 且审计请求全程留痕、删除不可恢复。
 
-### 4.1 共享 Project —— 聊天沉淀的正解
+### 6.4 价格
 
-官方原文要点：
+- **Enterprise：不公开。** 定价页只写 `Custom pricing` / 联系销售，**无公开席位价与最低席位数**（是否有隐含门槛：未核实）。
+- **Business（参考）**：Standard 席位 年报 **$20**/人/月、月报 **$25**/人/月；Premium 年报 $100、月报 $125；**至少要 2 个席位**；单订阅上限 **200** 个付费席位。
 
-- `Business, Enterprise and Edu users can additionally share projects with teammates` → **Business 可用**。
-- `ChatGPT can draw from anything in the shared project – including chats, uploaded files and custom instructions` → 共享项目本身就是「活的上下文中心」。
-- 权限两级：**Edit**（改 instructions、增删文件、邀请他人）/ **Chat**（可看可聊，不能邀请）。
-- Business 可按**个人邮箱、工作区组、工作区链接**邀请；用工作区链接加入的**默认是 chat 权限**，不能对全员默认给 edit。
-- 限额：单个工作区项目**最多 100 人**；**Business/Enterprise/Edu 单个项目最多 40 个文件**。
+→ 结论：**「升级 Enterprise 换全量会话采集」是一条需求不明确、成本不透明、还要自建管道的路**，不建议作为试点第一步。
 
-→ **对老板诉求的映射**：所谓「把聊天沉淀下来」，在 Business 下等价于**让成员把有价值的会话留在共享 Project 里**（共享项目内的 chats 对成员可见）。这是**主动协作容器**，不是**后台自动收集**。
+## 7. 共享 Project 深挖（用户重点质疑项）
 
-### 4.2 Plugin / Skill —— 能力沉淀的正解
+### 7.1 机制
 
-这条和我们上一份调研（[workspace-agent-capability-boundary-2026-09.md](workspace-agent-capability-boundary-2026-09.md)）的结论接得上：**Skill/Plugin 是文件形态**，可以进 Git。
+- **谁能建**：`Projects are available to all free and paid subscription types globally.` → **单人建、单人用完全可行**，不是必须多人。
+- **能邀请谁**：`You can only invite members within your workspace.`（个人邮箱 / 工作区组 / 工作区链接）
+- **装什么**：chats + 上传文件 + project instructions + project memory
+- **能取用什么**：`ChatGPT can draw from anything in the shared project – including chats, uploaded files and custom instructions`
+- **两级权限（原文）**：
+  - **Edit** = `allows members to update instructions, upload or remove files, and invite others (but not remove existing members)`
+  - **Chat** = `lets members see and interact with the project's chats, files, and instructions (but not invite others)`
 
-- 官方插件结构是**文件系统布局**：`skills/<skill-name>/SKILL.md` + `.codex-plugin/plugin.json` 清单 + 可选 `.mcp.json` / `.app.json`。
-- **发布到工作区需要管理员**：`You must be a workspace admin to publish a plugin to your workspace.` 发布时可**指定可访问的工作区角色**。
-- 工作区发布的插件**留在工作区与组织边界内**，未登录该工作区的账号访问不到。
-- Codex 侧另有 **Plugin sharing**：Business 用户可从 Codex app 把**本地构建的插件**分享给工作区成员，出现在 `Shared with you` 下，且管理员可用 `plugin_sharing = false` 关闭。
+### 7.2 限额（用户要求确认的数字）
 
-→ **这条是「把沉淀变成能力」的官方路径**，而且它的产物是**可进 Git 的目录结构**，不是平台内孤本。
+| 项 | 数值 | 适用范围 |
+|----|------|---------|
+| **每项目文件数** | **40** | **Business / Enterprise / Edu / Pro**；Free 5、Go/Plus 25。且 `only 10 files can be uploaded at the same time` |
+| **协作者上限** | **100** | Pro / Business / Enterprise / Edu；**Plus、Go 只有 10**；Free 5 |
+| 项目数量 | **无上限** | `Users can create an unlimited amount of projects.` |
+| 每项目 chat 数上限 | **未核实** | 官方未给出 |
+| 单文件大小 | 512 MB/文件；文本/文档 2M tokens；CSV/XLSX 约 50MB；图片 20MB | 全计划 |
+| 总存储 | 25 GB/人、100 GB/组织 | 全计划 |
+| 上传速率 | 80 文件 / 3 小时 | 全计划 |
 
-## 5. 对试点计划的建议
+→ **用户看到的「40 文件」「100 人」两项均属实**，且 40 文件对 Business 适用（不是更少）。共享项目与个人项目**套用同一套数字**。
 
-1. **修正老板的第一步设想。** 目标从「管理员把所有人聊天记录收上来」改为「**用共享 Project 建 1–2 个团队沉淀点**」，明确谁往里放、放什么。
-2. **不要把自动采集写进验收口径。** Business 没有该能力（A 口径）；B 口径的能力声明**无机制支撑且与 A 冲突**，须先实测或书面确认再谈。
-3. **合规/审计需求要早说。** 若「聊天留痕」是合规刚需（而非资料整理），那 Business 档位不够——Compliance API 是 Enterprise/Edu 专属，且日志只留 30 天、需自建归档。这是**档位决策**，不是配置决策。
-4. **沉淀的产物要落到 Git。** 聊天→共享 Project 是「存」，Project 里的结论要**人工提炼成 `docs/` 或 Skill 文件**才谈得上「变成 skill」。共享 Project 本身不产出 Skill。
-5. **成员要知道默认不共享。** 若不明确说清，会出现「以为团队看得到、实际只有自己看得到」的落差；共享链接与共享项目都需要成员主动使用。
+### 7.3 但是——几个会让人失望的限制
 
-## 6. 未核实清单
+1. **没有同步协作**：`Chats in shared projects can be branched, not collaborated on synchronously.` 是「分叉」不是「共编」。
+2. **项目里的对话可以被成员移出或删除，之后 owner 也看不到了**——「沉淀」的可靠性依赖成员不撤。
+3. **共享后记忆被锁死**：一旦共享，强制 **project-only memory 且不可逆**，也访问不到成员个人 memory/自定义指令。
+4. **共享项目里用不了 Google Drive / Slack 等链接源**：官方文档明确说这些源在 **private project** 里打开（`Open your private project`）。**这直接砍掉了「把公司资料接进来」的能力**——恰好是知识沉淀最需要的。
+5. **无导出**：Business 工作区数据导出为 `No`，且没有「一键导出全部项目」。
+6. **人的离开会伤到内容**：见 §2.3——项目转交给 owner，但**项目内对话按保留策略标记删除，且 owner 原本就看不见**。
 
-1. **Business 工作区实际有没有「管理员查看成员会话」入口**——两份官方文档冲突（§2），必须实测。
-2. **Business 的「数据保留期」是否真由管理员控制**——隐私页称「管理员可控制保留时长」，但本次未找到 Business 侧的对应设置入口。
-3. **Codex 本地会话文件在成员机器上的存储位置与生命周期**。
-4. **本地 Codex 的使用记录究竟以何种粒度进入 Compliance API**（是否含会话内容，还是仅元数据/用量）。
-5. **共享 Project 内聊天是否可被工作区管理员统一导出**（未找到相应说明）。
-6. **「Plugin sharing」在 Business 的实际可用范围**（发布说明为 2026 年条目，需在真实工作区确认）。
+### 7.4 第三方实测反馈（非官方，需打折看）
 
-## 7. Sources
+- 共享项目里 **app/custom connector 不工作**，社区帖直言 `Shared Projects in Business workspaces for team collaboration is essentially useless without the ability to access company knowledge layer and connected apps.`
+- 共享即降级：**Work Mode 不可用、File Library 被禁**，官方支持回复「no timeline」。
+- **无团队级记忆**：记忆是「按人」的，项目之间上下文不互通，只能靠重建项目/重贴指令硬撑。
 
-### OpenAI 帮助中心
+→ **判定**：共享 Project 是「**一个团队在一个话题上持续协作**」的容器，**不是**可导出、可审计、跨项目复用的企业知识库。**适合试点初期做小范围沉淀点，不适合当作「全公司知识底座」。**
+
+## 8. 更好的方案（用户要求）
+
+### 8.1 Garry Tan 的那个项目：很可能是 `yc-software/qm`
+
+**置信度：高（匹配到具体项目），但「by Garry Tan」是 likely 而非 confirmed。**
+
+- 仓库：[yc-software/qm](https://github.com/yc-software/qm)，描述 `Multiplayer agent harness for work.`，MIT，**创建于 2026-07-29**（正合「上个月」），约 15,000 stars。
+- README 明确支持多人**在同一个 project 内**协作：`collaborate with the agent in channels, group messages, and projects`；`Each person and each room has its own scoped memory, files, keychain view, permissions, crons, web apps, and durable sandbox`。
+- 技能机制：**`Skills are scope-owned and shareable by grant`**，并有 `admin-gated promotion to the whole org and skill packs imported from git repositories`。
+- 部署：**自托管**（`qm init . --target fly-or-aws`），跑在自己的云账号里。
+- 归属说明：仓库挂在 **YC 官方 org `yc-software`** 下，**不在 Garry Tan 个人账号**；他的个人账号只有 18 个仓库，多为旧 Rails/JS fork。Garry Tan 作为 YC CEO 公开推荐过 QM（二手来源）。
+- **注意**：README **未描述**技能版本化/审计；靠 grant 共享 + 管理员提升 + git 导入。
+
+**顺带核实**：你们 `AGENTS.md` 里「工作流三原则 (adapted from gstack ETHOS.md)」的来源确为 [garrytan/gstack](https://github.com/garrytan/gstack)，其 **team mode**（`./setup --team`，提交 `.claude/` 与 `CLAUDE.md`，队友 clone 即得）与你们现在的做法几乎同构。**一处小出入**：gstack ETHOS.md 原文是 **"Boil the Ocean"**，你们译作「把湖煮干 (Boil the Lake)」——属改写，非错误。
+
+**对 FZH 的适配性**：qm 在「多人同一空间协作 + skill 可共享 + 可导入 git skill 包」上**确实比 ChatGPT Projects 更贴近老板的诉求**。但它是**自托管 agent harness**，需要自己部署到 Fly/AWS，**面向的是工程团队**，6–8 名运营能否上手是最大问号。建议**列入观察，不作为试点首选**。
+
+### 8.2 我们已有的 Git 化方式本身就是更优解
+
+对照 [workspace-agent-capability-boundary-2026-09.md](workspace-agent-capability-boundary-2026-09.md) 的对比表：在版本控制、变更审批、多人合并、环境迁移、审计五个维度上，**Git 都强于平台内对象**。而下面的发现进一步说明**两者可以打通**。
+
+### 8.3 OpenAI 工作区插件市场：**能直接吃我们现有的 Claude 插件格式**
+
+- 路径：**Admin → Plugins → Import marketplace**，只填 GitHub 仓库 URL；子目录填 Path。
+- **目录文件可复用 `.claude-plugin/marketplace.json`**（官方同时接受 `.agents/plugins/marketplace.json` 与 `.claude-plugin/marketplace.json`）。
+- 支持 **branch / tag / commit pinning**（固定 commit 即不跟进更新）；**每日自动同步**；安装策略 `AVAILABLE` / `INSTALLED_BY_DEFAULT` / `NOT_AVAILABLE`。
+- **限制**：导入**仅支持 GitHub**（不支持其他 Git host）；声明 MCP 的插件**仅桌面端**可用；**sync 绑定导入者本人的 GitHub 连接**（该人离职需重导）；公共目录自助发布仍为 "coming soon"。
+- 另有 **Codex plugin sharing**：Business 用户可从 Codex app 把本地构建的插件分享给工作区成员（`Shared with you`），管理员可用 `plugin_sharing = false` 关闭。
+
+→ **这是「Git 真源 + 平台分发」的现成桥**：Git 仓库仍是 canonical，运营在 ChatGPT/Codex 里以插件形式拿到能力。
+
+### 8.4 其他值得知道的方案
+
+- **Claude Code Plugin Marketplace**：`.claude-plugin/marketplace.json` 放 git 仓库；`.claude/settings.json` 的 `extraKnownMarketplaces` + `enabledPlugins` 可**全团队默认启用**；省略 `version` 即按 **commit SHA** 更新，可建 stable/latest 双通道；**git 原生审计**。缺点是面向 CLI，非技术同事不友好。
+- **LangSmith Context Hub**（2026-05 上线）：AGENTS.md / SKILL.md 的**版本化 registry**，commit 不可变 + staging/production tag，`langsmith hub push/pull`，**明确面向「非工程师作者」**。最贴近诉求，代价是绑定 LangChain 生态。
+
+## 9. 建议
+
+1. **不要排期「自动收集全员聊天」。** Business 无此能力（定价页 `No`）；Enterprise 有但成本不透明、要自建 30 天滚动归档管道，且是合规工具挪用。
+2. **把目标从「收聊天」改成「收产出」。** 聊天是过程，skill 是产物。让运营在**产出环节**留痕，比在聊天环节捞一遍再人工蒸馏便宜得多。
+3. **试点第一周就定「聊天在哪发生」的纪律。** 明确要求登录时切到公司工作区；否则数据会漏进个人工作区且公司拿不到。
+4. **共享 Project 用作「周沉淀点」，不作知识底座。** 记住它的三个硬伤：共享后不能用 Google Drive/Slack 源、成员可把对话移出、无导出。
+5. **能力沉淀走 Git + 插件市场。** Git 仓库为真源；用 OpenAI 的 **Import marketplace**（可直接消费 `.claude-plugin/marketplace.json`）把它分发给非技术同事。注意 GitHub-only 与「绑定导入者 GitHub 连接」两个坑。
+6. **观察 `yc-software/qm`。** 它最接近「多人同一空间 + skill 共享」的形态，但自托管、偏工程；等试点跑出需求轮廓再评估。
+
+## 10. 未核实清单
+
+1. Business 工作区实际有无「管理员查看成员会话」入口——两份官方文档冲突（§5），建议按「无」决策。
+2. **不主动选择时默认激活哪个工作区。**
+3. Codex 本地会话（`history.jsonl`）是否同步到云端。
+4. 单个 Project 的 chat 数量上限。
+5. 本地 Codex 记录进入 Compliance API 的粒度（内容还是仅元数据）。
+6. 共享 Project 内的对话能否被管理员统一导出。
+7. Enterprise 是否有隐含的最低席位数/年约门槛。
+8. 「把聊天记录用于知识蒸馏」在合规条款下的边界（官方未背书也未禁止）。
+9. `yc-software/qm` 与 Garry Tan 本人的关联（repos 挂在 YC org，非其个人账号）。
+
+## 11. Sources
+
+### OpenAI 帮助中心 / 官网
 
 - [Managing data, sharing, and privacy in ChatGPT Business](https://help.openai.com/en/articles/8798634-managing-data-sharing-and-privacy-in-chatgpt-business)
-- [OpenAI Compliance Platform for Enterprise and Edu customers](https://help.openai.com/en/articles/9261474-compliance-platform-for-enterprise-and-edu)
+- [Managing members, seat types, and roles in ChatGPT Business](https://help.openai.com/en/articles/8542216-managing-members-seat-types-and-roles-in-chatgpt-business)
+- [Managing workspace lifecycle and migration in ChatGPT Business](https://help.openai.com/en/articles/8801890-managing-workspace-lifecycle-and-migration-in-chatgpt-business)
+- [Managing credits and spend controls in ChatGPT Business](https://help.openai.com/en/articles/20001155-managing-credits-and-spend-controls-in-chatgpt-business)
 - [Using Codex with your ChatGPT plan](https://help.openai.com/en/articles/11369540-using-codex-with-your-chatgpt-plan)
 - [Projects in ChatGPT](https://help.openai.com/en/articles/10169521-projects-in-chatgpt)
-- [Managing your tenant in Admin Console](https://help.openai.com/en/articles/12289294-managing-your-tenant-in-admin-console)
-- [Managing members, seat types, and roles in ChatGPT Business](https://help.openai.com/en/articles/8542216-managing-members-seat-types-and-roles-in-chatgpt-business)
-- [ChatGPT Workspace Agents for Enterprise and Business](https://help.openai.com/en/articles/20001143-chatgpt-workspace-agents-for-enterprise-and-business)
-- [ChatGPT Business release notes](https://help.openai.com/en/articles/11391654-chatgpt-business-release-notes)
-
-### OpenAI 官网 / 开发者文档
-
+- [Data retention when a member is removed from a workspace](https://help.openai.com/en/articles/8266418-data-retention-when-a-member-is-removed-from-a-workspace)
+- [File uploads FAQ](https://help.openai.com/en/articles/8555545-file-uploads-faq)
+- [Compliance Platform for Enterprise and Edu](https://help.openai.com/en/articles/9261474-compliance-platform-for-enterprise-and-edu)
+- [Managing Admin API keys](https://help.openai.com/en/articles/20001407-managing-admin-api-keys)
+- [ChatGPT pricing & plan comparison](https://openai.com/business/pricing/)（Business vs Enterprise 能力矩阵）
 - [Enterprise privacy at OpenAI](https://openai.com/enterprise-privacy/)（与帮助中心冲突的口径来源）
-- [Building Codex plugins](https://developers.openai.com/codex/plugins/build)（`skills/` + `.codex-plugin/plugin.json` 文件布局与工作区发布）
+
+### 开发者文档
+
+- [Codex config reference](https://developers.openai.com/codex/config-file/config-reference)（`history.persistence`、`forced_chatgpt_workspace_id`）
+- [Building Codex plugins](https://developers.openai.com/codex/plugins/build)
+- [Admin API reference](https://chatgpt.com/public/admin/api-reference)（Compliance / Projects 端点）
+
+### 开源项目
+
+- [yc-software/qm](https://github.com/yc-software/qm) — Multiplayer agent harness
+- [garrytan/gstack](https://github.com/garrytan/gstack) — AGENTS.md 三原则来源
+
+### 第三方（非官方，需打折）
+
+- [OpenAI Developer Community: apps not working inside projects](https://community.openai.com/t/apps-custom-connectors-not-working-inside-projects/1369786/19)
+- [Hjarni: Projects don't scale to a team](https://hjarni.com/blog/claude-and-chatgpt-projects-dont-scale-to-a-team)
+- [Elastic: OpenAI ChatGPT Enterprise integration fields](https://docs-v3-preview.elastic.dev/elastic/integration-docs/tree/main/reference/openai_chatgpt_enterprise.md)
 
 ### 本仓库
 
