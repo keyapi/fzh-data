@@ -16,6 +16,8 @@ tags: [ai-pilot, assessment, ops, index]
 | 2026-09 企业助手/Agent 载体与架构调研 | [assistant-platform-research-2026-09.md](assistant-platform-research-2026-09.md) |
 | **Workspace Agent 能力边界 + 与 Git 化方式逐项对比（工程细节）** | [workspace-agent-capability-boundary-2026-09.md](workspace-agent-capability-boundary-2026-09.md) |
 | **聊天记录能否沉淀 / 谁能看 / Codex 算不算** | [chat-history-capture-2026-09.md](chat-history-capture-2026-09.md) |
+| **买 2 个席位怎么分 / 账号与 workspace / 积分池与 5 小时限制** | [business-seat-account-and-usage-2026-09.md](business-seat-account-and-usage-2026-09.md) |
+| **skill 怎么发给运营（GitHub 插件市场）/ 自托管方案对比** | [skill-distribution-and-selfhost-options-2026-09.md](skill-distribution-and-selfhost-options-2026-09.md) |
 | 完整评估（逐章点评 + 项目现状证据） | [assessment.md](assessment.md) |
 | 内部底稿（不上会） | [counter-proposal.md](counter-proposal.md) |
 | 变更历史 | [log.md](log.md) |

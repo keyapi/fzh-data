@@ -7,6 +7,33 @@ description: docs/ai-ops-pilot 目录变更历史
 
 # 变更日志
 
+## 2026-09-16（深夜）新增席位/账号模型与 skill 分发调研（v3）
+
+**背景**：用户准备买 2 个 Business 席位，提出一组实操问题（怎么分配、要不要先有个人账号、默认几个 workspace、离职怎么交接、积分池与 5 小时限制、Astra/Sol、GitHub 发布 skill、qm 硬件）。用 5 个并行 subagent 分头核实。
+
+**新增 `business-seat-account-and-usage-2026-09.md`**：
+- **买席位=邀请邮箱**，不是发账号密码；没账号的会自动创建；已有账号用**同一邮箱**接受即可，**不要另建**。三层区分：账号（登录）/ 工作区（容器）/ 席位（付费名额）。
+- 接受后**默认 2 个 workspace**（个人 + 公司）；**merge 不可逆**，会删个人插件与自定义指令；管理员**不能强制**员工合并。
+- **离职**：移除成员 → 席位空出 → 邀请新邮箱。**不是改密码，也不是新建账号转移**。席位可复用；降席位下账期生效。**转移项目所有权 ≠ 转移私有对话。**
+- **积分池三层串行**：每席位内含额度 → 工作区共享池 → 购买的 credits。`Codex, ChatGPT Work, ChatGPT for Excel, and Workspace Agents` 共用同一池；**常规 Chat 单独计量**。
+- **5 小时限制**是滚动窗用量额度而非消息条数。**Standard = Plus 同档，有 5 小时窗；Premium 席位无 5 小时限制**——这才是官方的解法。credits 能延续超额用量，但**是否豁免 5 小时窗未核实**。用尽即**阻断**（非降级、非自动超支）。
+- **Astra/Sol 确认为真实模型**：GPT-6 Astra（经 GPT-6 Pro 入口）、GPT-5.6 Sol；另附 credits/1M tokens 费率与席位差异。
+
+**新增 `skill-distribution-and-selfhost-options-2026-09.md`**：
+- **Import marketplace 全流程**：`Admin → Plugins → Add → Import marketplace`；**私有仓库官方支持**，但认证是**导入者个人 GitHub OAuth**（人走同步断，建议用组织级专用账号）；支持 commit pinning + 每日同步；**仅支持 GitHub**；**声明 MCP 的插件仅桌面端**。
+- **`.claude-plugin/marketplace.json` 被官方接受**（已核实）。
+- **skills-only 插件可用**，但**不能持久化凭证** → 我们依赖赛狐/EN/通途凭证的 skill **无法在 Web 端跑**；加 MCP 则被限桌面端。**分发需按「是否需要凭证/执行」分两拨。**
+- **Claude Code marketplace 不能 as-is 给 ChatGPT 用**：仅顶层 JSON 文件名与 `SKILL.md` 可复用，执行模型不共享；Anthropic 侧**零互操作文档**。
+- **赛狐广告报告**：可走「脚本产出 → 上传共享 Project」（推荐），或包成 MCP app（Business 仅 Admin/Owner 可发）。
+- **qm 判定**：技能共享模型对口，但**官方无硬件规格**、Docker target 明确「仅供本地试跑，不得用于真实部署」、需 Postgres + 云账号等重运维；第三方评测定性 `The bus factor is two`、目标用户是「有工程师愿意兜基础设施的 5–50 人团队」。**不作为试点首选。**
+
+**更新 `chat-history-capture-2026-09.md`（v3）**：
+- **新增 §3.1「网页↔本地联动」核实**：确认存在，但主角是 **ChatGPT Work 云端会话同步**（`Cloud Work conversations now sync across web, mobile, and desktop`），**不是 Codex**——`Codex does not appear on web`。Codex 的 local↔cloud 只在 Codex 内部（`/cloud`、`/local`）。
+- 新增会话存放表：本地 Codex 在 `~/.codex/history.jsonl`，**设备损坏或离职即永久丢失、公司无恢复手段**。
+- **口径冲突升级为三处**：新增《Data access for your managed ChatGPT account》(20001067)，明列 Business 且称管理员 `may be able to access, export, audit, retain, delete`（含会话历史），限定 `where enabled by your organization's configuration and applicable law`。**行动项：采购前书面问 OpenAI 销售。**
+
+**索引**：`docs/ai-ops-pilot/index.md` 增两行；`scripts/update_index.py` 已跑且幂等。
+
 ## 2026-09-16（深夜）聊天记录调研 v2 — 补机制细节、修正两处、新增替代方案
 
 **背景**：用户指出 v1 结论过于压缩（workspace 为何要选、Codex 本地记录如何、额度是不是按席位固定），并要求深挖共享 Project 的实际限制与替代方案。用 4 个并行 subagent 分头核实。

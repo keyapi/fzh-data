@@ -87,6 +87,38 @@ Codex 是本地软件，但**「在哪跑」和「在哪记账/管控」是两�
 
 → **回答「本地 Codex 登录算不算」**：**算在管控和计费里，不算在可见内容里，而且它的会话记录本身就在成员自己的电脑上。**
 
+### 3.1 「网页和本地 App 联动」——核实结论：存在，但大概率不是 Codex
+
+用户描述「老板在网页上操作了什么，就转到本地 App 上了」。**这事是真的，但主角是 ChatGPT Work，不是 Codex。**
+
+官方（ChatGPT Business release notes）：
+
+> `Continue Work across devices: Cloud Work conversations now sync across web, mobile, and desktop, so you can start on one surface and continue on another. **Local conversations stay on your computer.**`
+
+> `Cloud Work chats sync across web, mobile, and desktop. Work chats started on web or mobile appear in the desktop app... **Messages and task context may be stored in the cloud, even when work runs locally.**`
+
+**普通 Chat 也跨端同步**：`Chats created in Chat sync between ChatGPT web and the desktop app.`
+
+**但 Codex 是独立的，且不出现在网页上**：
+
+> `Codex remains a separate view. Its workflows are unchanged, and **its history remains separate from ChatGPT history. Codex does not appear on web.**`
+
+Codex 的 `local ↔ cloud` 交接确实存在，但**只在 Codex 内部**（会话里的 `/cloud`、`/local` 命令），**不会跨到 ChatGPT 的网页界面**。
+
+→ **一句话**：老板看到的「网页 → 本地 App」联动，是 **ChatGPT Work 的云端会话同步**；Codex 那条线是独立且封闭的。
+
+### 3.2 会话记录存放位置与可恢复性
+
+| 类型 | 存在哪 | 公司能否取回 |
+|------|--------|-------------|
+| **本地 Codex**（CLI / IDE / 桌面 Local） | 本地 `$CODEX_HOME`（通常 `~/.codex/`）下的 **`history.jsonl`**；配置项 `history.persistence`（`save-all \| none`）、`history.max_bytes`、`sqlite_home` | ❌ **不能**。无云端副本、无管理端入口。**设备损坏或人离职即永久丢失。** |
+| **Codex 云任务** | OpenAI 托管环境，见 chatgpt.com/codex | ⚠️ 服务端在，但 Business **无合规导出通道** → 实操上取不回 |
+| **ChatGPT 侧内容**（含 Work） | 云端，Business 工作区 `retained indefinitely` | ⚠️ 数据在，但 `the workspace owner can't view that private content` |
+
+**Business 工作区对 Codex 的可见性**：只有**用量/采用度**与**策略开关**（`Codex Local` / `Codex Cloud` 可分别控制）；**会话正文不可见**。审计日志记录的也只是 Codex「Policies & Configurations」的**变更**，且走 Compliance API（Enterprise/Edu）。
+
+→ **对试点的硬结论**：**若要求「会话可归档、可追溯」，本地 Codex 模式不满足。** 要么让成员改用 **Codex 云任务**（chatgpt.com/codex），要么走 **ChatGPT Work 的云端会话**。
+
 ## 4. 额度模型：不是「一个席位固定额度」
 
 用户的理解只对了一半。官方是**两层**：
@@ -113,11 +145,22 @@ Codex 是本地软件，但**「在哪跑」和「在哪记账/管控」是两�
 
 帮助中心旁证：`Because each user has their own chat history. A Business workspace allows collaboration, but chats are not automatically visible to other members.` / `Does usage analytics let admins read all user chats? No.`
 
-### ⚠️ 仍存在一处口径冲突（v1 已报告，v2 复核后维持）
+### ⚠️ 仍存在一处口径冲突（v3 更新：已找到第三处来源）
 
-官网 [enterprise-privacy](https://openai.com/enterprise-privacy/) 的 Business FAQ 仍写着管理员「**可以查看、访问、导出和删除**工作区中终端用户的会话」。这与上面帮助中心 + 定价页的证据**直接矛盾**。
+官网 [enterprise-privacy](https://openai.com/enterprise-privacy/) 的 Business FAQ 写着管理员「**可以查看、访问、导出和删除**工作区中终端用户的会话」。这与上面帮助中心 + 定价页的证据**直接矛盾**。
 
-**v2 的处置**：证据天平已明显偏向「Business 做不到」——因为**定价对比表是产品能力表，且逐特性标了 No**，而隐私页那条**依旧没有给出任何机制**（Enterprise 那条点名了 Compliance API，Business 这条没有）。**建议按「做不到」决策**，若老板坚持要，让 owner 账号实测或向销售书面确认。
+**v3 又找到第三处，且它明列 Business**：《Data access for your managed ChatGPT account》(20001067) 称管理员 `may be able to access, export, audit, retain, delete and opt-in to share data tied to this account`，范围含 **`Conversation history and shared workspace content`**——但带限定语 **`where enabled by your organization's configuration and applicable law`**。
+
+| 来源 | 性质 | 说法 |
+|------|------|------|
+| 帮助中心 8798634 / 11509118 + 官方定价对比页 | **产品能力文档** | 管理员**不能**看；`Compliance API Logs Platform` = **No** |
+| Enterprise Privacy 页（Business FAQ） | **法务/承诺页** | 管理员**可以**查看、访问、导出、删除 |
+| Managed Account Notice 20001067 | **法务/承诺页** | 管理员**可能可以**访问、导出、审计、保留、删除（含会话历史），**若组织配置与法律允许** |
+
+**v3 处置**：
+- 产品文档说「不会自动可见」，法务文档说「有权利」——层级不同，后者带 `where enabled` 限定语。
+- **Business 后台是否真有可点的「查看成员会话」入口，官方文档未描述 → 未核实。**
+- **行动项（重要）：采购前把这个问题书面提给 OpenAI 销售/支持，拿到明确答复再决定。** 不要靠推测排期，也不要在上会材料里写成「能实现」。
 
 ## 6. Enterprise 到底怎么实现（已核实）
 
