@@ -15,6 +15,7 @@ tags: [ai-pilot, assessment, ops, index]
 | **递给老板和老板 Agent 的（对外）** | [brief-for-boss.md](brief-for-boss.md) |
 | 2026-09 企业助手/Agent 载体与架构调研 | [assistant-platform-research-2026-09.md](assistant-platform-research-2026-09.md) |
 | **Workspace Agent 能力边界 + 与 Git 化方式逐项对比（工程细节）** | [workspace-agent-capability-boundary-2026-09.md](workspace-agent-capability-boundary-2026-09.md) |
+| **聊天记录能否沉淀 / 谁能看 / Codex 算不算** | [chat-history-capture-2026-09.md](chat-history-capture-2026-09.md) |
 | 完整评估（逐章点评 + 项目现状证据） | [assessment.md](assessment.md) |
 | 内部底稿（不上会） | [counter-proposal.md](counter-proposal.md) |
 | 变更历史 | [log.md](log.md) |
@@ -26,6 +27,7 @@ tags: [ai-pilot, assessment, ops, index]
 | `docs/research/2026-07-24-*`（统一 AI 接入调研 + 独立复审 + PoC 计划） | **上游历史裁决**。当时未评估 ChatGPT Business；其 C′ 门户融合方案现作为 PoC/备用与工程工具参考 |
 | [assistant-platform-research-2026-09.md](assistant-platform-research-2026-09.md) | **当前平台复核**。核实 Workspace Agents、Company Knowledge、远程 MCP 与其他企业 Agent 平台，提出「ChatGPT 前台 + Git 真源 + FZH MCP 薄适配层」 |
 | [workspace-agent-capability-boundary-2026-09.md](workspace-agent-capability-boundary-2026-09.md) | **同一复核的工程下钻**。回答 R1 点名的五问（创建/编辑形态、上传物与代码执行、工具接入与私网、权限治理、可维护性），逐项给出「留 Git / 放 Workspace」的可执行清单 |
+| [chat-history-capture-2026-09.md](chat-history-capture-2026-09.md) | **老板新提诉求的核实**。「聊天记录能否统一沉淀」→ Business 做不到自动收集；给出共享 Project / Plugin-Skill 两条官方替代路径；**含两份官方文档的口径冲突**（须上会前解决） |
 | `ai_access_poc/`（壳 #113 + 板 #116 + portal） | **上游**。技术验收已绿，卡在运营审 |
 | `docs/non-tech-team-agent-guide.md`、`docs/enterprise-agent-knowledge-system.md` | **上游**。非技术同事用 Agent 的已验证做法 |
 | `docs/ai-for-amazon-ops-2026.md` | 2026-06-29 面向运营+管理层的分享稿；含一处与当前实际不符的表述（见 assessment 待核实清单） |

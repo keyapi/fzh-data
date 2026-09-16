@@ -7,6 +7,17 @@ description: docs/ai-ops-pilot 目录变更历史
 
 # 变更日志
 
+## 2026-09-16（夜）新增聊天记录沉淀能力调研
+
+- **背景**：老板 2026-09-16 会上提出「第一步把工作区里所有人的聊天记录都沉淀下来，之后整理成资料 / skill」。用户问：workspace 里的聊天是否自动算在工作区内、本地 Codex 登录算不算。
+- **新增 `chat-history-capture-2026-09.md`**：回答该诉求的可行性，并给出官方支持的替代路径。
+- **核心结论**：**Business 档位做不到「自动收集全员聊天」**——成员间默认互不可见（`Other members do not automatically see those chats or Codex activity`），用量分析 ≠ 会话访问（官方 FAQ 明确 `No`），且 **Business 工作区没有数据导出**（`Data export is not available`）。管理员读全部会话 + 导出是 **Compliance API**，**仅 Enterprise/Edu**，且日志只留 30 天需自建归档。
+- **发现一处官方口径冲突（本次最重要）**：帮助中心说管理员**不能**看/导出成员会话；而官网 [enterprise-privacy](https://openai.com/enterprise-privacy/) 的 Business FAQ 说管理员**可以**查看、访问、导出、删除。**两处均为 OpenAI 官方域名，结论相反。** 已在文档中单列并给出处置建议（不取平均、须实测或书面确认、上会列为待确认风险）。
+- **workspace 归属问题**：确认 workspace 是**账号级容器**，Chat 与 Codex 记录都归属该工作区，跨网页/桌面/移动/Codex 一致；但「归属工作区」≠「他人可见」。
+- **Codex 问题**：Codex 内容同样不与他人共享；但受工作区开关管控与计费，其使用记录进 Compliance API（Enterprise/Edu）。Codex local 需管理员启用。
+- **给出两条可落地路径**：① **共享 Project**（Business 可用，chats + 文件 + instructions，Edit/Chat 两级权限，工作区项目≤100 人、≤40 文件）——聊天沉淀；② **Plugin/Skill**（`skills/<name>/SKILL.md` + `.codex-plugin/plugin.json` 文件布局，发布到工作区需管理员）——能力沉淀，且产物可进 Git。
+- **6 项「未核实」**，其中第 1 项即上述口径冲突，必须实测。
+
 ## 2026-09-16（夜）新增 Workspace Agent 能力边界调研（工程下钻）
 
 - **新增 `workspace-agent-capability-boundary-2026-09.md`**：回答 `brief-for-boss.md` **R1** 点名的五个工程问题——创建/编辑形态、上传物与代码执行、工具接入（含私网）、权限治理、可维护性，并逐项与仓库 Git 化方式对比。

@@ -23,7 +23,7 @@ generated: 2026-09-16
 | **amazon_pairing** | 12 | Handoff, Index, Log, Reference | [amazon_pairing/](amazon_pairing/) -> [amazon_pairing/docs/index.md](amazon_pairing/docs/index.md) |
 | **channel_account_sync** | 13 | Index, Lesson, Log, Reference | [channel_account_sync/](channel_account_sync/) -> [channel_account_sync/docs/index.md](channel_account_sync/docs/index.md) |
 | **dingtalk** | 2 | index, log | [dingtalk/](dingtalk/) -> [dingtalk/dingtalk_robot/docs/index.md](dingtalk/dingtalk_robot/docs/index.md) |
-| **docs** | 98 | ?, Handoff, ImplementationPlan, Index | [docs/](docs/) -> [docs/research/index.md](docs/research/index.md) |
+| **docs** | 99 | ?, Handoff, ImplementationPlan, Index | [docs/](docs/) -> [docs/research/index.md](docs/research/index.md) |
 | **erpnext** | 5 | Index, Log | [erpnext/](erpnext/) -> [erpnext/docs/index.md](erpnext/docs/index.md) |
 | **fedex_track** | 3 | Index, Log, Reference | [fedex_track/](fedex_track/) -> [fedex_track/docs/index.md](fedex_track/docs/index.md) |
 | **gls_track** | 2 | Index, Log | [gls_track/](gls_track/) -> [gls_track/docs/index.md](gls_track/docs/index.md) |
@@ -283,6 +283,7 @@ generated: 2026-09-16
 | Reference | 通途自发货仓库改名后的对账与登记（ERPNext + 财务共享表） | [docs/solutions/workflow-issues/tongtu-warehouse-rename-reconciliation.md](docs/solutions/workflow-issues/tongtu-warehouse-rename-reconciliation.md) | 2026-08-19 |
 | Research | 2026-09 企业 AI 助手与 Agent 载体调研 | [docs/ai-ops-pilot/assistant-platform-research-2026-09.md](docs/ai-ops-pilot/assistant-platform-research-2026-09.md) | 2026-09-16 |
 | Research | AI Agent 平台深度对比 — Open WebUI vs Hermes vs Pi vs 其他 | [docs/research/web-agent-platform-comparison-2026.md](docs/research/web-agent-platform-comparison-2026.md) | 2026-07-24 |
+| Research | ChatGPT Business 聊天记录沉淀能力调研 | [docs/ai-ops-pilot/chat-history-capture-2026-09.md](docs/ai-ops-pilot/chat-history-capture-2026-09.md) | 2026-09-16 |
 | Research | ChatGPT Workspace Agent 能力边界与 Git 化方式对比 | [docs/ai-ops-pilot/workspace-agent-capability-boundary-2026-09.md](docs/ai-ops-pilot/workspace-agent-capability-boundary-2026-09.md) | 2026-09-16 |
 | Research | FZH 统一 AI 接入 — 独立复审与平台裁决 | [docs/research/2026-07-24-unified-ai-access-independent-review.md](docs/research/2026-07-24-unified-ai-access-independent-review.md) | 2026-07-24 |
 | Research | FZH 统一 AI 接入方案 — 完整调研报告与 Agent 交接文档 | [docs/research/2026-07-24-fzh-unified-ai-access-research.md](docs/research/2026-07-24-fzh-unified-ai-access-research.md) | 2026-07-24 |
