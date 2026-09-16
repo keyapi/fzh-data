@@ -6,7 +6,7 @@ Usage:
   python scripts/update_index.py --check   # Check only, report drift
 """
 
-import os, sys, argparse
+import os, sys, argparse, subprocess
 from pathlib import Path
 from datetime import datetime
 
@@ -18,8 +18,43 @@ SEP    = "|--------|------|-------|-------|"
 DETAIL_HEADER = "| Type | Title | Path | Updated |"
 DETAIL_SEP    = "|------|-------|------|---------|"
 
+# Which Index doc represents a module is a human choice for grab-bag folders,
+# so pin it explicitly; otherwise pick is derived from the tree (see entry_of).
+ENTRY_OVERRIDE = {"docs": "docs/research/index.md"}
 
-def scan(root: Path) -> dict:
+
+def entry_of(module: str, docs: list) -> str:
+    """Stable entry point: explicit override > shallowest Index > shallowest doc."""
+    if module in ENTRY_OVERRIDE:
+        return ENTRY_OVERRIDE[module]
+    candidates = [d for d in docs if d["type"] == "Index"] or docs
+    return min(candidates, key=lambda d: (d["path"].count("/"), d["path"]))["path"]
+
+
+def git_dates(root: Path) -> dict:
+    """{rel_path: 'YYYY-MM-DD'} — commit date of the most recent commit touching each file.
+
+    Preferred over filesystem mtime because a fresh clone/worktree resets mtimes,
+    which would otherwise rewrite every date in index.md.
+    """
+    try:
+        out = subprocess.run(
+            ["git", "log", "--format=%x01%cd", "--date=short", "--name-only"],
+            cwd=root, capture_output=True, text=True,
+            encoding="utf-8", errors="replace", check=True,
+        ).stdout
+    except Exception:
+        return {}
+    dates, cur = {}, None
+    for line in out.splitlines():
+        if line.startswith("\x01"):
+            cur = line[1:].strip()
+        elif line.strip() and cur:
+            dates.setdefault(line.strip(), cur)  # first hit = most recent commit
+    return dates
+
+
+def scan(root: Path, dates: dict) -> dict:
     modules = {}
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [d for d in dirnames if not d.startswith(".")
@@ -52,7 +87,9 @@ def scan(root: Path) -> dict:
             rel_path = fpath.relative_to(root).as_posix()
             parts = rel_dir.split("/")
             module = parts[0] if parts[0] != "." else "root"
-            mtime = datetime.fromtimestamp(fpath.stat().st_mtime).strftime("%Y-%m-%d")
+            # Git commit date first; mtime only for untracked/new files.
+            mtime = dates.get(rel_path) or datetime.fromtimestamp(
+                fpath.stat().st_mtime).strftime("%Y-%m-%d")
             modules.setdefault(module, []).append({
                 "path": rel_path, "type": meta.get("type","?"),
                 "title": meta.get("title", fname), "okf": meta.get("okf",""),
@@ -61,8 +98,8 @@ def scan(root: Path) -> dict:
     return modules
 
 
-def build(modules: dict) -> str:
-    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+def build(modules: dict, generated: str) -> str:
+    now = generated
     lines = [
         "---",
         "okf: v0.1",
@@ -85,8 +122,7 @@ def build(modules: dict) -> str:
     for mod in sorted(modules.keys()):
         docs = modules[mod]
         types = sorted(set(d["type"] for d in docs))
-        index_doc = next((d for d in docs if d["type"] == "Index"), None)
-        entry = (index_doc or docs[0])["path"]
+        entry = entry_of(mod, docs)
         lines.append(f"| **{mod}** | {len(docs)} | {', '.join(types[:4])} | [{mod}/]({mod}/) -> [{entry}]({entry}) |")
     lines.extend(["", "## Module Details", ""])
     for mod in sorted(modules.keys()):
@@ -105,8 +141,12 @@ def main():
     parser = argparse.ArgumentParser(description="Update root index.md")
     parser.add_argument("--check", action="store_true", help="Check only, report drift")
     args = parser.parse_args()
-    modules = scan(ROOT)
-    content = build(modules)
+    modules = scan(ROOT, git_dates(ROOT))
+    # Deterministic header timestamp: newest doc date, so --check is stable
+    # across runs (datetime.now() would make every check report drift).
+    all_dates = [d["mtime"] for docs in modules.values() for d in docs]
+    generated = max(all_dates) if all_dates else datetime.now().strftime("%Y-%m-%d")
+    content = build(modules, generated)
     if args.check:
         if INDEX_PATH.is_file():
             existing = INDEX_PATH.read_text(encoding="utf-8")
