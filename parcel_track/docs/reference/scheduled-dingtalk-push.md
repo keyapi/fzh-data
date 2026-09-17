@@ -116,9 +116,11 @@ schtasks /Query /TN FZH-ParcelTrack-daily /V /FO LIST
   `tongtu_orderdetail_report.run()`）。
   根治方案二选一：① 安全软件里把 `%LOCALAPPDATA%\ms-playwright` 加白；
   ② 给 `web_automation` 加一个统一的浏览器启动封装（读 env 决定 channel/headless）。
-- **FedEx 凭证是沙箱的**：打生产端点报 `Sandbox credentials not allowed in this environment`，
-  报表里 FedEx 行会全部落进「数据异常/查无」。**需要换成 FedEx 生产 key**。
-  UPS 与 GLS 不受影响（UPS 生产认证已验证可用）。
+- **承运商凭证要保证是「生产」的**：`parcel_track` 把环境写死为生产
+  （UPS `env="prod"` / FedEx `env="production"`），**沙箱 key 会认证失败**，报表里该承运商的
+  行会**全部落进「数据异常/查无」**（看着像查不到，其实是凭证不对，极易误判）。
+  FedEx 沙箱 key 的报错原文是 `Sandbox credentials not allowed in this environment`。
+  换 key 后记得 `FEDEX_ENV` 同步改（`fedex_track` 读的是 `FEDEX_ENV`，不是 `FEDEX_API_ENV`）。
 
 
 ## 排障
