@@ -42,6 +42,17 @@ python -m pytest parcel_track/tests fedex_track/tests/test_ops_report.py gls_tra
 
 工作树内不要 `uv run`（会另建 `.venv`）；用父仓库 `.venv\Scripts\python.exe`，并设 `PYTHONPATH` 为工作树根。凭证：CLI 依次加载工作树/仓库/sibling worktree 的 `.env`（`override=False`，只补未 export 的变量）。禁止把 key 写入文档或 commit。
 
+## 输入表形态
+
+`ingest.read_tongtu_sheet()` **自动定位表头行**，两种导出通吃：
+
+- 导出中心套模板导出：表头在第 0 行
+- `tongtu.orderdetail.export`（订单详情统计）：表头在**第 30 行**、91 列，前 30 行是筛选条件元数据。
+  ⚠️ 元数据里**自己有一行叫 `跟踪号`（值 `全部`）**，取「第一处出现跟踪号的行」会误判；
+  实现取「含跟踪号的各行中非空格子最多的那行」。
+
+自动导出流程与「发货截止日期不能为当天」等约束见 [docs/reference/scheduled-dingtalk-push.md](docs/reference/scheduled-dingtalk-push.md)。
+
 ## 推送口径
 
 - 推文正文由 `notify.summarize()` 渲染，**钉钉 markdown 不渲染表格**，所以用列表

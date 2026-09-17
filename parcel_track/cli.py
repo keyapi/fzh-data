@@ -127,13 +127,25 @@ def _alert(exc: BaseException) -> None:
         print(f"失败告警发送不成功：{alert_exc}", file=sys.stderr)
 
 
+def _safe_print(text: str) -> None:
+    """控制台编码可能装不下卡片正文里的 emoji（Windows 默认 GBK）——降级替换而不是崩。
+
+    推给钉钉的那份始终是完整 UTF-8，这里只影响本地预览输出。
+    """
+    try:
+        print(text)
+    except UnicodeEncodeError:
+        enc = sys.stdout.encoding or "utf-8"
+        print(text.encode(enc, errors="replace").decode(enc, errors="replace"))
+
+
 def _push(args, stats: dict) -> None:
     from .notify import notify_report
 
     result = notify_report(args.out, stats, title=args.title, dry_run=args.dry_run)
     if result.get("dry_run"):
         print("--- 钉钉卡片预览（dry-run，未发送）---")
-        print(f"标题：{result['title']}\n{result['text']}")
+        _safe_print(f"标题：{result['title']}\n{result['text']}")
         return
     if result.get("errcode") != 0:
         raise RuntimeError(f"钉钉推送失败：{result}")

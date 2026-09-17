@@ -33,11 +33,38 @@ tags: [parcel-track, dingtalk, scheduling, windows-task-scheduler, unattended]
 
 ## 输入从哪来
 
-`--tt` 给的是**目录**，取其中最新的 `.xlsx`：把通途「非FBA订单」导出丢进
+`--tt` 给的是**目录**，取其中最新的 `.xlsx`：把通途导出丢进
 `parcel_track_input/` 即可（该目录已 gitignore，含买家信息）。
 
-> ⚠️ **目前没有自动导出**：通途非FBA订单仍需人工从通途下载后放进 `parcel_track_input/`。
-> 真正全无人值守还差这一步（`web_automation` 现有 `tongtu.stock/sales/orderdetail` 三个能力，不含非FBA订单）。
+### 用仓库自动化导（2026-09-17 实测可行）
+
+```bash
+# 一次性：装子环境 + Chromium + OCR
+uv run python web_automation/scripts/bootstrap.py --with-ocr
+# 首次要在 web_automation/.env 填 TONGTU_USER / TONGTU_PASSWORD（gitignored）
+
+# 导一段发货时间（--auto-login = ddddocr 自动过验证码）
+uv run python web_automation/scripts/dispatch.py tongtu.orderdetail.export \
+    -- --range-start 2026-09-10 --range-end 2026-09-16 --auto-login
+
+# 产出 web_automation/downloads/订单详情统计_*.zip，解压出 xlsx 放进 parcel_track_input/
+```
+
+**三条硬约束（都踩过）**：
+
+1. **发货时间的「止」不能是当天**——通途不接受，会报错。所以「近 7 天」要写成
+   `<今天-7> ~ <昨天>`。定时任务算范围时必须避开今天。
+2. **导出的 xlsx 表头在第 30 行**（前面约 30 行是筛选条件元数据），91 列。
+   元数据区自己就有一行叫 `跟踪号`（值 `全部`），**不能**拿它当表头。
+   `parcel_track.ingest.read_tongtu_sheet()` 已自动定位表头行，两种导出形态通吃。
+3. **本机 bundled chromium 有头模式起不来**（`spawn UNKNOWN`；chromium-1228 另报沙箱
+   `拒绝访问 0x5`），但**系统 Chrome 有头正常**。`web_automation` 的脚本把
+   `launch_persistent_context(headless=False)` 写死、没留 channel 开关，本机需要
+   给它注入 `channel="chrome"` 才能跑（见下方「已知问题」）。
+
+> 备注：GLS 走公开 REST、UPS 走官方 Track，**都不依赖通途那条链**；
+> 「自动导出」只解决「从通途拿订单表」这一步。
+
 
 ## 注册定时任务（Windows）
 
@@ -78,6 +105,21 @@ schtasks /Query /TN FZH-ParcelTrack-daily /V /FO LIST
 ```
 
 日志：`parcel_track_output/logs/parcel_track-daily.log`；产出：`parcel_track_output/ops_<YYYYMMDD>.xlsx`。
+
+## 已知问题（2026-09-17）
+
+- **本机 bundled chromium 有头模式起不来**：`spawn UNKNOWN`；chromium-1228 换报沙箱
+  `拒绝访问 0x5`。headless 模式正常、系统 Chrome（`channel="chrome"`）有头也正常。
+  `web_automation/legacy-compatible/*` 里 20 个脚本各自内联
+  `launch_persistent_context(headless=False)`，**没有 channel/headless 开关**，所以本机
+  跑通途导出需要外部注入 `channel="chrome"`（例如包一层 monkeypatch 再调
+  `tongtu_orderdetail_report.run()`）。
+  根治方案二选一：① 安全软件里把 `%LOCALAPPDATA%\ms-playwright` 加白；
+  ② 给 `web_automation` 加一个统一的浏览器启动封装（读 env 决定 channel/headless）。
+- **FedEx 凭证是沙箱的**：打生产端点报 `Sandbox credentials not allowed in this environment`，
+  报表里 FedEx 行会全部落进「数据异常/查无」。**需要换成 FedEx 生产 key**。
+  UPS 与 GLS 不受影响（UPS 生产认证已验证可用）。
+
 
 ## 排障
 
