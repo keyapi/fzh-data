@@ -168,7 +168,19 @@ components:
         - searchField
         - searchType
         - searchValue
-      x-apifox-ignore-properties: []
+      x--orders:
+        - startDate
+        - endDate
+        - shopIds
+        - currency
+        - orderField
+        - orderValue
+        - pageNum
+        - pageSize
+        - searchField
+        - searchType
+        - searchValue
+      x--ignore-properties: []
       x-apifox-folder: ''
     OpenResult«TemuAllReportPageSkuOpenVo»:
       type: object
@@ -195,7 +207,13 @@ components:
         - msg
         - data
         - ts
-      x-apifox-ignore-properties: []
+      x--orders:
+        - requestId
+        - code
+        - msg
+        - data
+        - ts
+      x--ignore-properties: []
       x-apifox-folder: ''
     TemuAllReportPageSkuOpenVo:
       type: object
@@ -217,7 +235,11 @@ components:
         - rows
         - totalPage
         - totalSize
-      x-apifox-ignore-properties: []
+      x--orders:
+        - rows
+        - totalPage
+        - totalSize
+      x--ignore-properties: []
       x-apifox-folder: ''
     TemuAllMskuDaySummarySkuOpenVo:
       type: object
@@ -370,7 +392,41 @@ components:
         - shopOtherFee
         - productOtherFee
         - currency
-      x-apifox-ignore-properties: []
+      x--orders:
+        - shopId
+        - shopNameList
+        - mskuList
+        - salesNum
+        - grossProfit
+        - skuList
+        - grossRate
+        - platformStoreNoList
+        - developerNameList
+        - repaymentAmount
+        - commodityNameList
+        - platformIncomeFee
+        - salesManNameList
+        - transactionFee
+        - consumerRefundFee
+        - afterSalesSubsidyFee
+        - eprRefundFee
+        - platformExpendFee
+        - warehouseServiceFee
+        - advertisingServiceFee
+        - commercialAfterSalesFee
+        - warehouseAddedServiceFee
+        - stockDebitFee
+        - qualityAccidentDebitFee
+        - afterSaleDebitFee
+        - productQualityFee
+        - storeOtherExpend
+        - eprWithholdFee
+        - purchaseFee
+        - logisticsFee
+        - shopOtherFee
+        - productOtherFee
+        - currency
+      x--ignore-properties: []
       x-apifox-folder: ''
   securitySchemes: {}
 servers: []
