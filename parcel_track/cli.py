@@ -6,6 +6,7 @@ import argparse
 import datetime as _dt
 import os
 import sys
+from pathlib import Path
 
 from .orchestrate import run_report
 
@@ -14,12 +15,15 @@ def _make_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="parcel_track", description="通途订单混合尾程跟踪 + 运营异常报表")
     sub = p.add_subparsers(dest="command", required=True)
     r = sub.add_parser("report", help="读通途 xlsx，分流查询，写异常 Excel")
-    r.add_argument("--tt", required=True, help="通途非FBA订单 xlsx")
-    r.add_argument("--out", required=True, help="输出 Excel")
+    r.add_argument("--tt", required=True, help="通途非FBA订单 xlsx；给目录则取其中最新的 .xlsx")
+    r.add_argument("--out", help="输出 Excel，默认 parcel_track_output/ops_<日期>.xlsx")
     r.add_argument("--prefix", help="summary 前缀，默认与 --out 同目录同名")
     r.add_argument("--mock", action="store_true", help="离线 mock，不打官方 API / GLS 公开 REST")
     r.add_argument("--limit", type=int, default=0, help="每个承运商最多查 N 个")
     r.add_argument("--workers", type=int, default=4, help="UPS/FedEx/GLS 并发（--mock 时强制 1）")
+    r.add_argument("--notify", action="store_true", help="跑完把 Excel 推到钉钉群（复用 dingtalk_robot）")
+    r.add_argument("--dry-run", action="store_true", help="配合 --notify：只打印卡片正文，不发群")
+    r.add_argument("--title", help="钉钉卡片标题，默认「尾程运营异常 · <日期>」")
     return p
 
 
@@ -93,12 +97,57 @@ def _gls_query(mock: bool):
     return client, client.track
 
 
+def _resolve_tt(tt: str) -> str:
+    """--tt 给目录时取其中最新的 .xlsx，供无人值守跑（导出落盘后直接跑）。"""
+    if not os.path.isdir(tt):
+        return tt
+    candidates = [p for p in Path(tt).glob("*.xlsx") if not p.name.startswith("~$")]
+    if not candidates:
+        raise FileNotFoundError(f"{tt} 下没有 .xlsx")
+    return str(max(candidates, key=lambda p: p.stat().st_mtime))
+
+
+def _resolve_out(out: str | None) -> str:
+    """--out 省略时用带日期的默认名；父目录不存在则建（无人值守首次跑常见）。"""
+    if not out:
+        out = os.path.join("parcel_track_output", f"ops_{_dt.date.today():%Y%m%d}.xlsx")
+    parent = os.path.dirname(os.path.abspath(out))
+    os.makedirs(parent, exist_ok=True)
+    return out
+
+
+def _alert(exc: BaseException) -> None:
+    """无人值守跑挂时也要出声：发一条钉钉纯文本告警。"""
+    try:
+        from .notify import notify_failure
+
+        notify_failure(f"{type(exc).__name__}: {exc}")
+        print("已发出失败告警到钉钉", file=sys.stderr)
+    except Exception as alert_exc:      # 告警本身失败不能盖住原始异常
+        print(f"失败告警发送不成功：{alert_exc}", file=sys.stderr)
+
+
+def _push(args, stats: dict) -> None:
+    from .notify import notify_report
+
+    result = notify_report(args.out, stats, title=args.title, dry_run=args.dry_run)
+    if result.get("dry_run"):
+        print("--- 钉钉卡片预览（dry-run，未发送）---")
+        print(f"标题：{result['title']}\n{result['text']}")
+        return
+    if result.get("errcode") != 0:
+        raise RuntimeError(f"钉钉推送失败：{result}")
+    print("已推送到钉钉群")
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _make_parser().parse_args(argv)
     if args.command != "report":
         return 2
     if not args.mock:
         _load_env()
+    args.tt = _resolve_tt(args.tt)
+    args.out = _resolve_out(args.out)
     prefix = args.prefix
     if not prefix:
         base = os.path.splitext(args.out)[0]
@@ -112,6 +161,10 @@ def main(argv: list[str] | None = None) -> int:
             ups_query=uq, fedex_query=fq, gls_query=gq, limit=args.limit or 0,
             workers=1 if args.mock else args.workers,
         )
+    except Exception as exc:
+        if args.notify:
+            _alert(exc)
+        raise
     finally:
         if uc is not None:
             uc.close()
@@ -123,6 +176,8 @@ def main(argv: list[str] | None = None) -> int:
         f"入 {stats['in']} → UPS {stats['ups']} / FedEx {stats['fedex']} / GLS {stats['gls']} "
         f"/ 停放 {stats['parked']} → 分类 {stats['classified']}\nwritten {stats['out']}"
     )
+    if args.notify:
+        _push(args, stats)
     return 0
 
 

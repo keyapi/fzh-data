@@ -2,8 +2,8 @@
 okf: v0.1
 type: Index
 title: parcel_track
-description: 通途订单分流 UPS/FedEx/GLS + 共享运营异常报表
-updated: 2026-09-08
+description: 通途订单分流 UPS/FedEx/GLS + 共享运营异常报表 + 钉钉推送
+updated: 2026-09-17
 ---
 
 # parcel_track
@@ -19,4 +19,19 @@ python -m parcel_track.cli report --tt <通途.xlsx> --out parcel_track_output/o
 python -m parcel_track.cli report --tt <通途.xlsx> --out parcel_track_output/ops.xlsx --workers 4
 ```
 
+跑完推到钉钉群（`--dry-run` 只打印卡片正文、不发群）：
+
+```powershell
+python -m parcel_track.cli report --tt <通途.xlsx> --notify
+```
+
 FedEx 单承运商旧入口：`python -m fedex_track.ops_report`。GLS 单承运商月报：`python -m gls_track.cli monthly`。
+
+## 无人值守
+
+- `--tt` 可以给**目录**：取其中最新的 `.xlsx`（导出落盘后直接跑，不用改命令行）。
+- `--out` 省略时写 `parcel_track_output/ops_<YYYYMMDD>.xlsx`（父目录自动创建）。
+- 跑挂时若带 `--notify`，会额外发一条钉钉纯文本告警，避免静默失败。
+
+定时注册：[reference/scheduled-dingtalk-push.md](reference/scheduled-dingtalk-push.md)。
+
