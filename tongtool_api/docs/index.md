@@ -15,6 +15,7 @@ timestamp: 2026-08-13
 | Understand auth, permissions, and errors | reference/authentication-and-errors.md |
 | Find the useful ERP2 MCP areas | reference/erp2-tool-catalog.md |
 | Query orders and merchant packages | reference/orders-packages.md |
+| Create purchase orders from EN Delivery Notes | reference/purchase-orders.md |
 | Review source comparison | research/2026-08-13-source-audit.md |
 | Review Cursor MCP install evidence | research/2026-08-14-cursor-mcp-install.md |
 | Review rate-limit evidence | research/2026-08-13-rate-limit-experiment.md |
