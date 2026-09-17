@@ -163,7 +163,16 @@ components:
         - desc
         - pageNo
         - pageSize
-      x-apifox-ignore-properties: []
+      x--orders:
+        - currency
+        - shopIds
+        - startDate
+        - endDate
+        - orderBy
+        - desc
+        - pageNo
+        - pageSize
+      x--ignore-properties: []
       x-apifox-folder: ''
     OpenResult«FinAggSettlementAfterSalesResendTemuAllOpenVO»:
       type: object
@@ -190,7 +199,13 @@ components:
         - msg
         - data
         - ts
-      x-apifox-ignore-properties: []
+      x--orders:
+        - requestId
+        - code
+        - msg
+        - data
+        - ts
+      x--ignore-properties: []
       x-apifox-folder: ''
     FinAggSettlementAfterSalesResendTemuAllOpenVO:
       type: object
@@ -213,7 +228,11 @@ components:
         - rows
         - totalPage
         - totalSize
-      x-apifox-ignore-properties: []
+      x--orders:
+        - rows
+        - totalPage
+        - totalSize
+      x--ignore-properties: []
       x-apifox-folder: ''
     FinAggSettlementAfterSalesResendTemuAllPageOpenVO:
       type: object
@@ -273,7 +292,21 @@ components:
         - salesQuantity
         - amount
         - accountTime
-      x-apifox-ignore-properties: []
+      x--orders:
+        - currency
+        - shopId
+        - shopName
+        - accountType
+        - feeName
+        - parentOrderSn
+        - subPurchaseOrderSn
+        - msku
+        - mskuCode
+        - mskuAttribute
+        - salesQuantity
+        - amount
+        - accountTime
+      x--ignore-properties: []
       x-apifox-folder: ''
   securitySchemes: {}
 servers: []

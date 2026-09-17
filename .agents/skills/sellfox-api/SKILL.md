@@ -4,7 +4,7 @@ description: >
   赛狐 (Sellfox) OpenAPI 访问。支持两种方式：
   (1) 代理 API — 运营/非开发人员首选，钉钉登录自动配 Key，通过 api.vilavi.cn 中转；
   (2) 直接 API — 开发人员在 VPS 白名单 IP 上直连 openapi.sellfox.com。
-  提供 419 个 API 端点文档、7 种 SP/SB/SD 广告报告脚本、店铺列表拉取示例。
+  提供 443 个 API 端点文档、7 种 SP/SB/SD 广告报告脚本、店铺列表拉取示例。
   当用户提到"赛狐API"、"sellfox api"、"赛狐接口"、"赛狐开放平台"、
   "api.vilavi.cn/sellfox"、"赛狐代理"、"赛狐广告报告"、"赛狐店铺"、
   "sellfox report"、"saihu api"、"赛狐中转"、"赛狐 Key"等时触发。
@@ -20,7 +20,7 @@ metadata:
   accounts: sellfox-main (赛狐 ERP)
   api_docs: SELLFOX_API/docs/api-reference/
   scripts: SELLFOX_API/fetch_ad_reports.py, SELLFOX_API/fetch_extra_reports.py, SELLFOX_API/fetch_sb_sd_reports.py
-  updated: 2026-07-10
+  updated: 2026-09-09
 ---
 
 # 赛狐 API 访问
@@ -365,7 +365,7 @@ def compute_sign(access_token, app_id, app_secret, url_path):
 
 ## §5 API 文档
 
-赛狐 419 个 API 端点文档在 `SELLFOX_API/docs/api-reference/`，按模块组织：
+赛狐 443 个 API 端点文档在 `SELLFOX_API/docs/api-reference/`，按模块组织：
 
 | 模块 | 端点数 | 目录 |
 |------|--------|------|
@@ -373,12 +373,12 @@ def compute_sign(access_token, app_id, app_secret, url_path):
 | 销售 | 8 | `SELLFOX_API/docs/api-reference/销售/` |
 | 订单 | 9 | `SELLFOX_API/docs/api-reference/订单/` |
 | 广告 | 37 | `SELLFOX_API/docs/api-reference/广告/` |
-| FBA | 44 | `SELLFOX_API/docs/api-reference/FBA/` |
-| 采购 | 25 | `SELLFOX_API/docs/api-reference/采购/` |
-| 仓库 | 46 | `SELLFOX_API/docs/api-reference/仓库/` |
-| 数据 | 18 | `SELLFOX_API/docs/api-reference/数据/` |
-| 财务 | 68 | `SELLFOX_API/docs/api-reference/财务/` |
-| 多平台 | 115 | `SELLFOX_API/docs/api-reference/多平台/` |
+| FBA | 48 | `SELLFOX_API/docs/api-reference/FBA/` |
+| 采购 | 28 | `SELLFOX_API/docs/api-reference/采购/` |
+| 仓库 | 48 | `SELLFOX_API/docs/api-reference/仓库/` |
+| 数据 | 19 | `SELLFOX_API/docs/api-reference/数据/` |
+| 财务 | 71 | `SELLFOX_API/docs/api-reference/财务/` |
+| 多平台 | 126 | `SELLFOX_API/docs/api-reference/多平台/` |
 | 报告中心 | 10 | `SELLFOX_API/docs/api-reference/报告中心/` |
 | Feed | 3 | `SELLFOX_API/docs/api-reference/Feed/` |
 | 客服 | 1 | `SELLFOX_API/docs/api-reference/客服/` |
@@ -393,12 +393,16 @@ def compute_sign(access_token, app_id, app_secret, url_path):
 2. 进入对应目录，找到 `.md` 文件
 3. 文件内包含完整请求/响应 schema
 
-**机器可读索引**：`SELLFOX_API/docs/api-reference/llms.txt`（858 行，可 grep）
+**机器可读索引**：`SELLFOX_API/docs/api-reference/llms.txt`（可 grep）
+
+**刷新镜像**：见 `SELLFOX_API/docs/reference/api-docs-mirror.md`；学习记录 `docs/solutions/conventions/sellfox-apifox-api-docs-mirror-refresh.md`。命令：`uv run python SELLFOX_API/download_docs.py --all --force`（Cookie 与 `SELLFOX_API_DOC_KEY` 仅本机，勿写入仓库）。
 
 ---
 
 ## §6 相关文档
 
+- `SELLFOX_API/docs/reference/api-docs-mirror.md` — Apifox 文档镜像刷新
+- `docs/solutions/conventions/sellfox-apifox-api-docs-mirror-refresh.md` — 镜像对账学习记录
 - `sellfox-api-proxy/docs/lessons/2026-07-09-full-architecture-evolution.md` — 17 条经验教训
 - `sellfox-api-proxy/AGENT_HANDOFF.md` — 代理网关 Agent 接手文档
 - `SELLFOX_API/docs/lessons/2026-06-25-sellfox-integration-lessons.md` — 16 条 API 集成教训

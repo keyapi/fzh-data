@@ -106,7 +106,9 @@ components:
       title: ProductChildOpenQo
       x-apifox-orders:
         - parentId
-      x-apifox-ignore-properties: []
+      x--orders:
+        - parentId
+      x--ignore-properties: []
       x-apifox-folder: ''
     OpenResult«List«TemuLocalProductChildListOpenVo»»:
       type: object
@@ -136,7 +138,13 @@ components:
         - msg
         - data
         - ts
-      x-apifox-ignore-properties: []
+      x--orders:
+        - requestId
+        - code
+        - msg
+        - data
+        - ts
+      x--ignore-properties: []
       x-apifox-folder: ''
     TemuLocalProductChildListOpenVo:
       type: object
@@ -221,7 +229,27 @@ components:
         - commodityName
         - createTime
         - updateTime
-      x-apifox-ignore-properties: []
+      x--orders:
+        - parentId
+        - shopType
+        - goodsId
+        - skuId
+        - specName
+        - thumbUrl
+        - skuSn
+        - quantity
+        - price
+        - currency
+        - status
+        - goodsIsOnSale
+        - trusteeship
+        - commodityMatchStatus
+        - commoditySku
+        - salesmanNameList
+        - commodityName
+        - createTime
+        - updateTime
+      x--ignore-properties: []
       x-apifox-folder: ''
   securitySchemes: {}
 servers: []
