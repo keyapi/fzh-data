@@ -65,3 +65,27 @@ def test_cli_notify_dry_run_prints_card_preview(tmp_path: Path, capsys):
     printed = capsys.readouterr().out
     assert "钉钉卡片预览" in printed
     assert "尾程运营异常" in printed
+
+
+def _run_with_env_spy(tmp_path: Path, monkeypatch, extra: list[str]) -> list[bool]:
+    """跑一次 main，记录 _load_env 是否被调用。"""
+    import parcel_track.cli as cli
+
+    calls: list[bool] = []
+    monkeypatch.setattr(cli, "_load_env", lambda: calls.append(True))
+    tt = tmp_path / "tt.xlsx"
+    _write_tt(tt)
+    rc = cli.main(["report", "--tt", str(tt), "--out", str(tmp_path / "o.xlsx"), "--mock", *extra])
+    assert rc == 0
+    return calls
+
+
+def test_cli_skips_env_for_plain_mock(tmp_path: Path, monkeypatch):
+    """纯 mock 跑要与环境无关，不去读 .env。"""
+    assert _run_with_env_spy(tmp_path, monkeypatch, []) == []
+
+
+def test_cli_loads_env_for_notify_even_in_mock(tmp_path: Path, monkeypatch):
+    """回归：--mock 只表示不打承运商 API，不该把钉钉/ERPNext 凭证也掐掉。"""
+    assert _run_with_env_spy(tmp_path, monkeypatch, ["--notify", "--dry-run"]) == [True]
+

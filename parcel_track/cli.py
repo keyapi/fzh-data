@@ -41,11 +41,13 @@ def _mock_gls(number: str, postal: str | None = None):
 
 
 def _load_env() -> None:
-    """依次加载 .env（override=False，只补未设变量）：工作树 → 仓库根 → sibling worktree。"""
-    try:
-        from dotenv import load_dotenv
-    except ImportError:
-        return
+    """依次加载 .env（override=False，只补未设变量）：模块所在仓库根 → 向上找到 AGENTS.md 那层。
+
+    依赖 python-dotenv（pyproject 已声明）。**不要**再吞 ImportError——静默失败会让定时任务
+    在缺凭证时表现成莫名其妙的 KeyError。
+    """
+    from dotenv import load_dotenv
+
     start = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     seen: set[str] = set()
 
@@ -64,8 +66,6 @@ def _load_env() -> None:
         if parent == cur:
             break
         cur = parent
-    extra = os.path.join(os.path.dirname(start), "vigorous-shaw-b00a50", ".env")
-    _one(extra)
 
 
 def _ups_query(mock: bool):
@@ -144,7 +144,9 @@ def main(argv: list[str] | None = None) -> int:
     args = _make_parser().parse_args(argv)
     if args.command != "report":
         return 2
-    if not args.mock:
+    # --mock 只表示不打承运商 API；--notify 仍需 .env 里的钉钉/ERPNext 凭证。
+    # 纯 mock 跑（离线测试）不加载 .env，保持测试与环境无关。
+    if not args.mock or args.notify:
         _load_env()
     args.tt = _resolve_tt(args.tt)
     args.out = _resolve_out(args.out)
