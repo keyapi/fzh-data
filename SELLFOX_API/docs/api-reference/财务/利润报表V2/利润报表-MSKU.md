@@ -225,6 +225,12 @@ components:
           enum:
             - 'true'
             - 'false'
+        profitCaliberType:
+          type: string
+          description: 利润口径：settlement-结算口径（默认），shipment-发货口径
+          enum:
+            - settlement
+            - shipment
       title: FinAmzMonthProfitMskuOpenParam
       x-apifox-orders:
         - dateType
@@ -251,6 +257,7 @@ components:
         - pageNo
         - pageSize
         - selectAllLabel
+        - profitCaliberType
       x-apifox-ignore-properties: []
       x-apifox-folder: ''
     OpenResult«FinAmzProfitReportPageOpenV3VO»:

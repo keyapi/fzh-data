@@ -124,7 +124,12 @@ components:
         - shopId
         - date
         - campaignId
-      x-apifox-ignore-properties: []
+      x--orders:
+        - aggregationType
+        - shopId
+        - date
+        - campaignId
+      x--ignore-properties: []
       x-apifox-folder: ''
     OpenResult«FeedHourDataBaseRespVo«SdCampaignDataItem»»:
       type: object
@@ -152,7 +157,13 @@ components:
         - msg
         - data
         - ts
-      x-apifox-ignore-properties: []
+      x--orders:
+        - requestId
+        - code
+        - msg
+        - data
+        - ts
+      x--ignore-properties: []
       x-apifox-folder: ''
     FeedHourDataBaseRespVo«SdCampaignDataItem»:
       type: object
@@ -169,7 +180,10 @@ components:
       x-apifox-orders:
         - totalCount
         - itemList
-      x-apifox-ignore-properties: []
+      x--orders:
+        - totalCount
+        - itemList
+      x--ignore-properties: []
       x-apifox-folder: ''
     SdCampaignDataItem:
       type: object
@@ -252,7 +266,27 @@ components:
         - acos
         - roas
         - cpc
-      x-apifox-ignore-properties: []
+      x--orders:
+        - shopId
+        - date
+        - campaignId
+        - portfolioId
+        - hour
+        - costs
+        - clicks
+        - impressions
+        - sameOrders
+        - orders
+        - sameSales
+        - sales
+        - units
+        - ctr
+        - cvr
+        - cpa
+        - acos
+        - roas
+        - cpc
+      x--ignore-properties: []
       x-apifox-folder: ''
   securitySchemes: {}
 servers: []
