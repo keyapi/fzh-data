@@ -18,8 +18,8 @@
 
 1. **去除模板自带图片/印章**：模板 3 个 sheet 顶部有「宁波中基惠通集团股份有限公司」抬头图片 + 签名，导出时清除全部图片（`ws._images = []`）。
 2. **发票号留空**：报关发票 G9 / 装箱单 H9 / 报关单NEW I2 的「发票号」暂留空（后续人工/系统补）。
-3. **境外收货人**：报关单NEW C5 按收货人预设填充**名称+地址**（`CONSIGNEE_DATA`，CLI `--consignee`/弹窗下拉选择；未解析则保留模板原值）。发票/装箱单/合同的「To Messrs / 买方」仍留空（如需区分可配置）。
-4. **生产销售单位**：报关单NEW A8 填固定值 `绍兴雪雁针纺有限公司`（`CONFIG["production_unit"]`，不在弹窗体现）；A4「境内发货人」仍填发货方中文名。
+3. **境外收货人**：报关单NEW C5 填收货人预设**名称+地址**（`CONSIGNEE_DATA`，CLI `--consignee`/弹窗下拉选择；未指定且客户无法自动映射时**兜底默认 `centrade`**，不再保留模板 BO MITE 样例）。发票/装箱单/合同的「To Messrs / 买方」仍留空（如需区分可配置）。
+4. **境内收货人(境内发货人 A4) 与 生产销售单位(A8) 固定同一主体**：`CONFIG["domestic_party_cn"] = "（9111010856368328XF）（11149609R4）方州汇国际电子商务(北京)有限公司"`（不在弹窗体现）。与模板 A4/A8 现填值逐字符一致。
 5. **目的国（地区）按客户映射**：DANEEY / CENTRADE / 美国FBA仓 → `UNITED STATES(502)`；波兰公司 → `PL(327)`；后续新增在 `US_CUSTOMERS` / `PL_CUSTOMERS` 里加。**注意**：贸易国(D10)/运抵国(G10) 现已**留空**，该映射目前只用于「最终目的国(K列)」填中文（美国→`美国(502)`）。
 6. **单价/总价统一 = BOM 成本 × 加成 ÷ 汇率**：**4 个 sheet 全部**用 BOM 成本，即单价 = `bom_rate` × 1.45 ÷ 6.8、总价 = `bom_cost` × 1.45 ÷ 6.8、TOTAL = `Σbom_cost` × 1.45 ÷ 6.8（`usd_price()` 封装，**先 ×1.45 涨价、最后 ÷ 汇率，仅最终一步取整 3 位**）。汇率暂定 6.8、加成系数 `price_markup=1.45`（均暂定，后续换汇率表/确认加成）。
 7. **境内货源地 = 常量** `绍兴市（33069）`。
@@ -217,12 +217,13 @@
 | H2 / I2 | `发票号：` / DN.name |
 | K2 | `委托协议号:` |
 | A3 / G3 / I3 / K3 / L3 | `境内发货人` / `出境关别` / `出口日期` / `申报日期` / `备案号` |
-| G4 | 出境关别值（如 `NINGBO,CHINA`，见 §7） |
-| A5 / C5 | `境外收货人` / 名称+地址（`CONSIGNEE_DATA` 预设，C5 合并 C5:F6 两行显示；未解析保留模板原值） |
+| A4 | 境内收货人值：`（9111010856368328XF）（11149609R4）方州汇国际电子商务(北京)有限公司`（`CONFIG["domestic_party_cn"]`，同 A8） |
+| G4 | 出境关别值（如 `NINGBO,CHINA`，见 §7；当前留空） |
+| A5 / C5 | `境外收货人` / 名称+地址（`CONSIGNEE_DATA` 预设，C5 合并 C5:F6 两行显示；未指定且客户无法映射时兜底默认 `centrade`） |
 | G5 / I5 / K5 | `运输方式` / `运输工具名称及航次号` / `提运单号` |
 | G6 | 运输方式值（如 `BY SEA`） |
 | A7 / G7 / I7 / K7 | `生产销售单位` / `监管方式` / `征免性质` / `许可证号` |
-| A8 | 生产销售单位值：`绍兴雪雁针纺有限公司`（固定，`CONFIG["production_unit"]`） |
+| A8 | 生产销售单位值：同 A4 `（9111010856368328XF）（11149609R4）方州汇国际电子商务(北京)有限公司`（`CONFIG["domestic_party_cn"]`，固定，不在弹窗体现） |
 | G8 | 监管方式值（如 `一般贸易`） |
 | A9 / D9 / G9 / J9 / L9 | `合同协议号` / `贸易国（地区）` / `运抵国（地区）` / `指运港` / `离境口岸` |
 | A10 / D10 / G10 / J10 / L10 | DN.name / 贸易国（如 `UNITED STATES(502)`）/ 运抵国 / 指运港（如 `LONG BEACH,UNITED STATES`）/ 离境口岸（如 `NINGBO,CHINA`） |
@@ -288,8 +289,8 @@
 | 原产国/最终目的国 | 报关单 | `中国` / `美国(502)` | 可配 |
 | 境内货源地 | 报关单 L 列 | `绍兴市（33069）`（已确认常量） | 已定 |
 | 申报单位 | 报关单底部 | `宁波市鸿欣报关有限公司` | 可配 |
-| 境外收货人 | 报关单NEW C5 | `CONSIGNEE_DATA` 预设：centrade/daneey/poland + 自定义 | 可配 |
-| 生产销售单位 | 报关单NEW A8 | `绍兴雪雁针纺有限公司`（固定，不在弹窗体现） | 已定 |
+| 境外收货人 | 报关单NEW C5 | `CONSIGNEE_DATA` 预设：centrade/daneey/poland + 自定义；兜底默认 `centrade` | 可配 |
+| 境内收货人/生产销售单位 | 报关单NEW A4/A8 | `（9111010856368328XF）（11149609R4）方州汇国际电子商务(北京)有限公司`（`CONFIG["domestic_party_cn"]`，固定，不在弹窗体现） | 已定 |
 | 数字转英文 | 箱数大写 | 658 → `SIX HUNDRED AND FIFTY EIGHT` | 需写 num2words 工具 |
 | 单位映射（中文） | 报关单NEW 数量单位 | `件→只/个/条`、`套→套` 等 | **需确认** EN 的 uom 实际取值 |
 | 单位映射（英文） | 发票/装箱单/合同 | `件→PIECES`、`套→SETS` | 需确认 |
@@ -304,7 +305,7 @@
 4. **唛头 Marks & Number**（发票/装箱单 B 列竖排）→ 留空。
 5. **发票号**（报关发票 G9 / 装箱单 H9 / 报关单NEW I2）→ 留空。
 6. **境外收货人 / To Messrs / 买方**：报关单NEW C5 已改为填充（见决策3）；发票/装箱单/合同的 To Messrs / 买方 仍留空（如需可配置）。
-7. **生产销售单位**：报关单NEW A8 已改为固定值 `绍兴雪雁针纺有限公司`（见决策4）；境内发货人 A4 仍填发货方中文名。
+7. **境内收货人/生产销售单位**：报关单NEW A4/A8 已改为固定 `CONFIG["domestic_party_cn"]`（`（9111010856368328XF）（11149609R4）方州汇国际电子商务(北京)有限公司`，见决策4）。
 8. **模板自带图片/印章/签名**（宁波中基惠通集团股份有限公司抬头）→ 导出时清除全部图片。
 
 ---
@@ -467,10 +468,10 @@ python customs_export.py --dn DN-26-00056   # 生产，19 项并行翻译约 1-2
 
 弹窗/CLI 可选收货人预设，导出时自动填 C5 境外收货人（名称+地址）；生产销售单位 A8 固定；申报单位 A54 按需写入。
 
-- **常量**：`CONSIGNEE_DATA`（centrade/daneey/poland 名称+地址，新增只改这一处）、`DEFAULT_CONSIGNEE="centrade"`（弹窗默认选中）、`CONFIG["production_unit"]="绍兴雪雁针纺有限公司"`。
+- **常量**：`CONSIGNEE_DATA`（centrade/daneey/poland 名称+地址，新增只改这一处）、`DEFAULT_CONSIGNEE="centrade"`（弹窗默认选中 + 未映射兜底）、`CONFIG["domestic_party_cn"]="（9111010856368328XF）（11149609R4）方州汇国际电子商务(北京)有限公司"`（A4 境内收货人 + A8 生产销售单位固定值）。
 - **CLI 参数**：`--consignee {centrade|daneey|poland|custom}`、`--consignee-name`、`--consignee-addr`、`--declaration-unit`。
-- **解析**：`resolve_consignee(args, customer)` —— CLI 优先 → 客户自动映射（DANEEY→daneey、Centrade→centrade、波兰→poland）→ 兜底 None（保留模板原值）。
-- **单元格**：C5（合并 C5:F6）写 `名称\n地址`（wrap_text）；A8（合并 A8:F8）写生产销售单位；A54（合并 A54:D54）仅当传 `declaration_unit` 才写 `申报单位  {value}`。
+- **解析**：`resolve_consignee(args, customer)` —— CLI 优先 → 客户自动映射（DANEEY→daneey、Centrade→centrade、波兰→poland）→ 兜底 `centrade`（不再保留模板原值）。
+- **单元格**：C5（合并 C5:F6）写 `名称\n地址`（wrap_text）；A4（境内收货人）+ A8（生产销售单位）都写 `CONFIG["domestic_party_cn"]`；A54（合并 A54:D54）仅当传 `declaration_unit` 才写 `申报单位  {value}`。
 - **EN 部署侧待修正**（EN Agent 2026-08-25 实现，与本仓库模板/需求有出入，需其确认修正）：
   1. EN 文档写**申报单位在 A6**，但模板申报单位实际在 **A54**（A6 为空）——若 EN 部署模板一致则需改为 A54。
   2. EN 未实现**生产销售单位 A8 = 绍兴雪雁针纺有限公司**（本仓库已按决策4写入）。
@@ -581,3 +582,75 @@ python customs_export.py --dn DN-26-00056   # 生产，19 项并行翻译约 1-2
 - `export()` 填表前调用 `expand_sheets(wb, len(agg))`（N>16 才插入行；N<16 时 `delete_extra_rows` 删多余行，两者互斥互补）
 - 已验证 N=20：发票数据 16..35/TOTAL C37、报关单NEW 项号 1..20/TOTAL A59/末行申报要素合并 C57:N57
 - **样式继承修复（2026-08-31）**：`insert_rows` 不继承样式，>16 扩展出的新行字体/边框缺失（实测发票 R32-33 变宋体12、应微软雅黑10）。新增 `_copy_row_style`，`_expand_rows` 插入行后从模板数据行复制样式——发票/装箱单/合同参考 `at_row-1`，报关单NEW 每物料 2 行交替参考 item 48 / element 49。已验证 N=18 扩展行字体与模板一致。
+
+### 固定收货方 + 翻译尺寸修复（2026-09-07，参考脚本 + EN 测试服务器均已实现）
+
+> 需求：境内收货人(境内发货人 A4) 与 生产销售单位(A8) 均固定为方州汇含编码串；**境外收货人 C5 = 报关信息页签「选择收货人」选中的公司名（仅名称、不带地址；缺省/未传时默认 Centrade Inc）**；英文品名尺寸不再截断、分隔符统一 `*`。
+
+**A4/A8 固定值（参考脚本 `EN_API/customs_export.py` 已改，2026-09-07）**
+- 新增 `CONFIG["domestic_party_cn"]="（9111010856368328XF）（11149609R4）方州汇国际电子商务(北京)有限公司"`，与模板 报关单NEW A4/A8 现填值逐字符一致（公司名内括号用半角，编码括号用全角）。
+- `fill_declaration()`：`A4 = A8 = CONFIG["domestic_party_cn"]`（删除旧 `production_unit` 键，不再用 `shipper_cn` 覆盖 A4）。
+- 境外收货人（2026-09-08 改回“选择即导出”）：`resolve_consignee()` 按 CLI `--consignee` 选择即导出（仅名称），未指定默认 Centrade；`fill_declaration()` C5 写选中的公司名（`consignee_name`，忽略地址）。
+- 发票/装箱单/合同抬头 B2/B3 仍是纯公司名（`shipper_cn/en`），不混入编码。
+
+**EN 测试服务器（8.133.254.66 / ensh）已落地（2026-09-07，备份 `customs_export.py.bak_20260907`）**
+- `delivery_plan/utils/customs_export.py`：A4/A8 写 `domestic_party_cn`；C5 写 `consignee_info.name`（弹窗选择/填写的公司名，仅名称、忽略地址），空则兜底 Centrade；`export()` 收货人用传入 `consignee_name/addr`（两者都空才兜底 Centrade）；波兰预设已改为 **Pillow Palette Ltd**（`ul. Krucza 68/9, 53-411 Wrocław, mail: kontakt@pillowpalette.pl, 786 603 993`）；已 `bench restart` 生效。
+- ⚠️ **运行时模板改为「正常上传文件」查找（2026-09-09 起，不再用绝对路径目录）**：`_get_template_path()` 按 **File doctype** 查 `file_name=ZJ26DZJR0403-报关单据.xlsx`（优先 `/private/` 上传，无则任一上传记录），`_uploaded_template_path()` 取 `get_full_path()`（DB 内容则落临时文件）；`_ensure_clean_template()`（4 sheet + 报关合同 H48:J50）把关结构。旧版 os.walk 抓 `报关单据_*.xlsx` 当模板会 MergedCell 崩溃/串头，已废弃。测试机当前命中公开 `/files/` 上传版可导出；若要干净 private 版需替换上传同名（同名重复会被 Frappe 加哈希后缀，精确 file_name 只认一条）。**供生产：直接正常上传该模板文件即可，不再要求 customs_templates 目录。**
+
+**翻译尺寸修复（EN `translate_by_lookup` 查表组装，2026-09-07 已实现+实测）**
+- 现象/根因：`蓝白条纹款中控台车载狗窝-棉麻-45*22*27cm` 的 **item_code 尺寸段只存宽度 `45`**（如 `KS0181-MM-45`），完整 `45*22*27cm` 只在中文品名里 → 旧逻辑取编码尺寸段只出 `45`。
+- 修复：新增 `_dim_token()`（把 x/X/×/＊ 统一 `*`，整段保留）+ `_size_from_name()`（扫描中文品名各 `-` 段取最完整尺寸段，优先同首段数字且更长者）；`translate_by_lookup` 用 `size_final = _size_from_name(...) or _dim_token(code_size) or code_size`。
+- 实测：`KS0181-MM-45`/`棉麻-45*22*27cm` → `...Cotton and linen 45*22*27cm`；`ND#KS0383-153x50x24` → `...153*50*24`。
+- 示例：源 `45*22*27cm` → `45*22*27cm`；源 `153x50x24` → `153*50*24`。
+
+**靠枕固定宽高 —— 已恢复并加开关（2026-09-08 最终版）**
+> ⚠️ 历程：曾实现→业务暂缓→EN 回退；随后**恢复为「默认补全 + 弹窗可关」**（因已开票的单当时尺寸不完整，需能取消以与开票一致）。
+
+- 规则：中文品名含 `三角靠枕` → 尺寸补 `*20*50`；含 `平条靠枕` → 尺寸补 `*15*50`（常量 `FIXED_DIM_CN`，`(关键词, 宽, 高)`）。成品 KS#、皮壳 PK#、内胆 ND# 等凡含字眼都补；**尺寸已是完整三围（含 x/*/cm）则不动**。
+- 开关：报关弹窗**页签栏下方常驻「导出选项：☑ 靠枕尺寸补全（三角靠枕×20×50 ／ 平条靠枕×15×50）」勾选**，默认勾选、**所有页签都可见**（放顶部栏而非某个页签内，避免不易发现/勾选框太小）；取消则不补全（只长度，和已开票一致）。
+- 落点：`delivery_plan/utils/customs_export.py` 的 `FIXED_DIM_CN`/`_enrich_dim_cn`；`CustomsExporter.export(..., enrich_flat_dim=True)` 里在翻译前对每个 `name_agg` 调 `_enrich_dim_cn()`（受开关控制，`aggregate_items` 本身不再无条件补全）。中文 C 列与英文 D 列（查表组装）都带完整尺寸。
+- 联动：`api/customs_export_api.py::export_customs_documents_with_packages` 增参 `enrich_flat_dim`（`_as_bool` 兜底 True）；`delivery_note.js` 顶部页签栏下方常驻「导出选项」勾选框（id `pkg_enrich_flat_dim`，默认勾选、全页签可见）随 `frappe.call` 传该参。
+- 参考脚本：`EN_API/customs_export.py` 同逻辑，CLI 增 `--no-enrich-flat-dim`（默认补全，去色后翻译前应用）。
+- 实测（EN 测试机 DN-26-00054）：勾选 → C=`三角靠枕类-涤麻-194*20*50`、D=`Triangle pillow ... 194*20*50`；取消 → C=`三角靠枕类-涤麻-194`、D=`... 194`。`平条靠枕-涤纶-153`→`平条靠枕-涤纶-153*15*50`。狗窝等含完整尺寸产品不受影响。
+- 前端 JS 改动需浏览器硬刷新 / `bench clear-cache` 才生效。
+
+**申报要素第⑥段补完整尺寸（2026-09-09）**：申报要素字符串由 `seg1..seg5|||` 改为 `seg1..seg5|seg6||`，**seg6=完整尺寸**。口径：**始终从中文名提取/补全**——三角靠枕→`长度*20*50`、平条靠枕→`长度*15*50`，与品名补全开关**解耦**（开关关时中文 C 列只 `194`，申报要素 seg6 仍 `194*20*50`）。实现：`export()` 对每行算 `it["size_decl"]`（对 `_enrich_dim_cn(name_agg)` 各 `-` 段取 `_dim_token` 最完整者）；`fill_declaration` 拼串加 seg6。实测：`0|0|床品类|无品牌|无型号|194*20*50||`。参考脚本不生成申报要素，无需镜像。
+
+**待办（未做）**：本地参考改动未 commit（feature 分支 feature/customs-export-bom-consignee）；prod `erpnext.vilavi.cn`(47.116.128.218) 未同步（暂不动，SSH 不可达）。
+
+**弹窗箱数「累加/合并」修正（2026-09-09，production issue DN-26-00070）—— 仅测试机 delivery_note.js 已落地**
+- 现象：① 卡 `OBN-…001 · 箱组1` 显「2箱合计 自动=2」，用户找不到第2箱；② 箱18/19（同 XMMBS-153-HEMPNATURAL）不累加、同箱同 SKU 被拆 2/3 行。
+- 根因（prod 数据+代码实证）：`get_aggregated_items` 逐 DN 行入 `(carton_group, outer_carton_no)` 箱组、**同箱同 SKU 行不折叠**；JS `code_solo_count` 只认 `g.items.length===1` 的箱 → 仅 001 与 035（各自恰 1 行）被并成「2」。且 035 是 **WHITE**、与 001 GREY 因去色 code_agg `PK#KS0001-PR-194` 合并（显示却用 001 的完整码 → 误导）。真实纯装箱 PR-194 有 10 个（001/002/003/004/009/031/035/036/044/052）。
+- 已确认口径（用户）：**合并键 = 去色型号**；展示 = **相同内容箱子并成一张卡 + N 箱号清单**。
+- 方案（**只改 `delivery_plan/public/js/delivery_note.js` 的 show_package_dialog**；后端 customs_export_api.py / utils **零改动**，无需 bench restart，仅硬刷新）：
+  - 同箱多行按 code_agg 折叠成一行；纯装箱按 code_agg 归池（忽略箱内数量差——主物料无歧义）；混装箱仅当逐物料数量完全一致才归并（否则主物料随箱而异会误并）。
+  - 合并卡显「N 箱合计」角标 + `合并箱号：OBN-…/…` 清单（自然序）；默认箱数 = N（单箱卡默认 1，loose 仍 0）。
+  - 展示行：单色显完整码；同型号跨色并入时显去色码（避免「GREY 卡含 WHITE」误导）。
+  - do_export 改为**逐成员箱提交**：`{group_key: 成员箱原 cg__oc, packages: 首=N/其余=0, main_code, total_qty: 该箱折叠总量, secondary_codes}` → 后端仍按每箱归并，`pkg_map` 每物料箱数 = N，`totals.cartons` = 物理箱数。删除了旧的 `code_solo_count/solo_multi` 逻辑。
+- 备份：测试机 `delivery_note.js.bak_20260909`（md5 d3dee7ef…）；新版 md5 `bd1ecef8…`（node 语法通过）。
+- 预演（prod DN-26-00070 数据）：49 物理箱 → 18 张内容卡（纯池：PR-194 N=10、XMMBS-153 N=7、CMM-153 N=6、PR-153 N=5、CMM-194 N=4、CMKTR-153-GREY N=3、XMMBS-100 N=3、XMMBS-183 N=1、PR-140 N=1；混装箱 9 个各自独立）+ 8 loose。箱数合计=49。
+- 回归（test DN-26-00053，新 payload 走 API）：混装(KS0001-DM-194+KZKP)+纯装箱，导出成功、装箱单 E=`2CTNS`、TOTAL=`2 CTNS`、item_count=1，与物理箱一致。
+- ⚠️ **prod 未同步**：JS 改动在测试机；prod delivery_note.js 需走 delivery_plan git 流程**按 diff 移植**（prod 文件可能与 test 有差异，勿整文件覆盖）。移植后用户在 prod DN-26-00070 弹窗复核合并卡与箱号清单。
+
+**导出排版规范化（2026-09-09）—— 测试机 utils/customs_export.py（备份 .bak_20260909b，md5 `04ba37…`，已 bench restart）+ 本地参考 EN_API/customs_export.py（已镜像，py_compile 通过）**
+- 用户 4 条需求：
+  1) 内容格**不折叠/不换行 → 一行显示**：模板数据区默认 `wrap_text=True`，长英文品名会换行撑高行高。做法：`_plain_left_single_line(wb)` 对所有有内容格设 `wrap_text=False + shrink_to_fit=False`，并 `re.sub(r"\s*\r?\n\s*"," ")` 去掉字符串里的换行。
+  2) **报关发票 `F15='FOB NINGBO,CHINA'` 是模板静态文本**（fill_invoice 不写 F15）→ **用户自行删模板该格后重上传**（File doctype file_name=ZJ26DZJR0403-报关单据.xlsx）。同款静态：`报关合同 ` H15、`报关单NEW` H12='FOB' / G4 / L10='NINGBO,CHINA'（本次未动）。
+  3) **报关合同每物料行名称区四列合并 B:E**：`_merge_contract_name_cols(wb["报关合同 "], len(agg))`，先拆数据行内与 B:E 重叠旧合并（如模板默认 B16:C16/扩展复制 B:C）再并 `B:E` 逐行（数据行 16..16+N-1）；总计/页脚合并区不触碰。
+  4) **所有内容格统一水平左对齐**（含数字/表头；`horizontal='left'`，垂直/旋转保留原值）。
+- 插入点：export() 内 `delete_extra_rows` 之后、`wb.save` 之前。
+- 验证：test DN-26-00053(N=1)/DN-26-00054(N=3) API 导出 → 全部 populated 格 left+0 wrap+0 换行；合同 B16:E16(、B17:E17/B18:E18) 合并，总计区合并未被误拆；invoice F15 仍在（静态待用户处理）。
+- ⚠️ 注意：不换行后长文本在窄格可能**视觉截断**（内容仍在，点格可见）；**N>16** 扩展行的 B:E 未用真实大单验证（测试机无此类单），逻辑与 delete/expand 坐标一致。**prod 未同步**。
+- **动态列宽（2026-09-09 续）**：新增 `_autofit_columns(wb)` —— 只加宽**真正会被右邻格截断**的列（判定=单行文本宽 > 该格+右侧连续空格子的可用宽；能溢出到空格完整显示的不拉宽；列宽只增不减、单列封顶 90 防病态）；个别静态长句「合并区已撑满整行仍放不下」（如 报关合同 B33 整行合并 B33:J33 底部条款）**仅该格回退允许换行**，不影响数据行高。调用顺序：`delete_extra_rows` → `_merge_contract_name_cols` → `_plain_left_single_line` → `_autofit_columns` → save。验证 test DN-26-00053/00054：残差截断格=0，数据行全单行，仅 B33 保留 wrap=True。
+- **统一行高 + 表格全框线/粗外框（2026-09-10，测试机 utils md5 `111c08a5…`，备份 …bak_20260910a~d；本地参考已镜像）**：
+  - `_uniform_row_heights`：报关发票/装箱单/报关合同**除顶部公司信息/标题块**（起实行 发票=6、装箱单=6、合同=9；报关单NEW 不动）外行高统一 **16.5**；唯一例外=含「回退换行」的静态长句行（合同备注条款行）设 30 保完整显示。
+  - `_apply_table_borders(wb, len(agg))`：三表表格区**内部 thin 全框线 + 外框 thick**；区间随 N 动态 = 发票 `B14:G(17+N)`、装箱单 `B15:K(18+N)`、合同 `B13:J(17+N)`（含表头/数据/合计/中间空白行）。
+  - **坑（边框线中断）**：Excel 按**每个子格**渲染边框，而 openpyxl 合并会把覆盖格变成只读 MergedCell、`merge_cells` 还会清掉已画好的子格 → 「只画锚点」或「拆开重画再合并」都会让合并区缺线。**最终=给表格内每个坐标（含合并覆盖格）直接放真实 Cell 写边框**（`ws._cells[(r,c)] = _Cell(...)`），合并关系保留；边框按位置（thick 仅四周、其余 thin）。
+  - **验证坑**：openpyxl 读不出合并覆盖格样式 → 改用 **xlsx XML 级复核**（sheet XML 的 `s` → styles.xml 的 borderId 四条边）→ DN-26-00053/00054 三表 `cells_missing=0、border_mismatch=0`（测试机 utils md5 `b208800f…`，备份 …bak_20260910e/f）。粗细选 thick（嫌粗改回 medium 只需改 `Side(style=...)`）。**prod 未同步**。
+- **删除表头下空白行（2026-09-10 续，测试机 utils md5 `974a206e…`，备份 …bak_20260910g；本地参考已镜像）**：`_remove_blank_header_rows(wb)` 用 `_delete_rows_safe` 删 报关发票 row15 / 装箱单 row16 / 报关合同 row15（在 `delete_extra_rows` 之后）。删后**坐标整体上移 1**：数据起始 发票/合同 16→15、装箱单 17→16；`_apply_table_borders` 下边界 = 发票 `B14:G(16+N)`、装箱单 `B15:K(17+N)`、合同 `B13:J(16+N)`；`_merge_contract_name_cols` start_row=15。**副作用**：发票 row15 静态 FOB 被整行删掉（→ 发票的 FOB 无需再改模板）、合同 row15 的 FOB 与 **USD** 一并删除（USD 为金额列币种标识，若要保留改成只清 FOB 不删行）。验证：XML 级复核两单三表 `cells_missing=0、border_mismatch=0`；结构 发票 header14→数据15 / 装箱单 header15→数据16 / 合同 header14→数据15，内容无丢失。**prod 未同步**。
+- **扣胚固定英文名（2026-09-10 续，测试机 utils 备份 …bak_20260910h；本地参考已镜像）**：用户要「扣胚-5号-铁底铁面」→ 固定英文。**查明代码无硬编码**（`97bcd56` 已改为查表；docstring 的 `扣子-5号-金属 → Button 5#` 只是示例）；ERP 该物料中文名已是「扣胚-5号-铁底铁面-银色」、组「扣胚」(`custom_model_id=KZKP1010`)，但组翻译/面料/Translation 全空 → 原输出仅 `5#`。实现=新增 `TRANSLATION_OVERRIDES = {"KZKP1010-5#-IRONBOTTOMSURFACE": "Button embryo {size} iron bottom surface"}`（utils 的 `translate_by_lookup` 组装前命中返回；本地参考 DeepSeek 版 `_do` 命中跳过 API）。用精确 code_agg 键避免误伤 `6#-IRONBOTTOMALUMINUMSURFACE`。bench execute 验证：5#→`Button embryo 5# iron bottom surface`、6#→仍 `6#`。其它五金如需再加 overrides。
+- **数量/单位分列 + 表头恢复模板对齐（2026-09-10 续，测试机 utils md5 `081f8f93…`，备份 …bak_20260910i；本地参考已镜像）**：
+  - **报关单NEW「数量单位」列代码内拆分（无需改模板）**：`fill_declaration` 起始 unmerge 模板合并表头 `E17:F17`（并把 E17 的 font/fill/border/alignment 复制到 F17）→ `E17='数量'`、`F17='单位'`；数据行 `E{row}=int(qty)`、`F{row}=uom_cn(uom)`（原为 `f"{qty}{uom}"` 合并写 E）。
+  - **表头恢复模板样式**：新增 `DATA_START={"报关发票 ":15,"装箱单":16,"报关合同 ":15,"报关单NEW ":18}`；`_plain_left_single_line` 对 `cell.row < DATA_START[表]` 的行**跳过**（不左对齐、不去换行），表头/公司信息区保留模板原样（居中）。数据区仍左对齐+单行。
+  - 验证 test DN-26-00054：E17=数量/F17=单位、E18=3/F18=个；发票 C14/F14 恢复 center(=模板)；数据行仍 left。**prod 未同步**。
+  - **补竖线（md5 现 `7e569e78…`，备份 …bak_20260910j）**：模板数据行 `E.right`/`F.left` 均为空（原 E:F 被当作合并列）→ 分列后「数量｜单位」之间无线；已对**表头 E17/F17 与每个物料行**显式补 `thin` 竖线（`E.right=F.left=thin`，F 的 top/bottom 取 E）。元素行属 C:N 合并区、内部线本隐藏，无需处理。
