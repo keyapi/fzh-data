@@ -195,6 +195,16 @@ Claude Desktop **没有**原生的 per-connector 停用开关（配置里只有 
 
 **本项目的用法**：`notion-personal` 常用，常驻 `mcpServers`；`notion-company` 仅测试用，放在 `_disabled_mcpServers` 里备用。
 
+**实测效果**（重启后用 `/context` 验证）：
+
+| | 停用前 | 停用后 |
+|---|---|---|
+| MCP tools | 57.3k | **39.0k** |
+| MCP 工具数 | 168 | **127** |
+| Free space | 883.3k | 901.7k (90.2%) |
+
+工具数正好少 41 个（`notion-company` 的全部工具），token 少 18.3k（估算 18.5k），其余 4 个 server 无影响。停用后 `notion-personal` 占 18.6k / 39k（48%）。
+
 ---
 
 ## 四、更正：「3P 模式不支持 `url` 字段」是未复验断言
