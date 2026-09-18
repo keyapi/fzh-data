@@ -191,6 +191,16 @@ Claude Desktop **没有**原生的 per-connector 停用开关（配置里只有 
 - 改完**需要重启**才生效（MCP 不热加载）
 - OAuth token 不受影响 —— 仍在原凭证目录里，恢复后无需重新授权
 
+**用脚本切**（免手改 JSON，自动备份 + 回读校验）：
+
+```bash
+uv run python scripts/mcp_toggle.py                      # 查看状态
+uv run python scripts/mcp_toggle.py notion-company off   # 停用（保留配置）
+uv run python scripts/mcp_toggle.py notion-company on    # 启用
+```
+
+`scripts/mcp_toggle.py` 是通用的，任何 server 都能切；`--normal` 改普通模式配置，`--config <path>` 直接指定文件。
+
 > 这是社区标准做法，`KalinYorgov/mcp-server-manager`、`eversonl/claude-config-manager`、`@wyattjoh/mcp-manager` 三个独立工具用的都是这一招（键名 `_disabled_mcpServers` / `disabledMcpServers`）。
 
 **本项目的用法**：`notion-personal` 常用，常驻 `mcpServers`；`notion-company` 仅测试用，放在 `_disabled_mcpServers` 里备用。
