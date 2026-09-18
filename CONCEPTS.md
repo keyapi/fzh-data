@@ -291,8 +291,45 @@ Gold A：历史已配对 ∩ 通途别名唯一 ∩ EN/赛狐一致，只用于�
 ### DingTalk Custom Robot (钉钉自定义机器人)
 A webhook-based DingTalk group messaging channel used by AI agents (WorkBuddy, Claude Code) in this project to send notifications and file download links. Uses HMAC-SHA256 signing. Distinct from DingTalk enterprise internal bots — custom robots do not require AppKey/AppSecret and are scoped to a single group, making them safe to share with non-developer agent users. Cannot send file attachments directly; file delivery uses ActionCard messages with download links hosted on ERPNext.
 
+## 赛狐库存成本 (cost_adjust)
+
+### 私有接口 (undocumented internal API / shadow API 影子 API)
+赛狐自家前端在用、但**未写进公开 OpenAPI** 的 HTTP 端点（如 `/api/fba/cost/adjustment/create.json`、
+`/api/oversea/edit.json`）。与公开 OpenAPI 是**两套不同的调用面**：鉴权不同（站点 cookie vs OAuth2 签名）、
+权限不同（OpenAPI 的过滤字段可逐个受限）、稳定性不同（私有接口**无版本承诺**）。
+**同一个功能常常「公开 OpenAPI 没有、私有接口有」** —— 判据与用词见
+`docs/research/2026-09-18-sellfox-private-api-terminology.md`。业界亦称 shadow API，但赛狐这批是自家在维护的，
+严格说不符合「归属方失去管控」的定义。
+
+### 单个头程费用 (headFee)
+海外仓备货单明细上的单件头程，是**库存「单位费用」的驱动力**。改它（备货单编辑页 / `oversea/edit.json`）
+会让库存单位费用按加权平均重算。**成本补录单改不了它**（海外仓备货单类型不许填单位费用），
+两条 Excel 模板也不含该字段 —— 私有接口是唯一自动化路径。
+
+### 库存调整单（数量调整）
+只调库存**数量**、**无成本字段**的单据。新批次的成本是**创建时该 (仓库,SKU) 加权平均成本的快照**，
+不是来源单的成本 —— 所以它们天然不「跟随」任何后续改动。调整单的 `+N` 与 `-N` **不可互相抵消**
+（扣减按 FIFO 吃最老批次）；**已完成状态不可删除、不可撤销**。
+
+### 库存调整-增加 (type=3) / 库存调整-减少 (type=4)
+批次表 `type` 字段。**3=增加：新建独立批次**，成本冻结在创建时，**不跟随**来源单；
+**4=减少：引用已有批次**，共享同一份成本，会跟随。（5=海外仓备货单。）
+这个区别决定「改备货单能不能带动这批库存」，别笼统说「调整单批次会跟随」。
+
+### 其他入库单 (other inbound order)
+带成本的入库单据：`perPurchase`（采购单价）**必填**，表头另有 `shipFee`/`otherFee`/`apportionType`。
+**与库存调整单的关键差别**：调整单只带数量，其他入库单**显式携带成本**。用于「数量同步」类需求时，
+它比调整单可控。实现见 `web_automation/click-based/sellfox_import_other_inbound.py`。
+
+### 虚拟仓库
+成本补录单/备货单 payload 里 `warehouseId` 与 `targetWarehouseId` 是**两个不同的仓库**：
+前者是「虚拟仓库」（FBA 侧来源，如 272150），后者才是真实海外仓（如 279841=POLAND）。
+不是笔误，照抄。
+
 ## Flagged ambiguities
 
+- "「赛狐有 API」不区分公开 OpenAPI 与私有接口时会得出相反结论 —— 说「没有写接口」通常只对公开 OpenAPI 成立。"
+- "「调整单批次会跟随备货单成本」只对 type=4（减少）成立；type=3（增加）是独立快照，不跟随。"
 - "'AMZFZHSXEUR' 曾被当成欧洲聚合店 — Amazon 只有国家站，旧名只挂在 AMZFZHSXDE 别名。"
 - "'WFDANEEYUS' 与 'WFDaneeyUS' 不是同一条 Channel Account，大小写店铺码都保留。Channel Account Owner.user 存中文名；DingTalk/Frappe User.name 常是邮箱，同步时继续写中文。"
 - "'五桶' had been used as if it meant IvyeaOps 五杠杆 — they are distinct (search-term labels vs optimizer action candidates)."

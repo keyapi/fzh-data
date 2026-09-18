@@ -106,6 +106,77 @@ applies_when:
 代理（`api.vilavi.cn/sellfox`）实际约 **1 req/2s**，连打必 429。用
 `SELLFOX_API/client.py` 的 `SellfoxClient`（内置 2s pacing + 429 重试），别裸写 urllib。
 
+### 站点内部端点族（与 OpenAPI 路径不同）
+
+OpenAPI 的 `/api/ware/adjust/*` 在 `www.sellfox.com` 上 **404**（返回一段跳 `dashboard.html` 的 HTML）。
+站点用的是：
+
+```
+/api/gw/sellfox/sellfox-warehouse/sellfox/api/warehouse/adjust/
+   pageList | detail | create | submit | confirmAdjust | approval | delete | editRemark
+```
+
+列表页 `/web/warehouse/adjustmentSheet/index.html`；详情页 `adjustmentSheetNew/Detail.html?id=<id>`
+（**详情页用 URL 传 `id`**，与备货单用 localStorage 不同）。
+
+### 调整单的成本语义（2026-09-18 实测）
+
+- **创建时不录成本** —— item 只有 `originId/targetId/available/defective/shelfAvailable/shelfDefective`，**零成本字段**。
+- **新批次的成本 = 该 (仓库,SKU) 当前的加权平均成本快照**（即库存明细的「采购单价 / 单位费用」），
+  **不是**来源单的成本。
+
+实测：某 SKU 当前单位费用 4.3763、其来源备货单批次是 4.08，建 `+1` 后新批次
+`transportCost = 4.3763` —— 取的是 SKU 均价，不是 4.08。
+
+> 所以调整单批次**天然不会"跟随"**任何来源单：它们是**时点快照**。这解释了为什么改备货单头程改不动它们。
+
+### 不可逆性（重点）
+
+**① `+N` 之后用 `-N` 回不去。** 扣减按 **FIFO 吃最老的批次**，不会冲掉刚建的新批次。
+
+实测 `+1` 再 `-1`：
+
+| | 结果 |
+|---|---|
+| 备货单批次 | 139 → **138**（被 FIFO 啃掉 1 件）|
+| 新建批次 | **1 件留下**（成本 = 当时的 SKU 均价快照）|
+| 单位费用 | 4.3763 → **4.3782**（净漂移 +0.0019，且清不掉）|
+
+**② 已完成的调整单不可删除、不可撤销。**
+
+- 删除被明确拒绝：`仅【待调整】、【待提交】状态的单据可删除`
+- 详情页只有 `取消`（= 返回列表）和 `打印`，**没有撤销/作废**
+- 端点族里**没有** `antiAudit`/`revoke`；`confirmAdjust`/`approval` 都是正向流程
+- 唯一能对已完成单做的写操作是 **`editRemark`**（body `{id, remark}`）
+
+### 结论：调整单不适合承载「数量同步」
+
+数量同步是**可反复修正**的需求；调整单是**写完即终局、且不可撤销**的单据类型。用前者驱动后者，
+会持续产生三样东西：
+
+1. **不可撤销的账本记录**（写错只能再写一笔）
+2. **不可修正的成本快照批次**（堆积在库存里，拖累又改不动）
+3. **被 FIFO 逐渐啃掉的原始批次**（可修正的那部分在持续消耗）
+
+因此**越跑越难改**，且没有任何回退路径。
+
+### 替代：其他入库单（带成本）
+
+`其他入库单创建（2.0）` `/api/warehouseInOut/inRecord/v2.json`：
+
+```yaml
+WarehouseInItemOpenV2Qo:
+  required: [commoditySku, perPurchase]     # 采购单价必填
+表头: shipFee 运费 / otherFee 其它费用 / apportionType 费用分配方式(0不分配/1按金额/2按数量)
+      type 0其他入库 1采购入库 2维修入库 3退货入库 4还回入库 5次品入库
+```
+
+**能一次性带上 数量 + 采购单价 + 头程**。仓库已有实现：
+[`web_automation/click-based/sellfox_import_other_inbound.py`](../../../web_automation/click-based/sellfox_import_other_inbound.py)（已支持 `--sku --wh --qty --price`）。
+
+> 未验：其他入库单产生的批次是否同样"独立不跟随"（大概率是）。但它**显式携带成本**，
+> 每次入库都能对齐到目标值，比调整单的"黑箱默认"好一个数量级。
+
 ## Why This Matters
 
 - 按文档写「建单 → 确认」两步，第二步必然报错，容易被误判成权限或参数问题；
