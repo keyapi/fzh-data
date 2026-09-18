@@ -33,10 +33,21 @@ tags: [parcel-track, dingtalk, scheduling, windows-task-scheduler, unattended]
 
 ## 输入从哪来
 
-`--tt` 给的是**目录**，取其中最新的 `.xlsx`：把通途导出丢进
-`parcel_track_input/` 即可（该目录已 gitignore，含买家信息）。
+`--tt` 给的是**目录**，取其中最新的 `.xlsx`。有两条路：
 
-### 用仓库自动化导（2026-09-17 实测可行）
+**A. 定时任务自己取（默认，2026-09-18 起）**——`parcel_track/scripts/daily_fetch_and_report.py`
+每次自动做「近 7 天、**截止昨天**」的通途导出 → 解压进 `parcel_track_input/` → 出报表 → 推钉钉。
+范围固定避开今天（通途不接受截止为当天）。**取数失败不会中断**：它会先推一条失败告警，
+再退回用 `parcel_track_input/` 里已有的表照常出报表——否则无人值守时会「什么都没发生」。
+
+```bash
+uv run python parcel_track/scripts/daily_fetch_and_report.py --notify            # 取数+出表+推送
+uv run python parcel_track/scripts/daily_fetch_and_report.py --skip-fetch --notify  # 复用已有输入
+```
+
+**B. 手工放文件**——自己从通途导出后丢进 `parcel_track_input/`（注册定时任务时加 `-SkipFetch`）。
+
+### 底层导出命令（排查时手跑）
 
 ```bash
 # 一次性：装子环境 + Chromium + OCR
@@ -44,6 +55,7 @@ uv run python web_automation/scripts/bootstrap.py --with-ocr
 # 首次要在 web_automation/.env 填 TONGTU_USER / TONGTU_PASSWORD（gitignored）
 
 # 导一段发货时间（--auto-login = ddddocr 自动过验证码）
+WEB_AUTOMATION_BROWSER_CHANNEL=chrome \
 uv run python web_automation/scripts/dispatch.py tongtu.orderdetail.export \
     -- --range-start 2026-09-10 --range-end 2026-09-16 --auto-login
 
@@ -106,16 +118,23 @@ schtasks /Query /TN FZH-ParcelTrack-daily /V /FO LIST
 
 日志：`parcel_track_output/logs/parcel_track-daily.log`；产出：`parcel_track_output/ops_<YYYYMMDD>.xlsx`。
 
-## 已知问题（2026-09-17）
+## 已知问题（2026-09-18）
 
 - **本机 bundled chromium 有头模式起不来**：`spawn UNKNOWN`；chromium-1228 换报沙箱
   `拒绝访问 0x5`。headless 模式正常、系统 Chrome（`channel="chrome"`）有头也正常。
-  `web_automation/legacy-compatible/*` 里 20 个脚本各自内联
-  `launch_persistent_context(headless=False)`，**没有 channel/headless 开关**，所以本机
-  跑通途导出需要外部注入 `channel="chrome"`（例如包一层 monkeypatch 再调
-  `tongtu_orderdetail_report.run()`）。
-  根治方案二选一：① 安全软件里把 `%LOCALAPPDATA%\ms-playwright` 加白；
-  ② 给 `web_automation` 加一个统一的浏览器启动封装（读 env 决定 channel/headless）。
+  已在 `web_automation` 加统一启动出口，用 `WEB_AUTOMATION_BROWSER_CHANNEL=chrome` 切系统 Chrome
+  （定时包装里已设）。详见 `web_automation/docs/reference/browser-launch.md`。
+  赛狐族 ~15 处尚未迁移到该出口。
+- **`schtasks /TR` 不能用于带空格的仓库路径**：本仓库常在 `D:\Claude Demo\...`，
+  `schtasks` 会把 `/TR "…"` 的引号剥掉，任务于是试图运行 `D:\Claude`，报
+  `上次结果: -2147024894`（`ERROR_FILE_NOT_FOUND`）。注册脚本已改用
+  `New-ScheduledTaskAction` / `Register-ScheduledTask`（原生 cmdlet，不走 shell 解析）。
+- **`dispatch.py` 会自动补装浏览器**：它在跑任务前先 `collect_web_facts`，发现
+  Chromium 缺失就执行 `playwright install chromium`（约 192 MiB + headless shell 114 MiB）。
+  实测本机浏览器目录**被清空过一次**（疑与安全软件有关），于是那次定时运行多花了约 5 分钟下载。
+  不影响正确性（任务最终成功），但如果每次都被清就会每天重下——体检用
+  `uv run python web_automation/scripts/doctor.py`，反复出现就让安全软件把
+  `%LOCALAPPDATA%\ms-playwright` 加白。
 - **承运商凭证要保证是「生产」的**：`parcel_track` 把环境写死为生产
   （UPS `env="prod"` / FedEx `env="production"`），**沙箱 key 会认证失败**，报表里该承运商的
   行会**全部落进「数据异常/查无」**（看着像查不到，其实是凭证不对，极易误判）。
