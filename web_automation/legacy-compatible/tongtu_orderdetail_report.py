@@ -20,6 +20,8 @@ from pathlib import Path
 from datetime import datetime
 from playwright.sync_api import sync_playwright
 
+from browser_launch import launch_persistent
+
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', line_buffering=True)
 
 ORDERDETAIL_URL = "https://erp102.tongtool.com/statisticsreport/orderdetail/index.htm"
@@ -396,8 +398,9 @@ def run(args):
     print("=" * 50)
 
     with sync_playwright() as p:
-        context = p.chromium.launch_persistent_context(
-            user_data_dir=str(PROFILE_DIR),
+        context = launch_persistent(
+            p,
+            PROFILE_DIR,
             headless=False,
             accept_downloads=True,
             viewport={"width": 1400, "height": 900},

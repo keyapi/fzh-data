@@ -8,6 +8,31 @@ tags: [web-automation, tongtu, sellfox, playwright, log]
 
 # 迁移日志
 
+## 2026-09-18 — 浏览器启动统一出口（browser_launch）
+
+**背景**：本机 bundled chromium 的**有头**模式起不来（`spawn UNKNOWN`；chromium-1228 另报沙箱
+`拒绝访问 0x5`），而系统 Chrome 有头正常、bundled 无头也正常。各脚本内联
+`launch_persistent_context(headless=False)`，没法统一改，导致通途导出在本机跑不了。
+
+**改动**：
+- 新增 `legacy-compatible/browser_launch.py`：`launch_persistent()` / `launch()` 统一出口，
+  读 `WEB_AUTOMATION_BROWSER_CHANNEL`（走系统浏览器 channel）与 `WEB_AUTOMATION_HEADLESS`
+  （强制有头/无头）。**两个变量都不设时行为与改造前完全一致**（反例已验证）。
+  每次启动打一行 `[browser] channel=… headless=… profile=…`，便于排障。
+- 迁移**通途族 5 处调用**：`tongtu_orderdetail_report` / `tongtu_sales_report` /
+  `tongtu_login_ocr` / `tongtu_auto_export`（2 处）。赛狐族约 15 处**未迁移**
+  （流程未在本机实测，盲改有风险），留作后续。
+- 新增 `tests/web_automation/test_browser_launch.py`（6 个用例，覆盖两个环境变量的
+  覆盖/忽略/传递语义）。
+
+**实测**：`WEB_AUTOMATION_BROWSER_CHANNEL=chrome` 跑标准
+`dispatch.py tongtu.orderdetail.export -- --range-start … --range-end … --auto-login`
+→ `[browser] channel=chrome headless=False` 并导出成功；不设该变量仍以 `spawn UNKNOWN`
+失败（默认行为未变）。
+
+**文档**：新增 [reference/browser-launch.md](reference/browser-launch.md)。
+
+
 ## 2026-09-02 — Phase A 兼容迁移
 
 **源**：`keyapi/fzh-web-automation` `origin/main` commit `04698a8fb181081221b2997ac511ffc29a474c89`（本机主 checkout 的跟踪基线）。

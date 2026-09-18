@@ -18,6 +18,10 @@ Agent 参考（OKF 文档见 [docs/index.md](docs/index.md)；`click-based/AGENT
 - 凭据只放 `web_automation/.env`（gitignored）→ `TONGTU_USER`/`TONGTU_PASSWORD`（通途），绝不入库。
 - 持久化登录 cookie：`web_automation/chrome-profile/`（gitignored）。登录识别：body 含 `编号：`。
 - OCR 不可用自动降级半自动：自动填账号密码，验证码留人工在窗口输入。
+- **浏览器启动**：统一走 `legacy-compatible/browser_launch.py`（通途族已迁移）。本机 bundled
+  chromium **有头**模式起不来（`spawn UNKNOWN` / 沙箱 `拒绝访问 0x5`），用环境变量切系统 Chrome：
+  `WEB_AUTOMATION_BROWSER_CHANNEL=chrome`（可选 `WEB_AUTOMATION_HEADLESS=1/0`）。
+  两个变量都不设时行为与原生一致。详见 [docs/reference/browser-launch.md](docs/reference/browser-launch.md)。
 
 ## 常用任务（dispatcher-first）
 
