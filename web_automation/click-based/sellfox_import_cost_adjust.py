@@ -1,19 +1,25 @@
 #!/usr/bin/env python3
 """
 sellfox_import_cost_adjust.py
-赛狐 成本补录单 一键导入（按SKU）— 批量改「仓库+SKU」的采购单价
+赛狐 成本补录单 一键导入 — 改「仓库+SKU / 单据+SKU」的采购成本
 
 用法:
-  uv run python sellfox_import_cost_adjust.py                     # 导入 cost_adjust/ 下所有文件
+  uv run python sellfox_import_cost_adjust.py                     # 导入 cost_adjust/out 下最新一批
   uv run python sellfox_import_cost_adjust.py file1.xlsx          # 导入指定文件
   uv run python sellfox_import_cost_adjust.py --fresh             # 强制重新登录
 
-流程: 激活仓库模块 → 成本补录单页 → 导入成本补录单 → 选「按SKU导入」
-      → 添加文件 → 导入 → 等结果 → 解析 成功N条/失败N条 → 关闭 → 下一个
+流程: 激活仓库模块 → 成本补录单页 → 导入成本补录单 → 选模式 → 塞文件 → 导入 → 等结果 → 解析成功/失败
+
+模式按**文件名**判定（生成器输出即带模式）:
+  `赛狐_成本补录单_按SKU_导入_*.xlsx`  → 按SKU导入
+  `赛狐_成本补录单_按单据_导入_*.xlsx` → 按单据导入（海外仓只能用这个；
+                                        按SKU会报「创建类型为按sku时,不能为海外仓」）
 
 注意:
-  - 文件必须是「按SKU导入」模板（表头 9 列不可改），由 cost_adjust/build_saihu_cost_adjust.py 生成。
+  - 文件必须用官方模板生成（表头不可改、含 data validation），
+    由 cost_adjust/build_saihu_cost_adjust.py 产出。
   - 赛狐限制单文件 ≤5000 条，生成器已自动拆批。
+  - **导入成功 ≠ 生效**：补录单落库为「待审核」，需在页面点「审核通过」才改库存成本。
   - 页面有「最新活动」「功能上新」弹窗会遮挡按钮，脚本会先关掉。
   - 登录态存在 web_automation/sellfox-profile（与 MCP 共享浏览器无关）。
     配了 SELLFOX_USER/SELLFOX_PASSWORD 会先走 ddddocr 自动登录，否则打开登录页等人工登录(300s)。
@@ -173,41 +179,73 @@ def import_one_file(page, filepath: Path) -> dict:
 
     page.wait_for_timeout(1500)
 
-    # Step 2: 选「按SKU导入」模式（必须在加文件之前选，决定用哪套模板解析）
+    # Step 2: 按文件名选模式（必须在加文件之前选，决定用哪套模板解析）
+    #   生成器输出命名: 赛狐_成本补录单_按SKU_导入_*.xlsx / 赛狐_成本补录单_按单据_导入_*.xlsx
+    #   海外仓只能用「按单据」（按SKU会报「创建类型为按sku时,不能为海外仓」）
+    mode = "按单据导入" if "按单据" in filepath.name else "按SKU导入"
+    print(f"    模式: {mode}")
     r = page.evaluate(
-        """() => {
+        """(modeText) => {
             const wrappers = document.querySelectorAll('.el-dialog__wrapper');
             for (const d of wrappers) {
                 const rect = d.getBoundingClientRect();
                 if (window.getComputedStyle(d).display === 'none' || rect.width === 0) continue;
                 if (!(d.textContent || '').includes('批量导入成本补录')) continue;
-                for (const el of d.querySelectorAll('*')) {
-                    if (el.children.length === 0 && (el.textContent || '').trim() === '按SKU导入') {
-                        el.click(); return 'clicked';
+                const radios = d.querySelectorAll('input[type=radio]');
+                for (const rb of radios) {
+                    const label = (rb.closest('label') || {}).innerText || '';
+                    if (label.trim() === modeText) {
+                        // Element UI radio 必须真实点击其 label；JS click input 不改变 Vue 状态
+                        (rb.closest('label') || rb.parentElement).click();
+                        return rb.checked ? 'clicked' : 'clicked-unverified';
                     }
                 }
                 return 'radio-not-found';
             }
             return 'dialog-not-found';
-        }"""
+        }""",
+        mode,
     )
-    print(f"    选择「按SKU导入」=> {r}")
-    if r != "clicked":
+    print(f"    选择「{mode}」=> {r}")
+    if not str(r).startswith("clicked"):
         print("FAILURE_CODE=BUSINESS_VALIDATION")
-        return {"file": filepath.name, "success": 0, "fail": f"无法切到按SKU导入模式: {r}"}
-    page.wait_for_timeout(800)
+        return {"file": filepath.name, "success": 0, "fail": f"无法切到{mode}模式: {r}"}
+    page.wait_for_timeout(1200)
 
-    # Step 3: 添加文件（必须 Playwright 原生 click 才能触发 file chooser）
+    # 复核选中态
+    verified = page.evaluate(
+        """(modeText) => {
+            for (const d of document.querySelectorAll('.el-dialog__wrapper')) {
+                const rect = d.getBoundingClientRect();
+                if (window.getComputedStyle(d).display === 'none' || rect.width === 0) continue;
+                if (!(d.textContent || '').includes('批量导入成本补录')) continue;
+                for (const rb of d.querySelectorAll('input[type=radio]')) {
+                    const label = ((rb.closest('label') || {}).innerText || '').trim();
+                    if (label === modeText) return rb.checked;
+                }
+            }
+            return null;
+        }""",
+        mode,
+    )
+    if verified is not True:
+        print(f"    [!] 模式复核未通过: {verified}")
+        print("FAILURE_CODE=BUSINESS_VALIDATION")
+        return {"file": filepath.name, "success": 0, "fail": f"{mode} 未选中"}
+
+    # Step 3: 添加文件 —— 直接给弹窗内的隐藏 input[type=file] 塞文件
+    # （比点「添加文件」触发原生选择器更稳，也不依赖可见性）
     print(f"  上传: {filepath.name}")
-    add_file = page.locator("button").filter(has_text="添加文件").first
+    file_input = page.locator(
+        ".el-dialog__wrapper[style*='display: block'] input[type='file'], "
+        ".el-dialog__wrapper:visible input[type='file']"
+    ).first
     try:
-        with page.expect_file_chooser(timeout=10000) as fc_info:
-            add_file.click(timeout=5000)
+        file_input.set_input_files(str(filepath), timeout=15000)
     except Exception as e:
         print("FAILURE_CODE=ELEMENT_NOT_FOUND")
         return {"file": filepath.name, "success": 0, "fail": f"添加文件失败: {e}"}
-    fc_info.value.set_files(str(filepath))
-    page.wait_for_timeout(1200)
+    page.wait_for_timeout(1500)
 
     # Step 4: 点「导入」
     print("  导入中...")
