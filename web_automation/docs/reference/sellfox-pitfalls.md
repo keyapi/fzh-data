@@ -307,6 +307,28 @@ batchNo 20260529002385
 > 每行带具体 `batchNo` 和数量，看得见逐批扣减）。这决定订单成本取哪批，与上面的联动无关。
 > 官方帮助说批次成本按店铺站点维度先进先出，开关在【设置】>【业务设置】>【先进先出】。
 
+## 调整单内部接口（部分可用；创建缺一个未公开字段）
+
+内部页面接口（与 `pageList` 同前缀）：
+
+```
+/api/gw/sellfox/sellfox-warehouse/sellfox/api/warehouse/adjust/
+   pageList | detail | create | submit | confirmAdjust | approval | edit | delete | editRemark
+```
+
+- **读**：`POST .../pageList`（body 见下）与 **`GET .../detail?adjustId=<主表 id>`** 均可用
+  （`detail` 是 **GET**，传 `adjustId` 不是 `adjustNo`；用 POST 会返回「系统异常」）。
+- 列表/详情里**没有任何成本字段**，只有数量（`available/defective/targetAvailable/targetDefective`）。
+- **写**：`POST .../create` 存在，但**服务端要求的字段比两份公开文档都多**。
+  按文档补齐 `originId/targetId/commodityId/commoditySku/targetCommodityId/targetCommoditySku/available/defective`
+  后，仍报 **`操作类型不能为空`**——`type` 对应页面的「调整类型」（传 `"0"`=数量调整即可）；
+  「操作类型」是**另一个字段**，两份文档（公开版/灰度版）都没有，
+  试过 `operateType` / `operationType`（顶层与 item 层、字符串与数字）均不匹配。
+  → **未经批准前不要在这条路上继续试**：每次尝试都是对生产系统的写调用。
+
+**同一表单无「批次」字段**：创建页只有 仓库/调整类型/调整原因/SKU/可用量调整/次品量调整
+——**扣哪个批次由赛狐决定**，调用方无法指定。
+
 ## Element UI checkbox
 
 `cb.click()` 在 evaluate 中不改变 Vue 组件状态 → 必须用 Playwright `page.locator().click()` 真实点击。
