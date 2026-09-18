@@ -27,6 +27,7 @@ venv/
 # env files (secrets)
 .env
 secrets/*.json
+secrets/*.md
 *.cookie.txt
 cookie.txt
 **/docs/api-reference/llms_parsed.json
