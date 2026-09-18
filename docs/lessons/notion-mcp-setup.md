@@ -171,6 +171,30 @@ function getServerUrlHash(serverUrl, authorizeResource, headers, authorizeParams
 | `notion-company` | 公司工作区（如 `mxdeals1023@gmail.com`） |
 | `notion-personal` | 你的个人工作区 |
 
+### 停用某个 Server 但保留配置
+
+Claude Desktop **没有**原生的 per-connector 停用开关（配置里只有 `mcpServers` + `preferences`，无 enable 标志）。通行做法是把条目移到旁边的 `_disabled_mcpServers` 键 —— Claude Desktop 只读 `mcpServers`，不认识的顶层键直接忽略：
+
+```json
+{
+  "mcpServers": {
+    "notion-personal": { ... }
+  },
+  "_disabled_mcpServers": {
+    "notion-company": { ... }
+  }
+}
+```
+
+- **不加载，但配置原样保留**（含全部 args）
+- 恢复 = 把条目挪回 `mcpServers` + 重启 Claude Desktop
+- 改完**需要重启**才生效（MCP 不热加载）
+- OAuth token 不受影响 —— 仍在原凭证目录里，恢复后无需重新授权
+
+> 这是社区标准做法，`KalinYorgov/mcp-server-manager`、`eversonl/claude-config-manager`、`@wyattjoh/mcp-manager` 三个独立工具用的都是这一招（键名 `_disabled_mcpServers` / `disabledMcpServers`）。
+
+**本项目的用法**：`notion-personal` 常用，常驻 `mcpServers`；`notion-company` 仅测试用，放在 `_disabled_mcpServers` 里备用。
+
 ---
 
 ## 四、更正：「3P 模式不支持 `url` 字段」是未复验断言

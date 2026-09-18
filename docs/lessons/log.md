@@ -10,6 +10,8 @@ tags: [lessons, log]
 
 ## 2026-09-18
 
+- **更新**: [notion-mcp-setup.md](notion-mcp-setup.md) — 新增「停用某个 Server 但保留配置」。Claude Desktop 无原生 per-connector 停用开关；通行做法是把条目移入 `_disabled_mcpServers` 顶层键（Claude Desktop 只读 `mcpServers`，忽略未知键），配置原样保留、恢复即挪回 + 重启，OAuth token 不受影响。三个独立第三方工具（mcp-server-manager / claude-config-manager / @wyattjoh/mcp-manager）均用此法。**本项目用法：`notion-personal` 常驻（常用），`notion-company` 移入 `_disabled_mcpServers` 备用（仅测试用）。**
+
 - **更新**: [notion-mcp-setup.md](notion-mcp-setup.md) — 新增「五、上下文开销实测与减压结论」。`/context` ground truth：168 个 MCP 工具 = **57.3k token**，两个 Notion 站合计 37k = 1M 上下文的 3.7%，**不构成问题**。
 - **更正**: 排查中曾用 `tools/list` 原始 JSON 字节数排序，得出「`notion-query-data-sources` 77.8KB 是大头」——**完全错误**。实测该工具仅 **630 token**（跌出前十），而 `notion-update-page`（15.7KB）实为 1.8k token（第一）。原因：原始 JSON 含完整 JSON Schema，模型收到的是精简渲染版，单站 232KB 原始 JSON ≈ 仅 18.5k token（约 6 倍差距）。**铁律：判断 MCP 开销用 `/context` 实测，勿用字节数换算。**
 - **A/B 实证**: `ENABLE_TOOL_SEARCH` 设 `true` / `false` 两次重启后 `/context` **均为 57.3k / 168**，完全一致 → Tool Search 在本环境被 `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` 挡住，设置无效（`~/.claude/settings.json` 已还原）。不建议为它动该变量：收益仅约 4.8%，风险是会话起不来。
