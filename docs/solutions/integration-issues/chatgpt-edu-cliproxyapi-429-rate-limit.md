@@ -1,7 +1,7 @@
 ---
 title: ChatGPT Edu 账号 CLIProxyAPI 429 限流机制调研
 date: 2026-08-05
-last_updated: 2026-08-05
+last_updated: 2026-08-31
 category: integration-issues
 module: new-api-deployment
 problem_type: rate_limit
@@ -31,7 +31,7 @@ related_components: [us-openai-api-proxy, new-api-deployment, CLIProxyAPI]
 
 公司使用 new-api 作为 AI API 网关，通过 US Vultr 上的 CLIProxyAPI 将 1 个 ChatGPT Edu 教育账号转为 OpenAI 兼容 API，供 Codex IDE Agent 开发使用。
 
-2026-08-05 上午，张克勇在 Codex 中用 gpt-5.6-sol 持续开发时遇到 `exceeded retry limit, last status: 429 Too Many Requests`，被迫切换 deepseek-v4-pro。
+2026-08-05 上午，某同事在 Codex 中用 gpt-5.6-sol 持续开发时遇到 `exceeded retry limit, last status: 429 Too Many Requests`，被迫切换 deepseek-v4-pro。
 
 调研目标：
 1. ChatGPT Edu 账号（非 OpenAI API 账号）的限流机制

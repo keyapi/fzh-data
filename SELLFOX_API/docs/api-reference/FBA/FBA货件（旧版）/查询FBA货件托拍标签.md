@@ -83,7 +83,8 @@ paths:
                 type: object
                 properties: {}
                 x-apifox-orders: []
-                x-apifox-ignore-properties: []
+                x--orders: []
+                x--ignore-properties: []
           headers: {}
           x-apifox-name: 成功
         '401':
@@ -94,7 +95,8 @@ paths:
                 type: object
                 properties: {}
                 x-apifox-orders: []
-                x-apifox-ignore-properties: []
+                x--orders: []
+                x--ignore-properties: []
           headers: {}
           x-apifox-name: 没有权限
         '403':
@@ -105,7 +107,8 @@ paths:
                 type: object
                 properties: {}
                 x-apifox-orders: []
-                x-apifox-ignore-properties: []
+                x--orders: []
+                x--ignore-properties: []
           headers: {}
           x-apifox-name: 禁止访问
         '404':
@@ -116,7 +119,8 @@ paths:
                 type: object
                 properties: {}
                 x-apifox-orders: []
-                x-apifox-ignore-properties: []
+                x--orders: []
+                x--ignore-properties: []
           headers: {}
           x-apifox-name: 记录不存在
       security: []
@@ -138,7 +142,9 @@ components:
       title: BatchPalletLabelsOpenVo
       x-apifox-orders:
         - printDetails
-      x-apifox-ignore-properties: []
+      x--orders:
+        - printDetails
+      x--ignore-properties: []
       x-apifox-folder: ''
     PrintDetailOpenVo:
       type: object
@@ -161,7 +167,11 @@ components:
         - amazonShipmentId
         - pageType
         - printNum
-      x-apifox-ignore-properties: []
+      x--orders:
+        - amazonShipmentId
+        - pageType
+        - printNum
+      x--ignore-properties: []
       x-apifox-folder: ''
     OpenResult:
       type: object
@@ -179,8 +189,9 @@ components:
           type: object
           description: 数据
           x-apifox-orders: []
+          x--orders: []
           properties: {}
-          x-apifox-ignore-properties: []
+          x--ignore-properties: []
         ts:
           type: integer
           format: int64
@@ -192,7 +203,13 @@ components:
         - msg
         - data
         - ts
-      x-apifox-ignore-properties: []
+      x--orders:
+        - requestId
+        - code
+        - msg
+        - data
+        - ts
+      x--ignore-properties: []
       x-apifox-folder: ''
   securitySchemes: {}
 servers: []

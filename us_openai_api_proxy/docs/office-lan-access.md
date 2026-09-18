@@ -298,6 +298,18 @@ uci commit && /etc/init.d/firewall restart
 | Base URL | `https://api.vilavi.cn` |
 | API Key | 在 new-api 后台创建的令牌 |
 
+## 群晖 NAS 外网访问 (v0.12, 2026-08-28)
+
+北京办公室 OpenWrt 已对 `fzh.myds.me`、`nas.daneey.com`、`nas.vilavi.cn` 做 DNS 劫持到 `192.168.100.242`。外网经联通光猫 **仅 11024 通**（443 公网不通）。
+
+| 用途 | URL |
+|------|-----|
+| 统一入口（QC 自动选直连/中继） | `https://fangzhouhui.quickconnect.cn/` |
+| 深圳/外网备用（推荐） | `https://nas.daneey.com:11024/`、`https://nas.vilavi.cn:11024/` |
+| 办公室直连书签 | 同上或 `https://fzh.myds.me:11024/` |
+
+完整架构、证书铁律与未决项见 [NAS_API/docs/reference/nas-multi-domain-access.md](../../../NAS_API/docs/reference/nas-multi-domain-access.md)。
+
 ## 见也
 
 - [architecture.md](architecture.md) — 整体架构（服务器+API 流）

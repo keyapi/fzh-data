@@ -59,3 +59,7 @@ Desktop.ini
 # 测试文件
 test_*.py
 *_test.py
+
+# 登录凭据配置（含真实账号/密码历史，勿提交；本地创建 .env 读取）
+config.py
+sellfox_config.py

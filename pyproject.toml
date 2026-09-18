@@ -27,6 +27,8 @@ dependencies = [
     "google-auth>=2.56.3",
     "lightgbm>=4.7.0",
     "scikit-learn>=1.7.2",
+    "tencentcloud-sdk-python>=3.1.166",
+    "tencentcloud-sdk-python-tmt>=3.1.129",
 ]
 
 [tool.hatch.build.targets.wheel]

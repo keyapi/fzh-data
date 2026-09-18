@@ -14,7 +14,9 @@ Usage:
       new-api-dingtalk-oidc
 """
 
+import asyncio
 import hashlib
+import logging
 import os
 import secrets
 import sqlite3
@@ -28,6 +30,8 @@ from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from contextlib import asynccontextmanager
 from jwcrypto import jwk, jwt
+
+logger = logging.getLogger("new-api-dingtalk-oidc")
 
 # ── Config ──────────────────────────────────────────────────────────
 
@@ -239,6 +243,19 @@ async def dingtalk_callback(code: str = "", state: str = ""):
     user_name = user_data.get("name") or user_data.get("nick") or dingtalk_user_id
     email = user_data.get("email") or f"{dingtalk_user_id}@dingtalk"
     avatar = user_data.get("avatarUrl") or ""
+
+    # Best-effort: 登录时记录 unionId↔userId 映射（后台线程），失败绝不影响登录。
+    # 若 DingTalk OAuth 只返回 openId（无 unionId），跳过（映射无法以 unionId 为键）。
+    if user_data.get("unionId"):
+        try:
+            import stream_listener  # 局部导入，避免模块顶层循环依赖
+            loop = asyncio.get_running_loop()
+            loop.run_in_executor(
+                None,
+                lambda: stream_listener.record_login_identity(user_data["unionId"], user_name),
+            )
+        except Exception as e:  # 记录映射只是优化，登录主流程必须继续
+            logger.warning("identity map record skipped (non-fatal): %s", e)
 
     # Generate OIDC authorization code
     oidc_code = secrets.token_urlsafe(32)

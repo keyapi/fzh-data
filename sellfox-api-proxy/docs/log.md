@@ -8,6 +8,24 @@ tags: [sellfox, api-proxy, gateway, log]
 
 # 变更日志
 
+## 2026-09-08
+
+- **已部署 + bridge 挂载打通（实测）**: `offboarding-check.py` 覆盖 `/opt/new-api/`；bridge 重建后
+  在 compose bridge 服务加了 proxy DB 挂载（`- /data/sellfox-proxy:/data/sellfox-proxy`）与
+  `PROXY_DB_PATH` env → 实时通道容器内可直接 `disable_proxy_keys`。容器内对临时测试 key 实测
+  返回 1（`is_active` 置 0），测试 key 已清理，15 个真实在职 key 不受影响。
+  宿主机文件是 `/data/sellfox-proxy/sellfox-proxy.db`。两个容器挂法不同、指向同一文件：
+  proxy 容器 `- /data/sellfox-proxy:/data`（内部 `config.py` 默认 `/data/sellfox-proxy.db`）；
+  bridge 容器 `- /data/sellfox-proxy:/data/sellfox-proxy` + `PROXY_DB_PATH=/data/sellfox-proxy/sellfox-proxy.db`。
+  不要给 bridge 误用 proxy 那套 `/data` 挂载，否则路径对不上会 `STATUS_LATER`。
+- **离职封号侧加固联动**: 跨模块封号脚本（`new-api-deployment/offboarding-check.py`、
+  `new-api-dingtalk-oidc/stream_listener.py`）重写检测逻辑并加 `offboarding_audit` 审计。
+  对 proxy 的影响：proxy 不再参与预检（不阻断 new-api 封号），改为每个被封用户单独关 Key，
+  失败记 `proxy_pending` + 保留 identity_map 供次日补关，daily 结尾 `sys.exit(2)` 报警；
+  stream 通道 `STATUS_LATER` 重投。不再静默 0 行。proxy 侧无需改代码，但部署
+  时须在 `.secrets.env` 显式配 `PROXY_DB_PATH` 指到真实 sqlite 挂载点。详见
+  `docs/solutions/integration-issues/dingtalk-offboarding-hardening.md`
+
 ## 2026-07-09
 
 - **v0.4.3 离职封号集成 + 冒烟测试 + OIDC 刷新修复**:

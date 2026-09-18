@@ -10,6 +10,7 @@ timestamp: 2026-08-20
 
 | 标题 | 文件 |
 |------|------|
+| parcel_track 处理天数统一 3 个营业日与 per-carrier 顺序并发 | [parcel-track-handling-days-sequential-workers.md](parcel-track-handling-days-sequential-workers.md) |
 | 三角类皮壳在通途与赛狐并行期的共享库存代理 | [sellfox-cover-shared-inventory-transition.md](sellfox-cover-shared-inventory-transition.md) |
 | EN 物料/变体创建惯例 — 四层属性体系与配套物料 | [erpnext-item-variant-creation-convention.md](erpnext-item-variant-creation-convention.md) |
 | EN 成品与皮壳 1:1 配对审计与孤儿皮壳重建 | [erpnext-product-cover-variant-pairing.md](erpnext-product-cover-variant-pairing.md) |

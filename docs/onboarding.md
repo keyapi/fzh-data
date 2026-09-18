@@ -51,6 +51,21 @@ Agent 会运行 `uv run python EN_API/image_upload_app.py`，浏览器自动打�
 > 帮我导入采购成本
 > 帮我搜索 XXX 相关信息
 
+### 网页自动化（通途/赛狐导出、备货单导入）
+
+这些也在同一个仓库里（`web_automation/`）。普通 `uv sync` **不需要**装浏览器；
+你说业务目标即可，例如：
+
+> 帮我导出通途库存 / 导出赛狐库存 / 导入备货单
+
+Agent 会先运行 `uv run python web_automation/scripts/dispatch.py <任务> --check`：
+- `NEED_BROWSER` → Agent 自动建浏览器环境（约 1 分钟，只需第一次）；
+- `NEED_LOGIN` → 弹出的浏览器里你手动登录一次，之后免登录；
+- `NEED_USER_CONFIRMATION` → Agent 会先报出要操作的文件/商品/仓库，你确认范围它才继续；
+- `BLOCKED` → Agent 会把原因告诉你。
+
+验证码全自动识别（OCR）默认不装；需要时 Agent 会先问你。
+
 ---
 
 ## 项目更新了怎么同步

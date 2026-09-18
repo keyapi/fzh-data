@@ -1,7 +1,7 @@
 ---
 title: 钉钉 SSO 登录 new-api（OIDC Bridge 桥接方案）
 date: 2026-06-26
-last_updated: 2026-06-26
+last_updated: 2026-09-08
 category: integration-issues
 module: new-api-deployment
 problem_type: architecture_pattern
@@ -84,10 +84,10 @@ $1.00 = 500,000 配额
 ¥20.00 = 1,370,000 配额
 ```
 
-ModelRatio 将各模型价格差异编码在配额消耗中：
-- DeepSeek V4 Flash: ModelRatio=0.068493 → ¥1.00/1M tokens 输入
-- DeepSeek V4 Pro: ModelRatio=0.205479 → ¥3.00/1M tokens 输入
-- GPT-5.5 (via CLIProxyAPI): ModelRatio=2.5 → $5.00/1M tokens 输入（对应 OpenAI 官方 API 定价）
+ModelRatio 将各模型价格差异编码在配额消耗中。**注意：DeepSeek 自 2026-08-17 起实行峰谷分时计价，DeepSeek 的 ModelRatio 不再是静态值**——由外部 cron 脚本按北京时间在高峰/空闲两档间自动切换（见 [new-api-deepseek-time-based-pricing-automation.md](../tooling-decisions/new-api-deepseek-time-based-pricing-automation.md)）：
+- DeepSeek V4 Flash: 高峰 0.205479 / 空闲 0.10274
+- DeepSeek V4 Pro: 高峰 0.616438 / 空闲 0.308219
+- GPT 系模型（经 CLIProxyAPI）: 以 new-api 后台当前 `ModelRatio` 配置为准（不再假定固定值）
 
 **无需为每个模型单独设套餐额度**，同一套配额体系对所有模型生效。
 
@@ -167,6 +167,11 @@ VALUES
 
 ## 离职自动封号
 
+> ⚠️ **2026-09-08 检测逻辑已加固**：下文「查 active 状态 → 不活跃则禁用」为旧逻辑，
+> 已被 [dingtalk-offboarding-hardening.md](dingtalk-offboarding-hardening.md) 取代——
+> 真实离职(员工移出组织 → getbyunionid 60121)原逻辑会 [SKIP] 永不封，active=false 还会
+> 误伤在职未激活员工。新逻辑：60121 判离职 + 本地 identity_map(unionId↔userId) + 审计表。
+
 ### 权限配置
 
 在钉钉开发者后台 → 权限管理 → 开通 **成员信息读权限** (`qyapi_get_member`)，即可用 App Token 查询任意用户（含在职/离职状态）。
@@ -201,7 +206,7 @@ POST https://oapi.dingtalk.com/topapi/user/getbyunionid?access_token=TOKEN
 # Step 2: userId → 完整信息 (含 active 状态)
 POST https://oapi.dingtalk.com/topapi/v2/user/get?access_token=TOKEN
 {"userid": "014709..."}
-# → {"result": {"active": true, "name": "张克勇", ...}}
+# → {"result": {"active": true, "name": "某同事", ...}}
 ```
 
 ### API 调用注意事项

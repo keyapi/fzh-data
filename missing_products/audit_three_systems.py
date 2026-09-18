@@ -29,7 +29,7 @@ import requests
 HERE = Path(__file__).resolve().parent
 WORKTREE = HERE.parent
 MAIN = Path(r"D:\Work\赛狐\Cursor")
-WEB = Path(r"D:\Work\赛狐\网页自动化")
+WEB = WORKTREE / "web_automation"
 sys.path.insert(0, str(WORKTREE))
 
 from SELLFOX_API.client import SellfoxClient, SellfoxConfig
