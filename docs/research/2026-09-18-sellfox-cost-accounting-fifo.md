@@ -95,12 +95,51 @@ timestamp: 2026-09-18
 
 → **只重算受影响的批次份额，按加权平均合并。**
 
-## 5. 对「按仓库+SKU 改成本」工具的结论
+## 5. 库存调整单不涉及成本（实测）
+
+用 `test001-white` 核实调整单 `AD2608140016`（`type=0 数量调整`，POLAND）：**三处都没有成本字段**。
+
+| 来源 | 字段实况 |
+|---|---|
+| OpenAPI `POST /api/ware/adjust/create.json` | `type`(0数量调整/1换标调整)、`availableNum`、`defectiveNum`、货架位 —— 无成本 |
+| 内部 `POST /api/gw/sellfox/sellfox-warehouse/sellfox/api/warehouse/adjust/pageList` 主表 | `adjustNo/type/adjustStatus/sum/remark/adjustmentReason/...` —— 无成本（`sum` 只是数量合计） |
+| 同上 `itemList[]` | `available/defective/newAvailable/newDefective/targetAvailable/targetDefective` + 货架位 —— **成本字段 0 个** |
+
+→ **赛狐的库存调整单是纯数量调整，不碰成本。**
+调整单产生的批次行，其 `inventoryCost`/`transportCost` 是**继承被调整的原批次**的
+（实测 `AD2608140016` 的批次行带 1.5/0.2、1.5/4.08），不是调整单设定的。
+
+> 对比：ERPNext 的库存调账可同单同时改数量与成本；赛狐不是。
+
+## 6. 定位「该改哪些单据」：海外仓批次
+
+改成本必须落到**具体单据**，但一个 (仓库,SKU) 常有几十上百张历史单。
+`POST /api/overseaBatch/page.json`（页面 仓库 → 海外仓 → 海外仓批次）给出**批次级库存**：
+
+- 筛 SKU 用 **`searchType=commoditySku` + `searchContent`**（传 `commoditySku` 参数不过滤）
+- `goodsAva > 0` = 还在库；`oriNo` = 来源单号；`inventoryCost`/`transportCost` = 该批次采购成本/头程
+- `type=5` 且 `oriNo=OWS…` → 海外仓备货单（可改头程）；`AD…` → 库存调整单
+- 加权后可**反算**【库存明细】的 `采购单价(￥)`/`单位费用(￥)`
+
+实测：
+
+| SKU | 批次总数 | 有货批次 | 可用量 | 加权(采购/单位费用) | 来源 |
+|---|---|---|---|---|---|
+| test001-white @POLAND | 83 | 2 | 2000 | 1.375 / 0.6 | 全部备货单（029/030） |
+| KS0248-DM-60-WHITE @DANEEY | 128 | 4 | 150 | 104.38 / 8.12 | 139 件备货单 007 + 11 件 3 张调整单 |
+
+→ **库存常是混合来源**。调整单来源的批次没有「单个头程费用」可改，
+只改备货单无法把整个 (仓库,SKU) 的平均成本拉到目标值。
+工具：`cost_adjust/probe_batches.py`。
+
+## 7. 对「按仓库+SKU 改成本」工具的结论
 
 | 成本项 | 入库前 | 入库后（无需清零重入） |
 |---|---|---|
 | 采购成本 | 备货单 `指定采购单价` | **成本补录单 按单据导入**（类型=海外仓备货单，**需审核**） |
 | 头程 | 备货单 `单个头程费用` | **改备货单 `单个头程费用`**（成本补录单不支持改它） |
+| 数量 | — | 库存调整单（**只改数量，不涉及成本**） |
 
-两条路都会让库存明细的 `采购单价(￥)` / `单位费用(￥)` 按加权平均重算。
+两条链路都会让库存明细的 `采购单价(￥)` / `单位费用(￥)` 按加权平均重算。
+**调整单不需要纳入改成本的工具**；但用 `probe_batches.py` 看来源构成时要区分它。
 

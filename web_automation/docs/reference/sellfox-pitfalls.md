@@ -248,6 +248,28 @@ Playwright click 超时 (element not visible) → 使用 `page.evaluate("item.cl
 
 工具：`cost_adjust/probe_batches.py`（登录后直接打印上述分组与加权值）。
 
+## 库存调整单只管数量，不涉及成本（实测）
+
+2026-09-18 用 `test001-white` 核实（调整单 `AD2608140016`，`type=0 数量调整`，POLAND）。
+三处证据一致，**没有任何成本字段**：
+
+| 来源 | 结论 |
+|---|---|
+| OpenAPI `POST /api/ware/adjust/create.json` | 只有 `type(0数量调整/1换标调整)`、`availableNum`、`defectiveNum`、货架位 —— 无成本 |
+| 内部页面 `POST /api/gw/sellfox/sellfox-warehouse/sellfox/api/warehouse/adjust/pageList` | 主表字段：`adjustNo/type/adjustStatus/sum/remark/adjustmentReason/...` —— 无成本，只有 `sum` 数量合计 |
+| 同上接口的 `itemList[]` | `available/defective/newAvailable/newDefective/targetAvailable/targetDefective` + 货架位 —— **成本字段 0 个** |
+
+**结论：赛狐的库存调整单是纯数量调整，不碰成本。**
+（对比：ERPNext 的库存调账可同单同时改数量与成本；赛狐不是。）
+
+派生影响：
+
+- 用 API 把通途库存写回赛狐（同事的做法）只能走**数量**，成本改不了。
+- 调整单产生的批次行，其 `inventoryCost` / `transportCost` 是**从被调整的原批次继承的**
+  （实测 `AD2608140016` 的批次行带着被消耗批次的 1.5/0.2、1.5/4.08），不是调整单设定的。
+- 因此**改成本只需要盯「海外仓备货单」**；调整单只在**数量**维度影响库存，
+  但它产生的批次会参与加权平均，用 `probe_batches.py` 看来源构成时要注意区分。
+
 ## Element UI checkbox
 
 `cb.click()` 在 evaluate 中不改变 Vue 组件状态 → 必须用 Playwright `page.locator().click()` 真实点击。
