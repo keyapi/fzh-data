@@ -88,3 +88,7 @@ web_automation/debug_*.json
 # fedex_track 运行产物（大，不入库）
 fedex_track_output/
 parcel_track_output/
+# 定时任务等待处理/已处理完的通途导出（含买家信息，不入库）
+parcel_track_input/
+# 定时任务注册脚本按机器生成的包装（与 web_automation 的同类产物一致，不入库）
+parcel_track/scripts/run_parcel_track_scheduled-*.cmd

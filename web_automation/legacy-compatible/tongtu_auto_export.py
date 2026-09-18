@@ -23,6 +23,7 @@ import subprocess, sys, time, shutil, json
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 
+from browser_launch import launch_persistent
 from tongtu_warehouses import (
     WAREHOUSES,
     inventory_download_matches_warehouse,
@@ -257,10 +258,7 @@ def export_cookies():
         sys.exit(1)
 
     with sync_playwright() as p:
-        context = p.chromium.launch_persistent_context(
-            user_data_dir=str(PROFILE_DIR),
-            headless=True,
-        )
+        context = launch_persistent(p, PROFILE_DIR, headless=True)
         all_cookies = context.cookies()
         context.close()
 
@@ -360,8 +358,9 @@ def run():
     OUTPUT_DIR.mkdir(exist_ok=True)
 
     with sync_playwright() as p:
-        context = p.chromium.launch_persistent_context(
-            user_data_dir=str(PROFILE_DIR),
+        context = launch_persistent(
+            p,
+            PROFILE_DIR,
             headless=False,
             accept_downloads=True,
             viewport={"width": 1280, "height": 800},
