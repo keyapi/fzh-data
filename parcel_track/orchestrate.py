@@ -164,6 +164,10 @@ def run_report(
             "订单号": r.ident.get("订单号", ""),
             "包裹号": r.ident.get("包裹号", ""),
         })
+    counts: dict[str, int] = {}
+    for row in classified:
+        key = str(row.get("_key") or "")
+        counts[key] = counts.get(key, 0) + 1
     _write_csv(f"{prefix}-ups.summary.csv", ups_sum)
     _write_csv(f"{prefix}-fedex.summary.csv", fdx_sum)
     _write_csv(f"{prefix}-gls.summary.csv", gls_sum)
@@ -186,6 +190,7 @@ def run_report(
         "gls": len(gls_rows),
         "parked": len(report.parked),
         "classified": len(classified),
+        "counts": counts,
         "called": called,
         "out": out_xlsx,
     }

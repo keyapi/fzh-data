@@ -9,6 +9,7 @@ tags: [web-automation, reference, index]
 # Reference
 
 - [capability-matrix](capability-matrix.md) — 平台+动作路由、风险、允许/禁止回退、验证合同
+- [browser-launch](browser-launch.md) — 浏览器启动统一出口：环境变量决定 channel/headless（本机有头 bundled chromium 不可用）
 - [orderdetail-export](orderdetail-export.md) — 通途订单详情统计月度导出（`tongtu.orderdetail.export`：背景/MCP 探路/选择器/踩坑/核验）
 - [security-and-local-state](security-and-local-state.md) — profile/cookie/凭证本地化与写操作范围
 - [scheduling-exports](scheduling-exports.md) — 通途导出定时调度（Windows/macOS/Linux cron + 7 天自动续登）
