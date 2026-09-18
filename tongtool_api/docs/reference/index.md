@@ -13,3 +13,4 @@ timestamp: 2026-08-13
 - Authentication and errors: authentication-and-errors.md
 - ERP2 tool catalog: erp2-tool-catalog.md
 - Orders and packages: orders-packages.md
+- Purchase orders: purchase-orders.md
