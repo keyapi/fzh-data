@@ -1809,6 +1809,8 @@ dependencies = [
     { name = "scikit-learn", version = "1.9.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "sqlalchemy" },
     { name = "synology-api" },
+    { name = "tencentcloud-sdk-python" },
+    { name = "tencentcloud-sdk-python-tmt" },
     { name = "typer" },
     { name = "uvicorn" },
 ]
@@ -1841,6 +1843,8 @@ requires-dist = [
     { name = "scikit-learn", specifier = ">=1.7.2" },
     { name = "sqlalchemy", specifier = ">=2.0.50" },
     { name = "synology-api", specifier = ">=0.9.0" },
+    { name = "tencentcloud-sdk-python", specifier = ">=3.1.166" },
+    { name = "tencentcloud-sdk-python-tmt", specifier = ">=3.1.129" },
     { name = "typer", specifier = ">=0.9" },
     { name = "uvicorn", specifier = ">=0.49.0" },
 ]
@@ -2267,6 +2271,42 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/39/e7/31754f58c03827cbdd77bc10d1f68eff51d6f6e78f6508a8f3493cbae75f/synology_api-0.9.0.tar.gz", hash = "sha256:0df96f789bcb0d099db8f45d15b076baf977752aff6fafd7559299b41d046310", size = 256180, upload-time = "2026-05-27T21:54:38.149Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/60/27/ae417a8aa94c30775a75bef65b4985d87cacf3cbce92d8db9a01189857f8/synology_api-0.9.0-py3-none-any.whl", hash = "sha256:2da02d865f8872f358660d466a752cf75ba0885b85efdc8c237aca4f372c1b43", size = 256666, upload-time = "2026-05-27T21:54:28.57Z" },
+]
+
+[[package]]
+name = "tencentcloud-sdk-python"
+version = "3.1.166"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/54/b1/c71ab00ad9c25706aa5f5bb46ac36f8e1651f72f3c64717505c528dc6974/tencentcloud_sdk_python-3.1.166.tar.gz", hash = "sha256:83febb71ad87f85018d7bab17477a18e4865b8bf687fff4c6af2352351b6f99c", size = 16760200, upload-time = "2026-08-27T03:38:21.893Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8e/df/cfc3bd05fef954bbfa6d06bee0268f836e71639e1af7456ce36ba8bc177d/tencentcloud_sdk_python-3.1.166-py2.py3-none-any.whl", hash = "sha256:f2a1d1ee330ba3352a30a8dbf8bd30f2a5e9dfe1486956e8d9720f623f615131", size = 17686134, upload-time = "2026-08-27T03:38:07.869Z" },
+]
+
+[[package]]
+name = "tencentcloud-sdk-python-common"
+version = "3.1.166"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/61/eb/a7405bac9d6b0de9ca358114b77f1b5d27f15cc56c833cd4f34bd8d98d9e/tencentcloud_sdk_python_common-3.1.166.tar.gz", hash = "sha256:6d7dbb588d175c9b1a1296e5cabf56292eea823ac8bf4afcf8e195f2cd8b66a6", size = 22690, upload-time = "2026-08-27T03:39:37.845Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ac/b9/28d5b81415b1f9b164adefca77ab82b845e8904a8d521454a267d063ed47/tencentcloud_sdk_python_common-3.1.166-py2.py3-none-any.whl", hash = "sha256:be7c07e0572f70e8d09d95d0c39ecb1a2f65a4626e7f28ff9f39cc6ebcdd454b", size = 34275, upload-time = "2026-08-27T03:39:36.234Z" },
+]
+
+[[package]]
+name = "tencentcloud-sdk-python-tmt"
+version = "3.1.129"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "tencentcloud-sdk-python-common" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ec/73/b6cecced9eb9c069f5f114465976cf3177ab5e12d7d1b96e1a508fe1a1de/tencentcloud_sdk_python_tmt-3.1.129.tar.gz", hash = "sha256:c716405fb20ff13469373bf8c8904cda67aa165a9ea85f65e332bc5cb6bf83a2", size = 7879, upload-time = "2026-07-07T20:18:34.896Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/10/63/3c965d554e9ec2d54d5aabf3842b9ba6ee4d37b12ff0deda1d3ace9cefa5/tencentcloud_sdk_python_tmt-3.1.129-py2.py3-none-any.whl", hash = "sha256:33707610cfc0fd8ced2c7ba77f70f4c3c0ab7bd32503e1f9b238623a26df9aaa", size = 10566, upload-time = "2026-07-07T20:18:33.409Z" },
 ]
 
 [[package]]

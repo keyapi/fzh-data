@@ -15,10 +15,11 @@ tags: [openai, api-proxy, tailscale, vultr, chatgpt]
 |----------|--------|
 | 快速了解模块 + 开始工作 | [`../AGENT_HANDOFF.md`](../AGENT_HANDOFF.md) |
 | 了解怎么部署和使用 | [`../README.md`](../README.md) |
-| 查看架构设计决策 | [architecture.md](architecture.md) |
+| 服务启动、日志、重启或资源问题 | [operations.md](operations.md) |
+| `503 auth_unavailable`、OAuth 刷新或模型授权验收 | [operations.md](operations.md) |
+| 已解决的授权恢复故障 | [仓库解决方案](../../docs/solutions/integration-issues/cliproxyapi-auth-unavailable-oauth-recovery.md) |
 | 查阅工具、术语、链接 | [reference/tools-index.md](reference/tools-index.md) |
 | 查阅经验教训 | [lessons/lessons-learned.md](lessons/lessons-learned.md) |
-| 日常运维、监控、同事接入 | [operations.md](operations.md) |
 | 部署 LAN 网关让同事使用 | [lan-gateway.md](lan-gateway.md) |
 | 办公室全员访问 Tailscale (已实施) | [office-lan-access.md](office-lan-access.md) |
 | 查看变更历史 | [log.md](log.md) |
@@ -34,6 +35,7 @@ us_openai_api_proxy/
 └── docs/                         ← OKF v0.1 bundle
     ├── index.md                  ← 你在这里
     ├── log.md                    ← 变更历史
+    ├── operations.md             ← 日常运维与授权恢复
     ├── architecture.md           ← 架构设计
     ├── reference/
     │   └── tools-index.md        ← 工具/术语/链接

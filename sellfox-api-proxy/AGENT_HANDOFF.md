@@ -38,7 +38,7 @@
 
 4. **策略模式支持多 Provider**：认证策略（static_key / oauth2_cc / custom）+ 签名策略（noop / sellfox_hmac / md5_sign / custom）。加新 API = 加 YAML + 可选加 ~40 行插件。
 
-5. **复用钉钉 OIDC 身份体系**：不重建登录系统，通过已有的 `new-api-dingtalk-oidc` 桥实现 OIDC 登录。API Key 绑定 `dingtalk_union_id`，离职时 `offboarding-check.py`（每日 cron）+ `stream_listener.py`（实时 Stream）双通道自动封号。
+5. **复用钉钉 OIDC 身份体系**：不重建登录系统，通过已有的 `new-api-dingtalk-oidc` 桥实现 OIDC 登录。API Key 绑定 `dingtalk_union_id`，离职时 `offboarding-check.py`（每日 cron）+ `stream_listener.py`（实时 Stream）双通道自动封号（2026-09-08 检测逻辑加固：60121 判离职 + 本地 identity_map + 审计，详见 `docs/solutions/integration-issues/dingtalk-offboarding-hardening.md`）。生产：bridge 必须挂 `- /data/sellfox-proxy:/data/sellfox-proxy` 并设 `PROXY_DB_PATH`（与 proxy 容器自己的 `- /data/sellfox-proxy:/data` 不是同一挂法）。
 
 6. **冒烟测试覆盖**：`smoke_test.py`（290 行，纯 stdlib，9 条用例）覆盖 health/auth/CRUD/proxy/rate-limit，支持 `--local`（VPS 本地）和远程（公网 nginx）双模式。
 

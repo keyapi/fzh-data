@@ -20,21 +20,32 @@ venv/
 # Claude session / worktrees
 .claude/worktrees/
 .claude/settings.local.json
+.claude/scheduled_tasks.json
+.claude/scheduled_tasks.lock
 .playwright-mcp/
 
 # env files (secrets)
 .env
+# env 变体（备份 / 本地覆盖）；模板要入库，见下面的 ! 例外
+.env.*
+!.env.example
+!.env.sample
+!.env.template
 secrets/*.json
 *.cookie.txt
 cookie.txt
 **/docs/api-reference/llms_parsed.json
 **/docs/api-reference/download_log.json
 .env.local
+# Agent/Codex 临时工作区（可能含从别处拷来的脚本与明文凭证）
+.codex_tmp/
 .gh-token
 out/*
 missing_products/out/**
 amazon_pairing/out/**
 sellfox_cover_inventory/out/**
+channel_account_sync/out/**
+!channel_account_sync/out/.gitkeep
 !out/.gitkeep
 tongtool_order_cost/out/
 scripts/out/
@@ -48,3 +59,31 @@ sellfox_shipping/数据源/**
 
 # sellfox_shipping local DB
 sellfox_shipping/data/
+
+# Google Drive 权限管理 — 含员工邮箱 PII 的 CSV 不入仓（数据以 Google Sheet 台账为准）
+accounts_master.csv
+drive_permission_ledger.csv
+colab_permission_ledger.csv
+gsheet_permission_audit.csv
+google_drive_permissions/_init_local/
+
+# web_automation 能力舱：浏览器 profile / cookies / 下载输出（运行时状态）
+web_automation/.venv/
+web_automation/**/chrome-profile/
+web_automation/**/sellfox-profile/
+web_automation/**/profiles/
+web_automation/downloads/
+web_automation/output/
+web_automation/.env
+web_automation/*.cookie.txt
+web_automation/mcp_cookies.json
+web_automation/sellfox_cookies.json
+web_automation/debug_*.json
+# 但要跟踪子项目锁文件与配置
+!web_automation/uv.lock
+!web_automation/.env.example
+!web_automation/.mcp.json
+
+# fedex_track 运行产物（大，不入库）
+fedex_track_output/
+parcel_track_output/

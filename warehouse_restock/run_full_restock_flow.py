@@ -27,31 +27,36 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 # ── 路径配置 ──────────────────────────────────────────────
 
-CURSOR_ROOT = Path(__file__).resolve().parent.parent
-WEB_AUTO = Path(r"D:\Work\赛狐\网页自动化")
-CURSOR_VENV = CURSOR_ROOT / ".venv" / "Scripts" / "python.exe"
-WEB_VENV = WEB_AUTO / ".venv" / "Scripts" / "python.exe"
+REPO_ROOT = Path(__file__).resolve().parent.parent
+WEB_AUTO = REPO_ROOT / "web_automation"
+DISPATCH = WEB_AUTO / "scripts" / "dispatch.py"
 
-# 关键脚本
-EXPORT_SCRIPT = WEB_AUTO / "sellfox_auto_export.py"
-IMPORT_OUTBOUND_SCRIPT = WEB_AUTO / "sellfox_import_other_outbound.py"
-IMPORT_RESTOCK_SCRIPT = WEB_AUTO / "sellfox_import_warehouse_restock.py"
-GEN_OUTBOUND_SCRIPT = CURSOR_ROOT / "other_outbound" / "build_saihu_other_outbound.py"
+# 生成脚本（根项目数据管道）
+GEN_OUTBOUND_SCRIPT = REPO_ROOT / "other_outbound" / "build_saihu_other_outbound.py"
 GEN_RESTOCK_SCRIPT = Path(__file__).resolve().parent / "build_saihu_warehouse_restock.py"
 
-# 关键目录
-OUTBOUND_DATA_DIR = CURSOR_ROOT / "other_outbound" / "数据源"
+# 数据/输出目录
+OUTBOUND_DATA_DIR = REPO_ROOT / "other_outbound" / "数据源"
 OUTBOUND_OUT_DIR = WEB_AUTO / "outbound"
 RESTOCK_OUT_DIR = WEB_AUTO / "restock"
-DOWNLOADS_DIR = WEB_AUTO / "downloads"
 
 
-def run_py(script: Path, cwd: Path, venv: Path, *extra_args) -> int:
-    """运行 Python 脚本，返回 exit code。"""
-    args = [str(venv), str(script)] + list(extra_args)
+def run_py(script: Path, *extra_args) -> int:
+    """在当前仓库环境运行 Python 脚本（数据管道脚本用根 .venv）。"""
+    args = ["uv", "run", "python", str(script)] + list(extra_args)
     print(f"\n  > 执行: {' '.join(str(a) for a in args[-3:]) if len(args) > 4 else script.name}")
-    print(f"  > 工作目录: {cwd}")
-    result = subprocess.run(args, cwd=str(cwd), encoding="utf-8",
+    result = subprocess.run(args, cwd=str(REPO_ROOT), encoding="utf-8",
+                            errors="replace", env={**os.environ, "PYTHONIOENCODING": "utf-8"})
+    return result.returncode
+
+
+def run_web_task(task: str, confirm_scope: str | None = None) -> int:
+    """通过网页能力舱 dispatcher 执行浏览器任务（导出/导入）。"""
+    args = ["uv", "run", "python", str(DISPATCH), task]
+    if confirm_scope:
+        args.extend(["--confirm-scope", confirm_scope])
+    print(f"\n  > dispatcher: {task}" + (f" (scope={confirm_scope})" if confirm_scope else ""))
+    result = subprocess.run(args, cwd=str(REPO_ROOT), encoding="utf-8",
                             errors="replace", env={**os.environ, "PYTHONIOENCODING": "utf-8"})
     return result.returncode
 
@@ -69,9 +74,9 @@ def confirm(prompt: str) -> bool:
 
 
 def find_latest_export() -> Path | None:
-    """找到最新的 WarehouseItem*.xlsx 导出文件。"""
+    """找到最新的 WarehouseItem*.xlsx 导出文件（赛狐导出落在 web_automation/downloads/）。"""
     candidates = sorted(
-        [f for f in DOWNLOADS_DIR.glob("WarehouseItem*.xlsx") if not f.name.startswith("~$")],
+        [f for f in (WEB_AUTO / "downloads").glob("WarehouseItem*.xlsx") if not f.name.startswith("~$")],
         key=lambda f: f.stat().st_mtime, reverse=True
     )
     return candidates[0] if candidates else None
@@ -80,14 +85,14 @@ def find_latest_export() -> Path | None:
 # ── 各步骤 ────────────────────────────────────────────────
 
 def step_export_stock() -> Path | None:
-    """Step 1: 导出赛狐库存明细（headless 浏览器模式）。"""
+    """Step 1: 导出赛狐库存明细（dispatcher，API 优先，失败仅在允许时回退浏览器）。"""
     print("\n" + "=" * 60)
     print("Step 1: 导出赛狐库存明细")
     print("=" * 60)
 
-    ret = run_py(EXPORT_SCRIPT, WEB_AUTO, WEB_VENV, "--headless")
+    ret = run_web_task("sellfox.stock.export")
     if ret != 0:
-        print("[失败] 导出脚本返回非 0")
+        print("[失败] 库存导出 dispatcher 返回非 0")
         return None
 
     latest = find_latest_export()
@@ -111,7 +116,7 @@ def step_gen_other_outbound(inv_file: Path) -> list[Path] | None:
     print("Step 2a: 生成其他出库导入文件")
     print("=" * 60)
 
-    ret = run_py(GEN_OUTBOUND_SCRIPT, GEN_OUTBOUND_SCRIPT.parent, CURSOR_VENV)
+    ret = run_py(GEN_OUTBOUND_SCRIPT)
     if ret != 0:
         print("[失败] 其他出库生成脚本返回非 0")
         return None
@@ -131,14 +136,13 @@ def step_gen_other_outbound(inv_file: Path) -> list[Path] | None:
 
 
 def step_import_outbound(files: list[Path]) -> bool:
-    """Step 2b: 导入其他出库文件到赛狐。"""
+    """Step 2b: 导入其他出库文件到赛狐（dispatcher，写操作需范围确认）。"""
     print("\n" + "=" * 60)
     print("Step 2b: 导入其他出库到赛狐")
     print("=" * 60)
 
-    # 复制到 网页自动化/outbound/
+    # 复制到 web_automation/outbound/（导入脚本按文件参数处理；无参时扫描该目录）
     OUTBOUND_OUT_DIR.mkdir(exist_ok=True)
-    # 清空旧文件
     for old in OUTBOUND_OUT_DIR.glob("赛狐_其他出库_导入_*.xlsx"):
         old.unlink()
 
@@ -149,14 +153,15 @@ def step_import_outbound(files: list[Path]) -> bool:
         copied.append(dst)
         print(f"  已复制: {dst.name}")
 
-    print("\n⚠ 导入需要打开浏览器。赛狐导入后需手动'确认出库'。")
+    print("\n⚠ 赛狐导入后需手动'确认出库'。")
     if not confirm("确认导入其他出库文件到赛狐？"):
         print("  已跳过导入")
         return False
 
-    ret = run_py(IMPORT_OUTBOUND_SCRIPT, WEB_AUTO, WEB_VENV)
+    ret = run_web_task("sellfox.other-outbound.import",
+                       confirm_scope=f"其他出库导入 {len(copied)} 个已生成文件")
     if ret != 0:
-        print("[警告] 导入脚本返回非 0，请检查浏览器")
+        print("[警告] dispatcher 返回非 0，请检查浏览器")
         return False
     return True
 
@@ -167,7 +172,7 @@ def step_gen_warehouse_restock() -> list[Path] | None:
     print("Step 3a: 生成海外仓备货单导入文件（格式1 + 格式2）")
     print("=" * 60)
 
-    ret = run_py(GEN_RESTOCK_SCRIPT, GEN_RESTOCK_SCRIPT.parent, CURSOR_VENV)
+    ret = run_py(GEN_RESTOCK_SCRIPT)
     if ret != 0:
         print("[失败] 备货单生成脚本返回非 0")
         return None
@@ -193,12 +198,12 @@ def step_gen_warehouse_restock() -> list[Path] | None:
 
 
 def step_import_restock(files: list[Path]) -> bool:
-    """Step 3b: 导入海外仓备货单文件到赛狐。"""
+    """Step 3b: 导入海外仓备货单文件到赛狐（dispatcher，写操作需范围确认）。"""
     print("\n" + "=" * 60)
     print("Step 3b: 导入海外仓备货单到赛狐")
     print("=" * 60)
 
-    # 复制到 网页自动化/restock/
+    # 复制到 web_automation/restock/
     RESTOCK_OUT_DIR.mkdir(exist_ok=True)
     for old in RESTOCK_OUT_DIR.glob("赛狐_海外仓备货单_导入_*.xlsx"):
         old.unlink()
@@ -215,9 +220,10 @@ def step_import_restock(files: list[Path]) -> bool:
         print("  已跳过导入")
         return False
 
-    ret = run_py(IMPORT_RESTOCK_SCRIPT, WEB_AUTO, WEB_VENV)
+    ret = run_web_task("sellfox.restock.import",
+                       confirm_scope=f"海外仓备货单导入 {len(copied)} 个已生成文件")
     if ret != 0:
-        print("[警告] 导入脚本返回非 0，请检查浏览器")
+        print("[警告] dispatcher 返回非 0，请检查浏览器")
         return False
     return True
 

@@ -96,6 +96,7 @@ def collect_facts(repo_root: Path | None = None) -> dict[str, Any]:
     root = repo_root or ROOT
     skill = (root / ".agents" / "skills" / "windows-agent-shell" / "SKILL.md").is_file()
     is_windows = sys.platform.startswith("win")
+    web_auto = root / "web_automation"
     return {
         "os": platform.system(),
         "is_windows": is_windows,
@@ -111,6 +112,10 @@ def collect_facts(repo_root: Path | None = None) -> dict[str, Any]:
         "python_stdout_encoding": getattr(sys.stdout, "encoding", None),
         "python_utf8_env": os.environ.get("PYTHONUTF8"),
         "skill_windows_agent_shell": skill,
+        "web_automation": {
+            "available": (web_auto / "pyproject.toml").is_file(),
+            "ready": (web_auto / ".venv").is_dir(),
+        },
         "tools": {
             "git": bool(which("git")),
             "uv": bool(which("uv")),
@@ -147,6 +152,30 @@ def build_recommendations(facts: dict[str, Any]) -> list[dict[str, str]]:
                 "message": "未检测到 Node.js。Windows: winget install OpenJS.NodeJS.LTS；Mac: brew install node。",
             }
         )
+
+    web_auto = facts.get("web_automation") or {}
+    if web_auto.get("available"):
+        if web_auto.get("ready"):
+            recs.append(
+                {
+                    "code": "web_automation_ready",
+                    "severity": "info",
+                    "message": "网页自动化能力舱已就绪（web_automation/.venv 存在）。需要浏览器任务时 Agent 会先跑 dispatcher 检查状态。",
+                }
+            )
+        else:
+            recs.append(
+                {
+                    "code": "web_automation_on_demand",
+                    "severity": "info",
+                    "message": (
+                        "检测到网页自动化能力舱 web_automation/，但尚未初始化。"
+                        "普通 `uv sync` 不需要它；首个网页任务触发时由 "
+                        "web_automation/scripts/bootstrap.py 自动建独立 .venv + Chromium，"
+                        "OCR 仅在显式请求时安装。无需在本步手动安装。"
+                    ),
+                }
+            )
 
     if facts.get("is_windows"):
         pwsh = facts.get("pwsh") or {}

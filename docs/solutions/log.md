@@ -7,6 +7,39 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-09-10
+- **新增**: `tooling-decisions/deepseek-flash-price-cut-2026-09-10-openrouter-evaluation.md` — DeepSeek flash 系列 9/10 12:00 降价（空闲 ¥0.02/¥1/¥4，高峰 2 倍；pro 不变）+ 9/14 12:00 V4 Pro 下线路由到 V4.1 Flash；按账单**行单价反解**峰谷占比（flash 高峰 79.4%）与缓存命中占比（97.2%），实测 24 天 flash 家族 ¥620.82 → ¥358.07（-42.3%）；逐上游对比 OpenRouter（因缓存单价不占优，除 pin StreamLake 外均更贵或打平）→ **结论不迁移**；含 new-api `ChannelTypeOpenRouter=20`、OpenRouter 默认自动路由 vs new-api 多渠道回退、中国用户代理/支付/账单地址/封号/数据留存掣肘。
+- **更新**: `new-api-deployment/deepseek_time_pricing.py`（新价 + `PRO_EOL` + `--at` dry-run）、`sync_pricing.py`（同步新价）、`AGENT_HANDOFF.md`（第四节定价配置）— 已部署生产 `/opt/new-api/`。
+
+## 2026-09-08
+- **新增**: `integration-issues/cliproxyapi-auth-unavailable-oauth-recovery.md` — CLIProxyAPI `503 auth_unavailable` 恢复：服务健康不等于目标模型具备上游授权；按升级、浏览器 OAuth、失效认证记录隔离、重启和真实模型请求验收处理。
+- **同步**: `us_openai_api_proxy/` 的 runbook、handoff、README、lesson 和受控运维 skill；不记录账号、OAuth URL/代码、认证材料、私有地址或 API key。
+- **新增**: `conventions/parcel-track-handling-days-sequential-workers.md` — UPS/FedEx/GLS 迟发处理时间统一 3 个营业日（假日历仍分美国联邦 vs 波兰）；`--workers N` 是每家 N 路、三家串行（峰值 N 不是 3N）；8 月 live 全量分类合计（无单号/买家）。
+- **更新**: `integration-issues/dingtalk-offboarding-hardening.md` — 补「生产部署与实测」：上海生产已部署双通道（每日 `offboarding-check.py` cron `0 3 * * *` + 实时 bridge 重建），实测 3 名离职者被每日通道自动封号（`users.status=2`）；bridge 容器需挂 proxy DB volume + `PROXY_DB_PATH` 否则 `STATUS_LATER` 无限重投；proxy key 关 key 链路经容器内函数级测试打通。
+- **新增**: `integration-issues/dingtalk-offboarding-hardening.md` — new-api/sellfox-proxy 离职自动封号双通道加固：60121 判离职替代 active、本地 `dingtalk_identity_map`(unionId↔userId)、provider slug 解析、proxy 失败记 `proxy_pending` 保留映射次日补关、`offboarding_audit` 心跳/明细、`--dry-run`/`--force`。背景：真实离职场景(员工移出组织→getbyunionid 60121)原代码当 [SKIP] 永不封；active=false 误伤在职未激活员工。改动：`offboarding-check.py`(classify/熔断/retry)、`stream_listener.py`(本地映射优先+proxy 失败重投)、`main.py`(登录回填映射)；单测见 `tests/new_api_offboarding/`。
+
+## 2026-09-07
+- **新增**: `best-practices/adobe-genuine-prompts-office-openclash.md` — 办公室 OpenClash 屏蔽 Adobe 授权校验域名（AGS 弹窗）的处理与教训：hosts 无法通配 `*.adobe.io` 随机子域（lreXXXX）、三层 NAT 下 OpenClash 无法按单设备隔离、最终用 `DOMAIN-SUFFIX,adobe.io/adobegenuine.com,REJECT` 全局屏蔽模拟断网。
+
+## 2026-09-04
+- **新增**: `workflow-issues/fedex-track-batch-query.md` — FedEx 官方批量 Track（≤30/请求、配额按请求、不需自有账号）+ 账号/组织恢复路径（879197228 在 2023 组织 Centrade(10548976)，腾讯企业邮箱收重置码）+ `fedex_track` 模块 + 三条教训（反爬假报错需多源核实、按方法关键词统计会漏、配额按请求不计费）。
+- **背景**: 打通 FedEx 官方跟踪需先理账号/组织碎片；headless 探针曾误判"FedEx 查无此号"，实则反爬假报错，真实浏览器可查。
+
+## 2026-09-03
+- **新增**: `developer-experience/workbuddy-custom-model-newapi-config.md` — WorkBuddy 接公司 new-api 自定义模型，`useCustomProtocol` 必须 `false` 且 `url` 带 `/v1`，否则发消息只回「任务完成」无正文。
+- **新增**: `.agents/skills/workbuddy-config/SKILL.md` — WorkBuddy 接公司 new-api 的自动配置 skill（要 key → 备份 → 合并写 `~/.workbuddy/models.json` → 提示重启 → 可选 curl 验证）。
+
+## 2026-08-31
+- **更新**: `integration-issues/nas-multi-domain-access-openwrt-quickconnect.md` — QC 与 DSM 外部访问 DDNS 架构澄清；路径 A（OpenWrt 自定义域）vs 路径 B（QC/myds）；勿删 myds、无 DDNS 优先开关。
+
+## 2026-08-28
+- **新增**: `integration-issues/nas-multi-domain-access-openwrt-quickconnect.md` — NAS 多域名（nas.daneey.com / nas.vilavi.cn）、OpenWrt ACME 第二张证、DSM 反代铁律、QC 直连/cn4、联通 443 限制；政策保留 `fangzhouhui.quickconnect.cn` 统一入口。
+- **新增**: `NAS_API/` OKF bundle、`AGENT_HANDOFF.md`、`.agents/skills/nas-access/`。
+## 2026-08-25
+- **新增**: `workflow-issues/en-channel-account-gsheet-sync.md` — Google 表渠道账号 → 生产 EN Channel Account；人变才加行；Amazon 禁止 EUR、按 Johna 九国拆；Illiosenergy/`ILLIOSPL`。
+- **新增**: `channel_account_sync/` 折叠/命名库、fetch/compare/apply、OKF、Skill。
+- **生产结果**: 2026-08-25 新建 18 账号、10 别名、122 个已有账号补负责人，Kaufland 补 AT/IT/FR；未建 `AMZFZHSXEUR`。
+
 ## 2026-08-24
 - **新增**: `workflow-issues/sellfox-cover-combo-create-ops.md` — 三角皮壳 `PK# -> KS x1` 组合代理批量创建；与 EN `TJ#`/`sync-combos` 分流；`pageList total=0` 翻页、禁止并行 apply、组合商品不在普通商品。
 - **新增**: `SELLFOX_API/cover_combo_ops.py` / `cover_combo_plan.py` 与 `docs/reference/cover-combo-ops.md`。

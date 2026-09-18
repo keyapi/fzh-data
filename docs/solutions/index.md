@@ -10,6 +10,18 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-09-10 | DeepSeek flash 降价改价 + OpenRouter 迁移评估（结论：不迁） | [tooling-decisions/deepseek-flash-price-cut-2026-09-10-openrouter-evaluation.md](tooling-decisions/deepseek-flash-price-cut-2026-09-10-openrouter-evaluation.md) |
+| 2026-09-08 | CLIProxyAPI `auth_unavailable`：升级、浏览器 OAuth 与真实模型验收 | [integration-issues/cliproxyapi-auth-unavailable-oauth-recovery.md](integration-issues/cliproxyapi-auth-unavailable-oauth-recovery.md) |
+| 2026-09-08 | parcel_track 处理天数统一 3 个营业日与 per-carrier 顺序并发 | [conventions/parcel-track-handling-days-sequential-workers.md](conventions/parcel-track-handling-days-sequential-workers.md) |
+| 2026-09-08 | new-api/sellfox-proxy 离职自动封号不可靠——双通道检测加固（60121 + identity_map + audit） | [integration-issues/dingtalk-offboarding-hardening.md](integration-issues/dingtalk-offboarding-hardening.md) |
+| 2026-09-07 | 办公室 OpenClash 屏蔽 Adobe 授权校验域名 | [best-practices/adobe-genuine-prompts-office-openclash.md](best-practices/adobe-genuine-prompts-office-openclash.md) |
+| 2026-09-04 | FedEx 官方批量 Track 查询 + 账号/组织恢复路径 | [workflow-issues/fedex-track-batch-query.md](workflow-issues/fedex-track-batch-query.md) |
+| 2026-09-03 | WorkBuddy 接公司 new-api 自定义模型 — useCustomProtocol=false + url 带 /v1 | [developer-experience/workbuddy-custom-model-newapi-config.md](developer-experience/workbuddy-custom-model-newapi-config.md) |
+| 2026-09-01 | Cursor state.vscdb 膨胀 + Synology Drive 连续备份吃光 C 盘 | [integration-issues/cursor-state-vscdb-synology-cdrive-backup.md](integration-issues/cursor-state-vscdb-synology-cdrive-backup.md) |
+| 2026-09-01 | 服务器暴露面审计与安全加固（数据库远程 root、端口瘦身、凭证轮换） | [best-practices/server-exposure-audit-and-hardening.md](best-practices/server-exposure-audit-and-hardening.md) |
+| 2026-08-31 | DeepSeek 峰谷分时定价 — new-api 静态 ModelRatio 的 cron 定时切换 | [tooling-decisions/new-api-deepseek-time-based-pricing-automation.md](tooling-decisions/new-api-deepseek-time-based-pricing-automation.md) |
+| 2026-08-28 | 群晖 NAS 多域名访问 — OpenWrt ACME、DSM 反代与 QuickConnect | [integration-issues/nas-multi-domain-access-openwrt-quickconnect.md](integration-issues/nas-multi-domain-access-openwrt-quickconnect.md) |
+| 2026-08-25 | Google 表渠道账号同步到 EN Channel Account | [workflow-issues/en-channel-account-gsheet-sync.md](workflow-issues/en-channel-account-gsheet-sync.md) |
 | 2026-08-24 | 三角皮壳 PK# 组合代理批量创建（不是 EN 套件） | [workflow-issues/sellfox-cover-combo-create-ops.md](workflow-issues/sellfox-cover-combo-create-ops.md) |
 | 2026-08-21 | 软包墙围 EN 套件/赛狐组合商品批量分阶段创建 | [workflow-issues/soft-wall-combo-batch-staging.md](workflow-issues/soft-wall-combo-batch-staging.md) |
 | 2026-08-21 | 拉链款无捆绑SKU 合成客户物料号并批量创建组合 | [workflow-issues/zipper-combo-batch-staging.md](workflow-issues/zipper-combo-batch-staging.md) |

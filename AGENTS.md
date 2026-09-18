@@ -114,14 +114,18 @@ uv sync
 | `multi-attr` | `multi_attr_saihu/` | ERP 纵向物料 → 赛狐多属性 + 通途配对 |
 | `warehouse-restock` | `warehouse_restock/` | EN BOM → 三成本拆分 → 海外仓备货单 |
 | `other-outbound` | `other_outbound/` | 赛狐库存明细 → 其他出库清零 |
-| `sellfox-api` | `SELLFOX_API/` | 赛狐 OpenAPI 文档镜像（419 端点）+ 连通性测试 |
+| `sellfox-api` | `SELLFOX_API/` | 赛狐 OpenAPI 文档镜像（443 端点）+ 连通性测试 |
 | `sellfox-combo-create` | `SELLFOX_API/` | EN 套件 Product Bundle ↔ 赛狐组合商品：sync-combos 对账/创建/回读断言 |
 | `sellfox-cover-inventory` | `sellfox_cover_inventory/` | 三角类皮壳共享库存代理：KS 库存池 + PK# 组合 + cover_combo_ops 创建/对账 |
 | `sellfox-shipping` | `sellfox_shipping/` | 赛狐尾程打单（订单获取→承运人标签→追踪回写）三界面架构 |
 | `vite-api` | `vite-api/` | VITE 多承运商打单 API 文档（测试环境默认） |
+| `fedex-track` | `fedex_track/` | FedEx 官方 Track API 批量查询 + 运营异常报表(仿 ups_track；多Sheet/Amazon营业日口径；复用跟踪号多票) |
+| `gls-track` | `gls_track/` | GLS 波兰自发货批量跟踪(公开无鉴权 REST **免开发者账号**) + FedEx 风格异常表；loader 拆一格多号；monthly 一步整月。统一多承运商由 `parcel_track`(PR#215) 接入 |
+| `parcel-track` | `parcel_track/` | 通途混合订单分流 UPS/FedEx/GLS + 共享迟发/承运延误/卡件运营表（处理 3 营业日；GLS 波兰历；`--workers` 每家串行） |
 | `yiglobal-api` | `yiglobal-api/` | 蜴国际打单 API 文档（原 `蜴国际-API/`；env：`YIGLOBAL_*`） |
 | `en-image-upload` | `EN_API/` | 图片上传（CLI + Web UI + 物料组主图） |
 | `nas-itemgroup-folders` | `nas_itemgroup_folders/` | NAS-ERPNext 物料组文件夹对账 + 叶子组 (LGKS) 管理 |
+| `nas-access` | `NAS_API/` | 群晖多域名访问、QC 选路、OpenWrt ACME+反代、DSM 第二张证 |
 | `us-openai-api-proxy` | `us_openai_api_proxy/` | US Vultr Tailscale + CLIProxyAPI → ChatGPT API 共享 |
 | `new-api-deployment` | `new-api-deployment/` | new-api 部署（上海阿里云）+ 订阅/配额管理 |
 | `new-api-dingtalk-oidc` | `new-api-dingtalk-oidc/` | 钉钉 OAuth → OIDC 桥接代理（FastAPI） |
@@ -131,9 +135,19 @@ uv sync
 | `erpnext-wo-audit` | `.agents/skills/erpnext-wo-audit/` | 工单排查 Skill，按触发词自动加载 |
 | `missing-products` | `.agents/skills/missing-products/` | 通途有库存 SKU → EN 产品客户码 → 赛狐产品 SKU 三方主线补齐/审计 |
 | `platform-account-reconciliation` | `platform_account_reconciliation/` | OSTKUS/Wayfair 账期费用级对账 + EN Tongtool Order 匹配 |
+| `channel-account-sync` | `channel_account_sync/` | Google 表渠道账号 → EN Channel Account（人变才加行，Amazon 按国家站） |
+| `web-automation` | `.agents/skills/{web-automation,playwright-setup,tongtu-automation,sellfox-automation}/` | 网页自动化能力舱（通途/赛狐浏览器 + 通用 Playwright），子项目在 `web_automation/` |
 | `windows-agent-shell` | `.agents/skills/windows-agent-shell/` | Windows Agent shell：优先 pwsh、禁 bash/`&&`（5.1）、UTF-8 无 BOM |
 | `frappe-core-api` | — | ERPNext REST API 开发（外部 skill） |
 | `frappe-errors-api` | — | ERPNext API 错误处理（外部 skill） |
+
+> **网页任务路由（弱模型/新同事也必须遵守）**：任何通途/赛狐/通用浏览器任务，
+> Agent **不得**自己拼外部绝对路径、选 venv 或直接装 OCR。
+> 一律先跑 `uv run python web_automation/scripts/dispatch.py <task> --check`，
+> 按输出状态字面执行：`READY` 继续 / `NEED_BROWSER` 跑 bootstrap / `NEED_LOGIN` 让人手动登录
+> / `NEED_OCR` 先问用户 / `NEED_USER_CONFIRMATION` 先确认范围带 `--confirm-scope`
+> / `BLOCKED` 报告停止。写操作默认只许确认范围内商品，绝不扩大到全量。
+> 环境体检：`uv run python web_automation/scripts/doctor.py`。
 
 > 每个模块有 `AGENT_HANDOFF.md`（Agent 参考）和 `README.md`（人读）。
 > Skill 文件在 `.agents/skills/<name>/SKILL.md`，Agent 按触发词自动加载。
@@ -154,6 +168,8 @@ uv sync
    如果 Agent 不确定如何创建 PR，用 `gh pr create --title "..." --body "..."` 命令。
 9. **提交 PR 前扫描凭证**：以下命令必须全部零输出。禁止硬编码密钥/token/密码，禁止提交 CSV 数据文件、PDF、图片到公开仓库。违反 PR 不得合并（详见 `CONTRIBUTING.md` 安全检查章节）
    ```bash
+   # 0. 工作区全量扫描（含还没 git add 的脚本；上面的 diff 扫描看不到这些）
+   uv run python scripts/check_secrets.py
    # 传统 key=value 格式
    git diff origin/main...HEAD | grep -iE "(api_key|api_secret|password|token|ghp_|github_pat_)\s*=\s*['\"]?\w{8,}"
    # curl header 中的凭证

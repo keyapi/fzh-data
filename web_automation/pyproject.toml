@@ -1,0 +1,24 @@
+[project]
+name = "fzh-web-automation"
+version = "1.0.0"
+description = "FZH browser automation capability pod"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "openpyxl>=3.0",
+  "pandas>=2.0",
+  "pillow>=11.3.0",
+  "playwright>=1.40",
+  "pyyaml>=6.0",
+  "requests>=2.32.5",
+  "requests-toolbelt>=1.0.0",
+]
+
+[dependency-groups]
+ocr = [
+  "ddddocr>=1.5.6",
+  "onnxruntime>=1.20.1",
+]
+dev = ["pytest>=9.1.1"]
+
+[tool.uv]
+default-groups = []

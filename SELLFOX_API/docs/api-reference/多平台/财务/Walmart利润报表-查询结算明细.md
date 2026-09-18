@@ -203,7 +203,20 @@ components:
         - desc
         - pageNo
         - pageSize
-      x-apifox-ignore-properties: []
+      x--orders:
+        - marketplaceCode
+        - shopId
+        - transactionPostedStartDate
+        - transactionPostedEndDate
+        - fulfillmentType
+        - searchType
+        - searchMode
+        - searchContents
+        - orderBy
+        - desc
+        - pageNo
+        - pageSize
+      x--ignore-properties: []
       x-apifox-folder: ''
     OpenResult«FinAggSettlementWalmartOpenVO»:
       type: object
@@ -230,7 +243,13 @@ components:
         - msg
         - data
         - ts
-      x-apifox-ignore-properties: []
+      x--orders:
+        - requestId
+        - code
+        - msg
+        - data
+        - ts
+      x--ignore-properties: []
       x-apifox-folder: ''
     FinAggSettlementWalmartOpenVO:
       type: object
@@ -242,7 +261,9 @@ components:
       title: FinAggSettlementWalmartOpenVO
       x-apifox-orders:
         - rows
-      x-apifox-ignore-properties: []
+      x--orders:
+        - rows
+      x--ignore-properties: []
       x-apifox-folder: ''
     FinAggSettlementWalmartPageOpenVO:
       type: object
@@ -303,7 +324,25 @@ components:
         - transactionDescription
         - transactionPostedDate
         - transactionType
-      x-apifox-ignore-properties: []
+      x--orders:
+        - amount
+        - amountType
+        - currency
+        - fulfillmentType
+        - marketplaceCode
+        - marketplaceName
+        - partnerGtin
+        - partnerItemId
+        - periodEndDate
+        - periodStartDate
+        - purchaseOrder
+        - shipQty
+        - shopId
+        - shopName
+        - transactionDescription
+        - transactionPostedDate
+        - transactionType
+      x--ignore-properties: []
       x-apifox-folder: ''
   securitySchemes: {}
 servers: []

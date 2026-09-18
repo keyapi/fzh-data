@@ -10,6 +10,8 @@
 | `upload_local_images.py` | CLI 批量上传本地图片 | 本地图片目录 | 图片链接 Excel |
 | `image_upload_app.py` | **Web 可视化上传** | 浏览器拖拽图片 | 图片链接 Excel |
 | `upload_pim_images.py` | 上传图片到物料组 custom_pim_images 子表 | 本地图片目录 | PIM图片上传报告 |
+| `translate_item_group_names.py` | 物料组中文名 → `item_group_translation`（TMT） | 生产 EN API + 腾讯云 TMT | `out/物料组翻译_*.xlsx` |
+| `test_tmt_connectivity.py` | TMT API 连通性冒烟（3 条样例） | `TENCENT_SECRET_*` | 终端输出 |
 
 ## 前置条件
 

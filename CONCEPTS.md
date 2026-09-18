@@ -13,6 +13,15 @@ Shared domain vocabulary for this project — entities, named processes, and sta
 ### env_doctor
 根目录脚本 `scripts/env_doctor.py`：按 OS 检测 Git/uv/node、PS 5.1/pwsh、代码页与 `windows-agent-shell` skill，**默认只打印建议**；`--probe` 跑 `&&`/UTF-8/BOM 对照；`--apply-ps7` 仅在用户明确同意后装 PS7。
 
+### Cursor 本地数据库与磁盘
+Cursor（IDE）在 `%APPDATA%\Cursor\User\globalStorage` 存全局 SQLite 库 `state.vscdb`（聊天 + Agent KV）。已知会无限膨胀（2026-08 已到 31.8GB）。**`Developer: GC Agent KV Blobs` 只清"孤儿"agent 数据，对全 live 的库删不动**（0 deleted），且大库压缩需要 2~3 倍空闲空间（否则 SQLITE_FULL）。膨胀主因是 `bubbleId:task-*`（agent 任务气泡）累积，不是聊天文本。
+
+### state.vscdb
+Cursor 的全局状态库（聊天记录 + Agent KV blob 都在里面）。膨胀是 Cursor 已知 bug，官方不自动清理。**备份必须在 Cursor 关闭时快照**（如 `sqlite3 .backup` 或直接拷贝到 `D:\CursorBackup`），绝不能由 Synology 连续备份——连续备份大而高频变化的库会把 C 盘暂存写爆。
+
+### Synology Drive 连续备份 (continuous backup)
+群晖 Drive Client 的备份模式。若备份目标含 Cursor 的 `globalStorage`/`state.vscdb` 这类高频变化大文件，会在 `%LOCALAPPDATA%\SynologyDrive\temp\N\.SynologyWorkingDirectory` 反复暂存上传副本，C 盘空间被吃光（2026-08 事件根因）。诊断脚本：`scripts/check_cursor_cdrive_health.py`。
+
 ## Unified AI access (ai_access_poc)
 
 ### 壳 PoC (Shell PoC)
@@ -29,6 +38,15 @@ Open WebUI 里两套代码执行能力：Open Terminal = Docker Linux 沙箱（�
 
 ### api.vilavi.cn（公司 new-api 网关）
 上海阿里云 nginx 反代的公司 AI 网关：`/v1` 模型 API、`/sellfox` 赛狐代理、`/oidc` 钉钉 SSO。个人 Token 在后台「令牌管理」领取（`sk-…`）。生产渠道模型名以 `deepseek-v4-flash` / `deepseek-v4-pro` 为准；历史名 `deepseek-chat` 在默认组无渠道，会表现为 chat/completions **503**。
+
+### 离职自动封号（DingTalk offboarding）
+员工从钉钉组织离职/移出后，自动禁用其 new-api 网关账号与赛狐 API 代理 Key 的双通道机制。权威离职信号是 `user_leave_org` Stream 事件和 `getbyunionid` 的「未找到对应员工」(60121)——不是用户资料里的 `active` 字段（那只表示是否激活了钉钉，在职但未激活/长期未登录会被误封）。系统靠本地「unionId ↔ 数字 userId」映射在员工仍在组织时持续回填，事件到达时即使人已被移除也能定位账号。参见 `docs/solutions/integration-issues/dingtalk-offboarding-hardening.md`。
+
+### WorkBuddy（CodeBuddy Code 桌面壳）
+腾讯桌面 Agent（Electron，底层 CLI 为 CodeBuddy Code）。第三方模型走 `%USERPROFILE%\.workbuddy\models.json`，与 Codex++/Codex Desktop 配置体系无关。关键字段 `useCustomProtocol`：`true` = URL 透传（不补 `/chat/completions`），`false` = 自动补 `/chat/completions`。接 `api.vilavi.cn` 需 `url` 带 `/v1` 且 `useCustomProtocol=false`，否则「任务完成」无正文（`empty response output from model`）。见 `docs/solutions/developer-experience/workbuddy-custom-model-newapi-config.md`。
+
+### 峰谷分时计价 (DeepSeek time-based pricing)
+DeepSeek API 自 2026-08 起按北京时间分时计费：周一至周五工作日高峰时段（日间两段）价格为闲时（夜间、周末、节假日）的 2 倍。new-api 的定价参数是**静态值**，无法原生跟随时段切换，须靠外部 cron 脚本在边界时刻改写定价参数（实现见 `docs/solutions/tooling-decisions/new-api-deepseek-time-based-pricing-automation.md`）。闲时段多收一倍是"未做分时调价"的典型症状。
 
 ### IvyeaOps vs IvyeaAgent
 - **IvyeaOps**：运营工作台 SPA（本仓库板 PoC 的主体验，fork 于 Hector-xue/IvyeaOps）。  
@@ -50,6 +68,18 @@ Open WebUI 里两套代码执行能力：Open Terminal = Docker Linux 沙箱（�
 
 ### Local tracking import
 本模块把物流商返回的运单号写入**本地** SQLite（`lizard-import`）。这只更新本地库，**不会**自动改变赛狐包裹详情里的 `trackNo`。
+
+### 迟发（尾程跟踪）
+已建标但仓库/货代交接晚：Amazon 营业日下，建标→首次取件扫描的营业日数减去约定处理天数后仍大于 0。周末不计；公共假日按承运商（UPS/FedEx 美国联邦，GLS 波兰法定，见下文「处理时间」）。已交付但只是交接晚，仍归迟发。
+
+### 承运延误（尾程跟踪）
+承运商在途慢：首次取件扫描→交付的营业日超过该承运商阈值。一单既迟发又承运延误时，**主分类归承运延误**（延误优先）。
+
+### 卡件（尾程跟踪）
+尚未交付，且距离最近一次扫描已超过卡住阈值（日历日），视为在途丢失扫描/停滞。
+
+### 漏发/未交接（尾程跟踪）
+通途已有发货标记或已建标，但超过阈值仍无站点收件扫描。与迟发的差别是「还没交到承运商」vs「交了但交晚了」。
 
 ### submitToPlatform
 赛狐 OpenAPI「提交平台」写接口：请求可带 `trackNo` 等字段。公开文档下目前未见单独的「只改物流、不提交平台」接口。业务上销售平台运单仍可由通途写回；赛狐自动推送可关闭。能否用该接口在关自动推送时「只填赛狐可见号」须 live 验证，且只读代理权限不等于可写。
@@ -114,6 +144,9 @@ Custom doctypes in the `[Stock]` module that hold canonical attribute values for
 ### Item Attribute (物料属性) custom_select_doctype
 Convention: 面料/颜色 Item Attributes (e.g. 三角靠枕面料) set `custom_select_doctype` to an "All X" value table and `custom_select_from_all_attribute_values=1`; 尺寸 attributes leave `custom_select_from_all_attribute_values=0` (sizes lack cross-product generality). `custom_item_group` links the attribute to its owning item group.
 
+### item_group_translation (物料组翻译)
+Custom Data field on Item Group storing the English style-level name for customs/export. Source text is the Chinese `item_group_name`. Batch maintenance via `EN_API/translate_item_group_names.py` (Tencent TMT); distinct from material-level English names in `customs_export.py` (DeepSeek on DN line items).
+
 ### 模板物料 (Template Item)
 An Item with `has_variants=1` that defines the attribute set; concrete SKUs are `variant_of` it (e.g. template `KS0001`, variants `KS0001-CMM-153-PURPLE`).
 
@@ -157,6 +190,9 @@ ERPNext 用原生 Product Bundle 表示组合销售对象；work_order_task 扩�
 ### 赛狐加工 SKU
 赛狐商品类型 `isGroup=2`。加工 SKU 有自身库存，支持 `needAssembleProcess`、`processCost` 和 `childSkus`，库存流水里有加工单/拆分单事件。取消“开启加工过程”只缩短状态流，不等于无库存别名。适合未来赛狐接管库存且需要 `PK#` 独立库存时评估；当前通途/赛狐并行阶段不默认启用。
 
+### 赛狐 Apifox API 文档镜像
+密码保护的赛狐开放平台文档站（Apifox）在本地的 Markdown 快照，按模块三级目录存放，附 `llms.txt` 索引。用于 Agent 离线查端点 schema。刷新须浏览器登录拿 Cookie 再跑下载脚本；密钥只在本机环境变量，不进仓库。镜像只能证明文档是否更新，不能单独证明线上接口行为。
+
 ### 库存事实源（Inventory Source of Truth）
 多个系统都展示库存时，被选为校准基准的系统。当前通途/赛狐并行期，三角类分公司普通仓以通途为事实源，定期只校准赛狐底层 `KS`。同步必须处理“赛狐订单已扣、通途尚未标记发货”的时间差，避免旧快照把库存加回。FBA、退货仓和不良品仓不因 SKU 相同自动加入共享池。库存事实源不等于利润事实源：皮壳 Listing 的利润仍以 EN Tongtool Cost Review 为准。
 
@@ -185,6 +221,30 @@ Amazon FBA 账期费用里已经包含平台履约尾程。特殊规则里对 FB
 ### 发货仓库前缀改名（美东-/美中-/波兰-）
 通途自发货仓库最近把主仓名加上分公司前缀：`CENTRADE`→`美东-CENTRADE`、`FZH-DANEEY`→`美中-FZH-DANEEY`、`FZHPoland-covers`→`波兰-FZHPoland-covers`，并新增美东/波兰退货仓。原则是 3 家国外分公司各保留 1 普通仓 + 1 退货仓。生产订单仍大量引用旧名，所以两套名字都要在 ERPNext 登记。
 
+## Channel Account（vilavi_pim）
+
+### Channel Account（渠道账号）
+生产 EN 里一条销售渠道店铺主数据。名称由销售渠道代码 + 账号码 + 区域拼成（`account_id` 自动命名）；允许空账号码时只有渠道代码+区域（如 `KFLAT`、`ILLIOSPL`、`WFEU`）。运营事实源是 Google 表「和运营部共享」的「渠道账号」页；EN 按该表追加，不删历史负责人。
+
+### Sales Channel
+Channel Account 所挂的销售渠道主数据。渠道**名称**可以较长；渠道**代码**更短，会拼进账号 ID。同一渠道可有多个国家账号。`Illiosenergy` 是名称，`ILLIOS` 是代码。
+
+### Channel Account Owner
+渠道账号上的负责人时间轴。一行代表一段负责人，不是一个日历月。`user` 存中文名（可含 `&` 组合名和占位「待分配」），不是 User 邮箱。只在负责人相对上一段发生变化时新增一行，连续同名月份折叠为一段，`from_date` 取该段第一个月 1 号。
+
+### 待分配（渠道账号）
+店铺已经开卖、该月表上却没有具体运营人员时，仍要落一条 Owner，人名写「待分配」。开卖前的空月不写。
+
+### Channel Account Alias
+同一店铺的其它写法。规范名本身也是一条别名。Amazon 欧洲旧名只挂在对应国家账号上，避免九国重复挂同一个旧名。
+
+### Amazon 国家站
+Amazon 店铺按国家区域建 Channel Account，没有合法的 EUR/EU 聚合账号。欧洲九国站点与 Johna 对齐。Wayfair 等非 Amazon 渠道仍可以有 EU 区域。
+*Avoid:* AMZFZHSXEUR 当作独立账号
+
+### 渠道账号表（和运营部共享）
+运营维护渠道、账号、别名、运营分组和按月运营人员的 Google 表。写入 EN 前以该表为准；表上的样品/`null` 行不建账号。
+
 ### 订单发货仓库对应成本来源
 财务共享表「和财务部共享」里的 ws，8 列把发货仓库映射到成本：`发货仓库 | 对应成本工作簿 | 成本来源编码 | 发货仓分类 | 头程运费来源编码 | 二次加工成本来源编码 | 发货区域 | 发货仓按销售汇总分类`。编码口径：CENTRADE→HEAD-US/2CJG-US；FZH-DANEEY 主仓与皮壳→HEAD-USTX-PK/2CJG-SX；成品/半成品/退货→HEAD-USTX/2CJG-SX；FZHPoland-covers→HEAD-PL/2CJG-PL；FZHPoland-finished→HEAD-EUHWC/2CJG-SX。
 
@@ -211,11 +271,28 @@ Gold A：历史已配对 ∩ 通途别名唯一 ∩ EN/赛狐一致，只用于�
 
 通途 ERP2.0 的同一商户上游调用预算。2026-08-13 实测：两个独立 App 经 MCP 调用仍共用每分钟 5 次额度；主 App 连续 5 次成功后，第二 App 的首个同端点调用返回业务码 526。这不是每 App 独立额度。524 表示细粒度接口未授权，不能当作限流；所有 ERP2 自动化应合并计数、缓存和退避。
 
+### 网页自动化能力舱（web automation capability pod）
+`fzh-data` 内嵌的**独立 uv 子项目**（自带 `.venv`/`uv.lock`，不加入根 workspace、不进根
+`uv sync`），承载通途/赛狐等需要浏览器自动化的平台操作与通用 Playwright。它把"何时用 API、
+何时浏览器、验证码 OCR 是否可装、写操作范围"固化为能力矩阵与固定入口，使同事只 clone 一个
+仓库即可使用，且默认不给所有人安装 Playwright/Chromium/OCR。普通 `uv sync` 不含它；网页任务
+触发时才按需初始化子环境与浏览器（profile/cookie/downloads 均 gitignored）。
+
+### dispatcher（网页任务路由入口）
+网页自动化能力舱的**固定 Agent 入口**：任何网页任务先经它输出确定状态
+（`READY` / `NEED_BROWSER` / `NEED_LOGIN` / `NEED_OCR` / `NEED_USER_CONFIRMATION` / `BLOCKED`），
+弱模型按状态字面执行、不猜环境或脚本路径。`--check` 会聚合子环境/Chromium/OCR 与登录 profile
+是否存在（不是只报路由）。写操作无范围确认时返回 `NEED_USER_CONFIRMATION`，
+杜绝擅自扩大到全量。路由、风险、API/浏览器回退规则由 `capabilities.yaml` 能力矩阵声明
+（认证/权限/参数/业务校验错误禁止静默回退浏览器；仅显式列出的端点缺失/不可用才允许）。
+
 ### DingTalk Custom Robot (钉钉自定义机器人)
 A webhook-based DingTalk group messaging channel used by AI agents (WorkBuddy, Claude Code) in this project to send notifications and file download links. Uses HMAC-SHA256 signing. Distinct from DingTalk enterprise internal bots — custom robots do not require AppKey/AppSecret and are scoped to a single group, making them safe to share with non-developer agent users. Cannot send file attachments directly; file delivery uses ActionCard messages with download links hosted on ERPNext.
 
 ## Flagged ambiguities
 
+- "'AMZFZHSXEUR' 曾被当成欧洲聚合店 — Amazon 只有国家站，旧名只挂在 AMZFZHSXDE 别名。"
+- "'WFDANEEYUS' 与 'WFDaneeyUS' 不是同一条 Channel Account，大小写店铺码都保留。Channel Account Owner.user 存中文名；DingTalk/Frappe User.name 常是邮箱，同步时继续写中文。"
 - "'五桶' had been used as if it meant IvyeaOps 五杠杆 — they are distinct (search-term labels vs optimizer action candidates)."
 - "Amazon Auto/product/category reports often put ASINs in the customer search-term column — that is real report data, not a mapping bug; keyword 收割 must not treat those strings as exact keywords (filter deferred as of 2026-07-28)."
 - "通途主档 SKU 改名后的旧名，与规则笔误（例如 Foam FBA BLACK-97），不是同一类问题；像旧名的字符串要先查主档。"
@@ -227,3 +304,38 @@ A webhook-based DingTalk group messaging channel used by AI agents (WorkBuddy, C
 - **Tongtool Order**: EN 生产系统里的通途订单快照；Overstock 单据名通常为 `OS-{platform_order_id}`，另一账号 `OSTK02US` 使用 `OSFD-` 前缀。
 - **拆单后缀**: 多 SKU/多件订单在通途/EN 会拆成 `_1/_2/_3` 子单，`platform_order_id` 保留后缀；汇总时需排除金额相同的“无后缀重复主单”。
 - **对账金额口径**: 用 `order_amount` / `products_total_price` 对账；`order_items.transaction_price` 是组件行，不能加总；`actual_total_price` 在退货订单上可能为 0。
+
+## 群晖 NAS 外网访问
+
+### QuickConnect 统一入口
+对外宣传 `https://fangzhouhui.quickconnect.cn/`。群晖在浏览器侧探测网络后自动选择直连（`fzh.myds.me:11024`）或中国中继（`fangzhouhui.cn4.quickconnect.cn`）。用户政策：不因自定义域名而替换此入口，以免失去中继兜底。
+
+### DSM 第二张证书
+除默认 `fzh.myds.me`（`RmB4St`）外，通过 OpenWrt ACME 签发的 Let's Encrypt 导入 DSM，仅绑定 ReverseProxy 服务（如 `nas.daneey.com`、`nas.vilavi.cn`）。禁止改绑「DSM 桌面服务」默认证。
+
+### OpenWrt 域名劫持
+北京办公室 OpenWrt dnsmasq 将指定 FQDN 解析到 NAS LAN IP（`192.168.100.242`），使局域网访问公网域名不经 NAT 回环。客户端若启用 Chrome 安全 DNS / Private DNS 会绕过劫持。
+
+### NAS 外网高位端口
+联通光猫当前公网仅稳定转发 **11024**；443/80 外网不通。外网访问自定义域名须带 `:11024`，除非日后打通 443。
+
+### OpenWrt 自定义域路径 vs QC 登记路径
+- **路径 A**：`nas.daneey.com` / `nas.vilavi.cn` — OpenWrt 管 DDNS 与 ACME，DSM 仅导入第二张证并反代；**不**写入 DSM「外部访问→DDNS」；用户手动输入 URL；QC 不会自动跳转。
+- **路径 B**：`fangzhouhui.quickconnect.cn` → 群晖登记 `fzh.myds.me`；QC 浏览器探测后跳 myds 直连或 `cn4` 中继。勿删 myds；DSM 无 DDNS 优先级开关，不能靠改外部访问列表让 QC 改跳 mxdeals/daneey。
+
+## 尾程跟踪 (fedex_track / ups_track)
+
+### Basic Integrated Visibility (formerly Track API)
+FedEx 开发者门户里"基本综合可见性"对外的 API 名，即官方 Track。项目用它在 `fedex_track` 里批量查 FedEx 轨迹；配额按**请求次数**（10万次/日/项目，≤30号/请求），不是按跟踪号个数。
+
+### 站点收件时间 (FedEx Picked up)
+FedEx 首次收到包裹的扫描；`fedex_track` 用它在销售核查里对比"发货日期"判断**迟发/漏发**。
+
+### GLS 公开跟踪 (gls_track，免开发者账号)
+GLS 波兰自发货单号批量跟踪走 gls-group.com **公开无鉴权 REST**（`rstt029` 摘要 / `rstt028` 明细需**目的邮编**），不用开发者账号/波兰 GLS 登录；官方 ShipIT/MyGLS 则要 GLS 波兰客户 + WebAPI 开通（要"客户账号"不是"纯开发者账号"）。模块 `gls_track/`，月报 `python -m gls_track.cli monthly`。
+
+### 交接GLS时间 = GLS 收件首扫；数据录入 = GLS 建标
+`gls_track` 把 GLS history "was handed over to GLS"（须排除文案里的 "not yet handed over"）≈ FedEx 的"站点收件"；"data was entered into the GLS IT system" ≈ 建标。迟发处理时间与 UPS/FedEx **共用同一营业日阈值**；GLS 营业日用**波兰**假日（起运/交接在 GLS 波兰，勿沿用 FedEx 美国联邦假日）。
+
+### 处理时间（尾程迟发窗口）
+建标（面单创建 / GLS 数据录入）到站点收件（FedEx/UPS 首扫 / 交接 GLS）之间、允许占用的**营业日**窗口；超出则分类为迟发。UPS / FedEx / GLS 共用同一阈值；假日表仍按承运商（美国联邦 vs 波兰法定）。不要与承运延误（收件之后的在途慢）混为一谈。
