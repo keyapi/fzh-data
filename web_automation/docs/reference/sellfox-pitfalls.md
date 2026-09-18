@@ -329,6 +329,27 @@ batchNo 20260529002385
 **同一表单无「批次」字段**：创建页只有 仓库/调整类型/调整原因/SKU/可用量调整/次品量调整
 ——**扣哪个批次由赛狐决定**，调用方无法指定。
 
+### 走公开 OpenAPI（代理）也不行：读通、写 500
+
+改用仓库的**代理 API**（`https://api.vilavi.cn/sellfox/v1/sellfox-main/<path>` +
+`Authorization: Bearer $SELLFOX_API_KEY`，见 `.skills/sellfox-api`）实测：
+
+| 调用 | 结果 |
+|---|---|
+| `api/shop/pageList.json`（读） | ✅ `code:0` |
+| `api/ware/adjust/pageList.json`（读） | ✅ `code:0`，37 张调整单 |
+| `api/ware/adjust/createV2.json`（写） | ❌ **500 Internal Server Error** |
+| `api/ware/adjust/create.json`（写） | ❌ 500 |
+
+注意 500 返回的是**代理网关的 nginx 纯文本错误页**（`Content-Type: text/plain`，21 字节），
+**不是赛狐返回的 JSON** —— 说明请求在**代理层**就失败了，不是赛狐业务校验拒绝。
+`createV2` 的官方 schema（`/api/ware/adjust/createV2.json`，含 `type/warehouseId/remark/adjustmentReason/items`）
+本身没有「操作类型」字段，因此内部网关那条路上的报错与公开 API 不是一回事。
+
+> 结论：**调整单的创建路径目前两条都走不通**（内部网关缺未公开字段；公开 API 经代理 500）。
+> 需要的话得去 `sellfox-api-proxy` 侧查为什么 write 端点 500（可能代理只放行读）。
+> 未完成任何写入。
+
 ## Element UI checkbox
 
 `cb.click()` 在 evaluate 中不改变 Vue 组件状态 → 必须用 Playwright `page.locator().click()` 真实点击。
