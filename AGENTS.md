@@ -1,7 +1,7 @@
 ﻿# AGENTS.md
 
 > 本文件是项目**唯一指令来源**，Claude Code / Codex CLI 共用。
-> `CLAUDE.md` 应为此文件 symlink，不要直接编辑 CLAUDE.md。
+> `CLAUDE.md` 只是指向本文件的入口（内容为一行 `AGENTS.md`），**不要直接编辑 CLAUDE.md**。
 
 ## 通用守则
 
@@ -65,30 +65,29 @@ uv sync
 #    Mac:      brew install node
 #    Linux:    sudo apt-get install -y nodejs
 
-# 4. 安装 MCP 服务器（非技术同事优先 4a + 4c）
-# 4a. free-web-tools（网页搜索，无需 API Key）
-#     uv pip install git+https://github.com/changcheng967/free-web-tools.git
-#     （不要用全局 pip——包必须装到项目 .venv 里）
-# 4b. Playwright（浏览器自动化，需要时再装）
-#     npm install -g @playwright/mcp && npx playwright install chromium
-#
-# 4c. Tavily（AI 优化搜索，1000 次/月免费，推荐装）
-#     uv pip install mcp-tavily
-#     注册 → https://app.tavily.com/home → 获取 Key → 改 .codex/config.toml 里的 TAVILY_API_KEY
-# 4d. 通途 ERP2 MCP：填 tongtool_api/.env 后按宿主分别注册（clone 不会自动出现）
-#     Codex:  powershell -File tongtool_api/setup_codex_mcp.ps1（完全退出再开）
-#     Cursor: uv run python tongtool_api/setup_cursor_mcp.py（Customize→MCP 启用；未出现则重载窗口）
+# 4. 安装 MCP 服务器 —— 按需选装，不必全装
+#    ★ 选型表 / 各宿主配置路径 / 启停与裁剪 / 排错：docs/mcp-setup.md
+#    最常用两个：
+#      Tavily（AI 优化搜索，1000 次/月免费，推荐）：uv pip install mcp-tavily
+#        注册 → https://app.tavily.com/home → 取 Key → 写进你宿主配置的 TAVILY_API_KEY
+#      free-web-tools（免费无需 Key）：uv pip install git+https://github.com/changcheng967/free-web-tools.git
+#    通途 ERP2 MCP：填 tongtool_api/.env 后按宿主分别注册（clone 不会自动出现）
+#      Codex:  powershell -File tongtool_api/setup_codex_mcp.ps1
+#      Cursor: uv run python tongtool_api/setup_cursor_mcp.py
+#    （不要用全局 pip——包必须装到项目 .venv 里）
 
 # 5. 初始化 symlink（仅 Claude Desktop 需要；Codex 用户跳过此步）
 #    powershell -ExecutionPolicy Bypass -File setup.ps1
 
-# ⚠️ 通途 MCP：Codex 与 Cursor 要分别注册。仓库 `.cursor/` gitignore，没有可点的 Cursor 安装提示。
+# ⚠️ MCP 装完必须让宿主**完全退出**再开：Claude Desktop 托盘右键 → Quit；Codex 完全退出；Cursor 重载窗口。
+#    Claude Desktop 的 3P 模式与普通模式是**两个独立配置文件**，改错会静默无效 —— 路径见 docs/mcp-setup.md。
+#    通途 MCP：Codex 与 Cursor 要分别注册。仓库 `.cursor/` gitignore，没有可点的 Cursor 安装提示。
 ```
 
 
 > **首次打开项目时，Codex 弹窗问「是否信任此项目」→ 务必选「是」！**
 > 选「否」会导致 `.codex/config.toml` 里的 MCP 和 `.agents/skills/` 全部不加载。
-> MCP 安装完成后：**Codex 必须完全退出再打开**；**Cursor** 写完 `~/.cursor/mcp.json` 后先看工具目录，没有再 Customize → MCP 并重载窗口。
+> MCP 安装完成后：**Claude Desktop** 托盘右键 → Quit；**Codex** 必须完全退出再打开；**Cursor** 写完 `~/.cursor/mcp.json` 后先看工具目录，没有再 Customize → MCP 并重载窗口。
 >
 > 所有脚本通过 `uv run python <script.py>` 运行，不需要全局 Python / conda。
 > 如果 `uv` 不是命令，重新打开终端或手动加 `$env:Path += ";$env:USERPROFILE\.cargo\bin"`（Windows）或 `export PATH="$HOME/.cargo/bin:$PATH"`（Mac/Linux）。
@@ -192,6 +191,8 @@ AGENTS.md (< 200 lines)           ← 你正在读的，项目总纲 + 路由地
 ├── docs/onboarding.md            ← 非技术同事快速上手（A 类用户）
 ├── docs/company-context.md       ← 公司背景、供应链、三系统 SKU 定义
 ├── docs/agent-guide.md           ← Skill 管理规则、代码约定、文档 checklist
+├── docs/mcp-setup.md             ← MCP 选型与安装指南（选什么、装哪个宿主、启停与裁剪、排错）
+├── docs/lessons/                 ← MCP 等工具接入的踩坑与实测记录（Notion / Tavily）
 ├── docs/solutions/               ← 已解决问题记录（bug、最佳实践、工作流），YAML frontmatter 可按 module/tags 搜索
 ├── erpnext/docs/                  ← 工单排查 OKF 文档（方法论、经验教训、API 参考）
 ├── docs/codex_test_enapi_full.md ← Codex 测试 EN_API 全记录

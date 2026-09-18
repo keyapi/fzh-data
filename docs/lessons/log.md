@@ -10,6 +10,12 @@ tags: [lessons, log]
 
 ## 2026-09-18
 
+- **新增**: [../mcp-setup.md](../mcp-setup.md) — **MCP 选型与安装指南**（canonical 入口）。含选型表（每个 MCP 干什么 / 要什么凭证 / 谁该装）、宿主差异表（Claude Desktop 3P / 普通 / Codex / Cursor 的配置路径与重启要求）、3P 通用事实、启停与裁剪、排错、各 server 详细文档索引。**目标：同事读 main 即可自选要装的 MCP。**
+- **收敛**: 3P 的通用事实（配置路径、`mcp-remote` 桥接、重启要求、`~/.mcp-auth` 排错）原先散在 `fac-mcp-setup.md` / `tavily-mcp-setup.md` / `notion-mcp-setup.md` **各写一遍**（三份说同一件事 = 迟早互相矛盾），现以 `docs/mcp-setup.md` 为唯一来源，三份文档改为指向它、只保留各自特有内容。
+- **更新**: [../../../AGENTS.md](../../../AGENTS.md) — ① §4「安装 MCP 服务器」由 Codex-only 散列改为「按需选装 + 指向 `docs/mcp-setup.md`」，并补 Claude Desktop 3P 视角与「3P/普通是两个独立文件、改错静默无效」警告；② 文档体系树补入 `docs/mcp-setup.md` 与 `docs/lessons/`；③ 修正首行「CLAUDE.md 应为此文件 symlink」的失实描述（实为一行 `AGENTS.md` 的入口文件）。
+- **清理**: [../../../CONCEPTS.md](../../../CONCEPTS.md)「3P 模式」词条移除字面文件路径与配置字段值（CONCEPTS.md 规范禁止实现细节），改为描述行为差异；路径信息以 `docs/mcp-setup.md` 为准。
+- **修复**: `scripts/update_index.py` 的「Updated」原先取文件 **mtime**，而新 clone / worktree 会把所有 mtime 重置成检出时间 → 每次检出都产生几百行假日期 churn（本次实测 791 行里 789 行是假变化）。改为取 **git 提交日期**（单次 `git log --name-only` 建映射，未跟踪文件回退 mtime）。重新生成后日期变为真实提交日期，**幂等验证通过**（连续两次生成除时间戳外完全一致）。
+
 - **更新**: [notion-mcp-setup.md](notion-mcp-setup.md) — 新增「停用某个 Server 但保留配置」。Claude Desktop 无原生 per-connector 停用开关；通行做法是把条目移入 `_disabled_mcpServers` 顶层键（Claude Desktop 只读 `mcpServers`，忽略未知键），配置原样保留、恢复即挪回 + 重启，OAuth token 不受影响。三个独立第三方工具（mcp-server-manager / claude-config-manager / @wyattjoh/mcp-manager）均用此法。**本项目用法：`notion-personal` 常驻（常用），`notion-company` 移入 `_disabled_mcpServers` 备用（仅测试用）。**
 
 - **更新**: [notion-mcp-setup.md](notion-mcp-setup.md) — 新增「五、上下文开销实测与减压结论」。`/context` ground truth：168 个 MCP 工具 = **57.3k token**，两个 Notion 站合计 37k = 1M 上下文的 3.7%，**不构成问题**。

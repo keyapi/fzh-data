@@ -1,9 +1,12 @@
 # FAC MCP 部署指南（开发人员）
 
-> 最后更新：2026-06-09  
+> 最后更新：2026-09-18  
 > 面向：B 类技术开发同事  
 > 用途：在 Claude Desktop（3P 模式）上连接测试服务器 `ensh.vilavi.cn` 的 FAC MCP  
 > ⚠️ 当前仅测试环境可用，普通用户不可用（生产服务器未部署 FAC App）
+>
+> **3P 模式的通用事实**（配置路径、`mcp-remote` 桥接、重启要求、`~/.mcp-auth` 排错）已收敛到
+> [docs/mcp-setup.md](../mcp-setup.md)。本文档只保留 FAC 特有内容。
 
 ---
 

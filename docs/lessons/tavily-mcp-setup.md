@@ -11,6 +11,9 @@ timestamp: 2026-06-29
 
 > **阅读对象**：技术开发 + 非技术同事（Agent 辅助操作）
 > **前置条件**：已按 [AGENTS.md](../../AGENTS.md) 完成 clone 后的基础环境搭建
+>
+> **3P 模式的通用事实**（配置路径、`mcp-remote` 桥接、重启要求、`~/.mcp-auth` 排错）已收敛到
+> [docs/mcp-setup.md](../mcp-setup.md)。本文档保留踩坑过程与教训 —— 那才是它不可替代的价值。
 
 ---
 
