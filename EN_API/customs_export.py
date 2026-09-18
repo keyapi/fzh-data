@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import datetime
 import os
+import re
 import sys
 import time
 import urllib.parse
@@ -55,7 +56,9 @@ CONFIG = {
     "supervision_mode": "一般贸易",        # 监管方式
     "origin_place": "绍兴市（33069）",      # 境内货源地（常量）
     "declaration_unit": "宁波市鸿欣报关有限公司",   # 申报单位（弹窗可传，未传则保留模板原值）
-    "production_unit": "绍兴雪雁针纺有限公司",       # 生产销售单位（固定值，不在弹窗体现）
+    # 境内收货人(境内发货人 A4)与生产销售单位(A8)固定为同一主体（含统一社会信用代码+海关10位编码）。
+    # 与模板 报关单NEW A4/A8 现填值逐字符一致，改动只改这一处。
+    "domestic_party_cn": "（9111010856368328XF）（11149609R4）方州汇国际电子商务(北京)有限公司",
     # 单位映射：EN 的 uom → (英文单位, 中文单位)
     "uom_map": {
         "个": ("PIECES", "个"),
@@ -79,9 +82,9 @@ PL_CUSTOMERS = set()                     # 波兰公司（具体客户名待补�
 CONSIGNEE_DATA = {
     "centrade": {"name": "Centrade Inc", "addr": "389 Route 10 Unit R, East Hanover, NJ 07936 U.S.A."},
     "daneey":   {"name": "Daneey LLC", "addr": "10812 Fallstone Rd, Suite 402, Houston TX 77099 U.S.A."},
-    "poland":   {"name": "SHAOXING XUEYAN ZHENGFANG Sp. z o.o.", "addr": "ul. Prosta 2 95-035 Ozorków Poland"},
+    "poland":   {"name": "Pillow Palette Ltd", "addr": "ul. Krucza 68/9, 53-411 Wrocław, mail: kontakt@pillowpalette.pl, 786 603 993"},
 }
-DEFAULT_CONSIGNEE = "centrade"           # 弹窗默认选中项（EN 侧）；本脚本按客户自动映射
+DEFAULT_CONSIGNEE = "centrade"           # 兜底默认（未指定收货人时）
 
 # 装箱组合（混装版）：key = DN 单号 → 组合列表。装箱信息完全由用户确认，不用外箱子表。
 # 每个组合:
@@ -170,6 +173,11 @@ def get_doc(base: str, key: str, sec: str, doctype: str, name: str) -> dict:
 DEEPSEEK_BASE_URL = "https://api.vilavi.cn/v1"   # 用户 AI 网关（部署到 EN 后改走 AIContentGenerator/PIM Settings）
 DEEPSEEK_MODEL = "deepseek-v4-flash"
 
+# 少数物料的固定英文品名（优先于 AI 翻译；键=去色后的 code_agg）
+TRANSLATION_OVERRIDES = {
+    "KZKP1010-5#-IRONBOTTOMSURFACE": "Button embryo 5# iron bottom surface",
+}
+
 
 def load_deepseek_key() -> str:
     key = os.environ.get("DEEPSEEK_API_KEY", "")
@@ -227,6 +235,29 @@ def translate_zh_to_en(text: str, api_key: str) -> str:
 def drop_color(s: str) -> str:
     s = (s or "").strip()
     return s.rsplit("-", 1)[0] if s else s
+
+
+# ──────────────────────────────────────────────────────────────
+# 靠枕固定宽高：系统只维护长度，导出时按物料族补出 长度*宽*高。
+# 中文品名含关键词且尺寸为单段数字 → 尺寸段补 *宽*高；已有完整三围(x/*/cm)则不动。
+# ──────────────────────────────────────────────────────────────
+FIXED_DIM_CN = (("三角靠枕", 20, 50), ("平条靠枕", 15, 50))
+
+
+def _enrich_dim_cn(name: str) -> str:
+    """给单段长度尺寸补固定宽高：三角靠枕 *20*50、平条靠枕 *15*50。未命中必须返回原文。"""
+    if not name:
+        return name or ""
+    for kw, w, h in FIXED_DIM_CN:
+        if kw not in name:
+            continue
+        parts = name.split("-")
+        for i in range(len(parts) - 1, -1, -1):
+            m = re.fullmatch(r"(\d+)(cm|CM|厘米)?", parts[i])
+            if m:
+                parts[i] = f"{m.group(1)}*{w}*{h}{m.group(2) or ''}"
+                return "-".join(parts)
+    return name
 
 
 def aggregate_items(dn: dict) -> list[dict]:
@@ -293,34 +324,20 @@ def resolve_country(customer: str) -> tuple[str, str]:
     return "", ""
 
 
-def resolve_consignee(args, customer: str) -> dict | None:
-    """境外收货人：优先 CLI --consignee 指定，否则按客户自动映射。
+def resolve_consignee(args, customer: str) -> dict:
+    """境外收货人：CLI --consignee 选择即导出（仅公司名写入 C5）；未指定则默认 Centrade Inc。
 
-    返回 {"name": ..., "addr": ...}；无法解析返回 None（保留模板原值）。
+    2026-09-08 需求调整：不再无条件固定 Centrade，选择哪个预设/自定义名称就导出哪个。
     """
     choice = (args.consignee or "").strip().lower()
-    if choice == "custom":
-        if args.consignee_name or args.consignee_addr:
-            return {"name": args.consignee_name or "", "addr": args.consignee_addr or ""}
-        return None
-    if choice in CONSIGNEE_DATA:
-        info = dict(CONSIGNEE_DATA[choice])
-        if args.consignee_name:
-            info["name"] = args.consignee_name
-        if args.consignee_addr:
-            info["addr"] = args.consignee_addr
-        return info
-    cust = (customer or "").lower()
-    if "daneey" in cust:
-        return dict(CONSIGNEE_DATA["daneey"])
-    if "centrade" in cust:
-        return dict(CONSIGNEE_DATA["centrade"])
-    for key in PL_CUSTOMERS:
-        if key.lower() in cust:
-            return dict(CONSIGNEE_DATA["poland"])
-    if args.consignee_name or args.consignee_addr:
-        return {"name": args.consignee_name or "", "addr": args.consignee_addr or ""}
-    return None
+    name = args.consignee_name or ""
+    addr = args.consignee_addr or ""
+    if choice and choice != "custom" and choice in CONSIGNEE_DATA:
+        name = name or CONSIGNEE_DATA[choice]["name"]
+        addr = addr or CONSIGNEE_DATA[choice]["addr"]
+    if not name and not addr:
+        name = CONSIGNEE_DATA[DEFAULT_CONSIGNEE]["name"]
+    return {"name": name, "addr": addr}
 
 
 def usd_price(rmb: float) -> float:
@@ -476,6 +493,216 @@ def _delete_rows_safe(ws, start_row: int, count: int):
     ws.delete_rows(start_row, count)
 
 
+def _remove_blank_header_rows(wb):
+    """删除三张表「表头与数据之间」的空白行：报关发票 row15、装箱单 row16、报关合同 row15。
+
+    删除后所有相关行坐标整体上移 1：数据起始 发票/合同 16→15、装箱单 17→16；表格下边界 -1。
+    """
+    _delete_rows_safe(wb["报关发票 "], 15, 1)
+    _delete_rows_safe(wb["装箱单"], 16, 1)
+    _delete_rows_safe(wb["报关合同 "], 15, 1)
+
+
+def _merge_contract_name_cols(ws, n_items: int):
+    """报关合同每个物料数据行把「货物名称及规格」名称区四列 B:E 合并为单格。
+
+    注：表头下空白行（原 row15）已删除，数据行起始为 15。
+    """
+    if not n_items or n_items <= 0:
+        return
+    from openpyxl.utils.cell import range_boundaries
+    start_row = 15
+    data_rows = set(range(start_row, start_row + n_items))
+    # 先拆掉数据行里与 B:E 重叠的旧合并（如模板默认 B16:C16 / 扩展复制来的 B:C）
+    for rng in list(ws.merged_cells.ranges):
+        min_col, min_row, max_col, max_row = range_boundaries(str(rng))
+        if (min_row == max_row and min_row in data_rows
+                and min_col <= 5 and max_col >= 2):
+            ws.unmerge_cells(str(rng))
+    for i in range(n_items):
+        r = start_row + i
+        ws.merge_cells(start_row=r, start_column=2, end_row=r, end_column=5)
+
+
+def _plain_left_single_line(wb):
+    """统一 4 张表所有「有内容」单元格：水平左对齐、不自动换行、不缩小字号、去除写入的换行符。
+
+    模板数据区默认 wrap_text=True，长英文品名会换行把行高撑高、出现折叠/跨行；
+    这里改成单行显示 + 全部左对齐，保证导出件行高一致、视觉统一。
+    合并区非锚点的只读 MergedCell 跳过（锚点会被统一处理）。
+    """
+    for ws in wb.worksheets:
+        start = DATA_START.get(ws.title, 1)
+        for row in ws.iter_rows():
+            for cell in row:
+                if cell.row < start:
+                    continue  # 表头/公司信息区：保持模板样式，不左对齐、不去换行
+                if cell.value is None or (isinstance(cell.value, str) and cell.value == ""):
+                    continue
+                if isinstance(cell.value, str):
+                    cell.value = re.sub(r"\s*\r?\n\s*", " ", cell.value)
+                try:
+                    a = cell.alignment
+                    cell.alignment = Alignment(
+                        horizontal="left",
+                        vertical=a.vertical,
+                        text_rotation=a.text_rotation,
+                        wrap_text=False,
+                        shrink_to_fit=False,
+                        indent=a.indent,
+                    )
+                except Exception:
+                    pass  # MergedCell 只读，跳过
+
+
+def _autofit_columns(wb):
+    """动态列宽：只加宽「单行内容会真正被截断」的列。
+
+    不换行后长文本若右侧一路是空格，Excel 会直接溢出完整显示（无需拉宽）；
+    只有右邻格也有内容、文字被挡在列边界内时才会视觉截断。这里逐格估算
+    「文本宽度 vs 该格 + 右侧连续空格子的可用宽度」，不够才把本格所在列加宽
+    （合并格按整段合并列宽 + 其后空格子计可用宽度）。列宽只增不减。
+    个别静态长句「合并区已撑满整行仍放不下」时回退允许换行（完整显示，不影响数据行高）。
+    """
+    from openpyxl.utils import get_column_letter
+
+    def vlen(s):
+        return sum(2 if ord(ch) > 127 else 1 for ch in str(s))
+
+    def cell_merge(ws, row, col):
+        for rng in ws.merged_cells.ranges:
+            if rng.min_row <= row <= rng.max_row and rng.min_col <= col <= rng.max_col:
+                return rng
+        return None
+
+    def occupied(ws, row, col):
+        c = ws.cell(row, col)
+        if c.value not in (None, ""):
+            return True
+        return c.__class__.__name__ == "MergedCell"
+
+    for ws in wb.worksheets:
+        existing = {}
+        for col in range(1, ws.max_column + 1):
+            d = ws.column_dimensions.get(get_column_letter(col))
+            existing[col] = (d.width if (d and d.width) else 8.43)
+        need = {}
+        for row in ws.iter_rows():
+            for cell in row:
+                v = cell.value
+                if v is None or (isinstance(v, str) and not v.strip()):
+                    continue
+                if cell.__class__.__name__ == "MergedCell":
+                    continue
+                rng = cell_merge(ws, cell.row, cell.column)
+                right_max = rng.max_col if rng else cell.column
+                avail = sum(existing.get(cc, 8.43) for cc in range(cell.column, right_max + 1))
+                cc = right_max + 1
+                while cc <= ws.max_column and not occupied(ws, cell.row, cc):
+                    avail += existing.get(cc, 8.43)
+                    cc += 1
+                need_w = vlen(v) + 1.2
+                if need_w > avail:
+                    deficit = need_w - avail
+                    want = min(existing[cell.column] + deficit, 90.0)  # 封顶防病态拉宽
+                    if want > need.get(cell.column, existing[cell.column]):
+                        need[cell.column] = want
+        for col, w in need.items():
+            if w > existing[col]:
+                ws.column_dimensions[get_column_letter(col)].width = w
+        # 回退：仅对仍放不下的格允许换行（完整显示；静态固定行不影响数据行高）
+        for row in ws.iter_rows():
+            for cell in row:
+                v = cell.value
+                if v is None or (isinstance(v, str) and not v.strip()):
+                    continue
+                if cell.__class__.__name__ == "MergedCell":
+                    continue
+                rng = cell_merge(ws, cell.row, cell.column)
+                right_max = rng.max_col if rng else cell.column
+                avail = 0.0
+                for cc in range(cell.column, right_max + 1):
+                    d = ws.column_dimensions.get(get_column_letter(cc))
+                    avail += (d.width if (d and d.width) else 8.43)
+                cc = right_max + 1
+                while cc <= ws.max_column and not occupied(ws, cell.row, cc):
+                    d = ws.column_dimensions.get(get_column_letter(cc))
+                    avail += (d.width if (d and d.width) else 8.43)
+                    cc += 1
+                if vlen(v) + 1.2 > avail:
+                    try:
+                        a = cell.alignment
+                        cell.alignment = Alignment(
+                            horizontal="left", vertical=a.vertical,
+                            text_rotation=a.text_rotation,
+                            wrap_text=True, shrink_to_fit=False, indent=a.indent)
+                    except Exception:
+                        pass
+    return wb
+
+
+# 各表「数据区起始行」：其上方为表头/公司信息区，**不做左对齐**（保留模板样式，如表头居中）
+DATA_START = {"报关发票 ": 15, "装箱单": 16, "报关合同 ": 15, "报关单NEW ": 18}
+
+# 统一行高的起止：各自顶部「公司信息/标题块」以下开始统一（报关单NEW 不动）
+_UNIFORM_START = {"报关发票 ": 6, "装箱单": 6, "报关合同 ": 9}
+_UNIFORM_H = 16.5
+
+
+def _uniform_row_heights(wb):
+    """三张表（发票/装箱单/合同）除顶部公司信息/标题块外，行高统一为 16.5。
+
+    例外：含「回退允许换行」的长句所在行给足够高度（完整显示），其余严格统一。
+    """
+    for ws in wb.worksheets:
+        start = _UNIFORM_START.get(ws.title)
+        if not start:
+            continue
+        last = max(ws.max_row, start)
+        for r in range(start, last + 1):
+            ws.row_dimensions[r].height = _UNIFORM_H
+        for row in ws.iter_rows():
+            for cell in row:
+                if cell.value not in (None, "") and cell.alignment and cell.alignment.wrap_text:
+                    ws.row_dimensions[cell.row].height = 30
+
+
+def _apply_table_borders(wb, n_items: int):
+    """报关发票/装箱单/报关合同 表格区：内部全细线 + 外框 thick 粗线。
+
+    区间随物料数 N 动态：发票 B14:G(17+N)、装箱单 B15:K(18+N)、报关合同 B13:J(17+N)。
+    含表头行、数据行、合计行及其间空白行。
+
+    ⚠️ 合并区边框关键点：Excel 按「每个子格」渲染边框，openpyxl 合并会把覆盖格替换为
+    只读 MergedCell（赋值不落盘）→ 只画锚点会让合并区某条边缺线（线中断）。做法：给表格内
+    每一个坐标（含合并覆盖格）放一个真实 Cell 写边框；合并关系保留。
+    """
+    from openpyxl.styles import Border, Side
+    from openpyxl.cell.cell import Cell as _Cell
+    thin = Side(style="thin")
+    thick = Side(style="thick")
+    spec = [
+        ("报关发票 ", 2, 7, 14, 16 + n_items),
+        ("装箱单", 2, 11, 15, 17 + n_items),
+        ("报关合同 ", 2, 10, 13, 16 + n_items),
+    ]
+    for title, c1, c2, r1, r2 in spec:
+        ws = wb[title]
+        for r in range(r1, r2 + 1):
+            for c in range(c1, c2 + 1):
+                border = Border(
+                    left=(thick if c == c1 else thin),
+                    right=(thick if c == c2 else thin),
+                    top=(thick if r == r1 else thin),
+                    bottom=(thick if r == r2 else thin),
+                )
+                cell = ws._cells.get((r, c))
+                if cell is None or cell.__class__.__name__ == "MergedCell":
+                    cell = _Cell(ws, row=r, column=c, value=None)
+                    ws._cells[(r, c)] = cell
+                cell.border = border
+
+
 def delete_extra_rows(wb, n_items: int):
     """按实际导出的物料数 N 删除数据区末尾的多余整行。
 
@@ -568,7 +795,7 @@ def fill_packing(ws, dn, agg, totals):
     ws[f"D{n36}"] = f"TOTAL PACKED IN {num_to_words(totals['cartons'])} CTNS"
     ws[f"D{n36+1}"] = f"TOTAL GROSS WEIGHT {totals['gross']:.3f}KGS"
     ws[f"D{n36+2}"] = f"TOTAL NET WEIGHT {totals['net']:.3f}KGS"
-    ws[f"D{n36+3}"] = f"TOTAL MEASUREMENTS {totals['measrs']:.3f}M3"
+    ws[f"D{n36+3}"] = f"TOTAL MEASUREMENTS {totals['measrs']:.3f}M³"
 
 
 def fill_contract(ws, dn, agg, totals):
@@ -598,23 +825,38 @@ def fill_contract(ws, dn, agg, totals):
     ws[f"F{tr}"] = totals["qty"]
     _n3(ws, f"J{tr}", usd_price(totals["bom_cost"]))
     ws[f"E{39+k}"] = None                   # Time of Shipment(装运期) 留空
+    ws[f"F{40+k}"] = None                   # 装运口岸/目的港（装运港及目的港）置空
     ws[f"E{43+k}"] = None                   # TERMS OF PAYMENT 留空
     ws[f"H{48+k}"] = None                   # 底部 BUYERS 留空
 
 
 def fill_declaration(ws, dn, agg, totals, country,
-                     consignee_name="", consignee_addr="", declaration_unit="", production_unit=""):
+                     consignee_name="", consignee_addr="", declaration_unit=""):
     c = CONFIG
     country_en, country_cn = country
     k = 2 * max(0, len(agg) - 16)   # 扩展行偏移（每物料 2 行）
+    # 「数量单位」分列：拆开模板合并表头 E17:F17 → E=数量、F=单位（数据行分列写）
+    from copy import copy as _copy
+    if "E17:F17" in [str(x) for x in ws.merged_cells.ranges]:
+        ws.unmerge_cells("E17:F17")
+        for attr in ("font", "fill", "border", "alignment", "number_format", "protection"):
+            setattr(ws["F17"], attr, _copy(getattr(ws["E17"], attr)))
+    ws["E17"] = "数量"
+    ws["F17"] = "单位"
+    # 表头 E/F 之间补竖线
+    from openpyxl.styles import Border as _Bd, Side as _Sd
+    _b = ws["E17"].border
+    ws["E17"].border = _Bd(left=_b.left, right=_Sd(style="thin"), top=_b.top, bottom=_b.bottom)
+    _c = ws["F17"].border
+    ws["F17"].border = _Bd(left=_Sd(style="thin"), right=_c.right, top=_c.top, bottom=_c.bottom)
     ws["I2"] = None                        # 发票号 留空
-    ws["A4"] = c["shipper_cn"]             # 境内发货人
+    ws["A4"] = c["domestic_party_cn"]      # 境内收货人(境内发货人)固定方州汇含编码
     ws["G4"] = None                        # 出境关别 留空
-    if consignee_name or consignee_addr:
-        ws["C5"] = "\n".join(x for x in (consignee_name, consignee_addr) if x)   # 境外收货人：名称 + 地址
-        ws["C5"].alignment = Alignment(wrap_text=True, vertical="center")
+    # 境外收货人 C5：按选择写公司名（仅名称，2026-09-08；不带地址），未传兜底 Centrade Inc
+    ws["C5"] = consignee_name or CONSIGNEE_DATA[DEFAULT_CONSIGNEE]["name"]
+    ws["C5"].alignment = Alignment(wrap_text=True, vertical="center")
     ws["G6"] = None                        # 运输方式 留空
-    ws["A8"] = production_unit or None     # 生产销售单位（固定值）
+    ws["A8"] = c["domestic_party_cn"]      # 生产销售单位固定方州汇含编码
     ws["G8"] = c["supervision_mode"]       # 监管方式
     ws["A10"] = dn["name"]                 # 合同协议号
     ws["D10"] = None                       # 贸易国（地区） 留空
@@ -634,7 +876,15 @@ def fill_declaration(ws, dn, agg, totals, country,
             ws[f"B{row}"] = None                        # 商品编号(HS) 留空
             ws[f"C{row}"] = it["name_agg"]              # 中文名称（保留）
             ws[f"D{row}"] = it["name_en"]               # 英文名称
-            ws[f"E{row}"] = f"{int(it['qty'])}{uom_cn(it['uom'])}"
+            ws[f"E{row}"] = int(it["qty"])
+            ws[f"F{row}"] = uom_cn(it["uom"])
+            # 数量/单位之间补竖线（模板原 E:F 为合并列，内部无线）
+            _eb = ws[f"E{row}"].border
+            ws[f"E{row}"].border = _Bd(left=_eb.left, right=_Sd(style="thin"), top=_eb.top, bottom=_eb.bottom)
+            _fb = ws[f"F{row}"].border
+            ws[f"F{row}"].border = _Bd(left=_Sd(style="thin"),
+                                       right=(_fb.right if (_fb.right and _fb.right.style) else _Sd(style="thin")),
+                                       top=_eb.top, bottom=_eb.bottom)
             _n3(ws, f"G{row}", usd_price(it["bom_rate"]))     # 单价 = BOM成本 ÷ 汇率 × 加成
             _n3(ws, f"H{row}", usd_price(it["bom_cost"]))     # 总价 = BOM成本 ÷ 汇率 × 加成
             ws[f"I{row}"] = c["currency"]
@@ -662,10 +912,12 @@ def main():
     ap.add_argument("--dn", required=True, help="DN 单号，如 DN-26-00063")
     ap.add_argument("--test", action="store_true", help="使用测试环境")
     ap.add_argument("--output", "-o", help="输出路径")
-    ap.add_argument("--consignee", help="境外收货人预设: centrade/daneey/poland/custom（缺省按客户自动映射）")
+    ap.add_argument("--consignee", help="境外收货人预设: centrade/daneey/poland/custom（缺省默认 centrade，选择即导出）")
     ap.add_argument("--consignee-name", help="境外收货人名称（覆盖预设/自定义）")
     ap.add_argument("--consignee-addr", help="境外收货人地址（覆盖预设/自定义）")
     ap.add_argument("--declaration-unit", help="申报单位（缺省保留模板原值）")
+    ap.add_argument("--no-enrich-flat-dim", action="store_true",
+                    help="靠枕尺寸不补全（三角靠枕×20×50 / 平条靠枕×15×50），保持只有长度与已开票一致")
     args = ap.parse_args()
 
     env = "test" if args.test else "prod"
@@ -682,11 +934,17 @@ def main():
         sys.exit(1)
 
     agg = aggregate_items(dn)
+    # 靠枕尺寸补全开关（默认补全）：三角靠枕→长度*20*50 / 平条靠枕→长度*15*50。
+    # 已开票且当时尺寸不完整的单，可加 --no-enrich-flat-dim 保持只有长度与开票一致。
+    if not args.no_enrich_flat_dim:
+        for it in agg:
+            it["name_agg"] = _enrich_dim_cn(it["name_agg"])
     # 英文品名：并行翻译中文品名（去色后）
     dskey = load_deepseek_key()
     if dskey:
         def _do(it):
-            return it, translate_zh_to_en(it["name_agg"], dskey)
+            ov = TRANSLATION_OVERRIDES.get(it["code_agg"])
+            return it, (ov if ov else translate_zh_to_en(it["name_agg"], dskey))
         with ThreadPoolExecutor(max_workers=5) as ex:
             futs = [ex.submit(_do, it) for it in agg]
             for i, f in enumerate(as_completed(futs), 1):
@@ -707,12 +965,9 @@ def main():
     country = resolve_country(dn.get("customer", ""))
     print(f"客户: {dn.get('customer')} ({dn.get('customer_name')}) → 目的国: {country}")
 
-    # 境外收货人（CLI 指定或按客户自动映射）
+    # 境外收货人：固定 Centrade Inc（全部导出强制）
     consignee = resolve_consignee(args, dn.get("customer", ""))
-    if consignee:
-        print(f"境外收货人: {consignee['name']} / {consignee['addr']}")
-    else:
-        print("境外收货人: 未匹配预设，保留模板原值（可用 --consignee 指定）")
+    print(f"境外收货人: {consignee['name']}")
 
     # 装箱数据：仅用用户确认的装箱组合(CARTON_GROUPS_BY_DN)，不用外箱子表(outer_box_summary/item_weight_cats)
     groups = CARTON_GROUPS_BY_DN.get(args.dn, []) or []
@@ -755,11 +1010,21 @@ def main():
     fill_declaration(wb["报关单NEW "], dn, agg, totals, country,
                      consignee_name=(consignee or {}).get("name", ""),
                      consignee_addr=(consignee or {}).get("addr", ""),
-                     declaration_unit=args.declaration_unit or "",
-                     production_unit=CONFIG.get("production_unit", ""))
+                     declaration_unit=args.declaration_unit or "")
 
     # 按实际物料数删除数据区多余整行（发票/装箱单/报关单NEW，报关合同不动）
     delete_extra_rows(wb, len(agg))
+    # 删除三张表「表头与数据之间」的空白行（发票15/装箱单16/合同15），其后行坐标整体上移 1
+    _remove_blank_header_rows(wb)
+
+    # 报关合同：名称区每物料行合并 B:E；统一 4 张表内容格为左对齐 + 单行（不换行/不缩小/去换行）
+    _merge_contract_name_cols(wb["报关合同 "], len(agg))
+    _plain_left_single_line(wb)
+    # 动态列宽：仅加宽「单行内容会被右邻格截断」的列，保证完整显示
+    _autofit_columns(wb)
+    # 行高统一（三张表除顶部公司信息块外 16.5）+ 表格区全框线/粗外框
+    _uniform_row_heights(wb)
+    _apply_table_borders(wb, len(agg))
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     out = Path(args.output) if args.output else OUT_DIR / f"报关单据_{args.dn}.xlsx"
