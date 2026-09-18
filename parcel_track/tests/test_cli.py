@@ -88,4 +88,3 @@ def test_cli_skips_env_for_plain_mock(tmp_path: Path, monkeypatch):
 def test_cli_loads_env_for_notify_even_in_mock(tmp_path: Path, monkeypatch):
     """回归：--mock 只表示不打承运商 API，不该把钉钉/ERPNext 凭证也掐掉。"""
     assert _run_with_env_spy(tmp_path, monkeypatch, ["--notify", "--dry-run"]) == [True]
-

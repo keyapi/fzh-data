@@ -31,4 +31,3 @@ GOFO/TikTok/USPS 停放，不要去爬官网或擅自接 AfterShip。GLS 不要�
 无人值守：`--tt` 给目录取最新 xlsx、`--out` 省略按日期命名、`install_parcel_track_schedule.ps1` 注册 schtasks。
 
 禁止把 API key、买家姓名、原始跟踪号写进文档或 commit。
-

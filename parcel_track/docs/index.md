@@ -34,4 +34,3 @@ FedEx 单承运商旧入口：`python -m fedex_track.ops_report`。GLS 单承运
 - 跑挂时若带 `--notify`，会额外发一条钉钉纯文本告警，避免静默失败。
 
 定时注册：[reference/scheduled-dingtalk-push.md](reference/scheduled-dingtalk-push.md)。
-
