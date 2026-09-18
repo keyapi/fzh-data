@@ -7,9 +7,38 @@
 
 ```bash
 cd cost_adjust
+
+# 0) 先定位：这个 SKU 的库存来自哪些单据（哪张备货单还有货）
+uv run --project ../web_automation python probe_batches.py KS0248-DM-60-WHITE
+
+# 1) 生成导入文件
 uv run python build_saihu_cost_adjust.py               # 生成导入文件
 uv run python build_saihu_cost_adjust.py --dry-run     # 只看对照表，不生成文件
 ```
+
+## 先回答「改哪张单」
+
+成本补录单**只能按单据**改，备货单头程也只能**逐单**改。但一个 (仓库,SKU) 常有几十上百张
+历史单，绝大多数货已出完。真正要改的是**货还在库里的批次**的来源单 —— 用 `probe_batches.py`：
+
+```
+SKU: KS0248-DM-60-WHITE
+  批次总数 128，有货批次 4，可用总量 150
+  加权采购单价 104.38   加权单位费用 8.12
+
+  来源单号              仓库      type  备货单  批次  可用量  采购单价  单位费用
+  OWS294A9T700007      DANEEY   5     是     1    139    104.38   8.12
+  AD2609040001         DANEEY   3     否     1    7      104.38   8.12
+  AD2609150001         DANEEY   3     否     1    3      104.38   8.12
+  AD2609180001         DANEEY   3     否     1    1      104.38   8.12
+```
+
+数据来自**海外仓批次**接口（`/api/overseaBatch/page.json`）：`goodsAva>0` = 还在库，
+`oriNo` = 来源单号，`inventoryCost`/`transportCost` = 该批次的采购成本/头程。
+加权后可与【库存明细】的 `采购单价(￥)`/`单位费用(￥)` 对账。
+
+> `type=5` 且 `oriNo=OWS…` 才是**海外仓备货单**；`AD…` 是库存调整单，
+> **没有「单个头程费用」可改**。库存常是混合来源，改之前先看清构成。
 
 ## 数据流
 

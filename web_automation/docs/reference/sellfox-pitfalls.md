@@ -210,6 +210,44 @@ Playwright click 超时 (element not visible) → 使用 `page.evaluate("item.cl
 会在导入后按 **文件里的 SKU × status=待审核** 反查本次产生的补录单并逐张审核，
 审核后用同一接口复核 `status == has_passed` 才算成功；`--no-approve` 可关掉这步。
 
+### 定位「该改哪些单据」：海外仓批次接口
+
+改成本必须落到**具体单据**，但一个 (仓库,SKU) 有几十上百张历史单，绝大多数货已出完。
+真正要改的是**货还在库里的批次**对应的来源单。
+
+`POST /api/overseaBatch/page.json`（页面：仓库 → 海外仓 → 海外仓批次，
+`web/warehouse/batchManagement/index.html`）：
+
+```json
+{"warehouseIds":"","dateType":"","startDate":"2024-01-01","endDate":"2099-12-31",
+ "searchType":"commoditySku","searchContent":"<SKU>","type":[],"brandIds":[],"state":"",
+ "pageSize":200,"pageNo":1,"orderBy":"","desc":""}
+```
+
+- **筛 SKU 用 `searchType=commoditySku` + `searchContent`**。传 `commoditySku` 参数**不会过滤**
+  （会把所有 SKU 的批次按时间倒序返回，看起来"过滤了"只是因为目标 SKU 最新）。
+- `data.totalSize` 常为 0，**不能靠它判断翻页结束**；用「本页返回 < pageSize」判尾。
+- 关键字段：
+
+  | 字段 | 含义 |
+  |---|---|
+  | `oriNo` | **来源单号**（`OWS…`=海外仓备货单；`AD…`=库存调整单） |
+  | `type` | 5=海外仓备货；3/4=库存调整（增加/减少） |
+  | `goods` / `goodsAva` | 数量 / **可用量（>0 才是在库）** |
+  | `inventoryCost` | 该批次**采购成本** |
+  | `transportCost` | 该批次**头程费用**（即库存的「单位费用」） |
+  | `warehouseName` / `batchNo` | 仓库 / 批次号 |
+
+- 用 `goodsAva>0` 过滤、按 `oriNo + 仓库 + type` 分组，即可得到「该 SKU 的库存来自哪些单」，
+  且加权平均后可**反算出库存明细的 `采购单价(￥)` / `单位费用(￥)`**（实测完全对上）。
+
+> ⚠️ 库存常是**混合来源**：实测 `KS0248-DM-60-WHITE`@DANEEY 可用 150 件里，
+> 139 件来自备货单 `OWS294A9T700007`，另 11 件来自 3 张库存调整单（AD…）。
+> **调整单来源的批次没有「单个头程费用」可改**，所以只改备货单无法把整个 (仓库,SKU)
+> 的平均成本拉到目标值——改之前先看清楚来源构成。
+
+工具：`cost_adjust/probe_batches.py`（登录后直接打印上述分组与加权值）。
+
 ## Element UI checkbox
 
 `cb.click()` 在 evaluate 中不改变 Vue 组件状态 → 必须用 Playwright `page.locator().click()` 真实点击。
