@@ -18,10 +18,17 @@ cron（准点触发，幂等）:
   # 周末保险: 00:00 确保空闲价
   0 0  * * 0,6  python3 /opt/new-api/deepseek_time_pricing.py >> /var/log/deepseek_time_pricing.log 2>&1
 
-价格来源: 内置常量，从 https://api-docs.deepseek.com/zh-cn/quick_start/pricing/ 拷贝
-（2026-08-17 峰谷计价生效）。DeepSeek 官方调价时只需改 PRICING。
+价格来源: 内置常量，从 https://api-docs.deepseek.com/zh-cn/quick_start/pricing/ 拷贝。
+2026-08-17 峰谷计价生效；2026-09-10 12:00 起 flash 系列降价（pro 不变）；
+2026-09-14 12:00 起 V4 Pro 下线，请求路由到 V4.1 Flash 并按 V4.1 Flash 计费
+（V4.1 Flash 单价未单独公布，暂按 flash 系列价目处理，待账单核对）。
+DeepSeek 官方调价时只需改 PRICING / PRO_EOL。
 
 幂等: 只有当前值与期望值不一致时才写入 options 表，否则零副作用。
+
+测试参数:
+  --simulate peak|off       强制指定时段（会写库）
+  --at "YYYY-MM-DD HH:MM"   覆盖当前时间，只打印不写库，用于演练 9/14 Pro 下线分支
 """
 
 import json
@@ -36,17 +43,17 @@ from zoneinfo import ZoneInfo
 QUOTA_PER_UNIT = 500000   # $1 = 500,000 额度
 USD_RATE = 7.3             # 1 USD = 7.3 RMB
 
-# DeepSeek 官方定价（元/1M tokens）— 2026-08-17 峰谷计价
+# DeepSeek 官方定价（元/1M tokens）— 2026-09-10 12:00 起生效
 # peak=高峰(周一至周五 9-12,14-18), off=空闲(其余)
 # flash-vision-exp 与 flash 同价
 PRICING = {
     "deepseek-v4-flash": {
-        "peak": {"input": 3.0,  "output": 9.0,  "cache": 0.10},
-        "off":  {"input": 1.5,  "output": 4.5,  "cache": 0.05},
+        "peak": {"input": 2.0,  "output": 8.0,  "cache": 0.04},
+        "off":  {"input": 1.0,  "output": 4.0,  "cache": 0.02},
     },
     "deepseek-v4-flash-vision-exp": {
-        "peak": {"input": 3.0,  "output": 9.0,  "cache": 0.10},
-        "off":  {"input": 1.5,  "output": 4.5,  "cache": 0.05},
+        "peak": {"input": 2.0,  "output": 8.0,  "cache": 0.04},
+        "off":  {"input": 1.0,  "output": 4.0,  "cache": 0.02},
     },
     "deepseek-v4-pro": {
         "peak": {"input": 9.0,  "output": 27.0, "cache": 0.30},
@@ -54,10 +61,16 @@ PRICING = {
     },
 }
 
+# V4 Pro 下线（2026-09-14 12:00）：此后 pro 请求路由到 V4.1 Flash，按其价目计费。
+# V4.1 Flash 单价官方未单独公布，暂等同 flash 系列；9/14 后用真实账单核对。
+PRO_ROUTES_TO = "deepseek-v4-flash"
+
 # MySQL root 密码不硬编码：从环境变量 MYSQL_ROOT_PASSWORD 或 /opt/new-api/.secrets.env 读取
 SECRETS_FILE = Path("/opt/new-api/.secrets.env")
 
 TZ = ZoneInfo("Asia/Shanghai")
+
+PRO_EOL = datetime(2026, 9, 14, 12, 0, tzinfo=TZ)
 # ============================
 
 
@@ -131,23 +144,45 @@ def _patch_models(current: dict, expected: dict) -> bool:
 
 
 def main() -> int:
-    # 允许 --simulate peak|off 强制指定时段（用于测试）
-    period = None
     args = [a for a in sys.argv[1:]]
+
+    # --simulate peak|off 强制指定时段（用于测试）
+    period = None
     if "--simulate" in args:
         idx = args.index("--simulate")
         if idx + 1 < len(args):
             period = args[idx + 1]
 
+    # --at "YYYY-MM-DD HH:MM" 覆盖当前时间，仅演练不写库（用于验证 9/14 Pro 下线分支）
     now = datetime.now(TZ)
+    dry_run = False
+    if "--at" in args:
+        idx = args.index("--at")
+        if idx + 1 < len(args):
+            try:
+                now = datetime.strptime(args[idx + 1], "%Y-%m-%d %H:%M").replace(tzinfo=TZ)
+            except ValueError:
+                print(f"  [ERROR] --at 格式应为 'YYYY-MM-DD HH:MM': {args[idx + 1]}")
+                return 1
+            dry_run = True
+        else:
+            print("  [ERROR] --at 需要一个时间参数")
+            return 1
+
     if period is None:
         period = "peak" if is_peak_hour(now) else "off"
 
-    print(f"[{now:%Y-%m-%d %H:%M:%S %Z}] 时段: {period}")
+    print(f"[{now:%Y-%m-%d %H:%M:%S %Z}] 时段: {period}{'（演练，不写库）' if dry_run else ''}")
+
+    # V4 Pro 已于 PRO_EOL 下线，此后路由到 V4.1 Flash 并按其价目计费
+    pricing = dict(PRICING)
+    if now >= PRO_EOL:
+        pricing["deepseek-v4-pro"] = PRICING[PRO_ROUTES_TO]
+        print(f"  V4 Pro 已下线(>= {PRO_EOL:%Y-%m-%d %H:%M})，按 {PRO_ROUTES_TO} 价目计费")
 
     # 计算期望 ratios
     expected = {key: {} for key in ("ModelRatio", "CompletionRatio", "CacheRatio")}
-    for model, prices in PRICING.items():
+    for model, prices in pricing.items():
         r = calc_ratios(prices[period])
         expected["ModelRatio"][model] = r["model_ratio"]
         expected["CompletionRatio"][model] = r["completion_ratio"]
@@ -161,13 +196,18 @@ def main() -> int:
             print(f"  [ERROR] {e}")
             return 1
         if _patch_models(current, expected[key]):
-            set_option(key, current)
-            print(f"  {key} 已更新 -> {json.dumps(expected[key], ensure_ascii=False)}")
+            if dry_run:
+                print(f"  {key} 将更新 -> {json.dumps(expected[key], ensure_ascii=False)}")
+            else:
+                set_option(key, current)
+                print(f"  {key} 已更新 -> {json.dumps(expected[key], ensure_ascii=False)}")
             any_changed = True
         else:
             print(f"  {key} 无需变更 ({json.dumps(expected[key], ensure_ascii=False)})")
 
-    if any_changed:
+    if dry_run:
+        print("  演练完成（未写库）")
+    elif any_changed:
         print("  切换完成")
     else:
         print("  无变更")
