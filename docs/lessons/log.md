@@ -10,6 +10,10 @@ tags: [lessons, log]
 
 ## 2026-09-18
 
+- **更新**: [notion-mcp-setup.md](notion-mcp-setup.md) — 新增「五、上下文开销实测与减压结论」。`/context` ground truth：168 个 MCP 工具 = **57.3k token**，两个 Notion 站合计 37k = 1M 上下文的 3.7%，**不构成问题**。
+- **更正**: 排查中曾用 `tools/list` 原始 JSON 字节数排序，得出「`notion-query-data-sources` 77.8KB 是大头」——**完全错误**。实测该工具仅 **630 token**（跌出前十），而 `notion-update-page`（15.7KB）实为 1.8k token（第一）。原因：原始 JSON 含完整 JSON Schema，模型收到的是精简渲染版，单站 232KB 原始 JSON ≈ 仅 18.5k token（约 6 倍差距）。**铁律：判断 MCP 开销用 `/context` 实测，勿用字节数换算。**
+- **A/B 实证**: `ENABLE_TOOL_SEARCH` 设 `true` / `false` 两次重启后 `/context` **均为 57.3k / 168**，完全一致 → Tool Search 在本环境被 `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` 挡住，设置无效（`~/.claude/settings.json` 已还原）。不建议为它动该变量：收益仅约 4.8%，风险是会话起不来。
+- **结论**: 不做进一步减压。保留 `--ignore-tool` 裁掉计划不可用的 3 个工具（约省 1.4k/站，纯赚）。
 - **更新**: [notion-mcp-setup.md](notion-mcp-setup.md) — 新增「三、多工作区并存」小节。Notion 托管 MCP 一次 OAuth 只绑定一个工作区；用 `MCP_REMOTE_CONFIG_DIR` 给其中一个 Server 指独立凭证目录即可并存多个工作区。代码级依据（mcp-remote v0.14.2）：`const baseConfigDir = process.env.MCP_REMOTE_CONFIG_DIR || path.join(os.homedir(), ".mcp-auth")`。**未给 Notion 授权服务器发送任何额外参数，零兼容风险。**
 - **排除**: 不用 `--resource` 做区分。它虽参与 token 缓存 hash（`getServerUrlHash(serverUrl, authorizeResource, headers, authorizeParams, clientMetadataUrl, tokenEndpoint)`），但 Notion 的 `oauth-protected-resource` 明确发布 `{"resource":"https://mcp.notion.com"}` 并对其校验，传非标准值有 `invalid_target` 风险。
 - **落地**: 3P 配置 `mcpServers` 现为 `playwright` / `fac` / `tavily-mcp` / `notion-company` / `notion-personal`；`notion-company` 复用已有 token（免重新授权），`notion-personal` 走独立凭证目录需首次 OAuth。

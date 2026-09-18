@@ -212,6 +212,60 @@ function getServerUrlHash(serverUrl, authorizeResource, headers, authorizeParams
 
 ---
 
+## 五、上下文开销实测与减压结论
+
+### 实测 ground truth（`/context`）
+
+168 个 MCP 工具 = **57.3k token**，占 1M 上下文 **5.7%**：
+
+| Server | 工具数 | token | 占比 |
+|---|---|---|---|
+| `notion-company` | 41 | ~18.5k | 32% |
+| `notion-personal` | 41 | ~18.5k | 32% |
+| `Claude_in_Chrome` | 24 | ~7.0k | 12% |
+| `playwright` | 26 | ~4.4k | 8% |
+| `fac` | 17 | ~4.0k | 7% |
+| `Claude_Preview` | 13 | ~2.1k | 4% |
+| `scheduled-tasks` / `ccd_*` / `tavily-mcp` | 7 | ~3.2k | 5% |
+
+**两个 Notion 站合计 37k = 1M 上下文的 3.7%** —— 不构成问题，且 free space 仍有 88%。
+
+### ⚠️ 方法论教训：`tools/list` 的 JSON 字节数 ≠ 上下文 token 数
+
+排查时曾用原始 `tools/list` JSON 的字节数排序，得出「`notion-query-data-sources` 占 77.8KB 是大头」的结论 —— **完全错误**。两者排序对不上：
+
+| 工具 | 原始 JSON | 实际 token | 名次变化 |
+|---|---|---|---|
+| `notion-query-data-sources` | 77.8 KB（第 1） | **630**（跌出前十） | ↓↓↓ |
+| `notion-update-page` | 15.7 KB（第 4） | **1.8k**（第 1） | ↑ |
+| `notion-create-pages` | 13.9 KB（第 5） | 1.5k（第 2） | ↑ |
+| `notion-search` | 6.3 KB（第 9） | 1.3k（第 3） | ↑ |
+
+原因：原始 JSON 里每个参数都带完整 JSON Schema，而模型实际收到的是**精简渲染版**。单站 232 KB 原始 JSON 换算成上下文只有 **~18.5k token**（约 6 倍差距）。
+
+> **铁律**：判断 MCP 上下文开销，用 `/context` 的实测 token，**不要用 `tools/list` 的字节数换算**。
+
+### Tool Search 在本环境不可用（已 A/B 验证）
+
+Claude Code v2.1.7+ 的 MCP Tool Search（按需加载工具 schema，官方称省 85%）在 `ANTHROPIC_BASE_URL` 指向非官方主机时**默认关闭**，且是**客户端侧判断**（请求还没发到代理就决定了，代理 header 改不回来）。v2.1.72 起可通过 `ENABLE_TOOL_SEARCH` 强制启用。
+
+**本环境实测无效**：
+
+| `ENABLE_TOOL_SEARCH` | MCP tools |
+|---|---|
+| `true` | 57.3k / 168 |
+| `false` | 57.3k / 168 |
+
+两次完全一致 → 被 `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` 挡住（该变量大概率是刻意设的，DeepSeek 代理 `api.vilavi.cn` 可能不支持 beta header）。**不建议为它去动这个变量** —— 收益仅 ~4.8%（57.3k 的 85%），风险是会话起不来。
+
+### 结论
+
+- **不做进一步减压**。37k / 1M = 3.7%，加上缓存按 ~10% 计价，钱和窗口都不构成问题
+- 保留 `--ignore-tool` 裁掉计划不可用的 3 个工具（`notion-ai-search` / `notion-query-meeting-notes` / `notion-query-multiple-data-sources`），约省 1.4k/站，纯赚（本来调用就会失败）
+- 若将来移到官方 `api.anthropic.com` 或去掉 `DISABLE_EXPERIMENTAL_BETAS`，可重新评估 Tool Search
+
+---
+
 ## 相关文档
 
 - [docs/fac-mcp-setup.md](../fac-mcp-setup.md) — FAC MCP 部署（3P 路径 + mcp-remote 桥接 + 本次更正）
