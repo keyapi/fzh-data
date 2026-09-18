@@ -32,6 +32,7 @@ venv/
 !.env.sample
 !.env.template
 secrets/*.json
+secrets/*.md
 *.cookie.txt
 cookie.txt
 **/docs/api-reference/llms_parsed.json

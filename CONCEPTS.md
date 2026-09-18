@@ -102,7 +102,9 @@ SQLite BEGIN IMMEDIATE 事务内完成活跃标签/操作冲突检查、generati
 ## Development Environment
 
 ### 3P 模式 (Third-Party Provider Mode)
-Claude Desktop 的第三方 API 模式，允许连接非 Anthropic 模型（如 DeepSeek）。此模式有独立的配置文件路径 `Claude-3p\claude_desktop_config.json`（区别于普通模式的 `Claude\` 路径），配置中包含 `"deploymentMode": "3p"` 字段。MCP 服务器的配置格式与普通模式相同。
+Claude Desktop 的第三方 API 模式，允许连接非 Anthropic 模型（如 DeepSeek）。
+
+此模式与普通模式**各有独立的配置文件**，互不影响 —— 改错文件会**静默无效**（不报错，只是不生效）。MCP 服务器的**配置格式两种模式相同**，差异只在文件位置；具体路径见《MCP 选型与安装指南》。
 
 ### 凭证在父仓库不在 worktree
 本项目常开 git worktree（`.claude/worktrees/...`）。gitignore 的凭证只存在于**父仓库** `D:\Work\赛狐\Cursor`：`EN_API/.env`（生产 ERPNext API）、`tongtool_api/.env`（通途 MCP）、`secrets/gsheets-service-account.json`（Google Sheet gspread）。worktree 里找不到这些文件；跑脚本要把相关 env 指到父仓库路径（如 `GSPREAD_SERVICE_ACCOUNT_FILE=D:\Work\赛狐\Cursor\secrets\gsheets-service-account.json`），或从父仓库 cwd 运行。
