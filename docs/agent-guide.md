@@ -111,3 +111,4 @@ N = M + K + J + F（如有差数，在备注中解释）
 - **开发环境** (Lesson 8, 22, 54, 55, 57, 58)：见本文档各节
 - **MCP 工具配置** (Lesson 61)：FAC MCP 部署（OAuth + mcp-remote 桥接），见 [docs/fac-mcp-setup.md](fac-mcp-setup.md)
 - **FAC 实战踩坑** (Lesson 62-66)：已提交单据限制、中文 DocType、自定义报表 filter 发现、Issue 提交流程，见 [docs/fac-dev-notes.md](fac-dev-notes.md)
+- **Notion MCP 接入 + 3P 断言核查** (Lesson 67)：Notion 托管 MCP 走 `mcp-remote`（需 OAuth）；并更正「3P 不支持 `url` 字段」这一未复验断言，见 [docs/lessons/notion-mcp-setup.md](lessons/notion-mcp-setup.md)

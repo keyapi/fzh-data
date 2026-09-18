@@ -102,7 +102,9 @@ SQLite BEGIN IMMEDIATE 事务内完成活跃标签/操作冲突检查、generati
 ## Development Environment
 
 ### 3P 模式 (Third-Party Provider Mode)
-Claude Desktop 的第三方 API 模式，允许连接非 Anthropic 模型（如 DeepSeek）。此模式有独立的配置文件路径 `Claude-3p\claude_desktop_config.json`（区别于普通模式的 `Claude\` 路径），配置中包含 `"deploymentMode": "3p"` 字段。MCP 服务器的配置格式与普通模式相同。
+Claude Desktop 的第三方 API 模式，允许连接非 Anthropic 模型（如 DeepSeek）。
+
+此模式与普通模式**各有独立的配置文件**，互不影响 —— 改错文件会**静默无效**（不报错，只是不生效）。MCP 服务器的**配置格式两种模式相同**，差异只在文件位置；具体路径见《MCP 选型与安装指南》。
 
 ### 凭证在父仓库不在 worktree
 本项目常开 git worktree（`.claude/worktrees/...`）。gitignore 的凭证只存在于**父仓库** `D:\Work\赛狐\Cursor`：`EN_API/.env`（生产 ERPNext API）、`tongtool_api/.env`（通途 MCP）、`secrets/gsheets-service-account.json`（Google Sheet gspread）。worktree 里找不到这些文件；跑脚本要把相关 env 指到父仓库路径（如 `GSPREAD_SERVICE_ACCOUNT_FILE=D:\Work\赛狐\Cursor\secrets\gsheets-service-account.json`），或从父仓库 cwd 运行。
@@ -189,6 +191,9 @@ ERPNext 用原生 Product Bundle 表示组合销售对象；work_order_task 扩�
 
 ### 赛狐加工 SKU
 赛狐商品类型 `isGroup=2`。加工 SKU 有自身库存，支持 `needAssembleProcess`、`processCost` 和 `childSkus`，库存流水里有加工单/拆分单事件。取消“开启加工过程”只缩短状态流，不等于无库存别名。适合未来赛狐接管库存且需要 `PK#` 独立库存时评估；当前通途/赛狐并行阶段不默认启用。
+
+### 赛狐 Apifox API 文档镜像
+密码保护的赛狐开放平台文档站（Apifox）在本地的 Markdown 快照，按模块三级目录存放，附 `llms.txt` 索引。用于 Agent 离线查端点 schema。刷新须浏览器登录拿 Cookie 再跑下载脚本；密钥只在本机环境变量，不进仓库。镜像只能证明文档是否更新，不能单独证明线上接口行为。
 
 ### 库存事实源（Inventory Source of Truth）
 多个系统都展示库存时，被选为校准基准的系统。当前通途/赛狐并行期，三角类分公司普通仓以通途为事实源，定期只校准赛狐底层 `KS`。同步必须处理“赛狐订单已扣、通途尚未标记发货”的时间差，避免旧快照把库存加回。FBA、退货仓和不良品仓不因 SKU 相同自动加入共享池。库存事实源不等于利润事实源：皮壳 Listing 的利润仍以 EN Tongtool Cost Review 为准。

@@ -18,6 +18,10 @@ Agent 参考（OKF 文档见 [docs/index.md](docs/index.md)；`click-based/AGENT
 - 凭据只放 `web_automation/.env`（gitignored）→ `TONGTU_USER`/`TONGTU_PASSWORD`（通途），绝不入库。
 - 持久化登录 cookie：`web_automation/chrome-profile/`（gitignored）。登录识别：body 含 `编号：`。
 - OCR 不可用自动降级半自动：自动填账号密码，验证码留人工在窗口输入。
+- **浏览器启动**：统一走 `legacy-compatible/browser_launch.py`（通途族已迁移）。本机 bundled
+  chromium **有头**模式起不来（`spawn UNKNOWN` / 沙箱 `拒绝访问 0x5`），用环境变量切系统 Chrome：
+  `WEB_AUTOMATION_BROWSER_CHANNEL=chrome`（可选 `WEB_AUTOMATION_HEADLESS=1/0`）。
+  两个变量都不设时行为与原生一致。详见 [docs/reference/browser-launch.md](docs/reference/browser-launch.md)。
 
 ## 常用任务（dispatcher-first）
 
@@ -44,11 +48,12 @@ Agent 参考（OKF 文档见 [docs/index.md](docs/index.md)；`click-based/AGENT
 
 - 日期域 My97：`.fill()` 后**勿按 Enter**（整页刷新重置）；填值弹出日历 iframe 会拦截点击 → 需先关闭。
 - 「查询」`a[onclick='queryInfo()']` 只在 **数据查询** tab 可见 → 先切 tab。
-- 统计页结果不自动刷新 → 提交后往返 数据查询/统计导出 两 tab 轮询。
+- 统计页结果不自动刷新 → 脚本**先读后切**：未锁定/未完成才往返 数据查询/统计导出 两 tab 刷新。
 - 下载结果识别：按**最上行 = 本次提交**锚定（历史表按提交时间倒序）。数据表是 header（含「统计条件」th）后 `following::table[1]`，非 sibling；首行空 spacer 须跳过；行文本最后一个 datetime = 提交时间。提交前记最上行提交时间 → 提交后往返 tab → 最上行提交时间一变即锁本次行 → 等该行下载链接。
 - 文件名自带（不信 suggested_filename 的 GBK）。
 - 「查询」失败必须中止（`FAILURE_CODE=QUERY_FAILED`），勿带默认日期继续提交。
 - 统计任务提交互斥（生成中不能再提交）；非互斥打不开弹窗用 `SUBMIT_FAILED`。
+- **限流与复用**：短时间反复生成会被限流；脚本默认复用「今日同范围已完成」结果（`--no-reuse` 强制新生成）；提交后 90s 内最上行未变新 → `RATE_LIMITED`/`NO_NEW_JOB` 退出（不死等）。
 
 ## 文档指针
 

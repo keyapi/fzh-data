@@ -229,6 +229,9 @@ components:
         skcId:
           type: string
           description: 接口返回的产品的productSkcId
+        spuId:
+          type: string
+          description: 父体（SPU ID）
         extCode:
           type: string
           description: skc维度的货号
@@ -255,6 +258,7 @@ components:
         - marketplaceName
         - trusteeship
         - skcId
+        - spuId
         - extCode
         - productName
         - matchJitMode
