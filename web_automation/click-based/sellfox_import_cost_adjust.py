@@ -24,9 +24,11 @@ sellfox_import_cost_adjust.py
   - 登录态存在 web_automation/sellfox-profile（与 MCP 共享浏览器无关）。
     配了 SELLFOX_USER/SELLFOX_PASSWORD 会先走 ddddocr 自动登录，否则打开登录页等人工登录(300s)。
 """
+import json
 import os
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 
 sys.stdout.reconfigure(encoding="utf-8")
@@ -154,6 +156,128 @@ def _goto_adjust_page(page):
     if "adjust" not in page.evaluate("() => location.href"):
         page.goto(PAGE_URL, timeout=30000)
         page.wait_for_timeout(5000)
+
+
+def _file_skus(filepath: Path) -> set[str]:
+    """读导入文件里出现的 SKU（两种模板列名都是 *SKU）。"""
+    try:
+        import openpyxl
+
+        wb = openpyxl.load_workbook(filepath, read_only=True)
+        ws = wb.worksheets[0]
+        rows = ws.iter_rows(values_only=True)
+        header = next(rows, None) or ()
+        idx = None
+        for i, h in enumerate(header):
+            if h is not None and str(h).strip().lstrip("*") == "SKU":
+                idx = i
+                break
+        if idx is None:
+            return set()
+        return {str(r[idx]).strip() for r in rows if r and len(r) > idx and r[idx]}
+    except Exception as e:
+        print(f"  [!] 读 SKU 失败（跳过审核定位）: {e}")
+        return set()
+
+
+def _pending_adjustments(page, skus: set[str], since_date: str) -> list[dict]:
+    """查「待审核」的成本补录单，返回与本次导入 SKU 有交集的。
+
+    用页面同款私有接口 pageList.json（只读，且与浏览器上下文共享 cookie）。
+    这是**读**操作；写操作用 UI 点击完成，符合 contract: ui 的约定。
+
+    坑：`createTimeStart` **只接受日期**（`YYYY-MM-DD`）。带时分秒会返回
+    `code=500 系统异常`，看起来像"查不到"。
+    """
+    def query(body):
+        try:
+            resp = page.request.post(
+                "https://www.sellfox.com/api/fba/cost/adjustment/pageList.json",
+                data=json.dumps(body),
+                headers={"Content-Type": "application/json"},
+                timeout=20000,
+            )
+            j = resp.json()
+            if j.get("code") != 0:
+                print(f"  [!] pageList 返回 code={j.get('code')} msg={j.get('msg')}")
+                return []
+            return (j.get("data") or {}).get("rows") or []
+        except Exception as e:
+            print(f"  [!] 查待审核补录单失败: {e}")
+            return []
+
+    rows = query({"pageNo": 1, "pageSize": 50, "status": "to_audit",
+                  "createTimeStart": since_date, "createTimeEnd": "2099-12-31"})
+    if not rows:
+        # 兜底：不带时间范围（status=待审核 + SKU 交集已足够收敛）
+        rows = query({"pageNo": 1, "pageSize": 50, "status": "to_audit"})
+
+    out = []
+    for r in rows:
+        item_skus = {str(it.get("commoditySku", "")).strip() for it in (r.get("items") or [])}
+        if item_skus & skus:
+            # 坑：主键字段名是 adjustId（不是 id）；详情页 URL 用 adjustId
+            out.append({"adjustSn": r.get("adjustSn"), "id": r.get("adjustId") or r.get("id"),
+                        "createTime": r.get("createTime"), "adjustType": r.get("adjustType"),
+                        "skus": sorted(item_skus & skus)})
+    return out
+
+
+def _adjustment_status(page, adjust_sn: str) -> str | None:
+    """查单张补录单当前状态（用于审核后复核）。"""
+    try:
+        resp = page.request.post(
+            "https://www.sellfox.com/api/fba/cost/adjustment/pageList.json",
+            data=json.dumps({"pageNo": 1, "pageSize": 50, "status": ""}),
+            headers={"Content-Type": "application/json"},
+            timeout=20000,
+        )
+        for r in ((resp.json().get("data") or {}).get("rows") or []):
+            if r.get("adjustSn") == adjust_sn:
+                return r.get("status")
+    except Exception:
+        pass
+    return None
+
+
+def approve_adjustment(page, adj: dict) -> tuple[bool, str | None]:
+    """打开补录单详情 → 审核通过 → 确定 → 复核状态。返回 (是否点成功, 最终状态)。"""
+    detail_url = ("https://www.sellfox.com/amzup-web-main/web/fba/adjust/DetailCostSupplement/index.html"
+                  f"?user=isShowDetail&pageName=Adjustment&pageFrom=Adjustment&id={adj['id']}")
+    page.goto(detail_url, timeout=30000)
+    page.wait_for_timeout(5000)
+    _dismiss_blocking_dialogs(page)
+
+    clicked = page.evaluate(
+        """() => {
+            for (const b of document.querySelectorAll('button,.el-button')) {
+                if (b.getBoundingClientRect().width > 0 && (b.innerText||'').trim() === '审核通过') {
+                    b.click(); return 'clicked';
+                }
+            }
+            return 'audit-button-not-found';
+        }"""
+    )
+    if clicked != "clicked":
+        print(f"    [!] 未找到「审核通过」按钮: {clicked}")
+        return False, None
+    page.wait_for_timeout(2500)
+
+    # 确认弹窗「确认审核通过?」—— Element UI message-box 必须真实点击
+    try:
+        confirm = page.locator(".el-message-box:visible button:has-text('确定')").first
+        if confirm.count():
+            confirm.click(timeout=8000)
+        else:
+            print("    [!] 未见确认弹窗")
+            return False, None
+    except Exception as e:
+        print(f"    [!] 点确定失败: {e}")
+        return False, None
+    page.wait_for_timeout(4000)
+
+    status = _adjustment_status(page, adj["adjustSn"])
+    return True, status
 
 
 def import_one_file(page, filepath: Path) -> dict:
@@ -329,10 +453,37 @@ def import_one_file(page, filepath: Path) -> dict:
     return {"file": filepath.name, "success": success_count, "fail": fail_count}
 
 
+def approve_for_file(page, filepath: Path, since_date: str, do_approve: bool) -> dict:
+    """导入成功后，把本次产生的补录单审核通过（导入 ≠ 生效，必须审核）。"""
+    if not do_approve:
+        return {"approve": "skipped"}
+    skus = _file_skus(filepath)
+    if not skus:
+        return {"approve": "no-sku"}
+    pending = _pending_adjustments(page, skus, since_date)
+    if not pending:
+        print("  审核: 没有找到本次导入的「待审核」补录单")
+        return {"approve": "not-found"}
+    approved, failed = [], []
+    for adj in pending:
+        print(f"  审核: {adj['adjustSn']} (id={adj['id']}, {','.join(adj['skus'])}) ...")
+        ok, status = approve_adjustment(page, adj)
+        if ok and status == "has_passed":
+            print(f"    [OK] {adj['adjustSn']} 已审核通过（status={status}）")
+            approved.append(adj["adjustSn"])
+        else:
+            print(f"    [!] {adj['adjustSn']} 审核未生效（点击ok={ok}, status={status}）")
+            failed.append(adj["adjustSn"])
+    if approved and not failed:
+        return {"approve": approved}
+    return {"approve": f"approved={approved} failed={failed}"}
+
+
 def main():
     fresh = "--fresh" in sys.argv
     headless = "--headless" in sys.argv
-    args = [a for a in sys.argv[1:] if a not in ("--fresh", "--headless")]
+    do_approve = "--no-approve" not in sys.argv
+    args = [a for a in sys.argv[1:] if a not in ("--fresh", "--headless", "--no-approve")]
 
     if args and not args[0].startswith("--"):
         files = [Path(a).resolve() for a in args]
@@ -385,22 +536,45 @@ def main():
                 print(f"\n[跳过] 文件不存在: {fp}")
                 results.append({"file": fp.name, "success": 0, "fail": "not found"})
                 continue
-            results.append(import_one_file(page, fp))
+            # 记录导入日期，用于定位本次产生的「待审核」补录单
+            # （坑：pageList 的 createTimeStart 只接受日期，带时分秒会 code=500）
+            started_date = datetime.now().strftime("%Y-%m-%d")
+            r = import_one_file(page, fp)
+            if isinstance(r.get("success"), int) and r["success"] > 0:
+                r.update(approve_for_file(page, fp, started_date, do_approve))
+            elif r.get("success") != "unknown":
+                r["approve"] = "skipped-no-success"
+            results.append(r)
 
         print(f"\n{'=' * 50}")
         print("导入汇总")
         print(f"{'=' * 50}")
         total_ok = total_fail = 0
         for r in results:
-            if isinstance(r.get("success"), int) and isinstance(r.get("fail"), int) and r["fail"] == 0:
-                print(f"  ✓ 成功{r['success']}条  {r['file']}")
+            ap = r.get("approve")
+            if isinstance(ap, list):
+                ap_txt = f" 已审核通过 {', '.join(ap)}"
+            elif ap == "skipped":
+                ap_txt = " (未审核: --no-approve)"
+            elif ap == "not-found":
+                ap_txt = " (未找到待审核补录单)"
+            elif ap == "skipped-no-success":
+                ap_txt = ""
+            elif ap:
+                ap_txt = f" (审核: {ap})"
             else:
-                print(f"  ✗ {r['file']}: 成功{r.get('success')} / {r.get('fail')}")
+                ap_txt = ""
+            if isinstance(r.get("success"), int) and isinstance(r.get("fail"), int) and r["fail"] == 0:
+                print(f"  ✓ 成功{r['success']}条{ap_txt}  {r['file']}")
+            else:
+                print(f"  ✗ {r['file']}: 成功{r.get('success')} / {r.get('fail')}{ap_txt}")
             if isinstance(r.get("success"), int):
                 total_ok += r["success"]
             if isinstance(r.get("fail"), int):
                 total_fail += r["fail"]
         print(f"\n合计: 成功{total_ok}条, 失败{total_fail}条")
+        if not do_approve:
+            print("[提醒] 用了 --no-approve：补录单停在「待审核」，不会改库存成本。")
         print("\n关闭浏览器...")
         context.close()
 

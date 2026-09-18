@@ -191,6 +191,25 @@ Playwright click 超时 (element not visible) → 使用 `page.evaluate("item.cl
 
 两条路都行，不必清零重入。
 
+### 补录单相关私有接口的两个坑（自动化必踩）
+
+`POST /api/fba/cost/adjustment/pageList.json`（查列表）：
+
+- **`createTimeStart` 只接受日期 `YYYY-MM-DD`**。传 `"2026-09-18 13:55:12"` 会返回
+  `code=500 系统异常，请联系管理员！`，看起来像「查不到数据」，实际是参数被拒。
+- **主键字段是 `adjustId`，不是 `id`**。补录单详情页 URL 用 `adjustId`：
+  `/web/fba/adjust/DetailCostSupplement/index.html?...&id=<adjustId>`。
+  写成 `row["id"]` 会得到 `id=undefined`，页面打不开。
+- `status` 取值：`to_audit` / `has_passed` / `has_rejected`。
+- 该接口在页面上下文可用 `page.request.post(...)` 直接调（与浏览器共享 cookie）。
+  微前端沙箱里 `fetch` / `XMLHttpRequest` 时有时无，用 `page.request` 更稳。
+
+### 导入成功 ≠ 生效
+
+`sellfox.cost-adjust.import` 导入完只是落库为「待审核」。脚本 `approve_for_file()`
+会在导入后按 **文件里的 SKU × status=待审核** 反查本次产生的补录单并逐张审核，
+审核后用同一接口复核 `status == has_passed` 才算成功；`--no-approve` 可关掉这步。
+
 ## Element UI checkbox
 
 `cb.click()` 在 evaluate 中不改变 Vue 组件状态 → 必须用 Playwright `page.locator().click()` 真实点击。
