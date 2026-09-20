@@ -8,6 +8,11 @@ tags: [amazon, advertising, changelog]
 
 # 变更日志
 
+## 2026-09-20
+
+- **修复（链接）**：`specs/2026-07-02-ad-analysis-master-plan.md` 指向 `SELLFOX_API` 的链接由 `../../` → `../../../`；`research/2026-07-28-report-verify/{index,field-meanings-and-d1}.md` 指向 `ai_access_poc` 的由 `../../../` → `../../../../`。
+- **标注**：`specs/2026-07-02-ad-analysis-master-plan.md` 中「Amazon 广告最佳实践 2026」所指 `research/amazon-ads-best-practices-2026.md` 从未创建，改为非链接文本并标注「未撰写」。
+
 ## 2026-07-28
 
 - **SP7 独立复验（BJRYECLTD-US）**：Proxy 重拉 7 表全部成功；列对账与 analyze 验证包见 `docs/research/2026-07-28-report-verify/`；产物 `out/verify_2026-07-28/`。

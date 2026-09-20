@@ -41,5 +41,5 @@ BOM成本列表 → 去重保留末行 → 计算绍兴发货成本(皮壳/半�
 
 ## 参考
 
-- [给人看的 README](../../item_cost_sx/README.md)
-- [Agent 详细参考](../../item_cost_sx/AGENT_HANDOFF.md) — 成本计算公式、同前缀借用详则、命令行参数、函数表
+- [给人看的 README](../../../item_cost_sx/README.md)
+- [Agent 详细参考](../../../item_cost_sx/AGENT_HANDOFF.md) — 成本计算公式、同前缀借用详则、命令行参数、函数表

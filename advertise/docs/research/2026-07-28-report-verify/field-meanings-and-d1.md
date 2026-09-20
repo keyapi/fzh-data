@@ -59,4 +59,4 @@ sources:
 
 - 项目内：`advertise/docs/reference/sp-report-column-reference.md`  
 - 项目内：`advertise/docs/reference/amazon-official-docs/field-definitions-quick-reference.md`  
-- 缺口矩阵：[`phase2-dataset-gap.md`](../../../ai_access_poc/board/docs/specs/phase2-dataset-gap.md)
+- 缺口矩阵：[`phase2-dataset-gap.md`](../../../../ai_access_poc/board/docs/specs/phase2-dataset-gap.md)

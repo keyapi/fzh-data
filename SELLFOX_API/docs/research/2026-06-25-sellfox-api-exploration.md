@@ -188,7 +188,7 @@ const text = await page.evaluate(() => document.body.innerText);
 4. **确认数据范围** — 历史数据可回溯天数、刷新频率
 
 ## See also
-- [赛狐 API 实践指南](../reference/2026-sellfox-api-guide.md)
+- 赛狐 API 实践指南（未撰写）
 - [赛狐接入踩坑记录](../lessons/2026-06-25-sellfox-integration-lessons.md)
-- [SP-API 开发者模型](../reference/2026-sp-api-developer-model.md)
-- [多账号防关联安全](../reference/2026-security-multi-account.md)
+- SP-API 开发者模型（未撰写；见踩坑记录 Lesson 9）
+- 多账号防关联安全（未撰写；见踩坑记录 Lesson 8）

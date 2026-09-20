@@ -154,8 +154,8 @@ VALUES
 
 ## Related
 
-- [AGENT_HANDOFF.md (US Proxy)](../../us_openai_api_proxy/AGENT_HANDOFF.md) — CLIProxyAPI 上游渠道
-- [AGENT_HANDOFF.md (new-api)](../../new-api-deployment/AGENT_HANDOFF.md) — 订阅套餐和配额文档
+- [AGENT_HANDOFF.md (US Proxy)](../../../us_openai_api_proxy/AGENT_HANDOFF.md) — CLIProxyAPI 上游渠道
+- [AGENT_HANDOFF.md (new-api)](../../../new-api-deployment/AGENT_HANDOFF.md) — 订阅套餐和配额文档
 - [sync_pricing.py](../../new-api-deployment/sync_pricing.py) — ModelRatio 计算脚本
 - [oidc-bridge/main.py](../../new-api-dingtalk-oidc/main.py) — OIDC Bridge 源码
 - [auto-bind-subscription.py](../../new-api-deployment/auto-bind-subscription.py) — 自动绑套餐脚本
