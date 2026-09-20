@@ -2,7 +2,8 @@
 
 ## 2026-09-20
 
-- **修复（链接）**：`README.md` 中 `docs/reference/`、`docs/test-guide/` 两个目录没有 `index.md`，链接改为指向目录本身；`carriers/index.md` 中 7 条指向从未创建的 `endpoints*.md` 的链接改为对应承运商的 `overview.md`（端点表实际就写在 overview 内）。
+- **补齐索引**：新建 `reference/index.md` 与 `test-guide/index.md`（OKF v0.1 `type: Index`）。`README.md` 中指向这两处的链接（`docs/reference/index.md`、`docs/test-guide/index.md`）**恢复有效** —— 此前因目标文件从未创建，只能退而链接目录本身。
+- **修复（链接）**：`carriers/index.md` 中 7 条指向从未创建的 `endpoints*.md` 的链接改为对应承运商的 `overview.md`（端点表实际写在 overview 内，含「端点（国内）」「端点（国际）」两节）。
 
 ## 2026-07-20
 
