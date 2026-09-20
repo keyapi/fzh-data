@@ -39,5 +39,5 @@ EN物料属性(款式ID→赛狐分类 map) + 赛狐分类导出(末级名→4�
 
 ## 参考
 
-- [给人看的 README](../../category/README.md)
-- [Agent 详细参考](../../category/AGENT_HANDOFF.md) — CategoryIndex 类、核心函数、状态码、数据路径
+- [给人看的 README](../../../category/README.md)
+- [Agent 详细参考](../../../category/AGENT_HANDOFF.md) — CategoryIndex 类、核心函数、状态码、数据路径

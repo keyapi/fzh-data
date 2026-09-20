@@ -32,7 +32,7 @@ metadata:
   - `useCustomProtocol` 必须 `false`。`true` = URL 原样透传，会打不到 `/chat/completions` → 发消息只回「任务完成」无正文。
 - 模型名 `deepseek-v4-flash` 生产渠道可用；历史名 `deepseek-chat` 无渠道会 503。
 - WorkBuddy 内部用 `custom-local:` 前缀但在发请求时会自动剥掉，配置里**不要**写 `custom-local:`。
-- 现象对照与兜底见 [配置文档](docs/solutions/developer-experience/workbuddy-custom-model-newapi-config.md)。
+- 现象对照与兜底见 [配置文档](../../../docs/solutions/developer-experience/workbuddy-custom-model-newapi-config.md)。
 
 ## 执行流程
 
@@ -101,5 +101,5 @@ curl.exe -s -w "\nHTTP:%{http_code}" -X POST https://api.vilavi.cn/v1/chat/compl
 
 ## 相关
 
-- [WorkBuddy 配置文档](docs/solutions/developer-experience/workbuddy-custom-model-newapi-config.md) — 现象对照表 + 兜底
-- 勿混淆 Codex++/Codex Desktop（[codex-desktop-setup-guide.md](docs/codex-desktop-setup-guide.md)），那是另一套「供应商配置」体系
+- [WorkBuddy 配置文档](../../../docs/solutions/developer-experience/workbuddy-custom-model-newapi-config.md) — 现象对照表 + 兜底
+- 勿混淆 Codex++/Codex Desktop（[codex-desktop-setup-guide.md](../../../docs/codex-desktop-setup-guide.md)），那是另一套「供应商配置」体系

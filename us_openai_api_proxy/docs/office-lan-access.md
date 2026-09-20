@@ -308,7 +308,7 @@ uci commit && /etc/init.d/firewall restart
 | 深圳/外网备用（推荐） | `https://nas.daneey.com:11024/`、`https://nas.vilavi.cn:11024/` |
 | 办公室直连书签 | 同上或 `https://fzh.myds.me:11024/` |
 
-完整架构、证书铁律与未决项见 [NAS_API/docs/reference/nas-multi-domain-access.md](../../../NAS_API/docs/reference/nas-multi-domain-access.md)。
+完整架构、证书铁律与未决项见 [NAS_API/docs/reference/nas-multi-domain-access.md](../../NAS_API/docs/reference/nas-multi-domain-access.md)。
 
 ## 见也
 

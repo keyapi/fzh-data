@@ -8,6 +8,11 @@ tags: [sellfox, api-proxy, gateway, log]
 
 # 变更日志
 
+## 2026-09-20
+
+- **修复（链接）**：`lessons/index.md`、`reference/index.md` 指向 `SELLFOX_API/` 的 6 条链接少退一级，由 `../../` → `../../../`。
+- **标注**：`specs/index.md` 原链接指向仓库外的 `~/.claude/plans/api-app-quirky-metcalfe.md`（无法以仓库内相对路径引用），改为行内代码标注。
+
 ## 2026-09-08
 
 - **已部署 + bridge 挂载打通（实测）**: `offboarding-check.py` 覆盖 `/opt/new-api/`；bridge 重建后

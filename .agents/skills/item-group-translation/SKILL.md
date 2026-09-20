@@ -32,8 +32,8 @@ uv run python translate_item_group_names.py --apply   # 需用户确认
 
 ## 必读
 
-1. [`EN_API/AGENT_HANDOFF_物料组翻译.md`](../../EN_API/AGENT_HANDOFF_物料组翻译.md)
-2. [`docs/solutions/tooling-decisions/en-item-group-tencent-tmt-translation.md`](../../docs/solutions/tooling-decisions/en-item-group-tencent-tmt-translation.md)
+1. [`EN_API/AGENT_HANDOFF_物料组翻译.md`](../../../EN_API/AGENT_HANDOFF_物料组翻译.md)
+2. [`docs/solutions/tooling-decisions/en-item-group-tencent-tmt-translation.md`](../../../docs/solutions/tooling-decisions/en-item-group-tencent-tmt-translation.md)
 
 ## 铁律
 

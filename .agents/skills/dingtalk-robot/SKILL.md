@@ -69,6 +69,6 @@ ERP_API_SECRET     — ERPNext API Secret (仅文件附件需要)
 
 ## 参考
 
-- [给人看的 README](../../dingtalk/dingtalk_robot/README.md)
-- [Agent 详细参考](../../dingtalk/dingtalk_robot/AGENT_HANDOFF.md)
-- [同事操作手册](../../dingtalk/dingtalk_robot/钉钉自定义机器人配置指引_给同事.md)
+- [给人看的 README](../../../dingtalk/dingtalk_robot/README.md)
+- [Agent 详细参考](../../../dingtalk/dingtalk_robot/AGENT_HANDOFF.md)
+- [同事操作手册](../../../dingtalk/dingtalk_robot/钉钉自定义机器人配置指引_给同事.md)
