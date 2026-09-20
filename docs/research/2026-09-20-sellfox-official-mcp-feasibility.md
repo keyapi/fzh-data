@@ -169,6 +169,7 @@ timestamp: 2026-09-20
 
 **仓库内相关**
 
+- **`sellfox_mcp/`** —— **本文的落地模块**：可复现的只读探测脚本 [`scripts/probe_mcp.py`](../../sellfox_mcp/scripts/probe_mcp.py)（带写操作护栏）+ 完整操作参考 [`docs/reference/official-mcp.md`](../../sellfox_mcp/docs/reference/official-mcp.md)
 - `SELLFOX_API/docs/api-reference/` —— 443 篇端点文档（09-17 刷新）+ `llms.txt` / `llms_parsed.json`
 - `sellfox-api-proxy/` —— 自有 VPS 代理（catch-all 443 端点，签发自己的 key）
 - `sellfox_shipping/mcp_tools.py` —— 现有 FastMCP 骨架（仅发货域，7 工具）
