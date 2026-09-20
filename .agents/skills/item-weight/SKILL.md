@@ -41,5 +41,5 @@ python build_saihu_weight_import.py
 
 ## 参考
 
-- [给人看的 README](../../item_weight_size/README.md)
-- [Agent 详细参考](../../item_weight_size/AGENT_HANDOFF.md) — MappedRow 数据类、字段映射全表、校验规则、列名常量
+- [给人看的 README](../../../item_weight_size/README.md)
+- [Agent 详细参考](../../../item_weight_size/AGENT_HANDOFF.md) — MappedRow 数据类、字段映射全表、校验规则、列名常量

@@ -16,9 +16,9 @@ description: |
 
 ## 必读
 
-1. [NAS_API/AGENT_HANDOFF.md](../../NAS_API/AGENT_HANDOFF.md) — 速查表与铁律
-2. [NAS_API/docs/reference/nas-multi-domain-access.md](../../NAS_API/docs/reference/nas-multi-domain-access.md) — 完整参考
-3. [docs/solutions/integration-issues/nas-multi-domain-access-openwrt-quickconnect.md](../../docs/solutions/integration-issues/nas-multi-domain-access-openwrt-quickconnect.md) — 问题/解法记录
+1. [NAS_API/AGENT_HANDOFF.md](../../../NAS_API/AGENT_HANDOFF.md) — 速查表与铁律
+2. [NAS_API/docs/reference/nas-multi-domain-access.md](../../../NAS_API/docs/reference/nas-multi-domain-access.md) — 完整参考
+3. [docs/solutions/integration-issues/nas-multi-domain-access-openwrt-quickconnect.md](../../../docs/solutions/integration-issues/nas-multi-domain-access-openwrt-quickconnect.md) — 问题/解法记录
 
 ## 铁律（30 秒）
 

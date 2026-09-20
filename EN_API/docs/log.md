@@ -6,6 +6,10 @@ title: EN_API 文档变更日志
 
 # 变更日志
 
+## 2026-09-20
+
+- **修复（链接）**：`.agents/skills/en-image-upload/SKILL.md`（2 条）与 `.agents/skills/item-group-translation/SKILL.md`（1 条）指向本模块的链接少退一级，由 `../../` → `../../../`。
+
 ## 2026-08-31
 
 - **文档**: 新增 OKF bundle（物料组翻译 TMT 管道）、`AGENT_HANDOFF_物料组翻译.md`、skill `item-group-translation`
