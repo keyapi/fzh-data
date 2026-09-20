@@ -6,12 +6,12 @@ description: >
   与直接 API（开发人员 VPS 白名单直连 openapi.sellfox.com），443 端点文档、广告报告脚本、店铺列表；
   (B) **私有接口**（undocumented internal API，无文档、需浏览器 cookie）—— 公开 OpenAPI 没有写入口的
   功能常在这里有（成本补录单 create/audit、海外仓备货单改头程、库存调整单等）。
-  
+
   当用户提到"赛狐API"、"sellfox api"、"赛狐接口"、"赛狐开放平台"、"私有接口"、"内部接口"、
   "shadow API"、"api.vilavi.cn/sellfox"、"赛狐代理"、"赛狐广告报告"、"赛狐店铺"、
   "sellfox report"、"saihu api"、"赛狐中转"、"赛狐 Key"、
   "赛狐没有写接口"、"赛狐能不能改成本/头程"等时触发。
-  
+
   不要用于赛狐Excel导入（category/item-cost/item-weight/stock-init/warehouse-restock/multi-attr/other-outbound）。
 compatibility: >
   代理 API 不需要本地凭证，只需浏览器访问 https://api.vilavi.cn/sellfox/admin 钉钉登录。
@@ -291,7 +291,7 @@ BASE = "https://api.vilavi.cn/sellfox/v1/sellfox-main"
 
 def call_sellfox(path, body=None):
     """Call any Sellfox API endpoint through the proxy.
-    
+
     Args:
         path: API path, e.g. "/api/shop/pageList.json"
         body: Request body dict, e.g. {"pageSize": 10}
@@ -383,7 +383,7 @@ def compute_sign(access_token, app_id, app_secret, url_path):
     # 按 key 排序 → k=v&k=v 格式
     sorted_str = "&".join(f"{k}={v}" for k, v in sorted(params.items()))
     sig = hmac.new(app_secret.encode(), sorted_str.encode(), hashlib.sha256).hexdigest()
-    
+
     # 发送时只传 5 个参数（method 和 url 仅参与签名，不发送）
     return {
         "access_token": access_token,

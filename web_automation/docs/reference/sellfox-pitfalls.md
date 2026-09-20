@@ -414,4 +414,3 @@ batchNo 20260529002385
 MCP 的 `browser_run_code_unsafe` 跑的是 Playwright **JS** API：`page.locator('x').first()`、
 `.nth(i)`、`.count()` 都要加括号。写成 `.first` / `.nth` 会拿到函数对象并报
 `row.locator is not a function`。
-
