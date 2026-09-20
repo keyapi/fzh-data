@@ -7,6 +7,18 @@ description: docs/research 目录变更历史
 
 # 变更日志
 
+## 2026-09-20
+
+- **新增**: [2026-09-20-sellfox-official-mcp-feasibility.md](2026-09-20-sellfox-official-mcp-feasibility.md) — **赛狐官方 MCP 可行性**。FAC（ERPNext）接通后，接着问「赛狐能不能也接 MCP」。
+  - **结论：能，且比 FAC 简单。** 赛狐有**官方托管** MCP：`https://api-mcp.sellfox.com/mcp`，`streamable-http`，协议 `2025-06-18`（与 FAC 同版本），`serverInfo` = `sellfox-api v1.30.0`。
+  - **鉴权与 FAC 正好相反**：赛狐走**静态请求头** `X-Sellfox-Client-Id` / `X-Sellfox-Client-Secret`，**不需要 OAuth**。所以 ChatGPT 建应用时那个「标头方案（持有者/基本/自定义标头）」下拉 —— **对 FAC 是死路，对赛狐才是正解**。
+  - **实测要点**：① `initialize` **不校验凭据**（无凭据也 200），鉴权推迟到工具调用；② 服务**有状态**，`tools/list` 不带 `mcp-session-id` 会 400；③ 假凭据调用会暴露服务端行为 —— 它转去 `openapi.sellfox.com/api/oauth/v2/token.json` 用 client_credentials 换 token 得 401，说明后台就是赛狐公开 OpenAPI；④ 错误文本提到 `SELLFOX_CLIENT_ID` 环境变量 → 存在 **stdio 本地部署形态**。
+  - **⚠️ 最需要注意的发现**：`tools/list` 实测有 **23 个工具，其中 11 个是「写」**（`edit_sp_campaign` 单次最多 100 条、`create_sp_*_targeting`、`close_sp_negative_targeting` 等，全是 SP 广告的编辑/创建）。**这与项目既有硬约束「赛狐广告无写 API」直接冲突**，文档已标注需单独复核（两种可能：2026-07 后赛狐新增了写接口；或当时结论针对「私有接口族」而 MCP 走公开 OpenAPI）。
+  - **纠正**: CSDN 那篇接入教程称「工具为查询类、不涉及数据修改」—— **与线上 v1.30.0 实测不符，已过时**。以实测为准。
+  - **写权限处置建议**（按项目既有安全偏好）：给 MCP 建一个**权限收窄到只读的独立 API 账号**，把限制放在**服务端**而不是 prompt 里。
+  - **未决**：① IP 白名单对官方托管 MCP 是否生效（服务端在赛狐自己基础设施上，只有真实凭据能验）；② ChatGPT 的「自定义标头」下拉能否填**两个**头（赛狐需要两个）。
+  - 与自有 `sellfox-api-proxy`（VPS `api.vilavi.cn/sellfox`，catch-all 443 端点）**并存不冲突**，文档给了取舍表。
+
 ## 2026-09-18
 
 - **新增**: [2026-09-18-sellfox-private-api-terminology.md](2026-09-18-sellfox-private-api-terminology.md) — 区分赛狐「公开 OpenAPI」与「私有接口」。调研结论：业界**没有唯一权威说法**，最接近的是 **Shadow API（影子 API）**（Wiz/Invicti/Akto，OWASP API9:2023 Improper Inventory Management），但定义强调「归属方失去管控」——赛狐是**自己在用自己维护**，只是在公开 OpenAPI 之外，**不严格成立**；Tyk 的「UI 就是一个 ergonomics 更差的 API」最贴切本场景。**用词约定**：正文用「私有接口 / 非公开内部接口」，首次出现补「（undocumented internal API，业界亦称 shadow API）」，**避免用「浏览器 API」**（歧义大，易被读成 Playwright 自动化本身）。含 4 条判据、私有接口价值定位（**在「修」不在「批量」**，海外仓备货单改头程是典型唯一路径）、取证纪律（route 截获后 fulfill 假响应 = 零写入）。
