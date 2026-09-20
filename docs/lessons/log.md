@@ -8,6 +8,15 @@ tags: [lessons, log]
 
 # 变更日志
 
+## 2026-09-20
+
+- **新增**: [../../chatgpt/](../../chatgpt/README.md) — **新建 `chatgpt/` 子项目**（OKF bundle：`docs/index.md` + `docs/log.md` + `docs/reference/`）。主题：ChatGPT 当 Agent 宿主的接入知识，后续 ChatGPT 相关工作都记到这里。**起因**：在 ChatGPT 智能体「新应用」弹窗里不知道怎么选身份验证，且误入「访问令牌/API 密钥 → 标头方案（持有者/基本/自定义标头）」这条死路。结论：**必须选 OAuth** —— FAC 只有 OAuth 2.0+PKCE，无静态 token 方案（选「无身份验证」实测 401）。本文档最初写在本目录下（`chatgpt-mcp-connector.md`），随子项目建立**已迁移**，避免两处说同一件事。
+- **实测**: 拿 ChatGPT 真实回调 `https://chatgpt.com/connector_platform_oauth_redirect` 打 FAC 的 DCR 端点，**`HTTP 201 Created` + client_id** → OAuth 路径在服务端成立（探针记录测完即删）。同时确认 `/.well-known/oauth-authorization-server`、`/.well-known/oauth-protected-resource`、`/.well-known/openid-configuration` 三处 metadata 均可用，PKCE `S256` 与 `token_endpoint_auth_methods_supported` 含 `none` 均满足 ChatGPT 强制要求，DCR 已开启。
+- **纠正**: 「Allowed Public Client Origins」**预期无需为 ChatGPT 修改**。读源码 `api/oauth_cors.py` 确认该字段只写 `frappe.conf.allow_cors` —— **纯 CORS**，只约束浏览器侧 XHR；ChatGPT 是 OpenAI 服务端注册（无 `Origin` 头）+ 浏览器顶层跳转授权（不受 CORS 约束）。FAC 官方 quick start 里「给 MCP Inspector 加 `http://localhost:6274`」的语境是浏览器 XHR 客户端，**不要照搬**。另据源码 `utils/oauth_compat.py`，DCR 对 redirect_uri **只校验 scheme**（非 https 且非 localhost 才拒），不限域名。
+- **区分**: 新增「与 Claude Desktop 路径的差异」表 —— ChatGPT 是服务端直连、**无本地进程**，故 `~/.mcp-auth` 清理 / `taskkill node.exe` / `EADDRINUSE` / 「URL 必须在 `--transport` 前」这些 Claude 侧排错条目**在 ChatGPT 场景全部不适用**。
+- **观察**: 测试站 `OAuth Client` 累积 7 条同名 `MCP CLI Proxy`（`localhost:5535`，2026-06-08 → 08-27）→ **Claude Desktop 每次重新授权都新建一条记录，旧的不回收**。不紧急，清理时按 `creation` 删旧。
+- **未验证**: ChatGPT 侧完整端到端（授权跳转 / token 交换 / `tools/list`）需人工点授权，本地无法代劳，文档已显式标注「尚未验证」。
+
 ## 2026-09-18
 
 - **新增**: [../mcp-setup.md](../mcp-setup.md) — **MCP 选型与安装指南**（canonical 入口）。含选型表（每个 MCP 干什么 / 要什么凭证 / 谁该装）、宿主差异表（Claude Desktop 3P / 普通 / Codex / Cursor 的配置路径与重启要求）、3P 通用事实、启停与裁剪、排错、各 server 详细文档索引。**目标：同事读 main 即可自选要装的 MCP。**
