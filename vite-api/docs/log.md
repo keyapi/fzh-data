@@ -1,5 +1,9 @@
 # 文档变更日志
 
+## 2026-09-20
+
+- **修复（链接）**：`README.md` 中 `docs/reference/`、`docs/test-guide/` 两个目录没有 `index.md`，链接改为指向目录本身；`carriers/index.md` 中 7 条指向从未创建的 `endpoints*.md` 的链接改为对应承运商的 `overview.md`（端点表实际就写在 overview 内）。
+
 ## 2026-07-20
 
 - EEVEE 密码/邀请码/真实邮箱从 `test-credentials.md` 与 `.env.example` 移除，改为占位符 + 根 `.env`

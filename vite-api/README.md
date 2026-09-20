@@ -29,11 +29,11 @@ curl -X GET "https://test-api.vitedirect.com/user/account" \
 | 路径 | 说明 |
 |------|------|
 | [docs/quickstart/](docs/quickstart/index.md) | 快速入门指南 |
-| [docs/reference/](docs/reference/index.md) | 参考文档 |
+| [docs/reference/](docs/reference/) | 参考文档 |
 | [docs/carriers/gofo-express/](docs/carriers/gofo-express/index.md) | GOFO Express 详细文档 |
 | [docs/return-labels/](docs/return-labels/index.md) | 回标标签文档 |
 | [docs/webhooks/](docs/webhooks/index.md) | Webhook 配置 |
-| [docs/test-guide/](docs/test-guide/index.md) | 测试指南 |
+| [docs/test-guide/](docs/test-guide/) | 测试指南 |
 | [docs/specs/](docs/specs/2026-07-16-integration-design.md) | 集成方案设计 |
 
 ## 相关链接

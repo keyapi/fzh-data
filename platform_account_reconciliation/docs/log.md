@@ -9,6 +9,10 @@ timestamp: 2026-08-17
 
 # 变更日志
 
+## 2026-09-20
+
+- **修复（链接）**：`index.md` 指向模块 `AGENT_HANDOFF.md` 的链接多退一级（`../../` → `../`），修正为模块内相对路径。
+
 ## 2026-08-17
 
 - **初始化模块**：新建 `platform_account_reconciliation/`，覆盖 Overstock/OSTK 账期与 EN/Tongtool Order 费用级对账，预留 Wayfair 扩展。

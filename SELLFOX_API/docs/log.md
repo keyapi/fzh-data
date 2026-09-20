@@ -9,6 +9,10 @@ timestamp: 2026-09-09
 
 # 变更日志
 
+## 2026-09-20
+
+- **修复（链接）**：`lessons/`、`research/` 两篇指向 `docs/reference/2026-*.md` 的链接均为规划中文档、实际从未创建；改为非链接文本并标注「未撰写」，并指向本文对应 Lesson（多账号防关联 = Lesson 8，SP-API 开发者模型 = Lesson 9）。`lessons/` 中指向 `lessons-learned.md` 的条目同理（12 条教训已并入 Lesson 1-12）。
+
 ## 2026-09-09
 
 - **变更描述（Apifox 文档镜像核对/全量刷新）**：对照线上 `llms.txt`，本地索引由 **419 → 443**（+25 新增 / −1 删除 / 17 标题变更 / 2 路径变更）。更新公告已含 **2026-07 / 08 / 09** 条目（旧快照止于 2026-06-25；线上最新至 **2026-09-07**）。`download_docs.py` 新增 `--force`；全量重下 **443/443**；清理改名孤儿 `.md`。操作手册 [`reference/api-docs-mirror.md`](reference/api-docs-mirror.md)；学习记录 [`docs/solutions/conventions/sellfox-apifox-api-docs-mirror-refresh.md`](../../docs/solutions/conventions/sellfox-apifox-api-docs-mirror-refresh.md)。同步清理历史 log 中的明文密码引用。
