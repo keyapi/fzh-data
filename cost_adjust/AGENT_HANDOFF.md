@@ -95,7 +95,16 @@ profile 没登录时会停在登录页等（没有自动登录）。
 | 项 | 状态 |
 |---|---|
 | 成本补录单 `edit` / `updateRemark` | 端点存在但**成本补录单页面无触发入口**，payload 未解析 |
-| 库存调整-**增加**批次的成本修改 | **未找到任何入口** → 用「其他入库单」替代（见下） |
+| 库存调整-**增加**批次的成本修改 | **未找到任何入口** |
 | 其他入库单（`inRecord/v2.json`）产生的批次行为 | 未验；它 `perPurchase` 必填 + `shipFee/otherFee`，是**带成本的入库**正路 |
-| `oversea/inventory/syncInventory.json` 等三方仓库存端点 | 未探明，可能是「只改数量、不产成本批次」的正路 |
+| `oversea/inventory/syncInventory.json` 等三方仓库存端点 | **已探，未能验证**：本账号这些端点返回空、三方仓配置接口报 `系统异常`，推测**未开通三方仓功能**。若开通值得重探 |
 | `detail.json`（成本补录单） | 参数名未试出；`detailByRelationNo.json` 已覆盖需求 |
+
+## 数量同步场景：看这份文档
+
+「用调整单把外部库存数量同步进赛狐」是一条**长期积累成本债**的路 ——
+**这不是用错工具**（赛狐自己的三方仓模块就有「生成调整单」功能，权限
+`MOD_OVERSEA_WAREHOUSE.CREATE_ADJUST`），问题在**调整单批次的成本是快照且不可修正**。
+
+完整成因、量化证据与三个选项见
+[`docs/solutions/workflow-issues/sellfox-inventory-sync-cost-drift.md`](../docs/solutions/workflow-issues/sellfox-inventory-sync-cost-drift.md)。

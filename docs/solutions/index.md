@@ -10,6 +10,7 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-09-20 | 用库存调整单同步数量会让成本越来越改不动 —— 成因与三个选项 | [workflow-issues/sellfox-inventory-sync-cost-drift.md](workflow-issues/sellfox-inventory-sync-cost-drift.md) |
 | 2026-09-18 | 赛狐备货单改「单个头程费用」——无 Excel 路径，只能走私有接口 | [integration-issues/sellfox-restock-headfee-api.md](integration-issues/sellfox-restock-headfee-api.md) |
 | 2026-09-18 | 赛狐成本补录单——公开 OpenAPI 只读，创建/审核走内部接口（完整契约实测） | [integration-issues/sellfox-cost-adjust-api.md](integration-issues/sellfox-cost-adjust-api.md) |
 | 2026-09-18 | 赛狐调整单写链路——createV2 一步到位，batchConfirmAdjust 只适用「待调整」态 | [integration-issues/sellfox-adjust-order-write-chain.md](integration-issues/sellfox-adjust-order-write-chain.md) |

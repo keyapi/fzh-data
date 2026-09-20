@@ -7,6 +7,10 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-09-20
+- **新增**: `workflow-issues/sellfox-inventory-sync-cost-drift.md` — 「用库存调整单把外部库存数量同步进赛狐」的长期代价。**先纠正一个易走偏的结论**：赛狐自己的三方仓模块就有「生成调整单」功能（i18n `main.warehouse.tripartite.warehouse.generate.adjustment.order`，权限 `MOD_OVERSEA_WAREHOUSE.CREATE_ADJUST`），**官方建模本就是生成调整单** → 用它同步数量**不是选错工具**，问题在成本侧。三点成因：①调整单明细零成本字段，但每建一张必产生新批次，成本 = **创建时该(仓库,SKU)加权均价快照**；②该快照**不可修正**（`+N/-N` 不互抵、已完成单不可删不可撤、调整单无成本字段故无入口）；③结果=可修正的备货单批次被 FIFO 逐渐吃掉、不可修正的快照不断堆积 → **越跑越难改均价且无回退路径**。给出三个选项（维持/A 改用其他入库单`perPurchase`必填/B 保持调整单但先修好成本）。
+- **更新**: `integration-issues/sellfox-adjust-order-write-chain.md` 的「结论：调整单不适合承载数量同步」→ 改为「用它做数量同步的代价（不是用错工具）」，与新文档口径一致；`cost_adjust/AGENT_HANDOFF.md` 未解决项同步（三方仓端点已探、本账号未开通功能）。
+
 ## 2026-09-18
 - **新增**: `integration-issues/sellfox-restock-headfee-api.md` — 备货单改「单个头程费用」：**两条 Excel 路都堵死**（`pickingOrderUpdateTemplate` 表头零费用字段；`overseaPickingListFee` 是物流信息层且无 UI 入口），只能走私有接口 `detail.json` → 改 `items[].headFee`+派生值 → `edit.json` 整坨回发。**收敛口径**：改一张单只影响**本批次**，`Δ单位费用 = ΔheadFee × 本批次可用量/SKU总可用量`。**纠正旧文档**：调整单批次「跟随备货单成本」只对 `type=4（减少）` 成立，`type=3（增加）` 各自**新建独立批次**、不跟随——实测该 SKU 另 11 件来自 3 张 AD 增加单，无自动化入口。**性能**：500 行 / 1.06MB 的 edit 实测 **16~18 秒**（超线性），默认 30s 超时余量薄。另记 `page.json` 的 `searchType` 必须传 `'sku'`（传别的被静默忽略返回全量）、`pickId` 由 localStorage 而非 URL 传递。
 - **新增**: `cost_adjust/sellfox_restock_headfee_api.py` — `RestockHeadFeeClient`（`detail` / `list_orders` / `in_stocks()`批次构成 / `project_unit_fee()`预测 / `build_payload` / `edit`），显式超时 + 大单告警，默认 dry-run；打印批次构成与单位费用预测，预测值与实测分毫不差。

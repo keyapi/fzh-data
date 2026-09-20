@@ -326,6 +326,14 @@ A webhook-based DingTalk group messaging channel used by AI agents (WorkBuddy, C
 前者是「虚拟仓库」（FBA 侧来源，如 272150），后者才是真实海外仓（如 279841=POLAND）。
 不是笔误，照抄。
 
+### 三方仓 (tripartite / third-party warehouse)
+赛狐里指**海外第三方仓库**（与自建仓、FBA 相对）。关键点：赛狐**官方对三方仓库存同步的建模
+就是「生成调整单」** —— 三方仓模块带一个「生成调整单」功能
+（i18n `main.warehouse.tripartite.warehouse.generate.adjustment.order`，权限
+`MOD_OVERSEA_WAREHOUSE.CREATE_ADJUST`），配置项走 `/api/config/{get,set}ThirdWarehouseInventoryAdjust.json`。
+所以「用调整单同步外部数量」是官方路径、不是用错工具；它的代价在成本侧（见
+`docs/solutions/workflow-issues/sellfox-inventory-sync-cost-drift.md`）。
+
 ## Flagged ambiguities
 
 - "「赛狐有 API」不区分公开 OpenAPI 与私有接口时会得出相反结论 —— 说「没有写接口」通常只对公开 OpenAPI 成立。"
