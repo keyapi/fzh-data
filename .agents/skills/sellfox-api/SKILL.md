@@ -1,13 +1,17 @@
 ---
 name: sellfox-api
 description: >
-  赛狐 (Sellfox) OpenAPI 访问。支持两种方式：
-  (1) 代理 API — 运营/非开发人员首选，钉钉登录自动配 Key，通过 api.vilavi.cn 中转；
-  (2) 直接 API — 开发人员在 VPS 白名单 IP 上直连 openapi.sellfox.com。
-  提供 443 个 API 端点文档、7 种 SP/SB/SD 广告报告脚本、店铺列表拉取示例。
-  当用户提到"赛狐API"、"sellfox api"、"赛狐接口"、"赛狐开放平台"、
-  "api.vilavi.cn/sellfox"、"赛狐代理"、"赛狐广告报告"、"赛狐店铺"、
-  "sellfox report"、"saihu api"、"赛狐中转"、"赛狐 Key"等时触发。
+  赛狐 (Sellfox) API 访问，涵盖**两套调用面**：
+  (A) 公开 OpenAPI — 代理 API（运营/非开发人员首选，钉钉登录自动配 Key，经 api.vilavi.cn 中转）
+  与直接 API（开发人员 VPS 白名单直连 openapi.sellfox.com），443 端点文档、广告报告脚本、店铺列表；
+  (B) **私有接口**（undocumented internal API，无文档、需浏览器 cookie）—— 公开 OpenAPI 没有写入口的
+  功能常在这里有（成本补录单 create/audit、海外仓备货单改头程、库存调整单等）。
+
+  当用户提到"赛狐API"、"sellfox api"、"赛狐接口"、"赛狐开放平台"、"私有接口"、"内部接口"、
+  "shadow API"、"api.vilavi.cn/sellfox"、"赛狐代理"、"赛狐广告报告"、"赛狐店铺"、
+  "sellfox report"、"saihu api"、"赛狐中转"、"赛狐 Key"、
+  "赛狐没有写接口"、"赛狐能不能改成本/头程"等时触发。
+
   不要用于赛狐Excel导入（category/item-cost/item-weight/stock-init/warehouse-restock/multi-attr/other-outbound）。
 compatibility: >
   代理 API 不需要本地凭证，只需浏览器访问 https://api.vilavi.cn/sellfox/admin 钉钉登录。
@@ -19,11 +23,56 @@ metadata:
   proxy_base: https://api.vilavi.cn/sellfox/v1/{account}
   accounts: sellfox-main (赛狐 ERP)
   api_docs: SELLFOX_API/docs/api-reference/
+  private_api_docs: docs/research/2026-09-18-sellfox-private-api-terminology.md
   scripts: SELLFOX_API/fetch_ad_reports.py, SELLFOX_API/fetch_extra_reports.py, SELLFOX_API/fetch_sb_sd_reports.py
-  updated: 2026-09-09
+  updated: 2026-09-18
 ---
 
 # 赛狐 API 访问
+
+## §0 先分清：赛狐有**两套**完全不同的调用面
+
+> 跑下去之前必须先判断你要的功能属于哪一套。**同一个功能常常「公开 OpenAPI 没有、私有接口有」**，
+> 混为一谈会直接得出「赛狐做不到」的错误结论。
+
+| | **公开 OpenAPI**（本 skill §1–§5） | **私有接口**（undocumented internal API） |
+|---|---|---|
+| 入口 | `openapi.sellfox.com`；代理 `api.vilavi.cn/sellfox/v1/sellfox-main/...` | `www.sellfox.com/api/...`，**必须带站点 cookie** |
+| 文档 | Apifox 443 端点，本地镜像 `SELLFOX_API/docs/api-reference/` | **无文档**，只能抓包或挖打包产物 |
+| 鉴权 | OAuth2 + HMAC（或代理 Bearer Key） | 浏览器登录态 |
+| 权限 | App 级，**字段可逐个受限**（如 `40021 访问的接口暂无权限`） | 跟登录用户权限走 |
+| 稳定性 | 有版本承诺 | **无承诺，随时可能改** |
+
+**判据（按可靠性排序）**：
+
+1. 能 grep 到 `SELLFOX_API/docs/api-reference/llms.txt` → 公开 OpenAPI
+2. 需要 `access_token`/`client_id`/`nonce`/`timestamp`/`sign` 五个 query → 公开 OpenAPI
+3. **页面 Network 里能看到、文档里查不到** → 私有接口
+4. 路径前缀分不出来（两侧都是 `/api/xxx.json`），别靠前缀判断
+
+**私有接口的正确用法**：
+
+- 用 `page.request`（Playwright，复用登录态）调用；可用 `web_automation/sellfox-profile` + `browser_launch.launch_persistent`
+- 注意：OpenAPI 的路径在站点上**可能是 404**（正例：`/api/ware/adjust/*` 站点无，
+  站点用 `/api/gw/sellfox/sellfox-warehouse/sellfox/api/warehouse/adjust/*`）
+- **取证用「截获后挡掉」，不要试错写生产**：`page.route('**/某些写端点', r => { 记录 r.request().postData(); r.fulfill({假响应}) })`
+  → 请求到不了服务端，**零写入拿到契约**，事后再 `unroute` 走真实调用
+- 私有接口的 payload 常是**读结果的整坨回填**（inspect → 改几个字段 → 原样发回），
+  自造字段可能被静默改写或拒绝
+
+**已摸清的私有接口族**（详见对应文档）：
+
+| 功能 | 端点族 | 文档 |
+|---|---|---|
+| 成本补录单（改采购成本） | `/api/fba/cost/adjustment/{create,audit,delete,reject,detail,pageList,…}` | `docs/solutions/integration-issues/sellfox-cost-adjust-api.md` |
+| 海外仓备货单（改头程 / 读整单） | `/api/oversea/{detail,edit,save,page}.json` | `docs/solutions/integration-issues/sellfox-restock-headfee-api.md` |
+| 库存调整单 | `/api/gw/sellfox/sellfox-warehouse/sellfox/api/warehouse/adjust/*` | `docs/solutions/integration-issues/sellfox-adjust-order-write-chain.md` |
+| 海外仓批次 | `/api/overseaBatch/page.json` | 同上 |
+
+术语与完整判据：`docs/research/2026-09-18-sellfox-private-api-terminology.md`
+（业界亦称 **shadow API 影子 API**，但赛狐这些是自家在用的，严格说不算）
+
+---
 
 ## §1 入口路由（Agent 必须按顺序执行，不可跳过）
 
@@ -242,7 +291,7 @@ BASE = "https://api.vilavi.cn/sellfox/v1/sellfox-main"
 
 def call_sellfox(path, body=None):
     """Call any Sellfox API endpoint through the proxy.
-    
+
     Args:
         path: API path, e.g. "/api/shop/pageList.json"
         body: Request body dict, e.g. {"pageSize": 10}
@@ -334,7 +383,7 @@ def compute_sign(access_token, app_id, app_secret, url_path):
     # 按 key 排序 → k=v&k=v 格式
     sorted_str = "&".join(f"{k}={v}" for k, v in sorted(params.items()))
     sig = hmac.new(app_secret.encode(), sorted_str.encode(), hashlib.sha256).hexdigest()
-    
+
     # 发送时只传 5 个参数（method 和 url 仅参与签名，不发送）
     return {
         "access_token": access_token,
