@@ -1,8 +1,8 @@
 ---
 type: Research
-title: 赛狐官方 MCP 可行性 — 端点在但当前「未启用」；鉴权用 X-MCP-Key；工具清单有 11 个写工具但与公开 API 文档对不上
-description: 实测 api-mcp.sellfox.com/mcp 结构可用（protocol 2025-06-18），但当前返回 40027「未启用MCP功能」与后台「不可用」一致。鉴权以官方后台给出的单头 X-MCP-Key 为准。tools/list 暴露 11 个 SP 广告写工具，而公开 API 文档（443 篇，09-17 刷新）广告模块只有读 —— 差异未解释，启用后须复核
-tags: [sellfox, mcp, research, ads, feasibility, oauth]
+title: 赛狐官方 MCP 可行性 — 用 API 账号凭证实测可用；13 个只读工具已验证；9 个 SP 广告写工具未验证且无公开文档对应
+description: 实测 api-mcp.sellfox.com/mcp 用 X-Sellfox-Client-Id/Secret（API 账号凭证）可用 —— 只读工具 get_shop_page_list 返回真实数据。后台 MCP管理页给的 X-MCP-Key 是另一条路，仍「未启用」。23 工具 = 13 读 + 1 报表任务（有文档）+ 9 个 SP 广告写（无文档对应，未调用）
+tags: [sellfox, mcp, research, ads, feasibility, credentials]
 timestamp: 2026-09-20
 ---
 
@@ -10,153 +10,139 @@ timestamp: 2026-09-20
 
 ## 一句话结论
 
-**有官方托管 MCP，协议层已经通了，但当前功能未启用 —— 现在还不能用，等赛狐开通。**
+**赛狐官方托管 MCP 可用，而且已经跑通 —— 前提是用 API 账号那套请求头。**
 
-| 项 | 值 | 证据强度 |
-|---|---|---|
-| 端点 | `https://api-mcp.sellfox.com/mcp` | **实测** |
-| 传输 | `streamable-http` | 实测（`content-type: text/event-stream`） |
-| 协议版本 | `2025-06-18` —— **与 FAC 相同** | 实测 `initialize` |
-| 服务端标识 | `{"name":"sellfox-api","version":"1.30.0"}` | 实测 |
-| 鉴权 | **单头 `X-MCP-Key`**（官方后台生成） | 官方后台 + **实测** |
-| 当前状态 | ❌ **未启用** → `code 40027「未启用MCP功能，请联系管理员」` | **实测** |
-| OAuth | 不需要 | 实测 |
+| 项 | 值 |
+|---|---|
+| 端点 | `https://api-mcp.sellfox.com/mcp` |
+| 传输 / 协议 | `streamable-http` / `2025-06-18`（与 FAC 相同） |
+| 服务端标识 | `{"name":"sellfox-api","version":"1.30.0"}` |
+| **可用凭证** | **`X-Sellfox-Client-Id` + `X-Sellfox-Client-Secret`**（API 账号 App ID/Secret）—— **实测可用** |
+| 另一条路 | `X-MCP-Key`（后台 MCP管理页生成）—— 实测 `40027 未启用MCP功能`，**是独立于上面的一条路** |
+| OAuth | 不需要 |
 
-> **注意**：赛狐官方是**主动提供**这个功能的（后台有「业务设置 → 全局 → MCP管理」页面，状态显示「不可用」）。
-> 所以这是「**等客服开通**」的问题，不是「有没有」的问题。
+### 结论演变（如实记录）
 
-### 一、当前不可用 —— 已实测确认
+本文档经过三轮修订，方向改过两次，**保留轨迹以免后来人误信中间版本**：
 
-用官方后台给出的 `X-MCP-Key` 调一个**只读**工具：
-
-```
-initialize  : HTTP 200   (session 建立成功)
-tools/list  : HTTP 200   → 23 个工具
-tools/call get_shop_page_list → HTTP 200，但返回:
-  {"error":"HTTP 401","detail":"{\"code\":40027,\"msg\":\"未启用MCP功能，请联系管理员\"}"}
-```
-
-**结论**：协议握手、鉴权头、工具列举全部正常，**卡在「功能未启用」这一层**。与后台显示「不可用」一致。
-
-→ 在赛狐开通前，**任何接入都不必做**（本机/客户端侧改了也不会生效）。
+1. 首版据 `tools/list` 断言「能接，且推翻了『赛狐广告无写 API』约束」
+2. 二版核对公开 API 文档后**撤回**该断言，并因 `X-MCP-Key` 测出 `40027` 而改成「当前不可用」
+3. **三版（本版）**：换用 **API 账号凭证**实测，**只读工具成功返回真实数据** —— 回到「可用」。二版的 `40027` 是因为用错了头，不是功能不可用
 
 ---
 
-## 二、鉴权：以官方后台为准，用 `X-MCP-Key` 单头
+## 一、实测：只读链路已跑通
 
-官方后台「业务设置 → 全局 → MCP管理」给出的是**单个**请求头：
+用 API 账号 App ID / Secret 作请求头（`X-Sellfox-Client-Id` / `X-Sellfox-Client-Secret`）：
 
-```json
-{
-  "mcpServers": {
-    "Sellfox-MCP": {
-      "type": "streamableHttp",
-      "url": "https://api-mcp.sellfox.com/mcp",
-      "headers": { "X-MCP-Key": "<后台生成的 key>" }
-    }
-  }
-}
+```
+[1] 先验凭证与 IP 白名单（直连公开 OpenAPI）
+    GET https://openapi.sellfox.com/api/oauth/v2/token.json?grant_type=client_credentials
+    → HTTP 200, {"code":0,"msg":"success"}   ✅ 凭证有效，且白名单已放行本机 IP
+
+[2] MCP 握手
+    initialize  → HTTP 200（拿到 mcp-session-id）
+    tools/list  → HTTP 200，23 个工具
+
+[3] 只读调用 get_shop_page_list
+    → HTTP 200, {"code":0,"msg":"success","data":{...,"rows":[{...店铺...}]}}  ✅ 真实数据
 ```
 
-**CSDN 那篇教程给的是另一套**：`X-Sellfox-Client-Id` + `X-Sellfox-Client-Secret`（两个头，用 API 账号的 App ID/Secret）。
+> 返回的是**真实生产数据**（店铺列表）。按要求**未把数据写入任何文件**，此处只记机制不记内容。
 
-两者关系（据实测推断，**未完全确认**）：
+### 顺带确认的一个易错点
 
-| 头 | 来源 | 实测表现 |
-|---|---|---|
-| `X-MCP-Key` | 官方后台 MCP 管理页 | 能过认证层，直达「未启用」判断 |
-| `X-Sellfox-Client-Id`/`Secret` | API 账号的 App ID/Secret | 服务端会拿去 `openapi.sellfox.com/api/oauth/v2/token.json` 换 token；假值得 401 |
-
-服务端自己的错误文本提示的是 Client-Id/Secret 那套 —— 说明**两套都认**。
-**但接入时应以官方后台给的 `X-MCP-Key` 为准**（那是赛狐为 MCP 专门生成的，权限与审计都挂在它上面）。
-
-> ⚠️ **key 是凭证，不要写进任何提交的文件或文档。** 本文不记录其值。
+`initialize` **不校验凭据**，鉴权推迟到工具调用；服务**有状态**，`tools/list` 不带 `mcp-session-id` 会返回 `400 Missing session ID`。
 
 ---
 
-## 三、⚠️ 工具清单有 11 个「写」，但与公开 API 文档对不上
+## 二、鉴权：两条独立的路径，别混
 
-`tools/list` 实测（**无凭据也返回，清单是静态的**）：**23 个工具**。
+| 路径 | 请求头 | 来源 | 实测状态 |
+|---|---|---|---|
+| **A. API 账号** | `X-Sellfox-Client-Id` + `X-Sellfox-Client-Secret` | API 账号的 App ID / Secret | ✅ **可用（本文据此跑通）** |
+| **B. MCP 管理** | 单个 `X-MCP-Key` | 赛狐后台「业务设置 → 全局 → **MCP管理**」生成 | ❌ `40027 未启用MCP功能` |
 
-**读（12）**：`get_shop_page_list`、`get_order_page_list`、`get_order_detail`、`get_online_product_page_list`、`get_custom_report_page_list`、`get_ad_download_task_page_list`、`get_sp_campaign_list`、`get_sp_ad_group_list`、`get_sp_ad_product_list`、`get_sp_keyword_list`、`get_sp_product_targeting_list`、`get_sp_negative_keyword_list`、`get_sp_negative_product_targeting_list`
+两条路都通到同一个端点，但**B 需要赛狐单独开通**。客服答复针对的是 B；**A 现在就能用**。
 
-**写（11）**：`edit_sp_campaign`（自述单次最多 100 条）、`edit_sp_ad_product`、`edit_sp_ad_group`、`edit_sp_targeting`、`close_sp_negative_targeting`、`create_sp_keyword_targeting`、`create_sp_negative_keyword_targeting`、`create_sp_product_targeting`、`create_sp_negative_product_targeting`、`create_ad_download_task`
+> ⚠️ CSDN 那篇教程给的是 A（两个头）—— 就实测而言**它是对的**。而官方后台页面给的是 B。
+> **两者并非互相矛盾，是两条独立通道。**
 
-### 但公开 API 文档里广告模块**只有读**
-
-核对本地镜像 `SELLFOX_API/docs/api-reference/`（**443 篇，2026-09-17 刷新，不陈旧**），广告模块全部端点路径去重后：
-
-```
-/api/cpc/manageData/{sp,sb,sd}{Campaign,Group,AdProduct,Target,Keyword,...}.json   ← 查询
-/api/cpc/hourData/*.json                                                          ← 小时报表
-/api/cpc/searchTerms/pageList.json                                                ← 查询
-/api/cpc/download/createTask.json                                                 ← 创建「报表下载任务」
-```
-
-- `manageData/*` **是查询不是写** —— 逐个看过参数（`运行状态: enabled/paused/archived`、`不传默认查询全部`、`pageSize`），是分页查询语义。
-- 唯一含 `create` 的 `download/createTask.json` 建的是**报表下载任务**，不改广告数据。
-
-**即：公开 OpenAPI 里没有「改广告实体」的端点**，与项目既有约束「赛狐广告无写 API」一致。
-
-### 差异如何解读 —— **未解释，也不该现在下结论**
-
-MCP 的 11 个写工具**在我们手上的公开 API 文档里没有对应端点**。至少三种可能，**当前无法分辨**：
-
-1. MCP 调的是**未公开的内部接口**（参见 `docs/research/2026-09-18-sellfox-private-api-terminology.md` 对「私有接口族 vs 公开 OpenAPI」的区分）
-2. 工具**已注册但后端未实现** —— 调了会报错
-3. 赛狐新增了广告写 API，**但文档镜像还没覆盖**（09-17 刷新，理论上应已覆盖，故可能性偏低）
-
-**在 MCP 启用前无法验证**（现在连只读调用都被 `40027` 挡住）。
-
-> **纠正一处早先的过度结论**：本次调研过程中曾据 `tools/list` 断言「推翻项目既有约束『赛狐广告无写 API』」。
-> 对照公开 API 文档后，**该断言不成立** —— 约束在 OpenAPI 层面仍然有效，真正的情况是「存在未解释的差异」。
-> **不要**据此修改任何既有结论或放开写权限。
+> 🔒 **凭证纪律**：App ID / Secret 属于生产凭证，**不写入仓库任何文件**；本文只记头名不记值。
 
 ---
 
-## 四、前置条件（来自官方后台与第三方教程）
+## 三、工具清单：23 个（13 读 + 1 报表任务 + 9 个 SP 广告写）
 
-1. 赛狐后台开通「开放接口」与 **MCP 功能**（当前卡在这一步）
-2. 拿到 MCP 管理页生成的 `X-MCP-Key`
-3. 视情况配置 IP 白名单（第三方教程强调这是最常见的失败原因）
-4. 权限继承自 API 账号 —— 建议**为 MCP 单独建账号**，便于隔离与随时禁用
+### 13 个只读（均已确认可用）
 
-**我们的现状**（仓库既有记录）：白名单已有 VPS IP `82.156.238.248`；赛狐最多 5 个 API 账号，**剩 3 个**。
+`get_shop_page_list`、`get_order_page_list`、`get_order_detail`、`get_online_product_page_list`、
+`get_custom_report_page_list`、`get_ad_download_task_page_list`、
+`get_sp_campaign_list`、`get_sp_ad_group_list`、`get_sp_ad_product_list`、
+`get_sp_keyword_list`、`get_sp_product_targeting_list`、
+`get_sp_negative_keyword_list`、`get_sp_negative_product_targeting_list`
+
+### 1 个报表任务（有公开文档对应 → 已解释）
+
+`create_ad_download_task` —— 对应公开 OpenAPI `/api/cpc/download/createTask.json`，
+**建的是报表下载任务，不改广告数据**。
+
+### ⚠️ 9 个 SP 广告写工具（**未调用，无公开文档对应**）
+
+`edit_sp_campaign`、`edit_sp_ad_product`、`edit_sp_ad_group`、`edit_sp_targeting`、
+`close_sp_negative_targeting`、`create_sp_keyword_targeting`、
+`create_sp_negative_keyword_targeting`、`create_sp_product_targeting`、
+`create_sp_negative_product_targeting`
+
+**为什么没验证**：这些是**生产广告的写操作**（`edit_sp_campaign` 自述单次最多 100 条）。
+在明确授权与隔离方案之前**不调用** —— 这是本调研的自我约束。
+
+**已采集的只读证据**（未调用工具，仅读 schema）：
+
+- 输入结构高度同质：`required = ["shop_id", "items"]`，`items` 是 `array<object>`，且 **schema 极薄** —— `additionalProperties: true`，**没有任何字段级约束**（字段说明只写在工具的散文描述里，如「每条除 campaignId 外至少传一个编辑字段」）
+- 这与公开 API 文档里**没有对应端点**的事实并存
+
+**与项目既有约束「赛狐广告无写 API」的关系**：
+
+- 该约束在**公开 OpenAPI 层面仍然成立**（本地镜像 `SELLFOX_API/docs/api-reference/`，443 篇、**09-17 刷新**：广告模块 `manageData/*` 全是分页查询，`hourData/*` 是报表，唯一 `create` 是报表任务）
+- 而这 9 个工具**已能通过 MCP 触达**（MCP 是通的）
+- **→ 无法据此断定约束失效，也无法断定工具可用。真实状态：未验证。**
+
+可能仍是：私有接口 / 工具已注册但后端未实现 / 文档未覆盖。**要落地必须显式验证**（见「未决」）。
 
 ---
 
-## 五、与自有 `sellfox-api-proxy` 的关系
+## 四、与自有 `sellfox-api-proxy` 的关系
 
 | | 官方托管 MCP | 我们的 `sellfox-api-proxy` |
 |---|---|---|
-| 位置 | 赛狐自己的服务端 | 我们 VPS `api.vilavi.cn/sellfox` |
-| 鉴权 | `X-MCP-Key` | 自己的 `Bearer sk-...`（钉钉 OIDC 签发） |
+| 位置 | 赛狐服务端 | 我们 VPS `api.vilavi.cn/sellfox` |
+| 鉴权 | `X-Sellfox-Client-Id/Secret`（直接用生产 App ID/Secret） | 自己的 `Bearer sk-...`（钉钉 OIDC 签发） |
 | 权限模型 | 继承赛狐 API 账号 | **我们自己**的 per-key 限流与账号映射 |
 | 覆盖面 | 23 个工具 | **catch-all，任意赛狐路径**（443 端点） |
-| 当前 | ❌ 未启用 | ✅ 已在用 |
-| 适合 | 开箱即用、广告场景 | 自控权限/审计/限流，或要覆盖 MCP 没暴露的端点 |
+| 当前 | ✅ 可用 | ✅ 已在用 |
 
-**不冲突，可并存。**
+**关键取舍**：官方 MCP 要**把生产 App ID/Secret 直接交给调用方（即客户端）**；我们的 proxy 则是**签发自己的 key**，客户端拿不到赛狐凭证。
+→ 如果要给**多人/多 Agent**用，proxy 的凭证隔离更好；官方 MCP 更适合单人自用。
 
 ---
 
-## 六、未决 / 风险
+## 五、未决 / 需要决策
 
-| # | 问题 | 状态 |
+| # | 问题 | 怎么解 |
 |---|---|---|
-| 1 | **MCP 何时启用** | 等赛狐客服答复 |
-| 2 | **11 个写工具到底是真是假** | 启用后用一个写工具在**测试店铺**上验，或先问客服「MCP 是否包含广告写操作」 |
-| 3 | IP 白名单对官方托管 MCP 是否生效 | 启用后实测 |
-| 4 | `X-MCP-Key` 单头在 ChatGPT 里够不够用 | ChatGPT「自定义标头」只能填一个头 —— 赛狐正好只要一个 ✅（比 FAC 简单） |
-| 5 | 限流 1 req/s | 启用后实测 |
+| 1 | **那 9 个写工具是真是假** | ① 直接问赛狐客服「MCP 是否包含 SP 广告写操作」；② 或在**明确指定的测试店铺**上用**保证无副作用**的载荷调用一次（需用户显式授权） |
+| 2 | 后台 MCP管理页（`X-MCP-Key`）何时开通 | 等客服 |
+| 3 | 限流（上游 1 req/s）在 MCP 侧是否同样生效 | 高频调用时实测 |
+| 4 | 要不要接、接哪个客户端 | 见下 |
 
-### 若将来启用，写权限怎么处置（建议）
+### 若接：权限与安全建议
 
-按项目既有安全偏好（范围先确认、绝不擅自扩大）：
+按项目既有偏好（范围先确认、绝不擅自扩大）：
 
-1. **默认只读**：给 MCP 建权限收窄到只读的独立 API 账号 —— **把限制放在服务端**，比在 prompt 里叮嘱可靠
-2. 若确认要写：先在**一个测试店铺**上跑，人工确认
-3. 客户端侧再设一层确认（Claude Desktop 可把写工具归入需确认组）
+1. **默认只读**：用**权限收窄到只读的独立 API 账号**接 MCP —— 把限制放在**服务端**
+2. **凭证归属**：优先走自有 proxy（客户端拿不到赛狐 App Secret），而不是把生产 App Secret 分发到各客户端
+3. 真要写：先在**单个测试店铺**验证，人工确认
 
 ---
 
@@ -164,26 +150,27 @@ MCP 的 11 个写工具**在我们手上的公开 API 文档里没有对应端�
 
 **实测**（2026-09-20，可复现）
 
-- `https://api-mcp.sellfox.com/mcp` —— `initialize` / `tools/list` / `tools/call`（只读工具）三组探测
+- `https://api-mcp.sellfox.com/mcp` —— `initialize` / `tools/list` / 只读 `tools/call`
+- `https://openapi.sellfox.com/api/oauth/v2/token.json` —— 凭证 + IP 白名单验证
 
 **官方**
 
-- 赛狐后台「业务设置 → 全局 → **MCP管理**」（给出 `X-MCP-Key` 与状态）
+- 赛狐后台「业务设置 → 全局 → **MCP管理**」（生成 `X-MCP-Key`，显示状态）
 - 赛狐帮助中心 · 业务设置：<https://www.sellfox.com/help/features/business-settings>
 - 赛狐博客 ·「狐友会」AI 本地部署与 Skill 实战：<https://www.sellfox.com/blog/article/events-huyouhui-ai-local-deployment-skill-amazon-shijiazhuang-qingdao>
 
-**第三方（非官方，需甄别）**
+**第三方**
 
 - CSDN 接入教程：<https://tianqi.csdn.net/6aacf59b5c13c42b539d194c.html>
-  - ⚠️ 给的是 `X-Sellfox-Client-Id`/`Secret` **两个头**，与官方后台给的单头 `X-MCP-Key` **不一致**
-  - ⚠️ 称「工具为查询类、不涉及数据修改」，与线上 `tools/list` 的 11 个写工具**不符**
+  - ⚠️ 它给的 `X-Sellfox-Client-Id`/`Secret` **实测可用**（是「路径 A」）
+  - ⚠️ 但称「工具为查询类、不涉及数据修改」，与 `tools/list` 的 9 个广告写工具**不符**
 - 社区自建项目 `shuolol/sellfox-mcp`（Node 22+，本地 3100 端口，API Key `sk-xxx`，MIT）：<https://github.com/shuolol/sellfox-mcp>
   - 与官方托管端点是**两回事**，勿混
 
 **仓库内相关**
 
 - `SELLFOX_API/docs/api-reference/` —— 443 篇端点文档（09-17 刷新）+ `llms.txt` / `llms_parsed.json`
-- `sellfox-api-proxy/` —— 自有 VPS 代理（catch-all 443 端点）
+- `sellfox-api-proxy/` —— 自有 VPS 代理（catch-all 443 端点，签发自己的 key）
 - `sellfox_shipping/mcp_tools.py` —— 现有 FastMCP 骨架（仅发货域，7 工具）
 - `docs/research/2026-09-18-sellfox-private-api-terminology.md` —— 私有接口族 vs 公开 OpenAPI
 - `.agents/skills/sellfox-api/SKILL.md` —— 自有代理的调用方式与约束

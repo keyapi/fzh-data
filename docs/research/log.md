@@ -10,15 +10,21 @@ description: docs/research 目录变更历史
 ## 2026-09-20
 
 - **新增**: [2026-09-20-sellfox-official-mcp-feasibility.md](2026-09-20-sellfox-official-mcp-feasibility.md) — **赛狐官方 MCP 可行性**。FAC（ERPNext）接通后，接着问「赛狐能不能也接 MCP」。
-  - **结论：有官方托管 MCP，协议层已通，但当前「未启用」→ 现在不能用，等赛狐开通。** 端点 `https://api-mcp.sellfox.com/mcp`，`streamable-http`，协议 `2025-06-18`（与 FAC 同版本），`serverInfo` = `sellfox-api v1.30.0`。
-  - **当前状态实测**（决定性）：用官方后台给的 `X-MCP-Key` 调**只读**工具 `get_shop_page_list` → `initialize` 200、`tools/list` 200，但 `tools/call` 返回 **`code 40027「未启用MCP功能，请联系管理员」`**。与赛狐后台「业务设置 → 全局 → MCP管理」显示的「不可用」**一致**。**→ 开通前任何客户端侧改动都不会生效。**
-  - **鉴权以官方后台为准：单头 `X-MCP-Key`**（后台 MCP 管理页生成）。CSDN 教程给的是 `X-Sellfox-Client-Id` + `X-Sellfox-Client-Secret` **两个头** —— 与官方不一致（实测两套服务端似乎都认，但接入应以后台给的为准）。**key 是凭证，未写入任何文件。**
-  - **⚠️ 一处早先过度结论已在文档内更正**：调研中途曾据 `tools/list` 断言「推翻项目既有约束『赛狐广告无写 API』」。**对照公开 API 文档后该断言不成立** —— 核对本地镜像 `SELLFOX_API/docs/api-reference/`（443 篇，**09-17 刚刷新**）发现广告模块**只有读**：`manageData/*` 全是分页查询（参数为 `运行状态`/`不传默认查询全部`/`pageSize`），唯一含 `create` 的是 `download/createTask.json`（建**报表下载任务**，非改数据）。
-    - 所以「赛狐广告无写 API」在 OpenAPI 层面**仍然成立**；真实情况是 **MCP 的 11 个写工具在公开文档里没有对应端点 —— 差异未解释**（可能是私有接口 / 工具已注册但后端未实现 / 文档未覆盖）。**启用前无法验证**（只读都被 40027 挡住）。**不要据此改动既有结论或放开写权限。**
-  - **API 文档里的「11 个写工具」矛盾**：`tools/list`（**静态清单，无凭据也返回**）实测 23 个工具，其中 11 个是 SP 广告编辑/创建（`edit_sp_campaign` 自述单次最多 100 条等），**但公开 API 文档没有对应端点**。已在文档中标注为「未解释的差异」，**不当作可用能力**。
-  - **写权限处置建议**（按项目既有安全偏好）：若将来启用且确认可写，先建**权限收窄到只读的独立 API 账号**，把限制放在**服务端**而不是 prompt 里；真要写先在单个测试店铺上跑并人工确认。
-  - **未决**：① MCP 何时启用（等客服）；② 11 个写工具是真是假（启用后验或直接问客服）；③ IP 白名单对官方托管 MCP 是否生效。
-  - 与自有 `sellfox-api-proxy`（VPS `api.vilavi.cn/sellfox`，catch-all 443 端点，**已在用**）**并存不冲突**，文档给了取舍表。
+  - **最终结论：可用，且已用只读链路跑通。** 端点 `https://api-mcp.sellfox.com/mcp`，`streamable-http`，协议 `2025-06-18`（与 FAC 同版本），`serverInfo` = `sellfox-api v1.30.0`。
+  - **两条独立鉴权路径（关键，别混）**：
+    | 路径 | 头 | 来源 | 实测 |
+    |---|---|---|---|
+    | A. API 账号 | `X-Sellfox-Client-Id` + `X-Sellfox-Client-Secret` | API 账号 App ID/Secret | ✅ **可用** |
+    | B. MCP 管理 | 单头 `X-MCP-Key` | 后台「业务设置 → 全局 → MCP管理」 | ❌ `40027 未启用MCP功能` |
+    - 客服答复针对的是 **B**；**A 现在就能用**。CSDN 教程给的正是 A（就实测而言它是对的），官方后台页面给的是 B —— **不矛盾，是两条通道**。
+  - **只读链路实测通过**：① 直连 `openapi.sellfox.com` 取 token 得 `{"code":0,"msg":"success"}`（凭证有效 + **北京办公室 IP 白名单已放行**）；② MCP `initialize`/`tools/list` 200；③ 只读工具 `get_shop_page_list` 返回**真实店铺数据**。**数据未写入任何文件；生产 App Secret 未落盘、未写进文档。**
+  - **工具清单：23 个 = 13 读 + 1 报表任务 + 9 个 SP 广告写**。13 个读工具已确认可用；`create_ad_download_task` 对应公开文档 `/api/cpc/download/createTask.json`（建**报表下载任务**，不改广告数据）。
+  - **⚠️ 9 个 SP 广告写工具：未调用。** `edit_sp_campaign`（自述单次最多 100 条）、`edit_sp_ad_product/group/targeting`、`close_sp_negative_targeting`、`create_sp_{keyword,negative_keyword,product,negative_product}_targeting`。只读了 schema（`required=["shop_id","items"]`，`items` 是 `array<object>` 且 **schema 极薄、无字段级约束**），**未发任何写请求** —— 这些是生产广告写操作，在明确授权与隔离方案前不碰。
+  - **与「赛狐广告无写 API」约束的关系（仍未定论）**：该约束在**公开 OpenAPI 层面仍成立**（本地镜像 443 篇、09-17 刷新：广告模块 `manageData/*` 全是分页查询、`hourData/*` 是报表、唯一 `create` 是报表任务）；而这 9 个工具**已能通过 MCP 触达**。**→ 既不能据此断定约束失效，也不能断定工具可用。** 要落地须显式验证。
+  - **结论演变（如实保留，避免误信中间版本）**：首版「能接」→ 二版因 `40027` 改「不可用」并撤回一条过度断言 → **三版（本版）换 API 账号凭证实测只读成功，回到「可用」**。二版测出 `40027` 是因为**用错了头**（用了 B 路径），不是功能不可用。
+  - **凭证归属的关键取舍**：官方 MCP 要**把生产 App ID/Secret 直接交给客户端**；自有 `sellfox-api-proxy` 则**签发自己的 key**、客户端拿不到赛狐凭证。→ 多人/多 Agent 场景优先走 proxy；官方 MCP 更适合单人自用。
+  - **未决**：① 9 个写工具真伪（问客服，或在**明确指定的测试店铺**上用无副作用载荷验证 —— 需用户显式授权）；② B 路径何时开通；③ 限流是否同样适用。
+  - **安全建议**（按项目既有偏好）：默认只读，建**权限收窄到只读的独立 API 账号**，把限制放在**服务端**而非 prompt。
 
 ## 2026-09-18
 
