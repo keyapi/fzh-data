@@ -8,6 +8,9 @@ tags: [solutions, log]
 # 变更日志
 
 ## 2026-09-20
+- **新增**: `workflow-issues/sellfox-incentive-cost-adjust-2026-09.md` — 「特殊规则改赛狐入库成本」的批量执行尝试：目标值来自共享 Google Sheet 特殊规则 844-874 行（汇率 6.8，通途SKU→赛狐SKU 走 EN BOM「客户物料号→产品编号」，28/28 命中），生成 56 明细行 / 6 张备货单。**结论：清单能生成，但大部分行改不动**，因为①**成本补录单下调受「批次剩余货值」封顶**（`单件可下调幅度 ≲ 当前单价 × 剩余占比`，剩余为 0 就完全降不了 → 下调有强时效性，要在被消耗前做），②**同一 SKU 只能有一张待审核补录单**。另记录两条数据可信度教训：**批次表 `goodsAva` 不能当当前库存**（30 行 21 行与库存明细不符，POLAND 整组差约 1000）、**备货单列表接口 `items` 只返回 3 条预览**（据此判断 SKU 成员关系必然误判，本轮连错两次）。
+- **更新**: `integration-issues/sellfox-cost-adjust-api.md` — 补「建单/审核会被拒的两条硬约束」（`货值不能为负数` 的公式与实测边界 178.045；`存在待审核的补录单` 与 `delete.json` 用法）与 2026-09-20 实测表；`integration-issues/sellfox-restock-headfee-api.md` — 新增「`searchType` 三个调用面三种约定」表（站点列表 `sku` / 批次表 `commoditySku` / 公开 OpenAPI 不含 SKU）+ 列表 3 行预览陷阱；`research/2026-09-18-sellfox-cost-accounting-fifo.md` — **更正 `goodsAva > 0` = 还在库 的说法**，并在「改成本工具结论」补下调封顶；`cost_adjust/AGENT_HANDOFF.md` — 关键坑新增 8/9/10/11 四条，未解决表补两行。
+- **词汇**: `CONCEPTS.md` 新增「剩余货值约束（货值不能为负数）」「激励价」「海外仓批次表 goodsAva」，并加一条 `searchType` 三面约定的 Flagged ambiguity。
 - **新增**: `workflow-issues/sellfox-inventory-sync-cost-drift.md` — 「用库存调整单把外部库存数量同步进赛狐」的长期代价。**先纠正一个易走偏的结论**：赛狐自己的三方仓模块就有「生成调整单」功能（i18n `main.warehouse.tripartite.warehouse.generate.adjustment.order`，权限 `MOD_OVERSEA_WAREHOUSE.CREATE_ADJUST`），**官方建模本就是生成调整单** → 用它同步数量**不是选错工具**，问题在成本侧。三点成因：①调整单明细零成本字段，但每建一张必产生新批次，成本 = **创建时该(仓库,SKU)加权均价快照**；②该快照**不可修正**（`+N/-N` 不互抵、已完成单不可删不可撤、调整单无成本字段故无入口）；③结果=可修正的备货单批次被 FIFO 逐渐吃掉、不可修正的快照不断堆积 → **越跑越难改均价且无回退路径**。给出三个选项（维持/A 改用其他入库单`perPurchase`必填/B 保持调整单但先修好成本）。
 - **更新**: `integration-issues/sellfox-adjust-order-write-chain.md` 的「结论：调整单不适合承载数量同步」→ 改为「用它做数量同步的代价（不是用错工具）」，与新文档口径一致；`cost_adjust/AGENT_HANDOFF.md` 未解决项同步（三方仓端点已探、本账号未开通功能）。
 
