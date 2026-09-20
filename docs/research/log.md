@@ -10,14 +10,15 @@ description: docs/research 目录变更历史
 ## 2026-09-20
 
 - **新增**: [2026-09-20-sellfox-official-mcp-feasibility.md](2026-09-20-sellfox-official-mcp-feasibility.md) — **赛狐官方 MCP 可行性**。FAC（ERPNext）接通后，接着问「赛狐能不能也接 MCP」。
-  - **结论：能，且比 FAC 简单。** 赛狐有**官方托管** MCP：`https://api-mcp.sellfox.com/mcp`，`streamable-http`，协议 `2025-06-18`（与 FAC 同版本），`serverInfo` = `sellfox-api v1.30.0`。
-  - **鉴权与 FAC 正好相反**：赛狐走**静态请求头** `X-Sellfox-Client-Id` / `X-Sellfox-Client-Secret`，**不需要 OAuth**。所以 ChatGPT 建应用时那个「标头方案（持有者/基本/自定义标头）」下拉 —— **对 FAC 是死路，对赛狐才是正解**。
-  - **实测要点**：① `initialize` **不校验凭据**（无凭据也 200），鉴权推迟到工具调用；② 服务**有状态**，`tools/list` 不带 `mcp-session-id` 会 400；③ 假凭据调用会暴露服务端行为 —— 它转去 `openapi.sellfox.com/api/oauth/v2/token.json` 用 client_credentials 换 token 得 401，说明后台就是赛狐公开 OpenAPI；④ 错误文本提到 `SELLFOX_CLIENT_ID` 环境变量 → 存在 **stdio 本地部署形态**。
-  - **⚠️ 最需要注意的发现**：`tools/list` 实测有 **23 个工具，其中 11 个是「写」**（`edit_sp_campaign` 单次最多 100 条、`create_sp_*_targeting`、`close_sp_negative_targeting` 等，全是 SP 广告的编辑/创建）。**这与项目既有硬约束「赛狐广告无写 API」直接冲突**，文档已标注需单独复核（两种可能：2026-07 后赛狐新增了写接口；或当时结论针对「私有接口族」而 MCP 走公开 OpenAPI）。
-  - **纠正**: CSDN 那篇接入教程称「工具为查询类、不涉及数据修改」—— **与线上 v1.30.0 实测不符，已过时**。以实测为准。
-  - **写权限处置建议**（按项目既有安全偏好）：给 MCP 建一个**权限收窄到只读的独立 API 账号**，把限制放在**服务端**而不是 prompt 里。
-  - **未决**：① IP 白名单对官方托管 MCP 是否生效（服务端在赛狐自己基础设施上，只有真实凭据能验）；② ChatGPT 的「自定义标头」下拉能否填**两个**头（赛狐需要两个）。
-  - 与自有 `sellfox-api-proxy`（VPS `api.vilavi.cn/sellfox`，catch-all 443 端点）**并存不冲突**，文档给了取舍表。
+  - **结论：有官方托管 MCP，协议层已通，但当前「未启用」→ 现在不能用，等赛狐开通。** 端点 `https://api-mcp.sellfox.com/mcp`，`streamable-http`，协议 `2025-06-18`（与 FAC 同版本），`serverInfo` = `sellfox-api v1.30.0`。
+  - **当前状态实测**（决定性）：用官方后台给的 `X-MCP-Key` 调**只读**工具 `get_shop_page_list` → `initialize` 200、`tools/list` 200，但 `tools/call` 返回 **`code 40027「未启用MCP功能，请联系管理员」`**。与赛狐后台「业务设置 → 全局 → MCP管理」显示的「不可用」**一致**。**→ 开通前任何客户端侧改动都不会生效。**
+  - **鉴权以官方后台为准：单头 `X-MCP-Key`**（后台 MCP 管理页生成）。CSDN 教程给的是 `X-Sellfox-Client-Id` + `X-Sellfox-Client-Secret` **两个头** —— 与官方不一致（实测两套服务端似乎都认，但接入应以后台给的为准）。**key 是凭证，未写入任何文件。**
+  - **⚠️ 一处早先过度结论已在文档内更正**：调研中途曾据 `tools/list` 断言「推翻项目既有约束『赛狐广告无写 API』」。**对照公开 API 文档后该断言不成立** —— 核对本地镜像 `SELLFOX_API/docs/api-reference/`（443 篇，**09-17 刚刷新**）发现广告模块**只有读**：`manageData/*` 全是分页查询（参数为 `运行状态`/`不传默认查询全部`/`pageSize`），唯一含 `create` 的是 `download/createTask.json`（建**报表下载任务**，非改数据）。
+    - 所以「赛狐广告无写 API」在 OpenAPI 层面**仍然成立**；真实情况是 **MCP 的 11 个写工具在公开文档里没有对应端点 —— 差异未解释**（可能是私有接口 / 工具已注册但后端未实现 / 文档未覆盖）。**启用前无法验证**（只读都被 40027 挡住）。**不要据此改动既有结论或放开写权限。**
+  - **API 文档里的「11 个写工具」矛盾**：`tools/list`（**静态清单，无凭据也返回**）实测 23 个工具，其中 11 个是 SP 广告编辑/创建（`edit_sp_campaign` 自述单次最多 100 条等），**但公开 API 文档没有对应端点**。已在文档中标注为「未解释的差异」，**不当作可用能力**。
+  - **写权限处置建议**（按项目既有安全偏好）：若将来启用且确认可写，先建**权限收窄到只读的独立 API 账号**，把限制放在**服务端**而不是 prompt 里；真要写先在单个测试店铺上跑并人工确认。
+  - **未决**：① MCP 何时启用（等客服）；② 11 个写工具是真是假（启用后验或直接问客服）；③ IP 白名单对官方托管 MCP 是否生效。
+  - 与自有 `sellfox-api-proxy`（VPS `api.vilavi.cn/sellfox`，catch-all 443 端点，**已在用**）**并存不冲突**，文档给了取舍表。
 
 ## 2026-09-18
 

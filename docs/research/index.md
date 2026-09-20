@@ -10,7 +10,7 @@ tags: [research, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
-| 2026-09-20 | 赛狐官方 MCP 可行性 — 官方托管端点在（`api-mcp.sellfox.com/mcp`），自定义头鉴权非 OAuth；23 工具中 11 个是「写」，与「赛狐广告无写 API」约束冲突需复核 | [2026-09-20-sellfox-official-mcp-feasibility.md](2026-09-20-sellfox-official-mcp-feasibility.md) |
+| 2026-09-20 | 赛狐官方 MCP 可行性 — 端点在但**当前未启用**（`40027`，与后台「不可用」一致）；鉴权用官方后台单头 `X-MCP-Key`；`tools/list` 有 11 个广告写工具但与公开 API 文档对不上，差异未解释 | [2026-09-20-sellfox-official-mcp-feasibility.md](2026-09-20-sellfox-official-mcp-feasibility.md) |
 | 2026-09-18 | 赛狐「私有接口」与公开 OpenAPI 的区分 — 术语（undocumented internal API，业界亦称 shadow API 影子 API）、判据、用词约定 | [2026-09-18-sellfox-private-api-terminology.md](2026-09-18-sellfox-private-api-terminology.md) |
 | 2026-09-18 | 赛狐成本口径与 FIFO 批次 — 成本挂在批次上、调整单按先进先出吃批次 | [2026-09-18-sellfox-cost-accounting-fifo.md](2026-09-18-sellfox-cost-accounting-fifo.md) |
 | 2026-09-07 | GLS 跟踪可行性 — 公开无鉴权 API 免登录实测可行（明细需目的邮编）；官方 ShipIT/MyGLS 需 GLS 波兰客户号 + WebAPI 开通，纯开发者账号替代不了 | [2026-09-07-gls-poland-track-feasibility.md](2026-09-07-gls-poland-track-feasibility.md) |
