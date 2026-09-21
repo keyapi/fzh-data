@@ -166,14 +166,14 @@ NAS 双网口（`eth0` 在 OpenWrt LAN / `eth1` 在光猫 LAN），**默认线�
 > to the public internet, put both machines on a private overlay network and point `SYNOLOGY_URL`
 > at the overlay address. **Only the MCP server needs to reach DSM. DSM itself stays unexposed.**
 
-有几种实现路径，但**结合 §1.2 的默认路由问题后，结论与 `mrquj` 的泛化建议不同**：
+几种实现路径（**取舍见 §4.3** —— 那里会说明为什么「不是二选一」）：
 
-| 路径 | 做法 | 优点 | 代价 / 风险 |
-|---|---|---|---|
-| ~~**T1. NAS 装 Tailscale**~~ | NAS 加入 tailnet | 不用动路由器 | ⚠️ **依赖 NAS 出向默认路由** → 断电翻转可能断（§1.2）。**本场景不推荐** |
-| **T2. 让 OpenWrt advertise 网段** | 路由器 `--advertise-routes=192.168.100.0/24` + 控制台批准 | 不用动 NAS | **把整个办公网 LAN 暴露给 tailnet** —— 面太大 |
-| **⭐ T3. OpenWrt 定向转发** | 在 OpenWrt 上把 **tailnet 侧的一个端口 DNAT 到 `192.168.100.242:5001`** | 只暴露 NAS 的 DSM 端口，**不暴露整个网段**；**不依赖 NAS 出向路由** | 需在 OpenWrt 加一条 NAT 规则 |
-| **T4. 维持公网 `:11024`**（现状） | 不动 | 已通、不依赖 NAS 路由 | **DSM 暴露在公网非标端口** |
+| 路径 | 做法 | 说明 |
+|---|---|---|
+| **T1. NAS 装 Tailscale** | NAS 加入 tailnet，VPS 用 NAS 的 `100.x` 地址调 DSM | **抗「默认口翻转」**（走当前默认口出网，翻转后仍在线）；但抗不了 OpenWrt 断电 |
+| T2. OpenWrt advertise 网段 | 路由器 `--advertise-routes=192.168.100.0/24` + 批准 | 会把**整个办公网 LAN** 暴露给 tailnet —— 面太大，不取 |
+| T3. OpenWrt 定向转发 | 在 OpenWrt 上把 tailnet 侧一个端口 DNAT 到 `192.168.100.242:5001` | 不暴露整个网段；但**强依赖 OpenWrt 在线**（规则就在它上面） |
+| **T4. 公网 `:11024`**（现状） | 不动 | **抗 OpenWrt 断电**（入向转发不依赖它）；但**抗不了默认口翻转**（§1.2a） |
 
 ### 4.3 ✅ 最终结论：**两条路径互补，都留着**（本节已两次修正，以此为准）
 
