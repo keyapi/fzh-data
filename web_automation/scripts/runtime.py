@@ -29,6 +29,7 @@ _FAILURE_CODE_RE = re.compile(r"^FAILURE_CODE=([A-Z][A-Z0-9_]+)\s*$", re.M)
 _PROFILE_DIRS = {
     "tongtu": ("chrome-profile", "tongtu-profile-login"),
     "sellfox": ("sellfox-profile", "sellfox-profile-login"),
+    "dingtalk": ("dingtalk-profile", "dingtalk-profile-login"),
 }
 
 

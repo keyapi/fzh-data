@@ -6,7 +6,7 @@
 > ⚠️ 当前仅测试环境可用，普通用户不可用（生产服务器未部署 FAC App）
 >
 > **3P 模式的通用事实**（配置路径、`mcp-remote` 桥接、重启要求、`~/.mcp-auth` 排错）已收敛到
-> [docs/mcp-setup.md](../mcp-setup.md)。本文档只保留 FAC 特有内容。
+> [docs/mcp-setup.md](mcp-setup.md)。本文档只保留 FAC 特有内容。
 
 ---
 
@@ -183,6 +183,7 @@ Claude Desktop (stdio)
 
 ## 相关链接
 
+- [ChatGPT 连接器接 FAC MCP](../chatgpt/docs/reference/fac-mcp-oauth-connect.md) — 走 ChatGPT 时读这篇。**注意**：ChatGPT 是 OpenAI 服务端直连、无本地进程，本文的 `mcp-remote` / `~/.mcp-auth` 排错**不适用**；身份验证必须选 OAuth
 - [Frappe Assistant Core GitHub](https://github.com/buildswithpaul/Frappe_Assistant_Core)
 - [mcp-remote GitHub](https://github.com/geelen/mcp-remote)
 - [MCP Streamable HTTP 规范](https://spec.modelcontextprotocol.io/specification/2025-06-18/basic/transports/#streamable-http)

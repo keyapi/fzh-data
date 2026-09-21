@@ -1,3 +1,4 @@
+| 2026-09-21 | 把 FAC / 赛狐 / NAS 三个 MCP 接上 ChatGPT —— 一次串起来的方法与四个教训 | [workflow-issues/mcp-to-chatgpt-bringup-lessons.md](workflow-issues/mcp-to-chatgpt-bringup-lessons.md) |
 ---
 okf: v0.1
 type: Index
@@ -10,6 +11,18 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-09-10 | Amazon 账期按账号对 NAS/钉钉/赛狐结算组 | [conventions/amazon-period-file-reconcile.md](conventions/amazon-period-file-reconcile.md) |
+| 2026-09-20 | 「特殊规则改赛狐入库成本」执行记录 —— 下调受批次剩余货值封顶，越消耗越改不动 | [workflow-issues/sellfox-incentive-cost-adjust-2026-09.md](workflow-issues/sellfox-incentive-cost-adjust-2026-09.md) |
+| 2026-09-20 | 用库存调整单同步数量会让成本越来越改不动 —— 成因与三个选项 | [workflow-issues/sellfox-inventory-sync-cost-drift.md](workflow-issues/sellfox-inventory-sync-cost-drift.md) |
+| 2026-09-21 | git worktree 新分支的 upstream 被指成 `main` —— 裸 push 的隐藏方向 | [developer-experience/git-worktree-branch-upstream-tracks-main.md](developer-experience/git-worktree-branch-upstream-tracks-main.md) |
+| 2026-09-21 | 中文意图路由（intent_router）—— TypeSafe Jev + 置信度闸门 | [tooling-decisions/typesafe-jev-intent-router.md](tooling-decisions/typesafe-jev-intent-router.md) |
+| 2026-09-21 | Windows worktree 的 `CLAUDE.md`：symlink 还是 stub，取决于开发者模式 | [developer-experience/windows-worktree-claude-md-symlink.md](developer-experience/windows-worktree-claude-md-symlink.md) |
+| 2026-09-21 | ce-okf skill — 把「ce-compound + OKF 收尾」固化成一个命令 | [tooling-decisions/ce-okf-conversation-wrapup-skill.md](tooling-decisions/ce-okf-conversation-wrapup-skill.md) |
+| 2026-09-21 | Amazon 账期报表只能走赛狐「插件获取报告」——API 不可触发，文件地址 1 小时过期 | [integration-issues/sellfox-amazon-settlement-plug-only.md](integration-issues/sellfox-amazon-settlement-plug-only.md) |
+| 2026-09-21 | Walmart 账期走赛狐 API 直拉；平台费口径结案（差额=沃尔玛补贴×15%） | [workflow-issues/walmart-account-period-sellfox-api.md](workflow-issues/walmart-account-period-sellfox-api.md) |
+| 2026-09-18 | 赛狐备货单改「单个头程费用」——无 Excel 路径，只能走私有接口 | [integration-issues/sellfox-restock-headfee-api.md](integration-issues/sellfox-restock-headfee-api.md) |
+| 2026-09-18 | 赛狐成本补录单——公开 OpenAPI 只读，创建/审核走内部接口（完整契约实测） | [integration-issues/sellfox-cost-adjust-api.md](integration-issues/sellfox-cost-adjust-api.md) |
+| 2026-09-18 | 赛狐调整单写链路——createV2 一步到位，batchConfirmAdjust 只适用「待调整」态 | [integration-issues/sellfox-adjust-order-write-chain.md](integration-issues/sellfox-adjust-order-write-chain.md) |
 | 2026-09-10 | DeepSeek flash 降价改价 + OpenRouter 迁移评估（结论：不迁） | [tooling-decisions/deepseek-flash-price-cut-2026-09-10-openrouter-evaluation.md](tooling-decisions/deepseek-flash-price-cut-2026-09-10-openrouter-evaluation.md) |
 | 2026-09-08 | CLIProxyAPI `auth_unavailable`：升级、浏览器 OAuth 与真实模型验收 | [integration-issues/cliproxyapi-auth-unavailable-oauth-recovery.md](integration-issues/cliproxyapi-auth-unavailable-oauth-recovery.md) |
 | 2026-09-08 | parcel_track 处理天数统一 3 个营业日与 per-carrier 顺序并发 | [conventions/parcel-track-handling-days-sequential-workers.md](conventions/parcel-track-handling-days-sequential-workers.md) |

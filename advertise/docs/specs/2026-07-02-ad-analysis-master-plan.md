@@ -498,7 +498,7 @@ python -m advertise.build_report \
 
 - [SP 报告分析价值评估](../research/sp-report-analysis-value.md)
 - [现有代码库审计](../research/existing-codebase-audit.md)
-- [Amazon 广告最佳实践 2026](../research/amazon-ads-best-practices-2026.md)
+- Amazon 广告最佳实践 2026（未撰写）
 - [SP 报告字段权威参考](../reference/sp-report-column-reference.md)
 - [SB/SD 报告字段权威参考](../reference/sb-sd-report-column-reference.md)
-- [赛狐 API 接入教训 (16 条)](../../SELLFOX_API/docs/lessons/2026-06-25-sellfox-integration-lessons.md)
+- [赛狐 API 接入教训 (16 条)](../../../SELLFOX_API/docs/lessons/2026-06-25-sellfox-integration-lessons.md)
