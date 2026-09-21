@@ -109,6 +109,9 @@ Claude Desktop 的第三方 API 模式，允许连接非 Anthropic 模型（如 
 ### 凭证在父仓库不在 worktree
 本项目常开 git worktree（`.claude/worktrees/...`）。gitignore 的凭证只存在于**父仓库** `D:\Work\赛狐\Cursor`：`EN_API/.env`（生产 ERPNext API）、`tongtool_api/.env`（通途 MCP）、`secrets/gsheets-service-account.json`（Google Sheet gspread）。worktree 里找不到这些文件；跑脚本要把相关 env 指到父仓库路径（如 `GSPREAD_SERVICE_ACCOUNT_FILE=D:\Work\赛狐\Cursor\secrets\gsheets-service-account.json`），或从父仓库 cwd 运行。
 
+### 收尾仪式 / ce-okf
+对话结束时把「背景 / 过程 / 结果 / 经验教训」沉淀进仓库的固定动作，此前由用户每次手打一段长中文提示词触发。现已固化为仓库内 skill `/ce-okf`（`.agents/skills/ce-okf/`），一条命令跑完：`ce-compound` 出学习正文 → frontmatter 归一化成 OKF+ce-compound 合并 schema → 11 项级联登记（`docs/solutions/**`、各级 `index.md`/`log.md`、`AGENT_HANDOFF.md`、`AGENTS.md`、`CONCEPTS.md`）→ `scripts/update_index.py` 索引联动 → 凭证扫描 → 提交 + PR。参数 `refresh` 走增量、`no-pr` 只本地提交。缺了它最常漏的是第 11 条的索引联动。
+
 ## Manufacturing
 
 ### 一键完工 (One-Click Complete)
