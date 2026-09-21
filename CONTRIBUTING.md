@@ -56,22 +56,29 @@ powershell -ExecutionPolicy Bypass -File setup.ps1
 
 ### Git Worktree 创建（Windows 特别说明）
 
-> `CLAUDE.md` 和 `.claude/skills` 在 git 中以 symlink 形式跟踪（mode 120000）。
-> Git for Windows 默认 `core.symlinks=false`，clone 和 worktree 均正常。
-> 如果机器上 `core.symlinks=true`（如开启了 Windows 开发者模式），worktree 会因权限不足失败。
+> `CLAUDE.md` 在 git 中以 symlink 跟踪（mode 120000 → `AGENTS.md`），**单一事实源是 AGENTS.md**。
+> Windows 普通权限**建不了文件符号链接**，所以能否检出成真 symlink 取决于**开发者模式**（设置 → 系统 → 开发者选项 → 开发人员模式）。它只放宽这一件事；目录链接一直走 junction，不受影响。
 
-**Windows 上正确的 worktree 创建方式：**
+| 开发者模式 | 建 worktree 用 | 得到的 `CLAUDE.md` | git | 该 worktree 里 Claude 能读到 AGENTS.md |
+|---|---|---|---|---|
+| **开（推荐）** | `-c core.symlinks=true` | 真 symlink → AGENTS.md | 干净 | ✅ |
+| 关 | `-c core.symlinks=false` | 1 行 stub（内容就是 `AGENTS.md`） | 干净 | ❌ 读不到正文 |
+
+> ⚠️ **不传 `-c core.symlinks=...` 会拿到 stub**：本仓库的 `.git/config` 里 `core.symlinks` 被显式设成了 `false`，worktree 共享这份配置，所以即使开发者模式已开也不会自动建 symlink。
+
+**本机一次性设好（开发者模式已开时推荐）：**
 
 ```bash
-# 从主 repo 目录（如 D:\Work\赛狐\Cursor）执行
-git -c core.symlinks=false worktree add <path> -b <branch-name>
-
-# worktree 创建后，在新 worktree 中运行
-cd <path>
-powershell -ExecutionPolicy Bypass -File setup.ps1
+# 从主 repo 目录（如 D:\Work\赛狐\Cursor）执行；之后 worktree 默认就是真 symlink
+git config core.symlinks true
+git worktree add <path> -b <branch-name>
 ```
 
-> `setup.ps1` 的 `New-SafeSymlink` 会尝试创建真实 symlink，失败则自动回退为文件拷贝。
+不想改配置，就每次显式带 `git -c core.symlinks=true worktree add <path> -b <branch-name>`。
+没开开发者模式时只能拿 stub；此时若在 worktree 里跑 `setup.ps1`，`New-SafeSymlink` 会退化成**整份拷贝** —— git 变脏，但 Claude 至少读得到内容。
+
+**worktree 里不要跑 `setup.ps1`。** `~/.claude/skills/*` 是**全机一份**的链接，必须指向**主仓库**，这样每个 worktree 里 Claude 读到的都是同一份（已合并）skill。在 worktree 里跑会把链接指到那个临时 worktree；`New-SafeJunction` 对已存在路径 `[SKIP]`，**事后在主仓库再跑也修不回来**，只能手工删链接重建。
+**skill 链接只需在主仓库根目录跑一次**；`git pull` 拉到新 skill 后再跑一次即可。
 
 ---
 

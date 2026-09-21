@@ -8,6 +8,8 @@ tags: [solutions, log]
 # 变更日志
 
 ## 2026-09-21
+- **新增**: `developer-experience/windows-worktree-claude-md-symlink.md` — Windows 上 worktree 里 `CLAUDE.md` 是 symlink 还是 stub，取决于**开发者模式**（它正是提供"非管理员建文件符号链接"权限的东西）。修正 `CONTRIBUTING.md` 的过期结论：旧文写"开发者模式会让 worktree 创建因权限不足失败"，实测**已反向失效** —— 开启后 `git -c core.symlinks=true worktree add` 成功且 `CLAUDE.md -> AGENTS.md` 是真 symlink、`git status` 干净。**关键坑**：本仓库 `.git/config` 把 `core.symlinks` 显式设成 `false`，worktree 共享该配置，所以不传 `-c` 覆盖即使开了开发者模式仍拿到 stub。stub 状态极隐蔽 —— git 干净、不报错，但该 worktree 里 Claude 系统提示的项目指令**只有 `AGENTS.md` 这 9 个字符**，AGENTS.md 正文完全没进来。另：`setup.ps1` 只在主仓库根目录跑（`~/.claude/skills/*` 是全机一份、必须指向主仓库；在 worktree 跑会指错且 `[SKIP]` 导致修不回来）。
+- **更新**: `CONTRIBUTING.md`「Git Worktree 创建（Windows 特别说明）」三处 —— `:61` 的过期结论、`:67` 的推荐命令（`core.symlinks=false` 改成按开发者模式二选一 + 一次性 `git config core.symlinks true`）、`:69-71` 删掉"在 worktree 里跑 setup.ps1"（现在有害）。
 - **新增**: `tooling-decisions/ce-okf-conversation-wrapup-skill.md` — 把用户 40+ 会话里手打的固定收尾提示词（29 个版本同一骨架）固化成仓库内 skill `ce-okf`。决策：**包一层 `ce-compound` 而不是改它** —— 三条理由：① `ce-compound` 写完文档即结束回合，**不提交不开 PR**（用户每次都要"之后 git 提交 并 pr"，这是缺口）；② 它的 `component` 枚举是 Rails 味儿的，而本仓库 `docs/solutions/**` 早已是 OKF + ce-compound 合并 frontmatter，它不写 `okf:`/`type:`；③ 它是用户级外部 skill（`~/.agents/skills/`），改它不随本仓库 PR 走，同事的 Agent 拿不到。另记两条实测：各 category 的 `index.md` 表头不统一（`integration-issues` 三列带日期、`tooling-decisions` 两列）；`AGENT_HANDOFF.md` 用 `type: Handoff` 与 `updated:` 属现役事实，勿"修正"。
 - **新增**: `.agents/skills/ce-okf/SKILL.md` — 收尾一条龙：模式判定（新增/增量）→ `ce-compound` 出正文 → frontmatter 归一化 → 11 项 OKF 级联登记 → `update_index.py` 索引联动 → 凭证扫描 → 提交 + PR。参数 `/ce-okf`（默认到 PR）、`refresh`（增量）、`no-pr`（只本地提交）。
 - **更新**: `AGENTS.md` 模块索引表 +1 行（`ce-okf`）。
