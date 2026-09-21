@@ -17,6 +17,8 @@ tags: [solutions, log]
 - **坑**: Windows 上 `setup.ps1` 建**文件**符号链接要开发者模式/管理员，没开时退化成 `Copy-Item`，把 `CLAUDE.md` 从「1 行 stub」写成 AGENTS.md 整份副本（215 行），工作区变脏。**不要提交它**，也不要拿 `git restore` 当标准动作 —— 那会让本机 Claude Code 只读到 `AGENTS.md` 这 9 个字符（目录链接用 junction 不受影响，skills 一直正常）。两个状态只能取一个；开开发者模式才能兼得。已写进 `ce-okf` skill 安装节。
 - **新增**: `ce-okf` skill 补「多 Agent 并存（Claude/Codex/Cursor）」一节 —— 三者共用 `AGENTS.md` + `.agents/skills/` 一套事实源（`CLAUDE.md` 只是 Claude 入口，只改 AGENTS.md）；`/ce-compound` 是 Claude 专属、Codex/Cursor 上没有需走内置模板兜底；**提交只逐个 `git add` 本次自己动过的文件，绝不 `git add -A`**（另两个 Agent 的未完成改动会躺在工作区）；看到不认识的改动原样留着。
 - **坑**: `setup.ps1` **不能在 worktree 里跑** —— `~/.claude/skills/` 软链是 Claude 独有的，在 worktree 跑会把链接指向临时 worktree；而 `New-SafeJunction` 对已存在路径 `[SKIP]`，**事后在主仓库再跑也修不回来**。本次实施中了一次（`ce-okf` 链接指到 worktree），已用 `(Get-Item $p -Force).Delete()` 移除（只删链接、不动目标）。
+- **修正（`ce-compound-refresh` 首跑）**: 上面两条里"仓库 `core.symlinks` 是 `false`"的记载**已被本日后续操作推翻** —— 主仓库已改为 `true`。四份文件同步更正：`docs/solutions/developer-experience/windows-worktree-claude-md-symlink.md`（改判据为"换新机器先确认这一项" + 新增"项目 skill 会在技能列表里出现两遍"的副作用说明）、`docs/solutions/tooling-decisions/ce-okf-conversation-wrapup-skill.md`（改成"本机已开开发者模式 + `core.symlinks=true`，不再是两状态二选一"）、`CONTRIBUTING.md`、`.agents/skills/ce-okf/SKILL.md`。**教训：文档里写"当前状态"会随同一个会话的后续操作立刻过期** —— 能写成"判据/检查方法"就别写死值。
+- **修正（`ce-okf` 第 0 步）**: `ce-okf` 首跑发现模式判据不准。旧规则「本次对话已 commit / 已开 PR → 增量」把"对话产物"和"文档是否已存在"混为一谈；已改为「学习点**是否已写进某篇现存文档**」。边做边提交的会话可以同时"已有 PR"和"有全新学习点"，旧规则会把后者误送进 refresh。
 
 ## 2026-09-20
 

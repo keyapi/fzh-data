@@ -3,6 +3,7 @@ okf: v0.1
 type: Reference
 title: Windows 上 worktree 的 CLAUDE.md：symlink 还是 stub，取决于开发者模式
 date: 2026-09-21
+last_updated: 2026-09-21
 category: developer-experience
 module: tooling
 problem_type: developer_experience
@@ -33,7 +34,13 @@ Windows 上普通权限**建不了文件符号链接**（目录可以，走 junc
 | **开（推荐）** | `true` | 真 symlink → `AGENTS.md` | 干净 | ✅ |
 | 关 | `false` | 1 行 stub（内容就是字符串 `AGENTS.md`） | 干净 | ❌ 读不到正文 |
 
-**关键坑：本仓库 `.git/config` 把 `core.symlinks` 显式设成了 `false`，worktree 共享这份配置** —— 所以即使开发者模式已开，**不传 `-c` 覆盖，建出来的仍是 stub**。实测确认。
+> ⚠️ **不传 `-c core.symlinks=...` 也会拿到 stub** —— 本仓库 `.git/config` 原先显式设了 `core.symlinks=false`（**2026-09-21 已改为 `true`**），而 worktree 共享这份配置。**换新机器 / 新克隆先确认这一项**，否则即使开发者模式开着，建出来的仍是 stub。
+
+### 副作用：项目 skill 会在 Claude 的技能列表里出现两遍
+
+仓库里的 `.claude/skills` 也是 git 跟踪的 symlink（→ `../.agents/skills/`）。它和 `~/.claude/skills/*` 是**两条独立的加载路径**：修好之后 Claude 会同时从两边读到同一批 skill，列表里每个项目 skill 出现两次（`category`、`okf`、`stock-init`… 各一份）。主仓库从 2026-06-03 起就是真 symlink，所以**那里一直如此，不是新问题**。
+
+留着真 symlink 的理由是让按 `.claude/skills` 约定路径找 skill 的工具（如 Cursor）也能找到；把某个 worktree 的这份留成 stub 则能让列表恢复单份（skill 仍经 `~/.claude/skills/` 可用），代价是该 worktree 不提供项目级路径。**二者只是取舍** —— 本次选择与主仓库保持一致（真 symlink）。
 
 ### 推荐的创建方式
 

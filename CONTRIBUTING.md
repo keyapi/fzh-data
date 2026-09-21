@@ -64,7 +64,7 @@ powershell -ExecutionPolicy Bypass -File setup.ps1
 | **开（推荐）** | `-c core.symlinks=true` | 真 symlink → AGENTS.md | 干净 | ✅ |
 | 关 | `-c core.symlinks=false` | 1 行 stub（内容就是 `AGENTS.md`） | 干净 | ❌ 读不到正文 |
 
-> ⚠️ **不传 `-c core.symlinks=...` 会拿到 stub**：本仓库的 `.git/config` 里 `core.symlinks` 被显式设成了 `false`，worktree 共享这份配置，所以即使开发者模式已开也不会自动建 symlink。
+> ⚠️ **不传 `-c core.symlinks=...` 也会拿到 stub**：本仓库 `.git/config` 原先显式设了 `core.symlinks=false`（**2026-09-21 已改为 `true`**），worktree 共享这份配置。**新机器 / 新克隆先确认这一项**（`git config --get core.symlinks`），否则即使开发者模式开着也不会自动建 symlink。
 
 **本机一次性设好（开发者模式已开时推荐）：**
 
