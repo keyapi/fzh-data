@@ -11,6 +11,7 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-09-14 | EN 销售订单「已关闭未发货」死单与工单进度不可信 — 子表反查父单的 API 铁律 | [workflow-issues/erpnext-so-closed-unshipped-and-unstarted-work-orders.md](workflow-issues/erpnext-so-closed-unshipped-and-unstarted-work-orders.md) |
 | 2026-09-10 | Amazon 账期按账号对 NAS/钉钉/赛狐结算组 | [conventions/amazon-period-file-reconcile.md](conventions/amazon-period-file-reconcile.md) |
 | 2026-09-20 | 「特殊规则改赛狐入库成本」执行记录 —— 下调受批次剩余货值封顶，越消耗越改不动 | [workflow-issues/sellfox-incentive-cost-adjust-2026-09.md](workflow-issues/sellfox-incentive-cost-adjust-2026-09.md) |
 | 2026-09-20 | 用库存调整单同步数量会让成本越来越改不动 —— 成因与三个选项 | [workflow-issues/sellfox-inventory-sync-cost-drift.md](workflow-issues/sellfox-inventory-sync-cost-drift.md) |

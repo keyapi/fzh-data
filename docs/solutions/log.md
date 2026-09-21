@@ -7,6 +7,10 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-09-14
+- **新增**: `workflow-issues/erpnext-so-closed-unshipped-and-unstarted-work-orders.md` — 子表字段反查父单的三条 API 铁律（子表直查 403 / 父单直查子字段 417 / 子表过滤结果"一行一子行"必须按父单去重）+ `in` 列表超 4094 字节请求行上限须分块 + `Sales Order Item.name == Production Plan Item.sales_order_item` 连接键 + 出库单必须按 `item_code` 匹配（老出库行 `customer_item_code` 为空）+ `amended_from` 区分改单与死单 + 客户码注册在成品 `KS` 上而订单行卖 `PK#` 皮壳。两条反直觉结论：**ERPNext 的 `Closed` ≠ 已发完**；**`Work Order.status` / `produced_qty` 不可信，进度要看工序卡**（`WO-26-02609` 头 `Not Started`，实际 44 件已过 5 道工序；且完成件数不能各工序求和）。
+- **新增**: `EN_API/item_shipment_status.py` + `EN_API/AGENT_HANDOFF_物料发货状态.md` — 客户物料号 / EN 物料号 → 销售订单发货状态 + 生产计划/工单/工序卡报表（单物料颗粒度，3 sheet Excel，`--assert-fixture` 回归自检）。分页相对 `dn_trace_report.py` 加 `order_by="name asc"` 并按实收行数前移；只落新脚本，未回灌旧脚本。
+- **实测**: `CENKZ1325-Yellow-138` / `PK#KS0001-DM-140-YELLOW`（美中公司 DANEEY）10 张 SO / 330 件，已发 126 / 未发 184，其中死单 64（SO-26-00099、SO-26-00003、SO-25-00198 尾数 4）、在产待发 120。
 ## 2026-09-10
 - **更新**: `conventions/amazon-period-file-reconcile.md` — 补浏览器补下载路径、env/人名不上 git；公开叙述仍用拼音首字母。
 - **新增**: `conventions/amazon-period-file-reconcile.md` — Amazon 账期按账号对 NAS/钉钉/赛狐结算组：负责人≠人名夹、店名经别名、groupPage≠txt 原件、「或」≠「钉钉且附件」；公开叙述用人名首字母。
