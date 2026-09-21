@@ -7,6 +7,14 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-09-21
+
+- **新增**: [workflow-issues/mcp-to-chatgpt-bringup-lessons.md](workflow-issues/mcp-to-chatgpt-bringup-lessons.md) — 把 FAC / 赛狐 / NAS 三个 MCP 接上 ChatGPT 的**方法总结与四个教训**。两个是方法问题不是技术难题：
+  ① **单次探针不可信** —— 在办公网内测 `nas.vilavi.cn` 得 200，实为**内网 DNS 覆盖**，换两处外部主机复测才发现 443 公网不通；
+  ② **评估第三方方案要先盘功能面再决定自建**（用户直接批评）—— 我把 3 个开源方案只当「对比对象」、**没抄它们的工具清单**，导致功能面远小于现成方案，变成「用户要一个我加一个」；
+  ③ **上游封装会吞异常** —— `NAS_API.get_file_list` 失败 `return []`，把「Session timeout」伪装成「文件夹是空的」；`download_file()` 因 `get_file(mode='download')` 写盘不返字节而**永远返回 None**；
+  ④ **做对的**：鉴权先验最小闭环（本机 + Tailscale Funnel，零生产影响）拿到 `openai-mcp/1.0.0` 带 `Authorization` 头的决定性日志，结论赛狐与 NAS 共用。
+
 ## 2026-09-20
 
 - **修复（链接）**：本 bundle 失效相对链接（少退一级，`../../` → `../../../`）：`architecture-patterns/agent-dingtalk-file-bridge-via-erpnext.md`、`workflow-issues/en-channel-account-gsheet-sync.md`（5 条）、`workflow-issues/search-first-before-implementing.md`。
