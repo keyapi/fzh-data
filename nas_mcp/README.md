@@ -17,8 +17,9 @@ timestamp: 2026-09-21
 
 ## 三条硬安全约束
 
-1. **只读**：只暴露 **8 个**工具 —— `nas_health` / `nas_list_folder` / `nas_file_info` /
-   `nas_search` / `nas_folder_size` / **`nas_read_image`** / **`nas_read_pdf`** / `nas_read_text`。
+1. **只读**：只暴露 **11 个**工具 —— `nas_health` / `nas_list_folder` / `nas_file_info` /
+   `nas_search` / `nas_folder_size` / `nas_thumbnail` / `nas_file_md5` /
+   **`nas_read_image`** / **`nas_read_pdf`** / **`nas_read_doc`** / `nas_read_text`。
    **不暴露任何写或删**（`NAS_API/synology.py` 里的 `create_folder` / `create_subfolders` / **`delete_folder`** 一律不用）。
 2. **权限边界交给 NAS 账号**（默认 `NAS_ALLOWED_ROOTS=*`）：MCP 只拦 `..` 路径逃逸，
    **能看什么由 `fzh.mcp` 这个 DSM 账号的文件夹权限决定** —— 加目录不用改服务。

@@ -198,5 +198,42 @@ except S.NasError as e:
 except ValueError as e:
     print(f"  SKIP  PDF 用例：{e}")
 
+
+print("\n── 11) B+C 新工具（缩略图 / MD5 / Office 文本）")
+import base64 as _b64
+import json as _json
+import re as _re
+
+IMG2 = "/产品信息/KS0001_三角靠枕/图片/2026新图/宽条绒/土黄色/100/3.jpg"
+try:
+    out = S.tool_thumbnail({"path": IMG2, "size": "small"})
+    meta = _json.loads(out["_content"][0]["text"])
+    raw = _b64.b64decode(out["_content"][1]["data"])
+    check("nas_thumbnail 返回 JPEG", raw[:2] == b"\xff\xd8",
+          "DSM %s %dKiB -> 返回 %.1f KiB" % (meta["dsm_format"], meta["dsm_bytes"] // 1024, len(raw) / 1024))
+    check("nas_thumbnail 确实更小", len(raw) < meta["dsm_bytes"],
+          "%d < %d" % (len(raw), meta["dsm_bytes"]))
+except Exception as e:                                  # noqa: BLE001
+    check("nas_thumbnail", False, "%s: %s" % (type(e).__name__, str(e)[:70]))
+
+try:
+    r = S.tool_file_md5({"path": IMG2})
+    md5 = str(r.get("md5") or "")
+    check("nas_file_md5 得到 32 位 md5", bool(_re.fullmatch(r"[0-9a-f]{32}", md5)), md5)
+except Exception as e:                                  # noqa: BLE001
+    check("nas_file_md5", False, "%s: %s" % (type(e).__name__, str(e)[:70]))
+
+try:
+    sr = S.tool_search({"path": "/产品信息", "extension": "docx", "limit": 1})
+    items = sr.get("items") or []
+    if items:
+        r = S.tool_read_doc({"path": items[0]["path"], "max_chars": 800})
+        check("nas_read_doc 抽出文字", r.get("chars", 0) > 0,
+              "%s %d 字" % (r.get("ext"), r.get("chars")))
+    else:
+        print("  SKIP  docx 用例（搜不到 docx）")
+except Exception as e:                                  # noqa: BLE001
+    check("nas_read_doc", False, "%s: %s" % (type(e).__name__, str(e)[:70]))
+
 print(f"\n结果：{ok} passed, {fail} failed")
 sys.exit(1 if fail else 0)

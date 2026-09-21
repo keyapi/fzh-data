@@ -267,6 +267,41 @@ TOOLS = [
         },
     },
     {
+        "name": "nas_thumbnail",
+        "description": ("取**廉价缩略图**（适合批量预览，比读原图省很多）。只读。"
+                        "DSM 原始返回 BMP，本工具已转成 JPEG。"),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "图片路径"},
+                "size": {"type": "string", "description": "small(250) / medium(500) / large(原图)，默认 small"},
+            },
+            "required": ["path"],
+        },
+    },
+    {
+        "name": "nas_file_md5",
+        "description": "算文件 MD5，**不用下载文件**。只读，适合去重/比对。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"path": {"type": "string", "description": "文件路径"}},
+            "required": ["path"],
+        },
+    },
+    {
+        "name": "nas_read_doc",
+        "description": ("抽 Word(.docx) / Excel(.xlsx) / PPT(.pptx) 的**文字**（不渲染版式）。"
+                        "只读；老式 .doc/.xls/.ppt 不支持。"),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "文档路径"},
+                "max_chars": {"type": "integer", "description": "返回字符上限，默认 60000，最大 200000"},
+            },
+            "required": ["path"],
+        },
+    },
+    {
         "name": "nas_search",
         "description": "在 NAS 上按名字/扩展名递归搜索文件（DSM 索引搜索）。只读。",
         "inputSchema": {
@@ -666,10 +701,175 @@ def tool_read_pdf(a: dict) -> dict:
     return {"_content": blocks}
 
 
+# ── B+C 补齐：缩略图 / 校验和 / Office 文本 ──────────────────
+
+# 经 SYNO.API.Info 查得：Thumb 在 entry.cgi，maxVersion=3（库未收录，自行构造）
+THUMB_PATH, THUMB_VER = "entry.cgi", "3"
+
+
+def tool_thumbnail(a: dict) -> dict:
+    """取**廉价缩略图**（DSM Thumb API）—— 适合批量预览。
+
+    注意：DSM 的 small/medium 返回的是 **BMP（未压缩）**（实测 250x250 就要 188 KB），
+    所以这里拿回来自己转 JPEG —— 实测同样 250x250 转完约 20 KB，比读原图省两个数量级。
+    """
+    p = safe_path(a.get("path") or "")
+    if not p:
+        raise ValueError("path 必填")
+    size = (a.get("size") or "small").lower()
+    if size not in ("small", "medium", "large"):
+        size = "small"
+
+    c = nas_client()
+    url = (f"{c.base_url}{THUMB_PATH}?api=SYNO.FileStation.Thumb&version={THUMB_VER}"
+           f"&method=get&path={quote_plus(p)}&size={size}&_sid={c._sid}")
+    token = getattr(c.session, "_syno_token", "") or ""
+    r = requests.get(url, verify=False, timeout=60, headers={"X-SYNO-TOKEN": token})
+    r.raise_for_status()
+    raw = r.content
+    if raw[:2] == b"{" or b'"error"' in raw[:200]:
+        raise NasError("缩略图不可用（该类型/该图可能没有缩略图）：" + raw[:200].decode("utf-8", "replace"))
+
+    try:
+        im = Image.open(io.BytesIO(raw))
+        im.load()
+    except Exception as e:                            # noqa: BLE001
+        raise NasError(f"缩略图解析失败：{type(e).__name__}: {e}")
+    src_fmt, src_size = im.format, im.size
+    if im.mode not in ("RGB", "L"):
+        im = im.convert("RGB")
+    buf = io.BytesIO()
+    im.save(buf, "JPEG", quality=75, optimize=True)
+    out = buf.getvalue()
+    return {"_content": [
+        {"type": "text", "text": json.dumps({
+            "path": p, "dsm_size": size, "dsm_format": src_fmt, "dsm_bytes": len(raw),
+            "returned_bytes": len(out), "size": list(src_size),
+        }, ensure_ascii=False, indent=2)},
+        {"type": "image", "data": base64.b64encode(out).decode(), "mimeType": "image/jpeg"},
+    ]}
+
+
+def tool_file_md5(a: dict) -> dict:
+    """算文件 MD5（DSM MD5 API，**不需要下载文件**）。只读。适合去重/比对。"""
+    p = safe_path(a.get("path") or "")
+    if not p:
+        raise ValueError("path 必填")
+
+    def start(c):
+        return c.start_md5_calc(file_path=p)
+
+    res = start(nas_client())
+    c = nas_client()
+    try:
+        task_id = _task_id(res, "MD5")
+    except NasError:
+        res = start(nas_client(relogin=True))
+        c = nas_client()
+        task_id = _task_id(res, "MD5")
+
+    def status(tid):
+        # 有的版本要带引号，有的不要 —— 两种都试
+        for cand in (tid, '"{}"'.format(tid)):
+            try:
+                r = c.get_md5_status(taskid=cand)
+            except Exception as e:                    # noqa: BLE001
+                last = e
+                continue
+            if isinstance(r, dict) and r.get("success"):
+                return r
+            if isinstance(r, str) and "taskid" in r.lower():
+                continue
+            last = r
+        raise NasError("MD5 查询失败：" + str(last)[:200])
+
+    out = _poll(lambda: (lambda r: {"finished": bool((r.get("data") or {}).get("finished")),
+                                    "md5": (r.get("data") or {}).get("md5")})(status(task_id)),
+                tries=20, delay=1.0)
+    return {"path": p, **(out or {})}
+
+
+DOCX_EXT = {".docx"}
+XLSX_EXT = {".xlsx", ".xlsm"}
+PPTX_EXT = {".pptx"}
+
+
+def tool_read_doc(a: dict) -> dict:
+    """抽 **Word / Excel / PPT 的文字**（不是渲染版式）。只读。
+
+    - .docx → python-docx：段落 + 表格
+    - .xlsx → openpyxl：每个 sheet 的单元格（有行/列上限）
+    - .pptx → python-pptx：每页的文本框
+    老式二进制 .doc/.xls/.ppt 不支持（需要另外的库）。
+    """
+    raw = a.get("path") or ""
+    if not raw:
+        raise ValueError("path 必填")
+    p = safe_path(raw)
+    ext = posixpath.splitext(p)[1].lower()
+    if ext not in (DOCX_EXT | XLSX_EXT | PPTX_EXT):
+        raise ValueError(f"只处理 .docx / .xlsx / .pptx；当前是 {ext or '无扩展名'}"
+                         "（老式 .doc/.xls/.ppt 不支持）")
+
+    max_chars = max(2000, min(int(a.get("max_chars") or 60000), 200000))
+    data = fetch_bytes(p, max_bytes=64 * 1024 * 1024)
+    bio = io.BytesIO(data)
+    parts: list[str] = []
+
+    if ext in DOCX_EXT:
+        import docx                                # python-docx
+        d = docx.Document(bio)
+        for para in d.paragraphs:
+            t = (para.text or "").strip()
+            if t:
+                parts.append(t)
+        for ti, tbl in enumerate(d.tables, 1):
+            parts.append(f"\n[表 {ti}]")
+            for row in tbl.rows:
+                cells = [(c.text or "").strip() for c in row.cells]
+                if any(cells):
+                    parts.append(" | ".join(cells))
+
+    elif ext in XLSX_EXT:
+        import openpyxl
+        wb = openpyxl.load_workbook(bio, read_only=True, data_only=True)
+        try:
+            for ws in wb.worksheets:
+                parts.append(f"\n[工作表: {ws.title}]  ({ws.max_row} 行 x {ws.max_column} 列)")
+                for ri, row in enumerate(ws.iter_rows(values_only=True), 1):
+                    if ri > 300:
+                        parts.append("  ...（只取前 300 行）")
+                        break
+                    cells = ["" if v is None else str(v) for v in row]
+                    if any(c.strip() for c in cells):
+                        parts.append(" | ".join(cells))
+        finally:
+            wb.close()
+
+    else:                                          # pptx
+        import pptx                                # python-pptx
+        pr = pptx.Presentation(bio)
+        for i, slide in enumerate(pr.slides, 1):
+            parts.append(f"\n[第 {i} 页]")
+            for shape in slide.shapes:
+                if shape.has_text_frame:
+                    t = (shape.text_frame.text or "").strip()
+                    if t:
+                        parts.append(t)
+
+    text = "\n".join(parts)
+    truncated = len(text) > max_chars
+    return {"path": p, "ext": ext, "chars": len(text), "truncated": truncated,
+            "text": text[:max_chars]}
+
+
 TOOL_IMPL = {
     "nas_health": tool_health,
     "nas_list_folder": tool_list,
     "nas_file_info": tool_info,
+    "nas_thumbnail": tool_thumbnail,
+    "nas_file_md5": tool_file_md5,
+    "nas_read_doc": tool_read_doc,
     "nas_search": tool_search,
     "nas_folder_size": tool_folder_size,
     "nas_read_pdf": tool_read_pdf,

@@ -69,4 +69,15 @@ tags: [nas, mcp, log]
      最终仍失败时给可读的中文解释而非裸异常。
 - **容器依赖**：新增 `pymupdf`（镜像再 +~30MB）。
 - **测试 32/32**（新增：search 有结果、folder_size 有值、PDF 渲染出图 + 抽出文字）。
+- **新增（B+C，用户点选）**: 三个只读工具，工具数 8 → **11**：
+  - **`nas_thumbnail`** —— DSM Thumb API 的廉价缩略图。⚠️ **实测发现 DSM 对 small/medium 返回的是 BMP（未压缩）**
+    （250x250 就 183 KiB！），所以本工具拿回来**自己转 JPEG** —— 同样 250x250 转完 **10.8 KiB，省 17 倍**。
+  - **`nas_file_md5`** —— MD5 **不下载文件**（`start_md5_calc` + `get_md5_status` + 轮询）。
+    实测：`a3270f8f17ab6f06b6ec6a93966af928`。
+  - **`nas_read_doc`** —— 抽 **Word(.docx) / Excel(.xlsx) / PPT(.pptx) 的文字**（不渲染版式）。
+    实测：docx 抽出完整需求（含天猫参考链接）；xlsx 抽出 A+ 图需表（型号/尺寸/文案）。
+    老式二进制 .doc/.xls/.ppt 不支持。
+  - 容器依赖新增 `openpyxl` / `python-docx` / `python-pptx`。
+- **已知不稳**: `nas_folder_size` 偶尔失败 —— DSM 的 DirSize 任务会被回收（`No such task`）。
+  已加多次重启重试 + 可读中文解释；**测试里表现为间歇性**（连跑两次：一次 35/1、一次 36/0）。
 - **未决**: 尚无写入能力（刻意）；per-user 权限（现为单账号单 token）待评估。
