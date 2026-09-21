@@ -10,10 +10,15 @@
     2. {MM.DD} PotteryBarn label-FZH-DANEEY-Not Prime-第一天.pdf   步骤 4
     3. {MM.DD} PotteryBarn 背贴-中文西班牙语.pdf                    步骤 4.2
 
+用 `--no-stock "SKU-A,SKU-B"` 指出无货 SKU 时（只在有货才发的场景）：
+    - 通途额外产出 PB_1_不可导入_无库存_ / PB_2_导入_库存有货_
+    - 主标签/背贴 PDF **只含有货订单的页**
+    - 另出一份「无货{N单M件}-{MM.DD} …」子集标签/背贴 PDF，给无货那几单单独留着
+
 用法：
     uv run python run_pb_orders.py --dir "D:\\Work\\美国\\Tracy Miller\\PB orders\\20260921"
     uv run python run_pb_orders.py --dir "...\\20260921" --dry-run
-    uv run python run_pb_orders.py --dir "...\\20260921" --no-stock "SKU-A,SKU-B" --check-shipment
+    uv run python run_pb_orders.py --dir "...\\20260921" --no-stock "SKU-A" --check-shipment
 
 不做的：赛狐导入（原步骤 3.x）、按仓库分拆（原 4.3，已停用）、邮件对账（归 pb_reconciliation）。
 """
@@ -121,23 +126,18 @@ def run(args):
         for key, path in written.items():
             print(f"           -> {path.name}")
 
-    # ---------- 1:1 硬校验 ----------
-    if len(df_pdf) != len(importable):
+    # ---------- 1:1 硬校验（对全量订单行；无货拆分是之后的事）----------
+    if len(df_pdf) != len(df_order):
         print(
-            f"\n[1:1 校验] 失败：PDF {len(df_pdf)} 页 != 订单 {len(importable)} 行，"
+            f"\n[1:1 校验] 失败：PDF {len(df_pdf)} 页 != 订单 {len(df_order)} 行，"
             "拒绝生成 PDF 标签。"
         )
         print("  提示：请检查 SPS PDF 导出设置，可能 Qty per Carton 有不是 1 的。")
-        if no_stock_skus:
-            print(
-                f"  另：--no-stock 剔除了 {len(no_stock)} 行，会导致页数与行数不等。"
-                "若确认只发有货部分，请把无货订单的页也从 PDF 里剔除后再跑。"
-            )
         sys.exit(1)
-    print(f"\n[1:1 校验] PDF {len(df_pdf)} 页 == 订单 {len(importable)} 行  ✓")
+    print(f"\n[1:1 校验] PDF {len(df_pdf)} 页 == 订单 {len(df_order)} 行  ✓")
 
-    # ---------- join：页 -> SKUxQTY ----------
-    df_join, unmatched = sps_pb_pdf.join_pages_with_orders(df_pdf, importable)
+    # ---------- join：页 -> SKUxQTY（先用全量行 join，再按无货拆页）----------
+    df_join, unmatched = sps_pb_pdf.join_pages_with_orders(df_pdf, df_order)
     print(f"[join]     未匹配 {len(unmatched)}")
     if unmatched:
         print(f"  未匹配的 PO Number-Line: {unmatched[:10]}")
@@ -146,34 +146,73 @@ def run(args):
                 "  未匹配会往标签上写空 SKU，已中止。确认无害可加 --allow-unmatched 继续。"
             )
 
-    skus = df_join["SKUxQTY"].astype(str).tolist()
-    n_pages_in = len(df_pdf)
+    # 按无货 SKU 把「页」分成两组（df_join 行序 == PDF 页序）
+    if no_stock_skus:
+        wanted = {s.strip().lower() for s in no_stock_skus if s.strip()}
+        is_no_stock = df_join["Vendor Style"].astype(str).str.strip().str.lower().isin(wanted)
+    else:
+        is_no_stock = pd.Series(False, index=df_join.index)
+    ns_idx = [i for i, flag in enumerate(is_no_stock) if flag]
+    ok_idx = [i for i, flag in enumerate(is_no_stock) if not flag]
+    if no_stock_skus and not ns_idx:
+        print(f"警告：--no-stock 指定的 SKU 本批都没有，按全量出件: {no_stock_skus}")
+
+    split = bool(ns_idx)
+    df_ok = df_join.iloc[ok_idx].reset_index(drop=True) if split else df_join
+    df_ns = df_join.iloc[ns_idx].reset_index(drop=True) if split else df_join.iloc[0:0]
+    note = args.no_stock_note or f"{df_ns['PO Number'].nunique()}单{len(df_ns)}件"
+
     ts_mmdd = datetime.now().strftime("%m.%d")
 
-    # ---------- 步骤 4：标签 PDF ----------
+    # ---------- 步骤 4 / 4.2：标签 PDF + 背贴 PDF ----------
+    ns_label_name = pb_label_pdf.NO_STOCK_LABEL_PDF_NAME.format(note=note, mmdd=ts_mmdd)
+    ns_back_name = pb_back_label_pdf.NO_STOCK_BACK_LABEL_PDF_NAME.format(note=note, mmdd=ts_mmdd)
+    main_label_name = pb_label_pdf.LABEL_PDF_NAME.format(mmdd=ts_mmdd)
+    main_back_name = pb_back_label_pdf.BACK_LABEL_PDF_NAME.format(mmdd=ts_mmdd)
+
     if args.dry_run:
-        print(f"[步骤 4]   将输出 {n_pages_in * 2} 页 -> {pb_label_pdf.LABEL_PDF_NAME.format(mmdd=ts_mmdd)}")
-        print(
-            f"[步骤 4.2] 将输出 {len(df_join)} 页 -> "
-            f"{pb_back_label_pdf.BACK_LABEL_PDF_NAME.format(mmdd=ts_mmdd)}"
-        )
+        print(f"[步骤 4]   将输出 {len(ok_idx) * 2} 页 -> {main_label_name}")
+        print(f"[步骤 4.2] 将输出 {len(df_ok)} 页 -> {main_back_name}")
+        if split:
+            print(f"[无货子集] 将输出 {len(ns_idx) * 2} 页 -> {ns_label_name}")
+            print(f"[无货子集] 将输出 {len(df_ns)} 页 -> {ns_back_name}")
     else:
         label_path, label_pages = pb_label_pdf.build_label_pdf(
-            pdf_path, skus, out_dir, ts_mmdd=ts_mmdd
+            pdf_path, df_ok["SKUxQTY"].astype(str).tolist(), out_dir, ts_mmdd=ts_mmdd,
+            page_indices=ok_idx if split else None,
         )
-        print(f"[步骤 4]   {n_pages_in} 页 -> {label_pages} 页  {label_path.name}")
+        print(f"[步骤 4]   {len(ok_idx)} 页 -> {label_pages} 页  {label_path.name}")
 
         back_path, back_pages, missing_names = pb_back_label_pdf.build_back_label_pdf(
-            df_join, out_dir, ts_mmdd=ts_mmdd, use_cache_only=args.cache_only
+            df_ok, out_dir, ts_mmdd=ts_mmdd, use_cache_only=args.cache_only
         )
         print(f"[步骤 4.2] {back_pages} 页  {back_path.name}（缺名称 SKU {len(missing_names)}）")
+
+        if split:
+            ns_label, ns_label_pages = pb_label_pdf.build_label_pdf(
+                pdf_path, df_ns["SKUxQTY"].astype(str).tolist(), out_dir, ts_mmdd=ts_mmdd,
+                filename=ns_label_name, page_indices=ns_idx,
+            )
+            print(f"[无货子集] {len(ns_idx)} 页 -> {ns_label_pages} 页  {ns_label.name}")
+            ns_back, ns_back_pages, _ = pb_back_label_pdf.build_back_label_pdf(
+                df_ns, out_dir, ts_mmdd=ts_mmdd, filename=ns_back_name, use_cache_only=True
+            )
+            print(f"[无货子集] {ns_back_pages} 页  {ns_back.name}")
 
     # ---------- 数量对账 ----------
     print(
         f"\n[数量对账] 订单总行 {len(df_order)} = 可导入 {len(importable)} + 无库存 {len(no_stock)}"
         f" | 差 {len(df_order) - len(importable) - len(no_stock)}"
     )
-    print(f"[数量对账] 标签 {n_pages_in} 页 × 2 = {n_pages_in * 2} 页；背贴 {len(df_join)} 页")
+    print(
+        f"[数量对账] 页 {len(df_pdf)} = 有货 {len(ok_idx)} + 无货 {len(ns_idx)}"
+        f" | 差 {len(df_pdf) - len(ok_idx) - len(ns_idx)}"
+    )
+    print(
+        f"[数量对账] 标签 {len(ok_idx)}×2={len(ok_idx) * 2} 页"
+        + (f" + 无货 {len(ns_idx)}×2={len(ns_idx) * 2} 页" if split else "")
+        + f"；背贴 {len(df_ok)} 页" + (f" + 无货 {len(df_ns)} 页" if split else "")
+    )
     print("=" * 62)
 
 
@@ -185,6 +224,10 @@ def build_parser():
     ap.add_argument("--pdf", default=None, help=f"Packslip PDF 文件名，默认自动取最新 {PDF_PATTERN}")
     ap.add_argument("--csv", default=None, help=f"订单 CSV 文件名，默认自动取最新 {CSV_PATTERN}")
     ap.add_argument("--no-stock", default="", help="无货 SKU，逗号分隔；默认空 = 不过滤")
+    ap.add_argument(
+        "--no-stock-note", default=None,
+        help='无货子集文件名前缀里的描述，默认自动 "N单M件"，例："4单6个三角灰97"',
+    )
     ap.add_argument("--out", default=None, help="输出目录，默认与 --dir 相同")
     ap.add_argument("--check-shipment", action="store_true", help="只读核对 ASN 实发数量并报缺货")
     ap.add_argument("--allow-unmatched", action="store_true", help="join 未匹配时不中止")

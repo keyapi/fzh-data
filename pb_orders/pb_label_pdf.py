@@ -56,6 +56,7 @@ LABEL_CROP_LL, LABEL_CROP_UR = (97, 76), (529, 366)
 SLIP_SCALE = 0.732
 
 LABEL_PDF_NAME = "{mmdd} PotteryBarn label-FZH-DANEEY-Not Prime-第一天.pdf"
+NO_STOCK_LABEL_PDF_NAME = "无货{note}-{mmdd} PotteryBarn label-FZH-DANEEY-Not Prime-第一天.pdf"
 
 
 def _ts(fmt="%Y-%m-%d %H:%M:%S"):
@@ -185,17 +186,37 @@ def crop_split_pdf(src_path, out_path, scale=SLIP_SCALE):
     return Path(out_path)
 
 
-def build_label_pdf(base_pdf, skus, out_dir, ts_full=None, ts_mmdd=None):
-    """产出 {MM.DD} PotteryBarn label-...-第一天.pdf，返回 (路径, 输出页数)。"""
+def extract_pages(src_path, page_indices, out_path):
+    """把 src 的第 page_indices（0 基，按给定顺序）页抽成一个新 PDF。"""
+    reader, writer = PdfReader(str(src_path)), PdfWriter()
+    for idx in page_indices:
+        writer.add_page(reader.pages[idx])
+    with open(out_path, "wb") as fh:
+        writer.write(fh)
+    return Path(out_path)
+
+
+def build_label_pdf(base_pdf, skus, out_dir, ts_full=None, ts_mmdd=None,
+                    filename=None, page_indices=None):
+    """产出标签 PDF，返回 (路径, 输出页数)。
+
+    page_indices 给定时，先从原 PDF 抽出这些页（用于「无货子集」），
+    此时 skus 必须与所选页数一一对应。
+    """
     base_pdf, out_dir = Path(base_pdf), Path(out_dir)
     ts_full = ts_full or _ts("%Y-%m-%d %H:%M:%S")
     ts_mmdd = ts_mmdd or _ts("%m.%d")
     out_dir.mkdir(parents=True, exist_ok=True)
+    if page_indices is not None and len(page_indices) != len(skus):
+        raise ValueError(f"抽页数 {len(page_indices)} != SKU 数 {len(skus)}")
 
     with tempfile.TemporaryDirectory(prefix="pb_orders_") as tmp:
+        src = base_pdf
+        if page_indices is not None:
+            src = extract_pages(base_pdf, page_indices, Path(tmp) / "subset.pdf")
         overlay = make_sku_overlay_pdf(skus, Path(tmp) / "SKUxQTY_only.pdf", ts_full)
-        merged = merge_overlay(base_pdf, overlay, Path(tmp) / "packlist_SKUxQTY.pdf")
-        out_path = out_dir / LABEL_PDF_NAME.format(mmdd=ts_mmdd)
+        merged = merge_overlay(src, overlay, Path(tmp) / "packlist_SKUxQTY.pdf")
+        out_path = out_dir / (filename or LABEL_PDF_NAME.format(mmdd=ts_mmdd))
         crop_split_pdf(merged, out_path)
 
     return out_path, len(PdfReader(str(out_path)).pages)

@@ -29,7 +29,7 @@ timestamp: 2026-09-21
 | 输入 Packslip PDF | `D:\Work\美国\Tracy Miller\PB orders\YYYYMMDD\Packslip 美中 x{N} YYYYMMDD.pdf` |
 | 输入订单 CSV | `...\YYYYMMDD\checked0stock order x{N} YYYYMMDD_HHMM_SSSSSS.csv` |
 | 输入 ASN 发货 CSV（核对用） | `...\YYYYMMDD\shipment x{N} YYYYMMDD_HHMM_SSSSSS.csv` |
-| **输出**（默认与输入同目录） | `PB_0_导入_原始_{csv_stem}_on_{ts}.xlsx`<br>`{MM.DD} PotteryBarn label-FZH-DANEEY-Not Prime-第一天.pdf`<br>`{MM.DD} PotteryBarn 背贴-中文西班牙语.pdf` |
+| **输出**（默认与输入同目录） | `PB_0_导入_原始_{csv_stem}_on_{ts}.xlsx`<br>`{MM.DD} PotteryBarn label-FZH-DANEEY-Not Prime-第一天.pdf`<br>`{MM.DD} PotteryBarn 背贴-中文西班牙语.pdf`<br>（给了 `--no-stock` 时另有 `无货{N单M件}-…` 子集标签/背贴 + `PB_1`/`PB_2`） |
 | 背贴品名源表 | Google Sheet `US SKU Name` → 工作表 `SKUName`（列：通途SKU / 中文名称 / 西班牙语名称） |
 | 凭证 | `D:\Work\赛狐\Cursor\secrets\gsheets-service-account.json`（父仓库；worktree 里没有，模块会自动向上查找） |
 
@@ -46,7 +46,8 @@ uv run python run_pb_orders.py --dir "..." --check-shipment   # 用 ASN 核对�
 |------|------|
 | `--dir` | 当天文件夹；自动取最新 `Packslip*.pdf` 与 `checked0stock*.csv`（跳过 `~$`） |
 | `--pdf` / `--csv` | 显式指定文件名，覆盖自动挑选 |
-| `--no-stock` | 无货 SKU，逗号分隔；**默认空 = 不过滤** |
+| `--no-stock` | 无货 SKU，逗号分隔；**默认空 = 不过滤**。给了就按页拆成「有货主文件 + 无货子集」|
+| `--no-stock-note` | 无货子集文件名里的描述，默认自动 `{N}单{M}件`，例 `4单6个三角灰97` |
 | `--out` | 输出目录，默认 = `--dir` |
 | `--check-shipment` | 只读核对 ASN 实发数量并报缺货，不删行 |
 | `--allow-unmatched` | join 未匹配时不中止（默认中止，避免标签印空 SKU） |
@@ -67,7 +68,8 @@ uv run python run_pb_orders.py --dir "..." --check-shipment   # 用 ASN 核对�
 | `pb_label_pdf.py` | `make_sku_overlay_pdf(skus, ...)` | 生成 SKUxQTY 叠加页（A4 竖版、文字转 90°） |
 | | `merge_overlay(base, overlay, out)` | 逐页 `merge_page` 到原 PDF |
 | | `crop_split_pdf(src, out)` | 每页裁成两页（打包单 / UPS 标签），顺序 单_i, 标签_i |
-| | `build_label_pdf(base, skus, out)` | 步骤 4 总入口，返回 (路径, 页数) |
+| | `extract_pages(src, indices, out)` | 按页序抽出子 PDF（无货子集用） |
+| | `build_label_pdf(base, skus, out, page_indices=…)` | 步骤 4 总入口，返回 (路径, 页数)；给 `page_indices` 则只出这些页 |
 | `pb_back_label_pdf.py` | `load_sku_name(...)` | 读 Google Sheet（重试 + 本地缓存回退） |
 | | `load_english_words()` | nltk words 词表（本地缓存优先，不可用则告警跳过） |
 | | `prepare_name_table(...)` | 清洗中文/西语名 + 按通途SKU 去重 |
@@ -82,10 +84,10 @@ uv run python run_pb_orders.py --dir "..." --check-shipment   # 用 ASN 核对�
 |------|-----|------|
 | 通途列数上限 | `MAX_COLS = 100` | `pb_tongtu_excel.py` |
 | 固定删除列 | `COLS_TO_DROP`（31 列） | `pb_tongtu_excel.py` |
-| 叠加页坐标 | `ARROW_1/2`、`ARROW_LEFT`、`SKU_POS_1/2`、`SCISSOR_1/2`、`TS_MM/TS_PT` | `pb_label_pdf.py` |
+| 叠加页坐标 | `X1..X7` / `Y1..Y7`（与 notebook 变量一一对应）、`TS_1`、`TS_2` | `pb_label_pdf.py` |
 | 裁切框 | `SLIP_LL/UR`、`LABEL_LL/UR`、`LABEL_CROP_LL/UR`、`SLIP_SCALE=0.732` | `pb_label_pdf.py` |
 | 背贴页尺寸 | `PAGE_W/H = 288/144`、`COL_WIDTHS` | `pb_back_label_pdf.py` |
-| 输出文件名 | `LABEL_PDF_NAME`、`BACK_LABEL_PDF_NAME` | 两个 PDF 模块 |
+| 输出文件名 | `LABEL_PDF_NAME`、`BACK_LABEL_PDF_NAME`、`NO_STOCK_LABEL_PDF_NAME`、`NO_STOCK_BACK_LABEL_PDF_NAME` | 两个 PDF 模块 |
 
 ## 6. 踩过的坑（改代码前必读）
 
@@ -104,6 +106,9 @@ uv run python run_pb_orders.py --dir "..." --check-shipment   # 用 ASN 核对�
    notebook 本来就按字典序排序，保持字符串即可。
 5. **Colab 的「无货 SKU」是死代码**：参数是字符串，`for sku in zero_stock_skus` 迭代的是**单个字符**，
    `isin()` 永不命中，所以过滤从未生效（历史文件夹里只有 `PB_0_导入_原始_`）。本版做成真正可用，默认留空。
+   给了 `--no-stock` 时的拆页规则：**1:1 校验对全量订单行**（不是过滤后的），
+   再按 `Vendor Style` 把「页」分成有货/无货两组 —— join 必须用**全量行**做，
+   否则无货页拿不到 SKUxQTY（标签上会缺 SKU）。
 6. **notebook cell 29 明文硬编码服务账号私钥**。本版改读 `secrets/gsheets-service-account.json`，
    并支持 worktree 场景向上查找父仓库（见 `_find_service_account`）。
 7. **`US SKU Name` 表有重复 `通途SKU` 键**：不去重会让背贴多出页，已加去重 + 告警。
@@ -122,6 +127,8 @@ uv run python run_pb_orders.py --dir "..." --check-shipment   # 用 ASN 核对�
 
 - 订单 CSV 原始 `N` 行 → 留 `Record Type == 'D'` → 按 `Qty Ordered` 拆行 → **行数必须等于 PDF 页数**（1:1 硬校验）。
 - 无货过滤时：`通途总行 = 可导入 + 无库存`，差必须为 0。
+- 拆页时：`PDF 总页数 = 有货页 + 无货页`，差必须为 0；两个子集文件的页**不重不漏**
+  （主/无货背贴的 `PO: PO-Line` 集合交集为空、并集等于全量）。
 - 输出页数：标签 PDF = 输入页数 × 2；背贴 PDF = 订单行数。
 
 ## 8. 本会话成果（2026-09-21）
@@ -165,5 +172,6 @@ uv run python run_pb_orders.py --dir "..." --check-shipment   # 用 ASN 核对�
 - [x] 与历史产物几何/版式对齐
 - [x] 凭证不落仓库（读父仓库 secrets/）
 - [x] OKF 文档 + 根索引同步
-- [ ] 无货/部分发货时自动生成「无货子集」PDF（历史是人工做，见 `20250821/缺货/`）—— 本轮未做
+- [x] 无货时自动拆「有货主文件 + 无货子集」（标签 + 背贴各两份，`--no-stock` 触发）
+- [ ] 部分发货的一单跨两份 PDF 时，仍需人工确认哪些页给谁（目前按 SKU 自动拆）
 - [ ] 原 notebook 步骤 3.x（赛狐导入）、4.3（按仓库分拆，20260831 起停用）—— 本轮未迁

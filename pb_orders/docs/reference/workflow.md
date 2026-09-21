@@ -186,10 +186,28 @@ df_pdf[PO Number, Item Number]
 
 | 文件 | 模板 |
 |------|------|
-| 通途导入 | `PB_0_导入_原始_{csv_stem}_on_{YYYY-MM-DD_HH-MM-SS}.xlsx` |
-| 无货（仅命中时） | `PB_0_不可导入_原始_...` / `PB_1_不可导入_无库存_...` / `PB_2_导入_库存有货_...` |
-| 标签 PDF | `{MM.DD} PotteryBarn label-FZH-DANEEY-Not Prime-第一天.pdf` |
-| 背贴 PDF | `{MM.DD} PotteryBarn 背贴-中文西班牙语.pdf` |
+| 通途导入（无无货） | `PB_0_导入_原始_{csv_stem}_on_{YYYY-MM-DD_HH-MM-SS}.xlsx` |
+| 通途（有 `--no-stock` 命中） | `PB_0_不可导入_原始_...` / `PB_1_不可导入_无库存_...` / `PB_2_导入_库存有货_...` |
+| 标签 PDF（有货） | `{MM.DD} PotteryBarn label-FZH-DANEEY-Not Prime-第一天.pdf` |
+| 背贴 PDF（有货） | `{MM.DD} PotteryBarn 背贴-中文西班牙语.pdf` |
+| 标签 PDF（无货子集） | `无货{note}-{MM.DD} PotteryBarn label-FZH-DANEEY-Not Prime-第一天.pdf` |
+| 背贴 PDF（无货子集） | `无货{note}-{MM.DD} PotteryBarn 背贴-中文西班牙语.pdf` |
+
+`note` 默认 `{订单数}单{件数}件`（例 `4单6件`），可用 `--no-stock-note` 覆盖成历史那种描述
+（历史实例：`无货 4单6个三角灰97-08.21 PotteryBarn label-...pdf`、`无货蓝97-09.11 ...`）。
+
+### 无货拆分（`--no-stock` 非空且命中时）
+
+按「页 = 包裹」拆成两组，**不重不漏**：
+
+1. 1:1 校验仍对**全量**订单行做（PDF 页数 == 全部拆行后的行数）
+2. join 也用**全量行**做（否则无货页拿不到 SKUxQTY，标签上会缺 SKU）
+3. 按 `Vendor Style` 是否在无货清单里，把页索引分成 `ok_idx` / `ns_idx`
+4. 主文件（标签 + 背贴）只出 `ok_idx`，无货子集只出 `ns_idx`
+5. 对账打印：`PDF 总页数 = 有货页 + 无货页`，差必须为 0
+
+> 与历史做法的差别：历史是主文件含全量、再手工做一份无货子集（还出现过「撤回」）。
+> 现在主文件直接只发有货的，避免误发。
 
 `csv_stem` = 订单 CSV 去掉扩展名的完整文件名（含时间戳后缀）。
 

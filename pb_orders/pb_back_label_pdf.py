@@ -53,6 +53,7 @@ COL_WIDTHS = [0.4 * cm, 2.35 * cm, 0.7 * cm, 3.25 * cm, 3.35 * cm]
 HEADERS = ["#", "SKU", "QTY", "Name Chinese", "Nombres en español"]
 
 BACK_LABEL_PDF_NAME = "{mmdd} PotteryBarn 背贴-中文西班牙语.pdf"
+NO_STOCK_BACK_LABEL_PDF_NAME = "无货{note}-{mmdd} PotteryBarn 背贴-中文西班牙语.pdf"
 DATA_DIR = Path(__file__).resolve().parent / "data"
 CACHE_CSV = DATA_DIR / "us_sku_name_cache.csv"
 NLTK_DATA_DIR = DATA_DIR / "nltk_data"
@@ -252,7 +253,7 @@ def _write_pdf(df, out_path, timestamp):
 
 
 def build_back_label_pdf(df_rows, out_dir, ts_mmdd=None, cache_path=CACHE_CSV,
-                         use_cache_only=False):
+                         use_cache_only=False, filename=None):
     """产出背贴 PDF，返回 (路径, 页数, 未匹配 SKU 列表)。"""
     ts_mmdd = ts_mmdd or datetime.now().strftime("%m.%d")
     df_names, source, _ = prepare_name_table(df_rows, cache_path, use_cache_only)
@@ -262,7 +263,7 @@ def build_back_label_pdf(df_rows, out_dir, ts_mmdd=None, cache_path=CACHE_CSV,
 
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / BACK_LABEL_PDF_NAME.format(mmdd=ts_mmdd)
+    out_path = out_dir / (filename or BACK_LABEL_PDF_NAME.format(mmdd=ts_mmdd))
     _write_pdf(df, out_path, ts_mmdd)
     print(f"名称来源: {source}")
     return out_path, len(df), missing
