@@ -11,6 +11,7 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-09-10 | Amazon 账期按账号对 NAS/钉钉/赛狐结算组 | [conventions/amazon-period-file-reconcile.md](conventions/amazon-period-file-reconcile.md) |
 | 2026-09-20 | 「特殊规则改赛狐入库成本」执行记录 —— 下调受批次剩余货值封顶，越消耗越改不动 | [workflow-issues/sellfox-incentive-cost-adjust-2026-09.md](workflow-issues/sellfox-incentive-cost-adjust-2026-09.md) |
 | 2026-09-20 | 用库存调整单同步数量会让成本越来越改不动 —— 成因与三个选项 | [workflow-issues/sellfox-inventory-sync-cost-drift.md](workflow-issues/sellfox-inventory-sync-cost-drift.md) |
 | 2026-09-21 | git worktree 新分支的 upstream 被指成 `main` —— 裸 push 的隐藏方向 | [developer-experience/git-worktree-branch-upstream-tracks-main.md](developer-experience/git-worktree-branch-upstream-tracks-main.md) |

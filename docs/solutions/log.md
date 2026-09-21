@@ -7,6 +7,9 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-09-10
+- **更新**: `conventions/amazon-period-file-reconcile.md` — 补浏览器补下载路径、env/人名不上 git；公开叙述仍用拼音首字母。
+- **新增**: `conventions/amazon-period-file-reconcile.md` — Amazon 账期按账号对 NAS/钉钉/赛狐结算组：负责人≠人名夹、店名经别名、groupPage≠txt 原件、「或」≠「钉钉且附件」；公开叙述用人名首字母。
 ## 2026-09-21
 - **新增**: `integration-issues/sellfox-amazon-settlement-plug-only.md` — Amazon 账期报表（Transaction / Summary PDF）在赛狐侧**只有「插件获取报告」（`report/center/task/getPlugPageList.json`）一条路**，且该接口**纯读、API 不可触发抓取** —— 两条旁证：`创建报告任务` 的 `reportType` 只支持 `PRODUCT_SALE_REPORT`，`亚马逊原报告` 的类型枚举里没有账期。第二条硬约束：**`fileUrls` 是 1 小时有效的腾讯 COS 预签名 URL**，不能存链接，必须「拿新 URL → 立刻下载落盘」。实测：90 家 Amazon 店**仅 39 店有数据、51 店完全没抓过**（呈整店群分布 ⇒ 人工按品牌执行、非周期性任务），**只覆盖 2026-06/07，8-9 月一条没有**。另留档一个**已被否决**的替代方案（`monthProfit/shopSummary` 服务端销售额、覆盖全店但属赛狐自算口径），以免将来重复提议。
 - **新增**: `SELLFOX_API/fetch_amazon_settlement.py`（下载归档）+ `SELLFOX_API/probe_amazon_reports.py`（覆盖度矩阵）；调研全记录见 `docs/research/2026-09-21-sellfox-amazon-settlement-reports.md`。
