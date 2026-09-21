@@ -1,6 +1,7 @@
 ---
 module: web_automation
 date: 2026-09-02
+last_updated: 2026-09-18
 problem_type: architecture_pattern
 component: development_workflow
 severity: medium
@@ -157,6 +158,15 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 run_web_task("sellfox.stock.export")                       # 导出
 run_web_task("sellfox.restock.import", confirm_scope="…")  # 导入（写）
 ```
+
+## 2026-09 增补（刷新）
+
+- **新增动作** `tongtu.orderdetail.export`（订单详情统计月度导出，BROWSER_ONLY/read）——
+  落地细节与踩坑见 `docs/solutions/architecture-patterns/tongtu-orderdetail-export-row-anchor.md`
+  与 `web_automation/docs/reference/orderdetail-export.md`。
+- **浏览器启动统一出口**：`legacy-compatible/browser_launch.py`（通途族已迁移）——
+  本机 bundled chromium 有头模式不可用时，用 `WEB_AUTOMATION_BROWSER_CHANNEL=chrome` 走系统 Chrome；
+  两个环境变量都不设时行为不变。见 `web_automation/docs/reference/browser-launch.md`。
 
 ## 参考
 
