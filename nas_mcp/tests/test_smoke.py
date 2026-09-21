@@ -278,5 +278,28 @@ try:
 except ValueError as e:
     check("非压缩包被拒", "只处理压缩包" in str(e), str(e)[:50])
 
+print("\n── 14) File Station 深链（格式照抄 EN 实现，用真实样例钉住）")
+EXPECT_PARAM = ("openfile%3D%252F%25E4%25BA%25A7%25E5%2593%2581%25E4%25BF%25A1%25E6%2581%25AF"
+                "%252FKS0236_%25E4%25B9%2590%25E9%25AB%2598%25E6%2594%25B6%25E7%25BA%25B3%25E6%25A1%25B6"
+                "%252F%25E8%25B0%2583%25E7%25A0%2594%25E6%258A%25A5%25E5%2591%258A%252F")
+got = S.filestation_link("/产品信息/KS0236_乐高收纳桶/调研报告/").split("launchParam=", 1)[1]
+check("深链编码与 EN 样例逐字一致", got == EXPECT_PARAM,
+      "一致" if got == EXPECT_PARAM else "不一致！")
+
+out = S.tool_link({"path": "/产品信息/KS0236_乐高收纳桶/调研报告"})
+link = out.get("link") or ""
+check("nas_link 返回可点链接",
+      link.startswith("https://") and "launchApp=SYNO.SDS.App.FileStation3.Instance" in link,
+      link[:80] + "...")
+check("深链不是公开分享（无需 DSM 登录才怪）", "sharing" not in link.lower(), "")
+
+info = S.tool_info({"path": "/FZH共享文件夹"})
+check("nas_file_info 带 link 字段", bool(info.get("link")), str(info.get("link"))[:60] + "...")
+
+lf = S.tool_list({"path": "/FZH共享文件夹", "limit": 2})
+check("nas_list_folder 带自身 link", bool(lf.get("link")), "")
+check("默认不给子项附 link（避免输出膨胀）",
+      not any("link" in i for i in (lf.get("items") or [])), "")
+
 print(f"\n结果：{ok} passed, {fail} failed")
 sys.exit(1 if fail else 0)

@@ -104,4 +104,19 @@ tags: [nas, mcp, log]
     支持 `password`（加密包）与 `codepage`（包内 GBK 文件名）。
   - **教训（又一次同类）**：结论必须用**要交付的那个工具**复测，不能用自己的临时脚本 ——
     今天第二次因为临时脚本写错而得错结论。
+- **新增（工具 14 → 15）**: **`nas_link` + `filestation_link()`** —— File Station **深链**（需 DSM 登录才能打开
+  → 天然满足「有 NAS 权限的人才看得到」）。`nas_file_info` 也带 `link`；`nas_list_folder` 带**被查目录自身**的
+  link，子项要 `with_links=true` 才附（避免输出膨胀）。
+- **⭐ 关键：格式不是猜的，是抄 EN 现成实现的。** 用户指出 EN 的**产品物料库**早就在做 NAS 路径拼链接，
+  并指了代码位置。在 EN 测试服务器找到
+  `work_by_order_task/.../tasks/item_group_nas_path.py` → **`encode_filestation_link()`**：
+  ```python
+  first  = quote(path, safe="");  second = quote(first, safe="")
+  link = f"https://{domain}/?launchApp=SYNO.SDS.App.FileStation3.Instance&launchParam=openfile%3D{second}"
+  ```
+  **双层 URL 编码**。我先前自己猜的 `?launch=FileStation&path=` **是错的**。
+  已用用户给的**真实样例**做回归测试，**逐字一致**（`test_smoke.py` 里钉住）。
+  > 教训：AGENTS.md 的「**先搜再造**」我是读过的，却仍然自己猜了格式。**项目里已有实现时，先去找它。**
+- **修 bug（测试抓出）**: `nas_file_info` 对**共享文件夹根**（如 `/FZH共享文件夹`）会去列父目录 `/`，
+  而该账号列不了 `/`（DSM 报 `Unknown error`）→ 已改为「父目录是 `/` 或本身是根」时直接把它当目录返回。
 - **未决**: 尚无写入能力（刻意）；per-user 权限（现为单账号单 token）待评估。
