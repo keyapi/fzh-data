@@ -444,6 +444,12 @@ def compute_sign(access_token, app_id, app_secret, url_path):
 
 **机器可读索引**：`SELLFOX_API/docs/api-reference/llms.txt`（可 grep）
 
+**财务类端点（已实测可用）**：`财务/` 与 `多平台/财务/` 下有按平台分的结算明细端点。
+其中 **Walmart**（`POST /api/financial/walmartReport/queryStatementDetail.json`）返回带
+`periodStartDate`/`periodEndDate`（账期）的行级数据，App 权限已开通 —— 取数方式、账期节奏与平台费口径
+见 `docs/solutions/workflow-issues/walmart-account-period-sellfox-api.md`。
+注意：**Wayfair 无任何财务端点**、Overstock 不在赛狐平台枚举内，不要外推。
+
 **刷新镜像**：见 `SELLFOX_API/docs/reference/api-docs-mirror.md`；学习记录 `docs/solutions/conventions/sellfox-apifox-api-docs-mirror-refresh.md`。命令：`uv run python SELLFOX_API/download_docs.py --all --force`（Cookie 与 `SELLFOX_API_DOC_KEY` 仅本机，勿写入仓库）。
 
 ---

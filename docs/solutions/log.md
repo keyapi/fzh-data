@@ -20,6 +20,11 @@ tags: [solutions, log]
 - **坑**: `setup.ps1` **不能在 worktree 里跑** —— `~/.claude/skills/` 软链是 Claude 独有的，在 worktree 跑会把链接指向临时 worktree；而 `New-SafeJunction` 对已存在路径 `[SKIP]`，**事后在主仓库再跑也修不回来**。本次实施中了一次（`ce-okf` 链接指到 worktree），已用 `(Get-Item $p -Force).Delete()` 移除（只删链接、不动目标）。
 - **修正（`ce-compound-refresh` 首跑）**: 上面两条里"仓库 `core.symlinks` 是 `false`"的记载**已被本日后续操作推翻** —— 主仓库已改为 `true`。四份文件同步更正：`docs/solutions/developer-experience/windows-worktree-claude-md-symlink.md`（改判据为"换新机器先确认这一项" + 新增"项目 skill 会在技能列表里出现两遍"的副作用说明）、`docs/solutions/tooling-decisions/ce-okf-conversation-wrapup-skill.md`（改成"本机已开开发者模式 + `core.symlinks=true`，不再是两状态二选一"）、`CONTRIBUTING.md`、`.agents/skills/ce-okf/SKILL.md`。**教训：文档里写"当前状态"会随同一个会话的后续操作立刻过期** —— 能写成"判据/检查方法"就别写死值。
 - **修正（`ce-okf` 第 0 步）**: `ce-okf` 首跑发现模式判据不准。旧规则「本次对话已 commit / 已开 PR → 增量」把"对话产物"和"文档是否已存在"混为一谈；已改为「学习点**是否已写进某篇现存文档**」。边做边提交的会话可以同时"已有 PR"和"有全新学习点"，旧规则会把后者误送进 refresh。
+- **新增**: `workflow-issues/walmart-account-period-sellfox-api.md` — Walmart 账期可走**赛狐公开 OpenAPI 直拉**（`walmartReport/queryStatementDetail`，权限已开通，含 `periodStartDate`/`periodEndDate`），不再依赖财务手工 xlsx。两个硬结论：①**必须按账期取数**——Walmart 是**双周账期（14 天）**，同一 PO 的销售行与退货/费用行常落相邻账期，按单账期聚合比 EN 必错位（实测 58 单里 12 单如此，会被误判成金额不符）；②**平台费口径结案**——`赛狐佣金=(商品价+Total Walmart Funded Savings)×15%`，`EN platform_fee=商品价×15%`，**差额 = 沃尔玛补贴 × 15%**，逐单 64/64 命中、汇总 28.28 vs 28.32；结论是 **EN 漏算补贴基数、赛狐对**，先前看到的「费率 15%~17% 飘忽」是基数差异造成的假象。另记两类非错误差异（佣金已退货冲平=时点口径）与覆盖边界（**Wayfair 无赛狐财务端点、Overstock 不在赛狐平台枚举**，故本经验不可外推）。3 个账期销售额分毫不差（1317.28/1511.75/4346.60），顺带证明 EN 快照对通途忠实，**无需动用通途 API 复核**（限速 5 次/分钟）。
+- **新增**: `SELLFOX_API/probe_walmart_settlement.py`（只读取数探针：`--list-shops` / `--discover-periods` 摸账期 / `--pull-period` 按账期拉；`raw_post()` 绕开 `signed_post()` 的异常包装以保留 40021 等错误码，并兼容两种限流形态）。
+- **新增**: `platform_account_reconciliation/scripts/reconcile_walmart.py` — 跨账期合并勾稽 + 平台费口径判定，输出 `账期总览/订单级勾稽/账期费用分类/账期明细`。
+- **修复**: `platform_account_reconciliation/scripts/reconcile_ostkus.py` 的 `ENV_FILE` 原写死仓库根，**在 git worktree 里因凭证只在主仓库而跑不起来**；改为向上搜索 `EN_API/.env`（`_resolve_env_file()`）。
+- **更新**: `platform_account_reconciliation/AGENT_HANDOFF.md`（增 §10 Walmart，并在 OSTKUS 待办第 1 条补同型差额的复查线索）、模块 `docs/index.md` + `docs/log.md`、`skills/platform-account-reconciliation`（补 Walmart 线路与触发词）。
 
 ## 2026-09-20
 

@@ -116,9 +116,50 @@ uv run python platform_account_reconciliation/scripts/reconcile_ostkus.py \
 - 输出 xlsx 在 `out/`（gitignored）或用户指定路径。
 - 未匹配记录必须保留并说明原因，不能静默丢弃。
 
-## 10. 下一步
+## 10. Walmart（2026-09-21 新增）
+
+数据源与 OSTKUS **不同**：不再依赖财务手工 xlsx，改为**赛狐 API 直拉账期结算行**。
+
+```bash
+# 1) 按账期拉赛狐结算行（先 --discover-periods 摸账期节奏）
+uv run python SELLFOX_API/probe_walmart_settlement.py \
+    --shop-id 598030 --discover-periods --start 2026-01-01 --end 2026-09-21
+uv run python SELLFOX_API/probe_walmart_settlement.py \
+    --shop-id 598030 --pull-period 2026-08-08:2026-09-05
+
+# 2) 勾稽（必须跨账期合并，否则相邻账期的退货/费用行会错位）
+uv run python platform_account_reconciliation/scripts/reconcile_walmart.py \
+    --sellfox-json "<repo_root>/out/sellfox_walmart_probe/period_598030_*.json" \
+    --out "Walmart账期勾稽.xlsx"
+```
+
+关键事实：
+
+| 项 | 值 |
+|---|---|
+| 赛狐店铺 | `598030` Centrade（唯一 Walmart 店），站点 US / USD |
+| 端点 | `POST /api/financial/walmartReport/queryStatementDetail.json`（公开 OpenAPI，权限已开通） |
+| 账期节奏 | **Walmart 双周账期（14 天）**，2026 年 15 段（`08-08→09-05` 异常为 28 天，待确认） |
+| EN 侧 | `platform_code=walmart_api`，`name=WM-{platform_order_id}`，`sale_account=WM-CtrdUS` |
+| 连接键 | 赛狐 `purchaseOrder` == EN `platform_order_id`（100%）；`partnerItemId` == `Item.platform_sku` |
+
+**平台费口径（已查清，勿重复排查）**：
+
+```
+赛狐 Commission on Product = (商品价 + Total Walmart Funded Savings) × 15%
+EN   platform_fee          =  商品价 × 15%      →  差额 = 沃尔玛补贴 × 15%
+```
+
+逐单 64/64 命中，汇总 28.28 vs 28.32。**赛狐对，EN 漏算补贴基数。**
+→ 建议回头用同样方法复查 §7 里 OSTKUS 那笔未结案的 `platform_fee` 差额。
+
+完整调研：`docs/research/2026-09-21-sellfox-walmart-settlement-api.md`
+
+## 11. 下一步
 
 1. 确认 `platform_fee` 与 `Marketing Allowance 8.25%` 的差异原因（约 -25.73 / -36.52）。
+   **2026-09-21 新线索**：Walmart 侧的同类差额已查明是「EN `platform_fee` 漏算补贴基数」，
+   建议用同样方法（找 EN 少算的那个基数项）复查 OSTKUS。
 2. 核对 `07-01` EN 退货原单金额 `884.41` 与账期货值 `812.41` 的 `72.00` 差额。
 3. 对 4 个跨期退单做“销售期 + 退货期”合并核对。
 4. 扩展 Wayfair `WFUS` 账期：`Invoice #/PO #` 为 `CS.../CA...`，需要对应 Wayfair 订单导出与 EN 侧命名规则。

@@ -7,6 +7,16 @@ description: docs/research 目录变更历史
 
 # 变更日志
 
+## 2026-09-21
+
+- **新增**: [2026-09-21-sellfox-walmart-settlement-api.md](2026-09-21-sellfox-walmart-settlement-api.md) — 赛狐 Walmart 账期（结算明细）API 实测可行性。起点是「platform-account-reconciliation 的账期数据源一直是财务手工 xlsx，能否走 API」。结论：**能**。`POST /api/financial/walmartReport/queryStatementDetail.json`（公开 OpenAPI，非私有接口），App 权限已开通 `code=0`，**`periodStartDate`/`periodEndDate` 实测 200/200 行非空**；实测窗口 `2026-08-01→09-21`、店铺 `598030 Centrade US` 共 263 行（200+63），窗口内仅 1 个账期 `2026-08-08→2026-09-05`。EN 侧 `platform_code=walmart_api`、`name=WM-{po}`、`sale_account=WM-CtrdUS`，赛狐 `purchaseOrder` == EN `platform_order_id` **匹配 44/44 = 100%**，`partnerItemId` == EN `Item.platform_sku`。
+- **纠偏**: 现有设计文档计划扩展的 **Wayfair WFUS 拿不到赛狐数据源** —— `多平台利润报表` 的 `platformTypes` 枚举无 `WAYFAIR`，赛狐无任何 Wayfair 财务端点；Overstock 在赛狐平台枚举里也不存在。即「Walmart 走得通、Wayfair 走不通」，与既有假设相反。
+- **实证坑**: ①`data` 只返回 `rows`，**无 `totalSize`/`totalPage`**，必须翻到短页为止；②代理限流除 `code=40019` 外还有 HTTP 层 `{"detail":"Global rate limited. Retry after Xs"}`（无 `code` 字段），`client.py:114 is_rate_limited_response()` 不认这种；③EN 侧 `requests.Session()` 复用会**静默返回空**（44 个 PO 查 0 条，换裸 `requests.get` 立刻 44/44）；④EN 拆单同 OSTKUS：459 条 WM 单 / 442 个唯一 PO，9 个 PO 有 `{po}`+`{po}_1`+`{po}_2` 多条，2 个只有 `_N` 无裸单；⑤`Tongtool Order Item` 直接查列表 403，item 级只能从父单 detail 读。
+- **新增脚本**: `SELLFOX_API/probe_walmart_settlement.py`（只读探针，复用 `client.py` + `repo_root.find_main_root()`；`raw_post()` 绕开 `signed_post()` 的异常包装以保留错误码，并处理两种限流形态）。
+- **补测：账期勾稽 + 平台费口径结案**。摸清 **Walmart 是双周账期（14 天）**，2026 年 15 段（`08-08→09-05` 异常为 28 天，疑两期合并，待确认）。拉最近 3 个账期（384 行 / 78 单）：**销售额三个账期全部分毫不差**（1317.28 / 1511.75 / 4346.60，差异均 0.00），订单级 73/77 精确一致（4 单为跨期，销售行在更早账期）。**平台费之谜解开**：`赛狐 Commission on Product = (商品价 + Total Walmart Funded Savings) × 15%`，而 `EN platform_fee = 商品价 × 15%` —— 差额恰为「沃尔玛补贴 × 15%」，逐单 64/64 命中、汇总 28.28 vs 28.32。**结论：赛狐对，EN `platform_fee` 漏算了补贴基数**；之前的「15%~17% 费率飘忽」是基数差异造成的假象。已给 OSTKUS 未结案的 `platform_fee` 差额（-25.73/-36.52）留下复查线索。
+- **新增脚本**: `platform_account_reconciliation/scripts/reconcile_walmart.py` — Walmart 账期勾稽（跨账期合并 + 口径判定），输出 `账期总览/订单级勾稽/账期费用分类/账期明细` 四个 sheet。`AGENT_HANDOFF.md` 增补 §10 Walmart 章节。
+- **顺带修复**: `reconcile_ostkus.py` 的 `ENV_FILE` 原写死仓库根，**在 git worktree 里因凭证只在主仓库而跑不起来**；改为向上搜索 `EN_API/.env`（`_resolve_env_file()`）。全量测试 629 passed。
+
 ## 2026-09-18
 
 - **新增**: [2026-09-18-sellfox-private-api-terminology.md](2026-09-18-sellfox-private-api-terminology.md) — 区分赛狐「公开 OpenAPI」与「私有接口」。调研结论：业界**没有唯一权威说法**，最接近的是 **Shadow API（影子 API）**（Wiz/Invicti/Akto，OWASP API9:2023 Improper Inventory Management），但定义强调「归属方失去管控」——赛狐是**自己在用自己维护**，只是在公开 OpenAPI 之外，**不严格成立**；Tyk 的「UI 就是一个 ergonomics 更差的 API」最贴切本场景。**用词约定**：正文用「私有接口 / 非公开内部接口」，首次出现补「（undocumented internal API，业界亦称 shadow API）」，**避免用「浏览器 API」**（歧义大，易被读成 Playwright 自动化本身）。含 4 条判据、私有接口价值定位（**在「修」不在「批量」**，海外仓备货单改头程是典型唯一路径）、取证纪律（route 截获后 fulfill 假响应 = 零写入）。
