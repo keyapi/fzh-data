@@ -43,8 +43,10 @@ tags: [skill, ce-compound, okf, workflow, documentation, handoff]
 
 所以归一化（第 2、3 点）和提交/PR（第 1 点）必须落在**仓库内**的 skill 里。
 
-另外两条实测细节：
+另外四条实测细节：
 
+- **`scripts/update_index.py --check` 不能当硬门禁**。它是逐字节比对，而生成的文件头 `generated:` 是**分钟级**时间戳，所以只有"刚生成完的同一分钟内"才会通过，绝大多数时候误报 `STALE`。判断索引是否同步要看**内容**（新文档有没有出现在索引表里），不看退出码。
+- **索引日期列注定滞后一个 commit**：脚本优先取 git commit 日期，未跟踪文件回落 mtime。「先生成、后提交」时，本次改动的文件在索引里显示的是**上一次**提交日期。仓库现役习惯就是和文档放同一个 commit（如 `3ee5ca8`），不必为对齐日期再补一个 commit。
 - `docs/solutions/` 各 category 的 `index.md` **表头不统一**：`integration-issues/index.md` 是 `| 日期 | 标题 | 文件 |`，`tooling-decisions/index.md` 是 `| 标题 | 文件 |`。追加行要**以该文件现役表头为准**。
 - `<module>/AGENT_HANDOFF.md` 用的是 `type: Handoff`（**不在** okf 的 `type` 枚举里）和 `updated:`（**不在** okf 字段表里）。这是现役事实，不要去"修正"。
 

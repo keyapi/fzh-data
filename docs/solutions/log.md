@@ -11,6 +11,7 @@ tags: [solutions, log]
 - **新增**: `tooling-decisions/ce-okf-conversation-wrapup-skill.md` — 把用户 40+ 会话里手打的固定收尾提示词（29 个版本同一骨架）固化成仓库内 skill `ce-okf`。决策：**包一层 `ce-compound` 而不是改它** —— 三条理由：① `ce-compound` 写完文档即结束回合，**不提交不开 PR**（用户每次都要"之后 git 提交 并 pr"，这是缺口）；② 它的 `component` 枚举是 Rails 味儿的，而本仓库 `docs/solutions/**` 早已是 OKF + ce-compound 合并 frontmatter，它不写 `okf:`/`type:`；③ 它是用户级外部 skill（`~/.agents/skills/`），改它不随本仓库 PR 走，同事的 Agent 拿不到。另记两条实测：各 category 的 `index.md` 表头不统一（`integration-issues` 三列带日期、`tooling-decisions` 两列）；`AGENT_HANDOFF.md` 用 `type: Handoff` 与 `updated:` 属现役事实，勿"修正"。
 - **新增**: `.agents/skills/ce-okf/SKILL.md` — 收尾一条龙：模式判定（新增/增量）→ `ce-compound` 出正文 → frontmatter 归一化 → 11 项 OKF 级联登记 → `update_index.py` 索引联动 → 凭证扫描 → 提交 + PR。参数 `/ce-okf`（默认到 PR）、`refresh`（增量）、`no-pr`（只本地提交）。
 - **更新**: `AGENTS.md` 模块索引表 +1 行（`ce-okf`）。
+- **修正**: `scripts/update_index.py --check` **不能当硬门禁** —— 逐字节比对但文件头 `generated:` 是分钟级时间戳，只在"刚生成完的同一分钟内"通过，平时误报 `STALE`；索引是否同步要看内容不看退出码。且索引日期列因取 git commit 日期而**注定滞后一个 commit**（先生成后提交时显示上次提交日期），仓库现役习惯即和文档同 commit，无需补 commit。
 
 ## 2026-09-20
 

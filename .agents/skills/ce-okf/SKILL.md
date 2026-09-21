@@ -140,11 +140,15 @@ tags: [tag-one, tag-two]     # ≤8 个，小写连字符
 ### 第 5 步：索引联动（AGENTS.md 第 11 条）
 
 ```bash
-uv run python scripts/update_index.py          # 重生成根 index.md，纳入本次提交
-uv run python scripts/update_index.py --check  # 提交后再跑，确认零 drift
+uv run python scripts/update_index.py    # 重生成根 index.md，纳入本次提交
 ```
 
-完成后**必须**输出：`已同步更新根目录索引`。该脚本读 git commit 日期、无记录时回落 mtime（`scripts/update_index.py`），同一天跑结果一致，所以提交前后各跑一次都安全。
+完成后**必须**输出：`已同步更新根目录索引`。
+
+两条实测（踩过的坑，别当门禁用）：
+
+- `--check` 是**逐字节比对**，而文件头的 `generated:` 是**分钟级**时间戳 —— 所以 `--check` 只在"刚生成完的同一分钟内"才通过，**绝大多数时候会误报 STALE**。判断同步与否要看**内容**（新文档有没有进索引表），不要看它退出码。
+- 脚本优先取 **git commit 日期**，未跟踪文件回落 mtime。所以「先提交、后生成」会让被改文件的 `Updated` 列显示本次提交日期；「先生成、后提交」则显示上一次的日期。仓库现役习惯是**和文档放同一个 commit**（如 `3ee5ca8`），即日期列滞后一个 commit —— 这是可接受的，不必为了对齐日期再补一个 commit。
 
 ### 第 6 步：隐私与凭证清关（第 9 条）
 
