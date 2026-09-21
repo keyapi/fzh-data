@@ -4,7 +4,7 @@ date: 2026-09-02
 problem_type: architecture_pattern
 component: development_workflow
 severity: medium
-tags: [web-automation, playwright, capability-pod, monorepo, uv-isolation, dispatcher, sellfox, tongtu]
+tags: [web-automation, playwright, capability-pod, monorepo, uv-isolation, dispatcher, sellfox, tongtu, dingtalk]
 applies_when:
   - 同事需要"只 clone 一个仓库"即可用数据/API/网页自动化
   - 需要给弱模型/新同事一个"不猜环境"的固定浏览器任务入口
@@ -15,7 +15,7 @@ symptoms:
   - "网页脚本硬编码 D:\\Work\\赛狐\\网页自动化 与 .venv\\Scripts\\python.exe"
   - "把 ddddocr/onnxruntime 放进根 pyproject 会让所有 uv sync 用户强制下载"
 resolution_type: migration
-related_components: [sellfox, tongtu, playwright, tooling]
+related_components: [sellfox, tongtu, dingtalk, playwright, tooling]
 ---
 
 # 网页自动化迁入 fzh-data：单仓库独立 uv 能力舱 + 固定 dispatcher
@@ -36,6 +36,15 @@ Python 环境、脚本路径、API/网页边界。
 `web_automation/`，配统一 dispatcher + 能力矩阵，把能力选择、环境准备、安全边界固化为可执行入口。
 
 (本次实施：PR #208 `feature/web-automation-capability-pod`，源仓库 `origin/main` 04698a8)
+
+**后续扩展（2026-09-10）**：能力舱新增第三个浏览器平台 **钉钉 aflow**（OA审批管理后台）。
+落地方式与本模式一致，验证了架构的可扩展性：先在 `capabilities.yaml` 登记
+`dingtalk.aflow.receipt.export` / `dingtalk.aflow.receipt.attachments`，
+脚本放 `legacy-compatible/`，`runtime.py:_PROFILE_DIRS` 加 `dingtalk-profile`，
+失败码走 stdout 合同（实测 `LOGIN_TIMEOUT` → dispatcher `BLOCKED`，无静默回退）。
+落盘目录读 `DINGTALK_OA_WORK`，不要写本机人名路径。账期月过滤与 NAS 归档见
+`dingtalk/dingtalk_oa_approval/docs/research/browser-admin-download.md`。
+平台细节见 `web_automation/docs/reference/aflow-receipt-export.md`。
 
 ## Guidance
 
