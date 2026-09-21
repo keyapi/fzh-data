@@ -444,6 +444,20 @@ def compute_sign(access_token, app_id, app_secret, url_path):
 
 **机器可读索引**：`SELLFOX_API/docs/api-reference/llms.txt`（可 grep）
 
+**报告中心三条路径，别混**（Amazon 账期只走第三条）：
+
+| 路径 | 端点 | 生成方式 | 含 Amazon 账期？ |
+|---|---|---|---|
+| 亚马逊原报告 | `report/center/{add,pageList}.json` | 赛狐服务端（SP-API） | ✗ 类型枚举里没有账期 |
+| 自定义报表 | `custom/report/{reportList,pageList}.json` | 赛狐自建引擎 | ✗ 是赛狐分析表 |
+| **插件获取报告** | `report/center/task/getPlugPageList.json` | **插件在账号登录态下抓回** | **✓ 唯一** |
+
+第三条是**纯读**、API 不能触发抓取（`创建报告任务` 只支持 `PRODUCT_SALE_REPORT`），
+且 `fileUrls` 是**1 小时过期的临时签名 URL**，必须即取即下。
+取数用 `SELLFOX_API/fetch_amazon_settlement.py`（下载归档）、
+`SELLFOX_API/probe_amazon_reports.py`（覆盖度核查）；
+详见 `docs/solutions/integration-issues/sellfox-amazon-settlement-plug-only.md`。
+
 **刷新镜像**：见 `SELLFOX_API/docs/reference/api-docs-mirror.md`；学习记录 `docs/solutions/conventions/sellfox-apifox-api-docs-mirror-refresh.md`。命令：`uv run python SELLFOX_API/download_docs.py --all --force`（Cookie 与 `SELLFOX_API_DOC_KEY` 仅本机，勿写入仓库）。
 
 ---

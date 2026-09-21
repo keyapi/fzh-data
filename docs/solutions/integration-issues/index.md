@@ -10,6 +10,7 @@ tags: [integration, solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-09-21 | Amazon 账期报表只能走赛狐「插件获取报告」——API 不可触发，且文件地址 1 小时过期 | [sellfox-amazon-settlement-plug-only.md](sellfox-amazon-settlement-plug-only.md) |
 | 2026-09-18 | 赛狐备货单改「单个头程费用」——无 Excel 路径，只能走私有接口 | [sellfox-restock-headfee-api.md](sellfox-restock-headfee-api.md) |
 | 2026-09-18 | 赛狐成本补录单——公开 OpenAPI 只读，创建/审核走内部接口（完整契约实测） | [sellfox-cost-adjust-api.md](sellfox-cost-adjust-api.md) |
 | 2026-09-18 | 赛狐调整单写链路——createV2 一步到位，batchConfirmAdjust 只适用「待调整」态 | [sellfox-adjust-order-write-chain.md](sellfox-adjust-order-write-chain.md) |
