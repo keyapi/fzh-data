@@ -7,6 +7,11 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-09-21
+- **新增**: `tooling-decisions/ce-okf-conversation-wrapup-skill.md` — 把用户 40+ 会话里手打的固定收尾提示词（29 个版本同一骨架）固化成仓库内 skill `ce-okf`。决策：**包一层 `ce-compound` 而不是改它** —— 三条理由：① `ce-compound` 写完文档即结束回合，**不提交不开 PR**（用户每次都要"之后 git 提交 并 pr"，这是缺口）；② 它的 `component` 枚举是 Rails 味儿的，而本仓库 `docs/solutions/**` 早已是 OKF + ce-compound 合并 frontmatter，它不写 `okf:`/`type:`；③ 它是用户级外部 skill（`~/.agents/skills/`），改它不随本仓库 PR 走，同事的 Agent 拿不到。另记两条实测：各 category 的 `index.md` 表头不统一（`integration-issues` 三列带日期、`tooling-decisions` 两列）；`AGENT_HANDOFF.md` 用 `type: Handoff` 与 `updated:` 属现役事实，勿"修正"。
+- **新增**: `.agents/skills/ce-okf/SKILL.md` — 收尾一条龙：模式判定（新增/增量）→ `ce-compound` 出正文 → frontmatter 归一化 → 11 项 OKF 级联登记 → `update_index.py` 索引联动 → 凭证扫描 → 提交 + PR。参数 `/ce-okf`（默认到 PR）、`refresh`（增量）、`no-pr`（只本地提交）。
+- **更新**: `AGENTS.md` 模块索引表 +1 行（`ce-okf`）。
+
 ## 2026-09-20
 
 - **修复（链接）**：本 bundle 失效相对链接（少退一级，`../../` → `../../../`）：`architecture-patterns/agent-dingtalk-file-bridge-via-erpnext.md`、`workflow-issues/en-channel-account-gsheet-sync.md`（5 条）、`workflow-issues/search-first-before-implementing.md`。
