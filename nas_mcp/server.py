@@ -34,10 +34,27 @@ from NAS_API.synology import get_nas  # noqa: E402
 PORT = int(os.environ.get("NAS_MCP_PORT", "8402"))
 BIND = os.environ.get("NAS_MCP_BIND", "127.0.0.1")
 TOKEN = os.environ.get("NAS_MCP_TOKEN", "")
-ROOT = (os.environ.get("NAS_ROOT_FOLDER") or "/FZH共享文件夹").rstrip("/")
 PROTOCOL = "2025-06-18"
 MAX_TEXT_BYTES = 256 * 1024          # nas_read_text 硬上限 256 KiB
 LOG = os.environ.get("NAS_MCP_LOG", "")
+
+
+def _parse_roots() -> list[str]:
+    """允许的根目录列表。
+
+    优先级：`NAS_ALLOWED_ROOTS`（逗号或冒号分隔的多个）> `NAS_ROOT_FOLDER`（单个，兼容 NAS_API）。
+    注意 DSM 上各共享文件夹是**彼此独立的顶层目录**（如 /FZH共享文件夹 与 /产品信息），
+    所以需要哪个就显式列出来 —— 默认只给一个。
+    """
+    raw = os.environ.get("NAS_ALLOWED_ROOTS") or os.environ.get("NAS_ROOT_FOLDER") or "/FZH共享文件夹"
+    parts = [p.strip().rstrip("/") for p in raw.replace(":", ",").split(",")]
+    roots = [p for p in parts if p]
+    return roots or ["/FZH共享文件夹"]
+
+
+ROOTS = _parse_roots()
+ROOT = ROOTS[0]                      # 兼容旧引用（health 里也报这个作默认）
+ROOTS_STR = "、".join(ROOTS)          # 供工具描述使用
 
 
 def log(line: str) -> None:
@@ -59,17 +76,19 @@ class PathDenied(Exception):
 
 
 def safe_path(raw: str) -> str:
-    """把请求路径规范化，并强制落在 ROOT 之内。拒绝 .. 与软链逃逸。"""
+    """把请求路径规范化，并强制落在任一允许的根目录之内。拒绝 .. 与越界。"""
     p = (raw or "").strip()
     if not p:
         return ROOT
     p = p.replace("\\", "/")
+    # 相对路径：默认挂到第一个根目录下
     if not p.startswith("/"):
         p = posixpath.join(ROOT, p)
     p = posixpath.normpath(p)
-    if not (p == ROOT or p.startswith(ROOT + "/")):
-        raise PathDenied(f"路径越界：仅允许 {ROOT} 之内")
-    return p
+    for r in ROOTS:
+        if p == r or p.startswith(r + "/"):
+            return p
+    raise PathDenied(f"路径越界：仅允许 {'、'.join(ROOTS)} 之内")
 
 
 # ── 工具定义 ────────────────────────────────────────────────
@@ -87,7 +106,7 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "path": {"type": "string",
-                         "description": f"文件夹路径，必须在 {ROOT} 之内。留空则列根目录。"},
+                         "description": f"文件夹路径，必须在允许的根目录之一内（{ROOTS_STR}）。留空则列默认根目录。"},
                 "limit": {"type": "integer", "description": "返回条数上限，默认 100，最大 1000"},
             },
             "required": [],
@@ -128,7 +147,9 @@ TEXT_EXT = {".txt", ".md", ".csv", ".json", ".yaml", ".yml", ".log", ".ini",
 
 def tool_health(_a: dict) -> dict:
     nas = get_nas()
-    return {"available": bool(nas.available), "root": ROOT,
+    return {"available": bool(nas.available),
+            "allowed_roots": ROOTS,
+            "default_root": ROOT,
             "host": os.environ.get("NAS_URL", "").split("//")[-1].split("/")[0],
             "read_only": True}
 
@@ -256,7 +277,7 @@ class Handler(BaseHTTPRequestHandler):
                 "capabilities": {"tools": {}},
                 "serverInfo": {"name": "nas-mcp", "version": "0.1.0"},
                 "instructions": (
-                    f"只读访问公司群晖 NAS。根目录 {ROOT}。"
+                    f"只读访问公司群晖 NAS。允许的根目录：{ROOTS_STR}。"
                     "只提供列目录/查元数据/读小文本文件；无任何写入或删除能力。"
                 ),
             })

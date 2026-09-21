@@ -37,6 +37,8 @@ else:
     print("[env] 未找到 NAS_API/.env —— 只跑离线护栏检查")
 
 os.environ.setdefault("NAS_MCP_TOKEN", "test-token")
+# 多根目录场景（DSM 上各共享文件夹是彼此独立的顶层目录）
+os.environ["NAS_ALLOWED_ROOTS"] = "/FZH共享文件夹,/产品信息"
 
 sys.path.insert(0, str(REPO / "nas_mcp"))
 import server as S  # noqa: E402
@@ -54,17 +56,25 @@ def check(label: str, cond: bool, extra: str = "") -> None:
         print(f"  FAIL  {label} {extra}")
 
 
-print(f"ROOT = {S.ROOT}\n")
+print(f"ROOTS = {S.ROOTS}\n")
 
-print("── 1) 路径护栏（越界必须被拒）")
-for bad in ["/etc/passwd", "/FZH共享文件夹/../../etc", "/其他共享文件夹", "/FZH共享文件夹X/x"]:
+print("── 1) 路径护栏（越界必须被拒；多根必须都放行）")
+for bad in ["/etc/passwd", "/FZH共享文件夹/../../etc", "/其他共享文件夹", "/FZH共享文件夹X/x",
+            "/产品信息X/x"]:
     try:
         S.safe_path(bad)
         check(f"拒绝 {bad}", False, "← 竟然放行了！")
     except S.PathDenied:
         check(f"拒绝 {bad}", True)
-check("放行根目录", S.safe_path("") == S.ROOT, f"-> {S.safe_path('')}")
-check("放行子目录", S.safe_path("B-部门负责人共享").startswith(S.ROOT))
+check("放行根1", S.safe_path("") == S.ROOTS[0], f"-> {S.safe_path('')}")
+check("放行根1子目录", S.safe_path("B-部门负责人共享").startswith(S.ROOTS[0]))
+check("放行根2（本次新增能力）",
+      S.safe_path("/产品信息") == "/产品信息" and S.safe_path("/产品信息/x") == "/产品信息/x")
+try:
+    S.safe_path("/FZH共享文件夹X")
+    check("前缀混淆被拒", False, "← /FZH共享文件夹X 竟然放行")
+except S.PathDenied:
+    check("前缀混淆被拒", True)
 
 print("\n── 2) nas_health")
 h = S.tool_health({})
