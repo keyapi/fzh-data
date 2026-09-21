@@ -109,6 +109,6 @@ Step 1 是 API 优先（失败仅在明确允许时才回退浏览器）；Step 
 
 ## 参考
 
-- [给人看的 README](../../warehouse_restock/README.md)
-- [Agent 详细参考](../../warehouse_restock/AGENT_HANDOFF.md)
-- [BOM 成本拆解说明](../../docs/bom_cost_explanation.md)
+- [给人看的 README](../../../warehouse_restock/README.md)
+- [Agent 详细参考](../../../warehouse_restock/AGENT_HANDOFF.md)
+- [BOM 成本拆解说明](../../../docs/bom_cost_explanation.md)

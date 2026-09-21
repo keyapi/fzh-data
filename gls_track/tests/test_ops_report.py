@@ -2,11 +2,21 @@
 
 import datetime as _dt
 
+import numpy as np
 import pandas as pd
 
-from gls_track.ops_report import build
+from gls_track.ops_report import PL_HOLIDAYS_2026, build
 
-NOW = _dt.datetime.now().strftime("%Y-%m-%d")
+# 时点相对真实「今天」计算：写死的绝对日期会随时间漂移，令迟发样本一旦越过
+# STUCK_DAYS(7) 就必然被判成卡件（测试永久失败）。
+NOW_DT = _dt.datetime.now()
+NOW = NOW_DT.strftime("%Y-%m-%d")
+
+
+def _biz_before(base: _dt.date, days: int) -> str:
+    """base 之前 days 个营业日（按波兰 2026 假日）的时点串。"""
+    d = np.busday_offset(np.datetime64(base), -days, roll="forward", holidays=PL_HOLIDAYS_2026)
+    return f"{d} 06:00:00"
 
 
 def _make_tt(tmp_path):
@@ -28,6 +38,11 @@ def _make_tt(tmp_path):
 
 
 def _make_summary(tmp_path):
+    # 未交付的「迟发」样本：录入 → 交接 5 营业日（> HANDLING 3）；交接/最近扫描在 2 天前
+    # （< STUCK_DAYS 7）→ 判迟发而非卡件。全程相对 NOW，杜绝时间漂移。
+    late_pu_dt = NOW_DT - _dt.timedelta(days=2)
+    late_pu = late_pu_dt.strftime("%Y-%m-%d %H:%M:%S")
+    late_label = _biz_before(late_pu_dt.date(), 5)
     rows = [
         # delivered ok：录入08-03 → 交接08-04（1营业日，不迟）→ 交付08-05
         {"跟踪号": "GLSDEL", "国家/地区": "DE", "邮编": "12305", "当前状态": "DELIVERED", "状态说明": "Delivered",
@@ -41,10 +56,10 @@ def _make_summary(tmp_path):
         {"跟踪号": "GLSFRESH", "国家/地区": "PL", "邮编": "00-001", "当前状态": "INTRANSIT", "状态说明": "In transit",
          "已交付": "否", "交付时间": "", "数据录入时间": f"{NOW} 06:00:00",
          "交接GLS时间": "", "最近事件时间": f"{NOW} 06:00:00", "客户引用": "", "事件数": 1, "错误": ""},
-        # 迟发：录入08-28(五) → 交接09-02(三)（3营业日-2=1 迟）未交付；最近09-02距今<卡件阈值 → late_handover
+        # 迟发：录入 → 交接 5 营业日（-处理时间3 = 迟2 天）未交付，最近扫描 2 天前（不卡件）
         {"跟踪号": "GLSLATE", "国家/地区": "DE", "邮编": "12305", "当前状态": "INTRANSIT", "状态说明": "In transit",
-         "已交付": "否", "交付时间": "", "数据录入时间": "2026-08-28 06:00:00",
-         "交接GLS时间": "2026-09-02 12:00:00", "最近事件时间": "2026-09-02 12:00:00", "客户引用": "", "事件数": 6, "错误": ""},
+         "已交付": "否", "交付时间": "", "数据录入时间": late_label,
+         "交接GLS时间": late_pu, "最近事件时间": late_pu, "客户引用": "", "事件数": 6, "错误": ""},
         # 查无：非 GLS 单号
         {"跟踪号": "ALLEGROU", "国家/地区": "PL", "邮编": "", "当前状态": "", "状态说明": "",
          "已交付": "", "交付时间": "", "数据录入时间": "", "交接GLS时间": "", "最近事件时间": "", "客户引用": "", "事件数": 0,

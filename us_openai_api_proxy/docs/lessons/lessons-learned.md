@@ -2,461 +2,89 @@
 okf: v0.1
 type: Explanation
 title: 经验教训
-description: 部署过程中的经验教训和避坑指南
-tags: [lessons, pitfalls, tips]
+description: US OpenAI API Proxy 的可复用部署与运维原则（公开脱敏版）
+tags: [lessons, pitfalls, operations, authentication]
 ---
 # 经验教训
 
-## Lesson 1: Tailscale 国内下载需要 winget
+> 仅保留可公开复用的原则；实际服务器、账号、授权材料、订阅、私有地址与凭据均在受控环境管理。
 
-国内 Windows 优先用 `winget install Tailscale.Tailscale` 而非直接 curl 官方链接。
+## Lesson 1: 先验证网络层，再验证应用层
 
-## Lesson 2: Tailscale P2P 打洞中美可行
+连通性排查应由 ICMP、TCP 端口到 HTTP/API 逐层进行；单一层成功不代表服务整体可用。
 
-北京↔US P2P 直连 215ms，先试直连再决定是否部署中继，不要提前过度设计。
+## Lesson 2: 代理服务必须以系统服务常驻
 
-## Lesson 3: Vultr Web 控制台是万能兜底
+面向使用者的代理或转发服务应由 systemd 等系统级服务管理，并具备重启后自动恢复能力。
 
-云端虚拟机永远有厂商控制台（浏览器 VNC），不需要第三方远程软件做初始化。
+## Lesson 3: Linux 适合无界面转发服务
 
-## Lesson 4: 免费 ChatGPT 账号几乎不可用
+无 GUI 开销、systemd 原生、SSH 运维清晰，通常比共享桌面会话更适合长期运行的转发服务。
 
-免费账号只有 `gpt-5.4-mini`，很快限额。Plus/Pro/Team 才可用。
+## Lesson 4: 内网监听优先于全网暴露
 
-## Lesson 5: CLIProxyAPI 绑定内网 IP 而非 0.0.0.0
+服务应绑定受控内网地址或由访问控制层保护，不以公开监听换取运维便利。
 
-`host: "<Tailscale IP>"` 防止端口暴露公网被扫描。
+## Lesson 5: 关键访问路径需要独立应急方案
 
-## Lesson 6: 共享 Windows 机器需评估资源
+主代理或订阅失效时，应能经受控内网和 SSH 进入服务器诊断；应急链路需预先验证但不擅自启用。
 
-Tailscale + CLIProxyAPI 极轻量，但共享机器的其他因素（多用户 RDP）可能导致问题。
+## Lesson 6: DNS 接管需要显式验收
 
-## Lesson 7: 文档即基础设施
+虚拟网络或代理组件接管系统 DNS 后，必须验证冷启动、重启和上游解析器失效场景；不需要时应关闭接管。
 
-OKF v0.1 规范、AGENT_HANDOFF.md 确保 Agent 接手丝滑，敏感信息用 .env 隔离。
+## Lesson 7: 容器网络与虚拟网卡需单独验证
 
-## Lesson 8: Ping 通 != TCP 端口通 (Windows 防火墙)
+容器 bridge 网络不必然能访问宿主机的虚拟内网。确认路由、NAT 与回程路径后再持久化规则。
 
-从底层往上排查：ICMP ping → TCP 端口 → HTTP 应用层。
+## Lesson 8: 配置文件应从官方基线演进
 
-## Lesson 9: 代理进程须常驻
+部署开源服务时优先在官方 compose 或示例上最小修改，避免遗漏数据库、网络或持久化参数。
 
-面向用户的代理/转发服务必须在首次验证后立即注册为持久化服务（systemd / NSSM）。
+## Lesson 9: 代理策略组名称不是稳定接口
 
-## Lesson 10: Windows Server 多用户 RDP 冲突 Tailscale
+订阅或供应商切换后，先确认新配置中的策略组名称，再更新自定义规则；不要假设旧组名仍存在。
 
-Windows 多用户 RDP 时，第一个登入用户独占 Tailscale GUI socket。`tailscale up --unattended` 绑定系统级，或直接用 Linux。
+## Lesson 10: 验证以真实业务连续可用为准
 
-## Lesson 11: 服务器重启后所有手动进程都会丢失
+测速、模型列表或网页局部成功都不是最终验收；应测试目标客户端和目标功能的完整路径。
 
-所有服务必须注册为系统级自启。P2P 打洞重启后可能退化到 DERP relay。
+## Lesson 11: 自定义覆写必须可重复执行
 
-## Lesson 12: Linux 比 Windows Server 更适合做转发服务
+会被订阅更新覆盖的配置，应通过幂等覆写机制恢复；同时明确主线路优先、应急线路兜底的顺序。
 
-无 GUI 开销、systemd 原生、SSH 运维简单、Tailscale 无 session 冲突。1C2G 足够。
+## Lesson 12: 路由例外必须最小化且经授权
 
-## Lesson 13: LAN 网关降低同事接入成本
+直连或特殊路由可能改变全网行为。先测证据、确认影响范围、取得授权，再写入最小规则，并保留回滚方式。
 
-Tailscale → 网关代理 → 纯 HTTP，接入门槛每降一步，推广阻力小一个量级。
+## Lesson 13: 专用模型必须匹配协议端点
 
-## Lesson 14: Tailscale P2P 打洞重启后可能退化为 DERP
+模型出现在目录中不代表适用于聊天请求。调用前确认模型支持的 API 端点和客户端协议。
 
-P2P 直连是 bonus，架构设计始终以 DERP relay 兜底为前提。
+## Lesson 14: 工作区策略决定认证与模型范围
 
-## Lesson 15: 善用 `tailscale up --unattended`
+上游工作区可以限制模型、OAuth 方式或设备代码授权。遇到策略限制时使用受支持流程，不尝试绕过。
 
-服务器环境始终用 unattended 模式，避免用户 session 绑定。
+## Lesson 15: 敏感信息必须分层管理
 
-## Lesson 16: SSH SOCKS 代理解决无 GUI 服务器 OAuth
+公开仓库只保存占位符与原则；真实值保存在 gitignored 配置、受控主机或身份系统中。日志、截图和命令历史同样不能泄露凭据。
 
-一条 SSH 命令 `-L 1455:... -D 1080` 同时解决回调隧道 + US IP 问题。
+## Lesson 16: 无 GUI 服务器的 OAuth 需要双向准备
 
-## Lesson 17: systemd 让运维降维
+浏览器 OAuth 可通过本地 callback 转发和受控浏览器代理完成。授权会话短时效，生成后应立即操作，过期则重新生成。
 
-`Restart=always` 崩溃自愈，`journalctl -u xxx -f` 实时日志，`systemctl enable` 开机自启零配置。
+## Lesson 17: 健康检查与上游授权可用性不同
 
-## Lesson 18: Tailscale 新机器入网只需 2 条命令
+systemd active、端口监听或基础 health check 成功，只说明本地服务可响应；它不证明上游 OAuth 能为目标模型提供授权。
 
-`curl ... | sh` + `tailscale up`，浏览器授权 2 分钟搞定。
+## Lesson 18: `auth_unavailable` 必须以目标模型请求验收
 
-## Lesson 19: 敏感信息分层管理
+恢复顺序为：备份并升级 → 浏览器 OAuth 刷新 → 仅检查认证目录元数据并隔离确认失效的记录 → 重启 → 向实际监听地址发送最小目标模型 completion。只有正常 completion 才算恢复。
 
-| 层级 | 位置 | 内容 |
-|------|------|------|
-| L1 | Git 文档 | 占位符 `<VAR>` |
-| L2 | `.env` (gitignore) | 真实值 |
-| L3 | `~/.ssh/config` | SSH 密钥路径 |
-| L4 | Tailscale 控制台 | 机器列表 |
+OAuth URL、callback 参数、授权码、认证文件名和内容、token、私有地址及完整请求体均不得写入仓库或日志。
 
-## Lesson 20: Tailscale MagicDNS 会破坏国内服务器 DNS
+## 相关记录
 
-**问题**：`tailscale up` 后系统 DNS 全部超时。`/etc/resolv.conf` 被设为 `foreign` 模式，DNS Domain 被改为 `tailxxxx.ts.net`。
-
-**原因**：Tailscale MagicDNS 接管了 systemd-resolved，但国内阿里云 ECS 的 DNS 服务器（100.100.2.x）要求特定网络环境。MagicDNS 的覆盖导致 systemd-resolved 无法正确转发查询。
-
-**解决**：`tailscale up --accept-dns=false --accept-routes`。禁用 MagicDNS 接管，保留系统原有 DNS。
-
-**教训**：国内云服务器部署 Tailscale 时务必加 `--accept-dns=false`，否则 DNS 秒挂。
-
-## Lesson 21: shim-signed GRUB 交互提示阻塞 apt
-
-**问题**：Ubuntu 22.04 上 `apt-get install` docker 时被 shim-signed 的 GRUB 设备选择交互提示卡死，`DEBIAN_FRONTEND=noninteractive` 无效。
-
-**原因**：已知 Ubuntu Bug (#2080297)，shim-signed 的 postinst 脚本硬编码了 EFI 分区路径，与阿里云 ECS 的实际分区不匹配。
-
-**解决**：
-```bash
-echo "grub-efi-amd64 grub-efi/install_devices multiselect /dev/nvme0n1p2" | debconf-set-selections
-```
-然后用 `dpkg --configure -a` 修复。
-
-**教训**：阿里云 Ubuntu 上装 Docker 前，先 `dpkg --configure -a` 确认没有残留的 broken package。
-
-## Lesson 22: 阿里云内网镜像不可盲目依赖
-
-**问题**：`mirrors.cloud.aliyuncs.com` 解析到内网 IP `100.100.2.148` 但 TCP 超时不可达。
-
-**原因**：阿里云 ECS 内网镜像仅在特定区域/可用区内可达，跨区域或网络变更后可能失效。
-
-**解决**：换清华镜像 `mirrors.tuna.tsinghua.edu.cn`。国内服务器部署时准备至少 2 个备选镜像源。
-
-**教训**：`/etc/apt/sources.list` 里永远备一个非阿里云的镜像源。
-
-## Lesson 23: Docker 镜像在国内必须用代理拉取
-
-**问题**：Docker Hub (`registry-1.docker.io`) 从国内被完全阻断，TLS 握手超时。公共镜像加速器（如 `docker.1ms.run`）不稳定。
-
-**解决**：DaoCloud 代理 `docker.m.daocloud.io`：
-```bash
-docker pull docker.m.daocloud.io/library/mysql:8.0
-docker tag docker.m.daocloud.io/library/mysql:8.0 mysql:8.0
-```
-Compose 中加 `pull_policy: never` 防止重复拉取。
-
-**教训**：国内 Docker 部署三步走：① 配置 Daocloud mirror ② 手动 `docker pull` + `docker tag` ③ Compose `pull_policy: never`。
-
-## Lesson 24: Tailscale 两台国内机器之间延迟可能反而更高
-
-**问题**：北京和上海两台国内机器，Tailscale IP 间延迟极高（200ms+），而公网 IP 直连仅 30ms。
-
-**原因**：双 NAT（办公网 + 阿里云 VPC）导致 P2P 打洞失败，流量绕道境外 DERP（东京/纽约）来回。
-
-**方案优先级**：
-1. 尝试 Peer Relays（`tailscale set --relay-server-port 3478`，UDP 中继）
-2. 自建国内 DERP（需国内 VPS + 备案域名）
-3. 接受 DERP relay（API 调用场景 200ms 延迟可接受）
-4. 公网直连（放弃 Tailscale 加密，不推荐）
-
-**教训**：Tailscale 在国内两台云服务器之间的延迟不一定优于公网。P2P 打洞受 NAT 类型影响极大。对于 API 分发场景（new-api），可以接受 DERP 延迟。
-
-## Lesson 25: docker-compose 文件必须自包含，不能假设默认行为
-
-**问题**：docker-compose.yml 里配了 MySQL 容器，但没给 new-api 传 `SQL_DSN` 环境变量。new-api 检测不到 MySQL 就静默降级为内置 SQLite，初始化页面弹出"数据库警告：您正在使用 SQLite"。
-
-**根因**：没有从官方 docker-compose.yml 出发。官方文件里有完整的 `SQL_DSN` 配置（默认 PostgreSQL，MySQL 注释掉），我们按 `docker run` 教程里的单容器思路自己写 compose，漏掉了数据库连接参数。
-
-**修复**：加一行环境变量 `SQL_DSN=root:pass@tcp(mysql:3306)/new_api`。
-
-**现状**：MySQL 模式已正常，GQ 已完成管理员初始化，不换 PostgreSQL。
-
-**教训**：部署开源项目第一步永远是拉原版 docker-compose.yml，在上面改，不要按教程里的 `docker run` 单容器命令自己拼 compose。`docker run -e KEY=VALUE` 的参数在 compose 里就是 `environment:` 段，一一对应。漏一个就翻车。
-
-## Lesson 26: Docker bridge 容器无法访问宿主机 Tailscale 网络
-
-**问题**：new-api Docker 容器（bridge 网络）无法访问 US Ubuntu 的 Tailscale IP `100.126.133.106:8317`。宿主机能通，容器不通。
-
-**根因**：Docker bridge 网络的容器有独立的网络命名空间，`tailscale0` 虚拟网卡在宿主机上，容器内看不到。即使宿主机开启了 IP forwarding，回程路由也有问题——应答包会被 Tailscale 的路由表 52 劫持，走 `tailscale0` 而不是 `docker0`。
-
-这是 Tailscale + Docker 的**经典已知冲突**，2025 年 Docker 28 的网络变更加剧了问题。
-
-**社区 4 种标准方案**：
-
-| 方案 | 做法 | 适用场景 |
-|------|------|---------|
-| **MASQUERADE** ✅ | `iptables -t nat -I POSTROUTING -s <docker子网> -o tailscale0 -j MASQUERADE` | Tailscale 在宿主机 |
-| DOCKER-USER 链 | `iptables -I DOCKER-USER -j ts-forward` | Tailscale 官方推荐 (Docker 28+) |
-| Sidecar 模式 | Tailscale 单独容器，app 容器 `network_mode: "service:tailscale"` | Tailscale 也容器化 |
-| host 网络 | `network_mode: host` | 简单但 MySQL auth_socket 可能冲突 |
-
-**我们选 MASQUERADE**——Tailscale 直接跑在宿主机（非容器化），这是社区推荐的标准做法，不是 hack。
-
-**持久化**：iptables 规则重启后会丢失，需要 `apt install iptables-persistent && netfilter-persistent save`。
-
-**相关链接**：
-- [Tailscale Docker stateful filtering 官方文档](https://tailscale.com/docs/reference/messages/client/docker-stateful-filtering)
-- [moby/moby#49498: Docker 28 stops containers communicating with tailscale network](https://github.com/moby/moby/issues/49498)
-- [tailscale/tailscale#15401: container cannot reach other containers by name](https://github.com/tailscale/tailscale/issues/15401)
-- [tailscale/tailscale#14008: External DNS SERVFAIL with Tailscale on Docker host](https://github.com/tailscale/tailscale/issues/14008)
-- [tailscale/tailscale#13367: No connectivity from docker container when tailscale exit-node is set](https://github.com/tailscale/tailscale/issues/13367)
-
----
-
-### Lesson 27: OpenClash "绕过中国大陆IP" 关闭导致国内应用 UDP 卡顿 (v0.9, 2026-06-24)
-
-**现象**：小会议室电脑开钉钉视频会议卡顿，关掉 OpenWrt 路由器后正常。
-
-**根因**：OpenClash 的 `china_ip_route` 开关是**关闭的** (`0`)。这意味着所有流量（包括国内 IP）都进入 Clash 内核处理。在 `redir-host + tproxy` 模式下，UDP 流量被 TPROXY 劫持到 `127.0.0.1:7895`，代理节点对 UDP 转发延迟高、丢包严重。钉钉视频会议使用 UDP (WebRTC) 做媒体传输，即使服务器是国内阿里云 IP，UDP 包仍然通过代理节点中转。
-
-**修复**（两处改动）：
-
-1. **开启 "绕过中国大陆IP"**：
-   ```bash
-   uci set openclash.config.china_ip_route='1'
-   uci commit openclash
-   ```
-   开启后 OpenClash 在 iptables 层面插入 `match-set china_ip_route dst RETURN` 规则，国内 IP 流量不进 Clash 内核。效果验证：
-   - NAT TCP: 254 pkts RETURN (绕过) vs 188 REDIRECT (进Clash)
-   - MANGLE UDP: 471 pkts RETURN vs 73 TPROXY
-
-2. **添加钉钉域名 DIRECT 规则**（双重保险，在 `/etc/openclash/custom/openclash_custom_rules.list`）：
-   ```yaml
-   - DOMAIN-SUFFIX,dingtalk.com,DIRECT
-   - DOMAIN-SUFFIX,dingtalk.cn,DIRECT
-   - DOMAIN-SUFFIX,dingtalkapps.com,DIRECT
-   - DOMAIN-SUFFIX,alicdn.com,DIRECT
-   - DOMAIN-KEYWORD,dingtalk,DIRECT
-   ```
-
-**前置条件**（均已满足）：
-- DNS 劫持已开启 (`enable_redirect_dns=1`)
-- 国内 IP 段文件已存在 (`/etc/openclash/china_ip_route.ipset`, 4293 条, 152KB)
-- 国内 DNS 服务器已配置 (114.114.114.114, 119.29.29.29, doh.pub)
-
-**为什么之前关着**：该功能在某些旧版本中可能有兼容性问题或性能影响，但 v0.47.088 + Mihomo alpha 内核已经稳定。开启后翻墙功能不受影响——只有 `china_ip_route` 匹配的国内 IP 走直连，其余仍进 Clash 代理。
-
-**回滚**（如需）：
-```bash
-uci set openclash.config.china_ip_route='0' && uci commit openclash
-cp /etc/openclash/custom/openclash_custom_rules.list.bak /etc/openclash/custom/openclash_custom_rules.list
-/etc/init.d/openclash restart
-```
-（规则文件的 `.bak` 备份在执行修改时已自动创建）
-
-**当前 OpenClash 配置关键参数**：
-| 参数 | 值 | 说明 |
-|------|-----|------|
-| `en_mode` | `redir-host` | 运行模式 |
-| `china_ip_route` | **1** (已改为) | 绕过中国大陆IP |
-| `enable_redirect_dns` | `1` | DNS 劫持 |
-| `enable_udp_proxy` | `1` | UDP 代理 |
-| `lan_ac_mode` | `0` | 局域网访问控制 |
-| Mihomo 内核 | `alpha-g8f2d84f` | 最新 alpha |
-| 软件版本 | `v0.47.088` | — |
-
----
-
-### Lesson 28: OpenClash 代理失效导致全办公室外网瘫痪 + SSH SOCKS 应急 (v0.10, 2026-06-25)
-
-**现象**：办公室 FZH-5G WiFi 下所有设备无法访问外网，翻墙线路全部失效。本地电脑 SSH 到 US 服务器秒断（`Connection closed by remote host`）。
-
-**诊断过程**：
-
-1. **切换 WiFi 直连光猫**（绕过 OpenWrt/OpenClash）→ SSH 恢复正常 → 确认问题在 OpenClash
-2. **检查 OpenClash NAT iptables 链**：
-   - `match-set china_ip_route dst` → RETURN（中国 IP 正常直连）✓
-   - `REDIRECT tcp ... redir ports :7892`（非中国 IP TCP 全部劫持到 Clash）← 这是根因
-3. **US 服务器公网 IP 不在中国 IP 段**（`<US_PUBLIC_IP>`）→ 被 iptables REDIRECT → 进入 Clash → 走失效代理 → 连接秒断
-4. **应急方案**：SSH SOCKS 隧道（`ssh -D 1080 us-ubuntu-proxy`）走 Tailscale 内网 `100.x.x.x`，不经过 OpenClash → 成功翻墙
-5. **最终修复**：更新 OpenClash 代理订阅链接（ssrdog 新链接）
-
-**根因链路**：
-
-```
-设备 → FZH-5G WiFi → 新华三 → OpenWrt iptables:
-  目标 IP 检查:
-    ✓ 中国 IP (china_ip_route) → RETURN → 联通直连 → 正常
-    ✗ 非中国 IP → REDIRECT :7892 → Clash 内核 → 失效代理 → 连接秒断
-```
-
-这包括 SSH（TCP 22 到国外 IP）、浏览器访问国外网站、API 调用等所有非中国流量。
-
-**教训**：
-
-1. **代理订阅是单点故障**：订阅过期 → 所有非中国流量全死。建议设置订阅自动更新 + 健康检查告警。
-2. **Tailscale 内网是救命稻草**：Tailscale 使用自己的 WireGuard 隧道，流量不经过 OpenClash iptables 劫持。SSH 配置应优先使用 Tailscale 内网 IP（100.x.x.x），公网 IP 做备用。
-3. **诊断利器**：切换 WiFi 直连光猫是快速排除 OpenWrt/OpenClash 问题的方法。中国 IP 直连正常 + 国外 IP 全断 = 代理失效。
-4. **SSH 不应依赖翻墙**：关键服务器（US Ubuntu）的 SSH 应通过 Tailscale 内网 IP 访问，确保翻墙挂掉时仍可达。
-5. **OpenClash china_ip_route 已确认正常工作**：中国 IP 的 TCP 和 UDP 都正确 RETURN，不受代理状态影响。
-
-**SSH Config 优化**（双路 fallback）：
-
-```
-Host us-ubuntu-proxy          ← 主：Tailscale 内网，不依赖翻墙
-    HostName <US_TS_IP>
-
-Host us-ubuntu-proxy-pub      ← 备：公网 IP，需要翻墙正常
-    HostName <US_PUBLIC_IP>
-```
-
-> 敏感 IP 值见 `.env`（gitignored），以上用占位符。
-
-**相关**：Lesson 27 (OpenClash china_ip_route), `../.env` (US 服务器 IP)
-
-
-## Lesson 29: 钉钉 OAuth 接入 new-api（SSO 单点登录）
-
-**日期**：2026-06-25
-
-**背景**：公司内部使用 new-api 作为大模型 API 网关，每个新同事入职都需要管理员手动创建账号。目标是通过钉钉扫码登录实现自动创建账号（SSO），省去手动开账号的繁琐工作。
-
-**调研结论**：
-
-1. **全网无现成方案**：没有任何人为 new-api 或 one-api 做过钉钉 OAuth 集成，没有相关 PR/Issue/fork。
-
-2. **new-api 有两套 OAuth 扩展机制**：
-   - 内置 Provider（GitHub、OIDC、飞书、微信等）— 硬编码
-   - **自定义 Provider**（`controller/custom_oauth.go`）— 支持动态注册任意 OAuth/OIDC provider，含 OIDC Discovery
-
-3. **钉钉 → OIDC 桥接方案对比**：
-   - [dingtalk-oidc](https://github.com/maggch97/dingtalk-oidc)：Go 实现，功能完整但作者声明 99% AI 生成、无安全保证，密钥每次重启重新生成，内存状态
-   - [Logto connector](https://www.npmjs.com/package/@logto/connector-dingtalk-web)：需部署整套 Logto，杀鸡用牛刀
-   - [APISIX dingtalk-auth](https://docs.apiseven.com/hub/dingtalk-auth)：网关级方案，未使用 APISIX
-
-**最终方案**：自写 OIDC 桥接代理（~220 行 FastAPI）+ new-api 自定义 OAuth
-
-**架构**：
-```
-浏览器 → new-api (Custom OAuth) → OIDC Bridge (FastAPI) → 钉钉 OAuth v2 API
-```
-
-**钉钉 OAuth v2 端点**（第三方企业应用）：
-- 授权页：`https://login.dingtalk.com/oauth2/auth`
-- 换 token：`POST https://api.dingtalk.com/v1.0/oauth2/userAccessToken`
-- 用户信息：`GET https://api.dingtalk.com/v1.0/contact/users/me`
-
-**OIDC Bridge 关键设计决策**：
-- 固定 RSA 密钥对（持久化到文件），不像 dingtalk-oidc 每次重启换密钥，确保 id_token 签名稳定
-- SQLite 存 state/code/token（不像 dingtalk-oidc 存内存），重启不丢会话
-- `ALLOWED_CORP_ID` 限定只能本公司员工登录
-- 不需要暴露公网端口（仅 new-api 容器内部访问）
-
-**new-api 配置方式**：
-- 后台 → 自定义 OAuth → 添加提供商 → 填入 discovery URL → 自动填充
-
-**代码位置**：`new-api-dingtalk-oidc/main.py`
-
-**待办**：在钉钉开放平台创建第三方企业应用 → 获取 AppKey/AppSecret → 配置回调域名 → 填入 docker-compose 环境变量 → 启动 → new-api 后台配置
-
-**参考链接**：
-- new-api 仓库：https://github.com/Calcium-Ion/new-api
-- dingtalk-oidc（参考）：https://github.com/maggch97/dingtalk-oidc
-- 钉钉 OAuth2 文档：https://open.dingtalk.com/document/orgapp/obtain-user-token
-
-## Lesson 29: Tailscale MagicDNS 冷启动无上游导致全线 DNS 挂 (2026-07-27)
-
-**问题**：US Vultr 服务器内核升级重启后，所有 DNS 查询返回 SERVFAIL。`/etc/resolv.conf` 被 Tailscale 设为 `nameserver 100.100.100.100`，日志刷屏 `dns: resolver: forward: no upstream resolvers set, returning SERVFAIL`。
-
-**原因**：Tailscale MagicDNS 接管了系统 DNS，但 tailnet 未配置上游解析器。重启后 tailscaled 冷启动，尝试回退读取系统 DNS → systemd-resolved 返回 `500 Internal Server Error`（因 resolv.conf 被 Tailscale 自己设成 foreign 模式）→ 找不到上游 → 全部查询 SERVFAIL。
-
-重启前正常运行一个月未暴露，因长期运行的 tailscaled 缓存了 DNS 状态。重启后状态丢失才暴露。
-
-**修复**：
-1. `tailscale set --accept-dns=false` 禁用 MagicDNS
-2. systemd-resolved 配置持久化上游 DNS（Vultr DNS + Cloudflare 备用）
-3. `ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf`
-
-**教训**：不需要 MagicDNS 的节点（只用 IP 通信的出口节点）务必设 `--accept-dns=false`。即使服务器不在中国，MagicDNS 冷启动也可能失败。Tailscale 官方 Issue #15471 / #14252 记录了完全相同的问题。
-
-## Lesson 30: gpt-image-2 只能走 images 端点，不能聊天 (v0.6, 2026-08-03)
-
-**问题**：Codex/Codex++ 里选 gpt-image-2 模型发消息，报 503 `model gpt-image-2 is only supported on /v1/images/generations and /v1/images/edits`。
-
-**根因**：gpt-image-2 是专用生图模型，不接受 `/v1/chat/completions` 或 `/v1/responses` 请求。Codex 所有模型都走 `/v1/responses`，协议不兼容。
-
-**解决办法**：
-- 生图用聊天模型（gpt-5.4-mini / gpt-5.5），发自然语言 prompt，CLIProxyAPI 内部路由到 image-2
-- 直接 curl `/v1/images/generations` 端点（CLIProxyAPI 已代理）
-- 不能通过 new-api 中转给同事用——new-api 的渠道只转 chat completions
-
-**教训**：模型列表里有 ≠ 能聊天。gpt-image-2 在 new-api 渠道里单独标注。
-
-## Lesson 31: 订阅转 API 的定价策略——官方 API 价为锚，但不等同 (v0.6, 2026-08-03)
-
-**问题**：new-api 的 ModelRatio 该怎么填？直接用 OpenAI 官方 API 价格换算？
-
-**分析**：订阅制（edu/plus/pro）是固定月费，不是按量付费，不存在真正的"成本/M token"。DeepSeek 是真实 API Key 按量扣费。如果按官方 API 价填 ModelRatio，gpt-5.5 会是 deepseek-v4-pro 的 12 倍。
-
-**内部定价策略**：
-
-| 层级 | ModelRatio | 模型 | 逻辑 |
-|------|:--:|------|------|
-| 旗舰 | 0.41 | gpt-5.5, gpt-5.6-sol | 最好但贵 6× mini |
-| 中端 | 0.205 | gpt-5.6-terra, gpt-5.4, deepseek-v4-pro | 性价比主力 |
-| 轻量 | 0.15-0.062 | gpt-5.6-luna, gpt-5.4-mini | 日常便宜 |
-| 近乎免费 | 0.01 | codex-auto-review | Codex 内置 |
-
-**核心原则**：
-1. 订阅制模型的定价是引导行为（便宜模型多给，贵模型限制），不是成本回收
-2. 以 deepseek-v4-pro（真实成本 ¥3/1M）为基准锚点
-3. 同能力层级同价，差异分层
-4. 日限额 20 RMB 是真正的管控，ModelRatio 只是引导
-5. DeepSeek 按实际 API 成本不变
-
-## Lesson 32: 教育账号切换——工作区权限决定模型可用性 (v0.6, 2026-08-03)
-
-**问题**：CSUN 教育账号（@my.csun.edu）工作区禁了生图和 gpt-5.6-sol/luna/gpt-5.4。
-
-**切换**：CSU East Bay 教育账号（@horizon.csueastbay.edu）→ 7 聊天模型 + image-2 全通。
-
-**教训**：教育账号权限取决于学校 IT 管理员在 OpenAI 工作区的设置，同是 .edu 不代表权限相同。切换前先用网页版验证模型范围。账号历史见 `docs/operations.md`。
-
-**诊断命令**：
-```bash
-tailscale dns status                          # 查看 MagicDNS 状态和上游解析器
-journalctl -u tailscaled | grep -i "dns\|SERVFAIL"  # 查看 DNS 错误
-```
-
-## Lesson 30: 切换机场后自定义规则必须映射到新配置的策略组名 (2026-08-25)
-
-**问题**：从 SSRDog 切换到 BoostNet 后，OpenClash 自定义覆写规则仍指向旧配置的 `Auto` 策略组。BoostNet 没有 `Auto`，实际组名是 `自动选择`(url-test)、`故障转移`(fallback) 和主组 `BoostNet`(select)，规则目标组名不匹配。
-
-**原因**：自定义覆写规则里的策略组名是写死的，切换订阅后不会自动跟随。OpenClash 覆写机制只做配置结构合并，不校验组名是否存在；组名不一致时规则要么找不到目标组，要么回落到 `MATCH`。
-
-**解决**：读取新配置的 proxy-groups 组名后，把自定义规则中所有 `,Auto` 统一替换为 BoostNet 实际的 `,自动选择`。AI 规则从"固定国家组"改为"自动选择"，让 ChatGPT/Cursor/Claude 在可用节点间自动择优，避免写死某个国家组导致节点失效时全线不可用。
-
-**教训**：
-1. 切换机场后第一件事：读新配置的 proxy-groups 组名，确认覆写规则里的每个目标组都存在。
-2. 用 `自动选择`(url-test) 比写死国家组更稳：延迟/可用性变化时自动切换；写死国家组会重演"日本节点失效 → ChatGPT/Cursor 全挂"的问题。
-3. 验证标准是"实际服务能持续用"（ChatGPT 网页、Cursor 长连接），不是测速数值或 Google 语言重定向。
-4. 测速 URL 默认 `http://www.gstatic.com/generate_204`，部分节点测速超时但实际可用，可用 `http://cp.cloudflare.com/generate_204` 交叉验证。
-5. 后台提示"订阅 URL 已重置请重新导入"可能是通用自助排障文案，已在多客户端重新导入仍失败时应转向排查线路/供应商，而非反复粘贴订阅。
-
-## Lesson 31: 订阅里的 Cloudflare DoH 分流在国内被墙导致外网域名解析全挂 (2026-08-25)
-
-**问题**：切换到 BoostNet 订阅后，办公室全员 google/github/openai/chatgpt 打不开，但国内域名（baidu/qq）和部分国外域名（microsoft）正常。同事同 WiFi 也全挂。
-
-**根因**：BoostNet 订阅的 DNS 配置用 `nameserver-policy` 把 google/github/openai/chatgpt/anthropic 等强制指向 `https://dns.cloudflare.com/dns-query`（Cloudflare DoH）。Cloudflare DoH 自 2025 年起在大陆被 GFW 阻断/干扰（SNI 阻断 + 运营商封 `.1` 结尾 IP），这些域名解析返回 "No answer"。不在 policy 里的域名走 doh.pub/alidns 反而正常。
-
-**诊断证据**（全链路，非猜测）：
-- dnsmasq → Clash DNS(7874) 解析 baidu/qq/microsoft 正常
-- 同上解析 google/github/openai 返回 "No answer"（恰好都在 Cloudflare policy 里）
-- 路由器直连 `223.5.5.5` 解析 google 正常
-- 修复后（Cloudflare→223.5.5.5）全部恢复
-
-**为什么订阅作者用 Cloudflare DoH（有其道理）**：国内公共 DNS 会对 GFW 封锁域名返回污染 IP；Cloudflare DoH 提供加密、不被污染的解析。但悖论在于 Cloudflare DoH 本身在国内也被墙，"为了防污染"反而变成"完全不可用"。
-
-**修复（当前权宜）**：把 nameserver-policy 里的 Cloudflare DoH 全部替换为 `223.5.5.5`（阿里 DNS，国内可达，已验证可解析 google/github/openai）。同时改运行配置和 source 配置，已备份。
-
-**为什么之前用 SSRDog 没这问题**（SSRDog 旧配置对照）：
-```yaml
-dns:
-  enhanced-mode: redir-host
-  nameserver: [223.5.5.5, 223.6.6.6]   # 主解析 = 阿里 DNS（国内可达，稳定）
-  fallback: [1.1.1.1, 8.8.8.8]          # 仅作防污染纠偏
-  fallback-filter: { geoip: true, geoip-code: CN }
-```
-SSRDog 用"国内 DNS 为主 + 国外 DNS 兜底防污染"，且**没有**任何 `nameserver-policy` 强制指向 Cloudflare DoH；BoostNet 恰恰相反，把国外 DoH 当主解析，国内被墙 → 解析失败。
-
-**持久化修复（2026-08-25）**：已把 DNS 修复加进 `openclash_custom_overwrite.sh` 覆写脚本的 `fix_dns_cloudflare()`，每次 OpenClash 重新生成配置（含订阅更新）后自动把 `https://dns.cloudflare.com/dns-query` 替换为 `223.5.5.5`。已端到端测试：把 source 恢复成 Cloudflare 版（模拟订阅更新）→ 重启 → 脚本自动修复运行配置 → DNS 恢复。当前 source 和运行配置都已是干净的 `223.5.5.5`，脚本作为第二道防线。
-
-**更稳健的长期方案**：
-1. **fake-ip 模式**：域名解析放到代理出口完成，彻底绕开国内 DNS 污染（Mihomo 推荐）
-2. **境外 DNS 走代理**：fallback 加代理组标签，或 Mihomo `dns.proxy: true`
-3. 国内域名用国内 DoH（doh.pub/alidns），境外域名走代理解析
-
-**参考**：
-- [V2EX: 国内 1.1.1.1 的 doh 服务好像被墙了](https://global.v2ex.co/t/1164043)
-- [LINUX DO: cloudflare 在中国大陆快大结局](https://linux.do/t/topic/771266)
-- [Clash DNS nameserver/fallback 分步设置](https://clashsurge.com/zh-CN/blog/articles/clash-dns-nameserver-fallback-setup-2026.html)
-- [openwrt-clash Issue #116: 如何正确设置 DNS](https://github.com/chandelures/openwrt-clash/issues/116)
-- [V2EX: 江苏电信劫持公共 DNS](https://global.v2ex.co/t/1139109)
+- [CLIProxyAPI `auth_unavailable`：升级、浏览器 OAuth 与真实模型验收](../../../docs/solutions/integration-issues/cliproxyapi-auth-unavailable-oauth-recovery.md)
+- [运维手册](../operations.md)
+- [Agent 接手入口](../../AGENT_HANDOFF.md)

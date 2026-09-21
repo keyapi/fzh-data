@@ -26,12 +26,22 @@ venv/
 
 # env files (secrets)
 .env
+# env 变体（备份 / 本地覆盖）；模板要入库，见下面的 ! 例外
+.env.*
+!.env.example
+!.env.sample
+!.env.template
 secrets/*.json
+dingtalk/dingtalk_oa_approval/data/
+dingtalk/dingtalk_oa_approval/person_folders.local.json
+secrets/*.md
 *.cookie.txt
 cookie.txt
 **/docs/api-reference/llms_parsed.json
 **/docs/api-reference/download_log.json
 .env.local
+# Agent/Codex 临时工作区（可能含从别处拷来的脚本与明文凭证）
+.codex_tmp/
 .gh-token
 out/*
 missing_products/out/**
@@ -83,3 +93,11 @@ web_automation/debug_*.json
 
 # fedex_track 运行产物（大，不入库）
 fedex_track_output/
+parcel_track_output/
+# 定时任务等待处理/已处理完的通途导出（含买家信息，不入库）
+parcel_track_input/
+# 定时任务注册脚本按机器生成的包装（与 web_automation 的同类产物一致，不入库）
+parcel_track/scripts/run_parcel_track_scheduled-*.cmd
+
+# 游离的客户名单 JSON（脚本未展开 %TEMP% 环境变量，落到了仓库根）—— 含真实客户/部门名，禁入库
+%TEMP%customers.json

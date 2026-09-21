@@ -35,6 +35,9 @@ GLS（波兰分公司经 GLS 波兰自发货）跟踪码批量查询 + FedEx 风
 1. `gls_track/AGENT_HANDOFF.md`（唯一默认入口）
 2. 调研与口径：`docs/research/2026-09-07-gls-poland-track-feasibility.md`
 3. 已解决坑：`docs/solutions/integration-issues/gls-track-public-rest-calendar.md`
+4. 三家统一处理天数 / workers 语义：`docs/solutions/conventions/parcel-track-handling-days-sequential-workers.md`
+
+混合报表用 `parcel_track`（HANDLING=3，波兰历仍独立）。本模块 `monthly --workers 4` 只并发 GLS。
 
 ## 何时触发
 

@@ -1,12 +1,41 @@
 ---
 okf: v0.1
 type: Log
-title: web_automation 迁移日志
-description: fzh-web-automation → fzh-data/web_automation 独立能力舱迁移的 boil-the-lake 对账日志
-tags: [web-automation, migration, log]
+title: web_automation 变更日志
+description: web_automation 能力舱 OKF 变更日志（迁移 + 能力新增与审查修补）
+tags: [web-automation, tongtu, sellfox, playwright, log]
 ---
 
 # 迁移日志
+
+## 2026-09-20
+
+- **修复（链接）**：`solutions/integration-issues/ddddocr-playwright-login-fixes.md` 指向 `docs/lessons/`、`docs/reference/` 的 2 条链接少退一级，由 `../` → `../../`。
+
+## 2026-09-18 — 浏览器启动统一出口（browser_launch）
+
+**背景**：本机 bundled chromium 的**有头**模式起不来（`spawn UNKNOWN`；chromium-1228 另报沙箱
+`拒绝访问 0x5`），而系统 Chrome 有头正常、bundled 无头也正常。各脚本内联
+`launch_persistent_context(headless=False)`，没法统一改，导致通途导出在本机跑不了。
+
+**改动**：
+- 新增 `legacy-compatible/browser_launch.py`：`launch_persistent()` / `launch()` 统一出口，
+  读 `WEB_AUTOMATION_BROWSER_CHANNEL`（走系统浏览器 channel）与 `WEB_AUTOMATION_HEADLESS`
+  （强制有头/无头）。**两个变量都不设时行为与改造前完全一致**（反例已验证）。
+  每次启动打一行 `[browser] channel=… headless=… profile=…`，便于排障。
+- 迁移**通途族 5 处调用**：`tongtu_orderdetail_report` / `tongtu_sales_report` /
+  `tongtu_login_ocr` / `tongtu_auto_export`（2 处）。赛狐族约 15 处**未迁移**
+  （流程未在本机实测，盲改有风险），留作后续。
+- 新增 `tests/web_automation/test_browser_launch.py`（6 个用例，覆盖两个环境变量的
+  覆盖/忽略/传递语义）。
+
+**实测**：`WEB_AUTOMATION_BROWSER_CHANNEL=chrome` 跑标准
+`dispatch.py tongtu.orderdetail.export -- --range-start … --range-end … --auto-login`
+→ `[browser] channel=chrome headless=False` 并导出成功；不设该变量仍以 `spawn UNKNOWN`
+失败（默认行为未变）。
+
+**文档**：新增 [reference/browser-launch.md](reference/browser-launch.md)。
+
 
 ## 2026-09-02 — Phase A 兼容迁移
 
@@ -40,3 +69,151 @@ tags: [web-automation, migration, log]
 - 凭证扫描：改动文件新增行 4 regex 全部 zero；命中仅为 diff 中其它既有文件上下文/占位符
 - 索引：`update_index.py --check` → `OK: index.md is up to date`（24 modules / 328 docs）
 - dispatcher 路由：读任务 `--check` → READY；写任务无 `--confirm-scope` → NEED_USER_CONFIRMATION
+
+## 2026-09-08 — 新增 tongtu.orderdetail.export（订单详情统计月度导出）
+
+**背景**：财务/运营按月导出通途「订单详情统计」全量自发货订单（全渠道全账号、按发货时间整月）。原纯人工、无脚本。
+
+**交付**：
+- `legacy-compatible/tongtu_orderdetail_report.py` — 仿 `tongtu_sales_report.py`：登录（含 ddddocr `--auto-login`）→ 设发货时间范围 → 「统计导出」提交 → 往返 数据查询/统计导出 tab 轮询新「点击下载统计结果」→ 下载 zip
+- `capabilities.yaml` + `docs/reference/capability-matrix.md` 注册 `tongtu.orderdetail.export`（BROWSER_ONLY/read）
+- `.agents/skills/{web-automation,tongtu-automation}/SKILL.md` 触发词/任务清单
+- 新增 `web_automation/AGENT_HANDOFF.md`（模块级 Agent 参考）与 `docs/reference/orderdetail-export.md`（专题：背景/MCP 探路过程/选择器/踩坑/核验）
+- `tests/web_automation/test_migrated_entrypoints.py` 登记新脚本入口
+
+**过程要点（MCP 探路确认）**：日期框为 My97，`.fill()` 后勿按 Enter（会整页刷新重置）；「查询」`a[onclick='queryInfo()']` 仅在数据查询 tab 可见，失败须中止；统计结果不自动刷新需往返 tab 轮询；下载基线在历史表稳定后、提交前采集；统计任务提交互斥。
+
+**核验（2026-07 实测）**：`downloads/订单详情统计_202607_*.zip` ≈4.85 MB；xlsx 表头自第 30 行 91 列；9604 行；发货日期 07-01~07-31；数据来源=自发货订单。`uv run pytest tests/web_automation -q` → 48 passed。
+
+## 2026-09-08 — 审查修补（PR #220）
+
+**交付**：查询失败中止（`QUERY_FAILED`）+ 先等历史表稳定再 snapshot 再提交；`--range-start/--range-end` 必须成对；提交打不开弹窗区分 `BUSY`/`SUBMIT_FAILED`；OKF 用法只保留 dispatcher（含 `--check`）。
+
+## 2026-09-09 — 下载识别改为「最上行 = 本次提交」锚定（并入 PR #220）
+
+**为什么**：href 基线差集法在“历史表晚渲染（误认旧任务）”与“小范围快任务（基线含新链接被吞）”两端都有竞态；改成按行身份识别本次任务，两端一并消除。
+
+**改动**（`legacy-compatible/tongtu_orderdetail_report.py`）：
+- 去掉 `snapshot_download_hrefs`/`get_existing_download_hrefs`；新增 `capture_prev_top_ts` + `wait_for_my_download`
+- 历史表为 fixedHeadFoot 滚动表格：数据表是 header（含「统计条件」th）后 `following::table[1]`（非 sibling），首行空 spacer 须跳过；行文本最后一个 `YYYY-MM-DD HH:MM:SS` = 提交时间
+- 提交前记最上行提交时间 → 提交后往返 tab → 最上行提交时间一变锁本次行 → 等该行下载链接
+
+**核验**：单日 2026-07-15 实测 306 行、发货日期全 07-15，RUN_EXIT=0；`uv run pytest tests/web_automation -q` → 48 passed。
+
+## 2026-09-10 — 新增钉钉 aflow 销售收款确认单导出（`dingtalk.aflow.receipt.export`）
+
+**为什么**：财务每期手工从钉钉 aflow「OA审批管理后台」导出销售收款确认单单据 Excel。附件侧 API 路径已跑通，
+唯一盲区是离职发起人（`userNotExist`）。本次先把 Excel 这条链沉淀成能力。
+
+**MCP 探路关键结论**（详见 `docs/reference/aflow-receipt-export.md`）：
+- 直接开 aflow 会落到**没有任何登录控件**的 `error.vm`；必须先走 `oa.dingtalk.com` 触发统一身份认证 + **选组织**，SSO 才覆盖 aflow。
+- 「一键头像登录」依赖钉钉客户端 8441-8443 端口，本机客户端在 **8440** → 不通，最终走扫码。
+- 表单名称是 **antd 二级级联**（状态→表单），有多个近似名，必须 `:text-is` 精确匹配。
+- 发起时间输入框 **readOnly**，只能走 dtd RangePicker 日历面板；同页有**两对**「开始/结束日期」，用 `nth` 消歧。
+- `导出全部` **点按钮本体 = 立即异步导出**；附件选项藏在 **hover** 出来的下拉里（`仅导出审批单附件`）。
+- **导出产物是 2 行表头**（行1 审批元数据+合并组标题，行2 明细子字段），数据自第 3 行起；
+  **同一单据因明细表重复成多行 → 单据数按唯一 `数据id` 计**。
+- **`goto` 同一个 URL（只差 hash）不是重载** —— SPA 不会重新请求，会把旧进度看成"卡住"（本次曾被 96% 误导）。
+
+**附件：证伪**。aflow 无「批量下载附件」；`仅导出审批单附件` 的产物进**钉盘【云盘-团队文件】**，
+该行 `下载` 报 `ERR_TOO_MANY_REDIRECTS`；`oa.dingtalk.com` 与 `aflow.dingtalk.com` 是**同一个 SPA**，
+不存在可退的"老控制台"。附件维持 API 路径，离职发起人走 Excel 内 `previewAttachments` 深链。
+
+**交付**：`legacy-compatible/dingtalk_aflow_receipt.py`、`capabilities.yaml` 注册、`runtime._PROFILE_DIRS` 加 `dingtalk`、
+`.gitignore` 加 profile、`docs/reference/aflow-receipt-export.md`、索引/handoff/capability-matrix 同步、入口测试登记。
+
+**核验（2026-09-10 实测）**：窗口 2026-07-04~09-09 → 405 行 / **265 单据**，发起时间全在窗口内；
+产物 232 KB；`数据id` 与 API `instance_ids.json` **265/265 重合**；API manifest 对 6 名离职发起人共 **199 条 `userNotExist`**。
+
+## 2026-09-10 — 补 `dingtalk.aflow.receipt.attachments`：离职发起人附件可取了
+
+**为什么**：上一轮回溯结论是"aflow 批量附件取不回本地"。但离职发起人（API `userNotExist`）**必须**从 UI 拿，
+需要一条真正可用的浏览器路径。
+
+**探路（两条路，只通一条）**：
+- ❌ 导出表里的 `#/previewAttachments` 深链 → 浏览器访问会被重定向到 `#/goToDingtalk`，
+  页面只剩「该页面需要在钉钉客户端内打开」→ **客户端专用，Playwright 用不了**。
+- ✅ 数据查看行内「**查看**」→ 新标签页 `pchomepage.htm?...&corpid=<corp>#/plainapproval?procInstId=<数据id>`，
+  **浏览器能正常渲染**。附件卡片虽带 `file-list disabled`、`预览` 动作不可见，
+  **但点 `.item-name`（force）会触发真实下载**。
+
+**踩坑**：`goto` 同一 URL 只改 hash **不是重载**，会读到上一条单据 → 必须 `page.reload()`（这坑当天踩了两次）。
+
+**交付**：`--mode attachments`（读导出表 → 筛离职 → 逐单开详情页 → 点文件名下载），
+落 `<out>/dingtalk_oa_approval_data/aflow_attachments/<数据id>/` + `aflow_attachments_manifest.jsonl`（按 数据id 一行，可续传）；
+`capabilities.yaml` 注册 `dingtalk.aflow.receipt.attachments`。
+
+**核验（2026-09-10 实测）**：39 个离职发起人单据 → **39/39 成功、0 失败、39 文件 / 2.8 MB**。
+与 API manifest 交叉比对：这 39 单里 **38 单 API 侧是 `userNotExist`**，仅 1 单 API 已成功
+→ 该路径补回了 38 个 API 无解的单据。
+
+## 2026-09-10 — 钉钉登录改为账号密码（免扫码），凭据入 .env
+
+**为什么**：一键头像要依赖钉钉客户端端口（8441-8443，本机是 8440 所以走不通）；扫码要人参与。
+账号密码登录可免扫码。
+
+**流程（实测）**：`账号登录` tab → 手机号 → 下一步 → 密码 → 登录。
+凭据放 `web_automation/.env`（`DINGTALK_USER`/`DINGTALK_PASSWORD`，已 gitignore，**不入命令行**）；
+`.env` 未配则回退一键头像/扫码。密码**只尝试一次**，避免连续失败触发风控。
+
+**⚠️ 更正一处先前结论**：起初记为「无验证码、全程零人工」——**不准确**。
+钉钉对**陌生设备/profile** 会插一道**短信验证码**，必须人工输一次（无法自动化）。
+实测：全新 profile 首次登录**要**验证码；同一 profile 之后再跑**不要**（登录态已持久化，直接进导出）。
+另注：同一账号在别的 profile 重新登录可能让原 profile 会话失效 → 再触发一次验证码，所以**固定用一个 profile**。
+脚本已检测该步骤（`.module-verify-code-input`）并明确提示用户。
+
+**踩坑（重要）**：
+1. **所有控件必须限定 `.module-pass-login` 作用域**。整页有 **3 个「登录」按钮**，另两个是
+   `module-qrscan-login-btn`/`module-localscan-login-btn`（扫码）—— 遍历时点到会把页面**搞崩**
+   （`Page crashed`，连崩两次）。该容器里恰好只有本流程的手机号/密码框与「下一步/登录」。
+2. `is_visible()` **不够**：被遮住的元素照样返回 True；要用 Playwright `click()` 的可点击性检查
+   （visible+stable+receives events）逐个试。
+3. `.filter(has_text=/^下一步$/)` **匹配不到**：按钮文本被包在子 span 里且带空白，正则锚定失效。
+4. Playwright 自带 Chromium 上该登录页会崩；改用本机 Chrome 通道（`--channel chrome`，默认）。
+5. 必须勾「**自动登录**」，否则登录态留不住（脚本已自动勾）。
+
+**交付**：`--channel`（默认 chrome）、`.env.example` 增 `DINGTALK_*` 占位、文档补该路径与上述坑。
+
+**核验（2026-09-10）**：全新 profile 跑 `--mode excel` → 手机号+密码自动提交 → **需人工输一次短信验证码** →
+`已选择组织`（公司主组织）→ 导出成功 232 KB；**紧接着再跑一次，无需任何登录/验证码**，直接导出成功
+（证明登录态持久化生效）。
+
+## 2026-09-10 — 文档补齐与脱敏（aflow 三件事的交接面）
+
+**做了什么**：按 OKF 补齐本次钉钉 aflow 工作的交接面，并对安全区做隐私脱敏。
+
+- `AGENT_HANDOFF.md`：aflow 段补上**登录机制**（`.env` 账号密码 → 头像/扫码回退；
+  陌生设备**短信验证码**需人工一次；默认 `--channel chrome`）与**与 API 路径的关系**（两条独立路径）
+- `docs/lessons/index.md`：补上漏登记的 `login-fallback-design.md`，并注明它只覆盖**图形**验证码，
+  钉钉是**短信**验证码（机制不同）
+- `docs/reference/aflow-receipt-export.md`：修正 frontmatter（原 `description` 还写着"尚未沉淀为脚本"，
+  与 `status: scripted-and-verified` 自相矛盾）、补附件/登录的验证记录、新增「相关文档与边界」一节
+- **脱敏**：安全区内**已无个人姓名**；引用的日志里组织名改为泛称。
+  凭据只在 `web_automation/.env`（gitignore，**未被跟踪**，已 `git grep` 复核）。
+
+**边界（重要）**：本轮**只写 `web_automation/**` + `.agents/skills/web-automation/**` + `tests/**`**。
+`docs/solutions/**`、`CONCEPTS.md`、`AGENTS.md`、根 `index.md`、`dingtalk/**`、`.gitignore` **一律没碰** ——
+它们正在 PR #226（`feature/dingtalk-july-amz-reconcile-docs`）里改，碰了必冲突。
+**待 #226 合并后**再补：docs/solutions 条目、CONCEPTS.md 术语、`dingtalk/dingtalk_oa_approval/AGENT_HANDOFF.md`
+的反向交叉链接。另注意 #226 带了 `docs/research/browser-admin-download.md`，与本文件**主题相邻，需对齐**。
+
+## 2026-09-11 — 输出目录/组织名改 env，和 226 手册对齐
+
+**为什么**：默认 `--out` 写死了本机人名核算目录，和 226「路径不进 git」冲突；GitHub 正文还停在「附件 ATTACHMENT_MANUAL_REQUIRED」。
+
+**改动**：`--out` 读 `DINGTALK_OA_WORK`（未设即报错）；`--org` 读 `DINGTALK_ORG`；`--to` 默认今天。
+`.env.example` 更正短信验证码。测试禁止脚本再出现人名路径。
+浏览器下载之后的账期月过滤 / NAS 归档以 226 手册为准；`--only-departed` 盖不住在职补交。
+
+## 2026-09-11 — 轮询改「先读后切」+ 202607 重导实践
+
+**改动**：`wait_for_my_download` 由「每轮先切两 tab 再读」改为**先读状态、未锁定/未完成才切换刷新**，减少无谓切换与检测延迟（页面本身不自动刷新）。
+
+**实践**：重导 202607 全月（同事更新尾程后），按键值合并进「GS导出 只看尾程」；同日 25 行 needs=1 但三项尾费皆缺 → 待人工。
+
+## 2026-09-14 — 订单详情导出：限流防护 + 复用已完成结果
+
+- **现象**：短时间多次生成 7 月报表后，某次提交未产出新行；脚本在“最上行变新”上无限往返切换（用户观察到 09:25 链接已生成仍在切）。
+- **修复**：① 提交后“等最上行变新”加 **90s 窗口**（`LOCK_WAIT_SECS`），超时按页面提示输出 `RATE_LIMITED`/`NO_NEW_JOB` 退出；② 默认**复用今日已完成的同范围结果**（最上行=统计完成 + 条件含本次发货时间 + 今日提交），不再重复生成，`--no-reuse` 强制新生成；③ 提交后检测限流/排队提示并明确报错。
+- **可观测性**：脚本 stdout 改**行缓冲**（此前自建 `TextIOWrapper` 覆盖了 `PYTHONUNBUFFERED`，日志只在进程结束才落盘）。
+- **实测**：复用当日 09:25 结果（`订单详情统计202609140925.zip`）下载成功，未再生成新任务。

@@ -1,9 +1,12 @@
 # FAC MCP 部署指南（开发人员）
 
-> 最后更新：2026-06-09  
-> 面向：B 类技术开发同事  
-> 用途：在 Claude Desktop（3P 模式）上连接测试服务器 `ensh.vilavi.cn` 的 FAC MCP  
+> 最后更新：2026-09-18
+> 面向：B 类技术开发同事
+> 用途：在 Claude Desktop（3P 模式）上连接测试服务器 `ensh.vilavi.cn` 的 FAC MCP
 > ⚠️ 当前仅测试环境可用，普通用户不可用（生产服务器未部署 FAC App）
+>
+> **3P 模式的通用事实**（配置路径、`mcp-remote` 桥接、重启要求、`~/.mcp-auth` 排错）已收敛到
+> [docs/mcp-setup.md](mcp-setup.md)。本文档只保留 FAC 特有内容。
 
 ---
 
@@ -118,13 +121,26 @@ FAC（Frappe Assistant Core）把 ERPNext 的 CRUD/报表/工作流暴露为 MCP
 
 | 症状 | 原因 | 解决 |
 |------|------|------|
-| `fac` 不出现 / `not a valid MCP server` | 3P 模式不支持 `url` 字段 | 必须用 `mcp-remote` 桥接，不能直接写 `"url"` |
+| `fac` 不出现 / `not a valid MCP server` | 该 endpoint **需要 OAuth 2.0**，裸 `url` 字段不携带任何授权流程 | 用 `mcp-remote` 桥接（它负责 DCR + PKCE + token 缓存）。⚠️ 本条早期记为「3P 模式不支持 `url` 字段」，**该说法未经复验且有争议** —— 见下方说明 |
 | `Server disconnected` | OAuth 未完成 / 参数顺序错 | ① 清理 `~/.mcp-auth` ② 检查 URL 在 `--transport` 前 |
 | `Invalid URL` / `Fatal error` | `--transport` 放在 URL 前面了 | URL 放最前面，`--transport http-first` 放最后 |
 | `EADDRINUSE` 端口冲突 | 上次进程没杀干净 | `taskkill /F /IM node.exe` 然后删 `~/.mcp-auth` |
 | fac 蓝色但工具不出现 | 当前对话创建时 FAC 还没连上 | **开新对话**，MCP 工具只在对话创建时加载 |
 | 浏览器没弹出 | `mcp-remote` 未能打开浏览器 | 手动访问授权 URL（从日志中找 `Please authorize this client by visiting:` 开头的链接） |
 | token 过期（1 小时后） | access_token 有效期 3600s | `mcp-remote` 会自动用 refresh_token 续期，无需手动处理 |
+
+### ⚠️ 关于「3P 模式不支持 `url` 字段」的更正（2026-09-17）
+
+本条原始表述为「**3P 模式不支持 `url` 字段** → 必须用 `mcp-remote` 桥接」。2026-09-17 复查时发现：
+
+- **与项目权威文档冲突**：[CONCEPTS.md](../CONCEPTS.md)「3P 模式」词条和 [docs/lessons/tavily-mcp-setup.md](lessons/tavily-mcp-setup.md) 踩坑 5 都明确写「**MCP 服务器的配置格式与普通模式相同**」，唯一的区别是**配置文件路径**（`Claude-3p\` vs `Claude\`）
+- **无日期、无 app 版本、无复验记录**：该断言从未标注适用版本
+- **日志无佐证**：`logs/main.log` / `main1.log` 搜 `not a valid` 零命中
+- **无生效反例**：3P 环境中实际生效的三个 MCP（`playwright` / `fac` / `tavily-mcp`）**全是 stdio**，`url` 类型从未被真正放进 3P 配置测试过
+
+**更可能的真实原因**：`fac` 的 endpoint（`ensh.vilavi.cn`）需要 OAuth 2.0（见本文档开头），而 `url` 字段是个不携带授权流程的裸地址 —— 失败原因是**该 endpoint 要 OAuth**，而非 3P 不支持 `url`。这与项目已记录的 PR #84 误诊属同一类（参见 tavily 踩坑 5）。
+
+> **结论**：3P 是否支持 `url` **未被验证**。对需要 OAuth 的 endpoint（如 fac、Notion）而言，`mcp-remote` 是必需且已被长期验证的路径。若要彻底查实，可往 3P 配置放一个**不需要 OAuth** 的远程 MCP 后重启，看 `logs/mcp.log` 是否出现 `connected successfully`。
 
 ---
 
@@ -167,6 +183,7 @@ Claude Desktop (stdio)
 
 ## 相关链接
 
+- [ChatGPT 连接器接 FAC MCP](../chatgpt/docs/reference/fac-mcp-oauth-connect.md) — 走 ChatGPT 时读这篇。**注意**：ChatGPT 是 OpenAI 服务端直连、无本地进程，本文的 `mcp-remote` / `~/.mcp-auth` 排错**不适用**；身份验证必须选 OAuth
 - [Frappe Assistant Core GitHub](https://github.com/buildswithpaul/Frappe_Assistant_Core)
 - [mcp-remote GitHub](https://github.com/geelen/mcp-remote)
 - [MCP Streamable HTTP 规范](https://spec.modelcontextprotocol.io/specification/2025-06-18/basic/transports/#streamable-http)

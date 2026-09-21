@@ -162,6 +162,6 @@ grep -r "3p\|Claude-3p\|deploymentMode" docs/ --include="*.md" -l
 
 ## Related
 
-- [docs/fac-mcp-setup.md](../../docs/fac-mcp-setup.md) — FAC MCP 配置文档，已记录 3P 模式与普通模式的配置文件路径差异
-- [docs/lessons/tavily-mcp-setup.md](../../docs/lessons/tavily-mcp-setup.md) — Tavily MCP 配置教训记录（Codex 平台）
+- [docs/fac-mcp-setup.md](../../../docs/fac-mcp-setup.md) — FAC MCP 配置文档，已记录 3P 模式与普通模式的配置文件路径差异
+- [docs/lessons/tavily-mcp-setup.md](../../../docs/lessons/tavily-mcp-setup.md) — Tavily MCP 配置教训记录（Codex 平台）
 - [Tavily MCP 官方文档](https://docs.tavily.com/documentation/mcp#configuring-mcp-clients) — 正确的 key 名称和版本号

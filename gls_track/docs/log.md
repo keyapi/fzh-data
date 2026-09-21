@@ -7,6 +7,10 @@ tags: [gls, track, module, log]
 
 # 变更日志
 
+## 2026-09-08
+
+- **处理时间**：`HANDLING_DAYS` 2→3，与 parcel_track UPS/FedEx 统一；波兰假日历不变。
+
 ## 2026-09-07
 
 - **新增**: gls_track 模块 + 调研文档（`docs/research/2026-09-07-gls-poland-track-feasibility.md`）。

@@ -83,7 +83,8 @@ paths:
                 type: object
                 properties: {}
                 x-apifox-orders: []
-                x-apifox-ignore-properties: []
+                x--orders: []
+                x--ignore-properties: []
           headers: {}
           x-apifox-name: Created
         '401':
@@ -94,7 +95,8 @@ paths:
                 type: object
                 properties: {}
                 x-apifox-orders: []
-                x-apifox-ignore-properties: []
+                x--orders: []
+                x--ignore-properties: []
           headers: {}
           x-apifox-name: Unauthorized
         '403':
@@ -105,7 +107,8 @@ paths:
                 type: object
                 properties: {}
                 x-apifox-orders: []
-                x-apifox-ignore-properties: []
+                x--orders: []
+                x--ignore-properties: []
           headers: {}
           x-apifox-name: Forbidden
         '404':
@@ -116,7 +119,8 @@ paths:
                 type: object
                 properties: {}
                 x-apifox-orders: []
-                x-apifox-ignore-properties: []
+                x--orders: []
+                x--ignore-properties: []
           headers: {}
           x-apifox-name: Not Found
       security: []
@@ -136,7 +140,10 @@ components:
       x-apifox-orders:
         - feedDocumentId
         - shopId
-      x-apifox-ignore-properties: []
+      x--orders:
+        - feedDocumentId
+        - shopId
+      x--ignore-properties: []
       x-apifox-folder: ''
     OpenResult«FeedResultOpenVo»:
       type: object
@@ -163,7 +170,13 @@ components:
         - msg
         - data
         - ts
-      x-apifox-ignore-properties: []
+      x--orders:
+        - requestId
+        - code
+        - msg
+        - data
+        - ts
+      x--ignore-properties: []
       x-apifox-folder: ''
     FeedResultOpenVo:
       type: object
@@ -180,7 +193,10 @@ components:
       x-apifox-orders:
         - content
         - errors
-      x-apifox-ignore-properties: []
+      x--orders:
+        - content
+        - errors
+      x--ignore-properties: []
       x-apifox-folder: ''
     ApiErrorOpenVo:
       type: object
@@ -199,7 +215,11 @@ components:
         - code
         - message
         - details
-      x-apifox-ignore-properties: []
+      x--orders:
+        - code
+        - message
+        - details
+      x--ignore-properties: []
       x-apifox-folder: ''
   securitySchemes: {}
 servers: []

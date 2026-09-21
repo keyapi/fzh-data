@@ -13,6 +13,8 @@
 | [AGENT_HANDOFF_LG_QUERY.md](AGENT_HANDOFF_LG_QUERY.md) | LG 前缀物料组款式ID更新 |
 | [AGENT_HANDOFF_独立站产品链接.md](AGENT_HANDOFF_独立站产品链接.md) | daneey.com 产品链接写入物料组 |
 | [AGENT_HANDOFF_物料组翻译.md](AGENT_HANDOFF_物料组翻译.md) | 物料组 `item_group_translation` 批量中译英（TMT） |
+| [AGENT_HANDOFF_物料发货状态.md](AGENT_HANDOFF_物料发货状态.md) | 客户物料号 / EN 物料号 → 销售订单发货 + 工序进度 |
+| [AGENT_HANDOFF_DN追溯报表.md](AGENT_HANDOFF_DN追溯报表.md) | 销售出库 → 物料移动追溯 |
 
 ---
 

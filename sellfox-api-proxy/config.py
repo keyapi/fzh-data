@@ -53,7 +53,7 @@ class AppConfig(BaseModel):
 
     @classmethod
     def load(cls) -> "AppConfig":
-        with open(CONFIG_PATH) as f:
+        with open(CONFIG_PATH, encoding="utf-8") as f:
             raw = yaml.safe_load(f)
         return cls.model_validate(raw)
 

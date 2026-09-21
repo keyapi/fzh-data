@@ -3,6 +3,7 @@ okf: v0.1
 type: Reference
 title: GLS 波兰自发货跟踪——公开无鉴权 REST 免账号可行 + 口径坑（日历/脏单元格/返件）
 date: 2026-09-07
+last_updated: 2026-09-08
 category: integration-issues
 module: gls_track
 problem_type: integration_issue
@@ -28,7 +29,8 @@ FedEx/UPS 已有官方 Track 客户端 + 运营异常表。波兰分公司经 GL
    - 明细 `GET .../rstt028/{号}?caller=witt002&millis={ms}&postalCode={目的邮编}`（全量 history；**钥匙=目的邮编**，订单 `邮编` 列已有）
    - `curl` 直连无 cookie/JS 即 200 JSON。官方 ShipIT/MyGLS 则要 GLS 波兰客户 + WebAPI 开通，是**要客户账号不是纯开发者账号**；`dev-portal.gls-group.net`(德国集团侧)注册是必要非充分。
 2. **口径不能照抄 FedEx**：时点映射 建标≈数据录入 GLS IT、收件≈交接 GLS、交付=delivered；
-   `HANDLING_DAYS=2`(FedEx=1)；营业日排除周末(**天然**) + **波兰 2026 法定假日**(起运/交接在 GLS 波兰；勿沿用 FedEx 美国联邦假日；12/24 Wigilia 2025 起法定已补)；
+   `HANDLING_DAYS` 现已与 UPS/FedEx **统一为 3**（日历仍用波兰假日，勿照抄美国联邦假日）；
+   落地初期曾用 `HANDLING_DAYS=2`(当时 FedEx=1) 消化「周四录入→周一交接」误判。
    「Amazon是否判迟」**仅 Amazon/亚马逊 渠道**(中文 亚马逊要单独匹配)。
 3. **loader 拆一格多号**：通途 `跟踪号` 单元格会一格塞多号/混入 UPS `1Z`、allegro `…U`、截断碎片 → 按号拆分去重，整月单命令直出正确集合(ok 1148/err 39)。
 4. **限流**：公开接口无速率头/无公开限流文档；**共享 httpx 连接池 ≤8 并发实测安全**(默认 4)；每请求新建 TLS 会零星 transport 失败 → 共享 client + 重试。整月 ~1187 单 `--workers 4` ≈ 3m45s。
@@ -56,5 +58,6 @@ python -m gls_track.cli monthly --input <当月通途xlsx> --out gls_202608 --wo
 ## 参考
 
 - 调研与口径：`docs/research/2026-09-07-gls-poland-track-feasibility.md`
+- 混合统一处理天数 / `--workers` 语义（取代本文早期 HANDLING=2 数值）：`docs/solutions/conventions/parcel-track-handling-days-sequential-workers.md`
 - 模块：`gls_track/AGENT_HANDOFF.md`、`gls_track/docs/index.md`
 - 相似先例：`docs/research/2026-09-04-fedex-track-account-investigation.md`、`docs/solutions/workflow-issues/fedex-track-batch-query.md`

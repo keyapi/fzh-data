@@ -1,0 +1,328 @@
+---
+okf: v0.1
+type: Reference
+title: 钉钉 aflow「销售收款确认单」单据导出与离职发起人附件
+description: aflow（OA审批管理后台）的登录方式、选择器、Excel 导出流程（异步任务→操作记录→下载）、产物结构、离职发起人附件取法、以及批量附件取不回本地的证伪。已沉淀为 legacy-compatible/dingtalk_aflow_receipt.py 两个 capability。
+tags: [dingtalk, aflow, oa审批, 销售收款确认单, 导出, 附件, 离职发起人, 登录, 选择器]
+timestamp: 2026-09-10
+status: scripted-and-verified
+---
+
+# 钉钉 aflow「销售收款确认单」导出与附件
+
+**状态：已沉淀并端到端跑通**（`legacy-compatible/dingtalk_aflow_receipt.py`，2026-09-10）：
+- `dingtalk.aflow.receipt.export`（`--mode excel`）→ `status=READY`
+- `dingtalk.aflow.receipt.attachments`（`--mode attachments`）→ 39/39 单、0 失败
+
+本文件是耐久产物；`.playwright-mcp/` 里的截图/DOM dump 是临时的。
+
+## 入口与登录
+
+- 目标页：`https://aflow.dingtalk.com/dingtalk/web/query/dashboard?dinghash=aflowSetting#/aflowSetting/dataManage?tabKey=default`
+  页面标题 = **OA审批管理后台**。
+- **直接打开 aflow 会撞登录墙**：跳到 `error.vm?error=您的登录已过期，请退出后重新登录`，该页**没有任何登录控件**。
+- 正确入口是 **先走 `oa.dingtalk.com`**：
+  1. `https://oa.dingtalk.com/index.htm`
+  2. 302 到 `https://login.dingtalk.com/oauth2/challenge.htm?...&client_id=dingoaltcsv4vlgoefhpec&scope=openid+corpid&org_type=management`
+  3. 登录页有两个 tab：`账号登录` / `扫码登录`（默认选中扫码）。
+     **脚本走的是 `账号登录`（手机号+密码），见下面「账号密码登录」一节**；扫码是人工回退路径。
+  4. 登录后出现**组织选择页** `.app-page-curr`（"选择你管理的组织"），点目标组织名
+     （脚本用 `--org` 指定，默认值见脚本常量；本环境是公司主组织）
+  5. 落到 `oa.dingtalk.com/index.htm#/welcome`
+- 登录后 **SSO 覆盖 aflow**：再打开 aflow URL 即正常渲染。
+- **一键头像登录（"点击头像授权登录"）不可用**：登录页轮询 `http://127.0.0.1:8441|8442|8443/check_state`，而本机钉钉客户端只监听 **`127.0.0.1:8440`** → 三个请求全部 `ERR_CONNECTION_REFUSED`，头像点击后停在"登录中"然后静默回落。要用一键登录需把钉钉客户端升到与登录页匹配的版本。
+  - 但**头像能显示出来**（页面确实拿到了登录账号），说明本地客户端通道部分可用；最终成功仍走的是扫码。
+
+> 选择器定位坑：登录页是 SPA，DOM 里**同时存在几十个隐藏面板**，且隐藏面板的子元素 `getBoundingClientRect()` 仍然非零，"可见性"自检会误判。
+> 唯一可靠的活面板是 **`.app-qr-login-page`**（类含 `app-page-curr`）。改版后要按这个思路重新定位。
+
+### ✅ 账号密码登录（推荐）
+
+登录页的「**账号登录**」tab 是两步式：
+
+```
+点 [role=tab] 账号登录  →  手机号  →  下一步  →  密码  →  登录
+```
+
+- 凭据放 `web_automation/.env`（已被 gitignore）：
+  `DINGTALK_USER` / `DINGTALK_PASSWORD`，**不走命令行**（避免进 shell 历史和日志）。
+- 脚本优先用账号密码；`.env` 没配则回退「一键头像 / 扫码」人工登录。
+- **密码只尝试一次**：失败就交给人工，避免连续失败触发风控/锁定。
+- 一定要勾「**自动登录**」，否则登录态留不住（脚本已自动勾）。
+
+#### ⚠️ 首次在新设备/profile 上，钉钉会要一次**短信验证码**
+
+**这一步无法自动化**（短信只有你手机上有），必须人工输一次。实测（2026-09-10）：
+
+| 场景 | 是否需要验证码 |
+|---|---|
+| 全新 profile 首次登录 | **要**（钉钉对陌生设备的风控） |
+| 同一 profile 之后再跑 | **不要**（登录态已持久化，直接进导出） |
+
+脚本会检测到该步骤并**明确打印提示**（`.module-verify-code-input`），然后等你在浏览器窗口里输入。
+
+> 注：同一账号在另一个 profile 重新登录，可能让原 profile 的会话失效 → 又触发一次验证码。
+> 所以**尽量固定用一个 profile**（默认 `web_automation/dingtalk-profile/`）。
+
+#### ⚠️ 最大的坑：所有控件必须限定 `.module-pass-login` 作用域
+
+整页 DOM 里有 **3 个文本为「登录」的按钮** —— 另两个是
+`module-qrscan-login-btn` / `module-localscan-login-btn`（扫码登录）。遍历时点到它们会触发
+**钉钉客户端跳转，直接把页面搞崩**（实测 `Page crashed`，连崩两次）。
+
+而 `.module-pass-login` 容器里**恰好只有本流程要的控件**：
+手机号/密码框 + 「下一步」「登录」两个按钮。收窄作用域后一次通过。
+
+另外两点：
+- `is_visible()` **不够**：被遮住的元素它照样返回 True。只有 Playwright 的
+  `click()` 可点击性检查（visible + stable + receives events）靠谱 → 逐个试着重试，谁点得动就是谁。
+- 用 `.filter(has_text=/^下一步$/)` **匹配不到**：按钮文本常被包在子 span 里并带空白，正则锚定会失败。
+
+### 一键头像授权（备用路径）
+
+脚本里也实现了（`try_avatar_login` + `pick_org`），在 `.env` 未配凭据时使用：
+
+1. 勾选 `.app-qr-login-page .base-comp-check-box-rememberme-box`（第 0 个 = 自动登录）
+2. 点 `.app-qr-login-page .module-qrcode-user-avatar`
+3. 组织选择页出现后，点 `.app-page-curr :text-is("<组织名>")`
+
+**唯一脚本够不到的一步**：Chrome 会弹原生权限气泡
+「`login.dingtalk.com` 想要**访问此设备上的其它应用和服务**」——
+这是浏览器自己的 UI，不在网页 DOM 里，Playwright 点不到，**必须人工点【允许】**。
+好消息是它**按 profile 记住**，只需点一次；点过之后本机钉钉客户端通道打开，头像才会出现。
+
+实测：`web_automation/dingtalk-profile` 建好并点过一次允许后，
+脚本第二次运行**无需任何人工介入**（`已勾选自动登录并点击头像` → 自动选中组织 → 直接导出）。
+
+## 表单筛选（数据管理 → 数据查看）
+
+| 控件 | 选择器 | 说明 |
+|---|---|---|
+| 表单名称（级联，必填） | `.ant-select-selection-search-input` nth=0 | **二级级联**：先选 `已启用`/`已停用`/`无权限`，再选表单 |
+| └ 一级 | `.ant-cascader-menu-item:has-text("已启用")` | 三个状态之一 |
+| └ 二级 | `.ant-cascader-menu :text-is("销售收款确认单")` | **必须精确匹配**：列表里有「其他收入收款确认单」「新平台收款确认单」「European Sales Receipt Confirm」等近似名（共 68 项） |
+| 发起时间（必填） | `input[placeholder="开始日期"]` nth=0 / `input[placeholder="结束日期"]` nth=0 | **`readOnly`，不能 fill**；外层 `div.dtd-picker.dtd-picker-range` |
+| └ 翻月 | `.dtd-picker-header-next-btn` / `-prev-btn`；`-super-next-btn` / `-super-prev-btn` 翻年 | 面板一次显示两个月 |
+| └ 选日 | `[title="YYYY-MM-DD"]` | 点开始日后面板自动前移一个月 |
+| 查询 | `button.dtd-btn-primary:has-text("查询")` | 查询失败/空结果时**不要**继续导出 |
+
+- 同一页有**两对** `开始日期/结束日期`：**发起时间**是第 0 对，**完成时间**是第 1 对 → 必须用 `nth` 消歧。
+- 页面加载后会弹**两个弹窗**，必须先关：`智能OA试用已过期`（点 `button.dtd-modal-close`）和 `新增搜索功能`（点 `button.upgrade-guide-button:not(.button-primary)`，即「稍后升级」）。
+
+## 导出 Excel（异步任务）
+
+1. `button:has-text("导出全部")` —— **点按钮本体 = 立即触发导出，没有下拉菜单**。
+2. 弹窗：**「数据正在导出… 导出进度可在「操作记录」中查看」** → `关闭` / `查看进度`。
+3. 「查看进度」跳到 `#/aflowSetting/dataManage?tab=export&tabKey=record`。
+4. **操作记录 → 导出记录**，列为：`导出文件名称 | 导出方式 | 操作人 | 导出时间 | 导出表单 | 进度 | 操作`。
+   - `导出方式` 取值：`管理后台导出`（Excel）/ `附件下载`（附件）/ `前台导出`
+   - 别人导的显示「无权限下载」
+5. 行内 `下载`（span，无 href，JS 处理）→ 触发下载。**列表按导出时间倒序，最上行 = 最新**。
+   - 选择器：`text=下载 >> nth=0`（`tr:has-text(...)` 那句会被 strict 模式/解析拒绝，实测不行）。
+6. 文件名固定为 **`销售收款确认单-<YYYYMMDDHHMMSS>.xlsx`**。
+
+### 下载落到哪（重要）
+
+Playwright MCP 的下载写在 **MCP server 进程的 cwd** 下的 `.playwright-mcp/`，
+**不是**你的 worktree、也不是浏览器默认下载目录。本次落在
+`D:\Work\赛狐\Cursor\.claude\worktrees\recursing-wozniak-35c919\.playwright-mcp\销售收款确认单-20260910152730.xlsx`。
+→ 沉淀脚本时必须用 `download.save_as()` **显式指定目标路径**，不能依赖 MCP 的落点。
+
+## 导出产物结构（实测，与历史件一致）
+
+- **2 个 sheet**，名字是**模板 id**（本环境 `202606291156000004` / `202606291156000005`）——**不可当作稳定标识**。
+- **表头是 2 行**：
+  - **第 1 行**（23 个非空）= 审批元数据 + 明细表的**合并组标题**：
+    `序号, 数据id, 审批编号, 标题, 审批状态, 审批结果, 发起时间, 完成时间, 耗时(时:分:秒), 发起人工号, 发起人UserID, 发起人姓名, 发起人部门, 历史审批人姓名, 审批记录, 当前处理人姓名, ...收藏, 账期明细, 图片, 评论附件汇总, 所有附件汇总`
+  - **第 2 行**（83 个非空）= 明细子字段：`选择平台, 账期日期, 亚马逊注册账户, AMZCTRD账户, AMZVer账户, AMZJohna账户, ...`（合并区 `Q1:CU1`）
+  - 单列是纵向合并（`C1:C2`、`E1:E2`…）
+- **数据从第 3 行开始**，共 **105 列**。
+- ⚠️ **「第 2 行是空行」是错的**。只检查前 16 列会得出这个结论；第 2 行在 17 列往后全是子表头。
+  裸 `pd.read_excel` 会把第 1 行当表头并错位——需 `header=0, skiprows=[1]`（或 openpyxl 显式取第 3 行起）。
+- **同一单据会因「收款账户明细表」重复成多行** → **单据数必须按唯一 `数据id` 计**：
+  本次窗口 **405 行 / 265 个单据**。
+
+### 与 API 路径的对应关系（已交叉验证）
+
+- 导出里的 **`数据id` == 钉钉 `processInstanceId`**：
+  本次 265 个 `数据id` 与 `dingtalk_oa_approval` 的 `instance_ids.json`（441 个，窗口从 2026-06-01 起）
+  **265/265 完全重合**；差集只在 API 侧（176 个，因窗口更宽）。
+- 导出是**原始**数据：含 `已撤销`（本次 37 行），`keep_approval` 过滤仍归下游 `dingtalk/parse.py`。
+
+## 附件路径
+
+### 批量：hover，不是 click
+
+`导出全部` 按钮上 **hover**（不是点击）会浮出下拉菜单，**只有一个选项**：
+
+- **`仅导出审批单附件`** → `.dtd-dropdown-menu-item:has-text("仅导出审批单附件")`
+- 旁边 popover 文案「将审批单数据汇总导出到一张 Excel 中」描述的是**默认动作**，不是这个选项。
+
+点击后弹窗：**「附件正在下载至【云盘-团队文件】… 下载进度可在【操作记录】中查看」**
+→ **产物进钉盘（云盘-团队文件），不是本地 zip**（与官方帮助文档一致的第二跳）。
+该任务在「导出记录」里以 **`导出方式 = 附件下载`** 出现，完成后才有操作列。
+
+> 本次实测：任务**能完成**。在「导出记录」里先是 `96%`（**列表不自动刷新，且用 `goto` 同一个 URL 不算重载**——
+> SPA 只变 hash 不会重新请求；必须 `page.reload()` 或切 tab），真重载后显示 **已完成**。
+>
+> **但 `附件下载` 行的 `下载` 拿不到本地文件**：点了没有任何下载事件，控制台报
+> `ERR_TOO_MANY_REDIRECTS @ https://aflow.dingtalk.com/` + React error #31。
+> 与弹窗文案一致——**产物在钉盘【云盘-团队文件】，不走浏览器下载**。
+> 要落地必须**再去驱动钉盘**，本次**未打通**。
+
+**钉盘探测结果（2026-09-10）**
+
+- `pan.dingtalk.com` **不解析**（`ERR_NAME_NOT_RESOLVED`）。
+- 钉盘/团队文件网页版入口是 **`https://alidocs.dingtalk.com/`**（"钉钉文档"），
+  左侧导航有 `首页 / 我的文档 / 团队文件 / 知识库`；右上角能显示组织名与头像，说明会话有效。
+- 但**点 `团队文件` 不切换视图**：试过 `text=团队文件 >> nth=0`、
+  `.nav-title-text:text-is("团队文件")`、`div.nav-item-box:has-text("团队文件")`（最后一个直接 no match），
+  页面都停在 `#/i/desktop` 的"最近"。**未能进入团队文件**，故没看到这次批量下载产出的文件夹。
+- 官方帮助中心的说法是：**`【操作记录】→【批量下载】→【去下载】`** 跳到云盘团队文件。
+  但 **aflow 的操作记录没有「批量下载」子 tab**（只有 `导出记录 / 历史导出记录 / 批量打印记录 / 删除记录`）。
+
+**⚠️ 「回 oa.dingtalk.com 老控制台」这条路不存在（已证伪）**
+
+在 `oa.dingtalk.com` 首页搜索「OA审批」→ 点应用，落到的 URL 是：
+
+```
+https://oa.dingtalk.com/dingtalk/web/query/dashboard?dinghash=aflowSetting#/aflowSetting?lang=zh_CN&nation=CN&code=<orgCode>
+```
+
+**同一个 SPA**（`/dingtalk/web/query/dashboard`），左侧同样是
+`表单管理/数据管理/应用管理/集成开放/OA自定义/电子签章/系统管理/跨组织管理/版本管理`。
+即 **`oa.dingtalk.com` 和 `aflow.dingtalk.com` 是同一套控制台的两个域名**，**没有独立的"老控制台"**，
+帮助文档描述的界面在这套新控制台里**没有对应入口**。
+
+补充：直接深链到 oa 域名下的操作记录页**打不开列表**（需要 `code=` 参数；
+不带参数时页面停在未初始化的空壳，`a.export-file-download` 数量为 0）。
+
+**结论**：aflow 的**批量**附件下载取不回本地（产物进钉盘）。但**按单据逐条**可以取 —— 走下面这条。
+
+### ✅ 可用路径：`plainapproval` 详情页（`--mode attachments`）
+
+数据查看里每行的「**查看**」会**新开一个标签页**，URL 可构造：
+
+```
+https://aflow.dingtalk.com/dingtalk/web/query/pchomepage.htm?from=oflow&op=true
+  &corpid=<corpId>#/plainapproval?procInstId=<数据id>
+```
+
+页面在浏览器里**能正常渲染**（不需要客户端）。附件卡片长这样：
+
+```html
+<div class="m-field-view">
+  <label class="m-field-view-label">账期明细</label>
+  <div class="file-list disabled">            <!-- 注意 disabled -->
+    <div class="file-list-item">
+      <div class="item-content">
+        <div class="item-name">AMZRosoonES-2026-08-05.txt</div>
+        <div class="item-size">901B</div>
+        <div class="item-action"><span>预览</span></div>   <!-- 不可见 -->
+```
+
+**关键点：虽然容器带 `disabled`、`预览` 动作不可见，但点「文件名」（`.item-name`）仍会触发真实下载。**
+
+要点：
+- `goto` 之后**必须 `page.reload()`** —— 只改 hash 的导航在 SPA 里不会重渲染，会读到上一条单据
+- 点击要 `force=True`（元素被 `disabled` 样式挡住常规点击）
+- 用字段标签定位：`.m-field-view:has(label:text-is("账期明细"))` → 天然**跳过图片控件**（那是 `图片` 字段）
+- 落盘自构造文件名（同 excel 模式的教训）
+
+**踩坑**：`previewAttachments` 深链 → 需客户端，不能用；`plainapproval` → 可用。两者容易混，别走错。
+
+**实测（2026-09-10）**：对导出表里 **39 个离职发起人单据**跑一遍 → **39/39 成功、0 失败、39 个文件 / 2.8 MB**。
+与 API manifest 交叉比对：这 39 单里 **38 单在 API 侧是 `userNotExist`**（API 根本拿不到），
+只有 1 单 API 已成功 —— **这就是本路径的全部价值：补 API 无解的离职发起人**。
+
+### 单条：Excel 里的深链
+
+导出 Excel 的 `账期明细 / 图片 / 评论附件汇总 / 所有附件汇总` 四列是**超链接**（显示为「去下载」/「N个附件」），
+本次共 **1074 条**，指向按单据的附件预览页：
+
+```
+https://aflow.dingtalk.com/dingtalk/pc/pages/dynamic/formservice.htm?corpid=<corpId>
+  #/previewAttachments?corpId=<corpId>
+    &processCode=PROC-FB234439-0642-451E-A514-20FBEF4A4241
+    &processInstanceId=<数据id>
+    &componentId=<见下>&relatedId=&rowNumber=&subComponentId=
+```
+
+| 列 | componentId |
+|---|---|
+| 账期明细 | `DDAttachment-K2K7DF54~DDAttachment` |
+| 图片 | `DDPhotoField-K2K7DF55~DDPhotoField` |
+| 评论附件汇总 | `operation` |
+| 所有附件汇总 | （不带 componentId） |
+
+用 openpyxl `cell.hyperlink.target` 读；pandas 读不到超链接。
+
+> ⚠️ **这个 `#/previewAttachments` 深链在浏览器里打不开**：直接访问会被自己重定向成
+> `#/goToDingtalk?url=…&ddtab=true`，页面只剩「**该页面需要在钉钉客户端内打开**」+
+> 「打开钉钉 / 下载钉钉」。**它是客户端专用路由，不能用于 Playwright**。
+
+### aflow 页面**没有**「批量下载附件」
+
+勾选行后工具栏只变成 `导出已选 / 批量打印 / 删除已选`；
+行内「更多」只有 `转交 / 撤销 / 删除`；
+操作记录只有 `导出记录 / 历史导出记录 / 批量打印记录 / 删除记录`。
+官方帮助文档描述的「批量下载附件」在 `oa.dingtalk.com` 老控制台，本次未验证。
+
+## 与 API 路径的分工（不是二选一）
+
+| | API（`dingtalk/dingtalk_oa_approval`） | aflow 页面 |
+|---|---|---|
+| 入口 | `processCode` + 时间窗 | 浏览器，以**在职管理员**身份 |
+| 附件 | 全量，含图片控件，带 manifest/断点续传 | 批量进**钉盘**；或按单据走 `previewAttachments` 深链 |
+| 盲区 | **离职发起人 `userNotExist`** | 能覆盖离职发起人 |
+| 单调 | `API_ONLY`，快 | `BROWSER_ONLY`，慢、`contract: ui` 易碎 |
+
+**离职缺口实测**：API manifest 里对 **6 名离职发起人**共 **199 条 `userNotExist`**，
+而这 62 行**都在 aflow 导出里** —— 这正是 aflow 路径的存在理由。
+
+## 踩坑速查
+
+1. **`导出全部` 点击 = 立即导出**；附件选项要 **hover**。误点会多排一个导出任务。
+2. 日期控件 `readOnly`，必须走日历面板，不能 `fill()`。
+3. 操作记录列表**不自动刷新**，进度要切 tab 才更新。
+   **`goto` 同一个 URL（只差 hash）不是重载** —— SPA 不会重新请求，必须 `page.reload()`；否则会一直看到旧的进度值（本次就被 96% 骗了很久）。
+4. 导出文件名带时间戳，**导出记录按时间倒序** → 用「最上行」锚定本次任务（同通途订单详情的老教训）。
+5. 页面初始两个弹窗必须先关，否则点击被遮。
+6. MCP 下载落点是 **MCP server 的 cwd**，不是你的工作目录。
+7. 表头是 **2 行**，别只看前 16 列就断定第 2 行是空的。
+8. **aflow 按账号记住上次选的表单/日期区间**。再次进入数据管理时，`表单名称` 已显示
+   `已启用 / 销售收款确认单`、日期区间也还在 → 脚本必须**幂等**：已符合就跳过，
+   否则"显示已选值的 `span.ant-select-selection-item`"会**拦截点击**，报
+   `element ... intercepts pointer events` 并一路超时。
+9. 点 antd 级联要**点容器** `.ant-select.ant-cascader`，**不要**点内层
+   `.ant-select-selection-search-input`（已选值时被上面的 span 挡住）。
+
+## 验证记录（2026-09-10）
+
+**Excel 导出**
+- 窗口 `发起时间 2026-07-04 ~ 2026-09-09`，查询返回 **405 行 / 265 单据**；
+  `发起时间` 实测 `2026-07-06 10:05:07` ~ `2026-09-09 12:25:30`，**全部落在窗口内** → 筛选生效。
+- 落地 `<out>/Amazon&新平台成本 20260704-20260909 销售收款确认单-<导出时间戳>.xlsx`（约 232 KB）。
+- 与 API `instance_ids.json` 交叉验证 **265/265 重合**（`数据id` == `processInstanceId`）。
+
+**离职发起人附件（`--mode attachments`）**
+- 读导出表 → 筛离职发起人 **39 单** → **39/39 成功、0 失败、39 个文件 / 2.8 MB**。
+- 与 API manifest 交叉比对：这 39 单里 **38 单 API 侧是 `userNotExist`**（仅 1 单 API 已成功）
+  → 补回了 38 个 API 无解的单据。
+
+**登录**
+- 全新 profile：手机号+密码自动提交 → 人工输一次短信验证码 → 选组织 → 导出成功。
+- 紧接着再跑一次：**无需任何登录/验证码**，直接导出成功（登录态持久化生效）。
+
+## 相关文档与边界
+
+- **与 API / NAS 拼图**：浏览器只负责导出 Excel 和离职附件落地。
+  在职补交走 `fetch_attachments.py`；按账期月切表走 `filter_export_by_period.py`；
+  进财务桶走 `archive_aflow_to_nas.py` / `nas_upload_api21.py`（都要 dry-run）。
+  操作手册：`dingtalk/dingtalk_oa_approval/docs/research/browser-admin-download.md`。
+  **下载成功 ≠ 已入 7 月桶**。39/39 离职附件也不能代替 SE 7/18 那张 txt 已在 NAS。
+- **`--only-departed` 默认开**：在职补交（如 SYX 的 `AMZRosoonIT` 7/8，2026-09-10 已交）不会出现在这 39 里，用 API。
+- **落盘**：`DINGTALK_OA_WORK`（或 `--out`），不要写本机人名路径。组织名 `DINGTALK_ORG`。
+- **与 lessons**：`docs/lessons/login-fallback-design.md` 只覆盖通途/赛狐的**图形**验证码 OCR；
+  钉钉是账号密码 + **短信**验证码，机制不同。
+- 本文只落在 `web_automation/**`，避免和 PR 226 的 `dingtalk/**` 同文件冲突。口径以 226 手册为准。

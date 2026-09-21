@@ -1,56 +1,56 @@
 # US OpenAI API Proxy
 
-> 在 US Ubuntu 服务器上部署 CLIProxyAPI，通过 Tailscale 虚拟网络供北京办公室员工使用 ChatGPT API。
+> 在 US Ubuntu 服务器上部署 CLIProxyAPI，通过受控内网向团队提供 OpenAI 兼容 API。
 
 ## 做了什么
 
-部署开源项目 [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI)，将 ChatGPT 网页订阅账号转为标准 OpenAI API 兼容接口。通过 [Tailscale](https://tailscale.com) 组建中美虚拟局域网，北京员工通过 Tailscale 虚拟 IP 或 LAN 网关直接调用 API。
+部署开源项目 [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI)，将经授权的
+ChatGPT/Codex OAuth 会话代理为标准 OpenAI 兼容接口。服务由 systemd 管理，监听和认证
+配置仅保存在受控、gitignored 环境中。
 
 ## 为什么这样做
 
-- **ChatGPT 订阅无法分享 API**：网页版订阅需要代理转为 API 才能给团队用
-- **Tailscale P2P 直连免中继**：北京↔US P2P 打洞成功，延迟 ~260ms，DERP relay 兜底
-- **LAN 网关降低接入成本**：同事无需装 Tailscale，改 Codex++ URL 即可
+- 将受控的上游授权能力提供为统一 API 接口。
+- 内网访问减少服务暴露面。
+- systemd 便于运行、观察日志和受控重启。
 
 ## 当前状态
 
 | 项目 | 状态 |
 |------|------|
-| 部署位置 | ⚠️ 已放弃 Windows Server，待迁移至 Ubuntu 24.04 (1C2G) |
-| 网络 | Tailscale P2P/DERP ~260ms |
-| 软件 | CLIProxyAPI v7.2.16 |
-| 账号 | 免费账号 (待升级付费) |
+| 部署位置 | US Ubuntu（systemd） |
+| 网络 | 受控内网访问；实际地址不入库 |
+| 软件 | CLIProxyAPI v7.2.152 |
+| 上游认证 | 工作区 OAuth；真实身份和认证材料不入库 |
+| 验收 | 目标模型真实 completion 已验证 |
 
-## 架构
+## 认证与可用性
 
-```
-北京 ──Tailscale──→ US Ubuntu ──→ ChatGPT API
-  │                   └─ CLIProxyAPI (systemd)
-  └─ LAN 网关 :3000 ──→ 同事 PC
-```
+服务 active 或基础 health check 成功，只能证明进程和基础路径可用；它**不等于**目标模型
+已有可用上游授权。出现 `503 auth_unavailable` 时，按
+[运维手册](docs/operations.md) 中的升级、浏览器 OAuth、认证记录隔离和目标模型验收流程处理。
 
 ## 快速开始
 
-见 [AGENT_HANDOFF.md](./AGENT_HANDOFF.md)（Agent 接手）或 [docs/architecture.md](./docs/architecture.md)（架构详解）。
+- Agent 接手：[AGENT_HANDOFF.md](AGENT_HANDOFF.md)
+- 日常运维：[docs/operations.md](docs/operations.md)
+- 已解决故障：[CLIProxyAPI `auth_unavailable` 恢复](../docs/solutions/integration-issues/cliproxyapi-auth-unavailable-oauth-recovery.md)
 
 ## 目录
 
 ```
 us_openai_api_proxy/
-├── README.md              ← 你在这里
-├── AGENT_HANDOFF.md       ← Agent 接手参考
-├── .env.example           ← 环境变量模板
-├── .env                   ← 实际配置 (gitignore)
+├── README.md
+├── AGENT_HANDOFF.md
+├── .env.example
+├── .env                     ← 实际配置（gitignored）
 ├── .gitignore
 ├── tools/
-│   └── lite_lan_proxy.py  ← LAN 网关轻量反代
-└── docs/                  ← OKF v0.1 bundle
+└── docs/                    ← OKF v0.1 bundle
     ├── index.md
     ├── log.md
+    ├── operations.md
     ├── architecture.md
-    ├── lan-gateway.md
     ├── lessons/
-    │   └── lessons-learned.md
     └── reference/
-        └── tools-index.md
 ```

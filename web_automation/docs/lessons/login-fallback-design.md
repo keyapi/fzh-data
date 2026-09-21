@@ -14,6 +14,11 @@ last_updated: 2026-07-10
 
 通途和赛狐的 `--auto-login` 依赖 ddddocr 自动识别验证码。但 ddddocr 有复杂的依赖链（onnxruntime → VC++ Redistributable），在"新机器"、"部分依赖缺失"等场景下容易静默失败。本设计确保在任何依赖状态下用户都有明确、可操作的交互路径。
 
+> **适用范围**：本文只覆盖通途/赛狐的**图形验证码 OCR** 登录。
+> **钉钉 aflow 是另一套机制** —— 账号密码登录，没有图形验证码（也就用不上 ddddocr），
+> 但陌生设备会插一道**短信验证码**，必须人工输一次。见
+> `docs/reference/aflow-receipt-export.md` 的「账号密码登录」一节。
+
 ## 依赖链条与失败点
 
 ```

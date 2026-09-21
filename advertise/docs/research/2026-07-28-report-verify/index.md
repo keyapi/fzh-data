@@ -24,7 +24,7 @@ timestamp: 2026-07-28
 ## 相关
 
 - [字段释义与 D1](field-meanings-and-d1.md)
-- [Phase2 缺口矩阵](../../../ai_access_poc/board/docs/specs/phase2-dataset-gap.md)
+- [Phase2 缺口矩阵](../../../../ai_access_poc/board/docs/specs/phase2-dataset-gap.md)
 
 ## README 纠偏
 

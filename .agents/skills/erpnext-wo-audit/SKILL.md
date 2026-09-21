@@ -42,7 +42,7 @@ uv run python erpnext/scripts/gen_report.py
 | 5 | JC `time_logs.employee` | HR-EMP-00001=虚拟, 其他=真实 |
 | 6 | JC `owner` | yangyisen92=虚拟, 钉钉用户=扫码 |
 | 7 | Stock Entry owner | 杨义森=不可信, 其他人=真实入库 |
-| 8 | 交叉验证 | 真实JC ∪ SE ∪ open_mat → 可信产量 |
+| 8 | 交叉验证 | 真实JC ∪ SE ∪ open_mat → 可信产量；JC 按工序分别算，不可跨工序求和 |
 
 ## 分类速查
 
@@ -60,3 +60,12 @@ uv run python erpnext/scripts/gen_report.py
 - `owner` ≠ `employee`! employee 在 `time_logs` 子表
 - `time_logs` 只在单条 JC 查询时返回，列表查询不包含子表
 - API 凭证在 `EN_API/.env`，key/secret 不提交 git
+- **JC 完成量按工序分开算，不要跨工序求和**：同一批件数会在每道工序各生成一张工序卡，
+  跨工序求和会把产量按工序数放大（实测 2 批 × 22 件 = **44 件**，跨 4 道工序求和会算成 176）。
+  问"这批做了多少件"，取**第一道工序（裁剪/开料）**的完成量；问"某道工序做了多少"，才取那道工序的。
+- **`Work Order.status` / `produced_qty` 可能没回写**：实测有工单头部仍是 `Not Started`、
+  `produced_qty=0`，但工序卡已显示几十件过完多道工序。判断"是否已开工"要看**工序卡数量**，
+  不能只看工单状态 —— 否则会把在产工单误判成未开工。
+- 子表（Sales Order Item / Delivery Note Item 等）**不能直接 list**（403）；按子表字段反查父单
+  要用 `[[子表doctype, 字段, 操作符, 值]]` 四元组，且结果"一行一子行"须按父单去重。
+  详见 `docs/solutions/workflow-issues/erpnext-so-closed-unshipped-and-unstarted-work-orders.md`。

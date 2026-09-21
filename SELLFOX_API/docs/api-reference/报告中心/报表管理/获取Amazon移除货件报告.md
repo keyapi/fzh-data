@@ -84,8 +84,7 @@ paths:
                 type: object
                 properties: {}
                 x-apifox-orders: []
-                x--orders: []
-                x--ignore-properties: []
+                x-apifox-ignore-properties: []
           headers: {}
           x-apifox-name: Created
         '401':
@@ -96,8 +95,7 @@ paths:
                 type: object
                 properties: {}
                 x-apifox-orders: []
-                x--orders: []
-                x--ignore-properties: []
+                x-apifox-ignore-properties: []
           headers: {}
           x-apifox-name: Unauthorized
         '403':
@@ -108,8 +106,7 @@ paths:
                 type: object
                 properties: {}
                 x-apifox-orders: []
-                x--orders: []
-                x--ignore-properties: []
+                x-apifox-ignore-properties: []
           headers: {}
           x-apifox-name: Forbidden
         '404':
@@ -120,8 +117,7 @@ paths:
                 type: object
                 properties: {}
                 x-apifox-orders: []
-                x--orders: []
-                x--ignore-properties: []
+                x-apifox-ignore-properties: []
           headers: {}
           x-apifox-name: Not Found
       security: []
@@ -175,16 +171,7 @@ components:
         - timeType
         - startTime
         - endTime
-      x--orders:
-        - pageNo
-        - pageSize
-        - searchType
-        - shopIdList
-        - searchContentList
-        - timeType
-        - startTime
-        - endTime
-      x--ignore-properties: []
+      x-apifox-ignore-properties: []
       x-apifox-folder: ''
     OpenResult«Page«RemoveShipmentOpenVo»»:
       type: object
@@ -211,13 +198,7 @@ components:
         - msg
         - data
         - ts
-      x--orders:
-        - requestId
-        - code
-        - msg
-        - data
-        - ts
-      x--ignore-properties: []
+      x-apifox-ignore-properties: []
       x-apifox-folder: ''
     Page«RemoveShipmentOpenVo»:
       type: object
@@ -250,13 +231,7 @@ components:
         - totalPage
         - totalSize
         - rows
-      x--orders:
-        - pageNo
-        - pageSize
-        - totalPage
-        - totalSize
-        - rows
-      x--ignore-properties: []
+      x-apifox-ignore-properties: []
       x-apifox-folder: ''
     RemoveShipmentOpenVo:
       type: object
@@ -343,28 +318,7 @@ components:
         - updateDate
         - setStatus
         - matchType
-      x--orders:
-        - sellingPartnerId
-        - region
-        - shopId
-        - marketplaceId
-        - orderId
-        - requestDate
-        - convRequestDate
-        - shipmentDate
-        - convShipmentDate
-        - sku
-        - fnsku
-        - disposition
-        - shippedQuantity
-        - carrier
-        - trackingNumber
-        - removalOrderType
-        - createDate
-        - updateDate
-        - setStatus
-        - matchType
-      x--ignore-properties: []
+      x-apifox-ignore-properties: []
       x-apifox-folder: ''
   securitySchemes: {}
 servers: []

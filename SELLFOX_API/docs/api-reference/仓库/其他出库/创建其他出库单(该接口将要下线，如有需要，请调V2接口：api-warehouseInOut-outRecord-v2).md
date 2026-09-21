@@ -322,11 +322,19 @@ components:
     ChildSku:
       type: object
       properties:
+        batchDTOList:
+          type: array
+          items: &ref_2
+            $ref: '#/components/schemas/PickingListItemBatchDTO'
         customInfoObj:
           type: object
           x-apifox-orders: []
           properties: {}
           x-apifox-ignore-properties: []
+        itemBatchVOList:
+          type: array
+          items: &ref_3
+            $ref: '#/components/schemas/PickingListItemBatchVO'
         multiWareParamList:
           type: array
           items:
@@ -676,7 +684,9 @@ components:
             format: int64
       title: ChildSku
       x-apifox-orders:
+        - batchDTOList
         - customInfoObj
+        - itemBatchVOList
         - multiWareParamList
         - sku
         - num
@@ -833,6 +843,9 @@ components:
     OverseaPickingListItemWarehouseVO:
       type: object
       properties:
+        batchDTOList:
+          type: array
+          items: *ref_2
         commodityId:
           type: integer
           format: int64
@@ -852,6 +865,9 @@ components:
           format: int64
         inventoryOutBatchId:
           type: string
+        itemBatchVOList:
+          type: array
+          items: *ref_3
         itemId:
           type: integer
           format: int64
@@ -907,6 +923,7 @@ components:
           description: 修改时间
       title: OverseaPickingListItemWarehouseVO
       x-apifox-orders:
+        - batchDTOList
         - commodityId
         - commoditySku
         - createId
@@ -914,6 +931,7 @@ components:
         - fnsku
         - id
         - inventoryOutBatchId
+        - itemBatchVOList
         - itemId
         - manualPurchaseCost
         - pickId
@@ -934,6 +952,104 @@ components:
         - warehouseItemId
         - warehouseName
         - updateTime
+      x-apifox-ignore-properties: []
+      x-apifox-folder: ''
+    PickingListItemBatchVO:
+      type: object
+      properties:
+        batchId:
+          type: integer
+          format: int64
+        commodityId:
+          type: integer
+          format: int64
+        commodityName:
+          type: string
+        commoditySku:
+          type: string
+        fnsku:
+          type: string
+        image:
+          type: string
+        itemId:
+          type: integer
+          format: int64
+        itemWarehouseId:
+          type: integer
+          format: int64
+        occupiedQuantity:
+          type: integer
+          format: int32
+        occupyStatus:
+          type: integer
+          format: int32
+        oriRecordName:
+          type: string
+        oriRecordNo:
+          type: string
+        perFee:
+          type: number
+        perPurchase:
+          type: number
+        quantity:
+          type: integer
+          format: int32
+        shopId:
+          type: integer
+          format: int64
+        shopName:
+          type: string
+        supplierId:
+          type: integer
+          format: int64
+        supplierName:
+          type: string
+        warehouseId:
+          type: integer
+          format: int64
+        warehouseName:
+          type: string
+      title: PickingListItemBatchVO
+      x-apifox-orders:
+        - batchId
+        - commodityId
+        - commodityName
+        - commoditySku
+        - fnsku
+        - image
+        - itemId
+        - itemWarehouseId
+        - occupiedQuantity
+        - occupyStatus
+        - oriRecordName
+        - oriRecordNo
+        - perFee
+        - perPurchase
+        - quantity
+        - shopId
+        - shopName
+        - supplierId
+        - supplierName
+        - warehouseId
+        - warehouseName
+      x-apifox-ignore-properties: []
+      x-apifox-folder: ''
+    PickingListItemBatchDTO:
+      type: object
+      properties:
+        batchId:
+          type: integer
+          format: int64
+        orderNo:
+          type: string
+        quantity:
+          type: integer
+          format: int32
+      title: PickingListItemBatchDTO
+      x-apifox-orders:
+        - batchId
+        - orderNo
+        - quantity
       x-apifox-ignore-properties: []
       x-apifox-folder: ''
     OpenResult«string»:

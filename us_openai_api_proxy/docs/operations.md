@@ -2,464 +2,120 @@
 okf: v0.1
 type: HowTo
 title: 运维手册
-description: US AI Proxy 服务器日常运维操作指南
-tags: [operations, monitoring, health-check, ssh]
+description: US AI Proxy 的日常检查、授权恢复与安全边界
+tags: [operations, monitoring, health-check, ssh, authentication]
 ---
 # 运维手册
 
-## 快速登录
+## 操作边界
+
+- 本模块服务共享 API 使用者。升级、认证恢复、认证记录隔离、重启或配置修改前，必须取得用户授权。
+- 文档、终端回显和 issue 中只用占位符；不得记录账号、OAuth URL 或回调参数、授权码、认证文件名和内容、token、API key、私有地址或完整请求体。
+- 真实配置和认证材料仅留在受控服务器与 gitignored 配置中，不上传、不复制到仓库。
+- 占位符从 `us_openai_api_proxy/.env`（对照 `.env.example`）解析，不要从旧 markdown 抄地址：
+
+| 占位符 | `.env.example` |
+|--------|----------------|
+| `<PROXY_SSH_ALIAS>` | `UBUNTU_SSH_ALIAS` |
+| `<PROXY_BINARY>` | `$CLIPROXYAPI_INSTALL_DIR/cli-proxy-api` |
+| `<API_KEY>` | `CLIPROXYAPI_API_KEY` |
+| `<CONFIGURED_LISTENER>` | 受控配置中的实际监听地址（端口见 `CLIPROXYAPI_PORT`） |
+| `<AUTH_DIR>` | 服务器上的认证目录（通常在 `CLIPROXYAPI_INSTALL_DIR` 下，以配置为准） |
+| `<TARGET_MODEL>` | 返回 `503 auth_unavailable` 的那个模型 id，不要从 `GET /v1/models` 另选 |
+
+## 快速登录与服务检查
 
 ```bash
-# 管理员 (root)
-ssh us-ubuntu-proxy
-
-# 运维同事 (gq-agent, 有限权限)
-ssh gq-agent@<UBUNTU_PUBLIC_IP>
+ssh <PROXY_SSH_ALIAS> systemctl status cliproxyapi --no-pager
+ssh <PROXY_SSH_ALIAS> journalctl -u cliproxyapi -n 100 --no-pager
+ssh <PROXY_SSH_ALIAS> tail -20 <HEALTH_LOG_PATH>
 ```
 
-## 服务检查
+自动健康检查可确认进程、监听端口或基础 HTTP 路径是否响应，但**不能证明某个模型可获得上游授权**。
 
-### 手动检查
-```bash
-# 服务状态
-ssh us-ubuntu-proxy systemctl status cliproxyapi
+## 诊断 `auth_unavailable`
 
-# 查看实时日志
-ssh us-ubuntu-proxy journalctl -u cliproxyapi -f
+当调用返回 `503 auth_unavailable` 时：
 
-# 查看健康检查日志
-ssh us-ubuntu-proxy tail -20 /var/log/cliproxy-health.log
+1. 查看 systemd 状态和服务日志，排除进程退出、网络错误和客户端 API key 错误。
+2. 从受控配置确认服务的实际监听地址；不要假设是 `127.0.0.1`。
+3. 用最小、脱敏的真实请求调用**发生故障的目标模型**；避免 shell history、日志或截图保留认证头和请求体。
+4. 若服务 active 而目标模型仍返回 `auth_unavailable`，按“授权恢复”处理，而非仅反复重启。
 
-# API 快速测试 (从北京)
-curl -s --max-time 10 http://<TAILSCALE_IP>:8317/v1/models \
-  -H "Authorization: Bearer <API_KEY>" | head -50
-```
-
-### 自动检查
-- cron 每 5 分钟跑 `/opt/cliproxyapi/health_check.sh`
-- 检查项: systemd 是否 active + API 端口是否响应
-- 日志: `/var/log/cliproxy-health.log`
-
-## 服务重启
+验证请求形状仅供说明，地址和认证值必须来自受控配置：
 
 ```bash
-ssh us-ubuntu-proxy systemctl restart cliproxyapi
+curl --fail-with-body --max-time 30 \
+  "http://<CONFIGURED_LISTENER>/v1/chat/completions" \
+  -H "Authorization: Bearer <API_KEY>" \
+  -H "Content-Type: application/json" \
+  --data '{"model":"<TARGET_MODEL>","messages":[{"role":"user","content":"Reply OK"}],"max_tokens":8}'
 ```
 
-systemd 配置了 `Restart=always`，崩溃自动重启，无需手动干预。
+成功的验收标准是目标模型返回正常 completion，而不是仅返回模型列表或 HTTP 200。
+浏览器 OAuth 成功、新认证文件出现、或 CLI 退出码 0，都还不能标记恢复。
 
-## 重新登录 ChatGPT OAuth (换账号时)
+## 授权恢复：升级、浏览器 OAuth 与验证
 
-### 账号历史
+### 1. 升级前检查与可回滚备份
 
-| 日期 | 账号 | 类型 | 状态 |
-|------|------|------|------|
-| 2026-06-22 | fzhvickyjing@gmail.com | free | 已禁用 |
-| 2026-07-13 | @my.csun.edu (CSUN) | edu | 已禁用 (工作区禁生图) |
-| 2026-08-03 | @horizon.csueastbay.edu (CSU East Bay) | edu | ✅ 当前 |
-
-> 教育账号权限取决于学校 IT 管理员设置。CSUN 禁了 image-2/gpt-5.6-sol/luna/gpt-5.4；CSU East Bay 全开。
-
-### OAuth 登录步骤
+先检查当前二进制、服务单元和配置位置；将现有可执行文件或发布工件备份到受控路径，并确认可恢复。不要备份或打印认证文件内容。
 
 ```bash
-# 1. 在北京开 SSH 隧道 (新窗口, 保持不关)
-ssh -L 1455:127.0.0.1:1455 -D 1080 us-ubuntu-proxy
-
-# 2. 停服务
-ssh us-ubuntu-proxy systemctl stop cliproxyapi
-
-# 3. 启动 OAuth 登录
-ssh us-ubuntu-proxy /opt/cliproxyapi/cli-proxy-api --codex-login
-
-# 4. 在北京 Chrome (SOCKS 代理 localhost:1080) 打开输出的 URL
-# 5. 完成后 Ctrl+C, 启动服务
-ssh us-ubuntu-proxy systemctl start cliproxyapi
+ssh <PROXY_SSH_ALIAS> "<PROXY_BINARY> --help | head"
+ssh <PROXY_SSH_ALIAS> "systemctl cat cliproxyapi"
+ssh <PROXY_SSH_ALIAS> "test -d <AUTH_DIR> && printf 'auth directory exists\n'"
 ```
 
-## 添加同事 Agent 访问 (gq-agent)
+按上游发布说明升级后，保留上一版本工件直至真实模型请求通过；升级失败时使用已确认的备份恢复，再重启服务。
+
+### 2. 浏览器 OAuth
+
+若服务器无 GUI，在本地建立 callback 转发，并按需要让浏览器经受控代理访问授权页：
 
 ```bash
-# 管理员执行:
-ssh us-ubuntu-proxy "
-  adduser --disabled-password gq-agent
-  mkdir -p ~gq-agent/.ssh
-  echo '<GQ_PUBKEY>' >> ~gq-agent/.ssh/authorized_keys
-  chmod 700 ~gq-agent/.ssh
-  chmod 600 ~gq-agent/.ssh/authorized_keys
-  chown -R gq-agent:gq-agent ~gq-agent/.ssh
-"
+ssh -N -o ServerAliveInterval=30 -o ExitOnForwardFailure=yes \
+  -L <LOCAL_CALLBACK_PORT>:127.0.0.1:<SERVER_CALLBACK_PORT> \
+  -D <LOCAL_SOCKS_PORT> <PROXY_SSH_ALIAS>
 ```
 
-sudo 权限在 `/etc/sudoers.d/gq-agent`:
-```
-gq-agent ALL=(root) NOPASSWD: /bin/systemctl status cliproxyapi
-gq-agent ALL=(root) NOPASSWD: /bin/systemctl restart cliproxyapi
-gq-agent ALL=(root) NOPASSWD: /bin/journalctl -u cliproxyapi *
-```
-
-## 磁盘/资源检查
+在**人机 TTY**（不要经 Agent 会话）中停服并启动浏览器 OAuth。登录 flag 以 `<PROXY_BINARY> --help` 为准；当前上游为 `--codex-login`。仅在浏览器中打开该次命令即时输出的授权页，不要把 URL、state、code 或 callback 复制到文档、聊天记录或日志。
 
 ```bash
-ssh us-ubuntu-proxy "
-  echo '=== Disk ===' && df -h /
-  echo '=== Memory ===' && free -h
-  echo '=== CPU ===' && uptime
-  echo '=== Service ===' && systemctl status cliproxyapi --no-pager | head -5
-"
+ssh <PROXY_SSH_ALIAS> "<PROXY_BINARY> --help | head"
+ssh <PROXY_SSH_ALIAS> systemctl stop cliproxyapi
+ssh <PROXY_SSH_ALIAS> "<PROXY_BINARY> --codex-login"
 ```
 
-## 告警
+- OAuth 会话是短时效的；认证耗时过长或链接失效时，重新生成新会话，不能复用旧链接。
+- 设备代码登录可能被工作区管理员策略禁用；出现该限制时不要尝试绕过，改用受支持的浏览器流程。
+- 浏览器流程成功后不要立刻验收；先完成本节第 3 步的隔离与重启，再跑目标模型请求。
 
-当前无自动告警。可配置:
-- **Telegram Bot**: 健康检查连续失败 3 次 → 发 Telegram 消息
-- **邮件**: `mail` 命令发送到管理员邮箱
+### 3. 认证记录整理与重启
 
-待后续实施。
-
-## GFW 应急翻墙 (个人 Chrome / 备用)
-
-当 SSRDog 订阅失效 + Tailscale 直连被封锁时的应急方案。
-
-### 链路
-
-```
-本地 Chrome (SOCKS5 → localhost:1080)
-    → SSH 加密隧道 (经上海跳板)
-        → 上海服务器 (国内直连)
-            → Tailscale (上海↔US direct)
-                → US Vultr 服务器
-                    → 互联网 (Google/Gmail 等)
-```
-
-### 步骤 1: 启动 SSH 隧道 (Git Bash)
+先仅列出认证目录的时间与大小（不要打印文件名或内容）。在服务器本机 TTY 上将确认无效的条目 `mv` 到受控、可恢复的隔离目录，而不是直接删除；不要把文件名贴进聊天或仓库。
 
 ```bash
-ssh -i ~/.ssh/id_ed25519_us_proxy -o StrictHostKeyChecking=accept-new \
-    -D 1080 -J sh-erpnext-test root@100.126.133.106
+ssh <PROXY_SSH_ALIAS> "test -d <AUTH_DIR> && find <AUTH_DIR> -maxdepth 1 -type f -printf '%TY-%Tm-%Td %TH:%TM %s\n'"
+ssh <PROXY_SSH_ALIAS> "mkdir -p <AUTH_QUARANTINE_DIR>"
+ssh <PROXY_SSH_ALIAS> systemctl start cliproxyapi
 ```
 
-保持终端窗口不关。如果断了重新跑。
+启动服务后立即按上节对目标模型做最小真实请求。成功后再清理到期的隔离备份；失败时恢复隔离条目或升级前工件，并根据日志继续排查。
 
-### 步骤 2: 启动 Chrome (PowerShell)
+## 日常重启与资源检查
 
-```powershell
-& "C:\Program Files\Google\Chrome\Application\chrome.exe" `
-    --proxy-server="socks5://127.0.0.1:1080" `
-    --user-data-dir="$env:TEMP\chrome-proxy"
-```
-
-用这个独立 Chrome 窗口访问 Google/Gmail/SSRDog。
-
-### 前置条件
-
-- 上海服务器 (`sh-erpnext-test`) 能 SSH（国内线路一般不受影响）
-- 上海 → 美国 Tailscale 连通（上海有 Tailscale，通常不受 GFW 影响）
-- 本地有 `~/.ssh/id_ed25519_us_proxy` 密钥
-
-### 诊断
+重启前必须取得用户授权。`systemctl restart` 不能修复失效的上游授权。
 
 ```bash
-# 检查上海 Tailscale 状态
-ssh sh-erpnext-test "tailscale status | grep vultr"
-
-# 检查上海→美国连通性
-ssh sh-erpnext-test "ping -c 3 100.126.133.106"
-
-# 测试完整链路
-ssh -i ~/.ssh/id_ed25519_us_proxy -o StrictHostKeyChecking=accept-new \
-    -J sh-erpnext-test root@100.126.133.106 "curl -s --max-time 5 https://www.google.com -o /dev/null -w '%{http_code}'"
+ssh <PROXY_SSH_ALIAS> systemctl restart cliproxyapi
+ssh <PROXY_SSH_ALIAS> "df -h / && free -h && uptime"
 ```
 
-## GFW 应急翻墙 (办公室全员 / OpenWrt+OpenClash)
+`Restart=always` 能恢复进程崩溃，但不能恢复失效、过期或不被目标模型接受的上游授权。
 
-当 SSRDog 订阅失效时，通过上海 SSH SOCKS5 隧道为办公室全员提供代理。
+## 相关记录
 
-### 链路
-
-```
-办公室设备 (192.168.10.x, 无任何配置)
-    → 新华三 → OpenWrt (OpenClash TPROXY)
-        → OpenClash 通过 Tailscale 连接到上海 SOCKS5
-            → 上海 SSH 持久化隧道 (systemd)
-                → Tailscale (上海→US direct)
-                    → US Vultr → 互联网
-```
-
-### 部署架构
-
-| 组件 | 位置 | 配置 |
-|------|------|------|
-| SOCKS5 出口 | US Vultr | `ssh -D` via SSH 服务 |
-| SSH 隧道 | 上海 (100.119.28.72) | systemd service `socks5-tunnel`, 绑定 Tailscale IP:1080 |
-| iptables 访问控制 | 上海 | 仅允许 OpenWrt Tailscale IP (100.124.94.69) 访问 :1080 |
-| OpenClash 代理节点 | OpenWrt | SOCKS5 → 100.119.28.72:1080 |
-| OpenClash 策略 | OpenWrt | Emergency 组 → Auto fallback 首位 |
-
-### OpenClash 配置要点
-
-配置位置：`/etc/openclash/config/SSRDogAnyTLS.yaml`
-
-1. **新增 SOCKS5 节点**（proxy 列表首行）：
-   ```yaml
-   - { name: SH-Tailscale-US, type: socks5, server: 100.119.28.72, port: 1080 }
-   ```
-
-2. **新增 Emergency 策略组**（proxy-groups 里）：
-   ```yaml
-   - { name: Emergency, type: select, proxies: [SH-Tailscale-US, DIRECT] }
-   ```
-
-3. **Auto fallback 末尾放 Emergency**（SSRDog 优先，Emergency 兜底）：
-   ```yaml
-   - { name: Auto, type: fallback, proxies: [...原 SSRDog 节点, Emergency] }
-   ```
-
-4. **MATCH 规则保持原始值**（不修改为 Emergency）：
-   ```yaml
-   - 'MATCH,SSRDOG'
-   ```
-   > Auto fallback 会按顺序测试：SSRDog 国家组 → Emergency。SSRDog 正常时自动选中 SSRDog，全挂时才走 Emergency。
-
-### 应急启动步骤
-
-```bash
-# 1. 确认链路
-ssh sh-erpnext-test "tailscale status | grep vultr"  # 应显示 active
-
-# 2. 启动上海 SSH 隧道 (systemd 托管)
-ssh sh-erpnext-test systemctl start socks5-tunnel
-
-# 3. 确认 SOCKS5 端口监听
-ssh sh-erpnext-test "ss -tlnp | grep 1080"  # 应在 100.119.28.72:1080
-
-# 4. 测试代理
-ssh sh-erpnext-test "curl -x socks5h://100.119.28.72:1080 https://www.google.com -o /dev/null -w '%{http_code}'"  # 应返回 200
-
-# 5. 确认 OpenWrt 能连到上海
-ssh root@192.168.100.1 "ping -c 2 100.119.28.72"
-
-# 6. 确认 OpenClash 运行
-ssh root@192.168.100.1 "/etc/init.d/openclash status"
-
-# 7. 查看实时代理日志
-ssh root@192.168.100.1 "tail -f /tmp/openclash.log | grep SH-Tailscale-US"
-```
-
-### 订阅更新后 Emergency 持久化机制
-
-**问题**：SSRDog 订阅链接有效期仅 5 分钟，需手动粘贴新链接到 OpenClash GUI 更新。每次更新会重新生成配置文件，覆盖手动添加的 Emergency 配置。
-
-**方案**：使用 OpenClash 的 `openclash_custom_overwrite.sh` 脚本（`/etc/openclash/custom/`），在每次配置重新生成后自动注入 Emergency 代理组。
-
-**脚本逻辑**（已部署于 2026-07-02，2026-07-03 修复）：
-1. 检查配置中是否已有 `SH-Tailscale-US` 节点（幂等，已有则跳过）
-2. 注入 SOCKS5 代理节点 + Emergency 策略组
-3. Emergency 放入 Auto fallback **末尾**（SSRDog 优先，全部失败才兜底）
-4. **不修改 MATCH 规则**（保持原始 `MATCH,SSRDOG`）
-5. 同时处理两个路径：`/etc/openclash/config/` 和 `/etc/openclash/`（覆盖 Clash 实际加载的路径）
-
-**用户操作流程**：
-1. 登录 SSRDog 后台 → 复制最新订阅链接（5分钟内有效）
-2. OpenClash LuCI → 配置管理 → 粘贴订阅链接 → 更新配置
-3. OpenClash 自动重启 → overwrite 脚本自动注入 Emergency
-4. 不需要任何额外操作，Emergency 代理组自动出现
-
-### 回滚步骤
-
-```bash
-# 1. 恢复 OpenClash 原配置
-ssh root@192.168.100.1 "cp /etc/openclash/config/SSRDogAnyTLS.yaml.bak /etc/openclash/config/SSRDogAnyTLS.yaml"
-
-# 2. 重启 OpenClash
-ssh root@192.168.100.1 /etc/init.d/openclash restart
-
-# 3. (可选) 停止上海隧道
-ssh sh-erpnext-test systemctl stop socks5-tunnel
-```
-
-### 上海 SSH 隧道 systemd service
-
-`/etc/systemd/system/socks5-tunnel.service`:
-
-```ini
-[Unit]
-Description=SSH SOCKS5 Tunnel to US Vultr via Tailscale
-After=network-online.target tailscaled.service
-Wants=network-online.target
-
-[Service]
-Type=simple
-User=root
-ExecStart=/usr/bin/ssh -N -D 100.119.28.72:1080 \
-    -o ServerAliveInterval=30 \
-    -o ServerAliveCountMax=3 \
-    -o ExitOnForwardFailure=yes \
-    -o StrictHostKeyChecking=accept-new \
-    -i /root/.ssh/id_ed25519_us_proxy_tunnel \
-    root@100.126.133.106
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-```
-
-### 日常运维
-
-#### 上海 SSH 隧道
-
-```bash
-# 查看状态（是否运行、运行多久）
-ssh sh-erpnext-test systemctl status socks5-tunnel
-
-# 查看最近日志
-ssh sh-erpnext-test journalctl -u socks5-tunnel -n 20 --no-pager
-
-# 启动
-ssh sh-erpnext-test systemctl start socks5-tunnel
-
-# 停止（⚠️ 办公室翻墙会断）
-ssh sh-erpnext-test systemctl stop socks5-tunnel
-
-# 重启
-ssh sh-erpnext-test systemctl restart socks5-tunnel
-
-# 测试代理是否正常
-ssh sh-erpnext-test "curl -x socks5h://100.119.28.72:1080 -s --max-time 10 https://www.google.com -o /dev/null -w '%{http_code}'"
-# 正常输出: 200
-```
-
-隧道特性：
-- **开机自启**：`systemctl enable socks5-tunnel`（已设置）
-- **崩溃自愈**：`Restart=always`，SSH 断开 10 秒后自动重连
-- **存活检测**：`ServerAliveInterval=30` + `ServerAliveCountMax=3`，90 秒无响应判定断开
-
-#### 办公室翻墙状态
-
-```bash
-# 查看 OpenClash 是否在走 Emergency 代理
-ssh -i ~/.ssh/id_rsa_openwrt root@192.168.100.1 \
-  "tail -20 /tmp/openclash.log | grep -oE 'Emergency\[|SSRDOG\[' | sort | uniq -c"
-```
-
-输出中 `Emergency[` 数量 > 0 说明应急线路正在工作。
-
-#### 链路全检（一键脚本）
-
-```bash
-echo "=== 1. 上海 Tailscale 状态 ==="
-ssh sh-erpnext-test "tailscale status | grep vultr"
-
-echo "=== 2. 上海 SSH 隧道 ==="
-ssh sh-erpnext-test systemctl is-active socks5-tunnel
-
-echo "=== 3. SOCKS5 端口 ==="
-ssh sh-erpnext-test "ss -tlnp | grep 1080"
-
-echo "=== 4. 代理 Google 可达 ==="
-ssh sh-erpnext-test "curl -x socks5h://100.119.28.72:1080 -s --max-time 10 https://www.google.com -o /dev/null -w '%{http_code}'"
-
-echo "=== 5. OpenClash 运行状态 ==="
-ssh -i ~/.ssh/id_rsa_openwrt root@192.168.100.1 "ps | grep 'clash -d' | grep -v grep | head -1"
-
-echo "=== 6. 办公室流量线路 ==="
-ssh -i ~/.ssh/id_rsa_openwrt root@192.168.100.1 \
-  "tail -10 /tmp/openclash.log | grep -oE 'Emergency\[|SSRDOG\[' | sort | uniq -c"
-```
-
-## 翻墙流量机制与额度 (2026-08-25)
-
-### 什么流量走代理 / 直连
-
-办公室翻墙路由由 **OpenClash 规则**决定，与机场（SSRDog/BoostNet）无关：
-
-```
-国内 IP（china_ip_route）→ iptables 直连，不进 Clash（不耗额度）
-国外 IP → 重定向进 Clash
-  ↓ Clash 规则逐条匹配
-  ChinaMax / 钉钉 / sellfox 等 → DIRECT（不耗额度）
-  其余 → Match → 代理组（BoostNet）→ 消耗额度
-```
-
-- 钉钉、国内视频会议、国内网站 → DIRECT，**不消耗机场额度**
-- YouTube / Google / ChatGPT / 国外网站 → 走代理，**消耗额度**
-- 国内服务的国外 CDN（如某些 .com 域名解析到国外 IP）→ 规则上无法区分，会走代理（属正常，不是故障）
-
-### 已知 DIRECT 例外
-
-- **`45.63.1.166`（Vultr RDP 服务器）→ DIRECT**：BoostNet 对该服务器 3389 的 RDP 不通（香港/美国节点都试过，普通网页正常，疑似 BoostNet 屏蔽 RDP；直连光猫/US 服务器/应急线路都能正常 RDP）。故自定义规则加 `IP-CIDR,45.63.1.166/32,DIRECT` 直连。若以后换机场后 RDP 正常，可移除此规则。
-- **`groupe-rueducommerce.fr`（Mirakl 法国后台）→ DIRECT**：BoostNet 的日本/美国节点 TLS 被该站 Cloudflare 重置，仅香港节点能通；但自定义规则无法引用覆写脚本创建的 `香港` 组（合并阶段校验目标组存在会丢弃），而直连稳定快速（实测 6/6 全通，0.76-1.28s，与直连光猫一致）。故加 `DOMAIN-SUFFIX,groupe-rueducommerce.fr,DIRECT`。若以后换机场后该站走代理正常，可移除此规则。
-
-### 机场额度怎么算
-
-- 机场（BoostNet/SSRDog）按**经过其节点的字节数**计费，OpenClash 决定发什么给节点
-- 不同机场只是"账户额度 + 节点"不同，**路由规则完全一样**（同一份 OpenClash 配置）
-
-### 实测结果 (2026-08-25, BoostNet)
-
-- 启用 2 小时内消耗约 840MB（上行 141MB + 下行 698MB），**属正常偏高**；主要被 **YouTube 视频流**吃掉（活动连接快照 ~30%），其次 Wayfair 工作平台（~21%）
-- 活动连接快照分析：**未发现国内 IP 误走代理**，国内流量正确直连
-- 历史参照：SSRDog 每月约 280G（同一套规则）→ BoostNet 400G/月 有 ~40% 余量
-- **若额度消耗异常快，优先排查 YouTube/视频用量**（最大头）
-
-### 查看当前流量构成
-
-```bash
-# 当前活动连接（每个连接的 host / 出口策略 / 上下行字节）
-ssh -i ~/.ssh/id_rsa_openwrt root@192.168.100.1 \
-  "wget -qO- --header='Authorization: Bearer 123456' http://127.0.0.1:9090/connections"
-```
-
-> 把返回的 JSON 下载到本地，用 python 按 `metadata.host` / `chains[0]` / `upload` / `download` 聚合，即可得到按域名和策略的流量占比。
-
-## AI 出口切换（按国家分组，2026-08-25）
-
-### 为什么加
-
-老板 ChatGPT 网页在香港出口打不开（同一个香港节点，不同 OpenAI 账号结果不同——OpenAI 按账号/地区/风控判定），而日本/美国出口对大多数账号都友好。BoostNet 订阅**没有**按国家分组（只有 `自动选择`/`故障转移`/全节点扁平列表），所以通过覆写脚本动态生成了国家组 + AI 出口主组。
-
-### 结构
-
-```
-AI 规则（GEOSITE,openai / chatgpt.com 等 14 条）→ AI 出口
-AI 出口（select）: 自动选择 / 日本 / 美国 / 香港 / 新加坡 / 台湾 / 故障转移
-  ├── 自动选择（url-test，BoostNet 原生）
-  ├── 日本（select: 日本01-08）
-  ├── 美国（select: 美国01-04）
-  ├── 香港（select: 香港01-012）
-  ├── 新加坡 / 台湾（select）
-  └── 故障转移（fallback，BoostNet 原生）
-```
-
-- 默认 `AI 出口 → 自动选择`（通常选到香港07），日常体验不变
-- 需要日本/美国出口时，把 `AI 出口` 切到对应国家组
-
-### 如何切换
-
-**Zashboard / OpenClash 面板**：代理组 → `AI 出口` → 选择 `日本`（或 `美国`）。
-
-**API 方式**：
-```bash
-# 查看当前 AI 出口
-ssh root@192.168.100.1 "wget -qO- --header='Authorization: Bearer 123456' http://127.0.0.1:9090/proxies/AI%20%E5%87%BA%E5%8F%A3 | grep -o '\"now\":\"[^\"]*\"'"
-
-# 切到日本
-ssh root@192.168.100.1 "curl -s -X PUT 'http://127.0.0.1:9090/proxies/AI%20%E5%87%BA%E5%8F%A3' -H 'Authorization: Bearer 123456' -d '{\"name\":\"日本\"}' -o /dev/null -w '%{http_code}'"
-
-# 切回自动选择
-ssh root@192.168.100.1 "curl -s -X PUT 'http://127.0.0.1:9090/proxies/AI%20%E5%87%BA%E5%8F%A3' -H 'Authorization: Bearer 123456' -d '{\"name\":\"自动选择\"}' -o /dev/null -w '%{http_code}'"
-```
-
-### 持久化与注意
-
-- 国家组 + AI 出口 + 14 条 AI 规则都由 `openclash_custom_overwrite.sh` 的 `add_country_groups()` 注入，**订阅更新/重启不覆盖**（节点名变化时按前缀自动跟随）
-- **AI 规则不放自定义规则文件**：OpenClash 合并自定义规则时会校验目标组是否存在，`AI 出口` 组由覆写脚本后创建，放规则文件会被丢弃（实测）。所以 AI 规则在脚本里注入
-- 切换是**全局**的（所有 AI 流量都走同一出口），无法只让老板走日本、其他人走香港
-- 重启后 `AI 出口` 会重置为默认（自动选择）——若需要记住手动选择，可开启 `store-selected`（未启用）
-
-## 见也
-
-- [../AGENT_HANDOFF.md](../AGENT_HANDOFF.md) — Agent 参考
-- [architecture.md](architecture.md) — 架构设计
-- [lessons/lessons-learned.md](lessons/lessons-learned.md) — 经验教训
+- [CLIProxyAPI `auth_unavailable`：升级、浏览器 OAuth 与真实模型验收](../../docs/solutions/integration-issues/cliproxyapi-auth-unavailable-oauth-recovery.md)
+- [经验教训](lessons/lessons-learned.md)
+- [Agent 接手入口](../AGENT_HANDOFF.md)

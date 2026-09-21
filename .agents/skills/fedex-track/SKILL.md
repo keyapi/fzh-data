@@ -32,6 +32,7 @@ FedEx 官方 Track API 批量查询（仿 `ups_track`），保留**完整状态�
 
 1. `fedex_track/AGENT_HANDOFF.md`（唯一默认入口）
 2. 需要细节：`fedex_track/docs/index.md`、`docs/solutions/workflow-issues/fedex-track-batch-query.md`
+3. 与 UPS/GLS 混合口径（处理 3 营业日、workers 串行）：`docs/solutions/conventions/parcel-track-handling-days-sequential-workers.md`；共享分类在 `parcel_track.classify`（`HANDLING_DAYS=3`）。
 
 ## 何时触发
 

@@ -12,11 +12,11 @@ tags: [sellfox, api-proxy, reference, index]
 
 | 文档 | 位置 |
 |------|------|
-| 获取 Access Token | [SELLFOX_API](../../SELLFOX_API/docs/api-reference/开发指南/获取%20Access%20Token.md) |
-| 生成 sign（签名） | [SELLFOX_API](../../SELLFOX_API/docs/api-reference/开发指南/生成sign（签名）.md) |
-| 公共请求参数 | [SELLFOX_API](../../SELLFOX_API/docs/api-reference/开发指南/公共请求参数.md) |
-| 公共报错 | [SELLFOX_API](../../SELLFOX_API/docs/api-reference/开发指南/公共报错.md) |
-| 16 条踩坑教训 | [SELLFOX_API](../../SELLFOX_API/docs/lessons/2026-06-25-sellfox-integration-lessons.md) |
+| 获取 Access Token | [SELLFOX_API](../../../SELLFOX_API/docs/api-reference/开发指南/获取%20Access%20Token.md) |
+| 生成 sign（签名） | [SELLFOX_API](../../../SELLFOX_API/docs/api-reference/开发指南/生成sign（签名）.md) |
+| 公共请求参数 | [SELLFOX_API](../../../SELLFOX_API/docs/api-reference/开发指南/公共请求参数.md) |
+| 公共报错 | [SELLFOX_API](../../../SELLFOX_API/docs/api-reference/开发指南/公共报错.md) |
+| 16 条踩坑教训 | [SELLFOX_API](../../../SELLFOX_API/docs/lessons/2026-06-25-sellfox-integration-lessons.md) |
 
 ## 赛狐 API 签名算法（已验证）
 

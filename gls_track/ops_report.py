@@ -9,7 +9,7 @@ GLS 时点映射（对标 FedEx 建标/收件/交付）：
 - 交付 = delivered 事件 / arrivalTime
 
 > 定位：GLS 先行版。判定结构/版式仿 fedex_track.ops_report，但**日历/阈值独立**：
-> HANDLING_DAYS=2、营业日按波兰 2026 公共假日（起运/交接在 GLS 波兰，不用美国联邦假日）。
+> HANDLING_DAYS=3（与 parcel_track UPS/FedEx 统一）、营业日按波兰 2026 公共假日（起运/交接在 GLS 波兰，不用美国联邦假日）。
 > 待 PR#215 (parcel_track) 合入后，GLS adapter 应改走 parcel_track 共享 classify + ops_excel，
 > 本文件届时降为薄壳或删除。
 """
@@ -26,9 +26,9 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
 # ── GLS 口径（可调）─────────────────────────────────────────
-# 迟发允许处理时间：数据录入→交接 GLS，允许 2 个营业日（周末/假日顺延）。
-# FedEx 表用 1（美国市场）；GLS 起运/交接都在波兰，仓库+GLS 排程按波兰，定 2。
-HANDLING_DAYS = 2
+# 迟发允许处理时间：数据录入→交接 GLS，允许 3 个营业日（周末/假日顺延）。
+# 与 parcel_track UPS/FedEx 统一为 3；假日历仍用波兰法定假日。
+HANDLING_DAYS = 3
 TRANSIT_SLOW_DAYS = 6
 TRANSIT_SEVERE_DAYS = 12
 STUCK_DAYS = 7
@@ -311,8 +311,8 @@ def build(summary_csv: str, tt_xlsx: str, out_xlsx: str):
     notes = [
         ("GLS 运营异常报表口径说明（v0.1）", ""),
         ("1. 时点", "建标≈数据录入 GLS IT（history 首条 data entered）；收件≈交接 GLS（handed over）；交付=delivered/arrivalTime。"),
-        ("2. 迟发(Amazon口径)", "ship-by=发货日期+处理时间(营业日)；周末与公共假日不计入。营业日延迟=数据录入→交接 营业日数-处理时间(默认2天)。"),
-        ("3. 处理时间", f"默认 {HANDLING_DAYS} 个营业日（GLS 定 2；FedEx 表为 1），请按实际改脚本顶部 HANDLING_DAYS。"),
+        ("2. 迟发(Amazon口径)", "ship-by=发货日期+处理时间(营业日)；周末与公共假日不计入。营业日延迟=数据录入→交接 营业日数-处理时间(默认3天)。"),
+        ("3. 处理时间", f"默认 {HANDLING_DAYS} 个营业日（与 parcel_track UPS/FedEx 统一为 3），请按实际改脚本顶部 HANDLING_DAYS。"),
         ("4. 营业日排除", "周六日（np.busday_count 天然排除）+ **2026 波兰法定公共假日**：1/1,1/6,4/6,5/1,5/3,6/4,8/15,11/1,11/11,12/24,12/25,12/26（周日型假日 Easter4/5、Pentecost5/24 已被周末排除）。因数据录入/交接都发生在 GLS 波兰(起运国)，迟发判定用波兰历；美国联邦假日不适用，故未沿用 FedEx 表日历。"),
         ("5. 判定定义", f"漏发/未交接=有发货日期但无交接且>{MISSING_AFTER_DAYS}天；建标未收件=有数据录入但近期无交接；迟发=录入→交接营业日>处理时间({HANDLING_DAYS})；承运延误=交接→交付营业日>{TRANSIT_SLOW_DAYS}；卡件=在途且>{STUCK_DAYS}天无扫描；数据异常=rstt 接口无此单(如 allegro …U 行非 GLS 号)。"),
         ("6. 返件", "少数包裹先 DELIVERED 又回退(如 29626350320 08-10 派送→08-14 回 Strykow)，头条状态 INTRANSIT——本表按“先交付后回退+头条非DELIVERED”归为在途，不误标正常交付；请在通途/仓库侧按返件处理。"),

@@ -7,6 +7,10 @@ summary: 开发与变更记录
 
 # dingtalk_robot — 变更日志
 
+## 2026-09-20
+
+- **修复（链接）**：`.agents/skills/dingtalk-robot/SKILL.md` 指向本模块的 3 条链接少退一级，由 `../../` → `../../../`。
+
 ## 2026-07-23 — v0.2.0 文件附件支持
 
 - 新增 `send_file_card.py` — 上传 ERPNext + 发钉钉 ActionCard，一步完成

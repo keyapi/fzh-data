@@ -42,8 +42,12 @@ tags: [capability-matrix, routing, api, browser, fallback]
 |------|------|------|------|
 | tongtu.stock.export | BROWSER_ONLY | browser | read |
 | tongtu.sales.export | BROWSER_ONLY | browser | read |
+| tongtu.orderdetail.export | BROWSER_ONLY | browser | read |
 | sellfox.stock.export | API_FIRST_BROWSER_FALLBACK | api→browser | read |
 | sellfox.other-inbound.import | MANUAL_CONFIRM | browser | write |
 | sellfox.other-outbound.import | MANUAL_CONFIRM | browser | write |
 | sellfox.restock.import | MANUAL_CONFIRM | browser | write |
+| sellfox.cost-adjust.import | MANUAL_CONFIRM | browser | write |
 | web.generic.explore | BROWSER_ONLY | mcp | interactive |
+| dingtalk.aflow.receipt.export | BROWSER_ONLY | browser | read |
+| dingtalk.aflow.receipt.attachments | BROWSER_ONLY | browser | read |
