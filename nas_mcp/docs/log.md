@@ -94,4 +94,14 @@ tags: [nas, mcp, log]
     属于改变外部状态，**等用户拍板**。
   - Photos / Download Station / Container Manager / 系统电源 —— **权限面爆炸**且与产品图场景无关。
     mrquj 列这些是因为它想做「通用群晖管理员助手」，我们不需要。
+- **更正 + 新增（工具 13 → 14）**: 我先前说「两个共享文件夹里没有任何压缩包」——**那是错的**。
+  根因：我的**临时测试脚本**用 `res.get("taskid")` 取 id，而 `search_start` 返回的是**字符串**，
+  于是拿到 `None`、用假 id 去查 → 恒返回空。**用我自己的 `nas_search` 重测，压缩包是有的**：
+  `/产品信息` zip 3 / rar 3；`/FZH共享文件夹` zip 23 / rar 29 / 7z 7。
+  - **`nas_list_archive`** —— **不解压**看压缩包内容（zip/rar/7z/tar）。实测：
+    `作业及数据.zip` → Tableau训练营作业.docx / 人力数据.xlsx / 电商超市.xls；
+    `SOFT.7z` → ATI2021 / EIX2 / …；`Walmart.rar` → **Bedding1.jpg … Clothing1.jpg**（产品图）。
+    支持 `password`（加密包）与 `codepage`（包内 GBK 文件名）。
+  - **教训（又一次同类）**：结论必须用**要交付的那个工具**复测，不能用自己的临时脚本 ——
+    今天第二次因为临时脚本写错而得错结论。
 - **未决**: 尚无写入能力（刻意）；per-user 权限（现为单账号单 token）待评估。

@@ -17,7 +17,7 @@ timestamp: 2026-09-21
 
 ## 三条硬安全约束
 
-1. **只读**：只暴露 **13 个**工具 —— `nas_health` / **`nas_list_shares`** / `nas_list_folder` /
+1. **只读**：只暴露 **14 个**工具 —— `nas_health` / **`nas_list_shares`** / **`nas_list_archive`** / `nas_list_folder` /
    `nas_file_info` / `nas_search` / `nas_folder_size` / `nas_thumbnail` / **`nas_folder_thumbnails`** /
    `nas_file_md5` / **`nas_read_image`** / **`nas_read_pdf`** / **`nas_read_doc`** / `nas_read_text`。
    **不暴露任何写或删**（`NAS_API/synology.py` 里的 `create_folder` / `create_subfolders` / **`delete_folder`** 一律不用）。

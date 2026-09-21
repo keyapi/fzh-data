@@ -258,5 +258,25 @@ try:
 except Exception as e:                                  # noqa: BLE001
     check("nas_folder_thumbnails", False, "%s: %s" % (type(e).__name__, str(e)[:70]))
 
+
+print("\n── 13) nas_list_archive（不解压看压缩包）")
+try:
+    sr = S.tool_search({"path": "/FZH共享文件夹", "extension": "zip", "limit": 1})
+    items = sr.get("items") or []
+    if items:
+        out = S.tool_list_archive({"path": items[0]["path"], "limit": 5})
+        check("nas_list_archive 列出包内条目", (out.get("count") or 0) > 0,
+              "%s -> %s" % (items[0]["name"], [i["name"] for i in (out.get("items") or [])[:3]]))
+    else:
+        print("  SKIP  压缩包用例（搜不到 zip）")
+except Exception as e:                                  # noqa: BLE001
+    check("nas_list_archive", False, "%s: %s" % (type(e).__name__, str(e)[:70]))
+
+try:
+    S.tool_list_archive({"path": "/FZH共享文件夹/软件"})
+    check("非压缩包被拒", False, "← 竟然放行")
+except ValueError as e:
+    check("非压缩包被拒", "只处理压缩包" in str(e), str(e)[:50])
+
 print(f"\n结果：{ok} passed, {fail} failed")
 sys.exit(1 if fail else 0)

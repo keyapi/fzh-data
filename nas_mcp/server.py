@@ -239,6 +239,21 @@ def safe_path(raw: str) -> str:
 
 TOOLS = [
     {
+        "name": "nas_list_archive",
+        "description": "**不解压**直接看压缩包里有什么（zip / rar / 7z / tar 等）。只读。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "压缩包路径"},
+                "limit": {"type": "integer", "description": "返回条数上限，默认 100，最大 500"},
+                "offset": {"type": "integer", "description": "翻页用"},
+                "password": {"type": "string", "description": "加密压缩包的密码（可选）"},
+                "codepage": {"type": "string", "description": "包内文件名编码，默认 chs（GBK），可按需试 utf-8"},
+            },
+            "required": ["path"],
+        },
+    },
+    {
         "name": "nas_list_shares",
         "description": "列出**该账号能看到的共享文件夹**（先看有什么，不用猜路径）。只读。",
         "inputSchema": {"type": "object", "properties": {}, "required": []},
@@ -960,7 +975,53 @@ def tool_folder_thumbnails(a: dict) -> dict:
     return {"_content": blocks}
 
 
+ARCHIVE_EXT = {".zip", ".rar", ".7z", ".tar", ".gz", ".tgz", ".bz2"}
+
+
+def tool_list_archive(a: dict) -> dict:
+    """**不解压**直接看压缩包里有什么（zip / rar / 7z / tar）。只读。"""
+    raw = a.get("path") or ""
+    if not raw:
+        raise ValueError("path 必填")
+    p = safe_path(raw)
+    ext = posixpath.splitext(p)[1].lower()
+    if ext not in ARCHIVE_EXT:
+        raise ValueError(f"只处理压缩包 {sorted(ARCHIVE_EXT)}；当前是 {ext or '无扩展名'}")
+    limit = max(1, min(int(a.get("limit") or 100), 500))
+    offset = max(0, int(a.get("offset") or 0))
+    password = a.get("password") or None
+    # 包内文件名可能是 GBK（老压缩工具），允许指定 codepage
+    codepage = a.get("codepage") or "chs"
+
+    def call(c):
+        return c.get_file_list_of_archive(file_path=p, limit=limit, offset=offset,
+                                          sort_by="name", sort_direction="asc",
+                                          codepage=codepage, password=password)
+
+    res = call(nas_client())
+    if isinstance(res, str):
+        res = call(nas_client(relogin=True))
+    if isinstance(res, str):
+        raise NasError("列压缩包失败：" + res[:200])
+    if not (isinstance(res, dict) and res.get("success")):
+        err = (res or {}).get("error") if isinstance(res, dict) else None
+        raise NasError("列压缩包失败：" + json.dumps(err, ensure_ascii=False)[:200])
+
+    d = res.get("data") or {}
+    items = [{"name": it.get("name"), "path": it.get("path"),
+              "is_dir": it.get("isdir", False),
+              "size": (it.get("additional") or {}).get("size", 0)}
+             for it in (d.get("items") or [])]
+    out = {"archive": p, "count": len(items), "items": items}
+    if d.get("total") is not None:
+        out["total"] = d["total"]
+        if d["total"] > offset + len(items):
+            out["note"] = f"仅返回 {offset + 1}-{offset + len(items)} 项，共 {d['total']} 项；用 offset 翻页"
+    return out
+
+
 TOOL_IMPL = {
+    "nas_list_archive": tool_list_archive,
     "nas_list_shares": tool_list_shares,
     "nas_folder_thumbnails": tool_folder_thumbnails,
     "nas_health": tool_health,
