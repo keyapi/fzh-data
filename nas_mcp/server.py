@@ -267,6 +267,44 @@ TOOLS = [
         },
     },
     {
+        "name": "nas_search",
+        "description": "在 NAS 上按名字/扩展名递归搜索文件（DSM 索引搜索）。只读。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "从哪个目录开始搜；留空用默认根"},
+                "name": {"type": "string", "description": "文件名关键词（模糊匹配）"},
+                "extension": {"type": "string", "description": "扩展名过滤，如 pdf / jpg"},
+                "limit": {"type": "integer", "description": "返回上限，默认 50，最大 500"},
+            },
+            "required": [],
+        },
+    },
+    {
+        "name": "nas_folder_size",
+        "description": "算一个目录的递归大小与条目数（可能耗时，服务端会轮询）。只读。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"path": {"type": "string", "description": "目录路径"}},
+            "required": ["path"],
+        },
+    },
+    {
+        "name": "nas_read_pdf",
+        "description": ("把 PDF 渲染成图片返回，模型可直接看图；同时附每页抽出的文字。"
+                        "只读。默认只渲染第 1 页，用 pages 指定（如 2-4）。"),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "PDF 路径"},
+                "pages": {"type": "string", "description": "要渲染的页，如 1 或 1-3，默认 1"},
+                "max_edge": {"type": "integer", "description": "图片长边像素，默认 1400，最大 3000"},
+                "max_pages": {"type": "integer", "description": "最多渲染几页，默认 3，最大 10"},
+            },
+            "required": ["path"],
+        },
+    },
+    {
         "name": "nas_read_image",
         "description": ("读取 NAS 上的一张**图片**并直接返回画面内容（模型可看图）。只读。"
                         f"超过长边 {IMAGE_MAX_EDGE}px 会自动等比缩小。"),
@@ -431,10 +469,210 @@ def tool_read_image(a: dict) -> dict:
     ]}
 
 
+def _poll(fn, tries: int = 12, delay: float = 0.8, done=lambda d: d.get("finished")):
+    """DSM 的 Search / DirSize 都是「起任务 + 轮询」。统一轮询到 finished。"""
+    import time as _t
+    last = None
+    for _ in range(max(1, tries)):
+        last = fn()
+        if isinstance(last, dict) and done(last):
+            return last
+        _t.sleep(delay)
+    return last
+
+
+def _human(n) -> str:
+    try:
+        n = float(n)
+    except Exception:                                 # noqa: BLE001
+        return str(n)
+    for u in ("B", "KiB", "MiB", "GiB", "TiB"):
+        if n < 1024:
+            return f"{n:.0f} {u}" if u == "B" else f"{n:.1f} {u}"
+        n /= 1024
+    return f"{n:.1f} PiB"
+
+
+def _task_id(res, label: str) -> str:
+    """从「起任务」类调用的返回里取出 taskid。
+
+    synology_api 的 search_start / start_dir_size_calc 在 ``interactive_output=True``（默认）
+    时**返回一句字符串**（"...your id is: \\"xxx\\""），否则返回 ``{"message":…, "taskid":…}``。
+    两种都要能吃。
+    """
+    import re as _re
+    if isinstance(res, dict):
+        if res.get("taskid"):
+            return res["taskid"]
+        if res.get("success"):
+            tid = (res.get("data") or {}).get("taskid")
+            if tid:
+                return tid
+    s = str(res)
+    for pat in (r'taskid"\s*:\s*"([^"]+)"', r'id is:\s*"([^"]+)"', r"id is:\s*'?([0-9A-Za-z]+)'?"):
+        mm = _re.search(pat, s)
+        if mm:
+            return mm.group(1)
+    raise NasError(f"{label}启动失败：" + s[:200])
+
+
+def tool_search(a: dict) -> dict:
+    """在 NAS 上按名字/扩展名搜索（DSM 索引搜索）。只读。"""
+    p = safe_path(a.get("path", ""))
+    name = (a.get("name") or "").strip() or None
+    ext = (a.get("extension") or "").strip().lstrip(".") or None
+    limit = max(1, min(int(a.get("limit") or 50), 500))
+
+    def start(c):
+        return c.search_start(folder_path=p, recursive=True, pattern=name, extension=ext)
+
+    res = start(nas_client())
+    c = nas_client()
+    try:
+        task_id = _task_id(res, "搜索")
+    except NasError:
+        res = start(nas_client(relogin=True))
+        c = nas_client()
+        task_id = _task_id(res, "搜索")
+
+    def fetch():
+        # 注意：synology_api 的 get_search_list 要求 taskid **带双引号**
+        # （库自己的错误信息是 `Enter a correct taskid, choose one of the following: ['"xxx"']`）
+        r = c.get_search_list(task_id='"{}"'.format(task_id), limit=limit, offset=0,
+                              additional="size,time", filetype="all")
+        if isinstance(r, str):
+            raise NasError("搜索查询失败：" + r[:200])
+        if not (isinstance(r, dict) and r.get("success")):
+            raise NasError("搜索查询失败：" + json.dumps(r, ensure_ascii=False)[:200])
+        d = r.get("data") or {}
+        return {"finished": bool(d.get("finished")), "total": d.get("total"),
+                "items": [{"name": f.get("name"), "path": f.get("path"),
+                           "is_dir": f.get("isdir", False),
+                           "size": (f.get("additional") or {}).get("size", 0)}
+                          for f in (d.get("files") or [])]}
+
+    out = _poll(fetch)
+    return {"query": {"path": p, "name": name, "extension": ext}, "limit": limit, **(out or {})}
+
+
+def tool_folder_size(a: dict) -> dict:
+    """算一个目录的递归大小与条目数（DSM DirSize）。只读。"""
+    p = safe_path(a.get("path") or "")
+    if p == "/":
+        raise ValueError("请指定具体目录（不能对整个根算大小）")
+
+    def start(c):
+        return c.start_dir_size_calc(path=p)
+
+    res = start(nas_client())
+    c = nas_client()
+    try:
+        task_id = _task_id(res, "目录统计")
+    except NasError:
+        res = start(nas_client(relogin=True))
+        c = nas_client()
+        task_id = _task_id(res, "目录统计")
+
+    state = {"restarts": 0}
+    MAX_RESTARTS = 3
+
+    def restart(_why: str) -> dict:
+        nonlocal task_id
+        state["restarts"] += 1
+        task_id = _task_id(start(nas_client()), "目录统计")
+        return {"finished": False}
+
+    def fetch():
+        nonlocal task_id
+        try:
+            r = c.get_dir_status(taskid=task_id)
+        except Exception as e:                           # noqa: BLE001
+            # DSM 会回收 DirSize 任务；被回收时这里**抛异常**（也可能返回字符串）。
+            # 这是 DSM 该 API 的已知不稳，重启新任务重试有限次。
+            if "No such task" in str(e) and state["restarts"] < MAX_RESTARTS:
+                return restart(str(e))
+            if "No such task" in str(e):
+                raise NasError(
+                    "DSM 的「目录统计」任务反复被回收（该 API 已知不稳）。"
+                    "换个目录、或改用 nas_search/nas_list_folder 逐层看，稍后再试。"
+                ) from e
+            raise NasError(f"目录统计查询失败：{type(e).__name__}: {e}") from e
+        if isinstance(r, str) and "No such task" in r and state["restarts"] < MAX_RESTARTS:
+            return restart(r)
+        if isinstance(r, str):
+            raise NasError(r[:200])
+        if not (isinstance(r, dict) and r.get("success")):
+            raise NasError("目录统计查询失败：" + json.dumps(r, ensure_ascii=False)[:200])
+        d = r.get("data") or {}
+        return {"finished": bool(d.get("finished")), "total_size": d.get("total_size"),
+                "file_count": d.get("file_count"), "dir_count": d.get("dir_count")}
+
+    out = _poll(fetch, tries=20, delay=1.0)
+    if out and out.get("total_size") is not None:
+        out["human"] = _human(out["total_size"])
+    return {"path": p, **(out or {})}
+
+
+def tool_read_pdf(a: dict) -> dict:
+    """把 PDF **渲染成图片**返回（模型可直接看图），并附每页抽出的文字。只读。"""
+    import fitz                                    # PyMuPDF
+
+    raw = a.get("path") or ""
+    if not raw:
+        raise ValueError("path 必填")
+    p = safe_path(raw)
+    if posixpath.splitext(p)[1].lower() != ".pdf":
+        raise ValueError("这个工具只处理 .pdf")
+
+    max_pages = max(1, min(int(a.get("max_pages") or 3), 10))
+    max_edge = max(200, min(int(a.get("max_edge") or 1400), 3000))
+    sel = (a.get("pages") or "1").strip()
+
+    data = fetch_bytes(p, max_bytes=64 * 1024 * 1024)
+    try:
+        doc = fitz.open(stream=data, filetype="pdf")
+    except Exception as e:                            # noqa: BLE001
+        raise NasError(f"打不开 PDF：{type(e).__name__}: {e}")
+
+    n = doc.page_count
+    try:
+        if "-" in sel:
+            lo, hi = sel.split("-", 1)
+            idxs = list(range(max(1, int(lo)) - 1, min(n, int(hi))))
+        else:
+            idxs = [max(1, int(sel)) - 1]
+    except Exception:                                 # noqa: BLE001
+        idxs = [0]
+    idxs = [i for i in idxs if 0 <= i < n][:max_pages]
+
+    blocks = [{"type": "text", "text": json.dumps({
+        "path": p, "pages_total": n, "pages_returned": [i + 1 for i in idxs],
+        "note": ("只渲染了这些页；需要其它页用 pages 指定（如 2-4）" if len(idxs) < n else None),
+    }, ensure_ascii=False, indent=2)}]
+
+    for i in idxs:
+        page = doc.load_page(i)
+        zoom = max_edge / max(1.0, max(page.rect.width, page.rect.height))
+        pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=False)
+        png = pix.tobytes("png")
+        blocks.append({"type": "text", "text": f"--- 第 {i + 1} 页（{len(png) // 1024} KiB）---"})
+        blocks.append({"type": "image", "data": base64.b64encode(png).decode(),
+                       "mimeType": "image/png"})
+        txt = (page.get_text() or "").strip()
+        if txt:
+            blocks.append({"type": "text",
+                           "text": "[第 %d 页文字]\n%s" % (i + 1, txt[:4000])})
+    doc.close()
+    return {"_content": blocks}
+
+
 TOOL_IMPL = {
     "nas_health": tool_health,
     "nas_list_folder": tool_list,
     "nas_file_info": tool_info,
+    "nas_search": tool_search,
+    "nas_folder_size": tool_folder_size,
+    "nas_read_pdf": tool_read_pdf,
     "nas_read_image": tool_read_image,
     "nas_read_text": tool_read_text,
 }

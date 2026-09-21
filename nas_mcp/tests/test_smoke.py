@@ -169,5 +169,34 @@ check("任意共享文件夹都放行", S2.safe_path("/产品信息/x") == "/产
 check(".. 逃逸仍被 normpath 吃掉", S2.safe_path("/a/../../etc") == "/etc",
       f"-> {S2.safe_path('/a/../../etc')}（路径已规范化，真正的边界交给 DSM 账号）")
 
+print("\n── 10) 新增三工具（真连 NAS，只读）")
+try:
+    r = S.tool_search({"path": "/产品信息", "extension": "pdf", "limit": 3})
+    check("nas_search 返回结果", (r.get("total") or 0) > 0,
+          f"total={r.get('total')} 例: {(r.get('items') or [{}])[0].get('name')}")
+except Exception as e:                                  # noqa: BLE001
+    check("nas_search", False, f"{type(e).__name__}: {str(e)[:70]}")
+
+try:
+    r = S.tool_folder_size({"path": "/产品信息/KS0001_三角靠枕/设计稿"})
+    check("nas_folder_size 返回大小", r.get("total_size") is not None,
+          f"{r.get('human')} (finished={r.get('finished')})")
+except Exception as e:                                  # noqa: BLE001
+    check("nas_folder_size", False, f"{type(e).__name__}: {str(e)[:70]}")
+
+PDF = "/产品信息/KS0001_三角靠枕/设计稿/24.11.21三角靠枕有扣无扣终版.pdf"
+try:
+    out = S.tool_read_pdf({"path": PDF, "pages": "1"})
+    b = out.get("_content") or []
+    imgs = [x for x in b if x.get("type") == "image"]
+    txts = [x for x in b if x.get("type") == "text"]
+    check("nas_read_pdf 渲染出图片", len(imgs) >= 1, f"{len(imgs)} 张")
+    check("nas_read_pdf 抽出文字", any("产品名称" in t.get("text", "") for t in txts),
+          next((t["text"][:40] for t in txts if "产品名称" in t.get("text", "")), ""))
+except S.NasError as e:
+    print(f"  SKIP  PDF 用例（该文件当前账号不可读）：{str(e)[:70]}")
+except ValueError as e:
+    print(f"  SKIP  PDF 用例：{e}")
+
 print(f"\n结果：{ok} passed, {fail} failed")
 sys.exit(1 if fail else 0)
