@@ -7,6 +7,38 @@ description: docs/research 目录变更历史
 
 # 变更日志
 
+## 2026-09-21
+
+- **新增**: [2026-09-21-nas-mcp-chatgpt-feasibility.md](2026-09-21-nas-mcp-chatgpt-feasibility.md) — **群晖 NAS 接入 ChatGPT 的可行性与部署位置**。起因：FAC / 赛狐 MCP 之后，问「公司群晖 NAS 能不能也用 MCP 接 ChatGPT，部署在哪」。
+  - **结论：能接，但部署在 VPS（`api.vilavi.cn`），不要部署在 NAS 上。** 硬约束是 ChatGPT 由 OpenAI 服务端来连，必须公网可达；而 **NAS 公网只开非标端口 `11024`、标准 443 不通** —— 既接不了 ChatGPT，也不该为接它把 DSM 直接怼上公网。
+  - **定论过程（值得记的教训）**：我在**北京办公室内网**初测 `https://nas.vilavi.cn/` 得 **HTTP 200**，但那是个**假阳性** —— 办公室 OpenWrt dnsmasq 把该域名**劫持到内网 `192.168.100.242`**。改用**两处独立外部主机**（上海 VPS + 美国 VPS）复测：`nas.vilavi.cn:443` **两处都失败**、`:11024` **两处都 200**、对照 `api.vilavi.cn:443` **两处都 200**。与仓库既有记载吻合。**教训：在办公网内测自家公网可达性 = 无效，必须换外部视角。**
+  - **顺带验证**：那次外部测试同时证明 **上海 VPS 能访问 NAS 的 `11024`** → 方案 A 的链路（VPS → NAS）本来是通的，不需要额外打通。
+  - **落地设计（方案 A）**：ChatGPT → `api.vilavi.cn` nginx `/nas/*` → `nas-mcp` 容器（FastMCP）→ `nas.vilavi.cn:11024` DSM FileStation。
+    **只复用现有件，不引第三方**：`NAS_API/synology.py`（认证 + `NAS_ROOT_FOLDER` 范围限制）、`sellfox_shipping/mcp_tools.py` 的 FastMCP 骨架、`sellfox-api-proxy`/`new-api` 那套「Docker + nginx 路径块」模式。**明确不推荐**网上那些第三方群晖 MCP（默认权限面覆盖 Docker/备份/Photos，而我们只要一个共享文件夹）。
+  - **工具设计**：只读侧先上（`available`/`get_file_list`/`get_thumbnail`/`download_file`/`folder_exists`）；写侧默认不暴露；**`delete_folder` 建议永不暴露**（破坏性）。
+  - **安全约束**：① 专用 DSM 账号 + **只读权限**（DSM API **不支持 2FA** → 必须应用专用密码）；② DSM Auto Block 白名单要放行 VPS 出口 IP；③ **证书校验要打开**（`NAS_API` 现用 `cert_verify=False`，那是为局域网设计的，走公网应校验 LE 证书）；④ 范围锁死在 `NAS_ROOT_FOLDER`；⑤ 容器侧设超时与单文件大小上限。
+  - **未决（含一条对赛狐复用的共同问题）**：① **ChatGPT 能否用「自定义标头」鉴权** —— 这个结论**赛狐和 NAS 是同一个**，验一次两处受益；② VPS 出口 IP 到底是 `82.156.238.248` 还是 `8.133.254.66`（加 DSM 白名单前须确认）；③ 是否只给局域网 Agent 用（那样方案 C 最省事，不必上任何公网服务）。
+- **同日修订（用户反馈后深挖，含两处对本文自身的更正）**：
+  - **更正 ①：`sellfox_shipping/mcp_tools.py` 不是「现成的骨架」。** 文件确实在（201 行、2026-07-16 提交），但**从未启用** —— `fastmcp` **不在根 `pyproject.toml`**（只有该模块 Dockerfile 单独装），`main.py:7-17` 用 `try/except ImportError: pass` **静默吞掉**；`AGENT_HANDOFF.md:253` 自述「legacy；根 uv 环境无 fastmcp」。相关测试验证的是**「不装 fastmcp 也能起服务」的 no-op 路径**。→ 只是「可参考形状」，复用它等于从头验证。
+  - **更正 ②：「不推荐第三方群晖 MCP」下得太粗。** 深挖后有**明显更贴合**的方案：**`mrquj/mcp-server-synology`** —— `POST /mcp` **Streamable HTTP** + `Authorization: Bearer`，**默认只绑 `127.0.0.1:3020`**（要求前置反代，与本文设计一致），带**路径白名单（含 symlink 逃逸防护）**、只读启发式、**策略下不可能成功的工具直接从清单隐藏**、`/healthz` 可审计。另有 `cmeans`（权限分层 + 2FA，偏本地 stdio）、`lordraw77`（71 工具，面过宽）、`AnythingMCP`（通用网关，自带 OAuth2/RBAC，但对「一个共享文件夹」过重）。
+  - **新发现 ③：暴露路径有比公网端口更好的选择。** 上海 VPS 上 tailnet 已存在，**办公室 OpenWrt 路由器在网内**（`100.124.94.69`，VPS 能 ping 通），但**路由器未 advertise 办公网段**，故**到不了 NAS**（`192.168.100.242` ping 失败）。`mrquj` 文档针对「家用路由器后的 NAS」明确建议：**别端口转发 DSM，改用私网 overlay**。→ **把 NAS 拉上 tailnet**（NAS 装 Tailscale）即可让 VPS 走私网调 DSM，**DSM 完全不用公网暴露** —— 比现在的 `:11024` 更干净。
+  - **新发现 ④：Tailscale Funnel 已在用**（`https://izuf6cg60rfql8k8qbw87xz.alpines-grouper.ts.net`），当前 `/` → `127.0.0.1:3000`（即 **new-api 已被公网暴露**）。可作为 MCP 的备选前置，但优先用已有 nginx。
+  - **IP 查实 ⑤**：`8.133.254.66` = 上海 VPS 的**真实出口 IP**（在该机 `curl ifconfig.me` 实得；网卡只有 `192.168.0.12` + Tailscale `100.119.28.72`）。`82.156.238.248` **不是**这台的出口 —— 它是赛狐白名单里的另一条目（2026-06-25 入仓），**两者关系仍待确认**。→ 给 DSM 加白名单应加 **`8.133.254.66`**。
+  - **鉴权疑问已解答（⑥）**：ChatGPT 连接器 **两条路线都支持** —— A. 静态令牌（选「访问令牌/API 密钥」→ 发 `Authorization: Bearer`）；B. OAuth 2.1（PKCE + protected-resource metadata + DCR/CIMD）。但 **MCP 授权规范已把 OAuth 定为强制**（有资料称 2026-03-15 起），静态令牌属**过渡**方案，且**可发布的应用**必须 OAuth。
+    **⭐ 关键：我们的 FAC 已用 OAuth 把 ChatGPT 跑通 —— 路线 B 是被验证过的；路线 A 一次没验过。** → 最低成本动作：拿一个支持 Bearer 的最小服务在 ChatGPT 里试一次「访问令牌」连接器，**10 分钟定路线**。这个结论**赛狐与 NAS 共用**。
+  - **推进顺序已据此调整**：① 鉴权最小验证 → ② NAS 拉上 tailnet → ③ 实现路线二选一（先在本地跑 `mrquj` 验连通，再决定是否自建）→ ④ 前置反代 → ⑤ 安全约束。
+- **同日修订二（用户补充办公室架构后，再改一次 —— 其中一条推翻了上一轮的建议）**：
+  - **查实 ①：公网 443 不通的原因是「联通限制」（ISP 层封入向 443），不是配置问题。** 仓库早已记载（`NAS_API/docs/reference/nas-multi-domain-access.md` §网络拓扑：「端口转发 443 → 192.168.1.5:443（LAN 通，**公网不通 — 联通限制**）」）。→ **NAS 永远给不了公网标准 443**，除非走隧道（Cloudflare Tunnel / Tailscale Funnel，不依赖入向端口）。**这条强化了「部署在 VPS」的结论。**
+  - **查实 ②：本开发机在 `192.168.10.9`（新华三网段），DNS 指向 `192.168.10.1`，该 DNS 把 `nas.vilavi.cn` 解析成 `192.168.100.242`** → curl 实连 `192.168.100.242:443` 得 200。**证实「假阳性」的机制是内网 DNS 覆盖**（且仓库记着该网段 DNS 也劫持 myds）。另注：本机 ping 不通任何 NAS 地址但 TCP 通（ICMP 被挡）。
+  - **⚠️ 推翻上一轮建议 ③：不要用「NAS 装 Tailscale」。** NAS 双网口（`eth0` OpenWrt LAN / `eth1` 光猫 LAN），**默认线路是光猫侧**（用户为「可访问率」选的），但**断电重启有一定概率翻到 LAN1**（近期断电 2 次后仍保持 LAN2）。后果：
+    | 路径 | 依赖 NAS 出向默认路由？ | 断电翻转后 |
+    |---|---|---|
+    | 公网 `:11024`（现状） | ❌ 不依赖（入向转发） | ✅ 不受影响 |
+    | NAS 装 Tailscale | ✅ 依赖 | ⚠️ 可能断 |
+    | OpenWrt 定向转发 | ❌ 不依赖 | ✅ 不受影响 |
+    → **T1（NAS 装 Tailscale）引入的正是当初选 LAN2 想规避的风险**，已从推荐里移除。
+  - **新推荐：T3 —— 在 OpenWrt 上做定向转发**（只把 tailnet 侧一个端口 DNAT 到 `192.168.100.242:5001`）：只暴露 DSM 端口、不暴露整个网段、且不依赖 NAS 出向路由。**比 `mrquj` 文档给的泛化建议更贴合你们的双网卡现实。** 若嫌麻烦，**维持 T4（现状公网 `:11024`）其实够用且稳**，用「只读账号 + 只放行 VPS 出口 IP」收敛即可。
+  - 另记用户提到的已知副作用：LAN1/LAN2 **翻墙能力不一致**，群晖自动备份 Google Sheet 到 NAS 的功能受默认口影响（用户表示可后议）。
 ## 2026-09-20
 
 - **新增**: [2026-09-20-sellfox-official-mcp-feasibility.md](2026-09-20-sellfox-official-mcp-feasibility.md) — **赛狐官方 MCP 可行性**。FAC（ERPNext）接通后，接着问「赛狐能不能也接 MCP」。
