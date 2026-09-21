@@ -1,1 +1,3 @@
 synology-api>=0.9.0
+pillow>=12.2.0
+requests>=2.31.0
