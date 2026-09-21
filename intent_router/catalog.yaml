@@ -1,0 +1,273 @@
+# 运行时目录真源：中文意图 → 本仓库模块。
+#
+# 与 AGENTS.md 的「模块索引」表一一对应，tests/test_catalog.py 会解析 AGENTS.md
+# 并断言两边集合相等 —— 任一边增删模块而另一边没跟上，测试就会红。
+#
+# 为什么是人工策展而不是自动派生：.agents/skills/ 的目录数比 AGENTS.md 模块索引表多十几个
+# （14 个多出来、8 个对不上）；触发信息散在三种形状（triggers: 列表 / trigger: 单值 /
+# 内嵌在 description 里 / 5 个完全没有）；目录还是多对一（sellfox-api 与
+# sellfox-combo-create 同指 SELLFOX_API/）。没有任何单一自动源成立。
+#
+# 字段说明：
+#   skill       模块名，与 AGENTS.md 表第一列完全一致（保留连字符）—— 也是送给模型的选项名
+#   dir         仓库内目录；external 条目为 null
+#   summary     一句话（取自 AGENTS.md 表第三列）
+#   coverage    覆盖什么 —— 送给模型
+#   exclusions  不用于什么 —— 这是最难的部分，兄弟模块全靠它分开
+#   examples    中文口语样例（多取自 SKILL.md 的触发词）
+#   run         可选；只有已核实脚本名的条目才填（不臆造命令）
+#   web_task    可选；必须是 web_automation/capabilities.yaml 里的能力 id
+#   external    可选；true 表示不在本仓库（外部 skill）
+#
+# 注意：none 选项不在这里 —— 它由 typesafe.build_payload() 硬编码追加在最后，
+# 防止重新生成 catalog 时被漏掉。
+
+version: 1
+model: jev-latest
+
+options:
+  - skill: stock-init
+    dir: stock_init/
+    summary: 通途库存 + EN BOM → 赛狐库存初始值
+    coverage: 赛狐库存初始值导入：从通途多仓库存 + EN BOM 成本生成赛狐库存导入文件（数量 + 成本）
+    exclusions: 不用于采购成本导入(item-cost)、不用于商品重尺(item-weight)、不用于把已有库存清零(other-outbound)
+    examples: [导入库存初始值, 库存导入, 把通途库存初始化到赛狐, stock_init, 库存初始化, 初始库存, 仓库库存导入, 共享库存]
+    run: cd stock_init/ && uv run python build_saihu_stock_init.py
+
+  - skill: item-cost
+    dir: item_cost_sx/
+    summary: EN BOM 成本 → 赛狐采购成本
+    coverage: 赛狐采购成本导入：从 EN BOM 成本列表计算绍兴发货成本 → 生成赛狐采购成本导入文件
+    exclusions: 不用于库存初始值导入(stock-init)、不用于商品重尺(item-weight)、不用于海外仓备货单的成本拆分(warehouse-restock)
+    examples: [采购成本, 采购成本导入, BOM成本, 绍兴发货成本, 成本导入, 采购单价, 成本借用, item_cost_sx]
+    run: cd item_cost_sx/ && uv run python bom_cost_to_saihu_item_cost.py
+
+  - skill: item-weight
+    dir: item_weight_size/
+    summary: 重量模板匹配 → 赛狐商品重尺
+    coverage: 赛狐商品重尺导入：从重量模板匹配赛狐 SKU，填入国外发货包装尺寸重量
+    exclusions: 不用于采购成本(item-cost)、不用于库存初始值(stock-init)
+    examples: [商品重尺, 重量, 尺寸, 包装长宽高, 装箱量, 单箱重量, 物流运费, weight_size]
+
+  - skill: category
+    dir: category/
+    summary: EN 物料属性 + 分类树 → 4 级分类导入
+    coverage: 赛狐商品 4 级分类导入：交叉校验 EN 物料属性 + 赛狐分类导出 → 生成分类导入 xlsx
+    exclusions: 不用于多属性商品导入(multi-attr)、不用于图片上传(en-image-upload)
+    examples: [商品分类, 四级分类, 分类导入, 分类树, 款式分类, 类目, category]
+    run: cd category/ && uv run python build_saihu_category_import.py
+
+  - skill: multi-attr
+    dir: multi_attr_saihu/
+    summary: ERP 纵向物料 → 赛狐多属性 + 通途配对
+    coverage: 赛狐多属性商品导入 + 通途配对：ERPNext 纵向物料导出 → 赛狐扁平多属性格式 → 生成通途配对导入文件
+    exclusions: 不用于 4 级分类(category)
+    examples: [多属性, multi_attr, SPU, SKU生成, 商品导入, 通途配对, 物料导出, 属性炸开]
+
+  - skill: warehouse-restock
+    dir: warehouse_restock/
+    summary: EN BOM → 三成本拆分 → 海外仓备货单
+    coverage: 赛狐海外仓备货单导入：从 EN BOM 成本列表拆出绍兴发货成本/头程运费/国外加工成本，结合通途仓库分布生成备货单导入 xlsx
+    exclusions: 不用于期初库存导入(stock-init)、不用于采购成本导入(item-cost)
+    examples: [海外仓备货单, 备货单, 采购入库, 海外仓入库, 成本拆分, stock_plan]
+    web_task: sellfox.restock.import
+
+  - skill: other-outbound
+    dir: other_outbound/
+    summary: 赛狐库存明细 → 其他出库清零
+    coverage: 赛狐其他出库导入：从赛狐库存明细导出生成其他出库单，清零库存
+    exclusions: 不用于海外仓备货单(warehouse-restock)、不用于期初库存(stock-init)
+    examples: [其他出库, 清零库存, 出库单, 库存清零, 库存导出, other_outbound]
+    web_task: sellfox.other-outbound.import
+
+  - skill: sellfox-api
+    dir: SELLFOX_API/
+    summary: 赛狐 OpenAPI 文档镜像（443 端点）+ 连通性测试
+    coverage: 赛狐 OpenAPI 访问：公开 OpenAPI（钉钉登录代理 / VPS 白名单直连）、443 端点文档、店铺列表、广告报告；也含无文档的私有 internal API（成本补录单、海外仓备货单改头程、库存调整单）
+    exclusions: 不用于赛狐 Excel 导入（category/item-cost/item-weight/stock-init 等）；不用于尾程打单(sellfox-shipping)
+    examples: [赛狐API, sellfox api, 赛狐接口, 赛狐开放平台, 私有接口, 内部接口, 赛狐代理, 赛狐广告报告, 赛狐店铺, 赛狐Key]
+
+  - skill: sellfox-combo-create
+    dir: SELLFOX_API/
+    summary: EN 套件 Product Bundle ↔ 赛狐组合商品：sync-combos 对账/创建/回读断言
+    coverage: EN 套件 Product Bundle 与赛狐组合商品的对账、创建、回读断言
+    exclusions: 不用于皮壳共享库存代理(sellfox-cover-inventory)
+    examples: [组合商品, 套件, Product Bundle, sync-combos, combo]
+
+  - skill: sellfox-cover-inventory
+    dir: sellfox_cover_inventory/
+    summary: 三角类皮壳共享库存代理：KS 库存池 + PK# 组合 + cover_combo_ops 创建/对账
+    coverage: 三角类皮壳 Listing 的共享库存代理：KS 库存池 + PK# 组合 + cover_combo_ops 创建与对账
+    exclusions: 不把 PK#/HM1510 建成赛狐有库存普通商品；不用于一般组合商品(sellfox-combo-create)
+    examples: [皮壳, 共享库存, KS库存池, 皮壳库存, cover_combo, 三角皮壳]
+
+  - skill: sellfox-shipping
+    dir: sellfox_shipping/
+    summary: 赛狐尾程打单（订单获取→承运人标签→追踪回写）三界面架构
+    coverage: 赛狐尾程打单：从赛狐获取订单 → 匹配尾程物流商 → 生成运单标签 → 回写追踪号
+    exclusions: 不用于承运商轨迹批量查询与异常报表(fedex-track/gls-track/parcel-track)
+    examples: [尾程, 打单, 运单, 标签, 追踪号, 尾程物流商, 出运单标签, 回写追踪号]
+
+  - skill: vite-api
+    dir: vite-api/
+    summary: VITE 多承运商打单 API 文档（测试环境默认）
+    coverage: VITE 多承运商打单 API 文档与调用
+    exclusions: 不用于批量轨迹查询(fedex-track/gls-track)
+    examples: [VITE, vite api, 多承运商打单]
+
+  - skill: fedex-track
+    dir: fedex_track/
+    summary: FedEx 官方 Track API 批量查询 + 运营异常报表
+    coverage: FedEx 官方 Track API 批量查询与运营异常报表（多 Sheet / Amazon 营业日口径；复用一个跟踪号多票）
+    exclusions: 不用于 GLS 波兰(gls-track)；不用于打单(sellfox-shipping)
+    examples: [FedEx, 联邦快递, fedex track, FedEx 轨迹查询, FedEx 异常报表]
+
+  - skill: gls-track
+    dir: gls_track/
+    summary: GLS 波兰自发货批量跟踪（公开无鉴权 REST，免开发者账号）
+    coverage: GLS 波兰自发货批量跟踪（公开无鉴权 REST，rstt029/rstt028，免开发者账号）+ FedEx 风格异常表；loader 拆一格多号；monthly 一步整月
+    exclusions: 不用于 FedEx(fedex-track)；统一多承运商入口是 parcel-track
+    examples: [GLS, 波兰, 波兰自发货, gls 跟踪, GLS 轨迹]
+
+  - skill: parcel-track
+    dir: parcel_track/
+    summary: 通途混合订单分流 UPS/FedEx/GLS + 共享迟发/承运延误/卡件运营表
+    coverage: 通途混合订单分流到 UPS/FedEx/GLS + 共享的迟发/承运延误/卡件运营表（处理 3 营业日；GLS 波兰历）
+    exclusions: 单一承运商专用能力走 fedex-track / gls-track / ups_track；不用于打单(sellfox-shipping)
+    examples: [尾程异常, 迟发, 承运延误, 卡件, 混合订单分流, 运营表, parcel_track, 尾程异常统计]
+
+  - skill: yiglobal-api
+    dir: yiglobal-api/
+    summary: 蜴国际打单 API 文档
+    coverage: 蜴国际（YIGlobal）打单 API 文档与调用
+    exclusions: 不用于 VITE(vite-api)
+    examples: [蜴国际, YIGlobal, yiglobal]
+
+  - skill: en-image-upload
+    dir: EN_API/
+    summary: 图片上传（CLI + Web UI + 物料组主图）
+    coverage: ERPNext 图片上传：赛狐图片链接 Excel → 更新物料组主图；本地图片批量上传；Web 可视化拖拽上传 + 排序 + 压缩
+    exclusions: 不用于商品分类(category)、采购成本(item-cost)、商品重尺(item-weight)、库存(stock-init)、多属性(multi-attr)
+    examples: [图片链接, 商品图片, 上传图片, 物料图片, 物料组主图, 图片上传, 产品图片, 拖拽上传, 图片排序, 图片URL]
+
+  - skill: nas-itemgroup-folders
+    dir: nas_itemgroup_folders/
+    summary: NAS-ERPNext 物料组文件夹对账 + 叶子组 (LGKS) 管理
+    coverage: NAS 与 ERPNext 物料组文件夹对账，以及叶子组 (LGKS) 管理
+    exclusions: 不用于群晖访问/QC 选路/OpenWrt 反代(nas-access)
+    examples: [物料组文件夹, 物料组对账, 叶子组, LGKS, itemgroup 文件夹]
+
+  - skill: nas-access
+    dir: NAS_API/
+    summary: 群晖多域名访问、QC 选路、OpenWrt ACME+反代、DSM 第二张证
+    coverage: 群晖多域名访问、QC 选路、OpenWrt ACME + 反代、DSM 第二张证书
+    exclusions: 不用于物料组文件夹对账(nas-itemgroup-folders)
+    examples: [群晖, NAS 访问, QC 选路, OpenWrt, ACME, 反代, DSM 证书]
+
+  - skill: us-openai-api-proxy
+    dir: us_openai_api_proxy/
+    summary: US Vultr Tailscale + CLIProxyAPI → ChatGPT API 共享
+    coverage: US Vultr + Tailscale + CLIProxyAPI 搭建 ChatGPT API 共享出口
+    exclusions: 不用于 new-api 部署(new-api-deployment)
+    examples: [ChatGPT API 共享, Vultr, Tailscale, CLIProxyAPI, us proxy]
+
+  - skill: new-api-deployment
+    dir: new-api-deployment/
+    summary: new-api 部署（上海阿里云）+ 订阅/配额管理
+    coverage: new-api 部署（上海阿里云）以及订阅/配额管理
+    exclusions: 不用于钉钉 OAuth→OIDC 桥接(new-api-dingtalk-oidc)
+    examples: [new-api, new-api 部署, 订阅, 配额, 阿里云部署]
+
+  - skill: new-api-dingtalk-oidc
+    dir: new-api-dingtalk-oidc/
+    summary: 钉钉 OAuth → OIDC 桥接代理（FastAPI）
+    coverage: 钉钉 OAuth 到 OIDC 的桥接代理（FastAPI）
+    exclusions: 不用于钉钉机器人发消息(dingtalk-robot)；不用于 new-api 部署本身
+    examples: [钉钉登录, 钉钉 OAuth, OIDC, 桥接代理, new-api 登录]
+
+  - skill: dam-prototype
+    dir: dam-prototype/
+    summary: DAM 数字资产管理原型
+    coverage: DAM（数字资产管理）原型开发
+    exclusions: 不用于 ERPNext 官方功能或其它业务模块
+    examples: [DAM, 数字资产管理, 素材库原型]
+
+  - skill: erpnext
+    dir: erpnext/
+    summary: 工单排查 (setup→fetch→report 流水线)
+    coverage: ERPNext 生产工单排查流水线（setup → fetch → report）
+    exclusions: 按触发词自动加载的工单排查 skill 是 erpnext-wo-audit
+    examples: [ERPNext 工单, 工单排查流水线, 生产工单, work order]
+
+  - skill: tongtool-order-cost
+    dir: tongtool_order_cost/
+    summary: 通途订单特殊规则 1.7.0 本地引擎 + Google Sheet SKU 改名
+    coverage: 通途订单特殊规则 1.7.0 本地审计引擎 + Google Sheet 订单 SKU 改名替换 + goodsQuery 校验
+    exclusions: 不用于赛狐打单(sellfox-shipping)、不用于 ERPNext 工单排查(erpnext)
+    examples: [特殊规则, 订单改销售额成本, Jeck特殊规则, 1.7.0, 通途订单成本, Google Sheet SKU 替换, FBA 尾程, 账期差异]
+
+  - skill: erpnext-wo-audit
+    dir: .agents/skills/erpnext-wo-audit/
+    summary: 工单排查 Skill，按触发词自动加载
+    coverage: ERPNext 生产工单数据排查（skill，按触发词自动加载）
+    exclusions: 不用于通途订单成本规则(tongtool-order-cost)
+    examples: [工单排查, 生产工单排查, 工单数据有问题]
+
+  - skill: missing-products
+    dir: .agents/skills/missing-products/
+    summary: 通途有库存 SKU → EN 产品客户码 → 赛狐产品 SKU 三方主线补齐/审计
+    coverage: 通途有库存 SKU 的 EN/ERPNext/赛狐三方一致性审计、客户物料号补登、赛狐多属性 SKU 补齐；皮壳变体与成品缺皮壳的一键创建配套物料
+    exclusions: 不用于只算采购成本(item-cost)、不用于商品重尺(item-weight)；不把 PK#/HM1510 建成赛狐有库存普通商品
+    examples: [缺失商品, missing_products, 通途有库存, 三方一致性, 赛狐缺SKU, EN赛狐核对, 皮壳变体, 成品缺皮壳, 配套物料, 客户物料号]
+
+  - skill: platform-account-reconciliation
+    dir: platform_account_reconciliation/
+    summary: OSTKUS/Wayfair 账期费用级对账 + EN Tongtool Order 匹配
+    coverage: 平台账期对账（Overstock/OSTKUS，未来 Wayfair/WFUS）：解析 Payment Summary + Detail，与 EN 生产系统 Tongtool Order 做订单/费用级核对，识别拆单、重复主单与跨期退单
+    exclusions: 不用于库存初始值/采购成本/商品重尺/图片上传；Pottery Barn 对账走 pb-reconciliation
+    examples: [账期对账, OSTKUS, OSTK, Overstock账期, WFUS, Wayfair账期, Payment Summary, Tongtool Order, 平台费, 营销扣点]
+
+  - skill: channel-account-sync
+    dir: channel_account_sync/
+    summary: Google 表渠道账号 → EN Channel Account（人变才加行，Amazon 按国家站）
+    coverage: Google 表渠道账号同步到 EN Channel Account（人员变动才加行，Amazon 按国家站）
+    exclusions: 不用于平台账期对账(platform-account-reconciliation)
+    examples: [渠道账号, Channel Account, 渠道账号同步, Google 表账号]
+
+  - skill: web-automation
+    dir: .agents/skills/web-automation/
+    summary: 网页自动化能力舱（通途/赛狐浏览器 + 通用 Playwright），子项目在 web_automation/
+    coverage: 网页自动化能力舱：通途/赛狐浏览器任务 + 通用 Playwright；含 capabilities.yaml 能力矩阵与 dispatch.py 状态机
+    exclusions: 本分类器不代替 dispatch.py —— 任何通途/赛狐/浏览器任务必须先跑 dispatch.py --check，由它给出 READY/NEED_* 状态
+    examples: [网页自动化, 浏览器任务, Playwright, 通途自动化, 赛狐自动化, OCR, 浏览器导出库存]
+
+  - skill: windows-agent-shell
+    dir: .agents/skills/windows-agent-shell/
+    summary: Windows Agent shell：优先 pwsh、禁 bash/&&(5.1)、UTF-8 无 BOM
+    coverage: Windows 上 Agent 执行 shell 的约定：优先 pwsh、禁 bash 语法与 &&、读 UTF-8 中文、写 UTF-8 无 BOM
+    exclusions: 不用于 Mac/Linux
+    examples: [PowerShell, pwsh, ParserError, GBK, cp936, 中文乱码, 编码, 装 PowerShell 7, WindowsApps, Store 版]
+
+  - skill: intent-router
+    dir: intent_router/
+    summary: 中文意图 → 本仓库模块路由（TypeSafe Jev + 置信度闸门；只分类不执行）
+    coverage: 判断一句中文需求属于本仓库 30 多个业务模块中的哪一个，输出模块名 + 目录 + 置信度；置信度不足或都不匹配时明确回「无法判定，需人工/澄清」
+    exclusions: 只做分类，不执行任何业务动作；通途/赛狐/浏览器任务仍必须走 web_automation/scripts/dispatch.py
+    examples: [该用哪个模块, 这是哪个 skill 的活, 帮我找模块, 意图分类, 路由到哪个模块, intent router, TypeSafe, Jev]
+    run: uv run python -m intent_router.cli route "<中文请求>"
+
+  - skill: frappe-core-api
+    dir: null
+    external: true
+    summary: ERPNext REST API 开发（外部 skill）
+    coverage: 构建 ERPNext/Frappe API 集成（v14/v15/v16）：REST/RPC API、认证（token/OAuth2/会话）、端点设计、webhook、限流
+    exclusions: 不用于操作本仓库的具体业务模块
+    examples: [Frappe API, ERPNext 接口, 怎么连 ERPNext, REST endpoint, webhook, token 认证, frappe.call]
+
+  - skill: frappe-errors-api
+    dir: null
+    external: true
+    summary: ERPNext API 错误处理（外部 skill）
+    coverage: 排查 Frappe/ERPNext API 错误：401/403/404/417/429/500、CSRF、CORS、文件上传失败、webhook 投递失败
+    exclusions: 不用于正常集成开发(frappe-core-api)
+    examples: [API 报错, "401", 403 forbidden, CORS 报错, token 过期, 端点找不到, webhook 没收到, 限流]
