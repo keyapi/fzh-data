@@ -80,6 +80,12 @@ git worktree add <path> -b <branch-name>
 **worktree 里不要跑 `setup.ps1`。** `~/.claude/skills/*` 是**全机一份**的链接，必须指向**主仓库**，这样每个 worktree 里 Claude 读到的都是同一份（已合并）skill。在 worktree 里跑会把链接指到那个临时 worktree；`New-SafeJunction` 对已存在路径 `[SKIP]`，**事后在主仓库再跑也修不回来**，只能手工删链接重建。
 **skill 链接只需在主仓库根目录跑一次**；`git pull` 拉到新 skill 后再跑一次即可。
 
+**存量 worktree 怎么修**（symlink 重构之前建的那些，`CLAUDE.md` 还是 1 行 stub）：原地重新检出这两个条目 —— 只碰它们，不动任何其他文件，改完 `git status` 干净。
+
+```bash
+git -C <worktree-path> checkout -- CLAUDE.md .claude/skills
+```
+
 ---
 
 ## 开发流程

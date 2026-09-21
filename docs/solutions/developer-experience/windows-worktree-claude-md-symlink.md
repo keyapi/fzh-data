@@ -84,6 +84,16 @@ git worktree list
 ls -la <path>/CLAUDE.md          # lrwxrwxrwx = 真 symlink；-rw-r--r-- 9 bytes = stub
 ```
 
+### 批量修存量 worktree
+
+设 `core.symlinks=true` 之后，仍是 stub 的 worktree 会立刻在 `git status` 里显示 **`T CLAUDE.md` + `T .claude/skills`**（typechange：git 期望 symlink，实际是普通文件）。原地重新检出这两个条目即可，**只碰它们、不动任何其他文件**，改完 `git status` 干净：
+
+```bash
+git -C <worktree-path> checkout -- CLAUDE.md .claude/skills
+```
+
+批量扫时**务必先按工作区内容筛选**，只处理"除这两行 typechange 外别无改动"的 worktree；带在制品的（有些上千个文件）一律跳过 —— 那些是别的 Agent 正在干的活。2026-09-21 实测：134 个 worktree 里 88 个属"纯 typechange"，全量扫完 0 失败、`status` 归零，44 个带在制品的一个未动。
+
 ## Related
 
 - [`CONTRIBUTING.md` 的「Git Worktree 创建（Windows 特别说明）」](../../../CONTRIBUTING.md) — 本节结论已回写
