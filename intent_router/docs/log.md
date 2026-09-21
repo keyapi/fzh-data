@@ -38,3 +38,22 @@ title: intent_router 变更日志
   不能沿用旧结论）—— 仍 10/10，`confidence` 0.97–1.00、`ambiguity` 0.86–0.95，
   两条结论不变。**注**：`confidence` 早先在本模块自己的 33 项目录上确为「恒 1.00」，
   加到 35 项后变成 0.97–1.00 —— 措辞已按最新实测改准，但「阈值 0.5 永不触发」的结论不变。
+- **补齐目录（同日后续）**: catalog 35 → 56 项 —— 补入 11 个此前漏掉的 skill 目录
+  （dingtalk-robot / item-group-translation / tongtool-api / tongtool-warehouse-sync /
+  erpnext-item-create / ecommerce-image-workflow / okf / design-md / design-review /
+  frontend-design / workbuddy-config）与 10 个此前漏掉的业务模块目录
+  （advertise / ai-access-poc / amazon-pairing / cost-adjust / google-drive-permissions /
+  nas-product-visuals / pb-reconciliation / sellfox-api-proxy / sps-api / ups-track）。
+  **模块表因此从"策展子集"变成接近全量**（原先 18 个顶层模块目录里有 16 个不在表内）。
+  标注样例同步扩到 31 条（每个新模块一条），56 选项下重测 **33/33 全中、无回归** ——
+  这是对"选项变多会互相干扰"（原计划风险 #3）的正面回答。
+  **数字更新**：`confidence` 0.98–1.00、`ambiguity` 0.66–0.98、约 9815 输入 token ≈ $0.00041/次。
+  **未纳入并说明理由**：`test_upload`（0 个 py，已废弃）、`EN_shopify`（无任何文档）、
+  `SPS_Selenium_Local`（仅 README、零引用）、`pdf_to_md`（有文档但 3 个月未动）；
+  另有 3 个是**假缺口**（`missing_products` / `tongtool_api` / `web_automation` 已被表中同名行代表，
+  只是目录名用了 `_` 而表里用 `-`）。**`dingtalk` 也刻意未单独建行** ——
+  `dingtalk/dingtalk_robot/` 就是 `dingtalk-robot` skill 的实现，单列会造出两个都像
+  「发钉钉消息」的选项，正是最容易让模型选错的形态。
+- **计数改为不带数字**: README / SKILL.md / catalog 里原先写死的"33 个模块""30 多个模块"
+  随每次补录立刻过期；按 `docs/solutions/log.md` 的教训改成不带数字的表述，只在这一处
+  保留带日期的实测记录。
