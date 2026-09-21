@@ -33,14 +33,21 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
 
-# 叠加页版式（notebook 原值，单位：mm 或 points）
+# 叠加页版式 —— 与 notebook cell 24 的变量一一对应，避免翻译时出错。
+# ⚠️ reportlab 的单位是 point：`36 * mm` 已经算成 point，所以 notebook 里
+# `x5 + 30`、`y5 + 140` 加的是 **30/140 point**，不是 30/140 mm。
+# （曾把 TS_1 写成 (66mm, 215mm)，把时间戳画到了打包单区域，标签页反而没有时间戳。）
 FONT_SIZE = 14
 OVERLAY_FONT = "Helvetica-Bold"
-ARROW_1, ARROW_2 = (195 * mm, 165 * mm), (195 * mm, 280 * mm)
-ARROW_LEFT = (36 * mm, 75 * mm)
-TS_MM, TS_PT = (66 * mm, 215 * mm), (420, 815)
-SKU_POS_1, SKU_POS_2 = (205 * mm, 190 * mm), (170 * mm, 50 * mm)
-SCISSOR_1, SCISSOR_2 = (20, 815), (20, 440)
+X1, Y1 = 205 * mm, 190 * mm   # SKUxQTY 标注 1
+X2, Y2 = 170 * mm, 50 * mm    # SKUxQTY 标注 2
+X3, Y3 = 195 * mm, 165 * mm   # 箭头 '---→'
+X4, Y4 = X3, 280 * mm         # 箭头 '---→'
+X5, Y5 = 36 * mm, 75 * mm     # 箭头 '←---'
+X6, Y6 = 20, 815              # 剪刀 '✂' + 时间戳（point）
+X7, Y7 = 20, 440              # 剪刀 '✂'（point）
+TS_1 = (X5 + 30, Y5 + 140)    # 落在**标签**页
+TS_2 = (X6 + 400, Y6)         # 落在**打包单**页
 
 # 裁切框（pypdf 左下角原点）
 SLIP_LL, SLIP_UR = (10, 435), (590, 830)
@@ -60,17 +67,17 @@ def make_sku_overlay_pdf(skus, out_path, timestamp, font_size=FONT_SIZE):
     pdf = canvas.Canvas(str(out_path), pagesize=A4)
     pdf.setFont(OVERLAY_FONT, font_size)
     for sku in skus:
-        pdf.drawString(*ARROW_1, "---→")
-        pdf.drawString(*ARROW_2, "---→")
-        pdf.drawString(*ARROW_LEFT, "←---")
-        pdf.drawString(TS_MM[0] + 30, TS_MM[1] + 140, timestamp)
-        pdf.drawString(TS_PT[0] + 400, TS_PT[1], timestamp)
+        pdf.drawString(X3, Y3, "---→")
+        pdf.drawString(X4, Y4, "---→")
+        pdf.drawString(X5, Y5, "←---")
+        pdf.drawString(*TS_1, timestamp)
+        pdf.drawString(*TS_2, timestamp)
 
         pdf.rotate(90)
-        pdf.drawString(SKU_POS_1[1], -SKU_POS_1[0], sku)
-        pdf.drawString(SKU_POS_2[1], -SKU_POS_2[0], sku)
-        pdf.drawString(SCISSOR_1[1], -SCISSOR_1[0], "✂")
-        pdf.drawString(SCISSOR_2[1], -SCISSOR_2[0], "✂")
+        pdf.drawString(Y1, -X1, sku)
+        pdf.drawString(Y2, -X2, sku)
+        pdf.drawString(Y6, -X6, "✂")
+        pdf.drawString(Y7, -X7, "✂")
         pdf.rotate(-90)
 
         pdf.showPage()
