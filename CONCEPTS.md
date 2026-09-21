@@ -70,7 +70,7 @@ TypeSafe 的决策模型系列：**不生成文本**，输入 `state` + 结构�
 System One 的旗舰模型（请求用别名 `jev-latest`，实测解析到 `jev-1.13.0`）。端点 `POST https://api.typesafe.ai/v1/systemone` + Bearer `TYPESAFE_API_KEY`（存父仓库 `.env`）。**只有输入 token 计费**，输出免费。契约与实测见 `intent_router/docs/reference/typesafe-contract.md`。
 
 ### confidence 是分布集中度，不是正确率
-`choice` / `score` 的答案里 `confidence` 由**概率分布的集中程度**算出（越集中越高），所以它只反映「模型是否犹豫」，**不反映「模型是否答对」**。实测：在本仓库 35 路目录上 0.97–1.00、几近饱和，连模型选 `none` 时也有 0.99。**把高 confidence 读成"一定对"是错的** —— 这正是本仓库 `--min-confidence` 闸门实际不触发的原因。
+`choice` / `score` 的答案里 `confidence` 由**概率分布的集中程度**算出（越集中越高），所以它只反映「模型是否犹豫」，**不反映「模型是否答对」**。实测：本仓库 56 路目录上 confidence 仍在 0.98–1.00，几近饱和。**把高 confidence 读成"一定对"是错的** —— 这正是本仓库 `--min-confidence` 闸门实际不触发的原因。
 
 ### 置信度闸门（confidence gate）
 用阈值决定「敢不敢自动执行」：低于阈值就不猜，转人工或要求澄清（官方 `patterns/intent-routing.md` 的做法）。`intent_router` 的闸门语义锁定为 `--min-confidence`（默认 0.5）+ `none` 选项；但**真正兜底的是 `none`，不是阈值**。

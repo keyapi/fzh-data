@@ -8,6 +8,7 @@ tags: [solutions, log]
 # 变更日志
 
 ## 2026-09-21
+- **更新**（同日后续）: `intent_router/catalog.yaml` 从 35 补到 **56** 项 —— 补入 11 个此前漏掉的 skill 目录 + 10 个此前漏掉的**业务模块目录**（`advertise` / `amazon_pairing` / `ups_track` / `pb_reconciliation` / `cost_adjust` / `sellfox-api-proxy` / `ai_access_poc` / `google_drive_permissions` / `nas_product_visuals` / `sps_api`），`AGENTS.md` 模块索引表同步（35 → 56 行）。**关键认知：该表原是「策展子集」而非完整清单** —— 18 个顶层模块目录里 16 个不在表内，所以在此之前 `advertise`/`pb_reconciliation`/`ups_track` 这类模块**根本路由不到**。纳入规则（可审计）：有 `AGENT_HANDOFF.md` 或 `docs/`、有代码、且 2026-08-01 后仍有提交（或引用 ≥5 次）；据此排除 `test_upload`（0 py 已废弃）、`EN_shopify`（无文档）、`SPS_Selenium_Local`（仅 README 零引用）、`pdf_to_md`（文档齐但 3 个月未动）。**`dingtalk` 刻意不单列** —— 它就是 `dingtalk-robot` skill 的实现，单列会造出两个都像「发钉钉消息」的选项。**数字更新**：标注样例扩到 31 条（每新模块一条），56 选项下 **33/33 全中**，`confidence` 0.98–1.00、`ambiguity` 0.66–0.98、约 9815 输入 token ≈ $0.00041/次 —— 正面回答了原计划风险 #3「选项变多会互相干扰」。
 
 - **新增**: [workflow-issues/mcp-to-chatgpt-bringup-lessons.md](workflow-issues/mcp-to-chatgpt-bringup-lessons.md) — 把 FAC / 赛狐 / NAS 三个 MCP 接上 ChatGPT 的**方法总结与四个教训**。两个是方法问题不是技术难题：
   ① **单次探针不可信** —— 在办公网内测 `nas.vilavi.cn` 得 200，实为**内网 DNS 覆盖**，换两处外部主机复测才发现 443 公网不通；
