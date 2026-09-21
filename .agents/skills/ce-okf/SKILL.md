@@ -217,3 +217,10 @@ powershell -ExecutionPolicy Bypass -File setup.ps1
 ```
 
 （`setup.ps1` 把 `.agents/skills/*` 链进 `~/.claude/skills/`；Codex 用户不需要这步。）
+
+> ⚠️ **跑完立刻 `git status` 检查**。Windows 上若没有 Developer Mode / 管理员权限，
+> `setup.ps1` 建 symlink 会失败并**走 `Copy-Item` 兜底**，把 `CLAUDE.md`
+> 从「一行 `AGENTS.md` 的符号链接」**替换成 AGENTS.md 的整份副本**（215 行），
+> 工作区因此变脏；不慎提交会把重复内容并进仓库。
+> 发现后还原：`git restore CLAUDE.md`（`.agents/skills` 那侧的 junction 不受影响）。
+> 软链是否成功只看 `~/.claude/skills/ce-okf` 存不存在，与这次脏变更无关。

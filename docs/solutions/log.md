@@ -12,6 +12,7 @@ tags: [solutions, log]
 - **新增**: `.agents/skills/ce-okf/SKILL.md` — 收尾一条龙：模式判定（新增/增量）→ `ce-compound` 出正文 → frontmatter 归一化 → 11 项 OKF 级联登记 → `update_index.py` 索引联动 → 凭证扫描 → 提交 + PR。参数 `/ce-okf`（默认到 PR）、`refresh`（增量）、`no-pr`（只本地提交）。
 - **更新**: `AGENTS.md` 模块索引表 +1 行（`ce-okf`）。
 - **修正**: `scripts/update_index.py --check` **不能当硬门禁** —— 逐字节比对但文件头 `generated:` 是分钟级时间戳，只在"刚生成完的同一分钟内"通过，平时误报 `STALE`；索引是否同步要看内容不看退出码。且索引日期列因取 git commit 日期而**注定滞后一个 commit**（先生成后提交时显示上次提交日期），仓库现役习惯即和文档同 commit，无需补 commit。
+- **坑**: `setup.ps1` 在 Windows 无 Developer Mode / 管理员权限时建 symlink 失败并走 `Copy-Item` 兜底，把 `CLAUDE.md` 从「一行 `AGENTS.md` 的符号链接」**替换成 AGENTS.md 整份副本**（215 行），工作区变脏（本次实施中了一次，已 `git restore CLAUDE.md` 还原）。已写进 `ce-okf` skill 的安装节。
 
 ## 2026-09-20
 

@@ -72,6 +72,8 @@ tags: [skill, ce-compound, okf, workflow, documentation, handoff]
 skill 本体：`.agents/skills/ce-okf/SKILL.md`。装的机器要跑一次
 `powershell -ExecutionPolicy Bypass -File setup.ps1` 才会被 Claude Code / Claude Desktop 看到（`setup.ps1` 把 `.agents/skills/*` 链进 `~/.claude/skills/`）。
 
+> ⚠️ **跑完 `setup.ps1` 必须立刻 `git status`。** Windows 上无 Developer Mode / 管理员权限时，脚本建 symlink 会失败并走 `Copy-Item` 兜底，把 `CLAUDE.md` 从「一行 `AGENTS.md` 的符号链接」**替换成 AGENTS.md 的整份副本**（215 行），工作区变脏。本次实施就中了一次，已 `git restore CLAUDE.md` 还原。判断软链是否成功只看 `~/.claude/skills/<name>` 存不存在，与这个脏变更无关。
+
 ## Related
 
 - [`okf` skill](../../../.agents/skills/okf/SKILL.md) — 三条铁律的出处
