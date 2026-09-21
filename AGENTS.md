@@ -137,6 +137,7 @@ uv sync
 | `channel-account-sync` | `channel_account_sync/` | Google 表渠道账号 → EN Channel Account（人变才加行，Amazon 按国家站） |
 | `web-automation` | `.agents/skills/{web-automation,playwright-setup,tongtu-automation,sellfox-automation}/` | 网页自动化能力舱（通途/赛狐浏览器 + 通用 Playwright），子项目在 `web_automation/` |
 | `windows-agent-shell` | `.agents/skills/windows-agent-shell/` | Windows Agent shell：优先 pwsh、禁 bash/`&&`（5.1）、UTF-8 无 BOM |
+| `ce-okf` | `.agents/skills/ce-okf/` | 对话收尾一条龙：ce-compound 正文 + OKF 级联 + 索引联动 + 凭证扫描 + 提交 + PR |
 | `frappe-core-api` | — | ERPNext REST API 开发（外部 skill） |
 | `frappe-errors-api` | — | ERPNext API 错误处理（外部 skill） |
 
