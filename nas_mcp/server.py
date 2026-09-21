@@ -239,6 +239,26 @@ def safe_path(raw: str) -> str:
 
 TOOLS = [
     {
+        "name": "nas_list_shares",
+        "description": "列出**该账号能看到的共享文件夹**（先看有什么，不用猜路径）。只读。",
+        "inputSchema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "name": "nas_folder_thumbnails",
+        "description": ("**一次返回一个文件夹里的多张缩略图**，用于快速浏览「这目录里都有什么图」。"
+                        "比逐张读原图省得多（每张约 10-20 KiB）。只读。"),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "文件夹路径"},
+                "limit": {"type": "integer", "description": "最多返回几张，默认 8，最大 12"},
+                "size": {"type": "string", "description": "small(250) 或 medium(500)，默认 small"},
+                "images_only": {"type": "boolean", "description": "只取图片（默认 true）"},
+            },
+            "required": ["path"],
+        },
+    },
+    {
         "name": "nas_health",
         "description": "检查 NAS 连通性与配置的根目录。只读。",
         "inputSchema": {"type": "object", "properties": {}, "required": []},
@@ -863,7 +883,86 @@ def tool_read_doc(a: dict) -> dict:
             "text": text[:max_chars]}
 
 
+def tool_list_shares(_a: dict) -> dict:
+    """列出**该账号能看到的共享文件夹** —— 让模型先知道有什么，不用猜路径。只读。"""
+    c = nas_client()
+
+    def fetch():
+        r = c.get_list_share(limit=100, offset=0, additional="size,time")
+        if isinstance(r, str):
+            raise NasError(r[:200])
+        if not (isinstance(r, dict) and r.get("success")):
+            raise NasError("列共享文件夹失败：" + json.dumps(r, ensure_ascii=False)[:200])
+        d = r.get("data") or {}
+        return {"shares": [{"name": s0.get("name"), "path": s0.get("path")}
+                           for s0 in (d.get("shares") or [])],
+                "total": d.get("total")}
+
+    try:
+        return fetch()
+    except NasError:
+        globals()["_nas"] = None                      # 会话可能失效，重登一次
+        out = fetch()
+        out["note"] = "（已重新登录后取得）"
+        return out
+
+
+def tool_folder_thumbnails(a: dict) -> dict:
+    """**一次返回一个文件夹里的多张缩略图** —— 用于「这个文件夹里都有什么图」的快速浏览。
+
+    比逐张调 nas_read_image 省得多（每张缩略图约 10-20 KiB，不是几百 KiB）。
+    """
+    p = safe_path(a.get("path") or "")
+    if not p:
+        raise ValueError("path 必填")
+    limit = max(1, min(int(a.get("limit") or 8), 12))
+    size = (a.get("size") or "small").lower()
+    if size not in ("small", "medium"):
+        size = "small"
+    only_img = a.get("images_only", True)
+
+    lst = list_strict(p, limit=400)
+    items = lst["items"]
+    if only_img:
+        items = [i for i in items
+                 if not i.get("is_dir") and posixpath.splitext(i.get("name") or "")[1].lower()
+                 in {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"}]
+    picked = items[:limit]
+
+    c = nas_client()
+    token = getattr(c.session, "_syno_token", "") or ""
+    blocks = [{"type": "text", "text": json.dumps({
+        "path": p, "total_items": lst.get("total"), "images": len(items),
+        "returned": len(picked), "size": size,
+        "note": ("还有更多；调大 limit 或换目录" if len(items) > len(picked) else None),
+    }, ensure_ascii=False, indent=2)}]
+
+    for it in picked:
+        url = (f"{c.base_url}{THUMB_PATH}?api=SYNO.FileStation.Thumb&version={THUMB_VER}"
+               f"&method=get&path={quote_plus(it['path'])}&size={size}&_sid={c._sid}")
+        try:
+            r = requests.get(url, verify=False, timeout=60, headers={"X-SYNO-TOKEN": token})
+            r.raise_for_status()
+            im = Image.open(io.BytesIO(r.content))
+            im.load()
+            if im.mode not in ("RGB", "L"):
+                im = im.convert("RGB")
+            im.thumbnail((512, 512))
+            buf = io.BytesIO()
+            im.save(buf, "JPEG", quality=72, optimize=True)
+            out = buf.getvalue()
+        except Exception as e:                        # noqa: BLE001
+            blocks.append({"type": "text", "text": f"[{it['name']}] 缩略图不可用：{type(e).__name__}"})
+            continue
+        blocks.append({"type": "text", "text": f"--- {it['name']}（{it.get('size') or 0} 字节）---"})
+        blocks.append({"type": "image", "data": base64.b64encode(out).decode(),
+                       "mimeType": "image/jpeg"})
+    return {"_content": blocks}
+
+
 TOOL_IMPL = {
+    "nas_list_shares": tool_list_shares,
+    "nas_folder_thumbnails": tool_folder_thumbnails,
     "nas_health": tool_health,
     "nas_list_folder": tool_list,
     "nas_file_info": tool_info,

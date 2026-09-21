@@ -235,5 +235,28 @@ try:
 except Exception as e:                                  # noqa: BLE001
     check("nas_read_doc", False, "%s: %s" % (type(e).__name__, str(e)[:70]))
 
+
+print("\n── 12) 定向/批量工具（共享文件夹清单、批量缩略图）")
+try:
+    r = S.tool_list_shares({})
+    names = [x["name"] for x in (r.get("shares") or [])]
+    check("nas_list_shares 列出共享文件夹", len(names) > 0, str(names))
+except Exception as e:                                  # noqa: BLE001
+    check("nas_list_shares", False, "%s: %s" % (type(e).__name__, str(e)[:70]))
+
+try:
+    out = S.tool_folder_thumbnails({"path": "/产品信息/KS0001_三角靠枕/图片/2026新图/宽条绒/土黄色/100",
+                                    "limit": 4})
+    imgs = [x for x in out["_content"] if x["type"] == "image"]
+    meta = _json.loads(out["_content"][0]["text"])
+    check("nas_folder_thumbnails 出图", len(imgs) >= 1,
+          "images=%s returned=%s" % (meta.get("images"), meta.get("returned")))
+    if imgs:
+        small = all(len(_b64.b64decode(x["data"])) < 60 * 1024 for x in imgs)
+        check("缩略图确实小（<60KiB/张）", small,
+              "平均 %.1f KiB" % (sum(len(_b64.b64decode(x["data"])) for x in imgs) / len(imgs) / 1024))
+except Exception as e:                                  # noqa: BLE001
+    check("nas_folder_thumbnails", False, "%s: %s" % (type(e).__name__, str(e)[:70]))
+
 print(f"\n结果：{ok} passed, {fail} failed")
 sys.exit(1 if fail else 0)
