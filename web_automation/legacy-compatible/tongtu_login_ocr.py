@@ -286,9 +286,12 @@ if __name__ == "__main__":
 
     from playwright.sync_api import sync_playwright
 
+    from browser_launch import launch_persistent
+
     with sync_playwright() as p:
-        context = p.chromium.launch_persistent_context(
-            user_data_dir="chrome-profile",  # 与 tongtu_auto_export.py 共享 cookie
+        context = launch_persistent(
+            p,
+            "chrome-profile",  # 与 tongtu_auto_export.py 共享 cookie
             headless=False,
             viewport={"width": 1280, "height": 800},
             args=["--disable-blink-features=AutomationControlled"],

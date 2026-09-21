@@ -100,6 +100,20 @@ capabilities:
     contract: ui
     last_verified: "2026-08-26"
 
+  sellfox.cost-adjust.import:
+    platform: sellfox
+    mode: MANUAL_CONFIRM
+    risk: write
+    primary: browser
+    fallback: null
+    allowed_fallback_codes: []
+    blocked_fallback_codes: [AUTH_FAILED, PERMISSION_DENIED, INVALID_ARGUMENT, BUSINESS_VALIDATION]
+    verify: import_result_and_scope_summary
+    implementation:
+      browser: click-based/sellfox_import_cost_adjust.py
+    contract: ui
+    last_verified: null
+
   web.generic.explore:
     platform: generic
     mode: BROWSER_ONLY

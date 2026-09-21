@@ -8,6 +8,8 @@ title: 集成问题 — 变更日志
 
 | 日期 | 操作 | 文档 | 说明 |
 |------|------|------|------|
+| 2026-09-21 | 新增 | [sellfox-amazon-settlement-plug-only.md](sellfox-amazon-settlement-plug-only.md) | Amazon 账期报表（Transaction / Summary PDF）在赛狐侧**只有「插件获取报告」一条路**，该接口纯读、**API 无法触发抓取**（旁证：`创建报告任务` 只支持 `PRODUCT_SALE_REPORT`；`亚马逊原报告` 类型枚举无账期）。`fileUrls` 为 **1 小时有效的腾讯 COS 预签名 URL**，不能存链接只能即取即下。实测 90 店仅 39 店有数据、只覆盖 6/7 月 ⇒ **51 店需运营在插件侧补抓**。另留档一个**已被否决**的替代方案（`monthProfit/shopSummary` 服务端销售额、覆盖全店但属赛狐自算口径），以免将来重复提议。 |
+| 2026-09-20 | 修复 | [dingtalk-sso-new-api-oidc-bridge.md](dingtalk-sso-new-api-oidc-bridge.md) | 修正指向 `us_openai_api_proxy/`、`new-api-deployment/` 的失效相对链接（少退一级，`../../` → `../../../`） |
 | 2026-09-08 | 新增 | [cliproxyapi-auth-unavailable-oauth-recovery.md](cliproxyapi-auth-unavailable-oauth-recovery.md) | CLIProxyAPI `503 auth_unavailable`：区分进程健康与上游授权可用性，固化升级、浏览器 OAuth、失效认证记录隔离和目标模型真实请求验收；全程使用占位符。 |
 | 2026-09-08 | 更新 | [dingtalk-offboarding-hardening.md](dingtalk-offboarding-hardening.md) | 补「生产部署与实测」：上海生产已上线双通道（每日 cron 0 3 * * * + 实时 bridge 重建），实测 3 名离职者自动封号 status=2；bridge 容器需挂 proxy DB volume + PROXY_DB_PATH，否则 disable_proxy_keys 抛错致 STATUS_LATER 无限重投；proxy 关 key 链路容器内函数级实测通过 |
 | 2026-09-08 | 新增 | [dingtalk-offboarding-hardening.md](dingtalk-offboarding-hardening.md) | new-api/sellfox-proxy 离职自动封号加固：60121 判离职替代 active、本地 identity_map(unionId↔userId)、provider slug 解析、proxy 失败 proxy_pending 次日补关、offboarding_audit 心跳/明细、--dry-run；真实离职场景之前会漏(移出组织→[SKIP])会误伤(在职未激活) |

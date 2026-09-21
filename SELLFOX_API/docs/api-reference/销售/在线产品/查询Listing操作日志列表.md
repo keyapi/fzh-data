@@ -153,17 +153,7 @@ components:
         - endDate
         - pageNo
         - pageSize
-      x--orders:
-        - shopIdList
-        - createIdList
-        - changeTypeList
-        - status
-        - dateType
-        - startDate
-        - endDate
-        - pageNo
-        - pageSize
-      x--ignore-properties: []
+      x-apifox-ignore-properties: []
       x-apifox-folder: ''
     OpenResult«Page«ProductChangeRecordPageListOpenVo»»:
       type: object
@@ -191,13 +181,7 @@ components:
         - msg
         - data
         - ts
-      x--orders:
-        - requestId
-        - code
-        - msg
-        - data
-        - ts
-      x--ignore-properties: []
+      x-apifox-ignore-properties: []
       x-apifox-folder: ''
     Page«ProductChangeRecordPageListOpenVo»:
       type: object
@@ -230,13 +214,7 @@ components:
         - totalPage
         - totalSize
         - rows
-      x--orders:
-        - pageNo
-        - pageSize
-        - totalPage
-        - totalSize
-        - rows
-      x--ignore-properties: []
+      x-apifox-ignore-properties: []
       x-apifox-folder: ''
     ProductChangeRecordPageListOpenVo:
       type: object
@@ -313,31 +291,7 @@ components:
         - siteName
         - status
         - switchFulfillmentTo
-      x--orders:
-        - asin
-        - beginTime
-        - changeContent
-        - changeFrom
-        - changeType
-        - createId
-        - createName
-        - currency
-        - endTime
-        - failReason
-        - fnsku
-        - fulfillmentChannel
-        - id
-        - mainImage
-        - marketplaceId
-        - msku
-        - operateNote
-        - productId
-        - shopId
-        - shopName
-        - siteName
-        - status
-        - switchFulfillmentTo
-      x--ignore-properties: []
+      x-apifox-ignore-properties: []
       x-apifox-folder: ''
   securitySchemes: {}
 servers: []

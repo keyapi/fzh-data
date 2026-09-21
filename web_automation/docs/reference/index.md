@@ -9,6 +9,7 @@ tags: [web-automation, reference, index]
 # Reference
 
 - [capability-matrix](capability-matrix.md) — 平台+动作路由、风险、允许/禁止回退、验证合同
+- [browser-launch](browser-launch.md) — 浏览器启动统一出口：环境变量决定 channel/headless（本机有头 bundled chromium 不可用）
 - [orderdetail-export](orderdetail-export.md) — 通途订单详情统计月度导出（`tongtu.orderdetail.export`：背景/MCP 探路/选择器/踩坑/核验）
 - [aflow-receipt-export](aflow-receipt-export.md) — 钉钉 aflow 销售收款确认单导出（`dingtalk.aflow.receipt.export`：登录/级联/日期控件/异步导出/附件证伪）
 - [security-and-local-state](security-and-local-state.md) — profile/cookie/凭证本地化与写操作范围
