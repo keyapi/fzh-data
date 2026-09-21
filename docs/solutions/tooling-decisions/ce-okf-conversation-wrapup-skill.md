@@ -72,7 +72,9 @@ tags: [skill, ce-compound, okf, workflow, documentation, handoff]
 skill 本体：`.agents/skills/ce-okf/SKILL.md`。装的机器要跑一次
 `powershell -ExecutionPolicy Bypass -File setup.ps1` 才会被 Claude Code / Claude Desktop 看到（`setup.ps1` 把 `.agents/skills/*` 链进 `~/.claude/skills/`）。
 
-> ⚠️ **跑完 `setup.ps1` 必须立刻 `git status`。** Windows 上无 Developer Mode / 管理员权限时，脚本建 symlink 会失败并走 `Copy-Item` 兜底，把 `CLAUDE.md` 从「一行 `AGENTS.md` 的符号链接」**替换成 AGENTS.md 的整份副本**（215 行），工作区变脏。本次实施就中了一次，已 `git restore CLAUDE.md` 还原。判断软链是否成功只看 `~/.claude/skills/<name>` 存不存在，与这个脏变更无关。
+> ⚠️ **跑完 `setup.ps1` 后 `CLAUDE.md` 会变脏，不要提交它。** `CLAUDE.md` 在 git 里是 symlink（mode 120000 → `AGENTS.md`），单一事实源是 AGENTS.md（见 `CONTRIBUTING.md:51`）。但 Windows 建**文件**符号链接要开发者模式 / 管理员权限，没开时 `setup.ps1` 退化成 `Copy-Item`，把 CLAUDE.md 写成 AGENTS.md 整份副本（215 行）——这正是 commit `5582464` 引入兜底的原因（原先没有 `-ErrorAction Stop`，权限失败时 catch 不触发 → 文件直接丢失）。目录链接不受影响：`~/.claude/skills/*` 用 junction，普通权限即可，所以 skills 一直正常。
+>
+> 两个状态只能取一个：跑过 setup.ps1 → git 脏但 Claude Code 能读到 AGENTS.md 正文；`git restore CLAUDE.md` → git 干净但 Claude Code 只读到 `AGENTS.md` 这 9 个字符。两者兼得要开 Windows 开发者模式，让真 symlink 建得出来。**所以「检查 git status 然后 restore」不是标准动作** —— 那会让本机 Claude 读不到项目守则。
 
 ## Related
 

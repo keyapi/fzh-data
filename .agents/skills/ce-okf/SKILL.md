@@ -218,9 +218,8 @@ powershell -ExecutionPolicy Bypass -File setup.ps1
 
 （`setup.ps1` 把 `.agents/skills/*` 链进 `~/.claude/skills/`；Codex 用户不需要这步。）
 
-> ⚠️ **跑完立刻 `git status` 检查**。Windows 上若没有 Developer Mode / 管理员权限，
-> `setup.ps1` 建 symlink 会失败并**走 `Copy-Item` 兜底**，把 `CLAUDE.md`
-> 从「一行 `AGENTS.md` 的符号链接」**替换成 AGENTS.md 的整份副本**（215 行），
-> 工作区因此变脏；不慎提交会把重复内容并进仓库。
-> 发现后还原：`git restore CLAUDE.md`（`.agents/skills` 那侧的 junction 不受影响）。
-> 软链是否成功只看 `~/.claude/skills/ce-okf` 存不存在，与这次脏变更无关。
+> ⚠️ **跑完 `setup.ps1` 后 `git status` 会看到 `CLAUDE.md` 变脏 —— 这是 Windows 上的已知副作用，不要提交它。** 本 skill 第 7 步要求按文件名逐个 `git add`，正是为了避免把它带进去。
+>
+> 原因：`CLAUDE.md` 在 git 里是 symlink（mode 120000，指向 `AGENTS.md`），单一事实源是 AGENTS.md。但 Windows 建**文件**符号链接需要开发者模式 / 管理员权限，没开时 `setup.ps1` 会退化成 `Copy-Item`，把 CLAUDE.md 写成 AGENTS.md 的整份副本（215 行）。目录链接不受影响 —— `~/.claude/skills/*` 用的是 junction，普通权限即可，所以 skills 一直是好的。
+>
+> 两个状态只能取一个：**跑过 setup.ps1** → git 脏、但 Claude Code 能读到 AGENTS.md 正文；**`git restore CLAUDE.md`** → git 干净、但 Claude Code 只读到 `AGENTS.md` 这 9 个字符。想两者兼得，需要开 Windows 开发者模式，让真 symlink 建得出来。
