@@ -51,6 +51,7 @@ sudo mkdir -p /opt/nas-mcp && cd /opt/nas-mcp
 NAS_URL=https://fzh.myds.me:11024
 NAS_USERNAME=<MCP 专用账号>
 NAS_PASSWORD=<NAS 专用账号密码>
+NAS_ALLOWED_ROOTS=/FZH共享文件夹,/产品信息
 NAS_ROOT_FOLDER=/FZH共享文件夹
 NAS_MCP_TOKEN=<自己生成一个长随机串>
 ```
@@ -140,7 +141,9 @@ curl -sS -o /dev/null -w '%{http_code}\n' -X POST https://api.vilavi.cn/nas/mcp 
 
 ## 7. DSM 侧的两件事（别忘）
 
-1. **给 `<MCP 专用账号>` 这个账号配好文件夹权限** —— 这是真正的权限边界
+1. **给 `<MCP 专用账号>` 这个账号配好文件夹权限** —— 这是真正的权限边界。
+   ⚠️ 注意 DSM 上各共享文件夹是**彼此独立的顶层目录**：给账号开了 `/产品信息` 之后，
+   **还必须把 `/产品信息` 加进 `NAS_ALLOWED_ROOTS` 并重启容器**，否则仍会被路径护栏拒（实测踩过）。
 2. **若 DSM 开了 Auto Block**：把 VPS 出口 `8.133.254.66` 加白名单，否则几次失败就被封
 3. **账号不要开 2FA** —— DSM API 不支持 2FA，开了就连不上
 

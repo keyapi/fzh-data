@@ -19,7 +19,8 @@ timestamp: 2026-09-21
 
 1. **只读**：只暴露 `nas_health` / `nas_list_folder` / `nas_file_info` / `nas_read_text`。
    **不暴露任何写或删**（`NAS_API/synology.py` 里的 `create_folder` / `create_subfolders` / **`delete_folder`** 一律不用）。
-2. **路径锁死**：所有路径必须落在 `NAS_ROOT_FOLDER` 之内；`..` 与越界一律 `PathDenied`。
+2. **路径锁死**：所有路径必须落在**允许的根目录之一**内（`NAS_ALLOWED_ROOTS`）；
+   `..` 与越界一律 `PathDenied`。**前缀混淆也拒**（`/产品信息X` 不放行）。
 3. **不吐大文件**：`nas_read_text` 有硬上限（256 KiB），且只允许文本类扩展名；二进制/超大一律拒绝，只给元数据。
 
 ## 为什么自建而不用现成的
@@ -52,7 +53,9 @@ uv run python nas_mcp/tests/test_smoke.py
 | 变量 | 必填 | 说明 |
 |---|---|---|
 | `NAS_MCP_TOKEN` | ✅ | Bearer 令牌。**绝不写进仓库或镜像** |
-| `NAS_URL` / `NAS_USERNAME` / `NAS_PASSWORD` / `NAS_ROOT_FOLDER` | ✅ | 同 `NAS_API`（复用其约定） |
+| `NAS_URL` / `NAS_USERNAME` / `NAS_PASSWORD` | ✅ | 同 `NAS_API`（复用其约定） |
+| `NAS_ALLOWED_ROOTS` | ✅ | **允许的根目录，逗号或冒号分隔**（如 `/FZH共享文件夹,/产品信息`）。缺省回退到 `NAS_ROOT_FOLDER` |
+| `NAS_ROOT_FOLDER` | | 单根兼容项；仅在未设 `NAS_ALLOWED_ROOTS` 时生效 |
 | `NAS_MCP_BIND` / `NAS_MCP_PORT` | | 默认 `127.0.0.1:8402`（**只绑回环**，由 nginx 反代） |
 | `NAS_MCP_LOG` | | 可选，追加日志到文件 |
 
