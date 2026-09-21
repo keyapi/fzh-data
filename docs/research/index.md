@@ -10,6 +10,7 @@ tags: [research, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-09-21 | 群晖 NAS 接入 ChatGPT — **部署在 VPS 而非 NAS**（实测 NAS 公网 443 不通、只开非标端口 11024）；含落地设计与安全约束 | [2026-09-21-nas-mcp-chatgpt-feasibility.md](2026-09-21-nas-mcp-chatgpt-feasibility.md) |
 | 2026-09-18 | 赛狐「私有接口」与公开 OpenAPI 的区分 — 术语（undocumented internal API，业界亦称 shadow API 影子 API）、判据、用词约定 | [2026-09-18-sellfox-private-api-terminology.md](2026-09-18-sellfox-private-api-terminology.md) |
 | 2026-09-18 | 赛狐成本口径与 FIFO 批次 — 成本挂在批次上、调整单按先进先出吃批次 | [2026-09-18-sellfox-cost-accounting-fifo.md](2026-09-18-sellfox-cost-accounting-fifo.md) |
 | 2026-09-07 | GLS 跟踪可行性 — 公开无鉴权 API 免登录实测可行（明细需目的邮编）；官方 ShipIT/MyGLS 需 GLS 波兰客户号 + WebAPI 开通，纯开发者账号替代不了 | [2026-09-07-gls-poland-track-feasibility.md](2026-09-07-gls-poland-track-feasibility.md) |
