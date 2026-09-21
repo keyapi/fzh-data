@@ -137,7 +137,9 @@ def _is_session_error(err) -> bool:
         except Exception:                            # noqa: BLE001  异常对象不可序列化
             s = str(err)
     s = s.lower()
-    return ("session" in s) or ("timeout" in s) or ("code\":106" in s) or ("code\":107" in s)
+    # 105 / 106 / 107 = DSM 的鉴权类错误码（与 EN 的 pim/api/nas.py 对齐）
+    return ("session" in s) or ("timeout" in s) or any(
+        ('code":%d' % c) in s or ('code": %d' % c) in s for c in (105, 106, 107))
 
 
 def list_strict(path: str, limit: int = 100, offset: int = 0) -> dict:
@@ -803,8 +805,10 @@ def tool_thumbnail(a: dict) -> dict:
         size = "small"
 
     c = nas_client()
+    # path 用双引号包起来 —— EN 的 pim/api/nas.py 注释写明 spec 要求
+    # （实测加不加都通；加上更稳，能防带逗号等特殊字符的路径）
     url = (f"{c.base_url}{THUMB_PATH}?api=SYNO.FileStation.Thumb&version={THUMB_VER}"
-           f"&method=get&path={quote_plus(p)}&size={size}&_sid={c._sid}")
+           f"&method=get&path={quote_plus(chr(34) + p + chr(34))}&size={size}&_sid={c._sid}")
     token = getattr(c.session, "_syno_token", "") or ""
     r = requests.get(url, verify=False, timeout=60, headers={"X-SYNO-TOKEN": token})
     r.raise_for_status()
@@ -1001,7 +1005,7 @@ def tool_folder_thumbnails(a: dict) -> dict:
 
     for it in picked:
         url = (f"{c.base_url}{THUMB_PATH}?api=SYNO.FileStation.Thumb&version={THUMB_VER}"
-               f"&method=get&path={quote_plus(it['path'])}&size={size}&_sid={c._sid}")
+               f"&method=get&path={quote_plus(chr(34) + it['path'] + chr(34))}&size={size}&_sid={c._sid}")
         try:
             r = requests.get(url, verify=False, timeout=60, headers={"X-SYNO-TOKEN": token})
             r.raise_for_status()
