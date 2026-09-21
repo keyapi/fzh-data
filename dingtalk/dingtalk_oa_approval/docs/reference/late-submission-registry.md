@@ -84,4 +84,3 @@ Google 表「和财务部共享」→ worksheet **钉钉账期提交时间不对
 - 账期月切开：`filter_export_by_period.py`（`ding_xlsx.unique_key` / `exclude_keys`）
 - 剔除键生成：`late_submission_keys.py`（读本表 → 键文件）
 - 登记表本身仍在 Google 表；仓库外 `patch_july_2026.py` 只负责当初那次写入，不必再被核算脚本 import。
-
