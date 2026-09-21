@@ -113,5 +113,20 @@ check("无写/删工具",
       not any(w in n for n in tool_names for w in ("delete", "create", "move", "upload", "write")),
       str(tool_names))
 
+print("\n── 7) 回归护栏：**出错必须报错，不能伪装成「空」**")
+# 这正是实测踩到的 bug：会话过期被 NAS_API 吞成 []，前端看到「文件夹是空的」
+try:
+    res = S.tool_list({"path": f"{S.ROOTS[0]}/这个目录不存在_zzz", "limit": 5})
+    check("不存在的目录不返回「空」", False, f"← 竟然返回了 {res}")
+except S.NasError as e:
+    check("不存在的目录抛 NasError", True, f"({str(e)[:60]})")
+except Exception as e:                              # noqa: BLE001
+    check("不存在的目录抛错（类型非 NasError）", False, f"{type(e).__name__}: {e}")
+
+# 正常目录必须返回 total，供模型判断「还有下一页」
+r2 = S.tool_list({"path": S.ROOTS[0], "limit": 3})
+check("返回 total 供翻页", r2.get("total") is not None, f"total={r2.get('total')} count={r2.get('count')}")
+check("超出一页时给出 note", ("note" in r2) == (r2.get("total", 0) > 3), str(r2.get("note"))[:70])
+
 print(f"\n结果：{ok} passed, {fail} failed")
 sys.exit(1 if fail else 0)

@@ -22,14 +22,14 @@ import json
 import os
 import posixpath
 import sys
+import threading
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-# 让 server.py 在容器里也能 import 到仓库根下的 NAS_API
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from NAS_API.synology import get_nas  # noqa: E402
+from synology_api.filestation import FileStation  # noqa: E402
 
 PORT = int(os.environ.get("NAS_MCP_PORT", "8402"))
 BIND = os.environ.get("NAS_MCP_BIND", "127.0.0.1")
@@ -75,6 +75,111 @@ class PathDenied(Exception):
     pass
 
 
+class NasError(Exception):
+    """DSM 侧的失败。**绝不静默转成空结果。**"""
+
+
+def _parse_nas_url(url: str) -> tuple[str, str, bool]:
+    url = (url or "").strip().rstrip("/")
+    secure = url.startswith("https://")
+    host = url.replace("https://", "").replace("http://", "")
+    if ":" in host:
+        host, port = host.split(":", 1)
+    else:
+        port = "5001" if secure else "5000"
+    return host, port, secure
+
+
+_nas_lock = threading.Lock()
+_nas: FileStation | None = None
+
+
+def nas_client(relogin: bool = False) -> FileStation:
+    """DSM 客户端（进程内复用）。relogin=True 时丢弃旧会话重新登录。"""
+    global _nas
+    with _nas_lock:
+        if _nas is None or relogin:
+            url = os.environ.get("NAS_URL", "")
+            user, pw = os.environ.get("NAS_USERNAME", ""), os.environ.get("NAS_PASSWORD", "")
+            if not (url and user):
+                raise NasError("NAS_URL / NAS_USERNAME 未配置")
+            host, port, secure = _parse_nas_url(url)
+            _nas = FileStation(ip_address=host, port=port, username=user, password=pw,
+                               secure=secure, cert_verify=False, dsm_version=7, debug=False)
+            log(f"  DSM 会话{'重建' if relogin else '建立'}: {host}:{port}")
+        return _nas
+
+
+def _is_session_error(err) -> bool:
+    """判断是不是「会话失效」类错误。err 可能是 str / dict / 异常对象，都要能处理。"""
+    if isinstance(err, str):
+        s = err
+    else:
+        try:
+            s = json.dumps(err, ensure_ascii=False)
+        except Exception:                            # noqa: BLE001  异常对象不可序列化
+            s = str(err)
+    s = s.lower()
+    return ("session" in s) or ("timeout" in s) or ("code\":106" in s) or ("code\":107" in s)
+
+
+def list_strict(path: str, limit: int = 100, offset: int = 0) -> dict:
+    """列目录 —— **不吞异常**；会话失效自动重登重试一次。
+
+    为什么不用 NAS_API.get_file_list：它在失败时 `return []`，会把
+    「Session timeout / 权限被拒」伪装成「文件夹是空的」（实测踩过）。
+    """
+    last = None
+    for attempt in (1, 2):
+        c = nas_client(relogin=(attempt == 2))
+        try:
+            r = c.get_file_list(folder_path=path, limit=limit, offset=offset,
+                                sort_by="name", sort_direction="asc",
+                                additional="size,time")
+        except Exception as e:                       # noqa: BLE001
+            if attempt == 1 and _is_session_error(e):
+                log(f"  会话失效，重登重试：{e}")
+                last = e
+                continue
+            raise NasError(f"{type(e).__name__}: {e}") from e
+        if not r.get("success"):
+            err = r.get("error") or {}
+            if attempt == 1 and _is_session_error(err):
+                log(f"  会话失效(code={err.get('code')})，重登重试")
+                last = err
+                continue
+            raise NasError("DSM 返回失败：" + json.dumps(err, ensure_ascii=False))
+        d = r.get("data") or {}
+        items = [{
+            "name": f.get("name"),
+            "path": f.get("path"),
+            "is_dir": f.get("isdir", False),
+            "size": (f.get("additional") or {}).get("size", 0),
+            "mtime": ((f.get("additional") or {}).get("time") or {}).get("mtime", 0),
+        } for f in (d.get("files") or [])]
+        return {"items": items, "total": d.get("total")}
+    raise NasError(f"重试后仍失败：{last}")
+
+
+def download_strict(path: str) -> bytes:
+    last = None
+    for attempt in (1, 2):
+        c = nas_client(relogin=(attempt == 2))
+        try:
+            r = c.get_file(path=path, mode="download")
+        except Exception as e:                       # noqa: BLE001
+            if attempt == 1 and _is_session_error(e):
+                log(f"  会话失效，重登重试：{e}")
+                last = e
+                continue
+            raise NasError(f"{type(e).__name__}: {e}") from e
+        if isinstance(r, dict) and r.get("success") and "data" in r:
+            return r["data"]
+        raise NasError("下载失败：" + json.dumps(r if not isinstance(r, dict) else r.get("error"),
+                                                ensure_ascii=False)[:200])
+    raise NasError(f"重试后仍失败：{last}")
+
+
 def safe_path(raw: str) -> str:
     """把请求路径规范化，并强制落在任一允许的根目录之内。拒绝 .. 与越界。"""
     p = (raw or "").strip()
@@ -108,6 +213,7 @@ TOOLS = [
                 "path": {"type": "string",
                          "description": f"文件夹路径，必须在允许的根目录之一内（{ROOTS_STR}）。留空则列默认根目录。"},
                 "limit": {"type": "integer", "description": "返回条数上限，默认 100，最大 1000"},
+                "offset": {"type": "integer", "description": "从第几条开始（翻页用）。返回里会带 total 与下一页提示。"},
             },
             "required": [],
         },
@@ -146,19 +252,34 @@ TEXT_EXT = {".txt", ".md", ".csv", ".json", ".yaml", ".yml", ".log", ".ini",
 # ── 工具实现 ────────────────────────────────────────────────
 
 def tool_health(_a: dict) -> dict:
-    nas = get_nas()
-    return {"available": bool(nas.available),
-            "allowed_roots": ROOTS,
-            "default_root": ROOT,
+    base = {"allowed_roots": ROOTS, "default_root": ROOT,
             "host": os.environ.get("NAS_URL", "").split("//")[-1].split("/")[0],
             "read_only": True}
+    try:
+        # 用「列 1 项」探活 —— 它同时验证凭据与会话是否有效
+        r = list_strict(ROOT, limit=1)
+        base["available"] = True
+        base["probe"] = {"path": ROOT, "total": r.get("total")}
+    except Exception as e:                            # noqa: BLE001
+        base["available"] = False
+        base["error"] = str(e)
+    return base
 
 
 def tool_list(a: dict) -> dict:
     p = safe_path(a.get("path", ""))
     limit = max(1, min(int(a.get("limit") or 100), 1000))
-    items = get_nas().get_file_list(p, limit=limit)
-    return {"path": p, "count": len(items), "items": items}
+    offset = max(0, int(a.get("offset") or 0))
+    r = list_strict(p, limit=limit, offset=offset)
+    items = r["items"]
+    out = {"path": p, "count": len(items), "items": items}
+    # 让模型知道「这一页之外还有」，避免把分页当成「总共就这些」
+    if r.get("total") is not None:
+        out["total"] = r["total"]
+        if r["total"] > offset + len(items):
+            out["note"] = (f"仅返回第 {offset + 1}-{offset + len(items)} 项，共 {r['total']} 项；"
+                           f"用 offset={offset + len(items)} 取下一页")
+    return out
 
 
 def tool_info(a: dict) -> dict:
@@ -166,11 +287,12 @@ def tool_info(a: dict) -> dict:
     if not raw:
         raise ValueError("path 必填")
     p = safe_path(raw)
-    parent = posixpath.dirname(p)
-    name = posixpath.basename(p)
-    if parent == p:                      # 直接问 ROOT 本身
-        parent, name = posixpath.dirname(ROOT), posixpath.basename(ROOT)
-    for f in get_nas().get_file_list(parent, limit=1000):
+    parent, name = posixpath.dirname(p), posixpath.basename(p)
+    if not name:                                     # 问的是某个根目录本身
+        for r in ROOTS:
+            if p == r:
+                return {"name": posixpath.basename(r), "path": r, "is_dir": True}
+    for f in list_strict(parent, limit=1000)["items"]:
         if f.get("name") == name:
             return f
     return {"not_found": True, "path": p}
@@ -186,9 +308,8 @@ def tool_read_text(a: dict) -> dict:
     if ext and ext not in TEXT_EXT:
         raise ValueError(f"只允许读取文本类文件（{ext} 不在白名单）。二进制/大文件请取元数据。")
 
-    # 先看大小，避免把大文件拉下来
     parent, name = posixpath.dirname(p), posixpath.basename(p)
-    meta = next((f for f in get_nas().get_file_list(parent, limit=1000)
+    meta = next((f for f in list_strict(parent, limit=1000)["items"]
                  if f.get("name") == name), None)
     if meta is None:
         raise ValueError("文件不存在")
@@ -198,9 +319,7 @@ def tool_read_text(a: dict) -> dict:
     if size > cap:
         raise ValueError(f"文件 {size} 字节，超过上限 {cap}，拒绝读取（只返回元数据）")
 
-    data = get_nas().download_file(p)
-    if data is None:
-        raise ValueError("读取失败")
+    data = download_strict(p)
     if len(data) > cap:
         raise ValueError(f"实际大小 {len(data)} 超过上限 {cap}，拒绝")
     try:
@@ -302,6 +421,11 @@ class Handler(BaseHTTPRequestHandler):
                     "isError": False})
             except PathDenied as e:
                 self._result(mid, {"content": [{"type": "text", "text": f"拒绝：{e}"}],
+                                   "isError": True})
+            except NasError as e:
+                log(f"!! NAS 侧失败: {e}")
+                self._result(mid, {"content": [{"type": "text",
+                                   "text": f"NAS 侧失败（**不是空的**，是出错了）：{e}"}],
                                    "isError": True})
             except Exception as e:                  # noqa: BLE001
                 log(f"!! tool {name} error: {type(e).__name__}: {e}")
