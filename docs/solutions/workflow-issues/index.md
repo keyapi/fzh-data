@@ -9,6 +9,8 @@ tags: [workflow-issues, index]
 
 | 文档 | 说明 |
 |------|------|
+| [mcp-to-chatgpt-bringup-lessons.md](mcp-to-chatgpt-bringup-lessons.md) | 把 FAC / 赛狐 / NAS 三个 MCP 接上 ChatGPT 的方法与四个教训 |
+| [fedex-track-batch-query.md](fedex-track-batch-query.md) | FedEx 官方批量 Track + 账号/组织恢复 + 三条教训 |
 | [sellfox-cover-combo-create-ops.md](sellfox-cover-combo-create-ops.md) | 三角皮壳 PK# 组合代理批量创建（不是 EN 套件） |
 | [soft-wall-combo-batch-staging.md](soft-wall-combo-batch-staging.md) | 软包墙围 EN 套件/赛狐组合商品批量分阶段创建 |
 | [zipper-combo-batch-staging.md](zipper-combo-batch-staging.md) | 拉链款无捆绑SKU 合成客户物料号并批量创建组合 |
@@ -26,5 +28,5 @@ tags: [workflow-issues, index]
 | [ostkus-account-reconciliation.md](ostkus-account-reconciliation.md) | OSTKUS 账期与 EN Tongtool Order 对账 |
 | [pb-reconciliation-monthly-update.md](pb-reconciliation-monthly-update.md) | PB 对账表月度更新脚本化 + UPS 交付核查 |
 | [tongtool-sku-rename-gsheet-remap.md](tongtool-sku-rename-gsheet-remap.md) | 通途主档改名后对齐订单 Google Sheet |
-| [search-first-before-implementing.md](search-first-before-implementing.md) | 改之前先搜官方与项目文档 |
+| [search-first-before-implementing.md](search-first-before-implementing.md) | 先搜再造：官方/项目文档 → 内部约定要搜代码 → 第三方方案要抄功能清单 |
 | [erpnext-version-api-compatibility.md](erpnext-version-api-compatibility.md) | ERPNext 跨版本 API 兼容 |

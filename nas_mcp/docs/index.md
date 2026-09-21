@@ -22,6 +22,15 @@ timestamp: 2026-09-21
 | 部署到上海 VPS：Docker、nginx 反代、外部验证、接 ChatGPT | [reference/deploy.md](reference/deploy.md) |
 | 为什么部署在 VPS 而不是 NAS、为什么自建而不是用第三方 | [../../docs/research/2026-09-21-nas-mcp-chatgpt-feasibility.md](../../docs/research/2026-09-21-nas-mcp-chatgpt-feasibility.md) |
 
-## 工具（只读）
+## 工具（只读，15 个）
 
-`nas_health` / `nas_list_folder` / `nas_file_info` / `nas_read_text`
+| 类别 | 工具 |
+|------|------|
+| 连通 / 浏览 | `nas_health` · `nas_list_shares` · `nas_list_folder` · `nas_file_info` · `nas_folder_size` · `nas_search` |
+| 读内容 | `nas_read_text` · `nas_read_pdf`（渲染成图 + 抽文字）· `nas_read_image` · `nas_read_doc`（Office 文字） |
+| 图片 / 校验 | `nas_thumbnail` · `nas_folder_thumbnails` · `nas_file_md5` |
+| 压缩包 / 深链 | `nas_list_archive`（不解压看内容）· `nas_link`（File Station 深链） |
+
+`nas_link` / `nas_file_info` / `nas_list_folder` 返回的链接是 **File Station 深链**，打开需 DSM 登录
+—— 天然满足「有 NAS 权限的人才看得到」。格式**照抄 EN 产品物料库的 `encode_filestation_link()`**（双层 URL 编码），
+**不是自己发明的**；`tests/test_smoke.py` 用真实样例钉住编码。

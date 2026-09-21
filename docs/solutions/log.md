@@ -14,6 +14,7 @@ tags: [solutions, log]
   ② **评估第三方方案要先盘功能面再决定自建**（用户直接批评）—— 我把 3 个开源方案只当「对比对象」、**没抄它们的工具清单**，导致功能面远小于现成方案，变成「用户要一个我加一个」；
   ③ **上游封装会吞异常** —— `NAS_API.get_file_list` 失败 `return []`，把「Session timeout」伪装成「文件夹是空的」；`download_file()` 因 `get_file(mode='download')` 写盘不返字节而**永远返回 None**；
   ④ **做对的**：鉴权先验最小闭环（本机 + Tailscale Funnel，零生产影响）拿到 `openai-mcp/1.0.0` 带 `Authorization` 头的决定性日志，结论赛狐与 NAS 共用。
+- **更新**: [workflow-issues/search-first-before-implementing.md](workflow-issues/search-first-before-implementing.md) — 补 **Case 2 / Case 3** 与「Why This Matters」补充段。① **内部约定常常只在代码里，不在文档里** —— 给 NAS 路径拼 File Station 深链时我**自己猜了格式**（`?launch=FileStation&path=`）还当成结论写进文档；用户指出 EN 的**产品物料库**早已做过，去测试服务器一搜就找到 `vilavi_pim/api/nas.py` 与 `work_order_task/.../item_group_nas_path.py::encode_filestation_link()`，真格式是**双层 URL 编码**（`quote(quote(path))`），顺带对齐出会话失效错误码是 **105/106/107**（我原只判 106/107）、Thumb 的 `path` **要加双引号**（spec 要求）。② **评估第三方方案要抄「能力清单」** —— 只写对比表就决定自建，事后抄 mrquj 的工具表才发现一次漏了 7 项（搜索/缩略图/文件夹大小/校验和/分享链接/压缩包/读图）。原文档只讲「搜文档」，现补上「搜代码」与「抄清单」两步。另修 `docs/solutions/index.md` 一处 **frontmatter 被顶到第 2 行** 的缺陷（上一次提交把新行插到了 frontmatter 之上，已移回表格）。
 
 ## 2026-09-20
 

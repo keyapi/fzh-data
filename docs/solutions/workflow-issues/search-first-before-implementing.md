@@ -1,6 +1,9 @@
 ---
+okf: v0.1
+type: Reference
 title: "Search First Before Implementing: Always Check Official and Project Documentation Before Making Changes"
 date: 2026-07-14
+last_updated: 2026-09-21
 category: workflow-issues
 module: development_workflow
 problem_type: workflow_issue
@@ -11,6 +14,8 @@ applies_when:
   - "Editing configuration files in environments with multiple config paths (e.g., Claude vs Claude-3p)"
   - "Working in a project that already has documentation covering the task at hand"
   - "Setting up integrations (MCP servers, API clients, SDKs) with version-pinned dependencies"
+  - "拼自己系统的内部 URL / 深链 / 错误码约定 —— 这类内部约定优先搜项目已有实现"
+  - "评估第三方方案（该抄它们的「能力清单」，不只是拿来对比后自建）"
 symptoms:
   - "Agent edits the wrong configuration file multiple times without effect"
   - "Configuration changes have no observable impact despite correct syntax"
@@ -19,7 +24,7 @@ symptoms:
   - "Agent misses environment-specific configuration paths documented in the project"
 root_cause: inadequate_documentation
 resolution_type: workflow_improvement
-tags: [agent-workflow, mcp-configuration, search-first, claude-desktop-3p, tavily]
+tags: [agent-workflow, mcp-configuration, search-first, claude-desktop-3p, tavily, internal-conventions, third-party-eval]
 ---
 
 # Search First Before Implementing: Always Check Official and Project Documentation Before Making Changes
@@ -160,8 +165,62 @@ grep -r "mcp\|MCP\|tavily\|claude_desktop_config" docs/ --include="*.md" -l
 grep -r "3p\|Claude-3p\|deploymentMode" docs/ --include="*.md" -l
 ```
 
+## Case 2（2026-09-21 补充）: 搜「项目内已有实现」，不只是文档
+
+原文只强调搜**文档**。但内部约定（URL 格式、错误码含义、字段枚举）**常常只在代码里**，不一定是文档。
+2026-09-21 接 NAS MCP 时，我在这上面栽了一次：
+
+**做错的**：要给 NAS 路径生成 File Station 深链，我**自己猜了格式** `?launch=FileStation&path=<encoded>`，
+还写进文档当成结论。
+
+**实际**：EN 的**产品物料库**早就在做这件事。用户点了一句「EN 里 NAS 相关代码主要在 产品物料库 那个 app」，
+去测试服务器一搜就找到：
+
+```
+vilavi_pim/api/nas.py                       ← NAS 核心（SynologyNAS 类）
+work_order_task/.../item_group_nas_path.py  ← encode_filestation_link()  ← 真正的深链实现
+```
+
+真格式是**双层 URL 编码**，和我猜的完全不同：
+
+```python
+first  = quote(path, safe="");  second = quote(first, safe="")
+link = f"https://{domain}/?launchApp=SYNO.SDS.App.FileStation3.Instance&launchParam=openfile%3D{second}"
+```
+
+顺带还对齐出两处细节：会话失效错误码是 **105/106/107**（我原本只判 106/107）；
+Thumb API 的 `path` **要加双引号**（spec 要求）。**这两条自己猜是猜不出来的。**
+
+**做法**：找内部约定时，**搜代码**而不只是搜文档：
+
+```bash
+# 在 EN 测试服务器上（bench 目录）
+ls /home/frappe/frappe-bench/apps/
+sudo grep -rln "<关键词>" /home/frappe/frappe-bench/apps/<app>/ --include="*.py" --include="*.js"
+```
+
+关键词用**功能词**（如 `launchApp` / `NAS` / `syncing` / 字段名），比搜中文更有效。
+
+## Case 3（2026-09-21 补充）: 第三方方案的「能力清单」也要抄
+
+评估第三方方案时，**不要只写对比表然后自建** —— 至少把候选方案的**工具/功能清单**抄下来当 checklist。
+
+2026-09-21 评 3 个开源群晖 MCP 时，我只做对比就选了自建，结果自建的功能面远小于现成方案，
+变成「用户要一个功能我加一个」。事后抄 mrquj 的工具表才发现一次漏了 7 项
+（搜索 / 缩略图 / 文件夹大小 / 校验和 / 分享链接 / 压缩包 / 读图）。
+
+**做法**：即便决定自建，也先把候选方案的功能表抄成 checklist，再对照底层 API 的能力上限，
+**一次性补齐**，而不是等用户点菜。
+
+## Why This Matters（Case 2/3 补充）
+
+内部约定**猜错的代价特别高**：它不是「写错了会报错」，而是**看着能跑、结果不对**。
+我猜的深链格式照样返回 200，用户点开才发现进不去 —— 与「吞异常」那类 bug 同性质。
+而这类约定**项目里通常已经有唯一正解**，搜一次就能省掉整轮返工。
+
 ## Related
 
+- [mcp-to-chatgpt-bringup-lessons.md](mcp-to-chatgpt-bringup-lessons.md) — ChatGPT 连接器接入 FAC 的实测记录（同批 NAS MCP 工作）
 - [docs/fac-mcp-setup.md](../../../docs/fac-mcp-setup.md) — FAC MCP 配置文档，已记录 3P 模式与普通模式的配置文件路径差异
 - [docs/lessons/tavily-mcp-setup.md](../../../docs/lessons/tavily-mcp-setup.md) — Tavily MCP 配置教训记录（Codex 平台）
 - [Tavily MCP 官方文档](https://docs.tavily.com/documentation/mcp#configuring-mcp-clients) — 正确的 key 名称和版本号

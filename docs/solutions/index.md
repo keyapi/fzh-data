@@ -1,4 +1,3 @@
-| 2026-09-21 | 把 FAC / 赛狐 / NAS 三个 MCP 接上 ChatGPT —— 一次串起来的方法与四个教训 | [workflow-issues/mcp-to-chatgpt-bringup-lessons.md](workflow-issues/mcp-to-chatgpt-bringup-lessons.md) |
 ---
 okf: v0.1
 type: Index
@@ -11,6 +10,7 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-09-21 | 把 FAC / 赛狐 / NAS 三个 MCP 接上 ChatGPT —— 一次串起来的方法与四个教训 | [workflow-issues/mcp-to-chatgpt-bringup-lessons.md](workflow-issues/mcp-to-chatgpt-bringup-lessons.md) |
 | 2026-09-18 | 赛狐备货单改「单个头程费用」——无 Excel 路径，只能走私有接口 | [integration-issues/sellfox-restock-headfee-api.md](integration-issues/sellfox-restock-headfee-api.md) |
 | 2026-09-18 | 赛狐成本补录单——公开 OpenAPI 只读，创建/审核走内部接口（完整契约实测） | [integration-issues/sellfox-cost-adjust-api.md](integration-issues/sellfox-cost-adjust-api.md) |
 | 2026-09-18 | 赛狐调整单写链路——createV2 一步到位，batchConfirmAdjust 只适用「待调整」态 | [integration-issues/sellfox-adjust-order-write-chain.md](integration-issues/sellfox-adjust-order-write-chain.md) |
@@ -55,3 +55,4 @@ tags: [solutions, index]
 | 2026-07-28 | 赛狐 Phase2 ingest — IvyeaOps 五杠杆优化器数据接线 | [architecture-patterns/sellfox-ivyeaops-five-lever-ingest.md](architecture-patterns/sellfox-ivyeaops-five-lever-ingest.md) |
 | 2026-07-27 | IvyeaOps AI 问答 503 — deepseek-v4-flash | [integration-issues/ivyeaops-assistant-deepseek-v4-model-name.md](integration-issues/ivyeaops-assistant-deepseek-v4-model-name.md) |
 | 2026-07-24 | FZH 统一 AI 接入方案 — 选型结论 | [integration-issues/fzh-unified-ai-access-conclusion.md](integration-issues/fzh-unified-ai-access-conclusion.md) |
+| 2026-07-14 | 先搜再造：官方/项目文档 → 内部约定要搜代码 → 第三方方案要抄功能清单 | [workflow-issues/search-first-before-implementing.md](workflow-issues/search-first-before-implementing.md) |
