@@ -128,5 +128,46 @@ r2 = S.tool_list({"path": S.ROOTS[0], "limit": 3})
 check("返回 total 供翻页", r2.get("total") is not None, f"total={r2.get('total')} count={r2.get('count')}")
 check("超出一页时给出 note", ("note" in r2) == (r2.get("total", 0) > 3), str(r2.get("note"))[:70])
 
+print("\n── 8) 图片工具：返回 MCP 原生 image 内容")
+IMG = "/产品信息/KS0001_三角靠枕/图片/2026新图/宽条绒/土黄色/100/3.jpg"
+try:
+    out = S.tool_read_image({"path": IMG})
+    blocks = out.get("_content") or []
+    check("返回两个内容块（文本+图片）", len(blocks) == 2, f"实际 {len(blocks)}")
+    img = next((b for b in blocks if b.get("type") == "image"), None)
+    check("含 image 块", img is not None)
+    if img:
+        check("mimeType 是图片", str(img.get("mimeType", "")).startswith("image/"), str(img.get("mimeType")))
+        import base64 as _b64
+        raw = _b64.b64decode(img["data"])
+        check("base64 可解码且是图片魔数",
+              raw[:2] == b"\xff\xd8" or raw[:8] == b"\x89PNG\r\n\x1a\n", f"{len(raw)} bytes")
+        from PIL import Image as _I
+        import io as _io
+        im = _I.open(_io.BytesIO(raw))
+        check("长边不超上限", max(im.size) <= S.IMAGE_MAX_EDGE,
+              f"{im.size} (上限 {S.IMAGE_MAX_EDGE}) 返回 {len(raw)/1024:.0f} KiB")
+except S.NasError as e:
+    print(f"  SKIP  图片用例（该路径在当前账号下不可读）：{str(e)[:70]}")
+except ValueError as e:
+    print(f"  SKIP  图片用例：{e}")
+
+try:
+    S.tool_read_image({"path": f"{S.ROOTS[0]}/x.txt"})
+    check("非图片扩展名被拒", False, "← 竟然放行")
+except ValueError as e:
+    check("非图片扩展名被拒", "只允许图片类型" in str(e), f"({str(e)[:40]})")
+
+print("\n── 9) 放开模式：NAS_ALLOWED_ROOTS=* 时信任 DSM 账号权限")
+import importlib, os as _os
+_os.environ["NAS_ALLOWED_ROOTS"] = "*"
+_os.environ["NAS_ROOT_FOLDER"] = "/FZH共享文件夹"
+S2 = importlib.reload(S)
+check("ALLOW_ANY=True", S2.ALLOW_ANY is True)
+check("任意共享文件夹都放行", S2.safe_path("/产品信息/x") == "/产品信息/x"
+      and S2.safe_path("/任何共享/a") == "/任何共享/a")
+check(".. 逃逸仍被 normpath 吃掉", S2.safe_path("/a/../../etc") == "/etc",
+      f"-> {S2.safe_path('/a/../../etc')}（路径已规范化，真正的边界交给 DSM 账号）")
+
 print(f"\n结果：{ok} passed, {fail} failed")
 sys.exit(1 if fail else 0)

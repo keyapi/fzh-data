@@ -44,4 +44,14 @@ tags: [nas, mcp, log]
   - **顺带**：`nas_list_folder` 增报 `total` 与翻页 `note`（避免把「一页」当成「总共就这些」）；新增 `offset`。
   - **顺带修**: `_is_session_error()` 对异常对象做 `json.dumps` 会 `TypeError`，反而盖住真实错误 —— 已修。
   - **测试 19/19**，新增回归护栏：**不存在的目录必须抛错，不得返回空**（正是本次 bug 的核心）。
+- **新增（用户反馈驱动）**: **`nas_read_image` —— 返回 MCP 原生 `image` 内容块**，模型可真正看图。
+  背景：ChatGPT 能定位到 `3.jpg` 却看不到像素，只能列目录/读文本，**对产品图场景等于没用**。
+  实现：按 DSM `SYNO.FileStation.Download` 取字节 → Pillow 校验 → 超长边自动等比缩小 + 重编码 JPEG。
+  实测：2000×2000 / 1.14 MB 原图 → **1280×1280 / 287 KiB**。
+  - **顺带又修一个上游 bug**：`FileStation.get_file(mode='download')` 是**往磁盘写文件并返回 None** 的，
+    所以 `NAS_API.download_file()` **永远返回 None**（还会偷偷在磁盘建文件）。改为直接用 `requests`
+    打同一个 API 拿响应体。
+- **新增**: **放开模式 `NAS_ALLOWED_ROOTS=*`（现已设为默认）** —— **权限完全交给 DSM 账号**，
+  MCP 只拦 `..` 逃逸。用户明确要求「权限按用户（NAS 账号）走」，加目录不该还要改服务。
+  显式列表模式保留，供需要收紧时用。
 - **未决**: 尚无写入能力（刻意）；per-user 权限（现为单账号单 token）待评估。

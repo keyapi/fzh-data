@@ -18,6 +18,8 @@
 """
 from __future__ import annotations
 
+import base64
+import io
 import json
 import os
 import posixpath
@@ -26,9 +28,10 @@ import threading
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import quote_plus
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
+import requests
+from PIL import Image
 from synology_api.filestation import FileStation  # noqa: E402
 
 PORT = int(os.environ.get("NAS_MCP_PORT", "8402"))
@@ -36,25 +39,37 @@ BIND = os.environ.get("NAS_MCP_BIND", "127.0.0.1")
 TOKEN = os.environ.get("NAS_MCP_TOKEN", "")
 PROTOCOL = "2025-06-18"
 MAX_TEXT_BYTES = 256 * 1024          # nas_read_text 硬上限 256 KiB
+MAX_IMAGE_BYTES = 4 * 1024 * 1024    # nas_read_image 最终 base64 前的字节上限
+IMAGE_MAX_EDGE = int(os.environ.get("NAS_MCP_IMAGE_MAX_EDGE", "1280"))
 LOG = os.environ.get("NAS_MCP_LOG", "")
 
 
-def _parse_roots() -> list[str]:
-    """允许的根目录列表。
+def _parse_roots() -> tuple[list[str], bool]:
+    """返回 (允许的根目录列表, 是否放开为「信任 DSM 账号权限」)。
 
-    优先级：`NAS_ALLOWED_ROOTS`（逗号或冒号分隔的多个）> `NAS_ROOT_FOLDER`（单个，兼容 NAS_API）。
-    注意 DSM 上各共享文件夹是**彼此独立的顶层目录**（如 /FZH共享文件夹 与 /产品信息），
-    所以需要哪个就显式列出来 —— 默认只给一个。
+    两种模式：
+      - **`NAS_ALLOWED_ROOTS=*`（推荐）** —— 不在 MCP 层设目录白名单，
+        **完全交给 DSM 账号自身的权限**把关；MCP 只拦 `..` 之类路径逃逸。
+        这是「权限按用户（NAS 账号）走」的形态，加目录不用改服务。
+      - `NAS_ALLOWED_ROOTS=/dirA,/dirB` —— MCP 层再收一道，需要显式列。
     """
-    raw = os.environ.get("NAS_ALLOWED_ROOTS") or os.environ.get("NAS_ROOT_FOLDER") or "/FZH共享文件夹"
+    raw = os.environ.get("NAS_ALLOWED_ROOTS")
+    if raw is None:
+        raw = os.environ.get("NAS_ROOT_FOLDER") or "*"
+    raw = raw.strip()
+    if raw in ("*", "all", "ALL"):
+        return ["*"], True
     parts = [p.strip().rstrip("/") for p in raw.replace(":", ",").split(",")]
     roots = [p for p in parts if p]
-    return roots or ["/FZH共享文件夹"]
+    return (roots or ["*"]), (roots == ["*"] or not roots)
 
 
-ROOTS = _parse_roots()
-ROOT = ROOTS[0]                      # 兼容旧引用（health 里也报这个作默认）
-ROOTS_STR = "、".join(ROOTS)          # 供工具描述使用
+ROOTS, ALLOW_ANY = _parse_roots()
+# 空 path 时用哪个作默认：优先 NAS_ROOT_FOLDER；放开模式下没有就退到 "/"
+DEFAULT_ROOT = (os.environ.get("NAS_ROOT_FOLDER") or "").strip().rstrip("/") \
+    or (ROOTS[0] if not ALLOW_ANY else "/")
+ROOT = DEFAULT_ROOT
+ROOTS_STR = "任意目录（由 NAS 账号权限决定）" if ALLOW_ANY else "、".join(ROOTS)
 
 
 def log(line: str) -> None:
@@ -161,39 +176,63 @@ def list_strict(path: str, limit: int = 100, offset: int = 0) -> dict:
     raise NasError(f"重试后仍失败：{last}")
 
 
-def download_strict(path: str) -> bytes:
+def fetch_bytes(path: str, max_bytes: int = MAX_IMAGE_BYTES) -> bytes:
+    """按 DSM `SYNO.FileStation.Download` API 取文件字节 —— **不吞异常**，会话失效自动重登重试。
+
+    为什么不用 `FileStation.get_file(mode='download')`：那个方法**往磁盘写文件并返回 None**，
+    根本不返回字节（`NAS_API.download_file()` 因此永远返回 None，且会偷偷在磁盘建文件）。
+    这里直接用 `requests` 打同一个 API，拿到真正的响应体。
+    """
     last = None
     for attempt in (1, 2):
         c = nas_client(relogin=(attempt == 2))
+        api = "SYNO.FileStation.Download"
+        info = c.file_station_list[api]
+        url = (f"{c.base_url}{info['path']}?api={api}&version={info['maxVersion']}"
+               f"&method=download&path={quote_plus(path)}&mode=download&_sid={c._sid}")
+        token = getattr(c.session, "_syno_token", "") or ""
         try:
-            r = c.get_file(path=path, mode="download")
+            r = requests.get(url, stream=True, verify=False, timeout=120,
+                             headers={"X-SYNO-TOKEN": token})
+            r.raise_for_status()
+            buf = io.BytesIO()
+            for chunk in r.iter_content(65536):
+                if chunk:
+                    buf.write(chunk)
+                    if buf.tell() > max_bytes:
+                        raise NasError(f"文件超过上限 {max_bytes} 字节，拒绝下载")
+            return buf.getvalue()
+        except NasError:
+            raise
         except Exception as e:                       # noqa: BLE001
             if attempt == 1 and _is_session_error(e):
                 log(f"  会话失效，重登重试：{e}")
                 last = e
                 continue
             raise NasError(f"{type(e).__name__}: {e}") from e
-        if isinstance(r, dict) and r.get("success") and "data" in r:
-            return r["data"]
-        raise NasError("下载失败：" + json.dumps(r if not isinstance(r, dict) else r.get("error"),
-                                                ensure_ascii=False)[:200])
     raise NasError(f"重试后仍失败：{last}")
 
 
 def safe_path(raw: str) -> str:
-    """把请求路径规范化，并强制落在任一允许的根目录之内。拒绝 .. 与越界。"""
+    """规范化路径并拦掉越界逃逸。
+
+    - **放开模式（`NAS_ALLOWED_ROOTS=*`）**：不设目录白名单，
+      `..` 由 normpath 解析掉，**真正的权限边界交给 DSM 账号**。
+    - **列表模式**：必须落在列出的根目录之一内（前缀混淆也拒）。
+    """
     p = (raw or "").strip()
     if not p:
         return ROOT
     p = p.replace("\\", "/")
-    # 相对路径：默认挂到第一个根目录下
     if not p.startswith("/"):
         p = posixpath.join(ROOT, p)
     p = posixpath.normpath(p)
+    if ALLOW_ANY:
+        return p
     for r in ROOTS:
         if p == r or p.startswith(r + "/"):
             return p
-    raise PathDenied(f"路径越界：仅允许 {'、'.join(ROOTS)} 之内")
+    raise PathDenied(f"路径越界：仅允许 {ROOTS_STR} 之内")
 
 
 # ── 工具定义 ────────────────────────────────────────────────
@@ -228,6 +267,20 @@ TOOLS = [
         },
     },
     {
+        "name": "nas_read_image",
+        "description": ("读取 NAS 上的一张**图片**并直接返回画面内容（模型可看图）。只读。"
+                        f"超过长边 {IMAGE_MAX_EDGE}px 会自动等比缩小。"),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "图片路径（jpg/jpeg/png/gif/webp/bmp）"},
+                "max_edge": {"type": "integer",
+                             "description": f"返回图的长边上限像素，默认 {IMAGE_MAX_EDGE}，最大 4096"},
+            },
+            "required": ["path"],
+        },
+    },
+    {
         "name": "nas_read_text",
         "description": (
             f"读取 NAS 上一个小**文本**文件的内容（上限 {MAX_TEXT_BYTES // 1024} KiB）。"
@@ -247,6 +300,7 @@ TOOLS = [
 
 TEXT_EXT = {".txt", ".md", ".csv", ".json", ".yaml", ".yml", ".log", ".ini",
             ".conf", ".xml", ".html", ".py", ".js", ".ts", ".sql", ".toml"}
+IMAGE_EXT = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"}
 
 
 # ── 工具实现 ────────────────────────────────────────────────
@@ -319,7 +373,7 @@ def tool_read_text(a: dict) -> dict:
     if size > cap:
         raise ValueError(f"文件 {size} 字节，超过上限 {cap}，拒绝读取（只返回元数据）")
 
-    data = download_strict(p)
+    data = fetch_bytes(p, max_bytes=MAX_TEXT_BYTES)
     if len(data) > cap:
         raise ValueError(f"实际大小 {len(data)} 超过上限 {cap}，拒绝")
     try:
@@ -329,10 +383,59 @@ def tool_read_text(a: dict) -> dict:
     return {"path": p, "size": len(data), "text": text}
 
 
+def tool_read_image(a: dict) -> dict:
+    """读一张图片并**按 MCP 原生 image 内容返回**（base64）—— 让模型能真的看到画面。
+
+    超过长边上限会等比缩小并重编码为 JPEG，避免把几 MB 的原图塞进上下文。
+    返回 `_content` 交给传输层直接当 content 数组（文本元信息 + 图片）。
+    """
+    raw = a.get("path") or ""
+    if not raw:
+        raise ValueError("path 必填")
+    p = safe_path(raw)
+    ext = posixpath.splitext(p)[1].lower()
+    if ext not in IMAGE_EXT:
+        raise ValueError(f"只允许图片类型 {sorted(IMAGE_EXT)}；当前是 {ext or '无扩展名'}")
+
+    data = fetch_bytes(p, max_bytes=MAX_IMAGE_BYTES)
+    try:
+        im = Image.open(io.BytesIO(data))
+        im.load()
+    except Exception as e:                            # noqa: BLE001
+        raise ValueError(f"不是可解析的图片：{type(e).__name__}: {e}")
+
+    orig_size, orig_mode, orig_format = im.size, im.mode, im.format
+    max_edge = max(64, min(int(a.get("max_edge") or IMAGE_MAX_EDGE), 4096))
+    resized = False
+    if max(orig_size) > max_edge:
+        im = im.copy()
+        im.thumbnail((max_edge, max_edge))
+        resized = True
+
+    buf = io.BytesIO()
+    if im.mode in ("RGBA", "LA", "P") and (ext == ".png" or not resized):
+        mime, pil_fmt = "image/png", "PNG"
+    else:
+        if im.mode not in ("RGB", "L"):
+            im = im.convert("RGB")
+        mime, pil_fmt = "image/jpeg", "JPEG"
+    im.save(buf, pil_fmt, quality=82, optimize=True)
+    out = buf.getvalue()
+
+    meta = {"path": p, "mime": mime, "original": {"format": orig_format, "size": orig_size,
+                                                  "mode": orig_mode, "bytes": len(data)},
+            "returned": {"size": im.size, "bytes": len(out), "resized": resized}}
+    return {"_content": [
+        {"type": "text", "text": json.dumps(meta, ensure_ascii=False, indent=2)},
+        {"type": "image", "data": base64.b64encode(out).decode(), "mimeType": mime},
+    ]}
+
+
 TOOL_IMPL = {
     "nas_health": tool_health,
     "nas_list_folder": tool_list,
     "nas_file_info": tool_info,
+    "nas_read_image": tool_read_image,
     "nas_read_text": tool_read_text,
 }
 
@@ -416,9 +519,12 @@ class Handler(BaseHTTPRequestHandler):
                 return
             try:
                 out = fn(args)
-                self._result(mid, {"content": [
-                    {"type": "text", "text": json.dumps(out, ensure_ascii=False, indent=2)}],
-                    "isError": False})
+                if isinstance(out, dict) and "_content" in out:
+                    content = out["_content"]          # 工具自带内容块（如 文本+图片）
+                else:
+                    content = [{"type": "text",
+                                "text": json.dumps(out, ensure_ascii=False, indent=2)}]
+                self._result(mid, {"content": content, "isError": False})
             except PathDenied as e:
                 self._result(mid, {"content": [{"type": "text", "text": f"拒绝：{e}"}],
                                    "isError": True})

@@ -17,11 +17,13 @@ timestamp: 2026-09-21
 
 ## 三条硬安全约束
 
-1. **只读**：只暴露 `nas_health` / `nas_list_folder` / `nas_file_info` / `nas_read_text`。
+1. **只读**：只暴露 `nas_health` / `nas_list_folder` / `nas_file_info` / **`nas_read_image`** / `nas_read_text`。
    **不暴露任何写或删**（`NAS_API/synology.py` 里的 `create_folder` / `create_subfolders` / **`delete_folder`** 一律不用）。
-2. **路径锁死**：所有路径必须落在**允许的根目录之一**内（`NAS_ALLOWED_ROOTS`）；
-   `..` 与越界一律 `PathDenied`。**前缀混淆也拒**（`/产品信息X` 不放行）。
-3. **不吐大文件**：`nas_read_text` 有硬上限（256 KiB），且只允许文本类扩展名；二进制/超大一律拒绝，只给元数据。
+2. **权限边界交给 NAS 账号**（默认 `NAS_ALLOWED_ROOTS=*`）：MCP 只拦 `..` 路径逃逸，
+   **能看什么由 `fzh.mcp` 这个 DSM 账号的文件夹权限决定** —— 加目录不用改服务。
+   需要收紧时把 `NAS_ALLOWED_ROOTS` 设成显式列表（那时才有 MCP 层白名单）。
+3. **不吐大文件**：`nas_read_text` 上限 256 KiB 且只允许文本类扩展名；
+   `nas_read_image` 超过长边上限会自动等比缩小后重编码；其余二进制只给元数据。
 
 ## 为什么自建而不用现成的
 
@@ -54,7 +56,8 @@ uv run python nas_mcp/tests/test_smoke.py
 |---|---|---|
 | `NAS_MCP_TOKEN` | ✅ | Bearer 令牌。**绝不写进仓库或镜像** |
 | `NAS_URL` / `NAS_USERNAME` / `NAS_PASSWORD` | ✅ | 同 `NAS_API`（复用其约定） |
-| `NAS_ALLOWED_ROOTS` | ✅ | **允许的根目录，逗号或冒号分隔**（如 `/FZH共享文件夹,/产品信息`）。缺省回退到 `NAS_ROOT_FOLDER` |
+| `NAS_ALLOWED_ROOTS` | | `*`（默认）= **信任 DSM 账号权限**；或显式列目录（逗号/冒号分隔）做 MCP 层收紧 |
+| `NAS_MCP_IMAGE_MAX_EDGE` | | 图片返回长边上限像素，默认 `1280` |
 | `NAS_ROOT_FOLDER` | | 单根兼容项；仅在未设 `NAS_ALLOWED_ROOTS` 时生效 |
 | `NAS_MCP_BIND` / `NAS_MCP_PORT` | | 默认 `127.0.0.1:8402`（**只绑回环**，由 nginx 反代） |
 | `NAS_MCP_LOG` | | 可选，追加日志到文件 |
