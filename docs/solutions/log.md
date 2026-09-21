@@ -7,6 +7,14 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-09-21
+
+- **新增**: [workflow-issues/mcp-to-chatgpt-bringup-lessons.md](workflow-issues/mcp-to-chatgpt-bringup-lessons.md) — 把 FAC / 赛狐 / NAS 三个 MCP 接上 ChatGPT 的**方法总结与四个教训**。两个是方法问题不是技术难题：
+  ① **单次探针不可信** —— 在办公网内测 `nas.vilavi.cn` 得 200，实为**内网 DNS 覆盖**，换两处外部主机复测才发现 443 公网不通；
+  ② **评估第三方方案要先盘功能面再决定自建**（用户直接批评）—— 我把 3 个开源方案只当「对比对象」、**没抄它们的工具清单**，导致功能面远小于现成方案，变成「用户要一个我加一个」；
+  ③ **上游封装会吞异常** —— `NAS_API.get_file_list` 失败 `return []`，把「Session timeout」伪装成「文件夹是空的」；`download_file()` 因 `get_file(mode='download')` 写盘不返字节而**永远返回 None**；
+  ④ **做对的**：鉴权先验最小闭环（本机 + Tailscale Funnel，零生产影响）拿到 `openai-mcp/1.0.0` 带 `Authorization` 头的决定性日志，结论赛狐与 NAS 共用。
+
 ## 2026-09-20
 - **新增**: `workflow-issues/sellfox-incentive-cost-adjust-2026-09.md` — 「特殊规则改赛狐入库成本」的批量执行尝试：目标值来自共享 Google Sheet 特殊规则 844-874 行（汇率 6.8，通途SKU→赛狐SKU 走 EN BOM「客户物料号→产品编号」，28/28 命中），生成 56 明细行 / 6 张备货单。**结论：清单能生成，但大部分行改不动**，因为①**成本补录单下调受「批次剩余货值」封顶**（`单件可下调幅度 ≲ 当前单价 × 剩余占比`，剩余为 0 就完全降不了 → 下调有强时效性，要在被消耗前做），②**同一 SKU 只能有一张待审核补录单**。另记录两条数据可信度教训：**批次表 `goodsAva` 不能当当前库存**（30 行 21 行与库存明细不符，POLAND 整组差约 1000）、**备货单列表接口 `items` 只返回 3 条预览**（据此判断 SKU 成员关系必然误判，本轮连错两次）。
 - **更新**: `integration-issues/sellfox-cost-adjust-api.md` — 补「建单/审核会被拒的两条硬约束」（`货值不能为负数` 的公式与实测边界 178.045；`存在待审核的补录单` 与 `delete.json` 用法）与 2026-09-20 实测表；`integration-issues/sellfox-restock-headfee-api.md` — 新增「`searchType` 三个调用面三种约定」表（站点列表 `sku` / 批次表 `commoditySku` / 公开 OpenAPI 不含 SKU）+ 列表 3 行预览陷阱；`research/2026-09-18-sellfox-cost-accounting-fifo.md` — **更正 `goodsAva > 0` = 还在库 的说法**，并在「改成本工具结论」补下调封顶；`cost_adjust/AGENT_HANDOFF.md` — 关键坑新增 8/9/10/11 四条，未解决表补两行。
