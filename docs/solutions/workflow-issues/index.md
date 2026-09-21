@@ -9,6 +9,8 @@ tags: [workflow-issues, index]
 
 | 文档 | 说明 |
 |------|------|
+| [sellfox-inventory-sync-cost-drift.md](sellfox-inventory-sync-cost-drift.md) | 用库存调整单同步数量会让成本越来越改不动 —— 成因与三个选项 |
+| [sellfox-incentive-cost-adjust-2026-09.md](sellfox-incentive-cost-adjust-2026-09.md) | 特殊规则改赛狐入库成本执行记录 —— 下调受批次剩余货值封顶，越消耗越改不动 |
 | [sellfox-cover-combo-create-ops.md](sellfox-cover-combo-create-ops.md) | 三角皮壳 PK# 组合代理批量创建（不是 EN 套件） |
 | [soft-wall-combo-batch-staging.md](soft-wall-combo-batch-staging.md) | 软包墙围 EN 套件/赛狐组合商品批量分阶段创建 |
 | [zipper-combo-batch-staging.md](zipper-combo-batch-staging.md) | 拉链款无捆绑SKU 合成客户物料号并批量创建组合 |
