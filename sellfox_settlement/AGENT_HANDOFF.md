@@ -82,4 +82,3 @@ uv run python sellfox_settlement/reconcile_amazon.py reconcile --settlement data
 - **技能**：`okf`（OKF v0.1 文档规范：frontmatter `type`、每目录 index.md、每 bundle log.md）、`ce-compound`（docs/solutions 知识沉淀）、`sellfox-api`（赛狐 OpenAPI 访问/凭证/限流）。**不适用**：category/multi-attr/item-cost 等赛狐 Excel 导入类。
 - **库/凭证**：`SELLFOX_API/client.py`(`SellfoxClient`, 代理/直连/限流/重试)、gspread + `secrets/gsheets-service-account.json`(谷歌表)、`tongtool_order_cost.tongtool_order_cost.gsheets`。运行建议用**父仓库 `.venv`**。
 - **相关既有模块/技能**：`platform-account-reconciliation`(OSTKUS/账期对账)、`pb-reconciliation`(PB 对账)、`channel_account_sync`(渠道账号命名/同步)、`en-channel-account-gsheet-sync`(渠道账号 gsheet→EN)。
-

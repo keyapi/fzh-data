@@ -242,7 +242,3 @@ resource: sellfox_settlement/reconcile_amazon.py
 - **VERCART→AMZVer** 已补（按你确认）：`AMZVerUS/CA/ES/UK/FR/IT/NL/SE/PL/BE` = `VERCART-{region}`；`VERCART-TR/IE`、`AMZVerMX` 无对应店/账号，留空。
 - 北京固祥-* 未启用 → 排除；其余无当月数据店(君缘-TR/IE、北京熙锦-CA、云途汇德-CA、FZH深圳-CA/IE、方州汇绍兴-CA/MX、百纳-TR/IE、Daneey-IE) 留空。
 - 产物：`sellfox_settlement/reconcile_amazon.py`(新增 `fetch-custom`)；`out/storeName_to_account_candidates.csv`。
-
-
-
-
