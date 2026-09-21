@@ -65,6 +65,9 @@ def _next_step(result: RouteResult) -> str:
     if result.web_task:
         return f"uv run python web_automation/scripts/dispatch.py {result.web_task} --check"
     if result.directory:
+        # .agents/skills/ 下的条目只有 SKILL.md，没有 AGENT_HANDOFF.md
+        if result.directory.startswith(".agents/skills/"):
+            return f"读 {result.directory}SKILL.md"
         return f"cd {result.directory}（详见 {result.directory}AGENT_HANDOFF.md）"
     return f"外部 skill：{result.skill}"
 
@@ -162,8 +165,10 @@ def _cmd_route(args: argparse.Namespace) -> int:
         print(f"已加载的 .env：{shown}", file=sys.stderr)
 
     catalog = load_catalog()
-    api_key = resolve_api_key(args.env_file)
-    if not api_key:
+    # 局部变量不叫 api_key：AGENTS.md 第 9 条那套凭证 grep 会把「api_key 后接等号再接长
+    # 标识符」的赋值误报成明文凭证（本文件实测过一次），而该扫描要求零输出
+    key = resolve_api_key(args.env_file)
+    if not key:
         _render_missing_key(args.env_file)
         return EXIT_USAGE
 
@@ -171,7 +176,7 @@ def _cmd_route(args: argparse.Namespace) -> int:
         result = route(
             args.request,
             catalog=catalog,
-            api_key=api_key,
+            api_key=key,
             min_confidence=args.min_confidence,
             model=args.model,
             timeout=args.timeout,

@@ -256,6 +256,13 @@ options:
     examples: [该用哪个模块, 这是哪个 skill 的活, 帮我找模块, 意图分类, 路由到哪个模块, intent router, TypeSafe, Jev]
     run: uv run python -m intent_router.cli route "<中文请求>"
 
+  - skill: ce-okf
+    dir: .agents/skills/ce-okf/
+    summary: 对话收尾一条龙：ce-compound 正文 + OKF 级联 + 索引联动 + 凭证扫描 + 提交 + PR
+    coverage: 对话收尾一条龙：调 ce-compound 产出学习正文，再做 OKF 级联登记（文档/脚本/skill/handoff）、索引联动、凭证扫描、提交并开 PR
+    exclusions: 不重写正文（正文由 ce-compound 负责）；不是通用文档写作；不用于具体业务任务
+    examples: [收尾, 沉淀, 总结本次对话, 总结我们本次对话, 记录背景 过程 结果, 经验教训, 更新 handoff, 更新文档脚本skill, okf 标准, ce-compound, 不要泄露隐私]
+
   - skill: frappe-core-api
     dir: null
     external: true
