@@ -401,6 +401,8 @@ A webhook-based DingTalk group messaging channel used by AI agents (WorkBuddy, C
 - **Tongtool Order**: EN 生产系统里的通途订单快照；Overstock 单据名通常为 `OS-{platform_order_id}`，另一账号 `OSTK02US` 使用 `OSFD-` 前缀；Walmart 为 `WM-{platform_order_id}`（`platform_code=walmart_api`）。
 - **拆单后缀**: 多 SKU/多件订单在通途/EN 会拆成 `_1/_2/_3` 子单，`platform_order_id` 保留后缀；汇总时需排除金额相同的“无后缀重复主单”。
 - **对账金额口径**: 用 `order_amount` / `products_total_price` 对账；`order_items.transaction_price` 是组件行，不能加总；`actual_total_price` 在退货订单上可能为 0。
+- **Amazon 账期报表（插件获取报告）**: 赛狐里 Amazon 的 Transaction / Summary 账期文件，**只能**通过 `report/center/task/getPlugPageList.json` 读取 —— 由浏览器插件在账号登录态下抓取后存 COS，赛狐服务端不自抓。`reportType`：3=Transaction(csv/zip)、4=Summary(**pdf**)。该接口**纯读、不可触发抓取**。
+- **fileUrls 临时签名**: 插件报告的下载地址是**腾讯 COS 预签名 URL，1 小时过期**。不能存链接，归档必须存文件本体。
 
 ## 群晖 NAS 外网访问
 

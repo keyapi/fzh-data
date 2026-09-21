@@ -8,6 +8,9 @@ tags: [solutions, log]
 # 变更日志
 
 ## 2026-09-21
+- **新增**: `integration-issues/sellfox-amazon-settlement-plug-only.md` — Amazon 账期报表（Transaction / Summary PDF）在赛狐侧**只有「插件获取报告」（`report/center/task/getPlugPageList.json`）一条路**，且该接口**纯读、API 不可触发抓取** —— 两条旁证：`创建报告任务` 的 `reportType` 只支持 `PRODUCT_SALE_REPORT`，`亚马逊原报告` 的类型枚举里没有账期。第二条硬约束：**`fileUrls` 是 1 小时有效的腾讯 COS 预签名 URL**，不能存链接，必须「拿新 URL → 立刻下载落盘」。实测：90 家 Amazon 店**仅 39 店有数据、51 店完全没抓过**（呈整店群分布 ⇒ 人工按品牌执行、非周期性任务），**只覆盖 2026-06/07，8-9 月一条没有**。另留档一个**已被否决**的替代方案（`monthProfit/shopSummary` 服务端销售额、覆盖全店但属赛狐自算口径），以免将来重复提议。
+- **新增**: `SELLFOX_API/fetch_amazon_settlement.py`（下载归档）+ `SELLFOX_API/probe_amazon_reports.py`（覆盖度矩阵）；调研全记录见 `docs/research/2026-09-21-sellfox-amazon-settlement-reports.md`。
+- **更新**: `skills/sellfox-api` 补「报告中心三条路径」对照表（亚马逊原报告 / 自定义报表 / 插件获取报告）。
 - **更新**（同日后续）: `intent_router/catalog.yaml` 从 35 补到 **56** 项 —— 补入 11 个此前漏掉的 skill 目录 + 10 个此前漏掉的**业务模块目录**（`advertise` / `amazon_pairing` / `ups_track` / `pb_reconciliation` / `cost_adjust` / `sellfox-api-proxy` / `ai_access_poc` / `google_drive_permissions` / `nas_product_visuals` / `sps_api`），`AGENTS.md` 模块索引表同步（35 → 56 行）。**关键认知：该表原是「策展子集」而非完整清单** —— 18 个顶层模块目录里 16 个不在表内，所以在此之前 `advertise`/`pb_reconciliation`/`ups_track` 这类模块**根本路由不到**。纳入规则（可审计）：有 `AGENT_HANDOFF.md` 或 `docs/`、有代码、且 2026-08-01 后仍有提交（或引用 ≥5 次）；据此排除 `test_upload`（0 py 已废弃）、`EN_shopify`（无文档）、`SPS_Selenium_Local`（仅 README 零引用）、`pdf_to_md`（文档齐但 3 个月未动）。**`dingtalk` 刻意不单列** —— 它就是 `dingtalk-robot` skill 的实现，单列会造出两个都像「发钉钉消息」的选项。**数字更新**：标注样例扩到 31 条（每新模块一条），56 选项下 **33/33 全中**，`confidence` 0.98–1.00、`ambiguity` 0.66–0.98、约 9815 输入 token ≈ $0.00041/次 —— 正面回答了原计划风险 #3「选项变多会互相干扰」。
 
 - **新增**: [workflow-issues/mcp-to-chatgpt-bringup-lessons.md](workflow-issues/mcp-to-chatgpt-bringup-lessons.md) — 把 FAC / 赛狐 / NAS 三个 MCP 接上 ChatGPT 的**方法总结与四个教训**。两个是方法问题不是技术难题：
