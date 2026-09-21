@@ -27,8 +27,19 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
 ROOT = Path(__file__).resolve().parents[2]
-ENV_FILE = ROOT / "EN_API" / ".env"
 EN_BASE = "https://erpnext.vilavi.cn"
+
+
+def _resolve_env_file() -> Path:
+    """EN_API/.env 在仓库根；git worktree 里没有，需向上找到主仓库。"""
+    for base in (ROOT, *ROOT.parents):
+        candidate = base / "EN_API" / ".env"
+        if candidate.is_file():
+            return candidate
+    return ROOT / "EN_API" / ".env"
+
+
+ENV_FILE = _resolve_env_file()
 
 
 def base_id(value: object) -> str:
