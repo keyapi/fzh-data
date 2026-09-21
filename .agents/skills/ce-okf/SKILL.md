@@ -53,6 +53,45 @@ triggers:
 
 ---
 
+## 多 Agent 并存（Claude / Codex / Cursor）—— 先读这一节
+
+用户会**同时**用 Claude Code、Codex、Cursor 编同一个仓库。本 skill 可能被这三者中的任何一个触发，规则如下。
+
+### 事实源只有一套，别动 CLAUDE.md
+
+| 文件 | 谁读 | 怎么来的 |
+|---|---|---|
+| `AGENTS.md` | **全部**（Claude / Codex / Cursor） | 唯一事实源，唯一该改的地方 |
+| `CLAUDE.md` | Claude Code | symlink → `AGENTS.md`（git mode 120000）。**永远不要编辑它、不要提交它** |
+| `.agents/skills/<name>/SKILL.md` | Codex / Cursor 直接读；Claude 经 `~/.claude/skills/` 软链读 | 按触发词加载 |
+
+**写这套文档时只改 `AGENTS.md`。** 改 `CLAUDE.md` = 改 symlink 目标 = 等于改 AGENTS.md，但会让 git 出现诡异 diff。
+
+### `/ce-compound` 是 Claude 专属，Codex/Cursor 上没有
+
+`ce-compound` / `ce-compound-refresh` 是**用户级外部 skill**（`~/.agents/skills/`，软链进 `~/.claude/skills/`），**只有 Claude Code 能用**。Codex 或 Cursor 触发本 skill 时，第 1 步会找不到它 —— **不要去装、不要报错卡住，直接走第 3 步的 frontmatter 模板自己写正文**。
+
+同理，`/ce-okf` 这种斜杠写法是 Claude 的说法；在 Codex / Cursor 里等价于"按触发词加载了 `.agents/skills/ce-okf/SKILL.md`"，行为一致。
+
+### 提交时的硬规则（防三个 Agent 互相踩）
+
+用户可能在别的 Agent 里正编着同一批文件。所以：
+
+1. **提交前先 `git status`。只 `git add` 本次自己动过的文件**（第 7 步的逐个 add 就是这个原因）。
+2. **绝不 `git add -A` / `git add .`** —— 另外两个 Agent 未完成的改动会躺在工作区，全量 add 会把它们裹进你的提交。
+3. **看到不认识的改动 → 原样留着。** 不要 `git restore`、不要 `git stash`、不要顺手提交。
+4. `index.md` 是自动生成的，可以随本次一起提交；但**别手改它**。
+5. 别碰 `CLAUDE.md`（见上）。
+
+### `setup.ps1` 只在主仓库跑
+
+`~/.claude/skills/` 的软链是 **Claude 独有**的机制，Codex / Cursor 不需要。
+
+> ⚠️ **在 worktree 里跑 `setup.ps1` 会把 `~/.claude/skills/<name>` 指向这个临时 worktree。** 后果：链接随 worktree 删除而失效，而且脚本遇到已存在路径会 `[SKIP]`，**之后在主仓库再跑也修不回来**，得手工删掉那个软链重建。
+> **所以只在主仓库根目录 `D:\Work\赛狐\Cursor` 跑，不要在 `.claude/worktrees/...` 里跑。**
+
+---
+
 ## 执行流程
 
 ### 第 0 步：判定模式（先做，别写错方向）
@@ -210,13 +249,14 @@ gh pr create --title "<70 字以内>" --body-file "$BODY_FILE"
 
 ## 首次安装到新机器
 
-本 skill 在 `.agents/skills/ce-okf/`，需要软链才能被 Claude Code / Claude Desktop 看到：
+本 skill 在 `.agents/skills/ce-okf/`。**Codex / Cursor 直接读它，不需要任何安装**；只有 Claude Code / Claude Desktop 需要软链：
 
 ```powershell
+# 在主仓库根目录 D:\Work\赛狐\Cursor 下跑，不要在 worktree 里跑
 powershell -ExecutionPolicy Bypass -File setup.ps1
 ```
 
-（`setup.ps1` 把 `.agents/skills/*` 链进 `~/.claude/skills/`；Codex 用户不需要这步。）
+（`setup.ps1` 把 `.agents/skills/*` 链进 `~/.claude/skills/`。若在 worktree 里跑，链接会指到临时 worktree 且事后修不回来 —— 详见上面「多 Agent 并存」。）
 
 > ⚠️ **跑完 `setup.ps1` 后 `git status` 会看到 `CLAUDE.md` 变脏 —— 这是 Windows 上的已知副作用，不要提交它。** 本 skill 第 7 步要求按文件名逐个 `git add`，正是为了避免把它带进去。
 >

@@ -50,6 +50,15 @@ tags: [skill, ce-compound, okf, workflow, documentation, handoff]
 - `docs/solutions/` 各 category 的 `index.md` **表头不统一**：`integration-issues/index.md` 是 `| 日期 | 标题 | 文件 |`，`tooling-decisions/index.md` 是 `| 标题 | 文件 |`。追加行要**以该文件现役表头为准**。
 - `<module>/AGENT_HANDOFF.md` 用的是 `type: Handoff`（**不在** okf 的 `type` 枚举里）和 `updated:`（**不在** okf 字段表里）。这是现役事实，不要去"修正"。
 
+### 多 Agent 并存（Claude / Codex / Cursor）
+
+用户**同时**用三个 Agent 编同一个仓库，这正是"`CLAUDE.md` 用 symlink 指向 `AGENTS.md`"的初衷：一套事实源，三边都读。所以 ce-okf 必须做到：
+
+- **只改 `AGENTS.md`，永不编辑/提交 `CLAUDE.md`。** 三者都读 `AGENTS.md`；`CLAUDE.md` 只是 Claude 的入口。
+- **`/ce-compound` 只有 Claude 有**（用户级 `~/.agents/skills/`）。Codex / Cursor 触发本 skill 时会找不到它 —— 已写死"直接走内置 frontmatter 模板，不要卡住"。
+- **提交只 `git add` 本次自己动过的文件，绝不 `git add -A`。** 另外两个 Agent 未完成的改动就躺在工作区，全量 add 会把它们裹进来。看到不认识的改动**原样留着**，不 restore / 不 stash / 不提交。
+- **`setup.ps1` 只在主仓库根目录跑。** `~/.claude/skills/` 软链是 Claude 独有的；在 worktree 里跑会把链接指向临时 worktree，而脚本对已存在路径 `[SKIP]`，**事后在主仓库再跑也修不回来**，只能手工删链接重建。本次实施就中了一次（`ce-okf` 链接指到了 worktree），已用 `(Get-Item $p -Force).Delete()` 移除。
+
 ## Why This Matters
 
 - 收尾动作从"每次口述 8 条要求"变成"打一个 `/ce-okf`"，且**漏项率归零**——四条硬规则由 skill 强制执行，而不是靠 Agent 记性。

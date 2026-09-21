@@ -13,6 +13,8 @@ tags: [solutions, log]
 - **更新**: `AGENTS.md` 模块索引表 +1 行（`ce-okf`）。
 - **修正**: `scripts/update_index.py --check` **不能当硬门禁** —— 逐字节比对但文件头 `generated:` 是分钟级时间戳，只在"刚生成完的同一分钟内"通过，平时误报 `STALE`；索引是否同步要看内容不看退出码。且索引日期列因取 git commit 日期而**注定滞后一个 commit**（先生成后提交时显示上次提交日期），仓库现役习惯即和文档同 commit，无需补 commit。
 - **坑**: Windows 上 `setup.ps1` 建**文件**符号链接要开发者模式/管理员，没开时退化成 `Copy-Item`，把 `CLAUDE.md` 从「1 行 stub」写成 AGENTS.md 整份副本（215 行），工作区变脏。**不要提交它**，也不要拿 `git restore` 当标准动作 —— 那会让本机 Claude Code 只读到 `AGENTS.md` 这 9 个字符（目录链接用 junction 不受影响，skills 一直正常）。两个状态只能取一个；开开发者模式才能兼得。已写进 `ce-okf` skill 安装节。
+- **新增**: `ce-okf` skill 补「多 Agent 并存（Claude/Codex/Cursor）」一节 —— 三者共用 `AGENTS.md` + `.agents/skills/` 一套事实源（`CLAUDE.md` 只是 Claude 入口，只改 AGENTS.md）；`/ce-compound` 是 Claude 专属、Codex/Cursor 上没有需走内置模板兜底；**提交只逐个 `git add` 本次自己动过的文件，绝不 `git add -A`**（另两个 Agent 的未完成改动会躺在工作区）；看到不认识的改动原样留着。
+- **坑**: `setup.ps1` **不能在 worktree 里跑** —— `~/.claude/skills/` 软链是 Claude 独有的，在 worktree 跑会把链接指向临时 worktree；而 `New-SafeJunction` 对已存在路径 `[SKIP]`，**事后在主仓库再跑也修不回来**。本次实施中了一次（`ce-okf` 链接指到 worktree），已用 `(Get-Item $p -Force).Delete()` 移除（只删链接、不动目标）。
 
 ## 2026-09-20
 
