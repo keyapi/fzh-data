@@ -17,6 +17,7 @@ tags: [solutions, index]
 | 2026-09-21 | 中文意图路由（intent_router）—— TypeSafe Jev + 置信度闸门 | [tooling-decisions/typesafe-jev-intent-router.md](tooling-decisions/typesafe-jev-intent-router.md) |
 | 2026-09-21 | Windows worktree 的 `CLAUDE.md`：symlink 还是 stub，取决于开发者模式 | [developer-experience/windows-worktree-claude-md-symlink.md](developer-experience/windows-worktree-claude-md-symlink.md) |
 | 2026-09-21 | ce-okf skill — 把「ce-compound + OKF 收尾」固化成一个命令 | [tooling-decisions/ce-okf-conversation-wrapup-skill.md](tooling-decisions/ce-okf-conversation-wrapup-skill.md) |
+| 2026-09-21 | Walmart 账期走赛狐 API 直拉；平台费口径结案（差额=沃尔玛补贴×15%） | [workflow-issues/walmart-account-period-sellfox-api.md](workflow-issues/walmart-account-period-sellfox-api.md) |
 | 2026-09-18 | 赛狐备货单改「单个头程费用」——无 Excel 路径，只能走私有接口 | [integration-issues/sellfox-restock-headfee-api.md](integration-issues/sellfox-restock-headfee-api.md) |
 | 2026-09-18 | 赛狐成本补录单——公开 OpenAPI 只读，创建/审核走内部接口（完整契约实测） | [integration-issues/sellfox-cost-adjust-api.md](integration-issues/sellfox-cost-adjust-api.md) |
 | 2026-09-18 | 赛狐调整单写链路——createV2 一步到位，batchConfirmAdjust 只适用「待调整」态 | [integration-issues/sellfox-adjust-order-write-chain.md](integration-issues/sellfox-adjust-order-write-chain.md) |
