@@ -1,0 +1,1 @@
+synology-api>=0.9.0
