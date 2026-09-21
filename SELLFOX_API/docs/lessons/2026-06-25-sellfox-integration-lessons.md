@@ -307,9 +307,9 @@ SKU: KS0002-DL-194-IVORY → ZLMB 编码 = ZLMB#KS0002-DL-194
 | 2026-07-17 | 新增 Lesson 17（重尺数据位置、覆盖率、兜底方案）— 基于 sellfox_shipping 调研 |
 
 ## See also
-- [赛狐 API 实践指南](../reference/2026-sellfox-api-guide.md)
-- [多账号防关联安全](../reference/2026-security-multi-account.md)
-- [SP-API 开发者模型](../reference/2026-sp-api-developer-model.md)
-- [v0.1-v0.3 12条开发教训](lessons-learned.md)
+- 赛狐 API 实践指南（未撰写；本文即接入实践记录）
+- 多账号防关联安全（未撰写；见本文 Lesson 8）
+- SP-API 开发者模型（未撰写；见本文 Lesson 9）
+- v0.1-v0.3 12 条开发教训（已并入本文 Lesson 1-12）
 - [AGENT_HANDOFF.md](../../AGENT_HANDOFF.md)
 - [fetch_ad_reports.py](../../fetch_ad_reports.py) — 实战脚本（纯 stdlib，零依赖）

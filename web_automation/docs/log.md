@@ -8,6 +8,10 @@ tags: [web-automation, tongtu, sellfox, playwright, log]
 
 # 迁移日志
 
+## 2026-09-20
+
+- **修复（链接）**：`solutions/integration-issues/ddddocr-playwright-login-fixes.md` 指向 `docs/lessons/`、`docs/reference/` 的 2 条链接少退一级，由 `../` → `../../`。
+
 ## 2026-09-18 — 浏览器启动统一出口（browser_launch）
 
 **背景**：本机 bundled chromium 的**有头**模式起不来（`spawn UNKNOWN`；chromium-1228 另报沙箱
