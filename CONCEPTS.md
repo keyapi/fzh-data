@@ -61,6 +61,26 @@ DeepSeek API 自 2026-08 起按北京时间分时计费：周一至周五工作�
 ### 五桶分析法（advertise 搜索词分类）
 `advertise/analyze_search_term.py` 对**搜索词行**打的五个分析桶：**Harvest / Negate / Monitor / Protect / Ignore**（见 `advertise/AGENT_HANDOFF.md`「5 桶分类」）。这是报表分析标签，**不是** IvyeaOps 的五杠杆。对应关系：Harvest≈收割候选、Negate≈否词候选；Monitor/Protect/Ignore 在五杠杆里没有同名动作。
 
+## 意图路由 (intent_router)
+
+### System One
+TypeSafe 的决策模型系列：**不生成文本**，输入 `state` + 结构化问题，返回**带概率的判定**。三个原语：`noul`（是/否的概率）、`choice`（≤255 项里选一个）、`score`（2–10 级有序量表）。设计取向是 code 拥有 workflow，模型只在需要语义理解的地方给出可编程的常识判断。
+
+### Jev
+System One 的旗舰模型（请求用别名 `jev-latest`，实测解析到 `jev-1.13.0`）。端点 `POST https://api.typesafe.ai/v1/systemone` + Bearer `TYPESAFE_API_KEY`（存父仓库 `.env`）。**只有输入 token 计费**，输出免费。契约与实测见 `intent_router/docs/reference/typesafe-contract.md`。
+
+### confidence 是分布集中度，不是正确率
+`choice` / `score` 的答案里 `confidence` 由**概率分布的集中程度**算出（越集中越高），所以它只反映「模型是否犹豫」，**不反映「模型是否答对」**。实测：在本仓库 35 路目录上 0.97–1.00、几近饱和，连模型选 `none` 时也有 0.99。**把高 confidence 读成"一定对"是错的** —— 这正是本仓库 `--min-confidence` 闸门实际不触发的原因。
+
+### 置信度闸门（confidence gate）
+用阈值决定「敢不敢自动执行」：低于阈值就不猜，转人工或要求澄清（官方 `patterns/intent-routing.md` 的做法）。`intent_router` 的闸门语义锁定为 `--min-confidence`（默认 0.5）+ `none` 选项；但**真正兜底的是 `none`，不是阈值**。
+
+### none 选项
+给 `choice` 加一个「都不匹配」的出口。**必须留这个出口**，否则模型被迫在几十个选项里硬选一个。`intent_router` 里它由 `typesafe.build_payload()` 硬编码追加（**不写进 `catalog.yaml`**），防止重新生成 catalog 时被漏掉。实测有效：模糊请求与域外请求都正确落 `none`。
+
+### 触发词路由 vs 语义路由
+`.agents/skills/*/SKILL.md` 的触发词是**关键词匹配**（`当用户提到"…"时触发`）；`intent_router` 是**语义路由**（把整句需求交给 Jev 判断意图）。触发词分不开吃同一种数据源的兄弟模块 —— `item-cost` / `stock-init` / `warehouse-restock` 都消费 EN BOM 成本，得靠 `catalog.yaml` 里的 `exclusions`（"不用于…"）才能分开。
+
 ## Cross-border shipping (sellfox_shipping)
 
 ### Sellfox packageSn

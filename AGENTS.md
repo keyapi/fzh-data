@@ -135,6 +135,7 @@ uv sync
 | `missing-products` | `.agents/skills/missing-products/` | 通途有库存 SKU → EN 产品客户码 → 赛狐产品 SKU 三方主线补齐/审计 |
 | `platform-account-reconciliation` | `platform_account_reconciliation/` | OSTKUS/Wayfair 账期费用级对账 + EN Tongtool Order 匹配 |
 | `channel-account-sync` | `channel_account_sync/` | Google 表渠道账号 → EN Channel Account（人变才加行，Amazon 按国家站） |
+| `intent-router` | `intent_router/` | 中文意图 → 本仓库模块路由（TypeSafe Jev + 置信度闸门；只分类不执行） |
 | `web-automation` | `.agents/skills/{web-automation,playwright-setup,tongtu-automation,sellfox-automation}/` | 网页自动化能力舱（通途/赛狐浏览器 + 通用 Playwright），子项目在 `web_automation/` |
 | `windows-agent-shell` | `.agents/skills/windows-agent-shell/` | Windows Agent shell：优先 pwsh、禁 bash/`&&`（5.1）、UTF-8 无 BOM |
 | `ce-okf` | `.agents/skills/ce-okf/` | 对话收尾一条龙：ce-compound 正文 + OKF 级联 + 索引联动 + 凭证扫描 + 提交 + PR |

@@ -10,6 +10,7 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-09-21 | 中文意图路由（intent_router）—— TypeSafe Jev + 置信度闸门 | [tooling-decisions/typesafe-jev-intent-router.md](tooling-decisions/typesafe-jev-intent-router.md) |
 | 2026-09-21 | Windows worktree 的 `CLAUDE.md`：symlink 还是 stub，取决于开发者模式 | [developer-experience/windows-worktree-claude-md-symlink.md](developer-experience/windows-worktree-claude-md-symlink.md) |
 | 2026-09-21 | ce-okf skill — 把「ce-compound + OKF 收尾」固化成一个命令 | [tooling-decisions/ce-okf-conversation-wrapup-skill.md](tooling-decisions/ce-okf-conversation-wrapup-skill.md) |
 | 2026-09-18 | 赛狐备货单改「单个头程费用」——无 Excel 路径，只能走私有接口 | [integration-issues/sellfox-restock-headfee-api.md](integration-issues/sellfox-restock-headfee-api.md) |
