@@ -7,6 +7,10 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-09-09
+- **新增**: `architecture-patterns/account-period-revenue-reconciliation-ecosystem.md` — 账期/收款核算「生态地图」：把 销售额(通途) + 各平台账期(Amazon=赛狐结算/列式, OSTKUS, PB, Wayfair, Temu/TikTok/Walmart…) + 汇率 + Tax + 附加费 + 回款归属 + 回款率 + 钉钉提交/审批 + NAS 归桶 + 报税 整条链路画成地图，赛狐只是 Amazon 一块；含公共口径(账期月自然月/4号-3号窗口/结算 vs 日期范围口径/回款率=应收/销售/固定月汇率) 与 现有资产指针 + 缺口待办。
+- **新增**: `workflow-issues/amazon-account-period-late-submission-audit.md` — Amazon&新平台账期「提交异常/迟交」审计方法与规则：账期归属=账期日期自然月、提交窗口 4号~下月3号(先 8号~下月7号)、发起时间=提交、`账期月Z` vs `桶B` 判 正常/迟交/遗档/早交；跨文件去重 + `选择平台==亚马逊` 分流；2026-03~08 各桶 正常/迟交/遗档/早交 实测表(8月桶 40 行账期7月、7月桶 40 行完成>08-03+13 未办结、3月桶 6 行 2025 遗档)；产物在 `D:\Work\王忠于\成本核算\`。
+- **新增**: `tooling-decisions/amazon-settlement-autofetch-sellfox.md` — 赛狐自动拉取 Amazon 账期：结算中心V2(汇总+明细, `currency` 取原币, 默认 CNY) vs 紫鸟/赛狐插件列式报表(`报告中心 getPlugPageList type=3/4`, 已实测拿到 32 列 Custom Transaction CSV)；两报表口径(payout vs activity/posted)取舍、科目映射、赛狐店名↔渠道账号交叉表(写入共享表「和运营部共享/渠道账号」`赛狐店铺` 列, VERCART=AMZVer, 北京熙锦=AMZBJXJ, Daneey-CA=AMZDANEEYCA, 如泱-CA=AMZBJRYECLTDCA, 北京固祥未启用排除)。产出 `sellfox_settlement/reconcile_amazon.py`(+`fetch-custom`) 与 `sellfox_settlement/docs/research/saihu-amazon-settlement-autofetch-2026-09-09.md`(§10-13) + `sellfox_settlement/AGENT_HANDOFF.md` + `.agents/skills/sellfox-amazon-settlement/`。背景: 财务全靠运营钉钉手动提交 Amazon 账期金额, 依赖人工、金额易错、txt 只能解析 tax。
 ## 2026-09-14
 - **新增**: `workflow-issues/erpnext-so-closed-unshipped-and-unstarted-work-orders.md` — 子表字段反查父单的三条 API 铁律（子表直查 403 / 父单直查子字段 417 / 子表过滤结果"一行一子行"必须按父单去重）+ `in` 列表超 4094 字节请求行上限须分块 + `Sales Order Item.name == Production Plan Item.sales_order_item` 连接键 + 出库单必须按 `item_code` 匹配（老出库行 `customer_item_code` 为空）+ `amended_from` 区分改单与死单 + 客户码注册在成品 `KS` 上而订单行卖 `PK#` 皮壳。两条反直觉结论：**ERPNext 的 `Closed` ≠ 已发完**；**`Work Order.status` / `produced_qty` 不可信，进度要看工序卡**（`WO-26-02609` 头 `Not Started`，实际 44 件已过 5 道工序；且完成件数不能各工序求和）。
 - **新增**: `EN_API/item_shipment_status.py` + `EN_API/AGENT_HANDOFF_物料发货状态.md` — 客户物料号 / EN 物料号 → 销售订单发货状态 + 生产计划/工单/工序卡报表（单物料颗粒度，3 sheet Excel，`--assert-fixture` 回归自检）。分页相对 `dn_trace_report.py` 加 `order_by="name asc"` 并按实收行数前移；只落新脚本，未回灌旧脚本。

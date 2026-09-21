@@ -11,6 +11,9 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-09-09 | 账期/收款核算 生态地图（各平台账期 → 汇率/税/附加费 → 回款归属/回款率 → 归集给财务） | [architecture-patterns/account-period-revenue-reconciliation-ecosystem.md](architecture-patterns/account-period-revenue-reconciliation-ecosystem.md) |
+| 2026-09-09 | Amazon&新平台账期「提交异常/迟交」审计方法与规则 | [workflow-issues/amazon-account-period-late-submission-audit.md](workflow-issues/amazon-account-period-late-submission-audit.md) |
+| 2026-09-09 | 赛狐自动拉取 Amazon 账期（结算中心V2 + 紫鸟插件列式报表）与两报表口径取舍 | [tooling-decisions/amazon-settlement-autofetch-sellfox.md](tooling-decisions/amazon-settlement-autofetch-sellfox.md) |
 | 2026-09-14 | EN 销售订单「已关闭未发货」死单与工单进度不可信 — 子表反查父单的 API 铁律 | [workflow-issues/erpnext-so-closed-unshipped-and-unstarted-work-orders.md](workflow-issues/erpnext-so-closed-unshipped-and-unstarted-work-orders.md) |
 | 2026-09-10 | Amazon 账期按账号对 NAS/钉钉/赛狐结算组 | [conventions/amazon-period-file-reconcile.md](conventions/amazon-period-file-reconcile.md) |
 | 2026-09-20 | 「特殊规则改赛狐入库成本」执行记录 —— 下调受批次剩余货值封顶，越消耗越改不动 | [workflow-issues/sellfox-incentive-cost-adjust-2026-09.md](workflow-issues/sellfox-incentive-cost-adjust-2026-09.md) |
