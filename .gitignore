@@ -92,3 +92,6 @@ parcel_track_output/
 parcel_track_input/
 # 定时任务注册脚本按机器生成的包装（与 web_automation 的同类产物一致，不入库）
 parcel_track/scripts/run_parcel_track_scheduled-*.cmd
+
+# 游离的客户名单 JSON（脚本未展开 %TEMP% 环境变量，落到了仓库根）—— 含真实客户/部门名，禁入库
+%TEMP%customers.json

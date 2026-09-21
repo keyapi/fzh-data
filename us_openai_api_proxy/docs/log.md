@@ -9,6 +9,10 @@ tags: [openai, api-proxy, changelog]
 
 > 此日志只记录可公开复用的结论。服务器、账号、授权材料、私有地址、订阅与访问凭据均不入库。
 
+## 2026-09-20
+
+- **修复（链接）**：`office-lan-access.md` 指向 `NAS_API/docs/reference/nas-multi-domain-access.md` 的链接多退一级（`../../../` → `../../`）。
+
 ## 2026-09-08 (v0.15)
 
 - 处理 CLIProxyAPI `503 auth_unavailable`：确认 systemd active 与基础健康检查不等于目标模型有可用上游授权。

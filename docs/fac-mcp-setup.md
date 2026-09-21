@@ -6,7 +6,7 @@
 > ⚠️ 当前仅测试环境可用，普通用户不可用（生产服务器未部署 FAC App）
 >
 > **3P 模式的通用事实**（配置路径、`mcp-remote` 桥接、重启要求、`~/.mcp-auth` 排错）已收敛到
-> [docs/mcp-setup.md](../mcp-setup.md)。本文档只保留 FAC 特有内容。
+> [docs/mcp-setup.md](mcp-setup.md)。本文档只保留 FAC 特有内容。
 
 ---
 

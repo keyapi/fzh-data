@@ -8,4 +8,4 @@ tags: [sellfox, api-proxy, specs, index]
 
 # 设计规格
 
-设计规格文档将在实施阶段创建。当前方案设计已完成，详见 [上级目录计划文件](C:\Users\zhang\.claude\plans\api-app-quirky-metcalfe.md)。
+设计规格文档将在实施阶段创建。当前方案设计已完成，详见仓库外的计划文件 `~/.claude/plans/api-app-quirky-metcalfe.md`。

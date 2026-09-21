@@ -158,6 +158,6 @@ page.locator('text=点击刷新').first.click()  # 直接匹配文字
 
 ## Related
 
-- [docs/lessons/ddddocr-login-pitfalls.md](../lessons/ddddocr-login-pitfalls.md) — 原始 6 个踩坑记录（本文为其验证+修复版）
-- [docs/reference/tongtu-captcha-ocr.md](../reference/tongtu-captcha-ocr.md) — WX 的 CDP + ddddocr 方案参考
+- [docs/lessons/ddddocr-login-pitfalls.md](../../lessons/ddddocr-login-pitfalls.md) — 原始 6 个踩坑记录（本文为其验证+修复版）
+- [docs/reference/tongtu-captcha-ocr.md](../../reference/tongtu-captcha-ocr.md) — WX 的 CDP + ddddocr 方案参考
 - PR #11 — `feature/ddddocr-playwright-login`

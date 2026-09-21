@@ -50,5 +50,5 @@ python erp_tongtu_bridge.py [ERP通途SKU.xlsx] -t 通途SKU别名炸开.xlsx --
 
 ## 参考
 
-- [给人看的 README](../../multi_attr_saihu/README.md)
-- [Agent 详细参考](../../multi_attr_saihu/AGENT_HANDOFF.md) — 3 脚本各有完整函数表、自动选文件规则、命令行参数、踩坑记录
+- [给人看的 README](../../../multi_attr_saihu/README.md)
+- [Agent 详细参考](../../../multi_attr_saihu/AGENT_HANDOFF.md) — 3 脚本各有完整函数表、自动选文件规则、命令行参数、踩坑记录
