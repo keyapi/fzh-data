@@ -43,5 +43,5 @@ uv run python build_saihu_other_outbound.py
 
 ## 参考
 
-- [给人看的 README](../../other_outbound/README.md)
-- [Agent 详细参考](../../other_outbound/AGENT_HANDOFF.md)
+- [给人看的 README](../../../other_outbound/README.md)
+- [Agent 详细参考](../../../other_outbound/AGENT_HANDOFF.md)

@@ -6,7 +6,7 @@ Usage:
   python scripts/update_index.py --check   # Check only, report drift
 """
 
-import os, sys, argparse
+import os, sys, argparse, subprocess
 from pathlib import Path
 from datetime import datetime
 
@@ -18,8 +18,40 @@ SEP    = "|--------|------|-------|-------|"
 DETAIL_HEADER = "| Type | Title | Path | Updated |"
 DETAIL_SEP    = "|------|-------|------|---------|"
 
+GIT_DATE_MARK = "@@COMMIT@@"
 
-def scan(root: Path) -> dict:
+
+def git_dates(root: Path) -> dict:
+    """Map repo-relative path -> last commit date (YYYY-MM-DD), newest commit wins.
+
+    One `git log` pass instead of one call per file. Falls back to {} when git is
+    unavailable or the repo has no history, in which case callers use file mtime.
+
+    Why git dates and not mtime: mtime is the *checkout* time on a fresh clone or
+    worktree, so every file looks freshly edited and the whole index churns on
+    each checkout. The commit date is stable across machines.
+    """
+    try:
+        out = subprocess.run(
+            ["git", "log", f"--format={GIT_DATE_MARK}%ad", "--name-only", "--date=short"],
+            cwd=root, capture_output=True, text=True,
+            encoding="utf-8", errors="replace", timeout=120,
+        ).stdout
+    except Exception:
+        return {}
+
+    dates: dict = {}
+    current = None
+    for line in out.splitlines():
+        if line.startswith(GIT_DATE_MARK):
+            current = line[len(GIT_DATE_MARK):].strip()
+        elif line.strip() and current:
+            # git log is newest-first, so the first sighting is the latest commit
+            dates.setdefault(line.strip(), current)
+    return dates
+
+
+def scan(root: Path, dates: dict) -> dict:
     modules = {}
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [d for d in dirnames if not d.startswith(".")
@@ -52,7 +84,9 @@ def scan(root: Path) -> dict:
             rel_path = fpath.relative_to(root).as_posix()
             parts = rel_dir.split("/")
             module = parts[0] if parts[0] != "." else "root"
-            mtime = datetime.fromtimestamp(fpath.stat().st_mtime).strftime("%Y-%m-%d")
+            # commit date when the file is tracked; mtime for new/untracked files
+            mtime = dates.get(rel_path) or datetime.fromtimestamp(
+                fpath.stat().st_mtime).strftime("%Y-%m-%d")
             modules.setdefault(module, []).append({
                 "path": rel_path, "type": meta.get("type","?"),
                 "title": meta.get("title", fname), "okf": meta.get("okf",""),
@@ -105,7 +139,7 @@ def main():
     parser = argparse.ArgumentParser(description="Update root index.md")
     parser.add_argument("--check", action="store_true", help="Check only, report drift")
     args = parser.parse_args()
-    modules = scan(ROOT)
+    modules = scan(ROOT, git_dates(ROOT))
     content = build(modules)
     if args.check:
         if INDEX_PATH.is_file():

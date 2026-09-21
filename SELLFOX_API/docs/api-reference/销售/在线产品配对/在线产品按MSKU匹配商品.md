@@ -84,7 +84,8 @@ paths:
                 type: object
                 properties: {}
                 x-apifox-orders: []
-                x-apifox-ignore-properties: []
+                x--orders: []
+                x--ignore-properties: []
           headers: {}
           x-apifox-name: Created
         '401':
@@ -95,7 +96,8 @@ paths:
                 type: object
                 properties: {}
                 x-apifox-orders: []
-                x-apifox-ignore-properties: []
+                x--orders: []
+                x--ignore-properties: []
           headers: {}
           x-apifox-name: Unauthorized
         '403':
@@ -106,7 +108,8 @@ paths:
                 type: object
                 properties: {}
                 x-apifox-orders: []
-                x-apifox-ignore-properties: []
+                x--orders: []
+                x--ignore-properties: []
           headers: {}
           x-apifox-name: Forbidden
         '404':
@@ -117,7 +120,8 @@ paths:
                 type: object
                 properties: {}
                 x-apifox-orders: []
-                x-apifox-ignore-properties: []
+                x--orders: []
+                x--ignore-properties: []
           headers: {}
           x-apifox-name: Not Found
       security: []
@@ -139,7 +143,9 @@ components:
       title: ProductMatchMskuOpenQo
       x-apifox-orders:
         - matchList
-      x-apifox-ignore-properties: []
+      x--orders:
+        - matchList
+      x--ignore-properties: []
       x-apifox-folder: ''
     ProductMatchMskuItemOpenQo:
       type: object
@@ -162,7 +168,11 @@ components:
         - msku
         - sku
         - shopId
-      x-apifox-ignore-properties: []
+      x--orders:
+        - msku
+        - sku
+        - shopId
+      x--ignore-properties: []
       x-apifox-folder: ''
     OpenResult«List«ProductMatchMskuErrorQo»»:
       type: object
@@ -192,7 +202,13 @@ components:
         - msg
         - data
         - ts
-      x-apifox-ignore-properties: []
+      x--orders:
+        - requestId
+        - code
+        - msg
+        - data
+        - ts
+      x--ignore-properties: []
       x-apifox-folder: ''
     ProductMatchMskuErrorQo:
       type: object
@@ -215,7 +231,11 @@ components:
         - msku
         - sku
         - errorMsg
-      x-apifox-ignore-properties: []
+      x--orders:
+        - msku
+        - sku
+        - errorMsg
+      x--ignore-properties: []
       x-apifox-folder: ''
   securitySchemes: {}
 servers: []

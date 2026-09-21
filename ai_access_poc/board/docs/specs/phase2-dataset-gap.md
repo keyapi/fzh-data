@@ -13,7 +13,7 @@ updated: 2026-07-28
 **标定店**: BJRYECLTD-US (`596841`)  
 **报表窗**: 2026-06-28 ~ 2026-07-27（Proxy 重拉 SP7，7/7 成功）  
 **写路径**: 仍硬禁（D6）  
-**验证包**: [advertise/docs/research/2026-07-28-report-verify/](../../../advertise/docs/research/2026-07-28-report-verify/index.md)
+**验证包**: [advertise/docs/research/2026-07-28-report-verify/](../../../../advertise/docs/research/2026-07-28-report-verify/index.md)
 
 ## 五杠杆 ≠ 五桶（易混）
 

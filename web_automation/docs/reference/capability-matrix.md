@@ -47,4 +47,5 @@ tags: [capability-matrix, routing, api, browser, fallback]
 | sellfox.other-inbound.import | MANUAL_CONFIRM | browser | write |
 | sellfox.other-outbound.import | MANUAL_CONFIRM | browser | write |
 | sellfox.restock.import | MANUAL_CONFIRM | browser | write |
+| sellfox.cost-adjust.import | MANUAL_CONFIRM | browser | write |
 | web.generic.explore | BROWSER_ONLY | mcp | interactive |

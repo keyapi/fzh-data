@@ -61,6 +61,26 @@ DeepSeek API 自 2026-08 起按北京时间分时计费：周一至周五工作�
 ### 五桶分析法（advertise 搜索词分类）
 `advertise/analyze_search_term.py` 对**搜索词行**打的五个分析桶：**Harvest / Negate / Monitor / Protect / Ignore**（见 `advertise/AGENT_HANDOFF.md`「5 桶分类」）。这是报表分析标签，**不是** IvyeaOps 的五杠杆。对应关系：Harvest≈收割候选、Negate≈否词候选；Monitor/Protect/Ignore 在五杠杆里没有同名动作。
 
+## 意图路由 (intent_router)
+
+### System One
+TypeSafe 的决策模型系列：**不生成文本**，输入 `state` + 结构化问题，返回**带概率的判定**。三个原语：`noul`（是/否的概率）、`choice`（≤255 项里选一个）、`score`（2–10 级有序量表）。设计取向是 code 拥有 workflow，模型只在需要语义理解的地方给出可编程的常识判断。
+
+### Jev
+System One 的旗舰模型（请求用别名 `jev-latest`，实测解析到 `jev-1.13.0`）。端点 `POST https://api.typesafe.ai/v1/systemone` + Bearer `TYPESAFE_API_KEY`（存父仓库 `.env`）。**只有输入 token 计费**，输出免费。契约与实测见 `intent_router/docs/reference/typesafe-contract.md`。
+
+### confidence 是分布集中度，不是正确率
+`choice` / `score` 的答案里 `confidence` 由**概率分布的集中程度**算出（越集中越高），所以它只反映「模型是否犹豫」，**不反映「模型是否答对」**。实测：本仓库 56 路目录上 confidence 仍在 0.98–1.00，几近饱和。**把高 confidence 读成"一定对"是错的** —— 这正是本仓库 `--min-confidence` 闸门实际不触发的原因。
+
+### 置信度闸门（confidence gate）
+用阈值决定「敢不敢自动执行」：低于阈值就不猜，转人工或要求澄清（官方 `patterns/intent-routing.md` 的做法）。`intent_router` 的闸门语义锁定为 `--min-confidence`（默认 0.5）+ `none` 选项；但**真正兜底的是 `none`，不是阈值**。
+
+### none 选项
+给 `choice` 加一个「都不匹配」的出口。**必须留这个出口**，否则模型被迫在几十个选项里硬选一个。`intent_router` 里它由 `typesafe.build_payload()` 硬编码追加（**不写进 `catalog.yaml`**），防止重新生成 catalog 时被漏掉。实测有效：模糊请求与域外请求都正确落 `none`。
+
+### 触发词路由 vs 语义路由
+`.agents/skills/*/SKILL.md` 的触发词是**关键词匹配**（`当用户提到"…"时触发`）；`intent_router` 是**语义路由**（把整句需求交给 Jev 判断意图）。触发词分不开吃同一种数据源的兄弟模块 —— `item-cost` / `stock-init` / `warehouse-restock` 都消费 EN BOM 成本，得靠 `catalog.yaml` 里的 `exclusions`（"不用于…"）才能分开。
+
 ## Cross-border shipping (sellfox_shipping)
 
 ### Sellfox packageSn
@@ -102,10 +122,15 @@ SQLite BEGIN IMMEDIATE 事务内完成活跃标签/操作冲突检查、generati
 ## Development Environment
 
 ### 3P 模式 (Third-Party Provider Mode)
-Claude Desktop 的第三方 API 模式，允许连接非 Anthropic 模型（如 DeepSeek）。此模式有独立的配置文件路径 `Claude-3p\claude_desktop_config.json`（区别于普通模式的 `Claude\` 路径），配置中包含 `"deploymentMode": "3p"` 字段。MCP 服务器的配置格式与普通模式相同。
+Claude Desktop 的第三方 API 模式，允许连接非 Anthropic 模型（如 DeepSeek）。
+
+此模式与普通模式**各有独立的配置文件**，互不影响 —— 改错文件会**静默无效**（不报错，只是不生效）。MCP 服务器的**配置格式两种模式相同**，差异只在文件位置；具体路径见《MCP 选型与安装指南》。
 
 ### 凭证在父仓库不在 worktree
 本项目常开 git worktree（`.claude/worktrees/...`）。gitignore 的凭证只存在于**父仓库** `D:\Work\赛狐\Cursor`：`EN_API/.env`（生产 ERPNext API）、`tongtool_api/.env`（通途 MCP）、`secrets/gsheets-service-account.json`（Google Sheet gspread）。worktree 里找不到这些文件；跑脚本要把相关 env 指到父仓库路径（如 `GSPREAD_SERVICE_ACCOUNT_FILE=D:\Work\赛狐\Cursor\secrets\gsheets-service-account.json`），或从父仓库 cwd 运行。
+
+### 收尾仪式 / ce-okf
+对话结束时把「背景 / 过程 / 结果 / 经验教训」沉淀进仓库的固定动作，此前由用户每次手打一段长中文提示词触发。现已固化为仓库内 skill `/ce-okf`（`.agents/skills/ce-okf/`），一条命令跑完：`ce-compound` 出学习正文 → frontmatter 归一化成 OKF+ce-compound 合并 schema → 11 项级联登记（`docs/solutions/**`、各级 `index.md`/`log.md`、`AGENT_HANDOFF.md`、`AGENTS.md`、`CONCEPTS.md`）→ `scripts/update_index.py` 索引联动 → 凭证扫描 → 提交 + PR。参数 `refresh` 走增量、`no-pr` 只本地提交。缺了它最常漏的是第 11 条的索引联动。
 
 ## Manufacturing
 
@@ -189,6 +214,9 @@ ERPNext 用原生 Product Bundle 表示组合销售对象；work_order_task 扩�
 
 ### 赛狐加工 SKU
 赛狐商品类型 `isGroup=2`。加工 SKU 有自身库存，支持 `needAssembleProcess`、`processCost` 和 `childSkus`，库存流水里有加工单/拆分单事件。取消“开启加工过程”只缩短状态流，不等于无库存别名。适合未来赛狐接管库存且需要 `PK#` 独立库存时评估；当前通途/赛狐并行阶段不默认启用。
+
+### 赛狐 Apifox API 文档镜像
+密码保护的赛狐开放平台文档站（Apifox）在本地的 Markdown 快照，按模块三级目录存放，附 `llms.txt` 索引。用于 Agent 离线查端点 schema。刷新须浏览器登录拿 Cookie 再跑下载脚本；密钥只在本机环境变量，不进仓库。镜像只能证明文档是否更新，不能单独证明线上接口行为。
 
 ### 库存事实源（Inventory Source of Truth）
 多个系统都展示库存时，被选为校准基准的系统。当前通途/赛狐并行期，三角类分公司普通仓以通途为事实源，定期只校准赛狐底层 `KS`。同步必须处理“赛狐订单已扣、通途尚未标记发货”的时间差，避免旧快照把库存加回。FBA、退货仓和不良品仓不因 SKU 相同自动加入共享池。库存事实源不等于利润事实源：皮壳 Listing 的利润仍以 EN Tongtool Cost Review 为准。
@@ -322,9 +350,79 @@ Gold A：历史已配对 ∩ 通途别名唯一 ∩ EN/赛狐一致，只用于�
 ### DingTalk Custom Robot (钉钉自定义机器人)
 A webhook-based DingTalk group messaging channel used by AI agents (WorkBuddy, Claude Code) in this project to send notifications and file download links. Uses HMAC-SHA256 signing. Distinct from DingTalk enterprise internal bots — custom robots do not require AppKey/AppSecret and are scoped to a single group, making them safe to share with non-developer agent users. Cannot send file attachments directly; file delivery uses ActionCard messages with download links hosted on ERPNext.
 
+## 赛狐库存成本 (cost_adjust)
+
+### 私有接口 (undocumented internal API / shadow API 影子 API)
+赛狐自家前端在用、但**未写进公开 OpenAPI** 的 HTTP 端点（如 `/api/fba/cost/adjustment/create.json`、
+`/api/oversea/edit.json`）。与公开 OpenAPI 是**两套不同的调用面**：鉴权不同（站点 cookie vs OAuth2 签名）、
+权限不同（OpenAPI 的过滤字段可逐个受限）、稳定性不同（私有接口**无版本承诺**）。
+**同一个功能常常「公开 OpenAPI 没有、私有接口有」** —— 判据与用词见
+`docs/research/2026-09-18-sellfox-private-api-terminology.md`。业界亦称 shadow API，但赛狐这批是自家在维护的，
+严格说不符合「归属方失去管控」的定义。
+
+### 单个头程费用 (headFee)
+海外仓备货单明细上的单件头程，是**库存「单位费用」的驱动力**。改它（备货单编辑页 / `oversea/edit.json`）
+会让库存单位费用按加权平均重算。**成本补录单改不了它**（海外仓备货单类型不许填单位费用），
+两条 Excel 模板也不含该字段 —— 私有接口是唯一自动化路径。
+
+### 库存调整单（数量调整）
+只调库存**数量**、**无成本字段**的单据。新批次的成本是**创建时该 (仓库,SKU) 加权平均成本的快照**，
+不是来源单的成本 —— 所以它们天然不「跟随」任何后续改动。调整单的 `+N` 与 `-N` **不可互相抵消**
+（扣减按 FIFO 吃最老批次）；**已完成状态不可删除、不可撤销**。
+
+### 库存调整-增加 (type=3) / 库存调整-减少 (type=4)
+批次表 `type` 字段。**3=增加：新建独立批次**，成本冻结在创建时，**不跟随**来源单；
+**4=减少：引用已有批次**，共享同一份成本，会跟随。（5=海外仓备货单。）
+这个区别决定「改备货单能不能带动这批库存」，别笼统说「调整单批次会跟随」。
+
+### 其他入库单 (other inbound order)
+带成本的入库单据：`perPurchase`（采购单价）**必填**，表头另有 `shipFee`/`otherFee`/`apportionType`。
+**与库存调整单的关键差别**：调整单只带数量，其他入库单**显式携带成本**。用于「数量同步」类需求时，
+它比调整单可控。实现见 `web_automation/click-based/sellfox_import_other_inbound.py`。
+
+### 虚拟仓库
+成本补录单/备货单 payload 里 `warehouseId` 与 `targetWarehouseId` 是**两个不同的仓库**：
+前者是「虚拟仓库」（FBA 侧来源，如 272150），后者才是真实海外仓（如 279841=POLAND）。
+不是笔误，照抄。
+
+### 三方仓 (tripartite / third-party warehouse)
+赛狐里指**海外第三方仓库**（与自建仓、FBA 相对）。关键点：赛狐**官方对三方仓库存同步的建模
+就是「生成调整单」** —— 三方仓模块带一个「生成调整单」功能
+（i18n `main.warehouse.tripartite.warehouse.generate.adjustment.order`，权限
+`MOD_OVERSEA_WAREHOUSE.CREATE_ADJUST`），配置项走 `/api/config/{get,set}ThirdWarehouseInventoryAdjust.json`。
+所以「用调整单同步外部数量」是官方路径、不是用错工具；它的代价在成本侧（见
+`docs/solutions/workflow-issues/sellfox-inventory-sync-cost-drift.md`）。
+
+### 剩余货值约束（「货值不能为负数」）
+赛狐**成本补录单**下调采购单价时的硬校验：`变更额 = Δ单价 × 备货单备货量`，
+不能超过**该批次此刻剩余的货值**（`剩余可用量 × 当前单价`）。等价地：
+
+```
+单件可下调幅度 ≲ 当前单价 × (批次剩余可用量 / 备货单备货量)
+```
+
+**上调不受此限；下调被「剩余占比」封顶，剩余为 0 就完全降不了。**
+所以下调激励价有强时效性 —— 要在批次被订单/调整单吃掉前做。
+见 `docs/solutions/integration-issues/sellfox-cost-adjust-api.md`。
+
+### 激励价（低于 EN 成本的入库成本）
+运营为了让成本口径贴近销售激励而设的、**低于 EN 实际成本**的赛狐入库成本（仓库+SKU 维度）。
+数值来源是共享 Google Sheet 的特殊规则表，不是 EN BOM。落地路径只能是赛狐原生单据
+（`指定采购单价` / `单个头程费用`），且受「剩余货值约束」限制。
+执行记录见 `docs/solutions/workflow-issues/sellfox-incentive-cost-adjust-2026-09.md`。
+
+### 海外仓批次表 goodsAva
+`POST /api/overseaBatch/page.json` 返回的批次级字段，字面像「该批次可用量」，
+**实测不是当前可用库存**（30 行抽样 21 行与【库存明细】对不上，POLAND 曾整组差约 1000）。
+批次表可靠用途只有两个：**看库存由哪些来源单构成**、**看该批次的历史成本**。
+**数量一律以库存明细为准。**
+
 ## Flagged ambiguities
 
 - "'漏交' 曾被用来指赛狐有结算组但按店名拆 brand 对不上 txt——那是匹配失败。真漏交是有打款且钉钉无行、NAS 无对应 txt。有核算行但 API/NAS 无文件是下载缺口。打款 0 是否也算漏交，要财务确认 7 天规则是否覆盖 $0。"
+- "「赛狐有 API」不区分公开 OpenAPI 与私有接口时会得出相反结论 —— 说「没有写接口」通常只对公开 OpenAPI 成立。"
+- "「调整单批次会跟随备货单成本」只对 type=4（减少）成立；type=3（增加）是独立快照，不跟随。"
+- "「按 SKU 搜赛狐备货单」有三个调用面、三种写法：站点私有列表 `/api/oversea/page.json` 用 `searchType='sku'`；批次表 `/api/overseaBatch/page.json` 用 `searchType='commoditySku'`；**公开 OpenAPI 的列表页文档只列 pickSn/remark/itemRemark，不含 SKU**。别把某一面的约定套到另一面。且列表接口 `items` 只给 3 条预览，不能用来判断成员关系。"
 - "'AMZFZHSXEUR' 曾被当成欧洲聚合店 — Amazon 只有国家站，旧名只挂在 AMZFZHSXDE 别名。"
 - "'WFDANEEYUS' 与 'WFDaneeyUS' 不是同一条 Channel Account，大小写店铺码都保留。Channel Account Owner.user 存中文名；DingTalk/Frappe User.name 常是邮箱，同步时继续写中文。"
 - "'五桶' had been used as if it meant IvyeaOps 五杠杆 — they are distinct (search-term labels vs optimizer action candidates)."
@@ -335,9 +433,13 @@ A webhook-based DingTalk group messaging channel used by AI agents (WorkBuddy, C
 ## 平台账期对账
 
 - **账期文件**: Overstock `OSTKUS-*.xlsx` 含 `Payment Summary` + `Detail` + `Mozart Reports`，是结算文件，不是平台订单导出。
-- **Tongtool Order**: EN 生产系统里的通途订单快照；Overstock 单据名通常为 `OS-{platform_order_id}`，另一账号 `OSTK02US` 使用 `OSFD-` 前缀。
+- **Walmart 账期**: 赛狐 API 直拉的结算行，带 `periodStartDate`/`periodEndDate`；**双周账期（14 天）**，不是自然月。
+- **沃尔玛补贴 (Total Walmart Funded Savings)**: Walmart 自己出的折扣。**它是佣金的计算基数**——佣金 = (商品价 + 补贴) × 15%；EN 的 `platform_fee` 只按商品价 × 15%，漏了补贴部分。
+- **Tongtool Order**: EN 生产系统里的通途订单快照；Overstock 单据名通常为 `OS-{platform_order_id}`，另一账号 `OSTK02US` 使用 `OSFD-` 前缀；Walmart 为 `WM-{platform_order_id}`（`platform_code=walmart_api`）。
 - **拆单后缀**: 多 SKU/多件订单在通途/EN 会拆成 `_1/_2/_3` 子单，`platform_order_id` 保留后缀；汇总时需排除金额相同的“无后缀重复主单”。
 - **对账金额口径**: 用 `order_amount` / `products_total_price` 对账；`order_items.transaction_price` 是组件行，不能加总；`actual_total_price` 在退货订单上可能为 0。
+- **Amazon 账期报表（插件获取报告）**: 赛狐里 Amazon 的 Transaction / Summary 账期文件，**只能**通过 `report/center/task/getPlugPageList.json` 读取 —— 由浏览器插件在账号登录态下抓取后存 COS，赛狐服务端不自抓。`reportType`：3=Transaction(csv/zip)、4=Summary(**pdf**)。该接口**纯读、不可触发抓取**。
+- **fileUrls 临时签名**: 插件报告的下载地址是**腾讯 COS 预签名 URL，1 小时过期**。不能存链接，归档必须存文件本体。
 
 ## 群晖 NAS 外网访问
 
