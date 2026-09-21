@@ -6,6 +6,10 @@ title: NAS_API 变更日志
 
 # 变更日志
 
+## 2026-09-20
+
+- **修复（链接）**：`reference/nas-multi-domain-access.md` 三条链接少退一级 —— `../AGENT_HANDOFF.md` → `../../AGENT_HANDOFF.md`；指向根 `docs/solutions/...` 与 `us_openai_api_proxy/...` 的由 `../../` → `../../../`。`.agents/skills/nas-access/SKILL.md` 指向本仓库的 3 条链接同样由 `../../` → `../../../`。
+
 ## 2026-08-31
 - **更新** `reference/nas-multi-domain-access.md`、solutions 条目 — 澄清 OpenWrt 自定义域全栈（非仅 NAS 加证）、路径 A/B 与 QC 跳转关系；DSM 外部访问 DDNS 不能改 QC 目标、勿删 myds、无 mxdeals 优先；中国区 QC 政策摘要。
 

@@ -137,6 +137,6 @@ send_file_to_dingtalk("report.xlsx", "Today's Report", "Click to download")
 
 ## Related
 
-- [dingtalk_robot module](../../dingtalk/dingtalk_robot/README.md)
+- [dingtalk_robot module](../../../dingtalk/dingtalk_robot/README.md)
 - [DingTalk custom robot message types](https://open.dingtalk.com/document/robots/custom-robot-access)
-- [ERPNext REST API — file upload](../../.agents/skills/frappe-core-api/references/rest-api-reference.md)
+- [ERPNext REST API — file upload](../../../.agents/skills/frappe-core-api/references/rest-api-reference.md)

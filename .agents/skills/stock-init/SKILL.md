@@ -65,5 +65,5 @@ uv run python build_saihu_stock_init.py
 
 ## 参考
 
-- [给人看的 README](../../stock_init/README.md)
-- [Agent 详细参考](../../stock_init/AGENT_HANDOFF.md) — 仓库映射、成本选取表、函数索引、字段映射、边界条件、成本借用详则
+- [给人看的 README](../../../stock_init/README.md)
+- [Agent 详细参考](../../../stock_init/AGENT_HANDOFF.md) — 仓库映射、成本选取表、函数索引、字段映射、边界条件、成本借用详则

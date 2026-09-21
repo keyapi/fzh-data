@@ -81,9 +81,9 @@ EN token：父仓库 `EN_API/.env` 的 `PROD_ERP_API_KEY` / `PROD_ERP_API_SECRET
 
 ## Related
 
-- [模块接手](../../channel_account_sync/AGENT_HANDOFF.md)
-- [命名规则](../../channel_account_sync/docs/reference/naming-rules.md)
-- [字段对照](../../channel_account_sync/docs/reference/sheet-and-en-fields.md)
-- [同步规则](../../channel_account_sync/docs/specs/sync-rules.md)
-- [第一次写入踩坑](../../channel_account_sync/docs/lessons/2026-08-25-first-prod-sync.md)
+- [模块接手](../../../channel_account_sync/AGENT_HANDOFF.md)
+- [命名规则](../../../channel_account_sync/docs/reference/naming-rules.md)
+- [字段对照](../../../channel_account_sync/docs/reference/sheet-and-en-fields.md)
+- [同步规则](../../../channel_account_sync/docs/specs/sync-rules.md)
+- [第一次写入踩坑](../../../channel_account_sync/docs/lessons/2026-08-25-first-prod-sync.md)
 - 同类「表 → EN」：[tongtu-warehouse-rename-reconciliation.md](tongtu-warehouse-rename-reconciliation.md)
