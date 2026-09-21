@@ -349,10 +349,43 @@ A webhook-based DingTalk group messaging channel used by AI agents (WorkBuddy, C
 前者是「虚拟仓库」（FBA 侧来源，如 272150），后者才是真实海外仓（如 279841=POLAND）。
 不是笔误，照抄。
 
+### 三方仓 (tripartite / third-party warehouse)
+赛狐里指**海外第三方仓库**（与自建仓、FBA 相对）。关键点：赛狐**官方对三方仓库存同步的建模
+就是「生成调整单」** —— 三方仓模块带一个「生成调整单」功能
+（i18n `main.warehouse.tripartite.warehouse.generate.adjustment.order`，权限
+`MOD_OVERSEA_WAREHOUSE.CREATE_ADJUST`），配置项走 `/api/config/{get,set}ThirdWarehouseInventoryAdjust.json`。
+所以「用调整单同步外部数量」是官方路径、不是用错工具；它的代价在成本侧（见
+`docs/solutions/workflow-issues/sellfox-inventory-sync-cost-drift.md`）。
+
+### 剩余货值约束（「货值不能为负数」）
+赛狐**成本补录单**下调采购单价时的硬校验：`变更额 = Δ单价 × 备货单备货量`，
+不能超过**该批次此刻剩余的货值**（`剩余可用量 × 当前单价`）。等价地：
+
+```
+单件可下调幅度 ≲ 当前单价 × (批次剩余可用量 / 备货单备货量)
+```
+
+**上调不受此限；下调被「剩余占比」封顶，剩余为 0 就完全降不了。**
+所以下调激励价有强时效性 —— 要在批次被订单/调整单吃掉前做。
+见 `docs/solutions/integration-issues/sellfox-cost-adjust-api.md`。
+
+### 激励价（低于 EN 成本的入库成本）
+运营为了让成本口径贴近销售激励而设的、**低于 EN 实际成本**的赛狐入库成本（仓库+SKU 维度）。
+数值来源是共享 Google Sheet 的特殊规则表，不是 EN BOM。落地路径只能是赛狐原生单据
+（`指定采购单价` / `单个头程费用`），且受「剩余货值约束」限制。
+执行记录见 `docs/solutions/workflow-issues/sellfox-incentive-cost-adjust-2026-09.md`。
+
+### 海外仓批次表 goodsAva
+`POST /api/overseaBatch/page.json` 返回的批次级字段，字面像「该批次可用量」，
+**实测不是当前可用库存**（30 行抽样 21 行与【库存明细】对不上，POLAND 曾整组差约 1000）。
+批次表可靠用途只有两个：**看库存由哪些来源单构成**、**看该批次的历史成本**。
+**数量一律以库存明细为准。**
+
 ## Flagged ambiguities
 
 - "「赛狐有 API」不区分公开 OpenAPI 与私有接口时会得出相反结论 —— 说「没有写接口」通常只对公开 OpenAPI 成立。"
 - "「调整单批次会跟随备货单成本」只对 type=4（减少）成立；type=3（增加）是独立快照，不跟随。"
+- "「按 SKU 搜赛狐备货单」有三个调用面、三种写法：站点私有列表 `/api/oversea/page.json` 用 `searchType='sku'`；批次表 `/api/overseaBatch/page.json` 用 `searchType='commoditySku'`；**公开 OpenAPI 的列表页文档只列 pickSn/remark/itemRemark，不含 SKU**。别把某一面的约定套到另一面。且列表接口 `items` 只给 3 条预览，不能用来判断成员关系。"
 - "'AMZFZHSXEUR' 曾被当成欧洲聚合店 — Amazon 只有国家站，旧名只挂在 AMZFZHSXDE 别名。"
 - "'WFDANEEYUS' 与 'WFDaneeyUS' 不是同一条 Channel Account，大小写店铺码都保留。Channel Account Owner.user 存中文名；DingTalk/Frappe User.name 常是邮箱，同步时继续写中文。"
 - "'五桶' had been used as if it meant IvyeaOps 五杠杆 — they are distinct (search-term labels vs optimizer action candidates)."

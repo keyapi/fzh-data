@@ -10,6 +10,7 @@ tags: [developer-experience, index]
 | 你需要... | 读这个 |
 |----------|--------|
 | Windows worktree 的 `CLAUDE.md` 是 symlink 还是 stub（开发者模式 / `core.symlinks` / `setup.ps1` 在哪儿跑） | [windows-worktree-claude-md-symlink.md](windows-worktree-claude-md-symlink.md) |
+| 新分支的 upstream 被指成 `main`（裸 `git push` 会往哪推 / `branch.autoSetupMerge`） | [git-worktree-branch-upstream-tracks-main.md](git-worktree-branch-upstream-tracks-main.md) |
 | WorkBuddy 接公司 new-api 自定义模型（useCustomProtocol=false + url 带 /v1） | [workbuddy-custom-model-newapi-config.md](workbuddy-custom-model-newapi-config.md) |
 | 给 Cursor 安装通途 MCP（无安装提示 / `.cursor/` gitignore） | [cursor-tongtool-mcp-registration.md](cursor-tongtool-mcp-registration.md) |
 | Windows Codex/Cursor：`&&`、GBK/UTF-8、env_doctor | [windows-codex-powershell-utf8.md](windows-codex-powershell-utf8.md) |
