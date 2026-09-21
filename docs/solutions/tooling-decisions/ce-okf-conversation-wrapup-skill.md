@@ -3,6 +3,7 @@ okf: v0.1
 type: Reference
 title: ce-okf skill — 把「ce-compound + OKF 收尾」固化成一个命令
 date: 2026-09-21
+last_updated: 2026-09-21
 category: tooling-decisions
 module: .agents/skills
 problem_type: tooling_decision
@@ -81,9 +82,17 @@ tags: [skill, ce-compound, okf, workflow, documentation, handoff]
 skill 本体：`.agents/skills/ce-okf/SKILL.md`。装的机器要跑一次
 `powershell -ExecutionPolicy Bypass -File setup.ps1` 才会被 Claude Code / Claude Desktop 看到（`setup.ps1` 把 `.agents/skills/*` 链进 `~/.claude/skills/`）。
 
-> ⚠️ **跑完 `setup.ps1` 后 `CLAUDE.md` 会变脏，不要提交它。** `CLAUDE.md` 在 git 里是 symlink（mode 120000 → `AGENTS.md`），单一事实源是 AGENTS.md（见 `CONTRIBUTING.md:51`）。但 Windows 建**文件**符号链接要开发者模式 / 管理员权限，没开时 `setup.ps1` 退化成 `Copy-Item`，把 CLAUDE.md 写成 AGENTS.md 整份副本（215 行）——这正是 commit `5582464` 引入兜底的原因（原先没有 `-ErrorAction Stop`，权限失败时 catch 不触发 → 文件直接丢失）。目录链接不受影响：`~/.claude/skills/*` 用 junction，普通权限即可，所以 skills 一直正常。
+> ℹ️ **`setup.ps1` 与 `CLAUDE.md` 的关系（2026-09-21 起本机已不再是问题）。** `CLAUDE.md` 在 git 里是 symlink（mode 120000 → `AGENTS.md`），单一事实源是 AGENTS.md（见 `CONTRIBUTING.md`）。Windows 建**文件**符号链接需要开发者模式；**没开**时 `setup.ps1` 会退化成 `Copy-Item`，把 CLAUDE.md 写成 AGENTS.md 整份副本（215 行）→ git 变脏。那个兜底是 commit `5582464` 特意加的：原先没有 `-ErrorAction Stop`，权限失败时 catch 不触发 → 文件直接丢失。
 >
-> 两个状态只能取一个：跑过 setup.ps1 → git 脏但 Claude Code 能读到 AGENTS.md 正文；`git restore CLAUDE.md` → git 干净但 Claude Code 只读到 `AGENTS.md` 这 9 个字符。两者兼得要开 Windows 开发者模式，让真 symlink 建得出来。**所以「检查 git status 然后 restore」不是标准动作** —— 那会让本机 Claude 读不到项目守则。
+> 本机现已开启开发者模式、并把仓库 `core.symlinks` 设为 `true`，`setup.ps1` 的 Step 1 会直接 `[SKIP]`、`CLAUDE.md` 保持真 symlink —— **不再是"两状态二选一"**。仍是 stub 的存量 worktree 修法见 [windows-worktree-claude-md-symlink.md](../developer-experience/windows-worktree-claude-md-symlink.md)。
+
+### 首跑修正：模式判定规则（2026-09-21）
+
+本 skill 第一次实跑（对产出它的这次对话）就发现第 0 步判据不准。旧规则是「本次对话已 commit / 已开 PR → 增量模式」，它把**对话产物**和**文档是否已存在**混为一谈。真实判据应是：
+
+> 本次对话的学习点**是否已经写进某篇现存文档**？是 → 走 refresh 更新那篇；否 → 走 `ce-compound` 新建。
+
+一个边做边提交的会话完全可能**同时**"已有 PR"且"有全新学习点"—— 旧规则会把后者误送进 refresh。本次因为是"给两篇刚写的文档补漏"，增量语义恰好正确，所以问题没暴露成错误结果，但规则本身已改。
 
 ## Related
 
