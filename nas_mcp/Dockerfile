@@ -3,8 +3,14 @@ FROM python:3.12-slim
 WORKDIR /app
 
 # 只有一个三方依赖；其余全部标准库 + 仓库自带的 NAS_API
+#
+# ⚠️ 用国内 PyPI 镜像：本机在上海，直连 pypi.org 拉 pymupdf（~20MB 轮子）
+#    实测 15 分钟都下不完。清华镜像秒级。若要换回官方源删掉 -i 即可。
 COPY nas_mcp/requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir \
+        -i https://pypi.tuna.tsinghua.edu.cn/simple \
+        --trusted-host pypi.tuna.tsinghua.edu.cn \
+        -r requirements.txt
 
 # 复用仓库里已验证的 DSM 客户端
 COPY NAS_API/ ./NAS_API/
