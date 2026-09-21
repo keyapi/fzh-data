@@ -86,7 +86,7 @@ gate = apply_gate(skill=..., confidence=..., min_confidence=..., none_winner=...
 # "none"           → 模型选了 none，或回显了 catalog 之外的选项（fail closed）
 ```
 
-**`confidence` 是分布集中度，不是正确率。** 实测 0.97–1.00、几近饱和（连 `none` 胜出时也有 0.99），
+**`confidence` 是分布集中度，不是正确率。** 实测在本目录上 0.98–1.00、几近饱和（连 `none` 胜出时也是），
 所以 `--min-confidence` 实际上不触发。**兜底靠 `none` 选项**，实测有效。默认总打印 top-3 候选，
 这是发现「自信的错」的窗口。
 
@@ -134,9 +134,9 @@ INTENT_ROUTER_LIVE=1 uv run python -m pytest intent_router/tests/test_live_types
 
 ## 实测基线（2026-09-21）
 
-10 条标注中文样例 **10/10 命中**，`confidence` 0.97–1.00（catalog 33→35 项期间重跑 3 次均 10/10）；
+**31 条标注中文样例全中**（catalog 从 33 长到 56 项期间多次重跑，均无回归），`confidence` 0.98–1.00；
 模糊请求与域外请求均正确落 `none`。
-单次请求约 5550 输入 token ≈ $0.00023。
+单次请求约 9800 输入 token ≈ $0.00041（随 catalog 变大而增：33 项时约 5550）。
 
 ## See also
 
