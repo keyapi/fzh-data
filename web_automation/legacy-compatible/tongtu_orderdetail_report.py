@@ -20,7 +20,9 @@ from pathlib import Path
 from datetime import datetime
 from playwright.sync_api import sync_playwright
 
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+from browser_launch import launch_persistent
+
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', line_buffering=True)
 
 ORDERDETAIL_URL = "https://erp102.tongtool.com/statisticsreport/orderdetail/index.htm"
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -30,6 +32,9 @@ DOWNLOADS_DIR = WEB_ROOT / "downloads"
 LOGIN_TIMEOUT_SECS = 300
 POLL_INTERVAL_SECS = 5
 POLL_TIMEOUT_SECS = 900  # 全月几十万行统计任务可能较久
+LOCK_WAIT_SECS = 90      # 提交后「等最上行变新」的窗口；超时说明提交未生效/被限流
+# 通途对报表生成有限流：出现这些字样即视为限流/排队，明确报错而非死等
+RATE_LIMIT_WORDS = ("限额", "频繁", "排队", "稍后再试", "次数已用完", "请勿重复提交")
 
 # 本页为传统 HTML + My97 日期控件（非 ExtJS），过滤区各下拉默认即 全部/自发货订单，
 # 无需额外点选；如需改默认值，改这里。
@@ -180,8 +185,20 @@ def _top_row_state(page):
     return ts, href
 
 
+def get_all_download_hrefs(page) -> set:
+    """当前列表里所有「点击下载统计结果」链接 href（用于兜底检测新结果）。"""
+    out = set()
+    links = page.locator(DOWNLOAD_LINK)
+    for i in range(links.count()):
+        href = links.nth(i).get_attribute("href")
+        if href:
+            out.add(href)
+    return out
+
+
 def capture_prev_top_ts(page):
-    """提交前：切统计导出、等最上行提交时间稳定，返回当前最上行(旧最新)的提交时间。"""
+    """提交前：切统计导出、等最上行提交时间稳定。
+    返回 (最上行(旧最新)提交时间, 提交前已有下载 href 集合)。"""
     switch_tab(page, TAB_EXPORT)
     page.locator(STAT_BTN).wait_for(state="visible", timeout=8000)
     last = None
@@ -191,7 +208,38 @@ def capture_prev_top_ts(page):
             break
         last = ts
         page.wait_for_timeout(400)
-    return last
+    return last, get_all_download_hrefs(page)
+
+
+def _top_row_text(page) -> str:
+    try:
+        return _first_data_row(page).inner_text(timeout=2000)
+    except Exception:
+        return ""
+
+
+def _page_rate_limited(page) -> str:
+    """页面出现限流/排队提示时返回该提示片段，否则空串。"""
+    try:
+        text = page.locator("body").inner_text(timeout=2000)
+    except Exception:
+        return ""
+    for w in RATE_LIMIT_WORDS:
+        if w in text:
+            i = text.find(w)
+            return text[max(0, i - 20): i + 20].replace("\n", " ")
+    return ""
+
+
+def _reuse_candidate(page, d_from: str, today: str):
+    """若最上行已是「今日提交 + 含本次发货时间范围 + 已有下载链接」的完成任务，直接复用其链接。"""
+    ts, href = _top_row_state(page)
+    if not href or not ts or not ts.startswith(today):
+        return None
+    txt = _top_row_text(page)
+    if f"发货时间: {d_from}" in txt or f"发货时间:{d_from}" in txt:
+        return href
+    return None
 
 
 def _looks_like_mutex(page) -> bool:
@@ -235,22 +283,29 @@ def submit_statistic(page) -> str:
     return "ok"
 
 
-def wait_for_my_download(page, prev_top_ts):
+def wait_for_my_download(page, prev_top_ts, baseline_hrefs=None):
     """按行身份锚定本次提交：列表按提交时间倒序，最上行 = 本次刚提交任务。
     先等最上行提交时间变为新值（锁行），再等该行出现下载链接。
-    不依赖 href 基线，旧行晚渲染/快任务都不会被误判。"""
+    若若干轮仍锁不上（页面结构/解析异常），回退为「新出现的下载链接」并告警。"""
+    baseline_hrefs = baseline_hrefs or set()
     print(f"\n[信息] 等待本次统计任务完成（最长 {POLL_TIMEOUT_SECS} 秒）...")
     start_time = time.time()
+    lock_deadline = start_time + LOCK_WAIT_SECS
     settled = False
     my_ts = None
+    tries = 0
 
     while time.time() - start_time < POLL_TIMEOUT_SECS:
-        # 通途统计页不会自动刷新，需往返两 tab 强制刷新
-        switch_tab(page, TAB_QUERY)
-        page.wait_for_timeout(800)
-        switch_tab(page, TAB_EXPORT)
-
+        # 先读当前状态；未锁定/未完成才往返两 tab 强制刷新
         ts, href = _top_row_state(page)
+        tries += 1
+        if tries <= 3 or tries % 5 == 0:  # 首几轮与每 5 轮打印诊断
+            try:
+                top_txt = _first_data_row(page).inner_text(timeout=1500).replace("\n", " ")
+            except Exception:
+                top_txt = "<读不到最上行>"
+            print(f"  [诊断] ts={ts!r} href={'有' if href else '无'} 最上行={top_txt[:110]}")
+
         if not settled:
             if ts is None:
                 pass  # 历史表仍空/加载中
@@ -267,15 +322,41 @@ def wait_for_my_download(page, prev_top_ts):
 
         if settled and href:
             print(f"  [OK] 本次任务统计完成！链接: {href}")
-            return href
+            return href, None
+
+        # 锁行窗口内没等到新行 → 视为提交未生效/被限流，明确报错而非死等
+        if not settled and time.time() > lock_deadline:
+            hint = _page_rate_limited(page)
+            code = "RATE_LIMITED" if hint else "NO_NEW_JOB"
+            if hint:
+                print(f"  [提示] 页面限流/排队信息: {hint}")
+            print(f"[错误] {LOCK_WAIT_SECS}s 内最上行未变新（提交未生效或被限流）")
+            return None, code
+
+        # 未完成 → 刷新列表再等
+        switch_tab(page, TAB_QUERY)
+        page.wait_for_timeout(800)
+        switch_tab(page, TAB_EXPORT)
+
+        # 兜底：锁行失败多轮后，若出现基线之外的新下载链接，直接采用（告警）
+        if not settled and tries >= 6:
+            new = [h for h in get_all_download_hrefs(page) - baseline_hrefs]
+            if new:
+                print(f"  [警告] 未能按行锁定，回退采用新出现链接: {new[0]}")
+                return new[0], None
 
         elapsed = int(time.time() - start_time)
         if elapsed % 30 < POLL_INTERVAL_SECS:
             print(f"  等待中... ({elapsed}s)")
         time.sleep(POLL_INTERVAL_SECS)
 
+    # 超时前最后一次兜底
+    new = [h for h in get_all_download_hrefs(page) - baseline_hrefs]
+    if new:
+        print(f"  [警告] 超时，采用基线之外的新链接: {new[0]}")
+        return new[0], None
     print("[错误] 等待本次下载记录超时！")
-    return None
+    return None, "DOWNLOAD_TIMEOUT"
 
 
 def download_file(page, href, stamp: str):
@@ -317,8 +398,9 @@ def run(args):
     print("=" * 50)
 
     with sync_playwright() as p:
-        context = p.chromium.launch_persistent_context(
-            user_data_dir=str(PROFILE_DIR),
+        context = launch_persistent(
+            p,
+            PROFILE_DIR,
             headless=False,
             accept_downloads=True,
             viewport={"width": 1400, "height": 900},
@@ -345,24 +427,41 @@ def run(args):
 
         set_ship_date_range(page, d_from, d_to)
 
-        print("\n[步骤 3] 记录提交前最上行提交时间并提交统计任务...")
-        prev_top_ts = capture_prev_top_ts(page)
-        print(f"  [信息] 提交前最新行提交时间: {prev_top_ts}")
-        submit_code = submit_statistic(page)
-        if submit_code != "ok":
-            code = "BUSY" if submit_code == "busy" else "SUBMIT_FAILED"
-            print(f"FAILURE_CODE={code}")
-            print("[错误] 统计任务无法提交，请稍后重试")
-            context.close()
-            sys.exit(1)
+        print("\n[步骤 3] 记录提交前最上行提交时间 / 复用检查 / 提交统计任务...")
+        prev_top_ts, baseline_hrefs = capture_prev_top_ts(page)
+        print(f"  [信息] 提交前最新行提交时间: {prev_top_ts} | 已有下载链接 {len(baseline_hrefs)} 条")
 
-        print("\n[步骤 4] 等待本次统计完成...")
+        download_url = None
+        today = datetime.now().strftime("%Y-%m-%d")
+        if not args.no_reuse:
+            reuse_href = _reuse_candidate(page, d_from, today)
+            if reuse_href:
+                hint = _page_rate_limited(page)
+                print(f"  [OK] 复用今日已完成的同范围结果（不再提交）: {reuse_href}"
+                      + (f" | 页面提示: {hint}" if hint else ""))
+                download_url = reuse_href
 
-        download_url = wait_for_my_download(page, prev_top_ts)
-        if not download_url:
-            print("FAILURE_CODE=DOWNLOAD_TIMEOUT")
-            context.close()
-            sys.exit(1)
+        if download_url is None:
+            submit_code = submit_statistic(page)
+            if submit_code != "ok":
+                code = "BUSY" if submit_code == "busy" else "SUBMIT_FAILED"
+                print(f"FAILURE_CODE={code}")
+                print("[错误] 统计任务无法提交，请稍后重试")
+                context.close()
+                sys.exit(1)
+            hint = _page_rate_limited(page)
+            if hint:
+                print(f"FAILURE_CODE=RATE_LIMITED")
+                print(f"[错误] 提交后页面出现限流/排队提示: {hint}")
+                context.close()
+                sys.exit(1)
+
+            print("\n[步骤 4] 等待本次统计完成...")
+            download_url, fail_code = wait_for_my_download(page, prev_top_ts, baseline_hrefs)
+            if not download_url:
+                print(f"FAILURE_CODE={fail_code}")
+                context.close()
+                sys.exit(1)
 
         print("\n[步骤 5] 下载结果文件...")
         zip_result = download_file(page, download_url, tag)
@@ -399,6 +498,8 @@ if __name__ == "__main__":
     parser.add_argument("--range-end", help="止 yyyy-MM-dd")
     parser.add_argument("--fresh", action="store_true", help="清除旧登录会话")
     parser.add_argument("--auto-login", action="store_true", help="ddddocr 自动登录")
+    parser.add_argument("--no-reuse", action="store_true",
+                        help="不复用今日已完成的同范围结果（默认会复用，避免重复生成触发限流）")
     args = parser.parse_args()
     if bool(args.range_start) != bool(args.range_end):
         parser.error("--range-start 与 --range-end 必须同时使用")

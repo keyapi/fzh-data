@@ -39,8 +39,36 @@ class IngestReport:
         return [r for r in self.rows if r.route.carrier is None]
 
 
+def read_tongtu_sheet(xlsx: str) -> pd.DataFrame:
+    """读通途导出表，自动定位表头行。
+
+    两种导出形态：
+      - 导出中心套模板导出：表头在第 0 行
+      - 「订单详情统计」导出（`tongtu.orderdetail.export`）：前面约 30 行筛选条件元数据，
+        表头在第 30 行、91 列
+
+    不能简单取「第一处出现 `跟踪号` 的行」——元数据区自己就有一行 `跟踪号 | 全部`
+    （只有 2 格），会被误判成表头。改为：**在所有含 `跟踪号` 的行里取非空格子最多的那行**，
+    元数据行只有 2 格，真表头有 90+ 格，区分度足够。
+    """
+    raw = pd.read_excel(xlsx, sheet_name=0, header=None)
+    best_idx, best_filled = None, 0
+    for i in range(min(60, len(raw))):
+        cells = [str(v) for v in raw.iloc[i].tolist()]
+        if not any("跟踪号" in c for c in cells):
+            continue
+        filled = sum(1 for c in cells if c and c != "nan")
+        if filled > best_filled:
+            best_idx, best_filled = i, filled
+    if best_idx is None or best_filled < 5:
+        raise ValueError(f"{xlsx} 里找不到含「跟踪号」的表头行")
+    df = raw.iloc[best_idx + 1:].copy()
+    df.columns = [str(c) for c in raw.iloc[best_idx].tolist()]
+    return df.reset_index(drop=True)
+
+
 def ingest_tongtu(xlsx: str) -> IngestReport:
-    df = pd.read_excel(xlsx, sheet_name=0)
+    df = read_tongtu_sheet(xlsx)
     tc = next(c for c in df.columns if "跟踪号" in str(c))
     out = IngestReport()
     for i, rec in enumerate(df.to_dict("records")):

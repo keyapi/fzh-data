@@ -25,14 +25,16 @@ dependencies = [
     "reportlab>=5.0.0",
     "gspread>=6.2.1",
     "google-auth>=2.56.3",
+    "google-api-python-client>=2.150.0",
     "lightgbm>=4.7.0",
     "scikit-learn>=1.7.2",
     "tencentcloud-sdk-python>=3.1.166",
     "tencentcloud-sdk-python-tmt>=3.1.129",
+    "python-dotenv>=1.0",
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["multi_attr_saihu", "category", "item_cost_sx", "item_weight_size", "EN_API", "sellfox_shipping"]
+packages = ["multi_attr_saihu", "category", "item_cost_sx", "item_weight_size", "EN_API", "sellfox_shipping", "intent_router"]
 
 [build-system]
 requires = ["hatchling"]

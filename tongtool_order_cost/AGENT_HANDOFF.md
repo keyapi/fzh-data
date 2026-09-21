@@ -1,6 +1,6 @@
 # tongtool_order_cost — Agent 交接
 
-> **CLI**: `scripts/run_audit_170.py` · `scripts/remap_gsheet_sku.py` · `scripts/lookup_tongtool_sku.py`
+> **CLI**: `scripts/run_audit_170.py` · `scripts/remap_gsheet_sku.py` · `scripts/lookup_tongtool_sku.py` · `scripts/upload_monthly_order_sheet.py`
 > **人读**: [README.md](README.md)
 > **Skill**: `.agents/skills/tongtool-order-cost/SKILL.md`
 

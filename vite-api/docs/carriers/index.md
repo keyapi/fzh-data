@@ -18,37 +18,37 @@ GOFO Express 是 FZH 回标标签业务的主要承运商，支持 GFUS/YT 渠�
 联邦快递，支持国内和国际运输。
 
 - [FedEx V2 概述](./fedex/overview.md)
-- [FedEx V2 国内端点](./fedex/endpoints-domestic.md)
-- [FedEx 国际端点](./fedex/endpoints-international.md)
+- [FedEx V2 国内端点](./fedex/overview.md)
+- [FedEx 国际端点](./fedex/overview.md)
 
 ## UPS V2 + International
 
 UPS 快递，支持国内和国际运输。
 
 - [UPS V2 概述](./ups/overview.md)
-- [UPS V2 国内端点](./ups/endpoints-domestic.md)
-- [UPS 国际端点](./ups/endpoints-international.md)
+- [UPS V2 国内端点](./ups/overview.md)
+- [UPS 国际端点](./ups/overview.md)
 
 ## Amazon Ground
 
 亚马逊地面运输服务。
 
 - [Amazon Ground 概述](./amazon-ground/overview.md)
-- [Amazon Ground 端点](./amazon-ground/endpoints.md)
+- [Amazon Ground 端点](./amazon-ground/overview.md)
 
 ## EEI
 
 电子出口信息 (Electronic Export Information) 申报。
 
 - [EEI 概述](./eei/overview.md)
-- [EEI 端点](./eei/endpoints.md)
+- [EEI 端点](./eei/overview.md)
 
 ## Tracking
 
 多承运商追踪服务。
 
 - [Tracking 概述](./tracking/overview.md)
-- [Tracking 端点](./tracking/endpoints.md)
+- [Tracking 端点](./tracking/overview.md)
 
 ---
 

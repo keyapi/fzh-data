@@ -59,5 +59,5 @@ uv run python upload_item_images.py --dry-run
 
 ## 参考
 
-- [给人看的 README](../../EN_API/README.md)
-- [Agent 详细参考](../../EN_API/AGENT_HANDOFF.md)
+- [给人看的 README](../../../EN_API/README.md)
+- [Agent 详细参考](../../../EN_API/AGENT_HANDOFF.md)

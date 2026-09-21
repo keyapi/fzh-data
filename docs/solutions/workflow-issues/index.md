@@ -9,6 +9,8 @@ tags: [workflow-issues, index]
 
 | 文档 | 说明 |
 |------|------|
+| [sellfox-inventory-sync-cost-drift.md](sellfox-inventory-sync-cost-drift.md) | 用库存调整单同步数量会让成本越来越改不动 —— 成因与三个选项 |
+| [sellfox-incentive-cost-adjust-2026-09.md](sellfox-incentive-cost-adjust-2026-09.md) | 特殊规则改赛狐入库成本执行记录 —— 下调受批次剩余货值封顶，越消耗越改不动 |
 | [sellfox-cover-combo-create-ops.md](sellfox-cover-combo-create-ops.md) | 三角皮壳 PK# 组合代理批量创建（不是 EN 套件） |
 | [soft-wall-combo-batch-staging.md](soft-wall-combo-batch-staging.md) | 软包墙围 EN 套件/赛狐组合商品批量分阶段创建 |
 | [zipper-combo-batch-staging.md](zipper-combo-batch-staging.md) | 拉链款无捆绑SKU 合成客户物料号并批量创建组合 |
@@ -24,6 +26,7 @@ tags: [workflow-issues, index]
 | [en-channel-account-gsheet-sync.md](en-channel-account-gsheet-sync.md) | Google 表渠道账号同步到 EN Channel Account（人变才加行，Amazon 九国） |
 | [tongtu-warehouse-rename-reconciliation.md](tongtu-warehouse-rename-reconciliation.md) | 通途发货仓库改名后三处对账登记（通途→ERPNext→财务共享表） |
 | [ostkus-account-reconciliation.md](ostkus-account-reconciliation.md) | OSTKUS 账期与 EN Tongtool Order 对账 |
+| [walmart-account-period-sellfox-api.md](walmart-account-period-sellfox-api.md) | Walmart 账期走赛狐 API 直拉；平台费口径结案（差额=沃尔玛补贴×15%） |
 | [pb-reconciliation-monthly-update.md](pb-reconciliation-monthly-update.md) | PB 对账表月度更新脚本化 + UPS 交付核查 |
 | [tongtool-sku-rename-gsheet-remap.md](tongtool-sku-rename-gsheet-remap.md) | 通途主档改名后对齐订单 Google Sheet |
 | [search-first-before-implementing.md](search-first-before-implementing.md) | 改之前先搜官方与项目文档 |

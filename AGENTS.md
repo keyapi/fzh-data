@@ -1,7 +1,7 @@
 ﻿# AGENTS.md
 
 > 本文件是项目**唯一指令来源**，Claude Code / Codex CLI 共用。
-> `CLAUDE.md` 应为此文件 symlink，不要直接编辑 CLAUDE.md。
+> `CLAUDE.md` 只是指向本文件的入口（内容为一行 `AGENTS.md`），**不要直接编辑 CLAUDE.md**。
 
 ## 通用守则
 
@@ -65,30 +65,29 @@ uv sync
 #    Mac:      brew install node
 #    Linux:    sudo apt-get install -y nodejs
 
-# 4. 安装 MCP 服务器（非技术同事优先 4a + 4c）
-# 4a. free-web-tools（网页搜索，无需 API Key）
-#     uv pip install git+https://github.com/changcheng967/free-web-tools.git
-#     （不要用全局 pip——包必须装到项目 .venv 里）
-# 4b. Playwright（浏览器自动化，需要时再装）
-#     npm install -g @playwright/mcp && npx playwright install chromium
-#
-# 4c. Tavily（AI 优化搜索，1000 次/月免费，推荐装）
-#     uv pip install mcp-tavily
-#     注册 → https://app.tavily.com/home → 获取 Key → 改 .codex/config.toml 里的 TAVILY_API_KEY
-# 4d. 通途 ERP2 MCP：填 tongtool_api/.env 后按宿主分别注册（clone 不会自动出现）
-#     Codex:  powershell -File tongtool_api/setup_codex_mcp.ps1（完全退出再开）
-#     Cursor: uv run python tongtool_api/setup_cursor_mcp.py（Customize→MCP 启用；未出现则重载窗口）
+# 4. 安装 MCP 服务器 —— 按需选装，不必全装
+#    ★ 选型表 / 各宿主配置路径 / 启停与裁剪 / 排错：docs/mcp-setup.md
+#    最常用两个：
+#      Tavily（AI 优化搜索，1000 次/月免费，推荐）：uv pip install mcp-tavily
+#        注册 → https://app.tavily.com/home → 取 Key → 写进你宿主配置的 TAVILY_API_KEY
+#      free-web-tools（免费无需 Key）：uv pip install git+https://github.com/changcheng967/free-web-tools.git
+#    通途 ERP2 MCP：填 tongtool_api/.env 后按宿主分别注册（clone 不会自动出现）
+#      Codex:  powershell -File tongtool_api/setup_codex_mcp.ps1
+#      Cursor: uv run python tongtool_api/setup_cursor_mcp.py
+#    （不要用全局 pip——包必须装到项目 .venv 里）
 
 # 5. 初始化 symlink（仅 Claude Desktop 需要；Codex 用户跳过此步）
 #    powershell -ExecutionPolicy Bypass -File setup.ps1
 
-# ⚠️ 通途 MCP：Codex 与 Cursor 要分别注册。仓库 `.cursor/` gitignore，没有可点的 Cursor 安装提示。
+# ⚠️ MCP 装完必须让宿主**完全退出**再开：Claude Desktop 托盘右键 → Quit；Codex 完全退出；Cursor 重载窗口。
+#    Claude Desktop 的 3P 模式与普通模式是**两个独立配置文件**，改错会静默无效 —— 路径见 docs/mcp-setup.md。
+#    通途 MCP：Codex 与 Cursor 要分别注册。仓库 `.cursor/` gitignore，没有可点的 Cursor 安装提示。
 ```
 
 
 > **首次打开项目时，Codex 弹窗问「是否信任此项目」→ 务必选「是」！**
 > 选「否」会导致 `.codex/config.toml` 里的 MCP 和 `.agents/skills/` 全部不加载。
-> MCP 安装完成后：**Codex 必须完全退出再打开**；**Cursor** 写完 `~/.cursor/mcp.json` 后先看工具目录，没有再 Customize → MCP 并重载窗口。
+> MCP 安装完成后：**Claude Desktop** 托盘右键 → Quit；**Codex** 必须完全退出再打开；**Cursor** 写完 `~/.cursor/mcp.json` 后先看工具目录，没有再 Customize → MCP 并重载窗口。
 >
 > 所有脚本通过 `uv run python <script.py>` 运行，不需要全局 Python / conda。
 > 如果 `uv` 不是命令，重新打开终端或手动加 `$env:Path += ";$env:USERPROFILE\.cargo\bin"`（Windows）或 `export PATH="$HOME/.cargo/bin:$PATH"`（Mac/Linux）。
@@ -114,7 +113,7 @@ uv sync
 | `multi-attr` | `multi_attr_saihu/` | ERP 纵向物料 → 赛狐多属性 + 通途配对 |
 | `warehouse-restock` | `warehouse_restock/` | EN BOM → 三成本拆分 → 海外仓备货单 |
 | `other-outbound` | `other_outbound/` | 赛狐库存明细 → 其他出库清零 |
-| `sellfox-api` | `SELLFOX_API/` | 赛狐 OpenAPI 文档镜像（419 端点）+ 连通性测试 |
+| `sellfox-api` | `SELLFOX_API/` | 赛狐 OpenAPI 文档镜像（443 端点）+ 连通性测试 |
 | `sellfox-combo-create` | `SELLFOX_API/` | EN 套件 Product Bundle ↔ 赛狐组合商品：sync-combos 对账/创建/回读断言 |
 | `sellfox-cover-inventory` | `sellfox_cover_inventory/` | 三角类皮壳共享库存代理：KS 库存池 + PK# 组合 + cover_combo_ops 创建/对账 |
 | `sellfox-shipping` | `sellfox_shipping/` | 赛狐尾程打单（订单获取→承运人标签→追踪回写）三界面架构 |
@@ -126,18 +125,43 @@ uv sync
 | `en-image-upload` | `EN_API/` | 图片上传（CLI + Web UI + 物料组主图） |
 | `nas-itemgroup-folders` | `nas_itemgroup_folders/` | NAS-ERPNext 物料组文件夹对账 + 叶子组 (LGKS) 管理 |
 | `nas-access` | `NAS_API/` | 群晖多域名访问、QC 选路、OpenWrt ACME+反代、DSM 第二张证 |
+| `dingtalk-oa-approval` | `dingtalk/dingtalk_oa_approval/` | 钉钉 OA 销售收款确认单：API 附件 + aflow 浏览器导出 + 账期月过滤 + NAS 归档（不改本地同步） |
 | `us-openai-api-proxy` | `us_openai_api_proxy/` | US Vultr Tailscale + CLIProxyAPI → ChatGPT API 共享 |
 | `new-api-deployment` | `new-api-deployment/` | new-api 部署（上海阿里云）+ 订阅/配额管理 |
 | `new-api-dingtalk-oidc` | `new-api-dingtalk-oidc/` | 钉钉 OAuth → OIDC 桥接代理（FastAPI） |
 | `dam-prototype` | `dam-prototype/` | DAM 数字资产管理原型 |
 | `erpnext` | `erpnext/` | 工单排查 (setup→fetch→report 流水线) |
 | `tongtool-order-cost` | `tongtool_order_cost/` | 通途订单特殊规则 1.7.0 本地引擎 + Google Sheet SKU 改名 |
+| `gsheet-monthly-order` | `.agents/skills/gsheet-monthly-order/` | 月度成品 xlsx → 固定 gsheet 月度 ws（复制/归档/只覆盖变化列） |
 | `erpnext-wo-audit` | `.agents/skills/erpnext-wo-audit/` | 工单排查 Skill，按触发词自动加载 |
 | `missing-products` | `.agents/skills/missing-products/` | 通途有库存 SKU → EN 产品客户码 → 赛狐产品 SKU 三方主线补齐/审计 |
 | `platform-account-reconciliation` | `platform_account_reconciliation/` | OSTKUS/Wayfair 账期费用级对账 + EN Tongtool Order 匹配 |
 | `channel-account-sync` | `channel_account_sync/` | Google 表渠道账号 → EN Channel Account（人变才加行，Amazon 按国家站） |
+| `intent-router` | `intent_router/` | 中文意图 → 本仓库模块路由（TypeSafe Jev + 置信度闸门；只分类不执行） |
+| `advertise` | `advertise/` | Amazon 广告数据分析（SP 报告 → 多维分析 → Excel 报告 + 否定词生成） |
+| `ai-access-poc` | `ai_access_poc/` | 统一 AI 接入 C′ 的 PoC（壳 Open WebUI + 板 IvyeaOps 只读） |
+| `amazon-pairing` | `amazon_pairing/` | Amazon 在售未配对 Listing 只读智能审核（MSKU/ASIN/parent 家族） |
+| `cost-adjust` | `cost_adjust/` | 赛狐成本补录单：改已入库库存的采购成本与头程（不清零重入） |
+| `google-drive-permissions` | `google_drive_permissions/` | Google 表格/Colab 共享权限盘点与增删 |
+| `nas-product-visuals` | `nas_product_visuals/` | 群晖 NAS 产品目录扫描 + ACL 权限实时修复脚本集 |
+| `pb-reconciliation` | `pb_reconciliation/` | Pottery Barn 对账月度更新 + TM 佣金结算表 |
+| `sellfox-api-proxy` | `sellfox-api-proxy/` | 赛狐 API 代理网关（破 IP 白名单 + 凭证安全分发） |
+| `sps-api` | `sps_api/` | SPS Commerce API 可行性探测（EDI / ASN / 发票 / 库存） |
+| `ups-track` | `ups_track/` | UPS 官方 Track API 批量查询（当前状态 + 完整节点时间线） |
 | `web-automation` | `.agents/skills/{web-automation,playwright-setup,tongtu-automation,sellfox-automation}/` | 网页自动化能力舱（通途/赛狐浏览器 + 通用 Playwright），子项目在 `web_automation/` |
 | `windows-agent-shell` | `.agents/skills/windows-agent-shell/` | Windows Agent shell：优先 pwsh、禁 bash/`&&`（5.1）、UTF-8 无 BOM |
+| `ce-okf` | `.agents/skills/ce-okf/` | 对话收尾一条龙：ce-compound 正文 + OKF 级联 + 索引联动 + 凭证扫描 + 提交 + PR |
+| `design-md` | `.agents/skills/design-md/` | 创建/管理 DESIGN.md（设计方向、tokens、视觉规则单一事实源） |
+| `design-review` | `.agents/skills/design-review/` | 视觉审查 → 原子提交修复 + 前后对比截图（上线前收紧 UI） |
+| `dingtalk-robot` | `.agents/skills/dingtalk-robot/` | 钉钉自定义机器人通知 + 文件附件（经 ERPNext 中转，ActionCard 推送下载链接） |
+| `ecommerce-image-workflow` | `.agents/skills/ecommerce-image-workflow/` | 参考商品图 → 紧凑电商图片集（主图/特性图/场景图） |
+| `erpnext-item-create` | `.agents/skills/erpnext-item-create/` | EN 物料/变体创建（值表→属性→模板→变体→配套物料） |
+| `frontend-design` | `.agents/skills/frontend-design/` | 有辨识度的生产级前端界面（网页/落地页/仪表盘/组件） |
+| `item-group-translation` | `.agents/skills/item-group-translation/` | EN 物料组 item_group_translation 批量中译英（腾讯云 TMT） |
+| `okf` | `.agents/skills/okf/` | OKF v0.1 文档规范（type 必填 / 每目录 index.md / 每 bundle log.md） |
+| `tongtool-api` | `.agents/skills/tongtool-api/` | 通途 ERP2.0 API 与官方 MCP 接入（查询/调研/排错） |
+| `tongtool-warehouse-sync` | `.agents/skills/tongtool-warehouse-sync/` | 通途仓库改名/新增后三处对账登记（通途→ERPNext→财务共享表） |
+| `workbuddy-config` | `.agents/skills/workbuddy-config/` | WorkBuddy 配置公司 new-api 网关自定义模型（models.json） |
 | `frappe-core-api` | — | ERPNext REST API 开发（外部 skill） |
 | `frappe-errors-api` | — | ERPNext API 错误处理（外部 skill） |
 
@@ -168,6 +192,8 @@ uv sync
    如果 Agent 不确定如何创建 PR，用 `gh pr create --title "..." --body "..."` 命令。
 9. **提交 PR 前扫描凭证**：以下命令必须全部零输出。禁止硬编码密钥/token/密码，禁止提交 CSV 数据文件、PDF、图片到公开仓库。违反 PR 不得合并（详见 `CONTRIBUTING.md` 安全检查章节）
    ```bash
+   # 0. 工作区全量扫描（含还没 git add 的脚本；上面的 diff 扫描看不到这些）
+   uv run python scripts/check_secrets.py
    # 传统 key=value 格式
    git diff origin/main...HEAD | grep -iE "(api_key|api_secret|password|token|ghp_|github_pat_)\s*=\s*['\"]?\w{8,}"
    # curl header 中的凭证
@@ -190,6 +216,8 @@ AGENTS.md (< 200 lines)           ← 你正在读的，项目总纲 + 路由地
 ├── docs/onboarding.md            ← 非技术同事快速上手（A 类用户）
 ├── docs/company-context.md       ← 公司背景、供应链、三系统 SKU 定义
 ├── docs/agent-guide.md           ← Skill 管理规则、代码约定、文档 checklist
+├── docs/mcp-setup.md             ← MCP 选型与安装指南（选什么、装哪个宿主、启停与裁剪、排错）
+├── docs/lessons/                 ← MCP 等工具接入的踩坑与实测记录（Notion / Tavily）
 ├── docs/solutions/               ← 已解决问题记录（bug、最佳实践、工作流），YAML frontmatter 可按 module/tags 搜索
 ├── erpnext/docs/                  ← 工单排查 OKF 文档（方法论、经验教训、API 参考）
 ├── docs/codex_test_enapi_full.md ← Codex 测试 EN_API 全记录
