@@ -61,6 +61,26 @@ DeepSeek API 自 2026-08 起按北京时间分时计费：周一至周五工作�
 ### 五桶分析法（advertise 搜索词分类）
 `advertise/analyze_search_term.py` 对**搜索词行**打的五个分析桶：**Harvest / Negate / Monitor / Protect / Ignore**（见 `advertise/AGENT_HANDOFF.md`「5 桶分类」）。这是报表分析标签，**不是** IvyeaOps 的五杠杆。对应关系：Harvest≈收割候选、Negate≈否词候选；Monitor/Protect/Ignore 在五杠杆里没有同名动作。
 
+## 意图路由 (intent_router)
+
+### System One
+TypeSafe 的决策模型系列：**不生成文本**，输入 `state` + 结构化问题，返回**带概率的判定**。三个原语：`noul`（是/否的概率）、`choice`（≤255 项里选一个）、`score`（2–10 级有序量表）。设计取向是 code 拥有 workflow，模型只在需要语义理解的地方给出可编程的常识判断。
+
+### Jev
+System One 的旗舰模型（请求用别名 `jev-latest`，实测解析到 `jev-1.13.0`）。端点 `POST https://api.typesafe.ai/v1/systemone` + Bearer `TYPESAFE_API_KEY`（存父仓库 `.env`）。**只有输入 token 计费**，输出免费。契约与实测见 `intent_router/docs/reference/typesafe-contract.md`。
+
+### confidence 是分布集中度，不是正确率
+`choice` / `score` 的答案里 `confidence` 由**概率分布的集中程度**算出（越集中越高），所以它只反映「模型是否犹豫」，**不反映「模型是否答对」**。实测：在本仓库 35 路目录上 0.97–1.00、几近饱和，连模型选 `none` 时也有 0.99。**把高 confidence 读成"一定对"是错的** —— 这正是本仓库 `--min-confidence` 闸门实际不触发的原因。
+
+### 置信度闸门（confidence gate）
+用阈值决定「敢不敢自动执行」：低于阈值就不猜，转人工或要求澄清（官方 `patterns/intent-routing.md` 的做法）。`intent_router` 的闸门语义锁定为 `--min-confidence`（默认 0.5）+ `none` 选项；但**真正兜底的是 `none`，不是阈值**。
+
+### none 选项
+给 `choice` 加一个「都不匹配」的出口。**必须留这个出口**，否则模型被迫在几十个选项里硬选一个。`intent_router` 里它由 `typesafe.build_payload()` 硬编码追加（**不写进 `catalog.yaml`**），防止重新生成 catalog 时被漏掉。实测有效：模糊请求与域外请求都正确落 `none`。
+
+### 触发词路由 vs 语义路由
+`.agents/skills/*/SKILL.md` 的触发词是**关键词匹配**（`当用户提到"…"时触发`）；`intent_router` 是**语义路由**（把整句需求交给 Jev 判断意图）。触发词分不开吃同一种数据源的兄弟模块 —— `item-cost` / `stock-init` / `warehouse-restock` 都消费 EN BOM 成本，得靠 `catalog.yaml` 里的 `exclusions`（"不用于…"）才能分开。
+
 ## Cross-border shipping (sellfox_shipping)
 
 ### Sellfox packageSn
@@ -108,6 +128,9 @@ Claude Desktop 的第三方 API 模式，允许连接非 Anthropic 模型（如 
 
 ### 凭证在父仓库不在 worktree
 本项目常开 git worktree（`.claude/worktrees/...`）。gitignore 的凭证只存在于**父仓库** `D:\Work\赛狐\Cursor`：`EN_API/.env`（生产 ERPNext API）、`tongtool_api/.env`（通途 MCP）、`secrets/gsheets-service-account.json`（Google Sheet gspread）。worktree 里找不到这些文件；跑脚本要把相关 env 指到父仓库路径（如 `GSPREAD_SERVICE_ACCOUNT_FILE=D:\Work\赛狐\Cursor\secrets\gsheets-service-account.json`），或从父仓库 cwd 运行。
+
+### 收尾仪式 / ce-okf
+对话结束时把「背景 / 过程 / 结果 / 经验教训」沉淀进仓库的固定动作，此前由用户每次手打一段长中文提示词触发。现已固化为仓库内 skill `/ce-okf`（`.agents/skills/ce-okf/`），一条命令跑完：`ce-compound` 出学习正文 → frontmatter 归一化成 OKF+ce-compound 合并 schema → 11 项级联登记（`docs/solutions/**`、各级 `index.md`/`log.md`、`AGENT_HANDOFF.md`、`AGENTS.md`、`CONCEPTS.md`）→ `scripts/update_index.py` 索引联动 → 凭证扫描 → 提交 + PR。参数 `refresh` 走增量、`no-pr` 只本地提交。缺了它最常漏的是第 11 条的索引联动。
 
 ## Manufacturing
 
@@ -326,10 +349,43 @@ A webhook-based DingTalk group messaging channel used by AI agents (WorkBuddy, C
 前者是「虚拟仓库」（FBA 侧来源，如 272150），后者才是真实海外仓（如 279841=POLAND）。
 不是笔误，照抄。
 
+### 三方仓 (tripartite / third-party warehouse)
+赛狐里指**海外第三方仓库**（与自建仓、FBA 相对）。关键点：赛狐**官方对三方仓库存同步的建模
+就是「生成调整单」** —— 三方仓模块带一个「生成调整单」功能
+（i18n `main.warehouse.tripartite.warehouse.generate.adjustment.order`，权限
+`MOD_OVERSEA_WAREHOUSE.CREATE_ADJUST`），配置项走 `/api/config/{get,set}ThirdWarehouseInventoryAdjust.json`。
+所以「用调整单同步外部数量」是官方路径、不是用错工具；它的代价在成本侧（见
+`docs/solutions/workflow-issues/sellfox-inventory-sync-cost-drift.md`）。
+
+### 剩余货值约束（「货值不能为负数」）
+赛狐**成本补录单**下调采购单价时的硬校验：`变更额 = Δ单价 × 备货单备货量`，
+不能超过**该批次此刻剩余的货值**（`剩余可用量 × 当前单价`）。等价地：
+
+```
+单件可下调幅度 ≲ 当前单价 × (批次剩余可用量 / 备货单备货量)
+```
+
+**上调不受此限；下调被「剩余占比」封顶，剩余为 0 就完全降不了。**
+所以下调激励价有强时效性 —— 要在批次被订单/调整单吃掉前做。
+见 `docs/solutions/integration-issues/sellfox-cost-adjust-api.md`。
+
+### 激励价（低于 EN 成本的入库成本）
+运营为了让成本口径贴近销售激励而设的、**低于 EN 实际成本**的赛狐入库成本（仓库+SKU 维度）。
+数值来源是共享 Google Sheet 的特殊规则表，不是 EN BOM。落地路径只能是赛狐原生单据
+（`指定采购单价` / `单个头程费用`），且受「剩余货值约束」限制。
+执行记录见 `docs/solutions/workflow-issues/sellfox-incentive-cost-adjust-2026-09.md`。
+
+### 海外仓批次表 goodsAva
+`POST /api/overseaBatch/page.json` 返回的批次级字段，字面像「该批次可用量」，
+**实测不是当前可用库存**（30 行抽样 21 行与【库存明细】对不上，POLAND 曾整组差约 1000）。
+批次表可靠用途只有两个：**看库存由哪些来源单构成**、**看该批次的历史成本**。
+**数量一律以库存明细为准。**
+
 ## Flagged ambiguities
 
 - "「赛狐有 API」不区分公开 OpenAPI 与私有接口时会得出相反结论 —— 说「没有写接口」通常只对公开 OpenAPI 成立。"
 - "「调整单批次会跟随备货单成本」只对 type=4（减少）成立；type=3（增加）是独立快照，不跟随。"
+- "「按 SKU 搜赛狐备货单」有三个调用面、三种写法：站点私有列表 `/api/oversea/page.json` 用 `searchType='sku'`；批次表 `/api/overseaBatch/page.json` 用 `searchType='commoditySku'`；**公开 OpenAPI 的列表页文档只列 pickSn/remark/itemRemark，不含 SKU**。别把某一面的约定套到另一面。且列表接口 `items` 只给 3 条预览，不能用来判断成员关系。"
 - "'AMZFZHSXEUR' 曾被当成欧洲聚合店 — Amazon 只有国家站，旧名只挂在 AMZFZHSXDE 别名。"
 - "'WFDANEEYUS' 与 'WFDaneeyUS' 不是同一条 Channel Account，大小写店铺码都保留。Channel Account Owner.user 存中文名；DingTalk/Frappe User.name 常是邮箱，同步时继续写中文。"
 - "'五桶' had been used as if it meant IvyeaOps 五杠杆 — they are distinct (search-term labels vs optimizer action candidates)."

@@ -56,9 +56,27 @@ applies_when:
    Playwright `page.request` 默认 30s 超时，行数再多就会超。必须显式放宽，且不要并发。
 4. **`page.json` 的 `searchType` 必须传 `'sku'`**。传 `commoditySku` 等其它值会被**静默忽略**，
    返回未过滤的全量列表 —— 会让人误判「搜不到」。`data.totalSize` 也不可信，用 `rows`。
+   注意这与**批次表**和**公开 OpenAPI 文档**的写法都不同，别记串（见下）。
 5. **`pickId` 不由 URL 传**：前端靠 localStorage（`EditStockOrder_edit` /
    `DetailStockOrder_detail` 里的 `{"params":{"id":N}}`）取目标单，URL 上的 `?id=` 被忽略。
    走 API 时直接带 `?id=` 不受影响，但**做 UI 自动化必须知道这点**，否则会莫名打开错单。
+
+### `searchType` 三个调用面三种约定（2026-09-20 补录）
+
+「按 SKU 找备货单」这件事在不同调用面上写法完全不同，记串了就会以为「搜不到」：
+
+| 调用面 | 端点 | 筛 SKU 怎么写 |
+|---|---|---|
+| 备货单**列表**（站点私有） | `POST /api/oversea/page.json` | `searchType='sku'` + `searchContent=<SKU>`；其它值被静默忽略 |
+| 海外仓**批次表**（站点私有） | `POST /api/overseaBatch/page.json` | `searchType='commoditySku'` + `searchContent=<SKU>`；传 `commoditySku` 参数本身不过滤 |
+| 备货单列表（**公开 OpenAPI**，2.0） | `POST /api/oversea/page/v2.json` | ❌ **不支持按 SKU**。文档原文 `searchType: 搜索类型 pickSn: 备货单号, remark: 单据备注, itemRemark: 产品备注`（1.0 即将下线的文档同样只有这三个值） |
+
+**列表接口的 `items` 只返回前 3 条预览**，拿它判断「某 SKU 在不在某张单里」必然误判。
+要全量明细走**详情**：站点私有 `GET /api/oversea/detail.json?id=<pickId>`，
+公开 OpenAPI `POST /api/oversea/detail/v2.json`。
+
+> 2026-09-20 本轮连续两次误报「某 SKU 没有备货单」，正是把「列表只给 3 条预览」当成「该 SKU 不在单里」。
+> **在赛狐下「没有」的结论前，换一个接口/入口复核一遍。**
 
 ### 生效口径：只按「本批次占比」加权
 

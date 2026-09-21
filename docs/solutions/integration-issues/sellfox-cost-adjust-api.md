@@ -13,6 +13,8 @@ applies_when:
   - "create.json / audit.json 的 payload 怎么构造"
   - "公开 OpenAPI 调成本补录单一律 40021 访问的接口暂无权限"
   - "要判断某个赛狐功能是否有公开写接口"
+  - "审核报「货值不能为负数」—— 变更额超过了该批次剩余货值"
+  - "报「存在待审核的补录单」—— 同 SKU 只能有一张在审"
 ---
 
 # 赛狐成本补录单：公开 OpenAPI 只读，创建/审核走内部接口
@@ -73,6 +75,39 @@ applies_when:
 
 `oriTotalPurchaseCost` / `newTotalPurchaseCost` 是整数时要去掉小数点（`1500` 而非 `1500.0`）。
 
+### 建单/审核会被拒的两条硬约束（2026-09-20 实测）
+
+**① 变更额不能超过该批次剩余货值 —— `货值不能为负数`**
+
+补录单改的是**整条备货单行**（`newPurchaseCost` 是单件价，影响面按**备货量**算），
+但它扣的是**该批次此刻还剩的货值**（`剩余可用量 × 当前单价`）。两者不等价：
+
+```
+单件可下调幅度 ≲ 当前单价 × (批次剩余可用量 / 备货单备货量)
+```
+
+实测边界（`KS0001-HLR-153-GINGER`：备货量 1000、当前可用仅 7、单价 179.30）：
+理论下限 `179.30 × 7/1000 = 1.2551`，即最多降到 **178.045**。
+试 `178.05` 过校验；试 `123.76`（‑55.54/件 × 1000 = ‑55,540，而批次只剩 7×179.30 = 1,255 货值）被拒：
+
+```
+失败原因: SKU[KS0001-HLR-153-GINGER], FnSku[], 货值不能为负数。
+```
+
+**边界值与公式吻合。** 推论比约束本身更重要：**剩余占比决定可下调幅度**；
+备货单被消耗得越多越改不动，**剩余为 0 时完全改不动**。所以「下调成本」有强时效性
+—— 要在批次还没被订单/调整单吃掉时做（见
+[`../workflow-issues/sellfox-incentive-cost-adjust-2026-09.md`](../workflow-issues/sellfox-incentive-cost-adjust-2026-09.md)）。
+
+**② 同一 SKU 同时只能有一张待审核补录单**
+
+```
+SKU：KS0001-HLR-153-GINGER 存在待审核的补录单
+```
+
+批量建单必须**按 SKU 串行**：前一张 `audit.json` 通过或 `delete.json` 删除后才能建下一张。
+`delete.json` 的 body 与 audit 同形，就是 `[adjustId]`（如 `[20211]`）。
+
 ### 调 create 前先用「拦截后挡掉」拿契约，别试错写生产
 
 Playwright 路由可以把请求**截获后 fulfill 假响应**，请求不会到达服务端：
@@ -112,6 +147,8 @@ await page.route('**/api/fba/cost/adjustment/create.json', async (route) => {
 - payload 是靠**逐字段回填**读接口的结果，任何自造字段都可能被静默改写或拒绝。
 - 用真发请求去试 payload = 直接改生产库存成本。拦截后挡掉是零成本拿到契约的唯一安全姿势。
 - 生效影响是 **剩余数量 × 价差**，不是原始数量 × 价差（见下）。
+- **向下改比向上改难得多**：上调不受限，下调被「批次剩余货值」封顶
+  （`单件可下调幅度 ≲ 当前单价 × 剩余占比`）。已消耗完的备货单**改不动**。
 
 ## When to Apply
 
@@ -144,8 +181,23 @@ await page.route('**/api/fba/cost/adjustment/create.json', async (route) => {
 
 工具：`cost_adjust/sellfox_cost_adjust_api.py`（默认 dry-run，`--apply` 才写）
 
+### 2026-09-20 批量下调实测（被两条硬约束挡住）
+
+用规则表目标值批量下调激励价时，逐行验证了上面两条约束：
+
+| 测试 | 值 | 结果 |
+|---|---|---|
+| 边界值 `178.05` | 备货量 1000 / 可用 7 / 现价 179.30 → 理论下限 178.045 | 过校验，但被「存在待审核的补录单」挡下 |
+| 目标值 `123.76` | Δ = ‑55.54 ×1000 = ‑55,540；批次剩余货值 7×179.30 = 1,255 | ❌ `货值不能为负数` |
+| 清理在审单 | `POST delete.json` body `[20211]` | ✅ 清掉 `CA26092000001` 后可再建 |
+
+结论：这些备货单大多已被订单/调整单消耗大半，**目标价降不到**。
+完整执行记录见
+[`../workflow-issues/sellfox-incentive-cost-adjust-2026-09.md`](../workflow-issues/sellfox-incentive-cost-adjust-2026-09.md)。
+
 ## Related
 
+- [`../workflow-issues/sellfox-incentive-cost-adjust-2026-09.md`](../workflow-issues/sellfox-incentive-cost-adjust-2026-09.md) — 用这套接口批量下调激励价的执行记录（两条硬约束怎么挡住的）
 - [`sellfox-adjust-order-write-chain.md`](sellfox-adjust-order-write-chain.md) — 库存**调整单**（数量）的另一条写链路，同为「文档与实装不符 + 内部接口」
 - [`../conventions/sellfox-apifox-api-docs-mirror-refresh.md`](../conventions/sellfox-apifox-api-docs-mirror-refresh.md) — 镜像只证明文档更新，行为须实测
 - [`../../research/2026-09-18-sellfox-cost-accounting-fifo.md`](../../research/2026-09-18-sellfox-cost-accounting-fifo.md) — 赛狐成本口径与 FIFO 批次

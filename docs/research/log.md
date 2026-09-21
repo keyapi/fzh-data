@@ -39,6 +39,24 @@ description: docs/research 目录变更历史
     → **T1（NAS 装 Tailscale）引入的正是当初选 LAN2 想规避的风险**，已从推荐里移除。
   - **新推荐：T3 —— 在 OpenWrt 上做定向转发**（只把 tailnet 侧一个端口 DNAT 到 `192.168.100.242:5001`）：只暴露 DSM 端口、不暴露整个网段、且不依赖 NAS 出向路由。**比 `mrquj` 文档给的泛化建议更贴合你们的双网卡现实。** 若嫌麻烦，**维持 T4（现状公网 `:11024`）其实够用且稳**，用「只读账号 + 只放行 VPS 出口 IP」收敛即可。
   - 另记用户提到的已知副作用：LAN1/LAN2 **翻墙能力不一致**，群晖自动备份 Google Sheet 到 NAS 的功能受默认口影响（用户表示可后议）。
+## 2026-09-20
+
+- **新增**: [2026-09-20-sellfox-official-mcp-feasibility.md](2026-09-20-sellfox-official-mcp-feasibility.md) — **赛狐官方 MCP 可行性**。FAC（ERPNext）接通后，接着问「赛狐能不能也接 MCP」。
+  - **最终结论：可用，且已用只读链路跑通。** 端点 `https://api-mcp.sellfox.com/mcp`，`streamable-http`，协议 `2025-06-18`（与 FAC 同版本），`serverInfo` = `sellfox-api v1.30.0`。
+  - **两条独立鉴权路径（关键，别混）**：
+    | 路径 | 头 | 来源 | 实测 |
+    |---|---|---|---|
+    | A. API 账号 | `X-Sellfox-Client-Id` + `X-Sellfox-Client-Secret` | API 账号 App ID/Secret | ✅ **可用** |
+    | B. MCP 管理 | 单头 `X-MCP-Key` | 后台「业务设置 → 全局 → MCP管理」 | ❌ `40027 未启用MCP功能` |
+    - 客服答复针对的是 **B**；**A 现在就能用**。CSDN 教程给的正是 A（就实测而言它是对的），官方后台页面给的是 B —— **不矛盾，是两条通道**。
+  - **只读链路实测通过**：① 直连 `openapi.sellfox.com` 取 token 得 `{"code":0,"msg":"success"}`（凭证有效 + **北京办公室 IP 白名单已放行**）；② MCP `initialize`/`tools/list` 200；③ 只读工具 `get_shop_page_list` 返回**真实店铺数据**。**数据未写入任何文件；生产 App Secret 未落盘、未写进文档。**
+  - **工具清单：23 个 = 13 读 + 1 报表任务 + 9 个 SP 广告写**。13 个读工具已确认可用；`create_ad_download_task` 对应公开文档 `/api/cpc/download/createTask.json`（建**报表下载任务**，不改广告数据）。
+  - **⚠️ 9 个 SP 广告写工具：未调用。** `edit_sp_campaign`（自述单次最多 100 条）、`edit_sp_ad_product/group/targeting`、`close_sp_negative_targeting`、`create_sp_{keyword,negative_keyword,product,negative_product}_targeting`。只读了 schema（`required=["shop_id","items"]`，`items` 是 `array<object>` 且 **schema 极薄、无字段级约束**），**未发任何写请求** —— 这些是生产广告写操作，在明确授权与隔离方案前不碰。
+  - **与「赛狐广告无写 API」约束的关系（仍未定论）**：该约束在**公开 OpenAPI 层面仍成立**（本地镜像 443 篇、09-17 刷新：广告模块 `manageData/*` 全是分页查询、`hourData/*` 是报表、唯一 `create` 是报表任务）；而这 9 个工具**已能通过 MCP 触达**。**→ 既不能据此断定约束失效，也不能断定工具可用。** 要落地须显式验证。
+  - **结论演变（如实保留，避免误信中间版本）**：首版「能接」→ 二版因 `40027` 改「不可用」并撤回一条过度断言 → **三版（本版）换 API 账号凭证实测只读成功，回到「可用」**。二版测出 `40027` 是因为**用错了头**（用了 B 路径），不是功能不可用。
+  - **凭证归属的关键取舍**：官方 MCP 要**把生产 App ID/Secret 直接交给客户端**；自有 `sellfox-api-proxy` 则**签发自己的 key**、客户端拿不到赛狐凭证。→ 多人/多 Agent 场景优先走 proxy；官方 MCP 更适合单人自用。
+  - **未决**：① 9 个写工具真伪（问客服，或在**明确指定的测试店铺**上用无副作用载荷验证 —— 需用户显式授权）；② B 路径何时开通；③ 限流是否同样适用。
+  - **安全建议**（按项目既有偏好）：默认只读，建**权限收窄到只读的独立 API 账号**，把限制放在**服务端**而非 prompt。
 
 ## 2026-09-18
 
