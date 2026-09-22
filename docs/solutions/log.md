@@ -7,6 +7,9 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-09-22（公开仓与私有知识分层）
+- **新增**: `architecture-patterns/public-private-agent-knowledge-split.md` — 调研并裁决公开仓、内部知识与凭证的三层边界：公开仓保留脱敏代码/通用经验；真实拓扑、运维 runbook 和内部 API 进入独立私有 Markdown 仓；密码/token/私钥进入 secret manager 或已忽略的本地环境文件。私有仓用普通 clone + 一键 bootstrap，而非 submodule；SOPS 只补充少量 GitOps 密文，不承担长篇知识库；Vault 等到出现动态凭证/PKI/合规需求再引入。另定义 Agent 自动发现、无权限降级、敏感文档 lint 与已公开内容迁移/历史重写边界。
+
 ## 2026-09-22
 - **修正**: 「新机器怎么让 `ce-okf` 可用」原来教人跑 `setup.ps1`，**对 Claude Code 是多余的**。仓库里 `.claude/skills` 本身就是 git 跟踪的 symlink，只要克隆时让它正确检出，Claude Code 自动看到全部项目 skill。实测对照（同一台机器、开发者模式已开）：默认 `git clone` → `CLAUDE.md` 是 9 字节 stub（0 行）、`.claude/skills` 是**普通文件**、skill 为空；`git clone -c core.symlinks=true` → 两个都是**真 symlink**、`CLAUDE.md` 解析 243 行、`.claude/skills` 列 **47 个 skill**，**全程没跑 setup.ps1**。根因是 Git for Windows 的 `--system core.symlinks=false`；克隆时的 `-c` 只在那一刻生效、**不写进新克隆的 `.git/config`**（已核），所以还要补 `git config core.symlinks true` 才能扛住后续 `pull` 新增的 symlink 条目。`setup.ps1` 缩到**只剩 Claude Desktop 需要**（Desktop 只读 `~/.claude/skills/`，看不到项目级目录）。改动落在 `AGENTS.md` 克隆节 + `CONTRIBUTING.md`「首次初始化」+ `.agents/skills/ce-okf/SKILL.md`「首次安装到新机器」。macOS / Linux 原生支持 symlink，直接 clone 即可。
 - **更新**: `ce-okf` 的依赖关系讲清 —— 之前 `AGENTS.md` 的「新机器首次 clone 后必做」清单里**一个字都没提** compound-engineering，而 `ce-okf` 第 1 步要调 `/ce-compound`。同事 clone 完能跑，但会静默走兜底、自己不知道。补：① `AGENTS.md` 加第 **4.5 步**（上游是标准 Claude Code 插件，装法是两条斜杠命令 `/plugin marketplace add EveryInc/compound-engineering-plugin` + `/plugin install compound-engineering`，**脚本代劳不了**，所以只能写进清单让同事的 Agent 读到）；② `.agents/skills/ce-okf/SKILL.md` 的「分工」表加「在本仓库？」列，把 `ce-compound` 标成**第三方 / 可选增强**并列出不装时丢掉什么（重叠检测损失最大、grounding 校验、检索广度），写明**流程照样完整、只降正文质量**。

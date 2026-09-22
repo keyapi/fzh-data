@@ -10,6 +10,7 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-09-22 | 公开代码仓与私有公司知识分层——兼顾 Agent 检索、同事使用与防泄露 | [architecture-patterns/public-private-agent-knowledge-split.md](architecture-patterns/public-private-agent-knowledge-split.md) |
 | 2026-09-21 | 把 FAC / 赛狐 / NAS 三个 MCP 接上 ChatGPT —— 一次串起来的方法与四个教训 | [workflow-issues/mcp-to-chatgpt-bringup-lessons.md](workflow-issues/mcp-to-chatgpt-bringup-lessons.md) |
 | 2026-09-22 | 承运商批量导入面单的字段长度上限（UPS Reference 35 / FedEx poNumber 30） | [integration-issues/carrier-label-batch-field-length-limits.md](integration-issues/carrier-label-batch-field-length-limits.md) |
 | 2026-09-22 | 背贴品名缺失怎么补——通途SKU 在 EN 有两种登记写法 | [integration-issues/sku-name-backfill-via-en-customer-code.md](integration-issues/sku-name-backfill-via-en-customer-code.md) |
