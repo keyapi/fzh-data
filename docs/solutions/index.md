@@ -14,6 +14,8 @@ tags: [solutions, index]
 | 2026-09-22 | 背贴品名缺失怎么补——通途SKU 在 EN 有两种登记写法 | [integration-issues/sku-name-backfill-via-en-customer-code.md](integration-issues/sku-name-backfill-via-en-customer-code.md) |
 | 2026-09-22 | 用 Drive API 改同事的 Colab notebook（cell 插入 / 回读比对 / 并发守卫） | [developer-experience/colab-notebook-drive-api-editing.md](developer-experience/colab-notebook-drive-api-editing.md) |
 | 2026-09-22 | notebook 里别用 `!shell` 做文件操作——文件名含空格会让 `!zip` 静默失败 | [developer-experience/colab-shell-out-filename-spaces.md](developer-experience/colab-shell-out-filename-spaces.md) |
+| 2026-09-22 | 把「改同事的 Colab notebook」做成独立工具箱 colab_kit（tooling 决策） | [tooling-decisions/colab-kit-notebook-edit-toolbox.md](tooling-decisions/colab-kit-notebook-edit-toolbox.md) |
+| 2026-09-22 | `gh pr edit` 因 Projects classic 弃用而失败——改 PR 要走 `gh api PATCH` | [developer-experience/gh-pr-edit-projects-classic-workaround.md](developer-experience/gh-pr-edit-projects-classic-workaround.md) |
 | 2026-09-21 | 把 FAC / 赛狐 / NAS 三个 MCP 接上 ChatGPT —— 一次串起来的方法与四个教训 | [workflow-issues/mcp-to-chatgpt-bringup-lessons.md](workflow-issues/mcp-to-chatgpt-bringup-lessons.md) |
 | 2026-09-09 | 账期/收款核算 生态地图（各平台账期 → 汇率/税/附加费 → 回款归属/回款率 → 归集给财务） | [architecture-patterns/account-period-revenue-reconciliation-ecosystem.md](architecture-patterns/account-period-revenue-reconciliation-ecosystem.md) |
 | 2026-09-09 | Amazon&新平台账期「提交异常/迟交」审计方法与规则 | [workflow-issues/amazon-account-period-late-submission-audit.md](workflow-issues/amazon-account-period-late-submission-audit.md) |
