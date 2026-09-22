@@ -3,10 +3,100 @@ okf: v0.1
 type: Log
 title: pb_orders 变更日志
 tags: [pb, orders, log]
-timestamp: 2026-09-21
+timestamp: 2026-09-22
 ---
 
 # 变更日志
+
+## 2026-09-22（第九轮：时区修正 + 登录跳转 bug）
+- **修复登录后跳错页**（使用者实测发现）：挂在前缀 `/pb/` 下时，`return_to` 记的是
+  反代剥掉前缀后的**应用侧路径**（`/`），登录后把浏览器送到 `https://api.vilavi.cn/`
+  —— 那是公司的 new-api 大模型路由。现在回写浏览器的 URL 一律补前缀，
+  并限制 `return_to` 只能落在 `/pb/` 之下（顺带挡同域跳到隔壁服务）。
+- **时区**：容器默认 UTC，页面上「创建/开始/结束」比北京时间少 8 小时，
+  标签时间戳与产物文件名里的 `MM.DD` 同理。compose 统一设 `TZ=Asia/Shanghai`；
+  已有两条任务记录的 UTC 时间戳一次性纠偏为 `+08:00`。
+- **共 65 个测试**（新增一个专测回归本 bug 的用例）。
+
+## 2026-09-22（第八轮：公网 HTTPS + 钉钉登录，修界面问题）
+- **诊断出「慢」的真因**：服务器本机 1-3ms、公网 HTTPS 125ms、**Tailscale 20-30 秒**
+  （走香港中继 relay "hkg"，`tailscale ping` 超时，TCP 握手就要 12-19 秒）。
+  后果是 12MB 标签 PDF 传不完（用户本地留下 `.crdownload`）、表单提交十秒无反馈。
+- **改走公网**：`https://api.vilavi.cn/pb/`，前端加钉钉登录；容器只绑 `127.0.0.1`，
+  公网 8412 仍拒绝连接。NGINX 只加了一段 `location /pb/`（含
+  `client_max_body_size 128m` —— 默认 1m 会 413 掉 11MB 的 PDF），
+  改前备份、`nginx -t` 通过才 `systemctl reload`。
+- **认证层**：复用公司 OIDC 桥与 `sellfox_shipping.auth_oidc` 的会话签名；
+  state 改存 Redis（上游用内存 dict，多 worker 会「Invalid state」）；
+  登录后跳回原页面；加可选白名单 `PB_ORDERS_ALLOWED_USERS`。
+  **已知风险**：桥的 corpId 校验时灵时不灵，实际上是任何钉钉用户都能登录，
+  白名单是补这道口的（当前留空，待确认使用者后填）。
+- **修两个界面问题**：①「处理完了左上角还显示处理中」是真 bug ——
+  顶部状态标签不在轮询区域内，改为轮询到终态时整页 reload（已用 running→succeeded
+  的确定性实验验证）；②提交后加「正在上传，请勿关闭页面」反馈。
+- **无货 SKU 做成配置项**：`PB_ORDERS_DEFAULT_NO_STOCK` 预填表单、可随手改，
+  改断货情况只需改 .env + `docker compose up -d`。
+- **新增 URL 前缀支持**：`PB_ORDERS_URL_PREFIX`，同一份镜像既能挂根路径也能挂 `/pb/`。
+- **新增 22 个测试**（共 64 个）：闸门拦截、签名/篡改/过期 cookie、白名单、
+  登录回调（state 一次性、return_to）、开放重定向防护、前缀渲染、无货预填。
+- **公网验收**：上传 11.2MB 用 0.62 秒；**12MB 标签 PDF 4.7 秒完整下完**（之前下不完）；
+  真实批次 50 页 4 秒出件、1:1 通过、对账差全 0；产物与 Colab 等价
+  （通途 xlsx 0/5000 单元格差异、标签 PDF 归一化时间戳后 0 像素差异）。
+- **既有服务零影响**：6 个既有容器运行时间一字未变、无重启；
+  `/`、`/oidc/`、`/sellfox/`、`/nas/mcp` 返回码改动前后完全一致。
+- **用户实测发现并已修的 bug**：登录后跳到 `https://api.vilavi.cn/`（域名根路径，
+  那是公司的 new-api 大模型路由），而不是 `/pb/`。根因是 `return_to` 记的是
+  **反代剥掉前缀后的应用侧路径**（`/`），登录后直接拼成域名根。
+  修法：闸门把 `return_to` 补成浏览器可见的完整路径（`/pb/...`），
+  `safe_return_to` 同时限制只能回到本前缀之下（顺带挡住跳到同域其它服务）。
+  已加回归测试。教训：**前缀化部署下，「应用侧路径」与「浏览器看到的路径」必须分清**。
+
+## 2026-09-22（第七轮：部署到 EN 测试服务器）
+- **已部署**：EN 测试服务器（`sh-erpnext-test` / 8.133.254.66）的 `/opt/pb-orders`，
+  Compose 项目 `pb-orders`，入口 **`http://100.119.28.72:8412`**（仅 Tailscale）。
+  该栈是与 EN 并列的**独立服务**，不是 EN/Frappe Custom App，不接入 bench。
+- **构建坑**：服务器上 `pypi.org` 索引可达，但容器内下载包文件（`files.pythonhosted.org`）
+  超时；必须 `--build-arg PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple`。
+  Docker 守护进程已配 daocloud 镜像源，`python:3.11-slim` 可直接拉取，`redis:7-alpine` 机器上已有。
+- **资源限额按实测下调**：真实 50 页批次峰值 RSS ≈ 492MB，而服务器可用内存仅约 1.9Gi，
+  故 worker 1g / web 384m / redis 128m（可用环境变量覆盖）。
+- **隔离验证**：既有 6 个容器（nas-mcp / new-api 系列 / sellfox-api-proxy）部署前后
+  **运行时间一字未变、无重启**；仅新增 `pb-orders-net`；公网 `8.133.254.66:8412` 拒绝连接。
+- **远端验收**：脱敏合成样例上传→后台 1.3 秒出件→1:1 通过、对账差全 0、三件产物可下载；
+  `docker compose restart` 后三个容器仍 healthy，已成功任务仍可查、下载仍 200。
+- **未做**：页面无登录鉴权（只靠 Tailscale 限制）、保留策略无定时清理、未接 NGINX、
+  代码版本标记是人工填的 `pb-web-20260922`。
+
+## 2026-09-22（第六轮：Phase 1 网页版 + 隔离 Docker 落地）
+- **新增 `service.py`**：把编排从 CLI 抽成结构化服务层（`run_job` / `JobOptions` / `JobResult` /
+  `PBJobError`），硬校验失败**不产出任何产物**；`run_pb_orders.py` 退化为薄适配器，
+  输出格式与退出码不变。重构后重跑 20260921：通途 xlsx 0/5000 单元格差异、
+  背贴 PDF 字节与像素一致、标签 PDF 归一化时间戳后 0 像素差异 —— 与重构前、与 Colab 等价。
+- **新增网页版**：FastAPI + Jinja（无 CDN/SPA）+ Redis/RQ worker + SQLite 任务库。
+  上传 → 建任务 → 后台处理 → 页面看对账与校验明细 → 逐个下载；关浏览器不影响处理。
+- **新增隔离 Docker 栈**：独立 Compose 项目 `pb-orders`、独立网络与 Redis、
+  容器名全 `pb-orders-*`、端口默认仅绑回环；不改动任何既有服务。
+- **离线原则落地**：worker 强制 `cache_only=True`，缓存缺失直接失败（`cache_missing`），
+  绝不在出件路径上访问 Google。
+- **修两个真实缺陷**：`--allow-unmatched` 的 NA 穿透（reportlab 画 `nan` 崩溃 +
+  背贴 `IntCastingNaNError`）现在补可见占位符与「一页=一件」；无货拆分时
+  标签页/背贴页对账总数与分项打架，改为全量口径并按 `total - 各分项` 实算 diff。
+- **新增 42 个自动化测试**（合成夹具，不需要 Redis 与客户数据），覆盖服务层、
+  存储层、任务库与 Web 全链路。
+- **实测**：真实批次（11MB PDF / 50 页）上传后后台 6 秒出件；无货拆分（真实 2 个 SKU）
+  得 有货 37 / 无货 13、四条对账差全 0；停 worker 造出中断任务 → 重启 Web 标
+  `worker_interrupted` 且可重跑，已成功任务重启后仍可下载；故意用 49 页 PDF 触发 1:1 失败，
+  页面只显示可读原因与错误码，0 产物、0 路径泄露。
+- **未完成**：本机 Docker Desktop 启动失败（`connect ENOENT \\.\pipe\errorReporter`），
+  容器构建与 `docker compose up` 未在本机实测（`docker compose config` 已通过）；
+  本地验收改用 WSL 的 Redis + 本机 Python 进程完成。EN 测试服务器尚未部署。
+
+## 2026-09-22（第五轮：EN 测试服务器部署架构调研）
+- **新增**: `reference/server-deployment-architecture.md`，对比 Frappe Custom App、同步 FastAPI、FastAPI + Redis/RQ、SPA、Streamlit/Gradio。
+- **结论**: 第一阶段采用独立 FastAPI + Jinja/HTMX + Redis/RQ worker；任务、输入、报告和输出持久化，浏览器关闭或 Web 重启不影响已入队任务。
+- **离线原则**: 普通 PB 出件只读本地 SKU 名称缓存；Tailscale/OpenWrt 美国出口仅在管理员刷新 Google Sheet 缓存时显式启用，不作为运行依赖。
+- **边界**: 暂不做 SPS 自动下载，也不提前建设通用低代码处理平台；第二个同类流程出现后再抽 job/artifact/auth/storage 公共层。
+- **依据**: 核查仓库内 `sellfox_shipping` 上传、artifact、OIDC、Docker 模式和 `EN_API/image_upload_app.py`，并对照 FastAPI、Frappe、Tailscale 官方文档；原始 URL 已写入文档。
 
 ## 2026-09-22（第四轮：把一致性验证做成可复跑脚本）
 - **新增**: `compare_runs.py` —— 一条命令把本工具当天三个产物与 `<dir>/Colab处理/` 的三个逐项对比：

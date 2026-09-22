@@ -8,6 +8,8 @@ title: 集成问题 — 变更日志
 
 | 日期 | 操作 | 文档 | 说明 |
 |------|------|------|------|
+| 2026-09-22 | 新增 | [reverse-proxy-prefix-return-to.md](reverse-proxy-prefix-return-to.md) | 前缀化反代（`proxy_pass .../` 剥前缀）下，用 `request.url.path` 当 `return_to` 会把登录后的用户送到**域名根路径**（那是隔壁服务）。修法：回写浏览器的 URL 一律补前缀，并让 `safe_return_to` 只允许落在本前缀之下；测试补 StripPrefix 中间件模拟反代。由使用者实际登录时发现 |
+| 2026-09-22 | 新增 | [dingtalk-oidc-bridge-client-onboarding.md](dingtalk-oidc-bridge-client-onboarding.md) | 自建服务复用公司钉钉 OIDC 桥的客户端侧做法：不改钉钉后台（桥透传 redirect_uri）、复用 `sellfox_shipping.auth_oidc` 的签名 cookie、**state 必须外置到 Redis**（上游进程内 dict 在多 worker/重启后报 Invalid state）、闸门写应用中间件（桥没有 `/verify`，nginx `auth_request` 无处可指）、**corpId 校验不可依赖**故白名单要放服务侧 |
 | 2026-09-20 | 修复 | [dingtalk-sso-new-api-oidc-bridge.md](dingtalk-sso-new-api-oidc-bridge.md) | 修正指向 `us_openai_api_proxy/`、`new-api-deployment/` 的失效相对链接（少退一级，`../../` → `../../../`） |
 | 2026-09-08 | 新增 | [cliproxyapi-auth-unavailable-oauth-recovery.md](cliproxyapi-auth-unavailable-oauth-recovery.md) | CLIProxyAPI `503 auth_unavailable`：区分进程健康与上游授权可用性，固化升级、浏览器 OAuth、失效认证记录隔离和目标模型真实请求验收；全程使用占位符。 |
 | 2026-09-08 | 更新 | [dingtalk-offboarding-hardening.md](dingtalk-offboarding-hardening.md) | 补「生产部署与实测」：上海生产已上线双通道（每日 cron 0 3 * * * + 实时 bridge 重建），实测 3 名离职者自动封号 status=2；bridge 容器需挂 proxy DB volume + PROXY_DB_PATH，否则 disable_proxy_keys 抛错致 STATUS_LATER 无限重投；proxy 关 key 链路容器内函数级实测通过 |

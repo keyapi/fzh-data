@@ -10,6 +10,8 @@ tags: [integration, solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-09-22 | 自建服务接入公司钉钉 OIDC 桥（客户端侧做法） | [dingtalk-oidc-bridge-client-onboarding.md](dingtalk-oidc-bridge-client-onboarding.md) |
+| 2026-09-22 | 前缀化反向代理下的登录跳转：`return_to` 必须用浏览器可见路径 | [reverse-proxy-prefix-return-to.md](reverse-proxy-prefix-return-to.md) |
 | 2026-09-18 | 赛狐备货单改「单个头程费用」——无 Excel 路径，只能走私有接口 | [sellfox-restock-headfee-api.md](sellfox-restock-headfee-api.md) |
 | 2026-09-18 | 赛狐成本补录单——公开 OpenAPI 只读，创建/审核走内部接口（完整契约实测） | [sellfox-cost-adjust-api.md](sellfox-cost-adjust-api.md) |
 | 2026-09-18 | 赛狐调整单写链路——createV2 一步到位，batchConfirmAdjust 只适用「待调整」态 | [sellfox-adjust-order-write-chain.md](sellfox-adjust-order-write-chain.md) |

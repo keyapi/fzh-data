@@ -10,6 +10,9 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-09-22 | 境内访问境内服务器：Tailscale 走中继时慢到不可用，改用公网 HTTPS | [tooling-decisions/tailscale-relay-vs-public-https-china.md](tooling-decisions/tailscale-relay-vs-public-https-china.md) |
+| 2026-09-22 | 自建服务接入公司钉钉 OIDC 桥（客户端侧做法） | [integration-issues/dingtalk-oidc-bridge-client-onboarding.md](integration-issues/dingtalk-oidc-bridge-client-onboarding.md) |
+| 2026-09-22 | 前缀化反向代理下的登录跳转：`return_to` 必须用浏览器可见路径 | [integration-issues/reverse-proxy-prefix-return-to.md](integration-issues/reverse-proxy-prefix-return-to.md) |
 | 2026-09-21 | 中文意图路由（intent_router）—— TypeSafe Jev + 置信度闸门 | [tooling-decisions/typesafe-jev-intent-router.md](tooling-decisions/typesafe-jev-intent-router.md) |
 | 2026-09-21 | Windows worktree 的 `CLAUDE.md`：symlink 还是 stub，取决于开发者模式 | [developer-experience/windows-worktree-claude-md-symlink.md](developer-experience/windows-worktree-claude-md-symlink.md) |
 | 2026-09-21 | ce-okf skill — 把「ce-compound + OKF 收尾」固化成一个命令 | [tooling-decisions/ce-okf-conversation-wrapup-skill.md](tooling-decisions/ce-okf-conversation-wrapup-skill.md) |

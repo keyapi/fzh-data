@@ -27,6 +27,112 @@ PB_0_导入_原始_checked0stock order x40 20260921_0159_334423_on_2026-09-21_17
 
 拿到后：第一个导入通途，后两个发给 WXP。
 
+## 网页版（日常出件用这个）
+
+命令行适合在自己电脑上跑；**人不在电脑前**（比如休假）或者不想记参数时，用网页版：
+
+1. 浏览器打开服务地址（默认本机 <http://127.0.0.1:8412>）
+2. 「新建任务」→ 传 Packslip PDF + SPS 订单 CSV → 填无货 SKU（可选）→ 提交
+3. 页面立刻跳到任务页，**处理在后台继续，可以关掉浏览器**
+4. 处理完在同一个页面逐个下载三份（或多份）产物
+
+和命令行的区别：
+
+| | 命令行 | 网页版 |
+|---|---|---|
+| 处理时能不能关电脑 | 不能，进程断了就没了 | 能，任务在服务器上跑 |
+| 历史记录 | 没有 | 有，按状态筛选、可重新下载 |
+| 重跑同一批 | 再敲一遍命令 | 点「用相同输入重新处理」 |
+| 出错的提示 | 控制台文字 | 页面上写清原因和处理建议 |
+| 会不会联网 | 默认会（可用 `--cache-only` 关掉） | **永远不联网**，只读本地 SKU 缓存 |
+| 谁能用 | 有命令行环境的人 | 有钉钉且在白名单里的人（公网实例） |
+
+网页版把每次出件都记进任务库：任务编号、操作者、耗时、代码版本、输入文件、
+每个产物的 SHA-256 都能追溯。
+
+### 网页版怎么用（公网实例）
+
+1. 打开 <https://api.vilavi.cn/pb/>
+2. 没登录会自动跳到**钉钉登录**，登录后回到你原本想打开的页面
+3. 「新建任务」→ 传两个文件 → 无货 SKU 已按当前断货情况预填，**可直接改** → 提交
+4. 提交后页面立刻跳到任务页；**处理在后台跑，可以关浏览器**
+5. 处理完左上角状态会自动变成「成功」，下面出现可下载的产物
+
+右上角显示当前登录的钉钉账号，点「退出」注销（会话 8 小时）。
+
+### 首次准备：SKU 名称缓存
+
+网页版**不联网**，背贴的中文/西班牙语品名只读本地缓存。所以部署时要把缓存准备好：
+
+```
+pb_orders/data/us_sku_name_cache.csv    # 从 Google Sheet「US SKU Name / SKUName」导出
+pb_orders/data/nltk_data/               # nltk 英文词表（可选，缺了会告警并跳过清洗）
+```
+
+缓存不存在时，任务会直接失败并提示管理员准备缓存 —— 这是故意的：
+宁可不出件，也不能印出没有品名的背贴。
+
+缓存刷新是**独立的管理动作**（需要时临时开海外出口、导出、再关掉），
+不是日常出件流程的一部分。
+
+### 已部署的实例
+
+EN 测试服务器上已经跑了一份（**不是** EN 的 App，是并列的独立服务）：
+
+| | |
+|---|---|
+| 入口 | **<https://api.vilavi.cn/pb/>** —— 需要**钉钉登录** |
+| 部署目录 | 服务器 `/opt/pb-orders`，compose 入口 `pb_orders/docker-compose.yml` |
+| 运维 | `docker compose ps` / `logs -f pb-orders-worker` / `restart` |
+
+**为什么不用 Tailscale**：实测服务器本机 1-3ms、公网 HTTPS 125ms、
+Tailscale 走香港中继要 **20-30 秒**（12MB 的标签 PDF 根本下不完）。
+所以走公网 HTTPS + 钉钉登录，不再走 Tailscale，也不再直接暴露 8412 端口
+（容器只监听 `127.0.0.1`，公网只能经 NGINX 的 `/pb/`）。
+
+**改无货 SKU 预填**：编辑服务器 `/opt/pb-orders/pb_orders/.env` 里的
+`PB_ORDERS_DEFAULT_NO_STOCK=`（逗号分隔），然后 `docker compose up -d`。
+不用改代码、不用重建镜像。
+
+**要更新代码**：把新的 `pb_orders/` 覆盖上去，然后
+`docker compose build --build-arg PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple && docker compose up -d`。
+（服务器上直连 PyPI 下载包会超时，**必须**带这个 build-arg；Docker 镜像源已配好 daocloud，基础镜像不用管。）
+
+### 用 Docker 跑（本机 / 新机器）
+
+服务由三个容器组成：`pb-orders-web`（页面）、`pb-orders-worker`（干活的）、
+`pb-orders-redis`（队列）。三者是**独立的 Compose 项目**，不碰机器上任何既有服务。
+
+```bash
+cd pb_orders
+docker compose up -d --build
+docker compose ps          # 三个都该是 healthy
+```
+
+- 默认只绑本机回环（`127.0.0.1:8412`）。要给别人访问，改 `.env` 里的 `PB_ORDERS_BIND`
+  为服务器内网 / Tailscale 地址。
+- 运行数据在 `pb_orders/runtime/`（任务库、上传、产物），`pb_orders/data/` 只读挂载。
+- 停服务：`docker compose down`（加 `-v` 会连数据一起删，别乱加）。
+
+国内/受限网络构建时：
+
+```bash
+docker compose build --build-arg PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+```
+
+### 开发：不用 Docker 直接跑
+
+需要一个 Redis（本机没有的话，WSL 里 `redis-server --port 6390 --daemonize yes` 也行）：
+
+```bash
+cd pb_orders
+uv run uvicorn --app-dir . web.app:app --host 127.0.0.1 --port 8412   # 终端 1
+uv run python -m web.tasks                                            # 终端 2（worker）
+```
+
+配置从 `pb_orders/.env` 读（参考 `.env.example`）。改完代码要**同时重启 web 和 worker**，
+worker 是长驻进程，不重启就还在跑旧代码。
+
 ## 常用选项
 
 | 想做什么 | 加这个参数 |
@@ -96,6 +202,9 @@ uv run python compare_runs.py --dir "D:\Work\美国\Tracy Miller\PB orders\20260
 | 警告「名称表有重复 通途SKU」 | `US SKU Name` 表里有重复行，脚本保留最后一行，可去表里清理 |
 | 警告「nltk 英文词表不可用」 | 首次要联网下载一次词表；离线时会跳过中文名里的英文后缀清理 |
 | 提示找不到服务账号 JSON | 确认 `D:\Work\赛狐\Cursor\secrets\gsheets-service-account.json` 存在 |
+| 网页版任务一直「排队中」 | worker 没起来，或 Redis 不通。`docker compose ps` 看 worker 状态 |
+| 网页版任务「worker 在处理中重启」 | 处理到一半 worker 被重启了。点「用相同输入重新处理」即可，不会覆盖原记录 |
+| 网页版任务失败「缺少本地 SKU 名称缓存」 | 按上面「首次准备」把缓存放进 `pb_orders/data/` |
 
 ## 不做的事
 
