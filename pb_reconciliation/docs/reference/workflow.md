@@ -18,6 +18,9 @@ resource: ../reconcile_pb.py
 5. `--dry-run` 核对报告 → `--write` 生成时间戳新文件。
 6. 对"本轮未付"发票做 UPS 核查（见 ups-delivery-check.md），更新 `UNPAID_NOTES` 重新生成。
 7. Notes 详细说明用户手写；LibreOffice 重算验证；交付给财务。
+8. 合并当月 invoice CSV 交财务（收款附件）：`python merge_invoices.py --month YYYYMM --dry-run` 核对
+   逐日小计与 `invoice/*.txt` → `--write` 产出 `<月份文件夹>/PB invoice 合并 YYYYMM.csv`。
+   金额口径 = 过滤 `Record Type`(X) = H 后累加 `Invoice Total`(CA)；H+D 一起算会重复。详见 §9。
 
 ## 2. 表格列映射
 
@@ -81,3 +84,18 @@ resource: ../reconcile_pb.py
 - **未付区块**：`Unpaid in last period, paid in this period`（上轮未付且本账期已付，空时 Total=0 勿写 SUM 空范围）；`Unpaid in this period`（账期内未付，含结转仍未付的，空时 Total=0）。
 - **硬校验**：付款总额须与财务确认一致（`EXPECTED`）。
 - 关键事实：PB 邮件发票日期（E 列）按 UPS 实际发货确认，只可能等于或晚于我方，不可能早。
+
+## 9. 月度 invoice 合并（merge_invoices.py）
+
+```bash
+python merge_invoices.py --month YYYYMM --dry-run   # 报告：逐日 行数/H数/CA合计 vs 该日 invoice/*.txt
+python merge_invoices.py --month YYYYMM --write     # -> <月份文件夹>/PB invoice 合并 YYYYMM.csv
+```
+
+- 源：`<月份>/<日>/invoice/invoice*.csv` 的**下一层**（不递归 → 变体子目录不纳入）。
+- 输出：表头取列数最多的那份（SPS 新版 92 列），全部数据行（H+D）按日升序拼接，右侧补空到全局最大列数，
+  UTF-8 带 BOM + CRLF，无引号。规格与 2026-08-24 手工版**逐字节一致**。
+- 金额口径：只对 `Record Type` = H 的行累加 `Invoice Total`(CA)。H+D 都算会重复计数。
+- 硬校验：日文件夹有 `invoice/` 却没有 `invoice*.csv` 命中 → 报错退出（防文件名错拼被静默漏掉）。
+- 已存在同名输出默认不覆盖，改写 `_<时间戳>` 副本；`--force` / `--out` / `--base` 可覆盖行为。
+
