@@ -128,6 +128,17 @@ CGNAT 后面，就会自动切回 direct。修完之后**所有**走 Tailscale �
 - 一侧处于运营商 CGNAT 后面，UDP 打洞失败；
 - Tailscale 的协调服务器在境外，国内网络下建立直连本身就不稳定。
 
+### 「要不要自己开 41641」分两种环境（实测）
+
+| 环境 | 需要开吗 | 说明 |
+|---|---|---|
+| **云主机（阿里云等）** | **要**，在**云平台安全组**里放开入站 UDP 41641 | 云安全组在主机 iptables 之前，`tailscaled` 拦不到 |
+| **自管 Linux + ufw/iptables** | **不用** | `tailscaled` 启动时自动在 `ts-input` 链插 `ACCEPT udp dpt:41641`，且该链排在 ufw 的 DROP 策略**之前**。ufw 里只放行 22/tcp 也不影响 |
+
+实测佐证（美国 Vultr）：`ufw status` 只有 `22/tcp ALLOW`、INPUT 策略 DROP，
+但 `iptables -L ts-input` 里有 `ACCEPT udp dpt:41641`，且 `tailscale status`
+显示与上海服务器 `active; direct 8.133.254.66:41641` —— **直连正常，无需人工干预**。
+
 ### 一条通用教训
 
 **「内网方案」不等于「更快」**，尤其当两端分属不同运营商/云厂商时。
