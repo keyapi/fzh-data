@@ -50,3 +50,8 @@ uv run python platform_account_reconciliation/scripts/reconcile_ostkus.py \
 ```
 
 2026-08-17 结果：350 个基础 OS 订单全部覆盖；07-01/07-16 销售金额差异均为 0；4 个跨期退单；EN 平台费与账期营销扣点差异待财务确认。
+
+> **2026-09-21 新线索**：Walmart 侧的同类差额已查明是「**EN `platform_fee` 漏算了补贴基数**」
+> （差额恰为沃尔玛补贴 × 15%，逐单 64/64 命中）。OSTKUS 这笔 `platform_fee` 差额很可能是同一类问题，
+> 建议用同样方法（找 EN 少算的那个基数项）复查 —— 见
+> [walmart-account-period-sellfox-api.md](walmart-account-period-sellfox-api.md)。
