@@ -176,7 +176,8 @@ def create_app() -> FastAPI:
             # request.url.path 是反代剥掉前缀后的应用侧路径（如 "/"），
             # 直接用它会让登录后跳到域名根路径 —— 而根路径是别的服务。
             return RedirectResponse(
-                url(f"/oidc-login?return_to={quote(url(path), safe='')}")
+                url(f"/oidc-login?return_to={quote(url(path), safe='')}"),
+                status_code=303,  # 303 才会把 POST 变成 GET，307 会让浏览器继续 POST
             )
 
         if not auth_mod.is_allowed(user, settings):

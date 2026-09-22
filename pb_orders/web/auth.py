@@ -149,7 +149,7 @@ def build_router(ctx: AuthContext, states: StateStore, templates) -> APIRouter:
     @router.get("/oidc-login")
     async def oidc_login(return_to: str = ""):
         if not settings.auth_enabled:
-            return RedirectResponse(ctx.url("/"))
+            return RedirectResponse(ctx.url("/"), status_code=303)
         state = secrets.token_urlsafe(32)
         states.put(state, safe_return_to(return_to, ctx))
         params = {
@@ -220,7 +220,7 @@ def build_router(ctx: AuthContext, states: StateStore, templates) -> APIRouter:
         token = make_session_token(
             identity, display_name, secret=settings.session_secret, ttl=SESSION_TTL
         )
-        resp = RedirectResponse(return_to)
+        resp = RedirectResponse(return_to, status_code=303)
         resp.set_cookie(
             COOKIE_NAME,
             token,
@@ -235,7 +235,8 @@ def build_router(ctx: AuthContext, states: StateStore, templates) -> APIRouter:
 
     @router.post("/logout")
     async def logout():
-        resp = RedirectResponse(ctx.url("/"))
+        # 必须 303：307 会保留请求方法，浏览器会拿 POST 去请求只接受 GET 的首页 -> 405
+        resp = RedirectResponse(ctx.url("/"), status_code=303)
         resp.delete_cookie(COOKIE_NAME, path=ctx.cookie_path)
         return resp
 

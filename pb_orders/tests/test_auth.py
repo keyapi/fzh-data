@@ -79,7 +79,7 @@ def _login(c, name="张三", sub="user-123"):
 
 def test_anonymous_page_redirects_to_login(auth_client):
     resp = auth_client.get(PREFIX + "/", follow_redirects=False)
-    assert resp.status_code == 307 or resp.status_code == 302
+    assert resp.status_code == 303
     assert "/pb/oidc-login" in resp.headers["location"]
     # return_to 必须带前缀：不带的话登录后会跳到域名根路径（那是别的服务）
     assert "return_to=%2Fpb%2F" in resp.headers["location"]
@@ -87,7 +87,7 @@ def test_anonymous_page_redirects_to_login(auth_client):
 
 def test_anonymous_download_redirects_to_login(auth_client):
     resp = auth_client.get(f"{PREFIX}/artifacts/art-x/download", follow_redirects=False)
-    assert resp.status_code in (302, 307)
+    assert resp.status_code == 303
     assert "/pb/oidc-login" in resp.headers["location"]
 
 
@@ -122,12 +122,12 @@ def test_valid_cookie_reaches_page(auth_client):
 def test_tampered_cookie_is_rejected(auth_client):
     token = _cookie()
     auth_client.cookies.set(web_auth.COOKIE_NAME, token[:-4] + "aaaa", path=PREFIX + "/")
-    assert auth_client.get(PREFIX + "/", follow_redirects=False).status_code in (302, 307)
+    assert auth_client.get(PREFIX + "/", follow_redirects=False).status_code == 303
 
 
 def test_expired_cookie_is_rejected(auth_client):
     auth_client.cookies.set(web_auth.COOKIE_NAME, _expired_cookie(), path=PREFIX + "/")
-    assert auth_client.get(PREFIX + "/", follow_redirects=False).status_code in (302, 307)
+    assert auth_client.get(PREFIX + "/", follow_redirects=False).status_code == 303
 
 
 def test_cookie_signed_with_other_secret_is_rejected(auth_client):
@@ -136,7 +136,7 @@ def test_cookie_signed_with_other_secret_is_rejected(auth_client):
         make_session_token("u", "x", secret="wrong-secret", ttl=3600),
         path=f"{PREFIX}/",
     )
-    assert auth_client.get(PREFIX + "/", follow_redirects=False).status_code in (302, 307)
+    assert auth_client.get(PREFIX + "/", follow_redirects=False).status_code == 303
 
 
 # ---------- 白名单 ----------
@@ -170,7 +170,7 @@ def test_allowlist_accepts_listed_user_by_name_or_sub(pb_env, monkeypatch):
 
 def test_login_redirects_to_issuer_with_state(auth_client):
     resp = auth_client.get(f"{PREFIX}/oidc-login?return_to=/pb/jobs/abc", follow_redirects=False)
-    assert resp.status_code == 307 or resp.status_code == 302
+    assert resp.status_code in (302, 307)  # 跳到外部 IdP，不是闸门
     loc = resp.headers["location"]
     assert loc.startswith(f"{ISSUER}/authorize?")
     assert "state=" in loc and "client_id=pb-orders" in loc
@@ -213,7 +213,7 @@ def test_login_state_is_one_shot_and_return_to_survives(auth_client, monkeypatch
     monkeypatch.setattr(web_auth.httpx, "AsyncClient", lambda *a, **k: _Client())
 
     cb = auth_client.get(f"{PREFIX}/oidc-callback?code=abc&state={state}", follow_redirects=False)
-    assert cb.status_code in (302, 307)
+    assert cb.status_code == 303
     assert cb.headers["location"] == "/pb/jobs/abc"
     assert web_auth.COOKIE_NAME in cb.cookies or web_auth.COOKIE_NAME in auth_client.cookies
     assert seen["token_url"] == f"{ISSUER}/token"
@@ -249,7 +249,7 @@ def test_safe_return_to_stays_inside_the_service():
 def test_return_to_falls_back_to_service_root_not_domain_root(auth_client):
     """真 bug 回归：登录前访问 /pb/jobs/xxx，登录后必须回到 /pb/ 下，不能落到域名根。"""
     page = auth_client.get(f"{PREFIX}/jobs/does-not-exist", follow_redirects=False)
-    assert page.status_code in (302, 307)
+    assert page.status_code == 303
     assert "return_to=%2Fpb%2Fjobs%2Fdoes-not-exist" in page.headers["location"]
 
 
@@ -263,7 +263,8 @@ def test_logout_expires_the_session_cookie(auth_client):
     assert auth_client.get(PREFIX + "/").status_code == 200
 
     resp = auth_client.post(f"{PREFIX}/logout", follow_redirects=False)
-    assert resp.status_code in (302, 307)
+    # 必须 303：307 会保留 POST，浏览器会拿 POST 去请求只接受 GET 的首页 -> 405
+    assert resp.status_code == 303
     header = resp.headers.get("set-cookie", "")
     assert web_auth.COOKIE_NAME in header
     assert "Max-Age=0" in header
@@ -335,3 +336,29 @@ def test_prefix_applies_to_redirects_and_polling(auth_client):
     )
     assert resp.status_code == 303
     assert resp.headers["location"].startswith(f"{PREFIX}/jobs/")
+
+
+def test_logout_does_not_end_in_405(auth_client):
+    """真 bug 回归：退出后浏览器会带着 POST 去请求首页 -> `{"detail":"Method Not Allowed"}`。
+
+    `RedirectResponse` 默认是 307，会**保留请求方法**；退出是 POST，
+    于是浏览器 POST 到只接受 GET 的 `/`，再被闸门拦下时又 POST 到只接受 GET 的
+    `/oidc-login`，最终 405。改 303 后浏览器改用 GET 走完整条链。
+    """
+    _login(auth_client)
+    assert auth_client.get(PREFIX + "/").status_code == 200
+
+    logout = auth_client.post(f"{PREFIX}/logout", follow_redirects=False)
+    assert logout.status_code == 303, "退出必须是 303，307 会让浏览器继续用 POST"
+
+    # 浏览器按 303 改用 GET 请求 Location，不应再出现 405。
+    # （测试环境里 httpx 的 cookie jar 不按 Path 删除，所以这里可能仍是 200 已登录态；
+    #   真正钉住原 bug 的是上面那条「必须是 303」。）
+    after = auth_client.get(logout.headers["location"], follow_redirects=False)
+    assert after.status_code != 405
+
+
+def test_gate_redirect_is_303_not_307(auth_client):
+    """闸门拦截也要用 303，否则 POST 类请求（如「重新处理」）会被原样重放。"""
+    resp = auth_client.post(f"{PREFIX}/jobs/job-x/retry", follow_redirects=False)
+    assert resp.status_code == 303
