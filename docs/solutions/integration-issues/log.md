@@ -8,6 +8,7 @@ title: 集成问题 — 变更日志
 
 | 日期 | 操作 | 文档 | 说明 |
 |------|------|------|------|
+| 2026-09-22 | 新增 | [redirect-307-replays-post-405.md](redirect-307-replays-post-405.md) | `RedirectResponse` 默认 **307 会保留请求方法**，退出登录是 POST，于是浏览器拿 POST 去请求只接受 GET 的首页、再被闸门用 307 拦到只接受 GET 的登录路由——最终 `{"detail":"Method Not Allowed"}`。修法：凡「跳页面」的重定向一律显式 303。**只断言 Location 的用例抓不到它**，要断言状态码本身。由使用者实测发现 |
 | 2026-09-22 | 新增 | [reverse-proxy-prefix-return-to.md](reverse-proxy-prefix-return-to.md) | 前缀化反代（`proxy_pass .../` 剥前缀）下，用 `request.url.path` 当 `return_to` 会把登录后的用户送到**域名根路径**（那是隔壁服务）。修法：回写浏览器的 URL 一律补前缀，并让 `safe_return_to` 只允许落在本前缀之下；测试补 StripPrefix 中间件模拟反代。由使用者实际登录时发现 |
 | 2026-09-22 | 新增 | [dingtalk-oidc-bridge-client-onboarding.md](dingtalk-oidc-bridge-client-onboarding.md) | 自建服务复用公司钉钉 OIDC 桥的客户端侧做法：不改钉钉后台（桥透传 redirect_uri）、复用 `sellfox_shipping.auth_oidc` 的签名 cookie、**state 必须外置到 Redis**（上游进程内 dict 在多 worker/重启后报 Invalid state）、闸门写应用中间件（桥没有 `/verify`，nginx `auth_request` 无处可指）、**corpId 校验不可依赖**故白名单要放服务侧 |
 | 2026-09-20 | 修复 | [dingtalk-sso-new-api-oidc-bridge.md](dingtalk-sso-new-api-oidc-bridge.md) | 修正指向 `us_openai_api_proxy/`、`new-api-deployment/` 的失效相对链接（少退一级，`../../` → `../../../`） |

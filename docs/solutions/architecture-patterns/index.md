@@ -10,6 +10,7 @@ timestamp: 2026-07-28
 
 | 标题 | 文件 |
 |------|------|
+| 办公室出口拓扑与应急链路（OpenClash ↔ 上海跳板 ↔ 美国 Vultr） | [office-egress-fallback-chain.md](office-egress-fallback-chain.md) |
 | SPS Commerce API 自动化（Transaction API + M2M） | [sps-commerce-api-automation.md](sps-commerce-api-automation.md) |
 | 赛狐报表 Job 队列（错开 create + 合并轮询） | [sellfox-ivyeaops-report-job-queue.md](sellfox-ivyeaops-report-job-queue.md) |
 | 赛狐 Phase2 ingest — IvyeaOps 五杠杆 | [sellfox-ivyeaops-five-lever-ingest.md](sellfox-ivyeaops-five-lever-ingest.md) |

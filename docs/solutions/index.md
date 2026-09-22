@@ -10,6 +10,9 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-09-22 | 重定向用 307 会让浏览器重放 POST —— 退出登录报 405 | [integration-issues/redirect-307-replays-post-405.md](integration-issues/redirect-307-replays-post-405.md) |
+| 2026-09-22 | 办公室出口拓扑与应急链路（OpenClash ↔ 上海跳板 ↔ 美国 Vultr） | [architecture-patterns/office-egress-fallback-chain.md](architecture-patterns/office-egress-fallback-chain.md) |
+| 2026-09-22 | Tailscale 2026 新能力盘点与对本仓库的适用性（Tailcat / Peer Relays / Services） | [tooling-decisions/tailscale-2026-capabilities.md](tooling-decisions/tailscale-2026-capabilities.md) |
 | 2026-09-22 | Tailscale 慢到不可用：先查直连（UDP 41641 入站），别急着换方案 | [tooling-decisions/tailscale-relay-vs-public-https-china.md](tooling-decisions/tailscale-relay-vs-public-https-china.md) |
 | 2026-09-22 | 自建服务接入公司钉钉 OIDC 桥（客户端侧做法） | [integration-issues/dingtalk-oidc-bridge-client-onboarding.md](integration-issues/dingtalk-oidc-bridge-client-onboarding.md) |
 | 2026-09-22 | 前缀化反向代理下的登录跳转：`return_to` 必须用浏览器可见路径 | [integration-issues/reverse-proxy-prefix-return-to.md](integration-issues/reverse-proxy-prefix-return-to.md) |

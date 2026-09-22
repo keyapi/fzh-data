@@ -10,6 +10,7 @@ timestamp: 2026-08-31
 
 | 标题 | 文件 |
 |------|------|
+| Tailscale 2026 新能力盘点与对本仓库的适用性（Tailcat / Peer Relays / Services） | [tailscale-2026-capabilities.md](tailscale-2026-capabilities.md) |
 | Tailscale 慢到不可用：先查直连（UDP 41641 入站），别急着换方案 | [tailscale-relay-vs-public-https-china.md](tailscale-relay-vs-public-https-china.md) |
 | 中文意图路由（intent_router）—— TypeSafe Jev + 置信度闸门 | [typesafe-jev-intent-router.md](typesafe-jev-intent-router.md) |
 | ce-okf skill — 把「ce-compound + OKF 收尾」固化成一个命令 | [ce-okf-conversation-wrapup-skill.md](ce-okf-conversation-wrapup-skill.md) |

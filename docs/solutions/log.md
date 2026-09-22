@@ -7,6 +7,11 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-09-22（第二轮：重定向语义 / 出口拓扑 / Tailscale 2026 盘点）
+- **新增**: `integration-issues/redirect-307-replays-post-405.md` — 「跳页面」的重定向必须用 **303**。Starlette `RedirectResponse` 默认 307，而 307 **保留请求方法**：退出是 POST → 浏览器 POST 到只接受 GET 的首页 → 405 `{"detail":"Method Not Allowed"}`。由使用者实测发现。**只断言 `Location` 的测试抓不到它**，要断言状态码。
+- **新增**: `architecture-patterns/office-egress-fallback-chain.md` — 把散在多份文档里的出口链路串成一张图：主订阅线路 / **应急线路**（OpenClash 节点 `SH-Tailscale-US` → 上海 `socks5-tunnel.service:1080` → 美国 Vultr）/ 公网直反代；含重启存活状态与「用出口 IP 判断当前走哪条线」的定界方法。补的正是那个「各端都有文档、却没人串起来」的缺口。
+- **新增**: `tooling-decisions/tailscale-2026-capabilities.md` — 2026 年 Tailscale 新能力里与本仓库相关的三项：**Peer Relays**（自建中继，对症跨境中继慢）、**Services**（服务级 MagicDNS + ACL，可减少手工 NGINX location/白名单，但**不替代应用层登录**）、**Tailcat**（"Tailscale without Tailscale"，无控制面的临时连接工具，不是架构升级）。
+
 ## 2026-09-22
 - **更新**: `tooling-decisions/tailscale-relay-vs-public-https-china.md` —— 原结论「弃用 Tailscale」**不成立**。根因是**云厂商安全组没放行入站 UDP 41641**，导致直连失败退回香港中继。用户放开该规则后实测：同两台机器从 `relay "hkg"` + 超时 + HTTP 20-30 秒，变成 **直连 31-69ms**。处置顺序改为「先修直连，修不动再考虑绕开」。另记录该服务器上已有的 `socks5-tunnel.service`（SSH 动态转发到美国出口，仅监听 Tailscale 地址）及其实测效果。
 
