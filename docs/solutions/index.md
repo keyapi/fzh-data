@@ -1,4 +1,3 @@
-| 2026-09-21 | 把 FAC / 赛狐 / NAS 三个 MCP 接上 ChatGPT —— 一次串起来的方法与四个教训 | [workflow-issues/mcp-to-chatgpt-bringup-lessons.md](workflow-issues/mcp-to-chatgpt-bringup-lessons.md) |
 ---
 okf: v0.1
 type: Index
@@ -11,6 +10,11 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-09-22 | 承运商批量导入面单的字段长度上限（UPS Reference 35 / FedEx poNumber 30） | [integration-issues/carrier-label-batch-field-length-limits.md](integration-issues/carrier-label-batch-field-length-limits.md) |
+| 2026-09-22 | 背贴品名缺失怎么补——通途SKU 在 EN 有两种登记写法 | [integration-issues/sku-name-backfill-via-en-customer-code.md](integration-issues/sku-name-backfill-via-en-customer-code.md) |
+| 2026-09-22 | 用 Drive API 改同事的 Colab notebook（cell 插入 / 回读比对 / 并发守卫） | [developer-experience/colab-notebook-drive-api-editing.md](developer-experience/colab-notebook-drive-api-editing.md) |
+| 2026-09-22 | notebook 里别用 `!shell` 做文件操作——文件名含空格会让 `!zip` 静默失败 | [developer-experience/colab-shell-out-filename-spaces.md](developer-experience/colab-shell-out-filename-spaces.md) |
+| 2026-09-21 | 把 FAC / 赛狐 / NAS 三个 MCP 接上 ChatGPT —— 一次串起来的方法与四个教训 | [workflow-issues/mcp-to-chatgpt-bringup-lessons.md](workflow-issues/mcp-to-chatgpt-bringup-lessons.md) |
 | 2026-09-09 | 账期/收款核算 生态地图（各平台账期 → 汇率/税/附加费 → 回款归属/回款率 → 归集给财务） | [architecture-patterns/account-period-revenue-reconciliation-ecosystem.md](architecture-patterns/account-period-revenue-reconciliation-ecosystem.md) |
 | 2026-09-09 | Amazon&新平台账期「提交异常/迟交」审计方法与规则 | [workflow-issues/amazon-account-period-late-submission-audit.md](workflow-issues/amazon-account-period-late-submission-audit.md) |
 | 2026-09-09 | 赛狐自动拉取 Amazon 账期（结算中心V2 + 紫鸟插件列式报表）与两报表口径取舍 | [tooling-decisions/amazon-settlement-autofetch-sellfox.md](tooling-decisions/amazon-settlement-autofetch-sellfox.md) |

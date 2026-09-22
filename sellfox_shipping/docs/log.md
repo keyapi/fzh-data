@@ -833,3 +833,11 @@ updated: 2026-08-13
 - config.yaml 含仓库、承运人、规则模板
 - OKF 文档框架
 - ce-compound: 完整调研文档写入 docs/solutions/architecture-patterns/ 和 docs/research/
+
+## 2026-09-22 — 承运商批量模板字段上限 & 背贴查名链（本次无仓库代码改动）
+
+- 新增 `docs/solutions/integration-issues/carrier-label-batch-field-length-limits.md`：组合件多 SKU 合并成一行时，**UPS Reference 1~5 各上限 35 字符**（超了**整批被拒** `Invalid Package Reference Value`）、**FedEx `poNumber` String(30)** / `itemDescription` String(450)；同一个拼接串在不同字段要用不同上限。上限来源=官方模板自带的字段定义表（FedEx 的在模板 xlsx 的 `Available headers` sheet），交叉验证=承运商已接受历史文件的最长值（UPS 30 / FedEx 29）。关键认知：风险是「每包裹一行」→「每货品一行」的模板变更**新引入**的，旧模板下合并是空操作。
+- 新增 `docs/solutions/integration-issues/sku-name-backfill-via-en-customer-code.md`：背贴品名查名键是导出 `Reference 2` 原样字符串，表为 `US SKU Name` sheet；通途SKU 在 EN 存于 `customer_code` / `customer_items.ref_code`（**不在** `item_languages.tt_sku`，后者只存 `-Cover` 成品码）；`Item Language` 子表不可 list（403）、`commodity_sku` 不可过滤、`Item.name` 搜不到 TT 号；PIM API 映射前必须先做假阳性测试；尺寸↔序号不同序。
+- 更新本模块 `AGENT_HANDOFF.md`：补上述两条「将来迁移/复用时必须遵守」的约束。
+- 更新 `CONCEPTS.md`：补「背贴」「通途SKU 的后缀形态」两条词条（此前高频使用但从未定义）。
+- **本次流水线本体仍是同事的 Colab notebook**，未迁入本模块；`sellfox_shipping/sku_label/` 是将来迁移时的落点。改 notebook 的方法见 `docs/solutions/developer-experience/colab-notebook-drive-api-editing.md`。

@@ -16,3 +16,5 @@ tags: [developer-experience, index]
 | Windows Codex/Cursor：`&&`、GBK/UTF-8、env_doctor | [windows-codex-powershell-utf8.md](windows-codex-powershell-utf8.md) |
 | Codex Desktop 更新后安装失败与对话恢复 | [codex-chatgpt-windows-setup-config-recovery.md](codex-chatgpt-windows-setup-config-recovery.md) |
 | WSL2 Docker VHDX 磁盘优化 | [windows-wsl-docker-disk-optimization.md](windows-wsl-docker-disk-optimization.md) |
+| 要改同事的 Colab notebook 代码（.ipynb 走 Drive API、cell 备份、写完怎么自证"只动了一格"、并发守卫、内嵌私钥） | [colab-notebook-drive-api-editing.md](colab-notebook-drive-api-editing.md) |
+| Colab/notebook 打包报 `zip error: Nothing to do!` 或 `FileNotFoundError: Cannot find file`（`!zip` 被空格分词） | [colab-shell-out-filename-spaces.md](colab-shell-out-filename-spaces.md) |

@@ -53,6 +53,10 @@
   加用 `sendNotificationEmail=false` 可静默；权限 body `{role, type:"user", emailAddress}`。
 - **批量审计快径**：`files.list` 带 `permissions(id,emailAddress,role,type)` 字段，一次拿全（避免逐表 list_permissions 的几百次调用）。
 - **改内容**才分：spreadsheet→Sheets API(gspread)；.ipynb→Drive files.get/update。
+  - **读**：`GET /drive/v3/files/{id}?alt=media&supportsAllDrives=true`。别用 `/export?mimeType=` —— 对 Colab 文件返回 **403 `Export only supports Docs editors files`**（其 mimeType 是 `application/vnd.google.colaboratory`，不算 Docs Editors 文件）。
+  - **写**：`files.update` + **multipart**，`body={"mimeType":"application/vnd.google.colaboratory"}` 防类型被改。cell 定位按 `strip()` 匹配并断言唯一命中；写完**重新下载逐段断言**「除目标格外其余 cell 一字未变」；写前比 `modifiedTime` 防并发覆盖（用户在 Colab 里跑一次 cell、Colab 会把执行输出存回文件）。
+  - **⚠️ 私钥风险**：业务 Colab 常把服务账号私钥内嵌在「安装依赖」那个 cell 里 ⇒ 本地兜底备份必须放**仓库外**。
+  - 全过程、语法自检（魔法行中和要保留缩进）与「先备份再改」的落点见 [`docs/solutions/developer-experience/colab-notebook-drive-api-editing.md`](../docs/solutions/developer-experience/colab-notebook-drive-api-editing.md)。
 - **限流**：429/500/503 需退避重试（本项目脚本 `api()` 已实现 4 次指数退避）。
 
 ## 5. 边界与坑
