@@ -53,6 +53,9 @@ scripts/out/
 数据源/*
 !数据源/.gitkeep
 !数据源/README.txt
+# 上面两条带 `/` 的 pattern 只匹配仓库根目录，EN_API 下同名的目录要单独写
+EN_API/out/
+EN_API/数据源/
 
 # sellfox_shipping 原始业务样例（可含 PII，不入仓）
 sellfox_shipping/数据源/**
