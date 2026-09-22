@@ -38,24 +38,14 @@
 
 ### Agent 新机器首次 clone 后必做
 
-**克隆 · Windows 必须带 `-c core.symlinks=true`**（先开一次开发者模式：设置 → 系统 → 开发者选项 → 开发人员模式，需管理员）：
+**克隆 · Windows 上带 `-c core.symlinks=true`**（本仓库的 `CLAUDE.md` 与 `.claude/skills` 是 git 跟踪的 symlink；Windows 的 `core.symlinks` 默认 `false`，不带 flag 会检出成普通文件 → Claude Code 看不到任何项目 skill）。Windows 建文件符号链接需要开发者模式。
 
 ```bash
 git clone -c core.symlinks=true https://github.com/keyapi/fzh-data.git
-cd fzh-data
-git config core.symlinks true    # 持久化，见下方说明
+cd fzh-data && git config core.symlinks true    # 持久化；否则 pull 拉到的新 symlink 条目又会退化成普通文件
 ```
 
-**不带这个 flag 会怎样**（Git for Windows 的 `--system core.symlinks=false` 是默认值）：`CLAUDE.md` 检出成 9 字节 stub（Claude 读不到 AGENTS.md）、`.claude/skills` 检出成普通文件（**Claude Code 看不到任何项目 skill**）。实测对比：
-
-| 克隆方式 | `CLAUDE.md` | `.claude/skills` |
-|---|---|---|
-| 默认 | 9 字节 stub，0 行 | 普通文件，skill 为空 |
-| `-c core.symlinks=true` | 真 symlink，**243 行** | 真 symlink，**47 个 skill** |
-
-第二行**不需要再跑 `setup.ps1`** —— 项目级 `.claude/skills` 够 Claude Code 用了。`git config core.symlinks true` 那一步是为了持久化：克隆时的 `-c` 只在那一刻生效、**不写进新克隆的 `.git/config`**，不设的话以后 `git pull` 拉到新的 symlink 条目又会退化成 stub。
-
-> **macOS / Linux 直接 `git clone` 即可**，原生支持 symlink，不需要 flag、不需要开任何模式。
+带了这个 flag 就不必再跑 `setup.ps1`（它只剩 Claude Desktop 需要 —— Desktop 只读用户级 `~/.claude/skills/`）。**macOS / Linux 直接 `git clone` 即可。**
 
 ```bash
 # 0. 检测并安装 Git（如未安装）

@@ -42,15 +42,14 @@ HTTPS 协议不受 GFW 干扰，`gh` CLI 用 token 做认证——比 SSH 更稳
 
 ## 首次初始化
 
-**Windows：克隆时带 `-c core.symlinks=true`**（先开一次开发者模式：设置 → 系统 → 开发者选项 → 开发人员模式，需管理员）。克隆这一步就把 `CLAUDE.md` 和 `.claude/skills` 正确检出，**Claude Code 直接可用、不需要跑任何脚本**：
+**Windows：克隆时带 `-c core.symlinks=true`** —— 本仓库的 `CLAUDE.md` 和 `.claude/skills` 是 git 跟踪的 symlink，而 Windows 的 `core.symlinks` 默认 `false`、会把它们检出成普通文件（后果：**Claude Code 看不到任何项目 skill**）。带这个 flag 克隆后 **Claude Code 直接可用，不用跑任何脚本**：
 
 ```bash
 git clone -c core.symlinks=true https://github.com/keyapi/fzh-data.git
-cd fzh-data
-git config core.symlinks true    # 持久化；克隆时的 -c 只在那一刻生效、不写进 .git/config
+cd fzh-data && git config core.symlinks true    # 持久化，否则 pull 拉到的新 symlink 条目又会退化
 ```
 
-不带 flag 的后果（Git for Windows 的 `--system core.symlinks=false` 是默认值）：`CLAUDE.md` 变 9 字节 stub（读不到 AGENTS.md）、`.claude/skills` 变普通文件（**Claude Code 看不到任何项目 skill**）。已克隆错了就补：`git -C <repo> checkout -- CLAUDE.md .claude/skills`（前提是 `core.symlinks` 已设 `true`）。
+（Windows 建文件符号链接需要开发者模式。已克隆错了就补：`git -C <repo> checkout -- CLAUDE.md .claude/skills`。）
 
 **Claude Desktop 另需**（Claude Code 不需要）：
 
