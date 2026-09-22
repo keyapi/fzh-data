@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}新建任务 · PB 订单处理{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>新建出件任务</h1>
+  {% if not cache_ready %}
+  <p class="warn">
+    未检测到本地 SKU 名称缓存 <code>us_sku_name_cache.csv</code>。
+    普通出件不联网，缓存缺失时任务会直接失败 —— 请管理员先准备缓存（见 README「首次准备」）。
+  </p>
+  {% endif %}
+
+  <form method="post" action="{{ prefix }}/jobs/new" enctype="multipart/form-data" id="job-form">
+    <label>
+      Packslip PDF <span class="req">必填</span>
+      <input type="file" name="packslip" accept=".pdf" required>
+    </label>
+
+    <label>
+      SPS 订单 CSV <span class="req">必填</span>
+      <input type="file" name="order_csv" accept=".csv" required>
+    </label>
+
+    <label>
+      无货 SKU（可选，逗号或换行分隔）
+      <textarea name="no_stock" rows="4" placeholder="CENKZ1324-SkyBlue-97">{{ default_no_stock }}</textarea>
+      <small>
+        已按当前断货情况预填，<strong>可直接改</strong>：加新的断货 SKU，或删掉已恢复有货的。
+        留空 = 不过滤（全量出件）。大小写不敏感，写 <code>YELLOW</code> 也能对上 <code>Yellow</code>。
+      </small>
+    </label>
+
+    <label>
+      无货备注（可选）
+      <input type="text" name="no_stock_note" placeholder="4单6个三角灰97">
+      <small>用作无货子集文件名里的描述，留空自动生成「N单M件」。</small>
+    </label>
+
+    <label>
+      操作者
+      <input type="text" name="actor" value="{{ user.display_name if auth_enabled and user else 'web-user' }}">
+    </label>
+
+    <fieldset>
+      <label class="inline">
+        <input type="checkbox" name="validate_only" value="1">
+        仅校验（不出件，只跑 1:1 / join / 数量对账）
+      </label>
+      <label class="inline">
+        <input type="checkbox" name="allow_unmatched" value="1">
+        join 未匹配时继续（默认中止，避免标签上写空 SKU）
+      </label>
+    </fieldset>
+
+    <button class="btn primary" type="submit" id="submit-btn">提交任务</button>
+    <small class="muted" id="submit-hint">提交后立即跳转任务页，处理在后台继续；可以关闭浏览器。</small>
+  </form>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var form = document.getElementById("job-form");
+  var btn = document.getElementById("submit-btn");
+  var hint = document.getElementById("submit-hint");
+  if (!form) return;
+
+  form.addEventListener("submit", function () {
+    if (form.dataset.submitted === "1") return;
+    form.dataset.submitted = "1";
+    btn.disabled = true;
+    btn.textContent = "正在上传…";
+    hint.textContent = "正在上传文件（Packslip 约 11MB），请勿关闭或刷新页面…";
+    hint.className = "warn";
+  });
+})();
+</script>
+{% endblock %}

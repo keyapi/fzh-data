@@ -54,9 +54,13 @@ HEADERS = ["#", "SKU", "QTY", "Name Chinese", "Nombres en español"]
 
 BACK_LABEL_PDF_NAME = "{mmdd} PotteryBarn 背贴-中文西班牙语.pdf"
 NO_STOCK_BACK_LABEL_PDF_NAME = "无货{note}-{mmdd} PotteryBarn 背贴-中文西班牙语.pdf"
-DATA_DIR = Path(__file__).resolve().parent / "data"
-CACHE_CSV = DATA_DIR / "us_sku_name_cache.csv"
-NLTK_DATA_DIR = DATA_DIR / "nltk_data"
+
+# 缓存目录可用环境变量覆盖（容器里挂载到持久卷；默认仍是模块内 data/）
+DATA_DIR = Path(
+    os.environ.get("PB_ORDERS_DATA_DIR") or (Path(__file__).resolve().parent / "data")
+)
+CACHE_CSV = Path(os.environ.get("PB_ORDERS_SKU_CACHE") or (DATA_DIR / "us_sku_name_cache.csv"))
+NLTK_DATA_DIR = Path(os.environ.get("PB_ORDERS_NLTK_DIR") or (DATA_DIR / "nltk_data"))
 SHEET_RETRIES = 5
 
 

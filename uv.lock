@@ -71,6 +71,15 @@ wheels = [
 ]
 
 [[package]]
+name = "async-timeout"
+version = "5.0.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/a5/ae/136395dfbfe00dfc94da3f3e136d0b13f394cba8f4841120e34226265780/async_timeout-5.0.1.tar.gz", hash = "sha256:d9321a7a3d5a6a5e187e824d2fa0793ce379a202935782d555d6e9d2735677d3", size = 9274, upload-time = "2024-11-06T16:41:39.6Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fe/ba/e2081de779ca30d473f21f5b30e0e737c438205440784c7dfc81efc2b029/async_timeout-5.0.1-py3-none-any.whl", hash = "sha256:39e3809566ff85354557ec2398b55e096c8364bacac9405a7a1fa429e77fe76c", size = 6233, upload-time = "2024-11-06T16:41:37.9Z" },
+]
+
+[[package]]
 name = "bcrypt"
 version = "5.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -355,6 +364,18 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/d8/53/6f443c9a4a8358a93a6792e2acffb9d9d5cb0a5cfd8802644b7b1c9a02e4/colorama-0.4.6.tar.gz", hash = "sha256:08695f5cb7ed6e0531a20572697297273c47b8cae5a63ffc6d6ed5c201be6e44", size = 27697, upload-time = "2022-10-25T02:36:22.414Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d1/d6/3965ed04c63042e047cb6a3e6ed1a63a35087b6a609aa3a15ed8ac56c221/colorama-0.4.6-py2.py3-none-any.whl", hash = "sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6", size = 25335, upload-time = "2022-10-25T02:36:20.889Z" },
+]
+
+[[package]]
+name = "croniter"
+version = "6.2.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "python-dateutil" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/37/57/2e2a65aee2a70483cb28e2b7e15a072d00a523207593b44400d4717bb100/croniter-6.2.4.tar.gz", hash = "sha256:fc124f751b1b04805c2a04b061898b436b45ab2320b045e1e052ea895de65189", size = 166267, upload-time = "2026-07-10T09:52:59.955Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/cd/ba/d678e5bd329646ca51d3c92addbc77804e86d21f4b6b6a027218e6abb010/croniter-6.2.4-py3-none-any.whl", hash = "sha256:8ef3d544107a5c05a150a2d78f8bf5a8eb9c5c4d93405a736b824109574e3f4d", size = 46677, upload-time = "2026-07-10T09:52:58.425Z" },
 ]
 
 [[package]]
@@ -1762,6 +1783,18 @@ wheels = [
 ]
 
 [[package]]
+name = "redis"
+version = "8.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "async-timeout", marker = "python_full_version < '3.11.3'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a8/99/604f0b666d4c616d891cf77ebb9db6bb21601344c051aebf1b72b9ff915f/redis-8.1.0.tar.gz", hash = "sha256:6e1a19beef9225c83efd689c7e6b7da2d5215b1f42cd13b7fc3714d0a09c7b25", size = 5254356, upload-time = "2026-07-30T08:51:00.269Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/66/9d/c5731f6e3608663d4d3656fd8d3aecee8b509c3082818f5a13eae925baea/redis-8.1.0-py3-none-any.whl", hash = "sha256:a4fe1aac3d3b3cc791d4b3d5931c5a956045dc951ee74d1c913ee3ac4d2ee9fb", size = 560618, upload-time = "2026-07-30T08:50:58.497Z" },
+]
+
+[[package]]
 name = "regex"
 version = "2026.9.10"
 source = { registry = "https://pypi.org/simple" }
@@ -1965,6 +1998,20 @@ wheels = [
 ]
 
 [[package]]
+name = "rq"
+version = "2.12.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "click" },
+    { name = "croniter" },
+    { name = "redis" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a2/81/dacb94c8f67606b233cb7836dd67042daf9a61f7b585dcec65113f1e71f7/rq-2.12.0.tar.gz", hash = "sha256:78116d0c860f6285817b52d7d6d0b16a726372073ce8ea1d229732ce74ef9378", size = 760892, upload-time = "2026-08-30T12:05:25.048Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a4/c2/995863e88669133a058c2a6a912b62d18a64fa7baaf78eb66aaa4350b48d/rq-2.12.0-py3-none-any.whl", hash = "sha256:97e349a00e9f2a18962102b3dca156cb5ce315d3ef38145e24ba9cabd16a9361", size = 127957, upload-time = "2026-08-30T12:05:23.131Z" },
+]
+
+[[package]]
 name = "saihu-data-pipeline"
 version = "0.1.0"
 source = { editable = "." }
@@ -1989,8 +2036,10 @@ dependencies = [
     { name = "python-dotenv" },
     { name = "python-multipart" },
     { name = "pyyaml" },
+    { name = "redis" },
     { name = "reportlab" },
     { name = "requests" },
+    { name = "rq" },
     { name = "scikit-learn", version = "1.7.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "scikit-learn", version = "1.9.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "sqlalchemy" },
@@ -2027,8 +2076,10 @@ requires-dist = [
     { name = "python-dotenv", specifier = ">=1.0" },
     { name = "python-multipart", specifier = ">=0.0.32" },
     { name = "pyyaml", specifier = ">=6.0" },
+    { name = "redis", specifier = ">=5.0" },
     { name = "reportlab", specifier = ">=5.0.0" },
     { name = "requests" },
+    { name = "rq", specifier = ">=2.0" },
     { name = "scikit-learn", specifier = ">=1.7.2" },
     { name = "sqlalchemy", specifier = ">=2.0.50" },
     { name = "synology-api", specifier = ">=0.9.0" },

@@ -32,6 +32,8 @@ dependencies = [
     "python-dotenv>=1.0",
     "pypdf>=6.19.0",
     "nltk>=3.10.3",
+    "redis>=5.0",
+    "rq>=2.0",
 ]
 
 [tool.hatch.build.targets.wheel]

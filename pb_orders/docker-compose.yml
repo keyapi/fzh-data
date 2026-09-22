@@ -1,0 +1,113 @@
+# PB 订单处理服务 —— 完全独立的 Compose 项目。
+#
+# 隔离承诺（对应「不能影响现有服务」）：
+#   - 独立 project name `pb-orders`，独立网络 `pb-orders-net`（不 external、不加入 shipping-net）
+#   - 独立 Redis 容器，不监听宿主端口，不复用 Frappe/其它业务的 Redis
+#   - 容器名全部 `pb-orders-*`，不与既有容器重名
+#   - Web 端口通过 PB_ORDERS_BIND/PB_ORDERS_PORT 指定，默认只绑本机回环
+#   - 运行数据落在 ./runtime（宿主目录），SKU 缓存 ./data 只读挂载
+#   - 不修改、不重启任何既有容器 / 网络 / NGINX
+#
+# 用法：
+#   cd pb_orders
+#   docker compose up -d --build
+#   docker compose ps
+#
+# 首次准备：把 us_sku_name_cache.csv 与 nltk_data/ 放进 pb_orders/data/（见 README）。
+
+name: pb-orders
+
+x-common-env: &common-env
+  # 容器默认是 UTC，会让页面上的「创建/开始/结束」和标签上的时间戳少 8 小时。
+  # 统一用北京时间（与本机运行一致）。
+  TZ: ${PB_ORDERS_TZ:-Asia/Shanghai}
+  PB_ORDERS_REDIS_URL: redis://pb-orders-redis:6379/0
+  PB_ORDERS_RUNTIME_DIR: /runtime
+  PB_ORDERS_DATA_DIR: /data
+  PB_ORDERS_QUEUE: pb-orders
+  PB_ORDERS_MAX_UPLOAD_MB: ${PB_ORDERS_MAX_UPLOAD_MB:-64}
+  PB_ORDERS_JOB_TIMEOUT: ${PB_ORDERS_JOB_TIMEOUT:-1800}
+  PB_ORDERS_RETENTION_DAYS: ${PB_ORDERS_RETENTION_DAYS:-90}
+  PB_ORDERS_PIPELINE_VERSION: ${PB_ORDERS_PIPELINE_VERSION:-}
+  # 挂在反代前缀下时用（如 /pb）；留空 = 挂在根路径
+  PB_ORDERS_URL_PREFIX: ${PB_ORDERS_URL_PREFIX:-}
+  # 新建任务页预填的无货 SKU（配置项，断货情况变了改这里即可，不用改代码）
+  PB_ORDERS_DEFAULT_NO_STOCK: ${PB_ORDERS_DEFAULT_NO_STOCK:-}
+  # 钉钉 OIDC（复用公司桥）；ISSUER 留空 = 关闭登录，仅限内网使用
+  PB_ORDERS_OIDC_ISSUER: ${PB_ORDERS_OIDC_ISSUER:-}
+  PB_ORDERS_OIDC_CLIENT_ID: ${PB_ORDERS_OIDC_CLIENT_ID:-pb-orders}
+  PB_ORDERS_OIDC_CLIENT_SECRET: ${PB_ORDERS_OIDC_CLIENT_SECRET:-}
+  PB_ORDERS_OIDC_REDIRECT_URI: ${PB_ORDERS_OIDC_REDIRECT_URI:-}
+  PB_ORDERS_SESSION_SECRET: ${PB_ORDERS_SESSION_SECRET:-}
+  PB_ORDERS_ALLOWED_USERS: ${PB_ORDERS_ALLOWED_USERS:-}
+
+services:
+  pb-orders-redis:
+    image: redis:7-alpine
+    container_name: pb-orders-redis
+    restart: unless-stopped
+    command: ["redis-server", "--save", "60", "1", "--appendonly", "no"]
+    networks: [pb-orders-net]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    # 资源上限：PB 并发很低，限制住以免影响同机其它服务
+    # （实测依据见 docs/reference/server-deployment-architecture.md 第 11 节）
+    mem_limit: ${PB_ORDERS_REDIS_MEM:-128m}
+    cpus: 0.25
+
+  pb-orders-web:
+    build:
+      context: ..
+      dockerfile: pb_orders/Dockerfile
+    image: pb-orders:local
+    container_name: pb-orders-web
+    restart: unless-stopped
+    depends_on:
+      pb-orders-redis:
+        condition: service_healthy
+    environment: *common-env
+    ports:
+      # 默认只绑回环；要放 EN 测试服务器时改成服务器的内网/Tailscale 地址
+      - "${PB_ORDERS_BIND:-127.0.0.1}:${PB_ORDERS_PORT:-8412}:8412"
+    volumes:
+      - ./runtime:/runtime
+      - ./data:/data:ro
+    networks: [pb-orders-net]
+    # Web 只做上传/建任务/展示，不做 PDF 处理，内存需求很小
+    mem_limit: ${PB_ORDERS_WEB_MEM:-384m}
+    cpus: 0.5
+
+  pb-orders-worker:
+    image: pb-orders:local
+    container_name: pb-orders-worker
+    restart: unless-stopped
+    command: ["python", "-m", "web.tasks"]
+    depends_on:
+      pb-orders-redis:
+        condition: service_healthy
+      pb-orders-web:
+        condition: service_started
+    environment: *common-env
+    volumes:
+      - ./runtime:/runtime
+      - ./data:/data:ro
+    networks: [pb-orders-net]
+    healthcheck:
+      test: ["CMD", "python", "-m", "web.healthcheck", "worker"]
+      interval: 30s
+      timeout: 8s
+      retries: 3
+      start_period: 20s
+    # PDF/Excel 是内存大户：真实 50 页批次实测峰值 RSS ≈ 492MB。
+    # 默认给 1g 留一倍余量；批明显更大时可调 PB_ORDERS_WORKER_MEM。
+    mem_limit: ${PB_ORDERS_WORKER_MEM:-1g}
+    cpus: 1.5
+
+networks:
+  pb-orders-net:
+    name: pb-orders-net
+    driver: bridge
