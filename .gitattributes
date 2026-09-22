@@ -1,0 +1,3 @@
+# 归档的 .patch 是 unified diff，上下文行的前导/尾随空白是内容的一部分，
+# 参与 git diff --check 会误报 —— 对 patch 关闭空白检查。
+*.patch -whitespace
