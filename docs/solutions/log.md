@@ -8,6 +8,8 @@ tags: [solutions, log]
 # 变更日志
 
 ## 2026-09-22
+- **更新**: `tooling-decisions/tailscale-relay-vs-public-https-china.md` —— 原结论「弃用 Tailscale」**不成立**。根因是**云厂商安全组没放行入站 UDP 41641**，导致直连失败退回香港中继。用户放开该规则后实测：同两台机器从 `relay "hkg"` + 超时 + HTTP 20-30 秒，变成 **直连 31-69ms**。处置顺序改为「先修直连，修不动再考虑绕开」。另记录该服务器上已有的 `socks5-tunnel.service`（SSH 动态转发到美国出口，仅监听 Tailscale 地址）及其实测效果。
+
 - **新增**: `tooling-decisions/tailscale-relay-vs-public-https-china.md` — 境内访问境内服务器时 Tailscale 走**香港中继**（`relay "hkg"`，`tailscale ping` 超时）：实测服务器本机 1-3ms、公网 HTTPS 125ms、**Tailscale 20-30 秒**（TCP 握手单独就要 12-19 秒），12MB 文件根本传不完。结论是**弃用 Tailscale 改走同机公网 HTTPS + 应用层登录**（容器仍只绑 127.0.0.1）。含「把个人笔记本加进 Tailscale 解决不了这个问题」的解释与 UDP 41640 打洞失败的常见原因。
 - **新增**: `integration-issues/dingtalk-oidc-bridge-client-onboarding.md` — 自建服务接入公司钉钉 OIDC 桥的**客户端侧**做法（桥本身见 `dingtalk-sso-new-api-oidc-bridge.md`）：不用改钉钉后台、复用签名 cookie、**OIDC state 必须外置到 Redis**、闸门写在应用中间件而不是 nginx `auth_request`（桥没有 `/verify` 端点）、**桥的 corpId 校验时灵时不灵**所以限制用户要靠服务侧白名单。
 - **新增**: `integration-issues/reverse-proxy-prefix-return-to.md` — 前缀化反向代理下 `return_to` 踩的坑：`request.url.path` 是**反代剥掉前缀后的应用侧路径**，直接回写给浏览器会把登录后的用户送到**域名根路径**（同域上的另一个服务）。修法是把「应用侧路径」与「浏览器可见路径」分清，回写的 URL 一律补前缀；顺带给 `safe_return_to` 加前缀校验挡同域横向跳转。**使用者实际登录时发现**，自测没覆盖到。

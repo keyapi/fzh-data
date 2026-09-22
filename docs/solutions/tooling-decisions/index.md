@@ -10,7 +10,7 @@ timestamp: 2026-08-31
 
 | 标题 | 文件 |
 |------|------|
-| 境内访问境内服务器：Tailscale 走中继时慢到不可用，改用公网 HTTPS | [tailscale-relay-vs-public-https-china.md](tailscale-relay-vs-public-https-china.md) |
+| Tailscale 慢到不可用：先查直连（UDP 41641 入站），别急着换方案 | [tailscale-relay-vs-public-https-china.md](tailscale-relay-vs-public-https-china.md) |
 | 中文意图路由（intent_router）—— TypeSafe Jev + 置信度闸门 | [typesafe-jev-intent-router.md](typesafe-jev-intent-router.md) |
 | ce-okf skill — 把「ce-compound + OKF 收尾」固化成一个命令 | [ce-okf-conversation-wrapup-skill.md](ce-okf-conversation-wrapup-skill.md) |
 | DeepSeek flash 降价改价 + OpenRouter 迁移评估（结论：不迁） | [deepseek-flash-price-cut-2026-09-10-openrouter-evaluation.md](deepseek-flash-price-cut-2026-09-10-openrouter-evaluation.md) |
