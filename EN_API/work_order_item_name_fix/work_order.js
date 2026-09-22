@@ -3,23 +3,23 @@ frappe.ui.form.on('Work Order', {
     refresh: function(frm) {
         // 检查当前用户是否有生产经理角色
         const has_production_manager_role = frappe.user.has_role('Manufacturing Manager');
-        
+
         // 检查是否是拆分工单
         if (frm.doc.custom_is_split_work_order) {
             // 添加查看批次信息按钮
             frm.add_custom_button(__('查看批次跟踪'), function() {
                 show_batch_tracking_dialog(frm);
             }, __('批次'));
-            
+
             // 添加使用批次发料按钮
             frm.add_custom_button(__('按批次发料'), function() {
                 create_batch_material_issue(frm);
             }, __('批次'));
-            
+
             // 显示批次信息
             show_batch_info(frm);
         }
-        
+
         // 添加"打印生产工单条码"按钮（所有工单都可用）
         frm.add_custom_button(__('打印生产工单条码'), function() {
             print_work_order_barcode(frm);
@@ -49,14 +49,14 @@ frappe.ui.form.on('Work Order', {
                 'color': 'white'
             });
         }
-        
+
         // 只在提交状态的情况下显示一键操作按钮
         if (frm.doc.docstatus === 1) {
             // 添加一键工单入库按钮 - 仅对生产经理角色开放
-            if (has_production_manager_role && 
-                ["In Process", "Not Started"].includes(frm.doc.status) && 
+            if (has_production_manager_role &&
+                ["In Process", "Not Started"].includes(frm.doc.status) &&
                 flt(frm.doc.produced_qty) < flt(frm.doc.qty)) {
-                
+
                 frm.add_custom_button(__('一键工单入库'), function() {
                     // 先检查库存是否足够
                     frappe.call({
@@ -71,13 +71,13 @@ frappe.ui.form.on('Work Order', {
                                 // 库存不足，显示不足的物料并询问是否继续
                                 let message = __("以下物料库存不足，可能无法完成工单入库：") + "<br><br>";
                                 check_r.message.insufficient_items.forEach(item => {
-                                    message += `<b>${item.item_code}</b>: ${item.item_name || ""} - 
-                                                需要 ${item.required_qty} ${item.stock_uom}, 
+                                    message += `<b>${item.item_code}</b>: ${item.item_name || ""} -
+                                                需要 ${item.required_qty} ${item.stock_uom},
                                                 仓库 ${item.warehouse} 中只有 ${item.available_qty}<br>`;
                                 });
-                                
+
                                 message += "<br>" + __("确定要继续创建工单入库单吗？");
-                                
+
                                 frappe.confirm(
                                     message,
                                     // 继续创建
@@ -103,8 +103,8 @@ frappe.ui.form.on('Work Order', {
                     'padding': '6px 12px',
                     'font-size': '14px'
                 });
-            } else if (!has_production_manager_role && 
-                       ["In Process", "Not Started"].includes(frm.doc.status) && 
+            } else if (!has_production_manager_role &&
+                       ["In Process", "Not Started"].includes(frm.doc.status) &&
                        flt(frm.doc.produced_qty) < flt(frm.doc.qty)) {
                 // 非生产经理角色，显示禁用状态的按钮
                 frm.add_custom_button(__('一键工单入库（需生产经理权限）'), function() {
@@ -124,7 +124,7 @@ frappe.ui.form.on('Work Order', {
                     'opacity': '0.7'
                 });
             }
-            
+
             // 添加绕过创建提交加工单的按钮 - 仅对生产经理角色开放
             if (has_production_manager_role) {
                 frm.add_custom_button(__('绕过创建提交加工单'), function() {
@@ -149,13 +149,13 @@ frappe.ui.form.on('Work Order', {
                     'font-size': '14px'
                 });
             }
-            
+
             // 添加一键完成生产的按钮，整合创建Job Card和工单入库 - 仅对生产经理角色开放
-            if (has_production_manager_role && 
-                frm.doc.skip_transfer && 
-                ["Not Started", "In Process"].includes(frm.doc.status) && 
+            if (has_production_manager_role &&
+                frm.doc.skip_transfer &&
+                ["Not Started", "In Process"].includes(frm.doc.status) &&
                 flt(frm.doc.produced_qty) < flt(frm.doc.qty)) {
-                
+
                 frm.add_custom_button(__('一键完成生产'), function() {
                     frappe.confirm(
                         __('这将创建并提交所有加工单，并完成工单入库。确定继续吗？'),
@@ -173,13 +173,13 @@ frappe.ui.form.on('Work Order', {
                                         // 库存不足，显示不足的物料并询问是否继续
                                         let message = __("以下物料库存不足，可能无法完成工单入库：") + "<br><br>";
                                         check_r.message.insufficient_items.forEach(item => {
-                                            message += `<b>${item.item_code}</b>: ${item.item_name || ""} - 
-                                                        需要 ${item.required_qty} ${item.stock_uom}, 
+                                            message += `<b>${item.item_code}</b>: ${item.item_name || ""} -
+                                                        需要 ${item.required_qty} ${item.stock_uom},
                                                         仓库 ${item.warehouse} 中只有 ${item.available_qty}<br>`;
                                         });
-                                        
+
                                         message += "<br>" + __("确定要继续一键完成生产操作吗？");
-                                        
+
                                         frappe.confirm(
                                             message,
                                             // 继续创建
@@ -208,9 +208,9 @@ frappe.ui.form.on('Work Order', {
                     'font-size': '14px',
                     'font-weight': 'bold'
                 });
-            } else if (!has_production_manager_role && 
-                       frm.doc.skip_transfer && 
-                       ["Not Started", "In Process"].includes(frm.doc.status) && 
+            } else if (!has_production_manager_role &&
+                       frm.doc.skip_transfer &&
+                       ["Not Started", "In Process"].includes(frm.doc.status) &&
                        flt(frm.doc.produced_qty) < flt(frm.doc.qty)) {
                 // 非生产经理角色，显示禁用状态的按钮
                 frm.add_custom_button(__('一键完成生产（需生产经理权限）'), function() {
@@ -233,7 +233,7 @@ frappe.ui.form.on('Work Order', {
             }
         }
     },
-    
+
     // 监听物料需求表格更新
     required_items_on_form_rendered: function(frm) {
         if (frm.doc.custom_is_split_work_order) {
@@ -248,7 +248,7 @@ function highlight_batch_items(frm) {
         if (item.custom_batch_no) {
             $(`div[data-fieldname="required_items"] .grid-row[data-idx="${i+1}"]`)
                 .css("background-color", "rgba(212, 244, 252, 0.3)");
-            
+
             // 在行内显示批次信息
             let batch_info = $(`<div class="batch-tag">批次: ${item.custom_batch_no}</div>`)
                 .css({
@@ -256,7 +256,7 @@ function highlight_batch_items(frm) {
                     "font-weight": "bold",
                     "margin-top": "5px"
                 });
-                
+
             $(`div[data-fieldname="required_items"] .grid-row[data-idx="${i+1}"] .grid-static-col:last`)
                 .append(batch_info);
         }
@@ -267,7 +267,7 @@ function highlight_batch_items(frm) {
 function show_batch_info(frm) {
     // 清除原有内容
     frm.dashboard.clear_headline();
-    
+
     // 查询批次状态
     frappe.call({
         method: "work_order_task.work_order_task.utils.stock_entry.get_batch_consumed_qty",
@@ -281,7 +281,7 @@ function show_batch_info(frm) {
                     // 创建批次信息显示
                     let batch_info = $(`
                         <div class="batch-tracking-info">
-                            <span class="indicator ${data.pending_qty > 0 ? 'orange' : 'green'}" data-toggle="tooltip" 
+                            <span class="indicator ${data.pending_qty > 0 ? 'orange' : 'green'}" data-toggle="tooltip"
                                 title="关键物料: ${data.key_material}, 批次: ${data.batch_no}">
                                 <span>批次跟踪: ${data.batch_no}</span>
                             </span>
@@ -293,7 +293,7 @@ function show_batch_info(frm) {
                         "font-size": "12px",
                         "margin-top": "10px"
                     });
-                    
+
                     frm.dashboard.set_headline_alert(batch_info);
                 }
             }
@@ -311,7 +311,7 @@ function show_batch_tracking_dialog(frm) {
         callback: function(r) {
             if (r.message) {
                 let data = r.message;
-                
+
                 // 创建对话框
                 let d = new frappe.ui.Dialog({
                     title: __('批次跟踪信息'),
@@ -380,7 +380,7 @@ function show_batch_tracking_dialog(frm) {
                         d.hide();
                     }
                 });
-                
+
                 d.show();
             }
         }
@@ -412,11 +412,11 @@ frappe.ui.form.on('Work Order Item', {
         if (row.custom_batch_no) {
             let field_area = frm.fields_dict.required_items.grid.grid_rows_by_docname[cdn].grid_form
                 .fields_dict.custom_batch_no.$wrapper;
-                
+
             field_area.css('background-color', 'rgba(212, 244, 252, 0.3)');
         }
     }
-}); 
+});
 
 /**
  * 打印生产工单条码
@@ -451,7 +451,7 @@ function print_work_order_barcode(frm) {
         });
         return;
     }
-    
+
     // 检查必要字段
     if (!frm.doc.production_item) {
         frappe.msgprint({
@@ -461,21 +461,21 @@ function print_work_order_barcode(frm) {
         });
         return;
     }
-    
+
     // 显示加载提示
     frappe.show_alert({
         message: '正在准备打印格式...',
         indicator: 'blue'
     }, 2);
-    
+
     // 构建打印格式URL
     const docType = frm.doctype;
     const docName = frm.doc.name;
     const printFormatName = '打印 生产工单 标签'; // 使用您创建的打印格式名称
-    
+
     // 使用Frappe标准打印格式URL
     const printUrl = `/app/print/${encodeURIComponent(docType)}/${encodeURIComponent(docName)}?format=${encodeURIComponent(printFormatName)}&_print_source=work_order_barcode_button`;
-    
+
     // 在新窗口中打开打印预览
     openWorkOrderPrintPreview(printUrl);
 }
@@ -496,13 +496,13 @@ function openWorkOrderPrintPreview(printUrl) {
             });
             return;
         }
-        
+
         // 显示成功提示
         frappe.show_alert({
             message: '打印预览已打开，请查看工单条码标签',
             indicator: 'green'
         }, 5);
-        
+
         // 监听窗口关闭事件，提供额外提示
         const checkClosed = setInterval(() => {
             if (printWindow.closed) {
@@ -513,7 +513,7 @@ function openWorkOrderPrintPreview(printUrl) {
                 }, 2);
             }
         }, 1000);
-        
+
     } catch (e) {
         frappe.msgprint({
             title: '错误',
@@ -1054,16 +1054,16 @@ function create_manufacture_entry(frm) {
                         message: __('工单入库单已创建并提交：') + r.message.stock_entry,
                         indicator: 'green'
                     }, 5);
-                    
+
                     frappe.msgprint({
                         title: __("工单入库成功"),
                         indicator: "green",
-                        message: __("工单入库已完成，您可以查看") + 
+                        message: __("工单入库已完成，您可以查看") +
                                 ` <a href="/app/stock-entry/${r.message.stock_entry}">
                                     ${r.message.stock_entry}
                                  </a>`
                     });
-                    
+
                     // 刷新页面显示最新状态
                     frm.reload_doc();
                 } else {
@@ -1072,21 +1072,21 @@ function create_manufacture_entry(frm) {
                         // 创建了Stock Entry但未能提交
                         let indicator = "orange";
                         let title = __("工单入库单创建成功但未提交");
-                        
+
                         // 如果是库存不足错误，使用红色指示器
-                        if (r.message.error_type === "库存不足" || 
-                            (r.message.error && (r.message.error.includes("库存不足") || 
-                                               r.message.error.includes("insufficient") || 
+                        if (r.message.error_type === "库存不足" ||
+                            (r.message.error && (r.message.error.includes("库存不足") ||
+                                               r.message.error.includes("insufficient") ||
                                                r.message.error.includes("缺")))) {
                             indicator = "red";
                             title = __("库存不足");
                         }
-                        
+
                         frappe.msgprint({
                             title: title,
                             indicator: indicator,
                             message: r.message.message + "<br><br>" +
-                                    __("您可以查看并手动处理此工单入库单：") + 
+                                    __("您可以查看并手动处理此工单入库单：") +
                                     ` <a href="/app/stock-entry/${r.message.stock_entry}">
                                         ${r.message.stock_entry}
                                      </a>`
@@ -1121,7 +1121,7 @@ function execute_one_click_complete(frm) {
         message: __('正在处理中，请稍候...'),
         indicator: 'blue'
     }, 3);
-    
+
     frappe.call({
         method: "key_test.production_utils.one_click_complete_production",
         args: {
@@ -1133,7 +1133,7 @@ function execute_one_click_complete(frm) {
             if (r.message) {
                 // 先显示加工单结果的简短提示
                 let jobcard_alert = r.message.job_card_message || "";
-                
+
                 // 右下角显示操作总结
                 if (r.message.success) {
                     frappe.show_alert({
@@ -1151,18 +1151,18 @@ function execute_one_click_complete(frm) {
                         indicator: 'red'
                     }, 5);
                 }
-                
+
                 // 构建详细消息内容 - 先加入Job Card结果
                 let message = __('加工单创建结果: ') + r.message.job_card_message + '<br><br>';
-                
+
                 // 添加工单入库结果的详细信息
                 if (r.message.success) {
                     // 全部成功的情况 - 工单入库成功
-                    message += __('工单入库成功：工单入库已完成，您可以查看') + 
+                    message += __('工单入库成功：工单入库已完成，您可以查看') +
                                ` <a href="/app/stock-entry/${r.message.stock_entry}">
                                    ${r.message.stock_entry}
                                </a>`;
-                               
+
                     // 显示完整的成功消息
                     frappe.msgprint({
                         title: __('生产完成'),
@@ -1174,44 +1174,44 @@ function execute_one_click_complete(frm) {
                     let indicator = "orange";
                     let title = __('部分完成');
                     let stock_entry_msg = "";
-                    
+
                     // 检查是否是库存不足导致的失败
-                    if (r.message.error_type === "库存不足" || 
-                        (r.message.error && (r.message.error.includes("库存不足") || 
-                                           r.message.error.includes("insufficient") || 
+                    if (r.message.error_type === "库存不足" ||
+                        (r.message.error && (r.message.error.includes("库存不足") ||
+                                           r.message.error.includes("insufficient") ||
                                            r.message.error.includes("缺")))) {
                         indicator = "red";
                         title = __('库存不足');
-                        
+
                         // 添加库存不足详细信息
                         if (r.message.stock_entry_details) {
-                            stock_entry_msg = __('工单入库未能提交，库存不足：') + '<br>' + 
+                            stock_entry_msg = __('工单入库未能提交，库存不足：') + '<br>' +
                                            r.message.stock_entry_details + '<br><br>';
                         } else if (r.message.insufficient_items && r.message.insufficient_items.length) {
                             stock_entry_msg = __('工单入库未能提交，以下物料库存不足：') + '<br>';
                             r.message.insufficient_items.forEach(item => {
-                                stock_entry_msg += `<b>${item.item_code}</b>: ${item.item_name || ""} - 
-                                            需要 ${item.required_qty} ${item.stock_uom}, 
+                                stock_entry_msg += `<b>${item.item_code}</b>: ${item.item_name || ""} -
+                                            需要 ${item.required_qty} ${item.stock_uom},
                                             仓库 ${item.warehouse} 中只有 ${item.available_qty}<br>`;
                             });
                             stock_entry_msg += '<br>';
                         }
                     }
-                    
+
                     // 添加工单入库状态消息
-                    stock_entry_msg += r.message.stock_entry_message || 
-                                   (r.message.error ? 
+                    stock_entry_msg += r.message.stock_entry_message ||
+                                   (r.message.error ?
                                     __('工单入库单已创建但未能提交: ') + r.message.error :
                                     __('工单入库单已创建但未能提交'));
-                    
-                    stock_entry_msg += '<br><br>' + __('您可以查看并手动处理此工单入库单：') + 
+
+                    stock_entry_msg += '<br><br>' + __('您可以查看并手动处理此工单入库单：') +
                                ` <a href="/app/stock-entry/${r.message.stock_entry}">
                                    ${r.message.stock_entry}
                                </a>`;
-                    
+
                     // 添加到主消息中
                     message += stock_entry_msg;
-                    
+
                     frappe.msgprint({
                         title: title,
                         indicator: indicator,
@@ -1220,7 +1220,7 @@ function execute_one_click_complete(frm) {
                 } else if (r.message.error && r.message.error.includes("现有入库单") && r.message.error.includes("总入库数量已超工单数量")) {
                     // 特殊情况：工单已经有足够的入库单
                     message += __('工单入库失败: ') + r.message.error;
-                    
+
                     frappe.msgprint({
                         title: __('无需工单入库'),
                         indicator: 'blue',
@@ -1229,14 +1229,14 @@ function execute_one_click_complete(frm) {
                 } else {
                     // 只有加工单成功，工单入库完全失败
                     message += __('工单入库失败: ') + (r.message.error || __("未知错误"));
-                    
+
                     frappe.msgprint({
                         title: __('部分完成'),
                         indicator: 'orange',
                         message: message
                     });
                 }
-                
+
                 frm.reload_doc();
             } else {
                 frappe.msgprint({

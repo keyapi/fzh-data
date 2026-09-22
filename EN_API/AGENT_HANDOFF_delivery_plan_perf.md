@@ -130,4 +130,3 @@ cd /home/frappe/frappe-bench && sudo -u frappe bench restart
 1. 版本判定 = `new` 后，用 `dp_perf_probe.py hotpath` 复测；「整单 10s→<1s」由用户正常保存一次来观测
 2. `delivery_plan.py:613` 无菲号行的批量 SQL（用户此前说先保持现有 Error Log 逻辑）
 3. 前端"每扫一次就 save"（用户决定暂缓）
-

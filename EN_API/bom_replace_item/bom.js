@@ -81,7 +81,7 @@ function copy_bom_to_overseas_branches(frm) {
             });
             return;
         }
-        
+
         // 如果存在PP棉，继续执行原有逻辑
         execute_copy_bom_logic(frm);
     });
@@ -96,7 +96,7 @@ function execute_copy_bom_logic(frm) {
         },
         callback: function(response) {
             var item_group_names = response.message;
-            
+
             // 检查当前物料组是否在符合条件的物料组列表中
             // if (item_group_names.includes(frm.doc.item_group)) {
                 // frm.add_custom_button(__('一键创建配套物料及变体'), function() {
@@ -137,7 +137,7 @@ function execute_copy_bom_logic(frm) {
                 primary_action_label: __('执行'),
                 primary_action: function() {
                     // 获取选中的前缀
-                    let selected_prefixes = all_prefixes.filter(prefix => 
+                    let selected_prefixes = all_prefixes.filter(prefix =>
                         this.get_value(prefix.replace(/#/g, '_hash_'))
                     );
 
@@ -155,12 +155,12 @@ function execute_copy_bom_logic(frm) {
                             template_item_code = parts[1].split('-')[0]; // 取#后面的部分，去掉-后面的规格
                         }
                     }
-                    
+
                     if (!template_item_code) {
                         frappe.msgprint(__('无法从BOM物料字段提取模板物料代码'));
                         return;
                     }
-                    
+
                     // 获取模板物料单据信息
                     frappe.call({
                         method: 'frappe.client.get',
@@ -171,7 +171,7 @@ function execute_copy_bom_logic(frm) {
                         callback: function(template_response) {
                             if (template_response.message) {
                                 let template_item = template_response.message;
-                                
+
                                 // 获取模板物料的属性
                                 let attributes = [];
                                 if (template_item.attributes && template_item.attributes.length > 0) {
@@ -179,7 +179,7 @@ function execute_copy_bom_logic(frm) {
                                         attribute: attr.attribute
                                     }));
                                 }
-                                
+
                                 // 获取物料组的 custom_model_id（参考物料页面的逻辑）
                                 frappe.call({
                                     method: 'frappe.client.get',
@@ -190,7 +190,7 @@ function execute_copy_bom_logic(frm) {
                                     callback: function(group_response) {
                                         if (group_response.message) {
                                             let custom_model_id = group_response.message.custom_model_id;
-                                            
+
                                             // 调用服务器端方法创建配套物料
                                             frappe.call({
                                                 method: 'key_test.add_item_semi.create_supporting_items_and_variants',
@@ -218,7 +218,7 @@ function execute_copy_bom_logic(frm) {
                                                             primary_action_label: __('复制BOM'),
                                                             primary_action: function() {
                                                                 result_dialog.hide();
-                                                                
+
                                                                 // 自动执行BOM复制
                                                                 copy_bom_for_supporting_items(frm, selected_prefixes);
                                                             }
@@ -237,7 +237,7 @@ function execute_copy_bom_logic(frm) {
                             }
                         }
                     });
-                    
+
                     prefix_dialog.hide();
                 },
                 secondary_action_label: __('取消'),
@@ -270,23 +270,23 @@ function check_pp_cotton_in_bom_items(frm, callback) {
      * @param {Object} frm - 表单对象
      * @param {Function} callback - 回调函数，参数为boolean值表示是否存在PP棉
      */
-    
+
     // 获取BOM物料子表中的所有物料代码
     const bom_items = frm.doc.items || [];
-    
+
     if (bom_items.length === 0) {
         callback(false);
         return;
     }
-    
+
     // 提取所有物料代码
     const item_codes = bom_items.map(item => item.item_code).filter(Boolean);
-    
+
     if (item_codes.length === 0) {
         callback(false);
         return;
     }
-    
+
     // 批量获取物料的物料组信息
     frappe.call({
         method: 'frappe.client.get_list',
@@ -297,12 +297,12 @@ function check_pp_cotton_in_bom_items(frm, callback) {
         },
         callback: function(response) {
             let has_pp_cotton = false;
-            
+
             if (response.message) {
                 // 检查是否有物料组为"PP棉"的物料
                 has_pp_cotton = response.message.some(item => item.item_group === 'PP棉');
             }
-            
+
             callback(has_pp_cotton);
         },
         error: function() {
@@ -318,7 +318,7 @@ function copy_bom_for_supporting_items(frm, selected_prefixes) {
      * @param {Object} frm - 表单对象
      * @param {Array} selected_prefixes - 选中的前缀列表
      */
-    
+
     frappe.call({
         method: 'work_order_task.work_order_task.utils.bom.copy_bom_for_supporting_items',
         args: {
@@ -330,7 +330,7 @@ function copy_bom_for_supporting_items(frm, selected_prefixes) {
         callback: function(response) {
             if (response.message) {
                 let result = response.message;
-                
+
                 if (result.success) {
                     // 显示BOM复制结果
                     show_bom_copy_results(result.results);
@@ -351,10 +351,10 @@ function show_bom_copy_results(results) {
      * 显示BOM复制结果
      * @param {Array} results - 复制结果数组
      */
-    
+
     let message = "BOM复制结果:\n\n";
     let has_results = false;
-    
+
     results.forEach(result => {
         has_results = true;
         if (result.status === 'created') {
@@ -365,11 +365,11 @@ function show_bom_copy_results(results) {
             message += `❌ ${result.item_code}: ${result.message}\n`;
         }
     });
-    
+
     if (!has_results) {
         message = "没有需要复制的BOM";
     }
-    
+
     frappe.msgprint({
         title: __('BOM复制完成'),
         message: message,
