@@ -7,6 +7,9 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-09-22
+- **更新**: `developer-experience/git-worktree-branch-upstream-tracks-main.md` — 把"已排除本仓库自身"从三段散句改成**可逐条勾选的排除表**（换机器重新排查时照着跑一遍即可）：脚本调用 `worktree add`（`.md` 里的命中都是文档在教人敲命令）/ `setup.ps1` 实际内容（只做 `CLAUDE.md` symlink + `.agents/skills/*` 链接 + superpowers 链接，**不碰 worktree、不写 `branch.*`**）/ `.claude/settings.json` 不存在 / `.claude/settings.local.json` 只有权限 allowlist、**无 `hooks` 段、无 `WorktreeCreate` hook** / `.git/hooks` 只有 `.sample` / 107 个 `config.worktree` 无 `branch`/`push` 设置。顺带记一句成因量级：`"Bash(git worktree *)"` 在权限 allowlist 里，**Agent 建 worktree 免确认**，所以产出量才这么大。
+
 ## 2026-09-09
 - **新增**: `architecture-patterns/account-period-revenue-reconciliation-ecosystem.md` — 账期/收款核算「生态地图」：把 销售额(通途) + 各平台账期(Amazon=赛狐结算/列式, OSTKUS, PB, Wayfair, Temu/TikTok/Walmart…) + 汇率 + Tax + 附加费 + 回款归属 + 回款率 + 钉钉提交/审批 + NAS 归桶 + 报税 整条链路画成地图，赛狐只是 Amazon 一块；含公共口径(账期月自然月/4号-3号窗口/结算 vs 日期范围口径/回款率=应收/销售/固定月汇率) 与 现有资产指针 + 缺口待办。
 - **新增**: `workflow-issues/amazon-account-period-late-submission-audit.md` — Amazon&新平台账期「提交异常/迟交」审计方法与规则：账期归属=账期日期自然月、提交窗口 4号~下月3号(先 8号~下月7号)、发起时间=提交、`账期月Z` vs `桶B` 判 正常/迟交/遗档/早交；跨文件去重 + `选择平台==亚马逊` 分流；2026-03~08 各桶 正常/迟交/遗档/早交 实测表(8月桶 40 行账期7月、7月桶 40 行完成>08-03+13 未办结、3月桶 6 行 2025 遗档)；产物在 `D:\Work\王忠于\成本核算\`。

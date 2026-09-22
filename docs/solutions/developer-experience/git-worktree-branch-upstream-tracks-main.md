@@ -3,6 +3,7 @@ okf: v0.1
 type: Reference
 title: git worktree 新分支的 upstream 被指成 main —— 裸 push 的隐藏方向
 date: 2026-09-21
+last_updated: 2026-09-22
 category: developer-experience
 module: tooling
 problem_type: developer_experience
@@ -64,7 +65,18 @@ git branch -vv | grep '\[origin/main\]'
 | `git worktree add -b X <path> main`（本地 main） | ❌ 不设 |
 | `git worktree add --no-track -b X <path> origin/main` | ❌ 不设 |
 
-**已排除本仓库自身**：仓库内没有任何 `.ps1`/`.py`/`.sh`/`.md` 调用 `worktree add`，没有 `.claude/settings.json` 覆盖，`.git/hooks` 只有样本文件。→ 是**外部 worktree 工具**传了 `origin/main` 当起点。
+**已排除本仓库自身**（换机器要按这几条重新做一遍排除）：
+
+| 检查 | 结果 |
+|---|---|
+| 有 `.ps1`/`.py`/`.sh` **脚本**调用 `worktree add` 吗 | 无。`.md` 里的命中都是文档在教人敲这条命令（`CONTRIBUTING.md` 等），不是脚本在调用 |
+| `setup.ps1`（clone 后必跑的那步）做什么 | 三件事：`CLAUDE.md` → `AGENTS.md` symlink、`.agents/skills/*` 链进 `~/.claude/skills/`、superpowers skills 链接。**不碰 worktree、不写任何 `branch.*` 配置** |
+| `.claude/settings.json` 存在吗 | 不存在 |
+| `.claude/settings.local.json`（本机权限文件，gitignored） | 只有权限 allowlist（含 `"Bash(git worktree *)"`），**无 `hooks` 段、无 `WorktreeCreate` hook** |
+| `.git/hooks/` | 只有 `.sample` |
+| 107 个 `.git/worktrees/*/config.worktree` | 无 `branch`/`push` 设置 |
+
+→ 是**外部 worktree 工具**传了 `origin/main` 当起点。顺带一提：`"Bash(git worktree *)"` 在权限 allowlist 里，所以 Agent 建 worktree 是免确认的 —— 这也是它产出量这么大的原因。
 
 旁证：排查途中又冒出 1 个同类分支（`claude/laughing-euler-8c4d54`），说明**另有会话正在并发创建**，这个模式还在持续产出。
 
