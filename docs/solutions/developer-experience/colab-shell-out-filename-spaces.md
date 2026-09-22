@@ -4,7 +4,7 @@ type: Reference
 title: notebook 里别用 !shell 做文件操作——文件名含空格会让 !zip 静默失败
 date: 2026-09-22
 category: developer-experience
-module: tooling
+module: colab_kit
 problem_type: developer_experience
 component: tooling
 severity: medium
@@ -83,4 +83,5 @@ Python 的 `zipfile` 直接收字符串列表，没有 shell 这一层，空格�
 ## Related
 
 - `developer-experience/colab-notebook-drive-api-editing.md` —— 同批改动同一个 notebook 的经验
+- `colab_kit/`（`.agents/skills/colab-kit/`）—— Colab notebook 读写改工具箱（本坑是在改那个 notebook 时踩到的）
 - `integration-issues/carrier-label-batch-field-length-limits.md` —— 同一条流水线里的另一个「长度/格式」坑

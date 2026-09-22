@@ -105,7 +105,7 @@ options:
     dir: sellfox_shipping/
     summary: 赛狐尾程打单（订单获取→承运人标签→追踪回写）三界面架构
     coverage: 赛狐尾程打单：从赛狐获取订单 → 匹配尾程物流商 → 生成运单标签 → 回写追踪号
-    exclusions: 不用于承运商轨迹批量查询与异常报表(fedex-track/gls-track/parcel-track)
+    exclusions: 不用于承运商轨迹批量查询与异常报表(fedex-track/gls-track/parcel-track)；不用于通途订单导出的发货面单与背贴(tongtool-order-shipping)
     examples: [尾程, 打单, 运单, 标签, 追踪号, 尾程物流商, 出运单标签, 回写追踪号]
 
   - skill: vite-api
@@ -203,8 +203,15 @@ options:
     dir: tongtool_order_cost/
     summary: 通途订单特殊规则 1.7.0 本地引擎 + Google Sheet SKU 改名
     coverage: 通途订单特殊规则 1.7.0 本地审计引擎 + Google Sheet 订单 SKU 改名替换 + goodsQuery 校验
-    exclusions: 不用于赛狐打单(sellfox-shipping)、不用于 ERPNext 工单排查(erpnext)
+    exclusions: 不用于赛狐打单(sellfox-shipping)、不用于 ERPNext 工单排查(erpnext)、不用于通途订单的发货面单与背贴(tongtool-order-shipping)
     examples: [特殊规则, 订单改销售额成本, Jeck特殊规则, 1.7.0, 通途订单成本, Google Sheet SKU 替换, FBA 尾程, 账期差异]
+
+  - skill: tongtool-order-shipping
+    dir: tongtool_order_shipping/
+    summary: 通途订单导出 → 组合件合并成「每包裹一行」的承运商批量导入 csv + 仓库背贴 PDF（代码暂在同事 Colab，本目录只放硬约束与迁移落点）
+    coverage: 通途订单导出的发货侧处理：组合件（皮壳 -Cover + 海绵 -Foam）合并成「每包裹一行」的 UPS/FedEx 批量导入 csv，以及美中仓库背贴 PDF；含承运商字段长度上限与背贴品名补齐链两条硬约束、包裹号语义（Description of Goods = 订单号，不可剥后缀）
+    exclusions: 不用于赛狐侧尾程打单(sellfox-shipping)、不用于承运商轨迹跟踪(fedex-track/gls-track/parcel-track)、不用于通途订单成本(tongtool-order-cost)、不用于改 Colab notebook 本身(colab-kit)
+    examples: [Overstock 订单处理, 组合件合并, 每包裹一行, 每货品一行, 背贴, UPS 批量导入 csv, FedEx 批量模板, OSTK-Fedex, 通途订单导出, 美中仓库背贴, 通途处理订单]
 
   - skill: erpnext-wo-audit
     dir: .agents/skills/erpnext-wo-audit/
@@ -266,8 +273,15 @@ options:
     dir: google_drive_permissions/
     summary: Google 表格/Colab 共享权限盘点与增删
     coverage: 管理 Google 表格与 Colab notebook 的共享权限：查某账号在哪些表有权限、某表被谁共享；给同事加编辑或只读权限，移除离职或不再需要的人
-    exclusions: 不用于 ERPNext 渠道账号同步（那是 channel-account-sync）
+    exclusions: 不用于 ERPNext 渠道账号同步（那是 channel-account-sync）；不用于 Colab notebook 的内容读写改（那是 colab-kit）
     examples: [Google Drive 权限, 共享权限, 表格权限, 加编辑权限, 移除权限, 权限盘点, 离职清理权限]
+
+  - skill: colab-kit
+    dir: colab_kit/
+    summary: Colab notebook 读写改工具箱：取/备份/列格/插格/替换/语法自检/回写/回读比对/并发守卫
+    coverage: 在 Google Drive 上读写改 Colab notebook（.ipynb）：下载/兜底备份/列格找格/插入备份格/格内精确替换/语法自检/回写/回读逐格比对断言/并发守卫（modifiedTime）
+    exclusions: 不用于 Google 表格/Colab 的共享权限管理(google-drive-permissions)；不用于通途/赛狐的网页自动化导出(web-automation)；不用于业务流水线本身(tongtool-order-shipping)
+    examples: [Colab, notebook, ipynb, 改 Colab 代码, 备份 cell, 改同事的 notebook, Drive API 改 notebook, 回读比对, notebook 本地化迁移]
 
   - skill: nas-product-visuals
     dir: nas_product_visuals/
@@ -409,6 +423,28 @@ options:
     coverage: 在 WorkBuddy（腾讯桌面 Agent / CodeBuddy Code）里配置公司 new-api 网关(api.vilavi.cn)的自定义模型（deepseek-v4-flash / deepseek-v4-pro），自动写入/更新 %USERPROFILE%\.workbuddy\models.json
     exclusions: 不用于 Codex++ / Codex Desktop（另一套供应商配置）；不用于赛狐/ERPNext/通途/库存成本等业务模块
     examples: [WorkBuddy 配置, workbuddy 模型, models.json, deepseek-v4-flash, 公司 AI 网关, 任务完成没下文, workbuddy 接 api.vilavi.cn, 配置 deepseek]
+
+  # 以下 3 条为补齐「AGENTS.md 有、catalog 漏」的既有漂移（2026-09-22 发现并补，测试因此转绿）
+  - skill: sellfox-amazon-settlement
+    dir: sellfox_settlement/
+    summary: 赛狐结算中心V2 + 紫鸟列式报表自动取回 Amazon 账期；钉钉迟交/错位审计；店名↔渠道账号
+    coverage: 用赛狐 OpenAPI（结算中心 V2 + 紫鸟/赛狐插件列式报表）自动取回 Amazon 账期费用、科目解析、与钉钉运营提交值对账；含赛狐店名 ↔ 渠道账号交叉表
+    exclusions: 不用于其它平台账期对账（OSTKUS/Wayfair 是 platform-account-reconciliation，Pottery Barn 是 pb-reconciliation）；不用于 Amazon 广告数据分析(advertise)
+    examples: [Amazon 账期, 赛狐结算中心, 紫鸟报表, 列式报表, 钉钉迟交, 账期错位, 店名渠道账号, 自动拉取账期]
+
+  - skill: dingtalk-oa-approval
+    dir: dingtalk/dingtalk_oa_approval/
+    summary: 钉钉 OA 销售收款确认单：API 附件 + aflow 浏览器导出 + 账期月过滤 + NAS 归档（不改本地同步）
+    coverage: 读钉钉 OA「销售收款确认单」的审批实例与附件（账期明细/图片），按账期月过滤，与按人归档的 NAS 桶对照、走 NAS API 搬文件；不改本地同步副本
+    exclusions: 不用于发钉钉群消息与机器人通知(dingtalk-robot)；不用于钉钉 OAuth/OIDC 登录(new-api-dingtalk-oidc)
+    examples: [钉钉OA, 销售收款确认单, OA 审批附件, aflow 导出, 账期明细, 账期月过滤, NAS 归档, 收款确认单]
+
+  - skill: gsheet-monthly-order
+    dir: .agents/skills/gsheet-monthly-order/
+    summary: 月度成品 xlsx → 固定 gsheet 月度 ws（复制/归档/只覆盖变化列）
+    coverage: 把月度成品 xlsx（如「再次上传 通途非FBA订单YYYYMM …」）写回固定 Google Sheet 的月度 ws，归档旧 ws 为「弃用…」、只覆盖变化列、保持 ws 留在表左侧
+    exclusions: 不用于 Google 表/Colab 共享权限管理(google-drive-permissions)；不用于通途订单成本规则本身(tongtool-order-cost)
+    examples: [上传到 gsheet, 写回 gsheet, 更新 2026年X月订单, 弃用旧 ws, 通途订单2026XX 月度 ws, Colab 要读的订单表, 月度成品 xlsx]
 
   - skill: frappe-core-api
     dir: null

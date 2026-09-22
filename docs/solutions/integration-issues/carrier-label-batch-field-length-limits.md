@@ -4,7 +4,7 @@ type: Reference
 title: 承运商批量导入面单的字段长度上限——UPS Reference 35 字符、FedEx poNumber 30（多 SKU 合并后必须主动截断）
 date: 2026-09-22
 category: integration-issues
-module: sellfox_shipping
+module: tongtool_order_shipping
 problem_type: integration_issue
 component: tracking-integration
 severity: high
@@ -91,4 +91,6 @@ TT0031249K0064109-Cover x 1, TT0312                          ← [:35] 之后
 - SendPro Enterprise 支持文章「Error: Invalid Package Reference Value」—— 明确写「UPS API only allows 35 characters in the Content Description, Reference One, and Shipper Reference fields. This is a carrier limitation.」
 - FedEx Ship Manager Server Developer Guide —— 字段超长时按 Max Length 截断
 - 本仓库同类字段上限（另一承运商，勿混用）：`vite-api/docs/reference/units-and-limits.md`
+- 所属模块：`tongtool_order_shipping/AGENT_HANDOFF.md`（通途订单导出的发货侧处理）
+- 改这条流水线的工具：`.agents/skills/colab-kit/`（它还在同事的 Colab notebook 里）
 - 同批学习：`developer-experience/colab-notebook-drive-api-editing.md`

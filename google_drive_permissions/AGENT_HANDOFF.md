@@ -57,6 +57,7 @@
   - **写**：`files.update` + **multipart**，`body={"mimeType":"application/vnd.google.colaboratory"}` 防类型被改。cell 定位按 `strip()` 匹配并断言唯一命中；写完**重新下载逐段断言**「除目标格外其余 cell 一字未变」；写前比 `modifiedTime` 防并发覆盖（用户在 Colab 里跑一次 cell、Colab 会把执行输出存回文件）。
   - **⚠️ 私钥风险**：业务 Colab 常把服务账号私钥内嵌在「安装依赖」那个 cell 里 ⇒ 本地兜底备份必须放**仓库外**。
   - 全过程、语法自检（魔法行中和要保留缩进）与「先备份再改」的落点见 [`docs/solutions/developer-experience/colab-notebook-drive-api-editing.md`](../docs/solutions/developer-experience/colab-notebook-drive-api-editing.md)。
+  - **已固化成命令行工具**：`colab_kit/`（skill `colab-kit`）—— `fetch`/`guard`/`cells`/`backup-cell`/`sed`/`syntax`/`write`/`verify`。本模块只管**权限**，内容读写改去那边。
 - **限流**：429/500/503 需退避重试（本项目脚本 `api()` 已实现 4 次指数退避）。
 
 ## 5. 边界与坑

@@ -4,7 +4,7 @@ type: Reference
 title: 背贴品名缺失怎么补——通途SKU 在 EN 有两种登记写法，且不在 item_languages 里
 date: 2026-09-22
 category: integration-issues
-module: sellfox_shipping
+module: tongtool_order_shipping
 problem_type: integration_issue
 component: tooling
 severity: medium
@@ -95,4 +95,5 @@ body: {"skus": ["TT0312588K0064183-Foam", ...]}
 - `conventions/tongtu-en-sellfox-instock-sku-mainline.md` —— 同族结论：`-Cover/-Foam` 的**基码匹配 ≠ 完整登记**，完整登记要看 EN 的 `customer_items`
 - `sellfox_shipping/sku_label/name_lookup.py` —— 仓库内已迁移的查名实现（走 `item_languages`）
 - `docs/solutions/architecture-patterns/sku-label-pdf-generation-and-name-lookup.md` —— 背贴 PDF 与查名的架构说明
+- 所属模块：`tongtool_order_shipping/AGENT_HANDOFF.md`（通途订单导出的发货侧处理）
 - 同批学习：`integration-issues/carrier-label-batch-field-length-limits.md`

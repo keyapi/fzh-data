@@ -4,7 +4,7 @@ type: Reference
 title: 用 Drive API 改同事的 Colab notebook（.ipynb）——cell 插入、回读比对、并发守卫
 date: 2026-09-22
 category: developer-experience
-module: google_drive_permissions
+module: colab_kit
 problem_type: developer_experience
 component: tooling
 severity: medium
@@ -24,6 +24,10 @@ tags: [colab, ipynb, google-drive-api, notebook-editing, backup]
 关键认知：**`.ipynb` 在 Drive 里就是一个 JSON 文件，没有专门 API**（同 `google_drive_permissions/docs/lessons.md` Lesson 2：改内容才分家，spreadsheet → Sheets API，`.ipynb` → Drive `files.get/update`）。
 
 ## Guidance（本学习沉淀的做法）
+
+> **已固化成工具箱**：下面这些步骤不必再手写 —— 用 `colab_kit/`（`.agents/skills/colab-kit/`）：
+> `fetch` → `guard` → `cells` / `backup-cell` / `sed` / `syntax`（本地）→ `write` → `verify --expect-changed`。
+> 本节保留原理与踩坑，工具的命令与退出码见 `colab_kit/AGENT_HANDOFF.md`。
 
 **1. 读要 `alt=media`，不要 `/export`。**
 
@@ -110,6 +114,7 @@ compile(neutralized_src, "<cell>", "exec")
 
 ## 参考
 
+- **工具箱**：`colab_kit/colab_kit.py` + `.agents/skills/colab-kit/SKILL.md` —— 本节动作的 CLI 实现
 - `google_drive_permissions/docs/lessons.md` —— Lesson 2（权限接口 vs 内容接口）、Lesson 6（PII 治理）
 - `google_drive_permissions/scripts/check_colab_capabilities.py` —— 业务 Colab notebook 的 name → id 登记表
 - 同批学习：`integration-issues/carrier-label-batch-field-length-limits.md`

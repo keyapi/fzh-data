@@ -416,3 +416,5 @@ sellfox_shipping/
 详见 [`docs/solutions/integration-issues/sku-name-backfill-via-en-customer-code.md`](../docs/solutions/integration-issues/sku-name-backfill-via-en-customer-code.md)。
 
 > 注：上述流水线本体目前仍是同事的 Google Colab notebook（未迁入本模块），本模块也没有对应代码改动。两条先记录，避免将来迁移/复用时重踩。
+>
+> ⚠️ **module 归属已修正（2026-09-22）**：这两条讲的是**通途订单导出**的发货侧后处理，不属于 `sellfox_shipping`（那是**赛狐侧**尾程打单）。对应学习文档的 `module:` 已改为 **`tongtool_order_shipping`**，该模块现承载这两条硬约束与将来的迁移落点。本文件保留摘要仅作就近提示。
