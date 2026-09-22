@@ -38,6 +38,25 @@
 
 ### Agent 新机器首次 clone 后必做
 
+**克隆 · Windows 必须带 `-c core.symlinks=true`**（先开一次开发者模式：设置 → 系统 → 开发者选项 → 开发人员模式，需管理员）：
+
+```bash
+git clone -c core.symlinks=true https://github.com/keyapi/fzh-data.git
+cd fzh-data
+git config core.symlinks true    # 持久化，见下方说明
+```
+
+**不带这个 flag 会怎样**（Git for Windows 的 `--system core.symlinks=false` 是默认值）：`CLAUDE.md` 检出成 9 字节 stub（Claude 读不到 AGENTS.md）、`.claude/skills` 检出成普通文件（**Claude Code 看不到任何项目 skill**）。实测对比：
+
+| 克隆方式 | `CLAUDE.md` | `.claude/skills` |
+|---|---|---|
+| 默认 | 9 字节 stub，0 行 | 普通文件，skill 为空 |
+| `-c core.symlinks=true` | 真 symlink，**243 行** | 真 symlink，**47 个 skill** |
+
+第二行**不需要再跑 `setup.ps1`** —— 项目级 `.claude/skills` 够 Claude Code 用了。`git config core.symlinks true` 那一步是为了持久化：克隆时的 `-c` 只在那一刻生效、**不写进新克隆的 `.git/config`**，不设的话以后 `git pull` 拉到新的 symlink 条目又会退化成 stub。
+
+> **macOS / Linux 直接 `git clone` 即可**，原生支持 symlink，不需要 flag、不需要开任何模式。
+
 ```bash
 # 0. 检测并安装 Git（如未安装）
 #    Agent 执行：先 `git --version` 检查，若不存在则按 OS 安装：
@@ -88,8 +107,12 @@ uv sync
 #    Cursor / Codex 各自的 marketplace 装法见上游 README。这两个宿主本来就没有
 #    `/ce-compound`，一向靠兜底，不影响能否使用 ce-okf。
 
-# 5. 初始化 symlink（仅 Claude Desktop 需要；Codex 用户跳过此步）
+# 5. 给 Claude Desktop 补用户级 skill 链接（Claude Code 不需要；Codex 用户跳过）
+#    Claude Code 靠上面克隆好的项目级 `.claude/skills` 就够了。
+#    只有 Claude Desktop 读 ~/.claude/skills/，才需要这一条：
 #    powershell -ExecutionPolicy Bypass -File setup.ps1
+#    ⚠️ 必须在**主仓库根目录**跑；在 worktree 里跑会把链接指到临时 worktree，
+#       且脚本对已存在路径 [SKIP]，事后在主仓库再跑也修不回来（只能手工删链接重建）。
 
 # ⚠️ MCP 装完必须让宿主**完全退出**再开：Claude Desktop 托盘右键 → Quit；Codex 完全退出；Cursor 重载窗口。
 #    Claude Desktop 的 3P 模式与普通模式是**两个独立配置文件**，改错会静默无效 —— 路径见 docs/mcp-setup.md。

@@ -268,14 +268,17 @@ gh pr create --title "<70 字以内>" --body-file "$BODY_FILE"
 
 ## 首次安装到新机器
 
-本 skill 在 `.agents/skills/ce-okf/`。**Codex / Cursor 直接读它，不需要任何安装**；只有 Claude Code / Claude Desktop 需要软链：
+**这个 skill 不需要"安装"** —— 它在仓库里，谁读到仓库谁就有：
 
-```powershell
-# 在主仓库根目录 D:\Work\赛狐\Cursor 下跑，不要在 worktree 里跑
-powershell -ExecutionPolicy Bypass -File setup.ps1
-```
+| 宿主 | 怎么拿到 |
+|---|---|
+| **Claude Code** | **克隆对了就有**：`git clone -c core.symlinks=true <url>`（Windows 另需先开一次开发者模式）。项目级 `.claude/skills` 会自动把它带进来，**不用跑任何脚本** |
+| **Codex / Cursor** | 直接读 `.agents/skills/`，什么都不用做 |
+| **Claude Desktop** | 唯一要额外动作的 —— Desktop 只读用户级目录，看不到项目级 `.claude/skills`，得补：`powershell -ExecutionPolicy Bypass -File setup.ps1` |
 
-（`setup.ps1` 把 `.agents/skills/*` 链进 `~/.claude/skills/`。若在 worktree 里跑，链接会指到临时 worktree 且事后修不回来 —— 详见上面「多 Agent 并存」。）
+克隆为什么必须带 `-c core.symlinks=true`：Git for Windows 的 `--system core.symlinks=false` 是默认值，不带就把 `.claude/skills` 检出成**普通文件**（→ Claude Code 看不到任何项目 skill）、`CLAUDE.md` 检出成 9 字节 stub。实测：带 flag 后 `.claude/skills` 是真 symlink、列 47 个 skill。macOS / Linux 原生支持，不用管。
+
+跑 `setup.ps1` 时**必须在主仓库根目录**，别在 worktree 里跑 —— 会把链接指到那个临时 worktree，而脚本对已存在路径 `[SKIP]`，事后在主仓库再跑也修不回来，只能手工删链接重建（详见上面「多 Agent 并存」）。
 
 > ℹ️ **`CLAUDE.md` 变脏只在开发者模式关着时发生。** `CLAUDE.md` 在 git 里是 symlink（mode 120000 → `AGENTS.md`），单一事实源是 AGENTS.md。Windows 建**文件**符号链接需要开发者模式；没开时 `setup.ps1` 会退化成 `Copy-Item`，把 CLAUDE.md 写成 AGENTS.md 整份副本（215 行）→ `git status` 变脏。
 >
