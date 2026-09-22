@@ -76,6 +76,18 @@ uv sync
 #      Cursor: uv run python tongtool_api/setup_cursor_mcp.py
 #    （不要用全局 pip——包必须装到项目 .venv 里）
 
+# 4.5 安装 Compound Engineering 插件（可选，但强烈建议）—— 只为 Claude Code
+#    `ce-okf` 收尾 skill 的第 1 步会调 `/ce-compound` 产出学习正文。
+#    ⚠️ 它**不在本仓库**，是第三方插件（MIT）：EveryInc/compound-engineering-plugin
+#    不装也能跑完（ce-okf 会走内置模板兜底），但正文质量降级：
+#    丢掉重叠检测（判断"该更新哪篇已有文档"而不是新建重复的一篇）、
+#    grounding 校验（核对文档里的断言有没有证据）等。
+#    这是在 **Claude 里跑的斜杠命令**，不是 shell 命令 —— 脚本代劳不了：
+#      /plugin marketplace add EveryInc/compound-engineering-plugin
+#      /plugin install compound-engineering
+#    Cursor / Codex 各自的 marketplace 装法见上游 README。这两个宿主本来就没有
+#    `/ce-compound`，一向靠兜底，不影响能否使用 ce-okf。
+
 # 5. 初始化 symlink（仅 Claude Desktop 需要；Codex 用户跳过此步）
 #    powershell -ExecutionPolicy Bypass -File setup.ps1
 

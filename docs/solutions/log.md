@@ -8,6 +8,7 @@ tags: [solutions, log]
 # 变更日志
 
 ## 2026-09-22
+- **更新**: `ce-okf` 的依赖关系讲清 —— 之前 `AGENTS.md` 的「新机器首次 clone 后必做」清单里**一个字都没提** compound-engineering，而 `ce-okf` 第 1 步要调 `/ce-compound`。同事 clone 完能跑，但会静默走兜底、自己不知道。补：① `AGENTS.md` 加第 **4.5 步**（上游是标准 Claude Code 插件，装法是两条斜杠命令 `/plugin marketplace add EveryInc/compound-engineering-plugin` + `/plugin install compound-engineering`，**脚本代劳不了**，所以只能写进清单让同事的 Agent 读到）；② `.agents/skills/ce-okf/SKILL.md` 的「分工」表加「在本仓库？」列，把 `ce-compound` 标成**第三方 / 可选增强**并列出不装时丢掉什么（重叠检测损失最大、grounding 校验、检索广度），写明**流程照样完整、只降正文质量**。
 - **更新**: `developer-experience/git-worktree-branch-upstream-tracks-main.md` — 把"已排除本仓库自身"从三段散句改成**可逐条勾选的排除表**（换机器重新排查时照着跑一遍即可）：脚本调用 `worktree add`（`.md` 里的命中都是文档在教人敲命令）/ `setup.ps1` 实际内容（只做 `CLAUDE.md` symlink + `.agents/skills/*` 链接 + superpowers 链接，**不碰 worktree、不写 `branch.*`**）/ `.claude/settings.json` 不存在 / `.claude/settings.local.json` 只有权限 allowlist、**无 `hooks` 段、无 `WorktreeCreate` hook** / `.git/hooks` 只有 `.sample` / 107 个 `config.worktree` 无 `branch`/`push` 设置。顺带记一句成因量级：`"Bash(git worktree *)"` 在权限 allowlist 里，**Agent 建 worktree 免确认**，所以产出量才这么大。
 
 ## 2026-09-09

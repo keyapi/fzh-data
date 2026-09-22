@@ -33,11 +33,26 @@ triggers:
 
 ## 分工：谁是干什么的
 
-| 组件 | 负责 | 不负责 |
-|---|---|---|
-| `ce-compound` / `ce-compound-refresh`（用户级，外部） | 学习正文质量：并行子代理、重叠检测、grounding 校验、`CONCEPTS.md` 词表 | **不提交、不开 PR**（写完即结束回合） |
-| `okf`（本仓库 `.agents/skills/okf/`） | 三条铁律：`type` 必填 / 每目录 `index.md` / 每 bundle `log.md` | 不知道 `docs/solutions/` 的 schema |
-| **`ce-okf`（本 skill）** | schema 归一化 + 级联登记 + 索引联动 + 凭证扫描 + 提交 + PR | 不重写正文 |
+| 组件 | 在本仓库？ | 负责 | 不负责 |
+|---|---|---|---|
+| **`ce-okf`（本 skill）** | ✅ | 全流程编排 + schema 归一化 + 级联登记 + 索引联动 + 凭证扫描 + 提交 + PR | 不重写正文 |
+| `okf`（`.agents/skills/okf/`） | ✅ | 三条铁律：`type` 必填 / 每目录 `index.md` / 每 bundle `log.md` | 不知道 `docs/solutions/` 的 schema |
+| `ce-compound` / `ce-compound-refresh` | ❌ **第三方** | **可选增强** —— 学习正文质量：并行子代理、重叠检测、grounding 校验、`CONCEPTS.md` 词表 | 不提交、不开 PR（写完即结束回合） |
+
+**没有 `ce-compound`，本 skill 照样跑完整条链** —— 第 1 步退化成"自己按第 2、3 步的小节与模板写正文"。丢的是**正文质量**，不是流程：
+
+- **重叠检测**（损失最大）：第 0 步只是手工判据，能决定走不走 refresh，但**发现不了"这两篇该合并"**
+- **grounding 校验**（`validate-doc-claims.py` + 语义校验子代理）：写进文档的断言没人核
+- 并行子代理的检索广度、`CONCEPTS.md` 词表捕获规则
+
+想装上（**Claude Code 的斜杠命令，脚本代劳不了**；MIT 协议）：
+
+```
+/plugin marketplace add EveryInc/compound-engineering-plugin
+/plugin install compound-engineering
+```
+
+**Codex / Cursor 不适用** —— 这两个宿主本来就没有 `/ce-compound`，一向靠兜底。装不装都不影响能否使用 ce-okf。
 
 `ce-compound` 的 `component` 枚举是 Rails 味儿的（`rails_model` / `hotwire_turbo` / `frontend_stimulus`…），**与本仓库实际用的值不符** —— 归一化是 ce-okf 的活（见第 3 步）。
 
