@@ -1,0 +1,100 @@
+diff --git a/work_order_task/work_order_task/overrides/work_order_override.py b/work_order_task/work_order_task/overrides/work_order_override.py
+index 8af8f1d..01505a5 100644
+--- a/work_order_task/work_order_task/overrides/work_order_override.py
++++ b/work_order_task/work_order_task/overrides/work_order_override.py
+@@ -127,6 +127,47 @@ def _work_order_item_as_child_dict(item):
+     return {k: v for k, v in row.items() if k not in skip and not str(k).startswith("_")}
+ 
+ 
++def _resolve_item_rate(wo, item_code, qty, stock_uom=None):
++    """解析新增物料行的单价。
++
++    口径与「工单从 BOM 建行」时一致：用本工单 BOM 的取价方式（rm_cost_as_per）——
++    Price List 就查该 BOM 的 buying_price_list，Valuation Rate 就取库存估值。
++    取不到时回落到物料主数据的 valuation_rate。
++
++    注意 ERPNext 自己在工单里手动加行时并不会带单价
++    （work_order.get_item_details 只返回 uom/名称/描述等），所以这里必须自己算。
++    """
++    rate = 0
++    if wo.get("bom_no") and frappe.db.exists("BOM", wo.bom_no):
++        try:
++            bom = frappe.get_doc("BOM", wo.bom_no)
++            rate = bom.get_rm_rate(
++                {
++                    "company": wo.company,
++                    "item_code": item_code,
++                    "bom_no": "",
++                    "qty": qty,
++                    "uom": stock_uom,
++                    "stock_uom": stock_uom,
++                    "conversion_factor": 1,
++                    "sourced_by_supplier": 0,
++                }
++            )
++        except Exception:
++            frappe.log_error(
++                "解析物料单价失败 - 工单 {0} / BOM {1} / 物料 {2}".format(
++                    wo.name, wo.bom_no, item_code
++                ),
++                "Update Required Items Rate",
++            )
++            rate = 0
++
++    if not rate:
++        rate = flt(frappe.db.get_value("Item", item_code, "valuation_rate"))
++
++    return flt(rate)
++
++
+ @frappe.whitelist()
+ def update_required_items(work_order_name, items):
+     """
+@@ -180,12 +221,32 @@ def update_required_items(work_order_name, items):
+             })
+         else:
+             # 新增行
++            item_code = item.get("item_code")
++            qty = flt(item.get("required_qty", 0))
++            item_master = (
++                frappe.db.get_value(
++                    "Item",
++                    item_code,
++                    ["stock_uom", "include_item_in_manufacturing"],
++                    as_dict=True,
++                )
++                or {}
++            )
++            # 前端弹窗不传单价/金额，也不传 include_item_in_manufacturing；
++            # 不显式带出的话：单价金额归零、且勾选落到默认 0（该料不进工单发料/耗用）。
++            rate = _resolve_item_rate(wo, item_code, qty, item_master.get("stock_uom"))
+             items_to_add.append({
+-                "item_code": item.get("item_code"),
++                "item_code": item_code,
+                 "item_name": item.get("item_name") or "",
+-                "required_qty": flt(item.get("required_qty", 0)),
++                "required_qty": qty,
++                "rate": rate,
++                "amount": flt(rate * qty),
+                 "source_warehouse": item.get("source_warehouse"),
+                 "operation": item.get("operation"),
++                # 按物料主数据带出，与 ERPNext 从 BOM 建行时的行为一致
++                "include_item_in_manufacturing": 1
++                if item_master.get("include_item_in_manufacturing")
++                else 0,
+             })
+ 
+     # 统计变更
+@@ -218,8 +279,12 @@ def update_required_items(work_order_name, items):
+             "item_code": item["item_code"],
+             "item_name": item["item_name"],
+             "required_qty": item["required_qty"],
++            "rate": item.get("rate") or 0,
++            "amount": item.get("amount") or 0,
+             "source_warehouse": item.get("source_warehouse") or "",
+             "operation": item.get("operation") or "",
++            # 见上面 items_to_add 的说明：这两个必须显式带出，否则单价金额归零、勾选丢失
++            "include_item_in_manufacturing": item.get("include_item_in_manufacturing") or 0,
+         })
+ 
+     # 使用特殊标志忽略提交后的验证（因为已发料的物料不能随意删除/减少数量）

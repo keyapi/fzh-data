@@ -1,0 +1,141 @@
+diff --git a/work_order_task/public/js/work_order.js b/work_order_task/public/js/work_order.js
+index 95faf81..6f61b52 100644
+--- a/work_order_task/public/js/work_order.js
++++ b/work_order_task/public/js/work_order.js
+@@ -728,25 +728,34 @@ function show_update_required_items_dialog(frm) {
+                 );
+             };
+ 
+-            // 兜底：把名称还是空白的行先补齐。
++            // 兜底：把「物料名称 / 来源仓库」还是空白的行补齐。
+             // 网格里 item_code 的 onchange 不一定每次都触发（旧版第二次新增就不触发），
+-            // 而服务端只会原样接收前端传来的 item_name，所以这里必须补一次，
+-            // 否则工单上的「物料名称」会存成空白。
+-            const pending = trans_items.filter((it) => !it.item_name);
++            // 而服务端只会原样接收前端传来的 item_name / source_warehouse，所以这里必须补一次。
++            const pending = trans_items.filter((it) => !it.item_name || !it.source_warehouse);
+             if (!pending.length) {
+                 confirm_and_run();
+                 return;
+             }
+ 
+-            frappe.dom.freeze(__('正在补全物料名称…'));
++            frappe.dom.freeze(__('正在补全物料名称 / 来源仓库…'));
+             Promise.all(
+-                pending.map((it) =>
+-                    frappe.db
+-                        .get_value('Item', it.item_code, 'item_name')
+-                        .then((r) => {
+-                            it.item_name = (r.message && r.message.item_name) || '';
++                pending.map(
++                    (it) =>
++                        new Promise(function(resolve) {
++                            frappe.call({
++                                method: 'erpnext.stock.doctype.item.item.get_item_details',
++                                args: { item_code: it.item_code, company: frm.doc.company },
++                                callback: function(r) {
++                                    const d = (r && r.message) || {};
++                                    if (!it.item_name) it.item_name = d.item_name || '';
++                                    if (!it.source_warehouse) it.source_warehouse = d.default_warehouse || '';
++                                    resolve();
++                                },
++                                error: function() {
++                                    resolve();
++                                },
++                            });
+                         })
+-                        .catch(() => {})
+                 )
+             ).then(() => {
+                 frappe.dom.unfreeze();
+@@ -765,39 +774,62 @@ function show_update_required_items_dialog(frm) {
+     //   1) 直接扫一遍（不防抖）—— 供轮询调用，选完物料立刻补
+     //   2) change/blur 事件 —— 用户手动编辑时立刻响应
+     //   3) 弹窗存活期间每 400ms 扫一遍 —— 兜住"不触发任何事件"的情况
++    function mirror_to_data(row, grow, updates) {
++        // 同步回 df.data（primary_action 的 get_values / get_data 取的是它）
++        const data = dialog.fields_dict.trans_items.df.data || [];
++        let target = data[grow.idx - 1];
++        if (!target || target.item_code !== row.item_code) {
++            target = data
++                .slice()
++                .reverse()
++                .find(function(d) {
++                    return d && d.item_code === row.item_code;
++                });
++        }
++        if (!target) return;
++        Object.keys(updates).forEach(function(k) {
++            if (!target[k]) target[k] = updates[k];
++        });
++    }
++
+     function do_fill_missing_item_names() {
+         const grid = dialog.fields_dict.trans_items.grid;
+-        const data = dialog.fields_dict.trans_items.df.data || [];
+         (grid.grid_rows || []).forEach(function(grow) {
+-            const doc = grow.doc;
+-            if (!doc || !doc.item_code || doc.item_name || doc.__name_lookup_pending) return;
++            const row = grow.doc;
++            if (!row || !row.item_code) return;
++            // 名称和发料仓都齐了就不用再查
++            if (row.item_name && row.source_warehouse) return;
++            // 同一行同一个物料只查一次，避免轮询反复打接口
++            if (row.__lookup_pending || row.__looked_up_code === row.item_code) return;
+ 
+-            doc.__name_lookup_pending = true;
+-            frappe.db
+-                .get_value('Item', doc.item_code, 'item_name')
+-                .then(function(r) {
+-                    doc.__name_lookup_pending = false;
+-                    const name = (r.message && r.message.item_name) || '';
+-                    if (!name || doc.item_name === name) return;
+-                    doc.item_name = name;
+-                    // 同步回 df.data（primary_action 的 get_values/get_data 取的是它）
+-                    const by_index = data[grow.idx - 1];
+-                    if (by_index && by_index.item_code === doc.item_code && !by_index.item_name) {
+-                        by_index.item_name = name;
+-                    } else {
+-                        const mirror = data
+-                            .slice()
+-                            .reverse()
+-                            .find(function(d) {
+-                                return d && d.item_code === doc.item_code && !d.item_name;
+-                            });
+-                        if (mirror) mirror.item_name = name;
++            row.__lookup_pending = true;
++            row.__looked_up_code = row.item_code;
++            frappe.call({
++                method: 'erpnext.stock.doctype.item.item.get_item_details',
++                args: { item_code: row.item_code, company: frm.doc.company },
++                callback: function(res) {
++                    row.__lookup_pending = false;
++                    const details = (res && res.message) || {};
++                    const updates = {};
++                    if (!row.item_name && details.item_name) {
++                        updates.item_name = details.item_name;
+                     }
+-                    if (grow.refresh_field) grow.refresh_field('item_name');
+-                })
+-                .catch(function() {
+-                    doc.__name_lookup_pending = false;
+-                });
++                    if (!row.source_warehouse && details.default_warehouse) {
++                        updates.source_warehouse = details.default_warehouse;
++                    }
++                    if (!Object.keys(updates).length) return;
++                    Object.assign(row, updates);
++                    mirror_to_data(row, grow, updates);
++                    if (grow.refresh_field) {
++                        Object.keys(updates).forEach(function(k) {
++                            grow.refresh_field(k);
++                        });
++                    }
++                },
++                error: function() {
++                    row.__lookup_pending = false;
++                },
++            });
+         });
+     }
+ 
