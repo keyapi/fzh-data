@@ -59,9 +59,12 @@ def test_full_flow_upload_process_download(client, pb_env):
 
     job = client.repo.get_job(job_id)
     assert job["status"] == "succeeded"
-    assert job["input_packslip"] == "packslip.pdf"
-    assert job["input_order"] == "order.csv"
+    # 落库的是用户原始文件名（展示用）；磁盘上一律是固定物理名
+    assert job["input_packslip"] == "Packslip 美中 x3 20260921.pdf"
+    assert job["input_order"] == "checked0stock order x3 20260921.csv"
+    assert "Packslip 美中 x3 20260921.pdf" in page.text
     assert (pb_env.runtime / "inputs" / job_id / "packslip.pdf").is_file()
+    assert (pb_env.runtime / "inputs" / job_id / "order.csv").is_file()
     assert job["report"]["pdf"]["pages"] == 3
 
     arts = client.repo.list_artifacts(job_id)

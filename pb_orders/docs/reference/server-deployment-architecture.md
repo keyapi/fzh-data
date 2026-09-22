@@ -429,7 +429,14 @@ location /pb/ {
 ### 11.6 未完成事项
 
 - **白名单尚未填写**（见 11.5 的风险），需要确认使用者后填入 `PB_ORDERS_ALLOWED_USERS`。
-- **保留策略只有配置项**，尚无定时清理任务（`runtime/` 会持续增长）。
+  根因在桥侧：授权请求只带了 `scope=openid`，没申请 `corpid`，所以拿不到 `corpId`、
+  公司校验被跳过。要收口得改桥（**影响所有走这条桥的服务**），
+  或继续用这里的白名单。详见 `docs/solutions/integration-issues/dingtalk-sso-new-api-oidc-bridge.md`。
+- **保留策略在启动时执行**（`PB_ORDERS_RETENTION_DAYS`，默认 90 天），**不是定时任务**：
+  长期不重启的服务/worker 不会触发清理。要真正常态化清理得加调度。
+- **队列丢失靠启动时对账兜底**：Redis 是 `--save 60 1 --appendonly no`，
+  快照间隔内重启 / flush 会丢掉排队任务；worker 启动时 `housekeeping.reconcile_queued`
+  会把「数据库里还排队、Redis 里已经没了」的任务标失败。同样只在启动时跑。
 - **未接域名根路径**：目前挂在 `api.vilavi.cn/pb/` 路径前缀下；
   若以后要独立子域名（如 `pb.vilavi.cn`），需要加 DNS 记录与证书。
 - **代码版本标记是人工填的** `pb-web-20260922b`；PR 合并后应改为 commit SHA。

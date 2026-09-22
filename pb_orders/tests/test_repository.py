@@ -88,6 +88,39 @@ def test_recover_interrupted_does_not_stop_at_one_page(repo):
     assert repo.recover_interrupted() == 101
 
 
+def test_queued_jobs_lists_only_queued(repo):
+    _create(repo, job_id="job-q")
+    repo.mark_queued("job-q", "rq-q")
+    _create(repo, job_id="job-r")
+    repo.mark_running("job-r")
+    _create(repo, job_id="job-s")
+    repo.mark_succeeded("job-s", {})
+
+    assert repo.queued_jobs() == [{"id": "job-q", "worker_job_id": "rq-q"}]
+
+
+def test_reconcile_queued_marks_only_jobs_missing_from_queue(repo):
+    from web import housekeeping
+
+    _create(repo, job_id="still-there")
+    repo.mark_queued("still-there", "rq-live")
+    _create(repo, job_id="lost")
+    repo.mark_queued("lost", "rq-gone")
+    _create(repo, job_id="no-worker-id")
+    repo.mark_queued("no-worker-id", "")
+    _create(repo, job_id="running")
+    repo.mark_running("running")
+
+    alive = {"rq-live"}
+    assert housekeeping.reconcile_queued(repo, lambda jid: jid in alive) == 2
+
+    assert repo.get_job("still-there")["status"] == "queued"
+    assert repo.get_job("lost")["status"] == "failed"
+    assert repo.get_job("lost")["error"]["code"] == "queue_lost"
+    assert repo.get_job("no-worker-id")["status"] == "failed"
+    assert repo.get_job("running")["status"] == "running"
+
+
 def test_purge_expired_drops_old_finished_jobs_only(repo, pb_env):
     from web import housekeeping
     from web.config import get_settings
