@@ -20,3 +20,4 @@ timestamp: 2026-09-21
 | 步骤 3：通途导入 Excel | [../pb_tongtu_excel.py](../pb_tongtu_excel.py) |
 | 步骤 4：标签 PDF | [../pb_label_pdf.py](../pb_label_pdf.py) |
 | 步骤 4.2：背贴 PDF | [../pb_back_label_pdf.py](../pb_back_label_pdf.py) |
+| 与 Colab 产物的一致性对比 | [../compare_runs.py](../compare_runs.py) |

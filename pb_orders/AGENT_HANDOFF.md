@@ -40,6 +40,7 @@ cd pb_orders
 uv run python run_pb_orders.py --dir "D:\Work\美国\Tracy Miller\PB orders\20260921"
 uv run python run_pb_orders.py --dir "..." --dry-run          # 只算不写
 uv run python run_pb_orders.py --dir "..." --check-shipment   # 用 ASN 核对实发/缺货
+uv run python compare_runs.py --dir "..."                    # 与 <dir>/Colab处理 逐项对比
 ```
 
 | 参数 | 说明 |
@@ -77,6 +78,9 @@ uv run python run_pb_orders.py --dir "..." --check-shipment   # 用 ASN 核对�
 | | `build_back_label_pdf(...)` | 步骤 4.2 总入口，返回 (路径, 页数, 未匹配) |
 | `run_pb_orders.py` | `run(args)` | 编排 + 数量对账 + 1:1 硬校验 |
 | | `check_shipment(dir, df)` | ASN 实发 vs 订单数量核对 |
+| `compare_runs.py` | `compare_xlsx(a, b)` | 通途 xlsx 逐单元格对比 |
+| | `compare_pdf(a, b)` | 页数 + 几何签名 + 逐页渲染像素 + 时间戳归一后的文字 |
+| | `rebuild_label_with_colab_ts(...)` | 用 Colab 产物里的时间戳重建标签 PDF，再比一次（应 0 差异） |
 
 ## 5. 关键常量（改版式只动这里）
 
@@ -147,6 +151,8 @@ uv run python run_pb_orders.py --dir "..." --check-shipment   # 用 ASN 核对�
 | 叠加元素 | 打包单页时间戳、标签页时间戳、箭头、SKUxQTY 的 bbox **完全一致** |
 
 - 也用 20260917 的历史产物做了同源对照，几何与版式一致。
+- **可复现**：以上结论固化成 `compare_runs.py`（同一批数据、`--dir` 一条命令），
+  用户可自行复跑；退出码 0/1，便于以后每批先比再决定用不用。
 
 ### 附：Colab 产物在 Acrobat 里全白（已定位差异，未影响本版）
 
