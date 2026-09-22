@@ -240,6 +240,22 @@ uv run pytest tests/ -q
     凡是**可能被 POST 触发**的重定向（退出、表单提交后跳转、「重新处理」）一律
     显式 `status_code=303`。**测试要断言状态码本身** —— 只断言 `Location` 的用例
     地址是对的，抓不到这个"方法错了"的 bug。
+17. **同站其它服务能带着 cookie 向本服务 POST，所以需要 CSRF 令牌**：
+    `api.vilavi.cn` 上还挂着 `/oidc/`、`/sellfox/`、`/nas/mcp`，同域之间
+    `SameSite=Lax` 不算跨站，表单 POST 会带上本服务的会话 cookie。
+    所以新建任务 / 重新处理 / 退出都必须带 `web/csrf.py` 的令牌
+    （`httponly`、Path 限定在本服务前缀下），光靠 SameSite 挡不住。
+18. **上传文件的磁盘名固定，数据库里那两列只用于展示**：磁盘一律是
+    `inputs/<job-id>/packslip.pdf` / `order.csv`（按槽位校验扩展名），
+    不用用户文件名做路径。`jobs.input_packslip` / `input_order` 存的是
+    **用户原始文件名**，只给页面显示用 —— 要拼磁盘路径请用
+    `storage.PACKSLIP_NAME` / `storage.ORDER_NAME`，拿数据库字段拼会 FileNotFoundError。
+19. **重启时别把 `queued` 一律标失败，但也不能不管它**：`queued` 还在 Redis 里，
+    重启后 worker 会继续跑，所以只把 `running` 标为中断。但 Redis 也可能整个
+    丢队列（compose 是 `--save 60 1 --appendonly no`，快照间隔内重启 / flush 就没了），
+    那时数据库里的 `queued` 会永远停在「处理中」。worker 启动时用
+    `housekeeping.reconcile_queued` 拿 Redis 侧的 `worker_job_id`
+    （`rq.Job.fetch`）对账，查不到就标失败并允许「用相同输入重新处理」。
 
 ## 8. 数量对账口径
 
@@ -326,9 +342,12 @@ uv run pytest tests/ -q
 - [x] 无货时自动拆「有货主文件 + 无货子集」（标签 + 背贴各两份，`--no-stock` 触发）
 - [x] 网页版：FastAPI + Redis/RQ + SQLite，任务可后台跑、可追溯、可重下（2026-09-22）
 - [x] 独立 Docker Compose 栈，不碰既有服务（2026-09-22）
-- [x] 42 个自动化测试，不需要 Redis 也能跑
-- [x] 已部署到 EN 测试服务器（`/opt/pb-orders`，入口 `http://100.119.28.72:8412`，仅 Tailscale）
-- [ ] 页面暂无登录鉴权（依赖网络层限制；要放公网需接钉钉 OIDC）
-- [ ] 保留策略只实现了配置项，尚无定时清理任务
+- [x] 73 个自动化测试，不需要 Redis 也能跑
+- [x] 已部署到 EN 测试服务器（`/opt/pb-orders`）。入口 **<https://api.vilavi.cn/pb/>**
+      （公网 HTTPS + 钉钉登录，容器只绑 `127.0.0.1`）；Tailscale 那条路径已弃用（走香港中继太慢）
+- [x] 公网入口有钉钉登录闸门（`web/auth.py`）。**但白名单留空 = 任何钉钉账号都能登录**
+      —— 桥的 corpId 校验实际不生效，见部署文档 11.5 与 `docs/solutions/.../dingtalk-sso-new-api-oidc-bridge.md`
+- [x] 保留策略：启动时按 `PB_ORDERS_RETENTION_DAYS`（默认 90 天）清理已完成任务与无人引用的产物。
+      **只在服务/worker 启动时跑，不是定时任务**
 - [ ] 部分发货的一单跨两份 PDF 时，仍需人工确认哪些页给谁（目前按 SKU 自动拆）
 - [ ] 原 notebook 步骤 3.x（赛狐导入）、4.3（按仓库分拆，20260831 起停用）—— 未迁

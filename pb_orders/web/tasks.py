@@ -76,8 +76,10 @@ def run_job(job_id: str) -> dict:
 
     try:
         result = service.run_job(
-            in_dir / job["input_packslip"],
-            in_dir / job["input_order"],
+            # 磁盘名固定（见 storage 约定）。jobs.input_packslip/input_order
+            # 只存用户原始文件名，仅用于页面展示，不能当路径用。
+            in_dir / storage.PACKSLIP_NAME,
+            in_dir / storage.ORDER_NAME,
             options,
             output_dir=work_dir,
             progress=lambda step, msg: repo.set_progress(job_id, step, msg),
@@ -111,6 +113,8 @@ def main() -> None:
 
     from redis import Redis
     from rq import Queue, SimpleWorker, Worker
+    from rq.exceptions import NoSuchJobError
+    from rq.job import Job
 
     settings = get_settings()
     settings.ensure_dirs()
@@ -124,6 +128,20 @@ def main() -> None:
 
     conn = Redis.from_url(settings.redis_url)
     queue = Queue(settings.queue_name, connection=conn)
+
+    def _still_queued(worker_job_id: str) -> bool:
+        try:
+            Job.fetch(worker_job_id, connection=conn)
+            return True
+        except NoSuchJobError:
+            return False
+
+    try:
+        # Redis 若丢过队列，数据库里的 queued 就没人执行了，先标失败。
+        housekeeping.reconcile_queued(repo, _still_queued)
+    except Exception:  # noqa: BLE001 - 对账失败不应挡住 worker
+        traceback.print_exc()
+
     # Windows 没有 fork()，RQ 的常规 Worker 会起不来；本机开发用 SimpleWorker，
     # 容器（Linux）仍用可并行 fork 的常规 Worker。
     worker_cls = SimpleWorker if os.name == "nt" else Worker

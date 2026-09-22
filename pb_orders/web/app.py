@@ -267,8 +267,14 @@ def create_app() -> FastAPI:
         job_id = new_id("job")
         job_dir = settings.inputs_dir / job_id
         try:
-            storage.validate_upload_name(packslip.filename, "Packslip PDF", storage.PACKSLIP_SUFFIX)
-            storage.validate_upload_name(order_csv.filename, "订单 CSV", storage.ORDER_SUFFIX)
+            # 返回值是用户原始文件名，只落库供页面展示；
+            # 磁盘上一律用 storage 的固定名，避免用用户文件名做路径。
+            packslip_display = storage.validate_upload_name(
+                packslip.filename, "Packslip PDF", storage.PACKSLIP_SUFFIX
+            )
+            order_display = storage.validate_upload_name(
+                order_csv.filename, "订单 CSV", storage.ORDER_SUFFIX
+            )
         except ValueError as exc:
             return render(request, "error.html", {"message": str(exc)}, status_code=400)
 
@@ -291,8 +297,8 @@ def create_app() -> FastAPI:
             no_stock_note=no_stock_note.strip() or None,
             validate_only=bool(validate_only),
             allow_unmatched=bool(allow_unmatched),
-            input_packslip=storage.PACKSLIP_NAME,
-            input_order=storage.ORDER_NAME,
+            input_packslip=packslip_display,
+            input_order=order_display,
             pipeline_version=settings.pipeline_version,
         )
         try:

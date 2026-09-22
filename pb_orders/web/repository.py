@@ -214,6 +214,14 @@ class Repository:
             )
         return cur.rowcount
 
+    def queued_jobs(self) -> list[dict]:
+        """仍在排队中的任务，带 Redis 侧的 `worker_job_id`，供启动时对账。"""
+        with self.connect() as conn:
+            rows = conn.execute(
+                "SELECT id, worker_job_id FROM jobs WHERE status = 'queued'"
+            ).fetchall()
+        return [{"id": r[0], "worker_job_id": r[1] or ""} for r in rows]
+
     def expired_finished_ids(self, cutoff_iso: str) -> list[str]:
         with self.connect() as conn:
             rows = conn.execute(

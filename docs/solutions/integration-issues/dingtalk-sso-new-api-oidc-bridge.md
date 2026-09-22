@@ -246,7 +246,30 @@ new-api 的 `GenericOAuthProvider.ExchangeToken()` 发 POST 时用 `Content-Type
 
 ### 错误 4：`user not in allowed corp (got )`
 
-`/v1.0/contact/users/me` 不返回 `corpId`。修复：仅当 API 实际返回 `corpId` 时才校验。
+`/v1.0/contact/users/me` 不返回 `corpId`，于是 `ALLOWED_CORP_ID` 校验被整段跳过。
+当时的处置是「仅当 API 实际返回 `corpId` 时才校验」。
+
+**2026-09-22 更正：这不是钉钉的抖动，是请求本身没申请。** 钉钉 OAuth2 的 `scope`
+只有两种合法取值 —— `openid`，或 `openid corpid`（空格分隔、需 urlencode）。
+`main.py` 的 `/authorize` 写死传 `scope=openid`，所以 `corpId` 拿不到；
+而且**带上 `corpid` 后，`corpId` 会直接在 `/v1.0/oauth2/userAccessToken` 的响应里返回**，
+不必依赖 `contact/users/me`。另可在授权 URL 上传 `corpId=<本公司>` 指定组织。
+
+因此当前的「校验」实际上从不触发 → 桥放行的是**任何能走完授权的钉钉账号**，
+不只是本公司员工。下游服务要靠自己的白名单兜底。
+
+**要真正收口，改的是桥的授权地址（影响所有走这条桥的服务）**，且**不能直接改成硬拒绝**：
+若 `corpId` 仍为空，硬拒绝会把所有人挡在门外。建议两步走 ——
+先加 `openid corpid` + `corpId` 参数、只记录 corpId 缺失率，确认稳定返回后再打开拒绝。
+
+<details>
+<summary>钉钉官方依据</summary>
+
+- [获取登录用户的访问凭证](https://open.dingtalk.com/document/personalapp-server/obtain-the-access-credential-of-the-logon-user)
+  —— scope 含 `openid corpid` 时，`userAccessToken` 响应会带回 `corpId`
+- [钉钉集成模式与 scope 取值](https://open.dingtalk.com/document/orgapp/obtain-identity-credentials)
+
+</details>
 
 ### 错误 5：`管理员关闭了新用户注册`
 
