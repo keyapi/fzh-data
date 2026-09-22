@@ -17,3 +17,4 @@ timestamp: 2026-08-31
 | EN 物料组英文翻译 — 腾讯云 TMT | [en-item-group-tencent-tmt-translation.md](en-item-group-tencent-tmt-translation.md) |
 | GitHub ↔ Gitee 镜像同步 | [github-gitee-mirror-sync.md](github-gitee-mirror-sync.md) |
 | Open WebUI 赛狐 xlsx Tool summary | [owui-sellfox-xlsx-tool-summary-open-terminal.md](owui-sellfox-xlsx-tool-summary-open-terminal.md) |
+| 把「改同事的 Colab notebook」做成独立工具箱 colab_kit（而不是塞进 google_drive_permissions） | [colab-kit-notebook-edit-toolbox.md](colab-kit-notebook-edit-toolbox.md) |

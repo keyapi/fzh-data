@@ -134,6 +134,7 @@ uv sync
 | `dam-prototype` | `dam-prototype/` | DAM 数字资产管理原型 |
 | `erpnext` | `erpnext/` | 工单排查 (setup→fetch→report 流水线) |
 | `tongtool-order-cost` | `tongtool_order_cost/` | 通途订单特殊规则 1.7.0 本地引擎 + Google Sheet SKU 改名 |
+| `tongtool-order-shipping` | `tongtool_order_shipping/` | 通途订单导出 → 组合件合并成「每包裹一行」的承运商批量导入 csv + 仓库背贴 PDF（代码暂在同事 Colab，本目录只放硬约束与迁移落点） |
 | `gsheet-monthly-order` | `.agents/skills/gsheet-monthly-order/` | 月度成品 xlsx → 固定 gsheet 月度 ws（复制/归档/只覆盖变化列） |
 | `erpnext-wo-audit` | `.agents/skills/erpnext-wo-audit/` | 工单排查 Skill，按触发词自动加载 |
 | `missing-products` | `.agents/skills/missing-products/` | 通途有库存 SKU → EN 产品客户码 → 赛狐产品 SKU 三方主线补齐/审计 |
@@ -145,6 +146,7 @@ uv sync
 | `amazon-pairing` | `amazon_pairing/` | Amazon 在售未配对 Listing 只读智能审核（MSKU/ASIN/parent 家族） |
 | `cost-adjust` | `cost_adjust/` | 赛狐成本补录单：改已入库库存的采购成本与头程（不清零重入） |
 | `google-drive-permissions` | `google_drive_permissions/` | Google 表格/Colab 共享权限盘点与增删 |
+| `colab-kit` | `colab_kit/` | Colab notebook 读写改工具箱：取/备份/列格/插格/替换/语法自检/回写/回读比对/并发守卫 |
 | `nas-product-visuals` | `nas_product_visuals/` | 群晖 NAS 产品目录扫描 + ACL 权限实时修复脚本集 |
 | `pb-reconciliation` | `pb_reconciliation/` | Pottery Barn 对账月度更新 + TM 佣金结算表 |
 | `sellfox-api-proxy` | `sellfox-api-proxy/` | 赛狐 API 代理网关（破 IP 白名单 + 凭证安全分发） |
