@@ -16,6 +16,7 @@
       {% if auth_enabled and user %}
       <span class="who">{{ user.display_name }}</span>
       <form method="post" action="{{ prefix }}/logout" class="inline-form">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
         <button type="submit" class="linklike">退出</button>
       </form>
       {% endif %}

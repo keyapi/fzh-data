@@ -28,9 +28,11 @@ def test_save_upload_stream_rejects_oversize_and_cleans_partial(tmp_path):
     assert not dest.exists()
 
 
-def test_validate_upload_name_allows_pdf_and_csv():
-    assert storage.validate_upload_name("Packslip 美中 x50.pdf", "Packslip PDF") == "Packslip 美中 x50.pdf"
-    assert storage.validate_upload_name("order x40.csv", "订单 CSV") == "order x40.csv"
+def test_validate_upload_name_checks_the_slot_suffix():
+    assert storage.validate_upload_name("Packslip 美中 x50.pdf", "Packslip PDF", ".pdf") == "Packslip 美中 x50.pdf"
+    assert storage.validate_upload_name("order x40.csv", "订单 CSV", ".csv") == "order x40.csv"
+    with pytest.raises(ValueError):
+        storage.validate_upload_name("order.csv", "Packslip PDF", ".pdf")
 
 
 def test_validate_upload_name_strips_directory_components():
@@ -40,9 +42,9 @@ def test_validate_upload_name_strips_directory_components():
 
 def test_validate_upload_name_rejects_other_suffixes():
     with pytest.raises(ValueError):
-        storage.validate_upload_name("payload.exe", "Packslip PDF")
+        storage.validate_upload_name("payload.exe", "Packslip PDF", ".pdf")
     with pytest.raises(ValueError):
-        storage.validate_upload_name("/etc/passwd", "Packslip PDF")
+        storage.validate_upload_name("/etc/passwd", "Packslip PDF", ".pdf")
 
 
 def test_publish_artifact_is_content_addressed(tmp_path):

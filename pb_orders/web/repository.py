@@ -194,19 +194,52 @@ class Repository:
         )
 
     def recover_interrupted(self) -> int:
-        """Web 启动时把遗留的 running/queued 标为失败。
+        """worker 启动时，只把仍是 running 的任务标为失败。
 
-        worker 在容器重启时被杀，任务不会自己继续；明确标失败并允许「重新处理」，
-        比留下一个永远 running 的僵尸任务更诚实。
+        queued 还在 Redis 里，留给新 worker 继续执行。
+        条件更新避免把已经写成 succeeded 的任务盖回失败。
         """
-        stuck = [j["id"] for j in self.list_jobs() if j["status"] in ("queued", "running")]
-        for job_id in stuck:
-            self.mark_failed(job_id, {
-                "code": "worker_interrupted",
-                "message": "worker 在处理中重启，任务被中断",
-                "hint": "可点击「用相同输入重新处理」重新排队。",
-            })
-        return len(stuck)
+        error = {
+            "code": "worker_interrupted",
+            "message": "worker 在处理中重启，任务被中断",
+            "hint": "可点击「用相同输入重新处理」重新排队。",
+        }
+        with self.connect() as conn:
+            cur = conn.execute(
+                """UPDATE jobs
+                   SET status = 'failed', finished_at = ?, progress_step = 'failed',
+                       progress_message = ?, error_json = ?
+                   WHERE status = 'running'""",
+                (now_iso(), error["message"], json.dumps(error, ensure_ascii=False)),
+            )
+        return cur.rowcount
+
+    def expired_finished_ids(self, cutoff_iso: str) -> list[str]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                """SELECT id FROM jobs
+                   WHERE status IN ('succeeded', 'failed')
+                     AND COALESCE(finished_at, created_at) < ?""",
+                (cutoff_iso,),
+            ).fetchall()
+        return [r[0] for r in rows]
+
+    def delete_finished_job(self, job_id: str) -> bool:
+        """只删已结束的任务。产物行随外键级联删除。"""
+        with self.connect() as conn:
+            cur = conn.execute(
+                "DELETE FROM jobs WHERE id = ? AND status IN ('succeeded', 'failed')",
+                (job_id,),
+            )
+        return cur.rowcount == 1
+
+    def rel_path_referenced(self, rel_path: str) -> bool:
+        with self.connect() as conn:
+            row = conn.execute(
+                "SELECT 1 FROM artifacts WHERE rel_path = ? LIMIT 1",
+                (rel_path,),
+            ).fetchone()
+        return row is not None
 
     # ---------- artifacts ----------
 

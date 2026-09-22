@@ -19,6 +19,7 @@
   {% if job.error.hint %}<p class="muted">{{ job.error.hint }}</p>{% endif %}
   <p class="muted">错误码：<code>{{ job.error.code }}</code></p>
   <form method="post" action="{{ prefix }}/jobs/{{ job.id }}/retry">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
     <button class="btn" type="submit">用相同输入重新处理</button>
   </form>
 </section>
@@ -117,6 +118,7 @@
 {% if job.status in ("succeeded", "failed") %}
 <section class="card">
   <form method="post" action="{{ prefix }}/jobs/{{ job.id }}/retry">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
     <button class="btn" type="submit">用相同输入重新处理</button>
     <small class="muted">会创建一个新任务，不覆盖本次结果。</small>
   </form>

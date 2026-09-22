@@ -20,6 +20,7 @@ if str(_PB_DIR) not in sys.path:
     sys.path.insert(0, str(_PB_DIR))
 
 import service  # noqa: E402
+from web import housekeeping  # noqa: E402
 from web import storage  # noqa: E402
 from web.config import get_settings  # noqa: E402
 from web.repository import Repository  # noqa: E402
@@ -113,8 +114,13 @@ def main() -> None:
 
     settings = get_settings()
     settings.ensure_dirs()
-    # worker 启动时也做一次恢复，避免只重启 worker 时留下僵尸任务
-    Repository(settings.db_path).recover_interrupted()
+    repo = Repository(settings.db_path)
+    # 只收回 running。queued 还在 Redis 里，下面的 work() 会继续跑。
+    housekeeping.recover_running(repo)
+    try:
+        housekeeping.purge_expired(settings, repo)
+    except Exception:  # noqa: BLE001 - 清理失败不应挡住 worker
+        traceback.print_exc()
 
     conn = Redis.from_url(settings.redis_url)
     queue = Queue(settings.queue_name, connection=conn)

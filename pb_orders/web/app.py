@@ -39,6 +39,8 @@ from fastapi.staticfiles import StaticFiles  # noqa: E402
 from fastapi.templating import Jinja2Templates  # noqa: E402
 
 from web import auth as auth_mod  # noqa: E402
+from web import csrf as csrf_mod  # noqa: E402
+from web import housekeeping  # noqa: E402
 from web import storage  # noqa: E402
 from web.config import get_settings  # noqa: E402
 from web.repository import ARTIFACT_LABELS, Repository, new_id  # noqa: E402
@@ -103,7 +105,10 @@ def create_app() -> FastAPI:
     settings = get_settings()
     settings.ensure_dirs()
     repo = Repository(settings.db_path)
-    recovered = repo.recover_interrupted()
+    try:
+        housekeeping.purge_expired(settings, repo)
+    except Exception:  # noqa: BLE001 - 清理失败不应挡住服务启动
+        log.exception("过期任务清理失败")
 
     prefix = settings.url_prefix
     templates.env.globals["prefix"] = prefix
@@ -128,14 +133,13 @@ def create_app() -> FastAPI:
             )
     else:
         log.info("认证：关闭（仅限本机/内网使用）")
-    if recovered:
-        log.warning("启动了 %d 个中断任务的状态恢复", recovered)
     log.info("URL 前缀：%s", prefix or "（根路径）")
 
     def render(request: Request, name: str, ctx_extra: dict | None = None, status_code: int = 200):
         base = {
             "user": getattr(request.state, "user", None) or auth_mod.current_user(request, settings),
             "auth_enabled": settings.auth_enabled,
+            "csrf": getattr(request.state, "csrf", ""),
         }
         base.update(ctx_extra or {})
         return templates.TemplateResponse(request, name, base, status_code=status_code)
@@ -155,7 +159,7 @@ def create_app() -> FastAPI:
 
     @app.middleware("http")
     async def oidc_gate(request: Request, call_next):
-        """认证闸门（最后添加 = 最外层，最先执行）。
+        """认证闸门。CSRF 中间件在它外面，先把令牌放进 request.state。
 
         页面被拦 -> 302 去登录并记住原地址；页面里的轮询/下载请求被拦 -> 401，
         避免把登录页 HTML 塞进轮询片段里。
@@ -190,6 +194,24 @@ def create_app() -> FastAPI:
 
         request.state.user = user
         return await call_next(request)
+
+    @app.middleware("http")
+    async def issue_csrf(request: Request, call_next):
+        """最外层：先发 CSRF cookie，后面的页面（含闸门返回的错误页）都能带上令牌。"""
+        token, fresh = csrf_mod.current_or_new(request)
+        request.state.csrf = token
+        response = await call_next(request)
+        if fresh:
+            response.set_cookie(
+                csrf_mod.COOKIE_NAME,
+                token,
+                max_age=8 * 3600,
+                httponly=True,
+                samesite="lax",
+                path=ctx.cookie_path,
+                secure=csrf_mod.cookie_is_secure(request),
+            )
+        return response
 
     @app.get("/healthz")
     async def healthz():
@@ -238,17 +260,23 @@ def create_app() -> FastAPI:
         no_stock_note: str = Form(""),
         validate_only: str = Form(""),
         allow_unmatched: str = Form(""),
+        csrf: str = Form(""),
     ):
+        if not csrf_mod.accepted(request, csrf):
+            return render(request, "error.html", {"message": "页面已过期，请刷新后重试"}, status_code=403)
         job_id = new_id("job")
         job_dir = settings.inputs_dir / job_id
         try:
-            name_pdf = storage.validate_upload_name(packslip.filename, "Packslip PDF")
-            name_csv = storage.validate_upload_name(order_csv.filename, "订单 CSV")
+            storage.validate_upload_name(packslip.filename, "Packslip PDF", storage.PACKSLIP_SUFFIX)
+            storage.validate_upload_name(order_csv.filename, "订单 CSV", storage.ORDER_SUFFIX)
         except ValueError as exc:
             return render(request, "error.html", {"message": str(exc)}, status_code=400)
 
         try:
-            for upload, name in ((packslip, name_pdf), (order_csv, name_csv)):
+            for upload, name in (
+                (packslip, storage.PACKSLIP_NAME),
+                (order_csv, storage.ORDER_NAME),
+            ):
                 storage.save_upload_stream(upload.file, job_dir / name, settings.max_upload_bytes)
         except storage.UploadTooLarge as exc:
             storage.remove_job_dirs(settings.inputs_dir, settings.work_dir, job_id)
@@ -263,8 +291,8 @@ def create_app() -> FastAPI:
             no_stock_note=no_stock_note.strip() or None,
             validate_only=bool(validate_only),
             allow_unmatched=bool(allow_unmatched),
-            input_packslip=name_pdf,
-            input_order=name_csv,
+            input_packslip=storage.PACKSLIP_NAME,
+            input_order=storage.ORDER_NAME,
             pipeline_version=settings.pipeline_version,
         )
         try:
@@ -299,7 +327,9 @@ def create_app() -> FastAPI:
         )
 
     @app.post("/jobs/{job_id}/retry")
-    async def retry_job(request: Request, job_id: str):
+    async def retry_job(request: Request, job_id: str, csrf: str = Form("")):
+        if not csrf_mod.accepted(request, csrf):
+            return render(request, "error.html", {"message": "页面已过期，请刷新后重试"}, status_code=403)
         old = repo.get_job(job_id)
         if old is None:
             raise HTTPException(status_code=404, detail="任务不存在")

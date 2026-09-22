@@ -29,7 +29,7 @@ if str(_PB_DIR) not in sys.path:
     sys.path.insert(0, str(_PB_DIR))
 
 import httpx  # noqa: E402
-from fastapi import APIRouter, HTTPException, Request  # noqa: E402
+from fastapi import APIRouter, Form, HTTPException, Request  # noqa: E402
 from fastapi.responses import HTMLResponse, RedirectResponse  # noqa: E402
 
 from sellfox_shipping.auth_oidc import (  # noqa: E402
@@ -37,6 +37,7 @@ from sellfox_shipping.auth_oidc import (  # noqa: E402
     parse_session_token,
 )
 from web.config import Settings  # noqa: E402
+from web.csrf import accepted as csrf_accepted  # noqa: E402
 
 log = logging.getLogger("pb_orders.auth")
 
@@ -234,7 +235,14 @@ def build_router(ctx: AuthContext, states: StateStore, templates) -> APIRouter:
         return resp
 
     @router.post("/logout")
-    async def logout():
+    async def logout(request: Request, csrf: str = Form("")):
+        if not csrf_accepted(request, csrf):
+            return templates.TemplateResponse(
+                request,
+                "error.html",
+                {"message": "页面已过期，请刷新后重试", "prefix": ctx.prefix},
+                status_code=403,
+            )
         # 必须 303：307 会保留请求方法，浏览器会拿 POST 去请求只接受 GET 的首页 -> 405
         resp = RedirectResponse(ctx.url("/"), status_code=303)
         resp.delete_cookie(COOKIE_NAME, path=ctx.cookie_path)

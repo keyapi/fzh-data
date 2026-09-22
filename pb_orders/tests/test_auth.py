@@ -75,6 +75,14 @@ def _login(c, name="张三", sub="user-123"):
     c.cookies.set(web_auth.COOKIE_NAME, _cookie(name, sub), path=PREFIX + "/")
 
 
+def _csrf(c) -> str:
+    page = c.get(f"{PREFIX}/jobs/new")
+    assert page.status_code == 200
+    token = c.cookies.get("pb_orders_csrf")
+    assert token
+    return token
+
+
 # ---------- 未登录拦截 ----------
 
 def test_anonymous_page_redirects_to_login(auth_client):
@@ -262,7 +270,9 @@ def test_logout_expires_the_session_cookie(auth_client):
     _login(auth_client)
     assert auth_client.get(PREFIX + "/").status_code == 200
 
-    resp = auth_client.post(f"{PREFIX}/logout", follow_redirects=False)
+    resp = auth_client.post(
+        f"{PREFIX}/logout", data={"csrf": _csrf(auth_client)}, follow_redirects=False
+    )
     # 必须 303：307 会保留 POST，浏览器会拿 POST 去请求只接受 GET 的首页 -> 405
     assert resp.status_code == 303
     header = resp.headers.get("set-cookie", "")
@@ -331,7 +341,7 @@ def test_prefix_applies_to_redirects_and_polling(auth_client):
             "order_csv": ("o.csv", b"a", "text/csv"),
         },
         data={"actor": "t", "no_stock": "", "no_stock_note": "",
-              "validate_only": "", "allow_unmatched": ""},
+              "validate_only": "", "allow_unmatched": "", "csrf": _csrf(auth_client)},
         follow_redirects=False,
     )
     assert resp.status_code == 303
@@ -348,7 +358,9 @@ def test_logout_does_not_end_in_405(auth_client):
     _login(auth_client)
     assert auth_client.get(PREFIX + "/").status_code == 200
 
-    logout = auth_client.post(f"{PREFIX}/logout", follow_redirects=False)
+    logout = auth_client.post(
+        f"{PREFIX}/logout", data={"csrf": _csrf(auth_client)}, follow_redirects=False
+    )
     assert logout.status_code == 303, "退出必须是 303，307 会让浏览器继续用 POST"
 
     # 浏览器按 303 改用 GET 请求 Location，不应再出现 405。

@@ -65,7 +65,7 @@ def test_update_rejects_unknown_field(repo):
         repo.update_job("job-test", drop_table="x")
 
 
-def test_recover_interrupted_marks_stuck_jobs_failed(repo):
+def test_recover_interrupted_only_marks_running(repo):
     _create(repo, job_id="job-a")
     repo.mark_queued("job-a", "rq-a")
     _create(repo, job_id="job-b")
@@ -73,11 +73,61 @@ def test_recover_interrupted_marks_stuck_jobs_failed(repo):
     _create(repo, job_id="job-c")
     repo.mark_succeeded("job-c", {})
 
-    assert repo.recover_interrupted() == 2
-    assert repo.get_job("job-a")["status"] == "failed"
-    assert repo.get_job("job-a")["error"]["code"] == "worker_interrupted"
+    assert repo.recover_interrupted() == 1
+    assert repo.get_job("job-a")["status"] == "queued"
     assert repo.get_job("job-b")["status"] == "failed"
+    assert repo.get_job("job-b")["error"]["code"] == "worker_interrupted"
     assert repo.get_job("job-c")["status"] == "succeeded"
+
+
+def test_recover_interrupted_does_not_stop_at_one_page(repo):
+    for i in range(101):
+        job_id = f"run-{i:03d}"
+        _create(repo, job_id=job_id)
+        repo.mark_running(job_id)
+    assert repo.recover_interrupted() == 101
+
+
+def test_purge_expired_drops_old_finished_jobs_only(repo, pb_env):
+    from web import housekeeping
+    from web.config import get_settings
+
+    settings = get_settings()
+    _create(repo, job_id="old")
+    repo.mark_succeeded("old", {})
+    repo.update_job("old", finished_at="2000-01-01T00:00:00+00:00")
+    old_input = settings.inputs_dir / "old"
+    old_input.mkdir(parents=True)
+    (old_input / "packslip.pdf").write_bytes(b"pdf")
+
+    shared_dir = settings.artifacts_dir / "ab"
+    shared_dir.mkdir(parents=True)
+    shared = shared_dir / "abcdef0123456789.pdf"
+    shared.write_bytes(b"same")
+    only = shared_dir / "ffffffffffffffff.pdf"
+    only.write_bytes(b"gone")
+    repo.add_artifact(
+        "old", "label", "a.pdf", "a.pdf", "ab/abcdef0123456789.pdf", "abc", 4, "application/pdf"
+    )
+    repo.add_artifact(
+        "old", "back_label", "b.pdf", "b.pdf", "ab/ffffffffffffffff.pdf", "fff", 4, "application/pdf"
+    )
+
+    _create(repo, job_id="new")
+    repo.mark_succeeded("new", {})
+    repo.add_artifact(
+        "new", "label", "a.pdf", "a.pdf", "ab/abcdef0123456789.pdf", "abc", 4, "application/pdf"
+    )
+    _create(repo, job_id="live")
+    repo.mark_running("live")
+
+    assert housekeeping.purge_expired(settings, repo) == 1
+    assert repo.get_job("old") is None
+    assert repo.get_job("new")["status"] == "succeeded"
+    assert repo.get_job("live")["status"] == "running"
+    assert not old_input.exists()
+    assert shared.is_file()
+    assert not only.exists()
 
 
 def test_list_jobs_filters_and_orders(repo):

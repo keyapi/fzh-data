@@ -16,6 +16,14 @@ from fastapi.testclient import TestClient
 import web.app as web_app
 
 
+def _csrf(client) -> str:
+    page = client.get("/jobs/new")
+    assert page.status_code == 200
+    token = client.cookies.get("pb_orders_csrf")
+    assert token
+    return token
+
+
 def _upload(client, **overrides):
     files = {
         "packslip": ("Packslip 美中 x3 20260921.pdf", open(overrides["pdf"], "rb"), "application/pdf"),
@@ -27,6 +35,7 @@ def _upload(client, **overrides):
         "no_stock_note": overrides.get("no_stock_note", ""),
         "validate_only": "1" if overrides.get("validate_only") else "",
         "allow_unmatched": "1" if overrides.get("allow_unmatched") else "",
+        "csrf": overrides.get("csrf", _csrf(client)),
     }
     return client.post("/jobs/new", files=files, data=data, follow_redirects=False)
 
@@ -50,6 +59,9 @@ def test_full_flow_upload_process_download(client, pb_env):
 
     job = client.repo.get_job(job_id)
     assert job["status"] == "succeeded"
+    assert job["input_packslip"] == "packslip.pdf"
+    assert job["input_order"] == "order.csv"
+    assert (pb_env.runtime / "inputs" / job_id / "packslip.pdf").is_file()
     assert job["report"]["pdf"]["pages"] == 3
 
     arts = client.repo.list_artifacts(job_id)
@@ -105,11 +117,24 @@ def test_failed_job_shows_reason_and_retry_creates_new_job(client, pb_env):
     assert "Traceback" not in page.text
     assert str(pb_env.tmp) not in page.text  # 不泄露服务器路径
 
-    retry = client.post(f"/jobs/{job_id}/retry", follow_redirects=False)
+    retry = client.post(
+        f"/jobs/{job_id}/retry", data={"csrf": _csrf(client)}, follow_redirects=False
+    )
     assert retry.status_code == 303
     new_id = retry.headers["location"].rsplit("/", 1)[-1]
     assert new_id != job_id
     assert client.repo.get_job(new_id)["source_job_id"] == job_id
+
+
+def _post_new(client, files):
+    return client.post(
+        "/jobs/new",
+        files=files,
+        data={
+            "actor": "t", "no_stock": "", "no_stock_note": "",
+            "validate_only": "", "allow_unmatched": "", "csrf": _csrf(client),
+        },
+    )
 
 
 def test_rejects_wrong_extension(client, pb_env):
@@ -117,11 +142,34 @@ def test_rejects_wrong_extension(client, pb_env):
         "packslip": ("payload.exe", b"MZ", "application/octet-stream"),
         "order_csv": ("order.csv", b"PO Number\n1\n", "text/csv"),
     }
-    resp = client.post("/jobs/new", files=files, data={"actor": "t", "no_stock": "",
-                                                       "no_stock_note": "", "validate_only": "",
-                                                       "allow_unmatched": ""})
+    resp = _post_new(client, files)
     assert resp.status_code == 400
     assert "只接受" in resp.text
+
+
+def test_rejects_swapped_suffixes(client):
+    files = {
+        "packslip": ("notes.csv", b"a,b\n", "text/csv"),
+        "order_csv": ("slip.pdf", b"%PDF", "application/pdf"),
+    }
+    resp = _post_new(client, files)
+    assert resp.status_code == 400
+    assert "只接受 .pdf" in resp.text
+
+
+def test_post_without_csrf_is_rejected(client, pb_env):
+    files = {
+        "packslip": ("a.pdf", open(pb_env.pdf, "rb"), "application/pdf"),
+        "order_csv": ("a.csv", open(pb_env.csv, "rb"), "text/csv"),
+    }
+    resp = client.post(
+        "/jobs/new",
+        files=files,
+        data={"actor": "t", "no_stock": "", "no_stock_note": "",
+              "validate_only": "", "allow_unmatched": ""},
+    )
+    assert resp.status_code == 403
+    assert "刷新" in resp.text
 
 
 def test_rejects_oversize_upload(pb_env, monkeypatch):
@@ -138,9 +186,10 @@ def test_rejects_oversize_upload(pb_env, monkeypatch):
             "packslip": ("big.pdf", b"%PDF" + b"x" * (2 * 1024 * 1024), "application/pdf"),
             "order_csv": ("o.csv", b"a", "text/csv"),
         }
+        token = c.get("/jobs/new").cookies.get("pb_orders_csrf") or c.cookies.get("pb_orders_csrf")
         resp = c.post("/jobs/new", files=files, data={"actor": "t", "no_stock": "",
                                                       "no_stock_note": "", "validate_only": "",
-                                                      "allow_unmatched": ""})
+                                                      "allow_unmatched": "", "csrf": token})
     assert resp.status_code == 413
 
 

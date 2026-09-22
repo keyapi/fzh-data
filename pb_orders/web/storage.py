@@ -3,7 +3,8 @@
 """上传/产物的物理文件管理：分块落盘、哈希、原子发布、路径越界防护。
 
 约定：
-- 上传文件一律写进 `inputs/<job-id>/`，物理名由服务器生成，用户文件名只用于显示。
+- 上传文件一律写进 `inputs/<job-id>/`，物理名固定为 `packslip.pdf` / `order.csv`。
+  用户文件名只用来校验扩展名。
 - worker 只在 `work/<job-id>/` 里生成临时文件。
 - 全部硬校验通过后，产物按内容哈希原子移动到 `artifacts/`，再登记到数据库。
 - 下载时用 `resolve_artifact_path` 复查绝对路径必须在 artifacts 根之下。
@@ -18,7 +19,10 @@ from pathlib import Path
 
 CHUNK = 1024 * 1024
 
-ALLOWED_SUFFIXES = {".pdf", ".csv"}
+PACKSLIP_NAME = "packslip.pdf"
+ORDER_NAME = "order.csv"
+PACKSLIP_SUFFIX = ".pdf"
+ORDER_SUFFIX = ".csv"
 
 
 class UploadTooLarge(Exception):
@@ -42,12 +46,12 @@ def safe_display_name(name: str) -> str:
     return Path(str(name or "")).name.strip() or "unnamed"
 
 
-def validate_upload_name(name: str, kind: str) -> str:
-    """校验上传文件扩展名（只做边界校验，不做内容嗅探）。"""
+def validate_upload_name(name: str, kind: str, suffix: str) -> str:
+    """校验这个槽位的扩展名。返回清洗后的显示名，不作为磁盘文件名。"""
     display = safe_display_name(name)
-    suffix = Path(display).suffix.lower()
-    if suffix not in ALLOWED_SUFFIXES:
-        raise ValueError(f"{kind}只接受 {'/'.join(sorted(ALLOWED_SUFFIXES))} 文件，收到 {suffix or '无扩展名'}")
+    got = Path(display).suffix.lower()
+    if got != suffix.lower():
+        raise ValueError(f"{kind}只接受 {suffix} 文件，收到 {got or '无扩展名'}")
     return display
 
 
