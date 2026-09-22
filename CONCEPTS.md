@@ -83,6 +83,12 @@ System One 的旗舰模型（请求用别名 `jev-latest`，实测解析到 `jev
 
 ## Cross-border shipping (sellfox_shipping)
 
+### 背贴 (backing label)
+给仓库分拣用的 4×2" 小标签，**不是**承运商面单：每包裹一页，含 PO/包裹号 + Code128 条码 + 逐行 `SKU / QTY / 中文名 / 西语名`。生成见 `sellfox_shipping/sku_label/pdf_generator.py`。**一个包裹内的所有仓库 SKU 必须都列出来** —— 组合件（皮壳 `-Cover` + 海绵 `-Foam`）要两行，只列一行就等于拣货漏件。品名查不到时该列为空（**不报错**），所以流水线必须有「背贴缺名」报告行。
+
+### 通途SKU 的后缀形态（`-Cover` / `-Foam` / 裸基础码）
+组合件在通途里炸成多个仓库 SKU，同一个件在不同系统/字段里有**两种写法**：**带后缀**（`TT0312588K0064183-Foam`，通途导出 `Reference 2` 实际使用的形式）与**裸基础码**（`TT0312588K0064183`，EN `customer_code` / `customer_items.ref_code` 里也登记）。背贴查名的键是**导出里原样出现的那个**；且**基码匹配 ≠ 完整登记**（详见 `conventions/tongtu-en-sellfox-instock-sku-mainline.md`）。注意后缀段的编号**不与尺寸同序**（153→`...4183`、160→`...4182`），要逐条从 EN 读。
+
 ### Sellfox packageSn
 赛狐订单处理里的包裹业务键（对外字段 `packageSn`）。与通途历史「P 号」不是同一体系；蜴国际 Excel 客户参考号应对齐 `packageSn`，不能直接拿通途 `P814…` 当赛狐主键。
 
