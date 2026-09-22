@@ -38,6 +38,15 @@
 
 ### Agent 新机器首次 clone 后必做
 
+**克隆 · Windows 上带 `-c core.symlinks=true`**（本仓库的 `CLAUDE.md` 与 `.claude/skills` 是 git 跟踪的 symlink；Windows 的 `core.symlinks` 默认 `false`，不带 flag 会检出成普通文件 → Claude Code 看不到任何项目 skill）。Windows 建文件符号链接需要开发者模式。
+
+```bash
+git clone -c core.symlinks=true https://github.com/keyapi/fzh-data.git
+cd fzh-data && git config core.symlinks true    # 持久化；否则 pull 拉到的新 symlink 条目又会退化成普通文件
+```
+
+带了这个 flag 就不必再跑 `setup.ps1`（它只剩 Claude Desktop 需要 —— Desktop 只读用户级 `~/.claude/skills/`）。**macOS / Linux 直接 `git clone` 即可。**
+
 ```bash
 # 0. 检测并安装 Git（如未安装）
 #    Agent 执行：先 `git --version` 检查，若不存在则按 OS 安装：
@@ -76,8 +85,24 @@ uv sync
 #      Cursor: uv run python tongtool_api/setup_cursor_mcp.py
 #    （不要用全局 pip——包必须装到项目 .venv 里）
 
-# 5. 初始化 symlink（仅 Claude Desktop 需要；Codex 用户跳过此步）
+# 4.5 安装 Compound Engineering 插件（可选，但强烈建议）—— 只为 Claude Code
+#    `ce-okf` 收尾 skill 的第 1 步会调 `/ce-compound` 产出学习正文。
+#    ⚠️ 它**不在本仓库**，是第三方插件（MIT）：EveryInc/compound-engineering-plugin
+#    不装也能跑完（ce-okf 会走内置模板兜底），但正文质量降级：
+#    丢掉重叠检测（判断"该更新哪篇已有文档"而不是新建重复的一篇）、
+#    grounding 校验（核对文档里的断言有没有证据）等。
+#    这是在 **Claude 里跑的斜杠命令**，不是 shell 命令 —— 脚本代劳不了：
+#      /plugin marketplace add EveryInc/compound-engineering-plugin
+#      /plugin install compound-engineering
+#    Cursor / Codex 各自的 marketplace 装法见上游 README。这两个宿主本来就没有
+#    `/ce-compound`，一向靠兜底，不影响能否使用 ce-okf。
+
+# 5. 给 Claude Desktop 补用户级 skill 链接（Claude Code 不需要；Codex 用户跳过）
+#    Claude Code 靠上面克隆好的项目级 `.claude/skills` 就够了。
+#    只有 Claude Desktop 读 ~/.claude/skills/，才需要这一条：
 #    powershell -ExecutionPolicy Bypass -File setup.ps1
+#    ⚠️ 必须在**主仓库根目录**跑；在 worktree 里跑会把链接指到临时 worktree，
+#       且脚本对已存在路径 [SKIP]，事后在主仓库再跑也修不回来（只能手工删链接重建）。
 
 # ⚠️ MCP 装完必须让宿主**完全退出**再开：Claude Desktop 托盘右键 → Quit；Codex 完全退出；Cursor 重载窗口。
 #    Claude Desktop 的 3P 模式与普通模式是**两个独立配置文件**，改错会静默无效 —— 路径见 docs/mcp-setup.md。

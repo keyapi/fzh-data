@@ -42,17 +42,28 @@ HTTPS 协议不受 GFW 干扰，`gh` CLI 用 token 做认证——比 SSH 更稳
 
 ## 首次初始化
 
-Clone 后运行一次：
+**Windows：克隆时带 `-c core.symlinks=true`** —— 本仓库的 `CLAUDE.md` 和 `.claude/skills` 是 git 跟踪的 symlink，而 Windows 的 `core.symlinks` 默认 `false`、会把它们检出成普通文件（后果：**Claude Code 看不到任何项目 skill**）。带这个 flag 克隆后 **Claude Code 直接可用，不用跑任何脚本**：
+
+```bash
+git clone -c core.symlinks=true https://github.com/keyapi/fzh-data.git
+cd fzh-data && git config core.symlinks true    # 持久化，否则 pull 拉到的新 symlink 条目又会退化
+```
+
+（Windows 建文件符号链接需要开发者模式。已克隆错了就补：`git -C <repo> checkout -- CLAUDE.md .claude/skills`。）
+
+**Claude Desktop 另需**（Claude Code 不需要）：
 
 ```powershell
+# 必须在主仓库根目录跑
 powershell -ExecutionPolicy Bypass -File setup.ps1
 ```
 
-> **为什么需要？** `CLAUDE.md` 是 symlink（→ AGENTS.md），Windows 上 git clone 不会自动创建。
-> `~/.claude/skills/` 同样需要链接到项目的 `.agents/skills/`。
-> 脚本也处理 superpowers（如果已安装）。
+> 它把 `.agents/skills/*` 链进 `~/.claude/skills/` —— Desktop 只读用户级目录，读不到项目级的 `.claude/skills`。也处理 superpowers（如果已安装）。
+> ⚠️ **别在 worktree 里跑**：会把链接指向那个临时 worktree，而脚本对已存在路径 `[SKIP]`，事后在主仓库再跑也修不回来，只能手工删链接重建。
 
-运行一次即可，后续 `git pull` 新增的 skill 需要重新运行脚本。
+**macOS / Linux**：直接 `git clone` 即可 —— 原生支持 symlink，不需要 flag、不需要开任何模式。
+
+`git pull` 之后：Claude Code 什么都不用做（项目级链接跟着仓库走）；Claude Desktop 要重跑一次 `setup.ps1` 才能认到新 skill。
 
 ### Git Worktree 创建（Windows 特别说明）
 
