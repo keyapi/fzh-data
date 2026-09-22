@@ -96,8 +96,12 @@ triggers:
 
 ### 第 0 步：判定模式（先做，别写错方向）
 
-- 本次对话**已经有过 commit 或已开 PR** → **增量模式**，走 `ce-compound-refresh` 语义。
-- 否则 → **新增模式**，走 `ce-compound` 语义。
+判据是**学习点有没有落到文档里**，不是"这次对话有没有 commit"：
+
+- 本次对话的学习点**已经写进某篇现存文档** → **增量模式**，走 `ce-compound-refresh` 语义（更新那篇）。
+- 否则 → **新增模式**，走 `ce-compound` 语义（新建一篇）。
+
+> ⚠️ 别拿「已 commit / 已开 PR」当判据。边做边提交的会话完全可能**同时**"已有 PR"和"有全新学习点"，那会被误送进 refresh。2026-09-21 首跑时发现并改掉了这条。
 
 一个会话有**多个独立学习点**时，逐篇处理，**不要合并成一篇**（ce-compound 的硬约定）。
 
@@ -258,8 +262,8 @@ powershell -ExecutionPolicy Bypass -File setup.ps1
 
 （`setup.ps1` 把 `.agents/skills/*` 链进 `~/.claude/skills/`。若在 worktree 里跑，链接会指到临时 worktree 且事后修不回来 —— 详见上面「多 Agent 并存」。）
 
-> ⚠️ **跑完 `setup.ps1` 后 `git status` 会看到 `CLAUDE.md` 变脏 —— 这是 Windows 上的已知副作用，不要提交它。** 本 skill 第 7 步要求按文件名逐个 `git add`，正是为了避免把它带进去。
+> ℹ️ **`CLAUDE.md` 变脏只在开发者模式关着时发生。** `CLAUDE.md` 在 git 里是 symlink（mode 120000 → `AGENTS.md`），单一事实源是 AGENTS.md。Windows 建**文件**符号链接需要开发者模式；没开时 `setup.ps1` 会退化成 `Copy-Item`，把 CLAUDE.md 写成 AGENTS.md 整份副本（215 行）→ `git status` 变脏。
 >
-> 原因：`CLAUDE.md` 在 git 里是 symlink（mode 120000，指向 `AGENTS.md`），单一事实源是 AGENTS.md。但 Windows 建**文件**符号链接需要开发者模式 / 管理员权限，没开时 `setup.ps1` 会退化成 `Copy-Item`，把 CLAUDE.md 写成 AGENTS.md 的整份副本（215 行）。目录链接不受影响 —— `~/.claude/skills/*` 用的是 junction，普通权限即可，所以 skills 一直是好的。
+> **本机（2026-09-21 起）已开开发者模式并设了仓库 `core.symlinks=true`**，所以 Step 1 直接 `[SKIP]`、`CLAUDE.md` 保持真 symlink，不再有这个问题。若在别的机器上看到它变脏：**别提交它**（第 7 步按文件名逐个 `git add` 已覆盖），但**也不要顺手 `git restore`** —— 那会让本机 Claude 只读到 `AGENTS.md` 这 9 个字符、读不到正文。
 >
-> 两个状态只能取一个：**跑过 setup.ps1** → git 脏、但 Claude Code 能读到 AGENTS.md 正文；**`git restore CLAUDE.md`** → git 干净、但 Claude Code 只读到 `AGENTS.md` 这 9 个字符。想两者兼得，需要开 Windows 开发者模式，让真 symlink 建得出来。
+> 存量 stub worktree 的修法、以及"项目 skill 会在技能列表里出现两遍"这个副作用，见 `docs/solutions/developer-experience/windows-worktree-claude-md-symlink.md`。

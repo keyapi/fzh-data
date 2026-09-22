@@ -113,6 +113,8 @@ uv sync
 | `multi-attr` | `multi_attr_saihu/` | ERP 纵向物料 → 赛狐多属性 + 通途配对 |
 | `warehouse-restock` | `warehouse_restock/` | EN BOM → 三成本拆分 → 海外仓备货单 |
 | `other-outbound` | `other_outbound/` | 赛狐库存明细 → 其他出库清零 |
+| `sellfox-api` | `SELLFOX_API/` | 赛狐 OpenAPI 文档镜像（419 端点）+ 连通性测试 |
+| `sellfox-amazon-settlement` | `sellfox_settlement/` | 赛狐结算中心V2 + 紫鸟列式报表自动取回 Amazon 账期；钉钉迟交/错位审计；店名↔渠道账号 |
 | `sellfox-api` | `SELLFOX_API/` | 赛狐 OpenAPI 文档镜像（443 端点）+ 连通性测试 |
 | `sellfox-combo-create` | `SELLFOX_API/` | EN 套件 Product Bundle ↔ 赛狐组合商品：sync-combos 对账/创建/回读断言 |
 | `sellfox-cover-inventory` | `sellfox_cover_inventory/` | 三角类皮壳共享库存代理：KS 库存池 + PK# 组合 + cover_combo_ops 创建/对账 |
@@ -125,19 +127,45 @@ uv sync
 | `en-image-upload` | `EN_API/` | 图片上传（CLI + Web UI + 物料组主图） |
 | `nas-itemgroup-folders` | `nas_itemgroup_folders/` | NAS-ERPNext 物料组文件夹对账 + 叶子组 (LGKS) 管理 |
 | `nas-access` | `NAS_API/` | 群晖多域名访问、QC 选路、OpenWrt ACME+反代、DSM 第二张证 |
+| `dingtalk-oa-approval` | `dingtalk/dingtalk_oa_approval/` | 钉钉 OA 销售收款确认单：API 附件 + aflow 浏览器导出 + 账期月过滤 + NAS 归档（不改本地同步） |
 | `us-openai-api-proxy` | `us_openai_api_proxy/` | US Vultr Tailscale + CLIProxyAPI → ChatGPT API 共享 |
 | `new-api-deployment` | `new-api-deployment/` | new-api 部署（上海阿里云）+ 订阅/配额管理 |
 | `new-api-dingtalk-oidc` | `new-api-dingtalk-oidc/` | 钉钉 OAuth → OIDC 桥接代理（FastAPI） |
 | `dam-prototype` | `dam-prototype/` | DAM 数字资产管理原型 |
 | `erpnext` | `erpnext/` | 工单排查 (setup→fetch→report 流水线) |
 | `tongtool-order-cost` | `tongtool_order_cost/` | 通途订单特殊规则 1.7.0 本地引擎 + Google Sheet SKU 改名 |
+| `tongtool-order-shipping` | `tongtool_order_shipping/` | 通途订单导出 → 组合件合并成「每包裹一行」的承运商批量导入 csv + 仓库背贴 PDF（代码暂在同事 Colab，本目录只放硬约束与迁移落点） |
+| `gsheet-monthly-order` | `.agents/skills/gsheet-monthly-order/` | 月度成品 xlsx → 固定 gsheet 月度 ws（复制/归档/只覆盖变化列） |
 | `erpnext-wo-audit` | `.agents/skills/erpnext-wo-audit/` | 工单排查 Skill，按触发词自动加载 |
 | `missing-products` | `.agents/skills/missing-products/` | 通途有库存 SKU → EN 产品客户码 → 赛狐产品 SKU 三方主线补齐/审计 |
 | `platform-account-reconciliation` | `platform_account_reconciliation/` | OSTKUS/Wayfair 账期费用级对账 + EN Tongtool Order 匹配 |
 | `channel-account-sync` | `channel_account_sync/` | Google 表渠道账号 → EN Channel Account（人变才加行，Amazon 按国家站） |
+| `intent-router` | `intent_router/` | 中文意图 → 本仓库模块路由（TypeSafe Jev + 置信度闸门；只分类不执行） |
+| `advertise` | `advertise/` | Amazon 广告数据分析（SP 报告 → 多维分析 → Excel 报告 + 否定词生成） |
+| `ai-access-poc` | `ai_access_poc/` | 统一 AI 接入 C′ 的 PoC（壳 Open WebUI + 板 IvyeaOps 只读） |
+| `amazon-pairing` | `amazon_pairing/` | Amazon 在售未配对 Listing 只读智能审核（MSKU/ASIN/parent 家族） |
+| `cost-adjust` | `cost_adjust/` | 赛狐成本补录单：改已入库库存的采购成本与头程（不清零重入） |
+| `google-drive-permissions` | `google_drive_permissions/` | Google 表格/Colab 共享权限盘点与增删 |
+| `colab-kit` | `colab_kit/` | Colab notebook 读写改工具箱：取/备份/列格/插格/替换/语法自检/回写/回读比对/并发守卫 |
+| `nas-product-visuals` | `nas_product_visuals/` | 群晖 NAS 产品目录扫描 + ACL 权限实时修复脚本集 |
+| `pb-reconciliation` | `pb_reconciliation/` | Pottery Barn 对账月度更新 + TM 佣金结算表 |
+| `sellfox-api-proxy` | `sellfox-api-proxy/` | 赛狐 API 代理网关（破 IP 白名单 + 凭证安全分发） |
+| `sps-api` | `sps_api/` | SPS Commerce API 可行性探测（EDI / ASN / 发票 / 库存） |
+| `ups-track` | `ups_track/` | UPS 官方 Track API 批量查询（当前状态 + 完整节点时间线） |
 | `web-automation` | `.agents/skills/{web-automation,playwright-setup,tongtu-automation,sellfox-automation}/` | 网页自动化能力舱（通途/赛狐浏览器 + 通用 Playwright），子项目在 `web_automation/` |
 | `windows-agent-shell` | `.agents/skills/windows-agent-shell/` | Windows Agent shell：优先 pwsh、禁 bash/`&&`（5.1）、UTF-8 无 BOM |
 | `ce-okf` | `.agents/skills/ce-okf/` | 对话收尾一条龙：ce-compound 正文 + OKF 级联 + 索引联动 + 凭证扫描 + 提交 + PR |
+| `design-md` | `.agents/skills/design-md/` | 创建/管理 DESIGN.md（设计方向、tokens、视觉规则单一事实源） |
+| `design-review` | `.agents/skills/design-review/` | 视觉审查 → 原子提交修复 + 前后对比截图（上线前收紧 UI） |
+| `dingtalk-robot` | `.agents/skills/dingtalk-robot/` | 钉钉自定义机器人通知 + 文件附件（经 ERPNext 中转，ActionCard 推送下载链接） |
+| `ecommerce-image-workflow` | `.agents/skills/ecommerce-image-workflow/` | 参考商品图 → 紧凑电商图片集（主图/特性图/场景图） |
+| `erpnext-item-create` | `.agents/skills/erpnext-item-create/` | EN 物料/变体创建（值表→属性→模板→变体→配套物料） |
+| `frontend-design` | `.agents/skills/frontend-design/` | 有辨识度的生产级前端界面（网页/落地页/仪表盘/组件） |
+| `item-group-translation` | `.agents/skills/item-group-translation/` | EN 物料组 item_group_translation 批量中译英（腾讯云 TMT） |
+| `okf` | `.agents/skills/okf/` | OKF v0.1 文档规范（type 必填 / 每目录 index.md / 每 bundle log.md） |
+| `tongtool-api` | `.agents/skills/tongtool-api/` | 通途 ERP2.0 API 与官方 MCP 接入（查询/调研/排错） |
+| `tongtool-warehouse-sync` | `.agents/skills/tongtool-warehouse-sync/` | 通途仓库改名/新增后三处对账登记（通途→ERPNext→财务共享表） |
+| `workbuddy-config` | `.agents/skills/workbuddy-config/` | WorkBuddy 配置公司 new-api 网关自定义模型（models.json） |
 | `frappe-core-api` | — | ERPNext REST API 开发（外部 skill） |
 | `frappe-errors-api` | — | ERPNext API 错误处理（外部 skill） |
 

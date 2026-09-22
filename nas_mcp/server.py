@@ -1,0 +1,1205 @@
+#!/usr/bin/env python3
+"""NAS MCP server — 只读地暴露群晖 NAS 的若干目录给 MCP 客户端（含 ChatGPT）。
+
+设计要点（**安全优先**）：
+  1. **只读** —— 只暴露 `list / info / read_text / health`。创建、移动、**删除一律不暴露**。
+  2. **路径锁死** —— 所有路径必须落在 `NAS_ROOT_FOLDER` 之内，`..` 与软链逃逸一律拒绝。
+  3. **不吐大文件** —— `nas_read_text` 有硬上限；二进制/超大文件只返回元数据。
+  4. **Bearer 鉴权** —— 与 ChatGPT「访问令牌/持有者」路线一致（2026-09-21 已实测可用）。
+
+复用了仓库里已验证的 DSM 客户端 `NAS_API/synology.py`（认证 + 范围限制）。
+传输层是 stdlib 最小实现，形状与 2026-09-21 实测被 ChatGPT 成功调用的探测服务一致。
+
+环境变量：
+  NAS_URL / NAS_USERNAME / NAS_PASSWORD / NAS_ROOT_FOLDER   —— 同 NAS_API（复用其约定）
+  NAS_MCP_TOKEN    必填，Bearer 令牌（**不要写进文件**）
+  NAS_MCP_PORT     默认 8402
+  NAS_MCP_BIND     默认 127.0.0.1（只允许本机反代访问）
+"""
+from __future__ import annotations
+
+import base64
+import io
+import json
+import os
+import posixpath
+import sys
+import threading
+from datetime import datetime, timezone
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from urllib.parse import quote_plus
+
+import requests
+from PIL import Image
+from synology_api.filestation import FileStation  # noqa: E402
+
+PORT = int(os.environ.get("NAS_MCP_PORT", "8402"))
+BIND = os.environ.get("NAS_MCP_BIND", "127.0.0.1")
+TOKEN = os.environ.get("NAS_MCP_TOKEN", "")
+PROTOCOL = "2025-06-18"
+MAX_TEXT_BYTES = 256 * 1024          # nas_read_text 硬上限 256 KiB
+MAX_IMAGE_BYTES = 4 * 1024 * 1024    # nas_read_image 最终 base64 前的字节上限
+IMAGE_MAX_EDGE = int(os.environ.get("NAS_MCP_IMAGE_MAX_EDGE", "1280"))
+# File Station 深链基址（需 DSM 登录才能打开 → 天然「有 NAS 权限的人才看得到」）
+LINK_BASE = (os.environ.get("NAS_MCP_LINK_BASE") or "https://nas.vilavi.cn:11024").rstrip("/")
+LOG = os.environ.get("NAS_MCP_LOG", "")
+
+
+def _parse_roots() -> tuple[list[str], bool]:
+    """返回 (允许的根目录列表, 是否放开为「信任 DSM 账号权限」)。
+
+    两种模式：
+      - **`NAS_ALLOWED_ROOTS=*`（推荐）** —— 不在 MCP 层设目录白名单，
+        **完全交给 DSM 账号自身的权限**把关；MCP 只拦 `..` 之类路径逃逸。
+        这是「权限按用户（NAS 账号）走」的形态，加目录不用改服务。
+      - `NAS_ALLOWED_ROOTS=/dirA,/dirB` —— MCP 层再收一道，需要显式列。
+    """
+    raw = os.environ.get("NAS_ALLOWED_ROOTS")
+    if raw is None:
+        raw = os.environ.get("NAS_ROOT_FOLDER") or "*"
+    raw = raw.strip()
+    if raw in ("*", "all", "ALL"):
+        return ["*"], True
+    parts = [p.strip().rstrip("/") for p in raw.replace(":", ",").split(",")]
+    roots = [p for p in parts if p]
+    return (roots or ["*"]), (roots == ["*"] or not roots)
+
+
+ROOTS, ALLOW_ANY = _parse_roots()
+# 空 path 时用哪个作默认：优先 NAS_ROOT_FOLDER；放开模式下没有就退到 "/"
+DEFAULT_ROOT = (os.environ.get("NAS_ROOT_FOLDER") or "").strip().rstrip("/") \
+    or (ROOTS[0] if not ALLOW_ANY else "/")
+ROOT = DEFAULT_ROOT
+ROOTS_STR = "任意目录（由 NAS 账号权限决定）" if ALLOW_ANY else "、".join(ROOTS)
+
+
+def log(line: str) -> None:
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%SZ")
+    out = f"[{ts}] {line}"
+    print(out, flush=True)
+    if LOG:
+        try:
+            with open(LOG, "a", encoding="utf-8") as f:
+                f.write(out + "\n")
+        except Exception:
+            pass
+
+
+# ── 路径护栏 ────────────────────────────────────────────────
+
+class PathDenied(Exception):
+    pass
+
+
+class NasError(Exception):
+    """DSM 侧的失败。**绝不静默转成空结果。**"""
+
+
+def _parse_nas_url(url: str) -> tuple[str, str, bool]:
+    url = (url or "").strip().rstrip("/")
+    secure = url.startswith("https://")
+    host = url.replace("https://", "").replace("http://", "")
+    if ":" in host:
+        host, port = host.split(":", 1)
+    else:
+        port = "5001" if secure else "5000"
+    return host, port, secure
+
+
+_nas_lock = threading.Lock()
+_nas: FileStation | None = None
+
+
+def nas_client(relogin: bool = False) -> FileStation:
+    """DSM 客户端（进程内复用）。relogin=True 时丢弃旧会话重新登录。"""
+    global _nas
+    with _nas_lock:
+        if _nas is None or relogin:
+            url = os.environ.get("NAS_URL", "")
+            user, pw = os.environ.get("NAS_USERNAME", ""), os.environ.get("NAS_PASSWORD", "")
+            if not (url and user):
+                raise NasError("NAS_URL / NAS_USERNAME 未配置")
+            host, port, secure = _parse_nas_url(url)
+            _nas = FileStation(ip_address=host, port=port, username=user, password=pw,
+                               secure=secure, cert_verify=False, dsm_version=7, debug=False)
+            log(f"  DSM 会话{'重建' if relogin else '建立'}: {host}:{port}")
+        return _nas
+
+
+def _is_session_error(err) -> bool:
+    """判断是不是「会话失效」类错误。err 可能是 str / dict / 异常对象，都要能处理。"""
+    if isinstance(err, str):
+        s = err
+    else:
+        try:
+            s = json.dumps(err, ensure_ascii=False)
+        except Exception:                            # noqa: BLE001  异常对象不可序列化
+            s = str(err)
+    s = s.lower()
+    # 105 / 106 / 107 = DSM 的鉴权类错误码（与 EN 的 pim/api/nas.py 对齐）
+    return ("session" in s) or ("timeout" in s) or any(
+        ('code":%d' % c) in s or ('code": %d' % c) in s for c in (105, 106, 107))
+
+
+def list_strict(path: str, limit: int = 100, offset: int = 0) -> dict:
+    """列目录 —— **不吞异常**；会话失效自动重登重试一次。
+
+    为什么不用 NAS_API.get_file_list：它在失败时 `return []`，会把
+    「Session timeout / 权限被拒」伪装成「文件夹是空的」（实测踩过）。
+    """
+    last = None
+    for attempt in (1, 2):
+        c = nas_client(relogin=(attempt == 2))
+        try:
+            r = c.get_file_list(folder_path=path, limit=limit, offset=offset,
+                                sort_by="name", sort_direction="asc",
+                                additional="size,time")
+        except Exception as e:                       # noqa: BLE001
+            if attempt == 1 and _is_session_error(e):
+                log(f"  会话失效，重登重试：{e}")
+                last = e
+                continue
+            raise NasError(f"{type(e).__name__}: {e}") from e
+        if not r.get("success"):
+            err = r.get("error") or {}
+            if attempt == 1 and _is_session_error(err):
+                log(f"  会话失效(code={err.get('code')})，重登重试")
+                last = err
+                continue
+            raise NasError("DSM 返回失败：" + json.dumps(err, ensure_ascii=False))
+        d = r.get("data") or {}
+        items = [{
+            "name": f.get("name"),
+            "path": f.get("path"),
+            "is_dir": f.get("isdir", False),
+            "size": (f.get("additional") or {}).get("size", 0),
+            "mtime": ((f.get("additional") or {}).get("time") or {}).get("mtime", 0),
+        } for f in (d.get("files") or [])]
+        return {"items": items, "total": d.get("total")}
+    raise NasError(f"重试后仍失败：{last}")
+
+
+def fetch_bytes(path: str, max_bytes: int = MAX_IMAGE_BYTES) -> bytes:
+    """按 DSM `SYNO.FileStation.Download` API 取文件字节 —— **不吞异常**，会话失效自动重登重试。
+
+    为什么不用 `FileStation.get_file(mode='download')`：那个方法**往磁盘写文件并返回 None**，
+    根本不返回字节（`NAS_API.download_file()` 因此永远返回 None，且会偷偷在磁盘建文件）。
+    这里直接用 `requests` 打同一个 API，拿到真正的响应体。
+    """
+    last = None
+    for attempt in (1, 2):
+        c = nas_client(relogin=(attempt == 2))
+        api = "SYNO.FileStation.Download"
+        info = c.file_station_list[api]
+        url = (f"{c.base_url}{info['path']}?api={api}&version={info['maxVersion']}"
+               f"&method=download&path={quote_plus(path)}&mode=download&_sid={c._sid}")
+        token = getattr(c.session, "_syno_token", "") or ""
+        try:
+            r = requests.get(url, stream=True, verify=False, timeout=120,
+                             headers={"X-SYNO-TOKEN": token})
+            r.raise_for_status()
+            buf = io.BytesIO()
+            for chunk in r.iter_content(65536):
+                if chunk:
+                    buf.write(chunk)
+                    if buf.tell() > max_bytes:
+                        raise NasError(f"文件超过上限 {max_bytes} 字节，拒绝下载")
+            return buf.getvalue()
+        except NasError:
+            raise
+        except Exception as e:                       # noqa: BLE001
+            if attempt == 1 and _is_session_error(e):
+                log(f"  会话失效，重登重试：{e}")
+                last = e
+                continue
+            raise NasError(f"{type(e).__name__}: {e}") from e
+    raise NasError(f"重试后仍失败：{last}")
+
+
+def safe_path(raw: str) -> str:
+    """规范化路径并拦掉越界逃逸。
+
+    - **放开模式（`NAS_ALLOWED_ROOTS=*`）**：不设目录白名单，
+      `..` 由 normpath 解析掉，**真正的权限边界交给 DSM 账号**。
+    - **列表模式**：必须落在列出的根目录之一内（前缀混淆也拒）。
+    """
+    p = (raw or "").strip()
+    if not p:
+        return ROOT
+    p = p.replace("\\", "/")
+    if not p.startswith("/"):
+        p = posixpath.join(ROOT, p)
+    p = posixpath.normpath(p)
+    if ALLOW_ANY:
+        return p
+    for r in ROOTS:
+        if p == r or p.startswith(r + "/"):
+            return p
+    raise PathDenied(f"路径越界：仅允许 {ROOTS_STR} 之内")
+
+
+def filestation_link(path: str) -> str:
+    """把 NAS 路径拼成 **File Station 深链**。
+
+    ⚠️ **格式是从 EN 现成实现抄来的，不是猜的** ——
+    见 EN 测试服务器 `work_order_task/work_order_task/tasks/item_groups_nas_path.py`
+    的 `encode_filestation_link()`（产品物料库在用）。要点是**双层 URL 编码**：
+
+        first  = quote(path, safe="")
+        second = quote(first, safe="")
+        link   = <base>/?launchApp=SYNO.SDS.App.FileStation3.Instance&launchParam=openfile%3D<second>
+
+    打开会要求 DSM 登录 —— 所以「有 NAS 权限的人才看得到」，这正是我们要的语义。
+    """
+    from urllib.parse import quote as _q
+    second = _q(_q(path, safe=""), safe="")
+    return (f"{LINK_BASE}/?launchApp=SYNO.SDS.App.FileStation3.Instance"
+            f"&launchParam=openfile%3D{second}")
+
+
+def tool_link(a: dict) -> dict:
+    """给任意 NAS 路径生成 **File Station 深链**（需 DSM 登录才能打开）。只读。"""
+    raw = a.get("path") or ""
+    if not raw:
+        raise ValueError("path 必填")
+    p = safe_path(raw)
+    return {"path": p, "link": filestation_link(p),
+            "note": "打开需 DSM 登录；没有 NAS 权限的人打不开"}
+
+
+# ── 工具定义 ────────────────────────────────────────────────
+
+TOOLS = [
+    {
+        "name": "nas_list_archive",
+        "description": "**不解压**直接看压缩包里有什么（zip / rar / 7z / tar 等）。只读。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "压缩包路径"},
+                "limit": {"type": "integer", "description": "返回条数上限，默认 100，最大 500"},
+                "offset": {"type": "integer", "description": "翻页用"},
+                "password": {"type": "string", "description": "加密压缩包的密码（可选）"},
+                "codepage": {"type": "string", "description": "包内文件名编码，默认 chs（GBK），可按需试 utf-8"},
+            },
+            "required": ["path"],
+        },
+    },
+    {
+        "name": "nas_list_shares",
+        "description": "列出**该账号能看到的共享文件夹**（先看有什么，不用猜路径）。只读。",
+        "inputSchema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "name": "nas_folder_thumbnails",
+        "description": ("**一次返回一个文件夹里的多张缩略图**，用于快速浏览「这目录里都有什么图」。"
+                        "比逐张读原图省得多（每张约 10-20 KiB）。只读。"),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "文件夹路径"},
+                "limit": {"type": "integer", "description": "最多返回几张，默认 8，最大 12"},
+                "size": {"type": "string", "description": "small(250) 或 medium(500)，默认 small"},
+                "images_only": {"type": "boolean", "description": "只取图片（默认 true）"},
+            },
+            "required": ["path"],
+        },
+    },
+    {
+        "name": "nas_link",
+        "description": ("给任意 NAS 路径生成 **File Station 深链**（打开需 DSM 登录）。只读。"
+                        "适合把文件/文件夹发给有 NAS 权限的同事。"),
+        "inputSchema": {
+            "type": "object",
+            "properties": {"path": {"type": "string", "description": "文件或文件夹路径"}},
+            "required": ["path"],
+        },
+    },
+    {
+        "name": "nas_health",
+        "description": "检查 NAS 连通性与配置的根目录。只读。",
+        "inputSchema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "name": "nas_list_folder",
+        "description": "列出 NAS 上某个文件夹的内容（目录/文件、大小、修改时间）。只读。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string",
+                         "description": f"文件夹路径，必须在允许的根目录之一内（{ROOTS_STR}）。留空则列默认根目录。"},
+                "limit": {"type": "integer", "description": "返回条数上限，默认 100，最大 1000"},
+                "offset": {"type": "integer", "description": "从第几条开始（翻页用）。返回里会带 total 与下一页提示。"},
+                "with_links": {"type": "boolean", "description": "给每个子项也附 File Station 深链（输出会变长，默认 false）"},
+            },
+            "required": [],
+        },
+    },
+    {
+        "name": "nas_file_info",
+        "description": "查询 NAS 上单个文件/文件夹的元数据（大小、修改时间）。只读，不返回内容。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"path": {"type": "string", "description": "文件或文件夹路径"}},
+            "required": ["path"],
+        },
+    },
+    {
+        "name": "nas_thumbnail",
+        "description": ("取**廉价缩略图**（适合批量预览，比读原图省很多）。只读。"
+                        "DSM 原始返回 BMP，本工具已转成 JPEG。"),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "图片路径"},
+                "size": {"type": "string", "description": "small(250) / medium(500) / large(原图)，默认 small"},
+            },
+            "required": ["path"],
+        },
+    },
+    {
+        "name": "nas_file_md5",
+        "description": "算文件 MD5，**不用下载文件**。只读，适合去重/比对。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"path": {"type": "string", "description": "文件路径"}},
+            "required": ["path"],
+        },
+    },
+    {
+        "name": "nas_read_doc",
+        "description": ("抽 Word(.docx) / Excel(.xlsx) / PPT(.pptx) 的**文字**（不渲染版式）。"
+                        "只读；老式 .doc/.xls/.ppt 不支持。"),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "文档路径"},
+                "max_chars": {"type": "integer", "description": "返回字符上限，默认 60000，最大 200000"},
+            },
+            "required": ["path"],
+        },
+    },
+    {
+        "name": "nas_search",
+        "description": "在 NAS 上按名字/扩展名递归搜索文件（DSM 索引搜索）。只读。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "从哪个目录开始搜；留空用默认根"},
+                "name": {"type": "string", "description": "文件名关键词（模糊匹配）"},
+                "extension": {"type": "string", "description": "扩展名过滤，如 pdf / jpg"},
+                "limit": {"type": "integer", "description": "返回上限，默认 50，最大 500"},
+            },
+            "required": [],
+        },
+    },
+    {
+        "name": "nas_folder_size",
+        "description": "算一个目录的递归大小与条目数（可能耗时，服务端会轮询）。只读。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"path": {"type": "string", "description": "目录路径"}},
+            "required": ["path"],
+        },
+    },
+    {
+        "name": "nas_read_pdf",
+        "description": ("把 PDF 渲染成图片返回，模型可直接看图；同时附每页抽出的文字。"
+                        "只读。默认只渲染第 1 页，用 pages 指定（如 2-4）。"),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "PDF 路径"},
+                "pages": {"type": "string", "description": "要渲染的页，如 1 或 1-3，默认 1"},
+                "max_edge": {"type": "integer", "description": "图片长边像素，默认 1400，最大 3000"},
+                "max_pages": {"type": "integer", "description": "最多渲染几页，默认 3，最大 10"},
+            },
+            "required": ["path"],
+        },
+    },
+    {
+        "name": "nas_read_image",
+        "description": ("读取 NAS 上的一张**图片**并直接返回画面内容（模型可看图）。只读。"
+                        f"超过长边 {IMAGE_MAX_EDGE}px 会自动等比缩小。"),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "图片路径（jpg/jpeg/png/gif/webp/bmp）"},
+                "max_edge": {"type": "integer",
+                             "description": f"返回图的长边上限像素，默认 {IMAGE_MAX_EDGE}，最大 4096"},
+            },
+            "required": ["path"],
+        },
+    },
+    {
+        "name": "nas_read_text",
+        "description": (
+            f"读取 NAS 上一个小**文本**文件的内容（上限 {MAX_TEXT_BYTES // 1024} KiB）。"
+            "只读。二进制或超限文件会被拒绝，只建议文件。"
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "文本文件路径"},
+                "max_bytes": {"type": "integer",
+                              "description": f"最多读取字节数，默认 {MAX_TEXT_BYTES}，上限 {MAX_TEXT_BYTES}"},
+            },
+            "required": ["path"],
+        },
+    },
+]
+
+TEXT_EXT = {".txt", ".md", ".csv", ".json", ".yaml", ".yml", ".log", ".ini",
+            ".conf", ".xml", ".html", ".py", ".js", ".ts", ".sql", ".toml"}
+IMAGE_EXT = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"}
+
+
+# ── 工具实现 ────────────────────────────────────────────────
+
+def tool_health(_a: dict) -> dict:
+    base = {"allowed_roots": ROOTS, "default_root": ROOT,
+            "host": os.environ.get("NAS_URL", "").split("//")[-1].split("/")[0],
+            "read_only": True}
+    try:
+        # 用「列 1 项」探活 —— 它同时验证凭据与会话是否有效
+        r = list_strict(ROOT, limit=1)
+        base["available"] = True
+        base["probe"] = {"path": ROOT, "total": r.get("total")}
+    except Exception as e:                            # noqa: BLE001
+        base["available"] = False
+        base["error"] = str(e)
+    return base
+
+
+def tool_list(a: dict) -> dict:
+    p = safe_path(a.get("path", ""))
+    limit = max(1, min(int(a.get("limit") or 100), 1000))
+    offset = max(0, int(a.get("offset") or 0))
+    r = list_strict(p, limit=limit, offset=offset)
+    items = r["items"]
+    if a.get("with_links"):
+        for it in items:
+            it["link"] = filestation_link(it.get("path") or "")
+    out = {"path": p, "link": filestation_link(p), "count": len(items), "items": items}
+    # 让模型知道「这一页之外还有」，避免把分页当成「总共就这些」
+    if r.get("total") is not None:
+        out["total"] = r["total"]
+        if r["total"] > offset + len(items):
+            out["note"] = (f"仅返回第 {offset + 1}-{offset + len(items)} 项，共 {r['total']} 项；"
+                           f"用 offset={offset + len(items)} 取下一页")
+    return out
+
+
+def tool_info(a: dict) -> dict:
+    raw = a.get("path") or ""
+    if not raw:
+        raise ValueError("path 必填")
+    p = safe_path(raw)
+    parent, name = posixpath.dirname(p), posixpath.basename(p)
+    # 共享文件夹根 / 顶层目录：父目录是 "/"，而该账号**列不了 "/"**（DSM 报 Unknown error）。
+    # 这种情况直接把它自己当目录返回，不要去列父目录。
+    if parent in ("/", "") or p in ROOTS:
+        return {"name": name or p, "path": p, "is_dir": True,
+                "link": filestation_link(p)}
+    for f in list_strict(parent, limit=1000)["items"]:
+        if f.get("name") == name:
+            f["link"] = filestation_link(f.get("path") or p)
+            return f
+    return {"not_found": True, "path": p}
+
+
+def tool_read_text(a: dict) -> dict:
+    raw = a.get("path") or ""
+    if not raw:
+        raise ValueError("path 必填")
+    p = safe_path(raw)
+    cap = max(1, min(int(a.get("max_bytes") or MAX_TEXT_BYTES), MAX_TEXT_BYTES))
+    ext = posixpath.splitext(p)[1].lower()
+    if ext and ext not in TEXT_EXT:
+        raise ValueError(f"只允许读取文本类文件（{ext} 不在白名单）。二进制/大文件请取元数据。")
+
+    parent, name = posixpath.dirname(p), posixpath.basename(p)
+    meta = next((f for f in list_strict(parent, limit=1000)["items"]
+                 if f.get("name") == name), None)
+    if meta is None:
+        raise ValueError("文件不存在")
+    if meta.get("is_dir"):
+        raise ValueError("这是文件夹，请用 nas_list_folder")
+    size = int(meta.get("size") or 0)
+    if size > cap:
+        raise ValueError(f"文件 {size} 字节，超过上限 {cap}，拒绝读取（只返回元数据）")
+
+    data = fetch_bytes(p, max_bytes=MAX_TEXT_BYTES)
+    if len(data) > cap:
+        raise ValueError(f"实际大小 {len(data)} 超过上限 {cap}，拒绝")
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        raise ValueError("不是 UTF-8 文本，拒绝（避免返回乱码）")
+    return {"path": p, "size": len(data), "text": text}
+
+
+def tool_read_image(a: dict) -> dict:
+    """读一张图片并**按 MCP 原生 image 内容返回**（base64）—— 让模型能真的看到画面。
+
+    超过长边上限会等比缩小并重编码为 JPEG，避免把几 MB 的原图塞进上下文。
+    返回 `_content` 交给传输层直接当 content 数组（文本元信息 + 图片）。
+    """
+    raw = a.get("path") or ""
+    if not raw:
+        raise ValueError("path 必填")
+    p = safe_path(raw)
+    ext = posixpath.splitext(p)[1].lower()
+    if ext not in IMAGE_EXT:
+        raise ValueError(f"只允许图片类型 {sorted(IMAGE_EXT)}；当前是 {ext or '无扩展名'}")
+
+    data = fetch_bytes(p, max_bytes=MAX_IMAGE_BYTES)
+    try:
+        im = Image.open(io.BytesIO(data))
+        im.load()
+    except Exception as e:                            # noqa: BLE001
+        raise ValueError(f"不是可解析的图片：{type(e).__name__}: {e}")
+
+    orig_size, orig_mode, orig_format = im.size, im.mode, im.format
+    max_edge = max(64, min(int(a.get("max_edge") or IMAGE_MAX_EDGE), 4096))
+    resized = False
+    if max(orig_size) > max_edge:
+        im = im.copy()
+        im.thumbnail((max_edge, max_edge))
+        resized = True
+
+    buf = io.BytesIO()
+    if im.mode in ("RGBA", "LA", "P") and (ext == ".png" or not resized):
+        mime, pil_fmt = "image/png", "PNG"
+    else:
+        if im.mode not in ("RGB", "L"):
+            im = im.convert("RGB")
+        mime, pil_fmt = "image/jpeg", "JPEG"
+    im.save(buf, pil_fmt, quality=82, optimize=True)
+    out = buf.getvalue()
+
+    meta = {"path": p, "mime": mime, "original": {"format": orig_format, "size": orig_size,
+                                                  "mode": orig_mode, "bytes": len(data)},
+            "returned": {"size": im.size, "bytes": len(out), "resized": resized}}
+    return {"_content": [
+        {"type": "text", "text": json.dumps(meta, ensure_ascii=False, indent=2)},
+        {"type": "image", "data": base64.b64encode(out).decode(), "mimeType": mime},
+    ]}
+
+
+def _poll(fn, tries: int = 12, delay: float = 0.8, done=lambda d: d.get("finished")):
+    """DSM 的 Search / DirSize 都是「起任务 + 轮询」。统一轮询到 finished。"""
+    import time as _t
+    last = None
+    for _ in range(max(1, tries)):
+        last = fn()
+        if isinstance(last, dict) and done(last):
+            return last
+        _t.sleep(delay)
+    return last
+
+
+def _human(n) -> str:
+    try:
+        n = float(n)
+    except Exception:                                 # noqa: BLE001
+        return str(n)
+    for u in ("B", "KiB", "MiB", "GiB", "TiB"):
+        if n < 1024:
+            return f"{n:.0f} {u}" if u == "B" else f"{n:.1f} {u}"
+        n /= 1024
+    return f"{n:.1f} PiB"
+
+
+def _task_id(res, label: str) -> str:
+    """从「起任务」类调用的返回里取出 taskid。
+
+    synology_api 的 search_start / start_dir_size_calc 在 ``interactive_output=True``（默认）
+    时**返回一句字符串**（"...your id is: \\"xxx\\""），否则返回 ``{"message":…, "taskid":…}``。
+    两种都要能吃。
+    """
+    import re as _re
+    if isinstance(res, dict):
+        if res.get("taskid"):
+            return res["taskid"]
+        if res.get("success"):
+            tid = (res.get("data") or {}).get("taskid")
+            if tid:
+                return tid
+    s = str(res)
+    for pat in (r'taskid"\s*:\s*"([^"]+)"', r'id is:\s*"([^"]+)"', r"id is:\s*'?([0-9A-Za-z]+)'?"):
+        mm = _re.search(pat, s)
+        if mm:
+            return mm.group(1)
+    raise NasError(f"{label}启动失败：" + s[:200])
+
+
+def tool_search(a: dict) -> dict:
+    """在 NAS 上按名字/扩展名搜索（DSM 索引搜索）。只读。"""
+    p = safe_path(a.get("path", ""))
+    name = (a.get("name") or "").strip() or None
+    ext = (a.get("extension") or "").strip().lstrip(".") or None
+    limit = max(1, min(int(a.get("limit") or 50), 500))
+
+    def start(c):
+        return c.search_start(folder_path=p, recursive=True, pattern=name, extension=ext)
+
+    res = start(nas_client())
+    c = nas_client()
+    try:
+        task_id = _task_id(res, "搜索")
+    except NasError:
+        res = start(nas_client(relogin=True))
+        c = nas_client()
+        task_id = _task_id(res, "搜索")
+
+    def fetch():
+        # 注意：synology_api 的 get_search_list 要求 taskid **带双引号**
+        # （库自己的错误信息是 `Enter a correct taskid, choose one of the following: ['"xxx"']`）
+        r = c.get_search_list(task_id='"{}"'.format(task_id), limit=limit, offset=0,
+                              additional="size,time", filetype="all")
+        if isinstance(r, str):
+            raise NasError("搜索查询失败：" + r[:200])
+        if not (isinstance(r, dict) and r.get("success")):
+            raise NasError("搜索查询失败：" + json.dumps(r, ensure_ascii=False)[:200])
+        d = r.get("data") or {}
+        return {"finished": bool(d.get("finished")), "total": d.get("total"),
+                "items": [{"name": f.get("name"), "path": f.get("path"),
+                           "is_dir": f.get("isdir", False),
+                           "size": (f.get("additional") or {}).get("size", 0)}
+                          for f in (d.get("files") or [])]}
+
+    out = _poll(fetch)
+    return {"query": {"path": p, "name": name, "extension": ext}, "limit": limit, **(out or {})}
+
+
+def tool_folder_size(a: dict) -> dict:
+    """算一个目录的递归大小与条目数（DSM DirSize）。只读。"""
+    p = safe_path(a.get("path") or "")
+    if p == "/":
+        raise ValueError("请指定具体目录（不能对整个根算大小）")
+
+    def start(c):
+        return c.start_dir_size_calc(path=p)
+
+    res = start(nas_client())
+    c = nas_client()
+    try:
+        task_id = _task_id(res, "目录统计")
+    except NasError:
+        res = start(nas_client(relogin=True))
+        c = nas_client()
+        task_id = _task_id(res, "目录统计")
+
+    state = {"restarts": 0}
+    MAX_RESTARTS = 3
+
+    def restart(_why: str) -> dict:
+        nonlocal task_id
+        state["restarts"] += 1
+        task_id = _task_id(start(nas_client()), "目录统计")
+        return {"finished": False}
+
+    def fetch():
+        nonlocal task_id
+        try:
+            r = c.get_dir_status(taskid=task_id)
+        except Exception as e:                           # noqa: BLE001
+            # DSM 会回收 DirSize 任务；被回收时这里**抛异常**（也可能返回字符串）。
+            # 这是 DSM 该 API 的已知不稳，重启新任务重试有限次。
+            if "No such task" in str(e) and state["restarts"] < MAX_RESTARTS:
+                return restart(str(e))
+            if "No such task" in str(e):
+                raise NasError(
+                    "DSM 的「目录统计」任务反复被回收（该 API 已知不稳）。"
+                    "换个目录、或改用 nas_search/nas_list_folder 逐层看，稍后再试。"
+                ) from e
+            raise NasError(f"目录统计查询失败：{type(e).__name__}: {e}") from e
+        if isinstance(r, str) and "No such task" in r and state["restarts"] < MAX_RESTARTS:
+            return restart(r)
+        if isinstance(r, str):
+            raise NasError(r[:200])
+        if not (isinstance(r, dict) and r.get("success")):
+            raise NasError("目录统计查询失败：" + json.dumps(r, ensure_ascii=False)[:200])
+        d = r.get("data") or {}
+        return {"finished": bool(d.get("finished")), "total_size": d.get("total_size"),
+                "file_count": d.get("file_count"), "dir_count": d.get("dir_count")}
+
+    out = _poll(fetch, tries=20, delay=1.0)
+    if out and out.get("total_size") is not None:
+        out["human"] = _human(out["total_size"])
+    return {"path": p, **(out or {})}
+
+
+def tool_read_pdf(a: dict) -> dict:
+    """把 PDF **渲染成图片**返回（模型可直接看图），并附每页抽出的文字。只读。"""
+    import fitz                                    # PyMuPDF
+
+    raw = a.get("path") or ""
+    if not raw:
+        raise ValueError("path 必填")
+    p = safe_path(raw)
+    if posixpath.splitext(p)[1].lower() != ".pdf":
+        raise ValueError("这个工具只处理 .pdf")
+
+    max_pages = max(1, min(int(a.get("max_pages") or 3), 10))
+    max_edge = max(200, min(int(a.get("max_edge") or 1400), 3000))
+    sel = (a.get("pages") or "1").strip()
+
+    data = fetch_bytes(p, max_bytes=64 * 1024 * 1024)
+    try:
+        doc = fitz.open(stream=data, filetype="pdf")
+    except Exception as e:                            # noqa: BLE001
+        raise NasError(f"打不开 PDF：{type(e).__name__}: {e}")
+
+    n = doc.page_count
+    try:
+        if "-" in sel:
+            lo, hi = sel.split("-", 1)
+            idxs = list(range(max(1, int(lo)) - 1, min(n, int(hi))))
+        else:
+            idxs = [max(1, int(sel)) - 1]
+    except Exception:                                 # noqa: BLE001
+        idxs = [0]
+    idxs = [i for i in idxs if 0 <= i < n][:max_pages]
+
+    blocks = [{"type": "text", "text": json.dumps({
+        "path": p, "pages_total": n, "pages_returned": [i + 1 for i in idxs],
+        "note": ("只渲染了这些页；需要其它页用 pages 指定（如 2-4）" if len(idxs) < n else None),
+    }, ensure_ascii=False, indent=2)}]
+
+    for i in idxs:
+        page = doc.load_page(i)
+        zoom = max_edge / max(1.0, max(page.rect.width, page.rect.height))
+        pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=False)
+        png = pix.tobytes("png")
+        blocks.append({"type": "text", "text": f"--- 第 {i + 1} 页（{len(png) // 1024} KiB）---"})
+        blocks.append({"type": "image", "data": base64.b64encode(png).decode(),
+                       "mimeType": "image/png"})
+        txt = (page.get_text() or "").strip()
+        if txt:
+            blocks.append({"type": "text",
+                           "text": "[第 %d 页文字]\n%s" % (i + 1, txt[:4000])})
+    doc.close()
+    return {"_content": blocks}
+
+
+# ── B+C 补齐：缩略图 / 校验和 / Office 文本 ──────────────────
+
+# 经 SYNO.API.Info 查得：Thumb 在 entry.cgi，maxVersion=3（库未收录，自行构造）
+THUMB_PATH, THUMB_VER = "entry.cgi", "3"
+
+
+def tool_thumbnail(a: dict) -> dict:
+    """取**廉价缩略图**（DSM Thumb API）—— 适合批量预览。
+
+    注意：DSM 的 small/medium 返回的是 **BMP（未压缩）**（实测 250x250 就要 188 KB），
+    所以这里拿回来自己转 JPEG —— 实测同样 250x250 转完约 20 KB，比读原图省两个数量级。
+    """
+    p = safe_path(a.get("path") or "")
+    if not p:
+        raise ValueError("path 必填")
+    size = (a.get("size") or "small").lower()
+    if size not in ("small", "medium", "large"):
+        size = "small"
+
+    c = nas_client()
+    # path 用双引号包起来 —— EN 的 pim/api/nas.py 注释写明 spec 要求
+    # （实测加不加都通；加上更稳，能防带逗号等特殊字符的路径）
+    url = (f"{c.base_url}{THUMB_PATH}?api=SYNO.FileStation.Thumb&version={THUMB_VER}"
+           f"&method=get&path={quote_plus(chr(34) + p + chr(34))}&size={size}&_sid={c._sid}")
+    token = getattr(c.session, "_syno_token", "") or ""
+    r = requests.get(url, verify=False, timeout=60, headers={"X-SYNO-TOKEN": token})
+    r.raise_for_status()
+    raw = r.content
+    if raw[:2] == b"{" or b'"error"' in raw[:200]:
+        raise NasError("缩略图不可用（该类型/该图可能没有缩略图）：" + raw[:200].decode("utf-8", "replace"))
+
+    try:
+        im = Image.open(io.BytesIO(raw))
+        im.load()
+    except Exception as e:                            # noqa: BLE001
+        raise NasError(f"缩略图解析失败：{type(e).__name__}: {e}")
+    src_fmt, src_size = im.format, im.size
+    if im.mode not in ("RGB", "L"):
+        im = im.convert("RGB")
+    buf = io.BytesIO()
+    im.save(buf, "JPEG", quality=75, optimize=True)
+    out = buf.getvalue()
+    return {"_content": [
+        {"type": "text", "text": json.dumps({
+            "path": p, "dsm_size": size, "dsm_format": src_fmt, "dsm_bytes": len(raw),
+            "returned_bytes": len(out), "size": list(src_size),
+        }, ensure_ascii=False, indent=2)},
+        {"type": "image", "data": base64.b64encode(out).decode(), "mimeType": "image/jpeg"},
+    ]}
+
+
+def tool_file_md5(a: dict) -> dict:
+    """算文件 MD5（DSM MD5 API，**不需要下载文件**）。只读。适合去重/比对。"""
+    p = safe_path(a.get("path") or "")
+    if not p:
+        raise ValueError("path 必填")
+
+    def start(c):
+        return c.start_md5_calc(file_path=p)
+
+    res = start(nas_client())
+    c = nas_client()
+    try:
+        task_id = _task_id(res, "MD5")
+    except NasError:
+        res = start(nas_client(relogin=True))
+        c = nas_client()
+        task_id = _task_id(res, "MD5")
+
+    def status(tid):
+        # 有的版本要带引号，有的不要 —— 两种都试
+        for cand in (tid, '"{}"'.format(tid)):
+            try:
+                r = c.get_md5_status(taskid=cand)
+            except Exception as e:                    # noqa: BLE001
+                last = e
+                continue
+            if isinstance(r, dict) and r.get("success"):
+                return r
+            if isinstance(r, str) and "taskid" in r.lower():
+                continue
+            last = r
+        raise NasError("MD5 查询失败：" + str(last)[:200])
+
+    out = _poll(lambda: (lambda r: {"finished": bool((r.get("data") or {}).get("finished")),
+                                    "md5": (r.get("data") or {}).get("md5")})(status(task_id)),
+                tries=20, delay=1.0)
+    return {"path": p, **(out or {})}
+
+
+DOCX_EXT = {".docx"}
+XLSX_EXT = {".xlsx", ".xlsm"}
+PPTX_EXT = {".pptx"}
+
+
+def tool_read_doc(a: dict) -> dict:
+    """抽 **Word / Excel / PPT 的文字**（不是渲染版式）。只读。
+
+    - .docx → python-docx：段落 + 表格
+    - .xlsx → openpyxl：每个 sheet 的单元格（有行/列上限）
+    - .pptx → python-pptx：每页的文本框
+    老式二进制 .doc/.xls/.ppt 不支持（需要另外的库）。
+    """
+    raw = a.get("path") or ""
+    if not raw:
+        raise ValueError("path 必填")
+    p = safe_path(raw)
+    ext = posixpath.splitext(p)[1].lower()
+    if ext not in (DOCX_EXT | XLSX_EXT | PPTX_EXT):
+        raise ValueError(f"只处理 .docx / .xlsx / .pptx；当前是 {ext or '无扩展名'}"
+                         "（老式 .doc/.xls/.ppt 不支持）")
+
+    max_chars = max(2000, min(int(a.get("max_chars") or 60000), 200000))
+    data = fetch_bytes(p, max_bytes=64 * 1024 * 1024)
+    bio = io.BytesIO(data)
+    parts: list[str] = []
+
+    if ext in DOCX_EXT:
+        import docx                                # python-docx
+        d = docx.Document(bio)
+        for para in d.paragraphs:
+            t = (para.text or "").strip()
+            if t:
+                parts.append(t)
+        for ti, tbl in enumerate(d.tables, 1):
+            parts.append(f"\n[表 {ti}]")
+            for row in tbl.rows:
+                cells = [(c.text or "").strip() for c in row.cells]
+                if any(cells):
+                    parts.append(" | ".join(cells))
+
+    elif ext in XLSX_EXT:
+        import openpyxl
+        wb = openpyxl.load_workbook(bio, read_only=True, data_only=True)
+        try:
+            for ws in wb.worksheets:
+                parts.append(f"\n[工作表: {ws.title}]  ({ws.max_row} 行 x {ws.max_column} 列)")
+                for ri, row in enumerate(ws.iter_rows(values_only=True), 1):
+                    if ri > 300:
+                        parts.append("  ...（只取前 300 行）")
+                        break
+                    cells = ["" if v is None else str(v) for v in row]
+                    if any(c.strip() for c in cells):
+                        parts.append(" | ".join(cells))
+        finally:
+            wb.close()
+
+    else:                                          # pptx
+        import pptx                                # python-pptx
+        pr = pptx.Presentation(bio)
+        for i, slide in enumerate(pr.slides, 1):
+            parts.append(f"\n[第 {i} 页]")
+            for shape in slide.shapes:
+                if shape.has_text_frame:
+                    t = (shape.text_frame.text or "").strip()
+                    if t:
+                        parts.append(t)
+
+    text = "\n".join(parts)
+    truncated = len(text) > max_chars
+    return {"path": p, "ext": ext, "chars": len(text), "truncated": truncated,
+            "text": text[:max_chars]}
+
+
+def tool_list_shares(_a: dict) -> dict:
+    """列出**该账号能看到的共享文件夹** —— 让模型先知道有什么，不用猜路径。只读。"""
+    c = nas_client()
+
+    def fetch():
+        r = c.get_list_share(limit=100, offset=0, additional="size,time")
+        if isinstance(r, str):
+            raise NasError(r[:200])
+        if not (isinstance(r, dict) and r.get("success")):
+            raise NasError("列共享文件夹失败：" + json.dumps(r, ensure_ascii=False)[:200])
+        d = r.get("data") or {}
+        return {"shares": [{"name": s0.get("name"), "path": s0.get("path")}
+                           for s0 in (d.get("shares") or [])],
+                "total": d.get("total")}
+
+    try:
+        return fetch()
+    except NasError:
+        globals()["_nas"] = None                      # 会话可能失效，重登一次
+        out = fetch()
+        out["note"] = "（已重新登录后取得）"
+        return out
+
+
+def tool_folder_thumbnails(a: dict) -> dict:
+    """**一次返回一个文件夹里的多张缩略图** —— 用于「这个文件夹里都有什么图」的快速浏览。
+
+    比逐张调 nas_read_image 省得多（每张缩略图约 10-20 KiB，不是几百 KiB）。
+    """
+    p = safe_path(a.get("path") or "")
+    if not p:
+        raise ValueError("path 必填")
+    limit = max(1, min(int(a.get("limit") or 8), 12))
+    size = (a.get("size") or "small").lower()
+    if size not in ("small", "medium"):
+        size = "small"
+    only_img = a.get("images_only", True)
+
+    lst = list_strict(p, limit=400)
+    items = lst["items"]
+    if only_img:
+        items = [i for i in items
+                 if not i.get("is_dir") and posixpath.splitext(i.get("name") or "")[1].lower()
+                 in {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"}]
+    picked = items[:limit]
+
+    c = nas_client()
+    token = getattr(c.session, "_syno_token", "") or ""
+    blocks = [{"type": "text", "text": json.dumps({
+        "path": p, "total_items": lst.get("total"), "images": len(items),
+        "returned": len(picked), "size": size,
+        "note": ("还有更多；调大 limit 或换目录" if len(items) > len(picked) else None),
+    }, ensure_ascii=False, indent=2)}]
+
+    for it in picked:
+        url = (f"{c.base_url}{THUMB_PATH}?api=SYNO.FileStation.Thumb&version={THUMB_VER}"
+               f"&method=get&path={quote_plus(chr(34) + it['path'] + chr(34))}&size={size}&_sid={c._sid}")
+        try:
+            r = requests.get(url, verify=False, timeout=60, headers={"X-SYNO-TOKEN": token})
+            r.raise_for_status()
+            im = Image.open(io.BytesIO(r.content))
+            im.load()
+            if im.mode not in ("RGB", "L"):
+                im = im.convert("RGB")
+            im.thumbnail((512, 512))
+            buf = io.BytesIO()
+            im.save(buf, "JPEG", quality=72, optimize=True)
+            out = buf.getvalue()
+        except Exception as e:                        # noqa: BLE001
+            blocks.append({"type": "text", "text": f"[{it['name']}] 缩略图不可用：{type(e).__name__}"})
+            continue
+        blocks.append({"type": "text", "text": f"--- {it['name']}（{it.get('size') or 0} 字节）---"})
+        blocks.append({"type": "image", "data": base64.b64encode(out).decode(),
+                       "mimeType": "image/jpeg"})
+    return {"_content": blocks}
+
+
+ARCHIVE_EXT = {".zip", ".rar", ".7z", ".tar", ".gz", ".tgz", ".bz2"}
+
+
+def tool_list_archive(a: dict) -> dict:
+    """**不解压**直接看压缩包里有什么（zip / rar / 7z / tar）。只读。"""
+    raw = a.get("path") or ""
+    if not raw:
+        raise ValueError("path 必填")
+    p = safe_path(raw)
+    ext = posixpath.splitext(p)[1].lower()
+    if ext not in ARCHIVE_EXT:
+        raise ValueError(f"只处理压缩包 {sorted(ARCHIVE_EXT)}；当前是 {ext or '无扩展名'}")
+    limit = max(1, min(int(a.get("limit") or 100), 500))
+    offset = max(0, int(a.get("offset") or 0))
+    password = a.get("password") or None
+    # 包内文件名可能是 GBK（老压缩工具），允许指定 codepage
+    codepage = a.get("codepage") or "chs"
+
+    def call(c):
+        return c.get_file_list_of_archive(file_path=p, limit=limit, offset=offset,
+                                          sort_by="name", sort_direction="asc",
+                                          codepage=codepage, password=password)
+
+    res = call(nas_client())
+    if isinstance(res, str):
+        res = call(nas_client(relogin=True))
+    if isinstance(res, str):
+        raise NasError("列压缩包失败：" + res[:200])
+    if not (isinstance(res, dict) and res.get("success")):
+        err = (res or {}).get("error") if isinstance(res, dict) else None
+        raise NasError("列压缩包失败：" + json.dumps(err, ensure_ascii=False)[:200])
+
+    d = res.get("data") or {}
+    items = [{"name": it.get("name"), "path": it.get("path"),
+              "is_dir": it.get("isdir", False),
+              "size": (it.get("additional") or {}).get("size", 0)}
+             for it in (d.get("items") or [])]
+    out = {"archive": p, "count": len(items), "items": items}
+    if d.get("total") is not None:
+        out["total"] = d["total"]
+        if d["total"] > offset + len(items):
+            out["note"] = f"仅返回 {offset + 1}-{offset + len(items)} 项，共 {d['total']} 项；用 offset 翻页"
+    return out
+
+
+TOOL_IMPL = {
+    "nas_link": tool_link,
+    "nas_list_archive": tool_list_archive,
+    "nas_list_shares": tool_list_shares,
+    "nas_folder_thumbnails": tool_folder_thumbnails,
+    "nas_health": tool_health,
+    "nas_list_folder": tool_list,
+    "nas_file_info": tool_info,
+    "nas_thumbnail": tool_thumbnail,
+    "nas_file_md5": tool_file_md5,
+    "nas_read_doc": tool_read_doc,
+    "nas_search": tool_search,
+    "nas_folder_size": tool_folder_size,
+    "nas_read_pdf": tool_read_pdf,
+    "nas_read_image": tool_read_image,
+    "nas_read_text": tool_read_text,
+}
+
+
+# ── MCP 传输 ────────────────────────────────────────────────
+
+class Handler(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+
+    def log_message(self, *a):
+        pass
+
+    def handle_one_request(self):
+        try:
+            super().handle_one_request()
+        except Exception as e:                      # noqa: BLE001
+            log(f"!! request error: {type(e).__name__}: {e}")
+            self.close_connection = True
+
+    def _read_body(self) -> bytes:
+        n = self.headers.get("Content-Length")
+        return self.rfile.read(int(n)) if n else b""
+
+    def _auth_ok(self) -> bool:
+        return bool(TOKEN) and self.headers.get("Authorization", "") == f"Bearer {TOKEN}"
+
+    def _send(self, obj, code=200):
+        body = json.dumps(obj, ensure_ascii=False).encode()
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        try:
+            self.wfile.write(body)
+        except Exception:                           # noqa: BLE001
+            self.close_connection = True
+
+    def _result(self, mid, result):
+        self._send({"jsonrpc": "2.0", "id": mid, "result": result})
+
+    def _error(self, mid, code, msg):
+        self._send({"jsonrpc": "2.0", "id": mid, "error": {"code": code, "message": msg}})
+
+    def do_POST(self):
+        try:
+            msg = json.loads(self._read_body().decode("utf-8", "replace") or "{}")
+        except Exception:
+            msg = {}
+        method = msg.get("method") or "?"
+        mid = msg.get("id")
+        ua = self.headers.get("User-Agent", "-")
+        log(f"<{method}> from {ua[:40]} auth={'ok' if self._auth_ok() else 'NO'}")
+
+        if not self._auth_ok():
+            self._send({"error": "unauthorized"}, 401)
+            return
+
+        if method == "initialize":
+            self._result(mid, {
+                "protocolVersion": PROTOCOL,
+                "capabilities": {"tools": {}},
+                "serverInfo": {"name": "nas-mcp", "version": "0.1.0"},
+                "instructions": (
+                    f"只读访问公司群晖 NAS。允许的根目录：{ROOTS_STR}。"
+                    "只提供列目录/查元数据/读小文本文件；无任何写入或删除能力。"
+                ),
+            })
+        elif method.startswith("notifications/"):
+            self.send_response(202)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+        elif method == "tools/list":
+            self._result(mid, {"tools": TOOLS})
+        elif method == "tools/call":
+            params = msg.get("params") or {}
+            name = params.get("name")
+            args = params.get("arguments") or {}
+            fn = TOOL_IMPL.get(name)
+            if fn is None:
+                self._error(mid, -32602, f"未知工具 {name}")
+                return
+            try:
+                out = fn(args)
+                if isinstance(out, dict) and "_content" in out:
+                    content = out["_content"]          # 工具自带内容块（如 文本+图片）
+                else:
+                    content = [{"type": "text",
+                                "text": json.dumps(out, ensure_ascii=False, indent=2)}]
+                self._result(mid, {"content": content, "isError": False})
+            except PathDenied as e:
+                self._result(mid, {"content": [{"type": "text", "text": f"拒绝：{e}"}],
+                                   "isError": True})
+            except NasError as e:
+                log(f"!! NAS 侧失败: {e}")
+                self._result(mid, {"content": [{"type": "text",
+                                   "text": f"NAS 侧失败（**不是空的**，是出错了）：{e}"}],
+                                   "isError": True})
+            except Exception as e:                  # noqa: BLE001
+                log(f"!! tool {name} error: {type(e).__name__}: {e}")
+                self._result(mid, {"content": [{"type": "text", "text": f"错误：{e}"}],
+                                   "isError": True})
+        else:
+            self._error(mid, -32601, f"unknown method {method}")
+
+    def do_GET(self):
+        if not self._auth_ok():
+            self._send({"error": "unauthorized"}, 401)
+            return
+        self._send({"status": "ok", "server": "nas-mcp", "root": ROOT,
+                    "tools": [t["name"] for t in TOOLS], "read_only": True})
+
+
+if __name__ == "__main__":
+    if not TOKEN:
+        raise SystemExit("必须设置 NAS_MCP_TOKEN")
+    log(f"=== nas-mcp 启动于 {BIND}:{PORT}（只读，root={ROOT}） ===")
+    ThreadingHTTPServer((BIND, PORT), Handler).serve_forever()

@@ -61,7 +61,33 @@ DeepSeek API 自 2026-08 起按北京时间分时计费：周一至周五工作�
 ### 五桶分析法（advertise 搜索词分类）
 `advertise/analyze_search_term.py` 对**搜索词行**打的五个分析桶：**Harvest / Negate / Monitor / Protect / Ignore**（见 `advertise/AGENT_HANDOFF.md`「5 桶分类」）。这是报表分析标签，**不是** IvyeaOps 的五杠杆。对应关系：Harvest≈收割候选、Negate≈否词候选；Monitor/Protect/Ignore 在五杠杆里没有同名动作。
 
+## 意图路由 (intent_router)
+
+### System One
+TypeSafe 的决策模型系列：**不生成文本**，输入 `state` + 结构化问题，返回**带概率的判定**。三个原语：`noul`（是/否的概率）、`choice`（≤255 项里选一个）、`score`（2–10 级有序量表）。设计取向是 code 拥有 workflow，模型只在需要语义理解的地方给出可编程的常识判断。
+
+### Jev
+System One 的旗舰模型（请求用别名 `jev-latest`，实测解析到 `jev-1.13.0`）。端点 `POST https://api.typesafe.ai/v1/systemone` + Bearer `TYPESAFE_API_KEY`（存父仓库 `.env`）。**只有输入 token 计费**，输出免费。契约与实测见 `intent_router/docs/reference/typesafe-contract.md`。
+
+### confidence 是分布集中度，不是正确率
+`choice` / `score` 的答案里 `confidence` 由**概率分布的集中程度**算出（越集中越高），所以它只反映「模型是否犹豫」，**不反映「模型是否答对」**。实测：本仓库 56 路目录上 confidence 仍在 0.98–1.00，几近饱和。**把高 confidence 读成"一定对"是错的** —— 这正是本仓库 `--min-confidence` 闸门实际不触发的原因。
+
+### 置信度闸门（confidence gate）
+用阈值决定「敢不敢自动执行」：低于阈值就不猜，转人工或要求澄清（官方 `patterns/intent-routing.md` 的做法）。`intent_router` 的闸门语义锁定为 `--min-confidence`（默认 0.5）+ `none` 选项；但**真正兜底的是 `none`，不是阈值**。
+
+### none 选项
+给 `choice` 加一个「都不匹配」的出口。**必须留这个出口**，否则模型被迫在几十个选项里硬选一个。`intent_router` 里它由 `typesafe.build_payload()` 硬编码追加（**不写进 `catalog.yaml`**），防止重新生成 catalog 时被漏掉。实测有效：模糊请求与域外请求都正确落 `none`。
+
+### 触发词路由 vs 语义路由
+`.agents/skills/*/SKILL.md` 的触发词是**关键词匹配**（`当用户提到"…"时触发`）；`intent_router` 是**语义路由**（把整句需求交给 Jev 判断意图）。触发词分不开吃同一种数据源的兄弟模块 —— `item-cost` / `stock-init` / `warehouse-restock` 都消费 EN BOM 成本，得靠 `catalog.yaml` 里的 `exclusions`（"不用于…"）才能分开。
+
 ## Cross-border shipping (sellfox_shipping)
+
+### 背贴 (backing label)
+给仓库分拣用的 4×2" 小标签，**不是**承运商面单：每包裹一页，含 PO/包裹号 + Code128 条码 + 逐行 `SKU / QTY / 中文名 / 西语名`。生成见 `sellfox_shipping/sku_label/pdf_generator.py`。**一个包裹内的所有仓库 SKU 必须都列出来** —— 组合件（皮壳 `-Cover` + 海绵 `-Foam`）要两行，只列一行就等于拣货漏件。品名查不到时该列为空（**不报错**），所以流水线必须有「背贴缺名」报告行。
+
+### 通途SKU 的后缀形态（`-Cover` / `-Foam` / 裸基础码）
+组合件在通途里炸成多个仓库 SKU，同一个件在不同系统/字段里有**两种写法**：**带后缀**（`TT0312588K0064183-Foam`，通途导出 `Reference 2` 实际使用的形式）与**裸基础码**（`TT0312588K0064183`，EN `customer_code` / `customer_items.ref_code` 里也登记）。背贴查名的键是**导出里原样出现的那个**；且**基码匹配 ≠ 完整登记**（详见 `conventions/tongtu-en-sellfox-instock-sku-mainline.md`）。注意后缀段的编号**不与尺寸同序**（153→`...4183`、160→`...4182`），要逐条从 EN 读。
 
 ### Sellfox packageSn
 赛狐订单处理里的包裹业务键（对外字段 `packageSn`）。与通途历史「P 号」不是同一体系；蜴国际 Excel 客户参考号应对齐 `packageSn`，不能直接拿通途 `P814…` 当赛狐主键。
@@ -131,6 +157,31 @@ The first production operation that issues raw fabric and cuts it to size. The q
 
 ### 虚拟员工 (Virtual Employee)
 Employee ID `HR-EMP-00001`, used exclusively by the 一键完工 feature. All Job Cards assigned to this employee are synthetic and reflect planned quantities, not actual production. Detected by checking `time_logs[].employee` on individual Job Card records.
+
+### 工序卡 (Job Card)
+The per-operation production record, created either by a worker scanning at an operation station
+(扫码报工) or programmatically by 一键完工. It is the source of truth for whether production has
+actually started and how far it has progressed — a Work Order's own `status` and `produced_qty`
+can lag behind reality, reading `Not Started` while the shop floor has already cleared several
+operations. Genuinely not-started means zero Job Cards and every operation still pending.
+
+One batch of pieces yields one Job Card *per operation*, so completed quantity must be read per
+operation: the first operation in the routing answers "how many pieces did this batch make", and
+summing `total_completed_qty` (falling back to `for_quantity`) across operations multiplies the batch size by the operation count.
+
+## 订单交付 (Order Fulfillment)
+
+### 预估可发 (Estimated Ship Date)
+The date a Sales Order is expected to ship, derived as the order date plus a lead-time window. The
+window length is a planning-side business convention, **not** a field in the ERP — it must never be
+read as system data, and it moves when planning policy is revised, so state the derivation rather
+than the number.
+
+### 死单 (Dead Order)
+A Sales Order that is `Closed` in the ERP yet still carries undelivered quantity. `Closed` is an
+administrative close, **not** a fulfillment state: remaining qty is neither "fully shipped" nor
+reliably "will never ship" (a duplicate may have been Closed instead of Cancelled). Status-only
+reports treat `Closed` as complete; confirm with planning before treating leftover qty as dead.
 
 ## ERPNext Platform
 
@@ -241,7 +292,43 @@ Channel Account 所挂的销售渠道主数据。渠道**名称**可以较长；
 店铺已经开卖、该月表上却没有具体运营人员时，仍要落一条 Owner，人名写「待分配」。开卖前的空月不写。
 
 ### Channel Account Alias
-同一店铺的其它写法。规范名本身也是一条别名。Amazon 欧洲旧名只挂在对应国家账号上，避免九国重复挂同一个旧名。
+同一店铺的其它写法。规范名本身也是一条别名。Amazon 欧洲旧名只挂在对应国家账号上，避免九国重复挂同一个旧名。赛狐 ERP 店名（表列「赛狐店铺」）可以和 Amazon 账期 txt 文件名前缀不是同一个词，必须经别名才能对上。
+
+### 账期桶
+财务 NAS 上按「每月 4 日到下月 3 日」切开的归档文件夹。钉钉按发起时间进提交窗；核算按表单「账期日期」自然月进对应桶。两套「应该放哪」不是同一件事。
+
+### 木已成舟（账期归档）
+已经在上一提交窗里核算过的销售收款确认单，即使账期日期或文件名落在本月，也不再改归本月桶。误传到本月的副本删掉，上月原件保留。
+
+### 迟交挪动登记
+钉钉只能按**发起时间**导出，所以迟交单会落进下个月的提交窗导出。财务共享表「钉钉账期提交时间不对挪动记录」把「账期日期在本月、发起时间在 ≥ 下月 4 号」的单登记下来，含审批编号、账期日期、销售账户、销售额、审批状态，以及人工复审列。规范见 `dingtalk/dingtalk_oa_approval/docs/reference/late-submission-registry.md`。
+
+### 跨月剔除
+按【迟交挪动登记】的**唯一键** `审批编号|账期日期|销售账户|销售额`，在算某个账期月时先把它从当月导出里去掉，避免同一笔既算上月又算本月。登记行的 `后续账期须剔除` 列出需要剔除的账期月。实现：`dingtalk/dingtalk_oa_approval/ding_xlsx.py` 的 `unique_key` / `exclude_keys`，切月用 `filter_export_by_period.py`。
+
+### 销售收款确认单
+钉钉 OA 原生模板，财务用来交各平台账期。Excel「数据id」= `processInstanceId`，「审批编号」= `businessId`（21 位，必须当文本）。Amazon 账期附件只认 `.txt`。
+
+### aflow
+钉钉 OA 审批管理后台。`oa.dingtalk.com` 与 `aflow.dingtalk.com` 是**同一个 SPA**。浏览器导出/离职附件走 `web_automation` 任务 `dingtalk.aflow.receipt.export` 与 `dingtalk.aflow.receipt.attachments`。批量「仅导出审批单附件」进钉盘，不能当本地下载。下载目录用 `DINGTALK_OA_WORK`，不要写本机人名路径。
+
+### 离职发起人附件
+标准 OA 下载按发起人钉盘授权，离职常 `userNotExist`；不能把这个错误当成「没交钉钉」。在职补交走 API。离职附件走 aflow 详情页点文件名。落盘之后还要用 FileStation 按账期月进 NAS 桶。
+
+### Amazon 结算周期
+Amazon 专业卖家结算一般 14 天一期，自然月通常 2 期，对齐到月末会变 3 期。某月只有 1 期甚至 0 期的常见原因是该期余额 ≤ 0 未打款、新店前 30 天、或漏交。判断漏交要落在**有打款**的结算组上；银行到账次数本身不能证明。别的平台不能套这个节奏（Walmart 多为双周，eBay 可日结）。
+
+### 提交人 vs 渠道负责人
+NAS 人名文件夹记录谁在钉钉发起；店的月度负责人是渠道账号表 `运营人员YYYYMM`。助手、离职交接、换人会使同一渠道账号的附件出现在多个人名夹。按现任负责人文件夹判断漏交会漏掉前任已交的期。
+
+### 赛狐结算组
+赛狐 OpenAPI 按结算结束日列出的站点结算汇总，不是 Amazon 后台结算报告 txt 原件。可以有打款金额为 0 的组。没有结算组的渠道账号不会出现在该窗口的对照清单里。
+
+### Amazon txt 账期
+Amazon 销售收款确认单只把 `.txt` 当账期明细。结算周期 csv、以及桶里已有同茎 csv 时的 zip，不算 Amazon 账期文件。
+
+### 账期漏交（Amazon）
+有打款的赛狐结算组，在对照窗内既无核算行也无 NAS `.txt`，才优先当漏交（要催现任渠道负责人补钉钉）。有核算行但标准 API 下不来、NAS 也没有文件，是下载/归档缺口，不是忘传。打款为 0 的结算组先不当漏交，除非财务确认「出账期 N 天内必须交」连 0 打款也算。按店名硬拆 brand 对不上 txt，是匹配失败，不要写成漏交。
 
 ### Amazon 国家站
 Amazon 店铺按国家区域建 Channel Account，没有合法的 EUR/EU 聚合账号。欧洲九国站点与 Johna 对齐。Wayfair 等非 Amazon 渠道仍可以有 EU 区域。
@@ -329,10 +416,44 @@ A webhook-based DingTalk group messaging channel used by AI agents (WorkBuddy, C
 前者是「虚拟仓库」（FBA 侧来源，如 272150），后者才是真实海外仓（如 279841=POLAND）。
 不是笔误，照抄。
 
+### 三方仓 (tripartite / third-party warehouse)
+赛狐里指**海外第三方仓库**（与自建仓、FBA 相对）。关键点：赛狐**官方对三方仓库存同步的建模
+就是「生成调整单」** —— 三方仓模块带一个「生成调整单」功能
+（i18n `main.warehouse.tripartite.warehouse.generate.adjustment.order`，权限
+`MOD_OVERSEA_WAREHOUSE.CREATE_ADJUST`），配置项走 `/api/config/{get,set}ThirdWarehouseInventoryAdjust.json`。
+所以「用调整单同步外部数量」是官方路径、不是用错工具；它的代价在成本侧（见
+`docs/solutions/workflow-issues/sellfox-inventory-sync-cost-drift.md`）。
+
+### 剩余货值约束（「货值不能为负数」）
+赛狐**成本补录单**下调采购单价时的硬校验：`变更额 = Δ单价 × 备货单备货量`，
+不能超过**该批次此刻剩余的货值**（`剩余可用量 × 当前单价`）。等价地：
+
+```
+单件可下调幅度 ≲ 当前单价 × (批次剩余可用量 / 备货单备货量)
+```
+
+**上调不受此限；下调被「剩余占比」封顶，剩余为 0 就完全降不了。**
+所以下调激励价有强时效性 —— 要在批次被订单/调整单吃掉前做。
+见 `docs/solutions/integration-issues/sellfox-cost-adjust-api.md`。
+
+### 激励价（低于 EN 成本的入库成本）
+运营为了让成本口径贴近销售激励而设的、**低于 EN 实际成本**的赛狐入库成本（仓库+SKU 维度）。
+数值来源是共享 Google Sheet 的特殊规则表，不是 EN BOM。落地路径只能是赛狐原生单据
+（`指定采购单价` / `单个头程费用`），且受「剩余货值约束」限制。
+执行记录见 `docs/solutions/workflow-issues/sellfox-incentive-cost-adjust-2026-09.md`。
+
+### 海外仓批次表 goodsAva
+`POST /api/overseaBatch/page.json` 返回的批次级字段，字面像「该批次可用量」，
+**实测不是当前可用库存**（30 行抽样 21 行与【库存明细】对不上，POLAND 曾整组差约 1000）。
+批次表可靠用途只有两个：**看库存由哪些来源单构成**、**看该批次的历史成本**。
+**数量一律以库存明细为准。**
+
 ## Flagged ambiguities
 
+- "'漏交' 曾被用来指赛狐有结算组但按店名拆 brand 对不上 txt——那是匹配失败。真漏交是有打款且钉钉无行、NAS 无对应 txt。有核算行但 API/NAS 无文件是下载缺口。打款 0 是否也算漏交，要财务确认 7 天规则是否覆盖 $0。"
 - "「赛狐有 API」不区分公开 OpenAPI 与私有接口时会得出相反结论 —— 说「没有写接口」通常只对公开 OpenAPI 成立。"
 - "「调整单批次会跟随备货单成本」只对 type=4（减少）成立；type=3（增加）是独立快照，不跟随。"
+- "「按 SKU 搜赛狐备货单」有三个调用面、三种写法：站点私有列表 `/api/oversea/page.json` 用 `searchType='sku'`；批次表 `/api/overseaBatch/page.json` 用 `searchType='commoditySku'`；**公开 OpenAPI 的列表页文档只列 pickSn/remark/itemRemark，不含 SKU**。别把某一面的约定套到另一面。且列表接口 `items` 只给 3 条预览，不能用来判断成员关系。"
 - "'AMZFZHSXEUR' 曾被当成欧洲聚合店 — Amazon 只有国家站，旧名只挂在 AMZFZHSXDE 别名。"
 - "'WFDANEEYUS' 与 'WFDaneeyUS' 不是同一条 Channel Account，大小写店铺码都保留。Channel Account Owner.user 存中文名；DingTalk/Frappe User.name 常是邮箱，同步时继续写中文。"
 - "'五桶' had been used as if it meant IvyeaOps 五杠杆 — they are distinct (search-term labels vs optimizer action candidates)."
@@ -340,12 +461,37 @@ A webhook-based DingTalk group messaging channel used by AI agents (WorkBuddy, C
 - "通途主档 SKU 改名后的旧名，与规则笔误（例如 Foam FBA BLACK-97），不是同一类问题；像旧名的字符串要先查主档。"
 - "赛狐「采购成本」曾被用来同时指商品主数据绍兴发货、期初仓+SKU 尾程前、备货单指定采购单价+头程；三者不可互换，也都不等于 EN Tongtool Cost Review 的皮壳切片。"
 
+## 账期/回款核算（Amazon/多平台）
+
+### 账期月
+一笔平台回款归属的会计月份。**两套归属不要混用**：
+- **钉钉/运营提交侧**：`账期日期` 所在自然月（1 号~月末）。迟交审计、NAS 归桶都用这套。
+- **赛狐结算中心 V2 / Amazon 结算报告侧**：结算周期结束日 `groupEndStr` 所在自然月（约 14 天一结）。`fetch --month` 按此过滤。
+
+区别于「提交月」或「打款日」，是费用归集的最小记账单位。
+
+### 账期窗口
+运营须在钉钉提交某月账期的起止：**该账期月 4 号 ~ 下月 3 号**（原为 8 号~下月 7 号；多留 3 天处理月底账期）。超出即「迟交/错位混入下月桶」。
+
+### 回款率
+回款效率考核 = 该渠道账号（按回款归属）**应收金额 / 销售额**。只统计未撤销且未拒绝的收款单。
+
+### 回款归属
+渠道账号对应的收款主体（如 欧洲公司/绍兴工厂/各分公司），决定该笔回款计入哪个核算主体；同一账号多币种要分别折算。
+
+### 结算报告 vs 日期范围报告
+Amazon 财务数据两种口径：**结算报告（settlement）= 打款(payout)口径**，逐交易行 amount-type/amount-description；**日期范围报告（date-range/transaction）= 活动(activity/posted)口径**，含 deferred、列式（product sales/tax/selling fees/fba fees/other/total）。二者**总额不同、不能对等**；做费用/科目用列式、做回款率/打款用结算。注意：税净≈0（代收代缴）、off-account 广告不进结算→TACoS 低估。
+
 ## 平台账期对账
 
 - **账期文件**: Overstock `OSTKUS-*.xlsx` 含 `Payment Summary` + `Detail` + `Mozart Reports`，是结算文件，不是平台订单导出。
-- **Tongtool Order**: EN 生产系统里的通途订单快照；Overstock 单据名通常为 `OS-{platform_order_id}`，另一账号 `OSTK02US` 使用 `OSFD-` 前缀。
+- **Walmart 账期**: 赛狐 API 直拉的结算行，带 `periodStartDate`/`periodEndDate`；**双周账期（14 天）**，不是自然月。
+- **沃尔玛补贴 (Total Walmart Funded Savings)**: Walmart 自己出的折扣。**它是佣金的计算基数**——佣金 = (商品价 + 补贴) × 15%；EN 的 `platform_fee` 只按商品价 × 15%，漏了补贴部分。
+- **Tongtool Order**: EN 生产系统里的通途订单快照；Overstock 单据名通常为 `OS-{platform_order_id}`，另一账号 `OSTK02US` 使用 `OSFD-` 前缀；Walmart 为 `WM-{platform_order_id}`（`platform_code=walmart_api`）。
 - **拆单后缀**: 多 SKU/多件订单在通途/EN 会拆成 `_1/_2/_3` 子单，`platform_order_id` 保留后缀；汇总时需排除金额相同的“无后缀重复主单”。
 - **对账金额口径**: 用 `order_amount` / `products_total_price` 对账；`order_items.transaction_price` 是组件行，不能加总；`actual_total_price` 在退货订单上可能为 0。
+- **Amazon 账期报表（插件获取报告）**: 赛狐里 Amazon 的 Transaction / Summary 账期文件，**只能**通过 `report/center/task/getPlugPageList.json` 读取 —— 由浏览器插件在账号登录态下抓取后存 COS，赛狐服务端不自抓。`reportType`：3=Transaction(csv/zip)、4=Summary(**pdf**)。该接口**纯读、不可触发抓取**。
+- **fileUrls 临时签名**: 插件报告的下载地址是**腾讯 COS 预签名 URL，1 小时过期**。不能存链接，归档必须存文件本体。
 
 ## 群晖 NAS 外网访问
 

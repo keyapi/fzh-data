@@ -48,6 +48,9 @@ Query `Version` doctype for `ref_doctype = "Work Order"` and `owner = "yangyisen
 - `actual_end_date` iterated at ~17ms intervals (programmatic, not human)
 - `custom_label_combination` being set
 
+These signatures are a **conjunction** (all together confirm 一键完工; a single trace is only
+"suspected"). The Chinese methodology keeps this AND-gate as its own section after Step 8.
+
 ### Step 4: Open Material Quantity Analysis
 
 - **Semi-finished (PK#/ND#)**: `open_material_qty = 0` is **abnormal**. Cutting must issue material. Zero means production data is unreliable.
@@ -60,6 +63,18 @@ Fetch individual Job Card → check `time_logs[].employee`:
 - **Other IDs** = real workers. Quantities reflect actual scan-based production.
 
 **API**: `GET /api/resource/Job Card/{name}` → `time_logs[]` child table
+
+**Aggregating quantities — do NOT sum across operations.** The same batch of pieces gets its own
+Job Card *per operation*, so summing `total_completed_qty` (fallback `for_quantity`) across operations multiplies the output by the
+number of operations. Observed: one Work Order ran 2 batches × 22 pieces = **44 pieces**; summing
+裁剪 / 皮壳整件 / 锁扣眼 / 拷边 (four operations) yields 176 — 4× inflated. To answer "how many
+pieces did this batch produce", take the **first operation** in the routing (裁剪 / 开料). To answer
+"how much did operation X do", then take operation X alone.
+
+**`Work Order.status` / `produced_qty` may be stale.** Observed Work Orders whose header still read
+`Not Started` with `produced_qty = 0` while the Job Cards showed dozens of pieces through several
+operations. Decide "has this started?" from the **Job Card count** — genuinely not-started means
+zero Job Cards and every operation still `Pending` — never from the Work Order status alone.
 
 ### Step 6: Job Card owner (Supplementary Cross-Check)
 
@@ -143,5 +158,7 @@ Without governance around 一键完工 use and without this detection methodolog
 
 ## Related
 
-- `erpnext/docs/work-order-investigation-methodology.md` — project-specific methodology (Chinese)
+- `erpnext/docs/work-order-investigation-methodology.md` — project-specific methodology (Chinese, same 8 steps)
 - `erpnext/scripts/gen_report.py` — report generation script
+- `.agents/skills/erpnext-wo-audit/SKILL.md` — skill that auto-loads this methodology
+- `docs/solutions/workflow-issues/erpnext-so-closed-unshipped-and-unstarted-work-orders.md` — adjacent but distinct problem domain: Sales Order shipping status (Closed-but-undelivered dead orders, child-table filter API rules)

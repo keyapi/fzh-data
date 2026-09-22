@@ -385,3 +385,36 @@ sellfox_shipping/
 | GLS/FedEx | 后续验证，不在当前纵切 |
 
 真调前：复制 [`.env.example`](.env.example) 键到仓库根 `.env`（gitignore）。冒烟脚本**只**读 env，不再从 Markdown 取密钥。禁止把真实 Key 写入仓库或文档。赛狐导入/回写前必须用户确认范围。
+
+## 坑（2026-09-22 补 — 面向将来的迁移/复用）
+
+### 1. 承运商批量导入的字段有硬上限，多 SKU 合并后要主动截断
+
+组合件（皮壳 `-Cover` + 海绵 `-Foam`）在仓库侧炸成多 SKU，而一个包裹只能贴一个面单 ⇒ 批量导入 csv 必须**每包裹一行**、把多个 SKU 拼进同一字段。拼接随 SKU 数变长，会撞上限：
+
+| 承运商 | 字段 | 上限 | 超限行为 |
+|---|---|---|---|
+| UPS | Reference 1~5 | **各 35** | **整批被拒**（`Invalid Package Reference Value`） |
+| FedEx | `poNumber` | **String(30)** | 承运商侧静默按上限切 |
+| FedEx | `itemDescription` | **String(450)** | 余量极大 |
+
+- 上限**从官方模板自带的字段定义表读**（FedEx 那张在模板 xlsx 的 `Available headers` sheet），不要猜；再用「已接受历史文件的最长值」交叉验证。
+- 同一个拼接串放进不同字段**要用不同上限**，不能一刀切。
+- 这个风险是「每包裹一行」→「每货品一行」的模板变更**新引入**的：旧模板下每包裹只 1 个 SKU、合并是空操作（最长 32 字符），历史里找不到先例。
+
+详见 [`docs/solutions/integration-issues/carrier-label-batch-field-length-limits.md`](../docs/solutions/integration-issues/carrier-label-batch-field-length-limits.md)。
+
+### 2. 背贴合成的品名，查名键是通途导出的原样字符串
+
+背贴 4×2" 标签逐行显示 `SKU / QTY / 中文名 / 西语名`，查名键是导出 `Reference 2` 的**原样字符串**（两侧 `strip().upper()` 后匹配），数据在 `US SKU Name` sheet（**不是** `sku_label/name_lookup.py` 走的 `item_languages`）。缺失时该行品名为**空白且不报错** ⇒ 流水线必须有「背贴缺名」报告行。
+
+- 通途SKU 在 EN 存于 `Item.customer_code` / `customer_items[].ref_code`，**不在** `item_languages.tt_sku`（后者只存 `-Cover` 成品码，海绵件为空）。
+- 访问性坑：`Item Language` 子表**不能 list**（403，可逐 Item 读带出）、`commodity_sku` **不能当过滤字段**、`Item.name` 是物料编码搜不到 TT 号。
+- 尺寸↔序号**不同序**（153→`...4183`、160→`...4182`）必须逐条从 EN 读。
+- PIM API `vilavi_pim.api.pim_api.get_sku_item_itemgroup_mapping` 可一把映射，**但必须先做假阳性测试**（丢不存在的 SKU 应返回 `not_found`）并横验同族自洽。
+
+详见 [`docs/solutions/integration-issues/sku-name-backfill-via-en-customer-code.md`](../docs/solutions/integration-issues/sku-name-backfill-via-en-customer-code.md)。
+
+> 注：上述流水线本体目前仍是同事的 Google Colab notebook（未迁入本模块），本模块也没有对应代码改动。两条先记录，避免将来迁移/复用时重踩。
+>
+> ⚠️ **module 归属已修正（2026-09-22）**：这两条讲的是**通途订单导出**的发货侧后处理，不属于 `sellfox_shipping`（那是**赛狐侧**尾程打单）。对应学习文档的 `module:` 已改为 **`tongtool_order_shipping`**，该模块现承载这两条硬约束与将来的迁移落点。本文件保留摘要仅作就近提示。
