@@ -17,7 +17,7 @@ timestamp: 2026-09-21
 
 ## 三条硬安全约束
 
-1. **只读**：只暴露 **14 个**工具 —— `nas_health` / **`nas_list_shares`** / **`nas_list_archive`** / `nas_list_folder` /
+1. **只读**：只暴露 **15 个**工具 —— `nas_health` / **`nas_link`** / **`nas_list_shares`** / **`nas_list_archive`** / `nas_list_folder` /
    `nas_file_info` / `nas_search` / `nas_folder_size` / `nas_thumbnail` / **`nas_folder_thumbnails`** /
    `nas_file_md5` / **`nas_read_image`** / **`nas_read_pdf`** / **`nas_read_doc`** / `nas_read_text`。
    **不暴露任何写或删**（`NAS_API/synology.py` 里的 `create_folder` / `create_subfolders` / **`delete_folder`** 一律不用）。
@@ -60,6 +60,7 @@ uv run python nas_mcp/tests/test_smoke.py
 | `NAS_URL` / `NAS_USERNAME` / `NAS_PASSWORD` | ✅ | 同 `NAS_API`（复用其约定） |
 | `NAS_ALLOWED_ROOTS` | | `*`（默认）= **信任 DSM 账号权限**；或显式列目录（逗号/冒号分隔）做 MCP 层收紧 |
 | `NAS_MCP_IMAGE_MAX_EDGE` | | 图片返回长边上限像素，默认 `1280` |
+| `NAS_MCP_LINK_BASE` | | File Station 深链基址，默认 `https://nas.vilavi.cn:11024` |
 | `NAS_ROOT_FOLDER` | | 单根兼容项；仅在未设 `NAS_ALLOWED_ROOTS` 时生效 |
 | `NAS_MCP_BIND` / `NAS_MCP_PORT` | | 默认 `127.0.0.1:8402`（**只绑回环**，由 nginx 反代） |
 | `NAS_MCP_LOG` | | 可选，追加日志到文件 |

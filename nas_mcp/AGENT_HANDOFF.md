@@ -31,10 +31,11 @@
 
 | 项 | 状态 |
 |---|---|
-| 本机只读冒烟测试（真连 NAS） | ✅ 13/13 通过 |
+| 工具数 | **15 个，全部只读**（清单见 [docs/index.md](docs/index.md)） |
+| 本机只读冒烟测试（真连 NAS） | ⚠️ **45 通过 / 2 失败**，两个失败都是**本地环境**问题：venv 缺 `python-docx`/`python-pptx`；`nas_folder_size` 撞上 DSM「目录统计」任务被回收（该 API 已知不稳） |
 | MCP 传输（initialize / tools-list / 401） | ✅ 本机通过 |
-| 部署到 VPS | ⏳ 见 [docs/reference/deploy.md](docs/reference/deploy.md) |
-| 接进 ChatGPT | ⏳ 部署后 |
+| 部署到 VPS | ✅ 已上（容器 `nas-mcp` @ `127.0.0.1:8402`，nginx 反代 `https://api.vilavi.cn/nas/mcp`） |
+| 接进 ChatGPT | ✅ 已通（Bearer 静态令牌路线；已在 ChatGPT 里实际调用 NAS 工具） |
 
 ## 已知坑
 
@@ -43,3 +44,11 @@
 - **凭证在父仓库**：worktree 里通常没有 `NAS_API/.env`；`tests/test_smoke.py` 会自动往上找父仓库。
 - **`NAS_URL` 用哪个域名**：仓库里 `NAS_API/.env` 用的是 `fzh.myds.me:11024`；
   从 VPS 走 `nas.vilavi.cn:11024` 也可（已实测 VPS→NAS 通）。
+- **File Station 深链格式不要自己编**：照抄 EN 现成实现 —— 双层 URL 编码
+  （`quote(quote(path))`）+ `?launchApp=SYNO.SDS.App.FileStation3.Instance&launchParam=openfile%3D<second>`。
+  见 `nas_mcp/server.py::filestation_link()`；测试用真实样例钉住逐字一致。
+  **EN 侧的 NAS 代码主要在两处**：`vilavi_pim`（产品物料库：`api/nas.py`、`public/js/item_group_nas.js`）
+  与 `work_order_task` 的 `item_groups_nas_path.py::encode_filestation_link()`。
+- **会话失效错误码**：DSM 报 **`[105, 106, 107]`** 都算会话过期（EN 口径）—— **不要只判 106/107**。
+- **DSM Thumb 的 `path` 要加双引号**（EN 注释：spec 要求）。实测加不加都通，加上更稳（防路径带逗号等特殊字符）。
+- **加了 DSM 文件夹权限还不够**：还要把该目录加进 `NAS_ALLOWED_ROOTS` 并重启容器，否则仍被路径护栏拒。

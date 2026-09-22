@@ -10,6 +10,7 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-09-21 | 把 FAC / 赛狐 / NAS 三个 MCP 接上 ChatGPT —— 一次串起来的方法与四个教训 | [workflow-issues/mcp-to-chatgpt-bringup-lessons.md](workflow-issues/mcp-to-chatgpt-bringup-lessons.md) |
 | 2026-09-22 | 承运商批量导入面单的字段长度上限（UPS Reference 35 / FedEx poNumber 30） | [integration-issues/carrier-label-batch-field-length-limits.md](integration-issues/carrier-label-batch-field-length-limits.md) |
 | 2026-09-22 | 背贴品名缺失怎么补——通途SKU 在 EN 有两种登记写法 | [integration-issues/sku-name-backfill-via-en-customer-code.md](integration-issues/sku-name-backfill-via-en-customer-code.md) |
 | 2026-09-22 | 用 Drive API 改同事的 Colab notebook（cell 插入 / 回读比对 / 并发守卫） | [developer-experience/colab-notebook-drive-api-editing.md](developer-experience/colab-notebook-drive-api-editing.md) |
@@ -74,3 +75,4 @@ tags: [solutions, index]
 | 2026-07-28 | 赛狐 Phase2 ingest — IvyeaOps 五杠杆优化器数据接线 | [architecture-patterns/sellfox-ivyeaops-five-lever-ingest.md](architecture-patterns/sellfox-ivyeaops-five-lever-ingest.md) |
 | 2026-07-27 | IvyeaOps AI 问答 503 — deepseek-v4-flash | [integration-issues/ivyeaops-assistant-deepseek-v4-model-name.md](integration-issues/ivyeaops-assistant-deepseek-v4-model-name.md) |
 | 2026-07-24 | FZH 统一 AI 接入方案 — 选型结论 | [integration-issues/fzh-unified-ai-access-conclusion.md](integration-issues/fzh-unified-ai-access-conclusion.md) |
+| 2026-07-14 | 先搜再造：官方/项目文档 → 内部约定要搜代码 → 第三方方案要抄功能清单 | [workflow-issues/search-first-before-implementing.md](workflow-issues/search-first-before-implementing.md) |

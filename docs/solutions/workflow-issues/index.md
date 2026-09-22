@@ -9,6 +9,8 @@ tags: [workflow-issues, index]
 
 | 文档 | 说明 |
 |------|------|
+| [mcp-to-chatgpt-bringup-lessons.md](mcp-to-chatgpt-bringup-lessons.md) | 把 FAC / 赛狐 / NAS 三个 MCP 接上 ChatGPT 的方法与四个教训 |
+| [fedex-track-batch-query.md](fedex-track-batch-query.md) | FedEx 官方批量 Track + 账号/组织恢复 + 三条教训 |
 | [sellfox-inventory-sync-cost-drift.md](sellfox-inventory-sync-cost-drift.md) | 用库存调整单同步数量会让成本越来越改不动 —— 成因与三个选项 |
 | [sellfox-incentive-cost-adjust-2026-09.md](sellfox-incentive-cost-adjust-2026-09.md) | 特殊规则改赛狐入库成本执行记录 —— 下调受批次剩余货值封顶，越消耗越改不动 |
 | [sellfox-cover-combo-create-ops.md](sellfox-cover-combo-create-ops.md) | 三角皮壳 PK# 组合代理批量创建（不是 EN 套件） |
@@ -29,6 +31,6 @@ tags: [workflow-issues, index]
 | [walmart-account-period-sellfox-api.md](walmart-account-period-sellfox-api.md) | Walmart 账期走赛狐 API 直拉；平台费口径结案（差额=沃尔玛补贴×15%） |
 | [pb-reconciliation-monthly-update.md](pb-reconciliation-monthly-update.md) | PB 对账表月度更新脚本化 + UPS 交付核查 |
 | [tongtool-sku-rename-gsheet-remap.md](tongtool-sku-rename-gsheet-remap.md) | 通途主档改名后对齐订单 Google Sheet |
-| [search-first-before-implementing.md](search-first-before-implementing.md) | 改之前先搜官方与项目文档 |
+| [search-first-before-implementing.md](search-first-before-implementing.md) | 先搜再造：官方/项目文档 → 内部约定要搜代码 → 第三方方案要抄功能清单 |
 | [erpnext-version-api-compatibility.md](erpnext-version-api-compatibility.md) | ERPNext 跨版本 API 兼容 |
 | [erpnext-so-closed-unshipped-and-unstarted-work-orders.md](erpnext-so-closed-unshipped-and-unstarted-work-orders.md) | 已关闭却未发货的死单 + 工单进度不可信（子表反查父单的 API 铁律） |

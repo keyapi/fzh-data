@@ -41,6 +41,8 @@ PROTOCOL = "2025-06-18"
 MAX_TEXT_BYTES = 256 * 1024          # nas_read_text 硬上限 256 KiB
 MAX_IMAGE_BYTES = 4 * 1024 * 1024    # nas_read_image 最终 base64 前的字节上限
 IMAGE_MAX_EDGE = int(os.environ.get("NAS_MCP_IMAGE_MAX_EDGE", "1280"))
+# File Station 深链基址（需 DSM 登录才能打开 → 天然「有 NAS 权限的人才看得到」）
+LINK_BASE = (os.environ.get("NAS_MCP_LINK_BASE") or "https://nas.vilavi.cn:11024").rstrip("/")
 LOG = os.environ.get("NAS_MCP_LOG", "")
 
 
@@ -135,7 +137,9 @@ def _is_session_error(err) -> bool:
         except Exception:                            # noqa: BLE001  异常对象不可序列化
             s = str(err)
     s = s.lower()
-    return ("session" in s) or ("timeout" in s) or ("code\":106" in s) or ("code\":107" in s)
+    # 105 / 106 / 107 = DSM 的鉴权类错误码（与 EN 的 pim/api/nas.py 对齐）
+    return ("session" in s) or ("timeout" in s) or any(
+        ('code":%d' % c) in s or ('code": %d' % c) in s for c in (105, 106, 107))
 
 
 def list_strict(path: str, limit: int = 100, offset: int = 0) -> dict:
@@ -235,6 +239,35 @@ def safe_path(raw: str) -> str:
     raise PathDenied(f"路径越界：仅允许 {ROOTS_STR} 之内")
 
 
+def filestation_link(path: str) -> str:
+    """把 NAS 路径拼成 **File Station 深链**。
+
+    ⚠️ **格式是从 EN 现成实现抄来的，不是猜的** ——
+    见 EN 测试服务器 `work_order_task/work_order_task/tasks/item_groups_nas_path.py`
+    的 `encode_filestation_link()`（产品物料库在用）。要点是**双层 URL 编码**：
+
+        first  = quote(path, safe="")
+        second = quote(first, safe="")
+        link   = <base>/?launchApp=SYNO.SDS.App.FileStation3.Instance&launchParam=openfile%3D<second>
+
+    打开会要求 DSM 登录 —— 所以「有 NAS 权限的人才看得到」，这正是我们要的语义。
+    """
+    from urllib.parse import quote as _q
+    second = _q(_q(path, safe=""), safe="")
+    return (f"{LINK_BASE}/?launchApp=SYNO.SDS.App.FileStation3.Instance"
+            f"&launchParam=openfile%3D{second}")
+
+
+def tool_link(a: dict) -> dict:
+    """给任意 NAS 路径生成 **File Station 深链**（需 DSM 登录才能打开）。只读。"""
+    raw = a.get("path") or ""
+    if not raw:
+        raise ValueError("path 必填")
+    p = safe_path(raw)
+    return {"path": p, "link": filestation_link(p),
+            "note": "打开需 DSM 登录；没有 NAS 权限的人打不开"}
+
+
 # ── 工具定义 ────────────────────────────────────────────────
 
 TOOLS = [
@@ -274,6 +307,16 @@ TOOLS = [
         },
     },
     {
+        "name": "nas_link",
+        "description": ("给任意 NAS 路径生成 **File Station 深链**（打开需 DSM 登录）。只读。"
+                        "适合把文件/文件夹发给有 NAS 权限的同事。"),
+        "inputSchema": {
+            "type": "object",
+            "properties": {"path": {"type": "string", "description": "文件或文件夹路径"}},
+            "required": ["path"],
+        },
+    },
+    {
         "name": "nas_health",
         "description": "检查 NAS 连通性与配置的根目录。只读。",
         "inputSchema": {"type": "object", "properties": {}, "required": []},
@@ -288,6 +331,7 @@ TOOLS = [
                          "description": f"文件夹路径，必须在允许的根目录之一内（{ROOTS_STR}）。留空则列默认根目录。"},
                 "limit": {"type": "integer", "description": "返回条数上限，默认 100，最大 1000"},
                 "offset": {"type": "integer", "description": "从第几条开始（翻页用）。返回里会带 total 与下一页提示。"},
+                "with_links": {"type": "boolean", "description": "给每个子项也附 File Station 深链（输出会变长，默认 false）"},
             },
             "required": [],
         },
@@ -434,7 +478,10 @@ def tool_list(a: dict) -> dict:
     offset = max(0, int(a.get("offset") or 0))
     r = list_strict(p, limit=limit, offset=offset)
     items = r["items"]
-    out = {"path": p, "count": len(items), "items": items}
+    if a.get("with_links"):
+        for it in items:
+            it["link"] = filestation_link(it.get("path") or "")
+    out = {"path": p, "link": filestation_link(p), "count": len(items), "items": items}
     # 让模型知道「这一页之外还有」，避免把分页当成「总共就这些」
     if r.get("total") is not None:
         out["total"] = r["total"]
@@ -450,12 +497,14 @@ def tool_info(a: dict) -> dict:
         raise ValueError("path 必填")
     p = safe_path(raw)
     parent, name = posixpath.dirname(p), posixpath.basename(p)
-    if not name:                                     # 问的是某个根目录本身
-        for r in ROOTS:
-            if p == r:
-                return {"name": posixpath.basename(r), "path": r, "is_dir": True}
+    # 共享文件夹根 / 顶层目录：父目录是 "/"，而该账号**列不了 "/"**（DSM 报 Unknown error）。
+    # 这种情况直接把它自己当目录返回，不要去列父目录。
+    if parent in ("/", "") or p in ROOTS:
+        return {"name": name or p, "path": p, "is_dir": True,
+                "link": filestation_link(p)}
     for f in list_strict(parent, limit=1000)["items"]:
         if f.get("name") == name:
+            f["link"] = filestation_link(f.get("path") or p)
             return f
     return {"not_found": True, "path": p}
 
@@ -756,8 +805,10 @@ def tool_thumbnail(a: dict) -> dict:
         size = "small"
 
     c = nas_client()
+    # path 用双引号包起来 —— EN 的 pim/api/nas.py 注释写明 spec 要求
+    # （实测加不加都通；加上更稳，能防带逗号等特殊字符的路径）
     url = (f"{c.base_url}{THUMB_PATH}?api=SYNO.FileStation.Thumb&version={THUMB_VER}"
-           f"&method=get&path={quote_plus(p)}&size={size}&_sid={c._sid}")
+           f"&method=get&path={quote_plus(chr(34) + p + chr(34))}&size={size}&_sid={c._sid}")
     token = getattr(c.session, "_syno_token", "") or ""
     r = requests.get(url, verify=False, timeout=60, headers={"X-SYNO-TOKEN": token})
     r.raise_for_status()
@@ -954,7 +1005,7 @@ def tool_folder_thumbnails(a: dict) -> dict:
 
     for it in picked:
         url = (f"{c.base_url}{THUMB_PATH}?api=SYNO.FileStation.Thumb&version={THUMB_VER}"
-               f"&method=get&path={quote_plus(it['path'])}&size={size}&_sid={c._sid}")
+               f"&method=get&path={quote_plus(chr(34) + it['path'] + chr(34))}&size={size}&_sid={c._sid}")
         try:
             r = requests.get(url, verify=False, timeout=60, headers={"X-SYNO-TOKEN": token})
             r.raise_for_status()
@@ -1021,6 +1072,7 @@ def tool_list_archive(a: dict) -> dict:
 
 
 TOOL_IMPL = {
+    "nas_link": tool_link,
     "nas_list_archive": tool_list_archive,
     "nas_list_shares": tool_list_shares,
     "nas_folder_thumbnails": tool_folder_thumbnails,
