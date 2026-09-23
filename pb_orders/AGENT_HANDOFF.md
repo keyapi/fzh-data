@@ -348,9 +348,13 @@ uv run pytest tests/ -q
 - [x] 75 个自动化测试（另有 Redis/RQ 生命周期用例，默认跳过），不需要 Redis 也能跑
 - [x] 已部署到 EN 测试服务器（`/opt/pb-orders`）。入口 **<https://api.vilavi.cn/pb/>**
       （公网 HTTPS + 钉钉登录，容器只绑 `127.0.0.1`）；Tailscale 那条路径已弃用（走香港中继太慢）
-- [x] 公网入口有钉钉登录闸门（`web/auth.py`）。**但白名单留空 = 任何钉钉账号都能登录**
-      —— 桥的 corpId 校验实际不生效，见部署文档 11.5 与 `docs/solutions/.../dingtalk-sso-new-api-oidc-bridge.md`
+- [x] 公网入口有钉钉登录闸门（`web/auth.py`）。**登录范围由桥把关**：2026-09-23 起桥按
+      组织成员判定（查本公司通讯录），只有本公司员工能进；`PB_ORDERS_ALLOWED_USERS`
+      留空即可，只在需要再窄一层时才填
+- [x] 队列对账：`queued` 不再被重启一刀切标失败之后，worker 启动对一次、运行期间每 60 秒再对一次
+      （`PB_ORDERS_QUEUE_WATCH_SECONDS`，0 = 关）。Redis 丢队列时任务会被标 `queue_lost` 并可重跑
 - [x] 保留策略：启动时按 `PB_ORDERS_RETENTION_DAYS`（默认 90 天）清理已完成任务与无人引用的产物。
       **只在服务/worker 启动时跑，不是定时任务**
+- [x] 同站 POST 带 CSRF 令牌（`web/csrf.py`）；上传磁盘名固定，原始文件名只用于展示
 - [ ] 部分发货的一单跨两份 PDF 时，仍需人工确认哪些页给谁（目前按 SKU 自动拆）
 - [ ] 原 notebook 步骤 3.x（赛狐导入）、4.3（按仓库分拆，20260831 起停用）—— 未迁

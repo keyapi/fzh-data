@@ -415,23 +415,22 @@ location /pb/ {
   公司里其它服务（sellfox-api-proxy 等）也是这么做的。
 - 登录后跳回用户原本想去的页面（`return_to` 只接受本站相对路径，挡开放重定向）。
 
-**已知风险，必须知道**：桥的 `ALLOWED_CORP_ID` 只在钉钉返回 corpId 时才校验，
-而 `/v1.0/contact/users/me` 经常不返回 —— 所以**实际上任何钉钉用户都能登录**
-（仓库文档 `docs/solutions/integration-issues/dingtalk-sso-new-api-oidc-bridge.md`
-把这个列为已知坑）。因此 PB 侧加了可选白名单 `PB_ORDERS_ALLOWED_USERS`
-（逗号分隔，匹配钉钉显示名或 `sub`）：
+**登录范围由桥负责（2026-09-23 起）**：桥的授权请求只带 `scope=openid`，钉钉不回
+`corpId`，原先「返回了才比」的比对等于从不生效 —— 任何钉钉账号都能登录。
+桥已改为按**组织成员**判定（`topapi/user/getbyunionid`，本公司应用凭证）：
+不在本公司通讯录的人返回 `60121` → 拒绝，判定不了也拒绝。生产实测真实员工放行、
+伪造账号拒绝，并留下日志 `登录校验 union_id=… 显示名=… corp_id=(未返回) 公司成员=True`。
 
-- 留空 = 任何钉钉用户可登录，启动时打 WARNING（当前服务器就是这个状态）
+因此 PB 侧**不需要**再自己拦「谁算公司人」。`PB_ORDERS_ALLOWED_USERS`
+（逗号分隔，匹配钉钉显示名或 `sub`）保留为**可选加码**，只在需要再窄一层时才填：
+
+- 留空 = 信任桥的判定（默认，也就是按本公司员工放行）
 - 填了就只放白名单里的，其余 403
 
-登录后页头会显示钉钉显示名 —— 拿不准该填谁时，先留空登录一次看名字，再填进去。
+登录后页头会显示钉钉显示名。
 
 ### 11.6 未完成事项
 
-- **白名单尚未填写**（见 11.5 的风险），需要确认使用者后填入 `PB_ORDERS_ALLOWED_USERS`。
-  根因在桥侧：授权请求只带了 `scope=openid`，没申请 `corpid`，所以拿不到 `corpId`、
-  公司校验被跳过。要收口得改桥（**影响所有走这条桥的服务**），
-  或继续用这里的白名单。详见 `docs/solutions/integration-issues/dingtalk-sso-new-api-oidc-bridge.md`。
 - **保留策略在启动时执行**（`PB_ORDERS_RETENTION_DAYS`，默认 90 天），**不是定时任务**：
   长期不重启的服务/worker 不会触发清理。要真正常态化清理得加调度。
 - **队列丢失**：RQ 2.12.0 在 Redis 断连时**重连而不退出**（`ConnectionError` 指数退避），
