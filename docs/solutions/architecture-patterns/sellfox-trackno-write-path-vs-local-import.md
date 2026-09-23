@@ -1,4 +1,6 @@
 ---
+okf: v0.1
+type: Reference
 title: 赛狐 trackNo 写路径 vs 本地 import vs 通途/自动推送
 date: 2026-07-20
 category: docs/solutions/architecture-patterns/

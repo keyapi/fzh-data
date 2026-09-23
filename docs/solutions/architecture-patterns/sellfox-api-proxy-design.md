@@ -1,4 +1,6 @@
 ---
+okf: v0.1
+type: Reference
 module: sellfox-api-proxy
 date: 2026-07-09
 problem_type: architecture_pattern

@@ -1,4 +1,5 @@
 ---
+type: Reference
 okf: v0.1
 title: DeepSeek flash 系列 2026-09-10 降价改价 + OpenRouter 迁移评估（结论：不迁）
 date: 2026-09-10

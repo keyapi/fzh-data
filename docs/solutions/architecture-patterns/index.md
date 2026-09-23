@@ -10,6 +10,7 @@ timestamp: 2026-07-28
 
 | 标题 | 文件 |
 |------|------|
+| EN 端到端供应链履约可视化蓝图 | [en-end-to-end-supply-chain-fulfillment-visibility.md](en-end-to-end-supply-chain-fulfillment-visibility.md) |
 | 公开代码仓与私有公司知识分层——兼顾 Agent 检索、同事使用与防泄露 | [public-private-agent-knowledge-split.md](public-private-agent-knowledge-split.md) |
 | 办公室出口拓扑与应急链路（OpenClash ↔ 上海跳板 ↔ 美国 Vultr） | [office-egress-fallback-chain.md](office-egress-fallback-chain.md) |
 | SPS Commerce API 自动化（Transaction API + M2M） | [sps-commerce-api-automation.md](sps-commerce-api-automation.md) |

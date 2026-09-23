@@ -1,4 +1,6 @@
 ---
+okf: v0.1
+type: Reference
 title: 通途有库存 SKU 三方主线补齐惯例
 date: 2026-08-11
 category: conventions

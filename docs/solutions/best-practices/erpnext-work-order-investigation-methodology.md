@@ -1,4 +1,6 @@
 ---
+okf: v0.1
+type: Reference
 title: "ERPNext Work Order Production Data Anomaly Investigation Methodology"
 date: 2026-07-10
 category: docs/solutions/best-practices/

@@ -1,4 +1,6 @@
 ---
+okf: v0.1
+type: Reference
 title: 搜索词收割勿把 ASIN 当精准关键词
 date: 2026-07-28
 category: best-practices

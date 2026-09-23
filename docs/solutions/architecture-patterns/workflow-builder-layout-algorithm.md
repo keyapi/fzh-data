@@ -1,4 +1,6 @@
 ---
+okf: v0.1
+type: Reference
 title: "ERPNext 工作流设计器画布自动布局算法"
 date: 2026-07-03
 category: architecture-patterns

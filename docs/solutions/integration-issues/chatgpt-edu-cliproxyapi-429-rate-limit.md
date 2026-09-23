@@ -1,4 +1,6 @@
 ---
+okf: v0.1
+type: Reference
 title: ChatGPT Edu 账号 CLIProxyAPI 429 限流机制调研
 date: 2026-08-05
 last_updated: 2026-08-31

@@ -1,4 +1,6 @@
 ---
+okf: v0.1
+type: Reference
 title: Amazon&新平台账期「提交异常/迟交」审计方法与规则
 date: 2026-09-09
 category: workflow-issues

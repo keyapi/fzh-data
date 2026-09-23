@@ -1,4 +1,6 @@
 ---
+okf: v0.1
+type: Reference
 title: AGENTS.md Missing ERPNext Environment Access Distinction
 date: 2026-07-03
 category: docs/solutions/documentation-gaps/

@@ -1,4 +1,6 @@
 ---
+okf: v0.1
+type: Reference
 module: EN_API
 date: 2026-08-31
 problem_type: tooling_decision

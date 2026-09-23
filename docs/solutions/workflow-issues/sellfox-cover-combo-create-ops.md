@@ -1,4 +1,6 @@
 ---
+okf: v0.1
+type: Reference
 title: 三角皮壳 PK# 组合代理批量创建（不是 EN 套件）
 date: 2026-08-24
 category: workflow-issues
