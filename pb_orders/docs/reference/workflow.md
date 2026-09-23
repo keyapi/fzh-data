@@ -369,6 +369,10 @@ SPS 导出的 CSV 是**参差**的：表头 147 列、数据行 146 列、且**�
 | 导航「检查 SPS 新订单」→ `/checks/new` | 还没筛过：传 SPS 原始 CSV，拿 checked CSV + 操作表 |
 | 导航「直接生成发货文件」→ `/jobs/new` | 已经手工筛好：直接传 Packslip PDF + checked CSV |
 
+> ⚠️ 两个入口的断货 SKU 都走 `app.parse_sku_list()` 解析（中英文逗号/分号/空格/换行都算
+> 分隔）。**不要改回 `split(",")`** —— 页面写着「逗号或换行分隔」，只按逗号切会把多行
+> 输入当成一个 SKU，缺货行静默漏掉，而且报告看起来是"跑通了"。
+
 检查任务成功后，任务页底部有「继续生成发货文件」按钮 → `/jobs/{id}/fulfill`：
 **只需再传 Packslip PDF**，系统把上次那份 checked CSV 直接落成新任务的 `order.csv`
 （`storage.link_or_copy`），出件范围与预检结果严格一致，人也少传一遍文件。

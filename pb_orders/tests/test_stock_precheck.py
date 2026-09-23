@@ -202,6 +202,99 @@ def test_operations_table_shows_integer_qty_and_sources_columns(tmp_path):
     assert "2" in result.checked_csv.read_text(encoding="utf-8")
 
 
+def test_incidental_whitespace_and_lowercase_are_legal(tmp_path):
+    """源文件里 Record Type 写成小写、字段两侧带空格，都是合法输入，不能报校验失败。
+
+    回归：回读校验曾拿**规范化后**的 DataFrame 去比逐行照搬的原文，
+    这类输入会误报 output_verify_failed（内容其实没写错）。
+    """
+    source = tmp_path / "check0stock order x1.csv"
+    source.write_text(
+        RAGGED_HEADER + "\n"
+        + "100000001,, H ,,,,,C1\n"
+        + "100000001,1, d ,2, STYLE-A ,BUYER-A,C1\n",
+        encoding="utf-8",
+    )
+    result = stock_precheck.run_stock_check(source, [], tmp_path / "out")
+
+    # 输出逐行照搬原文：空格与小写都原样留着
+    lines = result.checked_csv.read_text(encoding="utf-8").splitlines()
+    assert lines[1] == "100000001,, H ,,,,,C1"
+    assert lines[2] == "100000001,1, d ,2, STYLE-A ,BUYER-A,C1"
+    assert result.report["details"]["total"] == 1
+
+
+def test_rerun_replaces_both_products(tmp_path):
+    """同一批重跑：两个产物都覆盖（Windows 上 shutil.move 撞同名会直接失败）。"""
+    source = write_ragged_csv(tmp_path / "check0stock order x3.csv")
+    out = tmp_path / "out"
+
+    first = stock_precheck.run_stock_check(source, RAGGED_NO_STOCK, out)
+    assert first.report["replaced"] == []
+
+    # 第二次换个断货清单（因此内容不同），产物应该整体被换掉
+    second = stock_precheck.run_stock_check(source, ["STYLE-D"], out)
+    assert second.checked_csv.name == first.checked_csv.name  # 同名 -> 覆盖
+    assert second.report["replaced"] == [first.checked_csv.name, first.operations_xlsx.name]
+
+    lines = second.checked_csv.read_text(encoding="utf-8").splitlines()
+    assert lines == [RAGGED_HEADER, *RAGGED_ROWS[:5]]  # 这次只砍掉整单缺货的 PO 003
+    assert "STYLE-D" not in second.checked_csv.read_text(encoding="utf-8")
+
+
+def test_locked_output_is_refused_without_publishing_anything(tmp_path, monkeypatch):
+    """产物被占用（Excel 打开着）时整体拒绝，不能出现「新 CSV + 旧 XLSX」。"""
+    import builtins
+    from pathlib import Path
+
+    source = write_ragged_csv(tmp_path / "check0stock order x3.csv")
+    out = tmp_path / "out"
+    first = stock_precheck.run_stock_check(source, RAGGED_NO_STOCK, out)
+
+    # 同名重跑会被挡下：把内容换掉，就能验证它一个字没被动过
+    locked = first.checked_csv
+    locked.write_text("上一版的内容", encoding="utf-8")
+    workbook_bytes = first.operations_xlsx.read_bytes()
+
+    real_open = builtins.open
+
+    def fake_open(file, mode="r", *args, **kwargs):
+        if "a" in mode and Path(file) == locked:
+            raise PermissionError(13, "being used by another process")
+        return real_open(file, mode, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "open", fake_open)
+    with pytest.raises(stock_precheck.StockCheckError) as exc:
+        stock_precheck.run_stock_check(source, RAGGED_NO_STOCK, out)  # 同样的参数 -> 同名
+
+    assert exc.value.code == "output_locked"
+    assert locked.read_text(encoding="utf-8") == "上一版的内容"       # 没被覆盖
+    assert first.operations_xlsx.read_bytes() == workbook_bytes      # 也没被单独换掉
+
+
+def test_formula_like_values_are_escaped_in_xlsx_only(tmp_path):
+    """外部 CSV 里以 `=` 开头的值在 xlsx 里不能变成公式；checked CSV 保持原文。"""
+    evil = "=cmd|'/c calc'!A1"
+    source = tmp_path / "check0stock order x1.csv"
+    source.write_text(
+        RAGGED_HEADER + "\n"
+        "100000001,,H,,,,C1\n"
+        f'100000001,1,D,2,"{evil}",BUYER-A,C1\n',
+        encoding="utf-8",
+    )
+    result = stock_precheck.run_stock_check(source, [], tmp_path / "out")
+
+    wb = load_workbook(result.operations_xlsx, data_only=False)
+    ws = wb["ASN有货明细"]
+    headers = [cell.value for cell in ws[1]]
+    cell = ws.cell(row=2, column=headers.index("Vendor Style") + 1)
+    assert cell.data_type != "f", "以 = 开头的值被 openpyxl 写成了公式"
+    assert cell.value == f"'{evil}"
+
+    # checked CSV 仍是逐行照搬的原始字节
+    assert evil in result.checked_csv.read_text(encoding="utf-8")
+
+
 def test_checked_csv_keeps_source_line_shape(tmp_path):
     """逐行照搬：空列名、参差列数、行尾都与 SPS 导出同构，不重新序列化。"""
     source = write_ragged_csv(tmp_path / "check0stock order x2.csv")
@@ -288,3 +381,5 @@ def test_web_table_payload_is_built_from_the_same_frames(tmp_path):
         {"ASN有货明细": pd.DataFrame({"A": list(range(10))})}, 3
     )["ASN有货明细"]
     assert limited["total"] == 10 and len(limited["rows"]) == 3 and limited["truncated"] is True
+    # 截断取的是**前** limit 行（先 head 再转列表，不是整表转完再切片）
+    assert limited["rows"] == [["0"], ["1"], ["2"]]

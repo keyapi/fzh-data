@@ -346,8 +346,10 @@ def create_app() -> FastAPI:
             job_id=job_id,
             job_type="stock_check",
             created_by=(actor.strip() or default_actor or "web-user"),
-            # 提交即冻结：这份快照写进任务，之后改设置不影响已出的结果
-            no_stock=",".join(s.strip() for s in no_stock.split(",") if s.strip()),
+            # 提交即冻结：这份快照写进任务，之后改设置不影响已出的结果。
+            # 用 parse_sku_list 而不是 split(",")：页面写着「逗号或换行分隔」，
+            # 只按逗号切会把多行输入当成一个 SKU，缺货行就静默漏掉了。
+            no_stock=",".join(parse_sku_list(no_stock)),
             no_stock_note=None,
             validate_only=False,
             allow_unmatched=False,
@@ -427,7 +429,8 @@ def create_app() -> FastAPI:
             job_id=job_id,
             job_type="fulfillment",
             created_by=(actor.strip() or default_actor or "web-user"),
-            no_stock=",".join(s.strip() for s in no_stock.split(",") if s.strip()),
+            # 同 /checks/new：页面写的是「逗号或换行分隔」，多行输入要能分开
+            no_stock=",".join(parse_sku_list(no_stock)),
             no_stock_note=no_stock_note.strip() or None,
             validate_only=bool(validate_only),
             allow_unmatched=bool(allow_unmatched),

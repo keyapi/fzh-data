@@ -107,6 +107,42 @@ def test_old_job_without_tables_still_renders(client, pb_env):
     assert "ASN 有货明细" not in page.text
 
 
+def test_newline_separated_no_stock_is_split(client, pb_env):
+    """页面写着「逗号或换行分隔」，多行输入必须真的分开 —— 否则缺货行静默漏掉。"""
+    resp = upload_check(
+        client, write_raw_orders(pb_env.tmp / "raw.csv"), no_stock="STYLE-B\nSTYLE-C\n"
+    )
+    job_id = resp.headers["location"].rsplit("/", 1)[-1]
+    assert client.repo.get_job(job_id)["no_stock_list"] == ["STYLE-B", "STYLE-C"]
+
+    artifact = next(a for a in client.repo.list_artifacts(job_id) if a["kind"] == "checked_order")
+    path = storage.resolve_artifact_path(client.settings.artifacts_dir, artifact["rel_path"])
+    checked = pd.read_csv(path, dtype=str, keep_default_na=False)
+    assert "STYLE-B" not in checked["Vendor Style"].tolist()
+    assert "STYLE-C" not in checked["Vendor Style"].tolist()
+    # 两条明细都缺货 -> 整个 PO 拿掉，只剩第一个 PO 的 Header + Detail
+    assert set(checked["PO Number"]) == {"100000001"}
+
+
+def test_fulfillment_route_also_splits_newlines(client, pb_env):
+    """同一个缺陷在出件入口也存在，一起修掉。"""
+    client.get("/jobs/new")
+    csrf = client.cookies.get("pb_orders_csrf")
+    with open(pb_env.pdf, "rb") as pdf, open(pb_env.csv, "rb") as csv:
+        resp = client.post(
+            "/jobs/new",
+            files={
+                "packslip": ("Packslip 美中 x3 20260921.pdf", pdf, "application/pdf"),
+                "order_csv": ("checked0stock order x3 20260921.csv", csv, "text/csv"),
+            },
+            data={"no_stock": "STYLE-A\nSTYLE-B", "actor": "t", "csrf": csrf},
+            follow_redirects=False,
+        )
+    assert resp.status_code == 303
+    job_id = resp.headers["location"].rsplit("/", 1)[-1]
+    assert client.repo.get_job(job_id)["no_stock_list"] == ["STYLE-A", "STYLE-B"]
+
+
 def test_checked_csv_keeps_header_and_drops_only_no_stock_detail(client, pb_env):
     resp = upload_check(client, write_raw_orders(pb_env.tmp / "raw.csv"))
     job_id = resp.headers["location"].rsplit("/", 1)[-1]

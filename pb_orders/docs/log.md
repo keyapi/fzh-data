@@ -36,13 +36,27 @@ timestamp: 2026-09-22
   `source_job_id` 指回检查任务，历史可追溯。
 - **数据库**：`jobs` 加 `job_type`（`fulfillment` / `stock_check`），老库启动时
   `ALTER TABLE` 自动补列，已有任务默认 `fulfillment` 不受影响；worker 按类型分发。
-- **测试 89 → 121**（新增 32）：预检服务 16、worker 分发 2、仓库迁移 1、Web 13。
+- **测试 89 → 129**（新增 40）：预检服务 20、worker 分发 2、仓库迁移 3、Web 15。
   全套通过、2 项跳过（需 Docker 的 Redis/RQ 生命周期用例）。
 - **网页版明细表**：任务页直接列出部分缺货 PO / ASN 有货明细 / 缺货明细 / 全部缺货 PO
   四张逐行表（两个 SKU 并列、数量按整数显示），与 xlsx **同一批 DataFrame**；
   超过 300 行截断并在页面上写明。旧任务没有 `tables` 则跳过，不 500。
 - **产物名里的 PO 数改为筛完剩下的**：`order x21 …` → `order x18 …`（用户要求），
   源导出的时间戳/流水号保留以便回溯。
+- **PR #274 复审修正（Cursor 审出 7 条，全部已修并补回归）**：
+  ① 断货 SKU 只按逗号切 → 多行输入被当成一个 SKU、缺货行静默漏掉；两个入口
+  改用 `app.parse_sku_list()`（同一个缺陷在出件入口也存在，一起修）；
+  ② 回读校验拿**规范化后**的 DataFrame 比逐行照搬的原文 → 源文件里 Record Type
+  写成小写 `d` / 字段带空格这类合法输入会误报 `output_verify_failed`；改为比源文件原文；
+  ③ 同名产物在 Windows 上 `shutil.move` 直接失败，且先移 CSV 再移 XLSX 会留下
+  「新 CSV + 旧 XLSX」；改为先统一探占用（`output_locked`）再 `os.replace` 原子覆盖；
+  ④ xlsx 里以 `=` 开头的值会被 openpyxl 写成**公式**（公式注入）；`_excel_safe()` 只给
+  xlsx 加 `'` 前缀，checked CSV 保持原始字节；
+  ⑤ `report["tables"]` 先把整表转 Python 列表再切片 → 先 `head(limit)`；
+  ⑥ 老库升级时 Web 与 worker 会同时 `ALTER TABLE`，输的那个收到 duplicate column name
+  → 只放过这一种错误；
+  ⑦ 页面写「每个 PO 的 Header 都保留」不准确（整单缺货的 PO 会整组剔除）→ 改成
+  「除整单缺货被拿掉的 PO 以外，Header 全部保留」。
 - **未做**：尚未部署到 EN 测试服务器。
 
 ## 2026-09-23（第十二轮：断货 SKU 列表改为网页上自己维护）

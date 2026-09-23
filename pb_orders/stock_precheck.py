@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import tempfile
@@ -317,18 +318,57 @@ def _tables_payload(tables: dict[str, pd.DataFrame], limit: int) -> dict:
 
     与写进 xlsx 的是**同一批 DataFrame**，所以网页表与操作表不会各说各话。
     行数超上限时截断并**明确标出**（不静默丢），页面上提示去看完整 xlsx。
+
+    先 `head(limit)` 再转列表：整表转成 Python 二维列表会为每一行都分配对象，
+    大表（几万行）在 1G 的 worker 里没必要地吃内存。
     """
     payload: dict[str, dict] = {}
     for name, table in tables.items():
-        text = table.astype(str)
-        rows = text.values.tolist()
+        head = table.head(limit).astype(str)
         payload[name] = {
-            "columns": list(text.columns),
-            "rows": rows[:limit],
-            "total": len(rows),
-            "truncated": len(rows) > limit,
+            "columns": list(head.columns),
+            "rows": head.values.tolist(),
+            "total": len(table),
+            "truncated": len(table) > limit,
         }
     return payload
+
+
+def _excel_safe(table: pd.DataFrame) -> pd.DataFrame:
+    """只给 xlsx 用：把以 `=` 开头的值转义，别让 openpyxl 写成**公式**。
+
+    这些值来自外部 CSV（SPS 导出），`=cmd|…` 这类内容在 Excel 里会当公式执行。
+    前面加 `'` 是标准的文本化处理；只影响这个人看的 xlsx，
+    checked CSV 仍是逐行照搬的原始字节（那份才是给机器/回传用的）。
+    """
+    return table.map(lambda value: f"'{value}" if isinstance(value, str) and value.startswith("=") else value)
+
+
+def _ensure_publishable(*targets: Path) -> None:
+    """发布前统一探一遍目标文件：被别的程序占用就整体拒绝，不做半截发布。"""
+    for target in targets:
+        if not target.exists():
+            continue
+        try:
+            with open(target, "ab"):
+                pass
+        except OSError as exc:
+            raise StockCheckError(
+                f"产物被占用，无法覆盖：{target.name}",
+                "该文件可能正在 Excel 里打开，请关闭后重跑（或用 --out 换个目录）。",
+                "output_locked",
+            ) from exc
+
+
+def _publish(temp: Path, dest: Path) -> bool:
+    """把 temp 原子地发布到 dest，返回原来是否已有同名文件。
+
+    用 `os.replace` 而不是 `shutil.move`：Windows 上同名文件 `os.rename` 会失败
+    （同一批重跑就撞），`os.replace` 是原子覆盖、两个平台都对。
+    """
+    existed = dest.exists()
+    os.replace(temp, dest)
+    return existed
 
 
 def _style_workbook(path: Path) -> None:
@@ -372,15 +412,24 @@ def _style_workbook(path: Path) -> None:
     wb.save(path)
 
 
-def _verify_checked(path: Path, original_columns: list[str], expected: pd.DataFrame) -> None:
+def _verify_checked(path: Path, original_columns: list[str], expected_raw: pd.DataFrame) -> None:
+    """回读 checked CSV，确认它就是「源文件里被保留的那些行」，一字不改。
+
+    ``expected_raw`` 必须是**源文件原文**（未去空格、未转大小写）：
+    输出是逐行照搬的，所以能且只能与原文比。早先误用规范化后的 DataFrame 来比，
+    结果源文件里 Record Type 写成小写 `d`、或字段两侧带空格时，
+    合法输入会报 `output_verify_failed`（内容其实没写错）。
+    """
     actual = _read_csv(path)
     if list(actual.columns) != original_columns:
         raise StockCheckError("checked CSV 列顺序校验失败", code="output_verify_failed")
-    if actual.fillna("").astype(str).values.tolist() != expected.fillna("").astype(str).values.tolist():
+    if actual.fillna("").astype(str).values.tolist() != expected_raw.fillna("").astype(str).values.tolist():
         raise StockCheckError("checked CSV 回读内容校验失败", code="output_verify_failed")
 
-    details = actual[actual[COL_RECORD].str.upper() == "D"]
-    headers = actual[actual[COL_RECORD].str.upper() == "H"]
+    # 这两条用规范化后的值判断：源文件里大小写/空白怎么写都不影响结论
+    record = actual[COL_RECORD].astype(str).str.strip().str.upper()
+    details = actual[record == "D"]
+    headers = actual[record == "H"]
     if set(details[COL_PO]) != set(headers[COL_PO]):
         raise StockCheckError("checked CSV 的 Header / Detail 对账失败", code="output_verify_failed")
     if (headers.groupby(COL_PO).size() != 1).any():
@@ -470,18 +519,25 @@ def run_stock_check(
         source_lines = _source_lines(csv_path, len(source))
         checked_lines = [source_lines[0]] + [source_lines[int(pos) + 1] for pos in checked.index]
         temp_checked.write_text("\n".join(checked_lines) + "\n", encoding="utf-8", newline="")
-        _verify_checked(temp_checked, original_columns, checked)
+        # 与源文件原文比（不是规范化后的 DataFrame），见 _verify_checked 的说明
+        _verify_checked(temp_checked, original_columns, source.loc[checked.index])
 
         with pd.ExcelWriter(temp_workbook, engine="openpyxl") as writer:
             for sheet_name, table in tables.items():
-                table.to_excel(writer, sheet_name=sheet_name[:31], index=False)
+                _excel_safe(table).to_excel(writer, sheet_name=sheet_name[:31], index=False)
         _style_workbook(temp_workbook)
 
         output_dir.mkdir(parents=True, exist_ok=True)
         checked_path = output_dir / checked_name
         workbook_path = output_dir / workbook_name
-        shutil.move(str(temp_checked), checked_path)
-        shutil.move(str(temp_workbook), workbook_path)
+        # 两个目标先统一探一遍（被 Excel 占用就整体拒绝），再逐个 `os.replace` 覆盖：
+        # 避免只发布成功一个、留下「新 CSV + 旧 XLSX」这种半新半旧。
+        _ensure_publishable(checked_path, workbook_path)
+        replaced = [
+            target.name
+            for temp, target in ((temp_checked, checked_path), (temp_workbook, workbook_path))
+            if _publish(temp, target)
+        ]
     except Exception:
         if output_dir.is_dir() and not any(output_dir.iterdir()):
             output_dir.rmdir()
@@ -493,5 +549,6 @@ def run_stock_check(
         {"kind": "checked_order", "name": checked_path.name},
         {"kind": "stock_operations", "name": workbook_path.name},
     ]
+    report["replaced"] = replaced
     progress("done", "库存预检完成")
     return StockCheckResult(checked_path, workbook_path, report)

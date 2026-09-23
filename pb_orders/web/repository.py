@@ -12,10 +12,13 @@
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 import uuid
 from datetime import datetime
 from pathlib import Path
+
+log = logging.getLogger("pb_orders.web")
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS jobs (
@@ -118,9 +121,17 @@ class Repository:
             conn.executescript(SCHEMA)
             columns = {row[1] for row in conn.execute("PRAGMA table_info(jobs)")}
             if "job_type" not in columns:
-                conn.execute(
-                    "ALTER TABLE jobs ADD COLUMN job_type TEXT NOT NULL DEFAULT 'fulfillment'"
-                )
+                try:
+                    conn.execute(
+                        "ALTER TABLE jobs ADD COLUMN job_type TEXT NOT NULL DEFAULT 'fulfillment'"
+                    )
+                except sqlite3.OperationalError as exc:
+                    # Web 与 worker 会同时启动、同时看到旧库缺这一列，其中一个必然
+                    # 撞上 duplicate column name。SQLite 没有 ADD COLUMN IF NOT EXISTS，
+                    # 而那一刻「列已经在了」正是我们想要的结果，所以这里放行。
+                    if "duplicate column name" not in str(exc).lower():
+                        raise
+                    log.info("job_type 列已由另一个进程迁移完成，跳过")
 
     # ---------- jobs ----------
 

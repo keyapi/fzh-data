@@ -9,7 +9,8 @@
     系统按 <code>Vendor Style</code> 逐条明细判库存，产出：
   </p>
   <ul class="muted">
-    <li><strong>checked0stock CSV</strong> —— 有货 Detail 保留、缺货 Detail 剔除；每个 PO 的 Header 都保留。</li>
+    <li><strong>checked0stock CSV</strong> —— 缺货 Detail 剔除、有货 Detail 保留；
+      <strong>整单缺货的 PO 整组拿掉，其余 PO 的 Header 全部保留</strong>（部分缺货的 PO 也要留 Header）。</li>
     <li><strong>SPS 库存检查操作表 xlsx</strong> —— 逐行告诉你哪些勾、哪些不勾，对方 SKU 与我方 SKU 并列。</li>
   </ul>
 
