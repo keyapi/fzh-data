@@ -1,4 +1,6 @@
 ---
+okf: v0.1
+type: Reference
 title: "中文意图路由（intent_router）—— TypeSafe Jev + 置信度闸门"
 date: 2026-09-21
 category: docs/solutions/tooling-decisions/

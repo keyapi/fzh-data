@@ -10,6 +10,7 @@ timestamp: 2026-07-28
 
 | 标题 | 文件 |
 |------|------|
+| EN 端到端供应链履约可视化蓝图 | [en-end-to-end-supply-chain-fulfillment-visibility.md](en-end-to-end-supply-chain-fulfillment-visibility.md) |
 | SPS Commerce API 自动化（Transaction API + M2M） | [sps-commerce-api-automation.md](sps-commerce-api-automation.md) |
 | 赛狐报表 Job 队列（错开 create + 合并轮询） | [sellfox-ivyeaops-report-job-queue.md](sellfox-ivyeaops-report-job-queue.md) |
 | 赛狐 Phase2 ingest — IvyeaOps 五杠杆 | [sellfox-ivyeaops-five-lever-ingest.md](sellfox-ivyeaops-five-lever-ingest.md) |

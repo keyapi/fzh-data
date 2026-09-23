@@ -70,8 +70,12 @@ def scan(root: Path, dates: dict) -> dict:
             if end == -1:
                 continue
             fm_text = content[3:end].strip()
-            has_okf = "okf:" in fm_text
-            has_type = "type:" in fm_text
+            # 逐行匹配键名, 不能用 `"type:" in fm_text` —— 那会把
+            # `problem_type:` / `component_type:` 这类**含 type 子串的别的键**
+            # 误判成 type 字段, 于是「缺 type 的文件」也被当成合规文档计入。
+            fm_lines = [ln.strip() for ln in fm_text.split("\n")]
+            has_okf = any(ln.startswith("okf:") for ln in fm_lines)
+            has_type = any(ln.startswith("type:") for ln in fm_lines)
             if not (has_okf or has_type):
                 continue
             meta = {}

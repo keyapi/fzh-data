@@ -1,4 +1,6 @@
 ---
+okf: v0.1
+type: Reference
 title: "Codex (ChatGPT Desktop) 更新后 Windows 安装失败与对话历史恢复"
 date: 2026-07-14
 category: developer-experience

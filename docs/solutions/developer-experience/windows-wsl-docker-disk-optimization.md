@@ -1,4 +1,6 @@
 ---
+okf: v0.1
+type: Reference
 title: Windows WSL2 Docker VHDX disk space optimization and migration
 date: 2026-07-27
 category: developer-experience

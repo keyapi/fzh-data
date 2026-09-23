@@ -195,3 +195,27 @@ def test_fixture_buckets_disjoint_and_live_values_stay_out_of_fatal():
               "wo_count", "dead_sos"):
         assert k not in iss.FIXTURE, f"{k} 会随经营推进而变, 不能进稳定档"
         assert k in iss.LIVE, f"{k} 应当留在在产档"
+
+
+# ── 客户 PO 号 (po_no) ───────────────────────────────────────────────────
+# po_no 是跨系统（EN ↔ 内部海运登记表）查 ZM 号/头程进度的候选键，
+# 所以必须出现在报表里。订单行级 `purchase_order` 优先于表头 `po_no`：
+# 一行可能对应客户的多个 PO（拼单），行级才是更细的事实。
+
+def test_line_po_no_prefers_line_level_over_header():
+    assert iss.line_po_no({"po_no": "PO-HEADER"}, {"purchase_order": "PO-LINE"}) == "PO-LINE"
+
+
+def test_line_po_no_falls_back_to_header():
+    assert iss.line_po_no({"po_no": "PO-HEADER"}, {"purchase_order": None}) == "PO-HEADER"
+    assert iss.line_po_no({"po_no": "PO-HEADER"}, {}) == "PO-HEADER"
+
+
+def test_line_po_no_blank_when_neither_present():
+    assert iss.line_po_no({}, {}) == ""
+    assert iss.line_po_no({"po_no": ""}, {"purchase_order": ""}) == ""
+    assert iss.line_po_no(None, None) == ""
+
+
+def test_line_po_no_trims_whitespace():
+    assert iss.line_po_no({"po_no": "  PO-X  "}, {"purchase_order": "  "}) == "PO-X"

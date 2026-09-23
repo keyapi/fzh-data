@@ -1,4 +1,6 @@
 ---
+okf: v0.1
+type: Reference
 title: new-api/sellfox-proxy 离职自动封号不可靠 —— 双通道检测加固
 date: 2026-09-08
 last_updated: 2026-09-08

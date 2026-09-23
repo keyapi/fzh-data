@@ -1,4 +1,6 @@
 ---
+okf: v0.1
+type: Reference
 title: Verify External API Claims Against Official Documentation Before Committing to Docs
 date: 2026-06-30
 category: documentation-gaps

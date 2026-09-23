@@ -10,6 +10,8 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-09-16 | PB 断货通知与 0 库存订单处理 — PO/SKU 映射与三个反直觉陷阱 | [workflow-issues/pb-out-of-stock-notification-and-zero-stock-orders.md](workflow-issues/pb-out-of-stock-notification-and-zero-stock-orders.md) |
+| 2026-09-16 | 「货物到哪了」查询方法 — 四个数据源的可靠性分级与查询顺序 | [workflow-issues/cargo-location-tracking-source-reliability.md](workflow-issues/cargo-location-tracking-source-reliability.md) |
 | 2026-09-21 | 把 FAC / 赛狐 / NAS 三个 MCP 接上 ChatGPT —— 一次串起来的方法与四个教训 | [workflow-issues/mcp-to-chatgpt-bringup-lessons.md](workflow-issues/mcp-to-chatgpt-bringup-lessons.md) |
 | 2026-09-22 | 承运商批量导入面单的字段长度上限（UPS Reference 35 / FedEx poNumber 30） | [integration-issues/carrier-label-batch-field-length-limits.md](integration-issues/carrier-label-batch-field-length-limits.md) |
 | 2026-09-22 | 背贴品名缺失怎么补——通途SKU 在 EN 有两种登记写法 | [integration-issues/sku-name-backfill-via-en-customer-code.md](integration-issues/sku-name-backfill-via-en-customer-code.md) |

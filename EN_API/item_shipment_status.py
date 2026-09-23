@@ -23,11 +23,14 @@
 5. fields 只能是父单字段, 传未知字段 417 (实测 Item.has_bom 被拒);
    子表值必须 get_single 后读 doc["items"] / doc["po_items"]
 
-── 两条容易搞错的业务口径 ─────────────────────────────────────────────────
+── 三条容易搞错的业务口径 ─────────────────────────────────────────────────
 * Work Order.status / produced_qty 不可信 —— 实测 WO-26-02609 头部 Not Started、
   produced_qty=0, 但 14 张工序卡显示 44 件已过 裁剪/皮壳整件/锁扣眼/拷边。
   判断进度看 Job Card, 不要只看 WO.operation 状态。
 * ERPNext 的 Closed ≠ 已发完 —— 实测 10 张 SO 里 3 张 Closed 却仍有未发量。
+* EN 的 po_no **不是客户 PO 号** —— 2026-09-15 经计划物流同事核实, 它是离职同事
+  自编的内部流转号 (当年用来区分同单多客户PO的下单日期/仓库), 意义有限、待废弃。
+  头程不在 EN 里, 在钉钉「发货信息总表 / 2026年下单表」, 按 **EN销售订单编号** 匹配。
 
 示例:
   uv run python EN_API/item_shipment_status.py --customer-code CENKZ1325-Yellow-138
@@ -408,6 +411,27 @@ def find_sales_orders_by_items(item_codes, base_url, key, secret, customers=None
     return out
 
 
+def line_po_no(so_doc, line) -> str:
+    """内部流转号 (EN `po_no` / 行级 `purchase_order`) —— **不是客户 PO 号**。
+
+    2026-09-15 经计划物流同事核实：这个字段是离职同事自编的，不是客户给的采购订单号。
+    当初的用途是「一张 SO 里对应多个客户 PO 时，用来区分下单日期 / 仓库」。
+    现在 SO 本身已有下单日期和仓库，所以它意义有限、**之后可能弃用**，
+    改由钉钉「发货信息总表 / 2026年下单表」按 **EN 销售订单编号** 匹配。
+
+    因此报表只把它当**内部流转号**展示并标「待废弃」，不得对外称客户 PO，
+    也不得用它去查头程 —— 头程要走 EN 销售订单编号 + 钉钉表。
+    取值：行级 `purchase_order` 优先，退回表头 `po_no`；只去空格，不猜哪个是"主"。
+    """
+    so_doc = so_doc or {}
+    line = line or {}
+    for v in (line.get("purchase_order"), so_doc.get("po_no")):
+        s = str(v).strip() if v else ""
+        if s:
+            return s
+    return ""
+
+
 def line_matches(line, item_codes, customer_code) -> bool:
     if item_code_equals(line.get("item_code"), item_codes):
         return True
@@ -435,6 +459,7 @@ def fetch_so_lines(so_names, item_codes, customer_code, base_url, key, secret, s
                     "so_delivery_date": d.get("delivery_date"),
                     "transaction_date": d.get("transaction_date"),
                     "amended_from": d.get("amended_from"),
+                    "po_no": line_po_no(d, line),
                     "line_id": line.get("name"),
                     "item_code": line.get("item_code"),
                     "item_name": line.get("item_name"),
@@ -921,11 +946,12 @@ def render_console(ctx, args, base_url):
     for r in sorted(so_rows, key=lambda x: (x["delivery_date"] or "", x["so"])):
         dn_txt = ", ".join(sorted({d["dn"] for d in r["dns"] if d["dn_docstatus"] == 1})) or "-"
         wo_txt = ", ".join(sorted({w["name"] for w in r["wos"]})) or "-"
-        rows.append([r["so"], r["so_status"], r["delivery_date"] or "-", fmt_qty(r["qty"]),
-                     fmt_qty(r["delivered_qty"]), fmt_qty(r["open_qty"]), dn_txt, wo_txt,
-                     r["progress"]])
-    print_table(["SO", "状态", "交货日期", "订单量", "已发", "未发", "出库单", "工单", "工序进度"],
-                rows, aligns=["left", "left", "left", "right", "right", "right", "left", "left", "left"])
+        rows.append([r["so"], r.get("po_no") or "-", r["so_status"], r["delivery_date"] or "-",
+                     fmt_qty(r["qty"]), fmt_qty(r["delivered_qty"]), fmt_qty(r["open_qty"]),
+                     dn_txt, wo_txt, r["progress"]])
+    print_table(["SO", "内部流转号", "状态", "交货日期", "订单量", "已发", "未发", "出库单", "工单", "工序进度"],
+                rows, aligns=["left", "left", "left", "left", "right", "right", "right",
+                              "left", "left", "left"])
 
     t = ctx["totals"]
     print(f"\n  订单量 {fmt_qty(t['order_qty'])} = 有效 {fmt_qty(t['valid_qty'])}"
@@ -962,11 +988,13 @@ def render_console(ctx, args, base_url):
             note = "⚠ 无生产计划, 实际不会发"
         elif "死单(Closed未发)" in r["anomalies"]:
             note = "⚠ ERP 已 Closed, 不会发"
-        rows.append([r["so"], r["transaction_date"] or "-", r["lead_date"] or "-",
-                     f"{fmt_qty(r['open_qty'])} 件", note])
+        rows.append([r["so"], r.get("po_no") or "-", r["transaction_date"] or "-",
+                     r["lead_date"] or "-", f"{fmt_qty(r['open_qty'])} 件", note])
     if rows:
-        print_table(["SO", "下单日期", f"预估可发(+{lead}月)", "未发", "工序/备注"], rows,
-                    aligns=["left", "left", "left", "right", "left"])
+        print_table(["SO", "内部流转号", "下单日期", f"预估可发(+{lead}月)", "未发", "工序/备注"], rows,
+                    aligns=["left", "left", "left", "left", "right", "left"])
+        print("  (内部流转号是 EN 内部字段, 非客户PO, 待废弃; 头程请用 EN销售订单编号 查钉钉「发货信息总表」)")
+        print("  (预估可发是业务粗估, 非系统字段)")
 
     rule("异常")
     order = {"error": 0, "warn": 1, "info": 2}
@@ -981,7 +1009,8 @@ def build_sheets(ctx):
     so_rows, jc_map = ctx["so_rows"], ctx["jc_map"]
     lead = ctx["lead_months"]
 
-    s1 = [("SO单据号", 15), ("SO状态", 21), ("docstatus", 9), ("客户", 24), ("公司", 8),
+    s1 = [("SO单据号", 15), ("内部流转号(非客户PO,待废弃)", 26), ("SO状态", 21), ("docstatus", 9),
+          ("客户", 24), ("公司", 8),
           ("交货日期", 12), ("下单日期", 12), (f"预估可发(+{lead}月)", 15), ("订单行ID", 13),
           ("物料编码", 27), ("物料名称", 30), ("客户物料号(订单行)", 24), ("客户码注册物料", 26),
           ("发货仓", 18), ("订单量", 9), ("ERP已发", 9), ("ERP未发", 9), ("出库单号", 30),
@@ -991,7 +1020,7 @@ def build_sheets(ctx):
     for r in sorted(so_rows, key=lambda x: (x["delivery_date"] or "", x["so"])):
         dns = [d for d in r["dns"] if d["dn_docstatus"] == 1]
         rows1.append([
-            r["so"], r["so_status"], r["so_docstatus"], r["customer"], r["company"],
+            r["so"], r.get("po_no"), r["so_status"], r["so_docstatus"], r["customer"], r["company"],
             r["delivery_date"], r["transaction_date"], r["lead_date"], r["line_id"],
             r["item_code"], r["item_name"], r["customer_item_code"], r["master_item"],
             r["warehouse"], r["qty"], r["delivered_qty"], r["open_qty"],
@@ -1232,7 +1261,7 @@ def main():
     wb = Workbook()
     (h1, r1), (h2, r2), (h3, r3) = build_sheets(ctx)
     _write_sheet(wb, "订单发货状态", h1, r1, group_col=0, first=True,
-                 number_cols=(15, 16, 17, 20, 26))
+                 number_cols=(16, 17, 18, 21, 27))
     _write_sheet(wb, "出库明细", h2, r2, group_col=0, number_cols=(13, 15, 16))
     _write_sheet(wb, "工单与工序", h3, r3, group_col=0, number_cols=(3, 4, 13))
 

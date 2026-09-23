@@ -1,4 +1,6 @@
 ---
+okf: v0.1
+type: Reference
 title: 赛狐 Apifox API 文档本地镜像刷新与对账
 date: 2026-09-09
 category: conventions

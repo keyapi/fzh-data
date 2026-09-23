@@ -1,4 +1,6 @@
 ---
+okf: v0.1
+type: Reference
 title: "赛狐尾程打单系统 — 完整调研与架构规划"
 date: 2026-07-15
 category: architecture-patterns

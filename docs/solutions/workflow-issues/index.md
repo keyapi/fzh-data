@@ -34,3 +34,5 @@ tags: [workflow-issues, index]
 | [search-first-before-implementing.md](search-first-before-implementing.md) | 先搜再造：官方/项目文档 → 内部约定要搜代码 → 第三方方案要抄功能清单 |
 | [erpnext-version-api-compatibility.md](erpnext-version-api-compatibility.md) | ERPNext 跨版本 API 兼容 |
 | [erpnext-so-closed-unshipped-and-unstarted-work-orders.md](erpnext-so-closed-unshipped-and-unstarted-work-orders.md) | 已关闭却未发货的死单 + 工单进度不可信（子表反查父单的 API 铁律） |
+| [pb-out-of-stock-notification-and-zero-stock-orders.md](pb-out-of-stock-notification-and-zero-stock-orders.md) | PB 断货通知与 0 库存订单处理（PO→Tongtool Order 映射 + 三个反直觉陷阱） |
+| [cargo-location-tracking-source-reliability.md](cargo-location-tracking-source-reliability.md) | 「货物到哪了」查询方法：四个数据源可靠性分级 |

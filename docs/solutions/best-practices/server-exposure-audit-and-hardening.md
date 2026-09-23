@@ -1,4 +1,6 @@
 ---
+okf: v0.1
+type: Reference
 title: 服务器暴露面审计与安全加固（数据库远程 root、端口瘦身、凭证轮换）
 date: 2026-09-01
 category: best-practices
