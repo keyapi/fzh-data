@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}历史任务 · PB 订单处理{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>历史任务</h1>
+  <p class="filters">
+    <a class="chip {% if not status %}on{% endif %}" href="{{ prefix }}/">全部</a>
+    {% for key, label in STATUS_LABELS.items() %}
+      <a class="chip {% if status == key %}on{% endif %}" href="{{ prefix }}/?status={{ key }}">{{ label }}</a>
+    {% endfor %}
+    <a class="btn primary right" href="{{ prefix }}/jobs/new">新建任务</a>
+  </p>
+
+  {% if jobs %}
+  <table>
+    <thead>
+      <tr><th>任务</th><th>状态</th><th>当前步骤</th><th>操作者</th><th>创建时间</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for job in jobs %}
+      <tr>
+        <td><a href="{{ prefix }}/jobs/{{ job.id }}"><code>{{ job.id }}</code></a></td>
+        <td><span class="badge {{ job.status }}">{{ STATUS_LABELS.get(job.status, job.status) }}</span></td>
+        <td class="muted">{{ job.progress_step or '-' }}</td>
+        <td>{{ job.created_by }}</td>
+        <td class="muted">{{ (job.created_at or '')[:19].replace('T', ' ') }}</td>
+        <td>{% if job.validate_only %}<span class="tag">仅校验</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">还没有任务。点右上角「新建任务」开始。</p>
+  {% endif %}
+</section>
+{% endblock %}

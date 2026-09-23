@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}出错了 · PB 订单处理{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>无法继续</h1>
+  <p class="error">{{ message }}</p>
+  <p><a class="btn" href="{{ prefix }}/jobs/new">返回新建任务</a> <a class="btn ghost" href="{{ prefix }}/">历史任务</a></p>
+</section>
+{% endblock %}
