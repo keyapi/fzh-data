@@ -1,0 +1,24 @@
+# PB 订单处理服务的运行依赖（固定版本，取自本机已验证的 .venv）。
+#
+# 为什么不用 `uv sync` 装整个仓库：pyproject 里还有 lightgbm / scikit-learn /
+# tencentcloud / paramiko 等与出件无关的重依赖，装进这个对外服务只会放大镜像
+# 和攻击面。这里只列 PB 真正 import 到的包，版本与本机跑通一致。
+#
+# 跨模块依赖只有两个：sellfox_shipping.sku_label.pdf_generator（中英混排）与
+# tongtool_order_cost.gsheets（读名称表），它们只用到 reportlab / httpx / gspread。
+
+fastapi==0.136.3
+uvicorn==0.49.0
+jinja2==3.1.6
+python-multipart==0.0.32
+pandas==3.0.2
+openpyxl==3.1.5
+pymupdf==1.28.0
+reportlab==5.0.0
+pypdf==6.19.0
+nltk==3.10.3
+gspread==6.2.1
+google-auth==2.56.3
+httpx==0.28.1
+redis==8.1.0
+rq==2.12.0

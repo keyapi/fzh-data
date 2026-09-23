@@ -7,6 +7,25 @@ summary: 开发与部署记录
 
 # new-api-dingtalk-oidc — 变更日志
 
+## 2026-09-22
+
+### v0.4.0 — 登录闸门只放本公司员工（收口「任何钉钉账号都能登录」）
+
+- **问题**：授权请求只带 `scope=openid`，钉钉不回 `corpId`，`/contact/users/me` 也常常不返回它，
+  于是 `ALLOWED_CORP_ID` 的校验被整段跳过 —— **任何钉钉账号（别的企业、外部联系人）都能登录**，
+  而下游（new-api、sellfox-proxy、pb_orders）都以为这道闸门在生效。
+- **改法**：不再依赖 `corpId` 字段，改用**组织成员查询**做权威判据 ——
+  用本公司应用凭证调 `topapi/user/getbyunionid`，查得到=本公司员工，`60121/60111`=通讯录没这个人。
+- **新增** `stream_listener.check_org_membership()`：三态返回（在/不在/判定不了），
+  与既有 `get_user_id_by_union_id` 的区别是**不把接口抖动压成「不在公司」**。
+- **新增** `REQUIRE_COMPANY_MEMBER`（**默认开启**，设 `0` 可临时关掉只记日志）；
+  `corpId` 若返回则继续比对。被拒绝返回人话 HTML 页面，不是 JSON。
+- **单测** `tests/test_org_membership.py`：60121→不在 / errcode 0→在 / 其它 errcode 与网络错→判定不了 /
+  errcode 0 却没有 userid→判定不了（共 7 例）。
+- **部署方式**同 v0.3.1：拷 `main.py` + `stream_listener.py` 到 `/opt/new-api-dingtalk-oidc/` →
+  `docker build -t new-api-dingtalk-oidc:latest .` → `cd /opt/new-api && docker compose up -d --no-deps bridge`。
+  改前备份两个 `.py`；compose 未改（`REQUIRE_COMPANY_MEMBER` 有默认值）。
+
 ## 2026-09-08
 
 ### v0.3.1 — 加固版已部署生产（实测）
@@ -70,5 +89,5 @@ summary: 开发与部署记录
 | `Form data requires python-multipart` | requirements.txt 加 python-multipart |
 | `object of type 'NoneType' has no len()` | JWK 用私钥构造（非公钥）|
 | `DingTalk user info missing ID` | 钉钉权限 Contact.User.Read 缺失 |
-| `user not in allowed corp (got )` | corpId 为空时跳过校验 |
+| `user not in allowed corp (got )` | 当时改成「corpId 为空就跳过校验」——**这个判断是错的**，见 2026-09-22 v0.4.0：根因是没申请 corpid，跳过等于不校验 |
 | 502 Bad Gateway | 容器崩溃（python-multipart 缺失）|

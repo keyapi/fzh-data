@@ -1,0 +1,21 @@
+# 只影响 pb_orders/Dockerfile 的构建上下文（BuildKit 的 <dockerfile>.dockerignore 约定），
+# 不动仓库里其它服务的构建。
+**/.venv
+**/__pycache__
+**/*.pyc
+**/.git
+**/.pytest_cache
+**/node_modules
+**/*.egg-info
+
+# 运行数据与本地缓存一律不进镜像：data 由 compose 只读挂载，runtime 是持久卷
+pb_orders/data
+pb_orders/runtime
+pb_orders/tests
+
+# 业务文件绝不进镜像
+**/*.pdf
+**/*.xlsx
+**/*.xls
+**/secrets
+**/.env
