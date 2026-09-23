@@ -7,6 +7,12 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-09-23（PB 对账月度更新：防静默丢数 + Excel 核对）
+- **新增**: `best-practices/scanner-silent-data-loss-guard.md` — 扫描类脚本防「静默丢数」的通用模式：**反转匹配方向**（枚举全部文件 → 显式排除清单 → 其余必须被识别，识别不了就报错停机），外加结构断言与"跳过/排除同样要校验"。实据：`glob("invoice*.csv")` 漏掉拼写成 `invocie` 的 37 张 / $2,232.28，且因该文件夹在扫描序列中间，还让范围判定提前停止、连带丢掉整个 202608 月份——一个字符放大两个数量级。适用面覆盖仓库里所有靠通配符扫输入的脚本。
+- **新增**: `tooling-decisions/excel-formula-cells-and-recalc-verification.md` — 核对 xlsx 交付物金额的坑：openpyxl 读公式单元格拿到的是公式字符串、`data_only=True` 只在文件被 Excel/LO 存过时才有缓存值；数据列里混着手写公式单元格时裸加会系统性偏差。实例：`PB Remittance Advice!I` 的 R6779/R6788 合计 386.86，裸加正好少这个数，一度被误判成"表里有历史差额"。正解是 LibreOffice headless 转换触发重算后再读缓存值。
+- **更新**: `workflow-issues/pb-reconciliation-monthly-update.md`（`last_updated: 2026-09-23`）— 补「对账单 vs 台账」双向核对（正向逐条对齐 / 反向行数相等 / 完整性无该付未付；双开票需 `REMAP` 归一化再比）、UPS 核查改 `ups_track` 批量 API、整月纳入口径与扫码硬校验；2026-09 实测两个账期 0 差异。
+- **新增（补 OKF 缺口）**: `best-practices/index.md` —— 该目录此前无索引（违反 AGENTS.md 第 10 条「每个目录必须有 index.md」）。
+
 ## 2026-09-22（公开仓与私有知识分层）
 - **新增**: `architecture-patterns/public-private-agent-knowledge-split.md` — 调研并裁决公开仓、内部知识与凭证的三层边界：公开仓保留脱敏代码/通用经验；真实拓扑、运维 runbook 和内部 API 进入独立私有 Markdown 仓；密码/token/私钥进入 secret manager 或已忽略的本地环境文件。私有仓用普通 clone + 一键 bootstrap，而非 submodule；SOPS 只补充少量 GitOps 密文，不承担长篇知识库；Vault 等到出现动态凭证/PKI/合规需求再引入。另定义 Agent 自动发现、无权限降级、敏感文档 lint 与已公开内容迁移/历史重写边界。
 

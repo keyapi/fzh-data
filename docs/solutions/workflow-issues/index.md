@@ -29,7 +29,7 @@ tags: [workflow-issues, index]
 | [tongtu-warehouse-rename-reconciliation.md](tongtu-warehouse-rename-reconciliation.md) | 通途发货仓库改名后三处对账登记（通途→ERPNext→财务共享表） |
 | [ostkus-account-reconciliation.md](ostkus-account-reconciliation.md) | OSTKUS 账期与 EN Tongtool Order 对账 |
 | [walmart-account-period-sellfox-api.md](walmart-account-period-sellfox-api.md) | Walmart 账期走赛狐 API 直拉；平台费口径结案（差额=沃尔玛补贴×15%） |
-| [pb-reconciliation-monthly-update.md](pb-reconciliation-monthly-update.md) | PB 对账表月度更新脚本化 + UPS 交付核查 |
+| [pb-reconciliation-monthly-update.md](pb-reconciliation-monthly-update.md) | PB 对账表月度更新脚本化（整月纳入口径 + 扫码硬校验 + 对账单/台账双向核对 + UPS 批量核查） |
 | [tongtool-sku-rename-gsheet-remap.md](tongtool-sku-rename-gsheet-remap.md) | 通途主档改名后对齐订单 Google Sheet |
 | [search-first-before-implementing.md](search-first-before-implementing.md) | 先搜再造：官方/项目文档 → 内部约定要搜代码 → 第三方方案要抄功能清单 |
 | [erpnext-version-api-compatibility.md](erpnext-version-api-compatibility.md) | ERPNext 跨版本 API 兼容 |

@@ -10,6 +10,8 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-09-23 | 扫描类脚本防「静默丢数」——反转匹配方向（枚举 + 排除清单 + 未识别即报） | [best-practices/scanner-silent-data-loss-guard.md](best-practices/scanner-silent-data-loss-guard.md) |
+| 2026-09-23 | Excel 交付物金额核对——公式单元格无缓存值 + LibreOffice 重算 | [tooling-decisions/excel-formula-cells-and-recalc-verification.md](tooling-decisions/excel-formula-cells-and-recalc-verification.md) |
 | 2026-09-16 | PB 断货通知与 0 库存订单处理 — PO/SKU 映射与三个反直觉陷阱 | [workflow-issues/pb-out-of-stock-notification-and-zero-stock-orders.md](workflow-issues/pb-out-of-stock-notification-and-zero-stock-orders.md) |
 | 2026-09-16 | 「货物到哪了」查询方法 — 四个数据源的可靠性分级与查询顺序 | [workflow-issues/cargo-location-tracking-source-reliability.md](workflow-issues/cargo-location-tracking-source-reliability.md) |
 | 2026-09-22 | 公开代码仓与私有公司知识分层——兼顾 Agent 检索、同事使用与防泄露 | [architecture-patterns/public-private-agent-knowledge-split.md](architecture-patterns/public-private-agent-knowledge-split.md) |

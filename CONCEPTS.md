@@ -534,6 +534,8 @@ Amazon 财务数据两种口径：**结算报告（settlement）= 打款(payout)
 - **对账金额口径**: 用 `order_amount` / `products_total_price` 对账；`order_items.transaction_price` 是组件行，不能加总；`actual_total_price` 在退货订单上可能为 0。
 - **Amazon 账期报表（插件获取报告）**: 赛狐里 Amazon 的 Transaction / Summary 账期文件，**只能**通过 `report/center/task/getPlugPageList.json` 读取 —— 由浏览器插件在账号登录态下抓取后存 COS，赛狐服务端不自抓。`reportType`：3=Transaction(csv/zip)、4=Summary(**pdf**)。该接口**纯读、不可触发抓取**。
 - **fileUrls 临时签名**: 插件报告的下载地址是**腾讯 COS 预签名 URL，1 小时过期**。不能存链接，归档必须存文件本体。
+- **PB 账期 (Pottery Barn settlement cycle)**: 按 PB 付款日起 **19 号 ~ 次月 18 号**（美国中部时间）切分，与 Amazon 的「4 号 ~ 下月 3 号」**不是同一套窗口**，不能混用。PB 通过 SPS 下单/发货，付款日 ≈ 仓库**实际交给承运商**（UPS "We Have Your Package"）后约 30 天——不是发票日、也不是建标日；因此同一批订单的实际付款会跨账期错位，一个账期不完全付清是常态。
+- **双开票（SPS 双 invoice 号）**: SPS 里有时一个订单创建了 **2 个 invoice 号**，发票 CSV 只保留其中一个，而 PB 可能按另一个号付款。对账时必须把付款行归一到 CSV 留用的号再比对，否则会误报「对账单上有、台账里没有」= 漏记。台账要在备注列留下「弃用 A 留用 B」的痕迹，供下轮和财务追溯。
 
 ## 群晖 NAS 外网访问
 
