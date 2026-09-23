@@ -63,7 +63,18 @@ profile 没登录时会停在登录页等（没有自动登录）。
    `4`=库存调整-**减少**（共享批次，跟随）、`5`=海外仓备货单。
    **调整单-增加产生的批次没有自动化入口可以改。**
 7. **A 的公开 OpenAPI 读接口会间歇 `40021`**，重试即可；`sellfox_cost_adjust_api.py` 走浏览器会话不受影响。
-8. **写操作范围必须先确认**：默认只用测试商品，绝不擅自扩大。
+8. **A 的「货值不能为负数」= 变更额超过了该批次剩余货值**（2026-09-20 实测）。
+   `单件可下调幅度 ≲ 当前单价 × (批次剩余可用量 / 备货单备货量)` ——
+   **剩余占比决定能降多少，剩余为 0 就完全降不了**。上调不受此限。
+9. **A 同一 SKU 同时只能有一张待审核补录单**（报 `存在待审核的补录单`），
+   批量建单必须**按 SKU 串行**；`delete.json` body 同 audit，都是 `[adjustId]`。
+10. **海外仓批次表的 `goodsAva` 不能当当前库存**（抽样 30 行 21 行与库存明细对不上，
+    POLAND 整组差约 1000）。**数量查库存明细**；批次表只用来看来源构成与历史成本。
+11. **备货单列表接口的 `items` 只返回 3 条预览** —— 拿它判断「该 SKU 在不在单里」必然误判，
+    要全量明细走详情接口（`/api/oversea/detail/v2.json?id=`）。按 SKU 搜备货单的
+    `searchType` 在「列表/批次表/公开OpenAPI」三个面上写法各不相同，见
+    `docs/solutions/integration-issues/sellfox-restock-headfee-api.md`。
+12. **写操作范围必须先确认**：默认只用测试商品，绝不擅自扩大。
 
 ## 不可逆操作（红线）
 
@@ -86,6 +97,7 @@ profile 没登录时会停在登录页等（没有自动登录）。
 - `docs/solutions/integration-issues/sellfox-cost-adjust-api.md` — 成本补录单完整契约
 - `docs/solutions/integration-issues/sellfox-restock-headfee-api.md` — 头程完整契约
 - `docs/solutions/integration-issues/sellfox-adjust-order-write-chain.md` — 调整单语义与不可逆性
+- `docs/solutions/workflow-issues/sellfox-incentive-cost-adjust-2026-09.md` — 激励价批量下调的执行记录（两条硬约束）
 - `docs/research/2026-09-18-sellfox-private-api-terminology.md` — 私有接口 vs 公开 OpenAPI
 - `docs/research/2026-09-18-sellfox-cost-accounting-fifo.md` — 批次成本口径与 FIFO
 - `web_automation/docs/reference/sellfox-pitfalls.md` — 页面侧踩坑（vxe-table、弹窗、批次警告）
@@ -95,7 +107,26 @@ profile 没登录时会停在登录页等（没有自动登录）。
 | 项 | 状态 |
 |---|---|
 | 成本补录单 `edit` / `updateRemark` | 端点存在但**成本补录单页面无触发入口**，payload 未解析 |
-| 库存调整-**增加**批次的成本修改 | **未找到任何入口** → 用「其他入库单」替代（见下） |
+| 库存调整-**增加**批次的成本修改 | **未找到任何入口** |
 | 其他入库单（`inRecord/v2.json`）产生的批次行为 | 未验；它 `perPurchase` 必填 + `shipFee/otherFee`，是**带成本的入库**正路 |
-| `oversea/inventory/syncInventory.json` 等三方仓库存端点 | 未探明，可能是「只改数量、不产成本批次」的正路 |
+| `oversea/inventory/syncInventory.json` 等三方仓库存端点 | **已探，未能验证**：本账号这些端点返回空、三方仓配置接口报 `系统异常`，推测**未开通三方仓功能**。若开通值得重探 |
 | `detail.json`（成本补录单） | 参数名未试出；`detailByRelationNo.json` 已覆盖需求 |
+| 已消耗备货单的**下调** | 受「批次剩余货值」封顶（`货值不能为负数`），**无绕过路径**；只能等下一批入库时把激励价建对，或清零重入 |
+| 批次表 `goodsAva` 与库存明细不一致的**成因** | 现象已确认（30 行 21 行不符），机制未查（疑似含在途/占用口径），数量一律以库存明细为准 |
+
+## 数量同步场景：看这份文档
+
+「用调整单把外部库存数量同步进赛狐」是一条**长期积累成本债**的路 ——
+**这不是用错工具**（赛狐自己的三方仓模块就有「生成调整单」功能，权限
+`MOD_OVERSEA_WAREHOUSE.CREATE_ADJUST`），问题在**调整单批次的成本是快照且不可修正**。
+
+完整成因、量化证据与三个选项见
+[`docs/solutions/workflow-issues/sellfox-inventory-sync-cost-drift.md`](../docs/solutions/workflow-issues/sellfox-inventory-sync-cost-drift.md)。
+
+## 激励价（下调成本）场景：看这份文档
+
+规则表（共享 Google Sheet）目标值 → 赛狐单据的批量落地尝试记录在
+[`docs/solutions/workflow-issues/sellfox-incentive-cost-adjust-2026-09.md`](../docs/solutions/workflow-issues/sellfox-incentive-cost-adjust-2026-09.md)。
+
+**一句话结论：下调成本有强时效性** —— 备货单被订单/调整单吃掉后，
+能下调的幅度按剩余占比缩水，剩余为 0 就完全降不了。**要改就在刚收货时改。**

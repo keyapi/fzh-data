@@ -40,6 +40,7 @@ timestamp: 2026-09-18
 | Claude Desktop · 普通模式 | 同上，把 `Claude-3p\` 换成 `Claude\` | 同上 |
 | **Codex** | `~/.codex/config.toml` | 完全退出再打开 |
 | **Cursor** | `~/.cursor/mcp.json`（仓库 `.cursor/` 已 gitignore，clone 不带） | Customize → MCP 启用；未出现则重载窗口 |
+| **ChatGPT**（网页版自定义连接器） | **无本地配置文件** —— 在 ChatGPT 设置 → 应用和连接器 → 高级设置里加 | 保存应用即生效。⚠️ **OpenAI 服务端直连 MCP endpoint，本机不起任何进程** —— 所以 `mcp-remote`、`~/.mcp-auth`、端口冲突那套排错**都不适用**。详见 [chatgpt/](../chatgpt/docs/index.md) |
 
 > ⚠️ **最常见的坑**：Claude Desktop 的 3P 模式与普通模式是**两个独立文件**。
 > 改错文件会**静默无效** —— 没有任何报错，只是不生效。

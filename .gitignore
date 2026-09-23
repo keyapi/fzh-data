@@ -32,6 +32,8 @@ venv/
 !.env.sample
 !.env.template
 secrets/*.json
+dingtalk/dingtalk_oa_approval/data/
+dingtalk/dingtalk_oa_approval/person_folders.local.json
 secrets/*.md
 *.cookie.txt
 cookie.txt
@@ -53,6 +55,9 @@ scripts/out/
 数据源/*
 !数据源/.gitkeep
 !数据源/README.txt
+# 上面两条带 `/` 的 pattern 只匹配仓库根目录，EN_API 下同名的目录要单独写
+EN_API/out/
+EN_API/数据源/
 
 # sellfox_shipping 原始业务样例（可含 PII，不入仓）
 sellfox_shipping/数据源/**
@@ -60,6 +65,10 @@ sellfox_shipping/数据源/**
 
 # sellfox_shipping local DB
 sellfox_shipping/data/
+
+# sellfox_settlement 取回原始结算/列式 CSV（生成数据，不入仓）
+data/saihu_*/
+sellfox_settlement/data/
 
 # Google Drive 权限管理 — 含员工邮箱 PII 的 CSV 不入仓（数据以 Google Sheet 台账为准）
 accounts_master.csv

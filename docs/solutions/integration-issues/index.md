@@ -13,6 +13,9 @@ tags: [integration, solutions, index]
 | 2026-09-22 | 重定向用 307 会让浏览器重放 POST —— 退出登录报 405 | [redirect-307-replays-post-405.md](redirect-307-replays-post-405.md) |
 | 2026-09-22 | 自建服务接入公司钉钉 OIDC 桥（客户端侧做法） | [dingtalk-oidc-bridge-client-onboarding.md](dingtalk-oidc-bridge-client-onboarding.md) |
 | 2026-09-22 | 前缀化反向代理下的登录跳转：`return_to` 必须用浏览器可见路径 | [reverse-proxy-prefix-return-to.md](reverse-proxy-prefix-return-to.md) |
+| 2026-09-22 | 承运商批量导入面单的字段长度上限——UPS Reference 35 字符、FedEx poNumber 30（多 SKU 合并后必须主动截断） | [carrier-label-batch-field-length-limits.md](carrier-label-batch-field-length-limits.md) |
+| 2026-09-22 | 背贴品名缺失怎么补——通途SKU 在 EN 有两种登记写法，且不在 item_languages 里 | [sku-name-backfill-via-en-customer-code.md](sku-name-backfill-via-en-customer-code.md) |
+| 2026-09-21 | Amazon 账期报表只能走赛狐「插件获取报告」——API 不可触发，且文件地址 1 小时过期 | [sellfox-amazon-settlement-plug-only.md](sellfox-amazon-settlement-plug-only.md) |
 | 2026-09-18 | 赛狐备货单改「单个头程费用」——无 Excel 路径，只能走私有接口 | [sellfox-restock-headfee-api.md](sellfox-restock-headfee-api.md) |
 | 2026-09-18 | 赛狐成本补录单——公开 OpenAPI 只读，创建/审核走内部接口（完整契约实测） | [sellfox-cost-adjust-api.md](sellfox-cost-adjust-api.md) |
 | 2026-09-18 | 赛狐调整单写链路——createV2 一步到位，batchConfirmAdjust 只适用「待调整」态 | [sellfox-adjust-order-write-chain.md](sellfox-adjust-order-write-chain.md) |

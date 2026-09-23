@@ -36,6 +36,29 @@ LABELED = [
     ("查一下 FedEx 的轨迹和异常报表", "fedex-track"),
     ("帮我把赛狐图片链接更新到物料组主图", "en-image-upload"),
     ("通途订单特殊规则 1.7.0 本地审计", "tongtool-order-cost"),
+    # 2026-09-21 补录的 11 个模块，每个一条
+    ("发个钉钉群通知，把下载链接附上", "dingtalk-robot"),
+    ("新建一批物料变体和配套皮壳内胆", "erpnext-item-create"),
+    ("把物料组名字批量翻译成英文", "item-group-translation"),
+    ("通途仓库改名了，要做三处对账登记", "tongtool-warehouse-sync"),
+    ("按 OKF 规范给新模块建文档", "okf"),
+    ("做个仪表盘页面，要好看别千篇一律", "frontend-design"),
+    ("写一份 DESIGN.md 把设计规范固化下来", "design-md"),
+    ("上线前做一次视觉审查", "design-review"),
+    ("WorkBuddy 接一下公司网关的 deepseek 模型", "workbuddy-config"),
+    ("通途 API 怎么查订单和包裹", "tongtool-api"),
+    ("把这几张产品参考图做成主图和场景图", "ecommerce-image-workflow"),
+    # 2026-09-21 补录的 10 个业务模块目录，每个一条
+    ("分析一下这个月的亚马逊广告数据", "advertise"),
+    ("统一 AI 接入 PoC 的壳和板进展到哪了", "ai-access-poc"),
+    ("赛狐里在售但没配对的 Listing 帮我审一下", "amazon-pairing"),
+    ("改一下已入库库存的采购成本，走成本补录单", "cost-adjust"),
+    ("查一下谁有这张 Google 表的编辑权限", "google-drive-permissions"),
+    ("NAS 上产品目录的 ACL 权限有问题要修", "nas-product-visuals"),
+    ("这个月的 PB 对账表更新一下", "pb-reconciliation"),
+    ("赛狐 API 代理网关要加一个模块的权限控制", "sellfox-api-proxy"),
+    ("SPS Commerce 能不能用 API 自动跑订单和 ASN", "sps-api"),
+    ("批量查一下这批 UPS 跟踪号现在什么状态", "ups-track"),
 ]
 
 # 两条对照样例：模糊到无法路由，以及明确不属于本仓库
