@@ -299,10 +299,12 @@ async def dingtalk_callback(code: str = "", state: str = ""):
     # 现在按组织成员查：不在本公司通讯录的人 getbyunionid 返回 60121。
     if REQUIRE_COMPANY_MEMBER:
         verdict = _company_member_verdict(user_data)
+        # 打的是**实际会落库/展示**的显示名（钉钉常只回 nick、不回 name），
+        # 只打 name 会显得像"没有名字"，误导后来排查的人。
         logger.info(
-            "登录校验 union_id=%s name=%s corp_id=%s 公司成员=%s",
+            "登录校验 union_id=%s 显示名=%s corp_id=%s 公司成员=%s",
             user_data.get("unionId") or dingtalk_user_id,
-            user_data.get("name"),
+            user_data.get("name") or user_data.get("nick") or "(钉钉未返回)",
             corp_id or "(未返回)",
             verdict,
         )
