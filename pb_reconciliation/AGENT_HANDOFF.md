@@ -70,6 +70,31 @@ python visual_check.py <xlsx> [sheet名] ["自定义提示"]
 ```
 渲染 sheet → PNG → qwen-vl-plus 描述背景色/字体/换行/截断。需 openai 包 + LibreOffice + PyMuPDF。**API key 不提交 git，需会话环境变量**。
 
+## 4d. 月度 invoice 合并（merge_invoices.py）
+
+每月把 `YYYYMM\YYYYMMDD\invoice\invoice*.csv` 拼成**一个**文件交给财务，作为 PB 收款对账附件。
+
+```bash
+cd pb_reconciliation
+python merge_invoices.py --month 202608 --dry-run   # 只读+报告+校验
+python merge_invoices.py --month 202608 --write     # 输出 <月份文件夹>/PB invoice 合并 <月份>.csv
+```
+
+- **规格**（逆向自 2026-08-24 手工产出，逐字节复现）：表头取列数最多的那份（SPS 新版 92 列）；
+  数据行 = 各日 CSV 的**全部**行（H 头行 + D 明细行都保留，不筛选不去重），按日文件夹日期升序拼接；
+  每行补齐到全局最大列数；UTF-8 带 BOM + CRLF。
+- **为什么 H+D 都留**：文件是给人看/存档的明细；**算金额时**必须过滤 `Record Type` = H 再累加
+  `Invoice Total`(CA)，H+D 一起算会重复（见根目录《Pottery Barn 收款附件 invoice csv文件 累加金额操作 202403.docx》）。
+  脚本报告就是这个口径。
+- **只扫 `invoice/` 下一层**：`invoice/截至YYYYMMDD尚未取消/` 之类的**变体子目录**天然不纳入
+  （如 20260814 里"去掉无货的…x17"那份），避免同一批发票重复进文件。
+- **硬校验**：某日文件夹有 `invoice/` 子目录、但一层内没有任何 `invoice*.csv` 命中 → 报错退出并列出目录下
+  所有 `.csv`。**踩过的坑**：`20260730` 的文件名把 `invoice` 拼成 `invocie`，被 glob 静默漏掉，
+  当月合并文件少了 37 张 / $2,232.28——不报错的静默丢弃比报错贵得多。
+- **交叉核对**：每天与 `invoice/*.txt` 文件名里的小计（人手写的当日合计）比对，打印 `txt ✔ / ✘`。
+- 已存在同名输出时**默认不覆盖**，改写 `_<时间戳>` 副本（`--force` 覆盖；`--out` 指定路径；
+  `--base` 指向副本做回归验证）。
+
 ## 5. 关键逻辑与校验（脚本内，改前必读）
 
 - **截止判定**：按日文件夹日期序扫描发票 CSV，**首个 0 付款的文件夹即停止**（自动）；8 月发票未收集在 `202608` 文件夹时，下月收集后再扫描。
@@ -97,4 +122,5 @@ python visual_check.py <xlsx> [sheet名] ["自定义提示"]
 - [ ] 对"本轮未付"发票做 UPS 核查（见 reference），把结果填 `UNPAID_NOTES` 重新生成
 - [ ] 用户在 Notes 里写详细说明（历史多付、特殊案例、异常）
 - [ ] LibreOffice 重算验证公式（G2/H2/H86、CG/CH）
-- [ ] 输出文件给财务；提交脚本到分支 → PR
+- [ ] 输出文件给财务；合并当月 invoice（`merge_invoices.py --month YYYYMM --write`）一并给财务
+- [ ] 提交脚本到分支 → PR

@@ -12,7 +12,14 @@ tags: [solutions, index]
 |------|------|------|
 | 2026-09-16 | PB 断货通知与 0 库存订单处理 — PO/SKU 映射与三个反直觉陷阱 | [workflow-issues/pb-out-of-stock-notification-and-zero-stock-orders.md](workflow-issues/pb-out-of-stock-notification-and-zero-stock-orders.md) |
 | 2026-09-16 | 「货物到哪了」查询方法 — 四个数据源的可靠性分级与查询顺序 | [workflow-issues/cargo-location-tracking-source-reliability.md](workflow-issues/cargo-location-tracking-source-reliability.md) |
+| 2026-09-22 | 公开代码仓与私有公司知识分层——兼顾 Agent 检索、同事使用与防泄露 | [architecture-patterns/public-private-agent-knowledge-split.md](architecture-patterns/public-private-agent-knowledge-split.md) |
 | 2026-09-21 | 把 FAC / 赛狐 / NAS 三个 MCP 接上 ChatGPT —— 一次串起来的方法与四个教训 | [workflow-issues/mcp-to-chatgpt-bringup-lessons.md](workflow-issues/mcp-to-chatgpt-bringup-lessons.md) |
+| 2026-09-22 | 重定向用 307 会让浏览器重放 POST —— 退出登录报 405 | [integration-issues/redirect-307-replays-post-405.md](integration-issues/redirect-307-replays-post-405.md) |
+| 2026-09-22 | 办公室出口拓扑与应急链路（OpenClash ↔ 上海跳板 ↔ 美国 Vultr） | [architecture-patterns/office-egress-fallback-chain.md](architecture-patterns/office-egress-fallback-chain.md) |
+| 2026-09-22 | Tailscale 2026 新能力盘点与对本仓库的适用性（Tailcat / Peer Relays / Services） | [tooling-decisions/tailscale-2026-capabilities.md](tooling-decisions/tailscale-2026-capabilities.md) |
+| 2026-09-22 | Tailscale 慢到不可用：先查直连（UDP 41641 入站），别急着换方案 | [tooling-decisions/tailscale-relay-vs-public-https-china.md](tooling-decisions/tailscale-relay-vs-public-https-china.md) |
+| 2026-09-22 | 自建服务接入公司钉钉 OIDC 桥（客户端侧做法） | [integration-issues/dingtalk-oidc-bridge-client-onboarding.md](integration-issues/dingtalk-oidc-bridge-client-onboarding.md) |
+| 2026-09-22 | 前缀化反向代理下的登录跳转：`return_to` 必须用浏览器可见路径 | [integration-issues/reverse-proxy-prefix-return-to.md](integration-issues/reverse-proxy-prefix-return-to.md) |
 | 2026-09-22 | 承运商批量导入面单的字段长度上限（UPS Reference 35 / FedEx poNumber 30） | [integration-issues/carrier-label-batch-field-length-limits.md](integration-issues/carrier-label-batch-field-length-limits.md) |
 | 2026-09-22 | 背贴品名缺失怎么补——通途SKU 在 EN 有两种登记写法 | [integration-issues/sku-name-backfill-via-en-customer-code.md](integration-issues/sku-name-backfill-via-en-customer-code.md) |
 | 2026-09-22 | 用 Drive API 改同事的 Colab notebook（cell 插入 / 回读比对 / 并发守卫） | [developer-experience/colab-notebook-drive-api-editing.md](developer-experience/colab-notebook-drive-api-editing.md) |

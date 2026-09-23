@@ -7,6 +7,20 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-09-22（公开仓与私有知识分层）
+- **新增**: `architecture-patterns/public-private-agent-knowledge-split.md` — 调研并裁决公开仓、内部知识与凭证的三层边界：公开仓保留脱敏代码/通用经验；真实拓扑、运维 runbook 和内部 API 进入独立私有 Markdown 仓；密码/token/私钥进入 secret manager 或已忽略的本地环境文件。私有仓用普通 clone + 一键 bootstrap，而非 submodule；SOPS 只补充少量 GitOps 密文，不承担长篇知识库；Vault 等到出现动态凭证/PKI/合规需求再引入。另定义 Agent 自动发现、无权限降级、敏感文档 lint 与已公开内容迁移/历史重写边界。
+
+## 2026-09-22（第二轮：重定向语义 / 出口拓扑 / Tailscale 2026 盘点）
+- **新增**: `integration-issues/redirect-307-replays-post-405.md` — 「跳页面」的重定向必须用 **303**。Starlette `RedirectResponse` 默认 307，而 307 **保留请求方法**：退出是 POST → 浏览器 POST 到只接受 GET 的首页 → 405 `{"detail":"Method Not Allowed"}`。由使用者实测发现。**只断言 `Location` 的测试抓不到它**，要断言状态码。
+- **新增**: `architecture-patterns/office-egress-fallback-chain.md` — 把散在多份文档里的出口链路串成一张图：主订阅线路 / **应急线路**（OpenClash 节点 `SH-Tailscale-US` → 上海 `socks5-tunnel.service:1080` → 美国 Vultr）/ 公网直反代；含重启存活状态与「用出口 IP 判断当前走哪条线」的定界方法。补的正是那个「各端都有文档、却没人串起来」的缺口。
+- **新增**: `tooling-decisions/tailscale-2026-capabilities.md` — 2026 年 Tailscale 新能力里与本仓库相关的三项：**Peer Relays**（自建中继，对症跨境中继慢）、**Services**（服务级 MagicDNS + ACL，可减少手工 NGINX location/白名单，但**不替代应用层登录**）、**Tailcat**（"Tailscale without Tailscale"，无控制面的临时连接工具，不是架构升级）。
+
+## 2026-09-22
+- **更新**: `tooling-decisions/tailscale-relay-vs-public-https-china.md` —— 原结论「弃用 Tailscale」**不成立**。根因是**云厂商安全组没放行入站 UDP 41641**，导致直连失败退回香港中继。用户放开该规则后实测：同两台机器从 `relay "hkg"` + 超时 + HTTP 20-30 秒，变成 **直连 31-69ms**。处置顺序改为「先修直连，修不动再考虑绕开」。另记录该服务器上已有的 `socks5-tunnel.service`（SSH 动态转发到美国出口，仅监听 Tailscale 地址）及其实测效果。
+
+- **新增**: `tooling-decisions/tailscale-relay-vs-public-https-china.md` — 境内访问境内服务器时 Tailscale 走**香港中继**（`relay "hkg"`，`tailscale ping` 超时）：实测服务器本机 1-3ms、公网 HTTPS 125ms、**Tailscale 20-30 秒**（TCP 握手单独就要 12-19 秒），12MB 文件根本传不完。结论是**弃用 Tailscale 改走同机公网 HTTPS + 应用层登录**（容器仍只绑 127.0.0.1）。含「把个人笔记本加进 Tailscale 解决不了这个问题」的解释与 UDP 41640 打洞失败的常见原因。
+- **新增**: `integration-issues/dingtalk-oidc-bridge-client-onboarding.md` — 自建服务接入公司钉钉 OIDC 桥的**客户端侧**做法（桥本身见 `dingtalk-sso-new-api-oidc-bridge.md`）：不用改钉钉后台、复用签名 cookie、**OIDC state 必须外置到 Redis**、闸门写在应用中间件而不是 nginx `auth_request`（桥没有 `/verify` 端点）、**桥的 corpId 校验时灵时不灵**所以限制用户要靠服务侧白名单。
+- **新增**: `integration-issues/reverse-proxy-prefix-return-to.md` — 前缀化反向代理下 `return_to` 踩的坑：`request.url.path` 是**反代剥掉前缀后的应用侧路径**，直接回写给浏览器会把登录后的用户送到**域名根路径**（同域上的另一个服务）。修法是把「应用侧路径」与「浏览器可见路径」分清，回写的 URL 一律补前缀；顺带给 `safe_return_to` 加前缀校验挡同域横向跳转。**使用者实际登录时发现**，自测没覆盖到。
 ## 2026-09-22
 - **修正**: 「新机器怎么让 `ce-okf` 可用」原来教人跑 `setup.ps1`，**对 Claude Code 是多余的**。仓库里 `.claude/skills` 本身就是 git 跟踪的 symlink，只要克隆时让它正确检出，Claude Code 自动看到全部项目 skill。实测对照（同一台机器、开发者模式已开）：默认 `git clone` → `CLAUDE.md` 是 9 字节 stub（0 行）、`.claude/skills` 是**普通文件**、skill 为空；`git clone -c core.symlinks=true` → 两个都是**真 symlink**、`CLAUDE.md` 解析 243 行、`.claude/skills` 列 **47 个 skill**，**全程没跑 setup.ps1**。根因是 Git for Windows 的 `--system core.symlinks=false`；克隆时的 `-c` 只在那一刻生效、**不写进新克隆的 `.git/config`**（已核），所以还要补 `git config core.symlinks true` 才能扛住后续 `pull` 新增的 symlink 条目。`setup.ps1` 缩到**只剩 Claude Desktop 需要**（Desktop 只读 `~/.claude/skills/`，看不到项目级目录）。改动落在 `AGENTS.md` 克隆节 + `CONTRIBUTING.md`「首次初始化」+ `.agents/skills/ce-okf/SKILL.md`「首次安装到新机器」。macOS / Linux 原生支持 symlink，直接 clone 即可。
 - **更新**: `ce-okf` 的依赖关系讲清 —— 之前 `AGENTS.md` 的「新机器首次 clone 后必做」清单里**一个字都没提** compound-engineering，而 `ce-okf` 第 1 步要调 `/ce-compound`。同事 clone 完能跑，但会静默走兜底、自己不知道。补：① `AGENTS.md` 加第 **4.5 步**（上游是标准 Claude Code 插件，装法是两条斜杠命令 `/plugin marketplace add EveryInc/compound-engineering-plugin` + `/plugin install compound-engineering`，**脚本代劳不了**，所以只能写进清单让同事的 Agent 读到）；② `.agents/skills/ce-okf/SKILL.md` 的「分工」表加「在本仓库？」列，把 `ce-compound` 标成**第三方 / 可选增强**并列出不装时丢掉什么（重叠检测损失最大、grounding 校验、检索广度），写明**流程照样完整、只降正文质量**。
