@@ -61,6 +61,7 @@ PB_0_导入_原始_checked0stock order x40 20260921_0159_334423_on_2026-09-21_17
 1. 打开 <https://api.vilavi.cn/pb/>
 2. 没登录会自动跳到**钉钉登录**，登录后回到你原本想打开的页面
 3. 「新建任务」→ 传两个文件 → 无货 SKU 已按当前断货情况预填，**可直接改** → 提交
+   （要改「以后每次的预填值」，点导航里的**「断货 SKU」**去维护那份清单）
 4. 提交后页面立刻跳到任务页；**处理在后台跑，可以关浏览器**
 5. 处理完左上角状态会自动变成「成功」，下面出现可下载的产物
 
@@ -96,9 +97,13 @@ Tailscale 走香港中继要 **20-30 秒**（12MB 的标签 PDF 根本下不完�
 所以走公网 HTTPS + 钉钉登录，不再走 Tailscale，也不再直接暴露 8412 端口
 （容器只监听 `127.0.0.1`，公网只能经 NGINX 的 `/pb/`）。
 
-**改无货 SKU 预填**：编辑服务器 `/opt/pb-orders/pb_orders/.env` 里的
-`PB_ORDERS_DEFAULT_NO_STOCK=`（逗号分隔），然后 `docker compose up -d`。
-不用改代码、不用重建镜像。
+**改无货 SKU 预填**：直接在网页上改 —— 点顶部导航的**「断货 SKU」**，
+加新的断货 SKU、删掉已恢复有货的，保存即可。下次新建任务就按这份清单预填，
+还能看到上次是谁什么时候改的。**不用改代码，也不用动服务器。**
+
+（服务器 `.env` 里的 `PB_ORDERS_DEFAULT_NO_STOCK=` 只是**初始值**：
+页面里改过之后就不再起作用。要回到「页面没设过」的状态，把
+`app_settings` 表里 `default_no_stock` 那行删掉即可。）
 
 **要更新代码**：把新的 `pb_orders/` 覆盖上去，然后
 `docker compose build --build-arg PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple && docker compose up -d`。

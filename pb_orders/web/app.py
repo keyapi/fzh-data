@@ -20,6 +20,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import sys
 from pathlib import Path
 from urllib.parse import quote
@@ -43,12 +44,32 @@ from web import csrf as csrf_mod  # noqa: E402
 from web import housekeeping  # noqa: E402
 from web import storage  # noqa: E402
 from web.config import get_settings  # noqa: E402
-from web.repository import ARTIFACT_LABELS, Repository, new_id  # noqa: E402
+from web.repository import ARTIFACT_LABELS, NO_STOCK_KEY, Repository, new_id  # noqa: E402
 
 WEB_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(WEB_DIR / "templates"))
 
 log = logging.getLogger("pb_orders.web")
+
+_SKU_SPLIT = re.compile(r"[,，;；\s]+")
+
+
+def parse_sku_list(raw: str) -> list[str]:
+    """把断货 SKU 的输入文本解析成列表。
+
+    逗号（中英文）、分号、空格、换行都算分隔；空项丢掉；
+    **按小写去重**（保留第一次出现的写法）—— 匹配本来就是大小写不敏感的，
+    所以 `YELLOW-138` 和 `Yellow-138` 是同一条。
+    """
+    seen: set[str] = set()
+    out: list[str] = []
+    for part in _SKU_SPLIT.split(raw or ""):
+        sku = part.strip()
+        if not sku or sku.lower() in seen:
+            continue
+        seen.add(sku.lower())
+        out.append(sku)
+    return out
 
 
 def _human_size(num) -> str:
@@ -116,6 +137,17 @@ def create_app() -> FastAPI:
     def url(path: str) -> str:
         return f"{prefix}{path}"
 
+    def current_no_stock() -> str:
+        """当前生效的断货 SKU 列表（逗号分隔）。
+
+        页面里设过就用页面那份（存在 `app_settings`），从没设过才回落到
+        `.env` 的 `PB_ORDERS_DEFAULT_NO_STOCK` —— 也就是「初始值」。
+        """
+        stored = repo.get_setting(NO_STOCK_KEY)
+        if stored is not None:
+            return stored["value"]
+        return ",".join(settings.default_no_stock)
+
     app = FastAPI(title="PB 订单处理", docs_url=None, redoc_url=None)
     app.mount("/static", StaticFiles(directory=str(WEB_DIR / "static")), name="static")
 
@@ -124,12 +156,12 @@ def create_app() -> FastAPI:
     app.include_router(auth_mod.build_router(ctx, states, templates))
 
     if settings.auth_enabled:
-        allow = "、".join(settings.allowed_users) if settings.allowed_users else "（未设白名单，任何钉钉用户可登录）"
+        allow = "、".join(settings.allowed_users) if settings.allowed_users else "（未设白名单，按桥的判定 = 本公司钉钉员工）"
         log.info("认证：开启（钉钉 OIDC %s）；允许用户：%s", settings.oidc_issuer, allow)
         if not settings.allowed_users:
-            log.warning(
-                "PB_ORDERS_ALLOWED_USERS 未设置 —— 任何钉钉用户都能登录这个服务。"
-                "公网暴露时建议填写白名单。"
+            log.info(
+                "PB_ORDERS_ALLOWED_USERS 未设 —— 登录范围由桥把关（2026-09-23 起桥按组织成员"
+                "判定，只有本公司钉钉员工能进）。需要再窄一层时再填这个白名单。"
             )
     else:
         log.info("认证：关闭（仅限本机/内网使用）")
@@ -246,9 +278,37 @@ def create_app() -> FastAPI:
             {
                 "settings": settings,
                 "cache_ready": settings.sku_cache_path.is_file(),
-                "default_no_stock": ",".join(settings.default_no_stock),
+                "default_no_stock": current_no_stock(),
             },
         )
+
+    @app.get("/settings", response_class=HTMLResponse)
+    async def settings_page(request: Request, saved: str = ""):
+        stored = repo.get_setting(NO_STOCK_KEY)
+        return render(
+            request,
+            "settings.html",
+            {
+                "settings": settings,
+                "no_stock": current_no_stock(),
+                "updated_at": (stored or {}).get("updated_at", ""),
+                "updated_by": (stored or {}).get("updated_by", ""),
+                "env_default": ",".join(settings.default_no_stock),
+                "saved": bool(saved),
+            },
+        )
+
+    @app.post("/settings/no-stock")
+    async def save_no_stock(request: Request, no_stock: str = Form(""), csrf: str = Form("")):
+        if not csrf_mod.accepted(request, csrf):
+            return render(request, "error.html", {"message": "页面已过期，请刷新后重试"}, status_code=403)
+        user = getattr(request.state, "user", None) or auth_mod.current_user(request, settings) or {}
+        repo.set_setting(
+            NO_STOCK_KEY,
+            ",".join(parse_sku_list(no_stock)),
+            (user.get("display_name") or user.get("identity") or "web-user"),
+        )
+        return RedirectResponse(url("/settings?saved=1"), status_code=303)
 
     @app.post("/jobs/new")
     async def create_job(

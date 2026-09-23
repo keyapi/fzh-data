@@ -56,7 +56,17 @@ CREATE TABLE IF NOT EXISTS artifacts (
     FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_artifacts_job ON artifacts(job_id);
+
+CREATE TABLE IF NOT EXISTS app_settings (
+    key        TEXT PRIMARY KEY,
+    value      TEXT NOT NULL DEFAULT '',
+    updated_at TEXT NOT NULL,
+    updated_by TEXT NOT NULL DEFAULT ''
+);
 """
+
+# 断货 SKU 列表存这里（页面可改）；从没设置过时回落到 .env 的初始值
+NO_STOCK_KEY = "default_no_stock"
 
 ARTIFACT_KINDS = (
     "input_packslip", "input_order",
@@ -222,6 +232,26 @@ class Repository:
             ).fetchall()
         return [{"id": r[0], "worker_job_id": r[1] or ""} for r in rows]
 
+    # ---------- 应用设置（页面上自己维护，不必再改服务器 .env）----------
+
+    def get_setting(self, key: str) -> dict | None:
+        with self.connect() as conn:
+            row = conn.execute(
+                "SELECT value, updated_at, updated_by FROM app_settings WHERE key = ?", (key,)
+            ).fetchone()
+        return dict(row) if row else None
+
+    def set_setting(self, key: str, value: str, actor: str = "") -> None:
+        with self.connect() as conn:
+            conn.execute(
+                """INSERT INTO app_settings(key, value, updated_at, updated_by)
+                   VALUES (?, ?, ?, ?)
+                   ON CONFLICT(key) DO UPDATE SET
+                       value      = excluded.value,
+                       updated_at = excluded.updated_at,
+                       updated_by = excluded.updated_by""",
+                (key, value, now_iso(), actor),
+            )
     def expired_finished_ids(self, cutoff_iso: str) -> list[str]:
         with self.connect() as conn:
             rows = conn.execute(
