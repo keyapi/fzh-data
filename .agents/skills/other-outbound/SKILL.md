@@ -45,3 +45,4 @@ uv run python build_saihu_other_outbound.py
 
 - [给人看的 README](../../../other_outbound/README.md)
 - [Agent 详细参考](../../../other_outbound/AGENT_HANDOFF.md)
+- [扫目录取输入防漏数](../../../docs/solutions/best-practices/scanner-silent-data-loss-guard.md) — 靠通配符扫赛狐库存明细导出，文件名写错会**静默丢数**

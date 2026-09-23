@@ -20,6 +20,9 @@ description: >
 2. `platform_account_reconciliation/docs/reference/field-mapping.md` — 账期字段与 EN 字段映射。
 3. `platform_account_reconciliation/docs/lessons/lessons-learned.md` — 对账踩坑清单。
 4. Walmart 线路另读 `docs/research/2026-09-21-sellfox-walmart-settlement-api.md`（端点、账期节奏、口径结论）。
+5. 改动「扫目录找账期文件」的逻辑前读 `docs/solutions/best-practices/scanner-silent-data-loss-guard.md` —— 账期文件靠通配符扫，文件名写错会**静默丢数**。
+6. PB（Pottery Barn）账期对账不在这里，走 `.agents/skills/pb-reconciliation/SKILL.md`（PB 的结算窗口是 19 号~次月 18 号，与 Amazon 的 4 号~下月 3 号不是同一套）。
+7. 用脚本核对 xlsx 金额时读 `docs/solutions/tooling-decisions/excel-formula-cells-and-recalc-verification.md` —— openpyxl 读公式单元格拿到的是公式串，裸加会系统性偏差。
 
 不要只凭账期文件里的原始 `OS Order #` 精确查 EN；先处理后缀 `_1/_2/_3`、`-1` 和 `OSFD-` 前缀。
 

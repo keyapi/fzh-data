@@ -52,3 +52,4 @@ python erp_tongtu_bridge.py [ERP通途SKU.xlsx] -t 通途SKU别名炸开.xlsx --
 
 - [给人看的 README](../../../multi_attr_saihu/README.md)
 - [Agent 详细参考](../../../multi_attr_saihu/AGENT_HANDOFF.md) — 3 脚本各有完整函数表、自动选文件规则、命令行参数、踩坑记录
+- [扫目录取输入防漏数](../../../docs/solutions/best-practices/scanner-silent-data-loss-guard.md) — 脚本有「自动选文件」逻辑，正是靠通配符筛；写错/多出文件会静默漏，改前先读

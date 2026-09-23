@@ -21,6 +21,7 @@ description: >
 5b. 成品↔皮壳 1:1 审计、独立 `PK#` 重建、cover-only 暂缓：`docs/solutions/conventions/erpnext-product-cover-variant-pairing.md`；脚本 `missing_products/fix_missing_cover_variants.py`（默认 dry-run）。
 5c. 赛狐皮壳 Listing / `PK#` 组合代理 / 通途并行期共享库存：改走 `.agents/skills/sellfox-cover-inventory/SKILL.md`，不要在本流程创建赛狐 `PK#` 普通商品。
 6. 需要赛狐 API 时再读 `.agents/skills/sellfox-api/SKILL.md` 和 `.agents/skills/multi-attr/SKILL.md`。
+7. 改动「扫目录找输入文件」的逻辑前读 `docs/solutions/best-practices/scanner-silent-data-loss-guard.md` —— 本模块脚本靠通配符扫导出目录，文件名写错/命名漂移会**静默丢数**（曾漏 37 张发票）。
 
 不要根据旧 xlsx、单个 BOM 报表列、SPU 名称或记忆直接下结论；先重新取数。
 
