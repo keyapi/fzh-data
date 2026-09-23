@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""启动时的三件 housekeeping：收回被杀掉的 running、捡回丢掉的队列任务、删掉过期成品。
+"""启动时的 housekeeping，以及 worker 活着时的队列对账。
 
 queued 默认不动。那条任务还在 Redis 里，worker 拉起来之后会继续跑。
 只把 status 仍是 running 的行标失败，避免盖掉已经成功的结果。
 但 Redis 也可能把队列整个丢掉（快照间隔内重启、flush、清库），
 那时数据库里的 queued 就再也没人管了 —— 由 `reconcile_queued` 兜住。
+worker 启动时对一次；之后按间隔再对，挡住「连接没断、队列 key 没了」。
 """
 
 from __future__ import annotations
 
 import logging
+import threading
 from datetime import datetime, timedelta
 from typing import Callable
 
@@ -48,6 +50,31 @@ def reconcile_queued(repo: Repository, is_still_queued: Callable[[str], bool]) -
     if stranded:
         log.warning("队列中已不存在 %d 个仍标记为排队中的任务，已标为失败", len(stranded))
     return len(stranded)
+
+
+def start_queue_watch(
+    repo: Repository,
+    is_still_queued: Callable[[str], bool],
+    interval_seconds: float,
+    stop: threading.Event | None = None,
+) -> threading.Event:
+    """worker 活着时定期对账。interval <= 0 表示关掉。
+
+    返回 stop 事件，调用方 set 即可停。线程是 daemon，进程退出时一起结束。
+    """
+    halt = stop or threading.Event()
+    if interval_seconds <= 0:
+        return halt
+
+    def loop() -> None:
+        while not halt.wait(interval_seconds):
+            try:
+                reconcile_queued(repo, is_still_queued)
+            except Exception:  # noqa: BLE001 - 对账失败下次再试，不能打死 worker
+                log.exception("队列对账失败，%s 秒后再试", interval_seconds)
+
+    threading.Thread(target=loop, name="pb-queue-watch", daemon=True).start()
+    return halt
 
 
 def purge_expired(settings, repo: Repository) -> int:

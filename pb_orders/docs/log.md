@@ -25,6 +25,14 @@ timestamp: 2026-09-22
   `AGENT_HANDOFF.md` §7 补坑 17-19、§10 清单更正（测试数、入口 URL、鉴权、保留策略）。
 - **共 73 个测试**（新增 2 个：`queued_jobs` 过滤、丢队列对账只动失联任务）。
 
+## 2026-09-23（worker 活着时定期对账）
+- Redis 重启：RQ 2.12.0 的 `dequeue_job_and_maintain_ttl` 对 `ConnectionError`
+  指数退避重连，**进程不退出**（`TimeoutError, quitting` 那条路径实测没走到）。
+  compose 的 `restart: unless-stopped` 因此不会被 Redis 重启触发。
+- `FLUSHALL` 同样不断开连接。两种丢失都靠 `start_queue_watch`（默认 60 秒）把库里
+  仍 `queued`、Redis 已无 job 的任务标失败。
+  新增不依赖 Redis 的对账测试；真 Redis 生命周期用例默认跳过，设 `PB_ORDERS_RQ_DOCKER=1` 才跑。
+
 ## 2026-09-22（第九轮：时区修正 + 登录跳转 bug）
 - **修复登录后跳错页**（使用者实测发现）：挂在前缀 `/pb/` 下时，`return_to` 记的是
   反代剥掉前缀后的**应用侧路径**（`/`），登录后把浏览器送到 `https://api.vilavi.cn/`

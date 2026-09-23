@@ -434,9 +434,10 @@ location /pb/ {
   或继续用这里的白名单。详见 `docs/solutions/integration-issues/dingtalk-sso-new-api-oidc-bridge.md`。
 - **保留策略在启动时执行**（`PB_ORDERS_RETENTION_DAYS`，默认 90 天），**不是定时任务**：
   长期不重启的服务/worker 不会触发清理。要真正常态化清理得加调度。
-- **队列丢失靠启动时对账兜底**：Redis 是 `--save 60 1 --appendonly no`，
-  快照间隔内重启 / flush 会丢掉排队任务；worker 启动时 `housekeeping.reconcile_queued`
-  会把「数据库里还排队、Redis 里已经没了」的任务标失败。同样只在启动时跑。
+- **队列丢失**：RQ 2.12.0 在 Redis 断连时**重连而不退出**（`ConnectionError` 指数退避），
+  所以不能指望 worker 被 `restart: unless-stopped` 拉起来再对账。
+  `FLUSHALL` 同样不断开连接。worker 启动时对一次账，之后每
+  `PB_ORDERS_QUEUE_WATCH_SECONDS` 秒再对（默认 60；设 0 关掉）。
 - **未接域名根路径**：目前挂在 `api.vilavi.cn/pb/` 路径前缀下；
   若以后要独立子域名（如 `pb.vilavi.cn`），需要加 DNS 记录与证书。
 - **代码版本标记是人工填的** `pb-web-20260922b`；PR 合并后应改为 commit SHA。

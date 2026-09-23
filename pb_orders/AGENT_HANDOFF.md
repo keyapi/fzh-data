@@ -256,6 +256,9 @@ uv run pytest tests/ -q
     那时数据库里的 `queued` 会永远停在「处理中」。worker 启动时用
     `housekeeping.reconcile_queued` 拿 Redis 侧的 `worker_job_id`
     （`rq.Job.fetch`）对账，查不到就标失败并允许「用相同输入重新处理」。
+    启动后再按 `PB_ORDERS_QUEUE_WATCH_SECONDS`（默认 60）对账。RQ 2.12.0 遇到
+    Redis `ConnectionError` 是重连而不是退出，所以不能指望容器重启来触发启动对账；
+    `FLUSHALL` 同样不断开连接。
 
 ## 8. 数量对账口径
 
@@ -342,7 +345,7 @@ uv run pytest tests/ -q
 - [x] 无货时自动拆「有货主文件 + 无货子集」（标签 + 背贴各两份，`--no-stock` 触发）
 - [x] 网页版：FastAPI + Redis/RQ + SQLite，任务可后台跑、可追溯、可重下（2026-09-22）
 - [x] 独立 Docker Compose 栈，不碰既有服务（2026-09-22）
-- [x] 73 个自动化测试，不需要 Redis 也能跑
+- [x] 75 个自动化测试（另有 Redis/RQ 生命周期用例，默认跳过），不需要 Redis 也能跑
 - [x] 已部署到 EN 测试服务器（`/opt/pb-orders`）。入口 **<https://api.vilavi.cn/pb/>**
       （公网 HTTPS + 钉钉登录，容器只绑 `127.0.0.1`）；Tailscale 那条路径已弃用（走香港中继太慢）
 - [x] 公网入口有钉钉登录闸门（`web/auth.py`）。**但白名单留空 = 任何钉钉账号都能登录**

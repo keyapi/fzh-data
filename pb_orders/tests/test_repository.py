@@ -121,6 +121,36 @@ def test_reconcile_queued_marks_only_jobs_missing_from_queue(repo):
     assert repo.get_job("running")["status"] == "running"
 
 
+def test_queue_watch_marks_lost_jobs_while_worker_stays_up(repo):
+    """FLUSHALL 不断开连接：worker 不退出，必须靠定期对账，不能等下次启动。"""
+    import time
+    from web import housekeeping
+
+    _create(repo, job_id="lost")
+    repo.mark_queued("lost", "rq-gone")
+    _create(repo, job_id="keep")
+    repo.mark_queued("keep", "rq-live")
+    alive = {"rq-live"}
+    stop = housekeeping.start_queue_watch(repo, lambda jid: jid in alive, 0.05)
+    deadline = time.time() + 3
+    while time.time() < deadline and repo.get_job("lost")["status"] != "failed":
+        time.sleep(0.05)
+    stop.set()
+    assert repo.get_job("lost")["status"] == "failed"
+    assert repo.get_job("lost")["error"]["code"] == "queue_lost"
+    assert repo.get_job("keep")["status"] == "queued"
+
+
+def test_queue_watch_off_when_interval_is_zero(repo):
+    from web import housekeeping
+
+    _create(repo, job_id="lost")
+    repo.mark_queued("lost", "rq-gone")
+    stop = housekeeping.start_queue_watch(repo, lambda jid: False, 0)
+    stop.set()
+    assert repo.get_job("lost")["status"] == "queued"
+
+
 def test_purge_expired_drops_old_finished_jobs_only(repo, pb_env):
     from web import housekeeping
     from web.config import get_settings

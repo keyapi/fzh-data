@@ -142,6 +142,8 @@ def main() -> None:
     except Exception:  # noqa: BLE001 - 对账失败不应挡住 worker
         traceback.print_exc()
 
+    housekeeping.start_queue_watch(repo, _still_queued, settings.queue_watch_seconds)
+
     # Windows 没有 fork()，RQ 的常规 Worker 会起不来；本机开发用 SimpleWorker，
     # 容器（Linux）仍用可并行 fork 的常规 Worker。
     worker_cls = SimpleWorker if os.name == "nt" else Worker

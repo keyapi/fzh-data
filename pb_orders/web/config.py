@@ -79,6 +79,8 @@ class Settings:
     max_upload_mb: int = field(default_factory=lambda: _env_int("PB_ORDERS_MAX_UPLOAD_MB", 64))
     job_timeout: int = field(default_factory=lambda: _env_int("PB_ORDERS_JOB_TIMEOUT", 1800))
     retention_days: int = field(default_factory=lambda: _env_int("PB_ORDERS_RETENTION_DAYS", 90))
+    # worker 活着时多久对一次 Redis 队列；0 = 关掉。挡住 FLUSHALL 这类「连接还在、key 没了」。
+    queue_watch_seconds: int = field(default_factory=lambda: _env_int("PB_ORDERS_QUEUE_WATCH_SECONDS", 60))
     pipeline_version: str = field(default_factory=_pipeline_version)
     # 挂在反代路径下时用（如 /pb）。空 = 挂在根路径。
     url_prefix: str = field(default_factory=lambda: _normalize_prefix(os.environ.get("PB_ORDERS_URL_PREFIX", "")))
