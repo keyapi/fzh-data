@@ -8,6 +8,26 @@ timestamp: 2026-09-22
 
 # 变更日志
 
+## 2026-09-23（第十一轮：桥收口后更正登录措辞 + 把积压改动一起上线）
+- **桥已收口，登录措辞更正**：钉钉 OIDC 桥（`new-api-dingtalk-oidc`）2026-09-23 起按
+  **组织成员**判定 —— 不在本公司通讯录的人返回 `60121` 直接拒绝。此前桥的 `corpId`
+  校验因授权未申请 `corpid` 而**从不生效**，所以「任何钉钉账号都能登录」这句是对的，
+  现在不成立了。四处说法一起更正：`README.md`、`AGENT_HANDOFF.md` §10、
+  部署文档 11.5/11.6、`docs/solutions/.../dingtalk-oidc-bridge-client-onboarding.md`。
+  `PB_ORDERS_ALLOWED_USERS` 从「兜底必需」降级为**可选加码**（留空即信任桥的判定）。
+- **上线（本次把积压的改动一起部署）**：此前线上停在第九轮那版（303 修复），
+  `a39fcc1`、`#266` 复查修正、`2866ac9` 定期对账都没上。本次一起部署到
+  `/opt/pb-orders/pb_orders`（备份 `pb_orders-code.bak-20260923-135501.tar.gz`）。
+  - **验证**：未登录访问 `/pb/jobs/new` → 303 + `Set-Cookie: pb_orders_csrf=…`
+    （CSRF 中间件确实生效，这是新代码上线的标志）；`/healthz` 正常；
+    任务库 2 个成功、**无僵尸任务**；只重建 `pb-orders-web/worker`，
+    `new-api` / `sellfox-api-proxy` / 桥 / `nas-mcp` / mysql / redis 全程未动。
+  - 部署时代码 `HEAD` 的 `pb_orders` 内容 = `81662db`，故把任务里记录的
+    `PB_ORDERS_PIPELINE_VERSION` 从过期的 `pb-web-20260922b` 改为 `pb-web-81662db`
+    （该值会写进每条任务记录，属于可追溯性的一部分）。
+  - **注意**：解包用 `git archive`（只含跟踪文件），所以服务器上的 `.env`、`runtime/`、
+    `data/` 都没被覆盖；`sellfox_shipping/`、`tongtool_order_cost/` 也不在本次包内。
+
 ## 2026-09-22（第十轮：重启不再丢队列 / CSRF / 保留清理，及复查修正）
 - **重启不再把排队任务当失败**：`queued` 还在 Redis 里、新 worker 会继续跑，
   所以启动时只把仍处于 `running` 的标为中断（条件更新，盖不掉已成功的）。
