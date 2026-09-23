@@ -238,7 +238,7 @@ uv sync
 ## 文档体系
 
 ```
-AGENTS.md (< 200 lines)           ← 你正在读的，项目总纲 + 路由地图
+AGENTS.md                        ← 你正在读的，项目总纲 + 路由地图
 ├── index.md                      ← 自动生成的子项目文档索引（scripts/update_index.py）
 ├── CONTRIBUTING.md               ← 技术开发贡献指南（B 类用户）
 ├── CONCEPTS.md                    ← 共享领域词汇（实体、流程、状态概念）
@@ -256,6 +256,24 @@ AGENTS.md (< 200 lines)           ← 你正在读的，项目总纲 + 路由地
 ├── (其他 6 个模块)/AGENT_HANDOFF.md   ← 各模块详情
 └── .agents/skills/*/SKILL.md     ← Agent Skill 入口（按触发词加载）
 ```
+
+### 经验库路由（`docs/solutions/`）
+
+**动手前先查这里有没有现成结论**——踩过的坑基本都在。104 篇按 category 分 8 类，每类一份 `index.md`：
+
+| 类别 | 篇数 | 什么时候读 |
+|------|-----|-----------|
+| `workflow-issues/` | 28 | 账期对账、迟交/错位、跨期结算、批处理流程 |
+| `integration-issues/` | 20 | API 鉴权 / 限流 / 字段长度 / OIDC / Webhook 等集成踩坑 |
+| `architecture-patterns/` | 17 | 「这个管道/系统为什么这样设计」 |
+| `tooling-decisions/` | 12 | 脚本、工具选型、产出校验 |
+| `developer-experience/` | 10 | Windows / worktree / MCP / Colab 等本机环境坑 |
+| `conventions/` | 9 | 团队约定（配对、命名、SOP） |
+| `best-practices/` | 6 | 通用工程做法（防漏数、先搜再造、安全加固） |
+| `documentation-gaps/` | 2 | 文档与断言的缺口 |
+
+定位单篇：`grep -rl "^module: <模块名>" docs/solutions/`（frontmatter 有 `module` / `tags` / `problem_type`）。
+全量平表：`docs/solutions/index.md`。
 
 ### 团队协作角色
 
