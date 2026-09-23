@@ -10,6 +10,7 @@ tags: [integration, solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-09-23 | grok-bot（美东）SSH 接入——对称 NAT 下打不成直连，只有经上海跳板有收益（235ms vs DERP 373ms），Vultr 跳板实为绕远路 | [grokbot-ssh-via-shanghai-jump-symmetric-nat.md](grokbot-ssh-via-shanghai-jump-symmetric-nat.md) |
 | 2026-09-22 | 重定向用 307 会让浏览器重放 POST —— 退出登录报 405 | [redirect-307-replays-post-405.md](redirect-307-replays-post-405.md) |
 | 2026-09-22 | 自建服务接入公司钉钉 OIDC 桥（客户端侧做法） | [dingtalk-oidc-bridge-client-onboarding.md](dingtalk-oidc-bridge-client-onboarding.md) |
 | 2026-09-22 | 前缀化反向代理下的登录跳转：`return_to` 必须用浏览器可见路径 | [reverse-proxy-prefix-return-to.md](reverse-proxy-prefix-return-to.md) |
