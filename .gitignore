@@ -104,3 +104,13 @@ parcel_track/scripts/run_parcel_track_scheduled-*.cmd
 
 # 游离的客户名单 JSON（脚本未展开 %TEMP% 环境变量，落到了仓库根）—— 含真实客户/部门名，禁入库
 %TEMP%customers.json
+
+# pb_orders 运行产物与本地缓存（数据在仓库外，这里只兜底）
+pb_orders/out/
+pb_orders/*.pdf
+pb_orders/data/
+
+# pb_orders Web 服务的运行状态：任务库、上传、临时件、产物，全是业务数据
+pb_orders/runtime/
+# 部署时按机器覆盖的 Compose 变量（可能含服务器地址）
+pb_orders/.env
