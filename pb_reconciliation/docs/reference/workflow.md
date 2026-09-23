@@ -98,4 +98,3 @@ python merge_invoices.py --month YYYYMM --write     # -> <月份文件夹>/PB in
 - 金额口径：只对 `Record Type` = H 的行累加 `Invoice Total`(CA)。H+D 都算会重复计数。
 - 硬校验：日文件夹有 `invoice/` 却没有 `invoice*.csv` 命中 → 报错退出（防文件名错拼被静默漏掉）。
 - 已存在同名输出默认不覆盖，改写 `_<时间戳>` 副本；`--force` / `--out` / `--base` 可覆盖行为。
-
