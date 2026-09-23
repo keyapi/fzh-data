@@ -74,6 +74,12 @@ def test_member_is_true(monkeypatch):
     assert stream_listener.check_org_membership("u1", "token") is True
 
 
+def test_invalid_unionid_errcode_is_unknown(monkeypatch):
+    """实测：格式非法的 unionId 返回 40035「不合法的参数」，不是 60121 —— 归入判定不了。"""
+    _reply(monkeypatch, {"errcode": 40035, "errmsg": "不合法的参数 unionid"})
+    assert stream_listener.check_org_membership("bad-unionid", "token") is None
+
+
 def test_other_errcode_is_unknown(monkeypatch):
     """权限/限流等错误不能当成「不是成员」——否则一旦接口出问题就会误拒在职同事。"""
     _reply(monkeypatch, {"errcode": 88, "errmsg": "permission denied"})

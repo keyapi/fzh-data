@@ -33,6 +33,16 @@ from contextlib import asynccontextmanager
 from jwcrypto import jwk, jwt
 
 logger = logging.getLogger("new-api-dingtalk-oidc")
+# uvicorn 只配置它自己的 logger，本模块的 INFO 会被根 logger 的默认 WARNING 级别吞掉 ——
+# 于是「登录校验」这类结果在 docker logs 里根本看不到。自带 handler 保证判定结果可见。
+if not logger.handlers:
+    _handler = logging.StreamHandler()
+    _handler.setFormatter(
+        logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
+    )
+    logger.addHandler(_handler)
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
 
 # ── Config ──────────────────────────────────────────────────────────
 
