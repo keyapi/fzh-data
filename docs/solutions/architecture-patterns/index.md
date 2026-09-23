@@ -25,3 +25,6 @@ timestamp: 2026-07-28
 | Workflow builder 布局算法 | [workflow-builder-layout-algorithm.md](workflow-builder-layout-algorithm.md) |
 | 网页自动化迁入 fzh-data（独立 uv 能力舱 + dispatcher） | [web-automation-capability-pod-monorepo.md](web-automation-capability-pod-monorepo.md) |
 | 通途订单详情下载识别：最上行锚定 vs href 基线 | [tongtu-orderdetail-export-row-anchor.md](tongtu-orderdetail-export-row-anchor.md) |
+| 账期/收款核算 生态地图（各平台账期 → 汇率/税/附加费 → 回款归属/回款率 → 归集给财务） | [account-period-revenue-reconciliation-ecosystem.md](account-period-revenue-reconciliation-ecosystem.md) |
+| ERPNext 工作流配置完整指南 | [erpnext-workflow-configuration.md](erpnext-workflow-configuration.md) |
+| SKU 背贴 PDF 生成与通用名称查询模式 | [sku-label-pdf-generation-and-name-lookup.md](sku-label-pdf-generation-and-name-lookup.md) |

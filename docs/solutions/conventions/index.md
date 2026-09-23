@@ -18,3 +18,4 @@ timestamp: 2026-09-10
 | 通途有库存 SKU 三方主线补齐惯例 | [tongtu-en-sellfox-instock-sku-mainline.md](tongtu-en-sellfox-instock-sku-mainline.md) |
 | Amazon 在线商品配对的分层候选与运营确认流程 | [amazon-online-product-pairing-candidate-workflow.md](amazon-online-product-pairing-candidate-workflow.md) |
 | 赛狐组合商品/套件 SKU 创建与配对工作流 | [sellfox-combo-sku-create-pairing-workflow.md](sellfox-combo-sku-create-pairing-workflow.md) |
+| 赛狐 Apifox API 文档本地镜像刷新与对账 | [sellfox-apifox-api-docs-mirror-refresh.md](sellfox-apifox-api-docs-mirror-refresh.md) |

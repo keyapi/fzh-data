@@ -128,6 +128,6 @@ GSPREAD_SERVICE_ACCOUNT_FILE='D:\Work\赛狐\Cursor\secrets\gsheets-service-acco
 
 - [通途主档 SKU 改名后用本地 gspread 对齐订单 Google Sheet](tongtool-sku-rename-gsheet-remap.md) — SKU 改名（非仓库）；gspread 凭证用法相同
 - [Google Sheet 凭证](../../../tongtool_order_cost/docs/reference/gsheets-credentials.md) — service account 分层
-- [ERPNext Workflow 配置指南](../erpnext-workflow-configuration.md) — ERPNext 侧 DocType 概念
+- [ERPNext Workflow 配置指南](../architecture-patterns/erpnext-workflow-configuration.md) — ERPNext 侧 DocType 概念
 - [Tongtool ERP2 MCP 共享限流](../integration-issues/tongtool-erp2-mcp-shared-rate-limit.md) — 通途 API 5 次/分钟
 - [通途有库存 SKU 三方主线](../conventions/tongtu-en-sellfox-instock-sku-mainline.md) — 另一条主线，不要和仓库登记混用
