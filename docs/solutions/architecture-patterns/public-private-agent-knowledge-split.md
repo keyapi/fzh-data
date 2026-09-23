@@ -190,25 +190,25 @@ uv run python scripts/bootstrap_private_knowledge.py
 
 ## 来源
 
-- GitHub：仓库可见性与私有仓库的访问边界  
+- GitHub：仓库可见性与私有仓库的访问边界
   <https://docs.github.com/en/repositories/creating-and-managing-repositories/about-repositories>
-- GitHub：Secret scanning 会扫描整个 Git 历史中的已知凭证模式  
+- GitHub：Secret scanning 会扫描整个 Git 历史中的已知凭证模式
   <https://docs.github.com/en/code-security/concepts/secret-security/secret-scanning>
-- GitHub：Push protection 在 push 到仓库前阻断受支持的秘密  
+- GitHub：Push protection 在 push 到仓库前阻断受支持的秘密
   <https://docs.github.com/en/code-security/concepts/secret-security/command-line-push-protection>
-- GitHub：泄露后的正确顺序包含撤销凭证；清理仓库不是撤销的替代品  
+- GitHub：泄露后的正确顺序包含撤销凭证；清理仓库不是撤销的替代品
   <https://docs.github.com/en/enterprise-cloud@latest/code-security/secret-scanning/working-with-secret-scanning-and-push-protection/remediating-a-leaked-secret>
-- Git：Submodule clone/update、递归选项与 detached HEAD 行为  
+- Git：Submodule clone/update、递归选项与 detached HEAD 行为
   <https://git-scm.com/book/en/v2/Git-Tools-Submodules>
-- SOPS：支持 age/KMS/PGP 的 Git 友好型加密文件工具  
+- SOPS：支持 age/KMS/PGP 的 Git 友好型加密文件工具
   <https://github.com/getsops/sops>
-- 1Password：本地 `.env` 挂载的行为与平台限制  
+- 1Password：本地 `.env` 挂载的行为与平台限制
   <https://developer.1password.com/docs/environments/local-env-file>
-- 1Password：Events API 与审计事件  
+- 1Password：Events API 与审计事件
   <https://developer.1password.com/docs/events-api/introduction>
-- HashiCorp：GitOps 中由 Vault 动态提供秘密而不写入 Git  
+- HashiCorp：GitOps 中由 Vault 动态提供秘密而不写入 Git
   <https://developer.hashicorp.com/well-architected-framework/define-and-automate-processes/process-automation/gitops>
-- HashiCorp：Vault 的动态秘密、最小权限与审计日志能力  
+- HashiCorp：Vault 的动态秘密、最小权限与审计日志能力
   <https://developer.hashicorp.com/validated-patterns/vault/vault-agent-approle>
-- Infisical：人员/机器身份、限时授权与访问审计概览  
+- Infisical：人员/机器身份、限时授权与访问审计概览
   <https://infisical.com/videos/secrets-management-infisical>
