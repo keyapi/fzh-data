@@ -134,6 +134,51 @@ def get_user_id_by_union_id(union_id: str, access_token: str) -> str | None:
     return (data.get("result") or {}).get("userid")
 
 
+def check_org_membership(union_id: str, access_token: str) -> bool | None:
+    """这个 unionId 是不是本公司钉钉组织的成员。
+
+    登录闸门用它做权威判据 —— 比 `corpId` 字段可靠：`getbyunionid` 是用**本公司
+    应用**的凭证查本公司通讯录，外部人（别的企业、外部联系人、已离职被移出）都查不到。
+
+        True  = 在组织里（解析出 userId）
+        False = 不在（60121 未找到对应员工 / 60111 用户不存在）
+        None  = 判定不了（网络、权限、其它 errcode）—— 由调用方决定放行还是拒绝
+
+    与 `get_user_id_by_union_id` 打的是同一个接口，但那个函数把所有非 0 errcode
+    都压成 None，用它做闸门会把「不在公司」和「接口抖动」混为一谈，所以单独一个。
+    """
+    try:
+        resp = httpx.post(
+            f"https://oapi.dingtalk.com/topapi/user/getbyunionid?access_token={access_token}",
+            json={"unionid": union_id},
+            headers={"Content-Type": "application/json"},
+            timeout=15,
+        )
+        data = resp.json()
+    except Exception as exc:  # noqa: BLE001 - 网络/解析异常都属于「判定不了」
+        logger.warning("getbyunionid 调用失败 union_id=%s: %s", union_id, exc)
+        return None
+
+    try:
+        errcode = int(data.get("errcode"))
+    except (TypeError, ValueError):
+        logger.warning("getbyunionid 返回异常 union_id=%s: %r", union_id, data)
+        return None
+
+    if errcode == 0:
+        userid = (data.get("result") or {}).get("userid")
+        if userid:
+            return True
+        logger.warning("getbyunionid errcode=0 却没有 userid: %r", data)
+        return None
+    if errcode in (60121, 60111):
+        return False
+    logger.warning(
+        "getbyunionid errcode=%s %s union_id=%s", errcode, data.get("errmsg"), union_id
+    )
+    return None
+
+
 def record_login_identity(union_id: str, display_name: str | None):
     """Best-effort: persist unionId↔numeric-userId mapping after a successful login.
 
