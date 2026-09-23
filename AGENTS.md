@@ -173,6 +173,7 @@ uv sync
 | `google-drive-permissions` | `google_drive_permissions/` | Google 表格/Colab 共享权限盘点与增删 |
 | `colab-kit` | `colab_kit/` | Colab notebook 读写改工具箱：取/备份/列格/插格/替换/语法自检/回写/回读比对/并发守卫 |
 | `nas-product-visuals` | `nas_product_visuals/` | 群晖 NAS 产品目录扫描 + ACL 权限实时修复脚本集 |
+| `pb-orders` | `pb_orders/` | Pottery Barn 出件：SPS 库存预检（明细级）→ 通途导入 xlsx + 标签/背贴 PDF；CLI + 网页版 |
 | `pb-reconciliation` | `pb_reconciliation/` | Pottery Barn 对账月度更新 + TM 佣金结算表 |
 | `sellfox-api-proxy` | `sellfox-api-proxy/` | 赛狐 API 代理网关（破 IP 白名单 + 凭证安全分发） |
 | `sps-api` | `sps_api/` | SPS Commerce API 可行性探测（EDI / ASN / 发票 / 库存） |

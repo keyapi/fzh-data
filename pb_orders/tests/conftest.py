@@ -146,4 +146,5 @@ def client(pb_env, monkeypatch):
     app = web_app.create_app()
     with TestClient(app) as c:
         c.repo = Repository(get_settings().db_path)
+        c.settings = get_settings()
         yield c

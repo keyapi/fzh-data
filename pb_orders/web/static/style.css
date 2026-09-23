@@ -66,11 +66,15 @@ thead th { color: var(--muted); font-weight: 600; font-size: 12.5px; background:
 table.kv th { width: 190px; color: var(--muted); font-weight: 500; }
 
 .muted { color: var(--muted); }
+.mono { font-family: Consolas, "Cascadia Mono", ui-monospace, monospace; font-size: 13px; }
 .ok { color: var(--ok); font-weight: 600; }
 .bad { color: var(--bad); font-weight: 600; }
 .error { color: var(--bad); background: #fdecea; padding: 10px 12px; border-radius: 6px; }
 .warn { color: #8a6100; background: var(--warn-bg); padding: 10px 12px; border-radius: 6px; }
 .warn-list li { color: #8a6100; }
+/* 「部分缺货 PO」的醒目提示：整单取消会让 PB 发催单，必须显眼 */
+.mixed-warning { border-left: 4px solid #d9a300; background: var(--warn-bg); }
+.mixed-warning h2 { color: #8a6100; }
 
 .badge {
   display: inline-block; padding: 2px 9px; border-radius: 10px;

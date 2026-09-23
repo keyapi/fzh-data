@@ -20,6 +20,7 @@ if str(_PB_DIR) not in sys.path:
     sys.path.insert(0, str(_PB_DIR))
 
 import service  # noqa: E402
+import stock_precheck  # noqa: E402
 from web import housekeeping  # noqa: E402
 from web import storage  # noqa: E402
 from web.config import get_settings  # noqa: E402
@@ -35,6 +36,8 @@ def _friendly_error(exc: Exception) -> dict:
     """把异常翻译成面向用户的失败报告，不泄露服务器路径与堆栈。"""
     if isinstance(exc, service.PBJobError):
         return exc.to_dict()
+    if isinstance(exc, stock_precheck.StockCheckError):
+        return exc.to_dict()
     if isinstance(exc, FileNotFoundError):
         return {"code": "cache_missing", "message": "缺少本地 SKU 名称缓存", "hint": _CACHE_HINT}
     if isinstance(exc, (ValueError, KeyError)):
@@ -44,6 +47,70 @@ def _friendly_error(exc: Exception) -> dict:
         "message": "处理时发生内部错误",
         "hint": "已记录日志，请把任务编号反馈给维护者。",
     }
+
+
+def _publish_artifacts(repo, settings, job_id: str, specs) -> None:
+    """把产物按内容哈希发布到 artifacts 目录，再登记到数据库。"""
+    for spec in specs:
+        rel_path, size, content_hash = storage.publish_artifact(
+            spec.path, settings.artifacts_dir, spec.download_name
+        )
+        repo.add_artifact(
+            job_id=job_id, kind=spec.kind, original_name=spec.path.name,
+            download_name=spec.download_name, rel_path=rel_path,
+            content_hash=content_hash, size_bytes=size, mime_type=spec.mime_type,
+        )
+
+
+def _run_fulfillment(repo, job, settings, job_id, in_dir, work_dir):
+    """出件：Packslip PDF + checked CSV -> 通途 xlsx + 标签/背贴 PDF。"""
+    options = service.JobOptions(
+        no_stock=job["no_stock_list"],
+        no_stock_note=job["no_stock_note"],
+        allow_unmatched=job["allow_unmatched"],
+        cache_only=True,  # 普通任务绝不联网
+        validate_only=job["validate_only"],
+        sku_cache_path=settings.sku_cache_path,
+        nltk_dir=settings.nltk_dir,
+    )
+    result = service.run_job(
+        # 磁盘名固定（见 storage 约定）。jobs.input_packslip/input_order
+        # 只存用户原始文件名，仅用于页面展示，不能当路径用。
+        in_dir / storage.PACKSLIP_NAME,
+        in_dir / storage.ORDER_NAME,
+        options,
+        output_dir=work_dir,
+        progress=lambda step, msg: repo.set_progress(job_id, step, msg),
+    )
+    return result.report, result.artifacts
+
+
+def _run_stock_check(repo, job, settings, job_id, in_dir, work_dir):
+    """库存预检：SPS 原始 New 订单 CSV -> checked CSV + 操作 Excel。"""
+    result = stock_precheck.run_stock_check(
+        in_dir / storage.ORDER_NAME,
+        job["no_stock_list"],
+        work_dir,
+        progress=lambda step, msg: repo.set_progress(job_id, step, msg),
+        name_stem=Path(job["input_order"] or "").stem,
+    )
+    specs = [
+        service.ArtifactSpec(
+            "checked_order", result.checked_csv, result.checked_csv.name, stock_precheck.MIME_CSV
+        ),
+        service.ArtifactSpec(
+            "stock_operations", result.operations_xlsx, result.operations_xlsx.name,
+            stock_precheck.MIME_XLSX,
+        ),
+    ]
+    return result.report, specs
+
+
+# 任务类型 -> 执行器。两种流程共用同一套「跑完发布产物」的外壳。
+_RUNNERS = {
+    "fulfillment": _run_fulfillment,
+    "stock_check": _run_stock_check,
+}
 
 
 def run_job(job_id: str) -> dict:
@@ -57,6 +124,15 @@ def run_job(job_id: str) -> dict:
     if job["status"] in ("succeeded", "failed"):
         return {"job_id": job_id, "status": job["status"], "skipped": True}
 
+    job_type = job["job_type"] or "fulfillment"
+    runner = _RUNNERS.get(job_type)
+    if runner is None:
+        repo.mark_failed(
+            job_id,
+            {"code": "unknown_job_type", "message": f"未知的任务类型：{job_type}", "hint": "请联系维护者。"},
+        )
+        return {"job_id": job_id, "status": "failed", "error": "unknown_job_type"}
+
     repo.mark_running(job_id)
     in_dir = settings.inputs_dir / job_id
     work_dir = settings.work_dir / job_id
@@ -64,38 +140,10 @@ def run_job(job_id: str) -> dict:
         shutil.rmtree(work_dir, ignore_errors=True)
     work_dir.mkdir(parents=True, exist_ok=True)
 
-    options = service.JobOptions(
-        no_stock=job["no_stock_list"],
-        no_stock_note=job["no_stock_note"],
-        allow_unmatched=job["allow_unmatched"],
-        cache_only=True,  # 普通任务绝不联网
-        validate_only=job["validate_only"],
-        sku_cache_path=settings.sku_cache_path,
-        nltk_dir=settings.nltk_dir,
-    )
-
     try:
-        result = service.run_job(
-            # 磁盘名固定（见 storage 约定）。jobs.input_packslip/input_order
-            # 只存用户原始文件名，仅用于页面展示，不能当路径用。
-            in_dir / storage.PACKSLIP_NAME,
-            in_dir / storage.ORDER_NAME,
-            options,
-            output_dir=work_dir,
-            progress=lambda step, msg: repo.set_progress(job_id, step, msg),
-        )
-        report = result.report
+        report, specs = runner(repo, job, settings, job_id, in_dir, work_dir)
         report["pipeline_version"] = settings.pipeline_version
-
-        for spec in result.artifacts:
-            rel_path, size, content_hash = storage.publish_artifact(
-                spec.path, settings.artifacts_dir, spec.download_name
-            )
-            repo.add_artifact(
-                job_id=job_id, kind=spec.kind, original_name=spec.path.name,
-                download_name=spec.download_name, rel_path=rel_path,
-                content_hash=content_hash, size_bytes=size, mime_type=spec.mime_type,
-            )
+        _publish_artifacts(repo, settings, job_id, specs)
         repo.mark_succeeded(job_id, report)
         return {"job_id": job_id, "status": "succeeded"}
     except Exception as exc:  # noqa: BLE001 - 任何失败都要落库，页面才看得到原因

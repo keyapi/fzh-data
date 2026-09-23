@@ -4,9 +4,10 @@
 <section class="card">
   <h1>任务 <code>{{ job.id }}</code></h1>
   <p>
+    <span class="tag">{{ JOB_TYPE_LABELS.get(job.job_type, job.job_type or '出件') }}</span>
     <span class="badge {{ job.status }}" id="top-status">{{ STATUS_LABELS.get(job.status, job.status) }}</span>
     {% if job.validate_only %}<span class="tag">仅校验</span>{% endif %}
-    {% if job.source_job_id %}<span class="tag">重跑自 {{ job.source_job_id }}</span>{% endif %}
+    {% if job.source_job_id %}<span class="tag">来源任务 {{ job.source_job_id }}</span>{% endif %}
     <a class="btn ghost right" href="{{ prefix }}/">返回列表</a>
   </p>
   <table class="kv">
@@ -14,8 +15,12 @@
     <tr><th>创建</th><td>{{ (job.created_at or '')[:19].replace('T', ' ') }}</td></tr>
     <tr><th>开始</th><td>{{ (job.started_at or '-')[:19].replace('T', ' ') }}</td></tr>
     <tr><th>结束</th><td>{{ (job.finished_at or '-')[:19].replace('T', ' ') }}</td></tr>
+    {% if job.job_type == "stock_check" %}
+    <tr><th>输入</th><td>{{ job.input_order }}</td></tr>
+    {% else %}
     <tr><th>输入</th><td>{{ job.input_packslip }} / {{ job.input_order }}</td></tr>
-    <tr><th>无货 SKU</th><td>{{ job.no_stock or '（无，不过滤）' }}</td></tr>
+    {% endif %}
+    <tr><th>断货 SKU</th><td>{{ job.no_stock or '（无，不过滤）' }}</td></tr>
     <tr><th>代码版本</th><td><code>{{ job.pipeline_version }}</code></td></tr>
   </table>
 </section>

@@ -1,0 +1,108 @@
+{# 库存预检任务的对账与操作提示 #}
+{% macro detail_table(table, title, hint, tone) %}
+<section class="card {{ tone or '' }}">
+  <h2>{{ title }}（{{ table.total }} 行）</h2>
+  {% if hint %}<p class="muted">{{ hint }}</p>{% endif %}
+  {% if table.rows %}
+  <table>
+    <thead><tr>{% for column in table.columns %}<th>{{ column }}</th>{% endfor %}</tr></thead>
+    <tbody>
+      {% for row in table.rows %}
+      <tr>
+        {% for value in row %}
+        {% set column = table.columns[loop.index0] %}
+        <td class="{{ 'mono' if column in ('PO Number', 'PO Line #', 'Buyers Catalog or Stock Keeping #', 'Vendor Style', 'SPS 操作') }}
+                   {{ 'bad' if column == '库存状态' and value == '缺货' }}
+                   {{ 'ok' if column == '库存状态' and value == '有货' }}">{{ value }}</td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if table.truncated %}
+  <p class="warn">表里只显示前 {{ table.rows | length }} 行（共 {{ table.total }} 行）——
+    完整内容看下面的操作表 xlsx。</p>
+  {% endif %}
+  {% else %}
+  <p class="muted">这一类没有明细行。</p>
+  {% endif %}
+</section>
+{% endmacro %}
+
+{% if job.report %}
+{% set r = job.report %}
+{% set tables = r.tables or {} %}
+
+{% if r.mixed_po_count %}
+<section class="card mixed-warning">
+  <h2>⚠ 有 {{ r.mixed_po_count }} 个 PO 是「部分缺货」——不要整单取消</h2>
+  <p>
+    这些 PO 里既有有货也有缺货的明细行。在 SPS 里<strong>保留 Header</strong>，
+    生成 ASN / shipment 时<strong>只勾选有货的明细行</strong>，缺货行不要勾、另发新日期通知。
+    整单取消会让 PB 以为这单不发了。
+  </p>
+  <p class="mono">{{ r.mixed_po | join('、') }}</p>
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>库存对账</h2>
+  <table>
+    <thead><tr><th>口径</th><th>总数</th><th>有货</th><th>部分缺货</th><th>缺货</th><th>差</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>PO</td><td>{{ r.po.total }}</td><td>{{ r.po.fully_in_stock }}</td>
+        <td>{{ r.po.partially_out_of_stock }}</td><td>{{ r.po.fully_out_of_stock }}</td>
+        <td class="ok">0</td>
+      </tr>
+      <tr>
+        <td>Detail 行</td><td>{{ r.details.total }}</td><td>{{ r.details.in_stock }}</td>
+        <td></td><td>{{ r.details.out_of_stock }}</td>
+        <td class="{{ 'bad' if r.details.diff else 'ok' }}">{{ r.details.diff }}</td>
+      </tr>
+      <tr>
+        <td>数量</td><td>{{ r.quantity.total }}</td><td>{{ r.quantity.in_stock }}</td>
+        <td></td><td>{{ r.quantity.out_of_stock }}</td>
+        <td class="{{ 'bad' if r.quantity.diff else 'ok' }}">{{ r.quantity.diff }}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>本次用的断货 SKU（已冻结）</h2>
+  {% if r.no_stock_snapshot %}
+  <p class="mono">{{ r.no_stock_snapshot | join('、') }}</p>
+  {% else %}
+  <p class="muted">本次没有断货 SKU —— 全量有货，checked CSV 与原始导出一致。</p>
+  {% endif %}
+
+  <h2>校验明细</h2>
+  <table class="kv">
+    <tr><th>输入文件行数 / 列数</th><td>{{ r.input.rows }} / {{ r.input.columns }}</td></tr>
+    <tr><th>保留 PO / 剔除整单 PO</th><td>{{ r.po.retained }} / {{ r.po.fully_out_of_stock }}</td></tr>
+    <tr><th>保留 Detail 行</th><td>{{ r.details.retained }}</td></tr>
+  </table>
+  <p class="muted">
+    缺货明细已从 checked CSV 剔除；<strong>Header 行全部保留</strong>（部分缺货 PO 的 Header 也必须留着，
+    SPS 靠它认这单）。下载下面两个文件去 SPS 操作。
+  </p>
+</section>
+
+{# 逐行明细表：这里与 xlsx 操作表是同一批数据，两个 SKU 永远并列。
+   改版前建的旧任务 report 里没有 tables，整段跳过即可。 #}
+{% if tables.get('ASN有货明细') %}
+  {# 部分缺货只有真出现时才列；0 行还挂着黄色警告框会自相矛盾 #}
+  {% if tables['部分缺货PO-逐行操作'].total %}
+    {{ detail_table(tables['部分缺货PO-逐行操作'], '部分缺货 PO 逐行操作',
+        '这些 PO 不要整单取消：Header 留着，ASN 只勾「有货」行。按对方 SKU 在 SPS 里定位。', 'mixed-warning') }}
+  {% endif %}
+
+  {{ detail_table(tables['ASN有货明细'], 'ASN 有货明细',
+      '这些行要在 SPS 里勾选、生成 ASN。「对方 SKU」用来定位行，「我方 SKU」是内部对照。') }}
+
+  {{ detail_table(tables['缺货明细'], '缺货明细',
+      '这些行不要在 ASN 里勾选，改发新日期通知。') }}
+
+  {{ detail_table(tables['全部缺货PO'], '全部缺货 PO',
+      '整单不生成 ASN，发新日期通知。') }}
+{% endif %}
+{% endif %}

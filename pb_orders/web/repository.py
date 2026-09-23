@@ -20,6 +20,7 @@ from pathlib import Path
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS jobs (
     id               TEXT PRIMARY KEY,
+    job_type         TEXT NOT NULL DEFAULT 'fulfillment',
     status           TEXT NOT NULL,
     created_by       TEXT NOT NULL DEFAULT '',
     created_at       TEXT NOT NULL,
@@ -70,6 +71,7 @@ NO_STOCK_KEY = "default_no_stock"
 
 ARTIFACT_KINDS = (
     "input_packslip", "input_order",
+    "checked_order", "stock_operations",
     "tongtool", "tongtool_no_stock", "tongtool_importable",
     "label", "back_label", "label_no_stock", "back_label_no_stock",
 )
@@ -78,6 +80,8 @@ ARTIFACT_KINDS = (
 ARTIFACT_LABELS = {
     "input_packslip": "Packslip PDF",
     "input_order": "SPS 订单 CSV",
+    "checked_order": "checked0stock CSV",
+    "stock_operations": "SPS 库存检查操作表",
     "tongtool": "通途导入 xlsx",
     "tongtool_no_stock": "通途 无库存 xlsx",
     "tongtool_importable": "通途 有货 xlsx",
@@ -112,6 +116,11 @@ class Repository:
     def init_db(self) -> None:
         with self.connect() as conn:
             conn.executescript(SCHEMA)
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(jobs)")}
+            if "job_type" not in columns:
+                conn.execute(
+                    "ALTER TABLE jobs ADD COLUMN job_type TEXT NOT NULL DEFAULT 'fulfillment'"
+                )
 
     # ---------- jobs ----------
 
@@ -127,16 +136,17 @@ class Repository:
         input_order: str,
         pipeline_version: str,
         source_job_id: str | None = None,
+        job_type: str = "fulfillment",
     ) -> str:
         with self.connect() as conn:
             conn.execute(
-                """INSERT INTO jobs (id, status, created_by, created_at, no_stock, no_stock_note,
+                """INSERT INTO jobs (id, job_type, status, created_by, created_at, no_stock, no_stock_note,
                        validate_only, allow_unmatched, input_packslip, input_order,
                        progress_step, progress_message, pipeline_version, source_job_id)
-                   VALUES (?, 'uploaded', ?, ?, ?, ?, ?, ?, ?, ?, 'uploaded', '已接收上传文件',
+                   VALUES (?, ?, 'uploaded', ?, ?, ?, ?, ?, ?, ?, ?, 'uploaded', '已接收上传文件',
                        ?, ?)""",
                 (
-                    job_id, created_by, now_iso(), no_stock, no_stock_note,
+                    job_id, job_type, created_by, now_iso(), no_stock, no_stock_note,
                     int(validate_only), int(allow_unmatched), input_packslip, input_order,
                     pipeline_version, source_job_id,
                 ),

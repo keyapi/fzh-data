@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+import sqlite3
+
 import pytest
 
 from web.repository import Repository, new_id
@@ -16,7 +18,7 @@ def repo(pb_env):
 
 def _create(repo, job_id="job-test", **kw):
     kwargs = dict(
-        job_id=job_id, created_by="tester", no_stock="", no_stock_note=None,
+        job_id=job_id, job_type="fulfillment", created_by="tester", no_stock="", no_stock_note=None,
         validate_only=False, allow_unmatched=False, input_packslip="a.pdf",
         input_order="b.csv", pipeline_version="v1",
     )
@@ -27,10 +29,65 @@ def _create(repo, job_id="job-test", **kw):
 def test_create_and_read_job(repo):
     _create(repo, no_stock="SKU-A,SKU-B")
     job = repo.get_job("job-test")
+    assert job["job_type"] == "fulfillment"
     assert job["status"] == "uploaded"
     assert job["created_by"] == "tester"
     assert job["no_stock_list"] == ["SKU-A", "SKU-B"]
     assert job["report"] is None and job["error"] is None
+
+
+def test_create_stock_check_job(repo):
+    _create(
+        repo,
+        job_id="stock-1",
+        job_type="stock_check",
+        input_packslip="",
+        input_order="raw-orders.csv",
+        no_stock="SKU-X",
+    )
+    job = repo.get_job("stock-1")
+    assert job["job_type"] == "stock_check"
+    assert job["input_packslip"] == ""
+    assert job["input_order"] == "raw-orders.csv"
+    assert job["no_stock_list"] == ["SKU-X"]
+
+
+def test_existing_database_migrates_job_type(tmp_path):
+    db_path = tmp_path / "old.sqlite"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            """CREATE TABLE jobs (
+                id TEXT PRIMARY KEY,
+                status TEXT NOT NULL,
+                created_by TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL,
+                started_at TEXT,
+                finished_at TEXT,
+                no_stock TEXT NOT NULL DEFAULT '',
+                no_stock_note TEXT,
+                validate_only INTEGER NOT NULL DEFAULT 0,
+                allow_unmatched INTEGER NOT NULL DEFAULT 0,
+                input_packslip TEXT NOT NULL DEFAULT '',
+                input_order TEXT NOT NULL DEFAULT '',
+                progress_step TEXT,
+                progress_message TEXT,
+                report_json TEXT,
+                error_json TEXT,
+                worker_job_id TEXT,
+                pipeline_version TEXT NOT NULL DEFAULT '',
+                source_job_id TEXT
+            )"""
+        )
+        conn.execute(
+            """INSERT INTO jobs(id, status, created_at, input_packslip, input_order)
+               VALUES ('old-job', 'uploaded', '2026-09-23T00:00:00+08:00', 'a.pdf', 'b.csv')"""
+        )
+
+    migrated = Repository(db_path)
+    assert migrated.get_job("old-job")["job_type"] == "fulfillment"
+    with migrated.connect() as conn:
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(jobs)")}
+    assert "job_type" in columns
 
 
 def test_status_transitions(repo):

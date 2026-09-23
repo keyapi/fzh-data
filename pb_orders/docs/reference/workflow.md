@@ -15,12 +15,17 @@ timestamp: 2026-09-21
 ## 0. 整体数据流
 
 ```
-Packslip 美中 x50.pdf ─┬─ 步骤1-2 抽取每页 PO + Item Number ─┐
-                       │                                     ├─ join ─ SKUxQTY 列表 ─┐
-checked0stock order.csv ┴─ 步骤3 拆行 + 派生 SKUxQTY ────────┘                      │
-                                                                                   ├─ 步骤4  标签 PDF
-                             US SKU Name 表（中/西语名） ──────────────────────────┴─ 步骤4.2 背贴 PDF
+SPS New 订单全量导出 ─ 步骤0 库存预检 ─> checked0stock order.csv ─┬─ 步骤3 拆行 + 派生 SKUxQTY ─┐
+   (check0stock…csv)   (§9)                                      │                            │
+                                                                 │                            ├─ 步骤4   标签 PDF
+Packslip 美中 x50.pdf ─── 步骤1-2 抽每页 PO + Item Number ────────┴─ join ─> SKUxQTY 列表 ────┤
+                                                                                              └─ 步骤4.2 背贴 PDF
+                          US SKU Name 表（中/西语名） ─────────────────────────────────────────┘
 ```
+
+**步骤 0 是履约的前置动作**（详见 §9）：出件用的 `checked0stock order.csv` 必须是
+「按当前断货清单筛过」的那份，而不是 SPS 导出的原始 New 订单。以前这一步靠人在
+Excel 里筛，现在由 `stock_precheck.py` 做，产物与 SPS 自己导出的那份**字节级一致**。
 
 ## 1. 步骤 1-2：从 PDF 抽 PO 与 Item Number
 
@@ -236,3 +241,135 @@ df_pdf[PO Number, Item Number]
 | 叠加元素位置 | 打包单页时间戳 (300.1, 0.0, 396.4, 14.1)、标签页时间戳 (34.0, -1.6, 165.6, 17.7)、箭头与 SKUxQTY bbox **完全一致** |
 
 另与 20260917 历史产物同源对照：几何、版式、`PO: PO-Line` 与 QTY 显示一致。
+
+## 9. 步骤 0：SPS New 订单库存预检（履约前置）
+
+### 9.1 为什么有这一步
+
+出件用的 `checked0stock` CSV 不是 SPS 直接导出的原始文件 —— 出件前要先在 SPS 里
+**把当批 New 订单全选导出**（`check0stock order x{N} YYYYMMDD_HHMM_SSSSSS.csv`），
+按 `Vendor Style` 对照当前断货清单，剔掉缺货明细，得到 `checked0stock …`，
+再拿它在 SPS 界面里勾 ASN 明细、给缺货的行发新日期通知。
+
+以前这一步靠人在 Excel 里手工筛。现在 `stock_precheck.py` 做，产出两个文件：
+
+| 文件 | 用途 |
+|------|------|
+| `checked0stock {stem}.csv` | 给下一步出件（以及留档） |
+| `SPS库存检查操作表-{stem}.xlsx` | 人在 SPS 里照着勾，7 个 sheet，见 §9.4 |
+
+### 9.2 分类口径：按**明细行**，不按整单（重要）
+
+SPS 订单是 H（Header）/ D（Detail）两段结构。**判定单位是 Detail 行**：
+
+| 该 PO 的 Detail 情况 | Header | Detail | SPS 侧动作 |
+|---|---|---|---|
+| 全部有货 | 保留 | 全留 | 正常出 ASN |
+| **部分缺货** | **保留** | **只留有货的** | **不要整单取消**；ASN 只勾有货明细行；缺货行另发新日期通知 |
+| 全部缺货 | 剔除 | 全剔除 | 不生成 ASN；发新日期通知 |
+
+> ⚠️ 早期设计是「PO 里只要有一个 SKU 没货就整单剔除」，这是**错的**：PB 会以为整单不发，
+> 回头发催单邮件。用户在 2026-09-23 明确纠正 —— 部分缺货的 PO 该发的部分要发。
+>
+> `Vendor Style` 匹配大小写不敏感（`CENKZ1325-YELLOW-138` 与 `CENKZ1325-Yellow-138` 同一条），
+> 但**冻结的是用户原始写法**（任务报告里的 `no_stock_snapshot` 就是当次那份）。
+
+### 9.3 checked CSV 必须与 SPS 导出一致（踩过的坑）
+
+SPS 导出的 CSV 是**参差**的：表头 147 列、数据行 146 列、且**最后一个列名是空的**。
+
+如果读进 pandas 再 `to_csv` 写回去，会得到：
+
+- 空列名被写成字面量 `Unnamed: 146`；
+- 数据行被补齐到 147 列 → 每行多一个尾逗号。
+
+所以本版**逐行照搬源文件原文**（`_source_lines()` + 按保留行的索引取行），
+而**不是**重新序列化。这样 checked CSV 与 SPS 自己导出的那份同构。
+
+实测：2026-09-17 真实批次（`check0stock order x21 20260917_0338_456788.csv`，
+断货只填 `CEN961NLINEN-SAGEGREEN-138`）生成的 checked CSV 与历史
+`checked0stock order x19 20260917_0341_630468.csv` **SHA-256 完全相同**
+（`e99a9b78…`，19,363 字节）。
+
+另有两条配套约束：
+
+- 编码对齐 SPS：**UTF-8 不带 BOM、LF**（带 BOM 就不再是同一格式）。
+- 字段里含换行时按行照搬不成立 → 直接报错 `ragged_source`，宁可不出件也不出格式不同的文件。
+  校验方式：`源文件行数 == 解析出的记录数 + 1`。
+
+### 9.4 操作表：xlsx 7 个 sheet + **网页同一批明细表**
+
+`SPS库存检查操作表-{stem}.xlsx`：
+
+| sheet | 内容 |
+|------|------|
+| 操作总览 | 项目 / 数量 / 操作说明 |
+| 部分缺货PO-逐行操作 | 部分缺货 PO 的明细，含「不要整单取消，只勾有货行」提示 |
+| ASN有货明细 | 该勾的行 |
+| 缺货明细 | 不该勾的行（发新日期通知） |
+| 全部缺货PO | 整单不出 ASN |
+| 检查报告 | PO / Detail / 数量 三口径对账 |
+| 原始剔除行 | 已从 checked CSV 剔除的行 |
+
+**网页上也有同样的明细表**（任务页，改版后新建的任务都有）：部分缺货 PO / ASN 有货明细 /
+缺货明细 / 全部缺货 PO 四张表直接列出来，不用先下 xlsx 再看。
+网页表与 xlsx 是**同一批 DataFrame**（`report["tables"]` 由 `_tables_payload()` 从
+`_build_tables()` 的结果生成），所以两边不会各说各话。
+超过 `WEB_TABLE_LIMIT`（300 行）会截断并在页面上**明确写出**「只显示前 N 行 / 共 M 行，
+完整看 xlsx」—— 不静默丢。
+
+改版前建的旧任务 `report` 里没有 `tables`，页面跳过这一段（不会 500）。
+
+**每个明细表永远并列两个 SKU**（用户明确要求，2026-09-23）：
+
+| 列 | 谁用 |
+|----|------|
+| `Buyers Catalog or Stock Keeping #` | **对方** SKU —— 在 SPS 界面里定位明细行 |
+| `Vendor Style` | **我方** SKU —— 对照内部货品，也是库存匹配的键 |
+
+> 用户原话：「ASN 有货明细表 缺货明细表 等等 永远！需要我们自己的 SKU！」
+> 「我之前说在 SPS 后台明细表里我只看到对方的 SKU，不等于说我们自己不需要
+> 自己的 SKU `Vendor Style` 用来对照」。
+
+`Qty Ordered` 在网页表与 xlsx 里都**按整数显示**（源 CSV 里是 `1.0` 这种 float 字面量，
+给人看的表不该照抄成 `1.0`；checked CSV 本身仍是逐行照搬的原文，不动）。
+
+### 9.5 数量对账口径
+
+| 检查 | 期望 |
+|------|------|
+| PO：总数 = 全有货 + 部分缺货 + 全部缺货 | 相等 |
+| Detail：总数 = 有货 + 缺货 | 相等（`diff` 必须 0） |
+| 数量：总数 = 有货 + 缺货 | 相等（`diff` 必须 0） |
+| checked CSV 回读 | 列名与列序与源文件一致、逐单元格等于分类结果 |
+| checked CSV 里每个 PO | 恰好 1 行 Header，且 Header 集合 == Detail 集合 |
+| 部分缺货 PO | Header 在、缺货 Detail 不在 |
+
+### 9.6 命名规则（含 PO 数）
+
+`checked0stock {stem}.csv` + `SPS库存检查操作表-{stem}.xlsx`，两边用同一个 `stem`：
+
+1. 取源文件名去掉开头的 `check0stock`（免得叠成 `checked0stock check0stock …`）；
+2. 洗掉 Windows 非法字符（`\ / : * ? " < > |`）；
+3. **把里面的 `x{N}` 换成筛完剩下的 PO 数**（`order x21 …` → `order x18 …`）。
+
+第 3 条是照 SPS 自己的命名口径来的：它重导一次，文件名里的数字跟流水号一起变。
+所以文件名里的数字应当等于里面装了几个 PO。源文件的时间戳/流水号原样保留，
+还能对回是哪一次导出。没有 `x{N}` 记号时原样返回（不猜用户想叫它什么）。
+见 `stock_precheck._with_po_count()`。
+
+> 与历史的差异：历史 `checked0stock order x19 20260917_0341_630468.csv` 的
+> `0341_630468` 是 SPS 重导时生成的新流水号 —— 那一步（在 SPS 界面里点导出）
+> 本地做不了，所以本工具保留源导出的流水号。
+
+### 9.7 两个入口（Web）
+
+| 从哪进 | 什么时候用 |
+|--------|-----------|
+| 导航「检查 SPS 新订单」→ `/checks/new` | 还没筛过：传 SPS 原始 CSV，拿 checked CSV + 操作表 |
+| 导航「直接生成发货文件」→ `/jobs/new` | 已经手工筛好：直接传 Packslip PDF + checked CSV |
+
+检查任务成功后，任务页底部有「继续生成发货文件」按钮 → `/jobs/{id}/fulfill`：
+**只需再传 Packslip PDF**，系统把上次那份 checked CSV 直接落成新任务的 `order.csv`
+（`storage.link_or_copy`），出件范围与预检结果严格一致，人也少传一遍文件。
+新任务的 `source_job_id` 指向检查任务，可追溯。
