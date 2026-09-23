@@ -15,4 +15,4 @@ python tm_commission.py --dry-run  # TM 佣金报告（只读）
 python tm_commission.py --write    # 生成 To Tracy Miller 账期文件
 ```
 
-数据文件在 `D:\Work\美国\Tracy Miller\PB orders\`（仓库外）。每次使用前改脚本顶部常量（当月邮件批次、发票文件夹、双开票映射、UPS 备注、账期）。
+数据文件在 `D:\Work\美国\Tracy Miller\PB orders\`（仓库外）。每次使用前改脚本顶部常量（当月邮件批次、发票文件夹、双开票映射、`UNPAID_NOTES_FILE` 备注 JSON、账期）。发票按**整月口径**纳入（锚点 `Notes!B2` 之后的日文件夹全收）。未付发票用 `ups_track` 批量查 UPS 官方 API 生成备注，见 [AGENT_HANDOFF.md](AGENT_HANDOFF.md) §4e。
