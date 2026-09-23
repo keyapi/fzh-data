@@ -7,6 +7,9 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-09-22（公开仓与私有知识分层）
+- **新增**: `architecture-patterns/public-private-agent-knowledge-split.md` — 调研并裁决公开仓、内部知识与凭证的三层边界：公开仓保留脱敏代码/通用经验；真实拓扑、运维 runbook 和内部 API 进入独立私有 Markdown 仓；密码/token/私钥进入 secret manager 或已忽略的本地环境文件。私有仓用普通 clone + 一键 bootstrap，而非 submodule；SOPS 只补充少量 GitOps 密文，不承担长篇知识库；Vault 等到出现动态凭证/PKI/合规需求再引入。另定义 Agent 自动发现、无权限降级、敏感文档 lint 与已公开内容迁移/历史重写边界。
+
 ## 2026-09-22（第二轮：重定向语义 / 出口拓扑 / Tailscale 2026 盘点）
 - **新增**: `integration-issues/redirect-307-replays-post-405.md` — 「跳页面」的重定向必须用 **303**。Starlette `RedirectResponse` 默认 307，而 307 **保留请求方法**：退出是 POST → 浏览器 POST 到只接受 GET 的首页 → 405 `{"detail":"Method Not Allowed"}`。由使用者实测发现。**只断言 `Location` 的测试抓不到它**，要断言状态码。
 - **新增**: `architecture-patterns/office-egress-fallback-chain.md` — 把散在多份文档里的出口链路串成一张图：主订阅线路 / **应急线路**（OpenClash 节点 `SH-Tailscale-US` → 上海 `socks5-tunnel.service:1080` → 美国 Vultr）/ 公网直反代；含重启存活状态与「用出口 IP 判断当前走哪条线」的定界方法。补的正是那个「各端都有文档、却没人串起来」的缺口。
