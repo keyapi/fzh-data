@@ -233,4 +233,3 @@ def test_http_json_retries_transient_uuid_not_exist(monkeypatch):
     st, payload = dc.http_json("GET", "https://x")
     assert st == 200
     assert calls["n"] == 3
-
