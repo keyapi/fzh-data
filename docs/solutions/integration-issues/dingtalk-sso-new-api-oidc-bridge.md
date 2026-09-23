@@ -255,21 +255,17 @@ new-api 的 `GenericOAuthProvider.ExchangeToken()` 发 POST 时用 `Content-Type
 而且**带上 `corpid` 后，`corpId` 会直接在 `/v1.0/oauth2/userAccessToken` 的响应里返回**，
 不必依赖 `contact/users/me`。另可在授权 URL 上传 `corpId=<本公司>` 指定组织。
 
-因此当前的「校验」实际上从不触发 → 桥放行的是**任何能走完授权的钉钉账号**，
-不只是本公司员工。下游服务要靠自己的白名单兜底。
+**结论：当时的「校验」实际上从不触发** —— 桥放行的是**任何能走完授权的钉钉账号**，
+不只是本公司员工。new-api、sellfox-api-proxy、pb_orders 三个下游都以为这道闸门在工作。
 
-**要真正收口，改的是桥的授权地址（影响所有走这条桥的服务）**，且**不能直接改成硬拒绝**：
-若 `corpId` 仍为空，硬拒绝会把所有人挡在门外。建议两步走 ——
-先加 `openid corpid` + `corpId` 参数、只记录 corpId 缺失率，确认稳定返回后再打开拒绝。
+**2026-09-22 已收口（v0.4.0，未走 scope 方案）**：改用**组织成员查询**做权威判据 ——
+用本公司应用凭证调 `topapi/user/getbyunionid`：查得到就是本公司通讯录里的人，返回
+`60121/60111` 就是不在（含别的企业、外部联系人、已离职被移出）。三态判定在
+`stream_listener.check_org_membership()`，登录回调据此拒绝，默认开启
+（`REQUIRE_COMPANY_MEMBER=0` 可临时关掉）。单测 `new-api-dingtalk-oidc/tests/`。
 
-<details>
-<summary>钉钉官方依据</summary>
-
-- [获取登录用户的访问凭证](https://open.dingtalk.com/document/personalapp-server/obtain-the-access-credential-of-the-logon-user)
-  —— scope 含 `openid corpid` 时，`userAccessToken` 响应会带回 `corpId`
-- [钉钉集成模式与 scope 取值](https://open.dingtalk.com/document/orgapp/obtain-identity-credentials)
-
-</details>
+没走 `scope=openid corpid` 方案的原因：它依赖钉钉应用侧的 `corpid` 权限开通情况，
+未经验证；而成员查询这条路已被本仓库的离职检测长期跑通（`60121` 正是它的离职信号）。
 
 ### 错误 5：`管理员关闭了新用户注册`
 
