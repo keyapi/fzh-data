@@ -18,6 +18,12 @@
       "runtimeExecutable": "uv",
       "runtimeArgs": ["run", "python", "-m", "sellfox_shipping.cli", "serve", "--host", "0.0.0.0", "--port", "8401"],
       "port": 8401
+    },
+    {
+      "name": "pb-orders-web",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "uvicorn", "--app-dir", "pb_orders", "web.app:app", "--host", "127.0.0.1", "--port", "8412", "--log-level", "info"],
+      "port": 8412
     }
   ]
 }

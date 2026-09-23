@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}任务 {{ job.id }} · PB 订单处理{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>任务 <code>{{ job.id }}</code></h1>
+  <p>
+    <span class="badge {{ job.status }}" id="top-status">{{ STATUS_LABELS.get(job.status, job.status) }}</span>
+    {% if job.validate_only %}<span class="tag">仅校验</span>{% endif %}
+    {% if job.source_job_id %}<span class="tag">重跑自 {{ job.source_job_id }}</span>{% endif %}
+    <a class="btn ghost right" href="{{ prefix }}/">返回列表</a>
+  </p>
+  <table class="kv">
+    <tr><th>操作者</th><td>{{ job.created_by }}</td></tr>
+    <tr><th>创建</th><td>{{ (job.created_at or '')[:19].replace('T', ' ') }}</td></tr>
+    <tr><th>开始</th><td>{{ (job.started_at or '-')[:19].replace('T', ' ') }}</td></tr>
+    <tr><th>结束</th><td>{{ (job.finished_at or '-')[:19].replace('T', ' ') }}</td></tr>
+    <tr><th>输入</th><td>{{ job.input_packslip }} / {{ job.input_order }}</td></tr>
+    <tr><th>无货 SKU</th><td>{{ job.no_stock or '（无，不过滤）' }}</td></tr>
+    <tr><th>代码版本</th><td><code>{{ job.pipeline_version }}</code></td></tr>
+  </table>
+</section>
+
+<div id="status-panel">
+  {% include "_status.html" %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var TERMINAL = ["succeeded", "failed"];
+  var panel = document.getElementById("status-panel");
+  if (!panel) return;
+
+  function statusOf(html) {
+    var holder = document.createElement("div");
+    holder.innerHTML = html;
+    var el = holder.querySelector("[data-status]");
+    return el ? el.getAttribute("data-status") : null;
+  }
+
+  function poll() {
+    fetch("{{ prefix }}/jobs/{{ job.id }}/status", {
+      headers: { "X-Requested-With": "fetch" }
+    }).then(function (r) {
+      if (r.status === 401) { window.location.href = "{{ prefix }}/oidc-login"; return null; }
+      return r.ok ? r.text() : null;
+    }).then(function (html) {
+      if (!html) return;
+      var status = statusOf(html);
+      if (status && TERMINAL.indexOf(status) !== -1) {
+        // 顶部状态标签在面板之外，只换面板会让它一直停在「处理中」——
+        // 到终态就整页重载，顺带把产物列表、耗时一次性刷新到位。
+        window.location.reload();
+        return;
+      }
+      panel.innerHTML = html;
+      setTimeout(poll, 2500);
+    }).catch(function () { setTimeout(poll, 5000); });
+  }
+
+  var initial = panel.querySelector("[data-status]");
+  if (initial && TERMINAL.indexOf(initial.getAttribute("data-status")) === -1) {
+    setTimeout(poll, 1500);
+  }
+})();
+</script>
+{% endblock %}
