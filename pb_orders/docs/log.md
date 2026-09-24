@@ -8,6 +8,29 @@ timestamp: 2026-09-22
 
 # 变更日志
 
+## 2026-09-24（第十七轮：同名重复上传的保证 + 记号在中间时也剥掉）
+
+- **问题（使用者提）**：同名文件多次上传、内容相同或不同，会不会互相覆盖？
+- **结论：不会，已实现且有测试固定**（内容寻址存储，与尾程打单/EN File 同一套思路）：
+  - **同名 + 同内容** → 落盘**去重成一份**（`artifacts/<hash前2位>/<hash前16位><ext>`），
+    两个任务都指向它；每个任务自己的 `inputs/<job>/order.csv` 各自独立、都在。
+  - **同名 + 不同内容** → **两份都保留**，页面上是同样文件名两行，靠 **SHA-256** 区分；
+    浏览器下载时同名的第二个文件由浏览器自动加后缀（与钉钉附件的行为一致）。
+  - 物理名固定（`order.csv`）**不会覆盖**，因为每个任务有自己的目录 `inputs/<job>/`。
+  - 先例核对：`sellfox_shipping/package_repository.py` 的 artifact 就是
+    `Like ERPNext File: same content_hash → one blob on disk`，落盘名
+    `private/files/{stem}_{content_hash[:8]}{suffix}`；pb_orders 用同一思路。
+  - **没用 EN File 的「被单据字段引用」那套**：pb_orders 是独立服务、不在 Frappe 里，
+    没有单据可以挂文件；它的对应物是产物表的外键（`artifacts.job_id` → `jobs.id`）。
+- **命名修正**：`_output_stem` 原来只剥**开头**的 check/checked0stock 记号，而使用者的文件名
+  `已和2单手动合并 check0stock order x16 …` 记号在**中间** → 拼出
+  `checked0stock 已和2单手动合并 check0stock order x15 …`（一前一后各一个）。
+  改为按出现位置统一剥掉 → `checked0stock 已和2单手动合并 order x15 …`。
+  ⚠️ 顺手踩到一个正则坑：`checked?0stock` 只匹配 `checke/checked`，**匹配不到 `check`**，
+  要写 `check(?:ed)?0stock`。
+- **测试 147 → 150**：同名同内容去重且不移走源文件、同名不同内容两份都在、
+  记号在中间时的精确命名。
+
 ## 2026-09-24（第十六轮：上传的输入也能下载核对）
 
 - **动机**：使用者要能核对「我到底传了什么」。此前只有产物可下载，输入只能看到文件名。

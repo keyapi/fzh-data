@@ -166,7 +166,7 @@ cd pb_orders
 uv run pytest tests/ -q
 ```
 
-147 个用例通过、2 个跳过，**不需要 Redis**：`tests/conftest.py` 用 reportlab 现画一个结构同构的
+150 个用例通过、2 个跳过，**不需要 Redis**：`tests/conftest.py` 用 reportlab 现画一个结构同构的
 3 页 Packslip PDF + 5 行订单 CSV + 3 行名称缓存，跑真实流程；Web 用例把
 `web.app.enqueue_job` 换成同步执行，从而覆盖「Web 建任务 + worker 处理 + 页面 + 下载」整链。
 另有 Redis/RQ 生命周期用例需本地 Docker，设 `PB_ORDERS_RQ_DOCKER=1` 才跑（默认跳过）。
@@ -418,6 +418,19 @@ uv run pytest tests/ -q
     用户只能回来问我们。现在错误信息带上 pandas 原文 + 可能原因 + 下一步。
     同理 `invalid_record_type` 里的空值要显示成 `(空)`，否则提示会以冒号结尾、看着像 bug。
 
+36. **同名重复上传不会有问题，别再自己造去重层**（使用者问过）：
+    产物与输入都走**内容寻址**（`artifacts/<hash前2位>/<hash前16位><ext>`），
+    同内容 → 落盘一份，多个任务引用它；不同内容 → 各存一份，页面同样文件名两行、
+    靠 SHA-256 区分（浏览器下载时自己会加后缀）。物理名固定（`order.csv`）也不会互相覆盖，
+    因为每个任务有自己的目录 `inputs/<job>/`。这是仓库既有做法（见
+    `sellfox_shipping/package_repository.py`: `Like ERPNext File: same content_hash → one blob`）。
+    ⚠️ 但**输入**必须用 `publish_input_copy`（硬链接/复制）而不是 `publish_artifact`
+    （`os.replace` 移走）—— 前者留原文件给 worker 与重跑用。
+37. **剥文件名记号要按出现位置，不能只看开头**：使用者的文件名可能是
+    `已和2单手动合并 check0stock order x16 …`（记号在中间），只剥开头会拼出
+    前后各一个记号的产物名。正则也别写成 `checked?0stock` —— 它只匹配
+    `checke`/`checked`，**匹配不到 `check`**，要写 `check(?:ed)?0stock`。
+
 ## 8. 数量对账口径
 
 ### 8.1 库存预检（步骤 0）
@@ -555,7 +568,7 @@ uv run pytest tests/ -q
 - [x] 无货时自动拆「有货主文件 + 无货子集」（标签 + 背贴各两份，`--no-stock` 触发）
 - [x] 网页版：FastAPI + Redis/RQ + SQLite，任务可后台跑、可追溯、可重下（2026-09-22）
 - [x] 独立 Docker Compose 栈，不碰既有服务（2026-09-22）
-- [x] 147 个自动化测试（另有 Redis/RQ 生命周期用例，默认跳过），不需要 Redis 也能跑
+- [x] 150 个自动化测试（另有 Redis/RQ 生命周期用例，默认跳过），不需要 Redis 也能跑
 - [x] 已部署到 EN 测试服务器（`/opt/pb-orders`）。入口 **<https://api.vilavi.cn/pb/>**
       （公网 HTTPS + 钉钉登录，容器只绑 `127.0.0.1`）；Tailscale 那条路径已弃用（走香港中继太慢）
 - [x] 公网入口有钉钉登录闸门（`web/auth.py`）。**登录范围由桥把关**：2026-09-23 起桥按

@@ -46,6 +46,10 @@ MIME_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 _UNSAFE_STEM = re.compile(r'[\\/:*?"<>|\r\n\t]+')
 # SPS 命名里的 PO 数记号：`order x21 20260917_0338_456788` 里的 `x21`
 _PO_COUNT_TOKEN = re.compile(r"(?i)(?<![0-9A-Za-z])x\d+")
+# check/checked0stock 记号（含后面的分隔符）：见 _output_stem 的说明。
+# 注意写成 check(?:ed)?0stock —— 写成 checked? 只匹配 checke/checked，匹配不到 check。
+_MARKER = re.compile(r"(?i)check(?:ed)?0stock[ _-]*")
+_MULTI_SPACE = re.compile(r"\s{2,}")
 
 # 网页明细表最多渲染多少行（超了截断并提示，完整内容看 xlsx 产物）
 WEB_TABLE_LIMIT = 300
@@ -77,15 +81,18 @@ def _output_stem(raw: str) -> str:
     """把来源文件名整理成可安全拼进输出名的词干。
 
     历史命名是 `check0stock …`（待检查）→ `checked0stock …`（已检查），
-    所以剥掉开头的 check/checked 记号，避免叠成 `checked0stock check0stock …`。
+    所以把中间的 check/checked0stock 记号剥掉，避免拼出前后各一个记号的名字。
+
+    ⚠️ 记号**可能在中间**，不能只看开头：使用者的文件名长这样 ——
+    `已和2单手动合并 check0stock order x16 20260924_0145_20820.csv`（手工合并过，
+    自己加了前缀）。只剥开头会得到
+    `checked0stock 已和2单手动合并 check0stock order x15 …`（两个记号），
+    现在按出现位置统一剥掉 → `checked0stock 已和2单手动合并 order x15 …`。
+
     用户文件名是外部输入，这里一并洗掉路径分隔符与 Windows 非法字符。
     """
-    stem = str(raw or "").strip()
-    lowered = stem.lower()
-    for marker in ("checked0stock", "check0stock"):
-        if lowered.startswith(marker):
-            stem = stem[len(marker):].strip(" _-")
-            break
+    stem = _MARKER.sub("", str(raw or "").strip())
+    stem = _MULTI_SPACE.sub(" ", stem)
     stem = _UNSAFE_STEM.sub("-", stem).strip(" .-")
     return stem or "orders"
 

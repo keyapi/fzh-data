@@ -512,6 +512,26 @@ def test_po_count_replacement_leaves_other_names_alone():
     assert stock_precheck._with_po_count("CENx21 order", 3) == "CENx21 order"
 
 
+def test_check_marker_is_stripped_wherever_it_appears(tmp_path):
+    """记号可能在文件名**中间**（使用者手工合并时自己加了前缀）。
+
+    回归：只剥开头时，`已和2单手动合并 check0stock order x16 …` 会拼出
+    `checked0stock 已和2单手动合并 check0stock order x15 …` —— 前后各一个记号。
+    """
+    source = write_ragged_csv(tmp_path / "raw.csv")
+    result = stock_precheck.run_stock_check(
+        source, RAGGED_NO_STOCK, tmp_path / "out",
+        name_stem="已和2单手动合并 check0stock order x16 20260924_0145_20820",
+    )
+    name = result.checked_csv.name
+    # 精确等值断言：记号出现在中间时也只保留我们自己加的那一个
+    assert name == "checked0stock 已和2单手动合并 order x2 20260924_0145_20820.csv"
+    assert "check0stock" not in name.replace("checked0stock", "")
+    # 正常形状不变
+    assert stock_precheck._output_stem("check0stock order x21 20260917") == "order x21 20260917"
+    assert stock_precheck._output_stem("checked0stock order x19 2026") == "order x19 2026"
+
+
 def test_web_table_payload_is_built_from_the_same_frames(tmp_path):
     """网页明细表与 xlsx 用同一批 DataFrame；超限才截断且明确标出。"""
     source = write_ragged_csv(tmp_path / "raw.csv")
