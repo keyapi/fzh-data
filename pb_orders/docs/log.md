@@ -249,7 +249,7 @@ timestamp: 2026-09-22
   已加回归测试。教训：**前缀化部署下，「应用侧路径」与「浏览器看到的路径」必须分清**。
 
 ## 2026-09-22（第七轮：部署到 EN 测试服务器）
-- **已部署**：EN 测试服务器（`sh-erpnext-test` / 8.133.254.66）的 `/opt/pb-orders`，
+- **已部署**：EN 测试服务器（`sh-erpnext-test`）的 `/opt/pb-orders`，
   Compose 项目 `pb-orders`，入口 **`http://100.119.28.72:8412`**（仅 Tailscale）。
   该栈是与 EN 并列的**独立服务**，不是 EN/Frappe Custom App，不接入 bench。
 - **构建坑**：服务器上 `pypi.org` 索引可达，但容器内下载包文件（`files.pythonhosted.org`）
@@ -258,7 +258,7 @@ timestamp: 2026-09-22
 - **资源限额按实测下调**：真实 50 页批次峰值 RSS ≈ 492MB，而服务器可用内存仅约 1.9Gi，
   故 worker 1g / web 384m / redis 128m（可用环境变量覆盖）。
 - **隔离验证**：既有 6 个容器（nas-mcp / new-api 系列 / sellfox-api-proxy）部署前后
-  **运行时间一字未变、无重启**；仅新增 `pb-orders-net`；公网 `8.133.254.66:8412` 拒绝连接。
+  **运行时间一字未变、无重启**；仅新增 `pb-orders-net`；公网 8412 端口拒绝连接。
 - **远端验收**：脱敏合成样例上传→后台 1.3 秒出件→1:1 通过、对账差全 0、三件产物可下载；
   `docker compose restart` 后三个容器仍 healthy，已成功任务仍可查、下载仍 200。
 - **未做**：页面无登录鉴权（只靠 Tailscale 限制）、保留策略无定时清理、未接 NGINX、

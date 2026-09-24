@@ -499,7 +499,7 @@ uv run pytest tests/ -q
 - **本机 Docker Desktop 启动失败**（`connect ENOENT \\.\pipe\errorReporter`，后台服务异常退出），
   容器构建与 `docker compose up` 未能在本机实测（Compose 配置已过 `docker compose config`）。
   本地验收改用 WSL 里的 Redis + 本机 Python 进程完成；**容器链路直接在 EN 测试服务器上验证**。
-- **已上机 EN 测试服务器**（`sh-erpnext-test` / 8.133.254.66 → `/opt/pb-orders`）：
+- **已上机 EN 测试服务器**（`sh-erpnext-test` → `/opt/pb-orders`）：
   三个容器 healthy，入口 `http://100.119.28.72:8412`（**仅 Tailscale**，公网 8412 拒绝连接）。
   构建**必须**带 `--build-arg PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple`
   —— 服务器上 PyPI 索引可达但包文件下载超时；Docker 镜像源已配 daocloud，基础镜像不用管。

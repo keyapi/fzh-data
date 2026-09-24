@@ -57,7 +57,7 @@ ping "100.119.28.72" timed out        # 连中继都打不通
 > **实测（2026-09-22，用户放开安全组后）**：
 > ```
 > $ tailscale ping izuf6cg60rfql8k8qbw87xz      # 从国内 PC
-> pong ... via 8.133.254.66:41641 in 69ms       # 直连，69ms
+> pong ... via <上海机 EIP>:41641 in 69ms       # 直连，69ms（IP 数值不入库）
 > $ tailscale ping fzhpc13                      # 从上海服务器
 > pong ... via 123.117.232.176:41641 in 35ms    # 直连，35ms
 > ```
@@ -137,7 +137,7 @@ CGNAT 后面，就会自动切回 direct。修完之后**所有**走 Tailscale �
 
 实测佐证（美国 Vultr）：`ufw status` 只有 `22/tcp ALLOW`、INPUT 策略 DROP，
 但 `iptables -L ts-input` 里有 `ACCEPT udp dpt:41641`，且 `tailscale status`
-显示与上海服务器 `active; direct 8.133.254.66:41641` —— **直连正常，无需人工干预**。
+显示与上海服务器 `active; direct <上海机 EIP>:41641` —— **直连正常，无需人工干预**。
 
 ### 一条通用教训
 

@@ -593,7 +593,7 @@ python customs_export.py --dn DN-26-00056   # 生产，19 项并行翻译约 1-2
 - 境外收货人（2026-09-08 改回“选择即导出”）：`resolve_consignee()` 按 CLI `--consignee` 选择即导出（仅名称），未指定默认 Centrade；`fill_declaration()` C5 写选中的公司名（`consignee_name`，忽略地址）。
 - 发票/装箱单/合同抬头 B2/B3 仍是纯公司名（`shipper_cn/en`），不混入编码。
 
-**EN 测试服务器（8.133.254.66 / ensh）已落地（2026-09-07，备份 `customs_export.py.bak_20260907`）**
+**EN 测试服务器（`sh-erpnext-test` / ensh）已落地（2026-09-07，备份 `customs_export.py.bak_20260907`）**
 - `delivery_plan/utils/customs_export.py`：A4/A8 写 `domestic_party_cn`；C5 写 `consignee_info.name`（弹窗选择/填写的公司名，仅名称、忽略地址），空则兜底 Centrade；`export()` 收货人用传入 `consignee_name/addr`（两者都空才兜底 Centrade）；波兰预设已改为 **Pillow Palette Ltd**（`ul. Krucza 68/9, 53-411 Wrocław, mail: kontakt@pillowpalette.pl, 786 603 993`）；已 `bench restart` 生效。
 - ⚠️ **运行时模板改为「正常上传文件」查找（2026-09-09 起，不再用绝对路径目录）**：`_get_template_path()` 按 **File doctype** 查 `file_name=ZJ26DZJR0403-报关单据.xlsx`（优先 `/private/` 上传，无则任一上传记录），`_uploaded_template_path()` 取 `get_full_path()`（DB 内容则落临时文件）；`_ensure_clean_template()`（4 sheet + 报关合同 H48:J50）把关结构。旧版 os.walk 抓 `报关单据_*.xlsx` 当模板会 MergedCell 崩溃/串头，已废弃。测试机当前命中公开 `/files/` 上传版可导出；若要干净 private 版需替换上传同名（同名重复会被 Frappe 加哈希后缀，精确 file_name 只认一条）。**供生产：直接正常上传该模板文件即可，不再要求 customs_templates 目录。**
 

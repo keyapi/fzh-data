@@ -321,7 +321,7 @@ Tailscale exit node 会把该客户端的非 Tailscale 流量全部经出口设�
 
 | 项 | 值 |
 |---|---|
-| 主机 | `sh-erpnext-test`（阿里云上海，`8.133.254.66`），EN 测试站所在机 |
+| 主机 | `sh-erpnext-test`（阿里云上海），EN 测试站所在机 |
 | 访问入口 | **<https://api.vilavi.cn/pb/>**（公网 HTTPS + 钉钉登录） |
 | 部署目录 | `/opt/pb-orders`（`pb_orders/docker-compose.yml` 为 compose 入口） |
 | Compose 项目 | `pb-orders`（独立于既有的 `new-api` 项目） |
@@ -396,7 +396,7 @@ location /pb/ {
 | 既有 6 个容器 | `nas-mcp` / `new-api-dingtalk-oidc` / `new-api-mysql` / `new-api-redis` / `new-api` / `sellfox-api-proxy` —— 部署与改 NGINX 前后**运行时间一字未变，无重启** |
 | 既有端点 | `/`(200)、`/oidc/.well-known/openid-configuration`(200)、`/sellfox/`(404)、`/nas/mcp`(401) —— 改动前后**返回码完全一致** |
 | Docker 网络 | 仅新增 `pb-orders-net`，既有网络未改动 |
-| 端口 | 新增仅 `127.0.0.1:8412`（容器侧）；公网 `8.133.254.66:8412` **拒绝连接** |
+| 端口 | 新增仅 `127.0.0.1:8412`（容器侧）；公网 8412 **拒绝连接** |
 | Redis | 独立容器，不映射宿主端口，未复用 `new-api-redis` |
 | 内存占用 | PB 三个容器合计约 190MB；服务器可观测量无明显变化 |
 | 服务器内存大头（不是 PB） | 宿主 MariaDB `mariadbd` 1149MB；`frappe-bench` python ×5 ≈1050MB；`new-api-mysql` 容器内 mysqld ≈600MB；Cursor server ≈500MB |

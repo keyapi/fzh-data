@@ -10,8 +10,8 @@ from datetime import datetime
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-SSH_KEY = Path(r"D:\Work\Aliyun\ssh\aliyun_fzh_erpnext_20240726.pem")
-SSH_HOST = "frappe@47.116.128.218"
+# 走 ~/.ssh/config 的别名：主机地址与私钥路径都不写进仓库
+SSH_HOST = "阿里云-FZH-ERPNext-frappe"
 
 SQL = r'''
     select i.name as item_code, i.item_name, i.item_group, c.ref_code
@@ -42,7 +42,7 @@ def summarize(rows: list[dict]) -> dict:
 def main() -> None:
     command = [
         "ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=15",
-        "-i", str(SSH_KEY), SSH_HOST,
+        SSH_HOST,
         "cd ~/frappe-bench && bench --site erpnext.vilavi.cn mariadb --batch --raw",
     ]
     completed = subprocess.run(

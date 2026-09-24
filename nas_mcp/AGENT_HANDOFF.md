@@ -8,7 +8,7 @@
 一个 **Python 薄 MCP 服务**：复用 `NAS_API/synology.py`（已验证的 DSM 客户端）把 NAS 的
 几个共享文件夹**只读**暴露给 MCP 客户端。
 
-跑在**上海 EN 测试服务器 VPS**（`8.133.254.66` / `api.vilavi.cn`），由现有 nginx 反代出去。
+跑在**上海 EN 测试服务器 VPS**（`sh-erpnext-test` / `api.vilavi.cn`），由现有 nginx 反代出去。
 
 ## 何时用
 

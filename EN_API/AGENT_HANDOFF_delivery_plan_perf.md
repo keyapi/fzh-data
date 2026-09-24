@@ -11,7 +11,7 @@
 **测试机已改完并验证通过，等用户手动同步到生产**。下一步是：用户在**生产**做复验（只读，不改数据）。
 
 - 改动只有一个文件（在测试机，本地检出**没有**这个 app 的源码）：
-  `8.133.254.66:/home/frappe/frappe-bench/apps/delivery_plan/delivery_plan/delivery_plan/doctype/delivery_plan/delivery_plan.py`
+  `sh-erpnext-test:/home/frappe/frappe-bench/apps/delivery_plan/delivery_plan/delivery_plan/doctype/delivery_plan/delivery_plan.py`
 - 该文件的 `git status` 应只显示这**一个** `M`（临时探针已删除）。
 
 ### 问题（用户同事报告）
@@ -75,9 +75,9 @@
 
 | 用途 | 位置 |
 |---|---|
-| 改动前原文件 | `8.133.254.66:/tmp/zz_bak_delivery_plan.py` |
-| 10 处补丁脚本（可重放） | `8.133.254.66:/tmp/zz_patch_dp.py` |
-| 改后的文件 | `8.133.254.66:/home/frappe/frappe-bench/apps/delivery_plan/delivery_plan/delivery_plan/doctype/delivery_plan/delivery_plan.py` |
+| 改动前原文件 | `sh-erpnext-test:/tmp/zz_bak_delivery_plan.py` |
+| 10 处补丁脚本（可重放） | `sh-erpnext-test:/tmp/zz_patch_dp.py` |
+| 改后的文件 | `sh-erpnext-test:/home/frappe/frappe-bench/apps/delivery_plan/delivery_plan/delivery_plan/doctype/delivery_plan/delivery_plan.py` |
 
 ## 六、未做（等用户决定）
 
