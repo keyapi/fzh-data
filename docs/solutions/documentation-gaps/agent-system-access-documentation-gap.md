@@ -134,6 +134,31 @@ Adding a dedicated `## ERPNext 环境访问` section with a full table would wor
 
 The one-line approach achieves the same routing effect with zero duplication.
 
+## Second instance (2026-09-24): SSH entry, and a wrong fact polluting the docs
+
+Now the *SSH* entry, same shape, worse failure mode — the authoritative fact lived in `~/.ssh/config`
+(Chinese aliases like `阿里云-FZH-ERPNext-frappe`), no document pointed there, and instead the repo
+documented the **opposite**: 6 files asserted "生产 SSH 不可达 / 没有 SSH" (a handoff, a skill note,
+three scripts' docstrings, a conventions entry). Agents read those, inherited the false premise, and
+either asked the user again for the entry or took a detour (building throwaway API Server Scripts on production
+to avoid a shell that was available all along). One repo file — `missing_products/AGENT_HANDOFF.md` —
+even recorded a successful `ssh frappe@47.116.128.218` rename, contradicting the rest.
+
+Trigger of the false premise: the default SSH key gets `Permission denied (publickey)` — because the
+per-host entry lives in `~/.ssh/config` — and "key rejected" was recorded as "host unreachable".
+
+Fix shipped with this entry:
+
+1. One line in AGENTS.md pointing at `~/.ssh/config` aliases for both servers (same progressive-disclosure
+   pattern as the first instance).
+2. Corrected all 10 occurrences of that false claim, keeping the workarounds that were built on it (the
+   temporary-Server-Script route still works — it just isn't *required*).
+
+**Lesson (same as the first instance, one level deeper)**: a cross-cutting access fact belongs in
+AGENTS.md the moment it is discovered, and any *negation* of it ("X is unreachable") must be traceable
+to an observation, not to a single failed attempt. Wrong facts in per-module docs propagate: each new
+session reads them as ground truth.
+
 ## Related
 
 - `AGENTS.md` line 117 — the fix location

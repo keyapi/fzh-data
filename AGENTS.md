@@ -207,6 +207,7 @@ uv sync
 > Skill 文件在 `.agents/skills/<name>/SKILL.md`，Agent 按触发词自动加载。
 > **ERPNext 系统访问**: 生产 (`erpnext.vilavi.cn`) → REST API, 测试 (`ensh.vilavi.cn`) → FAC MCP + REST API. 详见 `EN_API/README.md`
 > **ERPNext API 凭证**: 从 `EN_API/.env` 读取 `ERP_API_KEY` / `ERP_API_SECRET`，认证头 `Authorization: token <key>:<secret>`
+> **EN 服务器 SSH**: 入口以 `~/.ssh/config` 的中文别名为准（**不要凭记忆拼 `用户@IP`**）——生产 `阿里云-FZH-ERPNext-frappe`（`47.116.128.218`）、测试 `上海测试-阿里云-FZH-ERPNext-frappe`（`8.133.254.66`），都是 `frappe` 用户，bench 在 `/home/frappe/frappe-bench`。**两台 SSH 都通**，历史文档里的"生产 SSH 不可达"是误判；改 `.py` 后 `sudo -u frappe bench restart`
 
 ## 关键行为规则
 
