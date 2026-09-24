@@ -190,7 +190,7 @@ POST /api/resource/Item
 4. 弹窗勾选 9 类配套物料
 5. 调 `key_test.add_item_semi.create_supporting_items_and_variants`，参数：`item_group`、`item_template_name`、`custom_model_id`、`attributes`(JSON)、`prefixes`(JSON)
 
-> 服务器端函数在 `key_test` app（`add_item_semi.py`）。生产 SSH **可达**（见 AGENTS.md「EN 服务器 SSH」；此条原记「不可达」，2026-09-24 实测勘误）。Client Script 只传**属性名列表**和勾选的配套前缀，不传具体 SKU。属性全组合笛卡尔积对 KS0001 约 2 万条，而皮壳变体只有 987，因此一键创建不是「属性值全展开」，而是按产品模板已有变体去**复制**配套变体（测试环境另有停用脚本「物料 检查新建 配套物料组 物料模板 复制变体」）。
+> 服务器端函数在 `key_test` app（`add_item_semi.py`）。生产 SSH **可达**（见 `EN_API/docs/reference/en-server-access.md`；此条原记「不可达」，2026-09-24 实测勘误）。Client Script 只传**属性名列表**和勾选的配套前缀，不传具体 SKU。属性全组合笛卡尔积对 KS0001 约 2 万条，而皮壳变体只有 987，因此一键创建不是「属性值全展开」，而是按产品模板已有变体去**复制**配套变体（测试环境另有停用脚本「物料 检查新建 配套物料组 物料模板 复制变体」）。
 >
 > 「只有皮壳没有成品」因此不是一键按钮的正常产物：多半是后来有人在 `PK#` 模板上用系统自带「生成变体」多做了组合、或成品变体被删而皮壳留下。本次**不**为这 176/27 条补成品。补成品缺皮壳用 `missing_products/fix_missing_cover_variants.py`。
 
