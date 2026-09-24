@@ -8,6 +8,43 @@ timestamp: 2026-09-22
 
 # 变更日志
 
+## 2026-09-24（第十四轮：部署到 EN 测试服务器 + 真机端到端验收）
+
+代码 `598baae`（= PR #274 的 HEAD，**当时尚未合并**）已部署到
+`/opt/pb-orders/pb_orders`，`PB_ORDERS_PIPELINE_VERSION` 同步改为 `pb-web-598baae`。
+
+- **部署**：备份 `pb_orders-code.bak-20260924-101745.tar.gz`（`.env` 另有 `.env.bak-*`）；
+  解包用 `git archive`（只含跟踪文件），服务器上的 `.env` / `runtime/` / `data/` 未被覆盖；
+  构建带 `--build-arg PIP_INDEX_URL=…tsinghua…`（老坑）。
+- **隔离**：全程只有 `pb-orders-web` / `pb-orders-worker` 被重建；
+  其余 7 个容器（含 `pb-orders-redis`）的 `StartedAt` **逐字节未变**；
+  既有端点返回码 `/`(200) `/oidc/…`(200) `/sellfox/`(404) `/nas/mcp`(401) 与部署前一致。
+- **真机端到端验收**（真实 NGINX + 公网入口 + 真 Redis/RQ worker，不是同步替身）：
+  - 走 `https://api.vilavi.cn/pb/checks/new` 上传 **147 列宽表**（真实导出脱敏：个人信息列清空、
+    列结构/参差形状原样保留）→ 303 → 真实 worker → 2 秒内 succeeded；
+  - 任务页渲染出四张明细表、两个 SKU 并列、部分缺货提醒、数量按整数显示；
+  - 下载 checked CSV：**41 行 / 146 个逗号（147 列）/ 末列名为空 / 数据行仍比表头少一列** ——
+    宽表与参差形状在真机上也原样保留；
+  - 报告：PO 21 → 全有货 19 / 部分缺货 0 / 全缺货 2，保留 19；明细 23 → 21 / 2，差 0
+    （与历史 20260917 批次一致，产物名 `checked0stock … x19 …`）；
+  - 续出件：`/pb/jobs/{id}/fulfill` **只传 21 页 Packslip PDF**，checked CSV 由系统复用
+    （任务里 `source_job_id` 指回检查任务、`no_stock` 留空）→ 出件成功：
+    **1:1 通过（21 页 = 21 行）**、join 未匹配 0、三个产物可下载，
+    标签 PDF **42 页**（= 页数×2）、背贴 PDF **21 页**（= 订单行数），与文档口径一致。
+- **验收怎么做的（下次照做）**：公网入口要过钉钉登录，自动化测试用的办法是
+  **用容器自己的密钥签一个会话 cookie**（不改任何鉴权配置）：
+  `docker exec pb-orders-web python -c "…make_session_token(…secret=os.environ['PB_ORDERS_SESSION_SECRET'])"`，
+  再把 `pb_orders_session=<token>` 手工写进 cookie jar。
+  ⚠️ **必须走真实的 `/pb/` 入口**：CSRF cookie 的 `Path=/pb/`，直连 `127.0.0.1:8412`
+  时浏览器/curl 都不会带上它，POST 会 403（这是路径作用域，不是缺陷）。
+- **发现一处待修（不是本轮引入）**：网页出件的通途 xlsx 名叫
+  `PB_0_导入_原始_order_on_{ts}.xlsx` —— 因为网页路径的订单 CSV 磁盘名固定是 `order.csv`，
+  `service.py` 用 `csv_path.stem` 命名就得到 `order`。命令行路径没这个问题（文件名是原始的）。
+  影响：网页出的这份产物看不出是哪一批。续出件流程同样受影响。
+  修法：把展示名（`job["input_order"]` 的 stem）传给 `service.run_job` 用于命名。
+- **未做**：PR #274 尚未合并（部署的是分支 HEAD）。服务器上留了 4 条 `actor=验收测试` 的任务
+  （2 条检查成功、1 条出件成功、1 条失败），需要时再清。
+
 ## 2026-09-23（第十三轮：库存预检 —— 把「出件前的手工筛选」做进模块）
 
 - **动机**：出件用的 `checked0stock` CSV 不是 SPS 直接给的。每批出件前，要先把当批
@@ -66,7 +103,7 @@ timestamp: 2026-09-22
   开头 openpyxl 存的是 `t="inlineStr"` 文本单元格（CSV 才需要防那三个），
   顺手加上反而会把 `-1`、`+A1` 这类正常值改坏；
   ⑩ `run_stock_check.py` 模块注释「每个 PO 的 Header 一律保留」不准确，一并改。
-- **未做**：尚未部署到 EN 测试服务器。
+- **后续**：见第十四轮（2026-09-24 已部署并真机验收）。
 
 ## 2026-09-23（第十二轮：断货 SKU 列表改为网页上自己维护）
 - **动机**：断货清单原先只能改服务器 `.env` + 重启容器，等于每次断货/恢复有货都要
