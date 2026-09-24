@@ -7,6 +7,10 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-09-24（知识库防腐 + PB 佣金表日期口径）
+- **新增**: `best-practices/knowledge-base-anti-rot.md` —— 知识库防腐三件套：**孤儿检测**（反向引用图，入链要排除 docs/solutions 自身互链与自动 log/index）、**生成式索引**（根平表由 frontmatter 生成，手工维护实测漂 30 篇）、**链接图**（相对链接必须解析，实测断 13 处），外加处置规则「孤儿只有两个归宿：route 或显式豁免，静默忽略不是选项」。依据：Vercel 对照实验 —— 靠 Agent 自己决定要不要查文档，**56% 的情况根本不会查**（skill 按需 53% = 无文档基线；常驻目录 100%）。**工具不会自己跑**，所以挂进 `ce-okf` 收尾第 5b 步。另记一条：一手知识只留在未合并分支上等于不存在（PB 活动价整套记录因 PR revert 停在 `feature/*`，main 上 grep 不到）。
+- **更新**: `workflow-issues/pb-reconciliation-monthly-update.md`（`last_updated: 2026-09-24`）—— 补两条：**TM 佣金表 Notes 的两套日期口径**（A/B = 我方开票日；C/D = PB Remittance Advice 的 Invoice Date，按 UPS 实收确认，常晚于我方；A2 填本期正常起点、A3 用 `plus Nx M/D/YYYY` 备注上期未付结转），以及**给 TM / 给 PB 的邮件边界**（佣金只进给 TM 且不抄 PB；给 PB 禁写佣金/比例/本地文件名/双号解释；活动价差额对 TM 的口径「PB makes good the shortfall → 补该差额上的 commission」，不写比例金额）。
+
 ## 2026-09-23（PB 对账月度更新：防静默丢数 + Excel 核对）
 - **新增**: `best-practices/scanner-silent-data-loss-guard.md` — 扫描类脚本防「静默丢数」的通用模式：**反转匹配方向**（枚举全部文件 → 显式排除清单 → 其余必须被识别，识别不了就报错停机），外加结构断言与"跳过/排除同样要校验"。实据：`glob("invoice*.csv")` 漏掉拼写成 `invocie` 的 37 张 / $2,232.28，且因该文件夹在扫描序列中间，还让范围判定提前停止、连带丢掉整个 202608 月份——一个字符放大两个数量级。适用面覆盖仓库里所有靠通配符扫输入的脚本。
 - **新增**: `tooling-decisions/excel-formula-cells-and-recalc-verification.md` — 核对 xlsx 交付物金额的坑：openpyxl 读公式单元格拿到的是公式字符串、`data_only=True` 只在文件被 Excel/LO 存过时才有缓存值；数据列里混着手写公式单元格时裸加会系统性偏差。实例：`PB Remittance Advice!I` 的 R6779/R6788 合计 386.86，裸加正好少这个数，一度被误判成"表里有历史差额"。正解是 LibreOffice headless 转换触发重算后再读缓存值。

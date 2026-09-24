@@ -3,7 +3,7 @@ okf: v0.1
 type: Reference
 title: PB 对账表月度更新 — 脚本自动化 + UPS 交付核查
 date: 2026-08-14
-last_updated: 2026-09-23
+last_updated: 2026-09-24
 category: workflow-issues
 module: pb_reconciliation
 problem_type: workflow_issue
@@ -41,6 +41,22 @@ Pottery Barn (PB) 通过 SPS 系统下单/发货。每月需要把 PB 邮件付�
    - **完整性**：该账期内 SPS 发票日的发票里，除了"无货未发/迟发"这类已知原因，不应还有未付 —— 证明没有"该付没付"。
    - 唯一允许的正向失配是**双开票**：对账单上是被弃用的号（如 `INV...1541`），台账按留用号（`INV...1530`）记，两边同日期同金额。核对时要用 `REMAP` 归一化再比，否则会误报"漏记"。
    - 这套核对能一次性回答"截至某账期 PB 应付是否已付"，是给财务的口径依据（2026-09 实测：两个账期 0 差异）。
+8. **TM 佣金表的 Notes 有「两套日期口径」，别填成一样**：
+   - **A/B「Invoice To PB」= 我方**操作发货生成 invoice 的日期（SPS 侧）。
+   - **C/D「PB Invoice」= PB Remittance Advice 的 Invoice Date**，按 **UPS 实际收到包裹**确认。
+     仓库迟发/漏发会让它靠后，**只可能等于或晚于我方日期**；两者常不一致（例：`B2=3/16` 而 `D2=3/18`），
+     那是正常现象，不是数据错。
+   - **A2 填「本期正常」起点**（剔除上期未付结转）；结转那几张的日期写进 **A3 备注**，格式 `plus Nx M/D/YYYY`。
+     例：`20260319-20260418` 的 A3 = `plus 1x 2/12/2026`。`tm_commission.py` 会自动生成，不必手填。
+   - 2026-09-24 修正：此前脚本把 C/D 也写成了我方日期（A=C、B=D），是错的。
+9. **给 TM 的佣金信 / 给 PB 的信，边界不同**：
+   - 佣金只在**给 TM** 的邮件里说，且**不抄 PB 的人**；正文只指向附件、不写比例与金额（金额问起再答）。
+   - 给 PB/Diane/Christine 的信里**禁止出现 Tracy 佣金、5%、本地文件名、`Daneey` 字样、双发票号解释**。
+   - 若活动供货价窗口结束后 PB 仍按错价结算：对 TM 的口径是
+     "once we agree on the catch-up and PB makes good the shortfall, I will also make up your commission on
+     that agreed delta" —— **不写比例、不写金额**，并说明她这侧暂时无需动作。
+   - ⚠️ 这套 PB 活动价 true-up 的完整记录（含对外沟通铁律与邮件草稿）目前在**未合并分支**
+     `feature/pb-promo-trueup-handoff` 上，main 上 grep 不到；要查得从 git 历史或该分支取。
 
 ## Why This Matters
 

@@ -9,6 +9,7 @@ tags: [best-practices, index]
 
 | 你需要... | 读这个 |
 |----------|--------|
+| 知识库越积越多，怕某篇再也找不到 / 索引与磁盘漂移 | [knowledge-base-anti-rot.md](knowledge-base-anti-rot.md) |
 | 写/改靠通配符扫目录取输入的脚本，怕文件被静默漏掉 | [scanner-silent-data-loss-guard.md](scanner-silent-data-loss-guard.md) |
 | ERPNext 工单生产数据异常怎么排查（方法论） | [erpnext-work-order-investigation-methodology.md](erpnext-work-order-investigation-methodology.md) |
 | 服务器暴露面审计与安全加固（远程 root / 端口 / 凭证轮换） | [server-exposure-audit-and-hardening.md](server-exposure-audit-and-hardening.md) |

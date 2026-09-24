@@ -220,6 +220,8 @@ uv run python scripts/check_solutions_health.py --strict   # CI 口径：孤儿�
 > 为什么值得每次跑：Vercel 的对照实验里，靠 Agent 自己决定"要不要查文档"有 **56% 的情况根本不会查**；
 > 只有把目录放进常驻上下文（100%）或做成机械校验才管用。这份体检就是那个机械校验——
 > 它防的正是「文档越积越多、没人发现它已经漂了或再也找不到」。
+>
+> 方法与实测数据见 `docs/solutions/best-practices/knowledge-base-anti-rot.md`（知识库防腐三件套）。
 
 两条实测（踩过的坑，别当门禁用）：
 
