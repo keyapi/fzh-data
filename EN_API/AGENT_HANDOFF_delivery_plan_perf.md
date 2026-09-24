@@ -61,7 +61,7 @@
 ## 四、下一步（待用户说"已同步"）
 
 在生产做「耗时 + 一致性」复验，**只读、不改任何数据**：
-- 生产 **SSH 可达**（`ssh 阿里云-FZH-ERPNext-frappe`，见 AGENTS.md「EN 服务器 SSH」）—— 下面这条
+- 生产 **SSH 可达**（`ssh 阿里云-FZH-ERPNext-frappe`，见 `EN_API/docs/reference/en-server-access.md`）—— 下面这条
   **临时 API Server Script** 路线仍然可用（`zz_` 前缀、`script_type=API`、`api_method` 字段注册、
   调用路径 `/api/method/<api_method>`、**用完即删**），但不再是唯一选择。生产凭据 `EN_API/.env` 的 `PROD_ERP_API_KEY/SECRET`，
   base = `https://erpnext.vilavi.cn`。
@@ -86,7 +86,7 @@
 
 ## 七、环境 / 规矩
 
-- **测试站**：`ssh 上海测试-阿里云-FZH-ERPNext-frappe`（`8.133.254.66`，别名见 `~/.ssh/config`），站点 `erpnext.vilavi.cn`（库名 `_133d3237c7c4c70b`），
+- **测试站**：`ssh 上海测试-阿里云-FZH-ERPNext-frappe`（别名见 `~/.ssh/config`），站点 `erpnext.vilavi.cn`（库名 `_133d3237c7c4c70b`），
   与 API `https://ensh.vilavi.cn`（凭据 `TEST_ERP_API_KEY/SECRET`）是**同一个库**。
   改 `.py` 后必须 `cd /home/frappe/frappe-bench && sudo -u frappe bench restart`。
   `dev01` 在 `frappe` 组、app 文件组可写。

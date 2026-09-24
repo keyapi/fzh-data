@@ -142,7 +142,7 @@ documented the **opposite**: 6 files asserted "生产 SSH 不可达 / 没有 SSH
 three scripts' docstrings, a conventions entry). Agents read those, inherited the false premise, and
 either asked the user again for the entry or took a detour (building throwaway API Server Scripts on production
 to avoid a shell that was available all along). One repo file — `missing_products/AGENT_HANDOFF.md` —
-even recorded a successful `ssh frappe@47.116.128.218` rename, contradicting the rest.
+even recorded a successful SSH rename on production (via the prod alias), contradicting the rest.
 
 Trigger of the false premise: the default SSH key gets `Permission denied (publickey)` — because the
 per-host entry lives in `~/.ssh/config` — and "key rejected" was recorded as "host unreachable".

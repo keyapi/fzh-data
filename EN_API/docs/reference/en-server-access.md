@@ -9,23 +9,24 @@ timestamp: 2026-09-24
 
 # EN 服务器与环境访问
 
-> **先读这条**：SSH 入口以 `~/.ssh/config` 的中文别名为准 —— **不要凭记忆拼 `用户@IP`**，
+> **先读这条**：SSH 入口以 `~/.ssh/config` 的中文别名为准 —— **不要凭记忆拼 `用户@主机`**，
 > 也不要因为默认 key 被拒就断言"主机不可达"（见「常见坑」第 1 条）。
 
 ## SSH 入口
 
-| 环境 | 别名（定义在 `~/.ssh/config`） | 主机 | 用户 |
-|------|------------------------------|------|------|
-| 生产 | `阿里云-FZH-ERPNext-frappe` | `47.116.128.218` | `frappe` |
-| 测试 | `上海测试-阿里云-FZH-ERPNext-frappe` | `8.133.254.66` | `frappe` |
+| 环境 | 别名（定义在 `~/.ssh/config`） | 站点 |
+|------|------------------------------|------|
+| 生产 | `阿里云-FZH-ERPNext-frappe` | `erpnext.vilavi.cn` |
+| 测试 | `上海测试-阿里云-FZH-ERPNext-frappe` | `ensh.vilavi.cn` |
 
 ```bash
 ssh 阿里云-FZH-ERPNext-frappe            # 生产
 ssh 上海测试-阿里云-FZH-ERPNext-frappe    # 测试
 ```
 
-- 两台共用同一把私钥，路径写在 `~/.ssh/config` 的 `IdentityFile` 里（**私钥不进仓库**）
-- 测试机 `dev01@8.133.254.66` 也能登（早期 handoff 里写的就是它），但**以别名 / `frappe` 为准**
+> **主机地址、端口、登录用户、私钥路径一律只存在于 `~/.ssh/config`，不进仓库。**
+> 本页只记别名 —— 需要新机器时，照上面两条别名在**该机器本地**的 ssh config 里补 `HostName`/`IdentityFile`。
+
 - bench 都在 `/home/frappe/frappe-bench`；生产 `frappe` 用户有 NOPASSWD sudo
 
 ## 改服务器代码后必须重启

@@ -616,7 +616,7 @@ python customs_export.py --dn DN-26-00056   # 生产，19 项并行翻译约 1-2
 
 **申报要素第⑥段补完整尺寸（2026-09-09）**：申报要素字符串由 `seg1..seg5|||` 改为 `seg1..seg5|seg6||`，**seg6=完整尺寸**。口径：**始终从中文名提取/补全**——三角靠枕→`长度*20*50`、平条靠枕→`长度*15*50`，与品名补全开关**解耦**（开关关时中文 C 列只 `194`，申报要素 seg6 仍 `194*20*50`）。实现：`export()` 对每行算 `it["size_decl"]`（对 `_enrich_dim_cn(name_agg)` 各 `-` 段取 `_dim_token` 最完整者）；`fill_declaration` 拼串加 seg6。实测：`0|0|床品类|无品牌|无型号|194*20*50||`。参考脚本不生成申报要素，无需镜像。
 
-**待办（未做）**：本地参考改动未 commit（feature 分支 feature/customs-export-bom-consignee）；prod `erpnext.vilavi.cn`(47.116.128.218) 未同步（当时记的理由"SSH 不可达"是误判，生产 SSH 可达，见 AGENTS.md「EN 服务器 SSH」）。
+**待办（未做）**：本地参考改动未 commit（feature 分支 feature/customs-export-bom-consignee）；prod `erpnext.vilavi.cn` 未同步（当时记的理由"SSH 不可达"是误判，生产 SSH 可达，见 `EN_API/docs/reference/en-server-access.md`）。
 
 **弹窗箱数「累加/合并」修正（2026-09-09，production issue DN-26-00070）—— 仅测试机 delivery_note.js 已落地**
 - 现象：① 卡 `OBN-…001 · 箱组1` 显「2箱合计 自动=2」，用户找不到第2箱；② 箱18/19（同 XMMBS-153-HEMPNATURAL）不累加、同箱同 SKU 被拆 2/3 行。

@@ -7,7 +7,7 @@
   ③ 皮壳：成品仓/半成品仓 → 待包装成品仓（Material Transfer，带跟踪单号）
   ④ 成品入库：待包装成品仓 → 成品仓（Manufacture，带跟踪单号）
 
-生产 SSH 实际可达（见 AGENTS.md「EN 服务器 SSH」）；本脚本沿用既有做法：临时建一条 API 型 Server Script，调用完删除（备选路线，非因 SSH 不通）。
+生产 SSH 实际可达（见 `EN_API/docs/reference/en-server-access.md`）；本脚本沿用既有做法：临时建一条 API 型 Server Script，调用完删除（备选路线，非因 SSH 不通）。
 沙箱限制（已实测）：无 getattr / frappe.get_value；有 get_doc / get_all / new_doc /
 db.sql / db.set_value / utils.flt；Stock Entry.set_stock_entry_type()+get_items() 可用。
 

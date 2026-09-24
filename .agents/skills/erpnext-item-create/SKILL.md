@@ -82,7 +82,7 @@ uv run python -c "..."   # 参考 docs/solutions/conventions/erpnext-item-varian
 - BOM operations 必须带 `workstation`/`workstation_type`，否则 417
 - `stock_uom`：面料用 `米`，成品/皮壳/内胆用 `个`（不是 `Nos`）
 - URL 含中文/`#` 需 URL 编码
-- 生产服务器 SSH **可达**（早期文档记的"IP 白名单不可达"已过时，2026-09-24 实测直连可用，见 AGENTS.md「EN 服务器 SSH」）；简单字段改动仍优先 REST API
+- 生产服务器 SSH **可达**（早期文档记的"IP 白名单不可达"已过时，2026-09-24 实测直连可用，见 `EN_API/docs/reference/en-server-access.md`）；简单字段改动仍优先 REST API
 - 一键生成按钮：模板物料页「一键创建配套物料及变体」→ `key_test.add_item_semi.create_supporting_items_and_variants`（角色 Item Supporting Material Manager/System Manager）—— **该函数不自动加颜色属性值，需手动补**；复制已有成品变体，不是属性笛卡尔积
 
 ## 赛狐侧（属性管理）
