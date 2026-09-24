@@ -102,6 +102,14 @@ resource: ../reconcile_pb.py
 - **PB Remittance Advice**：过滤 `Payment Date ∈ [账期]`（A-J + K 公式）。
 - **Invoice to PB（结转模型）**：发票日范围 = [min(上轮未付结转日, 本账期首个付款日), 本账期最后付款日]（含整天无付款日），**排除上轮已付（已结算）的发票**；上轮未付结转的必须全保留。每周期只发一次，不重复列已结算发票。
 - **Notes**：A2-F2 日期、G2/H2 金额、I2=5%、J2=`=H2*I2`、K2 英文说明、E3/F3 Actual PB Payment Start/End（=账期**实际首末付款日**，非边界）、两个未付区块 + Difference。
+- **Notes 的日期是两套口径，别填成一样**：
+  - **A/B「Invoice To PB Start/End Date」= 我方**操作发货生成 invoice 的日期（SPS 侧）。
+  - **C/D「PB Invoice Start/End Date」= PB Remittance Advice 的 Invoice Date**（按 **UPS 实际收到包裹**确认）。
+    仓库迟发/漏发会让它明显靠后，**只可能等于或晚于我方日期**；两者常不一致，是正常现象。
+    参考 `20260319-20260418.xlsx`：`B2=3/16` 而 `D2=3/18`。
+  - **A2 填"本期正常"起点**（剔除上期未付结转的那几张）；结转的日期写进 **A3 备注**，格式
+    `plus Nx M/D/YYYY`（多天用 `, ` 连）。例：`20260319-20260418` 的 A3 = `plus 1x 2/12/2026`。
+    由 `tm_commission.py` 自动生成，不必手填。
 - **未付区块**：`Unpaid in last period, paid in this period`（上轮未付且本账期已付，空时 Total=0 勿写 SUM 空范围）；`Unpaid in this period`（账期内未付，含结转仍未付的，空时 Total=0）。
 - **硬校验**：付款总额须与财务确认一致（`EXPECTED`）。
 - 关键事实：PB 邮件发票日期（E 列）按 UPS 实际发货确认，只可能等于或晚于我方，不可能早。

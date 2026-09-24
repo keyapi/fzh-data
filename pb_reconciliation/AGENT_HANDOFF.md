@@ -57,6 +57,9 @@ python tm_commission.py --write     # 生成 To Tracy Miller 目录账期文件
 
 - 数据源：给财务表（过滤账期付款 + 按天截止发票）。`FINANCE_FILE`/`PERIODS`/`EXPECTED`/`PREV_SOURCE` 在脚本顶部。
 - **Invoice to PB 结转模型**：发票范围 = [min(上轮未付结转日, 本账期首个付款日), 本账期最后付款日]（含整天无付款日），**排除上轮已付（已结算）发票**；上轮未付结转全保留。每周期只发一次，不重复列已结算发票。
+- **Notes 的日期是两套口径**：A/B = **我方**生成 invoice 的日期（SPS 侧）；C/D = **PB Remittance Advice 的 Invoice Date**（按 UPS 实收确认，
+  只可能等于或晚于我方，常不一致）。A2 填"本期正常"起点，上期未付结转的日期写进 **A3 备注**（`plus Nx M/D/YYYY`）。
+  2026-09-24 修正：此前脚本把 C/D 也填成了我方日期（A=C、B=D），是错的。
 - 未付区块：上轮未付本轮已付、本轮未付（含结转仍未付，空时 Total 0）。
 - **硬校验**：付款总额须与财务确认一致（`EXPECTED`）。跨期合并结算时，`EXPECTED` 填两期之和。
 - 2026-08-14 已生成：`PB Remittance Advice Payment Date 20260519-20260618.xlsx`（佣金 $709.29）、`...20260619-20260718.xlsx`（佣金 $442.14）、合并 `...20260519-20260718.xlsx`（佣金 $1,151.42）。
