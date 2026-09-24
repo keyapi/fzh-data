@@ -1,4 +1,6 @@
 ---
+okf: v0.1
+type: Reference
 title: 赛狐自动拉取 Amazon 账期（结算中心V2 + 紫鸟插件列式报表）与两报表口径取舍
 date: 2026-09-09
 category: tooling-decisions

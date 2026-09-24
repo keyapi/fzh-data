@@ -1,4 +1,6 @@
 ---
+okf: v0.1
+type: Reference
 title: "Cursor 通途 MCP 不会自动出现，必须写用户级 mcp.json"
 date: 2026-08-14
 category: developer-experience

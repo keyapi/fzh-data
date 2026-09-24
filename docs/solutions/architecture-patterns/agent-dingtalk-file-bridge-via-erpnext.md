@@ -1,4 +1,6 @@
 ---
+okf: v0.1
+type: Reference
 title: "Agent-to-DingTalk File Delivery via ERPNext Bridge"
 date: 2026-07-23
 category: architecture-patterns/

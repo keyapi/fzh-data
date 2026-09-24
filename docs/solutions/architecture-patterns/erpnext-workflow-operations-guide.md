@@ -1,4 +1,6 @@
 ---
+okf: v0.1
+type: Reference
 title: "ERPNext 工作流操作指南：跨系统管理与设计模式"
 date: 2026-07-03
 category: architecture-patterns

@@ -1,4 +1,6 @@
 ---
+okf: v0.1
+type: Reference
 title: ERPNext Custom App 跨版本 API 兼容性检查
 date: 2026-07-15
 category: docs/solutions/workflow-issues/

@@ -1,4 +1,6 @@
 ---
+okf: v0.1
+type: Reference
 title: "Windows Codex/Cursor：PowerShell 5.1 && 与 GBK/UTF-8 对照及 env_doctor"
 date: 2026-08-13
 category: developer-experience

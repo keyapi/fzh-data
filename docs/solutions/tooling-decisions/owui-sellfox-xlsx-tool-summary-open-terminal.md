@@ -1,4 +1,6 @@
 ---
+okf: v0.1
+type: Reference
 module: ai_access_poc
 date: 2026-07-24
 problem_type: tooling_decision

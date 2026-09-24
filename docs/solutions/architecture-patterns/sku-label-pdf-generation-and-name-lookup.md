@@ -1,4 +1,6 @@
 ---
+okf: v0.1
+type: Reference
 title: SKU 背贴 PDF 生成与通用名称查询模式
 date: 2026-07-28
 category: architecture-patterns

@@ -1,4 +1,6 @@
 ---
+okf: v0.1
+type: Reference
 title: 钉钉 SSO 登录 new-api（OIDC Bridge 桥接方案）
 date: 2026-06-26
 last_updated: 2026-09-08

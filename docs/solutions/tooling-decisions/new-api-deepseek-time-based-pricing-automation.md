@@ -1,4 +1,6 @@
 ---
+okf: v0.1
+type: Reference
 title: DeepSeek 峰谷分时定价：new-api 静态 ModelRatio 的 cron 定时切换方案
 date: 2026-08-31
 category: tooling-decisions

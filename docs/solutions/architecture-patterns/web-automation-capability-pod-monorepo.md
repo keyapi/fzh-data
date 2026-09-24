@@ -1,4 +1,6 @@
 ---
+okf: v0.1
+type: Reference
 module: web_automation
 date: 2026-09-02
 last_updated: 2026-09-18

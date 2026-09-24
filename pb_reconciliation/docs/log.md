@@ -8,6 +8,16 @@ timestamp: 2026-08-14
 
 # 变更日志
 
+## 2026-09-22
+- **新增**: `merge_invoices.py` — 月度 invoice CSV 合并（各日 `invoice/invoice*.csv` → 一个月一个文件，交给财务）。
+  规格逆向自 2026-08-24 手工产出的 `202607/PB invoice 合并 202607.csv`，**逐字节复现**（122,218 bytes 完全一致）。
+- **校验**: 未匹配防护——日文件夹有 `invoice/` 但一层内没有 `invoice*.csv` 时硬报错，并列出该目录下的 `.csv`。
+  这正是上个月 `20260730` 被静默漏掉的原因：文件名把 `invoice` 拼成了 `invocie`，glob 没匹配上，
+  合并文件少了 37 张 / $2,232.28。新增 `--base` 便于指向副本做回归验证。
+- **成果**: 生成 `202608\PB invoice 合并 202608.csv` — 10 个日文件夹 / 563 数据行 / 278 张发票 /
+  `Invoice Total`(H 行) 合计 **$15,560.90**；每天与各自 `invoice/*.txt` 手工小计全部对得上。
+- **新增**: AGENT_HANDOFF「4d. 月度 invoice 合并」、reference/workflow.md 月度步骤加一步。
+
 ## 2026-08-14
 - **修正**: `tm_commission.py` Notes G2-J2 水平居中、I2 佣金率显示 5%（0% 格式）；Invoice to PB 首行加筛选（Record Type X列 过滤为 H，隐藏 D 重复行）、未付发票 H 头行黄底标记。
 - **新增**: `visual_check.py` — Excel 渲染视觉自查工具（xlsx sheet → PNG → qwen-vl-plus/OpenRouter VL 描述），供非多模态模型（如 deepseek-v4-flash）自查格式。需 `DASHSCOPE_API_KEY` 或 `AI_API_KEY` 环境变量。
