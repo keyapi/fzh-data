@@ -219,7 +219,7 @@ code=-1 msg=已发货状态，不能修改商品配对
 新开通赛狐权限后如果仍返回 `40021 访问的接口暂无权限`，原因是 `sellfox-api-proxy` 内存缓存了旧的 OAuth access token。重启代理会清缓存且不改变 Key：
 
 ```bash
-ssh -i D:/Work/Aliyun/ssh/aliyun_fzh_erpnext_20240726.pem frappe@8.133.254.66
+ssh 上海测试-阿里云-FZH-ERPNext-frappe        # 别名见 ~/.ssh/config（主机与私钥不进仓库）
 sudo docker restart sellfox-api-proxy
 ```
 

@@ -149,7 +149,7 @@ uv sync
 | `gls-track` | `gls_track/` | GLS 波兰自发货批量跟踪(公开无鉴权 REST **免开发者账号**) + FedEx 风格异常表；loader 拆一格多号；monthly 一步整月。统一多承运商由 `parcel_track`(PR#215) 接入 |
 | `parcel-track` | `parcel_track/` | 通途混合订单分流 UPS/FedEx/GLS + 共享迟发/承运延误/卡件运营表（处理 3 营业日；GLS 波兰历；`--workers` 每家串行） |
 | `yiglobal-api` | `yiglobal-api/` | 蜴国际打单 API 文档（原 `蜴国际-API/`；env：`YIGLOBAL_*`） |
-| `en-image-upload` | `EN_API/` | 图片上传（CLI + Web UI + 物料组主图） |
+| `en-image-upload` | `EN_API/` | EN/ERPNext 生产系统操作总目录（图片上传、物料组/BOM 维护、出货计划与报关、服务器与凭证入口） |
 | `nas-itemgroup-folders` | `nas_itemgroup_folders/` | NAS-ERPNext 物料组文件夹对账 + 叶子组 (LGKS) 管理 |
 | `nas-access` | `NAS_API/` | 群晖多域名访问、QC 选路、OpenWrt ACME+反代、DSM 第二张证 |
 | `dingtalk-oa-approval` | `dingtalk/dingtalk_oa_approval/` | 钉钉 OA 销售收款确认单：API 附件 + aflow 浏览器导出 + 账期月过滤 + NAS 归档（不改本地同步） |
@@ -205,7 +205,7 @@ uv sync
 
 > 每个模块有 `AGENT_HANDOFF.md`（Agent 参考）和 `README.md`（人读）。
 > Skill 文件在 `.agents/skills/<name>/SKILL.md`，Agent 按触发词自动加载。
-> **ERPNext 系统访问**: 生产 (`erpnext.vilavi.cn`) → REST API, 测试 (`ensh.vilavi.cn`) → FAC MCP + REST API. 详见 `EN_API/README.md`
+> **ERPNext 系统访问**: 生产 (`erpnext.vilavi.cn`) → REST API, 测试 (`ensh.vilavi.cn`) → FAC MCP + REST API；两台服务器 SSH 也直连。**入口 / 凭证 / 常见坑** 详见 `EN_API/docs/reference/en-server-access.md`
 > **ERPNext API 凭证**: 从 `EN_API/.env` 读取 `ERP_API_KEY` / `ERP_API_SECRET`，认证头 `Authorization: token <key>:<secret>`
 
 ## 关键行为规则

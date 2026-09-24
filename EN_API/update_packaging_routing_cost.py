@@ -14,7 +14,7 @@ Frappe 15 里**没有任何 REST 路径能跳过校验**，已逐条核实：
     `Importer.update_record` 全部以 `doc.save()` 收尾；
   * `PUT /api/resource/BOM Operation/<子行>` 也会级联
     `frappe.get_doc(parenttype, parent).save()`。
-生产机 SSH 不可达，所以也不能 `bench execute`。
+生产机 SSH 实际可达（见 `EN_API/docs/reference/en-server-access.md`）；本脚本仍走 REST，是为了可复现、免交互 —— `bench execute` 不再被排除。
 
 做法
 ----

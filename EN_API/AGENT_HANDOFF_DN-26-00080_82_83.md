@@ -115,10 +115,10 @@ python EN_API/dn_0080_83_edit_rows.py plan        # 打印逐行改动指令（�
 
 ## 九、环境 / 规矩
 
-- **生产**：`https://erpnext.vilavi.cn`，凭据 `EN_API/.env` → `PROD_ERP_API_KEY/SECRET`；**无 SSH**。
-  写生产只能走**临时 API Server Script**（`zz_` 前缀、`script_type=API`、`api_method` 注册，
-  调用 `/api/method/<api_method>`，**用完即删**）。
-- **测试机**：`ssh dev01@8.133.254.66`，站点 `erpnext.vilavi.cn`（与 API `https://ensh.vilavi.cn` 同库），
+- **生产**：`https://erpnext.vilavi.cn`，凭据 `EN_API/.env` → `PROD_ERP_API_KEY/SECRET`；SSH 可达（`ssh 阿里云-FZH-ERPNext-frappe`，见 `EN_API/docs/reference/en-server-access.md`）。
+  写生产的**临时 API Server Script** 路线（`zz_` 前缀、`script_type=API`、`api_method` 注册，
+  调用 `/api/method/<api_method>`，**用完即删**）仍可用，但不再是唯一选择。
+- **测试机**：`ssh 上海测试-阿里云-FZH-ERPNext-frappe`（别名见 `~/.ssh/config`），站点 `erpnext.vilavi.cn`（与 API `https://ensh.vilavi.cn` 同库），
   改 `.py` 后 `cd /home/frappe/frappe-bench && sudo -u frappe bench restart`。
 - **Server Script 沙箱限制**（实测）：禁 `import`（`json` 已注入）；禁 `_` 开头的变量/属性名；
   禁 `+=`；不支持 `a, b = f()` 解包；`frappe.get_attr` 不可用；
