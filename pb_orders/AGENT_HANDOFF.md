@@ -166,7 +166,7 @@ cd pb_orders
 uv run pytest tests/ -q
 ```
 
-138 个用例通过、2 个跳过，**不需要 Redis**：`tests/conftest.py` 用 reportlab 现画一个结构同构的
+144 个用例通过、2 个跳过，**不需要 Redis**：`tests/conftest.py` 用 reportlab 现画一个结构同构的
 3 页 Packslip PDF + 5 行订单 CSV + 3 行名称缓存，跑真实流程；Web 用例把
 `web.app.enqueue_job` 换成同步执行，从而覆盖「Web 建任务 + worker 处理 + 页面 + 下载」整链。
 另有 Redis/RQ 生命周期用例需本地 Docker，设 `PB_ORDERS_RQ_DOCKER=1` 才跑（默认跳过）。
@@ -397,6 +397,27 @@ uv run pytest tests/ -q
     （别的 SQLite 错误照旧抛）。测试：`test_migration_tolerates_losing_the_alter_race` +
     `test_migration_does_not_swallow_other_sqlite_errors`。
 
+34. **数据行末尾多出的「空」字段要容忍 —— 但它会整批挡住 pandas**（2026-09-24 真实批次踩到）：
+    SPS 自己导出的 20260924 批次是 **表头 147 字段 / H 行 146 / D 行 148** ——
+    D 行在所有列之后多一个空字段。pandas 遇到「比表头多」的行直接
+    `ParserError: Expected 147 fields in line 3, saw 148`，**连未经手改的原始导出都读不进来**
+    （用户一度以为是自己的手工合并弄坏了，实测原始文件同样失败）。
+    正解：`pb_tongtu_excel.strip_trailing_empty_fields()` —— 多出来的**都是空的**就削掉
+    （位于所有列之后，不影响任何列的对齐），**有非空值就拒绝**（无法判断它属于哪一列）。
+    checked CSV 仍**逐行照搬原文**（连那个空字段一起照搬），所以「输出 == 源文件被保留的行」
+    这个字节契约对任何形状都成立。两个读取器都用它：
+    `stock_precheck._read_csv` 与 `pb_tongtu_excel.load_order_csv`（出件阶段读 checked CSV）。
+    削掉空字段会在报告里留一条 `warnings`（页面「提醒」区块 + CLI `[提醒]`），不静默。
+    ⚠️ **安全网在 `_validate`**：只看尾部是不是空的，判断不出*中间*有没有错位。
+    中间插/删一列会让 `Record Type` 那格落到别的值上 —— `_validate` 的
+    「Record Type 必须是 H/D + PO/Line/SKU 非空 + 数量正整数」就是拦这个的。
+    实测三种错位（末尾非空 / 中间插入 / 中间删除）分别报 `ragged_source` 与 `invalid_record_type`。
+35. **别把 pandas 的原话吞掉**（同一个真实案例）：`_read_csv` 以前把所有异常翻成
+    「无法读取 SPS 订单 CSV / 请确认没被 Excel 另存过」，把
+    `Expected 147 fields in line 3, saw 148` 这种**唯一能自查的线索**丢了，
+    用户只能回来问我们。现在错误信息带上 pandas 原文 + 可能原因 + 下一步。
+    同理 `invalid_record_type` 里的空值要显示成 `(空)`，否则提示会以冒号结尾、看着像 bug。
+
 ## 8. 数量对账口径
 
 ### 8.1 库存预检（步骤 0）
@@ -534,7 +555,7 @@ uv run pytest tests/ -q
 - [x] 无货时自动拆「有货主文件 + 无货子集」（标签 + 背贴各两份，`--no-stock` 触发）
 - [x] 网页版：FastAPI + Redis/RQ + SQLite，任务可后台跑、可追溯、可重下（2026-09-22）
 - [x] 独立 Docker Compose 栈，不碰既有服务（2026-09-22）
-- [x] 138 个自动化测试（另有 Redis/RQ 生命周期用例，默认跳过），不需要 Redis 也能跑
+- [x] 144 个自动化测试（另有 Redis/RQ 生命周期用例，默认跳过），不需要 Redis 也能跑
 - [x] 已部署到 EN 测试服务器（`/opt/pb-orders`）。入口 **<https://api.vilavi.cn/pb/>**
       （公网 HTTPS + 钉钉登录，容器只绑 `127.0.0.1`）；Tailscale 那条路径已弃用（走香港中继太慢）
 - [x] 公网入口有钉钉登录闸门（`web/auth.py`）。**登录范围由桥把关**：2026-09-23 起桥按
