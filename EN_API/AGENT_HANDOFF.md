@@ -15,6 +15,7 @@
 | [AGENT_HANDOFF_物料组翻译.md](AGENT_HANDOFF_物料组翻译.md) | 物料组 `item_group_translation` 批量中译英（TMT） |
 | [AGENT_HANDOFF_物料发货状态.md](AGENT_HANDOFF_物料发货状态.md) | 客户物料号 / EN 物料号 → 销售订单发货 + 工序进度 |
 | [AGENT_HANDOFF_DN追溯报表.md](AGENT_HANDOFF_DN追溯报表.md) | 销售出库 → 物料移动追溯 |
+| [docs/reference/en-server-access.md](docs/reference/en-server-access.md) | **服务器与环境访问**：生产/测试 SSH 别名、bench 重启规矩、REST 凭证、常见坑 |
 
 ---
 

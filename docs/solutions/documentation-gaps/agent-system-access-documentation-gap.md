@@ -149,8 +149,13 @@ per-host entry lives in `~/.ssh/config` — and "key rejected" was recorded as "
 
 Fix shipped with this entry:
 
-1. One line in AGENTS.md pointing at `~/.ssh/config` aliases for both servers (same progressive-disclosure
-   pattern as the first instance).
+1. The authoritative page is **`EN_API/docs/reference/en-server-access.md`** (OKF reference: SSH aliases,
+   `bench restart` rule, REST creds, three pitfalls). The pre-existing one-line pointer in AGENTS.md
+   (`ERPNext 系统访问`) now points there instead of `EN_API/README.md`. **No new line was added to
+   AGENTS.md** — the operator pushed back on growing the project outline with module-specific content,
+   and the first instance's "one line in AGENTS.md" was re-read as "one *pointer* in AGENTS.md, detail
+   in the module". The module-index row for `EN_API/` was also corrected (it advertised only
+   "图片上传", which is how the module's real scope — EN production ops — stayed invisible).
 2. Corrected all 10 occurrences of that false claim, keeping the workarounds that were built on it (the
    temporary-Server-Script route still works — it just isn't *required*).
 
