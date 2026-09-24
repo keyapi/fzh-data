@@ -63,7 +63,20 @@ timestamp: 2026-09-22
 - **两个错误提示都改了措辞**：缺列信息去掉 markdown 记号（纯文本里会原样显示 `**`）；
   并把这一层的 `ValueError` 包成 `PBJobError(code=order_csv_invalid)`，
   否则页面会落到通用提示「PDF 与 CSV 可能不是同一批」——指错方向。
-- **复测**（重新上线后，真机）：见本条下面的实测记录。
+- **复测（重新上线后，真机，逐条对着页面输出核）**：
+  - 缺列提示：`订单 CSV 缺少必需列：Ship To Country、Unit Price。出件要的是 SPS 导出的完整订单 CSV
+    （checked0stock …），不是只有几列的摘要。` + 提示「请用 SPS 导出的完整订单 CSV 重新提交；
+    本批的 checked0stock 文件见「检查 SPS 新订单」任务。」+ 错误码 `order_csv_invalid`
+    （以前是 `输入数据有问题：'Ship To Country'` + 误导的「PDF 与 CSV 不是同一批」）。
+  - 产物名：续出件出来的通途 xlsx 叫
+    `PB_0_导入_原始_checked0stock acc_on_2026-09-24_10-51-29.xlsx`（以前是 `…_order_on_…`）。
+  - 整批回归：真实宽表（147 列）→ 检查 succeeded → 只传 21 页 Packslip → 出件 succeeded，
+    **1:1 通过（21 页 = 21 行）**、join 未匹配 0。
+  - 隔离：三次部署期间仍只有 `pb-orders-web` / `pb-orders-worker` 被重建。
+- **遗留**：服务器上累计 **13 条** `actor=验收测试` 任务（检查 6 条、出件成功 4 条、失败 3 条，
+  失败的都是刻意用瘦 CSV 造的错误路径用例）。删除属于破坏性操作，**等用户确认再清**。
+  另有 `service.py` 的 `_UNSAFE_STEM` 与 `stock_precheck._UNSAFE_STEM` 两处同样的正则
+  （各管各的输出命名，暂不合并，等真需要共用时再抽）。
 
 ## 2026-09-23（第十三轮：库存预检 —— 把「出件前的手工筛选」做进模块）
 
