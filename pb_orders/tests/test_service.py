@@ -272,3 +272,34 @@ def test_full_width_sample_has_every_required_column(pb_env):
     """正常夹具（含全部必需列）不该被上面那道检查挡住。"""
     df = service.pb_tongtu_excel.build_order_df(pb_env.csv)
     assert len(df) == 3
+
+
+def test_order_reader_tolerates_extra_trailing_empty_field(pb_env):
+    """出件阶段也要能读「数据行末尾多一个空字段」的 CSV。
+
+    回归：20260924 真实批次（表头 147 / H 行 146 / D 行 148）在库存预检与出件
+    两边都会被 pandas 整批 ParserError 拒绝 —— 出件读的是预检产出的 checked CSV，
+    形状与源文件一致，所以两个读取器都得能读。
+    """
+    lines = pb_env.csv.read_text(encoding="utf-8-sig").splitlines()
+    data = [l for l in lines[1:] if l.strip()]
+    padded = "\n".join([lines[0], *[l + "," for l in data]]) + "\n"
+    src = pb_env.tmp / "padded.csv"
+    src.write_text(padded, encoding="utf-8")
+
+    df = service.pb_tongtu_excel.build_order_df(src)
+    assert len(df) == 3                      # 与未加空字段时一致
+    assert df.shape[1] <= service.pb_tongtu_excel.MAX_COLS
+
+
+def test_order_reader_rejects_extra_field_with_value(pb_env):
+    """多出来的字段带值 → 拒绝，别猜它属于哪一列。"""
+    lines = pb_env.csv.read_text(encoding="utf-8-sig").splitlines()
+    data = [l for l in lines[1:] if l.strip()]
+    data[0] = data[0] + ",多余的非空值"
+    src = pb_env.tmp / "bad_pad.csv"
+    src.write_text("\n".join([lines[0], *data]) + "\n", encoding="utf-8")
+
+    with pytest.raises(service.pb_tongtu_excel.CsvSourceError) as exc:
+        service.pb_tongtu_excel.build_order_df(src)
+    assert "非空值" in str(exc.value)

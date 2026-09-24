@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import io
 import os
 import re
 import shutil
@@ -26,6 +27,8 @@ import pandas as pd
 from openpyxl import load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
+
+import pb_tongtu_excel
 
 COL_PO = "PO Number"
 COL_LINE = "PO Line #"
@@ -43,6 +46,10 @@ MIME_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 _UNSAFE_STEM = re.compile(r'[\\/:*?"<>|\r\n\t]+')
 # SPS 命名里的 PO 数记号：`order x21 20260917_0338_456788` 里的 `x21`
 _PO_COUNT_TOKEN = re.compile(r"(?i)(?<![0-9A-Za-z])x\d+")
+# check/checked0stock 记号（含后面的分隔符）：见 _output_stem 的说明。
+# 注意写成 check(?:ed)?0stock —— 写成 checked? 只匹配 checke/checked，匹配不到 check。
+_MARKER = re.compile(r"(?i)check(?:ed)?0stock[ _-]*")
+_MULTI_SPACE = re.compile(r"\s{2,}")
 
 # 网页明细表最多渲染多少行（超了截断并提示，完整内容看 xlsx 产物）
 WEB_TABLE_LIMIT = 300
@@ -74,15 +81,18 @@ def _output_stem(raw: str) -> str:
     """把来源文件名整理成可安全拼进输出名的词干。
 
     历史命名是 `check0stock …`（待检查）→ `checked0stock …`（已检查），
-    所以剥掉开头的 check/checked 记号，避免叠成 `checked0stock check0stock …`。
+    所以把中间的 check/checked0stock 记号剥掉，避免拼出前后各一个记号的名字。
+
+    ⚠️ 记号**可能在中间**，不能只看开头：使用者的文件名长这样 ——
+    `已和2单手动合并 check0stock order x16 20260924_0145_20820.csv`（手工合并过，
+    自己加了前缀）。只剥开头会得到
+    `checked0stock 已和2单手动合并 check0stock order x15 …`（两个记号），
+    现在按出现位置统一剥掉 → `checked0stock 已和2单手动合并 order x15 …`。
+
     用户文件名是外部输入，这里一并洗掉路径分隔符与 Windows 非法字符。
     """
-    stem = str(raw or "").strip()
-    lowered = stem.lower()
-    for marker in ("checked0stock", "check0stock"):
-        if lowered.startswith(marker):
-            stem = stem[len(marker):].strip(" _-")
-            break
+    stem = _MARKER.sub("", str(raw or "").strip())
+    stem = _MULTI_SPACE.sub(" ", stem)
     stem = _UNSAFE_STEM.sub("-", stem).strip(" .-")
     return stem or "orders"
 
@@ -115,19 +125,45 @@ def _normalized_skus(values: list[str]) -> tuple[list[str], set[str]]:
     return snapshot, seen
 
 
-def _read_csv(path: Path) -> pd.DataFrame:
+def _read_csv(path: Path) -> tuple[pd.DataFrame, list[str], str]:
+    """读 SPS 订单 CSV，返回 (DataFrame, 原始文本行, 给用户看的说明)。
+
+    容忍「数据行末尾多出的空字段」—— 20260924 真实批次就是表头 147 字段、
+    H 行 146、D 行 148，pandas 会整批 `ParserError` 拒绝。容忍规则与拒绝条件
+    见 `pb_tongtu_excel.strip_trailing_empty_fields`（非空的额外字段照样拒绝）。
+
+    pandas 的原话必须带上：早先把任何异常都翻成一句「无法读取 SPS 订单 CSV」，
+    真因（`Expected 147 fields in line 3, saw 148`）被吞掉，用户没法自查。
+    """
     try:
-        return pd.read_csv(path, dtype=str, keep_default_na=False)
-    except Exception as exc:  # pandas 的具体解析异常不直接暴露给页面
+        raw_lines = pb_tongtu_excel.read_text_lines(path)
+    except pb_tongtu_excel.CsvSourceError as exc:
         raise StockCheckError(
-            "无法读取 SPS 订单 CSV",
-            "请确认文件是 SPS 导出的 CSV，且没有被 Excel 另存为其它格式。",
+            str(exc), "请从 SPS 的 New 订单列表重新导出原始 CSV。", "csv_read_failed"
+        ) from exc
+    if not raw_lines:
+        raise StockCheckError("订单 CSV 是空文件", "请确认导出成功。", "csv_read_failed")
+    try:
+        parse_lines, note = pb_tongtu_excel.strip_trailing_empty_fields(raw_lines)
+    except pb_tongtu_excel.CsvSourceError as exc:
+        raise StockCheckError(
+            str(exc), "手改/另存过列数就会对不上，请从 SPS 重新导出这一批。", "ragged_source"
+        ) from exc
+    try:
+        df = pd.read_csv(io.StringIO("\n".join(parse_lines)), dtype=str, keep_default_na=False)
+    except Exception as exc:  # noqa: BLE001 - 原样带出 pandas 的原因
+        raise StockCheckError(
+            f"CSV 解析失败：{exc}",
+            "若文件被 Excel 另存或手工改过，列数可能与表头不一致；请从 SPS 重新导出。",
             "csv_read_failed",
         ) from exc
+    # 返回**原文**行（不是规范化后的）：checked CSV 要逐行照搬源文件，
+    # 连那个多出来的空尾字段也照搬——它是 SPS 自己导出就有的形状。
+    return df, raw_lines, note
 
 
-def _source_lines(path: Path, rows: int) -> list[str]:
-    """按行取源 CSV 原文，供 checked CSV **逐行照搬**。
+def _source_lines(lines: list[str], rows: int) -> list[str]:
+    """供 checked CSV **逐行照搬**的源文件原文。
 
     为什么不重新序列化：SPS 的导出本身是参差的 —— 表头 147 列、数据行 146 列，
     且最后一个列名是空的。pandas 读进来会把它命名成 `Unnamed: 146`、并把数据行
@@ -136,16 +172,6 @@ def _source_lines(path: Path, rows: int) -> list[str]:
 
     行数对不上说明字段里含换行，此时按行切分不成立，宁可报错也不出格式不同的文件。
     """
-    try:
-        lines = path.read_text(encoding="utf-8-sig").splitlines()
-    except Exception as exc:
-        raise StockCheckError(
-            "无法按行读取 SPS 订单 CSV",
-            "请确认文件是 UTF-8 编码的 SPS 导出。",
-            "csv_read_failed",
-        ) from exc
-    while lines and not lines[-1].strip():  # 容忍文件末尾多出的空行
-        lines.pop()
     if len(lines) != rows + 1:
         raise StockCheckError(
             "源 CSV 的行数与解析出的记录数对不上（字段里可能含换行）",
@@ -168,9 +194,12 @@ def _validate(df: pd.DataFrame) -> pd.DataFrame:
     work[COL_RECORD] = work[COL_RECORD].astype(str).str.strip().str.upper()
     unexpected = work.loc[~work[COL_RECORD].isin(["H", "D"]), COL_RECORD].unique().tolist()
     if unexpected:
+        # 空值要显式写成「(空)」，否则提示会以「无法识别的值：」结尾、看着像 bug
+        shown = "、".join(repr(v) if v else "(空)" for v in unexpected[:10])
         raise StockCheckError(
-            f"Record Type 含无法识别的值：{', '.join(unexpected[:10])}",
-            "库存预检只接受 SPS 的 Header(H) / Detail(D) 订单导出。",
+            f"Record Type 含无法识别的值：{shown}",
+            "库存预检只接受 SPS 的 Header(H) / Detail(D) 订单导出。"
+            "若这一行是手工改出来的，列可能整体错位了。",
             "invalid_record_type",
         )
 
@@ -449,7 +478,7 @@ def _verify_checked(path: Path, original_columns: list[str], expected_raw: pd.Da
     结果源文件里 Record Type 写成小写 `d`、或字段两侧带空格时，
     合法输入会报 `output_verify_failed`（内容其实没写错）。
     """
-    actual = _read_csv(path)
+    actual, _, _ = _read_csv(path)
     if list(actual.columns) != original_columns:
         raise StockCheckError("checked CSV 列顺序校验失败", code="output_verify_failed")
     if actual.fillna("").astype(str).values.tolist() != expected_raw.fillna("").astype(str).values.tolist():
@@ -485,7 +514,8 @@ def run_stock_check(
         raise StockCheckError("SPS 订单 CSV 不存在", code="input_missing")
 
     progress("read", "读取并校验 SPS New 订单 CSV")
-    source = _read_csv(csv_path)
+    source, raw_lines, read_note = _read_csv(csv_path)
+    warnings: list[str] = [read_note] if read_note else []
     original_columns = list(source.columns)
     work = _validate(source)
     snapshot, wanted = _normalized_skus(no_stock_skus)
@@ -521,6 +551,7 @@ def run_stock_check(
         "mixed_po_count": int(status_counts.get("部分缺货", 0)),
         "mixed_po": [po for po, status in po_status.items() if status == "部分缺货"],
         "no_stock_snapshot": snapshot,
+        "warnings": warnings,
         "outputs": [],
     }
 
@@ -545,7 +576,7 @@ def run_stock_check(
         temp_workbook = temp_root / workbook_name
         # 逐行照搬源文件原文（含空列名、参差列数、行尾），
         # 使这份 checked CSV 与 SPS 自己导出的那份是同一种格式；UTF-8 无 BOM / LF。
-        source_lines = _source_lines(csv_path, len(source))
+        source_lines = _source_lines(raw_lines, len(source))
         checked_lines = [source_lines[0]] + [source_lines[int(pos) + 1] for pos in checked.index]
         temp_checked.write_text("\n".join(checked_lines) + "\n", encoding="utf-8", newline="")
         # 与源文件原文比（不是规范化后的 DataFrame），见 _verify_checked 的说明

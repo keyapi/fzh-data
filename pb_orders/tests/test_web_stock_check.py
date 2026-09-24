@@ -40,6 +40,79 @@ def upload_check(client, path, no_stock="STYLE-B", csrf=None):
         )
 
 
+def test_uploaded_inputs_are_downloadable(client, pb_env):
+    """上传的输入也要能下载核对（使用者要确认自己传的是什么）。"""
+    resp = upload_check(client, write_raw_orders(pb_env.tmp / "raw.csv"), no_stock="")
+    job_id = resp.headers["location"].rsplit("/", 1)[-1]
+
+    page = client.get(f"/jobs/{job_id}")
+    assert page.status_code == 200
+
+    art = next(a for a in client.repo.list_artifacts(job_id) if a["kind"] == "input_order")
+    assert art["download_name"] == "check0stock order x21 20260917_0338_456788.csv"
+    dl = client.get(f"/artifacts/{art['id']}/download")
+    assert dl.status_code == 200
+
+    # 下载链接出现在顶部「输入」那一行（页面下方不再另有一块）
+    header = page.text[: page.text.index('id="status-panel"')]
+    assert f"/artifacts/{art['id']}/download" in header
+    assert art["download_name"] in header
+    # 而且做成了表格（内联时文件名长短不一会让按钮参差不齐）
+    assert "<th>类型</th><th>文件名</th><th>大小</th><th>SHA-256</th>" in header
+    # 下回来的就是上传的那份（逐字节）
+    assert dl.content == (pb_env.tmp / "raw.csv").read_bytes()
+
+    # 输入文件仍在 inputs/ 里 —— 登记不能把原文件移走
+    assert (client.settings.inputs_dir / job_id / storage.ORDER_NAME).is_file()
+
+
+def test_old_job_without_input_artifacts_still_renders_header(client, pb_env):
+    """功能上线前建的任务没有输入下载件：那一行要退回纯文本，不能 500 / 不能空白。"""
+    resp = upload_check(client, write_raw_orders(pb_env.tmp / "raw.csv"), no_stock="")
+    job_id = resp.headers["location"].rsplit("/", 1)[-1]
+    # 模拟老任务：删掉输入产物
+    for a in client.repo.list_artifacts(job_id):
+        if a["kind"].startswith("input_"):
+            with client.repo.connect() as conn:
+                conn.execute("DELETE FROM artifacts WHERE id = ?", (a["id"],))
+
+    page = client.get(f"/jobs/{job_id}")
+    assert page.status_code == 200
+    assert "check0stock order x21 20260917_0338_456788.csv" in page.text   # 名字还在
+    assert "该功能上线前" in page.text
+
+
+def test_inputs_are_only_linked_in_the_header_not_a_second_block(client, pb_env):
+    """输入的下载入口只在顶部「输入」那一行 —— 不再在页面下方另裂一块。"""
+    resp = upload_check(client, write_raw_orders(pb_env.tmp / "raw.csv"), no_stock="")
+    job_id = resp.headers["location"].rsplit("/", 1)[-1]
+    page = client.get(f"/jobs/{job_id}").text
+
+    art = next(a for a in client.repo.list_artifacts(job_id) if a["kind"] == "input_order")
+    header = page[: page.index('id="status-panel"')]
+    assert f"/artifacts/{art['id']}/download" in header          # 顶部有链接
+    assert "输入文件（可下载核对）" not in page                    # 下方没有第二块
+    assert "input_order" not in page[page.index("产物下载"):]      # 产物表里也不列输入
+
+
+def test_fulfillment_job_exposes_its_reused_checked_csv(client, pb_env):
+    """续出件任务的输入块要能看到「复用的那份 checked CSV」。"""
+    resp = upload_check(client, write_raw_orders(pb_env.tmp / "raw.csv"), no_stock="")
+    check_job = resp.headers["location"].rsplit("/", 1)[-1]
+    client.get(f"/jobs/{check_job}/fulfill")
+    csrf = client.cookies.get("pb_orders_csrf")
+    with open(pb_env.pdf, "rb") as fh:
+        started = client.post(
+            f"/jobs/{check_job}/fulfill",
+            files={"packslip": ("Packslip 美中 x3 20260921.pdf", fh, "application/pdf")},
+            data={"csrf": csrf, "actor": "tester"},
+            follow_redirects=False,
+        )
+    job_id = started.headers["location"].rsplit("/", 1)[-1]
+    kinds = {a["kind"] for a in client.repo.list_artifacts(job_id)}
+    assert {"input_packslip", "input_order"} <= kinds
+
+
 def test_check_page_prefills_no_stock(client):
     resp = client.get("/checks/new")
     assert resp.status_code == 200
@@ -62,7 +135,9 @@ def test_upload_runs_check_and_offers_downloads(client, pb_env):
 
     artifacts = client.repo.list_artifacts(job_id)
     kinds = {a["kind"] for a in artifacts}
-    assert kinds == {"checked_order", "stock_operations"}
+    assert kinds == {"input_order", "checked_order", "stock_operations"}
+    # 输入文件本身仍在 inputs/ 里（登记用的是硬链接/复制，不是移动）
+    assert (client.settings.inputs_dir / job_id / storage.ORDER_NAME).is_file()
 
     for artifact in artifacts:
         dl = client.get(f"/artifacts/{artifact['id']}/download")
@@ -202,7 +277,9 @@ def test_bad_csv_fails_with_readable_reason(client, pb_env):
     page = client.get(f"/jobs/{job_id}")
     assert page.status_code == 200
     assert "缺少必需列" in page.text
-    assert client.repo.list_artifacts(job_id) == []
+    # 失败时**没有任何产物**；但上传的输入仍在（那是建任务时登记的，用于核对）
+    kinds = {a["kind"] for a in client.repo.list_artifacts(job_id)}
+    assert kinds == {"input_order"}
 
 
 def test_continue_to_fulfillment_reuses_checked_csv(client, pb_env):

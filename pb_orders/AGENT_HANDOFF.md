@@ -166,7 +166,7 @@ cd pb_orders
 uv run pytest tests/ -q
 ```
 
-138 个用例通过、2 个跳过，**不需要 Redis**：`tests/conftest.py` 用 reportlab 现画一个结构同构的
+150 个用例通过、2 个跳过，**不需要 Redis**：`tests/conftest.py` 用 reportlab 现画一个结构同构的
 3 页 Packslip PDF + 5 行订单 CSV + 3 行名称缓存，跑真实流程；Web 用例把
 `web.app.enqueue_job` 换成同步执行，从而覆盖「Web 建任务 + worker 处理 + 页面 + 下载」整链。
 另有 Redis/RQ 生命周期用例需本地 Docker，设 `PB_ORDERS_RQ_DOCKER=1` 才跑（默认跳过）。
@@ -397,6 +397,40 @@ uv run pytest tests/ -q
     （别的 SQLite 错误照旧抛）。测试：`test_migration_tolerates_losing_the_alter_race` +
     `test_migration_does_not_swallow_other_sqlite_errors`。
 
+34. **数据行末尾多出的「空」字段要容忍 —— 但它会整批挡住 pandas**（2026-09-24 真实批次踩到）：
+    SPS 自己导出的 20260924 批次是 **表头 147 字段 / H 行 146 / D 行 148** ——
+    D 行在所有列之后多一个空字段。pandas 遇到「比表头多」的行直接
+    `ParserError: Expected 147 fields in line 3, saw 148`，**连未经手改的原始导出都读不进来**
+    （用户一度以为是自己的手工合并弄坏了，实测原始文件同样失败）。
+    正解：`pb_tongtu_excel.strip_trailing_empty_fields()` —— 多出来的**都是空的**就削掉
+    （位于所有列之后，不影响任何列的对齐），**有非空值就拒绝**（无法判断它属于哪一列）。
+    checked CSV 仍**逐行照搬原文**（连那个空字段一起照搬），所以「输出 == 源文件被保留的行」
+    这个字节契约对任何形状都成立。两个读取器都用它：
+    `stock_precheck._read_csv` 与 `pb_tongtu_excel.load_order_csv`（出件阶段读 checked CSV）。
+    削掉空字段会在报告里留一条 `warnings`（页面「提醒」区块 + CLI `[提醒]`），不静默。
+    ⚠️ **安全网在 `_validate`**：只看尾部是不是空的，判断不出*中间*有没有错位。
+    中间插/删一列会让 `Record Type` 那格落到别的值上 —— `_validate` 的
+    「Record Type 必须是 H/D + PO/Line/SKU 非空 + 数量正整数」就是拦这个的。
+    实测三种错位（末尾非空 / 中间插入 / 中间删除）分别报 `ragged_source` 与 `invalid_record_type`。
+35. **别把 pandas 的原话吞掉**（同一个真实案例）：`_read_csv` 以前把所有异常翻成
+    「无法读取 SPS 订单 CSV / 请确认没被 Excel 另存过」，把
+    `Expected 147 fields in line 3, saw 148` 这种**唯一能自查的线索**丢了，
+    用户只能回来问我们。现在错误信息带上 pandas 原文 + 可能原因 + 下一步。
+    同理 `invalid_record_type` 里的空值要显示成 `(空)`，否则提示会以冒号结尾、看着像 bug。
+
+36. **同名重复上传不会有问题，别再自己造去重层**（使用者问过）：
+    产物与输入都走**内容寻址**（`artifacts/<hash前2位>/<hash前16位><ext>`），
+    同内容 → 落盘一份，多个任务引用它；不同内容 → 各存一份，页面同样文件名两行、
+    靠 SHA-256 区分（浏览器下载时自己会加后缀）。物理名固定（`order.csv`）也不会互相覆盖，
+    因为每个任务有自己的目录 `inputs/<job>/`。这是仓库既有做法（见
+    `sellfox_shipping/package_repository.py`: `Like ERPNext File: same content_hash → one blob`）。
+    ⚠️ 但**输入**必须用 `publish_input_copy`（硬链接/复制）而不是 `publish_artifact`
+    （`os.replace` 移走）—— 前者留原文件给 worker 与重跑用。
+37. **剥文件名记号要按出现位置，不能只看开头**：使用者的文件名可能是
+    `已和2单手动合并 check0stock order x16 …`（记号在中间），只剥开头会拼出
+    前后各一个记号的产物名。正则也别写成 `checked?0stock` —— 它只匹配
+    `checke`/`checked`，**匹配不到 `check`**，要写 `check(?:ed)?0stock`。
+
 ## 8. 数量对账口径
 
 ### 8.1 库存预检（步骤 0）
@@ -534,7 +568,7 @@ uv run pytest tests/ -q
 - [x] 无货时自动拆「有货主文件 + 无货子集」（标签 + 背贴各两份，`--no-stock` 触发）
 - [x] 网页版：FastAPI + Redis/RQ + SQLite，任务可后台跑、可追溯、可重下（2026-09-22）
 - [x] 独立 Docker Compose 栈，不碰既有服务（2026-09-22）
-- [x] 138 个自动化测试（另有 Redis/RQ 生命周期用例，默认跳过），不需要 Redis 也能跑
+- [x] 150 个自动化测试（另有 Redis/RQ 生命周期用例，默认跳过），不需要 Redis 也能跑
 - [x] 已部署到 EN 测试服务器（`/opt/pb-orders`）。入口 **<https://api.vilavi.cn/pb/>**
       （公网 HTTPS + 钉钉登录，容器只绑 `127.0.0.1`）；Tailscale 那条路径已弃用（走香港中继太慢）
 - [x] 公网入口有钉钉登录闸门（`web/auth.py`）。**登录范围由桥把关**：2026-09-23 起桥按
@@ -545,6 +579,8 @@ uv run pytest tests/ -q
 - [x] 保留策略：启动时按 `PB_ORDERS_RETENTION_DAYS`（默认 90 天）清理已完成任务与无人引用的产物。
       **只在服务/worker 启动时跑，不是定时任务**
 - [x] 同站 POST 带 CSRF 令牌（`web/csrf.py`）；上传磁盘名固定，原始文件名只用于展示
+- [x] **上传的输入也能下载核对**：下载入口放在任务页顶部**「输入」那一行**
+      （人自然会去上传的地方找，别在下面另裂一块）；用 `storage.publish_input_copy`（硬链接/复制，**不移走** inputs/ 里的原文件）
 - [x] 断货 SKU 列表可在**网页上自己维护**（导航「断货 SKU」→ `app_settings` 表），
       改完立即影响新建任务的预填，不用改服务器 `.env`、不用重启（2026-09-23）
 - [x] 库存预检（步骤 0）：上传 SPS 原始订单 CSV → checked CSV + SPS 操作表；
@@ -555,11 +591,14 @@ uv run pytest tests/ -q
 - [ ] 部分发货的一单跨两份 PDF 时，仍需人工确认哪些页给谁（目前按 SKU 自动拆）
 - [ ] 原 notebook 步骤 3.x（赛狐导入）、4.3（按仓库分拆，20260831 起停用）—— 未迁
 
+- [x] 库存预检**已部署到 EN 测试服务器**（2026-09-24，代码 `598baae`，`PB_ORDERS_PIPELINE_VERSION=pb-web-598baae`）；公网入口真机端到端验收通过：147 列宽表上传 → checked CSV（列/参差形状原样）→ 续出件只传 PDF → 1:1 通过、三件产物可下载。见 docs/log.md 第十四轮
+- [x] 网页出件的通途 xlsx 名已修：`JobOptions.csv_stem` 由 worker 传入页面上的文件名（原来是磁盘名 `order.csv`，产物看不出批次）。命令行行为不变
+- [ ] EN 测试服务器上累计了十几条 `actor=验收测试` 的任务（含刻意造的错误路径用例），清理属破坏性操作，等用户确认
+- [x] 数据行末尾多出的**空**字段已能读（2026-09-24 真实批次：表头 147 / H 146 / D 148）；非空的额外字段仍拒绝。见坑 34-35
+
 ## 相关经验（docs/solutions）
 
 踩过的坑与设计取舍，动手前先读：
 
 - `docs/solutions/workflow-issues/pb-out-of-stock-notification-and-zero-stock-orders.md` —— PB 断货通知与 0 库存订单处理 — 数据来源、PO 映射与三个反直觉陷阱
-- [x] 库存预检**已部署到 EN 测试服务器**（2026-09-24，代码 `598baae`，`PB_ORDERS_PIPELINE_VERSION=pb-web-598baae`）；公网入口真机端到端验收通过：147 列宽表上传 → checked CSV（列/参差形状原样）→ 续出件只传 PDF → 1:1 通过、三件产物可下载。见 docs/log.md 第十四轮
-- [ ] **待修**：网页出件的通途 xlsx 名是 `…_order_on_…`（磁盘名固定 `order.csv` 导致），看不出是哪一批；命令行无此问题。修法：把 `job["input_order"]` 的 stem 传进 `service.run_job` 用于命名
-- [ ] EN 测试服务器上留了 4 条 `actor=验收测试` 的任务，需要时清理
+

@@ -68,7 +68,9 @@ def test_full_flow_upload_process_download(client, pb_env):
     assert job["report"]["pdf"]["pages"] == 3
 
     arts = client.repo.list_artifacts(job_id)
-    assert {a["kind"] for a in arts} == {"tongtool", "label", "back_label"}
+    assert {a["kind"] for a in arts} == {
+        "input_packslip", "input_order", "tongtool", "label", "back_label",
+    }
 
     for art in arts:
         dl = client.get(f"/artifacts/{art['id']}/download")
@@ -87,11 +89,13 @@ def test_download_sets_download_name(client, pb_env):
     assert art["download_name"] in disposition
 
 
-def test_validate_only_job_has_no_artifacts(client, pb_env):
+def test_validate_only_job_has_no_outputs_but_inputs_are_downloadable(client, pb_env):
+    """仅校验 = 不出产物；但上传的输入仍可下载核对。"""
     resp = _upload(client, pdf=pb_env.pdf, csv=pb_env.csv, validate_only=True)
     job_id = resp.headers["location"].rsplit("/", 1)[-1]
     assert client.repo.get_job(job_id)["status"] == "succeeded"
-    assert client.repo.list_artifacts(job_id) == []
+    kinds = {a["kind"] for a in client.repo.list_artifacts(job_id)}
+    assert kinds == {"input_packslip", "input_order"}
     assert "仅校验" in client.get(f"/jobs/{job_id}").text
 
 

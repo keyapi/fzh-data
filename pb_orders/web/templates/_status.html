@@ -31,13 +31,17 @@
   {% include "_report_fulfillment.html" %}
 {% endif %}
 
+{# 输入的下载入口在任务页顶部「输入」那一行（人自然会在上传的地方找），
+   这里只列产物。所以 input_* 要从产物表里排除掉，别在这里再裂出一块。 #}
+{% set outputs = artifacts | rejectattr('kind', 'in', ['input_packslip', 'input_order']) | list %}
+
 <section class="card">
   <h2>产物下载</h2>
-  {% if artifacts %}
+  {% if outputs %}
   <table>
     <thead><tr><th>类型</th><th>文件名</th><th>大小</th><th>SHA-256</th><th></th></tr></thead>
     <tbody>
-      {% for a in artifacts %}
+      {% for a in outputs %}
       <tr>
         <td>{{ ARTIFACT_LABELS.get(a.kind, a.kind) }}</td>
         <td>{{ a.download_name }}</td>
