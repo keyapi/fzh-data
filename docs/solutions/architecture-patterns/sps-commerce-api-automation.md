@@ -1,4 +1,6 @@
 ---
+okf: v0.1
+type: Reference
 title: SPS Commerce API 自动化（Pottery Barn）— Transaction API + M2M client_credentials
 date: 2026-08-18
 category: docs/solutions/architecture-patterns/
@@ -24,6 +26,12 @@ tags:
 ## Context
 
 FZH 是 Pottery Barn 的供应商，所有操作在 SPS Commerce **门户**手动完成：下载订单(850)、生成 ASN(856)、下载发票(810)、每天发库存(846，已用 Selenium 自动化)。想验证能否改用 API。本会话完成外部调研 + POC 实测，结论：**可行**，正路是 **Transaction API**（HTTPS 版 FTP/AS2）交换 EDI/RSX 文件 + **Machine-to-Machine** 认证。
+
+> **状态更新（2026-09-16）**：已向 SPS 求证，**API 为收费项，暂缓推进**，门户手动操作继续
+> （本文件描述的 4 个流程不变）。这与下面 Guidance 的结论一致 —— 瓶颈在商务开通，不在技术。
+> 将来重启评估时，先谈商务成本，别再重复做技术验证。
+> 相关：断货时要在门户重发 Acknowledgement（EDI 855），见
+> `workflow-issues/pb-out-of-stock-notification-and-zero-stock-orders.md`。
 
 ## Guidance
 

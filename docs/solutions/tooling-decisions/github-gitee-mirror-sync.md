@@ -1,4 +1,6 @@
 ---
+okf: v0.1
+type: Reference
 title: "GitHub to Gitee Mirror Sync via GitHub Actions"
 date: 2026-06-30
 category: docs/solutions/tooling-decisions/

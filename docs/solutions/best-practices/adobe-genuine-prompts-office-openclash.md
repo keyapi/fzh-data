@@ -1,4 +1,6 @@
 ---
+okf: v0.1
+type: Reference
 title: 办公室 OpenClash 屏蔽 Adobe 授权校验域名的处理与教训
 date: 2026-09-07
 category: best-practices

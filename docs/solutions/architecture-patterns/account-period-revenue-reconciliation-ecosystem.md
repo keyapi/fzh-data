@@ -1,4 +1,6 @@
 ---
+okf: v0.1
+type: Reference
 title: 账期/收款核算 生态地图（各平台账期 → 汇率/税/附加费 → 回款归属/回款率 → 归集给财务）
 date: 2026-09-09
 category: architecture-patterns
