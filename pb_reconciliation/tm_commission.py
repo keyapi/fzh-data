@@ -21,16 +21,16 @@ import openpyxl
 from openpyxl.styles import PatternFill
 
 # ================= 本月参数（下月复用只改这里） =================
-FINANCE_FILE = r"D:\Work\美国\Tracy Miller\PB orders\payment advice\给财务\PB Remittance Advice Payment Date 20240430-20260813_差5单未付 20260814_171350.xlsx"
+FINANCE_FILE = r"D:\Work\美国\Tracy Miller\PB orders\payment advice\给财务\PB Remittance Advice Payment Date 20240430-20260922_20260923_164417.xlsx"
 OUT_DIR = r"D:\Work\美国\Tracy Miller\PB orders\payment advice\To Tracy Miller"
 # 账期列表：(start, end) 格式 YYYYMMDD。默认每月两个独立账期；
 # 如需一次合并结算（如 2026-08 付 05/19-07/18 两期），可临时改为 [("20260519","20260718")]
-PERIODS = [("20260519", "20260618"), ("20260619", "20260718")]
+PERIODS = [("20260719", "20260918")]
 # 各账期预计付款总额（硬校验，来自财务确认）；如需一次合并结算可加 ("20260519","20260718") -> 23028.46
-EXPECTED = {"20260519-20260618": 14185.71, "20260619-20260718": 8842.75}
+EXPECTED = {"20260719-20260918": 29193.28}
 # 上轮账期 TM 文件（供 P1 的"上轮未付本轮已付"）；未列出的账期自动衔接上一期的未付清单
 PREV_SOURCE = {
-    "20260519": r"D:\Work\美国\Tracy Miller\PB orders\payment advice\To Tracy Miller\PB Remittance Advice Payment Date 20260419-20260518.xlsx",
+    "20260719": r"D:\Work\美国\Tracy Miller\PB orders\payment advice\To Tracy Miller\PB Remittance Advice Payment Date 20260519-20260718.xlsx",
 }
 COMMISSION_RATE = 0.05
 K2_NOTE = (
