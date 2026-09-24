@@ -166,7 +166,7 @@ cd pb_orders
 uv run pytest tests/ -q
 ```
 
-132 个用例通过、2 个跳过，**不需要 Redis**：`tests/conftest.py` 用 reportlab 现画一个结构同构的
+137 个用例通过、2 个跳过，**不需要 Redis**：`tests/conftest.py` 用 reportlab 现画一个结构同构的
 3 页 Packslip PDF + 5 行订单 CSV + 3 行名称缓存，跑真实流程；Web 用例把
 `web.app.enqueue_job` 换成同步执行，从而覆盖「Web 建任务 + worker 处理 + 页面 + 下载」整链。
 另有 Redis/RQ 生命周期用例需本地 Docker，设 `PB_ORDERS_RQ_DOCKER=1` 才跑（默认跳过）。
@@ -454,9 +454,10 @@ uv run pytest tests/ -q
   老库启动时 `ALTER TABLE` 自动补列（默认 `fulfillment`）—— 已有任务不会丢。
   worker 按 `job_type` 走 `_RUNNERS` 分发，两种流程共用同一套「跑完发布产物」外壳。
 - **产物类型**：新增 `checked_order` / `stock_operations` 两个 artifact kind 与中文标签。
-- **测试 89 → 132**（新增 43）：预检服务 23 例（含字节级一致、参差形状、含换行拒绝、
+- **测试 89 → 137**（新增 48）：预检服务 23 例（含字节级一致、参差形状、含换行拒绝、
   命名与 PO 数、网页表负载与截断、重跑覆盖、占用拒绝与回滚、公式转义、冗余空白）、
-  worker 分发 2 例、仓库迁移 3 例、Web 两入口 / 续出件 / 网页明细表 / 旧任务兼容 15 例。
+  worker 分发 2 例、仓库迁移 3 例、Web 两入口 / 续出件 / 网页明细表 / 旧任务兼容 15 例、
+  出件产物命名与缺列提示 5 例。
 
 ### 2026-09-21（从 Colab 迁到本地）
 
@@ -533,7 +534,7 @@ uv run pytest tests/ -q
 - [x] 无货时自动拆「有货主文件 + 无货子集」（标签 + 背贴各两份，`--no-stock` 触发）
 - [x] 网页版：FastAPI + Redis/RQ + SQLite，任务可后台跑、可追溯、可重下（2026-09-22）
 - [x] 独立 Docker Compose 栈，不碰既有服务（2026-09-22）
-- [x] 132 个自动化测试（另有 Redis/RQ 生命周期用例，默认跳过），不需要 Redis 也能跑
+- [x] 137 个自动化测试（另有 Redis/RQ 生命周期用例，默认跳过），不需要 Redis 也能跑
 - [x] 已部署到 EN 测试服务器（`/opt/pb-orders`）。入口 **<https://api.vilavi.cn/pb/>**
       （公网 HTTPS + 钉钉登录，容器只绑 `127.0.0.1`）；Tailscale 那条路径已弃用（走香港中继太慢）
 - [x] 公网入口有钉钉登录闸门（`web/auth.py`）。**登录范围由桥把关**：2026-09-23 起桥按

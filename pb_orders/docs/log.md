@@ -37,13 +37,29 @@ timestamp: 2026-09-22
   再把 `pb_orders_session=<token>` 手工写进 cookie jar。
   ⚠️ **必须走真实的 `/pb/` 入口**：CSRF cookie 的 `Path=/pb/`，直连 `127.0.0.1:8412`
   时浏览器/curl 都不会带上它，POST 会 403（这是路径作用域，不是缺陷）。
-- **发现一处待修（不是本轮引入）**：网页出件的通途 xlsx 名叫
-  `PB_0_导入_原始_order_on_{ts}.xlsx` —— 因为网页路径的订单 CSV 磁盘名固定是 `order.csv`，
-  `service.py` 用 `csv_path.stem` 命名就得到 `order`。命令行路径没这个问题（文件名是原始的）。
-  影响：网页出的这份产物看不出是哪一批。续出件流程同样受影响。
-  修法：把展示名（`job["input_order"]` 的 stem）传给 `service.run_job` 用于命名。
+- **实测发现两处问题，都已修并重新上线**（见下一条）：
+  ① 网页出件的通途 xlsx 名叫 `PB_0_导入_原始_order_on_{ts}.xlsx`，看不出是哪一批；
+  ② 订单 CSV 缺列时页面只给「输入数据有问题：'Ship To Country'」，看不出到底缺什么。
 - **未做**：PR #274 尚未合并（部署的是分支 HEAD）。服务器上留了 4 条 `actor=验收测试` 的任务
   （2 条检查成功、1 条出件成功、1 条失败），需要时再清。
+
+### 2026-09-24（第十五轮：修掉实测发现的两处，重新上线并复测）
+
+- **① 网页出件的通途 xlsx 名看不出批次**（不是本轮引入）：
+  网页路径的订单 CSV 磁盘名固定是 `order.csv`，`service.py` 用 `csv_path.stem` 命名
+  就得到 `PB_0_导入_原始_order_on_….xlsx`。命令行路径没这问题（用的是原始文件名）。
+  修法：`JobOptions` 加 `csv_stem`，worker 把页面上那份 CSV 的词干
+  （`job["input_order"]`，续出件时就是 checked CSV 的名字）传进去；
+  命令行不传 → 行为与从前**完全一致**。词干来自用户文件名，一并洗掉非法字符、洗空了回落 `order`
+  （`service._output_csv_stem`）。
+- **② 订单 CSV 缺列时只给一句「输入数据有问题」**（实测踩到）：
+  拿 7 列的瘦 CSV 走出件，深处抛 `KeyError: 'Ship To Country'`，页面提示却是
+  「请核对上传的 PDF 与 CSV 是否属于同一批」——没指到真因。
+  修法：`pb_tongtu_excel.REQUIRED_COLUMNS` + `build_order_df` 开头先检查，
+  报「订单 CSV 缺少必需列：Ship To Country、Unit Price。出件要用 SPS 导出的**完整**订单 CSV」。
+- **测试 132 → 137**（新增 5）：`csv_stem` 优先级与默认值、词干清洗与回落、
+  缺列提示、完整夹具不被误挡、网页产物名的回归断言。
+- **复测**（重新上线后，真机）：见本条下面的实测记录。
 
 ## 2026-09-23（第十三轮：库存预检 —— 把「出件前的手工筛选」做进模块）
 

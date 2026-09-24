@@ -14,6 +14,7 @@ CLI（`run_pb_orders.py`）与 Web worker（`web/tasks.py`）共用这一层：
 
 from __future__ import annotations
 
+import re
 import sys
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -73,6 +74,10 @@ class JobOptions:
     timestamp: str | None = None
     sku_cache_path: Path | None = None
     nltk_dir: Path | None = None
+    # 通途 xlsx 文件名里的订单标识，缺省用订单 CSV 的词干。
+    # 网页上传的磁盘名固定是 `order.csv`，词干就是 "order"（产物看不出是哪一批），
+    # 所以 worker 把用户的原始文件名词干传进来；命令行不传，行为与从前一致。
+    csv_stem: str | None = None
 
 
 @dataclass
@@ -90,6 +95,22 @@ UNMATCHED_MARK = "？？未匹配"
 
 def _noop(_step: str, _message: str) -> None:
     return None
+
+
+# 输出文件名里不能出现的字符（Windows 最严）。词干可能来自用户上传的文件名。
+_UNSAFE_STEM = re.compile(r'[\\/:*?"<>|\r\n\t]+')
+
+
+def _output_csv_stem(options: JobOptions, csv_path: Path) -> str:
+    """通途 xlsx 文件名里的订单标识。
+
+    优先用调用方给的 `options.csv_stem`（网页上传的磁盘名固定是 `order.csv`，
+    不传就会把产物命名成 `..._order_on_...`，看不出是哪一批）；没给就用 CSV 自己的词干。
+    词干可能来自用户文件名，洗掉不合法字符，洗空了回落 `order`。
+    """
+    stem = str(options.csv_stem or csv_path.stem or "")
+    stem = _UNSAFE_STEM.sub("-", stem).strip(" .-")
+    return stem or "order"
 
 
 def sku_overlay_texts(df: pd.DataFrame) -> list[str]:
@@ -288,7 +309,7 @@ def run_job(
     # ---------- 通途 xlsx ----------
     progress("tongtool", "生成通途导入 xlsx")
     written = pb_tongtu_excel.export(
-        df_order, importable, no_stock, out_dir, csv_path.stem, ts_stamp
+        df_order, importable, no_stock, out_dir, _output_csv_stem(options, csv_path), ts_stamp
     )
     kind_map = {
         "PB_0_导入_原始": "tongtool",

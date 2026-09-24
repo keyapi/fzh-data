@@ -72,6 +72,9 @@ def _run_fulfillment(repo, job, settings, job_id, in_dir, work_dir):
         validate_only=job["validate_only"],
         sku_cache_path=settings.sku_cache_path,
         nltk_dir=settings.nltk_dir,
+        # 磁盘名固定是 order.csv，拿它命名产物会变成 `..._order_on_...`；
+        # 用页面上的原始文件名词干，产物才对得上批次。
+        csv_stem=Path(job["input_order"] or "").stem,
     )
     result = service.run_job(
         # 磁盘名固定（见 storage 约定）。jobs.input_packslip/input_order

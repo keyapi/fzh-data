@@ -186,3 +186,71 @@ def test_scan_dir_picks_latest_inputs(pb_env):
     result = service.scan_dir(pb_env.tmp, options=service.JobOptions(validate_only=True))
     assert result.report["inputs"]["packslip"] == pb_env.pdf.name
     assert result.report["inputs"]["order_csv"] == pb_env.csv.name
+
+
+def test_tongtool_name_uses_csv_stem_by_default(pb_env):
+    """命令行路径：产物名用订单 CSV 自己的词干（与从前一致）。"""
+    out = pb_env.tmp / "out-cli"
+    result = service.run_job(
+        pb_env.pdf, pb_env.csv,
+        service.JobOptions(cache_only=True, sku_cache_path=pb_env.cache),
+        out,
+    )
+    tongtool = next(a for a in result.artifacts if a.kind == "tongtool")
+    assert tongtool.path.name.startswith(f"PB_0_导入_原始_{pb_env.csv.stem}_on_")
+
+
+def test_tongtool_name_prefers_options_csv_stem(pb_env):
+    """网页路径：磁盘名固定是 order.csv，得用页面上的原始文件名词干命名。
+
+    回归：以前网页出的产物叫 `PB_0_导入_原始_order_on_…`，看不出是哪一批。
+    """
+    out = pb_env.tmp / "out-web"
+    result = service.run_job(
+        pb_env.pdf, pb_env.csv,
+        service.JobOptions(
+            cache_only=True, sku_cache_path=pb_env.cache,
+            csv_stem="checked0stock order x40 20260921_0159_334423",
+        ),
+        out,
+    )
+    tongtool = next(a for a in result.artifacts if a.kind == "tongtool")
+    assert tongtool.path.name.startswith(
+        "PB_0_导入_原始_checked0stock order x40 20260921_0159_334423_on_"
+    )
+
+
+def test_tongtool_name_sanitizes_unsafe_and_empty_stems(pb_env):
+    """词干来自用户文件名，必须洗掉非法字符；洗空了就回落。"""
+    assert service._output_csv_stem(
+        service.JobOptions(csv_stem="批次: 2026/09?*"), pb_env.csv
+    ) == "批次- 2026-09"   # 非法字符换 -，再剥掉首尾的空白/点/横线
+    assert service._output_csv_stem(service.JobOptions(csv_stem="..."), pb_env.csv) == "order"
+    assert service._output_csv_stem(service.JobOptions(), pb_env.csv) == pb_env.csv.stem
+
+
+def test_order_csv_missing_required_column_says_which(pb_env):
+    """缺列时要说清楚缺哪几列，不能只给 `KeyError: 'Ship To Country'`。
+
+    回归：实测拿 7 列的瘦 CSV 走出件，页面只显示「输入数据有问题：'Ship To Country'」。
+    """
+    import pandas as pd
+
+    thin = pb_env.tmp / "thin.csv"
+    pd.DataFrame({
+        "PO Number": ["137943090"], "PO Line #": ["1"], "Record Type": ["D"],
+        "Qty Ordered": ["1"], "Vendor Style": ["STYLE-A"],
+        "Buyers Catalog or Stock Keeping #": ["1069914"], "Customer Order #": ["USA"],
+    }).to_csv(thin, index=False)
+
+    with pytest.raises(ValueError) as exc:
+        service.pb_tongtu_excel.build_order_df(thin)
+    message = str(exc.value)
+    assert "Ship To Country" in message and "Unit Price" in message
+    assert "缺少必需列" in message
+
+
+def test_full_width_sample_has_every_required_column(pb_env):
+    """正常夹具（含全部必需列）不该被上面那道检查挡住。"""
+    df = service.pb_tongtu_excel.build_order_df(pb_env.csv)
+    assert len(df) == 3

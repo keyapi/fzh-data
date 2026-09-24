@@ -272,3 +272,11 @@ def test_direct_fulfillment_still_works(client, pb_env):
     job_id = resp.headers["location"].rsplit("/", 1)[-1]
     assert client.repo.get_job(job_id)["job_type"] == "fulfillment"
     assert "通途导入 xlsx" in client.get(f"/jobs/{job_id}").text
+
+    # 通途 xlsx 要用页面上那份 CSV 的名字，而不是磁盘名 order.csv
+    # （回归：以前网页产物叫 `PB_0_导入_原始_order_on_…`，看不出是哪一批）
+    tongtool = next(a for a in client.repo.list_artifacts(job_id) if a["kind"] == "tongtool")
+    assert tongtool["download_name"].startswith(
+        "PB_0_导入_原始_checked0stock order x3 20260921_on_"
+    )
+    assert "_order_on_" not in tongtool["download_name"]
