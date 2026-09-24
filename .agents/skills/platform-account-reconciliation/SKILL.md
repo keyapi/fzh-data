@@ -65,3 +65,10 @@ uv run python platform_account_reconciliation/scripts/reconcile_walmart.py \
 - 重复主单已排除，金额没有双算。
 - 输出 xlsx 不提交 git，原始 PII 不入仓。
 - PR 前运行凭证扫描和 `git diff --check`。
+
+## 相关经验（docs/solutions）
+
+踩过的坑与设计取舍，动手前先读：
+
+- `docs/solutions/workflow-issues/ostkus-account-reconciliation.md` —— OSTKUS 账期与 EN Tongtool Order 对账
+- `docs/solutions/architecture-patterns/account-period-revenue-reconciliation-ecosystem.md` —— 账期/收款核算 生态地图（各平台账期 → 汇率/税/附加费 → 回款归属/回款率 → 归集给财务）

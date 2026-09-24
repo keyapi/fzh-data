@@ -67,7 +67,7 @@ def reference_sources() -> list[Path]:
       - 自动生成的清单（根 index.md / 各处 log.md —— 它们提到每一篇，会把孤儿数压成 0）
       - 第三方文档镜像（SELLFOX_API 等都是 450+ 篇的导入件，不是我们的知识）
     """
-    skip_dirs = {"SELLFOX_API", "vite-api", "yiglobal-api", "sps_api"}
+    skip_dirs = {"SELLFOX_API", "vite-api", "yiglobal-api"}
     src = [AGENTS, ROOT / "CONCEPTS.md", ROOT / "CONTRIBUTING.md"]
     src += sorted(p for p in (ROOT / "docs").rglob("*.md") if SOL not in p.parents)
     src += sorted((ROOT / ".agents" / "skills").rglob("SKILL.md"))

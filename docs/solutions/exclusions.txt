@@ -4,12 +4,14 @@
 #       skill / AGENT_HANDOFF / AGENTS.md / CONCEPTS.md 指过来的文档。
 #       每篇孤儿只有两种合法归宿：
 #         1) 挂到相关 skill 或模块文档（route —— 只写路径，不要把内容复制过去）
-#         2) 写进本文件豁免（确实不该被任何 skill 路由的，例如仓库治理、一次性调研）
+#         2) 写进本文件豁免（确实不该被任何 skill 路由的）
 #       没有第三条：静默忽略不是选项，那正是这份清单要防的事。
 #
 # 格式：每行 `<仓库相对路径>  # 豁免原因`；`#` 开头为注释。
-#
-# 例：
-#   docs/solutions/architecture-patterns/public-private-agent-knowledge-split.md  # 仓库治理，无业务模块归属
-#
-# 当前状态：尚未 triage，孤儿清单见 `uv run python scripts/check_solutions_health.py` 的 WARN 段。
+
+docs/solutions/architecture-patterns/public-private-agent-knowledge-split.md  # 仓库治理（公开仓/私有知识/凭证的三层边界），不属于任何业务模块
+docs/solutions/best-practices/adobe-genuine-prompts-office-openclash.md  # 办公室网络运维（OpenClash 屏蔽授权校验域名），无对应 skill
+docs/solutions/best-practices/server-exposure-audit-and-hardening.md  # 服务器暴露面/安全加固，基础设施运维，无对应 skill
+docs/solutions/integration-issues/cursor-state-vscdb-synology-cdrive-backup.md  # 本机开发环境（Cursor state.vscdb + Synology 备份吃盘），非业务模块
+docs/solutions/tooling-decisions/github-gitee-mirror-sync.md  # 仓库基础设施（GitHub Actions 镜像同步），非业务模块
+docs/solutions/documentation-gaps/agent-system-access-documentation-gap.md  # 文档缺口记录；AGENTS.md 现已写明 EN_API/ERPNext 访问方式，待复核是否作废

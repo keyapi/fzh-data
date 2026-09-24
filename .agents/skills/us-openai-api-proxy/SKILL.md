@@ -36,3 +36,9 @@ triggers:
   网络拓扑均不得输出到仓库、日志或对话摘要。认证目录 listing 不得贴进聊天。
 - 认证记录仅可在服务器上受控检查；先备份、再隔离已确认失效的条目，并保留恢复路径。
 - 设备代码登录若被策略禁用，不绕过策略；改用经授权的浏览器 OAuth。
+
+## 相关经验（docs/solutions）
+
+踩过的坑与设计取舍，动手前先读：
+
+- `docs/solutions/integration-issues/grokbot-ssh-via-shanghai-jump-symmetric-nat.md` —— grok-bot（美东）SSH 接入 — 对称 NAT 下的跳板选路与 Tailscale SSH 验证绕过

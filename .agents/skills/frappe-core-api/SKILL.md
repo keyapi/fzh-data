@@ -392,3 +392,9 @@ See `references/webhooks-reference.md` for complete handler examples.
 ---
 
 *Verified against Frappe docs 2026-03-20 | Frappe v14/v15/v16*
+
+## 相关经验（docs/solutions）
+
+踩过的坑与设计取舍，动手前先读：
+
+- `docs/solutions/workflow-issues/erpnext-version-api-compatibility.md` —— ERPNext Custom App 跨版本 API 兼容性检查

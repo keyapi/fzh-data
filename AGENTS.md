@@ -234,6 +234,7 @@ uv sync
    ```
 10. **OKF 文档规范**：新建子项目/模块时，必须创建 `docs/` 目录，按 [OKF v0.1](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md) 规范编写文档。所有 `.md` 文件必须有 YAML frontmatter（`type` 字段必填），每个目录必须有 `index.md`，每个 bundle 必须有 `log.md`。参考示例：`advertise/docs/`。触发 `/okf` 或编辑 Markdown 时自动加载 OKF skill。
 11. **索引联动更新**: 修改或新建子项目 OKF 文档后，**必须**运行 `python scripts/update_index.py` 同步更新根目录 `index.md`。完成子项目文档更新后输出 "已同步更新根目录索引"。
+    动过 `docs/solutions/` 时**同样必须**跑 `uv run python scripts/check_solutions_health.py --fix`：它重建根平表并体检孤儿文档 / 索引漂移 / 断链 / 上表篇数。新增的 learning 若是孤儿，要么挂到相关 skill（只写路径，不复制内容），要么写进 `docs/solutions/exclusions.txt` 并给原因——**不允许静默放着**。
 
 ## 文档体系
 

@@ -66,3 +66,9 @@ metadata:
 **能**：按用户范围拉 EN → 对账赛狐 → 输出计划 → dry-run → 确认后 `--apply` create/set_category → 回读断言。
 
 **不能**：全量扫描、PUT 改组成、自动配对、改冻结对象、发明文档未写的 API。遇未知边界 → 停 → 带 EN/赛狐回读证据报告用户。
+
+## 相关经验（docs/solutions）
+
+踩过的坑与设计取舍，动手前先读：
+
+- `docs/solutions/workflow-issues/fringe-sofa-combo-batch-staging.md` —— 弧形流苏沙发单件整沙发组合创建

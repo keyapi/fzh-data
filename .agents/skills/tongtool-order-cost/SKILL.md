@@ -44,3 +44,9 @@ metadata:
 - 不要全量导入赛狐。
 - 不要把 service account JSON / notebook 私钥写进文档或 commit。
 - 不要在未 dry-run 的情况下 `--apply`。
+
+## 相关经验（docs/solutions）
+
+踩过的坑与设计取舍，动手前先读：
+
+- `docs/solutions/workflow-issues/tongtool-sku-rename-gsheet-remap.md` —— 通途主档 SKU 改名后用本地 gspread 对齐订单 Google Sheet

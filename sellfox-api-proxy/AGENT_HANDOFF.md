@@ -57,3 +57,9 @@
 - Python 技术栈（团队技能匹配）
 - 赛狐限流 ~1 rps（全局限流需要处理）
 - 赛狐 API 账号仅剩 3 个配额（已有 5 个中用了 2 个）
+
+## 相关经验（docs/solutions）
+
+踩过的坑与设计取舍，动手前先读：
+
+- `docs/solutions/architecture-patterns/sellfox-api-proxy-design.md` —— sellfox-api-proxy-design.md

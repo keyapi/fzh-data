@@ -203,6 +203,24 @@ uv run python scripts/update_index.py    # 重生成根 index.md，纳入本次�
 
 完成后**必须**输出：`已同步更新根目录索引`。
 
+### 第 5b 步：知识库体检（docs/solutions 完整性）
+
+```bash
+uv run python scripts/check_solutions_health.py --fix     # 重建主平表 + 体检
+uv run python scripts/check_solutions_health.py --strict   # CI 口径：孤儿也算失败
+```
+
+五项检查：孤儿文档（反向引用图）、category index 与磁盘一致、根平表不漏收、AGENTS.md 分类表篇数、
+相对链接可解析。`--fix` 重建 `docs/solutions/index.md`（该文件**不要手改**）。
+
+本次新增/改动的 solutions 文档如果报**孤儿**，按二选一处理，**不要放着不管**：
+1. 挂到相关 skill 或模块文档的「新对话必读 / 相关经验」段 —— 只写路径，**不要复制内容**；
+2. 判断确实不该被任何 skill 路由的，写进 `docs/solutions/exclusions.txt`，一行一条并给出原因。
+
+> 为什么值得每次跑：Vercel 的对照实验里，靠 Agent 自己决定"要不要查文档"有 **56% 的情况根本不会查**；
+> 只有把目录放进常驻上下文（100%）或做成机械校验才管用。这份体检就是那个机械校验——
+> 它防的正是「文档越积越多、没人发现它已经漂了或再也找不到」。
+
 两条实测（踩过的坑，别当门禁用）：
 
 - `--check` 是**逐字节比对**，而文件头的 `generated:` 是**分钟级**时间戳 —— 所以 `--check` 只在"刚生成完的同一分钟内"才通过，**绝大多数时候会误报 STALE**。判断同步与否要看**内容**（新文档有没有进索引表），不要看它退出码。
@@ -285,3 +303,14 @@ gh pr create --title "<70 字以内>" --body-file "$BODY_FILE"
 > **本机（2026-09-21 起）已开开发者模式并设了仓库 `core.symlinks=true`**，所以 Step 1 直接 `[SKIP]`、`CLAUDE.md` 保持真 symlink，不再有这个问题。若在别的机器上看到它变脏：**别提交它**（第 7 步按文件名逐个 `git add` 已覆盖），但**也不要顺手 `git restore`** —— 那会让本机 Claude 只读到 `AGENTS.md` 这 9 个字符、读不到正文。
 >
 > 存量 stub worktree 的修法、以及"项目 skill 会在技能列表里出现两遍"这个副作用，见 `docs/solutions/developer-experience/windows-worktree-claude-md-symlink.md`。
+
+## 相关经验（docs/solutions）
+
+踩过的坑与设计取舍，动手前先读：
+
+- `docs/solutions/tooling-decisions/ce-okf-conversation-wrapup-skill.md` —— ce-okf skill — 把「ce-compound + OKF 收尾」固化成一个命令
+## 相关经验（docs/solutions）
+
+踩过的坑与设计取舍，动手前先读：
+
+- `docs/solutions/developer-experience/gh-pr-edit-projects-classic-workaround.md` —— gh pr edit 会因 Projects classic 弃用而失败——改 PR 标题/body 要走 gh api PATCH（且管道会掩盖退出码）

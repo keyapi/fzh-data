@@ -46,3 +46,10 @@ uv run python erpnext/scripts/gen_report.py               # 生成报告
 - 方法论: `docs/work-order-investigation-methodology.md`
 - 脚本: `scripts/gen_report.py`
 - OKF: `docs/index.md`
+
+## 相关经验（docs/solutions）
+
+踩过的坑与设计取舍，动手前先读：
+
+- `docs/solutions/architecture-patterns/erpnext-workflow-operations-guide.md` —— ERPNext 工作流操作指南：跨系统管理与设计模式
+- `docs/solutions/architecture-patterns/workflow-builder-layout-algorithm.md` —— ERPNext 工作流设计器画布自动布局算法
