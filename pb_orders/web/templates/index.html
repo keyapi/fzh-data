@@ -8,18 +8,20 @@
     {% for key, label in STATUS_LABELS.items() %}
       <a class="chip {% if status == key %}on{% endif %}" href="{{ prefix }}/?status={{ key }}">{{ label }}</a>
     {% endfor %}
-    <a class="btn primary right" href="{{ prefix }}/jobs/new">新建任务</a>
+    <a class="btn primary right" href="{{ prefix }}/checks/new">检查 SPS 新订单</a>
+    <a class="btn ghost right" href="{{ prefix }}/jobs/new">直接生成发货文件</a>
   </p>
 
   {% if jobs %}
   <table>
     <thead>
-      <tr><th>任务</th><th>状态</th><th>当前步骤</th><th>操作者</th><th>创建时间</th><th></th></tr>
+      <tr><th>任务</th><th>类型</th><th>状态</th><th>当前步骤</th><th>操作者</th><th>创建时间</th><th></th></tr>
     </thead>
     <tbody>
       {% for job in jobs %}
       <tr>
         <td><a href="{{ prefix }}/jobs/{{ job.id }}"><code>{{ job.id }}</code></a></td>
+        <td><span class="tag">{{ JOB_TYPE_LABELS.get(job.job_type, job.job_type or '出件') }}</span></td>
         <td><span class="badge {{ job.status }}">{{ STATUS_LABELS.get(job.status, job.status) }}</span></td>
         <td class="muted">{{ job.progress_step or '-' }}</td>
         <td>{{ job.created_by }}</td>
@@ -30,7 +32,7 @@
     </tbody>
   </table>
   {% else %}
-  <p class="muted">还没有任务。点右上角「新建任务」开始。</p>
+  <p class="muted">还没有任务。点右上角「检查 SPS 新订单」或「直接生成发货文件」开始。</p>
   {% endif %}
 </section>
 {% endblock %}

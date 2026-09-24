@@ -12,14 +12,18 @@
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 import uuid
 from datetime import datetime
 from pathlib import Path
 
+log = logging.getLogger("pb_orders.web")
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS jobs (
     id               TEXT PRIMARY KEY,
+    job_type         TEXT NOT NULL DEFAULT 'fulfillment',
     status           TEXT NOT NULL,
     created_by       TEXT NOT NULL DEFAULT '',
     created_at       TEXT NOT NULL,
@@ -56,10 +60,21 @@ CREATE TABLE IF NOT EXISTS artifacts (
     FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_artifacts_job ON artifacts(job_id);
+
+CREATE TABLE IF NOT EXISTS app_settings (
+    key        TEXT PRIMARY KEY,
+    value      TEXT NOT NULL DEFAULT '',
+    updated_at TEXT NOT NULL,
+    updated_by TEXT NOT NULL DEFAULT ''
+);
 """
+
+# 断货 SKU 列表存这里（页面可改）；从没设置过时回落到 .env 的初始值
+NO_STOCK_KEY = "default_no_stock"
 
 ARTIFACT_KINDS = (
     "input_packslip", "input_order",
+    "checked_order", "stock_operations",
     "tongtool", "tongtool_no_stock", "tongtool_importable",
     "label", "back_label", "label_no_stock", "back_label_no_stock",
 )
@@ -68,6 +83,8 @@ ARTIFACT_KINDS = (
 ARTIFACT_LABELS = {
     "input_packslip": "Packslip PDF",
     "input_order": "SPS 订单 CSV",
+    "checked_order": "checked0stock CSV",
+    "stock_operations": "SPS 库存检查操作表",
     "tongtool": "通途导入 xlsx",
     "tongtool_no_stock": "通途 无库存 xlsx",
     "tongtool_importable": "通途 有货 xlsx",
@@ -102,6 +119,19 @@ class Repository:
     def init_db(self) -> None:
         with self.connect() as conn:
             conn.executescript(SCHEMA)
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(jobs)")}
+            if "job_type" not in columns:
+                try:
+                    conn.execute(
+                        "ALTER TABLE jobs ADD COLUMN job_type TEXT NOT NULL DEFAULT 'fulfillment'"
+                    )
+                except sqlite3.OperationalError as exc:
+                    # Web 与 worker 会同时启动、同时看到旧库缺这一列，其中一个必然
+                    # 撞上 duplicate column name。SQLite 没有 ADD COLUMN IF NOT EXISTS，
+                    # 而那一刻「列已经在了」正是我们想要的结果，所以这里放行。
+                    if "duplicate column name" not in str(exc).lower():
+                        raise
+                    log.info("job_type 列已由另一个进程迁移完成，跳过")
 
     # ---------- jobs ----------
 
@@ -117,16 +147,17 @@ class Repository:
         input_order: str,
         pipeline_version: str,
         source_job_id: str | None = None,
+        job_type: str = "fulfillment",
     ) -> str:
         with self.connect() as conn:
             conn.execute(
-                """INSERT INTO jobs (id, status, created_by, created_at, no_stock, no_stock_note,
+                """INSERT INTO jobs (id, job_type, status, created_by, created_at, no_stock, no_stock_note,
                        validate_only, allow_unmatched, input_packslip, input_order,
                        progress_step, progress_message, pipeline_version, source_job_id)
-                   VALUES (?, 'uploaded', ?, ?, ?, ?, ?, ?, ?, ?, 'uploaded', '已接收上传文件',
+                   VALUES (?, ?, 'uploaded', ?, ?, ?, ?, ?, ?, ?, ?, 'uploaded', '已接收上传文件',
                        ?, ?)""",
                 (
-                    job_id, created_by, now_iso(), no_stock, no_stock_note,
+                    job_id, job_type, created_by, now_iso(), no_stock, no_stock_note,
                     int(validate_only), int(allow_unmatched), input_packslip, input_order,
                     pipeline_version, source_job_id,
                 ),
@@ -222,6 +253,26 @@ class Repository:
             ).fetchall()
         return [{"id": r[0], "worker_job_id": r[1] or ""} for r in rows]
 
+    # ---------- 应用设置（页面上自己维护，不必再改服务器 .env）----------
+
+    def get_setting(self, key: str) -> dict | None:
+        with self.connect() as conn:
+            row = conn.execute(
+                "SELECT value, updated_at, updated_by FROM app_settings WHERE key = ?", (key,)
+            ).fetchone()
+        return dict(row) if row else None
+
+    def set_setting(self, key: str, value: str, actor: str = "") -> None:
+        with self.connect() as conn:
+            conn.execute(
+                """INSERT INTO app_settings(key, value, updated_at, updated_by)
+                   VALUES (?, ?, ?, ?)
+                   ON CONFLICT(key) DO UPDATE SET
+                       value      = excluded.value,
+                       updated_at = excluded.updated_at,
+                       updated_by = excluded.updated_by""",
+                (key, value, now_iso(), actor),
+            )
     def expired_finished_ids(self, cutoff_iso: str) -> list[str]:
         with self.connect() as conn:
             rows = conn.execute(

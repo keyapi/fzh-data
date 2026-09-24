@@ -20,6 +20,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import sys
 from pathlib import Path
 from urllib.parse import quote
@@ -43,12 +44,32 @@ from web import csrf as csrf_mod  # noqa: E402
 from web import housekeeping  # noqa: E402
 from web import storage  # noqa: E402
 from web.config import get_settings  # noqa: E402
-from web.repository import ARTIFACT_LABELS, Repository, new_id  # noqa: E402
+from web.repository import ARTIFACT_LABELS, NO_STOCK_KEY, Repository, new_id  # noqa: E402
 
 WEB_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(WEB_DIR / "templates"))
 
 log = logging.getLogger("pb_orders.web")
+
+_SKU_SPLIT = re.compile(r"[,，;；\s]+")
+
+
+def parse_sku_list(raw: str) -> list[str]:
+    """把断货 SKU 的输入文本解析成列表。
+
+    逗号（中英文）、分号、空格、换行都算分隔；空项丢掉；
+    **按小写去重**（保留第一次出现的写法）—— 匹配本来就是大小写不敏感的，
+    所以 `YELLOW-138` 和 `Yellow-138` 是同一条。
+    """
+    seen: set[str] = set()
+    out: list[str] = []
+    for part in _SKU_SPLIT.split(raw or ""):
+        sku = part.strip()
+        if not sku or sku.lower() in seen:
+            continue
+        seen.add(sku.lower())
+        out.append(sku)
+    return out
 
 
 def _human_size(num) -> str:
@@ -74,6 +95,12 @@ STATUS_LABELS = {
     "failed": "失败",
 }
 templates.env.globals["STATUS_LABELS"] = STATUS_LABELS
+
+JOB_TYPE_LABELS = {
+    "fulfillment": "出件",
+    "stock_check": "库存预检",
+}
+templates.env.globals["JOB_TYPE_LABELS"] = JOB_TYPE_LABELS
 
 
 def get_queue(settings):
@@ -116,6 +143,37 @@ def create_app() -> FastAPI:
     def url(path: str) -> str:
         return f"{prefix}{path}"
 
+    def receive_upload(upload: UploadFile, label: str, suffix: str, dest: Path) -> str:
+        """校验扩展名 + 分块落盘到固定物理名，返回用户原始文件名（仅供展示）。
+
+        抛 `ValueError`（扩展名不对，页面按 400 处理）或
+        `storage.UploadTooLarge`（超限，页面按 413 处理）。
+        """
+        display = storage.validate_upload_name(upload.filename, label, suffix)
+        storage.save_upload_stream(upload.file, dest, settings.max_upload_bytes)
+        return display
+
+    def enqueue_or_fail(job_id: str) -> None:
+        """投队列；Redis 不可用时把任务落成失败，页面才看得到原因。"""
+        try:
+            enqueue_job(settings, repo, job_id)
+        except HTTPException as exc:
+            repo.mark_failed(
+                job_id,
+                {"code": "queue_unavailable", "message": exc.detail, "hint": "确认 Redis 后重新提交。"},
+            )
+
+    def current_no_stock() -> str:
+        """当前生效的断货 SKU 列表（逗号分隔）。
+
+        页面里设过就用页面那份（存在 `app_settings`），从没设过才回落到
+        `.env` 的 `PB_ORDERS_DEFAULT_NO_STOCK` —— 也就是「初始值」。
+        """
+        stored = repo.get_setting(NO_STOCK_KEY)
+        if stored is not None:
+            return stored["value"]
+        return ",".join(settings.default_no_stock)
+
     app = FastAPI(title="PB 订单处理", docs_url=None, redoc_url=None)
     app.mount("/static", StaticFiles(directory=str(WEB_DIR / "static")), name="static")
 
@@ -124,12 +182,12 @@ def create_app() -> FastAPI:
     app.include_router(auth_mod.build_router(ctx, states, templates))
 
     if settings.auth_enabled:
-        allow = "、".join(settings.allowed_users) if settings.allowed_users else "（未设白名单，任何钉钉用户可登录）"
+        allow = "、".join(settings.allowed_users) if settings.allowed_users else "（未设白名单，按桥的判定 = 本公司钉钉员工）"
         log.info("认证：开启（钉钉 OIDC %s）；允许用户：%s", settings.oidc_issuer, allow)
         if not settings.allowed_users:
-            log.warning(
-                "PB_ORDERS_ALLOWED_USERS 未设置 —— 任何钉钉用户都能登录这个服务。"
-                "公网暴露时建议填写白名单。"
+            log.info(
+                "PB_ORDERS_ALLOWED_USERS 未设 —— 登录范围由桥把关（2026-09-23 起桥按组织成员"
+                "判定，只有本公司钉钉员工能进）。需要再窄一层时再填这个白名单。"
             )
     else:
         log.info("认证：关闭（仅限本机/内网使用）")
@@ -246,9 +304,89 @@ def create_app() -> FastAPI:
             {
                 "settings": settings,
                 "cache_ready": settings.sku_cache_path.is_file(),
-                "default_no_stock": ",".join(settings.default_no_stock),
+                "default_no_stock": current_no_stock(),
             },
         )
+
+    # ---------- 库存预检（SPS New 订单原始 CSV -> checked CSV + 操作表）----------
+
+    @app.get("/checks/new", response_class=HTMLResponse)
+    async def new_check_form(request: Request):
+        return render(
+            request,
+            "new_check.html",
+            {"settings": settings, "default_no_stock": current_no_stock()},
+        )
+
+    @app.post("/checks/new")
+    async def create_check(
+        request: Request,
+        raw_csv: UploadFile,
+        actor: str = Form(""),
+        no_stock: str = Form(""),
+        csrf: str = Form(""),
+    ):
+        if not csrf_mod.accepted(request, csrf):
+            return render(request, "error.html", {"message": "页面已过期，请刷新后重试"}, status_code=403)
+        job_id = new_id("job")
+        job_dir = settings.inputs_dir / job_id
+        try:
+            order_display = receive_upload(
+                raw_csv, "原始订单 CSV", storage.ORDER_SUFFIX, job_dir / storage.ORDER_NAME
+            )
+        except ValueError as exc:
+            return render(request, "error.html", {"message": str(exc)}, status_code=400)
+        except storage.UploadTooLarge as exc:
+            storage.remove_job_dirs(settings.inputs_dir, settings.work_dir, job_id)
+            return render(request, "error.html", {"message": str(exc)}, status_code=413)
+
+        user = getattr(request.state, "user", None) or {}
+        default_actor = user.get("display_name") if settings.auth_enabled else ""
+        repo.create_job(
+            job_id=job_id,
+            job_type="stock_check",
+            created_by=(actor.strip() or default_actor or "web-user"),
+            # 提交即冻结：这份快照写进任务，之后改设置不影响已出的结果。
+            # 用 parse_sku_list 而不是 split(",")：页面写着「逗号或换行分隔」，
+            # 只按逗号切会把多行输入当成一个 SKU，缺货行就静默漏掉了。
+            no_stock=",".join(parse_sku_list(no_stock)),
+            no_stock_note=None,
+            validate_only=False,
+            allow_unmatched=False,
+            input_packslip="",
+            input_order=order_display,
+            pipeline_version=settings.pipeline_version,
+        )
+        enqueue_or_fail(job_id)
+        return RedirectResponse(url(f"/jobs/{job_id}"), status_code=303)
+
+    @app.get("/settings", response_class=HTMLResponse)
+    async def settings_page(request: Request, saved: str = ""):
+        stored = repo.get_setting(NO_STOCK_KEY)
+        return render(
+            request,
+            "settings.html",
+            {
+                "settings": settings,
+                "no_stock": current_no_stock(),
+                "updated_at": (stored or {}).get("updated_at", ""),
+                "updated_by": (stored or {}).get("updated_by", ""),
+                "env_default": ",".join(settings.default_no_stock),
+                "saved": bool(saved),
+            },
+        )
+
+    @app.post("/settings/no-stock")
+    async def save_no_stock(request: Request, no_stock: str = Form(""), csrf: str = Form("")):
+        if not csrf_mod.accepted(request, csrf):
+            return render(request, "error.html", {"message": "页面已过期，请刷新后重试"}, status_code=403)
+        user = getattr(request.state, "user", None) or auth_mod.current_user(request, settings) or {}
+        repo.set_setting(
+            NO_STOCK_KEY,
+            ",".join(parse_sku_list(no_stock)),
+            (user.get("display_name") or user.get("identity") or "web-user"),
+        )
+        return RedirectResponse(url("/settings?saved=1"), status_code=303)
 
     @app.post("/jobs/new")
     async def create_job(
@@ -279,11 +417,8 @@ def create_app() -> FastAPI:
             return render(request, "error.html", {"message": str(exc)}, status_code=400)
 
         try:
-            for upload, name in (
-                (packslip, storage.PACKSLIP_NAME),
-                (order_csv, storage.ORDER_NAME),
-            ):
-                storage.save_upload_stream(upload.file, job_dir / name, settings.max_upload_bytes)
+            receive_upload(packslip, "Packslip PDF", storage.PACKSLIP_SUFFIX, job_dir / storage.PACKSLIP_NAME)
+            receive_upload(order_csv, "订单 CSV", storage.ORDER_SUFFIX, job_dir / storage.ORDER_NAME)
         except storage.UploadTooLarge as exc:
             storage.remove_job_dirs(settings.inputs_dir, settings.work_dir, job_id)
             return render(request, "error.html", {"message": str(exc)}, status_code=413)
@@ -292,8 +427,10 @@ def create_app() -> FastAPI:
         default_actor = user.get("display_name") if settings.auth_enabled else ""
         repo.create_job(
             job_id=job_id,
+            job_type="fulfillment",
             created_by=(actor.strip() or default_actor or "web-user"),
-            no_stock=",".join(s.strip() for s in no_stock.split(",") if s.strip()),
+            # 同 /checks/new：页面写的是「逗号或换行分隔」，多行输入要能分开
+            no_stock=",".join(parse_sku_list(no_stock)),
             no_stock_note=no_stock_note.strip() or None,
             validate_only=bool(validate_only),
             allow_unmatched=bool(allow_unmatched),
@@ -301,14 +438,100 @@ def create_app() -> FastAPI:
             input_order=order_display,
             pipeline_version=settings.pipeline_version,
         )
-        try:
-            enqueue_job(settings, repo, job_id)
-        except HTTPException as exc:
-            repo.mark_failed(
-                job_id,
-                {"code": "queue_unavailable", "message": exc.detail, "hint": "确认 Redis 后重新提交。"},
-            )
+        enqueue_or_fail(job_id)
         return RedirectResponse(url(f"/jobs/{job_id}"), status_code=303)
+
+    # ---------- 从库存预检继续出件（不再传 checked CSV）----------
+
+    def checked_artifact(job_id: str) -> dict | None:
+        return next(
+            (a for a in repo.list_artifacts(job_id) if a["kind"] == "checked_order"), None
+        )
+
+    @app.get("/jobs/{job_id}/fulfill", response_class=HTMLResponse)
+    async def fulfill_form(request: Request, job_id: str):
+        job = repo.get_job(job_id)
+        if job is None or job["job_type"] != "stock_check":
+            return render(request, "error.html", {"message": "这不是一个库存预检任务"}, status_code=404)
+        checked = checked_artifact(job_id)
+        error = ""
+        if job["status"] != "succeeded":
+            error = "库存预检还没成功完成，先等它跑完再继续。"
+        elif checked is None:
+            error = "这个任务没有 checked CSV 产物，无法继续出件。"
+        return render(
+            request,
+            "check_fulfill.html",
+            {
+                "settings": settings,
+                "check_job": job,
+                "checked_name": checked["download_name"] if checked else "",
+                "cache_ready": settings.sku_cache_path.is_file(),
+                "error": error,
+            },
+        )
+
+    @app.post("/jobs/{job_id}/fulfill")
+    async def start_fulfillment(
+        request: Request,
+        job_id: str,
+        packslip: UploadFile,
+        actor: str = Form(""),
+        csrf: str = Form(""),
+    ):
+        if not csrf_mod.accepted(request, csrf):
+            return render(request, "error.html", {"message": "页面已过期，请刷新后重试"}, status_code=403)
+        source = repo.get_job(job_id)
+        if source is None or source["job_type"] != "stock_check":
+            return render(request, "error.html", {"message": "这不是一个库存预检任务"}, status_code=404)
+
+        checked = checked_artifact(job_id) if source["status"] == "succeeded" else None
+        if checked is None:
+            return render(
+                request,
+                "error.html",
+                {"message": "来源任务的 checked CSV 不可用（任务未成功或已被清理），请先重新跑一次库存预检。"},
+                status_code=409,
+            )
+        try:
+            checked_path = storage.resolve_artifact_path(settings.artifacts_dir, checked["rel_path"])
+        except storage.StoredPathError as exc:
+            return render(request, "error.html", {"message": str(exc)}, status_code=409)
+
+        new_job_id = new_id("job")
+        new_dir = settings.inputs_dir / new_job_id
+        try:
+            packslip_display = receive_upload(
+                packslip, "Packslip PDF", storage.PACKSLIP_SUFFIX, new_dir / storage.PACKSLIP_NAME
+            )
+        except ValueError as exc:
+            return render(request, "error.html", {"message": str(exc)}, status_code=400)
+        except storage.UploadTooLarge as exc:
+            storage.remove_job_dirs(settings.inputs_dir, settings.work_dir, new_job_id)
+            return render(request, "error.html", {"message": str(exc)}, status_code=413)
+
+        # 把上一次生成的 checked CSV 直接落成这次出件的 order.csv：
+        # 出件范围与预检结果严格一致，人也少传一遍文件。
+        storage.link_or_copy(checked_path, new_dir / storage.ORDER_NAME)
+
+        user = getattr(request.state, "user", None) or {}
+        default_actor = user.get("display_name") if settings.auth_enabled else ""
+        repo.create_job(
+            job_id=new_job_id,
+            job_type="fulfillment",
+            created_by=(actor.strip() or default_actor or "web-user"),
+            # checked CSV 已经剔过缺货明细，这里不再做无货拆分（留空）
+            no_stock="",
+            no_stock_note=None,
+            validate_only=False,
+            allow_unmatched=False,
+            input_packslip=packslip_display,
+            input_order=checked["download_name"],
+            pipeline_version=settings.pipeline_version,
+            source_job_id=job_id,
+        )
+        enqueue_or_fail(new_job_id)
+        return RedirectResponse(url(f"/jobs/{new_job_id}"), status_code=303)
 
     @app.get("/jobs/{job_id}", response_class=HTMLResponse)
     async def job_detail(request: Request, job_id: str):
@@ -352,6 +575,7 @@ def create_app() -> FastAPI:
         storage.clone_inputs(src_dir, settings.inputs_dir / new_job_id)
         repo.create_job(
             job_id=new_job_id,
+            job_type=old["job_type"] or "fulfillment",
             created_by=old["created_by"],
             no_stock=old["no_stock"],
             no_stock_note=old["no_stock_note"],
@@ -362,13 +586,7 @@ def create_app() -> FastAPI:
             pipeline_version=settings.pipeline_version,
             source_job_id=job_id,
         )
-        try:
-            enqueue_job(settings, repo, new_job_id)
-        except HTTPException as exc:
-            repo.mark_failed(
-                new_job_id,
-                {"code": "queue_unavailable", "message": exc.detail, "hint": ""},
-            )
+        enqueue_or_fail(new_job_id)
         return RedirectResponse(url(f"/jobs/{new_job_id}"), status_code=303)
 
     @app.get("/artifacts/{artifact_id}/download")

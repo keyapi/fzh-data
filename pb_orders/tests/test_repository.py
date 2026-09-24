@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+import sqlite3
+
 import pytest
 
 from web.repository import Repository, new_id
@@ -16,7 +18,7 @@ def repo(pb_env):
 
 def _create(repo, job_id="job-test", **kw):
     kwargs = dict(
-        job_id=job_id, created_by="tester", no_stock="", no_stock_note=None,
+        job_id=job_id, job_type="fulfillment", created_by="tester", no_stock="", no_stock_note=None,
         validate_only=False, allow_unmatched=False, input_packslip="a.pdf",
         input_order="b.csv", pipeline_version="v1",
     )
@@ -27,10 +29,111 @@ def _create(repo, job_id="job-test", **kw):
 def test_create_and_read_job(repo):
     _create(repo, no_stock="SKU-A,SKU-B")
     job = repo.get_job("job-test")
+    assert job["job_type"] == "fulfillment"
     assert job["status"] == "uploaded"
     assert job["created_by"] == "tester"
     assert job["no_stock_list"] == ["SKU-A", "SKU-B"]
     assert job["report"] is None and job["error"] is None
+
+
+def test_create_stock_check_job(repo):
+    _create(
+        repo,
+        job_id="stock-1",
+        job_type="stock_check",
+        input_packslip="",
+        input_order="raw-orders.csv",
+        no_stock="SKU-X",
+    )
+    job = repo.get_job("stock-1")
+    assert job["job_type"] == "stock_check"
+    assert job["input_packslip"] == ""
+    assert job["input_order"] == "raw-orders.csv"
+    assert job["no_stock_list"] == ["SKU-X"]
+
+
+def _legacy_db(db_path):
+    """建一个还没有 job_type 列的旧库（模拟升级前的线上库）。"""
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            """CREATE TABLE jobs (
+                id TEXT PRIMARY KEY,
+                status TEXT NOT NULL,
+                created_by TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL,
+                started_at TEXT,
+                finished_at TEXT,
+                no_stock TEXT NOT NULL DEFAULT '',
+                no_stock_note TEXT,
+                validate_only INTEGER NOT NULL DEFAULT 0,
+                allow_unmatched INTEGER NOT NULL DEFAULT 0,
+                input_packslip TEXT NOT NULL DEFAULT '',
+                input_order TEXT NOT NULL DEFAULT '',
+                progress_step TEXT,
+                progress_message TEXT,
+                report_json TEXT,
+                error_json TEXT,
+                worker_job_id TEXT,
+                pipeline_version TEXT NOT NULL DEFAULT '',
+                source_job_id TEXT
+            )"""
+        )
+        conn.execute(
+            """INSERT INTO jobs(id, status, created_at, input_packslip, input_order)
+               VALUES ('old-job', 'uploaded', '2026-09-23T00:00:00+08:00', 'a.pdf', 'b.csv')"""
+        )
+    return db_path
+
+
+def test_existing_database_migrates_job_type(tmp_path):
+    db_path = _legacy_db(tmp_path / "old.sqlite")
+
+    migrated = Repository(db_path)
+    assert migrated.get_job("old-job")["job_type"] == "fulfillment"
+    with migrated.connect() as conn:
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(jobs)")}
+    assert "job_type" in columns
+
+
+def _connect_raising_on_alter(monkeypatch, error: Exception):
+    """让 ALTER TABLE 在「另一个进程已经把列加上」之后抛指定异常。"""
+
+    class RaisingConnection(sqlite3.Connection):
+        def execute(self, sql, *params):
+            if "ALTER TABLE jobs ADD COLUMN job_type" in sql:
+                super().execute(sql, *params)  # 另一个进程赢了这一手
+                raise error
+            return super().execute(sql, *params)
+
+    def patched_connect(self):
+        conn = sqlite3.connect(self.db_path, timeout=30, factory=RaisingConnection)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA foreign_keys=ON")
+        return conn
+
+    monkeypatch.setattr(Repository, "connect", patched_connect)
+
+
+def test_migration_tolerates_losing_the_alter_race(tmp_path, monkeypatch):
+    """Web 与 worker 同时启动时会同时 ALTER，输的那个收到 duplicate column name。
+
+    那一刻「列已经在了」正是想要的结果，必须放行而不是让容器崩在启动阶段。
+    """
+    db_path = _legacy_db(tmp_path / "old.sqlite")
+    _connect_raising_on_alter(monkeypatch, sqlite3.OperationalError("duplicate column name: job_type"))
+
+    repo = Repository(db_path)  # 不该抛
+    assert repo.get_job("old-job")["job_type"] == "fulfillment"
+
+
+def test_migration_does_not_swallow_other_sqlite_errors(tmp_path, monkeypatch):
+    """只放过 duplicate column 这一种；别的 OperationalError 照样得炸出来。"""
+    db_path = _legacy_db(tmp_path / "old.sqlite")
+    _connect_raising_on_alter(monkeypatch, sqlite3.OperationalError("disk I/O error"))
+
+    with pytest.raises(sqlite3.OperationalError):
+        Repository(db_path)
 
 
 def test_status_transitions(repo):

@@ -10,17 +10,24 @@ timestamp: 2026-09-22
 
 > 从 SPS 导出的「打包单 + UPS 标签」合并 PDF 和订单 CSV，一条命令产出
 > **通途导入 Excel** + **给 WXP 的标签 PDF** + **给 WXP 的背贴 PDF**。
+> 出件之前还有一步**库存预检**（SPS 原始 New 订单 CSV → checked CSV + SPS 操作表），
+> 也做进本模块了（`stock_precheck.py`）。
 > 也有网页版：上传 → 后台排队 → 页面看报告与下载（见第 4 节）。
 > 原实现是 Google Colab notebook（`1SjFXUYbQf0XwKl5H8B2lRhFBaYbF9d_5`），
 > 上传 11MB PDF 受网速影响经常失败，故迁到本地。
 
-> **先读**：[工作流参考](docs/reference/workflow.md)（列映射、坐标表、命名规则、数量对账）。
+> **先读**：[工作流参考](docs/reference/workflow.md)（列映射、坐标表、命名规则、数量对账、
+> §9 库存预检口径）。
 
 ## 1. 业务背景
 
 - **客户**：Pottery Barn (PB)，走 SPS Commerce 下单/发货，供应商是 Daneey LLC。
 - **仓库**：美中仓（USTX / `FZH-DANEEY`）。标签 PDF 命名里的 `FZH-DANEEY` 即此。
 - **每批流程**：SPS 导出两个文件 → 本模块出三个文件 → 通途导入 + 把两个 PDF 发给 WXP（皮壳仓库）。
+- **出件前必须先筛库存**（重要，2026-09-23 补记）：SPS 的 New 订单要先全选导出原始
+  CSV（`check0stock order x{N} …`），按 `Vendor Style` 对照断货清单筛成
+  `checked0stock …`，再拿它在 SPS 里勾 ASN 明细、给缺货行发新日期通知，然后才导出
+  Packslip PDF。**判定单位是明细行，不是整单** —— 详见坑 21 与 workflow.md §9。
 - **下游**：WXP 按标签 PDF 打单发货、按背贴 PDF 贴箱（背贴含中文/西班牙语品名，供仓库与收货方核对）。
 
 ## 2. 文件位置（Windows，均在仓库外）
@@ -28,9 +35,11 @@ timestamp: 2026-09-22
 | 角色 | 路径 |
 |------|------|
 | 输入 Packslip PDF | `D:\Work\美国\Tracy Miller\PB orders\YYYYMMDD\Packslip 美中 x{N} YYYYMMDD.pdf` |
-| 输入订单 CSV | `...\YYYYMMDD\checked0stock order x{N} YYYYMMDD_HHMM_SSSSSS.csv` |
+| 输入**原始**订单 CSV（预检用） | `...\YYYYMMDD\check0stock order x{N} YYYYMMDD_HHMM_SSSSSS.csv`（可能在 `NotUsed/` 子目录） |
+| 输入订单 CSV（出件用） | `...\YYYYMMDD\checked0stock order x{N} YYYYMMDD_HHMM_SSSSSS.csv` |
 | 输入 ASN 发货 CSV（核对用） | `...\YYYYMMDD\shipment x{N} YYYYMMDD_HHMM_SSSSSS.csv` |
 | **输出**（默认与输入同目录） | `PB_0_导入_原始_{csv_stem}_on_{ts}.xlsx`<br>`{MM.DD} PotteryBarn label-FZH-DANEEY-Not Prime-第一天.pdf`<br>`{MM.DD} PotteryBarn 背贴-中文西班牙语.pdf`<br>（给了 `--no-stock` 时另有 `无货{N单M件}-…` 子集标签/背贴 + `PB_1`/`PB_2`） |
+| **预检输出** | `checked0stock order x{N} YYYYMMDD_HHMM_SSSSSS.csv`<br>`SPS库存检查操作表-order x{N} ….xlsx` |
 | 背贴品名源表 | Google Sheet `US SKU Name` → 工作表 `SKUName`（列：通途SKU / 中文名称 / 西班牙语名称） |
 | 凭证 | `D:\Work\赛狐\Cursor\secrets\gsheets-service-account.json`（父仓库；worktree 里没有，模块会自动向上查找） |
 
@@ -38,11 +47,30 @@ timestamp: 2026-09-22
 
 ```bash
 cd pb_orders
+uv run python run_stock_check.py --dir "D:\Work\美国\Tracy Miller\PB orders\20260921" \
+    --no-stock "SKU-A,SKU-B"                                  # 步骤 0：库存预检
 uv run python run_pb_orders.py --dir "D:\Work\美国\Tracy Miller\PB orders\20260921"
 uv run python run_pb_orders.py --dir "..." --dry-run          # 只算不写
 uv run python run_pb_orders.py --dir "..." --check-shipment   # 用 ASN 核对实发/缺货
 uv run python compare_runs.py --dir "..."                    # 与 <dir>/Colab处理 逐项对比
 ```
+
+### 3.1 `run_stock_check.py`（步骤 0，薄适配器）
+
+| 参数 | 说明 |
+|------|------|
+| `--dir` | 当天文件夹；自动取最新 `check0stock*.csv`（跳过 `~$`） |
+| `--csv` | 显式指定原始 CSV |
+| `--no-stock` | 断货 SKU，逗号分隔；**留空 = 不筛**（等于原样照抄一份） |
+| `--out` | 输出目录，默认 = `--dir` |
+| `--dry-run` | 走完整流程（含产物自校验）但落在临时目录、不写 `--dir` |
+
+产物：`checked0stock {stem}.csv` + `SPS库存检查操作表-{stem}.xlsx`。
+`{stem}` = 原始文件名去掉开头的 `check0stock`（免得叠成 `checked0stock check0stock …`）、
+洗掉不合法字符、**再把里面的 `x{N}` 换成筛完剩下的 PO 数**（`order x21 …` → `order x18 …`，
+照 SPS 自己的命名口径）；为空回落 `orders`。见 `stock_precheck._with_po_count`。
+
+### 3.2 `run_pb_orders.py`
 
 | 参数 | 说明 |
 |------|------|
@@ -77,12 +105,14 @@ uv run python compare_runs.py --dir "..."                    # 与 <dir>/Colab�
 | 文件 | 职责 |
 |------|------|
 | `service.py` | `run_job()` / `JobOptions` / `JobResult` / `PBJobError`；硬校验与数量对账都在这 |
-| `run_pb_orders.py` | CLI 薄适配器：把结构化报告打印回原来的控制台格式，退出码不变 |
+| `stock_precheck.py` | 步骤 0：`run_stock_check()` / `StockCheckError` / `StockCheckResult` |
+| `run_pb_orders.py` | 出件 CLI 薄适配器：把结构化报告打印回原来的控制台格式，退出码不变 |
+| `run_stock_check.py` | 预检 CLI 薄适配器 |
 | `web/config.py` | 全部配置走环境变量（`PB_ORDERS_*`），本机 fallback 读 `pb_orders/.env` |
-| `web/app.py` | 路由：`/`、`/jobs/new`、`/jobs/{id}`、`/jobs/{id}/status`、`/jobs/{id}/retry`、`/artifacts/{id}/download`、`/healthz` |
-| `web/repository.py` | SQLite：`jobs` / `artifacts` 两张表 + 状态机 + 中断恢复 |
-| `web/storage.py` | 分块上传、SHA-256、内容寻址发布、路径越界防护 |
-| `web/tasks.py` | worker 入口；异常翻译成用户可读的失败报告 |
+| `web/app.py` | 路由：`/`、`/jobs/new`、`/checks/new`、`/jobs/{id}/fulfill`、`/settings`、`/settings/no-stock`、`/jobs/{id}`、`/jobs/{id}/status`、`/jobs/{id}/retry`、`/artifacts/{id}/download`、`/healthz` |
+| `web/repository.py` | SQLite：`jobs`（含 `job_type`）/ `artifacts` 两张表 + `app_settings` + 状态机 + 中断恢复；老库启动时自动补 `job_type` 列 |
+| `web/storage.py` | 分块上传、SHA-256、内容寻址发布、路径越界防护、`link_or_copy`（checked CSV 复用成出件输入） |
+| `web/tasks.py` | worker 入口；**按 `job_type` 分发**（`_RUNNERS`：`fulfillment` / `stock_check`）；异常翻译成用户可读的失败报告 |
 | `web/auth.py` | 钉钉 OIDC 登录：闸门中间件、Redis state、可选白名单、URL 前缀 |
 | `web/healthcheck.py` | `python -m web.healthcheck web\|worker` |
 
@@ -90,9 +120,14 @@ uv run python compare_runs.py --dir "..."                    # 与 <dir>/Colab�
 
 `uploaded → queued → running → succeeded / failed`（终态不再变）。
 
-Web 与 worker **启动时都会**把遗留的 `queued`/`running` 标成 `failed`
-（`worker_interrupted`）：worker 被容器重启杀掉时任务不会自己继续，
-留一个永远 running 的僵尸比明确失败更糟。页面因此给出「用相同输入重新处理」。
+启动时的恢复**分三种情况**（2026-09-22 起，别再按「一律标失败」理解）：
+
+- 仍处于 `running`：worker 被杀时任务不会自己继续，**标失败** `worker_interrupted`
+  （条件更新，盖不掉已成功的），页面给出「用相同输入重新处理」。
+- `queued`：**不动**。那条任务还在 Redis 里，新 worker 起来会继续跑。
+- `queued` 但 Redis 里已经没有（快照间隔内重启、`FLUSHALL`）：worker 启动时对一次账、
+  运行期间每 `PB_ORDERS_QUEUE_WATCH_SECONDS` 秒再对（默认 60），标 `queue_lost` 并可重跑。
+  见坑 19。
 
 重跑会**新建 job** 并记 `source_job_id`，输入文件从原 job 目录硬链接过来，
 不覆盖历史结果。
@@ -131,14 +166,31 @@ cd pb_orders
 uv run pytest tests/ -q
 ```
 
-42 个用例，**不需要 Redis**：`tests/conftest.py` 用 reportlab 现画一个结构同构的
+138 个用例通过、2 个跳过，**不需要 Redis**：`tests/conftest.py` 用 reportlab 现画一个结构同构的
 3 页 Packslip PDF + 5 行订单 CSV + 3 行名称缓存，跑真实流程；Web 用例把
 `web.app.enqueue_job` 换成同步执行，从而覆盖「Web 建任务 + worker 处理 + 页面 + 下载」整链。
+另有 Redis/RQ 生命周期用例需本地 Docker，设 `PB_ORDERS_RQ_DOCKER=1` 才跑（默认跳过）。
 
 ## 5. 函数表
 
 | 文件 | 函数 | 作用 |
 |------|------|------|
+| `stock_precheck.py` | `run_stock_check(csv, skus, out, progress, name_stem)` | **步骤 0 总入口**：SPS 原始订单 CSV → checked CSV + 操作 Excel + 报告 |
+| | `StockCheckError` | 业务失败（`message` / `hint` / `code`），失败时**不产出任何产物** |
+| | `_normalized_skus(values)` | 断货清单去重（按小写）并冻结原始写法 → `(snapshot, wanted)` |
+| | `_validate(df)` | 必需列 / 只接受 H·D / 明细非空 / 数量正整数 / `(PO, Line)` 唯一 / 每 PO 恰好 1 个 Header |
+| | `_classify(work, wanted)` | 明细级判定 + 派生 PO 状态（全部有货 / 部分缺货 / 全部缺货） |
+| | `_checked_rows(classified, po_status)` | 保留 Header + 有货明细；整单缺货的 PO 整组剔除 |
+| | `_output_stem(raw)` | 输出词干：剥 `check0stock` 前缀 + 洗非法字符 |
+| | `_with_po_count(stem, count)` | 把 `x{N}` 换成筛完剩下的 PO 数（SPS 同款命名口径） |
+| | `_source_lines(path, rows)` | 按行取源原文（**逐行照搬**用）；行数对不上则报 `ragged_source` |
+| | `_build_tables(...)` | 操作表 7 个 sheet；`_detail_table()` 永远并列两个 SKU、数量按整数显示 |
+| | `_tables_payload(tables, limit)` | 同一批表转成 `report["tables"]`，供网页渲染；先 `head(limit)`，超限标 `truncated` |
+| | `_excel_safe(table)` | 只给 xlsx：转义会被 openpyxl 写成公式的值（条件与 openpyxl 对齐） |
+| | `_publish_all(pairs, backup_dir)` | 成对发布：先备份、`os.replace` 覆盖；失败**回滚**并把占用翻译成 `output_locked` |
+| | `_verify_checked(...)` | 回读 checked CSV：列序 + 逐单元格 + Header/Detail 对账 |
+| | `_style_workbook(path)` | 表头配色、冻结首行、筛选、有货绿/缺货红、部分缺货黄 |
+| `run_stock_check.py` | `run(args)` | CLI 薄适配器：调 `stock_precheck.run_stock_check` 后按控制台格式打印 |
 | `service.py` | `run_job(pdf, csv, options, output_dir, progress, shipment_csv)` | **编排总入口**（CLI 与 worker 共用），返回 `JobResult(report, artifacts)` |
 | | `JobOptions` | `no_stock` / `no_stock_note` / `allow_unmatched` / `cache_only` / `validate_only` / `timestamp` / `sku_cache_path` |
 | | `sku_overlay_texts(df)` | 取 SKUxQTY 做叠加文字，NA 换可见占位符（`？？未匹配`） |
@@ -259,8 +311,104 @@ uv run pytest tests/ -q
     启动后再按 `PB_ORDERS_QUEUE_WATCH_SECONDS`（默认 60）对账。RQ 2.12.0 遇到
     Redis `ConnectionError` 是重连而不是退出，所以不能指望容器重启来触发启动对账；
     `FLUSHALL` 同样不断开连接。
+20. **`.env` 里的 `PB_ORDERS_DEFAULT_NO_STOCK` 只是初始值，日常维护走页面**：
+    断货清单存在 `app_settings` 表（键 `default_no_stock`），网页「断货 SKU」页可改，
+    改完**立即生效、不用重启**；只有「从没在页面里设过」时才回落到 `.env`。
+    所以看到断货清单不对，先看页面里是不是已经设过 —— 改 `.env` 可能根本没作用。
+    解析与去重规则见 `app.parse_sku_list()`（中英文逗号/分号/空格/换行都算分隔，
+    按小写去重并保留首次写法），任务页里那份仍然可临时改、只影响当次。
+21. **库存判定按「明细行」，不按整单**（真踩过，用户纠正）：
+    早期设计是「PO 里只要有一个 SKU 没货就整单剔除」。**这是错的** ——
+    PB 会以为整单不发，回头发催单邮件。正确口径：
+    ① 全部明细有货 → 原样保留；② **部分缺货 → Header 保留、只剔缺货明细**，
+    并在操作表里醒目提示「不要整单取消，ASN 只勾有货明细行」；
+    ③ 全部明细缺货 → 整组剔除。`_classify()` 派生 PO 状态、`_checked_rows()` 按行筛。
+    已加回归用例 `test_detail_level_filter_keeps_header_for_mixed_po`。
+22. **checked CSV 必须与 SPS 导出**逐字节**同构，不能重新序列化**（真踩过）：
+    SPS 的导出是**参差**的 —— 表头 147 列、数据行 146 列、**最后一个列名是空的**。
+    读进 pandas 再 `to_csv` 写回去会得到：空列名写成字面量 `Unnamed: 146`、
+    数据行被补齐到 147 列（每行多一个尾逗号）、还可能带 BOM。
+    正解：`_source_lines()` 取原文行，按保留行的索引**逐行照搬**；UTF-8 **不带 BOM**、LF。
+    实测 2026-09-17 真实批次与历史 `checked0stock order x19 …csv`
+    **SHA-256 完全相同**（`e99a9b78…`，19,363 字节）。
+    字段里含换行时按行切分不成立 → 报 `ragged_source`，宁可不出件也不出格式不同的文件。
+    锁定用例：`test_checked_csv_is_byte_identical_to_a_sps_style_export`。
+23. **操作表的每个明细表都要并列两个 SKU**（用户明确要求，别"精简"掉）：
+    `Buyers Catalog or Stock Keeping #`（**对方** SKU，用来在 SPS 界面里定位明细行）
+    与 `Vendor Style`（**我方** SKU，内部对照 + 库存匹配的键）缺一不可。
+    用户原话：「ASN 有货明细表 缺货明细表 等等 永远！需要我们自己的 SKU！」
+    —— 别把「SPS 界面里只显示对方 SKU」理解成「报表里不用给我方 SKU」。
+24. **网页版续出件不要人再传一遍 checked CSV**：检查任务成功后走
+    `GET/POST /jobs/{job_id}/fulfill`，只需传 Packslip PDF；worker 侧用
+    `storage.link_or_copy` 把已发布的 `checked_order` 产物落成新任务的 `order.csv`。
+    新任务 `job_type=fulfillment`、`source_job_id` 指向检查任务、**`no_stock` 留空**
+    （checked CSV 已经剔过缺货明细，再传一遍断货清单是多此一举）。
+    别用数据库里的展示文件名去拼路径（坑 18）。
+25. **明细表要在网页上也能看，且与 xlsx 同源**（用户追问「网页版明细表为啥没做」）：
+    操作表只构建**一次**（`tables = _build_tables(...)`），xlsx 与
+    `report["tables"] = _tables_payload(tables, WEB_TABLE_LIMIT)` 都从它来 ——
+    别在模板里另算一遍，否则网页和操作表迟早对不上。
+    超过 300 行截断并**在页面上写明**「只显示前 N 行 / 共 M 行，完整看 xlsx」。
+    旧任务（改版前的 `report_json`）没有 `tables`，模板整段跳过，不能 500。
+26. **产物名里的 `x{N}` 是筛完剩下的 PO 数**（用户要求）：`order x21 …` → `order x18 …`。
+    照 SPS 自己的命名口径（它重导时数字会变），文件名的数字应当等于里面装了几个 PO。
+    源导出里的时间戳/流水号**保留**，还能对回是哪一次导出 —— 本地做不了 SPS 那一步重导，
+    所以不要试图连流水号一起"修正"。见 `_with_po_count()`。
+27. **断货 SKU 的输入解析必须走 `app.parse_sku_list()`，不能 `split(",")`**（Cursor 复审发现）：
+    两个入口的 textarea 都写着「逗号或换行分隔」，只按逗号切会把多行输入当成**一个** SKU，
+    结果缺货行被静默保留 —— 看起来"跑通了"，实际筛漏了。`/checks/new` 与 `/jobs/new`
+    两处都改过来了（同一个缺陷）。测试：`test_newline_separated_no_stock_is_split`、
+    `test_fulfillment_route_also_splits_newlines`。
+28. **回读校验要比「源文件原文」，不能比规范化后的 DataFrame**（Cursor 复审发现）：
+    `_validate()` 会去空格、把 Record Type 转大写，而输出是**逐行照搬原文**的。
+    早先 `_verify_checked` 拿规范化后的 `checked` 去比回读结果，导致源文件里
+    Record Type 写成小写 `d`、或字段两侧带空格这种**合法输入**误报 `output_verify_failed`
+    （内容其实没写错）。正解：比 `source.loc[checked.index]`（原文）；
+    Header/Detail 对账那条则先 `strip().upper()` 再判。
+29. **同名产物要能覆盖，且必须整体发布**（Cursor 复审发现）：
+    CLI 默认输出到输入目录，同一批重跑会撞同名 —— Windows 上 `shutil.move`（内部 `os.rename`）
+    直接失败；更糟的是原来先移 CSV 再移 XLSX，第二个失败就留下「新 CSV + 旧 XLSX」。
+    现在 `_publish_all()` 先把将被覆盖的旧文件备份到同卷临时目录，再 `os.replace()` 原子覆盖，
+    **中途任何一步失败都回滚**（还原旧的、或删掉刚放上去的），`report["replaced"]` 记下被覆盖的文件名。
+30. **别用 `open(path, "ab")` 预探「文件是否被占用」**（实测踩到）：
+    想「先探一遍再发布」，实测**探不出字节区间锁**（`msvcrt.locking` / Excel 常是这一类）——
+    预探通过、真正的失败出现在后面 `copy2` / `os.replace` 上，用户看到的是一坨 `PermissionError`
+    堆栈（CLI 只捕获 `StockCheckError`）。
+    正解：不做预探，**在 `_publish_all()` 里动手时捕获 `OSError`**，`PermissionError` 翻译成
+    `output_locked` + 「可能正在 Excel 里打开，请关闭后重跑」，并回滚已发布的。
+    只有真动手时才知道能不能动。锁定用例：`test_locked_output_is_refused_without_publishing_anything`、
+    `test_permission_error_during_replace_is_readable_and_rolls_back`、
+    `test_partial_publish_failure_rolls_back`。
+31. **写 xlsx 前要转义公式，但只转义 `=`**（Cursor 复审发现 + 实测定界）：
+    操作表里的 PO/SKU 来自外部 CSV，openpyxl 会把以 `=` 开头的字符串写成 `<f>` **公式**
+    （`=cmd|…` 在 Excel 里会执行）。`_excel_safe()` 给这类值加 `'` 前缀，**只作用于 xlsx**；
+    checked CSV 仍是逐行照搬的原始字节。
+    条件与 openpyxl 内部**逐字对齐**（`len(value) > 1 and startswith("=")`，实测 3.1.5 源码）。
+    **不要顺手把 `+` / `-` / `@` 也加进来**：实测这三个开头的值 openpyxl 存的是
+    `t="inlineStr"` 文本单元格，Excel 不会把 xlsx 里的文本单元格再当公式解析
+    （那是 CSV 的注入面）；加了反而会把 `-1`、`+A1` 这类正常值改坏。
+32. **`report["tables"]` 要 `head(limit)` 再转列表**（Cursor 复审发现）：
+    先把整表 `astype(str).values.tolist()` 再切片，会为每一行都建 Python 对象；大表在 1G 的
+    worker 里没必要地吃内存。现在先 `head(limit)`，总数单用 `len(table)`。
+33. **SQLite 加列要容忍 duplicate column 竞争**（Cursor 复审发现）：
+    Web 与 worker 同时启动、同时看到旧库缺 `job_type`，就会同时 `ALTER TABLE`，
+    输的那个收到 `duplicate column name`。SQLite 没有 `ADD COLUMN IF NOT EXISTS`，
+    而那一刻「列已经在了」正是想要的结果，所以只放过这一种 `OperationalError`
+    （别的 SQLite 错误照旧抛）。测试：`test_migration_tolerates_losing_the_alter_race` +
+    `test_migration_does_not_swallow_other_sqlite_errors`。
 
 ## 8. 数量对账口径
+
+### 8.1 库存预检（步骤 0）
+
+- `PO 总数 = 全有货 + 部分缺货 + 全部缺货`。
+- `Detail 总数 = 有货 + 缺货`，`diff` 必须 0（`_classify` 的分类互斥完备）。
+- `数量总数 = 有货 + 缺货`，`diff` 必须 0。
+- checked CSV 回读校验：列名与列序与源文件一致、**逐单元格**等于分类结果、
+  每个 PO 恰好 1 行 Header、Header 集合 == Detail 集合。
+- 部分缺货 PO：Header 在、缺货 Detail 不在。
+
+### 8.2 出件（步骤 1-2 / 3 / 4）
 
 - 订单 CSV 原始 `N` 行 → 留 `Record Type == 'D'` → 按 `Qty Ordered` 拆行 → **行数必须等于 PDF 页数**（1:1 硬校验）。
 - 无货过滤时：`通途总行 = 可导入 + 无库存`，差必须为 0。
@@ -269,6 +417,47 @@ uv run pytest tests/ -q
 - 输出页数：标签 PDF = 输入页数 × 2；背贴 PDF = 订单行数。
 
 ## 9. 本会话成果
+
+### 2026-09-23（库存预检：把「出件前那一天的手工筛选」也做进本模块）
+
+- **动机**：出件用的 `checked0stock` CSV 不是 SPS 直接给的 —— 得先把当批 New 订单
+  全选导出原始 CSV，按 `Vendor Style` 对照断货清单筛掉缺货明细，再在 SPS 里勾 ASN。
+  这一步以前靠人在 Excel 里做。用户要求「上传原始 CSV → 出台账 → checked CSV 能直接
+  接着出件，且不用重传」。
+- **新增 `stock_precheck.py`（步骤 0）** + `run_stock_check.py`（CLI）：
+  `run_stock_check(csv, skus, out, progress, name_stem)` → checked CSV + 操作 Excel + 报告。
+  硬校验：必需列、只接受 H/D、明细非空、数量正整数、`(PO, Line)` 唯一、
+  每个 PO 恰好 1 个 Header、无孤儿 Header。**通过校验前不产出任何产物**。
+- **口径（用户纠正两次才定下）**：
+  - 判定单位是**明细行**（坑 21）：部分缺货的 PO 保留 Header、只剔缺货明细；
+    只有全部明细缺货才整组剔除。早期「有一个没货就整单剔」是错的，会让 PB 发催单邮件。
+  - 每个明细表**永远并列两个 SKU**（坑 23）：对方 `Buyers Catalog or Stock Keeping #`
+    （在 SPS 里定位行）+ 我方 `Vendor Style`（对照与匹配）。
+- **checked CSV 与 SPS 导出的那份**字节级一致**（坑 22，本批最硬的验收）**：
+  2026-09-17 真实批次（`check0stock order x21 20260917_0338_456788.csv`，21 PO / 23 明细，
+  断货只填 `CEN961NLINEN-SAGEGREEN-138`）→ 与历史
+  `checked0stock order x19 20260917_0341_630468.csv` **SHA-256 完全相同**
+  （`e99a9b78…`，19,363 字节）。做法是**逐行照搬源文件原文**而不是重新序列化
+  （SPS 导出是参差的：表头 147 列、数据行 146 列、末列无名）。
+- **操作 Excel 7 个 sheet**：操作总览 / 部分缺货PO-逐行操作 / ASN有货明细 / 缺货明细 /
+  全部缺货PO / 检查报告 / 原始剔除行；有货绿、缺货红、部分缺货黄、冻结首行 + 筛选。
+- **网页两入口 + 续出件**（坑 24）+ **网页版明细表**（坑 25）：
+  导航「检查 SPS 新订单」（`/checks/new`）与「直接生成发货文件」（`/jobs/new`）分开；
+  检查任务成功后任务页出现「继续生成发货文件」（`/jobs/{id}/fulfill`），
+  **只需再传 Packslip PDF**，worker 用 `storage.link_or_copy` 把上次那份 checked CSV
+  落成新任务的 `order.csv`，`source_job_id` 指向检查任务。
+  任务页同时列出部分缺货 PO / ASN 有货明细 / 缺货明细 / 全部缺货 PO 四张逐行表，
+  与 xlsx 同源（同一批 DataFrame），两个 SKU 并列、数量按整数显示。
+- **产物名里的 PO 数**（坑 26）：`x{N}` 换成筛完剩下的数量（`order x21 …` → `order x18 …`），
+  源导出里的时间戳/流水号保留以便回溯。
+- **数据库**：`jobs` 表加 `job_type`（`fulfillment` / `stock_check`），
+  老库启动时 `ALTER TABLE` 自动补列（默认 `fulfillment`）—— 已有任务不会丢。
+  worker 按 `job_type` 走 `_RUNNERS` 分发，两种流程共用同一套「跑完发布产物」外壳。
+- **产物类型**：新增 `checked_order` / `stock_operations` 两个 artifact kind 与中文标签。
+- **测试 89 → 137**（新增 48）：预检服务 23 例（含字节级一致、参差形状、含换行拒绝、
+  命名与 PO 数、网页表负载与截断、重跑覆盖、占用拒绝与回滚、公式转义、冗余空白）、
+  worker 分发 2 例、仓库迁移 3 例、Web 两入口 / 续出件 / 网页明细表 / 旧任务兼容 15 例、
+  出件产物命名与缺列提示 5 例。
 
 ### 2026-09-21（从 Colab 迁到本地）
 
@@ -345,7 +534,7 @@ uv run pytest tests/ -q
 - [x] 无货时自动拆「有货主文件 + 无货子集」（标签 + 背贴各两份，`--no-stock` 触发）
 - [x] 网页版：FastAPI + Redis/RQ + SQLite，任务可后台跑、可追溯、可重下（2026-09-22）
 - [x] 独立 Docker Compose 栈，不碰既有服务（2026-09-22）
-- [x] 75 个自动化测试（另有 Redis/RQ 生命周期用例，默认跳过），不需要 Redis 也能跑
+- [x] 138 个自动化测试（另有 Redis/RQ 生命周期用例，默认跳过），不需要 Redis 也能跑
 - [x] 已部署到 EN 测试服务器（`/opt/pb-orders`）。入口 **<https://api.vilavi.cn/pb/>**
       （公网 HTTPS + 钉钉登录，容器只绑 `127.0.0.1`）；Tailscale 那条路径已弃用（走香港中继太慢）
 - [x] 公网入口有钉钉登录闸门（`web/auth.py`）。**登录范围由桥把关**：2026-09-23 起桥按
@@ -356,6 +545,13 @@ uv run pytest tests/ -q
 - [x] 保留策略：启动时按 `PB_ORDERS_RETENTION_DAYS`（默认 90 天）清理已完成任务与无人引用的产物。
       **只在服务/worker 启动时跑，不是定时任务**
 - [x] 同站 POST 带 CSRF 令牌（`web/csrf.py`）；上传磁盘名固定，原始文件名只用于展示
+- [x] 断货 SKU 列表可在**网页上自己维护**（导航「断货 SKU」→ `app_settings` 表），
+      改完立即影响新建任务的预填，不用改服务器 `.env`、不用重启（2026-09-23）
+- [x] 库存预检（步骤 0）：上传 SPS 原始订单 CSV → checked CSV + SPS 操作表；
+      判定按明细行、部分缺货 PO 保留 Header；checked CSV 与 SPS 导出的那份**字节级一致**
+      （2026-09-23，见坑 21-23 与 workflow.md §9）
+- [x] 网页两入口分开（「检查 SPS 新订单」/「直接生成发货文件」）；
+      检查成功后「继续生成发货文件」**只需再传 Packslip PDF**，checked CSV 自动复用（2026-09-23）
 - [ ] 部分发货的一单跨两份 PDF 时，仍需人工确认哪些页给谁（目前按 SKU 自动拆）
 - [ ] 原 notebook 步骤 3.x（赛狐导入）、4.3（按仓库分拆，20260831 起停用）—— 未迁
 
@@ -364,3 +560,6 @@ uv run pytest tests/ -q
 踩过的坑与设计取舍，动手前先读：
 
 - `docs/solutions/workflow-issues/pb-out-of-stock-notification-and-zero-stock-orders.md` —— PB 断货通知与 0 库存订单处理 — 数据来源、PO 映射与三个反直觉陷阱
+- [x] 库存预检**已部署到 EN 测试服务器**（2026-09-24，代码 `598baae`，`PB_ORDERS_PIPELINE_VERSION=pb-web-598baae`）；公网入口真机端到端验收通过：147 列宽表上传 → checked CSV（列/参差形状原样）→ 续出件只传 PDF → 1:1 通过、三件产物可下载。见 docs/log.md 第十四轮
+- [ ] **待修**：网页出件的通途 xlsx 名是 `…_order_on_…`（磁盘名固定 `order.csv` 导致），看不出是哪一批；命令行无此问题。修法：把 `job["input_order"]` 的 stem 传进 `service.run_job` 用于命名
+- [ ] EN 测试服务器上留了 4 条 `actor=验收测试` 的任务，需要时清理

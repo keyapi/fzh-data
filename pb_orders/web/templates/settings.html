@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}断货 SKU 设置 · PB 订单处理{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>断货 SKU 设置</h1>
+
+  {% if saved %}
+  <p class="ok">已保存。新建任务时会按这份清单预填。</p>
+  {% endif %}
+
+  <p>
+    这里维护的清单只做一件事：<strong>新建任务时预填</strong>。
+    任务页里那份仍然可以随时临时改，改这里不影响已经建好的任务。
+  </p>
+
+  <form method="post" action="{{ prefix }}/settings/no-stock">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>
+      断货 SKU（逗号或换行分隔，可留空）
+      <textarea name="no_stock" rows="8" placeholder="CENKZ1324-SkyBlue-97">{{ no_stock }}</textarea>
+      <small>
+        加新断货的直接写进去，恢复有货的删掉即可。大小写不敏感，
+        写 <code>YELLOW</code> 也能对上 <code>Yellow</code>；重复的会自动去掉。
+        留空 = 不过滤（全量出件）。
+      </small>
+    </label>
+    <button class="btn primary" type="submit">保存</button>
+  </form>
+
+  <p class="muted">
+    {% if updated_at %}
+    上次修改：{{ updated_at }}{% if updated_by %}（{{ updated_by }}）{% endif %}
+    {% else %}
+    还没有在页面里改过 —— 现在用的是服务器 <code>.env</code> 里的初始值。
+    {% endif %}
+  </p>
+
+  <details>
+    <summary>初始值（来自服务器 .env，页面改过之后就不再起作用）</summary>
+    <p class="muted"><code>{{ env_default or "（空）" }}</code></p>
+  </details>
+</section>
+{% endblock %}

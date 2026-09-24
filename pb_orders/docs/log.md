@@ -8,6 +8,153 @@ timestamp: 2026-09-22
 
 # 变更日志
 
+## 2026-09-24（第十四轮：部署到 EN 测试服务器 + 真机端到端验收）
+
+代码 `598baae`（= PR #274 的 HEAD，**当时尚未合并**）已部署到
+`/opt/pb-orders/pb_orders`，`PB_ORDERS_PIPELINE_VERSION` 同步改为 `pb-web-598baae`。
+
+- **部署**：备份 `pb_orders-code.bak-20260924-101745.tar.gz`（`.env` 另有 `.env.bak-*`）；
+  解包用 `git archive`（只含跟踪文件），服务器上的 `.env` / `runtime/` / `data/` 未被覆盖；
+  构建带 `--build-arg PIP_INDEX_URL=…tsinghua…`（老坑）。
+- **隔离**：全程只有 `pb-orders-web` / `pb-orders-worker` 被重建；
+  其余 7 个容器（含 `pb-orders-redis`）的 `StartedAt` **逐字节未变**；
+  既有端点返回码 `/`(200) `/oidc/…`(200) `/sellfox/`(404) `/nas/mcp`(401) 与部署前一致。
+- **真机端到端验收**（真实 NGINX + 公网入口 + 真 Redis/RQ worker，不是同步替身）：
+  - 走 `https://api.vilavi.cn/pb/checks/new` 上传 **147 列宽表**（真实导出脱敏：个人信息列清空、
+    列结构/参差形状原样保留）→ 303 → 真实 worker → 2 秒内 succeeded；
+  - 任务页渲染出四张明细表、两个 SKU 并列、部分缺货提醒、数量按整数显示；
+  - 下载 checked CSV：**41 行 / 146 个逗号（147 列）/ 末列名为空 / 数据行仍比表头少一列** ——
+    宽表与参差形状在真机上也原样保留；
+  - 报告：PO 21 → 全有货 19 / 部分缺货 0 / 全缺货 2，保留 19；明细 23 → 21 / 2，差 0
+    （与历史 20260917 批次一致，产物名 `checked0stock … x19 …`）；
+  - 续出件：`/pb/jobs/{id}/fulfill` **只传 21 页 Packslip PDF**，checked CSV 由系统复用
+    （任务里 `source_job_id` 指回检查任务、`no_stock` 留空）→ 出件成功：
+    **1:1 通过（21 页 = 21 行）**、join 未匹配 0、三个产物可下载，
+    标签 PDF **42 页**（= 页数×2）、背贴 PDF **21 页**（= 订单行数），与文档口径一致。
+- **验收怎么做的（下次照做）**：公网入口要过钉钉登录，自动化测试用的办法是
+  **用容器自己的密钥签一个会话 cookie**（不改任何鉴权配置）：
+  `docker exec pb-orders-web python -c "…make_session_token(…secret=os.environ['PB_ORDERS_SESSION_SECRET'])"`，
+  再把 `pb_orders_session=<token>` 手工写进 cookie jar。
+  ⚠️ **必须走真实的 `/pb/` 入口**：CSRF cookie 的 `Path=/pb/`，直连 `127.0.0.1:8412`
+  时浏览器/curl 都不会带上它，POST 会 403（这是路径作用域，不是缺陷）。
+- **实测发现两处问题，都已修并重新上线**（见下一条）：
+  ① 网页出件的通途 xlsx 名叫 `PB_0_导入_原始_order_on_{ts}.xlsx`，看不出是哪一批；
+  ② 订单 CSV 缺列时页面只给「输入数据有问题：'Ship To Country'」，看不出到底缺什么。
+- **未做**：PR #274 尚未合并（部署的是分支 HEAD）。服务器上留了 4 条 `actor=验收测试` 的任务
+  （2 条检查成功、1 条出件成功、1 条失败），需要时再清。
+
+### 2026-09-24（第十五轮：修掉实测发现的两处，重新上线并复测）
+
+- **① 网页出件的通途 xlsx 名看不出批次**（不是本轮引入）：
+  网页路径的订单 CSV 磁盘名固定是 `order.csv`，`service.py` 用 `csv_path.stem` 命名
+  就得到 `PB_0_导入_原始_order_on_….xlsx`。命令行路径没这问题（用的是原始文件名）。
+  修法：`JobOptions` 加 `csv_stem`，worker 把页面上那份 CSV 的词干
+  （`job["input_order"]`，续出件时就是 checked CSV 的名字）传进去；
+  命令行不传 → 行为与从前**完全一致**。词干来自用户文件名，一并洗掉非法字符、洗空了回落 `order`
+  （`service._output_csv_stem`）。
+- **② 订单 CSV 缺列时只给一句「输入数据有问题」**（实测踩到）：
+  拿 7 列的瘦 CSV 走出件，深处抛 `KeyError: 'Ship To Country'`，页面提示却是
+  「请核对上传的 PDF 与 CSV 是否属于同一批」——没指到真因。
+  修法：`pb_tongtu_excel.REQUIRED_COLUMNS` + `build_order_df` 开头先检查，
+  报「订单 CSV 缺少必需列：Ship To Country、Unit Price。出件要用 SPS 导出的**完整**订单 CSV」。
+- **测试 132 → 138**（新增 6）：`csv_stem` 优先级与默认值、词干清洗与回落、
+  缺列提示（含「别混 markdown 记号」）、经 service 时转成带正确指引的 `PBJobError`、
+  完整夹具不被误挡、网页产物名的回归断言。
+- **两个错误提示都改了措辞**：缺列信息去掉 markdown 记号（纯文本里会原样显示 `**`）；
+  并把这一层的 `ValueError` 包成 `PBJobError(code=order_csv_invalid)`，
+  否则页面会落到通用提示「PDF 与 CSV 可能不是同一批」——指错方向。
+- **复测（重新上线后，真机，逐条对着页面输出核）**：
+  - 缺列提示：`订单 CSV 缺少必需列：Ship To Country、Unit Price。出件要的是 SPS 导出的完整订单 CSV
+    （checked0stock …），不是只有几列的摘要。` + 提示「请用 SPS 导出的完整订单 CSV 重新提交；
+    本批的 checked0stock 文件见「检查 SPS 新订单」任务。」+ 错误码 `order_csv_invalid`
+    （以前是 `输入数据有问题：'Ship To Country'` + 误导的「PDF 与 CSV 不是同一批」）。
+  - 产物名：续出件出来的通途 xlsx 叫
+    `PB_0_导入_原始_checked0stock acc_on_2026-09-24_10-51-29.xlsx`（以前是 `…_order_on_…`）。
+  - 整批回归：真实宽表（147 列）→ 检查 succeeded → 只传 21 页 Packslip → 出件 succeeded，
+    **1:1 通过（21 页 = 21 行）**、join 未匹配 0。
+  - 隔离：三次部署期间仍只有 `pb-orders-web` / `pb-orders-worker` 被重建。
+- **遗留**：服务器上累计 **13 条** `actor=验收测试` 任务（检查 6 条、出件成功 4 条、失败 3 条，
+  失败的都是刻意用瘦 CSV 造的错误路径用例）。删除属于破坏性操作，**等用户确认再清**。
+  另有 `service.py` 的 `_UNSAFE_STEM` 与 `stock_precheck._UNSAFE_STEM` 两处同样的正则
+  （各管各的输出命名，暂不合并，等真需要共用时再抽）。
+
+## 2026-09-23（第十三轮：库存预检 —— 把「出件前的手工筛选」做进模块）
+
+- **动机**：出件用的 `checked0stock` CSV 不是 SPS 直接给的。每批出件前，要先把当批
+  New 订单**全选导出原始 CSV**（`check0stock order x{N} …`），按 `Vendor Style` 对照
+  断货清单筛掉缺货明细，再拿它在 SPS 里勾 ASN 明细、给缺货的发新日期通知，
+  然后才导出 Packslip PDF。这一步以前全靠人在 Excel 里做。
+- **新增** `stock_precheck.py`（步骤 0）+ `run_stock_check.py`（CLI）+ 网页入口。
+  上传原始 CSV → `checked0stock …csv` + `SPS库存检查操作表-….xlsx`（7 个 sheet）+ 对账报告。
+  硬校验（缺列 / 非 H·D / 明细空值 / 数量非法 / `(PO,Line)` 重复 / Header 不唯一）
+  任一不过就**不产出任何产物**。
+- **口径按明细行、不按整单**（用户两次纠正后定稿）：部分缺货的 PO **保留 Header、
+  只剔缺货明细**，并在操作表里醒目提示「不要整单取消，ASN 只勾有货行」；
+  只有全部明细缺货才整组剔除。早期「有一个没货就整单剔」会让 PB 发催单邮件。
+- **每个明细表永远并列两个 SKU**（用户明确要求）：对方
+  `Buyers Catalog or Stock Keeping #`（在 SPS 里定位明细行）+ 我方 `Vendor Style`
+  （内部对照，也是库存匹配的键）。
+- **checked CSV 与 SPS 导出的那份字节级一致**：做法是**逐行照搬源文件原文**
+  （`_source_lines()`），不重新序列化 —— SPS 的导出是参差的（表头 147 列、
+  数据行 146 列、末列无名），经过 pandas 往返会写出字面量 `Unnamed: 146`
+  与每行一个尾逗号。实测 2026-09-17 真实批次与历史
+  `checked0stock order x19 20260917_0341_630468.csv` **SHA-256 完全相同**
+  （`e99a9b78…`，19,363 字节）。行数对不上（字段含换行）时报 `ragged_source` 而不是出个格式不同的文件。
+- **网页两入口 + 续出件**：导航「检查 SPS 新订单」与「直接生成发货文件」分开；
+  检查任务成功后页面出现「继续生成发货文件」→ **只需再传 Packslip PDF**，
+  worker 用 `storage.link_or_copy` 把上次那份 checked CSV 落成新任务的 `order.csv`，
+  `source_job_id` 指回检查任务，历史可追溯。
+- **数据库**：`jobs` 加 `job_type`（`fulfillment` / `stock_check`），老库启动时
+  `ALTER TABLE` 自动补列，已有任务默认 `fulfillment` 不受影响；worker 按类型分发。
+- **测试 89 → 132**（新增 43）：预检服务 23、worker 分发 2、仓库迁移 3、Web 15。
+  全套通过、2 项跳过（需 Docker 的 Redis/RQ 生命周期用例）。
+- **网页版明细表**：任务页直接列出部分缺货 PO / ASN 有货明细 / 缺货明细 / 全部缺货 PO
+  四张逐行表（两个 SKU 并列、数量按整数显示），与 xlsx **同一批 DataFrame**；
+  超过 300 行截断并在页面上写明。旧任务没有 `tables` 则跳过，不 500。
+- **产物名里的 PO 数改为筛完剩下的**：`order x21 …` → `order x18 …`（用户要求），
+  源导出的时间戳/流水号保留以便回溯。
+- **PR #274 复审修正（Cursor 审出 7 条，全部已修并补回归）**：
+  ① 断货 SKU 只按逗号切 → 多行输入被当成一个 SKU、缺货行静默漏掉；两个入口
+  改用 `app.parse_sku_list()`（同一个缺陷在出件入口也存在，一起修）；
+  ② 回读校验拿**规范化后**的 DataFrame 比逐行照搬的原文 → 源文件里 Record Type
+  写成小写 `d` / 字段带空格这类合法输入会误报 `output_verify_failed`；改为比源文件原文；
+  ③ 同名产物在 Windows 上 `shutil.move` 直接失败，且先移 CSV 再移 XLSX 会留下
+  「新 CSV + 旧 XLSX」；改为先统一探占用（`output_locked`）再 `os.replace` 原子覆盖；
+  ④ xlsx 里以 `=` 开头的值会被 openpyxl 写成**公式**（公式注入）；`_excel_safe()` 只给
+  xlsx 加 `'` 前缀，checked CSV 保持原始字节；
+  ⑤ `report["tables"]` 先把整表转 Python 列表再切片 → 先 `head(limit)`；
+  ⑥ 老库升级时 Web 与 worker 会同时 `ALTER TABLE`，输的那个收到 duplicate column name
+  → 只放过这一种错误；
+  ⑦ 页面写「每个 PO 的 Header 都保留」不准确（整单缺货的 PO 会整组剔除）→ 改成
+  「除整单缺货被拿掉的 PO 以外，Header 全部保留」；
+  ⑧ **真机上又发现一处**：`open(path,"ab")` 预探**探不出字节区间锁**（Excel 常是这类），
+  预探通过后失败发生在 `copy2`，用户看到的是一坨 `PermissionError` 堆栈。改为不做预探，
+  在发布函数里捕获 `OSError`、`PermissionError` 翻译成 `output_locked`，并把已发布的**回滚**
+  （备份到同卷临时目录 → 全部成功才算数）。用真 `msvcrt.locking` 验过：
+  被挡住、两个产物都没动、无残留，解锁后重跑正常覆盖；
+  ⑨ 公式转义条件与 openpyxl 源码**逐字对齐**（`len > 1 且以 = 开头`）：实测 `+` / `-` / `@`
+  开头 openpyxl 存的是 `t="inlineStr"` 文本单元格（CSV 才需要防那三个），
+  顺手加上反而会把 `-1`、`+A1` 这类正常值改坏；
+  ⑩ `run_stock_check.py` 模块注释「每个 PO 的 Header 一律保留」不准确，一并改。
+- **后续**：见第十四轮（2026-09-24 已部署并真机验收）。
+
+## 2026-09-23（第十二轮：断货 SKU 列表改为网页上自己维护）
+- **动机**：断货清单原先只能改服务器 `.env` + 重启容器，等于每次断货/恢复有货都要
+  找人改。使用者要求「有个地方能自己设置」，这次补上。
+- **新增**「断货 SKU」设置页（导航进入，`/settings` → POST `/settings/no-stock`）：
+  可增删清单、保存后立即影响新建任务的预填，并显示上次修改时间与修改人。
+- **存储**：新增 `app_settings` 表（`CREATE TABLE IF NOT EXISTS`，老库自动补表）。
+  取值顺序是**页面设过就用页面那份，否则回落到 `.env` 的初始值** —— 所以 `.env`
+  降级为「初始值」，README / `.env.example` / AGENT_HANDOFF 都按这个口径改了。
+- **解析**：`app.parse_sku_list()` —— 中英文逗号/分号/空格/换行都算分隔，按小写去重
+  （保留首次出现的写法），空项丢掉；留空 = 不过滤。
+- 顺带修正两处过期陈述：AGENT_HANDOFF §4.1 的「启动时一律把 queued/running 标失败」
+  （2026-09-22 起只有 running 会被标失败 + 有队列对账），以及 `app.py` 启动日志里
+  「未设白名单 = 任何钉钉用户可登录」（桥 2026-09-23 起按组织成员判定）。
+- **测试**：新增 `tests/test_settings.py`（解析规则 7 例 + 页面/保存/清空/CSRF 5 例）
+  与 `test_auth.py` 两条「未登录不能看也不能改设置」。全套 89 项通过、2 项跳过
+  （另有 Redis/RQ 生命周期用例需本地 Docker，默认跳过）。
+
 ## 2026-09-23（第十一轮：桥收口后更正登录措辞 + 把积压改动一起上线）
 - **桥已收口，登录措辞更正**：钉钉 OIDC 桥（`new-api-dingtalk-oidc`）2026-09-23 起按
   **组织成员**判定 —— 不在本公司通讯录的人返回 `60121` 直接拒绝。此前桥的 `corpId`

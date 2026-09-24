@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}生成发货文件 · PB 订单处理{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>生成发货文件</h1>
+
+  {% if error %}
+  <p class="error">{{ error }}</p>
+  {% endif %}
+
+  <table class="kv">
+    <tr><th>复用 checked CSV</th><td class="mono">{{ checked_name }}</td></tr>
+    <tr><th>来源检查任务</th><td><a href="{{ prefix }}/jobs/{{ check_job.id }}"><code>{{ check_job.id }}</code></a></td></tr>
+    <tr><th>断货快照</th><td class="mono">{{ (check_job.report.no_stock_snapshot | join('、')) if check_job.report and check_job.report.no_stock_snapshot else '（无）' }}</td></tr>
+  </table>
+  <p class="muted">
+    出件范围由上面这份 checked CSV 决定，<strong>这里不需要再填断货 SKU</strong> ——
+    缺货明细已经在检查那一步剔掉了。
+  </p>
+
+  {% if not cache_ready %}
+  <p class="warn">
+    未检测到本地 SKU 名称缓存 <code>us_sku_name_cache.csv</code>。
+    普通出件不联网，缓存缺失时任务会直接失败 —— 请管理员先准备缓存（见 README「首次准备」）。
+  </p>
+  {% endif %}
+
+  <form method="post" action="{{ prefix }}/jobs/{{ check_job.id }}/fulfill" enctype="multipart/form-data" id="fulfill-form">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+
+    <label>
+      Packslip PDF <span class="req">必填</span>
+      <input type="file" name="packslip" accept=".pdf" required>
+      <small>在 SPS 里勾选完明细后导出的那份 PDF。页数应与 checked CSV 的 Detail 行数一致。</small>
+    </label>
+
+    <label>
+      操作者
+      <input type="text" name="actor" value="{{ user.display_name if auth_enabled and user else 'web-user' }}">
+    </label>
+
+    <button class="btn primary" type="submit" id="submit-btn">提交任务</button>
+    <small class="muted" id="submit-hint">提交后立即跳转任务页，处理在后台继续；可以关闭浏览器。</small>
+  </form>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var form = document.getElementById("fulfill-form");
+  var btn = document.getElementById("submit-btn");
+  var hint = document.getElementById("submit-hint");
+  if (!form) return;
+  form.addEventListener("submit", function () {
+    if (form.dataset.submitted === "1") return;
+    form.dataset.submitted = "1";
+    btn.disabled = true;
+    btn.textContent = "正在上传…";
+    hint.textContent = "正在上传文件（Packslip 约 11MB），请勿关闭或刷新页面…";
+    hint.className = "warn";
+  });
+})();
+</script>
+{% endblock %}

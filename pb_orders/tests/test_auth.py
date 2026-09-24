@@ -85,6 +85,21 @@ def _csrf(c) -> str:
 
 # ---------- 未登录拦截 ----------
 
+def test_anonymous_settings_redirects_to_login(auth_client):
+    """设置页也要登录 —— 它决定以后每次出件怎么过滤 SKU。"""
+    resp = auth_client.get(PREFIX + "/settings", follow_redirects=False)
+    assert resp.status_code == 303
+    assert "/oidc-login" in resp.headers["location"]
+
+
+def test_anonymous_cannot_save_settings(auth_client):
+    resp = auth_client.post(
+        PREFIX + "/settings/no-stock", data={"no_stock": "X-1"}, follow_redirects=False
+    )
+    assert resp.status_code == 303  # 闸门拦下，且用 303（POST 不会被重放）
+    assert auth_client.repo.get_setting("default_no_stock") is None
+
+
 def test_anonymous_page_redirects_to_login(auth_client):
     resp = auth_client.get(PREFIX + "/", follow_redirects=False)
     assert resp.status_code == 303

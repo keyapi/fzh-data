@@ -67,6 +67,13 @@ COL_QTY = "Qty Ordered"
 COL_VENDOR_STYLE = "Vendor Style"
 COL_SKUxQTY = "SKUxQTY"
 
+# build_order_df/导出真正会读到的列。缺了会以 `KeyError: 'Ship To Country'` 这种
+# 形式炸在深处，页面只能给一句「输入数据有问题」；先检查一遍，把缺哪几列说清楚。
+REQUIRED_COLUMNS = [
+    COL_PO, "PO Line #", COL_RECORD_TYPE, COL_QTY, COL_VENDOR_STYLE,
+    "Buyers Catalog or Stock Keeping #", "Ship To Country", "Unit Price",
+]
+
 
 def _timestamp(fmt="%Y-%m-%d_%H-%M-%S"):
     return datetime.now().strftime(fmt)
@@ -92,6 +99,14 @@ def drop_extra_empty_columns(df, max_cols=MAX_COLS):
 def build_order_df(path):
     """订单 CSV -> 通途导入用 DataFrame（拆行后）。"""
     df = load_order_csv(path)
+
+    missing = [c for c in REQUIRED_COLUMNS if c not in df.columns]
+    if missing:
+        # 这里是纯文本错误信息，别写 markdown 记号（页面会原样显示 **）
+        raise ValueError(
+            "订单 CSV 缺少必需列：" + "、".join(missing)
+            + "。出件要的是 SPS 导出的完整订单 CSV（checked0stock …），不是只有几列的摘要。"
+        )
 
     # 组内前向填充：pandas 3.0 的 groupby.ffill() 会丢掉分组键，且 include_groups=True 已禁用
     # 用 concat 把 PO Number 拼回首位（直接赋值会往碎片化的宽表里 insert，触发 PerformanceWarning）
