@@ -25,70 +25,10 @@
 </section>
 {% endif %}
 
-{% if job.report %}
-{% set r = job.report %}
-<section class="card">
-  <h2>数量对账</h2>
-  <table>
-    <thead><tr><th>口径</th><th>总数</th><th>拆分</th><th>差</th></tr></thead>
-    <tbody>
-      {% for row in r.reconciliation %}
-      <tr>
-        <td>{{ row.label }}</td><td>{{ row.total }}</td><td>{{ row.parts }}</td>
-        <td class="{{ 'bad' if row.diff else 'ok' }}">{{ row.diff }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-
-  <h2>校验明细</h2>
-  <table class="kv">
-    <tr><th>PDF 页数 / 唯一 PO</th><td>{{ r.pdf.pages }} / {{ r.pdf.unique_po }}</td></tr>
-    <tr><th>抽取失败（PO / Item）</th><td>{{ r.pdf.po_fail }} / {{ r.pdf.item_fail }}</td></tr>
-    <tr><th>订单拆行 / 通途列数</th><td>{{ r.orders.rows }} / {{ r.orders.columns }}</td></tr>
-    <tr><th>1:1 校验</th><td class="{{ 'ok' if r.one_to_one.ok else 'bad' }}">{{ r.one_to_one.pdf_pages }} 页 = {{ r.one_to_one.order_rows }} 行</td></tr>
-    <tr><th>join 未匹配</th><td class="{{ 'bad' if r.join.unmatched else 'ok' }}">{{ r.join.unmatched }}</td></tr>
-    {% if r.split.enabled %}
-    <tr><th>无货拆分</th><td>有货 {{ r.split.in_stock_pages }} 页 / 无货 {{ r.split.no_stock_pages }} 页（{{ r.split.note }}）</td></tr>
-    {% endif %}
-    {% if r.shipment %}
-    <tr><th>ASN 核对</th><td>订单 {{ r.shipment.ordered }} 件 / 实发 {{ r.shipment.shipped }} 件
-      {% if r.shipment.short %}（缺货 {{ r.shipment.short|length }} 个 SKU）{% else %}（已发齐）{% endif %}</td></tr>
-    {% endif %}
-    {% if r.missing_names %}
-    <tr><th>缺名称 SKU</th><td class="bad">{{ r.missing_names|join(', ') }}</td></tr>
-    {% endif %}
-  </table>
-
-  {% if r.join.unmatched %}
-  <h2>未匹配记录</h2>
-  <p class="muted">这些页没在订单里找到对应 SKU，标签上会缺 SKU：</p>
-  <ul class="mono">{% for u in r.join.unmatched_sample %}<li>{{ u }}</li>{% endfor %}</ul>
-  {% endif %}
-
-  {% if r.shipment and r.shipment.short %}
-  <h2>缺货 SKU</h2>
-  <table>
-    <thead><tr><th>SKU</th><th>订购</th><th>实发</th><th>差</th></tr></thead>
-    <tbody>
-      {% for s in r.shipment.short %}
-      <tr><td class="mono">{{ s.sku }}</td><td>{{ s.ordered }}</td><td>{{ s.shipped }}</td><td class="bad">{{ s.diff }}</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  {% endif %}
-
-  {% if r.warnings %}
-  <h2>警告</h2>
-  <ul class="warn-list">{% for w in r.warnings %}<li>{{ w }}</li>{% endfor %}</ul>
-  {% endif %}
-</section>
-{% endif %}
-
-{% if job.validate_only and job.status == "succeeded" %}
-<section class="card">
-  <p class="muted">本次为「仅校验」，未生成可下载产物。确认无误后请重新提交并取消勾选。</p>
-</section>
+{% if job.job_type == "stock_check" %}
+  {% include "_report_stock_check.html" %}
+{% else %}
+  {% include "_report_fulfillment.html" %}
 {% endif %}
 
 <section class="card">
@@ -114,6 +54,32 @@
   <p class="muted">处理完成后这里会出现可下载的文件。</p>
   {% endif %}
 </section>
+
+{% if job.job_type == "stock_check" and job.status == "succeeded" %}
+{% set checked = artifacts | selectattr('kind', 'equalto', 'checked_order') | list %}
+<section class="card">
+  <h2>下一步：生成发货文件</h2>
+  <p>
+    在 SPS 里按上面的操作表勾选完明细、导出 Packslip PDF 后，
+    <strong>在这里上传 Packslip PDF 即可继续</strong>——
+    不用再传 checked CSV，系统直接复用本次生成的
+    <span class="mono">{{ checked[0].download_name if checked else 'checked0stock CSV' }}</span>，
+    出件范围与本次检查结果完全一致。
+  </p>
+  <p>
+    <a class="btn primary" href="{{ prefix }}/jobs/{{ job.id }}/fulfill">继续生成发货文件</a>
+  </p>
+</section>
+{% endif %}
+
+{% if not job.source_job_id and job.job_type == "fulfillment" and job.status == "succeeded" %}
+<section class="card">
+  <p class="muted">
+    本任务是直接出件（未经过库存预检）。若这批 SPS New 订单还没筛过断货，
+    建议先走 <a href="{{ prefix }}/checks/new">检查 SPS 新订单</a>。
+  </p>
+</section>
+{% endif %}
 
 {% if job.status in ("succeeded", "failed") %}
 <section class="card">

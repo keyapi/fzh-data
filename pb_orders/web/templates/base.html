@@ -12,7 +12,8 @@
     <a class="brand" href="{{ prefix }}/">PB 订单处理</a>
     <nav>
       <a href="{{ prefix }}/">历史任务</a>
-      <a href="{{ prefix }}/jobs/new">新建任务</a>
+      <a href="{{ prefix }}/checks/new">检查 SPS 新订单</a>
+      <a href="{{ prefix }}/jobs/new">直接生成发货文件</a>
       <a href="{{ prefix }}/settings">断货 SKU</a>
       {% if auth_enabled and user %}
       <span class="who">{{ user.display_name }}</span>
@@ -27,7 +28,7 @@
     {% block content %}{% endblock %}
   </main>
   <footer class="foot">
-    Pottery Barn 出件：通途导入 xlsx · 标签 PDF · 背贴 PDF（离线，只读本地 SKU 缓存）
+    Pottery Barn 出件：SPS 库存预检 · 通途导入 xlsx · 标签 PDF · 背贴 PDF（离线，只读本地 SKU 缓存）
   </footer>
   {% block scripts %}{% endblock %}
 </body>

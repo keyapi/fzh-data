@@ -130,6 +130,22 @@ def remove_job_dirs(inputs_dir: Path, work_dir: Path, job_id: str) -> None:
             shutil.rmtree(target, ignore_errors=True)
 
 
+def link_or_copy(src: Path, dest: Path) -> Path:
+    """把文件放到目标路径（优先硬链接省磁盘），同名已存在则覆盖。
+
+    只用在校验过的文件上（如已发布的 checked CSV 复用成出件任务的 `order.csv`），
+    绝不用用户文件名拼路径。
+    """
+    src, dest = Path(src), Path(dest)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.unlink(missing_ok=True)
+    try:
+        os.link(src, dest)
+    except OSError:
+        shutil.copy2(src, dest)
+    return dest
+
+
 def clone_inputs(src_dir: Path, dest_dir: Path) -> list[str]:
     """把源任务的上传文件复制到新任务目录（重试用）。优先硬链接省磁盘。
 
@@ -141,11 +157,6 @@ def clone_inputs(src_dir: Path, dest_dir: Path) -> list[str]:
     for path in sorted(src_dir.iterdir()):
         if not path.is_file():
             continue
-        dest = dest_dir / path.name
-        dest.unlink(missing_ok=True)
-        try:
-            os.link(path, dest)
-        except OSError:
-            shutil.copy2(path, dest)
+        link_or_copy(path, dest_dir / path.name)
         names.append(path.name)
     return names

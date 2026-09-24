@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}检查 SPS 新订单 · PB 订单处理{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>检查 SPS 新订单（库存预检）</h1>
+  <p class="muted">
+    从 SPS 的 New 订单列表导出<strong>原始</strong>订单 CSV（文件名形如
+    <code>check0stock order x21 20260917_0338_456788.csv</code>）传上来，
+    系统按 <code>Vendor Style</code> 逐条明细判库存，产出：
+  </p>
+  <ul class="muted">
+    <li><strong>checked0stock CSV</strong> —— 缺货 Detail 剔除、有货 Detail 保留；
+      <strong>整单缺货的 PO 整组拿掉，其余 PO 的 Header 全部保留</strong>（部分缺货的 PO 也要留 Header）。</li>
+    <li><strong>SPS 库存检查操作表 xlsx</strong> —— 逐行告诉你哪些勾、哪些不勾，对方 SKU 与我方 SKU 并列。</li>
+  </ul>
+
+  <form method="post" action="{{ prefix }}/checks/new" enctype="multipart/form-data" id="check-form">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+
+    <label>
+      原始 SPS 订单 CSV <span class="req">必填</span>
+      <input type="file" name="raw_csv" accept=".csv" required>
+    </label>
+
+    <label>
+      断货 SKU（逗号或换行分隔）
+      <textarea name="no_stock" rows="4" placeholder="CENKZ1324-SkyBlue-97">{{ default_no_stock }}</textarea>
+      <small>
+        已按当前断货情况预填，<strong>可直接改</strong>。提交时这份清单会<strong>冻结进本次任务</strong>，
+        之后改设置也不会影响已出的结果。留空 = 不过滤（全量有货）。大小写不敏感。
+        <br>改以后的默认值去 <a href="{{ prefix }}/settings">断货 SKU 设置</a>。
+      </small>
+    </label>
+
+    <label>
+      操作者
+      <input type="text" name="actor" value="{{ user.display_name if auth_enabled and user else 'web-user' }}">
+    </label>
+
+    <button class="btn primary" type="submit" id="submit-btn">开始检查</button>
+    <small class="muted" id="submit-hint">检查很快，完成后在同一页下载结果。</small>
+  </form>
+</section>
+
+<section class="card">
+  <p class="muted">
+    已经手工筛过、手上就是 <code>checked0stock …</code> 的？
+    直接走 <a href="{{ prefix }}/jobs/new">直接生成发货文件</a>，不必再检查一遍。
+  </p>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var form = document.getElementById("check-form");
+  var btn = document.getElementById("submit-btn");
+  var hint = document.getElementById("submit-hint");
+  if (!form) return;
+  form.addEventListener("submit", function () {
+    if (form.dataset.submitted === "1") return;
+    form.dataset.submitted = "1";
+    btn.disabled = true;
+    btn.textContent = "正在上传…";
+    hint.textContent = "正在上传，请勿关闭或刷新页面…";
+    hint.className = "warn";
+  });
+})();
+</script>
+{% endblock %}
