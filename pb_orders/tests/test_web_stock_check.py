@@ -47,12 +47,16 @@ def test_uploaded_inputs_are_downloadable(client, pb_env):
 
     page = client.get(f"/jobs/{job_id}")
     assert page.status_code == 200
-    assert "输入文件（可下载核对）" in page.text
 
     art = next(a for a in client.repo.list_artifacts(job_id) if a["kind"] == "input_order")
     assert art["download_name"] == "check0stock order x21 20260917_0338_456788.csv"
     dl = client.get(f"/artifacts/{art['id']}/download")
     assert dl.status_code == 200
+
+    # 下载链接也要出现在顶部「输入」那一行 —— 区块放在页面很下面等于没被发现
+    header = page.text[: page.text.index("</table>")]
+    assert f"/artifacts/{art['id']}/download" in header
+    assert art["download_name"] in header
     # 下回来的就是上传的那份（逐字节）
     assert dl.content == (pb_env.tmp / "raw.csv").read_bytes()
 
@@ -60,17 +64,33 @@ def test_uploaded_inputs_are_downloadable(client, pb_env):
     assert (client.settings.inputs_dir / job_id / storage.ORDER_NAME).is_file()
 
 
-def test_inputs_and_outputs_are_separated_on_the_page(client, pb_env):
-    """输入块与产物块分开：一个是「你给我的」，一个是「我给你的」。"""
+def test_old_job_without_input_artifacts_still_renders_header(client, pb_env):
+    """功能上线前建的任务没有输入下载件：那一行要退回纯文本，不能 500 / 不能空白。"""
+    resp = upload_check(client, write_raw_orders(pb_env.tmp / "raw.csv"), no_stock="")
+    job_id = resp.headers["location"].rsplit("/", 1)[-1]
+    # 模拟老任务：删掉输入产物
+    for a in client.repo.list_artifacts(job_id):
+        if a["kind"].startswith("input_"):
+            with client.repo.connect() as conn:
+                conn.execute("DELETE FROM artifacts WHERE id = ?", (a["id"],))
+
+    page = client.get(f"/jobs/{job_id}")
+    assert page.status_code == 200
+    assert "check0stock order x21 20260917_0338_456788.csv" in page.text   # 名字还在
+    assert "该功能上线前" in page.text
+
+
+def test_inputs_are_only_linked_in_the_header_not_a_second_block(client, pb_env):
+    """输入的下载入口只在顶部「输入」那一行 —— 不再在页面下方另裂一块。"""
     resp = upload_check(client, write_raw_orders(pb_env.tmp / "raw.csv"), no_stock="")
     job_id = resp.headers["location"].rsplit("/", 1)[-1]
     page = client.get(f"/jobs/{job_id}").text
 
-    assert page.index("输入文件（可下载核对）") < page.index("产物下载")
-    # 产物块里不该再列出输入的类型名
-    outputs_block = page[page.index("产物下载"):]
-    assert "input_order" not in outputs_block
-    assert "SPS 库存检查操作表" in outputs_block
+    art = next(a for a in client.repo.list_artifacts(job_id) if a["kind"] == "input_order")
+    header = page[: page.index("</table>")]
+    assert f"/artifacts/{art['id']}/download" in header          # 顶部有链接
+    assert "输入文件（可下载核对）" not in page                    # 下方没有第二块
+    assert "input_order" not in page[page.index("产物下载"):]      # 产物表里也不列输入
 
 
 def test_fulfillment_job_exposes_its_reused_checked_csv(client, pb_env):

@@ -31,31 +31,9 @@
   {% include "_report_fulfillment.html" %}
 {% endif %}
 
-{# 上传的输入也留一份可下载 —— 使用者要能核对「我到底传了什么」。
-   input_* 单独成块，别和产物混在一起：一个是「你给我的」，一个是「我给你的」。 #}
-{% set inputs = artifacts | selectattr('kind', 'in', ['input_packslip', 'input_order']) | list %}
+{# 输入的下载入口在任务页顶部「输入」那一行（人自然会在上传的地方找），
+   这里只列产物。所以 input_* 要从产物表里排除掉，别在这里再裂出一块。 #}
 {% set outputs = artifacts | rejectattr('kind', 'in', ['input_packslip', 'input_order']) | list %}
-
-{% if inputs %}
-<section class="card">
-  <h2>输入文件（可下载核对）</h2>
-  <table>
-    <thead><tr><th>类型</th><th>文件名</th><th>大小</th><th>SHA-256</th><th></th></tr></thead>
-    <tbody>
-      {% for a in inputs %}
-      <tr>
-        <td>{{ ARTIFACT_LABELS.get(a.kind, a.kind) }}</td>
-        <td>{{ a.download_name }}</td>
-        <td class="muted">{{ a.size_bytes | human_size }}</td>
-        <td class="muted mono">{{ a.content_hash[:12] }}</td>
-        <td><a class="btn ghost" href="{{ prefix }}/artifacts/{{ a.id }}/download">下载</a></td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  <p class="muted">下载回来就是本次实际使用的那份输入；SHA-256 可与本地文件比对。</p>
-</section>
-{% endif %}
 
 <section class="card">
   <h2>产物下载</h2>

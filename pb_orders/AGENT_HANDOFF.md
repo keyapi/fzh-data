@@ -579,7 +579,8 @@ uv run pytest tests/ -q
 - [x] 保留策略：启动时按 `PB_ORDERS_RETENTION_DAYS`（默认 90 天）清理已完成任务与无人引用的产物。
       **只在服务/worker 启动时跑，不是定时任务**
 - [x] 同站 POST 带 CSRF 令牌（`web/csrf.py`）；上传磁盘名固定，原始文件名只用于展示
-- [x] **上传的输入也能下载核对**（任务页「输入文件」区块，带 SHA-256）；用 `storage.publish_input_copy`（硬链接/复制，**不移走** inputs/ 里的原文件）
+- [x] **上传的输入也能下载核对**：下载入口放在任务页顶部**「输入」那一行**
+      （人自然会去上传的地方找，别在下面另裂一块）；用 `storage.publish_input_copy`（硬链接/复制，**不移走** inputs/ 里的原文件）
 - [x] 断货 SKU 列表可在**网页上自己维护**（导航「断货 SKU」→ `app_settings` 表），
       改完立即影响新建任务的预填，不用改服务器 `.env`、不用重启（2026-09-23）
 - [x] 库存预检（步骤 0）：上传 SPS 原始订单 CSV → checked CSV + SPS 操作表；

@@ -16,10 +16,26 @@
     <tr><th>开始</th><td>{{ (job.started_at or '-')[:19].replace('T', ' ') }}</td></tr>
     <tr><th>结束</th><td>{{ (job.finished_at or '-')[:19].replace('T', ' ') }}</td></tr>
     {% if job.job_type == "stock_check" %}
-    <tr><th>输入</th><td>{{ job.input_order }}</td></tr>
+    {% set input_arts = artifacts | selectattr('kind', 'equalto', 'input_order') | list %}
     {% else %}
-    <tr><th>输入</th><td>{{ job.input_packslip }} / {{ job.input_order }}</td></tr>
+    {% set input_arts = artifacts | selectattr('kind', 'in', ['input_packslip', 'input_order']) | list %}
     {% endif %}
+    {# 下载入口就放在使用者会看的那一行（原来只在页面很下面的区块里，等于没被发现） #}
+    <tr>
+      <th>输入</th>
+      <td>
+        {% for a in input_arts %}
+        <div>
+          <span class="muted">{{ ARTIFACT_LABELS.get(a.kind, a.kind) }}：</span>{{ a.download_name }}
+          <a class="btn ghost" href="{{ prefix }}/artifacts/{{ a.id }}/download">下载</a>
+          <span class="muted mono">{{ a.content_hash[:12] }}</span>
+        </div>
+        {% else %}
+        {{ job.input_packslip }}{% if job.input_packslip and job.input_order %} / {% endif %}{{ job.input_order }}
+        <span class="muted">（本次任务建立于该功能上线前，输入未留存下载件）</span>
+        {% endfor %}
+      </td>
+    </tr>
     <tr><th>断货 SKU</th><td>{{ job.no_stock or '（无，不过滤）' }}</td></tr>
     <tr><th>代码版本</th><td><code>{{ job.pipeline_version }}</code></td></tr>
   </table>
