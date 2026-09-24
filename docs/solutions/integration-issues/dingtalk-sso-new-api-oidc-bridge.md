@@ -158,12 +158,12 @@ VALUES
 
 - [AGENT_HANDOFF.md (US Proxy)](../../../us_openai_api_proxy/AGENT_HANDOFF.md) — CLIProxyAPI 上游渠道
 - [AGENT_HANDOFF.md (new-api)](../../../new-api-deployment/AGENT_HANDOFF.md) — 订阅套餐和配额文档
-- [sync_pricing.py](../../new-api-deployment/sync_pricing.py) — ModelRatio 计算脚本
-- [oidc-bridge/main.py](../../new-api-dingtalk-oidc/main.py) — OIDC Bridge 源码
-- [auto-bind-subscription.py](../../new-api-deployment/auto-bind-subscription.py) — 自动绑套餐脚本
-- [offboarding-check.py](../../new-api-deployment/offboarding-check.py) — 离职兜底检查脚本
-- [test-offboarding.py](../../new-api-deployment/test-offboarding.py) — 离职封号测试脚本
-- [stream_listener.py](../../new-api-dingtalk-oidc/stream_listener.py) — Stream 事件监听器
+- [sync_pricing.py](../../../new-api-deployment/sync_pricing.py) — ModelRatio 计算脚本
+- [oidc-bridge/main.py](../../../new-api-dingtalk-oidc/main.py) — OIDC Bridge 源码
+- [auto-bind-subscription.py](../../../new-api-deployment/auto-bind-subscription.py) — 自动绑套餐脚本
+- [offboarding-check.py](../../../new-api-deployment/offboarding-check.py) — 离职兜底检查脚本
+- [test-offboarding.py](../../../new-api-deployment/test-offboarding.py) — 离职封号测试脚本
+- [stream_listener.py](../../../new-api-dingtalk-oidc/stream_listener.py) — Stream 事件监听器
 
 ---
 

@@ -60,7 +60,7 @@ NAS `{账期桶}/{人名}/` 是钉钉**提交人**。店负责人是 Google 表�
 
 **9. 本机路径和真名不进 git。** 缓存/核算目录用 `DINGTALK_OA_DATA`、`DINGTALK_OA_WORK`；NAS 根用 `NAS_FINANCE_PERIOD_ROOT`；本地同步盘账期根用 `LOCAL_NAS_PERIOD_ROOT`（未设即报错）。NAS 账号用 `NAS_ADMIN_USER` / `NAS_SSH_USER` / `NAS_USERNAME`（只用最后一个会警告，它可能看不见「财务部」共享），只写在 `NAS_API/.env`。不要把含人名的磁盘路径、FileStation 路径或 NAS 账号写进脚本。
 
-**10. 算新月前先跨月剔除。** 钉钉只能按**发起时间**导出，迟交单会混进下个月的导出。财务共享表「钉钉账期提交时间不对挪动记录」登记这些行；算某个账期月时，用 `late_submission_keys.py --period <YYYY-MM>` 生成剔除集，再交给 `filter_export_by_period.py --exclude-keys`。两端都由 `ding_xlsx.build_key()` 现算唯一键 `审批编号|账期日期|销售账户|销售额`，**不要**直接用表里那列「唯一键」——金额 `str()` 出来是 `0` 还是 `0.0` 取决于 dtype，会静默漏剔除。规范：[late-submission-registry.md](../../dingtalk/dingtalk_oa_approval/docs/reference/late-submission-registry.md)。
+**10. 算新月前先跨月剔除。** 钉钉只能按**发起时间**导出，迟交单会混进下个月的导出。财务共享表「钉钉账期提交时间不对挪动记录」登记这些行；算某个账期月时，用 `late_submission_keys.py --period <YYYY-MM>` 生成剔除集，再交给 `filter_export_by_period.py --exclude-keys`。两端都由 `ding_xlsx.build_key()` 现算唯一键 `审批编号|账期日期|销售账户|销售额`，**不要**直接用表里那列「唯一键」——金额 `str()` 出来是 `0` 还是 `0.0` 取决于 dtype，会静默漏剔除。规范：[late-submission-registry.md](../../../dingtalk/dingtalk_oa_approval/docs/reference/late-submission-registry.md)。
 
 ## 结算周期基线
 
@@ -97,10 +97,10 @@ NAS `{账期桶}/{人名}/` 是钉钉**提交人**。店负责人是 Google 表�
 
 ## Related
 
-- [离职发起人附件 userNotExist](../../dingtalk/dingtalk_oa_approval/docs/research/departed-originator-download.md)
-- [迟交挪动登记与跨月剔除](../../dingtalk/dingtalk_oa_approval/docs/reference/late-submission-registry.md)
-- [2026-09-10 7 月对照过程](../../dingtalk/dingtalk_oa_approval/docs/research/2026-09-10-july-amazon-period-reconcile.md)
-- [2026-09-09 附件拉取与 DRM 对照审计](../../dingtalk/dingtalk_oa_approval/docs/research/2026-09-09-attachment-fetch-and-drm-audit.md)
-- [浏览器补下载钉钉管理后台](../../dingtalk/dingtalk_oa_approval/docs/research/browser-admin-download.md)
+- [离职发起人附件 userNotExist](../../../dingtalk/dingtalk_oa_approval/docs/research/departed-originator-download.md)
+- [迟交挪动登记与跨月剔除](../../../dingtalk/dingtalk_oa_approval/docs/reference/late-submission-registry.md)
+- [2026-09-10 7 月对照过程](../../../dingtalk/dingtalk_oa_approval/docs/research/2026-09-10-july-amazon-period-reconcile.md)
+- [2026-09-09 附件拉取与 DRM 对照审计](../../../dingtalk/dingtalk_oa_approval/docs/research/2026-09-09-attachment-fetch-and-drm-audit.md)
+- [浏览器补下载钉钉管理后台](../../../dingtalk/dingtalk_oa_approval/docs/research/browser-admin-download.md)
 - [渠道账号表同步 EN](../workflow-issues/en-channel-account-gsheet-sync.md)
 - [网页任务必须先 dispatch --check](../workflow-issues/search-first-before-implementing.md)

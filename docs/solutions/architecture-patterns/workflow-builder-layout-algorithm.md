@@ -371,8 +371,8 @@ def generate_workflow_data(states, transitions):
 ## 相关文档
 
 - [ERPNext 工作流操作指南](erpnext-workflow-operations-guide.md) — 第 7 节涵盖 workflow_data 陷阱和保存方法
-- [ERPNext 工作流配置完整指南](../erpnext-workflow-configuration.md) — workflow_data 字段定义
-- [生产→测试工作流复制实录](../workflow-copy-prod-to-test.md) — Lesson 69: workflow_data 非必需但影响设计器
+- [ERPNext 工作流配置完整指南](erpnext-workflow-configuration.md) — workflow_data 字段定义
+- [生产→测试工作流复制实录](../workflow-issues/workflow-copy-prod-to-test.md) — Lesson 69: workflow_data 非必需但影响设计器
 - [销售出库单审批布局快照](../../../EN_API/prod_wf_销售出库单审批_layout.json) — 用户手动排列的参考布局
 - [自动生成布局测试输出](../../../EN_API/gen_wf_layout_v2.json) — 算法生成的布局 JSON
 

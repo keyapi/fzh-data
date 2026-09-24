@@ -235,11 +235,12 @@ uv sync
    ```
 10. **OKF 文档规范**：新建子项目/模块时，必须创建 `docs/` 目录，按 [OKF v0.1](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md) 规范编写文档。所有 `.md` 文件必须有 YAML frontmatter（`type` 字段必填），每个目录必须有 `index.md`，每个 bundle 必须有 `log.md`。参考示例：`advertise/docs/`。触发 `/okf` 或编辑 Markdown 时自动加载 OKF skill。
 11. **索引联动更新**: 修改或新建子项目 OKF 文档后，**必须**运行 `python scripts/update_index.py` 同步更新根目录 `index.md`。完成子项目文档更新后输出 "已同步更新根目录索引"。
+    动过 `docs/solutions/` 时**同样必须**跑 `uv run python scripts/check_solutions_health.py --fix`：它重建根平表并体检孤儿文档 / 索引漂移 / 断链 / 上表篇数。新增的 learning 若是孤儿，要么挂到相关 skill（只写路径，不复制内容），要么写进 `docs/solutions/exclusions.txt` 并给原因——**不允许静默放着**。
 
 ## 文档体系
 
 ```
-AGENTS.md (< 200 lines)           ← 你正在读的，项目总纲 + 路由地图
+AGENTS.md                        ← 你正在读的，项目总纲 + 路由地图
 ├── index.md                      ← 自动生成的子项目文档索引（scripts/update_index.py）
 ├── CONTRIBUTING.md               ← 技术开发贡献指南（B 类用户）
 ├── CONCEPTS.md                    ← 共享领域词汇（实体、流程、状态概念）
@@ -257,6 +258,25 @@ AGENTS.md (< 200 lines)           ← 你正在读的，项目总纲 + 路由地
 ├── (其他 6 个模块)/AGENT_HANDOFF.md   ← 各模块详情
 └── .agents/skills/*/SKILL.md     ← Agent Skill 入口（按触发词加载）
 ```
+
+### 经验库路由（`docs/solutions/`）
+
+**动手前先查这里有没有现成结论**——踩过的坑基本都在。107 篇按 category 分 8 类，每类一份 `index.md`：
+
+| 类别 | 篇数 | 什么时候读 |
+|------|-----|-----------|
+| `workflow-issues/` | 29 | 账期对账、迟交/错位、跨期结算、批处理流程 |
+| `integration-issues/` | 20 | API 鉴权 / 限流 / 字段长度 / OIDC / Webhook 等集成踩坑 |
+| `architecture-patterns/` | 18 | 「这个管道/系统为什么这样设计」 |
+| `tooling-decisions/` | 12 | 脚本、工具选型、产出校验 |
+| `developer-experience/` | 10 | Windows / worktree / MCP / Colab 等本机环境坑 |
+| `conventions/` | 9 | 团队约定（配对、命名、SOP） |
+| `best-practices/` | 7 | 通用工程做法（防漏数、知识库防腐、先搜再造、安全加固） |
+| `documentation-gaps/` | 2 | 文档与断言的缺口 |
+
+定位单篇：`grep -rl "^module: <模块名>" docs/solutions/`（frontmatter 有 `module` / `tags` / `problem_type`）。
+全量平表：`docs/solutions/index.md`（由 `scripts/check_solutions_health.py --fix` 生成）。
+体检：`uv run python scripts/check_solutions_health.py`——查孤儿文档、索引漂移、断链、上表篇数是否过期。
 
 ### 团队协作角色
 

@@ -475,3 +475,10 @@ def compute_sign(access_token, app_id, app_secret, url_path):
 - `sellfox-api-proxy/AGENT_HANDOFF.md` — 代理网关 Agent 接手文档
 - `SELLFOX_API/docs/lessons/2026-06-25-sellfox-integration-lessons.md` — 16 条 API 集成教训
 - `SELLFOX_API/docs/api-reference/开发指南/` — 认证、签名、限流、公共参数
+
+## 相关经验（docs/solutions）
+
+踩过的坑与设计取舍，动手前先读：
+
+- `docs/solutions/architecture-patterns/sellfox-ivyeaops-report-job-queue.md` —— Sellfox 报表 Job 队列（错开 create + 合并轮询）
+- `docs/solutions/best-practices/sellfox-empty-searchterm-vs-target-report-split.md` —— 浏览空表 ≠ 拉取失败 — VERCART 搜索词/定向复验

@@ -21,16 +21,16 @@ import openpyxl
 from openpyxl.styles import PatternFill
 
 # ================= 本月参数（下月复用只改这里） =================
-FINANCE_FILE = r"D:\Work\美国\Tracy Miller\PB orders\payment advice\给财务\PB Remittance Advice Payment Date 20240430-20260813_差5单未付 20260814_171350.xlsx"
+FINANCE_FILE = r"D:\Work\美国\Tracy Miller\PB orders\payment advice\给财务\PB Remittance Advice Payment Date 20240430-20260922_20260923_164417.xlsx"
 OUT_DIR = r"D:\Work\美国\Tracy Miller\PB orders\payment advice\To Tracy Miller"
 # 账期列表：(start, end) 格式 YYYYMMDD。默认每月两个独立账期；
 # 如需一次合并结算（如 2026-08 付 05/19-07/18 两期），可临时改为 [("20260519","20260718")]
-PERIODS = [("20260519", "20260618"), ("20260619", "20260718")]
+PERIODS = [("20260719", "20260918")]
 # 各账期预计付款总额（硬校验，来自财务确认）；如需一次合并结算可加 ("20260519","20260718") -> 23028.46
-EXPECTED = {"20260519-20260618": 14185.71, "20260619-20260718": 8842.75}
+EXPECTED = {"20260719-20260918": 29193.28}
 # 上轮账期 TM 文件（供 P1 的"上轮未付本轮已付"）；未列出的账期自动衔接上一期的未付清单
 PREV_SOURCE = {
-    "20260519": r"D:\Work\美国\Tracy Miller\PB orders\payment advice\To Tracy Miller\PB Remittance Advice Payment Date 20260419-20260518.xlsx",
+    "20260719": r"D:\Work\美国\Tracy Miller\PB orders\payment advice\To Tracy Miller\PB Remittance Advice Payment Date 20260519-20260718.xlsx",
 }
 COMMISSION_RATE = 0.05
 K2_NOTE = (
@@ -93,8 +93,16 @@ def read_prev_unpaid(file):
 
 
 def build_notes(nws, period_start, period_end, inv_start, inv_end, pay_start, pay_end,
-                actual_pay_start, actual_pay_end, unpaid_last_paid, unpaid_this):
-    """写 Notes sheet（结构/样式对照示例 20260419-20260518）。"""
+                actual_pay_start, actual_pay_end, unpaid_last_paid, unpaid_this,
+                pb_inv_start=None, pb_inv_end=None, carry_note=None):
+    """写 Notes sheet（结构/样式对照示例 20260419-20260518）。
+
+    日期两套口径，别混：
+      A/B（Invoice To PB）     = 我们操作发货生成 invoice 的日期（SPS 侧）。
+      C/D（PB Invoice）        = PB Remittance Advice 里的 Invoice Date，按 **UPS 实际收到包裹**确认，
+                                 只可能等于或晚于我方日期（仓库迟发/漏发会让它明显靠后）。
+      A2 填"本期正常"的起点；上期未付结转的那几张日期早于它，写进 A3 备注（`plus Nx M/D/YYYY`）。
+    """
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     f10 = Font(name="Arial", size=10)
     f10b = Font(name="Arial", size=10, bold=True)
@@ -146,8 +154,9 @@ def build_notes(nws, period_start, period_end, inv_start, inv_end, pay_start, pa
         return datetime.datetime(v.year, v.month, v.day)
     put(2, 1, dt(inv_start), f11, None, date_fmt, center)
     put(2, 2, dt(inv_end), f11, None, date_fmt, center)
-    put(2, 3, dt(inv_start), f11, None, date_fmt, center)
-    put(2, 4, dt(inv_end), f11, None, date_fmt, center)
+    # C/D 是 PB 侧发票日期（PB Remittance Advice!E，按 UPS 实收确认），与 A/B 口径不同
+    put(2, 3, dt(pb_inv_start or inv_start), f11, None, date_fmt, center)
+    put(2, 4, dt(pb_inv_end or inv_end), f11, None, date_fmt, center)
     put(2, 5, dt(pay_start), f11, None, date_fmt, center)
     put(2, 6, dt(pay_end), f11, None, date_fmt, center)
     put(2, 7, f"=SUMIF('{INV_SHEET}'!X:X,\"H\",'{INV_SHEET}'!CA:CA)", f10, fill_yellow, amt_fmt, center)
@@ -156,7 +165,9 @@ def build_notes(nws, period_start, period_end, inv_start, inv_end, pay_start, pa
     put(2, 10, "=H2*I2", f10, None, amt_fmt, center)
     put(2, 11, K2_NOTE, f10, None, None, wrap)
 
-    # Row 3 actual dates（实际首末付款日，非账期边界）
+    # Row 3 actual dates（实际首末付款日，非账期边界）+ A3 上期未付结转备注
+    if carry_note:
+        put(3, 1, carry_note, f10, None, None, wrap)
     put(3, 5, f"Actual PB Payment Start Date: {actual_pay_start.month}/{actual_pay_start.day}/{actual_pay_start.year}", f10, None, None, wrap)
     put(3, 6, f"Actual PB Payment End Date: {actual_pay_end.month}/{actual_pay_end.day}/{actual_pay_end.year}", f10, None, None, wrap)
 
@@ -251,11 +262,25 @@ def build_tm_file(fin_wb_values, fin_wb_styles, period, prev_unpaid):
     if carry_days:
         ledger_start = min(ledger_start, min(carry_days))
     ledger_end = max(paid_days)
-    inv_start, inv_end = ledger_start, ledger_end
 
     # 4) 纳入发票 = 范围内 H 行发票号 - 已结算；上轮未付结转必须全保留
     included_inv = {i for i in inv_date if ledger_start <= inv_date[i] <= ledger_end and i not in settled_before}
     included_inv |= {i for i in prev_unpaid if i in inv_date}  # 结转安全网
+
+    # A2 = "本期正常"起点（剔除上期未付结转）；结转的那几张日期写进 A3 备注
+    normal_days = {inv_date[i] for i in (included_inv - set(prev_unpaid)) if inv_date.get(i)}
+    inv_start = min(normal_days) if normal_days else ledger_start
+    inv_end = ledger_end
+    _carry = {}
+    for i in prev_unpaid:
+        d = inv_date.get(i)
+        if d:
+            _carry[d] = _carry.get(d, 0) + 1
+    carry_note = ", ".join(f"plus {n}x {d.month}/{d.day}/{d.year}" for d, n in sorted(_carry.items())) or None
+
+    # C2/D2 = PB 侧发票日期（PB Remittance Advice!E，按 UPS 实收确认，只可能等于或晚于我方）
+    pb_days = sorted({x for x in (to_date(p[4]) for p in pay_rows) if x})
+    pb_inv_start, pb_inv_end = (pb_days[0], pb_days[-1]) if pb_days else (None, None)
 
     inv_rows = []
     for r in range(2, fi.max_row + 1):
@@ -335,10 +360,11 @@ def build_tm_file(fin_wb_values, fin_wb_styles, period, prev_unpaid):
 
     # Notes
     build_notes(ws_n, start, end, inv_start, inv_end, start, end,
-                pay_dates[0], pay_dates[-1], unpaid_last_paid, unpaid_this)
+                pay_dates[0], pay_dates[-1], unpaid_last_paid, unpaid_this,
+                pb_inv_start, pb_inv_end, carry_note)
 
     wb.calculation.fullCalcOnLoad = True
-    return wb, pay_rows, unpaid_this, inv_start, inv_end
+    return wb, pay_rows, unpaid_this, inv_start, inv_end, pb_inv_start, pb_inv_end, carry_note
 
 
 def main():
@@ -357,11 +383,15 @@ def main():
             prev_unpaid = prev_unpaid_this
             print(f"[{period[0]}-{period[1]}] 上轮未付衔接上一期: {len(prev_unpaid)} 张")
 
-        wb, pay_rows, unpaid_this, inv_start, inv_end = build_tm_file(fin_values, fin_styles, period, prev_unpaid)
+        wb, pay_rows, unpaid_this, inv_start, inv_end, pb_inv_start, pb_inv_end, carry_note = \
+            build_tm_file(fin_values, fin_styles, period, prev_unpaid)
         pay_total = round(sum(p[8] for p in pay_rows), 2)
         key = f"{period[0]}-{period[1]}"
         print(f"[{key}] 付款 {len(pay_rows)} 行, 总额 {pay_total}")
-        print(f"   发票范围 {inv_start}..{inv_end}，未付本账期 {len(unpaid_this)} 张")
+        print(f"   A/B Invoice to PB 范围 {inv_start}..{inv_end}"
+              + (f"（A3 备注：{carry_note}）" if carry_note else ""))
+        print(f"   C/D PB Invoice 范围   {pb_inv_start}..{pb_inv_end}（PB 侧按 UPS 实收确认）")
+        print(f"   未付本账期 {len(unpaid_this)} 张")
 
         # 硬校验
         exp = EXPECTED.get(key)

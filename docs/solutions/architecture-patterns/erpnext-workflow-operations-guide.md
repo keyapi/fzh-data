@@ -275,8 +275,8 @@ ERPNext 工作流的搭建容易出错、调试成本高。缺失依赖项导致
 
 ## 相关文档
 
-- [ERPNext 工作流配置完整指南（字段参考）](../erpnext-workflow-configuration.md)
-- [生产→测试工作流复制实录（Purchase Receipt V3 + 销售出库单）](../workflow-copy-prod-to-test.md)
+- [ERPNext 工作流配置完整指南（字段参考）](erpnext-workflow-configuration.md)
+- [生产→测试工作流复制实录（Purchase Receipt V3 + 销售出库单）](../workflow-issues/workflow-copy-prod-to-test.md)
 - [FAC 开发实战笔记（Lessons 62-72）](../../fac-dev-notes.md)
 - [生产系统工作流 JSON 快照](../../../EN_API/workflow_prod_output.json)
 - [API 凭证模板](../../../EN_API/.env.example)

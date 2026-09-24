@@ -248,8 +248,8 @@ roles_needed = {s["allow_edit"] for s in wf["states"]} | {t["allowed"] for t in 
 ## 相关文档
 
 - [FAC MCP 部署指南](fac-mcp-setup.md) — 如何连接测试站
-- [ERPNext 工作流配置完整指南](solutions/erpnext-workflow-configuration.md) — Workflow 所有字段和行为规则
-- [生产→测试工作流复制实录](solutions/workflow-copy-prod-to-test.md) — 本次完整操作记录
+- [ERPNext 工作流配置完整指南](solutions/architecture-patterns/erpnext-workflow-configuration.md) — Workflow 所有字段和行为规则
+- [生产→测试工作流复制实录](solutions/workflow-issues/workflow-copy-prod-to-test.md) — 本次完整操作记录
 - [Agent 开发指南](agent-guide.md) — Agent 行为规则和代码约定
 - [FAC GitHub](https://github.com/buildswithpaul/Frappe_Assistant_Core) — 源码 + Issues
 - [FAC Issue #203](https://github.com/buildswithpaul/Frappe_Assistant_Core/issues/203) — 自定义报表 filter 自动发现 Bug

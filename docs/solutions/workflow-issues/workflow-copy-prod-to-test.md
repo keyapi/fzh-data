@@ -1,7 +1,12 @@
 ---
-type: solution
-category: erpnext-workflow
-created: 2026-07-03
+okf: v0.1
+type: Reference
+title: 从生产系统复制 Purchase Receipt 工作流 V3 到测试系统
+date: 2026-07-03
+category: workflow-issues
+module: erpnext
+problem_type: workflow_issue
+component: tooling
 tags: [erpnext, workflow, prod-to-test, fac-mcp, rest-api]
 ---
 
@@ -233,11 +238,11 @@ roles_needed = {s["allow_edit"] for s in wf["states"]} | {t["allowed"] for t in 
 
 ## 相关文件
 
-- [ERPNext 工作流配置完整指南](erpnext-workflow-configuration.md) — 所有字段和行为规则
-- [FAC MCP 部署指南](../fac-mcp-setup.md) — 测试系统 MCP 连接方式
-- [FAC 开发实战笔记](../fac-dev-notes.md) — FAC 工具使用技巧和踩坑
-- [.env.example](../../EN_API/.env.example) — API 凭证配置模板
-- [ERPNext Workflow Operations Guide](architecture-patterns/erpnext-workflow-operations-guide.md) — 命名规范、设计模式、测试策略、常见陷阱
+- [ERPNext 工作流配置完整指南](../architecture-patterns/erpnext-workflow-configuration.md) — 所有字段和行为规则
+- [FAC MCP 部署指南](../../fac-mcp-setup.md) — 测试系统 MCP 连接方式
+- [FAC 开发实战笔记](../../fac-dev-notes.md) — FAC 工具使用技巧和踩坑
+- [.env.example](../../../EN_API/.env.example) — API 凭证配置模板
+- [ERPNext Workflow Operations Guide](../architecture-patterns/erpnext-workflow-operations-guide.md) — 命名规范、设计模式、测试策略、常见陷阱
 
 ---
 
@@ -287,4 +292,4 @@ Approved (doc=1)
 ### URL
 
 测试系统: http://ensh.vilavi.cn/app/workflow/销售出库单审批
-- [workflow_prod_output.json](../../EN_API/workflow_prod_output.json) — 生产系统工作流原始 JSON
+- [workflow_prod_output.json](../../../EN_API/workflow_prod_output.json) — 生产系统工作流原始 JSON

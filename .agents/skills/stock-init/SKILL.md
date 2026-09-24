@@ -67,3 +67,4 @@ uv run python build_saihu_stock_init.py
 
 - [给人看的 README](../../../stock_init/README.md)
 - [Agent 详细参考](../../../stock_init/AGENT_HANDOFF.md) — 仓库映射、成本选取表、函数索引、字段映射、边界条件、成本借用详则
+- [扫目录取输入防漏数](../../../docs/solutions/best-practices/scanner-silent-data-loss-guard.md) — 本模块脚本靠通配符扫「数据源/」，文件名写错会**静默丢数**；改扫描逻辑前先读这篇

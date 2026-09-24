@@ -68,3 +68,9 @@ uv run python -m sellfox_shipping.cli serve
 已完成：同步、审核、蜴国际 Excel、Batch/Artifact、Intent/CAS/限流、OIDC 路径（默认关）、VITE httpx 决策、蜴国际 API 可选。  
 未关：公网 OIDC、成功的 live 填号（赛狐 `trackNo` 可见性）。  
 Excel 仍生产默认。赛狐回写前必须用户确认范围。
+
+## 相关经验（docs/solutions）
+
+踩过的坑与设计取舍，动手前先读：
+
+- `docs/solutions/architecture-patterns/sku-label-pdf-generation-and-name-lookup.md` —— SKU 背贴 PDF 生成与通用名称查询模式

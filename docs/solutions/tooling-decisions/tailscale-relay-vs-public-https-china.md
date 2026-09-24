@@ -150,4 +150,4 @@ CGNAT 后面，就会自动切回 direct。修完之后**所有**走 Tailscale �
   —— 走公网 + 前缀化部署后踩到的登录跳转坑
 - [../integration-issues/dingtalk-oidc-bridge-client-onboarding.md](../integration-issues/dingtalk-oidc-bridge-client-onboarding.md)
   —— 公网暴露后补的登录层
-- [nas-access.md 所在模块](../../../NAS_API/README.md) —— 另一处 Tailscale 使用场景（exit node）
+- [nas-access.md 所在模块](../../../NAS_API/AGENT_HANDOFF.md) —— 另一处 Tailscale 使用场景（exit node）

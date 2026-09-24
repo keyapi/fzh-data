@@ -45,3 +45,9 @@ metadata:
 - **`歧义度` 不可用作闸门**：实测只跨 0.87–0.98，不具区分度，仅在「无法判定」分支显示。
 - 改模块时必须**同时**改 `AGENTS.md` 模块索引表 + `intent_router/catalog.yaml` +
   本 skill 目录，否则 `tests/test_catalog.py` 的集合相等断言会红。
+
+## 相关经验（docs/solutions）
+
+踩过的坑与设计取舍，动手前先读：
+
+- `docs/solutions/tooling-decisions/typesafe-jev-intent-router.md` —— 中文意图路由（intent_router）—— TypeSafe Jev + 置信度闸门

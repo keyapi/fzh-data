@@ -31,3 +31,9 @@ GOFO/TikTok/USPS 停放，不要去爬官网或擅自接 AfterShip。GLS 不要�
 无人值守：`--tt` 给目录取最新 xlsx、`--out` 省略按日期命名、`install_parcel_track_schedule.ps1` 注册 schtasks。
 
 禁止把 API key、买家姓名、原始跟踪号写进文档或 commit。
+
+## 相关经验（docs/solutions）
+
+踩过的坑与设计取舍，动手前先读：
+
+- `docs/solutions/workflow-issues/cargo-location-tracking-source-reliability.md` —— 「货物到哪了」查询方法 — 四个数据源的可靠性分级与查询顺序

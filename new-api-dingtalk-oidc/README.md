@@ -109,3 +109,11 @@ curl http://localhost:8086/.well-known/openid-configuration
 | `/token` | POST | 授权码换 id_token |
 | `/userinfo` | GET | 用户信息 |
 | `/health` | GET | 健康检查 |
+
+## 相关经验（docs/solutions）
+
+踩过的坑与设计取舍，动手前先读：
+
+- `docs/solutions/integration-issues/dingtalk-oidc-bridge-client-onboarding.md` —— 自建服务接入公司钉钉 OIDC 桥（客户端侧做法）
+- `docs/solutions/integration-issues/redirect-307-replays-post-405.md` —— 重定向用 307 会让浏览器重放 POST —— 退出登录报 405
+- `docs/solutions/integration-issues/reverse-proxy-prefix-return-to.md` —— 前缀化反向代理下的登录跳转：`return_to` 必须用浏览器可见路径

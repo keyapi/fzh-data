@@ -554,6 +554,12 @@ uv run pytest tests/ -q
       检查成功后「继续生成发货文件」**只需再传 Packslip PDF**，checked CSV 自动复用（2026-09-23）
 - [ ] 部分发货的一单跨两份 PDF 时，仍需人工确认哪些页给谁（目前按 SKU 自动拆）
 - [ ] 原 notebook 步骤 3.x（赛狐导入）、4.3（按仓库分拆，20260831 起停用）—— 未迁
+
+## 相关经验（docs/solutions）
+
+踩过的坑与设计取舍，动手前先读：
+
+- `docs/solutions/workflow-issues/pb-out-of-stock-notification-and-zero-stock-orders.md` —— PB 断货通知与 0 库存订单处理 — 数据来源、PO 映射与三个反直觉陷阱
 - [x] 库存预检**已部署到 EN 测试服务器**（2026-09-24，代码 `598baae`，`PB_ORDERS_PIPELINE_VERSION=pb-web-598baae`）；公网入口真机端到端验收通过：147 列宽表上传 → checked CSV（列/参差形状原样）→ 续出件只传 PDF → 1:1 通过、三件产物可下载。见 docs/log.md 第十四轮
 - [ ] **待修**：网页出件的通途 xlsx 名是 `…_order_on_…`（磁盘名固定 `order.csv` 导致），看不出是哪一批；命令行无此问题。修法：把 `job["input_order"]` 的 stem 传进 `service.run_job` 用于命名
 - [ ] EN 测试服务器上留了 4 条 `actor=验收测试` 的任务，需要时清理

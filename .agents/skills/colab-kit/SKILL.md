@@ -52,3 +52,9 @@ uv run python colab_kit/colab_kit.py verify $ID --from /tmp/nb.ipynb --expect-ch
 - 不要在用户还开着 Colab 标签页、没刷新时就说"改好了"。
 - 不要跳过 `verify`。
 - 不要用本机系统 python。
+
+## 相关经验（docs/solutions）
+
+踩过的坑与设计取舍，动手前先读：
+
+- `docs/solutions/tooling-decisions/colab-kit-notebook-edit-toolbox.md` —— 为什么把「改同事的 Colab notebook」做成独立工具箱 colab_kit（而不是塞进 google_drive_permissions）

@@ -219,3 +219,9 @@ curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8099   # 应返回 200
 |------|---------|
 | `upload_local_images.py` (CLI) | AI 自动调用、批处理、固定目录 |
 | `image_upload_app.py` (Web) | 普通同事手动操作、不同文件夹选图、需要排序 |
+
+## 相关经验（docs/solutions）
+
+踩过的坑与设计取舍，动手前先读：
+
+- `docs/solutions/architecture-patterns/en-end-to-end-supply-chain-fulfillment-visibility.md` —— EN 端到端供应链履约可视化蓝图 — 从销售订单到国外仓上架

@@ -76,3 +76,9 @@ uv run python web_automation/scripts/doctor.py
 - [playwright-setup](../playwright-setup/SKILL.md)
 - [tongtu-automation](../tongtu-automation/SKILL.md)
 - [sellfox-automation](../sellfox-automation/SKILL.md)
+
+## 相关经验（docs/solutions）
+
+踩过的坑与设计取舍，动手前先读：
+
+- `docs/solutions/architecture-patterns/web-automation-capability-pod-monorepo.md` —— web-automation-capability-pod-monorepo.md

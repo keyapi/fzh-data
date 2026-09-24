@@ -4,7 +4,7 @@
 
 从 PB 邮件付款批次 + 发票 CSV 更新给财务的对账表：
 1) 追加付款到 "PB Remittance Advice" 表（校验不重不漏）
-2) 追加发票到 "Invoice to PB" 表（截至首个 0 付款的文件夹，校验不重不漏）
+2) 追加发票到 "Invoice to PB" 表（锚点(Notes!B2)之后的所有日文件夹 = 整月口径，校验不重不漏）
 3) 更新 Notes 汇总日期 + 重写"上轮未付本轮已付/本轮未付"区块 + 差额说明
 4) 颜色标记：本轮未付发票黄底，之前未付本轮已付发票绿底
 5) 双开票映射：批次里的废用发票号改写为 CSV 留用号，便于公式 VLOOKUP
@@ -13,13 +13,14 @@
     python reconcile_pb.py --dry-run   # 只读+校验+打印报告，不写文件
     python reconcile_pb.py --write     # 写入新文件（时间戳后缀，不覆盖源）
 
-下月复用：改顶部常量（FINANCE_FILE / EMAIL_FILE / SCAN_FOLDERS / REMAP）后重跑即可。
+下月复用：改顶部常量（FINANCE_FILE / EMAIL_FILE / SCAN_FOLDERS / REMAP / UNPAID_NOTES_FILE）后重跑即可。
 """
 
 import argparse
 import csv
 import datetime
 import glob
+import json
 import os
 from copy import copy
 
@@ -29,28 +30,23 @@ from openpyxl.styles import PatternFill
 # ================= 本月参数（下月复用只改这里） =================
 BASE_DIR = r"D:\Work\美国\Tracy Miller\PB orders"
 FINANCE_FILE = os.path.join(
-    BASE_DIR, r"payment advice\给财务\PB Remittance Advice Payment Date 20240430-20260813.xlsx"
+    BASE_DIR, r"payment advice\给财务\PB Remittance Advice Payment Date 20240430-20260922.xlsx"
 )
 EMAIL_FILE = os.path.join(
     BASE_DIR,
-    r"payment advice\来自Email Payment Remittance Advice_PaymentDate 20260604-20260813_CheckDate 2026-08-14_14-17-30.xlsx",
+    r"payment advice\来自Email Payment Remittance Advice_PaymentDate 20260817-20260922_CheckDate 2026-09-23_16-24-09.xlsx",
 )
 # 待扫描发票文件夹：可混合"月份文件夹"(202605) 与根目录"每日文件夹"(20260803)
-SCAN_FOLDERS = ["202605", "202606", "202607"]
-# 双开票映射：批次里的发票号 -> CSV 留用的发票号
-REMAP = {"INV0580626000011541": "INV0580626000011530"}
+SCAN_FOLDERS = ["202607", "202608"]
+# 双开票映射：批次里的发票号 -> CSV 留用的发票号（本批次无）
+REMAP = {}
 REMAP_NOTE = "PB重复 弃用1541 留用1530"
 # 差额说明模板（{} 填本轮未付合计）；-195/-32.5 为历史多付常数，见 Notes 相关区块
 DIFF_NOTE = "多付的 -195  -  多付的32.5 = -227.50 + 未付{}"
-# 本轮未付发票备注（写在 Notes"本轮未付"区块 N 列）：
-# 实际发货日 = UPS "We Have Your Package" 日期（仓库实际发货日，PB 按此付款）；跟踪号来自 shipment CSV
-UNPAID_NOTES = {
-    "INV0580626000011362": "UPS实际发货07/30 交付08/04 跟踪1ZC0019E0301406005",
-    "INV0580626000011507": "UPS实际发货07/20 交付07/23 跟踪1ZC0019E0314557560",
-    "INV0580626000011521": "UPS实际发货07/20 交付07/23 跟踪1ZC0019E0318578736",
-    "INV0580626000011528": "UPS实际发货07/20 交付07/23 跟踪1ZC0019E0327032370",
-    "INV0580626000011535": "UPS实际发货07/20 交付07/23 跟踪1ZC0019E0329334504",
-}
+# 本轮未付发票备注（写在 Notes"本轮未付"区块 N 列）：发票号 -> 备注 JSON。
+# 由 UPS 批量核查产出（ups_track 模块），存业务数据目录不进仓库；文件缺失视为无备注。
+# 实际发货日 = UPS "We Have Your Package" 日期（仓库实际发货日，PB 按此付款）。
+UNPAID_NOTES_FILE = os.path.join(BASE_DIR, r"payment advice\ups_20260922\unpaid_notes.json")
 # ==============================================================
 
 # 颜色标记：黄 = 本轮未付；绿 = 之前未付本轮已付（浅绿）
@@ -96,6 +92,14 @@ def remap_inv(inv):
     return REMAP.get(inv, inv)
 
 
+def load_unpaid_notes():
+    """读本轮未付发票备注（UPS 核查产出）。文件不存在时返回空。"""
+    if UNPAID_NOTES_FILE and os.path.isfile(UNPAID_NOTES_FILE):
+        with open(UNPAID_NOTES_FILE, encoding="utf-8") as fh:
+            return json.load(fh)
+    return {}
+
+
 def load_email_batch():
     """读邮件付款批次，返回 [{col: value}]，C 列已做双开票映射。"""
     wb = openpyxl.load_workbook(EMAIL_FILE, data_only=True)
@@ -117,43 +121,68 @@ def read_invoice_csv(path):
 
 
 def collect_day_folders(scan_folders):
-    """扫描文件夹，返回按日期排序的 [(day_label, [csv_path,...])]。
+    """扫描文件夹，返回 (按日期排序的 [(day_label, [csv_path,...])], 问题列表)。
 
-    排除 NotUsed 子文件夹；按"日文件夹"分组（月文件夹下的 YYYYMMDD，或根目录的每日文件夹），
-    使截止判断能精确到天。"""
+    排除 NotUsed 子文件夹；按"日文件夹"分组（月文件夹下的 YYYYMMDD，或根目录的每日文件夹）。
+    硬校验：某日 `<日文件夹>/invoice/` 里有 csv、但一个都没匹配上 `invoice*.csv` → 记问题（报错退出），
+    杜绝文件名拼错被 glob 静默漏掉（20260730 的 `invocie` 曾因此丢掉 37 张 / $2,232.28）。
+    只看日文件夹的 `invoice/` 一层：`<日文件夹>/878/invoice/` 之类的补充子目录天然不查（其内容与
+    主导出重复，见 20260727）。"""
     days = []
+    problems = []
     for folder in scan_folders:
         root = folder if os.path.isabs(folder) else os.path.join(BASE_DIR, folder)
         if not os.path.isdir(root):
+            problems.append(f"SCAN_FOLDERS 里的 {folder} 不存在：{root}")
             continue
         csvs = [
             f
             for f in glob.glob(os.path.join(root, "**", "invoice*.csv"), recursive=True)
             if "NotUsed" not in f
         ]
+        day_dirs = [
+            os.path.join(root, d)
+            for d in sorted(os.listdir(root))
+            if len(d) == 8 and d.isdigit() and os.path.isdir(os.path.join(root, d))
+        ]
+        if os.path.isdir(os.path.join(root, "invoice")):
+            day_dirs.append(root)  # SCAN_FOLDERS 直接给的是日文件夹
+        for day_dir in day_dirs:
+            inv_dir = os.path.join(day_dir, "invoice")
+            if not os.path.isdir(inv_dir) or any(os.path.dirname(f) == inv_dir for f in csvs):
+                continue
+            others = [f for f in glob.glob(os.path.join(inv_dir, "*.csv")) if "NotUsed" not in f]
+            if others:
+                problems.append(
+                    f"{inv_dir} 下没有任何 invoice*.csv，只有：{[os.path.basename(f) for f in others]}"
+                )
         by_day = {}
         for f in csvs:
             day = os.path.basename(os.path.dirname(os.path.dirname(f)))  # <day>\invoice\*.csv
             by_day.setdefault(day, []).append(f)
         for day in sorted(by_day):
             days.append((day, sorted(by_day[day])))
-    return days
+    return days, problems
 
 
-def detect_cutoff(folders_with_csv, batch_set):
-    """按日期序返回要纳入的文件夹；首个 0 付款的文件夹及其后全部停止。"""
-    included = []
+def select_day_folders(folders_with_csv, anchor, old_sheet_set):
+    """锚点之前的日文件夹（发票已入表）跳过，其余**全部**纳入（整月口径）。
+
+    锚点 = 基准文件 Notes!B2（已入表的最大发票日期）。返回 (include, skipped)；
+    skipped 为 (label, 发票数, 不在表内的发票列表) —— 后者非空说明「跳过」变成了「漏数」。"""
+    include = []
+    skipped = []
     for label, files in folders_with_csv:
-        invs = set()
-        for fp in files:
-            for row in read_invoice_csv(fp):
-                invs.add(row[0].strip())
-        paid = invs & batch_set
-        if paid:
-            included.append((label, files))
+        try:
+            day = datetime.datetime.strptime(label, "%Y%m%d").date()
+        except ValueError:
+            day = None
+        if day is not None and anchor is not None and day <= anchor:
+            invs = {r[0].strip() for fp in files for r in read_invoice_csv(fp)}
+            skipped.append((label, len(invs), sorted(invs - old_sheet_set)))
         else:
-            break  # 第一个 0 付款文件夹即停止
-    return included
+            include.append((label, files))
+    return include, skipped
 
 
 def build_report(batch_rows, include_folders, wb, invoice_rows, added_set, existing_pay_invs, old_sheet_set, green_invs, yellow_invs):
@@ -224,24 +253,8 @@ def main():
     batch_set = {remap_inv(normalize_inv(v[2])) for v in batch_rows if normalize_inv(v[2])}
     print(f"      批次 {len(batch_rows)} 行 / {len(batch_set)} 张发票")
 
-    print("[2/5] 扫描发票 CSV 文件夹")
-    folders_with_csv = collect_day_folders(SCAN_FOLDERS)
-    for label, files in folders_with_csv:
-        print(f"      {label}: {len(files)} 个 CSV")
-    include_folders = detect_cutoff(folders_with_csv, batch_set)
-    print(f"      自动截止：纳入 {[l for l, _ in include_folders]}；"
-          f"{[l for l, _ in folders_with_csv[len(include_folders):]] or '（无后续）'} 停止")
-
-    invoice_rows = []
-    added_set = set()
-    for label, files in include_folders:
-        for fp in files:
-            for row in read_invoice_csv(fp):
-                invoice_rows.append(row)
-                added_set.add(normalize_inv(row[0]))
-
-    # ---- 读取基础文件 ----
-    print(f"[3/5] 读取基础文件: {os.path.basename(FINANCE_FILE)}")
+    print("[2/5] 读取基础文件")
+    print(f"      {os.path.basename(FINANCE_FILE)}")
     wb = openpyxl.load_workbook(FINANCE_FILE, data_only=False)
     pws = wb[PB_SHEET]
     existing_pay_invs = set()
@@ -255,6 +268,41 @@ def main():
         v = iws_base.cell(r, 1).value
         if v:
             old_sheet_set.add(normalize_inv(v))
+    anchor_cell = wb[NOTES_SHEET]["B2"].value
+    anchor = anchor_cell.date() if isinstance(anchor_cell, datetime.datetime) else None
+    print(f"      付款 {len(existing_pay_invs)} 张 / 发票 {len(old_sheet_set)} 张；"
+          f"锚点 Notes!B2 = {anchor}")
+
+    print("[3/5] 扫描发票 CSV 文件夹（锚点之后整月纳入）")
+    folders_with_csv, problems = collect_day_folders(SCAN_FOLDERS)
+    if problems:
+        print("\n扫描发现问题，不写入：")
+        for p in problems:
+            print("  - " + p)
+        return 1
+    include_folders, skipped = select_day_folders(folders_with_csv, anchor, old_sheet_set)
+    for label, n, missing in skipped:
+        flag = "✔ 全部已在表内" if not missing else f"✘ {len(missing)} 张不在表内 {missing[:5]}"
+        print(f"      跳过 {label}（{n} 张，≤锚点）{flag}")
+    dropped = [s for s in skipped if s[2]]
+    if dropped:
+        print("\n跳过的日文件夹里有发票不在表内，不写入：")
+        for label, _, missing in dropped:
+            print(f"  - {label}: {len(missing)} 张 {missing[:10]}")
+        return 1
+
+    invoice_rows = []
+    added_set = set()
+    for label, files in include_folders:
+        invs = set()
+        for fp in files:
+            for row in read_invoice_csv(fp):
+                invoice_rows.append(row)
+                added_set.add(normalize_inv(row[0]))
+                invs.add(normalize_inv(row[0]))
+        print(f"      纳入 {label}: CSV {len(files)} 个 / 发票 {len(invs)} 张 / "
+              f"已付 {len(invs & batch_set)} / 未付 {len(invs - batch_set)}")
+    print(f"      合计纳入 {len(added_set)} 张 / {len(invoice_rows)} 数据行")
 
     # 颜色集合：绿=之前未付本轮已付（批次 ∩ 旧表），黄=本轮未付（新加未付）
     green_invs = sorted(batch_set & old_sheet_set)
@@ -366,7 +414,7 @@ def main():
             nws.cell(2, col).value = datetime.datetime(new.year, new.month, new.day)
             print(f"      Notes {nws.cell(2, col).coordinate} -> {new}")
 
-    # ---- Notes 区块重写（R46-86）：上轮未付本轮已付 + 本轮未付 + 异常 + 差额 ----
+    # ---- Notes 区块重写：上轮未付本轮已付 + 本轮未付 + 异常 + 差额 ----
     def inv_detail(inv):
         for r in range(2, iws.max_row + 1):
             if iws.cell(r, 1).value == inv and iws.cell(r, 24).value == "H":
@@ -375,13 +423,24 @@ def main():
 
     # 读取基础文件里的"异常"区块（历史数据，保留原样）
     abn_header = "异常 已加入Invoice to PB"
-    abn_start = next((r for r in range(44, 87) if nws.cell(r, 11).value == abn_header), None)
+    abn_start = next(
+        (r for r in range(44, nws.max_row + 1) if nws.cell(r, 11).value == abn_header), None
+    )
     abn_rows = []
     if abn_start:
         r = abn_start + 1
-        while r <= 86 and nws.cell(r, 11).value not in (None, ""):
+        while r <= nws.max_row and nws.cell(r, 11).value not in (None, ""):
             abn_rows.append((nws.cell(r, 11).value, nws.cell(r, 12).value, nws.cell(r, 13).value))
             r += 1
+    if not abn_start:
+        print("      [警告] 基础文件里没找到「异常」区块表头，将不保留该区块")
+
+    # 区块行位置随未付张数浮动，**不能写死行号**（未付多时会把异常区块推过 86 行）
+    paid_total_row = 47 + len(green_invs)          # 绿区块合计行
+    hu = paid_total_row + 2                        # 未付区块表头行
+    unpaid_total_row = hu + 1 + len(yellow_invs)   # 未付区块合计行
+    he = unpaid_total_row + 2                      # 异常区块表头行
+    diff_row = he + 2 + len(abn_rows)              # 差额行
 
     # 捕获字体/格式（拷贝，避免清空时被改动），再清空
     hdr_font = copy(nws["K46"].font)
@@ -390,7 +449,7 @@ def main():
     base_border = copy(nws["K46"].border)
     base_align = copy(nws["K46"].alignment)
     no_fill = PatternFill(fill_type=None)
-    for r in range(47, 87):
+    for r in range(47, diff_row + 1):
         for c in range(1, 16):
             cell = nws.cell(r, c)
             cell.value = None
@@ -407,42 +466,40 @@ def main():
         return cell
 
     # 上轮未付 本轮已付（绿底）
-    r = 47
-    for inv in green_invs:
+    for i, inv in enumerate(green_invs):
         d, amt = inv_detail(inv)
-        put(r, 11, inv, data_font, GREEN)
+        put(47 + i, 11, inv, data_font, GREEN)
         if d:
-            put(r, 12, d, data_font, GREEN)
+            put(47 + i, 12, d, data_font, GREEN)
         if amt is not None:
-            put(r, 13, amt, data_font, GREEN, amt_fmt)
-        r += 1
-    paid_total_row = r
+            put(47 + i, 13, amt, data_font, GREEN, amt_fmt)
     put(paid_total_row, 11, "金额合计", data_font, GREEN)
-    put(paid_total_row, 13, f"=SUM(M47:M{paid_total_row - 1})", data_font, GREEN, amt_fmt)
+    put(paid_total_row, 13,
+        f"=SUM(M47:M{paid_total_row - 1})" if green_invs else 0,
+        data_font, GREEN, amt_fmt)
 
     # 本轮未付（黄底）
-    hu = paid_total_row + 2
     put(hu, 11, "本轮未付账单号", hdr_font)
     put(hu, 12, "订单日期", hdr_font)
     put(hu, 13, "账单金额", hdr_font)
-    r = hu + 1
-    for inv in yellow_invs:
+    unpaid_notes = load_unpaid_notes()
+    for i, inv in enumerate(yellow_invs):
+        r = hu + 1 + i
         d, amt = inv_detail(inv)
         put(r, 11, inv, data_font, YELLOW)
         if d:
             put(r, 12, d, data_font, YELLOW)
         if amt is not None:
             put(r, 13, amt, data_font, YELLOW, amt_fmt)
-        note = UNPAID_NOTES.get(inv)
+        note = unpaid_notes.get(inv)
         if note:
             put(r, 14, note, data_font, YELLOW)
-        r += 1
-    unpaid_total_row = r
     put(unpaid_total_row, 11, "金额合计", data_font, YELLOW)
-    put(unpaid_total_row, 13, f"=SUM(M{hu + 1}:M{unpaid_total_row - 1})", data_font, YELLOW, amt_fmt)
+    put(unpaid_total_row, 13,
+        f"=SUM(M{hu + 1}:M{unpaid_total_row - 1})" if yellow_invs else 0,
+        data_font, YELLOW, amt_fmt)
 
     # 异常（保留历史，无填充）
-    he = unpaid_total_row + 2
     put(he, 11, abn_header, hdr_font)
     put(he, 12, "订单日期", hdr_font)
     put(he, 13, "账单金额", hdr_font)
@@ -456,10 +513,15 @@ def main():
     # 差额
     unpaid_total = round(sum((inv_detail(i)[1] or 0) for i in yellow_invs), 2)
     green_total = round(sum((inv_detail(i)[1] or 0) for i in green_invs), 2)
-    put(86, 8, "=G2-H2", data_font)
-    put(86, 9, "差额", data_font)
-    put(86, 11, DIFF_NOTE.format(unpaid_total), data_font)
-    print(f"      Notes：绿(已付) {len(green_invs)} 张 合计 {green_total}，黄(未付) {len(yellow_invs)} 张 合计 {unpaid_total}")
+    put(diff_row, 8, "=G2-H2", data_font)
+    put(diff_row, 9, "差额", data_font)
+    put(diff_row, 11, DIFF_NOTE.format(unpaid_total), data_font)
+    missing_notes = [i for i in yellow_invs if i not in unpaid_notes]
+    print(f"      Notes：绿(已付) {len(green_invs)} 张 合计 {green_total}，"
+          f"黄(未付) {len(yellow_invs)} 张 合计 {unpaid_total}；"
+          f"备注 {len(unpaid_notes)} 条（{len(missing_notes)} 张未付无备注 {missing_notes[:5]}）")
+    print(f"      Notes 区块：绿 R47-R{paid_total_row}，未付 R{hu + 1}-R{unpaid_total_row}，"
+          f"异常 R{he + 1}-R{he + len(abn_rows)}，差额 R{diff_row}")
 
     wb.calculation.fullCalcOnLoad = True
     wb.save(out_path)

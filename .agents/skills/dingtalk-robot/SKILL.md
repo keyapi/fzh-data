@@ -72,3 +72,9 @@ ERP_API_SECRET     — ERPNext API Secret (仅文件附件需要)
 - [给人看的 README](../../../dingtalk/dingtalk_robot/README.md)
 - [Agent 详细参考](../../../dingtalk/dingtalk_robot/AGENT_HANDOFF.md)
 - [同事操作手册](../../../dingtalk/dingtalk_robot/钉钉自定义机器人配置指引_给同事.md)
+
+## 相关经验（docs/solutions）
+
+踩过的坑与设计取舍，动手前先读：
+
+- `docs/solutions/architecture-patterns/agent-dingtalk-file-bridge-via-erpnext.md` —— Agent-to-DingTalk File Delivery via ERPNext Bridge

@@ -102,3 +102,10 @@ uv run python scripts/env_doctor.py --probe
 - 已验证对照：`docs/solutions/developer-experience/windows-codex-powershell-utf8.md`（合并后）
 - BOM 事故背景：`docs/codex_thread_disappear_debug.md`
 - PowerShell 7 发布页（取 MSI + 核对 sha256）：<https://github.com/PowerShell/PowerShell/releases>
+
+## 相关经验（docs/solutions）
+
+踩过的坑与设计取舍，动手前先读：
+
+- `docs/solutions/developer-experience/codex-chatgpt-windows-setup-config-recovery.md` —— Codex (ChatGPT Desktop) 更新后 Windows 安装失败与对话历史恢复
+- `docs/solutions/developer-experience/windows-wsl-docker-disk-optimization.md` —— Windows WSL2 Docker VHDX disk space optimization and migration
