@@ -248,6 +248,24 @@ def test_order_csv_missing_required_column_says_which(pb_env):
     message = str(exc.value)
     assert "Ship To Country" in message and "Unit Price" in message
     assert "缺少必需列" in message
+    assert "**" not in message  # 纯文本，别混 markdown 记号
+
+
+def test_missing_column_becomes_readable_pbjob_error(pb_env):
+    """经 service 跑时，缺列要变成带正确指引的 PBJobError（不是通用「不是同一批」）。"""
+    import pandas as pd
+
+    thin = pb_env.tmp / "thin2.csv"
+    pd.DataFrame({
+        "PO Number": ["137943090"], "Record Type": ["D"], "Qty Ordered": ["1"],
+        "Vendor Style": ["STYLE-A"],
+    }).to_csv(thin, index=False)
+
+    with pytest.raises(service.PBJobError) as exc:
+        service.run_job(pb_env.pdf, thin, service.JobOptions(validate_only=True))
+    assert exc.value.code == "order_csv_invalid"
+    assert "缺少必需列" in exc.value.message
+    assert "订单 CSV 重新提交" in exc.value.hint
 
 
 def test_full_width_sample_has_every_required_column(pb_env):

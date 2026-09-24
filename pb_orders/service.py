@@ -198,7 +198,16 @@ def run_job(
 
     # ---------- 步骤 3：订单 CSV -> 通途 xlsx ----------
     progress("orders", "处理订单 CSV 并拆行")
-    df_order = pb_tongtu_excel.build_order_df(csv_path)
+    try:
+        df_order = pb_tongtu_excel.build_order_df(csv_path)
+    except ValueError as exc:
+        # 这一层的 ValueError 都是「这份 CSV 用不了」（缺列 / 数量非法等）。
+        # 不套 PBJobError 的话，页面会落到通用提示「PDF 与 CSV 可能不是同一批」——指错了方向。
+        raise PBJobError(
+            str(exc),
+            hint="请用 SPS 导出的完整订单 CSV 重新提交；本批的 checked0stock 文件见「检查 SPS 新订单」任务。",
+            code="order_csv_invalid",
+        ) from exc
     no_stock_skus = [s for s in options.no_stock if str(s).strip()]
     importable, no_stock = pb_tongtu_excel.split_no_stock(df_order, no_stock_skus)
 

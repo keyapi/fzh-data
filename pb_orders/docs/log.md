@@ -57,8 +57,12 @@ timestamp: 2026-09-22
   「请核对上传的 PDF 与 CSV 是否属于同一批」——没指到真因。
   修法：`pb_tongtu_excel.REQUIRED_COLUMNS` + `build_order_df` 开头先检查，
   报「订单 CSV 缺少必需列：Ship To Country、Unit Price。出件要用 SPS 导出的**完整**订单 CSV」。
-- **测试 132 → 137**（新增 5）：`csv_stem` 优先级与默认值、词干清洗与回落、
-  缺列提示、完整夹具不被误挡、网页产物名的回归断言。
+- **测试 132 → 138**（新增 6）：`csv_stem` 优先级与默认值、词干清洗与回落、
+  缺列提示（含「别混 markdown 记号」）、经 service 时转成带正确指引的 `PBJobError`、
+  完整夹具不被误挡、网页产物名的回归断言。
+- **两个错误提示都改了措辞**：缺列信息去掉 markdown 记号（纯文本里会原样显示 `**`）；
+  并把这一层的 `ValueError` 包成 `PBJobError(code=order_csv_invalid)`，
+  否则页面会落到通用提示「PDF 与 CSV 可能不是同一批」——指错方向。
 - **复测**（重新上线后，真机）：见本条下面的实测记录。
 
 ## 2026-09-23（第十三轮：库存预检 —— 把「出件前的手工筛选」做进模块）

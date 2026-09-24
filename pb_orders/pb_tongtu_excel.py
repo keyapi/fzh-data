@@ -102,10 +102,10 @@ def build_order_df(path):
 
     missing = [c for c in REQUIRED_COLUMNS if c not in df.columns]
     if missing:
+        # 这里是纯文本错误信息，别写 markdown 记号（页面会原样显示 **）
         raise ValueError(
             "订单 CSV 缺少必需列：" + "、".join(missing)
-            + "。出件要用 SPS 导出的**完整**订单 CSV（checked0stock …），"
-            "不是只有几列的摘要。"
+            + "。出件要的是 SPS 导出的完整订单 CSV（checked0stock …），不是只有几列的摘要。"
         )
 
     # 组内前向填充：pandas 3.0 的 groupby.ffill() 会丢掉分组键，且 include_groups=True 已禁用
