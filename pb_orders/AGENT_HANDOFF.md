@@ -79,8 +79,8 @@ uv run python compare_runs.py --dir "..."                    # 与 <dir>/Colab�
 | `service.py` | `run_job()` / `JobOptions` / `JobResult` / `PBJobError`；硬校验与数量对账都在这 |
 | `run_pb_orders.py` | CLI 薄适配器：把结构化报告打印回原来的控制台格式，退出码不变 |
 | `web/config.py` | 全部配置走环境变量（`PB_ORDERS_*`），本机 fallback 读 `pb_orders/.env` |
-| `web/app.py` | 路由：`/`、`/jobs/new`、`/jobs/{id}`、`/jobs/{id}/status`、`/jobs/{id}/retry`、`/artifacts/{id}/download`、`/healthz` |
-| `web/repository.py` | SQLite：`jobs` / `artifacts` 两张表 + 状态机 + 中断恢复 |
+| `web/app.py` | 路由：`/`、`/jobs/new`、`/settings`、`/settings/no-stock`、`/jobs/{id}`、`/jobs/{id}/status`、`/jobs/{id}/retry`、`/artifacts/{id}/download`、`/healthz` |
+| `web/repository.py` | SQLite：`jobs` / `artifacts` 两张表 + `app_settings`（页面可改的设置）+ 状态机 + 中断恢复 |
 | `web/storage.py` | 分块上传、SHA-256、内容寻址发布、路径越界防护 |
 | `web/tasks.py` | worker 入口；异常翻译成用户可读的失败报告 |
 | `web/auth.py` | 钉钉 OIDC 登录：闸门中间件、Redis state、可选白名单、URL 前缀 |
@@ -90,9 +90,14 @@ uv run python compare_runs.py --dir "..."                    # 与 <dir>/Colab�
 
 `uploaded → queued → running → succeeded / failed`（终态不再变）。
 
-Web 与 worker **启动时都会**把遗留的 `queued`/`running` 标成 `failed`
-（`worker_interrupted`）：worker 被容器重启杀掉时任务不会自己继续，
-留一个永远 running 的僵尸比明确失败更糟。页面因此给出「用相同输入重新处理」。
+启动时的恢复**分三种情况**（2026-09-22 起，别再按「一律标失败」理解）：
+
+- 仍处于 `running`：worker 被杀时任务不会自己继续，**标失败** `worker_interrupted`
+  （条件更新，盖不掉已成功的），页面给出「用相同输入重新处理」。
+- `queued`：**不动**。那条任务还在 Redis 里，新 worker 起来会继续跑。
+- `queued` 但 Redis 里已经没有（快照间隔内重启、`FLUSHALL`）：worker 启动时对一次账、
+  运行期间每 `PB_ORDERS_QUEUE_WATCH_SECONDS` 秒再对（默认 60），标 `queue_lost` 并可重跑。
+  见坑 19。
 
 重跑会**新建 job** 并记 `source_job_id`，输入文件从原 job 目录硬链接过来，
 不覆盖历史结果。
@@ -259,6 +264,12 @@ uv run pytest tests/ -q
     启动后再按 `PB_ORDERS_QUEUE_WATCH_SECONDS`（默认 60）对账。RQ 2.12.0 遇到
     Redis `ConnectionError` 是重连而不是退出，所以不能指望容器重启来触发启动对账；
     `FLUSHALL` 同样不断开连接。
+20. **`.env` 里的 `PB_ORDERS_DEFAULT_NO_STOCK` 只是初始值，日常维护走页面**：
+    断货清单存在 `app_settings` 表（键 `default_no_stock`），网页「断货 SKU」页可改，
+    改完**立即生效、不用重启**；只有「从没在页面里设过」时才回落到 `.env`。
+    所以看到断货清单不对，先看页面里是不是已经设过 —— 改 `.env` 可能根本没作用。
+    解析与去重规则见 `app.parse_sku_list()`（中英文逗号/分号/空格/换行都算分隔，
+    按小写去重并保留首次写法），任务页里那份仍然可临时改、只影响当次。
 
 ## 8. 数量对账口径
 
@@ -345,7 +356,7 @@ uv run pytest tests/ -q
 - [x] 无货时自动拆「有货主文件 + 无货子集」（标签 + 背贴各两份，`--no-stock` 触发）
 - [x] 网页版：FastAPI + Redis/RQ + SQLite，任务可后台跑、可追溯、可重下（2026-09-22）
 - [x] 独立 Docker Compose 栈，不碰既有服务（2026-09-22）
-- [x] 75 个自动化测试（另有 Redis/RQ 生命周期用例，默认跳过），不需要 Redis 也能跑
+- [x] 89 个自动化测试（另有 Redis/RQ 生命周期用例，默认跳过），不需要 Redis 也能跑
 - [x] 已部署到 EN 测试服务器（`/opt/pb-orders`）。入口 **<https://api.vilavi.cn/pb/>**
       （公网 HTTPS + 钉钉登录，容器只绑 `127.0.0.1`）；Tailscale 那条路径已弃用（走香港中继太慢）
 - [x] 公网入口有钉钉登录闸门（`web/auth.py`）。**登录范围由桥把关**：2026-09-23 起桥按
@@ -356,5 +367,7 @@ uv run pytest tests/ -q
 - [x] 保留策略：启动时按 `PB_ORDERS_RETENTION_DAYS`（默认 90 天）清理已完成任务与无人引用的产物。
       **只在服务/worker 启动时跑，不是定时任务**
 - [x] 同站 POST 带 CSRF 令牌（`web/csrf.py`）；上传磁盘名固定，原始文件名只用于展示
+- [x] 断货 SKU 列表可在**网页上自己维护**（导航「断货 SKU」→ `app_settings` 表），
+      改完立即影响新建任务的预填，不用改服务器 `.env`、不用重启（2026-09-23）
 - [ ] 部分发货的一单跨两份 PDF 时，仍需人工确认哪些页给谁（目前按 SKU 自动拆）
 - [ ] 原 notebook 步骤 3.x（赛狐导入）、4.3（按仓库分拆，20260831 起停用）—— 未迁
