@@ -335,40 +335,69 @@ def _tables_payload(tables: dict[str, pd.DataFrame], limit: int) -> dict:
 
 
 def _excel_safe(table: pd.DataFrame) -> pd.DataFrame:
-    """只给 xlsx 用：把以 `=` 开头的值转义，别让 openpyxl 写成**公式**。
+    """只给 xlsx 用：把会被 openpyxl 当成**公式**的值转义掉。
 
     这些值来自外部 CSV（SPS 导出），`=cmd|…` 这类内容在 Excel 里会当公式执行。
     前面加 `'` 是标准的文本化处理；只影响这个人看的 xlsx，
     checked CSV 仍是逐行照搬的原始字节（那份才是给机器/回传用的）。
+
+    条件与 openpyxl 内部判定**逐字对齐**（`len(value) > 1 and startswith("=")`）：
+    实测 openpyxl 3.1.5 只有这种情况会写 `<f>` 公式元素，`+` / `-` / `@` 开头
+    存的是 `t="inlineStr"` 文本单元格，Excel 不会把 xlsx 里的文本单元格再当公式解析
+    （那是 CSV 的注入面，不是本文件的）。所以不要顺手把 `-`、`+` 也加进来 ——
+    那会把 `-1`、`+A1` 这类**正常值**改坏。见 docs/reference/workflow.md §9.4。
     """
-    return table.map(lambda value: f"'{value}" if isinstance(value, str) and value.startswith("=") else value)
+    return table.map(
+        lambda value: f"'{value}"
+        if isinstance(value, str) and len(value) > 1 and value.startswith("=")
+        else value
+    )
 
 
-def _ensure_publishable(*targets: Path) -> None:
-    """发布前统一探一遍目标文件：被别的程序占用就整体拒绝，不做半截发布。"""
-    for target in targets:
-        if not target.exists():
-            continue
-        try:
-            with open(target, "ab"):
-                pass
-        except OSError as exc:
+def _publish_all(pairs: list[tuple[Path, Path]], backup_dir: Path) -> list[str]:
+    """成对发布多个产物：**要么都换掉，要么都不动**。
+
+    两个文件是给同一批用的，出现「新 CSV + 旧 XLSX」比两个都不更新还糟。
+    文件系统没有跨文件原子操作，所以先把将被覆盖的旧文件备份到**同一个卷**的
+    临时目录（`backup_dir` 与输出目录同父，`os.replace` 才够快够原子），
+    发布中途失败就把已经换掉的原样还回去。
+
+    占用/权限问题在这里统一翻译成可读的 `StockCheckError`，**不另做「能不能写」的预探**：
+    实测 `open(path, "ab")` 探不出字节区间锁（Excel 打开文件常是这一类），
+    真正会失败的是备份的 `copy2` 与发布的 `os.replace`。只有在真动手时才清楚能不能动，
+    所以判断放这里，失败就回滚。
+
+    返回被覆盖的文件名列表。
+    """
+    backups: dict[Path, Path] = {}
+    replaced: list[str] = []
+    published: list[Path] = []
+    try:
+        for _temp, target in pairs:
+            if target.exists():
+                backup = backup_dir / f"prev-{target.name}"
+                shutil.copy2(target, backup)
+                backups[target] = backup
+        for temp, target in pairs:
+            if target.exists():
+                replaced.append(target.name)
+            os.replace(temp, target)
+            published.append(target)
+    except OSError as exc:
+        for target in published:  # 回滚：还原旧的，或删掉刚放上去的
+            backup = backups.get(target)
+            if backup is None:
+                target.unlink(missing_ok=True)
+            else:
+                os.replace(backup, target)
+        if isinstance(exc, PermissionError):
             raise StockCheckError(
-                f"产物被占用，无法覆盖：{target.name}",
-                "该文件可能正在 Excel 里打开，请关闭后重跑（或用 --out 换个目录）。",
+                "产物被占用，无法写入",
+                "同名文件可能正在 Excel 里打开，请关闭后重跑（或用 --out 换个目录）。",
                 "output_locked",
             ) from exc
-
-
-def _publish(temp: Path, dest: Path) -> bool:
-    """把 temp 原子地发布到 dest，返回原来是否已有同名文件。
-
-    用 `os.replace` 而不是 `shutil.move`：Windows 上同名文件 `os.rename` 会失败
-    （同一批重跑就撞），`os.replace` 是原子覆盖、两个平台都对。
-    """
-    existed = dest.exists()
-    os.replace(temp, dest)
-    return existed
+        raise
+    return replaced
 
 
 def _style_workbook(path: Path) -> None:
@@ -530,14 +559,11 @@ def run_stock_check(
         output_dir.mkdir(parents=True, exist_ok=True)
         checked_path = output_dir / checked_name
         workbook_path = output_dir / workbook_name
-        # 两个目标先统一探一遍（被 Excel 占用就整体拒绝），再逐个 `os.replace` 覆盖：
-        # 避免只发布成功一个、留下「新 CSV + 旧 XLSX」这种半新半旧。
-        _ensure_publishable(checked_path, workbook_path)
-        replaced = [
-            target.name
-            for temp, target in ((temp_checked, checked_path), (temp_workbook, workbook_path))
-            if _publish(temp, target)
-        ]
+        # 成对发布：中途任何一步失败都会把已发布的还原，不留「新 CSV + 旧 XLSX」；
+        # 被占用/无权限统一报 output_locked（见 _publish_all 的说明）。
+        replaced = _publish_all(
+            [(temp_checked, checked_path), (temp_workbook, workbook_path)], temp_root
+        )
     except Exception:
         if output_dir.is_dir() and not any(output_dir.iterdir()):
             output_dir.rmdir()

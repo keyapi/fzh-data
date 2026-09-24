@@ -12,7 +12,8 @@
     2. `SPS库存检查操作表-{stem}.xlsx`        —— 人在 SPS 里照着勾
 
 **分类口径按明细行，不按整单**（见模块 docstring `stock_precheck.py`）：
-每个 PO 的 Header 一律保留；只有「全部明细都缺货」的 PO 才整组剔除。
+缺货明细剔除、有货明细保留；**整单缺货的 PO 连 Header 一起整组剔除**，
+其余 PO（含有货 / 部分缺货）的 Header 全部保留。
 
 用法：
     uv run python run_stock_check.py --dir "D:\\Work\\美国\\Tracy Miller\\PB orders\\20260917"

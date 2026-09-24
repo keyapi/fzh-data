@@ -166,7 +166,7 @@ cd pb_orders
 uv run pytest tests/ -q
 ```
 
-129 个用例通过、2 个跳过，**不需要 Redis**：`tests/conftest.py` 用 reportlab 现画一个结构同构的
+132 个用例通过、2 个跳过，**不需要 Redis**：`tests/conftest.py` 用 reportlab 现画一个结构同构的
 3 页 Packslip PDF + 5 行订单 CSV + 3 行名称缓存，跑真实流程；Web 用例把
 `web.app.enqueue_job` 换成同步执行，从而覆盖「Web 建任务 + worker 处理 + 页面 + 下载」整链。
 另有 Redis/RQ 生命周期用例需本地 Docker，设 `PB_ORDERS_RQ_DOCKER=1` 才跑（默认跳过）。
@@ -186,8 +186,8 @@ uv run pytest tests/ -q
 | | `_source_lines(path, rows)` | 按行取源原文（**逐行照搬**用）；行数对不上则报 `ragged_source` |
 | | `_build_tables(...)` | 操作表 7 个 sheet；`_detail_table()` 永远并列两个 SKU、数量按整数显示 |
 | | `_tables_payload(tables, limit)` | 同一批表转成 `report["tables"]`，供网页渲染；先 `head(limit)`，超限标 `truncated` |
-| | `_excel_safe(table)` | 只给 xlsx：转义以 `=` 开头的值，别让 openpyxl 写成公式 |
-| | `_ensure_publishable` / `_publish` | 发布前统一探占用；`os.replace` 原子覆盖同名产物 |
+| | `_excel_safe(table)` | 只给 xlsx：转义会被 openpyxl 写成公式的值（条件与 openpyxl 对齐） |
+| | `_publish_all(pairs, backup_dir)` | 成对发布：先备份、`os.replace` 覆盖；失败**回滚**并把占用翻译成 `output_locked` |
 | | `_verify_checked(...)` | 回读 checked CSV：列序 + 逐单元格 + Header/Detail 对账 |
 | | `_style_workbook(path)` | 表头配色、冻结首行、筛选、有货绿/缺货红、部分缺货黄 |
 | `run_stock_check.py` | `run(args)` | CLI 薄适配器：调 `stock_precheck.run_stock_check` 后按控制台格式打印 |
@@ -368,16 +368,29 @@ uv run pytest tests/ -q
 29. **同名产物要能覆盖，且必须整体发布**（Cursor 复审发现）：
     CLI 默认输出到输入目录，同一批重跑会撞同名 —— Windows 上 `shutil.move`（内部 `os.rename`）
     直接失败；更糟的是原来先移 CSV 再移 XLSX，第二个失败就留下「新 CSV + 旧 XLSX」。
-    现在先 `_ensure_publishable()` 统一探一遍（被 Excel 占用就整体拒绝、报 `output_locked`），
-    再用 `os.replace()` 原子覆盖；`report["replaced"]` 记下被覆盖的文件名，CLI 会打出来。
-30. **写 xlsx 前要转义以 `=` 开头的值**（Cursor 复审发现，Excel 公式注入）：
-    操作表里的 PO/SKU 来自外部 CSV，openpyxl 会把以 `=` 开头的字符串写成**公式**
+    现在 `_publish_all()` 先把将被覆盖的旧文件备份到同卷临时目录，再 `os.replace()` 原子覆盖，
+    **中途任何一步失败都回滚**（还原旧的、或删掉刚放上去的），`report["replaced"]` 记下被覆盖的文件名。
+30. **别用 `open(path, "ab")` 预探「文件是否被占用」**（实测踩到）：
+    想「先探一遍再发布」，实测**探不出字节区间锁**（`msvcrt.locking` / Excel 常是这一类）——
+    预探通过、真正的失败出现在后面 `copy2` / `os.replace` 上，用户看到的是一坨 `PermissionError`
+    堆栈（CLI 只捕获 `StockCheckError`）。
+    正解：不做预探，**在 `_publish_all()` 里动手时捕获 `OSError`**，`PermissionError` 翻译成
+    `output_locked` + 「可能正在 Excel 里打开，请关闭后重跑」，并回滚已发布的。
+    只有真动手时才知道能不能动。锁定用例：`test_locked_output_is_refused_without_publishing_anything`、
+    `test_permission_error_during_replace_is_readable_and_rolls_back`、
+    `test_partial_publish_failure_rolls_back`。
+31. **写 xlsx 前要转义公式，但只转义 `=`**（Cursor 复审发现 + 实测定界）：
+    操作表里的 PO/SKU 来自外部 CSV，openpyxl 会把以 `=` 开头的字符串写成 `<f>` **公式**
     （`=cmd|…` 在 Excel 里会执行）。`_excel_safe()` 给这类值加 `'` 前缀，**只作用于 xlsx**；
-    checked CSV 仍是逐行照搬的原始字节。实测真实批次没有触发（没有以 `=` 开头的值）。
-31. **`report["tables"]` 要 `head(limit)` 再转列表**（Cursor 复审发现）：
+    checked CSV 仍是逐行照搬的原始字节。
+    条件与 openpyxl 内部**逐字对齐**（`len(value) > 1 and startswith("=")`，实测 3.1.5 源码）。
+    **不要顺手把 `+` / `-` / `@` 也加进来**：实测这三个开头的值 openpyxl 存的是
+    `t="inlineStr"` 文本单元格，Excel 不会把 xlsx 里的文本单元格再当公式解析
+    （那是 CSV 的注入面）；加了反而会把 `-1`、`+A1` 这类正常值改坏。
+32. **`report["tables"]` 要 `head(limit)` 再转列表**（Cursor 复审发现）：
     先把整表 `astype(str).values.tolist()` 再切片，会为每一行都建 Python 对象；大表在 1G 的
     worker 里没必要地吃内存。现在先 `head(limit)`，总数单用 `len(table)`。
-32. **SQLite 加列要容忍 duplicate column 竞争**（Cursor 复审发现）：
+33. **SQLite 加列要容忍 duplicate column 竞争**（Cursor 复审发现）：
     Web 与 worker 同时启动、同时看到旧库缺 `job_type`，就会同时 `ALTER TABLE`，
     输的那个收到 `duplicate column name`。SQLite 没有 `ADD COLUMN IF NOT EXISTS`，
     而那一刻「列已经在了」正是想要的结果，所以只放过这一种 `OperationalError`
@@ -441,8 +454,8 @@ uv run pytest tests/ -q
   老库启动时 `ALTER TABLE` 自动补列（默认 `fulfillment`）—— 已有任务不会丢。
   worker 按 `job_type` 走 `_RUNNERS` 分发，两种流程共用同一套「跑完发布产物」外壳。
 - **产物类型**：新增 `checked_order` / `stock_operations` 两个 artifact kind 与中文标签。
-- **测试 89 → 129**（新增 40）：预检服务 20 例（含字节级一致、参差形状、含换行拒绝、
-  命名与 PO 数、网页表负载与截断、重跑覆盖、占用拒绝、公式转义、冗余空白）、
+- **测试 89 → 132**（新增 43）：预检服务 23 例（含字节级一致、参差形状、含换行拒绝、
+  命名与 PO 数、网页表负载与截断、重跑覆盖、占用拒绝与回滚、公式转义、冗余空白）、
   worker 分发 2 例、仓库迁移 3 例、Web 两入口 / 续出件 / 网页明细表 / 旧任务兼容 15 例。
 
 ### 2026-09-21（从 Colab 迁到本地）
@@ -520,7 +533,7 @@ uv run pytest tests/ -q
 - [x] 无货时自动拆「有货主文件 + 无货子集」（标签 + 背贴各两份，`--no-stock` 触发）
 - [x] 网页版：FastAPI + Redis/RQ + SQLite，任务可后台跑、可追溯、可重下（2026-09-22）
 - [x] 独立 Docker Compose 栈，不碰既有服务（2026-09-22）
-- [x] 129 个自动化测试（另有 Redis/RQ 生命周期用例，默认跳过），不需要 Redis 也能跑
+- [x] 132 个自动化测试（另有 Redis/RQ 生命周期用例，默认跳过），不需要 Redis 也能跑
 - [x] 已部署到 EN 测试服务器（`/opt/pb-orders`）。入口 **<https://api.vilavi.cn/pb/>**
       （公网 HTTPS + 钉钉登录，容器只绑 `127.0.0.1`）；Tailscale 那条路径已弃用（走香港中继太慢）
 - [x] 公网入口有钉钉登录闸门（`web/auth.py`）。**登录范围由桥把关**：2026-09-23 起桥按

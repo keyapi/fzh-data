@@ -36,7 +36,7 @@ timestamp: 2026-09-22
   `source_job_id` 指回检查任务，历史可追溯。
 - **数据库**：`jobs` 加 `job_type`（`fulfillment` / `stock_check`），老库启动时
   `ALTER TABLE` 自动补列，已有任务默认 `fulfillment` 不受影响；worker 按类型分发。
-- **测试 89 → 129**（新增 40）：预检服务 20、worker 分发 2、仓库迁移 3、Web 15。
+- **测试 89 → 132**（新增 43）：预检服务 23、worker 分发 2、仓库迁移 3、Web 15。
   全套通过、2 项跳过（需 Docker 的 Redis/RQ 生命周期用例）。
 - **网页版明细表**：任务页直接列出部分缺货 PO / ASN 有货明细 / 缺货明细 / 全部缺货 PO
   四张逐行表（两个 SKU 并列、数量按整数显示），与 xlsx **同一批 DataFrame**；
@@ -56,7 +56,16 @@ timestamp: 2026-09-22
   ⑥ 老库升级时 Web 与 worker 会同时 `ALTER TABLE`，输的那个收到 duplicate column name
   → 只放过这一种错误；
   ⑦ 页面写「每个 PO 的 Header 都保留」不准确（整单缺货的 PO 会整组剔除）→ 改成
-  「除整单缺货被拿掉的 PO 以外，Header 全部保留」。
+  「除整单缺货被拿掉的 PO 以外，Header 全部保留」；
+  ⑧ **真机上又发现一处**：`open(path,"ab")` 预探**探不出字节区间锁**（Excel 常是这类），
+  预探通过后失败发生在 `copy2`，用户看到的是一坨 `PermissionError` 堆栈。改为不做预探，
+  在发布函数里捕获 `OSError`、`PermissionError` 翻译成 `output_locked`，并把已发布的**回滚**
+  （备份到同卷临时目录 → 全部成功才算数）。用真 `msvcrt.locking` 验过：
+  被挡住、两个产物都没动、无残留，解锁后重跑正常覆盖；
+  ⑨ 公式转义条件与 openpyxl 源码**逐字对齐**（`len > 1 且以 = 开头`）：实测 `+` / `-` / `@`
+  开头 openpyxl 存的是 `t="inlineStr"` 文本单元格（CSV 才需要防那三个），
+  顺手加上反而会把 `-1`、`+A1` 这类正常值改坏；
+  ⑩ `run_stock_check.py` 模块注释「每个 PO 的 Header 一律保留」不准确，一并改。
 - **未做**：尚未部署到 EN 测试服务器。
 
 ## 2026-09-23（第十二轮：断货 SKU 列表改为网页上自己维护）

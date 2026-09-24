@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pandas as pd
 import pytest
 from openpyxl import load_workbook
@@ -242,34 +244,100 @@ def test_rerun_replaces_both_products(tmp_path):
     assert "STYLE-D" not in second.checked_csv.read_text(encoding="utf-8")
 
 
-def test_locked_output_is_refused_without_publishing_anything(tmp_path, monkeypatch):
-    """产物被占用（Excel 打开着）时整体拒绝，不能出现「新 CSV + 旧 XLSX」。"""
-    import builtins
-    from pathlib import Path
+def test_partial_publish_failure_rolls_back(tmp_path, monkeypatch):
+    """第二个产物发布失败时，第一个要还原 —— 不能留「新 CSV + 旧 XLSX」。"""
+    import os as os_mod
 
     source = write_ragged_csv(tmp_path / "check0stock order x3.csv")
     out = tmp_path / "out"
     first = stock_precheck.run_stock_check(source, RAGGED_NO_STOCK, out)
+    before_csv = first.checked_csv.read_bytes()
+    before_xlsx = first.operations_xlsx.read_bytes()
 
-    # 同名重跑会被挡下：把内容换掉，就能验证它一个字没被动过
+    real_replace = os_mod.replace
+
+    def flaky_replace(src, dst, *args, **kwargs):
+        if str(dst).endswith(".xlsx"):            # 只让 XLSX 这一步失败
+            raise OSError(28, "No space left on device")
+        return real_replace(src, dst, *args, **kwargs)
+
+    monkeypatch.setattr(stock_precheck.os, "replace", flaky_replace)
+    with pytest.raises(OSError):
+        stock_precheck.run_stock_check(source, ["STYLE-D"], out)  # 内容不同，能看出有没有换掉
+
+    assert first.checked_csv.read_bytes() == before_csv       # CSV 被回滚
+    assert first.operations_xlsx.read_bytes() == before_xlsx  # XLSX 原样
+    assert sorted(p.name for p in out.iterdir()) == sorted(
+        [first.checked_csv.name, first.operations_xlsx.name]
+    )  # 没留下备份等残留
+
+
+def test_locked_output_is_refused_without_publishing_anything(tmp_path, monkeypatch):
+    """产物被占用（Excel 打开着）时整体拒绝，不能出现「新 CSV + 旧 XLSX」。
+
+    真机上 Excel 的锁会让**备份的 copy2** 先失败（不是 open 预探），
+    所以这里就照真机那样注入 copy2 的 PermissionError。
+    """
+    source = write_ragged_csv(tmp_path / "check0stock order x3.csv")
+    out = tmp_path / "out"
+    first = stock_precheck.run_stock_check(source, RAGGED_NO_STOCK, out)
+
     locked = first.checked_csv
-    locked.write_text("上一版的内容", encoding="utf-8")
+    locked.write_text("上一版的内容", encoding="utf-8")     # 内容换掉，验证它没被动过
     workbook_bytes = first.operations_xlsx.read_bytes()
 
-    real_open = builtins.open
+    real_copy2 = stock_precheck.shutil.copy2
 
-    def fake_open(file, mode="r", *args, **kwargs):
-        if "a" in mode and Path(file) == locked:
-            raise PermissionError(13, "being used by another process")
-        return real_open(file, mode, *args, **kwargs)
+    def flaky_copy2(src, dst, *args, **kwargs):
+        if Path(src) == locked:
+            raise PermissionError(13, "另一个程序已锁定文件的一部分，进程无法访问。")
+        return real_copy2(src, dst, *args, **kwargs)
 
-    monkeypatch.setattr(builtins, "open", fake_open)
+    monkeypatch.setattr(stock_precheck.shutil, "copy2", flaky_copy2)
     with pytest.raises(stock_precheck.StockCheckError) as exc:
         stock_precheck.run_stock_check(source, RAGGED_NO_STOCK, out)  # 同样的参数 -> 同名
 
     assert exc.value.code == "output_locked"
+    assert "Excel" in exc.value.hint
     assert locked.read_text(encoding="utf-8") == "上一版的内容"       # 没被覆盖
     assert first.operations_xlsx.read_bytes() == workbook_bytes      # 也没被单独换掉
+
+
+def test_permission_error_during_replace_is_readable_and_rolls_back(tmp_path, monkeypatch):
+    """锁在「备份之后、发布之中」才出现：既要整体回滚，也要报可读错误而不是堆栈。"""
+    import os as os_mod
+
+    source = write_ragged_csv(tmp_path / "check0stock order x3.csv")
+    out = tmp_path / "out"
+    first = stock_precheck.run_stock_check(source, RAGGED_NO_STOCK, out)
+    before_csv = first.checked_csv.read_bytes()
+
+    real_replace = os_mod.replace
+
+    def flaky_replace(src, dst, *args, **kwargs):
+        if str(dst).endswith(".xlsx"):
+            raise PermissionError(13, "being used by another process")
+        return real_replace(src, dst, *args, **kwargs)
+
+    monkeypatch.setattr(stock_precheck.os, "replace", flaky_replace)
+    with pytest.raises(stock_precheck.StockCheckError) as exc:
+        stock_precheck.run_stock_check(source, ["STYLE-D"], out)
+
+    assert exc.value.code == "output_locked"
+    assert first.checked_csv.read_bytes() == before_csv  # 已经换上的 CSV 被还原
+
+
+def test_bare_equals_is_not_escaped_but_formula_like_is():
+    """转义条件与 openpyxl 对齐：只有「长度 > 1 且以 = 开头」才会写成公式。
+
+    实测 openpyxl 3.1.5 只看这一个条件；`+` / `-` / `@` 开头存的是文本单元格，
+    Excel 不会把 xlsx 里的文本单元格再当公式解析（那是 CSV 的注入面）。
+    所以不要把 `-1`、`+A1` 这类正常值也改坏。
+    """
+    frame = pd.DataFrame({"A": ["=1+1", "=", "+1+1", "-1+1", "@x", "normal"]})
+    assert stock_precheck._excel_safe(frame)["A"].tolist() == [
+        "'=1+1", "=", "+1+1", "-1+1", "@x", "normal"
+    ]
 
 
 def test_formula_like_values_are_escaped_in_xlsx_only(tmp_path):
