@@ -166,7 +166,7 @@ cd pb_orders
 uv run pytest tests/ -q
 ```
 
-144 个用例通过、2 个跳过，**不需要 Redis**：`tests/conftest.py` 用 reportlab 现画一个结构同构的
+147 个用例通过、2 个跳过，**不需要 Redis**：`tests/conftest.py` 用 reportlab 现画一个结构同构的
 3 页 Packslip PDF + 5 行订单 CSV + 3 行名称缓存，跑真实流程；Web 用例把
 `web.app.enqueue_job` 换成同步执行，从而覆盖「Web 建任务 + worker 处理 + 页面 + 下载」整链。
 另有 Redis/RQ 生命周期用例需本地 Docker，设 `PB_ORDERS_RQ_DOCKER=1` 才跑（默认跳过）。
@@ -555,7 +555,7 @@ uv run pytest tests/ -q
 - [x] 无货时自动拆「有货主文件 + 无货子集」（标签 + 背贴各两份，`--no-stock` 触发）
 - [x] 网页版：FastAPI + Redis/RQ + SQLite，任务可后台跑、可追溯、可重下（2026-09-22）
 - [x] 独立 Docker Compose 栈，不碰既有服务（2026-09-22）
-- [x] 144 个自动化测试（另有 Redis/RQ 生命周期用例，默认跳过），不需要 Redis 也能跑
+- [x] 147 个自动化测试（另有 Redis/RQ 生命周期用例，默认跳过），不需要 Redis 也能跑
 - [x] 已部署到 EN 测试服务器（`/opt/pb-orders`）。入口 **<https://api.vilavi.cn/pb/>**
       （公网 HTTPS + 钉钉登录，容器只绑 `127.0.0.1`）；Tailscale 那条路径已弃用（走香港中继太慢）
 - [x] 公网入口有钉钉登录闸门（`web/auth.py`）。**登录范围由桥把关**：2026-09-23 起桥按
@@ -566,6 +566,7 @@ uv run pytest tests/ -q
 - [x] 保留策略：启动时按 `PB_ORDERS_RETENTION_DAYS`（默认 90 天）清理已完成任务与无人引用的产物。
       **只在服务/worker 启动时跑，不是定时任务**
 - [x] 同站 POST 带 CSRF 令牌（`web/csrf.py`）；上传磁盘名固定，原始文件名只用于展示
+- [x] **上传的输入也能下载核对**（任务页「输入文件」区块，带 SHA-256）；用 `storage.publish_input_copy`（硬链接/复制，**不移走** inputs/ 里的原文件）
 - [x] 断货 SKU 列表可在**网页上自己维护**（导航「断货 SKU」→ `app_settings` 表），
       改完立即影响新建任务的预填，不用改服务器 `.env`、不用重启（2026-09-23）
 - [x] 库存预检（步骤 0）：上传 SPS 原始订单 CSV → checked CSV + SPS 操作表；

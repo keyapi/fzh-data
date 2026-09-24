@@ -40,6 +40,57 @@ def upload_check(client, path, no_stock="STYLE-B", csrf=None):
         )
 
 
+def test_uploaded_inputs_are_downloadable(client, pb_env):
+    """上传的输入也要能下载核对（使用者要确认自己传的是什么）。"""
+    resp = upload_check(client, write_raw_orders(pb_env.tmp / "raw.csv"), no_stock="")
+    job_id = resp.headers["location"].rsplit("/", 1)[-1]
+
+    page = client.get(f"/jobs/{job_id}")
+    assert page.status_code == 200
+    assert "输入文件（可下载核对）" in page.text
+
+    art = next(a for a in client.repo.list_artifacts(job_id) if a["kind"] == "input_order")
+    assert art["download_name"] == "check0stock order x21 20260917_0338_456788.csv"
+    dl = client.get(f"/artifacts/{art['id']}/download")
+    assert dl.status_code == 200
+    # 下回来的就是上传的那份（逐字节）
+    assert dl.content == (pb_env.tmp / "raw.csv").read_bytes()
+
+    # 输入文件仍在 inputs/ 里 —— 登记不能把原文件移走
+    assert (client.settings.inputs_dir / job_id / storage.ORDER_NAME).is_file()
+
+
+def test_inputs_and_outputs_are_separated_on_the_page(client, pb_env):
+    """输入块与产物块分开：一个是「你给我的」，一个是「我给你的」。"""
+    resp = upload_check(client, write_raw_orders(pb_env.tmp / "raw.csv"), no_stock="")
+    job_id = resp.headers["location"].rsplit("/", 1)[-1]
+    page = client.get(f"/jobs/{job_id}").text
+
+    assert page.index("输入文件（可下载核对）") < page.index("产物下载")
+    # 产物块里不该再列出输入的类型名
+    outputs_block = page[page.index("产物下载"):]
+    assert "input_order" not in outputs_block
+    assert "SPS 库存检查操作表" in outputs_block
+
+
+def test_fulfillment_job_exposes_its_reused_checked_csv(client, pb_env):
+    """续出件任务的输入块要能看到「复用的那份 checked CSV」。"""
+    resp = upload_check(client, write_raw_orders(pb_env.tmp / "raw.csv"), no_stock="")
+    check_job = resp.headers["location"].rsplit("/", 1)[-1]
+    client.get(f"/jobs/{check_job}/fulfill")
+    csrf = client.cookies.get("pb_orders_csrf")
+    with open(pb_env.pdf, "rb") as fh:
+        started = client.post(
+            f"/jobs/{check_job}/fulfill",
+            files={"packslip": ("Packslip 美中 x3 20260921.pdf", fh, "application/pdf")},
+            data={"csrf": csrf, "actor": "tester"},
+            follow_redirects=False,
+        )
+    job_id = started.headers["location"].rsplit("/", 1)[-1]
+    kinds = {a["kind"] for a in client.repo.list_artifacts(job_id)}
+    assert {"input_packslip", "input_order"} <= kinds
+
+
 def test_check_page_prefills_no_stock(client):
     resp = client.get("/checks/new")
     assert resp.status_code == 200
@@ -62,7 +113,9 @@ def test_upload_runs_check_and_offers_downloads(client, pb_env):
 
     artifacts = client.repo.list_artifacts(job_id)
     kinds = {a["kind"] for a in artifacts}
-    assert kinds == {"checked_order", "stock_operations"}
+    assert kinds == {"input_order", "checked_order", "stock_operations"}
+    # 输入文件本身仍在 inputs/ 里（登记用的是硬链接/复制，不是移动）
+    assert (client.settings.inputs_dir / job_id / storage.ORDER_NAME).is_file()
 
     for artifact in artifacts:
         dl = client.get(f"/artifacts/{artifact['id']}/download")
@@ -202,7 +255,9 @@ def test_bad_csv_fails_with_readable_reason(client, pb_env):
     page = client.get(f"/jobs/{job_id}")
     assert page.status_code == 200
     assert "缺少必需列" in page.text
-    assert client.repo.list_artifacts(job_id) == []
+    # 失败时**没有任何产物**；但上传的输入仍在（那是建任务时登记的，用于核对）
+    kinds = {a["kind"] for a in client.repo.list_artifacts(job_id)}
+    assert kinds == {"input_order"}
 
 
 def test_continue_to_fulfillment_reuses_checked_csv(client, pb_env):
