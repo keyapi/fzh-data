@@ -53,10 +53,12 @@ def test_uploaded_inputs_are_downloadable(client, pb_env):
     dl = client.get(f"/artifacts/{art['id']}/download")
     assert dl.status_code == 200
 
-    # 下载链接也要出现在顶部「输入」那一行 —— 区块放在页面很下面等于没被发现
-    header = page.text[: page.text.index("</table>")]
+    # 下载链接出现在顶部「输入」那一行（页面下方不再另有一块）
+    header = page.text[: page.text.index('id="status-panel"')]
     assert f"/artifacts/{art['id']}/download" in header
     assert art["download_name"] in header
+    # 而且做成了表格（内联时文件名长短不一会让按钮参差不齐）
+    assert "<th>类型</th><th>文件名</th><th>大小</th><th>SHA-256</th>" in header
     # 下回来的就是上传的那份（逐字节）
     assert dl.content == (pb_env.tmp / "raw.csv").read_bytes()
 
@@ -87,7 +89,7 @@ def test_inputs_are_only_linked_in_the_header_not_a_second_block(client, pb_env)
     page = client.get(f"/jobs/{job_id}").text
 
     art = next(a for a in client.repo.list_artifacts(job_id) if a["kind"] == "input_order")
-    header = page[: page.index("</table>")]
+    header = page[: page.index('id="status-panel"')]
     assert f"/artifacts/{art['id']}/download" in header          # 顶部有链接
     assert "输入文件（可下载核对）" not in page                    # 下方没有第二块
     assert "input_order" not in page[page.index("产物下载"):]      # 产物表里也不列输入
