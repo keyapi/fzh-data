@@ -101,7 +101,42 @@ description: 生产线(production-backup) 与测试线(main) 分叉已久；22 �
 | `key_test.tasks.update_bom_update_log_status`（每 5 分钟：把卡住的 `BOM Update Log`（Update Cost / In Progress）按子表批次状态收尾） | hooks 里**启用** | hooks 里**注释掉** |
 | 卡在 `In Progress` 的 `BOM Update Log` | **0** 条 | **3** 条（总量 1173） |
 
-⇒ 这是真正「测试在跑、生产没跑」的活功能（上一版把 QR/批号说成"唯一"，不准确）。生产那 3 条卡住与这个任务缺席的表现一致（未证实因果）。是否在生产开这个 5 分钟任务 = 解开 prod 版 hooks 里那一处注释，需要拍板。
+⇒ 这是真正「测试在跑、生产没跑」的活功能（上一版把 QR/批号说成"唯一"，不准确）。生产那 3 条卡住与这个任务缺席的表现一致（未证实因果）。**已处理，见下节。**
+
+## 统一后的收尾（2026-10-08，已完成并验证）
+
+**① 5 分钟 BOM Update Log 收尾任务：已恢复**
+
+- 发现：**生产那条线根本没有 `tasks.py`**（所以那边 hooks 里只能写成注释）——更正上一版"生产主动注释"的说法。
+- 动作：把 `tasks.py`（27 行、仅此一个函数）从备份的测试线迁入统一线，并解开 hooks 里的 cron（`*/5 * * * *`）。
+- 踩坑：只解开注释不够——Frappe 的 cron 要先 `bench migrate` 同步成 `Scheduled Job Type` 记录才会跑；第一次没 migrate，16:45:45 那次执行是 `Failed: No module named 'key_test.tasks'`（文件当时还没进 main）。
+- 验证（生产）：`bench migrate` 后 Job Type 注册（`*/5 * * * *`, stopped=0）；16:50:18 执行 **Complete**；
+  **3 条卡住的日志（BOM-UPDT-LOG-00046/00086/00121，2024-12 与 2025-02）全部变 Completed**，两台 In Progress = 0。
+  这三条各只有 1 个子批次且都已 Completed —— 卡住纯粹是因为这个任务从没跑过。
+
+**② 打印格式指向统一**（测试独占的那张）
+
+`采购入库jinjia带子表批次二维码`（仅测试有，生产 0 张）原本调 `key_test.api.batch_qrcode.generate_batch_qr_code`，已改为
+`work_order_task.api.batch_qrcode.generate_batch_qr_code`：
+
+- 改后测试：调 work_order_task 的打印格式 11 张（原 10）、仍调 key_test 的 **0** 张（原 1）；生产 10/0。
+- 新目标实测可用：`/api/method/work_order_task.api.batch_qrcode.generate_batch_qr_code?batch_no=00020` → 200，返回 `data:image/png;base64,...`。
+
+**③ 清掉过期 DB 对象**
+
+切换后测试剩 3 个「代码已删、DB 记录还在」的对象，生产一个都没有：
+
+| 对象 | 处置 |
+|---|---|
+| `Report: BOM Item Lead Time Days` | **已删**（模块文件随切换移除，打开必报 ImportError） |
+| `DocType: Item Cost` / `Excel Processing` | **未动**（各 1~2 行试验数据；DB 驱动，打开不报错，只是没有 controller）。要清可随时说 |
+
+**④ 测试侧独有的 6 条 hook 全部有了结论**
+
+| hook | 结论 |
+|---|---|
+| `commands.generate_batch_qrcodes.execute`、`commands.reset_qrcode_fields.execute`、`doc_events.batch.after_save`、`doc_events.purchase_receipt.after_save`、`doc_events.purchase_receipt.on_submit`（后两者确认只做 QR） | **放弃**（生产用 `work_order_task` + `erpnext_qrcode` 现算；测试那套无消费方） |
+| `tasks.update_bom_update_log_status` | **已恢复**（见 ①） |
 
 ## 被引用/在跑的实测判定（2026-10-08）
 
