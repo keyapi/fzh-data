@@ -78,6 +78,11 @@ class JobOptions:
     # 网页上传的磁盘名固定是 `order.csv`，词干就是 "order"（产物看不出是哪一批），
     # 所以 worker 把用户的原始文件名词干传进来；命令行不传，行为与从前一致。
     csv_stem: str | None = None
+    # 重复建单加后缀（见 docs/reference/workflow.md §10）：要补发的 PO 列表。
+    # 每项 `PO` = 扫历史导入 xlsx 自动算后缀；`PO=-2` = 显式指定。history_dirs 为空时
+    # 用 CSV 所在目录当历史目录（命令行惯例：补发时把 PB orders 根目录传进来）。
+    reorder: list[str] = field(default_factory=list)
+    history_dirs: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -198,8 +203,19 @@ def run_job(
 
     # ---------- 步骤 3：订单 CSV -> 通途 xlsx ----------
     progress("orders", "处理订单 CSV 并拆行")
+    # 重复建单加后缀（workflow.md §10）：先把要补发的 PO 解析成 {PO: "-N"}。
+    # 显式 `PO=-2` 直接采信；裸 `PO` 走「扫历史导入 xlsx 算下一个可用后缀」。
+    reorder_auto, reorder_suffixes = pb_tongtu_excel.parse_reorder_spec(options.reorder)
+    reorder_files = 0
+    if reorder_auto:
+        history_dirs = [Path(d) for d in options.history_dirs] or [Path(csv_path).parent]
+        auto_map, reorder_warns, reorder_files = pb_tongtu_excel.next_reorder_suffixes(
+            reorder_auto, history_dirs
+        )
+        reorder_suffixes.update(auto_map)
+        warnings.extend(reorder_warns)
     try:
-        df_order = pb_tongtu_excel.build_order_df(csv_path)
+        df_order = pb_tongtu_excel.build_order_df(csv_path, order_suffixes=reorder_suffixes)
     except ValueError as exc:
         # 这一层的 ValueError 都是「这份 CSV 用不了」（缺列 / 数量非法等）。
         # 不套 PBJobError 的话，页面会落到通用提示「PDF 与 CSV 可能不是同一批」——指错了方向。
@@ -280,6 +296,11 @@ def run_job(
         "orders": {
             "rows": len(df_order), "columns": int(df_order.shape[1]),
             "importable": len(importable), "no_stock_rows": len(no_stock),
+        },
+        # 重复建单加后缀：applied 是 {PO: "-N"}；history_files 是扫过的历史导入文件数
+        "reorder": {
+            "applied": dict(sorted(reorder_suffixes.items())),
+            "history_files": reorder_files,
         },
         "one_to_one": {"pdf_pages": len(df_pdf), "order_rows": len(df_order), "ok": True},
         "join": {"unmatched": len(unmatched),

@@ -8,6 +8,43 @@ timestamp: 2026-09-22
 
 # 变更日志
 
+## 2026-10-08（第二十轮：通途导入 Excel 支持「重复建单自动加后缀」）
+
+- **需求**：通途不允许重复订单号；同一 PO 分两次建单（部分缺货，有货先发、缺货到货后补发）
+  第二次要换号。以前靠人手工改 CSV 的 `PO Number`，现在做成功能。
+- **规则**（§10）：后缀 = 该 PO 已用过的**最大 `-N` + 1**；只见过裸号/查无 → `-2`。
+  `-N` 与同批多行的 `Line#` 后缀**同一命名空间**，所以按 max 递增，不能固定 `-2`。
+- **数据源**：**扫本地历史 `PB_*导入*.xlsx` 的 `PO Number-Line` 列**（离线）。实测 286 个文件，
+  结果与 Notion 表里「通途建单」勾选完全吻合，可靠。**不查通途 API**（PB 账号码未确认 + 限流）。
+- **实现**：`pb_tongtu_excel` 新增 `parse_reorder_spec` / `scan_used_order_numbers` /
+  `next_reorder_suffixes`，`build_order_df(path, order_suffixes=…)` 在 `PO Number` 上、
+  `Line #` 派生之前拼后缀；`service.JobOptions` 加 `reorder` / `history_dirs`，
+  `report["reorder"]` 记录 `{PO: "-N"}` 与扫过的文件数；CLI（`run_pb_orders.py` 与
+  `pb_tongtu_excel.main`）加 `--reorder PO[=N]` / `--history-dir DIR`。
+- **边界**：**只做本地**（命令行 + 核心函数）。网页服务器上没有历史导入文件，网页表单/worker
+  **不接**这条链路。PDF/标签/背贴不受影响（join 按 `-` 截断 PO）。
+- **测试 +8**：历史扫描（含跳过坏文件与 `~$`）、后缀规则三档、显式/自动解析、
+  `build_order_df` 加后缀、`run_job` 端到端（后缀进产物且 join 不断）。
+
+## 2026-10-08（第十九轮：判定「真发」以 UPS 取件为准 + 通途重复建单加后缀 `-2`）
+
+- **背景（无货表维护）**：核对 Notion「PB 无货未发」表里的 PO 到底发没发。早前拿 SPS 的
+  shipment / ASN 记录反推「已发货」—— **这是错的**：通途 `orderStatus=despatched` 和 SPS 的
+  ASN 行都只等于「**建了标签**」，不等于 UPS 真取件（用户纠正：通途常出现「标记发货实际未发」）。
+- **正解**：`ups_track` + UPS 官方 Track API（`--env prod`）查跟踪号（号从本地 `shipment*.csv`
+  按 PO 列取）。判据是 **`We Have Your Package` 时间点**：有 = 真发；只有
+  `Shipper created a label, UPS has not received the package yet.` = 无货未发。
+  实测 10 个 PO：真发 2（`137770200-1` 09/01 签收、`137974027` 的 -194 09/29 取件 / 10/05 签收），
+  其余 8 个只建标未取件 → 确认无货未发。据此修正了 Notion 表里 7 行原先写「待核实」的备注。
+- **新增业务规则（用户明确，非个别单）**：同一 PO **再次**建通途单要换一个没用过的 `PO Number`
+  （加 `-N`，通途不允许重复订单号），H/D 两行都要改。⚠️ **后缀不是固定 `-2`** —— `-N` 是同一命名空间
+  （同批多行占 `-1`…`-M`、跨批补发继续往后），**下次可用 = 已用过的最大 `-N` + 1**，从未用过才从 `-2` 起。
+  例：`137770200` 在 20260827 一批里建了 `-1`、`-2`（导入 xlsx 可见），两单都没发则补发用 `-3`。
+  **查「用到哪」**：① 通途模糊搜 `PBUS-{PO}`；② 翻历史 `PB_*导入*.xlsx` 的 `PO Number-Line` 列（离线）。
+  历史实例 `20250815/…/灰色po133729896_…_新建改PO号.csv`。**`pb_tongtu_excel` 目前无注入后缀的入口**
+  （靠人手工改 CSV）—— 待实现，见 `AGENT_HANDOFF.md` 坑 40。
+- **文档**：`docs/reference/workflow.md` 新增 §10「订单号与重复建单加后缀」；`AGENT_HANDOFF.md` 新增坑 40。
+
 ## 2026-10-08（第十八轮：顾客留言行 Record Type=O 不再挡住整批）
 
 - **现象（使用者，20261005 批次）**：`check0stock order x8 20261005_1014_590799.csv`

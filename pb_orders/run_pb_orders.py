@@ -61,6 +61,14 @@ def _print_report(report, dry_run):
         f" | 可导入 {orders['importable']} | 无库存 {orders['no_stock_rows']}"
     )
 
+    reorder = report.get("reorder") or {}
+    if reorder.get("applied"):
+        pairs = "、".join(f"{po}{sfx}" for po, sfx in reorder["applied"].items())
+        print(
+            f"[重复建单] 已加订单号后缀：{pairs}"
+            f"（扫历史导入 xlsx {reorder.get('history_files', 0)} 个）"
+        )
+
     ship = report.get("shipment")
     if ship:
         print(f"[发货核对] {ship['file']}: 订单 {ship['ordered']} 件 vs 实发 {ship['shipped']} 件")
@@ -105,6 +113,8 @@ def run(args):
         cache_only=args.cache_only,
         check_shipment=args.check_shipment,
         validate_only=args.dry_run,
+        reorder=list(args.reorder or []),
+        history_dirs=list(args.history_dir or []),
     )
     out_dir = Path(args.out).resolve() if args.out else in_dir
     pdf_path = service.resolve_input(in_dir, args.pdf, PDF_PATTERN, "Packslip PDF")
@@ -144,6 +154,14 @@ def build_parser():
         help='无货子集文件名前缀里的描述，默认自动 "N单M件"，例："4单6个三角灰97"',
     )
     ap.add_argument("--out", default=None, help="输出目录，默认与 --dir 相同")
+    ap.add_argument(
+        "--reorder", action="append", default=[], metavar="PO[=N]",
+        help="给「重复建单」（补发）的 PO 加订单号后缀；`PO` 自动算，`PO=-2` 显式。可重复/逗号分隔",
+    )
+    ap.add_argument(
+        "--history-dir", action="append", default=[], metavar="DIR",
+        help="扫历史导入 xlsx 的目录（可重复）；默认 = 订单 CSV 所在目录。补发时传 PB orders 根目录",
+    )
     ap.add_argument("--check-shipment", action="store_true", help="只读核对 ASN 实发数量并报缺货")
     ap.add_argument("--allow-unmatched", action="store_true", help="join 未匹配时不中止")
     ap.add_argument("--cache-only", action="store_true", help="背贴名称表只用本地缓存，不联网")
