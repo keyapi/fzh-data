@@ -271,7 +271,7 @@ AGENTS.md                        ← 你正在读的，项目总纲 + 路由地�
 | `tooling-decisions/` | 12 | 脚本、工具选型、产出校验 |
 | `developer-experience/` | 10 | Windows / worktree / MCP / Colab 等本机环境坑 |
 | `conventions/` | 9 | 团队约定（配对、命名、SOP） |
-| `best-practices/` | 7 | 通用工程做法（防漏数、知识库防腐、先搜再造、安全加固） |
+| `best-practices/` | 8 | 通用工程做法（防漏数、知识库防腐、先搜再造、安全加固） |
 | `documentation-gaps/` | 2 | 文档与断言的缺口 |
 
 定位单篇：`grep -rl "^module: <模块名>" docs/solutions/`（frontmatter 有 `module` / `tags` / `problem_type`）。

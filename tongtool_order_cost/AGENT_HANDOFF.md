@@ -104,6 +104,8 @@ Cursor Agent 用用户级 MCP `user-tongtool_erp2_primary`（`~/.cursor/mcp.json
   - [GS / worksheet 清单](../docs/solutions/architecture-patterns/colab-gsheet-inventory.md) —— 每个 ws 的角色、公式（`IMPORTRANGE`/`INDEX-MATCH`/EN 优先+手填兜底）、兜底行数、能否停更
   - [EN 成本侧现状](../docs/solutions/architecture-patterns/en-cost-side-current-state.md) —— 三条交付形态规则、借用、客户码索引必须回读 `customer_items`、`Cost Review` 与 `engine_170.py` 的边界
   - [数据流关系图](../docs/solutions/architecture-patterns/colab-cost-pipeline-data-flow.md) —— mermaid + 冲突点（"发货方式"4 处并存）
+- **审计交付物方法学（给独立评审用）**：[遗留系统审计交付物 — 活档案 + 机械自检](../docs/solutions/best-practices/legacy-audit-deliverable-living-spec-plus-self-check.md)
+  —— 含**被推翻的假设**清单与"自检脚本自己也会错"的踩坑；复核入口 = `tongtool_order_cost/scripts/verify_colab_cost_claims.py`（40 项断言）。
 
 ## 禁止
 
