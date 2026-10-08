@@ -616,4 +616,3 @@ uv run pytest tests/ -q
 踩过的坑与设计取舍，动手前先读：
 
 - `docs/solutions/workflow-issues/pb-out-of-stock-notification-and-zero-stock-orders.md` —— PB 断货通知与 0 库存订单处理 — 数据来源、PO 映射与三个反直觉陷阱
-
