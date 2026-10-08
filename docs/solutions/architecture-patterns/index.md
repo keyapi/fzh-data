@@ -28,3 +28,7 @@ timestamp: 2026-07-28
 | 账期/收款核算 生态地图（各平台账期 → 汇率/税/附加费 → 回款归属/回款率 → 归集给财务） | [account-period-revenue-reconciliation-ecosystem.md](account-period-revenue-reconciliation-ecosystem.md) |
 | ERPNext 工作流配置完整指南 | [erpnext-workflow-configuration.md](erpnext-workflow-configuration.md) |
 | SKU 背贴 PDF 生成与通用名称查询模式 | [sku-label-pdf-generation-and-name-lookup.md](sku-label-pdf-generation-and-name-lookup.md) |
+| 旧 Colab 成本链 — 逐段现状档案（cell 0 → 4.8） | [colab-cost-pipeline-current-state.md](colab-cost-pipeline-current-state.md) |
+| 旧 Colab 成本链 — GS / worksheet 清单 | [colab-gsheet-inventory.md](colab-gsheet-inventory.md) |
+| EN 成本侧现状（BOM Cost List / 客户码 / 借用） | [en-cost-side-current-state.md](en-cost-side-current-state.md) |
+| 旧 Colab 成本链 — 数据流关系图 | [colab-cost-pipeline-data-flow.md](colab-cost-pipeline-data-flow.md) |

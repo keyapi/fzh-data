@@ -1,0 +1,207 @@
+---
+okf: v0.1
+type: Reference
+title: 旧 Colab 成本链 — 逐段现状档案（cell 0 → 4.8）
+date: 2026-10-08
+last_updated: 2026-10-08
+category: architecture-patterns
+module: tongtool_order_cost
+problem_type: architecture_pattern
+component: colab-cost-pipeline-current-state
+severity: high
+applies_when:
+  - "要改旧 Colab《20250409 合并en成本…》任一单元，先查本档案确认它的读/写/键/开关"
+  - "判断某段是活的还是死代码、某个 #@param 当前值是什么"
+  - "评估把该链收口到 EN 或独立部署（迁移输入）"
+tags: [colab, cost-pipeline, current-state, living-spec, delivery-type, processing-cost, coefficients]
+related_components: [colab_kit, tongtool_order_cost, warehouse_restock, missing_products]
+---
+
+# 旧 Colab 成本链 — 逐段现状档案（cell 0 → 4.8）
+
+> **维护约定：本档案随改动同步更新。** 改动 notebook 必须同 PR 更新本文件（含 `#@param` 当前值）。
+> **自检**：可机械核对的断言由 `tongtool_order_cost/scripts/verify_colab_cost_claims.py` 复算（cell 数、开关字面量、`ls_col_order_keep` 71 列且不含 `EN绍兴包装*`、`0.001` 注入、`cell 145` 纪律、`gsheet_name` 未定义等）。改本档案请同步改该脚本。
+> 配套：[GS/worksheet 清单](colab-gsheet-inventory.md) · [数据流关系图](colab-cost-pipeline-data-flow.md) · [EN 成本侧现状](en-cost-side-current-state.md)。
+> 证据等级：未标注为**已证实**；推断项标注 高概率 / 无法确认。
+
+## 0. 基线与事实
+
+- **Notebook**：`1T5hZYvnJhS8xzORb3tuYRoXXWn9uSzNl`；线上 `modifiedTime=2026-10-08T02:16:38.425Z`、`version=6944`、**227 cells**、1 425 217 bytes。
+- **本地同步副本**（`G:/我的云端硬盘/Colab Notebooks/成本核算/透视表订单/处理通途订单/20250409 合并en成本 测算成本核算20250110 尺寸提取 产品名称-品类 海外仓成本.ipynb`）与该版本**同大小同时间戳** ⇒ 本档案以其为准。
+- 改 notebook 前：`uv run python colab_kit/colab_kit.py guard <ID> --expect 2026-10-08T02:16:38.425Z`。
+- **当前配置的账期是 202607**（不是 202606）：`gsheet_name_order="通途订单202607"`、`worksheet_name_order="2026年7月订单"`（cell 56）/`"2026年7月FBA订单"`（cell 138）、`col_name_select_exchange_rate="202607"`。
+- **执行是线性的**（cell 0→226）；`gsheet_name_order`/`worksheet_name_order` 在中途被重新赋值（36/56/138）。
+- `cell 0` **内嵌 GCP service-account dict**（两组凭证）——**不得复制其值**；仓库标准是 gitignore 的 `secrets/gsheets-service-account.json`（同一 SA）。
+
+## 1. 全链一句话
+
+> 通途订单导出 → GS 月度表 → Colab 解析"产品名称"拼 `品类尺寸面料编码` → **4.2.2/4.2.3 合并多行** → 用旧表桥接命中 EN 成本 + 从 GS `二次加工成本2022` 取二次加工成本 → **4.6 组装两套成本/利润（非系数链 + 系数链）** → 写回 GS → 4.6.1/4.7/4.8 裁剪+FBA 合并导出 → 4.9.x/5.x 运营人员与账期加工。
+
+## 1.1 运行纪律：**每月跑两遍**（FBA 特殊；顺序不可颠倒）
+
+| 遍 | 步骤 | 产物 |
+|---|---|---|
+| 第一遍（自发货/非 FBA） | `4.1 → 4.2 → 4.3.1 → 4.4 → 4.5.x → 4.6 → 4.6.1` | `df_order_cost_no_fba`；写回 `写回{worksheet_name_order}` |
+| 第二遍（FBA） | `4.7.1 → 4.7.2` → **再跑一遍 `4.3.1 → 4.4 → 4.5.x → 4.6`（⚠ 不跑 4.6.1）** → `4.7.3 → 4.8` | `df_order_cost_fba`；写回 `写回{…FBA订单}`；最终合并 `写回{worksheet_name_order}{filename_suffix_write_order}` |
+
+- **notebook 内已写明该纪律**：`cell 145` 标题 =「4.7.3 运行完上面的 4.7.1, 4.7.2后, 需要运行 4.3.1, 4.4, 4.5.1, 4.5.2, 4.5.3, 4.6（会生成 `df_order_cost_fba`）**注意不要运行 4.6.1**，然后运行本单元 4.7.3 和下面的 4.8」。
+- **机制（高概率，逻辑后果）**：`4.3.1–4.6` 复用**同一个全局 `df_order_cost`**；第二遍把它重新指向 **FBA 订单**，而 `cell 130/135` 的 `df_order_cost_no_fba(_orig)` 是第一遍留下的**快照** ⇒ ①顺序不可颠倒；②第二遍**绝不能跑 4.6.1**（否则按 FBA 订单重建非 FBA 帧）。
+- **直接解释 GS 侧两张中间写回表**：`写回2026年6月订单`（7873×166，第一遍）与 `写回2026年6月FBA订单`（1386×95，第二遍），`cell 151` 合成 `写回2026年6月FBA订单和非FBA订单`（9259×78）——与 `7873 + 1386 = 9259` 的自洽性一致。
+- **对后续改造的含义**：`cell 99–128`（成本主链）**每月被跑两遍**（两遍的 `df_order` 输入不同、`worksheet_name_order` 不同），任何改动都同时作用于两遍；**不要新增依赖"只跑一次"的全局状态**，并保持"第二遍不跑 4.6.1"仍成立。
+
+## 2. 主表（cell → 段 → 读/写/键/开关 → 活/死）
+
+### 2.1 前置与配置（cell 0–98）
+
+| cell | 段 | 读 | 写 | 键 | 开关当前值 | 活/死 |
+|---|---|---|---|---|---|---|
+| 0 | Bootstrap+helpers | — | 本地 `client_secrets.json` | — | — | 活；定义 `gsheet2df`/`set2after1`/`write_df_to_gsheet`/`get_timestamp`；**`write_df_to_gsheet` 吞写异常（只 print 不 raise）** |
+| 2 | §1.1 | — | — | — | `gsheet_name_cost_shaoxing="财务部绍兴成本核算表单2023"` | 活 |
+| 4 | §1.1.1 品类×面料 | 绍兴成本表/`品类使用面料` | — | 品类,面料,品类别名 | `worksheet_name_fabric="品类使用面料"` | 活 |
+| 5 | §1.2 cfg | — | — | — | `gsheet_name_cost_lihui="李惠物流SKU属性20230425"` | 活（第二套品类/面料来源） |
+| 7 | §1.2.1 | 李惠表/`2品类面料 工厂采购` | — | 品类,面料 | `worksheet_name_fabric_lihui="2品类面料 工厂采购"` | 活 |
+| 9 | §1.3 BOM | 绍兴成本表/`产品用料工时明细` | — | 品类编码,品类尺寸编码 | `worksheet_name_bom="产品用料工时明细"` | 活 |
+| 12 | §1.4.1 材料价 | 绍兴成本表/`材料价格明细` | — | 材料名称,材料编码,类别,单价 | `worksheet_name_mat_price="材料价格明细"` | 活；`材料名称→材料编码` 全链复用 |
+| 14/16 | §1.4.2/3 损耗 | `损耗明细` | — | 损耗类别 | — | 活 |
+| 18/20 | §1.5/1.6 | — | — | 品类编码/面料/材料编码 | — | 活（`errors='ignore'`）；**内胆真空袋块 dead** |
+| 24 | §1.7 人工费 | `人工费日常费` | — | 统计月份 | — | 活 |
+| 27 | §1.8 写回 | — | **绍兴成本表/`写回成本工时`** + xlsx | — | `worksheet_name_write='写回成本工时'` | 活（有 dead insert_row 块） |
+| 30 | §2.1.1 皮壳入库 | `皮壳入库10月` | — | 产品名称,入库数量 | `worksheet_name_inbound="皮壳入库10月"` | 活；字面量是"10月"但下拉列 7/8/9 月 → **手动改过的旋钮** |
+| 32 | §2.1.2 | — | — | 品类,品类编码,品类别名 | — | 活 |
+| 34 | §2.2 产品名提取 | — | **绍兴成本表/`写回皮壳入库10月`** | 型号,产品名称,是否内胆,有无扣,品类,总工时,总面料用量m | `col_name_cat_orig='型号'`；`if_delete_fangyuzhao=True`；`if_delete_YuanZhuNeidan_of_SanJiao=False` | 活；有 `try/except: "尚没有绍兴成本表"` |
+| 36 | §3.0.1 对照表 | 旧表/`皮壳成本平均202409-…` | — | 品类尺寸面料编码, EN重量模板物料号 | `worksheet_name_cost_cover=…`；`gsheet_name_order="通途订单202607"`(仅月份正则) | 活 |
+| 39 | §3.2.1 头程(测试) | 头程运费成本/全 ws 除 6 | — | 头程运费来源 | `ls_worksheet_name_not_read=[6项]` | **已被 c41 取代**（源码自述） |
+| 41 | §3.2 头程(正常) | 头程/全 ws 除 8 + `头程运费来源编码-EN成本列名对照表` | **头程/`头程运费合并`** | 头程运费来源编码,品类尺寸面料编码,EN成本列名,EN重量模板物料号 | `worksheet_name_concat="头程运费合并"` | 活 |
+| 43 | §3.2.1b 去重 | — | — | 同上两键 | `col_name_trans_head_month="头程运费金额"` | 活 |
+| 45 | §3.2.2 EN 头程读取 | 绍兴成本表/`EN产品BOM成本列表20260202` | — | `重量模板编号` + 19 成本列 | `worksheet_name_cost_en="EN产品BOM成本列表20260202"`；`col_zlmb='重量模板编号'` | 活；`groupby(重量模板编号).agg(['max',nonzero_mean])`；**若存在 `绍兴发货方式` 则 `.first()` 取并插到第 2 列** |
+| 47 | §3.2.3 melt | — | **头程/`EN头程运费`** | en重量模板编号,en绍兴发货方式,EN成本列名,EN头程运费金额 | `ls_col_head_en=[13]` | 活（另有 dead 重复写块） |
+| 49 | §3.2.3.2 选行 | — | **头程/`EN头程运费_处理后`** + xlsx | 同上 + 尾缀,发货方式 | `special_suffixes=['USNJ','USTX','PL']` | 活；`extract_suffix=([A-Z][A-Z0-9]+)$`；比例补（半成品=2×皮壳、成品=2×半成品）；**`select_by_sx_delivery` 每模板只留一行** |
+| 51 | §3.2.4 GS×EN | — | **头程/`头程运费合并替换EN`** | EN重量模板物料号,EN头程运费来源编码 | `old_to_new_mapping={HEAD-US→HEAD-USNJ, HEAD-USTX-PK→HEAD-USTX, HEAD-EUFBA→HEAD-DEFBA,…}` | 活；GS 值存 `GS头程运费金额` |
+| 53 | §3.4 海外仓/FBA | `海外仓和FBA成本`/`美国海外仓FBA成本` | — | 品类尺寸编码 | — | 活 |
+| 56 | §4.1.0 订单+汇率 | `通途订单202607`/`2026年7月订单`；`和财务部共享`/`汇率`+`订单发货仓库对应成本来源` | — | 收款币种,发货仓库 | `if_use_test_cost="正常-不用测算成本"`；`if_replace_xinglianhwc_to_ustx="是-替换星链海外仓为DANEEY"`；`col_name_select_exchange_rate="202607"` | 活；NBSP→空格；`物流商运费→运费` |
+| 59 | §4.1.0.1 特殊订单 | `处理特殊订单` | — | 通途订单号,处理方式 | `if_del_special_order='YES'` | 活 |
+| 61/62/64 | §4.1.1/1b/2 | `美国UPS邮编分区` | — | 邮编→分区；省/州→缩写 | `worksheet_name_us_zip_zone='美国UPS邮编分区'` | 活 |
+| **66** | **§4.2 品类/面料/尺寸提取** | — | **`通途订单202607`/`写回2026年7月订单`** | 产品名称→品类/面料/尺寸→`品类尺寸编码`/`品类尺寸面料编码` | `col_name_cat_orig='品类orig'`；`if_wedge_reduce_new_fabric_since_202403="YES"` | 活；**最大单元**；品类/面料目录**既硬编码**（`cat_string`/`str_fabric_name`）又 merge GS(4)+李惠(7)+材料价(12)；自带 TODO「改为读取 gsheet 列 需先去重」 |
+| 70 | §4.2.2 订单号 | — | — | 通途SKU,订单号 | — | 活；`normalize_order_id`（`TTDaneeyGo-`/`TTDaneeyUS-`）；含 test 列表 |
+| 71–72 | §4.2.2b 合并包裹 | — | — | 订单号_公共部分,平台SKU_统一,包含包裹 | — | 活；`add_package_suffix(['松饼大沙发-放大版'])` |
+| 73 | 测试导出 | — | xlsx 松饼大沙发-放大版 | — | — | test-only |
+| **74** | — | — | — | — | — | **全注释 = dead** |
+| 75–77 | §4.2.2c 合并 | — | xlsx df_merged | 订单号_公共部分 | — | 活；`groupby` 求和 售价/售价*汇率/运费；产品名前加 `'已合并多行 '` |
+| 78–79 | 回填 | — | — | 订单号_公共部分 | — | 活 |
+| 82–92 | §4.2.3 tiktok | — | — | 渠道,通途SKU,电话,订单号_公共部分,发货数量 | — | 活（`渠道∈['tiktok','TiktokUS']`）；`assign_merge_group` 按 (电话,sku_base)，leader=suffix==1；c89 正则 `([A-Za-z]+-\d{18})` |
+| **95** | §4.3.0.2 皮壳成本平均 | — | **`gsheet_name`（未定义变量！）/`皮壳成本平均202409-…`** + xlsx | 成本月份,品类尺寸面料编码 | `ls_month_average=['202409','202410','202411']` | 活；`replace(0,np.nan)`；**`gsheet_name` 与 `multi_df_sx_nodups` 在 0–98 内均未定义** |
+| **97** | §4.3.0.2.9 | — | — | — | — | **全注释 = dead** |
+| 98 | §4.3.0.3.0 标题 | — | — | — | — | md |
+
+### 2.2 成本主链（cell 99–128，段 4.3.0.3–4.6）
+
+| cell | 段 | 读 | 写 | 键 | 要点 |
+|---|---|---|---|---|---|
+| 99 | 4.3.0.3 读 EN 成本 | 绍兴成本表/`EN产品BOM成本列表20260202` | — | `重量模板编号` | 6 个成本列 → `groupby(重量模板编号).agg(['max',nonzero_mean])` → `en*_max`/`_avg`。**不读 `绍兴发货方式`**；且 `en美东/美中/波兰加工成本*_max` **此后全 notebook 无引用** |
+| 101 | 读旧皮壳/发货类型表 | 旧表/`皮壳成本平均202409-…` | — | `品类尺寸面料编码` | 数值化 + `drop_duplicates(品类尺寸面料编码)` → `df_sx_nodups`；`optional_cols` 含 `当月给分公司发货类型`、`EN重量模板物料号`、`二次加工成本(*)` |
+| 103 | 4.3.0.4 | — | **绍兴成本表/`SX合并EN成本`** | **`EN重量模板物料号` ↔ `en重量模板编号`** | `en皮壳成本_max`≠0 → 覆盖 `皮壳含/不含包装成本(*系数)`；`en绍兴包装成品成本_max`≠0 → 覆盖 `二次加工成本(*系数)`；`EN绍兴包装半成品成本=en…半成品_max`、`EN绍兴包装成品成本=二次加工成本*系数`（覆写后） |
+| 105 | **4.3.1** | — | — | `品类尺寸面料编码` | `merge_cols` = base + 存在的 `['产品发售日期','当月给分公司发货类型','EN绍兴包装半成品成本','EN绍兴包装成品成本']` ⇒ **订单上唯一的"交付形态"字段 = 旧表 `当月给分公司发货类型`** |
+| 109 | 4.4 | `头程运费成本`/`头程运费合并` | xlsx 导出 | `头程运费来源编码`,`品类尺寸面料编码` | `option_head_source="头程用:头程运费合并替换EN"` → 与 cell 51 的 `df_head_gs_en_nodups` 合并；**只带 `头程运费金额`，不带 `绍兴发货方式`**；`HEAD-SX` → 头程=0 |
+| 111 | 4.5.1 读二次加工成本表 | `二次加工成本2022` 多 ws（跳过名含 `合并/orig/副本/copy/测试/测算/import` 者） | — | `品类尺寸面料编码`（+`品类尺寸编码` 的 nofabric 分支） | 月列硬编码 `二次加工成本多月202511{,*系数}`；来源编码按 **ws 名包含关系**顺序赋（`美国→2CJG-US`→`美东USNJ→2CJG-USNJ-TEST`→`美中USTX→2CJG-USTX-TEST`→`波兰→2CJG-PL`→`绍兴→2CJG-SX`，后写覆盖）；合并 GS `材料价格明细`（材料名称→材料编码）；去重**取 `二次加工成本*系数` 最大行**；末尾按来源编码横向展开 |
+| **128** | **4.6 成本计算 + 写回 `写回{worksheet_name_order}`** | — | **写回 + xlsx + `files.download`** | 见下 | 见 2.3 |
+
+### 2.3 cell 128（4.6）逐步执行序（序号即代码顺序）
+
+1. `drop(['二次加工成本','二次加工成本系数','二次加工成本*系数','绍兴二次加工成本','绍兴二次加工成本系数','绍兴二次加工成本*系数'], errors='ignore')`
+2. `merge(df_cost_2prod_nodups, on=['二次加工成本来源编码','品类尺寸面料编码'])`
+3. 取 `来源=='2CJG-SX'` 子集改名加 `绍兴` 前缀，`merge(on=['品类尺寸面料编码'])`（**只按编码，与订单自身来源无关**）
+4. `品类尺寸面料编码` 为空 → 皮壳含/不含包装、二次加工成本、头程运费金额 = NaN（注释 20231122 BUG）
+5. 品类 ∈ {创意床品, 创意方抱枕, 异形沙包坐墩, 棉包, 售后针线扣} → `二次加工成本=0`；后两者还清皮壳/头程并置系数 1.0
+6. `皮壳成本 = 皮壳含包装成本`；`来源=='2CJG-SX'` → 用**不含**包装；`是否皮壳=='皮壳'` → 强制**含**包装
+7. 定义 `ls_type_goods_need_add_sx_2prod=['成品','半成品']`、`ls_type_warehouse_noneed_add_sx_2prod=['FBA','海外仓']`、`filter_en_cost_sxbzbcp=(来源!='2CJG-SX')&(类型=='半成品')`、`filter_en_cost_sxbzcp=(来源!='2CJG-SX')&(类型=='成品')`
+8. `if_use_EN_cost_sxbzbcp=='注意-…'`（**当前值**）→ `绍兴二次加工成本(*系数) = EN绍兴包装半成品成本.fillna(0)`
+9. `绍兴二次加工成本(*系数).fillna(0)`
+10. `if_use_EN_cost_sxbzcp=='注意-…'`（**当前值**）→ `绍兴二次加工成本(*系数) = EN绍兴包装成品成本.fillna(0)`
+11. `if '当月给分公司发货类型' in columns:` → 类型∈列表 → `皮壳成本(*系数) = 皮壳不含包装成本(*系数)`；**类型∉列表 → `绍兴二次加工成本(*系数)=0`**
+12. **`filter_condition = (类型=='成品') & (来源=='2CJG-PL') & (绍兴二次加工成本.notna()&!=0) & (二次加工成本.notna()&!=0)`；`if_0_PL_cost=='注意-清零PL二次加工成本'`（当前值）→ `二次加工成本 = 0.001`**（注释 20251013）
+13. 兜底（if 块外，总执行）：`发货仓分类∈['FBA','海外仓']` → `绍兴二次加工成本(*系数)=0`；`来源=='2CJG-SX'` → 同
+14. 再定 `皮壳成本`：`来源=='2CJG-SX'` → 不含包装；`是否皮壳=='皮壳'` → 含包装
+15. 数量列（各自由单价×`发货数量` 独立算出）：`皮壳成本*数量`、`皮壳成本*系数*数量`、`二次加工成本*数量`(皮壳→0)、`绍兴二次加工成本*数量`(皮壳→0)、`二次加工成本*系数*数量`(皮壳→0)、`绍兴二次加工成本*系数*数量`(皮壳→0)
+16. `1件产品成本 = 皮壳成本 + 绍兴二次加工成本 + 二次加工成本`（皮壳行→仅皮壳成本）；`1件产品成本*系数` 同构用 `*系数` 分量
+17. `产品成本*数量`、`产品成本*系数*数量`、`头程运费*数量`
+18. `海外仓成本`（`mask_USHWC`）→ `海外仓成本*数量`
+19. `mask_cost_fillna_zero = (发货仓库=='大件云仓') | 产品名称含'主体骨架 沙发L形支架'` → 一批成本列 `fillna(0)` **并重算**派生列
+20. `订单总成本 = 产品成本*数量 + 头程运费*数量 + 运费`（+ `海外仓成本*数量` 若非空）；`订单总成本*系数` 用 `*系数` 分量
+21. `订单利润 = 售价*汇率 - 订单总成本`；`订单利润*系数 = 售价*汇率 - 订单总成本*系数`
+22. FBA 分支：补 `运费=0`；`售价*汇率` ← `销售额`/`订单产品金额外币*汇率`；`发货数量` ← `销量`/`产品数量`
+23. `set2after1` 列序 → `df_order_cost = df_order_cost[ls_cols_order_cost]`
+24. 写回 `写回{worksheet_name_order}`（先 `clear()`）+ xlsx + `files.download`
+
+**两套利润链**：非系数链（`二次加工成本 → 1件产品成本 → 产品成本*数量 → 订单总成本 → 订单利润`）与系数链（同名 `*系数` 分支）。**`0.001` 只打在前者** ⇒ 同一单两套利润方向相反（202606：该单非系数链虚高 105.29、系数链偏低 81.51）。
+
+### 2.4 导出与写回（cell 129–4.8）
+
+| cell | 段 | 读 | 写 | 要点 |
+|---|---|---|---|---|
+| 130/132 | 4.6.1(.2) | `df_order_cost` | — | copy + 渠道账号×发货区域透视（`fill_value=0, margins=True`） |
+| **135** | **4.6.1.4** | `df_sales_account_region` | `df_order_cost_no_fba`（**白名单 71 列**） | `reindex(columns=ls_col_order_keep, fill_value=0)`；**白名单未收录 `EN绍兴包装半成品/成品成本` ⇒ 非 FBA 侧丢失** |
+| 138 | 4.7.1 | `通途订单202607`/`2026年7月FBA订单`；`和财务部共享`/`订单发货仓库对应成本来源` | `df_order` | **在此把 `worksheet_name_order` 改成 FBA 表名** |
+| 141 | 4.7.1.1 | — | — | 按 UUID 复制行 |
+| 142 | — | — | — | **dead（全注释）** |
+| 144 | 4.7.2 | `df_order` | `写回{worksheet_name_order}` + xlsx | FBA 侧产品名解析；`if_wedge_reduce_new_fabric_since_202403="YES"` |
+| 146 | 4.7.3 | `df_order_cost` | `df_order_cost_fba` | **整份 copy** |
+| 148 | 4.7.3 | — | 变异 | `drop(ls_fba_col_to_drop, errors='ignore')` + rename `MSKU→平台SKU`、`SKU→通途SKU`；**不重映射发货方式** |
+| 149 | 4.7.3 | — | `ls_col_order_fba_keep` | **只是打印快照，从不用于选列** |
+| **151** | **4.8** | no_fba + fba | `写回{worksheet_name_order}{filename_suffix_write_order}` + xlsx | `pd.concat([...])`（outer）→ **FBA-only 列在非 FBA 行变 NaN**（`EN绍兴包装*` 即此机制） |
+| 153/154 | — | — | — | **dead** |
+| 157/159/160/162 | 4.9.1–4.9.4 | `和运营部共享`/`渠道账号（20260521起在此维护）` | `检查运营人员-…` + xlsx | 接口级；`col_select_staff="运营人员202607"`；`sku_prefix_to_operator={BJ001-:张元/李娜, BJ002-:于彬, BJ003-:李雨欣, BJ004-:赵梦}` |
+| 171/172 | 4.9.5 | `df_concat_…` | — | 校验 `订单总成本*系数`/`订单利润*系数` |
+| 174 | 4.8.2 | — | — | **dead** |
+| **177** | 4.8.2.1 | no_fba + fba | `Amazon结果计算账期多月通途原始订单和FBA订单`/`写回Amazon…` + xlsx | 正则 `\d{3}-\d{7}-\d{7}`；仅 `渠道=='亚马逊'` |
+| **179** | 4.8.2.2 | `df_concat_…` | `结果计算账期多月通途原始订单和FBA订单`/`写回所有订单…` + xlsx | 全量 |
+| 182/186/190 | 5.x | `非FBA多月通途原始订单`/`新FBA多月通途原始订单` | 同族写回 | 本轮只到 4.8，仅记接口 |
+
+**`filename_suffix_write_order`** 推导：`worksheet_name_order` 含 `FBA` → `'和非FBA订单'`，否则 `'和FBA订单'`。
+
+## 3. 关键开关与当前值（照抄自源码）
+
+| 变量 | 当前值 | cell |
+|---|---|---|
+| `gsheet_name_order` | `"通途订单202607"` | 36/56/138 |
+| `worksheet_name_order` | `"2026年7月订单"`(56) / `"2026年7月FBA订单"`(138) | 56/138 |
+| `col_name_select_exchange_rate` | `"202607"` | 56 |
+| `if_use_test_cost` | `"正常-不用测算成本"` | 56 |
+| `if_replace_xinglianhwc_to_ustx` | `"是-替换星链海外仓为DANEEY"` | 56 |
+| `if_del_special_order` | `'YES'` | 59 |
+| `if_wedge_reduce_new_fabric_since_202403` | `"YES"` | 66/144 |
+| `option_head_source` | `"头程用:头程运费合并替换EN"` | 109 |
+| `if_use_EN_cost_sxbzbcp` | `"注意-用EN绍兴包装半成品成本"` | 124 |
+| `if_use_EN_cost_sxbzcp` | `"注意-用EN绍兴包装成品成本"` | 126 |
+| **`if_0_PL_cost`** | **`'注意-清零PL二次加工成本'`** | 128 |
+| `二次加工成本` 月列 | `"二次加工成本多月202511"`（+系数/×系数同月） | 111 |
+| `ls_type_goods_need_add_sx_2prod` | `['成品','半成品']` | 128 |
+| `ls_type_warehouse_noneed_add_sx_2prod` | `['FBA','海外仓']` | 128 |
+| `ls_month_average` | `['202409','202410','202411']` | 95 |
+| `filename_suffix_write_order` | 推导值 | 151/177/179 |
+
+## 4. 已知缺陷 / 风险（本档案的用途之一）
+
+| # | 位置 | 问题 | 影响 |
+|---|---|---|---|
+| 1 | cell 128 第 12 步 | **`0.001` 清零**：依赖旧字段 `成品`、只改一列、不同步 `*系数/*数量` 与下游总额 | 两套利润方向相反；202606 有 **5 行**命中（3 行错清） |
+| 2 | cell 105/128 | **交付形态只有一个来源 = 旧表 `当月给分公司发货类型`**；EN `绍兴发货方式` 只影响头程 | 202606 有 **25 行**金额错配 |
+| 3 | cell 103 | **EN 合并键是旧表 `EN重量模板物料号`** ⇒ 未进旧表的 SKU 拿不到 EN | 202606 **139 行**无 EN 匹配 |
+| 4 | cell 99 | `en美东/美中/波兰加工成本*_max` **算出后从不被引用** | 订单加工成本改走 GS `二次加工成本2022` |
+| 5 | cell 135 | 白名单**漏 `EN绍兴包装半成品/成品成本`** | 非 FBA 行在最终表该两列为 NaN |
+| 6 | cell 82–92 / 71–77 | 合并多行键（`平台SKU_统一`/`split('-')[0]`/结尾数字后缀）**既漏并又误并** | 202606 **46 组 / 173 行**；销量可能被按行累加 |
+| 7 | cell 111 | 月列硬编码；来源编码靠 ws 名包含关系；**`测算…` ws 被过滤器排除** ⇒ `if_use_test_cost` 一旦打开会丢加工成本 | 历史"补丁摞补丁"易踩 |
+| 8 | cell 0 | `write_df_to_gsheet` **吞写异常** | 写失败静默 |
+| 9 | cell 95 | 用**未定义变量 `gsheet_name`**（`multi_df_sx_nodups` 亦未定义） | 若被运行会 NameError（高概率） |
+| 10 | cell 66 | 品类/面料目录**硬编码 + GS + 李惠表 三源**，自带 TODO | 三源漂移 |
+| 11 | 全链 | 大量字符串归一化 hack（`超柔水晶绒→漂白荷兰绒`、`狗床→牛津布`、`金绒→圆滚靠枕`、尺寸抽 `\d+\*\d+` 降序取首…） | 与订单侧不同步即静默 mismatch |
+| 12 | 全链 | `drop(errors='ignore')` / `fillna(0)` / `errors='coerce'` / merge 命中数只 print 不断言 | 静默丢行/丢列 |
+| 13 | cell 135 | 白名单写 `运营部当月是否新品`（少"为"），上游用 `运营部当月是否为新品` ⇒ `reindex(fill_value=0)` **造出恒 0 幻影列**且**丢掉真实列** | 该列在非 FBA 侧无意义 |
+
+## 5. 死代码 / 未运行分支（清理候选）
+`cell 74`（全注释）、`cell 97`（全注释）、`cell 142`/`153`/`154`/`174`（dead）、`cell 39`（被 41 取代）、`cell 20` 内胆真空袋块、`cell 27` 的 insert_row 块、`cell 47` 的重复写块、`cell 51` 的 `df_sx_en` 块、`cell 95` 的 `multi_df_sx_nodups` 相关块。
+
+## 6. 无法确认 / 待验证
+- `multi_df_sx_nodups` 与 `gsheet_name`（cell 95 依赖）在何处定义 —— **0–98 内不存在**（可能来自更早/其他 notebook 或上次会话残留的 Colab 全局变量）。
+- 各 `#@param` 在"最后一次运行"时是否就是源码字面量（本档案按源码字面量记录）。
+- `ls_fba_col_to_drop` 运行期确切列集；是否存在"中间表有、最终表完全没有"的列（未指名）。
+- tiktok 合并（82–92）产出的 `发货数量` 是否正确（逻辑读过，范围内无断言）。

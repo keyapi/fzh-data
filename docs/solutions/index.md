@@ -13,6 +13,11 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-10-08 | 旧 Colab 成本链 — 逐段现状档案（cell 0 → 4.8） | [architecture-patterns/colab-cost-pipeline-current-state.md](architecture-patterns/colab-cost-pipeline-current-state.md) |
+| 2026-10-08 | 旧 Colab 成本链 — 数据流关系图（订单 → GS → Colab → EN ↔ 赛狐） | [architecture-patterns/colab-cost-pipeline-data-flow.md](architecture-patterns/colab-cost-pipeline-data-flow.md) |
+| 2026-10-08 | 旧 Colab 成本链 — Google Sheet / worksheet 清单（现状档案） | [architecture-patterns/colab-gsheet-inventory.md](architecture-patterns/colab-gsheet-inventory.md) |
+| 2026-10-08 | 旧 Colab 成本核算「发货方式」双数据源冲突（0.001 波兰清零 / 绍兴二次加工成本二选一） | [workflow-issues/colab-legacy-cost-two-source-delivery-type.md](workflow-issues/colab-legacy-cost-two-source-delivery-type.md) |
+| 2026-10-08 | EN 成本侧现状（BOM Cost List / 客户码与配套物料 / 借用规则） | [architecture-patterns/en-cost-side-current-state.md](architecture-patterns/en-cost-side-current-state.md) |
 | 2026-09-24 | 知识库防腐三件套 — 孤儿检测 / 生成式索引 / 链接图 | [best-practices/knowledge-base-anti-rot.md](best-practices/knowledge-base-anti-rot.md) |
 | 2026-09-23 | 扫描类脚本防"静默丢数"——反转匹配方向 | [best-practices/scanner-silent-data-loss-guard.md](best-practices/scanner-silent-data-loss-guard.md) |
 | 2026-09-23 | grok-bot（美东）SSH 接入 — 对称 NAT 下的跳板选路与 Tailscale SSH 验证绕过 | [integration-issues/grokbot-ssh-via-shanghai-jump-symmetric-nat.md](integration-issues/grokbot-ssh-via-shanghai-jump-symmetric-nat.md) |

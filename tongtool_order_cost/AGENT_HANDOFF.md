@@ -94,6 +94,17 @@ Workbook 标题：`通途订单202606-特殊规则`（1.7.0 用）、`通途订�
 
 Cursor Agent 用用户级 MCP `user-tongtool_erp2_primary`（`~/.cursor/mcp.json`，由 `tongtool_api/setup_cursor_mcp.py` 写入）。CLI 脚本仍用 `tongtool_api/mcp_http.py`。限流仍是商户合计 5 次/分钟。
 
+## 相关经验记录
+
+- [旧 Colab 成本核算「发货方式」双数据源冲突](../docs/solutions/workflow-issues/colab-legacy-cost-two-source-delivery-type.md)
+  —— 排查旧 Colab《20250409 合并en成本…》成本列异常（`二次加工成本*数量=0.001`、绍兴二次加工成本与 EN 不一致）时先读这篇；
+  该 Colab 的**成本链与 1.7.0 引擎是两套东西**，但共用 `secrets/gsheets-service-account.json` 读 GS。
+- **旧 Colab 成本链现状档案（活文档，改动须同 PR 更新）**：
+  - [逐段现状（cell 0 → 4.8）](../docs/solutions/architecture-patterns/colab-cost-pipeline-current-state.md) —— 每 cell 的读/写/键/开关当前值/活死 + 12 条已知缺陷
+  - [GS / worksheet 清单](../docs/solutions/architecture-patterns/colab-gsheet-inventory.md) —— 每个 ws 的角色、公式（`IMPORTRANGE`/`INDEX-MATCH`/EN 优先+手填兜底）、兜底行数、能否停更
+  - [EN 成本侧现状](../docs/solutions/architecture-patterns/en-cost-side-current-state.md) —— 三条交付形态规则、借用、客户码索引必须回读 `customer_items`、`Cost Review` 与 `engine_170.py` 的边界
+  - [数据流关系图](../docs/solutions/architecture-patterns/colab-cost-pipeline-data-flow.md) —— mermaid + 冲突点（"发货方式"4 处并存）
+
 ## 禁止
 
 - 不要把订单/规则大 xlsx 提交进 git

@@ -7,6 +7,16 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-10-08（旧 Colab 成本链：现状档案 + 收口到 EN 的整体规划）
+- **新增（Phase A 活文档，4 篇，随改动同步更新）**：
+  - `architecture-patterns/colab-cost-pipeline-current-state.md` — 旧 Colab《20250409 合并en成本…》（227 cells，线上 `version 6944` / `2026-10-08T02:16:38.425Z`，本地同步副本同版本）**逐段现状**：cell→段→读/写/键/开关当前值/活死；含 cell 128（4.6）24 步执行序、两套利润链、12 条已知缺陷（`0.001` 清零、交付形态单源、EN 合并键被旧表卡住、`cell 135` 列丢失、合并多行键既漏并又误并、`write_df_to_gsheet` 吞异常、`cell 95` 用未定义变量 `gsheet_name` 等）。
+  - `architecture-patterns/colab-gsheet-inventory.md` — GS/ws 清单：**关键结论「旧表活跃列其实是指向 EN 的公式」**（`二次加工成本2022/importBOMCostList = IMPORTRANGE(EN!A:Y)`、`import皮壳成本 = INDEX(…$N/$R/$X, MATCH(码,…$Y,0))` ⇒ 绍兴=EN 绍兴包装成品成本 / 美国=EN 美东加工成本USNJ / 波兰=EN 波兰加工成本PL），以及**手填兜底 340 行**（绍兴 188/903、美国 40/228、波兰 112/648）与 161 行无 EN 模板号 —— 这是旧表能否停更的闸门。
+  - `architecture-patterns/en-cost-side-current-state.md` — EN 侧现状：三条交付形态规则、§5 借用、`Tongtool Cost Review` 与 `engine_170.py` 的边界（源码不在仓库、不得杜撰）、客户码/9 类配套物料、**客户码索引必须回读 EN Item `customer_items`**、以及实测客户码形态（1977 产品/3315 客户码、一码多产品 7、多客户码产品 730、**26 个"两码皆 BASE"**、Cover+Foam **跨 base 26 / 同 base 4**、Foam 28/29 单登记 ⇒ 任何后缀规则都会漏，必须叠加订单侧信号）。
+  - `architecture-patterns/colab-cost-pipeline-data-flow.md` — mermaid 关系图 + 读图要点（两条"EN→Colab"入口同名不同物、桥接单点、`0.001` 注入点、列丢失点、7 处写回目标、"发货方式"4 处并存）。
+- **方法学（可复用）**：在本机（境内）读 Google Sheet 时，`gc.open(标题)` 会因走 **Drive files.list** 而间歇 `SSLError: UNEXPECTED_EOF_WHILE_READING`（**不是 429 配额**）；**改用 `gc.open_by_key(<表格key>)` + 4–6s 退避重试 + 落盘缓存**后每次成功。两枚已验证 key（非凭证）记在 GS 清单第 0 节。
+- **并行**：用 `superpowers:dispatching-parallel-agents` 分派 3 个域（Colab 0–98 / 129–4.8 / GS-ws 清单）并行读取，主控合并＋交叉校验，主控上下文不被原始输出淹没。
+- **配套**: `tongtool_order_cost/AGENT_HANDOFF.md` 增加指向这 4 篇的入口。
+
 ## 2026-09-24（知识库防腐 + PB 佣金表日期口径）
 - **新增**: `best-practices/knowledge-base-anti-rot.md` —— 知识库防腐三件套：**孤儿检测**（反向引用图，入链要排除 docs/solutions 自身互链与自动 log/index）、**生成式索引**（根平表由 frontmatter 生成，手工维护实测漂 30 篇）、**链接图**（相对链接必须解析，实测断 13 处），外加处置规则「孤儿只有两个归宿：route 或显式豁免，静默忽略不是选项」。依据：Vercel 对照实验 —— 靠 Agent 自己决定要不要查文档，**56% 的情况根本不会查**（skill 按需 53% = 无文档基线；常驻目录 100%）。**工具不会自己跑**，所以挂进 `ce-okf` 收尾第 5b 步。另记一条：一手知识只留在未合并分支上等于不存在（PB 活动价整套记录因 PR revert 停在 `feature/*`，main 上 grep 不到）。
 - **更新**: `workflow-issues/pb-reconciliation-monthly-update.md`（`last_updated: 2026-09-24`）—— 补两条：**TM 佣金表 Notes 的两套日期口径**（A/B = 我方开票日；C/D = PB Remittance Advice 的 Invoice Date，按 UPS 实收确认，常晚于我方；A2 填本期正常起点、A3 用 `plus Nx M/D/YYYY` 备注上期未付结转），以及**给 TM / 给 PB 的邮件边界**（佣金只进给 TM 且不抄 PB；给 PB 禁写佣金/比例/本地文件名/双号解释；活动价差额对 TM 的口径「PB makes good the shortfall → 补该差额上的 commission」，不写比例金额）。

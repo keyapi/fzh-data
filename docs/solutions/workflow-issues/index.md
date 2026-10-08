@@ -38,3 +38,4 @@ tags: [workflow-issues, index]
 | [cargo-location-tracking-source-reliability.md](cargo-location-tracking-source-reliability.md) | 「货物到哪了」查询方法：四个数据源可靠性分级 |
 | [amazon-account-period-late-submission-audit.md](amazon-account-period-late-submission-audit.md) | Amazon&新平台账期「提交异常/迟交」审计方法与规则 |
 | [workflow-copy-prod-to-test.md](workflow-copy-prod-to-test.md) | 从生产系统复制 Purchase Receipt 工作流 V3 到测试系统 |
+| [colab-legacy-cost-two-source-delivery-type.md](colab-legacy-cost-two-source-delivery-type.md) | 旧 Colab 成本链「发货方式」双源冲突（0.001 波兰清零触发 + 绍兴二次加工成本二选一） |
