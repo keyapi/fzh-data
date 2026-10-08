@@ -21,6 +21,8 @@
 """
 
 import argparse
+import csv
+import io
 import os
 import sys
 from datetime import datetime
@@ -79,12 +81,100 @@ def _timestamp(fmt="%Y-%m-%d_%H-%M-%S"):
     return datetime.now().strftime(fmt)
 
 
+class CsvSourceError(ValueError):
+    """SPS 订单 CSV 读不了：编码不对，或行结构与表头对不上。
+
+    两种情况都得把**具体原因**说出来 —— 早先只抛一句「无法读取 SPS 订单 CSV」，
+    把 pandas 的 `Expected 147 fields in line 3, saw 148` 吞掉了，用户根本没法自查。
+    """
+
+
+def read_text_lines(path) -> list[str]:
+    """读 CSV 文本行（UTF-8，容 BOM），去掉末尾空行。"""
+    try:
+        text = Path(path).read_text(encoding="utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise CsvSourceError(
+            f"CSV 不是 UTF-8 文本（第 {exc.start} 字节处解码失败）。"
+            "用 Excel 另存过的话请选「CSV UTF-8」，或从 SPS 重新导出。"
+        ) from exc
+    except OSError as exc:
+        raise CsvSourceError(f"读不到 CSV：{exc}") from exc
+    lines = text.splitlines()
+    while lines and not lines[-1].strip():
+        lines.pop()
+    return lines
+
+
+def strip_trailing_empty_fields(lines: list[str]) -> tuple[list[str], str]:
+    """削掉数据行末尾多出来的**空**字段，返回 (处理后行, 给用户看的说明)。
+
+    实测 20260924 批次：表头 147 字段、H 行 146、**D 行 148** —— D 行在所有列
+    之后多一个空字段（SPS 自己导出就这样，Excel 另存也常见）。pandas 遇到
+    「比表头多」的行会直接 `ParserError: Expected 147 fields in line 3, saw 148`，
+    于是整批读不进来。
+
+    这些字段在所有列之后且为空，削掉不影响任何一列的对齐；
+    但只要多出来的部分**有非空值**，就说明列可能真的错位 —— 直接拒绝：
+    宁可让人回 SPS 重导，也不能拿错位的数据去发货。
+    """
+    width = len(next(csv.reader([lines[0]])))
+    out: list[str] = []
+    dropped = 0
+    for no, line in enumerate(lines, start=1):
+        if no == 1 or not line.strip():
+            out.append(line)
+            continue
+        cells = next(csv.reader([line]))
+        extra = len(cells) - width
+        if extra <= 0:
+            out.append(line)
+            continue
+        if any(cell != "" for cell in cells[width:]):
+            raise CsvSourceError(
+                f"第 {no} 行比表头多 {extra} 个字段，其中有非空值：{cells[width:][:3]}"
+                " —— 列可能整体错位。请从 SPS 重新导出这一批。"
+            )
+        trimmed = line.rstrip()
+        if '"' in trimmed or not trimmed.endswith("," * extra):
+            raise CsvSourceError(
+                f"第 {no} 行比表头多 {extra} 个字段（含引号或结尾形状异常），无法安全处理。"
+                "请从 SPS 重新导出这一批。"
+            )
+        trimmed = trimmed[:-extra]
+        if len(next(csv.reader([trimmed]))) != width:
+            raise CsvSourceError(
+                f"第 {no} 行规范后仍与表头宽度不符。请从 SPS 重新导出这一批。"
+            )
+        out.append(trimmed)
+        dropped += 1
+    note = ""
+    if dropped:
+        note = (
+            f"输入有 {dropped} 行在末尾多出空字段（SPS 导出 / Excel 另存常见）："
+            "读取时按空字段忽略，不影响列对齐；checked CSV 仍逐行照搬原文，原样保留"
+        )
+    return out, note
+
+
+def read_order_csv_lines(path) -> list[str]:
+    """读订单 CSV 的文本行，容忍末尾多出的空字段。"""
+    lines = read_text_lines(path)
+    lines, _note = strip_trailing_empty_fields(lines)
+    return lines
+
+
 def load_order_csv(path):
-    """读订单 CSV：dtype / parse_dates 只对实际存在的列生效。"""
-    header = pd.read_csv(path, nrows=0).columns
+    """读订单 CSV：dtype / parse_dates 只对实际存在的列生效。
+
+    走 `read_order_csv_lines`，否则被 Excel 另存/手工合并过的文件会因为
+    「数据行比表头多一个空字段」被 pandas 整批拒绝。
+    """
+    text = "\n".join(read_order_csv_lines(path))
+    header = pd.read_csv(io.StringIO(text), nrows=0).columns
     dtype = {k: v for k, v in DTYPE_STR.items() if k in header}
     usecols_dates = [c for c in DATE_COLS if c in header]
-    return pd.read_csv(path, dtype=dtype, parse_dates=usecols_dates or None)
+    return pd.read_csv(io.StringIO(text), dtype=dtype, parse_dates=usecols_dates or None)
 
 
 def drop_extra_empty_columns(df, max_cols=MAX_COLS):
