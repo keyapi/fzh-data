@@ -7,6 +7,9 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-10-08（PB 无货件：UPS 才算真发 + 重复建单加后缀）
+- **更新**: `workflow-issues/pb-out-of-stock-notification-and-zero-stock-orders.md`（`last_updated: 2026-10-08`）—— 三处补料：**① §2.1.1 新增「重复建单也占 `-N`」**：通途不允许重复订单号；`-N` 与拆单后缀是**同一命名空间**（同批多行占 `-1…-M`、跨批补发继续排），所以**下一个可用 = 该 PO 已用过的最大 `-N` + 1**，不是固定 `-2`（用户纠正：「不一定后缀 -2，比如之前建了 2 单 -1 -2 但是都没发货呢？」）。两种查法都实测：**离线扫历史 `PB_*导入*.xlsx` 的 `PO Number-Line` 列**（286 个文件，结果与「`PBUS-<PO>` 存不存在」完全吻合）或通途模糊搜 `PBUS-{PO}`；注意导入 xlsx 里存的是**光号**（`137770200-1`），`PBUS-` 是通途侧店铺码。已在 `pb_orders` 落地成 `--reorder`/`--history-dir`。**② §6.1 补「通途 `orderStatus=despatched` 同样不等于真发」**：它和 ASN/面单一样只证明「建了单/建了标」，判定「真发」只有 **UPS 取件**一个口径。**③ §6.6 新增 2026-10-08 无货件复核实测**（10 个 PO：真发 2 —— `137770200-1` 与 `137974027` 的有货行 `-194`；只建标未取件 8），并记下本次**先拿 shipment/ASN 反推「已发货」、把 7 行改成已发、被用户纠正**的教训 —— ASN 与通途状态都替代不了 UPS。
+
 ## 2026-09-24（知识库防腐 + PB 佣金表日期口径）
 - **新增**: `best-practices/knowledge-base-anti-rot.md` —— 知识库防腐三件套：**孤儿检测**（反向引用图，入链要排除 docs/solutions 自身互链与自动 log/index）、**生成式索引**（根平表由 frontmatter 生成，手工维护实测漂 30 篇）、**链接图**（相对链接必须解析，实测断 13 处），外加处置规则「孤儿只有两个归宿：route 或显式豁免，静默忽略不是选项」。依据：Vercel 对照实验 —— 靠 Agent 自己决定要不要查文档，**56% 的情况根本不会查**（skill 按需 53% = 无文档基线；常驻目录 100%）。**工具不会自己跑**，所以挂进 `ce-okf` 收尾第 5b 步。另记一条：一手知识只留在未合并分支上等于不存在（PB 活动价整套记录因 PR revert 停在 `feature/*`，main 上 grep 不到）。
 - **更新**: `workflow-issues/pb-reconciliation-monthly-update.md`（`last_updated: 2026-09-24`）—— 补两条：**TM 佣金表 Notes 的两套日期口径**（A/B = 我方开票日；C/D = PB Remittance Advice 的 Invoice Date，按 UPS 实收确认，常晚于我方；A2 填本期正常起点、A3 用 `plus Nx M/D/YYYY` 备注上期未付结转），以及**给 TM / 给 PB 的邮件边界**（佣金只进给 TM 且不抄 PB；给 PB 禁写佣金/比例/本地文件名/双号解释；活动价差额对 TM 的口径「PB makes good the shortfall → 补该差额上的 commission」，不写比例金额）。

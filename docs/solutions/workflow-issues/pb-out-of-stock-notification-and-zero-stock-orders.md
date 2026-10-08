@@ -3,7 +3,7 @@ okf: v0.1
 type: Reference
 title: PB 断货通知与 0 库存订单处理 — 数据来源、PO 映射与三个反直觉陷阱
 date: 2026-09-16
-last_updated: 2026-09-16
+last_updated: 2026-10-08
 category: workflow-issues
 module: pb_orders
 problem_type: workflow_issue
@@ -13,7 +13,9 @@ applies_when:
   - "美国仓某 SKU 断货，要通知 PB 并重发 PO Acknowledgement"
   - "需要知道 PB 的哪些订单因无货卡住"
   - "需要把 PB 的 PO 号 / SKU 对回 EN 内部单据"
-tags: [pb, pottery-barn, sps, dropship, out-of-stock, tongtool-order, acknowledgement, edi-855]
+  - "缺货件到货后要补发 —— 得给通途新单选一个没被占用的订单号后缀"
+  - "要判断某个 PB 单到底发了没有（别再信通途 despatched / SPS ASN）"
+tags: [pb, pottery-barn, sps, dropship, out-of-stock, tongtool-order, acknowledgement, edi-855, ups-verification, reorder-suffix]
 related_components: [pb_reconciliation, en_api, tongtool_order, missing-products]
 ---
 
@@ -95,6 +97,31 @@ PB PO 137892570
 
 → 查 PO 时要**同时试无后缀和 `-1/-2/-3`**，只试无后缀会漏。
 包裹数与拆单数一一对应，可与 shipment csv 的跟踪号数量互相印证。
+
+### 2.1.1 ⚠️「重复建单」也占 `-N` —— 后缀按**已用过的最大值 + 1**，不是固定 `-2`
+
+通途**不允许重复订单号**。同一 PO 分两次建单（典型：部分缺货 —— 有货的先发、缺货那件到货后
+补发）时，第二次导入必须换一个没用过的号。**`-N` 与 §2.1 的拆单后缀是同一个命名空间**：
+
+- 同批多行 → `PO Number-Line` 占 `-1`…`-M`；
+- 跨批补发 → 继续往后排。
+
+所以 **下一个可用后缀 = 该 PO 已用过的最大 `-N` + 1**；从未用过带后缀的（只见过裸号、或查无）
+→ `-2`。例：`137770200` 在 20260827 一批里建了 `-1`、`-2`，两单都没发的话再补就要 **`-3`**；
+`137974027` 只建过裸号 → 补发用 `137974027-2`。
+
+**两种查法**（2026-10-08 都实测过）：
+
+1. **离线扫历史导入 xlsx**（推荐）：`PB orders/**/PB_*导入*.xlsx` 的 `PO Number-Line` 列
+   就是历次建单用过的号。实测扫 286 个文件，结果与 §2.2「`PBUS-<PO>` 存不存在」完全吻合。
+2. **通途模糊搜 `PBUS-{PO}`**，列出已存在的 `-N`。（通途显示的号前面带店铺码 `PBUS-`；
+   导入 xlsx 里存的是**光号**，没有 `PBUS`。）
+
+> ⚠️ **别把 `-N` 读成「第 N 个包裹」**：它同时是**拆单号**和**补发次数号**，两种来源都会占号。
+> 用户 2026-10-08 原话：「不一定后缀 -2，比如之前建了 2 单 -1 -2 但是都没发货呢？」
+
+已在 `pb_orders` 落地：`--reorder PO[=N]` / `--history-dir DIR`（本地 CLI；后缀扫历史自动算），
+见 `pb_orders/docs/reference/workflow.md` §10。
 
 ### 2.2 `PBUS-<PO>` 是否存在 ⟺ 是否已打单（生成面单）
 
@@ -235,10 +262,17 @@ CENKZ1325-Yellow-153
 
 > 这 4 个正是 §5.1 的典型：通途 0 但实际有货。
 
-### 6.1 ⚠️ 核实必须走 UPS 跟踪，不能只看 shipment 导出
+### 6.1 ⚠️ 核实必须走 UPS 跟踪，不能只看 shipment 导出**或通途状态**
 
 **`shipment xNN *.csv` 只是我们「标记发出」（生成 ASN + 面单），不等于 UPS 实际揽收。**
 必须用 UPS Track API 查节点，确认已离开「Shipper created a label」。
+
+**通途订单状态 `orderStatus=despatched` 同样不算数** —— 它和 ASN / 面单一样只是「标记发出」。
+通途里常见「标了 despatched、实际没发」的单（用户 2026-10-08：「通途经常出现标记发货但是实际
+未发货的情况。我如果记得住操作，会加上备注 无货未发」）。
+
+→ **判定「真发」只有一个口径：UPS 有没有取件**（§6.3）。ASN、通途状态、
+`PBUS-<PO>` 存不存在，都只能证明「建了单/建了标」，证明不了货出了门。
 
 实测这 4 个 SKU 在 2026-09（PB 侧 ASN 记录 22 单）：
 
@@ -321,6 +355,27 @@ uv run python -m ups_track.cli query --input <跟踪号.csv> --env prod --out <�
 
 **隐私**：UPS 输出含收货人姓名/城市，**只在本机看，不要提交进仓库**。
 
+### 6.6 实测：2026-10-08 无货件复核（10 个 PO）
+
+对无货清单里的 10 个 PO，从本地 `shipment*.csv` 按 PO 取跟踪号，跑
+`uv run python -m ups_track.cli query --env prod`：
+
+| 结果 | PO |
+|------|----|
+| **真发**（有取件/签收） | `137770200-1`（08/28 取件、09/01 签收）、`137974027` 的**有货那一行**（09/29 取件、10/05 签收） |
+| **只建标、UPS 从未取件** | `137682252` / `137874674` / `137887120` / `137892570` / `137924672` / `137940567` / `137951856` / `137974181` |
+
+状态全部是 `Shipper created a label, UPS has not received the package yet.`
+
+→ 8 个 PO 的**缺货那件**确实一件没走，与「无货未发」一致。`137974027` 是**部分发货**：
+发走签收的是另一个**有货的 SKU**（`-194`），本 PO 的缺货件（`-138`）仍未发。
+
+> ⚠️ **本次先犯过一次错**：拿 shipment / ASN 记录反推「已发货」，把 7 行状态改成已发 ——
+> 被用户纠正后用 UPS 复核才定案。**ASN、通途状态都替代不了 UPS。**（已写入 `pb_orders`
+> AGENT_HANDOFF 坑 40 与 workflow §10 相邻的教训。）
+>
+> 另注：`137874674` 的 `0912 通知 …无货未发.txt` 是**空文件**（0 字节，只有文件名在说话）。
+
 
 19 单已交付样本（该批全是 UPS Ground，`UPSC`）：
 
@@ -373,6 +428,11 @@ Acknowledgement = EDI **855（PO Acknowledgment）**。重发动作在 **SPS 门
   「我们系统里查不到 PB 的单」。
 - **补货逻辑（库存+销量、不够才补、不一次补全）是判断的前提**。不了解它就会把
   「某 SKU 不在补货单上」误读成「计划漏排」—— 这是一个会误导同事的结论。
+- **「我们标记了」与「货真走了」是两回事**（§6.1）。ASN、面单、通途 `despatched` 全都能在货
+  没出门的情况下存在，只有 UPS 取件算数。拿前者当后者会**系统性高估已发**，进而错判
+  「无货未发」清单、错报给 PB 的日期。
+- **补发要换订单号**（§2.1.1），且 `-N` 不是按包裹数而是按**已建立过的次数**排；写错号通途直接
+  拒收，整批导入白做。
 
 ## When to Apply
 
@@ -393,6 +453,9 @@ Acknowledgement = EDI **855（PO Acknowledgment）**。重发动作在 **SPS 门
 
 ## Related
 
+- `pb_orders/docs/reference/workflow.md` **§10** — 重复建单加后缀的**实现**（`--reorder` / `--history-dir`）与规范
+- `pb_orders/AGENT_HANDOFF.md` **坑 40** — 同上，改代码前必读
+- `pb_reconciliation/docs/reference/ups-delivery-check.md` — UPS 交付核查（判迟发 vs PB 漏结算）
 - `docs/solutions/workflow-issues/pb-reconciliation-monthly-update.md` — PB 对账表月度更新（同一数据根目录）
 - `docs/solutions/architecture-patterns/sps-commerce-api-automation.md` — SPS API 可行性论证（API 为收费项，暂缓）
 - `docs/solutions/workflow-issues/erpnext-so-closed-unshipped-and-unstarted-work-orders.md` — 第 10 条：EN `po_no` 不是客户 PO
