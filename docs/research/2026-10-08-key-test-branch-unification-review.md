@@ -81,6 +81,28 @@ description: 生产线(production-backup) 与测试线(main) 分叉已久；22 �
 | 真实功能但仍少用（`report/bom_item_lead_time_days`） | ~3 | 需你定是否上生产 |
 | fixtures（`fixtures/custom_field.json`、`fixtures/property_setter.json`） | 2 | 见下方事实 3 |
 
+## QR/批号：四套实现，生产实际用的是哪套（2026-10-08 核对）
+
+| # | 实现 | 性质 | 谁在用 |
+|---|---|---|---|
+| 1 | `work_order_task/api/batch_qrcode.py` → `generate_batch_qr_code` | **活**（包装 #2 的生成器） | **生产与测试各 10 个打印格式**用它现算：`{{ frappe.call('work_order_task.api.batch_qrcode.generate_batch_qr_code', batch_no=...) }}` |
+| 2 | `erpnext_qrcode`（第三方 app "ERPNEXT QR Code"，两台都装） | **活**（提供 Jinja 方法 `generate_qr_code`） | 被 #1 调用 |
+| 3 | 测试侧 in-house：`qr_utils/` + `doc_events/batch.py` + `doc_events/purchase_receipt.py` + `public/js/purchase_receipt_qrcode.js` + 2 个 bench 命令 + **7 个字段** | **旧实现**（PNG 落盘 + 写字段） | **无消费方**：0 个打印格式引用这些存盘字段。测试机 `public/files/qrcodes/` 74 个文件（最新 **2026-04-24**）；`Batch.qrcode_image` 28/129、`Purchase Receipt.qrcode_image` 43/247、`Purchase Receipt Item.batch_qrcode_image` **0**（该分支代码已注释） |
+| 4 | `key_test/api/batch_qrcode.py`（两条线同内容，9 行包装） | 旧调用点 | 测试还剩 **1 个**打印格式 `采购入库jinjia带子表批次二维码`（启用中）在调它；**生产 0 个** |
+
+**结论**：生产用的是 **#1 + #2**（打印格式里现算，不落库）——生产 DB 里没有任何 QR 自定义字段，`key_test` 侧唯一 QR 文件在生产是死代码。测试那套存量方案是**历史遗留**（4 月停写、无消费方、子表批次码从未产出），**不需要 port**；代码与数据留在 `backup/test-main-20261008`。
+
+留在统一线里的 #4 让测试那 1 个打印格式仍可用；若要和生产彻底一致，把它改成 `work_order_task.api.batch_qrcode.generate_batch_qr_code` 即可（同一份生成器的包装，一行）。
+
+## 更正：「测试在跑、生产没跑」的还有一项活功能（不是 QR 遗留）
+
+| 项 | 测试 | 生产 |
+|---|---|---|
+| `key_test.tasks.update_bom_update_log_status`（每 5 分钟：把卡住的 `BOM Update Log`（Update Cost / In Progress）按子表批次状态收尾） | hooks 里**启用** | hooks 里**注释掉** |
+| 卡在 `In Progress` 的 `BOM Update Log` | **0** 条 | **3** 条（总量 1173） |
+
+⇒ 这是真正「测试在跑、生产没跑」的活功能（上一版把 QR/批号说成"唯一"，不准确）。生产那 3 条卡住与这个任务缺席的表现一致（未证实因果）。是否在生产开这个 5 分钟任务 = 解开 prod 版 hooks 里那一处注释，需要拍板。
+
 ## 被引用/在跑的实测判定（2026-10-08）
 
 ### 测试侧独有的东西：哪些真在跑、哪些是死代码
