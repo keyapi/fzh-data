@@ -94,3 +94,4 @@ description: docs/research 目录变更历史
 - **纠偏补篇**: 独立复审文档 §8 — 撤销「advertise/ 已验证」论据；赛狐广告无写 API；IvyeaOps→赛狐分层成本 15–34 人天（只读）；推荐 Portal 融合 C′（OWUI 壳 + IvyeaOps 板）。
 - **新增**: [2026-07-24-unified-ai-access-independent-review.md](2026-07-24-unified-ai-access-independent-review.md) — 对 PR #109 统一 AI 接入调研的独立复审；回答开放问题 8.1–8.5；裁决推荐 Open WebUI 主路径（A′）并强制反证 IvyeaOps 全量改造。
 - **新增**: 本 log.md（OKF bundle 补齐）。
+- **新增**: [2026-10-08-key-test-branch-unification-review.md](2026-10-08-key-test-branch-unification-review.md) — key_test 生产线/测试线分叉的逐文件评审清单：22 个双边冲突文件分 4 档（纯格式 3 / 测试侧变薄 6 / 测试侧领先 12 / 需人工看 1）+ 41 个测试独有文件分 5 类 + 三个待决策 + 4 条已核对事实。

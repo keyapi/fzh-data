@@ -87,7 +87,7 @@ except:
 
 1. 备份（已完成 2026-10-08）：测试线 → `backup/test-main-20261008`；生产线补推齐 → `production-backup` @ `c87759a`（含本次登录 hook 修复）；建议再给 GitHub `main` 打 `backup/github-main-20261008`（`2612db4`）。
 2. 建 `main-new` = `production-backup` 的树（含本次 fix）。
-3. **逐文件评审 22 个 M 文件**（test → main-new），只把仍需要的改动 port 过去。其中 `doc_events/batch.py`、`doc_events/purchase_receipt.py`（测试启用、生产 hooks 已注释）与 `report/bom_item_lead_time_days` 是「测试在用、生产没有」的少数真实功能，需明确要不要上生产；`Item Cost`、`Excel Processing`（试验）、`report/bom_cost`（测试 DB 里连 Report 记录都没有的死代码）、`overrides/light_mes`（已注释）建议不带。
+3. **逐文件评审 22 个 M 文件**（test → main-new），只把仍需要的改动 port 过去 → **清单已产出：`docs/research/2026-10-08-key-test-branch-unification-review.md`**（4 档分类 + 3 个待决策）。其中 `doc_events/batch.py`、`doc_events/purchase_receipt.py`（测试启用、生产 hooks 已注释）与 `report/bom_item_lead_time_days` 是「测试在用、生产没有」的少数真实功能，需明确要不要上生产；`Item Cost`、`Excel Processing`（试验）、`report/bom_cost`（测试 DB 里连 Report 记录都没有的死代码）、`overrides/light_mes`（已注释）建议不带。
 4. 两台切到 `main-new`：
    - **测试**：`git checkout main-new && git pull` —— 会**删掉** 41 个 test-only 文件；若第 3 步没把 `doc_events/batch.py`、`purchase_receipt.py` 带过来，测试的 hooks 里那两项必须同步注释，否则 Batch / Purchase Receipt 保存会 ImportError。
    - **生产**：先把 remote 从 HTTPS 改成 SSH（`git remote set-url origin git@github.com:keyapi/key_test.git`），否则 `git pull` 每次都被凭证挡住（2026-10-08 实测：`git push origin` 报 `could not read Username`，只能用显式 URL `git push git@github.com:keyapi/key_test.git <branch>` 推）。
