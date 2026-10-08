@@ -166,7 +166,7 @@ cd pb_orders
 uv run pytest tests/ -q
 ```
 
-150 个用例通过、2 个跳过，**不需要 Redis**：`tests/conftest.py` 用 reportlab 现画一个结构同构的
+155 个用例通过、2 个跳过，**不需要 Redis**：`tests/conftest.py` 用 reportlab 现画一个结构同构的
 3 页 Packslip PDF + 5 行订单 CSV + 3 行名称缓存，跑真实流程；Web 用例把
 `web.app.enqueue_job` 换成同步执行，从而覆盖「Web 建任务 + worker 处理 + 页面 + 下载」整链。
 另有 Redis/RQ 生命周期用例需本地 Docker，设 `PB_ORDERS_RQ_DOCKER=1` 才跑（默认跳过）。
@@ -431,6 +431,21 @@ uv run pytest tests/ -q
     前后各一个记号的产物名。正则也别写成 `checked?0stock` —— 它只匹配
     `checke`/`checked`，**匹配不到 `check`**，要写 `check(?:ed)?0stock`。
 
+38. **`Record Type` 不止 H/D —— SPS 还会导出顾客留言行 `O`**（2026-10-08 真实批次踩到）：
+    整行只有 PO 号 + `Notes/Comments` 里的礼物留言，没有行号/数量/SKU，字段数也比表头短
+    （实测 99 vs 147）。扫过全部 102 个历史 CSV（2025-08 起）：只有 `H`/`D`/`O` 三种，
+    `O` 共 7 行全是留言。**历史 checked0stock 里也留着这些 O 行**（Colab 只是后续按 D 过滤），
+    所以别再把它当错误拒掉整批。
+    处理：非 H/D 且**不含明细数据** → 当留言行，从 checked CSV 剔掉并报出来；
+    ⚠️ 非 H/D 却**带着明细数据** → 仍旧拒绝（那是列错位的信号，别把安全网一起放掉）。
+    留言行跟着它的 PO 走：PO 整单剔除时留言行一并消失。
+    锁定用例：`test_customer_note_row_is_dropped_not_fatal` 等 4 条。
+39. **测试夹具里写换行用 `chr(10)`，别用 `"
+"`**：这些测试是**逐字节**比对 CSV 的，
+    而 `
+` 经过多层转义（进 heredoc / 进工具参数字符串）很容易被写成**字面反斜杠+n** ——
+    CSV 里就不是换行，断言会失真甚至语法报错。踩过一次。
+
 ## 8. 数量对账口径
 
 ### 8.1 库存预检（步骤 0）
@@ -568,7 +583,7 @@ uv run pytest tests/ -q
 - [x] 无货时自动拆「有货主文件 + 无货子集」（标签 + 背贴各两份，`--no-stock` 触发）
 - [x] 网页版：FastAPI + Redis/RQ + SQLite，任务可后台跑、可追溯、可重下（2026-09-22）
 - [x] 独立 Docker Compose 栈，不碰既有服务（2026-09-22）
-- [x] 150 个自动化测试（另有 Redis/RQ 生命周期用例，默认跳过），不需要 Redis 也能跑
+- [x] 155 个自动化测试（另有 Redis/RQ 生命周期用例，默认跳过），不需要 Redis 也能跑
 - [x] 已部署到 EN 测试服务器（`/opt/pb-orders`）。入口 **<https://api.vilavi.cn/pb/>**
       （公网 HTTPS + 钉钉登录，容器只绑 `127.0.0.1`）；Tailscale 那条路径已弃用（走香港中继太慢）
 - [x] 公网入口有钉钉登录闸门（`web/auth.py`）。**登录范围由桥把关**：2026-09-23 起桥按

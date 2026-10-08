@@ -149,6 +149,64 @@ def test_empty_record_type_is_shown_as_placeholder(tmp_path):
     assert "(空)" in exc.value.message
 
 
+# 顾客留言行（Record Type=O）：整行只有 PO 号 + Notes/Comments 里的留言，
+# 没有行号/数量/SKU。实测 102 个历史批次里只出现过这一种，共 7 行，全是礼物留言。
+NOTE_ROW = "100000001,,O,,,,C1"
+
+
+def _write_rows(path, rows):
+    """把表头 + 数据行写成 CSV（统一在这里拼，别再各写各的转义）。
+
+    用 `chr(10)` 而不是 `"\\n"`：这些测试是逐字节比对 CSV 的，
+    换行必须是真换行，不能被转义层吃掉。
+    """
+    path.write_text(chr(10).join([RAGGED_HEADER, *rows]) + chr(10), encoding="utf-8")
+    return path
+
+
+def write_csv_with_note(path):
+    return _write_rows(path, [NOTE_ROW, *RAGGED_ROWS])
+
+
+def test_customer_note_row_is_dropped_not_fatal(tmp_path):
+    """Record Type=O（顾客留言）不该挡住整批 —— 直接剔掉并报出来。
+
+    回归：20261005 真实批次里有一行 O，报「Record Type 含无法识别的值：'O'」，
+    使用者只能手工删掉那一行才跑得通。
+    """
+    source = write_csv_with_note(tmp_path / "check0stock order x3.csv")
+    result = stock_precheck.run_stock_check(source, [], tmp_path / "out")
+
+    assert result.report["note_rows"] == {"count": 1, "types": ["O"]}
+    assert any("顾客留言" in w for w in result.report["warnings"])
+    # checked CSV 里不该再有 O 行，其余行逐行照搬
+    lines = result.checked_csv.read_text(encoding="utf-8").splitlines()
+    assert lines[0] == RAGGED_HEADER
+    assert lines[1:] == RAGGED_ROWS
+    assert all(",O," not in line for line in lines[1:])
+
+
+def test_note_row_of_a_fully_out_of_stock_po_leaves_no_orphan(tmp_path):
+    """留言行跟着它的 PO 走：整单缺货被剔除时不留孤零零的留言行。"""
+    rows = [NOTE_ROW.replace("100000001", "100000003"), *RAGGED_ROWS]
+    source = _write_rows(tmp_path / "check0stock order x3.csv", rows)
+
+    result = stock_precheck.run_stock_check(source, RAGGED_NO_STOCK, tmp_path / "out")
+    text = result.checked_csv.read_text(encoding="utf-8")
+    assert "100000003" not in text   # 整单缺货 PO 的 H/D/留言行一起没了
+
+
+def test_non_hd_row_that_carries_line_data_is_still_rejected(tmp_path):
+    """非 H/D 却带着明细数据 —— 这是列错位的信号，必须拒绝（不能当成留言放行）。"""
+    rows = ["100000001,1,O,2,STYLE-A,BUYER-A,C1", *RAGGED_ROWS]   # 有行号/数量/SKU
+    source = _write_rows(tmp_path / "shifted.csv", rows)
+
+    with pytest.raises(stock_precheck.StockCheckError) as exc:
+        stock_precheck.run_stock_check(source, [], tmp_path / "out")
+    assert exc.value.code == "invalid_record_type"
+    assert "带着明细数据" in exc.value.message
+
+
 def test_detail_level_filter_keeps_header_for_mixed_po(tmp_path):
     source = write_raw_csv(tmp_path / "check0stock.csv")
     result = stock_precheck.run_stock_check(

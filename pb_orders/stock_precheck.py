@@ -181,7 +181,14 @@ def _source_lines(lines: list[str], rows: int) -> list[str]:
     return lines
 
 
-def _validate(df: pd.DataFrame) -> pd.DataFrame:
+def _validate(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
+    """校验并规范化，返回 (work, 剔掉的非 H/D 记录类型列表)。
+
+    除 H/D 之外，SPS 还会导出**顾客留言行**（Record Type=O：整行只有 PO 号 +
+    `Notes/Comments` 里的留言，没有行号/数量/SKU）。历史 102 个批次里只出现过这一种，
+    共 7 行，全是礼物留言。这类行**不参与任何判定**，出件阶段也只认 D 行，
+    所以直接从 checked CSV 里剔掉（使用者手工也是这么做的），并把类型报回去。
+    """
     missing = [column for column in REQUIRED_COLUMNS if column not in df.columns]
     if missing:
         raise StockCheckError(
@@ -192,16 +199,25 @@ def _validate(df: pd.DataFrame) -> pd.DataFrame:
 
     work = df.copy()
     work[COL_RECORD] = work[COL_RECORD].astype(str).str.strip().str.upper()
-    unexpected = work.loc[~work[COL_RECORD].isin(["H", "D"]), COL_RECORD].unique().tolist()
-    if unexpected:
-        # 空值要显式写成「(空)」，否则提示会以「无法识别的值：」结尾、看着像 bug
-        shown = "、".join(repr(v) if v else "(空)" for v in unexpected[:10])
-        raise StockCheckError(
-            f"Record Type 含无法识别的值：{shown}",
-            "库存预检只接受 SPS 的 Header(H) / Detail(D) 订单导出。"
-            "若这一行是手工改出来的，列可能整体错位了。",
-            "invalid_record_type",
-        )
+
+    # 非 H/D：只要它**不含明细数据**就当成留言行放行；含明细数据则很可能是列错位了
+    LINE_COLUMNS = [COL_LINE, COL_QTY, COL_BUYER, COL_VENDOR]
+    other = work[~work[COL_RECORD].isin(["H", "D"])]
+    notes: list[str] = []
+    if len(other):
+        has_line_data = other[LINE_COLUMNS].apply(
+            lambda col: col.astype(str).str.strip().ne("")
+        ).any(axis=1)
+        suspicious = other.loc[has_line_data]
+        if len(suspicious):
+            bad = suspicious[COL_RECORD].astype(str).unique().tolist()
+            shown = "、".join(repr(v) if v else "(空)" for v in bad[:10])
+            raise StockCheckError(
+                f"有些行既不是 Header(H) / Detail(D)，却又带着明细数据：{shown}",
+                "这类行通常是手工改过导致列整体错位；请从 SPS 重新导出这一批。",
+                "invalid_record_type",
+            )
+        notes = sorted({str(v) for v in other[COL_RECORD].unique() if str(v).strip()})
 
     for column in (COL_PO, COL_LINE, COL_VENDOR, COL_BUYER):
         work[column] = work[column].astype(str).str.strip()
@@ -253,7 +269,7 @@ def _validate(df: pd.DataFrame) -> pd.DataFrame:
 
     work["_qty"] = 0
     work.loc[details.index, "_qty"] = qty.astype(int)
-    return work
+    return work, notes
 
 
 def _classify(work: pd.DataFrame, wanted: set[str]) -> tuple[pd.DataFrame, dict[str, str]]:
@@ -517,7 +533,7 @@ def run_stock_check(
     source, raw_lines, read_note = _read_csv(csv_path)
     warnings: list[str] = [read_note] if read_note else []
     original_columns = list(source.columns)
-    work = _validate(source)
+    work, note_types = _validate(source)
     snapshot, wanted = _normalized_skus(no_stock_skus)
     classified, po_status = _classify(work, wanted)
     checked = _checked_rows(classified, po_status)
@@ -551,9 +567,21 @@ def run_stock_check(
         "mixed_po_count": int(status_counts.get("部分缺货", 0)),
         "mixed_po": [po for po, status in po_status.items() if status == "部分缺货"],
         "no_stock_snapshot": snapshot,
+        "note_rows": {
+            # 非 H/D 的行（实测只有顾客留言 O）：不参与判定，已从 checked CSV 剔掉
+            "count": int(len(work) - (work[COL_RECORD] == "H").sum() - (work[COL_RECORD] == "D").sum()),
+            "types": note_types,
+        },
         "warnings": warnings,
         "outputs": [],
     }
+
+    if report["note_rows"]["count"]:
+        kinds = "、".join(report["note_rows"]["types"]) or "非 H/D"
+        warnings.append(
+            f"输入有 {report['note_rows']['count']} 行 Record Type 不是 H/D（{kinds}），"
+            "已从 checked CSV 剔除 —— 这类行通常是顾客留言，出件阶段本来也只认 D 行"
+        )
 
     if report["details"]["diff"] or report["quantity"]["diff"]:
         raise StockCheckError("库存分类数量对账失败", code="reconciliation_failed")

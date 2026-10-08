@@ -274,6 +274,23 @@ def test_full_width_sample_has_every_required_column(pb_env):
     assert len(df) == 3
 
 
+def test_order_reader_ignores_customer_note_rows(pb_env):
+    """出件阶段读带「顾客留言行」的原始 CSV：只认 D 行，留言行自然被丢掉。
+
+    回归：使用者曾把带 O 行的原始 CSV 直接传给预检而被拒；万一直接走出件入口，
+    这里也必须没事。
+    """
+    lines = pb_env.csv.read_text(encoding="utf-8-sig").splitlines()
+    body = [l for l in lines[1:] if l.strip()]
+    # 插一行 Record Type=O 的留言（只有 PO 号 + 留言，没有明细数据）
+    body.insert(0, "137943090,,O,,,,USA,2026-09-21")
+    src = pb_env.tmp / "with_note.csv"
+    src.write_text(chr(10).join([lines[0], *body]) + chr(10), encoding="utf-8")
+
+    df = service.pb_tongtu_excel.build_order_df(src)
+    assert len(df) == 3                      # 与没有留言时一致（留言被丢掉）
+
+
 def test_order_reader_tolerates_extra_trailing_empty_field(pb_env):
     """出件阶段也要能读「数据行末尾多一个空字段」的 CSV。
 
