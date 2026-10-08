@@ -165,6 +165,10 @@ Commit 格式：中文 `type(scope): description`。类型用 `feat` / `fix` / `
 - 生产 SSH：`ssh 阿里云-FZH-ERPNext-frappe`（**该 app 的远端名是 `upstream`，不是 `origin`**）；测试 SSH：`ssh sh-erpnext-test-frappe`。
 - **不要拿「本地 clone → 直接开 PR」代替 ①②**：合并前必须在测试系统上真跑过 `migrate` 验证（fixtures / patch / after_migrate 钩子的效果只有 migrate 才暴露）。
 - 只改数据库记录（不动 app 代码）时，同样先测试后生产；DB 层写入用 `bench --site ... mariadb` / `bench console`，改完 `clear-cache`。
+- 踩过的坑：fixtures 把**布局类字段**（Section Break / HTML / Table / Attach Image…）标了 `in_list_view=1`，
+  会让该 doctype 的**任何**元数据写入都被 `check_in_list_view` 挡下——若某个 app 在 `on_session_creation`
+  里写元数据，全站用户每次登录都会弹窗。根因链、检测/修复/验证命令见
+  `docs/solutions/integration-issues/layout-field-in-list-view-breaks-metadata-writes.md`（2026-10-08 实际处置）。
 
 ## 新增 Skill 或模块
 
