@@ -74,7 +74,7 @@
 | 本次一次性脚本 | `EN_API/dn_stock_fix_apply.py`（probe/dry/apply/redo/verify/cleanup） |
 | 干跑输出 | `EN_API/out/dry_run.txt`、`apply_run.txt`、`redo_run.txt` |
 | 凭据 | `EN_API/.env` → `PROD_ERP_API_KEY/SECRET`（生产 `https://erpnext.vilavi.cn`） |
-| 测试机 | `ssh dev01@8.133.254.66`，`/home/frappe/frappe-bench/apps`（生产 SSH 不通） |
+| 服务器 SSH | 测试 `ssh 上海测试-阿里云-FZH-ERPNext-frappe`、生产 `ssh 阿里云-FZH-ERPNext-frappe`（别名见 `~/.ssh/config`），`/home/frappe/frappe-bench/apps` |
 
 ## 七、环境注意
 

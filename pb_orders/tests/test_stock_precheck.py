@@ -63,6 +63,150 @@ def write_ragged_csv(path):
     return path
 
 
+# 20260924 真实批次的形状：表头 147 字段、H 行 146、**D 行 148** ——
+# D 行比表头**多**一个空字段（SPS 自己导出就这样，Excel 另存也常见）。
+# pandas 遇到「比表头多」的行会整批 `ParserError: Expected 147 fields in line 3, saw 148`，
+# 连未经手改的原始导出都读不进来。
+# 这里的 RAGGED_HEADER 是 8 字段，所以 D 行要 9 字段（两个尾逗号）才对得上真实比例。
+PADDED_ROWS = [
+    "100000001,,H,,,,C1",
+    "100000001,1,D,2,STYLE-A,BUYER-A,C1,,",
+    "100000002,,H,,,,C2",
+    "100000002,1,D,3,STYLE-B,BUYER-B,C2,,",
+]
+
+
+def write_padded_csv(path):
+    path.write_text("\n".join([RAGGED_HEADER, *PADDED_ROWS]) + "\n", encoding="utf-8")
+    return path
+
+
+def _with_data_row(index: int, line: str) -> list[str]:
+    rows = list(PADDED_ROWS)
+    rows[index] = line
+    return rows
+
+
+def test_data_rows_with_extra_trailing_empty_field_are_accepted(tmp_path):
+    """末尾多出**空**字段要能读进来（20260924 真实批次就是这形状）。
+
+    回归：以前 pandas 整批 ParserError，页面只给一句「无法读取 SPS 订单 CSV」。
+    """
+    source = write_padded_csv(tmp_path / "check0stock order x2.csv")
+    result = stock_precheck.run_stock_check(source, [], tmp_path / "out")
+
+    assert result.report["po"]["total"] == 2
+    assert result.report["details"]["total"] == 2
+    # 削掉空字段不能是静默的
+    assert result.report["warnings"], "削掉空字段必须留下提醒"
+    assert "多出空字段" in result.report["warnings"][0]
+    assert "2 行" in result.report["warnings"][0]
+    # checked CSV 仍是逐行照搬原文（连那个多出来的空字段也照搬）
+    lines = result.checked_csv.read_text(encoding="utf-8").splitlines()
+    assert lines[0] == RAGGED_HEADER
+    assert lines[1:5] == PADDED_ROWS
+    assert lines[2].endswith(",,")
+
+
+def test_extra_field_with_nonempty_value_is_rejected(tmp_path):
+    """多出来的字段**有非空值**就无法判断它属于哪一列 —— 必须拒绝。"""
+    source = tmp_path / "bad.csv"
+    rows = _with_data_row(1, PADDED_ROWS[1] + "多余的非空值")   # 10 字段，尾部含非空
+    source.write_text("\n".join([RAGGED_HEADER, *rows]) + "\n", encoding="utf-8")
+
+    with pytest.raises(stock_precheck.StockCheckError) as exc:
+        stock_precheck.run_stock_check(source, [], tmp_path / "out")
+    assert exc.value.code == "ragged_source"
+    assert "非空值" in exc.value.message
+
+
+def test_mid_row_shift_is_caught_even_though_trailing_field_is_empty(tmp_path):
+    """中间插一列（后面的列整体位移）要能拦住 —— 靠 Record Type 的取值校验。
+
+    这是「容忍空尾字段」的安全网：只看尾部是不是空的，判断不出中间有没有错位。
+    """
+    source = tmp_path / "shifted.csv"
+    cells = PADDED_ROWS[1].rstrip(",").split(",")   # 去掉多余空尾，得 7 个值
+    cells.insert(2, "错位列")                        # 中间插一列 → Record Type 位置被占
+    rows = _with_data_row(1, ",".join(cells) + ",,")
+    source.write_text("\n".join([RAGGED_HEADER, *rows]) + "\n", encoding="utf-8")
+
+    with pytest.raises(stock_precheck.StockCheckError) as exc:
+        stock_precheck.run_stock_check(source, [], tmp_path / "out")
+    assert exc.value.code == "invalid_record_type"
+    assert "错位列" in exc.value.message             # 要把闯进来的值显示出来
+
+
+def test_empty_record_type_is_shown_as_placeholder(tmp_path):
+    """空值要显式写成 (空)，否则提示会以「无法识别的值：」结尾、看着像 bug。"""
+    source = tmp_path / "emptyrt.csv"
+    rows = _with_data_row(1, "100000001,1,,2,STYLE-A,BUYER-A,C1,,")
+    source.write_text("\n".join([RAGGED_HEADER, *rows]) + "\n", encoding="utf-8")
+
+    with pytest.raises(stock_precheck.StockCheckError) as exc:
+        stock_precheck.run_stock_check(source, [], tmp_path / "out")
+    assert exc.value.code == "invalid_record_type"
+    assert "(空)" in exc.value.message
+
+
+# 顾客留言行（Record Type=O）：整行只有 PO 号 + Notes/Comments 里的留言，
+# 没有行号/数量/SKU。实测 102 个历史批次里只出现过这一种，共 7 行，全是礼物留言。
+NOTE_ROW = "100000001,,O,,,,C1"
+
+
+def _write_rows(path, rows):
+    """把表头 + 数据行写成 CSV（统一在这里拼，别再各写各的转义）。
+
+    用 `chr(10)` 而不是 `"\\n"`：这些测试是逐字节比对 CSV 的，
+    换行必须是真换行，不能被转义层吃掉。
+    """
+    path.write_text(chr(10).join([RAGGED_HEADER, *rows]) + chr(10), encoding="utf-8")
+    return path
+
+
+def write_csv_with_note(path):
+    return _write_rows(path, [NOTE_ROW, *RAGGED_ROWS])
+
+
+def test_customer_note_row_is_dropped_not_fatal(tmp_path):
+    """Record Type=O（顾客留言）不该挡住整批 —— 直接剔掉并报出来。
+
+    回归：20261005 真实批次里有一行 O，报「Record Type 含无法识别的值：'O'」，
+    使用者只能手工删掉那一行才跑得通。
+    """
+    source = write_csv_with_note(tmp_path / "check0stock order x3.csv")
+    result = stock_precheck.run_stock_check(source, [], tmp_path / "out")
+
+    assert result.report["note_rows"] == {"count": 1, "types": ["O"]}
+    assert any("顾客留言" in w for w in result.report["warnings"])
+    # checked CSV 里不该再有 O 行，其余行逐行照搬
+    lines = result.checked_csv.read_text(encoding="utf-8").splitlines()
+    assert lines[0] == RAGGED_HEADER
+    assert lines[1:] == RAGGED_ROWS
+    assert all(",O," not in line for line in lines[1:])
+
+
+def test_note_row_of_a_fully_out_of_stock_po_leaves_no_orphan(tmp_path):
+    """留言行跟着它的 PO 走：整单缺货被剔除时不留孤零零的留言行。"""
+    rows = [NOTE_ROW.replace("100000001", "100000003"), *RAGGED_ROWS]
+    source = _write_rows(tmp_path / "check0stock order x3.csv", rows)
+
+    result = stock_precheck.run_stock_check(source, RAGGED_NO_STOCK, tmp_path / "out")
+    text = result.checked_csv.read_text(encoding="utf-8")
+    assert "100000003" not in text   # 整单缺货 PO 的 H/D/留言行一起没了
+
+
+def test_non_hd_row_that_carries_line_data_is_still_rejected(tmp_path):
+    """非 H/D 却带着明细数据 —— 这是列错位的信号，必须拒绝（不能当成留言放行）。"""
+    rows = ["100000001,1,O,2,STYLE-A,BUYER-A,C1", *RAGGED_ROWS]   # 有行号/数量/SKU
+    source = _write_rows(tmp_path / "shifted.csv", rows)
+
+    with pytest.raises(stock_precheck.StockCheckError) as exc:
+        stock_precheck.run_stock_check(source, [], tmp_path / "out")
+    assert exc.value.code == "invalid_record_type"
+    assert "带着明细数据" in exc.value.message
+
+
 def test_detail_level_filter_keeps_header_for_mixed_po(tmp_path):
     source = write_raw_csv(tmp_path / "check0stock.csv")
     result = stock_precheck.run_stock_check(
@@ -424,6 +568,26 @@ def test_po_count_replacement_leaves_other_names_alone():
     assert stock_precheck._with_po_count("order 20260917_0338_456788", 5) == "order 20260917_0338_456788"
     # 别把 SKU 里的字符当成记号
     assert stock_precheck._with_po_count("CENx21 order", 3) == "CENx21 order"
+
+
+def test_check_marker_is_stripped_wherever_it_appears(tmp_path):
+    """记号可能在文件名**中间**（使用者手工合并时自己加了前缀）。
+
+    回归：只剥开头时，`已和2单手动合并 check0stock order x16 …` 会拼出
+    `checked0stock 已和2单手动合并 check0stock order x15 …` —— 前后各一个记号。
+    """
+    source = write_ragged_csv(tmp_path / "raw.csv")
+    result = stock_precheck.run_stock_check(
+        source, RAGGED_NO_STOCK, tmp_path / "out",
+        name_stem="已和2单手动合并 check0stock order x16 20260924_0145_20820",
+    )
+    name = result.checked_csv.name
+    # 精确等值断言：记号出现在中间时也只保留我们自己加的那一个
+    assert name == "checked0stock 已和2单手动合并 order x2 20260924_0145_20820.csv"
+    assert "check0stock" not in name.replace("checked0stock", "")
+    # 正常形状不变
+    assert stock_precheck._output_stem("check0stock order x21 20260917") == "order x21 20260917"
+    assert stock_precheck._output_stem("checked0stock order x19 2026") == "order x19 2026"
 
 
 def test_web_table_payload_is_built_from_the_same_frames(tmp_path):

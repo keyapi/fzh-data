@@ -1,6 +1,6 @@
 # 销售出库单 → 通途采购单（已实现，测试环境）
 
-> 2026-09-16 实现并部署到测试服务器 `8.133.254.66`（site `erpnext.vilavi.cn`）。
+> 2026-09-16 实现并部署到测试服务器 `sh-erpnext-test`（site `erpnext.vilavi.cn`）。
 > 需求全文见同目录 `需求记录-销售出库创建通途采购单.md`。
 
 ---
@@ -192,4 +192,4 @@ sudo -n -u frappe /usr/local/bin/bench restart                                # 
 2. **人工**：在测试站打开 DN-26-00040，点一次「创建通途采购单」，确认按钮渲染、弹窗、
    预览、错误提示都正常。
 3. 上述 OK 后再做一次真实创建，回通途界面核对采购单号/供应商/仓库/数量/单价。
-4. 生产部署：生产 `47.116.128.218` **SSH 不可达**，需运维从 app 源码同步。
+4. 生产部署：生产 SSH 可达（`ssh 阿里云-FZH-ERPNext-frappe`，见 `EN_API/docs/reference/en-server-access.md`），可直接登录同步 app 源码，不必等运维代劳。

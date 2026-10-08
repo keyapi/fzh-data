@@ -12,7 +12,7 @@ timestamp: 2026-09-22
 |----------|--------|
 | Agent 完整交接（背景/文件/运行/函数表/坑/清单） | [../AGENT_HANDOFF.md](../AGENT_HANDOFF.md) |
 | 人读模块说明（怎么用、出错怎么办） | [../README.md](../README.md) |
-| 工作流细节：六步流程、列映射、坐标表、命名规则、数量对账、**§9 库存预检** | [reference/workflow.md](reference/workflow.md) |
+| 工作流细节：六步流程、列映射、坐标表、命名规则、数量对账、**§9 库存预检**、**§10 重复建单加后缀** | [reference/workflow.md](reference/workflow.md) |
 | 部署到 EN 测试服务器：前端、队列、离线缓存、Frappe 对比、**落地实现与实测** | [reference/server-deployment-architecture.md](reference/server-deployment-architecture.md) |
 | 迁移踩坑记录 | [lessons/index.md](lessons/index.md) |
 | 变更历史 | [log.md](log.md) |

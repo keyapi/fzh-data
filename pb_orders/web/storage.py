@@ -82,24 +82,45 @@ def save_upload_stream(fileobj, dest: Path, max_bytes: int) -> tuple[int, str]:
     return size, digest.hexdigest()
 
 
-def publish_artifact(src: Path, artifacts_dir: Path, download_name: str) -> tuple[str, int, str]:
-    """把产物原子移动到 artifacts 目录，按内容哈希命名。返回 (相对路径, 大小, hash)。
-
-    同名不同内容不会互相覆盖；同名同内容复用同一物理文件。
-    """
+def _artifact_placement(src: Path, artifacts_dir: Path) -> tuple[Path, str, int]:
+    """算出内容寻址的落点：返回 (目标路径, sha256, 大小)。"""
     src = Path(src)
     content_hash = sha256_file(src)
-    suffix = src.suffix
     final_dir = Path(artifacts_dir) / content_hash[:2]
     final_dir.mkdir(parents=True, exist_ok=True)
-    final = final_dir / f"{content_hash[:16]}{suffix}"
+    return final_dir / f"{content_hash[:16]}{src.suffix}", content_hash, src.stat().st_size
 
+
+def publish_artifact(src: Path, artifacts_dir: Path, download_name: str) -> tuple[str, int, str]:
+    """把**产物**原子移动到 artifacts 目录，按内容哈希命名。返回 (相对路径, 大小, hash)。
+
+    产物是一次性的：登记完就不需要留在 work 目录，所以移走省一份磁盘。
+    同内容复用同一个物理文件（不同任务出同样的件不会各存一份）。
+    """
+    src = Path(src)
+    final, content_hash, size = _artifact_placement(src, artifacts_dir)
     if final.exists():
         src.unlink(missing_ok=True)
     else:
         os.replace(src, final)
+    return str(final.relative_to(Path(artifacts_dir))).replace("\\", "/"), size, content_hash
 
-    return str(final.relative_to(Path(artifacts_dir))).replace("\\", "/"), final.stat().st_size, content_hash
+
+def publish_input_copy(src: Path, artifacts_dir: Path) -> tuple[str, int, str]:
+    """把**上传的输入**放进 artifacts 供下载核对，返回 (相对路径, 大小, hash)。
+
+    与 `publish_artifact` 的区别：**绝不移走原文件**。inputs/ 里的那份还要给
+    worker 用、还要供「用相同输入重新处理」，移动它等于把任务弄坏。
+    优先硬链接（同一份内容不占两份磁盘），不行再复制。
+    """
+    src = Path(src)
+    final, content_hash, size = _artifact_placement(src, artifacts_dir)
+    if not final.exists():
+        try:
+            os.link(src, final)
+        except OSError:
+            shutil.copy2(src, final)
+    return str(final.relative_to(Path(artifacts_dir))).replace("\\", "/"), size, content_hash
 
 
 def resolve_artifact_path(artifacts_dir: Path, rel_path: str) -> Path:

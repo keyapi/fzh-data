@@ -16,10 +16,36 @@
     <tr><th>开始</th><td>{{ (job.started_at or '-')[:19].replace('T', ' ') }}</td></tr>
     <tr><th>结束</th><td>{{ (job.finished_at or '-')[:19].replace('T', ' ') }}</td></tr>
     {% if job.job_type == "stock_check" %}
-    <tr><th>输入</th><td>{{ job.input_order }}</td></tr>
+    {% set input_arts = artifacts | selectattr('kind', 'equalto', 'input_order') | list %}
     {% else %}
-    <tr><th>输入</th><td>{{ job.input_packslip }} / {{ job.input_order }}</td></tr>
+    {% set input_arts = artifacts | selectattr('kind', 'in', ['input_packslip', 'input_order']) | list %}
     {% endif %}
+    {# 下载入口放在使用者会看的那一行（原来只在页面很下面的区块里，等于没被发现）。
+       这里用表格而不是一行行内联 —— 内联时文件名长短不一，几个「下载」按钮就参差不齐。 #}
+    <tr>
+      <th>输入</th>
+      <td>
+        {% if input_arts %}
+        <table>
+          <thead><tr><th>类型</th><th>文件名</th><th>大小</th><th>SHA-256</th><th></th></tr></thead>
+          <tbody>
+            {% for a in input_arts %}
+            <tr>
+              <td>{{ ARTIFACT_LABELS.get(a.kind, a.kind) }}</td>
+              <td>{{ a.download_name }}</td>
+              <td class="muted">{{ a.size_bytes | human_size }}</td>
+              <td class="muted mono">{{ a.content_hash[:12] }}</td>
+              <td><a class="btn ghost" href="{{ prefix }}/artifacts/{{ a.id }}/download">下载</a></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        {{ job.input_packslip }}{% if job.input_packslip and job.input_order %} / {% endif %}{{ job.input_order }}
+        <span class="muted">（本次任务建立于该功能上线前，输入未留存下载件）</span>
+        {% endif %}
+      </td>
+    </tr>
     <tr><th>断货 SKU</th><td>{{ job.no_stock or '（无，不过滤）' }}</td></tr>
     <tr><th>代码版本</th><td><code>{{ job.pipeline_version }}</code></td></tr>
   </table>
