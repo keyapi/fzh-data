@@ -82,7 +82,8 @@ uv run python -c "..."   # 参考 docs/solutions/conventions/erpnext-item-varian
 - BOM operations 必须带 `workstation`/`workstation_type`，否则 417
 - `stock_uom`：面料用 `米`，成品/皮壳/内胆用 `个`（不是 `Nos`）
 - URL 含中文/`#` 需 URL 编码
-- 生产服务器 SSH **可达**（早期文档记的"IP 白名单不可达"已过时，2026-09-24 实测直连可用，见 `EN_API/docs/reference/en-server-access.md`）；简单字段改动仍优先 REST API
+- 生产服务器 SSH 不可达（IP 白名单），改从 REST API 操作（2026-10-08 实测更正：`~/.ssh/config` 别名 `阿里云-FZH-ERPNext-frappe` 可直连；不通时再回退 REST）
+- **别给布局类字段勾 `in_list_view`**（Section Break/Column Break/Tab Break/HTML/Table/Table MultiSelect/Button/Image/Fold/Heading；子表只豁免 Button/HTML）：勾上之后该 doctype 的**任何**元数据写入（Custom Field / Property Setter / DocType / Customize Form）都会被 `check_in_list_view` 挡下报 `'In List View' not allowed for type ... in row N`——包括别人登录时跑的 `on_session_creation` 钩子，表现成全站「登录即弹窗」。检测/修复（含为什么不能走正常保存）见 `docs/solutions/integration-issues/layout-field-in-list-view-breaks-metadata-writes.md`
 - 一键生成按钮：模板物料页「一键创建配套物料及变体」→ `key_test.add_item_semi.create_supporting_items_and_variants`（角色 Item Supporting Material Manager/System Manager）—— **该函数不自动加颜色属性值，需手动补**；复制已有成品变体，不是属性笛卡尔积
 
 ## 赛狐侧（属性管理）

@@ -85,6 +85,11 @@
     缺货明细已从 checked CSV 剔除；<strong>除整单缺货被拿掉的 PO 以外，Header 全部保留</strong>
     （部分缺货 PO 的 Header 也必须留着，SPS 靠它认这单）。下载下面两个文件去 SPS 操作。
   </p>
+
+  {% if r.warnings %}
+  <h2>提醒</h2>
+  <ul class="warn-list">{% for w in r.warnings %}<li>{{ w }}</li>{% endfor %}</ul>
+  {% endif %}
 </section>
 
 {# 逐行明细表：这里与 xlsx 操作表是同一批数据，两个 SKU 永远并列。

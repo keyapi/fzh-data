@@ -163,6 +163,33 @@ def create_app() -> FastAPI:
                 {"code": "queue_unavailable", "message": exc.detail, "hint": "确认 Redis 后重新提交。"},
             )
 
+    # 上传槽位 -> (产物类型, 展示用类型名, MIME)。类型名与 database 的 ARTIFACT_LABELS 一致。
+    _INPUT_SLOTS = (
+        (storage.PACKSLIP_NAME, "input_packslip", "Packslip PDF", "application/pdf"),
+        (storage.ORDER_NAME, "input_order", "SPS 订单 CSV", "text/csv"),
+    )
+
+    def register_inputs(job_id: str, displays: dict[str, str]) -> None:
+        """把上传的输入也登记成可下载产物 —— 使用者要能核对「我到底传了什么」。
+
+        用 `publish_input_copy`（硬链接/复制），**不移动** inputs/ 里的原文件：
+        那份还要给 worker 用、还要供「用相同输入重新处理」。
+        登记失败不能连累建任务（没登记上也还能出件，只是少一个下载口），所以吞掉异常并记日志。
+        """
+        for slot, kind, label, mime in _INPUT_SLOTS:
+            path = settings.inputs_dir / job_id / slot
+            if not path.is_file():
+                continue
+            try:
+                rel_path, size, digest = storage.publish_input_copy(path, settings.artifacts_dir)
+                repo.add_artifact(
+                    job_id=job_id, kind=kind, original_name=slot,
+                    download_name=displays.get(slot) or slot, rel_path=rel_path,
+                    content_hash=digest, size_bytes=size, mime_type=mime,
+                )
+            except Exception:  # noqa: BLE001 - 登记失败不该挡住任务
+                log.exception("登记输入产物失败 job=%s slot=%s", job_id, slot)
+
     def current_no_stock() -> str:
         """当前生效的断货 SKU 列表（逗号分隔）。
 
@@ -357,6 +384,7 @@ def create_app() -> FastAPI:
             input_order=order_display,
             pipeline_version=settings.pipeline_version,
         )
+        register_inputs(job_id, {storage.ORDER_NAME: order_display})
         enqueue_or_fail(job_id)
         return RedirectResponse(url(f"/jobs/{job_id}"), status_code=303)
 
@@ -437,6 +465,10 @@ def create_app() -> FastAPI:
             input_packslip=packslip_display,
             input_order=order_display,
             pipeline_version=settings.pipeline_version,
+        )
+        register_inputs(
+            job_id,
+            {storage.PACKSLIP_NAME: packslip_display, storage.ORDER_NAME: order_display},
         )
         enqueue_or_fail(job_id)
         return RedirectResponse(url(f"/jobs/{job_id}"), status_code=303)
@@ -530,6 +562,10 @@ def create_app() -> FastAPI:
             pipeline_version=settings.pipeline_version,
             source_job_id=job_id,
         )
+        register_inputs(
+            new_job_id,
+            {storage.PACKSLIP_NAME: packslip_display, storage.ORDER_NAME: checked["download_name"]},
+        )
         enqueue_or_fail(new_job_id)
         return RedirectResponse(url(f"/jobs/{new_job_id}"), status_code=303)
 
@@ -585,6 +621,10 @@ def create_app() -> FastAPI:
             input_order=old["input_order"],
             pipeline_version=settings.pipeline_version,
             source_job_id=job_id,
+        )
+        register_inputs(
+            new_job_id,
+            {storage.PACKSLIP_NAME: old["input_packslip"], storage.ORDER_NAME: old["input_order"]},
         )
         enqueue_or_fail(new_job_id)
         return RedirectResponse(url(f"/jobs/{new_job_id}"), status_code=303)

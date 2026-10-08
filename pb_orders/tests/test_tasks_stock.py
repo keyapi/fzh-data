@@ -38,6 +38,8 @@ def test_worker_runs_stock_check_and_publishes_outputs(pb_env):
     assert job["report"]["no_stock_snapshot"] == ["STYLE-B"]
 
     artifacts = repo.list_artifacts(job_id)
+    # 注意：worker 只发产物；「输入也可下载」是 Web 上传时登记的（见 web/app.py）。
+    # 这里直接调 worker，所以只有产物。
     assert {artifact["kind"] for artifact in artifacts} == {
         "checked_order",
         "stock_operations",
