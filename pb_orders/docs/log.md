@@ -8,6 +8,24 @@ timestamp: 2026-09-22
 
 # 变更日志
 
+## 2026-10-08（第二十轮：通途导入 Excel 支持「重复建单自动加后缀」）
+
+- **需求**：通途不允许重复订单号；同一 PO 分两次建单（部分缺货，有货先发、缺货到货后补发）
+  第二次要换号。以前靠人手工改 CSV 的 `PO Number`，现在做成功能。
+- **规则**（§10）：后缀 = 该 PO 已用过的**最大 `-N` + 1**；只见过裸号/查无 → `-2`。
+  `-N` 与同批多行的 `Line#` 后缀**同一命名空间**，所以按 max 递增，不能固定 `-2`。
+- **数据源**：**扫本地历史 `PB_*导入*.xlsx` 的 `PO Number-Line` 列**（离线）。实测 286 个文件，
+  结果与 Notion 表里「通途建单」勾选完全吻合，可靠。**不查通途 API**（PB 账号码未确认 + 限流）。
+- **实现**：`pb_tongtu_excel` 新增 `parse_reorder_spec` / `scan_used_order_numbers` /
+  `next_reorder_suffixes`，`build_order_df(path, order_suffixes=…)` 在 `PO Number` 上、
+  `Line #` 派生之前拼后缀；`service.JobOptions` 加 `reorder` / `history_dirs`，
+  `report["reorder"]` 记录 `{PO: "-N"}` 与扫过的文件数；CLI（`run_pb_orders.py` 与
+  `pb_tongtu_excel.main`）加 `--reorder PO[=N]` / `--history-dir DIR`。
+- **边界**：**只做本地**（命令行 + 核心函数）。网页服务器上没有历史导入文件，网页表单/worker
+  **不接**这条链路。PDF/标签/背贴不受影响（join 按 `-` 截断 PO）。
+- **测试 +8**：历史扫描（含跳过坏文件与 `~$`）、后缀规则三档、显式/自动解析、
+  `build_order_df` 加后缀、`run_job` 端到端（后缀进产物且 join 不断）。
+
 ## 2026-10-08（第十九轮：判定「真发」以 UPS 取件为准 + 通途重复建单加后缀 `-2`）
 
 - **背景（无货表维护）**：核对 Notion「PB 无货未发」表里的 PO 到底发没发。早前拿 SPS 的

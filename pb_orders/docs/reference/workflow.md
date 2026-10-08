@@ -418,6 +418,27 @@ SPS 导出的 CSV 是**参差**的：表头 147 列、数据行 146 列、且**�
 - **无货件在通途常常根本没建过单**（缺货那件被剔出「可导入」集合）—— 到货补发才是第一次建单，
   但仍要避开该 PO 已经用掉的后缀。
 
-> ⚠️ **当前 `pb_tongtu_excel` 没有注入后缀的入口**：现阶段靠人手工改 CSV 的 `PO Number`。
-> 「缺货到货后补发」这条链路需要在生成导入 xlsx 时自动/半自动选后缀 —— **尚未实现**，
-> 见 `AGENT_HANDOFF.md` 坑 40。**这不是个别单的情况。**
+### 用法（已实现）
+
+```bash
+# 自动：扫历史导入 xlsx，算出下一个可用后缀
+uv run python run_pb_orders.py --dir "...\20261030" \
+    --reorder 137974027,137887120 \
+    --history-dir "D:\Work\美国\Tracy Miller\PB orders"
+
+# 显式指定后缀（不扫历史）
+uv run python run_pb_orders.py --dir "...\20261030" --reorder 137974027=-3
+```
+
+- `--reorder PO` → 扫 `--history-dir` 下的 `PB_*导入*.xlsx`，取该 PO 已用过的最大 `-N` + 1
+  （只见过裸号、或查无 → `-2`）。
+- `--reorder PO=-N` → 直接用该后缀，不扫历史。
+- `--history-dir` 缺省 = 订单 CSV 所在目录；**补发时请传 `PB orders` 根目录**，否则扫不到更早
+  批次 → 后缀会算小。查无历史的 PO 会在报告里留一条警告（多半是目录没指全，不是真没建过单）。
+- 只在生成通途 xlsx 时生效（`pb_tongtu_excel.build_order_df(order_suffixes=…)`，加在 `PO Number`
+  上、在 `Line #` 派生之前）；PDF/标签/背贴**不受影响**（join 按 `-` 截断）。
+- 结果进 `report["reorder"] = {"applied": {PO: "-N"}, "history_files": N}`，CLI 打印一行 `[重复建单]`。
+
+> 实现：`pb_tongtu_excel.parse_reorder_spec` / `scan_used_order_numbers` / `next_reorder_suffixes`，
+> 经 `service.JobOptions.reorder` / `history_dirs` 透传。**只做本地** —— 网页服务器上没有历史
+> 导入文件，网页表单/worker **不接**这条链路（要接得先解决"服务器上没有历史"的问题）。

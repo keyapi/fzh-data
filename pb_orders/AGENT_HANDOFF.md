@@ -459,8 +459,12 @@ uv run pytest tests/ -q
     join（`service.py`）对订单侧 `PO Number` **按 `-` 截断**再和 PDF 页匹配，所以带后缀不影响关联。
     ⚠️ 无货那件在通途常常**根本没建过单**（被剔出「可导入」集合），到货补发才是第一次建单，
     但仍要避开该 PO 已用掉的后缀。
-    **`pb_tongtu_excel` 目前没有注入后缀的入口**（靠人手工改 CSV），这是待实现的缺口。
-    详见 `docs/reference/workflow.md` §10。
+    **已实现**：`pb_tongtu_excel` 的 `parse_reorder_spec` / `scan_used_order_numbers` /
+    `next_reorder_suffixes`，经 `service.JobOptions.reorder` / `history_dirs` 透传；CLI/服务
+    加 `--reorder PO[=N]` 与 `--history-dir DIR`。`--history-dir` 缺省 = 订单 CSV 所在目录
+    （补发时务必传 `PB orders` 根目录，否则扫不全 → 后缀算小；查无会留警告）。
+    **只做本地** —— 服务器上没有历史导入文件，网页表单/worker 不接这条链路。
+    详见 `docs/reference/workflow.md` §10（含用法与测试）。
 
 ## 8. 数量对账口径
 
