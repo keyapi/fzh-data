@@ -21,7 +21,7 @@ tags: [key_test, erpnext, on-session-creation, monkey-patch, hooks, prod-test-di
 
 2026-10-08「两台 ERPNext 每个用户每次登录都弹窗」的事故：坏字段在 `work_order_task` 的 fixtures 里，但**让每个用户都撞上**的是 `key_test` —— 它把 `setup.after_migrate` 挂在 `on_session_creation` 上，每次登录都写 Item 的元数据，于是那个坏字段每次登录都被重新校验一遍。
 
-事故根因链与处置见 `docs/solutions/integration-issues/layout-field-in-list-view-breaks-metadata-writes.md`。本文记录同一次调查里查到的、**尚未处置**的结构性隐患（已开 issue：`keyapi/key_test#1`）。
+事故根因链与处置见 `docs/solutions/integration-issues/layout-field-in-list-view-breaks-metadata-writes.md`。本文记录同一次调查里查到的结构性隐患，以及 2026-10-08 已执行的处置（见「处置记录」）与分支归位方案（见「评估」）。
 
 ## 隐患 1：每次登录都写元数据
 
@@ -64,17 +64,35 @@ except:
 
 ## 隐患 3：生产/测试分支割裂（变更无法追溯）
 
-| | 测试 | 生产 |
-|---|---|---|
-| 分支 @ commit | `main` @ `132c1d0` | **`production-backup`** @ `6543a3a` |
-| commit 数 | 74 | 28 |
-| py+js 文件数（去掉 .git/pycache） | 94 | 64 |
-| `hooks.py` / `setup.py` | 与生产 md5 均不同 | 同左 |
+**2026-10-08 实测（`keyapi/key_test`，私有）：**
 
-生产缺测试上有的整块功能：`doc_events/`（batch、purchase_receipt）、`item.py`、`doctype/excel_processing`、`doctype/item_cost`、`report/bom_cost`、`report/bom_item_lead_time_days`、`overrides/light_mes` 等。
+| | 测试线 | 生产线 | GitHub `main` |
+|---|---|---|---|
+| 分支 @ commit | `main` @ `132c1d0` | `production-backup` @ `c87759a` | `main` @ `2612db4` |
+| commit 数 | 74 | 28（**全部为生产独有**） | — |
+| 与别的线的关系 | 与 GitHub main 只差 1–2 个提交（≈ 同一条线） | 与测试线**分叉**（共同祖先只有一个 2025-08 前的提交） | 最后推送 2026-07-22 |
 
-GitHub 仓库（`keyapi/key_test`，默认分支 `main`）最后推送是 **2026-07-22** —— 两台实际跑的都不是 GitHub 上那份。
-⇒ **在测试系统验证通过，不代表生产行为一致**（与 `erpnext-version-api-compatibility.md` 同一类坑）。
+- `git rev-list --left-right --count production-backup...test-main` → 生产独有 **28** 个提交 / 测试独有 **73** 个。
+- 两棵树差异：**41 个文件只在测试**、**22 个两边都改过**、0 个只在生产（生产没有测试缺的文件）。
+- 生产那 28 个提交是**真实的生产侧修复**（BOM Cost List 的一连串改动、销售订单 Excel 导入、物料批号管理、一键完工…），其中多条提交名直接写着「**复制测试系统代码 / 手动复制测试系统代码**」——说明生产是用**手工拷贝文件**的方式同步的；线本身起于 `213a0ed 生产环境代码备份，合并之前 20250814`。
+- ⇒ **两条线都含真实工作，且已分叉**：「测试系统验证通过」不代表生产行为一致（与 `erpnext-version-api-compatibility.md` 同一类坑）。
+
+### 评估：以生产为基线建新 main —— 结论是可行的，但必须做「逐文件评审」这一步
+
+**为什么以生产为基线**：① 生产是用户实际在跑的，行为已验证；② 生产没有测试缺的文件，反向以测试为基线会丢掉生产侧在 22 个核心文件里的改动；③ 测试侧独有的 41 个文件里多是试验件（见下）。
+
+**但不要整树覆盖**：那 **22 个两边都改过**的文件（`hooks.py`、`setup.py`、`report_patches.py`、`production_utils.py`、`bom_cost_list` 报表、`sales_order_utils.py`…）是双方意图交汇处，直接任选一边都会**静默丢掉另一边的工作**。必须逐文件评审、只挑仍需要的改动 port 过去。
+
+**建议执行顺序**（先备份，任何一步都可回退）：
+
+1. 备份（已完成 2026-10-08）：测试线 → `backup/test-main-20261008`；生产线补推齐 → `production-backup` @ `c87759a`（含本次登录 hook 修复）；建议再给 GitHub `main` 打 `backup/github-main-20261008`（`2612db4`）。
+2. 建 `main-new` = `production-backup` 的树（含本次 fix）。
+3. **逐文件评审 22 个 M 文件**（test → main-new），只把仍需要的改动 port 过去。其中 `doc_events/batch.py`、`doc_events/purchase_receipt.py`（测试启用、生产 hooks 已注释）与 `report/bom_item_lead_time_days` 是「测试在用、生产没有」的少数真实功能，需明确要不要上生产；`Item Cost`、`Excel Processing`（试验）、`report/bom_cost`（测试 DB 里连 Report 记录都没有的死代码）、`overrides/light_mes`（已注释）建议不带。
+4. 两台切到 `main-new`：
+   - **测试**：`git checkout main-new && git pull` —— 会**删掉** 41 个 test-only 文件；若第 3 步没把 `doc_events/batch.py`、`purchase_receipt.py` 带过来，测试的 hooks 里那两项必须同步注释，否则 Batch / Purchase Receipt 保存会 ImportError。
+   - **生产**：先把 remote 从 HTTPS 改成 SSH（`git remote set-url origin git@github.com:keyapi/key_test.git`），否则 `git pull` 每次都被凭证挡住（2026-10-08 实测：`git push origin` 报 `could not read Username`，只能用显式 URL `git push git@github.com:keyapi/key_test.git <branch>` 推）。
+5. GitHub `main` 指向 `main-new`（旧 main 留备份分支），之后走标准流程：测试分支 → 验证 → 合并 main → push → 生产 `git pull` + `migrate` + `clear-cache` + `restart`。
+6. 顺手：`file_structure.md` 是 `update_file_structure.sh` 的产物（测试机上常年有未提交的整文件改动，极易被误提交——本次差点被带进提交），建议 gitignore 或只在需要时提交。
 
 ### 补充：生产少的那些，实测影响多大
 
@@ -103,11 +121,25 @@ GitHub 仓库（`keyapi/key_test`，默认分支 `main`）最后推送是 **2026
 
 **都与登录 hook 无关** —— 这也是判断「登录 hook 纯属多余」的依据之一。
 
-## 建议（前两条各只改几行）
+## 处置记录（2026-10-08，两台已执行并验证）
 
-1. 把 `key_test.setup.after_migrate` 从 `on_session_creation` 摘掉（留在 `after_migrate` 就够）：去掉每次登录的元数据写入，也去掉这类事故的放大器，顺带每次登录省 ~1 s。
-2. 报表补丁改用受支持的挂载点（`override_whitelisted_methods`，或直接改报表模块），去掉「导入时执行」与裸 `except:`；两台同版本各验证一次。
-3. 分支归位：生产回到 `main`（或把 `production-backup` 合回 `main`），两台都 push 到 GitHub，确立可追溯真源；之后按 `CONTRIBUTING.md`「EN 自定义 app 的开发与发布流程」走。
+**改动**：`hooks.py` 里 `on_session_creation = [...]` → `on_session_creation = []`（附原因注释）；`after_migrate` 保持不动。
+测试提交 `20e26bd`（分支 `fix/remove-on-session-creation`，已推）；生产提交 `c87759a`（`production-backup`，已推）。
+
+**验证**（改前 → 改后）：
+
+| 指标 | 测试 | 生产 |
+|---|---|---|
+| 登录耗时（热进程 4 次） | 1.15–1.32 s → **0.12–0.29 s** | 0.59–0.81 s → **0.11–0.19 s** |
+| 登录是否重写 Item 的 4 条 Property Setter | 是 → **否**（`modified` 停在改前时刻） | 是 → **否** |
+| 猴补丁是否仍生效 | 是（`bench restart` 后 web.log 新增 14 行补丁标记，**无任何登录**） | 是（+15 行） |
+| web 进程里的 hook 配置 | `on_session_creation` 只剩 Frappe/ERPNext 自带 3 条 | 同左 |
+
+## 建议
+
+1. **已完成**（见上）：停用 `on_session_creation`。
+2. 报表补丁改用受支持的挂载点（`override_whitelisted_methods`，或直接改报表模块），去掉「导入时执行」与裸 `except:`；两台同版本各验证一次。（现在它靠 `key_test/__init__.py` 导入时打，能用但不体面）
+3. **分支归位**：见上面「评估：以生产为基线建新 main」的执行顺序。
 4. 冒烟：改动后跑 `validate_fields_for_doctype("<它写过的 doctype>")` + `EN_API/check_layout_in_list_view.py`；生产另做一次真实登录确认不弹窗。
 
 ## 复现 / 测量
