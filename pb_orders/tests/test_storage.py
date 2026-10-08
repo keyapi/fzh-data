@@ -92,3 +92,41 @@ def test_clone_inputs_copies_files(tmp_path):
     names = storage.clone_inputs(src, dest)
     assert names == ["one.pdf", "two.csv"]
     assert (dest / "one.pdf").read_bytes() == b"1"
+
+
+def test_publish_input_copy_keeps_source_and_dedupes(tmp_path):
+    """输入的登记：内容寻址去重，但**绝不移走原文件**。
+
+    回归：`publish_artifact` 用 os.replace 移走源文件（产物一次性，移走省磁盘）；
+    输入不能这么干 —— inputs/ 里那份还要给 worker 用、还要供「用相同输入重新处理」。
+    """
+    artifacts = tmp_path / "artifacts"
+    src_a = tmp_path / "job-a" / "order.csv"
+    src_b = tmp_path / "job-b" / "order.csv"
+    for src in (src_a, src_b):
+        src.parent.mkdir(parents=True)
+        src.write_bytes(b"same,content\n")
+
+    rel_a, size_a, hash_a = storage.publish_input_copy(src_a, artifacts)
+    rel_b, size_b, hash_b = storage.publish_input_copy(src_b, artifacts)
+
+    assert src_a.is_file() and src_b.is_file(), "原文件被移走了"
+    assert rel_a == rel_b and hash_a == hash_b, "同内容应去重成同一份"
+    assert size_a == size_b == len(b"same,content\n")
+    assert len([p for p in artifacts.rglob("*") if p.is_file()]) == 1
+
+
+def test_same_display_name_different_content_keeps_both(tmp_path):
+    """同名但内容不同：两份都保留，靠内容哈希区分（互不覆盖）。"""
+    artifacts = tmp_path / "artifacts"
+    a = tmp_path / "job-a" / "order.csv"
+    b = tmp_path / "job-b" / "order.csv"
+    a.parent.mkdir(parents=True); a.write_bytes(b"v1\n")
+    b.parent.mkdir(parents=True); b.write_bytes(b"v2,longer\n")
+
+    rel_a, _, hash_a = storage.publish_input_copy(a, artifacts)
+    rel_b, _, hash_b = storage.publish_input_copy(b, artifacts)
+
+    assert rel_a != rel_b and hash_a != hash_b
+    assert len([p for p in artifacts.rglob("*") if p.is_file()]) == 2
+    assert a.read_bytes() == b"v1\n" and b.read_bytes() == b"v2,longer\n"

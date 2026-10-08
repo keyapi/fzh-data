@@ -93,6 +93,8 @@ def _print_report(report, checked_path, workbook_path):
             print(f"    {po_number}")
 
     print("\n[对账] PO/明细/数量 均无差数 ✓")
+    for warn in report.get("warnings", []):
+        print(f"[提醒] {warn}")
     if report.get("replaced"):
         print(f"\n[覆盖] 已存在的同名产物被替换：{'、'.join(report['replaced'])}")
     print(f"\n[产物] {checked_path.name}")
