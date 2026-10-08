@@ -120,16 +120,16 @@
 
 ## 4. 关键技术细节
 
-### 4.1 服务器 SSH（重要！生产 IP 已换）
-- **生产**：`47.116.128.218`（frappe 用户），pem `D:/Work/Aliyun/ssh/aliyun_fzh_erpnext_20240726.pem`
-- SSH config 别名已更新（`阿里云-FZH-ERPNext-frappe/root` → 新 IP）
-- 测试：`8.133.254.66`（sh-erpnext-test / 上海测试）
+### 4.1 服务器 SSH（重要！入口只认 `~/.ssh/config` 别名）
+- **生产**：`erpnext.vilavi.cn`（frappe 用户），别名 `阿里云-FZH-ERPNext-frappe`；主机地址与私钥路径在 `~/.ssh/config`，**不进仓库**
+- SSH config 别名：`阿里云-FZH-ERPNext-frappe/root`
+- 测试：`sh-erpnext-test`（上海测试），别名 `上海测试-阿里云-FZH-ERPNext-frappe`
 - 旧香港 IP `8.223.4.206` 已废弃
 
 ### 4.2 BOM Cost List 生成（关键！）
 报表：`key_test.bom_cost_list`（Script Report），在服务器上运行：
 ```bash
-ssh frappe@47.116.128.218 -i D:/Work/Aliyun/ssh/aliyun_fzh_erpnext_20240726.pem
+ssh 阿里云-FZH-ERPNext-frappe
 cd ~/frappe-bench && env/bin/python /tmp/gen_bom_xlsx2.py
 ```
 **必须的 6 个 filter**（缺了会漏数据/列错序）：

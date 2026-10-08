@@ -11,7 +11,7 @@
 **测试机已改完并验证通过，等用户手动同步到生产**。下一步是：用户在**生产**做复验（只读，不改数据）。
 
 - 改动只有一个文件（在测试机，本地检出**没有**这个 app 的源码）：
-  `8.133.254.66:/home/frappe/frappe-bench/apps/delivery_plan/delivery_plan/delivery_plan/doctype/delivery_plan/delivery_plan.py`
+  `sh-erpnext-test:/home/frappe/frappe-bench/apps/delivery_plan/delivery_plan/delivery_plan/doctype/delivery_plan/delivery_plan.py`
 - 该文件的 `git status` 应只显示这**一个** `M`（临时探针已删除）。
 
 ### 问题（用户同事报告）
@@ -61,8 +61,9 @@
 ## 四、下一步（待用户说"已同步"）
 
 在生产做「耗时 + 一致性」复验，**只读、不改任何数据**：
-- 生产**没有 SSH** → 用**临时 API Server Script**（`zz_` 前缀、`script_type=API`、`api_method` 字段注册、
-  调用路径 `/api/method/<api_method>`、**用完即删**）。生产凭据 `EN_API/.env` 的 `PROD_ERP_API_KEY/SECRET`，
+- 生产 **SSH 可达**（`ssh 阿里云-FZH-ERPNext-frappe`，见 `EN_API/docs/reference/en-server-access.md`）—— 下面这条
+  **临时 API Server Script** 路线仍然可用（`zz_` 前缀、`script_type=API`、`api_method` 字段注册、
+  调用路径 `/api/method/<api_method>`、**用完即删**），但不再是唯一选择。生产凭据 `EN_API/.env` 的 `PROD_ERP_API_KEY/SECRET`，
   base = `https://erpnext.vilavi.cn`。
 - 探针逻辑（可重建）：加载目标计划 → `doc.run_method("create_items_from_planned_qties")`（**不保存**）→ 计时 + dump 关键字段；
   另有「改造前 vs 改造后」逐菲号对比函数。
@@ -74,9 +75,9 @@
 
 | 用途 | 位置 |
 |---|---|
-| 改动前原文件 | `8.133.254.66:/tmp/zz_bak_delivery_plan.py` |
-| 10 处补丁脚本（可重放） | `8.133.254.66:/tmp/zz_patch_dp.py` |
-| 改后的文件 | `8.133.254.66:/home/frappe/frappe-bench/apps/delivery_plan/delivery_plan/delivery_plan/doctype/delivery_plan/delivery_plan.py` |
+| 改动前原文件 | `sh-erpnext-test:/tmp/zz_bak_delivery_plan.py` |
+| 10 处补丁脚本（可重放） | `sh-erpnext-test:/tmp/zz_patch_dp.py` |
+| 改后的文件 | `sh-erpnext-test:/home/frappe/frappe-bench/apps/delivery_plan/delivery_plan/delivery_plan/doctype/delivery_plan/delivery_plan.py` |
 
 ## 六、未做（等用户决定）
 
@@ -85,7 +86,7 @@
 
 ## 七、环境 / 规矩
 
-- **测试站**：`ssh dev01@8.133.254.66`，站点 `erpnext.vilavi.cn`（库名 `_133d3237c7c4c70b`），
+- **测试站**：`ssh 上海测试-阿里云-FZH-ERPNext-frappe`（别名见 `~/.ssh/config`），站点 `erpnext.vilavi.cn`（库名 `_133d3237c7c4c70b`），
   与 API `https://ensh.vilavi.cn`（凭据 `TEST_ERP_API_KEY/SECRET`）是**同一个库**。
   改 `.py` 后必须 `cd /home/frappe/frappe-bench && sudo -u frappe bench restart`。
   `dev01` 在 `frappe` 组、app 文件组可写。

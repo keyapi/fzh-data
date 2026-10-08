@@ -17,6 +17,7 @@ timestamp: 2026-09-14
 
 | 你需要... | 读这个 |
 |----------|--------|
+| **服务器与环境访问（SSH 别名 / REST 凭证 / bench 重启 / 常见坑）** | [reference/en-server-access.md](reference/en-server-access.md) |
 | 销售订单「已发/未发」状态 + 生产/工序进度 | [../AGENT_HANDOFF_物料发货状态.md](../AGENT_HANDOFF_物料发货状态.md) |
 | 销售出库 → 物料移动追溯 | [../AGENT_HANDOFF_DN追溯报表.md](../AGENT_HANDOFF_DN追溯报表.md) |
 | 物料组英文翻译管道 | [reference/item-group-translation-pipeline.md](reference/item-group-translation-pipeline.md) |

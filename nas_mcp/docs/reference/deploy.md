@@ -2,14 +2,14 @@
 okf: v0.1
 type: Reference
 title: nas_mcp 部署 — 上海 EN 测试 VPS（Docker + nginx 反代）
-description: 在 8.133.254.66 上以 Docker 跑 nas_mcp（只绑回环），复用现有 nginx conf.d 路径块对外；含端口选择、备份、nginx -t 校验与回滚
+description: 在 sh-erpnext-test 上以 Docker 跑 nas_mcp（只绑回环），复用现有 nginx conf.d 路径块对外；含端口选择、备份、nginx -t 校验与回滚
 tags: [nas, mcp, deploy, nginx, docker, vps]
 timestamp: 2026-09-21
 ---
 
 # nas_mcp 部署（上海 EN 测试 VPS）
 
-**目标**：把 `nas_mcp` 跑在 `8.133.254.66`（`api.vilavi.cn` / `sh-erpnext-test`），
+**目标**：把 `nas_mcp` 跑在 `sh-erpnext-test`（`api.vilavi.cn`），
 由**现有 nginx** 反代成公网 HTTPS 路径，接给 ChatGPT。
 
 ## 0. 不干扰已有服务 —— 先确认基线
@@ -144,7 +144,7 @@ curl -sS -o /dev/null -w '%{http_code}\n' -X POST https://api.vilavi.cn/nas/mcp 
 1. **给 `<MCP 专用账号>` 这个账号配好文件夹权限** —— 这是真正的权限边界。
    ⚠️ 注意 DSM 上各共享文件夹是**彼此独立的顶层目录**：给账号开了 `/产品信息` 之后，
    **还必须把 `/产品信息` 加进 `NAS_ALLOWED_ROOTS` 并重启容器**，否则仍会被路径护栏拒（实测踩过）。
-2. **若 DSM 开了 Auto Block**：把 VPS 出口 `8.133.254.66` 加白名单，否则几次失败就被封
+2. **若 DSM 开了 Auto Block**：把 VPS 出口 IP（`sh-erpnext-test` 的 EIP，数值在该机取）加白名单，否则几次失败就被封
 3. **账号不要开 2FA** —— DSM API 不支持 2FA，开了就连不上
 
 ## 已知风险
@@ -152,5 +152,5 @@ curl -sS -o /dev/null -w '%{http_code}\n' -X POST https://api.vilavi.cn/nas/mcp 
 | 风险 | 说明 |
 |---|---|
 | DSM 会话过期 | 客户端会重新登录；若频繁报错先看是不是会话 |
-| 出口 IP 变动 | `8.133.254.66` 是 EIP；若换 IP 要同步 DSM 白名单 |
+| 出口 IP 变动 | 该机出口是 EIP；若换 IP 要同步 DSM 白名单 |
 | 速度 | 瓶颈是**办公室上行带宽**，不是 VPS。工具只返回元数据/小文本，**不要让它搬大文件** |

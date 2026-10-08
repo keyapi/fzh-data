@@ -97,11 +97,11 @@ NAS 双网口（`eth0` 在 OpenWrt LAN / `eth1` 在光猫 LAN），**默认线�
 
 | IP | 是什么 | 依据 |
 |---|---|---|
-| **`8.133.254.66`** | 上海 VPS（EN 测试 `ensh` / `api.vilavi.cn` 同一台）的**真实出口 IP** | 在该机 `curl ifconfig.me` 实得；网卡只有 `192.168.0.12` + Tailscale `100.119.28.72`，公网 IP 是 EIP |
+| **上海 VPS 的出口 IP（数值不记入仓库）** | 上海 VPS（EN 测试 `ensh` / `api.vilavi.cn` / 主机名 `sh-erpnext-test`）的**真实出口 IP** | 在该机 `curl ifconfig.me` 实得；网卡只有 `192.168.0.12` + Tailscale `100.119.28.72`，公网 IP 是 EIP |
 | **`82.156.238.248`** | 赛狐 OpenAPI **IP 白名单**里的「VPS」条目，2026-06-25 入仓 | `SELLFOX_API/docs/research/2026-06-25-sellfox-api-exploration.md:26` |
 
 **⚠️ 两者关系仍未确认** —— `82.156.238.248` **不是**上述那台的出口。它可能是另一台 VPS（也可能已下线）。
-**对 NAS 的影响**：若要给 DSM 加白名单，**应加 `8.133.254.66`**（那是 api.vilavi.cn 的真实出口）。
+**对 NAS 的影响**：若要给 DSM 加白名单，**应加上海这台的出口 IP**（`api.vilavi.cn` 的真实出口，数值在该机 `curl ifconfig.me` 取）。
 `82.156.238.248` 是否仍在服役，需单独确认。
 
 ---
@@ -266,7 +266,7 @@ funnel 一开，**数分钟内**就被互联网扫描器命中（`leakix.net` �
    > 两者的**部署形态相同**（VPS 上容器 + 前置反代），所以**先在本地把 ① 跑起来验证连通**，再决定是否值得自建。
 4. 前置反代：用**已有 nginx**（`api.vilavi.cn/nas/*`）
 5. 安全：专用只读 DSM 账号 + **应用专用密码**（DSM API 不支持 2FA）；**开证书校验**；
-   **只放行 VPS 出口 IP `8.133.254.66`**；范围锁死在 `NAS_ROOT_FOLDER`；`delete` 类工具不暴露
+   **只放行 VPS 出口 IP**（上海这台机的 EIP，数值在该机取）；范围锁死在 `NAS_ROOT_FOLDER`；`delete` 类工具不暴露
 3. **实现路线二选一**：
    - **① `mrquj/mcp-server-synology`** —— 省开发；默认绑回环 + 路径白名单 + 只读启发式，安全姿态最好；若走静态令牌它现成支持
    - **⑤ 自建薄 MCP**（复用 `NAS_API/synology.py`）—— 范围最可控；但传输/鉴权要自己实现

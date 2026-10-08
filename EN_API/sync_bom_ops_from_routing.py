@@ -12,7 +12,7 @@
   * `batch_update_selected_routings` 对没有 source_items 的路线显式 skip；
   * 已提交 BOM 必须走服务端（REST 不能改已提交单据，且要直接删子表行）；
   * 1,570 个 BOM 放一个 HTTP 请求里必然超时，所以需要服务端侧分批 + 断点续跑。
-生产机 SSH 不通，于是在生产上临时建一条 API 型 Server Script，跑完即删。
+生产机 SSH 实际可达（见 `EN_API/docs/reference/en-server-access.md`）；本脚本当时因误判"SSH 不通"走了"在生产上临时建一条 API 型 Server Script，跑完即删"这条备选路线（仍可用，但不是唯一选择）。
 
 Server Script 沙箱限制（frappe.utils.safe_exec，已实测）：
   * 任何以 `_` 开头的变量名/属性名都被拒绝 -> 不能 import 那个私有函数 `_update_bom_operations_from_routing`
