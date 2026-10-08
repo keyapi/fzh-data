@@ -151,6 +151,8 @@ Commit 格式：中文 `type(scope): description`。类型用 `feat` / `fix` / `
 > 适用：装在 ERPNext 上的自研 app —— `work_order_task` / `vilavi_pim` / `delivery_plan` / `key_oms` /
 > `light_mes` / `zelin_*` 等。**这些 app 不归本仓库管**，但改它们必须走下面这条链路。
 > ⚠️ 例外：`key_test` **不在统一 git 管理内**（生产/测试各自往不同分支提交，两边割裂，改前先问负责人）。
+> 它每次登录都会写 Item 元数据、还给核心报表打猴补丁——具体隐患、实测代价与建议见
+> `docs/solutions/workflow-issues/key-test-login-hook-and-prod-test-divergence.md`（issue：`keyapi/key_test#1`）。
 
 ```
 ① 测试系统上给该 app 建分支 → 改 → 提交
