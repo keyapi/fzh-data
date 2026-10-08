@@ -146,6 +146,26 @@ Commit 格式：中文 `type(scope): description`。类型用 `feat` / `fix` / `
 
 项目主（keyapi）会审批 PR。审批后 merge 到 main。
 
+## EN 自定义 app 的开发与发布流程
+
+> 适用：装在 ERPNext 上的自研 app —— `work_order_task` / `vilavi_pim` / `delivery_plan` / `key_oms` /
+> `light_mes` / `zelin_*` 等。**这些 app 不归本仓库管**，但改它们必须走下面这条链路。
+> ⚠️ 例外：`key_test` **不在统一 git 管理内**（生产/测试各自往不同分支提交，两边割裂，改前先问负责人）。
+
+```
+① 测试系统上给该 app 建分支 → 改 → 提交
+② 测试系统验证：bench --site erpnext.vilavi.cn migrate / clear-cache（必要时 restart）
+③ 验证通过 → 合并到 main → git push 到 GitHub
+④ 生产系统该 app：git pull → bench --site erpnext.vilavi.cn migrate \
+       && bench --site erpnext.vilavi.cn clear-cache && bench restart
+⑤ 极少数情况上面不生效，sudo reboot 之后才生效（reboot 前先确认）
+```
+
+- app 源码在两台服务器的 `/home/frappe/frappe-bench/apps/<app>/`，GitHub 组织 `keyapi`（`git@github.com:keyapi/<app>.git`），两边共用一个 SSH 私钥。
+- 生产 SSH：`ssh 阿里云-FZH-ERPNext-frappe`（**该 app 的远端名是 `upstream`，不是 `origin`**）；测试 SSH：`ssh sh-erpnext-test-frappe`。
+- **不要拿「本地 clone → 直接开 PR」代替 ①②**：合并前必须在测试系统上真跑过 `migrate` 验证（fixtures / patch / after_migrate 钩子的效果只有 migrate 才暴露）。
+- 只改数据库记录（不动 app 代码）时，同样先测试后生产；DB 层写入用 `bench --site ... mariadb` / `bench console`，改完 `clear-cache`。
+
 ## 新增 Skill 或模块
 
 1. 模块目录放到项目根目录下

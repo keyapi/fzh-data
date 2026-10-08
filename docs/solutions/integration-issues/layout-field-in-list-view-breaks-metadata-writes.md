@@ -146,7 +146,7 @@ ssh <host> 'cd /home/frappe/frappe-bench && bench --site erpnext.vilavi.cn clear
 
 **还要修源头**，否则会复发：`fixtures` 同步会**更新**已存在的 Custom Field，下次 `bench migrate` 就把 `in_list_view: 1` 写回来。
 
-- 应用仓库 `keyapi/work_order_task` → `work_order_task/fixtures/custom_field.json` 的 6 处 `"in_list_view": 1` 改为 `0`（[PR #2](https://github.com/keyapi/work_order_task/pull/2)，diff 只有 6 行）；合并后在两台服务器 `git pull` + `bench migrate` 让 fixtures 与 DB 一致。
+- 应用仓库 `keyapi/work_order_task` → `work_order_task/fixtures/custom_field.json` 的 6 处 `"in_list_view": 1` 改为 `0`（[PR #2](https://github.com/keyapi/work_order_task/pull/2)，diff 只有 6 行）。**已按 EN 自定义 app 流程走完**（2026-10-08）：测试系统分支验证 → 合并 main（`331d5c6`）→ 两台 `git pull` + `migrate` + `clear-cache` +（生产）`bench restart`。生产该 app 的远端名是 **`upstream`**（不是 `origin`），流程见 `CONTRIBUTING.md`「EN 自定义 app 的开发与发布流程」。
 - 顺带核对 `work_order_task/work_order_task/commands/install_custom_fields.py`（`after_migrate` 钩子，`create_custom_fields(..., ignore_validate=True)`）与 `key_test/setup.py` 的 `get_custom_fields()` 是否也定义这些字段——本次核对均未命中。
 
 ## 验证
@@ -163,9 +163,11 @@ ssh <host> 'cd /home/frappe/frappe-bench && bench --site erpnext.vilavi.cn conso
 
 **「hook 真的跑了」的旁证**：登录后看 `tabProperty Setter` 里 `Item-weight_template_variant-*` 的 `modified` 是否＝刚才（hook 每次登录都写它）。本次生产登录 11:10:01 写入、页面无弹窗 ⇒ 登录路径确实被校验过且通过。
 
+**判弹窗别 grep 原始 HTML**：Frappe 会把整份消息模板（含 `'In List View' not allowed for type {0} in row {1}` 及其翻译）塞进每个 Desk 页面的 `**.js` 里，`page.content()` 里必然出现这句话。要看「有没有真弹窗」，得看渲染出来的对话框（Playwright 的 a11y snapshot / `document.querySelector('.modal.show, .msgprint-dialog')`），否则必然误报。
+
 ## 遗留 / 边界
 
-- **同类潜伏**：`Item Group Image.image_file`（`Attach Image`，子表 `Item Group Image`）在**两台**都带 `in_list_view=1`。子表只豁免 `Button`/`HTML`，`Attach Image` 不豁免 → 保存该 doctype 的元数据会报 `'In Grid View' not allowed for type Attach Image`。它是应用自带 DocField（不是本次登录弹窗的原因），**未动**——清掉会移除子表里的缩略图，属功能取舍，需应用负责人决定。
+- **同类潜伏**：`Item Group Image.image_file`（`Attach Image`，子表 `Item Group Image`，module `Vilavi PIM`）在**两台**都带 `in_list_view=1`。子表只豁免 `Button`/`HTML`，`Attach Image` 不豁免 → 保存该 doctype 的元数据会报 `'In Grid View' not allowed for type Attach Image in row 1`（2026-10-08 在测试实测复现）。它是应用自带 DocField（不是本次登录弹窗的原因），**未动**——清掉会移除子表里的缩略图，属功能取舍。已交给应用负责人：[keyapi/vilavi_pim#1](https://github.com/keyapi/vilavi_pim/issues/1)（附件里 `item_group_image.json` 的 `"in_list_view": 1` 需改 0）。
 - **放大器**：`key_test` 把 `setup.after_migrate` 挂在 `on_session_creation` 上（每次登录写元数据）本身是隐患——它把「一次元数据错误」放大成「每个用户每次登录都报错」。建议单独评估，本次未改。
 - `Customize Form` 里对 `in_list_view` 有一份**同文案的 `frappe.msgprint`**（`frappe/custom/doctype/customize_form/customize_form.py:361-367`，不抛异常）；弹窗标题是 "Message" 时可能是它，也可能是 `throw` 的响应——两者文案一致，靠「有没有落库失败」和上面的链路区分。
 
