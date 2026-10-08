@@ -593,7 +593,7 @@ python customs_export.py --dn DN-26-00056   # 生产，19 项并行翻译约 1-2
 - 境外收货人（2026-09-08 改回“选择即导出”）：`resolve_consignee()` 按 CLI `--consignee` 选择即导出（仅名称），未指定默认 Centrade；`fill_declaration()` C5 写选中的公司名（`consignee_name`，忽略地址）。
 - 发票/装箱单/合同抬头 B2/B3 仍是纯公司名（`shipper_cn/en`），不混入编码。
 
-**EN 测试服务器（8.133.254.66 / ensh）已落地（2026-09-07，备份 `customs_export.py.bak_20260907`）**
+**EN 测试服务器（`sh-erpnext-test` / ensh）已落地（2026-09-07，备份 `customs_export.py.bak_20260907`）**
 - `delivery_plan/utils/customs_export.py`：A4/A8 写 `domestic_party_cn`；C5 写 `consignee_info.name`（弹窗选择/填写的公司名，仅名称、忽略地址），空则兜底 Centrade；`export()` 收货人用传入 `consignee_name/addr`（两者都空才兜底 Centrade）；波兰预设已改为 **Pillow Palette Ltd**（`ul. Krucza 68/9, 53-411 Wrocław, mail: kontakt@pillowpalette.pl, 786 603 993`）；已 `bench restart` 生效。
 - ⚠️ **运行时模板改为「正常上传文件」查找（2026-09-09 起，不再用绝对路径目录）**：`_get_template_path()` 按 **File doctype** 查 `file_name=ZJ26DZJR0403-报关单据.xlsx`（优先 `/private/` 上传，无则任一上传记录），`_uploaded_template_path()` 取 `get_full_path()`（DB 内容则落临时文件）；`_ensure_clean_template()`（4 sheet + 报关合同 H48:J50）把关结构。旧版 os.walk 抓 `报关单据_*.xlsx` 当模板会 MergedCell 崩溃/串头，已废弃。测试机当前命中公开 `/files/` 上传版可导出；若要干净 private 版需替换上传同名（同名重复会被 Frappe 加哈希后缀，精确 file_name 只认一条）。**供生产：直接正常上传该模板文件即可，不再要求 customs_templates 目录。**
 
@@ -616,7 +616,7 @@ python customs_export.py --dn DN-26-00056   # 生产，19 项并行翻译约 1-2
 
 **申报要素第⑥段补完整尺寸（2026-09-09）**：申报要素字符串由 `seg1..seg5|||` 改为 `seg1..seg5|seg6||`，**seg6=完整尺寸**。口径：**始终从中文名提取/补全**——三角靠枕→`长度*20*50`、平条靠枕→`长度*15*50`，与品名补全开关**解耦**（开关关时中文 C 列只 `194`，申报要素 seg6 仍 `194*20*50`）。实现：`export()` 对每行算 `it["size_decl"]`（对 `_enrich_dim_cn(name_agg)` 各 `-` 段取 `_dim_token` 最完整者）；`fill_declaration` 拼串加 seg6。实测：`0|0|床品类|无品牌|无型号|194*20*50||`。参考脚本不生成申报要素，无需镜像。
 
-**待办（未做）**：本地参考改动未 commit（feature 分支 feature/customs-export-bom-consignee）；prod `erpnext.vilavi.cn`(47.116.128.218) 未同步（暂不动，SSH 不可达）。
+**待办（未做）**：本地参考改动未 commit（feature 分支 feature/customs-export-bom-consignee）；prod `erpnext.vilavi.cn` 未同步（当时记的理由"SSH 不可达"是误判，生产 SSH 可达，见 `EN_API/docs/reference/en-server-access.md`）。
 
 **弹窗箱数「累加/合并」修正（2026-09-09，production issue DN-26-00070）—— 仅测试机 delivery_note.js 已落地**
 - 现象：① 卡 `OBN-…001 · 箱组1` 显「2箱合计 自动=2」，用户找不到第2箱；② 箱18/19（同 XMMBS-153-HEMPNATURAL）不累加、同箱同 SKU 被拆 2/3 行。

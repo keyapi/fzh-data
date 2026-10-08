@@ -9,6 +9,7 @@ tags: [workflow-issues, index]
 
 | 文档 | 说明 |
 |------|------|
+| [key-test-login-hook-and-prod-test-divergence.md](key-test-login-hook-and-prod-test-divergence.md) | key_test 每次登录写元数据（~0.75–1.05s）+ 猴补丁核心报表；生产 `production-backup` 与测试 `main` 割裂 |
 | [mcp-to-chatgpt-bringup-lessons.md](mcp-to-chatgpt-bringup-lessons.md) | 把 FAC / 赛狐 / NAS 三个 MCP 接上 ChatGPT 的方法与四个教训 |
 | [fedex-track-batch-query.md](fedex-track-batch-query.md) | FedEx 官方批量 Track + 账号/组织恢复 + 三条教训 |
 | [sellfox-inventory-sync-cost-drift.md](sellfox-inventory-sync-cost-drift.md) | 用库存调整单同步数量会让成本越来越改不动 —— 成因与三个选项 |

@@ -146,5 +146,5 @@ AI 编码助手（Cursor Agent 等）通常只能访问单个环境。它们无�
 ## Related
 
 - `delivery_plan/docs/fix-tracking-dimension-stock-validation.md` — 本次具体 bug 的完整修复文档
-- 原始问题发生环境：生产 47.116.128.218 (ERPNext v15.43.3, 已从香港迁移至上海) / 测试 8.133.254.66 (ERPNext v15.59.0)
+- 原始问题发生环境：生产 `erpnext.vilavi.cn` (ERPNext v15.43.3, 已从香港迁移至上海) / 测试 `sh-erpnext-test` (ERPNext v15.59.0)
 - 修复分支：`fix/tracking-dimension-source-fieldname`（delivery_plan repo）

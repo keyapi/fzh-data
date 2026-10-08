@@ -76,7 +76,7 @@
 | 改前账面快照 | `EN_API/out/wo_02571_03197_before_20260921_110508.json` |
 | 改后账面 | `EN_API/out/wo_02571_03197_after_probe.txt` |
 | 凭据 | `EN_API/.env` → `PROD_ERP_API_KEY/SECRET`（生产）、`TEST_ERP_API_KEY/SECRET`（测试） |
-| 测试机 | `ssh dev01@8.133.254.66`（生产 SSH 不通） |
+| 服务器 SSH | 测试 `ssh 上海测试-阿里云-FZH-ERPNext-frappe`、生产 `ssh 阿里云-FZH-ERPNext-frappe`（别名见 `~/.ssh/config`，两台都通） |
 
 ## 六、环境注意
 
