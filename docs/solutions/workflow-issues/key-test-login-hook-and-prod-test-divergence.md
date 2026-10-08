@@ -57,6 +57,11 @@ except:
 - 生产 v15.43.3 与测试 v15.59.0 版本不同，被替换的内部函数可能已经变了 → **静默失效，无人知晓**；
 - 两台补丁内容本身也不一样（`report_patches.py` md5 不同；测试多一个已注释的 light_mes 补丁）。
 
+**要摘掉登录 hook 前请注意**：补丁其实**不依赖** `on_session_creation` —— `key_test/__init__.py` 里就有
+`from key_test.monkey_patches.report_patches import apply_all_patches` + `apply_all_patches()`，
+任何进程导入 `key_test` 包（hooks 加载即导入）时就会打上；`report_patches.py` 末尾还有一段「导入时执行」。
+`after_migrate` 里也已有同样的两条。所以那两条登录 hook 是**纯重复**，删掉不会让报表补丁失效。
+
 ## 隐患 3：生产/测试分支割裂（变更无法追溯）
 
 | | 测试 | 生产 |
@@ -70,6 +75,33 @@ except:
 
 GitHub 仓库（`keyapi/key_test`，默认分支 `main`）最后推送是 **2026-07-22** —— 两台实际跑的都不是 GitHub 上那份。
 ⇒ **在测试系统验证通过，不代表生产行为一致**（与 `erpnext-version-api-compatibility.md` 同一类坑）。
+
+### 补充：生产少的那些，实测影响多大
+
+| 只测试有 | 生产状况 | 判定 |
+|---|---|---|
+| DocType `Item Cost` | 不存在（测试仅 1 行数据） | 试验 |
+| DocType `Excel Processing` | 不存在（测试仅 2 行数据） | 试验 |
+| `report/bom_cost/`（脚本报表目录） | 测试 DB 里连 Report 记录都没有 → 跑不起来 | 死代码（生产另有 Report Builder 的 “BOM Cost”） |
+| `report/bom_item_lead_time_days` | 生产无（测试有 Script Report 记录） | 未上生产的真实差异 |
+| `overrides/light_mes/*` | 测试里已注释（注释写「Light MES 已自修」） | 两边都不用 |
+| `doc_events/batch.py`、`purchase_receipt.py` | 生产 `hooks.py` 里这两项**已注释**且文件不存在 | 一致、不会 ImportError；测试启用 |
+| `item.py` | 测试 1 字节、生产缺失 | 无实质 |
+
+结论：生产跑得正常，是因为差异集中在「试验件」与「生产主动禁用的项」。
+
+### 这个 app 真正在做的功能（重量模板关联）
+
+用户 2024 年的原始需求是「物料加字段 ↔ 重量模板自动关联」，落点是：
+
+| 位置 | 作用 |
+|---|---|
+| `key_test/weight_template_utils.py` → `get_weight_template_variant()` | 按命名约定 `重量模板#{模板 item_name}` + 属性值匹配，找出物料的重量模板变体（whitelisted；同文件另有「已有物料批量回填」入口） |
+| `key_test/doc_events/item.py:validate()` | 新物料保存时：若为变体且填了 `weight_template_variant`，从重量模板带出 `weight_per_unit`/`weight_uom`（缺重量时 alert） |
+| `key_test/public/js/item_group.js` | 物料组页「批量」入口 → `key_test.batch_weight_template.start_batch_creation` |
+| `setup.py` 那 4 条 Property Setter | 只把 `weight_template_variant` 设为「不进列表视图/不进标准筛选/不复制/提交后不许改」 |
+
+**都与登录 hook 无关** —— 这也是判断「登录 hook 纯属多余」的依据之一。
 
 ## 建议（前两条各只改几行）
 
