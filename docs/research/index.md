@@ -10,7 +10,7 @@ tags: [research, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
-| 2026-10-08 | key_test 生产线 vs 测试线逐文件评审清单 — 22 个双边冲突文件分档（纯格式 / 测试侧变薄(功能已搬到别 app) / 测试侧领先 / 需人工看）+ 三个待决策 + 已核对事实 | [2026-10-08-key-test-branch-unification-review.md](2026-10-08-key-test-branch-unification-review.md) |
+| 2026-10-08 | key_test 生产线 vs 测试线逐文件评审清单 — 22 个冲突文件分档 + 引用关系实测（哪些真在跑/哪些死代码）+ 生产 Error Log 里的真 bug + 已建 `main-new`（以生产为基线）与备份分支 | [2026-10-08-key-test-branch-unification-review.md](2026-10-08-key-test-branch-unification-review.md) |
 | 2026-09-21 | 赛狐 API 拉 Amazon 账期报表 — **只有「插件获取报告」一条路且 API 不可触发**；90 店仅 39 店有数据、只有 6/7 两个月；fileUrls 为 1 小时签名 URL | [2026-09-21-sellfox-amazon-settlement-reports.md](2026-09-21-sellfox-amazon-settlement-reports.md) |
 | 2026-09-21 | 赛狐 Walmart 账期 API 实测 — `periodStartDate`/`periodEndDate` 真实可用，`purchaseOrder` 与 EN `Tongtool Order.platform_order_id` 100% 匹配；Wayfair/Overstock 无此路径 | [2026-09-21-sellfox-walmart-settlement-api.md](2026-09-21-sellfox-walmart-settlement-api.md) |
 | 2026-09-21 | 群晖 NAS 接入 ChatGPT — **部署在 VPS 而非 NAS**（实测 443 不通、只开 11024）；含**第三方方案深度对比**（mrquj 支持 Streamable HTTP + Bearer、Tailscale 私网优于公网端口）、鉴权两条路线，以及两处对早先结论的更正 | [2026-09-21-nas-mcp-chatgpt-feasibility.md](2026-09-21-nas-mcp-chatgpt-feasibility.md) |

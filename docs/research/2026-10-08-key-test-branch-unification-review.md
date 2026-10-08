@@ -81,11 +81,83 @@ description: 生产线(production-backup) 与测试线(main) 分叉已久；22 �
 | 真实功能但仍少用（`report/bom_item_lead_time_days`） | ~3 | 需你定是否上生产 |
 | fixtures（`fixtures/custom_field.json`、`fixtures/property_setter.json`） | 2 | 见下方事实 3 |
 
-## 必须先定的三个决策
+## 被引用/在跑的实测判定（2026-10-08）
 
-1. **QR / 批号功能留哪套？** 测试侧 = `setup.py` 加字段 + `qr_utils/` + `doc_events/batch|purchase_receipt` + `commands/*qrcode*`；生产侧 = 装 `erpnext_qrcode` app + `api/batch_qrcode.py` + `public/js/purchase_receipt_qrcode.js`。两套并存会互相打架（字段/钩子重复）。
-2. **B 档里哪几个真的已经在别的 app 里实现了？**（已证实 `production_utils.py`、`overrides.py`；`add_item_semi.py`、`bom_cost_updater.py`、`bom_utils.py`、`item_group.js` 待确认）→ 建议问 Jack（他维护 `work_order_task`）。
-3. **已搬到别处的功能，key_test 里还留不留一份？** 建议不留（双份维护 = 这次分叉的根因）。
+### 测试侧独有的东西：哪些真在跑、哪些是死代码
+
+| 判定 | 文件 | 依据 |
+|---|---|---|
+| **真在跑**（hooks 挂着） | `doc_events/batch.py` | hooks：`Batch.after_save` → 测试每次保存批次都会跑 |
+| | `doc_events/purchase_receipt.py` | hooks：`Purchase Receipt.after_save` + `on_submit` |
+| | `public/js/purchase_receipt_qrcode.js` | hooks：`app_include_js`（测试全站加载） |
+| | `commands/generate_batch_qrcodes.py`、`commands/reset_qrcode_fields.py` | hooks：`commands` 注册了 2 个 bench 命令 |
+| | `qr_utils/` | 被上述 3 处引用（QR 生成实现） |
+| | `tasks.py` | hooks：6 处 scheduler 引用 |
+| **死代码/试验** | `doctype/item_cost` | 0 处引用，测试仅 1 行数据 |
+| | `doctype/excel_processing` | 0 处引用，测试仅 2 行数据 |
+| | `report/bom_cost` | 0 处引用，测试 DB 里连 Report 记录都没有 |
+| | `report/bom_item_lead_time_days` | 0 处代码引用（报表现存，是否有人用需另查工作台） |
+| | `overrides/light_mes/*` | 唯一引用是 `report_patches.py` 里已注释的那行 |
+| | `api/batch_qrcode.py` | **0 处引用**（测试也是死的） |
+
+### 生产侧「多出来的代码」：是活代码，且被 work_order_task 的新前端调用
+
+`work_order_task`（前端已迁过去的那个 app）**仍在调 key_test 的后端**：
+
+```
+work_order_task/public/js/work_order.js → key_test.production_utils.check_stock_for_work_order / create_job_cards_for_operations
+work_order_task/public/js/bom.js        → key_test.add_item_semi.create_supporting_items_and_variants（一键生成配套物料）
+work_order_task/public/js/bom.js, routing.js → key_test.search_item_by_item_group_and_name.*
+key_test/public/js/bom.js               → key_test.bom_utils.*（deep_update_bom_cost / check_bom_update_chain）
+key_test/public/js/bom_list.js, item_group.js → key_test.bom_cost_updater.*
+```
+
+⇒ **B 档必须取生产侧**（生产侧是"被调用方"的完整实现）；取测试侧的薄版本会打断这些按钮。
+
+补充：`overrides.py`（生产 629 行 / 测试 76 行）**两边都是死代码** —— 它被同目录的 `overrides/` 包遮蔽（`key_test.overrides.bom_list` 才是真被 hooks 用的），且其中的 `CustomProductionPlan` 只在注释掉的 `override_doctype_class` 里出现过。清理候选，不急。
+
+### 「生产能跑 ≠ 生产没问题」——生产 Error Log 里的真 bug
+
+近 30 天生产 Error Log 有 **6 条** key_test 报错，最近 2026-09-19，方法名「检查工单库存出错」：
+
+```
+File "apps/key_test/key_test/production_utils.py", line 255, in check_stock_for_work_order
+    "stock_uom": item.stock_uom
+AttributeError: 'WorkOrderItem' object has no attribute 'stock_uom'
+```
+
+- 触发者：工单页的「检查库存」按钮（`key_test.production_utils.check_stock_for_work_order`）。
+- 该 bug **两条线同源**（测试侧 `production_utils.py` 第 258 行是同一句），只是测试上没人点这个按钮（测试 Error Log 里无此报错）。
+- 所以：主链路能跑，但按钮级报错被 Error Log 收着；「能跑」掩盖了它。
+
+## 三个决策 → 实测结论
+
+1. **QR / 批号留哪套？** 默认**按生产来**（生产在跑、且它不依赖测试侧那些 hooks）；测试侧那套（`qr_utils` + 两个 doc_events + 全局 JS + 2 个命令）**单独议**——如果一并 port 进 main-new，生产会在下次 `git pull` 后开始在每次采购入库保存/提交时跑新的 QR 钩子，风险未经评估，故不作为默认。
+2. **B 档怎么取？** 已用证据定：**取生产侧**（理由见上「被 work_order_task 的新前端调用」）。例外是 `overrides.py`（两边都死）——取任一侧皆可，建议留生产侧保持与生产一致。
+3. **已搬走的功能是否留双份？** 不留（`work_order_task` 里已有 `overrides/` 全套；key_test 侧只保留被调用的后端）。
+
+## 已完成的动作（2026-10-08）
+
+| 动作 | 结果 |
+|---|---|
+| 备份测试线 | GitHub `backup/test-main-20261008` = `132c1d0` |
+| 补齐并推送生产线 | `production-backup` = `c87759a`（含 `on_session_creation` 修复） |
+| 备份 GitHub 旧 main | `backup/github-main-20261008` = `2612db4` |
+| **以生产为基线建新 main** | GitHub **`main-new`** = `c87759a` |
+| 清理测试机 Error Log 噪音 | 删掉 7 条探针报错（`zz_probe_report_patch` 相关，已复查 0 残留） |
+
+**切换命令（等你点头再做，或你自己做）**：
+
+```bash
+# 测试系统
+cd /home/frappe/frappe-bench/apps/key_test && git checkout main-new && git pull origin main-new
+# 生产系统（先把 remote 换成 SSH，否则 HTTPS 无凭证）
+git remote set-url origin git@github.com:keyapi/key_test.git
+cd /home/frappe/frappe-bench/apps/key_test && git checkout main-new && git pull origin main-new
+```
+切到 `main-new` 后：测试机会**删掉**那 41 个测试独有文件、并按生产的 hooks 走（QR 那两项在生产 hooks 里是注释状态 → 测试的 QR 钩子随之停用）；生产机则只是补上 `on_session_creation` 修复（与现状一致）。
+
+**注意**：`main-new` 未同步到 `main`（GitHub 默认分支仍是旧 `main` @ `2612db4`）。等你确认后再把默认分支指过去。
 
 ## 核对过的事实（避免重复调查）
 
