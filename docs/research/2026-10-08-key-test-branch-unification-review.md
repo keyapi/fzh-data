@@ -140,28 +140,45 @@ AttributeError: 'WorkOrderItem' object has no attribute 'stock_uom'
 
 | 动作 | 结果 |
 |---|---|
-| 备份测试线 | GitHub `backup/test-main-20261008` = `132c1d0` |
-| 补齐并推送生产线 | `production-backup` = `c87759a`（含 `on_session_creation` 修复） |
+| 备份测试线 | GitHub `backup/test-main-20261008` = `132c1d0`（测试侧那 41 个文件/QR 一套都在这条线上） |
 | 备份 GitHub 旧 main | `backup/github-main-20261008` = `2612db4` |
-| **以生产为基线建新 main** | GitHub **`main-new`** = `c87759a` |
-| 清理测试机 Error Log 噪音 | 删掉 7 条探针报错（`zz_probe_report_patch` 相关，已复查 0 残留） |
+| **统一线落到 `main`** | `main` = `6f0940d`（= 生产线基线 + 登录 hook 修复 + 下方 stock_uom 修复 + 删带点空文件），强制更新（旧 main 已备份） |
+| 两台服务器切到 `main` | 测试 + 生产均已 `git checkout -B main origin/main` + `clear-cache` + `bench restart`，验证通过（补丁仍在、登录 0.1x s、登录不再写元数据） |
+| 生产 remote 改 SSH | `git remote set-url origin git@github.com:keyapi/key_test.git`（原来 HTTPS 无凭证，`git pull` 会卡） |
+| 修复「检查工单库存出错」 | 见下节 |
+| 删掉 `key_test/sales_order_utils.py.` | 文件名带**结尾点**、0 字节 → 该路径在 Windows 上非法，会让 Windows 克隆/检出直接失败（Linux 无感） |
+| 清理测试机 Error Log 噪音 | 删掉 7 条探针报错（已复查 0 残留） |
 
-**切换命令（等你点头再做，或你自己做）**：
+**切换的副作用（已知、可回退）**：测试机切到 `main` 后，那 41 个测试独有文件被移除、QR/批号那套 hooks 停用（生产版 hooks 里本来就是注释状态）。要恢复测试侧那套 QR，从 `backup/test-main-20261008` 取码，并按「单独一次改动」评估（带上它会让生产下次 pull 后也开始跑新钩子）。
 
-```bash
-# 测试系统
-cd /home/frappe/frappe-bench/apps/key_test && git checkout main-new && git pull origin main-new
-# 生产系统（先把 remote 换成 SSH，否则 HTTPS 无凭证）
-git remote set-url origin git@github.com:keyapi/key_test.git
-cd /home/frappe/frappe-bench/apps/key_test && git checkout main-new && git pull origin main-new
-```
-切到 `main-new` 后：测试机会**删掉**那 41 个测试独有文件、并按生产的 hooks 走（QR 那两项在生产 hooks 里是注释状态 → 测试的 QR 钩子随之停用）；生产机则只是补上 `on_session_creation` 修复（与现状一致）。
+**遗留分支**（都可留可删）：`production-backup`（= `c87759a`，比 main 少一处修复）、`main-new`（= `c87759a`）、`fix/remove-on-session-creation`（测试线那版 hook 修复）、`fix/wo-item-stock-uom`（即当前 main）。
 
-**注意**：`main-new` 未同步到 `main`（GitHub 默认分支仍是旧 `main` @ `2612db4`）。等你确认后再把默认分支指过去。
+## 「检查工单库存出错」的修复（跨版本字段差异）
+
+**根因**：`production_utils.py:255` 在库存不足时直接取子表字段 `WorkOrderItem.stock_uom`，而该字段是 ERPNext **新版本**才有的：
+
+| 环境 | ERPNext | `Work Order Item.stock_uom` | 结果 |
+|---|---|---|---|
+| 测试 | 15.59.0 | **存在** | 一直正常 |
+| 生产 | 15.43.3 | **不存在** | `AttributeError`（Error Log：9/8 十条 + 9/19 六条） |
+
+命中条件：`skip_transfer` + `from_wip_warehouse` 且库存不足——所以只有生产、只在部分工单上炸，属于「能跑但按钮报错」。
+（与本仓库 `docs/solutions/workflow-issues/erpnext-version-api-compatibility.md` 同一类坑。）
+
+**修法**：改为从 Item 查 UOM——`frappe.db.get_value("Item", item.item_code, "stock_uom")`，两个版本都成立。
+
+**验证**：
+
+| 环境 | 方法 | 结果 |
+|---|---|---|
+| 测试 | console 跑 151 个 WIP 工单 | 0 异常；库存不足条目 UOM 正常带出（米/条） |
+| 生产 | 切换后 console 跑 300 个 WIP 工单 | **0 报错**；UOM 正常带出（米）；此后无新增「检查工单库存出错」 |
 
 ## 核对过的事实（避免重复调查）
 
 1. **测试侧 `key_test/fixtures/custom_field.json` 只含 Purchase Receipt 字段**，不含 2026-10-08 弹窗事故的那 6 个字段 → 弹窗修复**不会**因 key_test fixtures 复发（复发源是 `work_order_task` 的 fixtures，已修并合并）。
 2. 生产侧 `key_test/fixtures/` 目录是空的，但 `hooks.py` 里声明了 fixtures → `bench migrate` 时是 no-op（无害，但也意味着生产这些字段只靠 `after_migrate` 钩子安装）。
-3. 生产 remote 是 HTTPS 且服务器上无凭证 → `git push origin` 会卡 `could not read Username`；本次用显式 URL `git push git@github.com:keyapi/key_test.git <branch>` 推成功。切新 main 时建议把 remote 改成 SSH。
-4. 测试机上 `file_structure.md` 常驻未提交改动（`update_file_structure.sh` 的产物）——2026-10-08 差点被卷进我的提交，已拆出。
+3. 生产 remote 是 HTTPS 且服务器上无凭证 → `git push origin` 会卡 `could not read Username`；本次用显式 URL `git push git@github.com:keyapi/key_test.git <branch>` 推成功，随后已把生产 remote 正式改成 SSH。
+4. 测试机上 `file_structure.md` 常驻未提交改动（`update_file_structure.sh` 的产物）——2026-10-08 差点被卷进我的提交，已拆出；切换分支前把内容备份到测试机 `/tmp/file_structure.md.bak` 后丢弃（该文件在统一线里不存在）。
+5. 生产线里有个 `key_test/sales_order_utils.py.`（结尾带点、0 字节）——Windows 上非法路径，任何 Windows 克隆/检出该分支都会失败（`error: invalid path`）。统一线已删除。**结论：key_test 之前无法在 Windows 上克隆，就是它。**
+6. 测试机上另有别人的 `zz_json_probe`（API Server Script）在反复报 `module has no attribute 'parse_json'` / `__import__ not found`——不是本次改动引起；按仓库「`zz_` 用完即删」的约定，建议提醒对方清理。
