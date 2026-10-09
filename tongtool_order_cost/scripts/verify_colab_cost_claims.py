@@ -53,10 +53,20 @@ def active_source(text: str) -> str:
     return "\n".join(l for l in text.splitlines() if not l.strip().startswith("#"))
 
 
+def cell_with(cs: list[str], needle: str, nth: int = 0) -> int | None:
+    """按内容定位 cell（**不要按编号**：编号随增删漂移）。
+
+    2026-10-08 基线 = 227 cells / version 6944；2026-10-09 线上 = 224 cells /
+    version 7011（删除基线 cell 93/94/95 三个，其余逐字节相同 ⇒ 计算逻辑未变）。
+    """
+    hits = [i for i, s in enumerate(cs) if needle in s]
+    return hits[nth] if len(hits) > nth else None
+
+
 def check_notebook() -> None:
-    print("\n== Notebook 断言 ==")
+    print("\n== Notebook 断言（按内容定位，不按编号）==")
     cs = cells()
-    check(len(cs) == 227, "cell 数 == 227")
+    print(f"  [INFO] cell 数 = {len(cs)}（基线 227 / 线上 224；编号漂移不影响按内容定位）")
 
     # 只匹配"真会执行"的赋值（排除 `"""…"""` 块与注释行）——否则会命中已注释的
     # `gsheet_name_order = "2022年6月份销售报表"`（cell 66/111/128/144/195/199/214）。
@@ -79,43 +89,39 @@ def check_notebook() -> None:
     check(bool(act) and all(v == "通途订单202607" for _, v in act),
           f"cell 0–144 的活跃 gsheet_name_order 全为 '通途订单202607'（实得 {act}）")
 
-    # cell 128 的 0.001 注入 + 月列
-    c128 = cs[128]
-    check("df_order_cost.loc[filter_condition, '二次加工成本'] = 0.001" in c128,
-          "cell 128 存在 `二次加工成本 = 0.001` 注入")
-    check("二次加工成本多月202511" in "".join(cs[111:128]),
-          "cell 111 月列字面量含 二次加工成本多月202511")
+    # 0.001 注入
+    check(cell_with(cs, "df_order_cost.loc[filter_condition, '二次加工成本'] = 0.001") is not None,
+          "存在 `二次加工成本 = 0.001` 注入")
+    check(any("二次加工成本多月202511" in s for s in cs), "存在月列字面量 二次加工成本多月202511")
+    check(any("不要运行4.6.1" in s.replace(" ", "") for s in cs), "存在「不要运行4.6.1」纪律")
 
-    # cell 145 纪律
-    check("不要运行4.6.1" in cs[145].replace(" ", ""),
-          "cell 145 标题含「不要运行4.6.1」")
+    # 白名单（源码为 `ls_col_order_keep = \` 反斜杠续行，收尾 `]` 在行内）
+    i135 = cell_with(cs, "ls_col_order_keep =")
+    cols: list[str] = []
+    if i135 is not None:
+        s = cs[i135]
+        j = s.find("ls_col_order_keep")
+        k = s.find("[", j)
+        e = s.find("]", k)
+        cols = re.findall(r"'([^']+)'", s[k + 1:e])
+    check(len(cols) == 71, f"ls_col_order_keep 列数 == 71（实得 {len(cols)}）")
+    check("EN绍兴包装半成品成本" not in cols and "EN绍兴包装成品成本" not in cols,
+          "ls_col_order_keep 不含 EN绍兴包装半成品/成品成本（即非 FBA 侧会丢这两列）")
+    check("运营部当月是否新品" in cols and "运营部当月是否为新品" not in cols,
+          "ls_col_order_keep 用 '运营部当月是否新品'（少'为'），上游用 '运营部当月是否为新品'"
+          " ⇒ 名称不一致：白名单那列被 reindex 造出恒 0，真实列被丢")
 
-    # cell 135 白名单：源码为 `ls_col_order_keep = \` 换行后 `['订单号',`，收尾 `]` 在行内
-    m = re.search(r"ls_col_order_keep\s*=\s*(?:\\\s*)?\[(.*?)\]", cs[135], re.S)
-    if m:
-        cols = re.findall(r"['\"]([^'\"]+)['\"]", m.group(1))
-        check(len(cols) == 71, f"ls_col_order_keep 列数 == 71（实得 {len(cols)}）")
-        check("EN绍兴包装半成品成本" not in cols and "EN绍兴包装成品成本" not in cols,
-              "ls_col_order_keep 不含 EN绍兴包装半成品/成品成本（即非 FBA 侧会丢这两列）")
-        check("运营部当月是否新品" in cols and "运营部当月是否为新品" not in cols,
-              "ls_col_order_keep 用 '运营部当月是否新品'（少'为'），上游 cell 36/101 用 '运营部当月是否为新品'"
-              " ⇒ 名称不一致：白名单那列被 reindex 造出恒 0，真实列被丢")
-    else:
-        check(False, "能解析 ls_col_order_keep")
+    # 未定义变量 gsheet_name：2026-10-09 线上已删除那个 cell ⇒ 仅作 INFO
+    print(f"  [INFO] 'multi_df_sx_nodups' 出现在 cell: "
+          f"{[i for i, s in enumerate(cs) if 'multi_df_sx_nodups' in s]}（2026-10-09 起该 cell 已从线上删除）")
 
-    # cell 95 的未定义变量（静态）
-    if "gsheet_name" in cs[95]:
-        prior = "\n".join(cs[:95])
-        check(not re.search(r"^\s*gsheet_name\s*=", prior, re.M),
-              "cell 95 用到的 gsheet_name 未在 0–94 内赋值（静态）")
-
-    # 两遍跑法
-    check("df_order_cost_fba = df_order_cost.copy()" in "\n".join(cs[146:150]),
-          "cell 146 附近存在 df_order_cost_fba = df_order_cost.copy()")
-
-    # 合并键自 2026-02-03 起为单键（独立复核 2026-10-09 指出）
-    check(re.search(r"df_merged\s*=\s*df_to_merge\.groupby\(\s*\['订单号_公共部分'\]", cs[77]) is not None,
-          "cell 77 合并键 = 单键 订单号_公共部分（2026-02-03 起；双键仅存注释）")
+    # 两遍跑法 / 合并键（单键） / add_package_suffix
+    check(any("df_order_cost_fba = df_order_cost.copy()" in s for s in cs),
+          "存在 df_order_cost_fba = df_order_cost.copy()（FBA 两遍跑法）")
+    check(any(re.search(r"df_merged\s*=\s*df_to_merge\.groupby\(\s*\['订单号_公共部分'\]", s) for s in cs),
+          "合并键 = 单键 订单号_公共部分（2026-02-03 起；双键仅存注释）")
+    check(any("def add_package_suffix" in s for s in cs),
+          "存在 add_package_suffix（会给『松饼大沙发-放大版』补『包裹N』）")
 
 
 # ---------------------------------------------------------------- Google Sheets

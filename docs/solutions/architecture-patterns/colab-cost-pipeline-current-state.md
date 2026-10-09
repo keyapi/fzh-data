@@ -26,9 +26,11 @@ related_components: [colab_kit, tongtool_order_cost, warehouse_restock, missing_
 
 ## 0. 基线与事实
 
-- **Notebook**：`1T5hZYvnJhS8xzORb3tuYRoXXWn9uSzNl`；线上 `modifiedTime=2026-10-08T02:16:38.425Z`、`version=6944`、**227 cells**、1 425 217 bytes。
-- **本地同步副本**（`G:/我的云端硬盘/Colab Notebooks/成本核算/透视表订单/处理通途订单/20250409 合并en成本 测算成本核算20250110 尺寸提取 产品名称-品类 海外仓成本.ipynb`）与该版本**同大小同时间戳** ⇒ 本档案以其为准。
-- 改 notebook 前：`uv run python colab_kit/colab_kit.py guard <ID> --expect 2026-10-08T02:16:38.425Z`。
+- **Notebook**：`1T5hZYvnJhS8xzORb3tuYRoXXWn9uSzNl`。
+- **本档案引用的 cell 编号 = 2026-10-08 基线**：`version=6944`、`modifiedTime=2026-10-08T02:16:38.425Z`、**227 cells**、1 425 217 bytes（本地同步副本与其同大小同时间戳）。
+- **⚠ 版本漂移（2026-10-09）**：线上变为 `version=7011`、`modifiedTime=2026-10-09T03:28:32Z`、**224 cells**。逐 cell 比对：**唯一变化 = 删除基线 `cell 93/94/95` 三个**（2 个 markdown 的 `4.3.0`/`4.3.0.2` 说明 + 1 个 code cell —— **正是本文档 §4 缺陷 #9 里那个"用未定义变量 `gsheet_name`"的 cell**）；**其余 cell 逐字节相同 ⇒ 成本/合并/0.001/白名单等计算逻辑一字未变**。
+  - **编号映射**：`> 95` 的引用需 **−3**。例：白名单 `135 → 132`、`0.001` 注入 `128 → 125`、月列 `111 → 108`、`不要运行4.6.1` `145 → 142`、`138 → 135`；`cell 72/77`（< 95）不变。**自检脚本已改为按内容定位，不再依赖编号。**
+- 改 notebook 前：`uv run python colab_kit/colab_kit.py guard <ID> --expect <fetch 打印的 modifiedTime>`（**先 fetch 拿当前值**，不要再用 6944/7011 这些过时值）。
 - **当前配置的账期是 202607**（不是 202606）：`gsheet_name_order="通途订单202607"`、`worksheet_name_order="2026年7月订单"`（cell 56）/`"2026年7月FBA订单"`（cell 138）、`col_name_select_exchange_rate="202607"`。
 - **执行是线性的**（cell 0→226）；`gsheet_name_order`/`worksheet_name_order` 在中途被重新赋值（36/56/138）。
 - `cell 0` **内嵌 GCP service-account dict**（两组凭证）——**不得复制其值**；仓库标准是 gitignore 的 `secrets/gsheets-service-account.json`（同一 SA）。
@@ -90,7 +92,7 @@ related_components: [colab_kit, tongtool_order_cost, warehouse_restock, missing_
 | 75–77 | §4.2.2c 合并 | — | xlsx df_merged | 订单号_公共部分 | — | 活；`groupby` 求和 售价/售价*汇率/运费；产品名前加 `'已合并多行 '` |
 | 78–79 | 回填 | — | — | 订单号_公共部分 | — | 活 |
 | 82–92 | §4.2.3 tiktok | — | — | 渠道,通途SKU,电话,订单号_公共部分,发货数量 | — | 活（`渠道∈['tiktok','TiktokUS']`）；`assign_merge_group` 按 (电话,sku_base)，leader=suffix==1；c89 正则 `([A-Za-z]+-\d{18})` |
-| **95** | §4.3.0.2 皮壳成本平均 | — | **`gsheet_name`（未定义变量！）/`皮壳成本平均202409-…`** + xlsx | 成本月份,品类尺寸面料编码 | `ls_month_average=['202409','202410','202411']` | 活；`replace(0,np.nan)`；**`gsheet_name` 与 `multi_df_sx_nodups` 在 0–98 内均未定义** |
+| ~~95~~ | §4.3.0.2 皮壳成本平均 | — | — | 成本月份,品类尺寸面料编码 | `ls_month_average=['202409','202410','202411']` | **已于 2026-10-09 从线上删除**（与 2 个 md 说明一起，见 §0 版本漂移）；它曾用未定义变量 `gsheet_name`/`multi_df_sx_nodups`（原缺陷 #9） |
 | **97** | §4.3.0.2.9 | — | — | — | — | **全注释 = dead** |
 | 98 | §4.3.0.3.0 标题 | — | — | — | — | md |
 
@@ -192,7 +194,7 @@ related_components: [colab_kit, tongtool_order_cost, warehouse_restock, missing_
 | 6 | cell 72 / 75 / 77 | 合并多行：**合并键自 2026-02-03 起是单键 `订单号_公共部分`**（`cell 75` 候选筛选 + `cell 77` `groupby`；双键只留在注释与 `cell 75` 取首行处）；触发条件还要 `包含包裹`——而 **`包含包裹`（`cell 72`）是按双键 `(订单号_公共部分, 平台SKU_统一)` 算的**，且 `cell 72` 的 `add_package_suffix(['松饼大沙发-放大版'])` **会给品名补 包裹1/2/3**；tiktok 分支另有 `split('-')[0]` / 结尾数字后缀 | 单键会把**平台 SKU 不同**的多行并成一行（7 月实测）。**202606/202607 实测（见 §8）：单键松散 262 组/1386 行 与 220 组/1621 行；现状实际合并 11 组/23 行 与 12 组/24 行（写回表 `已合并多行` = 地面真值）；业务候选 20 / 24 组** |
 | 7 | cell 111 | 月列硬编码；来源编码靠 ws 名包含关系；**`测算…` ws 被过滤器排除** ⇒ `if_use_test_cost` 一旦打开会丢加工成本 | 历史"补丁摞补丁"易踩 |
 | 8 | cell 0 | `write_df_to_gsheet` **吞写异常** | 写失败静默 |
-| 9 | cell 95 | 用**未定义变量 `gsheet_name`**（`multi_df_sx_nodups` 亦未定义） | 若被运行会 NameError（高概率） |
+| 9 | cell 95 | ~~用未定义变量 `gsheet_name`（`multi_df_sx_nodups` 亦未定义）~~ | **已消解（2026-10-09）**：线上已把该 cell 与 2 个 md 说明一并删除（见 §0 版本漂移）；自检脚本已确认 `multi_df_sx_nodups` 不再出现于任何 cell |
 | 10 | cell 66 | 品类/面料目录**硬编码 + GS + 李惠表 三源**，自带 TODO | 三源漂移 |
 | 11 | 全链 | 大量字符串归一化 hack（`超柔水晶绒→漂白荷兰绒`、`狗床→牛津布`、`金绒→圆滚靠枕`、尺寸抽 `\d+\*\d+` 降序取首…） | 与订单侧不同步即静默 mismatch |
 | 12 | 全链 | `drop(errors='ignore')` / `fillna(0)` / `errors='coerce'` / merge 命中数只 print 不断言 | 静默丢行/丢列 |
@@ -279,6 +281,7 @@ related_components: [colab_kit, tongtool_order_cost, warehouse_restock, missing_
 ### 8.3 ⚠ 新风险：`订单号_公共部分` 会退化成「平台前缀」⇒ 单键分组可跨订单塌并
 - 实测（写回表口径；2026-10-09 第三轮复核后精确化）：**完全不含数字**的键 —— 202606 **13 组 / 782 行**、202607 **12 组 / 1151 行**。逐键（行数，202606 / 202607）：`OS` **476 / 621**、`PBUS` 161 / 208、`''`(空) 83 / 175、`WM` 20 / 33、`OSFD` 8 / 59、`WOM` 8 / 30、`DY-LAPW` 8 / 3、`ETSYUS` 5 / 9、`Tod` 5 / 2、`JYWM` 1 / 9；另有单月出现 `EMAG` 4、`DY-LACS` 2、`DY-PPWS` 1、`CheckDE-FHUUMBQ/FYRBHUG` 各 1。
 - **注意 `OS` 的 621 行是 202607 的数**（202606 为 476 行）。
+- **202607 已在用户重跑后复测（2026-10-09）**：`写回2026年7月订单` = **9579 行 / 166 列 / `已合并多行` 12 / 多 SKU 组 220 / 无数字键 11 组**（与重跑前基本一致 ⇒ 重跑未改变口径结论）；`写回2026年7月FBA订单` = 1653 行 / 95 列 / 0 已合并 / **合并辅助列不存在**（在新数据上再次确认 FBA 不经合并）。
 - 例：`OS` 的真实 `订单号` 是 `OS-476580479`、`OS-477644941`…（OSTKUS 全站订单塌成一组）；**`DY-LAPW-24868` 本身是完整单号、未塌进 `DY-LAPW`**（`DY-LAPW` 只是另外存在的退化键形态）。
 - **待核实（第三轮）已定案（第四轮）**：`TTCozyDozy`(54 行)/`TTBNKC`(21 行) **行数属实**，但它们的 **`订单号_公共部分` = 空串 `''`**（真实订单号形如 `TTCozyDozy-577456067662615321`）⇒ 归入**空键桶**，而不是归到 `TTCozyDozy` 这个键。即：复核方的**数对、归属说偏**；我方先前"写回表无该键"也对 —— 两者不矛盾。
 - **空键桶构成（202607）**：`''` 共 **175 行**，其中 `TTCozyDozy` 54 + `TTBNKC` 21 + 其余为同类（UUID/平台前缀被 `get_order_common` 判空）。
