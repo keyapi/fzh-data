@@ -247,6 +247,17 @@ def check_gs() -> None:
               == counts["写回2026年6月FBA订单和非FBA订单"],
               "行数恒等式：非FBA + FBA == 最终合并表")
 
+    # 合并规模（地面真值：写回表「已合并多行」行数；见档案 §8 勘误）
+    for book, ws, expect in [("通途订单202606", "写回2026年6月订单", 11),
+                             ("通途订单202607", "写回2026年7月订单", 12)]:
+        v = fetch(book, ws)
+        if v is None:
+            skip(f"{ws} 已合并多行")
+            continue
+        i = col_index(v[0], "产品名称")
+        n = sum(1 for r in v[1:] if i is not None and i < len(r) and r[i].startswith("已合并多行"))
+        check(n == expect, f"{book}/{ws} 已合并多行 == {expect}（实得 {n}）")
+
     v = fetch(CFO_BOOK, "订单发货仓库对应成本来源")
     if v:
         rows = [r for r in v[1:] if any(str(x).strip() for x in r)]
