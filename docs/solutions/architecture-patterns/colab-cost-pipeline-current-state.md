@@ -28,7 +28,7 @@ related_components: [colab_kit, tongtool_order_cost, warehouse_restock, missing_
 
 - **Notebook**：`1T5hZYvnJhS8xzORb3tuYRoXXWn9uSzNl`。
 - **本档案引用的 cell 编号 = 2026-10-08 基线**：`version=6944`、`modifiedTime=2026-10-08T02:16:38.425Z`、**227 cells**、1 425 217 bytes（本地同步副本与其同大小同时间戳）。
-- **⚠ 版本漂移（2026-10-09）**：线上变为 `version=7011`、`modifiedTime=2026-10-09T03:28:32Z`、**224 cells**。逐 cell 比对：**唯一变化 = 删除基线 `cell 93/94/95` 三个**（2 个 markdown 的 `4.3.0`/`4.3.0.2` 说明 + 1 个 code cell —— **正是本文档 §4 缺陷 #9 里那个"用未定义变量 `gsheet_name`"的 cell**）；**其余 cell 逐字节相同 ⇒ 成本/合并/0.001/白名单等计算逻辑一字未变**。
+- **⚠ 版本漂移（2026-10-09，用户手动删除）**：线上变为 `version=7011`、`modifiedTime=2026-10-09T03:28:32Z`、**224 cells**。逐 cell 比对：**唯一变化 = 删除基线 `cell 93/94/95` 三个**（2 个 markdown 的 `4.3.0`/`4.3.0.2` 说明 + 1 个 code cell）。**归属：用户手动删除，且该 cell 从不被点击执行** —— 有独立佐证：被删的 code cell 里用了**未定义变量 `gsheet_name`**（及 `multi_df_sx_nodups`），**若执行必然 `NameError`** ⇒ 反证它长期未被运行。**其余 cell 逐字节相同 ⇒ 成本/合并/`0.001`/白名单等计算逻辑一字未变**。
   - **编号映射**：`> 95` 的引用需 **−3**。例：白名单 `135 → 132`、`0.001` 注入 `128 → 125`、月列 `111 → 108`、`不要运行4.6.1` `145 → 142`、`138 → 135`；`cell 72/77`（< 95）不变。**自检脚本已改为按内容定位，不再依赖编号。**
 - 改 notebook 前：`uv run python colab_kit/colab_kit.py guard <ID> --expect <fetch 打印的 modifiedTime>`（**先 fetch 拿当前值**，不要再用 6944/7011 这些过时值）。
 - **当前配置的账期是 202607**（不是 202606）：`gsheet_name_order="通途订单202607"`、`worksheet_name_order="2026年7月订单"`（cell 56）/`"2026年7月FBA订单"`（cell 138）、`col_name_select_exchange_rate="202607"`。
