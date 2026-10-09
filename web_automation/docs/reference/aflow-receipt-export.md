@@ -16,6 +16,8 @@ status: scripted-and-verified
 
 本文件是耐久产物；`.playwright-mcp/` 里的截图/DOM dump 是临时的。
 
+导出完成后，用同一发起窗的 OA API 结果对审批编号、审批状态、账期日期、销售账户。Excel「账期明细」常只有「N个附件」，文件名以 API 为准。只下了 Excel、没和 API 对过，不算这个月钉钉侧已经核对完。
+
 ## 入口与登录
 
 - 目标页：`https://aflow.dingtalk.com/dingtalk/web/query/dashboard?dinghash=aflowSetting#/aflowSetting/dataManage?tabKey=default`
