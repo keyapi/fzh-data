@@ -113,6 +113,10 @@ def check_notebook() -> None:
     check("df_order_cost_fba = df_order_cost.copy()" in "\n".join(cs[146:150]),
           "cell 146 附近存在 df_order_cost_fba = df_order_cost.copy()")
 
+    # 合并键自 2026-02-03 起为单键（独立复核 2026-10-09 指出）
+    check(re.search(r"df_merged\s*=\s*df_to_merge\.groupby\(\s*\['订单号_公共部分'\]", cs[77]) is not None,
+          "cell 77 合并键 = 单键 订单号_公共部分（2026-02-03 起；双键仅存注释）")
+
 
 # ---------------------------------------------------------------- Google Sheets
 _gc = None
@@ -199,6 +203,16 @@ def check_gs() -> None:
         joined = " ".join(x for row in v for x in row)
         check("importBOMCostList!$N:$N" in joined and "importBOMCostList!$Y:$Y" in joined,
               "import皮壳成本 用 INDEX(importBOMCostList!$N/$R/$X, MATCH(码, $Y)) 取 EN 值")
+
+    imp_full = fetch(key2, "import皮壳成本")
+    if imp_full:
+        coded = [r for r in imp_full[1:] if r and r[0].strip()]
+        uniq = {r[0].strip() for r in coded}
+        no_tpl = sum(1 for r in coded if not (len(r) > 1 and r[1].strip()))
+        check(len(coded) == 885, f"import皮壳成本 有码行 == 885（实得 {len(coded)}）")
+        check(len(uniq) == 868, f"import皮壳成本 唯一编码 == 868（实得 {len(uniq)}）")
+        check(len(coded) - len(uniq) == 17, f"import皮壳成本 重复行 == 17（实得 {len(coded) - len(uniq)}）")
+        check(no_tpl == 161, f"import皮壳成本 无 EN 重量模板物料号 == 161（实得 {no_tpl}）")
 
     sh = fetch(SX_BOOK, "皮壳成本平均202409-202410-202411（用于通途订单202502）", "A1:V3")
     if sh:
