@@ -25,6 +25,7 @@ uv run python web_automation/scripts/dispatch.py tongtu.orderdetail.export -- --
 
 # 3) EN「上传通途订单Excel」（列表入口 process_order_excel_for_costs，base64 进出、不落库）
 #    产出「EN上传Cost Review预估尾程 只用尾程 通途非FBA订单YYYYMM <ts>.xlsx」
+#    上传入口已兼容：通途直接导出的 .zip（自动解压取首个表）/ 未清表头 .xlsx（自动定位含「执行发货人」的表头行）/ 已清表头 .xlsx
 
 # 4) 核验 EN：needs=1 行数 / 来源分布 / 仍缺多少（见下「覆盖率口径」）
 
