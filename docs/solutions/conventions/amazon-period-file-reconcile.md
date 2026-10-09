@@ -3,7 +3,7 @@ okf: v0.1
 type: Reference
 title: Amazon 账期按账号对账（NAS + 钉钉 + 赛狐结算组）
 date: 2026-09-10
-last_updated: 2026-09-10
+last_updated: 2026-10-09
 category: conventions
 module: dingtalk_oa_approval
 problem_type: convention
@@ -61,6 +61,12 @@ NAS `{账期桶}/{人名}/` 是钉钉**提交人**。店负责人是 Google 表�
 **9. 本机路径和真名不进 git。** 缓存/核算目录用 `DINGTALK_OA_DATA`、`DINGTALK_OA_WORK`；NAS 根用 `NAS_FINANCE_PERIOD_ROOT`；本地同步盘账期根用 `LOCAL_NAS_PERIOD_ROOT`（未设即报错）。NAS 账号用 `NAS_ADMIN_USER` / `NAS_SSH_USER` / `NAS_USERNAME`（只用最后一个会警告，它可能看不见「财务部」共享），只写在 `NAS_API/.env`。不要把含人名的磁盘路径、FileStation 路径或 NAS 账号写进脚本。
 
 **10. 算新月前先跨月剔除。** 钉钉只能按**发起时间**导出，迟交单会混进下个月的导出。财务共享表「钉钉账期提交时间不对挪动记录」登记这些行；算某个账期月时，用 `late_submission_keys.py --period <YYYY-MM>` 生成剔除集，再交给 `filter_export_by_period.py --exclude-keys`。两端都由 `ding_xlsx.build_key()` 现算唯一键 `审批编号|账期日期|销售账户|销售额`，**不要**直接用表里那列「唯一键」——金额 `str()` 出来是 `0` 还是 `0.0` 取决于 dtype，会静默漏剔除。规范：[late-submission-registry.md](../../../dingtalk/dingtalk_oa_approval/docs/reference/late-submission-registry.md)。
+
+**11. 钉钉和赛狐并存，每月两边都对。** 赛狐 `groupPage` 只覆盖它已经同步、且结算结束日在该月的组。API 故障、延迟、或以后停用赛狐时，漏交与填错仍以钉钉为准：OA API 读表单，aflow Excel 按审批编号交叉，差集必须列出来。2026-10-09 发起窗 9/1–10/9，两边 9 月 Amazon 都是 74 行、61 个审批编号。发起从该月 1 日看到今天。审批中算已提交。
+
+**12. 手填销售额、txt 打款、赛狐打款是三个数。** 没读 txt 之前不要宣布金额正确。txt 的 `total-amount`（注意欧式逗号）是 Amazon 打款；表上销售额可以不是这个数。赛狐 `transferAmount` 只用来判断「有没有打款所以要催」，不用来改钉钉销售额。
+
+**13. 催办用人名，进 git 不用。** 对话和给财务的表用渠道账号表 `运营人员YYYYMM` 的真人名（无当月列则用最新列并写明）。仓库文档用渠道账号 + 审批编号；必须点人时用「拼音首字母 + 发起人 UserID」，不要只写首字母（会撞车）。真人名文件只放 `DINGTALK_OA_DATA`（已 gitignore 的 `data/` 或仓库外缓存）。
 
 ## 结算周期基线
 

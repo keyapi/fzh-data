@@ -16,14 +16,28 @@ resource: web_automation/scripts/dispatch.py
 
 | 段 | 做什么 | 入口 |
 |----|--------|------|
-| OA API | 在职发起人附件、实例详情、核算补行 | `fetch_attachments.py`（`--end` 默认今天） |
-| aflow 浏览器 | 管理后台 Excel；离职发起人附件（API `userNotExist`） | `dingtalk.aflow.receipt.export` / `.attachments` |
+| OA API | 在职发起人表单（账期日期、销售账户、附件文件名）、实例详情、附件字节 | `get_instance` / `fetch_attachments.py`（`--end` 默认今天） |
+| aflow 浏览器 | 同一发起窗的管理后台 Excel，用来和 API 对审批编号；离职发起人附件（API `userNotExist`） | `dingtalk.aflow.receipt.export` / `.attachments` |
 | 账期月切开 | 导出按**发起时间**，定稿按**账期日期**自然月 | `filter_export_by_period.py` |
 | NAS 归档 | 只走 FileStation；账号/URL/密码只在 `NAS_API/.env` | `nas_upload_api21.py`（API 缓存）、`archive_aflow_to_nas.py`（浏览器缓存） |
 
 浏览器脚本在 `web_automation/`（PR 227）。本模块不复制那份代码，只约定目录与后续步骤。
 
 选择器、登录（`.env` 账号密码 → 陌生设备短信一次 → `--channel chrome`）、SPA hash 必须 `reload`：见 `web_automation/docs/reference/aflow-receipt-export.md`。
+
+## 每月：API、Excel、赛狐三条线
+
+钉钉运营提交和赛狐结算组在一段时间内都要留着。赛狐出问题、同步不全、或以后不用赛狐时，仍然要能只靠钉钉判断「交了没有、填错没有」。
+
+1. **钉钉 API**（不下附件也能做）：发起时间从该月 1 日到今天。保留完成和审批中，去掉拒绝和已撤销。读每行账期日期、销售账户、附件文件名。
+2. **aflow Excel**：同一发起窗自己导出（用户刚下的同一窗口 xlsx 可以先用）。按 21 位审批编号（文本）对 API：行数、状态、账期日期、销售账户。差集写出来，不要只报「差不多」。导出格里的「账期明细」常常只是「1个附件」，文件名以 API 表单为准。
+3. **赛狐**（有则对，没有也不要停）：`groupPage`，`timeType=settlementEndTime`，`isSite=true`，结算结束日在该自然月。这是赛狐已经同步的组，不是亚马逊全部账期。有打款却对不上钉钉行的，才是催交；打款 0 先不催。别名先对上再判漏（熙锦 `AMZBJXJ*` = Jalnodd，`AMZTOODDLY*` = TOODDLY-Daneey）。
+4. **填错**：同一张单上，账期日期或销售账户和 txt 文件名不一致。这是改单，不是漏交。
+5. **手填金额先不要和赛狐打款比。** 表上「销售额」、txt 的 `total-amount`、赛狐 `transferAmount` 各是各的。金额是否填对，等附件 txt 的打款额。2026-10-09 这一轮没有下 txt，所以没有核销售额。
+
+催办对话用渠道账号表真人名（没有 `运营人员YYYYMM` 当月列就用最新列，并写明列名）。进 git 不写真名。真人名只放 `DINGTALK_OA_DATA`。
+
+2026-10-09：发起 9/1–10/9，API 与 15:13 Excel 的 9 月 Amazon 都是 74 行（完成 62、审批中 12）、61 个审批编号，集合相同。9/1–9/3 没有账期落在 9 月的 Amazon 行。
 
 ## 为什么还要走浏览器
 

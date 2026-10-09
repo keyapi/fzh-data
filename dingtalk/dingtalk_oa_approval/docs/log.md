@@ -6,6 +6,12 @@ title: dingtalk_oa_approval 变更日志
 
 # 变更日志
 
+## 2026-10-09（钉钉 API / Excel / 赛狐三条线，金额先不混）
+
+- 每月核对写成手册一节：API 读表单 → aflow Excel 按审批编号交叉 → 再对赛狐结算结束日。赛狐组不是钉钉提交的替代清单。
+- 2026-10-09 实测：发起 9/1–10/9，API 与 15:13 Excel 的 9 月 Amazon 都是 74 行、61 个审批编号。审批中计入。手填销售额没有和 txt 打款核对；三个金额不要互代。
+- 催办对话用渠道账号表真人名；进 git 不写真名。真人名只放 `DINGTALK_OA_DATA`。
+
 ## 2026-09-11（跨月剔除补上生成端 + 修键不对称 + NAS 账号出声）
 
 - **新增** `late_submission_keys.py`：读 Google 表「钉钉账期提交时间不对挪动记录」→ 按 `--period` 生成 `--exclude-keys` 文件。此前只有消费端（`filter_export_by_period.py`），从表里导出键这一步是手工的。
