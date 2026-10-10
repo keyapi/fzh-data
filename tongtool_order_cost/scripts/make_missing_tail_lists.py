@@ -22,10 +22,13 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import re
 import sys
 from pathlib import Path
 
 import pandas as pd
+
+_REISSUE_RE = re.compile(r"-M\d+$", re.IGNORECASE)
 
 # —— 账单来源判定（按序，子串匹配「邮寄方式」链；OSTK 必须排在通用 FedEx 之前）——
 SUPPLIER_RULES = [
@@ -39,15 +42,26 @@ SUPPLIER_RULES = [
 DETAIL_COLS = [
     "序号", "账单来源", "优先级", "包裹号", "跟踪号", "发货日期", "发货时间",
     "发货方式", "邮寄方式", "渠道", "渠道账号", "通途SKU", "平台SKU",
-    "订单号", "发货数量", "历史预估尾程费用", "备注",
+    "订单号", "发货数量", "历史预估尾程费用", "是否补发", "备注",
 ]
 
 
-def classify(chain: str) -> tuple[str, str, str]:
+def is_reissue(row: pd.Series) -> bool:
+    """补发单：是否补发货=是 或 订单号以 -M<数字> 结尾。"""
+    flag = str(row.get("是否补发货", "")).strip()
+    if flag in ("是", "1", "True", "true"):
+        return True
+    return bool(_REISSUE_RE.search(str(row.get("订单号", ""))))
+
+
+def classify(chain: str, reissue: bool = False) -> tuple[str, str, str]:
     """返回 (账单来源, 优先级, 说明)。"""
     s = str(chain)
     for kw, name, prio, note in SUPPLIER_RULES:
         if kw in s:
+            # OSTK/Wayfair 常态是平台付→不追；但**补发单**可能用自有尾程 → 需追（待确认）
+            if kw == "OSTK" and reissue:
+                return "平台渠道补发（需确认尾程）", "待确认", "补发货→可能用自有尾程，需确认是否追"
             return name, prio, note
     low = s.lower()
     if "fedex" in low:
@@ -63,8 +77,10 @@ def _tracking(row: pd.Series) -> str:
     return ""
 
 
-def _note(row: pd.Series, estimate, supplier: str) -> str:
+def _note(row: pd.Series, estimate, supplier: str, reissue: bool) -> str:
     notes = []
+    if reissue:
+        notes.append("补发单→若用自有尾程需追")
     if supplier.startswith("平台付"):
         notes.append("疑似平台付尾程，确认后可不追")
     if not _tracking(row):
@@ -80,7 +96,8 @@ def build_rows(miss: pd.DataFrame) -> pd.DataFrame:
     rows = []
     for parcel, g in miss.groupby("包裹号", sort=False):
         first = g.iloc[0]
-        supplier, prio, _ = classify(first.get("邮寄方式", ""))
+        re_ = bool(g.apply(is_reissue, axis=1).any())
+        supplier, prio, _ = classify(first.get("邮寄方式", ""), re_)
         est = round(float(g["历史预估尾程费用"].fillna(0).sum()), 2) if g["历史预估尾程费用"].notna().any() else None
         rows.append({
             "账单来源": supplier,
@@ -98,7 +115,8 @@ def build_rows(miss: pd.DataFrame) -> pd.DataFrame:
             "订单号": " / ".join(sorted({str(x) for x in g["订单号"].dropna().astype(str)})),
             "发货数量": int(g["发货数量"].fillna(0).sum()) if "发货数量" in g else "",
             "历史预估尾程费用": est,
-            "备注": _note(first, est, supplier),
+            "是否补发": "是" if re_ else "",
+            "备注": _note(first, est, supplier, re_),
         })
     out = pd.DataFrame(rows)
     # 排序：优先级(自定义) → 账单来源 → 发货日期 → 发货时间 → 包裹号
@@ -116,7 +134,7 @@ def _write_sheet(w, df: pd.DataFrame, name: str, freeze="A2"):
     widths = {"序号": 5, "账单来源": 26, "优先级": 8, "包裹号": 20, "跟踪号": 20,
               "发货日期": 11, "发货时间": 9, "发货方式": 16, "邮寄方式": 30,
               "渠道": 12, "渠道账号": 16, "通途SKU": 22, "平台SKU": 22,
-              "订单号": 30, "发货数量": 9, "历史预估尾程费用": 15, "备注": 40}
+              "订单号": 30, "发货数量": 9, "历史预估尾程费用": 15, "是否补发": 8, "备注": 40}
     for i, c in enumerate(df.columns, start=1):
         ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = widths.get(c, 14)
 
@@ -145,9 +163,9 @@ def main() -> int:
     print(f"needs=1: {len(n1)} 行 | 缺口(物流商运费=0): {len(miss)} 行 / {miss['包裹号'].nunique()} 包裹")
 
     allrows = build_rows(miss)
-    # 拆：待追（非平台付） / 无需追（平台付）
-    no_chase = allrows[allrows["账单来源"].astype(str).str.startswith("平台付")].copy()
-    to_chase = allrows[~allrows.index.isin(no_chase.index)].reset_index(drop=True)
+    # 拆：待追（非「不追」） / 无需追（平台付·非补发）
+    no_chase = allrows[allrows["优先级"] == "不追"].copy()
+    to_chase = allrows[allrows["优先级"] != "不追"].reset_index(drop=True)
     to_chase["序号"] = range(1, len(to_chase) + 1)
     to_chase = to_chase[DETAIL_COLS]
     no_chase = no_chase.reset_index(drop=True)
