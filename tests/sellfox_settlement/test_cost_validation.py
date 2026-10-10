@@ -21,6 +21,20 @@ def test_missing_sku_does_not_claim_order_item_coverage():
     assert match_transaction({"order_id": "O", "sku": "OTHER"}, orders)["status"] == "sku_unmatched"
 
 
+def test_nbsp_in_bill_sku_matches_the_same_platform_sku():
+    orders = [{"name": "O", "platform_order_id": "O", "sale_account": "A", "order_items": [{"platform_sku": "DUS-CYForest -60CM"}]}]
+    assert match_transaction({"order_id": "O", "sku": "DUS-CYForest\u00a0-60CM", "account": "A"}, orders)["status"] == "matched"
+
+
+def test_account_scope_does_not_compare_another_shops_sku():
+    orders = [
+        {"name": "other", "sale_account": "AMZTOODDLYUS", "platform_order_id": "O", "order_type": "FBA", "order_items": [{"platform_sku": "OTHER-SKU"}]},
+        {"name": "same", "sale_account": "AMZDANEEYUS", "platform_order_id": "O", "order_type": "FBA", "order_items": [{"platform_sku": "BILL-SKU"}]},
+    ]
+    assert match_transaction({"order_id": "O", "sku": "BILL-SKU", "account": "AMZDANEEYUS", "fulfillment": "FBA"}, orders)["status"] == "matched"
+    assert match_transaction({"order_id": "O", "sku": "BILL-SKU", "account": "AMZMISSING", "fulfillment": "FBA"}, orders)["status"] == "order_unmatched"
+
+
 def test_same_id_multiple_accounts_is_ambiguous():
     orders = [{"name": a, "sale_account": a, "platform_order_id": "O", "order_items": [{"platform_sku": "S"}]} for a in ["A", "B"]]
     assert match_transaction({"order_id": "O", "sku": "S"}, orders)["status"] == "ambiguous_account"

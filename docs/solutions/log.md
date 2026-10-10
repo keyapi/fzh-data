@@ -8,6 +8,7 @@ tags: [solutions, log]
 # 变更日志
 
 ## 2026-10-10（Amazon 非 V2 报税技术验证）
+- **更新**: `tooling-decisions/amazon-non-v2-tax-technical-validation.md` —— 父子单只加拆单；产品成本为 0 的两种形状（原单缺仓库/发货方式，或两边发货方式仍空）；尾程先实际物流商、历史预估只是第三级；FBA 缺单先分购买日和 SKU；结算净额含期初期末。明细留在仓库外清单，不入库。
 - **新增**: `tooling-decisions/amazon-non-v2-tax-technical-validation.md` —— 2026-08 非 V2 CSV/PDF 的只读技术验证已经钉死的边界：行数守恒、退款 `other` 是合并桶、PDF 净额一致不等于科目完整、账号匹配不是申报法人、当前 BOM 不是 8 月历史成本、银行实际到账仍缺输入、业务明细不入库。三份调研保留实测计数。Codex 续做时先读这篇，不要把探针结果写成申报数。
 
 ## 2026-10-10（外部问卷通道：单份仓库 MD + Notion）

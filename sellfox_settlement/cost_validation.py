@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import unicodedata
 from collections import Counter
 from pathlib import Path
 
@@ -29,9 +30,14 @@ def base_order_id(value):
     return re.sub(r"_\d+$", "", str(value or "").strip())
 
 
+def normalize_sku(value):
+    """Treat Unicode spaces as the same SKU character. Amazon exports sometimes use NBSP."""
+    return "".join(" " if unicodedata.category(ch) == "Zs" else ch for ch in str(value or "")).strip()
+
+
 def match_transaction(row, orders):
     oid = str(row.get("order_id") or "").strip()
-    sku = str(row.get("sku") or "").strip()
+    sku = normalize_sku(row.get("sku"))
     candidates = [o for o in orders if base_order_id(o.get("platform_order_id")) == oid]
     account = row.get("account")
     if account:
@@ -45,10 +51,10 @@ def match_transaction(row, orders):
     split = [o for o in candidates if o.get("platform_order_id") != oid]
     if exact and split:
         return {**result, "status": "ambiguous_parent_child"}
-    items = [i for o in candidates for i in o.get("order_items", []) if i.get("platform_sku") == sku and sku]
+    items = [i for o in candidates for i in o.get("order_items", []) if normalize_sku(i.get("platform_sku")) == sku and sku]
     if not items:
         return {**result, "status": "sku_unmatched" if sku else "sku_missing"}
-    selected = [o for o in candidates if any(i.get("platform_sku") == sku for i in o.get("order_items", []))]
+    selected = [o for o in candidates if any(normalize_sku(i.get("platform_sku")) == sku for i in o.get("order_items", []))]
     en_fulfillment = {"FBA" if o.get("order_type") == "FBA" else "FBM" for o in selected if o.get("order_type") in {"FBA", "FBM", "自发货"}}
     if row.get("fulfillment") in {"FBA", "FBM"} and en_fulfillment and en_fulfillment != {row["fulfillment"]}:
         return {**result, "status": "fulfillment_conflict"}
@@ -62,7 +68,8 @@ def match_transaction(row, orders):
             "en_order_names": [o["name"] for o in selected]}
 
 
-def summarize_coverage(rows, orders, supplemental_orders=None):
+def summarize_coverage(rows, orders, supplemental_orders=None, account_by_file=None):
+    account_by_file = account_by_file or {}
     order_index = {}
     for order in orders:
         order_index.setdefault(base_order_id(order.get("platform_order_id")), []).append(order)
@@ -76,7 +83,10 @@ def summarize_coverage(rows, orders, supplemental_orders=None):
     unique = set()
     for row in rows:
         eligible = row.get("type") in {"Order", "Refund"} and bool(row.get("order_id"))
-        result = match_transaction(row, order_index.get(row.get("order_id"), [])) if eligible else {"status": "excluded_non_order_or_missing_id"}
+        scoped = row
+        if account_by_file and not row.get("account"):
+            scoped = {**row, "account": account_by_file.get(Path(str(row.get("source_file") or "")).name)}
+        result = match_transaction(scoped, order_index.get(row.get("order_id"), [])) if eligible else {"status": "excluded_non_order_or_missing_id"}
         if row.get("type") in {"Refund_Retrocharge", "Chargeback Refund"} and row.get("order_id"):
             extra = match_transaction(row, extra_index[row["order_id"]]) if row["order_id"] in extra_index else {"status": "not_in_primary_snapshot"}
             supplemental[extra["status"]] += 1

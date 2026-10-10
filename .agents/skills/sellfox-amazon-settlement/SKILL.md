@@ -25,7 +25,7 @@ metadata:
 - 可复跑测试手册：`sellfox_settlement/docs/reference/how-we-tested-2026-09.md`；踩坑：`sellfox_settlement/docs/lessons/lessons-learned.md`
 - **国内报税底稿**：`sellfox_settlement/docs/research/2026-10-09-amazon-non-v2-monthly-tax-analysis.md`（2026-08 Amazon **非 V2** 交易/汇总→平台报送候选/退款/税费/回款/成本 + **§2 给 ZJ 的填写区** + **§11 实施路线**）；填写通道选型 `…/2026-10-10-zj-questionnaire-collection-options.md`；外部问卷约定 `docs/solutions/conventions/external-questionnaire-via-notion.md`；技术答复见 `sellfox_settlement/AGENT_HANDOFF.md` §11
 - **技术月度命令**：`python -m sellfox_settlement.run_technical_month --input <账单目录> --out <仓库外目录> --month 2026-08`。口径读 `sellfox_settlement/finance_rules.yaml`，未确认时不能选定候选。
-- **2026-10-10 技术验证（先读边界，再读计数）**：`docs/solutions/tooling-decisions/amazon-non-v2-tax-technical-validation.md`；调研 `sellfox_settlement/docs/research/2026-10-10-account-technical-validation.md`、`…/2026-10-10-cost-technical-validation.md`、`…/2026-10-10-pdf-technical-validation.md`。账号匹配不是法人，当前 BOM 不是 8 月成本，`Refund.other` 不能按行拆开，银行到账仍缺输入。
+- **2026-10-10 技术验证（先读边界，再读计数）**：`docs/solutions/tooling-decisions/amazon-non-v2-tax-technical-validation.md`；调研 `sellfox_settlement/docs/research/2026-10-10-account-technical-validation.md`、`…/2026-10-10-cost-technical-validation.md`、`…/2026-10-10-pdf-technical-validation.md`。账号匹配不是法人，当前 BOM 不是 8 月成本，`Refund.other` 不能按行拆开，银行到账仍缺输入。父子单只加拆单；产品成本为 0 先看发货仓库和发货方式，不要用 `item_cost` 填空。Codex 接手读 `sellfox_settlement/AGENT_HANDOFF.md` §11 下午那条。
 - 脚本：`sellfox_settlement/reconcile_amazon.py`；交叉表：`sellfox_settlement/out/storeName_to_account_candidates.csv`
 
 ## 关键事实（速查，别再踩）

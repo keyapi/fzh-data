@@ -8,6 +8,8 @@ tags: [sellfox, amazon, settlement, okf, log]
 # 变更日志
 
 ## 2026-10-10
+- **父子单产品成本为 0 的两种形状**：只有拆单有数 = 原单没有发货仓库和发货方式；两边都是 0 = 发货方式仍空、没有 EN 物料，通用 `item_cost` 不能填产品成本。尾程单独看。交接写在 `AGENT_HANDOFF.md` §11。
+- **父子单、缺单和波兰结算窗口**：SKU 比较把 Unicode 空格当成同一个字符；订单连接可以按账单文件上的渠道账号限定店铺，避免同号订单串到另一家店。尾程文档写明实际物流商费用是前两级，历史预估只在没有实际费用时使用。55 个父子单、23 张产品成本不一致、2 张 SKU 差异和波兰店放宽结算结束日后的 6 个 PLN 结算组，明细在仓库外。
 - **跑通技术月度步骤**：`run_technical_month.py` 按未确认的 `finance_rules.yaml` 重跑 2026-08 文件覆盖、PDF 科目、账号匹配和订单连接，并在仓库外写出 8 张工作表。Settlement / FBA 探针复用只读快照；不选定申报口径，不写生产。
 - **技术验证入库**：2026-08 非 V2 CSV/PDF、渠道账号、EN 成本与银行到账缺口的只读验证脚本和三份调研落入分支；业务明细仍在仓库外。经验库入口 `docs/solutions/tooling-decisions/amazon-non-v2-tax-technical-validation.md`。ZJ 口径、历史成本和 8 月 Amazon 银行流水仍缺。
 - **收尾沉淀（ce-okf）**：新增约定 `docs/solutions/conventions/external-questionnaire-via-notion.md`（外部问卷：单份仓库 MD + Notion 访客通道；三条硬边界：MCP 无邀请工具 / 国内需翻墙 / 数据出境只私享）；AGENT_HANDOFF 增 §11，记录技术负责人已答的 **T01—T08** 原话（含 **通途尾程人工导入、导入后次日才显示、一次下载不能跨太久、EN `tongtool_integration` 待完善、报表 FBA 订单不一定在通途**）作为 Codex 接手入口。

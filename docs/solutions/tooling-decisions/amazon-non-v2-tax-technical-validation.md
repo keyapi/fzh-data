@@ -3,6 +3,7 @@ okf: v0.1
 type: Reference
 title: Amazon 非 V2 报税技术验证：已证实边界与禁止推断
 date: 2026-10-10
+last_updated: 2026-10-10
 category: tooling-decisions
 module: sellfox_settlement
 problem_type: tooling_decision
@@ -36,9 +37,13 @@ tags: [amazon, tax, settlement, non-v2, validation]
 2. **退款 `other` 是合并桶。** 65 份文件上，CSV 所有 Refund 行的 `other` 合计等于 PDF 与 CSV 在产品退款、运费退款、礼品包装退款、促销退款、退税上的差额之和。这不能反推每一笔退款的商品、运费和税。非零 `Refund.other` 保持未分配。
 3. **PDF 净额一致不等于科目完整。** 五大控制分区的已读明细可以加回印出净额；加拿大模板里空白的 FBA 费用单元格仍然是缺失，不能补 0。瑞典语标题里的 `kr` 只在全文语境下推断为 SEK，裸 `kr` 不能当 ISO 币种。
 4. **账号匹配不是申报主体。** 运营渠道账号、EN Channel Account、赛狐 shop 是三套键。Seller ID + marketplace ID 只能做补充定位，不能冒充已登记的标准渠道账号，也不能推出法人。EN 账户币种全是 CNY，不能当账单原币。赛狐 `region` 是 `eu`/`na`，不是国家站点。
-5. **当前成本不是 8 月历史成本。** FBA 的通用 `item_cost` 在本批样本为正值的个数是 0；产品和头程看 Cost Review 分量。FBA 不叠加 FBM 尾程。生产 BOM 快照晚于账单月，离线调用计算函数只证明当前链路能跑，不证明申报月成本。父子单并存、SKU 不符、缺单都保持分行，不删行消歧。
-6. **银行实际到账仍缺输入。** 共享账期目录里核到的银行 PDF 不是 8 月 Amazon 入账。平台付款通知和结算 flatfile 的 `deposit-date` 都不能代替银行操作日。不要假定银行流水号等于 Settlement `traceId`。
-7. **私有输出不入库。** 脚本拒绝向 Git 工作树写业务明细。账号调研提到的 `bank_evidence_probe.py` 与 `bank_evidence_finish.py` 不在本分支文件清单里；若它们在账单旁的私有目录，留在那里。
+5. **当前成本不是 8 月历史成本。** FBA 的通用 `item_cost` 在本批样本为正值的个数是 0；产品和头程看 Cost Review 分量。自发货原单上的通用 `item_cost` 同样不能填「产品成本」列。FBA 不叠加 FBM 尾程。生产 BOM 快照晚于账单月，离线调用计算函数只证明当前链路能跑，不证明申报月成本。用户已定：先用现成成本，BOM 版本以后再选。
+6. **父子单只加拆单。** `_1`/`_2` 是同一张单的包裹（与 PR 280 的通途后缀约定相同）。不带后缀的原单不要再加一次。产品成本两边不相等的留下单独看，常见是原单仓库还在退货仓、拆单已在主仓。只有拆单有产品成本时，原单缺的是发货仓库和发货方式。两边产品成本都是 0 时，发货方式仍空、EN 物料仍空。尾程按自己的列处理，不跟着产品成本的这一侧再加一遍。
+7. **尾程先用实际物流商费用。** 顺序是上传物流商人民币、已分摊物流商人民币，然后才是设置里的历史预估。历史预估不是第一优先。设置指定历史预估时，历史预估为 0 不会再落到通途运费（这段兜底在源码里被注释）。FBA 在这个函数里直接是 0。
+8. **FBA 缺单先分购买日和 SKU。** 账单月缺的 FBA 行，SKU 多半已经在同账号其他订单或商品主数据里。通途查询用 `fbaOrderQuery` 的购买日，不是账单交易日。`platformordersquery` 对 FBA 空返回不能当成通途没有这张单。账单站点 `sim1.stores.amazon.com`、订单号 `S01-` 开头的行不在亚马逊零售 FBA 购买日结果里。
+9. **结算净额含期初和期末。** 收入 + 退款 + 支出不等于 `accountNetIncome` 时，先把 `beginningBalance` 和 `endingBalance` 加回去再看恒等式。银行匹配「暂无匹配」是财务对银行流水用的，不是申报收入。波兰店要放宽结算结束日；8 月交易 CSV 在，不表示该月有一个结束的结算组。
+10. **银行实际到账仍缺输入。** 共享账期目录里核到的银行 PDF 不是 8 月 Amazon 入账。平台付款通知和结算 flatfile 的 `deposit-date` 都不能代替银行操作日。不要假定银行流水号等于 Settlement `traceId`。
+11. **私有输出不入库。** 脚本拒绝向 Git 工作树写业务明细。账号调研提到的 `bank_evidence_probe.py` 与 `bank_evidence_finish.py` 不在本分支文件清单里；若它们在账单旁的私有目录，留在那里。父子单、SKU 核对和波兰结算组的清单工作簿也留在该私有目录，文件名 `2026-08-followup-lists.xlsx`。
 
 ## Why This Matters
 
