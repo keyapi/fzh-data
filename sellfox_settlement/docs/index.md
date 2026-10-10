@@ -14,6 +14,7 @@ tags: [sellfox, amazon, settlement, okf, index]
 | 人读使用说明 | [README.md](../README.md) |
 | 深度调研（赛狐自动拉取可行性、两报表口径、风险与路径） | [research/saihu-amazon-settlement-autofetch-2026-09-09.md](research/saihu-amazon-settlement-autofetch-2026-09-09.md) |
 | Amazon 非 V2 月度报表国内报税分析（ZJ 填写总表、收入退款候选、费用成本、法人归属、实施路线） | [research/2026-10-09-amazon-non-v2-monthly-tax-analysis.md](research/2026-10-09-amazon-non-v2-monthly-tax-analysis.md) |
+| ZJ 填写渠道选型（Notion / 自建局域网 / Google 表单） | [research/2026-10-10-zj-questionnaire-collection-options.md](research/2026-10-10-zj-questionnaire-collection-options.md) |
 | 赛狐结算中心V2 端点与字段 | [reference/settlement-v2-endpoints.md](reference/settlement-v2-endpoints.md) |
 | 科目映射（列式表 & 结算 amount-description → 钉钉列） | [reference/column-mapping.md](reference/column-mapping.md) |
 | 2026-09 试点测试方法与断言（可复跑） | [reference/how-we-tested-2026-09.md](reference/how-we-tested-2026-09.md) |
