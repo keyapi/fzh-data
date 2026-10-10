@@ -38,6 +38,8 @@ workbook.recalculate();
 console.log((await workbook.inspect({kind: 'sheet', include: 'id,name', maxChars: 2000})).ndjson);
 const exported = await SpreadsheetFile.exportXlsx(workbook);
 await exported.save(path.join(outputDir, path.basename(outputPath)));
-const preview = await workbook.render({sheetName: '文件覆盖', range: 'A1:H13', scale: 1, format: 'png'});
-await fs.writeFile(path.join(outputDir, 'workbook_preview.png'), new Uint8Array(await preview.arrayBuffer()));
+if (!process.argv.includes('--skip-preview')) {
+  const preview = await workbook.render({sheetName: '文件覆盖', range: 'A1:H13', scale: 1, format: 'png'});
+  await fs.writeFile(path.join(outputDir, 'workbook_preview.png'), new Uint8Array(await preview.arrayBuffer()));
+}
 console.log(JSON.stringify({sheets: data.sheets.length, output: outputPath}));

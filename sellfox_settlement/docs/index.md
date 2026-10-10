@@ -10,6 +10,10 @@ tags: [sellfox, amazon, settlement, okf, index]
 
 | 你需要... | 读这个 |
 |----------|--------|
+| 技术完成计划 | [research/2026-10-10-technical-completion-plan.md](research/2026-10-10-technical-completion-plan.md) |
+| 组件成本账本与当前BOM精确重放 | [research/2026-10-10-component-cost-ledger.md](research/2026-10-10-component-cost-ledger.md) |
+| 尾程选路与父拆单费用单位 | [research/2026-10-10-tail-routing-validation.md](research/2026-10-10-tail-routing-validation.md) |
+| FBA原生账号缺口只读诊断 | [research/2026-10-10-fba-sync-gap-validation.md](research/2026-10-10-fba-sync-gap-validation.md) |
 | 子项目入口/交接 | [AGENT_HANDOFF.md](../AGENT_HANDOFF.md) |
 | 人读使用说明 | [README.md](../README.md) |
 | 深度调研（赛狐自动拉取可行性、两报表口径、风险与路径） | [research/saihu-amazon-settlement-autofetch-2026-09-09.md](research/saihu-amazon-settlement-autofetch-2026-09-09.md) |

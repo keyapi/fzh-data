@@ -81,3 +81,15 @@ uv run python -m sellfox_settlement.run_technical_month --input <8月账单目�
 月度底层 fatal_validation_errors 必须由总入口执行：先写私有 monthly_validation.json、source_manifest.json 和 normalized_transactions.json，再报错停止，避免后续工作簿掩盖失败。已有旧工作簿不会被删除，使用者应以本次命令退出状态和 JSON 为准。
 
 新增三个回归用例先失败后修复通过；模块共 102 个测试通过。真实 8 月离线复验 130 源文件 hash 未变化、11580 行守恒、65 个退款解释桥闭合、PDF 时区期间越界为零。银行、法人和当前 BOM 边界保持不变；不将本地测试写成生产端到端全部通过。
+
+## Guidance：最终离线集成的防漏与防误并
+
+月度账号连接必须由每文件唯一原生账号证据确认；缺证据或冲突保持hold，不能用全局订单号兜底。计数分开文件、交易、订单、组件、费用occurrence及唯一item，成功／跳过／失败应覆盖完整输入。最终严格连接与此前全局候选是不同范围，保留两次验证证据。
+
+当前BOM探针缺子表键时保留歧义；确需消歧可按原始快照EN名称及item_position重放生产纯函数，加入源hash。精确组件身份不证明历史成本。产品原拆单选择与尾程包裹去重分别验证；退款不自动反转，通用item_cost不补产品零。
+
+FBA补齐前同时查原生账号及订单号，防止跨账号同号命中；合法零数量不可被 `quantityPurchased or 1` 改成1。只读诊断发现风险并不证明历史同步缺口根因；缺完整价格／时间字段及同步日志时输出候选和hold，不构造生产补单。
+
+快照请求日期必须由实际请求元数据证明并绑定原始文件hash，禁止从文件名或跨时区订单时间猜月份。入口前后核对输入hash，空输入和fatal失败关闭；零币种重试只可解除同币种、对应月份且范围明确的错误。工作簿按所有数据单元格回读与JSON核对，不能只检查文件存在。
+
+Related：`sellfox_settlement/docs/research/2026-10-10-component-cost-ledger.md`、`2026-10-10-tail-routing-validation.md`、`2026-10-10-fba-sync-gap-validation.md`、`2026-10-10-technical-completion-plan.md`。

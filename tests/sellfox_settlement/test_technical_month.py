@@ -36,11 +36,11 @@ def test_workbook_stays_outside_git_and_neutralizes_formulas(tmp_path):
 
 def test_pln_empty_retry_is_not_a_current_failure():
     stage = settlement_stage(
-        {"groups_input": 189, "groups_scoped": 189, "currencies": ["USD"],
+        {"groups_input": 189, "groups_scoped": 189, "currencies": ["USD"], 'start':'2026-08-01',
          "errors": [{"stage": "details_PLN", "error_type": "ValueError"}]},
-        {"errors": [], "details": [{"input_rows": 0}]})
+        {"errors": [], "details": [{"input_rows": 0, 'currency':'PLN', 'scope_shops':4, 'start':'2026-07-31','end':'2026-09-02'}]})
     assert stage["failed"] == 0
-    assert stage["skipped"] == 1
+    assert stage["skipped"] == 0
     assert "PLN" in stage["unmatched_reason"]
     assert "银行" in stage["unmatched_reason"]
 
@@ -51,4 +51,20 @@ def test_fba_probe_does_not_count_as_a_production_write():
     assert stage["status"] == "probe_reused_no_production_write"
     assert stage["success"] == 8
     assert stage["unmatched"] == 2
-    assert stage["skipped"] == 1
+    assert stage["skipped"] == 0
+
+
+def test_usd_empty_retry_cannot_clear_pln_error():
+    summary = {'groups_input':1, 'groups_scoped':1, 'start':'2026-08-01',
+               'errors':[{'stage':'details_PLN'}]}
+    retry = {'errors':[], 'details':[{'currency':'USD', 'input_rows':0, 'scope_shops':4,
+                                   'start':'2026-07-31','end':'2026-09-02'}]}
+    assert settlement_stage(summary, retry)['failed'] == 1
+
+
+def test_outdated_pln_retry_cannot_clear_current_month_error():
+    summary = {'groups_input':1, 'groups_scoped':1, 'start':'2026-09-01',
+               'errors':[{'stage':'details_PLN'}]}
+    retry = {'errors':[], 'details':[{'currency':'PLN', 'input_rows':0, 'scope_shops':4,
+                                   'start':'2026-07-31','end':'2026-09-02'}]}
+    assert settlement_stage(summary, retry)['failed'] == 1

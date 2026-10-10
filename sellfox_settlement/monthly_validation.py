@@ -191,7 +191,7 @@ def validate_month(root, month):
                 fatal_pdf_issues.append({'source_file': pair.get('source_file'), **issue})
     unexplained_differences = [c for c in checks if c['status'] == 'difference'
                               and c['control'] not in explained_controls]
-    fatal = bool(csv_validation['file_errors'] or csv_validation['rejected_rows'] or pdf_errors
+    fatal = bool(not before['total_files'] or not csv_validation['files'] or csv_validation['file_errors'] or csv_validation['rejected_rows'] or pdf_errors
         or any(p['status'] != 'paired' or p.get('metadata_issues') or p.get('pdf_window_issues') for p in pairs)
         or csv_validation['summary']['row_total_nonzero'] or not sources_unchanged
         or any(r['issues'] for r in csv_validation['rows'])

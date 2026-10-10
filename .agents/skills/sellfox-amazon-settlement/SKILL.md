@@ -51,3 +51,7 @@ uv run python sellfox_settlement/reconcile_amazon.py reconcile --settlement data
 V2 明细→钉钉列做成表驱动；逐账号 join `渠道账号` 对账；原币+固定月汇率；测 4 号前能否取全上月；广告 ad 另取 Ads API；多平台仅 Temu/TikTok/Walmart/eBay/AliExpress/MercadoLibre/SHEIN/Shopify 有账单，Wayfair 及小平台仍人工。
 
 PR286复跑：提供账号映射后缺映射必须保留为 account_unmapped；补充退款同范围。总入口不能忽略 fatal_validation_errors。详见 docs/solutions/tooling-decisions/amazon-non-v2-tax-technical-validation.md 的复审节。
+
+## 月度技术完成后的恢复入口
+
+先读 `sellfox_settlement/docs/research/2026-10-10-technical-completion-plan.md`，以及同目录组件成本ledger、尾程选路和FBA同步缺口调研。月度入口支持独立 `--snapshots`、`--json-only`；快照必须有真实请求月元数据和原始hash。严格账号桥不fallback global；组件、交易、费用occurrence分别对账。FBA补齐候选无完整字段或同步日志时hold，不能自动导入。
