@@ -8,6 +8,7 @@ tags: [sellfox, amazon, settlement, okf, log]
 # 变更日志
 
 ## 2026-10-10
+- **收尾沉淀（ce-okf）**：新增约定 `docs/solutions/conventions/external-questionnaire-via-notion.md`（外部问卷：单份仓库 MD + Notion 访客通道；三条硬边界：MCP 无邀请工具 / 国内需翻墙 / 数据出境只私享）；AGENT_HANDOFF 增 §11，记录技术负责人已答的 **T01—T08** 原话（含 **通途尾程人工导入、导入后次日才显示、一次下载不能跨太久、EN `tongtool_integration` 待完善、报表 FBA 订单不一定在通途**）作为 Codex 接手入口。
 - **合并为单份底稿（Notion 可直接导入）**：把填写区重排为 Notion 友好的 4 列表（编号/需确认事项/建议/你的答复+证据）、相对链接改为纯文本仓库路径、`<>` 自动链接改裸 URL，并删除临时派生稿——底稿本身即可导入 Notion，不再有第二份会漂移的副本。
 - **新增填写渠道选型调研**：比较让 ZJ 填写问卷的渠道——Notion 公开页+允许编辑（不推荐，公开可编辑且 prompt-injection 风险）、Notion 访客可编辑单页、Notion 原生表单（公开=匿名、不能改自己的回答）、自建局域网表单（最重、仅内网可达）、Google 表单→表格（最贴合现状，已有 SA+gsheets 读取）、钉钉（候选未深入）；结论与来源见 `docs/research/2026-10-10-zj-questionnaire-collection-options.md`。
 - **补充 Notion 访客单页实测要点（§2.4）**：核实「完整 MD 导入成页 + 简单表格可转（复杂表格降级、需清理）」「Can edit 即可直接填写（非提交）」「Google/Apple/Microsoft 免费登录」「Free 10 访客够用」「国内访问 Mixed、需翻墙兜底」「Notion MCP 无分享/邀请工具，访客邀请须界面手动」；给出落地流程与'填写区改数据库更好填'的建议。

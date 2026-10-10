@@ -82,3 +82,16 @@ uv run python sellfox_settlement/reconcile_amazon.py reconcile --settlement data
 - **技能**：`okf`（OKF v0.1 文档规范：frontmatter `type`、每目录 index.md、每 bundle log.md）、`ce-compound`（docs/solutions 知识沉淀）、`sellfox-api`（赛狐 OpenAPI 访问/凭证/限流）。**不适用**：category/multi-attr/item-cost 等赛狐 Excel 导入类。
 - **库/凭证**：`SELLFOX_API/client.py`(`SellfoxClient`, 代理/直连/限流/重试)、gspread + `secrets/gsheets-service-account.json`(谷歌表)、`tongtool_order_cost.tongtool_order_cost.gsheets`。运行建议用**父仓库 `.venv`**。
 - **相关既有模块/技能**：`platform-account-reconciliation`(OSTKUS/账期对账)、`pb-reconciliation`(PB 对账)、`channel_account_sync`(渠道账号命名/同步)、`en-channel-account-gsheet-sync`(渠道账号 gsheet→EN)。
+
+## 11. 国内报税底稿 & ZJ 填写（2026-10，供 Codex 接手）
+- **底稿**：`docs/research/2026-10-09-amazon-non-v2-monthly-tax-analysis.md` —— 2026-08 的 Amazon **非 V2**（Monthly Transaction CSV + Summary PDF，**非 Settlement V2**）国内报税分析：平台报送收入/退款候选、Amazon 税费、Settlement/银行回款、EN 成本链、法人归属，**§2 是给财务 ZJ 的填写区**，**§11 是 8 阶段实施路线**。
+- **同目录另有**：`docs/research/2026-10-10-zj-questionnaire-collection-options.md`（填写通道选型）。给 ZJ 的填写用 **Notion 访客可编辑单页**，**底稿即导入源**；做法与坑见 `docs/solutions/conventions/external-questionnaire-via-notion.md`（**别用公开链接**）。
+- **2026-08 文件事实**（盘点已核）：65 CSV + 65 PDF、13 套本地化表头、11,580 数据行、21 个零行 CSV；`如森法国/荷兰2020608` 是文件名错字已更正为 `202608`；**未发现已证实的下载不完整或期间选错**。多币种（USD/CAD/EUR/GBP/PLN/MXN/SEK）**未定汇率前禁止跨币种相加**。
+- **技术负责人已答 T01—T08（2026-10-10，原话摘录，供 Codex 继续）**：
+  - T01 渠道账号主键：**对**（以 gsheet `渠道账号` 为准），**最好之后统一文件名**。
+  - T02 别名维护：**新别名登记进 gsheet 时注意不能重复**。
+  - T03 Seller/站点稳定键：**存疑** —— 不确定是否必要，也不确定报表里有没有；**若有可记录**。
+  - T04 多语言归一：对。T05 PDF/CSV 期间校验：对。T08 自动化运行边界：好。
+  - T06 FBM 连接：可用 `order id + sku` 法；**或手动下载通途订单 Excel（含尾程）**；**通途尾程靠人工导入，导入后第二天通途下载才显示更新后的尾程**；通途 API 时效**未验证**；**一次下载不能跨太久时间**；**EN 侧是否及时/完整更新未知**；**EN App `tongtool_integration` 对接通途可能需进一步完善**。
+  - T07 FBA 探针：**报表里的 FBA 订单不一定出现在通途**；仍先做探针（见底稿 §11 阶段 6）。
+- **Codex 接手入口**：先读本 §11 + 底稿 §11（阶段 1→8）；阶段 1—3 与 5—8 不依赖财务，可直接开工；阶段 4/5/6 受上面 T 答复与 ZJ 的 F 答复约束（**财务未拍板的口径只并列输出候选值，不写死**）。
