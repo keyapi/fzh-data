@@ -91,6 +91,29 @@ related_components: [tongtool_order_cost, colab_kit, missing_products]
 
 **勘误（本轮我先后报错的口径，供后人避免）**：`46 组该合并`→错；`现状只触发 1 组/83 行`→错（实为 11/12 单，因为我**在"已合并后"的表上筛条件**）；`仓映射 48 数据行`→错（47+表头）；`未对上候选 11/13 组`→错（2/1，匹配规则太严）；`数量差 +27/+26`→错（+3/+2，同因）；`只发部件 5/2 行`→错（0，那几行是**已合并组的组长行**）。
 
+### 7. **权威源：EN `Tongtool Order`（原始单 + 拆分子单都存着）**
+
+EN 同时保存**未拆分的原始单**与**拆分后的子单**（`/api/resource/Tongtool Order/<order_id_code>`，整单含 `order_items` 子表）：
+
+| 原始单（`等待配货`） | 拆分子单（`已发货`） |
+|---|---|
+| `DY-LAPW-24868` | `DY-LAPW-24868_1` · `_2` |
+| `MXXXL-5172605872379-A` | `…-A_1` · `_2` · `_3` |
+| `Tod-1315` / `Tod-1314` | `Tod-1315_1/_2/_3`、`Tod-1314_1/_2` |
+
+`order_items` 就带 Cost Review 的切片：`erp_item_code`、`quantity`、**`shipping_method`（交付形态：皮壳/半成品/成品）**、`cost_sxbzcp`/`cost_fg`/`sx_shipping_cost`/`bcp_first_freight`/`pk_first_freight`/`first_freight`/`last_leg_fee`、**`split_package_cost_factor`（拆包裹成本系数）**、`match_status`。
+
+**实测（很关键）**
+- `DY-LAPW-24868` 原始单 **items=2** = `-Cover` + `-Foam`（**同一 `erp_item_code`**）⇒ 一件成品的两个部件；子单 `_1/_2` 各 1 item。
+- `MXXXL-…-A` 原始单 **items=4** = 3 色 Cover 各 **qty 3** + `-Foam` **qty 9** ⇒ **9 件**；子单 `_1` = 3 Cover 各 qty 1 + `-Foam` qty 3 ⇒ **3 件**。⇒ "保持 3 单、每单 3 件" = **子单口径**；"彻底合并 9 件" = **原单口径**。
+- `shipping_method`：`DY-LAPW` 两行都是 **`半成品`**（与 EN BOM `绍兴发货方式` 一致）⇒ **这才是要找的权威"交付形态"**，不必再用旧表 `当月给分公司发货类型`。
+- `Tod-1315` 原始单 items=3（`-Cover`/`-Foam`/主体骨架），主体骨架 `shipping_method` 为空、成本全 0 ⇒ EN 认为它是原单里的**第三个 item**。
+- `split_package_cost_factor` 本例全 = `1.0`（该字段在报表里"范围外"，但**订单子表里有**）。
+
+**对方案的简化**：不必在 Colab 里猜判据 —— **按 `order_id_code` 去掉 `_N` 即原始单**；**件数取 `order_items.quantity`**；**交付形态取 `shipping_method`**；**拆包系数取 `split_package_cost_factor`**。
+
+⚠ 查询注意：`fields=` 里放**不存在**的字段名会 **HTTP 417**（Frappe 校验）；先按 `name` 取整单看字段，再写过滤。
+
 ## 待业务拍板（**未定，不得私自实现**）
 
 1. `Tod-1315`（组合商品：Cover+Foam+主体骨架；EN **未登记套件#**）—— 要合并成 1 件吗？靠什么识别？
