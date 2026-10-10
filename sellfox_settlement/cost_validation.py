@@ -69,6 +69,7 @@ def match_transaction(row, orders):
 
 
 def summarize_coverage(rows, orders, supplemental_orders=None, account_by_file=None):
+    require_account = account_by_file is not None
     account_by_file = account_by_file or {}
     order_index = {}
     for order in orders:
@@ -84,11 +85,17 @@ def summarize_coverage(rows, orders, supplemental_orders=None, account_by_file=N
     for row in rows:
         eligible = row.get("type") in {"Order", "Refund"} and bool(row.get("order_id"))
         scoped = row
-        if account_by_file and not row.get("account"):
+        if require_account and not row.get("account"):
             scoped = {**row, "account": account_by_file.get(Path(str(row.get("source_file") or "")).name)}
-        result = match_transaction(scoped, order_index.get(row.get("order_id"), [])) if eligible else {"status": "excluded_non_order_or_missing_id"}
+        missing_account = require_account and not scoped.get("account")
+        result = {"status": "excluded_non_order_or_missing_id"}
+        if eligible:
+            result = {"status": "account_unmapped"} if missing_account else match_transaction(scoped, order_index.get(row.get("order_id"), []))
         if row.get("type") in {"Refund_Retrocharge", "Chargeback Refund"} and row.get("order_id"):
-            extra = match_transaction(row, extra_index[row["order_id"]]) if row["order_id"] in extra_index else {"status": "not_in_primary_snapshot"}
+            if missing_account:
+                extra = {"status": "account_unmapped"}
+            else:
+                extra = match_transaction(scoped, extra_index[row["order_id"]]) if row["order_id"] in extra_index else {"status": "not_in_primary_snapshot"}
             supplemental[extra["status"]] += 1
             result["supplemental_link_probe"] = extra
         details.append({"source_file": row.get("source_file"), "source_line": row.get("source_line"), "order_id": row.get("order_id"), "sku": row.get("sku"), "type": row.get("type"), "fulfillment": row.get("fulfillment"), **result})

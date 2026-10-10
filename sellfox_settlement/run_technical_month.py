@@ -76,6 +76,8 @@ def run_month(input_root, output, month):
     rows = monthly["csv_validation"]["rows"]
     _write_json(output / "normalized_transactions.json", rows)
     summary = monthly["summary"]
+    if summary["fatal_validation_errors"]:
+        raise ValueError("fatal monthly validation errors; see monthly_validation.json")
     stages.append(_stage("1", "file_coverage", "ran",
                          input=summary.get("source_files", 0), output=summary.get("pdf_success", 0),
                          success=summary.get("pdf_success", 0), skipped=0,

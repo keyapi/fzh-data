@@ -73,3 +73,11 @@ uv run python -m sellfox_settlement.run_technical_month --input <8月账单目�
 - [2026-08 报税分析底稿](../../../sellfox_settlement/docs/research/2026-10-09-amazon-non-v2-monthly-tax-analysis.md)
 - [赛狐结算中心与列式报表取舍](amazon-settlement-autofetch-sellfox.md)
 - [外部问卷：仓库 MD + Notion 访客](../conventions/external-questionnaire-via-notion.md)
+
+## PR286 复审：账号与运行门禁（2026-10-10）
+
+传入 account_by_file（即使空表）表示必须限账号。文件缺映射时输出 account_unmapped，保留该交易和成本分母，不退回 global 订单查询。补充 Chargeback Refund / Refund_Retrocharge 使用同一 scoped row；不能让主交易限账号而补充退款跨账号。未提供映射仍保留原有候选探针行为。
+
+月度底层 fatal_validation_errors 必须由总入口执行：先写私有 monthly_validation.json、source_manifest.json 和 normalized_transactions.json，再报错停止，避免后续工作簿掩盖失败。已有旧工作簿不会被删除，使用者应以本次命令退出状态和 JSON 为准。
+
+新增三个回归用例先失败后修复通过；模块共 102 个测试通过。真实 8 月离线复验 130 源文件 hash 未变化、11580 行守恒、65 个退款解释桥闭合、PDF 时区期间越界为零。银行、法人和当前 BOM 边界保持不变；不将本地测试写成生产端到端全部通过。

@@ -85,3 +85,19 @@ def test_separately_fetched_retrocharge_order_still_does_not_claim_sku_coverage(
     assert report["en_candidate_orders"] == 0
     assert report["eligible_rows"] == 0
     assert details[0]["supplemental_link_probe"]["status"] == "sku_missing"
+
+
+def test_missing_file_account_mapping_never_falls_back_to_global_matching():
+    rows = [{"source_file": "unmapped.csv", "type": "Order", "order_id": "O", "sku": "S"}]
+    orders = [{"name": "O", "platform_order_id": "O", "sale_account": "OTHER", "order_items": [{"platform_sku": "S"}]}]
+    report, details = summarize_coverage(rows, orders, account_by_file={"known.csv": "A"})
+    assert details[0]["status"] == "account_unmapped"
+    assert report["eligible_rows"] == 1
+
+
+def test_supplemental_refund_uses_same_file_account_scope():
+    rows = [{"source_file": "known.csv", "type": "Chargeback Refund", "order_id": "O", "sku": "S"}]
+    orders = [{"name": "O", "platform_order_id": "O", "sale_account": "OTHER", "order_items": [{"platform_sku": "S"}]}]
+    report, details = summarize_coverage(rows, orders, account_by_file={"known.csv": "A"})
+    assert details[0]["supplemental_link_probe"]["status"] == "order_unmatched"
+    assert report["eligible_rows"] == 0

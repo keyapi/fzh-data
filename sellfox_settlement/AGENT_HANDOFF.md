@@ -86,7 +86,7 @@ uv run python sellfox_settlement/reconcile_amazon.py reconcile --settlement data
 ## 11. 国内报税底稿 & ZJ 填写（2026-10，供 Codex 接手）
 - **底稿**：`docs/research/2026-10-09-amazon-non-v2-monthly-tax-analysis.md` —— 2026-08 的 Amazon **非 V2**（Monthly Transaction CSV + Summary PDF，**非 Settlement V2**）国内报税分析：平台报送收入/退款候选、Amazon 税费、Settlement/银行回款、EN 成本链、法人归属，**§2 是给财务 ZJ 的填写区**，**§11 是 8 阶段实施路线**。
 - **同目录另有**：`docs/research/2026-10-10-zj-questionnaire-collection-options.md`（填写通道选型）。给 ZJ 的填写用 **Notion 访客可编辑单页**，**底稿即导入源**；做法与坑见 `docs/solutions/conventions/external-questionnaire-via-notion.md`（**别用公开链接**）。
-- **2026-08 文件事实**（盘点已核）：65 CSV + 65 PDF、13 套本地化表头、11,580 数据行、21 个零行 CSV；`如森法国/荷兰2020608` 是文件名错字已更正为 `202608`；**未发现已证实的下载不完整或期间选错**。多币种（USD/CAD/EUR/GBP/PLN/MXN/SEK）**未定汇率前禁止跨币种相加**。
+- **2026-08 文件事实**（盘点已核）：65 CSV + 65 PDF、13 套本地化表头、11,580 数据行、14 个零行 CSV + 7 个单行 CSV；`如森法国/荷兰2020608` 是文件名错字已更正为 `202608`；**未发现已证实的下载不完整或期间选错**。多币种（USD/CAD/EUR/GBP/PLN/MXN/SEK）**未定汇率前禁止跨币种相加**。
 - **技术负责人已答 T01—T08（2026-10-10，原话摘录，供 Codex 继续）**：
   - T01 渠道账号主键：**对**（以 gsheet `渠道账号` 为准），**最好之后统一文件名**。
   - T02 别名维护：**新别名登记进 gsheet 时注意不能重复**。
@@ -109,3 +109,12 @@ uv run python sellfox_settlement/reconcile_amazon.py reconcile --settlement data
   5. 尾程：实际物流商费用优先；历史预估只是第三级。历史预估为 0 时源码不会改用通途运费。通途全部自发货的缺尾程数量，和本账单已匹配行不是同一个分母。导入后次日才在通途下载里显示。
   6. 成本：成品的国外加工允许为 0。皮壳/半成品加工为 0、以及成品头程为 0，才是缺口。10 月 9 日 BOM 按订单发货仓库算过，先用这套数。
 - **还不能做的事**：ZJ 的 F01—F20 仍空；未登记账号不要自行写入 EN 或运营表；当前 BOM 不能当 8 月历史成本；`Refund.other` 不能按行拆回商品/运费/税；银行实际到账仍缺 8 月 Amazon 流水。`bank_evidence_probe.py` 与 `bank_evidence_finish.py` 不在本分支文件清单里，私有脚本不要入库。不要把订单号、金额、运营人员姓名写进 Git。
+
+### PR286 Codex 复审与收口（2026-10-10）
+
+- 已审 Cursor 最新提交的账号连接、Unicode SKU、父子单与尾程边界；只加拆单的产品成本，不叠加原单尾程，23 张仓库不一致仍留在私有清单。
+- 修复三个可复现门禁问题：传入账号映射时缺映射不能退回全局连接（包括显式空映射）；补充退款使用同一账号范围；月度严重校验错误保留 JSON 证据后停止，不继续出工作簿。未传映射仍是 global 订单+SKU 候选，不能宣称已确认原生账号。
+- 本轮模块测试 102 passed；8 月 CSV/PDF 离线复跑：130 SHA256 未变、11580 行守恒、PDF 1918 complete / 5 partial / 18 difference，65 退款解释桥闭合，期间越界 0。
+- 本轮复跑 JSON 留在既有私有技术目录的 codex-review 子目录；没有改写 Cursor 已生成的两份工作簿，没有刷新生产或改变财务口径。
+- PR 无配置的 CI checks；本地模块测试与安全检查是本轮已取得证据，不能写成整个仓库或真实银行匹配全部通过。
+- 剩余输入/决定：ZJ F01—F20、8 月银行流水、23 张成本仓库差异、加拿大订单、S01 特殊站点、115 行未被当前选路采用的通途运费。保留清单，不自行补成本、注册账号或改 EN 设置。
