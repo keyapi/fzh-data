@@ -6,7 +6,8 @@ title: tongtool_order_cost 变更日志
 # 变更日志
 
 ## 2026-10-10
-- **FedEx 官方账单追补**：WXP 反馈官方 FedEx 包裹运费未上传、黄总想不起下载方式。① 新增缺尾清单脚本 `scripts/make_missing_tail_lists.py`（按「谁出账单」拆 官方 FedEx / 蜴国际 FedEx 两份 xlsx，包裹级、冻结首行）；202608 官方 FedEx 缺尾 **13 票（¥1,140.19）/ 蜴国际 250 票**。
+- **待追尾程清单（单一工作簿给 WXP）**：新增 `scripts/make_missing_tail_lists.py`，把某月缺口（`needs=1 且 物流商运费=0`）整理成**一个** Excel，含 **汇总 / 明细 / 无需追(平台付)** 三 sheet，明细含 包裹号·订单号·跟踪号·渠道·通途SKU·日期·预估·备注（冻结首行）。
+- **账单来源分类修正（用户领域口径）**：① **OSTK/Wayfair 不用导入尾程**（平台付）→ 单列 sheet 备查、不追；② `美国尾程7条` 是**独立供应商「7条」**，不是官方 FedEx；③ **`US-FedEx>>US-FedEx` 疑似官方 FedEx（待确认）**；④ **重点追查 GLS 波兰 + 蜴国际 FedEx**。202608 缺口 527 包裹 = 蜴国际 250 + GLS 228 + CENTRADE 36 + 「7条」5 + 疑似官方FedEx 1 + 无需追(OSTK/Wayfair) 7。产出 `202608 待追尾程清单 给WXP 20261010.xlsx`。
 - **FedEx 账单下载指引卡片**：新增 `docs/reference/fedex-billing-online-download.md`（FBO 登录 / Search-Download 与 Reporting 两条下载路径 / 30MB·14 天·SmartPost 限制 / 按跟踪号查票）+ 给 黄总/WXP 的单页卡片。
 - **调研结论**：FedEx **无账单/发票下载 API**（门户只有 Rate/Ship/Track 等）；官网**自动化登录被反爬系统性拦截**（全新 Playwright 重试 3 次均 `[200]` 连接错误，连 Track 页也 `system-error`）→ 官方账单只能**人工**下载。记 `docs/research/2026-10-10-fedex-invoice-api-and-official-parcels.md`。
 

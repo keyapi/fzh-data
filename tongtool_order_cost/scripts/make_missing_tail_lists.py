@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""生成「待追尾程清单」——按承运商/货代拆分给运营（WXP）与物流商对账。
+"""生成「待追尾程清单」——把某月所有「还没拿到真实账单」的包裹整理成**一个** Excel 给运营（WXP）。
 
 输入：EN「上传通途订单Excel」产出的成品
       「EN上传Cost Review预估尾程 只用尾程 通途非FBA订单YYYYMM <ts>.xlsx」
@@ -8,33 +8,51 @@
 口径（与 docs/reference/monthly-tail-cost-pipeline.md 一致）：
   分母只看「是否需要尾程=1」；缺口 = needs=1 且「物流商运费=0」（即还没拿到真实账单）。
 
-本脚本额外按「谁出账单」把缺口拆两类，分别落一个 xlsx：
-  1) 官方 FedEx（自有账号：US-FedEx / FEDEX Economy TX）→ 黄总/WXP 去 FedEx 官网下载账单
-  2) 蜴国际 FedEx（M6180蜴国际-Fedex）→ 找货代（YIGlobal）要账单
+输出一个工作簿（多 sheet）：
+  - 汇总        按「账单来源/供应商」统计：包裹数 / 行数 / 预估合计 / 说明
+  - 明细        逐包裹，含 包裹号/订单号/跟踪号/渠道/通途SKU/日期/预估 + 备注（可直接给 WXP）
+  - 无需追      平台付尾程（OSTK/Wayfair）等——默认不追，但保留不丢
 
-只读输入、不改源文件；输出到 --out 目录。用法见 --help。
+按「邮寄方式」链（如 `M6180蜴国际>>M6180蜴国际-Fedex`）判定账单来源：
+  蜴国际（货代）· GLS 波兰 · 「7条」尾程供应商 · CENTRADE · 疑似官方 FedEx · 平台付尾程（OSTK/Wayfair）
+
+只读输入、不改源文件。用法见 --help。
 """
 from __future__ import annotations
 
 import argparse
 import datetime as dt
-import os
 import sys
 from pathlib import Path
 
 import pandas as pd
 
-# 「邮寄方式」列存的是完整承运链（如 "US-FedEx>>OSTK-FedEx"）→ 用子串判定。
-# 蜴国际 FedEx（货代 YIGlobal）：链含此关键字
-FORWARDER_FEDEX_KEYWORD = "蜴国际"
-# 官方 FedEx 自有账号：链含 FedEx 且不是货代
-OFFICIAL_FEDEX_KEYWORD = "fedex"
-
-LIST_COLS = [
-    "序号", "包裹号", "跟踪号", "发货日期", "发货时间",
-    "发货方式", "邮寄方式", "渠道", "渠道账号",
-    "通途SKU", "订单号", "历史预估尾程费用",
+# —— 账单来源判定（按序，子串匹配「邮寄方式」链；OSTK 必须排在通用 FedEx 之前）——
+SUPPLIER_RULES = [
+    ("蜴国际", "蜴国际 FedEx（货代）", "高", "货代账单，找蜴国际/YIGlobal 要"),
+    ("GLS", "GLS 波兰", "高", "GLS 账单/后台下载"),
+    ("7条", "「7条」尾程供应商", "中", "美国尾程供应商「7条」结算"),
+    ("CENTRADE", "CENTRADE", "中", "Centrade 结算"),
+    ("OSTK", "平台付尾程（OSTK/Wayfair）", "不追", "疑似平台付尾程；确认后可不追"),
 ]
+
+DETAIL_COLS = [
+    "序号", "账单来源", "优先级", "包裹号", "跟踪号", "发货日期", "发货时间",
+    "发货方式", "邮寄方式", "渠道", "渠道账号", "通途SKU", "平台SKU",
+    "订单号", "发货数量", "历史预估尾程费用", "备注",
+]
+
+
+def classify(chain: str) -> tuple[str, str, str]:
+    """返回 (账单来源, 优先级, 说明)。"""
+    s = str(chain)
+    for kw, name, prio, note in SUPPLIER_RULES:
+        if kw in s:
+            return name, prio, note
+    low = s.lower()
+    if "fedex" in low:
+        return "疑似官方 FedEx（待确认）", "待确认", "可能是公司自有 FedEx 账号 → FedEx Billing Online"
+    return "其他（待确认）", "待确认", "未知来源，需人工确认"
 
 
 def _tracking(row: pd.Series) -> str:
@@ -45,14 +63,28 @@ def _tracking(row: pd.Series) -> str:
     return ""
 
 
-def build_package_rows(miss: pd.DataFrame) -> pd.DataFrame:
-    """按包裹号聚合（一包裹可能多行 → 预估求和；其余取首值）。"""
+def _note(row: pd.Series, estimate, supplier: str) -> str:
+    notes = []
+    if supplier.startswith("平台付"):
+        notes.append("疑似平台付尾程，确认后可不追")
+    if not _tracking(row):
+        notes.append("无跟踪号→按 账号+日期+目的地 反查")
+    if estimate is None or float(estimate or 0) == 0:
+        notes.append("无预估（重量/成本缺失）")
+    return "；".join(notes)
+
+
+def build_rows(miss: pd.DataFrame) -> pd.DataFrame:
     if len(miss) == 0:
-        return pd.DataFrame(columns=LIST_COLS)
+        return pd.DataFrame(columns=DETAIL_COLS)
     rows = []
     for parcel, g in miss.groupby("包裹号", sort=False):
         first = g.iloc[0]
+        supplier, prio, _ = classify(first.get("邮寄方式", ""))
+        est = round(float(g["历史预估尾程费用"].fillna(0).sum()), 2) if g["历史预估尾程费用"].notna().any() else None
         rows.append({
+            "账单来源": supplier,
+            "优先级": prio,
             "包裹号": parcel,
             "跟踪号": _tracking(first),
             "发货日期": first.get("发货日期", ""),
@@ -62,32 +94,35 @@ def build_package_rows(miss: pd.DataFrame) -> pd.DataFrame:
             "渠道": first.get("渠道", ""),
             "渠道账号": first.get("渠道账号", ""),
             "通途SKU": " / ".join(sorted({str(x) for x in g["通途SKU"].dropna().astype(str)})),
+            "平台SKU": " / ".join(sorted({str(x) for x in g["平台SKU"].dropna().astype(str)})),
             "订单号": " / ".join(sorted({str(x) for x in g["订单号"].dropna().astype(str)})),
-            "历史预估尾程费用": round(float(g["历史预估尾程费用"].fillna(0).sum()), 2),
+            "发货数量": int(g["发货数量"].fillna(0).sum()) if "发货数量" in g else "",
+            "历史预估尾程费用": est,
+            "备注": _note(first, est, supplier),
         })
     out = pd.DataFrame(rows)
-    # 排序：发货方式 → 邮寄方式 → 发货日期 → 发货时间 → 包裹号
-    out = out.sort_values(["发货方式", "邮寄方式", "发货日期", "发货时间", "包裹号"]).reset_index(drop=True)
+    # 排序：优先级(自定义) → 账单来源 → 发货日期 → 发货时间 → 包裹号
+    prio_order = {"高": 0, "中": 1, "待确认": 2, "不追": 3}
+    out["_p"] = out["优先级"].map(prio_order).fillna(9)
+    out = out.sort_values(["_p", "账单来源", "发货日期", "发货时间", "包裹号"]).drop(columns="_p").reset_index(drop=True)
     out.insert(0, "序号", range(1, len(out) + 1))
-    return out[LIST_COLS]
+    return out[DETAIL_COLS]
 
 
-def _write(df: pd.DataFrame, path: Path, note: str) -> None:
-    with pd.ExcelWriter(path, engine="openpyxl") as w:
-        df.to_excel(w, index=False, sheet_name="待追尾程")
-        ws = w.sheets["待追尾程"]
-        ws.freeze_panes = "A2"
-        # 列宽
-        widths = {"序号": 5, "包裹号": 22, "跟踪号": 22, "发货日期": 11, "发货时间": 9,
-                  "发货方式": 16, "邮寄方式": 26, "渠道": 12, "渠道账号": 18,
-                  "通途SKU": 24, "订单号": 20, "历史预估尾程费用": 14}
-        for i, c in enumerate(df.columns, start=1):
-            ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = widths.get(c, 14)
-    print(f"  -> {path.name}  ({len(df)} 行)  {note}")
+def _write_sheet(w, df: pd.DataFrame, name: str, freeze="A2"):
+    df.to_excel(w, index=False, sheet_name=name)
+    ws = w.sheets[name]
+    ws.freeze_panes = freeze
+    widths = {"序号": 5, "账单来源": 26, "优先级": 8, "包裹号": 20, "跟踪号": 20,
+              "发货日期": 11, "发货时间": 9, "发货方式": 16, "邮寄方式": 30,
+              "渠道": 12, "渠道账号": 16, "通途SKU": 22, "平台SKU": 22,
+              "订单号": 30, "发货数量": 9, "历史预估尾程费用": 15, "备注": 40}
+    for i, c in enumerate(df.columns, start=1):
+        ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = widths.get(c, 14)
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="生成待追尾程清单（官方 FedEx / 蜴国际 FedEx）")
+    ap = argparse.ArgumentParser(description="生成「待追尾程清单」单一工作簿（给 WXP）")
     ap.add_argument("--en-xlsx", required=True, help="EN 上传产出：EN上传Cost Review预估尾程 …YYYYMM <ts>.xlsx")
     ap.add_argument("--month", required=True, help="YYYYMM")
     ap.add_argument("--out", default=".", help="输出目录")
@@ -109,31 +144,44 @@ def main() -> int:
     miss = n1[n1["物流商运费"].fillna(0) == 0].copy()
     print(f"needs=1: {len(n1)} 行 | 缺口(物流商运费=0): {len(miss)} 行 / {miss['包裹号'].nunique()} 包裹")
 
-    mailing = miss["邮寄方式"].astype(str)
-    is_forwarder = mailing.str.contains(FORWARDER_FEDEX_KEYWORD, na=False)
-    is_official = mailing.str.contains(OFFICIAL_FEDEX_KEYWORD, case=False, na=False) & ~is_forwarder
+    allrows = build_rows(miss)
+    # 拆：待追（非平台付） / 无需追（平台付）
+    no_chase = allrows[allrows["账单来源"].astype(str).str.startswith("平台付")].copy()
+    to_chase = allrows[~allrows.index.isin(no_chase.index)].reset_index(drop=True)
+    to_chase["序号"] = range(1, len(to_chase) + 1)
+    to_chase = to_chase[DETAIL_COLS]
+    no_chase = no_chase.reset_index(drop=True)
+    no_chase["序号"] = range(1, len(no_chase) + 1)
+    no_chase = no_chase[DETAIL_COLS]
 
-    off = build_package_rows(miss[is_official])
-    fwd = build_package_rows(miss[is_forwarder])
+    # 汇总
+    summ = []
+    for supplier, g in to_chase.groupby("账单来源", sort=False):
+        prio = g["优先级"].iloc[0]
+        est = g["历史预估尾程费用"].dropna()
+        summ.append({"账单来源": supplier, "优先级": prio, "包裹数": len(g),
+                     "预估合计": round(float(est.sum()), 2) if len(est) else None})
+    summ_df = pd.DataFrame(summ)
+    prio_order = {"高": 0, "中": 1, "待确认": 2}
+    summ_df["_p"] = summ_df["优先级"].map(prio_order).fillna(9)
+    summ_df = summ_df.sort_values(["_p", "包裹数"]).drop(columns="_p")
+    # 追加总计
+    tot_est = to_chase["历史预估尾程费用"].dropna()
+    summ_df.loc[len(summ_df)] = {"账单来源": "合计（待追）", "优先级": "",
+                                 "包裹数": len(to_chase),
+                                 "预估合计": round(float(tot_est.sum()), 2) if len(tot_est) else None}
 
-    if len(off):
-        p = out / f"{args.month} 待追尾程-官方FedEx（自有账号） 给黄总WXP {stamp}.xlsx"
-        _write(off, p, f"预估合计 {off['历史预估尾程费用'].sum():.2f}")
-    else:
-        print("  (官方 FedEx 无缺口)")
+    path = out / f"{args.month} 待追尾程清单 给WXP {stamp}.xlsx"
+    with pd.ExcelWriter(path, engine="openpyxl") as w:
+        _write_sheet(w, summ_df, "汇总")
+        _write_sheet(w, to_chase, "明细")
+        if len(no_chase):
+            _write_sheet(w, no_chase, "无需追-平台付(待确认)")
 
-    if len(fwd):
-        p = out / f"{args.month} 待追尾程-蜴国际FedEx（货代） 给物流商 {stamp}.xlsx"
-        _write(fwd, p, f"预估合计 {fwd['历史预估尾程费用'].sum():.2f}")
-    else:
-        print("  (蜴国际 FedEx 无缺口)")
-
-    # 其余缺口（GLS / CENTRADE 等）也报一下，便于运营心里有数
-    rest = miss[~is_official & ~is_forwarder]
-    if len(rest):
-        g = rest.groupby("邮寄方式").agg(包裹=("包裹号", "nunique"), 预估=("历史预估尾程费用", "sum")).sort_values("包裹", ascending=False)
-        print("其余缺口（非 FedEx 两类，仅提示）:")
-        print(g.to_string())
+    print(f"  -> {path.name}")
+    print(summ_df.to_string(index=False))
+    # 缺口对账：待追 + 无需追 = 全部
+    print(f"  对账：待追 {len(to_chase)} + 无需追 {len(no_chase)} = {len(allrows)} 包裹")
     return 0
 
 

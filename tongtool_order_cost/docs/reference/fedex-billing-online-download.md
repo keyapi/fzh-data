@@ -49,10 +49,14 @@ tags: [fedex, billing, invoice, tail-cost, reference, guide]
 
 ## 5. 拿到明细后怎么用（补尾程）
 
-1. 打开本仓库月度「待追尾程-官方FedEx（自有账号）」清单（见 `monthly-tail-cost-pipeline.md` 与 `scripts/make_missing_tail_lists.py`）。
+1. 打开月度「待追尾程清单 给WXP」工作簿（`scripts/make_missing_tail_lists.py` 产出，见 `monthly-tail-cost-pipeline.md`），
+   看 **`疑似官方 FedEx（待确认）`** 那几票（"账单来源"列 / 明细 sheet 备注）。
 2. 在 FedEx 账单明细里按 **跟踪号（Tracking / Air Waybill No.）** 找到对应票 → 取**实际运费**。
-   - **注意**：OSTK-FedEx 那批清单里**跟踪号为空**（通途没记），需在 FBO 里按 **Account + 日期 + 目的地/收件人** 反查，或在 Overstock 后台取跟踪号。
+   - 缺跟踪号的票：按 **Account + 日期 + 目的地/收件人** 在 FBO 反查。
 3. 按跟踪号/包裹号把真实运费回填月度订单表（键值合并，勿按位置粘）。金额口径与通途/货代账单统一后再上 Google Sheet。
+
+> **哪些不从这里走**：`OSTK/Wayfair`（平台付尾程，**不用导入尾程**）；`美国尾程7条`（独立供应商「7条」结算）；
+> `蜴国际 FedEx` / `GLS 波兰`（各走货代/GLS 账单）。本卡**只服务公司自有官方 FedEx 账号**出的单。
 
 ## 6. 自动化现状（重要：目前不行）
 
