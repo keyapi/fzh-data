@@ -8,6 +8,7 @@ tags: [sellfox, amazon, settlement, okf, log]
 # 变更日志
 
 ## 2026-10-10
+- **新增 ZJ 可填写版（Notion 导入用）**：由底稿整理，保留完整正文，把填写区重排为 Notion 友好的 4 列表（编号/需确认事项/建议/你的答复+证据链接），并把仓库相对链接改为纯文本以免导入 Notion 后失效 → `docs/research/2026-10-10-zj-fillable-handout.md`。
 - **新增填写渠道选型调研**：比较让 ZJ 填写问卷的渠道——Notion 公开页+允许编辑（不推荐，公开可编辑且 prompt-injection 风险）、Notion 访客可编辑单页、Notion 原生表单（公开=匿名、不能改自己的回答）、自建局域网表单（最重、仅内网可达）、Google 表单→表格（最贴合现状，已有 SA+gsheets 读取）、钉钉（候选未深入）；结论与来源见 `docs/research/2026-10-10-zj-questionnaire-collection-options.md`。
 - **补充 Notion 访客单页实测要点（§2.4）**：核实「完整 MD 导入成页 + 简单表格可转（复杂表格降级、需清理）」「Can edit 即可直接填写（非提交）」「Google/Apple/Microsoft 免费登录」「Free 10 访客够用」「国内访问 Mixed、需翻墙兜底」「Notion MCP 无分享/邀请工具，访客邀请须界面手动」；给出落地流程与'填写区改数据库更好填'的建议。
 - **新增分析底稿**：盘点 2026 年 8 月 Amazon 非 V2 月度交易 CSV 与汇总 PDF，记录 65 对文件、13 套本地化表头、零活动及文件名异常，并拆分平台报送收入/退款候选、Amazon 税费、Settlement/银行回款、EN BOM / Tongtool Cost Review 与 FBM/FBA 成本层。
