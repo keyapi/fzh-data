@@ -52,7 +52,20 @@
 | 通途 MCP | `https://mcp.tongtool.com/mcp`；凭证在**父仓库** `tongtool_api/.env`（`TONGTOOL_ERP2_PRIMARY_KEY/SECRET`）；客户端骨架 `tongtool_api/mcp_http.py`（`McpClient(key, secret).call(name, args)`）；**商户合计限流 5 次/分钟** |
 | EN | `https://erpnext.vilavi.cn`；凭证父仓库 `EN_API/.env`（`ERP_API_KEY/SECRET`，头 `Authorization: token k:s`）；**DocType 名带空格要 `%20`**；**`fields=` 里放不存在的字段名会 HTTP 417** |
 
-## 四、建议接手顺序
+## 五、仓库改名（2026-08-19）疑似相关 —— 需评估受影响订单量与是否重算
+
+用户补充：**8 月通途给自发货仓库加了前缀**（`CENTRADE` → `美东-CENTRADE`，美中/波兰同理），**EN `Tongtu Shipping Warehouse` 当时没及时登记、后来才补上，但晚了一段时间（2026-08-19）**。
+
+- 这**很可能就是"空壳单"（`warehouse_name` 为 null）的一个来源**：同步时 EN 侧尚无该仓库记录（或名字对不上）⇒ 仓库解析不出来 ⇒ 交付形态/成本全空。
+- 相关既有记录：`docs/solutions/workflow-issues/tongtu-warehouse-rename-reconciliation.md`（同一次改名的三处对账与登记过程：通途 → 生产 ERPNext `Tongtu Shipping Warehouse` → 财务共享表「订单发货仓库对应成本来源」）。
+- ⚠ **但要小心别把成因单一化**：实测 `WOM-1436` 的 `last_sync_time = 2026-09-24`（**在 8-19 补登记之后**）却仍是 `warehouse_name=null` ⇒ 除改名外**可能还有**别的成因（平台特例 `shopify_api`？导入器未落 `warehouseName`？）。
+
+**待查（本任务应覆盖）**
+1. **受影响订单量**：`warehouse_name is null` 的订单按 `creation`/`last_sync_time` 与 `platform_code` 的分布 —— 是否集中在 8 月中下旬、是否集中在某些平台。
+2. **是否需要重算**：EN 侧应有"重算订单成本"的按钮/函数（用户口述存在）。**重算属写生产数据** ⇒ 先出受影响范围 + 让用户确认，再动；不要全量盲重算。
+3. 对照 `Tongtu Shipping Warehouse` 的记录创建/修改时间，确认"改名时间线"与"空壳单时间分布"是否吻合。
+
+## 六、建议接手顺序
 1. **Package 覆盖 + 尾程是否更新到 EN**（尾程直接影响利润）。
 2. **空壳单普查**：`warehouse_name` 为 null 的比例/分布（全量需逐单取；子表 `Tongtool Order Item` 不能直查）。
 3. **`warehouse_name` 为 null 的根因**（平台特例？仓库映射缺失？同步时字段为空？）→ 再谈修法（按 EN 自定义 app 标准发布链路）。
