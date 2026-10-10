@@ -5,12 +5,13 @@ description: >
   赛狐店名↔渠道账号交叉表、钉钉销售收款确认单迟交/错位审计。当用户提到"赛狐账期"、"Amazon结算"、
   "settlement"、"结算中心V2"、"Custom Transaction"、"列式报表"、"紫鸟插件报表"、"科目映射"、
   "两报表对比"、"账期费用自动取回"、"回款率"、"赛狐店铺↔渠道账号"、"sellfox settlement"、
-  "账期对账"、"账期错位"、"迟交"、"钉钉账期"、"销售收款确认单"、"账期窗口"时触发。
+  "账期对账"、"账期错位"、"迟交"、"钉钉账期"、"销售收款确认单"、"账期窗口"、
+  "国内报税"、"报税底稿"、"非V2报表"、"月度交易报表"、"ZJ问卷"、"Notion填写"时触发。
   不要用于赛狐Excel导入(category/item-cost/item-weight/stock-init/warehouse-restock/multi-attr/other-outbound)或纯广告报告(fetch_ad_reports)；
   也不用于 OSTKUS/Wayfair 平台账期对账(platform-account-reconciliation)。
 metadata:
   module: sellfox_settlement
-  updated: 2026-09-09
+  updated: 2026-10-10
 ---
 
 # 赛狐 Amazon 账期（settlement + 列式报表）
@@ -22,6 +23,7 @@ metadata:
 - `sellfox_settlement/docs/research/saihu-amazon-settlement-autofetch-2026-09-09.md`（§10 试点实测、§11 科目/币种/自定义表、§12 赛狐可否拿+storeName 落地、§13 实测+两表对比+gsheet）
 - `sellfox_settlement/AGENT_HANDOFF.md`（子项目入口/交接）；脚本：`sellfox_settlement/reconcile_amazon.py`；交叉表：`sellfox_settlement/out/storeName_to_account_candidates.csv`
 - 可复跑测试手册：`sellfox_settlement/docs/reference/how-we-tested-2026-09.md`；踩坑：`sellfox_settlement/docs/lessons/lessons-learned.md`
+- **国内报税底稿**：`sellfox_settlement/docs/research/2026-10-09-amazon-non-v2-monthly-tax-analysis.md`（2026-08 Amazon **非 V2** 交易/汇总→平台报送候选/退款/税费/回款/成本 + **§2 给 ZJ 的填写区** + **§11 实施路线**）；填写通道选型 `…/2026-10-10-zj-questionnaire-collection-options.md`；外部问卷约定 `docs/solutions/conventions/external-questionnaire-via-notion.md`；技术答复见 `sellfox_settlement/AGENT_HANDOFF.md` §11
 - 脚本：`sellfox_settlement/reconcile_amazon.py`；交叉表：`sellfox_settlement/out/storeName_to_account_candidates.csv`
 
 ## 关键事实（速查，别再踩）
