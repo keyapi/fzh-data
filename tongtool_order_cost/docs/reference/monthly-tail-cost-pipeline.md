@@ -61,6 +61,47 @@ uv run python tongtool_order_cost/scripts/upload_monthly_order_sheet.py \
 - **另单列**：`needs=1` 但连“历史预估/通途运费”都没有的行（本项目 202607 为 25 行）——需人工确认。
 - **用途**：**核对账单是否已到/是否漏单**（物流商是自动发账单或后台下载，**不会替你逐票查**）。
 
+### 一键出「待追尾程清单」单一工作簿（`scripts/make_missing_tail_lists.py`）
+
+把某月所有缺口（`needs=1 且 物流商运费=0`）整理成**一个** Excel 给 WXP，含 **汇总 / 明细**（+ 条件性的 **无需追-平台付**）：
+
+```bash
+uv run python tongtool_order_cost/scripts/make_missing_tail_lists.py \
+    --en-xlsx "EN上传Cost Review预估尾程 只用尾程 通途非FBA订单YYYYMM <ts>.xlsx" \
+    --month YYYYMM --out "D:\Work\王忠于\成本核算"
+# → 「YYYYMM 待追尾程清单 给WXP YYYYMMDD.xlsx」
+```
+
+- **汇总**：按「账单来源/供应商」统计 包裹数 / 预估合计 / 优先级（高/中/待确认）。
+- **明细**（可直接给 WXP）：逐包裹 `序号, 账单来源, 优先级, 包裹号, 跟踪号, 发货日期, 发货时间, 发货方式, 邮寄方式, 渠道, 渠道账号, 通途SKU, 平台SKU, 订单号, 发货数量, 历史预估尾程费用, 是否补发, 备注`。
+  排序 `优先级 → 账单来源 → 发货日期 → 发货时间 → 包裹号`，冻结首行。`备注` 标出「补发单」「无跟踪号→按账号+日期反查」「无预估」等。
+- **无需追-平台付(待确认)**（**仅当存在**非补发的平台付行时生成）：默认不追，但**保留不丢**（对账：待追 + 无需追 = 全部缺口）。
+
+**账单来源判定**（按「邮寄方式」链，如 `M6180蜴国际>>M6180蜴国际-Fedex` 子串匹配，**OSTK 必须排在通用 FedEx 前**）：
+
+| 账单来源 | 判据 | 优先级 | 说明 |
+|---|---|---|---|
+| **蜴国际 FedEx（货代）** | 链含「蜴国际」 | 高 | **重点**；找蜴国际/YIGlobal 要账单 |
+| **GLS 波兰** | 链含 `GLS` | 高 | **重点**；GLS 账单/后台 |
+| 「7条」尾程供应商 | 链含「7条」（如 `美国尾程7条>>FEDEX Economy TX`） | 中 | 美国尾程供应商「7条」结算 |
+| CENTRADE | 链含 `CENTRADE` | 中 | Centrade 结算 |
+| 疑似官方 FedEx（待确认） | 仅剩的 `US-FedEx>>US-FedEx` | 待确认 | 可能是公司自有 FedEx 账号 |
+| 平台付尾程（OSTK/Wayfair） | 链含 `OSTK` 且**非补发** | **不追** | 平台付尾程，无需导入（单列 sheet 备查） |
+| 平台渠道补发（需确认尾程） | 链含 `OSTK` 且**是补发单** | 待确认 | 补发货→可能用自有尾程，**需确认是否追** |
+
+> **补发单口径**：`是否补发货=是` 或 `订单号` 以 `-M<数字>` 结尾 → 标「是否补发=是 / 备注=补发单」。
+> 补发单**即使**走 OSTK/Wayfair，也**不能**当平台付直接放过（可能用自有尾程）→ 归「平台渠道补发（需确认尾程）」待确认。
+> （与 EN app 侧规则一致：补发单 `-M<num>` + 渠道 OSTK/Wayfair → 视为需尾程。）
+
+> **领域口径（2026-10 确认）**：
+> - **OSTK/Wayfair 常态不用导入尾程**（平台付）；**但补发单除外**（可能用自有尾程，需确认）。
+> - `美国尾程7条` 是**独立尾程供应商「7条」**，不是官方 FedEx。
+> - `US-FedEx>>US-FedEx` **可能是官方 FedEx，待确认** → 若是，去 **FedEx Billing Online** 下载（`fedex-billing-online-download.md`）。
+> - **重点追查：蜴国际 FedEx + GLS 波兰**（量大）。202608 缺口 527 包裹 = 蜴国际 250 + GLS 228 + CENTRADE 36 + 「7条」5 + 疑似官方FedEx 1 + 平台渠道补发 7。
+
+> **FedEx 无账单 API、官网自动化登录被反爬拦截**（2026-10-10 实测）→ 官方账单只能**人工**下载。
+> 详见 `fedex-billing-online-download.md` 与 `../research/2026-10-10-fedex-invoice-api-and-official-parcels.md`。
+
 ## 注意
 
 - **通途报表生成有限流**：不要短时间反复生成；`tongtu.orderdetail.export` 默认复用「今日同范围已完成」结果（`--no-reuse` 强制新生成），并在提交后 90s 内未出现新行时报 `RATE_LIMITED`/`NO_NEW_JOB`。

@@ -30,6 +30,8 @@ metadata:
 | SKU 替换预检 | `uv run python tongtool_order_cost/scripts/remap_gsheet_sku.py --sheet 通途订单202606` |
 | 确认后写回 | 同上加 `--apply` |
 | 通途主档是否存在 | `uv run python tongtool_order_cost/scripts/lookup_tongtool_sku.py SKU1 SKU2` |
+| 月度尾程上 gsheet | `uv run python tongtool_order_cost/scripts/upload_monthly_order_sheet.py --xlsx ... --month YYYYMM --in-place` |
+| 月度缺尾清单（单一工作簿给 WXP） | `uv run python tongtool_order_cost/scripts/make_missing_tail_lists.py --en-xlsx ... --month YYYYMM --out ...` |
 
 ## 铁律
 

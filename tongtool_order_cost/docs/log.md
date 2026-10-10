@@ -5,6 +5,12 @@ title: tongtool_order_cost 变更日志
 ---
 # 变更日志
 
+## 2026-10-10
+- **待追尾程清单（单一工作簿给 WXP）**：新增 `scripts/make_missing_tail_lists.py`，把某月缺口（`needs=1 且 物流商运费=0`）整理成**一个** Excel，含 **汇总 / 明细 / 无需追(平台付)** 三 sheet，明细含 包裹号·订单号·跟踪号·渠道·通途SKU·日期·预估·备注（冻结首行）。
+- **账单来源分类修正（用户领域口径）**：① **OSTK/Wayfair 常态不用导入尾程**（平台付）→ 不追；**但补发单除外**（`是否补发货=是` 或 `订单号 -M<数字>` → 可能用自有尾程，需确认）→ 单列「平台渠道补发（需确认尾程）」；② `美国尾程7条` 是**独立供应商「7条」**，不是官方 FedEx；③ **`US-FedEx>>US-FedEx` 疑似官方 FedEx（待确认）**；④ **重点追查 GLS 波兰 + 蜴国际 FedEx**。202608 缺口 527 包裹 = 蜴国际 250 + GLS 228 + CENTRADE 36 + 「7条」5 + 疑似官方FedEx 1 + 平台渠道补发 7（本月无非补发平台付行）。产出 `202608 待追尾程清单 给WXP 20261010.xlsx`。
+- **FedEx 账单下载指引卡片**：新增 `docs/reference/fedex-billing-online-download.md`（FBO 登录 / Search-Download 与 Reporting 两条下载路径 / 30MB·14 天·SmartPost 限制 / 按跟踪号查票）+ 给 黄总/WXP 的单页卡片。
+- **调研结论**：FedEx **无账单/发票下载 API**（门户只有 Rate/Ship/Track 等）；官网**自动化登录被反爬系统性拦截**（全新 Playwright 重试 3 次均 `[200]` 连接错误，连 Track 页也 `system-error`）→ 官方账单只能**人工**下载。记 `docs/research/2026-10-10-fedex-invoice-api-and-official-parcels.md`。
+
 ## 2026-09-18
 - **月度链路 runbook**：新增 `docs/reference/monthly-tail-cost-pipeline.md`（通途导出→清表头→EN 列表入口→键值合并→GSheet in-place；含覆盖率口径与「缺尾清单」整理）。
 - **口径结论**：`needs=1` 分母下，202606 通途实收尾程覆盖 **99.6%**（李惠预估补 21、0 遗漏）；202607 首轮 **75.0%** → 09-18 再导后 **87.3%**，EN 历史预估补 833，**仍缺 25**。
