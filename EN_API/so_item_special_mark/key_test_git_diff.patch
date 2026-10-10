@@ -1,0 +1,20 @@
+diff --git a/key_test/hooks.py b/key_test/hooks.py
+index 4f17f31..7be41a8 100644
+--- a/key_test/hooks.py
++++ b/key_test/hooks.py
+@@ -49,8 +49,9 @@ app_include_js = [
+ doctype_js = {
+     "Item Group": "public/js/item_group.js",
+     # "Work Order": "public/js/work_order.js",
+-    "Routing": "public/js/routing.js", 
+-    "BOM": "public/js/bom.js"
++    "Routing": "public/js/routing.js",
++    "BOM": "public/js/bom.js",
++    "Sales Order": "public/js/sales_order.js"
+ }
+ 
+ # doctype_list_js - 添加列表视图JS
+--- status ---
+ M key_test/hooks.py
+ M key_test/item_utils.py
+?? key_test/public/js/sales_order.js

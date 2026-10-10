@@ -1,0 +1,62 @@
+--- a/key_test/item_utils.py
++++ b/key_test/item_utils.py
+@@ -1266,8 +1266,11 @@
+ # 20241022 增加检索半成品皮壳，增加出货日期处理，增加标签组合验证
+ # 20241022 增加检索半成品皮壳，增加出货日期处理，增加标签组合验证
+ @frappe.whitelist()
+-def read_excel_file(file_url):
++def read_excel_file(file_url, customer=None, customer_name=None):
+     full_file_path = get_absolute_path(file_url)
++
++    # 只有销售订单为 FBA（客户名/客户全称含「FBA」）时，才给描述/通途产品名加「碎海绵」前缀
++    so_is_fba = "FBA" in f"{customer or ''} {customer_name or ''}".upper()
+ 
+     # 定义物料前缀对照表
+     prefix_mapping = {
+@@ -1306,6 +1309,10 @@
+             type_of_manufacturing = TYPE_OF_MANUFACTURING_MAP.get(raw_val, raw_val or '')
+             tongtool_item_name = row.get('物料名称', '')
+ 
++            # 客户物料号(ref_code)对应的特殊标记：若为「碎海绵」，则加在描述最前面
++            special_mark = frappe.db.get_value('Item Customer Detail', filters={'ref_code': customer_item_code}, fieldname='special_mark')
++            special_mark_prefix = "碎海绵 " if (so_is_fba and (special_mark or '').strip() == "碎海绵") else ""
++
+             # 默认的 item_code 查找
+             item_code = frappe.db.get_value('Item Customer Detail', filters={'ref_code': customer_item_code}, fieldname='parent')
+             search_item_code = item_code
+@@ -1321,7 +1328,7 @@
+                 if item_info:
+                     # 前缀处理 description
+                     description_prefix = f"{col_bcp_val.strip()} " if col_bcp_val and col_bcp_val.strip() != "" else "成品 "
+-                    description = f"{description_prefix}{item_info.get('description', '')}"
++                    description = f"{special_mark_prefix}{description_prefix}{item_info.get('description', '')}"
+ 
+                     # 添加找到的物料信息
+                     item_codes.append({
+@@ -1336,7 +1343,7 @@
+                         'delivery_date': delivery_date,  # 添加出货日期
+                         'custom_fba_sku': custom_fba_sku,  # 添加 FBA SKU
+                         'type_of_manufacturing': type_of_manufacturing,  # 添加生产方式
+-                        'tongtool_item_name': tongtool_item_name,
++                        'tongtool_item_name': f"{special_mark_prefix}{tongtool_item_name}",
+                     })
+                 # else:
+                 #     # 未找到配套物料，description 写明提示
+@@ -1357,7 +1364,7 @@
+                         if item_info:
+                             # 前缀处理 description
+                             description_prefix = f"{col_bcp_val.strip()} " if col_bcp_val and col_bcp_val.strip() != "" else "成品 "
+-                            description = f"{description_prefix}{item_info.get('description', '')}"
++                            description = f"{special_mark_prefix}{description_prefix}{item_info.get('description', '')}"
+ 
+                             # 添加找到的物料信息
+                             item_codes.append({
+@@ -1372,7 +1379,7 @@
+                                 'delivery_date': delivery_date,  # 添加出货日期
+                                 'custom_fba_sku': custom_fba_sku,  # 添加 FBA SKU
+                                 'type_of_manufacturing': type_of_manufacturing,  # 添加生产方式
+-                                'tongtool_item_name': tongtool_item_name,
++                                'tongtool_item_name': f"{special_mark_prefix}{tongtool_item_name}",
+                             })
+                             continue  # 跳过后续未找到逻辑
+ 

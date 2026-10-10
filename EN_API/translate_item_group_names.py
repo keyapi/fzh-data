@@ -1,19 +1,26 @@
 # -*- coding: utf-8 -*-
-"""批量翻译 EN 物料组中文名 → item_group_translation（腾讯云 TMT）。
+"""批量翻译 EN 物料组 / 海绵尺寸 中文名 → 对应翻译字段（腾讯云 TMT）。
 
-范围（生产「产品」子树）:
-  - is_group=0 的叶子节点（约 410）
-  - is_leaf_group=1 的叶子组 LGKS（约 14，与上集不重叠）
+目标（--target）:
+  item-group（默认）: 生产「产品」子树下的叶子物料组 → Item Group.item_group_translation
+      - is_group=0 的叶子节点（约 410）
+      - is_leaf_group=1 的叶子组 LGKS（约 14，与上集不重叠）
+  foam-size: Item Attribute Value All Foam Size.attribute_value → .foam_size_translation
+      - 中文名末尾的「（153cm）」这类括号尺寸会先去掉，只翻描述部分（数字由报关导出侧再拼）
 
 用法:
-  uv run python translate_item_group_names.py --dry-run          # 默认：拉取 + TMT 翻译，写 Excel，不写 EN
-  uv run python translate_item_group_names.py --dry-run --fetch-only   # 仅拉中文，缺密钥也可
-  uv run python translate_item_group_names.py --apply            # 写回 EN（需用户确认后再跑）
+  uv run python translate_item_group_names.py --dry-run                         # 默认：拉取 + TMT 翻译，写 Excel，不写 EN
+  uv run python translate_item_group_names.py --target foam-size --dry-run
+  uv run python translate_item_group_names.py --dry-run --fetch-only            # 仅拉中文，缺密钥也可
+  uv run python translate_item_group_names.py --target foam-size --apply        # 写回 EN（需用户确认后再跑）
 
 环境变量（EN_API/.env 或根 .env）:
   ERP_API_KEY / ERP_API_SECRET          生产 EN（或 PROD_ERP_API_*）
   TENCENT_SECRET_ID / TENCENT_SECRET_KEY   或 TENCENTCLOUD_SECRET_ID / TENCENTCLOUD_SECRET_KEY
   TENCENT_TMT_REGION  可选，默认 ap-guangzhou
+
+译文规范（术语表 / 句首大写 / 词形规则）由服务端 `get_translation_rules` 提供，
+与 `delivery_plan/api/translate_api.py` 同源；服务端没有该接口时无法翻译（可用 --fetch-only）。
 """
 from __future__ import annotations
 
@@ -21,6 +28,7 @@ import argparse
 import json
 import math
 import os
+import re
 import sys
 import time
 from datetime import datetime
@@ -54,9 +62,91 @@ COL_EXISTING = "现有翻译"
 COL_RESULT = "处理结果"
 COL_STATUS = "状态"
 COL_NOTE = "备注"
+COL_ABBR = "abbr/编码"
 
 TMT_MAX_CHARS = 1800  # 单次请求总字符上限（文档 2000，留余量）
 TMT_QPS_SLEEP = 0.25  # 5 次/秒
+
+# 固定译名与大小写/词形规则**不在此维护**——由服务端接口
+# `delivery_plan.api.translate_api.get_translation_rules` 提供（单一来源）。
+
+# 海绵尺寸目标
+FOAM_DT = "Item Attribute Value All Foam Size"
+FOAM_ZH_FIELD = "attribute_value"
+FOAM_EN_FIELD = "foam_size_translation"
+
+# 中文名末尾的尺寸：带括号的「（153cm）」或裸尾缀「153cm」「153x60x10cm」
+# 只翻描述部分，尺寸数字由报关导出侧用编码里的尺寸再拼（避免重复/口径不一）
+_SIZE_TAIL_RE = re.compile(
+    r"(?:"
+    r"[（(][^（()）]*\d[^（()）]*[)）]"                       # （153cm） / （60x56x20cm）
+    r"|\d+(?:\.\d+)?(?:[xX×*]\d+(?:\.\d+)?)+(?:cm|CM)?"     # 153x60x10 / 153x60x10cm
+    r"|\d+(?:\.\d+)?(?:cm|CM)"                              # 153cm
+    r")\s*$"
+)
+
+
+def strip_trailing_size(zh: str) -> str:
+    """去掉中文名末尾的尺寸（带括号或裸尾缀），只留描述部分。"""
+    return _SIZE_TAIL_RE.sub("", (zh or "").strip()).strip()
+
+
+# ──────────────────────────────────────────────────────────────
+# 译文规范化：算法须与 delivery_plan/api/translate_api.py 的
+# normalize_case / _finalize 保持一致；**规则数据由服务端接口提供**（单一来源），
+# 本脚本不手抄术语表，避免两边漂移。
+# ──────────────────────────────────────────────────────────────
+RULES_METHOD = "delivery_plan.api.translate_api.get_translation_rules"
+
+_TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z'’\-]*")
+
+
+def normalize_case(en: str, case_keep: set[str]) -> str:
+    """统一为句首大写（sentence case）：其余小写，保留缩写与 case_keep 中的品牌词。"""
+    def _fix(m: re.Match) -> str:
+        tok = m.group(0)
+        core = tok.strip("'’-")
+        if core in case_keep or (len(core) > 1 and core.isupper()):
+            return tok
+        return tok.lower()
+
+    s = _TOKEN_RE.sub(_fix, en or "")
+    m = re.search(r"[A-Za-z]", s)
+    if m:
+        i = m.start()
+        s = s[:i] + s[i].upper() + s[i + 1:]
+    return s
+
+
+class TranslationRules:
+    """从服务端拉取的术语/大小写规则。"""
+
+    def __init__(self, client: "ErpnextClient") -> None:
+        self.client = client
+        self.case_keep: set[str] = set()
+        self.overrides: dict[str, dict[str, str]] = {}
+        self.word_rules: dict[str, list[tuple[str, str, str]]] = {}
+
+    def load(self) -> None:
+        resp = self.client._get(f"{self.client.base_url}/api/method/{RULES_METHOD}")
+        msg = resp.json().get("message") or {}
+        self.case_keep = set(msg.get("case_keep") or [])
+        self.overrides = msg.get("term_overrides") or {}
+        self.word_rules = {
+            t: [(r[0], r[1], r[2]) for r in rules]
+            for t, rules in (msg.get("word_rules") or {}).items()
+        }
+
+    def finalize(self, en: str, zh: str, target: str) -> str:
+        """TMT 结果 → 最终入库值：术语表 → 句首大写 → 中文条件下的词形规则。"""
+        en = (en or "").strip()
+        if not en:
+            return ""
+        en = self.overrides.get(target, {}).get(zh) or normalize_case(en, self.case_keep)
+        for kw, pat, repl in self.word_rules.get(target, ()):
+            if kw in (zh or ""):
+                en = re.sub(pat, repl, en, flags=re.IGNORECASE)
+        return en
 
 
 def _load_dotenv(candidates: list[Path]) -> None:
@@ -114,8 +204,18 @@ class ErpnextClient:
         return resp.json().get("data", [])
 
     def update_translation(self, name: str, en: str) -> None:
-        url = f"{self.base_url}/api/resource/Item Group/{requests.utils.quote(name, safe='')}"
-        self._get(url, method="PUT", json={"item_group_translation": en})
+        self.update_field("Item Group", name, "item_group_translation", en)
+
+    def update_field(self, dt: str, name: str, field: str, en: str) -> None:
+        url = (f"{self.base_url}/api/resource/{requests.utils.quote(dt, safe='')}"
+               f"/{requests.utils.quote(name, safe='')}")
+        self._get(url, method="PUT", json={field: en})
+
+    def fetch_all_foam_sizes(self) -> list[dict[str, Any]]:
+        url = f"{self.base_url}/api/resource/{requests.utils.quote(FOAM_DT, safe='')}"
+        fields = ["name", FOAM_ZH_FIELD, "abbr", FOAM_EN_FIELD]
+        resp = self._get(url, params={"fields": json.dumps(fields), "limit_page_length": "0"})
+        return resp.json().get("data", [])
 
     def _get(self, url: str, method: str = "GET", **kwargs: Any) -> requests.Response:
         last: Exception | None = None
@@ -181,10 +281,34 @@ def select_targets(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "parent_item_group": _to_str(d.get("parent_item_group")),
             "is_leaf_group": is_leaf_group,
             "node_type": node_type,
+            "abbr": "",
             "zh": zh,
             "existing_en": _to_str(d.get("item_group_translation")),
         })
     targets.sort(key=lambda x: (x["node_type"], x["custom_model_id"] or "zzz", x["name"]))
+    return targets
+
+
+def select_foam_targets(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """海绵尺寸：attribute_value（去尾部括号尺寸）→ foam_size_translation。"""
+    targets: list[dict[str, Any]] = []
+    for d in rows:
+        name = _to_str(d.get("name"))
+        if not name:
+            continue
+        raw = _to_str(d.get(FOAM_ZH_FIELD)) or name
+        targets.append({
+            "name": name,
+            "item_group_name": "",
+            "custom_model_id": "",
+            "parent_item_group": "",
+            "is_leaf_group": 0,
+            "node_type": "海绵尺寸",
+            "abbr": _to_str(d.get("abbr")),
+            "zh": strip_trailing_size(raw),
+            "existing_en": _to_str(d.get(FOAM_EN_FIELD)),
+        })
+    targets.sort(key=lambda x: x["name"])
     return targets
 
 
@@ -273,6 +397,8 @@ def translate_all(
     secret_id: str,
     secret_key: str,
     region: str,
+    target: str,
+    rules: "TranslationRules",
 ) -> tuple[int, int, list[str]]:
     """返回 (成功数, 失败数, 错误列表)。"""
     need = [t for t in targets if t["zh"]]
@@ -302,7 +428,8 @@ def translate_all(
         offset += len(batch)
 
     for t in targets:
-        t["en"] = zh_to_en.get(t["zh"], "")
+        # TMT 结果 → 规范化（术语表与大小写规则由服务端提供，本脚本不另立一套）
+        t["en"] = rules.finalize(zh_to_en.get(t["zh"], ""), t["zh"], target)
         if not t["zh"]:
             t["result"] = "跳过"
             t["status"] = "空中文名"
@@ -333,6 +460,7 @@ def build_report_rows(targets: list[dict[str, Any]], *, fetch_only: bool) -> lis
             COL_SEQ: i,
             COL_NAME: t["name"],
             COL_IG_NAME: t["item_group_name"],
+            COL_ABBR: t.get("abbr", ""),
             COL_MODEL: t["custom_model_id"],
             COL_PARENT: t["parent_item_group"],
             COL_NODE_TYPE: t["node_type"],
@@ -356,22 +484,24 @@ def write_excel(
         pd.DataFrame(detail_rows).to_excel(w, sheet_name="明细", index=False)
 
 
-def apply_updates(client: ErpnextClient, targets: list[dict[str, Any]], dry_run: bool) -> tuple[int, int, int]:
+def apply_updates(client: ErpnextClient, targets: list[dict[str, Any]], dry_run: bool,
+                  dt: str, field: str) -> tuple[int, int, int]:
+    """写回。**已有译文的一律跳过**——保证同一个中文值永远对应同一个译文。"""
     ok = skip = fail = 0
     for t in targets:
         if t.get("result") != "成功" or not t.get("en"):
             skip += 1
             continue
-        if t.get("existing_en") == t["en"]:
+        if t.get("existing_en"):
             t["result"] = "跳过"
-            t["status"] = "已有相同译文"
+            t["status"] = "已有译文（不覆盖）"
             skip += 1
             continue
         if dry_run:
             ok += 1
             continue
         try:
-            client.update_translation(t["name"], t["en"])
+            client.update_field(dt, t["name"], field, t["en"])
             ok += 1
             time.sleep(0.15)
         except requests.RequestException as e:
@@ -396,25 +526,39 @@ def main() -> int:
     if sys.platform == "win32":
         sys.stdout.reconfigure(encoding="utf-8")
 
-    ap = argparse.ArgumentParser(description="物料组中文名 → item_group_translation (TMT)")
+    ap = argparse.ArgumentParser(description="物料组 / 海绵尺寸 中文名 → 翻译字段 (TMT)")
     ap.add_argument("--env", choices=["test", "prod"], default="prod")
+    ap.add_argument("--target", choices=["item-group", "foam-size"], default="item-group",
+                    help="翻译目标：item-group=物料组→item_group_translation；"
+                         "foam-size=海绵尺寸→foam_size_translation")
     ap.add_argument("--dry-run", action="store_true", default=True,
                     help="只出报告，不写 EN（默认）")
-    ap.add_argument("--apply", action="store_true", help="写回 item_group_translation")
+    ap.add_argument("--apply", action="store_true", help="写回 EN")
     ap.add_argument("--fetch-only", action="store_true",
                     help="仅拉取中文名单，不调用 TMT")
     args = ap.parse_args()
     dry_run = not args.apply
 
+    target_cfg = {
+        "item-group": ("Item Group", "item_group_translation", "物料组翻译", "Item Group"),
+        "foam-size": (FOAM_DT, FOAM_EN_FIELD, "海绵尺寸翻译", FOAM_DT),
+    }[args.target]
+    dt, field, label, fetch_dt = target_cfg
+
     base, key, sec = resolve_erp_creds(args.env)
     print(f"环境: {args.env} ({base})")
+    print(f"目标: {args.target} → {dt}.{field}")
     print(f"模式: {'DRY-RUN' if dry_run else 'APPLY'}"
           f"{' + 仅拉取' if args.fetch_only else ''}")
 
     client = ErpnextClient(base, key, sec)
-    print("拉取 Item Group …")
-    all_rows = client.fetch_all_item_groups()
-    targets = select_targets(all_rows)
+    print(f"拉取 {fetch_dt} …")
+    if args.target == "foam-size":
+        all_rows = client.fetch_all_foam_sizes()
+        targets = select_foam_targets(all_rows)
+    else:
+        all_rows = client.fetch_all_item_groups()
+        targets = select_targets(all_rows)
     print(f"目标节点: {len(targets)}")
     by_type: dict[str, int] = {}
     for t in targets:
@@ -431,8 +575,17 @@ def main() -> int:
             print("未配置 TENCENT_SECRET_ID / TENCENT_SECRET_KEY → 仅输出中文名单")
         args.fetch_only = True
     else:
+        rules = TranslationRules(client)
+        try:
+            rules.load()
+        except Exception as e:
+            raise SystemExit(
+                f"无法从服务端获取翻译规则（{RULES_METHOD}）：{e}\n"
+                "该接口属于 delivery_plan/api/translate_api.py，需先同步到该环境。"
+            )
         print(f"TMT 区域: {region}")
-        tmt_ok, tmt_fail, tmt_errors = translate_all(targets, sid, sk, region)
+        tmt_ok, tmt_fail, tmt_errors = translate_all(
+            targets, sid, sk, region, args.target, rules)
         print(f"TMT: 成功 {tmt_ok} 失败 {tmt_fail}")
 
     detail = build_report_rows(targets, fetch_only=args.fetch_only)
@@ -440,12 +593,13 @@ def main() -> int:
     apply_ok = apply_skip = apply_fail = 0
     if args.apply and not args.fetch_only:
         print("写回 EN …")
-        apply_ok, apply_skip, apply_fail = apply_updates(client, targets, dry_run=False)
+        apply_ok, apply_skip, apply_fail = apply_updates(
+            client, targets, dry_run=False, dt=dt, field=field)
         detail = build_report_rows(targets, fetch_only=False)
 
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     suffix = "fetch" if args.fetch_only else ("dryrun" if dry_run else "apply")
-    out_path = _OUT / f"物料组翻译_{suffix}_{ts}.xlsx"
+    out_path = _OUT / f"{label}_{suffix}_{ts}.xlsx"
 
     success = sum(1 for r in detail if r[COL_RESULT] == "成功")
     skipped = sum(1 for r in detail if r[COL_RESULT] == "跳过")
@@ -454,8 +608,8 @@ def main() -> int:
 
     summary = {
         "总行数": len(detail),
-        "KS叶子": by_type.get("KS叶子", 0),
-        "叶子组LGKS": by_type.get("叶子组(LGKS)", 0),
+        "目标": args.target,
+        "节点类型": "；".join(f"{k}:{v}" for k, v in sorted(by_type.items())),
         "成功": success,
         "跳过": skipped,
         "失败": failed,

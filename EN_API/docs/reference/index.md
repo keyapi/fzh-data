@@ -11,3 +11,4 @@ tags: [en-api, reference]
 |------|------|
 | 物料组英文翻译管道 | [item-group-translation-pipeline.md](item-group-translation-pipeline.md) |
 | 腾讯云 TMT 开通与密钥 | [tmt-setup.md](tmt-setup.md) |
+| BOM Cost List V2 报表逻辑与列定义 | [BOM成本报表逻辑.md](BOM成本报表逻辑.md) |

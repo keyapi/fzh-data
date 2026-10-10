@@ -1,6 +1,8 @@
 // BOM物料清单 自定义脚本
 frappe.ui.form.on('BOM', {
     refresh: function(frm) {
+        // 成品 BOM 且只有「包装」一道工序时，把「工费成本」显示成「工费成本（包装成本）」
+        setTimeout(() => apply_packaging_label(frm), 0);
         // 直接获取主单据的item字段值
         const main_item = frm.doc.item;
         // 条件判断：主单据item是否以SXBZCP开头
@@ -425,6 +427,17 @@ function calculateOperationCosts(frm, cdt, cdn, newHourRateLabour, newHourRateMa
 }
 
 frappe.ui.form.on('BOM Operation', {
+    // 工序增删改后，重新判断是否需要把「工费成本」显示为「工费成本（包装成本）」
+    operation(frm) {
+        setTimeout(() => apply_packaging_label(frm), 0);
+    },
+    operations_add(frm) {
+        setTimeout(() => apply_packaging_label(frm), 0);
+    },
+    operations_remove(frm) {
+        setTimeout(() => apply_packaging_label(frm), 0);
+    },
+
     workstation(frm, cdt, cdn) {
         const row = locals[cdt][cdn];
         if (!row.workstation) return;
@@ -452,6 +465,25 @@ frappe.ui.form.on('BOM Operation', {
     //     calculateOperationCosts(frm, cdt, cdn);
     // }
 });
+
+// ===== 成品 BOM 仅「包装」工序：工费成本标签补充「（包装成本）」 =====
+// 纯前端显示，不改任何数据；条件不满足时恢复为标准标签（其它 BOM 零影响）
+// 条件：BOM 的 item 以 "KS" 开头（成品） 且 工序子表正好只有一道工序、且该工序名为「包装」
+function apply_packaging_label(frm) {
+    // 注意：ERPNext 的 refresh() 会用 meta 的原始标签重建（=「工费成本 (CNY)」），
+    // 所以本函数必须延后执行（setTimeout）且基于“当前标签”追加，不能写死标签文本。
+    const f = frm.get_field && frm.get_field('operating_cost');
+    if (!f) return;
+    const ops = frm.doc.operations || [];
+    const hit = (frm.doc.item || '').startsWith('KS')
+             && ops.length === 1 && ((ops[0].operation || '') === '包装');
+    const cur = (f.df && f.df.label) || __('Operating Cost');
+    const base = cur.replace('（包装成本）', '');
+    const want = hit ? base + '（包装成本）' : base;
+    if (!f.df || f.df.label !== want) {
+        frm.set_df_property('operating_cost', 'label', want);
+    }
+}
 
 // ===== 替换面料：把本 BOM 子表里的旧物料替换为新物料 =====
 function replace_bom_item_dialog(frm) {
