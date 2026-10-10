@@ -61,6 +61,26 @@ uv run python tongtool_order_cost/scripts/upload_monthly_order_sheet.py \
 - **另单列**：`needs=1` 但连“历史预估/通途运费”都没有的行（本项目 202607 为 25 行）——需人工确认。
 - **用途**：**核对账单是否已到/是否漏单**（物流商是自动发账单或后台下载，**不会替你逐票查**）。
 
+### 按承运商/货代拆清单（`scripts/make_missing_tail_lists.py`）
+
+一键把上述缺口按「谁出账单」拆成两份 xlsx（包裹级，含 包裹号/跟踪号/日期/渠道/通途SKU/订单号/历史预估），
+给不同对象去要账单：
+
+```bash
+uv run python tongtool_order_cost/scripts/make_missing_tail_lists.py \
+    --en-xlsx "EN上传Cost Review预估尾程 只用尾程 通途非FBA订单YYYYMM <ts>.xlsx" \
+    --month YYYYMM --out "D:\Work\王忠于\成本核算"
+```
+
+- **官方 FedEx（自有账号）** → 给 黄总/WXP，去 **FedEx Billing Online** 下载账单（见 `fedex-billing-online-download.md`）。
+  判据：`邮寄方式` 链含 `FedEx` 且不含「蜴国际」；202608 = **13 票**。
+- **蜴国际 FedEx（货代）** → 给物流商；判据：`邮寄方式` 链含「蜴国际」；202608 = **250 票**。
+- 其余缺口（GLS 波兰 / CENTRADE）脚本只**打印提示**，不单独出文件。
+- ⚠️ **官方 FedEx 里 OSTK-FedEx/Wayfair 那批通途无跟踪号** → 账单需按 账号+日期+目的地 反查。
+
+> **FedEx 无账单 API、官网自动化登录被反爬拦截**（2026-10-10 实测）→ 官方账单只能**人工**下载。
+> 详见 `fedex-billing-online-download.md` 与 `../research/2026-10-10-fedex-invoice-api-and-official-parcels.md`。
+
 ## 注意
 
 - **通途报表生成有限流**：不要短时间反复生成；`tongtu.orderdetail.export` 默认复用「今日同范围已完成」结果（`--no-reuse` 强制新生成），并在提交后 90s 内未出现新行时报 `RATE_LIMITED`/`NO_NEW_JOB`。

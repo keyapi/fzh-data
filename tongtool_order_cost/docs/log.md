@@ -5,6 +5,11 @@ title: tongtool_order_cost 变更日志
 ---
 # 变更日志
 
+## 2026-10-10
+- **FedEx 官方账单追补**：WXP 反馈官方 FedEx 包裹运费未上传、黄总想不起下载方式。① 新增缺尾清单脚本 `scripts/make_missing_tail_lists.py`（按「谁出账单」拆 官方 FedEx / 蜴国际 FedEx 两份 xlsx，包裹级、冻结首行）；202608 官方 FedEx 缺尾 **13 票（¥1,140.19）/ 蜴国际 250 票**。
+- **FedEx 账单下载指引卡片**：新增 `docs/reference/fedex-billing-online-download.md`（FBO 登录 / Search-Download 与 Reporting 两条下载路径 / 30MB·14 天·SmartPost 限制 / 按跟踪号查票）+ 给 黄总/WXP 的单页卡片。
+- **调研结论**：FedEx **无账单/发票下载 API**（门户只有 Rate/Ship/Track 等）；官网**自动化登录被反爬系统性拦截**（全新 Playwright 重试 3 次均 `[200]` 连接错误，连 Track 页也 `system-error`）→ 官方账单只能**人工**下载。记 `docs/research/2026-10-10-fedex-invoice-api-and-official-parcels.md`。
+
 ## 2026-09-18
 - **月度链路 runbook**：新增 `docs/reference/monthly-tail-cost-pipeline.md`（通途导出→清表头→EN 列表入口→键值合并→GSheet in-place；含覆盖率口径与「缺尾清单」整理）。
 - **口径结论**：`needs=1` 分母下，202606 通途实收尾程覆盖 **99.6%**（李惠预估补 21、0 遗漏）；202607 首轮 **75.0%** → 09-18 再导后 **87.3%**，EN 历史预估补 833，**仍缺 25**。
