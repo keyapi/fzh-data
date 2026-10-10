@@ -95,3 +95,9 @@ uv run python sellfox_settlement/reconcile_amazon.py reconcile --settlement data
   - T06 FBM 连接：可用 `order id + sku` 法；**或手动下载通途订单 Excel（含尾程）**；**通途尾程靠人工导入，导入后第二天通途下载才显示更新后的尾程**；通途 API 时效**未验证**；**一次下载不能跨太久时间**；**EN 侧是否及时/完整更新未知**；**EN App `tongtool_integration` 对接通途可能需进一步完善**。
   - T07 FBA 探针：**报表里的 FBA 订单不一定出现在通途**；仍先做探针（见底稿 §11 阶段 6）。
 - **Codex 接手入口**：先读本 §11 + 底稿 §11（阶段 1→8）；阶段 1—3 与 5—8 不依赖财务，可直接开工；阶段 4/5/6 受上面 T 答复与 ZJ 的 F 答复约束（**财务未拍板的口径只并列输出候选值，不写死**）。
+- **2026-10-10 技术验证已跑完，尚未代替申报**（分支 `feature/amazon-non-v2-tech-validation`）。边界与禁止推断见 `docs/solutions/tooling-decisions/amazon-non-v2-tax-technical-validation.md`。实测计数在三份调研，不要从交接页再抄一套去对账：
+  - `docs/research/2026-10-10-account-technical-validation.md`
+  - `docs/research/2026-10-10-cost-technical-validation.md`
+  - `docs/research/2026-10-10-pdf-technical-validation.md`
+- **脚本**（只读；`--out` 必须在仓库外）：`non_v2_validation.py`、`pdf_validation.py`、`monthly_validation.py`、`account_validation.py`、`cost_validation.py`、`settlement_validation.py`、`validation_paths.py`。测试：`uv run pytest tests/sellfox_settlement -q`。
+- **还不能做的事**：ZJ 的 F01—F20 仍空；未登记账号不要自行写入 EN 或运营表；当前 BOM 不能当 8 月历史成本；`Refund.other` 不能按行拆回商品/运费/税；银行实际到账仍缺 8 月 Amazon 流水。`bank_evidence_probe.py` 与 `bank_evidence_finish.py` 不在本分支文件清单里，私有脚本不要入库。

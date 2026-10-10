@@ -22,3 +22,4 @@ timestamp: 2026-08-31
 | 把「改同事的 Colab notebook」做成独立工具箱 colab_kit（而不是塞进 google_drive_permissions） | [colab-kit-notebook-edit-toolbox.md](colab-kit-notebook-edit-toolbox.md) |
 | Excel 交付物金额核对 —— 公式单元格无缓存值 + LibreOffice 重算 | [excel-formula-cells-and-recalc-verification.md](excel-formula-cells-and-recalc-verification.md) |
 | 赛狐自动拉取 Amazon 账期（结算中心V2 + 紫鸟插件列式报表）与两报表口径取舍 | [amazon-settlement-autofetch-sellfox.md](amazon-settlement-autofetch-sellfox.md) |
+| Amazon 非 V2 报税技术验证：已证实边界与禁止推断 | [amazon-non-v2-tax-technical-validation.md](amazon-non-v2-tax-technical-validation.md) |

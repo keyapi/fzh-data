@@ -7,6 +7,9 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-10-10（Amazon 非 V2 报税技术验证）
+- **新增**: `tooling-decisions/amazon-non-v2-tax-technical-validation.md` —— 2026-08 非 V2 CSV/PDF 的只读技术验证已经钉死的边界：行数守恒、退款 `other` 是合并桶、PDF 净额一致不等于科目完整、账号匹配不是申报法人、当前 BOM 不是 8 月历史成本、银行实际到账仍缺输入、业务明细不入库。三份调研保留实测计数。Codex 续做时先读这篇，不要把探针结果写成申报数。
+
 ## 2026-10-10（外部问卷通道：单份仓库 MD + Notion）
 - **新增**: `conventions/external-questionnaire-via-notion.md` —— 把结构化问卷交给仓库外、不用 AI 工具的同事（财务 ZJ）填写的做法：**单一事实源仍是仓库 MD**，把它写成"双向可用"（4 列填写表 / 去掉相对链接改纯文本路径 / `<>` 自动链接改裸 URL / 表格保持简单单行），**Notion 只做填写通道**；分享用**访客 + `Can edit`**，**不要"发布到网"**（公开页只读；公开+允许编辑有 prompt-injection 风险）。三条硬边界：**Notion MCP 无分享/邀请工具**（访客邀请须界面手动；集成建的页归集成）、**国内访问需翻墙兜底**、**数据出境只可私享单访客**。教训：本次一度同时存在"底稿 + 填充版"两份文件，用户立刻要求合并 —— **单一源才有唯一真值**。落地底稿见 `sellfox_settlement/docs/research/2026-10-09-amazon-non-v2-monthly-tax-analysis.md`，选型见同目录 `2026-10-10-zj-questionnaire-collection-options.md`。
 
