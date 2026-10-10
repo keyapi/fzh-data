@@ -36,3 +36,17 @@ tags: [amazon, fba, sync, technical-validation]
 私有上游快照仅含 `orderId/account/purchaseDate/currency/salesChannel/orderItem`。全部缺少 `paymentsDate/totalItemPrice/totalShippingPrice`，子件亦缺部分税、重量字段。生产 `_create_fba_order`（376 行起）读取这些字段，缺失货币总额会默认 0，随后还调用汇率/物料匹配等函数。不得将精简探针伪装成完整导入数据，也不能伪造零金额。
 
 新增纯函数 `fba_sync_gap_validation.build_gap_report(scope_details, upstream, en_orders, channel_accounts)` 输出只读候选与字段缺口。测试先红后绿，覆盖精简快照 hold、缺上游仍保留、重复范围键拒绝和账户盲键碰撞。候选 JSON 在仓库外既有技术目录的 `account-cost-bridge/fba_sync_gap_candidates.json`，订单及金额数据不提交 Git。
+
+## 完整源字段与生产日志复核（同日继续，只读）
+
+按已有 89 个缺口的 6 个真实账号、2026-08-01 00:00:00 至 2026-08-31 23:59:59 购买日窗逐页查询官方 MCP。21 次调用全部 `code=200`，读取 1,864 单，保存目标 89 单完整 raw，1,775 个非目标单按范围跳过，失败 0、未取到目标 0。源数据、个人资料和日志全部在仓库外，没有部署或同步。
+
+正式 `fba-live-gap/full_source_report.json` 含 `month=2026-08`、请求窗、原 89 单/92 子件候选、逐页计数、93 个原始证据 SHA256 manifest。可供月度离线 runner 读取，不能当作执行导入结果。
+
+真实 API 57 单覆盖同步用字段键，32 单仍缺 `orderFinancial` 等字段键。保守状态为 56 单“源字段覆盖，未验证导入”、1 单账户碰撞 hold、31 单源字段不全 hold、1 单非法数量 hold。所有 `write_action=none`、已导入 0。全部源 `totalShippingPrice` 值为 null，不能将其描述为已验证的零金额。API 未提供重量字段，源码将其作为可选字段读取；纯函数现单列 optional 缺口，不以重量字段缺失认定接口未取全。增加正整数数量验证，零、负数、非整数和 NaN 均留待核，测试 8 项通过。
+
+生产 SQL 开启 `START TRANSACTION READ ONLY`，对原 89 个订单号实时查询仍只有另一账号的同号订单一条；证明 88 个全局缺单与 1 个账号范围缺单当前依然存在，未因快照刷新而消失。
+
+精准 FBA Error Log 得 8 条，为 9 月 10、18、22、29 日四次第 1 页 300 秒超时的两层日志；没有已取得的 8 月逐目标异常命中，不能把这些 9 月错误归因给 8 月单。初次日志查询的附件错误噪声已单独保留，并重新按同步标题查询，没有拿有限行数当完整历史。
+
+8 月 1 日至 10 月 10 日 Scheduled Job Log 为 87 条：每日多天回溯 71 条 `Start`，周刷新 10 条 `Complete`，月订单导入及包裹各 3 条 `Complete`。`Start` 不证明每日期、每页同步成功。当前只读设置自动同步及更新同步均开启、频率 Daily、回溯 7 天；没有历史配置版本，不推断 8 月配置或某单漏入的确切原因。账户盲键、零数量默认一、有限回溯和分页超时是已取得的后续技术修复/日志验证入口；尚未擅自改配置。

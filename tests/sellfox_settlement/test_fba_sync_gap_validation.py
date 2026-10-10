@@ -28,3 +28,8 @@ def test_zero_quantity_held_without_defaulting_to_one():
  assert r['candidates'][0]['identity_status']=='hold_identity_fields'
  assert r['candidates'][0]['items'][0]['quantity']==0
  assert r['summary']['candidate_items']==1
+
+@pytest.mark.parametrize('qty',['NaN',-1,'1.5'])
+def test_invalid_quantities_never_complete(qty):
+ data=upstream();data[0]['orderItem'][0]['quantityPurchased']=qty
+ assert build_gap_report(gaps(),data,[],{'shopUS'})['candidates'][0]['identity_status']=='hold_identity_fields'

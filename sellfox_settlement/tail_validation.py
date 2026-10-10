@@ -98,11 +98,14 @@ def diagnose(orders, coverage, priority='历史预估尾程费用'):
         included_transactions += 1
         for order, item_position, item in linked:
             value, field, reason = select_tail(order, item, priority)
+            missing = [f for f in (*FIELDS, 'last_leg_fee') if item.get(f) is None or item.get(f) == '']
             available = {f: str(money(item.get(f))) for f in FIELDS if f != field and money(item.get(f)) > 0}
             details.append({**trace, 'order_name': order['name'], 'account': order['sale_account'],
                             'fulfillment': row.get('fulfillment'), 'item_position': item_position,
                             'quantity': item.get('quantity'), 'split_package_cost_factor': item.get('split_package_cost_factor'),
                             'source_fields': {f: str(money(item.get(f))) for f in FIELDS},
+                            'source_missing_fields': missing,
+                            'source_completeness': 'missing_values_hold' if missing else 'complete_values',
                             'selected_field': field, 'selected_amount_rmb': str(value), 'selection_reason': reason,
                             'persisted_tail_rmb': str(money(item.get('last_leg_fee'))),
                             'persisted_source': item.get('last_leg_fee_sources'),
@@ -116,6 +119,7 @@ def diagnose(orders, coverage, priority='历史预估尾程费用'):
     summary = {'input_transaction_rows': len(coverage), 'included_transaction_rows': included_transactions,
                'excluded_transaction_rows': len(excluded), 'matched_item_occurrences': len(details),
                'unique_matched_items': len(unique), 'selection_reasons': dict(Counter(r['selection_reason'] for r in details)),
+               'missing_amount_evidence_occurrences': sum(bool(r['source_missing_fields']) for r in details),
                'persisted_amount_mismatch_occurrences': sum(not r['selection_matches_persisted_amount'] for r in details),
                'tt_positive_unselected_occurrences': len(tt_unselected),
                'tt_positive_unselected_unique_items': len({(r['order_name'], r['item_position']) for r in tt_unselected})}

@@ -35,6 +35,10 @@ def build_tables(root, *, snapshot_root=None):
     account_bridge = load(root, 'account_cost_bridge.json') if bridge_path.exists() else None
     gap_path = root / 'cost/fba_sync_gap_candidates.json'
     gap_report = load(root, 'cost/fba_sync_gap_candidates.json') if gap_path.exists() else None
+    full_fba_path = root / 'cost/fba_full_source_report.json'
+    full_fba = load(root, 'cost/fba_full_source_report.json') if full_fba_path.exists() else None
+    native_path = root / 'native_detail_coverage.json'
+    native = load(root, 'native_detail_coverage.json') if native_path.exists() else None
     settlements = load(snapshot_root, 'settlement/settlement_groups_scoped.json')
     account_by_file = {Path(f['file']).name: f for f in accounts['files']}
     sheets = []
@@ -46,7 +50,7 @@ def build_tables(root, *, snapshot_root=None):
                   p.get('currency_evidence', {}).get('kind', ''), '|'.join(p.get('metadata_issues', []))]
                  for p in monthly['pairs']]
     sheets.append(table('文件覆盖', ['文件/范围', '状态/指标', '输入/指标值', '规范化', '拒绝', '币种', '币种证据', '异常'],
-                        coverage, '2026-08 技术底稿；财务口径待确认。源文件与全部明细保留在同目录 JSON，未修改原始文件。'))
+                        coverage, f'{summary["month"]} 技术底稿；财务口径待确认。源文件与全部明细保留在同目录 JSON，未修改原始文件。'))
     candidate_headers = ['文件', '账号候选', '币种', '状态', '行数', '收入A', '退款A带符号', '净额A',
                          '收入B', '退款B带符号', '净额B', '促销税带符号', 'B加促销税诊断']
     candidate_keys = ['income_candidate_a', 'refund_candidate_a_signed', 'net_candidate_a',
@@ -75,6 +79,15 @@ def build_tables(root, *, snapshot_root=None):
                    'accountNetIncome', 'transferAmount', 'arrivalAmount', 'arrivalStatusStr']
     sheets.append(table('结算银行桥', bridge_keys, [[str(s.get(k, '')) for k in bridge_keys] for s in settlements],
                         '8-9月V2原始结算组。arrivalAmount/状态属于平台记录，不能证明银行实际到账；本批8月Amazon银行流水缺输入。'))
+    if native:
+        native_rows = [['覆盖', d['currency'], '', '', d['scope_shops'], d['input_rows'],
+                        d['site_august_rows'], d['input_rows']-d['site_august_rows'], '']
+                       for d in native['currency_details']]
+        native_rows += [['科目原币', b['currency'], b['report_type'], b['amount_description'], '', '',
+                         b['rows'], '', b['signed_amount']] for b in native['amount_buckets']]
+        sheets.append(table('V2原币证据', ['证据种类','币种','报表类型','科目','店铺数','缓冲期输入',
+                                        '目标月行数','边界或范围外','带符号金额精确文本'], native_rows,
+                            '原币与站点时间证据；每币分别保留，不跨币种相加。V2和非V2口径不同，不将科目差额认作申报差额或银行实收。'))
     counts = Counter((c['source_file'], c['fulfillment'], c['status']) for c in costs)
     cost_rows = [['交易计数', file, '', '', fulfillment, status, count, '', ''] for (file, fulfillment, status), count in sorted(counts.items())]
     cost_rows += [['连接异常', c['source_file'], c['source_line'], c['order_id'], c['fulfillment'], c['status'], 1,
@@ -118,7 +131,15 @@ def build_tables(root, *, snapshot_root=None):
     if gap_report:
         pending += [[c['native_account'] + ':' + c['order_id'], c['full_sync_status'],
                      c['source_key_status'] + '；完整导入字段缺失，write_action=none；原因需同步日志']
-                    for c in gap_report['candidates']]
+                    for c in gap_report['candidates']] if not full_fba else [
+                        [c['native_account'] + ':' + c['order_id'], c.get('dry_run_action_status', c['full_sync_status']),
+                         c['source_key_status'] + '；只读完整源与实时日志已取；未验证导入，write_action=none']
+                        for c in full_fba['candidates']]
+    if full_fba:
+        pending.append(['FBA源值完整性', 'null_values_unconfirmed',
+                        'totalShippingPrice所有目标源值为null，不伪造0；字段键覆盖不等于导入验收。'])
+    if native and native['failed']:
+        pending.append(['V2原币完整性', native['status'], '明细缺输入或不完整，不能报告全币种通过'])
     sheets.append(table('待确认与异常', ['事项/文件', '状态', '原因/下一证据'], pending,
                         '技术通过仅指已列明的验证；缺输入和财务决策保持显式待确认。未匹配明细没有删除。'))
     return {'month': summary['month'], 'sheets': sheets, 'source_manifest': monthly['source_manifest']}

@@ -69,3 +69,16 @@ def test_non_finite_rejected():
     row['hist_predict_fee'] = 'NaN'
     with pytest.raises(ValueError):
         select_tail({}, row)
+
+
+def test_null_amounts_keep_production_routing_but_mark_missing_evidence():
+    row = item()
+    row.update(allocated_carrier_fee_rmb=None, last_leg_fee='', hist_predict_fee=8)
+    orders = [{'name': 'O', 'platform_order_id': '1', 'sale_account': 'A',
+               'order_type': 'FBM', 'order_items': [row]}]
+    report = diagnose(orders, [dict(status='matched', fulfillment='FBM', sku='SKU', en_order_names=['O'])])
+    detail = report['details'][0]
+    assert detail['selected_amount_rmb'] == '8.0000'
+    assert detail['source_missing_fields'] == ['allocated_carrier_fee_rmb', 'last_leg_fee']
+    assert detail['source_completeness'] == 'missing_values_hold'
+    assert report['summary']['missing_amount_evidence_occurrences'] == 1

@@ -11,6 +11,9 @@ import hashlib
 import json
 from pathlib import Path
 import sys
+import uuid
+from collections import defaultdict
+from decimal import Decimal
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
@@ -109,6 +112,47 @@ def _load(path):
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def native_details_report(summary, root, month):
+    if not summary.get('details_complete') or summary.get('details_pending_currencies'):
+        return {'status': 'missing_or_incomplete_input', 'input': 0, 'output': 0,
+                'success': 0, 'skipped': 0, 'failed': 1, 'currency_details': [], 'amount_buckets': []}
+    buckets = defaultdict(lambda: [0, Decimal(0)])
+    details = summary.get('details') or []
+    if not details or len({d['currency'] for d in details}) != len(details):
+        raise ValueError('native detail currency evidence missing or duplicated')
+    total_input = total_output = 0
+    for detail in details:
+        currency = detail['currency']
+        if currency not in {'USD', 'CAD', 'EUR', 'GBP', 'PLN', 'MXN', 'SEK'}:
+            raise ValueError('unsupported native detail currency')
+        verify_settlement_snapshot_month({'start': detail.get('utc_request_start', '')[:10],
+                                          'end': detail.get('utc_request_end', '')[:10]}, month)
+        rows = _load(root / f'settlement_details_{currency}_site_august.json')
+        if (len(rows) != detail['site_august_rows'] or detail['scope_shops'] <= 0
+                or detail['input_rows'] != detail['scoped_rows'] + detail['outside_scope']
+                or detail['scoped_rows'] != len(rows) + detail['site_outside_august_rows'] + detail['site_time_missing']):
+            raise ValueError('native detail row count does not reconcile')
+        for row in rows:
+            if row.get('currency') != currency:
+                raise ValueError('native detail currency mismatch')
+            if not isinstance(row.get('siteTimeStr'), str) or row['siteTimeStr'][:7] != month:
+                raise ValueError('native detail site month mismatch')
+            amount = Decimal(str(row['amount']))
+            if not amount.is_finite():
+                raise ValueError('non-finite native detail amount')
+            key = (currency, str(row.get('reportType', '')), str(row.get('amountDescription', '')))
+            buckets[key][0] += 1
+            buckets[key][1] += amount
+        total_input += detail['input_rows']
+        total_output += len(rows)
+    return {'status': 'native_activity_evidence_only', 'input': total_input, 'output': total_output,
+            'success': total_output, 'skipped': total_input - total_output, 'failed': 0,
+            'currency_details': details, 'amount_buckets': [
+                {'currency': k[0], 'report_type': k[1], 'amount_description': k[2],
+                 'rows': v[0], 'signed_amount': str(v[1])} for k, v in sorted(buckets.items())],
+            'note': '原币按站点时间筛月；V2与非V2覆盖及计时不同，不据此认定申报差异或银行到账'}
+
+
 def snapshot_manifest(root):
     names = ['account_sheet.json', 'account_en.json', 'account_shops.json',
              'cost/en_orders.json', 'cost/current_cost_probe_details.json', 'cost/tongtool_fba_august.json',
@@ -120,10 +164,27 @@ def snapshot_manifest(root):
     names.append('cost/fba_month_scope_details.json')
     if (root / 'cost/current_cost_probe_components.json').exists():
         names.append('cost/current_cost_probe_components.json')
+    if (root / 'fba-live-gap/full_source_report.json').exists():
+        names.append('fba-live-gap/full_source_report.json')
+        full = _load(root / 'fba-live-gap/full_source_report.json')
+        for source in full.get('source_manifest') or []:
+            path = (root / 'fba-live-gap' / source['file']).resolve()
+            if not path.is_relative_to(root.resolve()):
+                raise ValueError('FBA source evidence escapes private snapshot root')
+            if hashlib.sha256(path.read_bytes()).hexdigest() != source['sha256']:
+                raise ValueError('FBA full source evidence hash mismatch')
+            names.append(str(path.relative_to(root.resolve())))
+    summary = _load(root / 'settlement/settlement_validation_summary.json')
+    if summary.get('details_complete'):
+        for detail in summary.get('details') or []:
+            currency = detail['currency']
+            if currency not in {'USD', 'CAD', 'EUR', 'GBP', 'PLN', 'MXN', 'SEK'}:
+                raise ValueError('unsupported native detail currency')
+            names.append(f'settlement/settlement_details_{currency}_site_august.json')
     return [{'path': str((root / name).resolve()), 'sha256': hashlib.sha256((root / name).read_bytes()).hexdigest()} for name in names]
 
 
-def run_month(input_root, output, month, *, snapshots=None, json_only=False):
+def _run_month(input_root, output, month, *, snapshots=None, json_only=False):
     source = Path(input_root)
     output = private_output(output, input_root=source)
     output.mkdir(parents=True, exist_ok=True)
@@ -196,7 +257,8 @@ def run_month(input_root, output, month, *, snapshots=None, json_only=False):
     probes = _load(snapshot_root / 'cost' / 'current_cost_probe_details.json')
     component_path = snapshot_root / 'cost/current_cost_probe_components.json'
     component_probes = _load(component_path) if component_path.exists() else None
-    ledger = build_ledger(orders, probes, details, component_probes=component_probes)
+    ledger = build_ledger(orders, probes, details, component_probes=component_probes,
+                          component_source_sha256=hashlib.sha256(orders_path.read_bytes()).hexdigest())
     _write_json(cost_dir / 'cost_technical_ledger.json', ledger)
     tail = diagnose(orders, details)
     _write_json(cost_dir / 'tail_validation.json', tail)
@@ -210,10 +272,29 @@ def run_month(input_root, output, month, *, snapshots=None, json_only=False):
                                   upstream, orders, channel_accounts)
     _write_json(cost_dir / 'fba_sync_gap_candidates.json', gap_report)
     stages.append(_stage('6', 'fba_sync_gap_dry_run', 'hold_no_import', **gap_report['summary']))
+    full_source_path = snapshot_root / 'fba-live-gap/full_source_report.json'
+    if full_source_path.exists():
+        full_source = _load(full_source_path)
+        expected = {(c['native_account'], c['order_id']) for c in gap_report['candidates']}
+        candidates = full_source['candidates']
+        observed = {(c['native_account'], c['order_id']) for c in candidates}
+        if full_source.get('month') != month or expected != observed or len(candidates) != len(expected):
+            raise ValueError('FBA full source month or candidate scope mismatch')
+        window = full_source['request_window']
+        verify_fba_snapshot_month({'query_start': window['purchaseDateFrom'],
+                                   'query_end': window['purchaseDateTo']}, month)
+        if any(c.get('write_action') != 'none' for c in candidates):
+            raise ValueError('FBA evidence cannot contain production write actions')
+        _write_json(cost_dir / 'fba_full_source_report.json', full_source)
+        stages.append(_stage('6', 'fba_full_source_evidence', 'read_only_no_import', **full_source['summary']))
     settlement_dir = snapshot_root / "settlement"
     stages.append(settlement_stage(
         settlement_summary,
         _load(settlement_dir / "native_pln_retry_summary.json")))
+    native = native_details_report(settlement_summary, settlement_dir, month)
+    _write_json(output / 'native_detail_coverage.json', native)
+    stages.append(_stage('7', 'native_currency_details', native['status'], **{
+        k: native[k] for k in ('input', 'output', 'success', 'skipped', 'failed')}))
 
     tables = build_tables(output, snapshot_root=snapshot_root)
     if snapshot_manifest(snapshot_root) != manifest:
@@ -230,6 +311,38 @@ def run_month(input_root, output, month, *, snapshots=None, json_only=False):
               "selected_income_candidate": rules["selected_income_candidate"], "stages": stages}
     _write_json(output / "technical_month_report.json", result)
     return result
+
+
+def run_month(input_root, output, month, *, snapshots=None, json_only=False):
+    output = private_output(output, input_root=Path(input_root))
+    output.mkdir(parents=True, exist_ok=True)
+    run = {'run_id': uuid.uuid4().hex, 'month': month, 'status': 'running',
+           'started_at': dt.datetime.now(dt.timezone.utc).isoformat(), 'artifacts': []}
+    _write_json(output / 'run_status.json', run)
+    try:
+        result = _run_month(input_root, output, month, snapshots=snapshots, json_only=json_only)
+        result.update(run_id=run['run_id'], status='succeeded')
+        _write_json(output / 'technical_month_report.json', result)
+        names = ['technical_month_report.json', 'workbook_tables.json', 'monthly_validation.json',
+                 'normalized_transactions.json', 'source_manifest.json', 'account_validation.json',
+                 'account_cost_bridge.json', 'cost/cost_coverage_summary.json', 'cost/cost_coverage_details.json',
+                 'cost/cost_technical_ledger.json', 'cost/tail_validation.json', 'cost/fba_sync_gap_candidates.json',
+                 'native_detail_coverage.json']
+        if not json_only:
+            names.append(f'{month}-technical-workbook.xlsx')
+        if (output / 'cost/fba_full_source_report.json').exists() and (Path(snapshots or output) / 'fba-live-gap/full_source_report.json').exists():
+            names.append('cost/fba_full_source_report.json')
+        run['artifacts'] = [{'path': name, 'sha256': hashlib.sha256((output / name).read_bytes()).hexdigest()}
+                            for name in names if (output / name).exists()]
+        run['status'] = 'succeeded'
+        return result
+    except Exception as exc:
+        run.update(status='failed', error_type=type(exc).__name__, error=str(exc), artifacts=[])
+        _write_json(output / 'technical_month_report.json', run)
+        raise
+    finally:
+        run['finished_at'] = dt.datetime.now(dt.timezone.utc).isoformat()
+        _write_json(output / 'run_status.json', run)
 
 
 def main():

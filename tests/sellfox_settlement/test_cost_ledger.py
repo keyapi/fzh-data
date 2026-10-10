@@ -1,4 +1,10 @@
 from sellfox_settlement.cost_ledger import build_ledger
+import hashlib
+import json
+
+
+def digest(orders):
+    return hashlib.sha256(json.dumps(orders, sort_keys=True, ensure_ascii=False, separators=(',', ':')).encode()).hexdigest()
 
 
 def order(oid, account='shop', product='10', tail='7'):
@@ -111,10 +117,51 @@ def test_component_probe_binds_position_and_exact_inputs():
     probe = {'order': source['name'], 'item_position': 2, 'sku': 'sku', 'status': 'calculated',
              'inputs': {'erp_item_code': None, 'warehouse_name': 'warehouse', 'tongtool_sku': 'sku',
                         'quantity': 4, 'split_package_cost_factor': 1}}
-    result = build_ledger([source], component_probes=[probe])
-    assert result['item_evidence'][0]['current_component_probe'] is None
+    probe['source_orders_sha256'] = digest([source])
+    first = dict(probe, item_position=1, inputs=dict(probe['inputs'], quantity=2))
+    result = build_ledger([source], component_probes=[first, probe], component_source_sha256=digest([source]))
+    assert result['item_evidence'][0]['current_component_probe'] == first
     assert result['item_evidence'][1]['current_component_probe'] == probe
     wrong = dict(probe, inputs=dict(probe['inputs'], quantity=2))
     import pytest
     with pytest.raises(ValueError, match='component probe input'):
-        build_ledger([source], component_probes=[wrong])
+        build_ledger([source], component_probes=[first, wrong], component_source_sha256=digest([source]))
+
+
+def test_component_probe_requires_hash_and_complete_identity_set():
+    import pytest
+    source = order('base')
+    probe = {'order': source['name'], 'item_position': 1, 'source_orders_sha256': 'wrong',
+             'inputs': {}, 'status': 'calculated'}
+    with pytest.raises(ValueError, match='snapshot hash'):
+        build_ledger([source], component_probes=[probe], component_source_sha256=digest([source]))
+    with pytest.raises(ValueError, match='missing component'):
+        build_ledger([source], component_probes=[], component_source_sha256=digest([source]))
+
+
+def test_invalid_quantity_cannot_be_zero_or_fractional_cost_evidence():
+    import pytest
+    for value in [None, '', -1, '1.5', 'Infinity', True]:
+        source = order('base')
+        source['order_items'][0]['quantity'] = value
+        with pytest.raises(ValueError, match='quantity'):
+            build_ledger([source])
+
+
+def test_component_duplicate_identity_rejected_without_legacy_fallback():
+    import pytest
+    source = order('base')
+    probe = {'order': source['name'], 'item_position': 1,
+             'source_orders_sha256': digest([source]), 'inputs': {}}
+    with pytest.raises(ValueError, match='duplicate component'):
+        build_ledger([source], component_probes=[probe, probe], component_source_sha256=digest([source]))
+
+
+def test_repeated_refund_transactions_do_not_repeat_ledger_cost():
+    source = order('base')
+    row = {'type': 'Refund', 'en_order_names': [source['name']]}
+    result = build_ledger([source], coverage=[row, row])
+    assert result['summary']['output_transaction_rows'] == 2
+    assert len(result['groups']) == 1
+    assert result['groups'][0]['components']['product']['selected_snapshot_amount'] == '10'
+    assert all(r['cost_action'] == 'hold_refund_policy' for r in result['transaction_evidence'])

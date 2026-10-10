@@ -63,10 +63,34 @@ def test_cli_rejects_other_git_checkout_before_reading_inputs(tmp_path, monkeypa
     checkout = tmp_path / "another-checkout"
     checkout.mkdir()
     (checkout / ".git").write_text("gitdir: elsewhere", encoding="utf-8")
-    monkeypatch.setattr("sys.argv", ["cost_validation", "--transactions", "missing.json", "--orders", "missing.json", "--output-dir", str(checkout / "nested" / "private")])
+    monkeypatch.setattr("sys.argv", ["cost_validation", "--global-candidates", "--transactions", "missing.json", "--orders", "missing.json", "--output-dir", str(checkout / "nested" / "private")])
     with pytest.raises(SystemExit, match="2"):
         main()
     assert "Git checkout" in capsys.readouterr().err
+
+
+def test_cli_requires_explicit_link_scope(monkeypatch, capsys):
+    monkeypatch.setattr('sys.argv', ['cost_validation', '--transactions','missing.json',
+                                    '--orders','missing.json','--output-dir','private'])
+    with pytest.raises(SystemExit, match='2'):
+        main()
+    assert '--account-map' in capsys.readouterr().err
+
+
+def test_cli_empty_account_map_holds_globally_matching_order(tmp_path, monkeypatch):
+    import json
+    rows = [{'source_file':'bill.csv','source_line':1,'type':'Order','order_id':'O','sku':'S','fulfillment':'FBA'}]
+    orders = [{'name':'O','sale_account':'OTHER','platform_order_id':'O','order_items':[{'platform_sku':'S'}],'packages':[]}]
+    for name, value in [('rows',rows),('orders',orders),('map',{})]:
+        (tmp_path / (name+'.json')).write_text(json.dumps(value),encoding='utf-8')
+    out = tmp_path / 'private'
+    monkeypatch.setattr('sys.argv',['cost_validation','--transactions',str(tmp_path/'rows.json'),
+                                   '--orders',str(tmp_path/'orders.json'),'--account-map',str(tmp_path/'map.json'),
+                                   '--output-dir',str(out)])
+    main()
+    summary=json.loads((out/'cost_coverage_summary.json').read_text(encoding='utf-8'))
+    assert summary['statuses']=={'account_unmapped':1}
+    assert summary['link_scope']=='file_native_account'
 
 
 def test_chargeback_link_probe_does_not_change_cost_denominator():

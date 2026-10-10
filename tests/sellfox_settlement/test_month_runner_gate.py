@@ -50,3 +50,56 @@ def test_settlement_snapshot_must_cover_requested_month(summary):
 
 def test_settlement_snapshot_accepts_cross_period_buffer():
     runner.verify_settlement_snapshot_month({'start': '2026-07-31', 'end': '2026-09-30'}, '2026-08')
+
+
+def test_failed_rerun_invalidates_previous_success_report(tmp_path, monkeypatch):
+    output = tmp_path / 'private'
+    output.mkdir()
+    (output / 'technical_month_report.json').write_text('{"status":"succeeded"}')
+    (output / '2026-08-technical-workbook.xlsx').write_bytes(b'previous output')
+    def fail(*args, **kwargs):
+        raise ValueError('invalid current input')
+    monkeypatch.setattr(runner, '_run_month', fail)
+    with pytest.raises(ValueError, match='invalid current input'):
+        runner.run_month(tmp_path / 'source', output, '2026-08', json_only=True)
+    status = runner._load(output / 'run_status.json')
+    assert status['status'] == 'failed'
+    assert runner._load(output / 'technical_month_report.json')['status'] == 'failed'
+    assert not status.get('artifacts')
+    assert (output / '2026-08-technical-workbook.xlsx').read_bytes() == b'previous output'
+
+
+def test_json_only_success_does_not_claim_previous_workbook(tmp_path, monkeypatch):
+    output = tmp_path / 'private'
+    output.mkdir()
+    (output / '2026-08-technical-workbook.xlsx').write_bytes(b'previous output')
+    monkeypatch.setattr(runner, '_run_month', lambda *args, **kwargs: {'month':'2026-08', 'stages':[]})
+    result = runner.run_month(tmp_path / 'source', output, '2026-08', json_only=True)
+    status = runner._load(output / 'run_status.json')
+    assert status['status'] == 'succeeded'
+    assert result['run_id'] == status['run_id']
+    assert not any(a['path'].endswith('.xlsx') for a in status['artifacts'])
+
+
+def test_native_details_rejects_wrong_site_month_and_count(tmp_path):
+    metadata={'details_complete':True,'details_pending_currencies':[], 'details':[{
+        'currency':'USD','input_rows':1,'scoped_rows':1,'outside_scope':0,'scope_shops':1,
+        'site_august_rows':1,'site_outside_august_rows':0,'site_time_missing':0,'utc_request_start':'2026-07-31','utc_request_end':'2026-09-02'}]}
+    runner._write_json(tmp_path/'settlement_details_USD_site_august.json',[
+        {'currency':'USD','siteTimeStr':'2026-09-01','amount':'1','amountDescription':'Principal','reportType':'Order'}])
+    with pytest.raises(ValueError, match='site month'):
+        runner.native_details_report(metadata,tmp_path,'2026-08')
+    runner._write_json(tmp_path/'settlement_details_USD_site_august.json',[])
+    with pytest.raises(ValueError, match='row count'):
+        runner.native_details_report(metadata,tmp_path,'2026-08')
+
+
+def test_native_details_preserves_currency_and_signed_amount(tmp_path):
+    metadata={'details_complete':True,'details_pending_currencies':[], 'details':[{
+        'currency':'USD','input_rows':2,'scoped_rows':1,'outside_scope':1,'scope_shops':1,
+        'site_august_rows':1,'site_outside_august_rows':0,'site_time_missing':0,'utc_request_start':'2026-07-31','utc_request_end':'2026-09-02'}]}
+    runner._write_json(tmp_path/'settlement_details_USD_site_august.json',[
+        {'currency':'USD','siteTimeStr':'2026-08-01','amount':'-1.25','amountDescription':'Principal','reportType':'Refund'}])
+    report=runner.native_details_report(metadata,tmp_path,'2026-08')
+    assert report['input']==report['output']+report['skipped']==2
+    assert report['amount_buckets'][0]['signed_amount']=='-1.25'

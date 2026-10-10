@@ -90,3 +90,13 @@ uv --project <主仓库> run pytest tests/sellfox_settlement/test_account_valida
 未来把平台付款与银行入账连接时，应保留银行附言原文及银行流水主键，再以实际包含的平台 reference/trace ID 建候选，并核对币种、到账时间、收款主体和付款处理商费用/换汇桥。不能假定「银行交易标识」与 Amazon `traceId` 天然相同，也不能用账期合并表中的 `settlement-id` 或 `deposit-date` 证明银行到账。
 
 私有输出 `bank_evidence_validation.json` 保留逐文件摘要、原文、银行字段、明确的重复分组、工作簿列和数据来源。原始资料未修改。银行标识、账号、个人姓名和金额明细没有写入 Git。对话里曾提到 `bank_evidence_probe.py` 与 `bank_evidence_finish.py`，本分支文件清单里没有这两个脚本；若它们在私有验证目录，留在仓库外。
+
+## 银行来源定向补查（2026-10-10）
+
+限定在上述三个相邻账期的本机 NAS 同步目录，逐文件登记 403 个来源：135 CSV、36 XLSX、20 XLS、6 PDF、205 TXT 和 1 个未完成下载。没有扩展至其他个人目录，也没有新增远程 API 长请求；本结论不声明 NAS 远端同步完整。
+
+191 份表格全部完成列头筛查，读取失败 0。银行关键词命中 3 份独立站付款 CSV 和 17 份 Kaufland 平台核算 XLS；均显式保留来源与分类。独立站 CSV 各 50 行，各有 47 行 Bank Reference，币种均为 USD，付款状态各为 49 paid / 1 failed；日期解析无错误，2026 年 8 月分别有 2、3、2 行。Bank Reference 为平台导出字段，不能独立证明银行实收，也不能将非 Amazon 交易连接到 Amazon V2。
+
+17 份 XLS 的命中来自平台核算材料中的银行账号标签，没有建立银行出具的流水来源。205 份 TXT 是平台账期来源，1 个未完成下载显式记为未解析。既有 6 份 PDF 的逐份核验结论保持不变：两份重复银行文件对应一笔 7 月物流交易；其余为平台付款界面或通知。
+
+本范围可证明的 **2026 年 8 月 Amazon 银行实际到账输入仍为 0**。已具备银行字段与平台 trace 的未来连接规则，但缺独立实际到账来源，故不执行金额或模糊附言自动匹配、不把平台付款标记改为 bank_actual。可复跑的私有来源清单为 `bank_search_inventory.json`，配套私有脚本为 `bank_search_inventory_probe.py`、`bank_search_xls_probe.py`、`bank_search_finish.py`；它们留在仓库外，包含的原始来源、银行账号字段、reference 和金额不进入 Git。

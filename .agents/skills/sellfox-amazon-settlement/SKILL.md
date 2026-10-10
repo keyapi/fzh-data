@@ -55,3 +55,5 @@ PR286复跑：提供账号映射后缺映射必须保留为 account_unmapped；�
 ## 月度技术完成后的恢复入口
 
 先读 `sellfox_settlement/docs/research/2026-10-10-technical-completion-plan.md`，以及同目录组件成本ledger、尾程选路和FBA同步缺口调研。月度入口支持独立 `--snapshots`、`--json-only`；快照必须有真实请求月元数据和原始hash。严格账号桥不fallback global；组件、交易、费用occurrence分别对账。FBA补齐候选无完整字段或同步日志时hold，不能自动导入。
+
+继续取证恢复：读取 `sellfox_settlement/docs/research/2026-10-10-native-settlement-details-validation.md`。先检查私有run_status的run_id/status/artifact hashes；JSON-only后的XLSX需另作导出回读验收。cost_validation独立CLI须--account-map或显式--global-candidates；组件探针source_orders_sha256必须绑定原快照。银行V2和实际银行证据分开，不把其他平台reference填入Amazon。

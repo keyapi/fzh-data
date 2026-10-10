@@ -10,6 +10,7 @@ tags: [sellfox, amazon, settlement, okf, index]
 
 | 你需要... | 读这个 |
 |----------|--------|
+| V2原币完整分页及站点月证据 | [research/2026-10-10-native-settlement-details-validation.md](research/2026-10-10-native-settlement-details-validation.md) |
 | 技术完成计划 | [research/2026-10-10-technical-completion-plan.md](research/2026-10-10-technical-completion-plan.md) |
 | 组件成本账本与当前BOM精确重放 | [research/2026-10-10-component-cost-ledger.md](research/2026-10-10-component-cost-ledger.md) |
 | 尾程选路与父拆单费用单位 | [research/2026-10-10-tail-routing-validation.md](research/2026-10-10-tail-routing-validation.md) |

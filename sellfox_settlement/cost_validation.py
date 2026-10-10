@@ -116,6 +116,9 @@ def main():
     parser.add_argument("--transactions", type=Path, required=True)
     parser.add_argument("--orders", type=Path, required=True)
     parser.add_argument("--supplemental-orders", type=Path)
+    scope = parser.add_mutually_exclusive_group(required=True)
+    scope.add_argument('--account-map', type=Path, help='JSON mapping of source basename to native account')
+    scope.add_argument('--global-candidates', action='store_true', help='Explicit exploratory scope; not confirmed account coverage')
     parser.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args()
     try:
@@ -128,7 +131,12 @@ def main():
     validate_input(orders, {"name", "platform_order_id", "order_items", "packages"}, "orders")
     supplemental_orders = json.loads(args.supplemental_orders.read_text(encoding="utf-8")) if args.supplemental_orders else []
     validate_input(supplemental_orders, {"name", "platform_order_id", "order_items", "packages"}, "supplemental orders")
-    report, details = summarize_coverage(rows, orders, supplemental_orders)
+    account_map = json.loads(args.account_map.read_text(encoding='utf-8')) if args.account_map else None
+    if account_map is not None and (not isinstance(account_map, dict) or any(
+            not isinstance(k, str) or (v is not None and not isinstance(v, str)) for k, v in account_map.items())):
+        parser.error('account map must be a source-basename to native-account object')
+    report, details = summarize_coverage(rows, orders, supplemental_orders, account_by_file=account_map)
+    report['link_scope'] = 'file_native_account' if account_map is not None else 'global_candidates_unconfirmed'
     args.output_dir.mkdir(parents=True, exist_ok=True)
     (args.output_dir / "cost_coverage_summary.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     (args.output_dir / "cost_coverage_details.json").write_text(json.dumps(details, ensure_ascii=False, indent=2), encoding="utf-8")

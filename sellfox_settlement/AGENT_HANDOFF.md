@@ -130,3 +130,13 @@ uv run python sellfox_settlement/reconcile_amazon.py reconcile --settlement data
 最终私有输出 `20261010/codex-completion`：八表工作簿逐单元格与workbook_tables JSON一致、无公式错误；JSON含全部明细、数量和源hash。Artifact导出 `export_validation_workbook.mjs --skip-preview` 可避免Windows预览退出故障。账期到银行仍缺实际流水；ZJ规则、主体、汇率、历史成本、退款及包裹分摊未确认。
 
 V2快照start/end也须覆盖目标整月；缺日期、错误年份或只覆盖半月均失败关闭，合法跨期缓冲允许。独立复审发现后先补4个失败用例再修复，147项测试及真实8月重跑通过。
+
+### 继续完善：原币明细与来源契约（2026-10-10）
+
+新增原币V2完整分页证据：53,995缓冲输入／47,995站点8月行／6,000边界行保留，6币61店；PLN明确total=0支持nullable list，不把未知响应当0。详读 `docs/research/2026-10-10-native-settlement-details-validation.md`。月度入口验证原币、站点月、查询期间、行数守恒和有限金额，源hash覆盖六份明细；第9表V2原币证据按币种科目汇总，只作平台证据，不与非V2或银行强制配平。
+
+成本探针每条必须source_orders_sha256等于EN源byteshash，9,823组件身份全覆盖，不允许空/遗漏/重复探针静默fallback；非法数量拒绝。尾程空值保持生产模拟，但原字段缺失明确missing_values_hold。独立cost_validation CLI必须显式--account-map或--global-candidates，global明确未确认，缺映射保持hold。
+
+run_status.json以run_id记录running/succeeded/failed及当次产物hash；失败重跑覆盖旧成功report，保留旧XLSX但不称本次成功。JSON-only不把残留XLSX计入新产物，外部Artifact导出须按tables逐单元格回读并记录source_tables_sha256。银行定向复查授权3期403文件、191表格列头错误0；新增独立站付款与其他平台核算不能当Amazon实收，可验证8月Amazon银行输入仍0。FBA完整源与live只读日志见同日FBA调研及私有fba-live-gap。
+
+本轮继续验收：161项模块测试通过，真实8月JSON重跑成功；9表交付加入原币证据。完整FBA89目标已取，56源字段键覆盖未验导入／1账号碰撞／31字段不全／1零数量hold；89源运费为null不得填0。实时只读确认缺口仍存在，93原始证据hash、请求月与目标身份集合纳入入口核验；历史具体漏单根因仍未证实。当前Daily回溯7天及9月超时不等于8月原因。后续技术修复位于生产tongtool_integration应用，须用所属应用测试和独立分支，不在数据仓库擅自部署。

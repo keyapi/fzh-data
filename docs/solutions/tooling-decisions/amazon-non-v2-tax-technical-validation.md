@@ -95,3 +95,11 @@ FBA补齐前同时查原生账号及订单号，防止跨账号同号命中；�
 Related：`sellfox_settlement/docs/research/2026-10-10-component-cost-ledger.md`、`2026-10-10-tail-routing-validation.md`、`2026-10-10-fba-sync-gap-validation.md`、`2026-10-10-technical-completion-plan.md`。
 
 V2快照start/end也须覆盖目标整月；缺日期、错误年份或只覆盖半月均失败关闭，合法跨期缓冲允许。独立复审发现后先补4个失败用例再修复，147项测试及真实8月重跑通过。
+
+## Guidance：重跑产物与可用证据的版本边界
+
+输入manifest必须纳入新增原币明细；原币、站点月份、请求期间、有限金额和数量守恒共同验证。平台明细和CSV交易是不同分母，不能为配平强行调整科目或推断银行实收。明确total=0的null列表可接受，缺列表/未知total必须失败。
+
+精确组件身份还须绑定原EN快照bytes SHA；显式空或漏组件探针不能回落旧probe。独立CLI不能隐式global匹配。生产flt空值模拟和真实零证据分别记录，避免混为已验证金额。
+
+同目录失败重跑可能残留旧XLSX。使用run_id、running/succeeded/failed及当次artifact hash区分；失败report不留旧成功状态，JSON-only不宣称旧XLSX已更新。外部导出回读后绑定tables hash，不能仅凭文件存在验收。

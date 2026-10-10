@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 from collections import Counter, defaultdict
 from decimal import Decimal
 from pathlib import Path
@@ -33,7 +34,7 @@ def text(value):
     return None if value is None else str(value)
 
 
-def build_ledger(orders, probes=None, coverage=None, *, component_probes=None):
+def build_ledger(orders, probes=None, coverage=None, *, component_probes=None, component_source_sha256=None):
     """Select child evidence once per native account/base order; hold product conflicts.
 
     Persisted fields are summed as stored, without quantity multiplication. Current
@@ -48,16 +49,35 @@ def build_ledger(orders, probes=None, coverage=None, *, component_probes=None):
         if not order['sale_account'] or not order['platform_order_id']:
             raise ValueError('missing native account/order identity')
         validate_input(order['order_items'], {'platform_sku', 'quantity'}, 'order items')
+        for item in order['order_items']:
+            try:
+                quantity = amount(item['quantity'])
+            except Exception as exc:
+                raise ValueError('invalid component quantity') from exc
+            if isinstance(item['quantity'], bool) or quantity is None or quantity < 0 or quantity != quantity.to_integral_value():
+                raise ValueError('invalid component quantity')
         by_group[(order['sale_account'], base_order_id(order['platform_order_id']))].append(order)
     probe_index = defaultdict(list)
     for probe in probes or []:
         probe_index[(probe.get('order'), probe.get('sku'))].append(probe)
     component_index = {}
+    if component_probes is not None and not re.fullmatch(r'[0-9a-f]{64}', str(component_source_sha256)):
+        raise ValueError('component snapshot hash required')
     for probe in component_probes or []:
+        if probe.get('source_orders_sha256') != component_source_sha256:
+            raise ValueError('component snapshot hash mismatch')
         key = (probe['order'], probe['item_position'])
+        if isinstance(probe['item_position'], bool) or not isinstance(probe['item_position'], int) or probe['item_position'] < 1:
+            raise ValueError('invalid component probe position')
         if key in component_index:
             raise ValueError('duplicate component probe identity')
         component_index[key] = probe
+    if component_probes is not None:
+        expected = {(o['name'], n) for o in orders for n, _ in enumerate(o['order_items'], 1)}
+        if expected - component_index.keys():
+            raise ValueError('missing component probe identity')
+        if component_index.keys() - expected:
+            raise ValueError('component probe references unknown component')
     # Probe order is EN name (globally unique), not the platform order ID.
     # The probe still lacks item-row identity; attach only an unambiguous key.
     item_keys = Counter((o['name'], i.get('tongtool_sku'))
@@ -156,7 +176,8 @@ def main():
     sources = [json.loads(path.read_text(encoding='utf-8')) for path in source_paths]
     component_path = args.cost_root / 'current_cost_probe_components.json'
     components = json.loads(component_path.read_text(encoding='utf-8')) if component_path.exists() else None
-    result = build_ledger(*sources, component_probes=components)
+    result = build_ledger(*sources, component_probes=components,
+                          component_source_sha256=hashlib.sha256(source_paths[0].read_bytes()).hexdigest())
     if component_path.exists():
         source_paths.append(component_path)
     result['source_manifest'] = [{'file': path.name, 'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}

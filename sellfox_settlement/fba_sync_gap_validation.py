@@ -1,10 +1,19 @@
 """Dry-run FBA sync gap evidence; never constructs executable import payloads."""
 from collections import Counter, defaultdict
+from decimal import Decimal, InvalidOperation
 
 ORDER_SYNC_FIELDS = {'orderId','account','purchaseDate','paymentsDate','currency','salesChannel',
                      'totalItemPrice','totalShippingPrice','orderItem'}
 ITEM_SYNC_FIELDS = {'sku','goodsSku','quantityPurchased','itemPrice','itemTax','shippingTax',
-                    'productWeight','goodsWeight','orderFinancial'}
+                    'orderFinancial'}
+
+
+def valid_quantity(value):
+    try:
+        quantity = Decimal(str(value))
+        return quantity.is_finite() and quantity > 0 and quantity == quantity.to_integral_value()
+    except (InvalidOperation, ValueError):
+        return False
 
 
 def build_gap_report(scope_details, upstream, en_orders, channel_accounts):
@@ -36,8 +45,11 @@ def build_gap_report(scope_details, upstream, en_orders, channel_accounts):
             item_records = []
             for item in items:
                 identity_missing = [k for k in ('sku','goodsSku','quantityPurchased') if not item.get(k)]
+                if not valid_quantity(item.get('quantityPurchased')) and 'quantityPurchased' not in identity_missing:
+                    identity_missing.append('quantityPurchased')
                 item_records.append({'sku':item.get('sku'),'goods_sku':item.get('goodsSku'),'quantity':item.get('quantityPurchased'),
-                                     'identity_missing':identity_missing,'sync_missing_fields':sorted(ITEM_SYNC_FIELDS-item.keys())})
+                                     'identity_missing':identity_missing,'sync_missing_fields':sorted(ITEM_SYNC_FIELDS-item.keys()),
+                                     'optional_missing_fields':sorted({'productWeight','goodsWeight'}-item.keys())})
             full_missing = sorted(ORDER_SYNC_FIELDS-row.keys())
             entry.update(purchase_date=row.get('purchaseDate'),currency=row.get('currency'),sales_channel=row.get('salesChannel'),
                          identity_missing=missing_identity,items=item_records,sync_missing_fields=full_missing,
