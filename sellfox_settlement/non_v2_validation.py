@@ -230,23 +230,27 @@ def money(row, key):
     return Decimal(row[key]) if row.get(key) is not None and row.get(key) != '' else Decimal(0)
 
 
-def candidate_totals(rows):
-    income = {'Order'}
-    refunds = {'Refund', 'Refund_Retrocharge', 'Chargeback Refund'}
-    a_fields = ['product_sales', 'shipping_credits', 'gift_wrap_credits', 'regulatory_fee', 'promotional_rebates']
-    b_fields = a_fields + ['product_sales_tax', 'shipping_credits_tax', 'giftwrap_credits_tax', 'tax_on_regulatory_fee', 'collected_sales_tax']
+def candidate_totals(rows, rules=None):
+    """Emit every configured candidate. A pending config cannot select one."""
+    from sellfox_settlement.finance_rules import load_finance_rules, selected_income_candidate
+    rules = rules or load_finance_rules()
+    income = set(rules['income_types'])
+    refunds = set(rules['refund_types'])
     totals = {}
-    for label, fields in [('a', a_fields), ('b', b_fields)]:
+    for label, spec in rules['income_candidates'].items():
+        fields = spec['fields']
         sales = sum((sum((money(row, key) for key in fields), Decimal(0)) for row in rows if row.get('type') in income), Decimal(0))
         returned = sum((sum((money(row, key) for key in fields), Decimal(0)) for row in rows if row.get('type') in refunds), Decimal(0))
-        totals['income_candidate_' + label] = str(sales)
-        totals['refund_candidate_' + label + '_signed'] = str(returned)
-        totals['net_candidate_' + label] = str(sales + returned)
-    # B reproduces PR284's stated formula. Keep the omitted promotion tax visible
-    # as a separate diagnostic until finance chooses the formula.
-    promo_tax = sum((money(row, 'promotional_rebates_tax') for row in rows if row.get('type') in income | refunds), Decimal(0))
+        key = label.lower()
+        totals['income_candidate_' + key] = str(sales)
+        totals['refund_candidate_' + key + '_signed'] = str(returned)
+        totals['net_candidate_' + key] = str(sales + returned)
+    # Promotion tax stays a diagnostic until finance chooses whether B includes it.
+    tax_field = rules['diagnostic_tax_field']
+    promo_tax = sum((money(row, tax_field) for row in rows if row.get('type') in income | refunds), Decimal(0))
     totals['promotional_tax_signed'] = str(promo_tax)
     totals['net_b_all_tax_diagnostic'] = str(Decimal(totals['net_candidate_b']) + promo_tax)
+    totals['selected_income_candidate'] = selected_income_candidate(rules) or 'unconfirmed'
     return totals
 
 

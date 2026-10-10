@@ -198,7 +198,8 @@ def validate_month(root, month):
         or fatal_pdf_issues or unexplained_differences
         or any(p.get('refund_other_bridge', {}).get('status') == 'difference' for p in pairs))
     summary['fatal_validation_errors'] = fatal
-    summary['finance_rules_status'] = 'pending_ZJ'
+    from sellfox_settlement.finance_rules import load_finance_rules
+    summary['finance_rules_status'] = load_finance_rules()['status']
     return {'summary': summary, 'pairs': pairs, 'candidate_groups': candidates,
             'csv_validation': csv_validation, 'pdf_errors': pdf_errors,
             'source_manifest': before, 'currency_map': currency_map,

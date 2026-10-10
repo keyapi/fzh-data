@@ -8,6 +8,7 @@ tags: [sellfox, amazon, settlement, okf, log]
 # 变更日志
 
 ## 2026-10-10
+- **跑通技术月度步骤**：`run_technical_month.py` 按未确认的 `finance_rules.yaml` 重跑 2026-08 文件覆盖、PDF 科目、账号匹配和订单连接，并在仓库外写出 8 张工作表。Settlement / FBA 探针复用只读快照；不选定申报口径，不写生产。
 - **技术验证入库**：2026-08 非 V2 CSV/PDF、渠道账号、EN 成本与银行到账缺口的只读验证脚本和三份调研落入分支；业务明细仍在仓库外。经验库入口 `docs/solutions/tooling-decisions/amazon-non-v2-tax-technical-validation.md`。ZJ 口径、历史成本和 8 月 Amazon 银行流水仍缺。
 - **收尾沉淀（ce-okf）**：新增约定 `docs/solutions/conventions/external-questionnaire-via-notion.md`（外部问卷：单份仓库 MD + Notion 访客通道；三条硬边界：MCP 无邀请工具 / 国内需翻墙 / 数据出境只私享）；AGENT_HANDOFF 增 §11，记录技术负责人已答的 **T01—T08** 原话（含 **通途尾程人工导入、导入后次日才显示、一次下载不能跨太久、EN `tongtool_integration` 待完善、报表 FBA 订单不一定在通途**）作为 Codex 接手入口。
 - **合并为单份底稿（Notion 可直接导入）**：把填写区重排为 Notion 友好的 4 列表（编号/需确认事项/建议/你的答复+证据）、相对链接改为纯文本仓库路径、`<>` 自动链接改裸 URL，并删除临时派生稿——底稿本身即可导入 Notion，不再有第二份会漂移的副本。

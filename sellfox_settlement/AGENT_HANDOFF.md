@@ -99,5 +99,6 @@ uv run python sellfox_settlement/reconcile_amazon.py reconcile --settlement data
   - `docs/research/2026-10-10-account-technical-validation.md`
   - `docs/research/2026-10-10-cost-technical-validation.md`
   - `docs/research/2026-10-10-pdf-technical-validation.md`
-- **脚本**（只读；`--out` 必须在仓库外）：`non_v2_validation.py`、`pdf_validation.py`、`monthly_validation.py`、`account_validation.py`、`cost_validation.py`、`settlement_validation.py`、`validation_paths.py`。测试：`uv run pytest tests/sellfox_settlement -q`。
+- **脚本**（只读；`--out` 必须在仓库外）：`run_technical_month.py` 串起阶段 1–3、5、8，并读取阶段 4 的 `finance_rules.yaml`（状态保持 `pending_ZJ`，不选定收入候选）。账号匹配用已保存的主数据快照，不刷新 Google/EN/赛狐。阶段 6 复用通途 FBA 探针，不部署 EN 生产接口。阶段 7 复用 Settlement 快照；PLN 原币明细重试为 0 行，银行实际到账仍缺输入。测试：`uv run pytest tests/sellfox_settlement -q`。
+- **2026-10-10 已跑通 2026-08**：130 个源文件、65 份 PDF 成功、1,941 个科目比较（1,918 完整 / 5 空白金额 / 18 项差额保留）、账号 64/65、订单连接 9,969/10,116。仓库外工作簿 `2026-08-technical-workbook.xlsx` 共 8 张表。这不是申报数。
 - **还不能做的事**：ZJ 的 F01—F20 仍空；未登记账号不要自行写入 EN 或运营表；当前 BOM 不能当 8 月历史成本；`Refund.other` 不能按行拆回商品/运费/税；银行实际到账仍缺 8 月 Amazon 流水。`bank_evidence_probe.py` 与 `bank_evidence_finish.py` 不在本分支文件清单里，私有脚本不要入库。

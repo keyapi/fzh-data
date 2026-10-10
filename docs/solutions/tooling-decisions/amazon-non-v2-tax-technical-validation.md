@@ -56,10 +56,12 @@ tags: [amazon, tax, settlement, non-v2, validation]
 
 ```powershell
 uv run pytest tests/sellfox_settlement -q
-uv run python sellfox_settlement/monthly_validation.py --help
+uv run python -m sellfox_settlement.run_technical_month --input <8月账单目录> --out <仓库外私有目录> --month 2026-08
 ```
 
-带原始账单的复跑必须把 `--out` 指到仓库外。省略刷新标志时使用已有只读快照。生产 EN、通途和赛狐调用保持查询；不要调用会保存 Cost Review、导入订单或创建主数据的入口。
+`finance_rules.yaml` 的 `status` 在 ZJ 确认前必须是 `pending_ZJ`。配置若写下已选定的收入候选，加载会直接报错。月度命令重跑文件覆盖、PDF 科目、账号匹配和订单连接，并写出 8 张工作表；Settlement 与通途 FBA 探针复用已完成的只读快照，不刷新生产、不部署 EN enrichment。
+
+2026-10-10 对 8 月目录跑过一次：65 份 PDF 成功，1,941 个科目比较中 1,918 个完整、5 个空白金额、18 个差额保留，账号候选 64/65，订单连接 9,969/10,116。工作簿留在账单旁的私有目录，文件名 `2026-08-technical-workbook.xlsx`。
 
 ## Related
 
