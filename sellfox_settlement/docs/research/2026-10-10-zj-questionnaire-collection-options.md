@@ -21,7 +21,7 @@ resource: sellfox_settlement/docs/research/2026-10-09-amazon-non-v2-monthly-tax-
 - **自建局域网表单可行但最重**：要服务器 + 数据库 + 长期维护；主流建议是"非技术团队别自建"。
 - **最贴合现状的是 Google 表单 → Google 表格**：本仓库已有 Google 服务账号和 `gsheets` 读取能力，ZJ 也会用表格，AI 可直接读回。
 - **如果 ZJ 愿意用 AI 工具，则不需要任何新系统**——继续用 Git 里的 MD + PR（本仓库既定流程）。
-- **Notion 若要用于填写，走"访客邀请 + 可编辑"单页**，而不是"对外公开"。
+- **Notion 若要用于填写，走"访客邀请 + 可编辑"单页**，而不是"对外公开"。该路**已核实可行**：完整 MD 可导入成页面、简单表格能转、ZJ 用 Google/微软账号免费登录、免费版 10 个访客够用；但**填 9 列大表较别扭**（建议填区改数据库），且**国内访问不稳定、需翻墙兜底**，**MCP 不能替你发访客邀请**（须在界面手动分享）。详见 2.4。
 
 ## 2. Notion 的三条路（容易混，分开看）
 
@@ -55,6 +55,37 @@ Notion 有**三种互不相同**的机制，很多人把它们当成一回事：
 - 数据库上限：1 万行 / 50 列；页面 1000 block。
 
 来源：<https://www.notion.com/help/forms>、<https://www.notion.com/help/guides/use-forms-to-collect-organize-and-act-on-responses-in-notion>、<https://www.notion.com/product/forms>、<https://matthiasfrank.de/en/notion-updates/give-respondents-access-to-their-notion-forms-submission>
+
+### 2.4 直接把Notion 访客单页用起来的可行性（重点核实）
+
+针对"**能不能把一个完整 MD 文档发到 Notion 让 ZJ 填**"，逐条核实：
+
+**① 能不能放完整文档？能。** 用 Notion 的 **`Settings → Import → Text & Markdown`（拖入 `.md` 文件）**导入，整个文档变成一个页面。比"复制粘贴"可靠得多（粘贴对复杂表格/代码块容易出错）。
+
+**② 表格会不会坏？大体可以。** 官方与多篇指南都指出：**简单 GFM 表格能转**，但 Notion 对表格格式很挑（分隔行必须规范），且**不支持列对齐、单元格内换行、合并单元格**；复杂表格会降级，导入后**通常需要少量手工清理**。此外 HTML 会被丢弃、脚注不支持、GitHub 式 `> [!NOTE]` 会退化成普通引用块。
+- 对底稿的影响：第 2.2 节那张 **9 列大表**（编号/主题/建议/答复/证据/主体/期间/状态/备注）在 Notion 里填起来**很别扭**。更顺的是把它做成 **Notion 数据库**（一行一个问题，属性当列），填充体验远好于长表——但那样就不是纯 MD 了。
+
+**③ 能不能"填写提交"？能填，但不是"提交表单"。** 给 ZJ 的访客页面开 `Can edit`，她就能**直接在被分享的页面上编辑表格单元格**——这是"协作编辑"，不是"提交"。若非要"提交式"体验，只能走 2.3 的 Notion 表单，但那是**结构化行 + 公开即匿名**，放不下完整文档。**「完整文档 + 可填写」= 访客可编辑单页**。
+
+**④ 账号怎么来？Google/Apple/Microsoft 登录都行。** Notion 官方登录方式含 `Continue with Google`、`Continue with Apple`、**`Continue with Microsoft`**、Passkey、邮箱验证码。ZJ 有 Google 账号即可直接注册登录（前提是能翻墙）。
+
+**⑤ 免费版够不够？够。** 免费的 Free 计划允许 **10 个访客**；付费版（2026 起）访客不限。只给 ZJ 一人用绰绰有余。
+
+**⑥ 国内能访问吗？不稳，需要翻墙兜底。** GreatFire 实测 `notion.so` 为 **Mixed**（24 个被测地址里 6 blocked / 1 accessible），主页当前"未封锁"但会在不同时段失效；另有实测显示可从阿里云国内节点打开但慢（首字节约 1.5s、首屏约 3.5s）。**结论：Notion 在国内时好时坏，不能假设一定通**。既然 ZJ 用 Google 本就要翻墙，Notion 一并走翻墙即可——但这也说明"跨墙依赖"是这个方案绕不开的前提。
+
+**⑦ 本项目 MCP 能做/不能做什么（重要）。** 本机 Notion MCP 有 `create_pages`、`update_page`、`fetch`、`query_data_sources` 等，**能建/读页面内容**；但**没有任何"分享/邀请访客"的工具**——所以：**页面内容可由 AI 建/改，但"邀请 ZJ 为访客并给可编辑权限"必须在 Notion 界面里手动做**。另需注意：由集成（bot）创建的页面归属集成，直接分享给人类访客可能要多一步；**更稳妥的是你自己在 Notion App 里手动导入 `.md` 建页，再分享给 ZJ**。
+
+**⑧ 隐私**：Notion 是境外云（数据出境）；页面内容含法人/银行/税务口径，**只可私享给 ZJ 这一个访客，绝不能发布公开链接**。
+
+**推荐落地流程**：
+
+1. AI 产出一份**导入友好的填充版 MD**（保留完整正文；把要填的部分整理成好填的表格或数据库结构）。
+2. **你**在 Notion App 里 `Import → Text & Markdown` 导入成页面（比 MCP 建页更稳，页归你所有）。
+3. **你**在该页 `Share` 里把 ZJ 邮箱加为 **Guest、权限 `Can edit`**（免费版够用）。
+4. ZJ 用 Google 账号登录后直接填写。
+5. AI 用 MCP `fetch` 把该页内容读回，合并进 Git（Git 仍是唯一事实源）。
+
+来源：<https://www.notion.com/help/log-in-and-out>、<https://www.notion.com/help/import-data-into-notion>、<https://blog.markdowntools.com/posts/markdown-for-notion-what-actually-works>、<https://www.goinsight.ai/blog/markdown-to-notion>、<https://en.greatfire.org/https/notion.so>、<https://www.21cloudbox.com/support/notion-china.html>、<https://tinycommand.com/blogs/notion-pricing-2026>
 
 ## 3. 自建局域网表单
 
@@ -91,17 +122,21 @@ Notion 有**三种互不相同**的机制，很多人把它们当成一回事：
 **建议（按优先级）**：
 
 1. **若 ZJ 会用 AI 工具** → 就用 Git 里的 MD（已设计好），**不引入任何新系统**。
-2. **若她想要熟人 UI** → **Google 表单 → Google 表格**：她填表，AI 用现成 SA 把回答读回并入 Git。
-3. Notion 党 → **访客邀请单页（可编辑）**，**不要**用公开页+允许编辑，也不要用公开表单（匿名+不可改）。
-4. **只有当"数据一个字都不能离开内网"时**才上自建（OpnForm/HeyForm 之类），并接受长期维护与"仅内网可达"的限制。
+2. **ZJ 暂时不用 AI 工具、且接受翻墙 → 用 Notion 访客可编辑单页**（用户倾向）：完整文档导入成页面，分享 `Can edit` 给她直接填（详见 2.4）。**这是"发完整文档给她填"最省事的路**。
+3. **不想依赖翻墙** → 自建/内网（Google 表单走 Google 也需翻墙，因此排在这里之后）：把同一份文档用 OpnForm/HeyForm 之类放内网，或干脆走钉钉表单。
+4. Notion 若用，**务必**：只私享给 ZJ 一个访客，**绝不**用公开页+允许编辑，也不用公开表单（匿名+不可改）。
 
-**共同前提**：无论走哪条，**Git 仍是唯一事实源**；外部工具只做"回答通道"，回答再由 AI 合并回 MD。
+**共同前提**：无论走哪条，**Git 仍是唯一事实源**；外部工具只做"填写通道"，内容再由 AI 合并回 MD。
+
+**如果选 Notion，落地要点**（已在 2.4 展开）：你自己在 App 里导入 `.md` 建页并由你拥有 → 手动把 ZJ 加为 Guest(`Can edit`) → 她用 Google 登录填写 → AI 用 MCP `fetch` 读回并入 Git。MCP **不能**替你发访客邀请。9 列大表在 Notion 里不好填，考虑把填写区改成 Notion 数据库。
 
 ## 7. 待用户决定
 
-1. 优先走哪条：Git MD / Google 表单 / Notion 访客单页 / 自建？
-2. ZJ 是否愿意用 AI 工具（决定第 1 条是否可行）？
-3. 问卷内容是否允许离开内网（决定自建是否必需）？
+1. 采用 **Notion 访客可编辑单页**（用户倾向），还是 Google 表单 / 自建 / 继续 Git MD？
+2. 填写区做成 **纯 MD 表格**（与仓库一致，但 Notion 里填 9 列大表别扭）还是 **Notion 数据库**（好填，但非纯 MD）？
+3. 是否要我产出**一份导入友好的"填充版 MD"**（保留完整正文，重排填写区）供你直接导入 Notion？
+4. ZJ 是否愿意用 AI 工具（若愿意，可省掉外部系统）？
+5. 问卷内容是否允许离开内网（决定是否必须自建）？
 
 ## 8. 原始来源
 
@@ -120,5 +155,13 @@ Notion 有**三种互不相同**的机制，很多人把它们当成一回事：
 - Google 表单能力与限制：<https://www.smartsurvey.co.uk/blog/top-8-alternatives-to-google-forms-paid-and-free>
 - Google 表单连接 Google 表格：<https://www.sheetgo.com/blog/google-sheets-features/how-to-connect-google-forms-to-google-sheets>
 - Google Sheets API：<https://developers.google.com/sheets/api/overview>
+- Notion 登录方式（Google/Apple/Microsoft/Passkey/邮箱）：<https://www.notion.com/help/log-in-and-out>
+- Notion 导入数据（支持 .md，复杂表格会降级）：<https://www.notion.com/help/import-data-into-notion>
+- Markdown 转 Notion 实测（表格/代码块/脚注等保真度）：<https://blog.markdowntools.com/posts/markdown-for-notion-what-actually-works>
+- Markdown 到 Notion 的丢失项（不支持表格/嵌套列表等）：<https://www.goinsight.ai/blog/markdown-to-notion>
+- Notion 免费版访客额度（Free 10 访客；付费不限）：<https://tinycommand.com/blogs/notion-pricing-2026>、<https://21notion.com/en/blog/notion-workspace-guest-limit>
+- Notion 免费版各项上限：<https://www.usecarly.com/blog/notion-free-plan-limits>
+- notion.so 在中国大陆的可达性（GreatFire 实测 Mixed）：<https://en.greatfire.org/https/notion.so>
+- Notion 在中国大陆访问实测：<https://www.21cloudbox.com/support/notion-china.html>
 
 > 外部链接与各平台权限规则会变动，落地前请按当前版本复核。
