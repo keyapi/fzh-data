@@ -1,0 +1,11 @@
+--- prod
++++ test
+@@ -17,5 +17,7 @@
+                 method: 'key_test.item_utils.read_excel_file',
+                 args: {
+-                    file_url: file_url
++                    file_url: file_url,
++                    customer: frm.doc.customer,
++                    customer_name: frm.doc.customer_name
+                 },
+                 callback: function(response) {

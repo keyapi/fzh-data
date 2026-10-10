@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import json
 import os
 import re
 import sys
@@ -230,6 +231,64 @@ def translate_zh_to_en(text: str, api_key: str) -> str:
 
 
 # ──────────────────────────────────────────────────────────────
+# 海绵（HM…）固定拼法：物料组翻译(海绵→Foam) + 型号(原样) + 尺寸
+#   尺寸 = Foam Size 表 foam_size_translation（只存描述）+ 编码里的尺寸数字
+#   与 EN 侧 delivery_plan/utils/customs_export.py 的 _translate_foam 逐字对齐
+# ──────────────────────────────────────────────────────────────
+FOAM_SIZE_DOCTYPE = "Item Attribute Value All Foam Size"
+# 物料组「海绵」的 item_group_translation（等价 EN 的 _get_item_group_translation_by_ks("HM1510")）
+FOAM_ITEM_GROUP_TRANSLATION = "Foam"
+
+# 编码尺寸段末尾的内部后缀（QKL/LX/ZJ/KB…），展示时要剥掉
+FOAM_SIZE_SUFFIX_RE = re.compile(r"[A-Z]{1,5}$")
+
+_FOAM_SIZE_MAP: dict[str, str] | None = None
+
+
+def _foam_size_display(size_abbr: str) -> str:
+    """编码里的尺寸段 → 展示文本：剥掉内部后缀(QKL/LX/ZJ/KB)、分隔符统一 x、末尾补 cm。"""
+    s = (size_abbr or "").strip()
+    if not s:
+        return ""
+    s = FOAM_SIZE_SUFFIX_RE.sub("", s)
+    s = re.sub(r"(?i)cm$", "", s)
+    s = re.sub(r"[*×＊xX]", "x", s)
+    s = re.sub(r"\s+", "", s)
+    return s + "cm" if s else ""
+
+
+def load_foam_size_map(base: str, key: str, sec: str) -> dict[str, str]:
+    """abbr → foam_size_translation（一次拉全表，进程内缓存）。"""
+    global _FOAM_SIZE_MAP
+    if _FOAM_SIZE_MAP is None:
+        path = f"/api/resource/{urllib.parse.quote(FOAM_SIZE_DOCTYPE, safe='')}?limit_page_length=0"
+        rows = api_get(base, key, sec, path).get("data", [])
+        _FOAM_SIZE_MAP = {r["abbr"]: (r.get("foam_size_translation") or "")
+                          for r in rows if r.get("abbr")}
+    return _FOAM_SIZE_MAP
+
+
+def _translate_foam(code_agg: str, name_agg: str, foam_map: dict[str, str]) -> str:
+    """海绵：Foam + 型号(原样，不翻译) + 尺寸（表中描述 + 编码尺寸）。"""
+    parts = [p for p in (code_agg or "").split("-") if p]
+    if not parts:
+        return name_agg or code_agg
+    model_attr = size_abbr = ""
+    if len(parts) >= 3:
+        model_attr, size_abbr = parts[1], "-".join(parts[2:])
+    elif len(parts) == 2:
+        # 只有两段：带 x / 以 cm 结尾 → 是尺寸；否则当型号
+        if re.search(r"[xX×＊*]", parts[1]) or re.search(r"(?i)cm$", parts[1]):
+            size_abbr = parts[1]
+        else:
+            model_attr = parts[1]
+    desc = (foam_map or {}).get(size_abbr, "") if size_abbr else ""
+    size_part = " ".join(x for x in (desc, _foam_size_display(size_abbr)) if x)
+    out = [p for p in (FOAM_ITEM_GROUP_TRANSLATION, model_attr, size_part) if p]
+    return " ".join(out) if out else (name_agg or code_agg)
+
+
+# ──────────────────────────────────────────────────────────────
 # 聚合：去掉 item_code / item_name 最后一个 "-" 段（颜色）
 # ──────────────────────────────────────────────────────────────
 def drop_color(s: str) -> str:
@@ -238,14 +297,22 @@ def drop_color(s: str) -> str:
 
 
 # ──────────────────────────────────────────────────────────────
-# 靠枕固定宽高：系统只维护长度，导出时按物料族补出 长度*宽*高。
-# 中文品名含关键词且尺寸为单段数字 → 尺寸段补 *宽*高；已有完整三围(x/*/cm)则不动。
+# 靠枕固定宽高：系统只维护长度，导出时按物料族补出 长度x宽x高。
+# 中文品名含关键词且尺寸为单段数字 → 尺寸段补 x宽x高；已有完整三围(x/*/cm)则不动。
 # ──────────────────────────────────────────────────────────────
 FIXED_DIM_CN = (("三角靠枕", 20, 50), ("平条靠枕", 15, 50))
 
 
+def _sep_to_x(s: str) -> str:
+    """把尺寸分隔符统一为 x：只替换「数字 分隔符 数字」处，其余 * 不动。
+
+    194*20*50 → 194x20x50；153×60X10 → 153x60x10。中/英文品名共用（与 EN 侧同口径）。
+    """
+    return re.sub(r"(?<=\d)\s*[*×＊xX]\s*(?=\d)", "x", s or "")
+
+
 def _enrich_dim_cn(name: str) -> str:
-    """给单段长度尺寸补固定宽高：三角靠枕 *20*50、平条靠枕 *15*50。未命中必须返回原文。"""
+    """给单段长度尺寸补固定宽高：三角靠枕 x20x50、平条靠枕 x15x50。未命中必须返回原文。"""
     if not name:
         return name or ""
     for kw, w, h in FIXED_DIM_CN:
@@ -255,7 +322,7 @@ def _enrich_dim_cn(name: str) -> str:
         for i in range(len(parts) - 1, -1, -1):
             m = re.fullmatch(r"(\d+)(cm|CM|厘米)?", parts[i])
             if m:
-                parts[i] = f"{m.group(1)}*{w}*{h}{m.group(2) or ''}"
+                parts[i] = f"{m.group(1)}x{w}x{h}{m.group(2) or ''}"
                 return "-".join(parts)
     return name
 
@@ -272,6 +339,7 @@ def aggregate_items(dn: dict) -> list[dict]:
             "amount": 0.0,      # 销售金额（发票/合同用）
             "bom_cost": 0.0,    # BOM 成本（报关单用）
             "uom": it.get("uom") or it.get("stock_uom") or "个",
+            "code_display": code,
         })
         g["qty"] += float(it.get("qty") or 0)
         g["amount"] += float(it.get("amount") or 0)
@@ -280,6 +348,43 @@ def aggregate_items(dn: dict) -> list[dict]:
         g["rate"] = g["amount"] / g["qty"] if g["qty"] else 0.0          # 销售单价
         g["bom_rate"] = g["bom_cost"] / g["qty"] if g["qty"] else 0.0    # BOM 单价
     return list(groups.values())
+
+
+# ──────────────────────────────────────────────────────────────
+# 扣胚（KZKP…）补价：DN 明细行常无价（rate/amount/bom_cost 全 0）→ 导出报关单时取 Item Price。
+# 只对扣胚生效；DN 行本身有成本时以 DN 为准（不覆盖真实数据）；Item Price 查不到则保持 0。
+# 与 EN 侧 delivery_plan/utils/customs_export.py 同口径。
+# ──────────────────────────────────────────────────────────────
+BUTTON_EMBRYO_PRICE_LIST = "标准采购"
+_BUTTON_EMBRYO_PRICE_CACHE: dict[str, float] = {}
+
+
+def _is_button_embryo(code_agg: str) -> bool:
+    return (code_agg or "").upper().startswith("KZKP")
+
+
+def load_button_embryo_price(base: str, key: str, sec: str, item_code: str) -> float:
+    """扣胚单价（元/套）：取 Item Price「标准采购」里 valid_from 最新的一条；无则 0。"""
+    if not item_code:
+        return 0.0
+    code = item_code.strip()
+    if code not in _BUTTON_EMBRYO_PRICE_CACHE:
+        path = (f"/api/resource/Item%20Price?filters={urllib.parse.quote(json.dumps([['item_code', '=', code], ['price_list', '=', BUTTON_EMBRYO_PRICE_LIST]]))}"
+                f"&fields={urllib.parse.quote(json.dumps(['price_list_rate']))}&limit_page_length=1")
+        rows = api_get(base, key, sec, path).get("data", [])
+        _BUTTON_EMBRYO_PRICE_CACHE[code] = float((rows[0].get("price_list_rate") if rows else 0) or 0)
+    return _BUTTON_EMBRYO_PRICE_CACHE[code]
+
+
+def apply_button_embryo_price(base: str, key: str, sec: str, agg: list[dict]) -> None:
+    """给聚合结果里的扣胚补价（就地修改）。"""
+    for it in agg:
+        if not _is_button_embryo(it.get("code_agg", "")) or it.get("bom_cost"):
+            continue
+        price = load_button_embryo_price(base, key, sec, it.get("code_display") or it.get("code_agg") or "")
+        if price:
+            it["bom_rate"] = price
+            it["bom_cost"] = round(price * float(it.get("qty") or 0), 6)
 
 
 def num_to_words(n: int) -> str:
@@ -349,6 +454,12 @@ def _n3(ws, coord: str, value):
     """写入数值并强制保留 3 位小数（补零对齐）。"""
     ws[coord] = round(float(value), 3)
     ws[coord].number_format = "0.000"
+
+
+def _n2(ws, coord: str, value):
+    """写入金额/单价并强制保留 2 位小数（与 EN 侧报关单据一致）。"""
+    ws[coord] = round(float(value), 2)
+    ws[coord].number_format = "0.00"
 
 
 def compute_packing(agg, groups):
@@ -744,8 +855,8 @@ def fill_invoice(ws, dn, agg, totals):
             ws[f"C{row}"] = it["name_en"]                    # 品名(英文)
             ws[f"D{row}"] = it["qty"]
             ws[f"E{row}"] = uom_en(it["uom"])
-            _n3(ws, f"F{row}", usd_price(it["bom_rate"]))    # 单价(USD)
-            _n3(ws, f"G{row}", usd_price(it["bom_cost"]))    # 总金额(USD)
+            _n2(ws, f"F{row}", it["price_usd"])    # 单价(USD)
+            _n2(ws, f"G{row}", it["amount_usd"])   # 总金额(USD)
         else:
             for col in "CDEFG":
                 ws[f"{col}{row}"] = None
@@ -753,7 +864,7 @@ def fill_invoice(ws, dn, agg, totals):
     ws[f"C{tr}"] = "TOTAL:"
     ws[f"D{tr}"] = totals["qty"]
     ws[f"F{tr}"] = c["currency"]
-    _n3(ws, f"G{tr}", usd_price(totals["bom_cost"]))
+    _n2(ws, f"G{tr}", totals["amount_usd"])
     nr = 35 + k
     ws[f"C{nr}"] = f"TOTAL PACKED IN {num_to_words(totals['cartons'])} CTNS"
 
@@ -814,16 +925,16 @@ def fill_contract(ws, dn, agg, totals):
             ws[f"B{row}"] = it["name_en"]
             ws[f"F{row}"] = it["qty"]
             ws[f"G{row}"] = uom_en(it["uom"])
-            _n3(ws, f"H{row}", usd_price(it["bom_rate"]))
+            _n2(ws, f"H{row}", it["price_usd"])
             ws[f"I{row}"] = f"/{uom_en(it['uom'])}"
-            _n3(ws, f"J{row}", usd_price(it["bom_cost"]))
+            _n2(ws, f"J{row}", it["amount_usd"])
         else:
             for col in "BFGHIJ":
                 ws[f"{col}{row}"] = None
     tr = 33 + k
     ws[f"B{tr}"] = "TOTAL:"
     ws[f"F{tr}"] = totals["qty"]
-    _n3(ws, f"J{tr}", usd_price(totals["bom_cost"]))
+    _n2(ws, f"J{tr}", totals["amount_usd"])
     ws[f"E{39+k}"] = None                   # Time of Shipment(装运期) 留空
     ws[f"F{40+k}"] = None                   # 装运口岸/目的港（装运港及目的港）置空
     ws[f"E{43+k}"] = None                   # TERMS OF PAYMENT 留空
@@ -885,8 +996,8 @@ def fill_declaration(ws, dn, agg, totals, country,
             ws[f"F{row}"].border = _Bd(left=_Sd(style="thin"),
                                        right=(_fb.right if (_fb.right and _fb.right.style) else _Sd(style="thin")),
                                        top=_eb.top, bottom=_eb.bottom)
-            _n3(ws, f"G{row}", usd_price(it["bom_rate"]))     # 单价 = BOM成本 ÷ 汇率 × 加成
-            _n3(ws, f"H{row}", usd_price(it["bom_cost"]))     # 总价 = BOM成本 ÷ 汇率 × 加成
+            _n2(ws, f"G{row}", it["price_usd"])     # 单价 = BOM成本 ÷ 汇率 × 加成
+            _n2(ws, f"H{row}", it["amount_usd"])    # 总价
             ws[f"I{row}"] = c["currency"]
             ws[f"J{row}"] = "中国"
             ws[f"K{row}"] = country_cn                  # 最终目的国（地区）
@@ -902,9 +1013,321 @@ def fill_declaration(ws, dn, agg, totals, country,
                 ws[f"{col}{row}"] = None
             ws[f"C{row + 1}"] = None
     tr = 51 + k
-    ws[f"A{tr}"] = f"TOTAL：{c['currency']} {usd_price(totals['bom_cost']):.3f}"
+    ws[f"A{tr}"] = f"TOTAL：{c['currency']} {totals['amount_usd']:.2f}"
     if declaration_unit:                    # 申报单位：仅当传入才写入，否则保留模板原值
         ws[f"A{54+k}"] = f"申报单位  {declaration_unit}"
+
+
+# ══════════════════════════════════════════════════════════════
+# 云驼版（出口报关单-云驼.xlsx，2026-10-09 需求）—— 与 EN 侧 delivery_plan/utils/customs_export.py 同口径
+#   4 张表全部由代码写值（模板自带公式一律覆盖），仅「报关单」有表头固定字段。
+#   版式：每物料 2 行（主行 + 申报要素行）；中文品名、不用英文；不涉及翻译。
+#   注：本参考脚本不建模「申报要素」，故要素行留空（与本地智美通版一致）。
+# ══════════════════════════════════════════════════════════════
+YUNTUO_TEMPLATE = _DIR / "数据源" / "出口报关单-云驼.xlsx"
+_YUNTUO_TMPL_ITEMS = 3      # 模板自带 3 个物料的合并区
+_YUNTUO_STEP = 2            # 每物料占 2 行
+
+# start=数据起始行；two=跨 2 行合并的列；one=主行/要素行各自单行合并的列；span=跨整个数据区合并的列
+_YUNTUO_LAYOUT = {
+    "报关单": {"start": 20,
+               "two": ("A", "B:C", "G", "H", "I", "J", "K", "L:M", "N:P", "Q:S", "T", "U", "V", "W"),
+               "one": ("D:F",), "span": ()},
+    "发票":   {"start": 8,  "two": ("D", "E", "F", "G:H"), "one": ("C",), "span": ("A:B",)},
+    "箱单":   {"start": 10, "two": ("C", "D", "E", "F", "G"), "one": ("B",), "span": ("A",)},
+    "合同":   {"start": 18, "two": ("D", "E", "F", "G:H"), "one": ("B:C",), "span": ()},
+}
+_YUNTUO_PRINT_END = {"报关单": ("T", 25), "发票": ("H", 17), "箱单": ("G", 18), "合同": ("H", 48)}
+
+
+def _split_cols(spec: str) -> tuple:
+    """'B:C' → ('B','C')；'A' → ('A','A')。"""
+    if ":" in spec:
+        a, b = spec.split(":", 1)
+        return a.strip(), b.strip()
+    return spec, spec
+
+
+def safe_write(ws, coord: str, value):
+    """写入单元格；合并区非锚点（只读 MergedCell）自动跳过。"""
+    cell = ws[coord]
+    if cell.__class__.__name__ == "MergedCell":
+        return
+    cell.value = value
+
+
+def _shift_merges_down(ws, at_row: int, k: int) -> None:
+    """把 at_row 及以下的所有合并区整体下移 k 行（insert_rows 不会平移合并区）。"""
+    if k <= 0:
+        return
+    to_remove, to_add = [], []
+    for rng in [r for r in list(ws.merged_cells.ranges) if r.min_row >= at_row]:
+        to_remove.append(rng)
+        to_add.append(f"{get_column_letter(rng.min_col)}{rng.min_row + k}:"
+                      f"{get_column_letter(rng.max_col)}{rng.max_row + k}")
+    for rng in to_remove:
+        ws.merged_cells.remove(rng)
+    for coord in to_add:
+        ws.merged_cells.add(coord)
+
+
+def _shift_row_heights_down(ws, at_row: int, k: int) -> None:
+    """行高不会随 insert_rows 平移，手动下移。"""
+    if k <= 0:
+        return
+    heights = {r: d.height for r, d in ws.row_dimensions.items() if r >= at_row and d.height}
+    for r, h in sorted(heights.items(), reverse=True):
+        ws.row_dimensions[r].height = None
+        ws.row_dimensions[r + k].height = h
+
+
+def _yuntuo_block_refs(layout: dict, row: int) -> list:
+    """一个物料块（2 行）的合并区引用。"""
+    r2 = row + 1
+    refs = []
+    for spec in layout["two"]:
+        c1, c2 = _split_cols(spec)
+        refs.append(f"{c1}{row}:{c2}{r2}")
+    for spec in layout["one"]:
+        c1, c2 = _split_cols(spec)
+        refs.append(f"{c1}{row}:{c2}{row}")
+        refs.append(f"{c1}{r2}:{c2}{r2}")
+    return refs
+
+
+def _resize_yuntuo_data(ws, sheet: str, n_items: int) -> int:
+    """把云驼某表的数据区调整为 n_items 个物料（每物料 2 行），并重建合并区；返回数据起始行。"""
+    lay = _YUNTUO_LAYOUT[sheet]
+    start, step = lay["start"], _YUNTUO_STEP
+    tmpl_end = start + _YUNTUO_TMPL_ITEMS * step - 1
+    for rng in [r for r in list(ws.merged_cells.ranges) if start <= r.min_row <= tmpl_end]:
+        ws.merged_cells.remove(rng)
+    if n_items < _YUNTUO_TMPL_ITEMS:
+        _delete_rows_safe(ws, start + n_items * step, (_YUNTUO_TMPL_ITEMS - n_items) * step)
+    elif n_items > _YUNTUO_TMPL_ITEMS:
+        at = start + _YUNTUO_TMPL_ITEMS * step
+        k = (n_items - _YUNTUO_TMPL_ITEMS) * step
+        ws.insert_rows(at, k)
+        _shift_merges_down(ws, at, k)
+        _shift_row_heights_down(ws, at, k)
+        for r in range(at, start + n_items * step):
+            ref = start + (r - start) % (_YUNTUO_TMPL_ITEMS * step)
+            _copy_row_style(ws, ref, r, ws.max_column)
+            h = ws.row_dimensions.get(ref)
+            if h and h.height:
+                ws.row_dimensions[r].height = h.height
+    for i in range(n_items):
+        for ref in _yuntuo_block_refs(lay, start + i * step):
+            ws.merged_cells.add(ref)
+    last = start + n_items * step - 1
+    for spec in lay["span"]:
+        c1, c2 = _split_cols(spec)
+        ws.merged_cells.add(f"{c1}{start}:{c2}{last}")
+    return start
+
+
+def _extend_yuntuo_print_area(wb, n_items: int) -> None:
+    """打印区随物料数扩展（模板按 3 个物料写死）。"""
+    d = (int(n_items) - _YUNTUO_TMPL_ITEMS) * _YUNTUO_STEP
+    for sheet, (col, row) in _YUNTUO_PRINT_END.items():
+        if sheet in wb.sheetnames:
+            wb[sheet].print_area = f"A1:{col}{row + d}"
+
+
+_UNIFORM_FONT_FAMILY = "微软雅黑"
+
+
+def _set_font_family(ws, family: str = _UNIFORM_FONT_FAMILY) -> None:
+    """把整张表所有单元格的字族统一为 family，保留字号/加粗/斜体/颜色等。
+
+    - 跳过合并区覆盖格（MergedCell 只读；合并区显示样式取自锚点，无需处理）。
+    - 跳过「无样式且无值」的空格，避免给上万个空单元格建样式。
+    - scheme=None：防止主题字体（minor/major）覆盖显式字体名。
+    """
+    from openpyxl.styles import Font
+    for row in ws.iter_rows():
+        for cell in row:
+            if cell.__class__.__name__ == "MergedCell":
+                continue
+            if not cell.has_style and cell.value in (None, ""):
+                continue
+            f = cell.font
+            if f is not None and f.name == family and f.scheme is None:
+                continue
+            src = f or Font()
+            cell.font = Font(
+                name=family, size=src.size, bold=src.bold, italic=src.italic,
+                underline=src.underline, color=src.color, vertAlign=src.vertAlign,
+                strike=src.strike, charset=src.charset, outline=src.outline,
+                shadow=src.shadow, condense=src.condense, extend=src.extend,
+                family=src.family, scheme=None,
+            )
+
+
+def _finalize_yuntuo(wb) -> None:
+    """云驼版收尾（与智美通同口径：内容显示完整 + 整册统一字体族微软雅黑）。"""
+    for ws in wb.worksheets:
+        _set_font_family(ws)
+    _autofit_columns(wb)
+    for ws in wb.worksheets:
+        for row in ws.iter_rows():
+            for cell in row:
+                if cell.value in (None, "") or not (cell.alignment and cell.alignment.wrap_text):
+                    continue
+                cur = ws.row_dimensions[cell.row].height or 0
+                if cur < 30:
+                    ws.row_dimensions[cell.row].height = 30
+
+
+def fill_yuntuo_declaration(ws, dn, agg, totals, country_cn, consignee_name="", packing=None):
+    """云驼「报关单」：表头固定字段（标签奇数行/值偶数行）+ 逐物料 2 行。"""
+    c = CONFIG
+    start = _resize_yuntuo_data(ws, "报关单", len(agg))
+    ws["A4"] = c["domestic_party_cn"]                       # 境内发货人
+    ws["A8"] = c["domestic_party_cn"]                       # 生产销售单位
+    safe_write(ws, "A6", consignee_name or "")              # 境外收货人
+    safe_write(ws, "A10", dn.get("name", ""))               # 合同协议号
+    ws["E8"] = c["supervision_mode"]                        # 监管方式
+    ws["E10"] = country_cn                                  # 贸易国（地区）
+    for ref in ("E4", "F4", "G4", "L4", "P4", "E6", "F6", "G6", "L6",
+                "G8", "H8", "L8", "G10", "H10", "L10", "M10", "P10", "Q10",
+                "L12", "O12", "R12", "C13", "C15", "B16", "P17"):
+        safe_write(ws, ref, None)
+    ws["A12"] = "CTNS"
+    ws["E12"] = int(totals["cartons"])
+    _n2(ws, "F12", totals["gross"])
+    _n2(ws, "G12", totals["net"])
+    ws["I12"] = c["trade_term"]
+    safe_write(ws, "K12", None)
+    ws["U18"] = int(totals["cartons"])
+    _n2(ws, "V18", totals["gross"])
+    _n2(ws, "W18", totals["net"])
+    pk = packing or {}
+    for i, it in enumerate(agg):
+        row = start + i * _YUNTUO_STEP
+        safe_write(ws, f"A{row}", i + 1)
+        safe_write(ws, f"B{row}", None)
+        safe_write(ws, f"D{row}", it["name_agg"])
+        ws[f"G{row}"] = int(it["qty"])
+        ws[f"H{row}"] = uom_cn(it["uom"])
+        _n2(ws, f"I{row}", it["price_usd"])
+        _n2(ws, f"J{row}", it["amount_usd"])
+        ws[f"K{row}"] = c["currency"]
+        ws[f"L{row}"] = "中国"
+        ws[f"N{row}"] = country_cn
+        ws[f"Q{row}"] = c["origin_place"]
+        safe_write(ws, f"T{row}", None)
+        p = pk.get(it["code_agg"]) or {}
+        ws[f"U{row}"] = float(p.get("net") or 0)
+        ws[f"V{row}"] = float(p.get("gross") or 0)
+        ws[f"W{row}"] = int(p.get("cartons") or 0)
+        safe_write(ws, f"D{row + 1}", None)                 # 申报要素（本脚本不建模）
+
+
+def fill_yuntuo_invoice(ws, dn, agg, totals, consignee_name=""):
+    """云驼「发票」：中文品名 + 逐物料 2 行。"""
+    c = CONFIG
+    start = _resize_yuntuo_data(ws, "发票", len(agg))
+    safe_write(ws, "G2", dn.get("name", ""))
+    safe_write(ws, "C3", consignee_name or "")
+    ws["G3"] = datetime.datetime.fromisoformat(_parse_date(dn.get("posting_date", "")))
+    safe_write(ws, "G6", c["trade_term"])
+    safe_write(ws, "H6", None)
+    for i, it in enumerate(agg):
+        row = start + i * _YUNTUO_STEP
+        safe_write(ws, f"C{row}", it["name_agg"])
+        ws[f"D{row}"] = int(it["qty"])
+        ws[f"E{row}"] = uom_cn(it["uom"])
+        _n2(ws, f"F{row}", it["price_usd"])
+        _n2(ws, f"G{row}", it["amount_usd"])
+        safe_write(ws, f"C{row + 1}", None)
+    tr = start + len(agg) * _YUNTUO_STEP
+    ws[f"A{tr}"] = f"总计{c['currency']}:"
+    _n2(ws, f"C{tr}", totals["amount_usd"])
+    ws[f"F{tr}"] = "TOTAL:"
+    _n2(ws, f"G{tr}", totals["amount_usd"])
+    safe_write(ws, f"F{tr + 1}", None)
+    safe_write(ws, f"F{tr + 2}", None)
+    safe_write(ws, f"D{tr + 3}", c["domestic_party_cn"])
+
+
+def fill_yuntuo_packing(ws, dn, agg, totals, consignee_name="", packing=None, country_cn=""):
+    """云驼「箱单」：中文品名 + 逐物料 2 行（箱数/数量/毛重/净重）。"""
+    c = CONFIG
+    start = _resize_yuntuo_data(ws, "箱单", len(agg))
+    ws["G3"] = datetime.datetime.fromisoformat(_parse_date(dn.get("posting_date", "")))
+    safe_write(ws, "G4", dn.get("name", ""))
+    safe_write(ws, "B5", consignee_name or "")
+    safe_write(ws, "G5", dn.get("name", ""))
+    origin_city = re.sub(r"[（(][^（）()]*[）)]\s*$", "", c["origin_place"]).strip()
+    safe_write(ws, "C7", f"由  {origin_city}  至")         # 由=报关单境内货源地(Q)，只取城市名
+    safe_write(ws, "D7", country_cn or None)               # 至=报关单贸易国（地区）(E10)
+    safe_write(ws, "G7", None)
+    pk = packing or {}
+    for i, it in enumerate(agg):
+        row = start + i * _YUNTUO_STEP
+        safe_write(ws, f"B{row}", it["name_agg"])
+        p = pk.get(it["code_agg"]) or {}
+        ws[f"C{row}"] = int(p.get("cartons") or 0)
+        ws[f"D{row}"] = int(it["qty"])
+        ws[f"E{row}"] = uom_cn(it["uom"])
+        _n2(ws, f"F{row}", float(p.get("gross") or 0))
+        _n2(ws, f"G{row}", float(p.get("net") or 0))
+        safe_write(ws, f"B{row + 1}", None)
+    tr = start + len(agg) * _YUNTUO_STEP
+    ws[f"C{tr}"] = int(totals["cartons"])
+    _n2(ws, f"F{tr}", totals["gross"])
+    _n2(ws, f"G{tr}", totals["net"])
+    safe_write(ws, f"A{start}", "N/M")
+    safe_write(ws, f"B{tr + 1}", c["domestic_party_cn"])
+
+
+def fill_yuntuo_contract(ws, dn, agg, totals, consignee_name="", consignee_addr=""):
+    """云驼「合同」：中文品名 + 逐物料 2 行。"""
+    c = CONFIG
+    start = _resize_yuntuo_data(ws, "合同", len(agg))
+    ws["C2"] = c["domestic_party_cn"]
+    safe_write(ws, "C4", c["shipper_addr"])
+    safe_write(ws, "C8", consignee_name or "")
+    safe_write(ws, "C10", consignee_addr or "")
+    safe_write(ws, "C12", None)
+    safe_write(ws, "E12", None)
+    safe_write(ws, "C6", None)
+    safe_write(ws, "E6", None)
+    safe_write(ws, "G6", dn.get("name", ""))
+    safe_write(ws, "G8", fmt_date_contract(dn.get("posting_date", "")))
+    safe_write(ws, "G10", None)
+    safe_write(ws, "G11", c["trade_term"])
+    safe_write(ws, "H11", None)
+    for i, it in enumerate(agg):
+        row = start + i * _YUNTUO_STEP
+        safe_write(ws, f"B{row}", it["name_agg"])
+        ws[f"D{row}"] = int(it["qty"])
+        ws[f"E{row}"] = uom_cn(it["uom"])
+        _n2(ws, f"F{row}", it["price_usd"])
+        _n2(ws, f"G{row}", it["amount_usd"])
+        safe_write(ws, f"B{row + 1}", None)
+    tr = start + len(agg) * _YUNTUO_STEP
+    _n2(ws, f"G{tr}", totals["amount_usd"])
+    safe_write(ws, f"E{tr + 2}", None)
+    amt = float(totals["amount_usd"] or 0)
+    dollars, cents = int(amt), int(round((amt - int(amt)) * 100))
+    words = num_to_words(dollars) or ""
+    if cents:
+        words = f"{words} AND CENTS {num_to_words(cents)}".strip()
+    safe_write(ws, f"B{tr + 3}", f"Total Value in Word:  {words} ONLY" if words else None)
+    for ref in (f"C{tr + 7}", f"C{tr + 8}", f"D{tr + 8}", f"C{tr + 12}"):
+        safe_write(ws, ref, None)
+    # 「(9)装运口岸和目的地」模板硬编码了港名（深圳 / Shenzhen-- To Hongkong）→ 只去港名、保留标签
+    for ref, pat in ((f"B{tr + 8}", "深圳"), (f"B{tr + 9}", "From  Shenzhen-- To Hongkong")):
+        cur = ws[ref].value
+        if isinstance(cur, str):
+            safe_write(ws, ref, cur.replace(pat, "").replace("Destination:  ", "Destination: "))
+
+
+def _parse_date(val) -> str:
+    """'2026-10-08' → 同值；带时间戳则取日期部分。"""
+    return (str(val or "").strip() or "1970-01-01")[:10]
 
 
 def main():
@@ -918,6 +1341,8 @@ def main():
     ap.add_argument("--declaration-unit", help="申报单位（缺省保留模板原值）")
     ap.add_argument("--no-enrich-flat-dim", action="store_true",
                     help="靠枕尺寸不补全（三角靠枕×20×50 / 平条靠枕×15×50），保持只有长度与已开票一致")
+    ap.add_argument("--template", choices=["zhimaitong", "yuntuo"], default="zhimaitong",
+                    help="报关单据版式：zhimaitong=智美通（默认）| yuntuo=云驼")
     args = ap.parse_args()
 
     env = "test" if args.test else "prod"
@@ -934,17 +1359,32 @@ def main():
         sys.exit(1)
 
     agg = aggregate_items(dn)
+    # 扣胚在 DN 行上常无价 → 用 Item Price（标准采购）补单件成本
+    apply_button_embryo_price(base, key, sec, agg)
     # 靠枕尺寸补全开关（默认补全）：三角靠枕→长度*20*50 / 平条靠枕→长度*15*50。
     # 已开票且当时尺寸不完整的单，可加 --no-enrich-flat-dim 保持只有长度与开票一致。
     if not args.no_enrich_flat_dim:
         for it in agg:
             it["name_agg"] = _enrich_dim_cn(it["name_agg"])
-    # 英文品名：并行翻译中文品名（去色后）
+    # 尺寸分隔符统一为 x（中/英文品名都统一；与 EN 侧同口径）
+    for it in agg:
+        it["name_agg"] = _sep_to_x(it["name_agg"])
+    # 英文品名：海绵固定拼法 / 固定覆盖 / 其余并行 AI 翻译
     dskey = load_deepseek_key()
+    foam_map = (load_foam_size_map(base, key, sec)
+                if any(it["code_agg"].startswith("HM") for it in agg) else {})
+
+    def _en_name(it):
+        if it["code_agg"].startswith("HM"):
+            return _sep_to_x(_translate_foam(it["code_agg"], it["name_agg"], foam_map))
+        ov = TRANSLATION_OVERRIDES.get(it["code_agg"])
+        if ov:
+            return _sep_to_x(ov)
+        return _sep_to_x(translate_zh_to_en(it["name_agg"], dskey)) if dskey else it["name_agg"]
+
     if dskey:
         def _do(it):
-            ov = TRANSLATION_OVERRIDES.get(it["code_agg"])
-            return it, (ov if ov else translate_zh_to_en(it["name_agg"], dskey))
+            return it, _en_name(it)
         with ThreadPoolExecutor(max_workers=5) as ex:
             futs = [ex.submit(_do, it) for it in agg]
             for i, f in enumerate(as_completed(futs), 1):
@@ -953,7 +1393,7 @@ def main():
                 print(f"  [{i}/{len(agg)}] {it['code_agg']} -> {en}", flush=True)
     else:
         for it in agg:
-            it["name_en"] = it["name_agg"]
+            it["name_en"] = _en_name(it)
     print(f"聚合后物料 {len(agg)} 行:")
     for it in agg:
         print(f"  {it['code_agg']}  qty={it['qty']}  rate={it['rate']:.4f}  "
@@ -988,10 +1428,23 @@ def main():
             it["cartons"] = it["gross"] = it["net"] = it["measrs"] = 0
         total_cartons = total_gross = total_net = total_volume = 0
 
+    # 报关金额（USD）：单价 = RMB 单件成本换算后取整；
+    # 金额 —— 扣胚按「单价 × 数量」（保证该行「单价×数量=金额」自洽，2026-09-28 要求）；
+    # 其余物料沿用「对 RMB 总额换算」。与 EN 侧同口径。
+    for it in agg:
+        it["price_usd"] = round(usd_price(it["bom_rate"]), 2)
+        it["amount_usd"] = (
+            round(it["price_usd"] * float(it.get("qty") or 0), 2)
+            if _is_button_embryo(it.get("code_agg", ""))
+            else round(usd_price(it["bom_cost"]), 2)
+        )
+
     totals = {
         "qty": round(sum(float(i.get("qty") or 0) for i in dn.get("items", [])), 2),
         "amount": round(sum(float(i.get("amount") or 0) for i in dn.get("items", [])), 2),
         "bom_cost": round(sum(float(i.get("bom_cost") or 0) for i in dn.get("items", [])), 2),
+        # 单据 TOTAL = 逐行 USD 金额之和（与打印的逐行金额严格对账）
+        "amount_usd": round(sum(float(i["amount_usd"]) for i in agg), 2),
         "cartons": total_cartons,
         "gross": total_gross,
         "net": total_net,
@@ -999,6 +1452,27 @@ def main():
     }
     print(f"合计: qty={totals['qty']}  amount={totals['amount']}  bom_cost={totals['bom_cost']}  "
           f"cartons={total_cartons}  gross={total_gross}kg  net={total_net}kg  vol={total_volume}m³")
+
+    if args.template == "yuntuo":
+        # ── 云驼版：4 张表全部写值（模板公式一律覆盖）；与 EN 侧 delivery_plan 同口径 ──
+        packing = {it["code_agg"]: {"cartons": it["cartons"], "gross": it["gross"], "net": it["net"]}
+                   for it in agg}
+        cname = (consignee or {}).get("name", "")
+        caddr = (consignee or {}).get("addr", "")
+        cty = country[1] if isinstance(country, tuple) else (country or "")
+        wb = load_workbook(YUNTUO_TEMPLATE)
+        for ws in wb.worksheets:
+            ws._images = []
+        fill_yuntuo_declaration(wb["报关单"], dn, agg, totals, cty, consignee_name=cname, packing=packing)
+        fill_yuntuo_invoice(wb["发票"], dn, agg, totals, consignee_name=cname)
+        fill_yuntuo_packing(wb["箱单"], dn, agg, totals, consignee_name=cname, packing=packing, country_cn=cty)
+        fill_yuntuo_contract(wb["合同"], dn, agg, totals, consignee_name=cname, consignee_addr=caddr)
+        _extend_yuntuo_print_area(wb, len(agg))
+        _finalize_yuntuo(wb)
+        out_path = Path(args.output) if args.output else OUT_DIR / f"报关单据_{args.dn}_云驼.xlsx"
+        wb.save(out_path)
+        print(f"OK: {out_path}")
+        return 0
 
     wb = load_workbook(TEMPLATE)
     for ws in wb.worksheets:      # 清除模板自带图片（中基抬头/印章/签名）
