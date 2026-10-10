@@ -86,7 +86,7 @@ uv run python sellfox_settlement/reconcile_amazon.py reconcile --settlement data
 ## 11. 国内报税底稿 & ZJ 填写（2026-10，供 Codex 接手）
 - **底稿**：`docs/research/2026-10-09-amazon-non-v2-monthly-tax-analysis.md` —— 2026-08 的 Amazon **非 V2**（Monthly Transaction CSV + Summary PDF，**非 Settlement V2**）国内报税分析：平台报送收入/退款候选、Amazon 税费、Settlement/银行回款、EN 成本链、法人归属，**§2 是给财务 ZJ 的填写区**，**§11 是 8 阶段实施路线**。
 - **同目录另有**：`docs/research/2026-10-10-zj-questionnaire-collection-options.md`（填写通道选型）。给 ZJ 的填写用 **Notion 访客可编辑单页**，**底稿即导入源**；做法与坑见 `docs/solutions/conventions/external-questionnaire-via-notion.md`（**别用公开链接**）。
-- **2026-08 文件事实**（盘点已核）：65 CSV + 65 PDF、13 套本地化表头、11,580 数据行、21 个零行 CSV；`如森法国/荷兰2020608` 是文件名错字已更正为 `202608`；**未发现已证实的下载不完整或期间选错**。多币种（USD/CAD/EUR/GBP/PLN/MXN/SEK）**未定汇率前禁止跨币种相加**。
+- **2026-08 文件事实**（盘点已核）：65 CSV + 65 PDF、13 套本地化表头、11,580 数据行、14 个零行 CSV + 7 个单行 CSV；`如森法国/荷兰2020608` 是文件名错字已更正为 `202608`；**未发现已证实的下载不完整或期间选错**。多币种（USD/CAD/EUR/GBP/PLN/MXN/SEK）**未定汇率前禁止跨币种相加**。
 - **技术负责人已答 T01—T08（2026-10-10，原话摘录，供 Codex 继续）**：
   - T01 渠道账号主键：**对**（以 gsheet `渠道账号` 为准），**最好之后统一文件名**。
   - T02 别名维护：**新别名登记进 gsheet 时注意不能重复**。
@@ -95,3 +95,48 @@ uv run python sellfox_settlement/reconcile_amazon.py reconcile --settlement data
   - T06 FBM 连接：可用 `order id + sku` 法；**或手动下载通途订单 Excel（含尾程）**；**通途尾程靠人工导入，导入后第二天通途下载才显示更新后的尾程**；通途 API 时效**未验证**；**一次下载不能跨太久时间**；**EN 侧是否及时/完整更新未知**；**EN App `tongtool_integration` 对接通途可能需进一步完善**。
   - T07 FBA 探针：**报表里的 FBA 订单不一定出现在通途**；仍先做探针（见底稿 §11 阶段 6）。
 - **Codex 接手入口**：先读本 §11 + 底稿 §11（阶段 1→8）；阶段 1—3 与 5—8 不依赖财务，可直接开工；阶段 4/5/6 受上面 T 答复与 ZJ 的 F 答复约束（**财务未拍板的口径只并列输出候选值，不写死**）。
+- **2026-10-10 技术验证已跑完，尚未代替申报**（分支 `feature/amazon-non-v2-tech-validation`）。边界与禁止推断见 `docs/solutions/tooling-decisions/amazon-non-v2-tax-technical-validation.md`。实测计数在三份调研，不要从交接页再抄一套去对账：
+  - `docs/research/2026-10-10-account-technical-validation.md`
+  - `docs/research/2026-10-10-cost-technical-validation.md`
+  - `docs/research/2026-10-10-pdf-technical-validation.md`
+- **脚本**（只读；`--out` 必须在仓库外）：`run_technical_month.py` 串起阶段 1–3、5、8，并读取阶段 4 的 `finance_rules.yaml`（状态保持 `pending_ZJ`，不选定收入候选）。账号匹配用已保存的主数据快照，不刷新 Google/EN/赛狐。阶段 6 复用通途 FBA 探针，不部署 EN 生产接口。阶段 7 复用 Settlement 快照；PLN 原币明细重试为 0 行，银行实际到账仍缺输入。测试：`uv run pytest tests/sellfox_settlement -q`。
+- **2026-10-10 已跑通 2026-08**：130 个源文件、65 份 PDF 成功、1,941 个科目比较（1,918 完整 / 5 空白金额 / 18 项差额保留）、账号 64/65、订单连接 9,969/10,116。仓库外工作簿 `2026-08-technical-workbook.xlsx` 共 8 张表。这不是申报数。
+- **2026-10-10 下午 Codex 接着做（不要再把下面几件事混成一张新表）**：
+  1. 父子单：只加 `_1`/`_2`，不要再加不带后缀的原单。23 张产品成本不相等的留在私有清单「产品成本对不上」，多半是仓库不同。只有拆单有产品成本 = 原单没有发货仓库、发货方式为空。两边产品成本都是 0 = 发货方式仍空且没有 EN 物料；原单上的 `item_cost` 不是产品成本。尾程单独看，原单有尾程时不要加到拆单尾程上。
+  2. SKU：Unicode 空格已在 `cost_validation.normalize_sku`。另一张「SKU 不符」是账单店铺和 EN 里另一家店的同号订单；匹配要带账单文件上的渠道账号。通途 FBA 里账单店铺那条 SKU 与账单一致，EN 快照没有那条。
+  3. FBA 缺单：先查购买日（7 月命中多数，9 月没有）。SKU 已在商品主数据或其他订单上的，不要整理成「请运营登记 SKU」。剩下的是 `S01-` + 站点 `sim1.stores.amazon.com`，以及一张加拿大账号订单未进通途（SKU 在美国店和商品主数据里已有）。
+  4. 结算：赛狐 V2 `groupPage.json`，不是本地 CSV。61 组是净额含期初/期末，恒等式含余额后为 0。波兰 4 店放宽结束日到 2026-01-01..2026-10-31 后有 PLN 结算组，结束日不在 8–9 月；其中一家放宽后仍是 0 组。银行「暂无匹配」留给财务对流水。
+  5. 尾程：实际物流商费用优先；历史预估只是第三级。历史预估为 0 时源码不会改用通途运费。通途全部自发货的缺尾程数量，和本账单已匹配行不是同一个分母。导入后次日才在通途下载里显示。
+  6. 成本：成品的国外加工允许为 0。皮壳/半成品加工为 0、以及成品头程为 0，才是缺口。10 月 9 日 BOM 按订单发货仓库算过，先用这套数。
+- **还不能做的事**：ZJ 的 F01—F20 仍空；未登记账号不要自行写入 EN 或运营表；当前 BOM 不能当 8 月历史成本；`Refund.other` 不能按行拆回商品/运费/税；银行实际到账仍缺 8 月 Amazon 流水。`bank_evidence_probe.py` 与 `bank_evidence_finish.py` 不在本分支文件清单里，私有脚本不要入库。不要把订单号、金额、运营人员姓名写进 Git。
+
+### PR286 Codex 复审与收口（2026-10-10）
+
+- 已审 Cursor 最新提交的账号连接、Unicode SKU、父子单与尾程边界；只加拆单的产品成本，不叠加原单尾程，23 张仓库不一致仍留在私有清单。
+- 修复三个可复现门禁问题：传入账号映射时缺映射不能退回全局连接（包括显式空映射）；补充退款使用同一账号范围；月度严重校验错误保留 JSON 证据后停止，不继续出工作簿。未传映射仍是 global 订单+SKU 候选，不能宣称已确认原生账号。
+- 本轮模块测试 102 passed；8 月 CSV/PDF 离线复跑：130 SHA256 未变、11580 行守恒、PDF 1918 complete / 5 partial / 18 difference，65 退款解释桥闭合，期间越界 0。
+- 本轮复跑 JSON 留在既有私有技术目录的 codex-review 子目录；没有改写 Cursor 已生成的两份工作簿，没有刷新生产或改变财务口径。
+- PR 无配置的 CI checks；本地模块测试与安全检查是本轮已取得证据，不能写成整个仓库或真实银行匹配全部通过。
+- 剩余输入/决定：ZJ F01—F20、8 月银行流水、23 张成本仓库差异、加拿大订单、S01 特殊站点、115 行未被当前选路采用的通途运费。保留清单，不自行补成本、注册账号或改 EN 设置。
+
+### 2026-10-10 技术目标继续与最终离线集成
+
+恢复先读 `docs/research/2026-10-10-technical-completion-plan.md`，再读组件ledger、尾程选路、FBA同步缺口三份同日调研。新增纯函数 `account_cost_bridge.py`、`cost_ledger.py`、`tail_validation.py`、`fba_sync_gap_validation.py` 已接入月度入口，147项测试通过。65文件36原生账号证据唯一、28缺证据、1标准账号未登记；11,580交易严格连接9,970、父子歧义91、缺订单53、账号未确认2、非订单排除1,464。所有状态保留，不能fallback到全局账号。
+
+9,614订单／9,823组件全部留证；拆单优先的23组产品差异hold、492组产品零不以通用item_cost补值。组件位置精确探针9,823：9,340可计算／342缺物料／141缺仓库，当前BOM不是历史。尾程115 occurrences未采用通途费用、55父拆单风险保留；金额相等不能证明重复。89个FBA原生账号缺口候选无生产写入；跨账号全局orderId查询及零quantity默认1风险已定位，不能称为实际缺单根因。完整源字段和同步日志未取得，不能生成可执行补单。
+
+复跑：`uv run python -m sellfox_settlement.run_technical_month --help`。输入原账单目录、目标月、独立私有输出目录以及 `--snapshots` 私有快照根；可用 `--json-only`。`cost/fba_snapshot_period.json` 必须记录真实query_start/query_end/date_basis/evidence/source_sha256，日期范围须对应目标整月且原始FBA快照hash一致；不能依据订单时间或输出文件名猜请求月。输入manifest前后核对hash，空输入或fatal停止。
+
+最终私有输出 `20261010/codex-completion`：八表工作簿逐单元格与workbook_tables JSON一致、无公式错误；JSON含全部明细、数量和源hash。Artifact导出 `export_validation_workbook.mjs --skip-preview` 可避免Windows预览退出故障。账期到银行仍缺实际流水；ZJ规则、主体、汇率、历史成本、退款及包裹分摊未确认。
+
+V2快照start/end也须覆盖目标整月；缺日期、错误年份或只覆盖半月均失败关闭，合法跨期缓冲允许。独立复审发现后先补4个失败用例再修复，147项测试及真实8月重跑通过。
+
+### 继续完善：原币明细与来源契约（2026-10-10）
+
+新增原币V2完整分页证据：53,995缓冲输入／47,995站点8月行／6,000边界行保留，6币61店；PLN明确total=0支持nullable list，不把未知响应当0。详读 `docs/research/2026-10-10-native-settlement-details-validation.md`。月度入口验证原币、站点月、查询期间、行数守恒和有限金额，源hash覆盖六份明细；第9表V2原币证据按币种科目汇总，只作平台证据，不与非V2或银行强制配平。
+
+成本探针每条必须source_orders_sha256等于EN源byteshash，9,823组件身份全覆盖，不允许空/遗漏/重复探针静默fallback；非法数量拒绝。尾程空值保持生产模拟，但原字段缺失明确missing_values_hold。独立cost_validation CLI必须显式--account-map或--global-candidates，global明确未确认，缺映射保持hold。
+
+run_status.json以run_id记录running/succeeded/failed及当次产物hash；失败重跑覆盖旧成功report，保留旧XLSX但不称本次成功。JSON-only不把残留XLSX计入新产物，外部Artifact导出须按tables逐单元格回读并记录source_tables_sha256。银行定向复查授权3期403文件、191表格列头错误0；新增独立站付款与其他平台核算不能当Amazon实收，可验证8月Amazon银行输入仍0。FBA完整源与live只读日志见同日FBA调研及私有fba-live-gap。
+
+本轮继续验收：161项模块测试通过，真实8月JSON重跑成功；9表交付加入原币证据。完整FBA89目标已取，56源字段键覆盖未验导入／1账号碰撞／31字段不全／1零数量hold；89源运费为null不得填0。实时只读确认缺口仍存在，93原始证据hash、请求月与目标身份集合纳入入口核验；历史具体漏单根因仍未证实。当前Daily回溯7天及9月超时不等于8月原因。后续技术修复位于生产tongtool_integration应用，须用所属应用测试和独立分支，不在数据仓库擅自部署。

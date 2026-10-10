@@ -7,6 +7,13 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-10-10
+- **更新**: 原币V2明细完整分页、站点月和行数守恒已集成第9表；组件探针绑定源hash、非法quantity拒绝、CLI显式范围及失败重跑状态收口。银行3期403文件复查保留缺输入，FBA补取完整源与只读同步日志。
+- **更新**: 完成严格账号桥、组件成本账本、尾程与89个FBA缺口只读诊断；147项测试和私有八表单元格回读通过。输入月元数据及前后hash门禁、全部异常保留，财务与缺输入仍hold；见非V2技术验证经验及模块交接。
+（Amazon 非 V2 报税技术验证）
+- **更新**: `tooling-decisions/amazon-non-v2-tax-technical-validation.md` —— 父子单只加拆单；产品成本为 0 的两种形状（原单缺仓库/发货方式，或两边发货方式仍空）；尾程先实际物流商、历史预估只是第三级；FBA 缺单先分购买日和 SKU；结算净额含期初期末。明细留在仓库外清单，不入库。
+- **新增**: `tooling-decisions/amazon-non-v2-tax-technical-validation.md` —— 2026-08 非 V2 CSV/PDF 的只读技术验证已经钉死的边界：行数守恒、退款 `other` 是合并桶、PDF 净额一致不等于科目完整、账号匹配不是申报法人、当前 BOM 不是 8 月历史成本、银行实际到账仍缺输入、业务明细不入库。三份调研保留实测计数。Codex 续做时先读这篇，不要把探针结果写成申报数。
+
 ## 2026-10-10（外部问卷通道：单份仓库 MD + Notion）
 - **新增**: `conventions/external-questionnaire-via-notion.md` —— 把结构化问卷交给仓库外、不用 AI 工具的同事（财务 ZJ）填写的做法：**单一事实源仍是仓库 MD**，把它写成"双向可用"（4 列填写表 / 去掉相对链接改纯文本路径 / `<>` 自动链接改裸 URL / 表格保持简单单行），**Notion 只做填写通道**；分享用**访客 + `Can edit`**，**不要"发布到网"**（公开页只读；公开+允许编辑有 prompt-injection 风险）。三条硬边界：**Notion MCP 无分享/邀请工具**（访客邀请须界面手动；集成建的页归集成）、**国内访问需翻墙兜底**、**数据出境只可私享单访客**。教训：本次一度同时存在"底稿 + 填充版"两份文件，用户立刻要求合并 —— **单一源才有唯一真值**。落地底稿见 `sellfox_settlement/docs/research/2026-10-09-amazon-non-v2-monthly-tax-analysis.md`，选型见同目录 `2026-10-10-zj-questionnaire-collection-options.md`。
 
@@ -240,3 +247,6 @@ tags: [solutions, log]
 - **修复（既有漂移）**: `intent_router/tests/test_catalog.py::test_catalog_skill_set_equals_agents_md_table` 在本批之前**已经是红的**（已用 HEAD 版文件核实）：AGENTS.md 有 `sellfox-amazon-settlement` / `dingtalk-oa-approval` / `gsheet-monthly-order` 三行，而 `intent_router/catalog.yaml` 一个都没有 —— 即「加了 AGENTS.md 行却没补 catalog 条目」，正是该文件头部注释与 `ce-okf` 记录里警告过的同一类脱节（这次方向相反）。已补 3 条选项（含各自的 `coverage`/`exclusions`/`examples`，`dir` 均验证存在），本批后 `pytest intent_router/tests colab_kit/tests` → **274 passed, 33 skipped**（原先 1 failed）。同时给 `sellfox-shipping` / `tongtool-order-cost` / `google-drive-permissions` 三条的 `exclusions` 补上新兄弟模块，让路由真正分得开。
 - **新增**: `tooling-decisions/colab-kit-notebook-edit-toolbox.md` —— 为什么把「改同事的 Colab notebook」做成**独立模块 + skill**（`colab_kit/`）而不是塞进 `google_drive_permissions/`。三条取舍：网络/本地命令分开（改 cell 是纯 JSON，可离线单测）；`verify` 与 `guard` 是**一等公民**（手写时最容易省掉的正是这两步）；`sed` 默认拒绝多命中（实测同一锚点命中 2 格）。与 `google_drive_permissions` 的分界写成对照表：**权限 vs 内容**，失败模式从"权限判断错"变成"**写坏别人的活文档**"。另一条动因是会重复 —— `pb_orders/` 已迁过一条，Overstock 这条将来也可能迁。
 - **新增**: `developer-experience/gh-pr-edit-projects-classic-workaround.md` —— `gh pr edit <n> --title/--body-file` 在本机（gh 2.71.2）**exit 1 且改动不生效**，报 `GraphQL: Projects (classic) is being deprecated … (repository.pullRequest.projectCards)`：`gh pr edit` 走 GraphQL 且前置查询会取 `projectCards`，弃用后整条命令在发出修改前就中止。绕法 = **`gh api -X PATCH repos/<owner>/<repo>/pulls/<n> -f title=… -F body=@file`**（REST，不碰 `projectCards`），改完 `gh pr view` 回读。**真正的坑是信号不可信**：命令串里接了 `| tail` 时 `$?` 是 `tail` 的、永远 0，报错行也被淹没 —— 本次就是靠回读 PR 才发现标题没变。
+
+## 2026-10-10 PR286复审收口
+- 更新 Amazon非V2技术验证边界：传账号映射需fail closed、补充退款同账号范围、月度fatal阻止下游；102模块测试和8月源文件hash复验。

@@ -24,6 +24,8 @@ metadata:
 - `sellfox_settlement/AGENT_HANDOFF.md`（子项目入口/交接）；脚本：`sellfox_settlement/reconcile_amazon.py`；交叉表：`sellfox_settlement/out/storeName_to_account_candidates.csv`
 - 可复跑测试手册：`sellfox_settlement/docs/reference/how-we-tested-2026-09.md`；踩坑：`sellfox_settlement/docs/lessons/lessons-learned.md`
 - **国内报税底稿**：`sellfox_settlement/docs/research/2026-10-09-amazon-non-v2-monthly-tax-analysis.md`（2026-08 Amazon **非 V2** 交易/汇总→平台报送候选/退款/税费/回款/成本 + **§2 给 ZJ 的填写区** + **§11 实施路线**）；填写通道选型 `…/2026-10-10-zj-questionnaire-collection-options.md`；外部问卷约定 `docs/solutions/conventions/external-questionnaire-via-notion.md`；技术答复见 `sellfox_settlement/AGENT_HANDOFF.md` §11
+- **技术月度命令**：`python -m sellfox_settlement.run_technical_month --input <账单目录> --out <仓库外目录> --month 2026-08`。口径读 `sellfox_settlement/finance_rules.yaml`，未确认时不能选定候选。
+- **2026-10-10 技术验证（先读边界，再读计数）**：`docs/solutions/tooling-decisions/amazon-non-v2-tax-technical-validation.md`；调研 `sellfox_settlement/docs/research/2026-10-10-account-technical-validation.md`、`…/2026-10-10-cost-technical-validation.md`、`…/2026-10-10-pdf-technical-validation.md`。账号匹配不是法人，当前 BOM 不是 8 月成本，`Refund.other` 不能按行拆开，银行到账仍缺输入。父子单只加拆单；产品成本为 0 先看发货仓库和发货方式，不要用 `item_cost` 填空。Codex 接手读 `sellfox_settlement/AGENT_HANDOFF.md` §11 下午那条。
 - 脚本：`sellfox_settlement/reconcile_amazon.py`；交叉表：`sellfox_settlement/out/storeName_to_account_candidates.csv`
 
 ## 关键事实（速查，别再踩）
@@ -47,3 +49,11 @@ uv run python sellfox_settlement/reconcile_amazon.py reconcile --settlement data
 
 ## 后续（更强模型继续）
 V2 明细→钉钉列做成表驱动；逐账号 join `渠道账号` 对账；原币+固定月汇率；测 4 号前能否取全上月；广告 ad 另取 Ads API；多平台仅 Temu/TikTok/Walmart/eBay/AliExpress/MercadoLibre/SHEIN/Shopify 有账单，Wayfair 及小平台仍人工。
+
+PR286复跑：提供账号映射后缺映射必须保留为 account_unmapped；补充退款同范围。总入口不能忽略 fatal_validation_errors。详见 docs/solutions/tooling-decisions/amazon-non-v2-tax-technical-validation.md 的复审节。
+
+## 月度技术完成后的恢复入口
+
+先读 `sellfox_settlement/docs/research/2026-10-10-technical-completion-plan.md`，以及同目录组件成本ledger、尾程选路和FBA同步缺口调研。月度入口支持独立 `--snapshots`、`--json-only`；快照必须有真实请求月元数据和原始hash。严格账号桥不fallback global；组件、交易、费用occurrence分别对账。FBA补齐候选无完整字段或同步日志时hold，不能自动导入。
+
+继续取证恢复：读取 `sellfox_settlement/docs/research/2026-10-10-native-settlement-details-validation.md`。先检查私有run_status的run_id/status/artifact hashes；JSON-only后的XLSX需另作导出回读验收。cost_validation独立CLI须--account-map或显式--global-candidates；组件探针source_orders_sha256必须绑定原快照。银行V2和实际银行证据分开，不把其他平台reference填入Amazon。
