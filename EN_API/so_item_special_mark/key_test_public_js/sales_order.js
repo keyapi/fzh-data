@@ -15,7 +15,7 @@ frappe.ui.form.on('Sales Order', {
         // 按钮点击事件
         frm.fields_dict["custom_process_file_customer_item_code"].onclick = function() {
             const file_url = frm.doc.custom_attach_file_customer_item_code; // 获取上传文件的 URL
-            
+
             // 调用后端方法，传递文件 URL
             frappe.call({
                 method: 'key_test.item_utils.read_excel_file',
@@ -51,10 +51,10 @@ frappe.ui.form.on('Sales Order', {
 
                         frm.refresh_field('items'); // 刷新子表显示
                         frappe.msgprint(__('已成功添加项目到子表'));
-                        
+
                         // 执行无扣一致性校验
                         validate_no_buckle_consistency(frm);
-                        
+
                     } else {
                         frappe.msgprint(__('未找到任何项目'));
                     }
@@ -85,7 +85,7 @@ function validate_no_buckle_consistency(frm) {
                 // cp_item_groups 和 bcp_item_groups 都是列表，包含了子孙分组
                 // 根据需求，应该校验 cp_item_groups 和 bcp_item_groups 中的所有物料组
                 const target_item_groups = [...cp_item_groups, ...bcp_item_groups];
-                
+
                 // 执行校验逻辑，传入目标物料组列表
                 perform_validation(frm, target_item_groups);
                 // console.log(target_item_groups)
@@ -109,7 +109,7 @@ function perform_validation(frm, target_item_groups) {
         if (!target_item_groups.includes(row.item_group)) {
             return; // 不在列表中，跳过校验
         }
-    
+
         const tongtool_name = (row.custom_tongtool_item_name || '').trim();
         const system_name = (row.item_name || '').trim();
         const tongtool_has = tongtool_name.includes('无扣');
@@ -144,7 +144,7 @@ function perform_validation(frm, target_item_groups) {
 //     refresh: function(frm) {
 //         frm.fields_dict["custom_process_file_customer_item_code"].onclick = function() {
 //             const file_url = frm.doc.custom_attach_file_customer_item_code; // 获取上传文件的 URL
-            
+
 //             // 调用后端方法，传递文件 URL
 //             frappe.call({
 //                 method: 'key_test.item_utils.read_excel_file',
@@ -155,7 +155,7 @@ function perform_validation(frm, target_item_groups) {
 //                     if (response.message) {
 //                         const item_codes = response.message;
 //                         const existing_customer_item_codes = frm.doc.items.map(item => item.customer_item_code);
-                        
+
 //                         // 遍历 item_codes 并处理重复项
 //                         item_codes.forEach(item => {
 //                             if (existing_customer_item_codes.includes(item.customer_item_code)) {
