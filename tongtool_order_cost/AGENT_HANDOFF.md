@@ -105,7 +105,9 @@ Cursor Agent 用用户级 MCP `user-tongtool_erp2_primary`（`~/.cursor/mcp.json
   - [EN 成本侧现状](../docs/solutions/architecture-patterns/en-cost-side-current-state.md) —— 三条交付形态规则、借用、客户码索引必须回读 `customer_items`、`Cost Review` 与 `engine_170.py` 的边界
   - [数据流关系图](../docs/solutions/architecture-patterns/colab-cost-pipeline-data-flow.md) —— mermaid + 冲突点（"发货方式"4 处并存）
 - **审计交付物方法学（给独立评审用）**：[遗留系统审计交付物 — 活档案 + 机械自检](../docs/solutions/best-practices/legacy-audit-deliverable-living-spec-plus-self-check.md)
-  —— 含**被推翻的假设**清单与"自检脚本自己也会错"的踩坑；复核入口 = `tongtool_order_cost/scripts/verify_colab_cost_claims.py`（40 项断言）。
+  —— 含**被推翻的假设**清单与"自检脚本自己也会错"的踩坑；复核入口 = `tongtool_order_cost/scripts/verify_colab_cost_claims.py`（47 项断言，按内容定位）。
+- **「该不该合并」判据（通途订单号后缀语义）**：[conventions/tongtu-order-suffix-and-merge-criteria.md](../docs/solutions/conventions/tongtu-order-suffix-and-merge-criteria.md)
+  —— `-1/-2/_1/_2`（1–2 位）＝一单多件⇒不并；`-M####` 补发⇒不并；**判据=用通途SKU 反查 EN 客户物料号是否同属一个 EN 产品**；提取"订单号公共部分"**只剥 1–2 位**否则键退化成平台名会跨订单塌并。**未实现，待业务拍板。**
 
 ## 禁止
 

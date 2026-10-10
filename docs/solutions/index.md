@@ -13,6 +13,7 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-10-09 | 通途订单号后缀语义与「该不该合并」判据（旧 Colab 4.2.2/4.2.3） | [conventions/tongtu-order-suffix-and-merge-criteria.md](conventions/tongtu-order-suffix-and-merge-criteria.md) |
 | 2026-10-08 | 遗留系统审计交付物 — 活档案 + 机械自检（让人能独立评审） | [best-practices/legacy-audit-deliverable-living-spec-plus-self-check.md](best-practices/legacy-audit-deliverable-living-spec-plus-self-check.md) |
 | 2026-10-08 | 旧 Colab 成本链 — 逐段现状档案（cell 0 → 4.8） | [architecture-patterns/colab-cost-pipeline-current-state.md](architecture-patterns/colab-cost-pipeline-current-state.md) |
 | 2026-10-08 | 旧 Colab 成本链 — 数据流关系图（订单 → GS → Colab → EN ↔ 赛狐） | [architecture-patterns/colab-cost-pipeline-data-flow.md](architecture-patterns/colab-cost-pipeline-data-flow.md) |

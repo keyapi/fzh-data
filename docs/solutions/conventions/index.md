@@ -17,5 +17,6 @@ timestamp: 2026-09-10
 | EN 成品与皮壳 1:1 配对审计与孤儿皮壳重建 | [erpnext-product-cover-variant-pairing.md](erpnext-product-cover-variant-pairing.md) |
 | 通途有库存 SKU 三方主线补齐惯例 | [tongtu-en-sellfox-instock-sku-mainline.md](tongtu-en-sellfox-instock-sku-mainline.md) |
 | Amazon 在线商品配对的分层候选与运营确认流程 | [amazon-online-product-pairing-candidate-workflow.md](amazon-online-product-pairing-candidate-workflow.md) |
+| 通途订单号后缀语义与「该不该合并」判据 | [tongtu-order-suffix-and-merge-criteria.md](tongtu-order-suffix-and-merge-criteria.md) |
 | 赛狐组合商品/套件 SKU 创建与配对工作流 | [sellfox-combo-sku-create-pairing-workflow.md](sellfox-combo-sku-create-pairing-workflow.md) |
 | 赛狐 Apifox API 文档本地镜像刷新与对账 | [sellfox-apifox-api-docs-mirror-refresh.md](sellfox-apifox-api-docs-mirror-refresh.md) |
