@@ -93,3 +93,5 @@ FBA补齐前同时查原生账号及订单号，防止跨账号同号命中；�
 快照请求日期必须由实际请求元数据证明并绑定原始文件hash，禁止从文件名或跨时区订单时间猜月份。入口前后核对输入hash，空输入和fatal失败关闭；零币种重试只可解除同币种、对应月份且范围明确的错误。工作簿按所有数据单元格回读与JSON核对，不能只检查文件存在。
 
 Related：`sellfox_settlement/docs/research/2026-10-10-component-cost-ledger.md`、`2026-10-10-tail-routing-validation.md`、`2026-10-10-fba-sync-gap-validation.md`、`2026-10-10-technical-completion-plan.md`。
+
+V2快照start/end也须覆盖目标整月；缺日期、错误年份或只覆盖半月均失败关闭，合法跨期缓冲允许。独立复审发现后先补4个失败用例再修复，147项测试及真实8月重跑通过。

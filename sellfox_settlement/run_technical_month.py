@@ -78,6 +78,18 @@ def verify_fba_snapshot_month(period, month):
         raise ValueError('FBA snapshot query month missing or incompatible')
 
 
+def verify_settlement_snapshot_month(summary, month):
+    target = dt.datetime.strptime(month, '%Y-%m').date()
+    next_month = (target.replace(day=28) + dt.timedelta(days=4)).replace(day=1)
+    try:
+        start = dt.date.fromisoformat(summary.get('start', ''))
+        end = dt.date.fromisoformat(summary.get('end', ''))
+    except (TypeError, ValueError) as exc:
+        raise ValueError('Settlement snapshot query period missing or invalid') from exc
+    if start > target or end < next_month - dt.timedelta(days=1):
+        raise ValueError('Settlement snapshot query period does not cover requested month')
+
+
 def cost_stage(report):
     matched = report['statuses'].get('matched', 0)
     skipped = report['excluded_rows']
@@ -135,6 +147,8 @@ def run_month(input_root, output, month, *, snapshots=None, json_only=False):
     source_hash = hashlib.sha256((snapshot_root / 'cost' / 'tongtool_fba_august.json').read_bytes()).hexdigest()
     if period.get('source_sha256') != source_hash:
         raise ValueError('FBA snapshot period source hash mismatch')
+    settlement_summary = _load(snapshot_root / 'settlement/settlement_validation_summary.json')
+    verify_settlement_snapshot_month(settlement_summary, month)
     stages.append(_stage("1", "file_coverage", "ran",
                          input=summary.get("source_files", 0), output=summary.get("pdf_success", 0),
                          input_unit='source_files', output_unit='csv_pdf_pairs',
@@ -198,7 +212,7 @@ def run_month(input_root, output, month, *, snapshots=None, json_only=False):
     stages.append(_stage('6', 'fba_sync_gap_dry_run', 'hold_no_import', **gap_report['summary']))
     settlement_dir = snapshot_root / "settlement"
     stages.append(settlement_stage(
-        _load(settlement_dir / "settlement_validation_summary.json"),
+        settlement_summary,
         _load(settlement_dir / "native_pln_retry_summary.json")))
 
     tables = build_tables(output, snapshot_root=snapshot_root)

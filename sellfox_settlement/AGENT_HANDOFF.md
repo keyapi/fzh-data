@@ -121,10 +121,12 @@ uv run python sellfox_settlement/reconcile_amazon.py reconcile --settlement data
 
 ### 2026-10-10 技术目标继续与最终离线集成
 
-恢复先读 `docs/research/2026-10-10-technical-completion-plan.md`，再读组件ledger、尾程选路、FBA同步缺口三份同日调研。新增纯函数 `account_cost_bridge.py`、`cost_ledger.py`、`tail_validation.py`、`fba_sync_gap_validation.py` 已接入月度入口，143项测试通过。65文件36原生账号证据唯一、28缺证据、1标准账号未登记；11,580交易严格连接9,970、父子歧义91、缺订单53、账号未确认2、非订单排除1,464。所有状态保留，不能fallback到全局账号。
+恢复先读 `docs/research/2026-10-10-technical-completion-plan.md`，再读组件ledger、尾程选路、FBA同步缺口三份同日调研。新增纯函数 `account_cost_bridge.py`、`cost_ledger.py`、`tail_validation.py`、`fba_sync_gap_validation.py` 已接入月度入口，147项测试通过。65文件36原生账号证据唯一、28缺证据、1标准账号未登记；11,580交易严格连接9,970、父子歧义91、缺订单53、账号未确认2、非订单排除1,464。所有状态保留，不能fallback到全局账号。
 
 9,614订单／9,823组件全部留证；拆单优先的23组产品差异hold、492组产品零不以通用item_cost补值。组件位置精确探针9,823：9,340可计算／342缺物料／141缺仓库，当前BOM不是历史。尾程115 occurrences未采用通途费用、55父拆单风险保留；金额相等不能证明重复。89个FBA原生账号缺口候选无生产写入；跨账号全局orderId查询及零quantity默认1风险已定位，不能称为实际缺单根因。完整源字段和同步日志未取得，不能生成可执行补单。
 
 复跑：`uv run python -m sellfox_settlement.run_technical_month --help`。输入原账单目录、目标月、独立私有输出目录以及 `--snapshots` 私有快照根；可用 `--json-only`。`cost/fba_snapshot_period.json` 必须记录真实query_start/query_end/date_basis/evidence/source_sha256，日期范围须对应目标整月且原始FBA快照hash一致；不能依据订单时间或输出文件名猜请求月。输入manifest前后核对hash，空输入或fatal停止。
 
 最终私有输出 `20261010/codex-completion`：八表工作簿逐单元格与workbook_tables JSON一致、无公式错误；JSON含全部明细、数量和源hash。Artifact导出 `export_validation_workbook.mjs --skip-preview` 可避免Windows预览退出故障。账期到银行仍缺实际流水；ZJ规则、主体、汇率、历史成本、退款及包裹分摊未确认。
+
+V2快照start/end也须覆盖目标整月；缺日期、错误年份或只覆盖半月均失败关闭，合法跨期缓冲允许。独立复审发现后先补4个失败用例再修复，147项测试及真实8月重跑通过。

@@ -39,3 +39,14 @@ def test_empty_fba_snapshot_is_missing_evidence():
 def test_empty_input_month_cannot_pass(tmp_path):
     from sellfox_settlement.monthly_validation import validate_month
     assert validate_month(tmp_path, '2026-08')['summary']['fatal_validation_errors']
+
+
+@pytest.mark.parametrize('summary', [{}, {'start': '2025-01-01', 'end': '2025-02-28'},
+                                    {'start': '2026-08-01', 'end': '2026-08-15'}])
+def test_settlement_snapshot_must_cover_requested_month(summary):
+    with pytest.raises(ValueError, match='Settlement snapshot'):
+        runner.verify_settlement_snapshot_month(summary, '2026-08')
+
+
+def test_settlement_snapshot_accepts_cross_period_buffer():
+    runner.verify_settlement_snapshot_month({'start': '2026-07-31', 'end': '2026-09-30'}, '2026-08')

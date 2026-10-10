@@ -45,4 +45,4 @@ uv run python -m pytest tests/sellfox_settlement/test_cost_ledger.py -q
 
 ## 原始组件位置重放（最终集成）
 
-旧探针28个歧义保留，不改写旧证据。私有生产函数重放新增 `current_cost_probe_components.json`，用EN名称加原快照item_position精确关联9,823组件，源快照hash进入月度manifest。9,340可计算、342缺物料、141缺仓库；与旧探针状态及计算值逐项一致。精确关联不代表成本全可用，也不代表8月历史BOM。模块13项测试通过，整模块143项通过。总入口优先使用组件探针，完整分量留私有JSON。
+旧探针28个歧义保留，不改写旧证据。私有生产函数重放新增 `current_cost_probe_components.json`，用EN名称加原快照item_position精确关联9,823组件，源快照hash进入月度manifest。9,340可计算、342缺物料、141缺仓库；与旧探针状态及计算值逐项一致。精确关联不代表成本全可用，也不代表8月历史BOM。模块13项测试通过，整模块147项通过。总入口优先使用组件探针，完整分量留私有JSON。
