@@ -11,6 +11,7 @@ tags: [solutions, architecture-patterns, log]
 
 - **新增**: `branch-param-desk-read-then-guard.md` — 网页内助手先读限额再提案；护栏看动作不看原话。
 - **更新**: 同上 — 公开配置只保留 OpenAI 兼容的 base URL 和 Key，真实值只放运行机器的 `.env`。
+- **更新**: 同上 — 借用 page-agent 点新字段。允许没点通不要对外演示。遮罩盖住侧边栏，刷新后按钮无点击。
 
 ## 2026-09-22
 
