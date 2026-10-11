@@ -9,19 +9,26 @@ tags: [ops-assistant, demo]
 
 银行内部竞赛用的网页演示。数据是假的。右侧助手会调用真实模型，但改数和交单要等页面上点允许。
 
+## 模型配置
+
+使用 OpenAI 兼容接口，只需要这两项：
+
+- `OPENAI_API_BASE_URL`：以 `/v1` 结尾，例如 `https://api.openai.com/v1`
+- `OPENAI_API_KEY`：该地址对应的密钥
+
+可选 `OPENAI_MODEL`，默认 `deepseek-v4-flash`。密钥只放在运行机器的 `.env`，不进仓库，也不发到浏览器。
+
 ## 本地运行
 
 需要 Python 3.10 以上。没有第三方包。
 
 ```bash
 cp .env.example .env
-# 编辑 .env，填入模型网关地址和 Key
+# 编辑 .env，填入上面的地址和 Key
 python server.py
 ```
 
 浏览器打开 http://127.0.0.1:8765/ 。
-
-密钥只留在运行这台机器的 `.env` 里，不会发到浏览器。
 
 ## 给评审看的顺序
 
