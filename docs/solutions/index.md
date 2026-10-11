@@ -13,6 +13,7 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-10-11 | 网页内参数助手先查再决定，护栏看动作不看原话 | [architecture-patterns/branch-param-desk-read-then-guard.md](architecture-patterns/branch-param-desk-read-then-guard.md) |
 | 2026-09-24 | 知识库防腐三件套 — 孤儿检测 / 生成式索引 / 链接图 | [best-practices/knowledge-base-anti-rot.md](best-practices/knowledge-base-anti-rot.md) |
 | 2026-09-23 | 扫描类脚本防"静默丢数"——反转匹配方向 | [best-practices/scanner-silent-data-loss-guard.md](best-practices/scanner-silent-data-loss-guard.md) |
 | 2026-09-23 | grok-bot（美东）SSH 接入 — 对称 NAT 下的跳板选路与 Tailscale SSH 验证绕过 | [integration-issues/grokbot-ssh-via-shanghai-jump-symmetric-nat.md](integration-issues/grokbot-ssh-via-shanghai-jump-symmetric-nat.md) |

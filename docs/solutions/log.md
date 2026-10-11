@@ -7,6 +7,9 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-10-11（网点参数台演示）
+- **新增**: `architecture-patterns/branch-param-desk-read-then-guard.md` —— 网页内助手先调用读限额，把结果交回模型再提案。安全护栏检查即将执行的动作，不因原话里出现「生产」否掉合法的测试限额修改。无差额不改数、不交单。分享用独立仓库，密钥只留在运行机器的 `.env`。
+
 ## 2026-09-24（知识库防腐 + PB 佣金表日期口径）
 - **新增**: `best-practices/knowledge-base-anti-rot.md` —— 知识库防腐三件套：**孤儿检测**（反向引用图，入链要排除 docs/solutions 自身互链与自动 log/index）、**生成式索引**（根平表由 frontmatter 生成，手工维护实测漂 30 篇）、**链接图**（相对链接必须解析，实测断 13 处），外加处置规则「孤儿只有两个归宿：route 或显式豁免，静默忽略不是选项」。依据：Vercel 对照实验 —— 靠 Agent 自己决定要不要查文档，**56% 的情况根本不会查**（skill 按需 53% = 无文档基线；常驻目录 100%）。**工具不会自己跑**，所以挂进 `ce-okf` 收尾第 5b 步。另记一条：一手知识只留在未合并分支上等于不存在（PB 活动价整套记录因 PR revert 停在 `feature/*`，main 上 grep 不到）。
 - **更新**: `workflow-issues/pb-reconciliation-monthly-update.md`（`last_updated: 2026-09-24`）—— 补两条：**TM 佣金表 Notes 的两套日期口径**（A/B = 我方开票日；C/D = PB Remittance Advice 的 Invoice Date，按 UPS 实收确认，常晚于我方；A2 填本期正常起点、A3 用 `plus Nx M/D/YYYY` 备注上期未付结转），以及**给 TM / 给 PB 的邮件边界**（佣金只进给 TM 且不抄 PB；给 PB 禁写佣金/比例/本地文件名/双号解释；活动价差额对 TM 的口径「PB makes good the shortfall → 补该差额上的 commission」，不写比例金额）。

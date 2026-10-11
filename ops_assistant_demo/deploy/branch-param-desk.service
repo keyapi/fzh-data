@@ -1,0 +1,14 @@
+[Unit]
+Description=Branch parameter desk demo
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/branch-param-desk
+EnvironmentFile=/opt/branch-param-desk/.env
+ExecStart=/usr/bin/python3 server.py
+Restart=on-failure
+User=desk
+
+[Install]
+WantedBy=multi-user.target

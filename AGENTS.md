@@ -167,6 +167,7 @@ uv sync
 | `channel-account-sync` | `channel_account_sync/` | Google 表渠道账号 → EN Channel Account（人变才加行，Amazon 按国家站） |
 | `intent-router` | `intent_router/` | 中文意图 → 本仓库模块路由（TypeSafe Jev + 置信度闸门；只分类不执行） |
 | `advertise` | `advertise/` | Amazon 广告数据分析（SP 报告 → 多维分析 → Excel 报告 + 否定词生成） |
+| `ops-assistant-demo` | `ops_assistant_demo/` | 网点参数台网页演示：先查限额再提案，护栏按动作拦截，写操作等人点允许 |
 | `ai-access-poc` | `ai_access_poc/` | 统一 AI 接入 C′ 的 PoC（壳 Open WebUI + 板 IvyeaOps 只读） |
 | `amazon-pairing` | `amazon_pairing/` | Amazon 在售未配对 Listing 只读智能审核（MSKU/ASIN/parent 家族） |
 | `cost-adjust` | `cost_adjust/` | 赛狐成本补录单：改已入库库存的采购成本与头程（不清零重入） |
@@ -267,7 +268,7 @@ AGENTS.md                        ← 你正在读的，项目总纲 + 路由地�
 |------|-----|-----------|
 | `workflow-issues/` | 29 | 账期对账、迟交/错位、跨期结算、批处理流程 |
 | `integration-issues/` | 20 | API 鉴权 / 限流 / 字段长度 / OIDC / Webhook 等集成踩坑 |
-| `architecture-patterns/` | 18 | 「这个管道/系统为什么这样设计」 |
+| `architecture-patterns/` | 19 | 「这个管道/系统为什么这样设计」 |
 | `tooling-decisions/` | 12 | 脚本、工具选型、产出校验 |
 | `developer-experience/` | 10 | Windows / worktree / MCP / Colab 等本机环境坑 |
 | `conventions/` | 9 | 团队约定（配对、命名、SOP） |

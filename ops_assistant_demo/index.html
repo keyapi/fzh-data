@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>柜面参数 · 对公结算</title>
+<style>
+  :root {
+    --blue: #0b3a82;
+    --blue-2: #0052d9;
+    --ink: #1d2129;
+    --muted: #86909c;
+    --line: #e5e6eb;
+    --bg: #f2f3f5;
+    --ok: #00a870;
+    --danger: #d54941;
+    --dim: rgba(29, 33, 41, 0.45);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    min-width: 1100px;
+    font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+    font-size: 13px;
+    color: var(--ink);
+    background: var(--bg);
+    display: grid;
+    grid-template-columns: 196px minmax(0, 1fr) 360px;
+    grid-template-rows: 48px minmax(0, 1fr);
+  }
+  header {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 0 16px;
+    background: var(--blue);
+    color: #fff;
+  }
+  .logo { font-weight: 650; letter-spacing: 0.02em; }
+  .logo small { font-weight: 400; opacity: 0.75; margin-left: 8px; }
+  header .meta { color: rgba(255,255,255,.8); font-size: 12px; }
+  .pill {
+    margin-left: auto;
+    font: inherit;
+    font-size: 12px;
+    color: #fff;
+    background: rgba(255,255,255,.12);
+    border: 1px solid rgba(255,255,255,.35);
+    border-radius: 2px;
+    padding: 4px 8px;
+  }
+  nav {
+    background: #fff;
+    border-right: 1px solid var(--line);
+    padding: 12px 0;
+    overflow: auto;
+  }
+  nav h2 {
+    margin: 8px 16px 6px;
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--muted);
+  }
+  nav button {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    color: var(--ink);
+    border: 0;
+    border-left: 3px solid transparent;
+    padding: 9px 16px 9px 18px;
+    cursor: pointer;
+    font: inherit;
+  }
+  nav button[hidden] { display: none; }
+  nav button[aria-current="true"] {
+    color: var(--blue-2);
+    background: #f2f3ff;
+    border-left-color: var(--blue-2);
+    font-weight: 650;
+  }
+  main { overflow: auto; padding: 12px 16px 24px; }
+  .crumb { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+  .page-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  h1 { font-size: 16px; font-weight: 650; margin: 0; }
+  .notice {
+    background: #f2f3ff;
+    border: 1px solid #d9e1ff;
+    color: #1d2129;
+    border-radius: 2px;
+    padding: 8px 12px;
+    margin-bottom: 12px;
+  }
+  .query {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    align-items: end;
+    background: #fff;
+    border: 1px solid var(--line);
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+  .query label, .sheet label, .form label {
+    display: grid;
+    gap: 4px;
+    font-size: 12px;
+    color: #4e5969;
+  }
+  .query input, .sheet input, .sheet textarea, .form input {
+    border: 1px solid #c9cdd4;
+    border-radius: 2px;
+    padding: 6px 8px;
+    font: inherit;
+    color: var(--ink);
+    background: #fff;
+    min-width: 180px;
+  }
+  .query input[readonly] { background: #f7f8fa; color: #4e5969; }
+  button.solid, button.ghost, button.link {
+    font: inherit;
+    cursor: pointer;
+    border-radius: 2px;
+    padding: 5px 14px;
+  }
+  button.solid { background: var(--blue-2); color: #fff; border: 1px solid var(--blue-2); }
+  button.ghost { background: #fff; color: var(--ink); border: 1px solid #c9cdd4; }
+  button.link { background: transparent; color: var(--blue-2); border: 0; padding: 0; }
+  button:disabled { opacity: 0.45; cursor: default; }
+  .panel { background: #fff; border: 1px solid var(--line); }
+  .panel-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--line);
+    font-weight: 650;
+  }
+  .panel-bar span:last-child { font-weight: 400; color: var(--muted); }
+  table { width: 100%; border-collapse: collapse; background: #fff; }
+  th, td { border-bottom: 1px solid var(--line); padding: 10px 12px; text-align: left; vertical-align: middle; white-space: nowrap; }
+  td.note, th.note { white-space: normal; }
+  th { background: #f7f8fa; color: #4e5969; font-weight: 650; font-size: 12px; }
+  tr[hidden] { display: none; }
+  td.num { font-variant-numeric: tabular-nums; font-weight: 650; }
+  .tag { display: inline-block; padding: 0 6px; border-radius: 2px; font-size: 12px; line-height: 20px; }
+  .tag.test { color: #0052d9; background: #f2f3ff; }
+  .tag.prod { color: #be5a00; background: #fff1e9; }
+  .tag.ok { color: #008858; background: #e3f9e9; }
+  .tag.wait { color: #0052d9; background: #f2f3ff; }
+  .tag.stop { color: #d54941; background: #fff0ed; }
+  .rails { border: 1px solid #d9e1ff; background: #f8f9ff; border-radius: 2px; padding: 8px 10px; }
+  .rails b { display: block; font-size: 12px; margin-bottom: 4px; }
+  .rail { display: grid; grid-template-columns: 40px 7.5em 1fr; gap: 8px; align-items: baseline; font-size: 12px; padding: 3px 0; }
+  .tag.read { color: #4e5969; background: #f2f3f5; }
+  .muted { color: var(--muted); }
+  .allow { color: var(--ok); }
+  .lock { color: var(--danger); }
+  .sheet { background: #fff; border: 1px solid var(--line); padding: 16px; display: grid; gap: 12px; max-width: 760px; }
+  .sheet-meta { display: grid; grid-template-columns: 88px 1fr 88px 1fr; gap: 8px 12px; align-items: center; }
+  .sheet-meta b { font-weight: 650; }
+  .sheet textarea { min-height: 96px; resize: vertical; width: 100%; }
+  .sheet input[type="text"] { width: 100%; }
+  .req { color: var(--danger); margin-left: 2px; }
+  .form-actions { display: flex; justify-content: flex-end; gap: 8px; }
+  #ticket-error { color: var(--danger); }
+  .toast { color: var(--ok); }
+  .empty { color: var(--muted); text-align: center; }
+  aside {
+    background: #fff;
+    border-left: 1px solid var(--line);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .ahead { padding: 12px 14px; border-bottom: 1px solid var(--line); display: flex; gap: 8px; align-items: center; }
+  .mark {
+    width: 28px; height: 28px; border-radius: 4px;
+    background: var(--blue-2); color: #fff;
+    display: grid; place-items: center; font-size: 13px; font-weight: 650;
+  }
+  .ahead strong { display: block; font-size: 14px; }
+  .ahead p { margin: 2px 0 0; color: var(--muted); font-size: 12px; }
+  #log { flex: 1; overflow: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+  .msg { font-size: 13px; line-height: 1.55; }
+  .msg.user { align-self: flex-end; background: var(--blue-2); color: #fff; padding: 8px 10px; border-radius: 4px 4px 0 4px; max-width: 92%; }
+  .msg.bot { align-self: stretch; }
+  .deny { border: 1px solid #f6c1be; background: #fff0ed; color: var(--danger); border-radius: 2px; padding: 8px 10px; }
+  .card { border: 1px solid #d9e1ff; background: #f8f9ff; border-radius: 2px; padding: 10px; }
+  .card ol { margin: 6px 0 10px; padding-left: 18px; }
+  .card .row { display: flex; justify-content: flex-end; gap: 8px; }
+  .step { font-size: 12px; color: var(--muted); padding: 2px 0 2px 16px; position: relative; }
+  .step::before { content: ""; position: absolute; left: 0; top: 7px; width: 8px; height: 8px; border: 1px solid #c9cdd4; border-radius: 50%; background: #fff; }
+  .step.on { color: var(--ink); font-weight: 650; }
+  .step.on::before { border-color: var(--blue-2); background: var(--blue-2); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 12px 8px; }
+  .chips button { font-size: 12px; padding: 4px 8px; }
+  .composer { border-top: 1px solid var(--line); padding: 10px 12px; display: flex; gap: 8px; }
+  .composer input { flex: 1; border: 1px solid #c9cdd4; border-radius: 2px; padding: 7px 8px; font: inherit; }
+  .mask {
+    position: fixed; inset: 0; z-index: 30;
+    background: rgba(29, 33, 41, 0.45);
+    display: flex; justify-content: center; padding-top: 10vh;
+  }
+  .mask[hidden] { display: none; }
+  .form { width: min(560px, calc(100vw - 48px)); background: #fff; border-radius: 4px; box-shadow: 0 12px 32px rgba(0,0,0,.18); height: fit-content; }
+  .dlg-h { padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  .dlg-h h3 { margin: 0; font-size: 16px; }
+  .dlg-b { padding: 16px; display: grid; gap: 12px; }
+  .dlg-b .sub { margin: 0; color: #4e5969; }
+  .form .form-actions { padding: 0 16px 16px; }
+  #spot {
+    position: fixed; pointer-events: none; z-index: 50; border-radius: 2px;
+    outline: 2px solid var(--blue-2); outline-offset: 2px;
+    box-shadow: 0 0 0 9999px var(--dim);
+    display: none;
+  }
+  #cursor {
+    position: fixed; z-index: 51; width: 14px; height: 14px; pointer-events: none; display: none;
+    background: var(--blue-2);
+    clip-path: polygon(0 0, 100% 58%, 58% 64%, 74% 100%, 46% 70%, 0 88%);
+    filter: drop-shadow(0 1px 1px rgba(0,0,0,.35));
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">柜面参数<small>对公结算</small></div>
+  <span class="meta">南京东路支行 · 31010001</span>
+  <select id="role" class="pill">
+    <option value="operator">林晓 · 柜面主管 E3301</option>
+    <option value="reader">陈默 · 综合柜员 E3302</option>
+  </select>
+</header>
+<nav>
+  <h2>对公结算</h2>
+  <button type="button" id="nav-rules" aria-current="true">限额参数</button>
+  <button type="button" id="nav-ticket">变更单</button>
+  <button type="button" id="nav-audit">操作审计</button>
+</nav>
+<main>
+  <section id="view-rules">
+    <div class="crumb">柜面参数 / 对公结算 / 限额参数</div>
+    <div class="page-head"><h1>单笔对公转账限额</h1></div>
+    <p class="notice">演示库与生产隔离，不产生资金划转。参数变更会先框出字段，确认后才写入。</p>
+    <form class="query" onsubmit="return false">
+      <label>网点<input type="text" value="31010001 南京东路支行" readonly /></label>
+      <label>币种<input type="text" value="人民币 CNY" readonly /></label>
+      <label>渠道<input type="text" value="柜面" readonly /></label>
+      <button class="solid" type="button">查询</button>
+      <button class="ghost" type="button">重置</button>
+    </form>
+    <div class="panel">
+      <div class="panel-bar"><span>参数列表</span><span id="row-count">2 条</span></div>
+      <table>
+        <thead>
+          <tr>
+            <th>参数代码</th><th>参数名称</th><th>环境</th><th>当前限额（元）</th><th>状态</th><th class="note">调整说明</th><th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr id="card-drill">
+            <td>LMT-CORP-SGL</td>
+            <td>单笔对公转账限额</td>
+            <td><span class="tag test">测试</span></td>
+            <td class="num" id="drill-amount">500,000.00</td>
+            <td><span class="tag ok">已生效</span></td>
+            <td class="note" id="drill-reason">初始生效，尚未调整</td>
+            <td><button class="link" id="btn-edit-drill" type="button">修改</button></td>
+          </tr>
+          <tr id="card-prod">
+            <td>LMT-CORP-SGL</td>
+            <td>单笔对公转账限额</td>
+            <td><span class="tag prod">生产</span></td>
+            <td class="num" id="prod-amount">500,000.00</td>
+            <td><span class="tag read">只读</span></td>
+            <td class="note">仅参数管理员周宁（A1028）可改，不能从测试同步</td>
+            <td class="muted">无修改权限</td>
+          </tr>
+          <tr id="card-export">
+            <td>CUS-CORP-LIST</td>
+            <td>对公客户清单</td>
+            <td><span class="tag prod">生产</span></td>
+            <td class="muted">客户信息</td>
+            <td><span class="tag read">无读权限</span></td>
+            <td class="note">不在本岗位可见范围</td>
+            <td><button class="link" id="btn-export" type="button">导出</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+  <section id="view-ticket" hidden>
+    <div class="crumb">柜面参数 / 对公结算 / 变更单</div>
+    <div class="page-head"><h1>参数变更单</h1></div>
+    <form class="sheet" id="ticket-form" onsubmit="return false">
+      <div class="sheet-meta">
+        <span>变更类型</span><b>限额参数调整</b>
+        <span>申请网点</span><b>31010001 南京东路支行</b>
+        <span>申请人</span><b>林晓 E3301</b>
+        <span>目标环境</span><b>仅测试</b>
+      </div>
+      <label>标题<span class="req">*</span><input id="ticket-title" type="text" placeholder="请输入变更标题" /></label>
+      <label>变更说明<span class="req">*</span><textarea id="ticket-body" rows="5" placeholder="请说明调整内容、影响范围，以及是否需要同步生产"></textarea></label>
+      <div class="form-actions">
+        <button class="solid" id="ticket-submit" type="button">提交工单</button>
+      </div>
+      <p id="ticket-error" hidden></p>
+      <p class="toast" id="ticket-done" hidden></p>
+    </form>
+    <div class="panel" style="margin-top:12px">
+      <div class="panel-bar"><span>本网点已提交</span><span>待参数管理员复核</span></div>
+      <table>
+        <thead><tr><th>单号</th><th>标题</th><th>状态</th><th>生产</th></tr></thead>
+        <tbody id="ticket-list"></tbody>
+      </table>
+    </div>
+  </section>
+  <section id="view-audit" hidden>
+    <div class="crumb">柜面参数 / 对公结算 / 操作审计</div>
+    <div class="page-head"><h1>操作审计</h1></div>
+    <div class="panel">
+      <div class="panel-bar"><span>当日留痕</span><span>执行和拒绝都记录</span></div>
+      <table>
+        <thead><tr><th>时间</th><th>柜员</th><th>事项</th><th>结果</th></tr></thead>
+        <tbody id="audit-body"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+<aside>
+  <div class="ahead">
+    <div class="mark">助</div>
+    <div>
+      <strong>参数助手</strong>
+      <p id="model-line">改参数前会停在页面上，等你确认</p>
+    </div>
+  </div>
+  <div id="log"></div>
+  <div class="chips">
+    <button class="ghost" type="button" id="chip-script-ok">演示 · 改测试限额</button>
+    <button class="ghost" type="button" id="chip-script-no">演示 · 越权被拒绝</button>
+    <button class="ghost" type="button" id="chip-port">让助手改限额</button>
+    <button class="ghost" type="button" id="chip-ticket">让助手填变更单</button>
+  </div>
+  <form class="composer" id="ask">
+    <input id="ask-input" placeholder="描述要改的参数" />
+    <button class="solid" type="submit">发送</button>
+  </form>
+</aside>
+<div class="mask" id="rule-dialog" hidden>
+  <form class="form" onsubmit="return false">
+    <div class="dlg-h"><h3>修改测试环境限额</h3></div>
+    <div class="dlg-b">
+      <p class="sub">只写入测试环境。生产环境限额不会变更。</p>
+      <label>单笔限额（元）<input id="f-amount" type="text" placeholder="200000" /></label>
+      <label>调整原因<input id="f-reason" type="text" placeholder="请填写调整原因" /></label>
+    </div>
+    <div class="form-actions">
+      <button class="ghost" id="rule-cancel" type="button">取消</button>
+      <button class="solid" id="rule-ok" type="button">确定</button>
+    </div>
+  </form>
+</div>
+<div id="spot"></div>
+<div id="cursor"></div>
+<script>
+const $ = (id) => document.getElementById(id);
+const KEY = "ops-assistant-demo-v6";
+const spot = $("spot");
+const cursor = $("cursor");
+let limits = { drill: 500000, prod: 500000 };
+let drillReason = "初始生效，尚未调整";
+let tickets = [];
+let audit = [];
+let log = [];
+let busy = false;
+
+function yuan(n) { return (n / 10000).toFixed(0) + " 万元"; }
+function money(n) { return Number(n).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function save() {
+  sessionStorage.setItem(KEY, JSON.stringify({ limits, drillReason, tickets, audit, log }));
+}
+function load() {
+  try {
+    const raw = sessionStorage.getItem(KEY);
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    limits = data.limits || limits;
+    drillReason = data.drillReason || drillReason;
+    tickets = data.tickets || [];
+    audit = data.audit || [];
+    log = data.log || [];
+  } catch (_) {}
+}
+function renderLimits() {
+  $("drill-amount").textContent = money(limits.drill);
+  $("prod-amount").textContent = money(limits.prod);
+  $("drill-reason").textContent = drillReason;
+}
+function renderAudit() {
+  $("audit-body").innerHTML = audit.map((a) =>
+    `<tr><td>${esc(a.time)}</td><td>${esc(a.who)}</td><td>${esc(a.what)}</td><td class="${a.result === "已拒绝" ? "lock" : "allow"}">${esc(a.result)}</td></tr>`
+  ).join("");
+}
+function stamp(result, what) {
+  const who = role() === "reader" ? "综合柜员陈默" : "柜面主管林晓";
+  audit.unshift({ time: new Date().toLocaleTimeString("zh-CN", { hour12: false }), who, what, result });
+  renderAudit();
+}
+function esc(s) {
+  return String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+}
+function renderLog() {
+  $("log").innerHTML = log.map((m) => {
+    if (m.kind === "user") return `<div class="msg user">${esc(m.text)}</div>`;
+    if (m.kind === "card") {
+      return `<div class="card"><div>${esc(m.text)}</div><ol>${m.items.map((x) => `<li>${esc(x)}</li>`).join("")}</ol>
+        <div class="row"><button class="ghost" data-act="skip" ${m.done ? "disabled" : ""}>跳过</button>
+        <button class="solid" data-act="allow" ${m.done ? "disabled" : ""}>允许</button></div></div>`;
+    }
+    if (m.kind === "steps") {
+      return `<div class="msg bot">${m.lines.map((line, i) =>
+        `<div class="step ${i === m.active ? "on" : ""}">${i < m.active ? "✓ " : ""}${esc(line)}</div>`).join("")}</div>`;
+    }
+    if (m.kind === "rails") {
+      const tone = { "通过": "ok", "拦截": "stop", "等待": "wait" };
+      return `<div class="rails"><b>安全护栏</b>${(m.items || []).map((r) =>
+        `<div class="rail"><span class="tag ${tone[r.result] || "read"}">${esc(r.result)}</span><span>${esc(r.name)}</span><span class="muted">${esc(r.detail)}</span></div>`
+      ).join("")}</div>`;
+    }
+    if (m.kind === "deny") return `<div class="deny">${esc(m.text)}</div>`;
+    return `<div class="msg bot">${esc(m.text)}</div>`;
+  }).join("");
+  $("log").scrollTop = $("log").scrollHeight;
+}
+function push(entry) { log.push(entry); renderLog(); save(); return log.length - 1; }
+function applyRoleVisibility() {
+  const reader = role() === "reader";
+  $("card-prod").hidden = reader;
+  $("card-export").hidden = true;
+  $("btn-edit-drill").hidden = reader;
+  $("nav-ticket").hidden = reader;
+  $("row-count").textContent = (reader ? "1" : "2") + " 条";
+  if (reader && !$("view-ticket").hidden) show("rules");
+}
+function show(name) {
+  $("view-rules").hidden = name !== "rules";
+  $("view-ticket").hidden = name !== "ticket";
+  $("view-audit").hidden = name !== "audit";
+  $("nav-rules").toggleAttribute("aria-current", name === "rules");
+  $("nav-ticket").toggleAttribute("aria-current", name === "ticket");
+  $("nav-audit").toggleAttribute("aria-current", name === "audit");
+}
+const PACE = {
+  live: { move: 780, hold: 1000, char: 120, between: 700, button: 1400, result: 1600 },
+  script: { move: 350, hold: 280, char: 28, between: 120, button: 350, result: 200 }
+};
+function paceOf(name) { return PACE[name] || PACE.live; }
+function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+function aim(el, moveMs) {
+  const ms = moveMs || PACE.live.move;
+  const ease = "top " + ms + "ms ease, left " + ms + "ms ease, width " + ms + "ms ease, height " + ms + "ms ease";
+  spot.style.transition = ease;
+  cursor.style.transition = ease;
+  const r = el.getBoundingClientRect();
+  spot.style.display = "block";
+  cursor.style.display = "block";
+  spot.style.top = (r.top - 6) + "px";
+  spot.style.left = (r.left - 6) + "px";
+  spot.style.width = (r.width + 12) + "px";
+  spot.style.height = (r.height + 12) + "px";
+  cursor.style.top = (r.top + Math.min(18, r.height / 2)) + "px";
+  cursor.style.left = (r.left + Math.min(28, r.width / 3)) + "px";
+}
+async function rest(el, pace, holdMs) {
+  aim(el, pace.move);
+  await sleep(pace.move + (holdMs == null ? pace.hold : holdMs));
+}
+function clearAim() { spot.style.display = "none"; cursor.style.display = "none"; }
+async function typeInto(el, text, charMs) {
+  el.focus();
+  el.value = "";
+  for (const ch of text) { el.value += ch; await sleep(charMs || PACE.live.char); }
+}
+
+function historyForModel() {
+  return log.filter((m) => (m.kind === "user" || m.kind === "bot") && m.text !== "正在想…").map((m) => ({
+    role: m.kind === "user" ? "user" : "assistant",
+    content: m.text
+  }));
+}
+function pageState() {
+  return { limits, ticketTitle: $("ticket-title").value, ticketBody: $("ticket-body").value };
+}
+function role() { return $("role").value; }
+function renderTickets() {
+  $("ticket-list").innerHTML = tickets.length
+    ? tickets.map((t) => `<tr><td>${esc(t.id)}</td><td>${esc(t.title)}</td><td>待复核</td><td>未同步</td></tr>`).join("")
+    : `<tr><td class="empty" colspan="4">暂无变更单</td></tr>`;
+}
+async function callModel() {
+  const resp = await fetch("/api/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ messages: historyForModel(), state: pageState(), role: role() })
+  });
+  const data = await resp.json();
+  if (!resp.ok) throw new Error((data.error || "模型调用失败") + (data.detail ? "：" + data.detail : ""));
+  if (data.model) $("model-line").textContent = data.model + " · " + (role() === "reader" ? "综合柜员" : "柜面主管");
+  return data;
+}
+async function changeLimit(limit, paceName) {
+  const pace = paceOf(paceName);
+  show("rules");
+  const stepAt = push({ kind: "steps", active: 0, lines: ["先框住测试环境限额", "再填写金额和原因", "停在确定按钮"] });
+  await rest($("card-drill"), pace);
+  $("f-amount").value = "";
+  $("f-reason").value = "";
+  if ($("rule-dialog").hidden) $("rule-dialog").hidden = false;
+  log[stepAt].active = 1; renderLog();
+  await rest($("f-amount"), pace);
+  await typeInto($("f-amount"), String(limit.amount), pace.char);
+  await sleep(pace.between);
+  await rest($("f-reason"), pace);
+  await typeInto($("f-reason"), limit.reason, pace.char);
+  await sleep(pace.between);
+  log[stepAt].active = 2; renderLog();
+  await rest($("rule-ok"), pace, pace.button);
+  limits.drill = Number(limit.amount);
+  drillReason = limit.reason;
+  renderLimits();
+  $("rule-dialog").hidden = true;
+  stamp("已执行", "测试限额改为 " + yuan(limits.drill));
+  log[stepAt].active = 3; renderLog();
+  await rest($("drill-amount"), pace, pace.result);
+  clearAim();
+  save();
+}
+async function fillTicket(ticket, andSubmit, paceName) {
+  const pace = paceOf(paceName);
+  show("ticket");
+  const stepAt = push({ kind: "steps", active: 0, lines: ["打开变更单", "先写标题，再写描述", andSubmit ? "提交工单" : "停在提交按钮，等你点"] });
+  await rest($("ticket-title"), pace);
+  await typeInto($("ticket-title"), ticket.title, pace.char);
+  await sleep(pace.between);
+  log[stepAt].active = 1; renderLog();
+  await rest($("ticket-body"), pace);
+  await typeInto($("ticket-body"), ticket.body, pace.char);
+  await sleep(pace.between);
+  log[stepAt].active = 2; renderLog();
+  await rest($("ticket-submit"), pace, pace.button);
+  if (andSubmit) {
+    submitTicket();
+    log[stepAt].active = 3; renderLog();
+    clearAim();
+  } else {
+    log[stepAt].active = 3; renderLog();
+  }
+  save();
+}
+function submitTicket() {
+  const title = $("ticket-title").value.trim();
+  const body = $("ticket-body").value.trim();
+  $("ticket-error").hidden = true;
+  if (role() === "reader") {
+    stamp("已拒绝", "综合柜员提交变更单");
+    push({ kind: "deny", text: "综合柜员陈默（E3302）不能提交变更单。请联系柜面主管，或参数管理员周宁（A1028）。" });
+    return;
+  }
+  if (!title || !body) {
+    $("ticket-error").hidden = false;
+    $("ticket-error").textContent = "标题和描述都要填写，才能提交。";
+    return;
+  }
+  const id = "CHG-" + String(10420 + tickets.length);
+  tickets.push({ id, title });
+  renderTickets();
+  $("ticket-done").hidden = false;
+  $("ticket-done").textContent = "已提交 " + id;
+  clearAim();
+  stamp("已执行", "提交变更单 " + id);
+  push({ kind: "bot", text: "变更单 " + id + " 已提交。这是演示数据，不进入真实审批流。" });
+  save();
+}
+async function askModel(text) {
+  if (busy) return;
+  busy = true;
+  push({ kind: "user", text });
+  push({ kind: "bot", text: "正在想…" });
+  const pending = log.length - 1;
+  try {
+    const data = await callModel();
+    log.splice(pending, 1);
+    const looked = (data.reads || [])[0];
+    if (looked && looked.drill != null) {
+      show("rules");
+      await rest($("drill-amount"), paceOf("live"), 700);
+      clearAim();
+      push({ kind: "bot", text: "查过了。当前测试限额是 " + yuan(looked.drill) + "。" });
+    }
+    if (data.rails && data.rails.length) push({ kind: "rails", items: data.rails });
+    if (data.denied && !data.proposal) {
+      push({ kind: "deny", text: data.denied.message });
+      busy = false;
+      return;
+    }
+    if (data.denied && data.proposal) push({ kind: "deny", text: data.denied.message });
+    if (data.noop) {
+      show("rules");
+      await rest($("drill-amount"), paceOf("live"), 900);
+      clearAim();
+      stamp("未改动", "测试限额已是 " + yuan(limits.drill) + "，无差额，未提交变更单");
+      push({ kind: "bot", text: data.text });
+      busy = false;
+      return;
+    }
+    if (data.proposal) {
+      const cardAt = push({
+        kind: "card",
+        text: data.proposal.summary,
+        items: data.proposal.steps.length ? data.proposal.steps : ["按提案改页面"],
+        done: false,
+        proposal: data.proposal
+      });
+      const node = $("log").querySelectorAll(".card");
+      const card = node[node.length - 1];
+      card.querySelector("[data-act=skip]").onclick = () => {
+        log[cardAt].done = true;
+        push({ kind: "bot", text: "已跳过，页面没有改。" });
+        busy = false;
+      };
+      card.querySelector("[data-act=allow]").onclick = () => runAllowed(cardAt);
+      busy = false;
+      return;
+    }
+    push({ kind: "bot", text: data.text || "我没有改页面。" });
+  } catch (err) {
+    log.splice(pending, 1);
+    push({ kind: "bot", text: String(err.message || err) });
+  }
+  busy = false;
+}
+async function runAllowed(cardAt) {
+  busy = true;
+  const proposal = log[cardAt].proposal;
+  log[cardAt].done = true;
+  renderLog();
+  try {
+    if (!proposal) throw new Error("没有可执行的提案");
+    if (role() === "reader" || proposal.kind === "prod" || proposal.kind === "export") {
+      const text = proposal.kind === "export"
+        ? "客户清单属于客户信息，助手不能导出。请走数据管理员审批。本次已拒绝，没有文件。"
+        : "这个身份不能做这件事。生产限额和客户清单都不会被助手改动。";
+      stamp("已拒绝", text);
+      push({ kind: "deny", text });
+    } else if (proposal.kind === "both" && Number(proposal.limit.amount) === Number(limits.drill)) {
+      show("rules");
+      await rest($("drill-amount"), paceOf("live"), 900);
+      clearAim();
+      stamp("未改动", "测试限额已是 " + yuan(limits.drill) + "，无差额，未提交变更单");
+      push({ kind: "bot", text: "测试限额已经是 " + yuan(limits.drill) + "，没有差额。不修改，也不提交变更单。" });
+    } else if (proposal.kind === "both") {
+      await changeLimit(proposal.limit, "live");
+      await fillTicket(proposal.ticket, !!proposal.submit, "live");
+      show("rules");
+      await rest($("drill-amount"), paceOf("live"), 1200);
+      clearAim();
+      push({ kind: "bot", text: "两件都做完了。测试限额已改为 " + yuan(proposal.limit.amount) + "，变更单" + (proposal.submit ? "已提交" : "已填好，等你点提交工单") + "。生产限额仍是 " + yuan(limits.prod) + "。" });
+    } else if (proposal.kind === "ticket") {
+      await fillTicket(proposal.ticket, !!proposal.submit, "live");
+      push({ kind: "bot", text: proposal.submit ? "变更单已提交。这次没有要求改限额，限额表未动。" : "变更单已填好，提交按钮还框着。请你自己点「提交工单」。助手不代提交。" });
+    } else if (Number(proposal.limit.amount) === Number(limits.drill)) {
+      show("rules");
+      await rest($("drill-amount"), paceOf("live"), 900);
+      clearAim();
+      stamp("未改动", "测试限额已是 " + yuan(limits.drill));
+      push({ kind: "bot", text: "测试限额已经是 " + yuan(limits.drill) + "，和你说的一样，页面没有改。" });
+    } else {
+      await changeLimit(proposal.limit, "live");
+      push({ kind: "bot", text: "测试环境单笔限额已改为 " + yuan(proposal.limit.amount) + "。生产环境仍是 " + yuan(limits.prod) + "。" });
+    }
+  } catch (err) {
+    push({ kind: "bot", text: String(err.message || err) });
+  }
+  busy = false;
+  save();
+}
+async function playScriptOk() {
+  if (busy) return;
+  busy = true;
+  $("role").value = "operator";
+  applyRoleVisibility();
+  show("rules");
+  push({ kind: "user", text: "把测试环境的单笔对公转账限额从 50 万调到 20 万，并补一张变更单。" });
+  push({ kind: "bot", text: "柜面主管可以改测试限额。生产环境不会动。这一段按预先排好的步骤走，不调用模型，方便控时。" });
+  await sleep(700);
+  await changeLimit({ amount: 200000, reason: "压缩测试环境单笔限额，降低误操作风险" }, "script");
+  await fillTicket({ title: "测试环境单笔对公限额调整为 20 万", body: "仅测试环境。生产环境仍为 50 万。请参数管理员知悉，无需同步生产。" }, true, "script");
+  show("rules");
+  await rest($("drill-amount"), paceOf("script"), 400);
+  clearAim();
+  push({ kind: "bot", text: "演示结束。测试限额已改，变更单已提交，生产限额没变。这一段没有等模型，方便控时。" });
+  busy = false;
+  save();
+}
+async function playScriptDeny() {
+  if (busy) return;
+  busy = true;
+  $("role").value = "operator";
+  applyRoleVisibility();
+  push({ kind: "user", text: "把刚才的限额同步到生产环境，并导出本网点全部对公客户清单。" });
+  await sleep(500);
+  push({ kind: "deny", text: "生产限额你能看见，但这个岗位没有修改按钮。助手硬要改，接口拒绝，数字仍是 50 万。客户清单这个岗位没有读权限，页面上不出现导出。助手仍去调，同样被拒绝，没有文件。两条都已写入审计。" });
+  stamp("已拒绝", "同步生产环境限额");
+  stamp("已拒绝", "导出对公客户清单");
+  show("audit");
+  push({ kind: "bot", text: "柜面主管本来可以改测试限额。敏感的两件事，点了允许也不够，系统按岗位拒绝。" });
+  busy = false;
+  save();
+}
+$("rule-cancel").onclick = () => { $("rule-dialog").hidden = true; };
+$("nav-rules").onclick = () => show("rules");
+$("nav-ticket").onclick = () => show("ticket");
+$("nav-audit").onclick = () => show("audit");
+$("ticket-submit").onclick = () => submitTicket();
+$("btn-edit-drill").onclick = () => { if (!busy && role() === "operator") $("rule-dialog").hidden = false; else if (role() === "reader") { stamp("已拒绝", "综合柜员手改测试限额"); push({ kind: "deny", text: "综合柜员不能修改限额。" }); } };
+$("rule-ok").onclick = () => {
+  if (role() !== "operator") return;
+  const amount = Number($("f-amount").value);
+  if (!amount) return;
+  limits.drill = amount;
+  drillReason = $("f-reason").value || drillReason;
+  renderLimits();
+  $("rule-dialog").hidden = true;
+  stamp("已执行", "手工将测试限额改为 " + yuan(amount));
+  save();
+};
+$("btn-export").onclick = () => {
+  stamp("已拒绝", "导出对公客户清单");
+  push({ kind: "deny", text: "客户清单不能从这里导出。请走数据管理员审批，双人复核。没有生成文件。" });
+  show("audit");
+};
+$("chip-script-ok").onclick = () => playScriptOk();
+$("chip-script-no").onclick = () => playScriptDeny();
+$("chip-port").onclick = () => askModel("把测试环境的单笔对公转账限额改成 20 万。改之前先在页面上问我。");
+$("chip-ticket").onclick = () => askModel("把刚才的限额调整补成变更单，填好标题和描述，不要自己提交。");
+$("ask").onsubmit = (e) => {
+  e.preventDefault();
+  const text = $("ask-input").value.trim();
+  $("ask-input").value = "";
+  if (text) askModel(text);
+};
+load();
+applyRoleVisibility();
+$("role").onchange = () => applyRoleVisibility();
+renderLimits();
+renderTickets();
+renderAudit();
+if (!log.length) {
+  push({ kind: "bot", text: "我在这个网页里面操作，不从浏览器外面点。柜面主管改测试限额时，会先框出字段，等你点允许。生产限额和客户清单，允许了也不够。上面两个演示不走模型，适合限时演示。" });
+} else renderLog();
+</script>
+</body>
+</html>

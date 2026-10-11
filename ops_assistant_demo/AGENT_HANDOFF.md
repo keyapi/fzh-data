@@ -1,0 +1,26 @@
+---
+type: Handoff
+title: 网点参数台演示
+module: ops_assistant_demo
+date: 2026-10-11
+tags: [demo, guardrails, agent]
+---
+
+# 网点参数台演示
+
+假的柜面参数页。浏览器里的助手调用 OpenAI 兼容网关，写操作等人点允许。
+
+## 新对话必读
+
+- [先查再决定，护栏看动作](../docs/solutions/architecture-patterns/branch-param-desk-read-then-guard.md)
+- [给人看的运行说明](README.md)
+
+## 运行
+
+`python server.py`，默认 `127.0.0.1:8765`。密钥从本目录 `.env`，其次才是仓库里已有的 Open WebUI `.env`。不要把 Key 写进页面或文档。
+
+## 不要再做的事
+
+- 不要用整句关键词「生产」「导出」否掉同一句里合法的测试限额修改。
+- 不要在用户没给金额时默认改成 20 万。
+- 不要把 Pi 或 DeepSeek Harness 整包嵌进来。借的是「读工具结果交回模型」这一轮。

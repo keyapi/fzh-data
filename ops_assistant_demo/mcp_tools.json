@@ -1,0 +1,10 @@
+{
+  "name": "branch-notice-mock",
+  "note": "模拟 MCP 工具清单。进程内执行，只打到本机假接口，没有外网业务系统。",
+  "tools": [
+    "search_kb",
+    "read_params",
+    "propose_change",
+    "operate"
+  ]
+}
