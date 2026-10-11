@@ -169,6 +169,8 @@
   .toast { color: var(--ok); }
   .empty { color: var(--muted); text-align: center; }
   aside {
+    position: relative;
+    z-index: 2147483646;
     background: #fff;
     border-left: 1px solid var(--line);
     display: flex;
@@ -291,6 +293,12 @@
         </tbody>
       </table>
     </div>
+    <div class="panel" id="card-note" style="margin-top:12px">
+      <div class="panel-bar"><span>值班备注</span><span>这是后加的字段，旧助手没有对应工具</span></div>
+      <div style="padding:12px">
+        <label>给下一班<input id="site-note" type="text" placeholder="例如：夜班注意，测试限额不要同步生产" style="min-width:280px" /></label>
+      </div>
+    </div>
   </section>
   <section id="view-ticket" hidden>
     <div class="crumb">柜面参数 / 对公结算 / 变更单</div>
@@ -330,7 +338,7 @@
     </div>
   </section>
 </main>
-<aside>
+<aside data-page-agent-ignore>
   <div class="ahead">
     <div class="mark">助</div>
     <div>
@@ -344,6 +352,7 @@
     <button class="ghost" type="button" id="chip-script-no">演示 · 越权被拒绝</button>
     <button class="ghost" type="button" id="chip-port">让助手改限额</button>
     <button class="ghost" type="button" id="chip-ticket">让助手填变更单</button>
+    <button class="ghost" type="button" id="chip-page-agent">页面助手试试</button>
   </div>
   <form class="composer" id="ask">
     <input id="ask-input" placeholder="描述要改的参数" />
@@ -368,7 +377,7 @@
 <div id="cursor"></div>
 <script>
 const $ = (id) => document.getElementById(id);
-const KEY = "ops-assistant-demo-v6";
+const KEY = "ops-assistant-demo-v7";
 const spot = $("spot");
 const cursor = $("cursor");
 let limits = { drill: 500000, prod: 500000 };
@@ -393,6 +402,15 @@ function load() {
     tickets = data.tickets || [];
     audit = data.audit || [];
     log = data.log || [];
+    let interrupted = false;
+    log = log.filter((m) => {
+      if (m.kind === "bot" && m.text === "正在加载页面助手…") { interrupted = true; return false; }
+      return true;
+    });
+    log.forEach((m) => {
+      if ((m.kind === "card" || m.kind === "steps") && !m.done) { m.done = true; interrupted = true; }
+    });
+    if (interrupted) log.push({ kind: "bot", text: "页面刷新后，上一次页面助手已经中断。允许和跳过不会继续那一轮。请再点「页面助手试试」。" });
   } catch (_) {}
 }
 function renderLimits() {
@@ -747,6 +765,7 @@ $("chip-script-ok").onclick = () => playScriptOk();
 $("chip-script-no").onclick = () => playScriptDeny();
 $("chip-port").onclick = () => askModel("把测试环境的单笔对公转账限额改成 20 万。改之前先在页面上问我。");
 $("chip-ticket").onclick = () => askModel("把刚才的限额调整补成变更单，填好标题和描述，不要自己提交。");
+$("chip-page-agent").onclick = () => runPageAgent(($("ask-input").value.trim()) || "在「值班备注」输入框里写上：夜班注意，测试限额不要同步生产。不要改限额，不要提交工单，不要导出。");
 $("ask").onsubmit = (e) => {
   e.preventDefault();
   const text = $("ask-input").value.trim();
@@ -759,8 +778,67 @@ $("role").onchange = () => applyRoleVisibility();
 renderLimits();
 renderTickets();
 renderAudit();
+let pageAgentLoading = null;
+function loadPageAgentLib() {
+  if (window.PageAgent) return Promise.resolve();
+  if (pageAgentLoading) return pageAgentLoading;
+  pageAgentLoading = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://registry.npmmirror.com/page-agent/1.12.4/files/dist/iife/page-agent.demo.js?autoInit=false";
+    script.crossOrigin = "anonymous";
+    script.onload = () => (window.PageAgent ? resolve() : reject(new Error("页面助手脚本里没有 PageAgent")));
+    script.onerror = () => reject(new Error("页面助手脚本加载失败。需要能访问 npmmirror。"));
+    document.head.appendChild(script);
+  });
+  return pageAgentLoading;
+}
+function waitPageAllow(text) {
+  return new Promise((resolve) => {
+    const at = push({
+      kind: "card",
+      text,
+      items: ["看清页面上即将被点击或填写的控件", "点允许后这一步才会发生"],
+      done: false
+    });
+    const cards = $("log").querySelectorAll(".card");
+    const node = cards[cards.length - 1];
+    node.querySelector("[data-act=allow]").onclick = () => { log[at].done = true; renderLog(); resolve(true); };
+    node.querySelector("[data-act=skip]").onclick = () => { log[at].done = true; renderLog(); resolve(false); };
+  });
+}
+async function runPageAgent(text) {
+  if (busy) return;
+  busy = true;
+  push({ kind: "user", text });
+  const pending = push({ kind: "bot", text: "正在加载页面助手…" });
+  try {
+    await loadPageAgentLib();
+    log.splice(pending, 1);
+    renderLog();
+    const agent = new window.PageAgent({
+      baseURL: location.origin + "/v1",
+      model: "deepseek-v4-flash",
+      language: "zh-CN",
+      disableNamedToolChoice: true,
+      transformRequestBody: (body) => Object.assign({}, body, { thinking: { type: "disabled" } }),
+      instructions: {
+        system: "你在这个网点参数台网页里操作左侧和中间的页面。不要点击带 data-page-agent-ignore 的右侧助手。看不见的按钮不要找。生产限额没有修改按钮就不要改。没有导出按钮就不要导出客户清单。每一步开始前页面会询问允许。"
+      },
+      onBeforeStep: async (pa) => {
+        const ok = await waitPageAllow("页面助手要执行下一步。");
+        if (!ok) await pa.stop();
+      }
+    });
+    const result = await agent.execute(text);
+    const said = result && (result.data || result.message || result.text);
+    push({ kind: "bot", text: said || "页面助手这一轮结束。" });
+  } catch (err) {
+    push({ kind: "bot", text: String(err && err.message ? err.message : err) });
+  }
+  busy = false;
+}
 if (!log.length) {
-  push({ kind: "bot", text: "我在这个网页里面操作，不从浏览器外面点。柜面主管改测试限额时，会先框出字段，等你点允许。生产限额和客户清单，允许了也不够。上面两个演示不走模型，适合限时演示。" });
+  push({ kind: "bot", text: "上面两个演示不走模型。「让助手改限额」只会改限额和工单。「页面助手试试」用 page-agent，能点页面上后加的值班备注。每一步都要你点允许。" });
 } else renderLog();
 </script>
 </body>

@@ -1,11 +1,11 @@
 [Unit]
-Description=Branch parameter desk demo
+Description=Web AI assistant demo
 After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=/opt/branch-param-desk
-EnvironmentFile=/opt/branch-param-desk/.env
+WorkingDirectory=/opt/web-ai-assistant
+EnvironmentFile=/opt/web-ai-assistant/.env
 ExecStart=/usr/bin/python3 server.py
 Restart=on-failure
 User=desk

@@ -305,6 +305,9 @@ class Handler(BaseHTTPRequestHandler):
         except json.JSONDecodeError:
             self._send(400, {"error": "bad json"}, "application/json; charset=utf-8")
             return
+        if path == "/v1/chat/completions":
+            self._proxy_llm(body)
+            return
         if path == "/api/change":
             result = apply_change(
                 str(body.get("env") or ""),
@@ -318,6 +321,36 @@ class Handler(BaseHTTPRequestHandler):
             self._send(404, {"error": "not found"}, "application/json; charset=utf-8")
             return
         self._chat(body)
+
+    def _proxy_llm(self, body: dict) -> None:
+        base, key = load_env_key()
+        if not key or not base:
+            self._send(503, {"error": "本机没有可用的模型 Token"}, "application/json; charset=utf-8")
+            return
+        payload = dict(body)
+        payload.pop("api_key", None)
+        payload["model"] = MODEL
+        payload["thinking"] = {"type": "disabled"}
+        raw = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(
+            base.rstrip("/") + "/chat/completions",
+            data=raw,
+            headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=90) as resp:
+                data = resp.read()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", "replace")[:300]
+            self._send(502, {"error": "模型网关 %s" % exc.code, "detail": detail}, "application/json; charset=utf-8")
+        except urllib.error.URLError as exc:
+            self._send(502, {"error": "模型网关连不上", "detail": str(exc.reason)}, "application/json; charset=utf-8")
 
     def _proposal_from(self, args: dict, asked: str) -> dict | None:
         kind = str(args.get("kind") or "")
