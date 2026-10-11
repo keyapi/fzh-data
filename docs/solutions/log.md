@@ -9,6 +9,7 @@ tags: [solutions, log]
 
 ## 2026-10-11（网点参数台演示）
 - **新增**: `architecture-patterns/branch-param-desk-read-then-guard.md` —— 网页内助手先调用读限额，把结果交回模型再提案。安全护栏检查即将执行的动作，不因原话里出现「生产」否掉合法的测试限额修改。无差额不改数、不交单。分享用独立仓库，密钥只留在运行机器的 `.env`。
+- **更新**: 同上 — 模型配置收成 OpenAI 兼容的 `OPENAI_API_BASE_URL` 与 `OPENAI_API_KEY`。演示机可以填当前网关，但不要写进仓库或文档。
 
 ## 2026-09-24（知识库防腐 + PB 佣金表日期口径）
 - **新增**: `best-practices/knowledge-base-anti-rot.md` —— 知识库防腐三件套：**孤儿检测**（反向引用图，入链要排除 docs/solutions 自身互链与自动 log/index）、**生成式索引**（根平表由 frontmatter 生成，手工维护实测漂 30 篇）、**链接图**（相对链接必须解析，实测断 13 处），外加处置规则「孤儿只有两个归宿：route 或显式豁免，静默忽略不是选项」。依据：Vercel 对照实验 —— 靠 Agent 自己决定要不要查文档，**56% 的情况根本不会查**（skill 按需 53% = 无文档基线；常驻目录 100%）。**工具不会自己跑**，所以挂进 `ce-okf` 收尾第 5b 步。另记一条：一手知识只留在未合并分支上等于不存在（PB 活动价整套记录因 PR revert 停在 `feature/*`，main 上 grep 不到）。

@@ -7,6 +7,11 @@ tags: [solutions, architecture-patterns, log]
 
 # architecture-patterns 变更日志
 
+## 2026-10-11
+
+- **新增**: `branch-param-desk-read-then-guard.md` — 网页内助手先读限额再提案；护栏看动作不看原话。
+- **更新**: 同上 — 公开配置只保留 OpenAI 兼容的 base URL 和 Key，真实值只放运行机器的 `.env`。
+
 ## 2026-09-22
 
 - **新增**: `public-private-agent-knowledge-split.md` — 公开仓、私有 Markdown 知识仓与 secret manager 三层分离；普通 clone + bootstrap 代替 submodule，保留 Agent 检索和非技术同事使用体验。

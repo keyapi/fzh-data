@@ -3,6 +3,7 @@ okf: v0.1
 type: Reference
 title: 网页内参数助手先查再决定，护栏看动作不看原话
 date: 2026-10-11
+last_updated: 2026-10-11
 category: architecture-patterns
 module: ops_assistant_demo
 problem_type: architecture_pattern
@@ -32,7 +33,7 @@ tags: [agent, guardrails, human-in-the-loop, demo]
 3. 安全护栏检查的是即将执行的动作，不是用户原话里的词。提到「不要同步生产」不算申请改生产。导出客户清单单独拦截，同一句里的测试限额提案可以留下。
 4. 目标金额和当前值相同：不改数，也不提交变更单，只记审计。没给出具体金额（「调高一点」）就追问，不默认 20 万。一句话里两个金额，只取最后一个。
 5. 护栏结果用固定条目显示在对话里：岗位工具白名单、生产写保护、客户信息不出域、无差额不立项、人工确认。模型负责想，护栏负责拦。
-6. 分享给外部时单独建仓库。密钥放运行机器的 `.env`，仓库只留 `.env.example`。文档不写主机地址、账号和私钥路径。
+6. 分享给外部时单独建仓库。模型只认 OpenAI 兼容的 `OPENAI_API_BASE_URL`（以 `/v1` 结尾）和 `OPENAI_API_KEY`。仓库只留 `.env.example` 里的占位符。演示机上的真实地址和密钥只写在那台机器的 `.env`，文档不写主机地址、账号和私钥路径。
 
 对照：OWASP LLM06 要求工具白名单、在下游强制授权、高影响动作人工确认。NVIDIA NeMo Guardrails 的 execution rails 包在工具执行前后，工具名和参数在模型之外再验一次。这两条都不要做成「整句关键词一票否决」。
 
