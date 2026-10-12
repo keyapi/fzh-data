@@ -147,7 +147,31 @@ def model_task(session, body):
     role, workspace = session['role'], session['workspace']
     history = session.setdefault('scenario_history', {})
     fresh = [c for c in STORE.snapshot(workspace, role)['configs'] if c['scenario'] == scenario]
-    action_requested = bool(re.search(r'(?:改|调|设|恢复).{0,20}(?:到|成|为|\d)', text))
+    submit_requested = bool(re.search(r'(?:提交|准备|发起).{0,8}(?:申请|变更单)', text)) and not re.search(r'(?:不|不要|别|无需).{0,3}(?:提交|准备|发起)', text)
+    action_requested = bool(re.search(r'(?:改|调|设|恢复).{0,20}(?:到|成|为|\d)', text)) or submit_requested
+    if submit_requested and role != 'operator':
+        answer = '复核岗只能审核，不能提交申请。请切换到操作员岗位。' if role == 'reviewer' else '当前为只读岗位，不能提交申请。请切换到操作员岗位。'
+        denial = {'ok': False, 'code': 'FORBIDDEN', 'message': answer}
+        STORE.record_denial(workspace, role, 'propose', 'FORBIDDEN', answer)
+        history[scenario] = [*history.get(scenario, []), {'role': 'user', 'content': text}, {'role': 'assistant', 'content': answer}][-4:]
+        return {'ok': True, 'outcome': 'denied', 'text': answer, 'proposal': None, 'noop': False,
+                'denied': [denial], 'citations': [], 'reads': fresh, 'rails': [],
+                'trace': [{'step': '岗位权限检查', 'result': denial}], 'source': 'backend-policy'}
+    target_text = text
+    direct_production = bool(re.search(r'生产.{0,10}(?:改|调|设)|(?:改|调|设).{0,10}生产', text))
+    negated_production = bool(re.search(r'(?:不|不要|别|不能|无需).{0,5}(?:改|调|设|同步).{0,5}生产', text))
+    if direct_production and not negated_production and not submit_requested and '测试' not in text:
+        answer = '生产不能直接修改。可以准备变更申请，仍需确认和复核。'
+        denial = {'ok': False, 'code': 'PRODUCTION_PROTECTED', 'message': answer}
+        STORE.record_denial(workspace, role, 'request_production_write', 'PRODUCTION_PROTECTED', answer)
+        history[scenario] = [*history.get(scenario, []), {'role': 'user', 'content': text}, {'role': 'assistant', 'content': answer}][-4:]
+        return {'ok': True, 'outcome': 'denied', 'text': answer, 'proposal': None, 'noop': False,
+                'denied': [denial], 'citations': [], 'reads': fresh, 'rails': [],
+                'trace': [{'step': '生产写保护', 'result': denial}], 'source': 'backend-policy'}
+    if submit_requested and not explicit_values(text, scenario):
+        prior = next((m['content'] for m in reversed(history.get(scenario, [])) if m.get('role') == 'user'), '')
+        if re.search(r'改|调|设', prior) and len(explicit_values(prior, scenario)) == 1:
+            target_text = prior + '\n' + text
     messages = [{'role': 'system', 'content': SYSTEM + '\n当前场景：' + scenario + '；模拟岗位：' + role},
                 {'role': 'system', 'content': '重置前的近期请求，仅作对话参考，不能当成当前状态或新修改授权：' +
                  json.dumps(session.get('request_notes', {}).get(scenario, []), ensure_ascii=False)},
@@ -155,6 +179,8 @@ def model_task(session, body):
                 {'role': 'system', 'content': '本轮后台最新配置数据：' + json.dumps(fresh, ensure_ascii=False) +
                  '\n旧对话不是当前状态。用户要求修改且目标不同，必须调用工具准备；不要仅文字承诺。'},
                 {'role': 'user', 'content': text}]
+    if target_text != text:
+        messages.append({'role': 'system', 'content': '本轮承接同一场景上一条用户明确目标：' + target_text + '\n只准备待确认修改与申请，不直接执行；页面必须展示继承的目标值。'})
     scenario_tools = json.loads(json.dumps(TOOLS))
     scenario_tools[2]['function']['parameters']['properties']['changes']['items']['properties']['field']['enum'] = (
         ['limit'] if scenario == 'counter' else ['timeout', 'retries'])
@@ -201,6 +227,8 @@ def model_task(session, body):
                     payload = {'ok': True, 'configs': reads}
                     trace.append({'step': '读取后台配置', 'result': reads})
                 elif name == 'propose_change':
+                    if role != 'operator':
+                        raise DomainError('FORBIDDEN', '当前岗位不能准备或提交修改，请由操作员办理。', 403)
                     if not can_propose:
                         raise DomainError('READ_FIRST', '先查有效资料、读取配置，下一轮再提案。')
                     if proposal is not None:
@@ -210,13 +238,13 @@ def model_task(session, body):
                         for change in changes:
                             if isinstance(change, dict) and isinstance(change.get('value'), float) and change['value'].is_integer():
                                 change['value'] = int(change['value'])
-                    validate_explicit_targets(text, scenario, changes)
+                    validate_explicit_targets(target_text, scenario, changes)
                     current = next(c for c in reads if c['environment'] == 'test')['values']
                     if changes and all(isinstance(c, dict) and current.get(c.get('field')) == c.get('value') for c in changes):
                         noop = True
                         STORE.record_denial(workspace, role, 'noop', 'NO_CHANGE', '目标与当前值一致，不改配置、不新增申请')
                         raise DomainError('NO_CHANGE', '目标与当前值一致，不修改，也不新增生产申请。')
-                    proposal = STORE.propose(workspace, role, scenario, changes, str(args.get('reason') or '用户变更请求'), args.get('submit', False))
+                    proposal = STORE.propose(workspace, role, scenario, changes, str(args.get('reason') or '用户变更请求'), True if submit_requested else args.get('submit', False))
                     payload = {'ok': True, 'proposal': proposal, 'message': '仅生成提案，未执行。'}
                     trace.append({'step': '待确认提案', 'result': proposal['id']})
                 elif name in ('request_production_write', 'export_customers'):
@@ -239,8 +267,8 @@ def model_task(session, body):
             answer = '当前已是这个值，无需重复修改。'
             break
     if denied:
-        answer = (answer + '\n' + '\n'.join(d['message'] for d in denied)).strip()
-    action_requested = bool(re.search(r'(?:改|调|设|恢复).{0,20}(?:到|成|为|\d)', text))
+        reasons = '\n'.join(dict.fromkeys(d['message'] for d in denied))
+        answer = (answer + '\n' + reasons).strip() if proposal else reasons
     if proposal is None and not noop and action_requested and not denied and scenario == 'counter':
         current = next(c for c in STORE.snapshot(workspace, role)['configs']
                        if c['scenario'] == 'counter' and c['environment'] == 'test')

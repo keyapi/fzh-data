@@ -966,7 +966,7 @@ async function askOps(text,scenario="integration"){
   const reply=data.proposal?"正在填写，请在页面确认修改。":data.noop?"当前已是这个值，无需重复修改。":data.text||"请补充具体要求。";
   const replyAt=push({kind:reply.length>220?"long-answer":"bot",text:reply});
   if(data.citations?.length||data.rails?.length||data.trace?.length)push({kind:"evidence",citations:data.citations,rails:data.rails,trace:data.trace});
-  if(data.denied?.length)push({kind:"deny",text:data.denied.map(d=>d.message||"此操作被后台拒绝。").join("\n")});
+  if(data.proposal&&data.denied?.length)push({kind:"deny",text:data.denied.map(d=>d.message||"此操作被后台拒绝。").join("\n")});
   if(data.model)$("model-line").textContent=data.model+" · 真实模型 · "+(scenario==="integration"?"联调":"柜面");
   if(data.state){opsState=data.state;renderOps();}else await loadOps();
   if(data.proposal){await previewChange(data.proposal);const p=data.proposal;log[replyAt].text=p.scenario==="counter"?"已填写"+(p.changes.find(c=>c.field==="limit").after/10000).toLocaleString("zh-CN",{maximumFractionDigits:4})+"万元。是否允许修改？生产限额不变。":"联调参数已填写。核对差异后，在对话里允许即可。";}

@@ -228,6 +228,32 @@ class HttpTests(unittest.TestCase):
         self.assertNotIn('旧执行结论标记', content)
         self.assertIn('本轮后台最新配置数据', content)
 
+    def test_reviewer_submission_is_denied_before_model_or_target_check(self):
+        self.login('reviewer')
+        with patch.object(server, 'model_call') as model:
+            _, data = self.request('/api/chat', {'scenario': 'integration', 'text': '那提交变更申请'})
+        model.assert_not_called()
+        self.assertEqual(data['denied'][0]['code'], 'FORBIDDEN')
+        self.assertNotIn('目标值', data['text'])
+        self.assertNotIn('已准备', data['text'])
+        self.assertEqual(data['state']['proposals'], [])
+
+    def test_operator_followup_uses_latest_explicit_target_in_same_scenario(self):
+        self.login()
+        def msg(calls):
+            return {'choices': [{'message': {'tool_calls': [
+                {'id': str(i), 'type': 'function', 'function': {'name': name, 'arguments': json.dumps(args)}}
+                for i, (name, args) in enumerate(calls)]}}]}
+        responses = [msg([('search_knowledge', {'query': '生产变更'}), ('read_configuration', {})]),
+                     msg([('propose_change', {'changes': [{'field': 'timeout', 'value': 70}], 'reason': '承接用户70秒目标', 'submit': True})])]
+        with patch.object(server, 'model_call', side_effect=responses), patch.dict(server.CONFIG,
+                {'OPENAI_API_KEY': 'fixture-only', 'OPENAI_API_BASE_URL': 'https://example.invalid/v1'}):
+            _, first = self.request('/api/chat', {'scenario': 'integration', 'text': '把生产也改成70秒'})
+            _, data = self.request('/api/chat', {'scenario': 'integration', 'text': '那提交变更申请'})
+        self.assertNotIn('已修改', first['text'])
+        self.assertEqual(data['proposal']['changes'][0]['after'], 70)
+        self.assertTrue(data['proposal']['submit'])
+
     def test_model_concurrency_rejects_without_calling_upstream(self):
         self.login()
         server.MODEL_SLOTS.acquire()
