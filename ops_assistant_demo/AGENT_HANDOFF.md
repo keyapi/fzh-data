@@ -5,6 +5,8 @@ title: 受控办理助手交接
 
 # 受控办理助手交接
 
+最新实现与验收见[渠道接入三页面](docs/bank-operations.md)。新增bank_ops.py、bank_agent.py、bank_ui.js及三组测试，部署须携带这些文件。当前76项自动化通过、0跳过；下文旧计数属于历史版本。三页已有真实模拟CRUD和真实模型准备，保留原限额/联调，不连接银行系统。
+
 先读 [本次交接与续办清单](docs/handoff-2026-10-12.md)、[规格](docs/competition-plan.md)、[边界](docs/security-boundaries.md)、[剧本](docs/demo-script.md)、[静态配置暴露经验](docs/solutions/static-config-exposure.md)。独立竞赛仓库不读取公司环境凭证，不连接真实银行系统。
 
 目标：保留原蓝色“柜面参数 · 对公结算”外壳，左侧保留联调配置、知识依据、安全实测和演示说明。新后台会话与领域执行统一全部入口；已修复Cursor版请求头身份及旧聊天旁路，47项自动化通过且0跳过，当前核验范围见交接与审计。运行使用 `uv run python server.py`。部署地址和私有路径不写入公开仓库。

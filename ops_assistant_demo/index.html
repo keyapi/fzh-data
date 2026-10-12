@@ -554,18 +554,18 @@ let tickets = [], audit = [], log = [], busy = false;
 let loginPassword = "", loginAccess = "", counterApproval = null;
 const motionPause = ms => new Promise(resolve => setTimeout(resolve, ms));
 function clearAim() { $("spot").style.display="none"; $("cursor").style.display="none"; $("motion-label").hidden=true; }
-async function spotlight(el, label, hold=450) {
+async function spotlight(el, label, hold=450, travel=550) {
  if(!el || el.hidden)return;
  el.scrollIntoView({block:"nearest"});
  const rect=el.getBoundingClientRect();
- for(const id of ["spot","cursor"])$(id).style.transition="top 550ms ease,left 550ms ease,width 550ms ease,height 550ms ease";
+ for(const id of ["spot","cursor"])$(id).style.transition=`top ${travel}ms ease,left ${travel}ms ease,width ${travel}ms ease,height ${travel}ms ease`;
  Object.assign($("spot").style,{display:"block",top:(rect.top-6)+"px",left:(rect.left-6)+"px",width:(rect.width+12)+"px",height:(rect.height+12)+"px"});
  Object.assign($("cursor").style,{display:"block",top:(rect.top+Math.min(18,rect.height/2))+"px",left:(rect.left+Math.min(28,rect.width/3))+"px"});
  $("motion-label").textContent=label;$("motion-label").hidden=false;
- await motionPause(550+hold);
+ await motionPause(travel+hold);
 }
-async function typeVisible(el,text) {
- const value=String(text), started=performance.now(), budget=Math.min(1100,Math.max(180,value.length*35));el.value="";
+async function typeVisible(el,text,budgetOverride) {
+ const value=String(text), started=performance.now(), budget=Math.min(1100,Math.max(60,budgetOverride??Math.max(180,value.length*35)));el.value="";
  while(el.value.length<value.length){const ratio=Math.min(1,(performance.now()-started)/budget);el.value=value.slice(0,Math.max(1,Math.ceil(value.length*ratio)));if(ratio===1)break;await motionPause(25);}
  el.value=value;
 }
@@ -724,12 +724,12 @@ function renderLog() {
 }
 function push(entry) { log.push(entry); renderLog(); save(); return log.length - 1; }
 function renderApproval(){
- const pending=(opsState?.proposals||[]).filter(p=>p.status==="pending");
+ const pending=(opsState?.proposals||[]).filter(p=>p.status==="pending"&&p.expires_at*1000>Date.now()&&(!p.scenario.startsWith("bank_")||p.version===opsState.bank?.version));
  const p=pending.find(p=>p.id===counterApproval?.id)||pending.at(-1);
  $("chat-approval").hidden=!p||role()!=="operator";
  if(!p)return;
  $("chat-approval").dataset.proposal=p.id;
- $("chat-change").textContent=p.changes.map(c=>fieldLabel(c.field)+"："+fieldValue(c.field,c.before)+" → "+fieldValue(c.field,c.after)).join("；")+"。生产不直接修改。"+(p.submit?"同时登记生产申请。":"");
+ $("chat-change").textContent=p.scenario.startsWith("bank_")?window.BankUI.describe(p,true):p.changes.map(c=>fieldLabel(c.field)+"："+fieldValue(c.field,c.before)+" → "+fieldValue(c.field,c.after)).join("；")+"。生产不直接修改。"+(p.submit?"同时登记生产申请。":"");
  $("chat-allow").disabled=busy;$("chat-cancel").disabled=busy;
  $("chat-allow").textContent=busy?"正在填写 / 办理…":"允许修改";
 }
@@ -738,6 +738,7 @@ async function confirmFromChat(cancel=false){
  const id=$("chat-approval").dataset.proposal;
  const p=(opsState?.proposals||[]).find(p=>p.id===id&&p.status==="pending");
  if(!p){push({kind:"bot",text:"当前没有待确认修改。"});return;}
+ if(p.scenario.startsWith("bank_")){push({kind:"user",text:cancel?"取消修改":"允许修改"});await window.BankUI[cancel?"cancel":"approve"](p);return;}
  if(p.scenario==="counter"&&counterApproval?.id!==id){busy=true;try{await previewChange(p);}finally{busy=false;$("rule-ok").disabled=false;renderApproval();}}
  push({kind:"user",text:cancel?"取消修改":"允许修改"});
  if(p.scenario==="counter")await $(cancel?"rule-cancel":"rule-ok").onclick();
@@ -760,6 +761,8 @@ function applyRoleVisibility() {
 
 }
 function show(name) {
+ document.querySelectorAll('.bank-view').forEach(el=>el.hidden=true);
+ document.querySelectorAll('nav button[id^="nav-bank-"]').forEach(el=>el.removeAttribute('aria-current'));
   ["rules", "ticket", "audit", "integration", "knowledge", "safety", "guide"].forEach((id) => {
     $("view-" + id).hidden = name !== id;
     $("nav-" + id).toggleAttribute("aria-current", name === id);
@@ -796,13 +799,13 @@ async function submitTicket(){
  try{await spotlight($("ticket-submit"),"检查申请条件",100);$("ticket-error").hidden=false;$("ticket-error").textContent="这是页面草稿。正式申请请在联调修改时勾选‘同时生成生产变更申请’，确认修改后登记。";await spotlight($("ticket-error"),"草稿未提交，未生成工单",500);}finally{busy=false;clearAim();$("rule-ok").disabled=false;renderApproval();}
 }
 $("rule-cancel").onclick = async () => { if(busy)return;busy=true;try{await spotlight($("rule-cancel"),"取消本次修改 · 不保存",100);if(counterApproval)await opsFetch("/api/ops/cancel",{proposal_id:counterApproval.id});counterApproval=null;$("rule-dialog").hidden=true;await loadOps();await spotlight($("drill-amount"),"已取消，原限额保持不变",400);}catch(err){push({kind:"deny",text:err.message});}finally{busy=false;clearAim();$("rule-ok").disabled=false;renderApproval();} };
-$("nav-rules").onclick = () => show("rules");
+$("nav-rules").onclick = () => {if(!busy)show("rules");};
 $("nav-ticket").onclick = async () => {if(busy)return;busy=true;try{show("ticket");await loadOps();await spotlight($("ticket-list"),"变更申请列表",500);}finally{busy=false;clearAim();$("rule-ok").disabled=false;renderApproval();}};
 $("nav-audit").onclick = async () => {if(busy)return;busy=true;try{show("audit");await loadOps();await spotlight($("audit-body"),"后台办理记录",500);}finally{busy=false;clearAim();$("rule-ok").disabled=false;renderApproval();}};
-$("nav-integration").onclick = () => show("integration");
-$("nav-knowledge").onclick = () => show("knowledge");
-$("nav-safety").onclick = () => show("safety");
-$("nav-guide").onclick = () => show("guide");
+$("nav-integration").onclick = () => {if(!busy)show("integration");};
+$("nav-knowledge").onclick = () => {if(!busy)show("knowledge");};
+$("nav-safety").onclick = () => {if(!busy)show("safety");};
+$("nav-guide").onclick = () => {if(!busy)show("guide");};
 $("ticket-submit").onclick = () => submitTicket();
 $("btn-edit-drill").onclick = async () => { if (!busy && role() === "operator") {const pending=(opsState?.proposals||[]).filter(p=>p.scenario==="counter"&&p.status==="pending").at(-1);if(pending){busy=true;try{await previewChange(pending);}finally{busy=false;clearAim();$("rule-ok").disabled=false;renderApproval();}return;}counterApproval=null;$("rule-scope").textContent="只写入测试环境。生产环境限额不会变更。";$("f-amount").readOnly=false;$("f-reason").readOnly=false;$("f-amount").value=limits.drill;$("f-reason").value="";$("rule-ok").disabled=false;$("rule-dialog").hidden=false;} else if (role() === "reader") { stamp("已拒绝", "综合柜员手改测试限额"); push({ kind: "deny", text: "综合柜员不能修改限额。" }); } };
 $("rule-ok").onclick=async()=>{
@@ -852,6 +855,7 @@ function renderOps() {
   tickets=(opsState.tickets||[]).filter(t=>t.scenario==="counter");
   audit=(opsState.audit||[]).slice().reverse().map(a=>({time:opsWhen(a.timestamp),who:a.role,what:a.action+" · "+(a.detail||""),result:a.outcome}));
   renderLimits();renderTickets();renderAudit();applyRoleVisibility();
+  window.BankUI?.render();
   const liveIds=new Set((opsState.proposals||[]).filter(p=>p.status==="pending").map(p=>p.id));
   log.forEach(m=>{if(m.kind==="card"&&m.proposal&&!liveIds.has(m.proposal.id))m.done=true;});
 
@@ -894,7 +898,7 @@ function renderOps() {
     <td class="${a.outcome === "denied" || a.outcome === "failed" ? "lock" : "allow"}">${esc(a.outcome)}</td>
     <td class="wrap">${esc(a.detail || "")}</td>
   </tr>`).join("") : `<tr><td class="empty" colspan="5">${role() === "reader" ? "只读岗位看不到办理记录" : "还没有办理记录"}</td></tr>`;
-  const pending = (opsState.proposals || []).filter((p) => p.status === "pending");
+  const pending = (opsState.proposals || []).filter((p) => p.status === "pending" && !p.scenario.startsWith("bank_"));
   opsProposal = pending[pending.length - 1] || null;
   if (!opsProposal || opsProposal.scenario === "counter") {
     $("ops-proposal").hidden = true;
@@ -990,6 +994,8 @@ async function runSafety(caseName) {
   } finally {busy=false;clearAim();$("rule-ok").disabled=false;renderApproval();}
 }
 async function askOps(text,scenario="integration"){
+ const bankEntity=window.BankUI?.scenarioFor(text);
+ if(bankEntity&&!/限额|柜面|联调/.test(text))return askBank(text,bankEntity);
  if(busy)return;scenario=scenarioFor(text,scenario);busy=true;
  if(scenario==="integration")show("integration");
  push({kind:"user",text});const pending=push({kind:"bot",text:"正在查依据和当前后台配置…"});
@@ -1008,6 +1014,22 @@ async function askOps(text,scenario="integration"){
  }catch(err){log.splice(pending,1);push({kind:"deny",text:String(err.message||err)+"。可使用明确标注的人工修改，仍需后台授权与确认。"});}
  finally{busy=false;$("rule-ok").disabled=false;clearAim();renderLog();}
 }
+async function askBank(text,entity){
+ if(busy)return;const activeTerminal=window.BankUI.activeTerminalId;busy=true;window.BankUI.show(entity,activeTerminal);window.BankUI.render();
+ push({kind:"user",text});const waiting=push({kind:"bot",text:"正在读取当前记录和操作依据…"});
+ try{
+  const data=await opsFetch('/api/bank/chat',{text,entity,active_terminal_id:activeTerminal});
+  log.splice(waiting,1);if(data.state){opsState=data.state;renderOps();}
+  push({kind:"bot",text:shortReply(data.text)});
+  if(data.trace?.length)push({kind:"evidence",citations:data.citations,trace:data.trace,rails:data.proposal?.rails});
+  $("model-line").textContent=(data.model||"模型")+" · 真实模型 · 渠道接入";
+  await window.BankUI.load();
+  if(data.proposal)await window.BankUI.preview(data.proposal);
+  else await spotlight($("log").lastElementChild,data.denied?.length?"后台已拒绝 · 未保存":"已读取当前后台记录",500);
+ }catch(err){log.splice(waiting,1);push({kind:"deny",text:err.message});}
+ finally{busy=false;clearAim();window.BankUI.render();renderApproval();}
+}
+window.askBank=askBank;
 $("ops-propose").onclick = () => proposeOps("integration", [
   { field: "timeout", value: Number($("ops-timeout").value) },
   { field: "retries", value: Number($("ops-retries").value) }
@@ -1062,5 +1084,6 @@ $("login-form").onsubmit=async event=>{event.preventDefault();try{await loginAs(
 $("role").onchange=async()=>{if(busy){$("role").value=role();return;}const desired=$("role").value;$("role").value=role();try{await loginAs(desired,loginPassword||"demo2026",loginAccess);}catch(err){push({kind:"deny",text:err.message});$("login-dialog").showModal();}};
 push({kind:"bot",text:"告诉我要改什么，我会在页面填写，等你确认后保存。"});loadOps();
 </script>
+<script src="/bank_ui.js"></script>
 </body>
 </html>

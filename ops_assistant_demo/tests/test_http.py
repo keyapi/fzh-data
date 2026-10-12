@@ -13,6 +13,10 @@ import server
 
 class HttpTests(unittest.TestCase):
     def setUp(self):
+        self.configpatch = patch.dict(server.CONFIG, {'OPENAI_API_BASE_URL': 'https://model.invalid/v1',
+                                                      'OPENAI_API_KEY': 'dummy'})
+        self.configpatch.start()
+        self.addCleanup(self.configpatch.stop)
         self.temp = tempfile.TemporaryDirectory()
         self.dbpatch = patch.object(server, 'STORE', server.Store(self.temp.name + '/demo.db'))
         self.dbpatch.start()

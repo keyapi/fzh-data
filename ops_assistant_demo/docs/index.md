@@ -9,6 +9,7 @@ title: 文档索引
 
 | 需要 | 文档 |
 |---|---|
+| 运营三功能页与实际验收 | [bank-operations.md](bank-operations.md) |
 | Cursor续办审计与待验收 | [cursor-audit-2026-10-12.md](cursor-audit-2026-10-12.md) |
 | 当前状态、对话批准与Harness交接 | [handoff-2026-10-12.md](handoff-2026-10-12.md) |
 | 实施与验收 | [competition-plan.md](competition-plan.md) |

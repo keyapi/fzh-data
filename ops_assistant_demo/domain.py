@@ -155,6 +155,12 @@ class Store:
                 prev = next(c for c in old if c['scenario'] == config['scenario'] and c['environment'] == config['environment'])
                 config['version'] = prev['version'] + 1
             state['configs'] = fresh['configs']
+            if 'bank' in state:
+                from bank_ops import initial_bank
+                bank = initial_bank()
+                bank['version'] = state['bank']['version'] + 1
+                bank['reset_count'] = state['bank'].get('reset_count', 0) + 1
+                state['bank'] = bank
             for p in state['proposals']:
                 if p['status'] == 'pending':
                     p['status'] = 'cancelled'

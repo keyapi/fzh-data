@@ -16,6 +16,8 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 from decimal import Decimal
 from domain import DomainError, Store
+from bank_ops import BankOperations, redact_all
+from bank_agent import run_bank_agent
 
 ROOT = Path(__file__).resolve().parent
 
@@ -334,7 +336,9 @@ class Handler(BaseHTTPRequestHandler):
         return session
 
     def _snapshot(self, session):
-        state = STORE.snapshot(session['workspace'], session['role'])
+        bank = BankOperations(STORE).snapshot(session['workspace'], session['role'])
+        state = redact_all(STORE.snapshot(session['workspace'], session['role']))
+        state['bank'] = bank
         state['model_configured'] = bool(CONFIG.get('OPENAI_API_KEY') and CONFIG.get('OPENAI_API_BASE_URL'))
         return state
 
@@ -346,6 +350,9 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path in ('/', '/index.html'):
             self._send(200, (ROOT / 'index.html').read_bytes(), 'text/html; charset=utf-8')
             return
+        if parsed.path == '/bank_ui.js':
+            self._send(200, (ROOT / 'bank_ui.js').read_bytes(), 'text/javascript; charset=utf-8')
+            return
         if not parsed.path.startswith('/api/'):
             self._send(404, {'error': 'not found'})
             return
@@ -354,6 +361,9 @@ class Handler(BaseHTTPRequestHandler):
             route = parsed.path.replace('/api/ops/', '/api/')
             if route == '/api/state':
                 result = self._snapshot(session)
+            elif route == '/api/bank/state':
+                state = self._snapshot(session)
+                result = {'bank': state['bank'], 'state': state}
             elif route == '/api/knowledge':
                 result = {'documents': STORE.knowledge((parse_qs(parsed.query).get('q') or [''])[0][:200], session['role'])}
             elif route == '/api/audit':
@@ -419,7 +429,7 @@ class Handler(BaseHTTPRequestHandler):
             rate_limit('write-ip:' + ip, 150, 60)
             route = path.replace('/api/ops/', '/api/')
             role, workspace = session['role'], session['workspace']
-            if route == '/api/chat':
+            if route in ('/api/chat', '/api/bank/chat'):
                 rate_limit('chat-ip:' + ip, 60, 3600)
                 rate_limit('chat-workspace:' + workspace, 30, 3600)
                 if not MODEL_SLOTS.acquire(blocking=False):
@@ -427,18 +437,35 @@ class Handler(BaseHTTPRequestHandler):
                 try:
                     if path == '/api/chat' and 'scenario' not in body:
                         body['scenario'] = 'counter'
-                    result = model_task(session, body)
+                    if route == '/api/bank/chat':
+                        base, key = CONFIG.get('OPENAI_API_BASE_URL'), CONFIG.get('OPENAI_API_KEY')
+                        if not base or not key:
+                            raise DomainError('MODEL_UNAVAILABLE', '模型未配置，没有准备或执行业务变更。', 503)
+                        result = run_bank_agent(session, body, BankOperations(STORE), STORE,
+                            lambda messages, tools: model_call(base, key, messages, tools))
+                        result['model'] = MODEL
+                    else:
+                        result = model_task(session, body)
                 except (TimeoutError, urllib.error.URLError, ValueError, KeyError, IndexError, TypeError):
                     raise DomainError('MODEL_UNAVAILABLE', '办理暂停：模型暂不可用，没有执行业务变更。', 502)
                 finally:
                     MODEL_SLOTS.release()
+            elif route == '/api/bank/propose':
+                p = BankOperations(STORE).propose(workspace, role, body.get('entity'), body.get('action'),
+                    body.get('record_id'), body.get('values'), str(body.get('reason') or ''))
+                result = {'ok': True, 'proposal': p}
             elif route == '/api/propose':
                 p = STORE.propose(workspace, role, body.get('scenario'), body.get('changes'), str(body.get('reason') or ''), body.get('submit', True))
                 result = {'ok': True, 'proposal': p, **(p if path.startswith('/api/ops/') else {})}
             elif route == '/api/execute':
-                result = STORE.execute(workspace, role, str(body.get('proposal_id') or ''), str(body.get('digest') or ''))
+                proposal_id = str(body.get('proposal_id') or '')
+                p = next((p for p in STORE.snapshot(workspace, role)['proposals'] if p['id'] == proposal_id), {})
+                executor = BankOperations(STORE) if p.get('scenario', '').startswith('bank_') else STORE
+                result = executor.execute(workspace, role, proposal_id, str(body.get('digest') or ''))
+                session['bank_task_notes'] = {}
             elif route == '/api/cancel':
                 result = STORE.cancel(workspace, role, str(body.get('proposal_id') or ''))
+                session['bank_task_notes'] = {}
             elif route == '/api/rollback':
                 p = STORE.rollback(workspace, role, str(body.get('proposal_id') or ''))
                 result = {'ok': True, 'proposal': p, **p}
@@ -452,6 +479,8 @@ class Handler(BaseHTTPRequestHandler):
                         *(m['content'] for m in items if m.get('role') == 'user')][-3:]
                 session.pop('history', None)
                 session['scenario_history'] = {}
+                session['bank_history'] = {}
+                session['bank_task_notes'] = {}
             elif route in ('/api/safety', '/api/safety-test'):
                 tested = STORE.safety_test(workspace, role, str(body.get('case') or ''))
                 result = {'ok': True, 'result': tested, **tested}
@@ -463,7 +492,7 @@ class Handler(BaseHTTPRequestHandler):
             if route == '/api/execute' and result.get('config'):
                 config = result['config']
                 result['verification'] = next(c for c in state['configs'] if c['scenario'] == config['scenario'] and c['environment'] == config['environment'])
-            self._send(200, result)
+            self._send(200, redact_all(result))
         except DomainError as exc:
             self._error(exc)
         except Exception:
