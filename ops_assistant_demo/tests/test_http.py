@@ -158,6 +158,76 @@ class HttpTests(unittest.TestCase):
             server.rate_limit(budget, 1, 3600)
         self.assertEqual(raised.exception.status, 429)
 
+    def test_plain_model_claim_is_not_a_prepared_change(self):
+        self.login()
+        response = {'choices': [{'message': {'content': '已提交限额提案；integration timeout60仍待处理。'}}]}
+        with patch.object(server, 'model_call', return_value=response), patch.dict(server.CONFIG,
+                {'OPENAI_API_KEY': 'fixture-only', 'OPENAI_API_BASE_URL': 'https://example.invalid/v1'}):
+            status, data = self.request('/api/chat', {'scenario': 'counter', 'text': '改限额到20万'})
+        self.assertEqual(status, 200)
+        self.assertEqual(data['outcome'], 'not_prepared')
+        self.assertIsNone(data['proposal'])
+        self.assertNotIn('timeout', data['text'])
+        self.assertNotIn('已提交', data['text'])
+        self.assertEqual(data['state']['proposals'], [])
+
+    def test_counter_history_never_contains_integration_task(self):
+        self.login()
+        captured = []
+        def respond(base, key, messages, tools):
+            captured.append((messages, tools))
+            return {'choices': [{'message': {'content': '请明确目标值。'}}]}
+        with patch.object(server, 'model_call', side_effect=respond), patch.dict(server.CONFIG,
+                {'OPENAI_API_KEY': 'fixture-only', 'OPENAI_API_BASE_URL': 'https://example.invalid/v1'}):
+            self.request('/api/chat', {'scenario': 'integration', 'text': '联调旧任务timeout60'})
+            self.request('/api/chat', {'scenario': 'counter', 'text': '改限额到20万'})
+        self.assertNotIn('联调旧任务', json.dumps(captured[-1][0], ensure_ascii=False))
+        fields = captured[-1][1][2]['function']['parameters']['properties']['changes']['items']['properties']['field']['enum']
+        self.assertEqual(fields, ['limit'])
+
+    def test_plain_noop_answer_is_checked_against_database(self):
+        self.login()
+        response = {'choices': [{'message': {'content': '当前已经是50万元。'}}]}
+        with patch.object(server, 'model_call', return_value=response), patch.dict(server.CONFIG,
+                {'OPENAI_API_KEY': 'fixture-only', 'OPENAI_API_BASE_URL': 'https://example.invalid/v1'}):
+            _, data = self.request('/api/chat', {'scenario': 'counter', 'text': '改限额到50万'})
+        self.assertTrue(data['noop'])
+        self.assertEqual(data['outcome'], 'noop')
+        self.assertEqual(data['state']['proposals'], [])
+
+    def test_missing_action_gets_one_feedback_retry(self):
+        self.login()
+        def msg(calls):
+            return {'choices': [{'message': {'tool_calls': [
+                {'id': str(i), 'type': 'function', 'function': {'name': name, 'arguments': json.dumps(args)}}
+                for i, (name, args) in enumerate(calls)]}}]}
+        responses = [{'choices': [{'message': {'content': '已经准备好了。'}}]},
+                     msg([('search_knowledge', {'query': '限额'}), ('read_configuration', {})]),
+                     msg([('propose_change', {'changes': [{'field': 'limit', 'value': 200000}],
+                                            'reason': '用户明确调整测试限额', 'submit': False})])]
+        with patch.object(server, 'model_call', side_effect=responses), patch.dict(server.CONFIG,
+                {'OPENAI_API_KEY': 'fixture-only', 'OPENAI_API_BASE_URL': 'https://example.invalid/v1'}):
+            _, data = self.request('/api/chat', {'scenario': 'counter', 'text': '改限额到20万'})
+        self.assertEqual(data['outcome'], 'ready')
+        self.assertEqual(data['proposal']['changes'][0]['after'], 200000)
+        self.assertEqual(data['state']['configs'][0]['values']['timeout'], 30)
+
+    def test_reset_preserves_requests_but_discards_old_execution_claims(self):
+        self.login()
+        captured = []
+        def respond(base, key, messages, tools):
+            captured.append(messages)
+            return {'choices': [{'message': {'content': '旧执行结论标记'}}]}
+        with patch.object(server, 'model_call', side_effect=respond), patch.dict(server.CONFIG,
+                {'OPENAI_API_KEY': 'fixture-only', 'OPENAI_API_BASE_URL': 'https://example.invalid/v1'}):
+            self.request('/api/chat', {'scenario': 'counter', 'text': '上一轮旧任务标记'})
+            self.request('/api/reset', {})
+            self.request('/api/chat', {'scenario': 'counter', 'text': '新任务'})
+        content = json.dumps(captured[-1], ensure_ascii=False)
+        self.assertIn('上一轮旧任务标记', content)
+        self.assertNotIn('旧执行结论标记', content)
+        self.assertIn('本轮后台最新配置数据', content)
+
     def test_model_concurrency_rejects_without_calling_upstream(self):
         self.login()
         server.MODEL_SLOTS.acquire()

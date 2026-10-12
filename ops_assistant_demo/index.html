@@ -491,7 +491,7 @@
     <button class="ghost" type="button" id="chip-script-ok">脚本演示 · 改测试限额</button>
     <button class="ghost" type="button" id="chip-script-no">后台实测 · 越权拒绝</button>
     <button class="ghost" type="button" id="chip-port">让助手改限额</button>
-    <button class="ghost" type="button" id="chip-ticket">让助手填变更单</button>
+    <button class="ghost" type="button" id="chip-ticket">填写申请草稿</button>
     <button class="ghost" type="button" id="chip-integration">让助手办联调</button>
   </div>
   <form class="composer" id="ask">
@@ -531,7 +531,14 @@ async function spotlight(el, label, hold=450) {
  $("motion-label").textContent=label;$("motion-label").hidden=false;
  await motionPause(550+hold);
 }
-async function typeVisible(el,text) { el.value="";const value=String(text);const delay=Math.min(45,1800/Math.max(1,value.length));for(const ch of value){el.value+=ch;await motionPause(delay);} }
+async function typeVisible(el,text) {
+ const value=String(text), started=performance.now(), budget=Math.min(1100,Math.max(180,value.length*35));el.value="";
+ while(el.value.length<value.length){const ratio=Math.min(1,(performance.now()-started)/budget);el.value=value.slice(0,Math.max(1,Math.ceil(value.length*ratio)));if(ratio===1)break;await motionPause(25);}
+ el.value=value;
+}
+function scenarioFor(text,fallback){if(/限额|金额|柜面|单笔/.test(text))return "counter";if(/联调|超时|重试/.test(text))return "integration";return fallback;}
+function shortReply(text){return String(text||"").replace(/提案/g,"修改确认").trim().slice(0,220);}
+
 async function previewChange(p) {
  if(p.scenario==="counter") {
   show("rules");counterApproval=p;
@@ -547,6 +554,7 @@ async function previewChange(p) {
  } else {
   show("integration");$("ops-submit").checked=!!p.submit;
   for(const c of p.changes){const el=$(c.field==="timeout"?"ops-timeout":"ops-retries");await spotlight(el,"填写"+fieldLabel(c.field)+" · 尚未保存");await typeVisible(el,c.after);}
+  await spotlight($("ops-reason"),"填写变更理由");await typeVisible($("ops-reason"),p.reason);
   await spotlight($("ops-execute"),"请核对差异并确认修改",700);clearAim();
  }
 }
@@ -660,12 +668,9 @@ function richText(raw) {
 function railResult(value){return ({pass:"通过",warning:"需关注",denied:"拒绝",deny:"拒绝",blocked:"拒绝",pending:"待确认",wait:"待确认",failed:"拒绝"})[value]||value;}
 function renderLog() {
   $("log").innerHTML = log.map((m) => {
+    if(m.kind==="evidence")return '<div class="msg bot"><details><summary>依据与安全检查 · '+(m.citations||[]).length+'条依据</summary>'+(m.citations||[]).map(d=>'<details><summary>'+esc(d.title)+' · '+esc(d.id)+'</summary>'+richText(d.content)+'</details>').join('')+'<p>'+(m.rails||[]).map(r=>esc(r.name)+'：'+esc(railResult(r.result))).join('；')+'</p><details><summary>工具与检查记录</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(JSON.stringify(m.trace||[],null,2))+'</pre></details></details></div>';
+    if(m.kind==="long-answer")return '<div class="msg bot">'+richText(shortReply(m.text))+'<details><summary>展开完整回答</summary>'+richText(m.text)+'</details></div>';
     if (m.kind === "user") return `<div class="msg user">${esc(m.text)}</div>`;
-    if (m.kind === "card") {
-      return `<div class="card"><div>${esc(m.text)}</div><ol>${m.items.map((x) => `<li>${esc(x)}</li>`).join("")}</ol>
-        <div class="row"><button class="ghost" data-act="skip" ${m.done ? "disabled" : ""}>跳过</button>
-        <button class="solid" data-act="allow" ${m.done ? "disabled" : ""}>确认修改</button></div></div>`;
-    }
     if (m.kind === "steps") {
       return `<div class="msg bot">${m.lines.map((line, i) =>
         `<div class="step ${i === m.active ? "on" : ""}">${i < m.active ? "✓ " : ""}${esc(line)}</div>`).join("")}</div>`;
@@ -705,7 +710,7 @@ function show(name) {
     $("nav-" + id).toggleAttribute("aria-current", name === id);
   });
   if (["rules","ticket","audit","integration","guide"].includes(name)) loadOps();
-  if (name === "knowledge") loadKnowledge();
+  if (name === "knowledge") loadKnowledge(true);
 }
 function role() { return opsState?.role || "reader"; }
 function renderTickets(){
@@ -715,26 +720,30 @@ function fieldValue(field,value){return field==="limit"?money(value)+" 元":Stri
 function verificationText(data){const config=data.verification||data.readback;return config?.values?Object.entries(config.values).map(([field,value])=>fieldLabel(field)+" "+fieldValue(field,value)).join(" / "):"没有收到读回字段，不能据此宣称核验成功";}
 function executionMessage(data){return data.code==="EXECUTED"?"测试配置已保存并核验；"+(data.ticket?"生产仅登记申请。":"生产配置未修改。"):data.message||"执行请求已处理。";}
 function showExecution(data){push({kind:"verification",text:executionMessage(data),values:verificationText(data),independent:!!data.verification,evidence:data.verification||data.readback||{}});}
-function pendingCard(proposal) {
- if(proposal?.scenario==="counter")return;
- if(!proposal || log.some(m=>m.kind==="card"&&m.proposal?.id===proposal.id&&!m.done))return;
- const items=(proposal.changes||[]).map(c=>fieldLabel(c.field)+"："+fieldValue(c.field,c.before)+" → "+fieldValue(c.field,c.after));
- items.push(proposal.submit?"执行测试变更后创建生产申请；生产不直接写入":"只写测试环境，不创建生产申请");
- push({kind:"card",text:(proposal.source==="manual"?"人工修改（不调用模型）":"请确认以下修改"),items,done:false,proposal});
-}
-async function runAllowed(cardAt) {
- if(busy||!log[cardAt]?.proposal||log[cardAt].done)return;busy=true;const p=log[cardAt].proposal;
- try{await executeVisible(p);log[cardAt].done=true;}
- catch(err){log[cardAt].done=true;push({kind:"deny",text:String(err.message||err)});await loadOps();}finally{busy=false;renderLog();}
-}
 async function askModel(text){return askOps(text,"counter");}
 async function playScriptOk(){push({kind:"bot",text:"脚本演示 / 不调用模型：准备20万元测试限额与生产申请。需你确认后才执行，后台仍校验权限。"});await proposeOps("counter",[{field:"limit",value:200000}],"脚本演示：压缩测试单笔限额，生产仅提交申请",true);}
 async function playScriptDeny(){show("safety");push({kind:"bot",text:"后台实测 / 不调用模型：在隔离工作区向执行层提交生产直改请求，以实际返回结果为准。"});await runSafety("production");}
-async function submitTicket(){push({kind:"bot",text:"当前 POC 的生产申请必须关联明确变更场景和目标值。请在限额或联调配置中检查修改，并勾选创建生产申请；本页表单只是草稿，不会生成无变更工单。"});}
-$("rule-cancel").onclick = async () => { if(busy)return;try{if(counterApproval)await opsFetch("/api/ops/cancel",{proposal_id:counterApproval.id});counterApproval=null;$("rule-dialog").hidden=true;clearAim();await loadOps();}catch(err){push({kind:"deny",text:err.message});} };
+async function fillTicketDraft(){
+ if(busy)return;busy=true;
+ try{show("ticket");await loadOps();
+  const change=(opsState?.proposals||[]).filter(p=>p.status==="pending"||p.status==="executed").at(-1);
+  if(!change){push({kind:"bot",text:"先指定要改的参数和目标值，我才能填写申请草稿。"});await spotlight($("ticket-title"),"缺少具体变更，尚未填写或提交",300);return;}
+  const title=(change.scenario==="counter"?"柜面限额":"联调参数")+"调整申请（草稿）";
+  const body=change.changes.map(c=>fieldLabel(c.field)+"："+fieldValue(c.field,c.before)+" → "+fieldValue(c.field,c.after)).join("；")+"。"+change.reason+"。生产参数未修改。";
+  await spotlight($("ticket-title"),"填写申请标题 · 页面草稿",100);await typeVisible($("ticket-title"),title);
+  await spotlight($("ticket-body"),"填写变更内容 · 页面草稿",100);await typeVisible($("ticket-body"),body);
+  await spotlight($("ticket-submit"),"草稿不会提交；正式申请随确认变更登记",500);
+  push({kind:"bot",text:"申请草稿已填写，尚未提交。（按当前变更整理，不调用模型）"});
+ }finally{busy=false;clearAim();}
+}
+async function submitTicket(){
+ if(busy)return;busy=true;
+ try{await spotlight($("ticket-submit"),"检查申请条件",100);$("ticket-error").hidden=false;$("ticket-error").textContent="这是页面草稿。正式申请请在联调修改时勾选‘同时生成生产变更申请’，确认修改后登记。";await spotlight($("ticket-error"),"草稿未提交，未生成工单",500);}finally{busy=false;clearAim();}
+}
+$("rule-cancel").onclick = async () => { if(busy)return;busy=true;try{await spotlight($("rule-cancel"),"取消本次修改 · 不保存",100);if(counterApproval)await opsFetch("/api/ops/cancel",{proposal_id:counterApproval.id});counterApproval=null;$("rule-dialog").hidden=true;await loadOps();await spotlight($("drill-amount"),"已取消，原限额保持不变",400);}catch(err){push({kind:"deny",text:err.message});}finally{busy=false;clearAim();} };
 $("nav-rules").onclick = () => show("rules");
-$("nav-ticket").onclick = () => show("ticket");
-$("nav-audit").onclick = () => show("audit");
+$("nav-ticket").onclick = async () => {if(busy)return;busy=true;try{show("ticket");await loadOps();await spotlight($("ticket-list"),"变更申请列表",500);}finally{busy=false;clearAim();}};
+$("nav-audit").onclick = async () => {if(busy)return;busy=true;try{show("audit");await loadOps();await spotlight($("audit-body"),"后台办理记录",500);}finally{busy=false;clearAim();}};
 $("nav-integration").onclick = () => show("integration");
 $("nav-knowledge").onclick = () => show("knowledge");
 $("nav-safety").onclick = () => show("safety");
@@ -757,13 +766,13 @@ $("btn-export").onclick = () => {
 $("chip-script-ok").onclick = () => playScriptOk();
 $("chip-script-no").onclick = () => playScriptDeny();
 $("chip-port").onclick = () => askModel("把测试环境的单笔对公转账限额改成 20 万。改之前先在页面上问我。");
-$("chip-ticket").onclick = () => {show("ticket");push({kind:"bot",text:"当前 POC 的申请需关联明确场景和目标值。可让助手准备包含测试变更与生产申请的修改；没有金额或参数时应追问，不会默认补单，也不假装已经提交。本页仅为草稿与后台申请列表。"});};
+$("chip-ticket").onclick = () => fillTicketDraft();
 $("chip-integration").onclick = () => askOps("合作方联调接口连续超时。查现行规范和历史教训，把联调超时调到60秒、重试调到1次，完成验证并提交生产变更申请（仅申请，不直接修改生产配置）。");
 $("ask").onsubmit = (e) => {
   e.preventDefault();
   const text = $("ask-input").value.trim();
   $("ask-input").value = "";
-  if (text) askOps(text,!$("view-integration").hidden?"integration":"counter");
+  if (text) askOps(text,scenarioFor(text,!$("view-integration").hidden?"integration":"counter"));
 };
 let opsState = null;
 let opsProposal = null;
@@ -788,7 +797,7 @@ function renderOps() {
   renderLimits();renderTickets();renderAudit();applyRoleVisibility();
   const liveIds=new Set((opsState.proposals||[]).filter(p=>p.status==="pending").map(p=>p.id));
   log.forEach(m=>{if(m.kind==="card"&&m.proposal&&!liveIds.has(m.proposal.id))m.done=true;});
-  (opsState.proposals||[]).filter(p=>p.status==="pending").forEach(pendingCard);
+
   renderLog();
   const configs = (opsState.configs || []).filter((c) => c.scenario === "integration");
   $("ops-config").innerHTML = configs.map((c) => `<tr>
@@ -836,10 +845,10 @@ function renderOps() {
   }
   $("ops-proposal").hidden = false;
   const lines = (opsProposal.changes || []).map((c) => `${fieldLabel(c.field)} ${fieldValue(c.field,c.before)} → ${fieldValue(c.field,c.after)}`);
-  $("ops-proposal-body").innerHTML = `<div>${esc(opsProposal.reason || "")}</div><div class="muted">场景 ${esc(opsProposal.scenario)} · 版本 ${esc(opsProposal.version)} · 到期 ${esc(opsWhen(opsProposal.expires_at))}</div>
+  $("ops-proposal-body").innerHTML = `<div>${esc(opsProposal.reason || "")}</div><div class="muted">${opsProposal.scenario==="integration"?"联调参数":"柜面限额"} · 版本 ${esc(opsProposal.version)} · 到期 ${esc(opsWhen(opsProposal.expires_at))}</div>
     <div style="margin-top:8px">${lines.map((line) => `<div>${esc(line)}</div>`).join("")}</div>
-    <div style="margin-top:8px">${(opsProposal.rails||[]).map(r=>"<div>"+esc(r.name)+" · "+esc(railResult(r.result))+" · "+esc(r.detail)+"</div>").join("")}</div>
-    <div class="muted" style="margin-top:8px">${opsProposal.submit ? "允许后写入测试，并生成生产申请。" : "允许后只写测试，不生成生产申请。"} 摘要 ${esc((opsProposal.digest || "").slice(0, 12))}</div>`;
+    <details style="margin-top:8px"><summary>查看后台安全校验</summary>${(opsProposal.rails||[]).map(r=>"<div>"+esc(r.name)+" · "+esc(railResult(r.result))+" · "+esc(r.detail)+"</div>").join("")}</details>
+    <div class="muted" style="margin-top:8px">${opsProposal.submit ? "确认后保存测试，并登记生产申请。" : "确认后只保存测试，不登记生产申请。"}</div>`;
 }
 async function loadOps() {
   try {
@@ -872,66 +881,75 @@ async function proposeOps(scenario, changes, reason, submit) {
   } finally {busy=false;clearAim();}
 }
 async function reviewTicket(id, approve) {
-  try {
-    const data = await opsFetch("/api/ops/review", { ticket_id: id, approve });
-    push({ kind: "bot", text: data.message || "申请已复核，生产配置没有改。" });
-    await loadOps();
-  } catch (err) {
-    showOpsError(err);
-  }
+ if(busy)return;busy=true;
+ try {
+  const button=$("ops-tickets").querySelector('[data-id="'+id+'"][data-review="'+(approve?"1":"0")+'"]');
+  await spotlight(button,approve?"复核申请 · 通过也不直接改生产":"驳回申请",150);
+  const data=await opsFetch("/api/ops/review",{ticket_id:id,approve});await loadOps();
+  push({kind:"bot",text:approve?"申请已通过复核，生产参数未修改。":"申请已驳回，生产参数未修改。"});
+  await spotlight($("ops-tickets"),"复核结果已登记 · 生产保持不变",800);
+ }catch(err){showOpsError(err);}finally{busy=false;clearAim();}
 }
-async function loadKnowledge() {
+async function loadKnowledge(animate=false) {
+  if(animate&&busy)return;if(animate)busy=true;
   try {
+    if(animate){await spotlight($("kb-q"),"检索当前岗位可见资料",150);await typeVisible($("kb-q"),$("kb-q").value);await spotlight($("kb-search"),"执行检索",100);}
     const data = await opsFetch("/api/ops/knowledge?q=" + encodeURIComponent($("kb-q").value || ""));
     const docs = data.documents || [];
     $("kb-count").textContent = docs.length + " 篇";
     $("kb-body").innerHTML = docs.map((d) => `<tr>
       <td>${esc(d.id)}</td><td>${esc(d.title)}</td><td>${esc(d.version)}</td>
       <td><span class="tag ${d.status === "active" ? "ok" : "read"}">${esc(d.status)}</span></td>
-      <td>${esc(d.environment)}</td><td class="wrap">${esc(d.content)}</td>
+      <td>${esc(d.environment)}</td><td class="wrap"><details><summary>${esc(String(d.content||"").slice(0,75))}…</summary>${esc(d.content)}</details></td>
     </tr>`).join("") || `<tr><td class="empty" colspan="6">没有可见资料</td></tr>`;
+    if(animate)await spotlight($("kb-body"),docs.length?"已找到 "+docs.length+" 条可见依据":"没有找到可见资料",600);
   } catch (err) {
     $("kb-body").innerHTML = `<tr><td class="empty" colspan="6">${esc(err.message || err)}</td></tr>`;
-  }
+  } finally {if(animate){busy=false;clearAim();}}
 }
 async function runSafety(caseName) {
+  if(busy)return;
+  show("safety");
   if (role() !== "operator") {
     $("safety-head").textContent = "当前岗位不能跑";
     $("safety-body").textContent = "安全实测要用柜面主管林晓的岗位。只读和复核不能借这项测试改配置。";
     return;
   }
+  busy=true;
   $("safety-head").textContent = "执行中";
   $("safety-body").textContent = "正在隔离库里调用执行层…";
   try {
+    await spotlight($("safety-cases").querySelector('[data-case="'+caseName+'"]'),"安全实测 · 隔离库执行",150);
     const data = await opsFetch("/api/ops/safety", { case: caseName });
     $("safety-head").textContent = data.passed ? "这一项符合预期" : "这一项不符合预期";
     const checks = (data.checks || []).map((c) => `${c.passed ? "通过" : "未通过"} · ${c.name}`).join("；");
-    $("safety-body").innerHTML = `<div>预期 ${esc(data.expected)} ，实际 ${esc(data.actual)}</div>
-      <div style="margin-top:8px">${esc(checks)}</div>
-      <div class="muted" style="margin-top:8px">${esc(data.detail || "")}</div><details><summary>前后状态与完整证据</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(JSON.stringify(data,null,2))}</pre></details>`;
-    push({ kind: "bot", text: "安全实测「" + caseName + "」：预期 " + data.expected + "，实际 " + data.actual + "。本页联调配置没有被这项测试改写。" });
+    $("safety-body").innerHTML = `<div><strong>${data.passed ? "验证通过：本项处理符合预期" : "本项验证未通过"}</strong></div>
+      <div style="margin-top:8px">${esc(checks)}</div><details><summary>查看拒绝码与前后状态证据</summary><p>预期 ${esc(data.expected)} ，实际 ${esc(data.actual)}</p><p>${esc(data.detail||"")}</p><pre style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(JSON.stringify(data,null,2))}</pre></details>`;
+    push({kind:"bot",text:data.passed?"已验证：这一项符合预期，当前业务配置未改变。":"这一项没有通过，请查看实测结果。"});
+    await spotlight($("safety-body"),data.passed?"护栏验证通过 · 业务配置未改变":"护栏验证未通过",900);
   } catch (err) {
     $("safety-head").textContent = "没有跑成";
     $("safety-body").textContent = String(err.message || err);
-  }
+  } finally {busy=false;clearAim();}
 }
 async function askOps(text,scenario="integration"){
- if(busy)return;busy=true;
+ if(busy)return;scenario=scenarioFor(text,scenario);busy=true;
  if(scenario==="integration")show("integration");
  push({kind:"user",text});const pending=push({kind:"bot",text:"正在查依据和当前后台配置…"});
  try{
   const data=await opsFetch("/api/ops/chat",{text,scenario});log.splice(pending,1);
-  push({kind:"bot",text:data.text||"模型没有补充说明。"});
-  if(data.citations?.length)push({kind:"citations",items:data.citations});
-  if(data.rails?.length)push({kind:"rails",items:data.rails});
-  if(data.trace?.length)push({kind:"trace",items:data.trace});
-  if(data.denied?.length)push({kind:"deny",text:data.denied.map(d=>typeof d==="string"?d:(d.message||d.reason||"后台拒绝此操作")).join("\n")});
+  const reply=data.proposal?"正在填写，请在页面确认修改。":data.noop?"当前已是这个值，无需重复修改。":data.text||"请补充具体要求。";
+  const replyAt=push({kind:reply.length>220?"long-answer":"bot",text:reply});
+  if(data.citations?.length||data.rails?.length||data.trace?.length)push({kind:"evidence",citations:data.citations,rails:data.rails,trace:data.trace});
+  if(data.denied?.length)push({kind:"deny",text:data.denied.map(d=>d.message||"此操作被后台拒绝。").join("\n")});
   if(data.model)$("model-line").textContent=data.model+" · 真实模型 · "+(scenario==="integration"?"联调":"柜面");
   if(data.state){opsState=data.state;renderOps();}else await loadOps();
-  if(data.proposal){pendingCard(data.proposal);await previewChange(data.proposal);}
-  else push({kind:"bot",text:"本次没有需要确认的修改，业务配置未变。"});
+  if(data.proposal){await previewChange(data.proposal);const p=data.proposal;log[replyAt].text=p.scenario==="counter"?"已填写"+(p.changes.find(c=>c.field==="limit").after/10000).toLocaleString("zh-CN",{maximumFractionDigits:4})+"万元。请点“确认修改”，生产限额不变。":"联调参数已填写。请核对差异并确认修改。";}
+  else if(data.noop){show(scenario==="counter"?"rules":"integration");await spotlight($(scenario==="counter"?"drill-amount":"ops-config"),"当前已是目标值，无需重复修改",600);}
+  else if(data.denied?.length){await spotlight($("role"),"后台已核对当前岗位权限",150);await spotlight($("log").lastElementChild,"本次操作被拒绝 · 未保存",500);}
+
  }catch(err){log.splice(pending,1);push({kind:"deny",text:String(err.message||err)+"。可使用明确标注的人工修改，仍需后台授权与确认。"});}
- finally{busy=false;renderLog();}
+ finally{busy=false;clearAim();renderLog();}
 }
 $("ops-propose").onclick = () => proposeOps("integration", [
   { field: "timeout", value: Number($("ops-timeout").value) },
@@ -955,34 +973,37 @@ $("ops-execute").onclick = async () => {
   } finally {busy=false;applyRoleVisibility();}
 };
 $("ops-cancel").onclick = async () => {
-  if (!opsProposal) return;
+  if (!opsProposal||busy) return;busy=true;
   try {
+    await spotlight($("ops-cancel"),"取消本次修改 · 不保存",100);
     const data = await opsFetch("/api/ops/cancel", { proposal_id: opsProposal.id });
     push({ kind: "bot", text: data.message || "已跳过。" });
     await loadOps();
-  } catch (err) { showOpsError(err); }
+  } catch (err) { showOpsError(err); } finally{busy=false;clearAim();}
 };
 $("ops-reset").onclick = async () => {
+  if(busy)return;
   if(!window.confirm("重置当前工作区配置、申请、待确认修改和办理记录？"))return;
   try {
+    busy=true;await spotlight($("ops-reset"),"恢复当前模拟工作区",100);
     const data = await opsFetch("/api/ops/reset", {});
     $("ops-readback").hidden = false;
     $("ops-readback").textContent = data.message || "已恢复。";
-    log=[];await loadOps();push({kind:"bot",text:"当前工作区已重置。"});
-  } catch (err) { showOpsError(err); }
+    log=[];counterApproval=null;$("rule-dialog").hidden=true;await loadOps();push({kind:"bot",text:"当前模拟工作区已重置。"});await spotlight($("ops-config"),"初始值已恢复",600);
+  } catch (err) { showOpsError(err); } finally{busy=false;clearAim();}
 };
-$("ops-rollback").onclick=async()=>{const executed=(opsState?.proposals||[]).filter(p=>p.status==="executed");const last=executed[executed.length-1];if(!last){push({kind:"bot",text:"没有已执行提案可恢复。"});return;}try{const proposal=await opsFetch("/api/ops/rollback",{proposal_id:last.id});await loadOps();pendingCard(proposal);await previewChange(proposal);push({kind:"bot",text:"已填写恢复值，请确认修改；已有生产申请不会直接撤销。"});}catch(err){push({kind:"deny",text:err.message});}};
-$("kb-search").onclick = () => loadKnowledge();
+$("ops-rollback").onclick=async()=>{if(busy)return;const executed=(opsState?.proposals||[]).filter(p=>p.status==="executed");const last=executed[executed.length-1];if(!last){push({kind:"bot",text:"没有已执行修改可恢复。"});return;}busy=true;try{await spotlight($("ops-rollback"),"读取上次修改，准备恢复值",150);const proposal=await opsFetch("/api/ops/rollback",{proposal_id:last.id});await loadOps();await previewChange(proposal);push({kind:"bot",text:"已填写恢复值，请确认修改；已有生产申请不会直接撤销。"});}catch(err){push({kind:"deny",text:err.message});}finally{busy=false;clearAim();}};
+$("kb-search").onclick = () => loadKnowledge(true);
 $("safety-cases").onclick = (e) => {
   const btn = e.target.closest("[data-case]");
   if (btn) runSafety(btn.dataset.case);
 };
-$("log").onclick=async event=>{const button=event.target.closest("[data-act]");if(!button||button.disabled)return;const cards=Array.from($("log").querySelectorAll(".card"));const index=cards.indexOf(button.closest(".card"));const entries=log.map((m,i)=>({m,i})).filter(x=>x.m.kind==="card");const at=entries[index]?.i;if(at===undefined)return;if(button.dataset.act==="allow")await runAllowed(at);else{try{await opsFetch("/api/ops/cancel",{proposal_id:log[at].proposal.id});log[at].done=true;push({kind:"bot",text:"已取消修改，没有执行变更。"});await loadOps();}catch(err){push({kind:"deny",text:err.message});}}};
+
 $("login-open").onclick=()=>{$("login-user").value=role();$("login-dialog").showModal();};$("login-close").onclick=()=>$("login-dialog").close();
 async function loginAs(username,password,accessCode){await opsFetch("/api/login",{username,password,access_code:accessCode});log=[];opsProposal=null;counterApproval=null;$("rule-dialog").hidden=true;clearAim();$("ops-proposal").hidden=true;$("ops-readback").hidden=true;$("log").innerHTML="";loginPassword=String(password);loginAccess=accessCode;$("login-password").value="";$("login-access").value="";$("login-dialog").close();await loadOps();}
 $("login-form").onsubmit=async event=>{event.preventDefault();try{await loginAs($("login-user").value,$("login-password").value,$("login-access").value);$("login-error").textContent="";}catch(err){$("login-error").textContent=err.message;}};
-$("role").onchange=async()=>{const desired=$("role").value;$("role").value=role();if(!loginPassword){$("login-user").value=desired;$("login-dialog").showModal();return;}try{await loginAs(desired,loginPassword,loginAccess);}catch(err){push({kind:"deny",text:err.message});$("login-dialog").showModal();}};
-push({kind:"bot",text:"所有柜面与联调变更都由后台执行。真实模型先查依据、读配置，再定位字段并填写；确认修改后保存、核验并留痕。脚本演示和安全实测不调用模型，已明确标注。"});loadOps();
+$("role").onchange=async()=>{if(busy){$("role").value=role();return;}const desired=$("role").value;$("role").value=role();if(!loginPassword){$("login-user").value=desired;$("login-dialog").showModal();return;}try{await loginAs(desired,loginPassword,loginAccess);}catch(err){push({kind:"deny",text:err.message});$("login-dialog").showModal();}};
+push({kind:"bot",text:"告诉我要改什么，我会在页面填写，等你确认后保存。"});loadOps();
 </script>
 </body>
 </html>

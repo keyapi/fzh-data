@@ -24,3 +24,10 @@ date: 2026-10-12
 page-agent可适配页面控件，但关键动作更适合结构化工具以限制范围、审计和核验。发现新字段不是本次主目标，暂不进入默认演示。
 
 有效操作范围＝用户权限∩工具能力∩本次授权范围∩当前业务条件。目标是证明错误动作无法突破演示中实现的边界；不声称完全防止所有攻击或获得监管认证。
+
+
+## Harness选型补查
+
+2026-10-12核对原始文档：[Pi agent-core](https://github.com/earendil-works/pi/blob/main/packages/agent/README.md)独立提供状态、工具执行与事件流，包含transformContext、prepareRequest、beforeToolCall、finishTurn；不能笼统说Pi对POC必然太重。本轮借鉴按轮更新真实状态、上下文筛选、工具前校验、基于工具结果结束/纠偏的机制，没有引入Pi依赖，也未完整对照评测。
+
+[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)基于Cordis插件架构，官方仍标记开发预览与兼容性变化；整套替换需要额外集成验证，模块化思想可借鉴。这是本项目取舍，不是其性能不好或模型能力弱的证明。现有Python执行层继续负责业务权限和事务，框架本身不能取代它。
