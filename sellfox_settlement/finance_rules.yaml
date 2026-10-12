@@ -1,0 +1,20 @@
+version: 2026-10-10
+status: pending_ZJ
+selected_income_candidate: unconfirmed
+selected_refund_policy: unconfirmed
+selected_deferred_policy: unconfirmed
+selected_fx_policy: unconfirmed
+selected_cost_method: unconfirmed
+income_types: [Order]
+refund_types: [Refund, Refund_Retrocharge, Chargeback Refund]
+income_candidates:
+  A:
+    fields: [product_sales, shipping_credits, gift_wrap_credits, regulatory_fee, promotional_rebates]
+  B:
+    fields: [product_sales, shipping_credits, gift_wrap_credits, regulatory_fee, promotional_rebates, product_sales_tax, shipping_credits_tax, giftwrap_credits_tax, tax_on_regulatory_fee, collected_sales_tax]
+diagnostic_tax_field: promotional_rebates_tax
+deferred_policy_candidates: [keep_released_and_deferred_separate]
+fx_policy_candidates: [do_not_sum_across_currencies_until_rate_table_is_confirmed]
+cost_method_candidates: [current_bom_probe_not_august_historical]
+fba_boundary: amazon_fulfillment_fees_from_report_do_not_add_fbm_last_leg
+bank_actual: missing_input

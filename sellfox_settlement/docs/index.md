@@ -10,11 +10,18 @@ tags: [sellfox, amazon, settlement, okf, index]
 
 | 你需要... | 读这个 |
 |----------|--------|
+| V2原币完整分页及站点月证据 | [research/2026-10-10-native-settlement-details-validation.md](research/2026-10-10-native-settlement-details-validation.md) |
+| 技术完成计划 | [research/2026-10-10-technical-completion-plan.md](research/2026-10-10-technical-completion-plan.md) |
+| 组件成本账本与当前BOM精确重放 | [research/2026-10-10-component-cost-ledger.md](research/2026-10-10-component-cost-ledger.md) |
+| 尾程选路与父拆单费用单位 | [research/2026-10-10-tail-routing-validation.md](research/2026-10-10-tail-routing-validation.md) |
+| FBA原生账号缺口只读诊断 | [research/2026-10-10-fba-sync-gap-validation.md](research/2026-10-10-fba-sync-gap-validation.md) |
 | 子项目入口/交接 | [AGENT_HANDOFF.md](../AGENT_HANDOFF.md) |
 | 人读使用说明 | [README.md](../README.md) |
 | 深度调研（赛狐自动拉取可行性、两报表口径、风险与路径） | [research/saihu-amazon-settlement-autofetch-2026-09-09.md](research/saihu-amazon-settlement-autofetch-2026-09-09.md) |
 | Amazon 非 V2 月度报表国内报税分析（ZJ 填写总表、收入退款候选、费用成本、法人归属、实施路线；Notion 可直接导入） | [research/2026-10-09-amazon-non-v2-monthly-tax-analysis.md](research/2026-10-09-amazon-non-v2-monthly-tax-analysis.md) |
 | ZJ 填写渠道选型（Notion / 自建局域网 / Google 表单） | [research/2026-10-10-zj-questionnaire-collection-options.md](research/2026-10-10-zj-questionnaire-collection-options.md) |
+| 2026-08 技术验证边界（禁止把探针结果写成申报数） | [../../docs/solutions/tooling-decisions/amazon-non-v2-tax-technical-validation.md](../../docs/solutions/tooling-decisions/amazon-non-v2-tax-technical-validation.md) |
+| 账号 / 成本 / PDF 技术验证计数 | [research/2026-10-10-account-technical-validation.md](research/2026-10-10-account-technical-validation.md)、[research/2026-10-10-cost-technical-validation.md](research/2026-10-10-cost-technical-validation.md)、[research/2026-10-10-pdf-technical-validation.md](research/2026-10-10-pdf-technical-validation.md) |
 | 赛狐结算中心V2 端点与字段 | [reference/settlement-v2-endpoints.md](reference/settlement-v2-endpoints.md) |
 | 科目映射（列式表 & 结算 amount-description → 钉钉列） | [reference/column-mapping.md](reference/column-mapping.md) |
 | 2026-09 试点测试方法与断言（可复跑） | [reference/how-we-tested-2026-09.md](reference/how-we-tested-2026-09.md) |
