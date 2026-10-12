@@ -1,3 +1,8 @@
+---
+type: Reference
+title: Amazon 结算技术验证入口
+---
+
 # sellfox_settlement — 赛狐自动拉取 Amazon 结算（试点）
 
 用赛狐 OpenAPI「财务/结算中心V2」+ 紫鸟/赛狐插件列式报表取回 Amazon 结算，与运营钉钉提交的收款确认单比对，评估能否替代人工提交。
@@ -63,3 +68,14 @@ uv run python sellfox_settlement/audit_late_submission.py \
 - 汇总：`POST /api/financial/v2/settlementSummary/groupPage.json`
 - 明细：`POST /api/financial/v2/settlementSummary/detailPage.json`
 - 参考 API 文档：`../SELLFOX_API/docs/api-reference/财务/结算中心V2/` 及 `llms.txt`
+
+## 月度技术产物验收
+
+在仓库根目录运行，原始账单、快照及输出均放在仓库外：
+
+```powershell
+uv run python -m sellfox_settlement.run_technical_month --input <账单目录> --snapshots <快照目录> --out <产物目录> --month 2026-08 --json-only
+uv run python -m sellfox_settlement.verify_technical_run --reports <产物目录>
+```
+
+`workbook_tables.json` 可用 artifact-tool 导出工作簿；外部导出的首次验收加 `--require-workbook --register-workbook`，以后只加 `--require-workbook`。验收检查本次成功状态、月份、输入和产物哈希及全部单元格，不会批准财务口径。十表包括成本输入诊断与 V2 交易候选连接；完整行级证据留在私有 JSON。

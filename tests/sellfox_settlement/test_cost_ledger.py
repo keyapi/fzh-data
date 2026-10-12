@@ -165,3 +165,42 @@ def test_repeated_refund_transactions_do_not_repeat_ledger_cost():
     assert len(result['groups']) == 1
     assert result['groups'][0]['components']['product']['selected_snapshot_amount'] == '10'
     assert all(r['cost_action'] == 'hold_refund_policy' for r in result['transaction_evidence'])
+
+
+def test_input_diagnosis_preserves_mapping_candidates_without_filling_cost():
+    from sellfox_settlement.cost_ledger import diagnose_cost_inputs
+    ledger = {'item_evidence': [
+        {'en_order_name': 'o', 'item_position': 1, 'base_order_id': 'b', 'native_account': 'a',
+         'warehouse': 'w', 'persisted_item': {'is_deliver_good': 1, 'tongtool_sku': 'alias', 'platform_sku': 'external'},
+         'current_component_probe': {'status': 'no_item', 'inputs': {'erp_item_code': None}}}], 'groups': []}
+    result = diagnose_cost_inputs(ledger, [{'item_fg': 'item', 'customer_item_code': 'alias'}], [{'name': 'w'}])
+    assert result['details'][0]['reason'] == 'deliver_item_missing_erp_mapping'
+    assert result['details'][0]['current_bom_exact_candidates'] == ['item']
+    assert result['details'][0]['action'] == 'hold_no_mapping_write_or_cost_fill'
+
+
+def test_missing_warehouse_and_non_delivery_placeholder_are_distinct():
+    from sellfox_settlement.cost_ledger import diagnose_cost_inputs
+    base = {'en_order_name': 'o', 'item_position': 1, 'base_order_id': 'b', 'native_account': 'a',
+            'warehouse': '', 'persisted_item': {'is_deliver_good': 0},
+            'current_component_probe': {'status': 'no_item', 'inputs': {}}}
+    second = dict(base, item_position=2, persisted_item={'is_deliver_good': 1},
+                  current_component_probe={'status': 'no_warehouse_config', 'inputs': {'erp_item_code': 'item'}})
+    result = diagnose_cost_inputs({'item_evidence': [base, second], 'groups': []}, [], [])
+    assert result['summary']['reason_counts'] == {'non_delivery_missing_item_placeholder': 1, 'warehouse_name_missing': 1}
+
+
+def test_nondelivery_diagnostic_does_not_release_product_hold():
+    from sellfox_settlement.cost_ledger import diagnose_cost_inputs
+    parent, child = order('base', product='10'), order('base_1', product='12')
+    for o in [parent, child]:
+        o['order_items'][0]['is_deliver_good'] = 1
+    child['order_items'].append(dict(child['order_items'][0], is_deliver_good=0, erp_item_code=None, sx_shipping_cost='0'))
+    ledger = build_ledger([parent, child])
+    for row in ledger['item_evidence']:
+        row['current_component_probe'] = {'status': 'calculated', 'calculated': {'sx_shipping_cost': 12}} if row['persisted_item']['is_deliver_good'] else {'status': 'no_item', 'calculated': None}
+    result = diagnose_cost_inputs(ledger, [], [])
+    conflict = result['product_conflicts'][0]
+    assert conflict['current_calculation_relation'] == 'incomplete'
+    assert conflict['current_explicit_delivery_calculation_relation'] == 'equal'
+    assert conflict['financial_status'] == 'hold_unchanged'

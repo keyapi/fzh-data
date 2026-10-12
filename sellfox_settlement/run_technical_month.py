@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 import sys
 import uuid
+import gzip
 from collections import defaultdict
 from decimal import Decimal
 
@@ -22,7 +23,8 @@ if str(REPO_ROOT) not in sys.path:
 from sellfox_settlement.account_validation import audit
 from sellfox_settlement.cost_validation import summarize_coverage, validate_input
 from sellfox_settlement.account_cost_bridge import build_bridge
-from sellfox_settlement.cost_ledger import build_ledger
+from sellfox_settlement.cost_ledger import build_ledger, diagnose_cost_inputs
+from sellfox_settlement.payout_activity_bridge import build_bridge as build_payout_bridge
 from sellfox_settlement.tail_validation import diagnose
 from sellfox_settlement.fba_sync_gap_validation import build_gap_report
 from sellfox_settlement.export_workbook import write_workbook
@@ -164,6 +166,9 @@ def snapshot_manifest(root):
     names.append('cost/fba_month_scope_details.json')
     if (root / 'cost/current_cost_probe_components.json').exists():
         names.append('cost/current_cost_probe_components.json')
+    for name in ('cost/current_bom.json.gz', 'cost/warehouse_configs.json'):
+        if (root / name).exists():
+            names.append(name)
     if (root / 'fba-live-gap/full_source_report.json').exists():
         names.append('fba-live-gap/full_source_report.json')
         full = _load(root / 'fba-live-gap/full_source_report.json')
@@ -260,6 +265,17 @@ def _run_month(input_root, output, month, *, snapshots=None, json_only=False):
     ledger = build_ledger(orders, probes, details, component_probes=component_probes,
                           component_source_sha256=hashlib.sha256(orders_path.read_bytes()).hexdigest())
     _write_json(cost_dir / 'cost_technical_ledger.json', ledger)
+    bom_path, config_path = snapshot_root / 'cost/current_bom.json.gz', snapshot_root / 'cost/warehouse_configs.json'
+    if bom_path.exists() != config_path.exists():
+        raise ValueError('cost input diagnosis requires both BOM and warehouse configuration snapshots')
+    if bom_path.exists():
+        bom = json.loads(gzip.decompress(bom_path.read_bytes()))
+        diagnosis = diagnose_cost_inputs(ledger, bom['result'], _load(config_path))
+        _write_json(cost_dir / 'cost_input_diagnosis.json', diagnosis)
+        stages.append(_stage('5', 'cost_input_diagnosis', 'current_inputs_only', **diagnosis['summary']))
+    else:
+        _write_json(cost_dir / 'cost_input_diagnosis.json', {'status': 'missing_input', 'summary': {}, 'details': [], 'product_conflicts': []})
+        stages.append(_stage('5', 'cost_input_diagnosis', 'missing_input', failed=1))
     tail = diagnose(orders, details)
     _write_json(cost_dir / 'tail_validation.json', tail)
     stages.append(_stage('5', 'component_ledger', 'diagnostic_only', **ledger['summary']))
@@ -295,6 +311,16 @@ def _run_month(input_root, output, month, *, snapshots=None, json_only=False):
     _write_json(output / 'native_detail_coverage.json', native)
     stages.append(_stage('7', 'native_currency_details', native['status'], **{
         k: native[k] for k in ('input', 'output', 'success', 'skipped', 'failed')}))
+    if native['failed'] == 0:
+        native_rows = [row for detail in native['currency_details']
+                       for row in _load(settlement_dir / f'settlement_details_{detail["currency"]}_site_august.json')]
+        payout_bridge = build_payout_bridge(rows, native_rows, [*exact, *accounts['supplemental_shop_matches']],
+                                           monthly['currency_map'])
+        _write_json(output / 'payout_activity_bridge.json', payout_bridge)
+        stages.append(_stage('7', 'payout_activity_evidence', 'candidate_links_only', **payout_bridge['summary']))
+    else:
+        _write_json(output / 'payout_activity_bridge.json', {'status': 'missing_input', 'summary': {}, 'csv_evidence': [], 'v2_evidence': [], 'events': []})
+        stages.append(_stage('7', 'payout_activity_evidence', 'missing_input', failed=1))
 
     tables = build_tables(output, snapshot_root=snapshot_root)
     if snapshot_manifest(snapshot_root) != manifest:
@@ -325,9 +351,10 @@ def run_month(input_root, output, month, *, snapshots=None, json_only=False):
         _write_json(output / 'technical_month_report.json', result)
         names = ['technical_month_report.json', 'workbook_tables.json', 'monthly_validation.json',
                  'normalized_transactions.json', 'source_manifest.json', 'account_validation.json',
-                 'account_cost_bridge.json', 'cost/cost_coverage_summary.json', 'cost/cost_coverage_details.json',
+                 'account_cost_bridge.json', 'account_shop_scope.json', 'additional_shop_scope.json',
+                 'cost/cost_coverage_summary.json', 'cost/cost_coverage_details.json',
                  'cost/cost_technical_ledger.json', 'cost/tail_validation.json', 'cost/fba_sync_gap_candidates.json',
-                 'native_detail_coverage.json']
+                 'native_detail_coverage.json', 'payout_activity_bridge.json', 'cost/cost_input_diagnosis.json']
         if not json_only:
             names.append(f'{month}-technical-workbook.xlsx')
         if (output / 'cost/fba_full_source_report.json').exists() and (Path(snapshots or output) / 'fba-live-gap/full_source_report.json').exists():

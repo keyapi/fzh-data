@@ -39,6 +39,10 @@ def build_tables(root, *, snapshot_root=None):
     full_fba = load(root, 'cost/fba_full_source_report.json') if full_fba_path.exists() else None
     native_path = root / 'native_detail_coverage.json'
     native = load(root, 'native_detail_coverage.json') if native_path.exists() else None
+    diagnosis_path = root / 'cost/cost_input_diagnosis.json'
+    diagnosis = load(root, 'cost/cost_input_diagnosis.json') if diagnosis_path.exists() else None
+    payout_path = root / 'payout_activity_bridge.json'
+    payout = load(root, 'payout_activity_bridge.json') if payout_path.exists() else None
     settlements = load(snapshot_root, 'settlement/settlement_groups_scoped.json')
     account_by_file = {Path(f['file']).name: f for f in accounts['files']}
     sheets = []
@@ -104,6 +108,15 @@ def build_tables(root, *, snapshot_root=None):
         cost_rows += [['未采用通途费用', c['source_file'], c['source_line'], c['order_id'], 'FBM', c['selection_reason'],
                        c['available_not_selected']['allocated_tt_fee_rmb'], c['sku'], c['order_name']]
                       for c in tail['tt_positive_unselected']]
+    if diagnosis:
+        cost_rows += [['当前输入原因', d['native_account'], d['item_position'], d['base_order_id'],
+                       d['warehouse'], d['reason'], 1, '|'.join(d['current_bom_exact_candidates']),
+                       '当前精确物料候选仅证据，不回填历史成本或ERP映射']
+                      for d in diagnosis['details'] if d['reason'] != 'current_calculation_available']
+        cost_rows += [['产品差异重放', d['native_account'], '', d['base_order_id'], 'product',
+                       d['current_explicit_delivery_calculation_relation'], '', '',
+                       '|'.join(d['observed_input_differences']) + '；历史金额hold保持']
+                      for d in diagnosis['product_conflicts']]
     unmatched_count = sum(c['status'] not in {'matched', 'excluded_non_order_or_missing_id'} for c in costs)
     sheets.append(table('成本覆盖', ['种类', '文件/账号', '原始行', '订单号/科目', '履约/成本分量', '状态', '行数/金额文本', 'SKU', '证据/原因'], cost_rows,
                         f'交易输入{len(costs)}行，连接异常{unmatched_count}行另列。成本组、组件、交易为不同分母；原单不叠加拆单，退款不冲成本，当前BOM不是历史，包裹分摊待确认。完整正常分量见私有ledger JSON。'))
@@ -112,6 +125,16 @@ def build_tables(root, *, snapshot_root=None):
                      f.get('pdf_legal_name', ''), f.get('legal_entity_status', '')] for f in accounts['files']]
     sheets.append(table('账号法人', ['文件', '标准账号候选', '匹配状态', '站点', 'EN存在', '赛狐身份连接', 'PDF法定名称原文', '法人归属状态'],
                         account_rows, 'PDF法定名称为证据原文；未经财务确认，不据品牌或文件名指定中国申报主体。'))
+    if payout:
+        payout_rows = [[label, '', '', '', key, count, '行数为对应输入分母，不能跨侧相加']
+                       for label, field in [('CSV状态', 'csv_status_counts'), ('V2明细状态', 'v2_status_counts'),
+                                            ('活动时间证据', 'unique_time_counts'), ('释放时间证据', 'unique_release_time_counts')]
+                       for key, count in payout['summary'].get(field, {}).items()]
+        payout_rows += [['CSV候选待核', d['source_file'], d['source_line'], d['order_id'], d['status'], 1,
+                         d.get('time_status', '') + '；' + d.get('release_time_status', '')]
+                        for d in payout['csv_evidence'] if d['status'] != 'unique_event_evidence']
+        sheets.append(table('V2交易连接', ['证据类型', '文件/币种', '原始行', '订单号', '状态', '计数', '时间证据/说明'],
+                            payout_rows, '按稳定店铺、原币、订单、SKU和类型连接，仅唯一双向事件作科目投影。释放和活动时间分别留证，未知科目不归other，未匹配不代表漏结算。完整双侧明细见payout_activity_bridge.json。'))
     pending = [['银行实际到账', '缺输入', '提供8月Amazon实际流水；含银行/收款平台reference。'],
                ['财务F01-F20', '待ZJ/税务顾问', '按PR284填写；候选A/B、Deferred、税、汇率、法人不自行拍板。'],
                ['本币V2明细', '见settlement_validation_summary.json', '按原币限店、UTC缓冲及站点8月过滤；完整性与差异保留。'],

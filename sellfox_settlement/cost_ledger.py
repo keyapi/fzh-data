@@ -3,13 +3,14 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import gzip
 import json
 import re
 from collections import Counter, defaultdict
 from decimal import Decimal
 from pathlib import Path
 
-from sellfox_settlement.cost_validation import base_order_id, validate_input
+from sellfox_settlement.cost_validation import base_order_id, normalize_sku, validate_input
 from sellfox_settlement.validation_paths import private_output
 
 COMPONENTS = {'product': 'sx_shipping_cost', 'first': 'first_freight',
@@ -165,10 +166,109 @@ def build_ledger(orders, probes=None, coverage=None, *, component_probes=None, c
             'summary': summary, 'groups': groups, 'item_evidence': items, 'transaction_evidence': evidence}
 
 
+def diagnose_cost_inputs(ledger, bom_rows, warehouse_configs):
+    """Classify current calculation blockers and observed split input differences.
+
+    Exact BOM aliases are suggestions only. They never fill missing ERP mappings,
+    establish historical costs, or release a financial hold.
+    """
+    validate_input(bom_rows, {'item_fg', 'customer_item_code'}, 'BOM rows')
+    validate_input(warehouse_configs, {'name'}, 'warehouse configs')
+    aliases = defaultdict(set)
+    for row in bom_rows:
+        if normalize_sku(row['customer_item_code']) and row['item_fg']:
+            aliases[normalize_sku(row['customer_item_code'])].add(row['item_fg'])
+    config_names = {row['name'] for row in warehouse_configs}
+    details, reasons = [], Counter()
+    by_group = defaultdict(list)
+    for record in ledger['item_evidence']:
+        item, probe = record['persisted_item'], record.get('current_component_probe')
+        status = probe.get('status') if probe else 'component_probe_missing'
+        if status == 'no_item':
+            if item.get('is_deliver_good') == 0:
+                reason = 'non_delivery_missing_item_placeholder'
+            elif item.get('is_deliver_good') == 1:
+                reason = 'deliver_item_missing_erp_mapping'
+            else:
+                reason = 'missing_item_delivery_role_unknown'
+        elif status == 'no_warehouse_config':
+            reason = 'warehouse_name_missing' if not record.get('warehouse') else 'warehouse_config_missing'
+        elif status == 'calculated':
+            reason = 'current_calculation_available'
+        else:
+            reason = status or 'component_probe_status_missing'
+        candidates = set()
+        for field in ('tongtool_sku', 'platform_sku'):
+            candidates.update(aliases.get(normalize_sku(item.get(field)), set()))
+        detail = {'native_account': record['native_account'], 'base_order_id': record['base_order_id'],
+                  'en_order_name': record['en_order_name'], 'item_position': record['item_position'],
+                  'reason': reason, 'probe_status': status, 'delivery_flag': item.get('is_deliver_good'),
+                  'warehouse': record.get('warehouse'), 'warehouse_config_exists': record.get('warehouse') in config_names,
+                  'tongtool_sku_present': bool(item.get('tongtool_sku')),
+                  'current_bom_exact_candidates': sorted(candidates),
+                  'action': 'evidence_only' if status == 'calculated' else 'hold_no_mapping_write_or_cost_fill'}
+        details.append(detail)
+        reasons[reason] += 1
+        by_group[(record['native_account'], record['base_order_id'])].append(record)
+    conflicts = []
+    for group in ledger['groups']:
+        if group['components']['product']['status'] != 'hold_parent_children_difference':
+            continue
+        records = by_group[(group['native_account'], group['base_order_id'])]
+        parent = [r for r in records if r['en_order_name'] in group['parent_order_names']]
+        child = [r for r in records if r['en_order_name'] in group['selected_order_names']]
+        def profile(rows):
+            def calculation(r):
+                return (r.get('current_component_probe') or {}).get('calculated') or {}
+            current = [amount(calculation(r).get('sx_shipping_cost')) for r in rows]
+            deliver_rows = [r for r in rows if r['persisted_item'].get('is_deliver_good') == 1]
+            delivery_values = [amount(calculation(r).get('sx_shipping_cost')) for r in deliver_rows]
+            return {'warehouses': sorted({r.get('warehouse') or '' for r in rows}),
+                    'erp_items': sorted({r['persisted_item'].get('erp_item_code') or '' for r in rows}),
+                    'item_rows': len(rows),
+                    'non_delivery_rows': sum(r['persisted_item'].get('is_deliver_good') == 0 for r in rows),
+                    'quantity_split_inputs': sorted([(r['persisted_item'].get('erp_item_code') or '',
+                        r['persisted_item'].get('tongtool_sku') or '', str(r['persisted_item'].get('quantity')),
+                        str(r['persisted_item'].get('split_package_cost_factor'))) for r in rows]),
+                    'current_product_amount': text(sum(current, Decimal(0))) if current and all(v is not None for v in current) else None,
+                    'current_product_missing_rows': sum(v is None for v in current),
+                    'current_explicit_delivery_product_amount': text(sum(delivery_values, Decimal(0))) if delivery_values and all(v is not None for v in delivery_values) else None,
+                    'delivery_role_unknown_rows': sum(r['persisted_item'].get('is_deliver_good') not in (0, 1) for r in rows),
+                    'persisted_shipping_methods': sorted({r['persisted_item'].get('shipping_method') or '' for r in rows}),
+                    'current_shipping_methods': sorted({calculation(r).get('shipping_method') or '' for r in rows})}
+        a, b = profile(parent), profile(child)
+        observed = [key + '_differ' for key in ('warehouses', 'erp_items', 'quantity_split_inputs',
+                    'persisted_shipping_methods', 'current_shipping_methods') if a[key] != b[key]]
+        relation = 'incomplete'
+        if a['current_product_amount'] is not None and b['current_product_amount'] is not None:
+            relation = 'equal' if Decimal(a['current_product_amount']) == Decimal(b['current_product_amount']) else 'different'
+        deliver_relation = 'incomplete'
+        if not a['delivery_role_unknown_rows'] and not b['delivery_role_unknown_rows'] and a['current_explicit_delivery_product_amount'] is not None and b['current_explicit_delivery_product_amount'] is not None:
+            deliver_relation = 'equal' if Decimal(a['current_explicit_delivery_product_amount']) == Decimal(b['current_explicit_delivery_product_amount']) else 'different'
+        conflicts.append({'native_account': group['native_account'], 'base_order_id': group['base_order_id'],
+                          'parent': a, 'children': b, 'observed_input_differences': observed,
+                          'current_calculation_relation': relation, 'financial_status': 'hold_unchanged',
+                          'current_explicit_delivery_calculation_relation': deliver_relation,
+                          'interpretation': 'Observed input changes are not proof of actual goods movement or historical valuation.'})
+    success = reasons['current_calculation_available']
+    skipped = reasons['non_delivery_missing_item_placeholder']
+    summary = {'input_component_rows': len(ledger['item_evidence']), 'reported_component_rows': len(details),
+               'success': success, 'skipped_non_delivery_placeholders': skipped,
+               'held_or_unclassified': len(details) - success - skipped, 'failed': 0,
+               'reason_counts': dict(reasons), 'product_conflict_groups': len(conflicts),
+               'conflict_current_calculation_relations': dict(Counter(r['current_calculation_relation'] for r in conflicts)),
+               'conflict_current_explicit_delivery_relations': dict(Counter(r['current_explicit_delivery_calculation_relation'] for r in conflicts)),
+               'conflict_observed_difference_counts': dict(Counter(k for r in conflicts for k in r['observed_input_differences']))}
+    assert summary['input_component_rows'] == summary['reported_component_rows']
+    return {'summary': summary, 'details': details, 'product_conflicts': conflicts,
+            'mapping_policy': 'Exact current BOM customer alias candidates only; no SKU suffix removal, sibling borrowing, write, or historical claim.'}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--cost-root', type=Path, required=True)
     parser.add_argument('--out', type=Path, required=True)
+    parser.add_argument('--diagnose-inputs', action='store_true', help='Classify current probe inputs using private BOM/config snapshots')
     args = parser.parse_args()
     out = private_output(args.out)
     names = ['en_orders', 'current_cost_probe_details', 'cost_coverage_details']
@@ -184,6 +284,14 @@ def main():
                                  for path in source_paths]
     out.mkdir(parents=True, exist_ok=True)
     (out / 'cost_technical_ledger.json').write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding='utf-8')
+    if args.diagnose_inputs:
+        bom_path, config_path = args.cost_root / 'current_bom.json.gz', args.cost_root / 'warehouse_configs.json'
+        bom = json.loads(gzip.decompress(bom_path.read_bytes()))
+        diagnosis = diagnose_cost_inputs(result, bom['result'], json.loads(config_path.read_text(encoding='utf-8')))
+        diagnosis['source_manifest'] = [*result['source_manifest'], *[
+            {'file': p.name, 'sha256': hashlib.sha256(p.read_bytes()).hexdigest()} for p in (bom_path, config_path)]]
+        (out / 'cost_input_diagnosis.json').write_text(json.dumps(diagnosis, ensure_ascii=False, indent=2), encoding='utf-8')
+        print(json.dumps(diagnosis['summary'], ensure_ascii=False))
     print(json.dumps(result['summary'], ensure_ascii=False))
 
 

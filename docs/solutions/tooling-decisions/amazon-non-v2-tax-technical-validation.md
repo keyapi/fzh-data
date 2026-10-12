@@ -3,7 +3,7 @@ okf: v0.1
 type: Reference
 title: Amazon 非 V2 报税技术验证：已证实边界与禁止推断
 date: 2026-10-10
-last_updated: 2026-10-10
+last_updated: 2026-10-12
 category: tooling-decisions
 module: sellfox_settlement
 problem_type: tooling_decision
@@ -103,3 +103,16 @@ V2快照start/end也须覆盖目标整月；缺日期、错误年份或只覆盖
 精确组件身份还须绑定原EN快照bytes SHA；显式空或漏组件探针不能回落旧probe。独立CLI不能隐式global匹配。生产flt空值模拟和真实零证据分别记录，避免混为已验证金额。
 
 同目录失败重跑可能残留旧XLSX。使用run_id、running/succeeded/failed及当次artifact hash区分；失败report不留旧成功状态，JSON-only不宣称旧XLSX已更新。外部导出回读后绑定tables hash，不能仅凭文件存在验收。
+
+## Guidance：2026-10-12 技术续验
+
+- V2 与非 V2 先建立账号、市场、订单、SKU、类型、币种候选事件，再要求两边唯一。一个事件的多个科目行不能各自伪称唯一交易；保留原始行索引、时间和科目，未知科目不能猜成 other。实测唯一候选 6,652 个：活动日期一致 417，释放日期一致 6,285。释放日期更接近 CSV 的现象只证明时间字段差异，不能证明银行实际到账或申报期间。
+- 成本 hold 应拆成实际发货缺物料、非发货占位、仓库名称缺失。当前发货组件重算相等不能推翻历史 hold。6 个平台 SKU 精确候选的初次 FBA 匹配被空 goodsSku 门槛阻断；回退修复必须同时守住物料唯一性、账号边界、空 SKU 和非法数量。
+- 验收必须独立读取成功运行状态、源及产物哈希，再逐格读取工作簿；空白、0、False 不等价。旧工作簿存在不代表本次运行成功。`verify_technical_run.py` 已覆盖改源、改产物、失败重跑、路径越界及旧表残留；十表实测 78,256 单元格一致。
+
+### Related：续验入口
+
+- `sellfox_settlement/docs/research/2026-10-12-cost-input-diagnostics.md`
+- `sellfox_settlement/docs/research/2026-10-12-fba-empty-goods-sku-mapping-gate.md`
+- `sellfox_settlement/docs/research/2026-10-12-payout-activity-evidence-bridge.md`
+- `sellfox_settlement/verify_technical_run.py`

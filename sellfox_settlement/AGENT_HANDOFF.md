@@ -140,3 +140,12 @@ V2快照start/end也须覆盖目标整月；缺日期、错误年份或只覆盖
 run_status.json以run_id记录running/succeeded/failed及当次产物hash；失败重跑覆盖旧成功report，保留旧XLSX但不称本次成功。JSON-only不把残留XLSX计入新产物，外部Artifact导出须按tables逐单元格回读并记录source_tables_sha256。银行定向复查授权3期403文件、191表格列头错误0；新增独立站付款与其他平台核算不能当Amazon实收，可验证8月Amazon银行输入仍0。FBA完整源与live只读日志见同日FBA调研及私有fba-live-gap。
 
 本轮继续验收：161项模块测试通过，真实8月JSON重跑成功；9表交付加入原币证据。完整FBA89目标已取，56源字段键覆盖未验导入／1账号碰撞／31字段不全／1零数量hold；89源运费为null不得填0。实时只读确认缺口仍存在，93原始证据hash、请求月与目标身份集合纳入入口核验；历史具体漏单根因仍未证实。当前Daily回溯7天及9月超时不等于8月原因。后续技术修复位于生产tongtool_integration应用，须用所属应用测试和独立分支，不在数据仓库擅自部署。
+
+## 2026-10-12：可做技术项续验与十表验收
+
+- 新增 `payout_activity_bridge.py`：按账号、市场、订单、SKU、类型、币种建立双向唯一的候选事件连接；保留所有未匹配、多义、非订单和未知科目。11,580 行 CSV 与 47,995 行 V2 均守恒。6,652 行唯一候选中，活动日期相同 417、释放日期相同 6,285；不能把释放日期当交易发生日期或银行到账。完整分类见 [交易连接调研](docs/research/2026-10-12-payout-activity-evidence-bridge.md)。
+- `diagnose_cost_inputs` 保留 9,823 个组件：9,340 成功、68 非发货占位、415 待处理。274 个实际发货组件无物料；141 个缺仓库配置的组件实际是仓库名称为空。23 个历史产品成本 hold 仅 6 个仓库集合不同；当前函数仅重算实际发货组件时 23 组均相等，不能据此解除历史 hold。见 [成本诊断](docs/research/2026-10-12-cost-input-diagnostics.md)。
+- 6 个精确平台 SKU 物料候选的原生 FBA goodsSku 为空，生产匹配函数没有进入平台 SKU 回退；见 [映射门槛](docs/research/2026-10-12-fba-empty-goods-sku-mapping-gate.md)。生产修复另走私有应用 PR，公开仓库仅保留诊断，未重配实际订单。
+- 月度命令已集成诊断与 V2 连接，第十表为「V2交易连接」。本次 `tests/sellfox_settlement` 184 项通过。私有新产物位于 `D:/Work/张晶/国内报税/Amazon账期非V2/技术验证/20261012/codex-completion`，工作簿 10 表、78,256 单元格逐格回读通过；18 个产物及 246 个输入哈希通过。
+- 新命令 `uv run python -m sellfox_settlement.verify_technical_run --reports <仓库外产物目录> --require-workbook` 验证成功运行状态、月份、manifest、源和产物哈希、工作簿所有单元格，严格区分空白、0、False。外部 artifact-tool 导出后仅首次显式加 `--register-workbook` 登记已逐格验证的工作簿。旧文件、失败重跑或改源不能通过。
+- 待 ZJ 的口径、银行到账输入继续待确认；未知科目不并入 other，当前 BOM 不变成历史成本。加拿大及 S01 缺单关系仍缺原始业务证据。生产应用未部署、同步未重跑。
