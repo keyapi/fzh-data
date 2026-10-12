@@ -11,19 +11,44 @@ import urllib.request
 from datetime import datetime, timezone, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
+
+from domain import DomainError, Store
 
 ROOT = Path(__file__).resolve().parent
 KB = (ROOT / "kb" / "notice-policy.md").read_text(encoding="utf-8")
-ENV_CANDIDATES = [
-    ROOT / ".env",
-    ROOT.parent / "ai_access_poc" / "open_webui" / ".env",
-    ROOT.parent / ".env",
-]
-MODEL = os.environ.get("OPENAI_MODEL", "deepseek-v4-flash")
-BASE = os.environ.get("OPENAI_API_BASE_URL", "https://api.vilavi.cn/v1").rstrip("/")
-HOST = os.environ.get("HOST", "127.0.0.1")
-PORT = int(os.environ.get("PORT", "8765"))
+ENV_CANDIDATES = [ROOT / ".env"]
+
+
+def _dotenv() -> dict:
+    found = {}
+    path = ROOT / ".env"
+    if not path.is_file():
+        return found
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        name, value = line.split("=", 1)
+        found[name.strip()] = value.strip().strip('"').strip("'")
+    return found
+
+
+def _setting(name: str, default: str) -> str:
+    return os.environ.get(name) or _dotenv().get(name) or default
+
+
+MODEL = _setting("OPENAI_MODEL", "deepseek-v4-flash")
+BASE = _setting("OPENAI_API_BASE_URL", "").rstrip("/")
+HOST = _setting("HOST", "127.0.0.1")
+PORT = int(_setting("PORT", "8765"))
 TZ = timezone(timedelta(hours=8))
+OPS_WS = "counter-desk"
+_db = Path(_setting("DEMO_DB_PATH", str(ROOT / "data" / "demo.sqlite3")))
+if not _db.is_absolute():
+    _db = ROOT / _db
+_db.parent.mkdir(parents=True, exist_ok=True)
+OPS = Store(str(_db))
 
 ACTOR = {"name": "林晓", "role": "网点值班员", "staffId": "E3301"}
 ADMIN = {"name": "周宁", "role": "参数管理员", "staffId": "A1028"}
@@ -268,6 +293,77 @@ SYSTEM_READER = """你是网点参数台网页里的助手，当前身份是综�
 先调用 read_test_limit。这个岗位看不到生产限额，工具结果里也不会有。不要编造生产数字。
 任何改限额、提交工单、同步生产、导出客户清单，都调用 propose_change，系统会拒绝。不要说没有工具。告诉用户岗位权限不够。"""
 
+OPS_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "search_knowledge",
+            "description": "检索现行模拟规范和事故复盘。提案前必须先调用。引用时写出文档编号和版本。过期资料不能当依据。",
+            "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "read_configuration",
+            "description": "读取科技运营联调的测试与生产超时秒数、重试次数。决定改不改之前必须调用，不要凭记忆猜。",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "propose_change",
+            "description": "在已经查过资料和当前配置之后，生成待人确认的提案。只改测试环境。submit=true 时额外生成生产申请，生产数值不会被写入。超时 10–120 的整数秒，重试 0–3 的整数次。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "changes": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "field": {"type": "string", "enum": ["timeout", "retries"]},
+                                "value": {"type": "integer"},
+                            },
+                            "required": ["field", "value"],
+                        },
+                    },
+                    "reason": {"type": "string"},
+                    "submit": {"type": "boolean"},
+                },
+                "required": ["changes", "reason", "submit"],
+            },
+        },
+    },
+]
+
+SYSTEM_OPS = """你是柜面参数台里的科技运营联调助手。业务数据全部是模拟的，模型只负责查证和提案。
+当前配置不在提示词里。必须先 search_knowledge，再 read_configuration，看完工具结果才能 propose_change。
+联调只开放 timeout（秒，10 到 120 的整数）和 retries（次，0 到 3 的整数）。
+人没给具体数字时直接追问，不要提案。
+生产环境不能直接改。用户要求改生产时，用 submit=true 生成生产申请，并明确说生产配置不会在本系统写入。
+引用资料时写出文档编号和版本。过期规范不能当依据。"""
+
+
+def _whole_number(value):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, float) and value == int(value):
+        return int(value)
+    return value
+
+
+def _ops_changes(raw) -> list:
+    if not isinstance(raw, list):
+        raise DomainError("INVALID_CHANGE", "必须明确指定字段和值")
+    changes = []
+    for item in raw:
+        if not isinstance(item, dict):
+            raise DomainError("INVALID_CHANGE", "必须明确指定字段和值")
+        changes.append({"field": item.get("field"), "value": _whole_number(item.get("value"))})
+    return changes
+
 
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt: str, *args) -> None:
@@ -281,17 +377,46 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(raw)
 
+    def _ops_role(self) -> str:
+        # 岗位只认页面下拉框带来的请求头。正文里的 role 不能改身份。
+        role = self.headers.get("X-Ops-Role") or "operator"
+        if role not in ("operator", "reader", "reviewer"):
+            raise DomainError("FORBIDDEN", "未知岗位", 403)
+        return role
+
+    def _ops_call(self, fn):
+        try:
+            self._send(200, fn(self._ops_role()), "application/json; charset=utf-8")
+        except DomainError as exc:
+            self._send(exc.status, {"ok": False, "code": exc.code, "message": exc.message}, "application/json; charset=utf-8")
+
     def do_GET(self) -> None:  # noqa: N802
-        path = self.path.split("?", 1)[0]
+        parsed = urlparse(self.path)
+        path = parsed.path
+        if path == "/api/ops/state":
+            def read(role):
+                snap = OPS.snapshot(OPS_WS, role)
+                snap["model_configured"] = bool(load_env_key()[1])
+                return snap
+            self._ops_call(read)
+            return
+        if path == "/api/ops/knowledge":
+            query = (parse_qs(parsed.query).get("q") or [""])[0]
+            self._ops_call(lambda role: {"documents": OPS.knowledge(query, role)})
+            return
+        if path == "/api/ops/audit":
+            self._ops_call(lambda role: {"audit": OPS.audit(OPS_WS, role)})
+            return
         if path == "/api/state":
             self._send(200, public_state(), "application/json; charset=utf-8")
             return
         if path == "/api/kb":
             self._send(200, {"text": KB}, "application/json; charset=utf-8")
             return
-        rel = "index.html" if path in ("/", "") else path.lstrip("/")
-        file = (ROOT / rel).resolve()
-        if not str(file).startswith(str(ROOT)) or not file.is_file():
+        allowed = {"/": "index.html", "/index.html": "index.html"}
+        rel = allowed.get(path)
+        file = ROOT / rel if rel else None
+        if file is None or not file.is_file():
             self._send(404, {"error": "not found"}, "application/json; charset=utf-8")
             return
         kind = "text/html; charset=utf-8" if file.suffix == ".html" else "application/json; charset=utf-8"
@@ -306,7 +431,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send(400, {"error": "bad json"}, "application/json; charset=utf-8")
             return
         if path == "/v1/chat/completions":
-            self._proxy_llm(body)
+            self._send(404, {"error": "not found"}, "application/json; charset=utf-8")
             return
         if path == "/api/change":
             result = apply_change(
@@ -317,10 +442,153 @@ class Handler(BaseHTTPRequestHandler):
             )
             self._send(200 if result.get("ok") else 403, {**result, "state": public_state()}, "application/json; charset=utf-8")
             return
+        if path.startswith("/api/ops/"):
+            self._ops_post(path, body)
+            return
         if path != "/api/chat":
             self._send(404, {"error": "not found"}, "application/json; charset=utf-8")
             return
         self._chat(body)
+
+    def _ops_post(self, path: str, body: dict) -> None:
+        body.pop("role", None)
+        try:
+            role = self._ops_role()
+        except DomainError as exc:
+            self._send(exc.status, {"ok": False, "code": exc.code, "message": exc.message}, "application/json; charset=utf-8")
+            return
+        try:
+            if path == "/api/ops/propose":
+                result = OPS.propose(
+                    OPS_WS, role, str(body.get("scenario") or ""),
+                    _ops_changes(body.get("changes")), str(body.get("reason") or ""), bool(body.get("submit")),
+                )
+            elif path == "/api/ops/execute":
+                result = OPS.execute(OPS_WS, role, str(body.get("proposal_id") or ""), str(body.get("digest") or ""))
+            elif path == "/api/ops/cancel":
+                result = OPS.cancel(OPS_WS, role, str(body.get("proposal_id") or ""))
+            elif path == "/api/ops/rollback":
+                result = OPS.rollback(OPS_WS, role, str(body.get("proposal_id") or ""))
+            elif path == "/api/ops/review":
+                result = OPS.review(OPS_WS, role, str(body.get("ticket_id") or ""), body.get("approve"))
+            elif path == "/api/ops/reset":
+                result = OPS.reset(OPS_WS, role)
+            elif path == "/api/ops/safety":
+                result = OPS.safety_test(OPS_WS, role, str(body.get("case") or ""))
+            elif path == "/api/ops/chat":
+                self._ops_chat(role, body)
+                return
+            else:
+                self._send(404, {"error": "not found"}, "application/json; charset=utf-8")
+                return
+        except DomainError as exc:
+            self._send(exc.status, {"ok": False, "code": exc.code, "message": exc.message}, "application/json; charset=utf-8")
+            return
+        self._send(200, result, "application/json; charset=utf-8")
+
+    def _ops_chat(self, role: str, body: dict) -> None:
+        base, key = load_env_key()
+        if not key:
+            self._send(503, {
+                "error": "办理暂停：模型暂不可用，没有生成或执行提案",
+                "source": "live-model",
+            }, "application/json; charset=utf-8")
+            return
+        messages: list = [{"role": "system", "content": SYSTEM_OPS}]
+        for item in (body.get("messages") or [])[-6:]:
+            if item.get("role") in ("user", "assistant") and isinstance(item.get("content"), str):
+                messages.append({"role": item["role"], "content": item["content"]})
+        if not any(item.get("role") == "user" for item in messages):
+            text = str(body.get("text") or "").strip()
+            if not text:
+                self._send(400, {"error": "请说明要办理的联调变更"}, "application/json; charset=utf-8")
+                return
+            messages.append({"role": "user", "content": text})
+        seen_knowledge = False
+        seen_config = False
+        citations: list[dict] = []
+        proposal = None
+        text = ""
+        model_name = MODEL
+        try:
+            for _ in range(6):
+                data = chat(base, key, messages, OPS_TOOLS)
+                model_name = data.get("model") or model_name
+                message = ((data.get("choices") or [{}])[0].get("message") or {})
+                text = message.get("content") or ""
+                calls = message.get("tool_calls") or []
+                if not calls:
+                    break
+                assistant = {"role": "assistant", "tool_calls": calls}
+                if text:
+                    assistant["content"] = text
+                messages.append(assistant)
+                for call in calls:
+                    fn = call.get("function") or {}
+                    name = fn.get("name")
+                    call_id = call.get("id") or name or "tool"
+                    try:
+                        args = json.loads(fn.get("arguments") or "{}")
+                    except json.JSONDecodeError:
+                        args = {}
+                    if name == "search_knowledge":
+                        seen_knowledge = True
+                        docs = OPS.knowledge(str(args.get("query") or ""), role)
+                        citations = [
+                            {"id": d["id"], "title": d["title"], "version": d["version"], "status": d["status"]}
+                            for d in docs[:4]
+                        ]
+                        payload = {"ok": True, "documents": [
+                            {"id": d["id"], "title": d["title"], "version": d["version"], "content": d["content"]}
+                            for d in docs[:4]
+                        ]}
+                    elif name == "read_configuration":
+                        seen_config = True
+                        snap = OPS.snapshot(OPS_WS, role)
+                        configs = [c for c in snap["configs"] if c["scenario"] == "integration"]
+                        payload = {"ok": True, "configs": configs, "note": "生产行只读，不能在本系统写入。"}
+                    elif name == "propose_change":
+                        if not seen_knowledge or not seen_config:
+                            payload = {"ok": False, "code": "READ_FIRST", "message": "先查资料和当前配置，下一轮再提案。"}
+                        else:
+                            submit = args.get("submit")
+                            if not isinstance(submit, bool):
+                                submit = True
+                            try:
+                                proposal = OPS.propose(
+                                    OPS_WS, role, "integration",
+                                    _ops_changes(args.get("changes")), str(args.get("reason") or "按联调规范调整测试参数"), submit,
+                                )
+                                payload = {"ok": True, "proposal_id": proposal["id"], "status": "pending", "message": "提案已生成，等页面上点允许后才写入测试配置。"}
+                            except DomainError as exc:
+                                proposal = None
+                                payload = {"ok": False, "code": exc.code, "message": exc.message}
+                    else:
+                        payload = {"ok": False, "error": "未知工具"}
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": call_id,
+                        "content": json.dumps(payload, ensure_ascii=False),
+                    })
+            self._send(200, {
+                "text": text,
+                "proposal": proposal,
+                "citations": citations,
+                "model": model_name,
+                "source": "live-model",
+            }, "application/json; charset=utf-8")
+        except DomainError as exc:
+            self._send(exc.status, {
+                "ok": False, "code": exc.code, "message": exc.message,
+                "text": exc.message, "proposal": None, "source": "live-model",
+            }, "application/json; charset=utf-8")
+        except TimeoutError:
+            self._send(503, {"error": "办理暂停：模型暂不可用，没有生成或执行提案", "source": "live-model"}, "application/json; charset=utf-8")
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", "replace")[:180]
+            self._send(502, {"error": "模型网关 %s" % exc.code, "detail": detail, "proposal": None}, "application/json; charset=utf-8")
+        except urllib.error.URLError as exc:
+            self._send(502, {"error": "模型网关连不上", "detail": str(exc.reason), "proposal": None}, "application/json; charset=utf-8")
 
     def _proxy_llm(self, body: dict) -> None:
         base, key = load_env_key()
