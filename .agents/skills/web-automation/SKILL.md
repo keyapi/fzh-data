@@ -54,6 +54,7 @@ uv run python web_automation/scripts/doctor.py
 `web.generic.explore`。
 
 钉钉落盘目录用 `DINGTALK_OA_WORK`，组织名 `DINGTALK_ORG`，不要把本机人名路径写进脚本。
+`dingtalk.aflow.receipt.export` 的 Excel 是和第二来源（OA API 表单）交叉用的，不是可选项。同一发起窗两边按审批编号对完再谈赛狐。用户已经下了同一窗口的 xlsx 就先用那份对，没有就自己走这条导出。
 下载成功 ≠ 已入 NAS 账期桶。整条流水线见 `dingtalk/dingtalk_oa_approval/docs/research/browser-admin-download.md`。
 
 ## 通用浏览器模式

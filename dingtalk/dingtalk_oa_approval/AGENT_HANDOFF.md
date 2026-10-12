@@ -44,6 +44,7 @@ DRM 在 NAS 上按 **发起人姓名** 分子文件夹。这只表示谁提交�
 - **不下图片**。部分 PDF / 审批中 csv 可不纳入综合集。
 - 离职附件标准 API 常 `userNotExist`：先综合 DRM 已归档与核算 Excel；专享接口见 docs/research。实例详情仍可读，附件可能已在单上只是下不下来。
 - 财务 NAS FileStation 用 `NAS_API/.env` 里的管理员账号（要能看见财务部共享），不要用看不到财务部的测试账号。
+- 每月 Amazon：钉钉 API 与 aflow Excel 先按审批编号交叉，再对赛狐结算结束日。手填销售额不和赛狐打款混比。催办用人名，进 git 不用。见 [browser-admin-download.md](docs/research/browser-admin-download.md)。
 - 未开的新月桶等 DRM 日切后再下；迟交件按账期月进已有桶，不预建空人名夹。
 - 算某个账期月之前，先跑 `late_submission_keys.py --period <YYYY-MM>` 从[迟交挪动登记](docs/reference/late-submission-registry.md)导出**唯一键** `审批编号|账期日期|销售账户|销售额` 剔除集，再交给 `filter_export_by_period.py --exclude-keys`，否则迟交单会被算两次。两个脚本都调 `ding_xlsx.build_key()`，**不要**直接用表里那列「唯一键」（金额 `0` vs `0.0` 会对不上）。
 
