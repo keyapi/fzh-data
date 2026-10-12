@@ -7,6 +7,10 @@ tags: [ops-assistant, log]
 
 # 变更日志
 
+## 2026-10-12
+
+- **更新**: 侧边栏把模型粘成一行的 markdown 排成表格、强调和编号。先转义再排版。见 `docs/solutions/developer-experience/ops-assistant-model-reply-formatting.md`。
+
 ## 2026-10-11
 
 - **新增**: 可独立运行的网点参数台演示。模型先读当前限额再提案；安全护栏按动作检查并显示在对话里。

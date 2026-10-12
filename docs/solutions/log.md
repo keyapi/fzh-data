@@ -7,6 +7,9 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-10-12（网点参数台演示）
+- **新增**: `developer-experience/ops-assistant-model-reply-formatting.md` —— 模型回复常把表格和星号粘成一行。侧边栏必须先转义再排成表、强调和编号。只核对接口字符串会漏掉气泡不可读。
+
 ## 2026-10-11（网点参数台演示）
 - **新增**: `architecture-patterns/branch-param-desk-read-then-guard.md` —— 网页内助手先调用读限额，把结果交回模型再提案。安全护栏检查即将执行的动作，不因原话里出现「生产」否掉合法的测试限额修改。无差额不改数、不交单。分享用独立仓库，密钥只留在运行机器的 `.env`。
 - **更新**: 同上 — 模型配置收成 OpenAI 兼容的 `OPENAI_API_BASE_URL` 与 `OPENAI_API_KEY`。演示机可以填当前网关，但不要写进仓库或文档。

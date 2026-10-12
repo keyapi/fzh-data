@@ -189,6 +189,14 @@
   .msg { font-size: 13px; line-height: 1.55; }
   .msg.user { align-self: flex-end; background: var(--blue-2); color: #fff; padding: 8px 10px; border-radius: 4px 4px 0 4px; max-width: 92%; }
   .msg.bot { align-self: stretch; }
+  .msg.bot p { margin: 0 0 8px; }
+  .msg.bot p:last-child { margin-bottom: 0; }
+  .msg.bot strong { font-weight: 650; }
+  .msg.bot code { font-family: Consolas, "Courier New", monospace; font-size: 12px; background: #f2f3f5; padding: 0 3px; }
+  .msg.bot table { width: 100%; border-collapse: collapse; margin: 4px 0 8px; }
+  .msg.bot th, .msg.bot td { border: 1px solid var(--line); padding: 4px 6px; white-space: normal; font-size: 12px; text-align: left; }
+  .msg.bot th { background: #f7f8fa; color: #4e5969; font-weight: 650; }
+  .msg.bot ol { margin: 0 0 8px; padding-left: 1.3em; }
   .deny { border: 1px solid #f6c1be; background: #fff0ed; color: var(--danger); border-radius: 2px; padding: 8px 10px; }
   .card { border: 1px solid #d9e1ff; background: #f8f9ff; border-radius: 2px; padding: 10px; }
   .card ol { margin: 6px 0 10px; padding-left: 18px; }
@@ -563,6 +571,86 @@ function stamp(result, what) {
 function esc(s) {
   return String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
 }
+function inlineRich(s) {
+  return esc(s).replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/`([^`]+)`/g, "<code>$1</code>");
+}
+function liftTable(text) {
+  const src = String(text || "");
+  const dash = src.indexOf("---");
+  const start = src.indexOf("|");
+  if (start < 0 || dash < 0 || start > dash) return src;
+  const before = src.slice(0, start).trim();
+  const tail = src.slice(start);
+  const last = tail.lastIndexOf("|");
+  const after = tail.slice(last + 1).trim();
+  const cells = tail.slice(0, last).split("|").slice(1).map((cell) => cell.trim()).filter(Boolean);
+  const sepAt = cells.findIndex((cell) => /^:?-{3,}:?$/.test(cell));
+  if (sepAt < 0) return src;
+  let sepEnd = sepAt;
+  while (sepEnd < cells.length && /^:?-{3,}:?$/.test(cells[sepEnd])) sepEnd += 1;
+  const cols = sepEnd - sepAt;
+  if (cols < 2) return src;
+  const header = sepAt >= cols ? cells.slice(sepAt - cols, sepAt) : null;
+  const data = cells.slice(sepEnd);
+  const lines = [];
+  if (before) lines.push(before);
+  if (header) lines.push("| " + header.join(" | ") + " |");
+  lines.push("| " + Array(cols).fill("---").join(" | ") + " |");
+  for (let i = 0; i + cols <= data.length; i += cols) lines.push("| " + data.slice(i, i + cols).join(" | ") + " |");
+  if (after) lines.push(after);
+  return lines.join("\n");
+}
+function normalizeReply(text) {
+  return liftTable(String(text || "").replace(/\r\n/g, "\n")).replace(/ (\d+\. )/g, "\n$1").trim();
+}
+function isTableSep(line) {
+  return /^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?$/.test(line.trim());
+}
+function tableCells(line) {
+  return line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((cell) => cell.trim());
+}
+function richText(raw) {
+  const lines = normalizeReply(raw).split("\n");
+  const blocks = [];
+  let para = [];
+  let list = [];
+  function flushPara() {
+    if (!para.length) return;
+    blocks.push("<p>" + para.map(inlineRich).join("<br>") + "</p>");
+    para = [];
+  }
+  function flushList() {
+    if (!list.length) return;
+    blocks.push("<ol>" + list.map((item) => "<li>" + inlineRich(item) + "</li>").join("") + "</ol>");
+    list = [];
+  }
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const next = lines[i + 1] || "";
+    if (!line.trim()) { flushPara(); flushList(); continue; }
+    if (line.trim().startsWith("|") && (isTableSep(next) || isTableSep(line))) {
+      flushPara(); flushList();
+      let header = null;
+      const rows = [];
+      if (!isTableSep(line)) { header = tableCells(line); i += 1; }
+      while (i + 1 < lines.length && lines[i + 1].trim().startsWith("|") && !isTableSep(lines[i + 1])) {
+        i += 1;
+        rows.push(tableCells(lines[i]));
+      }
+      const head = header ? "<thead><tr>" + header.map((cell) => "<th>" + inlineRich(cell) + "</th>").join("") + "</tr></thead>" : "";
+      const body = "<tbody>" + rows.map((row) => "<tr>" + row.map((cell) => "<td>" + inlineRich(cell) + "</td>").join("") + "</tr>").join("") + "</tbody>";
+      blocks.push("<table>" + head + body + "</table>");
+      continue;
+    }
+    const item = line.match(/^\d+\.\s+(.*)$/);
+    if (item) { flushPara(); list.push(item[1]); continue; }
+    flushList();
+    para.push(line.trim());
+  }
+  flushPara();
+  flushList();
+  return blocks.join("") || "<p>" + inlineRich(raw) + "</p>";
+}
 function renderLog() {
   $("log").innerHTML = log.map((m) => {
     if (m.kind === "user") return `<div class="msg user">${esc(m.text)}</div>`;
@@ -581,8 +669,8 @@ function renderLog() {
         `<div class="rail"><span class="tag ${tone[r.result] || "read"}">${esc(r.result)}</span><span>${esc(r.name)}</span><span class="muted">${esc(r.detail)}</span></div>`
       ).join("")}</div>`;
     }
-    if (m.kind === "deny") return `<div class="deny">${esc(m.text)}</div>`;
-    return `<div class="msg bot">${esc(m.text)}</div>`;
+    if (m.kind === "deny") return `<div class="deny">${richText(m.text)}</div>`;
+    return `<div class="msg bot">${richText(m.text)}</div>`;
   }).join("");
   $("log").scrollTop = $("log").scrollHeight;
 }

@@ -13,6 +13,7 @@ tags: [demo, guardrails, agent]
 ## 新对话必读
 
 - [先查再决定，护栏看动作](../docs/solutions/architecture-patterns/branch-param-desk-read-then-guard.md)
+- [助手回复不要原样显示 markdown](../docs/solutions/developer-experience/ops-assistant-model-reply-formatting.md)
 - [给人看的运行说明](README.md)
 
 ## 运行
@@ -27,3 +28,4 @@ tags: [demo, guardrails, agent]
 - 不要在用户没给金额时默认改成 20 万。
 - 不要把 Pi 或 DeepSeek Harness 整包嵌进来。借的是「读工具结果交回模型」这一轮。网页里自己点控件用 page-agent，并在每步之前等人点允许。
 - 允许按钮没被真实点通过之前，不要把页面助手放到对外演示。page-agent 遮罩会盖住侧边栏；刷新后未完成的允许按钮没有点击。
+- 不要把模型回复原样塞进气泡。星号和竖线表要先转义再排版，并且要看侧边栏，不要只核对接口字符串。
