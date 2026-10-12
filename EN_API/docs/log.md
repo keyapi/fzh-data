@@ -6,6 +6,10 @@ title: EN_API 文档变更日志
 
 # 变更日志
 
+## 2026-10-12
+
+- **新增（跨仓库，登记在本仓库 solutions）**: [../solutions/integration-issues/en-tongtool-order-package-sync-failures.md](../solutions/integration-issues/en-tongtool-order-package-sync-failures.md)、[../solutions/developer-experience/prod-batch-backfill-oom-small-box.md](../solutions/developer-experience/prod-batch-backfill-oom-small-box.md)。前者的对象是独立 app 仓库 `keyapi/tongtool_integration`（不在本仓库），故正文落在 `docs/solutions/`；`AGENT_HANDOFF.md` 的「相关交接文档」表已加两行指针。
+
 ## 2026-09-24
 
 - **新增**: [reference/en-server-access.md](reference/en-server-access.md) —— EN 服务器与环境访问单一事实源（生产/测试 SSH 别名、`bench restart` 规矩、REST 凭证、3 条常见坑）。

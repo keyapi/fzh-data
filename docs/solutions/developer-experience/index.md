@@ -9,6 +9,7 @@ tags: [developer-experience, index]
 
 | 你需要... | 读这个 |
 |----------|--------|
+| 在 EN 生产（2核4G 无 swap）跑批量回填、或生产 SSH/HTTPS 突然失联（内存顶破不是限流；别在网页进程里啃大表） | [prod-batch-backfill-oom-small-box.md](prod-batch-backfill-oom-small-box.md) |
 | Windows worktree 的 `CLAUDE.md` 是 symlink 还是 stub（开发者模式 / `core.symlinks` / `setup.ps1` 在哪儿跑） | [windows-worktree-claude-md-symlink.md](windows-worktree-claude-md-symlink.md) |
 | 新分支的 upstream 被指成 `main`（裸 `git push` 会往哪推 / `branch.autoSetupMerge`） | [git-worktree-branch-upstream-tracks-main.md](git-worktree-branch-upstream-tracks-main.md) |
 | WorkBuddy 接公司 new-api 自定义模型（useCustomProtocol=false + url 带 /v1） | [workbuddy-custom-model-newapi-config.md](workbuddy-custom-model-newapi-config.md) |
