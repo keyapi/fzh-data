@@ -455,6 +455,13 @@ class Handler(BaseHTTPRequestHandler):
             elif route in ('/api/safety', '/api/safety-test'):
                 tested = STORE.safety_test(workspace, role, str(body.get('case') or ''))
                 result = {'ok': True, 'result': tested, **tested}
+            elif route == '/api/desk/load':
+                result = STORE.load_params(workspace, role)
+            elif route == '/api/desk/suggest':
+                result = STORE.suggest_client(workspace, role)
+            elif route == '/api/desk/propose':
+                proposal = STORE.propose_desk(workspace, role, body.get('kind'), body.get('action'), body.get('payload') or {}, str(body.get('reason') or ''), body.get('submit', False))
+                result = {'ok': True, 'proposal': proposal, **proposal}
             else:
                 self._send(404, {'error': 'not found'})
                 return

@@ -263,6 +263,22 @@
   .notice { color:#556779;background:#f5f8fb;border-color:#e4eaf0;font-size:12px; }
   button.solid { background:#194a82;border-color:#194a82; }
   .photo-style-note { display:inline-block;color:#6e7f90;font-size:11px;margin-left:10px; }
+  .desk-title { display:flex; align-items:center; gap:8px; font-weight:650; margin:14px 0 10px; }
+  .desk-title::before { content:""; width:3px; height:14px; background:#194a82; }
+  .desk-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:12px 18px; }
+  .desk-field { display:grid; grid-template-columns:108px minmax(0,1fr); gap:8px; align-items:center; }
+  .desk-field.full { grid-column:1 / -1; }
+  .desk-field span { text-align:right; color:#4e5969; }
+  .desk-field input, .desk-field select { width:100%; min-width:0; height:32px; border:1px solid #c9cdd4; border-radius:2px; padding:0 8px; font:inherit; background:#fff; }
+  .desk-field input[readonly] { background:#f7f8fa; color:#4e5969; }
+  .desk-actions { display:flex; gap:8px; margin:12px 0; }
+  .pager { display:flex; justify-content:flex-end; align-items:center; gap:8px; padding:10px 0; color:#4e5969; }
+  .pager button { min-width:28px; height:28px; }
+  button.link.danger { color:#d54941; }
+  .anchors { display:flex; gap:18px; color:#86909c; font-size:12px; padding-top:8px; }
+  .anchors b { color:#1d2129; font-weight:400; }
+  .anchors i { display:inline-block; width:8px; height:8px; border-radius:50%; background:#c9cdd4; margin-right:6px; }
+  .anchors b i { background:#194a82; }
 </style>
 </head>
 <body>
@@ -287,6 +303,10 @@
   <button type="button" id="nav-knowledge">知识依据</button>
   <button type="button" id="nav-safety">安全实测</button>
   <button type="button" id="nav-guide">演示说明</button>
+  <h2>租户配置</h2>
+  <button type="button" id="nav-terminal">终端注册</button>
+  <button type="button" id="nav-params">注册信息</button>
+  <button type="button" id="nav-ip">固定地址</button>
 </nav>
 <main>
   <section id="view-rules">
@@ -509,6 +529,96 @@
       </div>
     </div>
   </section>
+  <section id="view-terminal" hidden>
+    <div class="crumb">系统菜单 / 租户配置管理 / 终端注册</div>
+    <div class="console-tab">终端注册</div>
+    <div class="page-head"><h1>终端注册-新增</h1><span class="photo-style-note">模拟终端 · 确认后才写入测试</span></div>
+    <p class="notice">结构对齐租户配置里的注册页。地址只能用演示域名。生产配置不在这里改，勾选申请也只是登记。</p>
+    <div class="desk-title">基础信息</div>
+    <div class="desk-grid">
+      <label class="desk-field"><span>终端编号</span><input id="terminal-id" value="TN-DEMO-0001" readonly /></label>
+      <label class="desk-field"><span><b class="req">*</b>终端名称</span><input id="terminal-name" /></label>
+      <label class="desk-field"><span><b class="req">*</b>受理优先级</span><select id="terminal-priority"><option>高</option><option selected>中</option><option>低</option></select></label>
+      <label class="desk-field"><span><b class="req">*</b>最大并发数</span><input id="terminal-concurrency" type="number" min="1" max="10" step="1" value="3" /></label>
+      <label class="desk-field"><span>所属市县区</span><input id="terminal-district" /></label>
+      <label class="desk-field"><span>向此终端推送</span><select id="terminal-push"><option value="false">否</option><option value="true">是</option></select></label>
+    </div>
+    <div class="desk-title">多银行接入</div>
+    <div class="desk-grid">
+      <label class="desk-field full"><span><b class="req">*</b>平台访问地址</span><input id="terminal-endpoint" /></label>
+      <label class="desk-field"><span>协议组件</span><select id="terminal-protocol"><option>演示协议</option><option>开放接口</option></select></label>
+      <label class="desk-field"><span>字符集</span><select id="terminal-charset"><option>UTF-8</option></select></label>
+      <label class="desk-field"><span>状态检测方式</span><select id="terminal-health"><option>握手探测</option><option>心跳</option></select></label>
+      <label class="desk-field"><span>数据交换方式</span><select id="terminal-exchange"><option>双向（演示）</option><option>单向（演示）</option></select></label>
+    </div>
+    <div class="desk-actions">
+      <button class="solid" id="terminal-save" type="button">检查修改</button>
+    </div>
+    <div id="desk-host-terminal"></div>
+    <div class="anchors"><b><i></i>基础信息</b><span><i></i>多银行接入</span></div>
+  </section>
+  <section id="view-params" hidden>
+    <div class="crumb">系统菜单 / 租户配置管理 / 终端注册</div>
+    <div class="console-tab">终端注册</div>
+    <div class="page-head"><h1>终端注册信息管理</h1><span class="photo-style-note">修改和删除都要确认</span></div>
+    <div class="desk-title">注册信息列表</div>
+    <div class="desk-actions"><button class="solid" id="param-load" type="button">+ 加载配置参数</button></div>
+    <table>
+      <thead><tr><th>参数名</th><th>参数值</th><th>备注</th><th>操作</th></tr></thead>
+      <tbody id="param-body"></tbody>
+    </table>
+    <div class="pager">
+      <button class="ghost" id="param-prev" type="button">‹</button>
+      <span id="param-page">1 / 1</span>
+      <button class="ghost" id="param-next" type="button">›</button>
+      <span id="param-count">共 0 条</span>
+    </div>
+    <div class="desk-title">基础信息</div>
+    <div class="desk-grid">
+      <label class="desk-field"><span><b class="req">*</b>参数名</span><input id="param-name" readonly /></label>
+      <label class="desk-field"><span>参数显示方式</span><input id="param-display" value="明文" readonly /></label>
+      <label class="desk-field"><span><b class="req">*</b>参数值</span><input id="param-value" /></label>
+      <label class="desk-field full"><span>备注</span><input id="param-note" /></label>
+    </div>
+    <div class="desk-actions"><button class="solid" id="param-save" type="button">检查修改</button></div>
+    <div id="desk-host-params"></div>
+  </section>
+  <section id="view-ip" hidden>
+    <div class="crumb">系统菜单 / 租户配置管理 / 终端注册</div>
+    <div class="console-tab">终端注册</div>
+    <div class="page-head"><h1>固定地址配置</h1><span class="photo-style-note">自动获取只填表，确认后才新增</span></div>
+    <div class="desk-title">固定地址列表</div>
+    <table>
+      <thead><tr><th>租户编号</th><th>商户号</th><th>终端编号</th><th>云桥代理地址</th><th>云桥代理端口</th><th>客户前置机地址</th><th>客户前置机端口</th><th>操作</th></tr></thead>
+      <tbody id="ip-body"></tbody>
+    </table>
+    <div class="pager"><span id="ip-count">共 0 条</span></div>
+    <div class="desk-title">固定地址</div>
+    <div class="desk-grid">
+      <label class="desk-field"><span>租户编号</span><input id="ip-tenant" value="DEMO-TN-01" /></label>
+      <label class="desk-field"><span>商户号</span><input id="ip-merchant" value="M0001" /></label>
+      <label class="desk-field"><span>终端编号</span><input id="ip-terminal" value="TN-DEMO-0001" /></label>
+      <label class="desk-field"><span>云桥代理地址</span><input id="ip-proxy" value="10.8.1.10" /></label>
+      <label class="desk-field"><span>云桥代理端口</span><input id="ip-proxy-port" type="number" value="12001" /></label>
+      <label class="desk-field"><span>客户前置机地址</span><input id="ip-client" placeholder="点自动获取，或填写 10.8 地址" /></label>
+      <label class="desk-field"><span>客户前置机端口</span><input id="ip-client-port" type="number" /></label>
+    </div>
+    <div class="desk-actions">
+      <button class="ghost" id="ip-suggest" type="button">自动获取</button>
+      <button class="solid" id="ip-save" type="button">检查修改</button>
+    </div>
+    <div id="desk-host-ip"></div>
+  </section>
+  <div id="desk-box" hidden>
+    <div class="panel">
+      <div class="panel-bar"><span>确认修改</span><span>还没写入</span></div>
+      <div id="desk-body" style="padding:12px"></div>
+      <div class="form-actions" style="padding:0 12px 12px">
+        <button class="ghost" id="desk-skip" type="button">跳过</button>
+        <button class="solid" id="desk-ok" type="button">确认修改</button>
+      </div>
+    </div>
+  </div>
 </main>
 <aside>
   <div class="ahead">
@@ -526,6 +636,9 @@
     <button class="ghost" type="button" id="chip-port">让助手改限额</button>
     <button class="ghost" type="button" id="chip-ticket">填写申请草稿</button>
     <button class="ghost" type="button" id="chip-integration">让助手办联调</button>
+    <button class="ghost" type="button" id="chip-terminal">让助手登记终端</button>
+    <button class="ghost" type="button" id="chip-param">让助手改注册参数</button>
+    <button class="ghost" type="button" id="chip-ip">让助手加固定地址</button>
   </div>
   <form class="composer" id="ask">
     <input id="ask-input" placeholder="描述要改的参数" />
@@ -573,6 +686,7 @@ function scenarioFor(text,fallback){if(/限额|金额|柜面|单笔/.test(text))
 function shortReply(text){return String(text||"").replace(/提案/g,"修改确认").trim().slice(0,220);}
 
 async function previewChange(p) {
+ if(p.kind){ await previewDesk(p); return; }
  if(p.scenario==="counter") {
   show("rules");counterApproval=p;
   await spotlight($("card-drill"),"定位测试环境的单笔限额");
@@ -591,13 +705,20 @@ async function previewChange(p) {
  }
 }
 async function executeVisible(p) {
- await spotlight($(p.scenario==="counter"?"rule-ok":"ops-execute"),"确认已收到 · 后台校验并保存",250);
+ const button = p.kind ? "desk-ok" : (p.scenario==="counter" ? "rule-ok" : "ops-execute");
+ await spotlight($(button),"确认已收到 · 后台校验并保存",250);
  try {
   const data=await opsFetch("/api/ops/execute",{proposal_id:p.id,digest:p.digest});
   if(p.scenario==="counter"){$("rule-dialog").hidden=true;counterApproval=null;}
   log.forEach(m=>{if(m.proposal?.id===p.id)m.done=true;});
-  await loadOps();showExecution(data);
-  await spotlight($(p.scenario==="counter"?"drill-amount":"ops-config"),data.verification||data.readback?"保存完成 · 已从数据库重新核验":"未收到独立核验结果，请查看办理记录",1500);
+  await loadOps();
+  if(p.kind){
+    push({kind:"verification", text:data.message||"已处理", values:p.summary||p.kind, independent:!!data.readback, evidence:data.readback||{}});
+    await spotlight($(p.kind==="terminal"?"terminal-name":p.kind==="param"?"param-body":"ip-body"), data.code==="NO_CHANGE"?"已经是目标值，没有写入":"保存完成 · 已从数据库重新核验",1200);
+  } else {
+    showExecution(data);
+    await spotlight($(p.scenario==="counter"?"drill-amount":"ops-config"),data.verification||data.readback?"保存完成 · 已从数据库重新核验":"未收到独立核验结果，请查看办理记录",1500);
+  }
   return data;
  } finally {clearAim();}
 }
@@ -740,6 +861,16 @@ async function confirmFromChat(cancel=false){
  if(!p){push({kind:"bot",text:"当前没有待确认修改。"});return;}
  if(p.scenario==="counter"&&counterApproval?.id!==id){busy=true;try{await previewChange(p);}finally{busy=false;$("rule-ok").disabled=false;renderApproval();}}
  push({kind:"user",text:cancel?"取消修改":"允许修改"});
+ if(p.kind){
+  busy=true;
+  try{
+    show(p.kind==="terminal"?"terminal":p.kind==="param"?"params":"ip", false);
+    if(cancel){await opsFetch("/api/ops/cancel",{proposal_id:p.id});await loadOps();push({kind:"bot",text:"已跳过，没有写入。"});}
+    else await executeVisible(p);
+  }catch(err){push({kind:"deny",text:err.message});}
+  finally{busy=false;clearAim();renderApproval();}
+  return;
+ }
  if(p.scenario==="counter")await $(cancel?"rule-cancel":"rule-ok").onclick();
  else{opsProposal=p;show("integration");await $(cancel?"ops-cancel":"ops-execute").onclick();}
  renderApproval();
@@ -759,19 +890,23 @@ function applyRoleVisibility() {
   if (reader && !$("view-ticket").hidden) {$("view-ticket").hidden=true;$("view-rules").hidden=false;}
 
 }
-function show(name) {
-  ["rules", "ticket", "audit", "integration", "knowledge", "safety", "guide"].forEach((id) => {
+function show(name, reload=true) {
+  ["rules", "ticket", "audit", "integration", "knowledge", "safety", "guide", "terminal", "params", "ip"].forEach((id) => {
     $("view-" + id).hidden = name !== id;
     $("nav-" + id).toggleAttribute("aria-current", name === id);
   });
-  if (["rules","ticket","audit","integration","guide"].includes(name)) loadOps();
+  if (reload && ["rules","ticket","audit","integration","guide","terminal","params","ip"].includes(name)) loadOps();
   if (name === "knowledge") loadKnowledge(true);
 }
 function role() { return opsState?.role || "reader"; }
 function renderTickets(){
  $("ticket-list").innerHTML=tickets.length?tickets.map(t=>'<tr><td>'+esc(t.id)+'</td><td>'+esc(t.reason||t.title||t.scenario)+'</td><td>'+esc(({pending_review:"待复核",approved_request:"申请已通过",rejected_request:"申请已驳回"})[t.status]||t.status)+'</td><td>未写入生产</td></tr>').join(''):'<tr><td class="empty" colspan="4">暂无后台变更申请</td></tr>';
 }
-function fieldValue(field,value){return field==="limit"?money(value)+" 元":String(value)+(field==="timeout"?" 秒":field==="retries"?" 次":"");}
+function fieldValue(field,value){
+ if(value && typeof value==="object") return Object.entries(value).map(([k,v])=>k+" "+v).join("，");
+ if(value==null) return "（无）";
+ return field==="limit"?money(value)+" 元":String(value)+(field==="timeout"?" 秒":field==="retries"?" 次":"");
+}
 function verificationText(data){const config=data.verification||data.readback;return config?.values?Object.entries(config.values).map(([field,value])=>fieldLabel(field)+" "+fieldValue(field,value)).join(" / "):"没有收到读回字段，不能据此宣称核验成功";}
 function executionMessage(data){return data.code==="EXECUTED"?"测试配置已保存并核验；"+(data.ticket?"生产仅登记申请。":"生产配置未修改。"):data.message||"执行请求已处理。";}
 function showExecution(data){push({kind:"verification",text:executionMessage(data),values:verificationText(data),independent:!!data.verification,evidence:data.verification||data.readback||{}});}
@@ -829,6 +964,7 @@ $("ask").onsubmit = (e) => {
   $("ask-input").value = "";
   if(/^(允许(?:修改|执行)?|确认修改|同意(?:修改|执行)?)[。！!\s]*$/.test(text)){confirmFromChat();return;}
   if(/^(取消(?:修改)?|不允许)[。！!\s]*$/.test(text)){confirmFromChat(true);return;}
+  if (/终端|注册参数|固定地址|固定IP|前置机/.test(text)) { askDesk(text); return; }
   if (text) askOps(text,scenarioFor(text,!$("view-integration").hidden?"integration":"counter"));
 };
 let opsState = null;
@@ -838,7 +974,7 @@ async function opsFetch(path,body){const resp=await fetch(path,{credentials:"sam
 function opsEnv(name) { return name === "prod" ? "生产" : "测试"; }
 function opsWhen(ts) {return ts?new Date(typeof ts==="number"?ts*1000:ts).toLocaleTimeString("zh-CN",{hour12:false}):"";}
 function fieldLabel(field) {
-  return { timeout: "超时", retries: "重试", limit: "限额" }[field] || field;
+  return { timeout: "超时", retries: "重试", limit: "限额", name: "名称", priority: "优先级", concurrency: "并发数", district: "市县区", push: "推送", endpoint: "访问地址", protocol: "协议", charset: "字符集", health: "检测方式", exchange: "交换方式", value: "参数值", delete: "删除", add: "新增" }[field] || field;
 }
 function renderOps() {
   if (!opsState) return;
@@ -877,7 +1013,9 @@ function renderOps() {
     const values = t.requested_values || {};
     const text = t.scenario === "counter"
       ? ("限额 " + money(values.limit || 0))
-      : ("超时 " + (values.timeout ?? "—") + " 秒 / 重试 " + (values.retries ?? "—") + " 次");
+      : t.scenario === "integration"
+      ? ("超时 " + (values.timeout ?? "—") + " 秒 / 重试 " + (values.retries ?? "—") + " 次")
+      : (values.summary || t.reason || t.scenario);
     const review = role() === "reviewer" && t.status === "pending_review"
       ? `<button class="link" type="button" data-review="1" data-id="${esc(t.id)}">通过申请</button>
          <button class="link" type="button" data-review="0" data-id="${esc(t.id)}">驳回</button>`
@@ -894,8 +1032,9 @@ function renderOps() {
     <td class="${a.outcome === "denied" || a.outcome === "failed" ? "lock" : "allow"}">${esc(a.outcome)}</td>
     <td class="wrap">${esc(a.detail || "")}</td>
   </tr>`).join("") : `<tr><td class="empty" colspan="5">${role() === "reader" ? "只读岗位看不到办理记录" : "还没有办理记录"}</td></tr>`;
-  const pending = (opsState.proposals || []).filter((p) => p.status === "pending");
-  opsProposal = pending[pending.length - 1] || null;
+  renderDeskPages();
+  const pending = (opsState.proposals || []).filter((p) => p.status === "pending" && !p.kind);
+  opsProposal = [...pending].reverse().find((p) => p.scenario !== "counter") || null;
   if (!opsProposal || opsProposal.scenario === "counter") {
     $("ops-proposal").hidden = true;
     return;
@@ -1049,13 +1188,178 @@ $("ops-reset").onclick = async () => {
     log=[];counterApproval=null;$("rule-dialog").hidden=true;await loadOps();push({kind:"bot",text:"当前模拟工作区已重置。"});await spotlight($("ops-config"),"初始值已恢复",600);
   } catch (err) { showOpsError(err); } finally{busy=false;clearAim();$("rule-ok").disabled=false;renderApproval();}
 };
-$("ops-rollback").onclick=async()=>{if(busy)return;const executed=(opsState?.proposals||[]).filter(p=>p.status==="executed");const last=executed[executed.length-1];if(!last){push({kind:"bot",text:"没有已执行修改可恢复。"});return;}busy=true;try{await spotlight($("ops-rollback"),"读取上次修改，准备恢复值",150);const proposal=await opsFetch("/api/ops/rollback",{proposal_id:last.id});await loadOps();await previewChange(proposal);push({kind:"bot",text:"已填写恢复值，请确认修改；已有生产申请不会直接撤销。"});}catch(err){push({kind:"deny",text:err.message});}finally{busy=false;clearAim();$("rule-ok").disabled=false;renderApproval();}};
+$("ops-rollback").onclick=async()=>{if(busy)return;const executed=(opsState?.proposals||[]).filter(p=>p.status==="executed");const last=executed.filter((p)=>!p.kind).at(-1);if(!last){push({kind:"bot",text:"没有已执行修改可恢复。"});return;}busy=true;try{await spotlight($("ops-rollback"),"读取上次修改，准备恢复值",150);const proposal=await opsFetch("/api/ops/rollback",{proposal_id:last.id});await loadOps();await previewChange(proposal);push({kind:"bot",text:"已填写恢复值，请确认修改；已有生产申请不会直接撤销。"});}catch(err){push({kind:"deny",text:err.message});}finally{busy=false;clearAim();$("rule-ok").disabled=false;renderApproval();}};
 $("kb-search").onclick = () => loadKnowledge(true);
 $("safety-cases").onclick = (e) => {
   const btn = e.target.closest("[data-case]");
   if (btn) runSafety(btn.dataset.case);
 };
 
+let deskProposal = null;
+let paramPage = 1;
+function deskPage(kind){ return kind==="terminal" ? "terminal" : kind==="param" ? "params" : "ip"; }
+function renderDeskPages(){
+  if(!opsState || !$("terminal-name")) return;
+  const t = opsState.terminal || {};
+  $("terminal-id").value = t.id || "";
+  $("terminal-name").value = t.name || "";
+  $("terminal-priority").value = t.priority || "中";
+  $("terminal-concurrency").value = t.concurrency ?? 3;
+  $("terminal-district").value = t.district || "";
+  $("terminal-push").value = t.push ? "true" : "false";
+  $("terminal-endpoint").value = t.endpoint || "";
+  $("terminal-protocol").value = t.protocol || "演示协议";
+  $("terminal-charset").value = t.charset || "UTF-8";
+  $("terminal-health").value = t.health || "握手探测";
+  $("terminal-exchange").value = t.exchange || "双向（演示）";
+  const canWrite = role()==="operator";
+  ["terminal-save","param-save","ip-save","ip-suggest","desk-ok","desk-skip"].forEach((id)=>{ if($(id)) $(id).hidden = !canWrite; });
+  const rows = opsState.params || [];
+  const pages = Math.max(1, Math.ceil(rows.length / 10));
+  if(paramPage > pages) paramPage = pages;
+  const slice = rows.slice((paramPage-1)*10, paramPage*10);
+  $("param-body").innerHTML = slice.length ? slice.map((row)=>{
+    const ops = row.env==="prod" || !canWrite ? '<span class="muted">无修改权限</span>' : `<button class="link" type="button" data-param-edit="${esc(row.name)}">修改</button> <button class="link danger" type="button" data-param-del="${esc(row.name)}">删除</button>`;
+    return `<tr><td>${esc(row.name)}</td><td>${esc(row.value)}</td><td class="note">${esc(row.note)}</td><td>${ops}</td></tr>`;
+  }).join("") : `<tr><td class="empty" colspan="4">暂无数据</td></tr>`;
+  $("param-count").textContent = "共 " + rows.length + " 条";
+  $("param-page").textContent = paramPage + " / " + pages;
+  $("param-body").querySelectorAll("[data-param-edit]").forEach((btn)=>{
+    btn.onclick = () => {
+      const row = rows.find((item)=>item.name===btn.dataset.paramEdit);
+      if(!row || row.env==="prod") return;
+      $("param-name").value = row.name;
+      $("param-value").value = row.value;
+      $("param-note").value = row.note;
+    };
+  });
+  $("param-body").querySelectorAll("[data-param-del]").forEach((btn)=>{
+    btn.onclick = () => proposeDesk("param","delete",{name:btn.dataset.paramDel},"删除测试注册参数 "+btn.dataset.paramDel,false);
+  });
+  const ips = opsState.ips || [];
+  $("ip-body").innerHTML = ips.length ? ips.map((row)=>{
+    const ops = row.env!=="test" || !canWrite ? '<span class="muted">无修改权限</span>' : `<button class="link danger" type="button" data-ip-del="${esc(row.id)}">删除</button>`;
+    return `<tr><td>${esc(row.tenant)}</td><td>${esc(row.merchant)}</td><td>${esc(row.terminal)}</td><td>${esc(row.proxy)}</td><td>${esc(row.proxy_port)}</td><td>${esc(row.client)}</td><td>${esc(row.client_port)}</td><td>${ops}</td></tr>`;
+  }).join("") : `<tr><td class="empty" colspan="8">暂无数据</td></tr>`;
+  $("ip-count").textContent = "共 " + ips.length + " 条";
+  $("ip-body").querySelectorAll("[data-ip-del]").forEach((btn)=>{
+    btn.onclick = () => proposeDesk("ip","delete",{id:btn.dataset.ipDel},"删除测试固定地址",false);
+  });
+  const pending = (opsState.proposals||[]).filter((p)=>p.kind && p.status==="pending");
+  deskProposal = pending.at(-1) || null;
+  if(!deskProposal){ $("desk-box").hidden = true; return; }
+  $("desk-host-"+deskPage(deskProposal.kind)).appendChild($("desk-box"));
+  $("desk-box").hidden = false;
+  const lines = (deskProposal.changes||[]).map((c)=>fieldLabel(c.field)+"："+fieldValue(c.field,c.before)+" → "+fieldValue(c.field,c.after));
+  $("desk-body").innerHTML = `<div>${esc(deskProposal.summary||"")}</div><div>${esc(deskProposal.reason||"")}</div>${lines.map((line)=>"<div>"+esc(line)+"</div>").join("")}${(deskProposal.rails||[]).map((r)=>'<div class="muted">'+esc(r.name)+" · "+esc(railResult(r.result))+" · "+esc(r.detail)+"</div>").join("")}<div class="muted">${deskProposal.submit?"确认后保存测试，并登记生产申请。":"确认后只保存测试。"}</div>`;
+}
+async function previewDesk(p){
+  deskProposal = p;
+  show(deskPage(p.kind), false);
+  if(p.kind==="terminal"){
+    for(const c of p.changes){
+      const el = $("terminal-"+c.field);
+      if(!el) continue;
+      await spotlight(el,"填写"+fieldLabel(c.field)+" · 尚未保存");
+      if(el.tagName==="SELECT") el.value = c.field==="push" ? String(c.after) : c.after;
+      else await typeVisible(el, c.after);
+    }
+  } else if(p.kind==="param"){
+    const c = p.changes[0];
+    $("param-name").value = c.name || "";
+    if(c.field!=="delete"){
+      await spotlight($("param-value"),"填写参数值 · 尚未保存");
+      await typeVisible($("param-value"), c.after);
+      $("param-note").value = c.note_after || "";
+    }
+  } else if(p.changes[0].after){
+    const row = p.changes[0].after;
+    const pairs = [["tenant","ip-tenant"],["merchant","ip-merchant"],["terminal","ip-terminal"],["proxy","ip-proxy"],["proxy_port","ip-proxy-port"],["client","ip-client"],["client_port","ip-client-port"]];
+    for(const [key,id] of pairs){ await spotlight($(id),"填写"+key+" · 尚未保存",80); await typeVisible($(id), row[key]); }
+  }
+  await spotlight($("desk-ok"),"请确认修改 · 生产不写入",700);
+  clearAim();
+}
+async function proposeDesk(kind, action, payload, reason, submit){
+  if(busy) return;
+  if(role()!=="operator"){ push({kind:"deny", text:"当前岗位不能准备这项修改。允许了也不行。"}); return; }
+  busy = true;
+  try{
+    const data = await opsFetch("/api/ops/desk/propose", {kind, action, payload, reason, submit: !!submit});
+    const proposal = data.proposal || data;
+    await loadOps();
+    await previewDesk(proposal);
+    if(proposal.rails) push({kind:"rails", items:proposal.rails});
+    push({kind:"bot", text:"已填写，尚未保存。请在页面或对话里确认。"});
+  }catch(err){ push({kind:"deny", text:err.message}); }
+  finally{ busy=false; clearAim(); renderApproval(); }
+}
+function askDesk(text){
+  push({kind:"user", text});
+  const named = text.match(/终端名称(?:改成|改为|设为)\s*(\S+)/);
+  if(named) return proposeDesk("terminal","save",{name:named[1]},"按指令修改测试终端名称",false);
+  const param = text.match(/参数\s*([A-Za-z0-9._-]+)\s*(?:改成|改为)\s*(\S+)/);
+  if(param) return proposeDesk("param","update",{name:param[1], value:param[2], note:"助手修改"},"按指令修改测试注册参数",false);
+  const ip = text.match(/10\.8\.\d{1,3}\.\d{1,3}/);
+  const port = text.match(/端口\s*(\d+)/);
+  if(/固定/.test(text) && ip && port){
+    return proposeDesk("ip","add",{
+      tenant:$("ip-tenant").value.trim(), merchant:$("ip-merchant").value.trim(), terminal:$("ip-terminal").value.trim(),
+      proxy:$("ip-proxy").value.trim(), proxy_port:Number($("ip-proxy-port").value), client:ip[0], client_port:Number(port[1])
+    },"按指令新增测试固定地址",false);
+  }
+  push({kind:"bot", text:"请说清楚测试项。例如：终端名称改成夜班终端；参数 demo.sftp.port 改成 8022；加一条固定地址 10.8.3.15 端口 9000。生产项不能直接改。"});
+}
+$("nav-terminal").onclick = () => show("terminal");
+$("nav-params").onclick = () => show("params");
+$("nav-ip").onclick = () => show("ip");
+$("terminal-save").onclick = () => proposeDesk("terminal","save",{
+  name:$("terminal-name").value, priority:$("terminal-priority").value, concurrency:Number($("terminal-concurrency").value),
+  district:$("terminal-district").value, push:$("terminal-push").value==="true", endpoint:$("terminal-endpoint").value,
+  protocol:$("terminal-protocol").value, charset:$("terminal-charset").value, health:$("terminal-health").value, exchange:$("terminal-exchange").value
+},"保存测试终端注册", false);
+$("param-load").onclick = async () => {
+  if(busy) return; busy=true;
+  try{ await opsFetch("/api/ops/desk/load", {}); await loadOps(); show("params", false); await spotlight($("param-body"),"演示参数已加载，生产参数对只读岗位不可见",600); }
+  catch(err){ push({kind:"deny", text:err.message}); }
+  finally{ busy=false; clearAim(); }
+};
+$("param-prev").onclick = () => { if(paramPage>1){ paramPage--; renderDeskPages(); } };
+$("param-next").onclick = () => { paramPage++; renderDeskPages(); };
+$("param-save").onclick = () => proposeDesk("param","update",{name:$("param-name").value, value:$("param-value").value, note:$("param-note").value||"备注"},"修改测试注册参数", false);
+$("ip-suggest").onclick = async () => {
+  if(busy || role()!=="operator") return; busy=true;
+  try{
+    const data = await opsFetch("/api/ops/desk/suggest", {});
+    const before = (opsState?.ips||[]).length;
+    await loadOps();
+    $("ip-client").value = data.client;
+    $("ip-client-port").value = data.client_port;
+    if((opsState?.ips||[]).length!==before) push({kind:"deny", text:"自动获取改动了地址表，这不符合预期。"});
+    else push({kind:"bot", text:"已填入模拟探测结果，地址表还没增加。确认后才会新增。"});
+    await spotlight($("ip-client"),"只填表，尚未保存",500);
+  }catch(err){ push({kind:"deny", text:err.message}); }
+  finally{ busy=false; clearAim(); }
+};
+$("ip-save").onclick = () => proposeDesk("ip","add",{
+  tenant:$("ip-tenant").value.trim(), merchant:$("ip-merchant").value.trim(), terminal:$("ip-terminal").value.trim(),
+  proxy:$("ip-proxy").value.trim(), proxy_port:Number($("ip-proxy-port").value),
+  client:$("ip-client").value.trim(), client_port:Number($("ip-client-port").value)
+},"新增测试固定地址", false);
+$("desk-ok").onclick = async () => { if(!deskProposal || busy) return; busy=true; try{ await executeVisible(deskProposal); }catch(err){ push({kind:"deny", text:err.message}); }finally{ busy=false; clearAim(); renderApproval(); } };
+$("desk-skip").onclick = async () => { if(!deskProposal || busy) return; busy=true; try{ await opsFetch("/api/ops/cancel",{proposal_id:deskProposal.id}); await loadOps(); push({kind:"bot", text:"已跳过，没有写入。"}); }catch(err){ push({kind:"deny", text:err.message}); }finally{ busy=false; clearAim(); renderApproval(); } };
+$("chip-terminal").onclick = () => proposeDesk("terminal","save",{name:"夜班演示终端"},"把测试终端名称改为夜班演示终端", false);
+$("chip-param").onclick = async () => {
+  if(busy) return;
+  if(!opsState?.params_loaded){
+    busy=true;
+    try{ await opsFetch("/api/ops/desk/load", {}); await loadOps(); }
+    catch(err){ push({kind:"deny", text:err.message}); busy=false; return; }
+    busy=false;
+  }
+  proposeDesk("param","update",{name:"demo.sftp.port", value:"8022", note:"电子回单-端口"},"把演示回单端口改成 8022", false);
+};
+$("chip-ip").onclick = () => proposeDesk("ip","add",{tenant:"DEMO-TN-01", merchant:"M0001", terminal:"TN-DEMO-0001", proxy:"10.8.1.10", proxy_port:12001, client:"10.8.3.15", client_port:9000},"新增一条测试固定地址", false);
 $("login-open").onclick=()=>{$("login-user").value=role();$("login-dialog").showModal();};$("login-close").onclick=()=>$("login-dialog").close();
 async function loginAs(username,password,accessCode){await opsFetch("/api/login",{username,password,access_code:accessCode});log=[];opsProposal=null;counterApproval=null;$("rule-dialog").hidden=true;clearAim();$("ops-proposal").hidden=true;$("ops-readback").hidden=true;$("log").innerHTML="";loginPassword=String(password);loginAccess=accessCode;$("login-password").value="demo2026";$("login-access").value="";$("login-dialog").close();await loadOps();}
 $("login-form").onsubmit=async event=>{event.preventDefault();try{await loginAs($("login-user").value,$("login-password").value,$("login-access").value);$("login-error").textContent="";}catch(err){$("login-error").textContent=err.message;}};
