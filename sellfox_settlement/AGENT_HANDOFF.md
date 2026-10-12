@@ -149,3 +149,5 @@ run_status.json以run_id记录running/succeeded/failed及当次产物hash；失�
 - 月度命令已集成诊断与 V2 连接，第十表为「V2交易连接」。本次 `tests/sellfox_settlement` 184 项通过。私有新产物位于 `D:/Work/张晶/国内报税/Amazon账期非V2/技术验证/20261012/codex-completion`，工作簿 10 表、78,256 单元格逐格回读通过；18 个产物及 246 个输入哈希通过。
 - 新命令 `uv run python -m sellfox_settlement.verify_technical_run --reports <仓库外产物目录> --require-workbook` 验证成功运行状态、月份、manifest、源和产物哈希、工作簿所有单元格，严格区分空白、0、False。外部 artifact-tool 导出后仅首次显式加 `--register-workbook` 登记已逐格验证的工作簿。旧文件、失败重跑或改源不能通过。
 - 待 ZJ 的口径、银行到账输入继续待确认；未知科目不并入 other，当前 BOM 不变成历史成本。加拿大及 S01 缺单关系仍缺原始业务证据。生产应用未部署、同步未重跑。
+
+私有生产应用补丁已提交 [tongtool_integration PR4](https://github.com/keyapi/tongtool_integration/pull/4)，提交 `1e7a3bf`：账号复合身份、数量门禁、保存点与完整分页、FBA 刷新/UI/包裹入口及唯一平台 SKU 回退。36 项源码回归测试与独立复审通过；测试站内存补丁、禁 commit、真实主子表保存点回滚通过，独立连接最终合成主子表均为 0。费用计算 stub，未验生产部署、并发或真实成本；核心同步成功不表示可选成本补全全部成功。生产未部署/补单。审批部署后须受控验收再重跑，不自动全量回填。
