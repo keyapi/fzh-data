@@ -254,6 +254,15 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(data['proposal']['changes'][0]['after'], 70)
         self.assertTrue(data['proposal']['submit'])
 
+    def test_request_only_never_prepares_a_test_parameter_write(self):
+        self.login()
+        with patch.object(server, 'model_call') as model:
+            _, data = self.request('/api/chat', {'scenario': 'integration', 'text': '只提交生产变更申请，不要修改测试参数'})
+        model.assert_not_called()
+        self.assertEqual(data['denied'][0]['code'], 'CAPABILITY_UNAVAILABLE')
+        self.assertIsNone(data['proposal'])
+        self.assertEqual(data['state']['proposals'], [])
+
     def test_model_concurrency_rejects_without_calling_upstream(self):
         self.login()
         server.MODEL_SLOTS.acquire()

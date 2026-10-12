@@ -971,7 +971,7 @@ async function askOps(text,scenario="integration"){
   if(data.state){opsState=data.state;renderOps();}else await loadOps();
   if(data.proposal){await previewChange(data.proposal);const p=data.proposal;log[replyAt].text=p.scenario==="counter"?"已填写"+(p.changes.find(c=>c.field==="limit").after/10000).toLocaleString("zh-CN",{maximumFractionDigits:4})+"万元。是否允许修改？生产限额不变。":"联调参数已填写。核对差异后，在对话里允许即可。";}
   else if(data.noop){show(scenario==="counter"?"rules":"integration");await spotlight($(scenario==="counter"?"drill-amount":"ops-config"),"当前已是目标值，无需重复修改",600);}
-  else if(data.denied?.length){await spotlight($("role"),"后台已核对当前岗位权限",150);await spotlight($("log").lastElementChild,"本次操作被拒绝 · 未保存",500);}
+  else if(data.denied?.length){if(data.denied.some(d=>d.code==="FORBIDDEN"))await spotlight($("role"),"后台已核对当前岗位权限",150);await spotlight($("log").lastElementChild,data.denied.some(d=>d.code==="CAPABILITY_UNAVAILABLE")?"当前业务能力未开放 · 未执行":"本次操作被拒绝 · 未保存",500);}
 
  }catch(err){log.splice(pending,1);push({kind:"deny",text:String(err.message||err)+"。可使用明确标注的人工修改，仍需后台授权与确认。"});}
  finally{busy=false;$("rule-ok").disabled=false;clearAim();renderLog();}

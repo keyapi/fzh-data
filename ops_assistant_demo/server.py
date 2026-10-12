@@ -158,6 +158,15 @@ def model_task(session, body):
                 'denied': [denial], 'citations': [], 'reads': fresh, 'rails': [],
                 'trace': [{'step': '岗位权限检查', 'result': denial}], 'source': 'backend-policy'}
     target_text = text
+    request_only = submit_requested and bool(re.search(r'只(?:提交|申请)|(?:不|不要|无需|不必).{0,4}(?:改|修改|变更|写入|调整).{0,4}测试', text))
+    if request_only:
+        answer = '当前演示暂不支持只提交申请而不修改测试参数。不会执行这项操作。'
+        denial = {'ok': False, 'code': 'CAPABILITY_UNAVAILABLE', 'message': answer}
+        STORE.record_denial(workspace, role, 'request_only', 'CAPABILITY_UNAVAILABLE', answer)
+        history[scenario] = [*history.get(scenario, []), {'role': 'user', 'content': text}, {'role': 'assistant', 'content': answer}][-4:]
+        return {'ok': True, 'outcome': 'denied', 'text': answer, 'proposal': None, 'noop': False,
+                'denied': [denial], 'citations': [], 'reads': fresh, 'rails': [],
+                'trace': [{'step': '业务能力检查', 'result': denial}], 'source': 'backend-policy'}
     direct_production = bool(re.search(r'生产.{0,10}(?:改|调|设)|(?:改|调|设).{0,10}生产', text))
     negated_production = bool(re.search(r'(?:不|不要|别|不能|无需).{0,5}(?:改|调|设|同步).{0,5}生产', text))
     if direct_production and not negated_production and not submit_requested and '测试' not in text:
