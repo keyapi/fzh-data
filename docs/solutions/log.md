@@ -7,6 +7,10 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-10-12（EN 通途同步：五类缺陷 + 生产小机器批量回填 OOM）
+- **新增**: `integration-issues/en-tongtool-order-package-sync-failures.md` —— EN `tongtool_integration` 同步专项排查的完整结论：**订单/包裹数量覆盖 100%**（判漏单必须用**发货口径**，用 `sale_time` 会大量假漏），病在 ① cron 走 `default` 300s 被掐断（改投 `long` + 06:30 闸门）② 限流器实例级→Redis 全局滑窗 ③ 滑窗瞬时连发仍撞 526（加**最短间隔 12s**）④ 长任务重叠（加跨进程互斥锁；生产实为 2 个 long worker）⑤ **`_update_order` 不回写 `warehouse_name`** ⇒ 空壳单（有单无成本，且每天新增）⑥ SKU 匹配是 `ref_code` **精确等值**、无后缀容错（约 1/5 未匹配 SKU 其实已登记）。
+- **新增**: `developer-experience/prod-batch-backfill-oom-small-box.md` —— 同一次排查把生产**三次压到失联**的复盘：瓶颈是**内存不是限流**（改成"小批+停顿"照样死）；真凶是**在 `bench console`（网页进程）里加载整张 BOM 表拼名单** + 无 swap ⇒ 直接卡死；**反证**是 app 自带的 refresh 按钮（只 enqueue、不啃大表）从没压垮过。结论：别为一次性任务去调 `innodb_buffer_pool_size`（已是默认最小值）/ `gunicorn_workers` / RQ worker，只加 **4GB swap** 作保险并保留机器原有 `vm.swappiness=0`。
+
 ## 2026-10-08（PB 无货件：UPS 才算真发 + 重复建单加后缀）
 - **更新**: `workflow-issues/pb-out-of-stock-notification-and-zero-stock-orders.md`（`last_updated: 2026-10-08`）—— 三处补料：**① §2.1.1 新增「重复建单也占 `-N`」**：通途不允许重复订单号；`-N` 与拆单后缀是**同一命名空间**（同批多行占 `-1…-M`、跨批补发继续排），所以**下一个可用 = 该 PO 已用过的最大 `-N` + 1**，不是固定 `-2`（用户纠正：「不一定后缀 -2，比如之前建了 2 单 -1 -2 但是都没发货呢？」）。两种查法都实测：**离线扫历史 `PB_*导入*.xlsx` 的 `PO Number-Line` 列**（286 个文件，结果与「`PBUS-<PO>` 存不存在」完全吻合）或通途模糊搜 `PBUS-{PO}`；注意导入 xlsx 里存的是**光号**（`137770200-1`），`PBUS-` 是通途侧店铺码。已在 `pb_orders` 落地成 `--reorder`/`--history-dir`。**② §6.1 补「通途 `orderStatus=despatched` 同样不等于真发」**：它和 ASN/面单一样只证明「建了单/建了标」，判定「真发」只有 **UPS 取件**一个口径。**③ §6.6 新增 2026-10-08 无货件复核实测**（10 个 PO：真发 2 —— `137770200-1` 与 `137974027` 的有货行 `-194`；只建标未取件 8），并记下本次**先拿 shipment/ASN 反推「已发货」、把 7 行改成已发、被用户纠正**的教训 —— ASN 与通途状态都替代不了 UPS。
 
