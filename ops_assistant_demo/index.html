@@ -210,12 +210,12 @@
   .composer { border-top: 1px solid var(--line); padding: 10px 12px; display: flex; gap: 8px; }
   .composer input { flex: 1; border: 1px solid #c9cdd4; border-radius: 2px; padding: 7px 8px; font: inherit; }
   .mask {
-    position: fixed; inset: 0; z-index: 30;
+    position: fixed; inset: 48px 360px 0 0; z-index: 30;
     background: rgba(29, 33, 41, 0.45);
     display: flex; justify-content: center; padding-top: 10vh;
   }
   .mask[hidden] { display: none; }
-  .form { width: min(560px, calc(100vw - 48px)); background: #fff; border-radius: 4px; box-shadow: 0 12px 32px rgba(0,0,0,.18); height: fit-content; }
+  .form { width: min(560px, calc(100% - 32px)); background: #fff; border-radius: 4px; box-shadow: 0 12px 32px rgba(0,0,0,.18); height: fit-content; }
   .dlg-h { padding: 14px 16px; border-bottom: 1px solid var(--line); }
   .dlg-h h3 { margin: 0; font-size: 16px; }
   .dlg-b { padding: 16px; display: grid; gap: 12px; }
@@ -487,6 +487,7 @@
     </div>
   </div>
   <div id="log"></div>
+  <div id="chat-approval" hidden style="padding:12px 14px;border-top:1px solid #e5e6eb;background:#f4f7ff"><p id="chat-change" style="margin:0 0 8px"></p><button class="solid" id="chat-allow" type="button">允许修改</button> <button class="ghost" id="chat-cancel" type="button">取消</button></div>
   <div class="chips">
     <button class="ghost" type="button" id="chip-script-ok">脚本演示 · 改测试限额</button>
     <button class="ghost" type="button" id="chip-script-no">后台实测 · 越权拒绝</button>
@@ -549,7 +550,6 @@ async function previewChange(p) {
   $("rule-scope").textContent="测试限额："+fieldValue("limit",change.before)+" → "+fieldValue("limit",change.after)+"。生产限额保持不变。"+(p.submit?"同时登记生产申请，等待复核。":"");
   await spotlight($("f-amount"),"填写新限额 · 尚未保存");await typeVisible($("f-amount"),change.after);
   await spotlight($("f-reason"),"填写调整原因");await typeVisible($("f-reason"),p.reason||"调整测试限额");
-  $("rule-ok").disabled=false;
   await spotlight($("rule-ok"),"请确认修改 · 生产限额保持不变",700);clearAim();
  } else {
   show("integration");$("ops-submit").checked=!!p.submit;
@@ -667,6 +667,7 @@ function richText(raw) {
 }
 function railResult(value){return ({pass:"通过",warning:"需关注",denied:"拒绝",deny:"拒绝",blocked:"拒绝",pending:"待确认",wait:"待确认",failed:"拒绝"})[value]||value;}
 function renderLog() {
+  renderApproval();
   $("log").innerHTML = log.map((m) => {
     if(m.kind==="evidence")return '<div class="msg bot"><details><summary>依据与安全检查 · '+(m.citations||[]).length+'条依据</summary>'+(m.citations||[]).map(d=>'<details><summary>'+esc(d.title)+' · '+esc(d.id)+'</summary>'+richText(d.content)+'</details>').join('')+'<p>'+(m.rails||[]).map(r=>esc(r.name)+'：'+esc(railResult(r.result))).join('；')+'</p><details><summary>工具与检查记录</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(JSON.stringify(m.trace||[],null,2))+'</pre></details></details></div>';
     if(m.kind==="long-answer")return '<div class="msg bot">'+richText(shortReply(m.text))+'<details><summary>展开完整回答</summary>'+richText(m.text)+'</details></div>';
@@ -690,6 +691,28 @@ function renderLog() {
   $("log").scrollTop = $("log").scrollHeight;
 }
 function push(entry) { log.push(entry); renderLog(); save(); return log.length - 1; }
+function renderApproval(){
+ const pending=(opsState?.proposals||[]).filter(p=>p.status==="pending");
+ const p=pending.find(p=>p.id===counterApproval?.id)||pending.at(-1);
+ $("chat-approval").hidden=!p||role()!=="operator";
+ if(!p)return;
+ $("chat-approval").dataset.proposal=p.id;
+ $("chat-change").textContent=p.changes.map(c=>fieldLabel(c.field)+"："+fieldValue(c.field,c.before)+" → "+fieldValue(c.field,c.after)).join("；")+"。生产不直接修改。"+(p.submit?"同时登记生产申请。":"");
+ $("chat-allow").disabled=busy;$("chat-cancel").disabled=busy;
+ $("chat-allow").textContent=busy?"正在填写 / 办理…":"允许修改";
+}
+async function confirmFromChat(cancel=false){
+ if(busy)return;
+ const id=$("chat-approval").dataset.proposal;
+ const p=(opsState?.proposals||[]).find(p=>p.id===id&&p.status==="pending");
+ if(!p){push({kind:"bot",text:"当前没有待确认修改。"});return;}
+ if(p.scenario==="counter"&&counterApproval?.id!==id){busy=true;try{await previewChange(p);}finally{busy=false;$("rule-ok").disabled=false;renderApproval();}}
+ push({kind:"user",text:cancel?"取消修改":"允许修改"});
+ if(p.scenario==="counter")await $(cancel?"rule-cancel":"rule-ok").onclick();
+ else{opsProposal=p;show("integration");await $(cancel?"ops-cancel":"ops-execute").onclick();}
+ renderApproval();
+}
+$("chat-allow").onclick=()=>confirmFromChat();$("chat-cancel").onclick=()=>confirmFromChat(true);
 function applyRoleVisibility() {
   const reader = role() === "reader";
   const reviewer = role() === "reviewer";
@@ -734,22 +757,22 @@ async function fillTicketDraft(){
   await spotlight($("ticket-body"),"填写变更内容 · 页面草稿",100);await typeVisible($("ticket-body"),body);
   await spotlight($("ticket-submit"),"草稿不会提交；正式申请随确认变更登记",500);
   push({kind:"bot",text:"申请草稿已填写，尚未提交。（按当前变更整理，不调用模型）"});
- }finally{busy=false;clearAim();}
+ }finally{busy=false;clearAim();$("rule-ok").disabled=false;renderApproval();}
 }
 async function submitTicket(){
  if(busy)return;busy=true;
- try{await spotlight($("ticket-submit"),"检查申请条件",100);$("ticket-error").hidden=false;$("ticket-error").textContent="这是页面草稿。正式申请请在联调修改时勾选‘同时生成生产变更申请’，确认修改后登记。";await spotlight($("ticket-error"),"草稿未提交，未生成工单",500);}finally{busy=false;clearAim();}
+ try{await spotlight($("ticket-submit"),"检查申请条件",100);$("ticket-error").hidden=false;$("ticket-error").textContent="这是页面草稿。正式申请请在联调修改时勾选‘同时生成生产变更申请’，确认修改后登记。";await spotlight($("ticket-error"),"草稿未提交，未生成工单",500);}finally{busy=false;clearAim();$("rule-ok").disabled=false;renderApproval();}
 }
-$("rule-cancel").onclick = async () => { if(busy)return;busy=true;try{await spotlight($("rule-cancel"),"取消本次修改 · 不保存",100);if(counterApproval)await opsFetch("/api/ops/cancel",{proposal_id:counterApproval.id});counterApproval=null;$("rule-dialog").hidden=true;await loadOps();await spotlight($("drill-amount"),"已取消，原限额保持不变",400);}catch(err){push({kind:"deny",text:err.message});}finally{busy=false;clearAim();} };
+$("rule-cancel").onclick = async () => { if(busy)return;busy=true;try{await spotlight($("rule-cancel"),"取消本次修改 · 不保存",100);if(counterApproval)await opsFetch("/api/ops/cancel",{proposal_id:counterApproval.id});counterApproval=null;$("rule-dialog").hidden=true;await loadOps();await spotlight($("drill-amount"),"已取消，原限额保持不变",400);}catch(err){push({kind:"deny",text:err.message});}finally{busy=false;clearAim();$("rule-ok").disabled=false;renderApproval();} };
 $("nav-rules").onclick = () => show("rules");
-$("nav-ticket").onclick = async () => {if(busy)return;busy=true;try{show("ticket");await loadOps();await spotlight($("ticket-list"),"变更申请列表",500);}finally{busy=false;clearAim();}};
-$("nav-audit").onclick = async () => {if(busy)return;busy=true;try{show("audit");await loadOps();await spotlight($("audit-body"),"后台办理记录",500);}finally{busy=false;clearAim();}};
+$("nav-ticket").onclick = async () => {if(busy)return;busy=true;try{show("ticket");await loadOps();await spotlight($("ticket-list"),"变更申请列表",500);}finally{busy=false;clearAim();$("rule-ok").disabled=false;renderApproval();}};
+$("nav-audit").onclick = async () => {if(busy)return;busy=true;try{show("audit");await loadOps();await spotlight($("audit-body"),"后台办理记录",500);}finally{busy=false;clearAim();$("rule-ok").disabled=false;renderApproval();}};
 $("nav-integration").onclick = () => show("integration");
 $("nav-knowledge").onclick = () => show("knowledge");
 $("nav-safety").onclick = () => show("safety");
 $("nav-guide").onclick = () => show("guide");
 $("ticket-submit").onclick = () => submitTicket();
-$("btn-edit-drill").onclick = async () => { if (!busy && role() === "operator") {const pending=(opsState?.proposals||[]).filter(p=>p.scenario==="counter"&&p.status==="pending").at(-1);if(pending){busy=true;try{await previewChange(pending);}finally{busy=false;clearAim();}return;}counterApproval=null;$("rule-scope").textContent="只写入测试环境。生产环境限额不会变更。";$("f-amount").readOnly=false;$("f-reason").readOnly=false;$("f-amount").value=limits.drill;$("f-reason").value="";$("rule-ok").disabled=false;$("rule-dialog").hidden=false;} else if (role() === "reader") { stamp("已拒绝", "综合柜员手改测试限额"); push({ kind: "deny", text: "综合柜员不能修改限额。" }); } };
+$("btn-edit-drill").onclick = async () => { if (!busy && role() === "operator") {const pending=(opsState?.proposals||[]).filter(p=>p.scenario==="counter"&&p.status==="pending").at(-1);if(pending){busy=true;try{await previewChange(pending);}finally{busy=false;clearAim();$("rule-ok").disabled=false;renderApproval();}return;}counterApproval=null;$("rule-scope").textContent="只写入测试环境。生产环境限额不会变更。";$("f-amount").readOnly=false;$("f-reason").readOnly=false;$("f-amount").value=limits.drill;$("f-reason").value="";$("rule-ok").disabled=false;$("rule-dialog").hidden=false;} else if (role() === "reader") { stamp("已拒绝", "综合柜员手改测试限额"); push({ kind: "deny", text: "综合柜员不能修改限额。" }); } };
 $("rule-ok").onclick=async()=>{
  if(busy)return;const amount=Number($("f-amount").value);
  if(!Number.isFinite(amount)||!$("f-amount").value.trim()){push({kind:"deny",text:"请填写明确金额。"});return;}
@@ -772,6 +795,8 @@ $("ask").onsubmit = (e) => {
   e.preventDefault();
   const text = $("ask-input").value.trim();
   $("ask-input").value = "";
+  if(/^(允许(?:修改|执行)?|确认修改|同意(?:修改|执行)?)[。！!\s]*$/.test(text)){confirmFromChat();return;}
+  if(/^(取消(?:修改)?|不允许)[。！!\s]*$/.test(text)){confirmFromChat(true);return;}
   if (text) askOps(text,scenarioFor(text,!$("view-integration").hidden?"integration":"counter"));
 };
 let opsState = null;
@@ -878,7 +903,7 @@ async function proposeOps(scenario, changes, reason, submit) {
   } catch (err) {
     showOpsError(err);
     push({ kind: "deny", text: String(err.message || err) });
-  } finally {busy=false;clearAim();}
+  } finally {busy=false;$("rule-ok").disabled=false;clearAim();renderApproval();}
 }
 async function reviewTicket(id, approve) {
  if(busy)return;busy=true;
@@ -888,7 +913,7 @@ async function reviewTicket(id, approve) {
   const data=await opsFetch("/api/ops/review",{ticket_id:id,approve});await loadOps();
   push({kind:"bot",text:approve?"申请已通过复核，生产参数未修改。":"申请已驳回，生产参数未修改。"});
   await spotlight($("ops-tickets"),"复核结果已登记 · 生产保持不变",800);
- }catch(err){showOpsError(err);}finally{busy=false;clearAim();}
+ }catch(err){showOpsError(err);}finally{busy=false;clearAim();$("rule-ok").disabled=false;renderApproval();}
 }
 async function loadKnowledge(animate=false) {
   if(animate&&busy)return;if(animate)busy=true;
@@ -905,7 +930,7 @@ async function loadKnowledge(animate=false) {
     if(animate)await spotlight($("kb-body"),docs.length?"已找到 "+docs.length+" 条可见依据":"没有找到可见资料",600);
   } catch (err) {
     $("kb-body").innerHTML = `<tr><td class="empty" colspan="6">${esc(err.message || err)}</td></tr>`;
-  } finally {if(animate){busy=false;clearAim();}}
+  } finally {if(animate){busy=false;clearAim();$("rule-ok").disabled=false;renderApproval();}}
 }
 async function runSafety(caseName) {
   if(busy)return;
@@ -930,7 +955,7 @@ async function runSafety(caseName) {
   } catch (err) {
     $("safety-head").textContent = "没有跑成";
     $("safety-body").textContent = String(err.message || err);
-  } finally {busy=false;clearAim();}
+  } finally {busy=false;clearAim();$("rule-ok").disabled=false;renderApproval();}
 }
 async function askOps(text,scenario="integration"){
  if(busy)return;scenario=scenarioFor(text,scenario);busy=true;
@@ -944,12 +969,12 @@ async function askOps(text,scenario="integration"){
   if(data.denied?.length)push({kind:"deny",text:data.denied.map(d=>d.message||"此操作被后台拒绝。").join("\n")});
   if(data.model)$("model-line").textContent=data.model+" · 真实模型 · "+(scenario==="integration"?"联调":"柜面");
   if(data.state){opsState=data.state;renderOps();}else await loadOps();
-  if(data.proposal){await previewChange(data.proposal);const p=data.proposal;log[replyAt].text=p.scenario==="counter"?"已填写"+(p.changes.find(c=>c.field==="limit").after/10000).toLocaleString("zh-CN",{maximumFractionDigits:4})+"万元。请点“确认修改”，生产限额不变。":"联调参数已填写。请核对差异并确认修改。";}
+  if(data.proposal){await previewChange(data.proposal);const p=data.proposal;log[replyAt].text=p.scenario==="counter"?"已填写"+(p.changes.find(c=>c.field==="limit").after/10000).toLocaleString("zh-CN",{maximumFractionDigits:4})+"万元。是否允许修改？生产限额不变。":"联调参数已填写。核对差异后，在对话里允许即可。";}
   else if(data.noop){show(scenario==="counter"?"rules":"integration");await spotlight($(scenario==="counter"?"drill-amount":"ops-config"),"当前已是目标值，无需重复修改",600);}
   else if(data.denied?.length){await spotlight($("role"),"后台已核对当前岗位权限",150);await spotlight($("log").lastElementChild,"本次操作被拒绝 · 未保存",500);}
 
  }catch(err){log.splice(pending,1);push({kind:"deny",text:String(err.message||err)+"。可使用明确标注的人工修改，仍需后台授权与确认。"});}
- finally{busy=false;clearAim();renderLog();}
+ finally{busy=false;$("rule-ok").disabled=false;clearAim();renderLog();}
 }
 $("ops-propose").onclick = () => proposeOps("integration", [
   { field: "timeout", value: Number($("ops-timeout").value) },
@@ -970,7 +995,7 @@ $("ops-execute").onclick = async () => {
   } catch (err) {
     showOpsError(err);
     push({ kind: "deny", text: String(err.message || err) });
-  } finally {busy=false;applyRoleVisibility();}
+  } finally {busy=false;applyRoleVisibility();renderApproval();}
 };
 $("ops-cancel").onclick = async () => {
   if (!opsProposal||busy) return;busy=true;
@@ -979,7 +1004,7 @@ $("ops-cancel").onclick = async () => {
     const data = await opsFetch("/api/ops/cancel", { proposal_id: opsProposal.id });
     push({ kind: "bot", text: data.message || "已跳过。" });
     await loadOps();
-  } catch (err) { showOpsError(err); } finally{busy=false;clearAim();}
+  } catch (err) { showOpsError(err); } finally{busy=false;clearAim();$("rule-ok").disabled=false;renderApproval();}
 };
 $("ops-reset").onclick = async () => {
   if(busy)return;
@@ -990,9 +1015,9 @@ $("ops-reset").onclick = async () => {
     $("ops-readback").hidden = false;
     $("ops-readback").textContent = data.message || "已恢复。";
     log=[];counterApproval=null;$("rule-dialog").hidden=true;await loadOps();push({kind:"bot",text:"当前模拟工作区已重置。"});await spotlight($("ops-config"),"初始值已恢复",600);
-  } catch (err) { showOpsError(err); } finally{busy=false;clearAim();}
+  } catch (err) { showOpsError(err); } finally{busy=false;clearAim();$("rule-ok").disabled=false;renderApproval();}
 };
-$("ops-rollback").onclick=async()=>{if(busy)return;const executed=(opsState?.proposals||[]).filter(p=>p.status==="executed");const last=executed[executed.length-1];if(!last){push({kind:"bot",text:"没有已执行修改可恢复。"});return;}busy=true;try{await spotlight($("ops-rollback"),"读取上次修改，准备恢复值",150);const proposal=await opsFetch("/api/ops/rollback",{proposal_id:last.id});await loadOps();await previewChange(proposal);push({kind:"bot",text:"已填写恢复值，请确认修改；已有生产申请不会直接撤销。"});}catch(err){push({kind:"deny",text:err.message});}finally{busy=false;clearAim();}};
+$("ops-rollback").onclick=async()=>{if(busy)return;const executed=(opsState?.proposals||[]).filter(p=>p.status==="executed");const last=executed[executed.length-1];if(!last){push({kind:"bot",text:"没有已执行修改可恢复。"});return;}busy=true;try{await spotlight($("ops-rollback"),"读取上次修改，准备恢复值",150);const proposal=await opsFetch("/api/ops/rollback",{proposal_id:last.id});await loadOps();await previewChange(proposal);push({kind:"bot",text:"已填写恢复值，请确认修改；已有生产申请不会直接撤销。"});}catch(err){push({kind:"deny",text:err.message});}finally{busy=false;clearAim();$("rule-ok").disabled=false;renderApproval();}};
 $("kb-search").onclick = () => loadKnowledge(true);
 $("safety-cases").onclick = (e) => {
   const btn = e.target.closest("[data-case]");
