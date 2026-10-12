@@ -515,7 +515,7 @@
     </div>
   </form>
 </div>
-<dialog id="login-dialog" style="border:1px solid #e5e6eb;max-width:480px;padding:24px;border-radius:4px"><form id="login-form"><h3>演示账号登录</h3><p class="sub">模拟账号，不是银行 SSO。身份由后台会话确认，切换保留本工作区。</p><label style="display:block;margin:12px 0">身份 <select id="login-user"><option value="operator">林晓 · 柜面主管</option><option value="reader">陈默 · 综合柜员（只读）</option><option value="reviewer">周宁 · 参数管理员（复核）</option></select></label><label style="display:block;margin:12px 0">演示口令 <input id="login-password" type="password" autocomplete="current-password" required placeholder="公开演示口令 demo2026" /></label><label style="display:block;margin:12px 0">访问码（如部署要求） <input id="login-access" type="password" autocomplete="off" /></label><p id="login-error" class="lock" role="alert"></p><button class="solid" type="submit">登录演示</button><button class="ghost" type="button" id="login-close">取消</button></form></dialog><script>
+<dialog id="login-dialog" style="border:1px solid #e5e6eb;max-width:480px;padding:24px;border-radius:4px"><form id="login-form"><h3>选择模拟岗位</h3><p class="sub">模拟身份，不是银行 SSO；公开演示口令已填好。后台仍校验岗位权限，切换保留本工作区。</p><label style="display:block;margin:12px 0">身份 <select id="login-user"><option value="operator">林晓 · 柜面主管</option><option value="reader">陈默 · 综合柜员（只读）</option><option value="reviewer">周宁 · 参数管理员（复核）</option></select></label><label style="display:block;margin:12px 0">演示口令（已填好） <input id="login-password" type="password" autocomplete="current-password" required value="demo2026" placeholder="公开演示口令 demo2026" /></label><label style="display:block;margin:12px 0">访问码（如部署要求） <input id="login-access" type="password" autocomplete="off" /></label><p id="login-error" class="lock" role="alert"></p><button class="solid" type="submit">进入演示</button><button class="ghost" type="button" id="login-close">取消</button></form></dialog><script>
 const $ = (id) => document.getElementById(id);
 let limits = { drill: 0, prod: 0 }, drillReason = "等待后台读取";
 let tickets = [], audit = [], log = [], busy = false;
@@ -1025,9 +1025,9 @@ $("safety-cases").onclick = (e) => {
 };
 
 $("login-open").onclick=()=>{$("login-user").value=role();$("login-dialog").showModal();};$("login-close").onclick=()=>$("login-dialog").close();
-async function loginAs(username,password,accessCode){await opsFetch("/api/login",{username,password,access_code:accessCode});log=[];opsProposal=null;counterApproval=null;$("rule-dialog").hidden=true;clearAim();$("ops-proposal").hidden=true;$("ops-readback").hidden=true;$("log").innerHTML="";loginPassword=String(password);loginAccess=accessCode;$("login-password").value="";$("login-access").value="";$("login-dialog").close();await loadOps();}
+async function loginAs(username,password,accessCode){await opsFetch("/api/login",{username,password,access_code:accessCode});log=[];opsProposal=null;counterApproval=null;$("rule-dialog").hidden=true;clearAim();$("ops-proposal").hidden=true;$("ops-readback").hidden=true;$("log").innerHTML="";loginPassword=String(password);loginAccess=accessCode;$("login-password").value="demo2026";$("login-access").value="";$("login-dialog").close();await loadOps();}
 $("login-form").onsubmit=async event=>{event.preventDefault();try{await loginAs($("login-user").value,$("login-password").value,$("login-access").value);$("login-error").textContent="";}catch(err){$("login-error").textContent=err.message;}};
-$("role").onchange=async()=>{if(busy){$("role").value=role();return;}const desired=$("role").value;$("role").value=role();if(!loginPassword){$("login-user").value=desired;$("login-dialog").showModal();return;}try{await loginAs(desired,loginPassword,loginAccess);}catch(err){push({kind:"deny",text:err.message});$("login-dialog").showModal();}};
+$("role").onchange=async()=>{if(busy){$("role").value=role();return;}const desired=$("role").value;$("role").value=role();try{await loginAs(desired,loginPassword||"demo2026",loginAccess);}catch(err){push({kind:"deny",text:err.message});$("login-dialog").showModal();}};
 push({kind:"bot",text:"告诉我要改什么，我会在页面填写，等你确认后保存。"});loadOps();
 </script>
 </body>
