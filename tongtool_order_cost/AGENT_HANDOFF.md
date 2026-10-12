@@ -85,6 +85,11 @@ Workbook 标题：`通途订单202606-特殊规则`（1.7.0 用）、`通途订�
 3. `01_科目瀑布` 各科 Δ 与总览一致
 4. SKU 替换：apply 后旧名计数为 0，新名计数 = 原旧名计数，gray60 计数不变
 
+## 相关档案
+
+- [EN 直接采购件用「自套 BOM」出成本惯例 + 骨架缺口](../docs/solutions/architecture-patterns/en-direct-purchase-self-bom.md)
+  —— 订单成本码为空时，先查物料有没有自套 BOM / 在不在皮壳平均表（`WL-shape-frame` 骨架就是漏项）
+
 ## 凭证
 
 | 用途 | 本地文件 | git |
