@@ -30,12 +30,30 @@ related_components: [EN_API, tongtool_order_cost]
 
 直接采购件维护成本的做法：
 
-1. 维护**物料价格（采购价）** → EN `Item.valuation_rate` / `last_purchase_rate`。
-2. 建一个**「自己套自己」的 BOM**：唯一组件就是该物料本身，`qty=1`，`rate=采购成本`。
-3. 这种架构**没有皮壳 / 半成品**；`绍兴发货方式` 可写 `成品`；**国外不需要加工**（国外加工成本 = 0）；
-   重量可能缺（重量用于头程）。
+1. 维护**物料价格（采购价）** → EN `Item Price` 的 `标准采购` 价目（另有一份 `供应链参考采购` 仅供参考）。
+2. 建一个**「自己套自己」的 BOM**：唯一组件就是该物料本身，`qty=1`、`rm_cost_as_per='Price List'`、
+   `buying_price_list='标准采购'` → BOM 的 `total_cost` 自动 = 该物料的**标准采购价**。
+3. 这种架构**没有皮壳 / 半成品**；**国外不需要加工**（国外加工成本 = 0）；重量可能缺（重量用于头程）。
+   实测：既有的自套 BOM 物料在 `BOM Cost List` / `V2` 报表里 **`shipping_method` 留空**、
+   成本出在 **`cost_fg`**（`cost_pk/cost_nd/sx_cost_all` 均为 0）——不必强填 `绍兴发货方式`。
 
 目的：**让 EN 成本报表里出现成本数字**（报表按 BOM 展开，没有 BOM 就不出数）。
+
+### 怎么建（实测可用）
+
+```json
+POST /api/resource/BOM
+{ "item": "<物料>", "company": "FZH", "uom": "个", "quantity": 1,
+  "is_active": 1, "is_default": 1, "allow_alternative_item": 1,
+  "rm_cost_as_per": "Price List", "buying_price_list": "标准采购",
+  "currency": "CNY", "conversion_rate": 1,
+  "items": [ {"item_code": "<物料>", "qty": 1, "uom": "个", "stock_uom": "个"} ] }
+# POST 建出来是草稿(docstatus=0)、total_cost 已按标准采购价算好；
+# 再 PUT {docstatus:1, modified:<回读值>} 提交（直接 frappe.client.submit 可能报 TimestampMismatch）。
+```
+
+未建成本前的报表表现：`item_group=主体骨架` 跑 `BOM Cost List` / `V2` → `cost_fg=0`。
+建成后 → `cost_fg=` 标准采购价。
 
 ### 自套 BOM 的结构特征（实测）
 
@@ -73,6 +91,24 @@ BOM-HM1510-YD2-135x152x80-WHITE-001
   单独售卖的 `SOFALSHAPEDBRACKET-IRON-55x45x45` 与 `MUFFINSOFABED-IRON-55x45x45` 都不是。
 
 **结论**：`WL-shape-frame` 属于「该建自套 BOM 但没建」的漏项，成本报表里没有它的成本数字。
+
+### 试验结果（2026-10-12，已建）
+
+- 建了 `BOM-ZTGJ5525-SOFALSHAPEDBRACKET-IRON-55x45x45-001`（唯一组件=自身 qty=1，
+  `标准采购` 价取 22.5，`total_cost=22.5`，已提交 docstatus=1）。
+- `BOM Cost List` / `BOM Cost List V2`（`item_group=主体骨架`）该行 **`cost_fg` 从 0 → 22.5**。
+- 形状与既有自套 BOM 物料（如 `HM1510-YD2-135x152x80-WHITE`：`cost_fg=721.05`）完全一致。
+- 撤销方式：先 cancel（docstatus 1→2）再 delete `BOM-<item>-001`。
+
+### 其余候选（未建）
+
+| 物料 | 标准采购价 | 说明 |
+|---|---|---|
+| `ZTGJ5525-SOFALSHAPEDBRACKET-IRON-75x50x45` | 24.0 | 有价，可建（`last_purchase_rate` 21.239 与价目表 24.0 不一致，以价目表为准） |
+| `ZTGJ5525-MUFFINSOFABED-IRON-55x45x45` | **无 Item Price** | 需先建 `标准采购` 价，才能建自套 BOM |
+| `ZTGJ5525-KTJDBYDY-IRON-60x50x36` | 20.0(last_pur) | 已是 `PK#` 皮壳 BOM 组件，成本走那条路 |
+| `ZTGJ5525-SODASOFA-IRON-100x58x48` | 300.0(last_pur) | 同上 |
+| `ZTGJ5525-LARGECUSHIONEDROCKINGCHAIR-…` | 236.38(last_pur) | 同上 |
 
 ## When to Apply
 
