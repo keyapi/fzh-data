@@ -1,31 +1,31 @@
 ---
-type: Handoff
-title: 网点参数台演示
-module: ops_assistant_demo
-date: 2026-10-11
-tags: [demo, guardrails, agent]
+type: Reference
+title: 受控办理助手交接
 ---
 
-# 网点参数台演示
+# 受控办理助手交接
 
-假的柜面参数页。浏览器里的助手调用 OpenAI 兼容网关，写操作等人点允许。
+先读 [本次交接与续办清单](docs/handoff-2026-10-12.md)、[规格](docs/competition-plan.md)、[边界](docs/security-boundaries.md)、[剧本](docs/demo-script.md)、[静态配置暴露经验](docs/solutions/static-config-exposure.md)。独立竞赛仓库不读取公司环境凭证，不连接真实银行系统。
 
-## 新对话必读
+目标：保留原蓝色“柜面参数 · 对公结算”外壳，左侧保留联调配置、知识依据、安全实测和演示说明。新后台会话与领域执行统一全部入口；已修复Cursor版请求头身份及旧聊天旁路，39项自动化通过且0跳过，当前核验范围见交接与审计。运行使用 `uv run python server.py`。部署地址和私有路径不写入公开仓库。
 
-- [先查再决定，护栏看动作](../docs/solutions/architecture-patterns/branch-param-desk-read-then-guard.md)
-- [助手回复不要原样显示 markdown](../docs/solutions/developer-experience/ops-assistant-model-reply-formatting.md)
-- [给人看的运行说明](README.md)
+## 保留的设计
 
-## 运行
+- 身份来自后台会话，不能信任请求角色、菜单隐藏或模型自报权限。
+- 有效操作范围是用户权限、工具能力、请求范围、业务条件的交集。
+- 确认绑定不可变提案摘要、十分钟有效期、状态版本；参数变化需重新确认。
+- 生产仅形成申请，复核也不产生生产配置写入。
+- 配置和工单写入使用事务，实际结果重新读取；失败回滚不得显示成功。
+- 金额以元保存，初始 500000 元（50 万元）；超时以秒、重试以次数存储。
+- 资料均模拟；有效版本、适用环境和引用可见。资料不能授予执行权限。
+- page-agent 仅保留历史调研，不能恢复公开代理或通用执行工具。
+- 演示登录不是 BOC SSO，SQLite 日志不是防篡改监管审计。
 
-`python server.py`，默认 `127.0.0.1:8765`。密钥从本目录 `.env`，其次才是仓库里已有的 Open WebUI `.env`。不要把 Key 写进页面或文档。
+环境见 [.env.example](.env.example)。禁止提交 Key、数据库、截图和运行数据。用户拒绝本次轮换 Key，不能宣称历史暴露风险消失。Git 走分支和 PR。根索引用 `uv run python scripts/update_index.py` 自动同步，不跨仓库修改。
 
-同一页左侧还有联调配置、知识依据、安全实测、演示说明。这些写入走 `/api/ops/*` 和 `domain.py`：确认后才改测试配置，生产只形成申请。
+## 主仓经验入口
 
-## 不要再做的事
+- [先查再决定与动作护栏](../docs/solutions/architecture-patterns/branch-param-desk-read-then-guard.md)
+- [助手回复排版](../docs/solutions/developer-experience/ops-assistant-model-reply-formatting.md)
 
-- 不要用整句关键词「生产」「导出」否掉同一句里合法的测试限额修改。
-- 不要在用户没给金额时默认改成 20 万。
-- 不要把 Pi 或 DeepSeek Harness 整包嵌进来。借的是「读工具结果交回模型」这一轮。网页里自己点控件用 page-agent，并在每步之前等人点允许。
-- 允许按钮没被真实点通过之前，不要把页面助手放到对外演示。page-agent 遮罩会盖住侧边栏；刷新后未完成的允许按钮没有点击。
-- 不要把模型回复原样塞进气泡。星号和竖线表要先转义再排版，并且要看侧边栏，不要只核对接口字符串。
+主仓索引由根scripts/update_index.py生成；子模块按README在模块目录运行测试。

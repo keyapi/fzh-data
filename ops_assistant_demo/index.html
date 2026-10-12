@@ -239,7 +239,8 @@
 <header>
   <div class="logo">柜面参数<small>对公结算</small></div>
   <span class="meta">南京东路支行 · 31010001</span>
-  <select id="role" class="pill">
+  <button id="login-open" type="button" class="pill" style="margin-left:auto">登录 · 模拟身份</button>
+  <select id="role" class="pill" style="margin-left:0" aria-label="切换演示角色">
     <option value="operator">林晓 · 柜面主管 E3301</option>
     <option value="reader">陈默 · 综合柜员 E3302</option>
     <option value="reviewer">周宁 · 参数管理员 A1028</option>
@@ -260,7 +261,7 @@
   <section id="view-rules">
     <div class="crumb">柜面参数 / 对公结算 / 限额参数</div>
     <div class="page-head"><h1>单笔对公转账限额</h1></div>
-    <p class="notice">演示库与生产隔离，不产生资金划转。参数变更会先框出字段，确认后才写入。</p>
+    <p class="notice">演示库与生产隔离，不产生资金划转。柜面与联调参数均由后台保存；确认具体提案后才写入并核验。</p>
     <form class="query" onsubmit="return false">
       <label>网点<input type="text" value="31010001 南京东路支行" readonly /></label>
       <label>币种<input type="text" value="人民币 CNY" readonly /></label>
@@ -292,7 +293,7 @@
             <td><span class="tag prod">生产</span></td>
             <td class="num" id="prod-amount">500,000.00</td>
             <td><span class="tag read">只读</span></td>
-            <td class="note">仅参数管理员周宁（A1028）可改，不能从测试同步</td>
+            <td class="note">本系统所有岗位仅可申请，复核通过也不直接改生产</td>
             <td class="muted">无修改权限</td>
           </tr>
           <tr id="card-export">
@@ -308,7 +309,7 @@
       </table>
     </div>
     <div class="panel" id="card-note" style="margin-top:12px">
-      <div class="panel-bar"><span>值班备注</span><span>这是后加的字段，旧助手没有对应工具</span></div>
+      <div class="panel-bar"><span>值班备注</span><span>仅页面草稿，不计作后台保存</span></div>
       <div style="padding:12px">
         <label>给下一班<input id="site-note" type="text" placeholder="例如：夜班注意，测试限额不要同步生产" style="min-width:280px" /></label>
       </div>
@@ -327,7 +328,7 @@
       <label>标题<span class="req">*</span><input id="ticket-title" type="text" placeholder="请输入变更标题" /></label>
       <label>变更说明<span class="req">*</span><textarea id="ticket-body" rows="5" placeholder="请说明调整内容、影响范围，以及是否需要同步生产"></textarea></label>
       <div class="form-actions">
-        <button class="solid" id="ticket-submit" type="button">提交工单</button>
+        <button class="solid" id="ticket-submit" type="button">检查申请条件（草稿不会提交）</button>
       </div>
       <p id="ticket-error" hidden></p>
       <p class="toast" id="ticket-done" hidden></p>
@@ -376,7 +377,7 @@
       <label>变更理由<span class="req">*</span><input id="ops-reason" type="text" value="联调连续超时。按现行规范把超时调到 60 秒，并把重试降到 1 次，避免重复处理。" /></label>
       <label style="display:flex;align-items:center;gap:8px">同时生成生产变更申请（只建申请，不写生产）<input id="ops-submit" type="checkbox" checked style="min-width:0" /></label>
       <div class="form-actions">
-        <button class="ghost" id="ops-reset" type="button">恢复初始值</button>
+        <button class="ghost" id="ops-reset" type="button">重置工作区</button><button class="ghost" id="ops-rollback" type="button">准备恢复提案</button>
         <button class="solid" id="ops-propose" type="button">生成提案</button>
       </div>
     </form>
@@ -454,13 +455,13 @@
   <section id="view-guide" hidden>
     <div class="crumb">柜面参数 / 科技运营 / 演示说明</div>
     <div class="page-head"><h1>五分钟主线</h1></div>
-    <p class="notice">全部业务是模拟数据，模型是真实的。身份用顶栏岗位切换，不是银行生产账号。生产配置在本系统里永远不写。</p>
+    <p class="notice">全部业务是模拟数据，模型是真实的。演示账号由后台登录会话确认；不是银行 SSO 或生产账号。生产配置在本系统里永远不写。</p>
     <div class="panel">
       <div class="panel-bar"><span>讲述顺序</span><span>模型慢时先展示已有读回，不要把固定脚本说成模型</span></div>
       <table>
         <thead><tr><th>时间</th><th class="note">做什么</th><th class="note">评委能看到</th></tr></thead>
         <tbody>
-          <tr><td>0:25</td><td class="wrap">点「让助手办联调」，或口头说把超时调到 60 秒、重试调到 1 次</td><td class="wrap">资料编号和版本，当前仍是 30 秒 / 2 次</td></tr>
+          <tr><td>0:25</td><td class="wrap">点「让助手办联调」，明确要求超时 60 秒、重试 1 次，核验后提交生产变更申请（仅申请）</td><td class="wrap">资料编号和版本，当前仍是 30 秒 / 2 次</td></tr>
           <tr><td>1:10</td><td class="wrap">展开待确认提案，先不要点允许</td><td class="wrap">只改测试；生产申请还没执行</td></tr>
           <tr><td>1:50</td><td class="wrap">点允许并执行</td><td class="wrap">测试变成 60 秒 / 1 次并读回；生产仍是 30 秒 / 2 次</td></tr>
           <tr><td>2:30</td><td class="wrap">再说「直接把生产也改成 60 秒」</td><td class="wrap">后台拒绝，生产数字不动</td></tr>
@@ -472,12 +473,12 @@
     <div class="panel" style="margin-top:12px">
       <div class="panel-bar"><span>答疑备用</span><span>柜面限额仍在「限额参数」</span></div>
       <div style="padding:12px" class="wrap">
-        左侧限额页保留原来的柜面操作：50 万改测试限额、越权拒绝、变更单、值班备注。同一套确认和读回在「联调配置」底部，建议值 15 万（150000 元）。1.5 万是 15000 元。没说金额就追问，不默认 20 万。页面助手按钮仍在，它要走的公开 /v1 已关闭，避免模型密钥变成对外开放的代理。
+        左侧限额页保留原来的柜面操作：50 万改测试限额、越权拒绝、变更单、值班备注。同一套确认和读回在「联调配置」底部，建议值 15 万（150000 元）。1.5 万是 15000 元。没说金额就追问，不默认 20 万。页面助手不进入主线。所有柜面与联调写入经过同一后台控制层；页面草稿不算执行结果。
       </div>
     </div>
   </section>
 </main>
-<aside data-page-agent-ignore>
+<aside>
   <div class="ahead">
     <div class="mark">助</div>
     <div>
@@ -487,12 +488,11 @@
   </div>
   <div id="log"></div>
   <div class="chips">
-    <button class="ghost" type="button" id="chip-script-ok">演示 · 改测试限额</button>
-    <button class="ghost" type="button" id="chip-script-no">演示 · 越权被拒绝</button>
+    <button class="ghost" type="button" id="chip-script-ok">脚本提案 · 改测试限额</button>
+    <button class="ghost" type="button" id="chip-script-no">后台实测 · 越权拒绝</button>
     <button class="ghost" type="button" id="chip-port">让助手改限额</button>
     <button class="ghost" type="button" id="chip-ticket">让助手填变更单</button>
     <button class="ghost" type="button" id="chip-integration">让助手办联调</button>
-    <button class="ghost" type="button" id="chip-page-agent">页面助手试试</button>
   </div>
   <form class="composer" id="ask">
     <input id="ask-input" placeholder="描述要改的参数" />
@@ -513,46 +513,15 @@
     </div>
   </form>
 </div>
-<div id="spot"></div>
-<div id="cursor"></div>
-<script>
+<dialog id="login-dialog" style="border:1px solid #e5e6eb;max-width:480px;padding:24px;border-radius:4px"><form id="login-form"><h3>演示账号登录</h3><p class="sub">模拟账号，不是银行 SSO。身份由后台会话确认，切换保留本工作区。</p><label style="display:block;margin:12px 0">身份 <select id="login-user"><option value="operator">林晓 · 柜面主管</option><option value="reader">陈默 · 综合柜员（只读）</option><option value="reviewer">周宁 · 参数管理员（复核）</option></select></label><label style="display:block;margin:12px 0">演示口令 <input id="login-password" type="password" autocomplete="current-password" required placeholder="公开演示口令 demo2026" /></label><label style="display:block;margin:12px 0">访问码（如部署要求） <input id="login-access" type="password" autocomplete="off" /></label><p id="login-error" class="lock" role="alert"></p><button class="solid" type="submit">登录演示</button><button class="ghost" type="button" id="login-close">取消</button></form></dialog><script>
 const $ = (id) => document.getElementById(id);
-const KEY = "ops-assistant-demo-v7";
-const spot = $("spot");
-const cursor = $("cursor");
-let limits = { drill: 500000, prod: 500000 };
-let drillReason = "初始生效，尚未调整";
-let tickets = [];
-let audit = [];
-let log = [];
-let busy = false;
-
+let limits = { drill: 0, prod: 0 }, drillReason = "等待后台读取";
+let tickets = [], audit = [], log = [], busy = false;
+let loginPassword = "", loginAccess = "";
 function yuan(n) { return (n / 10000).toFixed(0) + " 万元"; }
 function money(n) { return Number(n).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
-function save() {
-  sessionStorage.setItem(KEY, JSON.stringify({ limits, drillReason, tickets, audit, log }));
-}
-function load() {
-  try {
-    const raw = sessionStorage.getItem(KEY);
-    if (!raw) return;
-    const data = JSON.parse(raw);
-    limits = data.limits || limits;
-    drillReason = data.drillReason || drillReason;
-    tickets = data.tickets || [];
-    audit = data.audit || [];
-    log = data.log || [];
-    let interrupted = false;
-    log = log.filter((m) => {
-      if (m.kind === "bot" && m.text === "正在加载页面助手…") { interrupted = true; return false; }
-      return true;
-    });
-    log.forEach((m) => {
-      if ((m.kind === "card" || m.kind === "steps") && !m.done) { m.done = true; interrupted = true; }
-    });
-    if (interrupted) log.push({ kind: "bot", text: "页面刷新后，上一次页面助手已经中断。允许和跳过不会继续那一轮。请再点「页面助手试试」。" });
-  } catch (_) {}
-}
+function save() {} // Business data and authorization are server-owned.
+function load() {} // Never restore browser-authored state.
 function renderLimits() {
   $("drill-amount").textContent = money(limits.drill);
   $("prod-amount").textContent = money(limits.prod);
@@ -563,14 +532,8 @@ function renderAudit() {
     `<tr><td>${esc(a.time)}</td><td>${esc(a.who)}</td><td>${esc(a.what)}</td><td class="${a.result === "已拒绝" ? "lock" : "allow"}">${esc(a.result)}</td></tr>`
   ).join("");
 }
-function stamp(result, what) {
-  const who = role() === "reader" ? "综合柜员陈默" : (role() === "reviewer" ? "参数管理员周宁" : "柜面主管林晓");
-  audit.unshift({ time: new Date().toLocaleTimeString("zh-CN", { hour12: false }), who, what, result });
-  renderAudit();
-}
-function esc(s) {
-  return String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
-}
+function stamp(result, what) { push({kind:"bot",text:what+"（"+result+"）；实际审计请查看后台办理记录。"}); }
+function esc(s) {return String(s ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 function inlineRich(s) {
   return esc(s).replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/`([^`]+)`/g, "<code>$1</code>");
 }
@@ -651,6 +614,7 @@ function richText(raw) {
   flushList();
   return blocks.join("") || "<p>" + inlineRich(raw) + "</p>";
 }
+function railResult(value){return ({pass:"通过",warning:"需关注",denied:"拒绝",deny:"拒绝",blocked:"拒绝",pending:"待确认",wait:"待确认",failed:"拒绝"})[value]||value;}
 function renderLog() {
   $("log").innerHTML = log.map((m) => {
     if (m.kind === "user") return `<div class="msg user">${esc(m.text)}</div>`;
@@ -663,10 +627,13 @@ function renderLog() {
       return `<div class="msg bot">${m.lines.map((line, i) =>
         `<div class="step ${i === m.active ? "on" : ""}">${i < m.active ? "✓ " : ""}${esc(line)}</div>`).join("")}</div>`;
     }
+    if(m.kind==="verification")return '<div class="msg bot"><b>'+esc(m.text)+'</b><p>'+esc(m.independent?'提交后独立数据库核验':'后台读回')+'：'+esc(m.values)+'</p><details><summary>展开核验原始证据</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px">'+esc(JSON.stringify(m.evidence,null,2))+'</pre></details></div>';
+    if(m.kind==="trace")return '<div class="msg bot"><b>办理步骤</b><ol>'+(m.items||[]).map((t,i)=>'<li>'+esc(typeof t==='string'?t:(t.step||t.name||'后台检查'))+'</li>').join('')+'</ol><details><summary>展开工具返回证据</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px">'+esc(JSON.stringify(m.items,null,2))+'</pre></details></div>';
+    if (m.kind === "citations") return '<div class="msg bot"><b>可核查依据</b>'+(m.items||[]).map(d=>'<details><summary>'+esc(d.id)+' · '+esc(d.title)+' · v'+esc(d.version)+'</summary><div style="white-space:pre-wrap">'+esc(d.content||'')+'</div></details>').join('')+'</div>';
     if (m.kind === "rails") {
-      const tone = { "通过": "ok", "拦截": "stop", "等待": "wait" };
+      const tone = { "通过": "ok", "拦截": "stop", "等待": "wait", pass:"ok", warning:"wait", denied:"stop" };
       return `<div class="rails"><b>安全护栏</b>${(m.items || []).map((r) =>
-        `<div class="rail"><span class="tag ${tone[r.result] || "read"}">${esc(r.result)}</span><span>${esc(r.name)}</span><span class="muted">${esc(r.detail)}</span></div>`
+        `<div class="rail"><span class="tag ${tone[r.result] || "read"}">${esc(railResult(r.result))}</span><span>${esc(r.name)}</span><span class="muted">${esc(r.detail)}</span></div>`
       ).join("")}</div>`;
     }
     if (m.kind === "deny") return `<div class="deny">${richText(m.text)}</div>`;
@@ -683,287 +650,42 @@ function applyRoleVisibility() {
   $("btn-edit-drill").hidden = reader || reviewer;
   $("nav-ticket").hidden = reader;
   $("row-count").textContent = (reader ? "1" : "2") + " 条";
-  ["ops-propose", "ops-execute", "ops-cancel", "ops-reset", "ops-limit-propose"].forEach((id) => {
+  ["ops-propose", "ops-execute", "ops-cancel", "ops-reset", "ops-limit-propose", "ops-rollback"].forEach((id) => {
     if ($(id)) $(id).disabled = reader || reviewer;
   });
-  if (reader && !$("view-ticket").hidden) show("rules");
-  if (!$("view-integration").hidden || !$("view-guide").hidden) loadOps();
+  if (reader && !$("view-ticket").hidden) {$("view-ticket").hidden=true;$("view-rules").hidden=false;}
+
 }
 function show(name) {
   ["rules", "ticket", "audit", "integration", "knowledge", "safety", "guide"].forEach((id) => {
     $("view-" + id).hidden = name !== id;
     $("nav-" + id).toggleAttribute("aria-current", name === id);
   });
-  if (name === "integration" || name === "guide") loadOps();
+  if (["rules","ticket","audit","integration","guide"].includes(name)) loadOps();
   if (name === "knowledge") loadKnowledge();
 }
-const PACE = {
-  live: { move: 780, hold: 1000, char: 120, between: 700, button: 1400, result: 1600 },
-  script: { move: 350, hold: 280, char: 28, between: 120, button: 350, result: 200 }
-};
-function paceOf(name) { return PACE[name] || PACE.live; }
-function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
-function aim(el, moveMs) {
-  const ms = moveMs || PACE.live.move;
-  const ease = "top " + ms + "ms ease, left " + ms + "ms ease, width " + ms + "ms ease, height " + ms + "ms ease";
-  spot.style.transition = ease;
-  cursor.style.transition = ease;
-  const r = el.getBoundingClientRect();
-  spot.style.display = "block";
-  cursor.style.display = "block";
-  spot.style.top = (r.top - 6) + "px";
-  spot.style.left = (r.left - 6) + "px";
-  spot.style.width = (r.width + 12) + "px";
-  spot.style.height = (r.height + 12) + "px";
-  cursor.style.top = (r.top + Math.min(18, r.height / 2)) + "px";
-  cursor.style.left = (r.left + Math.min(28, r.width / 3)) + "px";
+function role() { return opsState?.role || "reader"; }
+function renderTickets(){
+ $("ticket-list").innerHTML=tickets.length?tickets.map(t=>'<tr><td>'+esc(t.id)+'</td><td>'+esc(t.reason||t.title||t.scenario)+'</td><td>'+esc(({pending_review:"待复核",approved_request:"申请已通过",rejected_request:"申请已驳回"})[t.status]||t.status)+'</td><td>未写入生产</td></tr>').join(''):'<tr><td class="empty" colspan="4">暂无后台变更申请</td></tr>';
 }
-async function rest(el, pace, holdMs) {
-  aim(el, pace.move);
-  await sleep(pace.move + (holdMs == null ? pace.hold : holdMs));
-}
-function clearAim() { spot.style.display = "none"; cursor.style.display = "none"; }
-async function typeInto(el, text, charMs) {
-  el.focus();
-  el.value = "";
-  for (const ch of text) { el.value += ch; await sleep(charMs || PACE.live.char); }
-}
-
-function historyForModel() {
-  return log.filter((m) => (m.kind === "user" || m.kind === "bot") && m.text !== "正在想…").map((m) => ({
-    role: m.kind === "user" ? "user" : "assistant",
-    content: m.text
-  }));
-}
-function pageState() {
-  return { limits, ticketTitle: $("ticket-title").value, ticketBody: $("ticket-body").value };
-}
-function role() { return $("role").value; }
-function renderTickets() {
-  $("ticket-list").innerHTML = tickets.length
-    ? tickets.map((t) => `<tr><td>${esc(t.id)}</td><td>${esc(t.title)}</td><td>待复核</td><td>未同步</td></tr>`).join("")
-    : `<tr><td class="empty" colspan="4">暂无变更单</td></tr>`;
-}
-async function callModel() {
-  const resp = await fetch("/api/chat", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages: historyForModel(), state: pageState(), role: role() })
-  });
-  const data = await resp.json();
-  if (!resp.ok) throw new Error((data.error || "模型调用失败") + (data.detail ? "：" + data.detail : ""));
-  if (data.model) $("model-line").textContent = data.model + " · " + (role() === "reader" ? "综合柜员" : (role() === "reviewer" ? "参数管理员" : "柜面主管"));
-  return data;
-}
-async function changeLimit(limit, paceName) {
-  const pace = paceOf(paceName);
-  show("rules");
-  const stepAt = push({ kind: "steps", active: 0, lines: ["先框住测试环境限额", "再填写金额和原因", "停在确定按钮"] });
-  await rest($("card-drill"), pace);
-  $("f-amount").value = "";
-  $("f-reason").value = "";
-  if ($("rule-dialog").hidden) $("rule-dialog").hidden = false;
-  log[stepAt].active = 1; renderLog();
-  await rest($("f-amount"), pace);
-  await typeInto($("f-amount"), String(limit.amount), pace.char);
-  await sleep(pace.between);
-  await rest($("f-reason"), pace);
-  await typeInto($("f-reason"), limit.reason, pace.char);
-  await sleep(pace.between);
-  log[stepAt].active = 2; renderLog();
-  await rest($("rule-ok"), pace, pace.button);
-  limits.drill = Number(limit.amount);
-  drillReason = limit.reason;
-  renderLimits();
-  $("rule-dialog").hidden = true;
-  stamp("已执行", "测试限额改为 " + yuan(limits.drill));
-  log[stepAt].active = 3; renderLog();
-  await rest($("drill-amount"), pace, pace.result);
-  clearAim();
-  save();
-}
-async function fillTicket(ticket, andSubmit, paceName) {
-  const pace = paceOf(paceName);
-  show("ticket");
-  const stepAt = push({ kind: "steps", active: 0, lines: ["打开变更单", "先写标题，再写描述", andSubmit ? "提交工单" : "停在提交按钮，等你点"] });
-  await rest($("ticket-title"), pace);
-  await typeInto($("ticket-title"), ticket.title, pace.char);
-  await sleep(pace.between);
-  log[stepAt].active = 1; renderLog();
-  await rest($("ticket-body"), pace);
-  await typeInto($("ticket-body"), ticket.body, pace.char);
-  await sleep(pace.between);
-  log[stepAt].active = 2; renderLog();
-  await rest($("ticket-submit"), pace, pace.button);
-  if (andSubmit) {
-    submitTicket();
-    log[stepAt].active = 3; renderLog();
-    clearAim();
-  } else {
-    log[stepAt].active = 3; renderLog();
-  }
-  save();
-}
-function submitTicket() {
-  const title = $("ticket-title").value.trim();
-  const body = $("ticket-body").value.trim();
-  $("ticket-error").hidden = true;
-  if (role() === "reader") {
-    stamp("已拒绝", "综合柜员提交变更单");
-    push({ kind: "deny", text: "综合柜员陈默（E3302）不能提交变更单。请联系柜面主管，或参数管理员周宁（A1028）。" });
-    return;
-  }
-  if (!title || !body) {
-    $("ticket-error").hidden = false;
-    $("ticket-error").textContent = "标题和描述都要填写，才能提交。";
-    return;
-  }
-  const id = "CHG-" + String(10420 + tickets.length);
-  tickets.push({ id, title });
-  renderTickets();
-  $("ticket-done").hidden = false;
-  $("ticket-done").textContent = "已提交 " + id;
-  clearAim();
-  stamp("已执行", "提交变更单 " + id);
-  push({ kind: "bot", text: "变更单 " + id + " 已提交。这是演示数据，不进入真实审批流。" });
-  save();
-}
-async function askModel(text) {
-  if (busy) return;
-  busy = true;
-  push({ kind: "user", text });
-  push({ kind: "bot", text: "正在想…" });
-  const pending = log.length - 1;
-  try {
-    const data = await callModel();
-    log.splice(pending, 1);
-    const looked = (data.reads || [])[0];
-    if (looked && looked.drill != null) {
-      show("rules");
-      await rest($("drill-amount"), paceOf("live"), 700);
-      clearAim();
-      push({ kind: "bot", text: "查过了。当前测试限额是 " + yuan(looked.drill) + "。" });
-    }
-    if (data.rails && data.rails.length) push({ kind: "rails", items: data.rails });
-    if (data.denied && !data.proposal) {
-      push({ kind: "deny", text: data.denied.message });
-      busy = false;
-      return;
-    }
-    if (data.denied && data.proposal) push({ kind: "deny", text: data.denied.message });
-    if (data.noop) {
-      show("rules");
-      await rest($("drill-amount"), paceOf("live"), 900);
-      clearAim();
-      stamp("未改动", "测试限额已是 " + yuan(limits.drill) + "，无差额，未提交变更单");
-      push({ kind: "bot", text: data.text });
-      busy = false;
-      return;
-    }
-    if (data.proposal) {
-      const cardAt = push({
-        kind: "card",
-        text: data.proposal.summary,
-        items: data.proposal.steps.length ? data.proposal.steps : ["按提案改页面"],
-        done: false,
-        proposal: data.proposal
-      });
-      const node = $("log").querySelectorAll(".card");
-      const card = node[node.length - 1];
-      card.querySelector("[data-act=skip]").onclick = () => {
-        log[cardAt].done = true;
-        push({ kind: "bot", text: "已跳过，页面没有改。" });
-        busy = false;
-      };
-      card.querySelector("[data-act=allow]").onclick = () => runAllowed(cardAt);
-      busy = false;
-      return;
-    }
-    push({ kind: "bot", text: data.text || "我没有改页面。" });
-  } catch (err) {
-    log.splice(pending, 1);
-    push({ kind: "bot", text: String(err.message || err) });
-  }
-  busy = false;
+function fieldValue(field,value){return field==="limit"?money(value)+" 元":String(value)+(field==="timeout"?" 秒":field==="retries"?" 次":"");}
+function verificationText(data){const config=data.verification||data.readback;return config?.values?Object.entries(config.values).map(([field,value])=>fieldLabel(field)+" "+fieldValue(field,value)).join(" / "):"没有收到读回字段，不能据此宣称核验成功";}
+function showExecution(data){push({kind:"verification",text:data.message||"执行请求已处理。",values:verificationText(data),independent:!!data.verification,evidence:data.verification||data.readback||{}});}
+function pendingCard(proposal) {
+ if(!proposal || log.some(m=>m.kind==="card"&&m.proposal?.id===proposal.id&&!m.done))return;
+ const items=(proposal.changes||[]).map(c=>fieldLabel(c.field)+"："+fieldValue(c.field,c.before)+" → "+fieldValue(c.field,c.after));
+ items.push(proposal.submit?"执行测试变更后创建生产申请；生产不直接写入":"只写测试环境，不创建生产申请");
+ push({kind:"card",text:(proposal.source==="manual"?"人工提案（不调用模型）":"待确认的具体提案")+" · "+proposal.id,items,done:false,proposal});
 }
 async function runAllowed(cardAt) {
-  busy = true;
-  const proposal = log[cardAt].proposal;
-  log[cardAt].done = true;
-  renderLog();
-  try {
-    if (!proposal) throw new Error("没有可执行的提案");
-    if (role() === "reader" || proposal.kind === "prod" || proposal.kind === "export") {
-      const text = proposal.kind === "export"
-        ? "客户清单属于客户信息，助手不能导出。请走数据管理员审批。本次已拒绝，没有文件。"
-        : "这个身份不能做这件事。生产限额和客户清单都不会被助手改动。";
-      stamp("已拒绝", text);
-      push({ kind: "deny", text });
-    } else if (proposal.kind === "both" && Number(proposal.limit.amount) === Number(limits.drill)) {
-      show("rules");
-      await rest($("drill-amount"), paceOf("live"), 900);
-      clearAim();
-      stamp("未改动", "测试限额已是 " + yuan(limits.drill) + "，无差额，未提交变更单");
-      push({ kind: "bot", text: "测试限额已经是 " + yuan(limits.drill) + "，没有差额。不修改，也不提交变更单。" });
-    } else if (proposal.kind === "both") {
-      await changeLimit(proposal.limit, "live");
-      await fillTicket(proposal.ticket, !!proposal.submit, "live");
-      show("rules");
-      await rest($("drill-amount"), paceOf("live"), 1200);
-      clearAim();
-      push({ kind: "bot", text: "两件都做完了。测试限额已改为 " + yuan(proposal.limit.amount) + "，变更单" + (proposal.submit ? "已提交" : "已填好，等你点提交工单") + "。生产限额仍是 " + yuan(limits.prod) + "。" });
-    } else if (proposal.kind === "ticket") {
-      await fillTicket(proposal.ticket, !!proposal.submit, "live");
-      push({ kind: "bot", text: proposal.submit ? "变更单已提交。这次没有要求改限额，限额表未动。" : "变更单已填好，提交按钮还框着。请你自己点「提交工单」。助手不代提交。" });
-    } else if (Number(proposal.limit.amount) === Number(limits.drill)) {
-      show("rules");
-      await rest($("drill-amount"), paceOf("live"), 900);
-      clearAim();
-      stamp("未改动", "测试限额已是 " + yuan(limits.drill));
-      push({ kind: "bot", text: "测试限额已经是 " + yuan(limits.drill) + "，和你说的一样，页面没有改。" });
-    } else {
-      await changeLimit(proposal.limit, "live");
-      push({ kind: "bot", text: "测试环境单笔限额已改为 " + yuan(proposal.limit.amount) + "。生产环境仍是 " + yuan(limits.prod) + "。" });
-    }
-  } catch (err) {
-    push({ kind: "bot", text: String(err.message || err) });
-  }
-  busy = false;
-  save();
+ if(busy||!log[cardAt]?.proposal||log[cardAt].done)return;busy=true;const p=log[cardAt].proposal;
+ try{const data=await opsFetch("/api/ops/execute",{proposal_id:p.id,digest:p.digest});log[cardAt].done=true;showExecution(data);await loadOps();}
+ catch(err){log[cardAt].done=true;push({kind:"deny",text:String(err.message||err)});await loadOps();}finally{busy=false;renderLog();}
 }
-async function playScriptOk() {
-  if (busy) return;
-  busy = true;
-  $("role").value = "operator";
-  applyRoleVisibility();
-  show("rules");
-  push({ kind: "user", text: "把测试环境的单笔对公转账限额从 50 万调到 20 万，并补一张变更单。" });
-  push({ kind: "bot", text: "柜面主管可以改测试限额。生产环境不会动。这一段按预先排好的步骤走，不调用模型，方便控时。" });
-  await sleep(700);
-  await changeLimit({ amount: 200000, reason: "压缩测试环境单笔限额，降低误操作风险" }, "script");
-  await fillTicket({ title: "测试环境单笔对公限额调整为 20 万", body: "仅测试环境。生产环境仍为 50 万。请参数管理员知悉，无需同步生产。" }, true, "script");
-  show("rules");
-  await rest($("drill-amount"), paceOf("script"), 400);
-  clearAim();
-  push({ kind: "bot", text: "演示结束。测试限额已改，变更单已提交，生产限额没变。这一段没有等模型，方便控时。" });
-  busy = false;
-  save();
-}
-async function playScriptDeny() {
-  if (busy) return;
-  busy = true;
-  $("role").value = "operator";
-  applyRoleVisibility();
-  push({ kind: "user", text: "把刚才的限额同步到生产环境，并导出本网点全部对公客户清单。" });
-  await sleep(500);
-  push({ kind: "deny", text: "生产限额你能看见，但这个岗位没有修改按钮。助手硬要改，接口拒绝，数字仍是 50 万。客户清单这个岗位没有读权限，页面上不出现导出。助手仍去调，同样被拒绝，没有文件。两条都已写入审计。" });
-  stamp("已拒绝", "同步生产环境限额");
-  stamp("已拒绝", "导出对公客户清单");
-  show("audit");
-  push({ kind: "bot", text: "柜面主管本来可以改测试限额。敏感的两件事，点了允许也不够，系统按岗位拒绝。" });
-  busy = false;
-  save();
-}
+async function askModel(text){return askOps(text,"counter");}
+async function playScriptOk(){push({kind:"bot",text:"脚本演示 / 不调用模型：准备20万元测试限额与生产申请。需你确认后才执行，后台仍校验权限。"});await proposeOps("counter",[{field:"limit",value:200000}],"脚本演示：压缩测试单笔限额，生产仅提交申请",true);}
+async function playScriptDeny(){show("safety");push({kind:"bot",text:"后台实测 / 不调用模型：在隔离工作区向执行层提交生产直改请求，以实际返回结果为准。"});await runSafety("production");}
+async function submitTicket(){push({kind:"bot",text:"当前 POC 的生产申请必须关联明确变更场景和目标值。请在限额或联调配置中生成提案，并勾选创建生产申请；本页表单只是草稿，不会生成无变更工单。"});}
 $("rule-cancel").onclick = () => { $("rule-dialog").hidden = true; };
 $("nav-rules").onclick = () => show("rules");
 $("nav-ticket").onclick = () => show("ticket");
@@ -974,17 +696,7 @@ $("nav-safety").onclick = () => show("safety");
 $("nav-guide").onclick = () => show("guide");
 $("ticket-submit").onclick = () => submitTicket();
 $("btn-edit-drill").onclick = () => { if (!busy && role() === "operator") $("rule-dialog").hidden = false; else if (role() === "reader") { stamp("已拒绝", "综合柜员手改测试限额"); push({ kind: "deny", text: "综合柜员不能修改限额。" }); } };
-$("rule-ok").onclick = () => {
-  if (role() !== "operator") return;
-  const amount = Number($("f-amount").value);
-  if (!amount) return;
-  limits.drill = amount;
-  drillReason = $("f-reason").value || drillReason;
-  renderLimits();
-  $("rule-dialog").hidden = true;
-  stamp("已执行", "手工将测试限额改为 " + yuan(amount));
-  save();
-};
+$("rule-ok").onclick=async()=>{const amount=Number($("f-amount").value);if(!Number.isFinite(amount)||!$("f-amount").value.trim()){push({kind:"deny",text:"请填写明确金额。"});return;}$("rule-dialog").hidden=true;await proposeOps("counter",[{field:"limit",value:amount}],$("f-reason").value.trim(),false);};
 $("btn-export").onclick = () => {
   stamp("已拒绝", "导出对公客户清单");
   push({ kind: "deny", text: "客户清单不能从这里导出。请走数据管理员审批，双人复核。没有生成文件。" });
@@ -993,46 +705,39 @@ $("btn-export").onclick = () => {
 $("chip-script-ok").onclick = () => playScriptOk();
 $("chip-script-no").onclick = () => playScriptDeny();
 $("chip-port").onclick = () => askModel("把测试环境的单笔对公转账限额改成 20 万。改之前先在页面上问我。");
-$("chip-ticket").onclick = () => askModel("把刚才的限额调整补成变更单，填好标题和描述，不要自己提交。");
-$("chip-page-agent").onclick = () => runPageAgent(($("ask-input").value.trim()) || "在「值班备注」输入框里写上：夜班注意，测试限额不要同步生产。不要改限额，不要提交工单，不要导出。");
-$("chip-integration").onclick = () => askOps("合作方联调接口连续超时。查现行规范和历史教训，把联调超时调到60秒、重试调到1次，完成验证并整理生产申请。生产配置不要直接改。");
+$("chip-ticket").onclick = () => {show("ticket");push({kind:"bot",text:"当前 POC 的申请需关联明确场景和目标值。可让助手准备包含测试变更与生产申请的提案；没有金额或参数时应追问，不会默认补单，也不假装已经提交。本页仅为草稿与后台申请列表。"});};
+$("chip-integration").onclick = () => askOps("合作方联调接口连续超时。查现行规范和历史教训，把联调超时调到60秒、重试调到1次，完成验证并提交生产变更申请（仅申请，不直接修改生产配置）。");
 $("ask").onsubmit = (e) => {
   e.preventDefault();
   const text = $("ask-input").value.trim();
   $("ask-input").value = "";
-  if (text) askModel(text);
+  if (text) askOps(text,!$("view-integration").hidden?"integration":"counter");
 };
-load();
-applyRoleVisibility();
-$("role").onchange = () => { applyRoleVisibility(); if (!$("view-knowledge").hidden) loadKnowledge(); };
-renderLimits();
-renderTickets();
-renderAudit();
 let opsState = null;
 let opsProposal = null;
-function opsHeaders(json) {
-  const headers = { "X-Ops-Role": role() };
-  if (json) headers["Content-Type"] = "application/json";
-  return headers;
-}
-async function opsFetch(path, body) {
-  const resp = await fetch(path, body === undefined
-    ? { headers: opsHeaders(false) }
-    : { method: "POST", headers: opsHeaders(true), body: JSON.stringify(body) });
-  const data = await resp.json().catch(() => ({}));
-  if (!resp.ok) throw new Error(data.message || data.error || ("请求失败 " + resp.status));
-  return data;
-}
+function opsHeaders(json){return json?{"Content-Type":"application/json","X-Demo-Request":"1"}:{};}
+async function opsFetch(path,body){const resp=await fetch(path,{credentials:"same-origin",method:body===undefined?"GET":"POST",headers:opsHeaders(body!==undefined),body:body===undefined?undefined:JSON.stringify(body)});const data=await resp.json().catch(()=>({}));if(!resp.ok||data.ok===false){if(resp.status===401&&!$("login-dialog").open)$("login-dialog").showModal();throw new Error(data.message||data.error||("请求失败 "+resp.status));}return data;}
 function opsEnv(name) { return name === "prod" ? "生产" : "测试"; }
-function opsWhen(ts) {
-  if (!ts) return "";
-  return new Date(ts * 1000).toLocaleTimeString("zh-CN", { hour12: false });
-}
+function opsWhen(ts) {return ts?new Date(typeof ts==="number"?ts*1000:ts).toLocaleTimeString("zh-CN",{hour12:false}):"";}
 function fieldLabel(field) {
   return { timeout: "超时", retries: "重试", limit: "限额" }[field] || field;
 }
 function renderOps() {
   if (!opsState) return;
+  $("role").value=opsState.role;
+  $("login-open").textContent="模拟账号 · 已登录";
+  const counterConfigs=(opsState.configs||[]).filter(c=>c.scenario==="counter");
+  const testCounter=counterConfigs.find(c=>c.environment==="test"),prodCounter=counterConfigs.find(c=>c.environment==="prod");
+  if(testCounter)limits.drill=Number(testCounter.values.limit);
+  if(prodCounter)limits.prod=Number(prodCounter.values.limit);
+  drillReason="后台配置 · 版本 "+(testCounter?.version??"—");
+  tickets=(opsState.tickets||[]).filter(t=>t.scenario==="counter");
+  audit=(opsState.audit||[]).slice().reverse().map(a=>({time:opsWhen(a.timestamp),who:a.role,what:a.action+" · "+(a.detail||""),result:a.outcome}));
+  renderLimits();renderTickets();renderAudit();applyRoleVisibility();
+  const liveIds=new Set((opsState.proposals||[]).filter(p=>p.status==="pending").map(p=>p.id));
+  log.forEach(m=>{if(m.kind==="card"&&m.proposal&&!liveIds.has(m.proposal.id))m.done=true;});
+  (opsState.proposals||[]).filter(p=>p.status==="pending").forEach(pendingCard);
+  renderLog();
   const configs = (opsState.configs || []).filter((c) => c.scenario === "integration");
   $("ops-config").innerHTML = configs.map((c) => `<tr>
     <td><span class="tag ${c.environment === "prod" ? "prod" : "test"}">${opsEnv(c.environment)}</span></td>
@@ -1049,8 +754,8 @@ function renderOps() {
     <td>${c.environment === "prod" ? '<span class="tag read">只读</span>' : '<span class="tag ok">可提案</span>'}</td>
   </tr>`).join("");
   $("ops-model-line").textContent = opsState.model_configured ? "模型已接通 · 写入前必须确认" : "模型未配置 · 仍可手工提案";
-  const tickets = opsState.tickets || [];
-  $("ops-tickets").innerHTML = tickets.length ? tickets.map((t) => {
+  const allTickets = opsState.tickets || [];
+  $("ops-tickets").innerHTML = allTickets.length ? allTickets.map((t) => {
     const values = t.requested_values || {};
     const text = t.scenario === "counter"
       ? ("限额 " + money(values.limit || 0))
@@ -1078,9 +783,10 @@ function renderOps() {
     return;
   }
   $("ops-proposal").hidden = false;
-  const lines = (opsProposal.changes || []).map((c) => `${fieldLabel(c.field)} ${c.before} → ${c.after}`);
-  $("ops-proposal-body").innerHTML = `<div>${esc(opsProposal.reason || "")}</div>
+  const lines = (opsProposal.changes || []).map((c) => `${fieldLabel(c.field)} ${fieldValue(c.field,c.before)} → ${fieldValue(c.field,c.after)}`);
+  $("ops-proposal-body").innerHTML = `<div>${esc(opsProposal.reason || "")}</div><div class="muted">场景 ${esc(opsProposal.scenario)} · 版本 ${esc(opsProposal.version)} · 到期 ${esc(opsWhen(opsProposal.expires_at))}</div>
     <div style="margin-top:8px">${lines.map((line) => `<div>${esc(line)}</div>`).join("")}</div>
+    <div style="margin-top:8px">${(opsProposal.rails||[]).map(r=>"<div>"+esc(r.name)+" · "+esc(railResult(r.result))+" · "+esc(r.detail)+"</div>").join("")}</div>
     <div class="muted" style="margin-top:8px">${opsProposal.submit ? "允许后写入测试，并生成生产申请。" : "允许后只写测试，不生成生产申请。"} 摘要 ${esc((opsProposal.digest || "").slice(0, 12))}</div>`;
 }
 async function loadOps() {
@@ -1099,18 +805,13 @@ function showOpsError(err) {
   $("ops-readback").hidden = true;
 }
 async function proposeOps(scenario, changes, reason, submit) {
-  if (role() !== "operator") {
-    showOpsError(new Error(role() === "reviewer" ? "参数管理员只复核申请，不能改配置。" : "综合柜员不能生成提案。"));
-    return;
-  }
   try {
     const proposal = await opsFetch("/api/ops/propose", { scenario, changes, reason, submit });
     opsProposal = proposal;
     $("ops-readback").hidden = true;
     $("ops-error").hidden = true;
-    show("integration");
     await loadOps();
-    push({ kind: "bot", text: "提案已生成，测试配置还没改。请在联调配置页点允许并执行。" });
+    push({ kind: "bot", text: "人工/脚本提案已生成，不调用模型，测试配置还没改。请核对右侧具体变更后点允许。" });
   } catch (err) {
     showOpsError(err);
     push({ kind: "deny", text: String(err.message || err) });
@@ -1149,37 +850,34 @@ async function runSafety(caseName) {
   $("safety-body").textContent = "正在隔离库里调用执行层…";
   try {
     const data = await opsFetch("/api/ops/safety", { case: caseName });
-    $("safety-head").textContent = data.passed ? "这一项被拦住" : "这一项不符合预期";
+    $("safety-head").textContent = data.passed ? "这一项符合预期" : "这一项不符合预期";
     const checks = (data.checks || []).map((c) => `${c.passed ? "通过" : "未通过"} · ${c.name}`).join("；");
     $("safety-body").innerHTML = `<div>预期 ${esc(data.expected)} ，实际 ${esc(data.actual)}</div>
       <div style="margin-top:8px">${esc(checks)}</div>
-      <div class="muted" style="margin-top:8px">${esc(data.detail || "")}</div>`;
+      <div class="muted" style="margin-top:8px">${esc(data.detail || "")}</div><details><summary>前后状态与完整证据</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(JSON.stringify(data,null,2))}</pre></details>`;
     push({ kind: "bot", text: "安全实测「" + caseName + "」：预期 " + data.expected + "，实际 " + data.actual + "。本页联调配置没有被这项测试改写。" });
   } catch (err) {
     $("safety-head").textContent = "没有跑成";
     $("safety-body").textContent = String(err.message || err);
   }
 }
-async function askOps(text) {
-  if (busy) return;
-  busy = true;
-  show("integration");
-  push({ kind: "user", text });
-  const pending = push({ kind: "bot", text: "正在查规范和当前联调配置…" });
-  try {
-    const data = await opsFetch("/api/ops/chat", { text });
-    log.splice(pending, 1);
-    const cites = (data.citations || []).map((d) => d.id + " " + d.title + " v" + d.version).join("；");
-    push({ kind: "bot", text: (data.text || "模型没有补充说明。") + (cites ? " 依据：" + cites : "") });
-    if (data.model) $("model-line").textContent = data.model + " · 联调";
-    await loadOps();
-    if (!data.proposal) push({ kind: "bot", text: "这次没有生成提案，测试配置没有写入。" });
-  } catch (err) {
-    log.splice(pending, 1);
-    push({ kind: "deny", text: String(err.message || err) });
-  }
-  busy = false;
-  save();
+async function askOps(text,scenario="integration"){
+ if(busy)return;busy=true;
+ if(scenario==="integration")show("integration");
+ push({kind:"user",text});const pending=push({kind:"bot",text:"正在查依据和当前后台配置…"});
+ try{
+  const data=await opsFetch("/api/ops/chat",{text,scenario});log.splice(pending,1);
+  push({kind:"bot",text:data.text||"模型没有补充说明。"});
+  if(data.citations?.length)push({kind:"citations",items:data.citations});
+  if(data.rails?.length)push({kind:"rails",items:data.rails});
+  if(data.trace?.length)push({kind:"trace",items:data.trace});
+  if(data.denied?.length)push({kind:"deny",text:data.denied.map(d=>typeof d==="string"?d:(d.message||d.reason||"后台拒绝此操作")).join("\n")});
+  if(data.model)$("model-line").textContent=data.model+" · 真实模型 · "+(scenario==="integration"?"联调":"柜面");
+  if(data.state){opsState=data.state;renderOps();}else await loadOps();
+  if(data.proposal)pendingCard(data.proposal);
+  else push({kind:"bot",text:"未生成可执行提案，没有写入业务配置。"});
+ }catch(err){log.splice(pending,1);push({kind:"deny",text:String(err.message||err)+"。可使用明确标注的人工提案，仍需后台授权与确认。"});}
+ finally{busy=false;renderLog();}
 }
 $("ops-propose").onclick = () => proposeOps("integration", [
   { field: "timeout", value: Number($("ops-timeout").value) },
@@ -1189,19 +887,20 @@ $("ops-limit-propose").onclick = () => proposeOps("counter", [
   { field: "limit", value: Number($("ops-limit").value) }
 ], "答疑备用：把柜面测试单笔限额调整为指定金额，生产不写。", false);
 $("ops-execute").onclick = async () => {
-  if (!opsProposal) return;
+  if (!opsProposal || busy) return;
+  busy=true;$("ops-execute").disabled=true;
   try {
     const data = await opsFetch("/api/ops/execute", { proposal_id: opsProposal.id, digest: opsProposal.digest });
-    const back = data.readback && data.readback.values;
+    const back = data.verification || data.readback;
     $("ops-readback").hidden = false;
-    $("ops-readback").textContent = data.message + (back ? (" 读回：" + JSON.stringify(back)) : "");
+    $("ops-readback").textContent = (data.message||"执行请求已处理。") + (back ? (" 独立核验：" + verificationText(data)) : "");
     $("ops-error").hidden = true;
-    push({ kind: "bot", text: data.message || "已执行。" });
+    showExecution(data);
     await loadOps();
   } catch (err) {
     showOpsError(err);
     push({ kind: "deny", text: String(err.message || err) });
-  }
+  } finally {busy=false;applyRoleVisibility();}
 };
 $("ops-cancel").onclick = async () => {
   if (!opsProposal) return;
@@ -1212,80 +911,26 @@ $("ops-cancel").onclick = async () => {
   } catch (err) { showOpsError(err); }
 };
 $("ops-reset").onclick = async () => {
+  if(!window.confirm("重置当前工作区配置、申请、提案和办理记录？"))return;
   try {
     const data = await opsFetch("/api/ops/reset", {});
     $("ops-readback").hidden = false;
     $("ops-readback").textContent = data.message || "已恢复。";
-    await loadOps();
+    log=[];await loadOps();push({kind:"bot",text:"当前工作区已重置。"});
   } catch (err) { showOpsError(err); }
 };
+$("ops-rollback").onclick=async()=>{const executed=(opsState?.proposals||[]).filter(p=>p.status==="executed");const last=executed[executed.length-1];if(!last){push({kind:"bot",text:"没有已执行提案可恢复。"});return;}try{const proposal=await opsFetch("/api/ops/rollback",{proposal_id:last.id});await loadOps();pendingCard(proposal);push({kind:"bot",text:"恢复仅生成新的具体提案，仍需确认与后台校验，不直接撤销生产申请。"});}catch(err){push({kind:"deny",text:err.message});}};
 $("kb-search").onclick = () => loadKnowledge();
 $("safety-cases").onclick = (e) => {
   const btn = e.target.closest("[data-case]");
   if (btn) runSafety(btn.dataset.case);
 };
-let pageAgentLoading = null;
-function loadPageAgentLib() {
-  if (window.PageAgent) return Promise.resolve();
-  if (pageAgentLoading) return pageAgentLoading;
-  pageAgentLoading = new Promise((resolve, reject) => {
-    const script = document.createElement("script");
-    script.src = "https://registry.npmmirror.com/page-agent/1.12.4/files/dist/iife/page-agent.demo.js?autoInit=false";
-    script.crossOrigin = "anonymous";
-    script.onload = () => (window.PageAgent ? resolve() : reject(new Error("页面助手脚本里没有 PageAgent")));
-    script.onerror = () => reject(new Error("页面助手脚本加载失败。需要能访问 npmmirror。"));
-    document.head.appendChild(script);
-  });
-  return pageAgentLoading;
-}
-function waitPageAllow(text) {
-  return new Promise((resolve) => {
-    const at = push({
-      kind: "card",
-      text,
-      items: ["看清页面上即将被点击或填写的控件", "点允许后这一步才会发生"],
-      done: false
-    });
-    const cards = $("log").querySelectorAll(".card");
-    const node = cards[cards.length - 1];
-    node.querySelector("[data-act=allow]").onclick = () => { log[at].done = true; renderLog(); resolve(true); };
-    node.querySelector("[data-act=skip]").onclick = () => { log[at].done = true; renderLog(); resolve(false); };
-  });
-}
-async function runPageAgent(text) {
-  if (busy) return;
-  busy = true;
-  push({ kind: "user", text });
-  const pending = push({ kind: "bot", text: "正在加载页面助手…" });
-  try {
-    await loadPageAgentLib();
-    log.splice(pending, 1);
-    renderLog();
-    const agent = new window.PageAgent({
-      baseURL: location.origin + "/v1",
-      model: "deepseek-v4-flash",
-      language: "zh-CN",
-      disableNamedToolChoice: true,
-      transformRequestBody: (body) => Object.assign({}, body, { thinking: { type: "disabled" } }),
-      instructions: {
-        system: "你在这个网点参数台网页里操作左侧和中间的页面。不要点击带 data-page-agent-ignore 的右侧助手。看不见的按钮不要找。生产限额没有修改按钮就不要改。没有导出按钮就不要导出客户清单。每一步开始前页面会询问允许。"
-      },
-      onBeforeStep: async (pa) => {
-        const ok = await waitPageAllow("页面助手要执行下一步。");
-        if (!ok) await pa.stop();
-      }
-    });
-    const result = await agent.execute(text);
-    const said = result && (result.data || result.message || result.text);
-    push({ kind: "bot", text: said || "页面助手这一轮结束。" });
-  } catch (err) {
-    push({ kind: "bot", text: String(err && err.message ? err.message : err) });
-  }
-  busy = false;
-}
-if (!log.length) {
-  push({ kind: "bot", text: "上面两个演示不走模型。「让助手改限额」只会改限额和工单。「让助手办联调」会查规范、读当前超时和重试，生成提案后等你点允许。左侧还有联调配置、知识依据、安全实测和演示说明。" });
-} else renderLog();
+$("log").onclick=async event=>{const button=event.target.closest("[data-act]");if(!button||button.disabled)return;const cards=Array.from($("log").querySelectorAll(".card"));const index=cards.indexOf(button.closest(".card"));const entries=log.map((m,i)=>({m,i})).filter(x=>x.m.kind==="card");const at=entries[index]?.i;if(at===undefined)return;if(button.dataset.act==="allow")await runAllowed(at);else{try{await opsFetch("/api/ops/cancel",{proposal_id:log[at].proposal.id});log[at].done=true;push({kind:"bot",text:"已撤销后台提案，没有执行变更。"});await loadOps();}catch(err){push({kind:"deny",text:err.message});}}};
+$("login-open").onclick=()=>{$("login-user").value=role();$("login-dialog").showModal();};$("login-close").onclick=()=>$("login-dialog").close();
+async function loginAs(username,password,accessCode){await opsFetch("/api/login",{username,password,access_code:accessCode});log=[];opsProposal=null;$("ops-proposal").hidden=true;$("ops-readback").hidden=true;$("log").innerHTML="";loginPassword=String(password);loginAccess=accessCode;$("login-password").value="";$("login-access").value="";$("login-dialog").close();await loadOps();}
+$("login-form").onsubmit=async event=>{event.preventDefault();try{await loginAs($("login-user").value,$("login-password").value,$("login-access").value);$("login-error").textContent="";}catch(err){$("login-error").textContent=err.message;}};
+$("role").onchange=async()=>{const desired=$("role").value;$("role").value=role();if(!loginPassword){$("login-user").value=desired;$("login-dialog").showModal();return;}try{await loginAs(desired,loginPassword,loginAccess);}catch(err){push({kind:"deny",text:err.message});$("login-dialog").showModal();}};
+push({kind:"bot",text:"所有柜面与联调变更都由后台执行。真实模型先查依据、读配置，再准备提案；点允许后核验并留痕。脚本提案和安全实测不调用模型，已明确标注。"});loadOps();
 </script>
 </body>
 </html>

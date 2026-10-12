@@ -2,3 +2,13 @@
 __pycache__/
 *.pyc
 .venv/
+data/
+*.sqlite
+*.sqlite3
+*.sqlite-*
+*.sqlite3-*
+screenshots/
+.playwright-mcp/
+reports/
+test-results/
+*.log

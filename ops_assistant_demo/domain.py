@@ -96,10 +96,17 @@ class Store:
                 self.db.execute('COMMIT')
                 return copy.deepcopy(result)
             except DomainError as exc:
-                self.db.execute('ROLLBACK')
-                self._record(original, role, action, 'denied', detail=exc.code + ': ' + exc.message)
-                self.db.execute('INSERT OR REPLACE INTO workspaces VALUES (?,?)',
-                                (workspace, json.dumps(original, ensure_ascii=False)))
+                # Operations only mutate the in-memory snapshot. Preserve the
+                # SQLite write lock while discarding these mutations and saving
+                # the denial record, so another Store cannot commit in between.
+                try:
+                    self._record(original, role, action, 'denied', detail=exc.code + ': ' + exc.message)
+                    self.db.execute('INSERT OR REPLACE INTO workspaces VALUES (?,?)',
+                                    (workspace, json.dumps(original, ensure_ascii=False)))
+                    self.db.execute('COMMIT')
+                except Exception:
+                    self.db.execute('ROLLBACK')
+                    raise
                 raise
             except Exception:
                 self.db.execute('ROLLBACK')
@@ -129,6 +136,14 @@ class Store:
 
     def audit(self, workspace, role):
         return self.snapshot(workspace, role)['audit']
+
+    def record_denial(self, workspace, role, action, code, detail):
+        """Record a server policy rejection; callers pass codes, not user text."""
+        def record(state):
+            self._record(state, role, action, 'denied', detail=detail)
+            state['audit'][-1]['code'] = code
+            return {'ok': True, 'code': 'DENIAL_RECORDED', 'message': '拒绝动作已记录'}
+        return self._transaction(workspace, role, 'record_denial', record)
 
     def reset(self, workspace, role):
         def reset(state):
@@ -173,10 +188,10 @@ class Store:
             if not isinstance(field, str) or field not in FIELDS[scenario] or field in seen:
                 raise DomainError('INVALID_CHANGE', '未知或重复字段')
             lo, hi = FIELDS[scenario][field]
-            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or not lo <= value <= hi:
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not lo <= value <= hi or not math.isfinite(value):
                 raise DomainError('INVALID_CHANGE', '参数超出明确允许范围或不是有效数字')
-            if field in {'timeout', 'retries'} and value != int(value):
-                raise DomainError('INVALID_CHANGE', '超时秒数和重试次数必须为整数')
+            if value != int(value):
+                raise DomainError('INVALID_CHANGE', '超时秒数、重试次数和演示限额元数必须为整数')
             seen.add(field)
             targets.append({'field': field, 'before': config['values'][field], 'after': value})
         rails = [{'name': '岗位权限', 'result': 'pass', 'detail': '操作员仅调整模拟联调/柜面测试环境'},

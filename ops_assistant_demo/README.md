@@ -1,67 +1,48 @@
 ---
-okf: v0.1
 type: Reference
-title: 网点参数台演示
-tags: [ops-assistant, demo]
+title: 科技运营受控办理助手
 ---
 
-# 网点参数台
+# 科技运营受控办理助手
 
-银行内部竞赛用的网页演示。数据是假的。右侧助手会调用真实模型，但改数和交单要等页面上点允许。
+> 本轮已修复身份、工作区、旧接口旁路和HTTP验收差距，并部署经验证的版本。39项自动化全部通过、0项跳过；真实模型和线上联调办理已验证。核验范围及剩余限制见[交接](docs/handoff-2026-10-12.md)与[审计](docs/cursor-audit-2026-10-12.md)。
 
-## 模型配置
+银行科技子公司内部创新竞赛 POC：有据可查、有权可办、执行可验。业务资料、参数、检测结果和工单全部模拟；自然语言助手调用真实模型。主场景是合作方联调异常处理，柜面测试限额作为答疑场景保留。
 
-使用 OpenAI 兼容接口，只需要这两项：
+演示流程：查询规范和历史经验、读取当前状态、提出具体变更、等待确认、执行受控动作、重新读取核验、形成生产申请。生产参数没有写入口。演示身份不是银行 SSO，检测不是实际外部接口压测。
 
-- `OPENAI_API_BASE_URL`：以 `/v1` 结尾，例如 `https://api.openai.com/v1`
-- `OPENAI_API_KEY`：该地址对应的密钥
+## 运行
 
-可选 `OPENAI_MODEL`，默认 `deepseek-v4-flash`。密钥只放在运行机器的 `.env`，不进仓库，也不发到浏览器。
+Python 3.10+，运行时使用标准库。在仓库目录执行：
 
-## 本地运行
-
-需要 Python 3.10 以上。没有第三方包。
-
-```bash
-cp .env.example .env
-# 编辑 .env，填入上面的地址和 Key
-python server.py
+```powershell
+Copy-Item .env.example .env
+uv run python server.py
 ```
 
-浏览器打开 http://127.0.0.1:8765/ 。
+编辑配置中的 `OPENAI_API_BASE_URL`、`OPENAI_API_KEY` 和 `OPENAI_MODEL`，浏览器打开 `http://127.0.0.1:8765/`。配置也可来自进程环境变量。Key 留在服务端，不进入页面或版本控制。
 
-## 给评审看的顺序
+演示账号：`operator`（经办）、`reader`（只读）、`reviewer`（复核）。共享演示口令为 `demo2026`，它是公开模拟资料，不应作为公网访问门槛。对外部署可设置私有 `DEMO_ACCESS_CODE`，配合 HTTPS 与来源限制；本次演示部署尚未设置私有访问码。这些账号不是银行员工的真实身份认证。
 
-1. 右上角保持「林晓 · 柜面主管」。点「演示 · 改测试限额」。测试限额变为 20 万，生产仍是 50 万，并提交一张变更单。这一段不调用模型。
-2. 点「演示 · 越权被拒绝」。同步生产、导出客户清单都会被拒绝，审计里有记录。
-3. 换成「陈默 · 综合柜员」。生产限额那一行和变更单菜单消失。
-4. 换回主管。在底部输入框自己说一句话，例如「把测试限额改成 15 万，并提交工单」。助手先框出当前数字，再给出提案。点允许后才改。
-5. 若当前已经是你说的那个数，它不改数，也不提交变更单，只在审计记「未改动」。
-6. 「页面助手试试」用 page-agent 自己在页面上找控件。限额表下面有一个后加的「值班备注」，旧助手没有这个工具，点这一颗会去填它。每一步仍要先点允许。模型请求由本机 `/v1` 转发，密钥不到浏览器。
+业务数据保存到 SQLite，`DEMO_DB_PATH` 可指定路径。后台按浏览器工作区隔离模拟状态，同一浏览器切换岗位保留工作区；这不是正式多租户隔离证明。数据库、模型配置和运行报告不提交到 Git。
 
-涉及改数、导出或越权时，对话里会出现「安全护栏」：岗位白名单、生产写保护、客户信息不出域、无差额不立项、人工确认。
+## 演示与验证
 
-为什么要先查再改、护栏为什么不看整句话，见 [branch-param-desk-read-then-guard.md](../docs/solutions/architecture-patterns/branch-param-desk-read-then-guard.md)。
+- [5 分钟主剧本与答疑场景](docs/demo-script.md)
+- [实施规格与验收目标](docs/competition-plan.md)
+- [安全边界与质疑解答](docs/security-boundaries.md)
+- [公开案例与设计依据](docs/research.md)
 
-## 部署到一台 Linux
-
-在本模块目录执行。`.env` 只放在服务器上。本仓库若没写本目录 `.env`，会再读上一级已有的 Open WebUI 环境文件，方便本机开发。
-
-```bash
-sudo useradd --system --home /opt/web-ai-assistant --shell /usr/sbin/nologin desk
-sudo mkdir -p /opt/web-ai-assistant
-sudo cp server.py index.html /opt/web-ai-assistant/
-sudo cp -r kb /opt/web-ai-assistant/
-sudo cp .env.example /opt/web-ai-assistant/.env
-sudoedit /opt/web-ai-assistant/.env
-sudo chown -R desk:desk /opt/web-ai-assistant
-sudo cp deploy/web-ai-assistant.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now web-ai-assistant
+```powershell
+uv run python -m unittest discover -s tests -v
 ```
 
-要让别人从浏览器打开，把 `.env` 里的 `HOST` 改成 `0.0.0.0`，并用安全组或防火墙只放行需要的来源地址。默认只监听本机。
+测试结果以本次命令输出为准。安全测试是明确标注的确定性测试，不把它冒充真实模型遭受攻击。真实模型对话单独演练；备用录像与回放也须标注。
 
-## 不要提交的东西
+## Linux 部署
 
-`.env`、私钥、客户数据。`.gitignore` 已忽略 `.env`。
+把代码部署到 `/opt/web-ai-assistant`，运行账户为 `desk`，创建该账户可写的 `data/` 目录；运行配置放在该目录 `.env`，权限 `0600`、属主 `desk`。安装 [systemd unit](deploy/web-ai-assistant.service) 后执行 `systemctl daemon-reload` 和 `systemctl restart web-ai-assistant`，检查状态、日志和 HTTP 响应。
+
+既有部署可能使用不同目录和 unit，先读取私有运维记录，不能盲目套用以上示例。HTTP 白名单仅提供界面资源，配置、源码、数据库和部署文件不可读取。公开 `/v1` 模型转发入口已取消；业务助手要求后台会话，并受进程内预算与并发控制；预算不是供应商硬账单上限。
+
+当前腾讯云地址使用 HTTP，不能防止网络窃听口令和会话。正式演示应在受信网络或 HTTPS 下开展。此前 `.env` 曾可被外部读取，封堵路径不能撤销可能发生的泄露；用户本次明确决定暂不轮换 Key。没有 Git 泄露不能证明没有 HTTP 泄露。

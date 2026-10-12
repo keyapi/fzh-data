@@ -7,6 +7,10 @@ tags: [solutions, architecture-patterns, log]
 
 # architecture-patterns 变更日志
 
+## 2026-10-12
+
+- **更新**：网点参数台现役流程统一后台会话、工作区隔离、确认与SQLite执行核验；page-agent降为历史调研，补上模块交接入口。
+
 ## 2026-10-11
 
 - **新增**: `branch-param-desk-read-then-guard.md` — 网页内助手先读限额再提案；护栏看动作不看原话。

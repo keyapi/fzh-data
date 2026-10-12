@@ -5,6 +5,7 @@ import unittest
 import urllib.error
 import urllib.parse
 import urllib.request
+import http.cookiejar
 from pathlib import Path
 from unittest.mock import patch
 from http.server import ThreadingHTTPServer
@@ -17,12 +18,14 @@ class OpsPageTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.store = Store(str(Path(self.temp.name) / "ops.sqlite3"))
-        self.patch = patch.object(server, "OPS", self.store)
+        self.patch = patch.object(server, "STORE", self.store)
         self.patch.start()
         self.http = ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
         self.thread = threading.Thread(target=self.http.serve_forever, daemon=True)
         self.thread.start()
         self.base = "http://127.0.0.1:" + str(self.http.server_port)
+        self.opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+        self.current_role = None
 
     def tearDown(self):
         self.http.shutdown()
@@ -33,15 +36,21 @@ class OpsPageTests(unittest.TestCase):
         self.temp.cleanup()
 
     def call(self, path, body=None, role="operator"):
+        if self.current_role != role:
+            login = urllib.request.Request(self.base + '/api/login', data=json.dumps({'username': role, 'password': 'demo2026'}).encode(),
+                headers={'Content-Type': 'application/json', 'X-Demo-Request': '1'})
+            with self.opener.open(login) as resp:
+                resp.read()
+            self.current_role = role
         data = None if body is None else json.dumps(body).encode("utf-8")
         req = urllib.request.Request(
             self.base + path,
             data=data,
-            headers={"Content-Type": "application/json", "X-Ops-Role": role},
+            headers={"Content-Type": "application/json", "X-Demo-Request": "1"},
             method="GET" if body is None else "POST",
         )
         try:
-            with urllib.request.urlopen(req) as resp:
+            with self.opener.open(req) as resp:
                 return resp.status, json.loads(resp.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             return exc.code, json.loads(exc.read().decode("utf-8"))

@@ -51,5 +51,7 @@ tags:
 
 ## Related
 
+- [后台权限与执行复核](../../../ops_assistant_demo/docs/cursor-audit-2026-10-12.md) — 排版改好不等于后台控制已验收，必须单独验证真实模型、确认执行与持久化结果。
+
 - `docs/solutions/architecture-patterns/branch-param-desk-read-then-guard.md`
 - `ops_assistant_demo/AGENT_HANDOFF.md`

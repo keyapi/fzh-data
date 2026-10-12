@@ -1,12 +1,19 @@
 ---
-okf: v0.1
 type: Index
-title: 网点参数台演示文档
-tags: [ops-assistant]
+title: 文档索引
 ---
 
-# 文档
+# 文档索引
 
-给人看的说明在上一级 [README.md](../README.md)。
+新增经验：[静态配置暴露](solutions/static-config-exposure.md)。
 
-经验记录在 [先查再决定，护栏看动作](../../docs/solutions/architecture-patterns/branch-param-desk-read-then-guard.md)。
+| 需要 | 文档 |
+|---|---|
+| Cursor续办审计与待验收 | [cursor-audit-2026-10-12.md](cursor-audit-2026-10-12.md) |
+| 当前完成与未完成 | [handoff-2026-10-12.md](handoff-2026-10-12.md) |
+| 实施与验收 | [competition-plan.md](competition-plan.md) |
+| 五分钟与答疑 | [demo-script.md](demo-script.md) |
+| 安全范围和剩余风险 | [security-boundaries.md](security-boundaries.md) |
+| 调研来源 | [research.md](research.md) |
+| 早期探索（部分已替代） | [read-then-guard.md](read-then-guard.md) |
+| 变更 | [log.md](log.md) |

@@ -26,6 +26,8 @@ tags: [agent, guardrails, human-in-the-loop, demo]
 
 ## Guidance（本学习沉淀的做法）
 
+2026-10-12复核更新：现役蓝色页面已经统一柜面与联调的后台会话、隔离工作区、确认摘要及SQLite执行核验。请求头不能授权，页面隐藏不是权限。page-agent仅作为历史调研，现役页面不再提供通用执行入口。参见模块的 `docs/cursor-audit-2026-10-12.md` 和 `docs/handoff-2026-10-12.md`；下文page-agent条目是此前实验教训。
+
 助手循环保持很小，不引入编码助手运行时。
 
 1. 当前限额不写进系统提示。模型要先调用 `read_test_limit`，工具结果交回之后，才允许 `propose_change`。
