@@ -31,3 +31,19 @@ page-agent可适配页面控件，但关键动作更适合结构化工具以限�
 2026-10-12核对原始文档：[Pi agent-core](https://github.com/earendil-works/pi/blob/main/packages/agent/README.md)独立提供状态、工具执行与事件流，包含transformContext、prepareRequest、beforeToolCall、finishTurn；不能笼统说Pi对POC必然太重。本轮借鉴按轮更新真实状态、上下文筛选、工具前校验、基于工具结果结束/纠偏的机制，没有引入Pi依赖，也未完整对照评测。
 
 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)基于Cordis插件架构，官方仍标记开发预览与兼容性变化；整套替换需要额外集成验证，模块化思想可借鉴。这是本项目取舍，不是其性能不好或模型能力弱的证明。现有Python执行层继续负责业务权限和事务，框架本身不能取代它。
+
+
+## 最后一轮Harness调研与下一轮实验（2026-10-12，尚未实现）
+
+工作假设：保留deepseek-v4-flash，先评估运行时与工具设计，不把当前失败归咎于模型能力。以下机制有原始文档支持，具体选型是本项目推断。
+
+- [Pi agent-core原始文档](https://github.com/earendil-works/pi/blob/main/packages/agent/README.md)：独立运行层提供prepareRequest、工具前后钩子、finishTurn及执行事件。建议做最小SDK原型对照，不需要搬整个编码助手，也不开放shell/文件系统工具。每次模型请求重新构建可信上下文，业务权限继续在当前Python执行层校验。尚未验证我们的网关与当前Pi版本兼容性。
+- [Anthropic上下文工程](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)：结构化笔记和压缩用于保存重要进展；提示应给足信息，避免堆砌硬编码分支。映射到本项目：任务对象保存目标、环境、来源轮次、当前阶段、待确认动作和完成证据；聊天历史、用户意图和后台实时状态分别管理。当前仅短历史加近期请求，未具备完整任务记忆。
+- [Anthropic工具设计](https://www.anthropic.com/engineering/writing-tools-for-agents)：工具应职责清楚、结果提供相关业务信息，并以独立任务集检验工具选择和参数错误。我们应拆开准备测试变更、创建生产申请、审核申请，避免submit布尔值把申请强制绑定测试修改。成功话术由确定的执行结果生成，不能信模型自行总结。
+- [DeepSeek Harness项目](https://github.com/deepseek-ai/deepseek-harness)：插件架构可作模块边界参考；本轮文档站未返回可读内容，Python目录读取失败，未验证嵌入式接入细节，不据此声称它太重或不适合。
+
+代码证据：server.py每场景只保留短历史、六轮工具循环，并配置max_tokens=900和thinking disabled；domain.py资料按查询字符匹配排序，不是语义检索。这些是待评估因素，尚不能证明关闭思考或900token就是失败原因，不能直接把开思考当修复。界面动画目前主要在后台结果返回后播放，缺少实际工具事件实时驱动。
+
+推荐顺序：先用同一Flash模型、相同业务工具与安全策略，比较当前运行时和最小Pi agent-core原型；保留至少12条独立多轮对话，包含生产70秒→提交申请、改口75秒、取消后重来、重置后继续、跨场景、仅申请不改测试、缺值澄清、复核岗提交拒绝、只读问答。测完整任务成功率、错误成功报告、额外追问数、错误工具调用、耗时和调用量，保存实际轨迹。当前46项测试主要证明具体回归和控制层，不代表自然对话能力已经评测通过。
+
+再按失败轨迹调整任务状态与工具合同；最后才单独对照请求参数、知识检索与提示词。不要同时改框架、模型和提示词导致无法定位收益，也不要继续靠某条对话的特判宣称整体变聪明。所有实验、SDK接入、独立生产申请和结构化任务对象均留给下一轮，本轮只完成调研记录。
