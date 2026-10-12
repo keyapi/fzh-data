@@ -126,6 +126,24 @@ def test_count_pieces_ignores_empty_sku_placeholder_rows():
     assert count_pieces([Item("", 1)]) == (0, "空")
 
 
+def test_count_pieces_merges_split_package_part_rows():
+    # 同一件的第 2 个包裹：SKU `<base>-2` 且 base 也在同一单 → 不另计件
+    items = [Item("TT0031217K0064032", 1, "成品"), Item("TT0031217K0064032-2", 1, "成品")]
+    assert count_pieces(items) == (1, "成品口径")
+    # base 不在同一单时，`-N` 行本身是独立成品，照常计
+    assert count_pieces([Item("TT0031217K0064032-2", 1)]) == (1, "成品口径")
+
+
+def test_count_pieces_sums_multiple_distinct_products_in_set():
+    # 4 件套：4 个不同成品各 1 件 ⇒ 4
+    items = [Item(f"TT0312637K00642{i}", 1, "皮壳") for i in (67, 70, 76, 79)]
+    assert count_pieces(items) == (4, "成品口径")
+    # 2 个成品各 qty2 ⇒ 4
+    assert count_pieces(
+        [Item("TT0312639K0064283", 2, "皮壳"), Item("TT0312639K0064284", 2, "皮壳")]
+    ) == (4, "成品口径")
+
+
 def test_normalize_order_document_keeps_cost_and_relationship_fields():
     doc = {
         "name": "RSUS-112-9990006-6105830_1-M2001",

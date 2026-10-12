@@ -27,6 +27,8 @@ _SPLIT_RE = re.compile(r"[_-]\d{1,2}$")
 _COVER_RE = re.compile(r"-Cover\d*$", re.I)
 # 填充件：只做内胆/填充，不是成品件本身（PP棉/海绵）
 _FILLING_RE = re.compile(r"-(?:Foam\d*|PPCotton\d*)$", re.I)
+# 拆包裹部件后缀：`<base>-N`（1–2 位），当 `<base>` 也在同一单时=同一件的第 N 个包裹
+_SKU_SPLIT_RE = re.compile(r"^(?P<base>.+?)[-_](?P<n>\d{1,2})$")
 # 明确的后缀部件码
 _PART_SUFFIX_RE = re.compile(r"-(?:Cover\d*|Foam)$", re.I)
 # 部件词（产品名）
@@ -70,6 +72,12 @@ def is_supplementary(order_id: str, flag: str | None = None) -> bool:
 
 def is_cover(sku: str | None, name: str | None = None) -> bool:
     return bool(_COVER_RE.search(sku or "")) or ("皮壳" in (name or ""))
+
+
+def _is_split_part(sku: str, present: set[str]) -> bool:
+    """SKU 是否为拆包裹部件：形如 `<base>-N` 且 `<base>` 也在同一单里。"""
+    match = _SKU_SPLIT_RE.match(sku)
+    return bool(match and match.group("base") in present)
 
 
 def is_part(sku: str | None, name: str | None = None) -> bool:
@@ -431,11 +439,13 @@ def count_pieces(items: list[Item]) -> tuple[int, str]:
     """件数 = 一单里「成品件」的数量（子单口径，每 `_N` 子单各算一件订单）。
 
     口径（对应 `docs/solutions/conventions/tongtu-order-suffix-and-merge-criteria.md`）：
+    0. 先剔除**拆包裹部件行**（SKU 形如 `<base>-N`，且 `<base>` 也在同一单）——
+       这是同一件的第 N 个包裹（如 `TT0031217K0064032` + `TT0031217K0064032-2`），
+       不是第 2 件。空 SKU 是 EN 占位行，同样剔除。
     1. 有明确皮壳行（`-Cover`）→ Σ(皮壳行 quantity)。一件成品的成本被拆成皮壳+填充
        两行时，只有皮壳行代表"件"。`绍兴发货方式`（EN `shipping_method` = 皮壳/半成品/成品）
        只决定成本落在哪、分公司要不要填充压缩，**不改变件数**。
-    2. 无皮壳行 → Σ(成品行 quantity)。普通成品单（裸成品码，无 `-Cover`）每行本身即成品；
-       一单多件不同成品时逐行相加，不能取 max。空 SKU 是 EN 占位行，不计入。
+    2. 无皮壳行 → Σ(成品行 quantity)。一单多件不同成品时逐行相加，不能取 max。
     3. 全是填充件（只发 `-Foam`/`-PPCotton`，无成品行）→ `max(quantity)` + 标记「只发部件·待复核」。
 
     Returns (件数, 口径标记)。
@@ -443,10 +453,14 @@ def count_pieces(items: list[Item]) -> tuple[int, str]:
     named = [item for item in items if item.sku.strip()]
     if not named:
         return 0, "空"
-    explicit_covers = [item for item in named if is_cover(item.sku)]
+    present = {item.sku.strip() for item in named}
+    rows = [item for item in named if not _is_split_part(item.sku.strip(), present)]
+    if not rows:
+        return 0, "空"
+    explicit_covers = [item for item in rows if is_cover(item.sku)]
     if explicit_covers:
         return sum(max(int(item.quantity), 0) for item in explicit_covers), "皮壳口径"
-    product_rows = [item for item in named if not _FILLING_RE.search(item.sku)]
+    product_rows = [item for item in rows if not _FILLING_RE.search(item.sku)]
     if product_rows:
         return sum(max(int(item.quantity), 0) for item in product_rows), "成品口径"
-    return max(int(item.quantity) for item in named), "只发部件·待复核"
+    return max(int(item.quantity) for item in rows), "只发部件·待复核"
