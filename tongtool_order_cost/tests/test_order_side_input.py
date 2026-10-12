@@ -82,15 +82,26 @@ def test_count_pieces_cover_sum_not_max():
 
 
 def test_count_pieces_fallback_no_cover():
-    assert count_pieces([Item("X-Foam", 1)]) == (1, "无皮壳·待复核")
+    # 只发填充件（无成品行）→ 给数并标待复核
+    assert count_pieces([Item("X-Foam", 1)]) == (1, "只发部件·待复核")
     assert count_pieces([]) == (0, "空")
 
 
-def test_count_pieces_uses_en_shipping_method_for_plain_cover_sku():
-    assert count_pieces([Item("C/Velvet-Black-100-703-wow", 2, "皮壳")]) == (
-        2,
-        "皮壳口径",
-    )
+def test_count_pieces_plain_product_line_is_one_piece_per_quantity():
+    # 裸成品码（无 -Cover/-Foam）：每行本身即成品，按 quantity 计
+    assert count_pieces([Item("C/Velvet-Black-100-703-wow", 2)]) == (2, "成品口径")
+
+
+def test_count_pieces_sums_distinct_products_not_max():
+    # 一单两件不同成品（成品 KS0233 + 半成品 KS0205）⇒ 2 件；max 只给 1
+    items = [Item("TT0020046K0063668", 1), Item("TT0020038K0063336", 1)]
+    assert count_pieces(items) == (2, "成品口径")
+
+
+def test_count_pieces_ignores_filling_rows_when_no_cover():
+    # 无 -Cover，但有成品行 + 填充行：只算成品行
+    items = [Item("X-Sofa", 2), Item("X-Foam", 2)]
+    assert count_pieces(items) == (2, "成品口径")
 
 
 def test_count_pieces_prefers_explicit_cover_over_shipping_method_component():
@@ -99,6 +110,20 @@ def test_count_pieces_prefers_explicit_cover_over_shipping_method_component():
         Item("Curve-Pillow-50-Cover", 1, "成品"),
     ]
     assert count_pieces(items) == (1, "皮壳口径")
+
+
+def test_count_pieces_plain_cover_sku_with_pikou_shipping_counts_by_quantity():
+    # 裸码 + EN 发货方式=皮壳：不是填充件，按成品口径计
+    assert count_pieces([Item("C/Velvet-Black-100-703-wow", 2, "皮壳")]) == (2, "成品口径")
+
+
+def test_count_pieces_ignores_empty_sku_placeholder_rows():
+    # EN 里存在空 SKU 的占位行（脏数据），不能算成成品
+    assert count_pieces([Item("C/Linen-DKBlue-100-660-WOW", 1, "皮壳"), Item("", 1)]) == (
+        1,
+        "成品口径",
+    )
+    assert count_pieces([Item("", 1)]) == (0, "空")
 
 
 def test_normalize_order_document_keeps_cost_and_relationship_fields():
@@ -163,7 +188,7 @@ def test_normalize_order_document_marks_empty_shell_and_no_cover():
     )
     assert no_cover.status == "review"
     assert no_cover.piece_count == 2
-    assert no_cover.piece_rule == "无皮壳·待复核"
+    assert no_cover.piece_rule == "只发部件·待复核"
 
 
 def test_fetch_order_inputs_keeps_parent_state_unknown_until_checked():
@@ -266,7 +291,7 @@ def test_fetch_order_inputs_reports_every_requested_order():
         failed_count=1,
         empty_shell_count=1,
         supplementary_count=0,
-        no_cover_count=0,
+        parts_only_count=0,
         child_only_count=2,
         failures=("BROKEN-1: RuntimeError: boom",),
         missing_order_ids=("GOOD", "EMPTY", "MISSING-1"),

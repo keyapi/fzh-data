@@ -25,8 +25,8 @@ _SUPP_RE = re.compile(r"[-_]M\d+$")
 _SPLIT_RE = re.compile(r"[_-]\d{1,2}$")
 # 皮壳行：SKU 以 `-Cover`（可带序号）结尾，或产品名含「皮壳」
 _COVER_RE = re.compile(r"-Cover\d*$", re.I)
-# EN 发货方式只能作为皮壳兜底；明确填充物/部件不能据此算成成品件数
-_NON_COVER_COMPONENT_RE = re.compile(r"-(?:Foam\d*|PPCotton\d*)$", re.I)
+# 填充件：只做内胆/填充，不是成品件本身（PP棉/海绵）
+_FILLING_RE = re.compile(r"-(?:Foam\d*|PPCotton\d*)$", re.I)
 # 明确的后缀部件码
 _PART_SUFFIX_RE = re.compile(r"-(?:Cover\d*|Foam)$", re.I)
 # 部件词（产品名）
@@ -126,7 +126,7 @@ class FetchReport:
     failed_count: int
     empty_shell_count: int
     supplementary_count: int
-    no_cover_count: int
+    parts_only_count: int
     child_only_count: int
     failures: tuple[str, ...]
     missing_order_ids: tuple[str, ...]
@@ -350,7 +350,7 @@ def normalize_order_document(
     warehouse_name = str(document.get("warehouse_name") or "").strip()
     if not items:
         status = "empty_shell"
-    elif piece_rule == "无皮壳·待复核":
+    elif piece_rule == "只发部件·待复核":
         status = "review"
     else:
         status = "ok"
@@ -417,7 +417,7 @@ def fetch_order_inputs(
         failed_count=len(failures),
         empty_shell_count=sum(row.status == "empty_shell" for row in rows),
         supplementary_count=sum(row.is_supplementary for row in rows),
-        no_cover_count=sum(row.piece_rule == "无皮壳·待复核" for row in rows),
+        parts_only_count=sum(row.piece_rule == "只发部件·待复核" for row in rows),
         child_only_count=sum(
             row.is_child and row.original_order_exists is False for row in rows
         ),
@@ -428,26 +428,25 @@ def fetch_order_inputs(
 
 
 def count_pieces(items: list[Item]) -> tuple[int, str]:
-    """件数优先取明确皮壳行；无明确皮壳时再使用 EN `皮壳` 发货方式。
+    """件数 = 一单里「成品件」的数量（子单口径，每 `_N` 子单各算一件订单）。
 
-    三级兜底（必须给数，绝不空）：
-    1. SKU 是 `-Cover` → Σ(明确皮壳行 quantity)
-    2. 无明确皮壳时，EN `shipping_method=皮壳` 且不是 Foam/PPCotton → Σ(quantity)
-    3. 仍无皮壳 → `max(各行 quantity)` + 标记「无皮壳·待复核」
+    口径（对应 `docs/solutions/conventions/tongtu-order-suffix-and-merge-criteria.md`）：
+    1. 有明确皮壳行（`-Cover`）→ Σ(皮壳行 quantity)。一件成品的成本被拆成皮壳+填充
+       两行时，只有皮壳行代表"件"。`绍兴发货方式`（EN `shipping_method` = 皮壳/半成品/成品）
+       只决定成本落在哪、分公司要不要填充压缩，**不改变件数**。
+    2. 无皮壳行 → Σ(成品行 quantity)。普通成品单（裸成品码，无 `-Cover`）每行本身即成品；
+       一单多件不同成品时逐行相加，不能取 max。空 SKU 是 EN 占位行，不计入。
+    3. 全是填充件（只发 `-Foam`/`-PPCotton`，无成品行）→ `max(quantity)` + 标记「只发部件·待复核」。
 
     Returns (件数, 口径标记)。
     """
-    explicit_covers = [item for item in items if is_cover(item.sku)]
+    named = [item for item in items if item.sku.strip()]
+    if not named:
+        return 0, "空"
+    explicit_covers = [item for item in named if is_cover(item.sku)]
     if explicit_covers:
         return sum(max(int(item.quantity), 0) for item in explicit_covers), "皮壳口径"
-    shipping_covers = [
-        item
-        for item in items
-        if item.shipping_method.strip() == "皮壳"
-        and not _NON_COVER_COMPONENT_RE.search(item.sku)
-    ]
-    if shipping_covers:
-        return sum(max(int(item.quantity), 0) for item in shipping_covers), "皮壳口径"
-    if not items:
-        return 0, "空"
-    return max(int(item.quantity) for item in items), "无皮壳·待复核"
+    product_rows = [item for item in named if not _FILLING_RE.search(item.sku)]
+    if product_rows:
+        return sum(max(int(item.quantity), 0) for item in product_rows), "成品口径"
+    return max(int(item.quantity) for item in named), "只发部件·待复核"

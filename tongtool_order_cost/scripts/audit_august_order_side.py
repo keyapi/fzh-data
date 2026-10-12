@@ -82,11 +82,49 @@ def prefix(order_id: str) -> str:
     return base
 
 
-def build_report(raw_rows: int, raw_order_ids: list[str], rows) -> dict[str, Any]:
+def chunked(seq: list[str], size: int):
+    for start in range(0, len(seq), size):
+        yield seq[start : start + size]
+
+
+def fetch_resilient(
+    fetch_chunk,
+    ids: list[str],
+    failures: list[str],
+    failed_ids: set[str],
+    label: str,
+) -> list[dict]:
+    """批量取数，失败时二分降级到单条，逐单定位并把失败记录进 failures/failed_ids。
+
+    Frappe 的 `in [...]` 过滤一旦过大或某条异常会整批报错；二分保证其余单照常取回，
+    失败的单不会被静默丢弃（数量对账必须闭合）。
+    """
+    if not ids:
+        return []
+    try:
+        return fetch_chunk(ids)
+    except Exception as exc:  # noqa: BLE001 - 需捕获任意批次异常以继续对账
+        if len(ids) == 1:
+            failures.append(f"{label} {ids[0]}: {type(exc).__name__}: {exc}")
+            failed_ids.add(ids[0])
+            return []
+        mid = len(ids) // 2
+        return fetch_resilient(
+            fetch_chunk, ids[:mid], failures, failed_ids, label
+        ) + fetch_resilient(fetch_chunk, ids[mid:], failures, failed_ids, label)
+
+
+def build_report(
+    raw_rows: int,
+    raw_order_ids: list[str],
+    rows,
+    failures: tuple[str, ...] = (),
+    failed_ids: frozenset[str] = frozenset(),
+) -> dict[str, Any]:
     counts = Counter(raw_order_ids)
     unique_ids = list(dict.fromkeys(raw_order_ids))
     by_id = {row.order_id: row for row in rows}
-    missing = [order_id for order_id in unique_ids if order_id not in by_id]
+    missing = [oid for oid in unique_ids if oid not in by_id and oid not in failed_ids]
     duplicate_ids = {order_id: count for order_id, count in counts.items() if count > 1}
 
     bodies: dict[str, list[str]] = defaultdict(list)
@@ -114,10 +152,10 @@ def build_report(raw_rows: int, raw_order_ids: list[str], rows) -> dict[str, Any
             "requested_unique": len(unique_ids),
             "fetched": len(rows),
             "missing": len(missing),
-            "failed": 0,
+            "failed": len(failures),
             "empty_shell": sum(row.status == "empty_shell" for row in rows),
             "supplementary": sum(row.is_supplementary for row in rows),
-            "no_cover": sum(row.piece_rule == "无皮壳·待复核" for row in rows),
+            "parts_only": sum(row.piece_rule == "只发部件·待复核" for row in rows),
             "confirmed_child_only": sum(
                 row.is_child and row.original_order_exists is False for row in rows
             ),
@@ -129,6 +167,7 @@ def build_report(raw_rows: int, raw_order_ids: list[str], rows) -> dict[str, Any
             "cross_prefix_candidate_groups": len(cross_prefix),
         },
         "missing_order_ids": missing,
+        "failed_order_ids": list(failures),
         "cross_prefix_candidates": cross_prefix,
         "orders": [asdict(row) for row in rows],
     }
@@ -168,9 +207,31 @@ def main(argv: list[str] | None = None) -> int:
         api_key,
         api_secret,
     )
-    parents = client.list_orders_by_ids(requested_ids)
+    failures: list[str] = []
+    failed_ids: set[str] = set()
+    parents: list[dict] = []
+    for chunk in chunked(requested_ids, 100):
+        parents.extend(
+            fetch_resilient(
+                lambda ids: client.list_orders_by_ids(ids, chunk_size=len(ids)),
+                chunk,
+                failures,
+                failed_ids,
+                "order",
+            )
+        )
     fetched_ids = [str(parent.get("name") or "") for parent in parents]
-    children = client.list_order_items_by_order_ids(fetched_ids)
+    children: list[dict] = []
+    for chunk in chunked(fetched_ids, 20):
+        children.extend(
+            fetch_resilient(
+                lambda ids: client.list_order_items_by_order_ids(ids, chunk_size=len(ids)),
+                chunk,
+                failures,
+                failed_ids,
+                "items",
+            )
+        )
     documents = group_order_documents(parents, children)
     normalized = [normalize_order_document(document) for document in documents]
 
@@ -192,7 +253,7 @@ def main(argv: list[str] | None = None) -> int:
             )
         rows.append(row)
 
-    report = build_report(raw_rows, raw_order_ids, rows)
+    report = build_report(raw_rows, raw_order_ids, rows, tuple(failures), frozenset(failed_ids))
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
