@@ -108,6 +108,84 @@ class BankAgentTests(unittest.TestCase):
 
 
 class BankAgentBackendTests(unittest.TestCase):
+    def test_delete_existing_ip_does_not_require_retyping_its_ports(self):
+        store = Store(':memory:')
+        try:
+            bank = BankOperations(store)
+            session = {'role': 'operator', 'workspace': 'delete-demo'}
+            body = {'entity': 'ip', 'text': '删除最新ip', 'active_terminal_id': 'TERM-DEMO-001'}
+            args = {'entity': 'ip', 'action': 'delete', 'record_id': 'IP-DEMO-002',
+                    'values': {'front_port': 8443, 'client_port': 8080}, 'reason': '删除最新记录'}
+            model = Mock(side_effect=[response(('read_bank_state', {}), ('search_bank_rules', {})),
+                                      response(('prepare_bank_change', args))])
+            result = run_bank_agent(session, body, bank, store, model)
+            self.assertEqual(result['outcome'], 'ready')
+            self.assertEqual(result['proposal']['action'], 'delete')
+            self.assertEqual(result['proposal']['values'], {})
+            self.assertEqual(len(bank.snapshot(session['workspace'], 'operator')['ip_configs']), 2)
+            done = bank.execute(session['workspace'], 'operator', result['proposal']['id'], result['proposal']['digest'])
+            self.assertTrue(done['verification']['passed'])
+        finally:
+            store.db.close()
+
+    def test_update_echoed_unchanged_port_is_not_a_new_target(self):
+        store = Store(':memory:')
+        try:
+            bank = BankOperations(store)
+            session = {'role': 'operator', 'workspace': 'update-demo'}
+            body = {'entity': 'ip', 'text': '把前置端口改为9001', 'active_terminal_id': 'TERM-DEMO-001'}
+            args = {'entity': 'ip', 'action': 'update', 'record_id': 'IP-DEMO-001',
+                    'values': {'front_port': 9001, 'client_port': 8080}, 'reason': '修改端口'}
+            model = Mock(side_effect=[response(('read_bank_state', {}), ('search_bank_rules', {})),
+                                      response(('prepare_bank_change', args))])
+            result = run_bank_agent(session, body, bank, store, model)
+            self.assertEqual(result['outcome'], 'ready')
+            self.assertEqual([c['field'] for c in result['proposal']['changes']], ['front_port'])
+        finally:
+            store.db.close()
+
+    def test_echoed_old_port_cannot_overwrite_a_concurrent_change(self):
+        store = Store(':memory:')
+        try:
+            bank = BankOperations(store)
+            session = {'role': 'operator', 'workspace': 'concurrent-targets'}
+            body = {'entity': 'ip', 'text': '把前置端口改为9001', 'active_terminal_id': 'TERM-DEMO-001'}
+            args = {'entity': 'ip', 'action': 'update', 'record_id': 'IP-DEMO-001',
+                    'values': {'front_port': 9001, 'client_port': 8080}, 'reason': '只改前置端口'}
+            rounds = []
+            def model(messages, tools):
+                rounds.append(1)
+                if len(rounds) == 1:
+                    return response(('read_bank_state', {}), ('search_bank_rules', {}))
+                p = bank.propose(session['workspace'], 'operator', 'ip', 'update', 'IP-DEMO-001',
+                                 {'client_port': 9002}, '并发修改客户端端口')
+                bank.execute(session['workspace'], 'operator', p['id'], p['digest'])
+                return response(('prepare_bank_change', args))
+            result = run_bank_agent(session, body, bank, store, model)
+            self.assertEqual(result['outcome'], 'ready')
+            self.assertEqual(result['proposal']['after']['client_port'], 9002)
+            self.assertEqual([c['field'] for c in result['proposal']['changes']], ['front_port'])
+        finally:
+            store.db.close()
+
+    def test_model_confirmation_question_must_prepare_actual_confirmation(self):
+        store = Store(':memory:')
+        try:
+            bank = BankOperations(store)
+            session = {'role': 'operator', 'workspace': 'confirmation-demo'}
+            body = {'entity': 'ip', 'text': '删除最新ip', 'active_terminal_id': 'TERM-DEMO-001'}
+            args = {'entity': 'ip', 'action': 'delete', 'record_id': 'IP-DEMO-002',
+                    'values': {}, 'reason': '删除最新记录'}
+            model = Mock(side_effect=[response(('read_bank_state', {}), ('search_bank_rules', {})),
+                response(content='确认删除这条IP吗？'), response(('prepare_bank_change', args))])
+            result = run_bank_agent(session, body, bank, store, model)
+            self.assertEqual(result['outcome'], 'ready')
+            tool_result = next(json.loads(m['content']) for m in model.call_args.args[0]
+                               if m.get('role') == 'tool' and 'latest_record_id' in m['content'])
+            self.assertEqual(tool_result['latest_record_id'], 'IP-DEMO-002')
+        finally:
+            store.db.close()
+
     def test_real_prepare_does_not_write_parameter(self):
         store = Store(':memory:')
         try:

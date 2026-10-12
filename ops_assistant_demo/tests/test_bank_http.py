@@ -98,9 +98,10 @@ class BankHttpTests(unittest.TestCase):
         _, state = self.call('/api/ops/state')
         self.assertNotIn('DEMO_SECRET', json.dumps(state))
         self.assertNotIn('DEMO_FAKE_VALUE', json.dumps(state))
-        with self.client.open(self.base + '/bank_ui.js') as response:
-            self.assertEqual(response.status, 200)
-            self.assertIn('javascript', response.headers['Content-Type'])
+        for script in ('/bank_ui.js', '/assistant_panel.js'):
+            with self.client.open(self.base + script) as response:
+                self.assertEqual(response.status, 200)
+                self.assertIn('javascript', response.headers['Content-Type'])
         self.assertEqual(self.call('/bank_ops.py')[0], 404)
 
     def test_bank_chat_uses_authenticated_role_and_common_model_limits(self):

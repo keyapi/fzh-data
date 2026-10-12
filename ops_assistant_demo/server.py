@@ -350,8 +350,8 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path in ('/', '/index.html'):
             self._send(200, (ROOT / 'index.html').read_bytes(), 'text/html; charset=utf-8')
             return
-        if parsed.path == '/bank_ui.js':
-            self._send(200, (ROOT / 'bank_ui.js').read_bytes(), 'text/javascript; charset=utf-8')
+        if parsed.path in ('/bank_ui.js', '/assistant_panel.js'):
+            self._send(200, (ROOT / parsed.path[1:]).read_bytes(), 'text/javascript; charset=utf-8')
             return
         if not parsed.path.startswith('/api/'):
             self._send(404, {'error': 'not found'})

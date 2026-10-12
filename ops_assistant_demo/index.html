@@ -603,7 +603,7 @@ async function executeVisible(p) {
 }
 function yuan(n) { return (n / 10000).toFixed(0) + " 万元"; }
 function money(n) { return Number(n).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
-function save() {} // Business data and authorization are server-owned.
+function save() { window.AssistantPanel?.save(); } // UI history only; authorization is server-owned.
 function load() {} // Never restore browser-authored state.
 function renderLimits() {
   $("drill-amount").textContent = money(limits.drill);
@@ -725,20 +725,21 @@ function renderLog() {
 function push(entry) { log.push(entry); renderLog(); save(); return log.length - 1; }
 function renderApproval(){
  const pending=(opsState?.proposals||[]).filter(p=>p.status==="pending"&&p.expires_at*1000>Date.now()&&(!p.scenario.startsWith("bank_")||p.version===opsState.bank?.version));
- const p=pending.find(p=>p.id===counterApproval?.id)||pending.at(-1);
+ const p=pending.at(-1);
  $("chat-approval").hidden=!p||role()!=="operator";
  if(!p)return;
  $("chat-approval").dataset.proposal=p.id;
  $("chat-change").textContent=p.scenario.startsWith("bank_")?window.BankUI.describe(p,true):p.changes.map(c=>fieldLabel(c.field)+"："+fieldValue(c.field,c.before)+" → "+fieldValue(c.field,c.after)).join("；")+"。生产不直接修改。"+(p.submit?"同时登记生产申请。":"");
  $("chat-allow").disabled=busy;$("chat-cancel").disabled=busy;
  $("chat-allow").textContent=busy?"正在填写 / 办理…":"允许修改";
+ if(!busy&&p.action==="delete")$("chat-allow").textContent="允许删除";
 }
 async function confirmFromChat(cancel=false){
  if(busy)return;
  const id=$("chat-approval").dataset.proposal;
  const p=(opsState?.proposals||[]).find(p=>p.id===id&&p.status==="pending");
  if(!p){push({kind:"bot",text:"当前没有待确认修改。"});return;}
- if(p.scenario.startsWith("bank_")){push({kind:"user",text:cancel?"取消修改":"允许修改"});await window.BankUI[cancel?"cancel":"approve"](p);return;}
+ if(p.scenario.startsWith("bank_")){push({kind:"user",text:cancel?"取消操作":p.action==="delete"?"允许删除":"允许修改"});await window.BankUI[cancel?"cancel":"approve"](p);return;}
  if(p.scenario==="counter"&&counterApproval?.id!==id){busy=true;try{await previewChange(p);}finally{busy=false;$("rule-ok").disabled=false;renderApproval();}}
  push({kind:"user",text:cancel?"取消修改":"允许修改"});
  if(p.scenario==="counter")await $(cancel?"rule-cancel":"rule-ok").onclick();
@@ -830,14 +831,20 @@ $("ask").onsubmit = (e) => {
   e.preventDefault();
   const text = $("ask-input").value.trim();
   $("ask-input").value = "";
-  if(/^(允许(?:修改|执行)?|确认修改|同意(?:修改|执行)?)[。！!\s]*$/.test(text)){confirmFromChat();return;}
+  if(/^(允许(?:修改|执行|删除|保存)?|确认(?:修改|删除|保存)?|确定|同意(?:修改|执行|删除|保存)?)[。！!\s]*$/.test(text)){confirmFromChat();return;}
   if(/^(取消(?:修改)?|不允许)[。！!\s]*$/.test(text)){confirmFromChat(true);return;}
   if (text) askOps(text,scenarioFor(text,!$("view-integration").hidden?"integration":"counter"));
 };
 let opsState = null;
 let opsProposal = null;
+let opsEpoch = 0;
 function opsHeaders(json){return json?{"Content-Type":"application/json","X-Demo-Request":"1"}:{};}
-async function opsFetch(path,body){const resp=await fetch(path,{credentials:"same-origin",method:body===undefined?"GET":"POST",headers:opsHeaders(body!==undefined),body:body===undefined?undefined:JSON.stringify(body)});const data=await resp.json().catch(()=>({}));if(!resp.ok||data.ok===false){if(resp.status===401&&!$("login-dialog").open)$("login-dialog").showModal();throw new Error(data.message||data.error||("请求失败 "+resp.status));}return data;}
+async function opsFetch(path,body){
+ const writing=body!==undefined;if(writing)opsEpoch++;const requestEpoch=opsEpoch;
+ const resp=await fetch(path,{credentials:"same-origin",method:writing?"POST":"GET",headers:opsHeaders(writing),body:writing?JSON.stringify(body):undefined});
+ const data=await resp.json().catch(()=>({}));if(writing)opsEpoch++;
+ if(!resp.ok||data.ok===false){if(resp.status===401&&(writing||requestEpoch===opsEpoch)&&!$("login-dialog").open)$("login-dialog").showModal();throw new Error(data.message||data.error||("请求失败 "+resp.status));}return data;
+}
 function opsEnv(name) { return name === "prod" ? "生产" : "测试"; }
 function opsWhen(ts) {return ts?new Date(typeof ts==="number"?ts*1000:ts).toLocaleTimeString("zh-CN",{hour12:false}):"";}
 function fieldLabel(field) {
@@ -845,6 +852,7 @@ function fieldLabel(field) {
 }
 function renderOps() {
   if (!opsState) return;
+  window.AssistantPanel?.attach(opsState);
   $("role").value=opsState.role;
   $("login-open").textContent="模拟账号 · 已登录";
   const counterConfigs=(opsState.configs||[]).filter(c=>c.scenario==="counter");
@@ -912,11 +920,15 @@ function renderOps() {
     <div class="muted" style="margin-top:8px">${opsProposal.submit ? "确认后保存测试，并登记生产申请。" : "确认后只保存测试，不登记生产申请。"}</div>`;
 }
 async function loadOps() {
+  const requestEpoch=opsEpoch;
   try {
-    opsState = await opsFetch("/api/ops/state");
+    const state = await opsFetch("/api/ops/state");
+    if(requestEpoch!==opsEpoch)return;
+    opsState=state;
     $("ops-error").hidden = true;
     renderOps();
   } catch (err) {
+    if(requestEpoch!==opsEpoch)return;
     $("ops-error").hidden = false;
     $("ops-error").textContent = String(err.message || err);
   }
@@ -994,11 +1006,12 @@ async function runSafety(caseName) {
   } finally {busy=false;clearAim();$("rule-ok").disabled=false;renderApproval();}
 }
 async function askOps(text,scenario="integration"){
+ window.AssistantPanel?.open();
  const bankEntity=window.BankUI?.scenarioFor(text);
  if(bankEntity&&!/限额|柜面|联调/.test(text))return askBank(text,bankEntity);
  if(busy)return;scenario=scenarioFor(text,scenario);busy=true;
  if(scenario==="integration")show("integration");
- push({kind:"user",text});const pending=push({kind:"bot",text:"正在查依据和当前后台配置…"});
+ push({kind:"user",text});const pending=push({kind:"bot",text:"正在查依据和当前后台配置…",transient:true});
  try{
   const data=await opsFetch("/api/ops/chat",{text,scenario});log.splice(pending,1);
   const reply=data.proposal?"正在填写，请在页面确认修改。":data.noop?"当前已是这个值，无需重复修改。":data.text||"请补充具体要求。";
@@ -1015,8 +1028,9 @@ async function askOps(text,scenario="integration"){
  finally{busy=false;$("rule-ok").disabled=false;clearAim();renderLog();}
 }
 async function askBank(text,entity){
- if(busy)return;const activeTerminal=window.BankUI.activeTerminalId;busy=true;window.BankUI.show(entity,activeTerminal);window.BankUI.render();
- push({kind:"user",text});const waiting=push({kind:"bot",text:"正在读取当前记录和操作依据…"});
+ window.AssistantPanel?.open();
+ if(busy)return;$("rule-dialog").hidden=true;counterApproval=null;const activeTerminal=window.BankUI.activeTerminalId;busy=true;window.BankUI.show(entity,activeTerminal);window.BankUI.render();
+ push({kind:"user",text});const waiting=push({kind:"bot",text:"正在读取当前记录和操作依据…",transient:true});
  try{
   const data=await opsFetch('/api/bank/chat',{text,entity,active_terminal_id:activeTerminal});
   log.splice(waiting,1);if(data.state){opsState=data.state;renderOps();}
@@ -1079,11 +1093,16 @@ $("safety-cases").onclick = (e) => {
 };
 
 $("login-open").onclick=()=>{$("login-user").value=role();$("login-dialog").showModal();};$("login-close").onclick=()=>$("login-dialog").close();
-async function loginAs(username,password,accessCode){await opsFetch("/api/login",{username,password,access_code:accessCode});log=[];opsProposal=null;counterApproval=null;$("rule-dialog").hidden=true;clearAim();$("ops-proposal").hidden=true;$("ops-readback").hidden=true;$("log").innerHTML="";loginPassword=String(password);loginAccess=accessCode;$("login-password").value="demo2026";$("login-access").value="";$("login-dialog").close();await loadOps();}
+async function loginAs(username,password,accessCode){
+ if(busy)return;window.AssistantPanel?.save();busy=true;
+ try{await opsFetch("/api/login",{username,password,access_code:accessCode});log=[];opsProposal=null;counterApproval=null;$("rule-dialog").hidden=true;clearAim();$("ops-proposal").hidden=true;$("ops-readback").hidden=true;$("log").innerHTML="";loginPassword=String(password);loginAccess=accessCode;$("login-password").value="demo2026";$("login-access").value="";$("login-dialog").close();await loadOps();}
+ finally{busy=false;window.BankUI?.render();applyRoleVisibility();renderApproval();}
+}
 $("login-form").onsubmit=async event=>{event.preventDefault();try{await loginAs($("login-user").value,$("login-password").value,$("login-access").value);$("login-error").textContent="";}catch(err){$("login-error").textContent=err.message;}};
 $("role").onchange=async()=>{if(busy){$("role").value=role();return;}const desired=$("role").value;$("role").value=role();try{await loginAs(desired,loginPassword||"demo2026",loginAccess);}catch(err){push({kind:"deny",text:err.message});$("login-dialog").showModal();}};
 push({kind:"bot",text:"告诉我要改什么，我会在页面填写，等你确认后保存。"});loadOps();
 </script>
 <script src="/bank_ui.js"></script>
+<script src="/assistant_panel.js"></script>
 </body>
 </html>
