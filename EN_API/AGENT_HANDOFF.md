@@ -17,6 +17,9 @@
 | [AGENT_HANDOFF_DN追溯报表.md](AGENT_HANDOFF_DN追溯报表.md) | 销售出库 → 物料移动追溯 |
 | [docs/reference/en-server-access.md](docs/reference/en-server-access.md) | **服务器与环境访问**：生产/测试 SSH 别名、bench 重启规矩、REST 凭证、常见坑 |
 
+> 「独立站」同步（`vilavi_pim` app，server-side）反复 300 秒超时的根因与修复方向，见
+> `docs/solutions/integration-issues/daneey-sync-429-eats-300s-rq-default-queue-timeout.md`。
+
 ---
 
 ## 1. 业务背景
