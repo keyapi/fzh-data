@@ -233,6 +233,36 @@
     clip-path: polygon(0 0, 100% 58%, 58% 64%, 74% 100%, 46% 70%, 0 88%);
     filter: drop-shadow(0 1px 1px rgba(0,0,0,.35));
   }
+
+  /* Synthetic operations console: layout inspired by supplied photos, no source data. */
+  header { background:linear-gradient(100deg,#12498e,#122b50);height:48px; }
+  nav { background:#f4f6f8;padding:10px 0; }
+  nav h2 { color:#294660;font-weight:650;border-bottom:1px solid #e3e8ed;padding-bottom:8px; }
+  nav button[aria-current] { background:#e2ecf6;color:#164b82;border-left-color:#164b82; }
+  main { background:#fff;padding:14px 18px 24px; }
+  .crumb { color:#728191;font-size:12px;border-bottom:1px solid #e4e9ef;padding-bottom:10px;margin-bottom:12px; }
+  .page-head { border-bottom:1px solid #edf0f3;padding-bottom:10px; }
+  .page-head h1 { font-size:18px;font-weight:650; }
+  .console-tab { display:inline-block;background:#194a82;color:#fff;font-size:12px;padding:5px 16px;border-radius:2px;margin-bottom:12px; }
+  .panel { border:1px solid #e4e9ef;border-radius:0; }
+  .panel-bar { background:#fafbfc;min-height:42px;padding:10px 14px; }
+  .panel-bar span:first-child { border-left:3px solid #194a82;padding-left:10px;color:#26394c; }
+  th { background:#eaf0f5;color:#364b60;font-weight:600; }
+  th,td { padding:9px 12px; }
+  tbody tr:nth-child(even) { background:#fafcfd; }
+  .sheet { max-width:none;background:#fafbfc; }
+  #ops-form { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 24px;padding:16px 18px; }
+  #ops-form .sheet-meta { grid-column:1/-1;border-bottom:1px solid #e2e8ed;padding-bottom:12px; }
+  #ops-form>label { position:relative;display:grid;grid-template-columns:90px minmax(0,1fr);align-items:center;gap:8px; }
+  #ops-form>label input { min-width:0;width:100%;grid-column:2; }
+  #ops-form>label .req { position:absolute;left:80px;top:8px; }
+  #ops-form>label:has(#ops-reason),#ops-form>label:has(#ops-submit),#ops-form .form-actions { grid-column:1/-1; }
+  #ops-form .form-actions { border-top:1px solid #e2e8ed;padding-top:12px; }
+  #ops-form #ops-submit { width:auto;min-width:0;flex:0 0 auto;margin:0; }
+  .editor-heading { grid-column:1/-1;border-left:3px solid #194a82;padding-left:10px;font-weight:650;color:#26394c; }
+  .notice { color:#556779;background:#f5f8fb;border-color:#e4eaf0;font-size:12px; }
+  button.solid { background:#194a82;border-color:#194a82; }
+  .photo-style-note { display:inline-block;color:#6e7f90;font-size:11px;margin-left:10px; }
 </style>
 </head>
 <body>
@@ -247,6 +277,7 @@
   </select>
 </header>
 <nav>
+  <h2>系统菜单</h2>
   <h2>对公结算</h2>
   <button type="button" id="nav-rules" aria-current="true">限额参数</button>
   <button type="button" id="nav-ticket">变更单</button>
@@ -354,10 +385,10 @@
   </section>
   <section id="view-integration" hidden>
     <div class="crumb">柜面参数 / 科技运营 / 联调配置</div>
-    <div class="page-head"><h1>合作方联调参数</h1></div>
+    <div class="console-tab">联调配置</div><div class="page-head"><h1>联调终端参数配置</h1><span class="photo-style-note">模拟配置 · 当前岗位权限内办理</span></div>
     <p class="notice">模拟库。助手填写超时和重试，确认修改后才保存到测试环境，并重新读回。生产行任何岗位都不能直接改，只能形成待复核申请。</p>
     <div class="panel">
-      <div class="panel-bar"><span>当前配置</span><span id="ops-model-line">读取中</span></div>
+      <div class="panel-bar"><span>联调参数列表</span><span id="ops-model-line">读取中</span></div>
       <table>
         <thead>
           <tr><th>环境</th><th>超时（秒）</th><th>重试（次）</th><th>版本</th><th>写入</th></tr>
@@ -366,6 +397,7 @@
       </table>
     </div>
     <form class="sheet" id="ops-form" style="margin-top:12px" onsubmit="return false">
+      <div class="editor-heading">基础信息 · 参数编辑</div>
       <div class="sheet-meta">
         <span>场景</span><b>科技运营联调</b>
         <span>目标环境</span><b>仅测试</b>
