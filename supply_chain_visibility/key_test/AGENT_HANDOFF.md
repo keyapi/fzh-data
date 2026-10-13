@@ -128,3 +128,13 @@ SAP Fiori Tree Table https://help.sap.com/docs/ABAP_PLATFORM_NEW/468a97775123488
 兜底 `production_plan_item→PP.sales_order_item` / `fg_sales_order_item`。
 完整基数表 + 铁律见 [../docs/reference/en-chain-cardinality.md](../docs/reference/en-chain-cardinality.md)。
 改动的三处：`key_test/so_chain.py`、`key_test__report__so_chain_overview__*`、`EN_API/item_shipment_status.py: wos_for_line`（+ `WO_FIELDS` 加 `sales_order_item`）。
+
+## 9. Stage 1 v3：可点链接 + 工序卡明细 + 交期逾期（2026-10-13）
+
+- **全加单据跳转链接**（`/app/<doctype-slug>/<name>`，新标签页）：主表 `物料→Item`、`生产计划→Production Plan`；
+  弹窗 `工单→Work Order`、`工序卡→Job Card`、`菲号→Tracking Number`、`开料工单→Initial Work Order`、`交付物料→Item`。
+- **工序卡明细**：弹窗每道工序下直接列出其 Job Card（名称可点 + 状态/数量）。
+- **交期 + 逾期**：主表新增「交期」列，逾期标红「(超 N 天)」；弹窗同步。
+- **阶段色块**（indicator-pill：灰/橙/蓝/绿）+ **合计行**（未发合计）。
+- 服务端扩展：`Job Card` 明细（**注意 Job Card 无 `employee` 列**——员工在 `time_logs` 子表，列表查不到，会 500）、行 `delivery_date`/`overdue_days`、工单 `last_end`。
+- 测试机已部署 + Playwright 验证：主表 10 个链接、弹窗 3+ 链接（Item/PP/WO）均正确。

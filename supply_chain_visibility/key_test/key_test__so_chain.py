@@ -14,6 +14,7 @@
   * WO.status / produced_qty 不可信，进度只看工序卡
 """
 import frappe
+from frappe.utils import getdate, today
 
 
 def _num(v):
@@ -67,15 +68,19 @@ def get_so_chain(sales_order):
                                     fields=["parent", "operation", "sequence_id", "status", "completed_qty"]):
                 ops_by_wo.setdefault(o.parent, []).append(o)
 
-        # 逐(工单, 工序)的工序卡完成量
-        jc_done = {}
+        # 逐(工单, 工序)的工序卡完成量 + 工序卡明细（供点开看/跳转）
+        jc_done, jc_by_op = {}, {}
         if wo_names:
             for j in frappe.get_all("Job Card",
                                     filters={"work_order": ["in", wo_names], "docstatus": ["<", 2]},
-                                    fields=["work_order", "operation", "status", "total_completed_qty", "for_quantity"]):
+                                    fields=["name", "work_order", "operation", "status", "total_completed_qty",
+                                            "for_quantity", "actual_end_date"]):
+                q = _num(j.total_completed_qty) or _num(j.for_quantity)
+                key = (j.work_order, j.operation)
+                jc_by_op.setdefault(key, []).append({
+                    "name": j.name, "status": j.status, "qty": q,
+                    "employee": "", "end": str(j.actual_end_date or "")[:19]})
                 if j.status == "Completed":
-                    q = _num(j.total_completed_qty) or _num(j.for_quantity)
-                    key = (j.work_order, j.operation)
                     jc_done[key] = jc_done.get(key, 0.0) + q
 
         # 菲号（跟踪单号）
@@ -90,18 +95,21 @@ def get_so_chain(sales_order):
         for w in wos:
             ops = sorted(ops_by_wo.get(w.name, []), key=lambda o: (_num(o.sequence_id), o.operation or ""))
             operations = [{"operation": o.operation, "seq": o.sequence_id, "status": o.status,
-                           "done": jc_done.get((w.name, o.operation), 0.0)} for o in ops]
+                           "done": jc_done.get((w.name, o.operation), 0.0),
+                           "job_cards": jc_by_op.get((w.name, o.operation), [])} for o in ops]
             # 工单完成量 = 第一道工序完成量，空则各工序最大值
             done_qty = 0.0
             if operations:
                 done_qty = operations[0]["done"] or max([x["done"] for x in operations] or [0.0])
             line_produced += done_qty
+            jc_ends = [j["end"] for x in operations for j in x["job_cards"] if j["end"]]
             tns = [{"tn": t.name, "qty": _num(t.qty),
                     "iwo": t.initial_work_order or "", "mat": t.so_materials or ""}
                    for t in tn_by_wo.get(w.name, [])]
             line_tn += len(tns)
             wo_detail.append({"wo": w.name, "qty": _num(w.qty), "status": w.status,
                               "produced_head": _num(w.produced_qty), "done": done_qty,
+                              "last_end": max(jc_ends) if jc_ends else "",
                               "operations": operations, "tracking_numbers": tns})
 
         # 出库净额
@@ -140,6 +148,9 @@ def get_so_chain(sales_order):
             "plans": [{"pp": p.pp, "planned_qty": _num(p.planned_qty), "pending_qty": _num(p.pending_qty)}
                       for p in plans],
             "wo_count": len(wos), "tn_count": line_tn,
+            "delivery_date": str(it.delivery_date or "")[:10],
+            "overdue_days": (getdate(today()) - getdate(it.delivery_date)).days
+                            if it.delivery_date and open_qty > 0 else 0,
             "work_orders": wo_detail,
         })
 
