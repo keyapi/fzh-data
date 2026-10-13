@@ -135,7 +135,7 @@ function so_chain_cell($row, which) {
 }
 function so_chain_clear_cells($box) {
     $box.find('td.so-chain-cell').each(function () {
-        this.style.border = ''; this.style.borderBottom = ''; this.style.background = '';
+        this.style.borderColor = ''; this.style.background = ''; this.style.boxShadow = '';
         this.style.borderRadius = ''; this.style.position = ''; this.style.zIndex = '';
     });
 }
@@ -153,9 +153,12 @@ function so_chain_toggle($box, idx, which, line) {
     const color = which === 'dn' ? SO_CHAIN_DN : SO_CHAIN_PROD;
     const body = which === 'dn' ? so_chain_dn_html(line) : so_chain_tree_html(line);
     // 被点单元格整体上色（上/左/右边框 + 圆角，下边留空 → 与下面面板连成一体）
+    // 被点单元格：**同样用 inset box-shadow 在格内画 上/左/右 三边**（border-collapse 会吃掉 td 的边）
     so_chain_cell($row, which).css({
-        'border': '1px solid ' + color, 'border-bottom': 'none',
-        'background': 'var(--fg-color)', 'border-radius': '6px 6px 0 0',
+        'border-color': 'transparent',
+        'background': 'var(--fg-color)',
+        'box-shadow': 'inset 1px 0 0 ' + color + ', inset -1px 0 0 ' + color + ', inset 0 1px 0 ' + color,
+        'border-radius': '6px 6px 0 0',
         'position': 'relative', 'z-index': 1
     });
     const panel = '<div style="border:1px solid ' + color + ';border-radius:0 0 6px 6px;padding:8px 10px">' + body + '</div>';
