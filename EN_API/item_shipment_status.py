@@ -70,8 +70,8 @@ DUP_WINDOW_DAYS = 3       # 疑似重复下单: 交货日相差天数上限
 
 SO_FIELDS = ["name", "status", "docstatus", "customer", "customer_name", "company",
              "delivery_date", "transaction_date", "per_delivered", "amended_from"]
-WO_FIELDS = ["name", "status", "docstatus", "sales_order", "production_item", "qty",
-             "produced_qty", "planned_start_date", "planned_end_date", "company", "bom_no"]
+WO_FIELDS = ["name", "status", "docstatus", "sales_order", "sales_order_item", "production_item",
+             "qty", "produced_qty", "planned_start_date", "planned_end_date", "company", "bom_no"]
 JC_FIELDS = ["name", "work_order", "operation", "status", "for_quantity",
              "total_completed_qty", "actual_start_date", "actual_end_date", "docstatus"]
 
@@ -641,13 +641,26 @@ def jc_completed_qty(j) -> float:
     return completed if completed > 0 else num(j.get("for_quantity"))
 
 
-def wos_for_line(wos, so, item_code):
-    """工单挂到「本 SO × 本物料」这一行, 不把同单其它物料的 WO 摊过来。"""
+def wos_for_line(wos, so, item_code, line_id=None):
+    """工单挂到「本 SO × 本物料」这一行。
+
+    **优先用行级外键 `Work Order.sales_order_item == Sales Order Item.name`** ——
+    生产实测：同一 SO 内同一 item_code 可有多达 40 行（674 组），只按
+    `(sales_order, production_item)` 配对会让 1464 张工单重复挂、并漏掉头字段为空的 139 张。
+    `sales_order_item` 为空的老工单，退回 `(sales_order, production_item)` 口径。
+    """
     so, item_code = so or "", item_code or ""
-    return [w for w in wos
-            if is_active_doc(w)
-            and (w.get("sales_order") or "") == so
-            and (w.get("production_item") or "") == item_code]
+    out = []
+    for w in wos:
+        if not is_active_doc(w):
+            continue
+        soi = w.get("sales_order_item") or ""
+        if soi:
+            if line_id and soi == line_id:
+                out.append(w)
+        elif (w.get("sales_order") or "") == so and (w.get("production_item") or "") == item_code:
+            out.append(w)
+    return out
 
 
 def op_progress(wo, jcs):
@@ -728,7 +741,7 @@ def enrich_so_rows(so_rows, dn_rows, pp_rows, wos, jc_map, master_text):
         r["shipped_dn"] = sum(d["qty"] for d in line_dns if d["dn_docstatus"] == 1)
         r["draft_dn"] = sum(d["qty"] for d in line_dns if d["dn_docstatus"] == 0)
         r["open_qty"] = r["qty"] - r["delivered_qty"]
-        r["wos"] = wos_for_line(wos, r["so"], r["item_code"])
+        r["wos"] = wos_for_line(wos, r["so"], r["item_code"], r.get("line_id"))
         r["pps"] = pp_by_line.get(r["line_id"]) or pp_by_so.get(r["so"], [])
         r["progress"] = progress_text(r["wos"], jc_map)
         r["master_item"] = master_text

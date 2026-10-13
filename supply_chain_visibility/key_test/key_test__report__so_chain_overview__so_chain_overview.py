@@ -30,6 +30,8 @@ COLS = [
     ("已发", "shipped", "Float", None, 80),
     ("未发", "open_qty", "Float", None, 80),
     ("阶段", "stage_txt", "Data", None, 130),
+    ("工单数", "wo_n", "Int", None, 70),
+    ("菲号数", "tn_n", "Int", None, 70),
     ("异常", "flags", "Data", None, 200),
 ]
 
@@ -54,6 +56,7 @@ def execute(filters=None):
     rows = frappe.db.sql(
         f"""select so.name as so, so.customer_name as customer, so.status as so_status,
                    so.delivery_date as delivery_date,
+                   soi.name as so_line,
                    soi.item_code, soi.customer_item_code,
                    soi.qty, soi.delivered_qty, (soi.qty - soi.delivered_qty) as open_qty
             from `tabSales Order` so
@@ -70,12 +73,28 @@ def execute(filters=None):
            group by dni.against_sales_order, dni.item_code""", as_dict=True)
     ship_map = {(r.so, r.item_code): (r.shipped or 0) for r in dn}
 
-    # 每 (SO, 物料) 有无工单
-    wo = frappe.db.sql(
-        """select sales_order as so, production_item as item_code, count(*) as n
-           from `tabWork Order` where docstatus = 1 and ifnull(sales_order,'') != ''
-           group by sales_order, production_item""", as_dict=True)
-    wo_map = {(r.so, r.item_code): (r.n or 0) for r in wo}
+    # 每 SO 行有无工单：**用行级外键 Work Order.sales_order_item**（复合键会让同 SO 同 item_code
+    # 的多行互串，生产实测 1464 张工单重复挂）。兜底 production_plan_item→PP.sales_order_item / fg_sales_order_item。
+    wo_res = frappe.db.sql(
+        """select w.name as wo, w.sales_order_item as soi_a,
+                  ppi.sales_order_item as soi_b, w.fg_sales_order_item as soi_c
+           from `tabWork Order` w
+           left join `tabProduction Plan Item` ppi on ppi.name = w.production_plan_item
+           where w.docstatus = 1""", as_dict=True)
+    wo_map, wo_to_line = {}, {}
+    for w in wo_res:
+        line = w.soi_a or w.soi_b or w.soi_c
+        if line:
+            wo_map[line] = wo_map.get(line, 0) + 1
+            wo_to_line[w.wo] = line
+    tn_res = frappe.db.sql(
+        """select work_order, count(*) as n from `tabTracking Number`
+           where ifnull(work_order, '') != '' group by work_order""", as_dict=True)
+    tn_map = {}
+    for t in tn_res:
+        line = wo_to_line.get(t.work_order)
+        if line:
+            tn_map[line] = tn_map.get(line, 0) + (t.n or 0)
 
     tday = getdate(today())
     data, stages = [], {}
@@ -83,7 +102,7 @@ def execute(filters=None):
     for r in rows:
         shipped = round(float(ship_map.get((r.so, r.item_code), 0) or 0), 3)
         open_qty = round(float(r.open_qty or 0), 3)
-        has_wo = wo_map.get((r.so, r.item_code), 0) > 0
+        has_wo = wo_map.get(r.so_line, 0) > 0
         flags = []
         if r.so_status == "Closed":
             stage, sub = 3, "Closed未发(死单)"
@@ -108,6 +127,7 @@ def execute(filters=None):
             "customer_item_code": r.customer_item_code, "delivery_date": r.delivery_date,
             "qty": float(r.qty or 0), "shipped": shipped, "open_qty": open_qty,
             "stage_txt": f"{stage} {sub}", "flags": " / ".join(flags),
+            "wo_n": wo_map.get(r.so_line, 0), "tn_n": tn_map.get(r.so_line, 0),
         })
 
     total_open = round(sum(d["open_qty"] for d in data), 3)

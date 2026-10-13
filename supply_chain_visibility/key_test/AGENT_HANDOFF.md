@@ -119,3 +119,12 @@ Cloudscape nested-table 告诫 https://cloudscape.design/patterns/resource-manag
 Dynamics sub-grid https://learn.microsoft.com/en-us/dynamics365/customerengagement/on-premises/customize/sub-grid-properties-legacy ；
 SAP Fiori Tree Table https://help.sap.com/docs/ABAP_PLATFORM_NEW/468a97775123488ab3345a0c48cadd8f/7cf7a31fd1ee490ab816ecd941bd2f1f.html 。
 **备选（用户提到）**：自定义报表渲染 / `vilavi_pim` 的「产品物料库」= **标准 Frappe Desk Page**（`item-group-browser`，jQuery+模板串+whitelist 取数，见 `docs/reference/en-custom-apps-and-deploy.md`）—— 要做「独立链条屏/树」时可抄它的 Page 四件套。
+
+## 8. 连接键修正（2026-10-13，务必）
+
+**旧键 `(sales_order, production_item)` 有冲突**：同 SO 内同 `item_code` 最多 40 行（674 组），
+生产实测会让 **1464 张工单重复挂、139 张漏挂**。
+**新键 = ERPNext 原生行级外键 `Work Order.sales_order_item == Sales Order Item.name`**（悬空 0，一行→最多 5 张），
+兜底 `production_plan_item→PP.sales_order_item` / `fg_sales_order_item`。
+完整基数表 + 铁律见 [../docs/reference/en-chain-cardinality.md](../docs/reference/en-chain-cardinality.md)。
+改动的三处：`key_test/so_chain.py`、`key_test__report__so_chain_overview__*`、`EN_API/item_shipment_status.py: wos_for_line`（+ `WO_FIELDS` 加 `sales_order_item`）。

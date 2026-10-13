@@ -236,3 +236,18 @@ def test_enrich_so_rows_nets_return_dn():
     iss.enrich_so_rows(so_rows, dn_rows, [], [], {}, "")
     assert so_rows[0]["shipped_dn"] == 30      # 40 正向 - 10 退货
     assert so_rows[0]["open_qty"] == 10        # 40 - delivered 30（delivered_qty 已是净额）
+
+
+# ── 工单归属：行级外键（同 SO 同物料多行不互串）────────────────────────────
+def test_wos_for_line_prefers_line_level_foreign_key():
+    """有 sales_order_item 的工单按行级外键挂；同 SO 同 item_code 的多行不互串。"""
+    wos = [
+        {"name": "WO-a", "sales_order": "SO-1", "sales_order_item": "L1", "production_item": PK,
+         "docstatus": 1, "status": "In Process"},
+        {"name": "WO-b", "sales_order": "SO-1", "sales_order_item": "L2", "production_item": PK,
+         "docstatus": 1, "status": "In Process"},
+        {"name": "WO-old", "sales_order": "SO-1", "production_item": PK,
+         "docstatus": 1, "status": "In Process"},   # 无 sales_order_item → 退回复合键
+    ]
+    assert {w["name"] for w in iss.wos_for_line(wos, "SO-1", PK, "L1")} == {"WO-a", "WO-old"}
+    assert {w["name"] for w in iss.wos_for_line(wos, "SO-1", PK, "L2")} == {"WO-b", "WO-old"}

@@ -43,11 +43,20 @@ def get_so_chain(sales_order):
                where pp.docstatus = 1 and ppi.sales_order_item = %s""",
             it.name, as_dict=True)
 
-        # 工单
-        wos = frappe.get_all(
-            "Work Order",
-            filters={"docstatus": 1, "production_item": it.item_code, "sales_order": doc.name},
-            fields=["name", "qty", "status", "produced_qty"])
+        # 工单 —— **用行级外键 Work Order.sales_order_item**（不是 (sales_order, production_item)！
+        # 生产实测：同 SO 内同 item_code 可有多达 40 行，复合键会让 1464 张工单重复挂、139 张漏挂）。
+        # 兜底：sales_order_item 为空时，走 production_plan_item→PP.sales_order_item，或 fg_sales_order_item。
+        wos = frappe.db.sql(
+            """select w.name, w.qty, w.status, w.produced_qty
+               from `tabWork Order` w
+               where w.docstatus = 1 and (
+                   w.sales_order_item = %(line)s
+                   or (ifnull(w.sales_order_item, '') = '' and exists(
+                        select 1 from `tabProduction Plan Item` ppi
+                        where ppi.name = w.production_plan_item and ppi.sales_order_item = %(line)s))
+                   or (ifnull(w.sales_order_item, '') = '' and w.fg_sales_order_item = %(line)s)
+               )
+               order by w.name""", {"line": it.name}, as_dict=True)
         wo_names = [w.name for w in wos]
 
         # 工序行（含顺序）
