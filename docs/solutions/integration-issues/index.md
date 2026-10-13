@@ -10,6 +10,7 @@ tags: [integration, solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-10-13 | new-api 屏蔽词过滤误拦会话 —— 500 sensitive_words_detected 的成因、关闭项与三处反直觉 | [new-api-sensitive-word-filter-blocks-conversations.md](new-api-sensitive-word-filter-blocks-conversations.md) |
 | 2026-10-08 | 布局类字段带 in_list_view=1 会让整个 DocType 的元数据写不进去（现象是「每次登录都弹窗」） | [layout-field-in-list-view-breaks-metadata-writes.md](layout-field-in-list-view-breaks-metadata-writes.md) |
 | 2026-09-23 | grok-bot（美东）SSH 接入——对称 NAT 下打不成直连，只有经上海跳板有收益（235ms vs DERP 373ms），Vultr 跳板实为绕远路 | [grokbot-ssh-via-shanghai-jump-symmetric-nat.md](grokbot-ssh-via-shanghai-jump-symmetric-nat.md) |
 | 2026-09-22 | 重定向用 307 会让浏览器重放 POST —— 退出登录报 405 | [redirect-307-replays-post-405.md](redirect-307-replays-post-405.md) |

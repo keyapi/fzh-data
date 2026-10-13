@@ -96,6 +96,13 @@
 - Windows 下 Python 的 `python3` 命令找不到 `/tmp` 路径
 - **解决**: 使用 Windows 绝对路径 `C:\Users\DEV01\AppData\Local\Temp\` 或直接写文件用 `python`（不带 3）
 
+### 问题 9：屏蔽词过滤误拦对话（返回 500 sensitive_words_detected）
+- **表现**: 请求返回 `500 sensitive_words_detected`；**多轮对话一旦某轮命中，之后每轮都失败**，该对话不可恢复
+- **根因**: **系统设置 → 运营设置 → 屏蔽词过滤设置** 默认开启，对**整个请求体**做纯子串匹配（无分词/无语义），命中即拒
+- **解决**: 关闭「**启用屏蔽词过滤功能**」+「**启用 Prompt 检查**」（`ShouldCheckPromptSensitive` 取 AND，两个都要关）并保存 —— **即时生效，无需重启容器**；2026-10-13 起**决定保持全关**
+- **注意**: ① 别把 500 当上游临时故障重试（重试必失败，看 body 错误名才是关键线索）；② 命中即开新对话，原对话救不回来
+- **详见**: [docs/solutions/integration-issues/new-api-sensitive-word-filter-blocks-conversations.md](../docs/solutions/integration-issues/new-api-sensitive-word-filter-blocks-conversations.md)
+
 ---
 
 ## 三、部署后初始化配置流程
@@ -449,4 +456,5 @@ crontab -l  # 查看定时任务
 - 桥接器: `../new-api-dingtalk-oidc/main.py` + `stream_listener.py`
 - 方案文档: `../docs/solutions/integration-issues/dingtalk-sso-new-api-oidc-bridge.md`
 - 方案文档: `../docs/solutions/tooling-decisions/new-api-deepseek-time-based-pricing-automation.md`（分时定价）
+- 方案文档: `../docs/solutions/integration-issues/new-api-sensitive-word-filter-blocks-conversations.md`（屏蔽词过滤误拦 500 与关闭项）
 - 本地敏感信息: `.secrets.env`（请勿提交）
