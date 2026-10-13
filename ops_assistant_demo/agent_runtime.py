@@ -8,6 +8,17 @@ from domain import DomainError
 
 
 MAX_HISTORY = 16
+_CAPABILITY_QUESTION = re.compile(r'能执行什么|能做什么|能处理什么|哪些工具|什么权限|现行规则|可办事项|有哪些规则')
+_ROLE_TITLE = {
+    'operator': '林晓 · 柜面主管',
+    'reader': '陈默 · 综合柜员（只读）',
+    'reviewer': '周宁 · 参数管理员（复核）',
+}
+_ROLE_BOUNDARY = {
+    'operator': '可读取工作区，并可准备测试环境方案。人确认后系统才写入测试环境。生产不直接改。',
+    'reader': '只读。可查看测试资料和待确认方案，不能准备变更，也不返回生产制度全文。',
+    'reviewer': '可查看审计和待确认方案。不准备变更。复核只处理模拟申请，不执行生产变更。',
+}
 
 
 class AgentRuntime:
@@ -61,10 +72,58 @@ class AgentRuntime:
         if not answer:
             answer = '模型没有形成可核验回复，业务配置未改变。请换一种明确问法或稍后重试。'
             outcome = 'failed'
+        citations = []
+        if _CAPABILITY_QUESTION.search(text):
+            answer, citations = self._readable_brief(workspace, role, trace)
         session['unified_agent_history'] = [*messages, {'role': 'assistant', 'content': answer}][-MAX_HISTORY:]
         return {'turn_id': turn_id, 'outcome': outcome, 'text': answer, 'trace': trace,
+                'citations': citations,
                 'source': 'langchain-create-agent' if runner is None else 'test-runner',
                 'completed_at': int(time.time())}
+
+    def _readable_brief(self, workspace, role, trace):
+        """Render a capability answer from this turn's tool results, not model wording."""
+        items, documents = [], []
+        for entry in trace:
+            result = entry.get('result') if isinstance(entry, dict) else None
+            if not isinstance(result, dict):
+                continue
+            if entry.get('tool') == 'list_capabilities':
+                items = result.get('items') or items
+            elif entry.get('tool') == 'search_rules' and result.get('documents'):
+                documents = result['documents']
+        if not items:
+            found = self.tools.invoke('list_capabilities', workspace, role, {})
+            items = found.get('items') or []
+            trace.append({'tool': 'list_capabilities', 'result': found})
+        if not documents:
+            found = self.tools.invoke('search_rules', workspace, role, {'query': '现行规则'})
+            documents = found.get('documents') or []
+            trace.append({'tool': 'search_rules', 'result': found})
+        reads = [item for item in items if item.get('kind') == 'read']
+        prepares = [item for item in items if item.get('kind') == 'prepare']
+        lines = [
+            f"当前岗位：{_ROLE_TITLE.get(role, role)}",
+            _ROLE_BOUNDARY.get(role, ''),
+            '以下来自本轮能力登记和规则检索。助手只准备方案；确认后系统才写入测试环境并读回。生产只生成申请。',
+            '',
+            '可直接读取',
+        ]
+        lines.extend(f"{index}. {item.get('description')}" for index, item in enumerate(reads, 1))
+        lines.append('')
+        if prepares:
+            lines.append('可准备方案，确认后才写入测试环境')
+            lines.extend(f"{index}. {item.get('description')}" for index, item in enumerate(prepares, 1))
+        else:
+            lines.append('当前岗位不能准备变更。')
+        lines.extend(['', '模拟知识库现行规则'])
+        lines.extend(
+            f"{index}. {doc.get('id')} {doc.get('title')}（v{doc.get('version')}）。{doc.get('content')}"
+            for index, doc in enumerate(documents, 1))
+        lines.extend(['', '过期规范和安全测试夹具不进入这份现行清单。'])
+        citations = [{'id': doc.get('id'), 'title': doc.get('title'), 'version': doc.get('version'),
+                      'content': doc.get('content'), 'status': doc.get('status')} for doc in documents]
+        return '\n'.join(lines), citations
 
     def _langchain_runner(self, messages, system_prompt, _descriptions, workspace, role):
         try:

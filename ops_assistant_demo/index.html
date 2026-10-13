@@ -789,30 +789,7 @@ function verificationText(data){const config=data.verification||data.readback;re
 function executionMessage(data){return data.code==="EXECUTED"?"测试配置已保存并核验；"+(data.ticket?"生产仅登记申请。":"生产配置未修改。"):data.message||"执行请求已处理。";}
 function showExecution(data){push({kind:"verification",text:executionMessage(data),values:verificationText(data),independent:!!data.verification,evidence:data.verification||data.readback||{}});}
 async function showCapabilityCatalog(){
- window.AssistantPanel?.open();
- const text="查看当前岗位能执行的操作、可用工具、权限，以及模拟知识库里的现行规则。";
- if(busy){push({kind:"user",text});push({kind:"bot",text:"当前正在读取或办理上一项请求。请等待结果返回后再继续；尚未新增写入。"});return;}
- busy=true;push({kind:"user",text});
- try{
-  const data=await opsFetch("/api/agent/catalog");
-  const who={operator:"林晓 · 柜面主管",reader:"陈默 · 综合柜员（只读）",reviewer:"周宁 · 参数管理员（复核）"}[data.role]||data.role;
-  const boundary={operator:"可读取工作区，并可准备测试环境方案。人确认后系统才写入测试环境。生产不直接改。",reader:"只读。可查看测试资料和待确认方案，不能准备变更，也不返回生产制度全文。",reviewer:"可查看审计和待确认方案。不准备变更。复核只处理模拟申请，不执行生产变更。"}[data.role]||"";
-  const kindName={read:"可直接读取",prepare:"可准备方案（确认后才写入测试环境）"};
-  const groups={read:[],prepare:[]};
-  (data.capabilities||[]).forEach(item=>{(groups[item.kind]||groups.read).push(item);});
-  const lines=["当前岗位："+who,boundary,"本次直接读取能力登记和模拟知识库，不调用模型，不写入配置。",""];
-  ["read","prepare"].forEach(kind=>{
-   if(!groups[kind].length)return;
-   lines.push(kindName[kind]);
-   groups[kind].forEach((item,index)=>lines.push((index+1)+". "+item.description));
-   lines.push("");
-  });
-  lines.push("模拟知识库现行规则");
-  (data.documents||[]).forEach((doc,index)=>lines.push((index+1)+". "+doc.id+" "+doc.title+"（v"+doc.version+"）。"+doc.summary));
-  lines.push("","过期规范和安全测试夹具不进入这份现行清单。");
-  push({kind:"bot",text:lines.join("\n")});
- }catch(err){push({kind:"deny",text:(err.message||"读取失败")+"。本次没有修改业务配置。"});}
- finally{busy=false;clearAim();renderLog();}
+ askUnified("查看当前岗位能执行的操作、可用工具、权限，以及模拟知识库里的现行规则。");
 }
 async function askModel(text){return askOps(text,"counter");}
 async function playScriptOk(){push({kind:"bot",text:"脚本演示 / 不调用模型：准备20万元测试限额与生产申请。需你确认后才执行，后台仍校验权限。"});await proposeOps("counter",[{field:"limit",value:200000}],"脚本演示：压缩测试单笔限额，生产仅提交申请",true);}
@@ -1082,7 +1059,7 @@ async function askUnified(text){
   const data=await opsFetch('/api/agent/turn',{text});
   log.splice(waiting,1);
   push({kind:"bot",text:data.text||"本次没有形成可核验回复，业务配置未改变。"});
-  const citations=(data.trace||[]).flatMap(item=>Array.isArray(item?.result?.documents)?item.result.documents:[]);
+  const citations=Array.isArray(data.citations)&&data.citations.length?data.citations:(data.trace||[]).flatMap(item=>Array.isArray(item?.result?.documents)?item.result.documents:[]);
   if(data.trace?.length||citations.length)push({kind:"evidence",citations,trace:data.trace||[]});
   if(data.state){opsState=data.state;renderOps();}
   const prepared=(data.trace||[]).map(item=>item?.result?.proposal).find(Boolean);
