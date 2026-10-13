@@ -6,6 +6,12 @@ title: EN_API 文档变更日志
 
 # 变更日志
 
+## 2026-10-13（下午：EN 全链路调研）
+
+- **新增调研**：[research/en-supply-chain-map.md](research/en-supply-chain-map.md) —— 用 REST API 枚举 EN 生产系统的 DocType 后，得出**真实全链路实体地图**：除原生 `Sales Order/Production Plan/Work Order/Job Card/BOM/Stock Entry` 外，还有 4 个**自定义 app** —— `Light Mes`（`Initial Work Order`/`Job Card Scan Input` 扫码/`Tracking Number` 菲号/`Wip Transfer` 外发回收/`Defect Code`/工序价）、`Work Order Task`（`Cutting Plan`/`Cutting Task` 开料/`Work Order Split`）、`Delivery Plan`（出货计划/外箱号）、`Tongtool Integration`。附**仓库覆盖 vs 空白**表：开料/扫码/WIP/工单拆分/物料需求/采购(MR/PO/PR) 在 EN 侧基本空白。
+- **新增调研**：`docs/solutions/architecture-patterns/supply-chain-visibility-forms-research.md` —— 呈现形式四类对比（ERPNext 原生 / 独立大屏 / AI 查询 / 嵌入单据，带原始 URL）+ 供应链可视化设计要素（事件时间线/阶段状态机/数量对账/例外管理/OTIF/EPCIS·DCSA）+ 本场景适配 + 需求头脑风暴 + **建议路线**（嵌入单据 → 原生 KPI/例外 → 小范围独立屏；AI/MCP 仅内部受监督助手）。
+- **范围决定**：物料需求 / 采购订单 / 采购入库 **先记录不做**（EN 侧空白且业务未明确）；头程阶段 4–8 沿用暂缓接入。
+
 ## 2026-10-13
 
 - **新增（统一履约查询入口）**: `EN_API/fulfillment_query.py` + `EN_API/fulfillment/` 包 —— 在 `item_shipment_status.py` 引擎之上叠加 多输入 / 阶段 0–3 状态机 / 数量阶梯对账 / 事实·推导·估算分层 / 异常 §8 结构 + 下一行动；输出 JSON（权威）+ 控制台 + Excel（9 分区，`--legacy-sheets` 复刻旧 3 Sheet）。实现按蓝图 §3/§4/§8/§9/§12 V1。
