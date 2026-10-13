@@ -853,7 +853,7 @@ async function opsFetch(path,body){
  const writing=body!==undefined;if(writing)opsEpoch++;const requestEpoch=opsEpoch;
  const resp=await fetch(path,{credentials:"same-origin",method:writing?"POST":"GET",headers:opsHeaders(writing),body:writing?JSON.stringify(body):undefined});
  const data=await resp.json().catch(()=>({}));if(writing)opsEpoch++;
- if(!resp.ok||data.ok===false){if(resp.status===401&&(writing||requestEpoch===opsEpoch)&&!$("login-dialog").open)$("login-dialog").showModal();throw new Error(data.message||data.error||("请求失败 "+resp.status));}return data;
+ if(!resp.ok||data.ok===false){if(resp.status===401&&(writing||requestEpoch===opsEpoch)&&!$("login-dialog").open)$("login-dialog").showModal();const error=new Error(data.message||data.error||("请求失败 "+resp.status));error.code=data.code;throw error;}return data;
 }
 function opsEnv(name) { return name === "prod" ? "生产" : "测试"; }
 function opsWhen(ts) {return ts?new Date(typeof ts==="number"?ts*1000:ts).toLocaleTimeString("zh-CN",{hour12:false}):"";}
