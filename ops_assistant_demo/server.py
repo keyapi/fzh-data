@@ -416,6 +416,12 @@ class Handler(BaseHTTPRequestHandler):
                 result = {'bank': state['bank'], 'state': state}
             elif route == '/api/knowledge':
                 result = {'documents': STORE.knowledge((parse_qs(parsed.query).get('q') or [''])[0][:200], session['role'])}
+            elif route == '/api/agent/catalog':
+                result = {'role': session['role'],
+                          'capabilities': AgentTools(STORE).catalog(session['role'])['items'],
+                          'documents': [{'id': d['id'], 'title': d['title'], 'version': d['version'],
+                                         'status': d['status'], 'summary': d['content']}
+                                        for d in STORE.knowledge('', session['role'])]}
             elif route == '/api/audit':
                 result = {'audit': STORE.audit(session['workspace'], session['role'])}
             elif route == '/api/bank/tasks/catalog':

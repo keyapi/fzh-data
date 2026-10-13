@@ -522,6 +522,7 @@
   <div id="log"></div>
   <div id="chat-approval" hidden style="padding:12px 14px;border-top:1px solid #e5e6eb;background:#f4f7ff"><p id="chat-change" style="margin:0 0 8px"></p><button class="solid" id="chat-allow" type="button">允许修改</button> <button class="ghost" id="chat-cancel" type="button">取消</button></div>
   <div class="chips">
+    <button class="ghost" type="button" id="chip-catalog">查看可办事项与规则</button>
     <button class="ghost" type="button" id="chip-script-ok">脚本演示 · 改测试限额</button>
     <button class="ghost" type="button" id="chip-script-no">后台实测 · 越权拒绝</button>
     <button class="ghost" type="button" id="chip-port">让助手改限额</button>
@@ -787,6 +788,32 @@ function fieldValue(field,value){return field==="limit"?money(value)+" 元":Stri
 function verificationText(data){const config=data.verification||data.readback;return config?.values?Object.entries(config.values).map(([field,value])=>fieldLabel(field)+" "+fieldValue(field,value)).join(" / "):"没有收到读回字段，不能据此宣称核验成功";}
 function executionMessage(data){return data.code==="EXECUTED"?"测试配置已保存并核验；"+(data.ticket?"生产仅登记申请。":"生产配置未修改。"):data.message||"执行请求已处理。";}
 function showExecution(data){push({kind:"verification",text:executionMessage(data),values:verificationText(data),independent:!!data.verification,evidence:data.verification||data.readback||{}});}
+async function showCapabilityCatalog(){
+ window.AssistantPanel?.open();
+ const text="查看当前岗位能执行的操作、可用工具、权限，以及模拟知识库里的现行规则。";
+ if(busy){push({kind:"user",text});push({kind:"bot",text:"当前正在读取或办理上一项请求。请等待结果返回后再继续；尚未新增写入。"});return;}
+ busy=true;push({kind:"user",text});
+ try{
+  const data=await opsFetch("/api/agent/catalog");
+  const who={operator:"林晓 · 柜面主管",reader:"陈默 · 综合柜员（只读）",reviewer:"周宁 · 参数管理员（复核）"}[data.role]||data.role;
+  const boundary={operator:"可读取工作区，并可准备测试环境方案。人确认后系统才写入测试环境。生产不直接改。",reader:"只读。可查看测试资料和待确认方案，不能准备变更，也不返回生产制度全文。",reviewer:"可查看审计和待确认方案。不准备变更。复核只处理模拟申请，不执行生产变更。"}[data.role]||"";
+  const kindName={read:"可直接读取",prepare:"可准备方案（确认后才写入测试环境）"};
+  const groups={read:[],prepare:[]};
+  (data.capabilities||[]).forEach(item=>{(groups[item.kind]||groups.read).push(item);});
+  const lines=["当前岗位："+who,boundary,"本次直接读取能力登记和模拟知识库，不调用模型，不写入配置。",""];
+  ["read","prepare"].forEach(kind=>{
+   if(!groups[kind].length)return;
+   lines.push(kindName[kind]);
+   groups[kind].forEach((item,index)=>lines.push((index+1)+". "+item.description));
+   lines.push("");
+  });
+  lines.push("模拟知识库现行规则");
+  (data.documents||[]).forEach((doc,index)=>lines.push((index+1)+". "+doc.id+" "+doc.title+"（v"+doc.version+"）。"+doc.summary));
+  lines.push("","过期规范和安全测试夹具不进入这份现行清单。");
+  push({kind:"bot",text:lines.join("\n")});
+ }catch(err){push({kind:"deny",text:(err.message||"读取失败")+"。本次没有修改业务配置。"});}
+ finally{busy=false;clearAim();renderLog();}
+}
 async function askModel(text){return askOps(text,"counter");}
 async function playScriptOk(){push({kind:"bot",text:"脚本演示 / 不调用模型：准备20万元测试限额与生产申请。需你确认后才执行，后台仍校验权限。"});await proposeOps("counter",[{field:"limit",value:200000}],"脚本演示：压缩测试单笔限额，生产仅提交申请",true);}
 async function playScriptDeny(){show("safety");push({kind:"bot",text:"后台实测 / 不调用模型：在隔离工作区向执行层提交生产直改请求，以实际返回结果为准。"});await runSafety("production");}
@@ -830,6 +857,7 @@ $("btn-export").onclick = () => {
   push({ kind: "deny", text: "客户清单不能从这里导出。请走数据管理员审批，双人复核。没有生成文件。" });
   show("audit");
 };
+$("chip-catalog").onclick = () => showCapabilityCatalog();
 $("chip-script-ok").onclick = () => playScriptOk();
 $("chip-script-no").onclick = () => playScriptDeny();
 $("chip-port").onclick = () => askModel("把测试环境的单笔对公转账限额改成 20 万。改之前先在页面上问我。");
