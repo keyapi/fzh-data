@@ -72,25 +72,28 @@ function so_chain_render($box, data) {
             ? '<a href="#" class="so-chain-toggle" data-i="' + idx + '" data-w="dn" style="color:' + SO_CHAIN_DN + '"><b>' + dnSummary + '</b> <span class="so-chain-caret">▸</span></a> ' + dialogIcon(idx)
             : dnSummary;
         const od2 = Number(l.overdue_days || 0);
-        const dd = od2 > 0 ? '<span class="text-danger" title="已过交付日期 ' + od2 + ' 天">' + so_chain_esc(l.delivery_date) + ' (超' + od2 + '天)</span>'
+        const dd = od2 > 0 ? '<span class="text-danger" title="已过交付日期 ' + od2 + ' 天">' + so_chain_esc(l.delivery_date) + ' 超' + od2 + '天</span>'
                            : so_chain_esc(l.delivery_date || '-');
         const stageColor = { 0: 'gray', 1: 'orange', 2: 'blue', 3: 'green' }[l.stage] || 'gray';
+        const nameTxt = l.item_name ? '<span class="text-muted" style="font-size:11px">: ' + so_chain_esc(l.item_name) + '</span>' : '';
         return '<tr data-idx="' + idx + '">'
-            + '<td>' + so_chain_link('Item', l.item_code, l.item_code) + '</td>'
-            + '<td>' + so_chain_esc(l.customer_item_code) + '</td>'
-            + '<td style="text-align:right">' + so_chain_num(l.qty) + '</td>'
-            + '<td style="text-align:right">' + so_chain_num(l.delivered) + '</td>'
-            + '<td style="text-align:right">' + so_chain_num(l.open_qty) + '</td>'
-            + '<td>' + dd + '</td>'
-            + '<td><span class="indicator-pill ' + stageColor + '">' + l.stage + ' ' + so_chain_esc(l.substate) + '</span></td>'
-            + '<td class="so-chain-cell">' + prodCell + '</td>'
-            + '<td class="so-chain-cell">' + dnCell + '</td>'
+            + '<td style="white-space:nowrap">' + so_chain_link('Item', l.item_code, l.item_code) + nameTxt + '</td>'
+            + '<td style="white-space:nowrap">' + so_chain_esc(l.customer_item_code) + '</td>'
+            + '<td style="text-align:right;white-space:nowrap">' + so_chain_num(l.qty) + '</td>'
+            + '<td style="text-align:right;white-space:nowrap">' + so_chain_num(l.delivered) + '</td>'
+            + '<td style="text-align:right;white-space:nowrap">' + so_chain_num(l.open_qty) + '</td>'
+            + '<td style="white-space:nowrap">' + dd + '</td>'
+            + '<td style="white-space:nowrap"><span class="indicator-pill ' + stageColor + '">' + l.stage + ' ' + so_chain_esc(l.substate) + '</span></td>'
+            + '<td class="so-chain-cell" style="white-space:nowrap">' + prodCell + '</td>'
+            + '<td class="so-chain-cell" style="white-space:nowrap">' + dnCell + '</td>'
             + '</tr>';
     }).join('');
     const html = '<div style="overflow:auto">'
-        + '<table class="table table-bordered" style="margin:0">'
-        + '<thead><tr><th>订单行物料</th><th>客户物料号</th><th>订单量</th><th>已发</th><th>未发</th>'
-        + '<th>交期</th><th>阶段</th><th>生产链条</th><th>出库</th></tr></thead>'
+        + '<table class="table table-bordered" style="margin:0;width:auto">'
+        + '<thead><tr><th style="white-space:nowrap">订单行物料</th><th style="white-space:nowrap">客户物料号</th>'
+        + '<th style="white-space:nowrap">订单量</th><th style="white-space:nowrap">已发</th><th style="white-space:nowrap">未发</th>'
+        + '<th style="white-space:nowrap">交期</th><th style="white-space:nowrap">阶段</th>'
+        + '<th style="white-space:nowrap">生产</th><th style="white-space:nowrap">出库</th></tr></thead>'
         + '<tbody>' + rows + '</tbody>'
         + '<tfoot><tr><th colspan="4" style="text-align:right">未发合计</th>'
         + '<th style="text-align:right">' + so_chain_num(tOpenQty) + '</th><th colspan="4"></th></tr></tfoot></table>'
@@ -122,12 +125,12 @@ function so_chain_summary_text(l, which) {
         if (!dns.length) return '无出库';
         const ship = dns.filter(function (d) { return d.docstatus === 1 && !d.is_return; }).reduce(function (a, d) { return a + Number(d.qty || 0); }, 0);
         const ret = dns.filter(function (d) { return d.docstatus === 1 && d.is_return; }).reduce(function (a, d) { return a + Number(d.qty || 0); }, 0);
-        return dns.length + ' 单 · 已发 ' + so_chain_num(ship) + (ret ? '（退 ' + so_chain_num(-ret) + '）' : '');
+        return dns.length + '单·已发' + so_chain_num(ship) + (ret ? '·退' + so_chain_num(-ret) : '');
     }
     const pg = l.prog;
     const progTxt = pg ? (pg.min === pg.max ? pg.max + '/' + pg.total : pg.min + '–' + pg.max + '/' + pg.total) : '';
-    return (l.wo_count ? l.wo_count + ' 工单' : '无工单') + ' · ' + (l.tn_count ? l.tn_count + ' 菲号' : '0 菲号')
-        + (progTxt ? '　工序 ' + progTxt : '');
+    return (l.wo_count ? l.wo_count + '工单' : '无工单') + '·' + (l.tn_count ? l.tn_count + '菲号' : '0菲号')
+        + (progTxt ? '·工序' + progTxt : '');
 }
 
 function so_chain_cell($row, which) {
@@ -193,7 +196,10 @@ function so_chain_tree_html(line) {
         h += '<div style="border:1px solid ' + (isForgot ? '#e6b800' : 'var(--border-color)') + ';'
            + (isForgot ? 'background:#fff9e6;' : '') + 'border-radius:6px;padding:8px;margin:6px 0">';
         h += '<div><b>' + so_chain_link('Work Order', w.wo, w.wo) + '</b>'
-           + (w.item_code ? '　' + so_chain_link('Item', w.item_code, w.item_code) + so_chain_item_type(w.item_code) : '')
+           + (w.item_code ? '　' + so_chain_link('Item', w.item_code, w.item_code)
+              + (w.item_name ? ' <span class="text-muted" style="font-size:11px">: ' + so_chain_esc(w.item_name) + '</span>' : '')
+              + so_chain_item_type(w.item_code) : '')
+           + (w.docstatus === 0 ? ' <span class="indicator-pill gray">草稿</span>' : '')
            + (w.pp ? '　计划 ' + so_chain_link('Production Plan', w.pp, w.pp) : '')
            + (isForgot ? ' <span class="indicator-pill yellow" title="成品工单未完工，但同行的皮壳/内胆已全部完成 —— 疑似忘了点完工">忘点完工?</span>' : '')
            + '　工单量 ' + so_chain_num(w.qty) + '　完成 ' + so_chain_num(w.done)

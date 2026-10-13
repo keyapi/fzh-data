@@ -55,9 +55,9 @@ def get_so_chain(sales_order):
         # 工单 —— **成品**用 sales_order_item；**皮壳/内胆**用 fg_sales_order_item（不是 sales_order_item！）。
         # 一条成品(KS)行的标准结构 = 1 成品 + 1 皮壳(PK#) + 1 内胆(ND#)。兜底 production_plan_item。
         wos = frappe.db.sql(
-            """select w.name, w.qty, w.status, w.produced_qty, w.production_item, w.production_plan_item
+            """select w.name, w.qty, w.status, w.docstatus, w.produced_qty, w.production_item, w.production_plan_item
                from `tabWork Order` w
-               where w.docstatus = 1 and (
+               where w.docstatus in (0, 1) and (
                    w.sales_order_item = %(line)s
                    or w.fg_sales_order_item = %(line)s
                    or (ifnull(w.sales_order_item, '') = '' and ifnull(w.fg_sales_order_item, '') = '' and exists(
@@ -65,6 +65,13 @@ def get_so_chain(sales_order):
                         where ppi.name = w.production_plan_item and ppi.sales_order_item = %(line)s))
                )
                order by w.name""", {"line": it.name}, as_dict=True)
+        # 排序：**成品工单在前**（它是父），皮壳/内胆（子装配件）随后
+        kind_rank = {"成品": 0, "皮壳": 1, "内胆": 2}
+        wos.sort(key=lambda w: (kind_rank.get(
+            "成品" if (w.production_item or "").startswith("KS")
+            else "皮壳" if (w.production_item or "").startswith("PK#")
+            else "内胆" if (w.production_item or "").startswith(("ND#", "DKND#")) else "z", 9),
+            w.name))
 
         # WO 的 production_plan_item → PP。**不过滤 sales_order_item**：
         # 皮壳/内胆的计划行通常不带 SO 行（实测 WO.production_plan_item 100% 指向 Production Plan Item）。
@@ -74,6 +81,13 @@ def get_so_chain(sales_order):
             for r in frappe.get_all("Production Plan Item", filters={"name": ["in", _ppi]},
                                     fields=["name", "parent"]):
                 pp_by_ppi[r.name] = r.parent
+
+        # 工单物料名（用于明细里显示）
+        _wo_items = sorted({w.production_item for w in wos if w.production_item})
+        _item_name = {}
+        if _wo_items:
+            for r in frappe.get_all("Item", filters={"name": ["in", _wo_items]}, fields=["name", "item_name"]):
+                _item_name[r.name] = r.item_name
         wo_names = [w.name for w in wos]
 
         # 工序行（菲号内部的排序轴）
@@ -162,7 +176,9 @@ def get_so_chain(sales_order):
                     else '内胆' if (pic.startswith('ND#') or pic.startswith('DKND#')) else '')
             completed = (w.status == 'Completed') or (_num(w.produced_qty) + 1e-6 >= _num(w.qty) > 0)
             wo_detail.append({"wo": w.name, "qty": _num(w.qty), "status": w.status,
-                              "item_code": pic, "kind": kind, "completed": completed,
+                              "docstatus": w.docstatus,
+                              "item_code": pic, "item_name": _item_name.get(pic, ""),
+                              "kind": kind, "completed": completed,
                               "pp": pp_by_ppi.get(w.production_plan_item or "", ""),
                               "produced_head": _num(w.produced_qty), "done": done_qty,
                               "ops_done": ops_done, "ops_total": len(req_ops),

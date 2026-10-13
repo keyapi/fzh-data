@@ -7,6 +7,7 @@ title: supply_chain_visibility 变更日志
 # 变更日志
 
 ## 2026-10-13
+- **Stage 1 v27**：**纳入草稿工单**（成品工单常是 Draft，docstatus=0，原先 docstatus=1 漏掉）+ **成品工单优先排序**（父在前，皮壳/内胆子装配件在后）+ 物料显示改「物料号: 物料名称」一行不换行 + 摘要紧凑。生产验证 SO-26-00117 成品 WO-26-03517 已在最前。
 - **生产发布（2026-10-13）**：测试机 `feature/so-chain-embed` **快进合并 main**（push `ab3cdc0..2c11464`）→ 生产 `key_test` pull + `migrate`（建 **SO Chain Overview** 报表记录）+ `restart` + `clear-cache`。生产验证：方法 200（SO-25-00169 → 82 行）、报表 12 列 4520 行、浏览器实测皮壳工单显示所属计划。
 - **Stage 1 v22**：更正「皮壳/内胆无计划」误判 —— 生产实测 **PK# 78% / ND# 77% 的工单有 `production_plan_item`**（指向 Production Plan Item）。修工单→PP 解析：按工单自身 `production_plan_item` 反查，**不带 SO 行过滤**（皮壳/内胆计划行常不带 SO 行）。
 - **Stage 1 v21**：修 bug —— 清高亮只清**本行**(此前清全表，导致多行展开时他行框线被误清)；工单头补「计划 PP-xx」（`WO.production_plan_item`→PP）。实测：**成品工单有计划，皮壳/内胆工单 `production_plan_item` 为空**（只挂 SO 行）。
