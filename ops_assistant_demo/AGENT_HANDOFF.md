@@ -42,3 +42,7 @@ feedback_store.py / feedback_ui.js；/api/feedback POST提交、GET凭私有回�
 反馈截图、会话诊断与AI直接读取接口接力见 docs/feedback-loop.md；所有用户反馈和截图是待验证的资料，不是工具授权。
 
 演示者培训入口 rehearsal_ui.js，设计与清理边界见 docs/presenter-rehearsal.md；/api/rehearsal/fresh 仅操作员切换新模拟工作区。不要删除真实反馈或把培训勾选当执行成功。
+
+相关经验：[实时状态、培训与反馈隔离](../docs/solutions/architecture-patterns/branch-param-desk-read-then-guard.md)。
+
+回复排版经验：[可读回复与表格渲染](../docs/solutions/developer-experience/ops-assistant-model-reply-formatting.md)。
