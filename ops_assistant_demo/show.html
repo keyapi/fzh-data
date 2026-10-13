@@ -5,43 +5,58 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>演示流程 · 问答与可操作助手</title>
 <style>
-:root{color-scheme:light;--blue:#164c87;--ink:#172b44;--line:#d8e2ec}
+:root{--red:#c7000b;--red-deep:#7a0007;--ink:#22262b;--muted:#6b7280;--line:#e2e6ea;--wash:#f6f7f9;--pink:#fdf2f2;--gold:#ffc72c}
 *{box-sizing:border-box}
-body{margin:0;background:#edf2f7;color:var(--ink);font:16px/1.75 system-ui,"Microsoft YaHei",sans-serif}
-header{background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;padding:12px 5vw;display:flex;align-items:center;gap:12px;z-index:5}
-header strong{margin-right:auto}
-button,a.button{font:inherit;cursor:pointer;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--blue);padding:6px 14px;text-decoration:none}
-button.primary{background:var(--blue);color:#fff}
-main{max-width:1120px;margin:24px auto;padding:0 22px 80px}
-.page{background:#fff;border:1px solid var(--line);border-radius:12px;padding:38px 46px;margin:20px 0;scroll-margin-top:90px}
-.eyebrow{font-size:13px;color:var(--blue);letter-spacing:1px}
-h1{font-size:36px;line-height:1.35;margin:12px 0}
-h2{font-size:28px;margin:8px 0 16px}
-p{margin:10px 0}
-.lead{font-size:21px;color:#36536f}
-.note{background:#eef5fc;border-left:4px solid #477fb7;padding:12px 18px}
-.warn{background:#fff7e7;border-left-color:#b98124}
-.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
-.card{padding:18px;border:1px solid var(--line);border-radius:8px}
-.card strong{display:block;color:var(--blue);margin-bottom:8px}
-ol,ul{margin:8px 0 8px 1.2em}
-table{width:100%;border-collapse:collapse;margin:14px 0;font-size:15px}
-th,td{text-align:left;vertical-align:top;padding:10px;border-bottom:1px solid var(--line)}
-th{background:#f0f5fa}
-blockquote{margin:14px 0;padding:14px 18px;background:#f3f7fb;font-size:20px;border-left:4px solid var(--blue)}
-.speaker{color:#516b82;font-size:14px}
-.say{background:#f8f3e8;border-left:4px solid #8a5a12;padding:12px 16px;font-size:18px}
-.controls{display:none;position:fixed;bottom:16px;right:24px;z-index:10;background:#fff;padding:8px;border:1px solid var(--line);border-radius:8px;align-items:center;gap:10px}
-body.present .page{display:none;min-height:calc(100vh - 150px);margin:0}
+body{margin:0;background:#eef0f3;color:var(--ink);font:16px/1.65 "Microsoft YaHei","微软雅黑",sans-serif}
+header{background:var(--red-deep);color:#fff;padding:12px 4vw;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:5}
+header strong{margin-right:auto;font-weight:600;letter-spacing:.5px}
+header:after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;background:var(--gold)}
+button,a.button{font:inherit;cursor:pointer;border:1px solid rgba(255,255,255,.45);border-radius:2px;background:transparent;color:#fff;padding:6px 14px;text-decoration:none}
+button.primary{background:#fff;color:var(--red-deep);border-color:#fff}
+.help{max-width:1180px;margin:18px auto 0;padding:14px 18px;background:#fff;border:1px solid var(--line);color:var(--muted);font-size:14px}
+.help strong{color:var(--ink)}
+.help code{font-family:inherit;color:var(--red-deep)}
+main{max-width:1180px;margin:0 auto;padding:8px 18px 72px}
+.page{background:#fff;margin:18px 0;min-height:640px;position:relative;padding:36px 48px 92px;box-shadow:0 1px 0 rgba(34,38,43,.06)}
+.kicker{color:var(--muted);font-size:14px}
+h1{font-size:36px;line-height:1.28;font-weight:700;margin:8px 0 0}
+.rule{width:48px;height:4px;background:var(--red);margin:14px 0}
+.sub{color:var(--muted);margin:0 0 18px;font-size:16px}
+.quote{margin:8px 0 18px;padding:12px 16px;background:var(--pink);border-left:4px solid var(--red);font-size:22px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:8px 0 16px}
+.card{background:var(--wash);min-height:148px}
+.card h2{margin:0;background:var(--red);color:#fff;font-size:16px;font-weight:600;padding:10px 14px}
+.card p,.card li{margin:8px 14px;font-size:14px}
+.card ul{margin:8px 0 12px;padding-left:1.3em}
+.chain{display:flex;align-items:stretch;gap:8px;margin:8px 0 16px}
+.node{flex:1;text-align:center;padding:14px 8px;font-size:14px}
+.node strong{display:block;font-size:16px;margin-bottom:4px}
+.node.on{background:var(--red);color:#fff}
+.node.off{background:var(--pink);color:var(--red-deep)}
+.arrow{align-self:center;color:var(--red);font-size:20px}
+.steps{margin:8px 0 16px;padding:0;list-style:none}
+.steps li{padding:8px 0 8px 28px;position:relative;border-bottom:1px solid var(--line)}
+.steps li:before{content:"";position:absolute;left:0;top:16px;width:8px;height:8px;background:var(--red)}
+table{width:100%;border-collapse:collapse;font-size:15px;margin:8px 0 16px}
+th,td{text-align:left;vertical-align:top;padding:10px 12px;border-bottom:1px solid var(--line)}
+th{background:var(--wash);color:var(--red-deep);font-weight:600}
+.foot{position:absolute;left:0;right:0;bottom:0;min-height:64px;background:var(--ink);color:#fff;display:flex;align-items:center;gap:18px;padding:12px 48px 12px 48px}
+.foot p{margin:0;font-size:16px}
+.num{margin-left:auto;color:#9ca3af;font-size:14px}
+.speaker{display:none}
+body.show-notes .speaker{display:block;color:var(--muted);font-size:14px;margin-top:8px}
+.controls{display:none;position:fixed;top:16px;right:16px;z-index:10;gap:8px;align-items:center;background:rgba(34,38,43,.92);color:#fff;padding:8px;border-radius:2px}
+.controls button{border-color:rgba(255,255,255,.4)}
+body.present header,body.present .help{display:none}
+body.present{background:#111}
+body.present main{max-width:none;padding:0}
+body.present .page{display:none;margin:0;min-height:100vh;padding:48px 64px 110px}
 body.present .page.selected{display:block}
+body.present h1{font-size:48px}
 body.present .controls{display:flex}
-body.present main{max-width:1200px}
-body.present .speaker,body.present .edit-help{display:none}
-body.present h1{font-size:44px}
 .timer{font-variant-numeric:tabular-nums}
-.edit-help{background:#fff;border:1px dashed var(--line);border-radius:8px;padding:12px 16px;margin:16px 0}
-@media(max-width:800px){.grid{grid-template-columns:1fr}.page{padding:22px}h1{font-size:28px}}
-@media print{body{background:#fff}header,.controls,.edit-help{display:none!important}.page,body.present .page{display:block!important;border:0;break-after:page;min-height:0}.speaker{display:block!important}}
+@media(max-width:800px){.grid,.chain{display:block}.node{margin:8px 0}.page{padding:22px 18px 96px}.foot{padding:12px 18px}h1{font-size:28px}}
+@media print{header,.help,.controls{display:none!important}body.show-notes .speaker{display:block!important}.page{break-after:page;box-shadow:none}}
 </style>
 </head>
 <body>
@@ -50,10 +65,12 @@ body.present h1{font-size:44px}
   <a class="button" href="/" target="_blank" rel="noopener">打开操作台</a>
   <a class="button" href="/competition.html">原操作说明</a>
   <button id="present" class="primary" type="button">投屏</button>
-  <button id="print" type="button">打印</button>
+  <button id="print" type="button">打印讲稿</button>
 </header>
+<div class="help">
+  <strong>朋友改稿：</strong>用记事本打开本文件，只改下面「演示正文从这里开始」到「演示正文到此结束」之间的中文。每一页用单独一行的 <code>---</code> 隔开。标题里的 <code>/</code> 是换行。<code>底栏</code> 投屏时显示，是要说给评委听的话。<code>口播</code> 投屏时不显示，打印讲稿时才出现。改完保存，用浏览器打开这个文件可以预览。网上的演示地址，要等这个文件被换上去之后才会变。
+</div>
 <main id="deck"></main>
-<p class="edit-help">改演示文字：编辑本文件里的 <code>slides</code>。投屏时这些说明和讲者注不会出现。知识库站点单独打开，不要把地址和口令写进这页。</p>
 <div class="controls">
   <span id="position"></span>
   <button id="prev" type="button">上一页</button>
@@ -61,73 +78,185 @@ body.present h1{font-size:44px}
   <button id="clock" type="button">开始计时</button>
   <span class="timer" id="timer">00:00</span>
 </div>
+<script type="text/plain" id="deck-source">
+# 演示正文从这里开始
+# 只改中文。不要删掉行首的词，例如「标题:」「底栏:」。
+# 卡片: 标题 | 说明。说明里用中文分号；分成几条。
+# 流程: 名称 | 说明。会排成一条红白相间的流程。
+# 步骤: 一行一步。
+# 问答: 问题 | 回答。
+
+---
+时间: 0:00–0:50 · 开场
+标题: 会自己干，是要求 / 经验留不下，是现状
+副题: 标准云服务原则上由分行自主实施。同类报错留在实施群里，换一个分行、换一个人，就要再答一遍。
+卡片: 人对人答疑 | 常见问题反复出现；经验留在群里，带不走；科技骨干被占在重复咨询上
+卡片: 要沉淀的 | 一次排障，变成下一次能复核的知识；不是再造一个模型
+卡片: 不能交出去的 | 改不改、改完算不算数；仍由实施人员决定并实施
+底栏: 政策要求分行「会自己干、必须干」。现实是「干不动、经验留不下」。
+口播: 不要念材料，也不要报效率百分比。第一句把缺口说完，马上接到：问得有出处，改之前必须有人点头。全部是模拟数据。
+
+---
+时间: 0:50–1:15 · 总边界
+标题: 一个助手，两个入口 / 判断与操作仍由人完成
+副题: 助手负责把依据和方案准备好。决定权和实施责任不转移。
+卡片: ① 财资助手 | 作业现场提问；只使用已经人审的知识；回答必须带来源
+卡片: ② 操作助手 | 按口径起草测试环境的建议方案；指出缺哪一项；确认之前不落盘
+卡片: ③ 实施人员 | 决定者，也是实施者；点确认后，系统才写入这一次测试变更并读回；生产不能由助手直接改
+底栏: 智能体只做一件事：帮实施人员更快找到「该怎么办」。判断与操作，仍然由人完成。
+口播: 这页是全场的钉子。后面讲知识库、讲两次操作，都回到这句。不要说任务由助手自己执行，也不要说助手已经替人做完实施。
+
+---
+时间: 1:15–3:05 · 财资助手
+标题: 现场只问一句 / 关键在知识库怎么长出来
+副题: 画面是一次带出处的问答。这一段要把入库规则说清楚。
+金句: 余额查询报错，一般先查什么？
+步骤: 打开财资助手，问这一句。答案旁边点开出处，不念完整篇。
+步骤: 指一下「有帮助」。低质反馈回到复审，不静默留在库里。
+流程: 沉淀 | 群聊、工单经验入库
+流程: 人审 | 过滤、去重、脱敏
+流程: 入库 | 带来源、带场景
+流程: 调用 | 已审知识，强制引用
+流程: 纠偏 | 踩赞回流，低质回炉
+底栏: 群聊经验不过人审，不能进库，也不能当制度。手册按来源整理。不合格的条目不进库。
+口播: 两个入口是同一套知识。插件是在工单或日志里选中就问，网页是完整问答和审核，今天用网页。问答变慢，就停在已经打开的那条引用上，口播继续。不要打开带具体客户环境的草稿。
+
+---
+时间: 3:05–3:45 · 合规
+标题: 建议可以生成 / 落盘必须由人来判
+副题: 对齐高风险人工智能的监管口径：谁使用，谁负责；关键环节要有人监督、能干预、能停。
+卡片: 治幻觉 | 检索只走已审核知识；群聊经验人审通过才进库；踩赞指出的低质条目回炉复审
+卡片: 本场边界 | 今天是模拟演练；不宣称已经通过高风险准入；不宣称数据已经不出域，也不宣称可以代替审批人
+卡片: 责任与合规 | 问答、入库、审核、确认全程留痕；只出建议，不直接改配置；人确认后才写入测试，并以读回为准
+底栏: 解释不够时，只能做辅助。涉及权益和财务影响的决定，要有人工复核，并留下依据。
+口播: 若被追问制度，再提国家金融监督管理总局金发〔2026〕8号：资金交易等列为高风险，关键环节人工监督，关键决定人工复核。背到边界即可。不要说本场已经满足该文。
+
+---
+时间: 3:45–5:15 · 操作预热
+标题: 简单例子 / 起草方案，人决定是否实施
+副题: 把测试环境的单笔限额改成 20 万。生产不要动。
+步骤: 操作台登录模拟柜面主管。口令已在登录框里，不要投出。
+步骤: 看它框住测试限额、填入 20 万，停在确认。这时数字还是旧的。
+步骤: 实施人员看过旧值、新值后，再点一次确认。没点，就没有落盘。
+步骤: 确认后测试环境变为 20 万，生产仍为 50 万。结果以读回为准。
+底栏: 这不是替人操作。智能体只给出建议方案。人确认之后，系统才实施这一次测试变更。
+口播: 点确认之前用手停一下，让评委看见旧数字。点完再指生产仍是 50 万。不要讲框架名称。
+
+---
+时间: 5:15–7:15 · 复杂例子
+标题: 缺一项，就只问这一项 / 整组方案仍等人点头
+副题: 打开「接入工单」，选择资料里缺客户端端口的那一张。
+步骤: 对照规则和现状，列出要改的整组。已经正确的项保留。
+步骤: 只追问客户端端口。现场补上，例如 9443。缺信息就问，不替人猜。
+步骤: 展示旧值、新值和依据。预演只是填写示意，这时还没有保存。
+步骤: 实施人员确认后，才写入测试环境并独立读回。生产配置不在这次写入里。
+底栏: 知识库回答「先查什么」。办理时，方案由助手起草，决定和实施由人完成，写完还要核对。
+口播: 超过二十秒不要连点发送。口播「正在核对缺项」，必要时改用下一页备用。确认前再说一次：人是决定者和实施者。
+
+---
+时间: 备用 · 只替换复杂例子
+标题: 工单若卡住 / 改做一条路由方案
+副题: 只开通余额查询，不要明细，不要票据。
+步骤: 打开「业务路由配置」，准备整组方案。范围里只有余额。
+步骤: 已有适配器复用，不重复建设。说不清的业务予以拒绝，不猜测成一个方案。
+步骤: 仍然停在确认。人点头之后才保存。生产不写。
+底栏: 备用例子同样是建议方案。人没有确认，就不实施。
+口播: 知识库和简单限额不必重做。
+
+---
+时间: 7:15–8:00 · 收口
+标题: 每一类报错 / 尽量只被认真回答一次
+副题: 第一次答清楚，就沉淀成可以复核、可以带走的知识。
+卡片: 问得有据 | 聊天经验先过人审；调用时强制带来源
+卡片: 改得有人 | 先形成方案；人确认后才写入测试环境；人承担这次实施
+卡片: 专家仍在 | 常见问题由助手回答；复杂问题转给在岗人员；重大故障仍由专家处理
+底栏: 助手不替代这三层。时长和工时是试点前的预期，要用命中率、有用率和试点对照来替换。
+口播: 停在这三层。不说已经省下多少工时，也不说已经全行上线。安全测试和换岗留给提问。
+
+---
+时间: 提问才用
+标题: 若被问到边界
+问答: 这不就是知识库吗？ | 知识库给出有出处、且入库前经过人审的答案。操作助手把答案变成测试环境里的一组建议。人确认后才实施，并读回结果。
+问答: 它会不会自己改生产？ | 不会。它只出方案。人的确认也只作用于这一次测试变更。本演示没有生产写入。
+问答: 责任算谁的？ | 算实施人员的。助手负责检索和起草，不取得决定权，也不能代替复核。
+问答: 是不是已经合规，数据也不出域？ | 今天是模拟演练，用来把边界做给人看。正式使用还要走本机构的准入、权限、留痕和出域控制。
+问答: 是不是写好的脚本？ | 金额可以更换。工单可以换成另一张缺项不同的单据，也可以改成只开通某一种查询。说不清的范围会被拒绝。
+底栏: 不说可以拦住所有攻击，也不说可以代替审批人或风险管理委员会。
+口播: 问到制度时，回到合规那一页的三栏，不展开文件。
+
+# 演示正文到此结束
+</script>
 <script>
-/* 朋友改这一段即可。time 是这一页建议用掉的时间，不是累计时间。 */
-const slides = [
-  {
-    kicker: "0:00–0:50 · 开场",
-    title: "经验要留下。<br>配置要由人来定。",
-    html: "<p class=\"lead\">标准项目要由分行自己开通、自己配置。现在同类报错留在实施群里，换一个分行、换一个人，就得再答一遍。</p><div class=\"grid\"><div class=\"card\"><strong>人对人答疑</strong>常见问题重复出现，经验带不走，骨干被占在群里。</div><div class=\"card\"><strong>要留下的</strong>一次排障变成下一次能复核的知识，而不是再造一个模型。</div><div class=\"card\"><strong>不能交出去的</strong>改不改、改完算不算数，仍由实施人员决定并实施。</div></div><p class=\"note\">后面先用财资助手讲知识怎么进库，再用两次操作看建议如何停在确认之前。全部是模拟数据，没有真实客户、真实资金，也没有生产写入。</p>",
-    speaker: "不要念材料，也不要报效率百分比。第一句把价值说完：分行必须自己会干，但经验留在群里。我们把“问得着”和“敢改”接上，改之前必须人点头。"
-  },
-  {
-    kicker: "0:50–1:15 · 总边界，后面两段都回到这句",
-    title: "智能体出建议。<br>人做决定，人也实施。",
-    html: "<div class=\"grid\"><div class=\"card\"><strong>财资助手</strong>只使用已经人工审核的知识。回答必须带来源。没审过的聊天不能当制度。</div><div class=\"card\"><strong>操作助手</strong>只准备测试环境的建议方案：改哪几项、缺哪一项、依据是什么。确认之前不落盘。</div><div class=\"card\"><strong>实施人员</strong>是决定者，也是实施者。点确认后，系统才写入这一次测试变更并读回。生产不能由助手直接改。</div></div><p class=\"say\">助手可以找依据、可以起草方案。判断对不对、要不要改、改完谁负责，都在人。</p>",
-    speaker: "这页是全场的钉子。知识库和两次操作讲完，都要回到这句。不要说“任务自主执行”，也不要说助手已经替人做完实施。"
-  },
-  {
-    kicker: "1:15–3:05 · 财资助手。画面短，话要说够",
-    title: "现场只问一句。<br>重点在知识怎么才能进库。",
-    html: "<blockquote>余额查询报错，一般先查什么？</blockquote><ol><li>打开财资助手，问这一句。答案旁边点开出处，不念完整篇。</li><li>指一下“有帮助”。低质反馈会回到复审，不会静默留在库里。</li></ol><div class=\"grid\"><div class=\"card\"><strong>1 进库要过人</strong>群聊和工单里的经验先过滤、去重、脱敏，再逐条人工审核。不合格不进库。手册按来源直接整理，不把聊天记录当成制度。</div><div class=\"card\"><strong>2 调用必须有出处</strong>检索只走已审核知识。回答旁边能点开来源。没有依据就不要编一条看起来很完整的步骤。</div><div class=\"card\"><strong>3 用过还要回炉</strong>踩和赞留在记录里。反复被指出有问题的条目退回去重审，而不是越用越脏。</div></div><p class=\"say\">画面就是一次带出处的问答。后台守住的是：模型不能自己把草稿写进库，实施人员看到的每一步都能对上来源。</p><p class=\"warn note\">不要打开带具体客户环境、系统版本的草稿。问答变慢就停在已经打开的那条引用上，口播继续。</p>",
-    speaker: "这一段可以多说，因为画面本身不出彩。建议口播：两个入口是同一套知识，插件是在工单或日志里选中就问，网页是完整问答和审核；今天用网页。采集之后有人审，才叫组织资产。回答强制带引用，是为了让实施人员自己判断，而不是让模型下结论。"
-  },
-  {
-    kicker: "3:05–3:45 · 合规。演示前先把打分点说死",
-    title: "建议可以生成。<br>落盘必须由人来判。",
-    html: "<div class=\"grid\"><div class=\"card\"><strong>责任在使用方</strong>谁使用，谁负责。助手不承担开通和配置的责任，也不能把责任转到模型上。</div><div class=\"card\"><strong>高风险只做辅助</strong>资金交易一类生成式应用，监管按高风险管理：关键环节要有人监督、能干预、能停。解释不够时，不能自动做最终决定。</div><div class=\"card\"><strong>复核才留痕</strong>涉及权益或财务影响的决定要有人工复核，并留下原始依据、推理和结果。本场用确认记录和读回对齐这个要求。</div></div><p class=\"say\">今天对齐的是这个边界，不是宣称已经通过高风险准入，也不是宣称数据已经不出域、可以代替审批人。</p>",
-    speaker: "若被追问制度：国家金融监督管理总局金发〔2026〕8号。第十六条把资金交易等列为高风险；第十七条要求关键环节人工监督和干预；第二十二条要求解释不足时只做辅助，关键决定设人工复核并保留依据。背编号即可，不要展开成合规宣讲，也不要说本演示已经满足该文。"
-  },
-  {
-    kicker: "3:45–5:15 · 操作预热",
-    title: "简单例子：它起草，人决定改不改。",
-    html: "<blockquote>把测试环境的单笔限额改成 20 万。生产不要动。</blockquote><ol><li>操作台登录模拟柜面主管。口令已在登录框里，不要投出口令。</li><li>看它框住测试限额、填入 20 万，停在确认。这时数字还是旧的。</li><li>实施人员看过旧值、新值后再点一次确认。没点，就没有落盘。</li><li>确认后测试变成 20 万，生产仍是 50 万。结果以读回为准，不以它自己说的为准。</li></ol><p class=\"say\">这不是代操作。智能体只给出建议方案。人确认之后，系统才实施这一次测试变更。生产不在这次决定里。</p>",
-    speaker: "点确认之前用手停一下，让评委看见旧数字。点完再指生产仍是 50 万。不要讲框架名称。"
-  },
-  {
-    kicker: "5:15–7:15 · 复杂例子，全场主演示",
-    title: "缺一项，就只问这一项。<br>整组方案仍等人点头。",
-    html: "<p>打开「接入工单」，选资料里缺客户端端口的那一张。</p><ol><li>让它对照规则和现状，列出要改的整组。已经正确的项保留，不顺手重写。</li><li>它应只追问客户端端口。现场补上，例如 9443。缺信息就问，不替人猜。</li><li>看旧值、新值和依据。预演只是填写示意，这时还没保存。</li><li>实施人员确认后才写入测试并独立读回。生产配置不出现在这次写入里。</li></ol><p class=\"say\">知识库只能告诉你先查什么。这一步才是办理：方案由助手起草，决定和实施由人完成，写完还要核对。</p>",
-    speaker: "超过二十秒不要连点发送。口播“正在核对缺项”，必要时改用备用页。确认前再说一次：人是决定者和实施者。"
-  },
-  {
-    kicker: "备用 · 只替换复杂例子",
-    title: "工单卡住时，改做一条路由方案。",
-    html: "<blockquote>只开通余额查询，不要明细，不要票据。</blockquote><ol><li>打开「业务路由配置」，准备整组方案。范围里只有余额。</li><li>已有适配器复用，不重复建。说不清的业务应被拒绝，而不是猜一个方案。</li><li>仍然停在确认。人点头之后才保存，生产不写。</li></ol><p class=\"say\">备用例子同样是建议方案。人没有确认，就不实施。</p>",
-    speaker: "知识库和简单限额不必重做。"
-  },
-  {
-    kicker: "7:15–8:00 · 收口",
-    title: "每一类报错，尽量只被认真回答一次。",
-    html: "<ol><li>问答给出处。聊天经验先过人审，再成为可以带走的知识。</li><li>变更先形成方案。人确认后才写入测试环境，人承担这次实施。</li><li>常见问题助手答，复杂问题转给在岗人员，重大故障仍由专家处理。助手不替代这三层。</li></ol><p class=\"warn note\">若问到时长或工时：那是试点前的预期，要用命中率、有用率、抽检准确率和试点对照来替换。不说已经省下多少，也不说已经全行上线。</p>",
-    speaker: "停在这三句。安全测试和换岗留给提问。"
-  },
-  {
-    kicker: "提问才用",
-    title: "若被问到边界",
-    html: "<table><thead><tr><th>问题</th><th>回答</th></tr></thead><tbody><tr><td>这不就是知识库吗？</td><td>知识库回答有出处的条款，而且入库前有人审。操作助手把条款变成测试环境里的一组建议，人确认后才实施并读回。</td></tr><tr><td>它会不会自己改生产？</td><td>不会。它只出方案。人确认也只作用于这一次测试变更。这个演示没有生产写入。</td></tr><tr><td>责任算谁的？</td><td>算实施人员的。助手检索和起草，不取得决定权，也不能代替复核。</td></tr><tr><td>是不是已经合规、数据不出域？</td><td>今天是模拟演练，用来把边界做给人看。正式使用还要走机构自己的准入、权限、留痕和出域控制。不能把这场演示说成已经验收。</td></tr><tr><td>是不是写死的脚本？</td><td>金额可以换。工单可以换成另一张缺项不同的单，或改成只开通某一种查询。说不清的范围会被拒绝。</td></tr></tbody></table>",
-    speaker: "不要说百分百拦住所有攻击，也不要说可以代替审批人或风险管理委员会。"
-  }
-];
+const raw = document.getElementById("deck-source").textContent;
+const slides = raw.split("\n---\n").map((block) => {
+  const slide = { time: "", title: "", sub: "", quote: "", foot: "", speaker: "", cards: [], flow: [], steps: [], faqs: [] };
+  let key = "";
+  block.split("\n").forEach((line) => {
+    if (!line.trim() || line.startsWith("#")) return;
+    const matched = line.match(/^(时间|标题|副题|金句|底栏|口播|卡片|流程|步骤|问答):\s*(.*)$/);
+    if (matched) {
+      key = matched[1];
+      const value = matched[2].trim();
+      if (key === "卡片") slide.cards.push(value);
+      else if (key === "流程") slide.flow.push(value);
+      else if (key === "步骤") slide.steps.push(value);
+      else if (key === "问答") slide.faqs.push(value);
+      else if (key === "时间") slide.time = value;
+      else if (key === "标题") slide.title = value;
+      else if (key === "副题") slide.sub = value;
+      else if (key === "金句") slide.quote = value;
+      else if (key === "底栏") slide.foot = value;
+      else if (key === "口播") slide.speaker = value;
+      return;
+    }
+    if (key === "卡片" && slide.cards.length) slide.cards[slide.cards.length - 1] += line.trim();
+    if (key === "口播") slide.speaker += line.trim();
+    if (key === "副题") slide.sub += line.trim();
+    if (key === "底栏") slide.foot += line.trim();
+  });
+  return slide;
+}).filter((slide) => slide.title);
+
+function esc(value) {
+  return value.replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
+}
+function pair(value) {
+  const parts = value.split("|");
+  return [parts.shift().trim(), parts.join("|").trim()];
+}
+function items(value) {
+  return value.split("；").map((item) => item.trim()).filter(Boolean);
+}
 
 const deck = document.getElementById("deck");
-deck.innerHTML = slides.map((slide, index) => `
-  <section class="page${index === 0 ? " selected" : ""}">
-    <span class="eyebrow">${slide.kicker}</span>
-    <h1>${slide.title}</h1>
-    ${slide.html}
-    <p class="speaker">${slide.speaker}</p>
-  </section>`).join("");
+deck.innerHTML = slides.map((slide, index) => {
+  const title = esc(slide.title).replaceAll("/", "<br>");
+  const cards = slide.cards.length ? `<div class="grid">${slide.cards.map((card) => {
+    const [head, body] = pair(card);
+    const list = items(body).map((item) => `<li>${esc(item)}</li>`).join("");
+    return `<article class="card"><h2>${esc(head)}</h2><ul>${list}</ul></article>`;
+  }).join("")}</div>` : "";
+  const flow = slide.flow.length ? `<div class="chain">${slide.flow.map((node, nodeIndex) => {
+    const [head, body] = pair(node);
+    const arrow = nodeIndex ? `<span class="arrow">→</span>` : "";
+    return `${arrow}<div class="node ${nodeIndex % 2 ? "off" : "on"}"><strong>${esc(head)}</strong>${esc(body)}</div>`;
+  }).join("")}</div>` : "";
+  const steps = slide.steps.length ? `<ol class="steps">${slide.steps.map((step) => `<li>${esc(step)}</li>`).join("")}</ol>` : "";
+  const faqs = slide.faqs.length ? `<table><thead><tr><th>问题</th><th>回答</th></tr></thead><tbody>${slide.faqs.map((faq) => {
+    const [q, a] = pair(faq);
+    return `<tr><td>${esc(q)}</td><td>${esc(a)}</td></tr>`;
+  }).join("")}</tbody></table>` : "";
+  const quote = slide.quote ? `<p class="quote">${esc(slide.quote)}</p>` : "";
+  return `<section class="page${index ? "" : " selected"}">
+    <div class="kicker">${esc(slide.time)}</div>
+    <h1>${title}</h1>
+    <div class="rule"></div>
+    ${slide.sub ? `<p class="sub">${esc(slide.sub)}</p>` : ""}
+    ${quote}${steps}${flow}${cards}${faqs}
+    <p class="speaker">${esc(slide.speaker)}</p>
+    <div class="foot"><p>${esc(slide.foot)}</p><span class="num">${String(index + 1).padStart(2, "0")}</span></div>
+  </section>`;
+}).join("");
 
 const pages = [...document.querySelectorAll(".page")];
 let current = 0;
@@ -135,13 +264,16 @@ let started = 0;
 function render() {
   pages.forEach((page, index) => page.classList.toggle("selected", index === current));
   document.getElementById("position").textContent = (current + 1) + " / " + pages.length;
+  if (document.body.classList.contains("present")) window.scrollTo(0, 0);
 }
 document.getElementById("present").onclick = () => {
   document.body.classList.toggle("present");
   render();
-  window.scrollTo(0, 0);
 };
-document.getElementById("print").onclick = () => window.print();
+document.getElementById("print").onclick = () => {
+  document.body.classList.add("show-notes");
+  window.print();
+};
 document.getElementById("prev").onclick = () => { current = Math.max(0, current - 1); render(); };
 document.getElementById("next").onclick = () => { current = Math.min(pages.length - 1, current + 1); render(); };
 document.addEventListener("keydown", (event) => {
