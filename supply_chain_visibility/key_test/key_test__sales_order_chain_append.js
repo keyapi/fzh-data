@@ -110,26 +110,60 @@ function so_chain_render($box, data) {
         e.preventDefault();
         so_chain_toggle($box, $(this).data('i'), $(this).data('w'), data.lines[$(this).data('i')]);
     });
+    // 标签切换（一个容器内切 生产链条 / 出库）
+    $box.off('click.sochaintab').on('click.sochaintab', '.so-chain-tab', function () {
+        const $wrap = $(this).closest('.so-chain-tabwrap');
+        const $inline = $wrap.closest('tr.so-chain-inline');
+        const idx = parseInt($inline.attr('data-key'), 10);
+        const t = $(this).data('t');
+        const line = data.lines[idx];
+        $wrap.html(so_chain_tabs_html(t) + '<div class="so-chain-tabbody">' + so_chain_panel_html(line, t) + '</div>');
+        $inline.attr('data-tab', t);
+        so_chain_set_caret($box.find('tr[data-idx="' + idx + '"]'), t);
+    });
     $box.find('.so-chain-dialog').on('click', function (e) {
         e.preventDefault();
         so_chain_show_detail(data.lines[$(this).data('i')], data.sales_order);
     });
 }
 
-function so_chain_toggle($box, idx, which, line) {
-    const key = idx + '-' + which;
-    const $row = $box.find('tr[data-idx="' + idx + '"]');
-    const $existing = $box.find('tr.so-chain-inline[data-key="' + key + '"]');
-    if ($existing.length) { $existing.remove(); $row.find('.so-chain-caret').text('▸'); return; }
-    // 两列用颜色区分：生产链条=绿，出库=蓝；展开面板带左侧色条 + 标题(明显区别于普通子表)
+// 单个标签的内容面板（左侧色条 + 标题，明显区别于普通子表）
+function so_chain_panel_html(line, which) {
     const accent = which === 'dn' ? '#0a6ed1' : '#0d7a3f';
-    const title = which === 'dn' ? '出库明细' : '生产链条（工单 → 菲号 → 工序卡）';
     const inner = which === 'dn' ? so_chain_dn_html(line) : so_chain_tree_html(line);
-    const panel = '<div style="border-left:4px solid ' + accent + ';background:#f8f9fa;border-radius:0 6px 6px 0;padding:8px 12px;margin:4px 0">'
-        + '<div style="font-weight:600;color:' + accent + ';margin-bottom:4px">' + title + '</div>'
+    return '<div style="border-left:4px solid ' + accent + ';background:#f8f9fa;border-radius:0 6px 6px 0;padding:8px 12px">'
         + inner + '</div>';
-    $row.after('<tr class="so-chain-inline" data-key="' + key + '"><td colspan="' + SO_CHAIN_COLS
-        + '" style="background:var(--fg-color);padding:6px 8px">' + panel + '</td></tr>');
+}
+// 标签栏（生产链条=绿 / 出库=蓝）
+function so_chain_tabs_html(active) {
+    const mk = function (t, label, color) {
+        const on = t === active;
+        return '<button class="so-chain-tab" data-t="' + t + '" style="cursor:pointer;border:none;'
+            + 'border-bottom:2px solid ' + (on ? color : 'transparent') + ';background:none;'
+            + 'color:' + (on ? color : 'var(--text-muted)') + ';font-weight:' + (on ? '600' : '400') + ';'
+            + 'padding:4px 12px;font-size:13px">' + label + '</button>';
+    };
+    return '<div style="border-bottom:1px solid var(--border-color);margin-bottom:6px">'
+        + mk('prod', '生产链条', '#0d7a3f') + mk('dn', '出库', '#0a6ed1') + '</div>';
+}
+function so_chain_set_caret($row, which) {
+    $row.find('.so-chain-caret').text('▸');
+    $row.find('.so-chain-toggle[data-w="' + which + '"] .so-chain-caret').text('▾');
+}
+
+// 同一行只放**一个**展开容器；点「生产链条」「出库」任一 → 打开容器并切到对应标签
+function so_chain_toggle($box, idx, which, line) {
+    const $row = $box.find('tr[data-idx="' + idx + '"]');
+    const $ex = $box.find('tr.so-chain-inline[data-key="' + idx + '"]');
+    if ($ex.length && $ex.attr('data-tab') === which) {   // 同一列再点 → 收起
+        $ex.remove(); $row.find('.so-chain-caret').text('▸'); return;
+    }
+    if ($ex.length) { $ex.remove(); }
+    $row.after('<tr class="so-chain-inline" data-key="' + idx + '" data-tab="' + which + '">'
+        + '<td colspan="' + SO_CHAIN_COLS + '" style="background:var(--fg-color);padding:6px 8px">'
+        + '<div class="so-chain-tabwrap">' + so_chain_tabs_html(which)
+        + '<div class="so-chain-tabbody">' + so_chain_panel_html(line, which) + '</div></div></td></tr>');
+    so_chain_set_caret($row, which);
 }
 
 // 生产链条：工单 → 菲号(默认展开) → 逐工序 Job Card
