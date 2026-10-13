@@ -91,3 +91,31 @@ ssh $H "cd /home/frappe/frappe-bench && sudo -n -u frappe /usr/local/bin/bench r
 - `../docs/reference/en-supply-chain-map.md` — EN 全链路实体地图（**已更正**：Cutting Plan/Task、Work Order Split、Wip Transfer 生产 0 条；真实车辆是 Initial Work Order / Tracking Number / Job Card 自定义字段）
 - `../docs/research/presentation-forms.md` — 四类形式调研 + 建议路线
 - `EN_API/so_item_special_mark/README.md` — SO 表单定制的既有先例（Client Script→app 文件、hooks doctype_js、部署缓存要点）
+
+---
+
+## 7. Stage 1 v2：一对多的展示设计（2026-10-13）
+
+**问题**：一条 SO 行下游是 `0..1 生产计划 → 1..N 工单 → 每工单 N 道工序(裁剪/…) + N 个菲号`，
+**多层一对多**。旧版把「工单/工序」硬塞进一格（`|` 分隔），列不够、也没生产计划/菲号。
+
+**调研结论（业界成熟 ERP + Frappe 能力）**：
+- **Frappe 原生子表只有 2 层**（父→子），做不了「工单→工序→菲号」3 层；`Dialog` 里放 child table 还有已知只读 bug（frappe#17533）。
+- 主流做法（SAP Fiori / Dynamics sub-grid / Cloudscape 等）= **摘要 + 可下钻**；Cloudscape 明确告诫「深层嵌套塞进表格会牺牲可读性与性能」。
+- 结论：**主表只放摘要，多层结构放弹窗里自渲染只读 HTML 表**。
+
+**v2 实现**：
+- 主表一行 = 一条 SO 行：`物料 | 客户码 | 订单量 | 已发 | 未发 | 阶段 | 生产计划 | 工单 | 菲号`。
+  生产计划列显示 PP 号(+计划量)；「工单」「菲号」是**可点 chip**（`N 张 ▸` / `M 个 ▸`）。
+- 点开 = `frappe.ui.Dialog(size:'extra-large')` + HTML 字段，渲染 **工单 → 逐道工序(状态+完成量) → 菲号(数量+**开料工单**+交付物料)**。
+  菲号「开料工单」非空 = **已开料**（用户要的「已开料就显示跟踪单号」）。
+- 取数 `key_test.so_chain.get_so_chain` 扩展：按 `Sales Order Item.name` 挂 `Production Plan Item.sales_order_item`；
+  工单 `production_item+so`；逐道工序完成量取 Job Card；菲号 `Tracking Number.work_order`（+`initial_work_order`/`so_materials`）。
+- **状态**：测试机部署并 Playwright 验证（主表含新列、弹窗渲染 WO→工序/菲号层级）。
+
+**业界依据（原始 URL）**：Frappe Connections https://docs.frappe.io/framework/user/en/basics/doctypes/actions-and-links.md ；
+Frappe Dialog https://docs.frappe.io/framework/user/en/api/dialog ；Script Report 下钻 https://docs.frappe.io/framework/user/en/guides/reports-and-printing/how-to-make-script-reports.md ；
+Cloudscape nested-table 告诫 https://cloudscape.design/patterns/resource-management/view/table-with-nested-resources/ ；
+Dynamics sub-grid https://learn.microsoft.com/en-us/dynamics365/customerengagement/on-premises/customize/sub-grid-properties-legacy ；
+SAP Fiori Tree Table https://help.sap.com/docs/ABAP_PLATFORM_NEW/468a97775123488ab3345a0c48cadd8f/7cf7a31fd1ee490ab816ecd941bd2f1f.html 。
+**备选（用户提到）**：自定义报表渲染 / `vilavi_pim` 的「产品物料库」= **标准 Frappe Desk Page**（`item-group-browser`，jQuery+模板串+whitelist 取数，见 `docs/reference/en-custom-apps-and-deploy.md`）—— 要做「独立链条屏/树」时可抄它的 Page 四件套。

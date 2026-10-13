@@ -7,6 +7,7 @@ title: supply_chain_visibility 变更日志
 # 变更日志
 
 ## 2026-10-13
+- **Stage 1 v2（一对多展示）**：主表补「生产计划」列；「工单/菲号」做成可点 chip，点开 `frappe.ui.Dialog` 看层级（工单 → 逐道工序(裁剪…) + 菲号(含**开料工单**，非空=已开料)）。依据业界「摘要 + 可下钻」（Frappe 子表只有 2 层、Dialog 子表有只读 bug）。测试机已部署并 Playwright 验证。
 
 - **新开子项目** `supply_chain_visibility/` —— EN 供应链可视化与履约查询。
 - **迁移**：`EN_API/docs/research/en-supply-chain-map.md` → `docs/reference/en-supply-chain-map.md`；
