@@ -2,20 +2,21 @@
 // 「供应链链条摘要」内嵌 SO 表单 —— 追加到 key_test/public/js/sales_order.js **末尾**
 //
 // 原因：hooks.py 的 doctype_js 对 Sales Order 只允许**一个** JS 文件
-// （"Sales Order": "public/js/sales_order.js"），所以要并进该文件，
-// 不能新建第二个文件。Frappe 允许对同一 doctype 多次 frappe.ui.form.on(...)。
+// （"Sales Order": "public/js/sales_order.js"），所以要并进该文件。
+// Frappe 允许对同一 doctype 多次 frappe.ui.form.on(...)。
 //
 // 依赖服务端方法 key_test.so_chain.get_so_chain（见 key_test__so_chain.py）。
+// 容器用 frm.dashboard.parent（jQuery；Frappe Dashboard 的 this.parent），
+// 不用 frm.dashboard.wrapper（该属性不存在）。
 // ─────────────────────────────────────────────────────────────────────────
 frappe.ui.form.on('Sales Order', {
     refresh: function (frm) {
         if (frm.is_new()) return;
-        // 复用同一个容器，避免每次 refresh 重复叠加 section
-        let $box = frm.dashboard.wrapper.find('.so-chain-summary');
-        if (!$box.length) {
+        const $dash = frm.dashboard.parent;
+        if (!$dash.find('.so-chain-summary').length) {
             frm.dashboard.add_section('<div class="so-chain-summary"></div>', __('供应链链条'));
-            $box = frm.dashboard.wrapper.find('.so-chain-summary');
         }
+        const $box = $dash.find('.so-chain-summary');
         $box.html('<div class="text-muted">加载中…</div>');
         frappe.call({
             method: 'key_test.so_chain.get_so_chain',

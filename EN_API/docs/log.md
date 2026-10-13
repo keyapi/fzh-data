@@ -6,6 +6,12 @@ title: EN_API 文档变更日志
 
 # 变更日志
 
+## 2026-10-13（晚 2：Stage 2 原生报表，测试机已部署）
+
+- **新增（路线第 2 档：原生 KPI/例外）**：Script Report「**SO Chain Overview**」 —— 每行「还未发完」的订单行（阶段/已发/未发/异常）+ 顶部 KPI 卡（行数·未发总量·交期已过·死单）+ 阶段分布柱图。产物见 `EN_API/so_chain_embed/key_test__report__so_chain_overview__*`。
+  - **测试机已部署并验证**：`frappe.desk.query_report.run` 返回 **10 列 / 107 行 / KPI / 柱图**（0.10s）。
+  - **两个坑（已记进 handoff）**：① 报表文件路径要**多一层** `key_test`（模块名==app 名 → `apps/key_test/key_test/**key_test**/report/<name>/`），放少一层会被 migrate 生成返回 `([],[])` 的桩；② 加/改 `.py` 后**必须 `bench restart`**，`clear-cache` 不重载 Python 模块。
+
 ## 2026-10-13（晚：Stage 1 嵌入单据，测试机已部署）
 
 - **新增（呈现形式路线第 1 档：嵌入单据）**：`EN_API/so_chain_embed/` —— 在 ERPNext 销售订单表单内嵌「供应链链条摘要」（阶段/已发/未发/工单工序）。

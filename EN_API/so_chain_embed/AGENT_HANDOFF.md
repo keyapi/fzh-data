@@ -52,20 +52,32 @@ ssh $H "cd /home/frappe/frappe-bench && sudo -n -u frappe bench --site erpnext.v
 
 **回滚**：删 `so_chain.py` + 用备份还原 `sales_order.js` + clear-cache。
 
-## 4. Stage 2 设计：原生 KPI / 例外（下一步）
+## 4. 做了什么（Stage 2：原生报表）
 
-**落点**：`key_test` app 里加 **Script Report**（先例：`key_test/key_test/report/`）。
-结构 `<app>/<module>/report/<name>/<name>.{json,py,js}`；Report 记录是 **DB 记录，靠 `bench migrate` 生成/更新**。
-**坑**：filter 自动发现会静默失败（`docs/fac-dev-notes.md` Lesson 64）→ 在 Python 里**显式加 `filters = [...]`**。
-Report 可直接返回 `chart`（bar/pie）与 `report_summary`（KPI 卡）。
+**Script Report「SO Chain Overview」**：每个「还未发完」的订单行一行（阶段 / 已发 / 未发 / 异常），
+顶部出 KPI 卡（行数·未发总量·交期已过·死单）+ 阶段分布柱图。
 
-- 报表名（拟）：`so_chain_overview` —— 每张 SO（或每行）→ 阶段、未发量、逾期、死单、工序停滞；
-  `report_summary` 出「未发总量 / 超期单数 / 死单数 / 停滞工单数」。
-- 数据源复用 `so_chain.py` 的口径（抽成公共函数，避免两处）。
-- 若要**图表**：Dashboard Chart 的 Custom source（`dashboard_chart_source` hook）或 Number Card 的 `function`。
-  仓库无先例，需在服务器抄一个 app 的 hooks 写法。
+- 文件落点 **`key_test/key_test/key_test/report/so_chain_overview/so_chain_overview.{py,json,js}`**
+  ⚠️ **多一层 `key_test`**！模块名 == app 名，Frappe 的 report 路径 = `<app>.<module>.report.<name>.<name>`
+  → 磁盘 `apps/key_test/key_test/**key_test**/report/<name>/`。放少一层 Frappe 找不到（会由 migrate 生成
+  返回 `([],[])` 的桩）。
+- Report 记录（DocType `Report`，`is_standard=Yes`/`report_type=Script Report`/`module=key_test`）需存在；
+  可用 `bench --site X console` 建，或靠 migrate。
+- **改/加 `.py` 后必须 `bench restart`** —— `clear-cache` 不重载 Python 模块（报错表现为端点返回 0 行、耗时 ~0）。
 
-**前置**：确认 `key_test` 是 Developer Mode 站点（Script Report 需要）。
+### 状态
+- ✅ **测试机已部署并验证（2026-10-13）**：`query_report.run` 返回 **10 列 / 107 行 / KPI / 柱图**（耗时 0.10s）。
+  文件已搬到正确路径；`bench restart` 后生效。
+- ⏳ 生产未部署。
+
+### 生产部署补丁（Stage 2）
+```bash
+H=阿里云-FZH-ERPNext-frappe
+D=/home/frappe/frappe-bench/apps/key_test/key_test/key_test/report/so_chain_overview
+ssh $H "mkdir -p $D" && 传 3 个文件
+ssh $H "cd /home/frappe/frappe-bench && sudo -n -u frappe bench --site erpnext.vilavi.cn console <<< '<建 Report 记录的脚本>'"
+ssh $H "cd /home/frappe/frappe-bench && sudo -n -u frappe /usr/local/bin/bench restart"
+```
 
 ## 5. Stage 3 设计：小范围独立屏（暂缓）
 
