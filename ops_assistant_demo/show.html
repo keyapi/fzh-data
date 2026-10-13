@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>演示流程 · 问答与可操作助手</title>
+<style>
+:root{color-scheme:light;--blue:#164c87;--ink:#172b44;--line:#d8e2ec}
+*{box-sizing:border-box}
+body{margin:0;background:#edf2f7;color:var(--ink);font:16px/1.75 system-ui,"Microsoft YaHei",sans-serif}
+header{background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;padding:12px 5vw;display:flex;align-items:center;gap:12px;z-index:5}
+header strong{margin-right:auto}
+button,a.button{font:inherit;cursor:pointer;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--blue);padding:6px 14px;text-decoration:none}
+button.primary{background:var(--blue);color:#fff}
+main{max-width:1120px;margin:24px auto;padding:0 22px 80px}
+.page{background:#fff;border:1px solid var(--line);border-radius:12px;padding:38px 46px;margin:20px 0;scroll-margin-top:90px}
+.eyebrow{font-size:13px;color:var(--blue);letter-spacing:1px}
+h1{font-size:36px;line-height:1.35;margin:12px 0}
+h2{font-size:28px;margin:8px 0 16px}
+p{margin:10px 0}
+.lead{font-size:21px;color:#36536f}
+.note{background:#eef5fc;border-left:4px solid #477fb7;padding:12px 18px}
+.warn{background:#fff7e7;border-left-color:#b98124}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.card{padding:18px;border:1px solid var(--line);border-radius:8px}
+.card strong{display:block;color:var(--blue);margin-bottom:8px}
+ol,ul{margin:8px 0 8px 1.2em}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:15px}
+th,td{text-align:left;vertical-align:top;padding:10px;border-bottom:1px solid var(--line)}
+th{background:#f0f5fa}
+blockquote{margin:14px 0;padding:14px 18px;background:#f3f7fb;font-size:20px;border-left:4px solid var(--blue)}
+.speaker{color:#516b82;font-size:14px}
+.controls{display:none;position:fixed;bottom:16px;right:24px;z-index:10;background:#fff;padding:8px;border:1px solid var(--line);border-radius:8px;align-items:center;gap:10px}
+body.present .page{display:none;min-height:calc(100vh - 150px);margin:0}
+body.present .page.selected{display:block}
+body.present .controls{display:flex}
+body.present main{max-width:1200px}
+body.present .speaker,body.present .edit-help{display:none}
+body.present h1{font-size:44px}
+.timer{font-variant-numeric:tabular-nums}
+.edit-help{background:#fff;border:1px dashed var(--line);border-radius:8px;padding:12px 16px;margin:16px 0}
+@media(max-width:800px){.grid{grid-template-columns:1fr}.page{padding:22px}h1{font-size:28px}}
+@media print{body{background:#fff}header,.controls,.edit-help{display:none!important}.page,body.present .page{display:block!important;border:0;break-after:page;min-height:0}.speaker{display:block!important}}
+</style>
+</head>
+<body>
+<header>
+  <strong>演示流程</strong>
+  <a class="button" href="/" target="_blank" rel="noopener">打开操作台</a>
+  <a class="button" href="/competition.html">原操作说明</a>
+  <button id="present" class="primary" type="button">投屏</button>
+  <button id="print" type="button">打印</button>
+</header>
+<main id="deck"></main>
+<p class="edit-help">改演示文字：编辑本文件里的 <code>slides</code>。投屏时这些说明和讲者注不会出现。知识库站点单独打开，不要把地址和口令写进这页。</p>
+<div class="controls">
+  <span id="position"></span>
+  <button id="prev" type="button">上一页</button>
+  <button id="next" type="button">下一页</button>
+  <button id="clock" type="button">开始计时</button>
+  <span class="timer" id="timer">00:00</span>
+</div>
+<script>
+/* 朋友改这一段即可。time 是这一页建议用掉的时间，不是累计时间。 */
+const slides = [
+  {
+    kicker: "0:00–0:40 · 开场",
+    title: "问答很多队都会做。<br>我们多做的是把变更做到页面上。",
+    html: "<p class=\"lead\">先用一次带出处的问答让大家看懂问题。重点看后面两次操作：一次简单改数，一次缺信息的整组办理。</p><p class=\"note\">全部是模拟数据。没有真实客户、真实资金，也没有生产写入。</p>",
+    speaker: "不要念材料。第一句就说出和普通知识库的差别：问完之后，人确认，测试环境才改。"
+  },
+  {
+    kicker: "分工 · 仍在开场里说完",
+    title: "两段能力，一条边界",
+    html: "<div class=\"grid\"><div class=\"card\"><strong>财资助手</strong>回答“这类报错先查什么”。答案要带出处，可以点有帮助或没帮助。</div><div class=\"card\"><strong>操作助手</strong>回答“测试环境改哪几项、缺哪一项”。自己不落库。</div><div class=\"card\"><strong>人</strong>确认之后，系统才写入测试并读回。生产只留下申请，不能直接改。</div></div>",
+    speaker: "知识库是队友的成果，用一页承认它，不要展开成第二场产品发布。"
+  },
+  {
+    kicker: "0:40–2:00 · 知识库，短",
+    title: "先问一句大家听得懂的",
+    html: "<blockquote>余额查询报错，一般先查什么？</blockquote><ol><li>打开财资助手，问这一句。</li><li>答案旁边点开出处，不要念完整篇。</li><li>指一下“有帮助”。用一句话说明：聊天整理出来的要人审，手册可以直接入库。</li></ol><p class=\"warn note\">不要打开带具体客户环境的草稿。这一段控制在一分二十秒内。</p>",
+    speaker: "若问答变慢，就停在已经打开的一条带引用答案上，口播往下走。"
+  },
+  {
+    kicker: "2:00–4:00 · 操作预热",
+    title: "简单例子：改一个测试限额",
+    html: "<blockquote>把测试环境的单笔限额改成 20 万。生产不要动。</blockquote><ol><li>操作台登录模拟柜面主管。口令已填在登录框里，不要投出口令。</li><li>看它框住测试限额、填入 20 万，停在确认。</li><li>确认前数字不变。点一次确认。</li><li>测试变成 20 万，生产仍是 50 万。</li></ol><p class=\"note\">这一步让观众看懂：它会动手，但动手之前有一次明确确认，而且生产不动。</p>",
+    speaker: "不要在这里讲框架名称。讲完立刻进入复杂例子。"
+  },
+  {
+    kicker: "4:00–6:40 · 复杂例子",
+    title: "缺一项，就只问这一项",
+    html: "<p>打开「接入工单」，选资料里缺客户端端口的那一张。</p><ol><li>让它对照规则和现状，列出要改的整组，已有的正确项保留。</li><li>它应只追问客户端端口。现场补上，例如 9443。</li><li>看旧值、新值和依据。先预演填写，这时还没保存。</li><li>点一次确认。独立读回。生产配置不出现在这次写入里。</li></ol><p class=\"note\">这是知识库做不到的：跨页面、缺信息会问、确认前不写、确认后能核对结果。</p>",
+    speaker: "模型若超过二十秒没结果，不要连点发送。口播“正在核对缺项”，必要时改用备用页。"
+  },
+  {
+    kicker: "备用 · 不进主计时",
+    title: "复杂例子卡住时，改做路由",
+    html: "<blockquote>只开通余额查询，不要明细，不要票据。</blockquote><ol><li>打开「业务路由配置」，输入这句话，准备整组方案。</li><li>范围里只有余额。已有适配器复用，不重复建。</li><li>仍是一次确认后才保存。说不清的业务应被拒绝，而不是猜一个方案。</li></ol>",
+    speaker: "备用只换复杂例子，知识库和简单限额不必重做。"
+  },
+  {
+    kicker: "6:40–7:30 · 收口",
+    title: "问得有据，改得有人点头",
+    html: "<ol><li>问答给出处，不把聊天记录直接当成制度。</li><li>变更先形成方案，人确认后才写入测试环境。</li><li>生产不在这个演示里直接改。重大故障仍由人处理。</li></ol><p class=\"warn note\">效率数字如果被问到，说是试点前的预期，要用命中率、有用率和试点前后对照来替换，不说已经省下多少。</p>",
+    speaker: "停在这三句。安全测试和换岗留给提问。"
+  },
+  {
+    kicker: "提问才用",
+    title: "若被问到边界",
+    html: "<table><thead><tr><th>问题</th><th>回答</th></tr></thead><tbody><tr><td>这不就是知识库吗？</td><td>知识库回答条款。操作助手把条款变成测试环境里的一组变更，并在确认后读回结果。</td></tr><tr><td>它会不会自己改生产？</td><td>不会。这个演示没有生产写入。确认也只作用于测试环境里这一次方案。</td></tr><tr><td>是不是写死的脚本？</td><td>简单例子可以换一个明确金额。复杂例子可以换成另一张缺项不同的工单，或换成只开通某一种查询。</td></tr></tbody></table>",
+    speaker: "不要说百分百拦住所有攻击，也不要说可以代替审批人。"
+  }
+];
+
+const deck = document.getElementById("deck");
+deck.innerHTML = slides.map((slide, index) => `
+  <section class="page${index === 0 ? " selected" : ""}">
+    <span class="eyebrow">${slide.kicker}</span>
+    <h1>${slide.title}</h1>
+    ${slide.html}
+    <p class="speaker">${slide.speaker}</p>
+  </section>`).join("");
+
+const pages = [...document.querySelectorAll(".page")];
+let current = 0;
+let started = 0;
+function render() {
+  pages.forEach((page, index) => page.classList.toggle("selected", index === current));
+  document.getElementById("position").textContent = (current + 1) + " / " + pages.length;
+}
+document.getElementById("present").onclick = () => {
+  document.body.classList.toggle("present");
+  render();
+  window.scrollTo(0, 0);
+};
+document.getElementById("print").onclick = () => window.print();
+document.getElementById("prev").onclick = () => { current = Math.max(0, current - 1); render(); };
+document.getElementById("next").onclick = () => { current = Math.min(pages.length - 1, current + 1); render(); };
+document.addEventListener("keydown", (event) => {
+  if (!document.body.classList.contains("present")) return;
+  if (event.key === "ArrowRight") { current = Math.min(pages.length - 1, current + 1); render(); }
+  if (event.key === "ArrowLeft") { current = Math.max(0, current - 1); render(); }
+  if (event.key === "Escape") document.body.classList.remove("present");
+});
+document.getElementById("clock").onclick = () => {
+  started = Date.now();
+  document.getElementById("clock").textContent = "重新计时";
+};
+setInterval(() => {
+  if (!started) return;
+  const seconds = Math.floor((Date.now() - started) / 1000);
+  document.getElementById("timer").textContent = String(Math.floor(seconds / 60)).padStart(2, "0") + ":" + String(seconds % 60).padStart(2, "0");
+}, 500);
+render();
+</script>
+</body>
+</html>
