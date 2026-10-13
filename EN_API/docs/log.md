@@ -6,6 +6,17 @@ title: EN_API 文档变更日志
 
 # 变更日志
 
+## 2026-10-13
+
+- **新增（统一履约查询入口）**: `EN_API/fulfillment_query.py` + `EN_API/fulfillment/` 包 —— 在 `item_shipment_status.py` 引擎之上叠加 多输入 / 阶段 0–3 状态机 / 数量阶梯对账 / 事实·推导·估算分层 / 异常 §8 结构 + 下一行动；输出 JSON（权威）+ 控制台 + Excel（9 分区，`--legacy-sheets` 复刻旧 3 Sheet）。实现按蓝图 §3/§4/§8/§9/§12 V1。
+  - **落点取舍**：**包裹引擎而非整体搬迁** —— 引擎带 fixture 断言与单测（`tests/test_item_shipment_status.py` 用 `monkeypatch.setattr(iss, "api_get_status", ...)` 打桩，要求 `paginated_get`/`api_get_status` 同模块命名空间），整体搬迁会破坏该契约且回归风险高。引擎文件**未改动**。
+  - **实测踩坑**：ERPNext 对突发请求限流 —— 多打一轮冗余 DN 查询会让后续 WO 查询返回 **403 PermissionError**。已改为出库单只查一次。
+  - **回归**：`--codes CENKZ1325-Yellow-138 --assert-fixture` 稳定档 14/14 通过、exit 0；`uv run pytest EN_API/tests/` 38 项通过（引擎老测试零改动）。
+- **新增**: [reference/en-order-to-shipment-chain.md](reference/en-order-to-shipment-chain.md) —— **链路导航单一入口**：给一个通途 SKU，它在 ERPNext 里如何串起 销售订单→生产计划→工单→工序卡→销售出库；含链路图、每段 DocType/字段/代码落点（`item_shipment_status.py` 函数+行号）、7 条易错口径、统一查询入口、相关子项目与 PR 清单、最新实跑快照。
+  **背景**：仓库此前有零散的 handoff 与蓝图，但没有一篇把「链路 + 子项目 + PR」串起来导航的文，新同事/新会话找不到入口。
+- **实跑留证**: `--customer-code CENKZ1325-Yellow-138`（2026-10-13）10 张 SO / 330 件 = 有效 310 + 已改单 20；已发 166 / 未发 144（`DN 实算 == ERP delivered_qty` ✓）。
+- **索引修正**: reference 索引补登此前遗漏的 `en-server-access.md`。
+
 ## 2026-09-24
 
 - **新增**: [reference/en-server-access.md](reference/en-server-access.md) —— EN 服务器与环境访问单一事实源（生产/测试 SSH 别名、`bench restart` 规矩、REST 凭证、3 条常见坑）。
