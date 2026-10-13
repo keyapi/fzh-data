@@ -5,6 +5,8 @@ title: 受控办理助手交接
 
 # 受控办理助手交接
 
+**2026-10-13 工单驱动任务升级**：新增内置模拟接入工单、版本化知识、五项整组方案、一次确认、事务执行、独立读回及逐项模拟验收；默认/保守档/失败恢复三场景。独立仓当前108项测试与云端真实模型主线复核，主仓镜像须独立复测。参见[设计合同](docs/competition-v2-design.md)、[实际观测](docs/competition-v2-results.md)、[7分钟讲稿](docs/competition-v2-script.md)。新增 bank_tasks.py、bank_task_agent.py、bank_task_ui.js、competition.html 和 scripts/task_eval.py 部署时须一并携带；真实系统、任意附件解析、正式身份未接。
+
 最新补修见[助手面板与删除语义](docs/assistant-panel.md)，当前80项测试通过。新增assistant_panel.js须部署且加入静态白名单；界面历史不授权，待确认全取后台。历史76项计数对应此前三页实现。
 
 最新实现与验收见[渠道接入三页面](docs/bank-operations.md)。新增bank_ops.py、bank_agent.py、bank_ui.js及三组测试，部署须携带这些文件。当前76项自动化通过、0跳过；下文旧计数属于历史版本。三页已有真实模拟CRUD和真实模型准备，保留原限额/联调，不连接银行系统。

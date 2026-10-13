@@ -5,6 +5,16 @@ title: 文档索引
 
 # 文档索引
 
+| 需要 | 文档 |
+|---|---|
+| 工单驱动主线的架构与接口 | [competition-v2-design.md](competition-v2-design.md) |
+| 竞赛项目说明与价值 | [competition-v2-project.md](competition-v2-project.md) |
+| 6–8分钟演示与上场检查 | [competition-v2-script.md](competition-v2-script.md) |
+| 工单、知识与模拟数据 | [competition-v2-materials.md](competition-v2-materials.md) |
+| 评审答疑 | [competition-v2-faq.md](competition-v2-faq.md) |
+| 实际测试结果和局限 | [competition-v2-results.md](competition-v2-results.md) |
+| 续接实施计划 | [competition-v2-implementation-plan.md](competition-v2-implementation-plan.md) |
+
 新增经验：[静态配置暴露](solutions/static-config-exposure.md)。
 
 | 需要 | 文档 |

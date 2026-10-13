@@ -724,7 +724,7 @@ function renderLog() {
 }
 function push(entry) { log.push(entry); renderLog(); save(); return log.length - 1; }
 function renderApproval(){
- const pending=(opsState?.proposals||[]).filter(p=>p.status==="pending"&&p.expires_at*1000>Date.now()&&(!p.scenario.startsWith("bank_")||p.version===opsState.bank?.version));
+ const pending=(opsState?.proposals||[]).filter(p=>p.status==="pending"&&p.expires_at*1000>Date.now()&&["counter","integration","bank_terminal","bank_parameter","bank_ip"].includes(p.scenario)&&(!p.scenario.startsWith("bank_")||p.version===opsState.bank?.version));
  const p=pending.at(-1);
  $("chat-approval").hidden=!p||role()!=="operator";
  if(!p)return;
@@ -736,6 +736,10 @@ function renderApproval(){
 }
 async function confirmFromChat(cancel=false){
  if(busy)return;
+ if(window.BankTaskUI?.isActive()){
+   if(window.BankTaskUI.hasPending())return window.BankTaskUI.confirmFromChat(cancel);
+   push({kind:"bot",text:"当前工单没有待确认的整组方案。请先核对任务页状态。"});return;
+ }
  const id=$("chat-approval").dataset.proposal;
  const p=(opsState?.proposals||[]).find(p=>p.id===id&&p.status==="pending");
  if(!p){push({kind:"bot",text:"当前没有待确认修改。"});return;}
@@ -763,6 +767,8 @@ function applyRoleVisibility() {
 }
 function show(name) {
  document.querySelectorAll('.bank-view').forEach(el=>el.hidden=true);
+ const taskView=$("view-bank-task");if(taskView)taskView.hidden=true;
+ const taskNav=$("nav-bank-task");if(taskNav)taskNav.removeAttribute('aria-current');
  document.querySelectorAll('nav button[id^="nav-bank-"]').forEach(el=>el.removeAttribute('aria-current'));
   ["rules", "ticket", "audit", "integration", "knowledge", "safety", "guide"].forEach((id) => {
     $("view-" + id).hidden = name !== id;
@@ -833,6 +839,7 @@ $("ask").onsubmit = (e) => {
   $("ask-input").value = "";
   if(/^(允许(?:修改|执行|删除|保存)?|确认(?:修改|删除|保存)?|确定|同意(?:修改|执行|删除|保存)?)[。！!\s]*$/.test(text)){confirmFromChat();return;}
   if(/^(取消(?:修改)?|不允许)[。！!\s]*$/.test(text)){confirmFromChat(true);return;}
+  if(text&&window.BankTaskUI?.routes(text)){window.BankTaskUI.ask(text);return;}
   if (text) askOps(text,scenarioFor(text,!$("view-integration").hidden?"integration":"counter"));
 };
 let opsState = null;
@@ -852,6 +859,7 @@ function fieldLabel(field) {
 }
 function renderOps() {
   if (!opsState) return;
+  window.BankTaskUI?.onOpsState(opsState);
   window.AssistantPanel?.attach(opsState);
   $("role").value=opsState.role;
   $("login-open").textContent="模拟账号 · 已登录";
@@ -1007,6 +1015,7 @@ async function runSafety(caseName) {
 }
 async function askOps(text,scenario="integration"){
  window.AssistantPanel?.open();
+ if(window.BankTaskUI?.routes(text))return window.BankTaskUI.ask(text);
  const bankEntity=window.BankUI?.scenarioFor(text);
  if(bankEntity&&!/限额|柜面|联调/.test(text))return askBank(text,bankEntity);
  if(busy)return;scenario=scenarioFor(text,scenario);busy=true;
@@ -1104,5 +1113,6 @@ push({kind:"bot",text:"告诉我要改什么，我会在页面填写，等你确
 </script>
 <script src="/bank_ui.js"></script>
 <script src="/assistant_panel.js"></script>
+<script src="/bank_task_ui.js"></script>
 </body>
 </html>

@@ -49,7 +49,10 @@ class DomainError(Exception):
 
 
 def digest(proposal):
-    immutable = {k: v for k, v in proposal.items() if k not in {'digest', 'status', 'executed_version', 'ticket_id'}}
+    # Explicit allowlist of fields that legitimately change after approval:
+    # execution bookkeeping and display-only metadata. Any other field is bound.
+    excluded = {'digest', 'status', 'executed_version', 'ticket_id', '_execution', '_expected_hash'}
+    immutable = {k: v for k, v in proposal.items() if k not in excluded}
     return hashlib.sha256(json.dumps(immutable, sort_keys=True, ensure_ascii=False,
                                      separators=(',', ':'), allow_nan=False).encode()).hexdigest()
 
@@ -125,6 +128,9 @@ class Store:
     def snapshot(self, workspace, role):
         def read(state):
             result = copy.deepcopy(state)
+            # Task evidence and conversation are available only through the
+            # scoped BankTasks service, never through the generic snapshot.
+            result.pop('bank_tasks', None)
             if role == 'reader':
                 result['configs'] = [c for c in result['configs'] if c['environment'] == 'test']
                 result['tickets'] = []
@@ -161,6 +167,10 @@ class Store:
                 bank['version'] = state['bank']['version'] + 1
                 bank['reset_count'] = state['bank'].get('reset_count', 0) + 1
                 state['bank'] = bank
+            for task in state.get('bank_tasks', []):
+                task['status'] = 'invalidated'
+                task['revision'] += 1
+                task['active_proposal_id'] = None
             for p in state['proposals']:
                 if p['status'] == 'pending':
                     p['status'] = 'cancelled'

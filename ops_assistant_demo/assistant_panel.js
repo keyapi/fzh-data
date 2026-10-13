@@ -11,12 +11,12 @@
   function clamp(value){return Math.round(Math.max(320,Math.min(maxWidth(),Number(value)||360)));}
   function preferences(){try{return read(window.localStorage,preferenceKey);}catch{return null;}}
   function persistPreferences(){try{write(window.localStorage,preferenceKey,{open:isOpen,width});}catch{}}
-  function pendingCount(){return (lastState?.proposals||[]).filter(p=>p.status==='pending'&&p.expires_at*1000>Date.now()&&(!p.scenario?.startsWith('bank_')||p.version===lastState?.bank?.version)).length;}
+  function pendingCount(){return (lastState?.proposals||[]).filter(p=>p.status==='pending'&&p.expires_at*1000>Date.now()&&['counter','integration','bank_terminal','bank_parameter','bank_ip'].includes(p.scenario)&&(!p.scenario.startsWith('bank_')||p.version===lastState?.bank?.version)).length+(window.BankTaskUI?.pendingCount||0);}
   function updateContext(){
     if(!installed)return;const view=currentView(),bankPage=/^bank-/.test(view);
-    const names={rules:'柜面限额',ticket:'变更申请',audit:'操作审计',integration:'联调配置',knowledge:'知识依据',safety:'安全实测',guide:'演示说明','bank-terminal':'终端注册','bank-parameter':'注册参数','bank-ip':'固定 IP 配置'};
+    const names={rules:'柜面限额',ticket:'变更申请',audit:'操作审计',integration:'联调配置',knowledge:'知识依据',safety:'安全实测',guide:'演示说明','bank-terminal':'终端注册','bank-parameter':'注册参数','bank-ip':'固定 IP 配置','bank-task':'接入工单'};
     contextLine.textContent='当前页面 · '+(names[view]||'业务操作');
-    get('ask-input').placeholder=view==='bank-ip'?'例如：删除最新 IP 配置':view==='bank-parameter'?'例如：把超时改为 75 秒':view==='bank-terminal'?'例如：查一下当前终端':view==='integration'?'例如：超时改为 60 秒，重试 1 次':view==='rules'?'例如：把限额改为 20 万':'描述需要查询或办理的事项';
+    get('ask-input').placeholder=view==='bank-task'?'例如：核对这份工单并形成整组方案':view==='bank-ip'?'例如：删除最新 IP 配置':view==='bank-parameter'?'例如：把超时改为 75 秒':view==='bank-terminal'?'例如：查一下当前终端':view==='integration'?'例如：超时改为 60 秒，重试 1 次':view==='rules'?'例如：把限额改为 20 万':'描述需要查询或办理的事项';
     const chips=aside.querySelector('.chips');if(chips)chips.hidden=bankPage;
   }
   function paint(){
@@ -42,7 +42,7 @@
   function currentView(){return [...document.querySelectorAll('main > section[id^="view-"]')].find(section=>!section.hidden)?.id.replace(/^view-/,'')||'rules';}
   function save(){
     updateContext();
-    if(!scope||restoring)return;const context={reset_count:resetCount,messages:messages(log),draft:String(get('ask-input')?.value||'').slice(0,3000),view:currentView(),terminal_id:window.BankUI?.activeTerminalId||null};
+    if(!scope||restoring)return;const context={reset_count:resetCount,messages:messages(log),draft:String(get('ask-input')?.value||'').slice(0,3000),view:currentView(),terminal_id:window.BankUI?.activeTerminalId||null,task_id:lastState?.role==='operator'?window.BankTaskUI?.taskId||null:null};
     // Keep per-tab conversation UI small. No proposal object is stored or revived.
     while(JSON.stringify(context).length>90000&&context.messages.length)context.messages.shift();
     try{write(window.sessionStorage,historyPrefix+scope,context);}catch{}
@@ -56,7 +56,8 @@
     try{
       if(stored&&stored.reset_count===count){
         log=messages(stored.messages);get('ask-input').value=String(stored.draft||'').slice(0,3000);renderLog();
-        if(/^bank-(terminal|parameter|ip)$/.test(stored.view||''))window.BankUI?.show(stored.view.replace('bank-',''),stored.terminal_id);
+        if(stored.view==='bank-task'){window.BankTaskUI?.show();if(state.role==='operator'&&stored.task_id)window.BankTaskUI?.restore(stored.task_id);}
+        else if(/^bank-(terminal|parameter|ip)$/.test(stored.view||''))window.BankUI?.show(stored.view.replace('bank-',''),stored.terminal_id);
         else if(['rules','ticket','audit','integration','knowledge','safety','guide'].includes(stored.view)&&!(state.role==='reader'&&stored.view==='ticket'))show(stored.view);
       }else{log=[];get('ask-input').value='';renderLog();}
     }finally{restoring=false;}

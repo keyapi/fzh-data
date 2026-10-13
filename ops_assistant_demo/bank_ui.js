@@ -103,6 +103,20 @@
     else{const row=[...el(`bank-${entity}-rows`).querySelectorAll('[data-id]')].find(row=>row.dataset.id===p.record_id);await spotlight(row||el(`bank-${entity}-rows`),'待删除记录 · 尚未删除',350);}
     if(p.reason)el(`bank-${entity}-reason`).value=p.reason;message(entity,'尚未保存。核对差异后，在对话里允许或点“确认保存”。');render();renderApproval();
   }
+  async function previewFields(operation){
+    const entity=operation?.entity;if(!specs[entity])return;
+    showBank(entity);await load();
+    const record=(bank?.[specs[entity].plural]||[]).find(r=>String(r.id)===String(operation.record_id))||{};
+    fill(entity,{...record,...(operation.action==='create'?operation.values||{}:{})});
+    const changes=(operation.changes||[]).filter(c=>specs[entity].fields.some(f=>f[0]===c.field));
+    const visible=changes.length?changes:specs[entity].fields.filter(f=>Object.hasOwn(operation.values||{},f[0])).map(f=>({field:f[0],after:operation.values[f[0]]}));
+    for(const change of visible.slice(0,entity==='terminal'?2:entity==='parameter'?1:2)){
+      const input=el(`bank-${entity}-${change.field}`);if(!input)continue;
+      await spotlight(input,`预演${label(entity,change.field)} · 尚未保存`,50,130);
+      if(input.tagName==='SELECT')input.value=String(change.after??'');else await typeVisible(input,String(change.after??''),180);
+    }
+    message(entity,'任务预演：整组差异须回任务页一次确认，当前页面尚未保存。');
+  }
   async function approve(p){if(!p||busy)return;busy=true;const entity=p.entity||p.scenario.replace('bank_','');showBank(entity);render();try{await spotlight(el(`view-bank-${entity}`).querySelector('[data-bank-confirm]'),'已获批准 · 后台核对权限后执行',150);const data=await opsFetch('/api/ops/execute',{proposal_id:p.id,digest:p.digest});if(data.state){opsState=data.state;renderOps();}else await loadOps();await load();const verification=data.verification||data.readback;
       if(!verification||verification.passed===false)throw new Error('未收到后台读回证据，请刷新核对；不能宣称核验成功');
       const text=data.code==='ALREADY_EXECUTED'?'该操作已处理，未重复写入。':p.action==='delete'?'记录已删除，并从后台独立核验。':'已保存，并从后台独立核验。';message(entity,text,false,true);push({kind:'verification',text,values:`${specs[entity].title} · ${p.action==='delete'?'记录已移除':'已保存模拟配置'}`,independent:!!data.verification,evidence:verification});selected[entity]=null;await spotlight(el(`bank-${entity}-message`),text,800);
@@ -111,6 +125,6 @@
   function example(entity){const terminal=bank?.terminals?.find(t=>String(t.id)===el(`bank-${entity}-terminal_id`)?.value)||bank?.terminals?.[0];if(entity==='terminal')return '新增测试终端 DEMO-T003，名称“演示渠道终端”，租户 DEMO-3101，最大并发 10，协议 HTTPS，编码 UTF-8，服务地址 https://192.0.2.30:8443/demo，签名 HMAC-SHA256，回调 SYNC。';if(!terminal)return '请先注册一个模拟终端。';return entity==='parameter'?`为终端 ${terminal.terminal_code} 将 timeout_seconds 参数改为 75，值类型 number，说明“演示请求超时秒数”。`:`为终端 ${terminal.terminal_code} 新增固定 IP 配置，租户编号 DEMO-3101，租户 ID DEMO-TENANT-01，前置地址 203.0.113.20 端口 443，客户端地址 198.51.100.20 端口 8443。`;}
   function scenarioFor(text,fallback){if(/\bIP\b|固定\s*IP|前置地址|客户端地址/i.test(text))return 'ip';if(/注册参数|timeout_seconds|参数名称|参数值/.test(text))return 'parameter';if(/终端注册|注册终端|新增终端|终端编号|终端名称|最大并发/.test(text))return 'terminal';if(/限额|金额|柜面|单笔|联调/.test(text))return null;if(!el(`view-bank-${current}`)?.hidden)return current;if(/重试|超时/.test(text))return null;return fallback||null;}
   async function ask(text,entity=current){if(busy)return;if(typeof window.askBank==='function')return window.askBank(text,entity);push({kind:'deny',text:'助手接入尚未完成，请使用页面人工操作；保存仍需批准。'});}
-  window.BankUI={install,show:showBank,load,render,preview,approve,cancel,scenarioFor,ask,describe,get activeTerminalId(){return activeTerminalId();},get state(){return bank;}};
+  window.BankUI={install,show:showBank,load,render,preview,previewFields,approve,cancel,scenarioFor,ask,describe,get activeTerminalId(){return activeTerminalId();},get state(){return bank;}};
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install);else install();
 })();

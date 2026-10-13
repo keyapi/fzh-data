@@ -18,6 +18,8 @@ from decimal import Decimal
 from domain import DomainError, Store
 from bank_ops import BankOperations, redact_all
 from bank_agent import run_bank_agent
+from bank_tasks import BankTasks
+from bank_task_agent import run_task_agent
 
 ROOT = Path(__file__).resolve().parent
 
@@ -306,11 +308,13 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         print('%s - %s' % (self.address_string(), fmt % args))
 
-    def _send(self, code, payload, content_type='application/json; charset=utf-8', cookie=None):
+    def _send(self, code, payload, content_type='application/json; charset=utf-8', cookie=None, headers=None):
         raw = json.dumps(payload, ensure_ascii=False).encode('utf-8') if isinstance(payload, (dict, list)) else payload
         self.send_response(code)
         for k, v in {'Content-Type': content_type, 'Content-Length': str(len(raw)), 'Cache-Control': 'no-store',
                      'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'same-origin'}.items():
+            self.send_header(k, v)
+        for k, v in (headers or {}).items():
             self.send_header(k, v)
         if cookie:
             self.send_header('Set-Cookie', cookie)
@@ -350,8 +354,13 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path in ('/', '/index.html'):
             self._send(200, (ROOT / 'index.html').read_bytes(), 'text/html; charset=utf-8')
             return
-        if parsed.path in ('/bank_ui.js', '/assistant_panel.js'):
-            self._send(200, (ROOT / parsed.path[1:]).read_bytes(), 'text/javascript; charset=utf-8')
+        if parsed.path in ('/bank_ui.js', '/assistant_panel.js', '/bank_task_ui.js', '/competition.html'):
+            asset = ROOT / parsed.path[1:]
+            if not asset.is_file():
+                self._send(404, {'error': 'not found'})
+                return
+            kind = 'text/html; charset=utf-8' if asset.suffix == '.html' else 'text/javascript; charset=utf-8'
+            self._send(200, asset.read_bytes(), kind)
             return
         if not parsed.path.startswith('/api/'):
             self._send(404, {'error': 'not found'})
@@ -368,6 +377,19 @@ class Handler(BaseHTTPRequestHandler):
                 result = {'documents': STORE.knowledge((parse_qs(parsed.query).get('q') or [''])[0][:200], session['role'])}
             elif route == '/api/audit':
                 result = {'audit': STORE.audit(session['workspace'], session['role'])}
+            elif route == '/api/bank/tasks/catalog':
+                result = BankTasks(STORE).catalog(session['workspace'], session['role'])
+            elif route == '/api/bank/tasks/state':
+                result = BankTasks(STORE).state(session['workspace'], session['role'],
+                    (parse_qs(parsed.query).get('task_id') or [''])[0][:100])
+            elif route == '/api/bank/tasks/download':
+                item = BankTasks(STORE).download(session['workspace'], session['role'],
+                    (parse_qs(parsed.query).get('id') or [''])[0][:200])
+                kind = ('application/json; charset=utf-8' if item['filename'].endswith('.json')
+                        else 'text/plain; charset=utf-8')
+                self._send(200, item['content'].encode('utf-8'), kind,
+                           headers={'Content-Disposition': 'attachment; filename="%s"' % item['filename']})
+                return
             else:
                 self._send(404, {'error': 'not found'})
                 return
@@ -429,7 +451,35 @@ class Handler(BaseHTTPRequestHandler):
             rate_limit('write-ip:' + ip, 150, 60)
             route = path.replace('/api/ops/', '/api/')
             role, workspace = session['role'], session['workspace']
-            if route in ('/api/chat', '/api/bank/chat'):
+            if route == '/api/bank/tasks/chat':
+                rate_limit('chat-ip:' + ip, 60, 3600)
+                rate_limit('chat-workspace:' + workspace, 30, 3600)
+                base, key = CONFIG.get('OPENAI_API_BASE_URL'), CONFIG.get('OPENAI_API_KEY')
+                if not base or not key:
+                    raise DomainError('MODEL_UNAVAILABLE', '模型未配置，没有准备或执行业务变更。', 503)
+                if not MODEL_SLOTS.acquire(blocking=False):
+                    raise DomainError('BUSY', '模型忙，请稍后再试。', 429)
+                try:
+                    result = run_task_agent(session, body, BankTasks(STORE), STORE,
+                        lambda messages, tools: model_call(base, key, messages, tools))
+                    result['model'] = MODEL
+                except (TimeoutError, urllib.error.URLError, ValueError, KeyError, IndexError, TypeError):
+                    raise DomainError('MODEL_UNAVAILABLE', '办理暂停：模型暂不可用，没有执行业务变更。', 502)
+                finally:
+                    MODEL_SLOTS.release()
+            elif route == '/api/bank/tasks/start':
+                result = {'task': BankTasks(STORE).start(workspace, role, str(body.get('ticket_id') or '')),
+                          'proposal': None, 'report': None}
+            elif route == '/api/bank/tasks/answer':
+                result = BankTasks(STORE).answer(workspace, role, str(body.get('task_id') or ''),
+                    str(body.get('question_id') or ''), body.get('value'))
+            elif route == '/api/bank/tasks/verify':
+                result = BankTasks(STORE).verify(workspace, role, str(body.get('task_id') or ''))
+            elif route == '/api/bank/tasks/recover':
+                tasks, task_id = BankTasks(STORE), str(body.get('task_id') or '')
+                tasks.recover(workspace, role, task_id)
+                result = tasks.state(workspace, role, task_id)
+            elif route in ('/api/chat', '/api/bank/chat'):
                 rate_limit('chat-ip:' + ip, 60, 3600)
                 rate_limit('chat-workspace:' + workspace, 30, 3600)
                 if not MODEL_SLOTS.acquire(blocking=False):
@@ -460,11 +510,16 @@ class Handler(BaseHTTPRequestHandler):
             elif route == '/api/execute':
                 proposal_id = str(body.get('proposal_id') or '')
                 p = next((p for p in STORE.snapshot(workspace, role)['proposals'] if p['id'] == proposal_id), {})
-                executor = BankOperations(STORE) if p.get('scenario', '').startswith('bank_') else STORE
+                scenario = p.get('scenario', '')
+                executor = (BankTasks(STORE) if scenario == 'bank_task'
+                            else BankOperations(STORE) if scenario.startswith('bank_') else STORE)
                 result = executor.execute(workspace, role, proposal_id, str(body.get('digest') or ''))
                 session['bank_task_notes'] = {}
             elif route == '/api/cancel':
-                result = STORE.cancel(workspace, role, str(body.get('proposal_id') or ''))
+                proposal_id = str(body.get('proposal_id') or '')
+                p = next((p for p in STORE.snapshot(workspace, role)['proposals'] if p['id'] == proposal_id), {})
+                canceller = BankTasks(STORE) if p.get('scenario') == 'bank_task' else STORE
+                result = canceller.cancel(workspace, role, proposal_id)
                 session['bank_task_notes'] = {}
             elif route == '/api/rollback':
                 p = STORE.rollback(workspace, role, str(body.get('proposal_id') or ''))
