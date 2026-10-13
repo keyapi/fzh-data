@@ -52,3 +52,22 @@ SO 行的工单 = Work Order.sales_order_item == Sales Order Item.name
 - `supply_chain_visibility/key_test/key_test__so_chain.py`、`...__report__so_chain_overview__so_chain_overview.py`：工单归属改行级外键 + 兜底。
 - `EN_API/item_shipment_status.py` 的 `wos_for_line`：**同样 bug，已改**（优先 `sales_order_item`，`WO_FIELDS` 加该字段，`enrich_so_rows` 传 `line_id`）；单测 `test_wos_for_line_prefers_line_level_foreign_key` 锁定。
 - 实测验证（测试机 SO-24-00012 两条重复 `ND#` 行）：修正后各挂**自己**的那张工单（修复前会各挂 2 张）。
+
+## 5. 成品(KS)行的工单结构 + 工序分母（2026-10-13 生产实测补）
+
+**一条卖成品(KS)的 SO 行 → 最多 3 张工单，两把键挂接**：
+```
+SO Item (KS…)
+├─ 成品(KS) WO :  Work Order.sales_order_item    = 行 name
+├─ 皮壳(PK#) WO:  Work Order.fg_sales_order_item = 行 name   ← 不是 sales_order_item！
+└─ 内胆(ND#) WO:  同上
+```
+实测：883 行只有 1 张成品 WO（未拆皮壳/内胆）、199 行 1+1+1、不少行 0 张（库存发货）。
+**老数据的 `fg_sales_order_item` 多为空**（7761/8188 PK/ND 工单），近月才补齐。
+
+**工序进度分母必须排除返工分支**：`Operation.is_corrective_operation = 1` 的只有两道
+（**质检发现问题 / 通用返工**），正常批永不执行（完成数 0）。**不要**用 sequence_id 判（会误伤 翻面/质检）。
+`X/Y` 的 Y = `is_corrective_operation = 0` 的工序数。
+
+**「成品是否完工」判据**：主用 `Work Order.status='Completed'`（≈ produced_qty≥qty，实测 1212 张仅 1 张不一致）；
+探测「忘点完工」看同行皮壳/内胆兄弟工单是否全 Completed。**菲号数量/入库单不能单独当完工信号**。

@@ -41,6 +41,14 @@ function so_chain_link(doctype, name, label) {
          + so_chain_esc(label || name) + '</a>';
 }
 
+function so_chain_item_type(c) {
+    c = c || '';
+    if (c.indexOf('PK#') === 0) return '（皮壳）';
+    if (c.indexOf('ND#') === 0 || c.indexOf('DKND#') === 0) return '（内胆）';
+    if (/^KS/.test(c)) return '（成品）';
+    return '';
+}
+
 function so_chain_render($box, data) {
     let tOpenQty = 0;
     const rows = (data.lines || []).map(function (l, idx) {
@@ -48,11 +56,11 @@ function so_chain_render($box, data) {
         const plans = (l.plans || []).map(function (p) {
             return so_chain_link('Production Plan', p.pp, p.pp + (p.planned_qty ? ' (' + so_chain_num(p.planned_qty) + ')' : ''));
         }).join(', ') || '-';
-        // 摘要：工单/菲号数 + 完成工序合计
-        let od = 0, ot = 0;
-        (l.work_orders || []).forEach(function (w) { od += (w.ops_done || 0); ot += (w.ops_total || 0); });
-        const summary = (l.wo_count ? l.wo_count + ' 张' : '-') + ' · ' + (l.tn_count ? l.tn_count + ' 菲号' : '0 菲号')
-            + (ot ? '　<span class="text-muted">工序 ' + od + '/' + ot + '</span>' : '');
+        // 摘要：工单/菲号数 + 必经工序进度(最慢–最快菲号 / 总数, 已排除返工分支)
+        const pg = l.prog;
+        const progTxt = pg ? (pg.min === pg.max ? pg.max + '/' + pg.total : pg.min + '–' + pg.max + '/' + pg.total) : '';
+        const summary = (l.wo_count ? l.wo_count + ' 工单' : '-') + ' · ' + (l.tn_count ? l.tn_count + ' 菲号' : '0 菲号')
+            + (progTxt ? '　<span class="text-muted" title="必经工序完成数(最慢–最快菲号)/总数，已排除返工分支">工序 ' + progTxt + '</span>' : '');
         const chainCell = l.wo_count
             ? '<a href="#" class="so-chain-toggle" data-i="' + idx + '"><b>' + summary + '</b> <span class="so-chain-caret">▸</span></a>'
             : summary;
@@ -114,7 +122,9 @@ function so_chain_tree_html(line) {
     line.work_orders.forEach(function (w) {
         const tns = w.tracking_numbers || [];
         h += '<div style="border:1px solid var(--border-color);border-radius:6px;padding:8px;margin:6px 0">';
-        h += '<div><b>' + so_chain_link('Work Order', w.wo, w.wo) + '</b>　工单量 ' + so_chain_num(w.qty)
+        h += '<div><b>' + so_chain_link('Work Order', w.wo, w.wo) + '</b>'
+           + (w.item_code ? '　' + so_chain_link('Item', w.item_code, w.item_code) + so_chain_item_type(w.item_code) : '')
+           + '　工单量 ' + so_chain_num(w.qty)
            + '　完成 ' + so_chain_num(w.done) + '　头部状态 ' + so_chain_t(w.status)
            + (w.produced_head ? '（已产 ' + so_chain_num(w.produced_head) + '）' : '')
            + (w.ops_total ? '　工序 ' + w.ops_done + '/' + w.ops_total : '')
@@ -140,17 +150,18 @@ function so_chain_tree_html(line) {
 }
 
 function so_chain_tn_html(t, w) {
-    const total = (w.operations || []).length;
-    const doneSteps = (t.steps || []).filter(function (s) { return s.status === 'Completed'; }).length;
     let h = '<details open style="margin:4px 0;border-left:3px solid var(--border-color);padding-left:8px">'
         + '<summary style="cursor:pointer"><b>菲号 ' + so_chain_link('Tracking Number', t.tn, t.tn) + '</b>'
-        + '　数量 ' + so_chain_num(t.qty) + '　工序完成 ' + doneSteps + '/' + total
+        + '　数量 ' + so_chain_num(t.qty)
+        + (t.ops_total ? '　必经工序 ' + (t.ops_done || 0) + '/' + t.ops_total : '')
         + (t.iwo ? '　开料 ' + so_chain_link('Initial Work Order', t.iwo, t.iwo) : '') + '</summary>';
     if (t.steps && t.steps.length) {
         h += '<table class="table table-bordered" style="margin:4px 0;font-size:12px">'
            + '<thead><tr><th>工序</th><th>序</th><th>工序卡</th><th>状态</th><th>数量</th><th>完工时间</th></tr></thead><tbody>';
         t.steps.forEach(function (s) {
-            h += '<tr><td>' + so_chain_t(s.operation) + '</td><td>' + so_chain_esc(s.seq) + '</td>'
+            h += '<tr' + (s.corrective ? ' style="color:var(--text-muted)"' : '') + '>'
+               + '<td>' + so_chain_t(s.operation) + (s.corrective ? ' <span class="text-muted">(返工分支)</span>' : '') + '</td>'
+               + '<td>' + so_chain_esc(s.seq) + '</td>'
                + '<td>' + so_chain_link('Job Card', s.jc, s.jc) + '</td><td>' + so_chain_t(s.status) + '</td>'
                + '<td style="text-align:right">' + so_chain_num(s.qty) + '</td><td>' + so_chain_esc(s.end) + '</td></tr>';
         });

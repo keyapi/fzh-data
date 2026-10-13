@@ -34,6 +34,10 @@ def get_so_chain(sales_order):
     if not frappe.has_permission("Sales Order", "read", doc):
         frappe.throw("无权限读取该销售订单")
 
+    # 返工/纠正工序（如「质检发现问题」「通用返工」）—— 非常规必经，**不计入进度分母**
+    corrective = {r.name for r in frappe.get_all(
+        "Operation", filters={"is_corrective_operation": 1}, fields=["name"])}
+
     lines = []
     for it in doc.items:
         qty = _num(it.qty)
@@ -48,16 +52,17 @@ def get_so_chain(sales_order):
                where pp.docstatus = 1 and ppi.sales_order_item = %s""",
             it.name, as_dict=True)
 
-        # 工单 —— 行级外键 + 兜底
+        # 工单 —— **成品**用 sales_order_item；**皮壳/内胆**用 fg_sales_order_item（不是 sales_order_item！）。
+        # 一条成品(KS)行的标准结构 = 1 成品 + 1 皮壳(PK#) + 1 内胆(ND#)。兜底 production_plan_item。
         wos = frappe.db.sql(
-            """select w.name, w.qty, w.status, w.produced_qty
+            """select w.name, w.qty, w.status, w.produced_qty, w.production_item
                from `tabWork Order` w
                where w.docstatus = 1 and (
                    w.sales_order_item = %(line)s
-                   or (ifnull(w.sales_order_item, '') = '' and exists(
+                   or w.fg_sales_order_item = %(line)s
+                   or (ifnull(w.sales_order_item, '') = '' and ifnull(w.fg_sales_order_item, '') = '' and exists(
                         select 1 from `tabProduction Plan Item` ppi
                         where ppi.name = w.production_plan_item and ppi.sales_order_item = %(line)s))
-                   or (ifnull(w.sales_order_item, '') = '' and w.fg_sales_order_item = %(line)s)
                )
                order by w.name""", {"line": it.name}, as_dict=True)
         wo_names = [w.name for w in wos]
@@ -95,29 +100,39 @@ def get_so_chain(sales_order):
                 tn_by_wo.setdefault(t.work_order, []).append(t)
 
         wo_detail, line_produced, line_tn = [], 0.0, 0
+        prog_vals = []          # 每个菲号的「必经工序完成数」，用于算 line 的 最慢/最快
         for w in wos:
             ops = sorted(ops_by_wo.get(w.name, []), key=lambda o: (_num(o.sequence_id), o.operation or ""))
-            op_axis = [{"operation": o.operation, "seq": o.sequence_id, "status": o.status} for o in ops]
-            # 工单完成量 = 第一道工序完成量，空则各工序最大值
+            # 必经工序（排除返工/纠正分支）
+            req_ops = [o for o in ops if o.operation not in corrective]
+            op_axis = [{"operation": o.operation, "seq": o.sequence_id, "status": o.status,
+                        "corrective": o.operation in corrective} for o in ops]
+            # 工单完成量 = 第一道**必经**工序完成量，空则各必经工序最大值
             done_qty = 0.0
-            if ops:
-                first = jc_done.get((w.name, ops[0].operation), 0.0)
-                done_qty = first or max([jc_done.get((w.name, o.operation), 0.0) for o in ops] or [0.0])
+            if req_ops:
+                first = jc_done.get((w.name, req_ops[0].operation), 0.0)
+                done_qty = first or max([jc_done.get((w.name, o.operation), 0.0) for o in req_ops] or [0.0])
             line_produced += done_qty
 
-            # 菲号 → 逐工序 Job Card
+            # 菲号 → 逐工序 Job Card（同时算该菲号的必经工序完成数）
             tn_rows = []
             for t in tn_by_wo.get(w.name, []):
-                steps = []
+                steps, done_op_names = [], set()
                 for o in ops:
                     for x in jc_by_op.get((w.name, o.operation), []):
                         if x["tn"] == t.name:
                             steps.append({"operation": o.operation, "seq": o.sequence_id,
                                           "jc": x["name"], "status": x["status"],
-                                          "qty": x["qty"], "end": x["end"]})
+                                          "qty": x["qty"], "end": x["end"],
+                                          "corrective": o.operation in corrective})
+                            if x["status"] == "Completed" and o.operation not in corrective:
+                                done_op_names.add(o.operation)
+                t_done = len(done_op_names)
+                prog_vals.append((t_done, len(req_ops)))
                 tn_rows.append({"tn": t.name, "qty": _num(t.qty),
                                 "iwo": t.initial_work_order or "", "mat": t.so_materials or "",
-                                "fgw": t.finished_product_work_order or "", "steps": steps})
+                                "fgw": t.finished_product_work_order or "", "steps": steps,
+                                "ops_done": t_done, "ops_total": len(req_ops)})
             # 无菲号的工序卡（未分配菲号 / 成品工单报工）
             unassigned = []
             for o in ops:
@@ -128,13 +143,14 @@ def get_so_chain(sales_order):
                                            "qty": x["qty"], "end": x["end"]})
             jc_ends = [s["end"] for tn in tn_rows for s in tn["steps"] if s["end"]] + \
                       [u["end"] for u in unassigned if u["end"]]
-            # 完成的工序数（该工序下任一工序卡 Completed）
-            ops_done = sum(1 for o in ops
+            # 完成的必经工序数（该工序下任一工序卡 Completed）
+            ops_done = sum(1 for o in req_ops
                            if any(x["status"] == "Completed" for x in jc_by_op.get((w.name, o.operation), [])))
             line_tn += len(tn_rows)
             wo_detail.append({"wo": w.name, "qty": _num(w.qty), "status": w.status,
+                              "item_code": w.production_item,
                               "produced_head": _num(w.produced_qty), "done": done_qty,
-                              "ops_done": ops_done, "ops_total": len(ops),
+                              "ops_done": ops_done, "ops_total": len(req_ops),
                               "last_end": max(jc_ends) if jc_ends else "",
                               "operations": op_axis, "tracking_numbers": tn_rows,
                               "unassigned": unassigned})
@@ -175,6 +191,8 @@ def get_so_chain(sales_order):
             "plans": [{"pp": p.pp, "planned_qty": _num(p.planned_qty), "pending_qty": _num(p.pending_qty)}
                       for p in plans],
             "wo_count": len(wos), "tn_count": line_tn,
+            "prog": ({"min": min(p[0] for p in prog_vals), "max": max(p[0] for p in prog_vals),
+                      "total": max(p[1] for p in prog_vals)} if prog_vals else None),
             "delivery_date": str(it.delivery_date or "")[:10],
             "overdue_days": (getdate(today()) - getdate(it.delivery_date)).days
                             if it.delivery_date and open_qty > 0 else 0,
