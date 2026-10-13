@@ -1140,9 +1140,9 @@ $("login-form").onsubmit=async event=>{event.preventDefault();try{await loginAs(
 $("role").onchange=async()=>{if(busy){$("role").value=role();return;}const desired=$("role").value;$("role").value=role();try{await loginAs(desired,loginPassword||"demo2026",loginAccess);}catch(err){push({kind:"deny",text:err.message});$("login-dialog").showModal();}};
 push({kind:"bot",text:"告诉我要改什么，我会在页面填写，等你确认后保存。"});loadOps();
 </script>
-<script src="/bank_ui.js"></script>
+<script src="/bank_ui.js?v=20261014"></script>
 <script src="/assistant_panel.js"></script>
-<script src="/bank_task_ui.js"></script>
+<script src="/bank_task_ui.js?v=20261014"></script>
 <script src="/route_ui.js"></script>
 <script src="/rehearsal_ui.js"></script>
 </body>
