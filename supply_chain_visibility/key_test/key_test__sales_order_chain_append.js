@@ -141,15 +141,20 @@ function so_chain_toggle($box, idx, which, line) {
     const color = which === 'dn' ? SO_CHAIN_DN : SO_CHAIN_PROD;
     const title = so_chain_summary_text(line, which);
     const body = which === 'dn' ? so_chain_dn_html(line) : so_chain_tree_html(line);
-    // tab 造型：标题是「标签」(上/左/右边框，下边不封) 直接并进下面同色边框的明细面板 → 框线连贯
-    const box = '<div style="padding:2px 2px 8px">'
-        + '<div style="display:inline-block;margin-left:8px;padding:4px 14px;border:1px solid ' + color + ';'
-        + 'border-bottom:none;border-radius:6px 6px 0 0;color:' + color + ';font-weight:600;font-size:12px;'
-        + 'background:var(--fg-color)">' + title + ' <span style="opacity:.55">▾</span></div>'
-        + '<div style="border:1px solid ' + color + ';border-radius:0 6px 6px 6px;padding:8px 10px;margin-top:-1px">'
-        + body + '</div></div>';
+    // 让标签落在**被点列的下方**：按该列相对表格的左偏移做 margin-left
+    let off = 0;
+    try {
+        const $cell = $row.find('.so-chain-toggle[data-w="' + which + '"]').closest('td');
+        const $tbl = $row.closest('table');
+        off = Math.max(0, Math.round($cell.offset().left - $tbl.offset().left) - 8);
+    } catch (e) { off = 0; }
+    const tab = '<div style="display:inline-block;margin-left:' + off + 'px;margin-bottom:-1px;'
+        + 'padding:4px 14px;border:1px solid ' + color + ';border-bottom:none;border-radius:6px 6px 0 0;'
+        + 'color:' + color + ';font-weight:600;font-size:12px;background:var(--fg-color);position:relative;z-index:1">'
+        + title + ' <span style="opacity:.55">▾</span></div>';
+    const panel = '<div style="border:1px solid ' + color + ';border-radius:0 6px 6px 6px;padding:8px 10px">' + body + '</div>';
     $row.after('<tr class="so-chain-inline" data-key="' + idx + '" data-tab="' + which + '">'
-        + '<td colspan="' + SO_CHAIN_COLS + '" style="padding:2px;border-top:none">' + box + '</td></tr>');
+        + '<td colspan="' + SO_CHAIN_COLS + '" style="padding:2px 8px;border-top:none">' + tab + panel + '</td></tr>');
     so_chain_set_caret($box, idx, which);
 }
 
