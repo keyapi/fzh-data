@@ -83,8 +83,8 @@ function so_chain_render($box, data) {
             + '<td style="text-align:right">' + so_chain_num(l.open_qty) + '</td>'
             + '<td>' + dd + '</td>'
             + '<td><span class="indicator-pill ' + stageColor + '">' + l.stage + ' ' + so_chain_esc(l.substate) + '</span></td>'
-            + '<td>' + prodCell + '</td>'
-            + '<td>' + dnCell + '</td>'
+            + '<td class="so-chain-cell">' + prodCell + '</td>'
+            + '<td class="so-chain-cell">' + dnCell + '</td>'
             + '</tr>';
     }).join('');
     const html = '<div style="overflow:auto">'
@@ -130,31 +130,37 @@ function so_chain_summary_text(l, which) {
         + (progTxt ? '　工序 ' + progTxt : '');
 }
 
-// 同一行只放一个展开框：**框的标题就是被点的那块摘要文本**，标题与明细连成一体(浅底+细色条)，框住明细
+function so_chain_cell($row, which) {
+    return $row.children('td.so-chain-cell').eq(which === 'dn' ? 1 : 0);
+}
+function so_chain_clear_cells($box) {
+    $box.find('td.so-chain-cell').each(function () {
+        this.style.border = ''; this.style.borderBottom = ''; this.style.background = '';
+        this.style.borderRadius = ''; this.style.position = ''; this.style.zIndex = '';
+    });
+}
+
+// 点列 → **该单元格本身**上色框线(下边不封) + 下面同色边框明细面板，连成一体(模拟标签页)；
+// 点同列收起(取消框线)、点另一列切换。
 function so_chain_toggle($box, idx, which, line) {
     const $row = $box.find('tr[data-idx="' + idx + '"]');
     const $ex = $box.find('tr.so-chain-inline[data-key="' + idx + '"]');
-    if ($ex.length && $ex.attr('data-tab') === which) {
-        $ex.remove(); so_chain_set_caret($box, idx, null); return;
+    if ($ex.length && $ex.attr('data-tab') === which) {          // 收起
+        $ex.remove(); so_chain_clear_cells($box); so_chain_set_caret($box, idx, null); return;
     }
     if ($ex.length) { $ex.remove(); }
+    so_chain_clear_cells($box);                                   // 切换：先清旧高亮
     const color = which === 'dn' ? SO_CHAIN_DN : SO_CHAIN_PROD;
-    const title = so_chain_summary_text(line, which);
     const body = which === 'dn' ? so_chain_dn_html(line) : so_chain_tree_html(line);
-    // 让标签落在**被点列的下方**：按该列相对表格的左偏移做 margin-left
-    let off = 0;
-    try {
-        const $cell = $row.find('.so-chain-toggle[data-w="' + which + '"]').closest('td');
-        const $tbl = $row.closest('table');
-        off = Math.max(0, Math.round($cell.offset().left - $tbl.offset().left) - 8);
-    } catch (e) { off = 0; }
-    const tab = '<div style="display:inline-block;margin-left:' + off + 'px;margin-bottom:-1px;'
-        + 'padding:4px 14px;border:1px solid ' + color + ';border-bottom:none;border-radius:6px 6px 0 0;'
-        + 'color:' + color + ';font-weight:600;font-size:12px;background:var(--fg-color);position:relative;z-index:1">'
-        + title + ' <span style="opacity:.55">▾</span></div>';
-    const panel = '<div style="border:1px solid ' + color + ';border-radius:0 6px 6px 6px;padding:8px 10px">' + body + '</div>';
+    // 被点单元格整体上色（上/左/右边框 + 圆角，下边留空 → 与下面面板连成一体）
+    so_chain_cell($row, which).css({
+        'border': '1px solid ' + color, 'border-bottom': 'none',
+        'background': 'var(--fg-color)', 'border-radius': '6px 6px 0 0',
+        'position': 'relative', 'z-index': 1
+    });
+    const panel = '<div style="border:1px solid ' + color + ';border-radius:0 0 6px 6px;padding:8px 10px">' + body + '</div>';
     $row.after('<tr class="so-chain-inline" data-key="' + idx + '" data-tab="' + which + '">'
-        + '<td colspan="' + SO_CHAIN_COLS + '" style="padding:2px 8px;border-top:none">' + tab + panel + '</td></tr>');
+        + '<td colspan="' + SO_CHAIN_COLS + '" style="padding:0;border:none">' + panel + '</td></tr>');
     so_chain_set_caret($box, idx, which);
 }
 
