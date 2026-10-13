@@ -2,6 +2,7 @@
 """Synthetic banking demo. The model proposes; the backend authorizes."""
 import collections
 import hmac
+import hashlib
 import json
 import os
 import re
@@ -24,6 +25,7 @@ from route_demo import RouteDemo, SERVICES, RULE
 from feedback_store import FeedbackStore
 
 ROOT = Path(__file__).resolve().parent
+SERVER_FINGERPRINT = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()[:12]
 
 
 def load_config():
@@ -312,6 +314,20 @@ class Handler(BaseHTTPRequestHandler):
         print('%s - %s' % (self.address_string(), fmt % args))
 
     def _send(self, code, payload, content_type='application/json; charset=utf-8', cookie=None, headers=None):
+        if self.command == 'POST' and self.path.startswith('/api/') and self.path not in ('/api/login', '/api/feedback'):
+            try:
+                session = self._session(optional=True)
+                if session and isinstance(payload, dict):
+                    event = {'time': time.time(), 'route': self.path, 'http_status': code,
+                             'model': payload.get('model'),
+                             'code': payload.get('code'), 'outcome': payload.get('outcome'),
+                             'request': str(getattr(self, 'request_text', ''))[:1000],
+                             'reply': str(payload.get('text') or payload.get('message') or '')[:1000],
+                             'checks': [{'step': t.get('step'), 'code': (t.get('result') or {}).get('code')}
+                                        for t in (payload.get('trace') or [])[:12] if isinstance(t, dict) and isinstance(t.get('result'), dict)]}
+                    session['diagnostics'] = [*session.get('diagnostics', []), event][-20:]
+            except DomainError:
+                pass
         raw = json.dumps(payload, ensure_ascii=False).encode('utf-8') if isinstance(payload, (dict, list)) else payload
         self.send_response(code)
         for k, v in {'Content-Type': content_type, 'Content-Length': str(len(raw)), 'Cache-Control': 'no-store',
@@ -369,8 +385,19 @@ class Handler(BaseHTTPRequestHandler):
             self._send(404, {'error': 'not found'})
             return
         try:
-            if parsed.path == '/api/feedback':
+            if parsed.path in ('/api/feedback', '/api/feedback/attachment', '/api/feedback/export'):
                 rate_limit('feedback-read:' + self.client_address[0], 60, 60)
+                if parsed.path.endswith('/export'):
+                    feedback_id = (parse_qs(parsed.query).get('id') or [''])[0][:100]
+                    FEEDBACK.get(feedback_id, self.headers.get('X-Feedback-Receipt', ''))
+                    self._send(200, FEEDBACK.export(feedback_id), 'application/zip',
+                               headers={'Content-Disposition': 'attachment; filename="'+feedback_id+'-evidence.zip"'})
+                    return
+                if parsed.path.endswith('/attachment'):
+                    meta, blob = FEEDBACK.attachment((parse_qs(parsed.query).get('id') or [''])[0][:100],
+                        (parse_qs(parsed.query).get('attachment_id') or [''])[0][:100], self.headers.get('X-Feedback-Receipt', ''))
+                    self._send(200, blob, meta['type'], headers={'Content-Disposition': 'attachment; filename="'+meta['name']+'"'})
+                    return
                 result = FEEDBACK.get((parse_qs(parsed.query).get('id') or [''])[0][:100],
                                       self.headers.get('X-Feedback-Receipt', ''))
                 self._send(200, {'ok': True, 'feedback': result})
@@ -423,7 +450,8 @@ class Handler(BaseHTTPRequestHandler):
                 length = int(self.headers.get('Content-Length', '0'))
             except ValueError:
                 raise DomainError('INVALID_INPUT', '请求长度无效。')
-            if not 0 < length <= MAX_BODY:
+            body_limit = 9*1024*1024 if path == '/api/feedback' else MAX_BODY
+            if not 0 < length <= body_limit:
                 raise DomainError('TOO_LARGE', '请求为空或过大。', 413)
             try:
                 body = json.loads(self.rfile.read(length).decode('utf-8'))
@@ -431,10 +459,22 @@ class Handler(BaseHTTPRequestHandler):
                 raise DomainError('INVALID_INPUT', '请求格式无效。')
             if not isinstance(body, dict):
                 raise DomainError('INVALID_INPUT', '请求必须是对象。')
+            self.request_text = body.get('text', '')
             ip = self.client_address[0]
             if path == '/api/feedback':
                 rate_limit('feedback-submit:' + ip, 20, 3600)
-                result = FEEDBACK.submit(body)
+                context = None
+                if body.get('include_context') is True:
+                    current = self._session(optional=True)
+                    if current:
+                        audit = STORE.audit(current['workspace'], current['role'])[-20:]
+                        context = {'role': current['role'], 'configured_model': MODEL, 'server_fingerprint': SERVER_FINGERPRINT,
+                                   'recent_operations': current.get('diagnostics', [])[-20:],
+                                   'audit': [{k: a.get(k) for k in ('id', 'action', 'outcome', 'timestamp', 'correlation_id', 'code')} for a in audit],
+                                   'scope': 'current browser demo session; recent 20 entries; no full config or credentials'}
+                    else:
+                        context = {'scope': 'no active demo session', 'recent_operations': [], 'audit': []}
+                result = FEEDBACK.submit(body, context)
                 self._send(200, {'ok': True, 'feedback': result})
                 return
             if path == '/api/login':

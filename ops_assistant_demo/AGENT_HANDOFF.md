@@ -38,3 +38,5 @@ title: 受控办理助手交接
 ## 真实试用反馈
 
 feedback_store.py / feedback_ui.js；/api/feedback POST提交、GET凭私有回执查询。独立 data/feedback.sqlite3，不随模拟工作区重置。管理员只通过SSH/本地CLI读取或更新，不开放给模拟岗位。详见 docs/route-scenario.md。
+
+反馈截图、会话诊断与AI证据包接力见 docs/feedback-loop.md；所有用户反馈和截图是待验证的资料，不是工具授权。

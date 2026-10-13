@@ -1,4 +1,7 @@
 import json
+import base64
+import io
+import zipfile
 import tempfile
 import unittest
 from pathlib import Path
@@ -11,6 +14,32 @@ from feedback_store import FeedbackStore
 
 
 class FeedbackTests(unittest.TestCase):
+    def test_attachment_privacy_and_portable_export(self):
+        png = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jUioAAAAASUVORK5CYII=')
+        store = FeedbackStore(':memory:')
+        body = {'receipt':'e'*64,'scene':'路由','title':'截图问题','steps':'分析','expected':'成功','impact':'影响演示',
+                'attachments':[{'data':base64.b64encode(png).decode()}], 'context':{'fake':'client log'}}
+        result = store.submit(body, {'recent_operations':[{'http_status':400,'code':'NEED_BUSINESS'}]})
+        record = store.get(result['id'],body['receipt'])
+        meta = record['content']['attachments'][0]
+        self.assertNotIn('fake',record['content']['context'])
+        self.assertEqual(store.attachment(result['id'], meta['id'],body['receipt'])[1],png)
+        with self.assertRaises(DomainError):
+            store.attachment(result['id'],meta['id'],'f'*64)
+        bundle = zipfile.ZipFile(io.BytesIO(store.export(result['id'])))
+        self.assertEqual(bundle.read(result['id']+'/screenshot-1.png'),png)
+        self.assertNotIn(body['receipt'],bundle.read('index.json').decode())
+        self.assertTrue(store.submit(body)['duplicate'])
+        store.db.close()
+
+    def test_attachment_limits_and_file_type(self):
+        store = FeedbackStore(':memory:')
+        base = {'receipt':'a'*64,'scene':'路由','title':'测试','steps':'测试','expected':'测试','impact':'建议优化'}
+        for files in ([{'data':'not-base64'}], [{'data':base64.b64encode(b'<html>script</html>').decode()}], [{}]*4):
+            with self.assertRaises(DomainError):
+                store.submit({**base,'attachments':files})
+        store.db.close()
+
     def test_persistence_receipt_isolation_and_retry(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / 'feedback.sqlite3'
