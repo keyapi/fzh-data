@@ -54,11 +54,8 @@ function so_chain_render($box, data) {
     let tOpenQty = 0;
     const rows = (data.lines || []).map(function (l, idx) {
         tOpenQty += Number(l.open_qty || 0);
-        // 生产链条摘要
-        const pg = l.prog;
-        const progTxt = pg ? (pg.min === pg.max ? pg.max + '/' + pg.total : pg.min + '–' + pg.max + '/' + pg.total) : '';
-        const prodSummary = (l.wo_count ? l.wo_count + ' 工单' : '无工单') + ' · ' + (l.tn_count ? l.tn_count + ' 菲号' : '0 菲号')
-            + (progTxt ? '　<span class="text-muted" title="必经工序完成数(最慢–最快菲号)/总数，已排除返工分支">工序 ' + progTxt + '</span>' : '');
+        // 生产链条摘要（文本 = 展开框标题）
+        const prodSummary = so_chain_summary_text(l, 'prod');
         const forgot = (l.forgot_complete || []);
         const forgotBadge = forgot.length
             ? ' <span class="indicator-pill yellow" title="成品工单未完工，但同行的皮壳/内胆工单已全部完成：' + so_chain_esc(forgot.join(', ')) + '">忘点完工?</span>'
@@ -68,13 +65,9 @@ function so_chain_render($box, data) {
             ? '<a href="#" class="so-chain-toggle" data-i="' + idx + '" data-w="prod" style="color:' + SO_CHAIN_PROD + '"><b>' + prodSummary + '</b> <span class="so-chain-caret">▸</span></a>'
               + ' ' + dialogIcon(idx) + forgotBadge
             : prodSummary + forgotBadge;
-        // 出库摘要
+        // 出库摘要（文本 = 展开框标题）
         const dns = l.dns || [];
-        const shipSum = dns.filter(function (d) { return d.docstatus === 1 && !d.is_return; }).reduce(function (a, d) { return a + Number(d.qty || 0); }, 0);
-        const retSum = dns.filter(function (d) { return d.docstatus === 1 && d.is_return; }).reduce(function (a, d) { return a + Number(d.qty || 0); }, 0);
-        const dnSummary = dns.length
-            ? dns.length + ' 单 · 已发 ' + so_chain_num(shipSum) + (retSum ? '（退 ' + so_chain_num(-retSum) + '）' : '')
-            : '无';
+        const dnSummary = so_chain_summary_text(l, 'dn');
         const dnCell = dns.length
             ? '<a href="#" class="so-chain-toggle" data-i="' + idx + '" data-w="dn" style="color:' + SO_CHAIN_DN + '"><b>' + dnSummary + '</b> <span class="so-chain-caret">▸</span></a> ' + dialogIcon(idx)
             : dnSummary;
@@ -122,7 +115,22 @@ function so_chain_set_caret($box, idx, which) {
     $row.find('.so-chain-toggle[data-w="' + which + '"] .so-chain-caret').text('▾');
 }
 
-// 同一行只放一个展开框；框的**标题就是列名**(绿色=生产链条 / 蓝色=出库)，与列同色、紧贴其下
+// 摘要文本（列里显示的、也是展开框的**标题**）
+function so_chain_summary_text(l, which) {
+    if (which === 'dn') {
+        const dns = l.dns || [];
+        if (!dns.length) return '无出库';
+        const ship = dns.filter(function (d) { return d.docstatus === 1 && !d.is_return; }).reduce(function (a, d) { return a + Number(d.qty || 0); }, 0);
+        const ret = dns.filter(function (d) { return d.docstatus === 1 && d.is_return; }).reduce(function (a, d) { return a + Number(d.qty || 0); }, 0);
+        return dns.length + ' 单 · 已发 ' + so_chain_num(ship) + (ret ? '（退 ' + so_chain_num(-ret) + '）' : '');
+    }
+    const pg = l.prog;
+    const progTxt = pg ? (pg.min === pg.max ? pg.max + '/' + pg.total : pg.min + '–' + pg.max + '/' + pg.total) : '';
+    return (l.wo_count ? l.wo_count + ' 工单' : '无工单') + ' · ' + (l.tn_count ? l.tn_count + ' 菲号' : '0 菲号')
+        + (progTxt ? '　工序 ' + progTxt : '');
+}
+
+// 同一行只放一个展开框：**框的标题就是被点的那块摘要文本**，标题与明细连成一体(浅底+细色条)，框住明细
 function so_chain_toggle($box, idx, which, line) {
     const $row = $box.find('tr[data-idx="' + idx + '"]');
     const $ex = $box.find('tr.so-chain-inline[data-key="' + idx + '"]');
@@ -131,16 +139,15 @@ function so_chain_toggle($box, idx, which, line) {
     }
     if ($ex.length) { $ex.remove(); }
     const color = which === 'dn' ? SO_CHAIN_DN : SO_CHAIN_PROD;
-    const title = which === 'dn' ? '出库' : '生产链条';
+    const title = so_chain_summary_text(line, which);
     const body = which === 'dn' ? so_chain_dn_html(line) : so_chain_tree_html(line);
-    // 标题框：顶部 3px 同色边 + 同色标题条（标题=列名），下方框住明细；紧贴本行(无间隙)
-    const box = '<div style="border:1px solid ' + color + ';border-top:3px solid ' + color
-        + ';border-radius:0 0 6px 6px;overflow:hidden">'
-        + '<div style="background:' + color + ';color:#fff;padding:3px 10px;font-weight:600;font-size:12px">'
-        + title + (which === 'prod' ? '（生产计划 · 工单 · 菲号 · 工序卡）' : '（出库单明细）') + '</div>'
+    const box = '<div style="border:1px solid #d1d8dd;border-radius:6px;overflow:hidden">'
+        + '<div style="background:#f8f9fa;border-left:3px solid ' + color + ';border-bottom:1px solid #d1d8dd;'
+        + 'padding:5px 10px;color:' + color + ';font-weight:600;font-size:12px">'
+        + title + ' <span style="opacity:.55">▾</span></div>'
         + '<div style="padding:8px 10px">' + body + '</div></div>';
     $row.after('<tr class="so-chain-inline" data-key="' + idx + '" data-tab="' + which + '">'
-        + '<td colspan="' + SO_CHAIN_COLS + '" style="padding:0;border-top:none">' + box + '</td></tr>');
+        + '<td colspan="' + SO_CHAIN_COLS + '" style="padding:2px;border-top:none">' + box + '</td></tr>');
     so_chain_set_caret($box, idx, which);
 }
 
