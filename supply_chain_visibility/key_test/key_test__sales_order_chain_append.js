@@ -1,11 +1,12 @@
 // ─────────────────────────────────────────────────────────────────────────
 // 「供应链链条」内嵌 SO 表单 —— 追加到 key_test/public/js/sales_order.js **末尾**
 //
-// 形态：一行一摘要 + 行内展开(accordion) + 弹窗(小图标)做深度。
-//   主表列：物料 | 客户码 | 订单量 | 已发 | 未发 | 交期 | 阶段 | 生产计划 | 生产链条 | 销售出库
-//   「生产链条」= 工单 → 菲号(默认展开) → 逐工序 Job Card；「销售出库」= DN 明细(可能一对多/含退货)。
-//   两列各自独立展开。层 级依据：菲号=一批(组)皮壳/半成品实物流身份证，贯穿工单全部工序。
-// 状态/选择值一律过 `__()` 取 ERPNext 翻译。容器用 frm.dashboard.parent。
+// 形态（列头即标签）：
+//   主表列：物料 | 客户码 | 订单量 | 已发 | 未发 | 交期 | 阶段 | 生产链条 | 出库
+//   点「生产链条」→ 该列**下方**展开一个**绿色标题框**(标题就是列名)，框住 生产计划 + 工单→菲号→工序卡；
+//   点「出库」→ 蓝色标题框，框住出库明细。同一行**只一个框**，点另一列即切换到它（点同一列收起）。
+//   两列都有 ⤢（弹窗一次装两块）。
+// 层级依据：菲号=一批(组)皮壳/半成品实物流身份证，贯穿工单全部工序。状态值过 __() 翻译。
 // ─────────────────────────────────────────────────────────────────────────
 frappe.ui.form.on('Sales Order', {
     refresh: function (frm) {
@@ -27,7 +28,9 @@ frappe.ui.form.on('Sales Order', {
     }
 });
 
-const SO_CHAIN_COLS = 10;
+const SO_CHAIN_PROD = '#0d7a3f';   // 生产链条 主色
+const SO_CHAIN_DN = '#0a6ed1';     // 出库 主色
+const SO_CHAIN_COLS = 9;
 function so_chain_esc(s) { return frappe.utils.escape_html(s == null ? '' : String(s)); }
 function so_chain_num(v) { const f = Number(v || 0); return (Math.round(f * 1000) / 1000).toString(); }
 function so_chain_t(s) { return so_chain_esc(s == null ? '' : __(String(s))); }
@@ -51,9 +54,6 @@ function so_chain_render($box, data) {
     let tOpenQty = 0;
     const rows = (data.lines || []).map(function (l, idx) {
         tOpenQty += Number(l.open_qty || 0);
-        const plans = (l.plans || []).map(function (p) {
-            return so_chain_link('Production Plan', p.pp, p.pp + (p.planned_qty ? ' (' + so_chain_num(p.planned_qty) + ')' : ''));
-        }).join(', ') || '-';
         // 生产链条摘要
         const pg = l.prog;
         const progTxt = pg ? (pg.min === pg.max ? pg.max + '/' + pg.total : pg.min + '–' + pg.max + '/' + pg.total) : '';
@@ -63,11 +63,12 @@ function so_chain_render($box, data) {
         const forgotBadge = forgot.length
             ? ' <span class="indicator-pill yellow" title="成品工单未完工，但同行的皮壳/内胆工单已全部完成：' + so_chain_esc(forgot.join(', ')) + '">忘点完工?</span>'
             : '';
+        const dialogIcon = function (i) { return '<a href="#" class="so-chain-dialog" data-i="' + i + '" title="弹窗看全图(生产+出库)" style="text-decoration:none">⤢</a>'; };
         const prodCell = l.wo_count
-            ? '<a href="#" class="so-chain-toggle" data-i="' + idx + '" data-w="prod" style="color:#0d7a3f"><b>' + prodSummary + '</b> <span class="so-chain-caret">▸</span></a>'
-              + ' <a href="#" class="so-chain-dialog" data-i="' + idx + '" title="弹窗看大图" style="text-decoration:none">⤢</a>' + forgotBadge
+            ? '<a href="#" class="so-chain-toggle" data-i="' + idx + '" data-w="prod" style="color:' + SO_CHAIN_PROD + '"><b>' + prodSummary + '</b> <span class="so-chain-caret">▸</span></a>'
+              + ' ' + dialogIcon(idx) + forgotBadge
             : prodSummary + forgotBadge;
-        // 出库摘要（列名简称「出库」）
+        // 出库摘要
         const dns = l.dns || [];
         const shipSum = dns.filter(function (d) { return d.docstatus === 1 && !d.is_return; }).reduce(function (a, d) { return a + Number(d.qty || 0); }, 0);
         const retSum = dns.filter(function (d) { return d.docstatus === 1 && d.is_return; }).reduce(function (a, d) { return a + Number(d.qty || 0); }, 0);
@@ -75,7 +76,7 @@ function so_chain_render($box, data) {
             ? dns.length + ' 单 · 已发 ' + so_chain_num(shipSum) + (retSum ? '（退 ' + so_chain_num(-retSum) + '）' : '')
             : '无';
         const dnCell = dns.length
-            ? '<a href="#" class="so-chain-toggle" data-i="' + idx + '" data-w="dn" style="color:#0a6ed1"><b>' + dnSummary + '</b> <span class="so-chain-caret">▸</span></a>'
+            ? '<a href="#" class="so-chain-toggle" data-i="' + idx + '" data-w="dn" style="color:' + SO_CHAIN_DN + '"><b>' + dnSummary + '</b> <span class="so-chain-caret">▸</span></a> ' + dialogIcon(idx)
             : dnSummary;
         const od2 = Number(l.overdue_days || 0);
         const dd = od2 > 0 ? '<span class="text-danger" title="已过交付日期 ' + od2 + ' 天">' + so_chain_esc(l.delivery_date) + ' (超' + od2 + '天)</span>'
@@ -89,7 +90,6 @@ function so_chain_render($box, data) {
             + '<td style="text-align:right">' + so_chain_num(l.open_qty) + '</td>'
             + '<td>' + dd + '</td>'
             + '<td><span class="indicator-pill ' + stageColor + '">' + l.stage + ' ' + so_chain_esc(l.substate) + '</span></td>'
-            + '<td>' + plans + '</td>'
             + '<td>' + prodCell + '</td>'
             + '<td>' + dnCell + '</td>'
             + '</tr>';
@@ -97,12 +97,12 @@ function so_chain_render($box, data) {
     const html = '<div style="overflow:auto">'
         + '<table class="table table-bordered" style="margin:0">'
         + '<thead><tr><th>订单行物料</th><th>客户物料号</th><th>订单量</th><th>已发</th><th>未发</th>'
-        + '<th>交期</th><th>阶段</th><th>生产计划</th><th>生产链条</th><th>出库</th></tr></thead>'
+        + '<th>交期</th><th>阶段</th><th>生产链条</th><th>出库</th></tr></thead>'
         + '<tbody>' + rows + '</tbody>'
         + '<tfoot><tr><th colspan="4" style="text-align:right">未发合计</th>'
-        + '<th style="text-align:right">' + so_chain_num(tOpenQty) + '</th><th colspan="5"></th></tr></tfoot></table>'
+        + '<th style="text-align:right">' + so_chain_num(tOpenQty) + '</th><th colspan="4"></th></tr></tfoot></table>'
         + '<div class="text-muted" style="margin-top:4px;font-size:11px">'
-        + '点绿色「生产链条」＝展开 工单→菲号→工序卡；点蓝色「出库」＝展开 出库单明细。两列各自独立展开；⤢ 弹窗看大图。'
+        + '点「生产链条」＝展开 生产计划+工单→菲号→工序卡；点「出库」＝展开 出库单明细；同区切换。⤢ 弹窗看全图。'
         + '完成量取第一道工序(不跨工序求和)；已发按出库单净额(含退货抵扣)。</div></div>';
     $box.html(html);
 
@@ -110,67 +110,55 @@ function so_chain_render($box, data) {
         e.preventDefault();
         so_chain_toggle($box, $(this).data('i'), $(this).data('w'), data.lines[$(this).data('i')]);
     });
-    // 标签切换（一个容器内切 生产链条 / 出库）
-    $box.off('click.sochaintab').on('click.sochaintab', '.so-chain-tab', function () {
-        const $wrap = $(this).closest('.so-chain-tabwrap');
-        const $inline = $wrap.closest('tr.so-chain-inline');
-        const idx = parseInt($inline.attr('data-key'), 10);
-        const t = $(this).data('t');
-        const line = data.lines[idx];
-        $wrap.html(so_chain_tabs_html(t) + '<div class="so-chain-tabbody">' + so_chain_panel_html(line, t) + '</div>');
-        $inline.attr('data-tab', t);
-        so_chain_set_caret($box.find('tr[data-idx="' + idx + '"]'), t);
-    });
     $box.find('.so-chain-dialog').on('click', function (e) {
         e.preventDefault();
         so_chain_show_detail(data.lines[$(this).data('i')], data.sales_order);
     });
 }
 
-// 单个标签的内容面板（左侧色条 + 标题，明显区别于普通子表）
-function so_chain_panel_html(line, which) {
-    const accent = which === 'dn' ? '#0a6ed1' : '#0d7a3f';
-    const inner = which === 'dn' ? so_chain_dn_html(line) : so_chain_tree_html(line);
-    return '<div style="border-left:4px solid ' + accent + ';background:#f8f9fa;border-radius:0 6px 6px 0;padding:8px 12px">'
-        + inner + '</div>';
-}
-// 标签栏（生产链条=绿 / 出库=蓝）
-function so_chain_tabs_html(active) {
-    const mk = function (t, label, color) {
-        const on = t === active;
-        return '<button class="so-chain-tab" data-t="' + t + '" style="cursor:pointer;border:none;'
-            + 'border-bottom:2px solid ' + (on ? color : 'transparent') + ';background:none;'
-            + 'color:' + (on ? color : 'var(--text-muted)') + ';font-weight:' + (on ? '600' : '400') + ';'
-            + 'padding:4px 12px;font-size:13px">' + label + '</button>';
-    };
-    return '<div style="border-bottom:1px solid var(--border-color);margin-bottom:6px">'
-        + mk('prod', '生产链条', '#0d7a3f') + mk('dn', '出库', '#0a6ed1') + '</div>';
-}
-function so_chain_set_caret($row, which) {
+function so_chain_set_caret($box, idx, which) {
+    const $row = $box.find('tr[data-idx="' + idx + '"]');
     $row.find('.so-chain-caret').text('▸');
     $row.find('.so-chain-toggle[data-w="' + which + '"] .so-chain-caret').text('▾');
 }
 
-// 同一行只放**一个**展开容器；点「生产链条」「出库」任一 → 打开容器并切到对应标签
+// 同一行只放一个展开框；框的**标题就是列名**(绿色=生产链条 / 蓝色=出库)，与列同色、紧贴其下
 function so_chain_toggle($box, idx, which, line) {
     const $row = $box.find('tr[data-idx="' + idx + '"]');
     const $ex = $box.find('tr.so-chain-inline[data-key="' + idx + '"]');
-    if ($ex.length && $ex.attr('data-tab') === which) {   // 同一列再点 → 收起
-        $ex.remove(); $row.find('.so-chain-caret').text('▸'); return;
+    if ($ex.length && $ex.attr('data-tab') === which) {
+        $ex.remove(); so_chain_set_caret($box, idx, null); return;
     }
     if ($ex.length) { $ex.remove(); }
+    const color = which === 'dn' ? SO_CHAIN_DN : SO_CHAIN_PROD;
+    const title = which === 'dn' ? '出库' : '生产链条';
+    const body = which === 'dn' ? so_chain_dn_html(line) : so_chain_tree_html(line);
+    // 标题框：顶部 3px 同色边 + 同色标题条（标题=列名），下方框住明细；紧贴本行(无间隙)
+    const box = '<div style="border:1px solid ' + color + ';border-top:3px solid ' + color
+        + ';border-radius:0 0 6px 6px;overflow:hidden">'
+        + '<div style="background:' + color + ';color:#fff;padding:3px 10px;font-weight:600;font-size:12px">'
+        + title + (which === 'prod' ? '（生产计划 · 工单 · 菲号 · 工序卡）' : '（出库单明细）') + '</div>'
+        + '<div style="padding:8px 10px">' + body + '</div></div>';
     $row.after('<tr class="so-chain-inline" data-key="' + idx + '" data-tab="' + which + '">'
-        + '<td colspan="' + SO_CHAIN_COLS + '" style="background:var(--fg-color);padding:6px 8px">'
-        + '<div class="so-chain-tabwrap">' + so_chain_tabs_html(which)
-        + '<div class="so-chain-tabbody">' + so_chain_panel_html(line, which) + '</div></div></td></tr>');
-    so_chain_set_caret($row, which);
+        + '<td colspan="' + SO_CHAIN_COLS + '" style="padding:0;border-top:none">' + box + '</td></tr>');
+    so_chain_set_caret($box, idx, which);
 }
 
-// 生产链条：工单 → 菲号(默认展开) → 逐工序 Job Card
+// 生产链条面板内容：生产计划 + 工单→菲号→工序卡
 function so_chain_tree_html(line) {
-    if (!line.work_orders || !line.work_orders.length) return '<div class="text-muted">无工单</div>';
+    let h = '';
+    if (line.plans && line.plans.length) {
+        h += '<div style="margin-bottom:6px"><b>生产计划</b>：' + line.plans.map(function (p) {
+            return so_chain_link('Production Plan', p.pp, p.pp)
+                 + (p.planned_qty ? ' (计划 ' + so_chain_num(p.planned_qty) + ')' : '')
+                 + (p.pending_qty ? '（待产 ' + so_chain_num(p.pending_qty) + '）' : '');
+          }).join('、') + '</div>';
+    }
+    if (!line.work_orders || !line.work_orders.length) {
+        return h + '<div class="text-muted">无工单</div>';
+    }
     const forgot = line.forgot_complete || [];
-    let h = '<div style="padding:2px 4px">';
+    h += '<div style="padding:2px 0">';
     line.work_orders.forEach(function (w) {
         const tns = w.tracking_numbers || [];
         const isForgot = forgot.indexOf(w.wo) >= 0;
@@ -230,11 +218,10 @@ function so_chain_tn_html(t, w) {
     return h + '</details>';
 }
 
-// 销售出库：DN 明细（一对多 / 含退货）
 function so_chain_dn_html(line) {
     const dns = line.dns || [];
     if (!dns.length) return '<div class="text-muted">无销售出库</div>';
-    let h = '<table class="table table-bordered" style="margin:4px 0;font-size:12px">'
+    let h = '<table class="table table-bordered" style="margin:0;font-size:12px">'
         + '<thead><tr><th>出库单</th><th>日期</th><th>状态</th><th>数量</th><th>类型</th></tr></thead><tbody>';
     dns.forEach(function (d) {
         const ship = (d.docstatus === 1) && !d.is_return;
@@ -246,8 +233,7 @@ function so_chain_dn_html(line) {
            + '<td style="text-align:right">' + qtyTxt + '</td>'
            + '<td>' + (d.is_return ? '退货(抵扣)' : (ship ? '出库' : '—')) + '</td></tr>';
     });
-    h += '</tbody></table>';
-    return '<div style="padding:2px 4px">' + h + '</div>';
+    return h + '</tbody></table>';
 }
 
 function so_chain_show_detail(line, so) {
@@ -257,20 +243,20 @@ function so_chain_show_detail(line, so) {
         + (Number(line.overdue_days) > 0 ? ' <span class="text-danger">(超 ' + line.overdue_days + ' 天)</span>' : '')
         + '　' + line.stage + ' ' + so_chain_esc(line.substate)
         + (line.customer_item_code ? '　客户码 ' + so_chain_esc(line.customer_item_code) : '') + '</div>';
-    const plans = (line.plans && line.plans.length)
-        ? '<div style="margin:6px 0"><b>生产计划</b>：' + line.plans.map(function (p) {
-            return so_chain_link('Production Plan', p.pp, p.pp) + (p.pending_qty ? '（待产 ' + so_chain_num(p.pending_qty) + '）' : '');
-          }).join('、') + '</div>'
-        : '';
+    const sec = function (color, title, body) {
+        return '<div style="margin-top:10px"><div style="background:' + color + ';color:#fff;padding:3px 10px;'
+            + 'border-radius:4px 4px 0 0;font-weight:600;font-size:12px">' + title + '</div>'
+            + '<div style="border:1px solid ' + color + ';border-top:none;border-radius:0 0 4px 4px;padding:8px 10px">'
+            + body + '</div></div>';
+    };
     const d = new frappe.ui.Dialog({
         title: __('链条明细：') + so + ' / ' + (line.item_name || line.item_code),
         size: 'extra-large',
         fields: [{ fieldtype: 'HTML', fieldname: 'html' }],
     });
-    d.fields_dict.html.$wrapper.html('<div style="max-height:72vh;overflow:auto">'
-        + head + plans
-        + '<div style="margin-top:8px"><b>生产链条</b>' + so_chain_tree_html(line) + '</div>'
-        + '<div style="margin-top:8px"><b>销售出库</b>' + so_chain_dn_html(line) + '</div>'
+    d.fields_dict.html.$wrapper.html('<div style="max-height:72vh;overflow:auto">' + head
+        + sec(SO_CHAIN_PROD, '生产链条', so_chain_tree_html(line))
+        + sec(SO_CHAIN_DN, '出库', so_chain_dn_html(line))
         + '</div>');
     d.show();
 }
