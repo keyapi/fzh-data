@@ -7,6 +7,7 @@ title: supply_chain_visibility 变更日志
 # 变更日志
 
 ## 2026-10-13
+- **Stage 1 v22**：更正「皮壳/内胆无计划」误判 —— 生产实测 **PK# 78% / ND# 77% 的工单有 `production_plan_item`**（指向 Production Plan Item）。修工单→PP 解析：按工单自身 `production_plan_item` 反查，**不带 SO 行过滤**（皮壳/内胆计划行常不带 SO 行）。
 - **Stage 1 v21**：修 bug —— 清高亮只清**本行**(此前清全表，导致多行展开时他行框线被误清)；工单头补「计划 PP-xx」（`WO.production_plan_item`→PP）。实测：**成品工单有计划，皮壳/内胆工单 `production_plan_item` 为空**（只挂 SO 行）。
 - **Stage 1 v18**：被点单元格的上/左/右边线改用 `box-shadow: inset` 在格内绘制（表格 border-collapse 会吃掉 td 的上/左边线），框线完整。
 - **Stage 1 v17**：**不再单独画标题** —— 被点的那一格本身着蓝/绿框线(下边敞开)，与下方同色边框明细面板连成一体(模拟标签页)；未展开的格子无框线；切换/收起时框线随之变化。

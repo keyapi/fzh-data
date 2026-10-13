@@ -79,3 +79,15 @@ SO Item (KS…)
   前端在主表「链条」列与弹窗/行内展开的该工单头 **标黄「忘点完工?」**。
 - 依据：成品 WO `status='Completed'` 可信（=produced≥qty，1212 张仅 1 张不一致）；成品 WO 本身无工序/无菲号，活都在皮壳/内胆上，
   故「兄弟全完成而自己没完工」是强信号。生产实测仅 `WO-26-01176`、`WO-26-01205` 命中。
+
+## 7. 生产计划 ↔ 工单（2026-10-13 生产实测更正）
+
+**`Work Order.production_plan_item` 100% 指向 `Production Plan Item`**（生产实测 PK# 3770/3770 全部在 `Production Plan Item`，`Production Plan Sub Assembly Item` 命中 0）。
+即：**PP 里为 皮壳/内胆 也建了计划行**，工单挂到各自的计划行。
+
+**挂接情况**（docstatus=1 生产实测）：成品 KS 1113/1118 有 `production_plan_item`；**皮壳 PK# 3770/4810（78%）**；内胆 ND# 2010/2598（77%）。→ **大多数皮壳/内胆工单是有计划的**。
+
+⚠️ **查法陷阱**：解析「工单属于哪个 PP」**不能**只查 `Production Plan Item.sales_order_item = 本 SO 行` —— **皮壳/内胆的计划行通常不带 SO 行**，那样会得到空。
+**正确**：`Work Order.production_plan_item`（计划行 name）→ `Production Plan Item.parent`（PP 名）。
+
+（更正：先前据**测试库**稀疏样本误判「皮壳/内胆无计划」；测试库该字段多为空，生产库多已填。）

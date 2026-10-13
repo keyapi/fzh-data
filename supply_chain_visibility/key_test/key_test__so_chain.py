@@ -44,14 +44,13 @@ def get_so_chain(sales_order):
         delivered = _num(it.delivered_qty)
         open_qty = qty - delivered
 
-        # 生产计划（按订单行连接键）+ PP行→计划 映射（供工单归属）
+        # 生产计划（按订单行连接键）—— 用于顶部的「本行计划/待产」数字
         plans = frappe.db.sql(
             """select pp.name as pp, ppi.name as ppi, ppi.planned_qty, ppi.pending_qty
                from `tabProduction Plan Item` ppi
                join `tabProduction Plan` pp on pp.name = ppi.parent
                where pp.docstatus = 1 and ppi.sales_order_item = %s""",
             it.name, as_dict=True)
-        pp_by_ppi = {p.ppi: p.pp for p in plans}
 
         # 工单 —— **成品**用 sales_order_item；**皮壳/内胆**用 fg_sales_order_item（不是 sales_order_item！）。
         # 一条成品(KS)行的标准结构 = 1 成品 + 1 皮壳(PK#) + 1 内胆(ND#)。兜底 production_plan_item。
@@ -66,6 +65,15 @@ def get_so_chain(sales_order):
                         where ppi.name = w.production_plan_item and ppi.sales_order_item = %(line)s))
                )
                order by w.name""", {"line": it.name}, as_dict=True)
+
+        # WO 的 production_plan_item → PP。**不过滤 sales_order_item**：
+        # 皮壳/内胆的计划行通常不带 SO 行（实测 WO.production_plan_item 100% 指向 Production Plan Item）。
+        pp_by_ppi = {p.ppi: p.pp for p in plans}
+        _ppi = [w.production_plan_item for w in wos if w.production_plan_item]
+        if _ppi:
+            for r in frappe.get_all("Production Plan Item", filters={"name": ["in", _ppi]},
+                                    fields=["name", "parent"]):
+                pp_by_ppi[r.name] = r.parent
         wo_names = [w.name for w in wos]
 
         # 工序行（菲号内部的排序轴）
@@ -167,6 +175,17 @@ def get_so_chain(sales_order):
         comps = [w for w in wo_detail if w["kind"] in ("皮壳", "内胆")]
         forgot = [f["wo"] for f in fins if not f["completed"]] if (comps and all(c["completed"] for c in comps)) else []
 
+        # 本行计划 = 按 SO 行连接的计划行 + 工单所属计划（皮壳/内胆的计划行可能不带 SO 行，靠工单反查补上）
+        by_pp = {}
+        for p in plans:
+            e = by_pp.setdefault(p.pp, {"pp": p.pp, "planned_qty": 0.0, "pending_qty": 0.0})
+            e["planned_qty"] += _num(p.planned_qty)
+            e["pending_qty"] += _num(p.pending_qty)
+        for _w in wo_detail:
+            if _w["pp"]:
+                by_pp.setdefault(_w["pp"], {"pp": _w["pp"], "planned_qty": 0.0, "pending_qty": 0.0})
+        _plans_out = list(by_pp.values())
+
         # 销售出库（可能一对多：一条订单行拆多张 DN / 含退货）
         dns = frappe.db.sql(
             """select dn.name as dn, dn.posting_date as date, dn.status as status,
@@ -207,8 +226,7 @@ def get_so_chain(sales_order):
             "customer_item_code": it.customer_item_code,
             "qty": qty, "delivered": delivered, "open_qty": open_qty, "shipped_dn": shipped,
             "stage": stage, "substate": sub,
-            "plans": [{"pp": p.pp, "planned_qty": _num(p.planned_qty), "pending_qty": _num(p.pending_qty)}
-                      for p in plans],
+            "plans": _plans_out,
             "wo_count": len(wos), "tn_count": line_tn,
             "forgot_complete": forgot,
             "dns": [{"dn": d.dn, "date": str(d.date or "")[:10], "qty": _num(d.qty),
