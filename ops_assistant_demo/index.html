@@ -703,7 +703,7 @@ function railResult(value){return ({pass:"通过",warning:"需关注",denied:"�
 function renderLog() {
   renderApproval();
   $("log").innerHTML = log.map((m) => {
-    if(m.kind==="evidence")return '<div class="msg bot"><details><summary>依据与安全检查 · '+(m.citations||[]).length+'条依据</summary>'+(m.citations||[]).map(d=>'<details><summary>'+esc(d.title)+' · '+esc(d.id)+'</summary>'+richText(d.content)+'</details>').join('')+'<p>'+(m.rails||[]).map(r=>esc(r.name)+'：'+esc(railResult(r.result))).join('；')+'</p><details><summary>工具与检查记录</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(JSON.stringify(m.trace||[],null,2))+'</pre></details></details></div>';
+    if(m.kind==="evidence"){const citeCount=(m.citations||[]).length,toolCount=(m.trace||[]).length;const summary=[citeCount?citeCount+'条依据':'',toolCount?toolCount+'次工具读取':''].filter(Boolean).join(' · ')||'0条依据';return '<div class="msg bot"><details><summary>依据与安全检查 · '+summary+'</summary>'+(m.citations||[]).map(d=>'<details><summary>'+esc(d.title)+' · '+esc(d.id)+'</summary>'+richText(d.content)+'</details>').join('')+'<p>'+(m.rails||[]).map(r=>esc(r.name)+'：'+esc(railResult(r.result))).join('；')+'</p><details><summary>工具与检查记录</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(JSON.stringify(m.trace||[],null,2))+'</pre></details></details></div>';}
     if(m.kind==="long-answer")return '<div class="msg bot">'+richText(shortReply(m.text))+'<details><summary>展开完整回答</summary>'+richText(m.text)+'</details></div>';
     if (m.kind === "user") return `<div class="msg user">${esc(m.text)}</div>`;
     if (m.kind === "steps") {
@@ -1081,8 +1081,9 @@ async function askUnified(text){
  try{
   const data=await opsFetch('/api/agent/turn',{text});
   log.splice(waiting,1);
-  push({kind:data.text.length>220?"long-answer":"bot",text:data.text||"本次没有形成可核验回复，业务配置未改变。"});
-  if(data.trace?.length)push({kind:"evidence",citations:[],trace:data.trace});
+  push({kind:"bot",text:data.text||"本次没有形成可核验回复，业务配置未改变。"});
+  const citations=(data.trace||[]).flatMap(item=>Array.isArray(item?.result?.documents)?item.result.documents:[]);
+  if(data.trace?.length||citations.length)push({kind:"evidence",citations,trace:data.trace||[]});
   if(data.state){opsState=data.state;renderOps();}
   const prepared=(data.trace||[]).map(item=>item?.result?.proposal).find(Boolean);
   if(prepared){
