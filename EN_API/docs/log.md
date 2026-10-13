@@ -6,6 +6,14 @@ title: EN_API 文档变更日志
 
 # 变更日志
 
+## 2026-10-13（晚：Stage 1 嵌入单据，测试机已部署）
+
+- **新增（呈现形式路线第 1 档：嵌入单据）**：`EN_API/so_chain_embed/` —— 在 ERPNext 销售订单表单内嵌「供应链链条摘要」（阶段/已发/未发/工单工序）。
+  - 服务端：`key_test/so_chain.py`（`@frappe.whitelist() get_so_chain`）；前端：追加进 `key_test/public/js/sales_order.js`（`doctype_js` 只允许一个文件，故追加）。
+  - **测试机（站点 erpnext.vilavi.cn）已部署并验证**：方法 REST 调用 HTTP 200、stage/工序/DN 净额正确；`getdoctype.__js` 已含嵌入代码；备份在 `/tmp/sales_order.js.bak_*`。**生产未部署**（步骤见 handoff）。
+  - 交接：`EN_API/so_chain_embed/AGENT_HANDOFF.md`（含 prod 部署/回滚 + Stage 2/3 设计）。
+- **更正调研**：`EN_API/docs/research/en-supply-chain-map.md` —— API **实测记录数**发现 `Cutting Plan/Cutting Task/Work Order Split/Wip Transfer` 四个 doctype **生产 0 条**（建了没用）；真实车辆是 `Initial Work Order`(开料 750)、`Tracking Number`(菲号 4887)、`Job Card`(扫码 48854，含 WIP 外包自定义字段)，拆分走 Cancel+Amend。并补 `key_test` 为 SO 定制主战场 + app 各自独立仓库。
+
 ## 2026-10-13（下午：EN 全链路调研）
 
 - **新增调研**：[research/en-supply-chain-map.md](research/en-supply-chain-map.md) —— 用 REST API 枚举 EN 生产系统的 DocType 后，得出**真实全链路实体地图**：除原生 `Sales Order/Production Plan/Work Order/Job Card/BOM/Stock Entry` 外，还有 4 个**自定义 app** —— `Light Mes`（`Initial Work Order`/`Job Card Scan Input` 扫码/`Tracking Number` 菲号/`Wip Transfer` 外发回收/`Defect Code`/工序价）、`Work Order Task`（`Cutting Plan`/`Cutting Task` 开料/`Work Order Split`）、`Delivery Plan`（出货计划/外箱号）、`Tongtool Integration`。附**仓库覆盖 vs 空白**表：开料/扫码/WIP/工单拆分/物料需求/采购(MR/PO/PR) 在 EN 侧基本空白。
