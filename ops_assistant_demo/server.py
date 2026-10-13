@@ -21,6 +21,7 @@ from bank_agent import run_bank_agent
 from bank_tasks import BankTasks
 from bank_task_agent import run_task_agent
 from route_demo import RouteDemo, SERVICES, RULE
+from feedback_store import FeedbackStore
 
 ROOT = Path(__file__).resolve().parent
 
@@ -46,6 +47,7 @@ if not db_path.is_absolute():
     db_path = ROOT / db_path
 db_path.parent.mkdir(parents=True, exist_ok=True)
 STORE = Store(str(db_path))
+FEEDBACK = FeedbackStore(db_path.parent / 'feedback.sqlite3')
 SESSIONS = {}
 LOCK = threading.RLock()
 BUCKETS = collections.defaultdict(collections.deque)
@@ -355,7 +357,7 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path in ('/', '/index.html'):
             self._send(200, (ROOT / 'index.html').read_bytes(), 'text/html; charset=utf-8')
             return
-        if parsed.path in ('/bank_ui.js', '/assistant_panel.js', '/bank_task_ui.js', '/route_ui.js', '/competition.html'):
+        if parsed.path in ('/bank_ui.js', '/assistant_panel.js', '/bank_task_ui.js', '/route_ui.js', '/feedback_ui.js', '/competition.html'):
             asset = ROOT / parsed.path[1:]
             if not asset.is_file():
                 self._send(404, {'error': 'not found'})
@@ -367,6 +369,12 @@ class Handler(BaseHTTPRequestHandler):
             self._send(404, {'error': 'not found'})
             return
         try:
+            if parsed.path == '/api/feedback':
+                rate_limit('feedback-read:' + self.client_address[0], 60, 60)
+                result = FEEDBACK.get((parse_qs(parsed.query).get('id') or [''])[0][:100],
+                                      self.headers.get('X-Feedback-Receipt', ''))
+                self._send(200, {'ok': True, 'feedback': result})
+                return
             session = self._session()
             route = parsed.path.replace('/api/ops/', '/api/')
             if route == '/api/state':
@@ -424,6 +432,11 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(body, dict):
                 raise DomainError('INVALID_INPUT', '请求必须是对象。')
             ip = self.client_address[0]
+            if path == '/api/feedback':
+                rate_limit('feedback-submit:' + ip, 20, 3600)
+                result = FEEDBACK.submit(body)
+                self._send(200, {'ok': True, 'feedback': result})
+                return
             if path == '/api/login':
                 rate_limit('login:' + ip, 40, 60)
                 role = body.get('username')

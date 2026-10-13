@@ -34,3 +34,7 @@ title: 受控办理助手交接
 ## 路由副线（2026-10-13）
 
 见 docs/route-scenario.md；route_demo.py / route_ui.js；接口 /api/routes/{state,plan,execute,cancel}。独立于原三页工单，模型仅选业务，后台生成受控差异。最终测试和部署记录需查看该文档。
+
+## 真实试用反馈
+
+feedback_store.py / feedback_ui.js；/api/feedback POST提交、GET凭私有回执查询。独立 data/feedback.sqlite3，不随模拟工作区重置。管理员只通过SSH/本地CLI读取或更新，不开放给模拟岗位。详见 docs/route-scenario.md。
