@@ -151,3 +151,16 @@ SAP Fiori Tree Table https://help.sap.com/docs/ABAP_PLATFORM_NEW/468a97775123488
 > ⚠️ 之前 stage 完成时只在 fzh-data 提交，**服务器 app 仓库留着一堆未提交改动**（有丢失风险）——已补交。
 > 以后：在 EN 上改完并验证 → **先在服务器 git 提交 + push** → 再把产物/记录提交进 fzh-data。
 > 测试机先行；生产待确认后 `git pull` + `migrate` + `restart`。
+
+## 11. Stage 1 v4：弹窗层级 = 工单 → 菲号 → 工序卡（2026-10-13）
+
+**为什么改**：生产实测 **菲号 = 一批(组)皮壳/半成品实物流的身份证**（开料按组生成，`<皮壳WO>-NNN`），
+**贯穿该工单全部工序（6–9 道）**；**每个菲号在每个工序恰 1 张 Job Card** → 唯一键 `(菲号, 工序)`。
+原「工单→工序→工序卡」是**转置投影**，把一个菲号撕到多个工序节点、丢了菲号这层物证（车间扫的码、打印的标签、出库/耗料的键都是菲号）。
+完整语义 + 基数见 [../docs/reference/en-tracking-number-semantics.md](../docs/reference/en-tracking-number-semantics.md)。
+
+**服务端**：`so_chain.py` 返回 `work_orders[].tracking_numbers[].steps[]`（每 step = 一道工序的一张 Job Card）+ `unassigned[]`（无菲号的报工）。
+**前端**：弹窗 = 工单头 → 每个菲号一个 `<details>`（菲号链接 / 数量 / 工序完成 N/M / 开料工单链接）→ 展开逐工序 Job Card 表（工序|序|工序卡链接|状态|数量|完工时间）。**状态/选择值一律过 `__()`**（否则显示英文 `In Process`/`Work in Progress`/`Pending`/`Completed`）。
+**验证**（测试库 `SO-26-00023`）：2 个菲号 `WO-26-00028-001/002`，分别完成 4/5、1/5 道工序，开料 324，逐工序工序卡全中文正常。
+
+**EN app 提交账**（keyapi/key_test）：`feature/so-chain-embed` 分支，commit `80de553`(v1–3) → `2568a55`(v4)，均已 push（测试机）。

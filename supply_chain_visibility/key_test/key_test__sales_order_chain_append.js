@@ -1,11 +1,13 @@
 // ─────────────────────────────────────────────────────────────────────────
 // 「供应链链条」内嵌 SO 表单 —— 追加到 key_test/public/js/sales_order.js **末尾**
 //
-// 设计（业界主流「摘要 + 可下钻」）：
-//   主表一行 = 一条 SO 行：物料 / 客户码 / 订单量 / 已发 / 未发 / 交期 / 阶段 / 生产计划 / 工单 / 菲号
-//   一对多（SO行→N工单→N工序+N菲号）不塞格子，点开弹窗看只读多级表。
-//   单据名一律用 **可点链接**（frappe.utils.get_form_link）便于跳转。
-// 依赖服务端方法 key_test.so_chain.get_so_chain。容器用 frm.dashboard.parent。
+// 层级（按生产实测的语义）：
+//   SO 行 → 工单 → **菲号(跟踪单号)** → 逐工序 Job Card
+//   菲号 = 一批(组)皮壳/半成品实物流的身份证，开料时按组生成，贯穿该工单全部工序；
+//   每个菲号在每个工序恰 1 张 Job Card → 唯一键 = (菲号, 工序)。
+//   工序是菲号内部的**顺序轴**，不是树的父节点。
+// 所有状态/选择值过 `__()` 取 ERPNext 的翻译（否则显示英文原值）。
+// 依赖 key_test.so_chain.get_so_chain。容器用 frm.dashboard.parent。
 // ─────────────────────────────────────────────────────────────────────────
 frappe.ui.form.on('Sales Order', {
     refresh: function (frm) {
@@ -29,31 +31,28 @@ frappe.ui.form.on('Sales Order', {
 
 function so_chain_esc(s) { return frappe.utils.escape_html(s == null ? '' : String(s)); }
 function so_chain_num(v) { const f = Number(v || 0); return (Math.round(f * 1000) / 1000).toString(); }
-// 单据跳转链接（新标签页打开；name 为空返回原样文本）
+function so_chain_t(s) { return so_chain_esc(s == null ? '' : __(String(s))); }   // 过翻译
 function so_chain_link(doctype, name, label) {
     if (!name) return so_chain_esc(label || '');
     let slug;
     try { slug = frappe.router.slug(doctype); }
     catch (e) { slug = doctype.toLowerCase().replace(/ /g, '-'); }
-    const href = '/app/' + slug + '/' + encodeURIComponent(name);
-    return '<a href="' + href + '" target="_blank">' + so_chain_esc(label || name) + '</a>';
+    return '<a href="/app/' + slug + '/' + encodeURIComponent(name) + '" target="_blank">'
+         + so_chain_esc(label || name) + '</a>';
 }
-function so_chain_chip(n) { return n ? n + ' ▸' : '-'; }
 
 function so_chain_render($box, data) {
-    let tOpen = 0, tShipped = 0, tOpenQty = 0;
+    let tOpenQty = 0;
     const rows = (data.lines || []).map(function (l, idx) {
         tOpenQty += Number(l.open_qty || 0);
         const plans = (l.plans || []).map(function (p) {
             return so_chain_link('Production Plan', p.pp, p.pp + (p.planned_qty ? ' (' + so_chain_num(p.planned_qty) + ')' : ''));
         }).join(', ') || '-';
-        const woCell = l.wo_count ? '<a href="#" class="so-chain-open" data-i="' + idx + '">' + so_chain_chip(l.wo_count) + '</a>' : '-';
-        const tnCell = l.tn_count ? '<a href="#" class="so-chain-open" data-i="' + idx + '">' + so_chain_chip(l.tn_count) + '</a>' : '-';
+        const chip = function (n, i) { return n ? '<a href="#" class="so-chain-open" data-i="' + i + '">' + n + ' ▸</a>' : '-'; };
         const od = Number(l.overdue_days || 0);
         const dd = od > 0 ? '<span class="text-danger" title="已过交付日期 ' + od + ' 天">' + so_chain_esc(l.delivery_date) + ' (超' + od + '天)</span>'
                           : so_chain_esc(l.delivery_date || '-');
         const stageColor = { 0: 'gray', 1: 'orange', 2: 'blue', 3: 'green' }[l.stage] || 'gray';
-        const stageChip = '<span class="indicator-pill ' + stageColor + '">' + l.stage + ' ' + so_chain_esc(l.substate) + '</span>';
         return '<tr>'
             + '<td>' + so_chain_link('Item', l.item_code, l.item_code) + '</td>'
             + '<td>' + so_chain_esc(l.customer_item_code) + '</td>'
@@ -61,10 +60,10 @@ function so_chain_render($box, data) {
             + '<td style="text-align:right">' + so_chain_num(l.delivered) + '</td>'
             + '<td style="text-align:right">' + so_chain_num(l.open_qty) + '</td>'
             + '<td>' + dd + '</td>'
-            + '<td>' + stageChip + '</td>'
+            + '<td><span class="indicator-pill ' + stageColor + '">' + l.stage + ' ' + so_chain_esc(l.substate) + '</span></td>'
             + '<td>' + plans + '</td>'
-            + '<td>' + woCell + '</td>'
-            + '<td>' + tnCell + '</td>'
+            + '<td>' + chip(l.wo_count, idx) + '</td>'
+            + '<td>' + chip(l.tn_count, idx) + '</td>'
             + '</tr>';
     }).join('');
     const html = '<div style="overflow:auto">'
@@ -75,8 +74,8 @@ function so_chain_render($box, data) {
         + '<tfoot><tr><th colspan="4" style="text-align:right">未发合计</th>'
         + '<th style="text-align:right">' + so_chain_num(tOpenQty) + '</th><th colspan="5"></th></tr></tfoot></table>'
         + '<div class="text-muted" style="margin-top:4px;font-size:11px">'
-        + '阶段 0–3；工单完成量取第一道工序（不跨工序求和）；已发按出库单净额(含退货抵扣)。'
-        + '单据名可点跳转；点「工单/菲号」看逐道工序、工序卡与跟踪单号。</div></div>';
+        + '阶段 0–3；完成量取第一道工序(不跨工序求和)；已发按出库单净额(含退货抵扣)。'
+        + '点「工单/菲号」看 工单→菲号→逐工序工序卡。</div></div>';
     $box.html(html);
     $box.find('.so-chain-open').on('click', function (e) {
         e.preventDefault();
@@ -101,41 +100,60 @@ function so_chain_show_detail(line, so) {
         h += '<div class="text-muted">无工单</div></div>';
     } else {
         line.work_orders.forEach(function (w) {
+            const tns = w.tracking_numbers || [];
             h += '<div style="border:1px solid var(--border-color);border-radius:6px;padding:8px;margin:8px 0">';
             h += '<div><b>' + so_chain_link('Work Order', w.wo, w.wo) + '</b>　工单量 ' + so_chain_num(w.qty)
-               + '　完成 ' + so_chain_num(w.done) + '　头部状态 ' + so_chain_esc(w.status)
+               + '　完成 ' + so_chain_num(w.done) + '　头部状态 ' + so_chain_t(w.status)
                + (w.produced_head ? '（已产 ' + so_chain_num(w.produced_head) + '）' : '')
                + (w.last_end ? '　最后报工 ' + so_chain_esc(w.last_end) : '') + '</div>';
-            if (w.operations && w.operations.length) {
-                h += '<table class="table table-bordered" style="margin:6px 0;font-size:12px">'
-                   + '<thead><tr><th>工序</th><th>序</th><th>状态</th><th>完成量</th><th>工序卡（Job Card）</th></tr></thead><tbody>';
-                w.operations.forEach(function (o) {
-                    const jcs = (o.job_cards || []).map(function (jc) {
-                        return so_chain_link('Job Card', jc.name, jc.name)
-                             + ' <span class="text-muted">[' + so_chain_esc(jc.status) + ' ' + so_chain_num(jc.qty)
-                             + (jc.employee ? ' ' + so_chain_esc(jc.employee) : '') + ']</span>';
-                    }).join('<br>') || '<span class="text-muted">无</span>';
-                    h += '<tr><td>' + so_chain_esc(o.operation) + '</td><td>' + so_chain_esc(o.seq)
-                       + '</td><td>' + so_chain_esc(o.status) + '</td>'
-                       + '<td style="text-align:right">' + so_chain_num(o.done) + '</td>'
-                       + '<td>' + jcs + '</td></tr>';
+
+            if (tns.length) {
+                // 菲号 → 逐工序 Job Card
+                tns.forEach(function (t) {
+                    const total = (w.operations || []).length;
+                    const doneSteps = (t.steps || []).filter(function (s) { return s.status === 'Completed'; }).length;
+                    h += '<details style="margin:6px 0;border-left:3px solid var(--border-color);padding-left:8px">'
+                       + '<summary style="cursor:pointer">'
+                       + '<b>菲号 ' + so_chain_link('Tracking Number', t.tn, t.tn) + '</b>'
+                       + '　数量 ' + so_chain_num(t.qty)
+                       + '　工序完成 ' + doneSteps + '/' + total
+                       + (t.iwo ? '　开料 ' + so_chain_link('Initial Work Order', t.iwo, t.iwo) : '')
+                       + '</summary>';
+                    if (t.steps && t.steps.length) {
+                        h += '<table class="table table-bordered" style="margin:4px 0;font-size:12px">'
+                           + '<thead><tr><th>工序</th><th>序</th><th>工序卡</th><th>状态</th><th>数量</th><th>完工时间</th></tr></thead><tbody>';
+                        t.steps.forEach(function (s) {
+                            h += '<tr><td>' + so_chain_t(s.operation) + '</td><td>' + so_chain_esc(s.seq) + '</td>'
+                               + '<td>' + so_chain_link('Job Card', s.jc, s.jc) + '</td>'
+                               + '<td>' + so_chain_t(s.status) + '</td>'
+                               + '<td style="text-align:right">' + so_chain_num(s.qty) + '</td>'
+                               + '<td>' + so_chain_esc(s.end) + '</td></tr>';
+                        });
+                        h += '</tbody></table>';
+                    } else {
+                        h += '<div class="text-muted">该菲号暂无工序卡</div>';
+                    }
+                    if (t.fgw && t.fgw !== w.wo) {
+                        h += '<div class="text-muted" style="font-size:11px">成品工单：' + so_chain_link('Work Order', t.fgw, t.fgw) + '</div>';
+                    }
+                    h += '</details>';
+                });
+            }
+            // 未绑定菲号的报工（成品工单/未分配）
+            if (w.unassigned && w.unassigned.length) {
+                h += '<div class="text-muted" style="margin-top:4px">未绑定菲号的报工 ' + w.unassigned.length + ' 条</div>'
+                   + '<table class="table table-bordered" style="margin:4px 0;font-size:12px">'
+                   + '<thead><tr><th>工序</th><th>工序卡</th><th>状态</th><th>数量</th><th>完工时间</th></tr></thead><tbody>';
+                w.unassigned.forEach(function (u) {
+                    h += '<tr><td>' + so_chain_t(u.operation) + '</td>'
+                       + '<td>' + so_chain_link('Job Card', u.jc, u.jc) + '</td>'
+                       + '<td>' + so_chain_t(u.status) + '</td>'
+                       + '<td style="text-align:right">' + so_chain_num(u.qty) + '</td>'
+                       + '<td>' + so_chain_esc(u.end) + '</td></tr>';
                 });
                 h += '</tbody></table>';
-            } else {
-                h += '<div class="text-muted">无工序路由</div>';
             }
-            if (w.tracking_numbers && w.tracking_numbers.length) {
-                h += '<div style="margin-top:4px"><b>菲号（跟踪单号）</b> ' + w.tracking_numbers.length + ' 个'
-                   + '<table class="table table-bordered" style="margin:4px 0;font-size:12px">'
-                   + '<thead><tr><th>菲号</th><th>数量</th><th>开料工单</th><th>交付物料</th></tr></thead><tbody>';
-                w.tracking_numbers.forEach(function (t) {
-                    h += '<tr><td>' + so_chain_link('Tracking Number', t.tn, t.tn) + '</td>'
-                       + '<td style="text-align:right">' + so_chain_num(t.qty) + '</td>'
-                       + '<td>' + (t.iwo ? so_chain_link('Initial Work Order', t.iwo, t.iwo) : '<span class="text-muted">未开料</span>') + '</td>'
-                       + '<td>' + (t.mat ? so_chain_link('Item', t.mat, t.mat) : '') + '</td></tr>';
-                });
-                h += '</tbody></table></div>';
-            } else {
+            if (!tns.length && !(w.unassigned && w.unassigned.length)) {
                 h += '<div class="text-muted" style="margin-top:4px">无菲号（未开料）</div>';
             }
             h += '</div>';

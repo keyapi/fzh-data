@@ -1,15 +1,19 @@
 # -*- coding: utf-8 -*-
 """key_test app：key_test/so_chain.py
 
-销售订单表单「供应链链条」的服务端数据方法（@frappe.whitelist），v2。
+销售订单表单「供应链链条」的服务端数据方法（@frappe.whitelist），v4。
 被 public/js/sales_order.js 追加的 refresh 钩子调用。
 
-口径（与 fzh-data 的 EN_API/item_shipment_status.py 一致）：
+## 口径（与 fzh-data 的 EN_API/item_shipment_status.py 一致）
   * 订单行主键 = Sales Order Item.name
-  * 工单：production_item == 行 item_code 且 sales_order == 本 SO
-  * 生产计划：Production Plan Item.sales_order_item = 行 name（**不要**用 pp 行的 work_order 字段，实测为空）
+  * 工单：**行级外键 Work Order.sales_order_item == 行 name**（不是 sales_order+production_item！
+    生产实测：同 SO 内同 item_code 最多 40 行，复合键会让 1464 张工单重复挂、139 张漏挂）。
+    兜底：sales_order_item 空 → production_plan_item→PP.sales_order_item，或 fg_sales_order_item。
+  * 生产计划：Production Plan Item.sales_order_item = 行 name
+  * **菲号 = 一批(组)皮壳/半成品的实物流身份证**，开料时按组生成(name=<皮壳WO>-NNN)，
+    贯穿该工单全部工序；**每个菲号在每个工序恰 1 张 Job Card**。成品(KS)工单基本无菲号。
+    → 展示层级 = **工单 → 菲号 → 逐工序 Job Card**（工序是菲号内部的轴）。
   * 工序进度：逐道工序的 Job Card 完成量；「工单完成量」取第一道工序，**不跨工序求和**
-  * 菲号：Tracking Number.work_order = 工单；initial_work_order 非空 = 已开料
   * 已发：出库单按 item_code 匹配的带符号 qty 之和（退货行负数自动抵扣）
   * WO.status / produced_qty 不可信，进度只看工序卡
 """
@@ -44,9 +48,7 @@ def get_so_chain(sales_order):
                where pp.docstatus = 1 and ppi.sales_order_item = %s""",
             it.name, as_dict=True)
 
-        # 工单 —— **用行级外键 Work Order.sales_order_item**（不是 (sales_order, production_item)！
-        # 生产实测：同 SO 内同 item_code 可有多达 40 行，复合键会让 1464 张工单重复挂、139 张漏挂）。
-        # 兜底：sales_order_item 为空时，走 production_plan_item→PP.sales_order_item，或 fg_sales_order_item。
+        # 工单 —— 行级外键 + 兜底
         wos = frappe.db.sql(
             """select w.name, w.qty, w.status, w.produced_qty
                from `tabWork Order` w
@@ -60,7 +62,7 @@ def get_so_chain(sales_order):
                order by w.name""", {"line": it.name}, as_dict=True)
         wo_names = [w.name for w in wos]
 
-        # 工序行（含顺序）
+        # 工序行（菲号内部的排序轴）
         ops_by_wo = {}
         if wo_names:
             for o in frappe.get_all("Work Order Operation",
@@ -68,18 +70,18 @@ def get_so_chain(sales_order):
                                     fields=["parent", "operation", "sequence_id", "status", "completed_qty"]):
                 ops_by_wo.setdefault(o.parent, []).append(o)
 
-        # 逐(工单, 工序)的工序卡完成量 + 工序卡明细（供点开看/跳转）
+        # 工序卡（Job Card）—— 每张恰一个菲号(tracking_number) + 一道工序
         jc_done, jc_by_op = {}, {}
         if wo_names:
             for j in frappe.get_all("Job Card",
                                     filters={"work_order": ["in", wo_names], "docstatus": ["<", 2]},
                                     fields=["name", "work_order", "operation", "status", "total_completed_qty",
-                                            "for_quantity", "actual_end_date"]):
+                                            "for_quantity", "actual_end_date", "tracking_number"]):
                 q = _num(j.total_completed_qty) or _num(j.for_quantity)
+                rec = {"name": j.name, "status": j.status, "qty": q,
+                       "end": str(j.actual_end_date or "")[:19], "tn": j.tracking_number or ""}
                 key = (j.work_order, j.operation)
-                jc_by_op.setdefault(key, []).append({
-                    "name": j.name, "status": j.status, "qty": q,
-                    "employee": "", "end": str(j.actual_end_date or "")[:19]})
+                jc_by_op.setdefault(key, []).append(rec)
                 if j.status == "Completed":
                     jc_done[key] = jc_done.get(key, 0.0) + q
 
@@ -88,29 +90,50 @@ def get_so_chain(sales_order):
         if wo_names:
             for t in frappe.get_all("Tracking Number",
                                     filters={"work_order": ["in", wo_names]},
-                                    fields=["name", "work_order", "qty", "initial_work_order", "so_materials"]):
+                                    fields=["name", "work_order", "qty", "initial_work_order",
+                                            "so_materials", "finished_product_work_order"]):
                 tn_by_wo.setdefault(t.work_order, []).append(t)
 
         wo_detail, line_produced, line_tn = [], 0.0, 0
         for w in wos:
             ops = sorted(ops_by_wo.get(w.name, []), key=lambda o: (_num(o.sequence_id), o.operation or ""))
-            operations = [{"operation": o.operation, "seq": o.sequence_id, "status": o.status,
-                           "done": jc_done.get((w.name, o.operation), 0.0),
-                           "job_cards": jc_by_op.get((w.name, o.operation), [])} for o in ops]
+            op_axis = [{"operation": o.operation, "seq": o.sequence_id, "status": o.status} for o in ops]
             # 工单完成量 = 第一道工序完成量，空则各工序最大值
             done_qty = 0.0
-            if operations:
-                done_qty = operations[0]["done"] or max([x["done"] for x in operations] or [0.0])
+            if ops:
+                first = jc_done.get((w.name, ops[0].operation), 0.0)
+                done_qty = first or max([jc_done.get((w.name, o.operation), 0.0) for o in ops] or [0.0])
             line_produced += done_qty
-            jc_ends = [j["end"] for x in operations for j in x["job_cards"] if j["end"]]
-            tns = [{"tn": t.name, "qty": _num(t.qty),
-                    "iwo": t.initial_work_order or "", "mat": t.so_materials or ""}
-                   for t in tn_by_wo.get(w.name, [])]
-            line_tn += len(tns)
+
+            # 菲号 → 逐工序 Job Card
+            tn_rows = []
+            for t in tn_by_wo.get(w.name, []):
+                steps = []
+                for o in ops:
+                    for x in jc_by_op.get((w.name, o.operation), []):
+                        if x["tn"] == t.name:
+                            steps.append({"operation": o.operation, "seq": o.sequence_id,
+                                          "jc": x["name"], "status": x["status"],
+                                          "qty": x["qty"], "end": x["end"]})
+                tn_rows.append({"tn": t.name, "qty": _num(t.qty),
+                                "iwo": t.initial_work_order or "", "mat": t.so_materials or "",
+                                "fgw": t.finished_product_work_order or "", "steps": steps})
+            # 无菲号的工序卡（未分配菲号 / 成品工单报工）
+            unassigned = []
+            for o in ops:
+                for x in jc_by_op.get((w.name, o.operation), []):
+                    if not x["tn"]:
+                        unassigned.append({"operation": o.operation, "seq": o.sequence_id,
+                                           "jc": x["name"], "status": x["status"],
+                                           "qty": x["qty"], "end": x["end"]})
+            jc_ends = [s["end"] for tn in tn_rows for s in tn["steps"] if s["end"]] + \
+                      [u["end"] for u in unassigned if u["end"]]
+            line_tn += len(tn_rows)
             wo_detail.append({"wo": w.name, "qty": _num(w.qty), "status": w.status,
                               "produced_head": _num(w.produced_qty), "done": done_qty,
                               "last_end": max(jc_ends) if jc_ends else "",
-                              "operations": operations, "tracking_numbers": tns})
+                              "operations": op_axis, "tracking_numbers": tn_rows,
+                              "unassigned": unassigned})
 
         # 出库净额
         dn = frappe.db.sql(
