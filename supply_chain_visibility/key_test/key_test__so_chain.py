@@ -147,13 +147,23 @@ def get_so_chain(sales_order):
             ops_done = sum(1 for o in req_ops
                            if any(x["status"] == "Completed" for x in jc_by_op.get((w.name, o.operation), [])))
             line_tn += len(tn_rows)
+            pic = w.production_item or ''
+            kind = ('成品' if pic.startswith('KS')
+                    else '皮壳' if pic.startswith('PK#')
+                    else '内胆' if (pic.startswith('ND#') or pic.startswith('DKND#')) else '')
+            completed = (w.status == 'Completed') or (_num(w.produced_qty) + 1e-6 >= _num(w.qty) > 0)
             wo_detail.append({"wo": w.name, "qty": _num(w.qty), "status": w.status,
-                              "item_code": w.production_item,
+                              "item_code": pic, "kind": kind, "completed": completed,
                               "produced_head": _num(w.produced_qty), "done": done_qty,
                               "ops_done": ops_done, "ops_total": len(req_ops),
                               "last_end": max(jc_ends) if jc_ends else "",
                               "operations": op_axis, "tracking_numbers": tn_rows,
                               "unassigned": unassigned})
+
+        # 「忘点完工」探测：成品(KS)工单未完工，但同行的皮壳/内胆兄弟工单**全部已完成**
+        fins = [w for w in wo_detail if w["kind"] == "成品"]
+        comps = [w for w in wo_detail if w["kind"] in ("皮壳", "内胆")]
+        forgot = [f["wo"] for f in fins if not f["completed"]] if (comps and all(c["completed"] for c in comps)) else []
 
         # 出库净额
         dn = frappe.db.sql(
@@ -191,6 +201,7 @@ def get_so_chain(sales_order):
             "plans": [{"pp": p.pp, "planned_qty": _num(p.planned_qty), "pending_qty": _num(p.pending_qty)}
                       for p in plans],
             "wo_count": len(wos), "tn_count": line_tn,
+            "forgot_complete": forgot,
             "prog": ({"min": min(p[0] for p in prog_vals), "max": max(p[0] for p in prog_vals),
                       "total": max(p[1] for p in prog_vals)} if prog_vals else None),
             "delivery_date": str(it.delivery_date or "")[:10],

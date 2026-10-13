@@ -61,9 +61,13 @@ function so_chain_render($box, data) {
         const progTxt = pg ? (pg.min === pg.max ? pg.max + '/' + pg.total : pg.min + '–' + pg.max + '/' + pg.total) : '';
         const summary = (l.wo_count ? l.wo_count + ' 工单' : '-') + ' · ' + (l.tn_count ? l.tn_count + ' 菲号' : '0 菲号')
             + (progTxt ? '　<span class="text-muted" title="必经工序完成数(最慢–最快菲号)/总数，已排除返工分支">工序 ' + progTxt + '</span>' : '');
+        const forgot = (l.forgot_complete || []);
+        const forgotBadge = forgot.length
+            ? ' <span class="indicator-pill yellow" title="成品工单未完工，但同行的皮壳/内胆工单已全部完成：' + so_chain_esc(forgot.join(', ')) + '">忘点完工?</span>'
+            : '';
         const chainCell = l.wo_count
-            ? '<a href="#" class="so-chain-toggle" data-i="' + idx + '"><b>' + summary + '</b> <span class="so-chain-caret">▸</span></a>'
-            : summary;
+            ? '<a href="#" class="so-chain-toggle" data-i="' + idx + '"><b>' + summary + '</b> <span class="so-chain-caret">▸</span></a>' + forgotBadge
+            : summary + forgotBadge;
         const od2 = Number(l.overdue_days || 0);
         const dd = od2 > 0 ? '<span class="text-danger" title="已过交付日期 ' + od2 + ' 天">' + so_chain_esc(l.delivery_date) + ' (超' + od2 + '天)</span>'
                            : so_chain_esc(l.delivery_date || '-');
@@ -119,11 +123,15 @@ function so_chain_toggle($box, idx, line) {
 function so_chain_tree_html(line) {
     if (!line.work_orders || !line.work_orders.length) return '<div class="text-muted">无工单</div>';
     let h = '<div style="padding:2px 4px">';
+    const forgot = line.forgot_complete || [];
     line.work_orders.forEach(function (w) {
         const tns = w.tracking_numbers || [];
-        h += '<div style="border:1px solid var(--border-color);border-radius:6px;padding:8px;margin:6px 0">';
+        const isForgot = forgot.indexOf(w.wo) >= 0;
+        h += '<div style="border:1px solid ' + (isForgot ? '#e6b800' : 'var(--border-color)') + ';'
+           + (isForgot ? 'background:#fff9e6;' : '') + 'border-radius:6px;padding:8px;margin:6px 0">';
         h += '<div><b>' + so_chain_link('Work Order', w.wo, w.wo) + '</b>'
            + (w.item_code ? '　' + so_chain_link('Item', w.item_code, w.item_code) + so_chain_item_type(w.item_code) : '')
+           + (isForgot ? ' <span class="indicator-pill yellow" title="成品工单未完工，但同行的皮壳/内胆已全部完成 —— 疑似忘了点完工">忘点完工?</span>' : '')
            + '　工单量 ' + so_chain_num(w.qty)
            + '　完成 ' + so_chain_num(w.done) + '　头部状态 ' + so_chain_t(w.status)
            + (w.produced_head ? '（已产 ' + so_chain_num(w.produced_head) + '）' : '')
