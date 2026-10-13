@@ -9,6 +9,7 @@ title: 文档索引
 
 | 需要 | 文档 |
 |---|---|
+| 统一Agent底座改造与Terra验收计划 | [unified-agent-plan.md](unified-agent-plan.md) |
 | 助手开合、拖宽、刷新与删除修复 | [assistant-panel.md](assistant-panel.md) |
 | 运营三功能页与实际验收 | [bank-operations.md](bank-operations.md) |
 | Cursor续办审计与待验收 | [cursor-audit-2026-10-12.md](cursor-audit-2026-10-12.md) |

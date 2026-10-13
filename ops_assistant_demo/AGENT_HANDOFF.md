@@ -5,6 +5,8 @@ title: 受控办理助手交接
 
 # 受控办理助手交接
 
+**2026-10-13 统一侧边栏首版**：自然语言问题现在走 `/api/agent/turn`，使用 LangChain `create_agent` 的受控工具循环，而非依据当前页面 `active()` 分流。`agent_tools.py` 只开放真实工作区读取、工单目录、规则、待确认方案和审计；操作员可用两项语义化“准备”工具生成限额或联调的测试待确认方案，仍由既有摘要、版本、岗位和确认路径执行。明确的工单/路由/终端 CRUD 请求暂继续桥接既有专用规划器，避免一次替换四套经过验证的领域合同。`requirements.txt` 是运行依赖；部署前执行 `python3 -m pip install -r requirements.txt`。真实模型已验证“几个工单及区别”和“测试限额20万→侧栏确认→独立读回”；确定性回归为130项。不要把工具注册理解成可操作任意页面或任意接口。
+
 **2026-10-13 本轮完成**：五阶段计划已推进到「可运行 + 已验证」。`server.py` 已接通 `/api/bank/tasks/*` 与静态白名单，`bank_task` 误路由已修；`verify` 落地逐项模拟验收矩阵；契约缺陷（catalog 正文、答后清问、端口类型、登录后按钮、三页预演回落）已修；`domain.digest` 改显式白名单。**确定性测试 108 项通过**；真机（`deepseek-v4-flash`）001 主线/002 保守档 completed、003 失败→恢复 recovered，浏览器全流程与刷新恢复实测通过。逐项结果见[实际测试结果](docs/competition-v2-results.md)，未实现项与口径在文内明确列出。竞赛交付四件与结果记在 `docs/competition-v2-*.md`。
 
 **2026-10-13 存档与接力**：上一轮未提交的 4 改 7 增已提交存档（此前服务端未接线即中断）。`server.py` 尚未接入任何 `/api/bank/tasks/*` 端点，是首要阻塞；`/api/execute`/`/api/cancel` 对 `bank_task` 存在静默误路由。续接按[实施计划](docs/competition-v2-implementation-plan.md)的五阶段推进，阶段划分、闸门与「不可伪装完成」清单**以该文件为准**。

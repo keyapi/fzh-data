@@ -53,12 +53,27 @@ class RouteDemo:
     def explicit_services(text):
         if not isinstance(text, str) or not text.strip() or len(text) > 1000:
             raise DomainError('INVALID_INPUT', '请说明要开通的业务（不超过1000字）。')
-        names = {key for key, item in SERVICES.items() if any(alias in text for alias in item['aliases'])}
+        normalized = re.sub(r'\s+', '', text)
+        if '全部' in normalized and ('只开' in normalized or '仅开' in normalized):
+            raise DomainError('AMBIGUOUS_SCOPE', '同时出现“仅开”和“全部”，请明确本次业务范围。尚未准备修改。')
+        names, excluded = set(), set()
+        for key, item in SERVICES.items():
+            for alias in item['aliases']:
+                position = normalized.find(alias)
+                if position < 0:
+                    continue
+                prefix = normalized[max(0, position - 6):position]
+                if re.search(r'(?:不|不要|不需|排除|除外|取消)(?:开通|开|办理)?$', prefix):
+                    excluded.add(key)
+                else:
+                    names.add(key)
+                break
+        names -= excluded
         if not names:
+            if excluded:
+                raise DomainError('NEED_BUSINESS', '只识别到排除项，请明确本次要开通的业务。尚未准备修改。')
             raise DomainError('NEED_BUSINESS', '请明确要开通余额查询、明细查询或票据查询中的哪项；不会猜测业务范围。')
-        if re.search(r'(?:不|别|取消|除外|除了|只读).{0,8}(?:余额|明细|流水|票据)|(?:余额|明细|流水|票据).{0,8}(?:不要|不需要|不开通)', text):
-            raise DomainError('AMBIGUOUS_SCOPE', '检测到业务排除或取消条件，请只列本次要开通的业务。尚未准备修改。')
-        if re.search(r'贷款|支付|转账|代发|生产|全部|所有', text):
+        if re.search(r'贷款|支付|转账|代发|生产|全部|所有', normalized):
             raise DomainError('UNSUPPORTED_SCOPE', '本模拟只支持明确的余额、明细、票据查询；包含其他业务或生产要求时需先澄清。')
         return names
 

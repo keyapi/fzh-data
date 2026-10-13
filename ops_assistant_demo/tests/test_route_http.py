@@ -23,10 +23,13 @@ class RouteHttpTests(unittest.TestCase):
         self.assertTrue(saved['route']['report']['passed'])
         self.assertEqual(self.call('/api/routes/execute', {'proposal_id':p['id'],'digest':p['digest']})[0],409)
 
-    def test_reader_denied_before_model_and_negation(self):
+    def test_reader_denied_before_model_and_explicit_exclusion(self):
         self.login('reader')
         with patch.object(server, 'model_call') as model:
             self.assertEqual(self.call('/api/routes/plan', {'text':'开通余额查询'})[0],403)
             model.assert_not_called()
         self.login()
-        self.assertEqual(self.call('/api/routes/plan', {'text':'开通余额但不要开通票据'})[0],400)
+        with patch.object(server, 'model_call', return_value=helper.reply(calls=[('select_services', {'services':['balance']})])):
+            status, result = self.call('/api/routes/plan', {'text':'开通余额但不要开通票据'})
+        self.assertEqual(status, 200, result)
+        self.assertEqual(result['route']['proposal']['scope'], ['balance'])

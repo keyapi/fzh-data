@@ -7,6 +7,9 @@ title: 文档变更日志
 
 ## 2026-10-13
 
+- 新增[统一工作台Agent规划](unified-agent-plan.md)：核实页面路由劫持、状态/工具断层，按五个实施单元定义真实对话和浏览器发布闸门；已落地首个统一读取/准备入口，剩余领域规划器统一化仍待后续迭代。
+- 新增统一助手首版：`/api/agent/turn` 使用 LangChain `create_agent`，通过受控能力目录读取真实工作区并保留服务端岗位/工作区绑定；测试限额与联调只可准备待确认方案。真实模型及浏览器验证“工单差异查询”和“20万→确认→独立读回”；130项确定性回归通过。
+
 - 续接实施：`server.py` 接通 `/api/bank/tasks/*` 与静态白名单；新增 `tests/test_bank_task_http.py` 脚本化端到端；修契约（catalog 正文、答后清问、端口类型）；`verify` 落地逐项模拟验收矩阵；`domain.digest` 改显式白名单；容错操作取值；修任务页登录后状态与三页预演回落。确定性测试 108 项通过。
 - 真机评测（`deepseek-v4-flash`）：001 主线 completed、002 保守档 completed、003 失败→恢复 recovered、规则问答不生成方案、提示污染未扩大范围。详见 [实际测试结果](competition-v2-results.md)。
 - 新增竞赛交付：[项目说明](competition-v2-project.md)、[演示脚本](competition-v2-script.md)、[答疑](competition-v2-faq.md)、[演示材料](competition-v2-materials.md)、[实际测试结果](competition-v2-results.md)。

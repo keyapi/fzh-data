@@ -841,9 +841,13 @@ $("ask").onsubmit = (e) => {
   $("ask-input").value = "";
   if(/^(允许(?:修改|执行|删除|保存)?|确认(?:修改|删除|保存)?|确定|同意(?:修改|执行|删除|保存)?)[。！!\s]*$/.test(text)){confirmFromChat();return;}
   if(/^(取消(?:修改)?|不允许)[。！!\s]*$/.test(text)){confirmFromChat(true);return;}
-  if(text&&window.RouteUI?.routes(text)){window.RouteUI.ask(text);return;}
-  if(text&&window.BankTaskUI?.routes(text)){window.BankTaskUI.ask(text);return;}
-  if (text) askOps(text,scenarioFor(text,!$("view-integration").hidden?"integration":"counter"));
+  // Explicit, domain-changing requests keep their mature bounded planners.
+  // All questions go through the unified agent instead of the current-page router.
+  if(text&&/工单.*(?:核对|办理|形成方案)|(?:核对|办理|形成方案).*工单|按当前工单/.test(text)){window.BankTaskUI?.ask(text);return;}
+  if(text&&/(?:开通|配置).*(?:余额|明细|票据)|(?:余额|明细|票据).*(?:开通|配置)/.test(text)){window.RouteUI?.ask(text);return;}
+  const bankEntity=window.BankUI?.scenarioFor(text);
+  if(text&&bankEntity&&/(?:删除|新增|修改|配置|保存)/.test(text)&&!/限额|超时|重试/.test(text)){askBank(text,bankEntity);return;}
+  if (text) askUnified(text);
 };
 let opsState = null;
 let opsProposal = null;
@@ -1041,6 +1045,25 @@ async function askOps(text,scenario="integration"){
 
  }catch(err){log.splice(pending,1);push({kind:"deny",text:String(err.message||err)+"。可使用明确标注的人工修改，仍需后台授权与确认。"});}
  finally{busy=false;$("rule-ok").disabled=false;clearAim();renderLog();}
+}
+async function askUnified(text){
+ window.AssistantPanel?.open();
+ if(busy){push({kind:"user",text});push({kind:"bot",text:"当前正在读取或办理上一项请求。请等待当前结果返回后再继续；尚未新增写入。"});return;}
+ busy=true;push({kind:"user",text});const waiting=push({kind:"bot",text:"已受理，正在读取当前工作区与适用依据…",transient:true});
+ try{
+  const data=await opsFetch('/api/agent/turn',{text});
+  log.splice(waiting,1);
+  push({kind:data.text.length>220?"long-answer":"bot",text:data.text||"本次没有形成可核验回复，业务配置未改变。"});
+  if(data.trace?.length)push({kind:"evidence",citations:[],trace:data.trace});
+  if(data.state){opsState=data.state;renderOps();}
+  const prepared=(data.trace||[]).map(item=>item?.result?.proposal).find(Boolean);
+  if(prepared){
+    push({kind:"bot",text:"已准备测试环境方案，尚未保存。可在侧边栏点击“允许修改”，由后台再次核对后执行。"});
+    await previewChange(prepared);
+  }
+ }catch(err){
+  log.splice(waiting,1);push({kind:"deny",text:(err.message||"读取失败")+"。本次没有修改业务配置。"});
+ }finally{busy=false;clearAim();$("rule-ok").disabled=false;renderApproval();}
 }
 async function askBank(text,entity){
  window.AssistantPanel?.open();

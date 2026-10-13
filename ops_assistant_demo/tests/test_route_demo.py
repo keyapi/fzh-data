@@ -47,6 +47,13 @@ class RouteDemoTests(unittest.TestCase):
             self.routes.execute(self.workspace, 'operator', plan['id'], plan['digest'])
         self.assertEqual(stale.exception.code, 'NO_PROPOSAL')
 
+    def test_explicit_exclusion_is_respected_but_contradiction_is_clarified(self):
+        selected = self.routes.explicit_services('开通余额和明细，不开票据')
+        self.assertEqual(selected, {'balance', 'statement'})
+        with self.assertRaises(DomainError) as contradiction:
+            self.routes.explicit_services('只开余额，同时开通全部业务')
+        self.assertEqual(contradiction.exception.code, 'AMBIGUOUS_SCOPE')
+
 
 if __name__ == '__main__':
     unittest.main()

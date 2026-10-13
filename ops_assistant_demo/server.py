@@ -23,6 +23,8 @@ from bank_tasks import BankTasks
 from bank_task_agent import run_task_agent
 from route_demo import RouteDemo, SERVICES, RULE
 from feedback_store import FeedbackStore
+from agent_runtime import AgentRuntime
+from agent_tools import AgentTools
 
 ROOT = Path(__file__).resolve().parent
 SERVER_FINGERPRINT = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()[:12]
@@ -55,6 +57,12 @@ LOCK = threading.RLock()
 BUCKETS = collections.defaultdict(collections.deque)
 MODEL_SLOTS = threading.BoundedSemaphore(2)
 MAX_BODY = 32768
+
+
+def unified_agent_turn(session, body):
+    """One server-owned LangChain turn. Browser page hints are intentionally ignored."""
+    return AgentRuntime(AgentTools(STORE), CONFIG).turn(
+        session, body.get('text'), session['workspace'], session['role'])
 
 
 def rate_limit(name, maximum, window):
@@ -514,6 +522,26 @@ class Handler(BaseHTTPRequestHandler):
                 for name in ('diagnostics', 'scenario_history', 'task_history', 'bank_history', 'bank_task_notes'):
                     session.pop(name, None)
                 self._send(200, {'ok': True, 'state': state})
+                return
+            if route == '/api/agent/turn':
+                text = body.get('text')
+                if not isinstance(text, str) or not text.strip():
+                    raise DomainError('INVALID_INPUT', '请输入要查询或办理的事项。')
+                rate_limit('agent-turn-ip:' + ip, 60, 3600)
+                rate_limit('agent-turn-workspace:' + workspace, 30, 3600)
+                if not MODEL_SLOTS.acquire(blocking=False):
+                    raise DomainError('BUSY', '助手正在处理上一项请求，请等待结果返回。', 429)
+                try:
+                    # The browser may offer a page hint, but it is never routed or trusted.
+                    result = unified_agent_turn(session, {'text': text})
+                    session.setdefault('diagnostics', []).append({'kind': 'unified_agent_turn',
+                        'outcome': result.get('outcome'), 'timestamp': int(time.time()),
+                        'turn_id': result.get('turn_id')})
+                    session['diagnostics'] = session['diagnostics'][-20:]
+                    result['state'] = self._snapshot(session)
+                finally:
+                    MODEL_SLOTS.release()
+                self._send(200, {'ok': True, **result})
                 return
             if route == '/api/routes/plan':
                 STORE._role(role, 'operator')
