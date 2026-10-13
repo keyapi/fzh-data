@@ -35,6 +35,6 @@
   async function execute(){const p=state?.route?.proposal;if(working||!p||p.status!=='pending')return;working=true;render();try{await spotlight(el('route-execute'),'一次确认 · 后台执行',100,160);const d=await opsFetch('/api/routes/execute',{proposal_id:p.id,digest:p.digest});state={...state,...d};render();say(d.message);await spotlight(el('route-report'),'独立读回与模拟命中结果',100,160);}catch(e){say(e.message,true);await refresh();}finally{working=false;clearAim();render();}}
   async function ask(text){window.AssistantPanel?.open();show();push({kind:'user',text});await plan(text);push({kind:'bot',text:el('route-message').textContent});}
   function routes(text){return active()||/路由|适配器|余额查询|明细查询|票据查询/.test(String(text||''));}
-  async function confirmFromChat(cancelled){if(cancelled){const d=await opsFetch('/api/routes/cancel',{});state={...state,...d};render();say(d.message);return;}await execute();} window.RouteUI={show,ask,routes,refresh,confirmFromChat,isActive:active};
+  async function confirmFromChat(cancelled){if(cancelled){const d=await opsFetch('/api/routes/cancel',{});state={...state,...d};render();say(d.message);return;}await execute();} window.RouteUI={show,ask,routes,refresh,confirmFromChat,plan,preview,execute,isActive:active,get isWorking(){return working;}};
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install);else install();
 })();

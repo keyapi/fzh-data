@@ -26,6 +26,7 @@ title: Web AI assistant — 文档索引
 | Reference | 2026-10-12 实现与验证交接 | [docs/handoff-2026-10-12.md](docs/handoff-2026-10-12.md) |
 | Index | 文档索引 | [docs/index.md](docs/index.md) |
 | Log | 文档变更日志 | [docs/log.md](docs/log.md) |
+| Reference | 演示者培训、环节反馈与上场准备 | [docs/presenter-rehearsal.md](docs/presenter-rehearsal.md) |
 | Reference | 网页内参数助手先查再决定，护栏看动作不看原话 | [docs/read-then-guard.md](docs/read-then-guard.md) |
 | Research | 竞赛设计依据与公开案例 | [docs/research.md](docs/research.md) |
 | Guide | 路由配置场景评估与演示 | [docs/route-scenario.md](docs/route-scenario.md) |

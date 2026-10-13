@@ -376,7 +376,7 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path in ('/', '/index.html'):
             self._send(200, (ROOT / 'index.html').read_bytes(), 'text/html; charset=utf-8')
             return
-        if parsed.path in ('/bank_ui.js', '/assistant_panel.js', '/bank_task_ui.js', '/route_ui.js', '/feedback_ui.js', '/competition.html'):
+        if parsed.path in ('/bank_ui.js', '/assistant_panel.js', '/bank_task_ui.js', '/route_ui.js', '/feedback_ui.js', '/rehearsal_ui.js', '/competition.html'):
             asset = ROOT / parsed.path[1:]
             if not asset.is_file():
                 self._send(404, {'error': 'not found'})
@@ -504,6 +504,17 @@ class Handler(BaseHTTPRequestHandler):
             rate_limit('write-ip:' + ip, 150, 60)
             route = path.replace('/api/ops/', '/api/')
             role, workspace = session['role'], session['workspace']
+            if route == '/api/rehearsal/fresh':
+                STORE._role(role, 'operator')
+                rate_limit('fresh-workspace:' + ip, 20, 3600)
+                fresh_workspace = secrets.token_hex(12)
+                state = self._snapshot({'workspace': fresh_workspace, 'role': role})
+                # Keep durable audit and feedback; move only this browser session.
+                session['workspace'] = fresh_workspace
+                for name in ('diagnostics', 'scenario_history', 'task_history', 'bank_history', 'bank_task_notes'):
+                    session.pop(name, None)
+                self._send(200, {'ok': True, 'state': state})
+                return
             if route == '/api/routes/plan':
                 STORE._role(role, 'operator')
                 rate_limit('route-chat:' + workspace, 30, 3600)

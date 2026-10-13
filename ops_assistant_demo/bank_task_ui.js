@@ -5,7 +5,7 @@
   const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const labels={terminal:'终端注册',parameter:'注册参数',ip:'固定 IP',max_concurrency:'最大并发',callback_mode:'回调方式',value:'参数值',client_port:'客户端端口',timeout_seconds:'超时秒数',retry_count:'重试次数',idempotency_enabled:'幂等开关'};
   const statusNames={draft:'待分析',analyzing:'正在分析',needs_input:'待补充',ready:'待整组确认',executing:'正在保存',completed:'接入完成',verification_failed:'已保存，模拟验收未通过',execution_failed:'保存失败',cancelled:'已取消',invalidated:'已失效',recovered:'已恢复'};
-  let installed=false,task=null,proposal=null,report=null,catalog=null,working=false,readEpoch=0;
+  let installed=false,task=null,proposal=null,report=null,catalog=null,working=false,readEpoch=0,lastWorkspace=null;
   const name=value=>labels[value]||String(value||'—');
   function active(){return installed&&!el('view-bank-task').hidden;}
   function pending(){return proposal?.scenario==='bank_task'&&proposal.status==='pending'&&proposal.task_id===task?.id&&Number(proposal.expires_at)*1000>Date.now()&&role()==='operator';}
@@ -100,7 +100,7 @@
   async function confirmFromChat(cancelled){if(!active()||!pending())return;push({kind:'user',text:cancelled?'取消整组方案':'确认整组方案'});return cancelled?cancel():confirm();}
   function routes(text){return active()||/工单|整组接入|渠道接入任务|跨三页|三页.*(?:办理|配置)/.test(String(text||''));}
   async function ask(text){window.AssistantPanel?.open();if(!active())show();if(!task?.id){push({kind:'user',text});msg('请先选择工单并建立任务。');return;}push({kind:'user',text});await analyze(text);}
-  function onOpsState(state){if(!installed)return;if(state?.role!=='operator'||(task&&state?.bank?.reset_count!==undefined&&task.reset_count!==undefined&&Number(state.bank.reset_count)!==Number(task.reset_count))){task=null;proposal=null;report=null;}render();}
-  window.BankTaskUI={install,show,restore,ask,routes,confirmFromChat,onOpsState,isActive:active,hasPending:pending,get taskId(){return task?.id||null;},get pendingCount(){return pending()?1:0;}};
+  function onOpsState(state){if(!installed)return;if(lastWorkspace&&lastWorkspace!==state?.workspace){task=null;proposal=null;report=null;}lastWorkspace=state?.workspace;if(state?.role!=='operator'||(task&&state?.bank?.reset_count!==undefined&&task.reset_count!==undefined&&Number(state.bank.reset_count)!==Number(task.reset_count))){task=null;proposal=null;report=null;}render();}
+  window.BankTaskUI={install,show,restore,ask,routes,confirmFromChat,onOpsState,loadCatalog,start,analyze,answer,preview,confirm,isActive:active,hasPending:pending,get isWorking(){return working;},get taskId(){return task?.id||null;},get pendingCount(){return pending()?1:0;}};
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install);else install();
 })();

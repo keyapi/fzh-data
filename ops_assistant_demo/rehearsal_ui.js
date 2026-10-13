@@ -1,0 +1,74 @@
+/* Presenter coaching uses the real demo actions. It never simulates success. */
+(() => {
+  'use strict';
+  const el=id=>document.getElementById(id), esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  let scene='task',step=0,done={},notes={},tickets=[],working=false,scope=null,installed=false,feedbackLoaded=false,feedbackOpening=false,lastMessage="先登录模拟操作员，再开始排练。";
+  const routeRequest='请为客户开通余额查询、明细查询和票据查询，不动其他业务。';
+  const scripts={task:[
+    ['准备排练','开始前先准备一个干净的模拟工作区。','确认身份为操作员，旧聊天和旧方案不会带入。','开始全新排练','现场由哪个岗位负责操作与复核？'],
+    ['读取工单','难点是跨页面核对资料和现状。我只给一份工单，不逐字段报参数。','展示工单原文，找到过期模板与缺项。','打开工单并建立任务','实际办理材料里还缺哪些业务事实？'],
+    ['让助手分析','先核对当前配置和现行规则，材料真正缺失时再问人。','助手只追问客户端端口；尚未保存。','让助手分析工单','现行规则如何判断，哪些模板不能沿用？'],
+    ['补必要缺项','规范能确定的由系统处理，实际监听端口由人补充。','补充后出现5项整组差异，不重复新建已有终端。','补充端口并继续','这个值应由谁提供？真实流程是否另有缺项？'],
+    ['核对与预演','看旧值、新值和依据。预演展示填写过程，当前还没保存。','三页高亮与逐字填写后回到确认卡。','预演三页填写','真实页面有哪些必填项、依赖或生效步骤？'],
+    ['确认与验收','确认后保存整组，再独立读回并运行模拟验收。','接入完成，读回与6项模拟检查通过。','确认模拟修改并验收','实际系统怎样才算办理完成？'],
+    ['排练复盘','今天展示的是有依据、可确认、可验收的模拟办理闭环。','检查剩余疑问和反馈，再决定正式讲法。','核对本次结果','哪些步骤最费时、最容易错，助手价值在哪里？']
+  ],route:[
+    ['准备排练','先准备干净的模拟工作区。','确认操作员身份，旧方案不带入。','开始全新排练','真实路由维护由什么岗位负责？'],
+    ['提出业务目标','客户知道要哪些业务，不需要先知道适配器标识或业务码。','余额、明细、票据查询是本次明确范围。','打开业务路由页面','这三项业务的真实映射是否完整，哪些需要确认？'],
+    ['推导最小差异','读取现状与模拟映射，正确的已有配置复用。','8项差异；已有余额适配器被复用。','让助手准备路由方案','真实系统应新增适配器，还是选择已部署定义？'],
+    ['逐页预演','客户端、适配器和路由逐页预演，此时没有保存。','观察鼠标、高亮、逐字填写和整组差异。','预演逐页填写','实际配置顺序、调用方式、输入输出依赖是否正确？'],
+    ['确认与命中检查','一次确认整组，随后检查模拟业务码是否命中正确路由。','3项业务命中与范围检查通过。','确认模拟修改并验收','真实验收还需要哪些检查，谁负责批准？'],
+    ['排练复盘','这条副线展示业务目标到技术配置的转换。','模拟映射仍需业务同事校准。','核对本次结果','相比原工单场景，哪条更贴近实际、适合比赛？']
+  ]};
+  function steps(){return scripts[scene];}
+  function blocked(){return busy||working||window.BankTaskUI?.isWorking||window.RouteUI?.isWorking;}
+  function save(){if(!opsState?.workspace)return;scope=opsState.workspace;try{sessionStorage.setItem('demo-rehearsal:'+scope,JSON.stringify({scene,step,done,notes,tickets}));}catch{}}
+  function restore(){if(!opsState?.workspace||scope===opsState.workspace)return;scope=opsState.workspace;try{const data=JSON.parse(sessionStorage.getItem('demo-rehearsal:'+scope)||'null');if(data){scene=['task','route'].includes(data.scene)?data.scene:'task';step=Math.min(Number(data.step)||0,scripts[scene].length-1);done=data.done||{};notes=data.notes||{};tickets=data.tickets||[];}}catch{}}
+  function message(text){lastMessage=text;el('rehearsal-message').textContent=text;if(el('coach-status'))el('coach-status').textContent=text;}
+  function install(){if(installed)return;installed=true;
+    const style=document.createElement('style');style.textContent=`#view-rehearsal{padding-bottom:100px}#rehearsal-coach{position:fixed;left:210px;right:calc(var(--assistant-space,360px) + 12px);bottom:10px;z-index:110;background:#fff;border:1px solid #b7cce0;border-left:4px solid #174c88;border-radius:5px;padding:10px;box-shadow:0 2px 12px #153b651a;font-size:13px}#rehearsal-coach[hidden]{display:none}#rehearsal-coach button{margin:3px;padding:5px 8px}#view-rehearsal textarea{width:100%;min-height:65px;font:inherit;border:1px solid #bfcddd;padding:8px;box-sizing:border-box}.rehearsal-dialog{max-width:850px;width:85vw;max-height:85vh;border:1px solid #b7cce0;border-radius:8px;padding:18px;overflow:auto}.rehearsal-dialog::backdrop{background:#18324b66}.rehearsal-dialog .friend-only{margin:0;padding:12px}.rehearsal-dialog #feedback-form{display:grid;gap:10px}.rehearsal-dialog label{display:grid;gap:5px}.rehearsal-dialog input,.rehearsal-dialog textarea,.rehearsal-dialog select{font:inherit;width:100%;padding:7px;box-sizing:border-box}.rehearsal-dialog button{padding:7px;margin:4px}#view-rehearsal .task-actions{margin:12px 0}`;document.head.append(style);
+    const nav=document.createElement('button');nav.id='nav-rehearsal';nav.textContent='演示者排练';nav.type='button';nav.onclick=show;document.querySelector('nav').append(nav);
+    const section=document.createElement('section');section.id='view-rehearsal';section.className='bank-task';section.hidden=true;section.innerHTML=`<div class="crumb">演示准备 / 分步排练与业务反馈</div><div class="task-hero"><div><h1>演示者排练</h1><p>按步骤学习讲法与操作；每个环节可以就地提问、反馈，再准备正式演示。</p></div></div><div class="task-actions"><label>选择剧本<select id="rehearsal-scene"><option value="task">接入工单 · 主线约7分钟</option><option value="route">业务路由 · 副线约2分钟</option></select></label><button id="rehearsal-formal">一键准备正式演示</button><button id="rehearsal-clear">清理排练笔记与进度</button></div><p id="rehearsal-message" role="status">先登录模拟操作员，再开始排练。培训时间不限，正式展示按剧本控制节奏。</p><div id="rehearsal-content"></div>`;document.querySelector('main').append(section);
+    const coach=document.createElement('div');coach.id='rehearsal-coach';coach.hidden=true;document.body.append(coach);
+    for(const id of ['rehearsal-reset-dialog','rehearsal-feedback-dialog']){const d=document.createElement('dialog');d.id=id;d.className='rehearsal-dialog';document.body.append(d);}
+    el('rehearsal-scene').onchange=()=>{if(blocked())return;scene=el('rehearsal-scene').value;step=0;done={};save();render();};el('rehearsal-formal').onclick=()=>fresh(true);el('rehearsal-clear').onclick=clearNotes;
+    document.addEventListener('feedback-submitted',e=>{tickets.push({id:e.detail.id,scene,step});save();message('本步反馈已提交：'+e.detail.id+'，可在反馈窗口查询回复。');});render();
+  }
+  function reveal(){document.querySelectorAll('main > section[id^="view-"]').forEach(s=>s.hidden=s.id!=='view-rehearsal');document.querySelectorAll('nav button').forEach(b=>b.toggleAttribute('aria-current',b.id==='nav-rehearsal'));}
+  function show(){install();if(blocked())return;restore();reveal();render();window.AssistantPanel?.save();}
+  function render(){if(!installed)return;const current=steps()[step],id=scene+':'+step;el('rehearsal-scene').value=scene;el('rehearsal-content').innerHTML=`<div class="task-flow">${steps().map((s,i)=>`<button data-step="${i}" ${i===step?'class="solid"':''}>${i+1} ${esc(s[0])}${done[scene+':'+i]?' ✓':''}</button>`).join('')}</div><div class="task-card"><h2>第 ${step+1} 步 · ${esc(current[0])}</h2><div class="task-body"><p><b>可以这样讲：</b>${esc(current[1])}</p><p><b>应该看到：</b>${esc(current[2])}</p>${scene==='task'&&step===3?'<label>模拟客户端端口<input id="rehearsal-port" type="number" min="1" max="65535" value="9443"></label>':''}<div class="task-actions"><button id="rehearsal-action" class="solid">${esc(current[3])}</button><button id="rehearsal-copy">填入本步操作指令（不发送）</button><button id="rehearsal-next">下一步</button></div><p><b>这个环节请业务同事判断：</b>${esc(current[4])}</p><textarea id="rehearsal-note" placeholder="可记疑问或实际流程差异，也可留空继续排练">${esc(notes[id]||'')}</textarea><div class="task-actions"><button id="rehearsal-feedback">就本步提交问题 / 截图</button><button id="rehearsal-back">上一步</button></div><p>已提交反馈：${tickets.filter(t=>t.scene===scene&&t.step===step).map(t=>esc(t.id)).join('、')||'暂无'}。排练勾选只是进度；执行成功以后台结果为准。</p></div></div>`;
+    el('rehearsal-content').querySelectorAll('[data-step]').forEach(b=>b.onclick=()=>move(Number(b.dataset.step)));el('rehearsal-note').oninput=()=>{notes[id]=el('rehearsal-note').value;save();};el('rehearsal-action').onclick=run;el('rehearsal-feedback').onclick=feedback;el('rehearsal-copy').onclick=()=>{const commands=scene==='task'?['','按当前工单完成测试接入。','请读取工单和现行规范，只问必要缺项。','9443','请解释整组差异和依据。','确认','请说明本次验收结果。']:['',routeRequest,routeRequest,'请解释路由映射。','确认','请说明路由验收结果。'];el('ask-input').value=commands[step]||'';if(scene==='task')window.BankTaskUI.show();else window.RouteUI.show();window.AssistantPanel?.open(true);};el('rehearsal-next').onclick=()=>move(Math.min(step+1,steps().length-1));el('rehearsal-back').onclick=()=>move(Math.max(0,step-1));
+    el('rehearsal-coach').innerHTML=`<div id="coach-status">${esc(lastMessage)}</div><b>排练 ${step+1}/${steps().length} · ${esc(current[0])}</b> <span>${esc(current[1])}</span><div><button id="coach-run">${esc(current[3])}</button><button id="coach-next">下一步</button><button id="coach-feedback">本步反馈</button><button id="coach-return">返回排练</button><button id="coach-hide">收起提示条</button></div>`;el('coach-run').onclick=run;el('coach-next').onclick=()=>move(Math.min(step+1,steps().length-1));el('coach-feedback').onclick=feedback;el('coach-return').onclick=show;el('coach-hide').onclick=()=>el('rehearsal-coach').hidden=true;
+    el('rehearsal-action').disabled=blocked();el('coach-run').disabled=blocked();
+  }
+  function move(next){if(blocked())return;step=next;save();reveal();render();}
+  async function taskState(){if(!window.BankTaskUI.taskId)throw new Error('请先完成建立工单任务这一步。');return opsFetch('/api/bank/tasks/state?task_id='+encodeURIComponent(window.BankTaskUI.taskId));}
+  async function run(){if(blocked())return;if(role()!=='operator'){el('login-dialog').showModal();message('请先登录模拟操作员。');return;}if(step===0)return fresh(false);working=true;message('正在执行本步，请等待真实后台结果。');render();el('rehearsal-coach').hidden=false;
+    try{if(scene==='task'){
+      if(step===1){window.BankTaskUI.show();await window.BankTaskUI.loadCatalog();el('bank-task-ticket').value='WO-DEMO-001';await window.BankTaskUI.start();await taskState();}
+      if(step===2){await taskState();window.BankTaskUI.show();await window.BankTaskUI.analyze();const d=await taskState();if(!d.task.questions?.length&&!d.proposal)throw new Error('未得到追问或方案，请查看助手结果。');}
+      if(step===3){const d=await taskState();const q=d.task.questions.find(q=>q.field==='client_port');if(q){const value=Number(el('rehearsal-port')?.value||9443);if(!Number.isInteger(value)||value<1||value>65535)throw new Error('请输入有效的模拟端口。');window.BankTaskUI.show();await window.BankTaskUI.answer(q,value);}const after=await taskState();if(after.proposal?.status!=='pending')throw new Error('尚未得到待确认整组方案，请先核对缺项或模型返回。');}
+      if(step===4){const d=await taskState();if(d.proposal?.status!=='pending')throw new Error('请先完成分析并准备整组方案。');await window.BankTaskUI.preview();}
+      if(step===5){const d=await taskState();if(d.proposal?.status!=='pending')throw new Error('没有可确认方案；若已执行请进入结果复盘。');await window.BankTaskUI.confirm();const after=await taskState();if(!after.report?.passed)throw new Error('本次验收未通过，请保留现场并在本步反馈。');}
+      if(step===6){const d=await taskState();if(!d.report?.passed)throw new Error('后台尚无通过结果，不能宣称演示完成。');window.BankTaskUI.show();}
+    }else{
+      if(step===1){window.RouteUI.show();el('route-request').value=routeRequest;}
+      if(step===2){window.RouteUI.show();await window.RouteUI.plan(routeRequest);const d=await opsFetch('/api/routes/state');if(d.route.proposal?.status!=='pending')throw new Error('未得到待确认路由方案，请核对现状或模型返回。');}
+      if(step===3){const d=await opsFetch('/api/routes/state');if(d.route.proposal?.status!=='pending')throw new Error('请先准备路由方案。');await window.RouteUI.preview();}
+      if(step===4){const d=await opsFetch('/api/routes/state');if(d.route.proposal?.status!=='pending')throw new Error('当前没有待确认路由方案。');await window.RouteUI.execute();const after=await opsFetch('/api/routes/state');if(!after.route.report?.passed)throw new Error('后台尚无通过结果，请在本步反馈。');}
+      if(step===5){const d=await opsFetch('/api/routes/state');if(!d.route.report?.passed)throw new Error('尚未验收通过，不能宣称完成。');window.RouteUI.show();}
+    }done[scene+':'+step]=true;message('本步已检查。观察实际页面后点“下一步”，有疑问可直接反馈。');save();
+    }catch(e){message('本步暂停：'+e.message+' 可以在本步反馈；重复排练请先准备全新工作区。');}finally{working=false;render();el('rehearsal-coach').hidden=false;}
+  }
+  function confirmation(title,text){return new Promise(resolve=>{const d=el('rehearsal-reset-dialog');d.innerHTML=`<h2>${esc(title)}</h2><p>${esc(text)}</p><button id="rehearsal-reset-yes">确认准备</button><button id="rehearsal-reset-no">取消</button>`;const end=value=>{d.close();resolve(value);};el('rehearsal-reset-yes').onclick=()=>end(true);el('rehearsal-reset-no').onclick=()=>end(false);d.oncancel=e=>{e.preventDefault();end(false);};d.showModal();});}
+  async function fresh(formal){if(blocked()||el('rehearsal-reset-dialog').open)return;if(role()!=='operator'){el('login-dialog').showModal();return;}if(!await confirmation(formal?'准备正式演示':'开始全新排练','将切到新的模拟工作区，清除当前页面旧聊天、旧任务、待确认内容和填写残留。已提交反馈及原工作区审计保留；同一登录会话的其他标签页也会切到新工作区。'))return;working=true;
+    try{const d=await opsFetch('/api/rehearsal/fresh',{});opsEpoch++;opsState=d.state;opsProposal=null;counterApproval=null;log=[];el('ask-input').value='';el('rule-dialog').hidden=true;el('ops-proposal').hidden=true;el('ops-readback').hidden=true;clearAim();renderLog();renderOps();await window.BankUI?.load();await window.RouteUI?.refresh();scope=opsState.workspace;step=formal?1:0;done={};notes={};tickets=[];if(!formal)done[scene+':0']=true;save();if(formal){el('rehearsal-coach').hidden=true;window.AssistantPanel?.open();if(scene==='task')window.BankTaskUI.show();else window.RouteUI.show();}else reveal();message(formal?'正式演示工作区已就绪。请按所选剧本建立任务；尚未分析或保存。':'干净工作区已准备。继续下一步。');
+    }catch(e){message(e.message);}finally{working=false;render();el('rehearsal-coach').hidden=true;}
+  }
+  async function clearNotes(){if(blocked()||el('rehearsal-reset-dialog').open)return;if(!await confirmation('清理排练笔记与进度','仅清理当前浏览器本工作区的排练笔记和步骤勾选，不修改业务、不清聊天、不删除已提交反馈。'))return;done={};notes={};step=0;save();render();message('排练笔记与进度已清理，已提交反馈仍可查询。');}
+  async function feedback(){if(blocked()||feedbackOpening||el('rehearsal-feedback-dialog').open)return;feedbackOpening=true;const d=el('rehearsal-feedback-dialog');try{if(!feedbackLoaded){const response=await fetch('/competition.html');if(!response.ok)throw new Error('反馈表暂不可用，请稍后重试。');const doc=new DOMParser().parseFromString(await response.text(),'text/html');const section=doc.getElementById('feedback');if(!section)throw new Error('反馈表未找到。');d.innerHTML='<button id="rehearsal-feedback-close">关闭并保留草稿</button>';d.append(document.importNode(section,true));el('rehearsal-feedback-close').onclick=()=>d.close();await new Promise((resolve,reject)=>{const script=document.createElement('script');script.src='/feedback_ui.js';script.onload=resolve;script.onerror=()=>reject(new Error('反馈功能加载失败。'));document.body.append(script);});feedbackLoaded=true;el('feedback-form').addEventListener('feedback-submitted',()=>{el('feedback-form').dataset.submitted='1';});}
+      const form=el('feedback-form');if(!form.elements.title.value||form.dataset.submitted==='1'){form.reset();el('feedback-files').dispatchEvent(new Event('change'));delete form.dataset.submitted;form.elements.scene.value=scene==='task'?'接入工单':'业务路由配置';form.elements.title.value='排练第'+(step+1)+'步：'+steps()[step][0];form.elements.steps.value='排练场景：'+(scene==='task'?'接入工单':'业务路由')+'；环节：'+steps()[step][0]+'。\n'+(notes[scene+':'+step]||'');form.elements.expected.value=steps()[step][2];}d.showModal();
+    }catch(e){message(e.message);}finally{feedbackOpening=false;}
+  }
+  window.RehearsalUI={show,onOpsState(){restore();render();}};install();if(new URLSearchParams(location.search).has('presenter'))show();
+})();

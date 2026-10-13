@@ -30,3 +30,5 @@ title: 文档索引
 - [路由场景评估与两分钟演示](route-scenario.md)
 
 - [试用反馈与持续改进闭环](feedback-loop.md)
+
+- [演示者培训与上场准备](presenter-rehearsal.md)

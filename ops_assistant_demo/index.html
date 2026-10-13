@@ -863,6 +863,7 @@ function fieldLabel(field) {
 function renderOps() {
   if (!opsState) return;
   window.BankTaskUI?.onOpsState(opsState);
+  window.RehearsalUI?.onOpsState();
   if(window.RouteUI?.isActive())window.RouteUI.refresh();
   window.AssistantPanel?.attach(opsState);
   $("role").value=opsState.role;
@@ -1120,5 +1121,6 @@ push({kind:"bot",text:"告诉我要改什么，我会在页面填写，等你确
 <script src="/assistant_panel.js"></script>
 <script src="/bank_task_ui.js"></script>
 <script src="/route_ui.js"></script>
+<script src="/rehearsal_ui.js"></script>
 </body>
 </html>
