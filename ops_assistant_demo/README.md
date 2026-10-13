@@ -5,8 +5,6 @@ title: 科技运营受控办理助手
 
 # 科技运营受控办理助手
 
-竞赛主线从「智能办理 → 接入工单」进入：内置模拟工单、现行规则与三页现状形成整组变更，一次确认后原子保存并逐项模拟验收。[7分钟演示脚本](docs/competition-v2-script.md)、[项目说明](docs/competition-v2-project.md)、[测试证据与边界](docs/competition-v2-results.md)；投屏/打印版在运行服务的 `/competition.html`。本功能仅处理限定模拟样本，未接真实银行系统。
-
 助手现可从顶部打开/收起，收起后有悬浮入口，分割线可拖宽；刷新恢复当前岗位的聊天、草稿与布局。已修“删除最新IP”误索要数值，当前80项回归通过；边界和验收见[助手面板](docs/assistant-panel.md)。
 
 最新新增终端注册、注册参数、固定IP三功能页，包含模拟数据增删改查、真实模型准备、统一确认、高亮鼠标填写及后台独立读回。当前76项自动化通过、0跳过；实际验收见[渠道接入](docs/bank-operations.md)，下文早期计数为历史记录。
@@ -34,14 +32,24 @@ uv run python server.py
 
 ## 演示与验证
 
+工单驱动的渠道接入主线（当前主场景）演示与交付：
+
+- [项目说明](docs/competition-v2-project.md) / [演示脚本](docs/competition-v2-script.md) / [答疑](docs/competition-v2-faq.md) / [演示材料](docs/competition-v2-materials.md) / [实际测试结果](docs/competition-v2-results.md)
+- [设计合同](docs/competition-v2-design.md) / [续接实施计划](docs/competition-v2-implementation-plan.md)
+
+旧场景（柜面限额/联调）材料：
+
 - [5 分钟主剧本与答疑场景](docs/demo-script.md)
 - [实施规格与验收目标](docs/competition-plan.md)
 - [安全边界与质疑解答](docs/security-boundaries.md)
 - [公开案例与设计依据](docs/research.md)
 
 ```powershell
-uv run python -m unittest discover -s tests -v
+cd <项目目录>
+python -m unittest discover -s tests -v
 ```
+
+> 本仓库无 `pyproject.toml` / `uv.lock`，请用系统 `python` 在本目录直接运行；在仓库外跑 `uv run python` 会解析到别的项目。
 
 测试结果以本次命令输出为准。安全测试是明确标注的确定性测试，不把它冒充真实模型遭受攻击。真实模型对话单独演练；备用录像与回放也须标注。
 

@@ -27,7 +27,7 @@ title: 受控办理助手交接
 - 金额以元保存，初始 500000 元（50 万元）；超时以秒、重试以次数存储。
 - 资料均模拟；有效版本、适用环境和引用可见。资料不能授予执行权限。
 - page-agent 仅保留历史调研，不能恢复公开代理或通用执行工具。
-- 演示登录不是 BOC SSO，SQLite 日志不是防篡改监管审计。
+- 演示登录不是 真实组织单点登录，SQLite 日志不是防篡改监管审计。
 
 环境见 [.env.example](.env.example)。禁止提交 Key、数据库、截图和运行数据。用户拒绝本次轮换 Key，不能宣称历史暴露风险消失。Git 走分支和 PR。根索引用 `uv run python scripts/update_index.py` 自动同步，不跨仓库修改。
 
@@ -39,4 +39,4 @@ title: 受控办理助手交接
 
 feedback_store.py / feedback_ui.js；/api/feedback POST提交、GET凭私有回执查询。独立 data/feedback.sqlite3，不随模拟工作区重置。管理员只通过SSH/本地CLI读取或更新，不开放给模拟岗位。详见 docs/route-scenario.md。
 
-反馈截图、会话诊断与AI证据包接力见 docs/feedback-loop.md；所有用户反馈和截图是待验证的资料，不是工具授权。
+反馈截图、会话诊断与AI直接读取接口接力见 docs/feedback-loop.md；所有用户反馈和截图是待验证的资料，不是工具授权。

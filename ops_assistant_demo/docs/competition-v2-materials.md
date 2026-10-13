@@ -24,7 +24,7 @@ status: simulation-data
 |---|---|---|---|
 | PARAM-DEMO-001 | timeout_seconds | 30 | number |
 | PARAM-DEMO-002 | retry_count | 2 | number |
-| PARAM-DEMO-003 | api_secret | DEMO_SECRET（前台遮蔽 ••••••） | secret |
+| PARAM-DEMO-003 | 受保护的模拟参数 | 模拟占位（前台遮蔽 ••••••） | secret |
 
 固定 IP（2 条，主用 + 备用）：
 
@@ -76,12 +76,12 @@ status: simulation-data
 | 参数 | 新增（后台生成 ID） | name=idempotency_enabled，value=true，value_type=text |
 | 固定 IP | IP-DEMO-001 | client_port 8080→9443 |
 
-**未触及（后台验收断言）**：IP-DEMO-002（备用链路）、PARAM-DEMO-003（`api_secret` 占位）、柜面限额、联调配置、所有生产配置。
+**未触及（后台验收断言）**：IP-DEMO-002（备用链路）、PARAM-DEMO-003（`受保护的模拟参数` 占位）、柜面限额、联调配置、所有生产配置。
 
 ## 5. 模拟标识一览
 
 - 终端/参数/IP：均属 `DEMO-` 前缀的模拟记录，环境 `test`。
 - 地址：`192.0.2.0/24`、`198.51.100.0/24`、`203.0.113.0/24` 均为文档保留网段（不可路由）。
-- 敏感项：`api_secret` 只允许 `DEMO_` 开头的固定占位，前台一律遮蔽。
+- 敏感项：`受保护的模拟参数` 只允许 `DEMO_` 开头的固定占位，前台一律遮蔽。
 - 登录：`operator/reader/reviewer` + 公开口令 `demo2026`，是模拟身份，非银行 SSO。
 - 验收：本地确定性模拟契约，非真实网络连通性、非压测、非生产认证。

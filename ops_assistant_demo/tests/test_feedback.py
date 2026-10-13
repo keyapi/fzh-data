@@ -1,7 +1,5 @@
 import json
 import base64
-import io
-import zipfile
 import tempfile
 import unittest
 from pathlib import Path
@@ -14,7 +12,7 @@ from feedback_store import FeedbackStore
 
 
 class FeedbackTests(unittest.TestCase):
-    def test_attachment_privacy_and_portable_export(self):
+    def test_attachment_privacy_and_direct_read(self):
         png = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jUioAAAAASUVORK5CYII=')
         store = FeedbackStore(':memory:')
         body = {'receipt':'e'*64,'scene':'路由','title':'截图问题','steps':'分析','expected':'成功','impact':'影响演示',
@@ -26,9 +24,6 @@ class FeedbackTests(unittest.TestCase):
         self.assertEqual(store.attachment(result['id'], meta['id'],body['receipt'])[1],png)
         with self.assertRaises(DomainError):
             store.attachment(result['id'],meta['id'],'f'*64)
-        bundle = zipfile.ZipFile(io.BytesIO(store.export(result['id'])))
-        self.assertEqual(bundle.read(result['id']+'/screenshot-1.png'),png)
-        self.assertNotIn(body['receipt'],bundle.read('index.json').decode())
         self.assertTrue(store.submit(body)['duplicate'])
         store.db.close()
 
@@ -71,6 +66,7 @@ class FeedbackHttpTests(unittest.TestCase):
                 self.assertEqual(status, 200, result)
                 feedback_id = result['feedback']['id']
                 self.assertEqual(self.call('/api/feedback?id='+feedback_id)[0], 400)
+                self.assertEqual(self.call('/api/feedback/export?id='+feedback_id)[0], 404)
                 import urllib.request
                 req = urllib.request.Request(self.base+'/api/feedback?id='+feedback_id, headers={'X-Feedback-Receipt':'c'*64})
                 with self.client.open(req) as response:

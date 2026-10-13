@@ -23,7 +23,7 @@ status: observed-results-only
 ## 2. 确定性测试
 
 ```text
-cd D:/Work/web-ai-assistant-review-20261012
+cd <项目目录>
 python -m unittest discover -s tests
 Ran 108 tests in 22.5s — OK
 ```
@@ -47,7 +47,7 @@ catalog 正文、答后清问与重复追问、按目标字段比对取值、逐
 
 **001 确认前业务数据完全未变**（浏览器验证：`bank.version` 仍为 1，终端并发 8、回调 SYNC）；
 确认后 `version` 变 2，终端 12/ASYNC、超时 60、重试 1、幂等 true、目标 IP 客户端端口 9443，
-**备用链路 IP-DEMO-002 仍为 8080、`api_secret` 仍为遮蔽占位**。
+**备用链路 IP-DEMO-002 仍为 8080、`受保护的模拟参数` 仍为遮蔽占位**。
 
 003 的失败是**逐项**的：`checks` 明确列出「地址与回调契约（模拟）」未通过（`callback_receiver=reject`），
 其余读回/一致性/幂等/超时/范围五项仍各自 passed，不是一句笼统 fail。

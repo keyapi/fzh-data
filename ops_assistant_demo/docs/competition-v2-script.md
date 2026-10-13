@@ -49,7 +49,7 @@ status: rehearsal-script
 
 ## 上场检查清单
 
-1. `cd D:/Work/web-ai-assistant-review-20261012 && python server.py`（默认 `127.0.0.1:8766`；端口见 `.env`）。
+1. `cd <项目目录> && python server.py`（默认 `127.0.0.1:8766`；端口见 `.env`）。
 2. 浏览器打开演示站，登录 `operator`（口令 `demo2026`）。
 3. 先执行一次「重置」清库，保证结果可重复。
 4. 点一次「接入工单」，确认工单下拉与「建立任务」按钮可用（登录后按钮应可点）。

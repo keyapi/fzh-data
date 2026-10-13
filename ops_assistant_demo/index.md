@@ -10,14 +10,25 @@ title: Web AI assistant — 文档索引
 | 类型 | 文档 | 文件 |
 |---|---|---|
 | Reference | 受控办理助手交接 | [AGENT_HANDOFF.md](AGENT_HANDOFF.md) |
+| Reference | 助手面板、刷新记忆与删除语义修复 | [docs/assistant-panel.md](docs/assistant-panel.md) |
+| Reference | 渠道接入三页面实现与实际验收 | [docs/bank-operations.md](docs/bank-operations.md) |
 | Spec | 竞赛实施与验收规格 | [docs/competition-plan.md](docs/competition-plan.md) |
+| Spec | 工单驱动的渠道接入办理助手 · 竞赛升级设计 | [docs/competition-v2-design.md](docs/competition-v2-design.md) |
+| FAQ | 工单驱动渠道接入助手 · 答疑 | [docs/competition-v2-faq.md](docs/competition-v2-faq.md) |
+| Plan | 工单驱动渠道接入助手 · 续接实施计划 | [docs/competition-v2-implementation-plan.md](docs/competition-v2-implementation-plan.md) |
+| Materials | 工单驱动渠道接入助手 · 演示材料 | [docs/competition-v2-materials.md](docs/competition-v2-materials.md) |
+| Project | 工单驱动的渠道接入办理助手 · 项目说明 | [docs/competition-v2-project.md](docs/competition-v2-project.md) |
+| Results | 工单驱动渠道接入助手 · 实际测试与验收记录 | [docs/competition-v2-results.md](docs/competition-v2-results.md) |
+| Script | 工单驱动渠道接入助手 · 演示脚本（6–8 分钟） | [docs/competition-v2-script.md](docs/competition-v2-script.md) |
 | Reference | Cursor 续办代码审计与复核清单 | [docs/cursor-audit-2026-10-12.md](docs/cursor-audit-2026-10-12.md) |
 | Reference | 五分钟演示与答疑备用剧本 | [docs/demo-script.md](docs/demo-script.md) |
+| Reference | 试用反馈与直接读取闭环 | [docs/feedback-loop.md](docs/feedback-loop.md) |
 | Reference | 2026-10-12 实现与验证交接 | [docs/handoff-2026-10-12.md](docs/handoff-2026-10-12.md) |
 | Index | 文档索引 | [docs/index.md](docs/index.md) |
 | Log | 文档变更日志 | [docs/log.md](docs/log.md) |
 | Reference | 网页内参数助手先查再决定，护栏看动作不看原话 | [docs/read-then-guard.md](docs/read-then-guard.md) |
 | Research | 竞赛设计依据与公开案例 | [docs/research.md](docs/research.md) |
+| Guide | 路由配置场景评估与演示 | [docs/route-scenario.md](docs/route-scenario.md) |
 | Reference | 安全边界与质疑解答 | [docs/security-boundaries.md](docs/security-boundaries.md) |
 | Index | 经验索引 | [docs/solutions/index.md](docs/solutions/index.md) |
 | Log | 经验变更日志 | [docs/solutions/log.md](docs/solutions/log.md) |

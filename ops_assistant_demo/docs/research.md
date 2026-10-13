@@ -10,7 +10,6 @@ date: 2026-10-12
 
 | 来源 | 能支持什么 | 演示选择 |
 |---|---|---|
-| [中国银行2026年中期业绩实录](https://www.boc.cn/aboutboc/bi1/202608/t20260829_25688702.html) | 银行讨论AI业务赋能与治理方向 | 尊重知识问答价值，把办理闭环作为进一步能力 |
 | [Yonder / Gradient Labs](https://gradient-labs.ai/customers/yonder) | 公开案例介绍Agent整理争议证据和案件，关键决定保留给人 | 减少查资料、整理和重复填写，人保留批准权 |
 | [Bradesco / Microsoft](https://www.microsoft.com/en/customers/story/25660-banco-bradesco-sa-azure-ai-foundry/) | 厂商介绍银行AI应用与平台治理 | 能力和控制同时呈现，不单独秀框架 |
 | [OWASP Excessive Agency](https://genai.owasp.org/llmrisk/llm062025-excessive-agency/) | 过大功能、权限和自主性会扩大风险；下游授权与最小权限是控制方向 | 固定业务动作、权限在模型之外检查 |

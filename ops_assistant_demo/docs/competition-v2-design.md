@@ -136,9 +136,9 @@ status: design-contract-not-implementation-evidence
 
 > 渠道测试接入工单 WO-DEMO-001（模拟）。渠道：星河对公服务；终端代码 DEMO-001；租户 DEMO-BANK / TENANT-DEMO-01；本次申请按“标准异步回调”接入档完成测试环境接入。工单采用接入模板1.0，旧模板栏：新增终端、最大并发8、同步回调、超时30秒、重试2次。目标前置192.0.2.10:8443，客户端198.51.100.10，实际监听端口待渠道补充。接入地址 https://192.0.2.10:8443/demo，签名HMAC-SHA256，编码UTF-8。请沿用既有终端身份，不创建重复代码；按当前生效规范校准模板项，补齐必备注册参数。只办理这份工单涉及的测试记录，不调整备用链路。
 
-当前数据直接复用 `initial_bank()`。规则 `CHANNEL-ASYNC v2.0` 标准异步档：max_concurrency12、callback_modeASYNC、timeout_seconds60、retry_count1、idempotency_enabled=true（text）。目标 IP 通过四项定位：terminal_code + tenant + front_address/front_port + client_address，明确排除备用 .11/.113 链路。唯一缺项 client_port；讲者回答9443。保留 api_secret 的固定模拟遮蔽值。需要报告：已有终端避免重复新增；旧模板冲突；缺端口；已有参数保留/更新；幂等参数缺失补齐。
+当前数据直接复用 `initial_bank()`。规则 `CHANNEL-ASYNC v2.0` 标准异步档：max_concurrency12、callback_modeASYNC、timeout_seconds60、retry_count1、idempotency_enabled=true（text）。目标 IP 通过四项定位：terminal_code + tenant + front_address/front_port + client_address，明确排除备用 .11/.113 链路。唯一缺项 client_port；讲者回答9443。保留 受保护的模拟参数 的固定模拟遮蔽值。需要报告：已有终端避免重复新增；旧模板冲突；缺端口；已有参数保留/更新；幂等参数缺失补齐。
 
-默认最终五条操作：终端并发8→12与SYNC→ASYNC；timeout30→60；retry2→1；新增idempotency_enabled=true；IP-DEMO-001 client_port8080→9443。IP-DEMO-002、api_secret、柜面和旧联调配置、所有生产配置不变。这些“未触及范围”作为后台验收断言，不靠助手口头承诺。
+默认最终五条操作：终端并发8→12与SYNC→ASYNC；timeout30→60；retry2→1；新增idempotency_enabled=true；IP-DEMO-001 client_port8080→9443。IP-DEMO-002、受保护的模拟参数、柜面和旧联调配置、所有生产配置不变。这些“未触及范围”作为后台验收断言，不靠助手口头承诺。
 
 ### WO-DEMO-002：数值与语义变体
 
@@ -278,7 +278,7 @@ variant003 `callback_receiver=reject` 必须触发失败结果：回调check fai
 
 成果数据采集口径：实际人工基线需同样工单、同样最终正确性判据，记录总时长、跨页次数、错误与修正次数；AI记录端到端时长、人工回答数、确认数、完成/失败。尚未测人工基线时只报“本POC本轮观测”，不写节省80%、零错误或生产ROI。三页/5操作/1缺项/1确认来自默认样本，不是普遍业务承诺。
 
-公开参考由调研提供：[深圳公开创新竞赛通知](https://jr.sz.gov.cn/gkmlpt/content/12/12379/mpost_12379222.html)可作创新、应用、示范、安全与效益表达参考；[西南财经大学公开通知](https://iec.swufe.edu.cn/info/1011/2731.htm)的路演安排可作节奏参考；[四川农业大学公开通知](https://yan.sicau.edu.cn/info/1037/17779.htm)可作视频材料形式参考。这些不是本次中国银行内部竞赛正式要求，最终版应以参赛方收到的通知为准。
+公开参考由调研提供：[深圳公开创新竞赛通知](https://jr.sz.gov.cn/gkmlpt/content/12/12379/mpost_12379222.html)可作创新、应用、示范、安全与效益表达参考；[西南财经大学公开通知](https://iec.swufe.edu.cn/info/1011/2731.htm)的路演安排可作节奏参考；[四川农业大学公开通知](https://yan.sicau.edu.cn/info/1037/17779.htm)可作视频材料形式参考。这些不是本次本次竞赛正式要求，最终版应以参赛方收到的通知为准。
 
 ## 12. 验收矩阵：确定性测试 + 真实模型 + 浏览器
 

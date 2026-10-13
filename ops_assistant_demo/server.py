@@ -370,6 +370,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urlparse(self.path)
+        if parsed.path == '/api/feedback/export':
+            self._send(404, {'error': 'not found'})
+            return
         if parsed.path in ('/', '/index.html'):
             self._send(200, (ROOT / 'index.html').read_bytes(), 'text/html; charset=utf-8')
             return
@@ -385,14 +388,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(404, {'error': 'not found'})
             return
         try:
-            if parsed.path in ('/api/feedback', '/api/feedback/attachment', '/api/feedback/export'):
+            if parsed.path in ('/api/feedback', '/api/feedback/attachment'):
                 rate_limit('feedback-read:' + self.client_address[0], 60, 60)
-                if parsed.path.endswith('/export'):
-                    feedback_id = (parse_qs(parsed.query).get('id') or [''])[0][:100]
-                    FEEDBACK.get(feedback_id, self.headers.get('X-Feedback-Receipt', ''))
-                    self._send(200, FEEDBACK.export(feedback_id), 'application/zip',
-                               headers={'Content-Disposition': 'attachment; filename="'+feedback_id+'-evidence.zip"'})
-                    return
                 if parsed.path.endswith('/attachment'):
                     meta, blob = FEEDBACK.attachment((parse_qs(parsed.query).get('id') or [''])[0][:100],
                         (parse_qs(parsed.query).get('attachment_id') or [''])[0][:100], self.headers.get('X-Feedback-Receipt', ''))
