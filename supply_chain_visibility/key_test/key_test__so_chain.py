@@ -128,9 +128,13 @@ def get_so_chain(sales_order):
                                            "qty": x["qty"], "end": x["end"]})
             jc_ends = [s["end"] for tn in tn_rows for s in tn["steps"] if s["end"]] + \
                       [u["end"] for u in unassigned if u["end"]]
+            # 完成的工序数（该工序下任一工序卡 Completed）
+            ops_done = sum(1 for o in ops
+                           if any(x["status"] == "Completed" for x in jc_by_op.get((w.name, o.operation), [])))
             line_tn += len(tn_rows)
             wo_detail.append({"wo": w.name, "qty": _num(w.qty), "status": w.status,
                               "produced_head": _num(w.produced_qty), "done": done_qty,
+                              "ops_done": ops_done, "ops_total": len(ops),
                               "last_end": max(jc_ends) if jc_ends else "",
                               "operations": op_axis, "tracking_numbers": tn_rows,
                               "unassigned": unassigned})

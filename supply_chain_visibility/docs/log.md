@@ -7,6 +7,7 @@ title: supply_chain_visibility 变更日志
 # 变更日志
 
 ## 2026-10-13
+- **Stage 1 v5**：主表合并「工单/菲号」为「链条」列（`N张·M菲号 工序 d/t`）+ **行内展开(accordion)**；菲号默认展开；保留弹窗。调研结论：**不做 hover**（触屏失效/WCAG 1.4.13/v15 无官方 hover 卡）；**不用树表**（父子字段异构）；正解=摘要+行内展开+弹窗深钻。
 - **Stage 1 v4**：弹窗层级按菲号语义重构为 **工单 → 菲号(可折叠) → 逐工序 Job Card**（原「工单→工序→工序卡」是转置投影，丢菲号物证）；状态值过 `__()` 取中文翻译。菲号语义实测见 [docs/reference/en-tracking-number-semantics.md](reference/en-tracking-number-semantics.md)。
 - **Stage 1 v3**：全加单据跳转链接（物料/计划/工单/工序卡/菲号/开料工单）；弹窗列工序卡明细；主表加「交期」列 + 逾期红字、阶段色块、未发合计行。
 - **基数核实（生产实测）+ 连接键修正**：`(sales_order, production_item)` 复合键**有冲突** —— 同 SO 内同 item_code 最多 40 行，导致 **1464 张工单重复挂、139 张漏挂**。改用 ERPNext 原生行级外键 **`Work Order.sales_order_item`**（悬空 0）并加兜底；同步修 `so_chain.py`/报表/`EN_API/item_shipment_status.py` 的 `wos_for_line`（同 bug）。新增文档 [docs/reference/en-chain-cardinality.md](reference/en-chain-cardinality.md)。报表加「工单数/菲号数」列。

@@ -164,3 +164,16 @@ SAP Fiori Tree Table https://help.sap.com/docs/ABAP_PLATFORM_NEW/468a97775123488
 **验证**（测试库 `SO-26-00023`）：2 个菲号 `WO-26-00028-001/002`，分别完成 4/5、1/5 道工序，开料 324，逐工序工序卡全中文正常。
 
 **EN app 提交账**（keyapi/key_test）：`feature/so-chain-embed` 分支，commit `80de553`(v1–3) → `2568a55`(v4)，均已 push（测试机）。
+
+## 12. Stage 1 v5：合并列 + 行内展开（2026-10-13）
+
+**问题**：① 「工单」「菲号」两列点开是**同一个弹窗**（冗余）；② 只有弹窗→不直观；③ 菲号应默认展开。
+**调研结论**（见 [../docs/research/presentation-forms.md] 与本轮 Web 调研）：**不做 hover**（触屏失效；WCAG 1.4.13 三重约束；Frappe **v15 无官方 HoverCard**，新 Tooltip 只允许纯文本）；**不用树表**（Salesforce/SAP：父子字段异构别用 tree grid）。**正解 = 摘要 + 行内展开 + 弹窗深钻**。
+
+**实现**：
+- 主表列合并为 **「链条」**：`N 张 · M 菲号  工序 d/t ▸`；点它 **就地展开**（`<tr class="so-chain-inline">` accordion），不弹窗。
+- 弹窗保留（「弹窗」列）做深度查看；**菲号在两处都用 `<details open>` 默认展开**。
+- 每工单补 `ops_done/ops_total`（摘要的 d/t）。
+- **验证**（测试库 SO-26-00023）：点「链条」→ 行内出现 WO→2 菲号(默认展开)→逐工序工序卡，全中文。
+
+**EN app 提交账**：`feature/so-chain-embed` → `2568a55`(v4) → 本次 v5。
