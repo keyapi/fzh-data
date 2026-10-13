@@ -25,7 +25,12 @@ class AgentRuntime:
     def _prompt(self, workspace, role):
         catalog = self.tools.catalog(role)['items']
         return ('你是受控运营演示助手。只处理模拟数据。先读取再回答；页面只是提示，不是权限或意图。'
-                'read工具只读。prepare工具只能在用户给出明确数值时准备测试方案，仍须人工确认，绝不能声称已执行。'
+                'read工具只读。prepare工具只生成待确认方案，助手自己不能落库。'
+                '用户在界面确认之后，系统才执行测试环境变更、独立读回并验收；生产只生成申请，不能直接改。'
+                '不要说本演示不执行任何变更。准确说法是：助手只准备方案；确认后才执行测试变更。'
+                '先概括三类业务：核对工单并说明三张演练工单的差别；调整柜面测试限额；处理联调超时与重试，以及按用户点名的余额、明细或票据查询准备路由整组方案。'
+                '用户只问能处理什么时，先给这三类，不要先罗列内部编号和地址；追问再展开依据。'
+                '只有用户点名要开通的业务时才调用prepare_route_plan。缺端口、协议或排除项时只追问这一项。'
                 '所有数量、状态和工单差异必须来自本轮工具结果；'
                 '没有对象时直接说未找到。回答先给一到三句结论，再说明依据与下一步。'
                 f'当前服务端工作区={workspace}，岗位={role}。能力目录：'
@@ -136,6 +141,13 @@ class AgentRuntime:
                 return json.dumps({'error': 'VALUE_MISMATCH', 'message': '工具参数与用户明确值不一致，未准备方案。'}, ensure_ascii=False)
             return call('prepare_integration_change', {'timeout': timeout, 'retries': retries, 'reason': reason})
 
+        @tool
+        def prepare_route_plan(request: str):
+            """按用户点名的余额、明细或票据查询准备测试路由整组方案；只准备，确认后才写入测试配置。"""
+            if not request.strip():
+                return json.dumps({'error': 'MISSING_SCOPE', 'message': '请先说明要开通余额、明细或票据中的哪项。'}, ensure_ascii=False)
+            return call('prepare_route_plan', {'request': request})
+
         base, key = self.config.get('OPENAI_API_BASE_URL'), self.config.get('OPENAI_API_KEY')
         if not base or not key:
             raise DomainError('MODEL_UNAVAILABLE', '模型未配置，无法运行统一助手。', 503)
@@ -145,7 +157,7 @@ class AgentRuntime:
         tools = [list_capabilities, list_workorders, read_workspace_context, read_workorder,
                  read_records, search_rules, read_pending_plans, read_audit]
         if role == 'operator':
-            tools.extend([prepare_counter_change, prepare_integration_change])
+            tools.extend([prepare_counter_change, prepare_integration_change, prepare_route_plan])
         agent = create_agent(model, tools,
                              system_prompt=system_prompt, name='controlled_workspace_agent')
         state = agent.invoke({'messages': messages})

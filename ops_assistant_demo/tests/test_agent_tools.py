@@ -69,5 +69,17 @@ class AgentToolsTests(unittest.TestCase):
         self.assertEqual(denied.exception.code, 'FORBIDDEN')
 
 
+    def test_route_plan_is_prepared_without_writing_routes(self):
+        names = [item['name'] for item in self.tools.catalog('operator')['items']]
+        self.assertIn('prepare_route_plan', names)
+        reader = [item['name'] for item in self.tools.catalog('reader')['items']]
+        self.assertNotIn('prepare_route_plan', reader)
+        result = self.tools.invoke('prepare_route_plan', self.workspace, 'operator',
+                                   {'request': '只开通余额查询，不要明细和票据'})
+        self.assertIn('message', result['plan'])
+        routes = self.tools.invoke('read_records', self.workspace, 'operator', {'collection': 'routes'})
+        self.assertEqual(routes['items'], [])
+
+
 if __name__ == '__main__':
     unittest.main()

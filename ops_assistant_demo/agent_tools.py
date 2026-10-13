@@ -41,9 +41,11 @@ class AgentTools:
             {'name': 'read_audit', 'kind': 'read', 'roles': ['operator', 'reviewer'],
              'description': '读取当前工作区审计摘要。'},
             {'name': 'prepare_counter_change', 'kind': 'prepare', 'roles': ['operator'],
-             'description': '准备测试限额变更，仍须人工确认；不执行。'},
+             'description': '准备柜面测试限额方案。用户确认后系统才写入测试环境并读回；生产不直接改。'},
             {'name': 'prepare_integration_change', 'kind': 'prepare', 'roles': ['operator'],
-             'description': '准备测试联调超时与重试变更，仍须人工确认；不执行。'},
+             'description': '准备联调超时与重试方案。用户确认后系统才写入测试环境并读回；生产不直接改。'},
+            {'name': 'prepare_route_plan', 'kind': 'prepare', 'roles': ['operator'],
+             'description': '按点名的余额、明细或票据查询准备测试路由整组方案。用户确认后才写入；缺关键项只追问该项。'},
         ]
         return {'items': [item for item in capabilities if role in item['roles']],
                 'source': self._source('capability_catalog', version='1')}
@@ -62,6 +64,7 @@ class AgentTools:
             'read_audit': self.read_audit,
             'prepare_counter_change': self.prepare_counter_change,
             'prepare_integration_change': self.prepare_integration_change,
+            'prepare_route_plan': self.prepare_route_plan,
         }
         method = methods.get(name)
         if method is None:
@@ -162,3 +165,10 @@ class AgentTools:
         return {'proposal': redact_all(proposal),
                 'source': self._source('backend_proposal', scenario='integration')}
 
+
+    def prepare_route_plan(self, workspace, role, args):
+        request = str(args.get('request') or '')
+        selected = args.get('services')
+        result = RouteDemo(self.store).plan(workspace, role, request, selected)
+        return {'plan': redact_all(result),
+                'source': self._source('route_plan')}
