@@ -138,3 +138,16 @@ SAP Fiori Tree Table https://help.sap.com/docs/ABAP_PLATFORM_NEW/468a97775123488
 - **阶段色块**（indicator-pill：灰/橙/蓝/绿）+ **合计行**（未发合计）。
 - 服务端扩展：`Job Card` 明细（**注意 Job Card 无 `employee` 列**——员工在 `time_logs` 子表，列表查不到，会 500）、行 `delivery_date`/`overdue_days`、工单 `last_end`。
 - 测试机已部署 + Playwright 验证：主表 10 个链接、弹窗 3+ 链接（Item/PP/WO）均正确。
+
+## 10. 两处提交账（务必要遵守的双轨约定）
+
+**每次阶段性结果，两处都要提交**（用户明确要求）：
+
+| 处 | 内容 | 本次状态 |
+|---|---|---|
+| **EN app 仓库** `keyapi/key_test`（服务器 `~/frappe-bench/apps/key_test`） | `key_test/so_chain.py`、`key_test/public/js/sales_order.js`、`key_test/key_test/report/so_chain_overview/` | **已提交**：分支 `feature/so-chain-embed`，commit **`80de553`**，已 push 到 origin（测试机） |
+| **本仓库 `fzh-data`** | 产物副本（本目录）+ 文档 + 记录 | 已提交（PR #291） |
+
+> ⚠️ 之前 stage 完成时只在 fzh-data 提交，**服务器 app 仓库留着一堆未提交改动**（有丢失风险）——已补交。
+> 以后：在 EN 上改完并验证 → **先在服务器 git 提交 + push** → 再把产物/记录提交进 fzh-data。
+> 测试机先行；生产待确认后 `git pull` + `migrate` + `restart`。
