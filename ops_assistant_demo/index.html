@@ -520,7 +520,7 @@
     </div>
   </div>
   <div id="log"></div>
-  <div id="chat-approval" hidden style="padding:12px 14px;border-top:1px solid #e5e6eb;background:#f4f7ff"><p id="chat-change" style="margin:0 0 8px"></p><button class="solid" id="chat-allow" type="button">允许修改</button> <button class="ghost" id="chat-cancel" type="button">取消</button></div>
+  <div id="chat-approval" hidden style="padding:12px 14px;border-top:1px solid #e5e6eb;background:#f4f7ff"><p id="chat-change" style="margin:0 0 8px"></p><button class="solid" id="chat-allow" type="button">允许修改（测试）</button> <button class="ghost" id="chat-cancel" type="button">取消</button></div>
   <div class="chips">
     <button class="ghost" type="button" id="chip-script-ok">脚本演示 · 改测试限额</button>
     <button class="ghost" type="button" id="chip-script-no">后台实测 · 越权拒绝</button>
@@ -583,7 +583,7 @@ async function previewChange(p) {
   $("rule-scope").textContent="测试限额："+fieldValue("limit",change.before)+" → "+fieldValue("limit",change.after)+"。生产限额保持不变。"+(p.submit?"同时登记生产申请，等待复核。":"");
   await spotlight($("f-amount"),"填写新限额 · 尚未保存");await typeVisible($("f-amount"),change.after);
   await spotlight($("f-reason"),"填写调整原因");await typeVisible($("f-reason"),p.reason||"调整测试限额");
-  await spotlight($("rule-ok"),"请确认修改 · 生产限额保持不变",700);clearAim();
+  await spotlight($("f-amount"),"填写完成 · 请在侧边栏允许修改（测试）",400);$("rule-dialog").hidden=true;clearAim();
  } else {
   show("integration");$("ops-submit").checked=!!p.submit;
   for(const c of p.changes){const el=$(c.field==="timeout"?"ops-timeout":"ops-retries");await spotlight(el,"填写"+fieldLabel(c.field)+" · 尚未保存");await typeVisible(el,c.after);}
@@ -728,17 +728,21 @@ function renderApproval(){
  const pending=(opsState?.proposals||[]).filter(p=>p.status==="pending"&&p.expires_at*1000>Date.now()&&["counter","integration","bank_terminal","bank_parameter","bank_ip"].includes(p.scenario)&&(!p.scenario.startsWith("bank_")||p.version===opsState.bank?.version));
  const p=pending.at(-1);
  $("chat-approval").hidden=!p||role()!=="operator";
- if(!p)return;
- $("chat-approval").dataset.proposal=p.id;
+ if(!p){
+  const kind=window.RouteUI?.isActive()&&window.RouteUI.hasPending()?'route':window.BankTaskUI?.isActive()&&window.BankTaskUI.hasPending()?'task':null;
+  $("chat-approval").hidden=!kind||role()!=="operator";$("chat-approval").dataset.kind=kind||'';
+  if(kind){$("chat-change").textContent="整组测试方案尚未保存。核对页面差异后允许，后台执行并独立读回验收。";$("chat-allow").textContent="允许修改（测试）";$("chat-allow").disabled=busy;$("chat-cancel").disabled=busy;}return;
+ }
+ $("chat-approval").dataset.kind="ops";$("chat-approval").dataset.proposal=p.id;
  $("chat-change").textContent=p.scenario.startsWith("bank_")?window.BankUI.describe(p,true):p.changes.map(c=>fieldLabel(c.field)+"："+fieldValue(c.field,c.before)+" → "+fieldValue(c.field,c.after)).join("；")+"。生产不直接修改。"+(p.submit?"同时登记生产申请。":"");
  $("chat-allow").disabled=busy;$("chat-cancel").disabled=busy;
- $("chat-allow").textContent=busy?"正在填写 / 办理…":"允许修改";
- if(!busy&&p.action==="delete")$("chat-allow").textContent="允许删除";
+ $("chat-allow").textContent=busy?"正在填写 / 办理…":"允许修改（测试）";
+
 }
 async function confirmFromChat(cancel=false){
  if(busy)return;
- if(window.RouteUI?.isActive())return window.RouteUI.confirmFromChat(cancel);
- if(window.BankTaskUI?.isActive()){
+ if($("chat-approval").dataset.kind==="route")return window.RouteUI.confirmFromChat(cancel);
+ if($("chat-approval").dataset.kind==="task"){
    if(window.BankTaskUI.hasPending())return window.BankTaskUI.confirmFromChat(cancel);
    push({kind:"bot",text:"当前工单没有待确认的整组方案。请先核对任务页状态。"});return;
  }
@@ -746,9 +750,9 @@ async function confirmFromChat(cancel=false){
  const p=(opsState?.proposals||[]).find(p=>p.id===id&&p.status==="pending");
  if(!p){push({kind:"bot",text:"当前没有待确认修改。"});return;}
  if(p.scenario.startsWith("bank_")){push({kind:"user",text:cancel?"取消操作":p.action==="delete"?"允许删除":"允许修改"});await window.BankUI[cancel?"cancel":"approve"](p);return;}
- if(p.scenario==="counter"&&counterApproval?.id!==id){busy=true;try{await previewChange(p);}finally{busy=false;$("rule-ok").disabled=false;renderApproval();}}
+ if(!cancel&&p.scenario==="counter"&&counterApproval?.id!==id){busy=true;try{await previewChange(p);}finally{busy=false;$("rule-ok").disabled=false;renderApproval();}}
  push({kind:"user",text:cancel?"取消修改":"允许修改"});
- if(p.scenario==="counter")await $(cancel?"rule-cancel":"rule-ok").onclick();
+ if(p.scenario==="counter"){busy=true;try{if(cancel){await opsFetch("/api/ops/cancel",{proposal_id:p.id});counterApproval=null;$("rule-dialog").hidden=true;await loadOps();push({kind:"bot",text:"已取消，测试配置未改变。"});}else await executeVisible(p);}catch(err){push({kind:"deny",text:err.message});}finally{busy=false;clearAim();}}
  else{opsProposal=p;show("integration");await $(cancel?"ops-cancel":"ops-execute").onclick();}
  renderApproval();
 }
@@ -1054,11 +1058,11 @@ async function askUnified(text){
   const data=await opsFetch('/api/agent/turn',{text});
   log.splice(waiting,1);
   push({kind:data.text.length>220?"long-answer":"bot",text:data.text||"本次没有形成可核验回复，业务配置未改变。"});
-  if(data.trace?.length)push({kind:"evidence",citations:[],trace:data.trace});
+  if(data.trace?.length)push({kind:"trace",items:data.trace});
   if(data.state){opsState=data.state;renderOps();}
   const prepared=(data.trace||[]).map(item=>item?.result?.proposal).find(Boolean);
   if(prepared){
-    push({kind:"bot",text:"已准备测试环境方案，尚未保存。可在侧边栏点击“允许修改”，由后台再次核对后执行。"});
+    push({kind:"bot",text:"已准备测试环境方案，尚未保存。可在侧边栏点击“允许修改（测试）”，由后台再次核对后执行。"});
     await previewChange(prepared);
   }
  }catch(err){

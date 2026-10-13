@@ -48,3 +48,4 @@ feedback_store.py / feedback_ui.js；/api/feedback POST提交、GET凭私有回�
 相关经验：[实时状态、培训与反馈隔离](../docs/solutions/architecture-patterns/branch-param-desk-read-then-guard.md)。
 
 回复排版经验：[可读回复与表格渲染](../docs/solutions/developer-experience/ops-assistant-model-reply-formatting.md)。
+2026-10-14：能力介绍使用三类短概览；统一侧栏允许修改（测试）/取消，柜面填写后收起弹窗，路由与工单复用整组确认。132项回归及真实模型浏览器确认、取消、路由验收通过。框架取舍见 docs/unified-agent-plan.md。
