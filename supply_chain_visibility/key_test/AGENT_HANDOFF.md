@@ -2,12 +2,12 @@
 
 > **目标**：在 ERPNext 销售订单表单里直接看到该单的链条摘要（阶段/已发/未发/工序进度），
 > 零跳转。这是「呈现形式建议路线」的第 1 档（见
-> `docs/solutions/architecture-patterns/supply-chain-visibility-forms-research.md` §5）。
+> `../docs/research/presentation-forms.md` §5）。
 
 ## 1. 做了什么（Stage 1：嵌入单据）
 
 **载体 = `key_test` app**（house app；EN 自定义 app 是各自独立仓库 `keyapi/*`，见
-`EN_API/docs/research/en-supply-chain-map.md` §1）。
+`../docs/reference/en-supply-chain-map.md` §1）。
 
 | 产物 | 落点 | 说明 |
 |---|---|---|
@@ -82,12 +82,12 @@ ssh $H "cd /home/frappe/frappe-bench && sudo -n -u frappe /usr/local/bin/bench r
 ## 5. Stage 3 设计：小范围独立屏（暂缓）
 
 不做全量大屏。只做「**例外队列 + ETA + 责任人**」小屏（Frappe UI(Vue) / 独立 SPA 走 REST）。
-**反营销红线**（`supply-chain-visibility-forms-research.md` §1.2）：只做漂亮看板会「看板淹没」；
+**反营销红线**（`presentation-forms.md` §1.2）：只做漂亮看板会「看板淹没」；
 必须带阈值化 + 责任人路由。**度量**用例外解决时长/阶段停留，不是看板数量。
 阶段 4–8（头程）数据仍外置（钉钉表/智美通），**本屏先只覆盖阶段 0–3**。
 
 ## 6. 关联
 
-- `EN_API/docs/research/en-supply-chain-map.md` — EN 全链路实体地图（**已更正**：Cutting Plan/Task、Work Order Split、Wip Transfer 生产 0 条；真实车辆是 Initial Work Order / Tracking Number / Job Card 自定义字段）
-- `docs/solutions/architecture-patterns/supply-chain-visibility-forms-research.md` — 四类形式调研 + 建议路线
+- `../docs/reference/en-supply-chain-map.md` — EN 全链路实体地图（**已更正**：Cutting Plan/Task、Work Order Split、Wip Transfer 生产 0 条；真实车辆是 Initial Work Order / Tracking Number / Job Card 自定义字段）
+- `../docs/research/presentation-forms.md` — 四类形式调研 + 建议路线
 - `EN_API/so_item_special_mark/README.md` — SO 表单定制的既有先例（Client Script→app 文件、hooks doctype_js、部署缓存要点）

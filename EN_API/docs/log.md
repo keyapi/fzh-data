@@ -8,22 +8,22 @@ title: EN_API 文档变更日志
 
 ## 2026-10-13（晚 2：Stage 2 原生报表，测试机已部署）
 
-- **新增（路线第 2 档：原生 KPI/例外）**：Script Report「**SO Chain Overview**」 —— 每行「还未发完」的订单行（阶段/已发/未发/异常）+ 顶部 KPI 卡（行数·未发总量·交期已过·死单）+ 阶段分布柱图。产物见 `EN_API/so_chain_embed/key_test__report__so_chain_overview__*`。
+- **新增（路线第 2 档：原生 KPI/例外）**：Script Report「**SO Chain Overview**」 —— 每行「还未发完」的订单行（阶段/已发/未发/异常）+ 顶部 KPI 卡（行数·未发总量·交期已过·死单）+ 阶段分布柱图。产物见 `supply_chain_visibility/key_test/key_test__report__so_chain_overview__*`。
   - **测试机已部署并验证**：`frappe.desk.query_report.run` 返回 **10 列 / 107 行 / KPI / 柱图**（0.10s）。
   - **两个坑（已记进 handoff）**：① 报表文件路径要**多一层** `key_test`（模块名==app 名 → `apps/key_test/key_test/**key_test**/report/<name>/`），放少一层会被 migrate 生成返回 `([],[])` 的桩；② 加/改 `.py` 后**必须 `bench restart`**，`clear-cache` 不重载 Python 模块。
 
 ## 2026-10-13（晚：Stage 1 嵌入单据，测试机已部署）
 
-- **新增（呈现形式路线第 1 档：嵌入单据）**：`EN_API/so_chain_embed/` —— 在 ERPNext 销售订单表单内嵌「供应链链条摘要」（阶段/已发/未发/工单工序）。
+- **新增（呈现形式路线第 1 档：嵌入单据）**：`supply_chain_visibility/key_test/` —— 在 ERPNext 销售订单表单内嵌「供应链链条摘要」（阶段/已发/未发/工单工序）。
   - 服务端：`key_test/so_chain.py`（`@frappe.whitelist() get_so_chain`）；前端：追加进 `key_test/public/js/sales_order.js`（`doctype_js` 只允许一个文件，故追加）。
   - **测试机（站点 erpnext.vilavi.cn）已部署并验证**：方法 REST 调用 HTTP 200、stage/工序/DN 净额正确；`getdoctype.__js` 已含嵌入代码；备份在 `/tmp/sales_order.js.bak_*`。**生产未部署**（步骤见 handoff）。
-  - 交接：`EN_API/so_chain_embed/AGENT_HANDOFF.md`（含 prod 部署/回滚 + Stage 2/3 设计）。
-- **更正调研**：`EN_API/docs/research/en-supply-chain-map.md` —— API **实测记录数**发现 `Cutting Plan/Cutting Task/Work Order Split/Wip Transfer` 四个 doctype **生产 0 条**（建了没用）；真实车辆是 `Initial Work Order`(开料 750)、`Tracking Number`(菲号 4887)、`Job Card`(扫码 48854，含 WIP 外包自定义字段)，拆分走 Cancel+Amend。并补 `key_test` 为 SO 定制主战场 + app 各自独立仓库。
+  - 交接：`supply_chain_visibility/key_test/AGENT_HANDOFF.md`（含 prod 部署/回滚 + Stage 2/3 设计）。
+- **更正调研**：`supply_chain_visibility/docs/reference/en-supply-chain-map.md` —— API **实测记录数**发现 `Cutting Plan/Cutting Task/Work Order Split/Wip Transfer` 四个 doctype **生产 0 条**（建了没用）；真实车辆是 `Initial Work Order`(开料 750)、`Tracking Number`(菲号 4887)、`Job Card`(扫码 48854，含 WIP 外包自定义字段)，拆分走 Cancel+Amend。并补 `key_test` 为 SO 定制主战场 + app 各自独立仓库。
 
 ## 2026-10-13（下午：EN 全链路调研）
 
-- **新增调研**：[research/en-supply-chain-map.md](research/en-supply-chain-map.md) —— 用 REST API 枚举 EN 生产系统的 DocType 后，得出**真实全链路实体地图**：除原生 `Sales Order/Production Plan/Work Order/Job Card/BOM/Stock Entry` 外，还有 4 个**自定义 app** —— `Light Mes`（`Initial Work Order`/`Job Card Scan Input` 扫码/`Tracking Number` 菲号/`Wip Transfer` 外发回收/`Defect Code`/工序价）、`Work Order Task`（`Cutting Plan`/`Cutting Task` 开料/`Work Order Split`）、`Delivery Plan`（出货计划/外箱号）、`Tongtool Integration`。附**仓库覆盖 vs 空白**表：开料/扫码/WIP/工单拆分/物料需求/采购(MR/PO/PR) 在 EN 侧基本空白。
-- **新增调研**：`docs/solutions/architecture-patterns/supply-chain-visibility-forms-research.md` —— 呈现形式四类对比（ERPNext 原生 / 独立大屏 / AI 查询 / 嵌入单据，带原始 URL）+ 供应链可视化设计要素（事件时间线/阶段状态机/数量对账/例外管理/OTIF/EPCIS·DCSA）+ 本场景适配 + 需求头脑风暴 + **建议路线**（嵌入单据 → 原生 KPI/例外 → 小范围独立屏；AI/MCP 仅内部受监督助手）。
+- **新增调研**：[supply_chain_visibility/docs/reference/en-supply-chain-map.md](../supply_chain_visibility/docs/reference/en-supply-chain-map.md) —— 用 REST API 枚举 EN 生产系统的 DocType 后，得出**真实全链路实体地图**：除原生 `Sales Order/Production Plan/Work Order/Job Card/BOM/Stock Entry` 外，还有 4 个**自定义 app** —— `Light Mes`（`Initial Work Order`/`Job Card Scan Input` 扫码/`Tracking Number` 菲号/`Wip Transfer` 外发回收/`Defect Code`/工序价）、`Work Order Task`（`Cutting Plan`/`Cutting Task` 开料/`Work Order Split`）、`Delivery Plan`（出货计划/外箱号）、`Tongtool Integration`。附**仓库覆盖 vs 空白**表：开料/扫码/WIP/工单拆分/物料需求/采购(MR/PO/PR) 在 EN 侧基本空白。
+- **新增调研**：`supply_chain_visibility/docs/research/presentation-forms.md` —— 呈现形式四类对比（ERPNext 原生 / 独立大屏 / AI 查询 / 嵌入单据，带原始 URL）+ 供应链可视化设计要素（事件时间线/阶段状态机/数量对账/例外管理/OTIF/EPCIS·DCSA）+ 本场景适配 + 需求头脑风暴 + **建议路线**（嵌入单据 → 原生 KPI/例外 → 小范围独立屏；AI/MCP 仅内部受监督助手）。
 - **范围决定**：物料需求 / 采购订单 / 采购入库 **先记录不做**（EN 侧空白且业务未明确）；头程阶段 4–8 沿用暂缓接入。
 
 ## 2026-10-13
