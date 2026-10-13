@@ -13,7 +13,7 @@ execution: code
 
 把侧边栏从按页面和关键词分流的聊天入口，改成能发现能力、读取真实状态、解释业务、准备受控方案的统一工作台 Agent。保留现有业务页面、鼠标/高亮/逐字预演、人工确认、事务写入、独立读回、模拟验收和反馈系统。
 
-目标仓库 web-ai-assistant；同一代码同步到 fzh-data 的 ops_assistant_demo。本文是待执行计划，不代表已实现或已通过新验收。本轮到规划为止，实施由后续执行轮开始。
+目标仓库 web-ai-assistant；同一代码同步到 fzh-data 的 ops_assistant_demo。首版已实现统一读取/准备入口；能力目录、岗位过滤、服务端分发与 LangChain schema 已统一由 `AgentTools.CAPABILITIES` 生成。专项工单、路由和终端的既有页面流程仍保留，后续迁移须逐项通过端到端回归。
 
 ---
 

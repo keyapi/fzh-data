@@ -17,6 +17,15 @@ class AgentToolsTests(unittest.TestCase):
         self.store.db.close()
         self.folder.cleanup()
 
+    def test_registry_is_the_single_exposed_capability_source(self):
+        specs = self.tools.capability_specs('operator')
+        catalog = self.tools.catalog('operator')['items']
+        self.assertEqual([item['name'] for item in catalog], [item['name'] for item in specs])
+        self.assertTrue(all('handler' not in item and 'arguments' not in item for item in catalog))
+        self.assertTrue(all(callable(getattr(self.tools, item['handler'])) for item in specs))
+        self.assertEqual({item['name'] for item in self.tools.capability_specs('reader')},
+                         {item['name'] for item in self.tools.catalog('reader')['items']})
+
     def test_catalog_is_real_and_distinguishes_all_workorders(self):
         result = self.tools.invoke('list_workorders', self.workspace, 'operator', {})
         self.assertEqual(result['count'], 3)

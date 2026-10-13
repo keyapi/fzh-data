@@ -13,9 +13,41 @@ from route_demo import RouteDemo, RULE, SERVICES
 
 
 class AgentTools:
-    """Capability directory and server-owned read tools for one turn."""
+    """Server-owned capability registry and handlers for one turn.
+
+    ``CAPABILITIES`` is the single source of truth for exposure: the catalog,
+    dispatcher and LangChain tool schemas all derive from it.  Internal methods
+    are not exposed merely because they exist on this class.
+    """
 
     _COLLECTIONS = frozenset({'terminals', 'parameters', 'ip_configs', 'routes', 'adapters'})
+    CAPABILITIES = (
+        {'name': 'list_capabilities', 'kind': 'read', 'roles': ('operator', 'reader', 'reviewer'),
+         'description': '列出当前岗位可调用的受控能力。', 'handler': 'list_capabilities', 'arguments': {}},
+        {'name': 'list_workorders', 'kind': 'read', 'roles': ('operator', 'reader', 'reviewer'),
+         'description': '列出演练工单及其差异，不建立任务。', 'handler': 'list_workorders', 'arguments': {}},
+        {'name': 'read_workspace_context', 'kind': 'read', 'roles': ('operator', 'reader', 'reviewer'),
+         'description': '读取当前工作区的摘要和版本。', 'handler': 'read_workspace_context', 'arguments': {}},
+        {'name': 'read_workorder', 'kind': 'read', 'roles': ('operator',),
+         'description': '读取指定工单原文与模拟资料。', 'handler': 'read_workorder', 'arguments': {'ticket_id': str}},
+        {'name': 'read_records', 'kind': 'read', 'roles': ('operator', 'reader', 'reviewer'),
+         'description': '读取许可的终端、参数、地址、适配器或路由集合。', 'handler': 'read_records', 'arguments': {'collection': str}},
+        {'name': 'search_rules', 'kind': 'read', 'roles': ('operator', 'reader', 'reviewer'),
+         'description': '检索当前可见的模拟规则；规则不授予执行权限。', 'handler': 'search_rules', 'arguments': {'query': str}},
+        {'name': 'read_pending_plans', 'kind': 'read', 'roles': ('operator', 'reader', 'reviewer'),
+         'description': '读取当前工作区待确认方案；不确认、不执行。', 'handler': 'read_pending_plans', 'arguments': {}},
+        {'name': 'read_audit', 'kind': 'read', 'roles': ('operator', 'reviewer'),
+         'description': '读取当前工作区审计摘要。', 'handler': 'read_audit', 'arguments': {}},
+        {'name': 'prepare_counter_change', 'kind': 'prepare', 'roles': ('operator',),
+         'description': '准备柜面测试限额方案。用户确认后系统才写入测试环境并读回；生产不直接改。',
+         'handler': 'prepare_counter_change', 'arguments': {'limit': int, 'reason': str}},
+        {'name': 'prepare_integration_change', 'kind': 'prepare', 'roles': ('operator',),
+         'description': '准备联调超时与重试方案。用户确认后系统才写入测试环境并读回；生产不直接改。',
+         'handler': 'prepare_integration_change', 'arguments': {'timeout': int, 'retries': int, 'reason': str}},
+        {'name': 'prepare_route_plan', 'kind': 'prepare', 'roles': ('operator',),
+         'description': '按点名的余额、明细或票据查询准备测试路由整组方案。用户确认后才写入；缺关键项只追问该项。',
+         'handler': 'prepare_route_plan', 'arguments': {'request': str}},
+    )
 
     def __init__(self, store):
         self.store = store
@@ -24,52 +56,26 @@ class AgentTools:
     def _source(kind, **values):
         return {'kind': kind, **values}
 
+    @classmethod
+    def _public(cls, item):
+        return {key: value for key, value in item.items() if key not in {'handler', 'arguments'}}
+
+    def capability_specs(self, role):
+        return [item for item in self.CAPABILITIES if role in item['roles']]
+
     def catalog(self, role):
-        capabilities = [
-            {'name': 'list_workorders', 'kind': 'read', 'roles': ['operator', 'reader', 'reviewer'],
-             'description': '列出演练工单及其差异，不建立任务。'},
-            {'name': 'read_workspace_context', 'kind': 'read', 'roles': ['operator', 'reader', 'reviewer'],
-             'description': '读取当前工作区的摘要和版本。'},
-            {'name': 'read_workorder', 'kind': 'read', 'roles': ['operator'],
-             'description': '读取指定工单原文与模拟资料。'},
-            {'name': 'read_records', 'kind': 'read', 'roles': ['operator', 'reader', 'reviewer'],
-             'description': '读取许可的终端、参数、地址、适配器或路由集合。'},
-            {'name': 'search_rules', 'kind': 'read', 'roles': ['operator', 'reader', 'reviewer'],
-             'description': '检索当前可见的模拟规则；规则不授予执行权限。'},
-            {'name': 'read_pending_plans', 'kind': 'read', 'roles': ['operator', 'reader', 'reviewer'],
-             'description': '读取当前工作区待确认方案；不确认、不执行。'},
-            {'name': 'read_audit', 'kind': 'read', 'roles': ['operator', 'reviewer'],
-             'description': '读取当前工作区审计摘要。'},
-            {'name': 'prepare_counter_change', 'kind': 'prepare', 'roles': ['operator'],
-             'description': '准备柜面测试限额方案。用户确认后系统才写入测试环境并读回；生产不直接改。'},
-            {'name': 'prepare_integration_change', 'kind': 'prepare', 'roles': ['operator'],
-             'description': '准备联调超时与重试方案。用户确认后系统才写入测试环境并读回；生产不直接改。'},
-            {'name': 'prepare_route_plan', 'kind': 'prepare', 'roles': ['operator'],
-             'description': '按点名的余额、明细或票据查询准备测试路由整组方案。用户确认后才写入；缺关键项只追问该项。'},
-        ]
-        return {'items': [item for item in capabilities if role in item['roles']],
-                'source': self._source('capability_catalog', version='1')}
+        return {'items': [self._public(item) for item in self.capability_specs(role)],
+                'source': self._source('capability_catalog', version='2')}
 
     def invoke(self, name, workspace, role, args):
         if not isinstance(args, dict):
             raise DomainError('INVALID_TOOL_INPUT', '工具参数必须是对象。')
-        methods = {
-            'list_capabilities': self.list_capabilities,
-            'list_workorders': self.list_workorders,
-            'read_workspace_context': self.read_workspace_context,
-            'read_workorder': self.read_workorder,
-            'read_records': self.read_records,
-            'search_rules': self.search_rules,
-            'read_pending_plans': self.read_pending_plans,
-            'read_audit': self.read_audit,
-            'prepare_counter_change': self.prepare_counter_change,
-            'prepare_integration_change': self.prepare_integration_change,
-            'prepare_route_plan': self.prepare_route_plan,
-        }
-        method = methods.get(name)
-        if method is None:
+        item = next((item for item in self.CAPABILITIES if item['name'] == name), None)
+        if item is None:
             raise DomainError('UNKNOWN_CAPABILITY', '该能力未开放。', 404)
-        return method(workspace, role, args)
+        if role not in item['roles']:
+            raise DomainError('FORBIDDEN', '当前岗位不能调用该能力。', 403)
+        return getattr(self, item['handler'])(workspace, role, args)
 
     def list_capabilities(self, _workspace, role, _args):
         return self.catalog(role)

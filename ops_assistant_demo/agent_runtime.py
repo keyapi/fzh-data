@@ -67,51 +67,13 @@ class AgentRuntime:
     def _langchain_runner(self, messages, system_prompt, _descriptions, workspace, role):
         try:
             from langchain.agents import create_agent
-            from langchain.tools import tool
+            from langchain_core.tools import StructuredTool
             from langchain_openai import ChatOpenAI
+            from pydantic import create_model
         except ImportError as exc:
             raise DomainError('AGENT_RUNTIME_UNAVAILABLE', '统一助手运行时未安装，业务配置未改变。') from exc
         trace = []
-
         request = str(messages[-1].get('content') or '')
-
-        def call(name, args):
-            result = self.tools.invoke(name, workspace, role, args)
-            trace.append({'tool': name, 'result': result})
-            return json.dumps(result, ensure_ascii=False)
-
-        @tool
-        def list_capabilities():
-            """列出当前岗位可调用的受控能力。"""
-            return call('list_capabilities', {})
-        @tool
-        def list_workorders():
-            """列出演练工单及它们的真实区别；不会创建任务。"""
-            return call('list_workorders', {})
-        @tool
-        def read_workspace_context():
-            """读取当前工作区的配置、任务、路由摘要与版本。"""
-            return call('read_workspace_context', {})
-        @tool
-        def read_workorder(ticket_id: str):
-            """读取指定演练工单原文；ticket_id必须来自目录。"""
-            return call('read_workorder', {'ticket_id': ticket_id})
-        @tool
-        def read_records(collection: str):
-            """读取一种集合：terminals、parameters、ip_configs、routes 或 adapters。"""
-            return call('read_records', {'collection': collection})
-        @tool
-        def search_rules(query: str):
-            """搜索当前岗位可见的模拟规则和依据。"""
-            return call('search_rules', {'query': query})
-        @tool
-        def read_pending_plans():
-            """读取当前待确认方案；不会批准或执行。"""
-            return call('read_pending_plans', {})
-        @tool
-        def read_audit():
-            """读取当前工作区最近的审计摘要。"""
-            return call('read_audit', {})
 
         def expected_limit():
             match = re.search(r'(?<!\d)(\d+(?:\.\d+)?)\s*万', request)
@@ -120,33 +82,32 @@ class AgentRuntime:
             match = re.search(r'(?<!\d)(\d{4,})\s*元', request)
             return int(match.group(1)) if match else None
 
-        @tool
-        def prepare_counter_change(limit: int, reason: str):
-            """准备明确的测试限额（元）方案；不会执行，且数值必须等于本轮用户请求。"""
-            expected = expected_limit()
-            if expected is None:
-                return json.dumps({'error': 'MISSING_VALUE', 'message': '用户没有给出明确限额，先追问，未准备方案。'}, ensure_ascii=False)
-            if limit != expected:
-                return json.dumps({'error': 'VALUE_MISMATCH', 'message': '工具参数与用户明确限额不一致，未准备方案。'}, ensure_ascii=False)
-            return call('prepare_counter_change', {'limit': limit, 'reason': reason})
+        def call(name, args):
+            # Semantic guards belong beside the registry dispatch, not in a
+            # second hand-written LangChain tool list.
+            if name == 'prepare_counter_change':
+                expected = expected_limit()
+                if expected is None:
+                    return json.dumps({'error': 'MISSING_VALUE', 'message': '用户没有给出明确限额，先追问，未准备方案。'}, ensure_ascii=False)
+                if args.get('limit') != expected:
+                    return json.dumps({'error': 'VALUE_MISMATCH', 'message': '工具参数与用户明确限额不一致，未准备方案。'}, ensure_ascii=False)
+            if name == 'prepare_integration_change':
+                timeout_match = re.search(r'(?:超时(?:调到|为|改为)?\s*)(\d+)\s*秒', request)
+                retry_match = re.search(r'(?:重试(?:调到|为|改为)?\s*)(\d+)\s*次?', request)
+                if not timeout_match or not retry_match:
+                    return json.dumps({'error': 'MISSING_VALUE', 'message': '必须同时明确超时秒数与重试次数，未准备方案。'}, ensure_ascii=False)
+                if args.get('timeout') != int(timeout_match.group(1)) or args.get('retries') != int(retry_match.group(1)):
+                    return json.dumps({'error': 'VALUE_MISMATCH', 'message': '工具参数与用户明确值不一致，未准备方案。'}, ensure_ascii=False)
+            result = self.tools.invoke(name, workspace, role, args)
+            trace.append({'tool': name, 'result': result})
+            return json.dumps(result, ensure_ascii=False)
 
-        @tool
-        def prepare_integration_change(timeout: int, retries: int, reason: str):
-            """准备明确的测试联调超时（秒）和重试（次）方案；不会执行。"""
-            timeout_match = re.search(r'(?:超时(?:调到|为|改为)?\s*)(\d+)\s*秒', request)
-            retry_match = re.search(r'(?:重试(?:调到|为|改为)?\s*)(\d+)\s*次?', request)
-            if not timeout_match or not retry_match:
-                return json.dumps({'error': 'MISSING_VALUE', 'message': '必须同时明确超时秒数与重试次数，未准备方案。'}, ensure_ascii=False)
-            if timeout != int(timeout_match.group(1)) or retries != int(retry_match.group(1)):
-                return json.dumps({'error': 'VALUE_MISMATCH', 'message': '工具参数与用户明确值不一致，未准备方案。'}, ensure_ascii=False)
-            return call('prepare_integration_change', {'timeout': timeout, 'retries': retries, 'reason': reason})
-
-        @tool
-        def prepare_route_plan(request: str):
-            """按用户点名的余额、明细或票据查询准备测试路由整组方案；只准备，确认后才写入测试配置。"""
-            if not request.strip():
-                return json.dumps({'error': 'MISSING_SCOPE', 'message': '请先说明要开通余额、明细或票据中的哪项。'}, ensure_ascii=False)
-            return call('prepare_route_plan', {'request': request})
+        def make_tool(spec):
+            fields = {key: (value, ...) for key, value in spec['arguments'].items()}
+            schema = create_model(f"{spec['name'].title().replace('_', '')}Input", **fields)
+            def handler(**args):
+                return call(spec['name'], args)
+            return StructuredTool.from_function(handler, name=spec['name'], description=spec['description'], args_schema=schema)
 
         base, key = self.config.get('OPENAI_API_BASE_URL'), self.config.get('OPENAI_API_KEY')
         if not base or not key:
@@ -154,12 +115,8 @@ class AgentRuntime:
         model = ChatOpenAI(model=self.config.get('OPENAI_MODEL', 'deepseek-v4-flash'), api_key=key,
                            base_url=base.rstrip('/'), temperature=0.2, max_completion_tokens=900,
                            timeout=45, max_retries=0, disabled_params={'parallel_tool_calls': None})
-        tools = [list_capabilities, list_workorders, read_workspace_context, read_workorder,
-                 read_records, search_rules, read_pending_plans, read_audit]
-        if role == 'operator':
-            tools.extend([prepare_counter_change, prepare_integration_change, prepare_route_plan])
-        agent = create_agent(model, tools,
-                             system_prompt=system_prompt, name='controlled_workspace_agent')
+        tools = [make_tool(spec) for spec in self.tools.capability_specs(role)]
+        agent = create_agent(model, tools, system_prompt=system_prompt, name='controlled_workspace_agent')
         state = agent.invoke({'messages': messages})
         answer = ''
         for message in reversed(state.get('messages', [])):
