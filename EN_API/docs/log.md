@@ -16,6 +16,11 @@ title: EN_API 文档变更日志
   **背景**：仓库此前有零散的 handoff 与蓝图，但没有一篇把「链路 + 子项目 + PR」串起来导航的文，新同事/新会话找不到入口。
 - **实跑留证**: `--customer-code CENKZ1325-Yellow-138`（2026-10-13）10 张 SO / 330 件 = 有效 310 + 已改单 20；已发 166 / 未发 144（`DN 实算 == ERP delivered_qty` ✓）。
 - **索引修正**: reference 索引补登此前遗漏的 `en-server-access.md`。
+- **补业务口径（更准）**:
+  - **退货净额抵扣**（修 bug）：`shipped_dn` 原先把退货型 DN 行（`is_return`）排除，导致有退货时 `DN 实算 == ERP delivered_qty` 校验翻车。改由新抽出的引擎函数 `enrich_so_rows` 按 docstatus=1 的**带符号 qty** 汇总（退货行负数自动抵扣）；`build_context` 与 fulfillment 共用该函数，避免口径分叉。Sheet2「计入已发」增「退货抵扣」标记。fixture 客户无退货 → 数字零变化。
+  - **异常新增**：交期逾期（真实 SO 交期已过仍未发，与引擎「下单+3月」估算不同）、工序停滞（在产工单 N 天无新报工，阈值 `--stall-days` 默认 14）。
+  - **整单齐套**（`--scope full_order_kit`，opt-in）：按**成品 BOM**（`BOM.items`，权威来源，非前缀约定）展开配套件，逐件算「已完工（工序卡第一道工序）+ 工厂侧库存」的可信可用量，取 min；简化（→`SXBZPK#`）/自引用 BOM 标「无法展开」。组件可用量为**全局**（未按订单行分配），到货仓/国外仓库存不计入（蓝图 §5/§13）。
+  - 测试：`uv run pytest EN_API/tests/` **45 项通过**；`--assert-fixture` 仍 14/14、exit 0。
 
 ## 2026-09-24
 

@@ -12,6 +12,7 @@ import io
 import item_shipment_status as iss
 
 from . import codes as codes_mod
+from . import kit as kit_mod
 from . import quantities as qty_mod
 from . import rules as rules_mod
 from . import stages as stages_mod
@@ -34,6 +35,7 @@ def _dedupe_lines(lines):
 
 
 def run_query(entities, base_url, key, secret, sleep_s=0.15, lead_months=3,
+              stall_days=rules_mod.DEFAULT_STALL_DAYS, scope="input_items",
               quiet=True) -> FulfillmentQueryResult:
     if isinstance(entities, str):
         entities = codes_mod.parse_inputs(entities)
@@ -126,26 +128,8 @@ def run_query(entities, base_url, key, secret, sleep_s=0.15, lead_months=3,
                                                         base_url, key, secret))
         pp_rows = iss.fetch_production_plans(so_names, item_codes, base_url, key, secret, sleep_s)
 
-    # ── 5. 每行补 出库/工单/生产计划（复刻引擎 enrich 逻辑）──
-    pp_by_line, pp_by_so = {}, {}
-    for p in pp_rows:
-        if p.get("so_line_id"):
-            pp_by_line.setdefault(p["so_line_id"], []).append(p)
-        if p.get("so"):
-            pp_by_so.setdefault(p["so"], []).append(p)
-
-    for r in so_rows:
-        line_dns = [d for d in dn_rows
-                    if d["so"] == r["so"] and (d["so_line_id"] == r["line_id"]
-                                               or (not d["so_line_id"] and d["item_code"] == r["item_code"]))]
-        r["dns"] = line_dns
-        r["shipped_dn"] = sum(d["qty"] for d in line_dns if d["dn_docstatus"] == 1 and not d["is_return"])
-        r["draft_dn"] = sum(d["qty"] for d in line_dns if d["dn_docstatus"] == 0)
-        r["open_qty"] = r["qty"] - r["delivered_qty"]
-        r["wos"] = iss.wos_for_line(wos, r["so"], r["item_code"])
-        r["pps"] = pp_by_line.get(r["line_id"]) or pp_by_so.get(r["so"], [])
-        r["progress"] = iss.progress_text(r["wos"], jc_map)
-        r["master_item"] = master_text
+    # ── 5. 每行补 出库/工单/生产计划（与引擎共用 enrich_so_rows，避免口径分叉）──
+    iss.enrich_so_rows(so_rows, dn_rows, pp_rows, wos, jc_map, master_text)
 
     # ── 6. 异常判定（复用引擎口径）──
     ctx = {"empty": False, "so_rows": so_rows, "dn_rows": dn_rows, "wos": wos, "jc_map": jc_map,
@@ -159,7 +143,7 @@ def run_query(entities, base_url, key, secret, sleep_s=0.15, lead_months=3,
     result.resolutions = codes_mod.resolve_inputs(entities, so_rows, master_by_code)
 
     # ── 8. 异常 §8 结构 ──
-    anomalies = rules_mod.build_anomalies(ctx)
+    anomalies = rules_mod.build_anomalies(ctx, stall_days=stall_days)
     anom_by_so = {}
     for a in anomalies:
         if a.so:
@@ -191,4 +175,9 @@ def run_query(entities, base_url, key, secret, sleep_s=0.15, lead_months=3,
     result.dn_rows, result.wos, result.jc_map = dn_rows, wos, jc_map
     result.pp_rows, result.item_master = pp_rows, item_master
     result.master_items = master_items
+
+    # ── 10. 整单齐套（opt-in，蓝图 §7.2）──
+    if scope == "full_order_kit":
+        with _mute(quiet):
+            kit_mod.evaluate_kit(result.lines, base_url, key, secret, sleep_s)
     return result

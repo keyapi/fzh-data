@@ -71,8 +71,9 @@ related_components: [item_shipment_status, dn_trace_report, erpnext-wo-audit, mi
 - **阶段 0–3 状态机**（蓝图 §3）：销售需求 / 待计划 / 生产中 / 工厂待出库。
 - **数量阶梯 + 对账**（§3.1）：`有效需求 = 已工厂出库 + 工厂未出库`。
 - **证据分层**（§4）：每个值标 `fact / derived / estimate`。
-- **异常 §8 结构 + 下一行动**（§8.1 十条 V1 规则）：`severity / code / 影响量 / 责任角色 / 建议行动`。
+- **异常 §8 结构 + 下一行动**（§8.1 十条 V1 规则 + 交期逾期 / 工序停滞）：`severity / code / 影响量 / 责任角色 / 建议行动`。
 - **多态输出**：JSON（权威）+ 控制台 + Excel（默认 9 分区；`--legacy-sheets` 复刻旧 3 Sheet）。
+- **整单齐套**（`--scope full_order_kit`，opt-in）：按**成品 BOM**（`BOM.items`）展开配套件，逐件算「已完工+工厂侧库存」的可信可用量，取 min 判齐套；简化/自引用 BOM 标「无法展开」。组件可用量是**全局**的（未按订单行分配），到货仓/国外仓库存不计入。
 
 ```bash
 uv run python EN_API/fulfillment_query.py --codes "CENKZ1325-Yellow-138,PK#KS0001-DM-140-YELLOW"
@@ -152,9 +153,9 @@ uv run python EN_API/item_shipment_status.py \
 | 通途 SKU → EN 物料 | ✅ `resolve_customer_code` :599 |
 | SO / PP / WO / JC / DN | ✅ `item_shipment_status.py` 全覆盖 |
 | 生产发料（Stock Entry） | ✅ 反向走 `dn_trace_report.py` |
+| **退货净额抵扣** | ✅ 退货型 DN 行（qty 为负）由 `enrich_so_rows` 自动净额 |
+| **整单齐套** | ✅ opt-in（`--scope full_order_kit`）；按成品 BOM 展开，简化/自引用 BOM 标「无法展开」 |
 | **头程/海运/国外仓（阶段 4–8）** | ❌ 数据在**钉钉表**，**尚未接入**；目前只能用「下单 + 3 个月」粗估。**2026-10-13 决定暂缓接入** —— 同事另有「智美通数据大屏」实现但**代码未共享**，待评估如何移植到 EN（见蓝图 §5.2） |
-| 退货净额抵扣 | ❌ 未做 |
-| 整单齐套 | ❌ 未实现（蓝图 §13.6 明确不擅自展开） |
 
 ## Related
 

@@ -1,5 +1,6 @@
 """fulfillment 包离线单测 —— 不连 ERP。"""
 import sys
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -156,6 +157,34 @@ def test_rules_adds_dn_draft_stall():
     assert stall and stall[0].affected_qty == 15
 
 
+def test_rules_adds_delivery_overdue():
+    rows = [_row(delivery_date="2020-01-01", open_qty=40, wos=[_wo()])]
+    out = R.build_anomalies(_ctx(rows), today=date(2026, 10, 13))
+    assert any(a.code == "DELIVERY_OVERDUE" for a in out)
+
+
+def test_rules_no_delivery_overdue_when_future_or_closed():
+    future = [_row(delivery_date="2030-01-01", open_qty=40, wos=[_wo()])]
+    assert not any(a.code == "DELIVERY_OVERDUE"
+                   for a in R.build_anomalies(_ctx(future), today=date(2026, 10, 13)))
+    closed = [_row(delivery_date="2020-01-01", so_status="Closed", open_qty=40, wos=[_wo()])]
+    assert not any(a.code == "DELIVERY_OVERDUE"
+                   for a in R.build_anomalies(_ctx(closed), today=date(2026, 10, 13)))
+
+
+def test_rules_adds_op_stall():
+    wo = _wo()
+    jc = {"WO-1": [{"operation": "OP1", "status": "Completed", "for_quantity": 10,
+                    "total_completed_qty": 10, "actual_end_date": "2026-01-01"}]}
+    row = _row(open_qty=40, wos=[wo])
+    ctx = {"so_rows": [row], "wos": [wo], "jc_map": jc, "anomalies": [], "totals": {}}
+    out = R.build_anomalies(ctx, today=date(2026, 10, 13), stall_days=14)
+    assert any(a.code == "OP_STALL" for a in out)
+    # 阈值放宽到 400 天则不再告警
+    out2 = R.build_anomalies(ctx, today=date(2026, 10, 13), stall_days=400)
+    assert not any(a.code == "OP_STALL" for a in out2)
+
+
 def test_anomalies_sorted_by_severity():
     rows = [_row(open_qty=40, draft_dn=5, wos=[_wo()])]
     ctx = _ctx(rows, [{"level": "error", "kind": "死单", "key": "SO-1", "message": "x"}])
@@ -215,3 +244,43 @@ def test_json_and_excel_render_smoke(tmp_path):
     wb = render.build_workbook(r)
     assert wb.sheetnames[0] == "履约总览"
     assert "异常与下一行动" in wb.sheetnames
+
+
+# ── 整单齐套（opt-in）─────────────────────────────────────────────────────
+def test_kit_finished_item_strips_prefix():
+    from fulfillment import kit as K
+    assert K.finished_item("PK#KS0001-DM-140-YELLOW") == "KS0001-DM-140-YELLOW"
+    assert K.finished_item("ND#KS0001-140-CYF-WHITE") == "KS0001-140-CYF-WHITE"
+    assert K.finished_item("KS0001-DM-140-YELLOW") == "KS0001-DM-140-YELLOW"
+
+
+def _kit_line(item_code="PK#X", open_qty=10):
+    from fulfillment.model import FulfillmentLine, StageResult
+    return FulfillmentLine(
+        so="SO-1", so_line_id="L1", item_code=item_code, item_name="", customer="",
+        company="", so_status="To Deliver and Bill", so_docstatus=1, delivery_date="",
+        ordered_qty=open_qty, shipped_qty=0, open_qty=open_qty, draft_qty=0, progress="-",
+        stage=StageResult(2, "生产中", []))
+
+
+def test_kit_marks_unexpandable_bom(monkeypatch):
+    from fulfillment import kit as K
+    monkeypatch.setattr(K, "fetch_bom", lambda fin, *a, **k: ("self_ref", []))
+    ln = _kit_line()
+    K.evaluate_kit([ln], "u", "k", "s", sleep_s=0)
+    assert ln.kit["mode"] == "self_ref"
+    assert ln.kit["ready_qty"] is None
+    assert ln.kit["note"]
+
+
+def test_kit_full_ready_is_min_over_components(monkeypatch):
+    from fulfillment import kit as K
+    monkeypatch.setattr(K, "fetch_bom", lambda fin, *a, **k: ("full", [
+        {"item_code": "PK#X", "qty": 1.0}, {"item_code": "ND#X", "qty": 2.0}]))
+    supplies = {"PK#X": {"produced": 10, "factory_stock": 0, "foreign_stock": 99, "supply": 10},
+                "ND#X": {"produced": 0, "factory_stock": 6, "foreign_stock": 0, "supply": 6}}
+    monkeypatch.setattr(K, "component_supply", lambda ic, *a, **k: supplies[ic])
+    ln = _kit_line()
+    K.evaluate_kit([ln], "u", "k", "s", sleep_s=0)
+    # PK#X: 10/1 = 10 ; ND#X: 6/2 = 3 → min 3（国外仓 99 不计入 supply）
+    assert ln.kit["ready_qty"] == 3

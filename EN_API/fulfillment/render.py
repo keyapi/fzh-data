@@ -65,6 +65,23 @@ def render_console(result):
           + (f" + 已取消 {iss.fmt_qty(t['cancelled_qty'])}" if t.get("cancelled_qty") else ""))
     print(f"  已发 {iss.fmt_qty(t.get('shipped_qty', 0))} / 未发 {iss.fmt_qty(t.get('open_qty', 0))}")
 
+    kit_lines = [ln for ln in result.lines if ln.kit]
+    if kit_lines:
+        iss.rule("整单齐套 (opt-in)")
+        for ln in kit_lines:
+            k = ln.kit
+            if k.get("mode") != "full":
+                print(f"  {ln.so}/{ln.so_line_id} 成品 {k.get('finished')}: {k.get('note')}")
+                continue
+            comps = " | ".join(
+                f"{c['item_code']} 可用{iss.fmt_qty(c['supply'])}"
+                f"(产{iss.fmt_qty(c['produced'])}+厂存{iss.fmt_qty(c['factory_stock'])})"
+                for c in k["components"])
+            print(f"  {ln.so}/{ln.so_line_id}: 齐套可用 {iss.fmt_qty(k['ready_qty'])} "
+                  f"/ 未发 {iss.fmt_qty(ln.open_qty)}  —— {comps}")
+        print("  (组件可用量=该件全局可信可用量[已完工+工厂侧库存]，**未按订单行分配**；"
+              "到货仓/国外仓库存不计入。多行同件会重复计同一池子，判'整单齐套'仅供单订单参考)")
+
     iss.rule(f"异常与下一行动 ({len(result.anomalies)})")
     if result.anomalies:
         for a in result.anomalies:
@@ -131,7 +148,30 @@ def build_workbook(result, legacy: bool = False) -> Workbook:
            d["dn_date"], d["item_code"], d["qty"], d["match_by"]] for d in result.dn_rows]
     iss._write_sheet(wb, "工厂出库明细", h5, r5, number_cols=(8,))
 
-    # Sheet6 头程与国外仓（占位 —— 数据在钉钉表，V2 接入）
+    # Sheet6 整单齐套（opt-in）
+    if any(ln.kit for ln in result.lines):
+        h6 = [("SO", 15), ("订单行ID", 13), ("成品", 27), ("BOM模式", 11), ("组件", 27),
+              ("需/件", 8), ("已完工", 9), ("工厂库存", 9), ("国外仓库存", 11), ("可信可用", 9),
+              ("行齐套可用", 11), ("行未发", 9), ("说明", 40)]
+        r6 = []
+        for ln in result.lines:
+            k = ln.kit
+            if not k:
+                continue
+            if k.get("mode") != "full":
+                r6.append([ln.so, ln.so_line_id, k.get("finished"), k.get("mode"), "", "", "", "",
+                           "", "", "", ln.open_qty, k.get("note")])
+                continue
+            for c in k["components"]:
+                r6.append([ln.so, ln.so_line_id, k["finished"], "full", c["item_code"], c["qty"],
+                           c["produced"], c["factory_stock"], c["foreign_stock"], c["supply"],
+                           k["ready_qty"], ln.open_qty, ""])
+        r6.append(["", "", "", "", "", "", "", "", "", "", "",
+                   "", "组件可用量=全局可信可用量(已完工+工厂侧库存)，未按订单行分配；"
+                       "到货仓/国外仓不计入；多行同件重复计同一池子"])
+        iss._write_sheet(wb, "整单齐套", h6, r6, number_cols=(6, 7, 8, 9, 10, 11, 12))
+
+    # Sheet7 头程与国外仓（占位 —— 数据在钉钉表，V2 接入）
     iss._write_sheet(wb, "头程与国外仓", [("说明", 90)], [
         ["阶段 4–8（待头程/在途/到港/国外仓上架）不在 EN。",
          "数据在钉钉「2026年下单表 / 发货信息总表」，按 EN销售订单编号 匹配（蓝图 §5.1 V2）。"],

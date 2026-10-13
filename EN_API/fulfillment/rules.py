@@ -6,9 +6,13 @@
 """
 from __future__ import annotations
 
-from item_shipment_status import num, op_progress
+from datetime import date
+
+from item_shipment_status import is_active_doc, num, op_progress, parse_date
 
 from .model import Anomaly
+
+DEFAULT_STALL_DAYS = 14   # 在产工单最后一次真实报工超过 N 天 → 工序停滞
 
 # kind（引擎口径）→ (code, owner_role, recommended_action, impact 模板)
 RULE_MAP = {
@@ -23,6 +27,8 @@ RULE_MAP = {
     "疑似重复下单": ("DUP_ORDER_SUSPECT", "销售", "核实是否重复下单", "可能重复"),
     "有计划无工单": ("PLAN_NO_WORK_ORDER", "计划", "下达工单", "计划未落地"),
     "DN草稿停留": ("DN_DRAFT_STALL", "仓库", "审核、提交或取消草稿出库单", "出库未确认"),
+    "交期逾期": ("DELIVERY_OVERDUE", "计划/销售", "确认能否按期发，否则调整客户交期", "交期已过"),
+    "工序停滞": ("OP_STALL", "生产", "查瓶颈、缺料或异常，确认是否仍在推进", "生产停摆"),
 }
 
 _SEVERITY_ORDER = {"error": 0, "warn": 1, "info": 2}
@@ -47,8 +53,9 @@ def _affected_qty(key, kind, by_so, by_wo):
     return 0.0
 
 
-def build_anomalies(ctx) -> list:
+def build_anomalies(ctx, today=None, stall_days: int = DEFAULT_STALL_DAYS) -> list:
     so_rows, wos = ctx["so_rows"], ctx["wos"]
+    today = today or date.today()
     by_so, by_wo = _index(so_rows, wos)
     out = []
 
@@ -86,6 +93,43 @@ def build_anomalies(ctx) -> list:
             fact=f"[DN草稿停留] {r['so']} 有 {num(r['draft_dn']):g} 件草稿出库未提交",
             impact=impact, evidence=r["so"], owner_role=owner,
             recommended_action=action, so=r["so"]))
+
+    # ── 补规则：交期逾期（真实 SO 交期已过仍未发；与引擎「下单+3月」估算不同）──
+    for r in so_rows:
+        if r.get("voided") or r.get("cancelled") or num(r.get("open_qty")) <= 0:
+            continue
+        if r.get("so_status") == "Closed":       # 死单已单独报
+            continue
+        dd = parse_date(r.get("delivery_date"))
+        if dd and dd < today:
+            code, owner, action, impact = RULE_MAP["交期逾期"]
+            out.append(Anomaly(
+                severity="warn", code=code, affected_qty=num(r["open_qty"]),
+                fact=f"[交期逾期] {r['so']} 交期 {r['delivery_date']} 已过，仍未发 "
+                     f"{num(r['open_qty']):g} 件（{r.get('progress') or '-'}）",
+                impact=impact, evidence=r["so"], owner_role=owner,
+                recommended_action=action, so=r["so"]))
+
+    # ── 补规则：工序停滞（在产工单最后一次真实报工超阈值）──
+    for r in so_rows:
+        for w in r.get("wos") or []:
+            if not is_active_doc(w):
+                continue
+            p = op_progress(w, ctx["jc_map"].get(w["name"], []))
+            if p["jc_count"] == 0:                       # 未开工由别处报
+                continue
+            if p["done_qty"] + 1e-6 >= num(w.get("qty")):  # 已完工
+                continue
+            last = parse_date(p["last_end"])
+            if last and (today - last).days > stall_days:
+                code, owner, action, impact = RULE_MAP["工序停滞"]
+                out.append(Anomaly(
+                    severity="warn", code=code, affected_qty=num(w.get("qty")),
+                    fact=f"[工序停滞] {w['name']}（{r['so']}）自 {last.isoformat()} 起 "
+                         f"{(today - last).days} 天无新报工，完成 {num(p['done_qty']):g}/"
+                         f"{num(w.get('qty')):g}",
+                    impact=impact, evidence=w["name"], owner_role=owner,
+                    recommended_action=action, so=r["so"]))
 
     return sorted(out, key=lambda x: _SEVERITY_ORDER.get(x.severity, 9))
 

@@ -36,8 +36,12 @@ def main(argv=None) -> int:
     parser.add_argument("--no-excel", action="store_true", help="只打控制台，不写文件")
     parser.add_argument("--json", action="store_true", help="额外/仅输出 JSON（配 --no-excel 时仅 JSON）")
     parser.add_argument("--legacy-sheets", action="store_true", help="Excel 出旧 3 Sheet（兼容 item_shipment_status）")
+    parser.add_argument("--scope", choices=["input_items", "full_order_kit"], default="input_items",
+                        help="查询范围: input_items(默认) | full_order_kit(额外展开成品 BOM 判整单齐套)")
     parser.add_argument("--env-file", help="指定 .env 路径 (默认自动探测)")
     parser.add_argument("--lead-months", type=int, default=3, help="交付约定: 下单 + N 月 (默认 3)")
+    parser.add_argument("--stall-days", type=int, default=14,
+                        help="工序停滞阈值: 在产工单 N 天无新报工即告警 (默认 14)")
     parser.add_argument("--sleep", type=float, default=0.15, help="单文档请求间隔秒数 (默认 0.15)")
     parser.add_argument("--assert-fixture", action="store_true", help="跑 CENKZ1325-Yellow-138 断言 (回归自检)")
     args = parser.parse_args(argv)
@@ -56,7 +60,8 @@ def main(argv=None) -> int:
 
     try:
         result = run_query(entities, base_url, key, secret,
-                           sleep_s=args.sleep, lead_months=args.lead_months)
+                           sleep_s=args.sleep, lead_months=args.lead_months,
+                           stall_days=args.stall_days, scope=args.scope)
     except iss.QueryError as e:
         print(f"✗ 查询中断 (部分结果不可信): {e}", file=sys.stderr)
         return 1

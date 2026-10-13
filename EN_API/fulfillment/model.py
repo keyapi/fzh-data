@@ -88,6 +88,7 @@ class FulfillmentLine:
     stage: StageResult = None
     anomalies: list = field(default_factory=list)          # list[Anomaly]
     input_sources: list = field(default_factory=list)      # 命中本行的输入 raw 列表
+    kit: dict = field(default_factory=dict)                # 整单齐套（opt-in scope=full_order_kit）
 
 
 @dataclass
