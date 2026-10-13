@@ -736,6 +736,7 @@ function renderApproval(){
 }
 async function confirmFromChat(cancel=false){
  if(busy)return;
+ if(window.RouteUI?.isActive())return window.RouteUI.confirmFromChat(cancel);
  if(window.BankTaskUI?.isActive()){
    if(window.BankTaskUI.hasPending())return window.BankTaskUI.confirmFromChat(cancel);
    push({kind:"bot",text:"当前工单没有待确认的整组方案。请先核对任务页状态。"});return;
@@ -839,6 +840,7 @@ $("ask").onsubmit = (e) => {
   $("ask-input").value = "";
   if(/^(允许(?:修改|执行|删除|保存)?|确认(?:修改|删除|保存)?|确定|同意(?:修改|执行|删除|保存)?)[。！!\s]*$/.test(text)){confirmFromChat();return;}
   if(/^(取消(?:修改)?|不允许)[。！!\s]*$/.test(text)){confirmFromChat(true);return;}
+  if(text&&window.RouteUI?.routes(text)){window.RouteUI.ask(text);return;}
   if(text&&window.BankTaskUI?.routes(text)){window.BankTaskUI.ask(text);return;}
   if (text) askOps(text,scenarioFor(text,!$("view-integration").hidden?"integration":"counter"));
 };
@@ -860,6 +862,7 @@ function fieldLabel(field) {
 function renderOps() {
   if (!opsState) return;
   window.BankTaskUI?.onOpsState(opsState);
+  if(window.RouteUI?.isActive())window.RouteUI.refresh();
   window.AssistantPanel?.attach(opsState);
   $("role").value=opsState.role;
   $("login-open").textContent="模拟账号 · 已登录";
@@ -1015,6 +1018,7 @@ async function runSafety(caseName) {
 }
 async function askOps(text,scenario="integration"){
  window.AssistantPanel?.open();
+ if(window.RouteUI?.routes(text))return window.RouteUI.ask(text);
  if(window.BankTaskUI?.routes(text))return window.BankTaskUI.ask(text);
  const bankEntity=window.BankUI?.scenarioFor(text);
  if(bankEntity&&!/限额|柜面|联调/.test(text))return askBank(text,bankEntity);
@@ -1114,5 +1118,6 @@ push({kind:"bot",text:"告诉我要改什么，我会在页面填写，等你确
 <script src="/bank_ui.js"></script>
 <script src="/assistant_panel.js"></script>
 <script src="/bank_task_ui.js"></script>
+<script src="/route_ui.js"></script>
 </body>
 </html>

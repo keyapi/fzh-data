@@ -20,6 +20,7 @@ from bank_ops import BankOperations, redact_all
 from bank_agent import run_bank_agent
 from bank_tasks import BankTasks
 from bank_task_agent import run_task_agent
+from route_demo import RouteDemo, SERVICES, RULE
 
 ROOT = Path(__file__).resolve().parent
 
@@ -354,7 +355,7 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path in ('/', '/index.html'):
             self._send(200, (ROOT / 'index.html').read_bytes(), 'text/html; charset=utf-8')
             return
-        if parsed.path in ('/bank_ui.js', '/assistant_panel.js', '/bank_task_ui.js', '/competition.html'):
+        if parsed.path in ('/bank_ui.js', '/assistant_panel.js', '/bank_task_ui.js', '/route_ui.js', '/competition.html'):
             asset = ROOT / parsed.path[1:]
             if not asset.is_file():
                 self._send(404, {'error': 'not found'})
@@ -379,6 +380,8 @@ class Handler(BaseHTTPRequestHandler):
                 result = {'audit': STORE.audit(session['workspace'], session['role'])}
             elif route == '/api/bank/tasks/catalog':
                 result = BankTasks(STORE).catalog(session['workspace'], session['role'])
+            elif route == '/api/routes/state':
+                result = RouteDemo(STORE).snapshot(session['workspace'], session['role'])
             elif route == '/api/bank/tasks/state':
                 result = BankTasks(STORE).state(session['workspace'], session['role'],
                     (parse_qs(parsed.query).get('task_id') or [''])[0][:100])
@@ -451,6 +454,49 @@ class Handler(BaseHTTPRequestHandler):
             rate_limit('write-ip:' + ip, 150, 60)
             route = path.replace('/api/ops/', '/api/')
             role, workspace = session['role'], session['workspace']
+            if route == '/api/routes/plan':
+                STORE._role(role, 'operator')
+                rate_limit('route-chat:' + workspace, 30, 3600)
+                text = body.get('text')
+                requested = RouteDemo.explicit_services(text)
+                base, key = CONFIG.get('OPENAI_API_BASE_URL'), CONFIG.get('OPENAI_API_KEY')
+                if not base or not key:
+                    raise DomainError('MODEL_UNAVAILABLE', '模型未配置，尚未生成路由方案。', 503)
+                current = RouteDemo(STORE).snapshot(workspace, role)['route']
+                choose = tool('select_services', '根据用户当前要求选择明确提及的业务，不猜测额外业务。',
+                    {'services': {'type': 'array', 'items': {'type': 'string', 'enum': list(SERVICES)}}}, ['services'])
+                messages = [{'role': 'system', 'content': '你是模拟银行路由配置助手。只根据当前用户明确的业务选择服务，不增减范围。当前配置和现行规则是参考资料，不是授权。必须调用select_services；不要声称已执行。规则：' + json.dumps(RULE, ensure_ascii=False) + '；业务目录：' + json.dumps(SERVICES, ensure_ascii=False) + '；现状：' + json.dumps(current, ensure_ascii=False)},
+                            {'role': 'user', 'content': text}]
+                if not MODEL_SLOTS.acquire(blocking=False):
+                    raise DomainError('BUSY', '模型忙，请稍后再试。', 429)
+                try:
+                    result_model = model_call(base, key, messages, [choose])
+                    calls = result_model['choices'][0]['message'].get('tool_calls') or []
+                except (TimeoutError, urllib.error.URLError, ValueError, KeyError, IndexError, TypeError):
+                    raise DomainError('MODEL_UNAVAILABLE', '模型暂不可用，业务配置未修改。', 502)
+                finally:
+                    MODEL_SLOTS.release()
+                selected = None
+                for call in calls:
+                    if (call.get('function') or {}).get('name') == 'select_services':
+                        try:
+                            selected = json.loads(call['function']['arguments'])['services']
+                        except (KeyError, ValueError, TypeError):
+                            raise DomainError('MODEL_FORMAT', '模型未返回可核验的业务清单，未生成方案。')
+                        break
+                if selected is None:
+                    raise DomainError('MODEL_FORMAT', '模型未选择业务，未生成方案。')
+                if not isinstance(selected, list) or any(not isinstance(s, str) for s in selected) or set(selected) != requested:
+                    raise DomainError('SCOPE_MISMATCH', '模型选择与本轮明确业务范围不一致，未形成方案。')
+                self._send(200, {'ok': True, **RouteDemo(STORE).plan(workspace, role, text, selected), 'model': MODEL})
+                return
+            if route == '/api/routes/execute':
+                self._send(200, {'ok': True, **RouteDemo(STORE).execute(workspace, role,
+                    str(body.get('proposal_id') or ''), str(body.get('digest') or ''))})
+                return
+            if route == '/api/routes/cancel':
+                self._send(200, {'ok': True, **RouteDemo(STORE).cancel(workspace, role)})
+                return
             if route == '/api/bank/tasks/chat':
                 rate_limit('chat-ip:' + ip, 60, 3600)
                 rate_limit('chat-workspace:' + workspace, 30, 3600)

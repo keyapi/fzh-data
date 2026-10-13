@@ -6,7 +6,14 @@ title: 文档变更日志
 # 文档变更日志
 
 ## 2026-10-13
-- 镜像工单驱动渠道接入任务：知识来源、跨三页整组事务、模拟验收、恢复与竞赛交付材料；独立仓已实测，主仓镜像独立回归。
+
+- 续接实施：`server.py` 接通 `/api/bank/tasks/*` 与静态白名单；新增 `tests/test_bank_task_http.py` 脚本化端到端；修契约（catalog 正文、答后清问、端口类型）；`verify` 落地逐项模拟验收矩阵；`domain.digest` 改显式白名单；容错操作取值；修任务页登录后状态与三页预演回落。确定性测试 108 项通过。
+- 真机评测（`deepseek-v4-flash`）：001 主线 completed、002 保守档 completed、003 失败→恢复 recovered、规则问答不生成方案、提示污染未扩大范围。详见 [实际测试结果](competition-v2-results.md)。
+- 新增竞赛交付：[项目说明](competition-v2-project.md)、[演示脚本](competition-v2-script.md)、[答疑](competition-v2-faq.md)、[演示材料](competition-v2-materials.md)、[实际测试结果](competition-v2-results.md)。
+
+- **存档**：上一轮未提交的 4 改 7 增（服务端未接线即中断）一次性提交，消除「未提交即可丢」的风险；`server.py` 接线仍是首要阻塞。
+- **新增**：[续接实施计划](competition-v2-implementation-plan.md)：把 ①接线→⑤演示材料的五阶段、每阶段闸门与「不可伪装完成」清单固化，供 Codex / Claude 等工具接力使用。
+- **新增**：[工单驱动升级设计合同](competition-v2-design.md)（上一轮产出）纳入索引。
 
 ## 2026-10-12
 
@@ -50,3 +57,5 @@ title: 文档变更日志
 ## 2026-10-11
 
 - 早期参数台强调读工具后提案、人点允许及动作级护栏。
+
+- 2026-10-13：新增独立模拟路由场景，保留已验证的接入工单主线；说明截图证据不足与模拟映射边界。

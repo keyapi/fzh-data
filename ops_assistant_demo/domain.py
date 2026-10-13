@@ -131,6 +131,7 @@ class Store:
             # Task evidence and conversation are available only through the
             # scoped BankTasks service, never through the generic snapshot.
             result.pop('bank_tasks', None)
+            result.pop('route_demo', None)
             if role == 'reader':
                 result['configs'] = [c for c in result['configs'] if c['environment'] == 'test']
                 result['tickets'] = []
@@ -167,6 +168,12 @@ class Store:
                 bank['version'] = state['bank']['version'] + 1
                 bank['reset_count'] = state['bank'].get('reset_count', 0) + 1
                 state['bank'] = bank
+            if 'route_demo' in state:
+                from route_demo import _fresh
+                route = _fresh()
+                route['version'] = state['route_demo']['version'] + 1
+                route['reset_count'] = state['route_demo'].get('reset_count', 0) + 1
+                state['route_demo'] = route
             for task in state.get('bank_tasks', []):
                 task['status'] = 'invalidated'
                 task['revision'] += 1

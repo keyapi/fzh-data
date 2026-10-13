@@ -5,7 +5,9 @@ title: 受控办理助手交接
 
 # 受控办理助手交接
 
-**2026-10-13 工单驱动任务升级**：新增内置模拟接入工单、版本化知识、五项整组方案、一次确认、事务执行、独立读回及逐项模拟验收；默认/保守档/失败恢复三场景。独立仓当前108项测试与云端真实模型主线复核，主仓镜像须独立复测。参见[设计合同](docs/competition-v2-design.md)、[实际观测](docs/competition-v2-results.md)、[7分钟讲稿](docs/competition-v2-script.md)。新增 bank_tasks.py、bank_task_agent.py、bank_task_ui.js、competition.html 和 scripts/task_eval.py 部署时须一并携带；真实系统、任意附件解析、正式身份未接。
+**2026-10-13 本轮完成**：五阶段计划已推进到「可运行 + 已验证」。`server.py` 已接通 `/api/bank/tasks/*` 与静态白名单，`bank_task` 误路由已修；`verify` 落地逐项模拟验收矩阵；契约缺陷（catalog 正文、答后清问、端口类型、登录后按钮、三页预演回落）已修；`domain.digest` 改显式白名单。**确定性测试 108 项通过**；真机（`deepseek-v4-flash`）001 主线/002 保守档 completed、003 失败→恢复 recovered，浏览器全流程与刷新恢复实测通过。逐项结果见[实际测试结果](docs/competition-v2-results.md)，未实现项与口径在文内明确列出。竞赛交付四件与结果记在 `docs/competition-v2-*.md`。
+
+**2026-10-13 存档与接力**：上一轮未提交的 4 改 7 增已提交存档（此前服务端未接线即中断）。`server.py` 尚未接入任何 `/api/bank/tasks/*` 端点，是首要阻塞；`/api/execute`/`/api/cancel` 对 `bank_task` 存在静默误路由。续接按[实施计划](docs/competition-v2-implementation-plan.md)的五阶段推进，阶段划分、闸门与「不可伪装完成」清单**以该文件为准**。
 
 最新补修见[助手面板与删除语义](docs/assistant-panel.md)，当前80项测试通过。新增assistant_panel.js须部署且加入静态白名单；界面历史不授权，待确认全取后台。历史76项计数对应此前三页实现。
 
@@ -29,9 +31,6 @@ title: 受控办理助手交接
 
 环境见 [.env.example](.env.example)。禁止提交 Key、数据库、截图和运行数据。用户拒绝本次轮换 Key，不能宣称历史暴露风险消失。Git 走分支和 PR。根索引用 `uv run python scripts/update_index.py` 自动同步，不跨仓库修改。
 
-## 主仓经验入口
+## 路由副线（2026-10-13）
 
-- [先查再决定与动作护栏](../docs/solutions/architecture-patterns/branch-param-desk-read-then-guard.md)
-- [助手回复排版](../docs/solutions/developer-experience/ops-assistant-model-reply-formatting.md)
-
-主仓索引由根scripts/update_index.py生成；子模块按README在模块目录运行测试。
+见 docs/route-scenario.md；route_demo.py / route_ui.js；接口 /api/routes/{state,plan,execute,cancel}。独立于原三页工单，模型仅选业务，后台生成受控差异。最终测试和部署记录需查看该文档。

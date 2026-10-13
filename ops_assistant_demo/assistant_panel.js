@@ -56,7 +56,8 @@
     try{
       if(stored&&stored.reset_count===count){
         log=messages(stored.messages);get('ask-input').value=String(stored.draft||'').slice(0,3000);renderLog();
-        if(stored.view==='bank-task'){window.BankTaskUI?.show();if(state.role==='operator'&&stored.task_id)window.BankTaskUI?.restore(stored.task_id);}
+        if(stored.view==='route-demo')window.RouteUI?.show();
+        else if(stored.view==='bank-task'){window.BankTaskUI?.show();if(state.role==='operator'&&stored.task_id)window.BankTaskUI?.restore(stored.task_id);}
         else if(/^bank-(terminal|parameter|ip)$/.test(stored.view||''))window.BankUI?.show(stored.view.replace('bank-',''),stored.terminal_id);
         else if(['rules','ticket','audit','integration','knowledge','safety','guide'].includes(stored.view)&&!(state.role==='reader'&&stored.view==='ticket'))show(stored.view);
       }else{log=[];get('ask-input').value='';renderLog();}
