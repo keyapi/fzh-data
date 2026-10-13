@@ -177,3 +177,17 @@ SAP Fiori Tree Table https://help.sap.com/docs/ABAP_PLATFORM_NEW/468a97775123488
 - **验证**（测试库 SO-26-00023）：点「链条」→ 行内出现 WO→2 菲号(默认展开)→逐工序工序卡，全中文。
 
 **EN app 提交账**：`feature/so-chain-embed` → `2568a55`(v4) → 本次 v5。
+
+## 13. 生产发布记录（2026-10-13）
+
+按惯例走链路：**测试机改 → 合并 main → push → 生产 pull → migrate → restart → clear-cache**。
+
+| 步骤 | 结果 |
+|---|---|
+| 测试机 `feature/so-chain-embed` → `main` | **快进合并**（origin/main 无他人提交），push：`ab3cdc0..2c11464` |
+| 生产 `keyapi/key_test` `git pull` | main → `2c11464`，`so_chain.py` + `report/so_chain_overview/` 到位 |
+| 生产 `bench --site erpnext.vilavi.cn migrate` | Report 记录 **SO Chain Overview**（Script Report / is_standard=Yes）已建 |
+| 生产 `bench restart` + `clear-cache` | 完成（新增 .py 必须 restart） |
+| **验证** | 方法 `key_test.so_chain.get_so_chain` HTTP 200（SO-25-00169 → 82 行）；报表 12 列 / **4520 行**；浏览器实测皮壳工单显示 `计划 PP-25-00057` |
+
+**两处提交**：EN app `keyapi/key_test`（合并到 main = `2c11464`）；本仓库 fzh-data 产物/记录。
