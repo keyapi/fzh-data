@@ -1024,7 +1024,7 @@ async function askOps(text,scenario="integration"){
  if(window.BankTaskUI?.routes(text))return window.BankTaskUI.ask(text);
  const bankEntity=window.BankUI?.scenarioFor(text);
  if(bankEntity&&!/限额|柜面|联调/.test(text))return askBank(text,bankEntity);
- if(busy)return;scenario=scenarioFor(text,scenario);busy=true;
+ if(busy){push({kind:"user",text});push({kind:"bot",text:"当前正在读取或办理上一项请求。请等待结果返回后再继续；尚未新增写入。"});return;}scenario=scenarioFor(text,scenario);busy=true;
  if(scenario==="integration")show("integration");
  push({kind:"user",text});const pending=push({kind:"bot",text:"正在查依据和当前后台配置…",transient:true});
  try{
@@ -1044,7 +1044,7 @@ async function askOps(text,scenario="integration"){
 }
 async function askBank(text,entity){
  window.AssistantPanel?.open();
- if(busy)return;$("rule-dialog").hidden=true;counterApproval=null;const activeTerminal=window.BankUI.activeTerminalId;busy=true;window.BankUI.show(entity,activeTerminal);window.BankUI.render();
+ if(busy){push({kind:"user",text});push({kind:"bot",text:"当前正在读取或办理上一项请求。请等待结果返回后再继续；尚未新增写入。"});return;}$("rule-dialog").hidden=true;counterApproval=null;const activeTerminal=window.BankUI.activeTerminalId;busy=true;window.BankUI.show(entity,activeTerminal);window.BankUI.render();
  push({kind:"user",text});const waiting=push({kind:"bot",text:"正在读取当前记录和操作依据…",transient:true});
  try{
   const data=await opsFetch('/api/bank/chat',{text,entity,active_terminal_id:activeTerminal});

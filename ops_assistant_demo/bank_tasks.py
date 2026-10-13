@@ -41,7 +41,13 @@ def _ticket(ticket_id, profile, port, receiver='accept'):
                           port_text='客户端实际监听端口' + str(port) if port else '实际监听端口待渠道补充')
     if receiver == 'reject':
         text += ' 模拟联调测试夹具：callback_receiver=reject，用于验证失败后恢复。'
-    return {'id': ticket_id, 'version': '1.0', 'title': '星河渠道异步回调接入（模拟）',
+    variants = {
+        'WO-DEMO-001': ('主线：缺少客户端端口', '标准异步档；刻意缺少客户端监听端口，助手应只追问这一项。'),
+        'WO-DEMO-002': ('保守档：资料已齐全', '保守异步档；端口已给定，应直接形成不同于主线的整组方案。'),
+        'WO-DEMO-003': ('故障演练：验收失败后恢复', '标准异步档；模拟回调验收会失败，用于演示保存与验收分离及整组恢复。'),
+    }
+    variant, summary = variants[ticket_id]
+    return {'id': ticket_id, 'version': '1.0', 'title': f'星河渠道异步回调接入（模拟）· {variant}', 'summary': summary,
             'status': 'active', 'environment': 'test', 'profile': profile,
             'terminal_code': 'DEMO-001', 'client_port': port,
             'callback_receiver': receiver, 'text': text,
@@ -138,7 +144,7 @@ class BankTasks:
 
     def catalog(self, workspace, role):
         self.store._role(role)
-        return {'tickets': [{k: t[k] for k in ('id', 'version', 'title', 'status', 'environment', 'hash', 'text')}
+        return {'tickets': [{k: t[k] for k in ('id', 'version', 'title', 'summary', 'status', 'environment', 'hash', 'text')}
                             for t in TICKETS.values()],
                 'documents': [{k: d[k] for k in ('id', 'version', 'title', 'status', 'environment')}
                               for d in DOCUMENTS],
