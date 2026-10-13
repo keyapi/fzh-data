@@ -64,17 +64,18 @@ function so_chain_render($box, data) {
             ? ' <span class="indicator-pill yellow" title="成品工单未完工，但同行的皮壳/内胆工单已全部完成：' + so_chain_esc(forgot.join(', ')) + '">忘点完工?</span>'
             : '';
         const prodCell = l.wo_count
-            ? '<a href="#" class="so-chain-toggle" data-i="' + idx + '" data-w="prod"><b>' + prodSummary + '</b> <span class="so-chain-caret">▸</span></a>'
+            ? '<a href="#" class="so-chain-toggle" data-i="' + idx + '" data-w="prod" style="color:#0d7a3f"><b>' + prodSummary + '</b> <span class="so-chain-caret">▸</span></a>'
               + ' <a href="#" class="so-chain-dialog" data-i="' + idx + '" title="弹窗看大图" style="text-decoration:none">⤢</a>' + forgotBadge
             : prodSummary + forgotBadge;
-        // 销售出库摘要
+        // 出库摘要（列名简称「出库」）
         const dns = l.dns || [];
-        const netShipped = dns.filter(function (d) { return d.docstatus === 1; }).reduce(function (a, d) { return a + Number(d.qty || 0); }, 0);
+        const shipSum = dns.filter(function (d) { return d.docstatus === 1 && !d.is_return; }).reduce(function (a, d) { return a + Number(d.qty || 0); }, 0);
+        const retSum = dns.filter(function (d) { return d.docstatus === 1 && d.is_return; }).reduce(function (a, d) { return a + Number(d.qty || 0); }, 0);
         const dnSummary = dns.length
-            ? dns.length + ' 张 · 净发 ' + so_chain_num(netShipped)
+            ? dns.length + ' 单 · 已发 ' + so_chain_num(shipSum) + (retSum ? '（退 ' + so_chain_num(-retSum) + '）' : '')
             : '无';
         const dnCell = dns.length
-            ? '<a href="#" class="so-chain-toggle" data-i="' + idx + '" data-w="dn"><b>' + dnSummary + '</b> <span class="so-chain-caret">▸</span></a>'
+            ? '<a href="#" class="so-chain-toggle" data-i="' + idx + '" data-w="dn" style="color:#0a6ed1"><b>' + dnSummary + '</b> <span class="so-chain-caret">▸</span></a>'
             : dnSummary;
         const od2 = Number(l.overdue_days || 0);
         const dd = od2 > 0 ? '<span class="text-danger" title="已过交付日期 ' + od2 + ' 天">' + so_chain_esc(l.delivery_date) + ' (超' + od2 + '天)</span>'
@@ -96,13 +97,13 @@ function so_chain_render($box, data) {
     const html = '<div style="overflow:auto">'
         + '<table class="table table-bordered" style="margin:0">'
         + '<thead><tr><th>订单行物料</th><th>客户物料号</th><th>订单量</th><th>已发</th><th>未发</th>'
-        + '<th>交期</th><th>阶段</th><th>生产计划</th><th>生产链条</th><th>销售出库</th></tr></thead>'
+        + '<th>交期</th><th>阶段</th><th>生产计划</th><th>生产链条</th><th>出库</th></tr></thead>'
         + '<tbody>' + rows + '</tbody>'
         + '<tfoot><tr><th colspan="4" style="text-align:right">未发合计</th>'
         + '<th style="text-align:right">' + so_chain_num(tOpenQty) + '</th><th colspan="5"></th></tr></tfoot></table>'
         + '<div class="text-muted" style="margin-top:4px;font-size:11px">'
-        + '阶段 0–3；完成量取第一道工序(不跨工序求和)；已发按出库单净额(含退货抵扣)。'
-        + '点「生产链条」「销售出库」就地展开。⤢ 弹窗看大图。</div></div>';
+        + '点绿色「生产链条」＝展开 工单→菲号→工序卡；点蓝色「出库」＝展开 出库单明细。两列各自独立展开；⤢ 弹窗看大图。'
+        + '完成量取第一道工序(不跨工序求和)；已发按出库单净额(含退货抵扣)。</div></div>';
     $box.html(html);
 
     $box.find('.so-chain-toggle').on('click', function (e) {
@@ -120,9 +121,15 @@ function so_chain_toggle($box, idx, which, line) {
     const $row = $box.find('tr[data-idx="' + idx + '"]');
     const $existing = $box.find('tr.so-chain-inline[data-key="' + key + '"]');
     if ($existing.length) { $existing.remove(); $row.find('.so-chain-caret').text('▸'); return; }
-    const body = which === 'dn' ? so_chain_dn_html(line) : so_chain_tree_html(line);
+    // 两列用颜色区分：生产链条=绿，出库=蓝；展开面板带左侧色条 + 标题(明显区别于普通子表)
+    const accent = which === 'dn' ? '#0a6ed1' : '#0d7a3f';
+    const title = which === 'dn' ? '出库明细' : '生产链条（工单 → 菲号 → 工序卡）';
+    const inner = which === 'dn' ? so_chain_dn_html(line) : so_chain_tree_html(line);
+    const panel = '<div style="border-left:4px solid ' + accent + ';background:#f8f9fa;border-radius:0 6px 6px 0;padding:8px 12px;margin:4px 0">'
+        + '<div style="font-weight:600;color:' + accent + ';margin-bottom:4px">' + title + '</div>'
+        + inner + '</div>';
     $row.after('<tr class="so-chain-inline" data-key="' + key + '"><td colspan="' + SO_CHAIN_COLS
-        + '" style="background:var(--fg-color)">' + body + '</td></tr>');
+        + '" style="background:var(--fg-color);padding:6px 8px">' + panel + '</td></tr>');
 }
 
 // 生产链条：工单 → 菲号(默认展开) → 逐工序 Job Card
