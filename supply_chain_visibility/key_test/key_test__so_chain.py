@@ -44,18 +44,19 @@ def get_so_chain(sales_order):
         delivered = _num(it.delivered_qty)
         open_qty = qty - delivered
 
-        # 生产计划（按订单行连接键）
+        # 生产计划（按订单行连接键）+ PP行→计划 映射（供工单归属）
         plans = frappe.db.sql(
-            """select pp.name as pp, ppi.planned_qty, ppi.pending_qty
+            """select pp.name as pp, ppi.name as ppi, ppi.planned_qty, ppi.pending_qty
                from `tabProduction Plan Item` ppi
                join `tabProduction Plan` pp on pp.name = ppi.parent
                where pp.docstatus = 1 and ppi.sales_order_item = %s""",
             it.name, as_dict=True)
+        pp_by_ppi = {p.ppi: p.pp for p in plans}
 
         # 工单 —— **成品**用 sales_order_item；**皮壳/内胆**用 fg_sales_order_item（不是 sales_order_item！）。
         # 一条成品(KS)行的标准结构 = 1 成品 + 1 皮壳(PK#) + 1 内胆(ND#)。兜底 production_plan_item。
         wos = frappe.db.sql(
-            """select w.name, w.qty, w.status, w.produced_qty, w.production_item
+            """select w.name, w.qty, w.status, w.produced_qty, w.production_item, w.production_plan_item
                from `tabWork Order` w
                where w.docstatus = 1 and (
                    w.sales_order_item = %(line)s
@@ -154,6 +155,7 @@ def get_so_chain(sales_order):
             completed = (w.status == 'Completed') or (_num(w.produced_qty) + 1e-6 >= _num(w.qty) > 0)
             wo_detail.append({"wo": w.name, "qty": _num(w.qty), "status": w.status,
                               "item_code": pic, "kind": kind, "completed": completed,
+                              "pp": pp_by_ppi.get(w.production_plan_item or "", ""),
                               "produced_head": _num(w.produced_qty), "done": done_qty,
                               "ops_done": ops_done, "ops_total": len(req_ops),
                               "last_end": max(jc_ends) if jc_ends else "",

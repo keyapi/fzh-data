@@ -133,11 +133,13 @@ function so_chain_summary_text(l, which) {
 function so_chain_cell($row, which) {
     return $row.children('td.so-chain-cell').eq(which === 'dn' ? 1 : 0);
 }
-function so_chain_clear_cells($box) {
-    $box.find('td.so-chain-cell').each(function () {
+// 只清**本行**的高亮（多行可同时展开，不能清别人）
+function so_chain_clear_cells($row) {
+    $row.find('td.so-chain-cell').each(function () {
         this.style.borderColor = ''; this.style.background = ''; this.style.boxShadow = '';
         this.style.borderRadius = ''; this.style.position = ''; this.style.zIndex = '';
     });
+    $row.find('.so-chain-cover').remove();
 }
 
 // 点列 → **该单元格本身**上色框线(下边不封) + 下面同色边框明细面板，连成一体(模拟标签页)；
@@ -146,21 +148,24 @@ function so_chain_toggle($box, idx, which, line) {
     const $row = $box.find('tr[data-idx="' + idx + '"]');
     const $ex = $box.find('tr.so-chain-inline[data-key="' + idx + '"]');
     if ($ex.length && $ex.attr('data-tab') === which) {          // 收起
-        $ex.remove(); so_chain_clear_cells($box); so_chain_set_caret($box, idx, null); return;
+        $ex.remove(); so_chain_clear_cells($row); so_chain_set_caret($box, idx, null); return;
     }
     if ($ex.length) { $ex.remove(); }
-    so_chain_clear_cells($box);                                   // 切换：先清旧高亮
+    so_chain_clear_cells($row);                                   // 只清本行(切换)
     const color = which === 'dn' ? SO_CHAIN_DN : SO_CHAIN_PROD;
     const body = which === 'dn' ? so_chain_dn_html(line) : so_chain_tree_html(line);
     // 被点单元格整体上色（上/左/右边框 + 圆角，下边留空 → 与下面面板连成一体）
-    // 被点单元格：**同样用 inset box-shadow 在格内画 上/左/右 三边**（border-collapse 会吃掉 td 的边）
-    so_chain_cell($row, which).css({
+    // 被点单元格：inset 画 上/左/右 三边；再用**格内绝对定位覆盖条**盖掉下方明细面板顶边 → 彻底连贯
+    const $cell = so_chain_cell($row, which);
+    $cell.css({
         'border-color': 'transparent',
         'background': 'var(--fg-color)',
         'box-shadow': 'inset 1px 0 0 ' + color + ', inset -1px 0 0 ' + color + ', inset 0 1px 0 ' + color,
         'border-radius': '6px 6px 0 0',
-        'position': 'relative', 'z-index': 1
+        'position': 'relative', 'z-index': 3
     });
+    $cell.append('<span class="so-chain-cover" style="position:absolute;left:0;right:0;bottom:-2px;'
+        + 'height:2px;background:var(--fg-color);pointer-events:none;z-index:3"></span>');
     const panel = '<div style="border:1px solid ' + color + ';border-radius:0 0 6px 6px;padding:8px 10px">' + body + '</div>';
     $row.after('<tr class="so-chain-inline" data-key="' + idx + '" data-tab="' + which + '">'
         + '<td colspan="' + SO_CHAIN_COLS + '" style="padding:0;border:none">' + panel + '</td></tr>');
@@ -189,6 +194,7 @@ function so_chain_tree_html(line) {
            + (isForgot ? 'background:#fff9e6;' : '') + 'border-radius:6px;padding:8px;margin:6px 0">';
         h += '<div><b>' + so_chain_link('Work Order', w.wo, w.wo) + '</b>'
            + (w.item_code ? '　' + so_chain_link('Item', w.item_code, w.item_code) + so_chain_item_type(w.item_code) : '')
+           + (w.pp ? '　计划 ' + so_chain_link('Production Plan', w.pp, w.pp) : '')
            + (isForgot ? ' <span class="indicator-pill yellow" title="成品工单未完工，但同行的皮壳/内胆已全部完成 —— 疑似忘了点完工">忘点完工?</span>' : '')
            + '　工单量 ' + so_chain_num(w.qty) + '　完成 ' + so_chain_num(w.done)
            + '　头部状态 ' + so_chain_t(w.status)
