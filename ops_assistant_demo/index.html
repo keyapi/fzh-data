@@ -522,6 +522,7 @@
   <div id="log"></div>
   <div id="chat-approval" hidden style="padding:12px 14px;border-top:1px solid #e5e6eb;background:#f4f7ff"><p id="chat-change" style="margin:0 0 8px"></p><button class="solid" id="chat-allow" type="button">允许修改（测试）</button> <button class="ghost" id="chat-cancel" type="button">取消</button></div>
   <div class="chips">
+    <button class="ghost" type="button" id="chip-catalog">查看可办事项与规则</button>
     <button class="ghost" type="button" id="chip-script-ok">脚本演示 · 改测试限额</button>
     <button class="ghost" type="button" id="chip-script-no">后台实测 · 越权拒绝</button>
     <button class="ghost" type="button" id="chip-port">让助手改限额</button>
@@ -702,7 +703,7 @@ function railResult(value){return ({pass:"通过",warning:"需关注",denied:"�
 function renderLog() {
   renderApproval();
   $("log").innerHTML = log.map((m) => {
-    if(m.kind==="evidence")return '<div class="msg bot"><details><summary>依据与安全检查 · '+(m.citations||[]).length+'条依据</summary>'+(m.citations||[]).map(d=>'<details><summary>'+esc(d.title)+' · '+esc(d.id)+'</summary>'+richText(d.content)+'</details>').join('')+'<p>'+(m.rails||[]).map(r=>esc(r.name)+'：'+esc(railResult(r.result))).join('；')+'</p><details><summary>工具与检查记录</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(JSON.stringify(m.trace||[],null,2))+'</pre></details></details></div>';
+    if(m.kind==="evidence"){const citeCount=(m.citations||[]).length,toolCount=(m.trace||[]).length;const summary=[citeCount?citeCount+'条依据':'',toolCount?toolCount+'次工具读取':''].filter(Boolean).join(' · ')||'0条依据';return '<div class="msg bot"><details><summary>依据与安全检查 · '+summary+'</summary>'+(m.citations||[]).map(d=>'<details><summary>'+esc(d.title)+' · '+esc(d.id)+'</summary>'+richText(d.content)+'</details>').join('')+'<p>'+(m.rails||[]).map(r=>esc(r.name)+'：'+esc(railResult(r.result))).join('；')+'</p><details><summary>工具与检查记录</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(JSON.stringify(m.trace||[],null,2))+'</pre></details></details></div>';}
     if(m.kind==="long-answer")return '<div class="msg bot">'+richText(shortReply(m.text))+'<details><summary>展开完整回答</summary>'+richText(m.text)+'</details></div>';
     if (m.kind === "user") return `<div class="msg user">${esc(m.text)}</div>`;
     if (m.kind === "steps") {
@@ -791,6 +792,9 @@ function fieldValue(field,value){return field==="limit"?money(value)+" 元":Stri
 function verificationText(data){const config=data.verification||data.readback;return config?.values?Object.entries(config.values).map(([field,value])=>fieldLabel(field)+" "+fieldValue(field,value)).join(" / "):"没有收到读回字段，不能据此宣称核验成功";}
 function executionMessage(data){return data.code==="EXECUTED"?"测试配置已保存并核验；"+(data.ticket?"生产仅登记申请。":"生产配置未修改。"):data.message||"执行请求已处理。";}
 function showExecution(data){push({kind:"verification",text:executionMessage(data),values:verificationText(data),independent:!!data.verification,evidence:data.verification||data.readback||{}});}
+async function showCapabilityCatalog(){
+ askUnified("查看当前岗位能执行的操作、可用工具、权限，以及模拟知识库里的现行规则。");
+}
 async function askModel(text){return askOps(text,"counter");}
 async function playScriptOk(){push({kind:"bot",text:"脚本演示 / 不调用模型：准备20万元测试限额与生产申请。需你确认后才执行，后台仍校验权限。"});await proposeOps("counter",[{field:"limit",value:200000}],"脚本演示：压缩测试单笔限额，生产仅提交申请",true);}
 async function playScriptDeny(){show("safety");push({kind:"bot",text:"后台实测 / 不调用模型：在隔离工作区向执行层提交生产直改请求，以实际返回结果为准。"});await runSafety("production");}
@@ -834,6 +838,7 @@ $("btn-export").onclick = () => {
   push({ kind: "deny", text: "客户清单不能从这里导出。请走数据管理员审批，双人复核。没有生成文件。" });
   show("audit");
 };
+$("chip-catalog").onclick = () => showCapabilityCatalog();
 $("chip-script-ok").onclick = () => playScriptOk();
 $("chip-script-no").onclick = () => playScriptDeny();
 $("chip-port").onclick = () => askModel("把测试环境的单笔对公转账限额改成 20 万。改之前先在页面上问我。");
@@ -1057,8 +1062,10 @@ async function askUnified(text){
  try{
   const data=await opsFetch('/api/agent/turn',{text});
   log.splice(waiting,1);
-  push({kind:data.text.length>220?"long-answer":"bot",text:data.text||"本次没有形成可核验回复，业务配置未改变。"});
-  if(data.trace?.length)push({kind:"trace",items:data.trace});
+  push({kind:"bot",text:data.text||"本次没有形成可核验回复，业务配置未改变。"});
+  const citations=Array.isArray(data.citations)&&data.citations.length?data.citations:(data.trace||[]).flatMap(item=>Array.isArray(item?.result?.documents)?item.result.documents:[]);
+  if(data.trace?.length||citations.length)push({kind:"evidence",citations,trace:data.trace||[]});
+
   if(data.state){opsState=data.state;renderOps();}
   const prepared=(data.trace||[]).map(item=>item?.result?.proposal).find(Boolean);
   if(prepared){
@@ -1144,9 +1151,9 @@ $("login-form").onsubmit=async event=>{event.preventDefault();try{await loginAs(
 $("role").onchange=async()=>{if(busy){$("role").value=role();return;}const desired=$("role").value;$("role").value=role();try{await loginAs(desired,loginPassword||"demo2026",loginAccess);}catch(err){push({kind:"deny",text:err.message});$("login-dialog").showModal();}};
 push({kind:"bot",text:"告诉我要改什么，我会在页面填写，等你确认后保存。"});loadOps();
 </script>
-<script src="/bank_ui.js"></script>
+<script src="/bank_ui.js?v=20261014"></script>
 <script src="/assistant_panel.js"></script>
-<script src="/bank_task_ui.js"></script>
+<script src="/bank_task_ui.js?v=20261014"></script>
 <script src="/route_ui.js"></script>
 <script src="/rehearsal_ui.js"></script>
 </body>

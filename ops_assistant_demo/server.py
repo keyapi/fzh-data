@@ -384,7 +384,7 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path in ('/', '/index.html'):
             self._send(200, (ROOT / 'index.html').read_bytes(), 'text/html; charset=utf-8')
             return
-        if parsed.path in ('/bank_ui.js', '/assistant_panel.js', '/bank_task_ui.js', '/route_ui.js', '/feedback_ui.js', '/rehearsal_ui.js', '/competition.html'):
+        if parsed.path in ('/bank_ui.js', '/assistant_panel.js', '/bank_task_ui.js', '/route_ui.js', '/feedback_ui.js', '/rehearsal_ui.js', '/competition.html', '/show.html'):
             asset = ROOT / parsed.path[1:]
             if not asset.is_file():
                 self._send(404, {'error': 'not found'})
@@ -416,6 +416,12 @@ class Handler(BaseHTTPRequestHandler):
                 result = {'bank': state['bank'], 'state': state}
             elif route == '/api/knowledge':
                 result = {'documents': STORE.knowledge((parse_qs(parsed.query).get('q') or [''])[0][:200], session['role'])}
+            elif route == '/api/agent/catalog':
+                result = {'role': session['role'],
+                          'capabilities': AgentTools(STORE).catalog(session['role'])['items'],
+                          'documents': [{'id': d['id'], 'title': d['title'], 'version': d['version'],
+                                         'status': d['status'], 'summary': d['content']}
+                                        for d in STORE.knowledge('', session['role'])]}
             elif route == '/api/audit':
                 result = {'audit': STORE.audit(session['workspace'], session['role'])}
             elif route == '/api/bank/tasks/catalog':

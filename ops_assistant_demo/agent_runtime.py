@@ -8,6 +8,17 @@ from domain import DomainError
 
 
 MAX_HISTORY = 16
+_CAPABILITY_QUESTION = re.compile(r'能执行什么|能做什么|能处理什么|哪些工具|什么权限|现行规则|可办事项|有哪些规则')
+_ROLE_TITLE = {
+    'operator': '林晓 · 柜面主管',
+    'reader': '陈默 · 综合柜员（只读）',
+    'reviewer': '周宁 · 参数管理员（复核）',
+}
+_ROLE_BOUNDARY = {
+    'operator': '可读取工作区，并可准备测试环境方案。人确认后系统才写入测试环境。生产不直接改。',
+    'reader': '只读。可查看测试资料和待确认方案，不能准备变更，也不返回生产制度全文。',
+    'reviewer': '可查看审计和待确认方案。不准备变更。复核只处理模拟申请，不执行生产变更。',
+}
 
 
 class AgentRuntime:
@@ -28,9 +39,11 @@ class AgentRuntime:
                 'read工具只读。prepare工具只生成待确认方案，助手自己不能落库。'
                 '用户在界面确认之后，系统才执行测试环境变更、独立读回并验收；生产只生成申请，不能直接改。'
                 '不要说本演示不执行任何变更。准确说法是：助手只准备方案；确认后才执行测试变更。'
-                '先概括三类业务：核对工单并说明三张演练工单的差别；调整柜面测试限额；处理联调超时与重试，以及按用户点名的余额、明细或票据查询准备路由整组方案。'
-                '用户只问能处理什么时，总回复不超过180字，恰好用三条简短业务概览，并附一句确认边界。不要罗列工单数量、编号、地址、规则号或参数范围；用户追问某项后再展开依据。概览不能声称未注册的自动办理已完成。'
-                '只有用户点名要开通的业务时才调用prepare_route_plan。缺端口、协议或排除项时只追问这一项。'
+                '用户问能执行什么、有哪些工具、什么权限或有哪些规则时，必须先调用list_capabilities和search_rules，再按本轮工具结果回答。即使历史对话里曾缩成三类，也以本轮工具结果重新回答，不要沿用旧的三类概括。'
+                '回答顺序：当前岗位可直接读取的事项；可准备的方案，以及确认后才写入测试环境；知识库现行规则的标题和要点。'
+                '接入工单在对话里只能列出和读取，不能在对话里建立任务或改配置。建立任务、补端口和整组确认在接入工单页面完成。'
+                '业务路由只有用户点名余额、明细或票据时才调用prepare_route_plan。缺端口、协议或排除项时只追问这一项。确认后才写入。'
+                '终端注册、注册参数、固定IP在对应页面办理，不在这组对话工具里。'
                 '所有数量、状态和工单差异必须来自本轮工具结果；'
                 '没有对象时直接说未找到。回答先给一到三句结论，再说明依据与下一步。'
                 f'当前服务端工作区={workspace}，岗位={role}。能力目录：'
@@ -59,10 +72,60 @@ class AgentRuntime:
         if not answer:
             answer = '模型没有形成可核验回复，业务配置未改变。请换一种明确问法或稍后重试。'
             outcome = 'failed'
+        citations = []
+        if _CAPABILITY_QUESTION.search(text):
+            answer, citations = self._readable_brief(workspace, role, trace)
+            if re.fullmatch(r"[你您]?(?:能做什么|能处理什么业务)[？?。\s]*", text) and role == "operator":
+                answer = "可以帮你核对工单、准备柜面测试限额调整、处理联调参数与路由接入。工单整组办理在接入工单页完成；测试方案经你确认后执行并读回，生产仅生成申请。想了解具体可办事项与规则，可以继续追问。"
         session['unified_agent_history'] = [*messages, {'role': 'assistant', 'content': answer}][-MAX_HISTORY:]
         return {'turn_id': turn_id, 'outcome': outcome, 'text': answer, 'trace': trace,
+                'citations': citations,
                 'source': 'langchain-create-agent' if runner is None else 'test-runner',
                 'completed_at': int(time.time())}
+
+    def _readable_brief(self, workspace, role, trace):
+        """Render a capability answer from this turn's tool results, not model wording."""
+        items, documents = [], []
+        for entry in trace:
+            result = entry.get('result') if isinstance(entry, dict) else None
+            if not isinstance(result, dict):
+                continue
+            if entry.get('tool') == 'list_capabilities':
+                items = result.get('items') or items
+            elif entry.get('tool') == 'search_rules' and result.get('documents'):
+                documents = result['documents']
+        if not items:
+            found = self.tools.invoke('list_capabilities', workspace, role, {})
+            items = found.get('items') or []
+            trace.append({'tool': 'list_capabilities', 'result': found})
+        if not documents:
+            found = self.tools.invoke('search_rules', workspace, role, {'query': '现行规则'})
+            documents = found.get('documents') or []
+            trace.append({'tool': 'search_rules', 'result': found})
+        reads = [item for item in items if item.get('kind') == 'read']
+        prepares = [item for item in items if item.get('kind') == 'prepare']
+        lines = [
+            f"当前岗位：{_ROLE_TITLE.get(role, role)}",
+            _ROLE_BOUNDARY.get(role, ''),
+            '以下来自本轮能力登记和规则检索。助手只准备方案；确认后系统才写入测试环境并读回。生产只生成申请。',
+            '',
+            '可直接读取',
+        ]
+        lines.extend(f"{index}. {item.get('description')}" for index, item in enumerate(reads, 1))
+        lines.append('')
+        if prepares:
+            lines.append('可准备方案，确认后才写入测试环境')
+            lines.extend(f"{index}. {item.get('description')}" for index, item in enumerate(prepares, 1))
+        else:
+            lines.append('当前岗位不能准备变更。')
+        lines.extend(['', '模拟知识库现行规则'])
+        lines.extend(
+            f"{index}. {doc.get('id')} {doc.get('title')}（v{doc.get('version')}）。{doc.get('content')}"
+            for index, doc in enumerate(documents, 1))
+        lines.extend(['', '过期规范和安全测试夹具不进入这份现行清单。'])
+        citations = [{'id': doc.get('id'), 'title': doc.get('title'), 'version': doc.get('version'),
+                      'content': doc.get('content'), 'status': doc.get('status')} for doc in documents]
+        return '\n'.join(lines), citations
 
     def _langchain_runner(self, messages, system_prompt, _descriptions, workspace, role):
         try:

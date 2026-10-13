@@ -9,6 +9,7 @@ title: 文档索引
 
 | 需要 | 文档 |
 |---|---|
+| 决赛 6–8 分钟：短问答加两次可操作 | [finals-brief-2026-10-13.md](finals-brief-2026-10-13.md) |
 | 统一Agent底座改造与Terra验收计划 | [unified-agent-plan.md](unified-agent-plan.md) |
 | 助手开合、拖宽、刷新与删除修复 | [assistant-panel.md](assistant-panel.md) |
 | 运营三功能页与实际验收 | [bank-operations.md](bank-operations.md) |
