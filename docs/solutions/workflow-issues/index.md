@@ -9,6 +9,7 @@ tags: [workflow-issues, index]
 
 | 文档 | 说明 |
 |------|------|
+| [dingtalk-period-month-closeout-export-sellfox-nas.md](dingtalk-period-month-closeout-export-sellfox-nas.md) | 钉钉账期月收尾：宽窗定稿、赛狐转账、NAS 相邻桶、Colab `OA_PERIOD_RE` 文件名 |
 | [key-test-login-hook-and-prod-test-divergence.md](key-test-login-hook-and-prod-test-divergence.md) | key_test 每次登录写元数据（~0.75–1.05s）+ 猴补丁核心报表；生产 `production-backup` 与测试 `main` 割裂 |
 | [mcp-to-chatgpt-bringup-lessons.md](mcp-to-chatgpt-bringup-lessons.md) | 把 FAC / 赛狐 / NAS 三个 MCP 接上 ChatGPT 的方法与四个教训 |
 | [fedex-track-batch-query.md](fedex-track-batch-query.md) | FedEx 官方批量 Track + 账号/组织恢复 + 三条教训 |
