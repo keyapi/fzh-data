@@ -15,6 +15,13 @@ title: tongtool_order_cost 变更日志
   **差异即结论**，不设「必须相等」阻断闸门；`import皮壳成本` 同键不同重量模板的冲突键不进索引、对应行排除（不猜值）。
 - **文档**：`docs/reference/monthly-profitability-audit.md` 增 USTX 对比章节；学习正文见
   `docs/solutions/architecture-patterns/ustx-cost-caliber-comparison.md`。
+- **头程口径补齐（b）**：新增 `build_head_freight_index` —— B2 头程取**皮壳头程**
+  （`测算 按皮壳重量 美国分公司USTX头程运费核算`；该 sheet 第 1 行是标题，`find_header_row` 自动定位表头；
+  面料级优先、品类尺寸级（无面料退路）取最大回退）。命中 4376/4379 行，头程 ΔB2 = **+3,244**。
+  B1 头程不改（B1 只动二次加工成本）。
+- **财务口径说明（c）**：新增 `docs/reference/ustx-cost-caliber-note.md` —— 给财务/业务的口径变更说明
+  （A/B1/B2 差额表 + 分歧归因 + 4 项待确认：加工费口径 / 半成品包装成本 / 头程重量基准 / 工资 167.8→105）。
+- **最终差额**：美中四项合计 A 526,225 → B2 794,381（ΔB2 **+268,156**，+51%）。
 
 ## 2026-09-18
 - **月度链路 runbook**：新增 `docs/reference/monthly-tail-cost-pipeline.md`（通途导出→清表头→EN 列表入口→键值合并→GSheet in-place；含覆盖率口径与「缺尾清单」整理）。
