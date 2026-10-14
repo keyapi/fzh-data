@@ -398,9 +398,16 @@ def cmd_ustx_compare(args) -> int:
                             ambiguous_keys=[d["key"] for d in shell_dups])
     b1 = U.build_b1_catalog(U.b1_key_values(b1h, b1r), b2, keys=ustx_keys)
 
+    # 皮壳头程（改造目标）——缺这张表则 B2 头程保留 A
+    head_index = None
+    head_rec = by_key.get("head_ustx_pkshell")
+    if head_rec and head_rec["status"] == "ok":
+        hh, hr = P.load_snapshot_csv(snap / head_rec["path"])
+        head_index = U.build_head_freight_index(hh, hr)
+
     result = U.compare_monthly_costs(
         order_rows, raw_rows, ustx_warehouse_names=ustx_wh,
-        b1_catalog=b1, b2_catalog=b2, contract=contract,
+        b1_catalog=b1, b2_catalog=b2, contract=contract, head_index=head_index,
     )
 
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")

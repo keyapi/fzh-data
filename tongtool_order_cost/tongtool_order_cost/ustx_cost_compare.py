@@ -70,6 +70,12 @@ WH_SRC_SHEET = "订单发货仓库对应成本来源"
 WH_SRC_WAREHOUSE = "发货仓库"
 WH_SRC_CLASS = "发货仓按销售汇总分类"
 
+# 头程表（皮壳重量口径）列
+HEAD_FREIGHT_SHEET = "测算 按皮壳重量 美国分公司USTX头程运费核算"
+HEAD_KEY_FABRIC = "品类尺寸面料编码"
+HEAD_KEY_NOFABRIC = "品类尺寸编码"
+HEAD_AMOUNT = "头程运费金额"
+
 FORMULA_VERSION = "ustx-import-v1"
 
 SHIP_METHOD_SHELL = "皮壳"
@@ -283,6 +289,67 @@ def ustx_warehouses(wh_headers: Sequence[str], wh_rows: Sequence[Sequence[str]])
         for r in dicts
         if r.get(WH_SRC_CLASS, "") == USTX_CLASS and r.get(WH_SRC_WAREHOUSE, "")
     }
+
+
+# ─────────────────────────── 头程（皮壳重量口径） ───────────────────────────
+
+
+def find_header_row(rows: Sequence[Sequence[str]], needle: str) -> int:
+    """找真正的表头行（有些 sheet 第 1 行是标题）。找不到返回 0。"""
+    for i, r in enumerate(rows[:5]):
+        if any(str(c).strip() == needle for c in r):
+            return i
+    return 0
+
+
+@dataclass
+class HeadFreightIndex:
+    """皮壳头程索引：面料级优先，品类尺寸级（取最大）回退。"""
+
+    by_fabric: dict[str, float]
+    by_nofabric: dict[str, float]
+    source_rows: dict[str, int]
+
+    def resolve(self, key_fabric: str, key_nofabric: str) -> tuple[float | None, str]:
+        if key_fabric and key_fabric in self.by_fabric:
+            return self.by_fabric[key_fabric], "品类尺寸面料编码"
+        if key_nofabric and key_nofabric in self.by_nofabric:
+            return self.by_nofabric[key_nofabric], "品类尺寸编码(取最大)"
+        return None, ""
+
+
+def build_head_freight_index(
+    head_headers: Sequence[str], head_rows: Sequence[Sequence[str]]
+) -> HeadFreightIndex:
+    """从「测算 按皮壳重量 美国分公司USTX头程运费核算」建索引。
+
+    该 sheet 第 1 行是标题；表头行按含 `品类尺寸面料编码` 自动定位。
+    面料级键重复时取首行；品类尺寸级按规格的「USTX 无面料退路」取**最大**。
+    """
+    hdr_i = find_header_row(head_rows, HEAD_KEY_FABRIC)
+    header = [str(c).strip() for c in head_rows[hdr_i]]
+    idx = {c: i for i, c in enumerate(header)}
+    missing = [c for c in (HEAD_KEY_FABRIC, HEAD_KEY_NOFABRIC, HEAD_AMOUNT) if c not in idx]
+    if missing:
+        raise ContractError(f"{HEAD_FREIGHT_SHEET} 缺列: {missing}")
+
+    by_fabric: dict[str, float] = {}
+    by_nofabric: dict[str, float] = {}
+    src: dict[str, int] = {}
+    for i, r in enumerate(head_rows[hdr_i + 1 :], start=hdr_i + 2):
+        kf = str(r[idx[HEAD_KEY_FABRIC]]).strip() if idx[HEAD_KEY_FABRIC] < len(r) else ""
+        kn = str(r[idx[HEAD_KEY_NOFABRIC]]).strip() if idx[HEAD_KEY_NOFABRIC] < len(r) else ""
+        amt = to_float(r[idx[HEAD_AMOUNT]]) if idx[HEAD_AMOUNT] < len(r) else None
+        if amt is None:
+            continue
+        if kf and kf not in by_fabric:
+            by_fabric[kf] = amt
+            src[kf] = i
+        if kn:
+            cur = by_nofabric.get(kn)
+            if cur is None or amt > cur:
+                by_nofabric[kn] = amt
+    return HeadFreightIndex(by_fabric=by_fabric, by_nofabric=by_nofabric, source_rows=src)
 
 
 # ─────────────────────────── 成本目录 ───────────────────────────
@@ -502,6 +569,7 @@ def order_row_to_record(row) -> dict:
         "occurrence_index": row.key.occurrence_index,
         "biz_key": _record_business_key(row),
         "key": row.get(KEY_COL),
+        "key_nofabric": row.get("品类尺寸编码"),
         "warehouse": row.get(WAREHOUSE_COL),
         "category": row.get(CATEGORY_COL),
         "qty": to_float(row.get(QTY_COL)) or 0.0,
@@ -517,8 +585,13 @@ def compare_monthly_costs(
     b1_catalog: CostCatalogResult,
     b2_catalog: CostCatalogResult,
     contract: FormulaContract,
+    head_index: "HeadFreightIndex | None" = None,
 ) -> MonthlyComparisonResult:
-    """全月逐行 A/B1/B2 比较；非 USTX 行严格复制 A；输出对账与闸门。"""
+    """全月逐行 A/B1/B2 比较；非 USTX 行严格复制 A；输出对账与闸门。
+
+    `head_index`（皮壳头程）给了就把 B2 的「头程运费」换成皮壳头程；
+    没给或该键未命中则保留 A。
+    """
     result = MonthlyComparisonResult()
     result.blocked_reasons.extend(sorted(set(b1_catalog.blocked_reasons + b2_catalog.blocked_reasons)))
     seen_dups: set[tuple] = set()
@@ -533,6 +606,8 @@ def compare_monthly_costs(
     ustx_keys: set[str] = set()
     b1_used = 0
     b2_used = 0
+    head_hit = 0
+    head_miss = 0
 
     for row in order_rows:
         rec = order_row_to_record(row)
@@ -543,15 +618,13 @@ def compare_monthly_costs(
         if is_ustx:
             ustx_keys.add(key)
 
-        def _b(which: str):
-            return dict(a)
-
-        b1 = _b(SCENARIO_B1)
-        b2 = _b(SCENARIO_B2)
+        b1 = dict(a)
+        b2 = dict(a)
         b1_kind = SRC_NOT_USTX
         b2_kind = SRC_NOT_USTX
         b1_lineage = ""
         b2_lineage = ""
+        head_src = ""
 
         if is_ustx:
             cat1 = b1_catalog.rows.get(key)
@@ -569,12 +642,19 @@ def compare_monthly_costs(
                     b2[pk_col] = cat2["shell_cost"]
                 b2[proc_col] = cat2["processing_cost"]
                 b2[sx2_col] = cat2["sx_processing_cost"]
-                # 头程：import 表无来源，保留 A
                 b2_kind = SRC_IMPORT
                 b2_lineage = ";".join(cat2.get("lineage", ()))
                 b2_used += 1
             else:
                 b2_kind = SRC_UNMATCHED
+
+            if head_index is not None:
+                amt, head_src = head_index.resolve(key, rec.get("key_nofabric", ""))
+                if amt is not None:
+                    b2[head_col] = amt
+                    head_hit += 1
+                else:
+                    head_miss += 1
 
         def _sum(d):
             return sum((d[c] or 0.0) for c in COMPONENT_COLS)
@@ -601,6 +681,7 @@ def compare_monthly_costs(
             "is_ustx": is_ustx,
             "b1_source": b1_kind,
             "b2_source": b2_kind,
+            "head_src": head_src,
             "b1_lineage": b1_lineage,
             "b2_lineage": b2_lineage,
         }
@@ -725,9 +806,22 @@ def compare_monthly_costs(
     gates.append(_gate("raw_coverage_conservation",
                        (len(raw_set - wb_set) + len(wb_set - raw_set) + len(raw_set & wb_set)) >= len(raw_set),
                        "raw/writeback 差异已分类"))
+    if head_index is not None:
+        gates.append(_gate("b2_head_freight_coverage",
+                           head_miss == 0,
+                           f"B2 皮壳头程命中 {head_hit} 行 / 未命中 {head_miss} 行（未命中保留 A）",
+                           blocking=False))
     result.gates = gates
 
-    result.notes.append("头程运费 import 表无来源，A/B1/B2 均沿用订单表现值（Δ=0）。")
+    if head_index is not None:
+        result.notes.append(
+            f"B2 头程=皮壳头程（{HEAD_FREIGHT_SHEET}）：命中 {head_hit} 行、未命中 {head_miss} 行（未命中保留 A）。"
+        )
+        result.notes.append(
+            "A 的头程含 Colab 的 EN 覆盖层（本次未复现）；Δ 为「订单现值 vs 皮壳头程目标」之差。"
+        )
+    else:
+        result.notes.append("头程运费未接入皮壳头程表 → A/B1/B2 均沿用订单现值（Δ=0）。")
     result.notes.append("B1 与 B2 非同源：B1=人工测算表，B2=EN/import 重建，差异本身即结论。")
     result.notes.append("B2 二次加工成本取自 EN 美中USTX包装 BOM；工资 167.8→105 尚未调整，值可能偏高。")
     return result
@@ -759,7 +853,7 @@ REPORT_SHEETS = [
 
 _ROW_COLUMNS = [
     "source_sheet", "source_row", "occurrence_index", "key", "warehouse", "category",
-    "shipping_method", "qty", "is_ustx", "b1_source", "b2_source",
+    "shipping_method", "qty", "is_ustx", "b1_source", "b2_source", "head_src",
     "A_pk", "A_head", "A_proc", "A_sx2",
     "B1_pk", "B1_head", "B1_proc", "B1_sx2",
     "B2_pk", "B2_head", "B2_proc", "B2_sx2",
