@@ -16,6 +16,7 @@ description: >
 附件拉取与 DRM 对照数字：`docs/research/2026-09-09-attachment-fetch-and-drm-audit.md`。
 迟交挪动登记 / 跨月剔除：`docs/reference/late-submission-registry.md`。
 惯例：`docs/solutions/conventions/amazon-period-file-reconcile.md`。
+账期月关账（宽窗导出、赛狐、NAS 桶、Colab 定稿文件名）：`docs/solutions/workflow-issues/dingtalk-period-month-closeout-export-sellfox-nas.md`。
 API + aflow + 账期月过滤 + NAS：**同一条流水线**，手册 `docs/research/browser-admin-download.md`。
 
 ```text
