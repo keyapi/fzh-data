@@ -5,6 +5,17 @@ title: tongtool_order_cost 变更日志
 ---
 # 变更日志
 
+## 2026-10-14
+- **美中 USTX 三方案对比**：新增 `tongtool_order_cost/ustx_cost_compare.py` + CLI `ustx-compare`（纯离线）——
+  A 现状(2CJG-SX) / B1 测算表 / B2 EN-import 重建 三口径逐行对比 + 仓库×品类×绍兴发货方式归因 + fail-closed 闸门。
+  7 月美中 4,379 行：A 合计 526,225 → ΔB1 +226,629 / ΔB2 +264,912（￥加权）。
+- **只读快照双冻结**：`audit_sources.SourceSpec.render_option ∈ {values, formulas}`，同一 worksheet 可分别冻结显示值与公式；
+  `snapshot --with-finance` 注册 USTX 成本源（绍兴二次加工 / 测算美中USTX / import皮壳成本 / importBOMCostList）。
+- **口径教训**：`测算 美中USTX二次加工成本` 的月度值是**手填、无公式** → B1(人工) 与 B2(import 重建) 在 57 个共有键上无一相等，
+  **差异即结论**，不设「必须相等」阻断闸门；`import皮壳成本` 同键不同重量模板的冲突键不进索引、对应行排除（不猜值）。
+- **文档**：`docs/reference/monthly-profitability-audit.md` 增 USTX 对比章节；学习正文见
+  `docs/solutions/architecture-patterns/ustx-cost-caliber-comparison.md`。
+
 ## 2026-09-18
 - **月度链路 runbook**：新增 `docs/reference/monthly-tail-cost-pipeline.md`（通途导出→清表头→EN 列表入口→键值合并→GSheet in-place；含覆盖率口径与「缺尾清单」整理）。
 - **口径结论**：`needs=1` 分母下，202606 通途实收尾程覆盖 **99.6%**（李惠预估补 21、0 遗漏）；202607 首轮 **75.0%** → 09-18 再导后 **87.3%**，EN 历史预估补 833，**仍缺 25**。

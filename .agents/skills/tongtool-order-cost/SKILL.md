@@ -1,14 +1,16 @@
 ---
 name: tongtool-order-cost
 description: >
-  通途订单特殊规则 1.7.0 本地审计、Google Sheet 订单 SKU 改名替换、通途 goodsQuery 校验。
+  通途订单特殊规则 1.7.0 本地审计、Google Sheet 订单 SKU 改名替换、通途 goodsQuery 校验、
+  月度盈利审计（只读冻结→离线分析）、美中 USTX 二次加工成本三方案对比。
   用户提到特殊规则、订单改销售额成本、Jeck特殊规则、1.7.0、通途订单202606、
-  Google Sheet 通途SKU 替换、gspread、FBA 尾程、账期差异时触发。
+  Google Sheet 通途SKU 替换、gspread、FBA 尾程、账期差异、月度盈利审计、平均成本低、
+  美中USTX、二次加工成本、测算表对比、绍兴发货方式时触发。
   不要用于赛狐打单或 ERPNext 工单排查。
 metadata:
   module: tongtool_order_cost
   docs: tongtool_order_cost/docs/index.md
-  updated: 2026-08-14
+  updated: 2026-10-14
 ---
 
 # 通途订单特殊规则 / Google Sheet SKU 改名
@@ -30,6 +32,8 @@ metadata:
 | SKU 替换预检 | `uv run python tongtool_order_cost/scripts/remap_gsheet_sku.py --sheet 通途订单202606` |
 | 确认后写回 | 同上加 `--apply` |
 | 通途主档是否存在 | `uv run python tongtool_order_cost/scripts/lookup_tongtool_sku.py SKU1 SKU2` |
+| 月度盈利审计 | `uv run python tongtool_order_cost/scripts/audit_monthly_profitability.py snapshot --month YYYYMM --with-finance` → `analyze --snapshot <目录>` |
+| 美中 USTX 三方案对比 | 复用上面的快照：`... audit_monthly_profitability.py ustx-compare --snapshot <目录>`（纯离线） |
 
 ## 铁律
 
@@ -50,3 +54,4 @@ metadata:
 踩过的坑与设计取舍，动手前先读：
 
 - `docs/solutions/workflow-issues/tongtool-sku-rename-gsheet-remap.md` —— 通途主档 SKU 改名后用本地 gspread 对齐订单 Google Sheet
+- `docs/solutions/architecture-patterns/ustx-cost-caliber-comparison.md` —— 美中 USTX 三方案成本对比：**先验测算表是手填还是公式再定等价闸门**（人工测算与 import 重建不等 ⇒ 差异即结论）、歧义维表键 fail-closed、闸门分级
