@@ -17,7 +17,6 @@
     document.head.append(style);
     const nav=document.querySelector('nav');const group=document.createElement('h2');group.textContent='智能办理';nav.append(group);
     const button=document.createElement('button');button.id='nav-bank-task';button.type='button';button.textContent='接入工单';button.onclick=()=>show();nav.append(button);
-    const delivery=document.createElement('a');delivery.href='/competition.html';delivery.target='_blank';delivery.rel='noopener';delivery.textContent='演示与交付 ↗';delivery.style.cssText='display:block;padding:9px 18px;color:#174c88;text-decoration:none';nav.append(delivery);
     const section=document.createElement('section');section.id='view-bank-task';section.className='bank-task';section.hidden=true;section.innerHTML=`
       <div class="crumb">科技运营 / 渠道接入 / 接入工单</div>
       <div class="task-hero"><div><div class="task-number">CHANNEL ONBOARDING · SIMULATION</div><h1>渠道接入工单</h1><p>读取工单、现行依据与三页现状，核对整组差异后一次确认。</p></div><div class="task-actions"><a class="ghost" href="/competition.html" target="_blank" rel="noopener" style="color:#174c88;background:#fff;padding:8px 12px;text-decoration:none;border-radius:3px">演示说明 ↗</a><a class="ghost" href="/show.html" target="_blank" rel="noopener" style="color:#174c88;background:#fff;padding:8px 12px;text-decoration:none;border-radius:3px">投屏讲解 ↗</a></div></div>
