@@ -202,6 +202,9 @@ def get_so_chain(sales_order):
                 by_pp.setdefault(_w["pp"], {"pp": _w["pp"], "planned_qty": 0.0, "pending_qty": 0.0})
         _plans_out = list(by_pp.values())
 
+        # 已生产 = 本物料（production_item == 行 item_code）的工单已产之和（避免把成品/皮壳/内胆再加一遍）
+        produced_sum = sum(_num(w.produced_qty) for w in wos if (w.production_item or "") == it.item_code)
+
         # 销售出库（可能一对多：一条订单行拆多张 DN / 含退货）
         dns = frappe.db.sql(
             """select dn.name as dn, dn.posting_date as date, dn.status as status,
@@ -241,6 +244,7 @@ def get_so_chain(sales_order):
             "so_line": it.name, "item_code": it.item_code, "item_name": it.item_name,
             "customer_item_code": it.customer_item_code,
             "qty": qty, "delivered": delivered, "open_qty": open_qty, "shipped_dn": shipped,
+            "produced": produced_sum,
             "stage": stage, "substate": sub,
             "plans": _plans_out,
             "wo_count": len(wos), "tn_count": line_tn,

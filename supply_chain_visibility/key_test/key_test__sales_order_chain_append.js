@@ -28,9 +28,8 @@ frappe.ui.form.on('Sales Order', {
     }
 });
 
-const SO_CHAIN_PROD = '#0d7a3f';   // 生产链条 主色
+const SO_CHAIN_PROD = '#0d7a3f';   // 生产 主色
 const SO_CHAIN_DN = '#0a6ed1';     // 出库 主色
-const SO_CHAIN_COLS = 9;
 function so_chain_esc(s) { return frappe.utils.escape_html(s == null ? '' : String(s)); }
 function so_chain_num(v) { const f = Number(v || 0); return (Math.round(f * 1000) / 1000).toString(); }
 function so_chain_t(s) { return so_chain_esc(s == null ? '' : __(String(s))); }
@@ -41,6 +40,49 @@ function so_chain_link(doctype, name, label) {
     catch (e) { slug = doctype.toLowerCase().replace(/ /g, '-'); }
     return '<a href="/app/' + slug + '/' + encodeURIComponent(name) + '" target="_blank">'
          + so_chain_esc(label || name) + '</a>';
+}
+const SO_CHAIN_DEF_COLS = [
+    { k: 'item', label: '订单行物料', w: 205 },
+    { k: 'code', label: '客户物料号', w: 125 },
+    { k: 'qty', label: '订单量', w: 62 },
+    { k: 'produced', label: '已生产', w: 62 },
+    { k: 'shipped', label: '已发', w: 58 },
+    { k: 'deliv', label: '交期', w: 100 },
+    { k: 'stage', label: '阶段', w: 118 },
+    { k: 'prod', label: '生产', w: 150 },
+    { k: 'dn', label: '出库', w: 112 }
+];
+const SO_CHAIN_COLS = SO_CHAIN_DEF_COLS.length;
+function so_chain_widths() {
+    const w = {};
+    SO_CHAIN_DEF_COLS.forEach(function (c) { w[c.k] = c.w; });
+    try {
+        const saved = JSON.parse(localStorage.getItem('so_chain_colw') || '{}');
+        Object.keys(saved).forEach(function (k) { if (k in w && saved[k] > 20) w[k] = saved[k]; });
+    } catch (e) { }
+    return w;
+}
+// 表头右缘拖动调整列宽；松手写入 localStorage（下次打开自动恢复）
+function so_chain_make_resizable($box, widths) {
+    $box.find('.so-chain-grip').each(function () {
+        const key = $(this).attr('data-k');
+        $(this).on('mousedown', function (e) {
+            e.preventDefault(); e.stopPropagation();
+            const startX = e.pageX;
+            const startW = widths[key] || 100;
+            const $col = $box.find('col[data-k="' + key + '"]');
+            const move = function (ev) {
+                const w = Math.max(50, Math.round(startW + (ev.pageX - startX)));
+                widths[key] = w;
+                $col.attr('style', 'width:' + w + 'px');
+            };
+            const up = function () {
+                $(document).off('mousemove', move).off('mouseup', up);
+                try { localStorage.setItem('so_chain_colw', JSON.stringify(widths)); } catch (err) { }
+            };
+            $(document).on('mousemove', move).on('mouseup', up);
+        });
+    });
 }
 function so_chain_item_type(c) {
     c = c || '';
@@ -75,39 +117,44 @@ function so_chain_render($box, data) {
         const dd = od2 > 0 ? '<span class="text-danger" title="已过交付日期 ' + od2 + ' 天">' + so_chain_esc(l.delivery_date) + ' 超' + od2 + '天</span>'
                            : so_chain_esc(l.delivery_date || '-');
         const stageColor = { 0: 'gray', 1: 'orange', 2: 'blue', 3: 'green' }[l.stage] || 'gray';
-        const codeCell = '<div style="font-size:12px;line-height:1.1;max-width:150px;overflow:hidden;'
-            + 'text-overflow:ellipsis;white-space:nowrap" title="' + so_chain_esc(l.item_code) + '">'
+        const codeCell = '<div style="max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'
+            + 'font-size:12px;line-height:1.1" title="' + so_chain_esc(l.item_code) + '">'
             + so_chain_link('Item', l.item_code, l.item_code) + '</div>'
-            + (l.item_name ? '<div class="text-muted" style="font-size:11px;line-height:1.1;max-width:150px;'
-                + 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + so_chain_esc(l.item_name) + '">'
+            + (l.item_name ? '<div class="text-muted" style="max-width:100%;overflow:hidden;text-overflow:ellipsis;'
+                + 'white-space:nowrap;font-size:11px;line-height:1.1" title="' + so_chain_esc(l.item_name) + '">'
                 + so_chain_esc(l.item_name) + '</div>' : '');
         return '<tr data-idx="' + idx + '">'
-            + '<td style="white-space:nowrap;padding:3px 8px">' + codeCell + '</td>'
+            + '<td style="white-space:nowrap;padding:3px 8px;overflow:hidden">' + codeCell + '</td>'
+            + '<td style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="' + so_chain_esc(l.customer_item_code) + '">' + so_chain_esc(l.customer_item_code) + '</td>'
             + '<td style="text-align:right;white-space:nowrap">' + so_chain_num(l.qty) + '</td>'
+            + '<td style="text-align:right;white-space:nowrap">' + so_chain_num(l.produced) + '</td>'
             + '<td style="text-align:right;white-space:nowrap">' + so_chain_num(l.delivered) + '</td>'
-            + '<td style="text-align:right;white-space:nowrap">' + so_chain_num(l.open_qty) + '</td>'
-            + '<td style="white-space:nowrap">' + dd + '</td>'
-            + '<td style="white-space:nowrap"><span class="indicator-pill ' + stageColor + '">' + l.stage + ' ' + so_chain_esc(l.substate) + '</span></td>'
-            + '<td class="so-chain-cell" style="white-space:nowrap">' + prodCell + '</td>'
-            + '<td class="so-chain-cell" style="white-space:nowrap">' + dnCell + '</td>'
-            + '<td style="white-space:nowrap"><div style="max-width:150px;overflow:hidden;text-overflow:ellipsis;'
-            + 'white-space:nowrap" title="' + so_chain_esc(l.customer_item_code) + '">' + so_chain_esc(l.customer_item_code) + '</div></td>'
+            + '<td style="white-space:nowrap;overflow:hidden">' + dd + '</td>'
+            + '<td style="white-space:nowrap;overflow:hidden"><span class="indicator-pill ' + stageColor + '">' + l.stage + ' ' + so_chain_esc(l.substate) + '</span></td>'
+            + '<td class="so-chain-cell" style="white-space:nowrap;overflow:hidden">' + prodCell + '</td>'
+            + '<td class="so-chain-cell" style="white-space:nowrap;overflow:hidden">' + dnCell + '</td>'
             + '</tr>';
     }).join('');
+    const W = so_chain_widths();
+    const cols = SO_CHAIN_DEF_COLS.map(function (c) {
+        return '<col data-k="' + c.k + '" style="width:' + W[c.k] + 'px">';
+    }).join('');
+    const ths = SO_CHAIN_DEF_COLS.map(function (c) {
+        return '<th style="white-space:nowrap;position:relative;overflow:hidden">' + c.label
+            + '<span class="so-chain-grip" data-k="' + c.k + '" title="拖动调整列宽(自动记忆)" '
+            + 'style="position:absolute;top:0;right:0;width:6px;height:100%;cursor:col-resize"></span></th>';
+    }).join('');
     const html = '<div style="overflow:auto">'
-        + '<table class="table table-bordered" style="margin:0;width:auto;font-size:12px">'
-        + '<thead><tr><th style="white-space:nowrap">订单行物料</th>'
-        + '<th style="white-space:nowrap">订单量</th><th style="white-space:nowrap">已发</th><th style="white-space:nowrap">未发</th>'
-        + '<th style="white-space:nowrap">交期</th><th style="white-space:nowrap">阶段</th>'
-        + '<th style="white-space:nowrap">生产</th><th style="white-space:nowrap">出库</th>'
-        + '<th style="white-space:nowrap">客户物料号</th></tr></thead>'
-        + '<tbody>' + rows + '</tbody>'
-        + '<tfoot><tr><th colspan="3" style="text-align:right">未发合计</th>'
-        + '<th style="text-align:right">' + so_chain_num(tOpenQty) + '</th><th colspan="5"></th></tr></tfoot></table>'
+        + '<table class="table table-bordered" style="margin:0;width:100%;table-layout:fixed;font-size:12px">'
+        + '<colgroup>' + cols + '</colgroup>'
+        + '<thead><tr>' + ths + '</tr></thead>'
+        + '<tbody>' + rows + '</tbody></table>'
         + '<div class="text-muted" style="margin-top:4px;font-size:11px">'
-        + '点「生产链条」＝展开 生产计划+工单→菲号→工序卡；点「出库」＝展开 出库单明细；同区切换。⤢ 弹窗看全图。'
-        + '完成量取第一道工序(不跨工序求和)；已发按出库单净额(含退货抵扣)。</div></div>';
+        + '未发合计 ' + so_chain_num(tOpenQty) + '　·　列宽可拖动表头右缘调整(自动记忆)。'
+        + '点「生产」＝展开 生产计划+工单→菲号→工序卡；点「出库」＝展开 出库单明细；同区切换。⤢ 弹窗看全图。'
+        + '已生产=本物料工单已产之和；已发按出库单净额(含退货抵扣)。</div></div>';
     $box.html(html);
+    so_chain_make_resizable($box, W);
 
     $box.find('.so-chain-toggle').on('click', function (e) {
         e.preventDefault();

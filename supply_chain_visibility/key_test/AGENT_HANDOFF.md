@@ -191,3 +191,20 @@ SAP Fiori Tree Table https://help.sap.com/docs/ABAP_PLATFORM_NEW/468a97775123488
 | **验证** | 方法 `key_test.so_chain.get_so_chain` HTTP 200（SO-25-00169 → 82 行）；报表 12 列 / **4520 行**；浏览器实测皮壳工单显示 `计划 PP-25-00057` |
 
 **两处提交**：EN app `keyapi/key_test`（合并到 main = `2c11464`）；本仓库 fzh-data 产物/记录。
+
+## 14. 事故与教训：生产表单空白（2026-10-14）
+
+**现象**：生产打开任何销售订单 → **整个表单空白**（sales_order.js 抛 `SyntaxError: Identifier 'SO_CHAIN_COLS' has already been declared`）。
+
+**三个叠加原因**：
+1. v31 我新增 `const SO_CHAIN_COLS = SO_CHAIN_DEF_COLS.length;`，但**忘了删文件里原有的 `const SO_CHAIN_COLS = 9;`** → 重复声明 → 整块脚本挂 → 表单渲染失败。
+2. **部署基线被污染**：部署脚本用 `cp <最新?…>` 的 `/tmp/sales_order.js.bak_*` 做「干净基线」再追加；结果文件里**累计了两份**我的代码块（旧的 `=9` 一份 + 新的），重复声明来自这里。
+3. **生产的 `git pull` 静默失败**：此前回滚用的 `git checkout <旧commit> -- <file>` 把旧文件**放进了索引** → 之后 `git pull` 被脏改动挡住、**未真正更新**（HEAD 仍是旧的 `84104cc`），于是「修了但没生效」。
+
+**处置**：生产 JS 回滚到 v30(`b29d801`) 恢复 → 测试机修好并**完整验证**（无报错/列正确/拖拽+缓存）→ 合并 main(`7947a1d`) → 生产 `git fetch && git reset --hard origin/main` 强制对齐 → clear-cache → 验证通过。
+
+**必须遵守的教训**：
+- **改 JS 后必须确认文件里声明唯一**：`grep -c '^const ' <file>`、以及每个关键标识符只声明一次。
+- **部署前先 `git status` 干净 + 用真·原始基线**（`/tmp/sales_order.js.bak_20261013_112137`，190 行、不含 `SO_CHAIN_DEF_COLS`）；或直接用整份文件部署，别「基线+追加」累计。
+- **部署后必须验证服务端真值**：`getdoctype?doctype=Sales Order` 的 `__js` 是否含新代码、且无重复声明；再看浏览器 **console 无 error**。
+- **先在测试机验证无误，再动生产**（用户明确要求）。
