@@ -25,15 +25,20 @@ title: Web AI assistant — 文档索引
 | Reference | 试用反馈与直接读取闭环 | [docs/feedback-loop.md](docs/feedback-loop.md) |
 | Reference | 2026-10-12 实现与验证交接 | [docs/handoff-2026-10-12.md](docs/handoff-2026-10-12.md) |
 | Index | 文档索引 | [docs/index.md](docs/index.md) |
+| Spec | 评审演示与工作台体验收口实施计划 | [docs/judging-experience-plan.md](docs/judging-experience-plan.md) |
 | Log | 文档变更日志 | [docs/log.md](docs/log.md) |
 | Reference | 演示者培训、环节反馈与上场准备 | [docs/presenter-rehearsal.md](docs/presenter-rehearsal.md) |
 | Reference | 网页内参数助手先查再决定，护栏看动作不看原话 | [docs/read-then-guard.md](docs/read-then-guard.md) |
 | Research | 竞赛设计依据与公开案例 | [docs/research.md](docs/research.md) |
 | Guide | 路由配置场景评估与演示 | [docs/route-scenario.md](docs/route-scenario.md) |
 | Reference | 安全边界与质疑解答 | [docs/security-boundaries.md](docs/security-boundaries.md) |
+| Reference | 网页内参数助手先查再决定，护栏看动作不看原话 | [docs/solutions/architecture-patterns/branch-param-desk-read-then-guard.md](docs/solutions/architecture-patterns/branch-param-desk-read-then-guard.md) |
+| Index | 状态与权限设计经验 | [docs/solutions/architecture-patterns/index.md](docs/solutions/architecture-patterns/index.md) |
+| Log | 设计经验变更 | [docs/solutions/architecture-patterns/log.md](docs/solutions/architecture-patterns/log.md) |
 | Index | 经验索引 | [docs/solutions/index.md](docs/solutions/index.md) |
 | Log | 经验变更日志 | [docs/solutions/log.md](docs/solutions/log.md) |
 | Reference | 独立演示静态目录不能包含可访问的运行配置 | [docs/solutions/static-config-exposure.md](docs/solutions/static-config-exposure.md) |
+| Spec | 统一工作台 Agent 实施与验收规划 | [docs/unified-agent-plan.md](docs/unified-agent-plan.md) |
 | Index | 模拟资料说明 | [kb/index.md](kb/index.md) |
 | Reference | 历史通知演示资料（非当前竞赛规则） | [kb/notice-policy.md](kb/notice-policy.md) |
 | Log | 项目变更日志 | [log.md](log.md) |

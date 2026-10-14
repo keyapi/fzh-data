@@ -34,3 +34,5 @@ title: 文档索引
 - [试用反馈与持续改进闭环](feedback-loop.md)
 
 - [演示者培训与上场准备](presenter-rehearsal.md)
+
+- [评审演示与工作台体验收口实施计划](judging-experience-plan.md)

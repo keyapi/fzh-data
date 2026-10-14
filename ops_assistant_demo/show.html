@@ -1,299 +1,82 @@
 <!doctype html>
-<html lang="zh-CN">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>演示流程 · 问答与可操作助手</title>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>运营配置辅助助手 · 投屏讲解</title>
 <style>
-:root{--red:#c7000b;--red-deep:#7a0007;--ink:#22262b;--muted:#6b7280;--line:#e2e6ea;--wash:#f6f7f9;--pink:#fdf2f2;--gold:#ffc72c}
-*{box-sizing:border-box}
-body{margin:0;background:#eef0f3;color:var(--ink);font:16px/1.65 "Microsoft YaHei","微软雅黑",sans-serif}
-header{background:var(--red-deep);color:#fff;padding:12px 4vw;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:5}
-header strong{margin-right:auto;font-weight:600;letter-spacing:.5px}
-header:after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;background:var(--gold)}
-button,a.button{font:inherit;cursor:pointer;border:1px solid rgba(255,255,255,.45);border-radius:2px;background:transparent;color:#fff;padding:6px 14px;text-decoration:none}
-button.primary{background:#fff;color:var(--red-deep);border-color:#fff}
-.help{max-width:1180px;margin:18px auto 0;padding:14px 18px;background:#fff;border:1px solid var(--line);color:var(--muted);font-size:14px}
-.help strong{color:var(--ink)}
-.help code{font-family:inherit;color:var(--red-deep)}
-main{max-width:1180px;margin:0 auto;padding:8px 18px 72px}
-.page{background:#fff;margin:18px 0;min-height:640px;position:relative;padding:36px 48px 92px;box-shadow:0 1px 0 rgba(34,38,43,.06)}
-.kicker{color:var(--muted);font-size:14px}
-h1{font-size:36px;line-height:1.28;font-weight:700;margin:8px 0 0}
-.rule{width:48px;height:4px;background:var(--red);margin:14px 0}
-.sub{color:var(--muted);margin:0 0 18px;font-size:16px}
-.quote{margin:8px 0 18px;padding:12px 16px;background:var(--pink);border-left:4px solid var(--red);font-size:22px}
-.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:8px 0 16px}
-.card{background:var(--wash);min-height:148px}
-.card h2{margin:0;background:var(--red);color:#fff;font-size:16px;font-weight:600;padding:10px 14px}
-.card p,.card li{margin:8px 14px;font-size:14px}
-.card ul{margin:8px 0 12px;padding-left:1.3em}
-.chain{display:flex;align-items:stretch;gap:8px;margin:8px 0 16px}
-.node{flex:1;text-align:center;padding:14px 8px;font-size:14px}
-.node strong{display:block;font-size:16px;margin-bottom:4px}
-.node.on{background:var(--red);color:#fff}
-.node.off{background:var(--pink);color:var(--red-deep)}
-.arrow{align-self:center;color:var(--red);font-size:20px}
-.steps{margin:8px 0 16px;padding:0;list-style:none}
-.steps li{padding:8px 0 8px 28px;position:relative;border-bottom:1px solid var(--line)}
-.steps li:before{content:"";position:absolute;left:0;top:16px;width:8px;height:8px;background:var(--red)}
-table{width:100%;border-collapse:collapse;font-size:15px;margin:8px 0 16px}
-th,td{text-align:left;vertical-align:top;padding:10px 12px;border-bottom:1px solid var(--line)}
-th{background:var(--wash);color:var(--red-deep);font-weight:600}
-.foot{position:absolute;left:0;right:0;bottom:0;min-height:64px;background:var(--ink);color:#fff;display:flex;align-items:center;gap:18px;padding:12px 48px 12px 48px}
-.foot p{margin:0;font-size:16px}
-.num{margin-left:auto;color:#9ca3af;font-size:14px}
-.speaker{display:none}
-body.show-notes .speaker{display:block;color:var(--muted);font-size:14px;margin-top:8px}
-.controls{display:none;position:fixed;top:16px;right:16px;z-index:10;gap:8px;align-items:center;background:rgba(34,38,43,.92);color:#fff;padding:8px;border-radius:2px}
-.controls button{border-color:rgba(255,255,255,.4)}
-body.present header,body.present .help{display:none}
-body.present{background:#111}
-body.present main{max-width:none;padding:0}
-body.present .page{display:none;margin:0;min-height:100vh;padding:48px 64px 110px}
-body.present .page.selected{display:block}
-body.present h1{font-size:48px}
-body.present .controls{display:flex}
-.timer{font-variant-numeric:tabular-nums}
-@media(max-width:800px){.grid,.chain{display:block}.node{margin:8px 0}.page{padding:22px 18px 96px}.foot{padding:12px 18px}h1{font-size:28px}}
-@media print{header,.help,.controls{display:none!important}body.show-notes .speaker{display:block!important}.page{break-after:page;box-shadow:none}}
-</style>
-</head>
-<body>
-<header>
-  <strong>演示流程</strong>
-  <a class="button" href="/" target="_blank" rel="noopener">打开操作台</a>
-  <a class="button" href="/competition.html">原操作说明</a>
-  <button id="present" class="primary" type="button">投屏</button>
-  <button id="print" type="button">打印讲稿</button>
-</header>
-<div class="help">
-  <strong>朋友改稿：</strong>用记事本打开本文件，只改下面「演示正文从这里开始」到「演示正文到此结束」之间的中文。每一页用单独一行的 <code>---</code> 隔开。标题里的 <code>/</code> 是换行。<code>底栏</code> 投屏时评审看得到，写结论。<code>口播</code> 只在打印讲稿时给讲者看，投屏不出现。给讲者的提醒写在口播，不要写进标题、底栏和问答。改完保存，用浏览器打开这个文件可以预览。网上的演示地址，要等这个文件被换上去之后才会变。
-</div>
-<main id="deck"></main>
-<div class="controls">
-  <span id="position"></span>
-  <button id="prev" type="button">上一页</button>
-  <button id="next" type="button">下一页</button>
-  <button id="clock" type="button">开始计时</button>
-  <span class="timer" id="timer">00:00</span>
-</div>
+:root{--navy:#112e51;--blue:#1769aa;--paper:#f6f8fb;--ink:#172b44;--muted:#587087;--line:#d7e1eb}*{box-sizing:border-box}body{margin:0;background:#dfe7ee;color:var(--ink);font:16px/1.7 "Microsoft YaHei","Noto Sans CJK SC",sans-serif}header{min-height:60px;background:var(--navy);color:#fff;display:flex;align-items:center;gap:10px;padding:10px 4vw;position:sticky;top:0;z-index:5}header strong{margin-right:auto;letter-spacing:.06em}button,a.button{font:inherit;cursor:pointer;border:1px solid rgba(255,255,255,.48);border-radius:3px;padding:6px 13px;background:transparent;color:#fff;text-decoration:none}button.primary{background:#fff;color:var(--navy);border-color:#fff}.guide{max-width:1180px;margin:14px auto 0;padding:10px 16px;border-left:4px solid var(--blue);background:#fff;color:var(--muted);font-size:13px}.guide summary{cursor:pointer;color:var(--navy);font-weight:700}main{max-width:1180px;margin:0 auto;padding:8px 18px 64px}.page{position:relative;min-height:640px;margin:18px 0;padding:42px 50px 92px;background:#fff;box-shadow:0 2px 10px rgba(17,46,81,.12)}.kicker{font-size:13px;letter-spacing:.14em;color:var(--blue);font-weight:700}h1{font-size:40px;line-height:1.27;margin:10px 0 12px;max-width:950px}h2{font-size:25px;margin:0 0 16px}.sub{font-size:18px;color:var(--muted);max-width:900px;margin:0 0 22px}.rule{height:4px;width:60px;background:var(--blue);margin:15px 0 18px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:14px 0}.card{padding:17px;border:1px solid var(--line);border-top:4px solid var(--blue);background:var(--paper)}.card h3{font-size:17px;margin:0 0 8px}.card p{font-size:14px;margin:5px 0}.flow{display:flex;align-items:stretch;gap:7px;margin:22px 0}.node{flex:1;min-width:0;padding:12px 9px;text-align:center;background:var(--paper);border-top:3px solid var(--blue);font-size:14px}.node strong{display:block;font-size:16px}.arrow{align-self:center;color:var(--blue);font-size:20px}.steps{margin:15px 0;padding:0;list-style:none}.steps li{padding:9px 0 9px 30px;border-bottom:1px solid var(--line);position:relative}.steps li:before{content:"";position:absolute;left:3px;top:17px;width:10px;height:10px;background:var(--blue)}.foot{position:absolute;left:0;right:0;bottom:0;min-height:64px;display:flex;align-items:center;gap:18px;padding:12px 50px;background:var(--navy);color:#fff}.foot p{margin:0}.num{margin-left:auto;color:#b9d5e6}.speaker{display:none;color:var(--muted);font-size:14px}.faq{width:100%;border-collapse:collapse}.faq th,.faq td{text-align:left;vertical-align:top;padding:10px;border-bottom:1px solid var(--line)}.faq th{color:var(--navy);background:var(--paper);width:29%}.controls{display:none;position:fixed;right:20px;bottom:18px;z-index:10;align-items:center;gap:8px;padding:9px;background:rgba(17,46,81,.95);color:#fff;border-radius:4px}.controls button{border-color:rgba(255,255,255,.5)}.timer{font-variant-numeric:tabular-nums}@media(max-width:800px){.grid,.flow{display:block}.node{margin:8px 0}.page{padding:26px 22px 100px;min-height:580px}.foot{padding:12px 22px}h1{font-size:30px}}body.present{background:#101923}body.present header,body.present .guide{display:none}body.present main{max-width:none;padding:0}body.present .page{display:none;margin:0;min-height:100vh;padding:54px 7vw 110px;box-shadow:none}body.present .page.selected{display:block}body.present h1{font-size:50px}body.present .controls{display:flex}@media print{header,.guide,.controls{display:none!important}body{background:#fff}.page,body.present .page{display:block!important;box-shadow:none;margin:0;min-height:0;padding:14mm 12mm;break-after:page}.speaker{display:block}.page:last-child{break-after:auto}}
+</style></head><body>
+<header><strong>运营配置辅助助手 · 投屏讲解</strong><a class="button" href="/" target="_blank" rel="noopener">打开操作台</a><a class="button" href="/competition.html" target="_blank" rel="noopener">演示说明</a><button id="present" class="primary" type="button">投屏</button><button id="print" type="button">打印讲稿</button></header>
+<div class="guide"><details><summary>讲者说明（现场投屏不显示）</summary><p>本稿是可选讲解材料，和自备 PPT 二选一。核心现场办理走“接入工单”，路由配置留作答疑扩展。所有数据、规则和验收均为模拟；模型慢时停在工单差异页解释核对项，不把录屏说成实时执行。</p></details></div>
+<main id="deck"></main><div class="controls"><span id="position"></span><button id="prev">上一页</button><button id="next">下一页</button><button id="clock">开始计时</button><span class="timer" id="timer">00:00</span></div>
 <script type="text/plain" id="deck-source">
-# 演示正文从这里开始
-# 只改中文。不要删掉行首的词，例如「标题:」「底栏:」。
-# 卡片: 标题 | 说明。说明里用中文分号；分成几条。
-# 流程: 名称 | 说明。会排成一条红白相间的流程。
-# 步骤: 一行一步。
-# 问答: 问题 | 回答。
-
 ---
-时间: 开场
-标题: 分行自主实施 / 经验沉淀为可复用能力
-副题: 标准云服务原则上由分行自主实施。同类问题若仅停留在实施群中，换岗、换分行即需重复解答。
-卡片: 实施现状 | 共性报错反复咨询；经验留在群内，难以复用；技术骨干被重复答疑占用
-卡片: 建设目标 | 将一次排障沉淀为可复核的知识；复用既有模型能力
-卡片: 责任归属 | 方案由助手起草；是否实施由实施人员决定；确认后方写入测试环境
-底栏: 本成果服务分行自主实施：问询有出处，配置变更经人工确认后实施。
-口播: 约 50 秒。先讲政策要求和经验留不下，再接到后面的知识入库和确认后实施。全部为模拟数据。效率百分比留到常见问题，开场不报。
-
+时间: 00:00–00:35
+标题: 运营配置辅助助手 / 让办理结果可核对
+副题: 渠道接入资料、现行配置与字段规则分散在不同页面；难点不只是填写，而是判断哪些该保留、哪些该补充，以及如何证明结果。
+卡片: 面向谁 | 渠道接入、联调准备与配置维护人员
+卡片: 交付什么 | 有依据的整组差异、人工确认、读回与模拟验收
+卡片: 本次范围 | 真实模型参与分析；业务数据、规则与环境均为模拟
+底栏: 从业务目标出发，形成范围明确、可确认、可验收的配置方案。
+口播: 今天演示的不是替人点表单，而是让助手先读工单、现状和规则，最后把每一步结果交给人核对。
 ---
-时间: 能力与边界
-标题: 一个助手，两个入口 / 判断与实施由人工完成
-副题: 助手提供依据与建议方案。决定权与实施责任归属实施人员。
-卡片: 财资助手 | 在作业现场受理问询；仅检索已审核知识；回答标注来源
-卡片: 操作助手 | 按规则起草测试环境变更方案；标明缺项；未经确认不写入
-卡片: 实施人员 | 承担决定与实施；确认后系统写入本次测试变更并读回；生产环境不开放直接写入
-底栏: 助手帮助实施人员确定处置口径。判断与操作，由实施人员完成。
-口播: 约 25 秒。这页是全场口径。后面两段演示都回到这一句。
-
+时间: 00:35–01:10
+标题: Agent 的价值 / 在判断和验收，不在代填
+副题: 已经知道每个字段时，人工填写很快；真正耗时的是资料冲突、字段依赖、信息缺口和完成后的核验。
+流程: 读取 | 工单、现状、适用规则
+流程: 形成方案 | 保留正确项，标出差异与缺项
+流程: 人工确认 | 确认具体范围，不授权任意动作
+流程: 后台执行 | 仅模拟测试环境，随后独立读回验收
+底栏: 模型负责理解与组织；权限、范围、保存和验收由后台确定性控制。
+口播: 这也是和单纯知识问答的区别：问答告诉你规则，受控助手把规则落实为可检查的整组方案。
 ---
-时间: 知识入库
-标题: 知识入库规则 / 现场演示一次带引用问答
-副题: 演示问询：余额查询报错时，一般先核查哪些事项。
-金句: 余额查询报错，一般先核查哪些事项？
-步骤: 在财资助手中提出该问题，并打开答案所附来源。
-步骤: 使用反馈进入复审。未通过审核的内容不进入正式知识库。
-流程: 沉淀 | 群聊与工单经验采集
-流程: 人审 | 过滤、去重、脱敏
-流程: 入库 | 标注来源与场景
-流程: 调用 | 检索已审核知识并引用
-流程: 纠偏 | 依据反馈退回复审
-底栏: 群聊与工单经验经人工审核后方可入库。官方手册按来源整理。回答仅引用已审核知识。
-口播: 约 1 分 50 秒。插件与网页是同一套知识，今天用网页。问答变慢时，停在已打开的来源上，继续讲入库规则。不打开含具体客户环境的草稿。
-
+时间: 01:10–04:45
+标题: 现场主线 / 一份渠道接入工单
+副题: 选择 WO-DEMO-001。工单夹带过期模板，客户端端口缺失；系统应复用已有终端，并只追问确实缺少的一项。
+步骤: 建立任务：读取工单、三页现状和现行模拟规则，尚不保存配置。
+步骤: 分析后只补客户端端口 9443；展示 5 项整组差异及字段来源。
+步骤: 点击“预演三页填写”：终端注册、注册参数、固定地址依次高亮与填写，预演不保存。
+步骤: 在侧边栏点击“允许修改（测试）”：后台一次提交，独立读回并显示模拟验收。
+底栏: 先发现问题，再确认范围，最后以读回和验收说明是否完成。
+口播: 停顿点在整组差异和允许修改。不要逐字读全部字段；强调只问端口、已有终端被复用、确认前数据没变。
 ---
-时间: 责任与合规
-标题: 建议由助手生成 / 落盘须经人工复核
-副题: 按照高风险人工智能应用的管理要求，使用方承担主体责任，关键环节保留人工监督与干预。
-卡片: 知识质量控制 | 检索范围限于已审核知识；群聊经验经人工审核后入库；低质条目依据反馈退回复审
-卡片: 本次演示范围 | 环境与数据均为模拟；生产写入未开放；正式使用另行履行准入、权限、留痕及数据管理
-卡片: 责任划分 | 问答、入库、审核与确认全程留痕；助手形成建议方案；实施人员确认后写入测试环境，并以读回结果为准
-底栏: 可解释性不足时，助手仅作辅助。涉及权益或财务影响的决定，设置人工复核并保留依据。
-口播: 约 40 秒。评审若问制度名称，再说明对照国家金融监督管理总局金发〔2026〕8号。页上不展开文号。本场尚未履行高风险应用准入。
-
+时间: 04:45–05:45
+标题: 安全护栏 / 每一层都不能由模型绕过
+副题: 演示中的答案、规则文本和聊天记录都不是权限；模型也不能用文字宣布已完成。
+卡片: 身份与范围 | 后台根据模拟岗位、环境和允许工具校验；生产只可准备申请
+卡片: 确认绑定内容 | 待确认方案绑定版本、摘要和有效期；数据变化后旧确认失效
+卡片: 结果独立产生 | 执行后重新读取配置并跑模拟验收；失败显示失败与恢复入口
+底栏: 人工确认是必要门槛；模型、页面和资料都不能越过后台控制。
+口播: 如需互动，切换只读岗位尝试办理，或说明生产没有直接写入接口。不要把模拟岗位说成企业单点登录。
 ---
-时间: 演示一
-标题: 测试环境限额调整 / 确认后实施
-副题: 将测试环境单笔限额调整为 20 万元。生产环境保持 50 万元。
-步骤: 以模拟柜面主管身份登录操作台。
-步骤: 助手定位测试环境限额，形成 20 万元的建议方案，并停在确认。确认前原值保持不变。
-步骤: 实施人员核对原值与建议值后予以确认。未经确认，系统不写入。
-步骤: 确认后，测试环境读回为 20 万元，生产环境仍为 50 万元。
-底栏: 助手形成建议方案。实施人员确认后，系统实施本次测试环境变更。
-口播: 约 1 分 30 秒。登录口令已预填，投屏时不展示口令。确认前停一下，让评审看到原值。确认后再指出生产环境仍为 50 万元。本页建议保留。后面接入工单与业务路由现场二选一，时间够则三项里选两项。
-
+时间: 05:45–06:30
+标题: 答疑扩展 / 按业务范围准备路由配置
+副题: 例如“开通余额查询”。助手将业务目标映射为客户端、请求应答适配器和业务路由的整组差异；未知业务或相互矛盾的范围会要求澄清。
+步骤: 输入业务范围，查看复用项与新增项。
+步骤: 预演客户端、适配器、路由管理三个页面。
+步骤: 仍由侧边栏“允许修改（测试）”确认，随后查看模拟命中与范围检查。
+底栏: 路由场景用于证明系统能把业务表达映射到多页面配置；真实映射需由业务人员校准。
+口播: 时间不够时只展示方案，不执行。它是主线之后的扩展，不替代已验证的工单办理。
 ---
-时间: 演示二
-标题: 接入工单办理 / 缺项追问与确认后写入
-副题: 选取客户端端口缺失的接入工单，演示整组方案的起草、确认与读回。
-步骤: 对照规则与现状，列出待调整事项。已符合要求的配置予以保留。
-步骤: 仅追问所缺的客户端端口。现场补录，例如 9443。资料不足时不代为推测。
-步骤: 展示原值、建议值与依据。预演阶段尚未保存。
-步骤: 实施人员确认后，写入测试环境并独立读回。生产配置不纳入本次写入。
-底栏: 知识查询说明核查顺序。配置办理由助手起草方案，实施人员确认后写入测试环境，并以读回核对结果。
-口播: 约 2 分钟。与下一页路由二选一，或与限额、路由一起三选二。本页用于展示缺项追问。超过二十秒未返回时，说明正在核对缺项，不重复发送。
-
+时间: 06:30–07:00
+标题: 交付的是证据 / 而不是一句成功
+副题: 当前 POC 已覆盖模拟任务的读取、追问、方案、确认、保存、独立读回和模拟验收；真实接入需另行完成业务校准、权限映射与试点验证。
+卡片: 给评审 | 业务痛点、主线剧本、安全边界与可追溯结果
+卡片: 给演示者 | 排练入口、讲解稿、可重复准备的模拟工作区
+卡片: 给后续试点 | 任务完成率、人工纠正次数、耗时与错误写入的同任务对照
+底栏: 有依据、有边界、有结果；从可验证的模拟 POC 再走向受控试点。
+口播: 不承诺未经实测的效率比例，也不把模拟验收说成真实网络连通或生产认证。
 ---
-时间: 演示三
-标题: 按业务需要配置路由 / 确认后保存
-副题: 本次业务只开通余额查询，不开通账户明细和票据。
-步骤: 在业务路由配置中提出开通范围。
-步骤: 助手形成整组方案，范围仅含余额查询。已有适配器继续复用，不重复建设。
-步骤: 业务范围无法明确对应时，不生成方案。
-步骤: 实施人员核对开通范围后确认。未经确认不保存。生产环境不写入。
-底栏: 助手按业务范围起草路由方案。实施人员确认后，系统保存本次测试配置。
-口播: 约 2 分钟。三项办理里现场选两项。限额最直观，建议保留。接入工单输入不够直观，或现场没有工单系统时，改讲本页。输入：只开通余额查询，不要明细，不要票据。
-
----
-时间: 小结
-标题: 共性报错一次沉淀 / 全辖实施可以复用
-副题: 经审核的处置经验，形成可复核、可复用的知识。
-卡片: 问询有出处 | 群聊经验经人工审核后入库；调用时标注来源
-卡片: 变更有确认 | 先形成方案；实施人员确认后写入测试环境；实施责任由确认人承担
-卡片: 支持分三层 | 共性报错由助手解答；复杂事项转交在岗人员；重大故障由专家处理
-底栏: 助手承担共性问询与方案起草，不替代在岗支持与专家处置。
-口播: 约 45 秒。收在这三层。效率数字若被问及，转到常见问题，按立项预期口径回答。
-
----
-时间: 常见问题
-标题: 常见问题
-问答: 与知识库问答有何区别？ | 知识库提供经审核、标注来源的答案。操作助手据此形成测试环境变更方案。实施人员确认后写入，并读回核对。
-问答: 能否直接变更生产环境？ | 不能。助手只形成建议方案。本次确认仅作用于测试环境中的该次变更。演示不提供生产写入。
-问答: 实施责任由谁承担？ | 由实施人员承担。助手负责检索与起草，不替代人工复核，也不取得决定权。
-问答: 本次演示的范围是什么？ | 本次为模拟演示，展示确认、留痕和测试环境写入。正式使用须按本机构要求完成准入、权限、留痕和数据管理。
-问答: 效率数据如何认定？ | 共性排查时长和工作量为立项阶段的预期。试点后以命中率、有用率及试点对照结果复核。
-问答: 演示路径是否固定？ | 限额调整、接入工单和业务路由均可作为办理演示。现场选取其中事项。范围无法确定时，系统不生成方案。
-底栏: 正式使用另行完成准入与权限管理。重大故障仍由专家处置。
-口播: 制度名称仅在被问到时说出，答案用本页「本次演示的范围」一栏，不另加限制性口号。
-
-# 演示正文到此结束
+时间: 附录 · 答疑
+标题: 常见质疑 / 可以直接回答
+问答: 这是不是脚本包了聊天？ | 模型读取当前任务并调用受控工具；字段、权限、写入与验收仍由后端服务判定。可通过换工单、补充端口和改变业务范围验证不是固定回答。
+问答: 为什么不直接接知识库？ | 规则可解释为什么，但仍需要把业务目标映射到字段、跨页差异和验收。当前资料是预配置的模拟规则与案例，带版本和来源标识。
+问答: 会不会直接改生产？ | 不会。演示只写模拟测试环境；生产动作仅生成申请，真实系统需要正式身份、审批与接口治理。
+问答: 为什么没有引入 Pi、MCP 或更多框架？ | 当前瓶颈是领域工具合同、权限、状态与确认体验。LangChain 已提供模型工具循环；新增框架不会自动补齐这些边界。后续可在同一任务集上比较运行框架。
+底栏: 以实际任务结果和边界说明回答质疑，不用未验证的承诺。
+口播: 只展开被问到的一项。所有材料均为模拟，不涉及真实客户或生产数据。
 </script>
 <script>
-const raw = document.getElementById("deck-source").textContent;
-const slides = raw.split(/\r?\n---\r?\n/).map((block) => {
-  const slide = { time: "", title: "", sub: "", quote: "", foot: "", speaker: "", cards: [], flow: [], steps: [], faqs: [] };
-  let key = "";
-  block.split(/\r?\n/).forEach((line) => {
-    if (!line.trim() || line.startsWith("#")) return;
-    const matched = line.match(/^(时间|标题|副题|金句|底栏|口播|卡片|流程|步骤|问答):\s*(.*)$/);
-    if (matched) {
-      key = matched[1];
-      const value = matched[2].trim();
-      if (key === "卡片") slide.cards.push(value);
-      else if (key === "流程") slide.flow.push(value);
-      else if (key === "步骤") slide.steps.push(value);
-      else if (key === "问答") slide.faqs.push(value);
-      else if (key === "时间") slide.time = value;
-      else if (key === "标题") slide.title = value;
-      else if (key === "副题") slide.sub = value;
-      else if (key === "金句") slide.quote = value;
-      else if (key === "底栏") slide.foot = value;
-      else if (key === "口播") slide.speaker = value;
-      return;
-    }
-    if (key === "卡片" && slide.cards.length) slide.cards[slide.cards.length - 1] += line.trim();
-    if (key === "口播") slide.speaker += line.trim();
-    if (key === "副题") slide.sub += line.trim();
-    if (key === "底栏") slide.foot += line.trim();
-  });
-  return slide;
-}).filter((slide) => slide.title);
-
-function esc(value) {
-  return value.replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
-}
-function pair(value) {
-  const parts = value.split("|");
-  return [parts.shift().trim(), parts.join("|").trim()];
-}
-function items(value) {
-  return value.split("；").map((item) => item.trim()).filter(Boolean);
-}
-
-const deck = document.getElementById("deck");
-deck.innerHTML = slides.map((slide, index) => {
-  const title = esc(slide.title).replaceAll("/", "<br>");
-  const cards = slide.cards.length ? `<div class="grid">${slide.cards.map((card) => {
-    const [head, body] = pair(card);
-    const list = items(body).map((item) => `<li>${esc(item)}</li>`).join("");
-    return `<article class="card"><h2>${esc(head)}</h2><ul>${list}</ul></article>`;
-  }).join("")}</div>` : "";
-  const flow = slide.flow.length ? `<div class="chain">${slide.flow.map((node, nodeIndex) => {
-    const [head, body] = pair(node);
-    const arrow = nodeIndex ? `<span class="arrow">→</span>` : "";
-    return `${arrow}<div class="node ${nodeIndex % 2 ? "off" : "on"}"><strong>${esc(head)}</strong>${esc(body)}</div>`;
-  }).join("")}</div>` : "";
-  const steps = slide.steps.length ? `<ol class="steps">${slide.steps.map((step) => `<li>${esc(step)}</li>`).join("")}</ol>` : "";
-  const faqs = slide.faqs.length ? `<table><thead><tr><th>问题</th><th>回答</th></tr></thead><tbody>${slide.faqs.map((faq) => {
-    const [q, a] = pair(faq);
-    return `<tr><td>${esc(q)}</td><td>${esc(a)}</td></tr>`;
-  }).join("")}</tbody></table>` : "";
-  const quote = slide.quote ? `<p class="quote">${esc(slide.quote)}</p>` : "";
-  return `<section class="page${index ? "" : " selected"}">
-    <div class="kicker">${esc(slide.time)}</div>
-    <h1>${title}</h1>
-    <div class="rule"></div>
-    ${slide.sub ? `<p class="sub">${esc(slide.sub)}</p>` : ""}
-    ${quote}${steps}${flow}${cards}${faqs}
-    <p class="speaker">${esc(slide.speaker)}</p>
-    <div class="foot"><p>${esc(slide.foot)}</p><span class="num">${String(index + 1).padStart(2, "0")}</span></div>
-  </section>`;
-}).join("");
-
-const pages = [...document.querySelectorAll(".page")];
-let current = 0;
-let started = 0;
-function render() {
-  pages.forEach((page, index) => page.classList.toggle("selected", index === current));
-  document.getElementById("position").textContent = (current + 1) + " / " + pages.length;
-  if (document.body.classList.contains("present")) window.scrollTo(0, 0);
-}
-document.getElementById("present").onclick = () => {
-  document.body.classList.toggle("present");
-  render();
-};
-document.getElementById("print").onclick = () => {
-  document.body.classList.add("show-notes");
-  window.print();
-};
-document.getElementById("prev").onclick = () => { current = Math.max(0, current - 1); render(); };
-document.getElementById("next").onclick = () => { current = Math.min(pages.length - 1, current + 1); render(); };
-document.addEventListener("keydown", (event) => {
-  if (!document.body.classList.contains("present")) return;
-  if (event.key === "ArrowRight") { current = Math.min(pages.length - 1, current + 1); render(); }
-  if (event.key === "ArrowLeft") { current = Math.max(0, current - 1); render(); }
-  if (event.key === "Escape") document.body.classList.remove("present");
-});
-document.getElementById("clock").onclick = () => {
-  started = Date.now();
-  document.getElementById("clock").textContent = "重新计时";
-};
-setInterval(() => {
-  if (!started) return;
-  const seconds = Math.floor((Date.now() - started) / 1000);
-  document.getElementById("timer").textContent = String(Math.floor(seconds / 60)).padStart(2, "0") + ":" + String(seconds % 60).padStart(2, "0");
-}, 500);
-render();
-</script>
-</body>
-</html>
+const raw=document.getElementById('deck-source').textContent;
+const slides=raw.split(/\n---\n/).map(block=>{const s={cards:[],flow:[],steps:[],faqs:[]};block.split(/\r?\n/).forEach(line=>{const m=line.match(/^(时间|标题|副题|底栏|口播|卡片|流程|步骤|问答):\s*(.*)$/);if(!m)return;const k=m[1],v=m[2].trim();if(k==='卡片')s.cards.push(v);else if(k==='流程')s.flow.push(v);else if(k==='步骤')s.steps.push(v);else if(k==='问答')s.faqs.push(v);else s[{时间:'time',标题:'title',副题:'sub',底栏:'foot',口播:'speaker'}[k]]=v;});return s}).filter(s=>s.title);
+const esc=v=>String(v||'').replace(/[&<>\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));const pair=v=>{const p=v.split('|');return[p.shift().trim(),p.join('|').trim()]};
+document.getElementById('deck').innerHTML=slides.map((s,i)=>{const cards=s.cards.length?`<div class="grid">${s.cards.map(v=>{const [a,b]=pair(v);return `<article class="card"><h3>${esc(a)}</h3><p>${esc(b)}</p></article>`}).join('')}</div>`:'';const flow=s.flow.length?`<div class="flow">${s.flow.map((v,n)=>{const[a,b]=pair(v);return `${n?'<span class="arrow">→</span>':''}<div class="node"><strong>${esc(a)}</strong>${esc(b)}</div>`}).join('')}</div>`:'';const steps=s.steps.length?`<ol class="steps">${s.steps.map(v=>`<li>${esc(v)}</li>`).join('')}</ol>`:'';const faq=s.faqs.length?`<table class="faq"><tbody>${s.faqs.map(v=>{const[a,b]=pair(v);return`<tr><th>${esc(a)}</th><td>${esc(b)}</td></tr>`}).join('')}</tbody></table>`:'';return `<section class="page${i?'':' selected'}"><div class="kicker">${esc(s.time)}</div><h1>${esc(s.title).replaceAll(' / ','<br>')}</h1><div class="rule"></div><p class="sub">${esc(s.sub)}</p>${steps}${flow}${cards}${faq}<p class="speaker">${esc(s.speaker)}</p><div class="foot"><p>${esc(s.foot)}</p><span class="num">${String(i+1).padStart(2,'0')}</span></div></section>`}).join('');
+const pages=[...document.querySelectorAll('.page')];let current=0,started=0;function render(){pages.forEach((p,i)=>p.classList.toggle('selected',i===current));document.getElementById('position').textContent=`${current+1} / ${pages.length}`;if(document.body.classList.contains('present'))scrollTo(0,0)}document.getElementById('present').onclick=()=>{document.body.classList.toggle('present');render()};document.getElementById('print').onclick=()=>print();document.getElementById('prev').onclick=()=>{current=Math.max(0,current-1);render()};document.getElementById('next').onclick=()=>{current=Math.min(pages.length-1,current+1);render()};document.getElementById('clock').onclick=()=>{started=Date.now();document.getElementById('clock').textContent='重新计时'};addEventListener('keydown',e=>{if(!document.body.classList.contains('present'))return;if(e.key==='ArrowRight'){current=Math.min(pages.length-1,current+1);render()}if(e.key==='ArrowLeft'){current=Math.max(0,current-1);render()}if(e.key==='Escape')document.body.classList.remove('present')});setInterval(()=>{if(!started)return;const n=Math.floor((Date.now()-started)/1000);document.getElementById('timer').textContent=`${String(Math.floor(n/60)).padStart(2,'0')}:${String(n%60).padStart(2,'0')}`},500);render();
+</script></body></html>

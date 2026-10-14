@@ -1,0 +1,51 @@
+import tempfile
+import threading
+import unittest
+import urllib.request
+from http.server import ThreadingHTTPServer
+from pathlib import Path
+from unittest.mock import patch
+
+import server
+from domain import Store
+
+
+class JudgingExperienceTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.store = Store(str(Path(self.temp.name) / "experience.sqlite3"))
+        self.store_patch = patch.object(server, "STORE", self.store)
+        self.store_patch.start()
+        self.http = ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
+        self.thread = threading.Thread(target=self.http.serve_forever, daemon=True)
+        self.thread.start()
+        self.base = "http://127.0.0.1:" + str(self.http.server_port)
+
+    def tearDown(self):
+        self.http.shutdown()
+        self.http.server_close()
+        self.thread.join(timeout=3)
+        self.store_patch.stop()
+        self.store.db.close()
+        self.temp.cleanup()
+
+    def test_projection_page_uses_verified_poc_language(self):
+        with urllib.request.urlopen(self.base + "/show.html") as response:
+            body = response.read().decode("utf-8")
+        self.assertEqual(response.status, 200)
+        self.assertIn("运营配置辅助助手", body)
+        self.assertIn("人工确认", body)
+        self.assertNotIn("分行自主实施", body)
+        self.assertNotIn("财资助手", body)
+        self.assertNotIn("全辖", body)
+
+    def test_ticket_switch_clears_old_local_task_before_analysis(self):
+        source = Path(server.ROOT, "bank_task_ui.js").read_text(encoding="utf-8")
+        self.assertIn("el('bank-task-ticket').onchange=selectTicket", source)
+        self.assertIn("currentTask=task&&task.ticket_id===selectedTicket?task:null", source)
+        self.assertIn("for(const op of proposal.operations.filter(op=>op.entity===entity))", source)
+        self.assertIn("请在对应业务页选择要确认的方案", Path(server.ROOT, "index.html").read_text(encoding="utf-8"))
+
+
+if __name__ == "__main__":
+    unittest.main()

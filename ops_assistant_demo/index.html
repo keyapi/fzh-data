@@ -727,12 +727,23 @@ function renderLog() {
 function push(entry) { log.push(entry); renderLog(); save(); return log.length - 1; }
 function renderApproval(){
  const pending=(opsState?.proposals||[]).filter(p=>p.status==="pending"&&p.expires_at*1000>Date.now()&&["counter","integration","bank_terminal","bank_parameter","bank_ip"].includes(p.scenario)&&(!p.scenario.startsWith("bank_")||p.version===opsState.bank?.version));
- const p=pending.at(-1);
+ const routeActive=window.RouteUI?.isActive()&&window.RouteUI.hasPending();
+ const taskActive=window.BankTaskUI?.isActive()&&window.BankTaskUI.hasPending();
+ const p=pending.length===1?pending[0]:null;
+ const explicitKind=routeActive?'route':taskActive?'task':'';
+ if(!explicitKind&&pending.length>1){
+  $("chat-approval").hidden=role()!=="operator";$("chat-approval").dataset.kind="choice";
+  $("chat-change").textContent=`当前有 ${pending.length} 项待确认方案。请在对应业务页选择要确认的方案，避免误执行。`;
+  $("chat-allow").textContent="请先选择方案";$("chat-allow").disabled=true;$("chat-cancel").disabled=true;return;
+ }
+ if(explicitKind){
+  $("chat-approval").hidden=role()!=="operator";$("chat-approval").dataset.kind=explicitKind;
+  $("chat-change").textContent="整组测试方案尚未保存。核对页面差异后允许，后台执行并独立读回验收。";
+  $("chat-allow").textContent="允许修改（测试）";$("chat-allow").disabled=busy;$("chat-cancel").disabled=busy;return;
+ }
  $("chat-approval").hidden=!p||role()!=="operator";
  if(!p){
-  const kind=window.RouteUI?.isActive()&&window.RouteUI.hasPending()?'route':window.BankTaskUI?.isActive()&&window.BankTaskUI.hasPending()?'task':null;
-  $("chat-approval").hidden=!kind||role()!=="operator";$("chat-approval").dataset.kind=kind||'';
-  if(kind){$("chat-change").textContent="整组测试方案尚未保存。核对页面差异后允许，后台执行并独立读回验收。";$("chat-allow").textContent="允许修改（测试）";$("chat-allow").disabled=busy;$("chat-cancel").disabled=busy;}return;
+  $("chat-approval").dataset.kind="";return;
  }
  $("chat-approval").dataset.kind="ops";$("chat-approval").dataset.proposal=p.id;
  $("chat-change").textContent=p.scenario.startsWith("bank_")?window.BankUI.describe(p,true):p.changes.map(c=>fieldLabel(c.field)+"："+fieldValue(c.field,c.before)+" → "+fieldValue(c.field,c.after)).join("；")+"。生产不直接修改。"+(p.submit?"同时登记生产申请。":"");
