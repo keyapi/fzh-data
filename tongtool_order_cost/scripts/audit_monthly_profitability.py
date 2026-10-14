@@ -398,12 +398,12 @@ def cmd_ustx_compare(args) -> int:
                             ambiguous_keys=[d["key"] for d in shell_dups])
     b1 = U.build_b1_catalog(U.b1_key_values(b1h, b1r), b2, keys=ustx_keys)
 
-    # 皮壳头程（改造目标）——缺这张表则 B2 头程保留 A
+    # 头程（改造目标：按绍兴发货方式取，皮壳兜底）——缺这张表则 B2 头程保留 A
     head_index = None
-    head_rec = by_key.get("head_ustx_pkshell")
+    head_rec = by_key.get("en_bom_cost")
     if head_rec and head_rec["status"] == "ok":
-        hh, hr = P.load_snapshot_csv(snap / head_rec["path"])
-        head_index = U.build_head_freight_index(hh, hr)
+        eh, er = P.load_snapshot_csv(snap / head_rec["path"])
+        head_index = U.build_head_freight_index(eh, er)
 
     result = U.compare_monthly_costs(
         order_rows, raw_rows, ustx_warehouse_names=ustx_wh,
@@ -426,8 +426,10 @@ def cmd_ustx_compare(args) -> int:
             "b2_unmatched": sum(1 for r in result.ustx_rows if r["b2_source"] == U.SRC_UNMATCHED),
         },
         "component_waterfall": result.component_waterfall,
+        "head_shell_sensitivity": result.head_shell_sensitivity,
         "gates": result.gates,
         "blocked_reasons": result.blocked_reasons,
+        "notes": result.notes,
         "out": written,
     }, ensure_ascii=False, indent=2))
     return 1 if result.conclusions_blocked else 0

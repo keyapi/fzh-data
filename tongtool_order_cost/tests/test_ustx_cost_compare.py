@@ -271,49 +271,51 @@ def test_compare_row_count_conserved_and_raw_coverage_reported():
     assert buckets["raw_only"] == 1
 
 
-# ── 皮壳头程（b） ──
+# ── 头程（按绍兴发货方式） ──
 
 
-def _head_sheet():
-    # 第 1 行是标题；表头在第 2 行
-    title = ["美国USTX头程运费成本", "", "", "", ""]
-    hdr = ["品类尺寸面料编码", "品类尺寸编码", "皮壳重量（g）", "成品重量（g）", "头程运费金额"]
-    data = [
-        ["SX-A-45-DM", "SX-A-45", "162", "1100", "1.58"],
-        ["SX-A-45-GREY", "SX-A-45", "162", "1100", "1.90"],   # 同品类尺寸，面料级不同
-        ["SX-B-60-DM", "SX-B-60", "372", "2000", "3.62"],
-    ]
-    return [title, hdr] + data
+def _en_bom(*rows):
+    h = ["重量模板, 编号", "绍兴发货方式",
+         "头程皮壳运费, 美中USTX", "头程半成品运费, 美中USTX", "头程成品运费, 美中USTX",
+         "皮壳单重, (g)", "半成品计费重量, (kg)", "成品计费重量, (kg)"]
+    return h, [list(r) for r in rows]
 
 
-def test_build_head_freight_index_skips_title_and_uses_max_for_nofabric():
-    rows = _head_sheet()
-    idx = U.build_head_freight_index(rows[0], rows)
-    assert idx.by_fabric["SX-A-45-DM"] == 1.58
-    assert idx.by_fabric["SX-A-45-GREY"] == 1.90
-    assert idx.by_nofabric["SX-A-45"] == 1.90          # 无面料回退取最大
-    amt, src = idx.resolve("SX-A-45-DM", "SX-A-45")
-    assert amt == 1.58 and "面料" in src
-    amt2, src2 = idx.resolve("SX-A-45-UNKNOWN", "SX-A-45")
-    assert amt2 == 1.90 and "无面料" in src2 or "尺寸" in src2
-    amt3, src3 = idx.resolve("NOPE", "NOPE")
+def test_head_freight_index_by_shipping_method_with_shell_fallback():
+    h, r = _en_bom(
+        ("WT1", "半成品", "3.5", "19.55", "21.02", "360", "2.0", "2.16"),
+        ("WT1", "半成品", "3.5", "19.55", "21.02", "360", "2.0", "2.16"),
+        ("WT2", "皮壳", "8.5", "", "48.65", "1000", "", "5.0"),
+    )
+    idx = U.build_head_freight_index(h, r)
+    assert idx.by_template["WT1"]["半成品"] == 19.55
+    assert idx.by_template["WT1"]["成品"] == 21.02
+    assert idx.by_template["WT2"]["皮壳"] == 8.5
+
+    amt, src = idx.resolve("WT1", "半成品")
+    assert amt == 19.55 and "半成品" in src
+    # 半成品头程缺失 → 回退皮壳头程
+    amt2, src2 = idx.resolve("WT2", "半成品")
+    assert amt2 == 8.5 and "兜底" in src2
+    amt3, _ = idx.resolve("NOPE", "皮壳")
     assert amt3 is None
 
 
-def test_compare_b2_head_freight_from_shell_weight_sheet():
+def test_compare_b2_head_freight_from_en_bom_by_shipping_method():
     shell = shell_rows(("SX-A-45-DM", "WT1", "1", "2", "3"))
-    bom = bom_rows(("WT1", "皮壳", "10", "4", "6", "7"))
+    bom = bom_rows(("WT1", "半成品", "10", "4", "6", "7"))
     b1h, b1r = b1_rows(("SX-A-45-DM", "99"))
     b2 = _b2(shell, bom, ["SX-A-45-DM"])
     b1 = U.build_b1_catalog(U.b1_key_values(b1h, b1r), b2, keys=["SX-A-45-DM"])
-    head = U.build_head_freight_index(_head_sheet()[0], _head_sheet())
+    eh, er = _en_bom(("WT1", "半成品", "3.5", "19.55", "21.02", "360", "2.0", "2.16"))
+    head = U.build_head_freight_index(eh, er)
     rows = [order_row("SX-A-45-DM", warehouse="FZH-DANEEY", qty="2", pk="10", head="8.5", proc="20", sx2="0")]
     res = U.compare_monthly_costs(rows, [], ustx_warehouse_names={"FZH-DANEEY"},
                                   b1_catalog=b1, b2_catalog=b2,
                                   contract=_contract(shell, bom, (b1h, b1r)), head_index=head)
     r = res.rows[0]
     assert r["A_head"] == 8.5            # A 保留现值
-    assert r["B2_head"] == 1.58          # B2 换成皮壳头程
+    assert r["B2_head"] == 19.55         # B2 按发货方式(半成品)取头程
     assert r["B1_head"] == 8.5           # B1 不改头程
-    assert abs(r["d2_head"] - (1.58 - 8.5)) < 0.001
+    assert abs(r["d2_head"] - (19.55 - 8.5)) < 0.001
     assert r["head_src"]
