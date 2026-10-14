@@ -214,6 +214,14 @@ def cmd_analyze(args) -> int:
     if tc:
         findings.append(tc)
 
+    # 规则轨差异：**只用表内两套列**（已验证口径；不用会跑偏的独立重放）
+    rule_events = P.rule_track_delta(wb) if wb else []
+    findings += rule_events
+
+    # 仓库口径体检：非绍兴发货却借用 2CJG-SX
+    wh_check = P.warehouse_cost_source_check(wb) if wb else []
+    findings += wh_check
+
     cons = P.row_conservation(wb).to_dict() if wb else {}
     gates = R.reconcile_gates(
         row_conservation=cons,
@@ -222,6 +230,7 @@ def cmd_analyze(args) -> int:
     )
 
     cohorts = {"by_account": P.cohort_summary(wb, key_col="渠道账号")} if wb else {}
+    cohorts["rule_events"] = [f.to_dict() for f in rule_events]
     inversions = P.find_profit_inversions(cohorts.get("by_account", []))
     findings += inversions
 
@@ -240,22 +249,44 @@ def cmd_analyze(args) -> int:
                           "total_cost": _tot(fba, "订单总成本"), "profit": _tot(fba, "订单利润")})
     cohorts["fba_scope"] = fba_scope
 
-    # 未匹配/异常行：空 SKU 占位行 + 成本全缺订单
+    # 未匹配/异常行级记录（不只是计数）：空 SKU 占位行 + 成本全缺订单
     exceptions = []
     if raw:
-        blk = [r for r in raw if not r.key.tongtool_sku]
-        exceptions.append({"kind": "blank_sku_placeholder", "rows": len(blk),
-                           "note": "空 SKU 占位行：保留血缘、不计件数"})
-    exceptions.append({"kind": "cost_missing_orders", "rows": sum(
-        1 for f in findings if f.category == "cost_missing_anywhere"),
-        "note": "订单成本全缺 → 主数据/成本来源待补"})
+        for r in raw:
+            if not r.key.tongtool_sku:
+                exceptions.append({
+                    "kind": "blank_sku_placeholder", "source_sheet": r.source_sheet,
+                    "source_row": r.row_number, "order_id": r.key.order_id,
+                    "package_id": r.key.package_id, "note": "占位行：保留血缘、不计件数"})
+    gap_orders = []
+    if wb:
+        for r in wb:
+            if P._to_float(r.get("订单总成本")) == 0 and P._to_float(r.get("售价*汇率")) > 0:
+                gap_orders.append({
+                    "kind": "cost_missing", "source_sheet": r.source_sheet,
+                    "source_row": r.row_number, "order_id": r.key.order_id,
+                    "tongtool_sku": r.key.tongtool_sku, "渠道账号": r.get("渠道账号"),
+                    "发货仓库": r.get("发货仓库"), "发货区域": r.get("发货区域"),
+                    "售价*汇率": P._to_float(r.get("售价*汇率"))})
+    exceptions += gap_orders
     cohorts["exceptions"] = exceptions
+
+    # 行级血缘样本（保留原始行身份，可下钻）
+    cohorts["lineage"] = [
+        {"source_sheet": r.source_sheet, "source_row": r.row_number,
+         "occurrence_index": r.key.occurrence_index, "order_id": r.key.order_id,
+         "base_order_id": r.key.base_order_id, "package_id": r.key.package_id,
+         "tongtool_sku": r.key.tongtool_sku, "platform_sku": r.key.platform_sku,
+         "ambiguous": r.key.ambiguous, "incomplete": r.key.incomplete}
+        for r in wb[:2000]
+    ]
 
     questions = {
         "product_cost": "见 01_指标口径 / 08_产品成本异常（行均 vs 数量加权 vs 订单均）",
         "freight": "见 09_运费异常（物流商运费=实收；通途运费=估算；包裹总运费口径更低）",
         "profit_inversion": (f"倒挂队列 {len(inversions)} 个，最高 "
-                             f"{inversions[0].key if inversions else '—'}"),
+                             f"{inversions[0].key if inversions else '—'}；"
+                             f"成本全缺 {len(gap_orders)} 行（见 15 + 成本全缺清单.xlsx）"),
     }
 
     report = R.build_report(
@@ -268,10 +299,21 @@ def cmd_analyze(args) -> int:
     )
     out_dir = R.new_run_dir(args.out_root, "analyze")
     written = R.write_all(report, out_dir)
+
+    # 独立可交接清单：成本全缺行（给运营/主数据直接看）
+    if gap_orders:
+        import pandas as pd
+
+        gap_path = out_dir / "成本全缺清单.xlsx"
+        pd.DataFrame(gap_orders).to_excel(gap_path, index=False)
+        written["cost_gap_xlsx"] = str(gap_path)
+
     print(json.dumps({
         "conclusions_blocked": report.conclusions_blocked,
         "gates": [g.to_dict() for g in gates],
         "findings": len(report.findings),
+        "cost_gap_rows": len(gap_orders),
+        "warehouse_asymmetry": len(wh_check),
         "out": written,
     }, ensure_ascii=False, indent=2))
     return 0

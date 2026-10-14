@@ -995,3 +995,86 @@ def zero_column_evidence(rows: Sequence[SourceRow], cols: Sequence[str]) -> list
                 evidence={"rows": len(rows), "nonzero": 0},
                 monetary_effect=None, confidence=PROVEN, decision_owner=OWNER_FINANCE))
     return out
+
+
+# ---------------------------------------------------------------------------
+# 规则轨差异（U6 补 / 已验证口径）：表内 `*系数` 列 vs 普通列
+# ---------------------------------------------------------------------------
+
+RULE_TRACK_DELTA = "rule_track_delta"
+
+# 普通列 ↔ 对应 `*系数` 列（同表内直接比，不依赖独立重放）
+TRACK_PAIRS = (
+    ("皮壳成本", "皮壳成本*系数"),
+    ("二次加工成本", "二次加工成本*系数"),
+    ("绍兴二次加工成本", "绍兴二次加工成本*系数"),
+    ("头程运费金额", "头程运费金额"),
+    ("订单总成本", "订单总成本*系数"),
+    ("订单利润", "订单利润*系数"),
+)
+
+
+def rule_track_delta(
+    rows: Sequence[SourceRow], *, pairs: Sequence[tuple[str, str]] = TRACK_PAIRS
+) -> list[Finding]:
+    """**用表内自带的两套列**算规则轨差异（唯一被验证过的口径）。
+
+    独立跑 `engine_170` 会因规则快照/基线不同得到假象（实测 −116k vs 真值 +1,070），
+    所以常规审计**只比表内两列**；`engine_170` 只作为交叉校验，不一致时标 unresolved。
+    """
+    out: list[Finding] = []
+    for plain, coeff in pairs:
+        if plain == coeff:
+            continue
+        a = sum(_to_float(r.get(plain)) for r in rows)
+        b = sum(_to_float(r.get(coeff)) for r in rows)
+        affected = sum(
+            1 for r in rows if abs(_to_float(r.get(plain)) - _to_float(r.get(coeff))) >= 0.01
+        )
+        out.append(Finding(
+            RULE_TRACK_DELTA, "cohort", f"{plain}->{coeff}",
+            "info" if abs(b - a) < 0.01 else "medium",
+            {"plain_sum": round(a, 2), "coeff_sum": round(b, 2),
+             "delta": round(b - a, 2), "affected_rows": affected, "rows": len(rows)},
+            round(b - a, 2), PROVEN, OWNER_FINANCE))
+    return out
+
+
+# ---------------------------------------------------------------------------
+# 仓库口径体检：美中/海外仓的「二次加工成本来源」是否仍在借用绍兴
+# ---------------------------------------------------------------------------
+
+WAREHOUSE_COST_SOURCE_ASYMMETRY = "warehouse_cost_source_asymmetry"
+
+
+def warehouse_cost_source_check(
+    rows: Sequence[SourceRow],
+    *,
+    warehouse_col: str = "发货仓库",
+    source_col: str = "二次加工成本来源编码",
+    region_col: str = "发货区域",
+    cost_col: str = "二次加工成本*数量",
+    borrowed_sources: Sequence[str] = ("2CJG-SX",),
+) -> list[Finding]:
+    """体检：**非绍兴发货**却用 `2CJG-SX`（绍兴二次加工）当加工成本的行。
+
+    这是已知历史妥协（美中/海外仓没有本地加工成本，借用绍兴）。**报出来，不自动改**。
+    """
+    groups: dict[tuple[str, str, str], list[SourceRow]] = {}
+    for r in rows:
+        src = r.get(source_col)
+        if src in borrowed_sources:
+            groups.setdefault((r.get(warehouse_col), src, r.get(region_col)), []).append(r)
+    out: list[Finding] = []
+    for (wh, src, region), group in groups.items():
+        if region == "其它" and wh in ("德国", "其他仓库", "扬州仓库"):
+            continue  # 真·绍兴自发货，借用是对的
+        cost = sum(_to_float(r.get(cost_col)) for r in group)
+        out.append(Finding(
+            WAREHOUSE_COST_SOURCE_ASYMMETRY, "cohort", f"{wh}|{region}",
+            "medium",
+            {"warehouse": wh, "region": region, "source": src,
+             "rows": len(group), "cost_sum": round(cost, 2)},
+            round(cost, 2), STRONG, OWNER_MASTER))
+    out.sort(key=lambda f: -(f.monetary_effect or 0))
+    return out

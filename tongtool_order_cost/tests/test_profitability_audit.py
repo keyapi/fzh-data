@@ -437,3 +437,46 @@ def test_zero_column_evidence_flags_missing_fees():
     assert f"column_all_zero:{P.FEE_VAT}" in cats        # VAT 全零
     assert f"column_all_zero:{P.FEE_PAYPAL}" in cats     # PayPal 全零
     assert f"column_all_zero:{P.FEE_CHANNEL}" not in cats  # 渠道费有值
+
+
+# --------------------------- U6 补：规则轨 / 仓库口径体检 ---------------------------
+
+def test_rule_track_delta_uses_in_sheet_columns_only():
+    headers = ["订单号", "通途SKU", "包裹号", "发货数量",
+               "皮壳成本", "皮壳成本*系数", "订单总成本", "订单总成本*系数"]
+    rows = P.build_source_rows(headers, [
+        ["O-1", "S1", "P1", "1", "100", "100", "500", "500"],
+        ["O-2", "S2", "P2", "1", "200", "150", "800", "760"],
+    ], "wb")
+    out = {f.key: f for f in P.rule_track_delta(
+        rows, pairs=(("皮壳成本", "皮壳成本*系数"), ("订单总成本", "订单总成本*系数")))}
+    f = out["皮壳成本->皮壳成本*系数"]
+    assert f.evidence["plain_sum"] == 300.0
+    assert f.evidence["coeff_sum"] == 250.0
+    assert f.evidence["delta"] == -50.0
+    assert f.evidence["affected_rows"] == 1
+    assert out["订单总成本->订单总成本*系数"].evidence["delta"] == -40.0
+
+
+def test_warehouse_cost_source_check_flags_borrowed_shaoxing():
+    headers = ["订单号", "通途SKU", "包裹号", "发货数量", "发货仓库",
+               "发货区域", "二次加工成本来源编码", "二次加工成本*数量"]
+    rows = P.build_source_rows(headers, [
+        ["O-1", "S1", "P1", "1", "FZH-DANEEY-成品仓", "美国", "2CJG-SX", "10"],
+        ["O-2", "S2", "P2", "1", "FZH-DANEEY-成品仓", "美国", "2CJG-SX", "20"],
+        ["O-3", "S3", "P3", "1", "美东-CENTRADE", "美国", "2CJG-US", "99"],   # 正常，不报
+        ["O-4", "S4", "P4", "1", "德国", "其它", "2CJG-SX", "5"],             # 真绍兴自发货，不报
+    ], "wb")
+    out = P.warehouse_cost_source_check(rows)
+    assert len(out) == 1
+    assert out[0].evidence["warehouse"] == "FZH-DANEEY-成品仓"
+    assert out[0].evidence["rows"] == 2
+    assert out[0].evidence["cost_sum"] == 30.0
+    assert out[0].decision_owner == P.OWNER_MASTER
+
+
+def test_track_pairs_have_matching_columns_for_july_writeback():
+    # 纯结构检查：除 头程运费金额（单列）外，成对的普通列与 *系数 列都存在
+    plain = [a for a, b in P.TRACK_PAIRS]
+    assert "订单总成本" in plain and "订单利润" in plain
+    assert ("头程运费金额", "头程运费金额") in P.TRACK_PAIRS
