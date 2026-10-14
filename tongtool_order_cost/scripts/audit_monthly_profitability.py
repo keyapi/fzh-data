@@ -222,6 +222,12 @@ def cmd_analyze(args) -> int:
     wh_check = P.warehouse_cost_source_check(wb) if wb else []
     findings += wh_check
 
+    # 分渠道成本（cell_222 口径）：按渠道拆 + 恒等式校验
+    channel_sheet, channel_findings = ([], [])
+    if wb:
+        channel_sheet, channel_findings = P.channel_cost_decomposition(wb)
+    findings += channel_findings
+
     cons = P.row_conservation(wb).to_dict() if wb else {}
     gates = R.reconcile_gates(
         row_conservation=cons,
@@ -231,6 +237,7 @@ def cmd_analyze(args) -> int:
 
     cohorts = {"by_account": P.cohort_summary(wb, key_col="渠道账号")} if wb else {}
     cohorts["rule_events"] = [f.to_dict() for f in rule_events]
+    cohorts["product_cost_waterfall"] = channel_sheet
     inversions = P.find_profit_inversions(cohorts.get("by_account", []))
     findings += inversions
 

@@ -480,3 +480,51 @@ def test_track_pairs_have_matching_columns_for_july_writeback():
     plain = [a for a, b in P.TRACK_PAIRS]
     assert "订单总成本" in plain and "订单利润" in plain
     assert ("头程运费金额", "头程运费金额") in P.TRACK_PAIRS
+
+
+# --------------------------- 分渠道成本审计 ---------------------------
+
+def _chan_rows():
+    headers = ["订单号", "通途SKU", "包裹号", "发货数量", "发货仓按销售汇总分类",
+               "二次加工成本来源编码", "皮壳成本*数量", "皮壳含包装成本", "皮壳不含包装成本",
+               "绍兴二次加工成本*数量", "二次加工成本*数量", "头程运费*数量", "运费",
+               "产品成本*数量", "订单总成本"]
+    return P.build_source_rows(headers, [
+        # USNJ：产品成本 = 皮壳 + 二次加工（无绍兴二次加工）
+        ["O-1", "S1", "P1", "1", "USNJ分公司", "2CJG-US", "100", "100", "0", "0", "20", "5", "30", "120", "155"],
+        # USTX：产品成本 = 皮壳 + 绍兴二次加工（借绍兴）
+        ["O-2", "S2", "P2", "1", "USTX分公司", "2CJG-SX", "80", "0", "80", "15", "0", "4", "25", "95", "124"],
+    ], "wb")
+
+
+def test_channel_cost_decomposition_identities_hold():
+    sheet, findings = P.channel_cost_decomposition(_chan_rows())
+    assert findings == []
+    by = {r["发货仓按销售汇总分类"]: r for r in sheet}
+    assert by["USNJ分公司"]["产品成本*数量"] == 120.0
+    assert by["USNJ分公司"]["订单总成本"] == 155.0
+    assert by["USTX分公司"]["绍兴二次加工成本*数量"] == 15.0
+    assert by["USNJ分公司"]["二次加工来源编码"] == "2CJG-US"
+    assert by["USTX分公司"]["二次加工来源编码"] == "2CJG-SX"
+    assert by["USNJ分公司"]["皮壳包装口径"] == "含包装"
+    assert by["USTX分公司"]["皮壳包装口径"] == "不含包装"
+
+
+def test_channel_cost_decomposition_flags_broken_identity():
+    headers = ["订单号", "通途SKU", "包裹号", "发货数量", "发货仓按销售汇总分类",
+               "皮壳成本*数量", "绍兴二次加工成本*数量", "二次加工成本*数量",
+               "头程运费*数量", "运费", "产品成本*数量", "订单总成本"]
+    rows = P.build_source_rows(headers, [
+        # 产品成本被少算 50（皮壳100 + 二次加工20 = 120，却写 70）
+        ["O-1", "S1", "P1", "1", "USNJ分公司", "100", "0", "20", "5", "30", "70", "105"],
+    ], "wb")
+    sheet, findings = P.channel_cost_decomposition(rows)
+    cats = {f.key: f.category for f in findings}
+    assert cats["USNJ分公司|产品成本"] == P.CHANNEL_COST_MISMATCH
+    assert findings[0].decision_owner == P.OWNER_TECH
+
+
+def test_channel_cost_defs_document_known_ustx_gap():
+    assert "美国分公司_USNJ" in P.CHANNEL_COST_DEFS
+    assert "美国分公司_USTX" not in P.CHANNEL_COST_DEFS      # cell_222 缺口
+    assert any("USTX" in s for s in P.CHANNEL_KNOWN_ISSUES)
