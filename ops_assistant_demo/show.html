@@ -4,16 +4,28 @@
 :root{--wine:#74152a;--red:#b32643;--rose:#f8eef0;--paper:#fffdfb;--ink:#2d1820;--muted:#725862;--line:#e6d5d9;--gold:#c79645}*{box-sizing:border-box}body{margin:0;background:#eee4e1;color:var(--ink);font:16px/1.7 "Noto Serif CJK SC","Songti SC","STSong","Microsoft YaHei",serif}header{min-height:64px;background:var(--wine);color:#fff;display:flex;align-items:center;gap:10px;padding:10px 4vw;position:sticky;top:0;z-index:5;border-bottom:3px solid var(--gold)}header strong{margin-right:auto;letter-spacing:.12em}button,a.button{font-family:"Microsoft YaHei","Noto Sans CJK SC",sans-serif;font:inherit;cursor:pointer;border:1px solid rgba(255,255,255,.54);border-radius:2px;padding:6px 13px;background:transparent;color:#fff;text-decoration:none}button.primary{background:#fff;color:var(--wine);border-color:#fff;font-weight:700}.guide{max-width:1180px;margin:14px auto 0;padding:10px 16px;border-left:4px solid var(--red);background:#fffaf8;color:var(--muted);font-size:13px}.guide summary{cursor:pointer;color:var(--wine);font-weight:700}main{max-width:1180px;margin:0 auto;padding:8px 18px 64px}.page{position:relative;min-height:640px;margin:18px 0;padding:42px 50px 92px;background:var(--paper);box-shadow:0 3px 14px rgba(63,19,29,.14);border-top:7px solid var(--wine)}.kicker{font-family:"Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:13px;letter-spacing:.16em;color:var(--red);font-weight:700}h1{font-size:40px;line-height:1.27;margin:10px 0 12px;max-width:950px;letter-spacing:.025em}h2{font-size:25px;margin:0 0 16px}.sub{font-size:18px;color:var(--muted);max-width:900px;margin:0 0 22px}.rule{height:4px;width:72px;background:linear-gradient(90deg,var(--wine) 0 74%,var(--gold) 74%);margin:15px 0 18px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:14px 0}.card{padding:17px;border:1px solid var(--line);border-top:4px solid var(--red);background:var(--rose)}.card h3{font-family:"Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:17px;margin:0 0 8px}.card p{font-size:14px;margin:5px 0}.flow{display:flex;align-items:stretch;gap:7px;margin:22px 0}.node{flex:1;min-width:0;padding:12px 9px;text-align:center;background:var(--rose);border-top:3px solid var(--red);font-size:14px}.node strong{display:block;font-family:"Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:16px}.arrow{align-self:center;color:var(--red);font-size:20px}.steps{margin:15px 0;padding:0;list-style:none}.steps li{padding:9px 0 9px 30px;border-bottom:1px solid var(--line);position:relative}.steps li:before{content:"";position:absolute;left:3px;top:17px;width:10px;height:10px;background:var(--red)}.foot{position:absolute;left:0;right:0;bottom:0;min-height:64px;display:flex;align-items:center;gap:18px;padding:12px 50px;background:var(--wine);color:#fff}.foot p{margin:0}.num{margin-left:auto;color:#f1d9a9}.speaker{display:none;color:var(--muted);font-size:14px}.faq{width:100%;border-collapse:collapse}.faq th,.faq td{text-align:left;vertical-align:top;padding:10px;border-bottom:1px solid var(--line)}.faq th{color:var(--wine);background:var(--rose);width:29%}.controls{display:none;position:fixed;right:20px;bottom:18px;z-index:10;align-items:center;gap:8px;padding:9px;background:rgba(116,21,42,.96);color:#fff;border-radius:3px;box-shadow:0 4px 15px rgba(57,9,20,.3)}.controls button{border-color:rgba(255,255,255,.5)}.timer{font-variant-numeric:tabular-nums}@media(max-width:800px){.grid,.flow{display:block}.node{margin:8px 0}.page{padding:26px 22px 100px;min-height:580px}.foot{padding:12px 22px}h1{font-size:30px}}body.present{background:#201015}body.present header,body.present .guide{display:none}body.present main{max-width:none;padding:0}body.present .page{display:none;margin:0;min-height:100vh;padding:54px 7vw 110px;box-shadow:none}body.present .page.selected{display:block}body.present h1{font-size:50px}body.present .controls{display:flex}@media print{header,.guide,.controls{display:none!important}body{background:#fff}.page,body.present .page{display:block!important;box-shadow:none;margin:0;min-height:0;padding:14mm 12mm;break-after:page}.speaker{display:block}.page:last-child{break-after:auto}}
  </style><style>
 /* Projection keeps the page's established visual language; only the chrome and other pages are hidden. */
+main{max-width:1440px}
+.page{padding:38px 48px 110px}
+h1{max-width:none;font-size:44px}
+.sub{max-width:none;font-size:22px;line-height:1.5;color:#51333d}
+.card{min-width:0;padding:22px}
+.card h3{font-size:24px}
+.card p,.steps li,.faq{font-size:22px;line-height:1.55;overflow-wrap:anywhere}
+.kicker{font-size:16px}
+.foot{font-size:19px;line-height:1.5;padding-right:460px;min-height:90px}
+.grid{gap:20px;margin-top:26px}
+.steps li{padding-top:12px;padding-bottom:12px}
 body.present{background:#eee4e1}
 body.present header,body.present .guide{display:none}
 body.present main{max-width:none;padding:0}
-body.present .page{display:none;margin:0;min-height:100vh;padding:42px 50px 92px;box-shadow:none}
+body.present .page{display:none;margin:0;min-height:100vh;padding:38px 48px 110px;box-shadow:none}
 body.present .page.selected{display:block}
-body.present h1{font-size:40px}
+body.present h1{font-size:44px}
 .controls{display:none;right:20px;bottom:18px}
 body.present .controls{display:flex}
 .controls button{font-size:14px}
 @media(max-width:800px){.controls{right:10px;bottom:10px;gap:5px;padding:7px}.controls button{padding:5px 7px;font-size:12px}}
+@media(max-width:1000px){h1,body.present h1{font-size:34px}.sub,.card p,.steps li,.faq{font-size:19px}.card h3{font-size:21px}.card{padding:14px}.page,body.present .page{padding:24px 28px 120px}.foot{font-size:16px;padding-left:28px;padding-right:420px}}
 </style></head><body>
 <header><strong>知识辅助与受控办理 · 答辩投屏稿</strong><a class="button" href="/" target="_blank" rel="noopener">打开操作台</a><a class="button" href="/competition.html" target="_blank" rel="noopener">演示者工作台</a><button id="present" class="primary" type="button">进入投屏</button><button id="print" type="button">打印讲稿</button></header>
 <div class="guide">项目概览 · 知识运营与受控办理分别验证；当前为模拟环境概念验证，真实接入按业务及风险准入要求推进。</div>
