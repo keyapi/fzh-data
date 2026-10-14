@@ -12,6 +12,7 @@ title: Web AI assistant — 文档索引
 | Reference | 受控办理助手交接 | [AGENT_HANDOFF.md](AGENT_HANDOFF.md) |
 | Reference | 助手面板、刷新记忆与删除语义修复 | [docs/assistant-panel.md](docs/assistant-panel.md) |
 | Reference | 渠道接入三页面实现与实际验收 | [docs/bank-operations.md](docs/bank-operations.md) |
+| Spec | 知识辅助与受控办理组合演示接力计划 | [docs/combined-demo-plan.md](docs/combined-demo-plan.md) |
 | Spec | 竞赛实施与验收规格 | [docs/competition-plan.md](docs/competition-plan.md) |
 | Spec | 工单驱动的渠道接入办理助手 · 竞赛升级设计 | [docs/competition-v2-design.md](docs/competition-v2-design.md) |
 | FAQ | 工单驱动渠道接入助手 · 答疑 | [docs/competition-v2-faq.md](docs/competition-v2-faq.md) |

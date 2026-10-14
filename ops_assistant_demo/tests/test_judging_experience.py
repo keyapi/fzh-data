@@ -29,14 +29,17 @@ class JudgingExperienceTests(unittest.TestCase):
         self.store.db.close()
         self.temp.cleanup()
 
-    def test_projection_page_uses_verified_poc_language(self):
+    def test_projection_page_keeps_knowledge_and_control_boundaries_visible(self):
         with urllib.request.urlopen(self.base + "/show.html") as response:
             body = response.read().decode("utf-8")
         self.assertEqual(response.status, 200)
-        self.assertIn("运营配置辅助助手", body)
+        self.assertIn("知识辅助与受控办理", body)
         self.assertIn("人工确认", body)
+        self.assertIn("财资助手", body)
+        self.assertIn("未自动共享知识或联通接口", body)
+        self.assertIn("不可把它说成逐条人工审核", body)
+        self.assertIn("生产只可准备申请", body)
         self.assertNotIn("分行自主实施", body)
-        self.assertNotIn("财资助手", body)
         self.assertNotIn("全辖", body)
 
     def test_ticket_switch_clears_old_local_task_before_analysis(self):

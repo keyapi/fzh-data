@@ -1,33 +1,51 @@
 <!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>运营配置辅助助手 · 投屏讲解</title>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>知识辅助与受控办理 · 投屏讲解</title>
 <style>
 :root{--navy:#112e51;--blue:#1769aa;--paper:#f6f8fb;--ink:#172b44;--muted:#587087;--line:#d7e1eb}*{box-sizing:border-box}body{margin:0;background:#dfe7ee;color:var(--ink);font:16px/1.7 "Microsoft YaHei","Noto Sans CJK SC",sans-serif}header{min-height:60px;background:var(--navy);color:#fff;display:flex;align-items:center;gap:10px;padding:10px 4vw;position:sticky;top:0;z-index:5}header strong{margin-right:auto;letter-spacing:.06em}button,a.button{font:inherit;cursor:pointer;border:1px solid rgba(255,255,255,.48);border-radius:3px;padding:6px 13px;background:transparent;color:#fff;text-decoration:none}button.primary{background:#fff;color:var(--navy);border-color:#fff}.guide{max-width:1180px;margin:14px auto 0;padding:10px 16px;border-left:4px solid var(--blue);background:#fff;color:var(--muted);font-size:13px}.guide summary{cursor:pointer;color:var(--navy);font-weight:700}main{max-width:1180px;margin:0 auto;padding:8px 18px 64px}.page{position:relative;min-height:640px;margin:18px 0;padding:42px 50px 92px;background:#fff;box-shadow:0 2px 10px rgba(17,46,81,.12)}.kicker{font-size:13px;letter-spacing:.14em;color:var(--blue);font-weight:700}h1{font-size:40px;line-height:1.27;margin:10px 0 12px;max-width:950px}h2{font-size:25px;margin:0 0 16px}.sub{font-size:18px;color:var(--muted);max-width:900px;margin:0 0 22px}.rule{height:4px;width:60px;background:var(--blue);margin:15px 0 18px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:14px 0}.card{padding:17px;border:1px solid var(--line);border-top:4px solid var(--blue);background:var(--paper)}.card h3{font-size:17px;margin:0 0 8px}.card p{font-size:14px;margin:5px 0}.flow{display:flex;align-items:stretch;gap:7px;margin:22px 0}.node{flex:1;min-width:0;padding:12px 9px;text-align:center;background:var(--paper);border-top:3px solid var(--blue);font-size:14px}.node strong{display:block;font-size:16px}.arrow{align-self:center;color:var(--blue);font-size:20px}.steps{margin:15px 0;padding:0;list-style:none}.steps li{padding:9px 0 9px 30px;border-bottom:1px solid var(--line);position:relative}.steps li:before{content:"";position:absolute;left:3px;top:17px;width:10px;height:10px;background:var(--blue)}.foot{position:absolute;left:0;right:0;bottom:0;min-height:64px;display:flex;align-items:center;gap:18px;padding:12px 50px;background:var(--navy);color:#fff}.foot p{margin:0}.num{margin-left:auto;color:#b9d5e6}.speaker{display:none;color:var(--muted);font-size:14px}.faq{width:100%;border-collapse:collapse}.faq th,.faq td{text-align:left;vertical-align:top;padding:10px;border-bottom:1px solid var(--line)}.faq th{color:var(--navy);background:var(--paper);width:29%}.controls{display:none;position:fixed;right:20px;bottom:18px;z-index:10;align-items:center;gap:8px;padding:9px;background:rgba(17,46,81,.95);color:#fff;border-radius:4px}.controls button{border-color:rgba(255,255,255,.5)}.timer{font-variant-numeric:tabular-nums}@media(max-width:800px){.grid,.flow{display:block}.node{margin:8px 0}.page{padding:26px 22px 100px;min-height:580px}.foot{padding:12px 22px}h1{font-size:30px}}body.present{background:#101923}body.present header,body.present .guide{display:none}body.present main{max-width:none;padding:0}body.present .page{display:none;margin:0;min-height:100vh;padding:54px 7vw 110px;box-shadow:none}body.present .page.selected{display:block}body.present h1{font-size:50px}body.present .controls{display:flex}@media print{header,.guide,.controls{display:none!important}body{background:#fff}.page,body.present .page{display:block!important;box-shadow:none;margin:0;min-height:0;padding:14mm 12mm;break-after:page}.speaker{display:block}.page:last-child{break-after:auto}}
 </style></head><body>
-<header><strong>运营配置辅助助手 · 投屏讲解</strong><a class="button" href="/" target="_blank" rel="noopener">打开操作台</a><a class="button" href="/competition.html" target="_blank" rel="noopener">演示说明</a><button id="present" class="primary" type="button">投屏</button><button id="print" type="button">打印讲稿</button></header>
+<header><strong>知识辅助与受控办理 · 投屏讲解</strong><a class="button" href="/" target="_blank" rel="noopener">打开操作台</a><a class="button" href="/competition.html" target="_blank" rel="noopener">演示说明</a><button id="present" class="primary" type="button">投屏</button><button id="print" type="button">打印讲稿</button></header>
 <div class="guide"><details><summary>讲者说明（现场投屏不显示）</summary><p>本稿是可选讲解材料，和自备 PPT 二选一。核心现场办理走“接入工单”，路由配置留作答疑扩展。所有数据、规则和验收均为模拟；模型慢时停在工单差异页解释核对项，不把录屏说成实时执行。</p></details></div>
 <main id="deck"></main><div class="controls"><span id="position"></span><button id="prev">上一页</button><button id="next">下一页</button><button id="clock">开始计时</button><span class="timer" id="timer">00:00</span></div>
 <script type="text/plain" id="deck-source">
 ---
-时间: 00:00–00:35
-标题: 运营配置辅助助手 / 让办理结果可核对
-副题: 渠道接入资料、现行配置与字段规则分散在不同页面；难点不只是填写，而是判断哪些该保留、哪些该补充，以及如何证明结果。
-卡片: 面向谁 | 渠道接入、联调准备与配置维护人员
-卡片: 交付什么 | 有依据的整组差异、人工确认、读回与模拟验收
+时间: 00:00–00:45
+标题: 知识辅助与受控办理 / 让办理结果可核对
+副题: 自主实施能力建设需要可复用的专业支持。共性问题反复咨询、经验散落群聊，制约人员培养和交付效率；将经验沉淀为组织能力，让实施人员问得有据、改得可控。
+卡片: 赋能实施 | 支持实施人员自主排查与配置，缩短等待专业答疑的时间
+卡片: 减负支持 | 共性问题复用知识，专业人员聚焦复杂事项与重大故障
 卡片: 本次范围 | 真实模型参与分析；业务数据、规则与环境均为模拟
 底栏: 从业务目标出发，形成范围明确、可确认、可验收的配置方案。
 口播: 今天演示的不是替人点表单，而是让助手先读工单、现状和规则，最后把每一步结果交给人核对。
 ---
-时间: 00:35–01:10
-标题: Agent 的价值 / 在判断和验收，不在代填
-副题: 已经知道每个字段时，人工填写很快；真正耗时的是资料冲突、字段依赖、信息缺口和完成后的核验。
+时间: 00:45–01:10
+标题: 知识辅助与受控办理 / 共同服务实施工作
+副题: 财资助手提供问询与知识运营；操作助手根据业务目标起草配置方案。两套演示共同说明实施支持路径，当前未自动共享知识或联通接口。
 流程: 读取 | 工单、现状、适用规则
 流程: 形成方案 | 保留正确项，标出差异与缺项
 流程: 人工确认 | 确认具体范围，不授权任意动作
 流程: 后台执行 | 仅模拟测试环境，随后独立读回验收
 底栏: 模型负责理解与组织；权限、范围、保存和验收由后台确定性控制。
-口播: 这也是和单纯知识问答的区别：问答告诉你规则，受控助手把规则落实为可检查的整组方案。
+口播: 先展示组员的财资助手，再展示受控办理。知识帮助实施人员理解处置口径；操作部分让具体变更可核对、可确认、可验收。
 ---
-时间: 01:10–04:45
+时间: 01:10–02:25
+标题: 财资助手短问 / 让经验可以复用
+副题: 切到财资助手，提问“余额查询报错”，打开答案引用，说明知识如何形成与纠偏。
+步骤: 提问并打开引用：观察来源是否支持回答；若没有足够依据，应明确说明信息缺口。
+步骤: 知识运营：展示脱敏样例上传后的处理状态与审核入口。当前实测的模拟样例自动显示“已通过”，不可把它说成逐条人工审核。
+步骤: 讲清分流：群聊经验应整理、脱敏并经人工审核；官方资料仍需核对来源、版本和适用范围。反馈用于纠偏，不自动成为可信规则。
+底栏: 知识质量决定建议质量；上传、审核、发布与调用是不同环节。
+口播: 本段共75秒，问答与引用约35秒，治理说明约25秒，上传或状态画面约15秒。预先打开演示资料和页面；上传处理耗时较长时展示既有样例状态，明确不是刚才上传的结果。当前自动通过的状态是试点前要补齐人工审核的治理缺口，不要将操作台预置资料说成财资助手实时检索结果。
+---
+时间: 02:25–03:15
+标题: 简单操作预热 / 改之前必须有人确认
+副题: 在操作助手中提出“把测试限额改为20万元”。先用一个容易理解的动作，让评审看见人机分工。
+步骤: 助手起草具体方案，页面高亮与填写；确认前配置保持原值。
+步骤: 实施人员核对后点击“允许修改（测试）”；后台保存并独立读回。
+步骤: 指出本次仅改变模拟测试配置，生产保持不变。
+底栏: 助手提出建议；人决定是否实施，系统在确认后执行这一次变更。
+口播: 50秒内结束，不展开全部工具轨迹。转场：简单例子证明确认边界，下面看不必先知道每个参数的复杂办理。
+---
+时间: 03:15–05:55
 标题: 现场主线 / 一份渠道接入工单
 副题: 选择 WO-DEMO-001。工单夹带过期模板，客户端端口缺失；系统应复用已有终端，并只追问确实缺少的一项。
 步骤: 建立任务：读取工单、三页现状和现行模拟规则，尚不保存配置。
@@ -37,7 +55,7 @@
 底栏: 先发现问题，再确认范围，最后以读回和验收说明是否完成。
 口播: 停顿点在整组差异和允许修改。不要逐字读全部字段；强调只问端口、已有终端被复用、确认前数据没变。
 ---
-时间: 04:45–05:45
+时间: 05:55–06:40
 标题: 安全护栏 / 每一层都不能由模型绕过
 副题: 演示中的答案、规则文本和聊天记录都不是权限；模型也不能用文字宣布已完成。
 卡片: 身份与范围 | 后台根据模拟岗位、环境和允许工具校验；生产只可准备申请
@@ -46,7 +64,16 @@
 底栏: 人工确认是必要门槛；模型、页面和资料都不能越过后台控制。
 口播: 如需互动，切换只读岗位尝试办理，或说明生产没有直接写入接口。不要把模拟岗位说成企业单点登录。
 ---
-时间: 05:45–06:30
+时间: 06:40–07:30
+标题: 交付的是证据 / 而不是一句成功
+副题: 当前 POC 已覆盖模拟任务的读取、追问、方案、确认、保存、独立读回和模拟验收；真实接入需另行完成业务校准、权限映射与试点验证。
+卡片: 实施侧赋能 | 复用处置知识，减少反复求助，支持人员学习与自主实施
+卡片: 支持侧减负 | 共性问题由助手辅助，复杂事项转专业支持，重大故障由专家处置
+卡片: 组织侧沉淀 | 将经验转成可治理、可复核的知识与办理方法；以试点对照验证价值
+底栏: 有依据、有边界、有结果；从可验证的模拟 POC 再走向受控试点。
+口播: 不承诺未经实测的效率比例，也不把模拟验收说成真实网络连通或生产认证。
+---
+时间: 答疑备用 · 不占主流程
 标题: 答疑扩展 / 按业务范围准备路由配置
 副题: 例如“开通余额查询”。助手将业务目标映射为客户端、请求应答适配器和业务路由的整组差异；未知业务或相互矛盾的范围会要求澄清。
 步骤: 输入业务范围，查看复用项与新增项。
@@ -54,15 +81,6 @@
 步骤: 仍由侧边栏“允许修改（测试）”确认，随后查看模拟命中与范围检查。
 底栏: 路由场景用于证明系统能把业务表达映射到多页面配置；真实映射需由业务人员校准。
 口播: 时间不够时只展示方案，不执行。它是主线之后的扩展，不替代已验证的工单办理。
----
-时间: 06:30–07:00
-标题: 交付的是证据 / 而不是一句成功
-副题: 当前 POC 已覆盖模拟任务的读取、追问、方案、确认、保存、独立读回和模拟验收；真实接入需另行完成业务校准、权限映射与试点验证。
-卡片: 给评审 | 业务痛点、主线剧本、安全边界与可追溯结果
-卡片: 给演示者 | 排练入口、讲解稿、可重复准备的模拟工作区
-卡片: 给后续试点 | 任务完成率、人工纠正次数、耗时与错误写入的同任务对照
-底栏: 有依据、有边界、有结果；从可验证的模拟 POC 再走向受控试点。
-口播: 不承诺未经实测的效率比例，也不把模拟验收说成真实网络连通或生产认证。
 ---
 时间: 附录 · 答疑
 标题: 常见质疑 / 可以直接回答

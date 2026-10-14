@@ -5,6 +5,8 @@ title: 受控办理助手交接
 
 # 受控办理助手交接
 
+**2026-10-14 组合演示收口**：`show.html` 与 `competition.html` 现按 7 分 30 秒串联知识短问、20万元确认预热、001 接入工单、安全结果和价值评估；路由仅作答疑备用。知识系统是独立子项目，未与本操作台共享知识、身份或接口。实测“余额查询报错”短问可返回引用；模拟TXT上传会被解析并自动显示“已通过”，因此投屏稿明确这不能冒充逐条人工审核，是试点前须补的治理缺口。完整剧本和实测边界见 [组合演示接力计划](docs/combined-demo-plan.md)。
+
 **2026-10-13 统一侧边栏首版**：自然语言问题现在走 `/api/agent/turn`，使用 LangChain `create_agent` 的受控工具循环，而非依据当前页面 `active()` 分流。`agent_tools.py` 的 `CAPABILITIES` 是唯一能力注册表：目录、岗位过滤、服务端分发和 LangChain 工具 schema 都从它生成；只开放真实工作区读取、工单目录、规则、待确认方案和审计。操作员可用限额、联调和路由三项语义化“准备”工具生成测试待确认方案，仍由既有摘要、版本、岗位和确认路径执行。明确的工单/路由/终端 CRUD 请求暂继续桥接既有专用规划器，避免一次替换四套经过验证的领域合同。`requirements.txt` 是运行依赖；部署前执行 `python3 -m pip install -r requirements.txt`。真实模型已验证“几个工单及区别”和“测试限额20万→侧栏确认→独立读回”；确定性回归为132项。不要把工具注册理解成可操作任意页面或任意接口。
 
 **2026-10-13 本轮完成**：五阶段计划已推进到「可运行 + 已验证」。`server.py` 已接通 `/api/bank/tasks/*` 与静态白名单，`bank_task` 误路由已修；`verify` 落地逐项模拟验收矩阵；契约缺陷（catalog 正文、答后清问、端口类型、登录后按钮、三页预演回落）已修；`domain.digest` 改显式白名单。**确定性测试 108 项通过**；真机（`deepseek-v4-flash`）001 主线/002 保守档 completed、003 失败→恢复 recovered，浏览器全流程与刷新恢复实测通过。逐项结果见[实际测试结果](docs/competition-v2-results.md)，未实现项与口径在文内明确列出。竞赛交付四件与结果记在 `docs/competition-v2-*.md`。
@@ -45,7 +47,8 @@ feedback_store.py / feedback_ui.js；/api/feedback POST提交、GET凭私有回�
 
 演示者培训入口 rehearsal_ui.js，设计与清理边界见 docs/presenter-rehearsal.md；/api/rehearsal/fresh 仅操作员切换新模拟工作区。不要删除真实反馈或把培训勾选当执行成功。
 
-相关经验：[实时状态、培训与反馈隔离](../docs/solutions/architecture-patterns/branch-param-desk-read-then-guard.md)。
+相关经验：[实时状态、培训与反馈隔离](docs/solutions/architecture-patterns/branch-param-desk-read-then-guard.md)。
 
-回复排版经验：[可读回复与表格渲染](../docs/solutions/developer-experience/ops-assistant-model-reply-formatting.md)。
-2026-10-14：能力介绍使用三类短概览；统一侧栏允许修改（测试）/取消，柜面填写后收起弹窗，路由与工单复用整组确认。132项回归及真实模型浏览器确认、取消、路由验收通过。框架取舍见 docs/unified-agent-plan.md。
+回复排版经验：[可读回复与表格渲染](docs/solutions/developer-experience/ops-assistant-model-reply-formatting.md)。
+
+2026-10-14：能力介绍限制为三类短概览；统一侧栏“允许修改（测试）/取消”，柜面填写后收起弹窗，路由/工单整组方案复用侧栏确认。保留页面人工入口及鼠标、高亮、逐字动画；132项回归通过，真实模型浏览器验证能力概览、20万确认独立读回、25万取消不写、余额路由侧栏确认验收。
