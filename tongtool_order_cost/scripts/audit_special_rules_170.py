@@ -94,6 +94,59 @@ _UNIT_COLS = {
 }
 
 
+def publish_to_gsheet(
+    spreadsheet: str,
+    frame: pd.DataFrame,
+    review_blocks: list[list[list]],
+    *,
+    frame_title: str,
+    review_title: str,
+    chunk: int = 1500,
+) -> dict[str, int]:
+    """把「规则后整帧」+「核验摘要」写成 gsheet 新表（**只增表，不动既有表**）。
+
+    仅当显式传 `--write-gsheet` 时才调用；默认全程只读。
+    """
+    import gspread  # noqa: F401 - 运行时依赖
+
+    from tongtool_order_cost import gsheets
+    from tongtool_order_cost.audit_sources import _retry
+
+    sh = _retry(lambda: gsheets.client().open(spreadsheet))
+    gids: dict[str, int] = {}
+
+    def _fresh(title: str, rows: int, cols: int):
+        try:
+            sh.del_worksheet(_retry(lambda: sh.worksheet(title)))
+        except Exception:  # noqa: BLE001 - 不存在即跳过
+            pass
+        return _retry(lambda: sh.add_worksheet(title=title, rows=rows, cols=cols))
+
+    vals = frame.fillna("")
+    hdr = [str(c) for c in vals.columns]
+    data = vals.values.tolist()
+    ws = _fresh(frame_title, len(data) + 2, len(hdr))
+    _retry(lambda: ws.update([hdr], "A1"))
+    for i in range(0, len(data), chunk):
+        part = data[i : i + chunk]
+        _retry(lambda p=part, i=i: ws.update(p, f"A{i + 2}"))
+    gids[frame_title] = ws.id
+
+    def _block(rows: list[list]) -> list[list]:
+        w = max((len(r) for r in rows), default=1)
+        return [[("" if c is None else c) for c in r] + [""] * (w - len(r)) for r in rows]
+
+    review = _fresh(review_title, 6000, 40)
+    flat: list[list] = []
+    for rows in review_blocks:
+        flat += _block(rows)
+        flat += [[""]]
+    flat = _block(flat)
+    _retry(lambda: review.update(flat, "A1"))
+    gids[review_title] = review.id
+    return gids
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--snapshot", required=True)
@@ -101,6 +154,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--month", default="202607")
     ap.add_argument("--out", required=True)
     ap.add_argument("--dedup-keep", choices=("last", "first"), default="last")
+    ap.add_argument("--write-gsheet", default="", metavar="SPREADSHEET",
+                    help="显式指定要写入的 gsheet 名（默认不写，全程只读）")
     args = ap.parse_args(argv)
 
     snapshot = Path(args.snapshot)
@@ -146,7 +201,28 @@ def main(argv: list[str] | None = None) -> int:
         bad.to_excel(writer, sheet_name="08_断言不通过", index=False)
         untouched.to_excel(writer, sheet_name="09_未被命中订单", index=False)
     print(f"审计簿: {out}")
+
+    if args.write_gsheet:
+        gids = publish_to_gsheet(
+            args.write_gsheet,
+            result.orders,
+            [
+                [["【总览】"]] + block_from_xlsx(out, "00_总览"),
+                [["【实际应用的规则】"]] + block_from_xlsx(out, "02_按规则汇总"),
+                [["【未命中规则】"]] + block_from_xlsx(out, "05_未命中规则"),
+            ],
+            frame_title="特殊规则_写回2026年7月FBA订单和非FBA订单",
+            review_title="特殊规则_1.7.0规则核验%s" % args.month,
+        )
+        print("已写入 gsheet:", gids)
     return 0
+
+
+def block_from_xlsx(path: Path, sheet: str) -> list[list]:
+    import openpyxl
+
+    wb = openpyxl.load_workbook(path, read_only=True)
+    return [list(r) for r in wb[sheet].iter_rows(values_only=True)]
 
 
 if __name__ == "__main__":

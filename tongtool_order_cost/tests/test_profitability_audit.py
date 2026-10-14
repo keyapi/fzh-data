@@ -528,3 +528,54 @@ def test_channel_cost_defs_document_known_ustx_gap():
     assert "美国分公司_USNJ" in P.CHANNEL_COST_DEFS
     assert "美国分公司_USTX" not in P.CHANNEL_COST_DEFS      # cell_222 缺口
     assert any("USTX" in s for s in P.CHANNEL_KNOWN_ISSUES)
+
+
+# --------------------------- 1.7.0 规则核验：算术断言 ---------------------------
+
+def _sr_script():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "audit_special_rules_170", _ROOT / "scripts" / "audit_special_rules_170.py"
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_special_rule_assertions_pass_and_fail():
+    import pandas as pd
+
+    m = _sr_script()
+    events = pd.DataFrame([
+        # coeff：after = before × 系数
+        {"mode": "coeff", "before": 100.0, "after": 75.0, "发货数量": 2, "fx": 6.8,
+         "ref_usd": None, "coeff_val": 0.75, "column": "皮壳成本", "ref_col": ""},
+        # coeff 对不上 → 应标 0
+        {"mode": "coeff", "before": 100.0, "after": 90.0, "发货数量": 2, "fx": 6.8,
+         "ref_usd": None, "coeff_val": 0.75, "column": "皮壳成本", "ref_col": ""},
+        # ref 单件：after = ref × fx
+        {"mode": "ref", "before": 0.0, "after": 13.6, "发货数量": 3, "fx": 6.8,
+         "ref_usd": 2.0, "coeff_val": None, "column": "二次加工成本", "ref_col": "x"},
+        # ref 数量列：after = ref × fx × 数量
+        {"mode": "ref", "before": 0.0, "after": 40.8, "发货数量": 3, "fx": 6.8,
+         "ref_usd": 2.0, "coeff_val": None, "column": "二次加工成本*数量", "ref_col": "x"},
+        # 尾程参考 → 按设计跳过
+        {"mode": "ref", "before": 5.0, "after": 1.5, "发货数量": 1, "fx": 6.8,
+         "ref_usd": -3.0, "coeff_val": None, "column": "运费", "ref_col": "发货数量1订单尾程运费"},
+    ])
+    out = m.assert_events(events)
+    assert list(out["ok"]) == ["1", "0", "1", "1", ""]
+    assert "尾程参考" in out.iloc[4]["why"]
+
+
+def test_publish_requires_explicit_flag(tmp_path):
+    m = _sr_script()
+    parser = m.main.__doc__  # noqa: F841 - 仅确保模块可导入
+    import inspect
+
+    sig = inspect.signature(m.main)
+    assert "argv" in sig.parameters
+    # 默认（不传 --write-gsheet）必须不写 gsheet
+    src = (_ROOT / "scripts" / "audit_special_rules_170.py").read_text(encoding="utf-8")
+    assert 'default=""' in src and "--write-gsheet" in src
