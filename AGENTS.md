@@ -150,6 +150,7 @@ uv sync
 | `parcel-track` | `parcel_track/` | 通途混合订单分流 UPS/FedEx/GLS + 共享迟发/承运延误/卡件运营表（处理 3 营业日；GLS 波兰历；`--workers` 每家串行） |
 | `yiglobal-api` | `yiglobal-api/` | 蜴国际打单 API 文档（原 `蜴国际-API/`；env：`YIGLOBAL_*`） |
 | `en-image-upload` | `EN_API/` | EN/ERPNext 生产系统操作总目录（图片上传、物料组/BOM 维护、出货计划与报关、服务器与凭证入口） |
+| `supply-chain-visibility` | `supply_chain_visibility/` | EN 供应链可视化：全链路实体地图 + 呈现形式调研 + SO 表单内嵌摘要 / 原生报表（`key_test` 产物） |
 | `nas-itemgroup-folders` | `nas_itemgroup_folders/` | NAS-ERPNext 物料组文件夹对账 + 叶子组 (LGKS) 管理 |
 | `nas-access` | `NAS_API/` | 群晖多域名访问、QC 选路、OpenWrt ACME+反代、DSM 第二张证 |
 | `dingtalk-oa-approval` | `dingtalk/dingtalk_oa_approval/` | 钉钉 OA 销售收款确认单：API 附件 + aflow 浏览器导出 + 账期月过滤 + NAS 归档（不改本地同步） |

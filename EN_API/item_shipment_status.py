@@ -70,8 +70,8 @@ DUP_WINDOW_DAYS = 3       # 疑似重复下单: 交货日相差天数上限
 
 SO_FIELDS = ["name", "status", "docstatus", "customer", "customer_name", "company",
              "delivery_date", "transaction_date", "per_delivered", "amended_from"]
-WO_FIELDS = ["name", "status", "docstatus", "sales_order", "production_item", "qty",
-             "produced_qty", "planned_start_date", "planned_end_date", "company", "bom_no"]
+WO_FIELDS = ["name", "status", "docstatus", "sales_order", "sales_order_item", "production_item",
+             "qty", "produced_qty", "planned_start_date", "planned_end_date", "company", "bom_no"]
 JC_FIELDS = ["name", "work_order", "operation", "status", "for_quantity",
              "total_completed_qty", "actual_start_date", "actual_end_date", "docstatus"]
 
@@ -641,13 +641,26 @@ def jc_completed_qty(j) -> float:
     return completed if completed > 0 else num(j.get("for_quantity"))
 
 
-def wos_for_line(wos, so, item_code):
-    """工单挂到「本 SO × 本物料」这一行, 不把同单其它物料的 WO 摊过来。"""
+def wos_for_line(wos, so, item_code, line_id=None):
+    """工单挂到「本 SO × 本物料」这一行。
+
+    **优先用行级外键 `Work Order.sales_order_item == Sales Order Item.name`** ——
+    生产实测：同一 SO 内同一 item_code 可有多达 40 行（674 组），只按
+    `(sales_order, production_item)` 配对会让 1464 张工单重复挂、并漏掉头字段为空的 139 张。
+    `sales_order_item` 为空的老工单，退回 `(sales_order, production_item)` 口径。
+    """
     so, item_code = so or "", item_code or ""
-    return [w for w in wos
-            if is_active_doc(w)
-            and (w.get("sales_order") or "") == so
-            and (w.get("production_item") or "") == item_code]
+    out = []
+    for w in wos:
+        if not is_active_doc(w):
+            continue
+        soi = w.get("sales_order_item") or ""
+        if soi:
+            if line_id and soi == line_id:
+                out.append(w)
+        elif (w.get("sales_order") or "") == so and (w.get("production_item") or "") == item_code:
+            out.append(w)
+    return out
 
 
 def op_progress(wo, jcs):
@@ -702,6 +715,36 @@ def progress_text(wos, jc_map) -> str:
         else:
             parts.append(f"{wo['name']} {len(p['done_ops'])}/{p['total_ops']}工序完({fmt_qty(p['done_qty'])}件)")
     return " | ".join(parts)
+
+
+def enrich_so_rows(so_rows, dn_rows, pp_rows, wos, jc_map, master_text):
+    """给订单行补 出库 / 工单 / 生产计划 / 进度。
+
+    build_context 与 fulfillment 包共用（单一事实源，避免两边口径分叉）。
+
+    退货净额：`shipped_dn` 汇总 docstatus=1 的 DN 行**带符号 qty** —— 退货型 DN 行
+    qty 为负且仍带 `against_sales_order`，会被 `line_dns` 命中，负数自然抵扣。
+    （`delivered_qty` 是 ERP 结算值，本身已是净额，不受本函数影响。）
+    """
+    pp_by_line, pp_by_so = {}, {}
+    for p in pp_rows:
+        if p.get("so_line_id"):
+            pp_by_line.setdefault(p["so_line_id"], []).append(p)
+        if p.get("so"):
+            pp_by_so.setdefault(p["so"], []).append(p)
+
+    for r in so_rows:
+        line_dns = [d for d in dn_rows
+                    if d["so"] == r["so"] and (d["so_line_id"] == r["line_id"]
+                                               or (not d["so_line_id"] and d["item_code"] == r["item_code"]))]
+        r["dns"] = line_dns
+        r["shipped_dn"] = sum(d["qty"] for d in line_dns if d["dn_docstatus"] == 1)
+        r["draft_dn"] = sum(d["qty"] for d in line_dns if d["dn_docstatus"] == 0)
+        r["open_qty"] = r["qty"] - r["delivered_qty"]
+        r["wos"] = wos_for_line(wos, r["so"], r["item_code"], r.get("line_id"))
+        r["pps"] = pp_by_line.get(r["line_id"]) or pp_by_so.get(r["so"], [])
+        r["progress"] = progress_text(r["wos"], jc_map)
+        r["master_item"] = master_text
 
 
 # ── 组装 ──────────────────────────────────────────────
@@ -768,25 +811,7 @@ def build_context(args, base_url, key, secret):
     pp_rows = fetch_production_plans(so_names, item_codes, base_url, key, secret, args.sleep)
 
     # ── 每行补: 出库 / 工单 / 生产计划 ──
-    pp_by_line, pp_by_so = {}, {}
-    for p in pp_rows:
-        if p.get("so_line_id"):
-            pp_by_line.setdefault(p["so_line_id"], []).append(p)
-        if p.get("so"):
-            pp_by_so.setdefault(p["so"], []).append(p)
-
-    for r in so_rows:
-        line_dns = [d for d in dn_rows
-                    if d["so"] == r["so"] and (d["so_line_id"] == r["line_id"]
-                                               or (not d["so_line_id"] and d["item_code"] == r["item_code"]))]
-        r["dns"] = line_dns
-        r["shipped_dn"] = sum(d["qty"] for d in line_dns if d["dn_docstatus"] == 1 and not d["is_return"])
-        r["draft_dn"] = sum(d["qty"] for d in line_dns if d["dn_docstatus"] == 0)
-        r["open_qty"] = r["qty"] - r["delivered_qty"]
-        r["wos"] = wos_for_line(wos, r["so"], r["item_code"])
-        r["pps"] = pp_by_line.get(r["line_id"]) or pp_by_so.get(r["so"], [])
-        r["progress"] = progress_text(r["wos"], jc_map)
-        r["master_item"] = master_text
+    enrich_so_rows(so_rows, dn_rows, pp_rows, wos, jc_map, master_text)
 
     ctx = {
         "empty": False, "so_rows": so_rows, "dn_rows": dn_rows, "wos": wos, "jc_map": jc_map,
@@ -1040,14 +1065,17 @@ def build_sheets(ctx):
           ("金额", 11), ("计入已发", 9), ("匹配方式", 10)]
     rows2 = []
     for d in sorted(ctx["dn_rows"], key=lambda x: (x["dn_date"] or "", x["dn"], x["so"])):
+        if d["dn_docstatus"] != 1:
+            counted = "否"
+        else:
+            counted = "退货抵扣" if d["is_return"] else "是"
         rows2.append([d["so"], d["so_line_id"], d["dn"], d["dn_status"], d["dn_docstatus"],
                       d["dn_date"], d["customer"], d["company"], d["warehouse"], d["item_code"],
                       d["item_name"], d["customer_item_code"], d["qty"], d["uom"], d["rate"],
-                      d["amount"], "是" if d["dn_docstatus"] == 1 and not d["is_return"] else "否",
-                      d["match_by"]])
+                      d["amount"], counted, d["match_by"]])
     if rows2:
         rows2.append(["合计", "", "", "", "", "", "", "", "", "", "", "",
-                      sum(d["qty"] for d in ctx["dn_rows"] if d["dn_docstatus"] == 1 and not d["is_return"]),
+                      sum(d["qty"] for d in ctx["dn_rows"] if d["dn_docstatus"] == 1),
                       "", "", sum(d["amount"] for d in ctx["dn_rows"]), "", ""])
 
     s3 = [("WO单据号", 15), ("WO状态", 12), ("WO数量", 9), ("WO已产", 9), ("计划开工", 12),
