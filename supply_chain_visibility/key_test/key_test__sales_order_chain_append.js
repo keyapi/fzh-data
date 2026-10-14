@@ -75,10 +75,14 @@ function so_chain_render($box, data) {
         const dd = od2 > 0 ? '<span class="text-danger" title="已过交付日期 ' + od2 + ' 天">' + so_chain_esc(l.delivery_date) + ' 超' + od2 + '天</span>'
                            : so_chain_esc(l.delivery_date || '-');
         const stageColor = { 0: 'gray', 1: 'orange', 2: 'blue', 3: 'green' }[l.stage] || 'gray';
-        const nameTxt = l.item_name ? '<span class="text-muted" style="font-size:11px">: ' + so_chain_esc(l.item_name) + '</span>' : '';
+        const codeCell = '<div style="font-size:12px;line-height:1.1;max-width:150px;overflow:hidden;'
+            + 'text-overflow:ellipsis;white-space:nowrap" title="' + so_chain_esc(l.item_code) + '">'
+            + so_chain_link('Item', l.item_code, l.item_code) + '</div>'
+            + (l.item_name ? '<div class="text-muted" style="font-size:11px;line-height:1.1;max-width:150px;'
+                + 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + so_chain_esc(l.item_name) + '">'
+                + so_chain_esc(l.item_name) + '</div>' : '');
         return '<tr data-idx="' + idx + '">'
-            + '<td style="white-space:nowrap">' + so_chain_link('Item', l.item_code, l.item_code) + nameTxt + '</td>'
-            + '<td style="white-space:nowrap">' + so_chain_esc(l.customer_item_code) + '</td>'
+            + '<td style="white-space:nowrap;padding:3px 8px">' + codeCell + '</td>'
             + '<td style="text-align:right;white-space:nowrap">' + so_chain_num(l.qty) + '</td>'
             + '<td style="text-align:right;white-space:nowrap">' + so_chain_num(l.delivered) + '</td>'
             + '<td style="text-align:right;white-space:nowrap">' + so_chain_num(l.open_qty) + '</td>'
@@ -86,17 +90,20 @@ function so_chain_render($box, data) {
             + '<td style="white-space:nowrap"><span class="indicator-pill ' + stageColor + '">' + l.stage + ' ' + so_chain_esc(l.substate) + '</span></td>'
             + '<td class="so-chain-cell" style="white-space:nowrap">' + prodCell + '</td>'
             + '<td class="so-chain-cell" style="white-space:nowrap">' + dnCell + '</td>'
+            + '<td style="white-space:nowrap"><div style="max-width:150px;overflow:hidden;text-overflow:ellipsis;'
+            + 'white-space:nowrap" title="' + so_chain_esc(l.customer_item_code) + '">' + so_chain_esc(l.customer_item_code) + '</div></td>'
             + '</tr>';
     }).join('');
     const html = '<div style="overflow:auto">'
-        + '<table class="table table-bordered" style="margin:0;width:auto">'
-        + '<thead><tr><th style="white-space:nowrap">订单行物料</th><th style="white-space:nowrap">客户物料号</th>'
+        + '<table class="table table-bordered" style="margin:0;width:auto;font-size:12px">'
+        + '<thead><tr><th style="white-space:nowrap">订单行物料</th>'
         + '<th style="white-space:nowrap">订单量</th><th style="white-space:nowrap">已发</th><th style="white-space:nowrap">未发</th>'
         + '<th style="white-space:nowrap">交期</th><th style="white-space:nowrap">阶段</th>'
-        + '<th style="white-space:nowrap">生产</th><th style="white-space:nowrap">出库</th></tr></thead>'
+        + '<th style="white-space:nowrap">生产</th><th style="white-space:nowrap">出库</th>'
+        + '<th style="white-space:nowrap">客户物料号</th></tr></thead>'
         + '<tbody>' + rows + '</tbody>'
-        + '<tfoot><tr><th colspan="4" style="text-align:right">未发合计</th>'
-        + '<th style="text-align:right">' + so_chain_num(tOpenQty) + '</th><th colspan="4"></th></tr></tfoot></table>'
+        + '<tfoot><tr><th colspan="3" style="text-align:right">未发合计</th>'
+        + '<th style="text-align:right">' + so_chain_num(tOpenQty) + '</th><th colspan="5"></th></tr></tfoot></table>'
         + '<div class="text-muted" style="margin-top:4px;font-size:11px">'
         + '点「生产链条」＝展开 生产计划+工单→菲号→工序卡；点「出库」＝展开 出库单明细；同区切换。⤢ 弹窗看全图。'
         + '完成量取第一道工序(不跨工序求和)；已发按出库单净额(含退货抵扣)。</div></div>';
