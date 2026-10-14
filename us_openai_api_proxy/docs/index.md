@@ -19,6 +19,7 @@ tags: [openai, api-proxy, tailscale, vultr, chatgpt]
 | `503 auth_unavailable`、OAuth 刷新或模型授权验收 | [operations.md](operations.md) |
 | 已解决的授权恢复故障 | [仓库解决方案](../../docs/solutions/integration-issues/cliproxyapi-auth-unavailable-oauth-recovery.md) |
 | **出口走哪条线 / 应急链路 / 定界方法** | [仓库：办公室出口拓扑与应急链路](../../docs/solutions/architecture-patterns/office-egress-fallback-chain.md) |
+| 应急线路「活着但没接线」（覆写脚本写死组名） | [仓库：覆写脚本写死策略组名致应急出口悬空](../../docs/solutions/integration-issues/openclash-overwrite-stale-group-name-orphaned-egress.md) |
 | Tailscale 直连/中继、2026 新能力 | [仓库：Tailscale 中继与直连](../../docs/solutions/tooling-decisions/tailscale-relay-vs-public-https-china.md)、[新能力盘点](../../docs/solutions/tooling-decisions/tailscale-2026-capabilities.md) |
 | 查阅工具、术语、链接 | [reference/tools-index.md](reference/tools-index.md) |
 | 查阅经验教训 | [lessons/lessons-learned.md](lessons/lessons-learned.md) |

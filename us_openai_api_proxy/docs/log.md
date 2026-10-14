@@ -9,6 +9,14 @@ tags: [openai, api-proxy, changelog]
 
 > 此日志只记录可公开复用的结论。服务器、账号、授权材料、私有地址、订阅与访问凭据均不入库。
 
+## 2026-10-14
+
+- **修复（出口接线）**：办公室 OpenClash 的**自建应急出口长期「活着但没接线」**。现象：策略组 `Emergency`（节点 `SH-Tailscale-US`，socks5 → 上海跳板 `ssh -D` SOCKS → 美国 Vultr）在运行配置里**入向引用为零** —— 无规则指向、无其它组收编；而链路本身实测是活的（出口 `149.28.67.226`、Tailscale 为 direct）。
+- **根因**：自定义覆写脚本 `openclash_custom_overwrite.sh` 的 `inject_emergency()` 里**写死了上一代订阅（SSRDog）的策略组名 `Auto`**，现役订阅叫 `自动选择` ⇒ `Array#find` 返回 `nil`、整段静默跳过。**即 Lesson 9（组名不是稳定接口）在现役订阅下的一次真实翻车**；修法即 Lesson 11（走幂等覆写路径）。
+- **处置**：在 `add_country_groups()` 的 `ai_members` 字面量末尾追加 `'Emergency'`（**改脚本不改 live config**），先备份 `*.bak-*`；验证顺序 = 副本干跑 → 重载后从内核 REST API 读回组员表 → 端到端切过去看出口 IP。**刻意不放进 url-test 自动组**（会把全办公室流量挤上窄带跨境隧道，并重现「被持续占用、忘了切回」的历史事故）；`故障转移`(fallback) 组当前成员开头是订阅商 info 伪节点，处于空转，未动。
+- **效果**：`AI 出口` 现在多了一个**人工兜底**选项 `Emergency`；AI 线路全挂时可手动切过去（实测出口 = 美国 Vultr，OpenAI 可达）。
+- **留档**：`docs/solutions/integration-issues/openclash-overwrite-stale-group-name-orphaned-egress.md`（事故正文 + 检测手段）；出口拓扑同步更新于 `docs/solutions/architecture-patterns/office-egress-fallback-chain.md`。
+
 ## 2026-09-20
 
 - **修复（链接）**：`office-lan-access.md` 指向 `NAS_API/docs/reference/nas-multi-domain-access.md` 的链接多退一级（`../../../` → `../../`）。
