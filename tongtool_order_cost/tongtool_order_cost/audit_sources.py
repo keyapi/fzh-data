@@ -87,10 +87,16 @@ class WorksheetMeta:
 
 
 class SheetReader(Protocol):
-    """只读 Sheets 访问协议。实现方**不得**提供写方法。"""
+    """只读 Sheets 访问协议。实现方**不得**提供写方法。
+
+    `render_option`: `"values"`（显示值，默认）或 `"formulas"`（A1 公式文本）。
+    成本重建要靠公式证据，必须能把同一 worksheet 分别冻结成值与公式两份。
+    """
 
     def list_worksheets(self, spreadsheet: str) -> list[WorksheetMeta]: ...
-    def read_values(self, spreadsheet: str, worksheet: str) -> list[list[str]]: ...
+    def read_values(
+        self, spreadsheet: str, worksheet: str, render_option: str = "values"
+    ) -> list[list[str]]: ...
 
 
 def _retry(operation, attempts: int = 12, base_sleep: float = 0.5):
@@ -128,9 +134,19 @@ class GspreadSheetReader:
             for ws in metas
         ]
 
-    def read_values(self, spreadsheet: str, worksheet: str) -> list[list[str]]:
+    def read_values(
+        self, spreadsheet: str, worksheet: str, render_option: str = "values"
+    ) -> list[list[str]]:
+        from gspread.utils import ValueRenderOption
+
         sh = self._open(spreadsheet)
         ws = _retry(lambda: sh.worksheet(worksheet))
+        if render_option == "formulas":
+            return _retry(
+                lambda: ws.get_all_values(
+                    value_render_option=ValueRenderOption.formula
+                )
+            )
         return _retry(lambda: ws.get_all_values())
 
     def spreadsheet_id(self, spreadsheet: str) -> str:
@@ -150,6 +166,7 @@ class SourceSpec:
     role: str = ""                  # 空=由 classify 推断
     required: bool = False
     required_columns: tuple[str, ...] = ()
+    render_option: str = "values"   # "values"（显示值）或 "formulas"（A1 公式）
 
 
 @dataclass
@@ -160,6 +177,7 @@ class SourceRecord:
     role: str
     required: bool
     status: str                     # ok / failed
+    render_option: str = "values"
     data_rows: int = 0
     value_rows: int = 0
     columns: list[str] = field(default_factory=list)
@@ -258,6 +276,7 @@ def snapshot_sources(
             role=spec.role,
             required=spec.required,
             status="failed",
+            render_option=spec.render_option,
         )
         try:
             if spec.spreadsheet not in listings:
@@ -282,7 +301,11 @@ def snapshot_sources(
                     f"现有 {len(titles)} 张: {titles}"
                 )
 
-            rows = _retry(lambda: reader.read_values(spec.spreadsheet, spec.worksheet))
+            rows = _retry(
+                lambda: reader.read_values(
+                    spec.spreadsheet, spec.worksheet, render_option=spec.render_option
+                )
+            )
             headers = [str(h) for h in (rows[0] if rows else [])]
             require_columns(headers, spec.required_columns, f"{spec.key}")
             role = spec.role or classify_worksheet(spec.worksheet, headers)

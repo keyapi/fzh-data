@@ -114,6 +114,37 @@ def _extra_specs(raw_specs: list[str]) -> list[SourceSpec]:
     return out
 
 
+def ustx_cost_specs(spreadsheet: str) -> list[SourceSpec]:
+    """美中 USTX 三方案对比所需成本源（plan Task 2）。
+
+    同一 worksheet 分别冻结「显示值」与「公式」：B1/B2 重建要靠公式证据，
+    公式等价校验要靠显示值。列名合同由 `ustx_cost_compare.validate_formula_contract`
+    在 Task 4 校验，此处只做源级 required 约束。
+    """
+    return [
+        SourceSpec("sx_processing_values", spreadsheet, "绍兴二次加工成本", required=True),
+        SourceSpec(
+            "sx_processing_formulas",
+            spreadsheet,
+            "绍兴二次加工成本",
+            required=True,
+            render_option="formulas",
+        ),
+        SourceSpec("ustx_estimate_values", spreadsheet, "测算 美中USTX二次加工成本", required=True),
+        SourceSpec(
+            "ustx_estimate_formulas",
+            spreadsheet,
+            "测算 美中USTX二次加工成本",
+            required=True,
+            render_option="formulas",
+        ),
+        # 美东测算仅作结构旁证，缺失不阻断
+        SourceSpec("usnj_estimate_values", spreadsheet, "测算 美东USNJ二次加工成本"),
+        SourceSpec("shell_cost_import_values", spreadsheet, "import皮壳成本", required=True),
+        SourceSpec("bom_cost_import_values", spreadsheet, "importBOMCostList", required=True),
+    ]
+
+
 def cmd_list(args) -> int:
     reader = _reader()
     spreadsheet = args.spreadsheet or _derive_names(args.month)[0]
@@ -149,6 +180,7 @@ def cmd_snapshot(args) -> int:
             SourceSpec("warehouse_cost_source", fin, "订单发货仓库对应成本来源"),
             SourceSpec("fx", fin, "汇率"),
         ]
+        specs += ustx_cost_specs(args.cost_spreadsheet)
     specs += _extra_specs(args.extra)
 
     out_dir = Path(args.out) if args.out else (
@@ -319,6 +351,81 @@ def cmd_analyze(args) -> int:
     return 0
 
 
+def cmd_ustx_compare(args) -> int:
+    """从已冻结快照离线做美中 USTX 三方案对比（不联网、不写任何外部系统）。"""
+    from datetime import datetime
+
+    from tongtool_order_cost import profitability_audit as P
+    from tongtool_order_cost import ustx_cost_compare as U
+
+    snap = Path(args.snapshot)
+    if not snap.exists():
+        raise SystemExit(f"快照目录不存在: {snap}（先跑 snapshot --with-finance）")
+    manifest = json.loads((snap / "manifest.json").read_text(encoding="utf-8"))
+    by_key = {s["key"]: s for s in manifest["sources"]}
+
+    def load(key: str) -> tuple[list[str], list[list[str]]]:
+        rec = by_key.get(key)
+        if not rec or rec["status"] != "ok":
+            raise SystemExit(f"快照缺必需源: {key}（重跑 snapshot --with-finance）")
+        return P.load_snapshot_csv(snap / rec["path"])
+
+    sh, sr = load("shell_cost_import_values")
+    bh, br = load("bom_cost_import_values")
+    b1h, b1r = load("ustx_estimate_values")
+    whh, whr = load("warehouse_cost_source")
+    wbh, wbr = load("writeback")
+
+    contract = U.validate_formula_contract(sh, bh, b1h)
+    ustx_wh = U.ustx_warehouses(whh, whr)
+    if not ustx_wh:
+        raise SystemExit("仓库映射表里没有 USTX分公司 行，无法判定美中范围")
+
+    order_rows = P.build_source_rows(wbh, wbr, "写回2026年7月订单", P.DEFAULT_BUSINESS_KEYS)
+    raw_rows = []
+    raw_rec = by_key.get("raw")
+    if raw_rec and raw_rec["status"] == "ok":
+        rawh, rawr = P.load_snapshot_csv(snap / raw_rec["path"])
+        raw_rows = P.build_source_rows(rawh, rawr, "2026年7月订单", P.DEFAULT_BUSINESS_KEYS)
+
+    ustx_keys = sorted({
+        r.get(U.KEY_COL) for r in order_rows
+        if r.get(U.WAREHOUSE_COL) in ustx_wh and r.get(U.KEY_COL)
+    })
+    shell_idx, shell_dups = U.build_shell_weight_index(sh, sr)
+    bom_idx = U.build_bom_index(bh, br)
+    b2 = U.build_b2_catalog(shell_idx, bom_idx, keys=ustx_keys,
+                            ambiguous_keys=[d["key"] for d in shell_dups])
+    b1 = U.build_b1_catalog(U.b1_key_values(b1h, b1r), b2, keys=ustx_keys)
+
+    result = U.compare_monthly_costs(
+        order_rows, raw_rows, ustx_warehouse_names=ustx_wh,
+        b1_catalog=b1, b2_catalog=b2, contract=contract,
+    )
+
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    out_dir = Path(args.out) if args.out else (snap.parent / f"{snap.name}_ustx_compare_{stamp}")
+    written = U.write_outputs(result, out_dir, run_id=manifest["run_id"], sources=manifest["sources"])
+
+    print(json.dumps({
+        "conclusions_blocked": result.conclusions_blocked,
+        "counts": {
+            "rows_total": len(result.rows),
+            "rows_ustx": len(result.ustx_rows),
+            "b1_measured": sum(1 for r in result.ustx_rows if r["b1_source"] == U.SRC_MEASURED),
+            "b1_formula_filled": sum(1 for r in result.ustx_rows if r["b1_source"] == U.SRC_FORMULA_FILLED),
+            "b1_unmatched": sum(1 for r in result.ustx_rows if r["b1_source"] == U.SRC_UNMATCHED),
+            "b2_import": sum(1 for r in result.ustx_rows if r["b2_source"] == U.SRC_IMPORT),
+            "b2_unmatched": sum(1 for r in result.ustx_rows if r["b2_source"] == U.SRC_UNMATCHED),
+        },
+        "component_waterfall": result.component_waterfall,
+        "gates": result.gates,
+        "blocked_reasons": result.blocked_reasons,
+        "out": written,
+    }, ensure_ascii=False, indent=2))
+    return 1 if result.conclusions_blocked else 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="月度通途订单盈利审计（只读）")
     sub = p.add_subparsers(dest="command", required=True)
@@ -335,6 +442,7 @@ def build_parser() -> argparse.ArgumentParser:
     ps.add_argument("--with-finance", action="store_true", help="同时冻结和财务部共享的规则/仓库映射/汇率")
     ps.add_argument("--finance-spreadsheet", default="和财务部共享")
     ps.add_argument("--rule-worksheet", default="Jeck特殊规则-订单改销售额成本")
+    ps.add_argument("--cost-spreadsheet", default="二次加工成本2022", help="二次加工成本源所在 workbook")
     ps.add_argument("--extra", action="append", default=[], help="额外源 KEY=SPREADSHEET::WORKSHEET")
     ps.set_defaults(func=cmd_snapshot)
 
@@ -342,6 +450,11 @@ def build_parser() -> argparse.ArgumentParser:
     pa.add_argument("--snapshot", required=True, help="snapshot 产出的目录")
     pa.add_argument("--out-root", default=str(MODULE_ROOT / "out" / "profitability_audit"))
     pa.set_defaults(func=cmd_analyze)
+
+    pu = sub.add_parser("ustx-compare", help="美中 USTX 三方案成本对比（从已冻结快照离线，不联网）")
+    pu.add_argument("--snapshot", required=True, help="snapshot 产出的目录（需 --with-finance）")
+    pu.add_argument("--out", default="", help="输出目录；默认在快照同级带时间戳")
+    pu.set_defaults(func=cmd_ustx_compare)
     return p
 
 

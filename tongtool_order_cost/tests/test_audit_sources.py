@@ -15,8 +15,9 @@ from tongtool_order_cost import audit_sources as A  # noqa: E402
 class FakeSheetReader:
     """只读协议实现 + 一个「被调用就会炸」的写方法（证明快照从不写）。"""
 
-    def __init__(self, books, fail_reads=()):
+    def __init__(self, books, fail_reads=(), formula_books=None):
         self.books = books
+        self.formula_books = formula_books or {}
         self.fail_reads = set(fail_reads)
         self.read_calls = []
         self.write_calls = []
@@ -32,10 +33,14 @@ class FakeSheetReader:
             for title, values in book.items()
         ]
 
-    def read_values(self, spreadsheet, worksheet):
-        self.read_calls.append((spreadsheet, worksheet))
+    def read_values(self, spreadsheet, worksheet, render_option="values"):
+        self.read_calls.append((spreadsheet, worksheet, render_option))
         if f"{spreadsheet}::{worksheet}" in self.fail_reads:
             raise RuntimeError("simulated read failure")
+        if render_option == "formulas":
+            book = self.formula_books.get(spreadsheet, {})
+            if worksheet in book:
+                return book[worksheet]
         return self.books[spreadsheet][worksheet]
 
     # 禁止调用的写方法
@@ -170,6 +175,79 @@ def test_snapshot_never_invokes_write_method(tmp_path):
     assert reader.write_calls == []
 
 
+def test_snapshot_freezes_values_and_formulas_separately(tmp_path):
+    book = {"二次加工成本2022": {"绍兴二次加工成本": [["键", "成本"], ["K1", "10"]]}}
+    formula_books = {
+        "二次加工成本2022": {"绍兴二次加工成本": [["键", "成本"], ["K1", "=1+9"]]}
+    }
+    reader = FakeSheetReader(book, formula_books=formula_books)
+    specs = [
+        A.SourceSpec(
+            "sx_values", "二次加工成本2022", "绍兴二次加工成本", render_option="values"
+        ),
+        A.SourceSpec(
+            "sx_formulas", "二次加工成本2022", "绍兴二次加工成本", render_option="formulas"
+        ),
+    ]
+    manifest = A.snapshot_sources(reader, specs, tmp_path)
+
+    v = manifest.find("sx_values")
+    f = manifest.find("sx_formulas")
+    assert v.status == "ok" and f.status == "ok"
+    assert v.render_option == "values" and f.render_option == "formulas"
+    assert v.sha256 != f.sha256
+    assert v.path != f.path
+    assert "=1+9" in (tmp_path / f.path).read_text(encoding="utf-8-sig")
+    assert "=1+9" not in (tmp_path / v.path).read_text(encoding="utf-8-sig")
+
+
+def test_required_formula_source_failure_keeps_neighbors(tmp_path):
+    book = {
+        "二次加工成本2022": {
+            "绍兴二次加工成本": [["键", "成本"], ["K1", "10"]],
+            "import皮壳成本": [["键", "皮壳成本"], ["K1", "3"]],
+        }
+    }
+    reader = FakeSheetReader(book, fail_reads={"二次加工成本2022::绍兴二次加工成本"})
+    specs = [
+        A.SourceSpec(
+            "sx_processing_formulas",
+            "二次加工成本2022",
+            "绍兴二次加工成本",
+            required=True,
+            render_option="formulas",
+        ),
+        A.SourceSpec("shell_cost_import_values", "二次加工成本2022", "import皮壳成本"),
+    ]
+    manifest = A.snapshot_sources(reader, specs, tmp_path)
+
+    rec = manifest.find("sx_processing_formulas")
+    assert rec.status == "failed"
+    assert rec.render_option == "formulas"
+    assert "simulated read failure" in rec.error
+    assert manifest.find("shell_cost_import_values").status == "ok"
+
+    import pytest
+
+    with pytest.raises(RuntimeError):
+        A.require_successful(manifest)
+
+
+def test_snapshot_with_render_options_never_writes(tmp_path):
+    book = {"二次加工成本2022": {"绍兴二次加工成本": [["键", "成本"], ["K1", "10"]]}}
+    formula_books = {
+        "二次加工成本2022": {"绍兴二次加工成本": [["键", "成本"], ["K1", "=1+9"]]}
+    }
+    reader = FakeSheetReader(book, formula_books=formula_books)
+    specs = [
+        A.SourceSpec("v", "二次加工成本2022", "绍兴二次加工成本", render_option="values"),
+        A.SourceSpec("f", "二次加工成本2022", "绍兴二次加工成本", render_option="formulas"),
+    ]
+    A.snapshot_sources(reader, specs, tmp_path)
+    assert reader.write_calls == []
+    assert ("二次加工成本2022", "绍兴二次加工成本", "formulas") in reader.read_calls
+
+
 def test_require_single_choice_blocks_ambiguous_candidates():
     assert A.require_single_choice(["a"], role="fx") == "a"
     assert A.require_single_choice([], role="fx") is None
@@ -270,6 +348,37 @@ def test_cli_extra_specs_parsing():
 
     with pytest.raises(ValueError):
         m._extra_specs(["badformat"])
+
+
+def test_cli_ustx_cost_specs_render_options_and_required():
+    m = _cli()
+    specs = m.ustx_cost_specs("二次加工成本2022")
+    by_key = {s.key: s for s in specs}
+
+    assert by_key["sx_processing_values"].render_option == "values"
+    assert by_key["sx_processing_formulas"].render_option == "formulas"
+    assert by_key["ustx_estimate_values"].render_option == "values"
+    assert by_key["ustx_estimate_formulas"].render_option == "formulas"
+    assert by_key["usnj_estimate_values"].render_option == "values"
+
+    # 同表分别冻结值/公式，但 key 与读模式必须不同
+    assert (
+        by_key["sx_processing_values"].worksheet
+        == by_key["sx_processing_formulas"].worksheet
+        == "绍兴二次加工成本"
+    )
+
+    required_keys = {s.key for s in specs if s.required}
+    assert required_keys == {
+        "sx_processing_values",
+        "sx_processing_formulas",
+        "ustx_estimate_values",
+        "ustx_estimate_formulas",
+        "shell_cost_import_values",
+        "bom_cost_import_values",
+    }
+    assert by_key["usnj_estimate_values"].required is False
+    assert all(s.spreadsheet == "二次加工成本2022" for s in specs)
 
 
 def test_resilient_fetch_isolates_failure_and_keeps_neighbors():
