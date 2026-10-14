@@ -394,16 +394,24 @@ function so_chain_dn_html(line) {
     const dns = line.dns || [];
     if (!dns.length) return '<div class="text-muted">无销售出库</div>';
     let h = '<table class="table table-bordered" style="margin:0;font-size:12px">'
-        + '<thead><tr><th>出库单</th><th>日期</th><th>状态</th><th>数量</th><th>类型</th></tr></thead><tbody>';
+        + '<thead><tr><th>出库单</th><th>日期</th><th>状态</th><th>行数</th><th>数量</th><th>类型</th></tr></thead><tbody>';
     dns.forEach(function (d) {
         const ship = (d.docstatus === 1) && !d.is_return;
+        const lines = d.lines || [];
         const qtyTxt = (d.is_return ? '<span class="text-danger">' + so_chain_num(d.qty) + '</span>' : so_chain_num(d.qty));
         h += '<tr>'
            + '<td>' + so_chain_link('Delivery Note', d.dn, d.dn) + '</td>'
            + '<td>' + so_chain_esc(d.date) + '</td>'
            + '<td>' + so_chain_t(d.status) + (d.docstatus === 0 ? ' <span class="text-muted">(草稿)</span>' : '') + '</td>'
+           + '<td style="text-align:right">' + lines.length + '</td>'
            + '<td style="text-align:right">' + qtyTxt + '</td>'
            + '<td>' + (d.is_return ? '退货(抵扣)' : (ship ? '出库' : '—')) + '</td></tr>';
+        if (lines.length > 1) {
+            const breakdown = lines.map(function (x) { return so_chain_num(x.qty); }).join(' + ');
+            h += '<tr><td colspan="6" style="border-top:none;padding:1px 8px 5px">'
+               + '<span class="text-muted" style="font-size:11px">该出库单 ' + lines.length + ' 行：'
+               + breakdown + ' = ' + so_chain_num(d.qty) + '</span></td></tr>';
+        }
     });
     return h + '</tbody></table>';
 }

@@ -235,20 +235,29 @@ def get_so_chain(sales_order):
             else:
                 reported, report_note = None, ""
 
-        # 销售出库（可能一对多：一条订单行拆多张 DN / 含退货）
-        dns = frappe.db.sql(
+        # 销售出库（可能一对多：一条订单行拆多张 DN / 含退货）—— 按**出库单**归组：
+        # 一张 DN 可含多行(同物料也会拆多行)，所以「N单」必须数 DN 张数，不能数明细行数。
+        dn_rows = frappe.db.sql(
             """select dn.name as dn, dn.posting_date as date, dn.status as status,
                       dn.docstatus as docstatus, ifnull(dn.is_return, 0) as is_return,
-                      dni.qty as qty, dni.so_detail as so_detail
+                      dni.item_code as item_code, dni.qty as qty, dni.so_detail as so_detail
                from `tabDelivery Note Item` dni
                join `tabDelivery Note` dn on dn.name = dni.parent
                where dni.against_sales_order = %(so)s
                  and (dni.so_detail = %(line)s
                       or (ifnull(dni.so_detail, '') = '' and dni.item_code = %(item)s))
                  and dn.docstatus in (0, 1)
-               order by dn.posting_date, dn.name""",
+               order by dn.posting_date, dn.name, dni.idx""",
             {"so": doc.name, "line": it.name, "item": it.item_code}, as_dict=True)
-        shipped = sum(_num(d.qty) for d in dns if d.docstatus == 1)
+        _dn_map = {}
+        for d in dn_rows:
+            e = _dn_map.setdefault(d.dn, {"dn": d.dn, "date": str(d.date or "")[:10],
+                                          "status": d.status, "docstatus": d.docstatus,
+                                          "is_return": d.is_return, "qty": 0.0, "lines": []})
+            e["qty"] += _num(d.qty)
+            e["lines"].append({"qty": _num(d.qty), "item_code": d.item_code})
+        dns = list(_dn_map.values())
+        shipped = sum(_num(d["qty"]) for d in dns if d["docstatus"] == 1)
 
         # 阶段 0–3
         if doc.docstatus == 2 and doc.amended_from:
@@ -280,9 +289,7 @@ def get_so_chain(sales_order):
             "plans": _plans_out,
             "wo_count": len(wos), "tn_count": line_tn,
             "forgot_complete": forgot,
-            "dns": [{"dn": d.dn, "date": str(d.date or "")[:10], "qty": _num(d.qty),
-                     "status": d.status, "docstatus": d.docstatus,
-                     "is_return": d.is_return} for d in dns],
+            "dns": dns,
             "prog": ({"min": min(p[0] for p in prog_vals), "max": max(p[0] for p in prog_vals),
                       "total": max(p[1] for p in prog_vals)} if prog_vals else None),
             "delivery_date": str(it.delivery_date or "")[:10],
