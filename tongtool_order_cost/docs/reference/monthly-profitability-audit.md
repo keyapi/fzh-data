@@ -181,6 +181,7 @@ uv run python tongtool_order_cost/scripts/audit_monthly_profitability.py \
   **敏感度**：若勾选「按皮壳重量」口径（`测算 按皮壳重量 美国分公司USTX头程运费核算`），
   头程将再变 **−16,517**（7 月，￥加权）——这是唯一的头程口径分歧点。
 - **工资待调**：EN 美中USTX包装工站工资拟 167.8→105（尚未调整），B2 二次加工成本可能**偏高**。
+- **字面 0**：`美中加工成本, USTX` 在源表里有 335 行（美中行）是**字面 0**（非空串；767 行全局 0/空，其中 393 行连 `美中包装成品, USTX 编号` 都没有）——按原值 0 计入，**不猜测回退**。
 
 **闸门**（`09_闸门`）：`writeback_row_conservation`、`non_ustx_zero_delta`、
 `b1_source_conservation`、`b2_lineage_complete`、`component_identity`、

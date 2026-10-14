@@ -860,6 +860,15 @@ def compare_monthly_costs(
         )
     else:
         result.notes.append("头程运费未接入 EN BOM 成本列表 → A/B1/B2 均沿用订单现值（Δ=0）。")
+
+    zero_proc = sum(
+        1 for r in result.ustx_rows
+        if r["b2_source"] == SRC_IMPORT and not (r["B2_proc"] or 0.0)
+    )
+    if zero_proc:
+        result.notes.append(
+            f"B2 有 {zero_proc} 行「美中加工成本, USTX」源值=0（表内**字面 0**，非空串）——按原值 0 计入、不猜测回退。"
+        )
     result.notes.append("B1 与 B2 非同源：B1=人工测算表，B2=EN/import 重建，差异本身即结论。")
     result.notes.append("B2 二次加工成本取自 EN 美中USTX包装 BOM；工资 167.8→105 尚未调整，值可能偏高。")
     return result
