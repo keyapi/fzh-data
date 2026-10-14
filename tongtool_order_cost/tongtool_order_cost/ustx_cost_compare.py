@@ -809,12 +809,12 @@ def compare_monthly_costs(
     gates.append(_gate("non_ustx_zero_delta", not non_ustx_bad,
                        f"非 USTX 行有差异 {len(non_ustx_bad)} 行"))
     counts = b1_catalog.source_counts
-    # 口径闭合按「键级目录」核对：measured + formula_filled + unmatched == 目录键总数
+    # 目录必须**闭合覆盖**所有美中键：rows(measured+formula_filled) + unmatched == 键数
     gates.append(_gate(
         "b1_source_conservation",
-        counts.get(SRC_MEASURED, 0) + counts.get(SRC_FORMULA_FILLED, 0) + counts.get("unmatched", 0)
-        == len(b1_catalog.rows) + len(b1_catalog.unmatched),
-        f"B1 measured={counts.get(SRC_MEASURED,0)} formula_filled={counts.get(SRC_FORMULA_FILLED,0)} unmatched={counts.get('unmatched',0)}",
+        len(b1_catalog.rows) + len(b1_catalog.unmatched) == len(ustx_keys),
+        f"B1 目录 {len(b1_catalog.rows)}+{len(b1_catalog.unmatched)} 键 vs 美中 {len(ustx_keys)} 键"
+        f"（measured={counts.get(SRC_MEASURED,0)} formula_filled={counts.get(SRC_FORMULA_FILLED,0)}）",
     ))
     b2_missing_lineage = [r for r in result.ustx_rows
                           if r["b2_source"] == SRC_IMPORT and not r["b2_lineage"]]
@@ -831,8 +831,10 @@ def compare_monthly_costs(
                        f"{len(b2_catalog.duplicate_keys)} 个（对应行已排除，不猜值）",
                        blocking=False))
     gates.append(_gate("raw_coverage_conservation",
-                       (len(raw_set - wb_set) + len(wb_set - raw_set) + len(raw_set & wb_set)) >= len(raw_set),
-                       "raw/writeback 差异已分类"))
+                       len(raw_set - wb_set) + len(wb_set - raw_set) + len(raw_set & wb_set)
+                       == len(raw_set | wb_set),
+                       f"raw {len(raw_keys)} / writeback {len(wb_keys)}："
+                       f"raw_only={len(raw_set - wb_set)} wb_only={len(wb_set - raw_set)} both={len(raw_set & wb_set)}"))
     if head_index is not None:
         gates.append(_gate("b2_head_freight_coverage",
                            head_miss == 0,

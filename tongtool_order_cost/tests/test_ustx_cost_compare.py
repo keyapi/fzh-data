@@ -216,8 +216,9 @@ def test_compare_non_ustx_rows_copy_a_exactly():
     shell = shell_rows(("K1", "WT1", "1", "2", "3"))
     bom = bom_rows(("WT1", "皮壳", "10", "4", "6", "7"))
     b1h, b1r = b1_rows(("K1", "99"))
-    b2 = _b2(shell, bom, ["K1"])
-    b1 = U.build_b1_catalog(U.b1_key_values(b1h, b1r), b2, keys=["K1"])
+    # 该用例无美中行 → 目录按空键集建（否则 b1_source_conservation 会（正确地）报不闭合）
+    b2 = _b2(shell, bom, [])
+    b1 = U.build_b1_catalog({}, b2, keys=[])
     rows = [order_row("K1", warehouse="美东-CENTRADE", pk="10", head="3", proc="20", sx2="0")]
     raw = []
     res = U.compare_monthly_costs(rows, raw, ustx_warehouse_names={"FZH-DANEEY"},
@@ -319,3 +320,39 @@ def test_compare_b2_head_freight_from_en_bom_by_shipping_method():
     assert r["B1_head"] == 8.5           # B1 不改头程
     assert abs(r["d2_head"] - (19.55 - 8.5)) < 0.001
     assert r["head_src"]
+
+
+# ── 闸门得真会失败（不能写成恒真） ──
+
+
+def test_gate_b1_source_conservation_catches_uncovered_key():
+    shell = shell_rows(("K1", "WT1", "1", "2", "3"), ("K2", "WT2", "1", "2", "3"))
+    bom = bom_rows(("WT1", "皮壳", "10", "4", "6", "7"), ("WT2", "皮壳", "10", "4", "6", "8"))
+    b2 = _b2(shell, bom, ["K1", "K2"])
+    b1h, b1r = b1_rows(("K1", "99"))
+    b1 = U.build_b1_catalog(U.b1_key_values(b1h, b1r), b2, keys=["K1", "K2"])
+    b1.rows.pop("K2")          # 人为破坏：目录漏掉 K2
+    rows = [order_row("K1"), order_row("K2")]
+    res = U.compare_monthly_costs(rows, [], ustx_warehouse_names={"FZH-DANEEY"},
+                                  b1_catalog=b1, b2_catalog=b2, contract=_contract(shell, bom, (b1h, b1r)))
+    gate = next(g for g in res.gates if g["gate"] == "b1_source_conservation")
+    assert gate["status"] == "fail" and gate["blocking"] is True
+    assert res.conclusions_blocked is True
+
+
+def test_gate_raw_coverage_conservation_is_partition_check():
+    shell = shell_rows(("K1", "WT1", "1", "2", "3"))
+    bom = bom_rows(("WT1", "皮壳", "10", "4", "6", "7"))
+    b1h, b1r = b1_rows(("K1", "99"))
+    b2 = _b2(shell, bom, ["K1"])
+    b1 = U.build_b1_catalog(U.b1_key_values(b1h, b1r), b2, keys=["K1"])
+    rows = [order_row("K1", key=FakeKey(order_id="O1"), row_number=2)]
+    raw = [order_row("K1", key=FakeKey(order_id="O1"), row_number=2),
+           order_row("K1", key=FakeKey(order_id="O2"), row_number=3)]
+    res = U.compare_monthly_costs(rows, raw, ustx_warehouse_names={"FZH-DANEEY"},
+                                  b1_catalog=b1, b2_catalog=b2, contract=_contract(shell, bom, (b1h, b1r)))
+    gate = next(g for g in res.gates if g["gate"] == "raw_coverage_conservation")
+    assert gate["status"] == "pass"
+    buckets = {b["bucket"]: b["rows"] for b in res.raw_coverage}
+    # 三个桶恰好划分并集：raw_only + wb_only + both == |raw ∪ wb|
+    assert buckets["raw_only"] + buckets["writeback_only"] + buckets["both"] == 2

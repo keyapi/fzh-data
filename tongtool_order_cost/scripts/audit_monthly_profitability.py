@@ -388,9 +388,10 @@ def cmd_ustx_compare(args) -> int:
         rawh, rawr = P.load_snapshot_csv(snap / raw_rec["path"])
         raw_rows = P.build_source_rows(rawh, rawr, "2026年7月订单", P.DEFAULT_BUSINESS_KEYS)
 
+    # 键集必须与 compare 阶段一致（按美中行取，不过滤空键）——空键会被记为 unmatched
     ustx_keys = sorted({
         r.get(U.KEY_COL) for r in order_rows
-        if r.get(U.WAREHOUSE_COL) in ustx_wh and r.get(U.KEY_COL)
+        if r.get(U.WAREHOUSE_COL) in ustx_wh
     })
     shell_idx, shell_dups = U.build_shell_weight_index(sh, sr)
     bom_idx = U.build_bom_index(bh, br)
