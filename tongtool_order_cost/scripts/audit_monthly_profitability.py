@@ -142,6 +142,12 @@ def ustx_cost_specs(spreadsheet: str) -> list[SourceSpec]:
         SourceSpec("usnj_estimate_values", spreadsheet, "测算 美东USNJ二次加工成本"),
         SourceSpec("shell_cost_import_values", spreadsheet, "import皮壳成本", required=True),
         SourceSpec("bom_cost_import_values", spreadsheet, "importBOMCostList", required=True),
+        # 头程/重量来源：EN BOM 成本列表（是 importBOMCostList 的超集）——ustx-compare 的头程靠它
+        SourceSpec(
+            "en_bom_cost",
+            "财务部绍兴成本核算表单2023",
+            "EN产品BOM成本列表20260202",
+        ),
     ]
 
 

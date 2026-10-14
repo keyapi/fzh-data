@@ -378,7 +378,10 @@ def test_cli_ustx_cost_specs_render_options_and_required():
         "bom_cost_import_values",
     }
     assert by_key["usnj_estimate_values"].required is False
-    assert all(s.spreadsheet == "二次加工成本2022" for s in specs)
+    # EN BOM 成本列表（头程来源）也随 --with-finance 冻结，别再靠 --extra 手加
+    assert by_key["en_bom_cost"].spreadsheet == "财务部绍兴成本核算表单2023"
+    assert by_key["en_bom_cost"].worksheet == "EN产品BOM成本列表20260202"
+    assert all(s.spreadsheet in ("二次加工成本2022", "财务部绍兴成本核算表单2023") for s in specs)
 
 
 def test_resilient_fetch_isolates_failure_and_keeps_neighbors():

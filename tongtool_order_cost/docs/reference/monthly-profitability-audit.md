@@ -148,11 +148,16 @@ CLI **没有** apply / write / update / upload 任何标志；本文件不 impor
 | **B2 EN 式** | 四项全按 import 表重建：皮壳=`importBOMCostList.皮壳成本` 按重量模板取 **max**；头程=**EN BOM 成本列表按绍兴发货方式取**（半成品→半成品头程、成品→成品头程、皮壳→皮壳头程，缺则皮壳兜底）；二次加工=`美中加工成本, USTX`；绍兴二次加工=按 `绍兴发货方式` 取 绍兴包装半成品/成品成本（半成品/成品）或 0（皮壳） |
 
 ```bash
-# 复用上面 snapshot --with-finance 的快照（已含 USTX 成本源）
+# 只跑 snapshot --with-finance 即可（USTX 成本源已内置注册，无需 --extra）
+uv run python tongtool_order_cost/scripts/audit_monthly_profitability.py \
+    snapshot --month 202607 --with-finance
 uv run python tongtool_order_cost/scripts/audit_monthly_profitability.py \
     ustx-compare --snapshot tongtool_order_cost/out/profitability_audit/2026年7月订单
 #   → <snapshot>_ustx_compare_<ts>/{audit.json,audit.xlsx(10 表),管理摘要.md}
 ```
+
+`--with-finance` 冻结的 USTX 相关源：`sx_processing_{values,formulas}`、`ustx_estimate_{values,formulas}`、
+`usnj_estimate_values`、`shell_cost_import_values`、`bom_cost_import_values`、**`en_bom_cost`**（头程/重量来源）。
 
 **链路（import 表）**：`品类尺寸面料编码` →（`import皮壳成本`.`EN重量模板物料号`）→
 （`importBOMCostList`.`重量模板, 编号`）→ 各项成本。`美中加工成本, USTX` 按重量模板**唯一**；
