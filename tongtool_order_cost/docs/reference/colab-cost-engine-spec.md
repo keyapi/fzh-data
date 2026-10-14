@@ -1,0 +1,228 @@
+---
+okf: v0.1
+type: Reference
+title: Colab 通途订单成本引擎逆向规格（皮壳/头程/二次加工/绍兴二次加工）
+description: 从 Colab notebook 备份逐 cell 逆向出的产品成本计算规则：数据源工作簿与 worksheet、匹配键、EN 覆盖条件、同组取最大/借用的确切 pandas、仓库→成本来源编码映射、以及美中 USTX 与美东 USNJ 的口径不对称
+tags: [tongtu, cost, colab, reverse-engineering, bom, gsheet, erpnext, reference]
+resource: 1T5hZYvnJhS8xzORb3tuYRoXXWn9uSzNl (Google Drive notebook)
+date: 2026-10-14
+---
+
+# Colab 通途订单成本引擎逆向规格
+
+> 来源：本机 Colab 备份 `C:\Users\zhang\.claude\backups\colab\1T5hZYvnJhS8xzORb3tuYRoXXWn9uSzNl_20261010_163404.ipynb`
+> （Drive notebook id `1T5hZYvnJhS8xzORb3tuYRoXXWn9uSzNl`）。
+> 逐 cell 抽取源码 → `tongtool_order_cost/out/colab_cells/cell_*.py`（运行时产物，不入库）。
+> **本文只记录"代码是怎么写的"，不判断对错。**
+
+## 0. 总公式
+
+```
+1件产品成本      = 皮壳成本 + 绍兴二次加工成本 + 二次加工成本
+产品成本*数量     = 1件产品成本 × 发货数量
+订单总成本        = 产品成本*数量 + 头程运费*数量 + 运费 [+ 海外仓成本*数量]
+订单利润          = 售价*汇率 − 订单总成本
+*系数 轨 = 同名各列 × 各自系数（公式结构与普通轨一致）
+```
+
+校验（cell_168）：`皮壳成本*系数*数量 + 绍兴二次加工成本*系数*数量 + 二次加工成本*系数*数量 == 产品成本*系数*数量`。
+
+## 1. 主联合键
+
+`品类尺寸面料编码 = 品类尺寸编码 + "-" + 材料编码.replace("ML-","")`（材料编码空则只有品类尺寸编码）。
+`品类尺寸编码 = 品类编码 + "-" + 尺寸`。
+EN 侧等价键 = **`重量模板编号`**（并入订单时改名 `EN重量模板物料号`）。
+
+## 2. 数据源工作簿 / worksheet
+
+| 变量 | 工作簿 | 用到的工作表 |
+|---|---|---|
+| `gsheet_name_cost_shaoxing` | **财务部绍兴成本核算表单2023** | `皮壳成本平均202409-202410-202411（用于通途订单202502）`（→`df_sx`）、**`EN产品BOM成本列表20260202`**（→`df_en`） |
+| `gsheet_name_cost_trans_head` | **头程运费成本** | **所有 ws**（逐 ws 追加 `头程运费来源`=ws名；排除 `头程运费合并` 等），另有对照表 ws `头程运费来源编码-EN成本列名对照表` |
+| `gsheet_name_cost_2prod` | **二次加工成本2022** | 所有 ws（排除 合并/orig/副本/copy/测试/测算/import） |
+| 订单→来源映射 | 和财务部共享 | `订单发货仓库对应成本来源` |
+
+> ⚠️ 行号/表名在**每月的 notebook 里都可能变**（如 `二次加工成本多月202511` 是硬编码月份名）。本表为 2026-10 备份的实际值。
+>
+> ⚠️ **worksheet 名 `EN产品BOM成本列表20260202` 里的日期是旧名，内容不是 2 月快照**：
+> 它是 **2026-09-03 从 EN BOM 成本表导出、删掉一列 `成品参考采购价` 后粘贴进来的**（用户在 A1 批注里备注）。
+> 本地副本：`D:\Work\王忠于\成本核算\EN产品BOM成本列表 20260903.xlsx`（另有 20260706/20260804/20260806/20260818 历史导出）。
+> 复核时不要再把它当"2 月旧快照"。
+
+## 3. 皮壳成本
+
+- 源：`df_sx_nodups`（按 `品类尺寸面料编码` 去重）。
+- **EN 覆盖**（cell_100）：
+  ```python
+  df_sx_en = df_sx_nodups.merge(df_en_zlmb, how='left',
+                left_on='EN重量模板物料号', right_on='en重量模板编号')
+  col_en_cost_pk = 'en皮壳成本_max'
+  mask = df_sx_en['en皮壳成本_max'].notna() & (df_sx_en['en皮壳成本_max'] != '') & (df_sx_en['en皮壳成本_max'] != 0)
+  df_sx_en.loc[mask, '皮壳不含包装成本'] = df_sx_en.loc[mask, col_en_cost_pk]
+  # 皮壳含包装成本 / 两者*系数 同步覆盖；绍兴成本系数 = 1.0
+  ```
+  → EN 值**严格优先**于 GSheet（条件：非 NaN、非空串、非 0）。
+- EN 聚合（cell_045）按 `重量模板编号` groupby，`皮壳成本` 取 **`max`**（另有 `nonzero_mean` 未用于覆盖）。
+- **口径选择**（cell_125）：
+  ```python
+  df_order_cost['皮壳成本'] = df_order_cost['皮壳含包装成本']
+  df_order_cost.loc[二次加工成本来源编码=='2CJG-SX', '皮壳成本'] = 皮壳不含包装成本
+  df_order_cost.loc[是否皮壳=='皮壳', '皮壳成本'] = 皮壳含包装成本
+  # 再由 当月给分公司发货类型 ∈ {成品,半成品} 强制为 皮壳不含包装成本（覆盖）
+  ```
+- 兜底：`品类尺寸面料编码` 为空 → 皮壳两列/二次加工/头程 `NaN`；品类 `售后针线扣`/`棉包` → 皮壳两列+二次加工+头程=0、系数=1.0；
+  灰区 `发货仓库=='大件云仓' | 产品名称 含 '主体骨架 沙发L形支架'` → 15 个成本列 `fillna(0)`。
+
+## 4. 头程运费
+
+- 源：`头程运费成本` 工作簿全部 ws → `df_cost_trans_head_nodups`，键 `['头程运费来源编码','品类尺寸面料编码']`。
+- 编码由 **worksheet 名 contains 规则**生成：`分公司+美国+USNJ→HEAD-US`、`分公司+美国+USTX→HEAD-USTX`、`+皮壳→HEAD-USTX-PK`、
+  `分公司+波兰→HEAD-PL`、`海外仓+美国→HEAD-USHWC`、`海外仓+欧洲→HEAD-EUHWC`、`FBA+美国→HEAD-USFBA`、`FBA+欧洲→HEAD-EUFBA`、
+  `FBA+英国→HEAD-UKFBA`、`FBA+日本→HEAD-JPFBA`、`海外仓+加拿大→HEAD-CAHWC`、`contains 绍兴→HEAD-SX`。
+  再 merge `头程运费来源编码-EN成本列名对照表` 得 `EN成本列名`；`当月头程是否成品=='成品'` 时把列名里的 `皮壳` 换成 `成品`。
+- EN 侧：把 `EN产品BOM成本列表20260202` 的头程列**熔化**（cell_047），键 `(EN重量模板物料号, EN头程运费来源编码)`；编码做 `HEAD-USTX-PK→HEAD-USTX` 等映射。
+- **EN 覆盖**（cell_051）：`EN头程运费金额.notna() & != 0` → 覆盖 `头程运费金额`。
+- 半成品/成品缺值时按 **皮壳 1× → 半成品 2× → 成品 4×** 的比例填充（`fill_shipping_cost`，基准优先 半成品>成品>皮壳）。
+- 源切换开关 `option_head_source`：`头程用:头程运费合并替换EN`（默认，EN 替换后）vs `头程用(原始):头程运费合并`。
+- 兜底：`头程运费来源编码=='HEAD-SX'` → `头程运费金额 = 0`。
+
+## 5. 二次加工成本
+
+- 源：`二次加工成本2022` 工作簿全部 ws → 键 `['二次加工成本来源编码','品类尺寸面料编码']`。
+- 编码：`美国→2CJG-US`、`美东USNJ→2CJG-USNJ-TEST`、`美中USTX→2CJG-USTX-TEST`、`波兰→2CJG-PL`、`绍兴→2CJG-SX`。
+- 月份列硬编码：绍兴用 `二次加工成本多月202511`（+系数列），美/波用 `_nosx` 同名列；缺列时 **系数=1.0**、`*系数 = 二次加工成本`。
+- **USTX 无面料退路**：按 `(二次加工成本来源编码, 品类尺寸编码)` groupby，组内 `二次加工成本*系数` 全 NaN 取首行，否则 **`idxmax()`（取最大）** → `df_cost_2prod_nofabric_nodups`。
+- 是否皮壳=='皮壳' → `二次加工成本*数量 = 0`。
+- 兜底：品类 `创意床品`/`创意方抱枕`/`异形沙包坐墩`/`棉包`/`售后针线扣` → `二次加工成本=0`。
+- **`if_0_PL_cost = '注意-清零PL二次加工成本'`**：`当月给分公司发货类型=='成品' & 二次加工成本来源编码=='2CJG-PL' & 绍兴二次加工成本 notna&≠0 & 二次加工成本 notna&≠0` → `二次加工成本 = 0.001`（占位非零，即 0.001 的来历）。
+
+## 6. 绍兴二次加工成本
+
+- 从 `df_cost_2prod_nodups` 切 `二次加工成本来源编码=='2CJG-SX'` 子集，改名 `绍兴二次加工成本`（+系数列），按 `品类尺寸面料编码` 并入订单。
+- 仅 `当月给分公司发货类型 ∈ {成品,半成品}` 需计；否则与 `发货仓分类 ∈ {FBA,海外仓}` 一样 → **两列 = 0**。
+- EN 变体（cell_100）：`EN绍兴包装半成品成本` 来自 en 列；`EN绍兴包装成品成本` 实际取的是**合并后二次加工成本*系数**（不是 en 列）。
+- 开关 `if_use_EN_cost_sxbzbcp=='注意-用EN绍兴包装半成品成本'` / `if_use_EN_cost_sxbzcp=…成品成本`：
+  `(二次加工成本来源编码!='2CJG-SX') & (当月给分公司发货类型=='半成品'/'成品')` → 用 EN 值 `fillna(0)`。
+
+## 7. 仓库 → 成本来源编码（`订单发货仓库对应成本来源`）
+
+实测 47 行。**关键不对称**（用户已怀疑的点）：
+
+| 发货仓库 | 成本来源编码 | 头程运费来源编码 | 二次加工成本来源编码 | 发货仓分类 |
+|---|---|---|---|---|
+| 美东-CENTRADE | `COST-US` | `HEAD-US` | **`2CJG-US`** | 分公司 |
+| FZH-DANEEY（美中） | `COST-US` | `HEAD-USTX-PK` | **`2CJG-SX`** | 分公司 |
+| FZH-DANEEY-成品仓 | `COST-US` | `HEAD-USTX` | **`2CJG-SX`** | 分公司 |
+| 大件云仓 | `COST-USHWC` | `HEAD-USTX` | **`2CJG-SX`** | 海外仓 |
+| 波兰-FZHPoland-covers | `COST-PL` | `HEAD-PL` | **`2CJG-PL`** | 分公司 |
+| FZHPoland-finished | `COST-EUHWC` | `HEAD-EUHWC` | **`2CJG-SX`** | 分公司 |
+
+→ **美中(USTX)的"二次加工成本"来源是绍兴(`2CJG-SX`)**，与美东用美国自有加工(`2CJG-US`)不同；
+波兰 covers 用 `2CJG-PL`，但波兰 finished 又回落 `2CJG-SX`。这正是"美中之前没有加工成本数据、用绍兴成品成本+成品头程拟合"的代码证据。
+
+## 8. 分渠道成本（cell_222）
+
+```
+美国分公司_USNJ  = 皮壳含包装成本 + 头程_HEAD-US   + 二次加工_2CJG-US
+美国FBA_USFBA    = 皮壳不含包装成本 + 头程_HEAD-USFBA + 二次加工_2CJG-SX
+美国海外仓_USHWC =                   头程_HEAD-USHWC + 二次加工_2CJG-SX
+波兰分公司_PL    = 皮壳含包装成本 + 头程_HEAD-PL   + 二次加工_2CJG-PL
+绍兴自发货_SX    = 皮壳不含包装成本 +              二次加工_2CJG-SX
+```
+
+## 9. 品类改写与开关（影响成本匹配）
+
+- `三角` 品类且 `发货仓库 contains 'CENTRADE|FZH-DANEEY'`（波兰亦然）→ 尺寸改写 `120→138 / 150→153 / 180→183 / 200→194`。
+- `弧形海绵 + CENTRADE` → 强制 `成本来源编码=COST-USFBA`、`头程=HEAD-USFBA`、`二次加工=2CJG-SX`。
+- 测试开关 `if_use_test_cost=='注意-用测算成本'` → 用 `2CJG-USNJ-TEST`/`HEAD-USTX-PK`/`2CJG-USTX-TEST`。
+- `if_replace_xinglianhwc_to_ustx=='是-替换星链海外仓为DANEEY'` → `星链海外仓` 改 `FZH-DANEEY-半成品仓`。
+
+## 10. 未证实（不要当结论）
+
+- `eval_delivery_en` / `use_local_rule_csv_170` **不在本 notebook 任何 cell**；它们是 1.7.0 本地引擎侧的开关。
+- `海外仓成本_EUHWC` / `mask_EUHWC` 注释自述"暂未启用"。
+- 本规格未验证数值正确性，仅还原代码行为。
+
+## 关联
+
+- 成本路径口径（皮壳/半成品/成品）：[bom_cost_explanation.md](../../../bom_cost_explanation.md)
+- 直接采购件自套 BOM：[en-direct-purchase-self-bom.md](../../../docs/solutions/architecture-patterns/en-direct-purchase-self-bom.md)
+- 月度盈利审计（口径矩阵/闸门）：[monthly-profitability-audit.md](monthly-profitability-audit.md)
+
+---
+
+# 附：EN 侧成本计算规格（方法 B）与两法差异图
+
+> 来源：2026-10-14 只读调查生产服务器（SSH 别名 `阿里云-FZH-ERPNext-frappe`）上的 app 源码。
+> 文件路径见文末。
+
+## B1. `BOM Cost List` / `BOM Cost List V2` 报表
+
+- V1 `/home/frappe/frappe-bench/apps/key_test/key_test/key_test/report/bom_cost_list/bom_cost_list.py`（1454 行）
+- V2 `/home/frappe/frappe-bench/apps/work_order_task/work_order_task/work_order_task/report/bom_cost_list_v2/bom_cost_list_v2.py`（1693 行）
+- V2 是 V1 超集，成本函数逐字相同。
+
+| 列 | 取法 |
+|---|---|
+| 皮壳成本 / 绍兴包装半成品成本 / 绍兴包装成品成本 | 该物料 **active+default BOM** 的 `operating_cost + raw_material_cost + scrap_material_cost` |
+| 美东/美中/波兰加工成本 | 该成品 BOM 的 **`total_cost`**；为空才回退 `Item.valuation_rate` |
+| 头程（皮壳/半成品/成品） | `Logistic Price` × 计费重（`fg_billing = max(ceil(实重,0.1), ceil(体积/6000,0.1))`） |
+| 目的港加工费 | `{usnj,ustx,pl}_valuation_rate` |
+| `sx_cost_all` | `成品 & cost_fg≠0 & cost_sxbzcp==0 & 成品BOM含主料` → `cost_fg`；否则 `cost_fg + cost_sxbzcp` |
+
+- 半成品 BOM 复制机制（决定"国外加工成本"来源）：`work_order_task/utils/bom.py::copy_bom_for_supporting_items`
+  `{"波兰PL包装成品#":"PLBZCP#","美东USNJ包装成品#":"USNJBZCP#","美中USTX包装成品#":"USTXBZCP#"}` —— 把**绍兴包装成品 BOM 复制**成三地包装 BOM；
+  当 BOM 行以 `SXBZCP` 开头且含 PP棉物料时自动触发。
+  → **国外加工成本 = 该地 `{USNJ,USTX,PL}BZCP#` 包装成品 BOM 的 `total_cost`**（工序价按 `operation_price_strategt.get_operation_price` 本地取价）。
+- 硬编码价目：`REFERENCE_PURCHASE_PRICE_LIST = "供应链参考采购"`。皮壳物料码 `PK#<item>`。
+
+## B2. `process_order_excel_for_costs`（Tongtool Cost Review，上传通途订单）
+
+- `/home/frappe/frappe-bench/apps/tongtool_integration/tongtool_integration/.../tongtool_cost_review/tongtool_cost_review.py`（2896 行），入口 `@1388`。
+- 成本全来自 `_load_bom_cost_data()` @2347 → 读 `Tongtool Settings.bom_cost_file_name`
+  （默认 `bom_cost_list_2025-25-11-11-12.json.gz`，生产实际最新 `bom_cost_list_2026-25-14-11-10.json.gz`，位于
+  `/home/frappe/frappe-bench/sites/erpnext.vilavi.cn/private/files/`）。**即 EN 的成本快照 = BOM Cost List 报表的 gzip JSON**。
+- `_calculate_single_item_cost(...)` @951：所有成本 = 基础值 × `quantity × split_factor`；仓库配置来自 `Tongtu Shipping Warehouse`
+  （字段 `shell_cost_column_name / shaoxing_semi_finished_cost_column_name / shaoxing_finished_cost_name / shaoxing_total_cost_name / processing_cost_name / first_leg_*`）。
+- **绍兴发货方式 → 路径**：
+
+| 绍兴发货方式 | 发货成本 | 头程 | 加工费 |
+|---|---|---|---|
+| 皮壳（正常） | `cost_fg` | `pk_first_freight` | `valuation_rate` |
+| 半成品（正常） | `cost_fg + cost_sxbzbcp` | `bcp_first_freight` | `valuation_rate` |
+| 成品（正常） | `sx_cost_all` | `cp_first_freight` | `valuation_rate` |
+| 任意 `-COVER` | `cost_fg` | `pk_first_freight` | 0 |
+| 任意 `-FOAM` | 半成品/成品对应成本 | `max(0, cp−pk)` / `max(0, bcp−pk)` | 保留 |
+| FBA 仓 | `sx_cost_all` | `cp_first_freight` | — |
+
+- **EN 里没有「二次加工成本」这个词**（全文件 grep 无）；最近似 = **「加工成本」= `valuation_rate`**（即目的港包装 BOM 的 `total_cost`）。
+- 输出列：绍兴发货成本、皮壳成本、绍兴包装半成品/成品成本、绍兴总成本、**加工成本**、头程费用、头程皮壳/半成品/成品运费、历史预估尾程费用、是否需要尾程、最终尾程费用、销售毛利润、差异列。
+- 最终尾程优先级：`物流商运费 > 历史预估尾程费用 > 通途运费`；`销售毛利润 = 售价×汇率 − 绍兴发货成本 − 头程 − 加工成本 − 最终尾程 − 渠道成交费(人民币)`。
+
+## B3. 两法差异图（待数值验证）
+
+| 成本分项 | 方法A（Colab/GSheet） | 方法B（EN Cost Review） | 潜在差异 |
+|---|---|---|---|
+| 皮壳成本 | GSheet `皮壳成本平均…` ws；EN 覆盖来自 **`EN产品BOM成本列表20260202`**（实为 **2026-09-03** 导出、删了 `成品参考采购价` 列），按 `重量模板编号` **取 max** | `cost_fg` = 物料 **当前** active+default BOM 三费之和（当日 `bom_cost_list_*.json.gz`） | 快照时点（09-03 vs 当日）＋ A 取组内 max、B 取该物料自身 |
+| 头程 | `头程运费成本` 工作簿 + 同快照 EN 覆盖；缺值按 皮壳1×/半成品2×/成品4× 补 | `Logistic Price` × 计费重（**实时价目**） | 来源与权重口径不同 |
+| 二次加工成本 | 工作簿 `二次加工成本2022`；**美中 = `2CJG-SX`（绍兴二次加工）** | = `valuation_rate` = 该地 **`USTXBZCP# 包装 BOM 的 total_cost`**（美中本地加工） | ⚠️ **美中口径根本不同**（绍兴 vs 美中本地加工） |
+| 绍兴二次加工 | 切 `2CJG-SX` 子集，仅 成品/半成品 计，FBA/海外仓清零 | 无此列；半成品路径并入「发货成本」 | 命名与合并方式不同 |
+| 关键开关 | 硬编码月份列名（如 `二次加工成本多月202511`）、`if_0_PL_cost=0.001` 占位 | 无 | A 有历史占位/清零逻辑 |
+
+**美中二次加工的现状与改造方案（用户 2026-10-14 说明）**：
+- `二次加工成本2022` 工作簿里**当前没有** `美中USTX二次加工成本` 这张 ws；
+  现有的是 `绍兴二次加工成本`、`美国二次加工成本`（= 美东 USNJ）、`波兰二次加工成本`，
+  以及两张**测算表**：`测算 美东USNJ二次加工成本`、`测算 美中USTX二次加工成本`（**已建、未启用**）。
+- **改造方向**：新建/启用 ws `美中USTX二次加工成本`，**模仿 `绍兴二次加工成本` 的格式**修改并填充公式，
+  让它能引用 `import皮壳成本`、`importBOMCostList`；使**美中发货**走
+  **绍兴皮壳成本 + 皮壳头程 + 美中USTX二次加工成本**（而不是现在的 `2CJG-SX`）。
+- 任务：用**现有算法**先算一版，同时按上述改造再算一版，**两版对比**给用户。
+
+**已作废的假设**：先前"EN 覆盖用的是 2026-02-02 旧快照 → 美中加工 BOM 缺失"的判断**错误**——
+该 worksheet 是 2026-09-03 导出，不构成"旧快照缺列"。差异要按上面 `仓库×绍兴发货方式` 的口径差去找。
+
+## B4. 未证实
+
+- 生成 `bom_cost_list_*.json.gz` 的写入脚本（生产 grep 无 writer）。
+- `Tongtool Settings.bom_cost_file_name` 实际值（REST 报 `TableMissingError`）。
+- 三地工序价差的具体常量。

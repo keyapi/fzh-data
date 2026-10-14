@@ -19,6 +19,7 @@ if str(MODULE_ROOT) not in sys.path:
     sys.path.insert(0, str(MODULE_ROOT))
 
 from tongtool_order_cost import gsheets
+from tongtool_order_cost.audit_sources import chunked, resilient_fetch
 from tongtool_order_cost.order_side_input import (
     ErpnextOrderClient,
     group_order_documents,
@@ -26,6 +27,9 @@ from tongtool_order_cost.order_side_input import (
     order_base,
     tiktok_platform_body,
 )
+
+# 兼容旧引用：实现已移到 audit_sources（chunked / resilient_fetch）
+fetch_resilient = resilient_fetch
 
 
 def main_repo_root() -> Path:
@@ -80,38 +84,6 @@ def prefix(order_id: str) -> str:
         if char.isdigit():
             return base[:index].rstrip("-_")
     return base
-
-
-def chunked(seq: list[str], size: int):
-    for start in range(0, len(seq), size):
-        yield seq[start : start + size]
-
-
-def fetch_resilient(
-    fetch_chunk,
-    ids: list[str],
-    failures: list[str],
-    failed_ids: set[str],
-    label: str,
-) -> list[dict]:
-    """批量取数，失败时二分降级到单条，逐单定位并把失败记录进 failures/failed_ids。
-
-    Frappe 的 `in [...]` 过滤一旦过大或某条异常会整批报错；二分保证其余单照常取回，
-    失败的单不会被静默丢弃（数量对账必须闭合）。
-    """
-    if not ids:
-        return []
-    try:
-        return fetch_chunk(ids)
-    except Exception as exc:  # noqa: BLE001 - 需捕获任意批次异常以继续对账
-        if len(ids) == 1:
-            failures.append(f"{label} {ids[0]}: {type(exc).__name__}: {exc}")
-            failed_ids.add(ids[0])
-            return []
-        mid = len(ids) // 2
-        return fetch_resilient(
-            fetch_chunk, ids[:mid], failures, failed_ids, label
-        ) + fetch_resilient(fetch_chunk, ids[mid:], failures, failed_ids, label)
 
 
 def build_report(

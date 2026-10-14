@@ -201,6 +201,7 @@ class ErpnextOrderClient:
         url = f"{self.base_url}/api/resource/{quote(doctype, safe='')}"
         rows: list[dict[str, Any]] = []
         offset = 0
+        prev_first: str | None = None
         while True:
             query = {
                 "fields": json.dumps(fields, ensure_ascii=False),
@@ -216,6 +217,13 @@ class ErpnextOrderClient:
                 response.raise_for_status()
                 page = response.json().get("data") or []
                 break
+            if not page:
+                return rows
+            first = str(page[0].get("name") or "")
+            if first and first == prev_first:
+                # 后端未按 limit_start 前进（子表常见）——停止，避免死循环
+                return rows
+            prev_first = first
             rows.extend(page)
             if len(page) < page_size:
                 return rows
