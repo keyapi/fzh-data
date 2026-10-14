@@ -42,15 +42,15 @@ function so_chain_link(doctype, name, label) {
          + so_chain_esc(label || name) + '</a>';
 }
 const SO_CHAIN_DEF_COLS = [
-    { k: 'item', label: '订单行物料', w: 205 },
-    { k: 'code', label: '客户物料号', w: 125 },
-    { k: 'qty', label: '订单量', w: 62 },
-    { k: 'produced', label: '已生产', w: 62 },
-    { k: 'shipped', label: '已发', w: 58 },
-    { k: 'deliv', label: '交期', w: 100 },
-    { k: 'stage', label: '阶段', w: 118 },
-    { k: 'prod', label: '生产', w: 150 },
-    { k: 'dn', label: '出库', w: 112 }
+    { k: 'item', label: '订单行物料', w: 0 },      // 0 = 弹性列：吸收剩余宽度（多看物料名）
+    { k: 'code', label: '客户物料号', w: 115 },
+    { k: 'qty', label: '订单量', w: 54 },
+    { k: 'produced', label: '已生产', w: 54 },
+    { k: 'shipped', label: '已发', w: 54 },
+    { k: 'deliv', label: '交期', w: 96 },
+    { k: 'stage', label: '阶段', w: 106 },
+    { k: 'prod', label: '生产', w: 142 },
+    { k: 'dn', label: '出库', w: 106 }
 ];
 const SO_CHAIN_COLS = SO_CHAIN_DEF_COLS.length;
 function so_chain_widths() {
@@ -137,7 +137,8 @@ function so_chain_render($box, data) {
     }).join('');
     const W = so_chain_widths();
     const cols = SO_CHAIN_DEF_COLS.map(function (c) {
-        return '<col data-k="' + c.k + '" style="width:' + W[c.k] + 'px">';
+        const w = W[c.k];
+        return '<col data-k="' + c.k + '"' + (w ? ' style="width:' + w + 'px"' : '') + '>';
     }).join('');
     const ths = SO_CHAIN_DEF_COLS.map(function (c) {
         return '<th style="white-space:nowrap;position:relative;overflow:hidden">' + c.label

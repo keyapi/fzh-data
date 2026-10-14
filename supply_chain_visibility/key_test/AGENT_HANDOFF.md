@@ -203,6 +203,8 @@ SAP Fiori Tree Table https://help.sap.com/docs/ABAP_PLATFORM_NEW/468a97775123488
 
 **处置**：生产 JS 回滚到 v30(`b29d801`) 恢复 → 测试机修好并**完整验证**（无报错/列正确/拖拽+缓存）→ 合并 main(`7947a1d`) → 生产 `git fetch && git reset --hard origin/main` 强制对齐 → clear-cache → 验证通过。
 
+**后续（v33 列宽）**：`5a3c9ef` 再发布 —— 「订单行物料」弹性列 + 数字列锁 54px。生产 SO-25-00169 实测 `wrapW=tblW=scrollW=1003` 一屏放下、0 控制台报错、82 行渲染正常；服务端 `grep -c 'const SO_CHAIN_COLS'` = **1**（无重复声明）。
+
 **必须遵守的教训**：
 - **改 JS 后必须确认文件里声明唯一**：`grep -c '^const ' <file>`、以及每个关键标识符只声明一次。
 - **部署前先 `git status` 干净 + 用真·原始基线**（`/tmp/sales_order.js.bak_20261013_112137`，190 行、不含 `SO_CHAIN_DEF_COLS`）；或直接用整份文件部署，别「基线+追加」累计。

@@ -7,7 +7,8 @@ title: supply_chain_visibility 变更日志
 # 变更日志
 
 ## 2026-10-13
-- **事故+修复（2026-10-14）**：v31 漏删重复的 `const SO_CHAIN_COLS` → 生产表单空白（整脚本 SyntaxError）；叠加「部署基线被污染累计两份」+「生产 git pull 静默失败」。处置：生产回滚 v30 → 测试机修好并完整验证 → main `7947a1d` → 生产 `git reset --hard origin/main` 对齐 → 验证通过。教训见 key_test/AGENT_HANDOFF.md §14。
+- **Stage 1 v31–v33（列宽）**：v31 客户码回第 2 列 + 加「已生产」列 + 去「未发」列 + 表头右缘**拖拽列宽**(localStorage `so_chain_colw` 记忆)；v32 修 v31 漏删的重复 `const SO_CHAIN_COLS`（见下行事故）；v33 默认列宽 —— 「订单行物料」改**弹性列**(`w:0` 时不输出 `width`，`table-layout:fixed` 下吸收余量)、数字列(订单量/已生产/已发)锁 **54px**、客户物料号 115、交期 96、阶段 106、生产 142、出库 106。生产 SO-25-00169(82 行)实测 `wrapW=tblW=scrollW=1003` **一屏放下、0 控制台报错**。
+- **事故+修复（2026-10-14）**：v31 漏删重复的 `const SO_CHAIN_COLS` → 生产表单空白（整脚本 SyntaxError）；叠加「部署基线被污染累计两份」+「生产 git pull 静默失败」。处置：生产回滚 v30 → 测试机修好并完整验证 → main `7947a1d`(v32) → 生产 `git reset --hard origin/main` 对齐 → 验证通过 → `5a3c9ef`(v33) 再发布。教训见 key_test/AGENT_HANDOFF.md §14。
 - **Stage 1 v28–v30（排版）**：订单行物料改「小字 2 行(码上名下单行距)+超长省略号」；表 12px、不换行；不重要的「客户物料号」列后移到最后；**物料码/名称/客户码上限 150px 截断(省略号+hover 全值)** —— 修「单个 56 字符物料码把列撑到 466px 导致横向拉拽」。生产 SO-25-00169（82 行）实测 **一屏放下、无需横向滚动**。
 - **Stage 1 v27**：**纳入草稿工单**（成品工单常是 Draft，docstatus=0，原先 docstatus=1 漏掉）+ **成品工单优先排序**（父在前，皮壳/内胆子装配件在后）+ 物料显示改「物料号: 物料名称」一行不换行 + 摘要紧凑。生产验证 SO-26-00117 成品 WO-26-03517 已在最前。
 - **生产发布（2026-10-13）**：测试机 `feature/so-chain-embed` **快进合并 main**（push `ab3cdc0..2c11464`）→ 生产 `key_test` pull + `migrate`（建 **SO Chain Overview** 报表记录）+ `restart` + `clear-cache`。生产验证：方法 200（SO-25-00169 → 82 行）、报表 12 列 4520 行、浏览器实测皮壳工单显示所属计划。
