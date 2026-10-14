@@ -82,12 +82,18 @@ uv run python tongtool_order_cost/scripts/make_missing_tail_lists.py \
 | 账单来源 | 判据 | 优先级 | 说明 |
 |---|---|---|---|
 | **蜴国际 FedEx（货代）** | 链含「蜴国际」 | 高 | **重点**；找蜴国际/YIGlobal 要账单 |
+| **PostPony / GOFOParcel** | 链含 `PostPony` 或 `GOFOParcel` | 高 | PostPony 尾程结算（量大） |
+| **VITE（货代）** | 链含 `VITE` | 高 | VITE 货代账单 |
+| **派速捷（货代）** | 链含「派速捷」 | 高 | 派速捷货代账单 |
 | **GLS 波兰** | 链含 `GLS` | 高 | **重点**；GLS 账单/后台 |
 | 「7条」尾程供应商 | 链含「7条」（如 `美国尾程7条>>FEDEX Economy TX`） | 中 | 美国尾程供应商「7条」结算 |
 | CENTRADE | 链含 `CENTRADE` | 中 | Centrade 结算 |
-| 疑似官方 FedEx（待确认） | 仅剩的 `US-FedEx>>US-FedEx` | 待确认 | 可能是公司自有 FedEx 账号 |
+| 疑似官方 FedEx（待确认） | 仅剩的 `US-FedEx>>US-FedEx`（无货代关键字） | 待确认 | 可能是公司自有 FedEx 账号 |
 | 平台付尾程（OSTK/Wayfair） | 链含 `OSTK` 且**非补发** | **不追** | 平台付尾程，无需导入（单列 sheet 备查） |
 | 平台渠道补发（需确认尾程） | 链含 `OSTK` 且**是补发单** | 待确认 | 补发货→可能用自有尾程，**需确认是否追** |
+
+> **判定顺序**：货代/供应商关键字（蜴国际/PostPony/VITE/派速捷/GLS/7条/CENTRADE）**先于** OSTK 与通用 FedEx 兜底；
+> 「VITE-Fedex…Centrade」按 VITE 归类（非 CENTRADE、非官方 FedEx）。
 
 > **补发单口径**：`是否补发货=是` 或 `订单号` 以 `-M<数字>` 结尾 → 标「是否补发=是 / 备注=补发单」。
 > 补发单**即使**走 OSTK/Wayfair，也**不能**当平台付直接放过（可能用自有尾程）→ 归「平台渠道补发（需确认尾程）」待确认。

@@ -30,9 +30,13 @@ import pandas as pd
 
 _REISSUE_RE = re.compile(r"-M\d+$", re.IGNORECASE)
 
-# —— 账单来源判定（按序，子串匹配「邮寄方式」链；OSTK 必须排在通用 FedEx 之前）——
+# —— 账单来源判定（按序，子串匹配「邮寄方式」链；货代/供应商须排在通用 FedEx 与 OSTK 之前）——
 SUPPLIER_RULES = [
     ("蜴国际", "蜴国际 FedEx（货代）", "高", "货代账单，找蜴国际/YIGlobal 要"),
+    ("PostPony", "PostPony / GOFOParcel", "高", "PostPony 尾程结算"),
+    ("GOFOParcel", "PostPony / GOFOParcel", "高", "PostPony 尾程结算"),
+    ("VITE", "VITE（货代）", "高", "VITE 货代账单"),
+    ("派速捷", "派速捷（货代）", "高", "派速捷货代账单"),
     ("GLS", "GLS 波兰", "高", "GLS 账单/后台下载"),
     ("7条", "「7条」尾程供应商", "中", "美国尾程供应商「7条」结算"),
     ("CENTRADE", "CENTRADE", "中", "Centrade 结算"),
