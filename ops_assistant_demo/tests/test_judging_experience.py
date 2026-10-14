@@ -37,7 +37,7 @@ class JudgingExperienceTests(unittest.TestCase):
         self.assertIn("人工确认", body)
         self.assertIn("财资助手", body)
         self.assertIn("未自动共享知识或联通接口", body)
-        self.assertIn("不可把它说成逐条人工审核", body)
+        self.assertIn("人工审核机制仍需在试点前完善", body)
         self.assertIn("生产只可准备申请", body)
         self.assertNotIn("分行自主实施", body)
         self.assertNotIn("全辖", body)
