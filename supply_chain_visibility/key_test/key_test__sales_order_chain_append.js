@@ -45,7 +45,8 @@ const SO_CHAIN_DEF_COLS = [
     { k: 'item', label: '订单行物料', w: 0 },      // 0 = 弹性列：吸收剩余宽度（多看物料名）
     { k: 'code', label: '客户物料号', w: 115 },
     { k: 'qty', label: '订单量', w: 54 },
-    { k: 'produced', label: '已生产', w: 54 },
+    { k: 'reported', label: '报工', w: 60 },       // 末道必经工序报工（成品行=子装配件齐套）
+    { k: 'instock', label: '入库', w: 60 },        // 入库单量(produced_qty)
     { k: 'shipped', label: '已发', w: 54 },
     { k: 'deliv', label: '交期', w: 96 },
     { k: 'stage', label: '阶段', w: 106 },
@@ -53,6 +54,11 @@ const SO_CHAIN_DEF_COLS = [
     { k: 'dn', label: '出库', w: 106 }
 ];
 const SO_CHAIN_COLS = SO_CHAIN_DEF_COLS.length;
+const SO_CHAIN_COL_TITLE = {
+    reported: '报工：末道必经工序已报工量（成品行取皮壳/内胆齐套，取较慢者）',
+    instock: '入库：本物料工单入库量（入库单 produced_qty）',
+    shipped: '已发：销售出库净额（含退货抵扣）'
+};
 function so_chain_widths() {
     const w = {};
     SO_CHAIN_DEF_COLS.forEach(function (c) { w[c.k] = c.w; });
@@ -62,25 +68,91 @@ function so_chain_widths() {
     } catch (e) { }
     return w;
 }
-// 表头右缘拖动调整列宽；松手写入 localStorage（下次打开自动恢复）
+// ── 列宽：成熟交互（参考 AG Grid / Frappe DataTable / Excel）────────────────
+//  · 表头右缘一条**始终可见**的细分隔条，悬停变主色 + col-resize 光标 → 一眼看出可拖
+//  · 拖拽改变**该列宽度**并同步**整表总宽**：总宽超出容器时**下方出现横向滚动条**，不再压缩首列
+//  · **双击**分隔条 = 该列自适应内容宽度
+//  · 宽度记忆在 localStorage['so_chain_colw']
+function so_chain_inject_css() {
+    if (document.getElementById('so-chain-css')) return;
+    const css = ''
+        + '.so-chain-tbl{table-layout:fixed;width:100%;margin:0;font-size:12px}'
+        + '.so-chain-tbl th{position:relative;overflow:hidden}'
+        + '.so-chain-tbl th .so-chain-grip{position:absolute;top:0;right:0;width:8px;height:100%;cursor:col-resize;z-index:6}'
+        + '.so-chain-tbl th .so-chain-grip::after{content:"";position:absolute;top:18%;bottom:18%;right:2px;width:3px;'
+        + 'border-radius:2px;background:var(--gray-400);transition:background .1s}'
+        + '.so-chain-tbl th:hover .so-chain-grip::after{background:var(--primary)}'
+        + '.so-chain-tbl .so-chain-grip:hover::after,.so-chain-tbl .so-chain-grip.so-chain-drag::after{background:var(--primary)}'
+        + 'body.so-chain-resizing,body.so-chain-resizing *{cursor:col-resize !important;user-select:none !important}';
+    const st = document.createElement('style');
+    st.id = 'so-chain-css';
+    st.textContent = css;
+    document.head.appendChild(st);
+}
+function so_chain_th_widths($box) {
+    const ws = [];
+    $box.find('thead th').each(function () { ws.push(Math.round($(this).outerWidth())); });
+    return ws;
+}
+// 把当前「占满容器」的渲染宽度固化为 px（首列原本无 width）；之后拖拽改总宽，不再压缩首列
+function so_chain_bake($box, widths) {
+    const cur = so_chain_th_widths($box);
+    SO_CHAIN_DEF_COLS.forEach(function (c, i) { if (cur[i] > 0) widths[c.k] = cur[i]; });
+    so_chain_apply_widths($box, widths);
+}
+function so_chain_apply_widths($box, widths) {
+    let total = 0;
+    SO_CHAIN_DEF_COLS.forEach(function (c) {
+        const w = Math.max(30, Math.round(widths[c.k] || 0));
+        widths[c.k] = w; total += w;
+        $box.find('col[data-k="' + c.k + '"]').attr('style', 'width:' + w + 'px');
+    });
+    $box.find('table').css('width', total + 'px');
+}
+function so_chain_autofit($box, widths, key) {
+    so_chain_bake($box, widths);
+    const idx = SO_CHAIN_DEF_COLS.map(function (c) { return c.k; }).indexOf(key);
+    const cv = so_chain_autofit._cv || (so_chain_autofit._cv = document.createElement('canvas'));
+    const ctx = cv.getContext('2d');
+    const cs = getComputedStyle($box.find('table')[0]);
+    ctx.font = (cs.fontWeight || 'normal') + ' ' + cs.fontSize + ' ' + cs.fontFamily;
+    let max = 0;
+    const measure = function (t) { max = Math.max(max, ctx.measureText((t || '').trim()).width); };
+    $box.find('thead th').eq(idx).each(function () { measure($(this).text()); });
+    $box.find('tbody tr').not('.so-chain-inline').each(function () {
+        const td = $(this).children('td').eq(idx);
+        measure(td.find('a,span,div').first().text() || td.text());
+    });
+    widths[key] = Math.min(460, Math.max(30, Math.ceil(max) + 24));
+    so_chain_apply_widths($box, widths);
+}
 function so_chain_make_resizable($box, widths) {
+    so_chain_inject_css();
     $box.find('.so-chain-grip').each(function () {
         const key = $(this).attr('data-k');
         $(this).on('mousedown', function (e) {
+            if (e.which !== 1) return;
             e.preventDefault(); e.stopPropagation();
-            const startX = e.pageX;
-            const startW = widths[key] || 100;
-            const $col = $box.find('col[data-k="' + key + '"]');
+            so_chain_bake($box, widths);                 // 首次拖拽即固化（此时表格必定可见）
+            const startX = e.pageX, startW = widths[key];
+            $(this).addClass('so-chain-drag');
+            $('body').addClass('so-chain-resizing');
             const move = function (ev) {
-                const w = Math.max(50, Math.round(startW + (ev.pageX - startX)));
-                widths[key] = w;
-                $col.attr('style', 'width:' + w + 'px');
+                widths[key] = Math.max(30, Math.round(startW + (ev.pageX - startX)));
+                so_chain_apply_widths($box, widths);
             };
             const up = function () {
                 $(document).off('mousemove', move).off('mouseup', up);
+                $('body').removeClass('so-chain-resizing');
+                $box.find('.so-chain-grip').removeClass('so-chain-drag');
                 try { localStorage.setItem('so_chain_colw', JSON.stringify(widths)); } catch (err) { }
             };
             $(document).on('mousemove', move).on('mouseup', up);
+        });
+        $(this).on('dblclick', function (e) {
+            e.preventDefault(); e.stopPropagation();
+            so_chain_autofit($box, widths, key);
+            try { localStorage.setItem('so_chain_colw', JSON.stringify(widths)); } catch (err) { }
         });
     });
 }
@@ -96,6 +168,12 @@ function so_chain_render($box, data) {
     let tOpenQty = 0;
     const rows = (data.lines || []).map(function (l, idx) {
         tOpenQty += Number(l.open_qty || 0);
+        // 报工 / 入库 两列；不一致标黄（报工=末道报工；成品行=子装配件齐套）
+        const hasRep = (l.reported !== null && l.reported !== undefined);
+        const diff = hasRep && Math.abs(Number(l.reported) - Number(l.instock || 0)) > 1e-6;
+        const hi = diff ? ' background:#fff9e6' : '';
+        const hiTitle = diff ? ' title="报工与入库不一致 —— 报工 ' + so_chain_num(l.reported) + ' / 入库 '
+            + so_chain_num(l.instock) + (l.report_note ? '（' + so_chain_esc(l.report_note) + '）' : '') + '"' : '';
         // 生产链条摘要（文本 = 展开框标题）
         const prodSummary = so_chain_summary_text(l, 'prod');
         const forgot = (l.forgot_complete || []);
@@ -127,7 +205,10 @@ function so_chain_render($box, data) {
             + '<td style="white-space:nowrap;padding:3px 8px;overflow:hidden">' + codeCell + '</td>'
             + '<td style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="' + so_chain_esc(l.customer_item_code) + '">' + so_chain_esc(l.customer_item_code) + '</td>'
             + '<td style="text-align:right;white-space:nowrap">' + so_chain_num(l.qty) + '</td>'
-            + '<td style="text-align:right;white-space:nowrap">' + so_chain_num(l.produced) + '</td>'
+            + '<td style="text-align:right;white-space:nowrap' + hi + '"' + hiTitle + '>'
+                + (diff ? '<b>' : '') + (hasRep ? so_chain_num(l.reported) : '—') + (diff ? '</b>' : '') + '</td>'
+            + '<td style="text-align:right;white-space:nowrap' + hi + '"' + hiTitle + '>'
+                + (diff ? '<b>' : '') + so_chain_num(l.instock) + (diff ? '</b>' : '') + '</td>'
             + '<td style="text-align:right;white-space:nowrap">' + so_chain_num(l.delivered) + '</td>'
             + '<td style="white-space:nowrap;overflow:hidden">' + dd + '</td>'
             + '<td style="white-space:nowrap;overflow:hidden"><span class="indicator-pill ' + stageColor + '">' + l.stage + ' ' + so_chain_esc(l.substate) + '</span></td>'
@@ -141,19 +222,20 @@ function so_chain_render($box, data) {
         return '<col data-k="' + c.k + '"' + (w ? ' style="width:' + w + 'px"' : '') + '>';
     }).join('');
     const ths = SO_CHAIN_DEF_COLS.map(function (c) {
-        return '<th style="white-space:nowrap;position:relative;overflow:hidden">' + c.label
-            + '<span class="so-chain-grip" data-k="' + c.k + '" title="拖动调整列宽(自动记忆)" '
-            + 'style="position:absolute;top:0;right:0;width:6px;height:100%;cursor:col-resize"></span></th>';
+        const t = SO_CHAIN_COL_TITLE[c.k] ? ' title="' + so_chain_esc(SO_CHAIN_COL_TITLE[c.k]) + '"' : '';
+        return '<th style="white-space:nowrap;position:relative;overflow:hidden"' + t + '>' + c.label
+            + '<span class="so-chain-grip" data-k="' + c.k + '" title="拖动调整列宽（双击=自适应内容）"></span></th>';
     }).join('');
     const html = '<div style="overflow:auto">'
-        + '<table class="table table-bordered" style="margin:0;width:100%;table-layout:fixed;font-size:12px">'
+        + '<table class="table table-bordered so-chain-tbl" style="margin:0;width:100%;table-layout:fixed;font-size:12px">'
         + '<colgroup>' + cols + '</colgroup>'
         + '<thead><tr>' + ths + '</tr></thead>'
         + '<tbody>' + rows + '</tbody></table>'
         + '<div class="text-muted" style="margin-top:4px;font-size:11px">'
-        + '未发合计 ' + so_chain_num(tOpenQty) + '　·　列宽可拖动表头右缘调整(自动记忆)。'
+        + '未发合计 ' + so_chain_num(tOpenQty) + '　·　'
+        + '列宽：拖拽表头右缘分隔条调整、双击自适应（自动记忆）。'
         + '点「生产」＝展开 生产计划+工单→菲号→工序卡；点「出库」＝展开 出库单明细；同区切换。⤢ 弹窗看全图。'
-        + '已生产=本物料工单已产之和；已发按出库单净额(含退货抵扣)。</div></div>';
+        + '报工=末道必经工序报工（成品行取皮壳/内胆齐套）；入库=本物料工单入库量；两者不一致标黄。已发按出库单净额(含退货抵扣)。</div></div>';
     $box.html(html);
     so_chain_make_resizable($box, W);
 

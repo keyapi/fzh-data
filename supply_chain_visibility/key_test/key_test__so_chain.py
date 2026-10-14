@@ -104,9 +104,9 @@ def get_so_chain(sales_order):
             for j in frappe.get_all("Job Card",
                                     filters={"work_order": ["in", wo_names], "docstatus": ["<", 2]},
                                     fields=["name", "work_order", "operation", "status", "total_completed_qty",
-                                            "for_quantity", "actual_end_date", "tracking_number"]):
+                                            "for_quantity", "actual_end_date", "tracking_number", "docstatus"]):
                 q = _num(j.total_completed_qty) or _num(j.for_quantity)
-                rec = {"name": j.name, "status": j.status, "qty": q,
+                rec = {"name": j.name, "status": j.status, "qty": q, "docstatus": j.docstatus,
                        "end": str(j.actual_end_date or "")[:19], "tn": j.tracking_number or ""}
                 key = (j.work_order, j.operation)
                 jc_by_op.setdefault(key, []).append(rec)
@@ -136,6 +136,18 @@ def get_so_chain(sales_order):
                 first = jc_done.get((w.name, req_ops[0].operation), 0.0)
                 done_qty = first or max([jc_done.get((w.name, o.operation), 0.0) for o in req_ops] or [0.0])
             line_produced += done_qty
+
+            # 末道「报工完成量」：取**有工序卡**的最大 sequence 必经工序（护栏：将来启用无扫码的工序不会被选成末道），
+            # 去重 = max(整批卡[无菲号]和, 逐菲号卡和) —— 生产实测「整批卡+逐菲号卡」并存会让朴素求和翻倍。
+            last_done, last_op = None, ""
+            if req_ops:
+                ordered = sorted(req_ops, key=lambda o: (_num(o.sequence_id), o.operation or ""), reverse=True)
+                chosen = next((o for o in ordered if jc_by_op.get((w.name, o.operation))), ordered[0])
+                last_op = chosen.operation
+                cards = [x for x in jc_by_op.get((w.name, chosen.operation), []) if x.get("docstatus") == 1]
+                _batch = sum(x["qty"] for x in cards if not x["tn"])
+                _per_tn = sum(x["qty"] for x in cards if x["tn"])
+                last_done = max(_batch, _per_tn)
 
             # 菲号 → 逐工序 Job Card（同时算该菲号的必经工序完成数）
             tn_rows = []
@@ -181,6 +193,7 @@ def get_so_chain(sales_order):
                               "kind": kind, "completed": completed,
                               "pp": pp_by_ppi.get(w.production_plan_item or "", ""),
                               "produced_head": _num(w.produced_qty), "done": done_qty,
+                              "last_op": last_op, "last_op_done": last_done,
                               "ops_done": ops_done, "ops_total": len(req_ops),
                               "last_end": max(jc_ends) if jc_ends else "",
                               "operations": op_axis, "tracking_numbers": tn_rows,
@@ -204,6 +217,23 @@ def get_so_chain(sales_order):
 
         # 已生产 = 本物料（production_item == 行 item_code）的工单已产之和（避免把成品/皮壳/内胆再加一遍）
         produced_sum = sum(_num(w.produced_qty) for w in wos if (w.production_item or "") == it.item_code)
+
+        # 「报工 / 入库」两列（2026-10-14 生产实测口径）：
+        #   入库 = 本物料工单入库量(produced_qty)
+        #   报工 = 末道必经工序报工量；本行物料的工单无工序时(成品 KS) → 取子装配件(皮壳/内胆)齐套(取较慢)
+        instock = produced_sum
+        own = [w for w in wo_detail if (w["item_code"] or "") == it.item_code and (w["ops_total"] or 0) > 0]
+        if own:
+            reported = sum(_num(w["last_op_done"]) for w in own)
+            report_note = "本行工单末道报工"
+        else:
+            subs = [_num(w["last_op_done"]) for w in wo_detail
+                    if w["kind"] in ("皮壳", "内胆") and (w["ops_total"] or 0) > 0 and w["last_op_done"] is not None]
+            if subs:
+                reported = min(subs)
+                report_note = "子装配件(皮壳/内胆)齐套完工(取较慢)"
+            else:
+                reported, report_note = None, ""
 
         # 销售出库（可能一对多：一条订单行拆多张 DN / 含退货）
         dns = frappe.db.sql(
@@ -244,7 +274,8 @@ def get_so_chain(sales_order):
             "so_line": it.name, "item_code": it.item_code, "item_name": it.item_name,
             "customer_item_code": it.customer_item_code,
             "qty": qty, "delivered": delivered, "open_qty": open_qty, "shipped_dn": shipped,
-            "produced": produced_sum,
+            "produced": produced_sum, "reported": reported, "instock": instock,
+            "report_note": report_note,
             "stage": stage, "substate": sub,
             "plans": _plans_out,
             "wo_count": len(wos), "tn_count": line_tn,
