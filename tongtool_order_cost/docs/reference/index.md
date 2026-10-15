@@ -24,3 +24,4 @@ tags: [reference, index]
 | [en-shaoxing-shipment-cost-logic-spec.md](en-shaoxing-shipment-cost-logic-spec.md) | EN「绍兴发货成本」按发货方式的组合（皮壳→皮壳；半成品→皮壳+半成品；成品→绍兴总成本）· 是否区分 分公司/FBA/海外仓 · 头程与发货方式联动（只读核实） |
 | [old-system-source-coverage-audit.md](old-system-source-coverage-audit.md) | 老系统各源表对 7 月订单的覆盖率与缺口：`测算 美中USTX二次加工成本` 缺 43.5%（最严重）· 头程 USTX 表多为「列未回填、可 rematch」· 缺口清单 `out/ustx_wage_sim/source_coverage_gaps.csv` |
 | [sku-remap.md](sku-remap.md) | 订单旧 SKU → 井新名 |
+| **[cost-engine-spec/](cost-engine-spec/index.md)** | **成本口径单一事实源（bundle）**：系统总览与术语 · 键与实体 · 数据源 · **按目的地×发货方式的决策表** · Colab 逐 cell · EN 39 个分流点+仓库配置 · 剔除额 · Colab↔EN 替换进度 · 特例 · 问题登记册 |
