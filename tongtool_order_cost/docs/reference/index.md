@@ -21,4 +21,6 @@ tags: [reference, index]
 | [en-shaoxing-ship-method-taxonomy-spec.md](en-shaoxing-ship-method-taxonomy-spec.md) | 「绍兴发货方式」定义（Item Group 字段 `custom_shipment_type_to_branch`）· 36 个无 PP棉源的画像 · 「成品→国外加工=0」核实 · 三种发货情况能否区分（只读调查） |
 | [en-material-request-type-spec.md](en-material-request-type-spec.md) | `Item.default_material_request_type` 调查：取值分布（Purchase 66.6% / Manufacture 33.4%）、谁读谁写、与「绍兴发货方式」正交不冲突、2025 起不再维护（只读调查） |
 | [en-pl-finished-processing-nonzero-spec.md](en-pl-finished-processing-nonzero-spec.md) | PL 16 个「成品却带非零加工成本」逐条清单：来源=2025-02 建料批次人工残值（未被 BOM 回写覆盖）· 清零金额 1463.17 复核 · 影响 `pllc_cover` 不影响绍兴总成本（只读调查） |
+| [en-shaoxing-shipment-cost-logic-spec.md](en-shaoxing-shipment-cost-logic-spec.md) | EN「绍兴发货成本」按发货方式的组合（皮壳→皮壳；半成品→皮壳+半成品；成品→绍兴总成本）· 是否区分 分公司/FBA/海外仓 · 头程与发货方式联动（只读核实） |
+| [old-system-source-coverage-audit.md](old-system-source-coverage-audit.md) | 老系统各源表对 7 月订单的覆盖率与缺口：`测算 美中USTX二次加工成本` 缺 43.5%（最严重）· 头程 USTX 表多为「列未回填、可 rematch」· 缺口清单 `out/ustx_wage_sim/source_coverage_gaps.csv` |
 | [sku-remap.md](sku-remap.md) | 订单旧 SKU → 井新名 |
