@@ -38,6 +38,7 @@ lookup_tongtool_sku.py <SKU...>             # 主档是否存在
 | `tongtool_order_cost/audit_sources.py` | 只读源盘点/快照 + 分块取数二分失败隔离（U1/U3） |
 | `tongtool_order_cost/profitability_audit.py` | 盈利审计核心：行身份/grain/口径矩阵/异常分类/利润倒挂（U2/U4/U5/U6） |
 | `tongtool_order_cost/profitability_report.py` | 对账闸门 + JSON/Excel(17表)/管理摘要（U7） |
+| `tongtool_order_cost/ustx_cost_compare.py` | 美中 USTX 三方案成本对比：列合同 / B1·B2 成本目录 / 全月逐行比较 / 归因 / 闸门 / 产出（纯离线） |
 | `tongtool_order_cost/audit.py` | 事件 → 审计簿 |
 | `tongtool_order_cost/io_loaders.py` | 订单/规则/汇率加载 |
 | `tongtool_order_cost/pp_cotton.py` | 美中 DANEEY 订单 × BOM Cost List → PP 棉 kg 估算 |
@@ -49,7 +50,7 @@ lookup_tongtool_sku.py <SKU...>             # 主档是否存在
 | `scripts/remap_gsheet_sku.py` | Google Sheet SKU 列 dry-run / apply |
 | `scripts/lookup_tongtool_sku.py` | 通途主档 SKU 存在性 |
 | `scripts/estimate_pp_cotton.py` | PP 棉用量估算 CLI |
-| `scripts/audit_monthly_profitability.py` | 月度盈利审计 CLI：`list`/`snapshot`(只读冻结)/`analyze`(离线) |
+| `scripts/audit_monthly_profitability.py` | 月度盈利审计 CLI：`list`/`snapshot`(只读冻结)/`analyze`(离线)/`ustx-compare`(美中三方案离线对比) |
 
 ## Notebook / Google Sheet 约定（2026-08-14 核实）
 
@@ -94,6 +95,12 @@ Workbook 标题：`通途订单202606-特殊规则`（1.7.0 用）、`通途订�
 - [月度盈利审计](docs/reference/monthly-profitability-audit.md)
   —— 老板质疑「平均成本/运费低、回款低反而利润高」时：**先 snapshot 冻结、再 analyze 离线**，
   口径矩阵 + 对账闸门 + JSON/Excel/管理摘要；**只读，不回写 GSheet/EN**。
+  含 **美中 USTX 三方案成本对比**（`ustx-compare`：A 现状 / B1 测算表 / B2 EN-import 重建）——
+  证明美中改走当地二次加工后四项成本怎么变；**纯离线、不写任何表**。
+  要点：B1(人工测算) 与 B2(EN 重建) 非同源，**差异即结论**；头程与现状同源（A 已按绍兴发货方式取 EN 值 → Δ=0），仅「按皮壳重量」勾选项会再差 −16,517；
+  另有 **B3 新工资情景**（工资率 167.8→105，只动 `operating_cost`，其余保持 9/3 快照）：7 月美中合计 A 526,225 → B2 791,137 → **B3 717,678**（ΔB3 +191,453）；需 `--wage-boms` 指向 EN 逐 BOM 工序表。见 `docs/reference/en-ustx-bom-wage-rate-spec.md`。
+- [Colab 成本引擎逆向规格](docs/reference/colab-cost-engine-spec.md)
+  —— 皮壳/头程/二次加工/绍兴二次加工的确切 pandas、仓库→成本来源编码、美中口径不对称的代码证据。
 - [EN 直接采购件用「自套 BOM」出成本惯例 + 骨架缺口](../docs/solutions/architecture-patterns/en-direct-purchase-self-bom.md)
   —— 订单成本码为空时，先查物料有没有自套 BOM / 在不在皮壳平均表（`WL-shape-frame` 骨架就是漏项）
 
