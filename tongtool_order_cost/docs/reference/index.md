@@ -16,4 +16,5 @@ tags: [reference, index]
 | [colab-cost-engine-spec.md](colab-cost-engine-spec.md) | Colab 成本引擎逆向规格（皮壳/头程/二次加工/绍兴二次加工 + 仓库→来源编码 + 美中 USTX 不对称） |
 | [monthly-profitability-audit.md](monthly-profitability-audit.md) | 月度盈利审计：只读冻结→口径矩阵→对账闸门→JSON/Excel/管理摘要（两阶段 CLI）；含美中 USTX 三方案对比 `ustx-compare` |
 | [ustx-cost-caliber-note.md](ustx-cost-caliber-note.md) | 美中仓库二次加工成本口径变更说明（给财务/业务）：A/B1/B2 差额 + 分歧归因 + 待确认项 |
+| [en-ustx-bom-wage-rate-spec.md](en-ustx-bom-wage-rate-spec.md) | EN「美中加工成本, USTX」成本链路逆向规格：公式、167.8 工资率存放记录、随动项、复制 BOM 机制、167.8→105 复算（含 `out/ustx_wage_sim/` 逐 BOM 结果） |
 | [sku-remap.md](sku-remap.md) | 订单旧 SKU → 井新名 |

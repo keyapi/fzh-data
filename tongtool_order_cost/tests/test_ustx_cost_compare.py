@@ -356,3 +356,70 @@ def test_gate_raw_coverage_conservation_is_partition_check():
     buckets = {b["bucket"]: b["rows"] for b in res.raw_coverage}
     # 三个桶恰好划分并集：raw_only + wb_only + both == |raw ∪ wb|
     assert buckets["raw_only"] + buckets["writeback_only"] + buckets["both"] == 2
+
+
+# ── B3 工资率情景 ──
+
+_SHEET_H = ["美中包装成品, USTX 编号", "重量模板, 编号", "美中加工成本, USTX"]
+_BOMS_H = ["bom_name", "item_code", "total_cost", "time_in_mins", "hour_rate_labour"]
+
+
+def test_wage_delta_index_matches_by_value_and_zero_for_no_bom():
+    sheet_r = [["USTX#A", "WT1", "100"], ["USTX#B", "WT2", "50"]]   # B 无 BOM
+    boms_r = [
+        ["B-A", "USTX#A", "100", "30", "167.8"],
+        ["B-A", "USTX#A", "100", "0", "0"],     # 非美中工站工序（labour=0）不计
+    ]
+    delta, stats = U.build_wage_delta_index(_SHEET_H, sheet_r, _BOMS_H, boms_r)
+    assert abs(delta["WT1"] - (-(30 / 60) * (167.8 - 105))) < 1e-9
+    assert "WT2" not in delta                     # 无 BOM → valuation_rate 回退 → 不随工资率变
+    assert stats["matched"] == 1 and stats["no_bom"] == 1
+
+
+def test_wage_delta_conflicting_same_template_not_guessed():
+    # 同一重量模板 WT1 上的两个物料 BOM 工时不同 → Δ 不同 → 判歧义、不取首/末
+    sheet_r = [["USTX#A", "WT1", "100"], ["USTX#B", "WT1", "100"]]
+    boms_r = [
+        ["B-A", "USTX#A", "100", "30", "167.8"],
+        ["B-B", "USTX#B", "100", "60", "167.8"],
+    ]
+    delta, stats = U.build_wage_delta_index(_SHEET_H, sheet_r, _BOMS_H, boms_r)
+    assert "WT1" not in delta and stats["wt_conflicts"] == 1
+
+
+def test_wage_delta_requires_columns():
+    with pytest.raises(U.ContractError):
+        U.build_wage_delta_index(_SHEET_H, [], ["bom_name"], [])
+
+
+def test_compare_b3_applies_wage_delta_only_to_b2():
+    shell = shell_rows(("SX-A-45-DM", "WT1", "1", "2", "3"))
+    bom = bom_rows(("WT1", "皮壳", "10", "4", "6", "7"))
+    b1h, b1r = b1_rows(("SX-A-45-DM", "99"))
+    b2 = _b2(shell, bom, ["SX-A-45-DM"])
+    b1 = U.build_b1_catalog(U.b1_key_values(b1h, b1r), b2, keys=["SX-A-45-DM"])
+    rows = [order_row("SX-A-45-DM", warehouse="FZH-DANEEY", qty="2", pk="10", head="3", proc="7", sx2="0")]
+    res = U.compare_monthly_costs(
+        rows, [], ustx_warehouse_names={"FZH-DANEEY"},
+        b1_catalog=b1, b2_catalog=b2, contract=_contract(shell, bom, (b1h, b1r)),
+        wage_delta_by_template={"WT1": -5.0},
+    )
+    r = res.rows[0]
+    assert r["B2_proc"] == 7 and r["B3_proc"] == 2          # 只动二次加工
+    assert r["B3_pk"] == r["B2_pk"] and r["B3_sx2"] == r["B2_sx2"]
+    assert r["b3_wage_delta"] == -5.0 and abs(r["d_unit_B3"] - (2 - 7)) < 1e-9
+    assert any(g["gate"] == "b3_wage_sim_coverage" for g in res.gates)
+
+
+def test_compare_without_wage_delta_b3_equals_b2():
+    shell = shell_rows(("SX-A-45-DM", "WT1", "1", "2", "3"))
+    bom = bom_rows(("WT1", "皮壳", "10", "4", "6", "7"))
+    b1h, b1r = b1_rows(("SX-A-45-DM", "99"))
+    b2 = _b2(shell, bom, ["SX-A-45-DM"])
+    b1 = U.build_b1_catalog(U.b1_key_values(b1h, b1r), b2, keys=["SX-A-45-DM"])
+    rows = [order_row("SX-A-45-DM", warehouse="FZH-DANEEY", proc="7")]
+    res = U.compare_monthly_costs(rows, [], ustx_warehouse_names={"FZH-DANEEY"},
+                                  b1_catalog=b1, b2_catalog=b2, contract=_contract(shell, bom, (b1h, b1r)))
+    r = res.rows[0]
+    assert r["B3_proc"] == r["B2_proc"] and r["b3_wage_delta"] == 0.0
+    assert not any(g["gate"] == "b3_wage_sim_coverage" for g in res.gates)

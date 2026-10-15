@@ -5,6 +5,26 @@ title: tongtool_order_cost 变更日志
 ---
 # 变更日志
 
+## 2026-10-15
+- **新增 B3 新工资情景**：`ustx-compare` 增加第 4 口径 B3 —— B2 基础上把美中「二次加工成本」
+  按**新工资率 167.8→105** 调整（只动 `operating_cost`；`hour_rate = labour + manage`，167.8+34.24=202.04）。
+  按「**9/3 快照数值**」匹配当时的 BOM（该物料可有多张 BOM，必须按 `total_cost` 值匹配，不能取当前默认，否则混入其它变量）。
+  CLI 新增 `--wage-boms`（默认 `out/ustx_wage_sim/ustx_boms_all.csv`）；命中 3962/4379 行。
+  **7 月美中**：A 526,225 → B2 791,137 → **B3 717,678**（ΔB2 +264,912 / ΔB3 **+191,453**）——
+  工资率一项影响约 **7.3 万/月**。
+- **踩坑**：首版把每个 sheet 行的 Δ **累加**到重量模板（同模板多行 → 被乘 N 倍，B3 变成 −192 万的负巨值）。
+  改为「同模板 Δ 必须唯一，冲突判歧义不猜」后正常。
+- **EN 美中 USTX 加工成本工资率链路逆向（只读）**：定位 `美中加工成本, USTX` 列来源 —— USTXBZCP# 物料
+  「is_active=1 且 is_default=1」BOM 的 `total_cost`（无则回退 `Item.valuation_rate`）；
+  `total_cost = raw + operating + scrap`（309 张 BOM 0 例外），**只有 `operating_cost` 随工资率变**。
+- **167.8 定位**：存于 `Workstation` 记录 `美中USTX包装` 的 `hour_rate_labour`（同记录 `hour_rate_manage=34.24`，
+  净 `hour_rate=202.04`）；**不是** 标准 `Workstation.hour_rate`，**也不是** 自定义 DocType `Hour Rate`（生产库 0 行）。
+- **复制 BOM 机制**：`BOM.on_submit → auto_copy_bom_on_submit` → `utils/bom.copy_bom_with_new_item`（整张 BOM 复制，
+  改价目表 + PP 棉筛选 + 工序工站/工费率改写后重算 `operating_cost`）。
+- **167.8→105 复算**：净工费率 202.04→139.24；309 张 BOM，304 张受影响；`sum_delta=−7,217.3057`（等权逐 BOM）、
+  仅 active+default 的 `sum_delta=−5,884.464667`。产出 `out/ustx_wage_sim/{ustx_bom_ops.csv, summary.json, build_sim.py}`。
+- **文档**：`docs/reference/en-ustx-bom-wage-rate-spec.md`（完整规格 + 未证实项）。
+
 ## 2026-10-14
 - **美中 USTX 三方案对比**：新增 `tongtool_order_cost/ustx_cost_compare.py` + CLI `ustx-compare`（纯离线）——
   A 现状(2CJG-SX) / B1 测算表 / B2 EN-import 重建 三口径逐行对比 + 仓库×品类×绍兴发货方式归因 + fail-closed 闸门。

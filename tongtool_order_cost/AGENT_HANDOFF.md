@@ -97,7 +97,8 @@ Workbook 标题：`通途订单202606-特殊规则`（1.7.0 用）、`通途订�
   口径矩阵 + 对账闸门 + JSON/Excel/管理摘要；**只读，不回写 GSheet/EN**。
   含 **美中 USTX 三方案成本对比**（`ustx-compare`：A 现状 / B1 测算表 / B2 EN-import 重建）——
   证明美中改走当地二次加工后四项成本怎么变；**纯离线、不写任何表**。
-  要点：B1(人工测算) 与 B2(EN 重建) 非同源，**差异即结论**；头程与现状同源（A 已按绍兴发货方式取 EN 值 → Δ=0），仅「按皮壳重量」勾选项会再差 −16,517；EN 美中包装工站工资 167.8→105 未调，B2 可能偏高。
+  要点：B1(人工测算) 与 B2(EN 重建) 非同源，**差异即结论**；头程与现状同源（A 已按绍兴发货方式取 EN 值 → Δ=0），仅「按皮壳重量」勾选项会再差 −16,517；
+  另有 **B3 新工资情景**（工资率 167.8→105，只动 `operating_cost`，其余保持 9/3 快照）：7 月美中合计 A 526,225 → B2 791,137 → **B3 717,678**（ΔB3 +191,453）；需 `--wage-boms` 指向 EN 逐 BOM 工序表。见 `docs/reference/en-ustx-bom-wage-rate-spec.md`。
 - [Colab 成本引擎逆向规格](docs/reference/colab-cost-engine-spec.md)
   —— 皮壳/头程/二次加工/绍兴二次加工的确切 pandas、仓库→成本来源编码、美中口径不对称的代码证据。
 - [EN 直接采购件用「自套 BOM」出成本惯例 + 骨架缺口](../docs/solutions/architecture-patterns/en-direct-purchase-self-bom.md)

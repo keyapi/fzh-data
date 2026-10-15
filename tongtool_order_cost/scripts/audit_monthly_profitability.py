@@ -411,10 +411,27 @@ def cmd_ustx_compare(args) -> int:
     if head_rec and head_rec["status"] == "ok":
         eh, er = P.load_snapshot_csv(snap / head_rec["path"])
         head_index = U.build_head_freight_index(eh, er)
+    else:
+        eh, er = None, None
+
+    # B3 工资率情景（167.8→105）：需 EN 逐 BOM 工序表（--wage-boms）
+    wage_delta = None
+    wage_stats = None
+    wage_boms = Path(args.wage_boms) if args.wage_boms else (
+        MODULE_ROOT / "out" / "ustx_wage_sim" / "ustx_boms_all.csv"
+    )
+    if wage_boms.exists():
+        if eh is None:
+            eh, er = P.load_snapshot_csv(snap / by_key["en_bom_cost"]["path"])
+        bh, br = P.load_snapshot_csv(wage_boms)
+        wage_delta, wage_stats = U.build_wage_delta_index(eh, er, bh, br)
+    elif args.wage_boms:
+        raise SystemExit(f"--wage-boms 指向的文件不存在: {wage_boms}")
 
     result = U.compare_monthly_costs(
         order_rows, raw_rows, ustx_warehouse_names=ustx_wh,
         b1_catalog=b1, b2_catalog=b2, contract=contract, head_index=head_index,
+        wage_delta_by_template=wage_delta,
     )
 
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -434,6 +451,7 @@ def cmd_ustx_compare(args) -> int:
         },
         "component_waterfall": result.component_waterfall,
         "head_shell_sensitivity": result.head_shell_sensitivity,
+        "wage_sim": wage_stats,
         "gates": result.gates,
         "blocked_reasons": result.blocked_reasons,
         "notes": result.notes,
@@ -470,6 +488,7 @@ def build_parser() -> argparse.ArgumentParser:
     pu = sub.add_parser("ustx-compare", help="美中 USTX 三方案成本对比（从已冻结快照离线，不联网）")
     pu.add_argument("--snapshot", required=True, help="snapshot 产出的目录（需 --with-finance）")
     pu.add_argument("--out", default="", help="输出目录；默认在快照同级带时间戳")
+    pu.add_argument("--wage-boms", default="", help="EN 逐 BOM 工序表 csv（默认 out/ustx_wage_sim/ustx_boms_all.csv）；给了才算 B3")
     pu.set_defaults(func=cmd_ustx_compare)
     return p
 

@@ -146,6 +146,7 @@ CLI **没有** apply / write / update / upload 任何标志；本文件不 impor
 | **A 现状** | 直接取订单表 皮壳成本 / 头程运费金额 / 二次加工成本 / 绍兴二次加工成本（2CJG-SX） |
 | **B1 测算表** | A 基础上，美中「二次加工成本」换成 `测算 美中USTX二次加工成本` 最新月度列（`二次加工成本*系数多月202411`）；缺行用 B2 公式补（`formula_filled`）；再缺 `unmatched` |
 | **B2 EN 式** | 四项全按 import 表重建：皮壳=`importBOMCostList.皮壳成本` 按重量模板取 **max**；头程=**EN BOM 成本列表按绍兴发货方式取**（半成品→半成品头程、成品→成品头程、皮壳→皮壳头程，缺则皮壳兜底）；二次加工=`美中加工成本, USTX`；绍兴二次加工=按 `绍兴发货方式` 取 绍兴包装半成品/成品成本（半成品/成品）或 0（皮壳） |
+| **B3 新工资** | B2 基础上，把美中「二次加工成本」按**新工资率 167.8→105** 调整（只动 `operating_cost`，其余保持 9/3 快照）。需 `--wage-boms` 指向 EN 逐 BOM 工序表 |
 
 ```bash
 # 只跑 snapshot --with-finance 即可（USTX 成本源已内置注册，无需 --extra）
@@ -154,6 +155,7 @@ uv run python tongtool_order_cost/scripts/audit_monthly_profitability.py \
 uv run python tongtool_order_cost/scripts/audit_monthly_profitability.py \
     ustx-compare --snapshot tongtool_order_cost/out/profitability_audit/2026年7月订单
 #   → <snapshot>_ustx_compare_<ts>/{audit.json,audit.xlsx(10 表),管理摘要.md}
+#   B3 工资情景默认读 out/ustx_wage_sim/ustx_boms_all.csv；换路径用 --wage-boms <csv>；不给则跳过 B3
 ```
 
 `--with-finance` 冻结的 USTX 相关源：`sx_processing_{values,formulas}`、`ustx_estimate_{values,formulas}`、
@@ -165,16 +167,17 @@ uv run python tongtool_order_cost/scripts/audit_monthly_profitability.py \
 
 **7 月实证（美中 4,379 行，按发货数量加权，￥）**：
 
-| 分项 | A | B1 | B2 | ΔB1 | ΔB2 |
-|---|---:|---:|---:|---:|---:|
-| 皮壳成本 | 231,530 | 231,530 | 231,530 | 0 | 0 |
-| 头程运费 | 52,666 | 52,666 | 52,666 | 0 | 0 |
-| 二次加工成本 | 242,029 | 468,658 | 468,011 | **+226,629** | **+225,982** |
-| 绍兴二次加工成本 | 0 | 0 | 38,930 | 0 | **+38,930** |
-| **合计** | **526,225** | **752,854** | **791,137** | **+226,629** | **+264,912** |
+| 分项 | A | B1 | B2 | B3 | ΔB1 | ΔB2 | ΔB3 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 皮壳成本 | 231,530 | 231,530 | 231,530 | 231,530 | 0 | 0 | 0 |
+| 头程运费 | 52,666 | 52,666 | 52,666 | 52,666 | 0 | 0 | 0 |
+| 二次加工成本 | 242,029 | 468,658 | 468,011 | 394,552 | **+226,629** | **+225,982** | **+152,522** |
+| 绍兴二次加工成本 | 0 | 0 | 38,930 | 38,930 | 0 | **+38,930** | **+38,930** |
+| **合计** | **526,225** | **752,854** | **791,137** | **717,678** | **+226,629** | **+264,912** | **+191,453** |
 
 分歧来自：① Colab 用绍兴二次加工（~17–50），EN 用 `USTXBZCP#` 成品 BOM `total_cost`（~200+）；
-② EN 按绍兴发货方式补了 绍兴包装半成品/成品成本，Colab 该列整列记 0；③ 皮壳/头程与现状一致（Δ=0）。
+② EN 按绍兴发货方式补了 绍兴包装半成品/成品成本，Colab 该列整列记 0；③ 皮壳/头程与现状一致（Δ=0）；
+④ 把工资率由 167.8 降到 105，二次加工成本 **−73,459**（￥加权），合计从 +264,912 收窄到 **+191,453**。
 
 **注意事项（务必带进结论）**：
 - **B1 与 B2 非同源**：B1=人工测算表（`美中USTX成本测算` 的月度值**是手填、无公式**，取平均）；
@@ -187,6 +190,9 @@ uv run python tongtool_order_cost/scripts/audit_monthly_profitability.py \
   头程将再变 **−16,517**（7 月，￥加权）——这是唯一的头程口径分歧点。
 - **工资待调**：EN 美中USTX包装工站工资拟 167.8→105（尚未调整），B2 二次加工成本可能**偏高**。
 - **字面 0**：`美中加工成本, USTX` 在源表里有 335 行（美中行）是**字面 0**（非空串；767 行全局 0/空，其中 393 行连 `美中包装成品, USTX 编号` 都没有）——按原值 0 计入，**不猜测回退**。
+- **B3 工资情景**：`167.8→105`，只动 `operating_cost`（`= Σ 工序 time/60 × hour_rate`；`hour_rate = hour_rate_labour + hour_rate_manage`，本案例 167.8+34.24=202.04）。167.8 存于 EN `Workstation` 记录「美中USTX包装」的 `hour_rate_labour`。
+  复算按**「9/3 快照数值」匹配当时的 BOM**（该物料可有多个 BOM，必须按 `total_cost` 值匹配，不能取当前默认，否则会混入其它变量）；
+  命中 3962/4379 行；未命中 417 行（96 个物料**完全没有 BOM**，其值来自 `Item.valuation_rate` 回退，**不随工资率变**）。详情见 [en-ustx-bom-wage-rate-spec.md](en-ustx-bom-wage-rate-spec.md)。
 
 **闸门**（`09_闸门`）：`writeback_row_conservation`、`non_ustx_zero_delta`、
 `b1_source_conservation`、`b2_lineage_complete`、`component_identity`、

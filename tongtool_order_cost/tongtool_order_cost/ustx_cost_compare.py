@@ -81,6 +81,11 @@ HEAD_COLS = {
     "成品": ("头程成品运费, 美中USTX", "成品计费重量, (kg)"),
 }
 
+# EN BOM 成本列表（importBOMCostList 超集）里 USTX 相关的列
+SHELL_USTX_ITEM = "美中包装成品, USTX 编号"
+SHELL_USTX_COST = "美中加工成本, USTX"
+SHELL_WEIGHT_TEMPLATE = "重量模板, 编号"
+
 FORMULA_VERSION = "ustx-import-v1"
 
 SHIP_METHOD_SHELL = "皮壳"
@@ -370,6 +375,91 @@ def build_head_freight_index(
     return HeadFreightIndex(by_template=by_template, weight_by_template=weight_by_template, source_rows=src)
 
 
+# ─────────────────────────── 工资率情景（B3） ───────────────────────────
+
+# EN 侧：工资率存放于 Workstation「美中USTX包装」的 hour_rate_labour
+WAGE_OLD_DEFAULT = 167.8
+WAGE_NEW_DEFAULT = 105.0
+
+BOM_ALL_ITEM = "item_code"
+BOM_ALL_NAME = "bom_name"
+BOM_ALL_TOTAL = "total_cost"
+BOM_ALL_TIME = "time_in_mins"
+BOM_ALL_LABOUR = "hour_rate_labour"
+
+
+def build_wage_delta_index(
+    sheet_headers: Sequence[str],
+    sheet_rows: Sequence[Sequence[str]],
+    boms_headers: Sequence[str],
+    boms_rows: Sequence[Sequence[str]],
+    *,
+    old_rate: float = WAGE_OLD_DEFAULT,
+    new_rate: float = WAGE_NEW_DEFAULT,
+) -> tuple[dict[str, float], dict]:
+    """按「9/3 快照数值」匹配出当时的 USTX BOM，算出只改工资率的 Δ（键=重量模板编号）。
+
+    逻辑：对 sheet 每一行取 `美中包装成品, USTX 编号` 与 `美中加工成本, USTX`；
+    在该编号的**全部** BOM 里找 `total_cost` 等于该值的那张（即 9/3 当时那张）；
+    再用它的工序算 `Δ = −Σ(工序 time/60，仅 hour_rate_labour==旧值) × (旧−新)`。
+    找不到 BOM（值来自 `Item.valuation_rate` 回退）或对不上数值 → Δ=0（工资率不影响 valuation_rate）。
+    """
+    want = {BOM_ALL_ITEM, BOM_ALL_NAME, BOM_ALL_TOTAL, BOM_ALL_TIME, BOM_ALL_LABOUR}
+    present = {str(h).strip() for h in boms_headers}
+    if not want <= present:
+        raise ContractError(f"工资情景表缺列: {sorted(want - present)}")
+
+    by_item: dict[str, list[tuple[str, float, float]]] = {}   # item -> [(bom, total, labour_min)]
+    acc: dict[str, dict] = {}
+    for r in _rows_to_dicts(boms_headers, boms_rows):
+        item = r.get(BOM_ALL_ITEM, "")
+        bom = r.get(BOM_ALL_NAME, "")
+        if not item or not bom:
+            continue
+        d = acc.setdefault(bom, {"item": item, "total": None, "lab_min": 0.0})
+        tot = to_float(r.get(BOM_ALL_TOTAL))
+        if tot is not None:
+            d["total"] = tot
+        t = to_float(r.get(BOM_ALL_TIME))
+        lab = to_float(r.get(BOM_ALL_LABOUR))
+        if t is not None and lab is not None and abs(lab - old_rate) < 0.01:
+            d["lab_min"] += t
+    for bom, d in acc.items():
+        by_item.setdefault(d["item"], []).append((bom, d["total"], d["lab_min"]))
+
+    delta_sets: dict[str, set[float]] = {}
+    stats = {"sheet_rows": 0, "matched": 0, "value_mismatch": 0, "no_bom": 0, "wt_conflicts": 0}
+
+    for r in _rows_to_dicts(sheet_headers, sheet_rows):
+        uid = r.get(SHELL_USTX_ITEM, "")
+        wt = r.get(SHELL_WEIGHT_TEMPLATE, "")
+        v = to_float(r.get(SHELL_USTX_COST))
+        if not uid or v is None:
+            continue
+        stats["sheet_rows"] += 1
+        cands = by_item.get(uid)
+        if not cands:
+            stats["no_bom"] += 1            # 值来自 Item.valuation_rate 回退 → 工资率不影响
+            continue
+        hit = [c for c in cands if c[1] is not None and abs(c[1] - v) < 0.005]
+        if not hit:
+            stats["value_mismatch"] += 1
+            continue
+        stats["matched"] += 1
+        delta = -(hit[0][2] / 60.0) * (old_rate - new_rate)
+        if wt:
+            delta_sets.setdefault(wt, set()).add(round(delta, 6))
+
+    # 同一重量模板必须只有一个 Δ；出现多个 → 判歧义，不取首/末（不猜）
+    delta_by_wt: dict[str, float] = {}
+    for wt, ds in delta_sets.items():
+        if len(ds) == 1:
+            delta_by_wt[wt] = next(iter(ds))
+        else:
+            stats["wt_conflicts"] += 1
+    return delta_by_wt, stats
+
+
 # ─────────────────────────── 成本目录 ───────────────────────────
 
 
@@ -605,6 +695,7 @@ def compare_monthly_costs(
     b2_catalog: CostCatalogResult,
     contract: FormulaContract,
     head_index: "HeadFreightIndex | None" = None,
+    wage_delta_by_template: "dict[str, float] | None" = None,
 ) -> MonthlyComparisonResult:
     """全月逐行 A/B1/B2 比较；非 USTX 行严格复制 A；输出对账与闸门。
 
@@ -627,6 +718,8 @@ def compare_monthly_costs(
     b2_used = 0
     head_hit = 0
     head_miss = 0
+    b3_hit = 0
+    b3_miss = 0
 
     for row in order_rows:
         rec = order_row_to_record(row)
@@ -682,12 +775,26 @@ def compare_monthly_costs(
             elif head_index is not None:
                 head_miss += 1
 
+        # B3 = B2 再把「二次加工成本」按新工资率调整（只对匹配到 9/3 BOM 的重量模板）
+        b3 = dict(b2)
+        b3_wage_delta = 0.0
+        if is_ustx and wage_delta_by_template:
+            tmpl = b2_catalog.rows.get(key, {}).get("weight_template", "")
+            dlt = wage_delta_by_template.get(tmpl)
+            if dlt is not None:
+                b3[proc_col] = (b2[proc_col] or 0.0) + dlt
+                b3_wage_delta = dlt
+                b3_hit += 1
+            else:
+                b3_miss += 1
+
         def _sum(d):
             return sum((d[c] or 0.0) for c in COMPONENT_COLS)
 
         unit_a = _sum(a)
         unit_b1 = _sum(b1)
         unit_b2 = _sum(b2)
+        unit_b3 = _sum(b3)
         qty = rec["qty"]
 
         out = {
@@ -716,15 +823,21 @@ def compare_monthly_costs(
             out[f"A_{label}"] = a[comp]
             out[f"B1_{label}"] = b1[comp]
             out[f"B2_{label}"] = b2[comp]
+            out[f"B3_{label}"] = b3[comp]
             out[f"d1_{label}"] = round((b1[comp] or 0.0) - (a[comp] or 0.0), 6)
             out[f"d2_{label}"] = round((b2[comp] or 0.0) - (a[comp] or 0.0), 6)
+            out[f"d3_{label}"] = round((b3[comp] or 0.0) - (a[comp] or 0.0), 6)
         out["unit_A"] = round(unit_a, 6)
         out["unit_B1"] = round(unit_b1, 6)
         out["unit_B2"] = round(unit_b2, 6)
+        out["unit_B3"] = round(unit_b3, 6)
         out["d_unit_B1"] = round(unit_b1 - unit_a, 6)
         out["d_unit_B2"] = round(unit_b2 - unit_a, 6)
+        out["d_unit_B3"] = round(unit_b3 - unit_a, 6)
         out["amt_B1"] = round((unit_b1 - unit_a) * qty, 6)
         out["amt_B2"] = round((unit_b2 - unit_a) * qty, 6)
+        out["amt_B3"] = round((unit_b3 - unit_a) * qty, 6)
+        out["b3_wage_delta"] = round(b3_wage_delta, 6)
         result.rows.append(out)
 
     result.ustx_rows = [r for r in result.rows if r["is_ustx"]]
@@ -760,14 +873,17 @@ def compare_monthly_costs(
         a_amt = sum((r[f"A_{k}"] or 0.0) * r["qty"] for r in result.ustx_rows for k in [_key_of(label)])
         b1_amt = sum((r[f"B1_{k}"] or 0.0) * r["qty"] for r in result.ustx_rows for k in [_key_of(label)])
         b2_amt = sum((r[f"B2_{k}"] or 0.0) * r["qty"] for r in result.ustx_rows for k in [_key_of(label)])
+        b3_amt = sum((r[f"B3_{k}"] or 0.0) * r["qty"] for r in result.ustx_rows for k in [_key_of(label)])
         waterfall.append(
             {
                 "component": label,
                 "A_amount": round(a_amt, 2),
                 "B1_amount": round(b1_amt, 2),
                 "B2_amount": round(b2_amt, 2),
+                "B3_amount": round(b3_amt, 2),
                 "d1_amount": round(b1_amt - a_amt, 2),
                 "d2_amount": round(b2_amt - a_amt, 2),
+                "d3_amount": round(b3_amt - a_amt, 2),
             }
         )
     result.component_waterfall = waterfall
@@ -780,7 +896,7 @@ def compare_monthly_costs(
             k,
             {"warehouse": r["warehouse"], "category": r["category"],
              "shipping_method": r["shipping_method"], "rows": 0, "qty": 0.0,
-             "amt_A": 0.0, "amt_B1": 0.0, "amt_B2": 0.0,
+             "amt_A": 0.0, "amt_B1": 0.0, "amt_B2": 0.0, "amt_B3": 0.0,
              "d1_pk": 0.0, "d1_proc": 0.0, "d2_pk": 0.0, "d2_proc": 0.0, "d2_sx2": 0.0},
         )
         q = r["qty"]
@@ -789,14 +905,18 @@ def compare_monthly_costs(
         cell["amt_A"] += r["unit_A"] * q
         cell["amt_B1"] += r["unit_B1"] * q
         cell["amt_B2"] += r["unit_B2"] * q
+        cell["amt_B3"] += r["unit_B3"] * q
         cell["d1_pk"] += r["d1_pk"] * q
         cell["d1_proc"] += r["d1_proc"] * q
         cell["d2_pk"] += r["d2_pk"] * q
         cell["d2_proc"] += r["d2_proc"] * q
         cell["d2_sx2"] += r["d2_sx2"] * q
     result.attribution = [
-        {**v, "d1_amt": round(v["amt_B1"] - v["amt_A"], 2), "d2_amt": round(v["amt_B2"] - v["amt_A"], 2)}
-        for v in sorted(agg.values(), key=lambda x: -abs(x["amt_B2"] - x["amt_A"]))
+        {**v,
+         "d1_amt": round(v["amt_B1"] - v["amt_A"], 2),
+         "d2_amt": round(v["amt_B2"] - v["amt_A"], 2),
+         "d3_amt": round(v["amt_B3"] - v["amt_A"], 2)}
+        for v in sorted(agg.values(), key=lambda x: -abs(x["amt_B3"] - x["amt_A"]))
     ]
 
     # ── 闸门 ──
@@ -840,6 +960,12 @@ def compare_monthly_costs(
                            head_miss == 0,
                            f"B2 头程(按绍兴发货方式)命中 {head_hit} 行 / 未命中 {head_miss} 行（未命中保留 A）",
                            blocking=False))
+    if wage_delta_by_template:
+        gates.append(_gate("b3_wage_sim_coverage",
+                           b3_miss == 0,
+                           f"B3 工资情景(167.8→105)命中 {b3_hit} 行 / 未命中 {b3_miss} 行"
+                           f"（未命中=该重量模板未匹配到 9/3 BOM，B3≡B2）",
+                           blocking=False))
     result.gates = gates
 
     if head_index is not None:
@@ -870,6 +996,14 @@ def compare_monthly_costs(
             f"B2 有 {zero_proc} 行「美中加工成本, USTX」源值=0（表内**字面 0**，非空串）——按原值 0 计入、不猜测回退。"
         )
     result.notes.append("B1 与 B2 非同源：B1=人工测算表，B2=EN/import 重建，差异本身即结论。")
+    if wage_delta_by_template:
+        b3_total = sum(r["amt_B3"] for r in result.ustx_rows)
+        result.notes.append(
+            f"B3=工资率 167.8→105 情景（只动工资、其余保持 9/3 快照）：命中 {b3_hit} / 未命中 {b3_miss} 行；"
+            f"相对 A 合计 ΔB3 = {b3_total:+,.0f}（￥加权）。只影响 `operating_cost`，物料/报废料不变。"
+        )
+    else:
+        result.notes.append("B3（工资率 167.8→105 情景）未接入：未提供 EN 逐 BOM 工序表。")
     result.notes.append("B2 二次加工成本取自 EN 美中USTX包装 BOM；工资 167.8→105 尚未调整，值可能偏高。")
     return result
 
@@ -904,11 +1038,14 @@ _ROW_COLUMNS = [
     "A_pk", "A_head", "A_proc", "A_sx2",
     "B1_pk", "B1_head", "B1_proc", "B1_sx2",
     "B2_pk", "B2_head", "B2_proc", "B2_sx2",
+    "B3_pk", "B3_head", "B3_proc", "B3_sx2",
     "d1_pk", "d1_head", "d1_proc", "d1_sx2",
     "d2_pk", "d2_head", "d2_proc", "d2_sx2",
-    "unit_A", "unit_B1", "unit_B2", "d_unit_B1", "d_unit_B2", "amt_B1", "amt_B2",
-    "B2_head_shell", "head_src",
-    "b1_lineage", "b2_lineage",
+    "d3_pk", "d3_head", "d3_proc", "d3_sx2",
+    "unit_A", "unit_B1", "unit_B2", "unit_B3",
+    "d_unit_B1", "d_unit_B2", "d_unit_B3",
+    "amt_B1", "amt_B2", "amt_B3", "b3_wage_delta",
+    "B2_head_shell", "b1_lineage", "b2_lineage",
 ]
 
 
@@ -948,6 +1085,7 @@ def build_sheets(
     for w in result.component_waterfall:
         summary.append({"metric": f"瀑布 Δ(B1) {w['component']}", "value": w["d1_amount"]})
         summary.append({"metric": f"瀑布 Δ(B2) {w['component']}", "value": w["d2_amount"]})
+        summary.append({"metric": f"瀑布 Δ(B3) {w['component']}", "value": w["d3_amount"]})
     for n in result.notes:
         summary.append({"metric": "note", "value": n})
 
@@ -1010,20 +1148,25 @@ def render_memo(result: MonthlyComparisonResult) -> str:
     lines.append("- B1：A 基础上把美中「二次加工成本」换成测算表最新月度列（多月202411），缺行用 B2 公式补")
     lines.append("- B2：四项按 EN/import 表重建（皮壳取 max；头程按绍兴发货方式取、皮壳兜底；")
     lines.append("  二次加工=美中USTX；绍兴二次加工按绍兴发货方式取包装半/成品成本）")
+    lines.append("- B3：B2 基础上，把美中「二次加工成本」按新工资率 167.8→105 调整（只动 operating_cost，其余保持 9/3 快照）")
     lines.append("")
     lines.append("## 全月差额（仅美中，按发货数量加权，￥）")
     lines.append("")
-    lines.append("| 分项 | A | B1 | B2 | ΔB1 | ΔB2 |")
-    lines.append("|---|---:|---:|---:|---:|---:|")
+    lines.append("| 分项 | A | B1 | B2 | B3 | ΔB1 | ΔB2 | ΔB3 |")
+    lines.append("|---|---:|---:|---:|---:|---:|---:|---:|")
     for w in result.component_waterfall:
         lines.append(
             f"| {w['component']} | {w['A_amount']:,.0f} | {w['B1_amount']:,.0f} | {w['B2_amount']:,.0f} "
-            f"| {w['d1_amount']:,.0f} | {w['d2_amount']:,.0f} |"
+            f"| {w['B3_amount']:,.0f} | {w['d1_amount']:,.0f} | {w['d2_amount']:,.0f} | {w['d3_amount']:,.0f} |"
         )
     tot_a = sum(w["A_amount"] for w in result.component_waterfall)
     tot_1 = sum(w["B1_amount"] for w in result.component_waterfall)
     tot_2 = sum(w["B2_amount"] for w in result.component_waterfall)
-    lines.append(f"| **合计** | **{tot_a:,.0f}** | **{tot_1:,.0f}** | **{tot_2:,.0f}** | **{tot_1-tot_a:,.0f}** | **{tot_2-tot_a:,.0f}** |")
+    tot_3 = sum(w["B3_amount"] for w in result.component_waterfall)
+    lines.append(
+        f"| **合计** | **{tot_a:,.0f}** | **{tot_1:,.0f}** | **{tot_2:,.0f}** | **{tot_3:,.0f}** "
+        f"| **{tot_1-tot_a:,.0f}** | **{tot_2-tot_a:,.0f}** | **{tot_3-tot_a:,.0f}** |"
+    )
     lines.append("")
     lines.append("## 关键数字")
     lines.append(f"- 写回表行数 {len(result.rows)}，美中 {len(result.ustx_rows)} 行")
