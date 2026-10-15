@@ -65,7 +65,7 @@ def summarize(result: ScanResult, *, when: _dt.date | None = None) -> str:
             lines.append(
                 f"- {w.warehouse}：**{w.count}** 个（在途合计 {_fmt_num(w.intransit_total)} 件）"
             )
-    lines += ["", f"> 口径：可用库存 < {threshold}；括号内为该仓低库存 SKU 的在途数量合计"]
+    lines += ["", f"> 口径：可用库存 < {threshold}（已排除「可用=0 且 在途=0」）；括号内为该仓低库存 SKU 的在途数量合计"]
     return "\n".join(lines)
 
 

@@ -12,6 +12,9 @@ tags: [stock-alert, tongtool, erp2, rate-limit, dingtalk, scheduling]
 
 正文（两种都会给）：每仓「**N** 个 SKU 可用<5（在途合计 M 件）」。
 
+**计入规则**：`availableStockQuantity < 阈值` **且** 不是「可用=0 且 在途=0」的死库存
+（后者既没货也无在途，多为历史/停用 SKU，过滤掉不统计）。即 `可用=0 + 在途>0` 仍计入。
+
 按**低库存 SKU 总数**自动分档（`--small-threshold`，默认 10）：
 
 | 总数 | 投递 |

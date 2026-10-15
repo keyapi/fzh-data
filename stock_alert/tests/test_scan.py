@@ -41,3 +41,16 @@ def test_scan_none_below_threshold():
     result = scan(rows, threshold=5)
     assert result.warehouses[0].count == 0
     assert result.total_low == 0
+
+
+def test_scan_drops_zero_available_and_zero_intransit():
+    """可用=0 且在途=0 的死库存应被过滤掉；0 可用但有在途、或有货但低 仍计入。"""
+    rows = {
+        "美中-FZH-DANEEY": [
+            _row("美中-FZH-DANEEY", "dead", 0, 0),       # 0/0 → 过滤
+            _row("美中-FZH-DANEEY", "incoming", 0, 7),   # 0 可用 + 在途 7 → 计入
+            _row("美中-FZH-DANEEY", "low", 3, 0),        # 有货但低 → 计入
+        ]
+    }
+    result = scan(rows, threshold=5)
+    assert [s.sku for s in result.warehouses[0].low] == ["incoming", "low"]  # 按可用升序

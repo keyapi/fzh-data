@@ -85,7 +85,7 @@ def test_notify_falls_back_to_default_robot(monkeypatch):
 
 
 def _big_result(n: int = 20):
-    rows = {"美中-FZH-DANEEY": [StockRow("美中-FZH-DANEEY", f"S{i}", 0, i) for i in range(n)]}
+    rows = {"美中-FZH-DANEEY": [StockRow("美中-FZH-DANEEY", f"S{i}", 0, i + 1) for i in range(n)]}
     return scan(rows, threshold=5)
 
 
