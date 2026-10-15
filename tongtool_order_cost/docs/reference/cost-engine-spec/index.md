@@ -11,6 +11,7 @@ tags: [reference, index, cost-engine]
 
 | 文档 | 说明 |
 |------|------|
+| [00-review-brief.md](00-review-brief.md) | **评审任务书**：给其它 Agent / 其它对话做独立核验用（待证伪断言清单 + 证据要求 + 输出格式 + 易错点 + 禁止事项） |
 | [01-overview-and-glossary.md](01-overview-and-glossary.md) | **入口**：系统上下文、范围/非目标、数据时点、实体与编码速查、用户惯用语对照、「疑问→答案」总表 |
 | [02-keys-and-entities.md](02-keys-and-entities.md) | **键与实体**：三套键（`品类尺寸面料编码`/`品类尺寸编码`/`重量模板编号`）、前缀实体、分流字段、6 列去重键、键的坑 |
 | [03-data-sources.md](03-data-sources.md) | **数据源清单**：GS 工作簿/ws（谁写谁读多少行）+ EN 报表/Doctype/app；缺口指向覆盖率审计 |
@@ -22,6 +23,7 @@ tags: [reference, index, cost-engine]
 | [08-special-cases.md](08-special-cases.md) | **特例**：`-COVER`/`-PPCOTTON`/`-FOAM`（含数字后缀）、自采购、拆单系数、Product Bundle、FBA 清零、是否需尾程、`HEAD-SX→0`、品类白名单清零、灰区 `fillna(0)`、`0.001` 占位、星链替换 |
 | [09-known-issues-register.md](09-known-issues-register.md) | **问题登记册**：EN 内部不一致（A）、时序错配（B）、数据缺口/脏数据（C）、命名坑（D）、待证实（E）。所有「未证实」指向此页 |
 | [10-glossary.md](10-glossary.md) | **术语表（字段级）**：实体前缀/成本来源编码/头程编码/SKU 后缀/EN 字段/GS 列名/Colab 开关两表速查 |
+| [11-plan-new-ustx-processing-table.md](11-plan-new-ustx-processing-table.md) | **可行性方案**：新建「美中USTX二次加工成本」ws —— 键与匹配链、**「行怎么建全」清单**（骨架=绍兴表 177/177；B 组 10 键需补）、缺口分类、风险、分步实施、对拍验证 |
 
 ## 疑问 → 答案位置
 
