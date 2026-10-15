@@ -84,6 +84,29 @@ uv run python compare_runs.py --dir "..."                    # 与 <dir>/Colab�
 | `--cache-only` | 背贴品名表只用本地缓存，不联网 |
 | `--dry-run` | 只算不写 |
 
+### 3.3 `notion_stockout.py`（断货登记，半自动）
+
+把预检产出的 `SPS库存检查操作表-*.xlsx` 算成 **Notion 待追加行**，输出可直接喂
+`notion-create-pages` 的 JSON。**不连 Notion**（写入走交互式 MCP，见
+[reference/notion-stockout.md](docs/reference/notion-stockout.md)）。
+
+```bash
+uv run python notion_stockout.py --xlsx "<SPS库存检查操作表-*.xlsx>" --out rows_to_add.json
+```
+
+| 参数 | 默认 | 说明 |
+|------|------|------|
+| `--xlsx` | 必填 | 预检操作表 |
+| `--sku-map` | `data/notion_sku_map.json` | Vendor Style → SKU 简称 / 通途SKU / 到货日期 |
+| `--known-pos` | `data/notion_pb_nostock_pos.json` | 已有 PO 快照（去重）；传 `''` 关闭 |
+| `--sps-date` | 文件名里的 `YYYYMMDD` | 覆盖 SPS 操作日期 |
+| `--batch` | 自动拼 | 覆盖「检出批次」文案 |
+| `--out` | stdout | 输出 JSON 路径 |
+
+硬约束：Vendor Style 不在映射表 → **退出码 2 且不产出半成品**；「缺货明细」里标
+`全部缺货` 的行必须与「全部缺货PO」sheet 一致。去重命中 / 同 PO 多缺货行 / 缺到货日期
+全部写进 `summary`。推完把新 PO 追加进 `data/notion_pb_nostock_pos.json`。
+
 ## 4. 网页版服务（FastAPI + Redis/RQ + SQLite）
 
 命令行是薄适配器，真正的编排在 **`service.py`**；网页和队列复用同一层，
@@ -486,6 +509,23 @@ uv run pytest tests/ -q
 - 输出页数：标签 PDF = 输入页数 × 2；背贴 PDF = 订单行数。
 
 ## 9. 本会话成果
+
+### 2026-10-15（断货登记：库存预检缺货 → Notion「PB 无货未发」库）
+
+- **背景**：预检筛出的整单缺货 PO 要登记到 Notion 跟踪。2026-10-08 已把手写表迁成结构化库
+  「**PB 无货未发（一行一个 PO）**」（`collection://fa2f272d-289a-4a88-88eb-9ef39be00e43`，
+  库 URL 见 reference）。此后每批新增缺货靠人对照手抄。
+- **本次**：20261012 批的 3 条新缺货补进库（`138066286` `138067758` 草绿153、`138083193` 草绿138；
+  `138034395` 10-08 已录不重复）→ 库 32 → 35 行；新增 `notion_stockout.py`（§3.3）+
+  `data/notion_sku_map.json` + `data/notion_pb_nostock_pos.json`。
+- **为什么半自动（关键约束）**：Notion 写入只有交互式 MCP 可用 —— 它缓存的 OAuth token
+  **实测打 REST API 返回 401**（token 只对 MCP 服务器有效）。所以脚本不连 Notion、只出 JSON；
+  用户明确选择不引入 Notion 集成 token。
+- **到货日期跟 SKU 走**：草绿153 → 2026-10-30、草绿138 → 2026-11-17（来自老表组标题）；
+  改了只动 `data/notion_sku_map.json`。黄色97 老表没记 → `eta=null`，该行留空并报出来。
+- **踩到的坑**：Notion `打单` 列部分缺货时填 `部分`，**不是** PO 库存状态的 `部分缺货`；
+  单测先写错、跑出来才发现（`打单` 是 select，值必须与库里的选项字面一致）。
+- **测试**：`tests/test_notion_stockout.py` +15；pb_orders 全套 178 passed / 2 skipped。
 
 ### 2026-09-23（库存预检：把「出件前那一天的手工筛选」也做进本模块）
 

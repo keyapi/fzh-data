@@ -108,7 +108,10 @@ parcel_track/scripts/run_parcel_track_scheduled-*.cmd
 # pb_orders 运行产物与本地缓存（数据在仓库外，这里只兜底）
 pb_orders/out/
 pb_orders/*.pdf
-pb_orders/data/
+# data/ 里跑出来的缓存不入库；但断货登记的映射表与 PO 快照是配置，必须入库
+pb_orders/data/*
+!pb_orders/data/notion_sku_map.json
+!pb_orders/data/notion_pb_nostock_pos.json
 
 # pb_orders Web 服务的运行状态：任务库、上传、临时件、产物，全是业务数据
 pb_orders/runtime/

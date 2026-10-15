@@ -1,0 +1,38 @@
+{
+  "_comment": "Vendor Style（大写、去空白后）→ Notion「PB 无货未发」库的取值。到货日期是唯一会随时间变的字段，变了只改这里。",
+  "CENKZ1324-SKYBLUE-97": {
+    "sku": "蓝色97",
+    "tongtu_sku": "CENKZ1324-SkyBlue-97",
+    "eta": "2026-11-16"
+  },
+  "CENKZ1325-YELLOW-97": {
+    "sku": "黄色97",
+    "tongtu_sku": "CENKZ1325-Yellow-97",
+    "eta": null
+  },
+  "CENKZ1325-YELLOW-138": {
+    "sku": "黄色138",
+    "tongtu_sku": "CENKZ1325-Yellow-138",
+    "eta": "2026-11-17"
+  },
+  "CENKZ1325-YELLOW-194": {
+    "sku": "黄194",
+    "tongtu_sku": "CENKZ1325-Yellow-194",
+    "eta": "2026-10-30"
+  },
+  "CEN961NLINEN-SAGEGREEN-100": {
+    "sku": "绿100",
+    "tongtu_sku": "CEN961NLinen-SageGreen-100",
+    "eta": "2026-11-17"
+  },
+  "CEN961NLINEN-SAGEGREEN-138": {
+    "sku": "草绿138",
+    "tongtu_sku": "CEN961NLinen-SageGreen-138",
+    "eta": "2026-11-17"
+  },
+  "CEN961NLINEN-SAGEGREEN-153": {
+    "sku": "草绿153",
+    "tongtu_sku": "CEN961NLinen-SageGreen-153",
+    "eta": "2026-10-30"
+  }
+}
