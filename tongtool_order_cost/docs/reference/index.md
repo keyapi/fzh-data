@@ -19,4 +19,6 @@ tags: [reference, index]
 | [en-ustx-bom-wage-rate-spec.md](en-ustx-bom-wage-rate-spec.md) | EN「美中加工成本, USTX」成本链路逆向规格：公式、167.8 工资率存放记录、随动项、复制 BOM 机制、167.8→105 复算（含 `out/ustx_wage_sim/` 逐 BOM 结果） |
 | [en-ustx-no-bom-items-spec.md](en-ustx-no-bom-items-spec.md) | EN 美中 USTX 无 BOM 物料画像（96 个）· 309 张 BOM 来源与时间分布 · 能否补齐 · PP棉→海绵 对自动复制链路的影响（只读调查） |
 | [en-shaoxing-ship-method-taxonomy-spec.md](en-shaoxing-ship-method-taxonomy-spec.md) | 「绍兴发货方式」定义（Item Group 字段 `custom_shipment_type_to_branch`）· 36 个无 PP棉源的画像 · 「成品→国外加工=0」核实 · 三种发货情况能否区分（只读调查） |
+| [en-material-request-type-spec.md](en-material-request-type-spec.md) | `Item.default_material_request_type` 调查：取值分布（Purchase 66.6% / Manufacture 33.4%）、谁读谁写、与「绍兴发货方式」正交不冲突、2025 起不再维护（只读调查） |
+| [en-pl-finished-processing-nonzero-spec.md](en-pl-finished-processing-nonzero-spec.md) | PL 16 个「成品却带非零加工成本」逐条清单：来源=2025-02 建料批次人工残值（未被 BOM 回写覆盖）· 清零金额 1463.17 复核 · 影响 `pllc_cover` 不影响绍兴总成本（只读调查） |
 | [sku-remap.md](sku-remap.md) | 订单旧 SKU → 井新名 |

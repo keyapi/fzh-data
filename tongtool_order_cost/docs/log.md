@@ -6,6 +6,21 @@ title: tongtool_order_cost 变更日志
 # 变更日志
 
 ## 2026-10-15
+- **`default_material_request_type` 调查（只读，subagent）**：ERPNext 标准字段，挂在 **`Item`**（非 Item Group），Select 五值。
+  实测分布 **Purchase 10,124(66.6%) / Manufacture 5,086(33.4%)**，全库只这两值；三个分公司的国外包装成品
+  （`USTXBZCP#`/`USNJBZCP#`/`PLBZCP#`）**100% Purchase** —— **与「大部分是工单入库」的印象相反**。
+  唯一活读取是 ERPNext 核心 Production Plan（+`work_order_task` 同义一行）；**无已装 app 写它**。
+  与「绍兴发货方式」**正交、不冲突**（每个发货方式桶里两值都有）；**不能区分**三种绍兴发货情况。
+  **2025 年起不再维护**（2024 M 4567>P 3176；2025 M 495<P 6198）→ 不能自证对错。详见
+  `docs/reference/en-material-request-type-spec.md`。
+- **PL「成品却带非零加工成本」16 个调查（只读，subagent）**：15 个启用项合计 **1463.17**（+停用 `KS0524-140` 158.53 = 1621.70）。
+  **来源是 2025-02-21 建料批次的人工 `Item.valuation_rate` 残值**（`tabVersion` 留痕 `0.0→人民币NN`），**任何 docstatus 下都没有 BOM**；
+  只有 `KS0524-140` 等于其自身 BOM 的 `total_cost`。**不是海绵那批**（横跨 16 条品线）。
+  该值进 `波兰加工成本-PL → destination_processing_cost → 皮壳尾程前成本 pllc_cover`，**不影响绍兴总成本**；
+  ⚠️ 但 `:1582-1583` 守卫在 `destination_processing_cost==0` 时会把整行 `pllc_cover` 置 0，故**按订单加权的实际差异 ≠ 1463.17**。
+  皮壳侧另有 18 个同类残值 1707.801 未逐条展开。详见 `docs/reference/en-pl-finished-processing-nonzero-spec.md`。
+- **KS0524 定性（用户说明）**：三角靠枕·碎海绵填充款（PP棉→海绵那批），目前只发 FBA、国外无海绵也不操作填充 → **国外加工成本应为 0**；
+  其 `USTXBZCP#` 被禁用很可能与此相关。已回填 `en-shaoxing-ship-method-taxonomy-spec.md`。
 - **绍兴发货方式 分类与「成品→国外加工=0」调查（只读，subagent）**：`绍兴发货方式` 不是物料组名，而是
   Item Group 自定义字段 `custom_shipment_type_to_branch`（Select：皮壳/成品/半成品），由物料代码推 KS 号再找
   `custom_model_id=KS` 的物料组读取（`bom_cost_list_v2.py:621/723/1383`）。401 个 KS 物料组：成品165/皮壳156/半成品62/空18。
