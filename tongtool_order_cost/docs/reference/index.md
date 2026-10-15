@@ -18,4 +18,5 @@ tags: [reference, index]
 | [ustx-cost-caliber-note.md](ustx-cost-caliber-note.md) | 美中仓库二次加工成本口径变更说明（给财务/业务）：A/B1/B2 差额 + 分歧归因 + 待确认项 |
 | [en-ustx-bom-wage-rate-spec.md](en-ustx-bom-wage-rate-spec.md) | EN「美中加工成本, USTX」成本链路逆向规格：公式、167.8 工资率存放记录、随动项、复制 BOM 机制、167.8→105 复算（含 `out/ustx_wage_sim/` 逐 BOM 结果） |
 | [en-ustx-no-bom-items-spec.md](en-ustx-no-bom-items-spec.md) | EN 美中 USTX 无 BOM 物料画像（96 个）· 309 张 BOM 来源与时间分布 · 能否补齐 · PP棉→海绵 对自动复制链路的影响（只读调查） |
+| [en-shaoxing-ship-method-taxonomy-spec.md](en-shaoxing-ship-method-taxonomy-spec.md) | 「绍兴发货方式」定义（Item Group 字段 `custom_shipment_type_to_branch`）· 36 个无 PP棉源的画像 · 「成品→国外加工=0」核实 · 三种发货情况能否区分（只读调查） |
 | [sku-remap.md](sku-remap.md) | 订单旧 SKU → 井新名 |
