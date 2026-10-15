@@ -19,3 +19,4 @@ tags: [developer-experience, index]
 | 要改同事的 Colab notebook 代码（.ipynb 走 Drive API、cell 备份、写完怎么自证"只动了一格"、并发守卫、内嵌私钥） | [colab-notebook-drive-api-editing.md](colab-notebook-drive-api-editing.md) |
 | Colab/notebook 打包报 `zip error: Nothing to do!` 或 `FileNotFoundError: Cannot find file`（`!zip` 被空格分词） | [colab-shell-out-filename-spaces.md](colab-shell-out-filename-spaces.md) |
 | `gh pr edit` 报 `Projects (classic) is being deprecated` 且标题没改成（改 PR 要走 `gh api PATCH`；管道会掩盖退出码） | [gh-pr-edit-projects-classic-workaround.md](gh-pr-edit-projects-classic-workaround.md) |
+| 用 gspread 插列/行把表搞乱了（`insert_cols` 把「行」当「列」） | [gspread-insert-cols-rows-as-columns.md](gspread-insert-cols-rows-as-columns.md) |

@@ -91,6 +91,9 @@ Workbook 标题：`通途订单202606-特殊规则`（1.7.0 用）、`通途订�
 
 ## 相关档案
 
+- [审派生成本/规则结果的独立验证法](../docs/solutions/best-practices/auditing-derived-costs-independent-verification.md)
+  —— 老板质疑成本/利润率时：外部对偶、同名列陷阱、无留档只能"量级吻合"
+
 - [月度盈利审计](docs/reference/monthly-profitability-audit.md)
   —— 老板质疑「平均成本/运费低、回款低反而利润高」时：**先 snapshot 冻结、再 analyze 离线**，
   口径矩阵 + 对账闸门 + JSON/Excel/管理摘要；**只读，不回写 GSheet/EN**。
