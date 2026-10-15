@@ -35,6 +35,9 @@ lookup_tongtool_sku.py <SKU...>             # 主档是否存在
 | 文件 | 作用 |
 |------|------|
 | `tongtool_order_cost/engine_170.py` | 与 notebook Cell 22 对齐的应用引擎 |
+| `tongtool_order_cost/audit_sources.py` | 只读源盘点/快照 + 分块取数二分失败隔离（U1/U3） |
+| `tongtool_order_cost/profitability_audit.py` | 盈利审计核心：行身份/grain/口径矩阵/异常分类/利润倒挂（U2/U4/U5/U6） |
+| `tongtool_order_cost/profitability_report.py` | 对账闸门 + JSON/Excel(17表)/管理摘要（U7） |
 | `tongtool_order_cost/audit.py` | 事件 → 审计簿 |
 | `tongtool_order_cost/io_loaders.py` | 订单/规则/汇率加载 |
 | `tongtool_order_cost/pp_cotton.py` | 美中 DANEEY 订单 × BOM Cost List → PP 棉 kg 估算 |
@@ -46,6 +49,7 @@ lookup_tongtool_sku.py <SKU...>             # 主档是否存在
 | `scripts/remap_gsheet_sku.py` | Google Sheet SKU 列 dry-run / apply |
 | `scripts/lookup_tongtool_sku.py` | 通途主档 SKU 存在性 |
 | `scripts/estimate_pp_cotton.py` | PP 棉用量估算 CLI |
+| `scripts/audit_monthly_profitability.py` | 月度盈利审计 CLI：`list`/`snapshot`(只读冻结)/`analyze`(离线) |
 
 ## Notebook / Google Sheet 约定（2026-08-14 核实）
 
@@ -84,6 +88,17 @@ Workbook 标题：`通途订单202606-特殊规则`（1.7.0 用）、`通途订�
 2. FBA 尾程：参考值 **>0 或 =0** 不改 `运费`；参考值 **<0** 按账期差异写入 `运费`
 3. `01_科目瀑布` 各科 Δ 与总览一致
 4. SKU 替换：apply 后旧名计数为 0，新名计数 = 原旧名计数，gray60 计数不变
+
+## 相关档案
+
+- [审派生成本/规则结果的独立验证法](../docs/solutions/best-practices/auditing-derived-costs-independent-verification.md)
+  —— 老板质疑成本/利润率时：外部对偶、同名列陷阱、无留档只能"量级吻合"
+
+- [月度盈利审计](docs/reference/monthly-profitability-audit.md)
+  —— 老板质疑「平均成本/运费低、回款低反而利润高」时：**先 snapshot 冻结、再 analyze 离线**，
+  口径矩阵 + 对账闸门 + JSON/Excel/管理摘要；**只读，不回写 GSheet/EN**。
+- [EN 直接采购件用「自套 BOM」出成本惯例 + 骨架缺口](../docs/solutions/architecture-patterns/en-direct-purchase-self-bom.md)
+  —— 订单成本码为空时，先查物料有没有自套 BOM / 在不在皮壳平均表（`WL-shape-frame` 骨架就是漏项）
 
 ## 凭证
 
