@@ -35,6 +35,7 @@ tags: [reference, index, cost-engine]
 | **[20-codex-round3-corrections.md](20-codex-round3-corrections.md)** | **⛔ Codex 第三轮复核：[16] 结论不予通过** —— 「更准/占优/零损失/四类问题消失」**全部撤回**；覆盖率定义更正（候选≠可唯一取成本，唯一 4369 + 3 歧义）；**我的比较脚本对客户码取 max、掩盖了多候选（自证反例）**；23 处应拆 3+3+17；7 行真实是白名单+五件套；「0」来自估值回退；**7 月历史不可直接回算**（五件套 creation 5/21 vs Version 8/11）；含 6 条可落地修订方案 |
 | [21-offline-evidence-table.md](21-offline-evidence-table.md) | **离线证据表 v3（修 Codex 第四轮 4 项）**：4379 行；处置 = auto_ok 3877 / **review_source_unverified 474** / value_diff 11 / bundle 4 / ambiguous 3 / business_exempt 3 / **ambiguous_weight_template 3** / alias_pending 2 / direct_only 2；取值来源**带时点**（`bom_cost_verified` vs `unverified_*`）；含完整 manifest（脚本/输出哈希、两时点、关联依据）。**关键诊断：20261016 导出 vs 当前 BOM 240/240 一致 → 机制对、差异是时点漂移** |
 | [22-review-brief-for-cursor-grok.md](22-review-brief-for-cursor-grok.md) | **给 Cursor/Grok 的自足评审说明**（零上下文）：只读本页+4 个文件即可复核 v2 表；含 6 条必证伪断言、已知历史（别重复报）、输出格式、约束 |
+| **[23-en-report-rest-fetch-and-timepoints.md](23-en-report-rest-fetch-and-timepoints.md)** | **自己拉 EN 报表的配方 + 三时点对照**：`POST /api/method/frappe.desk.query_report.run`（**必须** `filters.item_group` + `ignore_prepared_report=1`）+ 3 个坑；**机制三重验证**（自拉 ≡ 手导 2101/2101；自拉 ≡ DB BOM 1610/0）；**9/3→10/16 仅漂移 9 个产品(0.4%)**；据此收窄「474 行待业务」 |
 
 ## 疑问 → 答案位置
 

@@ -105,7 +105,10 @@ tags: [cost, ustx, evidence, offline, codex, reference]
 
 ## 5. 未证实
 
-- **`review_source_unverified` 的真实来源**（要回放各月**当时**的 BOM 才能证）——**这是最大的未证实块**。
+- **`review_source_unverified` 的真实来源** —— **【2026-10-16 补：已大幅收窄】** 见 [23](23-en-report-rest-fetch-and-timepoints.md)：
+  9/3 → 10/16 **只漂移 9 个产品（0.4%）**，且机制被**三重证明**（自拉 ≡ 手导 2101/2101；自拉 ≡ DB BOM 1610/0）。
+  → 474 行里**大部分是「覆盖差异」（disabled 件 / 9/3 导出含禁用件），不是值可疑**；
+  **真正要看的收窄为「9 个漂移产品 + 少量歧义/套件/豁免」**。
 - 8/9 月的精确数字（受 9/3 映射套用影响）。
 - 各桶的业务最终归属。
 - 7 月当时的登记状态（[20](20-codex-round3-corrections.md) §6）。
