@@ -5,6 +5,17 @@ title: tongtool_order_cost 变更日志
 ---
 # 变更日志
 
+## 2026-10-16
+- **新增 `docs/reference/overseas-bom-labor-ppcotton-findings.md`（只读调查，财务 ZJ 需求）**：三问一次查清——
+  **①工时系数 1/1/1.5 落点**：Single DocType `Manufacturing Settings` 的自定义 Table 字段 `foreign_branch_time_multipliers`（标签「分公司工时系数」）→ 子 DocType `Foreign Branch Time Multiplier.time_multiplier`；库中 `PL=1.0 / USNJ=1.0 / USTX=1.5`。
+  **仅在 `work_order_task/.../utils/bom_batch_process.py` 复制时乘算**（`:242` 就地更新 / `:751` 新建，入口 `:811/:883/:904`）；**`utils/bom.py` 的 `on_submit` 自动路径不乘**。
+  实证：`SXBZCP#KS0001-100` 与 USNJ/PL `time_in_mins=10.584`，USTX=`15.876`（=1.5×）。
+  **②PP棉用量**：BOM 里唯一 `item_group='PP棉'` 行；国外成品 BOM 是单行（3 家各 261 张 active+default 全为 1 行 PP棉）。
+  绍兴 `PPM1500-7D51-SILICONIZED-NEW`（10.00–11.00）→ 三家国外 `PPM1500-15D64-SILICONIZED-NEW`（10.80–15.00）；**用量 1:1 继承绍兴，251 对/0 例外**。
+  **③7-9 月国外包装成品 BOM 缺口**（自发货订单行）：缺口 PL 161/181/172、USNJ 74/117/129、USTX 396/442/289（07/08/09）。
+  去重 446 条中 **82% 是「绍兴发货方式=成品」（本无国外 BOM，非缺陷）**，**54 条皮壳是真缺口**；可被绍兴自动复制闸门放行的仅 **25 条**（`KS0018-SET7`/`KS0101-45`），**319 条绍兴 BOM 无 PP棉、102 条绍兴无 BOM**。
+  - 产出：`out/overseas_bom_gap_jul_sep.csv`、`overseas_bom_gap_summary.csv`、`overseas_bom_gap_no_sx.csv`、`bom_presence.tsv` 等（`out/` gitignore）。全程只读 EN；未改 gsheet；未提交。
+
 ## 2026-10-15
 - **新建 `docs/reference/cost-engine-spec/` bundle（成本口径单一事实源）**：13 个文件，把「Colab 老引擎 + Google Sheet + EN」的整套成本逻辑
   按**可查询的单一入口**整理：`01` 总览与术语（含**疑问→答案对照表**）、`02` 键与实体、`03` 数据源、**`04` 决策表（按 目的地×发货方式 → 皮壳/头程/目的地加工成本/绍兴侧加成；含 A/B1/B2/B3 取数对照）**、
