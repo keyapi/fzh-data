@@ -72,6 +72,21 @@ uv run python notion_stockout.py --xlsx "<批次>/SPS库存检查操作表-*.xls
 > 这种情况按 notion-stockout.md §2 手工组行，字段口径照那张表。
 > 登记完把新 PO 追加进 `pb_orders/data/notion_pb_nostock_pos.json`。
 
+**⚠️ 每次操作完，要把过程写回该行的「备注」**（用户明确要求：*所有操作的过程都需要记录到 Notion*）。
+口径：**在备注末尾追加**一段带日期的操作记录，逐条列当天做了什么 ——
+
+```
+【2026-10-16 操作记录】
+① SPS 重发 PO Acknowledgement：Expected Ship 01/19/2027、Current Scheduled Delivery 01/26/2027，状态 In Transit；
+② IA 模板「IA Template 20250605 x100」已改：Stock 0 / On Order 50 / On Order date 01/19/2027（明起每天自动生效）；
+③ IA 已批量补发 8 份（advice date 10/16–10/23，编号 20261016–20261023），全部 Accepted；
+④ 已发英文邮件通知 Diane（主题 SKU:9869246 & 9605892 out of stock Vendor 5806），报 restock 01/19/2027。
+```
+
+- **不要覆盖旧记录**，往后追加，形成这条 PO 的时间线（同一天多次操作也分开列）。
+- 待定/存疑的事也记进去（例：*WX 反馈最快到货 2 月，今天的 IA/AKN 暂不改，等确认*）。
+- 写到 Notion 只能走交互式 MCP（REST 401，见 notion-stockout.md §2），**没有脚本**。
+
 ### 第 3 步：通知 Diane（邮件）
 
 | | |
