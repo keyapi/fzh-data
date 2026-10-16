@@ -19,6 +19,7 @@ timestamp: 2026-09-22
 | 编排总入口（CLI 与网页共用） | [../service.py](../service.py) |
 | 步骤 0：库存预检（SPS 原始订单 CSV → checked CSV + 操作表） | [../stock_precheck.py](../stock_precheck.py) |
 | 断货登记到 Notion（操作表 → 待追加行 JSON） | [reference/notion-stockout.md](reference/notion-stockout.md) · [../notion_stockout.py](../notion_stockout.py) · [../data/notion_sku_map.json](../data/notion_sku_map.json) |
+| **打单后才发现无货**的闭环（清 invoice / 登记 / 通知 Diane / SPS） | [reference/stockout-closed-loop.md](reference/stockout-closed-loop.md) |
 | 命令行入口（薄适配器） | [../run_pb_orders.py](../run_pb_orders.py) · [../run_stock_check.py](../run_stock_check.py) |
 | 网页服务（FastAPI 路由） | [../web/app.py](../web/app.py) |
 | 任务库（SQLite 状态机与恢复） | [../web/repository.py](../web/repository.py) |

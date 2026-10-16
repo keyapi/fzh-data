@@ -8,6 +8,27 @@ timestamp: 2026-09-22
 
 # 变更日志
 
+## 2026-10-16（第二十二轮：打单后才发现无货的闭环成文 + 新增 `pb-orders` skill）
+
+- **动机**：出件都做完了、美中仓才回话「这单实际无货」——这条绕过预检的路径此前没有规范。
+  20261015 批的 PO `138093033` / `138099748` 就是实例。
+- **产出**：`docs/reference/stockout-closed-loop.md`（四步可执行版）+ skill `.agents/skills/pb-orders/`
+  （此前 AGENTS.md 有 `pb-orders` 行但**没有对应 skill 文件**，本轮补上）。
+- **踩实的三件事**：
+  - **invoice 惯例**：总额写在 **0 字节 txt 的文件名**里；摘无货单要把原 csv/原总额搬进
+    `invoice/NotUsed/`，新文件用句式 `<新总额> 已去除无货N单<PO…> 之前是<旧总额>.txt`。
+    `Invoice Total` 是第 79 列（1-based）只累加 H 行；**H 行才带 PO 号、D 行为空** → 必须整块删。
+  - **邮件规律**：主题首封 `SKU:<PB买家SKU> out of stock Vendor 5806`，**之后都回复上一封**
+    （主题滚成 `Re:RE: {EXT} …`）；从 `us@mxdeals.com`（Service U.S.）发给 PB 采购对接人。
+    `pb@icentrade.com` 是**只收不发**的 AP 汇款信箱（Sent=0）。
+  - **两套数字不能混用**：EN 不扣减通途库存 → EN 的 Bin **不能当可用库存**（实测差 351 件）；
+    SO 的「未交量」≠ 在途（货常已出境到目的仓，预留量与未交量一一对上）。
+    判在途用**通途采购单** `erp2_purchase_purchaseorderquery`。
+- **本次执行**：清 20261015 批 invoice（1596.54 → **1526.05**，x22 → x20，原件备份 NotUsed）；
+  Notion 加 `白色194` / `黄色60` 两个 SKU 选项并登记两行。
+- **缺口**：SPS 后台在指定 PO 上**重发 AKN(855)** 无脚本无记录（`sps_automation.py` 只发 IA）；
+  通知邮件无发信代码（Foxmail 手动）。
+
 ## 2026-10-15（第二十一轮：库存预检缺货 → Notion 断货库补登记工具）
 
 - **背景**：每次库存预检筛出的「整单缺货」PO 要登记到 Notion 跟踪。2026-10-08 已把老的手写表
