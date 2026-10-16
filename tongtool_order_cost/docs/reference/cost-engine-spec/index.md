@@ -33,7 +33,8 @@ tags: [reference, index, cost-engine]
 | [18-sku-direct-impact-on-order-merge.md](18-sku-direct-impact-on-order-merge.md) | **旁支**：通途SKU 直连对订单**合并/拆分/去重**的影响 —— 合并不按 `品类尺寸面料编码`/`通途SKU` 分组（按 `订单号公共部分+平台SKU(统一)`），但**存留行取 `first`** → 换 SKU 后**键身份从「产品级」降为「包裹级」**（核心风险）；3 处拆包逻辑依赖 `品类`/`产品名称`；**7 月只读复跑**：B/C/D=10/14/186 组（与 PR#280 §8.2 逐项吻合）、**歧义阻断桶=0**；含**待拍板 Q1–Q7**。**已按 [20](20-codex-round3-corrections.md) 收窄表述**（不主张"成本更准"） |
 | [19-service-account-key-rotation-checklist.md](19-service-account-key-rotation-checklist.md) | **旁支**：Google 服务账号**密钥轮换清单**（影响面/步骤/Colab 内嵌替换/回滚；只写文档，不碰凭证） |
 | **[20-codex-round3-corrections.md](20-codex-round3-corrections.md)** | **⛔ Codex 第三轮复核：[16] 结论不予通过** —— 「更准/占优/零损失/四类问题消失」**全部撤回**；覆盖率定义更正（候选≠可唯一取成本，唯一 4369 + 3 歧义）；**我的比较脚本对客户码取 max、掩盖了多候选（自证反例）**；23 处应拆 3+3+17；7 行真实是白名单+五件套；「0」来自估值回退；**7 月历史不可直接回算**（五件套 creation 5/21 vs Version 8/11）；含 6 条可落地修订方案 |
-| [21-offline-evidence-table.md](21-offline-evidence-table.md) | **离线证据表（Codex §9.5 交付物）**：4379 美中行的「命中方式/候选/直连值/旧路径值/**成本来源状态**/两路对比」；状态 = bom_cost 3963 / zero_literal 377 / valuation_fallback 29 / bundle_pending 4 / 客户码歧义 3 / 业务豁免 3；**先做证据表、不先建表** |
+| [21-offline-evidence-table.md](21-offline-evidence-table.md) | **离线证据表 v2（Codex §9.5 交付物，含 T1–T4）**：4379 美中行的「命中原码/命中方式/候选/直连值+来源/旧路径值+来源/两路对比/**处置分类**」；处置 = auto_ok 3975 / review_zero_source 331 / review_direct_only 41 / review_value_diff 20 / review_bundle 4 / ambiguous 3 / business_exempt 3 / alias_pending 2；含 manifest 版本清单；**先做证据表、不先建表** |
+| [22-review-brief-for-cursor-grok.md](22-review-brief-for-cursor-grok.md) | **给 Cursor/Grok 的自足评审说明**（零上下文）：只读本页+4 个文件即可复核 v2 表；含 6 条必证伪断言、已知历史（别重复报）、输出格式、约束 |
 
 ## 疑问 → 答案位置
 

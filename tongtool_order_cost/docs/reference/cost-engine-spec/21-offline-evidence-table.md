@@ -1,70 +1,89 @@
 ---
 okf: v0.1
 type: Reference
-title: 离线证据表 · 4379 美中订单行的身份解析与成本来源状态（Codex §9.5 交付物）
-description: 按 Codex 第三轮修订方案第 5 条交付的离线证据表：逐行给出「命中方式 / 候选 / 直连值 / 旧路径值 / 成本来源状态 / 两路对比」；先做证据表、不先建表
+title: 离线证据表 v2 · 4379 美中订单行的身份解析与成本来源状态（Codex §9.5 交付物）
+description: 按 Codex 第三轮修订方案第 5 条交付的离线证据表 v2：逐行给出「命中原码/命中方式/候选/直连值/直连成本来源/旧路径值/旧路径成本来源/两路对比/处置分类」；含版本清单(manifest)；先做证据表、不先建表
 date: 2026-10-16
 module: tongtool_order_cost
 tags: [cost, ustx, evidence, offline, codex, reference]
 ---
 
-# 离线证据表 · 4379 美中订单行
+# 离线证据表 v2 · 4379 美中订单行
 
-> **依据**：Codex 第三轮修订方案第 5 条（见 [20](20-codex-round3-corrections.md) §9）——
+> **依据**：Codex 第三轮修订方案第 5 条（[20](20-codex-round3-corrections.md) §9）——
 > **「先做离线证据表；先修登记冲突/明确别名、业务确认剩余语义，再对拍 8/9 月；不要求先建新表」**。
-> **这是给第四轮 Codex 复核与业务确认的共同靶子。**
+> v2 已落地该方案的 **T1–T4**（见 §3）。**这是给下一轮复核与业务确认的共同靶子。**
 
-## 产物
+## 1. 产物
 
-`tongtool_order_cost/out/ustx_wage_sim/offline_evidence_ustx_rows.csv`（**4379 行**，`out/` 已 gitignore）。
+| 文件 | 说明 |
+|---|---|
+| `out/ustx_wage_sim/offline_evidence_ustx_rows_v2.csv` | **4379 行 × 17 列**（评审对象） |
+| `out/ustx_wage_sim/offline_evidence_manifest.json` | **T4 版本清单**：输入 sha256 / 时点 / 别名规则版本 / 计数 |
+| `out/ustx_wage_sim/build_evidence_table_v2.py` | 生成脚本（**只读**，可复跑核对） |
 
-列：`源CSV物理行 / 订单号 / 通途SKU / 命中方式 / 品类尺寸面料编码 / 旧路径重量模板 / 候选数 /
-候选(产品编号|发货方式|USTX) / 直连值 / 旧路径值 / 成本来源状态 / 两路对比 / 发货仓库 / 发货数量`
+**列**：`源CSV物理行 / 订单号 / 通途SKU / 命中原码 / 命中方式 / 品类尺寸面料编码 / 旧路径重量模板 /
+候选数 / 候选(产品编号|发货方式|USTX) / 直连值 / 直连成本来源 / 旧路径值 / 旧路径成本来源 / 两路对比 / 处置分类 / 发货仓库 / 发货数量`
 
-生成脚本：`out/ustx_wage_sim/build_evidence_table.py`（**只读**，不改任何外部系统）。
+## 2. 结果（4379 行）
 
-## 成本来源状态（按 Codex §9.3「0 与异常分开」的口径）
+### 2.1 处置分类（**给业务的工作清单**）
 
-| 状态 | 行数 | 含义 |
+| 处置分类 | 行数 | 含义 |
 |---|---:|---|
-| `bom_cost` | **3963** | 该 USTX 包装成品有 **active+default BOM** → 值 = `total_cost` |
-| `zero_literal` | **377** | 值为 **0**（**未细分**「无 BOM 回退 0」与「批准的零成本」——见 §待办） |
-| `valuation_fallback` | **29** | 无 BOM → 回退 `Item.valuation_rate`（非 0） |
-| `bundle_pending` | **4** | **五件套**（`TT0031102-zuhe-all`）→ 需 Product Bundle 路径，**不硬造 BOM** |
-| `ambiguous_customer_code` | **3** | 同一完整客户码指向 **多个产品且成本不同** → **阻断，不取 max** |
-| `business_exempt_zero` | **3** | 空 key 的业务豁免（2 针线扣 + 1 棉包） |
-| **合计** | **4379** | 无静默丢行 |
+| `auto_ok` | **3975** | 两路一致、非歧义、非回退 0 —— **可直接采用** |
+| `review_zero_source` | **331** | 直连值为 0 且**无 BOM**（回退 0）—— **需确认「真 0」还是「缺 BOM」** |
+| `review_direct_only` | **41** | 只有直连有值（旧路径断链）—— 需确认直连值可用 |
+| `review_value_diff` | **20** | 两路**都有值但不一致** —— 需业务判断 |
+| `review_bundle` | **4** | **五件套**（Product Bundle）—— 需套件路径 |
+| `review_ambiguous_customer_code` | **3** | 同一完整客户码指向多产品多值 —— **阻断，不取 max** |
+| `business_exempt_zero` | **3** | 空 key 业务豁免（2 针线扣 + 1 棉包） |
+| `review_alias_pending` | **2** | 靠去末尾 `-Cover` 才命中 —— **别名待确认** |
+| **合计** | **4379** | |
 
-## 两路对比（直连 vs 旧路径）
+> **业务只需看 405 行**（非 `auto_ok` 的全部）。
 
-| 两路对比 | 行数 |
+### 2.2 成本来源（**T1：把「0」拆开**）
+
+| 直连成本来源 | 行数 | | 旧路径成本来源 | 行数 |
+|---|---:|---|---|---:|
+| `bom_cost`（有 active+default BOM） | 3981 | | `bom_cost` | 3965 |
+| `fallback_zero`（无 BOM 且值=0） | 359 | | `fallback_zero` | 335 |
+| `fallback_nonzero`（无 BOM，回退 `valuation_rate`≠0） | 29 | | `fallback_nonzero` | 31 |
+| `no_customer_code` | 7 | | `no_weight_template` | 44 |
+| `ambiguous_customer_code` | 3 | | `no_value` | 4 |
+
+### 2.3 两路对比
+
+| | 行数 |
 |---|---:|
-| `same`（一致） | **4308** |
-| `DIFF`（**都有值但不一致**） | **20** |
-| `direct_only`（只有直连有值） | **41** |
-| `old_only`（只有旧路径有值） | **0** |
-| `neither`（两边都没有） | **7** |
+| `same` | **4308** |
+| `direct_only` | **41** |
+| `DIFF` | **20** |
+| `neither` | 7 |
+| `old_only` | **3**（= 客户码歧义那 3 行） |
 
-> 注意：**`DIFF` 20 + `ambiguous` 3 + 旧路径歧义 3 = 26**，与 Codex 说的「23 处差异 + 3 客户码歧义」口径**需按其拆解对齐**（见 [20](20-codex-round3-corrections.md) §3）。**本表不替业务选边。**
+## 3. 已落地的 T1–T4（Codex §9 的规范）
 
-## 怎么用（建议）
-
-1. **业务/财务**：只看 `成本来源状态 ∈ {ambiguous_customer_code, valuation_fallback, bundle_pending, business_exempt_zero}` 与 `两路对比 = DIFF` 的行 —— **共 ≤ 40 行**，逐行核对实物/登记。
-2. **第四轮 Codex**：见 [00](00-review-brief.md) 的第三轮结果 + 本表作为**可复算的一手输入**。
-3. **对拍 8/9 月**：待 §2 的语义确认后再做（Codex 明确要求「先确认语义、再对拍」）。
-
-## 待办（按 Codex §9 的规范，尚未做）
-
-| # | 项 | 说明 |
+| # | 项 | 落地 |
 |---|---|---|
-| T1 | **细分 `zero_literal`** | 现 377 行里混了「无 BOM 回退 0」与「可能的批准零成本」→ 应拆成**两个字段**（原始数值 0 / 批准的零成本） |
-| T2 | **加「历史成本代理」列** | 与「实际身份」并列（Codex §9.2），不得因身份更精确就默默换费用政策 |
-| T3 | **修登记冲突 / 明确别名** | 3 行客户码歧义 + 2 行 `-Cover` 待验证别名 |
-| T4 | **锁定计算版本** | 每次产出冻结（原始 SKU / resolved Item / 映射快照日期 / 别名规则版本 / 成本来源与值 / 仓库规则 / 行身份）；**当前重估与历史复原分别命名** |
-| T5 | **不改现有链路** | 本表是**离线证据**，**未动** Colab / GS / EN |
+| **T1** | **细分「0」** | 成本来源拆成 `bom_cost` / `fallback_zero` / `fallback_nonzero`；**「原始数值 0」与「来源」分列**，不自动批准 |
+| **T2** | **身份 vs 代理分开** | `直连值/直连成本来源`（身份）与 `旧路径值/旧路径成本来源`（**历史成本代理**）**两列并列**，不因身份更精确就默默换费用政策 |
+| **T3** | **登记冲突 / 明确别名** | 3 行 `ambiguous_customer_code` + 2 行 `review_alias_pending` **显式标出**（**不自动消歧**；修复需业务/EN 侧动作） |
+| **T4** | **锁定计算版本** | `offline_evidence_manifest.json`：输入 sha256 / 快照时点 / **别名规则版本**（`v2: 仅 -Cover 去尾、标 pending、不自动消歧`）/ 计数 |
 
-## 未证实
+## 4. 怎么用
 
-- 17 行差异的**业务最终归属**（Codex 明确保留：通途商品主档查询本轮超时）。
-- **7 月当时的登记状态**（反例：五件套客户码 `creation=5/21` 但 Version 显示 `8/11` 才 added）。
-- `zero_literal` 里哪些是「真 0」哪些是「回退 0」。
+1. **业务/财务**：只看 `处置分类 != auto_ok` 的 **405 行**，按分类逐桶核对（`review_zero_source` 331 行是大头，多为「无 BOM 回退 0」）。
+2. **下一轮评审**：见 [22-review-brief-for-cursor-grok.md](22-review-brief-for-cursor-grok.md)（**自足**，不依赖 Codex 上下文）。
+3. **对拍 8/9 月**：**待语义确认后**再做（Codex 明确要求先确认语义）。
+
+## 5. 未证实
+
+- 405 行里各桶的**业务最终归属**（需通途商品主档 / 实物 / 财务）。
+- **7 月当时的登记状态**（反例仍在：[20](20-codex-round3-corrections.md) §6）。
+- `fallback_zero` 的 331 行：**「真 0」还是「缺 BOM」** 未定（表已分类，语义待业务）。
+
+## 6. 与 v1 的差异
+
+v1（`offline_evidence_ustx_rows.csv`）只有 6 类状态、无「处置分类」、无 manifest、且**曾有一个 bug**（`bom_cost` 判据拿 `产品编号` 比 `USTXBZCP#` 码 → 全被误判 `valuation_fallback`，已修）。**以 v2 为准。**
