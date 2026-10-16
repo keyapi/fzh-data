@@ -28,6 +28,8 @@ tags: [reference, index, cost-engine]
 | **[13-codex-review-corrections.md](13-codex-review-corrections.md)** | **⚠️ 外部独立复核（Codex, 2026-10-16）的更正登记**：四种时点不可混用 · 新表公式**搜错列**已更正 · 「改来源码无影响」**是错误归因** · 第15条真问题是**幂等**（A6 作废）· 51条正确分类（B组粗分类作废）· colab 逐 cell 文 4 处更正。**与其它页冲突时以本页为准** |
 | [14-colab-key-derivation-chain.md](14-colab-key-derivation-chain.md) | **主键推导链**：老引擎 `品类尺寸面料编码` 的三段（品类/尺寸/面料）怎么拼出来 —— `品类使用面料` 表结构 · 尺寸 4.2(cell_066) 与 4.7.2(cell_141) 两条路径 · 面料从 `材料价格明细` 取 `材料编码` · **海绵(HM) 三层特例** · 已被覆盖的旧逻辑 · 带 cell 定位的完整链 |
 | [15-exception-rows-monthly-impact.md](15-exception-rows-monthly-impact.md) | **异常行月度影响面**：161 空键 / 51 行在 **7/8/9 月**各自的美中命中行数·键数·占比（41/4379=0.94% · 36/5479=0.66% · 21/2959=0.71%）；Codex 4 类分月拆解；逐月**新增空键**（断链在扩大）；161 空键本季仅 **17 个**被用到 |
+| **[16-customer-sku-direct-path.md](16-customer-sku-direct-path.md)** | **⚠️ 重大建议**：改用「**通途SKU → EN 客户物料号**」直连取 USTX 成本 —— 实测美中 **4372/4379=99.8%** 命中、在 0 损失下多覆盖 41 行、且比重量模板更精确；**一次绕开**品类-尺寸-面料/重量模板/尺寸档/161 空键四座山。**可能推翻 [11](11-plan-new-ustx-processing-table.md) 的建表前提** |
+| [17-codex-round2-corrections.md](17-codex-round2-corrections.md) | **⚠️ Codex 第二轮复核更正**：公式**歧义仍会取值**（加标记≠阻断）· **「建表不启用」没有隔离**（notebook 按名自动读）· 月度推论更正（「死键」「断链扩大」不成立）· 9 月应 **≥63 行** · 白名单**未证明已归零** · 1:2:4 **源码存在但未触发**。**含安全事件：建议轮换服务账号密钥** |
 
 ## 疑问 → 答案位置
 

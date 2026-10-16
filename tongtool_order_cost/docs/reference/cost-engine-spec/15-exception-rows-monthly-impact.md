@@ -10,6 +10,14 @@ tags: [cost, ustx, exception, month-impact, codex, reference]
 
 # 异常行月度影响面 · 161 空键 / 51 行（2026-10-16）
 
+> ⚠️ **【2026-10-16 第二轮 Codex 复核更正——读本页前必读 [17](17-codex-round2-corrections.md) §4】**
+> 本页**数字（41/36/21 行、USTX 并集 17 键）复算成立**，但**三处推论被更正**：
+> ① 「144 个死键」**不成立**——其中**至少 12 个被其他区域 73 行订单使用**；
+> ② 「空键逐月新增 → 断链在扩大」**不能说**——只能证明「**订单侧首次命中**」的新键在增加；
+> ③ 9 月「61 行」**应 ≥63 行**（漏了 `SX-KZSJ-55-HLR` 2 行，它在映射表里**完全不存在**，属**比空键更外一层**）；
+> 另有：白名单批量**未证明已归零**（8 月 4 行 / 9 月 36 行「原始品类=棉包但派生品类为空」**未命中归零代码**）。
+> **另见 [16-customer-sku-direct-path.md](16-customer-sku-direct-path.md)**：若改用「通途SKU → 客户物料号」直连，**本页的空键问题整体不构成风险**。
+
 > **口径基准**：本页以 [13-codex-review-corrections.md](13-codex-review-corrections.md) §5 的 51 行 4 类分法为准（Codex 复核成立，见 [13](13-codex-review-corrections.md)）。
 > **本页只回答一个上游没有的问题**：这 51 行 / 那 161 个空键，**分别影响哪些月份、影响多少**。
 > 机器可读产物：`tongtool_order_cost/out/ustx_wage_sim/exception_month_impact.csv`（`out/` 已 gitignore）。
