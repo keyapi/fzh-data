@@ -61,8 +61,10 @@ SPS 导出的列数参差，过一遍 pandas 就变形）。
 
 从 `us@mxdeals.com`（显示名 Service U.S.）发出，收件人是 PB 采购对接人 Diane
 （**邮箱地址见历史邮件 / Notion 台账，不写进仓库**）。
-模板见 reference 文档 §2 第 3 步。**发信靠 Foxmail 手动**，项目里没有发信代码
-（`pb@icentrade.com` 是**只收不发**的 AP 汇款信箱，Sent=0）。
+模板见 reference 文档 §2 第 3 步。**可以直接用 SMTP 发**：Tencent Exmail `smtp.exmail.qq.com:465`（SSL），
+账号 `us@mxdeals.com`（凭据见父仓库未跟踪处）。
+**⚠️ Tencent Exmail 不会把 SMTP 发出的信自动存进「已发送」** —— 发完必须再 IMAP `APPEND` 一份到
+`Sent Messages`，否则自己邮箱里查不到这条线。（`pb@icentrade.com` 是**只收不发**的 AP 汇款信箱，与发信无关。）
 
 ### 4. EN 的库存数**不能当可用库存**用
 

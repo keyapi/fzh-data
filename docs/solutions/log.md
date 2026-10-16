@@ -7,6 +7,11 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-10-16（SPS 门户 IA/AKN 操作成文 + 邮件发信纠正）
+
+- **新增**: `workflow-issues/sps-portal-ia-akn-operations.md` —— SPS 门户里断货后必做的两条动作，此前**全无步骤记录**（`sps_automation.py` 只会每天自动发 IA，不碰 AKN）。三个关键点：**① AKN 一次 Send 发不出去** —— 点完 Send 后当前单据变 `Overridden Draft` 并冒出一条新草稿，必须**对新草稿再 Send 一次**，状态到 `In Transit` 才算发出；**② IA 是「发送日 + 7 天」的单日报告**（实测 `Inventory Advice #: IA7_20261016_124353` 而 `Date/Time: 10/23/2026`，Report Start/End 空）→ **PB 对某一天的认知由那天往前 7 天发的那份决定**，所以改模板只影响 7 天后；**③ 覆盖模板不是原地改** —— 会生成一个新的模板文档顶替旧的，从旧文档看会以为改动没生效。补发窗口用 Create New 的 `Number of Documents`（最多 100）一次建 N 份、逐份改日期/编号、勾选后走**底部工具条的 ✈** 批量发。
+- **更新**: `workflow-issues/pb-stockout-post-shipment-closed-loop.md` + `pb_orders/docs/reference/stockout-closed-loop.md` —— 纠正两处**过期断言**：①「邮件靠 Foxmail 手动、项目里没有发信代码」是错的，实际可用 **SMTP 直发**（Tencent Exmail `smtp.exmail.qq.com:465`，账号 `us@mxdeals.com`）；② 新增一条坑：**Tencent Exmail 不会把 SMTP 发出的信自动存进「已发送」**，发完必须 IMAP `APPEND` 一份，否则邮箱里查不到这条线（本次实测 Sent 总数 5553 → 5554）。同时把「SPS 重发 AKN 是唯一黑盒」改为指向新文档。
+
 ## 2026-10-16（PB 补货量估算方法）
 
 - **新增**: `workflow-issues/pb-replenishment-sizing-from-sales.md` —— 给 PB 物料家族算「下多少货」的方法与陷阱。要点：**只算美中 Daneey 仓**（仓名一整族 alias 都要收进来，波兰/FBA 排除）；销量读 `通途订单YYYYMM` 的 `2026年X月订单` tab（`渠道=PotteryBarn` 即 PB；**202610 表不存在**；读表要带重试）；**在途只能看通途采购单**（SO 未交量 ≠ 在途、EN Bin 不能当库存，实测差 351 件）；断货月与到货冲量月要剔出月需求率，断货窗口靠 Notion 任务页 + 已发送邮件 + 逐批 check0stock 差分**三源交叉**；交付同事用 **Excel 且结论打头**。**并记下一条教训**：子代理两次报「某 SKU 整表查不到」，据此误下「有别名」的结论，用户质疑后自己读原表发现数据一行不少 —— **「查不到/从未发货」这类否定结论必须自己复核再落地**。

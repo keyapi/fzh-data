@@ -41,3 +41,4 @@ tags: [workflow-issues, index]
 | [workflow-copy-prod-to-test.md](workflow-copy-prod-to-test.md) | 从生产系统复制 Purchase Receipt 工作流 V3 到测试系统 |
 | [pb-stockout-post-shipment-closed-loop.md](pb-stockout-post-shipment-closed-loop.md) | PB 打单后才发现无货的闭环：invoice 总额写文件名 / NotUsed 备份 / H+D 整块删、邮件回复成链、EN Bin 与 SO 未交量都不能当库存 |
 | [pb-replenishment-sizing-from-sales.md](pb-replenishment-sizing-from-sales.md) | PB 补货量估算：美中 Daneey 口径与仓名族、通途订单表读法、剔除断货月、在途看通途采购单、交付用 Excel 结论打头 |
+| [sps-portal-ia-akn-operations.md](sps-portal-ia-akn-operations.md) | SPS 门户 IA/AKN 操作：AKN 重发（一次 Send 发不出去要发两次）、IA 模板覆盖、IA 是「发送日+7」单日报告所以要逐天批量补发 |

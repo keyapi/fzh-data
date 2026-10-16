@@ -8,6 +8,28 @@ timestamp: 2026-09-22
 
 # 变更日志
 
+## 2026-10-16（第二十四轮：SPS 后台 IA/AKN 实操成文 + 邮件发信渠道纠正）
+
+- **动机**：断货后在 SPS 门户的两条动作（重发 AKN 855、改 IA 846）此前**全无步骤记录** ——
+  `sps_automation.py` 只每天自动发 IA，不碰 AKN，文档里标着「唯一黑盒」。本次实操作两单补上。
+- **跑通的三条**（详见 `docs/solutions/workflow-issues/sps-portal-ia-akn-operations.md`）：
+  - **AKN 一次 Send 发不出去**：当前单据变 `Overridden Draft` + 冒出**新草稿**，
+    必须**对新草稿再 Send 一次**；判据是状态到 **`In Transit`**（`Saved` 不算发）。
+  - **IA 是「发送日 + 7 天」的单日报告**（实测 `IA7_20261016_124353` / Date `10/23/2026`，
+    Report Start/End 空）→ PB 对某一天的认知 = 那天往前 7 天发的那份 → **改模板只管 7 天后，
+    已发出的 7 天窗口要逐天补发**。
+  - **批量补发**：Create New → 「I don't have a source document.」→ Inventory Advice →
+    选模板 + 填 **`Number of Documents`**（最多 100）→ 建 N 份草稿（**日期全继承模板旧值，要逐份改**）
+    → 勾选 → **底部工具条的 ✈**（不是卡片上那个）一次发出。
+- **邮件纠正**（两处过期断言）：① 可用 **SMTP 直发**（Tencent Exmail `smtp.exmail.qq.com:465`，
+  `us@mxdeals.com`），**不是** Foxmail 手动、也不是「项目里没有发信代码」；
+  ② **Tencent Exmail 不会把 SMTP 发出的信自动存进「已发送」** → 发完必须 IMAP `APPEND`
+  （本次实测 Sent 5553 → 5554）。
+- **本次执行**：AKN 两单（`138093033` Ship 01/19/2027、`138099748` Ship 12/02/2026）；
+  IA 模板改 `TT0031010K0062880` 与 `CENC/Linen-Yellow-60`；IA 批量补发 8 份（advice date 10/16–10/23，
+  编号 20261016–20261023）全部 `Accepted`；英文邮件已发 PB 采购对接人。
+- **Notion**：两行（`138093033` / `138099748`）备注已补当日全部操作记录。
+
 ## 2026-10-16（第二十三轮：补货量估算 —— 美中 Daneey 口径 + 剔除断货月 + Excel 交付）
 
 - **动机**：PB 床楔形枕头 8 款（`TT0031010K0062870–62881`）连续几个月没下补货单、已断货，

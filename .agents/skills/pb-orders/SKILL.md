@@ -47,8 +47,10 @@ uv run python run_pb_orders.py --dir "<批次目录>"                           
 2. **Notion 登记**：库「PB 无货未发（一行一个 PO）」，用 `pb_orders/notion_stockout.py` 算待追加行。
 3. **通知 Diane**（`us@mxdeals.com` → PB 采购对接人，地址见历史邮件）：主题 `SKU:<PB买家SKU> out of stock Vendor 5806`，
    **后续新 SKU 回复上一封**（主题滚成 `Re:RE: …`）。
-4. **SPS 后台**：重提 IA（`SPS_Selenium_Local/sps_automation.py` 能发 IA）+ 在 PO 上重发 AKN(855)
-   —— ⚠️ **AKN 目前无脚本、无步骤记录**。
+4. **SPS 后台**：重提 IA（`SPS_Selenium_Local/sps_automation.py` 每天定时发，模板 `IA Template 20250605 x100`）
+   + 在 PO 上重发 AKN(855) —— 完整点法见
+   `docs/solutions/workflow-issues/sps-portal-ia-akn-operations.md`
+   （⚠️ 一次 Send 发不出去要发两次；IA 是「发送日+7」的单日报告，改模板只影响 7 天后）。
 
 到货后按 Notion 记录重发，变化同样回写 Notion。
 

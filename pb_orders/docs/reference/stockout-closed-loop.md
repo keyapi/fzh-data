@@ -78,7 +78,7 @@ uv run python notion_stockout.py --xlsx "<批次>/SPS库存检查操作表-*.xls
 |---|---|
 | 发件 | `us@mxdeals.com`（显示名 **Service U.S.**） |
 | 收件 | PB 采购对接人 Diane（**具体邮箱见历史邮件 / Notion 台账，不写进仓库**） |
-| 工具 | **Foxmail 手动**（`D:\Program Files\Foxmail 7.2\Storage\`；账号 `service@icentrade.com` / `contact@mxdeals.com`）。**项目里没有发信代码** |
+| 工具 | **SMTP 直发**：`smtp.exmail.qq.com:465`（SSL），账号 `us@mxdeals.com`。**⚠️ 发完要 IMAP `APPEND` 一份到「已发送」** —— Tencent Exmail 不自动保存 SMTP 发出的信 |
 
 **主题规律**（2026-09/10 实测）：
 
@@ -123,13 +123,19 @@ Key
 
 ### 第 4 步：SPS 后台（IA + AKN）
 
-| 动作 | 现状 |
-|---|---|
-| 重提 **Inventory Advice（IA）** | `SPS_Selenium_Local/sps_automation.py` 能发（每天定时）；模板 `IA 20250605 x100` |
-| 在指定 PO 上重发 **Acknowledgement（855 / AKN）**，填新的 expected ship date | ⚠️ **无脚本、无步骤记录**。`sps_automation.py` 只做 IA |
+**完整点法见 [docs/solutions/workflow-issues/sps-portal-ia-akn-operations.md](../../../docs/solutions/workflow-issues/sps-portal-ia-akn-operations.md)。** 要点：
 
-SPS 门户登录 `commerce.spscommerce.com/fulfillment/transactions/list/`，合作伙伴 `Williams Sonoma OSR`，
-账号 `us@mxdeals.com`。**AKN 的点法待补**（用 Playwright 探或人工记录）。
+| 动作 | 怎么做 |
+|---|---|
+| 在指定 PO 上重发 **Acknowledgement（855 / AKN）** | 打开 PO → Workflow「Order Status → Acknowledgement」旁 **New** → Type 选 PO Acknowledgement、Auto Fill - Recommended → Expand → 改 `Current Schedule Ship Date`（下一批发货日）与 `Current Schedule Delivery Date`（+7 天）→ Save → **Send Document**。⚠️ **一次 Send 发不出去**：会生成一条新草稿，要**对新草稿再 Send 一次**，状态变 `In Transit` 才算发出 |
+| 重提 **Inventory Advice（IA）** | 每天由 `SPS_Selenium_Local/sps_automation.py` 定时发（模板 `IA Template 20250605 x100`）。**改模板 = 改以后每天的 IA**：Create New → Detail 改行 → ⋮ → Manage Templates → Overwrite → 选该模板 → Save（**不是** 单据的 Save） |
+
+**⚠️ IA 是「发送日 + 7 天」的单日报告** —— PB 对某一天的认知由「那天往前 7 天」发出的 IA 决定。
+所以改完模板**只影响 7 天后**；**已经发出去的 7 天窗口要逐天补发**（Create New 时填 `Number of Documents`
+一次建 N 份，逐份改日期/编号，勾选后用底部工具条的 ✈ 批量发）。
+
+SPS 门户入口 `commerce.spscommerce.com/fulfillment/transactions/list/`，partner `WILLIAMS SONOMA INC`，
+账号 `us@mxdeals.com`。
 
 ## 3. 到货之后
 
@@ -151,6 +157,8 @@ SPS 门户登录 `commerce.spscommerce.com/fulfillment/transactions/list/`，合
 
 ## 4. 已知缺口
 
-1. **SPS 后台重发 AKN 的步骤**没人记录 —— 这是闭环里唯一的黑盒。
-2. **没有发信代码** —— 邮件靠 Foxmail 手动，模板已固化在本文。
+1. **SPS 后台动作已全部成文**（AKN 重发、IA 模板覆盖、IA 批量补发）→ 见
+   [sps-portal-ia-akn-operations.md](../../../docs/solutions/workflow-issues/sps-portal-ia-akn-operations.md)。
+   仍未脚本化（靠人工点）。
+2. **邮件**：已可用 SMTP 直发（见 §2 第 3 步），**发完要 IMAP APPEND 到「已发送」**。
 3. **EN 的 Bin 数量不能当库存用**（EN 不扣减通途库存，2026-10 确认）。
