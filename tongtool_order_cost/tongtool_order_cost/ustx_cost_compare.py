@@ -26,6 +26,7 @@
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Iterable, Sequence
 
@@ -789,10 +790,66 @@ def order_row_to_record(row) -> dict:
         "category": row.get(CATEGORY_COL),
         "sku": sku,
         "tongtool_sku": str(row.get("通途SKU") or "").strip(),
+        "order_no": str(row.get("订单号") or "").strip(),
+        "platform_sku": str(row.get("平台SKU") or "").strip(),
         "product_name": str(row.get("产品名称") or ""),
         "qty": to_float(row.get(QTY_COL)) or 0.0,
         "a": dict(zip(COMPONENT_COLS, comps)),
     }
+
+
+
+# 订单号后缀（多件/多包裹）：只剥 1–2 位数字，见 docs/.../tongtu-order-suffix-and-merge-criteria
+_ORDER_SUFFIX_RE = re.compile(r"[_-]\d{1,2}$")
+
+
+def order_common_part(order_no: str) -> str:
+    """订单号 → 公共部分：**只剥末尾 1–2 位数字后缀**。
+
+    铁律（archive §4）：订单号本体是 `前缀-数字`（如 `OS-474530280`）时**不剥**，
+    否则键会退化成平台名（`OS`/`PBUS`），把整平台订单塌并。
+    """
+    s = str(order_no or "").strip()
+    return _ORDER_SUFFIX_RE.sub("", s) if s else ""
+
+
+def group_split_rows(
+    records: Sequence[dict],
+    *,
+    require_multi_sku: bool = True,
+) -> list[dict]:
+    """拆包裹候选分组：按 `(订单号公共部分, 平台SKU)` 分组，返回**需关注**的组。
+
+    判定（与 Colab `cell_075/077` 同结构键，但**不依赖"产品名含包裹"**）：
+    组内行数 ≥2，且（`require_multi_sku` 时）组内 `通途SKU` **多于 1 个**——
+    即"一件成品被拆成多个包裹"的形态。**不合并、不改原行**，只产出分组与审计。
+
+    返回每项：`{common, platform_sku, rows:[记录…], skus:[去重通途SKU…],
+    qty_pk_ish, key_set, n_rows}`。
+    """
+    buckets: dict[tuple, list[dict]] = {}
+    for r in records:
+        common = order_common_part(r.get("order_no", ""))
+        psk = r.get("platform_sku", "")
+        buckets.setdefault((common, psk), []).append(r)
+    out: list[dict] = []
+    for (common, psk), rows in buckets.items():
+        if len(rows) < 2:
+            continue
+        skus = sorted({(r.get("tongtool_sku") or "") for r in rows if r.get("tongtool_sku")})
+        if require_multi_sku and len(skus) < 2:
+            continue
+        out.append({
+            "common": common,
+            "platform_sku": psk,
+            "n_rows": len(rows),
+            "skus": skus,
+            "key_set": sorted({(r.get("key") or "") for r in rows if r.get("key")}),
+            "qty_sum": sum((r.get("qty") or 0.0) for r in rows),
+            "cost_sum": {c: sum((r["a"].get(c) or 0.0) for r in rows) for c in COMPONENT_COLS},
+            "rows": rows,
+        })
+    return sorted(out, key=lambda g: (-g["n_rows"], g["common"]))
 
 
 def direct_template_from_item(item_code: str) -> str:

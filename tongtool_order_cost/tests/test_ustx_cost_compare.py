@@ -225,6 +225,33 @@ def test_compare_resolves_ambiguous_key_by_order_category():
 # ── 直连优先（通途SKU → EN 物料 → 重量模板），不命中回落旧键 ──
 
 
+def test_order_common_part_strips_only_1_2_digits():
+    assert U.order_common_part("DY-LAPW-24868_1") == "DY-LAPW-24868"
+    assert U.order_common_part("OS-474530280") == "OS-474530280"   # 本体是 前缀-数字，不剥
+    assert U.order_common_part("PBUS-137242161") == "PBUS-137242161"
+    assert U.order_common_part("") == ""
+
+
+def test_group_split_rows_picks_multi_sku_groups():
+    def rec(no, psk, sku, key, qty, proc):
+        return {"order_no": no, "platform_sku": psk, "tongtool_sku": sku, "key": key,
+                "qty": qty, "a": {c: 0.0 for c in U.COMPONENT_COLS} | {"二次加工成本": proc}}
+    recs = [
+        rec("O-1_1", "PS", "S-Cover", "K1", 1, 10.0),   # 同一成品两包裹 → 候选
+        rec("O-1_2", "PS", "S-Foam", "K1", 1, 20.0),
+        rec("O-2_1", "PS", "S-A", "K2", 1, 5.0),        # 组内单 SKU → 不候选
+        rec("O-2_2", "PS", "S-A", "K2", 1, 5.0),
+    ]
+    g = U.group_split_rows(recs)
+    assert len(g) == 1
+    assert g[0]["common"] == "O-1" and g[0]["n_rows"] == 2
+    assert g[0]["skus"] == ["S-Cover", "S-Foam"]
+    assert g[0]["qty_sum"] == 2.0
+    assert g[0]["cost_sum"]["二次加工成本"] == 30.0
+    # 放宽 multi_sku → 两组都出
+    assert len(U.group_split_rows(recs, require_multi_sku=False)) == 2
+
+
 def test_direct_template_from_item():
     assert U.direct_template_from_item("KS0423-XNEOSTH-153x65x23-OFFWHITE") == "ZLMB#KS0423-XNEOSTH-153x65x23"
     assert U.direct_template_from_item("KS0174-WGMSR-45-BROWN") == "ZLMB#KS0174-WGMSR-45"
