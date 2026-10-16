@@ -72,14 +72,20 @@ tags: [cost, ustx, plan, gsheet, erpnext, feasibility]
 
 `品类 / 面料 / 尺寸 / 品类编码 / 尺寸编码 / 品类尺寸编码 / 品类尺寸面料编码 / <月度值列> / 材料名称 / 材料编码 / 品类统一名 / 品类别名`
 
-**取值列**建议新增一列（例如 `美中加工成本USTX`），公式：
+**取值列**建议新增一列（例如 `美中加工成本USTX`），公式（**已按 2026-10-16 Codex 复核更正，见 [13](13-codex-review-corrections.md) §3**）：
 
 ```
-=IFNA(IF(VLOOKUP(G2, import皮壳成本!$A:$B, 2, FALSE)="", "",
-      IFNA(VLOOKUP(VLOOKUP(G2, import皮壳成本!$A:$B, 2, FALSE),
-                   importBOMCostList!$A:$Y, 21, FALSE), "")), "")
+=IFERROR( IF( MATCH( VLOOKUP(G2, import皮壳成本!$A:$B, 2, FALSE),
+                    importBOMCostList!$Y:$Y, 0 ) = 0, "",
+   INDEX( importBOMCostList!$U:$U,
+          MATCH( VLOOKUP(G2, import皮壳成本!$A:$B, 2, FALSE),
+                 importBOMCostList!$Y:$Y, 0 ) ) ), "" )
 ```
-（`importBOMCostList` 的 `重量模板, 编号` 是第 25 列 = `Y`、`美中加工成本, USTX` 是第 21 列 = `U`；**实施时必须按当时的实际列序复核**。）
+
+**列号已自证**（冻结表实测）：`importBOMCostList` 中 **`产品编号`=A、`重量模板, 编号`=Y、`美中加工成本, USTX`=U**。
+
+> ⚠️ **上一版写法是错的**：`VLOOKUP(<wt>, importBOMCostList!$A:$Y, 21, FALSE)` 搜的是 **A 列（产品编号）**，不是 wt —— 因为它把「返回第 21 列」（对）和「在 A 列查找」（错）混在一起了。
+> ⚠️ **不要用 `IFNA` 空白掩盖状态** —— 必须先区分 `缺失 / 歧义 / 字面 0`，再取数（与 §3.4「取数来源」列配套）。
 
 ### 3.3 缺口分类与处置（7 月实测）
 
@@ -120,7 +126,7 @@ tags: [cost, ustx, plan, gsheet, erpnext, feasibility]
 | R4 | **`importBOMCostList` 列序变动** | 嵌套 VLOOKUP 的列号是**硬编码**（第 21 列）→ 每次重建表都要复核列序 |
 | R5 | **同名歧义键** | `import皮壳成本` 有 3 个「同键不同重量模板」的冲突键 → 新表对这 3 行要么取唯一、要么标 `ambiguous`（**不猜**） |
 | R6 | **只解决「二次加工」一项** | 「绍兴二次加工成本」也是借用（现为 0），需另行处理；本方案**不覆盖**它 |
-| R7 | **不能只改 `订单发货仓库对应成本来源`** | 美中行的二次加工**已被 EN 覆盖层接管**（同头程），改仓库编码**不影响**现状；真正生效要**新表 + 公式**（见 [07](07-colab-vs-en.md)） |
+| R7 | ~~不能只改 `订单发货仓库对应成本来源`~~ **【2026-10-16 更正】** | **原判「改来源码无影响」是错误归因**（Codex 追到 cell125：主「二次加工成本」链会**按来源码重新取数**）。<br>**该结论只对「头程」成立**（头程确由 EN 覆盖层接管）。<br>→ **新表真正生效还需要：可被 loader 读取的表名 + 明确来源码 + 正常生产仓库路由切换 + 完整唯一的对象关联 + 整件/分件分项规则**。只建表加公式**不够**。详见 [13](13-codex-review-corrections.md) §4 |
 
 ## 5. 分步实施（建议）
 

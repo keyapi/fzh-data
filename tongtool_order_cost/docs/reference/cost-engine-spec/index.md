@@ -24,6 +24,8 @@ tags: [reference, index, cost-engine]
 | [09-known-issues-register.md](09-known-issues-register.md) | **问题登记册**：EN 内部不一致（A）、时序错配（B）、数据缺口/脏数据（C）、命名坑（D）、待证实（E）。所有「未证实」指向此页 |
 | [10-glossary.md](10-glossary.md) | **术语表（字段级）**：实体前缀/成本来源编码/头程编码/SKU 后缀/EN 字段/GS 列名/Colab 开关两表速查 |
 | [11-plan-new-ustx-processing-table.md](11-plan-new-ustx-processing-table.md) | **可行性方案**：新建「美中USTX二次加工成本」ws —— 键与匹配链、**「行怎么建全」清单**（骨架=绍兴表 177/177；B 组 10 键需补）、缺口分类、风险、分步实施、对拍验证 |
+| [12-weight-template-mapping-spec.md](12-weight-template-mapping-spec.md) | **重量模板映射机制**：EN 里权威的只有「品类编码↔KS组」+「面料↔缩写」；**尺寸档规则不在 EN**（反推复现率 31.7%/62.9%）；161 空键仅可补 45 |
+| **[13-codex-review-corrections.md](13-codex-review-corrections.md)** | **⚠️ 外部独立复核（Codex, 2026-10-16）的更正登记**：四种时点不可混用 · 新表公式**搜错列**已更正 · 「改来源码无影响」**是错误归因** · 第15条真问题是**幂等**（A6 作废）· 51条正确分类（B组粗分类作废）· colab 逐 cell 文 4 处更正。**与其它页冲突时以本页为准** |
 
 ## 疑问 → 答案位置
 

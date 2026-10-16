@@ -10,6 +10,11 @@ date: 2026-10-15
 
 # 老成本引擎逐 cell 逆向（Colab notebook + Google Sheet）
 
+> ⚠️ **【2026-10-16 更正】本页有 4 处已知错误，读前务必先看 [13-codex-review-corrections.md](13-codex-review-corrections.md) §6**：
+> ① **漏 `cell049`**（导致否认 1:2:4 运算、找不到 `df_final` 构造、误判「绍兴发货方式无消费者」）；
+> ② **`cell045`(19列) 与 `cell096`(6列) 写反**；③ `eval_delivery_en` 现状已变（当前 notebook 新增 `cell36=True`）；
+> ④ `idxmax` 无面料兜底**无订单侧消费者**。本页正文**尚未逐格返工**，**更正以 [13](13-codex-review-corrections.md) 为准**。
+
 > 来源：本机 Colab 备份 `C:\Users\zhang\.claude\backups\colab\1T5hZYvnJhS8xzORb3tuYRoXXWn9uSzNl_20261010_163404.ipynb`
 > （Drive notebook id `1T5hZYvnJhS8xzORb3tuYRoXXWn9uSzNl`，共 224 个 cell）。
 > 本文**只描述代码是怎么写的**（含它自己写的注释），不判断对错。cell 序号按抽取顺序编号

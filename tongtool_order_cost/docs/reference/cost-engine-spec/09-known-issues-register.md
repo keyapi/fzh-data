@@ -21,8 +21,8 @@ tags: [cost, issues, register, risk, reference]
 | A2 | **EN 内 39 个按发货方式/目的地类型的分流点，分散在 9 个文件** | 改一处口径极易漏改其它处 | [en-branching-and-warehouse-config.md](en-branching-and-warehouse-config.md) | 抽成单一口径函数 |
 | A3 | **口径漂移 3 处**：`order_sync` 成品 `-FOAM` 头程不 clamp；`delivery_note_filling_cost.sx_cost_all` 缺自采购/剔除规则；`doc_event` 不认后缀且写 `custom_valuation_rate` | 同一 SKU 在不同链路成本不同 | 同上 | 逐条对齐 |
 | A4 | **FBA 分支无视发货方式与 `-COVER`/`-FOAM` 特例**（一律取绍兴总成本 + 成品头程） | 带后缀的 FBA 件可能取到不该取的口径 | [en-shaoxing-shipment-cost-logic-spec.md](../en-shaoxing-shipment-cost-logic-spec.md) | 确认是否有此类订单 |
-| A5 | **`check_bom_exists` 的 `docstatus` 写成 `0`（注释说应为 `1`）** → 「已存在就跳过」永不命中 | 重复复制会**堆重复 BOM**（36 个物料上已有 45 张重复） | [en-ustx-no-bom-items-spec.md](../en-ustx-no-bom-items-spec.md) | **暂不建 todo**（用户 2026-10-15） |
-| A6 | **表单「复制BOM」按钮路径没有 PP棉 闸门** | 在海绵版绍兴 BOM 上手工点按钮 → 生成 `raw_material_cost=0` 且**抢默认**的 BOM | 同上 | **暂不建 todo**；改填充物前必读 |
+| A5 | **BOM 复制缺幂等**：`check_bom_exists`（`utils/bom.py:127–145`）只查 `docstatus=0`（草稿），而 `:290–299` 插入后**立即 `submit()`**（→ docstatus=1）→「已存在」**永不命中**；异常也被吞掉当作不存在 → 重复创建 | 重复执行会堆重复 BOM | [13](13-codex-review-corrections.md) §2（Codex 复核更正）；[work_order_task issue #3](https://github.com/keyapi/work_order_task/issues/3) | **暂不建 todo**（用户 2026-10-15）；修复方向=**幂等 + 源版本更新政策**，**不能机械把 `0` 改 `1`** |
+| A6 | ~~表单「复制BOM」按钮路径没有 PP棉 闸门~~ **【2026-10-16 作废】** | **原判错误**：单 BOM 表单**前端有**、自动 `on_submit` **服务端有**、独立批量 **服务端有**。真正的问题是 A5 的幂等 | [13](13-codex-review-corrections.md) §2 | **本条作废**，不建 todo |
 | A7 | **`zelin_pp`（已卸载）留下的 Property Setter**给 `default_material_request_type` 加了第 6 个选项 `Phantom` | UI 可能出现无效选项（数据 0 条） | [en-material-request-type-spec.md](../en-material-request-type-spec.md) | 清理残留 |
 
 ## B. 时序错配（拿错时点的数据会得出错误结论）
