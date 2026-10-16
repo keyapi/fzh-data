@@ -794,6 +794,94 @@ def order_row_to_record(row) -> dict:
     }
 
 
+def direct_template_from_item(item_code: str) -> str:
+    """EN 物料名 → 重量模板：`KS0423-XNEOSTH-153x65x23-OFFWHITE` → `ZLMB#KS0423-XNEOSTH-153x65x23`。
+
+    规则：去掉最后一个 `-` 段（颜色/变体），前缀 `ZLMB#`。段数 <3 视为不可用。
+    """
+    parts = [p for p in str(item_code).split("-")]
+    if len(parts) < 3:
+        return ""
+    return "ZLMB#" + "-".join(parts[:-1])
+
+
+def build_direct_index(
+    direct_rows: Sequence[Sequence[str]] | dict[str, str],
+    *,
+    sku_col: str = "通途SKU",
+    item_col: str = "EN物料",
+) -> tuple[dict[str, str], list[dict[str, str]]]:
+    """通途SKU → 重量模板（直连优先路径）。
+
+    - 入参可为 (headers, rows) 两元素序列，或已构好的 {sku: item} 字典。
+    - 同一 SKU 指向**不同**模板 → 视为歧义：不进索引，记入 dups（不取首/末）。
+    返回 (sku→模板, dups)。
+    """
+    pairs: list[tuple[str, str]] = []
+    if isinstance(direct_rows, dict):
+        pairs = [(k, v) for k, v in direct_rows.items()]
+    else:
+        seq = list(direct_rows)
+        head, body = None, None
+        if (
+            len(seq) == 2
+            and isinstance(seq[0], (list, tuple))
+            and seq[0] and sku_col in [str(x).strip() for x in seq[0]]
+            and isinstance(seq[1], (list, tuple))
+            and all(isinstance(x, (list, tuple)) for x in seq[1])
+        ):
+            head, body = seq[0], seq[1]
+        if head is not None:
+            headers = [str(x).strip() for x in head]
+            si, ii = headers.index(sku_col), headers.index(item_col)
+            for r in body:
+                pairs.append((str(r[si]).strip() if si < len(r) else "",
+                              str(r[ii]).strip() if ii < len(r) else ""))
+        else:  # 裸数据行，按 (sku, item) 两列
+            for r in seq:
+                pairs.append((str(r[0]).strip(), str(r[1]).strip()))
+    index: dict[str, str] = {}
+    conflict: dict[str, set[str]] = {}
+    for sku, item in pairs:
+        wt = direct_template_from_item(item)
+        if not sku or not wt:
+            continue
+        if sku in conflict:
+            conflict[sku].add(wt)
+            continue
+        if sku in index and index[sku] != wt:
+            conflict[sku] = {index.pop(sku), wt}
+            continue
+        index.setdefault(sku, wt)
+    dups = [
+        {"key": k, "reason": "直连: 同通途SKU 指向不同重量模板", "values": "|".join(sorted(v))}
+        for k, v in conflict.items()
+    ]
+    return index, dups
+
+
+def build_direct_catalog(
+    direct_index: dict[str, str],
+    bom_index: BomIndex,
+    *,
+    skus: Iterable[str],
+) -> CostCatalogResult:
+    """直连优先目录：按**通途SKU**给出行（键=SKU）。模板不在 BOM 索引则跳过（由调用方回落旧法）。"""
+    result = CostCatalogResult()
+    n = 0
+    for sku in skus:
+        wt = direct_index.get(sku)
+        if not wt:
+            continue
+        row, _ = _b2_row_for(sku, wt, bom_index)
+        if row is None:
+            continue
+        result.rows[sku] = row
+        n += 1
+    result.source_counts = {"direct": n}
+    return result
+
+
 def _resolve_from_ambiguous(catalog: CostCatalogResult, key: str, rec: dict) -> dict | None:
     """在 catalog.ambiguous_rows[key] 里用订单信号定夺唯一候选；定不了返回 None。"""
     cands = catalog.ambiguous_rows.get(key)
@@ -823,11 +911,14 @@ def compare_monthly_costs(
     contract: FormulaContract,
     head_index: "HeadFreightIndex | None" = None,
     wage_delta_by_template: "dict[str, float] | None" = None,
+    direct_catalog: "CostCatalogResult | None" = None,
 ) -> MonthlyComparisonResult:
     """全月逐行 A/B1/B2 比较；非 USTX 行严格复制 A；输出对账与闸门。
 
     `head_index`（皮壳头程）给了就把 B2 的「头程运费」换成皮壳头程；
     没给或该键未命中则保留 A。
+    `direct_catalog`（通途SKU→EN物料 直连）给了就**优先**按订单的 `通途SKU` 取 B2；
+    命中即用（最准），否则**回落** 旧的 `品类尺寸面料编码` 键。
     """
     result = MonthlyComparisonResult()
     result.blocked_reasons.extend(sorted(set(b1_catalog.blocked_reasons + b2_catalog.blocked_reasons)))
@@ -849,6 +940,7 @@ def compare_monthly_costs(
     b3_miss = 0
     b1_unresolved = 0
     b2_unresolved = 0
+    direct_used = 0
 
     for row in order_rows:
         rec = order_row_to_record(row)
@@ -882,17 +974,25 @@ def compare_monthly_costs(
                 if key in b1_catalog.ambiguous_rows:
                     b1_unresolved += 1
 
-            cat2 = b2_catalog.rows.get(key)
-            if cat2 is None and key in b2_catalog.ambiguous_rows:
-                cat2 = _resolve_from_ambiguous(b2_catalog, key, rec)
+            cat2 = None
+            direct_hit = False
+            if direct_catalog is not None:
+                cat2 = direct_catalog.rows.get(rec.get("sku", ""))
+                direct_hit = cat2 is not None
+            if cat2 is None:
+                cat2 = b2_catalog.rows.get(key)
+                if cat2 is None and key in b2_catalog.ambiguous_rows:
+                    cat2 = _resolve_from_ambiguous(b2_catalog, key, rec)
             if cat2 is not None:
                 if cat2["shell_cost"] is not None:
                     b2[pk_col] = cat2["shell_cost"]
                 b2[proc_col] = cat2["processing_cost"]
                 b2[sx2_col] = cat2["sx_processing_cost"]
                 b2_kind = cat2["source_kind"]
-                b2_lineage = ";".join(cat2.get("lineage", ()))
+                b2_lineage = ("direct<-" if direct_hit else "") + ";".join(cat2.get("lineage", ()))
                 b2_used += 1
+                if direct_hit:
+                    direct_used += 1
             else:
                 b2_kind = SRC_UNMATCHED
                 if key in b2_catalog.ambiguous_rows:
@@ -1094,6 +1194,12 @@ def compare_monthly_costs(
                        == len(raw_set | wb_set),
                        f"raw {len(raw_keys)} / writeback {len(wb_keys)}："
                        f"raw_only={len(raw_set - wb_set)} wb_only={len(wb_set - raw_set)} both={len(raw_set & wb_set)}"))
+    if direct_catalog is not None:
+        gates.append(_gate("b2_direct_coverage",
+                           True,
+                           f"直连(通途SKU→EN物料)命中 {direct_used} 行 / B2 合计 {b2_used} 行"
+                           f"（未命中回落 品类尺寸面料编码 旧键）",
+                           blocking=False))
     if head_index is not None:
         gates.append(_gate("b2_head_freight_coverage",
                            head_miss == 0,

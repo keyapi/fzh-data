@@ -222,6 +222,72 @@ def test_compare_resolves_ambiguous_key_by_order_category():
     assert not res.conclusions_blocked
 
 
+# ── 直连优先（通途SKU → EN 物料 → 重量模板），不命中回落旧键 ──
+
+
+def test_direct_template_from_item():
+    assert U.direct_template_from_item("KS0423-XNEOSTH-153x65x23-OFFWHITE") == "ZLMB#KS0423-XNEOSTH-153x65x23"
+    assert U.direct_template_from_item("KS0174-WGMSR-45-BROWN") == "ZLMB#KS0174-WGMSR-45"
+    assert U.direct_template_from_item("KS0517-QDZZMMB-SET6-DEEPGREYMIX") == "ZLMB#KS0517-QDZZMMB-SET6"
+    assert U.direct_template_from_item("X-Y") == ""       # 段数不足
+
+
+def test_build_direct_index_accepts_dict_and_flags_conflict():
+    idx, dups = U.build_direct_index({"S1": "KS0001-HLR-100-OFFWHITE"})
+    assert idx["S1"] == "ZLMB#KS0001-HLR-100"
+    assert dups == []
+    # 同 SKU 指向不同模板 → 歧义，不进索引
+    h = ["通途SKU", "EN物料"]
+    idx2, dups2 = U.build_direct_index((h, [["S1", "KS0001-HLR-100-OFFWHITE"],
+                                            ["S1", "KS0002-DM-100-OFFWHITE"]]))
+    assert "S1" not in idx2 and len(dups2) == 1
+
+
+def _row_with_sku(sku, key_val="K1", warehouse="USTX分公司", proc="20", category="X"):
+    headers = ["品类尺寸面料编码", "发货仓库", "品类", "发货数量", "皮壳成本",
+               "头程运费金额", "二次加工成本", "绍兴二次加工成本", "通途SKU"]
+    cells = [key_val, warehouse, category, "1", "10", "3", proc, "0", sku]
+    return FakeRow(headers, cells, row_number=2)
+
+
+def test_compare_prefers_direct_by_sku_over_key():
+    shell = shell_rows(("K1", "WT-KEY", "1", "2", "3"))
+    # 旧键 → WT-KEY(proc 7)；直连 SKU → ZLMB#KS9000-XNEOSTH-153(proc 9)
+    bom = bom_rows(("WT-KEY", "皮壳", "10", "4", "6", "7"),
+                   ("ZLMB#KS9000-XNEOSTH-153", "皮壳", "10", "4", "6", "9"))
+    b1h, b1r = b1_rows(("K1", "99"))
+    b2 = _b2((shell[0], shell[1]), (bom[0], [r for r in bom[1] if r[0] == "WT-KEY"]), ["K1"])
+    b1 = U.build_b1_catalog(U.b1_key_values(b1h, b1r), b2, keys=["K1"])
+    didx, _ = U.build_direct_index({"S1": "KS9000-XNEOSTH-153-WHITE"})
+    assert didx["S1"] == "ZLMB#KS9000-XNEOSTH-153"
+    direct = U.build_direct_catalog(didx, U.build_bom_index(*bom), skus=["S1"])
+    assert direct.rows["S1"]["processing_cost"] == 9.0
+    rows = [_row_with_sku("S1")]
+    res = U.compare_monthly_costs(rows, [], ustx_warehouse_names={"USTX分公司"},
+                                  b1_catalog=b1, b2_catalog=b2,
+                                  contract=_contract((shell[0], shell[1]), bom, (b1h, b1r)),
+                                  direct_catalog=direct)
+    r = res.rows[0]
+    assert r["B2_proc"] == 9.0                      # 直连胜出
+    assert "direct<-" in r["b2_lineage"]
+    assert "b2_direct_coverage" in [g["gate"] for g in res.gates]
+
+
+def test_compare_direct_miss_falls_back_to_key():
+    shell = shell_rows(("K1", "WT-KEY", "1", "2", "3"))
+    bom = bom_rows(("WT-KEY", "皮壳", "10", "4", "6", "7"))
+    b1h, b1r = b1_rows(("K1", "99"))
+    b2 = _b2(shell, bom, ["K1"])
+    b1 = U.build_b1_catalog(U.b1_key_values(b1h, b1r), b2, keys=["K1"])
+    direct = U.build_direct_catalog({}, U.build_bom_index(*bom), skus=[])   # 空直连
+    rows = [_row_with_sku("S-NOPE")]
+    res = U.compare_monthly_costs(rows, [], ustx_warehouse_names={"USTX分公司"},
+                                  b1_catalog=b1, b2_catalog=b2,
+                                  contract=_contract((shell[0], shell[1]), bom, (b1h, b1r)),
+                                  direct_catalog=direct)
+    assert res.rows[0]["B2_proc"] == 7.0            # 回落旧键
+
+
 def test_compare_blocks_when_ambiguous_key_unresolvable():
     sh, sr = shell_rows_cat(("A", "K1", "WT-A", "1", "2", "3"),
                             ("B", "K1", "WT-B", "1", "2", "3"))
