@@ -36,6 +36,7 @@ tags: [reference, index, cost-engine]
 | [21-offline-evidence-table.md](21-offline-evidence-table.md) | **离线证据表 v3（修 Codex 第四轮 4 项）**：4379 行；处置 = auto_ok 3877 / **review_source_unverified 474** / value_diff 11 / bundle 4 / ambiguous 3 / business_exempt 3 / **ambiguous_weight_template 3** / alias_pending 2 / direct_only 2；取值来源**带时点**（`bom_cost_verified` vs `unverified_*`）；含完整 manifest（脚本/输出哈希、两时点、关联依据）。**关键诊断：20261016 导出 vs 当前 BOM 240/240 一致 → 机制对、差异是时点漂移** |
 | [22-review-brief-for-cursor-grok.md](22-review-brief-for-cursor-grok.md) | **给 Cursor/Grok 的自足评审说明**（零上下文）：只读本页+4 个文件即可复核 v2 表；含 6 条必证伪断言、已知历史（别重复报）、输出格式、约束 |
 | **[23-en-report-rest-fetch-and-timepoints.md](23-en-report-rest-fetch-and-timepoints.md)** | **自己拉 EN 报表的配方 + 三时点对照**：`POST /api/method/frappe.desk.query_report.run`（**必须** `filters.item_group` + `ignore_prepared_report=1`）+ 3 个坑；**机制三重验证**（自拉 ≡ 手导 2101/2101；自拉 ≡ DB BOM 1610/0）；**9/3→10/16 仅漂移 9 个产品(0.4%)**；据此收窄「474 行待业务」 |
+| [24-business-checklist.md](24-business-checklist.md) | **业务操作清单**：502 行按 8 桶 → 「要谁确认什么」；**474 行可批量接受**（机制已证、多数是覆盖差异），真正逐条判断的只有 **28 行**；**唯一要你拍板的一句**：7 月核算用 9/3 还是 10/16 的 BOM 状态（影响 3 个产品族） |
 
 ## 疑问 → 答案位置
 
