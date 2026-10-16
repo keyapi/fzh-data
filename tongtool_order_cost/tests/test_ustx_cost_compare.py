@@ -609,3 +609,215 @@ def test_compare_without_wage_delta_b3_equals_b2():
     r = res.rows[0]
     assert r["B3_proc"] == r["B2_proc"] and r["b3_wage_delta"] == 0.0
     assert not any(g["gate"] == "b3_wage_sim_coverage" for g in res.gates)
+
+
+# ─────────────────── 拆包裹合并（附加视图，不重不漏） ───────────────────
+
+
+def _rec(no, psk, sku, key, qty=1.0, *, sale=0.0, sale_cny=0.0, freight=0.0,
+         shell="", ship_type="", pk=0.0, head=0.0, proc=0.0, sx2=0.0, order_no=None):
+    a = dict(zip(U.COMPONENT_COLS, (pk, head, proc, sx2)))
+    return {"order_no": order_no if order_no is not None else no, "platform_sku": psk,
+            "tongtool_sku": sku, "key": key, "qty": qty,
+            "sale": sale, "sale_cny": sale_cny, "freight": freight,
+            "shell": shell, "ship_type": ship_type, "a": a}
+
+
+# ── order_row_to_record 补齐合并所需字段 ──
+
+
+def test_order_row_to_record_carries_merge_columns():
+    headers = ["品类尺寸面料编码", "发货仓库", "品类", "发货数量", "皮壳成本", "头程运费金额",
+               "二次加工成本", "绍兴二次加工成本", "售价", "售价*汇率", "运费", "是否皮壳",
+               "当月给分公司发货类型"]
+    cells = ["K1", "FZH-DANEEY", "三角", "2", "10", "3", "20", "0",
+             "34.45", "234.49", "94.14", "皮壳", "成品"]
+    rec = U.order_row_to_record(FakeRow(headers, cells))
+    assert rec["sale"] == 34.45 and rec["sale_cny"] == 234.49 and rec["freight"] == 94.14
+    assert rec["shell"] == "皮壳" and rec["ship_type"] == "成品"
+
+
+# ── 选成品行（歧义即阻断，不取 first/max） ──
+
+
+def test_pick_finished_row_prefers_delivery_form():
+    cover = _rec("O-1_1", "PS", "S-Cover", "K1", ship_type="皮壳")
+    fin = _rec("O-1_2", "PS", "S-Fin", "K2", ship_type="成品")
+    row, why = U.pick_finished_row([cover, fin])
+    assert row is fin and why == "delivery_form"
+
+
+def test_pick_finished_row_prefers_en_ship_form():
+    a = _rec("O-1_1", "PS", "S-A", "K1")
+    b = _rec("O-1_2", "PS", "S-B", "K2")
+    row, why = U.pick_finished_row([a, b], ship_form_by_sku={"S-B": U.FORM_FINISHED})
+    assert row is b and why == "en_ship_method"
+
+
+def test_pick_finished_row_falls_back_to_non_component():
+    cover = _rec("O-1_1", "PS", "S-Cover", "K1")
+    fin = _rec("O-1_2", "PS", "S-Fin", "K2")
+    row, why = U.pick_finished_row([cover, fin])
+    assert row is fin and why == "non_component"
+
+
+def test_pick_finished_row_shell_as_finished_for_cover_foam_pair():
+    cover = _rec("O-1_1", "PS", "TT1-Cover", "K1", shell="皮壳")
+    foam = _rec("O-1_2", "PS", "TT2-Foam", "K2")
+    row, why = U.pick_finished_row([cover, foam])
+    assert row is cover and why == "shell_as_finished"
+
+
+def test_pick_finished_row_blocks_multiple_finished_rows():
+    a = _rec("O-1_1", "PS", "S-A", "K1")
+    b = _rec("O-1_2", "PS", "S-B", "K2")
+    row, why = U.pick_finished_row([a, b])
+    assert row is None and why == "multiple_finished_rows"
+
+
+def test_pick_finished_row_blocks_no_shell_row():
+    a = _rec("O-1_1", "PS", "TT1-Foam", "K1")
+    b = _rec("O-1_2", "PS", "TT2-Foam", "K2")
+    row, why = U.pick_finished_row([a, b])
+    assert row is None and why == "no_shell_row"
+
+
+# ── 合并：累加 / 件数 / 成本只留成品行 ──
+
+
+def _pair():
+    cover = _rec("O-1_1", "PS", "TT1-Cover", "K1", sale=10.0, sale_cny=70.0, freight=5.0,
+                 shell="皮壳", ship_type="成品", pk=100.0, head=20.0, proc=50.0)
+    foam = _rec("O-1_2", "PS", "TT2-Foam", "K2", sale=9.0, sale_cny=63.0, freight=1.0,
+                ship_type="成品", pk=0.0, head=11.0, proc=0.0)
+    return [cover, foam]
+
+
+def test_merge_split_orders_sums_columns_and_keeps_finished_cost_only():
+    recs = _pair()
+    res = U.merge_split_orders(recs, sku_to_product={"TT1-Cover": "P1", "TT2-Foam": "P1"})
+    assert res.stats["merged"] == 1 and res.stats["blocked"] == 0
+    assert len(res.rows) == 1
+    m = res.rows[0]
+    assert m["merged"] is True
+    assert m["qty"] == 2.0                       # 发货数量 = sum（Colab cell_077）
+    assert m["sale"] == 19.0 and m["sale_cny"] == 133.0 and m["freight"] == 6.0
+    assert m["key"] == "K1"                      # 成品行的键（皮壳行按成品处理）
+    assert m["pieces"] == 1.0                    # 件数 = Σ(皮壳行 发货数量)
+    assert m["a"] == dict(zip(U.COMPONENT_COLS, (100.0, 20.0, 50.0, 0.0)))
+    assert set(m["merge_skus"]) == {"TT1-Cover", "TT2-Foam"}
+    # 重复计 = 海绵行四项 × 件数（成品行已含包装）
+    assert m["merge_double_count"] == 11.0
+
+
+def test_merge_split_orders_blocks_product_mismatch():
+    recs = _pair()
+    res = U.merge_split_orders(recs, sku_to_product={"TT1-Cover": "P1", "TT2-Foam": "P2"})
+    assert res.stats["merged"] == 0
+    assert res.stats["blocked_reasons"] == {"product_mismatch": 1}
+    assert len(res.rows) == 2                    # 阻断组原样保留
+    assert all(r["merged"] is False for r in res.rows)
+
+
+def test_merge_split_orders_blocks_unknown_product():
+    recs = _pair()
+    res = U.merge_split_orders(recs, sku_to_product={"TT1-Cover": "P1"})  # Foam 未登记
+    assert res.stats["blocked_reasons"] == {"product_unknown": 1}
+
+
+def test_merge_split_orders_without_product_guard_merges_structural_pair():
+    res = U.merge_split_orders(_pair())          # 不给 sku_to_product → 不守卫
+    assert res.stats["merged"] == 1
+
+
+def test_merge_split_orders_keeps_untouched_rows_and_original_input():
+    recs = _pair() + [_rec("O-9_1", "PS", "S-X", "K9", sale=1.0)]
+    before = [dict(r) for r in recs]
+    res = U.merge_split_orders(recs)
+    assert len(res.rows) == 2                    # 合并组 2→1，另一行原样
+    assert res.stats["rows_before"] == 3 and res.stats["rows_after"] == 2
+    assert res.rows[1]["tongtool_sku"] == "S-X" and res.rows[1]["merged"] is False
+    assert recs == before                        # 不改原行
+
+
+def test_merge_split_orders_blocks_multiple_finished_rows_and_passthrough():
+    recs = [_rec("O-2_1", "PS", "S-A", "K1"), _rec("O-2_2", "PS", "S-B", "K2")]
+    res = U.merge_split_orders(recs)
+    assert res.stats["merged"] == 0 and res.stats["blocked"] == 1
+    assert res.blocked[0]["reason"] == "multiple_finished_rows"
+    assert len(res.rows) == 2
+
+
+def test_merge_split_orders_single_sku_group_not_candidate():
+    recs = [_rec("O-3_1", "PS", "S-A", "K1"), _rec("O-3_2", "PS", "S-A", "K1")]
+    res = U.merge_split_orders(recs)
+    assert res.stats["groups_total"] == 0 and len(res.rows) == 2
+
+
+# ── 对账闸门（断言1/2/3/4） ──
+
+
+def test_merge_conservation_gates_pass_on_clean_merge():
+    recs = _pair()
+    res = U.merge_split_orders(recs, sku_to_product={"TT1-Cover": "P1", "TT2-Foam": "P1"})
+    gates = {g["gate"]: g for g in U.merge_conservation_gates(recs, res.rows)}
+    assert gates["merge_conservation_qty"]["status"] == "pass"
+    assert gates["merge_conservation_sale"]["status"] == "pass"
+    assert gates["merge_conservation_sale_cny"]["status"] == "pass"
+    assert gates["merge_conservation_freight"]["status"] == "pass"
+    assert gates["merge_pieces_from_shell_rows"]["status"] == "pass"
+    assert gates["merge_key_not_degraded"]["status"] == "pass"
+    assert gates["merge_cost_not_doubled"]["status"] == "pass"
+    assert "11.00" in gates["merge_cost_not_doubled"]["detail"]
+
+
+def test_merge_conservation_gates_detect_dropped_revenue():
+    recs = _pair()
+    res = U.merge_split_orders(recs)
+    tampered = [dict(r) for r in res.rows]
+    tampered[0]["sale"] = 0.0                    # 人为丢掉售价 → 断言1 必须失败
+    gates = {g["gate"]: g for g in U.merge_conservation_gates(recs, tampered)}
+    assert gates["merge_conservation_sale"]["status"] == "fail"
+
+
+def test_merge_conservation_gates_detect_degraded_key():
+    recs = _pair()
+    res = U.merge_split_orders(recs)
+    tampered = [dict(r) for r in res.rows]
+    tampered[0]["key"] = "K1+K2"                 # 拼接键 → 断言3 必须失败
+    gates = {g["gate"]: g for g in U.merge_conservation_gates(recs, tampered)}
+    assert gates["merge_key_not_degraded"]["status"] == "fail"
+
+
+def test_merge_conservation_gates_detect_pieces_mismatch():
+    recs = _pair()
+    res = U.merge_split_orders(recs)
+    tampered = [dict(r) for r in res.rows]
+    tampered[0]["pieces"] = 2.0                  # 件数被"静默补"成非皮壳行 → 断言2 失败
+    gates = {g["gate"]: g for g in U.merge_conservation_gates(recs, tampered)}
+    assert gates["merge_pieces_from_shell_rows"]["status"] == "fail"
+
+
+# ── 合并守卫索引：客户物料号 → 原始 EN 产品编号 ──
+
+
+def test_build_sku_product_index_keeps_raw_product_code():
+    head = ["客户物料号", "产品编号", "别的列"]
+    body = [["TT1-Cover", "KS0398-100", "x"], ["TT2-Foam", "KS0398-100", "y"]]
+    idx, dups = U.build_sku_product_index((head, body))
+    # 不做模板变换：原样保留（区别于 build_direct_index 的 ZLMB# 前缀）
+    assert idx == {"TT1-Cover": "KS0398-100", "TT2-Foam": "KS0398-100"}
+    assert dups == []
+
+
+def test_build_sku_product_index_drops_ambiguous_sku():
+    head = ["客户物料号", "产品编号"]
+    body = [["TT1", "P1"], ["TT1", "P2"]]       # 同 SKU 两个产品 → 歧义剔除
+    idx, dups = U.build_sku_product_index((head, body))
+    assert idx == {}
+    assert len(dups) == 1 and dups[0]["key"] == "TT1"
+
+
+def test_build_sku_product_index_accepts_plain_dict():
+    idx, dups = U.build_sku_product_index({"TT1": "P1", "TT2": ""})
+    assert idx == {"TT1": "P1"} and dups == []

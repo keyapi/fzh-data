@@ -465,9 +465,33 @@ def cmd_ustx_compare(args) -> int:
         wage_delta_by_template=wage_delta, direct_catalog=direct_catalog,
     )
 
+    # 拆包裹合并（附加视图，默认关）：主表 result.rows 仍保留**全部** writeback 行；
+    # 这里另出一份"每组合成一件成品"的对账，供 A/B 对拍（不重不漏）。
+    merge_payload = None
+    if getattr(args, "merge_split", False):
+        _bom_mod = by_key["bom_cost_import_values"]
+        mh, mr = P.load_snapshot_csv(snap / _bom_mod["path"])
+        sku_to_product, mdups = U.build_sku_product_index((mh, mr))
+        records = [U.order_row_to_record(r) for r in order_rows]
+        merge_res = U.merge_split_orders(records, sku_to_product=sku_to_product)
+        gates = U.merge_conservation_gates(records, merge_res.rows)
+        merge_payload = {
+            "stats": merge_res.stats,
+            "groups": merge_res.groups,
+            "blocked": merge_res.blocked,
+            "gates": gates,
+            "index": {"sku_to_product": len(sku_to_product), "dups": mdups},
+        }
+        print(f"拆包裹合并：候选 {merge_res.stats['groups_total']} 组，"
+              f"合并 {merge_res.stats['merged']} 组，阻断 {merge_res.stats['blocked']} 组"
+              f"（{merge_res.stats['blocked_reasons']}）；"
+              f"行 {merge_res.stats['rows_before']}→{merge_res.stats['rows_after']}；"
+              f"重复计成本（A 四项，加权）= {merge_res.stats['double_counted']:+,.2f}")
+
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     out_dir = Path(args.out) if args.out else (snap.parent / f"{snap.name}_ustx_compare_{stamp}")
-    written = U.write_outputs(result, out_dir, run_id=manifest["run_id"], sources=manifest["sources"])
+    written = U.write_outputs(result, out_dir, run_id=manifest["run_id"],
+                              sources=manifest["sources"], merge=merge_payload)
 
     print(json.dumps({
         "conclusions_blocked": result.conclusions_blocked,
@@ -485,6 +509,8 @@ def cmd_ustx_compare(args) -> int:
         "wage_sim": wage_stats,
         "gates": result.gates,
         "blocked_reasons": result.blocked_reasons,
+        "merge_split": merge_payload["stats"] if merge_payload else None,
+        "merge_gates": merge_payload["gates"] if merge_payload else None,
         "notes": result.notes,
         "out": written,
     }, ensure_ascii=False, indent=2))
@@ -522,6 +548,7 @@ def build_parser() -> argparse.ArgumentParser:
     pu.add_argument("--wage-boms", default="", help="EN 逐 BOM 工序表 csv（默认 out/ustx_wage_sim/ustx_boms_all.csv）；给了才算 B3")
     pu.add_argument("--direct-map", default="", help="直连映射 csv（列：通途SKU,EN物料）；不给则用 importBOMCostList 的 客户物料号→产品编号")
     pu.add_argument("--no-direct", action="store_true", help="关闭直连优先，只用 品类尺寸面料编码 旧键")
+    pu.add_argument("--merge-split", action="store_true", help="附加视图：把拆包裹候选组合成一件成品再对 BOM（默认关，便于 A/B）")
     pu.set_defaults(func=cmd_ustx_compare)
     return p
 

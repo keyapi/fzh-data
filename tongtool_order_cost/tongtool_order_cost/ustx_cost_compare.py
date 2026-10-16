@@ -38,6 +38,17 @@ WAREHOUSE_COL = "发货仓库"
 WAREHOUSE_CLASS_COL = "发货仓按销售汇总分类"
 CATEGORY_COL = "品类"
 
+# 拆包裹合并（附加视图）用到的写回表真实列名（列名全部取自 7 月快照 writeback 表头）
+SALE_COL = "售价"
+SALE_CNY_COL = "售价*汇率"
+FREIGHT_COL = "运费"
+SHELL_FLAG_COL = "是否皮壳"
+DELIVERY_FORM_COL = "当月给分公司发货类型"
+SHELL_FLAG_VALUE = "皮壳"
+FORM_FINISHED = "成品"
+# 组内**累加列**（与 Colab cell_077 同口径：售价/售价*汇率/运费/发货数量 求和）
+MERGE_SUM_FIELDS: tuple[str, ...] = ("qty", "sale", "sale_cny", "freight")
+
 # 订单表四项成本（顺序固定：皮壳 / 头程 / 二次加工 / 绍兴二次加工）
 COMPONENT_COLS: tuple[str, str, str, str] = (
     "皮壳成本",
@@ -794,6 +805,12 @@ def order_row_to_record(row) -> dict:
         "platform_sku": str(row.get("平台SKU") or "").strip(),
         "product_name": str(row.get("产品名称") or ""),
         "qty": to_float(row.get(QTY_COL)) or 0.0,
+        # 合并（附加视图）用：累加列 + 判定交付形态的信号。列名均为写回表**真实列**
+        "sale": to_float(row.get(SALE_COL)) or 0.0,
+        "sale_cny": to_float(row.get(SALE_CNY_COL)) or 0.0,
+        "freight": to_float(row.get(FREIGHT_COL)) or 0.0,
+        "shell": str(row.get(SHELL_FLAG_COL) or "").strip(),
+        "ship_type": str(row.get(DELIVERY_FORM_COL) or "").strip(),
         "a": dict(zip(COMPONENT_COLS, comps)),
     }
 
@@ -850,6 +867,254 @@ def group_split_rows(
             "rows": rows,
         })
     return sorted(out, key=lambda g: (-g["n_rows"], g["common"]))
+
+
+# ─────────────────── 拆包裹 → 合成一件成品（附加视图，不改主表） ───────────────────
+#
+# 设计稿见 docs/reference/cost-engine-spec/30-design-merge-split-no-double-count.md。
+# 铁律：**合并是附加视图**——主比较表（compare_monthly_costs）仍保留**全部** writeback 行；
+# 本节的输出是"把每个拆包裹候选组合成一行成品"的另一份视图 + 对账，供 A/B 对拍。
+# **不重不漏**：组内累加列求和；成本只留"成品行"一份；歧义组一律**阻断**（不取 first/max）。
+
+_COMPONENT_SKU_RE = re.compile(r"-(cover|foam)$", re.IGNORECASE)
+_COVER_SKU_RE = re.compile(r"-cover$", re.IGNORECASE)
+
+
+def _is_shell_row(rec: dict) -> bool:
+    """皮壳行：`是否皮壳=='皮壳'`，或 `通途SKU` 以 `-Cover` 结尾。"""
+    if (rec.get("shell") or "") == SHELL_FLAG_VALUE:
+        return True
+    return bool(_COVER_SKU_RE.search(str(rec.get("tongtool_sku") or "")))
+
+
+def _is_component_row(rec: dict) -> bool:
+    """部件行：皮壳 / 海绵（`-Cover`/`-Foam` 结尾）。非部件行视为"交付成品"。"""
+    if _is_shell_row(rec):
+        return True
+    return bool(_COMPONENT_SKU_RE.search(str(rec.get("tongtool_sku") or "")))
+
+
+def pick_finished_row(
+    rows: Sequence[dict],
+    *,
+    ship_form_by_sku: dict[str, str] | None = None,
+) -> tuple[dict | None, str]:
+    """在**同一件成品**的组内选出"成品行"（成本载体）；定不了返回 `(None, reason)`。
+
+    优先级（**定不了即阻断，绝不取 first/max**）：
+    1. EN 交付形态（`ship_form_by_sku`，若给）：唯一 `成品` 行；
+    2. 快照列 `当月给分公司发货类型 == 成品`（最接近 `custom_shipment_type_to_branch`）：唯一；
+    3. 唯一**非部件行**（既非 `-Cover`/`-Foam` 也非 `是否皮壳=皮壳`）；
+    4. 全为部件时：唯一皮壳行按成品处理（Colab `cell_078` 口径：合并行当成品）。
+    多重成品 / 无皮壳行 → None。
+    """
+    if ship_form_by_sku:
+        fin = [r for r in rows if ship_form_by_sku.get(r.get("tongtool_sku", "")) == FORM_FINISHED]
+        if len(fin) == 1:
+            return fin[0], "en_ship_method"
+    fin = [r for r in rows if (r.get("ship_type") or "") == FORM_FINISHED]
+    if len(fin) == 1:
+        return fin[0], "delivery_form"
+    non_comp = [r for r in rows if not _is_component_row(r)]
+    if len(non_comp) == 1:
+        return non_comp[0], "non_component"
+    if len(non_comp) > 1:
+        return None, "multiple_finished_rows"
+    shells = [r for r in rows if _is_shell_row(r)]
+    if len(shells) == 1:
+        return shells[0], "shell_as_finished"
+    if not shells:
+        return None, "no_shell_row"
+    return None, "multiple_shell_rows"
+
+
+@dataclass
+class MergeResult:
+    """合并（附加视图）结果：`.rows` 是合并后的行，`.groups`/`.blocked` 是逐组审计。"""
+
+    rows: list[dict] = field(default_factory=list)
+    groups: list[dict] = field(default_factory=list)    # 已合并组
+    blocked: list[dict] = field(default_factory=list)   # 被阻断组（原样保留、不合并）
+    stats: dict = field(default_factory=dict)
+
+    @property
+    def audit(self) -> dict:
+        return {"stats": self.stats, "groups": self.groups, "blocked": self.blocked}
+
+
+def _four_cost(rec: dict, qty: float) -> float:
+    return sum((rec["a"].get(c) or 0.0) for c in COMPONENT_COLS) * qty
+
+
+def merge_split_orders(
+    records: Sequence[dict],
+    *,
+    sku_to_product: dict[str, str] | None = None,
+    ship_form_by_sku: dict[str, str] | None = None,
+    require_multi_sku: bool = True,
+) -> MergeResult:
+    """把 `group_split_rows` 的每个候选组**合成一行成品**（附加视图；不改原行）。
+
+    - **累加类**（`售价/售价*汇率/运费/发货数量`）→ 组内 `sum`（Colab `cell_077` 口径）。
+    - **身份类**：`品类尺寸面料编码` = **成品行的键**（禁止拼接）；全组 SKU 集合留作血缘。
+    - **件数**：`pieces` = **Σ(皮壳行 `发货数量`)**（doc 18 判据，不是 max、不是首行）；
+      成品行的成本按 `pieces` 计权（`cost_qty`）——这是"不重"的关键。
+    - **只有成品行对 BOM**：其余行成本不再各自取值（等价"置 0 并入成品行"）。
+    - **歧义即阻断**：选不出唯一成品行 / `sku_to_product` 给出 ≥2 个 EN 产品 → 阻断，
+      该组**原样保留**并记入 `.blocked`（不取 first/max）。
+
+    `sku_to_product`（通途SKU → EN 产品编号/重量模板）给了就做"同 EN 产品"守卫；
+    未给则不守卫（调用方自负误并风险）。
+    """
+    groups = group_split_rows(records, require_multi_sku=require_multi_sku)
+    group_of: dict[int, dict] = {id(r): g for g in groups for r in g["rows"]}
+    decision: dict[int, tuple[str, str]] = {}       # id(group) -> ("merged"|"blocked", reason)
+    merged_row: dict[int, dict] = {}
+    group_audit: list[dict] = []
+    blocked_audit: list[dict] = []
+
+    for g in groups:
+        rows = g["rows"]
+        reason = ""
+        if sku_to_product is not None:
+            skus = [r.get("tongtool_sku", "") for r in rows]
+            known = {sku_to_product[s] for s in skus if sku_to_product.get(s)}
+            unmapped = [s for s in skus if s and not sku_to_product.get(s)]
+            if not known or unmapped:
+                # 有 SKU 未登记 → 无法证实"同一 EN 产品"，不猜（歧义即阻断）
+                reason = "product_unknown"
+            elif len(known) > 1:
+                reason = "product_mismatch"
+        if not reason:
+            fin, why = pick_finished_row(rows, ship_form_by_sku=ship_form_by_sku)
+            if fin is None:
+                reason = why
+            elif not fin.get("key"):
+                reason = "finished_key_empty"
+            elif not any(_is_shell_row(r) for r in rows):
+                reason = "no_shell_row"
+
+        if reason:
+            decision[id(g)] = ("blocked", reason)
+            blocked_audit.append({
+                "common": g["common"], "platform_sku": g["platform_sku"], "n_rows": g["n_rows"],
+                "reason": reason, "skus": g["skus"],
+            })
+            continue
+
+        shells = [r for r in rows if _is_shell_row(r)]
+        pieces = round(sum((r.get("qty") or 0.0) for r in shells), 6)
+        before = sum(_four_cost(r, r.get("qty") or 0.0) for r in rows)
+        after = _four_cost(fin, pieces)
+        new = dict(fin)
+        new["a"] = dict(fin["a"])
+        for f in MERGE_SUM_FIELDS:                       # 累加类：组内 sum
+            new[f] = round(sum((r.get(f) or 0.0) for r in rows), 6)
+        new["merged"] = True
+        new["pieces"] = pieces                            # 件数 = Σ(皮壳行 发货数量)
+        new["cost_qty"] = pieces                          # 成本计权用件数（不重）
+        new["merge_n_rows"] = len(rows)
+        new["merge_reason"] = "shell_as_finished" if fin is shells[0] else "finished_row"
+        new["merge_skus"] = list(g["skus"])
+        new["merge_keys"] = list(g["key_set"])
+        new["merge_cost_before"] = round(before, 6)
+        new["merge_cost_after"] = round(after, 6)
+        new["merge_double_count"] = round(before - after, 6)
+        new["merge_shell_qty"] = pieces
+        decision[id(g)] = ("merged", "")
+        merged_row[id(g)] = new
+        group_audit.append({
+            "common": g["common"], "platform_sku": g["platform_sku"], "n_rows": g["n_rows"],
+            "skus": g["skus"], "key": fin.get("key", ""), "finished_sku": fin.get("tongtool_sku", ""),
+            "pieces": pieces, "qty_sum": new["qty"],
+            "cost_before": new["merge_cost_before"], "cost_after": new["merge_cost_after"],
+            "double_count": new["merge_double_count"],
+        })
+
+    out_rows: list[dict] = []
+    emitted: set[int] = set()
+    for r in records:
+        g = group_of.get(id(r))
+        if g is None or decision.get(id(g), ("", ""))[0] != "merged":
+            r = dict(r)                                   # 原样保留（未合并行/token 阻断组）
+            r.setdefault("merged", False)
+            r.setdefault("pieces", r.get("qty") or 0.0)
+            r.setdefault("cost_qty", r.get("qty") or 0.0)
+            out_rows.append(r)
+            continue
+        if id(g) in emitted:
+            continue                                      # 组内其余行被吸收
+        emitted.add(id(g))
+        out_rows.append(merged_row[id(g)])
+
+    n_merged = len(group_audit)
+    stats = {
+        "groups_total": len(groups),
+        "merged": n_merged,
+        "blocked": len(blocked_audit),
+        "blocked_reasons": {
+            k: sum(1 for b in blocked_audit if b["reason"] == k)
+            for k in sorted({b["reason"] for b in blocked_audit})
+        },
+        "rows_before": len(records),
+        "rows_after": len(out_rows),
+        "rows_absorbed": len(records) - len(out_rows),
+        "cost_before": round(sum(g["cost_before"] for g in group_audit), 6),
+        "cost_after": round(sum(g["cost_after"] for g in group_audit), 6),
+        "double_counted": round(sum(g["double_count"] for g in group_audit), 6),
+    }
+    return MergeResult(rows=out_rows, groups=group_audit, blocked=blocked_audit, stats=stats)
+
+
+def merge_conservation_gates(
+    records: Sequence[dict],
+    merged_rows: Sequence[dict],
+    *,
+    tol: float = TOL,
+) -> list[dict]:
+    """合并 → A/B 对拍的逐项闸门（断言1/2/3/4）。
+
+    - 断言1 守恒：`Σ售价 / Σ售价*汇率 / Σ运费 / Σ发货数量` 前后相等；
+    - 断言2 件数：Σ(合并行 `pieces`) == Σ(合并行 `merge_shell_qty`)（= Σ 皮壳行数量）；
+    - 断言3 键不退化：合并行的 `key` ∈ 该组 `merge_keys`；
+    - 断言4 成本不重：逐组 `cost_after <= cost_before`（量化见 stats.double_counted）。
+    """
+    def total(field: str) -> tuple[float, float]:
+        return (sum((r.get(field) or 0.0) for r in records),
+                sum((r.get(field) or 0.0) for r in merged_rows))
+
+    gates: list[dict] = []
+    labels = {"qty": "发货数量", "sale": "售价", "sale_cny": "售价*汇率", "freight": "运费"}
+    for field in MERGE_SUM_FIELDS:
+        b, a = total(field)
+        gates.append(_gate(
+            f"merge_conservation_{field}", abs(a - b) <= tol,
+            f"{labels[field]} 合并前 {b:,.4f} vs 合并后 {a:,.4f}（差 {a - b:+,.4f}）",
+        ))
+
+    merged = [r for r in merged_rows if r.get("merged")]
+    bad_pieces = [r for r in merged if abs((r.get("pieces") or 0.0) - (r.get("merge_shell_qty") or 0.0)) > tol]
+    gates.append(_gate(
+        "merge_pieces_from_shell_rows", not bad_pieces,
+        f"合并行 {len(merged)} 行，件数≠Σ(皮壳行) 的 {len(bad_pieces)} 行；"
+        f"Σ件数={sum((r.get('pieces') or 0.0) for r in merged):,.2f}",
+    ))
+
+    degraded = [r for r in merged if r.get("key") and r.get("key") not in (r.get("merge_keys") or [])]
+    gates.append(_gate(
+        "merge_key_not_degraded", not degraded,
+        f"合并行键不在组内原键集合的 {len(degraded)} 行（禁止拼接）",
+    ))
+
+    over = [r for r in merged if (r.get("merge_cost_after") or 0.0) - (r.get("merge_cost_before") or 0.0) > tol]
+    dc = sum((r.get("merge_double_count") or 0.0) for r in merged)
+    gates.append(_gate(
+        "merge_cost_not_doubled", not over,
+        f"合并后成本高于合并前的组 {len(over)} 个；当前重复计成本（A 四项，加权）= {dc:+,.2f}",
+        blocking=False,
+    ))
+    return gates
+
 
 
 def direct_template_from_item(item_code: str) -> str:
@@ -913,6 +1178,60 @@ def build_direct_index(
         index.setdefault(sku, wt)
     dups = [
         {"key": k, "reason": "直连: 同通途SKU 指向不同重量模板", "values": "|".join(sorted(v))}
+        for k, v in conflict.items()
+    ]
+    return index, dups
+
+
+def build_sku_product_index(
+    rows: Sequence[Sequence[str]] | dict[str, str],
+    *,
+    sku_col: str = "客户物料号",
+    item_col: str = "产品编号",
+) -> tuple[dict[str, str], list[dict[str, str]]]:
+    """通途SKU → **原始 EN 产品编号**（合并守卫用，**不做**模板变换）。
+
+    与 `build_direct_index` 的区别：这里保留 `产品编号` 原值（同 EN 产品判据按原始编号，
+    见设计稿 §2A 两法取交集），不剥颜色/变体。同一 SKU 指向**不同**产品 → 歧义剔除。
+    返回 (sku→产品编号, dups)。
+    """
+    pairs: list[tuple[str, str]] = []
+    if isinstance(rows, dict):
+        pairs = [(k, v) for k, v in rows.items()]
+    else:
+        seq = list(rows)
+        head, body = None, None
+        if (
+            len(seq) == 2
+            and isinstance(seq[0], (list, tuple))
+            and seq[0] and sku_col in [str(x).strip() for x in seq[0]]
+            and isinstance(seq[1], (list, tuple))
+            and all(isinstance(x, (list, tuple)) for x in seq[1])
+        ):
+            head, body = seq[0], seq[1]
+        if head is not None:
+            headers = [str(x).strip() for x in head]
+            si, ii = headers.index(sku_col), headers.index(item_col)
+            for r in body:
+                pairs.append((str(r[si]).strip() if si < len(r) else "",
+                              str(r[ii]).strip() if ii < len(r) else ""))
+        else:  # 裸数据行，按 (sku, item) 两列
+            for r in seq:
+                pairs.append((str(r[0]).strip(), str(r[1]).strip()))
+    index: dict[str, str] = {}
+    conflict: dict[str, set[str]] = {}
+    for sku, item in pairs:
+        if not sku or not item:
+            continue
+        if sku in conflict:
+            conflict[sku].add(item)
+            continue
+        if sku in index and index[sku] != item:
+            conflict[sku] = {index.pop(sku), item}
+            continue
+        index.setdefault(sku, item)
+    dups = [
+        {"key": k, "reason": "合并守卫: 同通途SKU 指向不同 EN 产品编号", "values": "|".join(sorted(v))}
         for k, v in conflict.items()
     ]
     return index, dups
@@ -1339,6 +1658,15 @@ REPORT_SHEETS = [
     "07_未匹配",
     "08_重复歧义键",
     "09_闸门",
+    # 合并（附加视图）：只在 --merge-split 时有内容；主表 03 仍保留全部 writeback 行
+    "10_合并拆包对账",
+    "11_合并拆包分组",
+    "12_合并拆包阻断",
+]
+
+_MERGE_GROUP_COLUMNS = [
+    "common", "platform_sku", "n_rows", "skus", "key", "finished_sku",
+    "pieces", "qty_sum", "cost_before", "cost_after", "double_count",
 ]
 
 _ROW_COLUMNS = [
@@ -1362,8 +1690,13 @@ def build_sheets(
     result: MonthlyComparisonResult,
     *,
     sources: Sequence[dict] | None = None,
+    merge: dict | None = None,
 ) -> dict:
-    """把比较结果转成 {sheet_name: DataFrame}。"""
+    """把比较结果转成 {sheet_name: DataFrame}。
+
+    `merge`（可选）= `{"stats":…, "groups":…, "blocked":…, "gates":…}`；
+    **附加视图**——主表 `03_全量A_B1_B2逐行` 始终是全部 writeback 行，不因合并而减少。
+    """
     import pandas as pd
 
     def df(rows, cols=None):
@@ -1417,10 +1750,19 @@ def build_sheets(
         "07_未匹配": df(result.unmatched, ["scenario", "key", "source_row", "reason"]),
         "08_重复歧义键": df(result.duplicate_keys),
         "09_闸门": df(result.gates, ["gate", "status", "blocking", "detail"]),
+        "10_合并拆包对账": df(list((merge or {}).get("gates", [])), ["gate", "status", "blocking", "detail"]),
+        "11_合并拆包分组": df(list((merge or {}).get("groups", [])), _MERGE_GROUP_COLUMNS),
+        "12_合并拆包阻断": df(list((merge or {}).get("blocked", [])), ["common", "platform_sku", "n_rows", "reason", "skus"]),
     }
 
 
-def _json_payload(result: MonthlyComparisonResult, *, run_id: str, sources: Sequence[dict] | None) -> dict:
+def _json_payload(
+    result: MonthlyComparisonResult,
+    *,
+    run_id: str,
+    sources: Sequence[dict] | None,
+    merge: dict | None = None,
+) -> dict:
     return {
         "run_id": run_id,
         "formula_version": FORMULA_VERSION,
@@ -1441,6 +1783,7 @@ def _json_payload(result: MonthlyComparisonResult, *, run_id: str, sources: Sequ
         "blocked_reasons": result.blocked_reasons,
         "notes": result.notes,
         "sources": list(sources or []),
+        "merge_split": merge,      # 附加视图（--merge-split 才非空）；主表 rows_total 不受影响
     }
 
 
@@ -1508,8 +1851,12 @@ def write_outputs(
     *,
     run_id: str,
     sources: Sequence[dict] | None = None,
+    merge: dict | None = None,
 ) -> dict[str, str]:
-    """写 audit.json / audit.xlsx / 管理摘要.md；目录已存在则拒绝（不覆盖历史）。"""
+    """写 audit.json / audit.xlsx / 管理摘要.md；目录已存在则拒绝（不覆盖历史）。
+
+    `merge`（可选）= 拆包裹合并（附加视图）的对账负载；给了就多写三张表。
+    """
     import json
     from pathlib import Path as _P
 
@@ -1518,14 +1865,14 @@ def write_outputs(
         raise FileExistsError(f"输出目录已存在且非空，拒绝覆盖: {out}")
     out.mkdir(parents=True, exist_ok=True)
 
-    payload = _json_payload(result, run_id=run_id, sources=sources)
+    payload = _json_payload(result, run_id=run_id, sources=sources, merge=merge)
     jp = out / "audit.json"
     jp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
     mp = out / "管理摘要.md"
     mp.write_text(render_memo(result), encoding="utf-8")
 
-    sheets = build_sheets(result, sources=sources)
+    sheets = build_sheets(result, sources=sources, merge=merge)
     xp = out / "audit.xlsx"
     import pandas as pd
 
