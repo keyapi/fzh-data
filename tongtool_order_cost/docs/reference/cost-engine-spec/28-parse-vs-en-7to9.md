@@ -123,3 +123,21 @@ tags: [cost, ustx, gsheet, audit, parsing, en-truth, reference]
 - ⇒ **这些 SKU 大概率在被该 API key 覆盖的商户/范围之外**（或需其它参数）。**结论：产品名以用户实测为准。**
 
 
+
+## 9. 直连优先（#1）—— 已落地 + A/B 实测影响（2026-10-17）
+
+**实现**（`ustx_cost_compare.py` + CLI）：
+- 源：**`importBOMCostList` 的 `客户物料号→产品编号`**（EN BOM 成本表，**无需 SSH/通途API**）；可选 `--direct-map` CSV 并集，冲突剔除。
+- `direct_template_from_item`（EN物料名→`ZLMB#…`）+ `build_direct_index` + `build_direct_catalog`；`compare_monthly_costs(..., direct_catalog=)` **优先按订单 `通途SKU` 取 B2**，命中血缘标 `direct<-`；**未命中回落 `品类尺寸面料编码` 旧键**。
+- 修了一个致命 bug：原先用「平台SKU+通途SKU+解析后SKU」**拼接串**查直连 → 几乎全 miss；改按 `tongtool_sku` 精确查。
+
+**7 月 A/B 实测**（同一快照，仅切 `--no-direct`）：
+
+| | 键only | **直连优先+兜底** |
+|---|---:|---:|
+| B2 匹配行 | 4328 | **4372** |
+| B2 未匹配 | 51 | **7** |
+| 直连覆盖 | — | **4367/4372 = 99.9%** |
+| ΔB2 (vs A) | 264,912 | **268,610** |
+
+⇒ **直连：多覆盖 44 行、未匹配从 51 降到 7、ΔB2 变动 ≈ +3,698 元**。（与此前 [16](16-customer-sku-direct-path.md) 的 99.8% 一致。）

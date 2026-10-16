@@ -457,7 +457,7 @@ def cmd_ustx_compare(args) -> int:
                     didx[k] = v
         order_skus = {(r.get("通途SKU") or "") for r in order_rows}
         direct_catalog = U.build_direct_catalog(didx, bom_idx, skus=order_skus)
-        print(f"直连映射 {len(didx)} SKU（歧义 {len(ddups)}）；订单命中 {len(direct_catalog.rows)} 行")
+        print(f"直连映射 {len(didx)} SKU（歧义 {len(ddups)}）；订单 SKU 命中 {len(direct_catalog.rows)} 个（覆盖行数见闸 b2_direct_coverage）")
 
     result = U.compare_monthly_costs(
         order_rows, raw_rows, ustx_warehouse_names=ustx_wh,
