@@ -400,9 +400,11 @@ def cmd_ustx_compare(args) -> int:
         if r.get(U.WAREHOUSE_COL) in ustx_wh
     })
     shell_idx, shell_dups = U.build_shell_weight_index(sh, sr)
+    amb_cands = U.shell_ambiguous_candidates(sh, sr)
     bom_idx = U.build_bom_index(bh, br)
     b2 = U.build_b2_catalog(shell_idx, bom_idx, keys=ustx_keys,
-                            ambiguous_keys=[d["key"] for d in shell_dups])
+                            ambiguous_keys=[d["key"] for d in shell_dups],
+                            ambiguous_candidates=amb_cands)
     b1 = U.build_b1_catalog(U.b1_key_values(b1h, b1r), b2, keys=ustx_keys)
 
     # 头程（改造目标：按绍兴发货方式取，皮壳兜底）——缺这张表则 B2 头程保留 A

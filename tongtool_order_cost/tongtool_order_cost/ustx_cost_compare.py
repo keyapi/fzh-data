@@ -52,6 +52,7 @@ USTX_CLASS = "USTX分公司"
 SHELL_IMPORT_SHEET = "import皮壳成本"
 SHELL_IMPORT_KEY = "品类尺寸面料编码"
 SHELL_IMPORT_WT = "EN重量模板物料号"
+SHELL_IMPORT_CAT = "品类"
 
 BOM_SHEET = "importBOMCostList"
 BOM_WT = "重量模板, 编号"
@@ -232,6 +233,65 @@ def build_shell_weight_index(
         for k, v in ambiguous.items()
     ]
     return index, dups
+
+
+def shell_ambiguous_candidates(
+    shell_headers: Sequence[str], shell_rows: Sequence[Sequence[str]]
+) -> dict[str, list[dict[str, str]]]:
+    """同键指向**多个不同**重量模板时，返回全部候选（含来源行 `品类`），供订单侧消歧。"""
+    dicts = _rows_to_dicts(shell_headers, shell_rows)
+    by_key: dict[str, list[dict[str, str]]] = {}
+    for i, r in enumerate(dicts, start=2):
+        key = r.get(SHELL_IMPORT_KEY, "")
+        wt = r.get(SHELL_IMPORT_WT, "")
+        if not key or not wt:
+            continue
+        by_key.setdefault(key, []).append(
+            {
+                "weight_template": wt,
+                "category": r.get(SHELL_IMPORT_CAT, ""),
+                "source_row": str(i),
+            }
+        )
+    return {k: v for k, v in by_key.items() if len({c["weight_template"] for c in v}) > 1}
+
+
+def _norm_text(s: str) -> str:
+    return "".join(str(s).split()).upper()
+
+
+def _template_tail(wt: str) -> str:
+    """`ZLMB#KS0423-XNEOSTH-153x65x23` → `KS0423-XNEOSTH-153x65x23`。"""
+    return str(wt).split("#", 1)[-1]
+
+
+def resolve_shell_candidates(
+    candidates: Sequence[dict[str, str]],
+    *,
+    category: str = "",
+    sku: str = "",
+    product_name: str = "",
+) -> dict[str, str] | None:
+    """用**订单侧信号**在同键多模板里定夺唯一候选，定不了返回 None（不得取首行）。
+
+    优先级：①订单 `品类` 与候选来源行 `品类` 精确相等（唯一命中）；
+    ②候选模板尾串（`KS…-面料-尺寸`）完整出现在订单 SKU/产品名里（唯一命中）。
+    """
+    if not candidates:
+        return None
+    if len(candidates) == 1:
+        return candidates[0]
+    cat = _norm_text(category)
+    if cat:
+        hit = [c for c in candidates if _norm_text(c.get("category", "")) == cat]
+        if len(hit) == 1:
+            return hit[0]
+    blob = _norm_text(sku) + "|" + _norm_text(product_name)
+    if blob.strip("|"):
+        hit = [c for c in candidates if _norm_text(_template_tail(c["weight_template"])) in blob]
+        if len(hit) == 1:
+            return hit[0]
+    return None
 
 
 def build_bom_index(
@@ -471,6 +531,8 @@ class CostCatalogResult:
     formula_checks: list[dict] = field(default_factory=list)
     blocked_reasons: list[str] = field(default_factory=list)
     source_counts: dict[str, int] = field(default_factory=dict)
+    # 同键多模板的候选（每个候选算好一份 row）；由 compare 侧按订单信号定夺
+    ambiguous_rows: dict[str, list[dict]] = field(default_factory=dict)
 
 
 def _ship_method_for(methods: frozenset[str]) -> str:
@@ -491,14 +553,49 @@ def _sx_processing_for_ship_method(bom: BomTemplate, method: str) -> tuple[float
     return (0.0, "皮壳不计绍兴二次加工")
 
 
+def _b2_row_for(key: str, wt: str, bom_index: BomIndex) -> tuple[dict | None, str]:
+    """按重量模板算一份 B2 目录行；返回 (row|None, unmatched_reason)。"""
+    bom = bom_index.by_template.get(wt)
+    if bom is None:
+        return None, "missing_bom_import"
+    if bom.ustx_processing is None:
+        return None, "missing_ustx_processing"
+    method = _ship_method_for(bom.ship_methods)
+    sx2, sx2_src = _sx_processing_for_ship_method(bom, method)
+    return {
+        "key": key,
+        "source_kind": SRC_IMPORT,
+        "weight_template": wt,
+        "shipping_method": method,
+        "shell_cost": bom.shell_cost_max,
+        "head_freight": None,          # import 表无来源 → 调用方保留 A
+        "processing_cost": bom.ustx_processing,
+        "sx_processing_cost": sx2,
+        "formula_version": FORMULA_VERSION,
+        "lineage": (
+            f"{SHELL_IMPORT_SHEET}:{SHELL_IMPORT_KEY}={key}->{SHELL_IMPORT_WT}={wt}",
+            f"{BOM_SHEET}:{BOM_WT}={wt}(rows={','.join(map(str, bom.source_rows[:5]))})",
+            f"{BOM_SHEET}:{BOM_USTX_COST}={bom.ustx_processing}",
+            f"sx2_source={sx2_src}",
+        ),
+    }, ""
+
+
 def build_b2_catalog(
     shell_index: dict[str, str],
     bom_index: BomIndex,
     *,
     keys: Iterable[str],
     ambiguous_keys: Iterable[str] = (),
+    ambiguous_candidates: dict[str, list[dict[str, str]]] | None = None,
 ) -> CostCatalogResult:
-    """B2：四项全按 import 表重建。歧义键不解析（不猜首/末行）。"""
+    """B2：四项全按 import 表重建。
+
+    歧义键（同键多模板）**不猜首/末行**：
+    - 若给了 `ambiguous_candidates`，为每个候选算好一行放进 `ambiguous_rows`，
+      由 `compare_monthly_costs` 按订单侧信号（品类/SKU）定夺；
+    - 定不了 → `unmatched`（blocked）。
+    """
     result = CostCatalogResult()
     if bom_index.ambiguities:
         result.blocked_reasons.append(
@@ -510,42 +607,31 @@ def build_b2_catalog(
 
     for key in keys:
         if key in ambiguous:
-            result.unmatched.append({"key": key, "reason": "ambiguous_shell_key"})
+            cands = (ambiguous_candidates or {}).get(key, [])
+            built: list[dict] = []
+            for c in cands:
+                row, _ = _b2_row_for(key, c["weight_template"], bom_index)
+                if row is not None:
+                    row = dict(row)
+                    row["candidate_category"] = c.get("category", "")
+                    built.append(row)
+            if built:
+                result.ambiguous_rows[key] = built
+            else:
+                result.unmatched.append({"key": key, "reason": "ambiguous_shell_key"})
             continue
         wt = shell_index.get(key)
         if not wt:
             result.unmatched.append({"key": key, "reason": "missing_shell_import"})
             continue
-        bom = bom_index.by_template.get(wt)
-        if bom is None:
-            result.unmatched.append({"key": key, "reason": "missing_bom_import", "weight_template": wt})
+        row, why = _b2_row_for(key, wt, bom_index)
+        if row is None:
+            result.unmatched.append({"key": key, "reason": why, "weight_template": wt})
             continue
-        if bom.ustx_processing is None:
-            result.unmatched.append(
-                {"key": key, "reason": "missing_ustx_processing", "weight_template": wt}
-            )
-            continue
-        method = _ship_method_for(bom.ship_methods)
-        sx2, sx2_src = _sx_processing_for_ship_method(bom, method)
-        result.rows[key] = {
-            "key": key,
-            "source_kind": SRC_IMPORT,
-            "weight_template": wt,
-            "shipping_method": method,
-            "shell_cost": bom.shell_cost_max,
-            "head_freight": None,          # import 表无来源 → 调用方保留 A
-            "processing_cost": bom.ustx_processing,
-            "sx_processing_cost": sx2,
-            "formula_version": FORMULA_VERSION,
-            "lineage": (
-                f"{SHELL_IMPORT_SHEET}:{SHELL_IMPORT_KEY}={key}->{SHELL_IMPORT_WT}={wt}",
-                f"{BOM_SHEET}:{BOM_WT}={wt}(rows={','.join(map(str, bom.source_rows[:5]))})",
-                f"{BOM_SHEET}:{BOM_USTX_COST}={bom.ustx_processing}",
-                f"sx2_source={sx2_src}",
-            ),
-        }
+        result.rows[key] = row
     result.source_counts = {
         SRC_IMPORT: len(result.rows),
+        "ambiguous_resolvable": len(result.ambiguous_rows),
         "unmatched": len(result.unmatched),
     }
     return result
@@ -593,6 +679,23 @@ def build_b1_catalog(
                 "formula_version": FORMULA_VERSION,
                 "lineage": ("formula_filled<-" + ";".join(b2["lineage"]),),
             }
+            continue
+        if key in b2_catalog.ambiguous_rows:
+            # 同键多模板：镜像 B2 的候选，标为 formula_filled，交由 compare 按订单信号定夺
+            result.ambiguous_rows[key] = [
+                {
+                    **row,
+                    "source_kind": SRC_FORMULA_FILLED,
+                    "shell_cost": None,
+                    "head_freight": None,
+                    "sx_processing_cost": None,
+                    "lineage": ("formula_filled<-" + ";".join(row["lineage"]),),
+                }
+                for row in b2_catalog.ambiguous_rows[key]
+            ]
+            for dup in b2_catalog.duplicate_keys:
+                if dup.get("key") == key:
+                    result.duplicate_keys.append(dict(dup))
             continue
         reason = "missing_b1_and_b2"
         for u in b2_catalog.unmatched:
@@ -670,8 +773,11 @@ def _record_business_key(record) -> str:
 
 
 def order_row_to_record(row) -> dict:
-    """把 SourceRow 抽成比较所需的扁平字典（A 四项 + 血缘）。"""
+    """把 SourceRow 抽成比较所需的扁平字典（A 四项 + 血缘 + 消歧信号）。"""
     comps = [to_float(row.get(c)) for c in COMPONENT_COLS]
+    sku = " ".join(
+        str(row.get(c) or "") for c in ("平台SKU", "通途SKU", "解析后SKU")
+    ).strip()
     return {
         "source_sheet": row.source_sheet,
         "source_row": row.row_number,
@@ -681,9 +787,30 @@ def order_row_to_record(row) -> dict:
         "key_nofabric": row.get("品类尺寸编码"),
         "warehouse": row.get(WAREHOUSE_COL),
         "category": row.get(CATEGORY_COL),
+        "sku": sku,
+        "product_name": str(row.get("产品名称") or ""),
         "qty": to_float(row.get(QTY_COL)) or 0.0,
         "a": dict(zip(COMPONENT_COLS, comps)),
     }
+
+
+def _resolve_from_ambiguous(catalog: CostCatalogResult, key: str, rec: dict) -> dict | None:
+    """在 catalog.ambiguous_rows[key] 里用订单信号定夺唯一候选；定不了返回 None。"""
+    cands = catalog.ambiguous_rows.get(key)
+    if not cands:
+        return None
+    pick = resolve_shell_candidates(
+        [
+            {"weight_template": c["weight_template"], "category": c.get("candidate_category", "")}
+            for c in cands
+        ],
+        category=rec.get("category", ""),
+        sku=rec.get("sku", ""),
+        product_name=rec.get("product_name", ""),
+    )
+    if pick is None:
+        return None
+    return next((c for c in cands if c["weight_template"] == pick["weight_template"]), None)
 
 
 def compare_monthly_costs(
@@ -720,6 +847,8 @@ def compare_monthly_costs(
     head_miss = 0
     b3_hit = 0
     b3_miss = 0
+    b1_unresolved = 0
+    b2_unresolved = 0
 
     for row in order_rows:
         rec = order_row_to_record(row)
@@ -741,6 +870,8 @@ def compare_monthly_costs(
 
         if is_ustx:
             cat1 = b1_catalog.rows.get(key)
+            if cat1 is None and key in b1_catalog.ambiguous_rows:
+                cat1 = _resolve_from_ambiguous(b1_catalog, key, rec)
             if cat1 is not None:
                 b1[proc_col] = cat1["processing_cost"]
                 b1_kind = cat1["source_kind"]
@@ -748,18 +879,24 @@ def compare_monthly_costs(
                 b1_used += 1
             else:
                 b1_kind = SRC_UNMATCHED
+                if key in b1_catalog.ambiguous_rows:
+                    b1_unresolved += 1
 
             cat2 = b2_catalog.rows.get(key)
+            if cat2 is None and key in b2_catalog.ambiguous_rows:
+                cat2 = _resolve_from_ambiguous(b2_catalog, key, rec)
             if cat2 is not None:
                 if cat2["shell_cost"] is not None:
                     b2[pk_col] = cat2["shell_cost"]
                 b2[proc_col] = cat2["processing_cost"]
                 b2[sx2_col] = cat2["sx_processing_cost"]
-                b2_kind = SRC_IMPORT
+                b2_kind = cat2["source_kind"]
                 b2_lineage = ";".join(cat2.get("lineage", ()))
                 b2_used += 1
             else:
                 b2_kind = SRC_UNMATCHED
+                if key in b2_catalog.ambiguous_rows:
+                    b2_unresolved += 1
 
             if head_index is not None and cat2 is not None:
                 tmpl = head_index.by_template.get(cat2["weight_template"], {})
@@ -932,8 +1069,10 @@ def compare_monthly_costs(
     # 目录必须**闭合覆盖**所有美中键：rows(measured+formula_filled) + unmatched == 键数
     gates.append(_gate(
         "b1_source_conservation",
-        len(b1_catalog.rows) + len(b1_catalog.unmatched) == len(ustx_keys),
-        f"B1 目录 {len(b1_catalog.rows)}+{len(b1_catalog.unmatched)} 键 vs 美中 {len(ustx_keys)} 键"
+        len(b1_catalog.rows) + len(b1_catalog.unmatched) + len(b1_catalog.ambiguous_rows)
+        == len(ustx_keys),
+        f"B1 目录 {len(b1_catalog.rows)}+{len(b1_catalog.unmatched)}+{len(b1_catalog.ambiguous_rows)}"
+        f" 键 vs 美中 {len(ustx_keys)} 键"
         f"（measured={counts.get(SRC_MEASURED,0)} formula_filled={counts.get(SRC_FORMULA_FILLED,0)}）",
     ))
     b2_missing_lineage = [r for r in result.ustx_rows
@@ -966,6 +1105,12 @@ def compare_monthly_costs(
                            f"B3 工资情景(167.8→105)命中 {b3_hit} 行 / 未命中 {b3_miss} 行"
                            f"（未命中=该重量模板未匹配到 9/3 BOM，B3≡B2）",
                            blocking=False))
+    if b2_unresolved or b1_unresolved:
+        gates.append(_gate("ambiguous_key_resolved",
+                           False,
+                           f"同键多模板：B2 定夺不了 {b2_unresolved} 行 / B1 {b1_unresolved} 行"
+                           f"（订单信号品类/SKU 不足以唯一命中，未取首行）",
+                           blocking=True))
     result.gates = gates
 
     if head_index is not None:

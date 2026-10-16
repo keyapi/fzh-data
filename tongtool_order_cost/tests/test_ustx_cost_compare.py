@@ -151,6 +151,99 @@ def test_shell_conflicting_weight_template_is_duplicate():
     assert "K1" not in idx          # 歧义键不进索引（不猜首/末行）
 
 
+# ── 同键多模板：数据驱动消歧（不取首行） ──
+
+
+def shell_rows_cat(*rows):
+    """带 `品类` 列的小样：行 = (品类, 键, 重量模板, sx2, us2, pl2)。"""
+    h = ["品类", "品类尺寸面料编码", "EN重量模板物料号",
+         "绍兴二次加工成本", "美国二次加工成本", "波兰二次加工成本"]
+    return h, [list(r) for r in rows]
+
+
+def test_shell_ambiguous_candidates_lists_each_template():
+    sh, sr = shell_rows_cat(
+        ("米白床头靠枕", "K1", "WT-A", "1", "2", "3"),
+        ("米白大靠背", "K1", "WT-B", "1", "2", "3"),
+    )
+    cands = U.shell_ambiguous_candidates(sh, sr)
+    assert {c["weight_template"] for c in cands["K1"]} == {"WT-A", "WT-B"}
+    assert U.shell_ambiguous_candidates(*shell_rows(("K1", "WT1", "1", "2", "3"))) == {}
+
+
+def test_resolve_shell_candidates_by_category_then_sku_then_none():
+    cands = [
+        {"weight_template": "WT-A", "category": "米白床头靠枕"},
+        {"weight_template": "WT-B", "category": "米白大靠背"},
+    ]
+    assert U.resolve_shell_candidates(cands, category="米白大靠背")["weight_template"] == "WT-B"
+    assert U.resolve_shell_candidates(cands, category="查无此品类") is None
+    # 品类定不了 → 退到模板尾串落在 SKU 里（唯一命中）
+    td = [
+        {"weight_template": "ZLMB#KS0364-XNEOSTH-153x65", "category": ""},
+        {"weight_template": "ZLMB#KS0423-XNEOSTH-153x65x23", "category": ""},
+    ]
+    got = U.resolve_shell_candidates(td, sku="KS0423-XNEOSTH-153x65x23-OFFWHITE")
+    assert got["weight_template"] == "ZLMB#KS0423-XNEOSTH-153x65x23"
+
+
+def test_b2_builds_candidate_rows_for_ambiguous_key():
+    sh, sr = shell_rows_cat(("A", "K1", "WT-A", "1", "2", "3"),
+                            ("B", "K1", "WT-B", "1", "2", "3"))
+    bh, br = bom_rows(("WT-A", "皮壳", "10", "4", "6", "7"),
+                      ("WT-B", "皮壳", "20", "4", "6", "9"))
+    idx, dups = U.build_shell_weight_index(sh, sr)
+    bidx = U.build_bom_index(bh, br)
+    res = U.build_b2_catalog(idx, bidx, keys=["K1"], ambiguous_keys=[d["key"] for d in dups],
+                             ambiguous_candidates=U.shell_ambiguous_candidates(sh, sr))
+    assert "K1" not in res.rows                    # 不定到唯一，就不进主目录
+    assert {r["weight_template"] for r in res.ambiguous_rows["K1"]} == {"WT-A", "WT-B"}
+
+
+def test_compare_resolves_ambiguous_key_by_order_category():
+    sh, sr = shell_rows_cat(("米白床头靠枕", "K1", "WT-A", "1", "2", "3"),
+                            ("米白大靠背", "K1", "WT-B", "1", "2", "3"))
+    bom = bom_rows(("WT-A", "皮壳", "10", "4", "6", "7"),
+                   ("WT-B", "皮壳", "20", "4", "6", "9"))
+    idx, dups = U.build_shell_weight_index(sh, sr)
+    b2 = U.build_b2_catalog(idx, U.build_bom_index(*bom), keys=["K1"],
+                            ambiguous_keys=[d["key"] for d in dups],
+                            ambiguous_candidates=U.shell_ambiguous_candidates(sh, sr))
+    b1h, b1r = b1_rows(("K1", "99"))
+    b1 = U.build_b1_catalog({}, b2, keys=["K1"])
+    # 订单侧品类 = 大靠背 → 唯一命中 WT-B（proc=9）
+    rows = [order_row("K1", warehouse="USTX分公司", category="米白大靠背", proc="20")]
+    res = U.compare_monthly_costs(rows, [], ustx_warehouse_names={"USTX分公司"},
+                                  b1_catalog=b1, b2_catalog=b2,
+                                  contract=_contract((sh, sr), bom, (b1h, b1r)))
+    r = res.rows[0]
+    assert r["B2_proc"] == 9 and r["B1_proc"] == 9   # B1 缺测算值 → formula_filled 取定夺后的 B2
+    assert "ambiguous_key_resolved" not in [g["gate"] for g in res.gates]
+    assert not res.conclusions_blocked
+
+
+def test_compare_blocks_when_ambiguous_key_unresolvable():
+    sh, sr = shell_rows_cat(("A", "K1", "WT-A", "1", "2", "3"),
+                            ("B", "K1", "WT-B", "1", "2", "3"))
+    bom = bom_rows(("WT-A", "皮壳", "10", "4", "6", "7"),
+                   ("WT-B", "皮壳", "20", "4", "6", "9"))
+    idx, dups = U.build_shell_weight_index(sh, sr)
+    b2 = U.build_b2_catalog(idx, U.build_bom_index(*bom), keys=["K1"],
+                            ambiguous_keys=[d["key"] for d in dups],
+                            ambiguous_candidates=U.shell_ambiguous_candidates(sh, sr))
+    b1 = U.build_b1_catalog({}, b2, keys=["K1"])
+    b1h, b1r = b1_rows(("K1", "99"))
+    # 订单侧品类/SKU 都定不了 → 不猜，B2 记 unmatched 并阻断
+    rows = [order_row("K1", warehouse="USTX分公司", category="毫无关系", proc="20")]
+    res = U.compare_monthly_costs(rows, [], ustx_warehouse_names={"USTX分公司"},
+                                  b1_catalog=b1, b2_catalog=b2,
+                                  contract=_contract((sh, sr), bom, (b1h, b1r)))
+    r = res.rows[0]
+    assert r["B2_proc"] == r["A_proc"] == 20          # 未定夺 → 保留 A，不硬套
+    assert "ambiguous_key_resolved" in [g["gate"] for g in res.gates]
+    assert res.conclusions_blocked
+
+
 def test_b2_excludes_ambiguous_shell_key():
     shell = shell_rows(("K1", "WT1", "1", "2", "3"), ("K1", "WT2", "1", "2", "3"),
                        ("K2", "WT3", "1", "2", "3"))

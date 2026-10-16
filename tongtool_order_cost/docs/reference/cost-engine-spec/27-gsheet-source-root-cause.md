@@ -147,7 +147,24 @@ YM-HS-018-153-HLR（626,640）  ← 疑似 626 行 F 列串了（153 键指向 1
 ```
 > 与 §1.1 同源（`品类使用面料` 的 29 个重复品类编码）。已确认 **YM-HS-018-153-HLR** 疑为 626 行 D/E/F 串行。**这些需要逐条按 EN 核，属于同一整改批次。**
 
-**根因（供 Colab 整改）**：`cell_036` 读皮壳表后 `drop_duplicates('品类尺寸面料编码')` **静默取第一行** —— 一旦同键两行模板不同，结果取决于行序。**建议**：Colab 侧改为"同键多模板 → 按订单的 `品类`/`平台SKU` 尺寸段消歧；消不掉才报错"，而不是取首行。（我方 `ustx_cost_compare.py` 目前是**已 fail-closed**：冲突键不进索引、记录到 `重复歧义键` 页。）
+**根因（供 Colab 整改）**：`cell_036` 读皮壳表后 `drop_duplicates('品类尺寸面料编码')` **静默取第一行** —— 一旦同键两行模板不同，结果取决于行序。**建议**：Colab 侧改为"同键多模板 → 按订单的 `品类`/`平台SKU` 尺寸段消歧；消不掉才报错"，而不是取首行。
+
+## 3d. 已实现的「消歧自动化」（`ustx_cost_compare.py`，2026-10-17）
+
+订单行实际带 `品类`（写回表 99% 非空）、`产品名称`（100%）、`平台/通途/解析后SKU`（100%）⇒ 可机械消歧，不必报错让人判断：
+
+- **`build_shell_weight_index`** 仍只收唯一键；同键多模板**不进索引**（不取首/末行）。
+- **`shell_ambiguous_candidates(headers, rows)`** 收纳同键的**全部候选**（含来源行 `品类`）。
+- **`build_b2_catalog(..., ambiguous_candidates=...)`**：对歧义键**为每个候选各算一份 row** 放进 `ambiguous_rows`（B1 镜像为 `formula_filled`）。
+- **`resolve_shell_candidates(cands, category=, sku=, product_name=)`** 定夺顺序：
+  ①订单 `品类` 与候选来源行 `品类` **精确相等**（唯一命中）→ 用它；
+  ②候选**模板尾串**（`KS…-面料-尺寸`，如 `KS0423-XNEOSTH-153x65x23`）**完整落在**订单 SKU/产品名里（唯一命中）→ 用它；
+  ③仍定不了 → 返回 `None`。
+- **`compare_monthly_costs`**：USTX 行命中歧义键时按上法定夺；**定得了就用**（B2 取定夺候选，B1 同步）；**定不了 → 该行保留 A、记 `ambiguous_key_resolved` 闸（blocking）**，绝不硬套。
+
+> 效果：能由数据断定的自动断（如"品类=大靠背"或"SKU 含 `…-153x65x23`"→ 取 0423 模板）；真正断不了的才 fail-closed 报出来。测试见 `tests/test_ustx_cost_compare.py`（`test_compare_resolves_ambiguous_key_by_order_category` / `..._blocks_when_..._unresolvable`）。
+
+**Why**：用户要求"尽可能更彻底的判断自动化、别动不动让人拍板"——订单侧信号足够时机器能自己定；只有信息不足（品类与 SKU 都无区分度）才升级到人。
 
 ## 5. 关联
 
