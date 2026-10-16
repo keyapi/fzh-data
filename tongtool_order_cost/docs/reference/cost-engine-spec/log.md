@@ -6,6 +6,9 @@ title: cost-engine-spec 变更日志
 # 变更日志
 
 ## 2026-10-17
+- **新增 [29](29-review-brief-for-codex.md)**：给 Codex 的评审包（6 条待证伪断言 + 未做项）。
+
+## 2026-10-17
 - **EN `ref_code` 定案 3 个样例 + 修 1 处 F**：用 EN `Item Customer Detail.ref_code`（**须经 SSH 查 DB**；REST 该字段 403）拿到通途SKU→EN 物料真值：
   - `TT0031054K0062974 → KS0174-WGMSR-45-BROWN`（中控台车载狗窝/无光磨砂绒）⇒ **皮壳表 行453 F 误抄四季款(KS0234) 已修** 为 `ZLMB#KS0174-WGMSR-45`；
   - `TT0312705K0064584 → KS0517-QDZZMMB-SET6-DEEPGREYMIX`（鹅卵石套装）⇒ **原「自洽、表没错」判断作废**，实为 **Colab 解析错 + 源表缺行**（品类使用面料/材料价格明细 缺 鹅卵石套装/全涤针织磨毛布）→ 待办加行；

@@ -65,3 +65,4 @@ tags: [reference, index, cost-engine]
 - 美中 USTX 方案对比：[../monthly-profitability-audit.md](../monthly-profitability-audit.md)、[../ustx-cost-caliber-note.md](../ustx-cost-caliber-note.md)、[../en-ustx-bom-wage-rate-spec.md](../en-ustx-bom-wage-rate-spec.md)
 - 覆盖率审计：[../old-system-source-coverage-audit.md](../old-system-source-coverage-audit.md)
 - Colab 引擎总规格：[../colab-cost-engine-spec.md](../colab-cost-engine-spec.md)
+| [29-review-brief-for-codex.md](29-review-brief-for-codex.md) | **给 Codex 的评审说明**（自足）：本轮 = 直连映射 + gsheet 源头修正；含 6 条**待证伪断言**、证据要求、已知历史（别重复报）、约束、**3 项未做**（拆包裹合并 / 通途改名 / 摘要行） |
