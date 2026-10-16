@@ -66,3 +66,4 @@ tags: [reference, index, cost-engine]
 - 覆盖率审计：[../old-system-source-coverage-audit.md](../old-system-source-coverage-audit.md)
 - Colab 引擎总规格：[../colab-cost-engine-spec.md](../colab-cost-engine-spec.md)
 | [29-review-brief-for-codex.md](29-review-brief-for-codex.md) | **给 Codex 的评审说明**（自足）：本轮 = 直连映射 + gsheet 源头修正；含 6 条**待证伪断言**、证据要求、已知历史（别重复报）、约束、**3 项未做**（拆包裹合并 / 通途改名 / 摘要行） |
+| [30-design-merge-split-no-double-count.md](30-design-merge-split-no-double-count.md) | **设计稿（#2）**：拆包裹/合并订单 → **合成一件成品再对 BOM**（不重不漏）。含**落点判断**（Colab/EN/离线引擎三层各司其职）、**算法**（分组 ∩ EN 同产品、累加售价/运费/数量、件数=Σ皮壳行、只有成品行对 BOM）、**5 条不重不漏断言**、与 Colab `first` 现状的差异、待拍板 |

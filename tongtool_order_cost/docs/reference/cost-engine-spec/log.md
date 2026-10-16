@@ -5,6 +5,9 @@ title: cost-engine-spec 变更日志
 ---
 # 变更日志
 
+## 2026-10-17（补）
+- **新增 [30](30-design-merge-split-no-double-count.md)**：拆包裹合并 → 合成一件再对 BOM 的设计稿（落点/算法/断言/待拍板）。
+
 ## 2026-10-17
 - **新增 [29](29-review-brief-for-codex.md)**：给 Codex 的评审包（6 条待证伪断言 + 未做项）。
 
