@@ -13,6 +13,25 @@ tags: [cost, review, audit, brief, verification]
 > **用法**：把本文件的**路径**给评审方（Codex / Cursor / 另一个 Claude 对话），并附一句「按 `00-review-brief.md` 执行」。
 > 目的：让**不是写它的人**来证伪，而不是复述。
 
+## ⚠️ 第一轮复核（Codex，2026-10-16）已完成 —— 先读这条
+
+第一轮的结果与**全部更正**在 [**13-codex-review-corrections.md**](13-codex-review-corrections.md)（**与其它页冲突时以它为准**）。
+第一轮抓到并已修正的错误（**不要重复报，但可复核我们改对了没有**）：
+
+| 第一轮指出 | 现状 |
+|---|---|
+| 新表公式 `VLOOKUP(wt, importBOMCostList!$A:$Y, 21)` **搜错列**（A 是产品编号，wt 在 Y） | 已改为 `INDEX($U:$U, MATCH(wt,$Y:$Y,0))`；见 [11](11-plan-new-ustx-processing-table.md) §3.2 |
+| **「改来源码无影响」是错误归因**（cell125 会按来源码重取） | 已更正；该结论**只对头程成立**；见 [13](13-codex-review-corrections.md) §4 |
+| **第 15 条真问题是幂等**，不是「表单缺 PP棉 闸门」（三个入口都有） | A6 **作废**、A5 改述为幂等；见 [09](09-known-issues-register.md) §A |
+| 「51 行 / B 组 10 键」**分类太粗** | 已改 Codex 的 4 类分法（白名单 3 / 源映射空 41 / 五件套 4 / 双模板冲突 3）；见 [11](11-plan-new-ustx-processing-table.md) §3.3、[15](15-exception-rows-monthly-impact.md) |
+| `colab-engine-cell-by-cell.md` **漏 cell049**、**cell045/096 写反**、`eval_delivery_en` 现状过期、`idxmax` 无消费者 | 已**就地返工**；见该文件头部警示与 [13](13-codex-review-corrections.md) §6 |
+| 时点：**四种状态不能混用** | [01](01-overview-and-glossary.md) §4 已改为五段时点表 |
+| 18 条方抱枕是**历史成本代理**（非 parser 拼错） | 已记；见 [13](13-codex-review-corrections.md) §5.2 |
+
+**格式要求不变**：逐条给「已证实 / 证伪 / 未证实 + 证据（路径:行号 或 SQL 或数据）」，证伪给最小反例；**不要以 bundle 自身表述当证据**。
+
+---
+
 ## 0. 一句话任务
 
 独立核验 `tongtool_order_cost/docs/reference/cost-engine-spec/`（下称 **bundle**）里的结论——
@@ -56,8 +75,20 @@ tags: [cost, review, audit, brief, verification]
 
 ### C. 结构性问题
 14. `import皮壳成本` 的列名「绍兴/美国/波兰**二次加工成本**」实际装的是各地**包装成品成本**；绍兴列与 `importBOMCostList.绍兴包装成品成本` 在 4328/4331 行相同。
-15. 存在 `check_bom_exists` 的 `docstatus` 写成 `0`（应为 `1`）导致「已存在跳过」永不命中；表单「复制BOM」按钮缺 PP棉 闸门。
+15. **BOM 复制缺幂等**：`check_bom_exists`（`utils/bom.py:127–145`）只查 `docstatus=0`，而 `:290–299` 插入后立即 `submit()`；三个入口（表单/自动/批量）**都有** PP棉 资格检查。
 16. **2026-09-03 快照尚未含剔除额**（与 Jack 10-10 提交时序一致）。
+
+### D. 第二轮新增断言（2026-10-16 之后新增/返工的内容，**重点核验**）
+
+17. **主键推导链**（[14](14-colab-key-derivation-chain.md)）：
+    - `品类编码` 来自 GS `品类使用面料`（每行「品类 → 品类编码 + 面料清单 + 品类别名」），且编码**须唯一**并 = `产品用料工时明细.品类尺寸编码` 的前 2 段；
+    - **面料**来自 GS `材料价格明细`（**仅 `材料类别=='面料'`**），取 `材料编码`，拼键时去掉 `ML-`；
+    - **尺寸**有两条路径：4.2（`cell_066`，从产品名称解析、默认取最大、带特例）与 4.7.2（`cell_141`）；
+    - **海绵三层特例**：品类层（「弧形+海绵→弧形海绵」）· 面料提取层（「海绵」强制排末位）· 物料层（`面料/海绵 → ML-HM`，键尾 `-HM`；填充物 `HM-HX*` 不参与）。
+18. **`cell049` 存在且含字面 1:2:4**：`fill_shipping_cost`（L72–129）docstring 写「半成品 = 2×皮壳，成品 = 2×半成品 = 4×皮壳」；`select_by_sx_delivery`（L134–187）是 `绍兴发货方式` 的**真实消费点**；`df_final` 构造于 L211。
+    - **仍待判定**：该函数**只更新已存在的发货方式行、不给缺失方式新建行** → 1:2:4 **实际触发面**未证实。
+19. **异常行月度影响**（[15](15-exception-rows-monthly-impact.md)）：161 空键命中美中的行数 **7 月 41/4379、8 月 36/5479、9 月 21/2959**；**51 行非 7 月特有**（7/8/9 = 51/48/61）；161 空键本季**仅 17 个**被真正用到；**空键逐月新增**（8 月 +6、9 月真正新增 1 → 累计 +7，**断链在扩大**）。
+20. **`colab-engine-cell-by-cell.md` 的返工**：`cell045`=**19 列**、`cell096`=**6 列**；`has_sx_delivery` 分支归 `cell045`；`idxmax` 无面料兜底（`df_cost_2prod_nofabric_nodups`）**无订单侧消费者**（`cell_109` 整格注释）；`eval_delivery_en` 仅**当前 10/14 版** `cell36=True`，10/10 备份无。
 
 ## 3. 必查的「易错点」（评审时务必先看）
 
