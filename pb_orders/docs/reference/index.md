@@ -12,3 +12,5 @@ timestamp: 2026-09-22
 |------|------|
 | [workflow.md](workflow.md) | 五步流程、字段抽取规则、通途列处理顺序、叠加页坐标表、裁切框、背贴规格、命名规则、数量对账口径、与历史产物对齐证据 |
 | [server-deployment-architecture.md](server-deployment-architecture.md) | EN 测试服务器部署选型（已落地实现）：Frappe / 同步 FastAPI / FastAPI+RQ 对比、离线缓存、任务与产物模型、分阶段路线、落地实现与实测 |
+| [notion-stockout.md](notion-stockout.md) | 库存预检缺货 → Notion「PB 无货未发（一行一个 PO）」库：库 id/列契约、半自动推流程、`notion_stockout.py` 用法、SKU 映射表与字段对应 |
+| [stockout-closed-loop.md](stockout-closed-loop.md) | **打单后才发现无货**的闭环四步：清 invoice 惯例（总额写文件名 / NotUsed 备份 / H+D 整块删）、Notion 登记、通知 Diane 邮件规律（回复成链）、SPS IA 与 AKN |

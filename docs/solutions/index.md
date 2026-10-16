@@ -13,6 +13,9 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-10-16 | SPS 门户的 IA 与 AKN 操作 — 断货后重发 Inventory Advice / PO Acknowledgement | [workflow-issues/sps-portal-ia-akn-operations.md](workflow-issues/sps-portal-ia-akn-operations.md) |
+| 2026-10-16 | PB 楔形枕补货量估算 — 美中 Daneey 口径、剔除断货月、6 个月覆盖 | [workflow-issues/pb-replenishment-sizing-from-sales.md](workflow-issues/pb-replenishment-sizing-from-sales.md) |
+| 2026-10-16 | PB 打单后才发现无货的闭环 — invoice 清理惯例、邮件成链、两套库存不能混用 | [workflow-issues/pb-stockout-post-shipment-closed-loop.md](workflow-issues/pb-stockout-post-shipment-closed-loop.md) |
 | 2026-10-08 | 布局类字段带 in_list_view=1 会让整个 DocType 的元数据写不进去（现象是「每次登录都弹窗」） | [integration-issues/layout-field-in-list-view-breaks-metadata-writes.md](integration-issues/layout-field-in-list-view-breaks-metadata-writes.md) |
 | 2026-10-08 | key_test 应用的两个结构性隐患：每次登录写元数据 + 打核心报表猴补丁，且生产/测试分支割裂 | [workflow-issues/key-test-login-hook-and-prod-test-divergence.md](workflow-issues/key-test-login-hook-and-prod-test-divergence.md) |
 | 2026-09-24 | 知识库防腐三件套 — 孤儿检测 / 生成式索引 / 链接图 | [best-practices/knowledge-base-anti-rot.md](best-practices/knowledge-base-anti-rot.md) |
