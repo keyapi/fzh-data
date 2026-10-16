@@ -1458,6 +1458,9 @@ def render_memo(result: MonthlyComparisonResult) -> str:
     lines.append("- B2：四项按 EN/import 表重建（皮壳取 max；头程按绍兴发货方式取、皮壳兜底；")
     lines.append("  二次加工=美中USTX；绍兴二次加工按绍兴发货方式取包装半/成品成本）")
     lines.append("- B3：B2 基础上，把美中「二次加工成本」按新工资率 167.8→105 调整（只动 operating_cost，其余保持 9/3 快照）")
+    _dc = next((g for g in result.gates if g["gate"] == "b2_direct_coverage"), None)
+    if _dc:
+        lines.append(f"- 直连优先：{_dc['detail']}")
     lines.append("")
     lines.append("## 全月差额（仅美中，按发货数量加权，￥）")
     lines.append("")

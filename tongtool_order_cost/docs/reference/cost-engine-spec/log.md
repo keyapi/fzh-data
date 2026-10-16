@@ -5,6 +5,10 @@ title: cost-engine-spec 变更日志
 ---
 # 变更日志
 
+## 2026-10-17（A 收尾）
+- **管理摘要**加「直连优先」覆盖行（`render_memo` 取 `b2_direct_coverage` 闸）。
+- **[28](28-parse-vs-en-7to9.md) §1 更正**：「弧形海绵/PP棉 填充物判反」经查**不是判反**——同一 `…-Cover` 皮壳两种填充、平台SKU 明写 Foam/PPCotton、订单侧自洽；两填充二次加工确不同(49.45/31.95)。
+
 ## 2026-10-17（补）
 - **新增 [30](30-design-merge-split-no-double-count.md)**：拆包裹合并 → 合成一件再对 BOM 的设计稿（落点/算法/断言/待拍板）。
 
