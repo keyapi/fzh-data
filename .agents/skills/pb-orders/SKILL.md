@@ -46,7 +46,9 @@ uv run python run_pb_orders.py --dir "<批次目录>"                           
    `<新总额> 已去除无货N单<PO…> 之前是<旧总额>.txt`。
 2. **Notion 登记**：库「PB 无货未发（一行一个 PO）」，用 `pb_orders/notion_stockout.py` 算待追加行。
    **⚠️ 每次操作完必须把过程追加写回该行「备注」**（带日期的逐条记录，不覆盖旧记录）——
-   用户明确要求「所有操作的过程都需要记录到 Notion」。口径见 reference 文档 §2 第 2 步。
+   用户明确要求「所有操作的过程都需要记录到 Notion」。
+   **跨单/不挂在 PO 上的操作**（BOM 刷新、补货决策…）→ 改为在 `任务202408-` 库**建任务页**。
+   口径与坑见 reference 文档 §2 第 2 步 + notion-stockout.md §5。
 3. **通知 Diane**（`us@mxdeals.com` → PB 采购对接人，地址见历史邮件）：主题 `SKU:<PB买家SKU> out of stock Vendor 5806`，
    **后续新 SKU 回复上一封**（主题滚成 `Re:RE: …`）。
 4. **SPS 后台**：重提 IA（`SPS_Selenium_Local/sps_automation.py` 每天定时发，模板 `IA Template 20250605 x100`）

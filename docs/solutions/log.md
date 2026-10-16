@@ -7,6 +7,10 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-10-16（Notion 操作记录：落点规则 + 换行坑）
+
+- **更新**: `pb_orders/docs/reference/notion-stockout.md` §5 补两条（**单行 vs 任务页**的落点规则、**富文本换行别写 `\n` 字面量** 的坑），并同步 `pb_orders/AGENT_HANDOFF.md` 与 `.agents/skills/pb-orders/SKILL.md`。起因：上一轮定了「所有操作都要记进 Notion 该行备注」，但**跨单/不挂在 PO 上的操作**（BOM 成本刷新、补货量决策、断货预警）没有落点 —— 补齐为「跨单的建 `任务202408-` 任务页」。
+
 ## 2026-10-16（SPS 门户 IA/AKN 操作成文 + 邮件发信纠正）
 
 - **新增**: `workflow-issues/sps-portal-ia-akn-operations.md` —— SPS 门户里断货后必做的两条动作，此前**全无步骤记录**（`sps_automation.py` 只会每天自动发 IA，不碰 AKN）。三个关键点：**① AKN 一次 Send 发不出去** —— 点完 Send 后当前单据变 `Overridden Draft` 并冒出一条新草稿，必须**对新草稿再 Send 一次**，状态到 `In Transit` 才算发出；**② IA 是「发送日 + 7 天」的单日报告**（实测 `Inventory Advice #: IA7_20261016_124353` 而 `Date/Time: 10/23/2026`，Report Start/End 空）→ **PB 对某一天的认知由那天往前 7 天发的那份决定**，所以改模板只影响 7 天后；**③ 覆盖模板不是原地改** —— 会生成一个新的模板文档顶替旧的，从旧文档看会以为改动没生效。补发窗口用 Create New 的 `Number of Documents`（最多 100）一次建 N 份、逐份改日期/编号、勾选后走**底部工具条的 ✈** 批量发。
