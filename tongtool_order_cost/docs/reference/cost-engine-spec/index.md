@@ -38,6 +38,7 @@ tags: [reference, index, cost-engine]
 | **[23-en-report-rest-fetch-and-timepoints.md](23-en-report-rest-fetch-and-timepoints.md)** | **自己拉 EN 报表的配方 + 三时点对照**：`POST /api/method/frappe.desk.query_report.run`（**必须** `filters.item_group` + `ignore_prepared_report=1`）+ 3 个坑；**机制三重验证**（自拉 ≡ 手导 2101/2101；自拉 ≡ DB BOM 1610/0）；**9/3→10/16 仅漂移 9 个产品(0.4%)**；据此收窄「474 行待业务」 |
 | [24-business-checklist.md](24-business-checklist.md) | **业务操作清单**：502 行按 8 桶 → 「要谁确认什么」；**474 行可批量接受**（机制已证、多数是覆盖差异），真正逐条判断的只有 **28 行**；**唯一要你拍板的一句**：7 月核算用 9/3 还是 10/16 的 BOM 状态（影响 3 个产品族） |
 | [25-two-lines-and-28-rows.md](25-two-lines-and-28-rows.md) | **两条横向对比线（9/3 / 10/16）+ 大白话版 28 行**：A 242,029 / 线1(9/3) 467,648 / **线2(10/16) 463,893**，两线差 **−3,755￥**；28 行按 7 类列出「要干什么 / 涉及哪些 SKU」；另说明 474 行为何可批量接受 |
+| [26-answers-to-28-rows.md](26-answers-to-28-rows.md) | **28 行逐条答复**：27.04/101.07 的**确切出处**（旧 parser 归错款）；**五件套 = Σ(子件×数量) = 0**（现状 208.64 待改）；**海绵闸方案**（键含 FOAM/HM → 二次加工 0，换直连必须加）；**KS0423 gsheet 637 行确认是错的**（应删/改）；针线扣/棉包维持归零；TT0000718/756 无需处理 |
 
 ## 疑问 → 答案位置
 
