@@ -7,6 +7,9 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-10-17
+- **新增**: 通途SKU↔EN物料 权威映射（ref_code / importBOMCostList.客户物料号）与 gsheet 源头修正 → [`tongtu-en-item-mapping-and-gsheet-source-fix.md`](integration-issues/tongtu-en-item-mapping-and-gsheet-source-fix.md)
+
 ## 2026-10-14（美中 USTX 三方案成本对比：差异即结论 + 歧义键 fail-closed）
 - **新增**: `architecture-patterns/ustx-cost-caliber-comparison.md` —— 美中仓库由 `2CJG-SX`（绍兴加工）改走当地 USTX 加工的 A/B1/B2 三口径只读对比。四条沉淀：**① 先验「测算表是手填还是公式」再定等价闸门**——`测算 美中USTX二次加工成本` 的月度值全是手填（无公式），与 import 重建在 57 个共有键上**无一相等**，原计划「measured vs reconstructed 超差即阻断」的前提被证伪 → **差异本身即交付物**，不设等价阻断；**② 歧义维表键 fail-closed**——`import皮壳成本` 同键指向不同重量模板时摘除索引、对应行记 `ambiguous_shell_key` 排除，不 `setdefault` 猜首/末行；**③ 闸门分级**——阻断级 vs 告警级，`conclusions_blocked` 只能由 blocking 闸门触发（首版误把告警算进去导致永远 blocked）；**④ 只读快照 `render_option` 值/公式双冻结**。7 月美中 4,379 行：A 526,225 → ΔB1 +226,629 / ΔB2 +264,912（￥加权，按 `发货数量`）。
 

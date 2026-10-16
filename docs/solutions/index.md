@@ -13,6 +13,7 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-10-17 | 通途SKU↔EN物料 权威映射（ref_code / importBOMCostList.客户物料号）与 gsheet 源头修正 | [integration-issues/tongtu-en-item-mapping-and-gsheet-source-fix.md](integration-issues/tongtu-en-item-mapping-and-gsheet-source-fix.md) |
 | 2026-10-14 | 美中 USTX 成本三方案离线对比——口径不对称、「差异即结论」与歧义键 fail-closed | [architecture-patterns/ustx-cost-caliber-comparison.md](architecture-patterns/ustx-cost-caliber-comparison.md) |
 | 2026-10-12 | EN 直接采购件用「自套 BOM」出成本的惯例 + 骨架缺口 | [architecture-patterns/en-direct-purchase-self-bom.md](architecture-patterns/en-direct-purchase-self-bom.md) |
 | 2026-10-08 | 布局类字段带 in_list_view=1 会让整个 DocType 的元数据写不进去（现象是「每次登录都弹窗」） | [integration-issues/layout-field-in-list-view-breaks-metadata-writes.md](integration-issues/layout-field-in-list-view-breaks-metadata-writes.md) |

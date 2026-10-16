@@ -6,6 +6,9 @@ title: 集成问题 — 变更日志
 
 # 变更日志
 
+## 2026-10-17
+- **新增**: 通途SKU↔EN物料 权威映射（EN `Item Customer Detail.ref_code` / `importBOMCostList.客户物料号`）+ 「直连优先、旧键兜底」。两个通用坑：改 gsheet 前分清 IMPORTRANGE 源/显示层；覆盖率结论前必反证（自算的 11% 实为前缀过滤丢数据的 bug，真值 99.9%）。 → `tongtu-en-item-mapping-and-gsheet-source-fix.md`
+
 | 日期 | 操作 | 文档 | 说明 |
 |------|------|------|------|
 | 2026-09-23 | 新增 | [grokbot-ssh-via-shanghai-jump-symmetric-nat.md](grokbot-ssh-via-shanghai-jump-symmetric-nat.md) | grok-bot（美东，Tailscale `100.106.238.40`）SSH 接入。要害三条：① 对端**对称 NAT**（`MappingVariesByDestIP: true`、无 `PortMapping`、对 Vultr/上海出口各不同且端口会变）⇒ 本机↔对端**结构性打不成直连**，只能中继；② 四条通路实测里 **Vultr 跳板 299+60≈359ms 与 DERP 373ms 基本持平（原设想是绕远路）**，真正有收益的是**上海跳板 30+205≈235ms**——反直觉点在于**上海→美东 205ms 比北京办公室直连美东 299ms 还快**（阿里云骨干优于办公室出口+DERP）；③ **DERP / Peer Relays / ProxyJump 三者都只改传输、不改认证**，Tailscale SSH 的 check 模式（默认 12h、**按发起设备计**）走跳板时变成要单独验跳板机 ⇒ 真正的免验证做法是**关掉 `tailscale set --ssh=false`，改走对端本就跑着的系统 sshd + 公钥**（对端无 systemd，tailscaled 只占 tailnet 地址的 22）；切换后必须 `ssh-keygen -R` 清旧主机密钥。peer relay（上海做中继，全协议）暂缓，若启用 `src` 只 scope `fzhpc13`。 |

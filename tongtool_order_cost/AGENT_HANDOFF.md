@@ -118,3 +118,13 @@ Cursor Agent 用用户级 MCP `user-tongtool_erp2_primary`（`~/.cursor/mcp.json
 - 不要把订单/规则大 xlsx 提交进 git
 - 不要提交 service account JSON / notebook 私钥
 - 不要直接 push main；走 `feature/...` + PR
+
+## 通途SKU→EN物料 的权威桥（2026-10-17 起）
+
+排查 USTX 成本时确立，**优先用·别猜解析**：
+
+- **两条权威源**（都不需通途 API）：EN `Item Customer Detail.ref_code`（**REST 403，须 SSH 查 DB**）；gsheet `importBOMCostList.客户物料号`（现成列）。
+- EN 物料名 → 重量模板：**去末段(颜色) + 前缀 `ZLMB#`**。
+- 口径 **直连优先、旧键兜底**：`ustx-compare` 的 `--direct-map` / 默认取 `客户物料号`；`--no-direct` 关。7 月美中直连覆盖 **99.9%**（4367/4372），相对旧键 ΔB2 264,912→268,610。
+- **改 gsheet 前**：`import皮壳成本` 是 `IMPORTRANGE` 拉的，**改它无效**；改源工作簿 `财务部绍兴成本核算表单2023`（`皮壳成本平均…`/`品类使用面料`/`材料价格明细`），且**源表+成本表成对改**。
+- 详见 `docs/reference/cost-engine-spec/`（27/28 页）与 `docs/solutions/integration-issues/tongtu-en-item-mapping-and-gsheet-source-fix.md`。
