@@ -10,10 +10,11 @@ date: 2026-10-15
 
 # 老成本引擎逐 cell 逆向（Colab notebook + Google Sheet）
 
-> ⚠️ **【2026-10-16 更正】本页有 4 处已知错误，读前务必先看 [13-codex-review-corrections.md](13-codex-review-corrections.md) §6**：
-> ① **漏 `cell049`**（导致否认 1:2:4 运算、找不到 `df_final` 构造、误判「绍兴发货方式无消费者」）；
-> ② **`cell045`(19列) 与 `cell096`(6列) 写反**；③ `eval_delivery_en` 现状已变（当前 notebook 新增 `cell36=True`）；
-> ④ `idxmax` 无面料兜底**无订单侧消费者**。本页正文**尚未逐格返工**，**更正以 [13](13-codex-review-corrections.md) 为准**。
+> ⚠️ **【2026-10-16 更正】本页曾有 4 处错误，正文已于 2026-10-16 按 [13-codex-review-corrections.md](13-codex-review-corrections.md) §6 就地返工；下列记录保留以备溯源**：
+> ① **漏 `cell049`**（曾导致否认 1:2:4 运算、找不到 `df_final` 构造、误判「绍兴发货方式无消费者」）——已在 §C 补 `047/049`，并更正 §“未证实”；
+> ② **`cell045`(19列) 与 `cell096`(6列) 曾写反**——已改正（含 §C 表、§成本源读取方式、§8 第 13 条）；
+> ③ `eval_delivery_en` 现状已变（当前 notebook 10/14 版新增 `cell36=True`；10/10 备份无）——已在 §8 第 17 条更新；
+> ④ `idxmax` 无面料兜底（`df_cost_2prod_nofabric_nodups`）**构造了但无订单侧消费者**——已在 §8 与“未证实”更正。
 
 > 来源：本机 Colab 备份 `C:\Users\zhang\.claude\backups\colab\1T5hZYvnJhS8xzORb3tuYRoXXWn9uSzNl_20261010_163404.ipynb`
 > （Drive notebook id `1T5hZYvnJhS8xzORb3tuYRoXXWn9uSzNl`，共 224 个 cell）。
@@ -80,7 +81,9 @@ date: 2026-10-15
 | 041 | 头程合并主 cell：去列名换行/中文括号 → 材料编码 merge → `品类尺寸面料编码` 拼接（**已有值则不重拼**，`20240314`）→ 生成 `头程运费来源编码`（HEAD-US/USTX/USTX-PK/PL/USFBA/JPFBA/USHWC/EUHWC/EUFBA/SX/CAHWC/UKFBA，规则见 §5）→ merge 对照表 ws `头程运费来源编码-EN成本列名对照表` 得 `EN成本列名`（`当月头程是否成品=='成品'` 时把列名里的「皮壳」→「成品」）→ merge `df_gs_2_temp_codes_nodup_gs` 得 `EN重量模板物料号` → 写回 `头程运费合并` |
 | 042 | 显示 `df_cost_trans_head` |
 | 043 | `头程运费金额 = df[col_name_trans_head_month]`（**月份列名硬编码**，cell_043 L3 `头程运费金额`）；去重得 `df_cost_trans_head_nodups[头程运费来源编码, 品类尺寸面料编码, 头程运费金额, EN重量模板物料号, EN成本列名]` |
-| 045 | （与 096 同族）读 EN BOM 表的另一版本：`ls_col_en_cost` 只含 6 列（皮壳/绍兴半成品/绍兴成品/美东USNJ/美中USTX/波兰PL） |
+| 045 | 读 EN BOM 表：`ls_col_en_cost` **19 列**（皮壳/绍兴半成品/绍兴成品 + 美东USNJ/美中USTX/波兰PL + 头程 皮壳/半成品/成品运费 美东/美中/波兰 + USFBA/DEFBA/UKFBA/JPFBA）；空重量模板转 NA dropna；成本列 `''→NA→fillna(0)→float`；`groupby(重量模板编号).agg(['max', nonzero_mean])` → `_max`/`_avg` → 前缀 `en` → `df_en_zlmb`；**若源表存在 `绍兴发货方式` 列则并入 `en绍兴发货方式`（组内 first）← `has_sx_delivery` 分支属本 cell，不在 096** |
+| 047 | **头程 melt**：把 `df_en_zlmb` 的头程列 melt 成长表（`id_vars=['en重量模板编号','en绍兴发货方式']`，`var_name='EN成本列名'`，`value_name='EN头程运费金额'`），列名更名 `EN重量模板物料号`/`绍兴发货方式` → 写回 ws `EN头程运费`（供 cell_051 EN 替换头程用） |
+| 049 | **`df_final` 构造 + 1:2:4 补值 + `绍兴发货方式` 选行**：`extract_suffix`/`extract_delivery_type` 派生 `尾缀`/`发货方式`；`fill_shipping_cost`（L72-129）**含字面倍数**「半成品 = 2×皮壳，成品 = 2×半成品 = 4×皮壳」；`select_by_sx_delivery`（L134-187）**是 `绍兴发货方式` 的真实消费点**；`df_final = pd.concat([df_special_selected, df_other_selected])`（L211）→ 写回 ws `EN头程运费_处理后` |
 | 051 | **EN 替换头程**：`df_final['EN头程运费来源编码'] = 'HEAD-' + 尾缀`；对 `df_cost_trans_head_nodups['头程运费来源编码']` 做 `old_to_new_mapping`（`HEAD-US→HEAD-USNJ`、`HEAD-USTX-PK→HEAD-USTX`、`HEAD-EUFBA→HEAD-DEFBA` 等）；与 `df_final` merge on `[EN重量模板物料号, EN头程运费来源编码]`；**替换掩码 = `EN头程运费金额.notna() & !=0`**，命中则覆盖 `头程运费金额`，原值存 `GS头程运费金额`；写回 ws `头程运费合并替换EN` |
 | 053 | 读 `海外仓和FBA成本` 的 ws `美国海外仓FBA成本`；两列 to_numeric；`drop_duplicates('品类尺寸编码', keep='first')` |
 | 059 | 特殊订单处理：读 `通途订单号`+`处理方式`，`if_del_special_order='YES'` 时按 `处理方式=='删除'` 剔行 |
@@ -98,7 +101,7 @@ date: 2026-10-15
 | 072 | `df_order_reduce_row = df_order.copy()`；`get_order_common`；`add_package_suffix`（包裹1 皮壳/包裹2 海绵块/包裹3 纸箱）；置 `需要合并`/`包含包裹` 标记 |
 | 073–092 | 拆包裹/合并同订单多行（含 tiktok/TiktokUS 分支）：`082` 过滤 `渠道 in ['tiktok','TiktokUS']`，`通途SKU.str.extract(r'-(\d+)')` 拆尾缀；`084–091` groupby 合并（累加 售价/售价*汇率/运费/发货数量）；`092` `pd.concat` 回去 |
 | 094 | `麻将沙发衍生款`×3 数量修正（**已注释停用**，见 §8） |
-| 096 | **读 EN BOM 成本表** ws `EN产品BOM成本列表20260202` → 列名去 `", "`；`ls_col_en_cost` 19 列（含 头程皮壳/半成品/成品运费 美东/美中/波兰、USFBA/DEFBA/UKFBA/JPFBA 等）；空重量模板转 NA 并 dropna；成本列 `''→NA→fillna(0)→float`；`groupby(重量模板编号).agg(['max', nonzero_mean])` → 列名 `_max` / `_avg` → 前缀 `en` → `df_en_zlmb`；若存在 `绍兴发货方式` 列则并入 `en绍兴发货方式`（取组内 first） |
+| 096 | **读 EN BOM 成本表** ws `EN产品BOM成本列表20260202` → 列名去 `", "`；`ls_col_en_cost` **只 6 列**（皮壳/绍兴半成品/绍兴成品/美东USNJ/美中USTX/波兰PL，**无头程列、无 `绍兴发货方式` 分支**）；空重量模板转 NA 并 dropna；成本列 `''→NA→fillna(0)→float`；`groupby(重量模板编号).agg(['max', nonzero_mean])` → `_max` / `_avg` → 前缀 `en` → **重新绑定 `df_en_zlmb`**（在 4.3.0.3.0 段，**执行顺序在 045 之后**；其后 cell_100 用的就是这个 6 列版） |
 | 100 | **EN 覆盖皮壳/绍兴成品**：`df_sx_en = df_sx_nodups.merge(df_en_zlmb, how='left', left_on='EN重量模板物料号', right_on='en重量模板编号')`；`en皮壳成本_max` 有效（notna & !='' & !=0）→ 覆盖 `['皮壳不含包装成本','皮壳含包装成本','皮壳不含包装成本*系数','皮壳含包装成本*系数']` 且 `绍兴成本系数=1.0`；`en绍兴包装成品成本_max` 有效 → 覆盖 `['二次加工成本','二次加工成本*系数']` 且 `绍兴成本系数=1.0`；新增列 `EN绍兴包装半成品成本 = en绍兴包装半成品成本_max`、`EN绍兴包装成品成本 = 二次加工成本*系数`；写回 ws `SX合并EN成本`；`df_sx_nodups = df_sx_en.copy()` |
 | 102 | `df_order_cost_cover = df_order.merge(df_sx_nodups[merge_cols], how='left', on='品类尺寸面料编码')`；`merge_cols` 含基础 6 列 + 可选 4 列（`产品发售日期`/`当月给分公司发货类型`/`EN绍兴包装半成品成本`/`EN绍兴包装成品成本`，**存在才并入**） |
 | 104 | 显示 `成品`/`半成品` 行 |
@@ -212,14 +215,15 @@ date: 2026-10-15
 
 - **皮壳成本**：源 `财务部绍兴成本核算表单2023` / ws `皮壳成本平均202409-202410-202411（用于通途订单202502）`。
   EN 覆盖条件（cell_100）：`en皮壳成本_max` 满足 `notna & !='' & !=0` → 覆盖 4 列并 `绍兴成本系数=1.0`。
-- **绍兴包装半成品/成品成本**：源同工作簿 ws `EN产品BOM成本列表20260202`；读取按 `重量模板编号` `groupby().agg(['max', nonzero_mean])`（`096`：19 列；`045`：6 列旧版）。空重量模板 `''→NA` 后 dropna；成本列 `''→NA→fillna(0)→float`；`nonzero_mean` 只对非 0 取均值。合并回来时前缀 `en`。**注意 ws 名里的日期是旧名，内容非 2 月快照**（见 §10）。
+- **绍兴包装半成品/成品成本**：源同工作簿 ws `EN产品BOM成本列表20260202`；读取按 `重量模板编号` `groupby().agg(['max', nonzero_mean])`（`045`：**19 列**；`096`：**6 列**）。空重量模板 `''→NA` 后 dropna；成本列 `''→NA→fillna(0)→float`；`nonzero_mean` 只对非 0 取均值。合并回来时前缀 `en`。**两格都重新绑定 `df_en_zlmb`，096 执行在后 → cell_100 实际用的是 096 的 6 列版**（045 的 19 列版只在 4.2.x 段先建、随后被 047 melt 出头程长表）。**注意 ws 名里的日期是旧名，内容非 2 月快照**（见 §10）。
 - **头程运费**：源 `头程运费成本` 全 ws；EN 侧列名由对照表 ws `头程运费来源编码-EN成本列名对照表` 给出；合并键 `[EN重量模板物料号, EN头程运费来源编码]`；替换条件 `EN头程运费金额.notna() & !=0`（cell_051）。
 - **二次加工成本**：源 `二次加工成本2022` 全 ws（排除 合并/orig/副本/copy/测试/测算/import）；月份列名硬编码。
 - **物流/采购**：`和财务部共享` 的 `订单发货仓库对应成本来源` 给出 发货仓库 → 对应成本工作簿/成本来源编码。
 - **缺失填充**：EN 侧只对「皮壳 `_max`」与「绍兴半成品/成品 `_max`」做 `notna & !='' & !=0` 判定，其余列不覆盖、保留 GS 原值；订单侧对 `品类尺寸面料编码` 为空的行把 皮壳/二次加工/头程 置 nan（cell_125 L51-54）。
-- ⚠️ 关于「皮壳 1× / 半成品 2× / 成品 4×」这类**倍数口径**：本 notebook 里**没有字面倍数运算**，
-  只能看到 `当月给分公司发货类型 ∈ {成品,半成品}` 的选择与 `en*_max` 覆盖。倍数若存在，
-  属 EN 侧口径，**本引擎未证实**（见 §10）。
+- ⚠️ 关于「皮壳 1× / 半成品 2× / 成品 4×」这类**倍数口径**：**本 notebook 里有字面倍数运算**——在
+  `cell_049` 的 `fill_shipping_cost`（L72-129）：docstring 写「半成品 = 2 * 皮壳, 成品 = 2 * 半成品 = 4 * 皮壳」，
+  代码按已存在的 半成品/成品/皮壳 之一反推另外两档（如 半成品 → 皮壳 = /2、成品 = ×2）。
+  **更正**：本页先前称「本 notebook 没有字面倍数运算」**错误**。（该函数只更新**已存在**的行，不给缺失的发货方式新建行 → 对只报一档的组等价于无操作；详见 [14](14-colab-key-derivation-chain.md)。）
 
 ## 仓库→编码的使用
 
@@ -311,11 +315,11 @@ date: 2026-10-15
 10. **cell_211**：整个旧 4.6 的三段 `*数量`/`订单总成本`/`订单利润` 计算**大段 `"""..."""` 注释**，被 125 取代。
 11. **cell_110 / 056 / 043 等**：`ls_worksheet_name_not_read` 中的 `作废20230417欧洲海外仓头程运费核算`（worksheet 名自带「作废」）。
 12. **cell_036 注释段**：`df_gs_2_temp_codes_nodup_en`（「不全」，只用 `_gs` 版合并，见 cell_041 L203 注释「注意不是 df_gs_2_temp_codes_nodup_en （不全）」）。
-13. **cell_096 vs 045**：两份 EN 读取实现并存（19 列版 vs 6 列版），实际用 19 列版。
+13. **cell_045 vs 096**：两份 EN 读取实现并存——**045 是 19 列版**（含头程列，另带 `绍兴发货方式` 并入分支），**096 是 6 列版**（无头程列、无 `绍兴发货方式`）。两格都重新绑定 `df_en_zlmb`，**096 执行在后**，故 cell_100 实际用的是 **096 的 6 列版**；045 的 19 列版先被 cell_047 melt 出头程长表（写 ws `EN头程运费`，供 cell_051 EN 替换头程）。⚠️ 本页先前把两者写反（称 045=6 列、096=19 列且带 `绍兴发货方式`）**已更正**。
 14. **cell_206**：`# 20220727 TODO 报错 Cannot mask with non-boolean array containing NA / NaN values / 加了 ,na=False 还是报错`（已知 pandas 坑，靠 `品类.fillna('')` 绕过）。
 15. **cell_201/202**：颜色提取实验（jieba 词性），非主链。
 16. **cell_139**：`#df_order.loc[df_order['MSKU']=='petcaruscoffee-52']` 调试注释。
-17. **`eval_delivery_en` / `use_local_rule_csv_170`**：**本 notebook 不含**这两个标识（属本地 1.7.0 引擎，不是这套 Colab 老引擎）。
+17. **`eval_delivery_en` 现状已变**：**本机 10/10 备份不含**该标识；但**当前 Drive notebook（10/14 最后修改，version 7067）已在 `cell_036` L158 新增 `eval_delivery_en = True`**（L159 `if eval_delivery_en and ('EN重量模板物料号' in df_sx_nodups.columns) and ('当月给分公司发货类型' in df_sx_nodups.columns):`，把交付形态统一到 EN 绍兴发货方式；注释「置 False 可快速回退到纯旧表行为」）。⚠️ **保存了代码 ≠ 已运行**。`use_local_rule_csv_170` 仍**不属本 Colab 老引擎**（属本地 1.7.0 引擎）。
 
 ## 与 EN 逻辑对照表
 
@@ -339,12 +343,14 @@ Colab + Google Sheet 代码承担。USNJ 与 USTX 的口径不对称体现在 `�
 
 ## 未证实 / 存疑
 
-- **「皮壳 1× / 半成品 2× / 成品 4×」倍数口径**：本 notebook 无字面倍数运算；仅有
-  `当月给分公司发货类型 ∈ {成品,半成品}` 的选择。倍数是否存在于 EN 侧、以及本引擎是否间接受其影响，**未证实**。
-- **`绍兴发货方式` 列的双轨**：cell_096 的 `has_sx_delivery` 分支会并入 `en绍兴发货方式`（组内 first），
-  但**是否真的驱动任何成本分支**在代码里看不到消费点 → **存疑**（疑似只作诊断/对照）。
-- **`df_final` / `尾缀` 的构造**：cell_051 用了 `df_final['尾缀']` 与 `df_final[['发货方式','尾缀']]`，
-  但 `df_final` 的生成 cell 未在本次通读中定位到（疑在 133-135 或更早的隐含 cell）→ **未证实其确切来源**。
+- ~~**「皮壳 1× / 半成品 2× / 成品 4×」倍数口径未证实**~~ → **已证实**：字面倍数在 `cell_049` 的
+  `fill_shipping_cost`（L72-129），docstring 明写「半成品 = 2 * 皮壳, 成品 = 2 * 半成品 = 4 * 皮壳」
+  （见 §成本源读取方式）。
+- ~~**`绍兴发货方式` 列「无消费者」**~~ → **已更正**：`has_sx_delivery` 并入分支属 **cell_045**（**不是 096**），
+  且 `绍兴发货方式` 有真实消费点——`cell_049` 的 `select_by_sx_delivery`（L134-187，读 `group['绍兴发货方式'].iloc[0]` 选行）。
+- ~~**`df_final` / `尾缀` 来源未证实**~~ → **已定位**：`df_final` 在 `cell_049` 构造
+  （`extract_suffix`/`extract_delivery_type` 派生 `尾缀`/`发货方式`；`df_final = pd.concat([...])` L211；`final_columns` 过滤 L240），
+  写 ws `EN头程运费_处理后`。
 - **`df_gs_2_temp_codes_nodup_gs` vs `_en` 的完整构造**：cell_036 注释只说 `_en`「不全」，`_gs` 的定义在
   cell_036 内但细节未逐行确认 → 部分未证实。
 - **`if_delete_fangyuzhao` / `if_delete_YuanZhuNeidan_of_SanJiao` 的实际分支体**：开关存在，
@@ -365,6 +371,10 @@ Colab + Google Sheet 代码承担。USNJ 与 USTX 的口径不对称体现在 `�
 | EN 皮壳覆盖 / 绍兴成品覆盖 | 100:19-53 |
 | `df_order_cost_cover` 合并 | 102:40-42 |
 | 头程来源编码映射 | 041:112-174 |
+| EN 头程 melt（写 `EN头程运费`） | 047 |
+| EN 读取 19 列版（含 `绍兴发货方式` 并入） | 045 |
+| EN 读取 6 列版（重新绑定 `df_en_zlmb`，后于 045） | 096 |
+| `df_final` 构造 / 1:2:4 补值 / `绍兴发货方式` 选行 | 049:72-129 / 049:134-187 / 049:211 / 049:240 |
 | 头程 EN 列名对照 + 成品替换 | 041:186-197 |
 | 头程 EN 替换 + 存档列 | 051:104, 051:82 |
 | `option_head_source` | 106:23 |

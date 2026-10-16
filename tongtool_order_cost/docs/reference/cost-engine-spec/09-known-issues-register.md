@@ -37,12 +37,12 @@ tags: [cost, issues, register, risk, reference]
 
 | # | 现象 | 影响 | 证据 |
 |---|---|---|---|
-| C1 | **`测算 美中USTX二次加工成本` 缺 115/615 键（美中缺 43.5%）** | 影响 1146 行订单；是「新建美中成本表」的最痛处 | [old-system-source-coverage-audit.md](../old-system-source-coverage-audit.md) |
+| C1 | **`测算 美中USTX二次加工成本` 缺 115/615 键（美中缺 43.5%）** | 影响 1146 行订单；是「新建美中成本表」的最痛处。**【2026-10-16 按 Codex 复核改写】** 这是**真缺行**（测算表未维护到 177 键，体系不同），**与 C5 的「行在、断链」不是同一缺口**；与「7 月 51 行需专门处理」也无重叠 | [old-system-source-coverage-audit.md](../old-system-source-coverage-audit.md)；[15](15-exception-rows-monthly-impact.md) §6 |
 | C2 | **头程 USTX 核算表缺 78 键，但 77 个是「行在表内、`品类尺寸面料编码` 列未回填」** | 可通过 `品类尺寸编码`+面料 rematch 修复（行级 2443/2446） | 同上 |
-| C3 | **96 个美中 USTX 物料完全没有 BOM**（86 空壳变体 + 10 未建；全部零业务引用；89 个 `valuation_rate=0`） | 其成本走 `Item.valuation_rate` 回退；**不随工资率变** | [en-ustx-no-bom-items-spec.md](../en-ustx-no-bom-items-spec.md) |
+| C3 | **96 个美中 USTX 物料完全没有 BOM**（86 空壳变体 + 10 未建；全部零业务引用；89 个 `valuation_rate=0`） | 其成本走 `Item.valuation_rate` 回退；**不随工资率变**。**【2026-10-16 按 Codex 复核改写】** 这 96 个**零业务引用**，**不进订单行**，与「7 月 51 行 / 161 空键」（订单侧断链）**是两类不同缺口**，不重叠 | [en-ustx-no-bom-items-spec.md](../en-ustx-no-bom-items-spec.md)；[15](15-exception-rows-monthly-impact.md) §6 |
 | C4 | **PL 16 个「成品却带非零加工成本」**（15 启用合计 1463.17） | 与「成品→国外加工=0」矛盾；来源是 2025-02-21 建料批次**人工 `valuation_rate` 残值**；皮壳侧另有 18 个同类残值 1707.801 | [en-pl-finished-processing-nonzero-spec.md](../en-pl-finished-processing-nonzero-spec.md) |
-| C5 | **`import皮壳成本` 同键指向不同重量模板的冲突键 3 个** | 对比中已按「不猜首/末行」排除对应行 | [04](04-cost-decision-tables.md)、USTX 对比产出 `08_重复歧义键` |
-| C6 | **`美中加工成本, USTX` 有 335 行（美中）为字面 0**（非空串） | 按原值 0 计入，不猜测回退 | [monthly-profitability-audit.md](../monthly-profitability-audit.md) |
+| C5 | **`import皮壳成本` 同键指向不同重量模板的冲突键 3 个** | 对比中已按「不猜首/末行」排除对应行。**【2026-10-16 按 Codex 复核改写】** 精确化：是 **3 个键**（`YM-HS-018-153-HLR`／`KS0423-140-XNEOSTH`／`KS0423-153-XNEOSTH`）——**7 月订单命中 3 行**（键 `KS0423-153-XNEOSTH`，源 CSV 物理行 7068/7942/8075），**8 月 1 行、9 月 2 行**（**非 7 月独有**）。Codex §5.1：`KS0423-*` 的 637（指 KS0364）候选须撤下，**重算皮壳/加工/头程**。本条只是「7 月 51 行需专门处理」的 **4 类之一**；其余 3 类是空 key 白名单 3 行 / 源映射空值（161 空键命中 41 行）/ RD 五件套 4 行 | [04](04-cost-decision-tables.md)、[13](13-codex-review-corrections.md) §5.1、[15](15-exception-rows-monthly-impact.md) §3 |
+| C6 | **`美中加工成本, USTX` 有 335 行（美中）为字面 0**（非空串） | 按原值 0 计入，不猜测回退。**【2026-10-16 按 Codex 复核改写】** 精确化：7 月美中 **45 个键 / 335 行**为字面 0。**这与「161 空键」是两回事**——字面 0 是**表内有值**（`zero_literal`），空键是**表内无值**（`no_weight_template`），处置不同（前者取 0、后者要分 4 类处理）。月度数见 [15](15-exception-rows-monthly-impact.md) | [monthly-profitability-audit.md](../monthly-profitability-audit.md)；[11](11-plan-new-ustx-processing-table.md) §3.3 |
 | C7 | **重量模板命名不一致 1 例**：`ZLMB#KS0383-HLR- 140*50*24`（空格 + `*`）vs `...-140x50x24` | 直连会漏匹配 | [old-system-source-coverage-audit.md](../old-system-source-coverage-audit.md) |
 | C8 | **`default_material_request_type` 自 2025 年起不再维护**（2024 M>P，2025 M<P） | 不能拿它当业务标记（多数是没改过的默认 `Purchase`） | [en-material-request-type-spec.md](../en-material-request-type-spec.md) |
 | C9 | **绍兴发货方式「成品」是一个单一桶**，混着「绍兴直接采购 / 不用加工 / 仍需加工后发成品」 | 三者**不可区分**；现在靠「恰好没建 BOM」碰巧为 0，**一旦补 BOM 就会冒出错误加工成本** | [en-shaoxing-ship-method-taxonomy-spec.md](../en-shaoxing-ship-method-taxonomy-spec.md) |
@@ -63,7 +63,7 @@ tags: [cost, issues, register, risk, reference]
 | # | 项 | 已排除 |
 |---|---|---|
 | E1 | 7 个非零 `valuation_rate` 的无 BOM 物料来源 | 已排除库存/采购/工单/BOM/模板传播；形态像人工填报 |
-| E2 | 皮壳 1×/半成品 2×/成品 4× 倍数口径 | notebook 里**无字面**，未证实 |
+| E2 | **皮壳 1×/半成品 2×/成品 4× 倍数口径** —— **【2026-10-16 部分解决】** 字面**已找到**：`cell049` 的 `fill_shipping_cost`（L72–129）docstring 明写「半成品 = 2×皮壳，成品 = 2×半成品 = 4×皮壳」（[14](14-colab-key-derivation-chain.md) §、[colab-engine-cell-by-cell.md](colab-engine-cell-by-cell.md) §C/L086） | **仍待判定**：该函数**只更新已存在的发货方式行、不给缺失方式新建行** → 「实际是否触发、触发面多大」未证实（原判「notebook 里无字面」**已过期**） |
 | E3 | 半成品剔除项在 09-03 快照是否生效 | 快照未见生效（与 10-10 提交时序吻合） |
 | E4 | `绍兴自发货` / `欧洲海外仓` / `加拿大海外仓` 三类 | 配置表**有选项但无配置行** |
 | E5 | 剔除额的月度金额 | 未定量 |
