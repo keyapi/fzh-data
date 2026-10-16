@@ -430,10 +430,26 @@ def cmd_ustx_compare(args) -> int:
     elif args.wage_boms:
         raise SystemExit(f"--wage-boms 指向的文件不存在: {wage_boms}")
 
+    # 直连优先（通途SKU→EN物料→重量模板）：--direct-map 给了就用，命中即用、否则回落旧键
+    direct_catalog = None
+    if getattr(args, "direct_map", ""):
+        dm = Path(args.direct_map)
+        if not dm.exists():
+            # 相对路径回落到模块 out/ustx_wage_sim/
+            dm2 = MODULE_ROOT / "out" / "ustx_wage_sim" / args.direct_map
+            dm = dm2 if dm2.exists() else dm
+        if not dm.exists():
+            raise SystemExit(f"--direct-map 指向的文件不存在: {args.direct_map}")
+        dmh, dmr = P.load_snapshot_csv(dm)
+        didx, ddups = U.build_direct_index((dmh, dmr))
+        order_skus = {(r.get("通途SKU") or "") for r in order_rows}
+        direct_catalog = U.build_direct_catalog(didx, bom_idx, skus=order_skus)
+        print(f"直连映射 {len(didx)} SKU（歧义 {len(ddups)}）；订单命中 {len(direct_catalog.rows)}")
+
     result = U.compare_monthly_costs(
         order_rows, raw_rows, ustx_warehouse_names=ustx_wh,
         b1_catalog=b1, b2_catalog=b2, contract=contract, head_index=head_index,
-        wage_delta_by_template=wage_delta,
+        wage_delta_by_template=wage_delta, direct_catalog=direct_catalog,
     )
 
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -491,6 +507,7 @@ def build_parser() -> argparse.ArgumentParser:
     pu.add_argument("--snapshot", required=True, help="snapshot 产出的目录（需 --with-finance）")
     pu.add_argument("--out", default="", help="输出目录；默认在快照同级带时间戳")
     pu.add_argument("--wage-boms", default="", help="EN 逐 BOM 工序表 csv（默认 out/ustx_wage_sim/ustx_boms_all.csv）；给了才算 B3")
+    pu.add_argument("--direct-map", default="", help="直连映射 csv（列：通途SKU,EN物料，如 out/ustx_wage_sim/direct_map.csv）；给了则 B2 直连优先")
     pu.set_defaults(func=cmd_ustx_compare)
     return p
 
