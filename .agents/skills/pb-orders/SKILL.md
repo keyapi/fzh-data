@@ -64,6 +64,7 @@ uv run python run_pb_orders.py --dir "<批次目录>"                           
 ## 相关经验（docs/solutions）
 
 - `docs/solutions/workflow-issues/pb-stockout-post-shipment-closed-loop.md` —— 打单后才发现无货的闭环：invoice 清理惯例、邮件成链、两套库存不能混用
+- `docs/solutions/workflow-issues/pb-replenishment-sizing-from-sales.md` —— 补货量估算：美中 Daneey 口径、通途订单表读法、剔除断货月、交付用 Excel
 - `docs/solutions/workflow-issues/pb-out-of-stock-notification-and-zero-stock-orders.md` —— 断货判据 / PO→Tongtool Order 映射 / UPS 才算真发
 
 ## 相关 skill

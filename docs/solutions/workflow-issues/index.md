@@ -40,3 +40,4 @@ tags: [workflow-issues, index]
 | [amazon-account-period-late-submission-audit.md](amazon-account-period-late-submission-audit.md) | Amazon&新平台账期「提交异常/迟交」审计方法与规则 |
 | [workflow-copy-prod-to-test.md](workflow-copy-prod-to-test.md) | 从生产系统复制 Purchase Receipt 工作流 V3 到测试系统 |
 | [pb-stockout-post-shipment-closed-loop.md](pb-stockout-post-shipment-closed-loop.md) | PB 打单后才发现无货的闭环：invoice 总额写文件名 / NotUsed 备份 / H+D 整块删、邮件回复成链、EN Bin 与 SO 未交量都不能当库存 |
+| [pb-replenishment-sizing-from-sales.md](pb-replenishment-sizing-from-sales.md) | PB 补货量估算：美中 Daneey 口径与仓名族、通途订单表读法、剔除断货月、在途看通途采购单、交付用 Excel 结论打头 |
