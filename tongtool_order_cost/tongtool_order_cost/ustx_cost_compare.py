@@ -788,6 +788,7 @@ def order_row_to_record(row) -> dict:
         "warehouse": row.get(WAREHOUSE_COL),
         "category": row.get(CATEGORY_COL),
         "sku": sku,
+        "tongtool_sku": str(row.get("通途SKU") or "").strip(),
         "product_name": str(row.get("产品名称") or ""),
         "qty": to_float(row.get(QTY_COL)) or 0.0,
         "a": dict(zip(COMPONENT_COLS, comps)),
@@ -977,7 +978,7 @@ def compare_monthly_costs(
             cat2 = None
             direct_hit = False
             if direct_catalog is not None:
-                cat2 = direct_catalog.rows.get(rec.get("sku", ""))
+                cat2 = direct_catalog.rows.get(rec.get("tongtool_sku", ""))
                 direct_hit = cat2 is not None
             if cat2 is None:
                 cat2 = b2_catalog.rows.get(key)

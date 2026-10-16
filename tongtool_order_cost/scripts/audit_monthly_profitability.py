@@ -430,21 +430,34 @@ def cmd_ustx_compare(args) -> int:
     elif args.wage_boms:
         raise SystemExit(f"--wage-boms 指向的文件不存在: {wage_boms}")
 
-    # 直连优先（通途SKU→EN物料→重量模板）：--direct-map 给了就用，命中即用、否则回落旧键
-    direct_catalog = None
-    if getattr(args, "direct_map", ""):
-        dm = Path(args.direct_map)
-        if not dm.exists():
-            # 相对路径回落到模块 out/ustx_wage_sim/
-            dm2 = MODULE_ROOT / "out" / "ustx_wage_sim" / args.direct_map
-            dm = dm2 if dm2.exists() else dm
-        if not dm.exists():
-            raise SystemExit(f"--direct-map 指向的文件不存在: {args.direct_map}")
-        dmh, dmr = P.load_snapshot_csv(dm)
-        didx, ddups = U.build_direct_index((dmh, dmr))
+    # 直连优先（通途SKU→EN物料→重量模板）：默认用 importBOMCostList 的「客户物料号→产品编号」；
+    # 也可 --direct-map 指 CSV。命中即用、否则回落旧键。
+    if getattr(args, "no_direct", False):
+        direct_catalog = None
+    else:
+        # 源1：importBOMCostList 的「客户物料号→产品编号」（EN BOM 成本表，主力）
+        _bom_mod = by_key["bom_cost_import_values"]
+        bih, bir = P.load_snapshot_csv(snap / _bom_mod["path"])
+        didx, ddups = U.build_direct_index((bih, bir), sku_col="客户物料号", item_col="产品编号")
+        # 源2（可选）：--direct-map CSV（通途SKU,EN物料），与源1 并集；同 SKU 冲突则剔除
+        if getattr(args, "direct_map", ""):
+            dm = Path(args.direct_map)
+            if not dm.exists():
+                dm2 = MODULE_ROOT / "out" / "ustx_wage_sim" / args.direct_map
+                dm = dm2 if dm2.exists() else dm
+            if not dm.exists():
+                raise SystemExit(f"--direct-map 指向的文件不存在: {args.direct_map}")
+            dmh, dmr = P.load_snapshot_csv(dm)
+            m, _ = U.build_direct_index((dmh, dmr))
+            for k, v in m.items():
+                if k in didx and didx[k] != v:
+                    didx.pop(k)
+                    ddups.append({"key": k, "reason": "直连: 两源指向不同重量模板", "values": v})
+                elif k not in didx:
+                    didx[k] = v
         order_skus = {(r.get("通途SKU") or "") for r in order_rows}
         direct_catalog = U.build_direct_catalog(didx, bom_idx, skus=order_skus)
-        print(f"直连映射 {len(didx)} SKU（歧义 {len(ddups)}）；订单命中 {len(direct_catalog.rows)}")
+        print(f"直连映射 {len(didx)} SKU（歧义 {len(ddups)}）；订单命中 {len(direct_catalog.rows)} 行")
 
     result = U.compare_monthly_costs(
         order_rows, raw_rows, ustx_warehouse_names=ustx_wh,
@@ -507,7 +520,8 @@ def build_parser() -> argparse.ArgumentParser:
     pu.add_argument("--snapshot", required=True, help="snapshot 产出的目录（需 --with-finance）")
     pu.add_argument("--out", default="", help="输出目录；默认在快照同级带时间戳")
     pu.add_argument("--wage-boms", default="", help="EN 逐 BOM 工序表 csv（默认 out/ustx_wage_sim/ustx_boms_all.csv）；给了才算 B3")
-    pu.add_argument("--direct-map", default="", help="直连映射 csv（列：通途SKU,EN物料，如 out/ustx_wage_sim/direct_map.csv）；给了则 B2 直连优先")
+    pu.add_argument("--direct-map", default="", help="直连映射 csv（列：通途SKU,EN物料）；不给则用 importBOMCostList 的 客户物料号→产品编号")
+    pu.add_argument("--no-direct", action="store_true", help="关闭直连优先，只用 品类尺寸面料编码 旧键")
     pu.set_defaults(func=cmd_ustx_compare)
     return p
 
