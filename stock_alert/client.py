@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 import time
 from dataclasses import dataclass, field
@@ -136,6 +137,14 @@ def normalize_row(warehouse: str, item: dict) -> StockRow:
     )
 
 
+def is_transient_error(exc: Exception) -> bool:
+    """可重试的瞬时错误：网关 5xx / 网络错误（不含 4xx、参数错等确定性失败）。"""
+    if isinstance(exc, RuntimeError):
+        match = re.search(r"MCP HTTP (\d{3})", str(exc))
+        return bool(match and match.group(1).startswith("5"))
+    return isinstance(exc, OSError)
+
+
 class TongtoolStockClient:
     """节流 + 退避的通途库存客户端。"""
 
@@ -160,17 +169,29 @@ class TongtoolStockClient:
         return extract_payload(self.mcp.call(STOCK_QUERY_TOOL, arguments))
 
     def _call_with_retry(self, arguments: dict) -> dict:
-        payload = self._call(arguments)
-        if business_code(payload) != CODE_RATE_LIMIT:
-            return payload
+        """对**瞬时错误**（网关 5xx / 网络）与**业务码 526** 做指数退避重试。
+
+        4xx 等确定性错误不重试，直接抛。2026-10-19 那次 `MCP HTTP 502`（openresty
+        网关抖动）就是没重试才整跑失败。
+        """
         delay = 60.0
-        for _ in range(self.max_retries):
+        last_reason = ""
+        for attempt in range(self.max_retries + 1):
+            try:
+                payload = self._call(arguments)
+            except Exception as exc:  # noqa: BLE001 - 只对瞬时错误重试
+                if not is_transient_error(exc):
+                    raise
+                last_reason = f"{type(exc).__name__}: {str(exc)[:120]}"
+            else:
+                if business_code(payload) != CODE_RATE_LIMIT:
+                    return payload
+                last_reason = "业务码 526（超频）"
+            if attempt >= self.max_retries:
+                break
             self._sleep(delay)
-            payload = self._call(arguments)
-            if business_code(payload) != CODE_RATE_LIMIT:
-                return payload
-            delay *= 2
-        raise RuntimeError("通途限流(526)退避重试后仍被拒")
+            delay = min(delay * 2, 300)
+        raise RuntimeError(f"通途 MCP 调用重试 {self.max_retries} 次仍失败：{last_reason}")
 
     def list_stocks(self, warehouse: str, *, page_size: int = 100, max_pages: int = 200) -> list[StockRow]:
         """按仓库分页拉全量库存行。

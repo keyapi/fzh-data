@@ -115,3 +115,62 @@ def test_list_stocks_raises_on_business_error():
         assert "524" in str(exc)
     else:
         raise AssertionError("业务错误码应当抛出")
+
+
+class _FlakyMcp:
+    """前 N 次抛指定异常，之后返回一条记录。"""
+
+    def __init__(self, exc: Exception, fail_times: int):
+        self.exc = exc
+        self.fail_times = fail_times
+        self.calls = 0
+
+    def call(self, name: str, arguments: dict) -> dict:
+        self.calls += 1
+        if self.calls <= self.fail_times:
+            raise self.exc
+        return _resp({"code": 200, "datas": {"total": 1, "list": [
+            {"goodsSku": "A", "availableStockQuantity": 0, "intransitStockQuantity": 1},
+        ]}})
+
+
+def test_is_transient_error_classification():
+    from stock_alert.client import is_transient_error
+
+    assert is_transient_error(RuntimeError("MCP HTTP 502: <html>502 Bad Gateway</html>"))
+    assert is_transient_error(RuntimeError("MCP HTTP 503: x"))
+    assert not is_transient_error(RuntimeError("MCP HTTP 401: x"))
+    assert not is_transient_error(RuntimeError("业务错误"))
+
+
+def test_retries_transient_502_then_succeeds():
+    mcp = _FlakyMcp(RuntimeError("MCP HTTP 502: <html>502 Bad Gateway</html>"), 2)
+    client = TongtoolStockClient(mcp, min_interval=0, max_retries=3, sleep=lambda _s: None)
+    rows = client.list_stocks("WH", page_size=10)
+    assert [r.sku for r in rows] == ["A"]
+    assert mcp.calls == 3
+
+
+def test_does_not_retry_4xx():
+    mcp = _FlakyMcp(RuntimeError("MCP HTTP 401: unauthorized"), 1)
+    client = TongtoolStockClient(mcp, min_interval=0, max_retries=3, sleep=lambda _s: None)
+    try:
+        client.list_stocks("WH", page_size=10)
+    except RuntimeError as exc:
+        assert "401" in str(exc)
+    else:
+        raise AssertionError("4xx 应直接抛出")
+    assert mcp.calls == 1
+
+
+def test_exhausted_retries_raise_with_reason():
+    mcp = _FlakyMcp(RuntimeError("MCP HTTP 502: down"), 99)
+    client = TongtoolStockClient(mcp, min_interval=0, max_retries=2, sleep=lambda _s: None)
+    try:
+        client.list_stocks("WH", page_size=10)
+    except RuntimeError as exc:
+        assert "重试 2 次" in str(exc)
+        assert "502" in str(exc)
+    else:
+        raise AssertionError("重试用尽应抛出")
+    assert mcp.calls == 3
