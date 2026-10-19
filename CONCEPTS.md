@@ -22,6 +22,33 @@ Cursor 的全局状态库（聊天记录 + Agent KV blob 都在里面）。膨�
 ### Synology Drive 连续备份 (continuous backup)
 群晖 Drive Client 的备份模式。若备份目标含 Cursor 的 `globalStorage`/`state.vscdb` 这类高频变化大文件，会在 `%LOCALAPPDATA%\SynologyDrive\temp\N\.SynologyWorkingDirectory` 反复暂存上传副本，C 盘空间被吃光（2026-08 事件根因）。诊断脚本：`scripts/check_cursor_cdrive_health.py`。
 
+## Agent harness / DeepSeek 1017
+
+### Agent harness
+模型之外的执行层：工具调度、上下文管理、权限/沙箱、会话持久化。同一模型换 harness，
+成功率与成本会显著变化（本仓库实测 DSH native ≈ Claude Code 的 0.37x 成本）。
+
+### DeepSeek Harness (DSH)
+DeepSeek 官方开源 Agent 框架（MIT，Cordis 插件架构）。当前 `0.2.1-rc.2`，仍是
+developer preview；Windows 沙箱用 `DSH_PERMISSION_MODE`（`read-only` / `workspace-write` /
+`danger-full-access`）。Web UI 需显式 `--host 127.0.0.1`。
+
+### PTC (Programmatic Tool Calling)
+DSH 的一种工具呈现方式：模型只调 `run_code`，在生成的 SDK 里串联工具，中间结果不进上下文。
+省 token 的前提是任务有大量工具往返；小任务上可能更慢更贵。
+
+### Fresh input / prefix cache
+DeepSeek 按前缀缓存计费：缓存命中 ¥0.04/M、未命中 ¥2/M（高峰，差 50 倍）。
+成本杠杆是 **fresh input（未命中输入）**，不是总 token；长对话/稳定前缀受益最大。
+
+### cleanupPeriodDays
+Claude Code 的 transcript 保留天数，默认 30；0 不合法。设大值（如 3650）防止长对话被清，
+并定期归档 `~/.claude/projects/`。
+
+### Handoff brief
+把一段长对话压成 1–2 页的目标/决策/状态/验收文档，供 DSH/Pi 新会话使用；
+模板见 `docs/handoff-brief-template.md`。
+
 ## Unified AI access (ai_access_poc)
 
 ### 壳 PoC (Shell PoC)
