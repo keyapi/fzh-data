@@ -24,7 +24,7 @@ timestamp: 2026-10-16
 | 有没有 invoice | `invoice/invoice x*.csv` 里有没有该 PO 的 H 行；记下 `Invoice Number` 与 `Invoice Total` |
 | 追踪号是否真走 | `ups_track` 查 `Carrier Tracking`，只看「除 MP 外有没有节点」 |
 
-## 2. 四步
+## 2. 五步
 
 ### 第 1 步：清 invoice（**月底钉钉提交前必做**）
 
@@ -152,6 +152,38 @@ Key
 SPS 门户入口 `commerce.spscommerce.com/fulfillment/transactions/list/`，partner `WILLIAMS SONOMA INC`，
 账号 `us@mxdeals.com`。
 
+### 第 5 步：把断货 SKU 加进「网页预检」的断货清单
+
+**最容易漏的一步。** 不改的话，**下一批库存预检仍然会把这两个 SKU 当成有货放过去**，
+断货件会继续被打单。
+
+| 项 | 值 |
+|---|---|
+| 平台 | `https://api.vilavi.cn/pb` → **设置**页（`/settings`，钉钉登录） |
+| 存哪 | 测试服务器 `sh-erpnext-test:/opt/pb-orders/pb_orders/runtime/jobs.sqlite` 的 `app_settings.default_no_stock` |
+| 格式 | 逗号分隔的 **Vendor Style**（匹配大小写不敏感），如 `TT0031010K0062880,CENC/LINEN-YELLOW-60` |
+| 何时加 | 确认断货后（与 IA 模板同一批做） |
+| **何时删** | **到货后必须删掉**，否则以后每批预检都会把它当缺货剔除 |
+
+网页设置页要钉钉登录；没有登录态时可直接改 DB（服务**每次请求现读，无需重启**）。
+改前先把旧值抄下来（回滚用），改后回读确认：
+
+```bash
+ssh sh-erpnext-test 'python3 -c "
+import sqlite3, datetime
+p=\"/opt/pb-orders/pb_orders/runtime/jobs.sqlite\"
+c=sqlite3.connect(p)
+old=c.execute(\"select value from app_settings where key=?\",(\"default_no_stock\",)).fetchone()[0]
+add=[x for x in [\"<新SKU1>\",\"<新SKU2>\"] if x not in old.split(\",\")]
+new=old+(\",\"+\",\".join(add) if add else \"\")
+now=datetime.datetime.now().astimezone().isoformat(timespec=\"seconds\")
+c.execute(\"update app_settings set value=?, updated_at=?, updated_by=? where key=?\",(new,now,\"Agent（代操作）\",\"default_no_stock\"))
+c.commit(); print(\"OLD:\",old); print(\"NEW:\",new)
+"'
+```
+
+> `updated_by` 写清是谁：Agent 代操作就写 `Agent（代操作）`；人从设置页改会自动记钉钉用户。
+
 ## 3. 到货之后
 
 按 Notion 里的记录补发。**变化要回写 Notion**：
@@ -164,6 +196,7 @@ SPS 门户入口 `commerce.spscommerce.com/fulfillment/transactions/list/`，par
 | 顾客取消 | `顾客=取消` + `状态=顾客取消` |
 | invoice 处理完 | `invoice` → 已去除 / 已处理 |
 | 通知过 Diane | `通知Diane` 填日期 |
+| **到货了（整款）** | **把该 SKU 从网页断货清单里删掉**（见 §2 第 5 步），否则以后每批预检都会把它当缺货剔除；并同步改 IA 模板（Stock 回正 / On Order 清掉 / 日期清掉） |
 
 > 补发时**通途不允许重复订单号**，要换一个没用过的后缀 `-N`。
 > 下次可用 = **该 PO 已用过的最大 `-N` + 1**（拆单与补发共用同一命名空间）。

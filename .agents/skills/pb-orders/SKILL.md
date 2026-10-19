@@ -55,6 +55,10 @@ uv run python run_pb_orders.py --dir "<批次目录>"                           
    + 在 PO 上重发 AKN(855) —— 完整点法见
    `docs/solutions/workflow-issues/sps-portal-ia-akn-operations.md`
    （⚠️ 一次 Send 发不出去要发两次；IA 是「发送日+7」的单日报告，改模板只影响 7 天后）。
+5. **把断货 SKU 加进网页预检的断货清单**（`https://api.vilavi.cn/pb/settings`；
+   存 `sh-erpnext-test:/opt/pb-orders/pb_orders/runtime/jobs.sqlite` 的 `app_settings.default_no_stock`）。
+   **最容易漏** —— 不改的话下一批预检仍会把它当有货放过。**到货后必须删掉**。
+   命令见 reference 文档 §2 第 5 步。
 
 到货后按 Notion 记录重发，变化同样回写 Notion。
 

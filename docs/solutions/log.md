@@ -7,6 +7,10 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-10-19（断货闭环补第 5 步：网页预检的断货 SKU 清单）
+
+- **更新**: `pb_orders/docs/reference/stockout-closed-loop.md` 由「四步」改为「**五步**」，补上此前漏掉的第 5 步 —— **把断货 SKU 加进网页预检的断货清单**（`api.vilavi.cn/pb` 设置页 / `app_settings.default_no_stock`，存 `/opt/pb-orders/pb_orders/runtime/jobs.sqlite`）。不改这一步，**下一批预检仍会把这些 SKU 当有货放过**，断货件继续被打单。同时给「到货之后」补了两行：**到货必须把 SKU 从清单删掉** + 同步改 IA 模板。skill 与 `pb_orders/docs/log.md` 同步。
+
 ## 2026-10-16（Notion 操作记录：落点规则 + 换行坑）
 
 - **更新**: `pb_orders/docs/reference/notion-stockout.md` §5 补两条（**单行 vs 任务页**的落点规则、**富文本换行别写 `\n` 字面量** 的坑），并同步 `pb_orders/AGENT_HANDOFF.md` 与 `.agents/skills/pb-orders/SKILL.md`。起因：上一轮定了「所有操作都要记进 Notion 该行备注」，但**跨单/不挂在 PO 上的操作**（BOM 成本刷新、补货量决策、断货预警）没有落点 —— 补齐为「跨单的建 `任务202408-` 任务页」。
