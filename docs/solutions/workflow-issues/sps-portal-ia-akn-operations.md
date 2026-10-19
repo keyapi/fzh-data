@@ -3,12 +3,14 @@ okf: v0.1
 type: Reference
 title: SPS 门户的 IA 与 AKN 操作 — 断货后重发 Inventory Advice / PO Acknowledgement
 date: 2026-10-16
+last_updated: 2026-10-19
 category: workflow-issues
 module: pb_orders
 problem_type: workflow_issue
 component: tooling
 severity: high
 applies_when:
+  - "预检筛出断货 PO，要先判断「这单到底要不要重发 AKN」—— 读 Order 的 Ship No Later / Delivery Requested 与计划到货日比较"
   - "PB 断货后要在 SPS 上给某个 PO 重发 PO Acknowledgement（EDI 855 / AKN），填新的 expected ship date"
   - "要把断货 SKU 的库存 / 在途 / 到货日同步进每天自动发的 IA"
   - "发现已经发出去的 IA 报的库存是错的，要补一批纠正"
@@ -35,6 +37,38 @@ PB 断货后有两条必须在 **SPS 门户**上做的动作，此前**全无步
 
 ## Guidance
 
+### 0. 先判断：这一单到底要不要重发 AKN
+
+**断货 ≠ 必须重发 AKN。** 判据是「我们的计划到货日」与「PB 给的最晚发货日」谁更晚：
+
+```
+计划到货日（= 能发货的最早日期） ≤ Order 明细行的 Ship No Later
+    → 来得及，只点开 Order 即可，不要重发 AKN
+计划到货日 > Ship No Later
+    → 必须重发 AKN，把 Expected Ship/Pickup 改到计划到货日、Delivery 改 +7 天
+```
+
+**日期从哪读（关键）**：
+
+- **读 Order 单据**（不是 Acknowledgement）明细行的 `Delivery Requested` / `Ship No Later`。
+  这两个日期是 PB 下单时给的，实测 **Delivery = Ship + 7 天**。
+- **原 Acknowledgement 的表头日期常常是空的** —— 我们的 ACK 类型是
+  `Acknowledge - No Detail or Change`，`Expected Ship/Pickup Date` 与
+  `Current Scheduled Delivery` 都不填。所以「SPS 现在认为哪天发」要去 **Order** 上读，
+  拿空白 ACK 当基准会误判。
+
+**2026-10-19 实测（同日 4 单断货）**：
+
+| PO | SKU | 计划到货 | Ship No Later | Delivery Requested | 结论 |
+|---|---|---|---|---|---|
+| 138112580 | 草绿153 | 10/30/2026 | 11/09/2026 | 11/16/2026 | 来得及，**不重发** |
+| 138113357 | 白194 | 01/19/2027 | **10/29/2026** | **11/05/2026** | **重发** → 01/19/2027 / 01/26/2027 |
+| 138121964 | 黄138 | 11/17/2026 | 11/25/2026 | 12/02/2026 | 来得及，**不重发** |
+| 138126605 | 白194 | 01/19/2027 | 02/03/2027 | 02/10/2027 | 来得及（PB 已按长周期给期），**不重发** |
+
+> 同一 SKU 的两单可能给期不同（白194 的 `138113357` 是默认 14 天、`138126605` 是 3 个半月），
+> **必须逐单看**，不要按 SKU 一刀切。
+
 ### 1. 重发 AKN（PO Acknowledgement，填新 expected ship date）
 
 ```
@@ -50,7 +84,7 @@ PB 断货后有两条必须在 **SPS 门户**上做的动作，此前**全无步
 → 点 Send Document → 确认 Continue
 ```
 
-**⚠️ 最大的坑：一次 Send 不会真的发出去。** 实测两次都是同一个模式：
+**⚠️ 坑：一次 Send 不一定真的发出去。** 2026-10-16 两次实测都是同一个模式：
 
 ```
 点 Send Document → Continue
@@ -60,7 +94,17 @@ PB 断货后有两条必须在 **SPS 门户**上做的动作，此前**全无步
    → 状态变 In Transit   ← 这才是真发出
 ```
 
-**判据**：单据状态从 `Saved` → **`In Transit`** 才算发出（`Accepted` 是 PB 侧回执后的状态）。
+**但 2026-10-19 实测只发一次就成功了**（Send + Continue 后直接跳出
+`1 document for <PO> source document has been sent`，交易列表里出现当天的新 ACK，状态 `Accepted`）。
+所以别死记「必须发两次」——**判据是交易列表**：
+
+```
+搜 PO 号 → 应看到 1 条 Order + 2 条 Acknowledgement
+第二条 ACK 的日期 = 今天，且状态 Accepted / In Transit → 成功
+只有一条 ACK（还是旧日期）→ 没发出去，回去对新草稿再 Send
+```
+
+`Accepted` 是 PB 侧回执后的终态（比 `In Transit` 更后一步）；当天处理快时会直接跳到这里。
 
 ### 2. IA 每天自动发，模板就是「内容」
 
@@ -120,7 +164,8 @@ Report Start Date / End Date: 空
 
 ### 5. 每次改动后要核对
 
-- AKN：状态 `In Transit`
+- AKN：**交易列表搜 PO，确认出现今天的新 Acknowledgement 且状态 `Accepted` / `In Transit`**；
+  再打开新 ACK 核对 `Expected Ship/Pickup Date` 与 `Current Scheduled Delivery` 两个值
 - IA：模板列表里那份 `Template` 的**内容**（用它的 Content 视图逐行核）—— 注意别读成旧文档
 - 都可在交易列表按 PO 号 / 编号搜出来回查
 
@@ -192,12 +237,22 @@ fr = page.frame_locator('[data-testid="app-frame"]')
 
 ## When to Apply
 
+- 预检筛出断货 PO，先判断要不要重发 → §0（读 Order 的 Ship No Later 比计划到货日）
 - 断货件要改 SPS 侧的预计发货日 → §1（AKN）
 - 断货/到货导致可发库存变化 → §2（改模板）
 - 发现 IA 报错了库存 → §3 先算窗口，再 §4 批量补发
 - 任何一次 SPS 操作之后 → §5 核对
 
 ## Examples
+
+**2026-10-19 实测（同日 4 单断货，先判断再动手）**
+
+- 4 单全部只做了「点开 Order（New → Open）」，然后逐单比日期：只有 `138113357`（白194）
+  的计划到货 01/19/2027 晚于 Ship No Later 10/29/2026 → 单发这一单 AKN：
+  `Expected Ship/Pickup = 01/19/2027`、`Current Scheduled Delivery = 01/26/2027`，新文档
+  `3036283408`，状态 `Accepted`。其余三单**没有发**（详见 §0 表）。
+- **一次 Send 就成功**（与 10-16 的「两次」不同）—— 以交易列表出现当天新 ACK 为准。
+- 四单操作过程都追加到了 Notion「PB 无货未发」对应行的「备注」。
 
 **2026-10-16 实测（两单）**
 

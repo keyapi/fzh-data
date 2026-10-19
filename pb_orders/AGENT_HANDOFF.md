@@ -510,6 +510,25 @@ uv run pytest tests/ -q
 
 ## 9. 本会话成果
 
+### 2026-10-19（SPS Order 先点开 + AKN 重发的判断口径）
+
+- **背景**：当日网页平台跑了一批 `check0stock order x35 …`，4 个整单缺货 PO
+  （`138112580` 草绿153 / `138113357` 白194 / `138121964` 黄138 / `138126605` 白194）。
+  用户要求：① 断货登记 Notion；② SPS 上状态还是 `New` 的 Order 点开（→ `Open`），免得下次重复处理；
+  ③ 判断是否需要重发 AKN。
+- **新增判断口径（最容易搞错）**：**断货 ≠ 必须重发 AKN**。基准要读 **Order 单据明细行**的
+  `Ship No Later` / `Delivery Requested`（**原 ACK 表头这两个日期常是空的**，因为 ACK 类型是
+  `Acknowledge - No Detail or Change`）：
+  - 计划到货日 ≤ `Ship No Later` → 来得及，**只点开 Order，不发 AKN**；
+  - 计划到货日 > `Ship No Later` → 重发，Expected Ship = 计划到货日，Delivery = **+7 天**。
+  - **同一 SKU 的不同 PO 给期可能不同**（白194 两单：一单给 14 天，一单给 3 个半月）→ 逐单看。
+- **本次执行**：4 单全部 New → Open；只有 `138113357` 需改期（Ship No Later 10/29 vs 到货 01/19/2027），
+  重发 AKN 新文档 `3036283408`：Expected Ship `01/19/2027` / Delivery `01/26/2027`，状态 `Accepted`。
+- **「一次 Send 发不出去」不是铁律**：10-16 两次都要发两遍，10-19 一次 Send + Continue 就成功。
+  **判据改成看交易列表**：搜 PO → 出现「当天的新 ACK + `Accepted`/`In Transit`」才算成功。
+- 四单过程已追加到 Notion「PB 无货未发」对应行备注；`sps-portal-ia-akn-operations.md` 与
+  `docs/reference/stockout-closed-loop.md` 同步更新。
+
 ### 2026-10-16（Notion 操作记录的落点规则 + 换行坑）
 
 - 「所有操作过程都要记进 Notion」这条，**落点分两种**：

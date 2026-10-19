@@ -138,11 +138,20 @@ Key
 
 ### 第 4 步：SPS 后台（IA + AKN）
 
+**先判断要不要重发 AKN（2026-10-19 补）**：断货 ≠ 必须重发。读 **Order 单据明细行**的
+`Ship No Later` / `Delivery Requested`（原 ACK 的表头日期常为空，不能当基准）：
+
+- 计划到货日 **≤ Ship No Later** → 来得及，只把 Order 点开（New → Open），**不重发 AKN**；
+- 计划到货日 **> Ship No Later** → 重发 AKN：Expected Ship/Pickup = 计划到货日，Delivery = **+7 天**。
+
+同一 SKU 的不同 PO 给期可能不同（实测白194 一单给 14 天、一单给 3 个半月），**逐单看**。
+发完在交易列表搜 PO，确认出现**当天的新 Acknowledgement 且 Accepted / In Transit**。
+
 **完整点法见 [docs/solutions/workflow-issues/sps-portal-ia-akn-operations.md](../../../docs/solutions/workflow-issues/sps-portal-ia-akn-operations.md)。** 要点：
 
 | 动作 | 怎么做 |
 |---|---|
-| 在指定 PO 上重发 **Acknowledgement（855 / AKN）** | 打开 PO → Workflow「Order Status → Acknowledgement」旁 **New** → Type 选 PO Acknowledgement、Auto Fill - Recommended → Expand → 改 `Current Schedule Ship Date`（下一批发货日）与 `Current Schedule Delivery Date`（+7 天）→ Save → **Send Document**。⚠️ **一次 Send 发不出去**：会生成一条新草稿，要**对新草稿再 Send 一次**，状态变 `In Transit` 才算发出 |
+| 在指定 PO 上重发 **Acknowledgement（855 / AKN）** | 打开 PO → Workflow「Order Status → Acknowledgement」旁 **New** → Type 选 PO Acknowledgement、Auto Fill - Recommended → Expand → 改 `Current Schedule Ship Date`（下一批发货日）与 `Current Schedule Delivery Date`（+7 天）→ Save → **Send Document** → Continue。**判据看交易列表**：搜 PO 应出现「当天的新 ACK + Accepted/In Transit」。有时第一次 Send 只生成新草稿，要对**新草稿再 Send 一次**（10-16 两次实测如此；10-19 一次即成） |
 | 重提 **Inventory Advice（IA）** | 每天由 `SPS_Selenium_Local/sps_automation.py` 定时发（模板 `IA Template 20250605 x100`）。**改模板 = 改以后每天的 IA**：Create New → Detail 改行 → ⋮ → Manage Templates → Overwrite → 选该模板 → Save（**不是** 单据的 Save） |
 
 **⚠️ IA 是「发送日 + 7 天」的单日报告** —— PB 对某一天的认知由「那天往前 7 天」发出的 IA 决定。

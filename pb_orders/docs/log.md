@@ -8,6 +8,21 @@ timestamp: 2026-09-22
 
 # 变更日志
 
+## 2026-10-19（第二十七轮：SPS Order 先点开 + AKN 到底要不要重发）
+
+- **动机**：预检断货后，SPS 里 Order 状态仍是 `New`（下次操作会重复处理）；
+  且过去默认「断货就重发 AKN」，其实**有空档就不必发**。
+- **新增判断口径**：读 **Order 单据明细行**的 `Ship No Later` / `Delivery Requested`
+  （**原 ACK 表头日期常为空**，不能当基准）——
+  计划到货 ≤ Ship No Later → **只点开 Order，不重发**；晚于它 → 重发（Expected Ship = 到货日，Delivery = +7）。
+  **同一 SKU 不同 PO 给期可能不同**，必须逐单看。
+- **动作**：4 单 New → Open；只有 `138113357` 重发 AKN（`01/19/2027` / `01/26/2027`，新文档
+  `3036283408`，`Accepted`）；过程全部追加进 Notion 对应行备注。
+- **纠正一条旧断言**：「一次 Send 发不出去」不是铁律（10-19 一次即成）——
+  **以交易列表是否出现当天新 ACK + Accepted/In Transit 为准**。
+- 文档：`docs/reference/stockout-closed-loop.md` §2 第 4 步 + skill 同步；
+  `docs/solutions/workflow-issues/sps-portal-ia-akn-operations.md` 新增 §0 判断口径。
+
 ## 2026-10-19（第二十六轮：闭环补上第 5 步 —— 网页预检的断货 SKU 清单）
 
 - **动机**：断货闭环原来只有四步（清 invoice / Notion / 邮件 / SPS），**漏了「把断货 SKU 加进网页平台的断货清单」**。

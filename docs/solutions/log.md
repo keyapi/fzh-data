@@ -7,6 +7,10 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-10-19（AKN 到底要不要重发：以 Order 的 Ship No Later 为准）
+
+- **更新**: `workflow-issues/sps-portal-ia-akn-operations.md` 新增 **§0「先判断：这一单到底要不要重发 AKN」** —— **断货 ≠ 必须重发**：读 **Order 单据明细行**的 `Ship No Later` / `Delivery Requested`（**原 ACK 表头这两个日期常为空**，类型是 `Acknowledge - No Detail or Change`，拿它当基准会误判）；计划到货 ≤ Ship No Later → 只点开 Order（New → Open），不发 AKN；晚于它 → 重发（Expected Ship = 到货日，Delivery = +7 天）。**同一 SKU 的不同 PO 给期可能不同**（实测白194 一单 14 天、一单 3 个半月），必须逐单看。同时**纠正旧断言**：「一次 Send 发不出去、必须发两次」不是铁律（10-19 一次即成）→ 判据改为**交易列表里出现当天的新 ACK 且 `Accepted`/`In Transit`**。`pb_orders/docs/reference/stockout-closed-loop.md` §2 第 4 步、skill、handoff、`pb_orders/docs/log.md` 同步。
+
 ## 2026-10-19（断货闭环补第 5 步：网页预检的断货 SKU 清单）
 
 - **更新**: `pb_orders/docs/reference/stockout-closed-loop.md` 由「四步」改为「**五步**」，补上此前漏掉的第 5 步 —— **把断货 SKU 加进网页预检的断货清单**（`api.vilavi.cn/pb` 设置页 / `app_settings.default_no_stock`，存 `/opt/pb-orders/pb_orders/runtime/jobs.sqlite`）。不改这一步，**下一批预检仍会把这些 SKU 当有货放过**，断货件继续被打单。同时给「到货之后」补了两行：**到货必须把 SKU 从清单删掉** + 同步改 IA 模板。skill 与 `pb_orders/docs/log.md` 同步。

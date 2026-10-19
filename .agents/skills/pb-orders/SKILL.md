@@ -5,7 +5,7 @@ description: >
   打单后才发现无货时的 invoice 清理惯例、Notion 断货台账登记、通知 Diane 的邮件规律。
   当用户提到「PB」「Pottery Barn」「出件」「库存预检」「标签 PDF」「背贴」「Packslip」
   「无货未发」「断货台账」「通知对接人」「给 Diane 发邮件」「清 invoice」「invoice 总额」
-  「楔形枕补货」「PB 补货」时触发。
+  「楔形枕补货」「PB 补货」「重发 AKN」「改 SPS 发货日期」「Ship No Later」「Order 状态 open」时触发。
   不要用于 PB 月度对账 / TM 佣金 / UPS 交付核查（那是 pb-reconciliation）。
 metadata:
   module: pb_orders
@@ -51,10 +51,13 @@ uv run python run_pb_orders.py --dir "<批次目录>"                           
    口径与坑见 reference 文档 §2 第 2 步 + notion-stockout.md §5。
 3. **通知 Diane**（`us@mxdeals.com` → PB 采购对接人，地址见历史邮件）：主题 `SKU:<PB买家SKU> out of stock Vendor 5806`，
    **后续新 SKU 回复上一封**（主题滚成 `Re:RE: …`）。
-4. **SPS 后台**：重提 IA（`SPS_Selenium_Local/sps_automation.py` 每天定时发，模板 `IA Template 20250605 x100`）
-   + 在 PO 上重发 AKN(855) —— 完整点法见
+4. **SPS 后台**：先点开 Order（New → Open），再判断要不要重发 AKN ——
+   读 **Order 明细行**的 `Ship No Later`（原 ACK 表头日期常为空）：计划到货 ≤ 它 → **不用发**；
+   晚于它 → 重发 AKN（Expected Ship = 计划到货日，Delivery = +7 天），发完在交易列表确认
+   「当天新 ACK + Accepted/In Transit」。IA 重提（`SPS_Selenium_Local/sps_automation.py` 每天定时发，
+   模板 `IA Template 20250605 x100`）—— 完整点法见
    `docs/solutions/workflow-issues/sps-portal-ia-akn-operations.md`
-   （⚠️ 一次 Send 发不出去要发两次；IA 是「发送日+7」的单日报告，改模板只影响 7 天后）。
+   （⚠️ 一次 Send 不一定发得出去，以交易列表为准；IA 是「发送日+7」的单日报告，改模板只影响 7 天后）。
 5. **把断货 SKU 加进网页预检的断货清单**（`https://api.vilavi.cn/pb/settings`；
    存 `sh-erpnext-test:/opt/pb-orders/pb_orders/runtime/jobs.sqlite` 的 `app_settings.default_no_stock`）。
    **最容易漏** —— 不改的话下一批预检仍会把它当有货放过。**到货后必须删掉**。
