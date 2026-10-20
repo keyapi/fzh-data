@@ -155,16 +155,19 @@ Prefect（Windows 原生）→ Postgres / DuckDB + dbt（可选）
 - 目前只有**通途库存**可作为可用库存来源；它不一定准确，但暂时没有更好的替代。
 - **EN 没有与通途库存同步**；EN Bin 不能当可用库存（已知差 351 件）。
 - 通途 SKU ↔ EN 物料映射复杂；**拆包裹/合并订单**在 #294/#295 已有记录。
-- 历史上 Plentymarkets 每天自动备份库存 CSV 到 FTP；现在应考虑更好的方式。
 
 **结论：不要把通途库存写进 EN 的 Bin/Stock Ledger；建「只读快照 + 查询层」。**
+
+> 术语：**DuckDB** 是嵌入式分析数据库（单文件、无独立服务，像「分析版 SQLite」）；
+> **mart** 是面向某个主题的小型数据集市。**DuckDB mart** = 用 DuckDB 文件承载的
+> 供应链数据集市（快照表 + 维度/事实表），不是一个新产品，也不是数据仓库。
 
 | 方案 | 做法 | 优点 | 风险 | 结论 |
 |---|---|---|---|---|
 | A. 写入 EN Bin/Stock Ledger | 把通途库存同步成 EN 库存 | EN 内可直接查 | **污染账务/制造语义；双计；不可逆；违背 EN 不扣减通途的事实** | **不采用** |
 | B. EN 只读快照 DocType | 自定义 DocType 存快照，不碰 Bin | EN UI/REST 可直接查；权限沿用 EN | 生产库增长；需测试环境；仍需映射 | 可选（EN 是硬性 UI 要求时） |
 | C. 独立数据 mart | DuckDB/Postgres 存快照，供所有工具查询 | 无 EN 写入；可按 as-of 重建；迭代快 | 多一个存储/ETL；需权限 | **V1 推荐** |
-| D. FTP/CSV 直查 | 继续用 CSV 当数据源 | 零改造 | 无历史一致性、并发/权限差、易错 | 不采用 |
+| D. 手工导出/CSV 直查 | 继续用 CSV 当数据源 | 零改造 | 无历史一致性、并发/权限差、易错 | 不采用 |
 
 **推荐落地（V1）**：
 
@@ -181,8 +184,8 @@ Tongtool API（只读、分页）
 - **SKU 映射**：独立 `sku_map` 表（`tongtool_sku`、`en_item`、`customer_item_code`、
   `split_group`、`effective_from/to`、`source`、`confidence`）；拆包/合并按 #294/#295 的行级规则，
   歧义 fail-closed；库存粒度（SKU×仓）与订单粒度（行/包裹）分开建模。
-- **Plentymarkets FTP**：作为**历史回填源**保留；校验 manifest/checksum 后转 Parquet。
-  新链路用 API 或受控导出，不把 FTP 当查询层。
+- **历史库存备份（如有）**：只作一次性回填源；校验后转 Parquet。
+  新链路用 API 或受控导出，不把 CSV/手工文件当查询层。
 - **EN 的角色**：事实源（SO/PP/WO/DN/BOM），不是库存快照的存放地。
   如果非技术同事必须在 EN 里看，再加只读 Snapshot DocType，仍然**不写 Bin**。
 

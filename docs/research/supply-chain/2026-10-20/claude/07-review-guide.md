@@ -18,7 +18,7 @@ tags: [supply-chain, review, codex, guide]
 | 顺序 | 位置 | 要确认什么 |
 |---|---|---|
 | 1 | `05-synthesis.md` §2 指标权威矩阵 | 销量/库存/在途/成本的事实源是否同意；库存质量说明是否符合现实 |
-| 2 | `05-synthesis.md` §4.4 库存数据架构 | **本次新增**：不要写 EN Bin；独立 DuckDB mart；SKU/拆包映射；Plentymarkets 历史源；测试不碰 EN 生产 |
+| 2 | `05-synthesis.md` §4.4 库存数据架构 | **本次新增**：不要写 EN Bin；独立 DuckDB mart；SKU/拆包映射；历史备份处理；测试不碰 EN 生产 |
 | 3 | `05-synthesis.md` §3–4 三个候选架构与推荐 | 是否接受「轻量决策链 + 薄 Agent」，还是想直接上标准平台 |
 | 4 | `05-synthesis.md` §5 90 天路线 + §7 风险 | 切片、节奏、停止条件是否现实 |
 | 5 | `06-open-questions.md` A/B | 先答 5 个：服务水平、预算、审批边界、库存查询层、SKU 映射主键 |
@@ -45,7 +45,7 @@ tags: [supply-chain, review, codex, guide]
 - 公司做跨境电商，约 5 人技术团队；系统为通途（订单/库存/采购）、ERPNext（SO/PP/WO/DN/BOM）、
   赛狐（库存/结算）。目前只有通途库存可作为可用库存，但通途库存不一定准确；EN 未同步通途库存，
   EN Bin 不能当可用库存。通途 SKU ↔ EN 物料映射复杂，拆包裹/合并订单另有子项目记录。
-- 历史上 Plentymarkets 每天备份库存 CSV 到 FTP；现在在评估更好的方式。
+- 可能有历史库存备份/手工导出，但是否可用待确认。
 - 测试阶段先别碰 EN 生产系统。
 
 需要评审的文件（全部在 docs/research/supply-chain/2026-10-20/claude/）：

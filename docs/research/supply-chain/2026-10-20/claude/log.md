@@ -107,17 +107,19 @@ tags: [supply-chain, research, log]
 ## 2026-10-20 — 用户补充：库存数据架构与评审包
 
 - 用户确认：目前只有通途库存可用（不一定准确，但无更好替代）；EN 未同步通途库存；
-  通途 SKU ↔ EN 映射复杂；拆包裹/合并在 #294/#295 有记录；历史 Plentymarkets FTP 每日 CSV；
+  通途 SKU ↔ EN 映射复杂；拆包裹/合并在 #294/#295 有记录；
   测试阶段先别碰 EN 生产。
 - `05-synthesis.md` 新增 **§4.4 库存数据架构**：
   - 不把通途库存写进 EN Bin/Stock Ledger（会污染账务/双计）；
   - V1 用独立 DuckDB mart（Parquet 快照 + sku_map + 质量标记）；
   - EN 只读 Snapshot DocType 仅在 EN 是硬性 UI 要求时采用；
-  - Plentymarkets FTP 作为历史回填源，新链路用 API/受控导出；
+  - 历史库存备份（如有）只作一次性回填源，新链路用 API/受控导出；
   - 测试分三阶段：本地 → EN 测试 `ensh.vilavi.cn` → 生产只读，禁止写生产库存账。
 - `06-open-questions.md` 新增 B10–B15、C5、D8–D9，并更新最小可开工假设。
 - 新增 `07-review-guide.md`：用户审核顺序 + 给 Codex 的只读评审 brief。
-- PR 归属澄清：#300 交接包、#301 Codex、#302 Claude；建议先合 #300 再合 #302。
+- **更正（同日）**：Plentymarkets FTP 是用户多年前在别的公司的方法，与当前项目无关，
+  已从 05/06/07/sources 中移除；历史库存备份仅作为「如有则一次性回填」处理。
+- PR 归属澄清：#300 交接包、#301 Codex、#302 Claude；用户决定**合并到 #300**。
 
 ## 模板（后续阶段）
 
