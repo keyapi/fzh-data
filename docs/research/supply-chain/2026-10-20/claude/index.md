@@ -38,6 +38,7 @@ tags: [supply-chain, research, index]
 | [10-codex-round2-response.md](10-codex-round2-response.md) | 第二轮定向复审 R01–R07 处理、共同框架/决策/合成样例对照 |
 | [11-common-baseline.md](11-common-baseline.md) | G0 冻结基线（框架/契约/样例/决策表版本清单）+ G1 进入条件 |
 | [12-codex-g1-instructions.md](12-codex-g1-instructions.md) | G1 阶段给 Codex 的执行清单（基线冻结/样例/08 定向复核/三角靠枕映射） |
+| [13-g1-export-request.md](13-g1-export-request.md) | G1 脱敏导出请求清单（字段、范围、脱敏、命名、验收） |
 | [sources.md](sources.md) | 证据账本（ID / 主张 / 来源 / 日期 / 原文 / 强度） |
 | [log.md](log.md) | 过程记录、失败与放弃方向 |
 | [experiments/](experiments/index.md) | E1–E3 最小验证的代码、输入哈希与结果 |
