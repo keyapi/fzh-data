@@ -10,6 +10,10 @@ tags: [supply-chain, planning, inventory, ERPNext, frePPLe, open-source]
 
 调研时间：2026-10-20。目标链路是通途订单/库存/采购、ERPNext 的 SO/PP/WO/DN/BOM、赛狐库存和销售、头程、销售分析、未来数月预测、补货、排产与负责人审批。预算、数据量、当前 ERPNext 主版本和运维人力尚未知；所以成本用相对级别与明确假设表示，不编造金额。
 
+## 当前产品约束补充
+
+用户已找回#304历史预测资产：阶段A完成，阶段B未启动；当前方向为分段全局LightGBM、Croston/TSB兜长尾/生命周期、Conformal区间与物料组调和。现阶段不采用TSFM；原开源候选表保留为研究盘点，不能据“候选存在”重启基础模型实施。见[history-handoff.md](history-handoff.md)。
+
 ## 结论先行
 
 建议先把 ERPNext、通途、赛狐保留为交易事实来源，做一层只读、可追溯的计划数据模型；将 frePPLe 9.19.0 Community Edition 定位为**需补充库存策略能力的 APS 候选**，并与 ERPNext 原生 Production Plan/MPS/MRP 做基线对照。CE 有有限物料/产能计划和统计预测，但完整 Inventory Planning 屏、安全库存与再订货量策略维护归 Enterprise/Cloud；因此是否采用 CE 取决于我们能否用现有 EN 能力或轻量自建报表补齐策略审阅与审批，若不能就须将商业版报价计入决策。[R19][R1][R20][R21][R33]

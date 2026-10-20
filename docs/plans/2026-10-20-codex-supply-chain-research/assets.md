@@ -7,6 +7,8 @@ date: 2026-10-20
 
 # 供应链资产账本
 
+用户后续补充：已从#304定位历史预测资产，当前账本为27项；前文22开放PR/84远端扫描是首次快照，**其未定位结论已被新增归档修正**。详见A26/A27与[history-handoff.md](history-handoff.md)。
+
 这是 2026-10-20 的只读代码/文档核对，不是生产数据审计。已有设计、已有代码、离线测试、合并、测试站部署、生产运行分别记录。历史报告中的实测数字不当作本轮重测结果。
 
 ## 1. 检索范围与计数
@@ -31,6 +33,7 @@ date: 2026-10-20
 | PB | origin/claude/vigorous-lehmann-889bf7 / [#297](https://github.com/keyapi/fzh-data/pull/297) | e9e92e4fbbe1ebdb1b1be2917fb3d9ab02580750 |
 | DEMO | origin/claude/ce-okf-branch-param-desk / [#288](https://github.com/keyapi/fzh-data/pull/288) | 765f36933776963341ef0385dd2a009ebaa577a8 |
 | SYNC | origin/claude/affectionate-bell-93d3ec / [#290](https://github.com/keyapi/fzh-data/pull/290) | 57a6c83c29fd34a7350c579a3c02c21842c20e33 |
+| FORECAST | origin/claude/gifted-ptolemy-bc923f / [#304](https://github.com/keyapi/fzh-data/pull/304) | 74d78faa899596c1d16b07ea00b38be373a928a2 |
 
 本表 ref 会继续移动，续接按 SHA 回查，再刷新当前版本；不把本研究快照当永久真值。
 
@@ -63,6 +66,9 @@ date: 2026-10-20
 | A23 受控 Agent demo | DEMO: ops_assistant_demo/AGENT_HANDOFF.md、agent_runtime.py、agent_tools.py、domain.py | 已有CAPABILITIES统一注册、后台身份、不可变确认摘要/状态版本、过期/取消、独立读回模式；文档称132项测试与模拟真机验收，本轮未重跑。**模拟银行/工单，不是SCM生产实现**；可借模式，不整体搬业务 |
 | A24 企业 Agent 知识与界面 | MAIN: docs/enterprise-agent-knowledge-system.md、ai_access_poc/open_webui/AGENT_HANDOFF.md、board/AGENT_HANDOFF.md、intent_router/ | 已有只读工具壳/报表摘要、记忆/知识分层研究、路由none兜底。根级ai_access_poc/AGENT_HANDOFF.md不存在，勿据路径误判模块不存在。模型自报confidence不是正确率 |
 | A25 同步质量与外部自定义app | SYNC: docs/solutions/integration-issues/en-tongtool-order-package-sync-failures.md；COLAB同步覆盖交接 | 更新文档已给出 warehouse_name更新漏写、商户限流、队列300s、任务重叠等根因/修复记录，较旧“疑似仓库改名”更具体。真正tongtool_integration源码不在本仓，部署修复需另核，不能依据“已同步”状态保证字段完整 |
+
+| A26 历史数据可行性/路线 | FORECAST: docs/research/2026-08-31-demand-forecast-data-feasibility.md、2026-08-31-demand-forecast-practical-paths.md、2026-10-20-demand-forecast-session-reconstruction.md | 阶段A完成/阶段B未启动；43个月表为当时记录未重测。当前不上TSFM；继承分段全局LightGBM/长尾/Conformal/调和方向。9月2日17:35创建路线文档；原会话不可恢复，不填造原文 |
+| A27 PB多方法原型 | FORECAST: pb_reconciliation/sku_forecast.py、docs/reference/sku-forecast.md | M1/M2/M3/M3b已找到，单SKU/PO下单量代理、硬编码读取/日期窗口、人为区间和缓冲；不代表公司模型。仓外输出不入库，本轮未跑真实数据，详见历史接续限制 |
 
 ## 4. 必须裁定的冲突（现有测试不能代替裁定）
 
