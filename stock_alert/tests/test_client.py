@@ -139,8 +139,70 @@ def test_is_transient_error_classification():
 
     assert is_transient_error(RuntimeError("MCP HTTP 502: <html>502 Bad Gateway</html>"))
     assert is_transient_error(RuntimeError("MCP HTTP 503: x"))
+    assert is_transient_error(RuntimeError(
+        'MCP HTTP 400: {"jsonrpc":"2.0","error":{"code":-32000,'
+        '"message":"Bad Request: Server not initialized"},"id":null}'
+    ))
     assert not is_transient_error(RuntimeError("MCP HTTP 401: x"))
     assert not is_transient_error(RuntimeError("业务错误"))
+
+
+def test_mcp_client_reinitializes_on_server_not_initialized():
+    from tongtool_api.mcp_http import McpClient
+
+    class _Sub(McpClient):
+        def __init__(self):
+            self.request_id = 1
+            self._client_name = "t"
+            self.headers = {}
+            self.session_id = "s1"
+            self.init_calls = 0
+            self.post_calls = 0
+
+        def _initialize(self):
+            self.init_calls += 1
+            self.session_id = f"s{self.init_calls + 1}"
+
+        def _post(self, payload):
+            self.post_calls += 1
+            if self.post_calls == 1:
+                raise RuntimeError(
+                    'MCP HTTP 400: {"jsonrpc":"2.0","error":{"code":-32000,'
+                    '"message":"Bad Request: Server not initialized"},"id":null}'
+                )
+            return {"result": {"ok": True}}, {}
+
+    client = _Sub()
+    assert client.call("x", {}) == {"result": {"ok": True}}
+    assert client.init_calls == 1   # 重建了一次会话
+    assert client.post_calls == 2   # 原调用 + 重试
+
+
+def test_mcp_client_does_not_reinit_on_other_errors():
+    from tongtool_api.mcp_http import McpClient
+
+    class _Sub(McpClient):
+        def __init__(self):
+            self.request_id = 1
+            self._client_name = "t"
+            self.headers = {}
+            self.session_id = "s1"
+            self.init_calls = 0
+
+        def _initialize(self):
+            self.init_calls += 1
+
+        def _post(self, payload):
+            raise RuntimeError("MCP HTTP 502: down")
+
+    client = _Sub()
+    try:
+        client.call("x", {})
+    except RuntimeError as exc:
+        assert "502" in str(exc)
+    else:
+        raise AssertionError("非会话错误应直接抛出（由外层退避重试）")
+    assert client.init_calls == 0
 
 
 def test_retries_transient_502_then_succeeds():

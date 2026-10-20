@@ -48,6 +48,7 @@ class McpClient:
 
     def __init__(self, key: str, secret: str, client_name: str = "fzh-tongtool-mcp") -> None:
         self.request_id = 1
+        self._client_name = client_name
         self.headers = {
             "Accept": "application/json, text/event-stream",
             "Content-Type": "application/json",
@@ -55,15 +56,25 @@ class McpClient:
             "x-tongtool-secret-key": secret,
         }
         self.session_id = ""
+        self._initialize()
+
+    def _initialize(self) -> None:
+        """(重)建 MCP 会话：initialize → notifications/initialized。
+
+        服务端/负载均衡抖动时，已建会话可能被判为「未初始化」（tools/call 返回 HTTP 400
+        -32000 Server not initialized）。这种时候必须换新会话重来，所以把初始化独立出来，
+        供 `call()` 在会话失效时重建。
+        """
+        self.session_id = ""
         response, headers = self._post(
             {
                 "jsonrpc": "2.0",
-                "id": 1,
+                "id": self.next_id(),
                 "method": "initialize",
                 "params": {
                     "protocolVersion": "2025-11-25",
                     "capabilities": {},
-                    "clientInfo": {"name": client_name, "version": "1.0"},
+                    "clientInfo": {"name": self._client_name, "version": "1.0"},
                 },
             }
         )
@@ -105,6 +116,16 @@ class McpClient:
         return resp
 
     def call(self, name: str, arguments: dict) -> dict:
+        try:
+            return self._call_once(name, arguments)
+        except RuntimeError as exc:
+            if "Server not initialized" not in str(exc):
+                raise
+            # 会话被服务端丢弃（LB/抖动）：重建会话后重试一次
+            self._initialize()
+            return self._call_once(name, arguments)
+
+    def _call_once(self, name: str, arguments: dict) -> dict:
         resp, _ = self._post(
             {
                 "jsonrpc": "2.0",

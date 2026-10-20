@@ -138,9 +138,12 @@ def normalize_row(warehouse: str, item: dict) -> StockRow:
 
 
 def is_transient_error(exc: Exception) -> bool:
-    """可重试的瞬时错误：网关 5xx / 网络错误（不含 4xx、参数错等确定性失败）。"""
+    """可重试的瞬时错误：网关 5xx / 网络错误 / MCP 会话未初始化。"""
+    text = str(exc)
+    if "Server not initialized" in text:
+        return True
     if isinstance(exc, RuntimeError):
-        match = re.search(r"MCP HTTP (\d{3})", str(exc))
+        match = re.search(r"MCP HTTP (\d{3})", text)
         return bool(match and match.group(1).startswith("5"))
     return isinstance(exc, OSError)
 
