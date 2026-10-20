@@ -11,7 +11,7 @@ tags: [supply-chain, codex, g1, sync, consolidated]
 # 给 Codex 的 G1 同步（合并版，2026-10-20）
 
 > 本文件是当前**唯一同步口径**；前几轮碎片消息以本文件为准。
-> Claude #300 最新 `1dafa7b2`；Codex #301 最新 `c854800e`；**G1b 可在下文假设下启动**。
+> Claude #300 实质更新 `1dafa7b2`（其后仅 SHA/注记微调）；Codex #301 最新 `c854800e`；**G1b 可在下文假设下启动**。
 
 ## 0. Codex 当前所处位置（先对齐）
 
@@ -30,7 +30,7 @@ tags: [supply-chain, codex, g1, sync, consolidated]
 ## 1. 当前状态
 
 - Codex #301 `c854800e`：已接受 1:1 皮壳模型；C21–C25 完成，25/25 合成样例通过；Cost Review 不作数据源。
-- Claude #300 `1dafa7b2`：已把 33,719 改为**出库消耗毛量（含补发）**；补全全量输入去向对账；
+- Claude #300 实质更新 `1dafa7b2`：已把 33,719 改为**出库消耗毛量（含补发）**；补全全量输入去向对账；
   记录退货 5% 情境、WayfairCG 供货归属调拨单方案。
 - **G1b 可在假设下启动**：补发不再等交易事件；退货用 5% 情境 + `restock_share` 敏感性；
   WayfairCG 供货归属缺数据时标 `unknown`，只影响分公司级净算，不影响 family 总需求。
