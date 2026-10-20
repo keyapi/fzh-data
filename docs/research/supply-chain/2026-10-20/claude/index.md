@@ -15,10 +15,11 @@ tags: [supply-chain, research, index]
 
 ## 状态
 
-- 阶段：Phase 0–1（脚手架 + 项目内资产盘点）
+- 阶段：Phase 0–4 完成（资产盘点 → 三线调研 → E1–E3 实验 → 综合），待 Phase 5 质检与 PR。
 - 分支：`research/supply-chain-claude`（基于 `origin/main` @ `e5d07c9d`）
 - 交接包参考：`origin/docs/supply-chain-integration-handoff` @ `de899f4b`（PR #300，未合并）
-- 检查点：`01-existing-assets.md` 完成后先交用户确认，再进入三条调研线
+- **推荐方向**：轻量决策链 + 薄 Agent；预测用组合法；补货先定预算与服务水平。
+- 检查点：01（已确认）、E1–E3（已确认）。
 
 ## 文件
 
