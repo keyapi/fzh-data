@@ -9,7 +9,7 @@ description: docs/research 目录变更历史
 
 ## 2026-10-20
 
-- **新增**: [2026-10-20-demand-forecast-session-reconstruction.md](2026-10-20-demand-forecast-session-reconstruction.md) — 补三篇调研正文没有的检索事实：会话最后活动是 2026-09-02 17:33；Prophet/ARIMA 背景在 Claude 记忆（`fc0170d0`），调研正文不推荐 Prophet；Desktop 会话条目仍在，本地转录已清理。
+- **新增**: [2026-10-20-demand-forecast-session-reconstruction.md](2026-10-20-demand-forecast-session-reconstruction.md) — 补三篇调研正文没有的检索事实：可还原时间线（8-31 三次产出 + **9-02 17:35 创建 practical-paths**，原纪要“9/2 无产出”已更正）；Prophet/ARIMA 背景在 Claude 记忆（`fc0170d0`），调研正文不推荐 Prophet；Desktop 会话条目仍在，本地转录已清理。另补交接事实：阶段 A/B 边界、PB 基线不是公司级模型、凭证只在父仓库、`sku_forecast.py` 为一次性脚本。
 
 ## 2026-09-21
 
