@@ -11,12 +11,25 @@ tags: [supply-chain, codex, g1, sync, consolidated]
 # 给 Codex 的 G1 同步（合并版，2026-10-20）
 
 > 本文件是当前**唯一同步口径**；前几轮碎片消息以本文件为准。
-> Claude #300 最新 `17dce846`；Codex #301 最新 `c854800e`；G1b 暂停。
+> Claude #300 最新 `a85cad8d`；Codex #301 最新 `c854800e`；G1b 暂停。
+
+## 0. Codex 当前所处位置（先对齐）
+
+- Codex 最后收到的是 **#300 `6d0a1324`** 时的同步：
+  架构 / 1:1 皮壳 / 20261016 映射 / C21–C25 / 暂停 G1b。
+- Codex 已在 **#301 `c854800e`** 回应：
+  - 接受 1:1 皮壳；C21–C25 完成，25/25 通过；`mapping_process.md` §0–§4 复审完成；
+  - 要求 33,719 改称**匹配毛量**；退货仓 165 按交易事件核实；未匹配不得直接判非 family。
+- **Codex 尚未收到**：
+  1. WayfairCG 库存口径（后台手工导出、Tongtool 调拨≠在手、赛狐无 Wayfair 平台仓 API）；
+  2. WX 反馈（美东稳定/美中结构断点、operator/listing/cohort、产能交期区间）；
+  3. 本轮报告修正（匹配毛量、全量去向对账、退货仓正数出库、补发待核、C31–C32）。
+- 所以本次给 Codex 的是 **`c854800e` 之后的增量合并**，不是让它重做。
 
 ## 1. 当前状态
 
 - Codex #301 `c854800e`：已接受 1:1 皮壳模型；C21–C25 完成，25/25 合成样例通过；Cost Review 不作数据源。
-- Claude #300 `17dce846`：已把 33,719 改为**匹配毛量**；补全全量输入去向对账；G1b 暂停。
+- Claude #300 `a85cad8d`：已把 33,719 改为**匹配毛量**；补全全量输入去向对账；G1b 暂停。
 - **G1b 暂停**，等两件事：退货/贷项/补发交易事件；WayfairCG 由 USNJ 还是 USTX 供货。
 
 ## 2. 公司架构与需求模型
@@ -107,27 +120,21 @@ tags: [supply-chain, codex, g1, sync, consolidated]
 ## 9. 可直接复制给 Codex（合并版）
 
 ```text
-G1 合并版同步（以本段为准，前几轮碎片消息作废）：
+c854800e 之后的增量合并（你已完成的部分保留，不用重做）：
 
-一、架构与需求
-- 绍兴生产皮壳/内胆/半成品 → USNJ(CENTRADE)、USTX(DANEEY)、波兰分公司
-  填充 PP 棉/压缩/包装/发货；最终销售多数成品，个别只卖皮壳。
-- 三角靠枕类绍兴只发皮壳；成品销售 1:1 消耗皮壳；-Cover 是皮壳例外。
-- 皮壳仓是分公司仓，不是皮壳产品仓。
+一、你 c854800e 已完成、保留
+- C21–C25（25/25）与 mapping_process §0–§4 复审保留。
+- 你要求把 33,719 改称“匹配毛量”、退货 165 按交易事件、未匹配不得直接判非 family —— 已照办。
 
-二、映射
-- 唯一主映射：EN产品BOM成本列表20261016.xlsx 的产品编号+客户物料号，按通途SKU 精确匹配。
-- EN Tongtool Cost Review 只借代码逻辑，不用其数据；Colab 4.2 仅兜底；品类文本只作诊断。
-
-三、匹配毛量与对账（2026-04..09）
+二、报告修正（你还没看到）
 - 33,719 是 family 匹配毛量，不是净需求；32,888 行。
 - 订单文件 45,129 行/48,346 件，无负数退货行。
-- family 32,888 + 未匹配 pending 759 + 非 family 退货仓 148 + out_of_scope 11,334 = 45,129 行；
+- 全量去向：family 32,888 + 未匹配 pending 759 + 非 family 退货仓 148 + out_of_scope 11,334 = 45,129 行；
   件数 33,719+925+152+13,550=48,346。
-- 退货仓 family 164/165 是正数出库销售，不是退货；family 补发 66/72 待交易事件；
-  未匹配 759/925 标 pending，不直接判非 family；之前“124 行非 family”撤回。
+- 退货仓 family 164/165 是正数出库销售（Amazon/Wayfair/OSTK，是否补发=否），不是退货；
+  family 补发 66/72 待交易事件；未匹配 759/925 标 pending；之前“124 行非 family”撤回。
 
-四、WayfairCG/3PL
+三、新增输入 1：WayfairCG/3PL
 - 下游 3PL；family 销售 1,162 件计入毛量；分公司→3PL 转移不重复计。
 - 库存以 Wayfair 后台手工导出为准（YTQ）；Tongtool 调拨≠在手；到货可能丢件。
 - 赛狐平台仓 API 只有 Temu/Mercado/Walmart WFS，无 Wayfair；无数据标 unknown+安全缓冲；
@@ -135,17 +142,19 @@ G1 合并版同步（以本段为准，前几轮碎片消息作废）：
 - 其他 3PL 无 family 销售；海绵 -Foam 另列。
 - 待确认：WayfairCG 由 USNJ 还是 USTX 供货。
 
-五、美东/美中与交期（WX）
+四、新增输入 2：WX 计划
 - 美东稳定（2 运营），历史可回测；美中 2026-06/07/08 新运营、第二个月才下单、
   首批刚回货，历史不可参考；必须分仓，不能混池。
 - demand_line/forecast_bucket 增加 operator_id/listing_id/operator_start_date/
   listing_launch_date/demand_cohort；美中用短窗 run-rate + cohort/ramp，不套 ens5/季节性。
 - 产能/交期用区间/情景（如 60–120 天），输出覆盖期/缺货风险，不输出固定 3 个月到货日。
 
-六、请 Codex 做
-- 更新 g1-slice/baseline；保留 C21–C25，新增 C26–C32（3PL 销售/库存、
-  美中 cohort/ramp、交期区间、operator/listing/cohort、匹配毛量≠净需求、全量去向对账）。
-- 定向复核 mapping_process.md §3/§4。
+五、请 Codex 做
+- 更新 g1-slice/baseline：匹配毛量≠净需求；美东/美中分仓；WayfairCG 库存 manual/unknown；
+  删除“124 行非 family”等旧结论。
+- 保留 C21–C25，新增 C26–C32（3PL 销售/库存、美中 cohort/ramp、交期区间、
+  operator/listing/cohort、匹配毛量≠净需求、全量去向对账）。
+- 定向复核 mapping_process.md §3/§4（修正后的毛量与去向对账）。
 - G1b 暂停，等退货/补发交易事件 + WayfairCG 供货归属确认。
 - 不写生产、不合并 #301、不改 Claude 文件。
 ```
