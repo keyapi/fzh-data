@@ -8,6 +8,8 @@ reviewed_ref: cd7a8a065f32c204ef57a423527ecce61243f052
 
 # 当前对齐状态
 
+后续冻结与G1交接已落盘：[baseline.md](baseline.md)、[g1-slice.md](g1-slice.md)、[review-08-g0.md](review-08-g0.md)。下文为cd7a8a06时点记录；最新G0 tag b23c319a已补准这里的§3边界，Codex本轮20例通过，真实回放由Claude执行。
+
 本轮定向核对Claude [#300固定cd7a8a06](https://github.com/keyapi/fzh-data/tree/cd7a8a065f32c204ef57a423527ecce61243f052/docs/research/supply-chain/2026-10-20/claude)的10/08及E1；不修改对方文件、不拉原始数据、不访问生产。此前Codex成果固定dd2551ef。
 
 **总体架构原则已双向对齐，可进入G0契约确认与G1本地验证准备。** 这是报告与代码层的技术对齐，不是业务参数已批准、真实事实已核验或实施上线许可。Cursor成果尚未读取，不要求等待第三方才能推进已无争议的验证。
