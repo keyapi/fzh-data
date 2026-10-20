@@ -47,6 +47,13 @@ tags: [supply-chain, research, log]
 - 历史挖掘子 Agent 早期误用 `uv run python`，在本 worktree 生成 `.venv` 并安装 101 个包；
   未跟踪、已 gitignore，不影响提交。后续实验可直接复用该环境。
 
+### 检查点 1 后的用户更正（2026-10-20）
+
+- `demand_forecast`：已由用户另一会话恢复到 PR #304；阶段 A 完成，阶段 B 未启动、未建目录。
+- 多方法对比：实现 `pb_reconciliation/sku_forecast.py`，输出在本机 PB 目录，不入库。
+- PR #304 纪要更正：`practical-paths.md` 创建于 2026-09-02 17:35，不是「9/2 没有产出」。
+- 已写入 `01-existing-assets.md` §10；#300 的 §6 由维护者后续同步，本 PR 不改。
+
 ## 模板（后续阶段）
 
 ```text

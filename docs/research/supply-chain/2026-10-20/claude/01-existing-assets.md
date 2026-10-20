@@ -77,6 +77,8 @@ tags: [supply-chain, research, assets, checkpoint]
 
 - 归档：PR #304 的 `docs/research/2026-08-31-demand-forecast-data-feasibility.md`、
   `-practical-paths.md`、`-ts-forecast-methods.md`。
+- 文件名沿用 `2026-08-31`；其中 `practical-paths.md` 的实际创建时间是 **2026-09-02 17:35**，
+  不是「9/2 没有产出」。此处以用户 2026-10-20 的更正为准。
 - 数据可行性：通途订单 Google Sheet **202301–202607 连续 43 张月表**（逐日行，含发货日期/通途SKU/解析后SKU/数量/渠道/发货仓库）；
   EN 主数据 15,190 物料、410 个叶子物料组；断货信号用通途库存导出（可用 ≤0）。
 - SKU 映射：EN `customer_items.ref_code` + 剥离 `-淘汰/-out/-Cover/-Foam`；`missing_products/audit_three_systems.py` 已跑通。
@@ -89,6 +91,7 @@ tags: [supply-chain, research, assets, checkpoint]
 - 脚本：`pb_reconciliation/sku_forecast.py`（约 19.6 KB，2026-08-31），PR #304 归档。
 - 口径文档：`pb_reconciliation/docs/reference/sku-forecast.md`（PR #304）。
 - 输出样例：`D:/Work/美国/<PB渠道>/PB orders/sales_forecast/…CENKZ1325-YELLOW-97_20260831_141542.{md,xlsx}`。
+  **实际输出在仓库外，不入库**；仓库只归档脚本与口径文档（PR #304）。
 - 方法：M1 运行率、M2 同比窗口、M3 线性趋势、M3b 季节平均；输出中间值/区间/备货建议（上浮约 20%）。
 - 局限：销量取 PB 对账表 `Invoice to PB` 的 PO 下单量作代理；断货会低估需求；近 1–2 月数据滞后。
 
@@ -189,3 +192,20 @@ find "D:/Work/美国" -maxdepth 5 -iname '*forecast*' -o -iname '*预估*'
 ```
 
 > `sku_forecast.py` 在 git 对象中不存在；唯一命中是 PR #301 的计划文档。归档版本见 PR #304。
+
+---
+
+## 10. 对交接包 `01-asset-inventory.md` §6 的更正
+
+交接包 §6「用户提到但仓库里没找到」有 4 项；Phase 1 已全部定位。**本文件是更正后的权威版本**，
+#300 的原文由其维护者后续同步（本 PR 不修改 #300 的文件）。
+
+| 交接包 §6 原项 | 更正后 |
+|---|---|
+| `demand_forecast` 子项目 | **已定位**（用户 2026-10-20 于另一会话恢复到 PR #304）：阶段 A 数据可行性完成；**阶段 B 未启动，未建 `demand_forecast/` 目录**；资产见 PR #304 三篇 `docs/research/2026-08-31-*` |
+| 多方法销量预测对比 | **已定位**：PB 的 M1/M2/M3/M3b 实现在 `pb_reconciliation/sku_forecast.py`（PR #304 归档）；实际输出在仓库外 `D:\Work\美国\Tracy Miller\PB orders\sales_forecast\`，**不入库** |
+| 网页 Agent demo | **已定位两个**：PR #288 `ops_assistant_demo/`（2026-10-11）与 `D:/Work/web-ai-assistant-review-20261012`（2026-10-15，更可能是「上周」那个） |
+| 通途 SKU / Colab+GSheet 换 EN BOM 成本 | **已定位**：PR #295 / #294 / #280，核心提交 `9ccf0c1f`、`7f837046`、`dce9769a`、`430e268c`、`e9e92e4f`；未进 main |
+
+另：PR #304 的检索纪要中「practical-paths.md 9/2 没有产出」应更正为
+**该文件创建于 2026-09-02 17:35**（文件名仍保留 `2026-08-31` 前缀）。

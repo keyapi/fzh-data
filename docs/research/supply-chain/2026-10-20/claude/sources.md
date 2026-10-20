@@ -44,6 +44,7 @@ tags: [supply-chain, research, sources]
 | S1-013 | 钉钉头程表可机器读，但没有结构化 ETA | `dingtalk/dingtalk_sheet/AGENT_HANDOFF.md`、实读表头 | C | 2026-10-20 | 只有工厂确认交期/包装完成日期 | A | 01 §5、06 |
 | S1-014 | EN 不扣减通途库存，Bin 不能当可用库存 | `pb-replenishment-sizing-from-sales.md` §4 | C | 2026-10 | 「不要用 EN 的 Bin」 | A | 01 §6 |
 | S1-015 | 尾程费率分层模型与 EN 导入契约（历史资产） | PR #232（closed unmerged） | C | 2026-09 关闭 | V0–V4、Holdout、26 列契约 | B | 01 §3 |
+| S1-016 | `practical-paths.md` 实际创建于 2026-09-02 17:35（文件名沿用 08-31） | 用户 2026-10-20 更正 | C | 2026-09-02 | 「不是 9/2 没有产出」 | A | 01 §4.1/§10 |
 
 ## 未找到项（N-###）
 
