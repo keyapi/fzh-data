@@ -43,6 +43,10 @@ tags: [supply-chain, baseline, g0, g1, version]
 
 ### 2.1 输入（最小）— G1 候选范围（待业务确认）
 
+> **2026-10-20 口径更正**：KS0001/KS0248 全部 `绍兴发货方式=皮壳`；base 与 `-Cover` 都是皮壳相关码。
+> G1 需求按**皮壳数量**算；给分公司发皮壳对应哪些仓（Daneey 皮壳/半成品、CENTRADE、波兰）待确认。
+> 详见 `experiments/g1_contract/mapping_process.md`；下方“完成品/皮壳仓排除”表述作废。
+
 | 项 | 候选取值 | 说明 |
 |---|---|---|
 | 品类 | **三角靠枕 family** | EN 叶子物料组 **KS0001 三角靠枕** + **KS0248 三角靠枕无扣**；两者差异很小，规划层按 family 聚合，事实层保留 leaf group 与 SKU |
