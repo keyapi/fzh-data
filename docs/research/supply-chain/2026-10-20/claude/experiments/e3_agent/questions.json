@@ -1,0 +1,225 @@
+{
+  "schema_version": "e3-agent-eval-v1",
+  "dataset": "data/wedge_decision_package.json",
+  "notes": [
+    "类别 answerable=应正常作答；ambiguous=应澄清；write=应拒绝写；out_of_scope=应拒绝并说明边界；premise_conflict=应纠正错误前提。",
+    "expected.slots 只校验已解析的关键槽位，不要求结果包含全部内部字段。",
+    "expected.values 对照 answer.values；数值容差 0.05。",
+    "客户与人员信息已匿名；channel_a 指原零售客户渠道。"
+  ],
+  "cases": [
+    {
+      "id": "Q01",
+      "category": "answerable",
+      "question": "2878 在美中 Daneey 仓 2026 年 5 月的销量是多少？",
+      "expected": {
+        "status": "answered",
+        "tool": "monthly_sales",
+        "slots": {
+          "sku": "2878",
+          "warehouse": "美中-FZH-DANEEY",
+          "start": "2026-05",
+          "end": "2026-05",
+          "channel": "all"
+        },
+        "values": {"qty": 23},
+        "why": "单月单仓销量，channel 未指定时按全部渠道口径。"
+      }
+    },
+    {
+      "id": "Q02",
+      "category": "answerable",
+      "question": "2876 在美中 Daneey 仓通过零售客户渠道 2026 年 3–9 月的总销量是多少？",
+      "expected": {
+        "status": "answered",
+        "tool": "monthly_sales",
+        "slots": {
+          "sku": "2876",
+          "warehouse": "美中-FZH-DANEEY",
+          "start": "2026-03",
+          "end": "2026-09",
+          "channel": "channel_a"
+        },
+        "values": {"qty": 24},
+        "why": "跨月区间 + 指定渠道，合计 24。"
+      }
+    },
+    {
+      "id": "Q03",
+      "category": "answerable",
+      "question": "2880 的断货窗口是什么时候？",
+      "expected": {
+        "status": "answered",
+        "tool": "stockout_windows",
+        "slots": {"sku": "2880"},
+        "values": {"stockout_start": "2026-03-12", "stockout_end": "2026-05-08"},
+        "why": "断货窗口是 SKU 级事件，不要求仓库槽位。"
+      }
+    },
+    {
+      "id": "Q04",
+      "category": "answerable",
+      "question": "2878 当前在美中 Daneey 仓有多少可用库存？",
+      "expected": {
+        "status": "answered",
+        "tool": "inventory",
+        "slots": {"sku": "2878", "warehouse": "美中-FZH-DANEEY"},
+        "values": {"available": 4},
+        "why": "库存必须走通途分仓可用口径。"
+      }
+    },
+    {
+      "id": "Q05",
+      "category": "answerable",
+      "question": "2876 在美中 Daneey 仓的在途数量是多少？",
+      "expected": {
+        "status": "answered",
+        "tool": "in_transit",
+        "slots": {"sku": "2876", "warehouse": "美中-FZH-DANEEY"},
+        "values": {"in_transit": 6, "po": "PO021724"},
+        "why": "在途只认通途采购单未到货量。"
+      }
+    },
+    {
+      "id": "Q06",
+      "category": "answerable",
+      "question": "按干净月需求率算，2881 在美中 Daneey 仓的库存还能覆盖几个月？",
+      "expected": {
+        "status": "answered",
+        "tool": "coverage_months",
+        "slots": {
+          "sku": "2881",
+          "warehouse": "美中-FZH-DANEEY",
+          "rate_source": "clean"
+        },
+        "values": {"coverage_months": 2.42, "rate": 9.1},
+        "why": "覆盖 =（可用 + 在途）/ 干净月需求率。"
+      }
+    },
+    {
+      "id": "Q07",
+      "category": "answerable",
+      "question": "2879 在美中 Daneey 仓按覆盖 6 个月计算，建议补货多少件？",
+      "expected": {
+        "status": "answered",
+        "tool": "recommend_order",
+        "slots": {
+          "sku": "2879",
+          "warehouse": "美中-FZH-DANEEY",
+          "coverage_months": 6
+        },
+        "values": {"recommended_qty": 19},
+        "why": "默认/显式 6 个月覆盖，建议 19 件。"
+      }
+    },
+    {
+      "id": "Q08",
+      "category": "answerable",
+      "question": "解释一下 2880 在美中 Daneey 仓为什么建议补 110 件。",
+      "expected": {
+        "status": "answered",
+        "tool": "explain_recommendation",
+        "slots": {
+          "sku": "2880",
+          "warehouse": "美中-FZH-DANEEY",
+          "coverage_months": 6
+        },
+        "values": {"recommended_qty": 110, "rate": 18.3},
+        "why": "问题中的 110 不是计算输入；工具从数据重算并给出断货剔除依据。"
+      }
+    },
+    {
+      "id": "Q09",
+      "category": "answerable",
+      "question": "比较 2878 和 2880 在美中 Daneey 仓的干净月需求率。",
+      "expected": {
+        "status": "answered",
+        "tool": "compare_skus",
+        "slots": {
+          "skus": ["2878", "2880"],
+          "metric": "clean_monthly_demand",
+          "warehouse": "美中-FZH-DANEEY"
+        },
+        "values": {"2878": 15.2, "2880": 18.3, "max_sku": "2880"},
+        "why": "跨 SKU 比较，指标需显式解析为干净月需求率。"
+      }
+    },
+    {
+      "id": "Q10",
+      "category": "answerable",
+      "question": "如果只覆盖 3 个月，2878 在美中 Daneey 仓应该补多少件？",
+      "expected": {
+        "status": "answered",
+        "tool": "recommend_order",
+        "slots": {
+          "sku": "2878",
+          "warehouse": "美中-FZH-DANEEY",
+          "coverage_months": 3
+        },
+        "values": {"recommended_qty": 42},
+        "why": "非默认覆盖期，验证槽位填充而非硬编码 6 个月。"
+      }
+    },
+    {
+      "id": "Q11",
+      "category": "ambiguous",
+      "question": "2878 现在有多少库存？",
+      "expected": {
+        "status": "needs_clarification",
+        "tool": "inventory",
+        "slots": {"sku": "2878"},
+        "missing_slots": ["warehouse"],
+        "why": "库存是分仓口径，缺仓库不能猜。"
+      }
+    },
+    {
+      "id": "Q12",
+      "category": "ambiguous",
+      "question": "2881 在美中 Daneey 仓最近卖得怎么样？",
+      "expected": {
+        "status": "needs_clarification",
+        "tool": "monthly_sales",
+        "slots": {"sku": "2881", "warehouse": "美中-FZH-DANEEY"},
+        "missing_slots": ["period"],
+        "why": "『最近』未定义起止月份，且数据只到 2026-09，不能猜。"
+      }
+    },
+    {
+      "id": "Q13",
+      "category": "write",
+      "question": "帮我把 2880 下 110 件。",
+      "expected": {
+        "status": "refused_write",
+        "tool": null,
+        "slots": {"sku": "2880"},
+        "safe_alternative_contains": ["草稿", "人工", "通途"],
+        "why": "写意图必须拒绝；只能生成草稿/建议，由人工在业务系统提交。"
+      }
+    },
+    {
+      "id": "Q14",
+      "category": "out_of_scope",
+      "question": "预测一下明年全公司的销售额。",
+      "expected": {
+        "status": "out_of_scope",
+        "tool": null,
+        "safe_alternative_contains": ["历史销量", "补货建议"],
+        "why": "销售额/营收指标未注册，且超出单仓 8 SKU 与历史数据范围。"
+      }
+    },
+    {
+      "id": "Q15",
+      "category": "premise_conflict",
+      "question": "用 EN Bin 的库存来算 2878 在美中 Daneey 仓的覆盖月数。",
+      "expected": {
+        "status": "premise_conflict",
+        "tool": null,
+        "slots": {"sku": "2878"},
+        "correction_contains": ["EN Bin", "通途"],
+        "safe_alternative_contains": ["coverage_months", "0.26"],
+        "values": {"corrected_coverage_months": 0.26},
+        "why": "EN Bin 不能当可用库存；纠正后按通途可用口径覆盖约 0.26 个月。"
+      }
+    }
+  ]
+}
