@@ -12,7 +12,8 @@ tags: [supply-chain, g1, mapping, index]
 | 文件 | 内容 |
 |---|---|
 | [README.md](README.md) | 复现命令与输入 |
-| [results.md](results.md) | G1a 映射覆盖率、未匹配、仓库别名与判定 |
+| [mapping_process.md](mapping_process.md) | **待确认**：只用 BOM 客户码精确匹配；base/-Cover/-out 与皮壳仓口径 |
+| [results.md](results.md) | G1a v1 映射覆盖率（历史记录，口径已被 mapping_process 更正） |
 | [g1_mapping_coverage.py](g1_mapping_coverage.py) | 只读本地映射覆盖率脚本 |
 | [g1_missing_analysis.py](g1_missing_analysis.py) | 763 vs 155 未匹配归因（尾缀/平台SKU/P2 非 family） |
 | [out/](out/mapping_coverage.json) | 聚合结果（不含 PII/原始行） |

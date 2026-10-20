@@ -9,6 +9,11 @@ tags: [supply-chain, g1, mapping, coverage, tongtool, erpnext]
 
 # G1a — 本地映射覆盖率
 
+> **2026-10-20 更正**：本文件 v1 用“品类/产品名含三角”做主筛选，口径不对；
+> BOM 表里 KS0001/KS0248 **全部是 `绍兴发货方式=皮壳`**，base 码和 `-Cover` 码都可能是皮壳口径。
+> **以 [mapping_process.md](mapping_process.md) 为准**；本步骤确认前不进入 G1b。
+> 下面的 99.18% 两仓完成品数字仅作历史记录，不是最终 family/皮壳口径。
+
 > 只读本地文件：`EN产品BOM成本列表20261016.xlsx` + `2026年{4..9}月订单_order_cost_*.xlsx`。
 > 不访问 EN 生产、不写业务系统；输出仅聚合计数，不含客户 PII / 原始行。
 > 脚本：[`g1_mapping_coverage.py`](g1_mapping_coverage.py)；结果：[`out/mapping_coverage.json`](out/mapping_coverage.json)。

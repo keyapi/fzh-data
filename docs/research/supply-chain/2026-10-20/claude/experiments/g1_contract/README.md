@@ -13,7 +13,11 @@ tags: [supply-chain, g1, mapping, readme]
 cd docs/research/supply-chain/2026-10-20/claude/experiments/g1_contract
 uv run python g1_mapping_coverage.py
 uv run python g1_missing_analysis.py
+uv run python g1_cover_matching.py
 ```
+
+> **口径更正**：`mapping_process.md` 是待确认的正确匹配过程；`g1_cover_matching.py`
+> 只用 BOM 客户码精确匹配，不用品类文本。G1a v1 的品类筛选口径已作废。
 
 输入（只读，不入库）：
 

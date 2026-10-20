@@ -222,6 +222,18 @@ tags: [supply-chain, research, log]
 - 两条路径：P1 EN BOM 成本表 + P2 EN Tongtool Cost Review 足够；Colab 4.2 未介入 G1 family 映射。
 - 产物：`experiments/g1_contract/`（脚本、聚合 JSON、results/README/index）；无 PII/原始行入库。
 
+## 2026-10-20 — G1 匹配口径更正（待确认）
+
+- 用户指出：不能用“品类/产品名含三角”做主筛选；应优先用 EN BOM 成本表客户物料号。
+  EN Tongtool Cost Review 只借代码逻辑，不是数据源。`-Cover` 不是尾缀兜底，三角靠枕类只给分公司发皮壳。
+- 核实 BOM：KS0001/KS0248 **1,739 行全部 `绍兴发货方式=皮壳`**；base 码 1,200、`-Cover` 287、`-out` 2、空 142、已删除 108。
+- 只用客户码精确匹配重算 2026-04..09：base 32,634 行/33,452 件；`-Cover` 254 行/267 件；
+  皮壳口径合计 32,888 行/33,719 件；`-out`/`-Foam` 0；品类文本未命中 763 行（仅诊断）。
+- 仓库：CENTRADE 14,720；DANEEY 皮壳/半成品 10,537；DANEEY 成品 4,323；波兰 2,812；其他 1,162；退货 165。
+- **待业务确认**：给分公司发皮壳对应哪些仓；base 与 `-Cover` 是否相加；`-out/-Foam` 是否排除。
+- G1a v1（品类筛选、两仓完成品 99.18%）口径作废；以 `experiments/g1_contract/mapping_process.md` 为准。
+- **本步骤确认前不进入 G1b。**
+
 ## 模板（后续阶段）
 
 ```text
