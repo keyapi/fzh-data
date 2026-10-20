@@ -54,7 +54,8 @@ tags: [supply-chain, open-questions, decisions]
 | B20 | 退货是否自动重开未交义务？ | 默认重开会把返运当新增需求 | 不自动重开；只有业务批准补发才新建义务 | 计划 + 客服 |
 | B21 | KS0001 三角靠枕 与 KS0248 三角靠枕无扣如何映射？ | 两者差异小，但同 SKU 归并会污染成本/BOM/库存 | family 层聚合；leaf group/SKU 保留；歧义 fail-closed | 主数据 + 计划 |
 | B22 | G1 与 G2/G3 的仓/窗口怎么定？ | 6 个月够做契约回放，不够做季节性 | G1：两仓 × 2026-04..09；G2/G3：2023-01..2026-07（43 个月，PR #304），可扩到 2026-09 | 计划 + 技术 |
-| B23 | 通途SKU→EN客户物料号以哪张表为准？ | 映射错会同时污染销量、库存、成本 | P1 EN `Tongtool Order` 明细；P2 `Item Customer Detail.ref_code`/`importBOMCostList`；P3 Colab 4.2 兜底并标记 | 主数据 + 技术 |
+| B23 | 通途SKU→EN客户物料号以哪张表为准？ | 映射错会同时污染销量、库存、成本 | P1 通途SKU→EN客户物料号（Tongtool Order 明细 / EN BOM 成本表 / `ref_code`）；P2 GSheet 写回品类仅参考；P3 Colab 4.2 兜底并标记 | 主数据 + 技术 |
+| B24 | 库存快照取哪一天、用哪个任务？ | G1 只需 cutoff 快照，不是 6 个月序列 | 用 `stock_alert`/`FZH-StockAlert-daily` 或通途 API；记录 `snapshot_at` | 技术 |
 
 ## C. 外部依赖（Jack / PJ / 供应商）
 

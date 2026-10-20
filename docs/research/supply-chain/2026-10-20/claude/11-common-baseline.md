@@ -91,16 +91,18 @@ tags: [supply-chain, baseline, g0, g1, version]
 | 选项 | 谁提供 | 优点 | 前提/限制 |
 |---|---|---|---|
 | **A. 现有 GSheet + 本地成本文件（默认）** | 技术只读读取 | PR #304 已验证服务账号直读 43 张月表；本地 `D:/Work/王忠于/成本核算/2026年{4..9}月订单_order_cost_*.xlsx` 已有订单/成本/品类列；PR #303 已有 `query_customer_items_suffix.py` 映射查询工具 | 本地文件含员工/买家信息，必须脱敏；派生品类不作为主键 |
-| B. 业务导出 | 计划/仓库/财务导出脱敏文件 | 补库存/EN 单据缺口时责任清晰 | 需定义字段、cutoff、脱敏规则 |
-| C. 授权只读拉取 | 技术用现有客户端拉取 | 可复现、字段全 | 需书面授权范围；不写；EN 生产只读需单独批准 |
+| **A2. 通途库存快照（默认）** | `stock_alert`（PR #298）每日任务 `FZH-StockAlert-daily` 或 `erp2_stocks_stocksquery` | **只需 cutoff 当日快照**，不是 6 个月库存序列；按仓分页（pageSize≤100，5 次/分钟） | 不能拿 EN Bin 当可用库存；保存 snapshot_at |
+| **A3. EN 单据（默认）** | EN API 只读：`item_shipment_status.py` / #291 `fulfillment_query.py` / `erpnext/scripts/fetch.py` | 按单号/SKU 查询，缓存本地 Parquet | `Tongtool Order Item` 列表 403，从父单 `order_items` 读；不写生产 |
+| B. 业务导出 | 计划/仓库/财务导出脱敏文件 | 仅当 A/A2/A3 无法覆盖时 | 需定义字段、cutoff、脱敏规则 |
+| C. 授权只读拉取 | 技术用现有客户端拉取 | 补 EN 生产只读缺口 | 需书面授权范围；不写 |
 
 **映射优先级（用户 2026-10-20 确认）**：
-**P1 EN `Tongtool Order` 明细的客户物料号** → **P2 `Item Customer Detail.ref_code` / `importBOMCostList.客户物料号`** →
-**P3 Colab 4.2 派生物（仅缺失兜底，标 `fallback=true`）**。
+**P1 通途SKU → EN 客户物料号**（EN `Tongtool Order` 明细 / EN BOM 成本表 `importBOMCostList.客户物料号` / `Item Customer Detail.ref_code`）
+→ **P2 GSheet 写回结果的 `品类/品类统一名` 仅作参考** →
+**P3 Colab 4.2 派生物仅缺失兜底（标 `fallback=true`）**。
 详见 [13-g1-data-sources.md](13-g1-data-sources.md) §2。
 
-**已知缺口**：本地成本目录未找到 2026-04..09 的三角库存快照；EN SO/PP/WO/JC/SE/DN 也不在成本文件里。
-这两类先用现有导出/只读抽样补齐，缺失标 `unknown`，不补 0。
+**库存是快照，不是 6 个月序列**；G1 只用 cutoff 当日快照。EN 单据走 API，不要求业务导出。
 **没有实际输入时，只报告合成测试结果，不声称真实回放。**
 
 ### 2.3 输入清单（最小）

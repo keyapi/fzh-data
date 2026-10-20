@@ -62,6 +62,8 @@ tags: [supply-chain, research, sources]
 | S1-031 | PR #303：`EN_API/query_customer_items_suffix.py` + `erpnext_bi/` 客户物料后缀查询工具 | PR #303 `40309079`（已合并） | C | 2026-10-20 | ref_code 子表查询；生产只读需授权 | A | 13 §1.3/§2 |
 | S1-032 | 本地 2026-04..09 订单成本文件存在；2026-09 三角 3971 行，CENTRADE 1631/DANEEY 1590，有扣 3280/无扣 511 | `D:/Work/王忠于/成本核算/` 只读核对 | C | 2026-10-20 | 处理结果，不是原始凭证 | A | 13 §1.1/§1.2 |
 | S1-033 | 通途SKU↔EN 权威映射：ref_code/importBOMCostList，直连 99.9%；前缀过滤/解析键有坑 | `docs/solutions/integration-issues/tongtu-en-item-mapping-and-gsheet-source-fix.md`（10-17） | C | 2026-10-17 | 「直连优先、旧键兜底」 | A | 13 §2 |
+| S1-034 | 通途库存快照：`stock_alert`（PR #298）每日任务 `FZH-StockAlert-daily`；`erp2_stocks_stocksquery` 按仓分页 | `stock_alert/client.py`、`stock_alert/scripts/install_stock_alert_schedule.ps1` | C | 2026-10-20 | pageSize≤100、5 次/分钟 | A | 13 §1/§3 |
+| S1-035 | EN 单据只读查询入口：`EN_API/item_shipment_status.py`、#291 `fulfillment_query.py`、`erpnext/scripts/fetch.py` | 代码/文档 | C | 2026-10-20 | SO→PP→WO→JC→DN | A | 13 §1 |
 
 ## 未找到项（N-###）
 

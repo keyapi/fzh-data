@@ -177,14 +177,18 @@ tags: [supply-chain, research, log]
   **2026-04..09（6 个月）**；6 个月只做契约回放，不做季节性。G2/G3 用 2023-01..2026-07（43 个月，PR #304），
   可扩到 2026-09；节假日/促销作为结构化日历事件。
 - 新增 `13-g1-data-sources.md`（替代原导出请求清单）：默认用现有 GSheet + 本地成本文件 + 权威映射；
-  业务导出只作库存/EN 单据缺口兜底。
+  业务导出只作最后兜底。
 - **现有记录复用（2026-10-20）**：PR #304 是服务账号直读 GSheet 43 个月，不是业务导出；
   本地 `D:/Work/王忠于/成本核算/2026年{4..9}月订单_order_cost_*.xlsx` 已有订单/成本/品类列；
   PR #303（`40309079`）已有 `EN_API/query_customer_items_suffix.py`；
   权威映射记录见 `docs/solutions/integration-issues/tongtu-en-item-mapping-and-gsheet-source-fix.md`（10-17）
   与 `dce9769a/7f837046/83c05e8a`。G1 映射优先级改为
-  **P1 EN Tongtool Order 明细 → P2 ref_code/importBOMCostList → P3 Colab 4.2 兜底**，不再把 4.2 当主逻辑。
-- 新增 `13-g1-data-sources.md` 替代原导出请求清单；业务导出只作缺口兜底。
+  **P1 通途SKU → EN 客户物料号（Tongtool Order 明细 / EN BOM 成本表 / ref_code）→
+  P2 GSheet 写回品类仅参考 → P3 Colab 4.2 兜底**。
+- 库存不是 6 个月序列：G1 用 `stock_alert`（PR #298，`FZH-StockAlert-daily`）或
+  `erp2_stocks_stocksquery` 拉 cutoff 快照；EN 单据用 EN API（`item_shipment_status.py` /
+  #291 `fulfillment_query.py` / `erpnext/scripts/fetch.py`），本地缓存。
+- `13-g1-data-sources.md` 替代原导出请求清单；业务导出只作最后兜底。
 - 基线标签：`supply-chain-g0-baseline-20261020`（#300 提交 `b23c319a`）。
 - #300 与 #301 分别审核合并；不把 #301 并入 #300；不写生产。
 

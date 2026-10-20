@@ -57,10 +57,12 @@ tags: [supply-chain, codex, g1, handoff]
 ## 4. 三角靠枕 G1 切片输入说明（只做映射说明，不取数）
 
 - **数据来源默认用现有数据**：GSheet `通途订单YYYYMM`（PR #304 服务账号直读 43 个月）
-  + 本地 `D:/Work/王忠于/成本核算/2026年{4..9}月订单_order_cost_*.xlsx`；业务导出只作兜底。
-- **映射优先级**：**P1 EN `Tongtool Order` 明细的客户物料号** →
-  **P2 `Item Customer Detail.ref_code`（可复用 PR #303 `EN_API/query_customer_items_suffix.py`）/ `importBOMCostList.客户物料号`** →
-  **P3 Colab 4.2 派生物（仅缺失兜底，标 `fallback=true`）**。
+  + 本地 `D:/Work/王忠于/成本核算/2026年{4..9}月订单_order_cost_*.xlsx`
+  + 通途库存 `stock_alert`（PR #298，`FZH-StockAlert-daily`，cutoff 快照）
+  + EN 单据 API（`item_shipment_status.py` / #291 `fulfillment_query.py`）；业务导出只作兜底。
+- **映射优先级**：**P1 通途SKU → EN 客户物料号**（EN `Tongtool Order` 明细 / EN BOM 成本表
+  `importBOMCostList.客户物料号` / `Item Customer Detail.ref_code`）→ **P2 GSheet 写回 `品类/品类统一名` 仅参考**
+  → **P3 Colab 4.2 派生物仅缺失兜底（`fallback=true`）**。
   现有记录见 `13-g1-data-sources.md` §1.3；不要重复造映射。
 - EN：叶子物料组 `KS0001 三角靠枕`、`KS0248 三角靠枕无扣`；保留 leaf group/SKU。
 - 通途 GSheet：`品类orig` 多为「自产-三角靠枕-*」；`品类/品类统一名` 是 Colab 4.2 派生物，
