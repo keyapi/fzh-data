@@ -104,6 +104,21 @@ tags: [supply-chain, research, log]
 - `sources.md` 合并 S2/S3/S4 共 110 条证据；修正引用格式与表头列数。
 - `index.md` 状态更新为 Phase 0–4 完成。
 
+## 2026-10-20 — 用户补充：库存数据架构与评审包
+
+- 用户确认：目前只有通途库存可用（不一定准确，但无更好替代）；EN 未同步通途库存；
+  通途 SKU ↔ EN 映射复杂；拆包裹/合并在 #294/#295 有记录；历史 Plentymarkets FTP 每日 CSV；
+  测试阶段先别碰 EN 生产。
+- `05-synthesis.md` 新增 **§4.4 库存数据架构**：
+  - 不把通途库存写进 EN Bin/Stock Ledger（会污染账务/双计）；
+  - V1 用独立 DuckDB mart（Parquet 快照 + sku_map + 质量标记）；
+  - EN 只读 Snapshot DocType 仅在 EN 是硬性 UI 要求时采用；
+  - Plentymarkets FTP 作为历史回填源，新链路用 API/受控导出；
+  - 测试分三阶段：本地 → EN 测试 `ensh.vilavi.cn` → 生产只读，禁止写生产库存账。
+- `06-open-questions.md` 新增 B10–B15、C5、D8–D9，并更新最小可开工假设。
+- 新增 `07-review-guide.md`：用户审核顺序 + 给 Codex 的只读评审 brief。
+- PR 归属澄清：#300 交接包、#301 Codex、#302 Claude；建议先合 #300 再合 #302。
+
 ## 模板（后续阶段）
 
 ```text

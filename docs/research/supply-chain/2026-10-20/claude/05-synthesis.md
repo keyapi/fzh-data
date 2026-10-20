@@ -50,6 +50,11 @@ tags: [supply-chain, synthesis, architecture, recommendation]
 
 > 这张表是 V1 的**唯一口径来源**。任何报表、Agent 回答、Excel 都必须引用同一指标名与定义。
 > 落地方式：`metrics.yaml`（名称、公式、单位、权威源、刷新频率、禁用口径、owner）。
+>
+> **库存质量说明（用户 2026-10-20 补充）**：目前**只有通途库存**可作为可用库存来源；
+> 通途库存本身不一定准确，但暂时没有更好的替代。所有库存快照必须带 `fetched_at`、
+> 来源与质量标记（负数、异常波动、未映射 SKU），预测/补货输出要显式标注「库存置信度」，
+> 不能把通途库存当成精确账。
 
 ---
 
@@ -142,6 +147,59 @@ Prefect（Windows 原生）→ Postgres / DuckDB + dbt（可选）
 | #298 `stock_alert/` | 库存快照、分页、限流、钉钉推送 | 现成可复用 |
 | #288 / 独立 demo | 审批与回读的治理模式 | 只迁移模式，不搬域 |
 | #304 demand_forecast | 数据地基与 PB 基线脚本 | 阶段 B 未启动 |
+
+### 4.4 库存数据架构：通途 → 查询层（2026-10-20 补充）
+
+**现状（用户确认）**：
+
+- 目前只有**通途库存**可作为可用库存来源；它不一定准确，但暂时没有更好的替代。
+- **EN 没有与通途库存同步**；EN Bin 不能当可用库存（已知差 351 件）。
+- 通途 SKU ↔ EN 物料映射复杂；**拆包裹/合并订单**在 #294/#295 已有记录。
+- 历史上 Plentymarkets 每天自动备份库存 CSV 到 FTP；现在应考虑更好的方式。
+
+**结论：不要把通途库存写进 EN 的 Bin/Stock Ledger；建「只读快照 + 查询层」。**
+
+| 方案 | 做法 | 优点 | 风险 | 结论 |
+|---|---|---|---|---|
+| A. 写入 EN Bin/Stock Ledger | 把通途库存同步成 EN 库存 | EN 内可直接查 | **污染账务/制造语义；双计；不可逆；违背 EN 不扣减通途的事实** | **不采用** |
+| B. EN 只读快照 DocType | 自定义 DocType 存快照，不碰 Bin | EN UI/REST 可直接查；权限沿用 EN | 生产库增长；需测试环境；仍需映射 | 可选（EN 是硬性 UI 要求时） |
+| C. 独立数据 mart | DuckDB/Postgres 存快照，供所有工具查询 | 无 EN 写入；可按 as-of 重建；迭代快 | 多一个存储/ETL；需权限 | **V1 推荐** |
+| D. FTP/CSV 直查 | 继续用 CSV 当数据源 | 零改造 | 无历史一致性、并发/权限差、易错 | 不采用 |
+
+**推荐落地（V1）**：
+
+```text
+Tongtool API（只读、分页）
+  → 每日不可变快照（Parquet + manifest，含 fetched_at / run_id / 质量标记）
+  → DuckDB mart：raw_snapshot / dim_sku / dim_warehouse / fact_inventory_snapshot
+  → 语义层（metrics.yaml + 小 API / Metabase）
+  → 预测、补货、BI、Agent 共用同一份数据
+```
+
+- **快照**：保留 13 个月，支持 as-of 回测；每个快照带 `source`、`fetched_at`、行数、未映射数。
+- **质量标记**：负数、零、异常波动、未映射 SKU 单独记录，不静默丢弃。
+- **SKU 映射**：独立 `sku_map` 表（`tongtool_sku`、`en_item`、`customer_item_code`、
+  `split_group`、`effective_from/to`、`source`、`confidence`）；拆包/合并按 #294/#295 的行级规则，
+  歧义 fail-closed；库存粒度（SKU×仓）与订单粒度（行/包裹）分开建模。
+- **Plentymarkets FTP**：作为**历史回填源**保留；校验 manifest/checksum 后转 Parquet。
+  新链路用 API 或受控导出，不把 FTP 当查询层。
+- **EN 的角色**：事实源（SO/PP/WO/DN/BOM），不是库存快照的存放地。
+  如果非技术同事必须在 EN 里看，再加只读 Snapshot DocType，仍然**不写 Bin**。
+
+**测试策略（遵守「先别碰 EN 生产」）**：
+
+| 阶段 | 环境 | 允许动作 |
+|---|---|---|
+| 1 | 本地 / 测试机 | Tongtool 只读 + 历史 CSV；不碰 EN |
+| 2 | EN 测试环境 `ensh.vilavi.cn` | 建只读 Snapshot DocType/报表；FAC MCP + REST |
+| 3 | EN 生产 | 仅只读同步，评审 + 开关 + 对账后上线；**不写库存账** |
+
+**为什么不是「同步进 EN」**：
+
+- EN 库存是会计/制造语义，通途是运营库存；所有权、仓、批次口径不同。
+- 写进 EN 会让 EN 误以为拥有这些库存，导致 MRP、成本、对账错误；
+  也会破坏「EN 不扣减通途」这条已经确认的事实。
+- 只读快照能拿到大部分分析价值，不承担账务风险。
 
 ---
 

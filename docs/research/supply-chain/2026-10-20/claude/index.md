@@ -18,7 +18,8 @@ tags: [supply-chain, research, index]
 - 阶段：Phase 0–4 完成（资产盘点 → 三线调研 → E1–E3 实验 → 综合），待 Phase 5 质检与 PR。
 - 分支：`research/supply-chain-claude`（基于 `origin/main` @ `e5d07c9d`）
 - 交接包参考：`origin/docs/supply-chain-integration-handoff` @ `de899f4b`（PR #300，未合并）
-- **推荐方向**：轻量决策链 + 薄 Agent；预测用组合法；补货先定预算与服务水平。
+- **推荐方向**：轻量决策链 + 薄 Agent；预测用组合法；补货先定预算与服务水平；
+  库存用**独立只读快照 mart**，不写 EN Bin。
 - 检查点：01（已确认）、E1–E3（已确认）。
 
 ## 文件
@@ -32,6 +33,7 @@ tags: [supply-chain, research, index]
 | [04-open-source.md](04-open-source.md) | 开源方案、License、活跃度、TCO |
 | [05-synthesis.md](05-synthesis.md) | 指标权威矩阵 + 3 个候选架构 + 推荐 + 成本 + 反证 |
 | [06-open-questions.md](06-open-questions.md) | 需要老板/业务拍板的问题 |
+| [07-review-guide.md](07-review-guide.md) | 审核顺序 + 给 Codex 的只读评审 brief |
 | [sources.md](sources.md) | 证据账本（ID / 主张 / 来源 / 日期 / 原文 / 强度） |
 | [log.md](log.md) | 过程记录、失败与放弃方向 |
 | [experiments/](experiments/index.md) | E1–E3 最小验证的代码、输入哈希与结果 |
