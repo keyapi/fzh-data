@@ -18,6 +18,7 @@ tags: [supply-chain, g1, mapping, index]
 | [g1b_pilot.md](g1b_pilot.md) | G1b EN 单据只读试点（单个头部 SKU） |
 | [g1b_results.md](g1b_results.md) | G1b 首版：出库消耗、库存快照、覆盖与假设 |
 | [g1b_review_response.md](g1b_review_response.md) | 对 Codex `d9a11557` 的 G1B01–09 修复记录 |
+| [g1b_top10.md](g1b_top10.md) | 修复后 top10 SKU 抽取；未发分解全部对平 |
 | [g1b_warehouse_evidence.md](g1b_warehouse_evidence.md) | 旧皮壳仓/当前美中仓证据；合并 `unverified` |
 | [g1b_stock_snapshot.py](g1b_stock_snapshot.py) | 通途 family 库存快照（只读、分块节流） |
 | [stock_daily_backup.py](stock_daily_backup.py) | 每日全仓 API 库存备份（JSONL + manifest） |
