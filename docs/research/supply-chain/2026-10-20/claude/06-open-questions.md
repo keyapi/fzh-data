@@ -59,6 +59,7 @@ tags: [supply-chain, open-questions, decisions]
 | B23 | 通途SKU→EN客户物料号以哪张表为准？ | 映射错会同时污染销量、库存、成本 | P1 通途SKU→EN客户物料号（Tongtool Order 明细 / EN BOM 成本表 / `ref_code`）；P2 GSheet 写回品类仅参考；P3 Colab 4.2 兜底并标记 | 主数据 + 技术 |
 | B24 | 库存快照取哪一天、用哪个任务？ | G1 只需 cutoff 快照，不是 6 个月序列 | 用 `stock_alert`/`FZH-StockAlert-daily` 或通途 API；记录 `snapshot_at` | 技术 |
 | B25 | 历史库存不可得，G1/预测怎么处理？ | G1 不需要历史库存；断货删失是预测任务 | G1 用当前快照；断货用 Notion/邮件/check0stock/SPS 信号 + 敏感性；每日快照独立 | 技术 + 计划 |
+| B26 | WayfairCG 库存谁导出、多久一次、丢件率多少？ | Tongtool 调拨≠实际在手；赛狐无 Wayfair 平台仓 API | 由 YTQ 手工导出 Wayfair 后台；transfer vs receipt 对账；未知标 unknown | 运营(YTQ) + 技术 |
 
 ## C. 外部依赖（Jack / PJ / 供应商）
 
@@ -98,6 +99,7 @@ tags: [supply-chain, open-questions, decisions]
 | E8 | 节假日/促销日历（美国夏季、圣诞、Prime Day、返校季、CNY）谁提供？ | 6 个月样本无法推断季节性；需要结构化事件 | 业务给日期表；G2/G3 作为特征/事件 |
 | E9 | G2/G3 用 43 个月还是扩到 2026-09？ | 决定季节性回测长度 | 优先 2023-01..2026-09；至少保留 2023-01..2026-07 核心集 |
 | E10 | 是否现在启动每日全量库存快照？ | 独立任务，不是 G1 门槛；不启动就永远没有历史 | 可并行启动；3–6 个月后再评估库存策略回测 |
+| E11 | WayfairCG 是否做 Tongtool 调拨 vs Wayfair 后台收货对账？ | 3PL 库存不准会直接影响 Wayfair 补货 | 先取 YTQ 一份后台库存 + 对应调拨记录，算丢件率 |
 
 ## 最小可开工假设（若上述未答）
 

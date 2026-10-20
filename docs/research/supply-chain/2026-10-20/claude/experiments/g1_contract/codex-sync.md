@@ -56,6 +56,8 @@ tags: [supply-chain, codex, g1, sync, cover]
    - 它是下游 3PL，从美国分公司拿成品再发货；其 **1,162 件 family 销售计入总需求**；
    - 分公司→WayfairCG 的转移不是新增需求；净算时把 WayfairCG 库存/在途算进去；
    - 其他 3PL 在 2026-04..09 没有 family 销售；海绵 `-Foam` 是另一条组件流，不是皮壳需求；
+   - **WayfairCG 库存不能当 Tongtool 在手**：Wayfair 后台只能 YTQ 手工导出；
+     赛狐平台仓 API 只有 Temu/Mercado/Walmart WFS，无 Wayfair；Tongtool 调拨只算发出量；
    - 只剩“WayfairCG 由 USNJ 还是 USTX 供货”待确认，不影响 g1-slice 的总需求口径。
 5. 不合并 #301 到 #300；不访问生产；不写生产适配器。
 
@@ -72,10 +74,11 @@ G1 业务口径更正，请立即更新 g1-slice/baseline 与样例，旧的 G1a
 - 映射只用 EN产品BOM成本列表20261016.xlsx 的产品编号+客户物料号；
   EN Tongtool Cost Review 只借代码逻辑，不用其数据；品类文本只作诊断。
 - 旧“品类筛选/两仓完成品/99.18%/763/155”全部作废。
-- 请更新 g1-slice/baseline，补 C21–C25（1:1 皮壳、Cover 例外、皮壳仓是分公司仓、
-  非 family 诊断、Cost Review 只借逻辑），只复核 mapping_process §0–§4。
+- 请更新 g1-slice/baseline，补 C21–C27（1:1 皮壳、Cover 例外、皮壳仓是分公司仓、
+  非 family 诊断、Cost Review 只借逻辑、下游 3PL 销售计入、3PL 库存手工/unknown）。
 - WayfairCG 已确定：下游 3PL，1,162 件 family 销售计入总需求；分公司→3PL 转移不重复计；
-  其他 3PL 无 family 销售；只剩“WayfairCG 由 USNJ/USTX 哪家供货”待确认。
+  其他 3PL 无 family 销售；**WayfairCG 库存用 Wayfair 后台手工导出，Tongtool 调拨≠在手，
+  赛狐无 Wayfair 平台仓 API；无后台数据标 unknown，不补 0**。
 - 暂不进入 G1b/实现，等上述供货归属确认。
 边界：不写生产、不合并 #301、不改 Claude 文件。
 ```

@@ -33,6 +33,7 @@ tags: [supply-chain, g1, data-source, mapping, tongtool, erpnext]
 | EN 产品/物料组 | EN 主数据（KS0001/KS0248） | 只读；G1 用本地导出或测试环境，不写生产 |
 | 库存快照（cutoff） | **通途 `stock_alert`（PR #298 / `a4b1cf4d`）**：`stock_alert/client.py` 调 `erp2_stocks_stocksquery`；每日任务 `FZH-StockAlert-daily`（默认 09:23）；`web_automation tongtu.stock.export` 可定时导出 6 仓库存 | **只需 cutoff 当日快照**，不是 6 个月库存序列；字段：`goodsSku/availableStockQuantity/intransitStockQuantity/defectsStockQuantity/waitingShipmentStockQuantity`；按 `warehouseName` 整仓分页（pageSize≤100，5 次/分钟） |
 | EN SO/PP/WO/JC/SE/DN | **EN 生产 API 只读**：`EN_API/item_shipment_status.py`（SO→PP→WO→JC→DN）、#291 `EN_API/fulfillment_query.py`、`erpnext/scripts/fetch.py` | **测试环境没有真实单据**；必须用生产只读，按单号/SKU 查询，缓存本地 Parquet；不写生产 |
+| **WayfairCG 库存** | **Wayfair 后台手工导出（YTQ）** | **赛狐平台仓 API 只覆盖 Temu/Mercado/Walmart WFS，无 Wayfair**；Tongtool 调拨只作“发出量”，不能当实际在手；到货丢件需对账 |
 
 ### 1.1 库存历史限制（重要）
 
@@ -91,6 +92,18 @@ tags: [supply-chain, g1, data-source, mapping, tongtool, erpnext]
 | **PR #304** `docs/research/2026-08-31-demand-forecast-data-feasibility.md` | GSheet 43 个月、通途SKU↔EN 映射路径 |
 
 > 这些记录已经存在，G1 不重复造映射；只在缺口处补数据。
+
+### 1.5 WayfairCG 库存口径（重要）
+
+- **WayfairCG 库存以 Wayfair 后台导出为准**（YTQ 手工下载）；不能把 Tongtool 库存当实际在手。
+- Tongtool 里的调拨记录只能当**发出量**；Wayfair 实际收货可能丢件，需 `transfer vs receipt` 对账。
+- 赛狐「平台仓」API 文档只有 **Temu / Mercado / Walmart WFS**，**没有 Wayfair**；暂时不能 API 抓取。
+- 在丢件率未知前：
+  - WayfairCG 库存标 `source=wayfair_backend_manual`、`as_of`、`confidence=medium`；
+  - 对账差额进 `discrepancy`，不静默修正；
+  - 给 WayfairCG 补货加安全缓冲，或按较保守库存（如 min(Tongtool, Wayfair 后台)）净算。
+- 对总需求影响：WayfairCG family 销售 1,162 件 / 33,719 件 = **3.4%**；
+  如果丢件率 r%，总需求偏差约 3.4%×r（很小），但 WayfairCG 渠道库存偏差是 r%（对该渠道不小）。
 
 ## 2. 映射规则（权威优先级）
 

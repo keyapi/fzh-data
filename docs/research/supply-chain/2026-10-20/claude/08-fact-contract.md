@@ -92,6 +92,10 @@ return_reopen     = 仅当业务明确批准补发，才增加新的履约义务
 > **G1 不需要历史库存**，只用 cutoff 当前快照；`supply_balance(as_of)` 只从快照日起成立。
 > 历史库存的用途是预测时剔除断货影响，属于 G2/G3，不是 G1 前置；
 > 每日全量快照是独立任务，不能用 `stock_alert` 的低库存行当归档。
+>
+> **WayfairCG 3PL 特例**：其 `on_hand_available` 必须用 **Wayfair 后台手工导出**（`source=wayfair_backend_manual`），
+> Tongtool 调拨只算 `in_transit`/发出量，不能当在手；到货丢件进 `discrepancy`。
+> 赛狐平台仓 API 无 Wayfair（只有 Temu/Mercado/Walmart WFS）。无后台数据时标 `unknown`，不静默补 0。
 
 | 状态 | 含义 | 互斥/来源规则 |
 |---|---|---|
@@ -241,5 +245,6 @@ pending_stock_in = last_op_reported − stock_in_produced
 | V15 | 退货是否自动重开未交义务 | 取一张退货 + 补发记录 | R06：反向流 |
 | V16 | 累计里程碑是否被误加总 | 检查报表 SQL / 视图 | R06：事件 vs 余额 |
 | V17 | 库存是否有连续历史、每日全量快照是否在跑 | 检查 `stock_alert` 日志/`web_automation` 输出/本地档案 | **G1 不需要历史库存**；断货删失用信号；每日快照另行启动 |
+| V18 | WayfairCG 库存是否与 Wayfair 后台一致；调拨 vs 收货差多少 | YTQ 后台导出 vs Tongtool 调拨记录 | 3PL 库存不能用 Tongtool 当在手；丢件进 discrepancy |
 
-> 测试边界：V1–V17 全部只读；EN 测试环境优先，生产只读抽样需批准；**禁止写 EN 生产库存账**。
+> 测试边界：V1–V18 全部只读；EN 测试环境优先，生产只读抽样需批准；**禁止写 EN 生产库存账**。

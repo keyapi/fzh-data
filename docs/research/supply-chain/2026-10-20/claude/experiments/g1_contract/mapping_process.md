@@ -93,12 +93,27 @@ tags: [supply-chain, g1, mapping, cover, architecture]
   不是皮壳需求；其他产品也不在三角 family 内。
 - **退货仓 165 件**另列，不当作新增需求；净销售口径是否扣减按财务确认。
 
+### 4.2 WayfairCG 库存缺口（重要）
+
+- **Tongtool 的 WayfairCG 库存可能不准**：YTQ 一般会在通途做调拨，但 Wayfair 实际收货可能丢件。
+- YTQ 需要补 WayfairCG 时，是**下载 Wayfair 后台库存**；赛狐平台仓 API 只有 Temu/Mercado/Walmart WFS，
+  **没有 Wayfair**；暂时不能 API 抓取。
+- G1 处理：
+  - `WayfairCG on_hand` 标 `source=wayfair_backend_manual`、`as_of`、`confidence=medium`；
+  - Tongtool 调拨只算**发出量/在途**，不能当实际在手；
+  - `transfer vs Wayfair receipt` 对账，差额进 `discrepancy`，不静默修正；
+  - 无后台数据时标 `unknown`，加安全缓冲，不补 0。
+- 影响量级：WayfairCG family 销售 1,162 / 33,719 = **3.4%**；
+  若丢件率 r%，总需求偏差约 3.4%×r（很小），但 WayfairCG 渠道库存偏差是 r%（对该渠道不小）。
+
 ## 5. 需要确认的剩余问题（只问业务，不问常识）
 
 1. **WayfairCG 的补货归属**：它的成品由 USNJ 还是 USTX 供？还是按历史/成本来源分？
    - 这决定分公司补货净算时把 WayfairCG 库存/在途挂到哪个分公司。
-2. **`-out` / `-Foam` 排除**：建议排除；本次订单 0 命中。
-3. **退货 165 件**是否从毛销售中扣减：按财务口径。
+2. **WayfairCG 库存导出**：由 YTQ 手工下载，频率？能否给一份当前后台库存 + 对应 Tongtool 调拨记录？
+   - 用来算丢件率/差异，不然后台库存只能标 unknown。
+3. **`-out` / `-Foam` 排除**：建议排除；本次订单 0 命中。
+4. **退货 165 件**是否从毛销售中扣减：按财务口径。
 
 ## 6. 下一步（确认后）
 

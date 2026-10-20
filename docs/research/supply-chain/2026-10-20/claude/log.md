@@ -242,6 +242,11 @@ tags: [supply-chain, research, log]
   family 销售 1,162 件/6 个月，计入总需求；分公司→3PL 转移不重复计，净算要算 3PL 库存/在途。
   其他 3PL 在 2026-04..09 没有 family 销售；海绵 `-Foam` 是另一条组件流，不是皮壳需求。
   只剩 WayfairCG 由 USNJ 还是 USTX 供货待确认。
+- **WayfairCG 库存缺口（2026-10-20）**：Tongtool 库存可能不准；YTQ 做调拨但 Wayfair 实际收货会丢件；
+  YTQ 补货时下载 Wayfair 后台库存。赛狐平台仓 API 只有 Temu/Mercado/Walmart WFS，**无 Wayfair**；
+  G1 用 `source=wayfair_backend_manual`，Tongtool 调拨只算发出量，transfer vs receipt 对账；
+  未知标 unknown + 安全缓冲。WayfairCG family 销售 1,162/33,719 = 3.4%；
+  丢件率 r% → 总需求偏差约 3.4%×r，渠道库存偏差 r%。
 - **本步骤确认前不进入 G1b。**
 - 新增 `experiments/g1_contract/codex-sync.md`：给 Codex 的同步块（皮壳 1:1、旧 v1 作废、C21–C25）。
   以后每次我方实质更新都在结尾附「给 Codex」同步块。
