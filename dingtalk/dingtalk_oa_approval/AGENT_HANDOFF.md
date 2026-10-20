@@ -47,6 +47,15 @@ DRM 在 NAS 上按 **发起人姓名** 分子文件夹。这只表示谁提交�
 - 未开的新月桶等 DRM 日切后再下；迟交件按账期月进已有桶，不预建空人名夹。
 - 算某个账期月之前，先跑 `late_submission_keys.py --period <YYYY-MM>` 从[迟交挪动登记](docs/reference/late-submission-registry.md)导出**唯一键** `审批编号|账期日期|销售账户|销售额` 剔除集，再交给 `filter_export_by_period.py --exclude-keys`，否则迟交单会被算两次。两个脚本都调 `ding_xlsx.build_key()`，**不要**直接用表里那列「唯一键」（金额 `0` vs `0.0` 会对不上）。
 
+## 8 / 9 月账期收尾（2026-10-14）
+
+经验全文：[docs/solutions/workflow-issues/dingtalk-period-month-closeout-export-sellfox-nas.md](../../docs/solutions/workflow-issues/dingtalk-period-month-closeout-export-sellfox-nas.md)。
+
+- **宽窗导出**按 `filter_export_by_period.py --period` 切定稿；Colab 上传文件名须含 `YYYYMMDD-YYYYMMDD`（主 notebook cell 6 `OA_PERIOD_RE`），并手改 GSheet `worksheet_name_yearmonth*`、`TaxYYYYMM`、`运营人员YYYYMM`。
+- **2026-09 Amazon 保留 80 行**：与 API probe 0 缺口；`exclude_keys_2026-09` 对纯 9 月定稿命中 0（迟交键多为 7 月账期日期）。
+- **赛狐**：`siteGroupEndStr` + `fundTransferStatusStr`；同站一月多结 → 钉钉多行（Rosoon SE 两笔金额各对一行）。BJXJ ↔ 赛狐 Jalnoddsa 走别名。Strusery 表单 BE 改 **US** 与转账 1280.44 对齐（审批 `202610091112000258547`）。
+- **NAS**：`账期20260804-20260903` 与 `账期20260904-20261003` 的 txt **stem 交集应为 0**；9 月桶内非标准文件名应规范为 `…-2026-MM-DD.txt`。RUYANG 9 月若仍为 csv，Tax 只认备注/评论 **txt** 补传后 DRM 入桶。
+
 ## 7 月 Amazon 对账结论（2026-09-10）
 
 完整过程与剩余缺口：[docs/research/2026-09-10-july-amazon-period-reconcile.md](docs/research/2026-09-10-july-amazon-period-reconcile.md)。惯例：[docs/solutions/conventions/amazon-period-file-reconcile.md](../../docs/solutions/conventions/amazon-period-file-reconcile.md)。附件拉取与 DRM 对照数字：[docs/research/2026-09-09-attachment-fetch-and-drm-audit.md](docs/research/2026-09-09-attachment-fetch-and-drm-audit.md)。
