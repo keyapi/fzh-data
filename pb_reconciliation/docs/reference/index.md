@@ -12,3 +12,4 @@ timestamp: 2026-08-14
 |------|------|
 | [workflow.md](workflow.md) | 月度工作流、表格列映射、公式、校验规则、脚本运行 |
 | [ups-delivery-check.md](ups-delivery-check.md) | UPS 交付核查流程、跟踪号来源、迟发 vs PB 漏结算判定、5 单未付结论 |
+| [sku-forecast.md](sku-forecast.md) | SKU 销量预估（sku_forecast.py）：数据口径、三种方法、局限 |

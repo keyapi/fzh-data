@@ -7,6 +7,10 @@ description: docs/research 目录变更历史
 
 # 变更日志
 
+## 2026-10-20
+
+- **新增**: [2026-10-20-demand-forecast-session-reconstruction.md](2026-10-20-demand-forecast-session-reconstruction.md) — 补三篇调研正文没有的检索事实：可还原时间线（8-31 三次产出 + **9-02 17:35 创建 practical-paths**，原纪要“9/2 无产出”已更正）；Prophet/ARIMA 背景在 Claude 记忆（`fc0170d0`），调研正文不推荐 Prophet；Desktop 会话条目仍在，本地转录已清理。另补交接事实：阶段 A/B 边界、PB 基线不是公司级模型、凭证只在父仓库、`sku_forecast.py` 为一次性脚本。
+
 ## 2026-09-21
 
 - **新增**: [2026-09-21-sellfox-amazon-settlement-reports.md](2026-09-21-sellfox-amazon-settlement-reports.md) — 赛狐 API 拉 Amazon 账期报表的可行性与覆盖度实测。起点是「财务报税要各账号 Amazon 账期报表，现在只能拿 PDF 自己算」。结论：**能拉，但只有「插件获取报告」一条路，且 API 不可触发抓取**。赛狐侧三条路径实测分工：①`亚马逊原报告`（`report/center/add.json`）是**赛狐服务端生成**，报告类型枚举里**没有账期/结算**；②`自定义报表`（`custom/report/*`）是赛狐自建分析表，非 Amazon 结算文件；③`插件获取报告`（`report/center/task/getPlugPageList.json`）**唯一含账期**，靠浏览器插件在账号登录态下抓回存 COS，接口是**纯读**。旁证：`创建报告任务` 的 `reportType` 只支持 `PRODUCT_SALE_REPORT` 一个值 ⇒ 抓取只能在 UI 侧发生。
@@ -86,6 +90,14 @@ description: docs/research 目录变更历史
 - **新增**: [2026-08-18-sps-commerce-api-feasibility.md](2026-08-18-sps-commerce-api-feasibility.md) — SPS Commerce API 自动化可行性（Pottery Barn）。结论：走 Transaction API + M2M client_credentials（无需 Redirect URI），沙盒实测读/写/删全部成功；生产需与 SPS 签约 + 实施团队开通。新增 `sps_api/` POC 模块。
 - **关键发现**: Web Service App 不支持 client_credentials（403 unauthorized_client），必须配 Redirect URI；新建 Machine-to-Machine App 即可免交互拿 token。
 - **跟进**: 从 `us@mxdeals.com` 读取了 2025-06/07 与 SPS 联系人 Alison Kudrle 的完整邮件线程，并向她发出回复（确认是否仍负责 + 自己对接 API 是否额外收费）。新增 `sps_api/read_sps_mail.py`、`sps_api/docs/reference/tencent-imap.md`（腾讯 IMAP 检索特性）、`sps_api/docs/research/2026-08-18-sps-alison-email-thread.md`。
+
+## 2026-08-31
+
+- **新增（2026-10-20 从旧 worktree 抢救入库）**: [2026-08-31-ts-forecast-methods.md](2026-08-31-ts-forecast-methods.md) — 2026 时序预估方法现状。结论：前沿是 TSFM（Chronos-2/Bolt、TimesFM-2.5、Moirai-2.0、TimeGPT、TiRex 等），但稀疏/断货/低信噪比 SKU 上相对朴素基线提升小；按 ADI/CV² 分桶用 Croston/SBA/TSB，稀疏+协变量用 LightGBM 零膨胀，区间用 Conformal/CQR；断货=截断需求不能当普通 0。
+- **新增**: [2026-08-31-demand-forecast-practical-paths.md](2026-08-31-demand-forecast-practical-paths.md) — 电商落地路线对比。结论：分段 + 全局 LightGBM + 分层调和 + Conformal 的混合架构，特征工程优先于模型选择；不建议一上来上深度学习/TSFM。
+- **新增**: [2026-08-31-demand-forecast-data-feasibility.md](2026-08-31-demand-forecast-data-feasibility.md) — 阶段 A 数据可行性。通途订单月表 2023-01~2026-07 连续 43 张、EN 主数据 15,190 物料 / 410 叶子组、通途库存可做断货信号；通途 SKU↔EN 走 `customer_items.ref_code` + 剥后缀；风险是历史改名断匹配与新品冷启动。
+- **新增脚本**: `pb_reconciliation/sku_forecast.py` + `pb_reconciliation/docs/reference/sku-forecast.md` — PB 单 SKU 多方法预估（M1 运行率 / M2 同比 / M3 趋势 / M3b 季节平均），基于 `Invoice to PB` 的 PO 下单量。
+- **背景**: 原会话（`fc0170d0`，worktree `sharp-shannon-a0be9b`）的转录已被 30 天清理删除；这些文件当时未提交、无 PR，仅以未跟踪文件留在旧 worktree。
 
 ## 2026-07-24
 
