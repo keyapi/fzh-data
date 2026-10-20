@@ -14,7 +14,7 @@ tags: [supply-chain, g1b, codex, review, response]
 
 | ID | 修复 | 证据/结果 |
 |---|---|---|
-| G1B01 | `g1b_coverage.py` 增加 `supply_status`；只有 `sampled_complete` 分支进入缺口/低覆盖；PL 单独采样，WayfairCG `unknown`，退货仓 `demand_only`；旧 450/501 撤回 | 缺口计数改为 branch×SKU；旧数字不再发布 |
+| G1B01 | `g1b_coverage.py` 增加 `supply_status`；只有 `sampled_complete` 分支进入缺口/低覆盖；PL 单独采样，WayfairCG `unknown`，退货仓 `demand_only`；旧 450/501 撤回 | 完整快照重算：**131 有需求无供给 / 194 <2 月 / 127 unknown**（branch×SKU） |
 | G1B02 | 订单必需列校验；缺月/缺列 `window_complete=false`；坏数量/负数/非整数/缺 SKU/缺仓分别计数，不转 0；库存坏值 `None` 不聚合 | 本批 bad_qty=0、negative=0、非整数=0、缺 SKU/仓=0 |
 | G1B03 | 库存查询校验业务码/响应结构；满 `max_pages` 且末页仍满 → `truncated=true`、`complete=false`；capture_start/end、page_meta | 新快照 JSON 带 `complete`/`page_meta`；旧快照标 legacy |
 | G1B04 | 库存按 `(warehouse, sku)` 去重；相同忽略、不同冲突并置 incomplete；多快照同仓只取最新 `fetched_at` | `duplicate_conflicts`、`duplicates_ignored`、`selected_file_per_warehouse` |
@@ -36,7 +36,7 @@ tags: [supply-chain, g1b, codex, review, response]
 
 ## 仍未闭合
 
-- 完整 API 库存快照重跑后，重新计算缺口；在此之前不发布 450/501。
+- 完整 API 库存快照已重跑：131/194/127；主仓 complete，DANEEY 退货仓超时。
 - 旧皮壳仓的 ID/改名/迁移/余额凭证仍缺；`unverified`。
 - WayfairCG 后台库存与调拨归属仍 unknown。
-- top10–20 扩样等上述修复重跑通过后再做。
+- top10 EN 抽取 9/9 已完成且对平；全 family 仍未全量抽取。

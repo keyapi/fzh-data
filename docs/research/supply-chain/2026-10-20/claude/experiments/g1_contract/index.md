@@ -29,5 +29,6 @@ tags: [supply-chain, g1, mapping, index]
 | [g1_missing_analysis.py](g1_missing_analysis.py) | 763 vs 155 未匹配归因（尾缀/平台SKU/P2 非 family） |
 | [out/](out/mapping_coverage.json) | 聚合结果（不含 PII/原始行） |
 
-G1b 状态：EN 单据试点已修 DN 行键/JC 跨工序/SE/未发分解；库存完整快照重跑中；
-旧 450/501 缺口撤回，待 complete 快照重算；top10–20 扩样等修复重跑通过后再做。
+G1b 状态：EN 单据试点与 top10 已修 DN 行键/JC 跨工序/SE/未发分解，9/9 对平；
+完整 API 库存快照已重算（131 有需求无供给 / 194 <2 月 / 127 unknown）；
+旧 450/501 撤回；皮壳仓合并 `unverified`。

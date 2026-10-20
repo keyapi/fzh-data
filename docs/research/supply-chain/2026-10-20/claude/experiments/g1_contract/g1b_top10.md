@@ -13,7 +13,7 @@ tags: [supply-chain, g1b, erpnext, top10, reconciliation]
 > 输入：2026-04..09 family 出库前 10 个 SKU（9 个客户码 + 1 个 TT 码）。
 > 输出：`out/g1b_en_top_*.json`（本地，含单据号；不入库）。
 
-## 1. 已完成（8/9）
+## 1. 已完成（9/9）
 
 | # | 客户码 | SO | SE | open 对平差 | field_issues |
 |---|---|---:|---:|---:|---:|
@@ -25,9 +25,9 @@ tags: [supply-chain, g1b, erpnext, top10, reconciliation]
 | 6 | C/Velvet-Grey-100-705-wow | 15 | 36 | 0.0 | 0 |
 | 7 | C/Cord-Grey-100-710-wow | 18 | 63 | 0.0 | 0 |
 | 8 | C/Linen-White-100-662-WOW | 17 | 40 | 0.0 | 0 |
-| 9 | TT0000671K0063721 | 运行中 | — | — | — |
+| 9 | TT0000671K0063721 | 42 | 111 | 0.0 | 0 |
 
-- 全部 8 个 SKU 的 `open_breakdown.difference = 0`：死单 + 在产 + 无计划 + 超发 = `totals.open_qty`。
+- 全部 9 个 SKU 的 `open_breakdown.difference = 0`：死单 + 在产 + 无计划 + 超发 = `totals.open_qty`。
 - 全部 `se_query_error = None`，已提交 Manufacture SE 正常抽出。
 - 全部 `field_issues = 0`（open 行都有交货日/仓/UOM）。
 
@@ -45,4 +45,4 @@ tags: [supply-chain, g1b, erpnext, top10, reconciliation]
 
 - G1B05–07 修复可跨 SKU 复现：按工序 JC、DN 行键、SE、未发互斥分解都成立。
 - 仍不能宣布 G1 契约通过：库存完整快照/覆盖重算、WayfairCG 实盘、仓池证据仍未闭合。
-- 下一步：等第 9 个 SKU 完成；用完整 API 库存快照重算覆盖；再交 Codex 复审。
+- 下一步：用完整 API 库存快照重算覆盖（已完成：131/194/127）；再交 Codex 复审。

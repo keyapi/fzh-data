@@ -326,6 +326,13 @@ tags: [supply-chain, research, log]
 - 全量 API 备份手工运行中；DANEEY 退货仓出现一次连接超时，按仓记录 error 并继续。
 - 产物：`g1b_review_response.md`、`g1b_warehouse_evidence.md`、
   `14-daily-inventory-backup.md`、`stock_daily_backup.py`、`g1b_from_daily_backup.py`。
+- **完整 API 备份（2026-10-20）**：CENTRADE 2,072 行/21 页、DANEEY 1,024/11、PL 1,369/14、
+  WayfairCG-Cranbury 92/1，均 `complete=true`；DANEEY 退货仓一次连接超时，
+  整体 manifest `complete=false`、exit 1。主仓完整，可用于覆盖。
+- **完整快照覆盖**：USNJ 5.86 / USTX 5.48 / PL 10.24 个月（含在途名义）；
+  131 个 branch×SKU 有需求无供给、194 个 <2 月、127 个 unknown（3PL/退货仓不计缺口）。
+- **top10 EN 抽取 9/9 完成**：SO 15–42 张/SKU，SE 36–111 张；9 个 SKU 的未发互斥分解
+  `difference=0`；死单/无计划/超发均按 SKU 显式列出。
 
 ## 模板（后续阶段）
 

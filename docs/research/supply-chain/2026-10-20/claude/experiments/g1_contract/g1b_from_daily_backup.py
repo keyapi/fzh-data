@@ -16,13 +16,39 @@ from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
+import openpyxl
+
+BOM = Path(r"D:/Work/王忠于/成本核算/EN产品BOM成本列表20261016.xlsx")
+FAMILIES = ("KS0001", "KS0248")
+
+
+def load_family_codes(path: Path = BOM) -> set[str]:
+    wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+    ws = wb[wb.sheetnames[0]]
+    rows = ws.iter_rows(values_only=True)
+    hdr = list(next(rows))
+    i_item = hdr.index("产品编号")
+    i_code = hdr.index("客户物料号")
+    codes: set[str] = set()
+    for r in rows:
+        item = str(r[i_item] or "").strip()
+        code = str(r[i_code] or "").strip()
+        if item.startswith(FAMILIES) and code and "已删除" not in code:
+            codes.add(code)
+    wb.close()
+    return codes
+
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--backup-dir", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--warehouses", default="", help="逗号分隔仓名；空=manifest 全部")
+    ap.add_argument("--bom", default=str(BOM))
+    ap.add_argument("--all-skus", action="store_true", help="不过滤 family 客户码")
     args = ap.parse_args()
+
+    family = None if args.all_skus else load_family_codes(Path(args.bom))
 
     root = Path(args.backup_dir)
     manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
@@ -50,6 +76,8 @@ def main():
                 r = json.loads(line)
                 sku = str(r.get("goodsSku") or "").strip()
                 if not sku:
+                    continue
+                if family is not None and sku not in family:
                     continue
                 vals = {
                     "available": float(r.get("availableStockQuantity") or 0),

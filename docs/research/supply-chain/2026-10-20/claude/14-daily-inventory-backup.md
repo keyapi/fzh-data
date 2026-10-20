@@ -143,9 +143,12 @@ LEFT JOIN order_monthly o USING (sku);
 
 - **API 库存备份已做冒烟测试**：`stock_daily_backup.py --warehouses 美东-CENTRADE --max-pages 2`
   返回 2 页/200 行/`complete=false`（预期，因 max-pages 截断），JSONL+manifest 正常落盘。
-- **全量 6 仓 API 备份**：已启动一次手工全量运行，输出 `D:/Work/库存备份/2026-10-20/`；
-  完成后需核对 `manifest.complete=true`、仓数、总行数与日志退出码。
+- **全量 API 备份已完成一次**（2026-10-20）：CENTRADE 2,072 行/21 页、DANEEY 1,024/11、
+  PL 1,369/14、WayfairCG-Cranbury 92/1，均 `complete=true`；
+  DANEEY 退货仓一次连接超时，单仓 `complete=false`，整体 manifest `complete=false`、命令 exit 1。
+  主仓完整，可用于 G1b 覆盖；超时仓下次重跑补齐。
+- **G1b 覆盖已用完整快照重算**：USNJ 5.86、USTX 5.48、PL 10.24 个月（含在途名义）；
+  131 个 branch×SKU 有需求无供给、194 个 <2 月、127 个 unknown（3PL/退货仓不计缺口）。
 - **浏览器成本导出**：手工测试已生成 PL/CENTRADE/DANEEY 三个 `通途导入_头程运费_其他费用.xlsx`；
   它只产成本模板，不是库存数量，不能替代 API 备份。
 - EN 测试服务器出网/磁盘/uv 环境未验证；需技术确认后再部署。
-- API 全量 6 仓的页数与耗时需实测；若太慢，保留浏览器成本导出作成本用途、API 作库存用途。

@@ -67,12 +67,10 @@ tags: [supply-chain, g1b, inventory, coverage, tongtool, erpnext]
 > 在途没有 ETA，不能当作缺货前可到；`含在途` 只是名义覆盖，不是服务承诺。
 > 3PL/退货仓不进入缺口统计；PL 已单独采样，WayfairCG 仍 unknown。
 
-**旧 450/501 缺口数字已撤回（G1B01）**：旧脚本把未采样的 PL/WayfairCG/退货仓需求当成零供给，
-混入缺口统计；且旧快照缺 `complete/page` 元信息。新 API 备份完成后按“已采样完整仓”重算；
-WayfairCG `unknown`、退货仓 `demand_only` 不进入缺口，PL 已单独采样。
-
-> 当前 USNJ/USTX/PL 的供给来自旧快照（0 错误，但缺分页终止元信息），只能算**候选**；
-> 下列头部缺口同样标“候选”，待完整快照重跑确认。
+**完整快照重算（G1B01）**：USNJ/USTX/PL 均为 `sampled_complete`；
+**131 个 branch×SKU 有需求无供给；194 个覆盖 <2 个月；127 个 supply unknown（WayfairCG/退货仓）**。
+旧 450/501 撤回（它把未采样 PL/3PL/退货仓当零供给，且未按 branch×SKU 说明）。
+WayfairCG `unknown`、退货仓 `demand_only` 不进入缺口；PL 已单独采样 9.66/10.24 个月。
 
 USNJ 头部缺口：
 
@@ -138,7 +136,8 @@ EN 订单行实际物料 `PK#KS0001-XMMBS-194-HEMPNATURAL`。
 
 1. **G1b 链路已跑通**：通途库存快照 + EN SO/DN/WO/JC/PP 结构化提取 + 出库消耗对账均可复现。
 2. **两仓总量覆盖 5.86 / 5.48 个月（名义、含在途），on-hand 4.03 / 3.43**；
-   旧 450/501 缺口数字因未采样仓被当零供给而撤回，待完整快照重算；候选头部缺口见 §3。
+   完整快照重算：**131 个 branch×SKU 有需求无供给、194 个 <2 个月、127 个 supply unknown**
+   （WayfairCG/退货仓不计入缺口）；补货必须按 SKU × 仓。
 3. **Codex `852d7791` 三条硬约束已纳入**：
    ① **退货已计入库存时不得再次冲减**；当前库存净算不扣退货，5% 仅未来需求情景；
    ② **调拨完成 ≠ Wayfair 实收；历史供货占比 ≠ 当前库存归属**；当前库存用后台实盘，归属用近期调拨/unknown；
@@ -155,7 +154,7 @@ EN 订单行实际物料 `PK#KS0001-XMMBS-194-HEMPNATURAL`。
 |---|---|---|---:|
 | BOM | `EN产品BOM成本列表20261016.xlsx` | 3,700 行；family 1,739；有效客户码 1,486（排除含「已删除」）；0 歧义 | 2026-10-16 |
 | 订单 | `2026年{4..9}月订单_order_cost_*.xlsx` | 6 文件；45,129 行 / 48,346 件 | 每月最新时间戳 |
-| 库存 | 通途 `erp2_stocks_stocksquery` | CENTRADE 478 行；DANEEY 337 行；0 错误 | 2026-10-20 17:24 / 17:32 |
+| 库存 | 通途 `erp2_stocks_stocksquery`（每日 API 备份） | CENTRADE 2,072 行/21 页；DANEEY 1,024/11；PL 1,369/14；family 去重 1,140 | 2026-10-20 18:19 |
 | EN 单据 | EN 生产只读 API | 1 SKU：26 SO / 100 DN 行 / 22 WO / 555 JC / 28 PP | 2026-10-20 |
 
 ### 6.2 逐行去向
@@ -164,7 +163,7 @@ EN 订单行实际物料 `PK#KS0001-XMMBS-194-HEMPNATURAL`。
 |---|---:|---:|---:|---:|
 | 订单行 | 32,888 family | 759 text-tri pending | 11,482（11,334 其余非 family + 148 非 family 退货仓） | 45,129 |
 | 订单坏行 | 0 | bad_qty=0 / negative=0 / 非整数=0 / 缺 SKU=0 / 缺仓=0 | — | 45,129 |
-| 库存行 | 815 family（478 + 337） | bad_values=0 / duplicate_conflicts=0 | 非 family 未拉取（G1b 不需要） | — |
+| 库存行 | 1,140 family（CENTRADE 478 + DANEEY 337 + PL 565，去重后） | bad_values=0 / duplicate_conflicts=0 | 非 family 未进入 family 快照 | — |
 | EN SO | 26 | 3 dead / 2 未开工 / 2 疑似重复（待业务确认） | — | 26 |
 
 ### 6.3 数量守恒

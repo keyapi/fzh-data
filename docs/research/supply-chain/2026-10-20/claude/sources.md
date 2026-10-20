@@ -88,6 +88,9 @@ tags: [supply-chain, research, sources]
 | S1-057 | 浏览器 `tongtu.stock.export` 实际产出成本/头程模板（SKU/安全库存/头程费用），不是 available/intransit 库存数量 | `web_automation/output/*_通途导入_头程运费_其他费用.xlsx` + `tongtu_auto_export.py` | C | 2026-10-20 | 5 列；3 个仓手工测试 | A | 14-daily-inventory-backup §1 |
 | S1-058 | 每日 API 库存备份脚本 `stock_daily_backup.py` 冒烟通过；任务 `FZH-TongtuStockApiDaily` 每日 05:17 | 本地运行 + `Get-ScheduledTask` | C | 2026-10-20 | 2 页/200 行/complete=false（max-pages 截断） | A | 14-daily-inventory-backup §4 |
 | S1-059 | 旧皮壳仓 2026-05/08 有 896/904 SKU、余额 21,226/16,990；2026-10 当前列表不存在；无 ID/改名/迁移凭证 → unverified | 历史结存 xlsx + 通途仓库列表 | C | 2026-10-20 | `g1b_warehouse_evidence.md` | A | G1B09 |
+| S1-060 | 完整 API 库存备份：CENTRADE 2,072 行/21 页、DANEEY 1,024/11、PL 1,369/14、WayfairCG-Cranbury 92/1；主仓 complete=true | `D:/Work/库存备份/2026-10-20/manifest.json` | C | 2026-10-20 | 1 个退货仓连接超时；整体 complete=false | A | 14-daily-inventory-backup §6 |
+| S1-061 | 完整快照覆盖：USNJ 5.86 / USTX 5.48 / PL 10.24 个月；131 有需求无供给、194 <2 月、127 unknown | `out/g1b_coverage_complete.json` | C | 2026-10-20 | 缺口仅 sampled_complete；3PL/退货仓不计 | A | g1b_results §3/§5 |
+| S1-062 | top10 EN 抽取 9/9 完成；SO 15–42、SE 36–111；9 个 SKU 未发分解 difference=0 | `out/g1b_en_top_*.json` | C | 2026-10-20 | 死单/无计划/超发按 SKU 显式列出 | A | g1b_top10 |
 
 ## 未找到项（N-###）
 
