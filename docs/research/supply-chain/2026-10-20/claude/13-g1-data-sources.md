@@ -45,14 +45,16 @@ tags: [supply-chain, g1, data-source, mapping, tongtool, erpnext]
 
 - **通途 API 只给当前库存，没有历史序列。**
 - `stock_alert` 每日任务只写**低库存行**，不是全量归档。
-- `web_automation tongtu.stock.export` 可定时导出 6 仓库存到 `web_automation/output/`。
-  **2026-10-20 已注册 `FZH-TongtuAutoExport-stock`：每日 02:17**，日志 `web_automation/logs/export-stock.log`；
-  此前本机没有该任务/日志。首次运行可能需要在弹出的浏览器登录一次（`--auto-login` 可自动 OCR）。
+- `web_automation tongtu.stock.export` 是**浏览器成本模板导出**（实测只产
+  `通途导入_头程运费_其他费用.xlsx`，没有 available/intransit），**不是库存数量备份**。
+  浏览器任务 `FZH-TongtuAutoExport-stock` 每日 02:17；
+  **库存数量由 API 任务 `FZH-TongtuStockApiDaily` 每日 05:17** 备份到 `D:/Work/库存备份`
+  （JSONL + manifest）。此前本机没有这两个任务/日志。
 - 本地只有 `20260514`、`20260807` 等稀疏结存，不能当连续历史。
 - **G1 不需要历史库存**；只用 cutoff 当前快照。
 - 历史库存的用途是 **G2/G3 预测时剔除断货影响**，用 Notion/邮件/check0stock/SPS/零库存导出等信号；
   没有信号时零月按 `zero_confirmed`，并跑 raw vs censored 敏感性，不假装知道断货。
-- **每日全量快照是独立任务，不是 G1 门槛**：已开始注册；不能用低库存告警结果代归档。
+- **每日全量快照是独立任务，不是 G1 门槛**：API 任务 `FZH-TongtuStockApiDaily` 已注册（05:17）；不能用低库存告警结果代归档。
 - **平台库存 <=2 视为无货**：这是人工规则，会造成人为断货/删失；分析时标 `censored/manual_low`，
   不补 0；如可得，记录平台库存快照与调整事件。
 

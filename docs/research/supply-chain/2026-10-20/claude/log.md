@@ -305,6 +305,28 @@ tags: [supply-chain, research, log]
 - 新增 `g1b_stock_snapshot.py` / `g1b_en_extract.py` / `g1b_coverage.py` / `g1b_pilot.md` /
   `g1b_results.md`；原始库存/单据 JSON 留在本地，不入库。
 
+## 2026-10-20 — Codex d9a11557 G1b 复审修复
+
+- Codex #301 `d9a11557` 判“首版抽取有进展、未通过 G1 契约验收”，列 G1B01–09；
+  本轮只修适配器与报告，不扩 top10–20。
+- **G1B01**：覆盖只对 `sampled_complete` 分支计缺口；PL 单列、WayfairCG unknown、
+  退货仓 demand_only；旧 450/501 撤回。
+- **G1B02–04**：订单必需列/缺月/坏数量/负数/非整数/缺 SKU/缺仓显式计数；
+  库存分页截断/响应结构/坏值/重复/冲突显式标记；多快照同仓只取最新。
+- **G1B05–07**：JC 按工序聚合、首道/末道分开；补 63 张 Manufacture SE；
+  DN 增加 `dn_line_id`；未发互斥分解 `421+622+9-16=1,036`，差 7 = `+9-16`。
+- **G1B08**：同客户码多 EN 物料 fail-closed；本批 ambiguous=0。
+- **G1B09**：新增 `g1b_warehouse_evidence.md`；旧皮壳仓当前列表不存在，
+  但缺 ID/改名/迁移/余额凭证 → `unverified`，不再宣称已并入。
+- **每日备份更正**：浏览器 `tongtu.stock.export` 实测产出
+  `通途导入_头程运费_其他费用.xlsx`（只有 SKU/安全库存/头程费用），**不是库存数量**。
+  新增 `stock_daily_backup.py`（API 全仓 JSONL+manifest），
+  冒烟测试 2 页/200 行通过；注册 `FZH-TongtuStockApiDaily` 每日 05:17。
+  浏览器成本任务仍在 02:17；两者用途不同。
+- 全量 API 备份手工运行中；DANEEY 退货仓出现一次连接超时，按仓记录 error 并继续。
+- 产物：`g1b_review_response.md`、`g1b_warehouse_evidence.md`、
+  `14-daily-inventory-backup.md`、`stock_daily_backup.py`、`g1b_from_daily_backup.py`。
+
 ## 模板（后续阶段）
 
 ```text

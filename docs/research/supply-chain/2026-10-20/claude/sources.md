@@ -83,6 +83,11 @@ tags: [supply-chain, research, sources]
 | S1-052 | Codex #301 `852d7791`：C26–C35 35/35；接受 G1b 带假设启动；要求退货不二次冲减、调拨≠实收、美中 cohort 修正 | Codex #301 `852d7791` | C | 2026-10-20 | 「可以推进G1b，不必再互改综述」 | A | codex-sync §0/§7、g1b_results §5 |
 | S1-053 | G1b 库存快照：CENTRADE 478 SKU（可用 9,877 / 在途 4,504）；DANEEY 337 SKU（8,492 / 5,071）；旧皮壳仓当前无独立仓 | 通途 `erp2_stocks_stocksquery` 只读 + 仓库列表 | C | 2026-10-20 | 30 次请求 0 错误；覆盖 5.86 / 5.48 个月 | A | g1b_results §2–§3 |
 | S1-054 | EN 单据试点：26 SO / 3,220 订单 / 2,084 已发 / 1,036 未发；死单 421、在产 622；SO 行用 `PK#` 包装码 | `EN_API/item_shipment_status.py` 生产只读 | C | 2026-10-20 | `PK#KS0001-XMMBS-194-HEMPNATURAL`；555 JC | A | g1b_pilot、g1b_results §4 |
+| S1-055 | Codex `d9a11557` 判首版未通过 G1 契约验收，列 G1B01–09（缺口零值、坏输入、分页、重复、JC 跨工序、DN 行键、7 件差、歧义、仓池证据） | Codex #301 `review-g1b-first.md` | C | 2026-10-20 | 「首版抽取有进展，但尚未通过 G1 契约验收」 | A | g1b_review_response |
+| S1-056 | 试点未发 1,036 = 死单 421 + 在产 622 + 无计划 9 + 超发 -16；421+622 与 1,036 的差 7 = +9-16 | 本地 `g1b_en_fixed3.json` | C | 2026-10-20 | `difference=0` | A | g1b_pilot §1、g1b_results §4 |
+| S1-057 | 浏览器 `tongtu.stock.export` 实际产出成本/头程模板（SKU/安全库存/头程费用），不是 available/intransit 库存数量 | `web_automation/output/*_通途导入_头程运费_其他费用.xlsx` + `tongtu_auto_export.py` | C | 2026-10-20 | 5 列；3 个仓手工测试 | A | 14-daily-inventory-backup §1 |
+| S1-058 | 每日 API 库存备份脚本 `stock_daily_backup.py` 冒烟通过；任务 `FZH-TongtuStockApiDaily` 每日 05:17 | 本地运行 + `Get-ScheduledTask` | C | 2026-10-20 | 2 页/200 行/complete=false（max-pages 截断） | A | 14-daily-inventory-backup §4 |
+| S1-059 | 旧皮壳仓 2026-05/08 有 896/904 SKU、余额 21,226/16,990；2026-10 当前列表不存在；无 ID/改名/迁移凭证 → unverified | 历史结存 xlsx + 通途仓库列表 | C | 2026-10-20 | `g1b_warehouse_evidence.md` | A | G1B09 |
 
 ## 未找到项（N-###）
 
