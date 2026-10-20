@@ -96,10 +96,10 @@ tags: [supply-chain, baseline, g0, g1, version]
 
 | 选项 | 谁提供 | 优点 | 前提/限制 |
 |---|---|---|---|
-| **A. 现有 GSheet + 本地成本文件（默认）** | 技术只读读取 | PR #304 已验证服务账号直读 43 张月表；本地 `D:/Work/王忠于/成本核算/2026年{4..9}月订单_order_cost_*.xlsx` 已有订单/成本/品类列；PR #303 已有 `query_customer_items_suffix.py` 映射查询工具 | 本地文件含员工/买家信息，必须脱敏；派生品类不作为主键 |
+| **A. 现有 GSheet + 本地成本文件（默认）** | 技术只读读取 | PR #304 已验证服务账号直读 43 张月表；本地 `D:/Work/王忠于/成本核算/2026年{4..9}月订单_order_cost_*.xlsx` 已有订单/成本/品类列；**映射首选 `D:/Work/王忠于/成本核算/EN产品BOM成本列表20261016.xlsx`（产品编号+客户物料号，KS0001/KS0248 1,739 行）** | 本地文件含员工/买家信息，必须脱敏；派生品类不作为主键 |
 | **A2. 通途库存快照（默认）** | `stock_alert`（PR #298）每日任务 `FZH-StockAlert-daily` 或 `erp2_stocks_stocksquery` | **只需 cutoff 当日快照**，不是 6 个月库存序列；按仓分页（pageSize≤100，5 次/分钟） | 不能拿 EN Bin 当可用库存；保存 snapshot_at；**低库存告警行不是归档** |
 | **A2b. 每日全量快照（独立任务）** | `stock_alert/client.py` 全量拉取或 `web_automation tongtu.stock.export` | 用于未来库存策略回测；写不可变 Parquet，保留 13 个月 | **不是 G1 门槛**；本机当前无历史输出；不能凭空补历史 |
-| **A3. EN 单据（默认）** | EN API 只读：`item_shipment_status.py` / #291 `fulfillment_query.py` / `erpnext/scripts/fetch.py` | 按单号/SKU 查询，缓存本地 Parquet | `Tongtool Order Item` 列表 403，从父单 `order_items` 读；不写生产 |
+| **A3. EN 单据（默认）** | **EN 生产 API 只读**：`item_shipment_status.py` / #291 `fulfillment_query.py` / `erpnext/scripts/fetch.py` | 测试环境没有真实 SO/PP/WO/JC/SE/DN，必须用生产只读；按单号/SKU 查询，缓存本地 Parquet | `Tongtool Order Item` 列表 403，从父单 `order_items` 读；**不写生产** |
 | B. 业务导出 | 计划/仓库/财务导出脱敏文件 | 仅当 A/A2/A3 无法覆盖时 | 需定义字段、cutoff、脱敏规则 |
 | C. 授权只读拉取 | 技术用现有客户端拉取 | 补 EN 生产只读缺口 | 需书面授权范围；不写 |
 

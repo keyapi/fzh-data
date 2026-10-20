@@ -60,8 +60,9 @@ tags: [supply-chain, codex, g1, handoff]
 
 - **数据来源默认用现有数据**：GSheet `通途订单YYYYMM`（PR #304 服务账号直读 43 个月）
   + 本地 `D:/Work/王忠于/成本核算/2026年{4..9}月订单_order_cost_*.xlsx`
+  + 本地 `D:/Work/王忠于/成本核算/EN产品BOM成本列表20261016.xlsx`（产品编号+客户物料号；KS0001/KS0248 1,739 行）
   + 通途库存 `stock_alert`（PR #298，`FZH-StockAlert-daily`，cutoff 快照）
-  + EN 单据 API（`item_shipment_status.py` / #291 `fulfillment_query.py`）；业务导出只作兜底。
+  + EN 单据**生产 API 只读**（测试无真实 SO/PP/WO/JC/SE/DN）；业务导出只作兜底。
 - **映射优先级**：**P1 通途SKU → EN 客户物料号**（EN `Tongtool Order` 明细 / EN BOM 成本表
   `importBOMCostList.客户物料号` / `Item Customer Detail.ref_code`）→ **P2 GSheet 写回 `品类/品类统一名` 仅参考**
   → **P3 Colab 4.2 派生物仅缺失兜底（`fallback=true`）**。

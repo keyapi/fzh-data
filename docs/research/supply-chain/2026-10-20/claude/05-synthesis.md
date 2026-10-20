@@ -268,10 +268,11 @@ Tongtool API（只读、分页）
 规划层按 family 聚合，事实层保留 leaf group/SKU；通途品类「自产-三角靠枕-*」只作候选线索。
 **G1 数据来源默认现有记录**：GSheet（PR #304 直读 43 个月）+ 本地 `2026年{4..9}月订单_order_cost_*.xlsx`
 + 通途库存 `stock_alert`（PR #298，`FZH-StockAlert-daily`，**cutoff 快照**，不是 6 个月序列）
-+ EN 单据 API（`item_shipment_status.py` / #291 `fulfillment_query.py`）。
++ EN 单据 **生产 API 只读**（`item_shipment_status.py` / #291 `fulfillment_query.py`；测试无真实单据）。
 **G1 不依赖历史库存**：库存只用 cutoff 当前快照；断货删失是 G2/G3 预测任务；
 每日全量快照另立任务，不卡 G1。
-映射优先级 **P1 通途SKU → EN 客户物料号**（Tongtool Order 明细 / EN BOM 成本表 / `ref_code`）
+映射优先级 **P1 通途SKU → EN 客户物料号**（**首选 `D:/Work/王忠于/成本核算/EN产品BOM成本列表20261016.xlsx`
+的产品编号+客户物料号**；Tongtool Order 明细 / `ref_code` 交叉校验）
 → **P2 GSheet 写回 `品类/品类统一名` 仅参考** → **P3 Colab 4.2 仅兜底**；业务导出只作最后兜底。
 E1/E2 的 PB 楔形枕只作**方法试点**，不是 G1 业务切片。
 

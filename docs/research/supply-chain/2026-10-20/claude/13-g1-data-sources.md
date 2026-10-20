@@ -23,7 +23,7 @@ tags: [supply-chain, g1, data-source, mapping, tongtool, erpnext]
 | 通途SKU→EN物料 | `importBOMCostList.客户物料号`（GSheet）；EN `Item Customer Detail.ref_code`（SSH DB） | 权威桥；**直连优先**，旧键兜底 [dce9769a] |
 | EN 产品/物料组 | EN 主数据（KS0001/KS0248） | 只读；G1 用本地导出或测试环境，不写生产 |
 | 库存快照（cutoff） | **通途 `stock_alert`（PR #298 / `a4b1cf4d`）**：`stock_alert/client.py` 调 `erp2_stocks_stocksquery`；每日任务 `FZH-StockAlert-daily`（默认 09:23）；`web_automation tongtu.stock.export` 可定时导出 6 仓库存 | **只需 cutoff 当日快照**，不是 6 个月库存序列；字段：`goodsSku/availableStockQuantity/intransitStockQuantity/defectsStockQuantity/waitingShipmentStockQuantity`；按 `warehouseName` 整仓分页（pageSize≤100，5 次/分钟） |
-| EN SO/PP/WO/JC/SE/DN | **EN API 只读**：`EN_API/item_shipment_status.py`（SO→PP→WO→JC→DN）、#291 `EN_API/fulfillment_query.py`、`erpnext/scripts/fetch.py` | 按单号/SKU 查询，缓存到本地 Parquet 以便复现；不写生产 |
+| EN SO/PP/WO/JC/SE/DN | **EN 生产 API 只读**：`EN_API/item_shipment_status.py`（SO→PP→WO→JC→DN）、#291 `EN_API/fulfillment_query.py`、`erpnext/scripts/fetch.py` | **测试环境没有真实单据**；必须用生产只读，按单号/SKU 查询，缓存本地 Parquet；不写生产 |
 
 ### 1.1 库存历史限制（重要）
 
@@ -64,7 +64,8 @@ tags: [supply-chain, g1, data-source, mapping, tongtool, erpnext]
 | 记录 | 用途 |
 |---|---|
 | **PR #303**（`40309079`，已合并）`EN_API/query_customer_items_suffix.py` + `erpnext_bi/` | EN `customer_items.ref_code` 查询工具/BI 看板；只读；**对生产运行需授权**，G1 先用已有导出 |
-| **本地 `en_bom_cost_list/EN产品BOM成本列表_*.xlsx`** | 列含 `产品编号`（EN item）+ `客户物料号`（通途/客户SKU）；**G1 映射首选本地文件**，无需 EN API |
+| **本地 `D:/Work/王忠于/成本核算/EN产品BOM成本列表20261016.xlsx`** | **G1 映射首选**：3,700 行，其中 KS0001/KS0248 共 1,739 行；列 `产品编号` + `客户物料号` + `产品名称` |
+| **本地 `en_bom_cost_list/EN产品BOM成本列表_*.xlsx`** | 旧版 BOM 成本表（20260821 等），可作对照；列含 `产品编号` + `客户物料号` |
 | **本地 `en_tongtool_cost_review/EN Tongtool Cost Review 导入6仓库存 导出成本 *.xlsx`** | 列含 `Tongtool SKU` + `ERPNext物料号` + `Match Status` + 仓库/成本；可作交叉校验 |
 | **PR #298 / `a4b1cf4d`** `stock_alert/` | 通途库存客户端 + `FZH-StockAlert-daily` 定时任务；`stock_alert/client.py` 调 `erp2_stocks_stocksquery`，按仓分页（pageSize≤100，5 次/分钟） |
 | `web_automation/scripts/install_tongtu_schedule.ps1` | 通途导出定时任务（sales/both，间隔或固定时刻）；可作为库存/订单导出兜底 |
@@ -90,11 +91,21 @@ tags: [supply-chain, g1, data-source, mapping, tongtool, erpnext]
 
 | 优先级 | 来源 | 用法 | 标记 |
 |---|---|---|---|
-| **P1** | **通途SKU → EN 客户物料号**：本地 `en_bom_cost_list/EN产品BOM成本列表_*.xlsx` 的 `产品编号` + `客户物料号`；`en_tongtool_cost_review` 的 `Tongtool SKU` + `ERPNext物料号`；EN `Tongtool Order` 明细；EN `Item Customer Detail.ref_code` | 精确匹配桥；按通途SKU 查，命中即用；冲突进异常 | `mapping_source=bom_cost_list` / `tongtool_order` / `ref_code` |
+| **P1** | **通途SKU → EN 客户物料号**：**`D:/Work/王忠于/成本核算/EN产品BOM成本列表20261016.xlsx` 的 `产品编号` + `客户物料号`**；`en_tongtool_cost_review` 的 `Tongtool SKU` + `ERPNext物料号`；EN `Tongtool Order` 明细；EN `Item Customer Detail.ref_code` | 精确匹配桥；按通途SKU 查，命中即用；冲突进异常 | `mapping_source=bom_cost_list_20261016` / `tongtool_order` / `ref_code` |
 | **P2（仅参考）** | GSheet「写回」结果里的 `品类/品类统一名`（如「三角」「三角靠枕」） | 只作候选/对照，**不能当映射主键** | `reference_only=true` |
 | **P3（兜底）** | Colab 4.2 及后续派生物：`品类orig/材料编码/尺寸/有无扣/品类尺寸面料编码` | **仅当 P1 缺失时使用**；可能不一致 | `mapping_source=colab_4_2`，输出 `fallback=true` |
 
 - **不要**用拼接串或按前缀过滤（`TT` 前缀会漏 `CE/SX/PP`）；完整通途SKU 精确匹配。
+
+**20261016 BOM 成本表处理规则**：
+
+- 3,700 行；`KS0001`/`KS0248` 共 **1,739 行**；列 `产品编号` / `客户物料号` / `产品名称`。
+- `客户物料号` 为空 → 不算已映射，标 `missing_customer_code`。
+- `已删除...` 前缀 → 只作历史候选，默认排除，标 `deleted_alias`。
+- `-Cover` 后缀 → 皮壳/半成品，按独立行处理，不并入成品。
+- 一个 EN 物料对多个客户码 → 反向建 `通途SKU → EN物料` 索引；
+  同一通途SKU 命中多个 EN 物料 → `ambiguous`，fail-closed，不取 max/平均。
+- 直连覆盖实测 99.9%（2026-07 美中 4372 行，未匹配 7）[dce9769a/7f837046]。
 - `Tongtool Order Item` 不能直接查列表（403）；item 级数据从父单 `GET /api/resource/Tongtool Order/{name}` 的 `order_items` 读取。
 - 旧键 `品类尺寸面料编码` 只作最后兜底；解析键可能指错（实测 KS0423/KS0396 撞车）。
 - 直连覆盖实测 99.9%（2026-07 美中 4372 行，未匹配 7）[dce9769a/7f837046]。

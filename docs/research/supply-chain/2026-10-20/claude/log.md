@@ -197,6 +197,10 @@ tags: [supply-chain, research, log]
   `en_tongtool_cost_review/...` 有 `Tongtool SKU`+`ERPNext物料号`；G1 映射首选本地文件，无需 EN API。
 - **PB 断货记录限制**：PB 只覆盖约 30 个涤麻 SKU，仓从美中 Daneey 到美东 Centrade 有过切换；
   只能作部分标注样本，不能当全 family 真值；非 PB SKU 用 raw vs censored 敏感性。
+- **映射文件确认（2026-10-20）**：`D:/Work/王忠于/成本核算/EN产品BOM成本列表20261016.xlsx`
+  有 3,700 行，KS0001/KS0248 共 1,739 行；列 `产品编号`+`客户物料号`+`产品名称`。
+  G1 映射首选此文件；空客户码/`已删除`/`-Cover`/多物料歧义分别标记。
+- **EN 单据环境**：测试环境没有真实 SO/PP/WO/JC/SE/DN，G1 用 **EN 生产 API 只读**，不写生产。
 - `13-g1-data-sources.md` 替代原导出请求清单；业务导出只作最后兜底。
 - 基线标签：`supply-chain-g0-baseline-20261020`（#300 提交 `b23c319a`）。
 - #300 与 #301 分别审核合并；不把 #301 并入 #300；不写生产。
