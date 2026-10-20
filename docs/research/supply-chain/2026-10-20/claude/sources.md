@@ -65,6 +65,8 @@ tags: [supply-chain, research, sources]
 | S1-034 | 通途库存快照：`stock_alert`（PR #298）每日任务 `FZH-StockAlert-daily`；`erp2_stocks_stocksquery` 按仓分页 | `stock_alert/client.py`、`stock_alert/scripts/install_stock_alert_schedule.ps1` | C | 2026-10-20 | pageSize≤100、5 次/分钟 | A | 13 §1/§3 |
 | S1-035 | EN 单据只读查询入口：`EN_API/item_shipment_status.py`、#291 `fulfillment_query.py`、`erpnext/scripts/fetch.py` | 代码/文档 | C | 2026-10-20 | SO→PP→WO→JC→DN | A | 13 §1 |
 | S1-036 | 库存历史不可得：通途只给当前量；stock_alert 只写低库存行；web_automation stock export 可定时但本机无历史输出；仅有 20260514/20260807 稀疏文件 | 代码/本机核对 | C | 2026-10-20 | 无连续历史归档；G1 不需要历史库存 | A | 05 §2/§4.4、11 §2.1、13 §1.1 |
+| S1-037 | 本地 EN BOM 成本表含 `产品编号`+`客户物料号`；EN Tongtool Cost Review 含 `Tongtool SKU`+`ERPNext物料号` | `en_bom_cost_list/EN产品BOM成本列表_20260821_1501.xlsx`、`en_tongtool_cost_review/...` | C | 2026-10-20 | 可直接做 G1 映射，无需 EN API | A | 13 §1.4/§2 |
+| S1-038 | PB 只覆盖约 30 个涤麻三角 SKU；仓从 Daneey 到 Centrade 有切换；断货记录只是部分样本 | 用户 2026-10-20 说明 | C | 2026-10-20 | 不能当全 family 真值；仓库切换≠断货 | A | 05 §4.4、13 §3、06 B4 |
 
 ## 未找到项（N-###）
 

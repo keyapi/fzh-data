@@ -193,6 +193,10 @@ tags: [supply-chain, research, log]
   导出 6 仓库存，但本机无历史输出；本地仅有 `20260514`、`20260807` 稀疏结存。
   **G1 不需要历史库存**，只用 cutoff 当前快照；断货删失是 G2/G3 预测任务，
   用 Notion/邮件/check0stock/SPS 等信号 + 敏感性；每日全量快照是独立任务，不卡 G1。
+- **本地映射补充（2026-10-20）**：`en_bom_cost_list/EN产品BOM成本列表_*.xlsx` 有 `产品编号`+`客户物料号`；
+  `en_tongtool_cost_review/...` 有 `Tongtool SKU`+`ERPNext物料号`；G1 映射首选本地文件，无需 EN API。
+- **PB 断货记录限制**：PB 只覆盖约 30 个涤麻 SKU，仓从美中 Daneey 到美东 Centrade 有过切换；
+  只能作部分标注样本，不能当全 family 真值；非 PB SKU 用 raw vs censored 敏感性。
 - `13-g1-data-sources.md` 替代原导出请求清单；业务导出只作最后兜底。
 - 基线标签：`supply-chain-g0-baseline-20261020`（#300 提交 `b23c319a`）。
 - #300 与 #301 分别审核合并；不把 #301 并入 #300；不写生产。

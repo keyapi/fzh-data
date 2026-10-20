@@ -37,7 +37,7 @@ tags: [supply-chain, codex, g1, handoff]
 | C17 | on_hand 100 已含新收 20 → 不能再加 received 20；采购/头程两源冲突 → 异常，不相加/取 max | 同 cutoff 互斥余额 |
 | C18 | 收货 R1 修订 70→69+1 坏；R2 30；同一 revision 重播拒绝；R1 分摊到两个 DN 行 | revision 替换不累计、收货分摊 |
 | C19 | G1 只用 cutoff 当前库存快照；没有历史序列 → `supply_balance(as_of)` 只从快照日起成立 | **G1 不需要历史库存**；不能回放过去余额 |
-| C20 | 历史库存缺失时，断货/覆盖分析改用订单缺口/断货信号；每日快照是独立任务 | 断货删失属于 G2/G3 预测，不是 G1 门槛 |
+| C20 | 历史库存缺失时，断货/覆盖分析改用订单缺口/断货信号；PB 记录只覆盖约 30 涤麻 SKU，不能当全 family 真值 | 断货删失属于 G2/G3 预测，不是 G1 门槛；其余用敏感性 |
 
 要求：
 
@@ -65,7 +65,7 @@ tags: [supply-chain, codex, g1, handoff]
 - **映射优先级**：**P1 通途SKU → EN 客户物料号**（EN `Tongtool Order` 明细 / EN BOM 成本表
   `importBOMCostList.客户物料号` / `Item Customer Detail.ref_code`）→ **P2 GSheet 写回 `品类/品类统一名` 仅参考**
   → **P3 Colab 4.2 派生物仅缺失兜底（`fallback=true`）**。
-  现有记录见 `13-g1-data-sources.md` §1.3；不要重复造映射。
+  现有记录见 `13-g1-data-sources.md` §1.4；不要重复造映射。
 - EN：叶子物料组 `KS0001 三角靠枕`、`KS0248 三角靠枕无扣`；保留 leaf group/SKU。
 - 通途 GSheet：`品类orig` 多为「自产-三角靠枕-*」；`品类/品类统一名` 是 Colab 4.2 派生物，
   **可能不一致，不能当主键**；以完整通途SKU/客户码精确匹配为准。
@@ -94,6 +94,7 @@ tags: [supply-chain, codex, g1, handoff]
    引用 Claude #300 的标签 supply-chain-g0-baseline-20261020（提交 b23c319a）。
 2. 补 C14–C20 合成样例（family 映射、歧义拒绝、桶内已发冲减、互斥供应余额、
    收货 revision/分摊、库存历史不可得、断货信号替代），实跑并报告 PASS/FAIL。
+   C20 注意：PB 断货记录只覆盖 ~30 个涤麻 SKU（Daneey/Centrade），只是部分样本。
 3. 只复核 Claude 08 的 §2.1/§2.3/§2.4，逐条记录接受/部分接受/不接受及依据。
 4. 写 g1-slice.md：KS0001/KS0248、通途「三角」、两仓（DANEEY + CENTRADE）、
    2026-04..09；映射优先级 P1 通途SKU→EN客户物料号（Tongtool Order 明细 / EN BOM 成本表 / ref_code）

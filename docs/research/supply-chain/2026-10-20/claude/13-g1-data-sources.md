@@ -51,7 +51,7 @@ tags: [supply-chain, g1, data-source, mapping, tongtool, erpnext]
 目录：`D:/Work/王忠于/成本核算/`。这些文件是 Colab/成本流程的**处理结果**，
 不是通途原始导出；行级 trace 用 `发货日期/通途SKU/包裹号/订单号` 回查 GSheet。
 
-### 1.2 2026-09 三角行画像（只读）
+### 1.3 2026-09 三角行画像（只读）
 
 - 总行 6,246；含「三角」的行 3,971；发货件约 4,111。
 - `品类orig` 多为 `自产-三角靠枕-<面料>`；`品类` 多为「三角」；`品类统一名` 多为「三角靠枕」。
@@ -59,11 +59,13 @@ tags: [supply-chain, g1, data-source, mapping, tongtool, erpnext]
 - 有无扣：有扣 3,280；无扣 511；空 180。
 - **`品类/品类统一名` 是 Colab 4.2 的派生物，可能不一致**；G1 不用它当唯一键。
 
-### 1.3 现有记录（直接复用，不再新做）
+### 1.4 现有记录（直接复用，不再新做）
 
 | 记录 | 用途 |
 |---|---|
 | **PR #303**（`40309079`，已合并）`EN_API/query_customer_items_suffix.py` + `erpnext_bi/` | EN `customer_items.ref_code` 查询工具/BI 看板；只读；**对生产运行需授权**，G1 先用已有导出 |
+| **本地 `en_bom_cost_list/EN产品BOM成本列表_*.xlsx`** | 列含 `产品编号`（EN item）+ `客户物料号`（通途/客户SKU）；**G1 映射首选本地文件**，无需 EN API |
+| **本地 `en_tongtool_cost_review/EN Tongtool Cost Review 导入6仓库存 导出成本 *.xlsx`** | 列含 `Tongtool SKU` + `ERPNext物料号` + `Match Status` + 仓库/成本；可作交叉校验 |
 | **PR #298 / `a4b1cf4d`** `stock_alert/` | 通途库存客户端 + `FZH-StockAlert-daily` 定时任务；`stock_alert/client.py` 调 `erp2_stocks_stocksquery`，按仓分页（pageSize≤100，5 次/分钟） |
 | `web_automation/scripts/install_tongtu_schedule.ps1` | 通途导出定时任务（sales/both，间隔或固定时刻）；可作为库存/订单导出兜底 |
 | `EN_API/item_shipment_status.py`；#291 `EN_API/fulfillment_query.py`；`erpnext/scripts/fetch.py` | EN SO/PP/WO/Job Card/SE/DN 只读查询入口 |
@@ -88,7 +90,7 @@ tags: [supply-chain, g1, data-source, mapping, tongtool, erpnext]
 
 | 优先级 | 来源 | 用法 | 标记 |
 |---|---|---|---|
-| **P1** | **通途SKU → EN 客户物料号**：EN `Tongtool Order` 父单 `order_items` 明细；EN BOM 成本表 `importBOMCostList.客户物料号`；EN `Item Customer Detail.ref_code` | 三者都是精确匹配桥；按通途SKU 查，命中即用；冲突进异常 | `mapping_source=tongtool_order` / `bom_cost_list` / `ref_code` |
+| **P1** | **通途SKU → EN 客户物料号**：本地 `en_bom_cost_list/EN产品BOM成本列表_*.xlsx` 的 `产品编号` + `客户物料号`；`en_tongtool_cost_review` 的 `Tongtool SKU` + `ERPNext物料号`；EN `Tongtool Order` 明细；EN `Item Customer Detail.ref_code` | 精确匹配桥；按通途SKU 查，命中即用；冲突进异常 | `mapping_source=bom_cost_list` / `tongtool_order` / `ref_code` |
 | **P2（仅参考）** | GSheet「写回」结果里的 `品类/品类统一名`（如「三角」「三角靠枕」） | 只作候选/对照，**不能当映射主键** | `reference_only=true` |
 | **P3（兜底）** | Colab 4.2 及后续派生物：`品类orig/材料编码/尺寸/有无扣/品类尺寸面料编码` | **仅当 P1 缺失时使用**；可能不一致 | `mapping_source=colab_4_2`，输出 `fallback=true` |
 
@@ -105,7 +107,17 @@ tags: [supply-chain, g1, data-source, mapping, tongtool, erpnext]
 
 4. **family 只用于规划聚合**；成本、BOM、库存仍按 leaf group/SKU。
 
-## 3. 缺口与兜底
+## 3. 断货标签的覆盖限制（PB 只是子集）
+
+- **PB 只卖三角靠枕中的一小部分**：约 **30 个涤麻面料 SKU**；不是全部三角靠枕
+  （2026-09 三角品类有纯棉麻/荷兰绒/纯棉平绒/条绒等，约 3,971 行）。
+- **仓库也只在特定范围**：PB 目前走美中 Daneey；2023 年起有一阵走美东 Centrade。
+  仓库切换/渠道变化会制造“看起来断货”的假信号，必须与真实断货分开。
+- **所以 PB 的 Notion/邮件/check0stock 断货记录只能作部分标注样本**，不能当全 family 的真值；
+  非 PB SKU 没有标签时，用 raw vs censored 敏感性，不擅自标断货。
+- G1 不需要断货标签；这是 G2/G3 预测任务。
+
+## 4. 缺口与兜底
 
 | 缺口 | 兜底 | 不能做什么 |
 |---|---|---|
@@ -116,7 +128,7 @@ tags: [supply-chain, g1, data-source, mapping, tongtool, erpnext]
 
 **业务导出只在上述缺口无法用现有文件补齐时使用**，不是 G1 的默认前提。
 
-## 4. 脱敏与存储
+## 5. 脱敏与存储
 
 - 本地成本文件含员工名（如执行发货人）与可能的买家字段；G1 只取
   `发货日期/通途SKU/产品名称/品类orig/材料编码/尺寸/有无扣/发货数量/渠道/发货仓库/包裹号/订单号`，
@@ -124,7 +136,7 @@ tags: [supply-chain, g1, data-source, mapping, tongtool, erpnext]
 - 不导出/不提交客户姓名、地址、电话、邮箱、买家 ID；订单号/包裹号如需关联用稳定哈希。
 - 中间 Parquet/DuckDB 只放本地或 NAS 指定目录，**不入 git**。
 
-## 5. 验收（收到/读取数据后）
+## 6. 验收（收到/读取数据后）
 
 - [ ] 每月行数与 GSheet 原始 ws 对账，差异可解释。
 - [ ] 两仓都覆盖 2026-04..09；三角 family 映射覆盖率与未匹配清单。
