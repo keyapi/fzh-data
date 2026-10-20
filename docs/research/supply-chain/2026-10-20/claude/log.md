@@ -239,6 +239,8 @@ tags: [supply-chain, research, log]
   = **32,888 行 / 33,719 件 / 6 个月**；分公司皮壳库存/在途做净算；只剩 WayfairCG/3PL 是否计入待确认。
 - G1a v1（品类筛选、两仓完成品 99.18%）口径作废；以 `mapping_process.md` 为准。
 - **本步骤确认前不进入 G1b。**
+- 新增 `experiments/g1_contract/codex-sync.md`：给 Codex 的同步块（皮壳 1:1、旧 v1 作废、C21–C25）。
+  以后每次我方实质更新都在结尾附「给 Codex」同步块。
 
 ## 模板（后续阶段）
 

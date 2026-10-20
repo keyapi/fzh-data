@@ -13,6 +13,7 @@ tags: [supply-chain, g1, mapping, index]
 |---|---|
 | [README.md](README.md) | 复现命令与输入 |
 | [mapping_process.md](mapping_process.md) | **待确认**：只用 BOM 客户码精确匹配；base/-Cover/-out 与皮壳仓口径 |
+| [codex-sync.md](codex-sync.md) | 给 Codex 的 G1 口径同步（皮壳 1:1、旧 v1 作废、C21–C25） |
 | [results.md](results.md) | G1a v1 映射覆盖率（历史记录，口径已被 mapping_process 更正） |
 | [g1_mapping_coverage.py](g1_mapping_coverage.py) | 只读本地映射覆盖率脚本 |
 | [g1_missing_analysis.py](g1_missing_analysis.py) | 763 vs 155 未匹配归因（尾缀/平台SKU/P2 非 family） |
