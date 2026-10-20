@@ -31,9 +31,11 @@ tags: [supply-chain, g1, data-source, mapping, tongtool, erpnext]
 - `stock_alert` 每日任务只写**低库存行**，不是全量归档。
 - `web_automation tongtu.stock.export` 可定时导出 6 仓库存，但本机没有历史输出。
 - 本地只有 `20260514`、`20260807` 等稀疏结存，不能当连续历史。
-- **G1 只用 cutoff 当前快照；历史库存标 `not_available`。**
-- **P0**：从今天起每日全量快照（两仓）→ 不可变 Parquet，保留 13 个月；
-  不能用低库存告警结果代归档。库存策略回测等积累 3–6 个月后再做。
+- **G1 不需要历史库存**；只用 cutoff 当前快照。
+- 历史库存的用途是 **G2/G3 预测时剔除断货影响**，用 Notion/邮件/check0stock/SPS/零库存导出等信号；
+  没有信号时零月按 `zero_confirmed`，并跑 raw vs censored 敏感性，不假装知道断货。
+- **每日全量快照是独立任务，不是 G1 门槛**：从今天起另立，供未来库存策略回测；
+  不能用低库存告警结果代归档。
 
 ### 1.2 本地 2026-04..09 最新文件（示例）
 
@@ -107,7 +109,7 @@ tags: [supply-chain, g1, data-source, mapping, tongtool, erpnext]
 
 | 缺口 | 兜底 | 不能做什么 |
 |---|---|---|
-| 库存时间线 | **G1 只需 cutoff 当日快照**；用 `stock_alert`/`FZH-StockAlert-daily` 或通途 API 拉最新快照；如需历史，逐日快照留档 | **不要造“6 个月库存序列”**；不能拿 EN Bin 当可用库存；不能补 0 |
+| 库存时间线 | **G1 不需要历史库存**，只需 cutoff 当日快照；用 `stock_alert`/`FZH-StockAlert-daily` 或通途 API 拉最新快照 | **不要造“6 个月库存序列”**；不能拿 EN Bin 当可用库存；不能补 0 |
 | EN 生产/出库单据 | 用 EN API 只读（`item_shipment_status.py` / `fulfillment_query.py` / `erpnext/scripts/fetch.py`）；按单号/SKU 查询并缓存 | `Tongtool Order Item` 列表 403，从父单 `order_items` 读；不写生产 |
 | 头程事件 | 钉钉表/现有文件；没有标 unknown | 不能用“订单日期+3个月”冒充 ETA |
 | 历史 2023-01..2026-09 | `D:/文件存档/成本核算` + GSheet 月表 | 不能把处理后的品类当原始事实 |
