@@ -54,6 +54,26 @@ tags: [supply-chain, research, log]
 - PR #304 纪要更正：`practical-paths.md` 创建于 2026-09-02 17:35，不是「9/2 没有产出」。
 - 已写入 `01-existing-assets.md` §10；#300 的 §6 由维护者后续同步，本 PR 不改。
 
+## 2026-10-20 — Phase 2 三条调研线
+
+- 三个子 Agent 并行：业界实践（02）、AI/Agent SOTA（03）、开源方案（04）；各自只写自己的文件。
+- 证据量：02 = 24 条（S2），03 = 35 条（S3），04 = 51 条（S4）；未找到项 N-201–207 / N-301–308 / N-401–408。
+- URL 可达性抽检：110 个唯一 URL，96 个 200；其余为 403/429/Cloudflare（付费墙或反爬），非死链。
+- 关键来源人工复核：
+  - arXiv 2609.13840（Accuracy Is Not Service, 2026-09-12）：确认 Spearman −0.555、77.5%→92.0%。
+  - Quartz/Reuters（2026-05-22）：确认 Starbucks 约 9 个月后撤下 AI 盘点工具。
+  - accesson.kr（Quick-Commerce TSFM）：确认 TimesFM 汇总第一但优势集中于高周转，间歇段最佳模型随指标变。
+  - claude.com/pricing：确认 Sonnet 5.5 定价 $2/$10 per MTok。
+- 修正：03 的 frontmatter `okf_version` → `okf: v0.1`；证据计数 33→35。
+
+### Phase 2 核心结论（供 05 使用）
+
+- 先轻量 S&OP + 例外队列，不上 APS；补货用 DDMRP-lite，MEIO 只做两级。
+- TSFM 做挑战者而非主模型；稀疏需求先做 TSB/Croston + 偏差校正 + 分层选模。
+- LLM 不做最终数字；做编排、解释、归因、语义层问答，关键数字由确定性内核计算。
+- 推荐轻量栈：cron/uv/Python → DuckDB（算）→ SQLite（服务）→ Metabase → StatsForecast + HierarchicalForecast → OR-Tools → ERPNext 审批 → MCP 只读。
+- 明确不引入：Airflow/Dagster（当前）、K8s、dbt、Superset、深度预测、多 Agent 框架。
+
 ## 模板（后续阶段）
 
 ```text
