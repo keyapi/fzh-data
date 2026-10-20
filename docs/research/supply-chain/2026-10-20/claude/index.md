@@ -36,6 +36,7 @@ tags: [supply-chain, research, index]
 | [08-fact-contract.md](08-fact-contract.md) | 生产数量四分法、实体/键、守恒式、批次关联、SKU/单位/配套映射 |
 | [09-codex-review-response.md](09-codex-review-response.md) | 对 Codex 评审的接受/部分接受/不接受、已改内容、剩余分歧与裁决条件 |
 | [10-codex-round2-response.md](10-codex-round2-response.md) | 第二轮定向复审 R01–R07 处理、共同框架/决策/合成样例对照 |
+| [11-common-baseline.md](11-common-baseline.md) | G0 冻结基线（框架/契约/样例/决策表版本清单）+ G1 进入条件 |
 | [sources.md](sources.md) | 证据账本（ID / 主张 / 来源 / 日期 / 原文 / 强度） |
 | [log.md](log.md) | 过程记录、失败与放弃方向 |
 | [experiments/](experiments/index.md) | E1–E3 最小验证的代码、输入哈希与结果 |

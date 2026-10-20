@@ -10,6 +10,10 @@ tags: [supply-chain, fact-contract, quantity, batch, sku-mapping]
 
 # 08 — 端到端事实契约草案
 
+> **G0 基线**：本文件已随标签 `supply-chain-g0-baseline-20261020` 冻结；
+> 版本清单与 G1 进入条件见 [11-common-baseline.md](11-common-baseline.md)。
+> 变更必须新增版本并写明原因/影响/验证，不得静默修改。
+
 > 回应 Codex 评审第 1、4 项。目标：把「需求 → 生产 → 出库 → 采购在途 → 头程 → 实收」
 > 的实体、键、数量与守恒关系写成可实现的契约，**不重写已有事实层**（优先扩展 #291/#294）。
 > 本文是草案；标注「待验证」的条目必须在 EN 测试环境或只读抽样中确认。
@@ -38,19 +42,32 @@ tags: [supply-chain, fact-contract, quantity, batch, sku-mapping]
 
 ## 2. 守恒等式（按 cutoff 与需求类型限定）
 
-### 2.1 需求冲减（R05）
+### 2.1 需求冲减（R05 + G0 桶内已发订单）
 
 ```text
-terminal_demand   = open_terminal_orders + net_forecast
-net_forecast      = max(0, forecast_qty − included_order_qty)
-internal_replenishment_so  → 不计入 terminal_demand（单独标记）
+net_forecast        = max(0, forecast_qty − consumed_order_qty)
+bucket_total_demand = consumed_order_qty + net_forecast
+remaining_to_fulfill = open_order_qty + net_forecast
+internal_replenishment_so  → 不计入 bucket_total_demand（单独标记）
 ```
 
-- `forecast_qty` 是**服务池 × 计划桶 × 版本**的预测；`included_order_qty` 是已被该预测
-  覆盖的终端订单量；只有差额才是净预测。
-- 匹配必须写清：订单类型、承诺日期窗口、渠道/仓、版本；内部补货 SO 必须排除，
-  否则同一需求会被下单两次。
-- 预测 100 已含订单 30 → 净预测 70、总需求 100；再下内部补货 SO 80 不增加总需求。
+四个量必须分开，且同范围/同 cutoff：
+
+| 量 | 定义 |
+|---|---|
+| `forecast_qty` | 服务池 × 计划桶 × 版本的预测总量 |
+| `consumed_order_qty` | 落在该桶匹配窗口内、且被该预测覆盖的终端订单总量（**含已发、部分发、未发**） |
+| `open_order_qty` | 这些订单当前仍未交的量（只用于“还要发多少”） |
+| `net_forecast` | 预测扣除桶内已覆盖订单后的净预测 |
+
+- **桶内已发订单继续冲减预测**：预测 100、订单 30 已全部发完 → `consumed=30`、`net=70`、
+  `bucket_total_demand=100`，不能因为 `open=0` 又把预测当成 100。
+- 部分发运：订单 30 已发 10、未发 20 → `consumed=30`、`open=20`、`net=70`；
+  `remaining_to_fulfill=90`（20 未发 + 70 净预测）。
+- 交付**不能**让已冲减的需求重新长出来；不能用 `open_order_qty` 代替 `consumed_order_qty` 做冲减。
+- 匹配范围：订单类型、承诺日期窗口、渠道/仓、版本必须一致；内部补货 SO 排除。
+- 取消、跨桶、超额订单（`consumed > forecast`）规则由业务确认；超额部分进异常/下一桶，
+  不得静默丢弃或把 `net_forecast` 变成负数。
 
 ### 2.2 交付与反向流
 
@@ -66,36 +83,48 @@ return_reopen     = 仅当业务明确批准补发，才增加新的履约义务
 - 例：下单 100、取消 20、正向发运 70、退货 10 → 有效 80 = 正向 70 + 原未发 10；
   净交付 60；返运 10 另记。
 
-### 2.3 同 cutoff 的互斥供应余额（R06）
+### 2.3 同 cutoff 的互斥供应余额（R06 + G0）
+
+**不要用一条加法公式把所有状态相加**；先按 `(cutoff, item, warehouse, UOM)` 定义互斥状态，
+再对状态求和。同一件货在任一 cutoff 只能落在一个状态。
+
+| 状态 | 含义 | 互斥/来源规则 |
+|---|---|---|
+| `on_hand_available` | 已在该库存快照中的可用量 | 同一快照里已扣预留后的余额 |
+| `allocated_to_open_orders` | 同一快照中已预留/分配 | 与 `on_hand_available` 互斥；不能扣两次 |
+| `wip_unfinished` | 未完成工序部分（按成品当量/UOM） | 只含未完成部分；不与 `produced_pending_stock_in` 重叠 |
+| `produced_pending_stock_in` | 已完成但尚未提交入库 | 与 `wip_unfinished` 互斥；已完成部分 |
+| `in_transit_reconciled` | 采购/头程经 crosswalk 后的**单一**在途余额 | 两个来源视图只保留一个余额；未对齐/冲突进异常 |
+| `arrived_pending_receipt` | 已到港/到仓但未收货 | 已到但未进入收货行 |
+| `received_pending_putaway` | 已收货但尚未进入可用快照 | 只有“已收但未进快照”的余量可单列 |
+
+规则：
+
+- **新收货是来源事件**：若 `on_hand_available` 已包含新收 20，不得再加 `received_available 20`；
+  只把“已收但尚未进入该库存快照”的余量列为 `received_pending_putaway`。
+- **采购/头程在途**：保留两种来源视图，经同一批次 crosswalk 得到一个 `in_transit_reconciled`；
+  未对齐或数量冲突进异常，**不直接相加、不取 max、不取平均**。
+- **WIP 与已生产待入库**：WIP 只含未完成部分；两者按相同规范物料/UOM 对账；
+  不要把不同组件件数和成品件数强加成一个“供给总件数”。
+- 累计里程碑（发运 100 → 在途 100 → 到港 100 → 实收 100）只用于审计，
+  **不能相加成 400**。
+- 没有实际来源的状态标 `unknown`，不要当 0。
+
+### 2.4 收货与海外实收（R04 + G0）
 
 ```text
-supply_at_cutoff = on_hand_available
-                 + allocated_to_open_orders
-                 + wip_not_yet_stock_in
-                 + produced_pending_stock_in
-                 + purchase_in_transit
-                 + headleg_in_transit
-                 + arrived_pending_receipt
-                 + received_available
+overseas_gross      = accepted + damaged + rejected
+qualified_received  = accepted                 # 合格实收，不等于可用
+available_after_putaway = accepted − pending_inspection − pending_processing − pending_shelving
+unreceived          = ordered − accepted − damaged − rejected
 ```
 
-- **同一件货在任一 cutoff 只能落在一个 bucket**；累计里程碑（发运 100 → 在途 100 → 到港 100
-  → 实收 100）不能相加成 400。
-- `purchase_in_transit` 与 `headleg_in_transit` 是两条管道，不能相加；必须经 `headleg_allocation` 归位。
-- `allocated_to_open_orders` 与 `on_hand_available` 互斥；不要“扣了预留再扣一次”。
-- 累计事件表只用于审计，不用于余额求和。
-
-### 2.4 收货与海外实收（R04）
-
-```text
-overseas_gross    = accepted + damaged + rejected
-overseas_received = accepted
-unreceived        = ordered − accepted − damaged − rejected
-```
-
+- 字段命名固定：`gross`（总收）、`accepted`（合格）、`damaged`（损坏）、`rejected`（拒收）。
+- `accepted` 是**合格实收**指标；合格品仍可能待检、待加工、待上架，**不能直接等同可用库存**。
+- 无实际来源时，`pending_*` 与 `available_after_putaway` 标 `unknown`，不要当 0。
 - 收货行有 `source_receipt_id + source_receipt_line_id + revision`；
   新 revision **替换**旧 revision，不累计。
-- 一行收货可分摊到多个 DN 行/供应批次；`overseas_received` 只算 `accepted`，
+- 一行收货可分摊到多个 DN 行/供应批次；`qualified_received` 只算 `accepted`，
   不把 discrepancy 当已实收。
 - 其余管道：
 

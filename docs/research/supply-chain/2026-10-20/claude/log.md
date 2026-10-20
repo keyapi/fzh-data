@@ -154,6 +154,19 @@ tags: [supply-chain, research, log]
 - 实跑 Codex `contract_examples.py`：13/13 PASS（仅算例自洽）。
 - 不访问 EN 生产、不写业务系统、不锁定数据库/计划引擎。
 
+## 2026-10-20 — G0 基线冻结 / G1 准备
+
+- 读 Codex #301 `5708609d` 的 `alignment-status.md` §3。
+- 08 补准两处契约：
+  - 供应余额改为**互斥状态表**：新收不与可用重复；采购/头程在途经 crosswalk 只保留一个余额；
+    WIP 只含未完成部分；accepted ≠ available；无来源标 unknown。
+  - 需求冲减区分 `forecast_qty / consumed_order_qty / open_order_qty / net_forecast`；
+    **桶内已发订单继续冲减预测**，交付不使已冲减需求复活。
+- 新增 `11-common-baseline.md`：冻结共同框架/事实契约/验收样例/决策表的版本清单 +
+  G1 脱敏快照本地回放的输入、步骤、验收门槛。
+- 基线标签：`supply-chain-g0-baseline-20261020`（#300 提交）。
+- #300 与 #301 分别审核合并；不把 #301 并入 #300；不写生产。
+
 ## 模板（后续阶段）
 
 ```text

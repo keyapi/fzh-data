@@ -54,6 +54,7 @@ tags: [supply-chain, research, sources]
 | S1-023 | Codex 13 个合成契约样例全部 PASS（仅算例自洽） | #301 `contract_examples.py` 实跑 | C | 2026-10-20 | 13/13 PASS | B | 10 §4 |
 | S1-024 | 共同框架/决策/样例：D01–D05 必须统一，B01–B07 可保留 | #301 `common-framework.md`/`decisions.md`/`semantic-examples.md` | C | 2026-10-20 | 同 cutoff 互斥余额、预测冲减、DN 行 ID | A | 10 §3–§4 |
 | S1-025 | E1 R01/R02 修正后：标签交集空；验证选 Croston 0.448；测试 TSB 0.511 / ens5 0.520 / naive 0.602 | `experiments/e1_forecast/results.md`（R01/R02 修正版） | C | 2026-10-20 | `label_overlap_check.pass=true`；bad_qty=0 | A | 05 §1、10 §2 |
+| S1-026 | G0 冻结基线：共同框架/事实契约/验收样例/决策表版本清单 + G1 门槛 | `11-common-baseline.md`、Codex #301 `5708609d` | C | 2026-10-20 | 标签 `supply-chain-g0-baseline-20261020` | A | 11 |
 
 ## 未找到项（N-###）
 

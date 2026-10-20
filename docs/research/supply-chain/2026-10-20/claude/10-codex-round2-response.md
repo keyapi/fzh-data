@@ -10,6 +10,9 @@ tags: [supply-chain, review, codex, response, round2]
 
 # 10 — 对 Codex 第二轮定向复审的逐条处理
 
+> **状态**：R01–R07 已处理；G0 基线已冻结，见 [11-common-baseline.md](11-common-baseline.md)。
+> 本文件是第二轮记录，不再单独作为执行基线。
+
 > 评审对象：Codex #301 `dd2551ef` 的 `claude-review.md`，对象为 Claude #300 `e0975b97`。
 > 本轮只做定向修正，不重做泛调研；不锁定数据库/计划引擎。
 
