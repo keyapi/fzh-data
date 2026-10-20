@@ -157,6 +157,42 @@ date: 2026-10-20
 
 ---
 
+## 5.5 未合并 PR（比只看分支更重要）
+
+**2026-10-20 实查**：本仓库有 **20+ 个 open PR**，还有一批 **closed 但未合并**的 PR。
+只看 `main` 会严重低估已有成果；只看分支会漏掉「分支还在、PR 已关」和「PR 开了、分支已删」。
+
+```bash
+gh pr list --state open   --limit 200 --json number,title,headRefName,updatedAt,url
+gh pr list --state closed --limit 200 --json number,title,headRefName,mergedAt,url \
+  --jq '.[] | select(.mergedAt == null)'
+```
+
+### 与供应链整合相关、尚未合并的 PR（按相关度）
+
+| PR | 分支 | 内容 | 状态 |
+|---|---|---|---|
+| [#291](https://github.com/keyapi/fzh-data/pull/291) | `claude/frosty-hellman-58de7a` | EN 统一履约查询（阶段 0–3）+ 端到端蓝图 | open |
+| [#295](https://github.com/keyapi/fzh-data/pull/295) | `feature/ustx-cost-compare` | 美中 USTX 成本三方案（A/B1/B2）+ cost-engine-spec | open |
+| [#294](https://github.com/keyapi/fzh-data/pull/294) | `feature/en-order-side-input` | 通途订单订单侧输入 + 月度盈利审计 | open |
+| [#298](https://github.com/keyapi/fzh-data/pull/298) | `feature/en-api-ops` | 重量模板重尺数据导出与联动核对 | open |
+| [#288](https://github.com/keyapi/fzh-data/pull/288) | `claude/ce-okf-branch-param-desk` | 工单驱动的受控渠道接入演示（**可能是网页 Agent demo 之一**） | open |
+| [#287](https://github.com/keyapi/fzh-data/pull/287) | `docs/fedex-billing-online-guide` | 待追尾程清单 + FedEx 账单下载指引 | open |
+| [#283](https://github.com/keyapi/fzh-data/pull/283) | `docs/dingtalk-api-excel-sellfox` | 钉钉 API / Excel / 赛狐月度三条线核对 | open |
+| [#280](https://github.com/keyapi/fzh-data/pull/280) | `docs/colab-cost-current-state` | 旧 Colab 成本链现状档案 | open |
+| [#296](https://github.com/keyapi/fzh-data/pull/296) | `docs/dingtalk-sept-period-closeout` | 8/9 月账期收尾与 Colab 定稿文件名 | open |
+| [#297](https://github.com/keyapi/fzh-data/pull/297) | `claude/vigorous-lehmann-889bf7` | PB 断货闭环 + 补货量估算方法 | open |
+| [#278](https://github.com/keyapi/fzh-data/pull/278) | `docs/pb-orders-tongtool-reorder-suffix` | 通途重复建单后缀 + UPS 取件才算真发 | **closed 未合并** |
+| [#232](https://github.com/keyapi/fzh-data/pull/232) | `feature/history-last-leg-v2` | 历史尾程费率表升级（剖析/实测/定稿模型） | **closed 未合并** |
+| [#234](https://github.com/keyapi/fzh-data/pull/234) | `claude/zen-torvalds-5b9c9d` | AI ops pilot：Workspace Agent 能力边界 | **closed 未合并** |
+| [#175](https://github.com/keyapi/fzh-data/pull/175) | `feature/cursor-tongtool-mcp` | Cursor 注册通途 MCP + 宿主探测 | **closed 未合并** |
+
+> **规则**：调研阶段每个工具都要**独立跑一遍** open + closed-unmerged 的 PR 清单，
+> 不要只依赖本表（表会过时）。发现新的相关 PR → 补进自己的 `01-existing-assets.md`，
+> 不要改本文件（文件所有权见 04）。
+
+---
+
 ## 6. 用户提到但仓库里**没找到**的（待确认）
 
 > 这几项不要当成「不存在」，也不要当成「存在」—— 新对话第一件事是问用户要位置。

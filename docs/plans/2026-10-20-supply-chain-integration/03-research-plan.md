@@ -13,6 +13,11 @@ date: 2026-10-20
 >
 > 调研结果直接决定 02 能力地图里 P0/P1 的取舍，以及「自研 / 开源 / 采购」的比例。
 
+> **⚠️ 本文件是三家共用的一份 brief。**
+> Claude / Codex / Cursor **各自独立覆盖全部三条线**（不做 A/B/C 分工），
+> 各自输出到 `docs/research/supply-chain/2026-10-20/<tool>/02–04`。
+> 分工与独立性要求见 [04-multi-agent-handoff.md](04-multi-agent-handoff.md)。
+
 ## 0. 调研纪律（先读）
 
 1. **区分事实与宣传**：厂商博客/白皮书只算「厂商主张」；结论优先引用独立评测、公开案例、
@@ -51,7 +56,7 @@ date: 2026-10-20
 
 ### 产出
 
-`05-research-a-industry-practices.md`：
+`docs/research/supply-chain/2026-10-20/<tool>/02-industry-practices.md`：
 
 - 一张「方法 → 适用条件 → 我们是否适用 → 落地成本」表；
 - 3~5 个可直接抄的做法（含模板/指标定义）；
@@ -88,7 +93,7 @@ date: 2026-10-20
 
 ### 产出
 
-`06-research-b-ai-agent-sota.md`：
+`docs/research/supply-chain/2026-10-20/<tool>/03-ai-agent-sota.md`：
 
 - 「能用 AI 做 / 不能用 AI 做 / 只能辅助」三栏清单；
 - 推荐架构模式（含反例）；
@@ -119,7 +124,7 @@ date: 2026-10-20
 
 ### 产出
 
-`07-research-c-open-source.md`：
+`docs/research/supply-chain/2026-10-20/<tool>/04-open-source.md`：
 
 - 一张「层 → 候选 → 推荐 → 理由 → 风险」表；
 - 最小可运行组合（reference stack）与替代方案；
