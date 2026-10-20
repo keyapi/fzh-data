@@ -42,6 +42,7 @@ tags: [supply-chain, research, index]
 | [sources.md](sources.md) | 证据账本（ID / 主张 / 来源 / 日期 / 原文 / 强度） |
 | [log.md](log.md) | 过程记录、失败与放弃方向 |
 | [experiments/](experiments/index.md) | E1–E3 最小验证的代码、输入哈希与结果 |
+| [experiments/g1_contract/](experiments/g1_contract/index.md) | G1a 本地映射覆盖率（三角靠枕 × 两仓 × 2026-04..09） |
 
 ## 导航说明
 
