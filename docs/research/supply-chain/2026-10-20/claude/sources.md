@@ -70,6 +70,7 @@ tags: [supply-chain, research, sources]
 | S1-039 | `EN产品BOM成本列表20261016.xlsx`：3,700 行，KS0001/KS0248 1,739 行；列 `产品编号`+`客户物料号` | `D:/Work/王忠于/成本核算/` 只读核对 | C | 2026-10-20 | G1 映射首选 | A | 13 §1.4/§2、11 §2.2 |
 | S1-040 | EN 测试环境没有真实 SO/PP/WO/JC/SE/DN；G1 必须用生产 API 只读 | 用户 2026-10-20 说明 | C | 2026-10-20 | 不写生产 | A | 13 §1、11 §2.2 |
 | S1-041 | G1a 两仓完成品映射覆盖 99.18% 行/98.84% 件；0 歧义；未匹配 155 行/224 件 | `experiments/g1_contract/results.md` | C | 2026-10-20 | BOM 20261016：3,700 行/1,739 family 行 | A | G1a、05 §5 |
+| S1-042 | 763 全仓 vs 155 两仓；155 中 31 行尾缀（30 Cover/1 out）、124 行 P2 非 family；真 family 缺口 0 | `experiments/g1_contract/out/missing_analysis.json` | C | 2026-10-20 | P1/P2 足够，Colab 4.2 未介入 | A | G1a §5 |
 
 ## 未找到项（N-###）
 

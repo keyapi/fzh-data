@@ -12,6 +12,7 @@ tags: [supply-chain, g1, mapping, readme]
 ```bash
 cd docs/research/supply-chain/2026-10-20/claude/experiments/g1_contract
 uv run python g1_mapping_coverage.py
+uv run python g1_missing_analysis.py
 ```
 
 输入（只读，不入库）：
@@ -22,6 +23,7 @@ uv run python g1_mapping_coverage.py
 输出：
 
 - `out/mapping_coverage.json`：BOM 索引统计、两仓完成品口径、全仓对照、月度、仓库/渠道/族拆分、未匹配前缀。
+- `out/missing_analysis.json`：763 vs 155 归因、尾缀/平台SKU 可救、P2 非 family 映射、仍缺失样本。
 - 聚合计数，不含客户姓名/地址/电话/邮箱/原始行。
 
 边界：不访问 EN 生产、不写业务系统；未匹配不静默丢弃。

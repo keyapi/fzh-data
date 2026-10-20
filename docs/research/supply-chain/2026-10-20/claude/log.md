@@ -215,6 +215,11 @@ tags: [supply-chain, research, log]
 - 仓库归一：CENTRADE 14,751 件；DANEEY 成品 4,516 件；`FZH-DANEEY-皮壳仓库` 10,371 件排除
   （组件/半成品，待业务确认）；波兰/WayfairCG/退货仓不计入 G1。
 - 判定：**PASS**；未匹配单列，下一步逐条核。
+- **未匹配归因（763 vs 155）**：763 是全仓三角口径，155 是 G1 两仓完成品口径，差额 608 来自
+  皮壳/半成品 365、波兰 173、其他 66、退货 4。155 中 31 行可由 `-Cover`(30)/`-out`(1) 尾缀回退；
+  124 行在 EN Cost Review 里映射到**非 family** EN 物料（KS0194/KS0003/KS0383/KS0419/KS0260 等）；
+  **真正无法解释的 family 缺失为 0**。`-Cover` 按皮壳组件处理，不算完成品需求。
+- 两条路径：P1 EN BOM 成本表 + P2 EN Tongtool Cost Review 足够；Colab 4.2 未介入 G1 family 映射。
 - 产物：`experiments/g1_contract/`（脚本、聚合 JSON、results/README/index）；无 PII/原始行入库。
 
 ## 模板（后续阶段）
