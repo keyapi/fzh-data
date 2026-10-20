@@ -1,0 +1,6 @@
+# G1b row-level / raw outputs: keep local, do not commit to the repo.
+stock_snapshot_*.json
+g1b_en_*.json
+g1b_en_extract.log
+en_*.txt
+g1b_coverage_*.json

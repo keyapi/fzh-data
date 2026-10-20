@@ -14,10 +14,11 @@ tags: [supply-chain, g1, data-source, mapping, tongtool, erpnext]
 > 三角靠枕类绍兴只发皮壳，成品销售 1:1 消耗皮壳；`-Cover` 是只卖皮壳的例外。
 > **皮壳仓是分公司仓，不是“皮壳产品仓”**；其 family 销售行产品名也是「三角…靠枕」。
 > G1 出库消耗毛量 = family 出库（base + `-Cover`，含补发）1:1 皮壳，共 **33,719 件/6 个月**；
-> **不是净需求/净消耗**。补发是出库消耗，计入补货；退货是反向流，只有回库可再售才冲减：
-> 三角暂按 5% 情境（`sales_base≈33,647`，`restock_share` 未知；0/50/100% → 33,719 / 32,878 / 32,037）。
+> **不是净需求/净消耗**。补发是出库消耗，计入补货；退货是反向流：
+> **库存净算不二次冲减**——已回库的退货已在 `available`，未回库/报废也不冲减。
+> 三角 5% 仅作未来需求情景（约 1,682 件），不用于当前库存净算；未来可从 Amazon 结算 V2/退货报表配置化。
 > WayfairCG 是下游 3PL，1,162 件 family 销售计入毛量；分公司→3PL 转移不重复计；其他 3PL 无 family 销售；
-> 海绵 `-Foam` 是另一条组件流。**G1b 可在上述假设下启动**；供货归属按调拨单分配，不固定 USNJ/USTX。
+> 海绵 `-Foam` 是另一条组件流。**G1b 已启动**；供货归属按调拨单分配，不固定 USNJ/USTX。
 > 详见 `experiments/g1_contract/mapping_process.md`。
 
 > 结论：**PR #304 是服务账号直读 GSheet 的 43 张月表，不是业务导出。**
@@ -37,20 +38,23 @@ tags: [supply-chain, g1, data-source, mapping, tongtool, erpnext]
 | EN SO/PP/WO/JC/SE/DN | **EN 生产 API 只读**：`EN_API/item_shipment_status.py`（SO→PP→WO→JC→DN）、#291 `EN_API/fulfillment_query.py`、`erpnext/scripts/fetch.py` | **测试环境没有真实单据**；必须用生产只读，按单号/SKU 查询，缓存本地 Parquet；不写生产 |
 | **WayfairCG 库存** | **Wayfair 后台手工导出（YTQ）** | **赛狐平台仓 API 只覆盖 Temu/Mercado/Walmart WFS，无 Wayfair**；通途/赛狐调拨只作“发出量”，不能当实际在手；到货丢件需对账 |
 | **3PL 供货归属** | 赛狐调拨单列表 `POST /api/warehouseTransfer/pageList.json`（发货仓/收货仓/SKU/数量/状态/时间）；通途调拨单如可得 | 按 `source_branch × sku × period` 分配；无数据标 `unknown` + 情景，不固定 USNJ/USTX |
-| **补发** | 通途订单行的 `是否补发` + M 后缀；#294 `order_side_input.py` 补发口径 | 补发是出库消耗，计入补货；M 后缀不是唯一判据 |
+| **补发** | 通途订单行的 `是否补发货` + M 后缀；#294 `order_side_input.py` 补发口径 | 补发是出库消耗，计入补货；M 后缀不是唯一判据 |
 | **退货** | 退货单/贷项通知/平台退货事件 | 订单文件没有退货行；三角 5% 是假设；需确认是否回库可再售 |
 
 ### 1.1 库存历史限制（重要）
 
 - **通途 API 只给当前库存，没有历史序列。**
 - `stock_alert` 每日任务只写**低库存行**，不是全量归档。
-- `web_automation tongtu.stock.export` 可定时导出 6 仓库存，但本机没有历史输出。
+- `web_automation tongtu.stock.export` 可定时导出 6 仓库存到 `web_automation/output/`。
+  **2026-10-20 已注册 `FZH-TongtuAutoExport-stock`：每日 02:17**，日志 `web_automation/logs/export-stock.log`；
+  此前本机没有该任务/日志。首次运行可能需要在弹出的浏览器登录一次（`--auto-login` 可自动 OCR）。
 - 本地只有 `20260514`、`20260807` 等稀疏结存，不能当连续历史。
 - **G1 不需要历史库存**；只用 cutoff 当前快照。
 - 历史库存的用途是 **G2/G3 预测时剔除断货影响**，用 Notion/邮件/check0stock/SPS/零库存导出等信号；
   没有信号时零月按 `zero_confirmed`，并跑 raw vs censored 敏感性，不假装知道断货。
-- **每日全量快照是独立任务，不是 G1 门槛**：从今天起另立，供未来库存策略回测；
-  不能用低库存告警结果代归档。
+- **每日全量快照是独立任务，不是 G1 门槛**：已开始注册；不能用低库存告警结果代归档。
+- **平台库存 <=2 视为无货**：这是人工规则，会造成人为断货/删失；分析时标 `censored/manual_low`，
+  不补 0；如可得，记录平台库存快照与调整事件。
 
 ### 1.2 本地 2026-04..09 最新文件（示例）
 
@@ -108,6 +112,8 @@ tags: [supply-chain, g1, data-source, mapping, tongtool, erpnext]
   - 对账差额进 `discrepancy`，不静默修正；
   - 给 WayfairCG 补货加安全缓冲，或按较保守库存（如 min(通途, Wayfair 后台)）净算。
 - **供货归属不固定 USNJ/USTX**：可能按 SKU 分流、也可能随时间变化；必须看调拨单。
+  - **调拨完成 ≠ Wayfair 实收**；历史供货占比 ≠ 当前库存归属。
+    当前库存用后台实盘；归属用近期调拨，缺数据标 `unknown`。
   - 赛狐 `POST /api/warehouseTransfer/pageList.json`：`warehouseId`=发货仓、
     `targetWarehouseId`=收货仓、`items[].commoditySku`、`items[].goods`、`status`
     （0草稿/1待审核/2待调拨/3待入库/4已完成/5已驳回/6已作废）、`createTime`；
@@ -120,13 +126,13 @@ tags: [supply-chain, g1, data-source, mapping, tongtool, erpnext]
 
 ### 1.6 补发与退货数据（补货口径）
 
-- **补发**：通途订单行有 `是否补发`；M 后缀是线索，不是唯一判据。
+- **补发**：通途订单行有 `是否补发货`；M 后缀是线索，不是唯一判据。
   2026-04..09 全量 Mxxx 286 行/333 件（是 172/否 114）；family Mxxx 115 行/124 件（是 64/否 51）。
   补发是出库消耗，已含在 33,719 中，计入补货，不另加/不净扣。
 - **退货**：订单文件没有退货/贷项/负数行；必须从退货单、贷项通知或平台退货事件取。
-  三角退货率暂按 **5%**（`confidence=low`，业务假设）；其他品类/新品可能更高，不能外推。
-  只有退回并重新入库可再售才冲减：`net = 33,719 − 33,647×5%×restock_share`（≈1,682×restock_share）。
-  `restock_share` 未知，输出 0%/50%/100% 情境；默认 0%（不冲减，保守保服务）。
+  三角退货率暂按 **5% 只作未来需求情景**（`confidence=low`，业务假设）；本期参考约 1,682 件。
+  **库存净算不二次冲减**：已回库的退货已在 `available`；未回库/报废也不冲减。
+  未来可从 Amazon 结算 V2/退货报表取实际值并配置化；其他品类/新品另定。
 
 ### 1.7 运营/Listing 与产能数据（WX 2026-10-20 反馈）
 
@@ -135,6 +141,8 @@ tags: [supply-chain, g1, data-source, mapping, tongtool, erpnext]
 - 需要：运营名单、入职日期、首单日期、Listing 上线日期、渠道账号 → 运营/Listing 映射。
 - 产能/交期不确定：需要历史下单→到货分布、工厂产能/节假日，用于区间/情景；不能固定 3 个月。
 - 数据提供：WX（计划）/运营/工厂；缺失时美中只能短窗 run-rate，不能套历史模型。
+- **销售平台库存手工调整**：运营有时把库存 <=2 视为无货。这会造成**人为断货/删失**，
+  不能当真实零需求；分析时标 `censored/manual_low`，不补 0。若可得，记录平台库存快照与调整事件。
 
 ## 2. 映射规则（权威优先级）
 
@@ -149,6 +157,8 @@ tags: [supply-chain, g1, data-source, mapping, tongtool, erpnext]
 | **P3（兜底）** | Colab 4.2 及后续派生物：`品类orig/材料编码/尺寸/有无扣/品类尺寸面料编码` | **仅当 P1 缺失时使用**；可能不一致 | `mapping_source=colab_4_2`，输出 `fallback=true` |
 
 - **不要**用拼接串或按前缀过滤（`TT` 前缀会漏 `CE/SX/PP`）；完整通途SKU 精确匹配。
+- **EN SO 行可能用 `PK#`/`ND#` 包装码**：BOM `产品编号` 是 `KS0001-...`，订单行实际物料可能是
+  `PK#KS0001-...`。G1b 查 SO 用 `--customer-code` 或先做 `KS → PK#` 映射；只按 KS 精确查会漏单。
 
 **20261016 BOM 成本表处理规则**：
 

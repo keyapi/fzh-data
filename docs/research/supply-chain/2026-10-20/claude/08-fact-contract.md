@@ -87,18 +87,19 @@ return_reopen     = 仅当业务明确批准补发，才增加新的履约义务
 
 ```text
 outbound_consumption = positive_shipped + reissue_shipped
-net_consumption      = outbound_consumption − resalable_returns
+# 库存净算：不要用 returns 冲减 demand
+# 已回库的退货 -> 已在 on_hand_available；未回库/报废 -> 不冲减
 reissue_shipped      = Σ submitted DN 中补发/换货行（Mxxx 是线索，不是唯一判据）
 returned_total       = Σ 退货 DN / 贷项 / 平台退货事件
-resalable_returns    = returned_total × restock_share（回库且可再售）
 ```
 
 - **补发/换货是出库消耗，计入补货需求**；它不是新的客户订单义务，不重复生成 open order。
-- 退货不自动重开未交义务；只有回库且可再售才冲减消耗；报废/退回供应商不冲减。
-- 补发后又退货：补发已在 `outbound_consumption`，只有退货回库才进 `resalable_returns`，避免双扣/漏扣。
-- G1 三角没有退货单数据：`return_rate=5%` 是**假设**（`confidence=low`），不是契约事实；
-  `restock_share` 未知，输出 0%/50%/100% 情境。
-- 补发判定同时看 `是否补发` 与 M 后缀/渠道/订单规则；引用 #294 的补发口径，不能只凭后缀。
+- 退货不自动重开未交义务；**已回库的退货已经在可用库存里，不得再从需求扣一次（双扣）**；
+  未回库/报废也不冲减。若预计会回库再售，应作为未来供给（in-transit/receipt）单列，而不是减需求。
+- 补发后又退货：补发已在 `outbound_consumption`，退货回库已在库存中，同样不再重复冲减。
+- G1 三角没有退货单数据：`return_rate=5%` 是**未来需求情景假设**（`confidence=low`），
+  本期参考量约 1,682 件；**不用于当前库存净算**。未来可从 Amazon 结算 V2/退货报表取实际值并配置化。
+- 补发判定同时看 `是否补发货` 与 M 后缀/渠道/订单规则；引用 #294 的补发口径，不能只凭后缀。
 
 ### 2.3 同 cutoff 的互斥供应余额（R06 + G0）
 
@@ -111,7 +112,7 @@ resalable_returns    = returned_total × restock_share（回库且可再售）
 > 每日全量快照是独立任务，不能用 `stock_alert` 的低库存行当归档。
 >
 > **WayfairCG 3PL 特例**：其 `on_hand_available` 必须用 **Wayfair 后台手工导出**（`source=wayfair_backend_manual`），
-> Tongtool/赛狐调拨只算 `in_transit`/发出量，不能当在手；到货丢件进 `discrepancy`。
+> 通途/赛狐调拨只算 `in_transit`/发出量，不能当在手；**调拨完成 ≠ 实收**；到货丢件进 `discrepancy`。
 > 赛狐平台仓 API 无 Wayfair（只有 Temu/Mercado/Walmart WFS）。无后台数据时标 `unknown`，不静默补 0。
 >
 > **供货归属**：WayfairCG 不一定固定由 USNJ 或 USTX 供货，可能按 SKU 分流。
@@ -282,8 +283,8 @@ pending_stock_in = last_op_reported − stock_in_produced
 | V18 | WayfairCG 库存是否与 Wayfair 后台一致；调拨 vs 收货差多少 | YTQ 后台导出 vs Tongtool 调拨记录 | 3PL 库存不能用 Tongtool 当在手；丢件进 discrepancy |
 | V19 | 运营/Listing 起始日期、首单日期是否可得 | 运营名单 + 订单首单 | 美中 cohort/ramp 建模的前提；缺失则只能短窗 run-rate |
 | V20 | 产能/交期分布是否有数据 | 工厂交期/历史到货 | 不能用固定 3 个月；需区间/情景 |
-| V21 | 补发识别：M 后缀与 `是否补发` 覆盖是否一致 | 取 family Mxxx 115 行，对照 #294 补发口径 | 补发计入出库消耗；M 后缀不是唯一判据 |
-| V22 | 退货是否回库、可再售比例多少 | 取退货单/平台退货事件，核对通途入库 | 三角 5% 是假设；`restock_share` 0/50/100% 敏感性 |
+| V21 | 补发识别：M 后缀与 `是否补发货` 覆盖是否一致 | 取 family Mxxx 115 行，对照 #294 补发口径 | 补发计入出库消耗；M 后缀不是唯一判据 |
+| V22 | 退货是否回库、可再售比例多少 | 取退货单/平台退货事件，核对通途入库 | 三角 5% 仅未来需求情景；库存净算不二次冲减 |
 | V23 | 3PL 供货归属能否从调拨单还原 | 赛狐调拨单按目标仓=WayfairCG 拉取；核对来源仓/SKU/数量 | 无数据标 unknown + 情景；不断言固定 USNJ/USTX |
 
 > 测试边界：V1–V20 全部只读；EN 测试环境优先，生产只读抽样需批准；**禁止写 EN 生产库存账**。

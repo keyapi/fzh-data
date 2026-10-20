@@ -253,7 +253,7 @@ tags: [supply-chain, research, log]
   产能/交期用区间/情景，不输出固定 3 个月到货日。08 增加 operator/listing/cohort 与 V19/V20；
   06 增加 A12/B27/E12；13 增加 §1.6 运营/产能数据。
 - **Codex 复核意见处理（2026-10-20）**：33,719 只能叫「family 匹配毛量」，不是净需求；
-  退货仓 165 件是正数出库销售（Amazon/Wayfair/OSTK，是否补发=否），不是退货；
+  退货仓 165 件是正数出库销售（Amazon/Wayfair/OSTK，是否补发货=否），不是退货；
   family 补发 66 行/72 件待交易事件核实；订单文件 45,129 行/48,346 件**无负数行**；
   未匹配 text-tri 759/925 标 pending，不直接判非 family。
   全量去向：family 32,888 + 未匹配 759 + 非 family 退货仓 148 + out_of_scope 11,334 = 45,129 行；
@@ -266,8 +266,8 @@ tags: [supply-chain, research, log]
 
 - 用户明确：**补发/换货是出库消耗，补货必须计入**，不能只按会计“销量”净扣；
   退货是反向流，三角暂按 5% 假设，不确定退货是否在通途重新入库。
-- 补发核对：全量 Mxxx 286 行/333 件（`是否补发=是` 172 / 否 114）；
-  family Mxxx 115 行/124 件（是 64 / 否 51）；family `是否补发=是` 66/72。
+- 补发核对：全量 Mxxx 286 行/333 件（`是否补发货=是` 172 / 否 114）；
+  family Mxxx 115 行/124 件（是 64 / 否 51）；family `是否补发货=是` 66/72。
   **M 后缀不是唯一判据**。family Mxxx 渠道：Amazon 52、manomano 47、Wayfair 7、Cdiscount 3、
   PotteryBarn 2、HOME24 1、Mirakl 1、allegro 1、Shopify 1。
 - 退货：订单文件无负数行；5% 是**假设**（`confidence=low`），不是事实；
@@ -278,6 +278,32 @@ tags: [supply-chain, research, log]
   新增 `3pl_supply_allocation`；无数据 unknown + 情景，不阻塞 family 总需求。
 - 文档更新：mapping_process §3/§4、codex-sync、05/06/08/11/13/results、sources。
 - G1b 状态：可在假设下启动；不再等补发交易事件；退货回库比例/调拨数据用于收紧。
+
+## 2026-10-20 — G1b 首版与 Codex 852d7791
+
+- Codex #301 `852d7791`：C26–C35 **35/35**；接受 G1b 带显式假设/unknown 启动；
+  要求 ①退货已计入库存不得再次冲减 ②调拨完成≠Wayfair 实收、历史供货占比≠当前库存归属
+  ③美中 new cohort run-rate 考虑上架/有货曝光/断货；交付 manifest/逐行去向/守恒/假设清单。
+- **退货口径修正**：33,719 直接作为对照当前库存的需求基线；已回库退货已在 `available`，
+  不再从需求扣（双扣）；未回库/报废也不冲减。5% 仅未来需求情景（约 1,682 件），
+  未来可从 Amazon 结算 V2/退货报表配置化。
+- **库存快照**：CENTRADE 478 family SKU（可用 9,877 / 在途 4,504 / 次品 80 / 待发 49）；
+  DANEEY 337 SKU（8,492 / 5,071 / 4 / 54）；0 错误。旧 `FZH-DANEEY-皮壳仓库`
+  当前不在活跃仓库列表，历史老名并入 `美中-FZH-DANEEY`；不再单列皮壳仓。
+- **覆盖首版**：USNJ 5.86 个月、USTX 5.48 个月（gross run-rate）；但 450 个 SKU 有需求无供给、
+  501 个 <2 个月。头部缺口如 `CENCord995-DKGrey-97` 784 件/0 供给、
+  `CEN003-DPBLUE-100` 703/1、`C/Velvet-White-100-664-wow` 388/0。
+- **EN 试点**：`C/Linen-Natural-194-688-wow` → 26 SO / 3,220 订单 / 2,084 已发 / 1,036 未发；
+  死单 421、在产/待发 622；557 JC；SO 行用 `PK#` 包装码，必须用客户码或 KS→PK# 映射。
+- **每日库存备份**：本机此前未发现 `FZH-TongtuAutoExport-stock` / `FZH-StockAlert-daily` 任务，
+  `web_automation/logs/export-stock.log` 不存在；`stock_alert` 只写低库存行，不是全量归档。
+  **已注册 `FZH-TongtuAutoExport-stock`：每日 02:17** 跑 `tongtu.stock.export`，
+  输出 `web_automation/output/`，日志 `web_automation/logs/export-stock.log`；首跑可能需登录。
+  每日全量快照仍独立于 G1b。
+- **平台库存 <=2 视为无货**：会造成人为断货/删失，分析时标 `censored/manual_low`，不补 0；
+  若可得，记录平台库存快照与调整事件。
+- 新增 `g1b_stock_snapshot.py` / `g1b_en_extract.py` / `g1b_coverage.py` / `g1b_pilot.md` /
+  `g1b_results.md`；原始库存/单据 JSON 留在本地，不入库。
 
 ## 模板（后续阶段）
 

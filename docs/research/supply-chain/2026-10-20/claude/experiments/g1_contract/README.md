@@ -31,3 +31,35 @@ uv run python g1_cover_matching.py
 - 聚合计数，不含客户姓名/地址/电话/邮箱/原始行。
 
 边界：不访问 EN 生产、不写业务系统；未匹配不静默丢弃。
+
+## G1b — 库存快照 / EN 单据 / 覆盖
+
+```bash
+# 1) 两仓 + 皮壳仓 family 库存快照（通途只读；5 次/分钟限流，脚本 13s 节流）
+uv run python g1b_stock_snapshot.py \
+  --warehouses "美东-CENTRADE,美中-FZH-DANEEY,美中-FZH-DANEEY-皮壳仓库" \
+  --chunk-size 100 --min-interval 13 \
+  --out out/stock_snapshot_YYYYMMDD.json
+
+# 2) 单个客户码 / 物料的 EN 单据结构化导出（生产只读）
+uv run python g1b_en_extract.py --customer-code "C/Linen-Natural-194-688-wow" \
+  --out out/g1b_en_<code>.json
+
+# 3) 出库消耗 vs 库存覆盖
+uv run python g1b_coverage.py --stock out/stock_snapshot_YYYYMMDD.json \
+  --out out/g1b_coverage_YYYYMMDD.json
+```
+
+输入与凭证：
+
+- 通途凭证默认读 `D:/Work/赛狐/Cursor/tongtool_api/.env`（worktree 里没有 `.env`）；
+  可用 `TONGTOOL_ENV_FILE` 或 `--env-file` 覆盖。
+- EN 生产凭证走 `EN_API/item_shipment_status.py` 的候选 `.env`（worktree → 主仓库）。
+- 全部只读；不写 EN 生产库存账。
+
+注意：
+
+- 通途库存查询按仓库 + `skus` 分块；`pageSize` 上限 100，5 次/分钟。
+- EN SO 行可能用 `PK#`/`ND#` 包装码；用 `--customer-code` 或先做 `KS → PK#` 映射。
+- `g1b_en_extract.py` 输出不含客户名/地址等 PII；原始控制台输出仅本地。
+- `g1b_coverage.py` 的覆盖月数是历史 run-rate，不是预测；美中受新运营 ramp 影响。
