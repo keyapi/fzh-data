@@ -76,7 +76,10 @@ tags: [supply-chain, research, sources]
 | S1-045 | WayfairCG-Cranbury 是下游 3PL，family 销售 1,162 件/6个月；其他 3PL 无 family 销售；海绵 `-Foam` 另列 | 本地订单 family 精确匹配 + 用户说明 | C | 2026-10-20 | 3PL 销售计入需求，转移不重复计 | A | mapping_process §4.1 |
 | S1-046 | WayfairCG 库存以 Wayfair 后台手工导出为准；Tongtool 调拨只算发出量；赛狐平台仓 API 无 Wayfair | 用户 2026-10-20 说明 + `SELLFOX_API/docs/api-reference/多平台/平台仓/` 实查 | C | 2026-10-20 | 只有 Temu/Mercado/Walmart WFS，无 Wayfair | A | 13 §1.5、mapping_process §4.2 |
 | S1-047 | 产能/交期不确定；美中 2026-06/07/08 新运营入职、第二个月才下单、首批刚回货，历史不可参考；美东稳定 2 人 | WX 2026-10-20 反馈 | C | 2026-10-20 | 美东可回测，美中需 cohort/ramp；交期用区间 | A | 05 §5/§7、08 §5、06 A12 |
-| S1-048 | 订单文件 45,129 行/48,346 件无负数；退货仓 family 164/165 正数出库；补发 66/72；未匹配 759/925 pending | 本地 2026-04..09 订单只读核对 | C | 2026-10-20 | 33,719 是匹配毛量，不是净需求 | A | mapping_process §3 |
+| S1-048 | 订单文件 45,129 行/48,346 件无负数；退货仓 family 164/165 正数出库；补发 66/72；未匹配 759/925 pending | 本地 2026-04..09 订单只读核对 | C | 2026-10-20 | 33,719 是出库消耗毛量（含补发），不是净需求 | A | mapping_process §3 |
+| S1-049 | 补发/换货是出库消耗，补货必须计入；M 后缀不是唯一判据 | 用户 2026-10-20 口径 + 本地订单 Mxxx 快速核对 | C | 2026-10-20 | family Mxxx 115/124（是64/否51）；全量 286/333（是172/否114） | A | mapping_process §3.1 |
+| S1-050 | 三角退货率暂按 5% 假设；订单文件无退货行；退货是否回库未知 | 用户 2026-10-20 口径 | C | 2026-10-20 | 「比较低 可能先按5%」「不知道退货是否都在通途里操作了重新入库」 | B | mapping_process §3.2、06 B29 |
+| S1-051 | WayfairCG 供货归属不固定，可能按 SKU 分流；赛狐调拨单可查发货仓/收货仓/SKU/数量/状态/时间 | 用户 2026-10-20 猜测 + `SELLFOX_API/docs/api-reference/仓库/调拨单/调拨单列表.md` | C | 2026-10-20 | `warehouseId`/`targetWarehouseId`/`commoditySku`/`goods`/`status` | A | mapping_process §4.1.1、08 §2.3 |
 
 ## 未找到项（N-###）
 

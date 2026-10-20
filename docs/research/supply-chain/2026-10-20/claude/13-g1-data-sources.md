@@ -13,10 +13,11 @@ tags: [supply-chain, g1, data-source, mapping, tongtool, erpnext]
 > USNJ(CENTRADE)、USTX(DANEEY)、波兰分公司做填充 PP 棉、压缩、包装、发货；最终卖给顾客的多数是成品。
 > 三角靠枕类绍兴只发皮壳，成品销售 1:1 消耗皮壳；`-Cover` 是只卖皮壳的例外。
 > **皮壳仓是分公司仓，不是“皮壳产品仓”**；其 family 销售行产品名也是「三角…靠枕」。
-> G1 匹配毛量 = family 销售（base + `-Cover`）1:1 皮壳，共 **33,719 件/6 个月**；**不是净需求**：
-> 订单文件全是正数出库、没有退货行；退货/贷项/补发需交易事件核实，不能按仓名直接扣。
+> G1 出库消耗毛量 = family 出库（base + `-Cover`，含补发）1:1 皮壳，共 **33,719 件/6 个月**；
+> **不是净需求/净消耗**。补发是出库消耗，计入补货；退货是反向流，只有回库可再售才冲减：
+> 三角暂按 5% 情境（`sales_base≈33,647`，`restock_share` 未知；0/50/100% → 33,719 / 32,878 / 32,037）。
 > WayfairCG 是下游 3PL，1,162 件 family 销售计入毛量；分公司→3PL 转移不重复计；其他 3PL 无 family 销售；
-> 海绵 `-Foam` 是另一条组件流。**G1b 保持暂停到退货/补发与 WayfairCG 供货归属确认。**
+> 海绵 `-Foam` 是另一条组件流。**G1b 可在上述假设下启动**；供货归属按调拨单分配，不固定 USNJ/USTX。
 > 详见 `experiments/g1_contract/mapping_process.md`。
 
 > 结论：**PR #304 是服务账号直读 GSheet 的 43 张月表，不是业务导出。**
@@ -34,7 +35,10 @@ tags: [supply-chain, g1, data-source, mapping, tongtool, erpnext]
 | EN 产品/物料组 | EN 主数据（KS0001/KS0248） | 只读；G1 用本地导出或测试环境，不写生产 |
 | 库存快照（cutoff） | **通途 `stock_alert`（PR #298 / `a4b1cf4d`）**：`stock_alert/client.py` 调 `erp2_stocks_stocksquery`；每日任务 `FZH-StockAlert-daily`（默认 09:23）；`web_automation tongtu.stock.export` 可定时导出 6 仓库存 | **只需 cutoff 当日快照**，不是 6 个月库存序列；字段：`goodsSku/availableStockQuantity/intransitStockQuantity/defectsStockQuantity/waitingShipmentStockQuantity`；按 `warehouseName` 整仓分页（pageSize≤100，5 次/分钟） |
 | EN SO/PP/WO/JC/SE/DN | **EN 生产 API 只读**：`EN_API/item_shipment_status.py`（SO→PP→WO→JC→DN）、#291 `EN_API/fulfillment_query.py`、`erpnext/scripts/fetch.py` | **测试环境没有真实单据**；必须用生产只读，按单号/SKU 查询，缓存本地 Parquet；不写生产 |
-| **WayfairCG 库存** | **Wayfair 后台手工导出（YTQ）** | **赛狐平台仓 API 只覆盖 Temu/Mercado/Walmart WFS，无 Wayfair**；Tongtool 调拨只作“发出量”，不能当实际在手；到货丢件需对账 |
+| **WayfairCG 库存** | **Wayfair 后台手工导出（YTQ）** | **赛狐平台仓 API 只覆盖 Temu/Mercado/Walmart WFS，无 Wayfair**；通途/赛狐调拨只作“发出量”，不能当实际在手；到货丢件需对账 |
+| **3PL 供货归属** | 赛狐调拨单列表 `POST /api/warehouseTransfer/pageList.json`（发货仓/收货仓/SKU/数量/状态/时间）；通途调拨单如可得 | 按 `source_branch × sku × period` 分配；无数据标 `unknown` + 情景，不固定 USNJ/USTX |
+| **补发** | 通途订单行的 `是否补发` + M 后缀；#294 `order_side_input.py` 补发口径 | 补发是出库消耗，计入补货；M 后缀不是唯一判据 |
+| **退货** | 退货单/贷项通知/平台退货事件 | 订单文件没有退货行；三角 5% 是假设；需确认是否回库可再售 |
 
 ### 1.1 库存历史限制（重要）
 
@@ -94,19 +98,37 @@ tags: [supply-chain, g1, data-source, mapping, tongtool, erpnext]
 
 > 这些记录已经存在，G1 不重复造映射；只在缺口处补数据。
 
-### 1.5 WayfairCG 库存口径（重要）
+### 1.5 WayfairCG 库存与供货归属（重要）
 
-- **WayfairCG 库存以 Wayfair 后台导出为准**（YTQ 手工下载）；不能把 Tongtool 库存当实际在手。
-- Tongtool 里的调拨记录只能当**发出量**；Wayfair 实际收货可能丢件，需 `transfer vs receipt` 对账。
+- **WayfairCG 库存以 Wayfair 后台导出为准**（YTQ 手工下载）；不能把通途/赛狐库存当实际在手。
+- 通途/赛狐里的调拨记录只能当**发出量**；Wayfair 实际收货可能丢件，需 `transfer vs receipt` 对账。
 - 赛狐「平台仓」API 文档只有 **Temu / Mercado / Walmart WFS**，**没有 Wayfair**；暂时不能 API 抓取。
 - 在丢件率未知前：
   - WayfairCG 库存标 `source=wayfair_backend_manual`、`as_of`、`confidence=medium`；
   - 对账差额进 `discrepancy`，不静默修正；
-  - 给 WayfairCG 补货加安全缓冲，或按较保守库存（如 min(Tongtool, Wayfair 后台)）净算。
+  - 给 WayfairCG 补货加安全缓冲，或按较保守库存（如 min(通途, Wayfair 后台)）净算。
+- **供货归属不固定 USNJ/USTX**：可能按 SKU 分流、也可能随时间变化；必须看调拨单。
+  - 赛狐 `POST /api/warehouseTransfer/pageList.json`：`warehouseId`=发货仓、
+    `targetWarehouseId`=收货仓、`items[].commoditySku`、`items[].goods`、`status`
+    （0草稿/1待审核/2待调拨/3待入库/4已完成/5已驳回/6已作废）、`createTime`；
+    可按 `targetWarehouseIds` 过滤 WayfairCG、按 `start/end` 取区间。
+  - 输出 `3pl_supply_allocation`：有已完成调拨按量分配；多来源按 SKU 拆；只有在途标 `in_transit`；
+    无数据标 `unknown` + 情景（销售占比或 50/50），**不得断言固定来源**。
+  - 该分配只影响分公司级净算，不改变 family 总需求。
 - 对总需求影响：WayfairCG family 销售 1,162 件 / 33,719 件 = **3.4%**；
   如果丢件率 r%，总需求偏差约 3.4%×r（很小），但 WayfairCG 渠道库存偏差是 r%（对该渠道不小）。
 
-### 1.6 运营/Listing 与产能数据（WX 2026-10-20 反馈）
+### 1.6 补发与退货数据（补货口径）
+
+- **补发**：通途订单行有 `是否补发`；M 后缀是线索，不是唯一判据。
+  2026-04..09 全量 Mxxx 286 行/333 件（是 172/否 114）；family Mxxx 115 行/124 件（是 64/否 51）。
+  补发是出库消耗，已含在 33,719 中，计入补货，不另加/不净扣。
+- **退货**：订单文件没有退货/贷项/负数行；必须从退货单、贷项通知或平台退货事件取。
+  三角退货率暂按 **5%**（`confidence=low`，业务假设）；其他品类/新品可能更高，不能外推。
+  只有退回并重新入库可再售才冲减：`net = 33,719 − 33,647×5%×restock_share`（≈1,682×restock_share）。
+  `restock_share` 未知，输出 0%/50%/100% 情境；默认 0%（不冲减，保守保服务）。
+
+### 1.7 运营/Listing 与产能数据（WX 2026-10-20 反馈）
 
 - 美中 2026-06/07/08 新运营入职、第二个月才下单、首批刚回货；**美中历史不可直接参考**；
   美东稳定（2 个运营），历史可用。

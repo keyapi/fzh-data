@@ -2,7 +2,7 @@
 okf: v0.1
 type: Handoff
 title: 给 Codex 的 G1 同步（合并版 2026-10-20）
-description: 业务架构、皮壳 1:1、映射、匹配毛量与对账、WayfairCG/3PL、美东/美中与产能交期、Codex 待办
+description: 业务架构、皮壳 1:1、映射、出库消耗毛量与对账、补发/退货、WayfairCG/3PL 供货归属、美东/美中与产能交期、Codex 待办
 date: 2026-10-20
 status: consolidated-sync
 tags: [supply-chain, codex, g1, sync, consolidated]
@@ -11,7 +11,7 @@ tags: [supply-chain, codex, g1, sync, consolidated]
 # 给 Codex 的 G1 同步（合并版，2026-10-20）
 
 > 本文件是当前**唯一同步口径**；前几轮碎片消息以本文件为准。
-> Claude #300 最新 `a85cad8d`；Codex #301 最新 `c854800e`；G1b 暂停。
+> Claude #300 最新 `2fbe51ec`；Codex #301 最新 `c854800e`；**G1b 可在下文假设下启动**。
 
 ## 0. Codex 当前所处位置（先对齐）
 
@@ -21,16 +21,19 @@ tags: [supply-chain, codex, g1, sync, consolidated]
   - 接受 1:1 皮壳；C21–C25 完成，25/25 通过；`mapping_process.md` §0–§4 复审完成；
   - 要求 33,719 改称**匹配毛量**；退货仓 165 按交易事件核实；未匹配不得直接判非 family。
 - **Codex 尚未收到**：
-  1. WayfairCG 库存口径（后台手工导出、Tongtool 调拨≠在手、赛狐无 Wayfair 平台仓 API）；
+  1. WayfairCG 库存口径（后台手工导出、通途/赛狐调拨≠在手、赛狐无 Wayfair 平台仓 API）；
   2. WX 反馈（美东稳定/美中结构断点、operator/listing/cohort、产能交期区间）；
-  3. 本轮报告修正（匹配毛量、全量去向对账、退货仓正数出库、补发待核、C31–C32）。
+  3. 本轮报告修正（出库消耗毛量、全量去向对账、退货仓正数出库、C31–C32）；
+  4. **最新澄清（本轮新增）**：补发计入出库消耗；三角退货按 5% 情境；WayfairCG 供货归属看调拨单、不固定 USNJ/USTX。
 - 所以本次给 Codex 的是 **`c854800e` 之后的增量合并**，不是让它重做。
 
 ## 1. 当前状态
 
 - Codex #301 `c854800e`：已接受 1:1 皮壳模型；C21–C25 完成，25/25 合成样例通过；Cost Review 不作数据源。
-- Claude #300 `a85cad8d`：已把 33,719 改为**匹配毛量**；补全全量输入去向对账；G1b 暂停。
-- **G1b 暂停**，等两件事：退货/贷项/补发交易事件；WayfairCG 由 USNJ 还是 USTX 供货。
+- Claude #300 `2fbe51ec`：已把 33,719 改为**出库消耗毛量（含补发）**；补全全量输入去向对账；
+  记录退货 5% 情境、WayfairCG 供货归属调拨单方案。
+- **G1b 可在假设下启动**：补发不再等交易事件；退货用 5% 情境 + `restock_share` 敏感性；
+  WayfairCG 供货归属缺数据时标 `unknown`，只影响分公司级净算，不影响 family 总需求。
 
 ## 2. 公司架构与需求模型
 
@@ -50,35 +53,78 @@ tags: [supply-chain, codex, g1, sync, consolidated]
 - 品类/产品名只作未匹配诊断，**不作纳入条件**。
 - BOM：KS0001/KS0248 1,739 行，全部 `绍兴发货方式=皮壳`；有效客户码 1,489（base 1,200 / Cover 287 / out 2）；空 142、删除 108。
 
-## 4. G1 匹配毛量与全量去向对账（2026-04..09）
+## 4. G1 出库消耗毛量与全量去向对账（2026-04..09）
 
-> 订单文件是出库/销售行，**没有负数退货行**；33,719 是**匹配毛量，不是净需求**。
+> 订单文件是出库/销售行，**没有负数退货行**。补货看**库存消耗**，不看会计口径的“销量”：
+> 正常销售、补发/换货都是出库消耗，都应计入；退货是反向流，只有退回并重新入库可再售时才冲减。
+> 33,719 是 **family 出库消耗毛量（含补发）**，不是净需求，也不是净库存消耗。
 
 | 类别 | 行数 | 件数 | 说明 |
 |---|---:|---:|---|
-| base 码命中 | 32,634 | 33,452 | 成品销售 → 1:1 皮壳 |
+| base 码命中 | 32,634 | 33,452 | 分公司出库（多数成品销售，也含补发）→ 1:1 皮壳 |
 | `-Cover` 命中 | 254 | 267 | 皮壳例外 |
-| **family 匹配毛量** | **32,888** | **33,719** | **不是净需求** |
-| 其中：退货仓 family | 164 | 165 | **正数出库销售**（Amazon/Wayfair/OSTK，`是否补发=否`），不是退货，不能按仓名扣 |
-| 其中：family 补发 | 66 | 72 | `是否补发=是`；是否算新增需求待交易事件 |
+| **family 出库消耗毛量** | **32,888** | **33,719** | **含补发**；不是净需求 |
+| 其中：退货仓 family | 164 | 165 | **正数出库销售**（Amazon/Wayfair/OSTK，`是否补发=否`），不是退货，照常计入 |
+| 其中：family 补发 | 66 | 72 | `是否补发=是`；**已包含在毛量中，计入补货**；不另加/不净扣 |
 | 非 family 退货仓 | 148 | 152 | 其他产品，out of scope |
 | 未匹配 text-tri | 759 | 925 | 标 `pending`，不直接判非 family |
 | 其余非 family | 11,334 | 13,550 | out of scope |
 | **合计** | **45,129** | **48,346** | 对账：32,888+759+11,334+148=45,129；33,719+925+13,550+152=48,346 |
 
 - 之前基于 Cost Review 数据的“124 行非 family”结论**撤回**。
-- 退货/贷项/补发需退货单/贷项/补发交易事件；订单文件里没有负数行。
+- 退货/贷项不在订单文件；退货单/贷项/平台退货事件另取，不能靠订单文件净扣。
+
+### 4.1 补发（M 后缀）
+
+| 口径 | 行 | 件 | `是否补发=是` | `是否补发=否` |
+|---|---:|---:|---:|---:|
+| 全量 Mxxx | 286 | 333 | 172 | 114 |
+| family Mxxx | 115 | 124 | 64 | 51 |
+
+- M 后缀不是唯一判据：family 里 `是否补发=是` 66 行/72 件，其中 64 行带 M 后缀；
+  另有 51 行 Mxxx 但 `是否补发=否`。需结合 #294 补发口径与渠道/订单规则判断。
+- family Mxxx 渠道（行）：Amazon 52、manomano 47、Wayfair 7、Cdiscount 3、PotteryBarn 2、
+  HOME24 1、Mirakl 1、allegro 1、Shopify 1。
+- **补发是出库消耗，已含在 33,719 中；计入补货，不另加、不净扣。**
+
+### 4.2 退货（反向流，5% 情境）
+
+- 订单文件无退货/贷项/负数行；退货必须来自退货单、贷项通知或平台退货事件。
+- 三角靠枕退货率暂按 **5%**（`confidence=low`，业务假设，不是事实）；其他品类/新品可能更高，不能外推。
+- 只有退货**回库且可再售**才冲减：
+
+```text
+family_outbound_gross = 33,719 件/6个月（含补发）
+sales_base            ≈ 33,647 件（剔除 `是否补发=是` 的 72 件；近似）
+resalable_returns     = sales_base × 5% × restock_share   ≈ 1,682 × restock_share
+family_net_consumption = family_outbound_gross − resalable_returns
+```
+
+- `restock_share`（退回并重新入库可再售比例）**未知**；默认 0%（不冲减，保守保服务），
+  同时输出 50% / 100% 情境：约 32,878 / 32,037 件。全部标 `assumption`。
+- 退货不回库/报废则不冲减；退货后又补发时，补发已在毛量中，只有回库才冲减，避免双扣/漏扣。
 
 ## 5. WayfairCG / 其他 3PL
 
 - **WayfairCG-Cranbury 是下游 3PL**：美国分公司把成品发到 WayfairCG，再卖给顾客。
   - family 销售 **1,162 件/6 个月**（占毛量 3.4%）计入总需求；
   - 分公司→WayfairCG 的**转移不是新增需求**；净算时把 WayfairCG 库存/在途算进去，避免重复。
-- **库存口径**：以 **Wayfair 后台手工导出**为准（YTQ 下载）；Tongtool 调拨≠实际在手，到货可能丢件。
+- **库存口径**：以 **Wayfair 后台手工导出**为准（YTQ 下载）；通途/赛狐调拨≠实际在手，到货可能丢件。
 - 赛狐「平台仓」API 只有 **Temu/Mercado/Walmart WFS**，**无 Wayfair**；暂时不能 API 抓取。
 - 无后台数据：标 `unknown` + 安全缓冲，不补 0；`transfer vs receipt` 对账，差额进 `discrepancy`。
 - 其他 3PL：2026-04..09 没有 family 销售；海绵 `-Foam` 是另一条组件流，不是皮壳需求。
-- **待确认**：WayfairCG 由 USNJ 还是 USTX 供货（订单成本来源只写美国公司/COST-US，数据判断不了）。
+- **供货归属不固定**：不一定整仓由 USNJ 或 USTX 供，可能按 SKU 分流、也可能随时间变化。
+  必须看**通途/赛狐调拨单**，不能从 Wayfair 销售渠道反推。
+  - 赛狐 `POST /api/warehouseTransfer/pageList.json`：`warehouseId`=发货仓、
+    `targetWarehouseId`=收货仓、`items[].commoditySku`、`items[].goods`、
+    `status`（0草稿/1待审核/2待调拨/3待入库/4已完成/5已驳回/6已作废）、`createTime`；
+    可按 `targetWarehouseIds` 过滤 WayfairCG、按 `start/end` 取区间。
+    见 `SELLFOX_API/docs/api-reference/仓库/调拨单/调拨单列表.md`。
+  - 新增 `3pl_supply_allocation(sku, 3pl_warehouse, source_branch, period, transfer_qty,
+    in_transit_qty, transfer_no, source, confidence)`；有已完成调拨按量分配，多来源按 SKU 拆；
+    只有在途标 `in_transit`；无数据标 `unknown` + 情景（销售占比或 50/50），**不得断言固定来源**。
+  - 该分配只影响**分公司级净算**（把 WayfairCG 库存/在途挂到哪个分公司），
+    不改变 family 总需求；WayfairCG 总需求只计一次。
 
 ## 6. 美东/美中与产能交期（WX 反馈）
 
@@ -94,67 +140,88 @@ tags: [supply-chain, codex, g1, sync, consolidated]
 ## 7. Codex 现在应做
 
 1. **更新 `g1-slice.md` / `baseline.md`**：
-   - 33,719 = 匹配毛量，不是净需求；
+   - 33,719 = **family 出库消耗毛量（含补发）**，不是净需求/净消耗；
+   - 补发计入出库消耗，不另加、不净扣；M 后缀不是唯一判据；
+   - 退货按 5% 情境（三角），`restock_share` 未知，输出 0%/50%/100% 敏感性；其他品类不能复用 5%；
    - 美东/美中分仓，不混池；
-   - WayfairCG 下游 3PL、库存 manual/unknown；
-   - 删除“完成品两仓/皮壳仓排除/品类文本纳入/124 行非 family”等旧结论。
-2. **保留 C21–C25，新增 C26–C32**：
+   - WayfairCG 下游 3PL、库存 manual/unknown、供货归属按调拨单分配；
+   - 删除“完成品两仓/皮壳仓排除/品类文本纳入/124 行非 family/补发待核”等旧结论。
+2. **保留 C21–C25，新增 C26–C35**：
    - C26：下游 3PL 销售计入毛量，分公司→3PL 转移不重复计；
-   - C27：3PL 库存 manual/unknown；Tongtool 调拨≠在手；丢件进 discrepancy；
+   - C27：3PL 库存 manual/unknown；通途/赛狐调拨≠在手；丢件进 discrepancy；
    - C28：美中新运营 cohort/ramp，历史不可外推；美东稳定可回测；
    - C29：产能/交期区间/情景，不输出固定 3 个月到货日；
    - C30：operator/listing/cohort 维度，不得混池；
-   - C31：匹配毛量≠净需求；订单文件无负数退货行，退货/贷项/补发必须用交易事件；
-   - C32：全量输入去向对账；未匹配 pending，不直接判非 family。
-3. **定向复核**修正后的 `mapping_process.md` §3/§4（匹配毛量与去向对账），记录接受/部分接受/不接受。
-4. **暂不进入 G1b/实现**：等退货/补发交易事件 + WayfairCG 供货归属确认。
+   - C31：出库消耗毛量≠净需求；补发计入；退货是反向流，只有回库可再售才冲减；
+   - C32：全量输入去向对账；未匹配 pending，不直接判非 family；
+   - C33：3PL 供货归属按调拨单（发货仓→收货仓→SKU→数量）分配，不固定 USNJ/USTX；无数据 unknown+情景；
+   - C34：退货 5% 是三角情境，`restock_share` 敏感性；其他品类/新品另定；
+   - C35：补发 M 后缀不是唯一判据；需 `是否补发` + 渠道/订单规则，引用 #294 口径。
+3. **定向复核**修正后的 `mapping_process.md` §3/§4（出库消耗毛量与去向对账、补发/退货、3PL 供货归属），记录接受/部分接受/不接受。
+4. **G1b 可在假设下启动**：补发已计入，退货用 5% 情境，WayfairCG 供货归属缺数据标 unknown；
+   不再等“补发交易事件”。仍需业务给退货回库比例/调拨单数据来收紧假设。
 5. 不合并 #301 到 #300；不访问生产；不写生产适配器；不改 Claude 文件。
 
 ## 8. 待业务提供/确认
 
-1. 退货/贷项/补发交易事件（退货单、贷项通知、补发记录）：订单文件里没有负数行。
-2. WayfairCG 由 USNJ 还是 USTX 供货。
-3. 运营/Listing 起始日期、首单日期、Listing 上线日期。
-4. 历史下单→到货分布、工厂产能/节假日。
+1. 退货单/贷项/平台退货事件；退货是否在通途重新入库、可再售比例（三角暂按 5%，`restock_share` 未知）。
+2. WayfairCG 调拨单与仓库映射（赛狐 `warehouseTransfer/pageList.json`；通途如可得），用于供货归属。
+3. 补发 M 后缀规则与 `是否补发` 字段覆盖范围（family 有 51 行 Mxxx 但 `是否补发=否`）。
+4. 运营/Listing 起始日期、首单日期、Listing 上线日期。
+5. 历史下单→到货分布、工厂产能/节假日。
 
 ## 9. 可直接复制给 Codex（合并版）
 
 ```text
-c854800e 之后的增量合并（你已完成的部分保留，不用重做）：
+2fbe51ec 之后的增量合并（你已完成的部分保留，不用重做）：
 
 一、你 c854800e 已完成、保留
 - C21–C25（25/25）与 mapping_process §0–§4 复审保留。
-- 你要求把 33,719 改称“匹配毛量”、退货 165 按交易事件、未匹配不得直接判非 family —— 已照办。
+- 你要求把 33,719 改称“匹配毛量”、退货 165 按交易事件、未匹配不得直接判非 family ——
+  已照办，并进一步修正为“出库消耗毛量（含补发）”。
 
 二、报告修正（你还没看到）
-- 33,719 是 family 匹配毛量，不是净需求；32,888 行。
+- 33,719 是 family 出库消耗毛量（含补发），32,888 行；不是净需求/净消耗。
 - 订单文件 45,129 行/48,346 件，无负数退货行。
 - 全量去向：family 32,888 + 未匹配 pending 759 + 非 family 退货仓 148 + out_of_scope 11,334 = 45,129 行；
   件数 33,719+925+152+13,550=48,346。
-- 退货仓 family 164/165 是正数出库销售（Amazon/Wayfair/OSTK，是否补发=否），不是退货；
-  family 补发 66/72 待交易事件；未匹配 759/925 标 pending；之前“124 行非 family”撤回。
+- 退货仓 family 164/165 是正数出库销售（Amazon/Wayfair/OSTK，是否补发=否），不是退货，照常计入；
+  family 补发 66/72 已含在毛量中，计入补货，不另加/不净扣；未匹配 759/925 标 pending；
+  之前“124 行非 family”撤回。
 
-三、新增输入 1：WayfairCG/3PL
+三、最新澄清：补发/退货（本轮新增）
+- 补发是出库消耗，补货必须计入；M 后缀不是唯一判据：
+  全量 Mxxx 286/333（是否补发=是 172/否 114）；family Mxxx 115/124（是 64/否 51）；
+  family 渠道 Amazon 52、manomano 47、Wayfair 7 等。
+- 退货不在订单文件；三角退货率暂按 5% 情境（假设，不是事实），其他品类/新品另定。
+  只有退货回库且可再售才冲减：net = 33,719 − 33,647×5%×restock_share（≈1,682×restock_share）；
+  restock_share 未知，输出 0%/50%/100%（33,719 / ~32,878 / ~32,037）。
+- 退货后又补发时，补发已在毛量中，只有回库才冲减，避免双扣/漏扣。
+
+四、新增输入 1：WayfairCG/3PL
 - 下游 3PL；family 销售 1,162 件计入毛量；分公司→3PL 转移不重复计。
-- 库存以 Wayfair 后台手工导出为准（YTQ）；Tongtool 调拨≠在手；到货可能丢件。
+- 库存以 Wayfair 后台手工导出为准（YTQ）；Tongtool/赛狐调拨≠在手；到货可能丢件。
 - 赛狐平台仓 API 只有 Temu/Mercado/Walmart WFS，无 Wayfair；无数据标 unknown+安全缓冲；
   transfer vs receipt 对账，差额进 discrepancy。
+- 供货归属不固定 USNJ/USTX，可能按 SKU 分流：用调拨单分配；
+  赛狐 POST /api/warehouseTransfer/pageList.json（发货仓/收货仓/SKU/数量/状态/时间）；
+  新增 3pl_supply_allocation；无数据 unknown+情景，不得断言。
 - 其他 3PL 无 family 销售；海绵 -Foam 另列。
-- 待确认：WayfairCG 由 USNJ 还是 USTX 供货。
 
-四、新增输入 2：WX 计划
+五、新增输入 2：WX 计划
 - 美东稳定（2 运营），历史可回测；美中 2026-06/07/08 新运营、第二个月才下单、
   首批刚回货，历史不可参考；必须分仓，不能混池。
 - demand_line/forecast_bucket 增加 operator_id/listing_id/operator_start_date/
   listing_launch_date/demand_cohort；美中用短窗 run-rate + cohort/ramp，不套 ens5/季节性。
 - 产能/交期用区间/情景（如 60–120 天），输出覆盖期/缺货风险，不输出固定 3 个月到货日。
 
-五、请 Codex 做
-- 更新 g1-slice/baseline：匹配毛量≠净需求；美东/美中分仓；WayfairCG 库存 manual/unknown；
-  删除“124 行非 family”等旧结论。
-- 保留 C21–C25，新增 C26–C32（3PL 销售/库存、美中 cohort/ramp、交期区间、
-  operator/listing/cohort、匹配毛量≠净需求、全量去向对账）。
-- 定向复核 mapping_process.md §3/§4（修正后的毛量与去向对账）。
-- G1b 暂停，等退货/补发交易事件 + WayfairCG 供货归属确认。
+六、请 Codex 做
+- 更新 g1-slice/baseline：出库消耗毛量（含补发）；退货 5% 情境；美东/美中分仓；
+  WayfairCG 库存 manual/unknown + 供货归属调拨单；删除旧结论。
+- 保留 C21–C25，新增 C26–C35（3PL 销售/库存/供货分配、美中 cohort/ramp、交期区间、
+  operator/listing/cohort、出库消耗毛量、全量去向、退货 5%/restock、M 后缀判据）。
+- 定向复核 mapping_process.md §3/§4（修正后的出库消耗毛量与去向对账）。
+- G1b 可在假设下启动：补发已计入、退货 5% 情境、3PL 供货归属 unknown 不阻塞；
+  需业务补退货回库比例/调拨单数据来收紧。
 - 不写生产、不合并 #301、不改 Claude 文件。
 ```

@@ -262,6 +262,23 @@ tags: [supply-chain, research, log]
 - 新增 `experiments/g1_contract/codex-sync.md`：给 Codex 的同步块（皮壳 1:1、旧 v1 作废、C21–C25）。
   以后每次我方实质更新都在结尾附「给 Codex」同步块。
 
+## 2026-10-20 — 补发/退货/3PL 供货归属澄清（用户口径）
+
+- 用户明确：**补发/换货是出库消耗，补货必须计入**，不能只按会计“销量”净扣；
+  退货是反向流，三角暂按 5% 假设，不确定退货是否在通途重新入库。
+- 补发核对：全量 Mxxx 286 行/333 件（`是否补发=是` 172 / 否 114）；
+  family Mxxx 115 行/124 件（是 64 / 否 51）；family `是否补发=是` 66/72。
+  **M 后缀不是唯一判据**。family Mxxx 渠道：Amazon 52、manomano 47、Wayfair 7、Cdiscount 3、
+  PotteryBarn 2、HOME24 1、Mirakl 1、allegro 1、Shopify 1。
+- 退货：订单文件无负数行；5% 是**假设**（`confidence=low`），不是事实；
+  `net = 33,719 − 33,647×5%×restock_share` ≈ 1,682×restock_share；
+  输出 0/50/100% → 33,719 / 32,878 / 32,037；其他品类/新品不套 5%。
+- WayfairCG 供货归属：不固定 USNJ/USTX，可能按 SKU 分流；用赛狐调拨单
+  `POST /api/warehouseTransfer/pageList.json`（发货仓/收货仓/SKU/数量/状态/时间）或通途调拨单；
+  新增 `3pl_supply_allocation`；无数据 unknown + 情景，不阻塞 family 总需求。
+- 文档更新：mapping_process §3/§4、codex-sync、05/06/08/11/13/results、sources。
+- G1b 状态：可在假设下启动；不再等补发交易事件；退货回库比例/调拨数据用于收紧。
+
 ## 模板（后续阶段）
 
 ```text

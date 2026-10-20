@@ -83,6 +83,23 @@ return_reopen     = 仅当业务明确批准补发，才增加新的履约义务
 - 例：下单 100、取消 20、正向发运 70、退货 10 → 有效 80 = 正向 70 + 原未发 10；
   净交付 60；返运 10 另记。
 
+**出库消耗（补货口径）与订单履约口径分开**：
+
+```text
+outbound_consumption = positive_shipped + reissue_shipped
+net_consumption      = outbound_consumption − resalable_returns
+reissue_shipped      = Σ submitted DN 中补发/换货行（Mxxx 是线索，不是唯一判据）
+returned_total       = Σ 退货 DN / 贷项 / 平台退货事件
+resalable_returns    = returned_total × restock_share（回库且可再售）
+```
+
+- **补发/换货是出库消耗，计入补货需求**；它不是新的客户订单义务，不重复生成 open order。
+- 退货不自动重开未交义务；只有回库且可再售才冲减消耗；报废/退回供应商不冲减。
+- 补发后又退货：补发已在 `outbound_consumption`，只有退货回库才进 `resalable_returns`，避免双扣/漏扣。
+- G1 三角没有退货单数据：`return_rate=5%` 是**假设**（`confidence=low`），不是契约事实；
+  `restock_share` 未知，输出 0%/50%/100% 情境。
+- 补发判定同时看 `是否补发` 与 M 后缀/渠道/订单规则；引用 #294 的补发口径，不能只凭后缀。
+
 ### 2.3 同 cutoff 的互斥供应余额（R06 + G0）
 
 **不要用一条加法公式把所有状态相加**；先按 `(cutoff, item, warehouse, UOM)` 定义互斥状态，
@@ -94,8 +111,15 @@ return_reopen     = 仅当业务明确批准补发，才增加新的履约义务
 > 每日全量快照是独立任务，不能用 `stock_alert` 的低库存行当归档。
 >
 > **WayfairCG 3PL 特例**：其 `on_hand_available` 必须用 **Wayfair 后台手工导出**（`source=wayfair_backend_manual`），
-> Tongtool 调拨只算 `in_transit`/发出量，不能当在手；到货丢件进 `discrepancy`。
+> Tongtool/赛狐调拨只算 `in_transit`/发出量，不能当在手；到货丢件进 `discrepancy`。
 > 赛狐平台仓 API 无 Wayfair（只有 Temu/Mercado/Walmart WFS）。无后台数据时标 `unknown`，不静默补 0。
+>
+> **供货归属**：WayfairCG 不一定固定由 USNJ 或 USTX 供货，可能按 SKU 分流。
+> 用 `3pl_supply_allocation(sku, 3pl_warehouse, source_branch, period, transfer_qty,
+> in_transit_qty, transfer_no, source, confidence)` 从调拨单分配（赛狐
+> `POST /api/warehouseTransfer/pageList.json`：发货仓/收货仓/SKU/数量/状态/时间）。
+> 无调拨数据时 `source_branch=unknown` + 情景，不得断言固定来源；该分配只影响分公司级净算，
+> 不改变 family 总需求。
 
 | 状态 | 含义 | 互斥/来源规则 |
 |---|---|---|
@@ -193,7 +217,8 @@ pending_stock_in = last_op_reported − stock_in_produced
 | 终端订单（客户/平台） | 是 | 按订单行 + 承诺日期 + 渠道/仓；取消/改量保留版本 |
 | 预测 | 是（净额） | `net_forecast = max(0, forecast − included_orders)`；只冲减匹配窗口内的终端订单 |
 | 内部补货 SO | 否 | 单独标记；否则同一需求被下单两次 |
-| 退货/返运 | 否（独立流） | 只在业务批准补发时生成新履约义务 |
+| 补发/换货 | 是（出库消耗） | 计入补货；不新建客户订单义务；M 后缀不是唯一判据 |
+| 退货/返运 | 否（反向流） | 不自动重开；只有回库可再售才冲减消耗；业务批准补发才新建义务 |
 | 样品/一次性 | 按业务标注 | 默认不进入补货预测，需显式例外 |
 
 **冲减流程**：先确定服务池（商品 × 渠道/仓）、计划桶（月/周）、版本；
@@ -257,5 +282,8 @@ pending_stock_in = last_op_reported − stock_in_produced
 | V18 | WayfairCG 库存是否与 Wayfair 后台一致；调拨 vs 收货差多少 | YTQ 后台导出 vs Tongtool 调拨记录 | 3PL 库存不能用 Tongtool 当在手；丢件进 discrepancy |
 | V19 | 运营/Listing 起始日期、首单日期是否可得 | 运营名单 + 订单首单 | 美中 cohort/ramp 建模的前提；缺失则只能短窗 run-rate |
 | V20 | 产能/交期分布是否有数据 | 工厂交期/历史到货 | 不能用固定 3 个月；需区间/情景 |
+| V21 | 补发识别：M 后缀与 `是否补发` 覆盖是否一致 | 取 family Mxxx 115 行，对照 #294 补发口径 | 补发计入出库消耗；M 后缀不是唯一判据 |
+| V22 | 退货是否回库、可再售比例多少 | 取退货单/平台退货事件，核对通途入库 | 三角 5% 是假设；`restock_share` 0/50/100% 敏感性 |
+| V23 | 3PL 供货归属能否从调拨单还原 | 赛狐调拨单按目标仓=WayfairCG 拉取；核对来源仓/SKU/数量 | 无数据标 unknown + 情景；不断言固定 USNJ/USTX |
 
 > 测试边界：V1–V20 全部只读；EN 测试环境优先，生产只读抽样需批准；**禁止写 EN 生产库存账**。
