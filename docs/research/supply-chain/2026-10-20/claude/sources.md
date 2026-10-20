@@ -73,6 +73,7 @@ tags: [supply-chain, research, sources]
 | S1-042 | 763 全仓 vs 155 两仓；155 中 31 行尾缀（30 Cover/1 out）、124 行 P2 非 family；真 family 缺口 0 | `experiments/g1_contract/out/missing_analysis.json` | C | 2026-10-20 | P1/P2 足够，Colab 4.2 未介入 | A | G1a §5 |
 | S1-043 | BOM 表 KS0001/KS0248 1,739 行全部 `绍兴发货方式=皮壳`；base 1,200 / Cover 287 / out 2 / 空 142 / 删除 108 | `EN产品BOM成本列表20261016.xlsx` 只读核对 | C | 2026-10-20 | base 不是成品；皮壳口径待确认 | A | mapping_process |
 | S1-044 | 公司架构：绍兴生产皮壳/内胆/半成品 → USNJ(CENTRADE)、USTX(DANEEY)、波兰分公司填充/压缩/包装/发货；最终销售多数成品 | `docs/company-context.md:14-29、27-29` | C | 2026-10-20 | 三角靠枕类只发皮壳；成品销售 1:1 消耗皮壳 | A | mapping_process §0、05/11/13 |
+| S1-045 | WayfairCG-Cranbury 是下游 3PL，family 销售 1,162 件/6个月；其他 3PL 无 family 销售；海绵 `-Foam` 另列 | 本地订单 family 精确匹配 + 用户说明 | C | 2026-10-20 | 3PL 销售计入需求，转移不重复计 | A | mapping_process §4.1 |
 
 ## 未找到项（N-###）
 

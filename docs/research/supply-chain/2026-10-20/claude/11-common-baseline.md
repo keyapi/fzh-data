@@ -47,7 +47,9 @@ tags: [supply-chain, baseline, g0, g1, version]
 > 波兰分公司填充/压缩/包装/发货；最终销售多数是成品。三角靠枕类绍兴只发皮壳，成品销售 1:1 消耗皮壳；
 > `-Cover` 是只卖皮壳的例外。**皮壳仓是分公司仓，不是皮壳产品仓**。
 > G1 需求 = family 销售（base + Cover）1:1 皮壳；分公司皮壳库存/在途做净算。
-> 只剩 WayfairCG/其他 3PL 是否计入待确认。详见 `experiments/g1_contract/mapping_process.md`。
+> **WayfairCG 是下游 3PL，1,162 件 family 销售计入需求；分公司→3PL 转移不重复计；其他 3PL 无 family 销售；
+> 海绵 `-Foam` 是另一条组件流。** 只剩 WayfairCG 由 USNJ 还是 USTX 供货待确认。
+> 详见 `experiments/g1_contract/mapping_process.md`。
 
 | 项 | 候选取值 | 说明 |
 |---|---|---|

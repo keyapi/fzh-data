@@ -52,7 +52,11 @@ tags: [supply-chain, codex, g1, sync, cover]
    - C24：品类文本含三角但客户码未命中 → 不进 family（仅诊断）；
    - C25：EN Cost Review 只作代码逻辑参考，不作映射数据源。
 3. **只复核** `mapping_process.md` §0–§4，记录接受/部分接受/不接受；不要复核旧 v1 数字。
-4. **暂不进入实现/G1b**：等业务确认 WayfairCG/其他 3PL 是否计入分公司补货需求。
+4. **WayfairCG 已按架构/数据确定**：
+   - 它是下游 3PL，从美国分公司拿成品再发货；其 **1,162 件 family 销售计入总需求**；
+   - 分公司→WayfairCG 的转移不是新增需求；净算时把 WayfairCG 库存/在途算进去；
+   - 其他 3PL 在 2026-04..09 没有 family 销售；海绵 `-Foam` 是另一条组件流，不是皮壳需求；
+   - 只剩“WayfairCG 由 USNJ 还是 USTX 供货”待确认，不影响 g1-slice 的总需求口径。
 5. 不合并 #301 到 #300；不访问生产；不写生产适配器。
 
 ## 6. 可直接复制给 Codex
@@ -70,6 +74,8 @@ G1 业务口径更正，请立即更新 g1-slice/baseline 与样例，旧的 G1a
 - 旧“品类筛选/两仓完成品/99.18%/763/155”全部作废。
 - 请更新 g1-slice/baseline，补 C21–C25（1:1 皮壳、Cover 例外、皮壳仓是分公司仓、
   非 family 诊断、Cost Review 只借逻辑），只复核 mapping_process §0–§4。
-- 暂不进入 G1b/实现，等 WayfairCG/其他 3PL 是否计入分公司补货需求确认。
+- WayfairCG 已确定：下游 3PL，1,162 件 family 销售计入总需求；分公司→3PL 转移不重复计；
+  其他 3PL 无 family 销售；只剩“WayfairCG 由 USNJ/USTX 哪家供货”待确认。
+- 暂不进入 G1b/实现，等上述供货归属确认。
 边界：不写生产、不合并 #301、不改 Claude 文件。
 ```

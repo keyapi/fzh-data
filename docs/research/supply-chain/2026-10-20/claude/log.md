@@ -238,6 +238,10 @@ tags: [supply-chain, research, log]
 - 正确需求口径：family 销售（base 32,634 行/33,452 件 + `-Cover` 254 行/267 件）
   = **32,888 行 / 33,719 件 / 6 个月**；分公司皮壳库存/在途做净算；只剩 WayfairCG/3PL 是否计入待确认。
 - G1a v1（品类筛选、两仓完成品 99.18%）口径作废；以 `mapping_process.md` 为准。
+- **WayfairCG/3PL（2026-10-20）**：WayfairCG-Cranbury 是从美国分公司拿成品再发货的下游 3PL；
+  family 销售 1,162 件/6 个月，计入总需求；分公司→3PL 转移不重复计，净算要算 3PL 库存/在途。
+  其他 3PL 在 2026-04..09 没有 family 销售；海绵 `-Foam` 是另一条组件流，不是皮壳需求。
+  只剩 WayfairCG 由 USNJ 还是 USTX 供货待确认。
 - **本步骤确认前不进入 G1b。**
 - 新增 `experiments/g1_contract/codex-sync.md`：给 Codex 的同步块（皮壳 1:1、旧 v1 作废、C21–C25）。
   以后每次我方实质更新都在结尾附「给 Codex」同步块。
