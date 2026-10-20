@@ -5,14 +5,15 @@ title: 供应链独立调研当前保存点与续接
 date: 2026-10-20
 ---
 
-# 当前保存点（2026-10-20，已接收#304与头程补充）
+# 当前保存点（2026-10-20，Claude修订版复审与共同框架候选）
 
 ## 已完成
 
+- 本轮完成Claude #300固定e0975b97定向复审、共同框架候选、分歧表和13/13本地合成例；见common-framework/decisions/semantic-examples/claude-review。未声称双方已批准。
 - P0规划已提交dfded88e；本轮完成P1资产复核、P2首轮三路独立研究、P3验证合同设计、P4首轮综合及交叉审阅。
 - 首轮25项资产及22个开放PR/84远端树检索已完成；用户补交#304固定74d78faa后资产增至27项，历史预测位置问题已解决。首次检索边界见assets.md，不等于完整生产审计。
-- 三个gpt-6-luna子Agent分别落盘成熟实践、预测/Agent、开源研究与来源表，已互审并修订。全部子Agent已结束当前工作，不在后台继续消耗。
-- 原始来源中重要版本/许可由主Agent另核；没有以Claude/Cursor独立深度结论作为研究输入。
+- 首轮三个gpt-6-luna子Agent完成成熟实践、预测/Agent、开源研究及互审；本轮另两位定向复审E1/事实契约，并复核合成例，均已结束当前工作。
+- 原始来源中重要版本/许可由主Agent另核；原独立首稿未读其他软件；本轮用户授权后开始Claude定向对照，Cursor未读。
 - 固定SHA的成本56、履约46、低库存scan4项既有离线测试，共106 passed。它们不能裁定生产事实口径。
 - 综合三条路线、老板一页纸三视角、E1–E4验证合同已完成；本轮补独立头程模型/接入研究与来源表。真实回测/整套产品运行尚未执行。
 - 当前产品决定：阶段A完成/B未启动，分段全局LightGBM+Croston/TSB长尾/生命周期+Conformal+物料组调和；现阶段不采用TSFM，不加入当前实验。历史PB原型是单SKU一次性脚本，不等公司级模型。
@@ -31,26 +32,26 @@ date: 2026-10-20
 ## 当前未完成与精确下一步
 
 1. 历史预测已定位，不再等用户找位置。先读history-handoff.md的#304固定SHA与代码限制；PJ/Jack敏感资料仍在整理且无PR，等待的是供应商具体接口，不阻塞独立标准/关联模型研究。
-2. 优先E1：把成品独立需求、BOM派生、终端订单/内部SO、预测冲减、首道/末道/入库、成本库存、供应批次状态去重做成经业务确认的合成样例；不先改生产。
+2. 本地13个参照合成例已通过，下一步由业务确认预期，再在实际适配器/授权脱敏快照重放；不先改生产，不把算例通过写成事实层完成。
 3. 选定EN实际版本/启用模块与frePPLe正式CE，再做E2同输入计划对照；edition/许可/适配成本不过门槛就淘汰，不默认自研。
 4. 有当时可知历史快照后按已有方向设计E3滚动回测与库存策略仿真；当前不采用/不试验TSFM。PB人为±25%区间不是Conformal，阶段B尚未启动。
 5. E4评估Agent语义/权限/幂等/过期审批/独立读回。任何具体生产写入或通知任务另行按范围授权。
-6. Claude/Cursor各自成果固化后做主张/来源/适用条件差异表；现在尚未比较，不用多数票替代一手证据。
+6. Claude复审已完成，待其核R01–R06和13例；优先修E1标签可知时点/坏数量、DN行/收货键、预测冲减、同cutoff状态守恒。G0契约确认后做G1授权脱敏回放；Cursor独立成果待交付。
 
 ## 工作区、提交与校验
 
-使用已附着worktree与feature/codex-supply-chain-research；现有Draft PR：[301](https://github.com/keyapi/fzh-data/pull/301)。本研究文档在docs/plans/2026-10-20-codex-supply-chain-research/；当前研究成果提交可由git log该目录确认，P0基线dfded88e；前轮研究3d831924。本轮追加#304接续与头程研究，当前提交由git log该目录确认。不要在原主检出混入其他人的未提交修改。
+使用已附着worktree与feature/codex-supply-chain-research；现有Draft PR：[301](https://github.com/keyapi/fzh-data/pull/301)。本研究文档在docs/plans/2026-10-20-codex-supply-chain-research/；当前研究成果提交可由git log该目录确认，P0基线dfded88e；前轮研究3d831924。后续92458fcd补历史接续/头程；本轮补跨方案复审、共同框架和合成例，当前提交由git log该目录确认。不要在原主检出混入其他人的未提交修改。
 
-凭证扫描、文档BOM/frontmatter/本地链接与四类diff凭证模式检查已通过；移除两文件多余EOF空行后diff格式检查通过。无业务代码/锁文件/生产数据改动；从固定ref导出的临时测试源码仅留本机临时目录，不提交。
+凭证扫描、文档BOM/frontmatter/本地链接与四类diff凭证模式检查已通过；移除两文件多余EOF空行后diff格式检查通过。新增仅本地合成例脚本，无业务模块/锁文件/生产数据改动；从固定ref导出的临时测试源码仅留本机临时目录，不提交。
 
-本分支与#300都修改根index.md和docs/plans/index.md；合并需保留双方导航，再运行scripts/update_index.py。#300研究交接在本轮刷新时head为de899f4b8668bf27ddb15040ac1c69b273a99e11，未读取其后续深度研究。Gitee网页失败后用git只见main且与GitHub相同，未证明Gitee PR/私有分支没有新增。
+本分支与#300都修改根index.md和docs/plans/index.md；合并需保留双方导航，再运行scripts/update_index.py。#300首轮仅看交接；本轮已定向读取e0975b97819cb967009260795b52c7ed18c04dc2的08/09/05/E1相关文档和代码。Gitee网页失败后用git只见main且与GitHub相同，未证明Gitee PR/私有分支没有新增。
 
 ## 额度与可选Astra审查
 
-本轮最近读数：5小时窗口已用62%、周窗口已用39%；5小时窗口重置13:21:28。额度共享且可能被别的会话消耗，续接必须刷新。本轮未使用重置额度。
+前轮读数为62%/39%，该5小时窗口后来已重置；本轮保存前读数16%/42%（实际使用继续变化）。额度共享且可能被别的会话消耗，续接必须刷新。本轮未使用重置额度。
 
 Astra并非必经许可步骤；若用户手动切换，可直接审阅synthesis.md最后的审查提示。审完继续E1/E2；不需重新做泛综述。
 
 可复制续接提示：
 
-> 继续PR #301供应链独立研究，先读index.md、synthesis.md、assets.md和本checkpoint。P1–P4首轮报告已完成，不重做已核资产/泛搜索。优先裁定计划单位、生产数量和库存/供应语义，再按experiments.md做E1，核实际EN版本和正式CE后做E2。历史预测已在#304定位，先读history-handoff.md，不重复找被删会话；现阶段不采用TSFM。PJ头程接口未交付时保留具体接口未知，按freight-model/freight-connectors继续底层契约，UI后置。用便宜模型有界子任务，及时阶段提交；不修改生产、不外发通知。独立报告先固化，后与Claude/Cursor比较。
+> 继续PR #301供应链独立研究，先读index.md、synthesis.md、assets.md和本checkpoint。P1–P4首轮报告已完成，不重做已核资产/泛搜索。优先裁定计划单位、生产数量和库存/供应语义，再按experiments.md做E1，核实际EN版本和正式CE后做E2。历史预测已在#304定位，先读history-handoff.md，不重复找被删会话；现阶段不采用TSFM。PJ头程接口未交付时保留具体接口未知，按freight-model/freight-connectors继续底层契约，UI后置。用便宜模型有界子任务，及时阶段提交；不修改生产、不外发通知。独立报告已固化，Claude定向复审及共同候选见claude-review/common-framework/decisions，Cursor待交付；优先按G0/G1对齐，不重做泛调研。

@@ -9,6 +9,10 @@ date: 2026-10-20
 
 | 文档 | 用途 |
 |---|---|
+| [共同框架候选与下一阶段](common-framework.md) | 总体链条、实体/键/时间契约与G0–G5门槛；待对方确认 |
+| [13个合成例与结果](semantic-examples.md) | 13/13本地参照算例通过，非生产验证；源码contract_examples.py |
+| [对齐状态与备选分支](decisions.md) | 必须统一的契约、可暂留的实现分歧、影响与裁决时点 |
+| [Claude修订版定向复审](claude-review.md) | #300固定e0975b97：已关闭项、剩余标签重叠/坏数/键/守恒问题 |
 | [调研执行计划](research-plan.md) | 范围、独立性、覆盖标准、子 Agent、阶段提交与验收 |
 | [综合判断与三条路线](synthesis.md) | 先看：复用EN、增量计划引擎、窄范围组件的比较及审批视角 |
 | [历史预测接续与产品边界](history-handoff.md) | #304已找回；阶段A完成/B未启动；当前不采用TSFM，PB原型复用限制 |
@@ -19,9 +23,9 @@ date: 2026-10-20
 | [开源方案研究](open-source.md) / [来源](sources-oss.md) | 整套计划产品、组件、CE/商业边界、版本与TCO |
 | [头程关联模型](freight-model.md) / [来源](sources-freight-model.md) | DN行、票/提单/柜、多运输腿、事件及仓库实收的关联与守恒 |
 | [头程数据接入](freight-connectors.md) / [来源](sources-freight-connectors.md) | 供应商/船公司/聚合商API、EDI/文件兜底、开源边界和待核接口 |
-| [最小验证合同](experiments.md) | E1语义守恒、E2计划引擎、E3预测/策略、E4审批Agent；尚未执行 |
+| [最小验证合同](experiments.md) | E1已做本地合成参照例；适配器/真实回放、E2计划引擎、E3预测/策略、E4审批Agent尚待验证 |
 | [证据与交叉评审](evidence-review.md) | 主Agent抽查、子Agent互审、修改与局限 |
 | [起点核对与续接](checkpoint.md) | 已核对分支、交接纠偏、未决项、下次从哪里开始 |
 | [变更日志](log.md) | 阶段成果记录 |
 
-当前状态：已完成首轮独立研究、综合与交叉审阅；真实数据回测和整套产品运行仍待下一阶段。与Claude交接包平行维护，不修改其文件，尚未比较其他软件独立研究成果。
+当前状态：已完成首轮独立研究、综合与交叉审阅；真实数据回测和整套产品运行仍待下一阶段。已定向复审Claude #300固定e0975b97，并提出共同框架/分歧表；对方尚未确认，Cursor成果未读。两PR保持独立，不修改其文件。
