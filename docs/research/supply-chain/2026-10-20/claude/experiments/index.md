@@ -22,7 +22,7 @@ tags: [supply-chain, research, experiments]
 
 | 实验 | 结果 | 判定 | 关键数字 |
 |---|---|---|---|
-| [E1 预测基线](e1_forecast/results.md) | 修正 TSB/缺失值/日期归属后，held-out 测试期 TSB 0.511、ens5 0.520 vs naive 0.602（ens5 −13.6%）；验证期选中的 MA3 测试 0.575 | **部分通过**：优于 naive 成立；「稳定最优模型」与「ens5 被验证选中」均被证伪 | 测试期 60 格；验证期 50 格；见 results.md 修正版 |
+| [E1 预测基线](e1_forecast/results.md) | R01/R02 修正后：held-out 测试期 TSB 0.511、ens5 0.520 vs naive 0.602（ens5 −13.6%）；验证期选 Croston（测试 0.530），标签交集为空 | **部分通过**：优于 naive 成立；「选择规则可外推」与「稳定最优模型」均被证伪 | 验证 34 个 SKU-原点 / 测试 60 个；`label_overlap_check.pass=true`；bad_qty=0 |
 | [E2 补货 LP](e2_replenishment/results.md) | 6 个实例全部 OPTIMAL（≤0.04s），预算/MOQ/回读全通过；但固定**件数预算**下总缺货结构性不变 | **部分通过**：机制成立；「重分配固定预算显著降低缺货」被证伪；**不能外推金额预算** | B=180：缺货 394.8 vs 394.8；持有 −1.1%；到货后前 3 月缺货 7.5→0 |
 | [E3 只读 Agent](e3_agent/results.md) | 可作答 10/10，歧义澄清 2/2，写意图拒绝 1/1，越界/错误前提各 1/1；0 次写 | **PASS（仅本地语义层）** | 歧义率 13.3%；**未验证生产鉴权、并发与独立回读** |
 

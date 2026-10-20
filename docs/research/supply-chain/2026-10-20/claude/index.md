@@ -19,7 +19,7 @@ tags: [supply-chain, research, index]
 - 位置：**PR #300** 分支 `docs/supply-chain-integration-handoff`（交接包 + 本调研）。
 - **推荐方向**：轻量决策链 + 薄 Agent；预测用 TSB/ens5 + naive 守门；补货先定预算与服务水平；
   库存用**独立只读快照 mart**，不写 EN Bin；计划引擎保留比较入口，不提前锁定。
-- 检查点：01（已确认）、E1–E3（已确认）、Codex 评审（已逐条处理，见 09）。
+- 检查点：01（已确认）、E1–E3（已确认）、Codex 两轮评审（已逐条处理，见 09/10）。
 
 ## 文件
 
@@ -35,6 +35,7 @@ tags: [supply-chain, research, index]
 | [07-review-guide.md](07-review-guide.md) | 审核顺序 + 给 Codex 的只读评审 brief |
 | [08-fact-contract.md](08-fact-contract.md) | 生产数量四分法、实体/键、守恒式、批次关联、SKU/单位/配套映射 |
 | [09-codex-review-response.md](09-codex-review-response.md) | 对 Codex 评审的接受/部分接受/不接受、已改内容、剩余分歧与裁决条件 |
+| [10-codex-round2-response.md](10-codex-round2-response.md) | 第二轮定向复审 R01–R07 处理、共同框架/决策/合成样例对照 |
 | [sources.md](sources.md) | 证据账本（ID / 主张 / 来源 / 日期 / 原文 / 强度） |
 | [log.md](log.md) | 过程记录、失败与放弃方向 |
 | [experiments/](experiments/index.md) | E1–E3 最小验证的代码、输入哈希与结果 |

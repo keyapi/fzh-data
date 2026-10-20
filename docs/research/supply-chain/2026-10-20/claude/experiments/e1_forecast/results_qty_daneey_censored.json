@@ -3,6 +3,10 @@
     "measure": "qty_daneey",
     "mode": "censored",
     "h": 3,
+    "label_lag_months": 1,
+    "data_end_month": "2026-07",
+    "pull_as_of_month": "2026-08",
+    "labels_available_through": "2026-07",
     "min_train_months": 18,
     "alpha_tsb": 0.3,
     "alpha_croston": 0.3,
@@ -34,9 +38,7 @@
       "2025-01",
       "2025-02",
       "2025-03",
-      "2025-04",
-      "2025-05",
-      "2025-06"
+      "2025-04"
     ],
     "test_origins": [
       "2025-07",
@@ -48,7 +50,11 @@
       "2026-01",
       "2026-02"
     ],
+    "split_rule": "val_end <= test_start - H; at run time val_end is clamped to test_start - H if needed",
+    "split_adjustment": null,
     "selection": "fixed split: choose by validation WAPE, report on test",
+    "scoring": "h=3 forecast window; only target months with m+label_lag <= pull_as_of are scored",
+    "tsb_init": "z0=nonzero fraction, d0=mean of nonzero demands over full training history, then smooth; d unchanged on zeros",
     "dropped": {
       "origin_no_sku": [
         "2024-06",
@@ -331,6 +337,8 @@
         }
       ],
       "sku_origin_missing_target": [],
+      "sku_origin_bad_target": [],
+      "sku_origin_no_available_label": [],
       "sku_origin_censored": [
         {
           "origin": "2025-12",
@@ -368,6 +376,570 @@
       "2026-02": 6
     }
   },
+  "label_overlap_check": {
+    "label_lag_months": 1,
+    "data_end_month": "2026-07",
+    "pull_as_of_month": "2026-08",
+    "labels_available_through": "2026-07",
+    "validation_origins": [
+      "2024-12",
+      "2025-01",
+      "2025-02",
+      "2025-03",
+      "2025-04"
+    ],
+    "validation_target_months": [
+      "2025-01",
+      "2025-02",
+      "2025-03",
+      "2025-04",
+      "2025-05",
+      "2025-06",
+      "2025-07"
+    ],
+    "test_origins": [
+      "2025-07",
+      "2025-08",
+      "2025-09",
+      "2025-10",
+      "2025-11",
+      "2025-12",
+      "2026-01",
+      "2026-02"
+    ],
+    "test_target_months": [
+      "2025-08",
+      "2025-09",
+      "2025-10",
+      "2025-11",
+      "2025-12",
+      "2026-01",
+      "2026-02",
+      "2026-03",
+      "2026-04",
+      "2026-05"
+    ],
+    "target_month_intersection": [],
+    "max_validation_target": "2025-07",
+    "max_validation_available_at": "2025-08",
+    "min_test_decision_at": "2025-08",
+    "definition": "label for month m available at m+label_lag (first day); decision for origin t at t+label_lag (first day)",
+    "pass": true
+  },
+  "self_test": {
+    "passed": true,
+    "cases": [
+      {
+        "case": "tsb [0,5,0,10]",
+        "got": 4.38046125,
+        "expected": 4.38046125,
+        "pass": true
+      },
+      {
+        "case": "tsb [3]",
+        "got": 2.9999999999999996,
+        "expected": 3.0,
+        "pass": true
+      },
+      {
+        "case": "tsb [0,0]",
+        "got": 0.0,
+        "expected": 0.0,
+        "pass": true
+      },
+      {
+        "case": "croston [0,5,0,10]",
+        "got": 3.25,
+        "expected": 3.25,
+        "pass": true
+      }
+    ]
+  },
+  "data_quality": {
+    "bad_rows_count": 0,
+    "bad_sku_month_count": 0,
+    "bad_sku_months": [],
+    "bad_rows_sample": [],
+    "gate_exercised": false,
+    "gate": "row kept in raw with qty blank + qty_status=bad; any bad row marks the SKU-month bad_data and excludes it from training/evaluation; never converted to 0",
+    "sheet_counts": {
+      "2023-01": {
+        "source_rows": 11124,
+        "extracted_rows": 11123,
+        "blank_tail": 0,
+        "hits": 0,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2023-02": {
+        "source_rows": 8853,
+        "extracted_rows": 8852,
+        "blank_tail": 0,
+        "hits": 0,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2023-03": {
+        "source_rows": 9848,
+        "extracted_rows": 9847,
+        "blank_tail": 0,
+        "hits": 0,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2023-04": {
+        "source_rows": 8188,
+        "extracted_rows": 8185,
+        "blank_tail": 2,
+        "hits": 0,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2023-05": {
+        "source_rows": 8995,
+        "extracted_rows": 8994,
+        "blank_tail": 0,
+        "hits": 0,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2023-06": {
+        "source_rows": 7467,
+        "extracted_rows": 7466,
+        "blank_tail": 0,
+        "hits": 0,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2023-07": {
+        "source_rows": 10411,
+        "extracted_rows": 10410,
+        "blank_tail": 0,
+        "hits": 5,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2023-08": {
+        "source_rows": 12273,
+        "extracted_rows": 12272,
+        "blank_tail": 0,
+        "hits": 30,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2023-09": {
+        "source_rows": 8124,
+        "extracted_rows": 8123,
+        "blank_tail": 0,
+        "hits": 16,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2023-10": {
+        "source_rows": 8251,
+        "extracted_rows": 8250,
+        "blank_tail": 0,
+        "hits": 5,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2023-11": {
+        "source_rows": 9893,
+        "extracted_rows": 9892,
+        "blank_tail": 0,
+        "hits": 18,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2023-12": {
+        "source_rows": 11832,
+        "extracted_rows": 11831,
+        "blank_tail": 0,
+        "hits": 23,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2024-01": {
+        "source_rows": 9904,
+        "extracted_rows": 9903,
+        "blank_tail": 0,
+        "hits": 28,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2024-02": {
+        "source_rows": 8370,
+        "extracted_rows": 8369,
+        "blank_tail": 0,
+        "hits": 28,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2024-03": {
+        "source_rows": 7768,
+        "extracted_rows": 7767,
+        "blank_tail": 0,
+        "hits": 33,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2024-04": {
+        "source_rows": 7612,
+        "extracted_rows": 7611,
+        "blank_tail": 0,
+        "hits": 35,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2024-05": {
+        "source_rows": 8114,
+        "extracted_rows": 8113,
+        "blank_tail": 0,
+        "hits": 18,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2024-06": {
+        "source_rows": 7351,
+        "extracted_rows": 7350,
+        "blank_tail": 0,
+        "hits": 33,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2024-07": {
+        "source_rows": 11491,
+        "extracted_rows": 11490,
+        "blank_tail": 0,
+        "hits": 19,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2024-08": {
+        "source_rows": 13943,
+        "extracted_rows": 13942,
+        "blank_tail": 0,
+        "hits": 31,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2024-09": {
+        "source_rows": 8383,
+        "extracted_rows": 8382,
+        "blank_tail": 0,
+        "hits": 26,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2024-10": {
+        "source_rows": 8312,
+        "extracted_rows": 8311,
+        "blank_tail": 0,
+        "hits": 23,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2024-11": {
+        "source_rows": 9345,
+        "extracted_rows": 9344,
+        "blank_tail": 0,
+        "hits": 26,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2024-12": {
+        "source_rows": 13480,
+        "extracted_rows": 13479,
+        "blank_tail": 0,
+        "hits": 26,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2025-01": {
+        "source_rows": 10613,
+        "extracted_rows": 10612,
+        "blank_tail": 0,
+        "hits": 24,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2025-02": {
+        "source_rows": 7380,
+        "extracted_rows": 7379,
+        "blank_tail": 0,
+        "hits": 30,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2025-03": {
+        "source_rows": 6980,
+        "extracted_rows": 6979,
+        "blank_tail": 0,
+        "hits": 66,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2025-04": {
+        "source_rows": 6444,
+        "extracted_rows": 6443,
+        "blank_tail": 0,
+        "hits": 40,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2025-05": {
+        "source_rows": 6509,
+        "extracted_rows": 6508,
+        "blank_tail": 0,
+        "hits": 39,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2025-06": {
+        "source_rows": 7334,
+        "extracted_rows": 7333,
+        "blank_tail": 0,
+        "hits": 50,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2025-07": {
+        "source_rows": 16663,
+        "extracted_rows": 16662,
+        "blank_tail": 0,
+        "hits": 41,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2025-08": {
+        "source_rows": 14564,
+        "extracted_rows": 14563,
+        "blank_tail": 0,
+        "hits": 60,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2025-09": {
+        "source_rows": 8511,
+        "extracted_rows": 8510,
+        "blank_tail": 0,
+        "hits": 60,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2025-10": {
+        "source_rows": 8469,
+        "extracted_rows": 8468,
+        "blank_tail": 0,
+        "hits": 49,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2025-11": {
+        "source_rows": 8894,
+        "extracted_rows": 8893,
+        "blank_tail": 0,
+        "hits": 38,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2025-12": {
+        "source_rows": 11083,
+        "extracted_rows": 11082,
+        "blank_tail": 0,
+        "hits": 39,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2026-01": {
+        "source_rows": 7671,
+        "extracted_rows": 7670,
+        "blank_tail": 0,
+        "hits": 42,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2026-02": {
+        "source_rows": 6189,
+        "extracted_rows": 6188,
+        "blank_tail": 0,
+        "hits": 31,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2026-03": {
+        "source_rows": 5977,
+        "extracted_rows": 5976,
+        "blank_tail": 0,
+        "hits": 81,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2026-04": {
+        "source_rows": 5203,
+        "extracted_rows": 5202,
+        "blank_tail": 0,
+        "hits": 54,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2026-05": {
+        "source_rows": 5452,
+        "extracted_rows": 5451,
+        "blank_tail": 0,
+        "hits": 95,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2026-06": {
+        "source_rows": 7890,
+        "extracted_rows": 7889,
+        "blank_tail": 0,
+        "hits": 42,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2026-07": {
+        "source_rows": 9605,
+        "extracted_rows": 9604,
+        "blank_tail": 0,
+        "hits": 66,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      }
+    },
+    "source_rows_note": "source_rows = sheet row_count including header; extracted_rows = aligned data rows read (row 2..N). A successful sheet read does not prove all cross-month shipment rows exist; counts are logged per month for audit.",
+    "completeness_caveat": "月表读取成功 ≠ 跨月发货行完整；本实验不声称数据完整，仅逐月记录 source_rows/extracted_rows/blank_tail 供核对。"
+  },
   "data_status_summary": {
     "qty_all": {
       "pre_launch": 54,
@@ -392,565 +964,568 @@
   },
   "cells": 1430,
   "validation": {
-    "n_cells": 650,
-    "n_origins": 7,
+    "n_cells": 442,
+    "n_origins": 5,
+    "scored_h_hist": {
+      "3": 442
+    },
     "summary": {
       "naive": {
-        "wape": 0.579874213836478,
-        "bias": -0.09433962264150944,
-        "n_cells": 50,
-        "n_origins": 7,
+        "wape": 0.6382978723404256,
+        "bias": -0.08897485493230174,
+        "n_cells": 34,
+        "n_origins": 5,
         "top1": 0.0,
         "top3": 0.0,
-        "rank_std": 2.602981022612657,
+        "rank_std": 3.006659275674582,
         "per_sku": {
           "2870": {
-            "wape": 0.4186046511627907,
-            "bias": -0.37209302325581395
+            "wape": 0.6,
+            "bias": -0.52
           },
           "2871": {
-            "wape": 0.6666666666666666,
-            "bias": -0.125
+            "wape": 0.6351351351351351,
+            "bias": -0.3918918918918919
           },
           "2876": {
-            "wape": 0.8333333333333334,
-            "bias": -0.3125
+            "wape": 0.8771929824561403,
+            "bias": 0.0
           },
           "2877": {
-            "wape": 0.4603174603174603,
-            "bias": -0.3333333333333333
+            "wape": 0.5394736842105263,
+            "bias": -0.32894736842105265
           },
           "2878": {
-            "wape": 0.8554216867469879,
-            "bias": 0.012048192771084338
+            "wape": 1.2608695652173914,
+            "bias": 0.30434782608695654
           },
           "2879": {
-            "wape": 0.46564885496183206,
-            "bias": 0.1450381679389313
+            "wape": 0.4222222222222222,
+            "bias": 0.0
           },
           "2880": {
-            "wape": 0.46835443037974683,
-            "bias": 0.06329113924050633
+            "wape": 0.52,
+            "bias": 0.32
           },
           "2881": {
-            "wape": 0.5510204081632653,
-            "bias": 0.16326530612244897
+            "wape": 0.5405405405405406,
+            "bias": 0.05405405405405406
           }
         }
       },
       "seasonal_naive": {
-        "wape": 0.519496855345912,
-        "bias": -0.38616352201257864,
-        "n_cells": 50,
-        "n_origins": 7,
-        "top1": 0.2857142857142857,
-        "top3": 0.2857142857142857,
-        "rank_std": 4.47213595499958,
+        "wape": 0.5106382978723404,
+        "bias": -0.36363636363636365,
+        "n_cells": 34,
+        "n_origins": 5,
+        "top1": 0.4,
+        "top3": 0.4,
+        "rank_std": 4.586937976471886,
         "per_sku": {
           "2870": {
-            "wape": 0.5465116279069767,
-            "bias": -0.45348837209302323
+            "wape": 0.4,
+            "bias": -0.24
           },
           "2871": {
-            "wape": 0.65625,
-            "bias": -0.65625
+            "wape": 0.6891891891891891,
+            "bias": -0.6891891891891891
           },
           "2876": {
             "wape": 0.6666666666666666,
             "bias": -0.6666666666666666
           },
           "2877": {
-            "wape": 0.7301587301587301,
-            "bias": -0.7301587301587301
+            "wape": 0.7236842105263158,
+            "bias": -0.7236842105263158
           },
           "2878": {
-            "wape": 0.12048192771084337,
-            "bias": 0.024096385542168676
+            "wape": 0.1956521739130435,
+            "bias": 0.06521739130434782
           },
           "2879": {
-            "wape": 0.4580152671755725,
-            "bias": -0.4580152671755725
+            "wape": 0.37777777777777777,
+            "bias": -0.37777777777777777
           },
           "2880": {
-            "wape": 0.5443037974683544,
-            "bias": 0.5443037974683544
+            "wape": 0.56,
+            "bias": 0.56
           },
           "2881": {
-            "wape": 0.3469387755102041,
-            "bias": -0.3469387755102041
+            "wape": 0.3918918918918919,
+            "bias": -0.3918918918918919
           }
         }
       },
       "ma3": {
-        "wape": 0.41509433962264153,
-        "bias": -0.15345911949685534,
-        "n_cells": 50,
-        "n_origins": 7,
-        "top1": 0.2857142857142857,
-        "top3": 0.42857142857142855,
-        "rank_std": 2.390457218668787,
+        "wape": 0.4526112185686654,
+        "bias": -0.2011605415860735,
+        "n_cells": 34,
+        "n_origins": 5,
+        "top1": 0.2,
+        "top3": 0.4,
+        "rank_std": 2.4166091947189146,
         "per_sku": {
           "2870": {
-            "wape": 0.5232558139534884,
-            "bias": -0.5
+            "wape": 0.64,
+            "bias": -0.6
           },
           "2871": {
-            "wape": 0.65625,
-            "bias": -0.2604166666666667
+            "wape": 0.5945945945945946,
+            "bias": -0.5945945945945946
           },
           "2876": {
-            "wape": 0.6145833333333334,
-            "bias": -0.3020833333333333
+            "wape": 0.7368421052631579,
+            "bias": -0.21052631578947367
           },
           "2877": {
-            "wape": 0.42063492063492064,
-            "bias": -0.42063492063492064
+            "wape": 0.47368421052631576,
+            "bias": -0.47368421052631576
           },
           "2878": {
-            "wape": 0.43373493975903615,
-            "bias": -0.024096385542168676
+            "wape": 0.6086956521739131,
+            "bias": -0.043478260869565216
           },
           "2879": {
-            "wape": 0.11450381679389313,
-            "bias": 0.03816793893129771
+            "wape": 0.1111111111111111,
+            "bias": 0.022222222222222223
           },
           "2880": {
-            "wape": 0.2911392405063291,
-            "bias": 0.16455696202531644
+            "wape": 0.34,
+            "bias": 0.34
           },
           "2881": {
-            "wape": 0.3673469387755102,
-            "bias": 0.12244897959183673
+            "wape": 0.33783783783783783,
+            "bias": 0.013513513513513514
           }
         }
       },
       "ma6": {
-        "wape": 0.4371069182389937,
-        "bias": -0.2572327044025157,
-        "n_cells": 50,
-        "n_origins": 7,
-        "top1": 0.2857142857142857,
-        "top3": 0.42857142857142855,
-        "rank_std": 4.257046978786097,
+        "wape": 0.4709864603481625,
+        "bias": -0.30077369439071566,
+        "n_cells": 34,
+        "n_origins": 5,
+        "top1": 0.4,
+        "top3": 0.6,
+        "rank_std": 5.0039984012787215,
         "per_sku": {
           "2870": {
-            "wape": 0.622093023255814,
-            "bias": -0.622093023255814
+            "wape": 0.64,
+            "bias": -0.64
           },
           "2871": {
-            "wape": 0.5989583333333334,
-            "bias": -0.4947916666666667
+            "wape": 0.7027027027027027,
+            "bias": -0.7027027027027027
           },
           "2876": {
-            "wape": 0.515625,
-            "bias": -0.4010416666666667
+            "wape": 0.5350877192982456,
+            "bias": -0.34210526315789475
           },
           "2877": {
-            "wape": 0.5555555555555556,
-            "bias": -0.5555555555555556
+            "wape": 0.5855263157894737,
+            "bias": -0.5855263157894737
           },
           "2878": {
-            "wape": 0.3192771084337349,
-            "bias": -0.16265060240963855
+            "wape": 0.43478260869565216,
+            "bias": -0.15217391304347827
           },
           "2879": {
-            "wape": 0.1946564885496183,
-            "bias": -0.08778625954198473
+            "wape": 0.18888888888888888,
+            "bias": -0.18888888888888888
           },
           "2880": {
-            "wape": 0.4240506329113924,
-            "bias": 0.37341772151898733
+            "wape": 0.58,
+            "bias": 0.58
           },
           "2881": {
-            "wape": 0.32142857142857145,
-            "bias": 0.00510204081632653
+            "wape": 0.25,
+            "bias": -0.16891891891891891
           }
         }
       },
       "ma12": {
-        "wape": 0.46823899371069183,
-        "bias": -0.3292452830188679,
-        "n_cells": 50,
-        "n_origins": 7,
+        "wape": 0.5024177949709865,
+        "bias": -0.3409090909090909,
+        "n_cells": 34,
+        "n_origins": 5,
         "top1": 0.0,
-        "top3": 0.14285714285714285,
-        "rank_std": 2.4159335036125373,
+        "top3": 0.0,
+        "rank_std": 1.019803902718557,
         "per_sku": {
           "2870": {
-            "wape": 0.6133720930232558,
-            "bias": -0.5726744186046512
+            "wape": 0.565,
+            "bias": -0.495
           },
           "2871": {
-            "wape": 0.6015625,
-            "bias": -0.5963541666666666
+            "wape": 0.7128378378378378,
+            "bias": -0.7128378378378378
           },
           "2876": {
-            "wape": 0.5546875,
-            "bias": -0.5182291666666666
+            "wape": 0.5307017543859649,
+            "bias": -0.4692982456140351
           },
           "2877": {
-            "wape": 0.6428571428571429,
-            "bias": -0.6428571428571429
+            "wape": 0.6381578947368421,
+            "bias": -0.6381578947368421
           },
           "2878": {
-            "wape": 0.2560240963855422,
-            "bias": -0.09939759036144578
+            "wape": 0.30978260869565216,
+            "bias": -0.02717391304347826
           },
           "2879": {
-            "wape": 0.29770992366412213,
-            "bias": -0.29770992366412213
+            "wape": 0.3527777777777778,
+            "bias": -0.3527777777777778
           },
           "2880": {
-            "wape": 0.5031645569620253,
-            "bias": 0.5031645569620253
+            "wape": 0.635,
+            "bias": 0.635
           },
           "2881": {
-            "wape": 0.28061224489795916,
-            "bias": -0.17346938775510204
+            "wape": 0.30067567567567566,
+            "bias": -0.30067567567567566
           }
         }
       },
       "M1": {
-        "wape": 0.46823899371069183,
-        "bias": -0.3292452830188679,
-        "n_cells": 50,
-        "n_origins": 7,
+        "wape": 0.5024177949709865,
+        "bias": -0.3409090909090909,
+        "n_cells": 34,
+        "n_origins": 5,
         "top1": 0.0,
-        "top3": 0.14285714285714285,
-        "rank_std": 2.4159335036125373,
+        "top3": 0.0,
+        "rank_std": 1.019803902718557,
         "per_sku": {
           "2870": {
-            "wape": 0.6133720930232558,
-            "bias": -0.5726744186046512
+            "wape": 0.565,
+            "bias": -0.495
           },
           "2871": {
-            "wape": 0.6015625,
-            "bias": -0.5963541666666666
+            "wape": 0.7128378378378378,
+            "bias": -0.7128378378378378
           },
           "2876": {
-            "wape": 0.5546875,
-            "bias": -0.5182291666666666
+            "wape": 0.5307017543859649,
+            "bias": -0.4692982456140351
           },
           "2877": {
-            "wape": 0.6428571428571429,
-            "bias": -0.6428571428571429
+            "wape": 0.6381578947368421,
+            "bias": -0.6381578947368421
           },
           "2878": {
-            "wape": 0.2560240963855422,
-            "bias": -0.09939759036144578
+            "wape": 0.30978260869565216,
+            "bias": -0.02717391304347826
           },
           "2879": {
-            "wape": 0.29770992366412213,
-            "bias": -0.29770992366412213
+            "wape": 0.3527777777777778,
+            "bias": -0.3527777777777778
           },
           "2880": {
-            "wape": 0.5031645569620253,
-            "bias": 0.5031645569620253
+            "wape": 0.635,
+            "bias": 0.635
           },
           "2881": {
-            "wape": 0.28061224489795916,
-            "bias": -0.17346938775510204
+            "wape": 0.30067567567567566,
+            "bias": -0.30067567567567566
           }
         }
       },
       "M2": {
-        "wape": 0.5310061558973295,
-        "bias": -0.08419195522678977,
-        "n_cells": 50,
-        "n_origins": 7,
-        "top1": 0.14285714285714285,
-        "top3": 0.14285714285714285,
-        "rank_std": 4.47213595499958,
+        "wape": 0.6159418504058635,
+        "bias": -0.0004234992670297471,
+        "n_cells": 34,
+        "n_origins": 5,
+        "top1": 0.0,
+        "top3": 0.0,
+        "rank_std": 3.4292856398964493,
         "per_sku": {
           "2870": {
-            "wape": 0.6750276854928018,
-            "bias": -0.44246954595791804
+            "wape": 0.6250476190476191,
+            "bias": -0.22504761904761905
           },
           "2871": {
-            "wape": 0.5558642746142746,
-            "bias": -0.5350309412809413
+            "wape": 0.6618696618696619,
+            "bias": -0.6618696618696619
           },
           "2876": {
             "wape": 0.3333333333333333,
             "bias": -0.3333333333333333
           },
           "2877": {
-            "wape": 0.6096575382289667,
-            "bias": -0.6096575382289667
+            "wape": 0.6949585502217082,
+            "bias": -0.6949585502217082
           },
           "2878": {
-            "wape": 0.25332477586198354,
-            "bias": 0.189256739008688
+            "wape": 0.39928549711158423,
+            "bias": 0.39928549711158406
           },
           "2879": {
-            "wape": 0.36393166971712576,
-            "bias": -0.007965418210496499
+            "wape": 0.3712865497076024,
+            "bias": 0.1468421052631579
           },
           "2880": {
-            "wape": 1.4172121070855248,
-            "bias": 1.4144751929562058
+            "wape": 1.9485714285714286,
+            "bias": 1.9485714285714284
           },
           "2881": {
-            "wape": 0.21690746139725736,
-            "bias": 0.04991037684915236
+            "wape": 0.23220077220077223,
+            "bias": 0.03806949806949804
           }
         }
       },
       "M3": {
-        "wape": 0.4906803887935963,
-        "bias": -0.13750274882350358,
-        "n_cells": 50,
-        "n_origins": 7,
+        "wape": 0.5126469275405445,
+        "bias": -0.21466637810931816,
+        "n_cells": 34,
+        "n_origins": 5,
         "top1": 0.0,
-        "top3": 0.14285714285714285,
-        "rank_std": 3.331972511340172,
+        "top3": 0.2,
+        "rank_std": 3.54400902933387,
         "per_sku": {
           "2870": {
-            "wape": 0.6260774109611319,
-            "bias": -0.6260774109611319
+            "wape": 0.7788111888111888,
+            "bias": -0.7788111888111888
           },
           "2871": {
-            "wape": 0.7050189393939394,
-            "bias": -0.2939612470862471
+            "wape": 0.647987147987148,
+            "bias": -0.647987147987148
           },
           "2876": {
-            "wape": 0.5595498251748251,
-            "bias": -0.22075320512820515
+            "wape": 0.696233590970433,
+            "bias": -0.12562875720770456
           },
           "2877": {
-            "wape": 0.3968531468531469,
-            "bias": -0.3968531468531469
+            "wape": 0.4580419580419581,
+            "bias": -0.4580419580419581
           },
           "2878": {
-            "wape": 0.4408543263964951,
-            "bias": -0.18565169769989043
+            "wape": 0.6432806324110671,
+            "bias": -0.18280632411067188
           },
           "2879": {
-            "wape": 0.3085997971494155,
-            "bias": 0.16591042545241017
+            "wape": 0.20893550893550897,
+            "bias": 0.0012432012432013393
           },
           "2880": {
-            "wape": 0.44502965389041343,
-            "bias": 0.1775250066389308
+            "wape": 0.4918181818181819,
+            "bias": 0.4918181818181819
           },
           "2881": {
-            "wape": 0.5374625374625374,
-            "bias": 0.24075924075924068
+            "wape": 0.41438291438291436,
+            "bias": 0.02145152145152144
           }
         }
       },
       "M3b": {
-        "wape": 0.5528301886792453,
-        "bias": -0.4421383647798742,
-        "n_cells": 50,
-        "n_origins": 7,
+        "wape": 0.5154738878143134,
+        "bias": -0.36847195357833656,
+        "n_cells": 34,
+        "n_origins": 5,
         "top1": 0.0,
-        "top3": 0.2857142857142857,
-        "rank_std": 4.681705602335411,
+        "top3": 0.4,
+        "rank_std": 4.791659420284375,
         "per_sku": {
           "2870": {
-            "wape": 0.5988372093023255,
-            "bias": -0.5058139534883721
+            "wape": 0.43,
+            "bias": -0.27
           },
           "2871": {
-            "wape": 0.6822916666666666,
-            "bias": -0.6822916666666666
+            "wape": 0.6891891891891891,
+            "bias": -0.6891891891891891
           },
           "2876": {
-            "wape": 0.7395833333333334,
-            "bias": -0.7395833333333334
+            "wape": 0.6754385964912281,
+            "bias": -0.6754385964912281
           },
           "2877": {
-            "wape": 0.7738095238095238,
-            "bias": -0.7738095238095238
+            "wape": 0.7302631578947368,
+            "bias": -0.7302631578947368
           },
           "2878": {
-            "wape": 0.1566265060240964,
-            "bias": -0.012048192771084338
+            "wape": 0.1956521739130435,
+            "bias": 0.06521739130434782
           },
           "2879": {
-            "wape": 0.4847328244274809,
-            "bias": -0.4847328244274809
+            "wape": 0.37777777777777777,
+            "bias": -0.37777777777777777
           },
           "2880": {
-            "wape": 0.47468354430379744,
-            "bias": 0.3860759493670886
+            "wape": 0.56,
+            "bias": 0.56
           },
           "2881": {
-            "wape": 0.40816326530612246,
-            "bias": -0.40816326530612246
+            "wape": 0.3918918918918919,
+            "bias": -0.3918918918918919
           }
         }
       },
       "croston": {
-        "wape": 0.42789370692368783,
-        "bias": -0.24650532316645093,
-        "n_cells": 50,
-        "n_origins": 7,
+        "wape": 0.44820364919158445,
+        "bias": -0.27146316014560984,
+        "n_cells": 34,
+        "n_origins": 5,
         "top1": 0.0,
-        "top3": 0.42857142857142855,
-        "rank_std": 2.1852940772540506,
+        "top3": 0.6,
+        "rank_std": 1.2,
         "per_sku": {
           "2870": {
-            "wape": 0.5722009439008034,
-            "bias": -0.5611889775199221
+            "wape": 0.574219262151026,
+            "bias": -0.55527867997591
           },
           "2871": {
-            "wape": 0.5760723931519086,
-            "bias": -0.4280406264975643
+            "wape": 0.6513165532861446,
+            "bias": -0.6513165532861446
           },
           "2876": {
-            "wape": 0.5810056621194218,
-            "bias": -0.4333815912522603
+            "wape": 0.5963693838712623,
+            "bias": -0.3477393697792008
           },
           "2877": {
-            "wape": 0.5355430197241405,
-            "bias": -0.5355430197241405
+            "wape": 0.5553548740250313,
+            "bias": -0.5553548740250313
           },
           "2878": {
-            "wape": 0.3138309689274498,
-            "bias": -0.10852298262784472
+            "wape": 0.39704898194953847,
+            "bias": -0.026601963191555084
           },
           "2879": {
-            "wape": 0.21645371900962065,
-            "bias": -0.06806248319172642
+            "wape": 0.19481182934030583,
+            "bias": -0.14211115134833535
           },
           "2880": {
-            "wape": 0.3241950950035927,
-            "bias": 0.24246109316544615
+            "wape": 0.42042943183083914,
+            "bias": 0.4204294318308391
           },
           "2881": {
-            "wape": 0.3305457338882734,
-            "bias": 0.012598367701701151
+            "wape": 0.29451464693122403,
+            "bias": -0.1265507839645068
           }
         }
       },
       "tsb": {
-        "wape": 0.4367025764651565,
-        "bias": -0.23555170529220745,
-        "n_cells": 50,
-        "n_origins": 7,
+        "wape": 0.46827750493597053,
+        "bias": -0.26606181118564215,
+        "n_cells": 34,
+        "n_origins": 5,
         "top1": 0.0,
-        "top3": 0.14285714285714285,
-        "rank_std": 2.312344865176949,
+        "top3": 0.0,
+        "rank_std": 2.0591260281974,
         "per_sku": {
           "2870": {
-            "wape": 0.5832657118111154,
-            "bias": -0.5615934056695963
+            "wape": 0.6277155220140466,
+            "bias": -0.5904391554506336
           },
           "2871": {
-            "wape": 0.5881888926034077,
-            "bias": -0.4245816874601875
+            "wape": 0.656932268149359,
+            "bias": -0.656932268149359
           },
           "2876": {
-            "wape": 0.5914700416646889,
-            "bias": -0.41488646357533626
+            "wape": 0.6265201253464795,
+            "bias": -0.32911620435388567
           },
           "2877": {
-            "wape": 0.5141139735887843,
-            "bias": -0.5141139735887844
+            "wape": 0.5353549154899643,
+            "bias": -0.5353549154899643
           },
           "2878": {
-            "wape": 0.3604326329751448,
-            "bias": -0.12966804967053586
+            "wape": 0.4987843008354494,
+            "bias": -0.08240472661191589
           },
           "2879": {
-            "wape": 0.21371372604716057,
-            "bias": -0.06124017723950942
+            "wape": 0.19088234844229202,
+            "bias": -0.13382018074950933
           },
           "2880": {
-            "wape": 0.3628430844943202,
-            "bias": 0.28464746004117625
+            "wape": 0.4798119288141608,
+            "bias": 0.4798119288141606
           },
           "2881": {
-            "wape": 0.3307660039587044,
-            "bias": 0.027535636220966615
+            "wape": 0.2917297263136522,
+            "bias": -0.10984562555524395
           }
         }
       },
       "ens3": {
-        "wape": 0.43571873844668585,
-        "bias": -0.24632809223865237,
-        "n_cells": 50,
-        "n_origins": 7,
+        "wape": 0.46322941350786795,
+        "bias": -0.27593033063489103,
+        "n_cells": 34,
+        "n_origins": 5,
         "top1": 0.0,
-        "top3": 0.14285714285714285,
-        "rank_std": 1.979486637221574,
+        "top3": 0.2,
+        "rank_std": 2.1354156504062622,
         "per_sku": {
           "2870": {
-            "wape": 0.6040173280242425,
-            "bias": -0.593005361643361
+            "wape": 0.6289434428433409,
+            "bias": -0.6100028606682248
           },
           "2871": {
-            "wape": 0.585343228354897,
-            "bias": -0.43731146170055274
+            "wape": 0.6633435827386701,
+            "bias": -0.6633435827386701
           },
           "2876": {
-            "wape": 0.5685142419369679,
-            "bias": -0.42089017106980636
+            "wape": 0.5878577258050546,
+            "bias": -0.3392277117129932
           },
           "2877": {
-            "wape": 0.5344204161657637,
-            "bias": -0.5344204161657637
+            "wape": 0.5570083957484036,
+            "bias": -0.5570083957484036
           },
           "2878": {
-            "wape": 0.33135396948700213,
-            "bias": -0.12604598318739693
+            "wape": 0.446093074596383,
+            "bias": -0.07564605583839965
           },
           "2879": {
-            "wape": 0.21506997279101298,
-            "bias": -0.06667873697311873
+            "wape": 0.19364671275048306,
+            "bias": -0.14094603475851258
           },
           "2880": {
-            "wape": 0.3581859310182201,
-            "bias": 0.2799903065650761
+            "wape": 0.4724536263219226,
+            "bias": 0.47245362632192267
           },
           "2881": {
-            "wape": 0.3303100287412434,
-            "bias": 0.02009646820237361
+            "wape": 0.29112586724187944,
+            "bias": -0.11969749671500225
           }
         }
       },
       "ens5": {
-        "wape": 0.4358281241255285,
-        "bias": -0.24819935088687015,
-        "n_cells": 50,
-        "n_origins": 7,
+        "wape": 0.46310508158588354,
+        "bias": -0.27677914190698105,
+        "n_cells": 34,
+        "n_origins": 5,
         "top1": 0.0,
-        "top3": 0.2857142857142857,
-        "rank_std": 1.979486637221574,
+        "top3": 0.2,
+        "rank_std": 1.7204650534085253,
         "per_sku": {
           "2870": {
-            "wape": 0.6073040807657771,
-            "bias": -0.5856317746242581
+            "wape": 0.6345966575587806,
+            "bias": -0.5973202909953678
           },
           "2871": {
-            "wape": 0.585343228354897,
-            "bias": -0.43731146170055274
+            "wape": 0.6633435827386701,
+            "bias": -0.6633435827386701
           },
           "2876": {
-            "wape": 0.5762420772978055,
-            "bias": -0.42861800643064396
+            "wape": 0.5967708562000278,
+            "bias": -0.34814084210796625
           },
           "2877": {
-            "wape": 0.5332693316691308,
-            "bias": -0.5332693316691308
+            "wape": 0.5551000188197753,
+            "bias": -0.5551000188197753
           },
           "2878": {
-            "wape": 0.3357660712445599,
-            "bias": -0.13045808494495462
+            "wape": 0.446093074596383,
+            "bias": -0.07564605583839965
           },
           "2879": {
-            "wape": 0.2124127557190023,
-            "bias": -0.06933595404512939
+            "wape": 0.19364671275048306,
+            "bias": -0.14094603475851258
           },
           "2880": {
-            "wape": 0.3491991952539715,
-            "bias": 0.27100357080082754
+            "wape": 0.45825458381440975,
+            "bias": 0.45825458381440964
           },
           "2881": {
-            "wape": 0.32928256391241706,
-            "bias": 0.019069003373547323
+            "wape": 0.29112586724187944,
+            "bias": -0.11969749671500225
           }
         }
       }
@@ -959,6 +1534,9 @@
   "test": {
     "n_cells": 780,
     "n_origins": 8,
+    "scored_h_hist": {
+      "3": 780
+    },
     "summary": {
       "naive": {
         "wape": 0.601528384279476,
@@ -1522,617 +2100,617 @@
     }
   },
   "combined_reported": {
-    "n_cells": 1430,
-    "n_origins": 15,
+    "n_cells": 1222,
+    "n_origins": 13,
     "summary": {
       "naive": {
-        "wape": 0.5914669783752192,
-        "bias": -0.09000584453535944,
-        "n_cells": 110,
-        "n_origins": 15,
-        "top1": 0.06666666666666667,
-        "top3": 0.13333333333333333,
-        "rank_std": 3.684200501239493,
+        "wape": 0.6147941381716678,
+        "bias": -0.08722958827634333,
+        "n_cells": 94,
+        "n_origins": 13,
+        "top1": 0.07692307692307693,
+        "top3": 0.15384615384615385,
+        "rank_std": 3.9523792549738856,
         "per_sku": {
           "2870": {
-            "wape": 0.6621621621621622,
-            "bias": -0.10810810810810811
+            "wape": 0.8214285714285714,
+            "bias": -0.08928571428571429
           },
           "2871": {
-            "wape": 0.6901408450704225,
-            "bias": -0.07042253521126761
+            "wape": 0.675,
+            "bias": -0.225
           },
           "2876": {
-            "wape": 1.0058823529411764,
-            "bias": 0.0058823529411764705
+            "wape": 1.0763358778625953,
+            "bias": 0.2366412213740458
           },
           "2877": {
-            "wape": 0.7204301075268817,
-            "bias": -0.06451612903225806
+            "wape": 0.8602941176470589,
+            "bias": 0.03676470588235294
           },
           "2878": {
-            "wape": 0.5674846625766872,
-            "bias": -0.2361963190184049
+            "wape": 0.5951557093425606,
+            "bias": -0.22145328719723184
           },
           "2879": {
-            "wape": 0.5217391304347826,
-            "bias": 0.09565217391304348
+            "wape": 0.5132275132275133,
+            "bias": 0.015873015873015872
           },
           "2880": {
-            "wape": 0.2894736842105263,
-            "bias": -0.06842105263157895
+            "wape": 0.2732919254658385,
+            "bias": -0.012422360248447204
           },
           "2881": {
-            "wape": 0.47335423197492166,
-            "bias": -0.1536050156739812
+            "wape": 0.46440677966101696,
+            "bias": -0.20677966101694914
           }
         }
       },
       "seasonal_naive": {
-        "wape": 0.5341905318527177,
-        "bias": -0.293395675043834,
-        "n_cells": 110,
-        "n_origins": 15,
-        "top1": 0.26666666666666666,
-        "top3": 0.3333333333333333,
-        "rank_std": 4.498888751680797,
+        "wape": 0.5338450802512212,
+        "bias": -0.267271458478716,
+        "n_cells": 94,
+        "n_origins": 13,
+        "top1": 0.3076923076923077,
+        "top3": 0.38461538461538464,
+        "rank_std": 4.540416788730371,
         "per_sku": {
           "2870": {
-            "wape": 0.5067567567567568,
-            "bias": -0.4391891891891892
+            "wape": 0.42857142857142855,
+            "bias": -0.3392857142857143
           },
           "2871": {
-            "wape": 0.6408450704225352,
-            "bias": -0.34507042253521125
+            "wape": 0.6583333333333333,
+            "bias": -0.30833333333333335
           },
           "2876": {
-            "wape": 0.8,
-            "bias": -0.47058823529411764
+            "wape": 0.8396946564885496,
+            "bias": -0.4122137404580153
           },
           "2877": {
-            "wape": 0.7849462365591398,
-            "bias": -0.46236559139784944
+            "wape": 0.8014705882352942,
+            "bias": -0.3602941176470588
           },
           "2878": {
-            "wape": 0.42024539877300615,
-            "bias": -0.3834355828220859
+            "wape": 0.47058823529411764,
+            "bias": -0.4290657439446367
           },
           "2879": {
-            "wape": 0.5869565217391305,
-            "bias": -0.04782608695652174
+            "wape": 0.5767195767195767,
+            "bias": 0.07936507936507936
           },
           "2880": {
-            "wape": 0.35789473684210527,
-            "bias": 0.21052631578947367
+            "wape": 0.32919254658385094,
+            "bias": 0.15527950310559005
           },
           "2881": {
-            "wape": 0.3949843260188088,
-            "bias": -0.3949843260188088
+            "wape": 0.4101694915254237,
+            "bias": -0.4101694915254237
           }
         }
       },
       "ma3": {
-        "wape": 0.5008766803039159,
-        "bias": -0.08825248392752776,
-        "n_cells": 110,
-        "n_origins": 15,
-        "top1": 0.2,
-        "top3": 0.3333333333333333,
-        "rank_std": 3.8551552786135894,
+        "wape": 0.5310537334263782,
+        "bias": -0.0928122819260293,
+        "n_cells": 94,
+        "n_origins": 13,
+        "top1": 0.15384615384615385,
+        "top3": 0.3076923076923077,
+        "rank_std": 3.855373564966667,
         "per_sku": {
           "2870": {
-            "wape": 0.6081081081081081,
-            "bias": -0.0945945945945946
+            "wape": 0.6875,
+            "bias": -0.008928571428571428
           },
           "2871": {
-            "wape": 0.7535211267605634,
-            "bias": -0.06338028169014084
+            "wape": 0.7333333333333333,
+            "bias": -0.23333333333333334
           },
           "2876": {
-            "wape": 0.9470588235294117,
-            "bias": 0.041176470588235294
+            "wape": 1.099236641221374,
+            "bias": 0.183206106870229
           },
           "2877": {
-            "wape": 0.7688172043010753,
-            "bias": -0.04838709677419355
+            "wape": 0.9264705882352942,
+            "bias": 0.058823529411764705
           },
           "2878": {
-            "wape": 0.39570552147239263,
-            "bias": -0.254601226993865
+            "wape": 0.4186851211072664,
+            "bias": -0.28719723183391005
           },
           "2879": {
-            "wape": 0.30869565217391304,
-            "bias": 0.11739130434782609
+            "wape": 0.3492063492063492,
+            "bias": 0.12698412698412698
           },
           "2880": {
-            "wape": 0.28421052631578947,
-            "bias": -0.09473684210526316
+            "wape": 0.2981366459627329,
+            "bias": -0.08695652173913043
           },
           "2881": {
-            "wape": 0.31974921630094044,
-            "bias": -0.16300940438871472
+            "wape": 0.30847457627118646,
+            "bias": -0.2135593220338983
           }
         }
       },
       "ma6": {
-        "wape": 0.5055523085914669,
-        "bias": -0.10637054354178843,
-        "n_cells": 110,
-        "n_origins": 15,
-        "top1": 0.2,
-        "top3": 0.3333333333333333,
-        "rank_std": 4.333846123505335,
+        "wape": 0.5310537334263782,
+        "bias": -0.0928122819260293,
+        "n_cells": 94,
+        "n_origins": 13,
+        "top1": 0.23076923076923078,
+        "top3": 0.38461538461538464,
+        "rank_std": 4.576761470967236,
         "per_sku": {
           "2870": {
-            "wape": 0.6418918918918919,
-            "bias": -0.12837837837837837
+            "wape": 0.65625,
+            "bias": 0.022321428571428572
           },
           "2871": {
-            "wape": 0.7992957746478874,
-            "bias": -0.05985915492957746
+            "wape": 0.9,
+            "bias": -0.10833333333333334
           },
           "2876": {
-            "wape": 0.8029411764705883,
-            "bias": -0.0029411764705882353
+            "wape": 0.8969465648854962,
+            "bias": 0.14122137404580154
           },
           "2877": {
-            "wape": 0.8252688172043011,
-            "bias": -0.024193548387096774
+            "wape": 0.9411764705882353,
+            "bias": 0.15441176470588236
           },
           "2878": {
-            "wape": 0.34662576687116564,
-            "bias": -0.3067484662576687
+            "wape": 0.3685121107266436,
+            "bias": -0.3235294117647059
           },
           "2879": {
-            "wape": 0.33695652173913043,
-            "bias": 0.13695652173913042
+            "wape": 0.36507936507936506,
+            "bias": 0.13756613756613756
           },
           "2880": {
-            "wape": 0.38421052631578945,
-            "bias": -0.05263157894736842
+            "wape": 0.4254658385093168,
+            "bias": -0.06521739130434782
           },
           "2881": {
-            "wape": 0.322884012539185,
-            "bias": -0.2225705329153605
+            "wape": 0.3050847457627119,
+            "bias": -0.2847457627118644
           }
         }
       },
       "ma12": {
-        "wape": 0.49488603156049094,
-        "bias": -0.18132670952659263,
-        "n_cells": 110,
-        "n_origins": 15,
-        "top1": 0.06666666666666667,
-        "top3": 0.26666666666666666,
-        "rank_std": 3.021405118299909,
+        "wape": 0.5123866015352407,
+        "bias": -0.1568387997208653,
+        "n_cells": 94,
+        "n_origins": 13,
+        "top1": 0.07692307692307693,
+        "top3": 0.23076923076923078,
+        "rank_std": 2.8388680134224513,
         "per_sku": {
           "2870": {
-            "wape": 0.5084459459459459,
-            "bias": -0.24155405405405406
+            "wape": 0.453125,
+            "bias": -0.10044642857142858
           },
           "2871": {
-            "wape": 0.6672535211267606,
-            "bias": -0.1426056338028169
+            "wape": 0.7479166666666667,
+            "bias": -0.13125
           },
           "2876": {
-            "wape": 0.7676470588235295,
-            "bias": -0.21470588235294116
+            "wape": 0.8206106870229007,
+            "bias": -0.10305343511450382
           },
           "2877": {
-            "wape": 0.8118279569892473,
-            "bias": -0.18548387096774194
+            "wape": 0.8713235294117647,
+            "bias": -0.014705882352941176
           },
           "2878": {
-            "wape": 0.39033742331288346,
-            "bias": -0.3504601226993865
+            "wape": 0.41608996539792387,
+            "bias": -0.3711072664359862
           },
           "2879": {
-            "wape": 0.40652173913043477,
-            "bias": 0.06739130434782609
+            "wape": 0.45634920634920634,
+            "bias": 0.12037037037037036
           },
           "2880": {
-            "wape": 0.35657894736842105,
-            "bias": 0.06184210526315789
+            "wape": 0.37111801242236025,
+            "bias": 0.023291925465838508
           },
           "2881": {
-            "wape": 0.3346394984326019,
-            "bias": -0.3017241379310345
+            "wape": 0.3440677966101695,
+            "bias": -0.3440677966101695
           }
         }
       },
       "M1": {
-        "wape": 0.49488603156049094,
-        "bias": -0.18132670952659263,
-        "n_cells": 110,
-        "n_origins": 15,
+        "wape": 0.5123866015352407,
+        "bias": -0.1568387997208653,
+        "n_cells": 94,
+        "n_origins": 13,
         "top1": 0.0,
-        "top3": 0.26666666666666666,
-        "rank_std": 3.021405118299909,
+        "top3": 0.23076923076923078,
+        "rank_std": 2.8388680134224513,
         "per_sku": {
           "2870": {
-            "wape": 0.5084459459459459,
-            "bias": -0.24155405405405406
+            "wape": 0.453125,
+            "bias": -0.10044642857142858
           },
           "2871": {
-            "wape": 0.6672535211267606,
-            "bias": -0.1426056338028169
+            "wape": 0.7479166666666667,
+            "bias": -0.13125
           },
           "2876": {
-            "wape": 0.7676470588235295,
-            "bias": -0.21470588235294116
+            "wape": 0.8206106870229007,
+            "bias": -0.10305343511450382
           },
           "2877": {
-            "wape": 0.8118279569892473,
-            "bias": -0.18548387096774194
+            "wape": 0.8713235294117647,
+            "bias": -0.014705882352941176
           },
           "2878": {
-            "wape": 0.39033742331288346,
-            "bias": -0.3504601226993865
+            "wape": 0.41608996539792387,
+            "bias": -0.3711072664359862
           },
           "2879": {
-            "wape": 0.40652173913043477,
-            "bias": 0.06739130434782609
+            "wape": 0.45634920634920634,
+            "bias": 0.12037037037037036
           },
           "2880": {
-            "wape": 0.35657894736842105,
-            "bias": 0.06184210526315789
+            "wape": 0.37111801242236025,
+            "bias": 0.023291925465838508
           },
           "2881": {
-            "wape": 0.3346394984326019,
-            "bias": -0.3017241379310345
+            "wape": 0.3440677966101695,
+            "bias": -0.3440677966101695
           }
         }
       },
       "M2": {
-        "wape": 0.5719930254228545,
-        "bias": 0.048909104938863614,
-        "n_cells": 110,
-        "n_origins": 15,
-        "top1": 0.13333333333333333,
-        "top3": 0.2,
-        "rank_std": 4.697043987682276,
+        "wape": 0.6105876547243256,
+        "bias": 0.10495264049870141,
+        "n_cells": 94,
+        "n_origins": 13,
+        "top1": 0.07692307692307693,
+        "top3": 0.15384615384615385,
+        "rank_std": 4.588382551386689,
         "per_sku": {
           "2870": {
-            "wape": 0.6147683397683398,
-            "bias": -0.1958494208494208
+            "wape": 0.5730867346938775,
+            "bias": -0.019515306122448957
           },
           "2871": {
-            "wape": 0.6644161785006856,
-            "bias": -0.073090446329883
+            "wape": 0.7496873496873496,
+            "bias": -0.06661856661856665
           },
           "2876": {
-            "wape": 0.7294117647058823,
-            "bias": 0.058823529411764705
+            "wape": 0.8473282442748091,
+            "bias": 0.17557251908396945
           },
           "2877": {
-            "wape": 0.9271067194454291,
-            "bias": -0.06017123557446134
+            "wape": 1.091484189829778,
+            "bias": 0.09417757487610434
           },
           "2878": {
-            "wape": 0.29949387545748474,
-            "bias": -0.18681207872660818
+            "wape": 0.32863730058729507,
+            "bias": -0.2015291146555796
           },
           "2879": {
-            "wape": 0.7401900862452052,
-            "bias": 0.4882366612483019
+            "wape": 0.8253146062282429,
+            "bias": 0.6695962505098872
           },
           "2880": {
-            "wape": 0.798296649270633,
-            "bias": 0.3790891228519812
+            "wape": 0.8518334057778586,
+            "bias": 0.35845940699942624
           },
           "2881": {
-            "wape": 0.24247748730998486,
-            "bias": 0.002568207735710239
+            "wape": 0.2483940487383427,
+            "bias": -0.004253612902991559
           }
         }
       },
       "M3": {
-        "wape": 0.6063712247230658,
-        "bias": -0.004285992596921834,
-        "n_cells": 110,
-        "n_origins": 15,
+        "wape": 0.6367402079195519,
+        "bias": -0.006281343685391199,
+        "n_cells": 94,
+        "n_origins": 13,
         "top1": 0.0,
-        "top3": 0.06666666666666667,
-        "rank_std": 3.2138588781850532,
+        "top3": 0.07692307692307693,
+        "rank_std": 3.308586641170241,
         "per_sku": {
           "2870": {
-            "wape": 0.8693772443772443,
-            "bias": 0.04528917028917027
+            "wape": 1.0157654845154844,
+            "bias": 0.1929008491508493
           },
           "2871": {
-            "wape": 1.0539331560458323,
-            "bias": 0.10966381036803581
+            "wape": 1.0827311577311576,
+            "bias": -0.03465423465423463
           },
           "2876": {
-            "wape": 0.9244960921431509,
-            "bias": 0.24621554915672564
+            "wape": 1.0926173063577642,
+            "bias": 0.42662680830619765
           },
           "2877": {
-            "wape": 0.8766824573276186,
-            "bias": 0.18268290848936014
+            "wape": 1.087284039489922,
+            "bias": 0.36155388728918136
           },
           "2878": {
-            "wape": 0.35699729718134626,
-            "bias": -0.2469325153374233
+            "wape": 0.37848138021148403,
+            "bias": -0.25432525951557095
           },
           "2879": {
-            "wape": 0.5300243235025844,
-            "bias": 0.21242018850714506
+            "wape": 0.5305990305990306,
+            "bias": 0.14409664409664408
           },
           "2880": {
-            "wape": 0.4582811924917188,
-            "bias": -0.1994295178505704
+            "wape": 0.4751987143291492,
+            "bias": -0.16972158276506102
           },
           "2881": {
-            "wape": 0.35607339369094854,
-            "bias": -0.11256768310059855
+            "wape": 0.31044210027260877,
+            "bias": -0.196325708190115
           }
         }
       },
       "M3b": {
-        "wape": 0.565166569257744,
-        "bias": -0.41437755698421974,
-        "n_cells": 110,
-        "n_origins": 15,
+        "wape": 0.5540823447313329,
+        "bias": -0.38241451500348916,
+        "n_cells": 94,
+        "n_origins": 13,
         "top1": 0.0,
-        "top3": 0.26666666666666666,
-        "rank_std": 4.394946593026536,
+        "top3": 0.3076923076923077,
+        "rank_std": 4.25239229571854,
         "per_sku": {
           "2870": {
-            "wape": 0.5236486486486487,
-            "bias": -0.46283783783783783
+            "wape": 0.42410714285714285,
+            "bias": -0.34375
           },
           "2871": {
-            "wape": 0.6161971830985915,
-            "bias": -0.43309859154929575
+            "wape": 0.6083333333333333,
+            "bias": -0.39166666666666666
           },
           "2876": {
-            "wape": 0.8117647058823529,
-            "bias": -0.6411764705882353
+            "wape": 0.8053435114503816,
+            "bias": -0.583969465648855
           },
           "2877": {
-            "wape": 0.771505376344086,
-            "bias": -0.5510752688172043
+            "wape": 0.7463235294117647,
+            "bias": -0.44485294117647056
           },
           "2878": {
-            "wape": 0.46932515337423314,
-            "bias": -0.4325153374233129
+            "wape": 0.5155709342560554,
+            "bias": -0.4740484429065744
           },
           "2879": {
-            "wape": 0.5195652173913043,
-            "bias": -0.20217391304347826
+            "wape": 0.47619047619047616,
+            "bias": -0.08994708994708994
           },
           "2880": {
-            "wape": 0.46842105263157896,
-            "bias": -0.11052631578947368
+            "wape": 0.4937888198757764,
+            "bias": -0.14596273291925466
           },
           "2881": {
-            "wape": 0.49843260188087773,
-            "bias": -0.49843260188087773
+            "wape": 0.5016949152542373,
+            "bias": -0.5016949152542373
           }
         }
       },
       "croston": {
-        "wape": 0.4826223402754025,
-        "bias": -0.11363769013128018,
-        "n_cells": 110,
-        "n_origins": 15,
+        "wape": 0.5005670717647809,
+        "bias": -0.09686588254889891,
+        "n_cells": 94,
+        "n_origins": 13,
         "top1": 0.0,
-        "top3": 0.2,
-        "rank_std": 1.781385228784985,
+        "top3": 0.23076923076923078,
+        "rank_std": 1.5913969896597846,
         "per_sku": {
           "2870": {
-            "wape": 0.5679527904005818,
-            "bias": -0.13660151276870675
+            "wape": 0.5674883474229313,
+            "bias": 0.0025115551620465176
           },
           "2871": {
-            "wape": 0.6654456073851698,
-            "bias": -0.09328609497668688
+            "wape": 0.7282312620773798,
+            "bias": -0.16960125238415066
           },
           "2876": {
-            "wape": 0.8990258777971556,
-            "bias": 0.007217577975509926
+            "wape": 1.0003886300970528,
+            "bias": 0.17565249571480318
           },
           "2877": {
-            "wape": 0.7840275187162855,
-            "bias": -0.05151519210941081
+            "wape": 0.8864534442786013,
+            "bias": 0.11536488475727158
           },
           "2878": {
-            "wape": 0.35660925438298163,
-            "bias": -0.30338703673359046
+            "wape": 0.37533183279429916,
+            "bias": -0.3152956980064045
           },
           "2879": {
-            "wape": 0.311835832790005,
-            "bias": 0.1237859608620224
+            "wape": 0.32222152905856283,
+            "bias": 0.13014260674619663
           },
           "2880": {
-            "wape": 0.30327999141639356,
-            "bias": -0.06767031317768792
+            "wape": 0.3293991146296454,
+            "bias": -0.06826282156701241
           },
           "2881": {
-            "wape": 0.32273655309347954,
-            "bias": -0.2173192428871551
+            "wape": 0.3130629233514568,
+            "bias": -0.27092961535302607
           }
         }
       },
       "tsb": {
-        "wape": 0.4766064798818128,
-        "bias": -0.12477010238654503,
-        "n_cells": 110,
-        "n_origins": 15,
-        "top1": 0.06666666666666667,
-        "top3": 0.26666666666666666,
-        "rank_std": 2.573367875415838,
+        "wape": 0.4957394339426931,
+        "bias": -0.11428611015983987,
+        "n_cells": 94,
+        "n_origins": 13,
+        "top1": 0.07692307692307693,
+        "top3": 0.23076923076923078,
+        "rank_std": 2.5903781908434977,
         "per_sku": {
           "2870": {
-            "wape": 0.5734272078395727,
-            "bias": -0.1546151626853655
+            "wape": 0.5901084968321709,
+            "bias": -0.03667829430696872
           },
           "2871": {
-            "wape": 0.6916560273618936,
-            "bias": -0.10085862839249916
+            "wape": 0.7530167503209527,
+            "bias": -0.18479225898841206
           },
           "2876": {
-            "wape": 0.8234998345793395,
-            "bias": -0.05784777069434145
+            "wape": 0.9078282062857018,
+            "bias": 0.08576607509177674
           },
           "2877": {
-            "wape": 0.7365361990317686,
-            "bias": -0.08225007438296882
+            "wape": 0.8301790141541133,
+            "bias": 0.06465347985086278
           },
           "2878": {
-            "wape": 0.3660529336097159,
-            "bias": -0.30539961920466835
+            "wape": 0.38879386040920777,
+            "bias": -0.32037524277583224
           },
           "2879": {
-            "wape": 0.31709634466294995,
-            "bias": 0.10993958690593118
+            "wape": 0.32865117735506205,
+            "bias": 0.1125119150226671
           },
           "2880": {
-            "wape": 0.31770525680916645,
-            "bias": -0.04848550408124945
+            "wape": 0.3459005686919153,
+            "bias": -0.047880737130324764
           },
           "2881": {
-            "wape": 0.32216672448511585,
-            "bias": -0.21209286637349276
+            "wape": 0.31167497108477693,
+            "bias": -0.2660498068267355
           }
         }
       },
       "ens3": {
-        "wape": 0.48673643020569424,
-        "bias": -0.11548192225155877,
-        "n_cells": 110,
-        "n_origins": 15,
+        "wape": 0.5065591359388663,
+        "bias": -0.10077789014719261,
+        "n_cells": 94,
+        "n_origins": 13,
         "top1": 0.0,
-        "top3": 0.06666666666666667,
-        "rank_std": 1.7838784213679535,
+        "top3": 0.07692307692307693,
+        "rank_std": 1.8040060614705498,
         "per_sku": {
           "2870": {
-            "wape": 0.5958189898301592,
-            "bias": -0.14571111110420695
+            "wape": 0.6043115395263013,
+            "bias": -0.009526128352721739
           },
           "2871": {
-            "wape": 0.6848097052541164,
-            "bias": -0.1045421801926945
+            "wape": 0.7511454445556335,
+            "bias": -0.18292095322309276
           },
           "2876": {
-            "wape": 0.8834655640201878,
-            "bias": 0.008326695437789307
+            "wape": 0.9856463284608483,
+            "bias": 0.17164133648461818
           },
           "2877": {
-            "wape": 0.7772467339263645,
-            "bias": -0.05224757450934119
+            "wape": 0.8791438099286486,
+            "bias": 0.11239915809757427
           },
           "2878": {
-            "wape": 0.359025781599763,
-            "bias": -0.3058035639503718
+            "wape": 0.38083151129942966,
+            "bias": -0.32079537651153506
           },
           "2879": {
-            "wape": 0.3149992442300695,
-            "bias": 0.1095302267120356
+            "wape": 0.32647547029014157,
+            "bias": 0.11239007174063823
           },
           "2880": {
-            "wape": 0.31741302323300175,
-            "bias": -0.052066061290473364
+            "wape": 0.3455556967697334,
+            "bias": -0.052106239426924245
           },
           "2881": {
-            "wape": 0.3223326008105016,
-            "bias": -0.2146842098999233
+            "wape": 0.31185434243324484,
+            "bias": -0.26885197152141804
           }
         }
       },
       "ens5": {
-        "wape": 0.48114065360718666,
-        "bias": -0.12302527719014919,
-        "n_cells": 110,
-        "n_origins": 15,
+        "wape": 0.49977224481647103,
+        "bias": -0.10905274367284913,
+        "n_cells": 94,
+        "n_origins": 13,
         "top1": 0.0,
-        "top3": 0.26666666666666666,
-        "rank_std": 1.730767331432956,
+        "top3": 0.23076923076923078,
+        "rank_std": 1.5613679330911108,
         "per_sku": {
           "2870": {
-            "wape": 0.5727152017542436,
-            "bias": -0.16644011709991394
+            "wape": 0.5737815338545558,
+            "bias": -0.03691802913276313
           },
           "2871": {
-            "wape": 0.6837162815475178,
-            "bias": -0.10563560389929309
+            "wape": 0.7498515598361585,
+            "bias": -0.18421483794256777
           },
           "2876": {
-            "wape": 0.853454419071995,
-            "bias": -0.03041235768264364
+            "wape": 0.9449156536263466,
+            "bias": 0.12315419703159028
           },
           "2877": {
-            "wape": 0.7764669670092904,
-            "bias": -0.05146780759226736
+            "wape": 0.8780773639979447,
+            "bias": 0.11346560402827818
           },
           "2878": {
-            "wape": 0.35824889811637495,
-            "bias": -0.3050266804669837
+            "wape": 0.3786880218134027,
+            "bias": -0.31865188702550806
           },
           "2879": {
-            "wape": 0.30983740254347597,
-            "bias": 0.10436838502544217
+            "wape": 0.32203563880081293,
+            "bias": 0.10795024025130953
           },
           "2880": {
-            "wape": 0.31338102631443554,
-            "bias": -0.05550724463901911
+            "wape": 0.3407974395366428,
+            "bias": -0.05616726325440076
           },
           "2881": {
-            "wape": 0.32688981506543313,
-            "bias": -0.21987271915940015
+            "wape": 0.31712364040120467,
+            "bias": -0.2741212694893779
           }
         }
       }
     }
   },
   "selection": {
-    "selected_by_validation": "ma3",
-    "validation_wape": 0.41509433962264153,
+    "selected_by_validation": "croston",
+    "validation_wape": 0.44820364919158445,
     "oracle_best_single_on_test": "tsb",
     "oracle_test_wape": 0.511239234484697
   },
   "test_report": {
-    "ma3": {
-      "wape": 0.5753275109170306,
-      "bias": -0.03165938864628821,
+    "croston": {
+      "wape": 0.5301215362520545,
+      "bias": 0.0016786507671485808,
       "n_cells": 60,
       "n_origins": 8,
-      "top1": 0.125,
-      "top3": 0.25,
-      "rank_std": 3.9823830805184977,
+      "top1": 0.0,
+      "top3": 0.0,
+      "rank_std": 1.0,
       "per_sku": {
         "2870": {
-          "wape": 0.7258064516129032,
-          "bias": 0.46774193548387094
+          "wape": 0.5620601903841451,
+          "bias": 0.452342389950721
         },
         "2871": {
-          "wape": 0.9565217391304348,
-          "bias": 0.34782608695652173
+          "wape": 0.8519636196980626,
+          "bias": 0.6053320577625354
         },
         "2876": {
-          "wape": 1.3783783783783783,
-          "bias": 0.4864864864864865
+          "wape": 1.3115926440817833,
+          "bias": 0.5788056894061308
         },
         "2877": {
-          "wape": 1.5,
-          "bias": 0.7333333333333333
+          "wape": 1.3058449665997898,
+          "bias": 0.9649432458815217
         },
         "2878": {
-          "wape": 0.38271604938271603,
-          "bias": -0.3333333333333333
+          "wape": 0.37122076752211386,
+          "bias": -0.3699455408108616
         },
         "2879": {
-          "wape": 0.5656565656565656,
-          "bias": 0.2222222222222222
+          "wape": 0.43804852880243283,
+          "bias": 0.377646023195771
         },
         "2880": {
-          "wape": 0.27927927927927926,
-          "bias": -0.27927927927927926
+          "wape": 0.28839446724172024,
+          "bias": -0.2883944672417203
         },
         "2881": {
-          "wape": 0.2986425339366516,
-          "bias": -0.2895927601809955
+          "wape": 0.3192736584423945,
+          "bias": -0.3192736584423946
         }
       }
     },
@@ -2222,46 +2800,46 @@
         }
       }
     },
-    "croston": {
-      "wape": 0.5301215362520545,
-      "bias": 0.0016786507671485808,
+    "ma3": {
+      "wape": 0.5753275109170306,
+      "bias": -0.03165938864628821,
       "n_cells": 60,
       "n_origins": 8,
-      "top1": 0.0,
-      "top3": 0.0,
-      "rank_std": 1.0,
+      "top1": 0.125,
+      "top3": 0.25,
+      "rank_std": 3.9823830805184977,
       "per_sku": {
         "2870": {
-          "wape": 0.5620601903841451,
-          "bias": 0.452342389950721
+          "wape": 0.7258064516129032,
+          "bias": 0.46774193548387094
         },
         "2871": {
-          "wape": 0.8519636196980626,
-          "bias": 0.6053320577625354
+          "wape": 0.9565217391304348,
+          "bias": 0.34782608695652173
         },
         "2876": {
-          "wape": 1.3115926440817833,
-          "bias": 0.5788056894061308
+          "wape": 1.3783783783783783,
+          "bias": 0.4864864864864865
         },
         "2877": {
-          "wape": 1.3058449665997898,
-          "bias": 0.9649432458815217
+          "wape": 1.5,
+          "bias": 0.7333333333333333
         },
         "2878": {
-          "wape": 0.37122076752211386,
-          "bias": -0.3699455408108616
+          "wape": 0.38271604938271603,
+          "bias": -0.3333333333333333
         },
         "2879": {
-          "wape": 0.43804852880243283,
-          "bias": 0.377646023195771
+          "wape": 0.5656565656565656,
+          "bias": 0.2222222222222222
         },
         "2880": {
-          "wape": 0.28839446724172024,
-          "bias": -0.2883944672417203
+          "wape": 0.27927927927927926,
+          "bias": -0.27927927927927926
         },
         "2881": {
-          "wape": 0.3192736584423945,
-          "bias": -0.3192736584423946
+          "wape": 0.2986425339366516,
+          "bias": -0.2895927601809955
         }
       }
     },

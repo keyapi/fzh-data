@@ -54,7 +54,8 @@ tags: [supply-chain, review, codex, guide]
 - 05-synthesis.md（重点：§2 指标权威矩阵、§4.4 库存数据架构、§3–4 架构选择、§5 路线、§7 风险）
 - 06-open-questions.md（A/B 类决策）
 - 08-fact-contract.md（生产数量四分法、守恒式、批次关联）
-- 09-codex-review-response.md（对 Codex 评审的逐条处理）
+- 09-codex-review-response.md（对 Codex 第一轮评审的逐条处理）
+- 10-codex-round2-response.md（第二轮 R01–R07 处理、共同框架/决策/样例对照）
 - experiments/e1_forecast/results.md、e2_replenishment/results.md、e3_agent/results.md
 - 01-existing-assets.md（只核事实与路径，不重做文献综述）
 

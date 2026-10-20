@@ -50,6 +50,10 @@ tags: [supply-chain, research, sources]
 | S1-019 | E1 修正后：测试期 TSB 0.511 / ens5 0.520 / naive 0.602；验证选 MA3 测试 0.575 | `experiments/e1_forecast/results.md` | C | 2026-10-20 | 见 results.md §4 | A | 09、05 §1 |
 | S1-020 | 生产数量四分法：首道 JC / 末道 JC / 已提交 SE / 已提交 DN；produced_qty 仅展示 | `08-fact-contract.md` §1–§2 | C | 2026-10-20 | 「四个量必须分开，禁止互相替代」 | A | 05 §2、09 |
 | S1-021 | 计划引擎比较：轻量自组 / ERPNext 原生 / FrePPLe / Odoo；翻转条件 | `05-synthesis.md` §3 候选 D | C | 2026-10-20 | 公开文档主张，未做 PoC | B | 05 §3、09 |
+| S1-022 | Codex 第二轮复审 R01–R07：标签重叠、坏数量、DN 行键、收货分摊、需求冲减、互斥余额、引擎对照时点 | Codex #301 `dd2551ef` `claude-review.md` | C | 2026-10-20 | 「框架方向接近一致，实施契约尚未闭合」 | A | 10 |
+| S1-023 | Codex 13 个合成契约样例全部 PASS（仅算例自洽） | #301 `contract_examples.py` 实跑 | C | 2026-10-20 | 13/13 PASS | B | 10 §4 |
+| S1-024 | 共同框架/决策/样例：D01–D05 必须统一，B01–B07 可保留 | #301 `common-framework.md`/`decisions.md`/`semantic-examples.md` | C | 2026-10-20 | 同 cutoff 互斥余额、预测冲减、DN 行 ID | A | 10 §3–§4 |
+| S1-025 | E1 R01/R02 修正后：标签交集空；验证选 Croston 0.448；测试 TSB 0.511 / ens5 0.520 / naive 0.602 | `experiments/e1_forecast/results.md`（R01/R02 修正版） | C | 2026-10-20 | `label_overlap_check.pass=true`；bad_qty=0 | A | 05 §1、10 §2 |
 
 ## 未找到项（N-###）
 
