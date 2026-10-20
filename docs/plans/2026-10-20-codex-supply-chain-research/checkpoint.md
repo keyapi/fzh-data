@@ -1,49 +1,55 @@
 ---
 okf: v0.1
 type: Reference
-title: 起点核对与续接
+title: 供应链独立调研当前保存点与续接
 date: 2026-10-20
 ---
 
-# 起点核对与续接
+# 当前保存点（2026-10-20 10:28 北京时间）
 
-## 本轮完成与边界
+## 已完成
 
-已 fetch 当前配置的所有远端（仅 origin/GitHub），读取 PR #300 的简报/能力地图/研究计划，扫描开放 PR 元数据及相关分支路径。尚未完整审计代码、运行实验、深度外部检索，也未连接 Notion/Drive 或读取 Claude 历史会话。
+- P0规划已提交dfded88e；本轮完成P1资产复核、P2首轮三路独立研究、P3验证合同设计、P4首轮综合及交叉审阅。
+- 25项资产、22个开放PR的全部文件列表分流、84个远端树扫描、本地可达历史2,841路径及最近100个closed PR标题检索；边界见assets.md，不等于完整生产审计。
+- 三个gpt-6-luna子Agent分别落盘成熟实践、预测/Agent、开源研究与来源表，已互审并修订。全部子Agent已结束当前工作，不在后台继续消耗。
+- 原始来源中重要版本/许可由主Agent另核；没有以Claude/Cursor独立深度结论作为研究输入。
+- 固定SHA的成本56、履约46、低库存scan4项既有离线测试，共106 passed。它们不能裁定生产事实口径。
+- 综合三条路线、老板一页纸三视角、E1–E4验证合同已完成；真实回测/整套产品运行尚未执行。
 
-用户粘贴的 Claude 回复是上下文，不等于代码验证。Codex 不采纳其跨软件分工；独立覆盖全题。当前为规划保存点。
+## 关键固定版本与纠偏
 
-## 已核对的快照（2026-10-20）
+所有完整SHA见assets.md。MAIN=e5d07c9dfb181e102dd4ef990fe3271246527f74；COST=#295；FULFILL=#291；ALERT=#298；ORDER=#294；COLAB=#280；PB=#297；DEMO=#288；SYNC=#290。
 
-| 线索 | ref / 提交 SHA | 核对结果及下一步 |
-|---|---|---|
-| main | origin/main / e5d07c9dfb181e102dd4ef990fe3271246527f74 | 本研究分支基点 |
-| Claude 交接包，PR #300 | origin/docs/supply-chain-integration-handoff / 88ad11068f12fa8bf03770a9189f9b1541785809 | OPEN；可按分支读取，不必先合并 |
-| 履约蓝图 | main 的 docs/solutions/architecture-patterns/en-end-to-end-supply-chain-fulfillment-visibility.md；最近该路径提交 a1946f193bfd38825ad039083b9dca22c43e3724 | **文档已经在 main**，纠正交接中“蓝图不在 main”的概括 |
-| 履约实现，PR #291 | origin/claude/frosty-hellman-58de7a / 4e4316c52313f86a40ea5e3ee110263e9a5a8c93 | OPEN；分支有 EN_API/fulfillment/、fulfillment_query.py、tests/test_fulfillment.py；main 路径扫描未见这些文件。未验证运行效果 |
-| 成本引擎与拆包裹，PR #295 | origin/feature/ustx-cost-compare / 7d9c49f89e085960eff6c0c71491290fb76b31be | OPEN；tongtool_order_cost/docs/reference/cost-engine-spec/30-design-merge-split-no-double-count.md 与 31-handoff-merge-split-B.md 是重点；未完成代码审计 |
-| Colab 成本链，PR #280 | origin/docs/colab-cost-current-state / b90c79ecfb619921fcc4eb68379aaf16253a8162 | OPEN；找到 colab-cost-pipeline-current-state/data-flow、2026-10-09-en-tongtool-sync-coverage-open-issues、read-en-as-cost-authority-plan 等资料。部分组件 quantity 相加不能直接当成品件数，是优先复核线索 |
-| 网页 Agent demo，PR #288 | origin/claude/ce-okf-branch-param-desk / 765f36933776963341ef0385dd2a009ebaa577a8 | OPEN；有 ops_assistant_demo/AGENT_HANDOFF.md、agent_runtime.py 等；可能对应用户描述，未确认就是同一次探索 |
-| PB 断货与补货，PR #297 | origin/claude/vigorous-lehmann-889bf7 / e9e92e4fbbe1ebdb1b1be2917fb3d9ab02580750 | OPEN；PR 元数据指向断货闭环、Notion、补货估算；后续核对具体文档与计算，不视为已上线 |
-| 订单侧输入，PR #294 | origin/feature/en-order-side-input | OPEN；待固定 SHA、检查订单事实和盈利审计的复用边界 |
+- 履约蓝图文档已在main，实现/EN供应链呈现在未合并#291；阶段0–3不等于头程全链实现。
+- #298标题为重尺但包含stock_alert，不能只看PR标题找资产。
+- #295已有merge_split_orders；旧交接“只完成分组”已滞后。同产品映射守卫是可选参数，复用前要检查调用约束。
+- 同一#291里旧代码第一道工序量，与新文档建议的“已提交生产入库主口径”有冲突；此项尚未裁定。
+- 赛狐成本导入1000、通途报溢/零库存语义不等于实物可售；stock_alert排除零零行不适合作为全部断货事实。
+- frePPLe正式9.19.0 CE需要核库存政策补缺；库存规划屏/策略模型有商业edition边界。TimesFM3下载权重的商业/生产限制不能倒推到2.5。
 
-以上状态仅是核对时快照，后续启动必须刷新。相关链接：[交接](https://github.com/keyapi/fzh-data/pull/300)、[履约](https://github.com/keyapi/fzh-data/pull/291)、[成本](https://github.com/keyapi/fzh-data/pull/295)、[Colab](https://github.com/keyapi/fzh-data/pull/280)、[demo](https://github.com/keyapi/fzh-data/pull/288)、[PB](https://github.com/keyapi/fzh-data/pull/297)、[订单输入](https://github.com/keyapi/fzh-data/pull/294)。
+## 当前未完成与精确下一步
 
-## 尚未定位或核实
+1. 等待用户给历史多方法预测对比的位置、PJ/Jack头程PR/接口；两个异步问题已提出，未答不等于无资料。
+2. 优先E1：把成品独立需求、BOM派生、终端订单/内部SO、预测冲减、首道/末道/入库、成本库存、供应批次状态去重做成经业务确认的合成样例；不先改生产。
+3. 选定EN实际版本/启用模块与frePPLe正式CE，再做E2同输入计划对照；edition/许可/适配成本不过门槛就淘汰，不默认自研。
+4. 有当时可知历史快照后做E3滚动回测与库存策略仿真；选一个基础模型挑战者即可，不一次训练所有模型。
+5. E4评估Agent语义/权限/幂等/过期审批/独立读回。任何具体生产写入或通知任务另行按范围授权。
+6. Claude/Cursor各自成果固化后做主张/来源/适用条件差异表；现在尚未比较，不用多数票替代一手证据。
 
-- 历史多方法销量预测对比与 demand_forecast 的真实位置；main 文件名扫描无匹配不能证明不存在。
-- 用户提到的 EN BOM 成本替换工作是否完整落在 #280/#294/#295；必须逐项追踪。
-- PJ/Jack 的头程大屏在 [Gitee 仓库](https://gitee.com/keyapi/fzh-data) 的提交与接口，目前尚未查询该站。
-- 老板实际批准的 2026-10-16 计划样例、目标函数与审批抓手。
+## 工作区、提交与校验
 
-## 额度与接续
+使用已附着worktree与feature/codex-supply-chain-research；现有Draft PR：[301](https://github.com/keyapi/fzh-data/pull/301)。本研究文档在docs/plans/2026-10-20-codex-supply-chain-research/；当前研究成果提交可由git log该目录确认，P0基线dfded88e。不要在原主检出混入其他人的未提交修改。
 
-2026-10-20 本轮读取的账户额度快照：5 小时窗口已用 5%，周窗口已用 30%；后续以实时工具为准。没有启动后台研究/自动化，也未使用额度重置。
+凭证扫描、文档BOM/frontmatter/本地链接与四类diff凭证模式检查已通过；移除两文件多余EOF空行后diff格式检查通过。无业务代码/锁文件/生产数据改动；从固定ref导出的临时测试源码仅留本机临时目录，不提交。
 
-下一步是 P1：刷新远端与 PR 列表，核对本表所列 ref/SHA，建立 assets.md 与 coverage.md；再按 research-plan.md 启动三个便宜模型研究子 Agent。先固定独立首轮结论，再与其他软件调研比较。
+本分支与#300都修改根index.md和docs/plans/index.md；合并需保留双方导航，再运行scripts/update_index.py。#300研究交接在本轮刷新时head为de899f4b8668bf27ddb15040ac1c69b273a99e11，未读取其后续深度研究。Gitee网页失败后用git只见main且与GitHub相同，未证明Gitee PR/私有分支没有新增。
 
-本分支与 #300 均会生成根 index.md，并新建 docs/plans/index.md；合并时保留双方导航条目并重新运行 scripts/update_index.py，不能用整文件覆盖丢掉另一方索引。当前不修改 #300 分支。
+## 额度与可选Astra审查
 
-可复制的续接提示：
+最近读取：北京时间约10:30，5小时窗口已用39%、周窗口已用35%；5小时窗口重置13:21:28。额度共享且可能被别的会话消耗，续接必须刷新。本轮未使用重置额度。
 
-> 按 docs/plans/2026-10-20-codex-supply-chain-research/index.md 接续供应链整合独立调研。先读 research-plan.md 与 checkpoint.md，刷新 main/开放 PR/分支快照，从 P1 执行。Codex 自己覆盖完整研究范围，不采用 Claude/Codex/Cursor 的 A/B/C 分工。允许 gpt-6-luna 子 Agent，最多三个并发；主 Agent 负责证据核实和综合。按成果与额度阈值阶段提交到本研究分支/PR；先研究，不改业务代码或生产数据。Astra 留作可选人工审查节点。
+Astra并非必经许可步骤；若用户手动切换，可直接审阅synthesis.md最后的审查提示。审完继续E1/E2；不需重新做泛综述。
+
+可复制续接提示：
+
+> 继续PR #301供应链独立研究，先读index.md、synthesis.md、assets.md和本checkpoint。P1–P4首轮报告已完成，不重做已核资产/泛搜索。优先裁定计划单位、生产数量和库存/供应语义，再按experiments.md做E1，核实际EN版本和正式CE后做E2。历史预测对比/PJ头程资料未交付时保留未知。用便宜模型有界子任务，及时阶段提交；不修改生产、不外发通知。独立报告先固化，后与Claude/Cursor比较。
