@@ -13,9 +13,10 @@ tags: [supply-chain, g1, data-source, mapping, tongtool, erpnext]
 > USNJ(CENTRADE)、USTX(DANEEY)、波兰分公司做填充 PP 棉、压缩、包装、发货；最终卖给顾客的多数是成品。
 > 三角靠枕类绍兴只发皮壳，成品销售 1:1 消耗皮壳；`-Cover` 是只卖皮壳的例外。
 > **皮壳仓是分公司仓，不是“皮壳产品仓”**；其 family 销售行产品名也是「三角…靠枕」。
-> G1 需求 = family 销售（base + `-Cover`）1:1 皮壳，共 33,719 件/6 个月；分公司皮壳库存/在途做净算。
-> **WayfairCG 是下游 3PL，1,162 件 family 销售计入需求；分公司→3PL 转移不重复计；其他 3PL 无 family 销售；
-> 海绵 `-Foam` 是另一条组件流。** 只剩 WayfairCG 由 USNJ 还是 USTX 供货待确认。
+> G1 匹配毛量 = family 销售（base + `-Cover`）1:1 皮壳，共 **33,719 件/6 个月**；**不是净需求**：
+> 订单文件全是正数出库、没有退货行；退货/贷项/补发需交易事件核实，不能按仓名直接扣。
+> WayfairCG 是下游 3PL，1,162 件 family 销售计入毛量；分公司→3PL 转移不重复计；其他 3PL 无 family 销售；
+> 海绵 `-Foam` 是另一条组件流。**G1b 保持暂停到退货/补发与 WayfairCG 供货归属确认。**
 > 详见 `experiments/g1_contract/mapping_process.md`。
 
 > 结论：**PR #304 是服务账号直读 GSheet 的 43 张月表，不是业务导出。**

@@ -76,6 +76,7 @@ tags: [supply-chain, research, sources]
 | S1-045 | WayfairCG-Cranbury 是下游 3PL，family 销售 1,162 件/6个月；其他 3PL 无 family 销售；海绵 `-Foam` 另列 | 本地订单 family 精确匹配 + 用户说明 | C | 2026-10-20 | 3PL 销售计入需求，转移不重复计 | A | mapping_process §4.1 |
 | S1-046 | WayfairCG 库存以 Wayfair 后台手工导出为准；Tongtool 调拨只算发出量；赛狐平台仓 API 无 Wayfair | 用户 2026-10-20 说明 + `SELLFOX_API/docs/api-reference/多平台/平台仓/` 实查 | C | 2026-10-20 | 只有 Temu/Mercado/Walmart WFS，无 Wayfair | A | 13 §1.5、mapping_process §4.2 |
 | S1-047 | 产能/交期不确定；美中 2026-06/07/08 新运营入职、第二个月才下单、首批刚回货，历史不可参考；美东稳定 2 人 | WX 2026-10-20 反馈 | C | 2026-10-20 | 美东可回测，美中需 cohort/ramp；交期用区间 | A | 05 §5/§7、08 §5、06 A12 |
+| S1-048 | 订单文件 45,129 行/48,346 件无负数；退货仓 family 164/165 正数出库；补发 66/72；未匹配 759/925 pending | 本地 2026-04..09 订单只读核对 | C | 2026-10-20 | 33,719 是匹配毛量，不是净需求 | A | mapping_process §3 |
 
 ## 未找到项（N-###）
 

@@ -13,6 +13,8 @@ tags: [supply-chain, g1, mapping, coverage, tongtool, erpnext]
 > 按 `docs/company-context.md`，三角靠枕类绍兴只发皮壳，分公司填充/压缩/包装后卖成品；
 > 成品销售 1:1 消耗皮壳，`-Cover` 是只卖皮壳的例外；皮壳仓是分公司仓，不是皮壳产品仓。
 > **以 [mapping_process.md](mapping_process.md) 为准**；本步骤确认前不进入 G1b。
+> 另外：**33,719 是 family 匹配毛量，不是净需求**；订单文件全是正数出库、没有退货行；
+> 退货/贷项/补发（含退货仓 165 件、补发 72 件）需交易事件核实后才能净算。
 > 下面的 99.18% 两仓完成品数字仅作历史记录，不是最终 family/皮壳口径。
 
 > 只读本地文件：`EN产品BOM成本列表20261016.xlsx` + `2026年{4..9}月订单_order_cost_*.xlsx`。

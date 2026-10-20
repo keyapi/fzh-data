@@ -252,6 +252,12 @@ tags: [supply-chain, research, log]
   方法调整：美东用 ens5/TSB 回测；美中用短窗 run-rate + 运营/Listing cohort + ramp；
   产能/交期用区间/情景，不输出固定 3 个月到货日。08 增加 operator/listing/cohort 与 V19/V20；
   06 增加 A12/B27/E12；13 增加 §1.6 运营/产能数据。
+- **Codex 复核意见处理（2026-10-20）**：33,719 只能叫「family 匹配毛量」，不是净需求；
+  退货仓 165 件是正数出库销售（Amazon/Wayfair/OSTK，是否补发=否），不是退货；
+  family 补发 66 行/72 件待交易事件核实；订单文件 45,129 行/48,346 件**无负数行**；
+  未匹配 text-tri 759/925 标 pending，不直接判非 family。
+  全量去向：family 32,888 + 未匹配 759 + 非 family 退货仓 148 + out_of_scope 11,334 = 45,129 行；
+  件数 33,719+925+152+13,550 = 48,346。G1b 继续暂停。
 - **本步骤确认前不进入 G1b。**
 - 新增 `experiments/g1_contract/codex-sync.md`：给 Codex 的同步块（皮壳 1:1、旧 v1 作废、C21–C25）。
   以后每次我方实质更新都在结尾附「给 Codex」同步块。
