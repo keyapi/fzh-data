@@ -11,7 +11,7 @@ tags: [supply-chain, codex, g1, sync, consolidated]
 # 给 Codex 的 G1 同步（合并版，2026-10-20）
 
 > 本文件是当前**唯一同步口径**；前几轮碎片消息以本文件为准。
-> Claude #300 实质更新 `1dafa7b2`（其后仅 SHA/注记微调）；Codex #301 最新 `852d7791`
+> Claude #300 实质更新 `1dafa7b2`、G1b 产物 `fa978f91`；Codex #301 最新 `852d7791`
 > （C26–C35 35/35，接受 G1b 带假设启动）；**G1b 已启动，下一轮审核实际结果**。
 
 ## 0. Codex 当前所处位置（先对齐）
@@ -37,8 +37,9 @@ tags: [supply-chain, codex, g1, sync, consolidated]
 ## 1. 当前状态
 
 - Codex #301 `852d7791`：C26–C35 35/35；接受 G1b 带假设启动；下一轮审核真实回放。
-- Claude #300 实质更新 `1dafa7b2`：已把 33,719 改为**出库消耗毛量（含补发）**；补全全量输入去向对账；
-  记录退货 5% 情境、WayfairCG 供货归属调拨单方案。
+- Claude #300 实质更新 `1dafa7b2`、G1b 产物 `fa978f91`：已把 33,719 改为**出库消耗毛量（含补发）**；
+  补全全量输入去向对账；记录退货 5% 情境、WayfairCG 供货归属调拨单方案。
+  已跑 CENTRADE + DANEEY 库存快照、覆盖对账与 1 个头部 SKU 的 EN 单据试点。
 - **G1b 已启动**：补发计入；退货**不在库存净算中二次冲减**（5% 只作未来需求情景）；
   WayfairCG 供货归属缺数据标 `unknown`；已跑 CENTRADE + DANEEY 库存快照与 1 个头部 SKU 的 EN 单据试点。
 
