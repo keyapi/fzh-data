@@ -38,7 +38,7 @@ tags: [supply-chain, synthesis, architecture, recommendation]
 |---|---|---|---|---|
 | 销量（数量） | 通途订单月表（发货口径） | SKU × 仓 × 渠道 × 日 | 月表，滞后 1 月；202610 缺失 | 发货量 ≠ 真实需求；断货月是删失值 |
 | 销售额 / 毛利 | 平台结算 / 赛狐结算 | 订单 / 交易 | 日更或月结 | 金额不要用通途订单表凑 |
-| 可用库存 | 通途分仓库存 | SKU × 仓 | 准实时 | **EN Bin 不扣减通途，不能当可用库存** [S1-014] |
+| 可用库存 | 通途分仓库存 | SKU × 仓 | **仅当前快照**；无连续历史 | **EN Bin 不扣减通途，不能当可用库存** [S1-014]；历史库存不可得，每日全量快照需从今天起建 |
 | 采购在途 | 通途采购单 | PO × SKU × 仓 | 准实时 | EN PO/请购链基本空白；SO 未交量不是在途 |
 | 生产进度（WIP） | EN Job Card（首道 required 工序） | 工单 / 工序 | 实时 | 首道报工不跨工序求和；`WO.status`/`produced_qty` 不可信 |
 | 生产产出（已入库） | EN 已提交 Manufacture Stock Entry（成品行） | 工单 / 批次 | 实时 | `produced_qty` 只是展示代理，不等于已入库 |
@@ -59,6 +59,12 @@ tags: [supply-chain, synthesis, architecture, recommendation]
 > 通途库存本身不一定准确，但暂时没有更好的替代。所有库存快照必须带 `fetched_at`、
 > 来源与质量标记（负数、异常波动、未映射 SKU），预测/补货输出要显式标注「库存置信度」，
 > 不能把通途库存当成精确账。
+>
+> **库存历史限制（2026-10-20 核实）**：通途 API 只返回**当前**库存；项目没有连续历史归档。
+> `stock_alert` 每日任务只写低库存行，不是全量归档；`web_automation` 的
+> `tongtu.stock.export` 可定时导出 6 仓库存，但本机没有历史输出；本地只有
+> 20260514、20260807 等稀疏结存文件。**因此 G1 只能用 cutoff 当前快照，不能回放历史库存余额；
+> 库存策略回测需从今天开始每日全量快照积累。**
 
 ---
 
@@ -227,6 +233,18 @@ Tongtool API（只读、分页）
 | 2 | EN 测试环境 `ensh.vilavi.cn` | 建只读 Snapshot DocType/报表；FAC MCP + REST |
 | 3 | EN 生产 | 仅只读同步，评审 + 开关 + 对账后上线；**不写库存账** |
 
+**库存历史与每日全量快照（P0，2026-10-20 补）**：
+
+- **现状**：通途只给当前库存；没有连续历史归档。`stock_alert` 只写低库存行；
+  `web_automation tongtu.stock.export` 可定时导出 6 仓库存，但本机无历史输出；
+  本地仅有 20260514、20260807 等稀疏结存。
+- **P0 任务**：每日**全量**拉取两仓库存（`stock_alert/client.py` 的 `erp2_stocks_stocksquery`
+  或 `web_automation tongtu.stock.export`），写不可变 Parquet/CSV：
+  `snapshot_at/run_id/warehouse/sku/available/intransit/defects/waiting_shipment`；
+  保留 13 个月；做行数/负数/未映射质量检查；**不得用低库存告警结果当归档**。
+- **G1**：只用 cutoff 当前快照；历史库存标 `not_available`。
+- **G2/G3**：从今天开始积累；3–6 个月后再评估库存策略回测，不能凭空补历史。
+
 **为什么不是「同步进 EN」**：
 
 - EN 库存是会计/制造语义，通途是运营库存；所有权、仓、批次口径不同。
@@ -246,6 +264,7 @@ Tongtool API（只读、分页）
 **G1 数据来源默认现有记录**：GSheet（PR #304 直读 43 个月）+ 本地 `2026年{4..9}月订单_order_cost_*.xlsx`
 + 通途库存 `stock_alert`（PR #298，`FZH-StockAlert-daily`，**cutoff 快照**，不是 6 个月序列）
 + EN 单据 API（`item_shipment_status.py` / #291 `fulfillment_query.py`）。
+**库存只用 cutoff 当前快照；历史库存不可回放**；每日全量快照从今天开始积累。
 映射优先级 **P1 通途SKU → EN 客户物料号**（Tongtool Order 明细 / EN BOM 成本表 / `ref_code`）
 → **P2 GSheet 写回 `品类/品类统一名` 仅参考** → **P3 Colab 4.2 仅兜底**；业务导出只作最后兜底。
 E1/E2 的 PB 楔形枕只作**方法试点**，不是 G1 业务切片。
@@ -304,6 +323,7 @@ E1/E2 的 PB 楔形枕只作**方法试点**，不是 G1 业务切片。
 | 11 | 生产数量口径冲突 | #291 文档与代码矛盾；`produced_qty` vs 已提交 SE | 按 08 §1 四分法；先做 V1–V16 |
 | 12 | 计划引擎路线未锁定 | 轻量自组 vs ERPNext 原生 vs FrePPLe | 保留比较入口；按 §3 候选 D 翻转条件 |
 | 13 | 件数预算不能当金额预算 | E2 单位成本=1 是假设 | 用真实 EN BOM 成本重跑后再谈资金 |
+| 14 | **库存无历史** | 通途只给当前量；无连续归档；G1 只能用当前快照 | 立即启动每日全量快照；G2/G3 3–6 个月后再回测库存策略 |
 
 **本项目最强的反证**：如果业务只想要「每月一份能看的 Excel」，那么 A 的复杂度仍然偏高，
 应该退回「脚本 + 模板 + 人审」；本方案的价值只有在「要反复跑、要审计、要解释」时才成立。

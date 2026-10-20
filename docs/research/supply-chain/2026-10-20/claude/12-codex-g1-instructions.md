@@ -36,6 +36,8 @@ tags: [supply-chain, codex, g1, handoff]
 | C16 | 桶预测 100、订单 30 已全部发完 → `consumed=30`、`net=70`、桶总需求 100；部分发/取消/跨桶各一例 | 桶内已发继续冲减，交付不使需求复活 |
 | C17 | on_hand 100 已含新收 20 → 不能再加 received 20；采购/头程两源冲突 → 异常，不相加/取 max | 同 cutoff 互斥余额 |
 | C18 | 收货 R1 修订 70→69+1 坏；R2 30；同一 revision 重播拒绝；R1 分摊到两个 DN 行 | revision 替换不累计、收货分摊 |
+| C19 | 只有 cutoff 当前库存快照、没有历史序列 → `supply_balance(as_of)` 只从快照日起成立；历史标 `not_available` | 库存历史不可得，不能回放过去余额 |
+| C20 | 历史库存缺失时，断货/覆盖回测改用订单缺口/断货信号；每日快照从今天起积累 | 不能用不存在的库存历史做策略回测 |
 
 要求：
 
@@ -71,6 +73,8 @@ tags: [supply-chain, codex, g1, handoff]
   同时命中 KS0001/KS0248。
 - 仓与窗口：**两仓（美中-FZH-DANEEY + 美东-CENTRADE）× 2026-04..09（G1 6 个月）**；
   G2/G3 另用 2023-01..2026-07（43 个月）。
+- **库存历史不可得**：通途只给当前量；`stock_alert` 只写低库存行；本机无连续归档。
+  G1 只用 cutoff 当前快照；历史标 `not_available`；每日全量快照是 P0，从今天积累。
 - **不访问生产、不导出真实明细**；只写映射规则与预期异常。
 
 ## 5. 交付与边界
@@ -87,11 +91,13 @@ tags: [supply-chain, codex, g1, handoff]
 1. 把 #301 的 5708609d 记为 G0 基线（common-framework / alignment-status §3 /
    semantic-examples C01–C13 / decisions D01–D05、B01–B07），新增 baseline.md，
    引用 Claude #300 的标签 supply-chain-g0-baseline-20261020（提交 b23c319a）。
-2. 补 C14–C18 五个三角靠枕切片的合成样例（family 映射、歧义拒绝、桶内已发冲减、
-   互斥供应余额、收货 revision/分摊），实跑并报告 PASS/FAIL。
+2. 补 C14–C20 合成样例（family 映射、歧义拒绝、桶内已发冲减、互斥供应余额、
+   收货 revision/分摊、库存历史不可得、断货信号替代），实跑并报告 PASS/FAIL。
 3. 只复核 Claude 08 的 §2.1/§2.3/§2.4，逐条记录接受/部分接受/不接受及依据。
 4. 写 g1-slice.md：KS0001/KS0248、通途「三角」、两仓（DANEEY + CENTRADE）、
-   2026-04..09 的映射规则与预计未匹配/歧义；不取真实数据、不访问生产。
+   2026-04..09；映射优先级 P1 通途SKU→EN客户物料号（Tongtool Order 明细 / EN BOM 成本表 / ref_code）
+   → P2 GSheet 写回品类仅参考 → P3 Colab 4.2 兜底；库存历史不可得，G1 只用 cutoff 快照。
+   不取真实数据、不访问生产，也不要要求业务先导出。
 
 边界：不修改 Claude 文件；不合并 #301 到 #300；不写生产适配器。
 ```

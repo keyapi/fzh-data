@@ -188,6 +188,10 @@ tags: [supply-chain, research, log]
 - 库存不是 6 个月序列：G1 用 `stock_alert`（PR #298，`FZH-StockAlert-daily`）或
   `erp2_stocks_stocksquery` 拉 cutoff 快照；EN 单据用 EN API（`item_shipment_status.py` /
   #291 `fulfillment_query.py` / `erpnext/scripts/fetch.py`），本地缓存。
+- **库存历史核实（2026-10-20）**：通途只给当前库存；项目没有连续历史归档。
+  `stock_alert` 每日任务只写低库存行，不是全量；`web_automation tongtu.stock.export` 可定时
+  导出 6 仓库存，但本机无历史输出；本地仅有 `20260514`、`20260807` 稀疏结存。
+  **G1 只用 cutoff 当前快照；历史库存标 `not_available`；新增 P0 每日全量快照任务。**
 - `13-g1-data-sources.md` 替代原导出请求清单；业务导出只作最后兜底。
 - 基线标签：`supply-chain-g0-baseline-20261020`（#300 提交 `b23c319a`）。
 - #300 与 #301 分别审核合并；不把 #301 并入 #300；不写生产。

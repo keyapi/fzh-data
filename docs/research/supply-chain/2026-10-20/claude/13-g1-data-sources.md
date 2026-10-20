@@ -22,10 +22,20 @@ tags: [supply-chain, g1, data-source, mapping, tongtool, erpnext]
 | 历史档案 | `D:/文件存档/成本核算/` | 2022 起的历史成本文件，文件多且杂；用于 G2/G3 回补，不用于 G1 首选 |
 | 通途SKU→EN物料 | `importBOMCostList.客户物料号`（GSheet）；EN `Item Customer Detail.ref_code`（SSH DB） | 权威桥；**直连优先**，旧键兜底 [dce9769a] |
 | EN 产品/物料组 | EN 主数据（KS0001/KS0248） | 只读；G1 用本地导出或测试环境，不写生产 |
-| 库存快照（cutoff） | **通途 `stock_alert`（PR #298 / `a4b1cf4d`）**：`stock_alert/client.py` 调 `erp2_stocks_stocksquery`；每日任务 `FZH-StockAlert-daily`（默认 09:23） | **只需 cutoff 当日快照**，不是 6 个月库存序列；字段：`goodsSku/availableStockQuantity/intransitStockQuantity/defectsStockQuantity/waitingShipmentStockQuantity`；按 `warehouseName` 整仓分页（pageSize≤100，5 次/分钟） |
+| 库存快照（cutoff） | **通途 `stock_alert`（PR #298 / `a4b1cf4d`）**：`stock_alert/client.py` 调 `erp2_stocks_stocksquery`；每日任务 `FZH-StockAlert-daily`（默认 09:23）；`web_automation tongtu.stock.export` 可定时导出 6 仓库存 | **只需 cutoff 当日快照**，不是 6 个月库存序列；字段：`goodsSku/availableStockQuantity/intransitStockQuantity/defectsStockQuantity/waitingShipmentStockQuantity`；按 `warehouseName` 整仓分页（pageSize≤100，5 次/分钟） |
 | EN SO/PP/WO/JC/SE/DN | **EN API 只读**：`EN_API/item_shipment_status.py`（SO→PP→WO→JC→DN）、#291 `EN_API/fulfillment_query.py`、`erpnext/scripts/fetch.py` | 按单号/SKU 查询，缓存到本地 Parquet 以便复现；不写生产 |
 
-### 1.1 本地 2026-04..09 最新文件（示例）
+### 1.1 库存历史限制（重要）
+
+- **通途 API 只给当前库存，没有历史序列。**
+- `stock_alert` 每日任务只写**低库存行**，不是全量归档。
+- `web_automation tongtu.stock.export` 可定时导出 6 仓库存，但本机没有历史输出。
+- 本地只有 `20260514`、`20260807` 等稀疏结存，不能当连续历史。
+- **G1 只用 cutoff 当前快照；历史库存标 `not_available`。**
+- **P0**：从今天起每日全量快照（两仓）→ 不可变 Parquet，保留 13 个月；
+  不能用低库存告警结果代归档。库存策略回测等积累 3–6 个月后再做。
+
+### 1.2 本地 2026-04..09 最新文件（示例）
 
 | 月 | 文件 |
 |---|---|

@@ -64,6 +64,7 @@ tags: [supply-chain, research, sources]
 | S1-033 | 通途SKU↔EN 权威映射：ref_code/importBOMCostList，直连 99.9%；前缀过滤/解析键有坑 | `docs/solutions/integration-issues/tongtu-en-item-mapping-and-gsheet-source-fix.md`（10-17） | C | 2026-10-17 | 「直连优先、旧键兜底」 | A | 13 §2 |
 | S1-034 | 通途库存快照：`stock_alert`（PR #298）每日任务 `FZH-StockAlert-daily`；`erp2_stocks_stocksquery` 按仓分页 | `stock_alert/client.py`、`stock_alert/scripts/install_stock_alert_schedule.ps1` | C | 2026-10-20 | pageSize≤100、5 次/分钟 | A | 13 §1/§3 |
 | S1-035 | EN 单据只读查询入口：`EN_API/item_shipment_status.py`、#291 `fulfillment_query.py`、`erpnext/scripts/fetch.py` | 代码/文档 | C | 2026-10-20 | SO→PP→WO→JC→DN | A | 13 §1 |
+| S1-036 | 库存历史不可得：通途只给当前量；stock_alert 只写低库存行；web_automation stock export 可定时但本机无历史输出；仅有 20260514/20260807 稀疏文件 | 代码/本机核对 | C | 2026-10-20 | 无连续历史归档 | A | 05 §2/§4.4、11 §2.1、13 §1.1 |
 
 ## 未找到项（N-###）
 
