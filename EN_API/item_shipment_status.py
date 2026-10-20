@@ -502,6 +502,7 @@ def fetch_delivery_notes(so_names, item_codes, customer_code, base_url, key, sec
                 continue
             out.append({
                 "so": so, "so_line_id": line.get("so_detail"), "dn": dn["name"],
+                "dn_line_id": line.get("name"),
                 "dn_status": dn.get("status"), "dn_docstatus": dn.get("docstatus"),
                 "dn_date": dn.get("posting_date"), "customer": dn.get("customer"),
                 "company": dn.get("company"), "is_return": dn.get("is_return"),

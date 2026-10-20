@@ -57,15 +57,22 @@ tags: [supply-chain, g1b, inventory, coverage, tongtool, erpnext]
 
 ## 3. 覆盖（首版）
 
-| 分公司 | 6 个月出库 | 月均 | 可用+在途 | 覆盖月数（gross） |
-|---|---:|---:|---:|---:|
-| USNJ / CENTRADE | 14,720 | 2,453 | 14,381 | **5.86** |
-| USTX / DANEEY | 14,860 | 2,477 | 13,563 | **5.48** |
-| PL | 2,812 | 469 | 未拉取（G1 两仓外） | — |
-| WayfairCG | 1,162 | 194 | unknown（需后台导出） | unknown |
+| 分公司 | 供给状态 | 6 个月出库 | 月均 | 可用 | 在途 | on-hand 覆盖 | 含在途名义覆盖 |
+|---|---|---:|---:|---:|---:|---:|---:|
+| USNJ / CENTRADE | sampled | 14,720 | 2,453 | 9,877 | 4,504 | **4.03** | **5.86** |
+| USTX / DANEEY | sampled | 14,860 | 2,477 | 8,492 | 5,071 | **3.43** | **5.48** |
+| PL | sampled | 2,812 | 469 | 4,529 | 269 | **9.66** | **10.23** |
+| WayfairCG | unknown | 1,162 | 194 | unknown | unknown | unknown | unknown |
 
-**两仓总量都看着够，但 SKU 级缺口很大：**
-有需求无供给 **450 个 SKU**；覆盖 <2 个月 **501 个 SKU**。
+> 在途没有 ETA，不能当作缺货前可到；`含在途` 只是名义覆盖，不是服务承诺。
+> 3PL/退货仓不进入缺口统计；PL 已单独采样，WayfairCG 仍 unknown。
+
+**旧 450/501 缺口数字已撤回（G1B01）**：旧脚本把未采样的 PL/WayfairCG/退货仓需求当成零供给，
+混入缺口统计；且旧快照缺 `complete/page` 元信息。新 API 备份完成后按“已采样完整仓”重算；
+WayfairCG `unknown`、退货仓 `demand_only` 不进入缺口，PL 已单独采样。
+
+> 当前 USNJ/USTX/PL 的供给来自旧快照（0 错误，但缺分页终止元信息），只能算**候选**；
+> 下列头部缺口同样标“候选”，待完整快照重跑确认。
 
 USNJ 头部缺口：
 
@@ -108,26 +115,30 @@ EN 订单行实际物料 `PK#KS0001-XMMBS-194-HEMPNATURAL`。
 |---|---:|
 | SO | 26 张 |
 | 订单量 / 有效 / 已发 / 未发 | 3,220 / 3,120 / 2,084 / 1,036 件 |
-| 未发构成 | 死单（Closed 未发）421 + 在产/待发 622 |
-| DN | 17 张 / 100 行 |
-| WO / Job Card | 22 张 / 555 张，覆盖 20 张 WO |
+| 未发构成 | **死单 421 + 在产 622 + 无计划 9 + 超发 -16 = 1,036** |
+| DN | 17 张 / 100 行；每行保留 `dn_line_id`（Delivery Note Item.name） |
+| WO / Job Card | 22 张 / 555 张，覆盖 20 张 WO；按工序聚合，不跨工序求和 |
+| Manufacture SE | 63 张（已提交）；按 WO 汇总成品入库量 |
 | PP | 28 张（按物料过滤后 24 行） |
 
 关键发现：
 
 1. **`PK#` 码**：BOM 是 `KS...`，SO 行卖 `PK#KS...`；用 `--item KS...` 查不到，必须用客户码或 `KS → PK#` 映射。
 2. **ERP `Closed` ≠ 已发完**：3 张 Closed 未发共 421 件，必须单列死单，不能当 open demand。
+   未发 1,036 的互斥分解为死单 421 + 在产 622 + 无计划 9 + 超发 -16；
+   旧报告 421+622=1,043 的差 7 已解释为 `+9`（无计划）与 `-16`（超发）的净额。
 3. **未开工**：`WO-26-02663` 320 件、`WO-26-03128` 300 件工序卡为 0；`SO-26-00036` 9 件无生产计划。
 4. **疑似重复单**：同物料同量同交货日两组，需业务确认改单/重下，不能直接相加。
-5. **Job Card 是唯一可信进度**：WO 头部状态/`produced_qty` 不可当产出。
+5. **Job Card 是主要进度证据，但不能免验证**：按工序聚合、首道/末道分开；无 JC=unknown；
+   WO 头部状态/`produced_qty` 不可当产出；产出用已提交 Manufacture SE 单独核对。
 
 详见 [g1b_pilot.md](g1b_pilot.md)。
 
 ## 5. 结论与风险
 
 1. **G1b 链路已跑通**：通途库存快照 + EN SO/DN/WO/JC/PP 结构化提取 + 出库消耗对账均可复现。
-2. **两仓总量覆盖 5.86 / 5.48 个月，但 SKU 级缺口很大**：450 个有需求无供给、501 个 <2 个月；
-   补货必须按 SKU × 仓，不是按分公司总量。
+2. **两仓总量覆盖 5.86 / 5.48 个月（名义、含在途），on-hand 4.03 / 3.43**；
+   旧 450/501 缺口数字因未采样仓被当零供给而撤回，待完整快照重算；候选头部缺口见 §3。
 3. **Codex `852d7791` 三条硬约束已纳入**：
    ① **退货已计入库存时不得再次冲减**；当前库存净算不扣退货，5% 仅未来需求情景；
    ② **调拨完成 ≠ Wayfair 实收；历史供货占比 ≠ 当前库存归属**；当前库存用后台实盘，归属用近期调拨/unknown；
@@ -151,8 +162,9 @@ EN 订单行实际物料 `PK#KS0001-XMMBS-194-HEMPNATURAL`。
 
 | 输入 | used | pending / unmatched | out_of_scope / anomaly | 合计 |
 |---|---:|---:|---:|---:|
-| 订单行 | 32,888 family | 759 text-tri pending | 11,334 其余非 family + 148 非 family 退货仓 | 45,129 |
-| 库存行 | 815 family（478 + 337） | 0 | 非 family 未拉取（G1b 不需要） | — |
+| 订单行 | 32,888 family | 759 text-tri pending | 11,482（11,334 其余非 family + 148 非 family 退货仓） | 45,129 |
+| 订单坏行 | 0 | bad_qty=0 / negative=0 / 非整数=0 / 缺 SKU=0 / 缺仓=0 | — | 45,129 |
+| 库存行 | 815 family（478 + 337） | bad_values=0 / duplicate_conflicts=0 | 非 family 未拉取（G1b 不需要） | — |
 | EN SO | 26 | 3 dead / 2 未开工 / 2 疑似重复（待业务确认） | — | 26 |
 
 ### 6.3 数量守恒
@@ -174,18 +186,21 @@ USTX supply 13,563 = 8,492 available + 5,071 intransit
 | WayfairCG 供货归属 | unknown/partial | 近期调拨单按 SKU/区间；历史占比不作当前归属 |
 | 美中 run-rate | biased | 新运营/Listing ramp、有货曝光、断货；只作指示 |
 | 平台库存 <=2 视为无货 | manual rule | 标 `censored/manual_low`；不补 0；记录调整事件（待建） |
-| 皮壳仓 | renamed | 当前无独立皮壳仓；历史老名并入 `美中-FZH-DANEEY` |
+| 皮壳仓 | **unverified** | 当前列表无该仓，但无 ID/改名/迁移/余额证据；见 [g1b_warehouse_evidence.md](g1b_warehouse_evidence.md) |
+| 快照完整性 | legacy | 旧快照 0 错误但缺 `complete/page` 元信息；完整 API 备份重跑后更新缺口 |
+| 浏览器 `stock.export` | cost template | 只产 `通途导入_头程运费_其他费用.xlsx`，不是库存数量；API 库存任务另立 |
 | `PK#`/`ND#` | fact | SO 行用包装码；G1b 用客户码或 `KS → PK#` 映射 |
 | 死单/未开工/重复单 | fact/anomaly | 单列；不计入 open demand/供给，不直接相加 |
 
 ## 7. 下一步
 
-- 两仓库存已补齐；皮壳仓当前无独立仓，历史老名并入 `美中-FZH-DANEEY`。
+- 旧快照已拉；完整 API 快照重跑后更新缺口；皮壳仓合并 `unverified`。
 - 选 top 10–20 个 SKU 跑 `g1b_en_extract.py`，把 SO/DN/WO/JC/PP 与库存覆盖按 SKU 对齐。
 - 取 WayfairCG 后台库存 + 赛狐/通途调拨单，补 `3pl_supply_allocation`；
   调拨完成只当发出，不当实收；历史供货占比不当当前库存归属。
 - 退货：5% 仅未来需求情景；未来从 Amazon 结算 V2/退货报表配置化，库存净算不二次冲减。
-- **每日全量库存备份**：已注册 `FZH-TongtuAutoExport-stock`（每日 02:17，`tongtu.stock.export` →
-  `web_automation/output/`，日志 `web_automation/logs/export-stock.log`）；首跑可能需登录。
-  同时记录销售平台库存 <=2 的人工规则/调整事件，供 G2/G3 断货删失。
+- **每日库存备份**：API 任务 `FZH-TongtuStockApiDaily` 每日 **05:17** →
+  `D:/Work/库存备份/YYYY-MM-DD/`（JSONL + manifest）；浏览器 `FZH-TongtuAutoExport-stock` 02:17
+  只产成本/头程模板，不是库存数量。
+- 同时记录销售平台库存 <=2 的人工规则/调整事件，供 G2/G3 断货删失。
 - 所有输出带 `source/fetched_at/confidence`；未匹配/死单/未开工/重复单单列，不静默修正。

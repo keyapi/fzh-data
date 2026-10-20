@@ -78,11 +78,14 @@ def load_family_codes(path: Path = BOM) -> list[str]:
     return sorted(codes)
 
 
-def _to_num(value) -> float:
+def _to_num(value):
+    """严格数值：空/非法返回 None，不把坏数静默转 0。"""
+    if value is None or value == "":
+        return None
     try:
-        return float(value or 0)
+        return float(value)
     except (TypeError, ValueError):
-        return 0.0
+        return None
 
 
 def extract_payload(resp: dict) -> dict:
@@ -159,8 +162,12 @@ class StockClient:
             delay *= 2
         raise RuntimeError("通途限流(526)重试后仍被拒")
 
-    def query_chunk(self, warehouse: str, skus: list[str], page_size: int, max_pages: int) -> list[dict]:
+    def query_chunk(self, warehouse: str, skus: list[str], page_size: int, max_pages: int):
         rows: list[dict] = []
+        pages = 0
+        last_len = None
+        complete = False
+        truncated = False
         for page in range(1, max_pages + 1):
             payload = self._call_with_retry(
                 {
@@ -175,11 +182,24 @@ class StockClient:
                 raise RuntimeError(
                     f"{warehouse} 业务码 {code}: {json.dumps(payload, ensure_ascii=False)[:300]}"
                 )
+            if code is None and not isinstance(payload.get("datas"), (dict, list)):
+                raise RuntimeError(f"{warehouse} 响应结构无法识别: {str(payload)[:300]}")
             batch = rows_of(payload)
+            pages += 1
+            last_len = len(batch)
             rows.extend(batch)
             if len(batch) < page_size:
+                complete = True
                 break
-        return rows
+        else:
+            if last_len == page_size:
+                truncated = True
+        return rows, {
+            "pages": pages,
+            "last_len": last_len,
+            "complete": complete,
+            "truncated": truncated,
+        }
 
 
 def main() -> int:
@@ -208,6 +228,7 @@ def main() -> int:
     client = StockClient(mcp, min_interval=args.min_interval)
 
     started = time.monotonic()
+    capture_start = datetime.now()
     by_warehouse: dict[str, dict] = {}
     by_sku: dict[str, dict] = {}
     errors: list[str] = []
@@ -215,6 +236,7 @@ def main() -> int:
     chunks = [codes[i:i + args.chunk_size] for i in range(0, len(codes), args.chunk_size)]
 
     for wh in warehouses:
+        wh_start = datetime.now()
         agg = {
             "rows": 0,
             "skus": 0,
@@ -222,52 +244,79 @@ def main() -> int:
             "intransit": 0.0,
             "defects": 0.0,
             "waiting": 0.0,
+            "bad_rows": 0,
+            "bad_fields": 0,
+            "duplicates_ignored": 0,
+            "duplicate_conflicts": 0,
+            "bad_samples": [],
+            "duplicate_samples": [],
+            "page_meta": [],
+            "truncated": False,
+            "complete": True,
+            "capture_start": wh_start.isoformat(timespec="seconds"),
+            "capture_end": None,
         }
-        seen: set[str] = set()
+        seen: dict[tuple[str, str], dict] = {}
         print(f"\n仓库 {wh}：{len(chunks)} 块")
         for idx, chunk in enumerate(chunks, 1):
             try:
-                raw_rows = client.query_chunk(wh, chunk, args.page_size, args.max_pages)
+                raw_rows, meta = client.query_chunk(wh, chunk, args.page_size, args.max_pages)
             except Exception as e:  # noqa: BLE001 - 逐块记录，不中断整仓
                 msg = f"{wh} chunk {idx}: {e}"
                 errors.append(msg)
+                agg["complete"] = False
                 print(f"  ✗ {msg}", file=sys.stderr)
                 continue
+            agg["page_meta"].append({"chunk": idx, **meta})
+            if meta.get("truncated"):
+                agg["truncated"] = True
+                agg["complete"] = False
             for r in raw_rows:
                 sku = str(r.get("goodsSku") or "").strip()
                 if sku not in code_set:
                     continue
-                row = {
-                    "warehouse": wh,
-                    "sku": sku,
+                vals = {
                     "available": _to_num(r.get("availableStockQuantity")),
                     "intransit": _to_num(r.get("intransitStockQuantity")),
                     "defects": _to_num(r.get("defectsStockQuantity")),
                     "waiting": _to_num(r.get("waitingShipmentStockQuantity")),
                 }
+                bad_fields = [k for k, v in vals.items() if v is None]
+                if bad_fields:
+                    agg["bad_rows"] += 1
+                    agg["bad_fields"] += len(bad_fields)
+                    if len(agg["bad_samples"]) < 20:
+                        agg["bad_samples"].append({"sku": sku, "fields": bad_fields})
+                    agg["complete"] = False
+                    continue
+                key = (wh, sku)
+                if key in seen:
+                    if seen[key] == vals:
+                        agg["duplicates_ignored"] += 1
+                    else:
+                        agg["duplicate_conflicts"] += 1
+                        agg["complete"] = False
+                        if len(agg["duplicate_samples"]) < 20:
+                            agg["duplicate_samples"].append(
+                                {"sku": sku, "kept": seen[key], "discarded": vals}
+                            )
+                    continue
+                seen[key] = vals
                 agg["rows"] += 1
-                agg["available"] += row["available"]
-                agg["intransit"] += row["intransit"]
-                agg["defects"] += row["defects"]
-                agg["waiting"] += row["waiting"]
-                seen.add(sku)
+                for k in ("available", "intransit", "defects", "waiting"):
+                    agg[k] += vals[k]
                 sku_entry = by_sku.setdefault(
                     sku, {"sku": sku, "warehouses": {}, "available": 0.0, "intransit": 0.0,
                           "defects": 0.0, "waiting": 0.0}
                 )
-                sku_entry["warehouses"][wh] = {
-                    "available": row["available"],
-                    "intransit": row["intransit"],
-                    "defects": row["defects"],
-                    "waiting": row["waiting"],
-                }
-                sku_entry["available"] += row["available"]
-                sku_entry["intransit"] += row["intransit"]
-                sku_entry["defects"] += row["defects"]
-                sku_entry["waiting"] += row["waiting"]
+                sku_entry["warehouses"][wh] = vals
+                for k in ("available", "intransit", "defects", "waiting"):
+                    sku_entry[k] += vals[k]
             if idx % 5 == 0 or idx == len(chunks):
                 print(f"  块 {idx}/{len(chunks)}，累计 family 行 {agg['rows']}，SKU {len(seen)}")
         agg["skus"] = len(seen)
+        agg["capture_end"] = datetime.now().isoformat(timespec="seconds")
+        agg["complete"] = bool(agg["complete"] and not agg["truncated"])
         for k in ("available", "intransit", "defects", "waiting"):
             agg[k] = round(agg[k], 2)
         by_warehouse[wh] = agg
@@ -279,6 +328,14 @@ def main() -> int:
         "title": "G1b family 两仓库存快照（通途只读）",
         "date": datetime.now().strftime("%Y-%m-%d"),
         "fetched_at": datetime.now().isoformat(timespec="seconds"),
+        "capture_start": capture_start.isoformat(timespec="seconds"),
+        "capture_end": datetime.now().isoformat(timespec="seconds"),
+        "snapshot_is_transactional": False,
+        "complete": bool(not errors and all(v.get("complete") for v in by_warehouse.values())
+                         and all(v.get("truncated") is False for v in by_warehouse.values())),
+        "bad_rows_total": sum(v.get("bad_rows", 0) for v in by_warehouse.values()),
+        "duplicate_conflicts_total": sum(v.get("duplicate_conflicts", 0)
+                                          for v in by_warehouse.values()),
         "source": "tongtool erp2_stocks_stocksquery",
         "warehouses": warehouses,
         "family_codes": len(codes),
@@ -293,6 +350,9 @@ def main() -> int:
             "available/intransit/defects/waiting 来自通途分仓库存；不是 EN Bin。",
             "WayfairCG 后台库存不在此文件；需 YTQ 手工导出。",
             "分块 + 13s 节流以避开通途 5 次/分钟限流。",
+            "capture_start/end 是跨块采集窗口，不是严格瞬时全局事务。",
+            "坏数/缺字段不转 0；重复 (warehouse, sku) 相同则忽略、不同则冲突并置 complete=false。",
+            "满 max_pages 且末页仍满即 truncated=true、complete=false。",
         ],
     }
 

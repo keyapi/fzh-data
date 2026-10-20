@@ -52,7 +52,7 @@ def load_bom():
     i_item = hdr.index("产品编号")
     i_code = hdr.index("客户物料号")
     code2item: dict[str, str] = {}
-    ambiguous = 0
+    ambiguous: set[str] = set()
     for r in rows:
         item = str(cell(r, i_item) or "").strip()
         code = str(cell(r, i_code) or "").strip()
@@ -61,11 +61,13 @@ def load_bom():
         if not code or "已删除" in code:
             continue
         if code in code2item and code2item[code] != item:
-            ambiguous += 1
+            ambiguous.add(code)
+            code2item.pop(code, None)
             continue
-        code2item[code] = item
+        if code not in ambiguous:
+            code2item[code] = item
     wb.close()
-    return code2item, ambiguous
+    return code2item, sorted(ambiguous)
 
 
 def latest_order_file(month: int):
@@ -104,7 +106,11 @@ def branch_of_wh(wh: str) -> str:
     return "OTHER"
 
 
-def load_orders(code2item: dict[str, str]):
+REQUIRED_ORDER_COLS = ("发货日期", "通途SKU", "发货数量", "发货仓库")
+
+
+def load_orders(code2item: dict[str, str], ambiguous_codes: list[str]):
+    ambiguous_set = set(ambiguous_codes)
     by_month: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
     by_branch: Counter = Counter()
     by_warehouse: Counter = Counter()
@@ -116,34 +122,80 @@ def load_orders(code2item: dict[str, str]):
     reissue_rows = 0
     reissue_qty = 0.0
     files = []
+    missing_months = []
+    missing_columns = []
+    bad_qty_rows = 0
+    negative_qty_rows = 0
+    non_integer_qty_rows = 0
+    zero_qty_rows = 0
+    missing_sku_rows = 0
+    missing_wh_rows = 0
+    non_family_rows = 0
+    ambiguous_rows = 0
+    ambiguous_qty = 0.0
+    bad_samples = []
+    months_observed = 0
     for m in MONTHS:
         p = latest_order_file(m)
+        month = f"2026-{m:02d}"
         if not p:
-            files.append({"month": f"2026-{m:02d}", "file": None})
+            missing_months.append(month)
+            files.append({"month": month, "file": None, "status": "missing"})
             continue
-        files.append({"month": f"2026-{m:02d}", "file": Path(p).name})
         wb = openpyxl.load_workbook(p, read_only=True, data_only=True)
         ws = wb[wb.sheetnames[0]]
         rows = ws.iter_rows(values_only=True)
         hdr = list(next(rows))
+        missing = [c for c in REQUIRED_ORDER_COLS if c not in hdr]
+        if missing:
+            missing_columns.append({"month": month, "missing": missing})
+            files.append({"month": month, "file": Path(p).name, "status": "invalid_columns"})
+            wb.close()
+            continue
+        months_observed += 1
+        files.append({"month": month, "file": Path(p).name, "status": "ok"})
         ix = {name: (hdr.index(name) if name in hdr else None) for name in
               ("发货日期", "通途SKU", "发货数量", "发货仓库", "渠道", "是否补发货")}
-        for r in rows:
+        for row_no, r in enumerate(rows, start=2):
             sku = str(cell(r, ix["通途SKU"]) or "").strip()
-            item = code2item.get(sku)
-            if not item:
+            if not sku:
+                missing_sku_rows += 1
                 continue
+            if sku in ambiguous_set:
+                ambiguous_rows += 1
+                try:
+                    ambiguous_qty += float(cell(r, ix["发货数量"]) or 0)
+                except (TypeError, ValueError):
+                    pass
+                continue
+            if sku not in code2item:
+                non_family_rows += 1
+                continue
+            raw_qty = cell(r, ix["发货数量"])
             try:
-                qty = float(cell(r, ix["发货数量"]) or 0)
+                qty = float(raw_qty)
             except (TypeError, ValueError):
+                bad_qty_rows += 1
+                if len(bad_samples) < 20:
+                    bad_samples.append({"file": Path(p).name, "row": row_no, "reason": "bad_qty",
+                                        "value": str(raw_qty)[:40]})
                 continue
-            if qty <= 0:
+            if qty < 0:
+                negative_qty_rows += 1
                 continue
-            wh = normalize_warehouse(str(cell(r, ix["发货仓库"]) or ""))
+            if qty == 0:
+                zero_qty_rows += 1
+                continue
+            if qty != int(qty):
+                non_integer_qty_rows += 1
+            wh_raw = str(cell(r, ix["发货仓库"]) or "").strip()
+            if not wh_raw:
+                missing_wh_rows += 1
+                continue
+            wh = normalize_warehouse(wh_raw)
             branch = branch_of_wh(wh)
             flag = str(cell(r, ix["是否补发货"]) or "").strip()
             is_reissue = flag in ("是", "Y", "y", "1", "true", "TRUE")
-            month = f"2026-{m:02d}"
             family_rows += 1
             family_qty += qty
             by_month[branch][month] += qty
@@ -160,10 +212,24 @@ def load_orders(code2item: dict[str, str]):
         wb.close()
     return {
         "files": files,
+        "months_observed": months_observed,
+        "window_complete": (months_observed == len(MONTHS) and not missing_columns),
+        "missing_months": missing_months,
+        "missing_columns": missing_columns,
         "family_rows": family_rows,
         "family_qty": round(family_qty, 2),
         "reissue_rows": reissue_rows,
         "reissue_qty": round(reissue_qty, 2),
+        "bad_qty_rows": bad_qty_rows,
+        "negative_qty_rows": negative_qty_rows,
+        "non_integer_qty_rows": non_integer_qty_rows,
+        "zero_qty_rows": zero_qty_rows,
+        "missing_sku_rows": missing_sku_rows,
+        "missing_wh_rows": missing_wh_rows,
+        "non_family_rows": non_family_rows,
+        "ambiguous_rows": ambiguous_rows,
+        "ambiguous_qty": round(ambiguous_qty, 2),
+        "bad_samples": bad_samples,
         "by_month": {b: {m: round(v, 2) for m, v in sorted(ms.items())} for b, ms in by_month.items()},
         "by_branch": {b: round(v, 2) for b, v in by_branch.items()},
         "by_warehouse": {w: round(v, 2) for w, v in by_warehouse.items()},
@@ -196,6 +262,8 @@ def load_stock(paths: list[Path]):
     by_sku_branch = defaultdict(lambda: {"available": 0.0, "intransit": 0.0,
                                          "defects": 0.0, "waiting": 0.0})
     metas = []
+    payloads = []
+    complete_warehouses: set[str] = set()
     for path in paths:
         data = json.loads(path.read_text(encoding="utf-8"))
         metas.append({
@@ -203,23 +271,65 @@ def load_stock(paths: list[Path]):
             "fetched_at": data.get("fetched_at"),
             "source": data.get("source"),
             "warehouses": data.get("warehouses", []),
+            "complete": data.get("complete"),
         })
+        payloads.append((path, data))
+        if data.get("complete") is True:
+            complete_warehouses.update(data.get("warehouses", []))
+
+    # 同一仓在多个快照里出现时，只取 fetched_at 最新的一个，避免跨文件重复累加。
+    selected_file_per_wh: dict[str, Path] = {}
+    selected_fetched: dict[str, str] = {}
+    for path, data in payloads:
+        fetched = str(data.get("fetched_at") or "")
+        for wh in data.get("warehouses", []):
+            if wh not in selected_file_per_wh or fetched > selected_fetched.get(wh, ""):
+                selected_file_per_wh[wh] = path
+                selected_fetched[wh] = fetched
+
+    seen: dict[tuple[str, str], dict] = {}
+    duplicate_conflicts = 0
+    duplicates_ignored = 0
+    bad_values = 0
+    ignored_warehouses = []
+    for path, data in payloads:
         for row in data.get("by_sku", []):
             sku = row.get("sku", "")
             for wh, vals in (row.get("warehouses") or {}).items():
+                if selected_file_per_wh.get(wh) != path:
+                    if wh not in ignored_warehouses:
+                        ignored_warehouses.append(wh)
+                    continue
+                try:
+                    parsed = {
+                        "available": float(vals.get("available")),
+                        "intransit": float(vals.get("intransit")),
+                        "defects": float(vals.get("defects")),
+                        "waiting": float(vals.get("waiting")),
+                    }
+                except (TypeError, ValueError):
+                    bad_values += 1
+                    continue
+                key = (wh, sku)
+                if key in seen:
+                    if seen[key] == parsed:
+                        duplicates_ignored += 1
+                    else:
+                        duplicate_conflicts += 1
+                    continue
+                seen[key] = parsed
                 branch, _kind = wh_branch_and_kind(wh)
-                av = float(vals.get("available") or 0)
-                it = float(vals.get("intransit") or 0)
-                de = float(vals.get("defects") or 0)
-                wa = float(vals.get("waiting") or 0)
                 b = by_branch[branch]
-                b["available"] += av; b["intransit"] += it; b["defects"] += de; b["waiting"] += wa
+                for k in ("available", "intransit", "defects", "waiting"):
+                    b[k] += parsed[k]
                 b["skus"].add(sku); b["rows"] += 1; b["warehouses"].add(wh)
                 w = by_wh[wh]
-                w["available"] += av; w["intransit"] += it; w["defects"] += de; w["waiting"] += wa
+                for k in ("available", "intransit", "defects", "waiting"):
+                    w[k] += parsed[k]
                 w["skus"].add(sku); w["rows"] += 1
                 s = by_sku_branch[(branch, sku)]
-                s["available"] += av; s["intransit"] += it; s["defects"] += de; s["waiting"] += wa
+                for k in ("available", "intransit", "defects", "waiting"):
+                    s[k] += parsed[k]
     def finish(d):
         out = {}
         for k, v in d.items():
@@ -236,6 +346,12 @@ def load_stock(paths: list[Path]):
         return out
     return {
         "files": metas,
+        "selected_file_per_warehouse": {k: str(v) for k, v in selected_file_per_wh.items()},
+        "ignored_warehouses": ignored_warehouses,
+        "duplicate_conflicts": duplicate_conflicts,
+        "duplicates_ignored": duplicates_ignored,
+        "bad_values": bad_values,
+        "complete_warehouses": sorted(complete_warehouses),
         "by_branch": finish(by_branch),
         "by_warehouse": finish(by_wh),
         "by_sku_branch": by_sku_branch,
@@ -243,6 +359,9 @@ def load_stock(paths: list[Path]):
 
 
 def coverage(demand, stock):
+    observations = max(1, int(demand.get("months_observed") or len(MONTHS)))
+    complete_branches = {wh_branch_and_kind(wh)[0] for wh in stock.get("complete_warehouses", [])}
+    stocked_branches = {wh_branch_and_kind(wh)[0] for wh in stock.get("by_warehouse", {})}
     rows = []
     all_keys = set(demand["by_sku_branch"]) | set(stock["by_sku_branch"])
     for branch, sku in all_keys:
@@ -252,19 +371,30 @@ def coverage(demand, stock):
                                                        "defects": 0.0, "waiting": 0.0})
         gross = float(d.get("gross", 0) or 0)
         reissue = float(d.get("reissue", 0) or 0)
-        supply = float(s.get("available", 0) or 0) + float(s.get("intransit", 0) or 0)
-        avg_gross = gross / len(MONTHS)
-        cov = round(supply / avg_gross, 2) if avg_gross > 0 else None
+        available = float(s.get("available", 0) or 0)
+        intransit = float(s.get("intransit", 0) or 0)
+        supply = available + intransit
+        avg_gross = gross / observations
+        if branch in complete_branches:
+            supply_status = "sampled_complete"
+        elif branch in stocked_branches:
+            supply_status = "sampled_incomplete"
+        elif branch == "USTX-return":
+            supply_status = "demand_only"
+        else:
+            supply_status = "not_sampled"
         rows.append({
             "branch": branch,
             "sku": sku,
+            "supply_status": supply_status,
             "gross_6m": round(gross, 2),
             "reissue_6m": round(reissue, 2),
             "avg_monthly_gross": round(avg_gross, 2),
-            "available": round(float(s.get("available", 0) or 0), 2),
-            "intransit": round(float(s.get("intransit", 0) or 0), 2),
+            "available": round(available, 2),
+            "intransit": round(intransit, 2),
             "supply": round(supply, 2),
-            "coverage_months_gross": cov,
+            "coverage_months_on_hand": round(available / avg_gross, 2) if avg_gross > 0 else None,
+            "coverage_months_incl_intransit": round(supply / avg_gross, 2) if avg_gross > 0 else None,
         })
     rows.sort(key=lambda r: (r["branch"], -r["gross_6m"], r["sku"]))
     return rows
@@ -277,28 +407,49 @@ def main():
     args = ap.parse_args()
 
     code2item, ambiguous = load_bom()
-    demand = load_orders(code2item)
+    demand = load_orders(code2item, ambiguous)
     stock = load_stock([Path(p) for p in args.stock])
     rows = coverage(demand, stock)
+    observations = max(1, int(demand.get("months_observed") or len(MONTHS)))
+    complete_branches = {wh_branch_and_kind(wh)[0] for wh in stock.get("complete_warehouses", [])}
+    stocked_branches = {wh_branch_and_kind(wh)[0] for wh in stock.get("by_warehouse", {})}
 
     branch_cov = {}
     for branch in sorted(set(demand["by_branch"]) | set(stock["by_branch"])):
         gross = float(demand["by_branch"].get(branch, 0) or 0)
-        avg = gross / len(MONTHS)
+        avg = gross / observations
         s = stock["by_branch"].get(branch, {})
-        supply = float(s.get("available", 0) or 0) + float(s.get("intransit", 0) or 0)
+        available = float(s.get("available", 0) or 0)
+        intransit = float(s.get("intransit", 0) or 0)
+        supply = available + intransit
+        if branch in complete_branches:
+            supply_status = "sampled_complete"
+        elif branch in stocked_branches:
+            supply_status = "sampled_incomplete"
+        elif branch == "USTX-return":
+            supply_status = "demand_only"
+        else:
+            supply_status = "not_sampled"
         branch_cov[branch] = {
+            "supply_status": supply_status,
             "gross_6m": round(gross, 2),
             "avg_monthly_gross": round(avg, 2),
-            "available": round(float(s.get("available", 0) or 0), 2),
-            "intransit": round(float(s.get("intransit", 0) or 0), 2),
+            "available": round(available, 2),
+            "intransit": round(intransit, 2),
             "supply": round(supply, 2),
-            "coverage_months_gross": round(supply / avg, 2) if avg > 0 else None,
+            "coverage_months_on_hand": round(available / avg, 2) if avg > 0 else None,
+            "coverage_months_incl_intransit": round(supply / avg, 2) if avg > 0 else None,
         }
 
-    no_supply = [r for r in rows if r["gross_6m"] > 0 and r["supply"] == 0]
-    no_demand = [r for r in rows if r["gross_6m"] == 0 and r["supply"] > 0]
-    below_2 = [r for r in rows if r["coverage_months_gross"] is not None and r["coverage_months_gross"] < 2]
+    no_supply = [r for r in rows if r["supply_status"] == "sampled_complete"
+                 and r["gross_6m"] > 0 and r["supply"] == 0]
+    unknown_supply = [r for r in rows if r["gross_6m"] > 0
+                      and r["supply_status"] != "sampled_complete"]
+    no_demand = [r for r in rows if r["supply_status"] == "sampled_complete"
+                 and r["gross_6m"] == 0 and r["supply"] > 0]
+    below_2 = [r for r in rows if r["supply_status"] == "sampled_complete"
+               and r["coverage_months_incl_intransit"] is not None
+               and r["coverage_months_incl_intransit"] < 2]
 
     result = {
         "okf": "v0.1",
@@ -312,15 +463,17 @@ def main():
             "stock": [str(p) for p in args.stock],
             "stock_files": stock.get("files"),
             "months": [f"2026-{m:02d}" for m in MONTHS],
+            "months_observed": demand["months_observed"],
+            "window_complete": demand["window_complete"],
         },
         "assumptions": {
             "demand": "通途出库消耗毛量，含补发货；不是会计销量",
             "returns": "库存净算不冲减退货：已回库的退货已在 available，未回库/报废也不冲减；"
                        f"5% 仅作未来需求情景参考（本期约 {demand['family_qty'] * RETURN_RATE:.0f} 件），"
                        "不得与当前库存重复抵扣",
-            "supply": "available + intransit；不含 defects/waiting（waiting 已分配/待发，避免重复）",
+            "supply": "on_hand 与 incl_intransit 分开报；intransit 无 ETA，不是可用服务覆盖；不含 defects/waiting",
             "coverage": "历史 run-rate 覆盖月数，不是预测；美中受新运营 ramp 影响，只作指示",
-            "wayfaircg": "库存未接入（需 YTQ 后台手工导出）；3PL 需求单独列",
+            "wayfaircg": "库存未接入（需 YTQ 后台手工导出）；3PL 需求单独列，不进入缺口统计",
         },
         "returns_scenario_only": {
             "rate": RETURN_RATE,
@@ -336,24 +489,46 @@ def main():
             "by_month": demand["by_month"],
             "by_branch": demand["by_branch"],
             "by_warehouse": demand["by_warehouse"],
+            "bad_qty_rows": demand["bad_qty_rows"],
+            "negative_qty_rows": demand["negative_qty_rows"],
+            "non_integer_qty_rows": demand["non_integer_qty_rows"],
+            "zero_qty_rows": demand["zero_qty_rows"],
+            "missing_sku_rows": demand["missing_sku_rows"],
+            "missing_wh_rows": demand["missing_wh_rows"],
+            "non_family_rows": demand["non_family_rows"],
+            "ambiguous_rows": demand["ambiguous_rows"],
+            "ambiguous_qty": demand["ambiguous_qty"],
+            "bad_samples": demand["bad_samples"],
+            "missing_months": demand["missing_months"],
+            "missing_columns": demand["missing_columns"],
         },
         "stock": {
             "fetched_at": [m.get("fetched_at") for m in stock.get("files", [])],
             "warehouses_requested": sorted({w for m in stock.get("files", [])
                                             for w in (m.get("warehouses") or [])}),
+            "complete_warehouses": stock.get("complete_warehouses"),
+            "selected_file_per_warehouse": stock.get("selected_file_per_warehouse"),
+            "ignored_warehouses": stock.get("ignored_warehouses"),
+            "duplicate_conflicts": stock.get("duplicate_conflicts"),
+            "duplicates_ignored": stock.get("duplicates_ignored"),
+            "bad_values": stock.get("bad_values"),
             "by_branch": stock["by_branch"],
             "by_warehouse": stock["by_warehouse"],
         },
         "coverage_by_branch": branch_cov,
         "coverage_by_sku": rows,
         "gaps": {
+            "scope": "仅 sampled_complete 分支进入无供给/低覆盖计数；PL/3PL/退货仓单独列 unknown/demand_only",
             "demand_without_supply": no_supply[:200],
+            "unknown_supply": unknown_supply[:200],
             "supply_without_demand": no_demand[:200],
             "coverage_below_2_months": below_2[:200],
             "counts": {
                 "demand_without_supply": len(no_supply),
+                "unknown_supply": len(unknown_supply),
                 "supply_without_demand": len(no_demand),
                 "coverage_below_2_months": len(below_2),
+                "note": "按 branch×SKU 计数，不是全局去重 SKU",
             },
         },
     }
@@ -361,12 +536,15 @@ def main():
     out = Path(args.out) if args.out else OUT / f"g1b_coverage_{datetime.now():%Y%m%d_%H%M%S}.json"
     out.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"OK: {out}")
-    print(f"  6 个月出库消耗: {demand['family_qty']:g} 件 / {demand['family_rows']} 行")
+    print(f"  出库消耗: {demand['family_qty']:g} 件 / {demand['family_rows']} 行；"
+          f"窗口 {demand['months_observed']}/{len(MONTHS)} 月 complete={demand['window_complete']}")
     print(f"  补发货: {demand['reissue_qty']:g} 件 / {demand['reissue_rows']} 行")
     for b, v in branch_cov.items():
-        print(f"  {b}: 需求 {v['gross_6m']:g} 件，供给 {v['supply']:g}（可用 {v['available']:g} + 在途 {v['intransit']:g}），"
-              f"覆盖 {v['coverage_months_gross']} 个月")
-    print(f"  缺口: 有需求无供给 {len(no_supply)} 个 SKU；覆盖<2月 {len(below_2)} 个 SKU")
+        print(f"  {b} [{v['supply_status']}]: 需求 {v['gross_6m']:g}，供给 {v['supply']:g}"
+              f"（可用 {v['available']:g} + 在途 {v['intransit']:g}），"
+              f"on-hand {v['coverage_months_on_hand']} 月 / 含在途 {v['coverage_months_incl_intransit']} 月")
+    print(f"  缺口(仅已采样完整): 有需求无供给 {len(no_supply)} 个 branch×SKU；"
+          f"覆盖<2月 {len(below_2)}；unknown 供给 {len(unknown_supply)}")
 
 
 if __name__ == "__main__":

@@ -5,6 +5,12 @@
 复用 EN_API/item_shipment_status.py 的 build_context，不重复实现查询。
 只输出数量/单据号/物料/仓库，不输出客户名、地址等 PII。
 
+关键修正：
+  - DN 保留 Delivery Note Item.name（dn_line_id），不再拿 so_line_id 当 DN 行键。
+  - Job Card 按工序聚合，不再跨工序求和；首道/末道分开，无卡为 unknown。
+  - 补 Manufacture Stock Entry（已提交）作为生产入库事实；不再用 JC 求和替代。
+  - 未发量给出互斥分解（死单/在产/无计划/超发），并与 totals.open_qty 对平。
+
 用法：
   uv run python g1b_en_extract.py --customer-code "C/Linen-Natural-194-688-wow"
   uv run python g1b_en_extract.py --item "PK#KS0001-XMMBS-194-HEMPNATURAL"
@@ -15,6 +21,8 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
+from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -33,16 +41,165 @@ if str(REPO_ROOT) not in sys.path:
 import EN_API.item_shipment_status as iss  # noqa: E402
 
 
-def jc_summary(jc_map: dict) -> dict:
+def _op_order(wo: dict) -> list[str]:
+    ops = wo.get("operations") or []
+
+    def seq(o):
+        v = o.get("sequence_id")
+        if v is None:
+            v = o.get("sequence")
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return None
+
+    values = [seq(o) for o in ops]
+    if any(v is not None and v != 0 for v in values):
+        ordered = sorted(ops, key=lambda o: (seq(o) if seq(o) is not None else 10**9))
+    else:
+        ordered = ops  # 保留路由原始顺序，不能按工序名重排
+    order = [str(o.get("operation")) for o in ordered if o.get("operation")]
+    return list(dict.fromkeys(order))
+
+
+def jc_summary(jc_map: dict, wos: list[dict]) -> dict:
+    """按工序聚合 JC；同一工序多卡取 max（批量卡/菲号卡），不跨工序求和。"""
+    wo_by_name = {w.get("name"): w for w in wos}
     out = {}
-    for wo, cards in (jc_map or {}).items():
-        out[wo] = {
+    for wo_name, cards in (jc_map or {}).items():
+        wo = wo_by_name.get(wo_name, {})
+        by_op: dict[str, list[dict]] = defaultdict(list)
+        for c in cards:
+            by_op[str(c.get("operation") or "?")].append(c)
+        ops = {}
+        for op, rows in by_op.items():
+            qty = [float(c.get("total_completed_qty") or 0) for c in rows]
+            ops[op] = {
+                "cards": len(rows),
+                "sum_qty": round(sum(qty), 2) if qty else None,
+                "max_qty": round(max(qty), 2) if qty else None,
+                "statuses": sorted({c.get("status") for c in rows if c.get("status")}),
+                "docstatuses": sorted({c.get("docstatus") for c in rows
+                                       if c.get("docstatus") is not None}),
+            }
+        order = _op_order(wo)
+        with_cards = [op for op in order if op in ops]
+        first_op = with_cards[0] if with_cards else None
+        last_op = with_cards[-1] if with_cards else None
+        out[wo_name] = {
             "cards": len(cards),
-            "completed_qty": round(sum(float(c.get("total_completed_qty") or 0) for c in cards), 2),
-            "operations": sorted({c.get("operation") for c in cards if c.get("operation")}),
+            "operations": ops,
+            "operation_order": order,
+            "first_operation": first_op,
+            "last_operation": last_op,
+            "first_op_qty": ops.get(first_op, {}).get("sum_qty") if first_op else None,
+            "last_op_qty": ops.get(last_op, {}).get("sum_qty") if last_op else None,
             "statuses": sorted({c.get("status") for c in cards if c.get("status")}),
         }
     return out
+
+
+def open_breakdown(so_rows: list[dict], totals: dict) -> dict:
+    """未发量互斥分解：死单 / 在产 / 无计划 / 超发；作废单单列。"""
+    voided = 0.0
+    dead = 0.0
+    in_progress = 0.0
+    no_plan = 0.0
+    over = 0.0
+    buckets = {"dead": [], "in_progress": [], "no_plan": [], "over_delivered": []}
+    for r in so_rows:
+        open_qty = float(r.get("open_qty") or 0)
+        status = str(r.get("so_status") or "")
+        docstatus = r.get("so_docstatus")
+        is_voided = (docstatus == 2) or (status == "Cancelled")
+        if is_voided:
+            voided += open_qty
+            continue
+        if open_qty < 0:
+            over += open_qty
+            buckets["over_delivered"].append({"so": r.get("so"), "open_qty": open_qty})
+            continue
+        if open_qty == 0:
+            continue
+        anoms = r.get("anomalies") or []
+        item = {"so": r.get("so"), "open_qty": open_qty}
+        if "死单(Closed未发)" in anoms:
+            dead += open_qty
+            buckets["dead"].append(item)
+        elif r.get("wos"):
+            in_progress += open_qty
+            buckets["in_progress"].append(item)
+        else:
+            no_plan += open_qty
+            buckets["no_plan"].append(item)
+    total = dead + in_progress + no_plan + over
+    report_open = float(totals.get("open_qty") or 0)
+    return {
+        "voided_qty": round(voided, 2),
+        "dead_qty": round(dead, 2),
+        "in_progress_qty": round(in_progress, 2),
+        "no_plan_qty": round(no_plan, 2),
+        "over_delivered_qty": round(over, 2),
+        "reconciled_open_qty": round(total, 2),
+        "reported_open_qty": round(report_open, 2),
+        "difference": round(total - report_open, 2),
+        "buckets": buckets,
+        "note": "有效单未发 = 死单 + 在产 + 无计划 + 超发(负)；作废单不计入 open",
+    }
+
+
+def fetch_manufacture_stock_entries(wo_names: list[str], item_codes: list[str],
+                                    base_url: str, key: str, secret: str, sleep_s: float):
+    """已提交 Manufacture Stock Entry 的成品入库量。返回 (rows, error)。"""
+    if not wo_names:
+        return [], None
+    raw = []
+    try:
+        for chunk in iss.chunks(wo_names, iss.IN_CHUNK):
+            filters = [
+                ["Stock Entry", "stock_entry_type", "=", "Manufacture"],
+                ["Stock Entry", "docstatus", "=", 1],
+                ["Stock Entry", "work_order", "in", chunk],
+            ]
+            raw.extend(iss.paginated_get(
+                "Stock Entry", base_url, key, secret, filters,
+                ["name", "stock_entry_type", "docstatus", "posting_date", "work_order",
+                 "from_warehouse", "to_warehouse", "company"],
+                fallback_fields=["name", "stock_entry_type", "docstatus", "posting_date",
+                                 "work_order"],
+                label="SE(Manufacture)",
+            ))
+    except Exception as e:  # noqa: BLE001 - 查询失败要显式返回，不能当没有 SE
+        return [], f"{type(e).__name__}: {e}"
+
+    ses = iss.dedupe_by(raw, "name")
+    item_set = set(item_codes)
+    out = []
+    for i, se in enumerate(ses):
+        d = iss.get_single("Stock Entry", se["name"], base_url, key, secret)
+        if i + 1 < len(ses):
+            time.sleep(sleep_s)
+        if not d:
+            out.append({"se": se["name"], "finished_qty": None, "status": "missing_doc"})
+            continue
+        finished = 0.0
+        finished_lines = 0
+        for line in d.get("items", []):
+            is_finished = bool(line.get("is_finished_item"))
+            if is_finished and line.get("item_code") in item_set:
+                finished += float(line.get("qty") or 0)
+                finished_lines += 1
+        out.append({
+            "se": se["name"],
+            "posting_date": d.get("posting_date"),
+            "docstatus": d.get("docstatus"),
+            "work_order": d.get("work_order"),
+            "from_warehouse": d.get("from_warehouse"),
+            "to_warehouse": d.get("to_warehouse"),
+            "finished_qty": round(finished, 2),
+            "finished_lines": finished_lines,
+        })
+    return out, None
 
 
 def main():
@@ -72,8 +229,13 @@ def main():
         print("无匹配销售订单")
         return 0
 
+    field_issues = []
     so_rows = []
     for r in ctx.get("so_rows", []):
+        if float(r.get("open_qty") or 0) > 0:
+            for f in ("so_delivery_date", "warehouse", "uom"):
+                if not r.get(f):
+                    field_issues.append({"so": r.get("so"), "missing": f})
         so_rows.append({
             "so": r.get("so"),
             "so_status": r.get("so_status"),
@@ -90,7 +252,6 @@ def main():
             "shipped_dn": r.get("shipped_dn"),
             "draft_dn": r.get("draft_dn"),
             "open_qty": r.get("open_qty"),
-            "lead_date": r.get("lead_date"),
             "anomalies": r.get("anomalies", []),
             "wos": [w.get("name") for w in (r.get("wos") or [])],
             "pps": [p.get("pp") for p in (r.get("pps") or [])],
@@ -100,6 +261,7 @@ def main():
     for d in ctx.get("dn_rows", []):
         dn_rows.append({
             "dn": d.get("dn"),
+            "dn_line_id": d.get("dn_line_id"),
             "dn_date": d.get("dn_date"),
             "dn_status": d.get("dn_status"),
             "dn_docstatus": d.get("dn_docstatus"),
@@ -108,6 +270,7 @@ def main():
             "so_line_id": d.get("so_line_id"),
             "item_code": d.get("item_code"),
             "warehouse": d.get("warehouse"),
+            "uom": d.get("uom"),
             "qty": d.get("qty"),
         })
 
@@ -142,6 +305,35 @@ def main():
             "warehouse": p.get("warehouse"),
         })
 
+    jc = jc_summary(ctx.get("jc_map", {}), ctx.get("wos", []))
+    se_rows, se_error = fetch_manufacture_stock_entries(
+        [w["name"] for w in wos], ctx.get("item_codes", []),
+        iss.ENV_URLS["prod"], key, secret, args.sleep,
+    )
+
+    four_way = {}
+    by_wo_se = defaultdict(float)
+    for s in se_rows:
+        if s.get("finished_qty") is not None and s.get("work_order"):
+            by_wo_se[s["work_order"]] += float(s["finished_qty"])
+    for w in ctx.get("wos", []):
+        wo_name = w.get("name")
+        j = jc.get(wo_name, {})
+        last_qty = j.get("last_op_qty")
+        se_qty = by_wo_se.get(wo_name)
+        if se_qty is None and se_error is None:
+            se_qty = 0.0
+        pending = None
+        if last_qty is not None and se_qty is not None:
+            pending = round(last_qty - se_qty, 2)
+        four_way[wo_name] = {
+            "jc_present": bool(j),
+            "first_op_qty": j.get("first_op_qty"),
+            "last_op_qty": last_qty,
+            "se_finished_qty": round(se_qty, 2) if se_qty is not None else None,
+            "produced_pending_stock_in": pending,
+        }
+
     result = {
         "okf": "v0.1",
         "type": "Experiment-Results",
@@ -150,25 +342,33 @@ def main():
         "generated_at": datetime.now().isoformat(timespec="seconds"),
         "system": iss.ENV_URLS["prod"],
         "query": {"customer_code": args.customer_code, "item": args.item},
+        "legacy_lead_display_excluded": True,
         "item_codes": ctx.get("item_codes", []),
         "master_items": [
             {"name": m.get("name"), "item_name": m.get("item_name"), "item_group": m.get("item_group")}
             for m in ctx.get("master_items", [])
         ],
         "totals": ctx.get("totals", {}),
+        "open_breakdown": open_breakdown(so_rows, ctx.get("totals", {})),
         "so_rows": so_rows,
         "dn_rows": dn_rows,
         "wos": wos,
-        "jc_summary": jc_summary(ctx.get("jc_map", {})),
+        "jc_summary": jc,
+        "se_rows": se_rows,
+        "se_query_error": se_error,
+        "production_four_way": four_way,
         "pp_rows": pp_rows,
         "anomalies": ctx.get("anomalies", []),
+        "field_issues": field_issues,
     }
 
     out = Path(args.out) if args.out else OUT / f"g1b_en_{datetime.now():%Y%m%d_%H%M%S}.json"
     out.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"OK: {out}")
-    print(f"  SO {len(so_rows)}；DN {len(dn_rows)}；WO {len(wos)}；PP {len(pp_rows)}")
+    print(f"  SO {len(so_rows)}；DN 行 {len(dn_rows)}；WO {len(wos)}；PP {len(pp_rows)}；"
+          f"SE {len(se_rows)} err={se_error}")
     print(f"  totals: {json.dumps(result['totals'], ensure_ascii=False)}")
+    print(f"  open: {json.dumps(result['open_breakdown'], ensure_ascii=False)}")
     return 0
 
 
