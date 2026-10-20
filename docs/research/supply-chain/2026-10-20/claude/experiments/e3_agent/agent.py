@@ -828,38 +828,38 @@ def extract_period(text: str) -> tuple[str | None, str | None, str | None]:
 
 def extract_slots(text: str, data: dict) -> Slots:
     slots = Slots()
-    skus, sku_tokens = extract_skus(text, data)
+    skus, sku_slots = extract_skus(text, data)
     slots.skus = skus
 
     if WAREHOUSE_DANEEY.search(text):
         slots.warehouse = "美中-FZH-DANEEY"
-        warehouse_token = WAREHOUSE_DANEEY.search(text).group(0)
+        warehouse_slot = WAREHOUSE_DANEEY.search(text).group(0)
     elif WAREHOUSE_POLAND.search(text):
         slots.warehouse = "FZHPoland"
-        warehouse_token = WAREHOUSE_POLAND.search(text).group(0)
+        warehouse_slot = WAREHOUSE_POLAND.search(text).group(0)
     elif WAREHOUSE_ALL.search(text):
         slots.warehouse = "ALL"
-        warehouse_token = WAREHOUSE_ALL.search(text).group(0)
+        warehouse_slot = WAREHOUSE_ALL.search(text).group(0)
     else:
-        warehouse_token = None
+        warehouse_slot = None
 
     if CHANNEL_A.search(text):
         slots.channel = "channel_a"
-        channel_token = CHANNEL_A.search(text).group(0)
+        channel_slot = CHANNEL_A.search(text).group(0)
     elif CHANNEL_OTHER.search(text):
         slots.channel = "other"
-        channel_token = CHANNEL_OTHER.search(text).group(0)
+        channel_slot = CHANNEL_OTHER.search(text).group(0)
     else:
-        channel_token = None
+        channel_slot = None
 
-    slots.start, slots.end, period_token = extract_period(text)
+    slots.start, slots.end, period_slot = extract_period(text)
 
     m = COVERAGE_SLOT.search(text)
     if m:
         slots.coverage_months = int(m.group(1))
-        coverage_token = m.group(0)
+        coverage_slot = m.group(0)
     else:
-        coverage_token = None
+        coverage_slot = None
 
     if re.search(r"干净|剔除断货|clean", text, re.I):
         slots.rate_source = "clean"
@@ -872,11 +872,11 @@ def extract_slots(text: str, data: dict) -> Slots:
             break
 
     slots.evidence = {
-        "sku_tokens": sku_tokens,
-        "warehouse_token": warehouse_token,
-        "channel_token": channel_token,
-        "period_token": period_token,
-        "coverage_token": coverage_token,
+        "sku_slots": sku_slots,
+        "warehouse_slot": warehouse_slot,
+        "channel_slot": channel_slot,
+        "period_slot": period_slot,
+        "coverage_slot": coverage_slot,
         "metric": slots.metric,
     }
     return slots

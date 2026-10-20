@@ -253,7 +253,7 @@ Falsify 条件：SKU / 仓库语义歧义 > 20%，或路由器无法可靠映射
 
 | 文件 | SHA-256 |
 |---|---|
-| `agent.py` | `ba4da1196b0f4aa7bddad062228baf080de0fd1c4c0f5f7d6516c7e3e4db7281` |
+| `agent.py` | `368b2bc532ea49e7d72fccfc2e1f14ab9a70e43c4d33848b133a5a9c5c312499` |
 | `questions.json` | `907edfb89cd69ac27ef3d13251b3d32cb0fcf074a2faef8b78dd4ced556668f3` |
 | `data/wedge_decision_package.json` | `7d6e62323723e43ba6919f54f4b8e5b5970309efbd20c4f6f9cb4891fdba06f4` |
 

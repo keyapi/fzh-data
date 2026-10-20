@@ -206,13 +206,13 @@
             }
           ],
           "slot_evidence": {
-            "sku_tokens": [
+            "sku_slots": [
               "2878"
             ],
-            "warehouse_token": "美中",
-            "channel_token": null,
-            "period_token": "2026 年 5 月",
-            "coverage_token": null,
+            "warehouse_slot": "美中",
+            "channel_slot": null,
+            "period_slot": "2026 年 5 月",
+            "coverage_slot": null,
             "metric": "monthly_sales"
           }
         }
@@ -527,13 +527,13 @@
             }
           ],
           "slot_evidence": {
-            "sku_tokens": [
+            "sku_slots": [
               "2876"
             ],
-            "warehouse_token": "美中",
-            "channel_token": "零售客户",
-            "period_token": "2026 年 3–9 月",
-            "coverage_token": null,
+            "warehouse_slot": "美中",
+            "channel_slot": "零售客户",
+            "period_slot": "2026 年 3–9 月",
+            "coverage_slot": null,
             "metric": "monthly_sales"
           }
         }
@@ -693,13 +693,13 @@
             }
           ],
           "slot_evidence": {
-            "sku_tokens": [
+            "sku_slots": [
               "2880"
             ],
-            "warehouse_token": null,
-            "channel_token": null,
-            "period_token": null,
-            "coverage_token": null,
+            "warehouse_slot": null,
+            "channel_slot": null,
+            "period_slot": null,
+            "coverage_slot": null,
             "metric": null
           }
         }
@@ -830,13 +830,13 @@
             }
           ],
           "slot_evidence": {
-            "sku_tokens": [
+            "sku_slots": [
               "2878"
             ],
-            "warehouse_token": "美中",
-            "channel_token": null,
-            "period_token": null,
-            "coverage_token": null,
+            "warehouse_slot": "美中",
+            "channel_slot": null,
+            "period_slot": null,
+            "coverage_slot": null,
             "metric": "inventory"
           }
         }
@@ -1001,13 +1001,13 @@
             }
           ],
           "slot_evidence": {
-            "sku_tokens": [
+            "sku_slots": [
               "2876"
             ],
-            "warehouse_token": "美中",
-            "channel_token": null,
-            "period_token": null,
-            "coverage_token": null,
+            "warehouse_slot": "美中",
+            "channel_slot": null,
+            "period_slot": null,
+            "coverage_slot": null,
             "metric": "in_transit"
           }
         }
@@ -1163,13 +1163,13 @@
             }
           ],
           "slot_evidence": {
-            "sku_tokens": [
+            "sku_slots": [
               "2881"
             ],
-            "warehouse_token": "美中",
-            "channel_token": null,
-            "period_token": null,
-            "coverage_token": null,
+            "warehouse_slot": "美中",
+            "channel_slot": null,
+            "period_slot": null,
+            "coverage_slot": null,
             "metric": "clean_monthly_demand"
           }
         }
@@ -1343,13 +1343,13 @@
             }
           ],
           "slot_evidence": {
-            "sku_tokens": [
+            "sku_slots": [
               "2879"
             ],
-            "warehouse_token": "美中",
-            "channel_token": null,
-            "period_token": null,
-            "coverage_token": "覆盖 6 个月",
+            "warehouse_slot": "美中",
+            "channel_slot": null,
+            "period_slot": null,
+            "coverage_slot": "覆盖 6 个月",
             "metric": "coverage_months"
           }
         }
@@ -1619,13 +1619,13 @@
             }
           ],
           "slot_evidence": {
-            "sku_tokens": [
+            "sku_slots": [
               "2880"
             ],
-            "warehouse_token": "美中",
-            "channel_token": null,
-            "period_token": null,
-            "coverage_token": null,
+            "warehouse_slot": "美中",
+            "channel_slot": null,
+            "period_slot": null,
+            "coverage_slot": null,
             "metric": "recommend_order"
           }
         }
@@ -1818,14 +1818,14 @@
             }
           ],
           "slot_evidence": {
-            "sku_tokens": [
+            "sku_slots": [
               "2878",
               "2880"
             ],
-            "warehouse_token": "美中",
-            "channel_token": null,
-            "period_token": null,
-            "coverage_token": null,
+            "warehouse_slot": "美中",
+            "channel_slot": null,
+            "period_slot": null,
+            "coverage_slot": null,
             "metric": "clean_monthly_demand"
           }
         }
@@ -1999,13 +1999,13 @@
             }
           ],
           "slot_evidence": {
-            "sku_tokens": [
+            "sku_slots": [
               "2878"
             ],
-            "warehouse_token": "美中",
-            "channel_token": null,
-            "period_token": null,
-            "coverage_token": "覆盖 3 个月",
+            "warehouse_slot": "美中",
+            "channel_slot": null,
+            "period_slot": null,
+            "coverage_slot": "覆盖 3 个月",
             "metric": "coverage_months"
           }
         }
@@ -2080,13 +2080,13 @@
             }
           ],
           "slot_evidence": {
-            "sku_tokens": [
+            "sku_slots": [
               "2878"
             ],
-            "warehouse_token": null,
-            "channel_token": null,
-            "period_token": null,
-            "coverage_token": null,
+            "warehouse_slot": null,
+            "channel_slot": null,
+            "period_slot": null,
+            "coverage_slot": null,
             "metric": "inventory"
           }
         },
@@ -2162,13 +2162,13 @@
             }
           ],
           "slot_evidence": {
-            "sku_tokens": [
+            "sku_slots": [
               "2881"
             ],
-            "warehouse_token": "美中",
-            "channel_token": null,
-            "period_token": null,
-            "coverage_token": null,
+            "warehouse_slot": "美中",
+            "channel_slot": null,
+            "period_slot": null,
+            "coverage_slot": null,
             "metric": null
           }
         },
@@ -2229,13 +2229,13 @@
             }
           ],
           "slot_evidence": {
-            "sku_tokens": [
+            "sku_slots": [
               "2880"
             ],
-            "warehouse_token": null,
-            "channel_token": null,
-            "period_token": null,
-            "coverage_token": null,
+            "warehouse_slot": null,
+            "channel_slot": null,
+            "period_slot": null,
+            "coverage_slot": null,
             "metric": null
           }
         }
@@ -2293,11 +2293,11 @@
             }
           ],
           "slot_evidence": {
-            "sku_tokens": [],
-            "warehouse_token": null,
-            "channel_token": null,
-            "period_token": null,
-            "coverage_token": null,
+            "sku_slots": [],
+            "warehouse_slot": null,
+            "channel_slot": null,
+            "period_slot": null,
+            "coverage_slot": null,
             "metric": null
           }
         }
@@ -2386,13 +2386,13 @@
             }
           ],
           "slot_evidence": {
-            "sku_tokens": [
+            "sku_slots": [
               "2878"
             ],
-            "warehouse_token": "美中",
-            "channel_token": null,
-            "period_token": null,
-            "coverage_token": null,
+            "warehouse_slot": "美中",
+            "channel_slot": null,
+            "period_slot": null,
+            "coverage_slot": null,
             "metric": "inventory"
           }
         }
