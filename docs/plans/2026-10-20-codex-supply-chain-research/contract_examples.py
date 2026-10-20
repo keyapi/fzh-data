@@ -269,6 +269,51 @@ def scoped_stockout_signal(sku, warehouse, period, channel, signals):
     return "signal_present" if key in signals else "unknown"
 
 
+def triangle_match(sku, mapping_rows):
+    """Current G1 data authority is the one named BOM snapshot, not Cost Review."""
+    exact_rows = [r for r in mapping_rows if r["customer_code"] == sku]
+    approved = [r for r in exact_rows if r["source"] == "bom_20261016"]
+    match = mapping_gate(sku, [(r["item"], r["leaf"]) for r in approved],
+                         any(r.get("deleted", False) for r in approved))
+    return {**match, "ignored_sources": sorted({r["source"] for r in exact_rows
+                                               if r["source"] != "bom_20261016"})}
+
+
+def triangle_cover_consumption(lines, mapping_rows):
+    """User-confirmed triangle scenario: normalized independent sales consume 1 cover.
+
+    Warehouse names/channels never classify transaction purpose or inventory pools.
+    This returns a known consumption subtotal, not a forecast or replenishment order.
+    """
+    seen = set()
+    dispositions = []
+    known = 0
+    unresolved = []
+    for line in lines:
+        source_id = line["id"]
+        require(source_id not in seen, "duplicate source line")
+        seen.add(source_id)
+        quantity = strict_quantity(line["qty"])
+        match = triangle_match(line["sku"], mapping_rows)
+        result = {"source_id": source_id, "warehouse": line["warehouse"],
+                  "qty": quantity, "match": match, "cover_qty": None}
+        if match["status"] != "used":
+            result["status"] = match["status"]
+            unresolved.append(source_id)
+        elif line["event_kind"] in {"internal_transfer", "return_event", "package_component"}:
+            result.update(status="used", reason="not_new_terminal_demand", cover_qty=0)
+        elif (line["event_kind"] == "terminal_sale"
+              and line["sold_form"] in {"finished", "cover_only"}):
+            result.update(status="used", reason="confirmed_triangle_1_to_1", cover_qty=quantity)
+            known += quantity
+        else:
+            result.update(status="unknown", reason="unconfirmed_form_or_transaction")
+            unresolved.append(source_id)
+        dispositions.append(result)
+    return {"known_cover_consumption": known, "unresolved_source_ids": unresolved,
+            "dispositions": dispositions}
+
+
 def run():
     report = []
 
@@ -456,6 +501,63 @@ def run():
            and all(scoped_stockout_signal(sku, "DANEEY", "2026-06", "PB", signals) == "unknown"
                    for sku in family_skus[30:]),
            "PB subset signals do not label the family; warehouse switch, another channel, or no label remains unknown")
+
+    # Business correction v2: these are triangle-specific, not the generic C01 kit recipe.
+    triangle_map = [
+        {"source": "bom_20261016", "customer_code": "synthetic-base", "item": "synthetic-KS0001-A", "leaf": "KS0001"},
+        {"source": "bom_20261016", "customer_code": "synthetic-base-Cover", "item": "synthetic-KS0001-A", "leaf": "KS0001"},
+    ]
+    sale = {"id": "sale-A", "sku": "synthetic-base", "qty": 1, "event_kind": "terminal_sale",
+            "sold_form": "finished", "warehouse": "USNJ-CENTRADE", "channel": "synthetic-marketplace"}
+    base = triangle_cover_consumption([sale], triangle_map)
+    unknown_form = triangle_cover_consumption([{**sale, "sold_form": "unknown"}], triangle_map)
+    record("C21_triangle_finished_sale_consumes_one_cover", base["known_cover_consumption"] == 1
+           and unknown_form["unresolved_source_ids"] == ["sale-A"]
+           and unknown_form["dispositions"][0]["cover_qty"] is None,
+           "confirmed triangle finished sale1 consumes cover1; uncertain form remains unresolved, not zero or inferred")
+
+    cover_sale = {**sale, "id": "sale-cover", "sku": "synthetic-base-Cover", "qty": 2, "sold_form": "cover_only"}
+    component = {**cover_sale, "id": "parcel-component", "event_kind": "package_component"}
+    mixed = triangle_cover_consumption([{**sale, "qty": 3}, cover_sale, component], triangle_map)
+    record("C22_cover_only_sale_and_component_are_distinct", mixed["known_cover_consumption"] == 5
+           and mixed["dispositions"][2]["cover_qty"] == 0
+           and triangle_match("synthetic-base-Cover-extra", triangle_map)["status"] == "unmatched",
+           "finished3 plus independent Cover-only2 consumes5; package component is not another sale; no suffix stripping")
+
+    cover_warehouse_sale = {**sale, "warehouse": "FZH-DANEEY-皮壳仓库", "qty": 4}
+    transfer = {**cover_warehouse_sale, "id": "transfer", "event_kind": "internal_transfer"}
+    returned = {**cover_warehouse_sale, "id": "return", "event_kind": "return_event", "qty": 2,
+                "warehouse": "DANEEY-退货仓"}
+    uncertain_return_warehouse = {**returned, "id": "unknown-transaction", "event_kind": "unknown"}
+    warehouse_view = triangle_cover_consumption([cover_warehouse_sale, transfer, returned, uncertain_return_warehouse], triangle_map)
+    record("C23_warehouse_name_does_not_define_sale_or_pool", warehouse_view["known_cover_consumption"] == 4
+           and warehouse_view["dispositions"][0]["warehouse"] == "FZH-DANEEY-皮壳仓库"
+           and warehouse_view["dispositions"][1]["cover_qty"] == 0
+           and warehouse_view["dispositions"][2]["cover_qty"] == 0
+           and warehouse_view["unresolved_source_ids"] == ["unknown-transaction"]
+           and warehouse_view["dispositions"][3]["cover_qty"] is None
+           and all("stock_pool" not in d for d in warehouse_view["dispositions"]),
+           "confirmed sale4 from cover-named warehouse still consumes4; same-channel transfer and confirmed return add no new demand")
+
+    text_only = {**sale, "id": "text-hint", "sku": "synthetic-unmatched", "category": "三角靠枕", "qty": 7}
+    diagnostic = triangle_cover_consumption([text_only], triangle_map)
+    record("C24_text_hint_does_not_prove_family_or_nonfamily", diagnostic["known_cover_consumption"] == 0
+           and diagnostic["unresolved_source_ids"] == ["text-hint"]
+           and diagnostic["dispositions"][0]["status"] == "unmatched"
+           and diagnostic["dispositions"][0]["cover_qty"] is None,
+           "triangle text without authoritative exact match is diagnostic/unmatched7, not admitted and not proven outside family")
+
+    review_row = {"source": "cost_review_data", "customer_code": "synthetic-review-only",
+                  "item": "synthetic-KS0248-B", "leaf": "KS0248"}
+    misleading = {**review_row, "customer_code": "synthetic-base"}
+    review_only = triangle_match("synthetic-review-only", [review_row])
+    with_conflicting_review = triangle_match("synthetic-base", triangle_map + [misleading])
+    record("C25_cost_review_data_is_not_mapping_authority", review_only["status"] == "unmatched"
+           and review_only["ignored_sources"] == ["cost_review_data"]
+           and with_conflicting_review["status"] == "used"
+           and with_conflicting_review["item"] == "synthetic-KS0001-A"
+           and with_conflicting_review["ignored_sources"] == ["cost_review_data"],
+           "Cost Review-only mapping cannot admit a row; conflicting review data cannot override exact named-BOM mapping")
 
     print(json.dumps({"scope": "synthetic contract oracle only", "total": len(report),
                       "passed": len(report), "failed": 0, "skipped": 0, "cases": report},
