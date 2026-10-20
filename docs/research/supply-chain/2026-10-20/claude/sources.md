@@ -29,7 +29,21 @@ tags: [supply-chain, research, sources]
 
 | ID | 主张 | 来源 | 类型 | 日期 | 原文摘录 | 强度 | 用于 |
 |---|---|---|---|---|---|---|---|
-| — | （待 Phase 1–3 填充） | — | — | — | — | — | — |
+| S1-001 | 端到端履约蓝图已在 main，定义阶段 0–9、数量分层与四组对账等式 | `docs/solutions/architecture-patterns/en-end-to-end-supply-chain-fulfillment-visibility.md` | C | 2026-10-20 核实 | 「每个日期带来源与置信度」 | A | 01 §2/§7 |
+| S1-002 | 履约查询实现覆盖阶段 0–3，含证据分层与异常→下一行动 | PR #291 `EN_API/fulfillment/`、`fulfillment_query.py` | C | 2026-10-20 | `FieldValue(kind=fact/derived/estimate/assertion)` | A | 01 §2/§7 |
+| S1-003 | 通途订单侧输入事实层可复用，含件数/拆包/补发规则与审计闸门 | PR #294 `order_side_input.py` | C | 2026-10-20 | 快照 + `audit.json` + 17 sheet | A | 01 §2/§7 |
+| S1-004 | 成本引擎规格与拆包裹合并「不重不漏」断言 | PR #295 `cost-engine-spec/00–31`、`group_split_rows` | C | 2026-10-20 | 守恒、件数=Σ皮壳行、歧义即阻断 | A | 01 §2/§7 |
+| S1-005 | 补货量公式与断货删失口径已成一文 | PR #297 `pb-replenishment-sizing-from-sales.md` | C | 2026-10-20 | `月需求率 × 覆盖期 − 可用 − 在途` | A | 01 §2/§6 |
+| S1-006 | 现成低库存扫描：通途分页、526 退避、钉钉推送 | PR #298 `stock_alert/` | C | 2026-10-20 | pageSize≤100、无 total | A | 01 §2/§7 |
+| S1-007 | 受控办理 Demo 的治理模式：能力白名单、确认后执行、独立回读 | PR #288 `ops_assistant_demo/` | C | 2026-10-20 | read-then-guard | A | 01 §4.3 |
+| S1-008 | demand_forecast 阶段 A 资料与方法选型已归档 | PR #304 `docs/research/2026-08-31-*` | C | 2026-08-31 / 归档 2026-10-20 | 43 张月表 202301–202607 | A | 01 §4.1 |
+| S1-009 | PB 多方法预估实现存在且已归档 | PR #304 `pb_reconciliation/sku_forecast.py` | C | 2026-08-31 | M1/M2/M3/M3b + 区间 | A | 01 §4.2、E1 |
+| S1-010 | 用户说的「上周网页 Agent demo」更可能是独立仓库版本 | `D:/Work/web-ai-assistant-review-20261012` @ `acb2dd8` | C | 2026-10-15 | 23 项测试 | A | 01 §4.3 |
+| S1-011 | 通途订单月表 202301–202607 连续 43 张，可聚合出 SKU 月需求 | PR #304 数据可行性文档 | C | 2026-08-31 | 逐日逐行，含发货日期/通途SKU/数量/仓库 | A | 01 §4.1、E1 |
+| S1-012 | PB 10-16 决策包与断货预警可作为 E1/E2 对拍基准 | 本机 PB 订单目录、Notion「PB 断货处理 2026-10-16」 | C | 2026-10-16 | 楔形枕补货 257 件 | A | E1/E2 |
+| S1-013 | 钉钉头程表可机器读，但没有结构化 ETA | `dingtalk/dingtalk_sheet/AGENT_HANDOFF.md`、实读表头 | C | 2026-10-20 | 只有工厂确认交期/包装完成日期 | A | 01 §5、06 |
+| S1-014 | EN 不扣减通途库存，Bin 不能当可用库存 | `pb-replenishment-sizing-from-sales.md` §4 | C | 2026-10 | 「不要用 EN 的 Bin」 | A | 01 §6 |
+| S1-015 | 尾程费率分层模型与 EN 导入契约（历史资产） | PR #232（closed unmerged） | C | 2026-09 关闭 | V0–V4、Holdout、26 列契约 | B | 01 §3 |
 
 ## 未找到项（N-###）
 
@@ -38,4 +52,8 @@ tags: [supply-chain, research, sources]
 
 | ID | 目标 | 检索词 | 范围 | 日期 | 结论 |
 |---|---|---|---|---|---|
-| — | — | — | — | — | — |
+| N-001 | `demand_forecast/` 代码子项目 | `demand_forecast`、`forecast` | 全部分支对象表 + `git log --all --name-only` | 2026-10-20 | 在上述范围内未发现目录；只有阶段 A 文档（PR #304） |
+| N-002 | 需求预测 / 安全库存 / 净需求 / 排产 / 审批引擎代码 | 上述关键词 | main 全模块 + 全分支 | 2026-10-20 | 未发现实现；只有方法论文档 |
+| N-003 | 头程结构化 ETA（离厂/到港/清关/入仓） | ETA、离厂、到港、清关 | 钉钉两张表 + 仓库代码 | 2026-10-20 | 未发现结构化字段；只有人工日期 |
+| N-004 | Notion 页面注册表 | notion registry | 仓库文档 + Notion 检索 | 2026-10-20 | 未发现集中注册表；页面分散 |
+| N-005 | 第二套业务网页 Agent demo（仓库内） | `ops_assistant`、`web agent` | 全部分支 | 2026-10-20 | 仓库内只有 PR #288；另在 `D:/Work/web-ai-assistant-review-20261012` |

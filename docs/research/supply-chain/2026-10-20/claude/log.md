@@ -27,6 +27,26 @@ tags: [supply-chain, research, log]
 | 多方法销量预估 | 未定位 | 本机有输出 `D:/Work/美国/Tracy Miller/PB orders/sales_forecast/`；生成脚本 `pb_reconciliation/sku_forecast.py` **未入库** |
 | demand_forecast 子项目 | 未定位 | 继续挖（Cursor 对话库 / Notion / 本机目录） |
 
+## 2026-10-20 — Phase 1 项目内资产与历史资料
+
+- 三路并行：历史记录挖掘、仓库/PR 代码级复核、外部数据源侦察（只读）。
+- 产出 `01-existing-assets.md` 与 `sources.md` 的 S1-001–S1-015、N-001–N-005。
+
+### 关键发现
+
+- **PR #304（2026-10-20 新建，keyapi）**：已归档 demand_forecast 阶段 A 三篇调研 +
+  `pb_reconciliation/sku_forecast.py` + 口径文档。原会话转录已被 30 天清理。
+- `demand_forecast/` 代码目录确认不存在于任何 ref；只有文档与 PB 脚本。
+- 「上周网页 Agent demo」更可能是 `D:/Work/web-ai-assistant-review-20261012`（2026-10-15，`acb2dd8`），
+  不是 PR #288（2026-10-11）。
+- 通途×EN BOM 成本切换确实存在，集中在 PR #295/#294/#280，未进 main。
+- PB 10-16 决策包（楔形枕补货 257 件）可作为 E1/E2 对拍基准。
+
+### 副作用说明
+
+- 历史挖掘子 Agent 早期误用 `uv run python`，在本 worktree 生成 `.venv` 并安装 101 个包；
+  未跟踪、已 gitignore，不影响提交。后续实验可直接复用该环境。
+
 ## 模板（后续阶段）
 
 ```text
