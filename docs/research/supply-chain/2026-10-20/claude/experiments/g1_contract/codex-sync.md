@@ -85,6 +85,7 @@ tags: [supply-chain, codex, g1, sync, consolidated]
   另有 51 行 Mxxx 但 `是否补发=否`。需结合 #294 补发口径与渠道/订单规则判断。
 - family Mxxx 渠道（行）：Amazon 52、manomano 47、Wayfair 7、Cdiscount 3、PotteryBarn 2、
   HOME24 1、Mirakl 1、allegro 1、Shopify 1。
+- 上述 Mxxx 是快速聚合（按订单号后缀），未逐单核；用于量级判断，逐行以 #294 与原始订单为准。
 - **补发是出库消耗，已含在 33,719 中；计入补货，不另加、不净扣。**
 
 ### 4.2 退货（反向流，5% 情境）
