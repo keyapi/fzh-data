@@ -54,6 +54,11 @@ cron 触发的定时任务由 `ScheduledJobType.get_queue_name()` 决定队列�
 **⑥ SKU 匹配是精确串匹配，无容错**
 `_find_erp_item_by_tongtool_sku` 是 `Item Customer Detail.ref_code = %s` **等值查询**：不剥后缀（`-Cover`/`-Foam`/`-N`）、不去 `删除` 前缀、不回退基码。实测全库有数千子表行 `erp_item_code` 为空，但只对应很少的 distinct 通途SKU，其中**约 1/5 是"EN 里其实已登记、只是订单没被重新匹配"**（跑 rematch 即可修，零 API），**约 4/5 是 EN 里根本没登记**（属建物料范畴）。**别一律当成"没登记"。**
 
+**⑦ 历史回溯：开放 API 的可见性是"部分"的（2026-10 实测）**
+- 不带 `accountCode` 查某月，**第 60 页即空**（约 5–6 千条）；按账号查能翻更深（某大账号到第 40 页，与其月量吻合）→ **必须按账号查**。
+- 可见性**跟"最近更新时间"走，不是销售日期**：查 2025-06 只返回少数近期被更新过的单；大部分老单已不可见。
+- 因此：**API 适合近期补漏，不能完整重建 2025-07 以前的历史**；历史真源是 GS 月表。详见 [订单历史分析库](../architecture-patterns/order-history-duckdb-store.md)。
+
 ## Why This Matters
 
 - 300s + 限流 + 重叠是**同一根因链**（外部 5 次/分钟 × Frappe 默认队列），只修一处仍会以另一种形式复发。

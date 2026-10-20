@@ -18,6 +18,7 @@
 | [docs/reference/en-server-access.md](docs/reference/en-server-access.md) | **服务器与环境访问**：生产/测试 SSH 别名、bench 重启规矩、REST 凭证、常见坑 |
 | [../docs/solutions/integration-issues/en-tongtool-order-package-sync-failures.md](../docs/solutions/integration-issues/en-tongtool-order-package-sync-failures.md) | **通途订单/包裹同步**（`tongtool_integration` app）为什么会漏与空壳：300s 掐断 / 526 / 任务重叠 / 仓库不回写 / SKU 精确匹配 |
 | [../docs/solutions/developer-experience/prod-batch-backfill-oom-small-box.md](../docs/solutions/developer-experience/prod-batch-backfill-oom-small-box.md) | **生产 2核4G 跑批量回填会压死机器**（瓶颈是内存不是限流；别在网页进程里啃大表） |
+| [../docs/solutions/architecture-patterns/order-history-duckdb-store.md](../docs/solutions/architecture-patterns/order-history-duckdb-store.md) | **销量预测历史库**：GS 月表 + EN 并集进 DuckDB；通途 API 不能补齐历史；SKU 归一/补货快照 |
 
 ---
 

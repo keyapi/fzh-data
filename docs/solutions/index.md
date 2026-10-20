@@ -13,6 +13,7 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-10-20 | 销售历史分析库（DuckDB）——GS 月表 + EN 并集，支撑销量预测与补货 | [architecture-patterns/order-history-duckdb-store.md](architecture-patterns/order-history-duckdb-store.md) |
 | 2026-10-12 | 生产 2核4G 无 swap 上跑批量回填会把机器压死——瓶颈是内存不是限流，且别在网页进程里啃大表 | [developer-experience/prod-batch-backfill-oom-small-box.md](developer-experience/prod-batch-backfill-oom-small-box.md) |
 | 2026-10-12 | EN 通途订单/包裹同步为什么会漏与空壳——300s 掐断/526/任务重叠/仓库不回写/精确匹配 | [integration-issues/en-tongtool-order-package-sync-failures.md](integration-issues/en-tongtool-order-package-sync-failures.md) |
 | 2026-10-08 | 布局类字段带 in_list_view=1 会让整个 DocType 的元数据写不进去（现象是「每次登录都弹窗」） | [integration-issues/layout-field-in-list-view-breaks-metadata-writes.md](integration-issues/layout-field-in-list-view-breaks-metadata-writes.md) |

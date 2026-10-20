@@ -7,6 +7,10 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-10-20（销量预测历史库：DuckDB + GS/EN 并集）
+- **新增**: `architecture-patterns/order-history-duckdb-store.md` —— 为销量预测/补货建立独立分析库：GS 月表（2023-01 起）+ EN 并集进 DuckDB；**实测通途 API 历史不可完整回溯**（不带 accountCode 约 5–6 千条封顶、按账号能更深、可见性跟最近更新时间走），故历史真源用 GS；含运费口径演进、子表 REST 403 绕法、SKU 归一 99.2%、补货快照首版。
+- **更新**: `integration-issues/en-tongtool-order-package-sync-failures.md` —— 补 §⑦「历史回溯：开放 API 的可见性是部分的」。
+
 ## 2026-10-12（EN 通途同步：五类缺陷 + 生产小机器批量回填 OOM）
 - **新增**: `integration-issues/en-tongtool-order-package-sync-failures.md` —— EN `tongtool_integration` 同步专项排查的完整结论：**订单/包裹数量覆盖 100%**（判漏单必须用**发货口径**，用 `sale_time` 会大量假漏），病在 ① cron 走 `default` 300s 被掐断（改投 `long` + 06:30 闸门）② 限流器实例级→Redis 全局滑窗 ③ 滑窗瞬时连发仍撞 526（加**最短间隔 12s**）④ 长任务重叠（加跨进程互斥锁；生产实为 2 个 long worker）⑤ **`_update_order` 不回写 `warehouse_name`** ⇒ 空壳单（有单无成本，且每天新增）⑥ SKU 匹配是 `ref_code` **精确等值**、无后缀容错（约 1/5 未匹配 SKU 其实已登记）。
 - **新增**: `developer-experience/prod-batch-backfill-oom-small-box.md` —— 同一次排查把生产**三次压到失联**的复盘：瓶颈是**内存不是限流**（改成"小批+停顿"照样死）；真凶是**在 `bench console`（网页进程）里加载整张 BOM 表拼名单** + 无 swap ⇒ 直接卡死；**反证**是 app 自带的 refresh 按钮（只 enqueue、不啃大表）从没压垮过。结论：别为一次性任务去调 `innodb_buffer_pool_size`（已是默认最小值）/ `gunicorn_workers` / RQ worker，只加 **4GB swap** 作保险并保留机器原有 `vm.swappiness=0`。
