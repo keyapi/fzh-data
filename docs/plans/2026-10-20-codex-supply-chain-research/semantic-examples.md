@@ -1,7 +1,7 @@
 ---
 okf: v0.1
 type: Reference
-title: 供应链事实契约C01–C25合成样例与执行结果
+title: 供应链事实契约C01–C35合成样例与执行结果
 date: 2026-10-20
 ---
 
@@ -9,7 +9,7 @@ date: 2026-10-20
 
 运行 `uv run --no-project python docs/plans/2026-10-20-codex-supply-chain-research/contract_examples.py`。
 
-本轮实际运行结果：**25 cases / 25 passed / 0 failed / 0 skipped**。无第三方依赖、业务API或外部数据；程序只向stdout输出JSON报告，不写业务文件。源码见[contract_examples.py](contract_examples.py)。这不是生产代码回归、模型效果实验或对源数据真实性的验证。
+本轮实际运行结果：**35 cases / 35 passed / 0 failed / 0 skipped**。无第三方依赖、业务API或外部数据；程序只向stdout输出JSON报告，不写业务文件。源码见[contract_examples.py](contract_examples.py)。这不是生产代码回归、模型效果实验或对源数据真实性的验证。
 
 | ID | 输入与可复算预期 | 保护的契约 |
 |---|---|---|
@@ -71,3 +71,23 @@ date: 2026-10-20
 G1扩展也没有取真实xlsx/GSheet/库存/EN数据；最新切片与用户映射补充见[g1-slice.md](g1-slice.md)，08三节结论见[review-08-g0.md](review-08-g0.md)。G1适配层仍须自行通过这些案例并给逐行处置，不以本程序PASS代替真实回放。
 
 当前范围与暂停边界见[g1-slice.md](g1-slice.md)，仅复核新匹配说明§0–§4的结论见[review-mapping-process.md](review-mapping-process.md)。旧G1a v1数字已作废，3PL责任未定前不进入G1b/实现。
+
+
+## 增量v3（C26–C35，当前）
+
+| ID | 合成预期与拒绝边界 |
+|---|---|
+| C26 | 3PL销售10＋分公司转移10仅终端消耗10；重复事件拒绝 |
+| C27 | 库存缺失None、手工快照8；发出10＝实收8＋未收1＋差异1；调拨完成不能报在手10 |
+| C28 | 新cohort销量12/可观察6天仅情景run-rate2；含断货不直接外推，0曝光拒绝 |
+| C29 | 覆盖90天×交期60/120天＝0/30天缺口情景，不是单ETA或缺货概率 |
+| C30 | 分仓、operator/listing及起始日/cohort键保留，缺维度拒绝；不暗示禁止全局训练 |
+| C31 | 正常出库9＋退货命名仓正向出库1＋补发2＝毛量12；顾客退货合格回库1可得历史净11或库存5→6，不能再从已含回库库存扣一次 |
+| C32 | 合成3行9件全source_id处置；漏行、重复、等总量错ID均拒绝；pending保留 |
+| C33 | 指定SKU/期间已证实发出6:4仅为历史归属；计划/其他SKU不混入，下一期间无数据unknown，重复行拒绝 |
+| C34 | 三角5%退货情景下restock0/50/100：33719/32877.825/32036.65；其他family禁止套用，非整数记账 |
+| C35 | M线索不覆盖补发字段；无M但标补发仍是补发，只有M且无其他证据unknown，规则冲突隔离 |
+
+本轮35/35 PASS，原C01–C25与c854800e结果完全一致；旧章节的25例/暂停描述是历史记录，由本节和[g1-slice.md](g1-slice.md)替代当前执行状态。C26–C35是合成契约参照，不是预测器、库存适配器或实际补货程序；没有证实真实报表的逐行分类、5%退货率、调拨实收或任何模型精度。C29只是区间算术，C28只检查曝光闸门，没有实现ramp模型。
+
+当前同意Claude在显式假设下开始G1b；Codex本轮不取数据/访问生产。[增量复审](review-incremental-v3.md)记录接受与限制。

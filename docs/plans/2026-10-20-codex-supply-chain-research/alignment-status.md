@@ -8,6 +8,8 @@ reviewed_ref: cd7a8a065f32c204ef57a423527ecce61243f052
 
 # 当前对齐状态
 
+当前增量v3：固定Claude629dc7b3，35例通过（C01–C25未变）；见[g1-slice.md](g1-slice.md)及[增量定向复审](review-incremental-v3.md)。解除旧3PL等待条件，同意Claude按显式假设进行G1b；Codex本轮不取数据/访问生产。文内较早暂停/25例描述保留历史，不再作为当前执行指令。
+
 最新业务更正固定Claude 6d0a1324：以[baseline.md](baseline.md)、[g1-slice.md](g1-slice.md)和[映射过程复审](review-mapping-process.md)为准。C01–C25合成例通过；当前暂停G1b/实现，等待3PL责任确认并修正毛量、退货与全输入去向。以下为cd7a8a06时点的架构评审历史，不作为继续取数指令。
 
 本轮定向核对Claude [#300固定cd7a8a06](https://github.com/keyapi/fzh-data/tree/cd7a8a065f32c204ef57a423527ecce61243f052/docs/research/supply-chain/2026-10-20/claude)的10/08及E1；不修改对方文件、不拉原始数据、不访问生产。此前Codex成果固定dd2551ef。

@@ -7,6 +7,8 @@ date: 2026-10-20
 
 # 当前保存点（2026-10-20，三角皮壳口径v2与G1b暂停）
 
+当前增量v3：固定Claude629dc7b3，35例通过（C01–C25未变）；见[g1-slice.md](g1-slice.md)及[增量定向复审](review-incremental-v3.md)。解除旧3PL等待条件，同意Claude按显式假设进行G1b；Codex本轮不取数据/访问生产。文内较早暂停/25例描述保留历史，不再作为当前执行指令。
+
 ## 已完成
 
 - 最新接收6d0a1324的三角1:1皮壳更正：更新g1-slice/baseline、C21–C25（总25/25）、review-mapping-process仅§0–§4。主映射仅20261016 BOM；Cost Review只借逻辑不用数据。不得恢复旧两仓完成品/旧G1a v1成绩。

@@ -314,6 +314,97 @@ def triangle_cover_consumption(lines, mapping_rows):
             "dispositions": dispositions}
 
 
+def outbound_gross(events):
+    """Kinds describe physical event direction, never warehouse names."""
+    seen = set()
+    total = 0
+    for event_id, kind, qty in events:
+        require(event_id not in seen, "duplicate outbound event")
+        seen.add(event_id)
+        require(kind in {"sale", "replacement", "transfer", "customer_return_receipt"}, "unknown event")
+        qty = strict_quantity(qty)
+        if kind in {"sale", "replacement"}:
+            total += qty
+    return total
+
+
+def manual_inventory(value, source, as_of):
+    if value is None:
+        return {"qty": None, "status": "unknown"}
+    require(source == "wayfair_backend_manual" and as_of, "receipt/transfer is not inventory")
+    return {"qty": strict_quantity(value), "status": "reported_snapshot"}
+
+
+def cohort_key(row):
+    fields = ("branch", "operator_id", "listing_id", "operator_start_date",
+              "listing_launch_date", "demand_cohort")
+    require(all(row.get(f) for f in fields), "missing cohort dimension")
+    return tuple(row[f] for f in fields)
+
+
+def cohort_run_rate(sold, observable_days, censored_days):
+    require(observable_days > 0 and 0 <= censored_days <= observable_days, "invalid exposure")
+    if censored_days:
+        return {"rate": None, "status": "censored_scenario_required"}
+    return {"rate": Decimal(strict_quantity(sold)) / observable_days, "status": "short_window_scenario"}
+
+
+def return_stock_balance(snapshot, returns):
+    balance = strict_quantity(snapshot)
+    seen = set()
+    for return_id, qty, already_in_snapshot, resalable in returns:
+        require(return_id not in seen, "duplicate return event")
+        seen.add(return_id)
+        qty = strict_quantity(qty)
+        require(isinstance(already_in_snapshot, bool) and isinstance(resalable, bool), "unknown return inclusion/state")
+        if not already_in_snapshot and resalable:
+            balance += qty
+    return balance
+
+
+def return_scenario(gross, sales_base, rate, restock_share, family):
+    require(family == "triangle", "triangle assumption cannot transfer to another family")
+    gross, sales_base = Decimal(gross), Decimal(sales_base)
+    rate, restock_share = Decimal(rate), Decimal(restock_share)
+    require(0 <= sales_base <= gross and 0 <= rate <= 1 and 0 <= restock_share <= 1, "invalid return scenario")
+    return {"net": gross - sales_base * rate * restock_share, "status": "assumption",
+            "scope": "same-horizon eligible returns only; not a snapshot adjustment"}
+
+
+def reconcile_dispositions(inputs, outputs):
+    require(len({i for i, q in inputs}) == len(inputs), "duplicate source ID")
+    require(len({i for i, q, status in outputs}) == len(outputs), "duplicate disposition")
+    expected = {i: strict_quantity(q) for i, q in inputs}
+    actual = {i: strict_quantity(q) for i, q, status in outputs}
+    require(all(status in {"family", "pending", "out_of_scope"} for i, q, status in outputs), "bad status")
+    require(expected == actual, "input/disposition identity or quantity mismatch")
+    return sum(expected.values())
+
+
+def supply_attribution(rows, sku, period):
+    amounts = defaultdict(int)
+    seen = set()
+    for row_id, item, window, branch, qty, dispatched in rows:
+        require(row_id not in seen, "duplicate transfer line")
+        seen.add(row_id)
+        if item == sku and window == period and dispatched:
+            amounts[branch] += strict_quantity(qty)
+    total = sum(amounts.values())
+    if not total:
+        return {"status": "unknown", "weights": None}
+    return {"status": "historical_dispatch_evidence",
+            "weights": {k: Decimal(v) / total for k, v in amounts.items()}}
+
+
+def replacement_classification(flag, suffix_hint, rule_matches):
+    # A rule conflict needs evidence; a suffix alone never overrides the field.
+    if len(set(rule_matches)) > 1 or (rule_matches and flag is not None and flag != rule_matches[0]):
+        return "conflict"
+    if rule_matches:
+        return rule_matches[0]
+    return flag if flag is not None else "unknown"
+
+
 def run():
     report = []
 
@@ -558,6 +649,88 @@ def run():
            and with_conflicting_review["item"] == "synthetic-KS0001-A"
            and with_conflicting_review["ignored_sources"] == ["cost_review_data"],
            "Cost Review-only mapping cannot admit a row; conflicting review data cannot override exact named-BOM mapping")
+
+    # Incremental v3 fixtures: no real reports, API access, planner or forecasts.
+    events = [("sale-3pl", "sale", 10), ("branch-transfer", "transfer", 10)]
+    record("C26_3pl_sale_counted_transfer_excluded", outbound_gross(events) == 10
+           and rejects(lambda: outbound_gross(events + [events[0]])),
+           "3PL terminal sale10 counts once; upstream transfer10 is not additional consumption; duplicate event rejected")
+
+    missing_stock = manual_inventory(None, None, None)
+    manual_stock = manual_inventory(8, "wayfair_backend_manual", "synthetic-cutoff")
+    dispatched, received, damaged, pending = 10, 8, 0, 1
+    discrepancy = dispatched - received - damaged - pending
+    record("C27_manual_stock_and_receipt_discrepancy", missing_stock["qty"] is None
+           and manual_stock["qty"] == 8 and discrepancy == 1
+           and dispatched == received + damaged + pending + discrepancy
+           and rejects(lambda: manual_inventory(10, "completed_transfer", "synthetic-cutoff")),
+           "unknown inventory stays None; manual8 is a dated snapshot; dispatched10=received8+pending1+discrepancy1, not on-hand10")
+
+    ramp = cohort_run_rate(12, 6, 0)
+    censored = cohort_run_rate(12, 6, 2)
+    record("C28_new_cohort_observation_and_censoring", ramp["rate"] == 2
+           and censored["rate"] is None and rejects(lambda: cohort_run_rate(0, 0, 0)),
+           "new cohort12/6 gives scenario rate2; censored exposure yields unknown; no launched/observable days is not zero demand")
+
+    # Synthetic elapsed days and stock coverage: no probability distribution assumed.
+    coverage_days, lead_days = 90, (60, 120)
+    gaps = tuple(max(0, lead - coverage_days) for lead in lead_days)
+    record("C29_lead_time_bounds_not_fixed_arrival", gaps == (0, 30)
+           and lead_days[0] <= lead_days[1] and len(set(lead_days)) == 2,
+           "coverage90 versus lead60..120 yields shortage-duration scenarios0..30 days; not a fixed ETA or probability")
+
+    cohort = {"branch": "USTX", "operator_id": "op-new", "listing_id": "listing-A",
+              "operator_start_date": "2026-06-01", "listing_launch_date": "2026-07-01", "demand_cohort": "ramp"}
+    record("C30_operator_listing_cohort_keys", cohort_key(cohort) != cohort_key({**cohort, "branch": "USNJ"})
+           and cohort_key(cohort) != cohort_key({**cohort, "operator_id": "op-other"})
+           and rejects(lambda: cohort_key({**cohort, "listing_launch_date": None})),
+           "branch/operator/listing/start/launch/cohort retained; missing dimension rejected rather than pooled")
+
+    gross = outbound_gross([("original", "sale", 9), ("sale-from-return-named-warehouse", "sale", 1),
+                            ("replacement", "replacement", 2), ("returned", "customer_return_receipt", 1)])
+    accepted_return_after_cutoff = 1
+    snapshot_before_return, snapshot_already_includes_return = 5, 6
+    record("C31_gross_replacement_and_return_balance", gross == 12
+           and gross - accepted_return_after_cutoff == 11
+           and return_stock_balance(snapshot_before_return, [("R", 1, False, True)]) == 6
+           and return_stock_balance(snapshot_already_includes_return, [("R", 1, True, True)]) == 6
+           and return_stock_balance(snapshot_before_return, [("R", 1, False, False)]) == 5
+           and rejects(lambda: return_stock_balance(5, [("R", 1, None, True)]))
+           and rejects(lambda: return_stock_balance(5, [("R", 1, False, True), ("R", 1, False, True)]))
+           and rejects(lambda: outbound_gross([("bad", "unknown", 1)])),
+           "sales9+positive-sale-from-return-warehouse1+replacement2=gross12; customer-return-receipt1 gives historical net11 OR stock5->6, never another snapshot deduction")
+
+    inputs = [("A", 3), ("B", 2), ("C", 4)]
+    dispositions = [("A", 3, "family"), ("B", 2, "pending"), ("C", 4, "out_of_scope")]
+    record("C32_every_input_has_one_disposition", reconcile_dispositions(inputs, dispositions) == 9
+           and rejects(lambda: reconcile_dispositions(inputs, dispositions[:-1]))
+           and rejects(lambda: reconcile_dispositions(inputs, dispositions + [dispositions[0]]))
+           and rejects(lambda: reconcile_dispositions(inputs, [("X", 3, "family"), *dispositions[1:]])),
+           "3 unique source rows/9 units reconciled; missing/duplicate/equal-total-wrong-ID rejected; pending preserved")
+
+    transfers = [("T1", "sku-A", "month-1", "USNJ", 6, True),
+                 ("T2", "sku-A", "month-1", "USTX", 4, True),
+                 ("T3", "sku-A", "month-1", "USTX", 99, False),
+                 ("T4", "sku-B", "month-1", "USNJ", 99, True)]
+    allocation = supply_attribution(transfers, "sku-A", "month-1")
+    record("C33_supply_attribution_not_fixed_branch", allocation["weights"] == {"USNJ": Decimal("0.6"), "USTX": Decimal("0.4")}
+           and sum(allocation["weights"].values()) == 1
+           and supply_attribution(transfers, "sku-A", "month-2")["weights"] is None
+           and rejects(lambda: supply_attribution(transfers + [transfers[0]], "sku-A", "month-1")),
+           "SKU/window historical dispatched6:4 gives attribution weights, not receipt or future stock ownership; missing next period stays unknown")
+
+    scenarios = [return_scenario("33719", "33647", "0.05", share, "triangle") for share in ("0", "0.5", "1")]
+    record("C34_triangle_return_assumption_sensitivity", [x["net"] for x in scenarios] == [Decimal("33719"), Decimal("32877.825"), Decimal("32036.65")]
+           and all(x["status"] == "assumption" for x in scenarios)
+           and return_scenario("33719", "33647", "0", "1", "triangle")["net"] == Decimal("33719")
+           and rejects(lambda: return_scenario("33719", "33647", "0.05", "1", "another-family")),
+           "triangle-only 5% assumption with restock0/50/100 gives33719/32877.825/32036.65; not facts or integer bookings")
+
+    record("C35_suffix_not_replacement_authority", replacement_classification(False, True, []) is False
+           and replacement_classification(True, False, []) is True
+           and replacement_classification(None, True, []) == "unknown"
+           and replacement_classification(False, True, [True]) == "conflict",
+           "M hint alone cannot decide; no-M explicit replacement counts; conflicting rule/flag isolated without changing known outbound gross")
 
     print(json.dumps({"scope": "synthetic contract oracle only", "total": len(report),
                       "passed": len(report), "failed": 0, "skipped": 0, "cases": report},
