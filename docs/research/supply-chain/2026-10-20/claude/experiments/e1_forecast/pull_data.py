@@ -4,11 +4,16 @@
 
 只读 Google Sheets；输出到 experiments/e1_forecast/data/。
 不写任何业务系统。
+
+月份归属统一用「发货日期」解析（支持 YYYY-MM-DD / YYYY/M/D / datetime），
+不用月表名，也不用 date[:7]。解析失败的行保留在 raw 并把 month 置空，
+绝不当作 0 需求。
 """
 
 import csv
 import re
 import time
+from datetime import datetime
 from pathlib import Path
 
 import gspread
@@ -34,6 +39,33 @@ MONTHS = [
     for m in range(1, 13)
     if (y, m) <= (2026, 7)
 ]
+DATE_PATTERNS = [
+    re.compile(r"^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T].*)?$"),
+    re.compile(r"^(\d{4})/(\d{1,2})/(\d{1,2})(?:[ T].*)?$"),
+    re.compile(r"^(\d{4})\.(\d{1,2})\.(\d{1,2})(?:[ T].*)?$"),
+    re.compile(r"^(\d{4})年(\d{1,2})月(\d{1,2})日?(?:[ T].*)?$"),
+    re.compile(r"^(\d{4})-(\d{1,2})$"),
+]
+
+
+def parse_month(value):
+    """把 发货日期 解析为 YYYY-MM；失败返回 None。"""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.strftime("%Y-%m")
+    s = str(value).strip()
+    if not s:
+        return None
+    for pat in DATE_PATTERNS:
+        m = pat.match(s)
+        if m:
+            y, mo = int(m.group(1)), int(m.group(2))
+            return f"{y}-{mo:02d}" if 1 <= mo <= 12 else None
+    try:
+        return datetime.fromisoformat(s.replace("/", "-")).strftime("%Y-%m")
+    except ValueError:
+        return None
 
 
 def col_letter(idx: int) -> str:
@@ -106,6 +138,7 @@ def main():
         cols = [[r[0] if r else "" for r in vr] for vr in res]
         dates, skus, qtys, chans, whs = cols
         n_hit = 0
+        n_bad_date = 0
         for d, s, q, c, w in zip(dates, skus, qtys, chans, whs):
             s = str(s).strip()
             if s not in TARGET or not str(d).strip():
@@ -114,12 +147,17 @@ def main():
                 qn = int(float(q))
             except (TypeError, ValueError):
                 qn = 0
+            month = parse_month(d)
+            if month is None:
+                n_bad_date += 1
             rows.append(
-                (str(d).strip(), s, qn, str(c).strip(), str(w).strip(), f"{y}-{m:02d}")
+                (str(d).strip(), s, qn, str(c).strip(), str(w).strip(), month or "")
             )
             n_hit += 1
-        log.append(f"{name}: {cands[0]} rows={n} hits={n_hit}")
-        print(f"{name}: hits={n_hit}", flush=True)
+        log.append(
+            f"{name}: {cands[0]} rows={n} hits={n_hit} bad_date={n_bad_date}"
+        )
+        print(f"{name}: hits={n_hit} bad_date={n_bad_date}", flush=True)
 
     raw_path = OUT / "wedge_raw.csv"
     with raw_path.open("w", newline="", encoding="utf-8") as f:

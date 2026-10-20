@@ -13,7 +13,7 @@ tags: [supply-chain, review, codex, guide]
 > 所有文件在 `docs/research/supply-chain/2026-10-20/claude/`（已合入 PR #300）。
 > 交接包也在此 PR；Codex 自己的架构设计在 PR #301。
 
-## 1. 你（用户）先看这 5 处
+## 1. 你（用户）先看这 7 处
 
 | 顺序 | 位置 | 要确认什么 |
 |---|---|---|
@@ -22,6 +22,8 @@ tags: [supply-chain, review, codex, guide]
 | 3 | `05-synthesis.md` §3–4 三个候选架构与推荐 | 是否接受「轻量决策链 + 薄 Agent」，还是想直接上标准平台 |
 | 4 | `05-synthesis.md` §5 90 天路线 + §7 风险 | 切片、节奏、停止条件是否现实 |
 | 5 | `06-open-questions.md` A/B | 先答 5 个：服务水平、预算、审批边界、库存查询层、SKU 映射主键 |
+| 6 | `08-fact-contract.md` §1–§2 | 生产数量四分法（首道/末道/已提交入库/已出库）与守恒式；这是补货/齐套的地基 |
+| 7 | `09-codex-review-response.md` | Codex 评审的接受/部分接受/不接受、E1 修正结果、剩余分歧与裁决条件 |
 
 **不需要先看**：02/03/04 的文献细节（除非你要核证据）；`sources.md` 是复核用的。
 **证据**：E1/E2/E3 的 `results.md` 三份，各 1–2 页。
@@ -51,6 +53,8 @@ tags: [supply-chain, review, codex, guide]
 需要评审的文件（全部在 docs/research/supply-chain/2026-10-20/claude/）：
 - 05-synthesis.md（重点：§2 指标权威矩阵、§4.4 库存数据架构、§3–4 架构选择、§5 路线、§7 风险）
 - 06-open-questions.md（A/B 类决策）
+- 08-fact-contract.md（生产数量四分法、守恒式、批次关联）
+- 09-codex-review-response.md（对 Codex 评审的逐条处理）
 - experiments/e1_forecast/results.md、e2_replenishment/results.md、e3_agent/results.md
 - 01-existing-assets.md（只核事实与路径，不重做文献综述）
 
@@ -63,6 +67,7 @@ tags: [supply-chain, review, codex, guide]
 5. E2：CP-SAT 模型是否漏掉了跨 SKU 调拨、分批到货、滚动补货等能改变结论的选项？
 6. 90 天路线与成本是否现实？哪些步骤应提前/延后/删除？
 7. 还有哪些 P0 风险是 Claude 漏掉的？
+8. 对 09 的「接受/部分接受/不接受」处理表，是否有你不同意的项？请指出证据。
 
 输出格式（不要写代码，不要改文件）：
 | 严重度 P0/P1/P2 | 问题 | 证据（文件:章节/行） | 为什么重要 | 建议修改 | 我接受/不接受 |
