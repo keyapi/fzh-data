@@ -114,3 +114,50 @@ pb_orders/data/
 pb_orders/runtime/
 # 部署时按机器覆盖的 Compose 变量（可能含服务器地址）
 pb_orders/.env
+
+# erpnext_bi 本地工具与临时数据（不入仓）
+erpnext_bi/bin/
+erpnext_bi/tmp/
+# erpnext_bi 抓取的真实业务快照（含真实客户/订单/商品，禁入库）
+erpnext_bi/.orders.json
+erpnext_bi/.test_so.json
+erpnext_bi/dashboard_snapshot.html
+
+# ===== 敏感信息硬拦截（2026-10-20 收敛，任何情况下不得入库）=====
+# 密钥/证书类文件
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+credentials.*
+secrets.*
+config.local.*
+# 文件名含敏感关键词一律拦截（含 password/token/secret/api_key 的变体）
+*password*
+*passwd*
+*token*
+*secret*
+*api_key*
+*apikey*
+# 已知明文凭证载体：AI 会话记忆（历史曾写入 ERP 生产 api_key/secret）
+.workbuddy/
+.codex_tmp/
+# 会话 Cookie / 浏览器配置
+*.cookie.txt
+*.cookies.json
+**/cookies.json
+
+# ===== 第三方二进制依赖（体积大，按需本地安装）=====
+qms/training/_libs/
+
+# ===== 本地截图/临时产物（可能含业务数据，先不入仓）=====
+/tongtu-captcha.png
+/tongtu-inventory.png
+/tongtu_full.png
+/tongtu_page.png
+/dingtalk-qrcode.png
+/gpt-chat.png
+/gpt-response.png
+/playground.png
+qms/training/report_p1.png
