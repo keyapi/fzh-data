@@ -43,9 +43,11 @@ tags: [supply-chain, baseline, g0, g1, version]
 
 ### 2.1 输入（最小）— G1 候选范围（待业务确认）
 
-> **2026-10-20 口径更正**：KS0001/KS0248 全部 `绍兴发货方式=皮壳`；base 与 `-Cover` 都是皮壳相关码。
-> G1 需求按**皮壳数量**算；给分公司发皮壳对应哪些仓（Daneey 皮壳/半成品、CENTRADE、波兰）待确认。
-> 详见 `experiments/g1_contract/mapping_process.md`；下方“完成品/皮壳仓排除”表述作废。
+> **2026-10-20 口径更正（按公司架构）**：绍兴生产皮壳 → USNJ(CENTRADE)、USTX(DANEEY)、
+> 波兰分公司填充/压缩/包装/发货；最终销售多数是成品。三角靠枕类绍兴只发皮壳，成品销售 1:1 消耗皮壳；
+> `-Cover` 是只卖皮壳的例外。**皮壳仓是分公司仓，不是皮壳产品仓**。
+> G1 需求 = family 销售（base + Cover）1:1 皮壳；分公司皮壳库存/在途做净算。
+> 只剩 WayfairCG/其他 3PL 是否计入待确认。详见 `experiments/g1_contract/mapping_process.md`。
 
 | 项 | 候选取值 | 说明 |
 |---|---|---|

@@ -71,7 +71,8 @@ tags: [supply-chain, research, sources]
 | S1-040 | EN 测试环境没有真实 SO/PP/WO/JC/SE/DN；G1 必须用生产 API 只读 | 用户 2026-10-20 说明 | C | 2026-10-20 | 不写生产 | A | 13 §1、11 §2.2 |
 | S1-041 | G1a 两仓完成品映射覆盖 99.18% 行/98.84% 件；0 歧义；未匹配 155 行/224 件 | `experiments/g1_contract/results.md` | C | 2026-10-20 | BOM 20261016：3,700 行/1,739 family 行 | A | G1a、05 §5 |
 | S1-042 | 763 全仓 vs 155 两仓；155 中 31 行尾缀（30 Cover/1 out）、124 行 P2 非 family；真 family 缺口 0 | `experiments/g1_contract/out/missing_analysis.json` | C | 2026-10-20 | P1/P2 足够，Colab 4.2 未介入 | A | G1a §5 |
-| S1-043 | BOM 表 KS0001/KS0248 1,739 行全部 `绍兴发货方式=皮壳`；base 1,200 / Cover 287 / out 2 / 空 142 / 删除 108 | `EN产品BOM成本列表20261016.xlsx` 只读核对 | C | 2026-10-20 | base 不能当成品；皮壳口径待确认 | A | mapping_process |
+| S1-043 | BOM 表 KS0001/KS0248 1,739 行全部 `绍兴发货方式=皮壳`；base 1,200 / Cover 287 / out 2 / 空 142 / 删除 108 | `EN产品BOM成本列表20261016.xlsx` 只读核对 | C | 2026-10-20 | base 不是成品；皮壳口径待确认 | A | mapping_process |
+| S1-044 | 公司架构：绍兴生产皮壳/内胆/半成品 → USNJ(CENTRADE)、USTX(DANEEY)、波兰分公司填充/压缩/包装/发货；最终销售多数成品 | `docs/company-context.md:14-29、27-29` | C | 2026-10-20 | 三角靠枕类只发皮壳；成品销售 1:1 消耗皮壳 | A | mapping_process §0、05/11/13 |
 
 ## 未找到项（N-###）
 

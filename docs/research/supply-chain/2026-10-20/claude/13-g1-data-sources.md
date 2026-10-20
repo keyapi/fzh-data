@@ -9,11 +9,12 @@ tags: [supply-chain, g1, data-source, mapping, tongtool, erpnext]
 
 # 13 — G1 数据来源与映射清单
 
-> **2026-10-20 口径更正（待确认）**：BOM 表里 KS0001/KS0248 **1,739 行全部是 `绍兴发货方式=皮壳`**；
-> base 码（1,200）与 `-Cover` 码（287）都可能是皮壳口径，**不能把 base 当成品**。
-> G1 的三角靠枕需求应以**皮壳数量**为准；给分公司发皮壳对应哪些仓（Daneey 皮壳/半成品、CENTRADE、波兰）
-> 待业务确认。下方“两仓完成品/皮壳仓排除”的旧表述作废；以
-> `experiments/g1_contract/mapping_process.md` 为准。
+> **2026-10-20 口径更正（按公司架构）**：`docs/company-context.md` 明确绍兴生产皮壳/内胆/半成品 →
+> USNJ(CENTRADE)、USTX(DANEEY)、波兰分公司做填充 PP 棉、压缩、包装、发货；最终卖给顾客的多数是成品。
+> 三角靠枕类绍兴只发皮壳，成品销售 1:1 消耗皮壳；`-Cover` 是只卖皮壳的例外。
+> **皮壳仓是分公司仓，不是“皮壳产品仓”**；其 family 销售行产品名也是「三角…靠枕」。
+> G1 需求 = family 销售（base + `-Cover`）1:1 皮壳，共 33,719 件/6 个月；分公司皮壳库存/在途做净算。
+> 只剩 WayfairCG/其他 3PL 是否计入待确认。详见 `experiments/g1_contract/mapping_process.md`。
 
 > 结论：**PR #304 是服务账号直读 GSheet 的 43 张月表，不是业务导出。**
 > G1 默认用「现有 GSheet + 本地成本文件 + 权威映射」，业务导出只作缺口兜底。

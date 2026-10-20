@@ -10,7 +10,8 @@ tags: [supply-chain, g1, mapping, coverage, tongtool, erpnext]
 # G1a — 本地映射覆盖率
 
 > **2026-10-20 更正**：本文件 v1 用“品类/产品名含三角”做主筛选，口径不对；
-> BOM 表里 KS0001/KS0248 **全部是 `绍兴发货方式=皮壳`**，base 码和 `-Cover` 码都可能是皮壳口径。
+> 按 `docs/company-context.md`，三角靠枕类绍兴只发皮壳，分公司填充/压缩/包装后卖成品；
+> 成品销售 1:1 消耗皮壳，`-Cover` 是只卖皮壳的例外；皮壳仓是分公司仓，不是皮壳产品仓。
 > **以 [mapping_process.md](mapping_process.md) 为准**；本步骤确认前不进入 G1b。
 > 下面的 99.18% 两仓完成品数字仅作历史记录，不是最终 family/皮壳口径。
 
