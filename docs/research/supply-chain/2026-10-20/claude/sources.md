@@ -56,6 +56,7 @@ tags: [supply-chain, research, sources]
 | S1-025 | E1 R01/R02 修正后：标签交集空；验证选 Croston 0.448；测试 TSB 0.511 / ens5 0.520 / naive 0.602 | `experiments/e1_forecast/results.md`（R01/R02 修正版） | C | 2026-10-20 | `label_overlap_check.pass=true`；bad_qty=0 | A | 05 §1、10 §2 |
 | S1-026 | G0 冻结基线：共同框架/事实契约/验收样例/决策表版本清单 + G1 门槛 | `11-common-baseline.md`、Codex #301 `5708609d` | C | 2026-10-20 | 标签 `supply-chain-g0-baseline-20261020` | A | 11 |
 | S1-027 | G1 切片：三角靠枕 family（KS0001 + KS0248）；通途 GSheet 品类可能叫「三角」 | 用户 2026-10-20 确认 | C | 2026-10-20 | 「EN上分类更精确…两者区别很小」 | A | 11 §2.1、05 §5、06 A7 |
+| S1-028 | 2026-04..09 月表可用、2026-10 缺失；三角品类主要仓 CENTRADE 1631 vs DANEEY 1586；品类值为「自产-三角靠枕-*」 | Google Sheets 只读核对（2026-09） | C | 2026-10-20 | 2026-09 三角 3963 行 / 4111 件 | A | 11 §2.1、06 B22 |
 
 ## 未找到项（N-###）
 
