@@ -1,0 +1,2402 @@
+{
+  "meta": {
+    "dataset_id": "wedge_pillow_20261016",
+    "as_of": "2026-10-16",
+    "input_sha256": "7d6e62323723e43ba6919f54f4b8e5b5970309efbd20c4f6f9cb4891fdba06f4",
+    "questions_sha256": "907edfb89cd69ac27ef3d13251b3d32cb0fcf074a2faef8b78dd4ced556668f3",
+    "agent": "e3_agent/agent.py",
+    "router_mode": "deterministic_keyword_slots",
+    "llm_calls": 0
+  },
+  "summary": {
+    "total_cases": 15,
+    "passed_cases": 15,
+    "answerable_correct": "10/10",
+    "answerable_rate": 1.0,
+    "ambiguous_clarified": "2/2",
+    "write_refused_with_safe_alternative": "1/1",
+    "out_of_scope_refused": "1/1",
+    "premise_conflict_corrected": "1/1",
+    "evidence_coverage": "10/10",
+    "value_accuracy": "11/11",
+    "value_accuracy_rate": 1.0,
+    "executed_tools": [
+      "monthly_sales",
+      "monthly_sales",
+      "stockout_windows",
+      "inventory",
+      "in_transit",
+      "coverage_months",
+      "recommend_order",
+      "explain_recommendation",
+      "compare_skus",
+      "recommend_order"
+    ],
+    "write_executions": 0,
+    "semantic_ambiguity_rate": 0.1333,
+    "router_unmatched_cases": 0,
+    "slot_unresolved_on_answerable": 0,
+    "pass": true,
+    "falsified": false,
+    "verdict": "PASS：语义层 + 确定性路由足以支撑该楔形切片；可以进入带人工确认的只读 Agent 试点。"
+  },
+  "cases": [
+    {
+      "id": "Q01",
+      "category": "answerable",
+      "question": "2878 在美中 Daneey 仓 2026 年 5 月的销量是多少？",
+      "expected_status": "answered",
+      "expected_values": {
+        "qty": 23
+      },
+      "status": "answered",
+      "tool": "monthly_sales",
+      "resolved_slots": {
+        "sku": "2878",
+        "warehouse": "美中-FZH-DANEEY",
+        "start": "2026-05",
+        "end": "2026-05",
+        "channel": "all"
+      },
+      "values": {
+        "qty": 23,
+        "months": [
+          "2026-05"
+        ],
+        "channel": "all",
+        "rows": [
+          {
+            "month": "2026-05",
+            "total": 23,
+            "channel_a": 15,
+            "other": 8,
+            "picked": 23
+          }
+        ]
+      },
+      "summary": "2878 在 美中-Daneey 仓、全部渠道、2026-05~2026-05 的销量合计为 23 件。",
+      "checks": {
+        "passed": true,
+        "status_ok": true,
+        "tool_ok": true,
+        "slots_ok": true,
+        "missing_ok": true,
+        "values_ok": true,
+        "evidence_ok": true,
+        "safe_alternative_ok": true,
+        "correction_ok": true,
+        "execution_ok": true,
+        "failures": []
+      },
+      "result": {
+        "status": "answered",
+        "question": "2878 在美中 Daneey 仓 2026 年 5 月的销量是多少？",
+        "summary": "2878 在 美中-Daneey 仓、全部渠道、2026-05~2026-05 的销量合计为 23 件。",
+        "resolved_slots": {
+          "sku": "2878",
+          "warehouse": "美中-FZH-DANEEY",
+          "start": "2026-05",
+          "end": "2026-05",
+          "channel": "all"
+        },
+        "values": {
+          "qty": 23,
+          "months": [
+            "2026-05"
+          ],
+          "channel": "all",
+          "rows": [
+            {
+              "month": "2026-05",
+              "total": 23,
+              "channel_a": 15,
+              "other": 8,
+              "picked": 23
+            }
+          ]
+        },
+        "plan": {
+          "plan_id": "ae2813e7b3e8",
+          "tool": "monthly_sales",
+          "params": {
+            "sku": "2878",
+            "warehouse": "美中-FZH-DANEEY",
+            "start": "2026-05",
+            "end": "2026-05",
+            "channel": "all"
+          },
+          "read_only": true,
+          "metric": "monthly_sales",
+          "state": "readback_verified",
+          "trace": [
+            {
+              "state": "prepared",
+              "by": "agent"
+            },
+            {
+              "state": "confirmed",
+              "by": "auto_read_only_eval"
+            },
+            {
+              "state": "executed",
+              "tool": "monthly_sales",
+              "read_only": true
+            },
+            {
+              "state": "readback_verified",
+              "method": "re-execute_and_compare"
+            }
+          ],
+          "confirm_mode": "auto_read_only_eval"
+        },
+        "evidence": {
+          "tool": "monthly_sales",
+          "params": {
+            "sku": "2878",
+            "warehouse": "美中-FZH-DANEEY",
+            "start": "2026-05",
+            "end": "2026-05",
+            "channel": "all"
+          },
+          "data_source": "通途订单 Google Sheet（通途订单202603–202609）",
+          "authority": "通途订单 Google Sheet（通途订单YYYYMM）",
+          "metric_definition": "指定仓库、渠道、月份区间内，通途『发货数量』求和；按自然月拆分。",
+          "values": {
+            "qty": 23,
+            "months": [
+              "2026-05"
+            ],
+            "channel": "all",
+            "rows": [
+              {
+                "month": "2026-05",
+                "total": 23,
+                "channel_a": 15,
+                "other": 8,
+                "picked": 23
+              }
+            ]
+          },
+          "computation": [
+            "月份区间：2026-05 ~ 2026-05（1 个月）",
+            "渠道口径：all",
+            "逐月求和：23 = 23 件"
+          ],
+          "readback": {
+            "status": "verified",
+            "method": "re-execute_and_compare",
+            "matches": true
+          },
+          "dataset_id": "wedge_pillow_20261016",
+          "as_of": "2026-10-16",
+          "numbers_computed_by": "tool_impl"
+        },
+        "executed": true,
+        "router": {
+          "mode": "deterministic_keyword_slots",
+          "selected_rule": "R11_sales",
+          "confidence": 1.0,
+          "matched_rules": [
+            {
+              "id": "R11_sales",
+              "kind": "tool",
+              "tool": "monthly_sales",
+              "description": "月销量",
+              "pattern": "销量|卖了多少|卖了|销售|发货量|卖得"
+            }
+          ],
+          "slot_evidence": {
+            "sku_tokens": [
+              "2878"
+            ],
+            "warehouse_token": "美中",
+            "channel_token": null,
+            "period_token": "2026 年 5 月",
+            "coverage_token": null,
+            "metric": "monthly_sales"
+          }
+        }
+      }
+    },
+    {
+      "id": "Q02",
+      "category": "answerable",
+      "question": "2876 在美中 Daneey 仓通过零售客户渠道 2026 年 3–9 月的总销量是多少？",
+      "expected_status": "answered",
+      "expected_values": {
+        "qty": 24
+      },
+      "status": "answered",
+      "tool": "monthly_sales",
+      "resolved_slots": {
+        "sku": "2876",
+        "warehouse": "美中-FZH-DANEEY",
+        "start": "2026-03",
+        "end": "2026-09",
+        "channel": "channel_a"
+      },
+      "values": {
+        "qty": 24,
+        "months": [
+          "2026-03",
+          "2026-04",
+          "2026-05",
+          "2026-06",
+          "2026-07",
+          "2026-08",
+          "2026-09"
+        ],
+        "channel": "channel_a",
+        "rows": [
+          {
+            "month": "2026-03",
+            "total": 3,
+            "channel_a": 3,
+            "other": 0,
+            "picked": 3
+          },
+          {
+            "month": "2026-04",
+            "total": 3,
+            "channel_a": 3,
+            "other": 0,
+            "picked": 3
+          },
+          {
+            "month": "2026-05",
+            "total": 10,
+            "channel_a": 5,
+            "other": 5,
+            "picked": 5
+          },
+          {
+            "month": "2026-06",
+            "total": 4,
+            "channel_a": 0,
+            "other": 4,
+            "picked": 0
+          },
+          {
+            "month": "2026-07",
+            "total": 8,
+            "channel_a": 7,
+            "other": 1,
+            "picked": 7
+          },
+          {
+            "month": "2026-08",
+            "total": 6,
+            "channel_a": 3,
+            "other": 3,
+            "picked": 3
+          },
+          {
+            "month": "2026-09",
+            "total": 7,
+            "channel_a": 3,
+            "other": 4,
+            "picked": 3
+          }
+        ]
+      },
+      "summary": "2876 在 美中-Daneey 仓、零售客户渠道（匿名）、2026-03~2026-09 的销量合计为 24 件。",
+      "checks": {
+        "passed": true,
+        "status_ok": true,
+        "tool_ok": true,
+        "slots_ok": true,
+        "missing_ok": true,
+        "values_ok": true,
+        "evidence_ok": true,
+        "safe_alternative_ok": true,
+        "correction_ok": true,
+        "execution_ok": true,
+        "failures": []
+      },
+      "result": {
+        "status": "answered",
+        "question": "2876 在美中 Daneey 仓通过零售客户渠道 2026 年 3–9 月的总销量是多少？",
+        "summary": "2876 在 美中-Daneey 仓、零售客户渠道（匿名）、2026-03~2026-09 的销量合计为 24 件。",
+        "resolved_slots": {
+          "sku": "2876",
+          "warehouse": "美中-FZH-DANEEY",
+          "start": "2026-03",
+          "end": "2026-09",
+          "channel": "channel_a"
+        },
+        "values": {
+          "qty": 24,
+          "months": [
+            "2026-03",
+            "2026-04",
+            "2026-05",
+            "2026-06",
+            "2026-07",
+            "2026-08",
+            "2026-09"
+          ],
+          "channel": "channel_a",
+          "rows": [
+            {
+              "month": "2026-03",
+              "total": 3,
+              "channel_a": 3,
+              "other": 0,
+              "picked": 3
+            },
+            {
+              "month": "2026-04",
+              "total": 3,
+              "channel_a": 3,
+              "other": 0,
+              "picked": 3
+            },
+            {
+              "month": "2026-05",
+              "total": 10,
+              "channel_a": 5,
+              "other": 5,
+              "picked": 5
+            },
+            {
+              "month": "2026-06",
+              "total": 4,
+              "channel_a": 0,
+              "other": 4,
+              "picked": 0
+            },
+            {
+              "month": "2026-07",
+              "total": 8,
+              "channel_a": 7,
+              "other": 1,
+              "picked": 7
+            },
+            {
+              "month": "2026-08",
+              "total": 6,
+              "channel_a": 3,
+              "other": 3,
+              "picked": 3
+            },
+            {
+              "month": "2026-09",
+              "total": 7,
+              "channel_a": 3,
+              "other": 4,
+              "picked": 3
+            }
+          ]
+        },
+        "plan": {
+          "plan_id": "567077305702",
+          "tool": "monthly_sales",
+          "params": {
+            "sku": "2876",
+            "warehouse": "美中-FZH-DANEEY",
+            "start": "2026-03",
+            "end": "2026-09",
+            "channel": "channel_a"
+          },
+          "read_only": true,
+          "metric": "monthly_sales",
+          "state": "readback_verified",
+          "trace": [
+            {
+              "state": "prepared",
+              "by": "agent"
+            },
+            {
+              "state": "confirmed",
+              "by": "auto_read_only_eval"
+            },
+            {
+              "state": "executed",
+              "tool": "monthly_sales",
+              "read_only": true
+            },
+            {
+              "state": "readback_verified",
+              "method": "re-execute_and_compare"
+            }
+          ],
+          "confirm_mode": "auto_read_only_eval"
+        },
+        "evidence": {
+          "tool": "monthly_sales",
+          "params": {
+            "sku": "2876",
+            "warehouse": "美中-FZH-DANEEY",
+            "start": "2026-03",
+            "end": "2026-09",
+            "channel": "channel_a"
+          },
+          "data_source": "通途订单 Google Sheet（通途订单202603–202609）",
+          "authority": "通途订单 Google Sheet（通途订单YYYYMM）",
+          "metric_definition": "指定仓库、渠道、月份区间内，通途『发货数量』求和；按自然月拆分。",
+          "values": {
+            "qty": 24,
+            "months": [
+              "2026-03",
+              "2026-04",
+              "2026-05",
+              "2026-06",
+              "2026-07",
+              "2026-08",
+              "2026-09"
+            ],
+            "channel": "channel_a",
+            "rows": [
+              {
+                "month": "2026-03",
+                "total": 3,
+                "channel_a": 3,
+                "other": 0,
+                "picked": 3
+              },
+              {
+                "month": "2026-04",
+                "total": 3,
+                "channel_a": 3,
+                "other": 0,
+                "picked": 3
+              },
+              {
+                "month": "2026-05",
+                "total": 10,
+                "channel_a": 5,
+                "other": 5,
+                "picked": 5
+              },
+              {
+                "month": "2026-06",
+                "total": 4,
+                "channel_a": 0,
+                "other": 4,
+                "picked": 0
+              },
+              {
+                "month": "2026-07",
+                "total": 8,
+                "channel_a": 7,
+                "other": 1,
+                "picked": 7
+              },
+              {
+                "month": "2026-08",
+                "total": 6,
+                "channel_a": 3,
+                "other": 3,
+                "picked": 3
+              },
+              {
+                "month": "2026-09",
+                "total": 7,
+                "channel_a": 3,
+                "other": 4,
+                "picked": 3
+              }
+            ]
+          },
+          "computation": [
+            "月份区间：2026-03 ~ 2026-09（7 个月）",
+            "渠道口径：channel_a",
+            "逐月求和：3 + 3 + 5 + 0 + 7 + 3 + 3 = 24 件"
+          ],
+          "readback": {
+            "status": "verified",
+            "method": "re-execute_and_compare",
+            "matches": true
+          },
+          "dataset_id": "wedge_pillow_20261016",
+          "as_of": "2026-10-16",
+          "numbers_computed_by": "tool_impl"
+        },
+        "executed": true,
+        "router": {
+          "mode": "deterministic_keyword_slots",
+          "selected_rule": "R11_sales",
+          "confidence": 1.0,
+          "matched_rules": [
+            {
+              "id": "R11_sales",
+              "kind": "tool",
+              "tool": "monthly_sales",
+              "description": "月销量",
+              "pattern": "销量|卖了多少|卖了|销售|发货量|卖得"
+            }
+          ],
+          "slot_evidence": {
+            "sku_tokens": [
+              "2876"
+            ],
+            "warehouse_token": "美中",
+            "channel_token": "零售客户",
+            "period_token": "2026 年 3–9 月",
+            "coverage_token": null,
+            "metric": "monthly_sales"
+          }
+        }
+      }
+    },
+    {
+      "id": "Q03",
+      "category": "answerable",
+      "question": "2880 的断货窗口是什么时候？",
+      "expected_status": "answered",
+      "expected_values": {
+        "stockout_start": "2026-03-12",
+        "stockout_end": "2026-05-08"
+      },
+      "status": "answered",
+      "tool": "stockout_windows",
+      "resolved_slots": {
+        "sku": "2880"
+      },
+      "values": {
+        "has_stockout": true,
+        "window_count": 1,
+        "windows": [
+          {
+            "start": "2026-03-12",
+            "end": "2026-05-08",
+            "end_type": "arrival",
+            "evidence": [
+              "Notion 任务页",
+              "客户邮件（已匿名）",
+              "check0stock 差分"
+            ]
+          }
+        ],
+        "stockout_start": "2026-03-12",
+        "stockout_end": "2026-05-08"
+      },
+      "summary": "2880 的断货窗口：2026-03-12 → 2026-05-08。",
+      "checks": {
+        "passed": true,
+        "status_ok": true,
+        "tool_ok": true,
+        "slots_ok": true,
+        "missing_ok": true,
+        "values_ok": true,
+        "evidence_ok": true,
+        "safe_alternative_ok": true,
+        "correction_ok": true,
+        "execution_ok": true,
+        "failures": []
+      },
+      "result": {
+        "status": "answered",
+        "question": "2880 的断货窗口是什么时候？",
+        "summary": "2880 的断货窗口：2026-03-12 → 2026-05-08。",
+        "resolved_slots": {
+          "sku": "2880"
+        },
+        "values": {
+          "has_stockout": true,
+          "window_count": 1,
+          "windows": [
+            {
+              "start": "2026-03-12",
+              "end": "2026-05-08",
+              "end_type": "arrival",
+              "evidence": [
+                "Notion 任务页",
+                "客户邮件（已匿名）",
+                "check0stock 差分"
+              ]
+            }
+          ],
+          "stockout_start": "2026-03-12",
+          "stockout_end": "2026-05-08"
+        },
+        "plan": {
+          "plan_id": "9920a7d88999",
+          "tool": "stockout_windows",
+          "params": {
+            "sku": "2880"
+          },
+          "read_only": true,
+          "metric": "stockout_windows",
+          "state": "readback_verified",
+          "trace": [
+            {
+              "state": "prepared",
+              "by": "agent"
+            },
+            {
+              "state": "confirmed",
+              "by": "auto_read_only_eval"
+            },
+            {
+              "state": "executed",
+              "tool": "stockout_windows",
+              "read_only": true
+            },
+            {
+              "state": "readback_verified",
+              "method": "re-execute_and_compare"
+            }
+          ],
+          "confirm_mode": "auto_read_only_eval"
+        },
+        "evidence": {
+          "tool": "stockout_windows",
+          "params": {
+            "sku": "2880"
+          },
+          "data_source": "Notion 任务页 + 客户邮件（匿名） + check0stock 差分",
+          "authority": "Notion 任务页 + 客户邮件 + check0stock 差分，三方交叉",
+          "metric_definition": "SKU 级断货事件：开始日期 → 到货/恢复发货日期。",
+          "values": {
+            "has_stockout": true,
+            "window_count": 1,
+            "windows": [
+              {
+                "start": "2026-03-12",
+                "end": "2026-05-08",
+                "end_type": "arrival",
+                "evidence": [
+                  "Notion 任务页",
+                  "客户邮件（已匿名）",
+                  "check0stock 差分"
+                ]
+              }
+            ],
+            "stockout_start": "2026-03-12",
+            "stockout_end": "2026-05-08"
+          },
+          "computation": [
+            "断货窗口为 SKU 级事件，来自 Notion / 客户邮件 / check0stock 三方交叉。"
+          ],
+          "readback": {
+            "status": "verified",
+            "method": "re-execute_and_compare",
+            "matches": true
+          },
+          "dataset_id": "wedge_pillow_20261016",
+          "as_of": "2026-10-16",
+          "numbers_computed_by": "tool_impl"
+        },
+        "executed": true,
+        "router": {
+          "mode": "deterministic_keyword_slots",
+          "selected_rule": "R05_stockout",
+          "confidence": 1.0,
+          "matched_rules": [
+            {
+              "id": "R05_stockout",
+              "kind": "tool",
+              "tool": "stockout_windows",
+              "description": "断货窗口",
+              "pattern": "断货|缺货|断供|out\\s*of\\s*stock"
+            }
+          ],
+          "slot_evidence": {
+            "sku_tokens": [
+              "2880"
+            ],
+            "warehouse_token": null,
+            "channel_token": null,
+            "period_token": null,
+            "coverage_token": null,
+            "metric": null
+          }
+        }
+      }
+    },
+    {
+      "id": "Q04",
+      "category": "answerable",
+      "question": "2878 当前在美中 Daneey 仓有多少可用库存？",
+      "expected_status": "answered",
+      "expected_values": {
+        "available": 4
+      },
+      "status": "answered",
+      "tool": "inventory",
+      "resolved_slots": {
+        "sku": "2878",
+        "warehouse": "美中-FZH-DANEEY"
+      },
+      "values": {
+        "available": 4,
+        "warehouse": "美中-FZH-DANEEY",
+        "warehouses": [
+          "美中-FZH-DANEEY"
+        ]
+      },
+      "summary": "2878 在 美中-Daneey 仓 的通途可用库存为 4 件。",
+      "checks": {
+        "passed": true,
+        "status_ok": true,
+        "tool_ok": true,
+        "slots_ok": true,
+        "missing_ok": true,
+        "values_ok": true,
+        "evidence_ok": true,
+        "safe_alternative_ok": true,
+        "correction_ok": true,
+        "execution_ok": true,
+        "failures": []
+      },
+      "result": {
+        "status": "answered",
+        "question": "2878 当前在美中 Daneey 仓有多少可用库存？",
+        "summary": "2878 在 美中-Daneey 仓 的通途可用库存为 4 件。",
+        "resolved_slots": {
+          "sku": "2878",
+          "warehouse": "美中-FZH-DANEEY"
+        },
+        "values": {
+          "available": 4,
+          "warehouse": "美中-FZH-DANEEY",
+          "warehouses": [
+            "美中-FZH-DANEEY"
+          ]
+        },
+        "plan": {
+          "plan_id": "d624b491b777",
+          "tool": "inventory",
+          "params": {
+            "sku": "2878",
+            "warehouse": "美中-FZH-DANEEY"
+          },
+          "read_only": true,
+          "metric": "inventory",
+          "state": "readback_verified",
+          "trace": [
+            {
+              "state": "prepared",
+              "by": "agent"
+            },
+            {
+              "state": "confirmed",
+              "by": "auto_read_only_eval"
+            },
+            {
+              "state": "executed",
+              "tool": "inventory",
+              "read_only": true
+            },
+            {
+              "state": "readback_verified",
+              "method": "re-execute_and_compare"
+            }
+          ],
+          "confirm_mode": "auto_read_only_eval"
+        },
+        "evidence": {
+          "tool": "inventory",
+          "params": {
+            "sku": "2878",
+            "warehouse": "美中-FZH-DANEEY"
+          },
+          "data_source": "通途 ERP2 API erp2_stocks_stocksquery（逐仓）",
+          "authority": "通途 ERP2 API erp2_stocks_stocksquery（逐仓）",
+          "metric_definition": "通途分仓『可用库存』。报溢前可用 0 是常态，但仍是唯一可用口径。",
+          "values": {
+            "available": 4,
+            "warehouse": "美中-FZH-DANEEY",
+            "warehouses": [
+              "美中-FZH-DANEEY"
+            ]
+          },
+          "computation": [
+            "取通途分仓可用库存；EN Bin 与 SO 未交量均不采用。",
+            "可用库存 = 4 件。"
+          ],
+          "readback": {
+            "status": "verified",
+            "method": "re-execute_and_compare",
+            "matches": true
+          },
+          "dataset_id": "wedge_pillow_20261016",
+          "as_of": "2026-10-16",
+          "numbers_computed_by": "tool_impl"
+        },
+        "executed": true,
+        "router": {
+          "mode": "deterministic_keyword_slots",
+          "selected_rule": "R10_inventory",
+          "confidence": 1.0,
+          "matched_rules": [
+            {
+              "id": "R10_inventory",
+              "kind": "tool",
+              "tool": "inventory",
+              "description": "通途分仓库存",
+              "pattern": "库存|可用|仓里有|剩多少|还有多少"
+            }
+          ],
+          "slot_evidence": {
+            "sku_tokens": [
+              "2878"
+            ],
+            "warehouse_token": "美中",
+            "channel_token": null,
+            "period_token": null,
+            "coverage_token": null,
+            "metric": "inventory"
+          }
+        }
+      }
+    },
+    {
+      "id": "Q05",
+      "category": "answerable",
+      "question": "2876 在美中 Daneey 仓的在途数量是多少？",
+      "expected_status": "answered",
+      "expected_values": {
+        "in_transit": 6,
+        "po": "PO021724"
+      },
+      "status": "answered",
+      "tool": "in_transit",
+      "resolved_slots": {
+        "sku": "2876",
+        "warehouse": "美中-FZH-DANEEY"
+      },
+      "values": {
+        "in_transit": 6,
+        "warehouse": "美中-FZH-DANEEY",
+        "warehouses": [
+          "美中-FZH-DANEEY"
+        ],
+        "po": "PO021724",
+        "purchase_orders": [
+          {
+            "po": "PO021724",
+            "order_date": "2026-09-23",
+            "qty": 6,
+            "warehouse": "美中-FZH-DANEEY",
+            "arrival_date": null,
+            "status": "未到货（到货日未填）"
+          }
+        ]
+      },
+      "summary": "2876 在 美中-Daneey 仓 的在途为 6 件，采购单 PO021724。",
+      "checks": {
+        "passed": true,
+        "status_ok": true,
+        "tool_ok": true,
+        "slots_ok": true,
+        "missing_ok": true,
+        "values_ok": true,
+        "evidence_ok": true,
+        "safe_alternative_ok": true,
+        "correction_ok": true,
+        "execution_ok": true,
+        "failures": []
+      },
+      "result": {
+        "status": "answered",
+        "question": "2876 在美中 Daneey 仓的在途数量是多少？",
+        "summary": "2876 在 美中-Daneey 仓 的在途为 6 件，采购单 PO021724。",
+        "resolved_slots": {
+          "sku": "2876",
+          "warehouse": "美中-FZH-DANEEY"
+        },
+        "values": {
+          "in_transit": 6,
+          "warehouse": "美中-FZH-DANEEY",
+          "warehouses": [
+            "美中-FZH-DANEEY"
+          ],
+          "po": "PO021724",
+          "purchase_orders": [
+            {
+              "po": "PO021724",
+              "order_date": "2026-09-23",
+              "qty": 6,
+              "warehouse": "美中-FZH-DANEEY",
+              "arrival_date": null,
+              "status": "未到货（到货日未填）"
+            }
+          ]
+        },
+        "plan": {
+          "plan_id": "0c6bb27bf3c5",
+          "tool": "in_transit",
+          "params": {
+            "sku": "2876",
+            "warehouse": "美中-FZH-DANEEY"
+          },
+          "read_only": true,
+          "metric": "in_transit",
+          "state": "readback_verified",
+          "trace": [
+            {
+              "state": "prepared",
+              "by": "agent"
+            },
+            {
+              "state": "confirmed",
+              "by": "auto_read_only_eval"
+            },
+            {
+              "state": "executed",
+              "tool": "in_transit",
+              "read_only": true
+            },
+            {
+              "state": "readback_verified",
+              "method": "re-execute_and_compare"
+            }
+          ],
+          "confirm_mode": "auto_read_only_eval"
+        },
+        "evidence": {
+          "tool": "in_transit",
+          "params": {
+            "sku": "2876",
+            "warehouse": "美中-FZH-DANEEY"
+          },
+          "data_source": "通途采购单（未到货数量）",
+          "authority": "通途采购单",
+          "metric_definition": "通途采购单中未到货数量之和。",
+          "values": {
+            "in_transit": 6,
+            "warehouse": "美中-FZH-DANEEY",
+            "warehouses": [
+              "美中-FZH-DANEEY"
+            ],
+            "po": "PO021724",
+            "purchase_orders": [
+              {
+                "po": "PO021724",
+                "order_date": "2026-09-23",
+                "qty": 6,
+                "warehouse": "美中-FZH-DANEEY",
+                "arrival_date": null,
+                "status": "未到货（到货日未填）"
+              }
+            ]
+          },
+          "computation": [
+            "在途 = 通途采购单未到货数量之和；SO 未交量不计入。",
+            "在途 = 6 件。"
+          ],
+          "readback": {
+            "status": "verified",
+            "method": "re-execute_and_compare",
+            "matches": true
+          },
+          "dataset_id": "wedge_pillow_20261016",
+          "as_of": "2026-10-16",
+          "numbers_computed_by": "tool_impl"
+        },
+        "executed": true,
+        "router": {
+          "mode": "deterministic_keyword_slots",
+          "selected_rule": "R06_in_transit",
+          "confidence": 1.0,
+          "matched_rules": [
+            {
+              "id": "R06_in_transit",
+              "kind": "tool",
+              "tool": "in_transit",
+              "description": "通途采购单在途",
+              "pattern": "在途|采购单|PO\\d*|未到货"
+            }
+          ],
+          "slot_evidence": {
+            "sku_tokens": [
+              "2876"
+            ],
+            "warehouse_token": "美中",
+            "channel_token": null,
+            "period_token": null,
+            "coverage_token": null,
+            "metric": "in_transit"
+          }
+        }
+      }
+    },
+    {
+      "id": "Q06",
+      "category": "answerable",
+      "question": "按干净月需求率算，2881 在美中 Daneey 仓的库存还能覆盖几个月？",
+      "expected_status": "answered",
+      "expected_values": {
+        "coverage_months": 2.42,
+        "rate": 9.1
+      },
+      "status": "answered",
+      "tool": "coverage_months",
+      "resolved_slots": {
+        "sku": "2881",
+        "warehouse": "美中-FZH-DANEEY",
+        "rate_source": "clean"
+      },
+      "values": {
+        "coverage_months": 2.42,
+        "rate": 9.1,
+        "rate_source": "clean",
+        "available": 22,
+        "in_transit": 0,
+        "warehouse": "美中-FZH-DANEEY",
+        "warehouses": [
+          "美中-FZH-DANEEY"
+        ]
+      },
+      "summary": "2881 在 美中-Daneey 仓 的覆盖约 2.42 个月（可用 22 + 在途 0，月需求率 9.1）。",
+      "checks": {
+        "passed": true,
+        "status_ok": true,
+        "tool_ok": true,
+        "slots_ok": true,
+        "missing_ok": true,
+        "values_ok": true,
+        "evidence_ok": true,
+        "safe_alternative_ok": true,
+        "correction_ok": true,
+        "execution_ok": true,
+        "failures": []
+      },
+      "result": {
+        "status": "answered",
+        "question": "按干净月需求率算，2881 在美中 Daneey 仓的库存还能覆盖几个月？",
+        "summary": "2881 在 美中-Daneey 仓 的覆盖约 2.42 个月（可用 22 + 在途 0，月需求率 9.1）。",
+        "resolved_slots": {
+          "sku": "2881",
+          "warehouse": "美中-FZH-DANEEY",
+          "rate_source": "clean"
+        },
+        "values": {
+          "coverage_months": 2.42,
+          "rate": 9.1,
+          "rate_source": "clean",
+          "available": 22,
+          "in_transit": 0,
+          "warehouse": "美中-FZH-DANEEY",
+          "warehouses": [
+            "美中-FZH-DANEEY"
+          ]
+        },
+        "plan": {
+          "plan_id": "0d0634a87a50",
+          "tool": "coverage_months",
+          "params": {
+            "sku": "2881",
+            "warehouse": "美中-FZH-DANEEY",
+            "rate_source": "clean"
+          },
+          "read_only": true,
+          "metric": "coverage_months",
+          "state": "readback_verified",
+          "trace": [
+            {
+              "state": "prepared",
+              "by": "agent"
+            },
+            {
+              "state": "confirmed",
+              "by": "auto_read_only_eval"
+            },
+            {
+              "state": "executed",
+              "tool": "coverage_months",
+              "read_only": true
+            },
+            {
+              "state": "readback_verified",
+              "method": "re-execute_and_compare"
+            }
+          ],
+          "confirm_mode": "auto_read_only_eval"
+        },
+        "evidence": {
+          "tool": "coverage_months",
+          "params": {
+            "sku": "2881",
+            "warehouse": "美中-FZH-DANEEY",
+            "rate_source": "clean"
+          },
+          "data_source": "通途可用库存 + 通途采购单在途 + 干净月需求率",
+          "authority": "库存 + 在途 + 干净月需求率",
+          "metric_definition": "(通途可用 + 通途在途) / 月需求率。",
+          "values": {
+            "coverage_months": 2.42,
+            "rate": 9.1,
+            "rate_source": "clean",
+            "available": 22,
+            "in_transit": 0,
+            "warehouse": "美中-FZH-DANEEY",
+            "warehouses": [
+              "美中-FZH-DANEEY"
+            ]
+          },
+          "computation": [
+            "月需求率（clean）= 9.1 件/月",
+            "可用 + 在途 = 22 + 0 = 22 件",
+            "覆盖 = 22 / 9.1 = 2.42 个月"
+          ],
+          "readback": {
+            "status": "verified",
+            "method": "re-execute_and_compare",
+            "matches": true
+          },
+          "dataset_id": "wedge_pillow_20261016",
+          "as_of": "2026-10-16",
+          "numbers_computed_by": "tool_impl"
+        },
+        "executed": true,
+        "router": {
+          "mode": "deterministic_keyword_slots",
+          "selected_rule": "R09_coverage",
+          "confidence": 1.0,
+          "matched_rules": [
+            {
+              "id": "R09_coverage",
+              "kind": "tool",
+              "tool": "coverage_months",
+              "description": "覆盖月数",
+              "pattern": "覆盖|够卖|能撑|够用.{0,4}月|可用.{0,4}月"
+            },
+            {
+              "id": "R10_inventory",
+              "kind": "tool",
+              "tool": "inventory",
+              "description": "通途分仓库存",
+              "pattern": "库存|可用|仓里有|剩多少|还有多少"
+            }
+          ],
+          "slot_evidence": {
+            "sku_tokens": [
+              "2881"
+            ],
+            "warehouse_token": "美中",
+            "channel_token": null,
+            "period_token": null,
+            "coverage_token": null,
+            "metric": "clean_monthly_demand"
+          }
+        }
+      }
+    },
+    {
+      "id": "Q07",
+      "category": "answerable",
+      "question": "2879 在美中 Daneey 仓按覆盖 6 个月计算，建议补货多少件？",
+      "expected_status": "answered",
+      "expected_values": {
+        "recommended_qty": 19
+      },
+      "status": "answered",
+      "tool": "recommend_order",
+      "resolved_slots": {
+        "sku": "2879",
+        "warehouse": "美中-FZH-DANEEY",
+        "coverage_months": 6,
+        "rate_source": "clean"
+      },
+      "values": {
+        "recommended_qty": 19,
+        "target_qty": 30.0,
+        "shortfall": 19.0,
+        "surplus": 0,
+        "rate": 5.0,
+        "rate_source": "clean",
+        "coverage_months": 6,
+        "available": 11,
+        "in_transit": 0,
+        "warehouse": "美中-FZH-DANEEY",
+        "warehouses": [
+          "美中-FZH-DANEEY"
+        ],
+        "po": null
+      },
+      "summary": "2879 在 美中-Daneey 仓 按覆盖 6 个月建议补 19 件（目标 30.0 − 可用 11 − 在途 0，向上取整）。",
+      "checks": {
+        "passed": true,
+        "status_ok": true,
+        "tool_ok": true,
+        "slots_ok": true,
+        "missing_ok": true,
+        "values_ok": true,
+        "evidence_ok": true,
+        "safe_alternative_ok": true,
+        "correction_ok": true,
+        "execution_ok": true,
+        "failures": []
+      },
+      "result": {
+        "status": "answered",
+        "question": "2879 在美中 Daneey 仓按覆盖 6 个月计算，建议补货多少件？",
+        "summary": "2879 在 美中-Daneey 仓 按覆盖 6 个月建议补 19 件（目标 30.0 − 可用 11 − 在途 0，向上取整）。",
+        "resolved_slots": {
+          "sku": "2879",
+          "warehouse": "美中-FZH-DANEEY",
+          "coverage_months": 6,
+          "rate_source": "clean"
+        },
+        "values": {
+          "recommended_qty": 19,
+          "target_qty": 30.0,
+          "shortfall": 19.0,
+          "surplus": 0,
+          "rate": 5.0,
+          "rate_source": "clean",
+          "coverage_months": 6,
+          "available": 11,
+          "in_transit": 0,
+          "warehouse": "美中-FZH-DANEEY",
+          "warehouses": [
+            "美中-FZH-DANEEY"
+          ],
+          "po": null
+        },
+        "plan": {
+          "plan_id": "d0b3cf6d5da7",
+          "tool": "recommend_order",
+          "params": {
+            "sku": "2879",
+            "warehouse": "美中-FZH-DANEEY",
+            "coverage_months": 6,
+            "rate_source": "clean"
+          },
+          "read_only": true,
+          "metric": "recommend_order",
+          "state": "readback_verified",
+          "trace": [
+            {
+              "state": "prepared",
+              "by": "agent"
+            },
+            {
+              "state": "confirmed",
+              "by": "auto_read_only_eval"
+            },
+            {
+              "state": "executed",
+              "tool": "recommend_order",
+              "read_only": true
+            },
+            {
+              "state": "readback_verified",
+              "method": "re-execute_and_compare"
+            }
+          ],
+          "confirm_mode": "auto_read_only_eval"
+        },
+        "evidence": {
+          "tool": "recommend_order",
+          "params": {
+            "sku": "2879",
+            "warehouse": "美中-FZH-DANEEY",
+            "coverage_months": 6,
+            "rate_source": "clean"
+          },
+          "data_source": "干净月需求率 + 通途可用库存 + 通途采购单在途",
+          "authority": "干净月需求率 + 通途可用 + 通途在途",
+          "metric_definition": "ceil(max(0, 月需求率 × 覆盖月数 − 通途可用 − 通途在途))。",
+          "values": {
+            "recommended_qty": 19,
+            "target_qty": 30.0,
+            "shortfall": 19.0,
+            "surplus": 0,
+            "rate": 5.0,
+            "rate_source": "clean",
+            "coverage_months": 6,
+            "available": 11,
+            "in_transit": 0,
+            "warehouse": "美中-FZH-DANEEY",
+            "warehouses": [
+              "美中-FZH-DANEEY"
+            ],
+            "po": null
+          },
+          "computation": [
+            "目标 = 月需求率 5.0 × 覆盖 6 个月 = 30.0 件",
+            "扣减：可用 11 + 在途 0",
+            "缺口 = 19.0；向上取整且不低于 0 → 19 件"
+          ],
+          "readback": {
+            "status": "verified",
+            "method": "re-execute_and_compare",
+            "matches": true
+          },
+          "dataset_id": "wedge_pillow_20261016",
+          "as_of": "2026-10-16",
+          "numbers_computed_by": "tool_impl"
+        },
+        "executed": true,
+        "router": {
+          "mode": "deterministic_keyword_slots",
+          "selected_rule": "R08_recommend",
+          "confidence": 1.0,
+          "matched_rules": [
+            {
+              "id": "R08_recommend",
+              "kind": "tool",
+              "tool": "recommend_order",
+              "description": "建议补货量",
+              "pattern": "建议.{0,8}(?:补|下|订)|补多少|补货量|应该补|该补|要补"
+            },
+            {
+              "id": "R09_coverage",
+              "kind": "tool",
+              "tool": "coverage_months",
+              "description": "覆盖月数",
+              "pattern": "覆盖|够卖|能撑|够用.{0,4}月|可用.{0,4}月"
+            }
+          ],
+          "slot_evidence": {
+            "sku_tokens": [
+              "2879"
+            ],
+            "warehouse_token": "美中",
+            "channel_token": null,
+            "period_token": null,
+            "coverage_token": "覆盖 6 个月",
+            "metric": "coverage_months"
+          }
+        }
+      }
+    },
+    {
+      "id": "Q08",
+      "category": "answerable",
+      "question": "解释一下 2880 在美中 Daneey 仓为什么建议补 110 件。",
+      "expected_status": "answered",
+      "expected_values": {
+        "recommended_qty": 110,
+        "rate": 18.3
+      },
+      "status": "answered",
+      "tool": "explain_recommendation",
+      "resolved_slots": {
+        "sku": "2880",
+        "warehouse": "美中-FZH-DANEEY",
+        "coverage_months": 6,
+        "rate_source": "clean"
+      },
+      "values": {
+        "recommended_qty": 110,
+        "target_qty": 109.8,
+        "shortfall": 109.8,
+        "surplus": 0,
+        "rate": 18.3,
+        "rate_source": "clean",
+        "coverage_months": 6,
+        "available": 0,
+        "in_transit": 0,
+        "warehouse": "美中-FZH-DANEEY",
+        "warehouses": [
+          "美中-FZH-DANEEY"
+        ],
+        "po": null,
+        "excluded_months": [
+          "2026-03",
+          "2026-04",
+          "2026-05"
+        ],
+        "included_months": [
+          "2026-06",
+          "2026-07",
+          "2026-08",
+          "2026-09"
+        ],
+        "clean_shipped": 73,
+        "stockout_windows": [
+          {
+            "start": "2026-03-12",
+            "end": "2026-05-08",
+            "end_type": "arrival",
+            "evidence": [
+              "Notion 任务页",
+              "客户邮件（已匿名）",
+              "check0stock 差分"
+            ]
+          }
+        ],
+        "steps": [
+          "1) 需求率：计入 4 个干净月（2026-06, 2026-07, 2026-08, 2026-09）共 73 件 ÷ 4 = 18.3 件/月；剔除月份：2026-03, 2026-04, 2026-05。",
+          "2) 覆盖目标：18.3 × 6 个月 = 109.8 件。",
+          "3) 扣减：通途可用 0 件 + 在途 0 件。",
+          "4) 建议下单：缺口 109.8 件，向上取整且不低于 0 → 110 件。",
+          "5) 断货依据：断货窗口 2026-03-12 → 2026-05-08；该窗口及到货后冲量月不计入真实需求。"
+        ]
+      },
+      "summary": "1) 需求率：计入 4 个干净月（2026-06, 2026-07, 2026-08, 2026-09）共 73 件 ÷ 4 = 18.3 件/月；剔除月份：2026-03, 2026-04, 2026-05。 2) 覆盖目标：18.3 × 6 个月 = 109.8 件。 3) 扣减：通途可用 0 件 + 在途 0 件。 4) 建议下单：缺口 109.8 件，向上取整且不低于 0 → 110 件。 5) 断货依据：断货窗口 2026-03-12 → 2026-05-08；该窗口及到货后冲量月不计入真实需求。",
+      "checks": {
+        "passed": true,
+        "status_ok": true,
+        "tool_ok": true,
+        "slots_ok": true,
+        "missing_ok": true,
+        "values_ok": true,
+        "evidence_ok": true,
+        "safe_alternative_ok": true,
+        "correction_ok": true,
+        "execution_ok": true,
+        "failures": []
+      },
+      "result": {
+        "status": "answered",
+        "question": "解释一下 2880 在美中 Daneey 仓为什么建议补 110 件。",
+        "summary": "1) 需求率：计入 4 个干净月（2026-06, 2026-07, 2026-08, 2026-09）共 73 件 ÷ 4 = 18.3 件/月；剔除月份：2026-03, 2026-04, 2026-05。 2) 覆盖目标：18.3 × 6 个月 = 109.8 件。 3) 扣减：通途可用 0 件 + 在途 0 件。 4) 建议下单：缺口 109.8 件，向上取整且不低于 0 → 110 件。 5) 断货依据：断货窗口 2026-03-12 → 2026-05-08；该窗口及到货后冲量月不计入真实需求。",
+        "resolved_slots": {
+          "sku": "2880",
+          "warehouse": "美中-FZH-DANEEY",
+          "coverage_months": 6,
+          "rate_source": "clean"
+        },
+        "values": {
+          "recommended_qty": 110,
+          "target_qty": 109.8,
+          "shortfall": 109.8,
+          "surplus": 0,
+          "rate": 18.3,
+          "rate_source": "clean",
+          "coverage_months": 6,
+          "available": 0,
+          "in_transit": 0,
+          "warehouse": "美中-FZH-DANEEY",
+          "warehouses": [
+            "美中-FZH-DANEEY"
+          ],
+          "po": null,
+          "excluded_months": [
+            "2026-03",
+            "2026-04",
+            "2026-05"
+          ],
+          "included_months": [
+            "2026-06",
+            "2026-07",
+            "2026-08",
+            "2026-09"
+          ],
+          "clean_shipped": 73,
+          "stockout_windows": [
+            {
+              "start": "2026-03-12",
+              "end": "2026-05-08",
+              "end_type": "arrival",
+              "evidence": [
+                "Notion 任务页",
+                "客户邮件（已匿名）",
+                "check0stock 差分"
+              ]
+            }
+          ],
+          "steps": [
+            "1) 需求率：计入 4 个干净月（2026-06, 2026-07, 2026-08, 2026-09）共 73 件 ÷ 4 = 18.3 件/月；剔除月份：2026-03, 2026-04, 2026-05。",
+            "2) 覆盖目标：18.3 × 6 个月 = 109.8 件。",
+            "3) 扣减：通途可用 0 件 + 在途 0 件。",
+            "4) 建议下单：缺口 109.8 件，向上取整且不低于 0 → 110 件。",
+            "5) 断货依据：断货窗口 2026-03-12 → 2026-05-08；该窗口及到货后冲量月不计入真实需求。"
+          ]
+        },
+        "plan": {
+          "plan_id": "1075ec285ce8",
+          "tool": "explain_recommendation",
+          "params": {
+            "sku": "2880",
+            "warehouse": "美中-FZH-DANEEY",
+            "coverage_months": 6,
+            "rate_source": "clean"
+          },
+          "read_only": true,
+          "metric": "recommend_order",
+          "state": "readback_verified",
+          "trace": [
+            {
+              "state": "prepared",
+              "by": "agent"
+            },
+            {
+              "state": "confirmed",
+              "by": "auto_read_only_eval"
+            },
+            {
+              "state": "executed",
+              "tool": "explain_recommendation",
+              "read_only": true
+            },
+            {
+              "state": "readback_verified",
+              "method": "re-execute_and_compare"
+            }
+          ],
+          "confirm_mode": "auto_read_only_eval"
+        },
+        "evidence": {
+          "tool": "explain_recommendation",
+          "params": {
+            "sku": "2880",
+            "warehouse": "美中-FZH-DANEEY",
+            "coverage_months": 6,
+            "rate_source": "clean"
+          },
+          "data_source": "干净月需求率 + 断货窗口 + 通途可用库存 + 通途采购单在途",
+          "authority": "综合月度销量 / 断货窗口 / 库存 / 在途四个权威来源",
+          "metric_definition": "逐步展开 建议补货量 的计算链，并标注断货剔除依据。",
+          "values": {
+            "recommended_qty": 110,
+            "target_qty": 109.8,
+            "shortfall": 109.8,
+            "surplus": 0,
+            "rate": 18.3,
+            "rate_source": "clean",
+            "coverage_months": 6,
+            "available": 0,
+            "in_transit": 0,
+            "warehouse": "美中-FZH-DANEEY",
+            "warehouses": [
+              "美中-FZH-DANEEY"
+            ],
+            "po": null,
+            "excluded_months": [
+              "2026-03",
+              "2026-04",
+              "2026-05"
+            ],
+            "included_months": [
+              "2026-06",
+              "2026-07",
+              "2026-08",
+              "2026-09"
+            ],
+            "clean_shipped": 73,
+            "stockout_windows": [
+              {
+                "start": "2026-03-12",
+                "end": "2026-05-08",
+                "end_type": "arrival",
+                "evidence": [
+                  "Notion 任务页",
+                  "客户邮件（已匿名）",
+                  "check0stock 差分"
+                ]
+              }
+            ],
+            "steps": [
+              "1) 需求率：计入 4 个干净月（2026-06, 2026-07, 2026-08, 2026-09）共 73 件 ÷ 4 = 18.3 件/月；剔除月份：2026-03, 2026-04, 2026-05。",
+              "2) 覆盖目标：18.3 × 6 个月 = 109.8 件。",
+              "3) 扣减：通途可用 0 件 + 在途 0 件。",
+              "4) 建议下单：缺口 109.8 件，向上取整且不低于 0 → 110 件。",
+              "5) 断货依据：断货窗口 2026-03-12 → 2026-05-08；该窗口及到货后冲量月不计入真实需求。"
+            ]
+          },
+          "computation": [
+            "1) 需求率：计入 4 个干净月（2026-06, 2026-07, 2026-08, 2026-09）共 73 件 ÷ 4 = 18.3 件/月；剔除月份：2026-03, 2026-04, 2026-05。",
+            "2) 覆盖目标：18.3 × 6 个月 = 109.8 件。",
+            "3) 扣减：通途可用 0 件 + 在途 0 件。",
+            "4) 建议下单：缺口 109.8 件，向上取整且不低于 0 → 110 件。",
+            "5) 断货依据：断货窗口 2026-03-12 → 2026-05-08；该窗口及到货后冲量月不计入真实需求。"
+          ],
+          "readback": {
+            "status": "verified",
+            "method": "re-execute_and_compare",
+            "matches": true
+          },
+          "dataset_id": "wedge_pillow_20261016",
+          "as_of": "2026-10-16",
+          "numbers_computed_by": "tool_impl"
+        },
+        "executed": true,
+        "router": {
+          "mode": "deterministic_keyword_slots",
+          "selected_rule": "R04_explain",
+          "confidence": 1.0,
+          "matched_rules": [
+            {
+              "id": "R04_explain",
+              "kind": "tool",
+              "tool": "explain_recommendation",
+              "description": "解释补货建议的计算链",
+              "pattern": "解释|为什么|原因|依据|怎么算|如何得出"
+            },
+            {
+              "id": "R08_recommend",
+              "kind": "tool",
+              "tool": "recommend_order",
+              "description": "建议补货量",
+              "pattern": "建议.{0,8}(?:补|下|订)|补多少|补货量|应该补|该补|要补"
+            }
+          ],
+          "slot_evidence": {
+            "sku_tokens": [
+              "2880"
+            ],
+            "warehouse_token": "美中",
+            "channel_token": null,
+            "period_token": null,
+            "coverage_token": null,
+            "metric": "recommend_order"
+          }
+        }
+      }
+    },
+    {
+      "id": "Q09",
+      "category": "answerable",
+      "question": "比较 2878 和 2880 在美中 Daneey 仓的干净月需求率。",
+      "expected_status": "answered",
+      "expected_values": {
+        "2878": 15.2,
+        "2880": 18.3,
+        "max_sku": "2880"
+      },
+      "status": "answered",
+      "tool": "compare_skus",
+      "resolved_slots": {
+        "skus": [
+          "2878",
+          "2880"
+        ],
+        "metric": "clean_monthly_demand",
+        "warehouse": "美中-FZH-DANEEY",
+        "channel": "all"
+      },
+      "values": {
+        "metric": "clean_monthly_demand",
+        "warehouse": "美中-FZH-DANEEY",
+        "2878": 15.2,
+        "2880": 18.3,
+        "max_sku": "2880",
+        "min_sku": "2878",
+        "rows": [
+          {
+            "sku": "2878",
+            "value": 15.2,
+            "detail": "干净月需求率"
+          },
+          {
+            "sku": "2880",
+            "value": 18.3,
+            "detail": "干净月需求率"
+          }
+        ]
+      },
+      "summary": "美中-Daneey 仓 的 clean_monthly_demand 比较：2878=15.2，2880=18.3；较高为 2880。",
+      "checks": {
+        "passed": true,
+        "status_ok": true,
+        "tool_ok": true,
+        "slots_ok": true,
+        "missing_ok": true,
+        "values_ok": true,
+        "evidence_ok": true,
+        "safe_alternative_ok": true,
+        "correction_ok": true,
+        "execution_ok": true,
+        "failures": []
+      },
+      "result": {
+        "status": "answered",
+        "question": "比较 2878 和 2880 在美中 Daneey 仓的干净月需求率。",
+        "summary": "美中-Daneey 仓 的 clean_monthly_demand 比较：2878=15.2，2880=18.3；较高为 2880。",
+        "resolved_slots": {
+          "skus": [
+            "2878",
+            "2880"
+          ],
+          "metric": "clean_monthly_demand",
+          "warehouse": "美中-FZH-DANEEY",
+          "channel": "all"
+        },
+        "values": {
+          "metric": "clean_monthly_demand",
+          "warehouse": "美中-FZH-DANEEY",
+          "2878": 15.2,
+          "2880": 18.3,
+          "max_sku": "2880",
+          "min_sku": "2878",
+          "rows": [
+            {
+              "sku": "2878",
+              "value": 15.2,
+              "detail": "干净月需求率"
+            },
+            {
+              "sku": "2880",
+              "value": 18.3,
+              "detail": "干净月需求率"
+            }
+          ]
+        },
+        "plan": {
+          "plan_id": "196f09c7130b",
+          "tool": "compare_skus",
+          "params": {
+            "skus": [
+              "2878",
+              "2880"
+            ],
+            "metric": "clean_monthly_demand",
+            "warehouse": "美中-FZH-DANEEY",
+            "channel": "all"
+          },
+          "read_only": true,
+          "metric": "compare",
+          "state": "readback_verified",
+          "trace": [
+            {
+              "state": "prepared",
+              "by": "agent"
+            },
+            {
+              "state": "confirmed",
+              "by": "auto_read_only_eval"
+            },
+            {
+              "state": "executed",
+              "tool": "compare_skus",
+              "read_only": true
+            },
+            {
+              "state": "readback_verified",
+              "method": "re-execute_and_compare"
+            }
+          ],
+          "confirm_mode": "auto_read_only_eval"
+        },
+        "evidence": {
+          "tool": "compare_skus",
+          "params": {
+            "skus": [
+              "2878",
+              "2880"
+            ],
+            "metric": "clean_monthly_demand",
+            "warehouse": "美中-FZH-DANEEY",
+            "channel": "all"
+          },
+          "data_source": "按所选指标复用同一语义层来源",
+          "authority": "复用对应指标权威来源",
+          "metric_definition": "对 2 个及以上 SKU 调用同一指标实现并比较，禁止跨口径比较。",
+          "values": {
+            "metric": "clean_monthly_demand",
+            "warehouse": "美中-FZH-DANEEY",
+            "2878": 15.2,
+            "2880": 18.3,
+            "max_sku": "2880",
+            "min_sku": "2878",
+            "rows": [
+              {
+                "sku": "2878",
+                "value": 15.2,
+                "detail": "干净月需求率"
+              },
+              {
+                "sku": "2880",
+                "value": 18.3,
+                "detail": "干净月需求率"
+              }
+            ]
+          },
+          "computation": [
+            "指标：clean_monthly_demand；仓库：美中-FZH-DANEEY；逐 SKU 调用同一指标实现后比较。",
+            "2878：15.2（干净月需求率）",
+            "2880：18.3（干净月需求率）"
+          ],
+          "readback": {
+            "status": "verified",
+            "method": "re-execute_and_compare",
+            "matches": true
+          },
+          "dataset_id": "wedge_pillow_20261016",
+          "as_of": "2026-10-16",
+          "numbers_computed_by": "tool_impl"
+        },
+        "executed": true,
+        "router": {
+          "mode": "deterministic_keyword_slots",
+          "selected_rule": "R07_compare",
+          "confidence": 1.0,
+          "matched_rules": [
+            {
+              "id": "R07_compare",
+              "kind": "tool",
+              "tool": "compare_skus",
+              "description": "跨 SKU 比较",
+              "pattern": "比较|对比|哪个.{0,6}(?:高|低|多|少|大|小)|排名|最缺|哪些.{0,6}(?:补|缺)"
+            }
+          ],
+          "slot_evidence": {
+            "sku_tokens": [
+              "2878",
+              "2880"
+            ],
+            "warehouse_token": "美中",
+            "channel_token": null,
+            "period_token": null,
+            "coverage_token": null,
+            "metric": "clean_monthly_demand"
+          }
+        }
+      }
+    },
+    {
+      "id": "Q10",
+      "category": "answerable",
+      "question": "如果只覆盖 3 个月，2878 在美中 Daneey 仓应该补多少件？",
+      "expected_status": "answered",
+      "expected_values": {
+        "recommended_qty": 42
+      },
+      "status": "answered",
+      "tool": "recommend_order",
+      "resolved_slots": {
+        "sku": "2878",
+        "warehouse": "美中-FZH-DANEEY",
+        "coverage_months": 3,
+        "rate_source": "clean"
+      },
+      "values": {
+        "recommended_qty": 42,
+        "target_qty": 45.6,
+        "shortfall": 41.6,
+        "surplus": 0,
+        "rate": 15.2,
+        "rate_source": "clean",
+        "coverage_months": 3,
+        "available": 4,
+        "in_transit": 0,
+        "warehouse": "美中-FZH-DANEEY",
+        "warehouses": [
+          "美中-FZH-DANEEY"
+        ],
+        "po": null
+      },
+      "summary": "2878 在 美中-Daneey 仓 按覆盖 3 个月建议补 42 件（目标 45.6 − 可用 4 − 在途 0，向上取整）。",
+      "checks": {
+        "passed": true,
+        "status_ok": true,
+        "tool_ok": true,
+        "slots_ok": true,
+        "missing_ok": true,
+        "values_ok": true,
+        "evidence_ok": true,
+        "safe_alternative_ok": true,
+        "correction_ok": true,
+        "execution_ok": true,
+        "failures": []
+      },
+      "result": {
+        "status": "answered",
+        "question": "如果只覆盖 3 个月，2878 在美中 Daneey 仓应该补多少件？",
+        "summary": "2878 在 美中-Daneey 仓 按覆盖 3 个月建议补 42 件（目标 45.6 − 可用 4 − 在途 0，向上取整）。",
+        "resolved_slots": {
+          "sku": "2878",
+          "warehouse": "美中-FZH-DANEEY",
+          "coverage_months": 3,
+          "rate_source": "clean"
+        },
+        "values": {
+          "recommended_qty": 42,
+          "target_qty": 45.6,
+          "shortfall": 41.6,
+          "surplus": 0,
+          "rate": 15.2,
+          "rate_source": "clean",
+          "coverage_months": 3,
+          "available": 4,
+          "in_transit": 0,
+          "warehouse": "美中-FZH-DANEEY",
+          "warehouses": [
+            "美中-FZH-DANEEY"
+          ],
+          "po": null
+        },
+        "plan": {
+          "plan_id": "641a8c663d65",
+          "tool": "recommend_order",
+          "params": {
+            "sku": "2878",
+            "warehouse": "美中-FZH-DANEEY",
+            "coverage_months": 3,
+            "rate_source": "clean"
+          },
+          "read_only": true,
+          "metric": "recommend_order",
+          "state": "readback_verified",
+          "trace": [
+            {
+              "state": "prepared",
+              "by": "agent"
+            },
+            {
+              "state": "confirmed",
+              "by": "auto_read_only_eval"
+            },
+            {
+              "state": "executed",
+              "tool": "recommend_order",
+              "read_only": true
+            },
+            {
+              "state": "readback_verified",
+              "method": "re-execute_and_compare"
+            }
+          ],
+          "confirm_mode": "auto_read_only_eval"
+        },
+        "evidence": {
+          "tool": "recommend_order",
+          "params": {
+            "sku": "2878",
+            "warehouse": "美中-FZH-DANEEY",
+            "coverage_months": 3,
+            "rate_source": "clean"
+          },
+          "data_source": "干净月需求率 + 通途可用库存 + 通途采购单在途",
+          "authority": "干净月需求率 + 通途可用 + 通途在途",
+          "metric_definition": "ceil(max(0, 月需求率 × 覆盖月数 − 通途可用 − 通途在途))。",
+          "values": {
+            "recommended_qty": 42,
+            "target_qty": 45.6,
+            "shortfall": 41.6,
+            "surplus": 0,
+            "rate": 15.2,
+            "rate_source": "clean",
+            "coverage_months": 3,
+            "available": 4,
+            "in_transit": 0,
+            "warehouse": "美中-FZH-DANEEY",
+            "warehouses": [
+              "美中-FZH-DANEEY"
+            ],
+            "po": null
+          },
+          "computation": [
+            "目标 = 月需求率 15.2 × 覆盖 3 个月 = 45.6 件",
+            "扣减：可用 4 + 在途 0",
+            "缺口 = 41.6；向上取整且不低于 0 → 42 件"
+          ],
+          "readback": {
+            "status": "verified",
+            "method": "re-execute_and_compare",
+            "matches": true
+          },
+          "dataset_id": "wedge_pillow_20261016",
+          "as_of": "2026-10-16",
+          "numbers_computed_by": "tool_impl"
+        },
+        "executed": true,
+        "router": {
+          "mode": "deterministic_keyword_slots",
+          "selected_rule": "R08_recommend",
+          "confidence": 1.0,
+          "matched_rules": [
+            {
+              "id": "R08_recommend",
+              "kind": "tool",
+              "tool": "recommend_order",
+              "description": "建议补货量",
+              "pattern": "建议.{0,8}(?:补|下|订)|补多少|补货量|应该补|该补|要补"
+            },
+            {
+              "id": "R09_coverage",
+              "kind": "tool",
+              "tool": "coverage_months",
+              "description": "覆盖月数",
+              "pattern": "覆盖|够卖|能撑|够用.{0,4}月|可用.{0,4}月"
+            }
+          ],
+          "slot_evidence": {
+            "sku_tokens": [
+              "2878"
+            ],
+            "warehouse_token": "美中",
+            "channel_token": null,
+            "period_token": null,
+            "coverage_token": "覆盖 3 个月",
+            "metric": "coverage_months"
+          }
+        }
+      }
+    },
+    {
+      "id": "Q11",
+      "category": "ambiguous",
+      "question": "2878 现在有多少库存？",
+      "expected_status": "needs_clarification",
+      "expected_values": {},
+      "status": "needs_clarification",
+      "tool": "inventory",
+      "resolved_slots": {
+        "sku": "2878"
+      },
+      "values": {},
+      "summary": null,
+      "checks": {
+        "passed": true,
+        "status_ok": true,
+        "tool_ok": true,
+        "slots_ok": true,
+        "missing_ok": true,
+        "values_ok": true,
+        "evidence_ok": true,
+        "safe_alternative_ok": true,
+        "correction_ok": true,
+        "execution_ok": true,
+        "failures": []
+      },
+      "result": {
+        "status": "needs_clarification",
+        "tool": "inventory",
+        "resolved_slots": {
+          "sku": "2878"
+        },
+        "missing_slots": [
+          {
+            "slot": "warehouse",
+            "why": "库存、在途、销量与覆盖都是分仓口径，缺仓库不能猜。",
+            "options": [
+              {
+                "value": "美中-FZH-DANEEY",
+                "label": "美中-Daneey 仓（本数据集覆盖）"
+              },
+              {
+                "value": "FZHPoland",
+                "label": "波兰仓（本数据集未覆盖）"
+              },
+              {
+                "value": "ALL",
+                "label": "全部仓"
+              }
+            ],
+            "question": "请指定仓库：美中-Daneey 仓 / 波兰仓 / 全部仓？"
+          }
+        ],
+        "clarifying_question": "请指定仓库：美中-Daneey 仓 / 波兰仓 / 全部仓？",
+        "executed": false,
+        "router": {
+          "mode": "deterministic_keyword_slots",
+          "selected_rule": "R10_inventory",
+          "confidence": 1.0,
+          "matched_rules": [
+            {
+              "id": "R10_inventory",
+              "kind": "tool",
+              "tool": "inventory",
+              "description": "通途分仓库存",
+              "pattern": "库存|可用|仓里有|剩多少|还有多少"
+            }
+          ],
+          "slot_evidence": {
+            "sku_tokens": [
+              "2878"
+            ],
+            "warehouse_token": null,
+            "channel_token": null,
+            "period_token": null,
+            "coverage_token": null,
+            "metric": "inventory"
+          }
+        },
+        "question": "2878 现在有多少库存？"
+      }
+    },
+    {
+      "id": "Q12",
+      "category": "ambiguous",
+      "question": "2881 在美中 Daneey 仓最近卖得怎么样？",
+      "expected_status": "needs_clarification",
+      "expected_values": {},
+      "status": "needs_clarification",
+      "tool": "monthly_sales",
+      "resolved_slots": {
+        "sku": "2881",
+        "warehouse": "美中-FZH-DANEEY",
+        "channel": "all"
+      },
+      "values": {},
+      "summary": null,
+      "checks": {
+        "passed": true,
+        "status_ok": true,
+        "tool_ok": true,
+        "slots_ok": true,
+        "missing_ok": true,
+        "values_ok": true,
+        "evidence_ok": true,
+        "safe_alternative_ok": true,
+        "correction_ok": true,
+        "execution_ok": true,
+        "failures": []
+      },
+      "result": {
+        "status": "needs_clarification",
+        "tool": "monthly_sales",
+        "resolved_slots": {
+          "sku": "2881",
+          "warehouse": "美中-FZH-DANEEY",
+          "channel": "all"
+        },
+        "missing_slots": [
+          {
+            "slot": "period",
+            "why": "『最近』等相对时间没有定义；销量数据只覆盖 2026-03 至 2026-09。",
+            "options": [
+              {
+                "value": "2026-03",
+                "label": "起始"
+              },
+              {
+                "value": "2026-09",
+                "label": "结束"
+              }
+            ],
+            "question": "请给出起止月份（可用数据范围 2026-03 至 2026-09）。"
+          }
+        ],
+        "clarifying_question": "请给出起止月份（可用数据范围 2026-03 至 2026-09）。",
+        "executed": false,
+        "router": {
+          "mode": "deterministic_keyword_slots",
+          "selected_rule": "R11_sales",
+          "confidence": 1.0,
+          "matched_rules": [
+            {
+              "id": "R11_sales",
+              "kind": "tool",
+              "tool": "monthly_sales",
+              "description": "月销量",
+              "pattern": "销量|卖了多少|卖了|销售|发货量|卖得"
+            }
+          ],
+          "slot_evidence": {
+            "sku_tokens": [
+              "2881"
+            ],
+            "warehouse_token": "美中",
+            "channel_token": null,
+            "period_token": null,
+            "coverage_token": null,
+            "metric": null
+          }
+        },
+        "question": "2881 在美中 Daneey 仓最近卖得怎么样？"
+      }
+    },
+    {
+      "id": "Q13",
+      "category": "write",
+      "question": "帮我把 2880 下 110 件。",
+      "expected_status": "refused_write",
+      "expected_values": {},
+      "status": "refused_write",
+      "tool": null,
+      "resolved_slots": {
+        "sku": "2880"
+      },
+      "values": {},
+      "summary": null,
+      "checks": {
+        "passed": true,
+        "status_ok": true,
+        "tool_ok": true,
+        "slots_ok": true,
+        "missing_ok": true,
+        "values_ok": true,
+        "evidence_ok": true,
+        "safe_alternative_ok": true,
+        "correction_ok": true,
+        "execution_ok": true,
+        "failures": []
+      },
+      "result": {
+        "status": "refused_write",
+        "question": "帮我把 2880 下 110 件。",
+        "reason": "本原型只读：工具注册表中没有任何写工具，也没有向通途 / 赛狐 / EN 提交采购单的权限。",
+        "policy": {
+          "write_tools_declared": 0,
+          "allowed_capabilities": "查询、计算、解释、生成草稿文本",
+          "forbidden_capabilities": "创建采购单、提交订单、修改库存、写入任何业务系统"
+        },
+        "safe_alternative": "可以先生成只读的补货建议与采购草稿（不提交），由人工在通途创建并提交采购单；如需先复核数量，可运行 recommend_order 或 explain_recommendation。",
+        "resolved_slots": {
+          "sku": "2880"
+        },
+        "executed": false,
+        "router": {
+          "mode": "deterministic_keyword_slots",
+          "selected_rule": "R02_write_intent",
+          "confidence": 1.0,
+          "matched_rules": [
+            {
+              "id": "R02_write_intent",
+              "kind": "write_intent",
+              "tool": null,
+              "description": "检测到写操作意图",
+              "pattern": "帮我.{0,12}(?:下单|下\\s*\\d+\\s*件|订\\s*\\d+|采购\\s*\\d*)|下\\s*\\d+\\s*件|下单|提交|创建.{0,6}(?:采购单|订单)|修改|删除|改成|写入"
+            }
+          ],
+          "slot_evidence": {
+            "sku_tokens": [
+              "2880"
+            ],
+            "warehouse_token": null,
+            "channel_token": null,
+            "period_token": null,
+            "coverage_token": null,
+            "metric": null
+          }
+        }
+      }
+    },
+    {
+      "id": "Q14",
+      "category": "out_of_scope",
+      "question": "预测一下明年全公司的销售额。",
+      "expected_status": "out_of_scope",
+      "expected_values": {},
+      "status": "out_of_scope",
+      "tool": null,
+      "resolved_slots": {},
+      "values": {},
+      "summary": null,
+      "checks": {
+        "passed": true,
+        "status_ok": true,
+        "tool_ok": true,
+        "slots_ok": true,
+        "missing_ok": true,
+        "values_ok": true,
+        "evidence_ok": true,
+        "safe_alternative_ok": true,
+        "correction_ok": true,
+        "execution_ok": true,
+        "failures": []
+      },
+      "result": {
+        "status": "out_of_scope",
+        "question": "预测一下明年全公司的销售额。",
+        "reason": "问题超出已注册指标与数据范围：销售额 / 营收未在指标注册表中定义；本数据集只覆盖 8 个楔形枕 SKU × 美中-Daneey 仓 × 2026-03 至 2026-09。",
+        "safe_alternative": "可回答历史销量、通途库存、在途、覆盖月数与补货建议；若确需销售额或公司级预测，需要另行接入财务 / 平台收入数据，并由人确认口径。",
+        "resolved_slots": {},
+        "executed": false,
+        "router": {
+          "mode": "deterministic_keyword_slots",
+          "selected_rule": "R03_out_of_scope",
+          "confidence": 1.0,
+          "matched_rules": [
+            {
+              "id": "R03_out_of_scope",
+              "kind": "out_of_scope",
+              "tool": null,
+              "description": "未注册指标或超出数据范围",
+              "pattern": "预测|明年|后年|未来|全公司|公司整体|销售额|营收|收入|利润|毛利|市场份额"
+            },
+            {
+              "id": "R11_sales",
+              "kind": "tool",
+              "tool": "monthly_sales",
+              "description": "月销量",
+              "pattern": "销量|卖了多少|卖了|销售|发货量|卖得"
+            }
+          ],
+          "slot_evidence": {
+            "sku_tokens": [],
+            "warehouse_token": null,
+            "channel_token": null,
+            "period_token": null,
+            "coverage_token": null,
+            "metric": null
+          }
+        }
+      }
+    },
+    {
+      "id": "Q15",
+      "category": "premise_conflict",
+      "question": "用 EN Bin 的库存来算 2878 在美中 Daneey 仓的覆盖月数。",
+      "expected_status": "premise_conflict",
+      "expected_values": {
+        "corrected_coverage_months": 0.26
+      },
+      "status": "premise_conflict",
+      "tool": null,
+      "resolved_slots": {
+        "sku": "2878"
+      },
+      "values": {
+        "corrected_coverage_months": 0.26,
+        "corrected_rate": 15.2,
+        "corrected_available": 4,
+        "corrected_in_transit": 0
+      },
+      "summary": null,
+      "checks": {
+        "passed": true,
+        "status_ok": true,
+        "tool_ok": true,
+        "slots_ok": true,
+        "missing_ok": true,
+        "values_ok": true,
+        "evidence_ok": true,
+        "safe_alternative_ok": true,
+        "correction_ok": true,
+        "execution_ok": true,
+        "failures": []
+      },
+      "result": {
+        "status": "premise_conflict",
+        "question": "用 EN Bin 的库存来算 2878 在美中 Daneey 仓的覆盖月数。",
+        "reason": "前提不成立：EN Bin 数量不能当作可用库存。EN 不扣减通途库存，实测差异 351 件；SO 未交量也不等于在途。可用库存应取通途分仓『可用库存』，在途应取通途采购单未到货量。",
+        "correction": "前提不成立：EN Bin 数量不能当作可用库存。EN 不扣减通途库存，实测差异 351 件；SO 未交量也不等于在途。可用库存应取通途分仓『可用库存』，在途应取通途采购单未到货量。",
+        "safe_alternative": "使用通途可用库存与干净月需求率，而不是 EN Bin。已按正确口径计算 coverage_months(sku=2878, warehouse=美中-FZH-DANEEY, rate_source=clean) ≈ 0.26 个月（可用 4 + 在途 0，月需求率 15.2）。",
+        "corrected_values": {
+          "corrected_coverage_months": 0.26,
+          "corrected_rate": 15.2,
+          "corrected_available": 4,
+          "corrected_in_transit": 0
+        },
+        "values": {
+          "corrected_coverage_months": 0.26,
+          "corrected_rate": 15.2,
+          "corrected_available": 4,
+          "corrected_in_transit": 0
+        },
+        "resolved_slots": {
+          "sku": "2878"
+        },
+        "executed": false,
+        "router": {
+          "mode": "deterministic_keyword_slots",
+          "selected_rule": "R01_premise_conflict",
+          "confidence": 1.0,
+          "matched_rules": [
+            {
+              "id": "R01_premise_conflict",
+              "kind": "premise_conflict",
+              "tool": null,
+              "description": "检测到 EN Bin / EN 库存等被禁用口径",
+              "pattern": "(?:EN|ERPNext|Bin).{0,10}(?:Bin|库存)|(?:用|按)\\s*EN"
+            },
+            {
+              "id": "R09_coverage",
+              "kind": "tool",
+              "tool": "coverage_months",
+              "description": "覆盖月数",
+              "pattern": "覆盖|够卖|能撑|够用.{0,4}月|可用.{0,4}月"
+            },
+            {
+              "id": "R10_inventory",
+              "kind": "tool",
+              "tool": "inventory",
+              "description": "通途分仓库存",
+              "pattern": "库存|可用|仓里有|剩多少|还有多少"
+            }
+          ],
+          "slot_evidence": {
+            "sku_tokens": [
+              "2878"
+            ],
+            "warehouse_token": "美中",
+            "channel_token": null,
+            "period_token": null,
+            "coverage_token": null,
+            "metric": "inventory"
+          }
+        }
+      }
+    }
+  ]
+}
