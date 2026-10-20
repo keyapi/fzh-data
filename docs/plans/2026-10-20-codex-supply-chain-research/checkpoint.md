@@ -5,9 +5,11 @@ title: 供应链独立调研当前保存点与续接
 date: 2026-10-20
 ---
 
-# 当前保存点（2026-10-20，Claude修订版复审与共同框架候选）
+# 当前保存点（2026-10-20，框架原则对齐与G0/G1准备）
 
 ## 已完成
+
+- 最新补核Claude #300固定cd7a8a065f32c204ef57a423527ecce61243f052，R01/R02原代码问题可关闭，DN/收货/预测冲减结构修订接受。实跑其4个golden和另13个合成检查；未复现真实WAPE。架构原则已由Claude10接受，见alignment-status.md。
 
 - 本轮完成Claude #300固定e0975b97定向复审、共同框架候选、分歧表和13/13本地合成例；见common-framework/decisions/semantic-examples/claude-review。未声称双方已批准。
 - P0规划已提交dfded88e；本轮完成P1资产复核、P2首轮三路独立研究、P3验证合同设计、P4首轮综合及交叉审阅。
@@ -36,11 +38,11 @@ date: 2026-10-20
 3. 选定EN实际版本/启用模块与frePPLe正式CE，再做E2同输入计划对照；edition/许可/适配成本不过门槛就淘汰，不默认自研。
 4. 有当时可知历史快照后按已有方向设计E3滚动回测与库存策略仿真；当前不采用/不试验TSFM。PB人为±25%区间不是Conformal，阶段B尚未启动。
 5. E4评估Agent语义/权限/幂等/过期审批/独立读回。任何具体生产写入或通知任务另行按范围授权。
-6. Claude复审已完成，待其核R01–R06和13例；优先修E1标签可知时点/坏数量、DN行/收货键、预测冲减、同cutoff状态守恒。G0契约确认后做G1授权脱敏回放；Cursor独立成果待交付。
+6. Claude最新复核已完成，已修问题不重开；优先冻结G0互斥供给桶（可用/新收/采购和头程/WIP）与桶内已发订单冲减定义，再做G1测试/授权脱敏回放。Cursor成果待交付，不阻塞无争议验证。
 
 ## 工作区、提交与校验
 
-使用已附着worktree与feature/codex-supply-chain-research；现有Draft PR：[301](https://github.com/keyapi/fzh-data/pull/301)。本研究文档在docs/plans/2026-10-20-codex-supply-chain-research/；当前研究成果提交可由git log该目录确认，P0基线dfded88e；前轮研究3d831924。后续92458fcd补历史接续/头程；本轮补跨方案复审、共同框架和合成例，当前提交由git log该目录确认。不要在原主检出混入其他人的未提交修改。
+使用已附着worktree与feature/codex-supply-chain-research；现有Draft PR：[301](https://github.com/keyapi/fzh-data/pull/301)。本研究文档在docs/plans/2026-10-20-codex-supply-chain-research/；当前研究成果提交可由git log该目录确认，P0基线dfded88e；前轮研究3d831924。后续92458fcd补历史接续/头程；dd2551ef补跨方案复审/共同框架/合成例；本轮补cd7a8a06关闭记录与两PR推进规则，当前提交由git log该目录确认。不要在原主检出混入其他人的未提交修改。
 
 凭证扫描、文档BOM/frontmatter/本地链接与四类diff凭证模式检查已通过；移除两文件多余EOF空行后diff格式检查通过。新增仅本地合成例脚本，无业务模块/锁文件/生产数据改动；从固定ref导出的临时测试源码仅留本机临时目录，不提交。
 

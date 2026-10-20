@@ -8,6 +8,8 @@ reviewed_ref: e0975b97819cb967009260795b52c7ed18c04dc2
 
 # 定向复审
 
+**历史版本记录**：下文针对e0975b97；最新cd7a8a06的修复复核与关闭状态见[alignment-status.md](alignment-status.md)。不要将历史R01/R02继续作为当前未修问题。
+
 对象：[PR #300](https://github.com/keyapi/fzh-data/pull/300)固定 `e0975b97819cb967009260795b52c7ed18c04dc2`，不是随分支变化的链接。只读导出09/08/05及E1相关代码和结果；未修改Claude文件、取真实数据或访问生产。两位gpt-6-luna子Agent分别复核预测和事实契约；主Agent再读承载发现的代码，不把子Agent意见直接当结论。
 
 ## 1. 原评审处理状态

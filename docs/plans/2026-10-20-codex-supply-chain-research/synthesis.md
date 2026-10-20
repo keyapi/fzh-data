@@ -14,7 +14,7 @@ status: research-checkpoint
 
 ## 跨方案对齐进展
 
-本轮新增[共同框架候选](common-framework.md)、[13个合成样例](semantic-examples.md)与[分歧表](decisions.md)。它们是Codex提案，不是双方已批准方案。保留原独立路线；EN原生基线必须显式处理未同步运营库存，不能直接信projected_qty。Claude预测的验证/测试目标窗仍重叠，指标待重算；本轮没有重跑真实WAPE。
+本轮新增[共同框架候选](common-framework.md)、[13个合成样例](semantic-examples.md)与[分歧表](decisions.md)。它们是Codex发起的共同基线；后续已有原则对齐，尚非业务批准或实施就绪。保留原独立路线；EN原生基线必须显式处理未同步运营库存，不能直接信projected_qty。Claude后续cd7a8a06已修正目标窗隔离与坏数量处理，本轮用纯函数/合成行补核；没有重跑真实WAPE。共同架构原则已获对方10接受，G0余额与需求周期仍需确认，见[当前对齐](alignment-status.md)。
 
 ## 用户补充后的已定边界
 
