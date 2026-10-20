@@ -8,6 +8,9 @@ timestamp: 2026-08-14
 
 # 变更日志
 
+## 2026-08-31
+- **新增**: `sku_forecast.py` + [reference/sku-forecast.md](reference/sku-forecast.md) — 按 Vendor Style 从 `Invoice to PB` 提取 PO 下单量，用 M1 运行率 / M2 同比 / M3 趋势 / M3b 季节平均预估未来 N 个月并对比。2026-10-20 从旧 worktree `sharp-shannon-a0be9b` 抢救入库（当时未提交、无 PR）。
+
 ## 2026-09-23
 - **改造**: `reconcile_pb.py` 纳入范围改为**整月口径** —— 锚点(`Notes!B2`)之前的日文件夹跳过，
   其余全部纳入（不再「首个 0 付款即停」）。跳过的文件夹逐日校验其发票都已在表内，防止「跳过」变「漏数」。
