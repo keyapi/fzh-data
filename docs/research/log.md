@@ -7,6 +7,10 @@ description: docs/research 目录变更历史
 
 # 变更日志
 
+## 2026-10-20
+
+- **新增**: [2026-10-20-demand-forecast-session-reconstruction.md](2026-10-20-demand-forecast-session-reconstruction.md) — 补三篇调研正文没有的检索事实：会话最后活动是 2026-09-02 17:33；Prophet/ARIMA 背景在 Claude 记忆（`fc0170d0`），调研正文不推荐 Prophet；Desktop 会话条目仍在，本地转录已清理。
+
 ## 2026-09-21
 
 - **新增**: [2026-09-21-sellfox-amazon-settlement-reports.md](2026-09-21-sellfox-amazon-settlement-reports.md) — 赛狐 API 拉 Amazon 账期报表的可行性与覆盖度实测。起点是「财务报税要各账号 Amazon 账期报表，现在只能拿 PDF 自己算」。结论：**能拉，但只有「插件获取报告」一条路，且 API 不可触发抓取**。赛狐侧三条路径实测分工：①`亚马逊原报告`（`report/center/add.json`）是**赛狐服务端生成**，报告类型枚举里**没有账期/结算**；②`自定义报表`（`custom/report/*`）是赛狐自建分析表，非 Amazon 结算文件；③`插件获取报告`（`report/center/task/getPlugPageList.json`）**唯一含账期**，靠浏览器插件在账号登录态下抓回存 COS，接口是**纯读**。旁证：`创建报告任务` 的 `reportType` 只支持 `PRODUCT_SALE_REPORT` 一个值 ⇒ 抓取只能在 UI 侧发生。
