@@ -45,12 +45,17 @@ tags: [supply-chain, codex, g1, sync, cover]
 ## 5. Codex 现在应做
 
 1. **更新 `g1-slice.md` / `baseline.md`**：按“family 销售 1:1 皮壳”写，删除“完成品两仓/皮壳仓排除/品类文本纳入”。
-2. **补/改样例 C21–C25**：
+2. **补/改样例 C21–C30**：
    - C21：一个成品销售 → 1 件皮壳需求（1:1）；
    - C22：只卖皮壳的 `-Cover` 例外，计入需求；
    - C23：皮壳仓是分公司仓，销量是成品销售，不是“皮壳产品”；
    - C24：品类文本含三角但客户码未命中 → 不进 family（仅诊断）；
-   - C25：EN Cost Review 只作代码逻辑参考，不作映射数据源。
+   - C25：EN Cost Review 只作代码逻辑参考，不作映射数据源；
+   - C26：下游 3PL 销售计入需求，但分公司→3PL 转移不重复计；
+   - C27：3PL 库存 manual/unknown；Tongtool 调拨≠在手；丢件进 discrepancy；
+   - C28：美中新运营 cohort/ramp，历史不可直接外推；美东稳定可回测；
+   - C29：产能/交期不确定 → 区间/情景，不输出固定 3 个月到货日；
+   - C30：demand_line/forecast_bucket 带 operator/listing/cohort，不得把新老运营混池。
 3. **只复核** `mapping_process.md` §0–§4，记录接受/部分接受/不接受；不要复核旧 v1 数字。
 4. **WayfairCG 已按架构/数据确定**：
    - 它是下游 3PL，从美国分公司拿成品再发货；其 **1,162 件 family 销售计入总需求**；
@@ -58,7 +63,9 @@ tags: [supply-chain, codex, g1, sync, cover]
    - 其他 3PL 在 2026-04..09 没有 family 销售；海绵 `-Foam` 是另一条组件流，不是皮壳需求；
    - **WayfairCG 库存不能当 Tongtool 在手**：Wayfair 后台只能 YTQ 手工导出；
      赛狐平台仓 API 只有 Temu/Mercado/Walmart WFS，无 Wayfair；Tongtool 调拨只算发出量；
-   - 只剩“WayfairCG 由 USNJ 还是 USTX 供货”待确认，不影响 g1-slice 的总需求口径。
+   - **美中结构性断点**：2026-06/07/08 新运营入职、第二个月才下单、首批刚回货；历史不可参考；
+     美东稳定（2 人）可用历史；
+   - **产能/交期不确定**：不能固定 3 个月；用区间/情景，输出缺货风险。
 5. 不合并 #301 到 #300；不访问生产；不写生产适配器。
 
 ## 6. 可直接复制给 Codex
@@ -74,11 +81,14 @@ G1 业务口径更正，请立即更新 g1-slice/baseline 与样例，旧的 G1a
 - 映射只用 EN产品BOM成本列表20261016.xlsx 的产品编号+客户物料号；
   EN Tongtool Cost Review 只借代码逻辑，不用其数据；品类文本只作诊断。
 - 旧“品类筛选/两仓完成品/99.18%/763/155”全部作废。
-- 请更新 g1-slice/baseline，补 C21–C27（1:1 皮壳、Cover 例外、皮壳仓是分公司仓、
-  非 family 诊断、Cost Review 只借逻辑、下游 3PL 销售计入、3PL 库存手工/unknown）。
+- 请更新 g1-slice/baseline，补 C21–C30（1:1 皮壳、Cover 例外、皮壳仓是分公司仓、
+  非 family 诊断、Cost Review 只借逻辑、下游 3PL 销售计入、3PL 库存手工/unknown、
+  美中结构性断点/运营 cohort、产能交期区间、operator/listing/cohort 维度）。
 - WayfairCG 已确定：下游 3PL，1,162 件 family 销售计入总需求；分公司→3PL 转移不重复计；
   其他 3PL 无 family 销售；**WayfairCG 库存用 Wayfair 后台手工导出，Tongtool 调拨≠在手，
   赛狐无 Wayfair 平台仓 API；无后台数据标 unknown，不补 0**。
+- 美中/美东必须分开：美东稳定可回测；美中新运营 cohort/短窗 run-rate，不套历史；
+  产能/交期用区间/情景，不输出固定 3 个月到货日。
 - 暂不进入 G1b/实现，等上述供货归属确认。
 边界：不写生产、不合并 #301、不改 Claude 文件。
 ```

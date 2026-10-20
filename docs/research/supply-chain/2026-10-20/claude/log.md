@@ -247,6 +247,11 @@ tags: [supply-chain, research, log]
   G1 用 `source=wayfair_backend_manual`，Tongtool 调拨只算发出量，transfer vs receipt 对账；
   未知标 unknown + 安全缓冲。WayfairCG family 销售 1,162/33,719 = 3.4%；
   丢件率 r% → 总需求偏差约 3.4%×r，渠道库存偏差 r%。
+- **WX 计划反馈（2026-10-20）**：产能时间不确定；美中新运营 2026-06/07/08 入职、第二个月才下单、
+  首批刚回货，历史不可参考；美东稳定（2 个运营），历史可用。
+  方法调整：美东用 ens5/TSB 回测；美中用短窗 run-rate + 运营/Listing cohort + ramp；
+  产能/交期用区间/情景，不输出固定 3 个月到货日。08 增加 operator/listing/cohort 与 V19/V20；
+  06 增加 A12/B27/E12；13 增加 §1.6 运营/产能数据。
 - **本步骤确认前不进入 G1b。**
 - 新增 `experiments/g1_contract/codex-sync.md`：给 Codex 的同步块（皮壳 1:1、旧 v1 作废、C21–C25）。
   以后每次我方实质更新都在结尾附「给 Codex」同步块。

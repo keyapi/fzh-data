@@ -156,8 +156,8 @@ pending_stock_in = last_op_reported − stock_in_produced
 |---|---|---|---|
 | `item_master` / `item_alias` | 物料的一个别名 | EN `item_code`、通途 SKU、客户码 | 三系统定义不同；需后缀规则 |
 | `bom_edge` | 父件 × 子件 | `(parent, component, bom_version)` | BOM/Bundle/已确认配套要区分，禁止靠前缀猜 |
-| `demand_line` | SO Item × 需求物料 | `Sales Order Item.name` + `demand_type` | #291 `model.py:71-92` 已落地；需区分终端/内部补货 |
-| `forecast_bucket` | 商品 × 服务池 × 计划桶 × 版本 | 复合键；含 `forecast_qty`、`included_order_qty`、`net_forecast` | **新增**；匹配窗口/类型必须落表 |
+| `demand_line` | SO Item × 需求物料 | `Sales Order Item.name` + `demand_type` + `operator_id` + `listing_id` | #291 `model.py:71-92` 已落地；需区分终端/内部补货与运营/Listing |
+| `forecast_bucket` | 商品 × 服务池 × 计划桶 × 版本 | 复合键；含 `forecast_qty`、`included_order_qty`、`net_forecast`、`demand_cohort` | **新增**；匹配窗口/类型必须落表；cohort 区分新运营/新品 |
 | `production_fact` | WO × 工序 × 事件 | `Work Order.sales_order_item` | 优先用该字段关联 SO 行 |
 | `factory_shipment_line` | DN Item | **`Delivery Note Item.name`（自身 ID）**；`parent`=DN 头；`so_detail`=SO 行外键；`against_sales_order`=SO 头外键 | 已实现；**不能用 `so_detail` 当 DN 行主键** |
 | `inventory_snapshot` | SKU × 仓 × 快照时间 | `(snapshot_id, sku, warehouse)` | 见 05 §4.4；通途为源 |
@@ -199,6 +199,15 @@ pending_stock_in = last_op_reported − stock_in_produced
 **冲减流程**：先确定服务池（商品 × 渠道/仓）、计划桶（月/周）、版本；
 再把落在匹配窗口内的终端订单标记为 `included_order_qty`；最后输出 `net_forecast`。
 **禁止**把 forecast 与所有 SO 直接相加；也禁止把内部补货 SO 当终端需求。
+
+**结构性断点（WX 2026-10-20 反馈）**：
+
+- 美中 2026-06/07/08 新运营入职，第二个月才下单，首批刚回货；历史销售是 ramp + 缺货后的结果，
+  **不能直接当稳定需求外推**。forecast/demand 必须带 `operator_id`、`listing_id`、
+  `operator_start_date`、`listing_launch_date`、`demand_cohort`，按 cohort 建模。
+- 美东稳定（2 个运营），历史可用于回测。
+- **产能/交期不确定**：lead time 是分布/情景（如 60–120 天），不是固定 3 个月；
+  补货输出覆盖期与缺货风险区间，不输出单一到货日。
 
 ---
 
@@ -246,5 +255,7 @@ pending_stock_in = last_op_reported − stock_in_produced
 | V16 | 累计里程碑是否被误加总 | 检查报表 SQL / 视图 | R06：事件 vs 余额 |
 | V17 | 库存是否有连续历史、每日全量快照是否在跑 | 检查 `stock_alert` 日志/`web_automation` 输出/本地档案 | **G1 不需要历史库存**；断货删失用信号；每日快照另行启动 |
 | V18 | WayfairCG 库存是否与 Wayfair 后台一致；调拨 vs 收货差多少 | YTQ 后台导出 vs Tongtool 调拨记录 | 3PL 库存不能用 Tongtool 当在手；丢件进 discrepancy |
+| V19 | 运营/Listing 起始日期、首单日期是否可得 | 运营名单 + 订单首单 | 美中 cohort/ramp 建模的前提；缺失则只能短窗 run-rate |
+| V20 | 产能/交期分布是否有数据 | 工厂交期/历史到货 | 不能用固定 3 个月；需区间/情景 |
 
-> 测试边界：V1–V18 全部只读；EN 测试环境优先，生产只读抽样需批准；**禁止写 EN 生产库存账**。
+> 测试边界：V1–V20 全部只读；EN 测试环境优先，生产只读抽样需批准；**禁止写 EN 生产库存账**。

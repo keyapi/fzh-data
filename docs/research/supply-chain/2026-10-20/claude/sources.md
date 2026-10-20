@@ -75,6 +75,7 @@ tags: [supply-chain, research, sources]
 | S1-044 | 公司架构：绍兴生产皮壳/内胆/半成品 → USNJ(CENTRADE)、USTX(DANEEY)、波兰分公司填充/压缩/包装/发货；最终销售多数成品 | `docs/company-context.md:14-29、27-29` | C | 2026-10-20 | 三角靠枕类只发皮壳；成品销售 1:1 消耗皮壳 | A | mapping_process §0、05/11/13 |
 | S1-045 | WayfairCG-Cranbury 是下游 3PL，family 销售 1,162 件/6个月；其他 3PL 无 family 销售；海绵 `-Foam` 另列 | 本地订单 family 精确匹配 + 用户说明 | C | 2026-10-20 | 3PL 销售计入需求，转移不重复计 | A | mapping_process §4.1 |
 | S1-046 | WayfairCG 库存以 Wayfair 后台手工导出为准；Tongtool 调拨只算发出量；赛狐平台仓 API 无 Wayfair | 用户 2026-10-20 说明 + `SELLFOX_API/docs/api-reference/多平台/平台仓/` 实查 | C | 2026-10-20 | 只有 Temu/Mercado/Walmart WFS，无 Wayfair | A | 13 §1.5、mapping_process §4.2 |
+| S1-047 | 产能/交期不确定；美中 2026-06/07/08 新运营入职、第二个月才下单、首批刚回货，历史不可参考；美东稳定 2 人 | WX 2026-10-20 反馈 | C | 2026-10-20 | 美东可回测，美中需 cohort/ramp；交期用区间 | A | 05 §5/§7、08 §5、06 A12 |
 
 ## 未找到项（N-###）
 

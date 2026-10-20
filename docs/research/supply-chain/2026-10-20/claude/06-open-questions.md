@@ -28,6 +28,7 @@ tags: [supply-chain, open-questions, decisions]
 | A9 | 工厂产能/工序瓶颈是否有硬约束？ | 决定是否需要 APS；目前未证 | 先做粗能力校验，不上 APS | 工厂 |
 | A10 | 现有手工流程谁在做、花多久、最易错在哪？ | 决定自动化优先级与采纳阻力 | 先访谈 2–3 名一线同事再定 | 计划/采购 |
 | A11 | 每日全量库存快照由谁跑、存哪、保留多久？ | 这是独立任务，不是 G1 前置；不启动就永远没有历史 | 技术负责；每日一次，Parquet 留 13 个月；是否现在启动由技术/老板定 | 技术 + 老板 |
+| A12 | 美中/美东运营结构与新入职 ramp 如何进入需求？ | 美中历史不可参考；美东稳定可用历史 | 美东用历史；美中用运营/Listing cohort + 短窗 run-rate + ramp；需运营/Listing 起始日期 | 计划(WX) + 运营 |
 
 ## B. 数据与口径（业务 + 技术）
 
@@ -60,6 +61,7 @@ tags: [supply-chain, open-questions, decisions]
 | B24 | 库存快照取哪一天、用哪个任务？ | G1 只需 cutoff 快照，不是 6 个月序列 | 用 `stock_alert`/`FZH-StockAlert-daily` 或通途 API；记录 `snapshot_at` | 技术 |
 | B25 | 历史库存不可得，G1/预测怎么处理？ | G1 不需要历史库存；断货删失是预测任务 | G1 用当前快照；断货用 Notion/邮件/check0stock/SPS 信号 + 敏感性；每日快照独立 | 技术 + 计划 |
 | B26 | WayfairCG 库存谁导出、多久一次、丢件率多少？ | Tongtool 调拨≠实际在手；赛狐无 Wayfair 平台仓 API | 由 YTQ 手工导出 Wayfair 后台；transfer vs receipt 对账；未知标 unknown | 运营(YTQ) + 技术 |
+| B27 | 产能/交期不确定怎么进入补货？ | 固定 3 个月交期会给出错误到货日 | 用区间/情景（如 60–120 天）+ 产能约束；输出缺货风险 | 工厂 + 计划 |
 
 ## C. 外部依赖（Jack / PJ / 供应商）
 
@@ -100,6 +102,7 @@ tags: [supply-chain, open-questions, decisions]
 | E9 | G2/G3 用 43 个月还是扩到 2026-09？ | 决定季节性回测长度 | 优先 2023-01..2026-09；至少保留 2023-01..2026-07 核心集 |
 | E10 | 是否现在启动每日全量库存快照？ | 独立任务，不是 G1 门槛；不启动就永远没有历史 | 可并行启动；3–6 个月后再评估库存策略回测 |
 | E11 | WayfairCG 是否做 Tongtool 调拨 vs Wayfair 后台收货对账？ | 3PL 库存不准会直接影响 Wayfair 补货 | 先取 YTQ 一份后台库存 + 对应调拨记录，算丢件率 |
+| E12 | 美东历史回测 vs 美中 cohort/ramp 的最小验证？ | 美中历史不可参考，不能直接套 ens5 | 美东用 E1 方法；美中按运营/Listing 起始日期做 cohort 与 ramp 对比 |
 
 ## 最小可开工假设（若上述未答）
 
