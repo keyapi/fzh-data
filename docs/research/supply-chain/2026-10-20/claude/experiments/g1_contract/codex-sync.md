@@ -174,7 +174,7 @@ family_net_consumption = family_outbound_gross − resalable_returns
 ## 9. 可直接复制给 Codex（合并版）
 
 ```text
-1dafa7b2 之后的增量合并（你已完成的部分保留，不用重做）：
+c854800e 之后的增量合并（你已完成的部分保留，不用重做）：
 
 一、你 c854800e 已完成、保留
 - C21–C25（25/25）与 mapping_process §0–§4 复审保留。
