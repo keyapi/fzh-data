@@ -56,9 +56,17 @@ tags: [supply-chain, codex, g1, handoff]
 
 ## 4. 三角靠枕 G1 切片输入说明（只做映射说明，不取数）
 
+- **数据来源默认用现有数据**：GSheet `通途订单YYYYMM`（PR #304 服务账号直读 43 个月）
+  + 本地 `D:/Work/王忠于/成本核算/2026年{4..9}月订单_order_cost_*.xlsx`；业务导出只作兜底。
+- **映射优先级**：**P1 EN `Tongtool Order` 明细的客户物料号** →
+  **P2 `Item Customer Detail.ref_code`（可复用 PR #303 `EN_API/query_customer_items_suffix.py`）/ `importBOMCostList.客户物料号`** →
+  **P3 Colab 4.2 派生物（仅缺失兜底，标 `fallback=true`）**。
+  现有记录见 `13-g1-data-sources.md` §1.3；不要重复造映射。
 - EN：叶子物料组 `KS0001 三角靠枕`、`KS0248 三角靠枕无扣`；保留 leaf group/SKU。
-- 通途 GSheet：品类可能叫「三角」（SX-KZSJ）；**只作候选线索**，以 SKU/客户码精确匹配为准。
-- 列出预计的未匹配/歧义类别：后缀（`-Cover/-Foam`）、无扣 vs 有扣、组合/套件、历史改名。
+- 通途 GSheet：`品类orig` 多为「自产-三角靠枕-*」；`品类/品类统一名` 是 Colab 4.2 派生物，
+  **可能不一致，不能当主键**；以完整通途SKU/客户码精确匹配为准。
+- 列出预计的未匹配/歧义类别：后缀（`-Cover/-Foam`）、无扣 vs 有扣、组合/套件、历史改名、
+  同时命中 KS0001/KS0248。
 - 仓与窗口：**两仓（美中-FZH-DANEEY + 美东-CENTRADE）× 2026-04..09（G1 6 个月）**；
   G2/G3 另用 2023-01..2026-07（43 个月）。
 - **不访问生产、不导出真实明细**；只写映射规则与预期异常。
