@@ -11,7 +11,11 @@ tags: [solutions, log]
 - **核实**: 销售订单 Excel 上传只生成 `PK#` 行；内胆由启用的 Client Script `销售订单 子表 items 所有行 增加配套物料20241030` 添加，`key_test.item_utils.get_supporting_item` 按**物料组+尺寸**找 `内胆#` 变体（不读 BOM），并走 `custom_replaced_by_other_item_group`。近 90 天 22 张含皮壳 SO 中 13 张有内胆、9 张没有；2026-08-17 起基本 1:1，零内胆多为没点按钮。
 - **统计**: EN 启用提交 KS BOM 2,210：PK+ND 1,745 / PK only 280 / neither 185；本地 1,811 个含皮壳 BOM 中 BOM 与按钮逻辑一致 1,531（84.5%），BOM 无但按钮会加 82，BOM 有但按钮找不到 62。
 - **修正**: `forecast_shipment_plan.py` 同时输出 BOM 与按钮两种口径：`nd_from_button_not_bom` 10 行/52、`bom_nd_no_button_match` 11 行/121；皮壳 249 行/3,831、内胆 BOM 219/3,637。
-- **核实**: 通途 `-Cover` 与 listing 是独立 SKU 账（库存/销售/变动均不镜像；cover 销量 404 vs listing 8,849，4.4%），可售总量应相加，不能同一数量写两遍；是否同一堆实物未证，需调拨/盘点/运营确认。Sellfox 的 `PK#→KS x1` 是销售层共享代理，不代表通途合并。
+- **核实**: 通途 `-Cover` 与不带后缀的通途 SKU 是独立 SKU 账（库存/销售/变动均不镜像；cover 销量 404 vs 非 cover 8,849，4.4%），可售总量应相加，不能同一数量写两遍；是否同一堆实物未证，需调拨/盘点/运营确认。Sellfox 的 `PK#→KS x1` 是销售层共享代理，不代表通途合并。
+- **修正**: `forecast_replenishment_v3.py` 新增物料级合并池 `replenishment_pool`：同一物料所有通途 SKU 合并，**皮壳/半成品把 `-Cover` 计入供给**，成品不自动计入；池级 1,074 物料×仓、277 需补货 / 4,538 件。3PL 落 `three_pl_stock`（92 SKU / 880 件），按库存数量展示、暂不进 ROP。
+- **根因**: 62 个「BOM 有内胆、按钮找不到」中 **61 个是内胆物料停用**，1 个是皮壳尺寸属性取错；82 个「BOM 没内胆、按钮会加」集中在 KS0026/KS0428/KS0385。新增 `nd_button_gap_report.py` → `nd_button_gaps.csv`。
+- **架构**: KS BOM 只有 PK#+ND#；PP 棉/海绵+压缩包装在 `SXBZCP#`（393）/`PLBZCP#`（262）/`USTXBZCP#`（262）BOM，且不含 KS 子件，是附加填充/包装 BOM。成品/FBA 完整用料需叠加，分公司补货按 KS BOM 是对的。
+- **更新**: 文档 §9–§12 同步池级/3PL/根因/包装 BOM；`-Cover` 也用于大件拆包与不同填充物，EN 架构未必一一对应。
 - **更新**: 文档 §10 补 SO 按钮真实逻辑、BOM/按钮偏差统计、`-Cover` 独立性证据；§11 补 ND 物料与变体属性导出；§12 更新皮壳池待确认项。
 
 ## 2026-10-21（修正：分公司补货是「发货形态」，不是 BOM 叶节点补货）

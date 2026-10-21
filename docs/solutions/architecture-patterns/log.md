@@ -9,8 +9,10 @@ tags: [solutions, architecture-patterns, log]
 
 ## 2026-10-21
 
-- **核实**: `order-history-duckdb-store.md` §10 补 SO 内胆按钮的真实机制（Excel 只建 PK#；按钮按物料组+尺寸找 ND#，不是读 BOM，含 `custom_replaced_by_other_item_group`）、22 张 SO 的 13/9 分布、BOM 与按钮 84.5% 一致及两类偏差；`-Cover` 与 listing 在通途是独立 SKU 账（变动不镜像，cover 销量 4.4%），可售总量相加但实物同池未证。
+- **核实**: `order-history-duckdb-store.md` §10 补 SO 内胆按钮的真实机制（Excel 只建 PK#；按钮按物料组+尺寸找 ND#，不是读 BOM，含 `custom_replaced_by_other_item_group`）、22 张 SO 的 13/9 分布、BOM 与按钮 84.5% 一致及两类偏差；`-Cover` 与不带后缀的通途 SKU 是独立 SKU 账（变动不镜像，cover 销量 4.4%），可售总量相加但实物同池未证。
 - **修正**: `forecast_shipment_plan.py` 输出 `nd_from_button_not_bom` / `bom_nd_no_button_match` 两种偏差；首跑皮壳 249 行/3,831、内胆 BOM 219/3,637、按钮补 10/52、按钮对不上 11/121。
+- **修正**: `forecast_replenishment_v3.py` 增物料级合并池（皮壳/半成品计入 `-Cover`）：277 需补货 / 4,538 件；3PL `three_pl_stock` 92 SKU/880 件。
+- **根因/架构**: 61/62 个「BOM 有内胆、按钮找不到」是内胆停用；82 个反例集中 KS0026/KS0428/KS0385；KS BOM 只有皮壳+内胆，PP 棉/包装在 SXBZCP/PLBZCP/USTXBZCP BOM。新增 `nd_button_gap_report.py`。
 
 - **修正**: `order-history-duckdb-store.md` §10 重写为「分公司发货形态」：成品 KS = PK# + ND# + 充棉；`Item Group.custom_shipment_type_to_branch` 决定发什么；补货量只有一套，`forecast_shipment_plan.py` 按 BOM 第一层换算成皮壳/内胆清单。删除面料/拉链/PP 棉与 EN Bin 供给的错误做法。3PL API 实测仅 Cranbury 有量，权威仍是 Wayfair 后台导出；E1 表述改为「E1 选择 Croston、held-out TSB 0.511 / ens5 0.520」。
 - **修正**: `demand_forecast_90` 只取未来月并按实际未来月数归一，补货 v3 由 722/14,474 修正为 311/4,548；`forecast_ensemble.py` 短史 SKU 兜底后未来预测覆盖 1,156 条序列，回测 ens5 WAPE 0.690 不变。

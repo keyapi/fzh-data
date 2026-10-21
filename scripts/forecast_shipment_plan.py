@@ -12,18 +12,18 @@
   BOM 有内胆但按钮找不到 → `bom_nd_no_button_match`；
   BOM 没内胆但按钮会加 → `nd_from_button_not_bom`。
 - 面料/拉链/PP 棉属于中国生产物料/分公司填充耗材，不做分公司补货。
-- 分公司库存池仍用通途（listing SKU，`-Cover` 是独立 SKU 账，不镜像）；
-  本脚本不在成品补货之外再算一套供给，只把补货量换算成「该发什么」。
+- 分公司库存池用通途 SKU 合并（同一物料含 `-Cover`；`-Cover` 是独立 SKU 账，不镜像），
+  皮壳/半成品把 `-Cover` 计入供给；成品不自动计入。本脚本只把补货量换算成「该发什么」。
 
 输入（默认 D:/Work/fzh-order-store）：
   ks_items.tsv          EN 物料 → 物料组（KS/PK#/ND#）
   item_groups_full.tsv  EN 物料组 → 发货形态 + custom_replaced_by_other_item_group
   nd_items.tsv          EN 内胆物料（物料组/是否变体模板/停用）
   variant_attrs.tsv     EN 变体属性（用于取「尺寸」值）
-  replenishment_v3      成品 SKU×仓 补货建议（先跑 forecast_replenishment_v3.py）
+  replenishment_pool    物料×仓 合并库存池补货建议（先跑 forecast_replenishment_v3.py）
 
 输出：
-  replenishment_v3_ship   补货行 + 发货形态 + cover 库存提示
+  replenishment_pool_ship 补货行 + 发货形态 + cover 库存提示 + 通途 SKU 列表
   component_ship_plan     按 BOM 第一层 + 按钮逻辑拆到 PK#/ND# 的发货清单
   component_ship_summary  按仓 × 组件汇总
 
@@ -98,27 +98,15 @@ def main():
         con.unregister(n)
 
     con.execute("""
-        CREATE OR REPLACE TABLE item_cover_stock AS
-        SELECT m.item_code, s.warehouse, SUM(s.available) AS cover_available
-        FROM stock_latest s
-        JOIN sku_map m ON m.tongtool_sku = s.sku
-        WHERE lower(s.sku) LIKE '%-cover' AND s.available > 0
-        GROUP BY 1, 2
-    """)
-
-    con.execute("""
-        CREATE OR REPLACE TABLE replenishment_v3_ship AS
-        SELECT r.*, m.item_code AS en_item_code,
-               IFNULL(t.ship_type, '') AS ship_type,
-               IFNULL(cs.cover_available, 0) AS cover_stock_same_item,
-               CASE WHEN IFNULL(cs.cover_available, 0) > 0
-                          AND (r.available + r.intransit + IFNULL(r.on_order, 0)) = 0 THEN 'cover_only'
-                    WHEN IFNULL(cs.cover_available, 0) > 0 THEN 'cover_also'
-                    ELSE '' END AS pool_note
-        FROM replenishment_v3 r
-        LEFT JOIN sku_map m ON m.tongtool_sku = r.sku
-        LEFT JOIN item_ship_type t ON t.item_code = m.item_code
-        LEFT JOIN item_cover_stock cs ON cs.item_code = m.item_code AND cs.warehouse = r.warehouse
+        CREATE OR REPLACE TABLE replenishment_pool_ship AS
+        SELECT p.*,
+               CASE WHEN p.cover_available > 0
+                          AND p.available_all - p.cover_available <= 0 THEN 'cover_only'
+                    WHEN p.cover_available > 0 THEN 'cover_also'
+                    ELSE '' END AS pool_note,
+               (SELECT STRING_AGG(DISTINCT si.sku, ',')
+                FROM sku_item si WHERE si.item_code = p.item_code) AS sku_list
+        FROM replenishment_pool p
     """)
 
     # 只取 BOM 第一层：皮壳 PK# / 内胆 ND#（面料、拉链、PP 棉不在分公司补货范围）
@@ -140,11 +128,11 @@ def main():
     con.execute("""
         CREATE OR REPLACE TABLE component_ship_plan AS
         WITH need AS (
-            SELECT warehouse, sku, en_item_code, ship_type, suggested_qty
-            FROM replenishment_v3_ship
+            SELECT warehouse, item_code AS en_item_code, ship_type, suggested_qty, sku_list
+            FROM replenishment_pool_ship
             WHERE suggested_qty > 0
         ), bom_expanded AS (
-            SELECT n.warehouse, n.sku, n.en_item_code, n.ship_type, n.suggested_qty,
+            SELECT n.warehouse, n.sku_list, n.en_item_code, n.ship_type, n.suggested_qty,
                    c.component_item, c.component_name, c.qty_per_unit,
                    ROUND(n.suggested_qty * c.qty_per_unit, 1) AS component_qty,
                    CASE WHEN c.component_item LIKE 'ND#%'
@@ -159,7 +147,7 @@ def main():
             WHERE n.ship_type IN ('皮壳', '半成品')
         ), button_added AS (
             -- BOM 没有内胆，但销售订单按钮会按物料组+尺寸补一条内胆
-            SELECT n.warehouse, n.sku, n.en_item_code, n.ship_type, n.suggested_qty,
+            SELECT n.warehouse, n.sku_list, n.en_item_code, n.ship_type, n.suggested_qty,
                    b.nd_item AS component_item, bi.item_name AS component_name,
                    1.0 AS qty_per_unit,
                    ROUND(n.suggested_qty * pk.qty_per_unit, 1) AS component_qty,
@@ -173,7 +161,7 @@ def main():
               AND NOT EXISTS (SELECT 1 FROM bom_nd x WHERE x.item_code = n.en_item_code)
         ), fallback AS (
             -- 成品 / 没匹配到物料 / 没有 BOM：保留原行，明确标记
-            SELECT n.warehouse, n.sku, n.en_item_code, n.ship_type, n.suggested_qty,
+            SELECT n.warehouse, n.sku_list, n.en_item_code, n.ship_type, n.suggested_qty,
                    n.en_item_code AS component_item, NULL AS component_name, 1.0 AS qty_per_unit,
                    n.suggested_qty AS component_qty,
                    CASE WHEN n.ship_type = '成品' THEN 'ship_finished'
@@ -200,7 +188,7 @@ def main():
     split = con.execute("""
         SELECT COALESCE(NULLIF(ship_type,''),'(unknown)') AS ship_type,
                COUNT(*) AS sku_wh, SUM(suggested_qty) AS qty
-        FROM replenishment_v3_ship WHERE suggested_qty > 0
+        FROM replenishment_pool_ship WHERE suggested_qty > 0
         GROUP BY 1 ORDER BY qty DESC
     """).df()
     nd_source = con.execute("""
