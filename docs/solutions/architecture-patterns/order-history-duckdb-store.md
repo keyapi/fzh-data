@@ -12,8 +12,8 @@ applies_when:
   - "要做销量预测 / 补货决策，需要 2023 年至今的自发货与 FBA 历史销量"
   - "想判断 EN 的 Tongtool Order 能不能靠通途 API 补齐历史"
   - "要设计订单历史的分析库（表/字段/口径/增量方式）"
-  - "皮壳/内胆/面料等组件怎么按 BOM 展开做补货"
-tags: [demand-forecast, duckdb, tongtool, gsheet, erpnext, replenishment, bom]
+  - "给分公司补货时，成品/皮壳/半成品到底发什么、BOM 怎么换算"
+tags: [demand-forecast, duckdb, tongtool, gsheet, erpnext, replenishment, shipment-type, 3pl]
 related_components: [EN_API, tongtool_api, erpnext]
 ---
 
@@ -67,9 +67,9 @@ DuckDB（分析库，独立文件）
 | `sku_map` | SKU→物料 | 来自 EN `Item Customer Detail`（见下） |
 | `stock_bin` / `po_open` | 物料 | EN 现存、未结采购在途 |
 | `replenishment` | 物料 | on_hand / on_order / 90 天日均 / 覆盖天数 / 建议补货量 |
-| `bom` / `bom_item` / `bom_exploded` | BOM | EN 默认 BOM（5,582 条）+ 多级展开（root/node/level/qty_per_unit） |
-| `component_demand` | 组件 | 成品预测 × BOM 累计用量，日均（全公司） |
-| `component_replenishment` | 组件 | EN Bin + 未结 PO 供给、ROP、MOQ/装箱取整 |
+| `bom` / `bom_item` / `bom_exploded` | BOM | EN 默认 BOM（5,575 条去重）+ 多级展开（root/node/level/qty_per_unit） |
+| `replenishment_v3_ship` | SKU×仓 | 成品补货 + 物料组发货形态 + cover 池提示 |
+| `component_ship_plan` / `_summary` | 皮壳/内胆 | 按 BOM 第一层把补货量换算成 `PK#`/`ND#` 发货清单 |
 | `orders_unified` | 订单级视图 | EN 优先，GS 只补 EN 没有的 |
 | `raw_wide/raw_YYYYMM.parquet` | 原样 | **每月整表原样保存**，可追溯、可换真源重算 |
 
@@ -107,29 +107,33 @@ DuckDB（分析库，独立文件）
 
 ### 9. 库存快照 + ens5 预测 + 补货 v3（2026-10-21）
 
-- **库存来源改为通途**（EN 库存口径不可用）：`erp2_stocks_stocksquery`，按仓分页（pageSize≤100、5 次/分钟）。已拉三家主仓 **4,465 行**（美东 2,072 / 美中 1,024 / 波兰 1,369）；另拉组件仓「半成品仓 160 / 成品仓 250」作核对，但**通途里没有 PK#/面料/拉链**，组件库存只能取 EN。
+- **库存来源只用通途**（EN Bin 不可作可用库存，PR #300 `02-capability-map` §4：EN 不扣减通途）：`erp2_stocks_stocksquery`，按仓分页（pageSize≤100、5 次/分钟）。三家主仓 **4,465 行**（美东 2,072 / 美中 1,024 / 波兰 1,369）；半成品/成品仓与 WayfairCG 另拉，见 §10。
 - **预测**：`scripts/forecast_ensemble.py`，MA3/MA6/MA12/Croston/TSB + ens5 中位数，滚动 origin、horizon=3、指标 WAPE。
-  - **回测结果（1,347 条 SKU×仓 序列）：ens5 0.690 最优**，ma3 0.703、ma12 0.705、tsb 0.723、ma6 0.724、croston 0.741 —— 与 PR #300 E1 的结论一致（简单组合优于单模型）。
+  - **回测结果（1,347 条 SKU×仓 序列）：ens5 0.690 最优**，ma3 0.703、ma12 0.705、tsb 0.723、ma6 0.724、croston 0.741。注意这是本数据集结论；PR #300 E1 的 held-out 里 TSB 0.511、ens5 0.520，且 E1 的选择规则选中 Croston，见 §10 末尾。
   - 预测覆盖已扩到 **2,357 条序列**（最少 3 个月历史，短史 SKU 用同一套方法兜底）；其中 **1,156 条有未来月预测**。回测仍只跑 ≥12 个有销量月的 1,347 条，保持与 E1 可比。
   - **口径修正（重要）**：`demand_forecast_90` 早期把 ens5 表的全部月份求和（包含回测 origin 和历史外推），会把已停售 SKU 的旧预测也算进需求。现只取 `month >= 当前月`，并按**实际未来月数 ×30** 归一（有的序列只剩 1–2 个月未来，不能一律除 90）。
 - **补货 v3**：`scripts/forecast_replenishment_v3.py`，`ROP = 日均预测 × (交期 45 + 安全 30)`，`建议 = max(0, ROP − (available + intransit + PO未入库))`。
   - 供给 = 通途库存 `available` + `intransit` + 通途 PO 未入库量（`erp2_purchase_purchaseorderquery`，180 个 SKU×仓、16,043 件在途）。
   - 修正后首跑：4,465 个 SKU×仓，**1,156 有未来预测**，**311 需补货**，建议合计 **4,548 件**（美中 2,257 / 美东 1,324 / 波兰 967）。
 
-### 10. 组件级补货：EN BOM 展开（2026-10-21）
+### 10. 分公司补货的发货形态：成品 / 皮壳 / 半成品（2026-10-21 修正）
 
-成品补货只看成品 SKU 不够：皮壳（PK#）、内胆（ND#）、面料、拉链、PP 棉要单独备料。做法：
+**先把术语摆正**（`CONCEPTS.md:149-153`）：成品 `KS` = 皮壳 `PK#` + 内胆 `ND#` + 充棉；半成品只有皮壳/内胆。「组件」不是公司内部业务分类，上一版把它展开到面料/拉链/PP 棉是错的——那是中国生产物料，不是分公司补货对象。
 
-- **BOM 取数**：EN 启用且默认的 BOM **5,582 条、明细 13,157 行**（`scripts/forecast_component_bom.py` 读 `bom.tsv` / `bom_items.tsv`）。
-  - 层级实测**最多 2 层**：成品 → PK#/ND# → 面料/拉链/辅料；无环。
-  - 同一 item 有 7 组重复默认 BOM（内容相同），按 BOM 名排序保留第一条。
-- **需求**：ens5 成品日均 × BOM 累计用量（递归展开，最多 4 层）。**981/1,004（97.7%）** 有预测的成品能匹配到 BOM；缺的 22 个 KS + 1 个 TJ 需补 BOM。
-- **供给**：EN `Bin.actual_qty`（只算中国境内 FZH/绍仓库，排除所有仓库聚合、海外到货/在途、不良/报废/呆滞/样品）+ EN 未结 PO（`received_qty < qty`）。
-  - 组件库存**不在通途**：三家主仓与半成品/成品仓都没有 PK#、面料、拉链。
-  - **负库存按 0 计**并打 `negative_stock` 标记（如 `NL1010-3#-32-WHITE-SINGLE` EN 为 −47,305，若不夹紧会凭空多出 5.5 万条拉链的建议量）。
-- **重订货**：`ROP = 日均组件需求 × (交期 + 安全 15)`；交期优先取 Item `lead_time_days`，缺省 30 天。
-- **取整**：先按 Item `custom_quantity_per_outer_package`（其次 `min_pack_qty`）向上取整，再满足 `min_order_qty`（MOQ）。目前只有 21 个物料维护了 MOQ、747 个维护了装箱数，取整影响约 +2%。
-- 首跑：**1,731 个组件有需求**（1,048 个半成品 + 683 个原料），**1,334 个需补货**，建议合计 **34,283**（按件/米等各自单位）。
+- **决定发什么的不是 BOM，是物料组的「绍兴发货方式」**：EN `Item Group.custom_shipment_type_to_branch`（皮壳 243 组 / 成品 169 / 半成品 62 / 空 107）。旧称「给分公司发皮壳」是口语，实际发什么以 BOM 为准，通常 `PK# + ND#` 一起发。
+- **补货量只有一套**：`forecast_replenishment_v3` 按分公司仓的通途库存池（listing SKU，必要时 `-Cover` 代理）算 ROP；不要为组件另算一套 ROP，否则同一库存池会被扣两次。
+- **换算成发货形态**（`scripts/forecast_shipment_plan.py`，只取 BOM 第一层 `PK#`/`ND#`）：
+  - 成品 → 发成品 KS；
+  - 皮壳 → 发 `PK#`，并按 BOM 同时列出 `ND#`（「可能也发内胆」）；
+  - 半成品 → 同样按第一层 BOM，包装半成品暂未进 KS BOM。
+- 首跑（311 行 / 4,548 件）：**皮壳 246 行 / 3,702 件**、成品 47 / 655、半成品 14 / 171、未匹配 4 / 20。组件清单前几位是通用内胆（`ND#KS0001-100-CYF-WHITE` 1,470 等）与各色皮壳。
+- **不要用 EN Bin 当组件供给**：EN 不扣减通途，`Bin.actual_qty` 只是账面；组件也没有独立的可用库存池。上一版用 EN Bin + 负库存夹紧算出 34,283 的做法已废弃。
+- **皮壳库存可能在 `-Cover` SKU 上**：107 个物料有 cover 库存、其中 65 个只有 cover 库存（总量 3,534，对比 listing 46,970）。脚本输出 `cover_stock_same_item` / `pool_note`（`cover_only` / `cover_also`）提示复核，但**不自动合并**——一对多映射直接相加会重复承诺 ATP（`CONCEPTS.md:282-283`）。
+- **面料/拉链/PP 棉不在范围内**：面料/拉链走中国生产物料计划；PP 棉是分公司填充耗材（部分产品 BOM 里确有，但本次不做补货）。
+
+**3PL（WayfairCG）**：`erp2_stocks_stocksquery` 能查，但数据很薄——5 个启用仓实测只有 Cranbury 92 个 SKU / 880 件，Perris 4 个 / 0，Romeoville 2 个 / 0，McDonough、PortWentworth 为空；没有报表导出 API（文档镜像只有库存查询/变动/FBA），Excel 只能在 UI 导出。结论：**API 可作交叉核对，权威仍是 Wayfair 后台导出**（PR #300 `13-g1-data-sources` §1.5）；3PL 是否纳入补货等 PR #301 G1b 的责任确认，目前不并入分公司主仓补货。
+
+**关于 E1 的准确说法**：PR #300 E1（8 个 PB SKU）的验证选择规则选中 Croston；held-out WAPE 为 TSB 0.511、ens5 0.520、Croston 0.530、naive 0.602——组合优于 naive，但**不能说 E1 验证了 ens5**。本库 1,347 条长史序列的回测里 ens5 0.690 最好，这是本数据集结论，不是 E1 的复现。
 
 ### 11. EN 侧数据导出（BOM / Bin / PO）
 
@@ -147,15 +151,16 @@ open('/tmp/export.tsv','w',encoding='utf-8').write(r.stdout)
 PY"
 ```
 
-需要导的三张小表：`tabBOM`（5,582）、`tabBOM Item`（13,157）、`tabBin`（非零 3,123）、`tabPurchase Order Item`（未结 21 行）。全部只读，不碰业务写入。
+需要导的表：`tabBOM`（5,582）、`tabBOM Item`（13,157）、`tabItem`（15,230，含 MOQ/装箱/交期）、`tabItem Group`（`custom_shipment_type_to_branch`）、`tabBin`（非零 3,123）、`tabPurchase Order Item`（未结 21 行）。全部只读，不碰业务写入。
 
 ### 12. 仍未覆盖 / 下一步
 
-- **3PL（WayfairCG）库存**：通途里是启用仓，但库存需人工导出，尚未并入。
-- **BOM 缺口**：22 个 KS + 1 个 TJ 有销量但无默认 BOM；补齐后需求会更完整。
-- **组件供给口径**：只有 EN `Bin.actual_qty`，且个别物料存在大额负库存（已夹紧并标记）；EN 的在制品/委外仓是否都算可用，需要业务确认。
-- **MOQ/装箱数维护率低**：21/15,230 有 MOQ、747 有装箱数，取整目前只影响少数物料。
-- **组件需求未按仓拆分**：按全公司汇总（组件在中国集中采购/生产），海外仓备料需另建调拨逻辑。
+- **3PL（WayfairCG）**：API 可查但只有 Cranbury 有量（92 SKU / 880 件），其余仓几乎为空；权威仍是 Wayfair 后台导出，是否纳入补货待责任确认（PR #301 G1b 已暂停）。
+- **BOM 缺口**：22 个 KS + 1 个 TJ 有销量但无默认 BOM；12 行皮壳/半成品补货因此无法拆组件。
+- **皮壳池身份**：65 个物料只有 `-Cover` 库存（无 listing 库存），目前只做提示不合并；需要业务确认这些仓的物理池是否与 listing 同一个池。
+- **内胆库存**：通途没有独立的 `ND#` 库存码；本次只按 BOM 算「该发多少内胆」，没有内胆可用库存口径。
+- **半成品包装**：KS BOM 只含 `PK# + ND#`，绍兴包装半成品未进 BOM。
+- **组件（皮壳/内胆）没有独立 ROP**：补货量沿用成品池，发货形态只是换算；等分公司能分别盘点皮壳/成品后再考虑独立库存池。
 
 ## Why This Matters
 
@@ -166,7 +171,7 @@ PY"
 
 - 做销量预测/补货分析、需要 2023 年以来的数据时。
 - 有人问"能不能用通途 API 把 EN 历史补齐"——答案是不能，见 §2。
-- 需要把成品预测展开到皮壳/内胆/面料等组件时，见 §10。
+- 需要把成品补货换算成皮壳/内胆的发货清单时，见 §10。
 - 需要新增数据源（FBA、库存、在途）时，按 §4 的表结构扩展。
 
 ## Examples
@@ -178,16 +183,18 @@ uv run python scripts/forecast_order_store.py --months 202301,...,202609 --with-
 uv run python scripts/forecast_order_store.py --months 202609 --en-sample 0
 # 通途库存快照（三家主仓；5 次/分钟，12s 间隔）
 uv run python scripts/tongtool_stock_snapshot.py --warehouses "美东-CENTRADE,美中-FZH-DANEEY,波兰-FZHPoland-covers"
-# 组件仓库存核对（通途里只有零星半成品，没有 PK#/面料）
+# 半成品/成品仓库存（通途没有 PK#/ND# 码，皮壳/海绵用 -Cover/-Foam 后缀）
 uv run python scripts/tongtool_stock_snapshot.py --warehouses "FZH-DANEEY-半成品仓,FZH-DANEEY-成品仓"
+# 3PL 库存（API 可查但数据很薄，仅作交叉核对）
+uv run python scripts/tongtool_stock_snapshot.py --warehouses "WayfairCG-Cranbury仓,WayfairCG-McDonough仓,WayfairCG-Perris仓,WayfairCG-PortWentworth仓,WayfairCG-Romeoville仓"
 # 通途采购在途
 uv run python scripts/tongtool_po_snapshot.py --from 2026-06-01
 # ens5 预测 + 回测（短史 SKU 也出预测；回测仍只跑 ≥12 个有销量月）
 uv run python scripts/forecast_ensemble.py --horizon 3 --origins 6 --min-months 3
 # 成品补货建议（ROP）
 uv run python scripts/forecast_replenishment_v3.py --lead-days 45 --safety-days 30
-# 组件补货建议（BOM 展开 + MOQ/装箱取整）
-uv run python scripts/forecast_component_bom.py --lead-days 30 --safety-days 15
+# 按「绍兴发货方式」换算成 成品/皮壳/半成品 发货清单
+uv run python scripts/forecast_shipment_plan.py
 ```
 
 产物统一落在 **`D:/Work/fzh-order-store/`**（持久目录，不进 git；Windows 临时目录会被清理）。

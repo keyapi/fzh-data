@@ -24,6 +24,12 @@ UNUSED = {
     "海外仓美西仓库备用仓",
 }
 
+# 下游 3PL（不属于自营分公司仓，单独归类，不并入补货主仓）
+THREE_PL = {
+    "WayfairCG-Cranbury仓", "WayfairCG-McDonough仓", "WayfairCG-Perris仓",
+    "WayfairCG-PortWentworth仓", "WayfairCG-Romeoville仓",
+}
+
 PENDING = {"海外仓美中仓库备用仓", "扬州仓库"}
 
 PREFIXES = ("美东-", "美中-", "波兰-")
@@ -37,6 +43,8 @@ def classify(name: str, current_set: set[str]) -> tuple[str | None, str]:
         return EXPLICIT[name]
     if name in UNUSED:
         return (None, "unused")
+    if name in THREE_PL:
+        return (name, "3pl")
     if name in current_set:
         return (name, "current")
     for p in PREFIXES:

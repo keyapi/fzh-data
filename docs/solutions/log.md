@@ -7,6 +7,13 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-10-21（修正：分公司补货是「发货形态」，不是 BOM 叶节点补货）
+- **修正**: 上一版把「组件」展开到面料/拉链/PP 棉并用 EN Bin 当供给，口径错误。公司术语：成品 KS = 皮壳 PK# + 内胆 ND# + 充棉；「组件」不是内部业务分类；面料/拉链属于中国生产物料，PP 棉是分公司填充耗材，均不在分公司补货范围。
+- **正确做法**: `Item Group.custom_shipment_type_to_branch`（皮壳/半成品/成品）决定发什么；补货量仍只有一套（成品池 ROP），`scripts/forecast_shipment_plan.py` 只把补货量按 BOM 第一层换算成 `PK#`/`ND#` 清单。首跑 311 行/4,548 件 → 皮壳 246/3,702、成品 47/655、半成品 14/171、未匹配 4/20。
+- **供给口径**: EN Bin 不可作可用库存（EN 不扣减通途）；删除 `forecast_component_bom.py` 与 `component_replenishment`（EN Bin + 负库存夹紧）做法。皮壳可能在 `-Cover` SKU 上（107 个物料有、65 个仅 cover），只输出 `pool_note` 提示，不自动合并（避免重复 ATP）。
+- **3PL**: `erp2_stocks_stocksquery` 可查 WayfairCG，但只有 Cranbury 92 SKU/880 件，其余仓几乎为空；无报表导出 API，UI 导出仍保留；权威仍是 Wayfair 后台，暂不并入补货。
+- **E1 表述**: 修正「与 PR #300 E1 一致」的说法——E1 选择规则选中 Croston，held-out TSB 0.511 / ens5 0.520；本库 1,347 序列回测 ens5 0.690 是本数据集结论。
+
 ## 2026-10-21（组件级补货：EN BOM 展开 + 预测口径修正）
 - **更新**: `architecture-patterns/order-history-duckdb-store.md` —— 补 §10 组件级补货（EN 默认 BOM 5,582 条 / 明细 13,157 行，最多 2 层；981/1,004 有预测的成品能匹配 BOM；组件需求 = 成品预测 × BOM 累计用量；供给取 EN Bin 中国仓 + 未结 PO；MOQ/装箱取整）；§11 `bench mariadb` **1000 行截断**的坑与直连 mysql 导出法；§12 剩余缺口。
 - **修正**: `demand_forecast_90` 之前把 ens5 全部月份求和（含回测/历史外推），会把停售 SKU 的旧预测计入需求；现只取未来月，并按实际未来月数×30 归一。补货 v3 结果由 722/14,474 修正为 **311 个 SKU×仓 / 4,548 件**。
