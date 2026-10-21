@@ -92,7 +92,7 @@ tags: [supply-chain, research, sources]
 | S1-061 | 完整快照覆盖：USNJ 5.86 / USTX 5.48 / PL 10.24 个月；131 有需求无供给、194 <2 月、127 unknown | `out/g1b_coverage_complete.json` | C | 2026-10-20 | 缺口仅 sampled_complete；3PL/退货仓不计 | A | g1b_results §3/§5 |
 | S1-062 | top10 EN 抽取 9/9 完成；SO 15–42、SE 36–111；9 个 SKU 未发分解 difference=0 | `out/g1b_en_top_*.json` | C | 2026-10-20 | 死单/无计划/超发按 SKU 显式列出 | A | g1b_top10 |
 | S1-063 | 库存结存 4,575 行/family 1,527；销售及库存报表 1,954 行/family 568；后者有销量但不是完整库存 | 浏览器 2026-10-21 导出 | C | 2026-10-21 | 961 个 family 键只在库存结存；67 个 waiting 差异 | A | 14-daily-inventory-backup §1.1 |
-| S1-064 | 浏览器 02:17 首跑成功 4/6 仓、4,575 行；API 05:17 首跑因中文任务路径失败，已迁 ASCII 路径重注册 | `web_automation/logs/export-stock.log` + Task Scheduler | C | 2026-10-21 | `status=READY reason=success`；API exit 1 无 manifest | A | 14-daily-inventory-backup §4/§6 |
+| S1-064 | 浏览器 02:17 首跑成功 4/6 仓、4,575 行；API 05:17 首跑因中文任务路径失败，迁 ASCII 后补跑 `complete=True` | `web_automation/logs/export-stock.log` + Task Scheduler + `2026-10-21/manifest.json` | C | 2026-10-21 | CENTRADE 2,072/DANEEY 1,024/退货 522/PL 1,369 | A | 14-daily-inventory-backup §4/§6 |
 
 ## 未找到项（N-###）
 

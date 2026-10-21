@@ -343,9 +343,10 @@ tags: [supply-chain, research, log]
   销量/周转用销售报表，二者都归档。
 - **自动登录**：02:17 无弹窗，使用手动登录建立的 `chrome-profile`；`.env` 仍无
   `TONGTU_USER/PASSWORD`，cookie 过期后需再手动或补凭证（脚本已支持 ddddocr）。
-- **API 05:17 首跑失败**：任务 action 的中文路径被 Task Scheduler 存成乱码，命令未执行。
-  已把 wrapper/脚本/`tongtool_api`/`.env` 复制到 `D:\Work\fzh-stock-backup`（ASCII）并重注册；
-  09:2x 手工补跑，数据写 `D:\Work\库存备份\2026-10-21\`。
+- **API 05:17 首跑失败，补跑成功**：旧任务 action 的中文路径被 Task Scheduler 存成乱码；
+  已把 wrapper/脚本/`tongtool_api`/`.env` 复制到 `D:\Work\fzh-stock-backup`（ASCII）并重注册。
+  09:46 补跑 `complete=True`：CENTRADE 2,072/21、DANEEY 1,024/11、DANEEY 退货仓 522/6、
+  PL 1,369/14、WayfairCG-Cranbury 92/1；数据 `D:\Work\库存备份\2026-10-21\`。
 - **DANEEY 退货仓超时**：2026-10-20 18:06 跑，不在 QDY/通途 API 同步窗口；
   是到 `mcp.tongtool.com` 的 TCP 超时（WinError 10060）。2026-10-21 补跑成功，
   脚本已加 3 次网络重试（10/20s）。

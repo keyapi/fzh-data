@@ -136,7 +136,9 @@ WHERE snapshot_date <= ?;
 - 说明：按启用仓全量分页，13 秒/页；526 退避；`complete=false` 不写 0。
 - **2026-10-21 05:17 首跑失败**：旧任务 action 含中文路径，Task Scheduler 存储为乱码，
   命令未执行；已把 wrapper 移到 `D:\Work\fzh-stock-backup` 并重注册。
-- 2026-10-21 09:2x 已手工补跑，数据写入 `D:\Work\库存备份\2026-10-21\`；
+- 2026-10-21 09:2x 手工补跑，**09:46 完成 `complete=True`**：
+  CENTRADE 2,072/21、DANEEY 1,024/11、DANEEY 退货仓 522/6、PL 1,369/14、
+  WayfairCG-Cranbury 92、Perris 4、Romeoville 2；空退货仓 0 行按 complete 跳过。
   次日 05:17 起自动运行。
 
 ### 4.1 如果放 EN 测试服务器
@@ -162,10 +164,9 @@ LEFT JOIN order_monthly o USING (sku);
 
 ## 6. 仍未完成
 
-- **2026-10-21 05:17 API 任务首跑失败**：旧任务 action 的中文路径被 Task Scheduler 存成乱码，
-  命令未执行（exit 1、无 manifest）。已把 wrapper/脚本/`tongtool_api`/`.env` 复制到
-  `D:\Work\fzh-stock-backup`（ASCII），重注册任务；09:2x 手工补跑，数据写入
-  `D:\Work\库存备份\2026-10-21\`。次日 05:17 起自动运行。
+- **2026-10-21 API 补跑完成**：`D:\Work\库存备份\2026-10-21\manifest.json` `complete=True`；
+  CENTRADE 2,072/21、DANEEY 1,024/11、DANEEY 退货仓 522/6、PL 1,369/14、
+  WayfairCG-Cranbury 92/1、Perris 4、Romeoville 2；次日 05:17 自动。
 - **浏览器 02:17 首跑成功**：4/6 仓，2 个空退货仓跳过，合并 4,575 行；
   `downloads/` 原始库存 + `output/通途合并库存结存清单` + 成本模板。
 - **销售及库存报表已导出**：1,954 行/8 仓；family 568，不能替代库存结存（1,527）。
