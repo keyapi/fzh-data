@@ -2,19 +2,25 @@
 # -*- coding: utf-8 -*-
 """生产只读统一预算闸门离线单测（全部 mock，不访问生产）。
 
-覆盖任务书 2026-10-21-gate-task.md 的验收项：
-  零预算 / 精确边界（请求、字节）/ 超大响应中途停 / 超时连续失败 /
-  429 Retry-After 与重试上限 / 401 立即停 / 崩溃续跑 / 日志对账 /
-  解压后字节上限 / 最小间隔 / 两工具接入 / 离线默认不变。
+覆盖任务书 2026-10-21-gate-task.md 的验收项，以及 2026-10-21 复审 FAIL 的
+全部反例：
+
+  零预算 / 精确边界（请求、字节）/ 按剩余额度读取（不是先读后裁）/
+  解压后字节硬限 / 重定向不跟随 / 墙钟绑定剩余时间与空响应越时 /
+  403 后 fetch 不再发请求 / 停止状态跨进程持久 / 崩溃途中保守恢复 /
+  独占运行锁 / 最小间隔跨进程 / 重叠上下文禁止 / 离线输出与父版本逐字节一致。
 """
 
 from __future__ import annotations
 
 import gzip
+import importlib.util
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest import mock
 
@@ -27,22 +33,56 @@ import g1b_dn_wo_jc_se as dn  # noqa: E402
 import g1b_en_extract as ex  # noqa: E402
 import EN_API.item_shipment_status as iss  # noqa: E402
 
+PARENT_COMMIT = "be37645b^"
+DN_RELPATH = ("docs/research/supply-chain/2026-10-20/claude/experiments/"
+              "g1_contract/g1b_dn_wo_jc_se.py")
+EX_RELPATH = ("docs/research/supply-chain/2026-10-20/claude/experiments/"
+              "g1_contract/g1b_en_extract.py")
+
 
 # ── 测试替身 ──────────────────────────────────────────
 class FakeRaw:
+    """按 `read(amt)` 每次交付一个源块（最多 amt 字节），模拟 urllib3 流式读取。"""
+
     def __init__(self, chunks, tick=None):
         self.chunks = list(chunks)
         self.tick = tick
         self.chunks_yielded = 0
         self.bytes_yielded = 0
+        self.reads: list[int] = []
+        self.eof = not self.chunks
+
+    def read(self, amt, decode_content=False):
+        if self.tick:
+            self.tick()
+        if not self.chunks:
+            self.eof = True
+            return b""
+        item = self.chunks[0]
+        if isinstance(item, BaseException):
+            self.chunks.pop(0)
+            raise item
+        self.reads.append(amt)
+        take = item[:amt]
+        if len(take) < len(item):
+            self.chunks[0] = item[amt:]
+        else:
+            self.chunks.pop(0)
+        self.chunks_yielded += 1
+        self.bytes_yielded += len(take)
+        if not self.chunks:
+            self.eof = True
+        return take
 
     def stream(self, amt, decode_content=False):
-        for c in self.chunks:
-            if self.tick:
-                self.tick()
-            self.chunks_yielded += 1
-            self.bytes_yielded += len(c)
-            yield c
+        while True:
+            chunk = self.read(amt, decode_content=decode_content)
+            if not chunk:
+                return
+            yield chunk
+
+    def isclosed(self):
+        return self.eof and not self.chunks
 
 
 class FakeResponse:
@@ -59,17 +99,25 @@ class FakeResponse:
 class FakeHTTP:
     """按顺序返回响应；元素为 Exception 时抛出。用尽即断言（零额外请求）。"""
 
-    def __init__(self, responses, clock=None):
+    def __init__(self, responses, clock=None, call_tick=0.0):
         self.responses = list(responses)
         self.served: list[FakeResponse] = []
         self.calls: list[str] = []
         self.starts: list[float] = []
+        self.timeouts: list[float] = []
+        self.allow_redirects: list[bool] = []
         self.clock = clock
+        self.call_tick = call_tick
 
-    def __call__(self, url, headers=None, timeout=None, stream=False):
+    def __call__(self, url, headers=None, timeout=None, stream=False,
+                 allow_redirects=None):
         self.calls.append(url)
+        self.timeouts.append(timeout)
+        self.allow_redirects.append(allow_redirects)
         if self.clock is not None:
             self.starts.append(self.clock())
+            if self.call_tick:
+                self.clock.t += self.call_tick
         if not self.responses:
             raise AssertionError(f"unexpected extra HTTP call: {url}")
         item = self.responses.pop(0)
@@ -92,11 +140,24 @@ class FakeClock:
         self.t += s
 
 
-def make(tmp: str, http, *, clock=None, **kw) -> pb.ProductionBudget:
+def make(tmp: str, http, *, clock=None, wall=None, **kw) -> pb.ProductionBudget:
     d = Path(tmp)
     return pb.ProductionBudget(
         ledger_path=d / "prod_budget.json", log_path=d / "prod_budget.log",
-        http_get=http, clock=clock, sleep=clock.sleep if clock else None, **kw)
+        http_get=http, clock=clock, wall_clock=wall if wall is not None else clock,
+        sleep=clock.sleep if clock else None, **kw)
+
+
+def crash(b: pb.ProductionBudget) -> None:
+    """模拟进程死亡：OS 释放锁与日志句柄，但不写收尾账本。"""
+    if b._log_handle is not None:
+        b._log_handle.flush()
+        b._log_handle.close()
+        b._log_handle = None
+    if b._lock is not None:
+        b._lock.release()
+        b._lock = None
+    b._closed = True
 
 
 def ledger(tmp: str) -> dict:
@@ -189,7 +250,8 @@ class ZeroAndBoundaryTests(BudgetExhaustedAssertions):
             b.close()
             self.assertEqual(ledger(d)["used"]["bytes"], len(body))
 
-    def test_oversized_response_stops_mid_stream(self):
+    def test_read_amount_never_exceeds_remaining(self):
+        """复审反例：曾经实读 16、只记 10；现在读之前就按剩余额度封顶。"""
         chunks = [b"12345678", b"ABCDEFGH", b"ZZZZZZZZ"]
         http = FakeHTTP([FakeResponse(chunks=chunks)])
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
@@ -197,9 +259,11 @@ class ZeroAndBoundaryTests(BudgetExhaustedAssertions):
             with self.assertRaises(pb.BudgetExhausted) as ctx:
                 fetch(b)
             self.assertStopped(ctx, "bytes")
+            raw = http.served[0].raw
+            self.assertEqual(raw.reads, [10, 2])          # 第二次只请求剩余 2 字节
+            self.assertEqual(raw.bytes_yielded, 10)       # 不再实读 16
+            self.assertEqual(raw.chunks_yielded, 2)
             self.assertEqual(b.used_bytes, 10)            # 不越界
-            self.assertEqual(http.served[0].raw.bytes_yielded, 16)
-            self.assertEqual(http.served[0].raw.chunks_yielded, 2)  # 第三块没读完
             b.close()
             lines = log_lines(d)
             self.assertEqual(len(lines), 1)
@@ -221,6 +285,21 @@ class ZeroAndBoundaryTests(BudgetExhaustedAssertions):
             self.assertEqual(b.decoded_bytes, 1000)
             b.close()
 
+    def test_decoded_budget_reached_refuses_next_request(self):
+        plain = b"\0" * 1000
+        wire = gzip.compress(plain)
+        http = FakeHTTP([FakeResponse(chunks=[wire], headers={"Content-Encoding": "gzip"})])
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
+            b = make(d, http, max_bytes=1000)
+            r = fetch(b)                              # 传输字节远小于上限，解压恰好用满
+            self.assertEqual(r.status, 200)
+            self.assertEqual(b.decoded_bytes, 1000)
+            with self.assertRaises(pb.BudgetExhausted) as ctx:
+                fetch(b)
+            self.assertStopped(ctx, "bytes")          # 解压额度已满：下一次请求前拒绝
+            self.assertEqual(len(http.calls), 1)
+            b.close()
+
     def test_gzip_body_is_decoded_and_counted(self):
         plain = b'{"data": [1, 2]}'
         wire = gzip.compress(plain)
@@ -234,7 +313,7 @@ class ZeroAndBoundaryTests(BudgetExhaustedAssertions):
             b.close()
 
 
-# ── 超时 / 429 / 401 ─────────────────────────────────
+# ── 超时 / 重定向 / 429 / 401 ────────────────────────
 class StopConditionTests(BudgetExhaustedAssertions):
     def test_timeout_counts_as_request_and_stops_after_three(self):
         http = FakeHTTP([pb.requests.Timeout("t")] * 10)
@@ -295,6 +374,36 @@ class StopConditionTests(BudgetExhaustedAssertions):
             b.close()
             self.assertEqual(ledger(d)["stop_reason"], "auth")
 
+    def test_403_then_fetch_never_sends(self):
+        """复审反例：403 后再次 fetch 仍然发请求。"""
+        http = FakeHTTP([FakeResponse(status=403, chunks=[])])
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
+            b = make(d, http)
+            with self.assertRaises(pb.BudgetExhausted) as ctx:
+                fetch(b)
+            self.assertStopped(ctx, "auth")
+            with self.assertRaises(pb.BudgetExhausted) as ctx2:
+                fetch(b)
+            self.assertStopped(ctx2, "auth")
+            self.assertEqual(len(http.calls), 1)          # 第二次没有 HTTP
+            b.close()
+
+    def test_stop_is_persistent_across_processes(self):
+        http = FakeHTTP([FakeResponse(status=403, chunks=[])])
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
+            b1 = make(d, http)
+            with self.assertRaises(pb.BudgetExhausted):
+                fetch(b1)
+            b1.close()
+            b2 = make(d, http)                            # 新进程：停止状态不得清除
+            self.assertTrue(b2.exhausted)
+            self.assertEqual(b2.stop_reason, "auth")
+            with self.assertRaises(pb.BudgetExhausted) as ctx:
+                fetch(b2)
+            self.assertStopped(ctx, "auth")
+            self.assertEqual(len(http.calls), 1)
+            b2.close()
+
     def test_5xx_stops_after_three(self):
         http = FakeHTTP([FakeResponse(status=500, chunks=[b"err"]) for _ in range(5)])
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
@@ -306,14 +415,76 @@ class StopConditionTests(BudgetExhaustedAssertions):
             b.close()
 
 
-# ── 崩溃续跑 / 日志对账 ──────────────────────────────
+# ── 重定向 / 墙钟 ────────────────────────────────────
+class RedirectAndDeadlineTests(BudgetExhaustedAssertions):
+    def test_redirect_is_refused_not_followed(self):
+        """复审反例：requests 默认自动跟随重定向，跳转绕过计数/字节/间隔。"""
+        http = FakeHTTP([FakeResponse(status=302, chunks=[],
+                                      headers={"Location": "http://elsewhere/"})])
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
+            b = make(d, http)
+            with self.assertRaises(pb.BudgetExhausted) as ctx:
+                fetch(b)
+            self.assertStopped(ctx, "redirect")
+            self.assertEqual(len(http.calls), 1)
+            self.assertEqual(http.allow_redirects, [False])
+            with self.assertRaises(pb.BudgetExhausted) as ctx2:
+                fetch(b)
+            self.assertStopped(ctx2, "redirect")
+            self.assertEqual(len(http.calls), 1)
+            b.close()
+            self.assertEqual(ledger(d)["stop_reason"], "redirect")
+
+    def test_timeout_is_bounded_by_remaining_wall_clock(self):
+        clk = FakeClock()
+        http = FakeHTTP([FakeResponse(chunks=[b'{"data": []}'])], clock=clk)
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
+            b = make(d, http, clock=clk, max_seconds=10.0)
+            clk.t = 3.0                                   # 已用 3 秒，剩 7 秒
+            fetch(b)
+            self.assertLessEqual(http.timeouts[0], 7.0)
+            self.assertGreater(http.timeouts[0], 0)
+            b.close()
+
+    def test_empty_response_past_deadline_does_not_succeed(self):
+        """复审反例：空响应在截止后仍返回成功。"""
+        clk = FakeClock()
+        http = FakeHTTP([FakeResponse(chunks=[])], clock=clk, call_tick=2.0)
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
+            b = make(d, http, clock=clk, max_seconds=1.0)
+            with self.assertRaises(pb.BudgetExhausted) as ctx:
+                fetch(b)
+            self.assertStopped(ctx, "seconds")
+            self.assertEqual(log_lines(d)[0]["status"], "deadline")
+            b.close()
+
+    def test_wall_budget_stops_mid_response(self):
+        clk = FakeClock()
+
+        def tick():
+            clk.t += 0.6
+
+        http = FakeHTTP([FakeResponse(chunks=[b"chunk1", b"chunk2", b"chunk3"],
+                                      tick=tick)], clock=clk)
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
+            b = make(d, http, clock=clk, max_seconds=1.0)
+            with self.assertRaises(pb.BudgetExhausted) as ctx:
+                fetch(b)
+            self.assertStopped(ctx, "seconds")
+            self.assertEqual(http.served[0].raw.chunks_yielded, 2)
+            self.assertEqual(log_lines(d)[0]["status"], "deadline")
+            b.close()
+
+
+# ── 崩溃续跑 / 日志对账 / 并发 ───────────────────────
 class ResumeAndReconcileTests(BudgetExhaustedAssertions):
     def test_resume_after_crash_does_not_reset(self):
         http = FakeHTTP([FakeResponse(chunks=[b'{"data": [1]}']),
                          FakeResponse(chunks=[b'{"data": [2]}'])])
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
             b1 = make(d, http, max_requests=5)
-            fetch(b1)                    # 模拟进程崩溃：不调用 close()
+            fetch(b1)
+            crash(b1)                    # 模拟进程崩溃：不调用 close()
             b2 = make(d, http, max_requests=5)
             self.assertEqual(b2.used, 1)  # 从账本继续，不重置
             fetch(b2)
@@ -333,11 +504,83 @@ class ResumeAndReconcileTests(BudgetExhaustedAssertions):
             with mock.patch.object(b1, "_persist", lambda: None):
                 fetch(b1)                # 日志已写、账本未写
             self.assertFalse((Path(d) / "prod_budget.json").exists())
+            crash(b1)
             b2 = make(d, http, max_requests=5)
             self.assertEqual(b2.used, 1)
             self.assertEqual(b2.used_bytes, len(b'{"data": [1]}'))
             b2.close()
             self.assertTrue(b2.reconcile()["ok"])
+
+    def test_tail_recovery_restores_elapsed_seconds(self):
+        """复审反例：尾恢复只补请求/字节，不补耗时。"""
+        clk = FakeClock()
+        http = FakeHTTP([FakeResponse(chunks=[b'{"data": [1]}'])], clock=clk)
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
+            b1 = make(d, http, clock=clk, max_seconds=100.0)
+            clk.t = 5.0
+            with mock.patch.object(b1, "_persist", lambda: None):
+                fetch(b1)                # 日志 cum_seconds≈5，账本未写
+            crash(b1)
+            b2 = make(d, http, clock=clk, max_seconds=100.0)
+            self.assertGreaterEqual(b2.used_seconds, 5.0)
+            b2.close()
+            self.assertTrue(b2.reconcile()["ok"])
+
+    def test_crash_mid_request_is_counted_and_recovered_conservatively(self):
+        """复审反例：HTTP 途中崩溃丢请求/字节/耗时。"""
+        clk = FakeClock()
+        http = FakeHTTP([FakeResponse(chunks=[b"12345678",
+                                              KeyboardInterrupt("boom")])], clock=clk)
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
+            b1 = make(d, http, clock=clk, max_requests=5, max_bytes=100,
+                      max_seconds=600.0, timeout=30.0)
+            with self.assertRaises(KeyboardInterrupt):
+                fetch(b1)
+            led = ledger(d)
+            self.assertEqual(led["used"]["requests"], 1)   # 发请求前已持久预占
+            self.assertIsNotNone(led["pending"])
+            crash(b1)
+
+            b2 = make(d, http, clock=clk, max_requests=5, max_bytes=100,
+                      max_seconds=600.0, timeout=30.0)
+            self.assertEqual(b2.used, 1)
+            self.assertGreaterEqual(b2.used_bytes, 8)
+            self.assertGreaterEqual(b2.used_seconds, 30.0)  # 至少补一个 timeout
+            self.assertTrue(b2.reconcile()["ok"])
+            # 保守恢复把字节额度记满：下一次请求在发请求前拒绝
+            with self.assertRaises(pb.BudgetExhausted) as ctx:
+                fetch(b2)
+            self.assertStopped(ctx, "bytes")
+            self.assertEqual(len(http.calls), 1)
+            b2.close()
+
+    def test_pending_with_matching_log_adopts_exact_values(self):
+        """崩溃发生在日志写后、账本写前：直接采用日志精确值，不再加保守上界。"""
+        http = FakeHTTP([FakeResponse(chunks=[b'{"data": [1]}'])])
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
+            b1 = make(d, http)
+            fetch(b1)
+            b1.close()
+            led = ledger(d)
+            led["pending"] = {"seq": 1, "kind": "iss", "path": "/x",
+                              "timeout_seconds": 60, "wire_bytes": 0,
+                              "decoded_bytes": 0, "content_encoding": ""}
+            (Path(d) / "prod_budget.json").write_text(json.dumps(led), encoding="utf-8")
+            b2 = make(d, http)
+            self.assertEqual(b2.used_bytes, len(b'{"data": [1]}'))
+            self.assertLess(b2.used_seconds, 1.0)     # 采用日志精确值，未加 60s 保守上界
+            self.assertTrue(b2.reconcile()["ok"])
+            b2.close()
+
+    def test_exclusive_run_lock_rejects_second_live_budget(self):
+        http = FakeHTTP([])
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
+            b1 = make(d, http)
+            with self.assertRaises(pb.BudgetLedgerError):
+                make(d, http)
+            b1.close()
+            b2 = make(d, http)                # 关闭后可重新获取
+            b2.close()
 
     def test_log_reconciles_with_ledger(self):
         http = FakeHTTP([FakeResponse(chunks=[b'{"data": [1]}']),
@@ -369,23 +612,6 @@ class ResumeAndReconcileTests(BudgetExhaustedAssertions):
             with self.assertRaises(pb.BudgetLedgerError):
                 make(d, http)
 
-    def test_wall_budget_stops_mid_response(self):
-        clk = FakeClock()
-
-        def tick():
-            clk.t += 0.6
-
-        http = FakeHTTP([FakeResponse(chunks=[b"chunk1", b"chunk2", b"chunk3"],
-                                     tick=tick)], clock=clk)
-        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
-            b = make(d, http, clock=clk, max_seconds=1.0)
-            with self.assertRaises(pb.BudgetExhausted) as ctx:
-                fetch(b)
-            self.assertStopped(ctx, "seconds")
-            self.assertEqual(http.served[0].raw.chunks_yielded, 2)
-            self.assertEqual(log_lines(d)[0]["status"], "deadline")
-            b.close()
-
     def test_min_interval_is_enforced(self):
         clk = FakeClock()
         http = FakeHTTP([FakeResponse(chunks=[b'{"data": []}']),
@@ -396,6 +622,21 @@ class ResumeAndReconcileTests(BudgetExhaustedAssertions):
             fetch(b)
             self.assertEqual(http.starts, [0.0, 1.0])
             b.close()
+
+    def test_min_interval_survives_resume(self):
+        """复审反例：续跑重置最小间隔。"""
+        clk, wall = FakeClock(), FakeClock()
+        http = FakeHTTP([FakeResponse(chunks=[b'{"data": []}']),
+                         FakeResponse(chunks=[b'{"data": []}'])], clock=clk)
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
+            b1 = make(d, http, clock=clk, wall=wall, min_interval=1.0)
+            fetch(b1)
+            crash(b1)
+            wall.t += 0.2                     # 距上次请求只过了 0.2 秒
+            b2 = make(d, http, clock=clk, wall=wall, min_interval=1.0)
+            fetch(b2)
+            self.assertEqual(http.starts, [0.0, 1.0])   # 仍等满 1 秒
+            b2.close()
 
     def test_interval_wait_beyond_wall_budget_refuses(self):
         clk = FakeClock()
@@ -409,6 +650,25 @@ class ResumeAndReconcileTests(BudgetExhaustedAssertions):
             self.assertStopped(ctx, "seconds")
             self.assertEqual(http.calls, [])
             b.close()
+
+    def test_overlapping_iss_contexts_are_forbidden(self):
+        """复审反例：交错上下文会串预算、还原错误函数。"""
+        http = FakeHTTP([])
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
+            b1 = make(d, http)
+            b2 = make(str(Path(d) / "second"), http)
+            original = iss.api_get_status
+            with pb.iss_budget(b1, iss):
+                with self.assertRaises(pb.BudgetContextError):
+                    with pb.iss_budget(b2, iss):
+                        pass
+                self.assertIsNot(iss.api_get_status, original)
+            self.assertIs(iss.api_get_status, original)
+            with pb.iss_budget(b2, iss):      # 前一个退出后可正常进入
+                self.assertIsNot(iss.api_get_status, original)
+            self.assertIs(iss.api_get_status, original)
+            b1.close()
+            b2.close()
 
 
 # ── 工具接入 ─────────────────────────────────────────
@@ -523,6 +783,141 @@ class LegacyHttpBudgetTests(unittest.TestCase):
         self.assertEqual(log["events"],
                          [{"n": 1, "kind": "enrich", "detail": ""},
                           {"n": 2, "kind": "probe", "detail": ""}])
+
+
+# ── 离线输出与父版本逐字节对照 ───────────────────────
+_FIXED_NAIVE = datetime(2026, 10, 20, 18, 0, 0)
+_FIXED_UTC = datetime(2026, 10, 20, 10, 0, 0, tzinfo=timezone.utc)
+
+
+class _FixedDateTime(datetime):
+    @classmethod
+    def now(cls, tz=None):
+        return _FIXED_UTC if tz is not None else _FIXED_NAIVE
+
+
+def _repo_root() -> Path:
+    for p in Path(__file__).resolve().parents:
+        if (p / ".git").exists():
+            return p
+    raise unittest.SkipTest("找不到仓库根（无法做父版本对照）")
+
+
+def _git_show(relpath: str) -> str:
+    repo = _repo_root()
+    try:
+        out = subprocess.run(["git", "show", f"{PARENT_COMMIT}:{relpath}"],
+                             cwd=repo, capture_output=True, check=True)
+    except FileNotFoundError as e:
+        raise unittest.SkipTest(f"git 不可用，无法做父版本对照: {e}")
+    except subprocess.CalledProcessError as e:
+        raise AssertionError(
+            f"无法读取父版本 {PARENT_COMMIT}:{relpath}: "
+            f"{e.stderr.decode('utf-8', 'replace')[:300]}") from e
+    return out.stdout.decode("utf-8")
+
+
+def _load_source(source: str, filename: str, name: str, tmpdir: str):
+    # 父版本用 `Path(__file__).resolve().parents[7]` 作为 `next()` 的默认值；
+    # 该默认值会被**立即求值**，所以源码必须放在至少 8 层深的路径下。
+    # 同时路径要在仓库根之下，`next()` 才能找到 `EN_API/item_shipment_status.py`。
+    deep = Path(tmpdir)
+    for part in ("a", "b", "c", "d", "e", "f"):
+        deep = deep / part
+    deep.mkdir(parents=True, exist_ok=True)
+    path = deep / filename
+    path.write_text(source, encoding="utf-8")
+    spec = importlib.util.spec_from_file_location(name, path)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[name] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+class ParentVersionParityTests(unittest.TestCase):
+    """复审要求：离线分析输出必须与父版本逐字节一致，而不只是字段集合。"""
+
+    def _dn_snapshot(self, path: Path) -> None:
+        snap = {
+            "query": {"customer_code": "C-TEST", "item": None},
+            "generated_at": "2026-10-20T18:00:00",
+            "so_rows": [], "dn_rows": [], "wos": [], "jc_summary": {},
+            "se_rows": [{"se": "SE-1", "work_order": None, "docstatus": 1,
+                         "posting_date": "2026-05-01", "finished_qty": 10,
+                         "finished_lines": 1}],
+        }
+        path.write_text(json.dumps(snap), encoding="utf-8")
+
+    def test_dn_offline_outputs_match_parent_byte_for_byte(self):
+        with tempfile.TemporaryDirectory(dir=_repo_root(), prefix=".parity-dn-") as moddir:
+            parent = _load_source(_git_show(DN_RELPATH), "dn_parent.py",
+                                  "g1b_dn_wo_jc_se_parent", moddir)
+            with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
+                snap = Path(d) / "snap.json"
+                self._dn_snapshot(snap)
+                out_cur, out_par = Path(d) / "cur", Path(d) / "par"
+                argv = ["--snapshot", str(snap), "--run-id", "FIXED"]
+                with mock.patch.object(dn, "datetime", _FixedDateTime):
+                    rc_cur = dn.main(argv + ["--out-dir", str(out_cur)])
+                parent_argv = ["dn_parent.py"] + argv + ["--out-dir", str(out_par)]
+                with mock.patch.object(parent, "datetime", _FixedDateTime), \
+                     mock.patch.object(sys, "argv", parent_argv):
+                    rc_par = parent.main()
+                self.assertEqual(rc_cur, rc_par)
+                for name in ("association_manifest.json", "line_dispositions.jsonl",
+                             "snapshots_manifest.json", "run.log"):
+                    self.assertEqual((out_cur / name).read_bytes(),
+                                     (out_par / name).read_bytes(), name)
+                self.assertFalse((out_cur / "prod_budget.json").exists())
+
+    def test_en_extract_offline_output_matches_parent_byte_for_byte(self):
+        with tempfile.TemporaryDirectory(dir=_repo_root(), prefix=".parity-en-") as moddir:
+            parent = _load_source(_git_show(EX_RELPATH), "en_parent.py",
+                                  "g1b_en_extract_parent", moddir)
+            ctx = {
+                "so_rows": [{
+                    "so": "SO-1", "so_status": "To Deliver and Bill", "so_docstatus": 1,
+                    "transaction_date": "2026-05-01", "so_delivery_date": "2026-06-01",
+                    "line_id": "SO-1-1", "item_code": "KS0001",
+                    "customer_item_code": "C1", "warehouse": "W", "uom": "Nos",
+                    "qty": 10, "delivered_qty": 0, "shipped_dn": [], "draft_dn": [],
+                    "open_qty": 10, "anomalies": [], "wos": [{"name": "WO-1"}],
+                    "pps": [],
+                }],
+                "dn_rows": [], "pp_rows": [],
+                "wos": [{"name": "WO-1", "status": "In Process", "docstatus": 1,
+                         "sales_order": "SO-1", "production_item": "KS0001", "qty": 10,
+                         "produced_qty": 0, "planned_start_date": "2026-05-01",
+                         "planned_end_date": "2026-05-02", "bom_no": "BOM-1"}],
+                "jc_map": {}, "item_codes": ["KS0001"],
+                "master_items": [{"name": "KS0001", "item_name": "X",
+                                  "item_group": "G"}],
+                "totals": {"open_qty": 10}, "anomalies": [],
+            }
+            with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
+                out_cur, out_par = Path(d) / "cur.json", Path(d) / "par.json"
+                with mock.patch.object(ex.iss, "load_credentials",
+                                       return_value=("k", "s")), \
+                     mock.patch.object(ex.iss, "build_context", return_value=ctx), \
+                     mock.patch.object(ex, "fetch_manufacture_stock_entries",
+                                       return_value=([], None)), \
+                     mock.patch.object(parent, "fetch_manufacture_stock_entries",
+                                       return_value=([], None)), \
+                     mock.patch.object(ex, "datetime", _FixedDateTime):
+                    rc_cur = ex.main(["--customer-code", "C-TEST", "--sleep", "0",
+                                      "--out", str(out_cur)])
+                argv = ["en_parent.py", "--customer-code", "C-TEST",
+                        "--sleep", "0", "--out", str(out_par)]
+                with mock.patch.object(ex.iss, "load_credentials",
+                                       return_value=("k", "s")), \
+                     mock.patch.object(ex.iss, "build_context", return_value=ctx), \
+                     mock.patch.object(parent, "fetch_manufacture_stock_entries",
+                                       return_value=([], None)), \
+                     mock.patch.object(parent, "datetime", _FixedDateTime), \
+                     mock.patch.object(sys, "argv", argv):
+                    rc_par = parent.main()
+                self.assertEqual(rc_cur, rc_par)
+                self.assertEqual(out_cur.read_bytes(), out_par.read_bytes())
 
 
 if __name__ == "__main__":
