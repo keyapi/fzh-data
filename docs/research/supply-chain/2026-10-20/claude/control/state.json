@@ -24,8 +24,8 @@
       "priority": 1,
       "completed_at": "2026-10-21T18:12:20+08:00",
       "summary": "5 top-SKU snapshots (120 SO / 293 DN / 128 WO / 425 SE); C1 SO<->DN 8,467=8,467 all pass; C2 115 pass + 2 produced_qty anomalies + 11 open; C3 425/425 pass; WO.produced_qty found unreliable; JC progress-only; bounded EN read-only 362 SE detail GETs + 4 probe requests, 0 failures; audit_ok=true evidence_complete=true; <=0.0 tests 35/35",
-      "updated_at": "2026-10-21T18:37:41+0800",
-      "note": "v2 commit 49a142e0 fixes all 6 P1 + 3 P2 from adapter review; 78/78 offline tests; C1 115/115 per-line, C2 117 comparable, C3 425/425, SE coverage 425/425; evidence v2 zip a0d8bb45..., manifest 5d3fdabb..., line dispositions 2941ea1c..., stable c45a0838...; pushed on docs/supply-chain-integration-handoff (PR #300). v1 evidence superseded."
+      "updated_at": "2026-10-21T19:13:55+0800",
+      "note": "v3 rework delivered: commit e6b3cc9a (branch docs/supply-chain-integration-handoff, PR #300); 82/82 offline tests (test_g1b_dn_wo_jc_se.py; 4 new v3 regressions covering per-(WO,UOM) SE buckets, unresolved child propagation, matched malformed JC disclosure); evidence v3 out/dn_wo_jc_se_evidence_v3.zip sha256 0fe66f0916123303d59678116e82190b8b15ac1b74459c47e2b1912a39da7cc9; manifest 23fb363ceda2bdf1a005931bc7f720679673f6eb07cbc9353982752962ba2721, payload_sha256 3a8940c845944b75b80ff925bbdf8e83f71b6e6cea5631644b1b76aae2ebb8ad, stable_sha256 6f12333c688d736e861278a4e2c31ee3191aa945750712753a5548b5cb878636; line_dispositions 95197f0665ffd2046d51ea12f41c6029e30b1f141ab803ce761397468513c39c (2040 rows); replay R1/R2 stable+dispositions identical; audit_ok=true evidence_complete=true; 0 HTTP; no family expansion, no production writes, no merge."
     },
     {
       "id": "R290-RECON",
@@ -49,8 +49,10 @@
       "priority": 3,
       "on_failure": "set G1B-DN-WO-JC-SE.status=ready and G1B-CROSS-REVIEW.status=waiting with review notes",
       "unblocked_at": "2026-10-21T18:12:20+08:00",
-      "note": "Review only 49a142e0 + v2 evidence; do not review 22ae9a1e or re-review accepted SO gate v5. Key review gpt-6.1-sol.",
-      "updated_at": "2026-10-21T18:37:41+0800"
+      "note": "Review v3 at commit e6b3cc9a (not 49a142e0). Evidence v3: zip 0fe66f09…, manifest 23fb363c…, stable 6f12333c…, dispositions 95197f06… (2040 rows). Verify the three rework items: per-(WO,UOM) SE finished buckets with cross-UOM WO sealed as wo_uom_mixed; unresolved SE child propagates to parent SE/WO and blocks C2/audit/evidence; matched malformed JC groups emit explicit invalid rows. Report: docs/research/supply-chain/2026-10-20/claude/experiments/g1_contract/g1b_dn_wo_jc_se.md",
+      "updated_at": "2026-10-21T19:13:55+0800",
+      "claimed_at": "2026-10-21T19:04:31.367966+08:00",
+      "claimed_by": "codex"
     },
     {
       "id": "G1B-ADAPTER-REVIEW",
@@ -70,15 +72,15 @@
     "business decisions: service level/budget, 3PL supply ownership, return restock share"
   ],
   "quota": {
-    "codex_5h_remaining_pct": 14,
+    "codex_5h_remaining_pct": null,
     "reset": "18:51:55",
     "reserve_pct": 10,
-    "codex_pause": true,
-    "updated": "2026-10-21T18:34:17.628639+08:00",
+    "codex_pause": false,
+    "updated": "2026-10-21T19:04:31.230604+08:00",
     "fresh": true,
-    "source": "terminal:term_d0bcd5e0-9f57-43b9-8dfc-6ffe4578063a",
-    "last_read_at": "2026-10-21T18:34:17.628639+08:00",
-    "raw_line": "⚠ 5h limit: 14% left · resets at 18:51 · /status",
+    "source": "probe:codex-exec",
+    "last_read_at": "2026-10-21T19:04:31.230604+08:00",
+    "raw_line": "no quota footer marker; tiny codex exec probe completed",
     "resets_at": "18:51"
   },
   "control_page": "D:\\Work\\赛狐\\Cursor-claude\\docs\\research\\supply-chain\\2026-10-20\\claude\\control\\CONTROL.md",
