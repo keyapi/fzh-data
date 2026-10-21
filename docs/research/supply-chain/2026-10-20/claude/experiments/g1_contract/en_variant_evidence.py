@@ -269,11 +269,18 @@ def uom_factor(item_doc: dict, uom: str, stock_uom: str):
 
 
 def flag(value):
-    """Strict 1/0 flag parser: '0'/0/False -> False; '1'/1/True -> True; else None."""
+    """Strict flag parser.
+
+    Accepts bool, integer 0/1, float 0.0/1.0 (equivalent to 0/1), and strings
+    0/1/true/false. Rejects other numbers (2, -1, 0.5), NaN/Inf, and unknown
+    strings. Apply the same parser to Item.disabled/has_variants and BOM flags.
+    """
     if isinstance(value, bool):
         return value
-    if isinstance(value, (int, float)):
-        return value != 0
+    if isinstance(value, int):
+        return bool(value) if value in (0, 1) else None
+    if isinstance(value, float):
+        return bool(value) if math.isfinite(value) and value in (0.0, 1.0) else None
     if isinstance(value, str):
         text = value.strip().lower()
         if text in ("1", "true", "yes", "y"):

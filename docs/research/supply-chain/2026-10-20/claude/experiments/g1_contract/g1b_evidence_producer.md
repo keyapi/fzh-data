@@ -54,7 +54,7 @@ tags: [supply-chain, evidence, item, bom, producer, bounded, historical]
 |---|---|
 | 反向 BOM | `variant_parent_ks_component` 只进 `excluded_boms`，reason `unsupported_direction`；不得进入合格候选，不得 `consistent`/`current_planning_eligible=True`；正反混合 → `conflict_mixed_direction`。 |
 | 共享 ND | base 不在 `ks_items` → `unresolved_canonical_mapping`，reason_code 区分多父/单父/无父；保留 raw 父边与 `shared_parent_ks`；不再 `not_family`。 |
-| 严格 flag | `flag()` 接受 bool 或整数 0/1；字符串 `0/1/true/false` 显式解析；其它 → `bom_flag_invalid` / `item_flag_invalid`。Item `disabled`/`has_variants` 同一解析。 |
+| 严格 flag | 只接受 bool、整数 **0/1**、浮点 **0.0/1.0**（与 0/1 等价）；字符串 `0/1/true/false` 显式解析；`2/-1/0.5/NaN/Inf` 与未知字符串 → `bom_flag_invalid` / `item_flag_invalid`。Item `disabled`/`has_variants` 同一解析。 |
 | reason_code | 每条记录都有 `reason_code/reason_detail`；summary 增加 `by_reason_code`。 |
 
 Consumer 增加 `variant_unresolved_canonical_mapping`：有该 resolution 的记录在
@@ -97,10 +97,10 @@ Apr–Sep 窗口仍 pending，不再笼统落到 `variant_base_not_family`。
 
 ## 7. 离线单测
 
-- `test_en_family_poc.py`（45 条）+ `test_en_variant_evidence.py`（16 条）
-  = **61 条全绿**，不联网、不调 `main()`。
-- 新增：反向 only/mixed、共享 ND 多父/单父、字符串 `'0'/'false'/'maybe'` flag、
-  unresolved consumer reason。
+- `test_en_family_poc.py`（45 条）+ `test_en_variant_evidence.py`（21 条）
+  = **66 条全绿**，不联网、不调 `main()`。
+- 新增：反向 only/mixed、共享 ND 多父/单父、字符串 `'0'/'false'/'maybe'`、
+  数值 `0.0/1.0` 等价与 `2/-1/0.5/NaN/Inf` invalid、Item disabled 非二值 invalid。
 
 ## 8. 产物与 hash（v5）
 

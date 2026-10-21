@@ -513,6 +513,15 @@ tags: [supply-chain, research, log]
 - 离线单测 61 条全绿；文档更新 `g1b_evidence_producer.md`；
   evidence `1d6a7b33…`、producer zip `db44dadf…`、replay zip `a3b23cf1…`。
 
+## 2026-10-21 — producer P2 flag 数值边界
+
+- Codex v5：两个 P1 关闭，仅余 P2 flag 数值分支。
+- `flag()` 收紧：只接受 bool、整数 0/1、浮点 0.0/1.0（显式等价）；
+  `2/-1/0.5/NaN/Inf` 与未知字符串 → invalid；Item/BOM 共用。
+- 补负例后 66 条单测全绿（consumer 45 + producer 21）。
+- 复用 v5 raw（43 BOM 全 int1、37/6 default、34 Item disabled=0），严格解析全通过；
+  evidence/replay hash 不变，无新增生产查询、无样本扩张。
+
 ## 模板（后续阶段）
 
 ```text

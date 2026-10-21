@@ -44,9 +44,18 @@ class FlagTest(unittest.TestCase):
         self.assertIs(ev.flag(1), True)
         self.assertIsNone(ev.flag("maybe"))
 
+    def test_float_zero_one_are_equivalent(self):
+        self.assertIs(ev.flag(0.0), False)
+        self.assertIs(ev.flag(1.0), True)
+
+    def test_other_numbers_and_nan_inf_are_invalid(self):
+        for value in (2, -1, 0.5, float("nan"), float("inf"), float("-inf")):
+            self.assertIsNone(ev.flag(value), value)
+
     def test_item_disabled_string_zero(self):
         self.assertIs(ev.item_meta({"disabled": "0"})["disabled"], False)
         self.assertIs(ev.item_meta({"disabled": "1"})["disabled"], True)
+        self.assertIsNone(ev.item_meta({"disabled": 2})["disabled"])
 
 
 class AnalyzeBomTest(unittest.TestCase):
@@ -67,6 +76,19 @@ class AnalyzeBomTest(unittest.TestCase):
         cand, reason = ev.analyze_bom(bom(active="maybe"), CODE, BASE, item_docs())
         self.assertIsNone(cand)
         self.assertEqual(reason, "bom_flag_invalid")
+
+    def test_numeric_non_binary_flag_is_invalid(self):
+        for value in (2, -1, 0.5, float("nan"), float("inf")):
+            cand, reason = ev.analyze_bom(bom(active=value), CODE, BASE, item_docs())
+            self.assertIsNone(cand, value)
+            self.assertEqual(reason, "bom_flag_invalid")
+
+    def test_float_one_flag_is_eligible(self):
+        cand, reason = ev.analyze_bom(bom(active=1.0, default=0.0), CODE, BASE,
+                                      item_docs())
+        self.assertEqual(reason, "")
+        self.assertTrue(cand["eligible_at_evidence"])
+        self.assertFalse(cand["is_default"])
 
     def test_inactive_bom_not_eligible(self):
         cand, _ = ev.analyze_bom(bom(active=0), CODE, BASE, item_docs())
@@ -149,6 +171,14 @@ class BuildRecordTest(unittest.TestCase):
             shared_edges=[edge])
         self.assertEqual(resolution, "unresolved_canonical_mapping")
         self.assertEqual(rec["reason_code"], "shared_component_single_parent")
+
+    def test_disabled_item_numeric_non_binary_is_invalid(self):
+        items = item_docs()
+        items[CODE]["disabled"] = 2
+        rec, resolution = ev.build_record(
+            CODE, BASE, "PK", items, [], [], AS_OF, {BASE})
+        self.assertEqual(resolution, "item_flag_invalid")
+        self.assertEqual(rec["reason_code"], "item_flag_invalid")
 
     def test_consumer_accepts_structure_once_historical_anchor_exists(self):
         cand, _ = ev.analyze_bom(bom(), CODE, BASE, item_docs())

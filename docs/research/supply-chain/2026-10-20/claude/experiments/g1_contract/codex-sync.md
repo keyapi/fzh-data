@@ -25,7 +25,8 @@ tags: [supply-chain, codex, g1, sync, consolidated]
 > **Item/BOM producer 首样本（20 变体，v5）**：79/500 HTTP、19.8/900s；
 > 14 PK `consistent/current_structure_only`（ratio=1），6 ND
 > `unresolved_canonical_mapping`（2 多父 + 1 单父 + 3 样本内无父；保留 raw 父边）。
-> 反向 BOM 只进 excluded；严格 flag 0/1 与字符串解析。无 Version，不升级历史；
+> 反向 BOM 只进 excluded；严格 flag 仅接受布尔/整数 0-1/浮点 0.0-1.0/字符串
+> 0-1-true-false，`2/-1/0.5/NaN/Inf` invalid。无 Version，不升级历史；
 > v5 回放 2,024 行：`unresolved 537 / not_in_manifest 694 / base_not_family 419 /
 > current_structure_only 119`；PK/ND family=0，历史仍 pending
 > （见 `g1b_evidence_producer.md`）。
