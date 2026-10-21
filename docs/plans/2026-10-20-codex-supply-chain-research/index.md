@@ -7,6 +7,8 @@ date: 2026-10-20
 
 # Codex 供应链整合独立调研
 
+2026-10-21 BOM历史证据边界：current_structure_only / historical_verified / historical_unknown；Version/modified 不足以升级历史；见[报告](history-evidence-boundary-2026-10-21.md)。
+
 2026-10-21最新固定Claudee696fa65：U01已关闭，15定义统一接受；SO批量PoC开始，见[SO首版复审](review-family-so-poc.md)。需修日期漏窗/包装family分类，显式标截断与详情失败；不重开旧T项，不重做综述。
 
 2026-10-21第四轮固定Claudef14c9709：见[关闭项与family PoC交接](review-g1b-round4.md)。T01–T04/T06关闭，T05仅余成功SE＋无法定位失败SE的U01；7正例/1反例。E01–E04接受，可推进family只读批量PoC，下一轮审核实际PoC，不重做综述。
@@ -49,6 +51,7 @@ date: 2026-10-20
 | [G1b修复第三轮与批量ETL](review-g1b-round3.md) | 固定f4797aa0：8正例/6反例、15方案的family全集/水位/键；g1b_round3_probes.py |
 | [G1b第四轮关闭与PoC交接](review-g1b-round4.md) | 固定f14c9709：7正例/1剩余SE边界、接受E01–E04并推进PoC；g1b_round4_probes.py |
 | [U01关闭与SO批量PoC复审](review-family-so-poc.md) | 固定e696fa65：U01正例、4个SO反例与同窗/行级manifest；family_so_review_probes.py |
+| [BOM历史证据边界与producer反例](history-evidence-boundary-2026-10-21.md) | current/historical分级、冲突规则、16个producer正反例与阶段总结 |
 | [变更日志](log.md) | 阶段成果记录 |
 
 当前状态：Codex完成v3增量、35例和629dc7b3的§3/§4定向复核；旧G1a v1失效，Claude可按显式假设进行G1b，Codex等待真实回放报告再核；已完成首轮独立研究、综合与交叉审阅；真实数据回测和整套产品运行仍待下一阶段。已复核Claude #300固定cd7a8a06：共同框架原则已双向对齐，R01/R02原代码问题可关闭，G0细节及真实验证仍待完成；Cursor成果未读。两PR保持独立，不修改其文件。

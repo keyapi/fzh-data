@@ -6,6 +6,12 @@ title: Codex 供应链独立调研变更日志
 
 # 变更日志
 
+## 2026-10-21 BOM历史证据边界与producer反例
+
+- 独立验证 current_structure_only / historical_verified / historical_unknown 边界；Version 空集、旧 modified、当前 active/default 均不足以升级 Apr–Sep 历史。
+- 固定 d8c473fe 的 bom_fabric_qty_fix.py update_modified=False 路径否定“modified 覆盖所有变更”；Frappe save_version 受配置/保存方式影响；历史升级需内容锚点+变化覆盖+生效证据或明确交易绑定。
+- 交付冲突规则、16 个可重复 producer 正反例、最小字段建议与阶段总结/踩坑；0 生产查询、0 文件写入，未重开已接受项。
+
 ## 2026-10-21 U01关闭与SO批量PoC
 
 - 固定e696fa65，U01全局SE闸门的混合失败/完整成功正例通过，关闭；15旧定义统一接受，不重开旧适配器项。
