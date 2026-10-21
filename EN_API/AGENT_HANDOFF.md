@@ -16,6 +16,9 @@
 | [AGENT_HANDOFF_物料发货状态.md](AGENT_HANDOFF_物料发货状态.md) | 客户物料号 / EN 物料号 → 销售订单发货 + 工序进度 |
 | [AGENT_HANDOFF_DN追溯报表.md](AGENT_HANDOFF_DN追溯报表.md) | 销售出库 → 物料移动追溯 |
 | [docs/reference/en-server-access.md](docs/reference/en-server-access.md) | **服务器与环境访问**：生产/测试 SSH 别名、bench 重启规矩、REST 凭证、常见坑 |
+| [../docs/solutions/integration-issues/en-tongtool-order-package-sync-failures.md](../docs/solutions/integration-issues/en-tongtool-order-package-sync-failures.md) | **通途订单/包裹同步**（`tongtool_integration` app）为什么会漏与空壳：300s 掐断 / 526 / 任务重叠 / 仓库不回写 / SKU 精确匹配 |
+| [../docs/solutions/developer-experience/prod-batch-backfill-oom-small-box.md](../docs/solutions/developer-experience/prod-batch-backfill-oom-small-box.md) | **生产 2核4G 跑批量回填会压死机器**（瓶颈是内存不是限流；别在网页进程里啃大表） |
+| [../docs/solutions/architecture-patterns/order-history-duckdb-store.md](../docs/solutions/architecture-patterns/order-history-duckdb-store.md) | **销量预测历史库**：GS 月表 + EN 并集进 DuckDB；通途 API 不能补齐历史；SKU 归一/补货快照 |
 
 ---
 
@@ -121,6 +124,7 @@ python upload_item_images.py --input "x.xlsx" # 指定输入文件
 7. **附件上限** — 每文档最多 3 个附件。≥3 时按 content_hash 找重复记录: 同 hash 的 image 字段记录只保留一条, 删其余 + hash=None 记录。非 image 字段附件 (如 PDF) 绝不删。无可安全清理的记录则跳过
 8. **附件上限按文档** — 不是按字段: PDF 等挂在文档上 (attached_to_field=null) 也占 3 个名额
 9. **凭证** — `.env` 文件 (gitignored) 或环境变量 `ERP_API_KEY` / `ERP_API_SECRET`
+10. **批量导表会被截断** — `bench --site ... mariadb -e "SELECT ..."` 的输出上限是 **1000 行**（实测 5,582 行只出 1,000 行，且退出码为 0，不报错）。批量导 BOM/Bin/子表时必须直连 mysql 客户端（读服务器 `site_config.json` 的 `db_name`/`db_password`，`MYSQL_PWD` 传密码），或用 REST 逐条取。详见 `docs/solutions/architecture-patterns/order-history-duckdb-store.md` §11。
 
 ---
 

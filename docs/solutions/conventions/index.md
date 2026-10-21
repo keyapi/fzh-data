@@ -10,6 +10,7 @@ timestamp: 2026-09-10
 
 | 标题 | 文件 |
 |------|------|
+| 分公司补货与皮壳/内胆业务规则（原型已核实，待验收） | [branch-shipment-cover-rules.md](branch-shipment-cover-rules.md) |
 | Amazon 账期按账号对 NAS/钉钉/赛狐结算组 | [amazon-period-file-reconcile.md](amazon-period-file-reconcile.md) |
 | parcel_track 处理天数统一 3 个营业日与 per-carrier 顺序并发 | [parcel-track-handling-days-sequential-workers.md](parcel-track-handling-days-sequential-workers.md) |
 | 三角类皮壳在通途与赛狐并行期的共享库存代理 | [sellfox-cover-shared-inventory-transition.md](sellfox-cover-shared-inventory-transition.md) |

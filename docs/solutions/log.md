@@ -7,6 +7,48 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-10-21（核实：SO 内胆按钮与 -Cover 库存口径）
+- **核实**: 销售订单 Excel 上传只生成 `PK#` 行；内胆由启用的 Client Script `销售订单 子表 items 所有行 增加配套物料20241030` 添加，`key_test.item_utils.get_supporting_item` 按**物料组+尺寸**找 `内胆#` 变体（不读 BOM），并走 `custom_replaced_by_other_item_group`。近 90 天 22 张含皮壳 SO 中 13 张有内胆、9 张没有；2026-08-17 起基本 1:1，零内胆多为没点按钮。
+- **统计**: EN 启用提交 KS BOM 2,210：PK+ND 1,745 / PK only 280 / neither 185；本地 1,811 个含皮壳 BOM 中 BOM 与按钮逻辑一致 1,531（84.5%），BOM 无但按钮会加 82，BOM 有但按钮找不到 62。
+- **修正**: `forecast_shipment_plan.py` 内胆**只按 BOM**（BOM 没内胆就是没有）；按钮误加单独列 `button_overadd_candidates` 10 行、停用内胆标 `bom_inner_disabled` 6 行、按钮对不上 5 行；皮壳 211 行/3,990、内胆 BOM 180/3,795。
+- **核实**: 通途 `-Cover` 与不带后缀的通途 SKU 是独立 SKU 账（库存/销售/变动均不镜像；cover 销量 404 vs 非 cover 8,849，4.4%），可售总量应相加，不能同一数量写两遍；是否同一堆实物未证，需调拨/盘点/运营确认。Sellfox 的 `PK#→KS x1` 是销售层共享代理，不代表通途合并。
+- **修正**: `forecast_replenishment_v3.py` 新增物料级合并池 `replenishment_pool`：同一物料所有通途 SKU 合并，**皮壳/半成品把 `-Cover` 计入供给**，成品不自动计入；池级 1,074 物料×仓、296 需补货 / 4,813 件。3PL 落 `three_pl_stock`（92 SKU / 880 件），按库存数量展示、暂不进 ROP。
+- **根因**: 62 个「BOM 有内胆、按钮找不到」中 **61 个是 BOM 仍挂停用内胆**（多半已不需要内胆 → 清理 BOM，不重置物料），1 个是皮壳尺寸属性取错；82 个「BOM 没内胆、按钮会加」**BOM 是对的，产品就没有内胆，按钮误加**（KS0026/KS0428/KS0385 集中），发货计划只按 BOM、按钮误加单独列 `button_overadd_candidates`。新增 `nd_button_gap_report.py` → `nd_button_gaps.csv`（含 action）。
+- **架构**: KS BOM 只有 PK#+ND#；PP 棉/海绵+压缩包装在 `SXBZCP#`（393）/`PLBZCP#`（262）/`USTXBZCP#`（262）BOM，且不含 KS 子件，是附加填充/包装 BOM。成品/FBA 完整用料需叠加，分公司补货按 KS BOM 是对的。
+- **更新**: 文档 §9–§12 同步池级/3PL/根因/包装 BOM；`-Cover` 也用于大件拆包与不同填充物，EN 架构未必一一对应。
+- **新增**: `conventions/branch-shipment-cover-rules.md` — 集中登记已核实业务规则：产品结构、发货形态、内胆以 BOM 为准、`-Cover` 独立数量桶、EN Bin 不可用、intransit 与 PO 不叠加、3PL 权威口径；标注“原型已核实，待 #300/#301 验收”。
+- **核实**: `intransit` 与 PO 未入库高度重叠（173 个 SKU×仓同时有，146 个相差 ≤1；`SUM(LEAST)=13,118` 等于全部 intransit，PO 合计 15,567）→ 供给改 `available + GREATEST(intransit, PO)`；SKU 级 321/4,784、池级 296/4,813，发货清单皮壳 210/3,866、成品 72/769、半成品 13/169。
+- **缺数**: `input_health` + `data_flags` 标 `po_missing`/`stock_missing`/`ship_type_missing`/`no_stock_row`；PO 或库存源缺失时建议量置 NULL，不当作 0 供给。
+- **冻结**: 新增 `freeze_snapshot.py`（代码 commit、输入 SHA256、表行数、输入健康度、已知限制）与 `replenishment_trace.py`（5 个代表性商品的预测→供给→建议→组件追溯）；按 #300/#301 分工定位为快速原型支线，结果保持实验标签、不用于下单。
+- **收紧（按 #300 复核）**: `MAX(intransit, PO)` 只是临时假设，未证明逐笔包含；248 条未结 PO 的 `will_arrive_date` 全空，到货时点无法验证，真正风险是把未发/到货过晚的 PO 当近期供给。Cover 合并改为**显式情景假设**，不写成已批准规则；“成品=皮壳+内胆+充棉”改为“典型配置，实际按有效 BOM+发货形态”；BOM 挂停用内胆改为“待清理核实”，不凭停用自动删。对账包：`D:/Work/fzh-order-store/RECONCILIATION_2026-10-21.md`。
+- **更新**: 文档 §10 补 SO 按钮真实逻辑、BOM/按钮偏差统计、`-Cover` 独立性证据；§11 补 ND 物料与变体属性导出；§12 更新皮壳池待确认项。
+
+## 2026-10-21（修正：分公司补货是「发货形态」，不是 BOM 叶节点补货）
+- **修正**: 上一版把「组件」展开到面料/拉链/PP 棉并用 EN Bin 当供给，口径错误。公司术语：成品 KS = 皮壳 PK# + 内胆 ND# + 充棉；「组件」不是内部业务分类；面料/拉链属于中国生产物料，PP 棉是分公司填充耗材，均不在分公司补货范围。
+- **正确做法**: `Item Group.custom_shipment_type_to_branch`（皮壳/半成品/成品）决定发什么；补货量仍只有一套（成品池 ROP），`scripts/forecast_shipment_plan.py` 只把补货量按 BOM 第一层换算成 `PK#`/`ND#` 清单。首跑 311 行/4,548 件 → 皮壳 246/3,702、成品 47/655、半成品 14/171、未匹配 4/20。
+- **供给口径**: EN Bin 不可作可用库存（EN 不扣减通途）；删除 `forecast_component_bom.py` 与 `component_replenishment`（EN Bin + 负库存夹紧）做法。皮壳可能在 `-Cover` SKU 上（107 个物料有、65 个仅 cover），只输出 `pool_note` 提示，不自动合并（避免重复 ATP）。
+- **3PL**: `erp2_stocks_stocksquery` 可查 WayfairCG，但只有 Cranbury 92 SKU/880 件，其余仓几乎为空；无报表导出 API，UI 导出仍保留；权威仍是 Wayfair 后台，暂不并入补货。
+- **E1 表述**: 修正「与 PR #300 E1 一致」的说法——E1 选择规则选中 Croston，held-out TSB 0.511 / ens5 0.520；本库 1,347 序列回测 ens5 0.690 是本数据集结论。
+
+## 2026-10-21（组件级补货：EN BOM 展开 + 预测口径修正）
+- **更新**: `architecture-patterns/order-history-duckdb-store.md` —— 补 §10 组件级补货（EN 默认 BOM 5,582 条 / 明细 13,157 行，最多 2 层；981/1,004 有预测的成品能匹配 BOM；组件需求 = 成品预测 × BOM 累计用量；供给取 EN Bin 中国仓 + 未结 PO；MOQ/装箱取整）；§11 `bench mariadb` **1000 行截断**的坑与直连 mysql 导出法；§12 剩余缺口。
+- **修正**: `demand_forecast_90` 之前把 ens5 全部月份求和（含回测/历史外推），会把停售 SKU 的旧预测计入需求；现只取未来月，并按实际未来月数×30 归一。补货 v3 结果由 722/14,474 修正为 **311 个 SKU×仓 / 4,548 件**。
+- **预测覆盖**: `forecast_ensemble.py` 的 `--min-months` 默认 3（短史 SKU 兜底），预测序列 2,357 条、1,156 条有未来预测；回测仍只跑 ≥12 个有销量月的 1,347 条，**ens5 WAPE 0.690 不变**。
+- **新增脚本**: `scripts/forecast_component_bom.py`（BOM 展开 + 组件补货）；修正 `forecast_replenishment_v3.py` 的 stock_latest 取数（按仓各自最新快照，避免分批拉取后只看到最后一批仓）。
+- **首跑**: 组件 1,731 个有需求（1,048 半成品 + 683 原料），1,334 个需补货，取整后 34,283。
+
+## 2026-10-21（补货 v3：仓库归一 + 通途库存 + ens5 预测）
+- **更新**: `architecture-patterns/order-history-duckdb-store.md` —— 补 §8 仓库归一（旧仓名占绝大多数；组件仓并入美中、波兰成品并入波兰、海外仓 unused）、§9 通途库存快照 + ens5 预测回测（**ens5 WAPE 0.690 最优**，与 PR #300 E1 一致）+ 补货 v3（733 个 SKU×仓需补货）。
+- **新增脚本**: `scripts/tongtool_stock_snapshot.py`、`scripts/forecast_ensemble.py`、`scripts/forecast_replenishment_v2.py`/`v3.py`、`scripts/warehouse_map.py`；产物统一落 `D:/Work/fzh-order-store/`。
+
+## 2026-10-20（销量预测历史库：DuckDB + GS/EN 并集）
+- **新增**: `architecture-patterns/order-history-duckdb-store.md` —— 为销量预测/补货建立独立分析库：GS 月表（2023-01 起）+ EN 并集进 DuckDB；**实测通途 API 历史不可完整回溯**（不带 accountCode 约 5–6 千条封顶、按账号能更深、可见性跟最近更新时间走），故历史真源用 GS；含运费口径演进、子表 REST 403 绕法、SKU 归一 99.2%、补货快照首版。
+- **更新**: `integration-issues/en-tongtool-order-package-sync-failures.md` —— 补 §⑦「历史回溯：开放 API 的可见性是部分的」。
+
+## 2026-10-12（EN 通途同步：五类缺陷 + 生产小机器批量回填 OOM）
+- **新增**: `integration-issues/en-tongtool-order-package-sync-failures.md` —— EN `tongtool_integration` 同步专项排查的完整结论：**订单/包裹数量覆盖 100%**（判漏单必须用**发货口径**，用 `sale_time` 会大量假漏），病在 ① cron 走 `default` 300s 被掐断（改投 `long` + 06:30 闸门）② 限流器实例级→Redis 全局滑窗 ③ 滑窗瞬时连发仍撞 526（加**最短间隔 12s**）④ 长任务重叠（加跨进程互斥锁；生产实为 2 个 long worker）⑤ **`_update_order` 不回写 `warehouse_name`** ⇒ 空壳单（有单无成本，且每天新增）⑥ SKU 匹配是 `ref_code` **精确等值**、无后缀容错（约 1/5 未匹配 SKU 其实已登记）。
+- **新增**: `developer-experience/prod-batch-backfill-oom-small-box.md` —— 同一次排查把生产**三次压到失联**的复盘：瓶颈是**内存不是限流**（改成"小批+停顿"照样死）；真凶是**在 `bench console`（网页进程）里加载整张 BOM 表拼名单** + 无 swap ⇒ 直接卡死；**反证**是 app 自带的 refresh 按钮（只 enqueue、不啃大表）从没压垮过。结论：别为一次性任务去调 `innodb_buffer_pool_size`（已是默认最小值）/ `gunicorn_workers` / RQ worker，只加 **4GB swap** 作保险并保留机器原有 `vm.swappiness=0`。
+
 ## 2026-10-08（PB 无货件：UPS 才算真发 + 重复建单加后缀）
 - **更新**: `workflow-issues/pb-out-of-stock-notification-and-zero-stock-orders.md`（`last_updated: 2026-10-08`）—— 三处补料：**① §2.1.1 新增「重复建单也占 `-N`」**：通途不允许重复订单号；`-N` 与拆单后缀是**同一命名空间**（同批多行占 `-1…-M`、跨批补发继续排），所以**下一个可用 = 该 PO 已用过的最大 `-N` + 1**，不是固定 `-2`（用户纠正：「不一定后缀 -2，比如之前建了 2 单 -1 -2 但是都没发货呢？」）。两种查法都实测：**离线扫历史 `PB_*导入*.xlsx` 的 `PO Number-Line` 列**（286 个文件，结果与「`PBUS-<PO>` 存不存在」完全吻合）或通途模糊搜 `PBUS-{PO}`；注意导入 xlsx 里存的是**光号**（`137770200-1`），`PBUS-` 是通途侧店铺码。已在 `pb_orders` 落地成 `--reorder`/`--history-dir`。**② §6.1 补「通途 `orderStatus=despatched` 同样不等于真发」**：它和 ASN/面单一样只证明「建了单/建了标」，判定「真发」只有 **UPS 取件**一个口径。**③ §6.6 新增 2026-10-08 无货件复核实测**（10 个 PO：真发 2 —— `137770200-1` 与 `137974027` 的有货行 `-194`；只建标未取件 8），并记下本次**先拿 shipment/ASN 反推「已发货」、把 7 行改成已发、被用户纠正**的教训 —— ASN 与通途状态都替代不了 UPS。
 
