@@ -7,6 +7,10 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-10-21（多 Agent 调度与四轮返修验收）
+- **新增**: `workflow-issues/orca-multi-agent-automation-claims-and-quota.md` —— Orca 周期任务的四个机制坑：手动 `automations run` 跳过 precheck、worker 完成后不释放 `locks/<task>.lock` 导致下一轮被挡、超时只能标 `needs_verification` 不能自动重派、Codex 5h 页脚在健康额度下消失需用极小 `codex exec` 探针（并把 precheck 超时从 60s 提到 180s）。另记锁屏时 GUI 权限弹窗不可用，改走 `claude -p --permission-mode auto` headless。
+- **新增**: `best-practices/multi-agent-rework-review-status-separation.md` —— worker 完成 ≠ 评审完成 ≠ 业务验收；四轮返修（`22ae9a1e` 6P1+3P2 → `49a142e0` 2P1+1P2 → `e6b3cc9a` 1P2 → `4b7ec55f` PASS）的做法：每轮新 commit 不 amend、评审意见必须可复现带 file:line、只修当前阻断项、非阻塞 P3 验收后单独修文档、明确停止条件。证据：84 条离线测试、2,040 行两轮回放、zip/manifest/行去向哈希一致。
+
 ## 2026-10-08（PB 无货件：UPS 才算真发 + 重复建单加后缀）
 - **更新**: `workflow-issues/pb-out-of-stock-notification-and-zero-stock-orders.md`（`last_updated: 2026-10-08`）—— 三处补料：**① §2.1.1 新增「重复建单也占 `-N`」**：通途不允许重复订单号；`-N` 与拆单后缀是**同一命名空间**（同批多行占 `-1…-M`、跨批补发继续排），所以**下一个可用 = 该 PO 已用过的最大 `-N` + 1**，不是固定 `-2`（用户纠正：「不一定后缀 -2，比如之前建了 2 单 -1 -2 但是都没发货呢？」）。两种查法都实测：**离线扫历史 `PB_*导入*.xlsx` 的 `PO Number-Line` 列**（286 个文件，结果与「`PBUS-<PO>` 存不存在」完全吻合）或通途模糊搜 `PBUS-{PO}`；注意导入 xlsx 里存的是**光号**（`137770200-1`），`PBUS-` 是通途侧店铺码。已在 `pb_orders` 落地成 `--reorder`/`--history-dir`。**② §6.1 补「通途 `orderStatus=despatched` 同样不等于真发」**：它和 ASN/面单一样只证明「建了单/建了标」，判定「真发」只有 **UPS 取件**一个口径。**③ §6.6 新增 2026-10-08 无货件复核实测**（10 个 PO：真发 2 —— `137770200-1` 与 `137974027` 的有货行 `-194`；只建标未取件 8），并记下本次**先拿 shipment/ASN 反推「已发货」、把 7 行改成已发、被用户纠正**的教训 —— ASN 与通途状态都替代不了 UPS。
 

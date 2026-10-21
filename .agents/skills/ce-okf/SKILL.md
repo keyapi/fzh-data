@@ -311,6 +311,8 @@ gh pr create --title "<70 字以内>" --body-file "$BODY_FILE"
 踩过的坑与设计取舍，动手前先读：
 
 - `docs/solutions/tooling-decisions/ce-okf-conversation-wrapup-skill.md` —— ce-okf skill — 把「ce-compound + OKF 收尾」固化成一个命令
+- `docs/solutions/workflow-issues/orca-multi-agent-automation-claims-and-quota.md` —— Orca 周期任务：领取锁、超时恢复、Codex 额度探针、无人值守 headless CLI
+- `docs/solutions/best-practices/multi-agent-rework-review-status-separation.md` —— worker 完成 ≠ 评审完成 ≠ 验收；多轮返修与证据门
 ## 相关经验（docs/solutions）
 
 踩过的坑与设计取舍，动手前先读：

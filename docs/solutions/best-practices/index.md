@@ -16,3 +16,4 @@ tags: [best-practices, index]
 | 赛狐 VERCART 搜索词/定向报表：浏览空表 ≠ 拉取失败 | [sellfox-empty-searchterm-vs-target-report-split.md](sellfox-empty-searchterm-vs-target-report-split.md) |
 | 赛狐搜索词收割：别把 ASIN 当精准关键词 | [sellfox-search-term-asin-as-keyword-harvest.md](sellfox-search-term-asin-as-keyword-harvest.md) |
 | 办公室 OpenClash 屏蔽 Adobe 授权校验域名的处理与教训 | [adobe-genuine-prompts-office-openclash.md](adobe-genuine-prompts-office-openclash.md) |
+| 一个 Agent 实现、另一个复审，需要多轮返修才收敛 | [multi-agent-rework-review-status-separation.md](multi-agent-rework-review-status-separation.md) |
