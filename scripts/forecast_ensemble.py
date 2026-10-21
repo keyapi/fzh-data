@@ -92,7 +92,10 @@ def main():
     ap.add_argument("--out", default="D:/Work/fzh-order-store")
     ap.add_argument("--horizon", type=int, default=3)
     ap.add_argument("--origins", type=int, default=6, help="回测用最近 N 个 origin")
-    ap.add_argument("--min-months", type=int, default=12)
+    ap.add_argument("--min-months", type=int, default=3,
+                    help="出预测所需最少历史月数；短史 SKU 用现有方法兜底")
+    ap.add_argument("--backtest-min-months", type=int, default=12,
+                    help="回测只跑历史 ≥N 月的序列，保证与 E1 结论可比")
     args = ap.parse_args()
 
     con = duckdb.connect(str(Path(args.out) / "order_store.duckdb"))
@@ -166,8 +169,10 @@ def main():
             results.append({"sku": sku, "warehouse": wh, "month": m,
                             "forecast_qty": max(0.0, ens([fc[k][i] for k in fc])), "method": "ens5"})
 
-        # 滚动回测（最近 N 个 origin，horizon=H）
+        # 滚动回测（最近 N 个 origin，horizon=H）；只跑「有销售月数 ≥12」的序列，保持与 E1 可比
         n = len(series)
+        if len(g) < args.backtest_min_months:
+            continue
         for o in range(max(1, n - args.origins * args.horizon), n - args.horizon):
             train = series[:o]
             if sum(train) <= 0:

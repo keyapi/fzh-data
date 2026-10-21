@@ -33,15 +33,20 @@ def main():
     con = duckdb.connect(str(Path(args.out) / "order_store.duckdb"))
     rop_days = args.lead_days + args.safety_days
 
+    # 每个仓各自取最新快照（不同仓可能分批拉取，不能只取全局 MAX(snapshot_at)）
     con.execute("""
         CREATE OR REPLACE TABLE stock_latest AS
-        SELECT warehouse_name AS warehouse, goods_sku AS sku,
-               SUM(IFNULL(available,0)) AS available,
-               SUM(IFNULL(intransit,0)) AS intransit,
-               SUM(IFNULL(waiting_shipment,0)) AS waiting_shipment,
-               SUM(IFNULL(defects,0)) AS defects
-        FROM tongtool_stock
-        WHERE snapshot_at = (SELECT MAX(snapshot_at) FROM tongtool_stock)
+        WITH latest AS (
+            SELECT warehouse_name, MAX(snapshot_at) AS snapshot_at
+            FROM tongtool_stock GROUP BY 1
+        )
+        SELECT t.warehouse_name AS warehouse, t.goods_sku AS sku,
+               SUM(IFNULL(t.available,0)) AS available,
+               SUM(IFNULL(t.intransit,0)) AS intransit,
+               SUM(IFNULL(t.waiting_shipment,0)) AS waiting_shipment,
+               SUM(IFNULL(t.defects,0)) AS defects
+        FROM tongtool_stock t
+        JOIN latest l ON t.warehouse_name = l.warehouse_name AND t.snapshot_at = l.snapshot_at
         GROUP BY 1, 2
     """)
 
@@ -56,9 +61,11 @@ def main():
 
     con.execute("""
         CREATE OR REPLACE TABLE demand_forecast_90 AS
-        SELECT sku, warehouse, SUM(forecast_qty) / 90.0 AS daily_forecast
+        SELECT sku, warehouse,
+               SUM(forecast_qty) / (COUNT(DISTINCT month) * 30.0) AS daily_forecast
         FROM forecast_sku_wh
         WHERE method = 'ens5'
+          AND month >= strftime(CURRENT_DATE, '%Y-%m')   -- 只取未来月，排除回测/历史外推
         GROUP BY 1, 2
     """)
 

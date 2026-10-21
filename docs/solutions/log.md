@@ -7,6 +7,13 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-10-21（组件级补货：EN BOM 展开 + 预测口径修正）
+- **更新**: `architecture-patterns/order-history-duckdb-store.md` —— 补 §10 组件级补货（EN 默认 BOM 5,582 条 / 明细 13,157 行，最多 2 层；981/1,004 有预测的成品能匹配 BOM；组件需求 = 成品预测 × BOM 累计用量；供给取 EN Bin 中国仓 + 未结 PO；MOQ/装箱取整）；§11 `bench mariadb` **1000 行截断**的坑与直连 mysql 导出法；§12 剩余缺口。
+- **修正**: `demand_forecast_90` 之前把 ens5 全部月份求和（含回测/历史外推），会把停售 SKU 的旧预测计入需求；现只取未来月，并按实际未来月数×30 归一。补货 v3 结果由 722/14,474 修正为 **311 个 SKU×仓 / 4,548 件**。
+- **预测覆盖**: `forecast_ensemble.py` 的 `--min-months` 默认 3（短史 SKU 兜底），预测序列 2,357 条、1,156 条有未来预测；回测仍只跑 ≥12 个有销量月的 1,347 条，**ens5 WAPE 0.690 不变**。
+- **新增脚本**: `scripts/forecast_component_bom.py`（BOM 展开 + 组件补货）；修正 `forecast_replenishment_v3.py` 的 stock_latest 取数（按仓各自最新快照，避免分批拉取后只看到最后一批仓）。
+- **首跑**: 组件 1,731 个有需求（1,048 半成品 + 683 原料），1,334 个需补货，取整后 34,283。
+
 ## 2026-10-21（补货 v3：仓库归一 + 通途库存 + ens5 预测）
 - **更新**: `architecture-patterns/order-history-duckdb-store.md` —— 补 §8 仓库归一（旧仓名占绝大多数；组件仓并入美中、波兰成品并入波兰、海外仓 unused）、§9 通途库存快照 + ens5 预测回测（**ens5 WAPE 0.690 最优**，与 PR #300 E1 一致）+ 补货 v3（733 个 SKU×仓需补货）。
 - **新增脚本**: `scripts/tongtool_stock_snapshot.py`、`scripts/forecast_ensemble.py`、`scripts/forecast_replenishment_v2.py`/`v3.py`、`scripts/warehouse_map.py`；产物统一落 `D:/Work/fzh-order-store/`。
