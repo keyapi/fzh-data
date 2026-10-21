@@ -15,14 +15,31 @@ tags: [supply-chain, inventory, backup, scheduling, duckdb, erpnext]
 |---|---|
 | `FZH-TongtuAutoExport-stock` | **Windows 浏览器导出**，不是通途 API |
 | 实现 | `web_automation/legacy-compatible/tongtu_auto_export.py`（`tongtu.stock.export`，BROWSER_ONLY） |
-| 实际产物 | `通途导入_头程运费_其他费用.xlsx`：列只有 `SKU/SKU别名`、`安全库存`、头程报关费、头程运费、其他费用；**没有 available/intransit** |
-| 结论 | **它是成本/头程导入模板，不是库存数量快照**；不能当每日库存备份 |
-| 触发 | 每日 **02:17**（已注册，NextRunTime 2026-10-21 02:17） |
-| 首跑状态 | 手工 `--auto-login` 测试成功，生成 PL/CENTRADE/DANEEY 三个 xlsx；**内容是成本模板** |
-| 历史 | 本机此前没有该任务、没有日志、没有 output/stock 文件；`stock_alert` 只写低库存行，不是全量归档 |
+| 原始库存 | **`web_automation/downloads/*_库存结存清单*.xlsx`**；每次运行再合并为 `output/通途合并库存结存清单*.xlsx`（19 列，含 SKU/仓库/可用/在途/待发/故障品/成本） |
+| 派生成本模板 | `output/*_通途导入_头程运费_其他费用.xlsx`（SKU/安全库存/头程费用），**只是派生文件** |
+| 结论 | **浏览器导出本身是有效的库存结存备份**；成本模板不是唯一产物 |
+| 触发 | 每日 **02:17**（已注册） |
+| 2026-10-21 首跑 | **成功**：4/6 仓导出，2 个空退货仓跳过；合并 **4,575 行**；日志 `status=READY reason=success` |
+| 登录 | 使用你手动登录建立的 `chrome-profile`，02:17 无弹窗；`.env` 仍无 `TONGTU_USER/PASSWORD`，cookie 过期后需再手动或补凭证 |
 
-> 所以“没动静”不是任务挂了，而是**从未在本机注册/登录**。现在成本模板任务已注册；
-> 但**库存数量**需要另走 API 备份（见 §3–§4）。
+> 更正：之前说“浏览器导出只有成本模板”不完整——`downloads/` 有原始库存结存，
+> `output/` 同时有合并库存和派生成本模板。浏览器导出可以作每日库存备份；
+> 但它依赖 Windows 浏览器会话，服务器化不如 API。
+
+### 1.1 库存结存 vs 销售及库存报表 vs API
+
+| 口径 | 行数 | family SKU | 含销量 | 含库存 | 含状态/别名 | 结论 |
+|---|---:|---:|---|---|---|---|
+| 库存结存（浏览器合并） | 4,575 | 1,527 | 否 | available/intransit/waiting/defects | 是 | **完整库存备份首选** |
+| 销售及库存报表（浏览器） | 1,954 | 568 | 7/15/30/90 天 | available/waiting/intransit（无 defects） | 是 | **销量/周转搭档，不是完整库存** |
+| 通途 API 全仓 | 5,192（含其他仓） | 1,140（三主仓） | 否 | available/intransit/defects/waiting | 否 | 服务器化首选；零库存 SKU 更全 |
+
+- 库存结存 vs 销售报表：961 个 family 键只在库存结存、2 个只在销售报表；
+  67 个数量差异，主要是 `waiting`（库存结存有值、销售报表为 0）。**销售报表不能替代库存结存。**
+- 库存结存 vs API：PL 完全一致（1,369 行）；CENTRADE 1,686 vs 2,072、DANEEY 998 vs 1,024，
+  API 多出的是零库存/非活跃 SKU，重叠 SKU 数量基本一致；DANEEY 退货仓 522 vs API 400（API 超时不全）。
+- **建议**：每日归档 **库存结存合并文件 + 销售及库存报表**；如需服务器化，再加 API 全仓 JSONL。
+  只用一份时：库存用库存结存，销售/周转用销售报表。
 
 ## 2. 与 EN 三个通途 API 同步任务的关系
 
@@ -36,9 +53,8 @@ EN 生产 `Scheduled Job Type` 实测（2026-10-20）：
 
 - 浏览器成本导出走通途 **网页会话**，三个同步任务走 **通途 API**；两者不共享 5 次/分钟 API 限流。
 - 但 02:17 的浏览器导出如果跑过 28 分钟，会与 02:45 的订单同步在 CPU/浏览器上重叠。
-- **API 库存备份**必须避开三个同步窗口；已注册 `FZH-TongtuStockApiDaily` 每日 **05:17**
-  （04:30 之后），不抢 01:00/02:45/04:30 的 API 额度。
-- 浏览器成本导出保持 02:17 可以接受；它只产成本模板，不产库存数量。
+- 浏览器库存导出 02:17 已成功（4/6 仓，合并 4,575 行）；它同时产成本模板。
+- **库存 API 备份**已改为每日 05:17（04:30 之后），避开三个同步窗口。
 
 ## 3. 推荐落库形式：DuckDB/Parquet，不是 EN Bin
 
@@ -103,7 +119,7 @@ WHERE snapshot_date <= ?;
 
 | 选项 | 可行性 | 建议 |
 |---|---|---|
-| **本机 Windows 任务（当前）** | 已注册成本模板任务 02:17；**API 库存任务 `FZH-TongtuStockApiDaily` 05:17**；PC 关机/未登录不跑 | 过渡可用；不适合长期唯一来源 |
+| **本机 Windows 任务（当前）** | 浏览器库存+成本任务 02:17；**API 库存任务 `FZH-TongtuStockApiDaily` 05:17**；PC 关机/未登录不跑 | 过渡可用；不适合长期唯一来源 |
 | **EN 测试服务器 `ensh.vilavi.cn`** | Linux + Python/uv；需能出网到 `mcp.tongtool.com`；可写 NAS/本地 Parquet | **推荐试点**：只跑 API 快照，写 Parquet/JSONL，不写 EN 数据库；先确认出网与磁盘 |
 | EN 生产服务器 | 能跑但会与订单同步抢 API 额度/资源 | 不建议把每日全量库存快照放生产；除非单独配额/独立进程 |
 | 独立常开 Linux 小机/cron | 最干净 | **长期推荐**：与 EN 解耦，DuckDB/Parquet 落 NAS |
@@ -112,11 +128,16 @@ WHERE snapshot_date <= ?;
 
 - 任务名：`FZH-TongtuStockApiDaily`
 - 触发：每日 **05:17**
-- 脚本：`stock_daily_backup.py`（本目录）
-- 输出：`D:/Work/库存备份/YYYY-MM-DD/warehouse=<id>_<name>.jsonl` + `manifest.json`
-- 日志：`D:/Work/库存备份/stock_daily_backup.log`
+- 任务 action：`D:\Work\fzh-stock-backup\run_stock_daily_backup.cmd`（**ASCII 路径**；
+  脚本/`tongtool_api`/`.env` 已复制到该目录，避免 Task Scheduler 对中文路径编码错误）
+- 输出：`D:\Work\库存备份\YYYY-MM-DD\warehouse=<id>_<name>.jsonl` + `manifest.json`
+  （另有 ASCII junction `D:\Work\fzh-inventory` 指向同一目录）
+- 日志：`D:\Work\库存备份\stock_daily_backup.log`
 - 说明：按启用仓全量分页，13 秒/页；526 退避；`complete=false` 不写 0。
-- 过渡期任务指向 worktree；合并后应把脚本移到主仓库并重注册任务。
+- **2026-10-21 05:17 首跑失败**：旧任务 action 含中文路径，Task Scheduler 存储为乱码，
+  命令未执行；已把 wrapper 移到 `D:\Work\fzh-stock-backup` 并重注册。
+- 2026-10-21 09:2x 已手工补跑，数据写入 `D:\Work\库存备份\2026-10-21\`；
+  次日 05:17 起自动运行。
 
 ### 4.1 如果放 EN 测试服务器
 
@@ -141,14 +162,18 @@ LEFT JOIN order_monthly o USING (sku);
 
 ## 6. 仍未完成
 
-- **API 库存备份已做冒烟测试**：`stock_daily_backup.py --warehouses 美东-CENTRADE --max-pages 2`
-  返回 2 页/200 行/`complete=false`（预期，因 max-pages 截断），JSONL+manifest 正常落盘。
-- **全量 API 备份已完成一次**（2026-10-20）：CENTRADE 2,072 行/21 页、DANEEY 1,024/11、
-  PL 1,369/14、WayfairCG-Cranbury 92/1，均 `complete=true`；
-  DANEEY 退货仓一次连接超时，单仓 `complete=false`，整体 manifest `complete=false`、命令 exit 1。
-  主仓完整，可用于 G1b 覆盖；超时仓下次重跑补齐。
+- **2026-10-21 05:17 API 任务首跑失败**：旧任务 action 的中文路径被 Task Scheduler 存成乱码，
+  命令未执行（exit 1、无 manifest）。已把 wrapper/脚本/`tongtool_api`/`.env` 复制到
+  `D:\Work\fzh-stock-backup`（ASCII），重注册任务；09:2x 手工补跑，数据写入
+  `D:\Work\库存备份\2026-10-21\`。次日 05:17 起自动运行。
+- **浏览器 02:17 首跑成功**：4/6 仓，2 个空退货仓跳过，合并 4,575 行；
+  `downloads/` 原始库存 + `output/通途合并库存结存清单` + 成本模板。
+- **销售及库存报表已导出**：1,954 行/8 仓；family 568，不能替代库存结存（1,527）。
+- **API 全量备份（2026-10-20）**：CENTRADE 2,072/21、DANEEY 1,024/11、PL 1,369/14、
+  WayfairCG-Cranbury 92/1；DANEEY 退货仓一次连接超时，主仓完整。
 - **G1b 覆盖已用完整快照重算**：USNJ 5.86、USTX 5.48、PL 10.24 个月（含在途名义）；
-  131 个 branch×SKU 有需求无供给、194 个 <2 月、127 个 unknown（3PL/退货仓不计缺口）。
-- **浏览器成本导出**：手工测试已生成 PL/CENTRADE/DANEEY 三个 `通途导入_头程运费_其他费用.xlsx`；
-  它只产成本模板，不是库存数量，不能替代 API 备份。
+  131 有需求无供给、194 <2 月、127 unknown。
+- **DANEEY 退货仓超时原因**：2026-10-20 18:06 全量跑，不在 01:00/02:45/04:30 的 QDY/通途
+  API 同步窗口内；是到 `mcp.tongtool.com` 的 **TCP 连接超时**（WinError 10060），不是同步任务抢占。
+  2026-10-21 09:2x 补跑该仓已成功（160KB JSONL）；脚本已加 3 次网络重试（10/20s）。
 - EN 测试服务器出网/磁盘/uv 环境未验证；需技术确认后再部署。

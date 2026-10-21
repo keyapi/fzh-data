@@ -10,7 +10,8 @@ tags: [supply-chain, g1b, codex, review, response]
 # 对 Codex #301 `d9a11557` G1b 复审的修复记录
 
 > 结论：**首版不是契约验收**；本轮只修适配器与报告口径，不扩 top10–20。
-> 修复后用同一批本地输入重跑；WayfairCG 实盘、仓库合并证据仍标 unknown/unverified。
+> 修复后用同一批本地输入重跑；WayfairCG 实盘仍 unknown；仓库改名为 user-confirmed、
+> 旧仓 ID/余额审计 pending。
 
 | ID | 修复 | 证据/结果 |
 |---|---|---|
@@ -22,7 +23,7 @@ tags: [supply-chain, g1b, codex, review, response]
 | G1B06 | `EN_API/item_shipment_status.py` 的 DN 投影增加 `Delivery Note Item.name`；导出 `dn_line_id` | 100 条 DN 行都有自身 ID |
 | G1B07 | 未发量互斥分解：死单/在产/无计划/超发；作废单不计入 | 421+622+9-16=1,036，difference=0；7=+9-16 |
 | G1B08 | 同客户码多 EN 物料 → 该码进 `ambiguous` 并从映射移除，订单侧单列，不 fail-open | 本批 ambiguous=0，但规则已 fail-closed |
-| G1B09 | 新增 [g1b_warehouse_evidence.md](g1b_warehouse_evidence.md)：当前仓 ID/状态、历史 2026-05/08 旧皮壳仓余额；无改名/迁移凭证 → `unverified` | 不再宣称“已并入” |
+| G1B09 | 新增 [g1b_warehouse_evidence.md](g1b_warehouse_evidence.md)：当前仓 ID/状态、历史 2026-05/08 旧皮壳仓余额；2026-09 仓名统一（用户确认 + 脚本注释）旧皮壳并入美中；旧仓 ID/余额审计 pending | 不再仅凭“列表没有”断言；结论 `user-confirmed-rename-system-audit-pending` |
 
 ## P2 报告完善
 
@@ -30,13 +31,13 @@ tags: [supply-chain, g1b, codex, review, response]
 - 去掉 `lead_date` 导出（`legacy_lead_display_excluded=true`）；`so_delivery_date` 缺失进 `field_issues`。
 - manifest 增加月份观测、缺月/缺列、坏行、库存 complete/page 元信息；逐行主状态分开。
 - 快照标 `snapshot_is_transactional=false`，记录 capture_start/end。
-- 每日备份：浏览器 `tongtu.stock.export` 实测只产成本/头程模板，不是库存数量；
-  新增 `stock_daily_backup.py`（API）与 `FZH-TongtuStockApiDaily` 05:17。
+- 每日备份：浏览器 `tongtu.stock.export` 的 `downloads/` 有原始库存结存、`output/` 有合并库存 +
+  派生成本模板；它是有效库存备份。新增 `stock_daily_backup.py`（API）与 `FZH-TongtuStockApiDaily` 05:17。
 - 5% 退货仅未来需求情景；库存净算不二次冲减。
 
 ## 仍未闭合
 
 - 完整 API 库存快照已重跑：131/194/127；主仓 complete，DANEEY 退货仓超时。
-- 旧皮壳仓的 ID/改名/迁移/余额凭证仍缺；`unverified`。
+- 旧皮壳仓已确认 2026-09 改名并入美中；旧仓 ID/余额转移审计仍 pending。
 - WayfairCG 后台库存与调拨归属仍 unknown。
 - top10 EN 抽取 9/9 已完成且对平；全 family 仍未全量抽取。

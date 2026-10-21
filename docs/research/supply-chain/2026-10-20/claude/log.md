@@ -316,13 +316,13 @@ tags: [supply-chain, research, log]
 - **G1B05–07**：JC 按工序聚合、首道/末道分开；补 63 张 Manufacture SE；
   DN 增加 `dn_line_id`；未发互斥分解 `421+622+9-16=1,036`，差 7 = `+9-16`。
 - **G1B08**：同客户码多 EN 物料 fail-closed；本批 ambiguous=0。
-- **G1B09**：新增 `g1b_warehouse_evidence.md`；旧皮壳仓当前列表不存在，
-  但缺 ID/改名/迁移/余额凭证 → `unverified`，不再宣称已并入。
-- **每日备份更正**：浏览器 `tongtu.stock.export` 实测产出
-  `通途导入_头程运费_其他费用.xlsx`（只有 SKU/安全库存/头程费用），**不是库存数量**。
+- **G1B09**：新增 `g1b_warehouse_evidence.md`；2026-09 仓名统一，
+  旧皮壳仓并入美中主仓（用户确认 + `tongtu_auto_export.py` 注释）；
+  旧仓 ID/余额转移仍待系统审计。
+- **每日备份更正**：浏览器 `tongtu.stock.export` 的 `downloads/` 有原始库存结存，
+  `output/` 有合并库存 + 派生成本模板；**它是有效库存备份**，不是只有成本模板。
   新增 `stock_daily_backup.py`（API 全仓 JSONL+manifest），
   冒烟测试 2 页/200 行通过；注册 `FZH-TongtuStockApiDaily` 每日 05:17。
-  浏览器成本任务仍在 02:17；两者用途不同。
 - 全量 API 备份手工运行中；DANEEY 退货仓出现一次连接超时，按仓记录 error 并继续。
 - 产物：`g1b_review_response.md`、`g1b_warehouse_evidence.md`、
   `14-daily-inventory-backup.md`、`stock_daily_backup.py`、`g1b_from_daily_backup.py`。
@@ -333,6 +333,26 @@ tags: [supply-chain, research, log]
   131 个 branch×SKU 有需求无供给、194 个 <2 月、127 个 unknown（3PL/退货仓不计缺口）。
 - **top10 EN 抽取 9/9 完成**：SO 15–42 张/SKU，SE 36–111 张；9 个 SKU 的未发互斥分解
   `difference=0`；死单/无计划/超发均按 SKU 显式列出。
+
+## 2026-10-21 — 每日备份核对、自动登录与 WayfairCG 尝试
+
+- **浏览器 02:17 首跑成功**：4/6 仓，2 个空退货仓跳过，合并 4,575 行；
+  `downloads/` 原始库存结存，`output/` 合并库存 + 派生成本模板；日志 `status=READY reason=success`。
+- **销售及库存报表**：`tongtu.sales.export` 导出 1,954 行/8 仓；family 568，
+  含 7/15/30/90 天销量，但不是完整库存（库存结存 family 1,527）。结论：库存备份用库存结存，
+  销量/周转用销售报表，二者都归档。
+- **自动登录**：02:17 无弹窗，使用手动登录建立的 `chrome-profile`；`.env` 仍无
+  `TONGTU_USER/PASSWORD`，cookie 过期后需再手动或补凭证（脚本已支持 ddddocr）。
+- **API 05:17 首跑失败**：任务 action 的中文路径被 Task Scheduler 存成乱码，命令未执行。
+  已把 wrapper/脚本/`tongtool_api`/`.env` 复制到 `D:\Work\fzh-stock-backup`（ASCII）并重注册；
+  09:2x 手工补跑，数据写 `D:\Work\库存备份\2026-10-21\`。
+- **DANEEY 退货仓超时**：2026-10-20 18:06 跑，不在 QDY/通途 API 同步窗口；
+  是到 `mcp.tongtool.com` 的 TCP 超时（WinError 10060）。2026-10-21 补跑成功，
+  脚本已加 3 次网络重试（10/20s）。
+- **WayfairCG 继续尝试**：Sellfox 调拨单 2025-01..2026-10 共 0 条；
+  通途中转发货单对 5 个 WayfairCG 仓 2026-04..09 均 0 条；
+  通途 WayfairCG 库存：Cranbury 92、Perris 4、Romeoville 2，其余 0。
+  **供货归属仍 unknown**；需要业务导出通途 WMS 调拨单或 Wayfair 后台收货记录。
 
 ## 模板（后续阶段）
 

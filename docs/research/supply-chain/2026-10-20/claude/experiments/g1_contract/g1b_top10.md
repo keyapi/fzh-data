@@ -10,7 +10,9 @@ tags: [supply-chain, g1b, erpnext, top10, reconciliation]
 # G1b top10 EN 单据抽取（修复后）
 
 > 目的：验证 G1B05–07 修复能跨 SKU 工作；不是全 family 结果。
-> 输入：2026-04..09 family 出库前 10 个 SKU（9 个客户码 + 1 个 TT 码）。
+> 输入：2026-04..09 family 出库前 10 个 SKU（9 个客户码 + 1 个 TT 码），
+> 合计约 6,110/33,719 = **18.1%** 的 6 个月需求。
+> **库存快照覆盖全部 family；这里只抽 top10 的 EN 单据，不是全 1,486 个客户码。**
 > 输出：`out/g1b_en_top_*.json`（本地，含单据号；不入库）。
 
 ## 1. 已完成（9/9）

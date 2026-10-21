@@ -19,7 +19,7 @@ tags: [supply-chain, g1, mapping, index]
 | [g1b_results.md](g1b_results.md) | G1b 首版：出库消耗、库存快照、覆盖与假设 |
 | [g1b_review_response.md](g1b_review_response.md) | 对 Codex `d9a11557` 的 G1B01–09 修复记录 |
 | [g1b_top10.md](g1b_top10.md) | 修复后 top10 SKU 抽取；未发分解全部对平 |
-| [g1b_warehouse_evidence.md](g1b_warehouse_evidence.md) | 旧皮壳仓/当前美中仓证据；合并 `unverified` |
+| [g1b_warehouse_evidence.md](g1b_warehouse_evidence.md) | 2026-09 仓名统一，旧皮壳并入美中（用户确认+脚本注释）；旧仓 ID/余额审计 pending |
 | [g1b_stock_snapshot.py](g1b_stock_snapshot.py) | 通途 family 库存快照（只读、分块节流） |
 | [stock_daily_backup.py](stock_daily_backup.py) | 每日全仓 API 库存备份（JSONL + manifest） |
 | [g1b_from_daily_backup.py](g1b_from_daily_backup.py) | 每日备份 JSONL → G1b 快照 JSON |
@@ -31,4 +31,4 @@ tags: [supply-chain, g1, mapping, index]
 
 G1b 状态：EN 单据试点与 top10 已修 DN 行键/JC 跨工序/SE/未发分解，9/9 对平；
 完整 API 库存快照已重算（131 有需求无供给 / 194 <2 月 / 127 unknown）；
-旧 450/501 撤回；皮壳仓合并 `unverified`。
+旧 450/501 撤回；2026-09 仓名统一，旧皮壳并入美中（系统审计 pending）。

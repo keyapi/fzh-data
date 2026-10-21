@@ -2,9 +2,9 @@
 # -*- coding: utf-8 -*-
 """每日通途全量库存备份（API 版，只读）。
 
-与 browser 的 `tongtu.stock.export` 不同：后者导出的是「通途导入_头程运费_其他费用」
-成本模板，不包含 available/intransit 库存量；本脚本用 `erp2_stocks_stocksquery`
-直接拉全仓库存，写不可变 JSONL + manifest，供 DuckDB/Parquet 后续转换。
+与 browser 的 `tongtu.stock.export` 不同：浏览器导出包含 `downloads/` 原始库存结存和
+`output/通途合并库存结存清单`，同时派生「通途导入_头程运费_其他费用」成本模板；
+本脚本用 `erp2_stocks_stocksquery` 拉全部启用仓，输出全仓 JSONL + manifest，便于服务器化。
 
 输出（默认 D:/Work/库存备份）：
   YYYY-MM-DD/warehouse=<warehouseId>_<name>.jsonl
@@ -21,6 +21,7 @@ import json
 import os
 import sys
 import time
+import urllib.error
 from datetime import datetime
 from pathlib import Path
 
@@ -99,7 +100,20 @@ class Client:
     def call(self, name: str, args: dict) -> dict:
         self._throttle()
         self.requests += 1
-        payload = extract_payload(self.mcp.call(name, args))
+        last = None
+        for attempt in range(3):
+            try:
+                payload = extract_payload(self.mcp.call(name, args))
+                break
+            except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
+                last = e
+                if attempt < 2:
+                    wait = 10 * (attempt + 1)
+                    print(f"  [net] {type(e).__name__}，等待 {wait}s 重试", file=sys.stderr)
+                    time.sleep(wait)
+                    self.requests += 1
+        else:
+            raise last
         code = business_code(payload)
         if code == CODE_RATE_LIMIT:
             delay = 60.0

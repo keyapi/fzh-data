@@ -185,21 +185,21 @@ USTX supply 13,563 = 8,492 available + 5,071 intransit
 | WayfairCG 供货归属 | unknown/partial | 近期调拨单按 SKU/区间；历史占比不作当前归属 |
 | 美中 run-rate | biased | 新运营/Listing ramp、有货曝光、断货；只作指示 |
 | 平台库存 <=2 视为无货 | manual rule | 标 `censored/manual_low`；不补 0；记录调整事件（待建） |
-| 皮壳仓 | **unverified** | 当前列表无该仓，但无 ID/改名/迁移/余额证据；见 [g1b_warehouse_evidence.md](g1b_warehouse_evidence.md) |
-| 快照完整性 | legacy | 旧快照 0 错误但缺 `complete/page` 元信息；完整 API 备份重跑后更新缺口 |
-| 浏览器 `stock.export` | cost template | 只产 `通途导入_头程运费_其他费用.xlsx`，不是库存数量；API 库存任务另立 |
+| 皮壳仓 | user-confirmed-rename | 2026-09 仓名统一，旧皮壳并入 `美中-FZH-DANEEY`（用户确认+脚本注释）；旧仓 ID/余额转移仍待审计 |
+| 快照完整性 | legacy | 旧快照 0 错误但缺 `complete/page` 元信息；完整 API 备份已重跑 |
+| 浏览器 `stock.export` | inventory + cost | `downloads/` 原始库存 + `output/通途合并库存结存清单` 合并库存；成本模板是派生文件 |
 | `PK#`/`ND#` | fact | SO 行用包装码；G1b 用客户码或 `KS → PK#` 映射 |
 | 死单/未开工/重复单 | fact/anomaly | 单列；不计入 open demand/供给，不直接相加 |
 
 ## 7. 下一步
 
-- 旧快照已拉；完整 API 快照重跑后更新缺口；皮壳仓合并 `unverified`。
+- 旧快照已拉；完整 API 快照已重算缺口；2026-09 仓名统一，旧皮壳并入美中（系统审计 pending）。
 - 选 top 10–20 个 SKU 跑 `g1b_en_extract.py`，把 SO/DN/WO/JC/PP 与库存覆盖按 SKU 对齐。
 - 取 WayfairCG 后台库存 + 赛狐/通途调拨单，补 `3pl_supply_allocation`；
   调拨完成只当发出，不当实收；历史供货占比不当当前库存归属。
 - 退货：5% 仅未来需求情景；未来从 Amazon 结算 V2/退货报表配置化，库存净算不二次冲减。
 - **每日库存备份**：API 任务 `FZH-TongtuStockApiDaily` 每日 **05:17** →
   `D:/Work/库存备份/YYYY-MM-DD/`（JSONL + manifest）；浏览器 `FZH-TongtuAutoExport-stock` 02:17
-  只产成本/头程模板，不是库存数量。
+  产原始库存结存 + 合并库存 + 派生成本模板（2026-10-21 成功 4/6 仓、4,575 行）。
 - 同时记录销售平台库存 <=2 的人工规则/调整事件，供 G2/G3 断货删失。
 - 所有输出带 `source/fetched_at/confidence`；未匹配/死单/未开工/重复单单列，不静默修正。

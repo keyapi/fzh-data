@@ -87,10 +87,12 @@ tags: [supply-chain, research, sources]
 | S1-056 | 试点未发 1,036 = 死单 421 + 在产 622 + 无计划 9 + 超发 -16；421+622 与 1,036 的差 7 = +9-16 | 本地 `g1b_en_fixed3.json` | C | 2026-10-20 | `difference=0` | A | g1b_pilot §1、g1b_results §4 |
 | S1-057 | 浏览器 `tongtu.stock.export` 实际产出成本/头程模板（SKU/安全库存/头程费用），不是 available/intransit 库存数量 | `web_automation/output/*_通途导入_头程运费_其他费用.xlsx` + `tongtu_auto_export.py` | C | 2026-10-20 | 5 列；3 个仓手工测试 | A | 14-daily-inventory-backup §1 |
 | S1-058 | 每日 API 库存备份脚本 `stock_daily_backup.py` 冒烟通过；任务 `FZH-TongtuStockApiDaily` 每日 05:17 | 本地运行 + `Get-ScheduledTask` | C | 2026-10-20 | 2 页/200 行/complete=false（max-pages 截断） | A | 14-daily-inventory-backup §4 |
-| S1-059 | 旧皮壳仓 2026-05/08 有 896/904 SKU、余额 21,226/16,990；2026-10 当前列表不存在；无 ID/改名/迁移凭证 → unverified | 历史结存 xlsx + 通途仓库列表 | C | 2026-10-20 | `g1b_warehouse_evidence.md` | A | G1B09 |
+| S1-059 | 旧皮壳仓 2026-05/08 有 896/904 SKU、余额 21,226/16,990；2026-09 仓名统一并入美中主仓（用户确认+脚本注释）；旧仓 ID/余额审计 pending | 历史结存 xlsx + 通途仓库列表 + `tongtu_auto_export.py` 注释 + 用户 2026-10-21 | C | 2026-10-21 | `g1b_warehouse_evidence.md` | A | G1B09 |
 | S1-060 | 完整 API 库存备份：CENTRADE 2,072 行/21 页、DANEEY 1,024/11、PL 1,369/14、WayfairCG-Cranbury 92/1；主仓 complete=true | `D:/Work/库存备份/2026-10-20/manifest.json` | C | 2026-10-20 | 1 个退货仓连接超时；整体 complete=false | A | 14-daily-inventory-backup §6 |
 | S1-061 | 完整快照覆盖：USNJ 5.86 / USTX 5.48 / PL 10.24 个月；131 有需求无供给、194 <2 月、127 unknown | `out/g1b_coverage_complete.json` | C | 2026-10-20 | 缺口仅 sampled_complete；3PL/退货仓不计 | A | g1b_results §3/§5 |
 | S1-062 | top10 EN 抽取 9/9 完成；SO 15–42、SE 36–111；9 个 SKU 未发分解 difference=0 | `out/g1b_en_top_*.json` | C | 2026-10-20 | 死单/无计划/超发按 SKU 显式列出 | A | g1b_top10 |
+| S1-063 | 库存结存 4,575 行/family 1,527；销售及库存报表 1,954 行/family 568；后者有销量但不是完整库存 | 浏览器 2026-10-21 导出 | C | 2026-10-21 | 961 个 family 键只在库存结存；67 个 waiting 差异 | A | 14-daily-inventory-backup §1.1 |
+| S1-064 | 浏览器 02:17 首跑成功 4/6 仓、4,575 行；API 05:17 首跑因中文任务路径失败，已迁 ASCII 路径重注册 | `web_automation/logs/export-stock.log` + Task Scheduler | C | 2026-10-21 | `status=READY reason=success`；API exit 1 无 manifest | A | 14-daily-inventory-backup §4/§6 |
 
 ## 未找到项（N-###）
 
