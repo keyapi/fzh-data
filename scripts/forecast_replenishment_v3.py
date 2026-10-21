@@ -45,6 +45,15 @@ def main():
         GROUP BY 1, 2
     """)
 
+    try:
+        con.execute("""
+            CREATE OR REPLACE TABLE po_open_latest AS
+            SELECT sku, warehouse, SUM(on_order) AS on_order
+            FROM tongtool_po_open GROUP BY 1, 2
+        """)
+    except Exception:
+        con.execute("CREATE OR REPLACE TABLE po_open_latest (sku VARCHAR, warehouse VARCHAR, on_order DOUBLE)")
+
     con.execute("""
         CREATE OR REPLACE TABLE demand_forecast_90 AS
         SELECT sku, warehouse, SUM(forecast_qty) / 90.0 AS daily_forecast
@@ -56,17 +65,19 @@ def main():
     con.execute("""
         CREATE OR REPLACE TABLE replenishment_v3 AS
         SELECT s.warehouse, s.sku,
-               s.available, s.intransit, s.waiting_shipment, s.defects,
+               s.available, s.intransit, IFNULL(p.on_order,0) AS on_order,
+               s.waiting_shipment, s.defects,
                ROUND(IFNULL(d.daily_forecast,0), 3) AS daily_forecast,
                CASE WHEN IFNULL(d.daily_forecast,0) > 0
-                    THEN ROUND((s.available + s.intransit) / d.daily_forecast, 1) END AS days_cover,
+                    THEN ROUND((s.available + s.intransit + IFNULL(p.on_order,0)) / d.daily_forecast, 1) END AS days_cover,
                {rops} AS rop_days,
                CASE WHEN IFNULL(d.daily_forecast,0) > 0
                     THEN ROUND(d.daily_forecast * {rops}, 0) END AS rop_qty,
                CASE WHEN IFNULL(d.daily_forecast,0) > 0
-                    THEN GREATEST(0, ROUND(d.daily_forecast * {rops} - (s.available + s.intransit), 0)) END AS suggested_qty
+                    THEN GREATEST(0, ROUND(d.daily_forecast * {rops} - (s.available + s.intransit + IFNULL(p.on_order,0)), 0)) END AS suggested_qty
         FROM stock_latest s
         LEFT JOIN demand_forecast_90 d ON s.sku = d.sku AND s.warehouse = d.warehouse
+        LEFT JOIN po_open_latest p ON s.sku = p.sku AND s.warehouse = p.warehouse
         WHERE s.warehouse IN {whs}
     """.replace("{rops}", str(rop_days)).replace("{whs}", str(tuple(MAIN_WH))))
 

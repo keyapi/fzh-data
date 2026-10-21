@@ -106,9 +106,10 @@ DuckDB（分析库，独立文件）
 - **库存来源改为通途**（EN 库存口径不可用）：`erp2_stocks_stocksquery`，按仓分页（pageSize≤100、5 次/分钟）。已拉三家主仓 **4,465 行**（美东 2,072 / 美中 1,024 / 波兰 1,369）。
 - **预测**：`scripts/forecast_ensemble.py`，MA3/MA6/MA12/Croston/TSB + ens5 中位数，滚动 origin、horizon=3、指标 WAPE。
   - **回测结果（1,347 条 SKU×仓 序列）：ens5 0.690 最优**，ma3 0.703、ma12 0.705、tsb 0.723、ma6 0.724、croston 0.741 —— 与 PR #300 E1 的结论一致（简单组合优于单模型）。
-- **补货 v3**：`scripts/forecast_replenishment_v3.py`，`ROP = 日均预测 × (交期 45 + 安全 30)`，`建议 = max(0, ROP − (available + intransit))`。
-  - 首跑：4,465 个 SKU×仓，**1,317 有预测**，**733 需补货**，建议合计 **14,826 件**。
-- **仍未覆盖**：组件（皮壳/海绵/PP 棉）需按 BOM 展开；3PL（WayfairCG）库存需人工导出；`intransit` 目前取库存字段，完整在途可接 `erp2_purchase_purchaseorderquery`。
+- **补货 v3**：`scripts/forecast_replenishment_v3.py`，`ROP = 日均预测 × (交期 45 + 安全 30)`，`建议 = max(0, ROP − (available + intransit + PO未入库))`。
+  - 供给 = 通途库存 `available` + `intransit` + 通途 PO 未入库量（`erp2_purchase_purchaseorderquery`，已接；180 个 SKU×仓、16,043 件在途）。
+  - 首跑：4,465 个 SKU×仓，**1,317 有预测**，**722 需补货**，建议合计 **14,474 件**。
+- **仍未覆盖**：组件（皮壳/海绵/PP 棉）需按 BOM 展开；3PL（WayfairCG）库存需人工导出；MOQ/装箱量未接入。
 
 ## Why This Matters
 
