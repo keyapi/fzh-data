@@ -268,15 +268,31 @@ def uom_factor(item_doc: dict, uom: str, stock_uom: str):
     return None
 
 
+def flag(value):
+    """Strict 1/0 flag parser: '0'/0/False -> False; '1'/1/True -> True; else None."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        text = value.strip().lower()
+        if text in ("1", "true", "yes", "y"):
+            return True
+        if text in ("0", "false", "no", "n", ""):
+            return False
+    return None
+
+
 def item_meta(detail: dict) -> dict:
     return {
         "name": str(detail.get("name") or ""),
         "item_code": str(detail.get("item_code") or detail.get("name") or ""),
         "item_group": str(detail.get("item_group") or ""),
-        "disabled": bool(detail.get("disabled")),
+        "disabled": flag(detail.get("disabled")),
+        "disabled_raw": detail.get("disabled"),
         "stock_uom": str(detail.get("stock_uom") or ""),
         "variant_of": str(detail.get("variant_of") or ""),
-        "has_variants": bool(detail.get("has_variants")),
+        "has_variants": flag(detail.get("has_variants")),
         "modified": str(detail.get("modified") or ""),
         "sha256": sha_obj(detail),
     }
@@ -336,9 +352,17 @@ def analyze_bom(bom: dict, code: str, base: str, item_docs: dict[str, dict]):
     if out_stock_uom != comp_stock_uom:
         return None, "stock_uom_mismatch"
     ratio = comp_stock / out_stock
-    docstatus = int(bom.get("docstatus") or 0)
-    is_active = bool(bom.get("is_active"))
-    is_default = bool(bom.get("is_default"))
+    try:
+        docstatus = int(bom.get("docstatus"))
+    except (TypeError, ValueError):
+        return None, "bom_docstatus_invalid"
+    is_active = flag(bom.get("is_active"))
+    if is_active is None:
+        return None, "bom_flag_invalid"
+    raw_default = bom.get("is_default")
+    is_default = False if raw_default is None else flag(raw_default)
+    if is_default is None:
+        return None, "bom_flag_invalid"
     return {
         "name": str(bom.get("name") or ""),
         "modified": str(bom.get("modified") or ""),
@@ -369,27 +393,128 @@ def clean_candidate(cand: dict) -> dict:
     return {k: cand[k] for k in keys}
 
 
+REASON_CODES = {
+    "consistent": "consistent_structure",
+    "conflict": "bom_conflict",
+    "conflict_mixed_direction": "conflict_mixed_direction",
+    "unsupported_direction": "unsupported_direction",
+    "missing_evidence": "missing_evidence",
+    "item_missing": "item_missing",
+    "item_flag_invalid": "item_flag_invalid",
+    "unresolved_canonical_mapping": "unresolved_canonical_mapping",
+}
+
+
+def shared_edge(bom: dict, code: str):
+    """Raw KS parent → shared component edge (e.g. ND# used by many finished BOMs)."""
+    lines = [x for x in (bom.get("items") or [])
+             if str(x.get("item_code") or "") == code]
+    if not lines:
+        return None
+    comp_stock = 0.0
+    comp_qty = 0.0
+    uoms: set[str] = set()
+    stock_uom = ""
+    for line in lines:
+        qty = num(line.get("qty"))
+        stock = num(line.get("stock_qty"))
+        if qty is None or qty <= 0:
+            return None
+        if stock is None:
+            stock = qty
+        comp_qty += qty
+        comp_stock += stock
+        uoms.add(str(line.get("uom") or ""))
+        if line.get("stock_uom"):
+            stock_uom = str(line.get("stock_uom"))
+    out_qty = num(bom.get("quantity"))
+    out_uom = str(bom.get("uom") or "")
+    ratio = (comp_stock / out_qty if (out_qty and out_qty > 0 and stock_uom
+                                      and out_uom == stock_uom) else None)
+    try:
+        docstatus = int(bom.get("docstatus"))
+    except (TypeError, ValueError):
+        docstatus = None
+    active = flag(bom.get("is_active"))
+    default = flag(bom.get("is_default"))
+    return {
+        "name": str(bom.get("name") or ""),
+        "modified": str(bom.get("modified") or ""),
+        "sha256": sha_obj(bom),
+        "docstatus": docstatus,
+        "is_active": active,
+        "eligible_at_evidence": docstatus == 1 and active is True,
+        "is_default": bool(default),
+        "direction": "ks_parent_variant_component",
+        "parent_item": str(bom.get("item") or ""),
+        "child_item": code,
+        "component_stock_qty": comp_stock,
+        "output_stock_qty": out_qty,
+        "uom": stock_uom or out_uom,
+        "ratio": ratio,
+        "ratio_known": ratio is not None,
+        "component_qty": comp_qty,
+        "component_line_count": len(lines),
+        "raw_component_uoms": sorted(x for x in uoms if x),
+    }
+
+
 def build_record(code: str, base: str, role: str, item_docs: dict[str, dict],
                  analyses: list[dict], excluded: list[dict], as_of: str,
-                 ks_items: set[str]) -> tuple[dict, str]:
+                 ks_items: set[str], shared_edges: list[dict] | None = None
+                 ) -> tuple[dict, str]:
     variant_item = item_docs.get(code)
+    candidates = [clean_candidate(c) for c in analyses]
     if base not in ks_items:
+        edges = shared_edges or []
+        parents = sorted({e["parent_item"] for e in edges if e.get("parent_item")})
+        if len(parents) > 1:
+            reason = "shared_component_multiple_parents"
+        elif len(parents) == 1:
+            reason = "shared_component_single_parent"
+        else:
+            reason = "unresolved_canonical_mapping_no_parent"
         return {
             "schema_version": SCHEMA_VERSION, "canonical_ks": base, "role": role,
             "evidence": "missing", "evidence_scope": "historical_unknown",
-            "direction": "", "valid_from": as_of, "valid_to": as_of,
-            "resolution": "not_family", "current_planning_eligible": False,
+            "direction": "ks_parent_variant_component" if edges else "",
+            "valid_from": as_of, "valid_to": as_of,
+            "resolution": "unresolved_canonical_mapping",
+            "reason_code": reason,
+            "reason_detail": (f"stripped base {base} is not in ks_items; "
+                              f"{len(parents)} KS parent edge(s) in sample; "
+                              f"canonical mapping is not unique"),
+            "base_not_in_manifest": True,
+            "not_finished_item": True,
+            "shared_parent_ks": parents,
+            "item_missing": not bool(variant_item),
+            "current_planning_eligible": False,
             "item": item_meta(variant_item) if variant_item else {},
-            "candidate_boms": [], "excluded_boms": excluded,
-        }, "not_family"
+            "candidate_boms": edges, "excluded_boms": excluded,
+        }, "unresolved_canonical_mapping"
     if not variant_item:
         return {
             "schema_version": SCHEMA_VERSION, "canonical_ks": base, "role": role,
             "evidence": "missing", "evidence_scope": "historical_unknown",
             "direction": "", "valid_from": as_of, "valid_to": as_of,
-            "resolution": "item_missing", "current_planning_eligible": False,
-            "item": {}, "candidate_boms": [], "excluded_boms": excluded,
+            "resolution": "item_missing", "reason_code": REASON_CODES["item_missing"],
+            "reason_detail": f"Item detail missing for {code}",
+            "current_planning_eligible": False,
+            "item": {}, "candidate_boms": candidates, "excluded_boms": excluded,
         }, "item_missing"
+    meta = item_meta(variant_item)
+    if meta["disabled"] is None:
+        return {
+            "schema_version": SCHEMA_VERSION, "canonical_ks": base, "role": role,
+            "evidence": "missing", "evidence_scope": "historical_unknown",
+            "direction": "", "valid_from": as_of, "valid_to": as_of,
+            "resolution": "item_flag_invalid",
+            "reason_code": REASON_CODES["item_flag_invalid"],
+            "reason_detail": f"Item.disabled is not a recognizable flag: "
+                             f"{meta.get('disabled_raw')!r}",
+            "current_planning_eligible": False,
+            "item": meta, "candidate_boms": candidates, "excluded_boms": excluded,
+        }, "item_flag_invalid"
     eligible = [c for c in analyses if c["eligible_at_evidence"]]
     for cand in analyses:
         if not cand["eligible_at_evidence"]:
@@ -399,9 +524,11 @@ def build_record(code: str, base: str, role: str, item_docs: dict[str, dict],
             "schema_version": SCHEMA_VERSION, "canonical_ks": base, "role": role,
             "evidence": "missing", "evidence_scope": "historical_unknown",
             "direction": "", "valid_from": as_of, "valid_to": as_of,
-            "resolution": "missing_evidence", "current_planning_eligible": False,
-            "item": item_meta(variant_item), "candidate_boms": [],
-            "excluded_boms": excluded,
+            "resolution": "missing_evidence",
+            "reason_code": REASON_CODES["missing_evidence"],
+            "reason_detail": "no related BOM found",
+            "current_planning_eligible": False,
+            "item": meta, "candidate_boms": [], "excluded_boms": excluded,
         }, "missing_evidence"
     if not eligible:
         return {
@@ -409,16 +536,45 @@ def build_record(code: str, base: str, role: str, item_docs: dict[str, dict],
             "evidence": "missing", "evidence_scope": "historical_unknown",
             "direction": analyses[0]["direction"], "valid_from": as_of,
             "valid_to": as_of, "resolution": "missing_evidence",
+            "reason_code": REASON_CODES["missing_evidence"],
+            "reason_detail": "related BOMs exist but none is eligible at evidence time",
             "current_planning_eligible": False,
-            "item": item_meta(variant_item),
-            "candidate_boms": [clean_candidate(c) for c in analyses],
-            "excluded_boms": excluded,
+            "item": meta, "candidate_boms": candidates, "excluded_boms": excluded,
         }, "missing_evidence"
-    signatures = {(c["direction"], c["uom"], c["parent_item"], c["child_item"],
-                   round(c["ratio"], 9)) for c in eligible}
-    resolution = "consistent" if len(signatures) == 1 and all(
-        abs(c["ratio"] - 1.0) <= 1e-9 for c in eligible) else "conflict"
-    selected = next((c for c in eligible if c["is_default"]), eligible[0])
+
+    valid = [c for c in eligible if c["direction"] == "ks_parent_variant_component"]
+    reverse = [c for c in eligible if c["direction"] != "ks_parent_variant_component"]
+    for cand in reverse:
+        excluded.append({"name": cand["name"], "reason": "unsupported_direction",
+                         "candidate": clean_candidate(cand)})
+    if not valid:
+        return {
+            "schema_version": SCHEMA_VERSION, "canonical_ks": base, "role": role,
+            "evidence": "missing", "evidence_scope": "historical_unknown",
+            "direction": reverse[0]["direction"], "valid_from": as_of,
+            "valid_to": as_of, "resolution": "unsupported_direction",
+            "reason_code": REASON_CODES["unsupported_direction"],
+            "reason_detail": (f"{len(reverse)} eligible BOM(s) are variant-parent "
+                              f"direction; not cover consumption"),
+            "current_planning_eligible": False,
+            "item": meta, "candidate_boms": [], "excluded_boms": excluded,
+        }, "unsupported_direction"
+    if reverse:
+        resolution = "conflict_mixed_direction"
+        selected = next((c for c in valid if c["is_default"]), valid[0])
+        reason_detail = (f"{len(valid)} valid-direction BOM(s) and "
+                         f"{len(reverse)} reversed-direction BOM(s) in sample")
+    else:
+        signatures = {(c["uom"], c["parent_item"], c["child_item"],
+                       round(c["ratio"], 9)) for c in valid}
+        resolution = "consistent" if len(signatures) == 1 and all(
+            abs(c["ratio"] - 1.0) <= 1e-9 for c in valid) else "conflict"
+        selected = next((c for c in valid if c["is_default"]), valid[0])
+        reason_detail = (f"{len(valid)} BOM(s), ratio={selected['ratio']:.6g}, "
+                         f"direction={selected['direction']}")
+    current_eligible = (resolution == "consistent"
+                        and meta["disabled"] is False
+                        and selected["eligible_at_evidence"])
     uom = selected["uom"]
     record = {
         "schema_version": SCHEMA_VERSION,
@@ -431,8 +587,9 @@ def build_record(code: str, base: str, role: str, item_docs: dict[str, dict],
         "valid_from": as_of,
         "valid_to": as_of,
         "resolution": resolution,
-        "current_planning_eligible": bool(
-            not variant_item.get("disabled") and selected["eligible_at_evidence"]),
+        "reason_code": REASON_CODES[resolution],
+        "reason_detail": reason_detail,
+        "current_planning_eligible": current_eligible,
         "ratio": selected["ratio"],
         "uom": uom,
         "component": {
@@ -452,10 +609,10 @@ def build_record(code: str, base: str, role: str, item_docs: dict[str, dict],
             "stock_uom": uom,
             "conversion_factor": 1,
         },
-        "item": item_meta(variant_item),
+        "item": meta,
         "bom": {"name": selected["name"], "modified": selected["modified"],
                 "sha256": selected["sha256"]},
-        "candidate_boms": [clean_candidate(c) for c in eligible],
+        "candidate_boms": [clean_candidate(c) for c in valid],
         "excluded_boms": excluded,
     }
     return record, resolution
@@ -527,22 +684,36 @@ def main() -> int:
 
     items_out = {}
     counts = defaultdict(int)
+    reason_counts = defaultdict(int)
     for rec in selected:
         code, base, role = rec["code"], rec["base"], rec["role"]
         analyses = []
         excluded = []
-        for name, bom in bom_docs.items():
-            if str(bom.get("item") or "") not in (base, code):
-                continue
-            cand, reason = analyze_bom(bom, code, base, item_docs)
-            if cand:
-                analyses.append(cand)
-            elif reason:
-                excluded.append({"name": name, "reason": reason})
+        shared = []
+        if base not in ks_items:
+            # Shared component (e.g. ND# inner) may appear under many KS parents;
+            # keep the raw parent edges instead of using the stripped base.
+            for name, bom in bom_docs.items():
+                if str(bom.get("item") or "") not in ks_items:
+                    continue
+                edge = shared_edge(bom, code)
+                if edge:
+                    shared.append(edge)
+        else:
+            for name, bom in bom_docs.items():
+                if str(bom.get("item") or "") not in (base, code):
+                    continue
+                cand, reason = analyze_bom(bom, code, base, item_docs)
+                if cand:
+                    analyses.append(cand)
+                elif reason:
+                    excluded.append({"name": name, "reason": reason})
         record, resolution = build_record(
-            code, base, role, item_docs, analyses, excluded, args.as_of, ks_items)
+            code, base, role, item_docs, analyses, excluded, args.as_of, ks_items,
+            shared_edges=shared)
         items_out[code] = record
         counts[resolution] += 1
+        reason_counts[str(record.get("reason_code") or "unknown")] += 1
 
     status = "complete" if not status_reasons else "partial"
 
@@ -597,7 +768,8 @@ def main() -> int:
                    "max_seconds": args.max_seconds,
                    "errors": client.errors},
         "counts": {"variants": len(selected), "records": len(items_out),
-                   "by_resolution": dict(sorted(counts.items()))},
+                   "by_resolution": dict(sorted(counts.items())),
+                   "by_reason_code": dict(sorted(reason_counts.items()))},
         "historical_evidence": "not_attempted; Codex validates historical boundary in parallel",
         "evidence_scope": "current_structure_only",
         "outputs": {

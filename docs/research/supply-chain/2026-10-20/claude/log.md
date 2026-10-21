@@ -495,6 +495,24 @@ tags: [supply-chain, research, log]
   sha256 `69b679af…`；evidence `0f365b99…`。
 - 离线单测 53 条全绿（consumer 44 + producer 9），不联网、不调 `main()`。
 
+## 2026-10-21 — producer P1 修正与 20 样本 v5 回放
+
+- Codex producer 复审 CONDITIONAL：反向 BOM 误判 consistent；共享 ND 被武断
+  `not_family` 且丢失父边；字符串 `'0'` 被当 True。
+- **修正**：反向方向只进 `excluded/unsupported_direction`，混合方向
+  `conflict_mixed_direction`，current planning 仅 `consistent` 且正向可行；
+  ND 改 `unresolved_canonical_mapping`，按 raw BOM 保留 `shared_parent_ks` 与父边，
+  reason_code 区分多父/单父/样本内无父；`flag()` 严格解析 bool/int/`'0'/'1'/'true'/'false'`，
+  其它 invalid；consumer 新增 `variant_unresolved_canonical_mapping`。
+- v5：20 样本（14 PK / 6 ND）；14 `consistent/current_structure_only`；
+  6 `unresolved`（2 多父 8/5、1 单父、3 无父）；79/500 HTTP、19.8/900s。
+- v5 本地回放（复用 d8 R1 快照，无新 SO 查询）：pending 1,769
+  （unresolved 537 / not_in_manifest 694 / base_not_family 419 /
+  current_structure_only 119）；family 132 KS、PK/ND family 0；无 historical_verified；
+  两次归一化 audit 相同。
+- 离线单测 61 条全绿；文档更新 `g1b_evidence_producer.md`；
+  evidence `1d6a7b33…`、producer zip `db44dadf…`、replay zip `a3b23cf1…`。
+
 ## 模板（后续阶段）
 
 ```text

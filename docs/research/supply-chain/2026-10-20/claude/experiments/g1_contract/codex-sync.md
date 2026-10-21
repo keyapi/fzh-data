@@ -22,12 +22,13 @@ tags: [supply-chain, codex, g1, sync, consolidated]
 > 唯一 delta 是 `SO-26-00110/dkdau5nmkg` 的输入漂移
 > （`item_code PK#KS0156…→KS0156…`、`item_group 皮壳#沙发支撑垫→沙发支撑垫`、
 > `warehouse 半成品仓-FZH→成品仓-FZH`，qty 300 不变），非分类器回归。
-> **Item/BOM producer 首样本（20 变体）**：79/500 HTTP、19.8/900s；
-> 14 PK `consistent/current_structure_only`（ratio=1），6 ND `not_family`
-> （base 不在 KS 成品清单）。无 Version、不升级 Apr–Sep 历史；
-> `modified` 受 `update_modified=False` 影响，不能当历史见证。
-> 证据载入 consumer 后 PK/ND family=0，历史关系仍 pending（见
-> `g1b_evidence_producer.md`）。
+> **Item/BOM producer 首样本（20 变体，v5）**：79/500 HTTP、19.8/900s；
+> 14 PK `consistent/current_structure_only`（ratio=1），6 ND
+> `unresolved_canonical_mapping`（2 多父 + 1 单父 + 3 样本内无父；保留 raw 父边）。
+> 反向 BOM 只进 excluded；严格 flag 0/1 与字符串解析。无 Version，不升级历史；
+> v5 回放 2,024 行：`unresolved 537 / not_in_manifest 694 / base_not_family 419 /
+> current_structure_only 119`；PK/ND family=0，历史仍 pending
+> （见 `g1b_evidence_producer.md`）。
 
 ## 0. Codex 当前所处位置（先对齐）
 

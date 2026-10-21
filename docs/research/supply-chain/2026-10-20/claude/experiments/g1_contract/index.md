@@ -32,8 +32,8 @@ tags: [supply-chain, g1, mapping, index]
 | [g1b_from_daily_backup.py](g1b_from_daily_backup.py) | 每日备份 JSONL → G1b 快照 JSON |
 | [g1b_en_extract.py](g1b_en_extract.py) | EN SO/DN/WO/JC/SE/PP 结构化导出（生产只读） |
 | [en_family_poc.py](en_family_poc.py) | Family SO 批量只读 PoC（证据门 + 逐行审计 + 详情守恒） |
-| [test_en_family_poc.py](test_en_family_poc.py) | 变体证据契约离线单测（44 条，不联网） |
-| [test_en_variant_evidence.py](test_en_variant_evidence.py) | producer 离线单测（9 条，不联网） |
+| [test_en_family_poc.py](test_en_family_poc.py) | 变体证据契约离线单测（45 条，不联网） |
+| [test_en_variant_evidence.py](test_en_variant_evidence.py) | producer 离线单测（16 条，不联网） |
 | [g1b_coverage.py](g1b_coverage.py) | 出库消耗 vs 库存覆盖（历史 run-rate） |
 | [g1_mapping_coverage.py](g1_mapping_coverage.py) | 只读本地映射覆盖率脚本 |
 | [g1_missing_analysis.py](g1_missing_analysis.py) | 763 vs 155 未匹配归因（尾缀/平台SKU/P2 非 family） |

@@ -34,6 +34,21 @@ def bom(output=10, component=10, active=1, default=1):
     }
 
 
+class FlagTest(unittest.TestCase):
+    def test_strict_flag_parsing(self):
+        self.assertIs(ev.flag("0"), False)
+        self.assertIs(ev.flag("1"), True)
+        self.assertIs(ev.flag("false"), False)
+        self.assertIs(ev.flag("true"), True)
+        self.assertIs(ev.flag(0), False)
+        self.assertIs(ev.flag(1), True)
+        self.assertIsNone(ev.flag("maybe"))
+
+    def test_item_disabled_string_zero(self):
+        self.assertIs(ev.item_meta({"disabled": "0"})["disabled"], False)
+        self.assertIs(ev.item_meta({"disabled": "1"})["disabled"], True)
+
+
 class AnalyzeBomTest(unittest.TestCase):
     def test_integer_flags_are_normalized(self):
         cand, reason = ev.analyze_bom(bom(), CODE, BASE, item_docs())
@@ -41,6 +56,17 @@ class AnalyzeBomTest(unittest.TestCase):
         self.assertTrue(cand["is_active"])
         self.assertTrue(cand["eligible_at_evidence"])
         self.assertEqual(cand["ratio"], 1.0)
+
+    def test_string_zero_flag_is_inactive(self):
+        cand, reason = ev.analyze_bom(bom(active="0"), CODE, BASE, item_docs())
+        self.assertEqual(reason, "")
+        self.assertFalse(cand["is_active"])
+        self.assertFalse(cand["eligible_at_evidence"])
+
+    def test_unknown_flag_is_invalid(self):
+        cand, reason = ev.analyze_bom(bom(active="maybe"), CODE, BASE, item_docs())
+        self.assertIsNone(cand)
+        self.assertEqual(reason, "bom_flag_invalid")
 
     def test_inactive_bom_not_eligible(self):
         cand, _ = ev.analyze_bom(bom(active=0), CODE, BASE, item_docs())
@@ -75,11 +101,54 @@ class BuildRecordTest(unittest.TestCase):
             CODE, BASE, "PK", item_docs(), [cand], [], AS_OF, {BASE})
         self.assertEqual(resolution, "conflict")
 
-    def test_base_not_in_family_is_not_family(self):
+    def test_reversed_direction_is_not_consistent(self):
+        rev = bom()
+        rev["item"] = CODE
+        rev["items"][0]["item_code"] = BASE
+        cand, _ = ev.analyze_bom(rev, CODE, BASE, item_docs())
         rec, resolution = ev.build_record(
-            CODE, "KS9999-X", "PK", item_docs(), [], [], AS_OF, {BASE})
-        self.assertEqual(resolution, "not_family")
-        self.assertEqual(rec["evidence"], "missing")
+            CODE, BASE, "PK", item_docs(), [cand], [], AS_OF, {BASE})
+        self.assertEqual(resolution, "unsupported_direction")
+        self.assertEqual(rec["reason_code"], "unsupported_direction")
+        self.assertFalse(rec["current_planning_eligible"])
+
+    def test_mixed_valid_and_reverse_is_conflict(self):
+        rev = bom()
+        rev["item"] = CODE
+        rev["items"][0]["item_code"] = BASE
+        rev_cand, _ = ev.analyze_bom(rev, CODE, BASE, item_docs())
+        valid_cand, _ = ev.analyze_bom(bom(), CODE, BASE, item_docs())
+        rec, resolution = ev.build_record(
+            CODE, BASE, "PK", item_docs(), [valid_cand, rev_cand], [], AS_OF, {BASE})
+        self.assertEqual(resolution, "conflict_mixed_direction")
+        self.assertFalse(rec["current_planning_eligible"])
+        self.assertTrue(rec["candidate_boms"])
+        self.assertTrue(any(e["reason"] == "unsupported_direction"
+                            for e in rec["excluded_boms"]))
+
+    def test_shared_component_multiple_parents_is_unresolved(self):
+        b1 = bom()
+        b2 = bom()
+        b2["name"] = "BOM-B"
+        b2["item"] = "KS0001-B"
+        edges = [ev.shared_edge(b1, CODE), ev.shared_edge(b2, CODE)]
+        rec, resolution = ev.build_record(
+            CODE, "KS9999-X", "ND", item_docs(), [], [], AS_OF, {BASE},
+            shared_edges=edges)
+        self.assertEqual(resolution, "unresolved_canonical_mapping")
+        self.assertEqual(rec["reason_code"], "shared_component_multiple_parents")
+        self.assertEqual(rec["shared_parent_ks"], ["KS0001-A", "KS0001-B"])
+        self.assertEqual(len(rec["candidate_boms"]), 2)
+        self.assertFalse(rec["current_planning_eligible"])
+
+    def test_base_not_in_family_is_unresolved(self):
+        cand, _ = ev.analyze_bom(bom(), CODE, BASE, item_docs())
+        edge = ev.shared_edge(bom(), CODE)
+        rec, resolution = ev.build_record(
+            CODE, "KS9999-X", "PK", item_docs(), [cand], [], AS_OF, {BASE},
+            shared_edges=[edge])
+        self.assertEqual(resolution, "unresolved_canonical_mapping")
+        self.assertEqual(rec["reason_code"], "shared_component_single_parent")
 
     def test_consumer_accepts_structure_once_historical_anchor_exists(self):
         cand, _ = ev.analyze_bom(bom(), CODE, BASE, item_docs())

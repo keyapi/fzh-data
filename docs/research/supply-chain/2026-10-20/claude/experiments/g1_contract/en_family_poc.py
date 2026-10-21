@@ -427,9 +427,18 @@ def classify_line(item: str, group: str, cust: str, groups: list[str],
     """
     base, prefix_role = normalize_item(item)
     if prefix_role in ("PK", "ND"):
+        rec = variant_items.get(item)
+        try:
+            unresolved = (isinstance(rec, dict)
+                          and rec.get("resolution") == "unresolved_canonical_mapping")
+        except Exception as e:  # noqa: BLE001 - 单条坏记录不中断整轮
+            return "pending", prefix_role, "variant_record_invalid", "", \
+                f"exception:{type(e).__name__}"
+        if unresolved:
+            return "pending", prefix_role, "variant_unresolved_canonical_mapping", "", \
+                "canonical_ks"
         if base not in family_items:
             return "pending", prefix_role, "variant_base_not_family", "", "canonical_ks"
-        rec = variant_items.get(item)
         if rec is None:
             reason = ("variant_manifest_absent" if variant_mode == "none"
                       else "variant_not_in_manifest")

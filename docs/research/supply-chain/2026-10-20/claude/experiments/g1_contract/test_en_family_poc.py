@@ -245,6 +245,14 @@ class ClassifyLineTest(unittest.TestCase):
         self.assertEqual(out[0], "pending")
         self.assertEqual(out[2], "variant_base_conflict")
 
+    def test_unresolved_canonical_mapping_reason(self):
+        out = fp.classify_line(
+            CODE, "x", "", [], {BASE}, set(),
+            {CODE: {"resolution": "unresolved_canonical_mapping"}},
+            "evidence", WIN_FROM, WIN_TO, "个")
+        self.assertEqual(out[0], "pending")
+        self.assertEqual(out[2], "variant_unresolved_canonical_mapping")
+
     def test_validator_exception_is_contained(self):
         class BadRec(dict):
             def get(self, key, default=None):
