@@ -118,6 +118,34 @@ def docstatus(v: Any) -> int | None:
     return int(n)
 
 
+def jc_operation_payloads(ops: Any) -> tuple[dict[str, float], list[dict]]:
+    """校验 JC 组的工序 payload，返回 (合法工序 -> sum_qty, 非法项列表)。
+
+    合法工序必须同时满足：值为对象、`sum_qty` 是有限数值。null/字符串/数组/
+    空对象/缺 sum_qty 一律非法。调用方必须落显式 invalid 披露行，且整组不计
+    matched、不出 progress——工序卡只作进度证据，不参与数量守恒。
+    """
+    qty: dict[str, float] = {}
+    bad: list[dict] = []
+    if not isinstance(ops, dict):
+        return qty, bad
+    for op, v in ops.items():
+        if not isinstance(v, dict):
+            bad.append({"operation": op,
+                        "reason_code": "jc_operation_payload_invalid",
+                        "detail": f"工序 payload 不是对象: {type(v).__name__}"})
+            continue
+        q = num(v.get("sum_qty"))
+        if q is None:
+            bad.append({"operation": op,
+                        "reason_code": "jc_operation_sum_qty_invalid",
+                        "detail": "工序 payload 为空对象" if not v else
+                                  f"sum_qty 非法: {v.get('sum_qty')!r}"})
+            continue
+        qty[op] = q
+    return qty, bad
+
+
 def close(a: float | None, b: float | None, tol: float = EPS) -> bool:
     return a is not None and b is not None and abs(a - b) <= tol
 
@@ -712,8 +740,7 @@ def build_scope(snap: dict, se_details: dict, window: tuple[str | None, str | No
         raw_ops = jc.get("operations")
         ops_ok = isinstance(raw_ops, dict)
         ops = raw_ops if ops_ok else {}
-        op_sums = {op: num(v.get("sum_qty")) for op, v in ops.items() if isinstance(v, dict)}
-        numeric = {k: v for k, v in op_sums.items() if v is not None}
+        numeric, op_bad = jc_operation_payloads(ops)
         max_op = max(numeric, key=numeric.get) if numeric else None
         jc_flags = []
         if name not in jc_map:
@@ -724,6 +751,8 @@ def build_scope(snap: dict, se_details: dict, window: tuple[str | None, str | No
             jc_flags.append("jc_operations_invalid")
         elif not ops:
             jc_flags.append("jc_no_operations")
+        elif op_bad:
+            jc_flags.append("jc_operation_payload_invalid")
         elif not numeric:
             jc_flags.append("jc_zero_completed")
         elif jc.get("last_operation") not in numeric or (
@@ -758,27 +787,42 @@ def build_scope(snap: dict, se_details: dict, window: tuple[str | None, str | No
                "link_status": link_status, "link_reason_code": link_code,
                "reason_detail": ";".join(codes + jc_flags)}
         wo_rows_out.append(rec)
-        # JC 工序行（每工序一条；只作进度证据）
-        for op, v in ops.items():
-            emit(scope, "jc_operation", f"{name}::{op}",
-                 {"work_order": name, "operation": op,
-                  "jc_ids": (v or {}).get("jc_ids") if isinstance(v, dict) else [],
-                  "so_line_key": info["link"].get("so_line_key")},
-                 {"sum_qty": r2(num((v or {}).get("sum_qty"))) if isinstance(v, dict) else None,
-                  "cards": (v or {}).get("cards") if isinstance(v, dict) else None},
-                 None, "progress", "jc_progress_evidence_only",
-                 "工序卡按批量/返工重复开卡，不作数量守恒",
-                 None, {})
+        # JC 工序行（每工序一条；只作进度证据）。组内任一工序 payload 非法 →
+        # 整组不出 progress，改由下方 jc_stats 分支落显式 invalid 披露行。
+        if not op_bad:
+            for op, v in ops.items():
+                emit(scope, "jc_operation", f"{name}::{op}",
+                     {"work_order": name, "operation": op,
+                      "jc_ids": (v or {}).get("jc_ids") if isinstance(v, dict) else [],
+                      "so_line_key": info["link"].get("so_line_key")},
+                     {"sum_qty": r2(num((v or {}).get("sum_qty"))) if isinstance(v, dict) else None,
+                      "cards": (v or {}).get("cards") if isinstance(v, dict) else None},
+                     None, "progress", "jc_progress_evidence_only",
+                     "工序卡按批量/返工重复开卡，不作数量守恒",
+                     None, {})
     out_rows.extend(wo_rows_out)
 
     # 快照外 WO 的 JC 组：保留为 orphan；匹配到 WO 但工序明细非法的组：
-    # 必须落**显式 invalid 披露行**，不能静默计入 matched。
+    # 必须落**显式 invalid 披露行**，不能静默计入 matched。工序 payload 也逐个
+    # 校验（null/字符串/空对象/非法 sum_qty 都非法），整组 matched=0、无 progress。
     jc_stats = {"read": len(jc_map), "matched": 0, "orphan": 0, "invalid": 0}
     for jc_name, jc in jc_map.items():
         raw_ops = jc.get("operations") if isinstance(jc, dict) else None
         if jc_name in jc_seen and jc_name in wo_idx:
             if isinstance(jc, dict) and isinstance(raw_ops, dict) and raw_ops:
-                jc_stats["matched"] += 1
+                _op_qty, op_bad = jc_operation_payloads(raw_ops)
+                if not op_bad:
+                    jc_stats["matched"] += 1
+                    continue
+                jc_stats["invalid"] += 1
+                for b in op_bad:
+                    op = b["operation"]
+                    v = raw_ops.get(op)
+                    emit(scope, "jc_operation", f"{jc_name}::{op}",
+                         {"work_order": jc_name, "operation": op, "jc_ids": []},
+                         {"sum_qty": None,
+                          "cards": v.get("cards") if isinstance(v, dict) else None},
+                         None, "invalid", b["reason_code"], b["detail"], None, {})
                 continue
             jc_stats["invalid"] += 1
             if not isinstance(jc, dict):

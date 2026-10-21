@@ -8,6 +8,8 @@
   P2-8 请求级 HTTP 预算、P2-9 最终 payload 校验和。
 并覆盖 v2 交叉复审（2026-10-21 FAIL）的 3 项发现：
   SE finished 量按 UOM 分桶、子行未解决向父 SE/WO 传播、匹配 JC 组非法工序显式披露。
+并覆盖 v3 交叉复审（2026-10-21 FAIL，1 P2）的发现：
+  JC 工序 payload 逐个校验（null/字符串/空对象/非法 sum_qty）→ 整组 invalid、无 progress。
 """
 
 from __future__ import annotations
@@ -619,6 +621,55 @@ class CrossReviewV3Tests(unittest.TestCase):
                 man = final_manifest(sc)
                 self.assertEqual(man["coverage"]["invalid_jc_groups"], 1)
                 self.assertEqual(man["coverage"]["orphan_jc_groups"], 0)
+
+
+# ── v4 交叉复审 P2：JC 工序 payload 逐个校验 ──
+class CrossReviewV4Tests(unittest.TestCase):
+    """匹配到 WO 的 JC 组：任一工序 payload 非法 → 整组 invalid、不出 progress。"""
+
+    CASES = [
+        ("CUT", None, "jc_operation_payload_invalid"),
+        ("CUT", "done", "jc_operation_payload_invalid"),
+        ("CUT", {}, "jc_operation_sum_qty_invalid"),
+        ("CUT", {"cards": 1, "sum_qty": "n/a", "jc_ids": ["J1"]},
+         "jc_operation_sum_qty_invalid"),
+    ]
+
+    def test_malformed_operation_payloads_are_invalid(self):
+        for op, payload, reason in self.CASES:
+            with self.subTest(payload=payload):
+                jc_map = {"WO-1": {"cards": 1, "operations": {op: payload},
+                                   "last_operation": op}}
+                sc = run(snapshot(jc_map=jc_map))
+                self.assertEqual(sc["jc_stats"],
+                                 {"read": 1, "matched": 0, "orphan": 0, "invalid": 1})
+                rows = by_type(sc, "jc_operation")
+                self.assertEqual([r["row_key"] for r in rows], [f"WO-1::{op}"])
+                self.assertEqual(rows[0]["disposition"], "invalid")
+                self.assertEqual(rows[0]["reason_code"], reason)
+                self.assertIsNone(rows[0]["qty"]["sum_qty"])
+                self.assertNotIn("progress", {r["disposition"] for r in rows})
+                wo_row = find(sc, "wo", "WO-1")
+                self.assertEqual(wo_row["disposition"], "conserved")   # JC 不参与守恒
+                self.assertIn("jc_operation_payload_invalid", wo_row["reason_detail"])
+                man = final_manifest(sc)
+                self.assertEqual(man["coverage"]["invalid_jc_groups"], 1)
+                self.assertEqual(man["coverage"]["orphan_jc_groups"], 0)
+
+    def test_one_malformed_operation_invalidates_whole_group(self):
+        """组内仍有合法工序时也不出 progress：整组只落非法项披露。"""
+        jc_map = {"WO-1": {"cards": 2, "last_operation": "质检", "operations": {
+            "裁剪": {"cards": 1, "sum_qty": 10.0, "jc_ids": ["J1"]},
+            "质检": {"cards": 1, "sum_qty": None, "jc_ids": ["J2"]}}}}
+        sc = run(snapshot(jc_map=jc_map))
+        self.assertEqual(sc["jc_stats"],
+                         {"read": 1, "matched": 0, "orphan": 0, "invalid": 1})
+        self.assertEqual(
+            [(r["row_key"], r["disposition"], r["reason_code"])
+             for r in by_type(sc, "jc_operation")],
+            [("WO-1::质检", "invalid", "jc_operation_sum_qty_invalid")])
+        self.assertEqual(sc["checks"]["C4_rows"]["jc_groups"],
+                         {"read": 1, "matched": 0, "orphan": 0, "invalid": 1})
 
 
 # ── P1-6：C4 数原始输入、保留 rejected/orphan、校验子键唯一 ──
