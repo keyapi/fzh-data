@@ -7,6 +7,8 @@ date: 2026-10-20
 
 # Codex 供应链整合独立调研
 
+2026-10-21第四轮固定Claudef14c9709：见[关闭项与family PoC交接](review-g1b-round4.md)。T01–T04/T06关闭，T05仅余成功SE＋无法定位失败SE的U01；7正例/1反例。E01–E04接受，可推进family只读批量PoC，下一轮审核实际PoC，不重做综述。
+
 2026-10-21第三轮复审固定Claudef4797aa0：见[修复关闭项与批量ETL实施边界](review-g1b-round3.md)。8个修复正例、6个剩余反例；接受批量方向，仍需修presence/SE未知/批次完整性并补family manifest与增量键。未取业务数据或访问生产。
 
 2026-10-21最新复审：固定Claudeaad55822，见[第二轮修复与重跑审查](review-g1b-round2.md)。DN行键、差7、BOM歧义与业务合仓口径已关闭相应子项；每日备份转换/complete、JC端点、SE未知仍需修复。8个离线反例＋4修复正例，未读取业务数据或访问生产。
@@ -43,6 +45,7 @@ date: 2026-10-20
 | [G1b首版实际结果复审](review-g1b-first.md) | 固定2ae0650b，450/501口径、完整性、JC/DN/数量差异；离线探针g1b_review_probes.py |
 | [G1b修复第二轮复审](review-g1b-round2.md) | 固定aad55822：关闭子项、daily入口负例与下一步；g1b_round2_probes.py |
 | [G1b修复第三轮与批量ETL](review-g1b-round3.md) | 固定f4797aa0：8正例/6反例、15方案的family全集/水位/键；g1b_round3_probes.py |
+| [G1b第四轮关闭与PoC交接](review-g1b-round4.md) | 固定f14c9709：7正例/1剩余SE边界、接受E01–E04并推进PoC；g1b_round4_probes.py |
 | [变更日志](log.md) | 阶段成果记录 |
 
 当前状态：Codex完成v3增量、35例和629dc7b3的§3/§4定向复核；旧G1a v1失效，Claude可按显式假设进行G1b，Codex等待真实回放报告再核；已完成首轮独立研究、综合与交叉审阅；真实数据回测和整套产品运行仍待下一阶段。已复核Claude #300固定cd7a8a06：共同框架原则已双向对齐，R01/R02原代码问题可关闭，G0细节及真实验证仍待完成；Cursor成果未读。两PR保持独立，不修改其文件。
