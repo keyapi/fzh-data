@@ -1,10 +1,11 @@
 {
-  "updated": "2026-10-21T19:33:00+08:00",
+  "updated": "2026-10-21T20:05:00+08:00",
   "accepted": [
     "G1 SO evidence gate v5: 9a04741e / d027f981; 66 tests; current_structure_only boundary; historical pending",
     "R1/R2 no-evidence audit gate: d8c473fe",
     "BOM historical boundary report: d3fc4c8d",
-    "G1B DN/WO/JC/SE narrow sample: 4b7ec55f PASS cross-review (84 tests; v4 evidence 6cec02bd; scope narrow sample only; P3 doc count corrected post-acceptance)"
+    "G1B DN/WO/JC/SE narrow sample: 4b7ec55f PASS cross-review (84 tests; v4 evidence 6cec02bd; scope narrow sample only; P3 doc count corrected post-acceptance)",
+    "G1B offline expansion: 10 SKUs, 3,098 rows, C1 10/10; C2/C3 complete only for original 5; 238 SE unverified; two-round stable 5aa41e8e; target 100 requires bounded production read-only authorization"
   ],
   "tasks": [
     {
@@ -68,7 +69,8 @@
   "blocked": [
     "historical_verified anchors/effective dates missing",
     "full family expansion not authorized",
-    "business decisions: service level/budget, 3PL supply ownership, return restock share"
+    "business decisions: service level/budget, 3PL supply ownership, return restock share",
+    "100-SKU expansion awaiting user authorization for bounded EN read-only (<=4000 requests, <=200MB, <=90min, single concurrency)"
   ],
   "quota": {
     "codex_5h_remaining_pct": null,

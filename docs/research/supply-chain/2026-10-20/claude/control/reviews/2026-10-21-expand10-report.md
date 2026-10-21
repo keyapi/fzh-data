@@ -66,7 +66,8 @@ verdict: partial-offline-ceiling
 - `line_dispositions.jsonl` `67e10909dcfc535a587e…`
 - `snapshots_manifest.json` `3f83de8961fb667309af…`
 - `stable_sha256` `5aa41e8e60606ad4…`
-- 两轮一致性：本轮仅跑一次；离线输入未变，重跑应一致（未声明已验证两轮）。
+- **两轮一致性**：同一输入复跑第二遍（`out/dn_wo_jc_se_expand10_r2/`），
+  `stable_sha256`、`row_accounting`、`line_dispositions.jsonl` 逐字节一致。
 
 ## 边界
 
