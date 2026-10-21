@@ -147,13 +147,13 @@ def main():
                    COUNT(DISTINCT warehouse) AS demand_warehouses
             FROM component_demand_wh GROUP BY 1
         ), usage AS (
-            SELECT node AS component_item, COUNT(DISTINCT root) AS used_in_products,
+            SELECT node AS component_item, COUNT(DISTINCT root) AS used_in_boms,
                    MIN(level) AS level,
                    MAX(CASE WHEN node IN (SELECT item FROM bom) THEN 1 ELSE 0 END) AS has_bom
             FROM bom_exploded GROUP BY 1
         )
         SELECT d.component_item, d.daily_demand, d.demand_warehouses,
-               IFNULL(u.used_in_products, 0) AS used_in_products,
+               IFNULL(u.used_in_boms, 0) AS used_in_boms,
                IFNULL(u.level, 1) AS level, IFNULL(u.has_bom, 0) AS has_bom
         FROM demand d
         LEFT JOIN usage u ON u.component_item = d.component_item
@@ -177,7 +177,7 @@ def main():
         WITH base AS (
             SELECT d.component_item,
                    a.item_name, a.item_group,
-                   d.daily_demand, d.used_in_products, d.level, d.has_bom,
+                   d.daily_demand, d.used_in_boms, d.level, d.has_bom,
                    IFNULL(s.on_hand_raw, 0) AS on_hand_raw,
                    GREATEST(0, IFNULL(s.on_hand_raw, 0)) AS on_hand,
                    IFNULL(p.on_order, 0) AS on_order,
@@ -202,7 +202,7 @@ def main():
                                          - (on_hand + on_order)) END AS suggested_raw
             FROM base
         )
-        SELECT component_item, item_name, item_group, level, has_bom, used_in_products,
+        SELECT component_item, item_name, item_group, level, has_bom, used_in_boms,
                daily_rounded AS daily_demand,
                ROUND(on_hand_raw, 1) AS on_hand_raw,
                ROUND(on_hand, 1) AS on_hand, ROUND(on_order, 1) AS on_order,
