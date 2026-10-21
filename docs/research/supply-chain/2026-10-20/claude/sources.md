@@ -76,7 +76,7 @@ tags: [supply-chain, research, sources]
 | S1-045 | WayfairCG-Cranbury 是下游 3PL，family 销售 1,162 件/6个月；其他 3PL 无 family 销售；海绵 `-Foam` 另列 | 本地订单 family 精确匹配 + 用户说明 | C | 2026-10-20 | 3PL 销售计入需求，转移不重复计 | A | mapping_process §4.1 |
 | S1-046 | WayfairCG 库存以 Wayfair 后台手工导出为准；Tongtool 调拨只算发出量；赛狐平台仓 API 无 Wayfair | 用户 2026-10-20 说明 + `SELLFOX_API/docs/api-reference/多平台/平台仓/` 实查 | C | 2026-10-20 | 只有 Temu/Mercado/Walmart WFS，无 Wayfair | A | 13 §1.5、mapping_process §4.2 |
 | S1-047 | 产能/交期不确定；美中 2026-06/07/08 新运营入职、第二个月才下单、首批刚回货，历史不可参考；美东稳定 2 人 | WX 2026-10-20 反馈 | C | 2026-10-20 | 美东可回测，美中需 cohort/ramp；交期用区间 | A | 05 §5/§7、08 §5、06 A12 |
-| S1-048 | 订单文件 45,129 行/48,346 件无负数；退货仓 family 164/165 正数出库；补发 66/72；未匹配 759/925 pending | 本地 2026-04..09 订单只读核对 | C | 2026-10-20 | 33,719 是出库消耗毛量（含补发），不是净需求 | A | mapping_process §3 |
+| S1-048 | 订单文件 45,129 行/48,346 件无负数；退货仓 family 164/165 正数出库；补发 66/72；未匹配 763/931 pending | 本地 2026-04..09 订单只读核对 | C | 2026-10-20 | 33,719 是出库消耗毛量（含补发），不是净需求；pending 用四列文本全查 | A | mapping_process §3 |
 | S1-049 | 补发/换货是出库消耗，补货必须计入；M 后缀不是唯一判据 | 用户 2026-10-20 口径 + 本地订单 Mxxx 快速核对 | C | 2026-10-20 | family Mxxx 115/124（是64/否51）；全量 286/333（是172/否114） | A | mapping_process §3.1 |
 | S1-050 | 三角退货率暂按 5% 作未来需求情景；订单文件无退货行；已回库退货不得二次冲减 | 用户 2026-10-20 口径 + Codex #301 `852d7791` 审核要求 | C | 2026-10-20 | 「比较低 可能先按5%」「退货已计入库存时不得再次冲减」 | B | mapping_process §3.2、06 B29 |
 | S1-051 | WayfairCG 供货归属不固定，可能按 SKU 分流；赛狐调拨单可查发货仓/收货仓/SKU/数量/状态/时间 | 用户 2026-10-20 猜测 + `SELLFOX_API/docs/api-reference/仓库/调拨单/调拨单列表.md` | C | 2026-10-20 | `warehouseId`/`targetWarehouseId`/`commoditySku`/`goods`/`status` | A | mapping_process §4.1.1、08 §2.3 |
@@ -93,6 +93,11 @@ tags: [supply-chain, research, sources]
 | S1-062 | top10 EN 抽取 9/9 完成；SO 15–42、SE 36–111；9 个 SKU 未发分解 difference=0 | `out/g1b_en_top_*.json` | C | 2026-10-20 | 死单/无计划/超发按 SKU 显式列出 | A | g1b_top10 |
 | S1-063 | 库存结存 4,575 行/family 1,527；销售及库存报表 1,954 行/family 568；后者有销量但不是完整库存 | 浏览器 2026-10-21 导出 | C | 2026-10-21 | 961 个 family 键只在库存结存；67 个 waiting 差异 | A | 14-daily-inventory-backup §1.1 |
 | S1-064 | 浏览器 02:17 首跑成功 4/6 仓、4,575 行；API 05:17 首跑因中文任务路径失败，迁 ASCII 后补跑 `complete=True` | `web_automation/logs/export-stock.log` + Task Scheduler + `2026-10-21/manifest.json` | C | 2026-10-21 | CENTRADE 2,072/DANEEY 1,024/退货 522/PL 1,369 | A | 14-daily-inventory-backup §4/§6 |
+| S1-065 | Codex `fd1029b4` 第二轮：G1B06/07/08 关闭；RR01–RR08 未闭合，要求先修 daily→转换→coverage | Codex #301 `review-g1b-round2.md` | C | 2026-10-21 | 「先修 RR01–RR06，再扩全 family」 | A | g1b_round2_response |
+| S1-066 | 批量 SO 按 `item_group in (三角靠枕,三角靠枕无扣)` 返回 333 行/56 张 SO，证明无需逐客户码 1,486 次 | EN 生产只读探针 | C | 2026-10-21 | 56 unique SO | A | 15-full-family-etl §1 |
+| S1-067 | `TONGTU_USER/PASSWORD` 在 `fzh-web-automation/.env`；两个浏览器脚本已加载该路径 | 本机 env 扫描 + 代码修改 | C | 2026-10-21 | `TONGTU_USER True / TONGTU_PASSWORD True` | A | 14-daily-inventory-backup §1、log |
+| S1-068 | 4 仓（含 WayfairCG）转换 `complete=True`、bad=0、conflict=0；Wayfair 标 `unknown_authority` 不计缺口 | `out/stock_snapshot_rr.json`、`out/g1b_coverage_rr.json` | C | 2026-10-21 | 131/194/127 不变 | A | g1b_round2_response |
+| S1-069 | 库存结存会漏零库存 SKU：API 比 CENTRADE 多 386（343 零）/比 DANEEY 多 26（25 零） | 浏览器合并库存 vs API JSONL 对比 | C | 2026-10-21 | 重叠 SKU 数量基本一致；API 无状态/别名 | A | 14-daily-inventory-backup §1.1 |
 
 ## 未找到项（N-###）
 

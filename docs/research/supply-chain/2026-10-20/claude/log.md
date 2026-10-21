@@ -341,8 +341,9 @@ tags: [supply-chain, research, log]
 - **销售及库存报表**：`tongtu.sales.export` 导出 1,954 行/8 仓；family 568，
   含 7/15/30/90 天销量，但不是完整库存（库存结存 family 1,527）。结论：库存备份用库存结存，
   销量/周转用销售报表，二者都归档。
-- **自动登录**：02:17 无弹窗，使用手动登录建立的 `chrome-profile`；`.env` 仍无
-  `TONGTU_USER/PASSWORD`，cookie 过期后需再手动或补凭证（脚本已支持 ddddocr）。
+- **自动登录**：02:17 无弹窗，使用 `chrome-profile`；`TONGTU_USER/PASSWORD` 在
+  `fzh-web-automation/.env`，`tongtu_auto_export.py` 与 `tongtu_sales_report.py` 已加载该路径；
+  cookie 过期可走 ddddocr 自动登录（失败降级人工输码）。
 - **API 05:17 首跑失败，补跑成功**：旧任务 action 的中文路径被 Task Scheduler 存成乱码；
   已把 wrapper/脚本/`tongtool_api`/`.env` 复制到 `D:\Work\fzh-stock-backup`（ASCII）并重注册。
   09:46 补跑 `complete=True`：CENTRADE 2,072/21、DANEEY 1,024/11、DANEEY 退货仓 522/6、
@@ -354,6 +355,33 @@ tags: [supply-chain, research, log]
   通途中转发货单对 5 个 WayfairCG 仓 2026-04..09 均 0 条；
   通途 WayfairCG 库存：Cranbury 92、Perris 4、Romeoville 2，其余 0。
   **供货归属仍 unknown**；需要业务导出通途 WMS 调拨单或 Wayfair 后台收货记录。
+
+## 2026-10-21 — Codex fd1029b4 复审与全 family 方向修正
+
+- Codex #301 `fd1029b4`：G1B06/07/08 关闭；RR01–RR08 未闭合，要求先修
+  `daily backup → 转换 → coverage` 入口，再扩全 family。
+- **RR01**：complete 绑定选中仓/文件；坏值/冲突降该仓 complete；branch 按
+  CENTRADE/DANEEY/PL 全覆盖才 `sampled_complete`。
+- **RR02**：转换器空/NaN/Inf/负数/分数→bad，不转 0；同仓同 SKU 异值 conflict 整键丢弃；
+  缺文件/坏行/冲突→仓 incomplete；加 file hash。
+- **RR03**：每日备份校验 datas/业务码/`truncated`；空仓清单不再 `all([])`；
+  JSONL/manifest 原子写；加 run_id/script_version。
+- **RR04**：首/末工序取路由首/末，无卡则 unknown，不用后道替代；补 JC ID/status；
+  另给 `last_card_operation` 辅助。
+- **RR05**：SE 保留行 ID/item/qty/UOM/成品标记；详情失败/无匹配/UOM 未知→unknown；
+  不再把未知产量当 0。
+- **RR06**：Wayfair API 只作参考，标 `unknown_authority`，不进入缺口。
+- **RR07/08**：请求/读取/缺失仓、file hash、逐仓 complete；非整数/NaN 不纳入毛量；
+  文本三角 pending 与 non_family 分开。
+- **实跑**：4 仓转换 `complete=True`、bad=0、conflict=0；Wayfair `unknown_authority`；
+  131/194/127 不变；EN 试点 63 SE 全 `ok`，last_route 无卡→null。
+- **方向修正**：逐客户码 1,486 次只适合试点；批量 SO 探针按
+  `item_group in ("三角靠枕","三角靠枕无扣")` 返回 333 行/56 张 SO，证明可按物料组批量。
+  新增 `15-full-family-etl.md`：ODS→staging→fact/dim→语义层、水位线、幂等键、manifest/hash。
+- **自动登录**：`TONGTU_USER/PASSWORD` 在 `fzh-web-automation/.env`；
+  `tongtu_auto_export.py` 与 `tongtu_sales_report.py` 已加载该路径，cookie 过期可走 ddddocr。
+- **库存备份**：浏览器 02:17 成功 4/6 仓/4,575 行；API 05:17 因中文任务路径失败，
+  迁 ASCII 后 09:46 补跑 `complete=True`；销售报表 1,954 行/family 568，不能替代库存结存。
 
 ## 模板（后续阶段）
 

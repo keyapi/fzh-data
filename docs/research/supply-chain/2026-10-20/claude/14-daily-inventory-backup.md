@@ -20,7 +20,7 @@ tags: [supply-chain, inventory, backup, scheduling, duckdb, erpnext]
 | 结论 | **浏览器导出本身是有效的库存结存备份**；成本模板不是唯一产物 |
 | 触发 | 每日 **02:17**（已注册） |
 | 2026-10-21 首跑 | **成功**：4/6 仓导出，2 个空退货仓跳过；合并 **4,575 行**；日志 `status=READY reason=success` |
-| 登录 | 使用你手动登录建立的 `chrome-profile`，02:17 无弹窗；`.env` 仍无 `TONGTU_USER/PASSWORD`，cookie 过期后需再手动或补凭证 |
+| 登录 | 使用 `chrome-profile`，02:17 无弹窗；`TONGTU_USER/PASSWORD` 在 `fzh-web-automation/.env`，两个浏览器脚本已加载该路径，cookie 过期可走 ddddocr 自动登录 |
 
 > 更正：之前说“浏览器导出只有成本模板”不完整——`downloads/` 有原始库存结存，
 > `output/` 同时有合并库存和派生成本模板。浏览器导出可以作每日库存备份；
@@ -37,9 +37,14 @@ tags: [supply-chain, inventory, backup, scheduling, duckdb, erpnext]
 - 库存结存 vs 销售报表：961 个 family 键只在库存结存、2 个只在销售报表；
   67 个数量差异，主要是 `waiting`（库存结存有值、销售报表为 0）。**销售报表不能替代库存结存。**
 - 库存结存 vs API：PL 完全一致（1,369 行）；CENTRADE 1,686 vs 2,072、DANEEY 998 vs 1,024，
-  API 多出的是零库存/非活跃 SKU，重叠 SKU 数量基本一致；DANEEY 退货仓 522 vs API 400（API 超时不全）。
+  **API 多出的 386/26 个 SKU 中 343/25 个是零库存**——库存结存会漏零库存 SKU，API 更全；
+  重叠 SKU 数量基本一致；DANEEY 退货仓 522 vs API 400（API 那次超时不全）。
+  API 无状态/别名，库存结存有；建议 API 数量 + 库存结存状态/别名合并。
 - **建议**：每日归档 **库存结存合并文件 + 销售及库存报表**；如需服务器化，再加 API 全仓 JSONL。
   只用一份时：库存用库存结存，销售/周转用销售报表。
+- **“API 1,140”是 family/三主仓口径**，不是 API 只取了三个仓：2026-10-21 API 实际覆盖
+  CENTRADE/DANEEY/DANEEY 退货/PL/WayfairCG 5 仓/多渠道/大件/星链等所有启用仓；
+  1,140 是过滤 family 客户码并只取三主仓后的唯一 SKU 数。
 
 ## 2. 与 EN 三个通途 API 同步任务的关系
 
@@ -161,6 +166,8 @@ LEFT JOIN order_monthly o USING (sku);
 
 - 库存是 **as-of 快照**，订单是 **出库/消耗**；不要用 EN Bin 或赛狐库存替代。
 - 平台库存（<=2 视为无货）另表记录，标 `censored/manual_low`，不要混进通途 `available`。
+- 全 family/全 SKU 的批量 ETL 方向见 [15-full-family-etl.md](15-full-family-etl.md)：
+  按物料组/物料码批量 + 水位线 + 幂等事实表，不逐客户码查。
 
 ## 6. 仍未完成
 

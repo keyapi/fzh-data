@@ -161,7 +161,7 @@ EN 订单行实际物料 `PK#KS0001-XMMBS-194-HEMPNATURAL`。
 
 | 输入 | used | pending / unmatched | out_of_scope / anomaly | 合计 |
 |---|---:|---:|---:|---:|
-| 订单行 | 32,888 family | 759 text-tri pending | 11,482（11,334 其余非 family + 148 非 family 退货仓） | 45,129 |
+| 订单行 | 32,888 family | 763 text-tri pending | 11,478（11,330 其余非 family + 148 非 family 退货仓） | 45,129 |
 | 订单坏行 | 0 | bad_qty=0 / negative=0 / 非整数=0 / 缺 SKU=0 / 缺仓=0 | — | 45,129 |
 | 库存行 | 1,140 family（CENTRADE 478 + DANEEY 337 + PL 565，去重后） | bad_values=0 / duplicate_conflicts=0 | 非 family 未进入 family 快照 | — |
 | EN SO | 26 | 3 dead / 2 未开工 / 2 疑似重复（待业务确认） | — | 26 |
@@ -169,8 +169,8 @@ EN 订单行实际物料 `PK#KS0001-XMMBS-194-HEMPNATURAL`。
 ### 6.3 数量守恒
 
 ```text
-45,129 = 32,888 + 759 + 11,334 + 148
-48,346 = 33,719 + 925 + 13,550 + 152
+45,129 = 32,888 + 763 + 11,330 + 148
+48,346 = 33,719 + 931 + 13,544 + 152
 33,719 = 33,452 (base) + 267 (Cover)
 USNJ supply 14,381 = 9,877 available + 4,504 intransit
 USTX supply 13,563 = 8,492 available + 5,071 intransit

@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import glob
 import json
+import math
 from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
@@ -36,6 +37,11 @@ ORDER_GLOB = r"D:/Work/王忠于/成本核算/2026年{month}月订单_order_cost
 MONTHS = list(range(4, 10))
 FAMILIES = ("KS0001", "KS0248")
 RETURN_RATE = 0.05
+REQUIRED_SUPPLY_WAREHOUSES = {
+    "USNJ": ("美东-CENTRADE",),
+    "USTX": ("美中-FZH-DANEEY",),
+    "PL": ("波兰-FZHPoland-covers",),
+}
 
 
 def cell(row, idx):
@@ -131,6 +137,8 @@ def load_orders(code2item: dict[str, str], ambiguous_codes: list[str]):
     missing_sku_rows = 0
     missing_wh_rows = 0
     non_family_rows = 0
+    pending_text_tri_rows = 0
+    pending_text_tri_qty = 0.0
     ambiguous_rows = 0
     ambiguous_qty = 0.0
     bad_samples = []
@@ -155,7 +163,8 @@ def load_orders(code2item: dict[str, str], ambiguous_codes: list[str]):
         months_observed += 1
         files.append({"month": month, "file": Path(p).name, "status": "ok"})
         ix = {name: (hdr.index(name) if name in hdr else None) for name in
-              ("发货日期", "通途SKU", "发货数量", "发货仓库", "渠道", "是否补发货")}
+              ("发货日期", "通途SKU", "发货数量", "发货仓库", "渠道", "是否补发货",
+               "产品名称", "品类orig", "品类", "品类统一名")}
         for row_no, r in enumerate(rows, start=2):
             sku = str(cell(r, ix["通途SKU"]) or "").strip()
             if not sku:
@@ -169,7 +178,16 @@ def load_orders(code2item: dict[str, str], ambiguous_codes: list[str]):
                     pass
                 continue
             if sku not in code2item:
-                non_family_rows += 1
+                texts = [str(cell(r, ix[k]) or "") for k in
+                         ("产品名称", "品类orig", "品类", "品类统一名") if ix.get(k) is not None]
+                if any("三角" in t for t in texts):
+                    pending_text_tri_rows += 1
+                    try:
+                        pending_text_tri_qty += float(cell(r, ix["发货数量"]) or 0)
+                    except (TypeError, ValueError):
+                        pass
+                else:
+                    non_family_rows += 1
                 continue
             raw_qty = cell(r, ix["发货数量"])
             try:
@@ -183,11 +201,21 @@ def load_orders(code2item: dict[str, str], ambiguous_codes: list[str]):
             if qty < 0:
                 negative_qty_rows += 1
                 continue
+            if not math.isfinite(qty):
+                bad_qty_rows += 1
+                if len(bad_samples) < 20:
+                    bad_samples.append({"file": Path(p).name, "row": row_no,
+                                        "reason": "non_finite_qty"})
+                continue
             if qty == 0:
                 zero_qty_rows += 1
                 continue
             if qty != int(qty):
                 non_integer_qty_rows += 1
+                if len(bad_samples) < 20:
+                    bad_samples.append({"file": Path(p).name, "row": row_no,
+                                        "reason": "non_integer_qty", "value": qty})
+                continue
             wh_raw = str(cell(r, ix["发货仓库"]) or "").strip()
             if not wh_raw:
                 missing_wh_rows += 1
@@ -227,6 +255,8 @@ def load_orders(code2item: dict[str, str], ambiguous_codes: list[str]):
         "missing_sku_rows": missing_sku_rows,
         "missing_wh_rows": missing_wh_rows,
         "non_family_rows": non_family_rows,
+        "pending_text_tri_rows": pending_text_tri_rows,
+        "pending_text_tri_qty": round(pending_text_tri_qty, 2),
         "ambiguous_rows": ambiguous_rows,
         "ambiguous_qty": round(ambiguous_qty, 2),
         "bad_samples": bad_samples,
@@ -263,7 +293,6 @@ def load_stock(paths: list[Path]):
                                          "defects": 0.0, "waiting": 0.0})
     metas = []
     payloads = []
-    complete_warehouses: set[str] = set()
     for path in paths:
         data = json.loads(path.read_text(encoding="utf-8"))
         metas.append({
@@ -274,24 +303,27 @@ def load_stock(paths: list[Path]):
             "complete": data.get("complete"),
         })
         payloads.append((path, data))
-        if data.get("complete") is True:
-            complete_warehouses.update(data.get("warehouses", []))
 
-    # 同一仓在多个快照里出现时，只取 fetched_at 最新的一个，避免跨文件重复累加。
+    # 同一仓在多个快照里出现时，只取 fetched_at 最新的一个；complete 必须绑定这个选中文件。
     selected_file_per_wh: dict[str, Path] = {}
     selected_fetched: dict[str, str] = {}
+    selected_complete: dict[str, bool] = {}
     for path, data in payloads:
         fetched = str(data.get("fetched_at") or "")
         for wh in data.get("warehouses", []):
             if wh not in selected_file_per_wh or fetched > selected_fetched.get(wh, ""):
                 selected_file_per_wh[wh] = path
                 selected_fetched[wh] = fetched
+                selected_complete[wh] = data.get("complete") is True
 
     seen: dict[tuple[str, str], dict] = {}
     duplicate_conflicts = 0
     duplicates_ignored = 0
     bad_values = 0
     ignored_warehouses = []
+    incomplete_warehouses: set[str] = set()
+    bad_samples = []
+    conflict_samples = []
     for path, data in payloads:
         for row in data.get("by_sku", []):
             sku = row.get("sku", "")
@@ -309,6 +341,16 @@ def load_stock(paths: list[Path]):
                     }
                 except (TypeError, ValueError):
                     bad_values += 1
+                    incomplete_warehouses.add(wh)
+                    if len(bad_samples) < 20:
+                        bad_samples.append({"warehouse": wh, "sku": sku, "reason": "bad_value"})
+                    continue
+                if any((not math.isfinite(v)) or v < 0 or v != int(v) for v in parsed.values()):
+                    bad_values += 1
+                    incomplete_warehouses.add(wh)
+                    if len(bad_samples) < 20:
+                        bad_samples.append({"warehouse": wh, "sku": sku, "reason": "invalid_qty",
+                                            "values": parsed})
                     continue
                 key = (wh, sku)
                 if key in seen:
@@ -316,6 +358,10 @@ def load_stock(paths: list[Path]):
                         duplicates_ignored += 1
                     else:
                         duplicate_conflicts += 1
+                        incomplete_warehouses.add(wh)
+                        if len(conflict_samples) < 20:
+                            conflict_samples.append({"warehouse": wh, "sku": sku,
+                                                     "kept": seen[key], "discarded": parsed})
                     continue
                 seen[key] = parsed
                 branch, _kind = wh_branch_and_kind(wh)
@@ -330,6 +376,13 @@ def load_stock(paths: list[Path]):
                 s = by_sku_branch[(branch, sku)]
                 for k in ("available", "intransit", "defects", "waiting"):
                     s[k] += parsed[k]
+    incomplete_warehouses |= {
+        wh for wh in selected_file_per_wh if selected_complete.get(wh) is not True
+    }
+    complete_warehouses = sorted(
+        wh for wh in selected_file_per_wh
+        if selected_complete.get(wh) is True and wh not in incomplete_warehouses
+    )
     def finish(d):
         out = {}
         for k, v in d.items():
@@ -346,12 +399,18 @@ def load_stock(paths: list[Path]):
         return out
     return {
         "files": metas,
+        "requested_warehouses": sorted({wh for _, data in payloads
+                                        for wh in (data.get("warehouses") or [])}),
         "selected_file_per_warehouse": {k: str(v) for k, v in selected_file_per_wh.items()},
+        "selected_complete": selected_complete,
         "ignored_warehouses": ignored_warehouses,
         "duplicate_conflicts": duplicate_conflicts,
         "duplicates_ignored": duplicates_ignored,
         "bad_values": bad_values,
-        "complete_warehouses": sorted(complete_warehouses),
+        "bad_samples": bad_samples,
+        "conflict_samples": conflict_samples,
+        "incomplete_warehouses": sorted(incomplete_warehouses),
+        "complete_warehouses": complete_warehouses,
         "by_branch": finish(by_branch),
         "by_warehouse": finish(by_wh),
         "by_sku_branch": by_sku_branch,
@@ -360,8 +419,11 @@ def load_stock(paths: list[Path]):
 
 def coverage(demand, stock):
     observations = max(1, int(demand.get("months_observed") or len(MONTHS)))
-    complete_branches = {wh_branch_and_kind(wh)[0] for wh in stock.get("complete_warehouses", [])}
-    stocked_branches = {wh_branch_and_kind(wh)[0] for wh in stock.get("by_warehouse", {})}
+    complete_set = set(stock.get("complete_warehouses", []))
+    complete_branches = {
+        branch for branch, whs in REQUIRED_SUPPLY_WAREHOUSES.items()
+        if all(wh in complete_set for wh in whs)
+    }
     rows = []
     all_keys = set(demand["by_sku_branch"]) | set(stock["by_sku_branch"])
     for branch, sku in all_keys:
@@ -377,16 +439,20 @@ def coverage(demand, stock):
         avg_gross = gross / observations
         if branch in complete_branches:
             supply_status = "sampled_complete"
-        elif branch in stocked_branches:
+        elif branch in REQUIRED_SUPPLY_WAREHOUSES:
             supply_status = "sampled_incomplete"
+        elif branch == "3PL":
+            supply_status = "unknown_authority"
         elif branch == "USTX-return":
             supply_status = "demand_only"
         else:
             supply_status = "not_sampled"
+        authority = "wayfair_backend_manual" if branch == "3PL" else "tongtool_api_or_browser_stock"
         rows.append({
             "branch": branch,
             "sku": sku,
             "supply_status": supply_status,
+            "authority": authority,
             "gross_6m": round(gross, 2),
             "reissue_6m": round(reissue, 2),
             "avg_monthly_gross": round(avg_gross, 2),
@@ -411,8 +477,11 @@ def main():
     stock = load_stock([Path(p) for p in args.stock])
     rows = coverage(demand, stock)
     observations = max(1, int(demand.get("months_observed") or len(MONTHS)))
-    complete_branches = {wh_branch_and_kind(wh)[0] for wh in stock.get("complete_warehouses", [])}
-    stocked_branches = {wh_branch_and_kind(wh)[0] for wh in stock.get("by_warehouse", {})}
+    complete_set = set(stock.get("complete_warehouses", []))
+    complete_branches = {
+        branch for branch, whs in REQUIRED_SUPPLY_WAREHOUSES.items()
+        if all(wh in complete_set for wh in whs)
+    }
 
     branch_cov = {}
     for branch in sorted(set(demand["by_branch"]) | set(stock["by_branch"])):
@@ -424,14 +493,18 @@ def main():
         supply = available + intransit
         if branch in complete_branches:
             supply_status = "sampled_complete"
-        elif branch in stocked_branches:
+        elif branch in REQUIRED_SUPPLY_WAREHOUSES:
             supply_status = "sampled_incomplete"
+        elif branch == "3PL":
+            supply_status = "unknown_authority"
         elif branch == "USTX-return":
             supply_status = "demand_only"
         else:
             supply_status = "not_sampled"
+        authority = "wayfair_backend_manual" if branch == "3PL" else "tongtool_api_or_browser_stock"
         branch_cov[branch] = {
             "supply_status": supply_status,
+            "authority": authority,
             "gross_6m": round(gross, 2),
             "avg_monthly_gross": round(avg, 2),
             "available": round(available, 2),
@@ -439,6 +512,8 @@ def main():
             "supply": round(supply, 2),
             "coverage_months_on_hand": round(available / avg, 2) if avg > 0 else None,
             "coverage_months_incl_intransit": round(supply / avg, 2) if avg > 0 else None,
+            "coverage_eligible": bool(supply_status == "sampled_complete"
+                                      and demand.get("window_complete")),
         }
 
     no_supply = [r for r in rows if r["supply_status"] == "sampled_complete"
@@ -484,6 +559,9 @@ def main():
         "demand": {
             "family_rows": demand["family_rows"],
             "family_qty": demand["family_qty"],
+            "months_observed": demand.get("months_observed"),
+            "window_complete": demand.get("window_complete"),
+            "missing_months": demand.get("missing_months"),
             "reissue_rows": demand["reissue_rows"],
             "reissue_qty": demand["reissue_qty"],
             "by_month": demand["by_month"],
@@ -496,6 +574,8 @@ def main():
             "missing_sku_rows": demand["missing_sku_rows"],
             "missing_wh_rows": demand["missing_wh_rows"],
             "non_family_rows": demand["non_family_rows"],
+            "pending_text_tri_rows": demand.get("pending_text_tri_rows"),
+            "pending_text_tri_qty": demand.get("pending_text_tri_qty"),
             "ambiguous_rows": demand["ambiguous_rows"],
             "ambiguous_qty": demand["ambiguous_qty"],
             "bad_samples": demand["bad_samples"],
@@ -507,15 +587,22 @@ def main():
             "warehouses_requested": sorted({w for m in stock.get("files", [])
                                             for w in (m.get("warehouses") or [])}),
             "complete_warehouses": stock.get("complete_warehouses"),
+            "incomplete_warehouses": stock.get("incomplete_warehouses"),
+            "requested_warehouses": stock.get("requested_warehouses"),
             "selected_file_per_warehouse": stock.get("selected_file_per_warehouse"),
+            "selected_complete": stock.get("selected_complete"),
             "ignored_warehouses": stock.get("ignored_warehouses"),
             "duplicate_conflicts": stock.get("duplicate_conflicts"),
             "duplicates_ignored": stock.get("duplicates_ignored"),
             "bad_values": stock.get("bad_values"),
+            "bad_samples": stock.get("bad_samples"),
+            "conflict_samples": stock.get("conflict_samples"),
             "by_branch": stock["by_branch"],
             "by_warehouse": stock["by_warehouse"],
         },
         "coverage_by_branch": branch_cov,
+        "coverage_eligible_branches": sorted(
+            b for b, v in branch_cov.items() if v.get("coverage_eligible")),
         "coverage_by_sku": rows,
         "gaps": {
             "scope": "仅 sampled_complete 分支进入无供给/低覆盖计数；PL/3PL/退货仓单独列 unknown/demand_only",

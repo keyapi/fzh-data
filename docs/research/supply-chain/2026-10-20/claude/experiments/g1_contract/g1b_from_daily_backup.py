@@ -5,21 +5,27 @@
 输入：D:/Work/库存备份/YYYY-MM-DD/warehouse=*.jsonl + manifest.json
 输出：out/stock_snapshot_from_daily.json（聚合，无 PII）
 
-这样 G1b 覆盖使用每日 API 备份的 complete 结果，不用再重复打通途 API。
+严格口径：
+  - 空/非法/负数/非整数库存量 → bad row，不转 0；
+  - 同仓同 SKU 重复：同值计 duplicate，异值计 conflict 并整键丢弃，不 first-wins；
+  - 缺文件/坏行/冲突 → 该仓 complete=false；
+  - complete 只绑定实际选中并完整读取的仓。
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import math
 from collections import defaultdict
-from datetime import datetime
 from pathlib import Path
 
 import openpyxl
 
 BOM = Path(r"D:/Work/王忠于/成本核算/EN产品BOM成本列表20261016.xlsx")
 FAMILIES = ("KS0001", "KS0248")
+QTY_FIELDS = ("available", "intransit", "defects", "waiting")
 
 
 def load_family_codes(path: Path = BOM) -> set[str]:
@@ -39,6 +45,26 @@ def load_family_codes(path: Path = BOM) -> set[str]:
     return codes
 
 
+def parse_qty(value):
+    if value is None or value == "":
+        return None
+    try:
+        f = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(f) or f < 0 or f != int(f):
+        return None
+    return f
+
+
+def sha256(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--backup-dir", required=True)
@@ -49,55 +75,124 @@ def main():
     args = ap.parse_args()
 
     family = None if args.all_skus else load_family_codes(Path(args.bom))
-
     root = Path(args.backup_dir)
-    manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+    manifest_path = root / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     wanted = {w.strip() for w in args.warehouses.split(",") if w.strip()}
     entries = manifest.get("warehouses", [])
     if wanted:
         entries = [e for e in entries if e.get("warehouseName") in wanted]
 
-    by_sku: dict[str, dict] = {}
-    by_wh: dict[str, dict] = {}
-    selected = []
+    rows_by_key: dict[tuple[str, str], list[dict]] = defaultdict(list)
+    row_meta: dict[tuple[str, str], dict] = {}
+    bad_rows: dict[str, int] = defaultdict(int)
+    bad_samples = []
+    missing_files = []
+    read_files = {}
+    file_hashes = {}
+
     for e in entries:
         name = e.get("warehouseName")
         path = Path(e.get("file") or "")
         if not path.is_file():
+            missing_files.append(name)
             continue
-        selected.append(name)
-        wh = by_wh.setdefault(name, {"available": 0.0, "intransit": 0.0, "defects": 0.0,
-                                     "waiting": 0.0, "rows": 0, "complete": e.get("complete")})
+        read_files[name] = str(path)
+        file_hashes[name] = sha256(path)
         with path.open(encoding="utf-8") as f:
-            for line in f:
+            for line_no, line in enumerate(f, 1):
                 line = line.strip()
                 if not line:
                     continue
-                r = json.loads(line)
+                try:
+                    r = json.loads(line)
+                except json.JSONDecodeError:
+                    bad_rows[name] += 1
+                    if len(bad_samples) < 20:
+                        bad_samples.append({"warehouse": name, "file": str(path),
+                                            "line": line_no, "reason": "bad_json"})
+                    continue
                 sku = str(r.get("goodsSku") or "").strip()
                 if not sku:
+                    bad_rows[name] += 1
+                    if len(bad_samples) < 20:
+                        bad_samples.append({"warehouse": name, "file": str(path),
+                                            "line": line_no, "reason": "missing_sku"})
                     continue
                 if family is not None and sku not in family:
                     continue
                 vals = {
-                    "available": float(r.get("availableStockQuantity") or 0),
-                    "intransit": float(r.get("intransitStockQuantity") or 0),
-                    "defects": float(r.get("defectsStockQuantity") or 0),
-                    "waiting": float(r.get("waitingShipmentStockQuantity") or 0),
+                    "available": parse_qty(r.get("availableStockQuantity")),
+                    "intransit": parse_qty(r.get("intransitStockQuantity")),
+                    "defects": parse_qty(r.get("defectsStockQuantity")),
+                    "waiting": parse_qty(r.get("waitingShipmentStockQuantity")),
                 }
-                entry = by_sku.setdefault(
-                    sku, {"sku": sku, "warehouses": {}, "available": 0.0, "intransit": 0.0,
-                          "defects": 0.0, "waiting": 0.0}
-                )
-                if name in entry["warehouses"]:
-                    # JSONL 内同仓同 SKU 重复：保留首个，不累加
+                if any(v is None for v in vals.values()):
+                    bad_rows[name] += 1
+                    if len(bad_samples) < 20:
+                        bad_samples.append({"warehouse": name, "file": str(path),
+                                            "line": line_no, "reason": "bad_qty", "sku": sku})
                     continue
-                entry["warehouses"][name] = vals
-                for k in vals:
-                    entry[k] += vals[k]
-                wh["rows"] += 1
-                for k in vals:
-                    wh[k] += vals[k]
+                key = (name, sku)
+                rows_by_key[key].append(vals)
+                row_meta.setdefault(key, {"file": str(path), "line": line_no})
+
+    by_sku: dict[str, dict] = {}
+    by_wh: dict[str, dict] = {}
+    duplicate_same = 0
+    conflicts = []
+    conflict_warehouses: set[str] = set()
+    for (wh_name, sku), rows in rows_by_key.items():
+        if len(rows) > 1:
+            if all(vals == rows[0] for vals in rows[1:]):
+                duplicate_same += len(rows) - 1
+            else:
+                conflict_warehouses.add(wh_name)
+                conflicts.append({"warehouse": wh_name, "sku": sku, "rows": len(rows),
+                                  "source": row_meta.get((wh_name, sku))})
+                continue
+        vals = rows[0]
+        entry = by_sku.setdefault(
+            sku, {"sku": sku, "warehouses": {}, "available": 0.0, "intransit": 0.0,
+                  "defects": 0.0, "waiting": 0.0}
+        )
+        entry["warehouses"][wh_name] = vals
+        for k in QTY_FIELDS:
+            entry[k] += vals[k]
+        w = by_wh.setdefault(wh_name, {
+            "available": 0.0, "intransit": 0.0, "defects": 0.0, "waiting": 0.0,
+            "rows": 0, "complete": False,
+        })
+        for k in QTY_FIELDS:
+            w[k] += vals[k]
+        w["rows"] += 1
+
+    requested = [e.get("warehouseName") for e in entries]
+    for e in entries:
+        name = e.get("warehouseName")
+        w = by_wh.setdefault(name, {
+            "available": 0.0, "intransit": 0.0, "defects": 0.0, "waiting": 0.0,
+            "rows": 0, "complete": False,
+        })
+        complete = (
+            e.get("complete") is True
+            and name not in missing_files
+            and name not in conflict_warehouses
+            and bad_rows.get(name, 0) == 0
+        )
+        w["complete"] = complete
+        w["bad_rows"] = bad_rows.get(name, 0)
+        w["conflict"] = name in conflict_warehouses
+        w["file"] = read_files.get(name)
+
+    complete_warehouses = sorted(
+        name for name, w in by_wh.items() if w.get("complete") is True
+    )
+    global_complete = bool(
+        requested
+        and not missing_files
+        and all(by_wh.get(name, {}).get("complete") is True for name in requested)
+    )
 
     result = {
         "fetched_at": manifest.get("snapshot_at"),
@@ -106,24 +201,35 @@ def main():
         "capture_end": max((e.get("capture_end") for e in entries if e.get("capture_end")),
                            default=None),
         "source": "stock_daily_backup.py (tongtool API)",
-        "warehouses": selected,
-        "complete": all(e.get("complete") for e in entries),
-        "complete_warehouses": [e.get("warehouseName") for e in entries if e.get("complete")],
-        "bad_rows_total": sum(int(e.get("bad_rows") or 0) for e in entries),
+        "requested_warehouses": requested,
+        "read_warehouses": sorted(read_files),
+        "missing_files": missing_files,
+        "file_hashes": file_hashes,
+        "warehouses": sorted(read_files),
+        "complete": global_complete,
+        "complete_warehouses": complete_warehouses,
+        "incomplete_warehouses": sorted(set(requested) - set(complete_warehouses)),
+        "bad_rows_total": sum(bad_rows.values()),
+        "bad_samples": bad_samples,
+        "duplicate_same": duplicate_same,
+        "duplicate_conflicts": len(conflicts),
+        "conflict_samples": conflicts[:20],
         "by_warehouse": {
-            k: {**v, **{f: round(v[f], 2) for f in ("available", "intransit", "defects", "waiting")}}
+            k: {**v, **{f: round(v[f], 2) for f in QTY_FIELDS}}
             for k, v in by_wh.items()
         },
         "by_sku": sorted(by_sku.values(), key=lambda x: x["sku"]),
         "notes": [
             "由每日 API JSONL 聚合；不重复请求通途。",
-            "同仓同 SKU 重复行保留首个，不累加。",
-            "complete 来自 manifest；未完成仓不应进入缺口统计。",
+            "空/非法/负数/非整数量→bad row，不转 0。",
+            "同仓同 SKU 重复：同值计 duplicate；异值 conflict 并整键丢弃，不 first-wins。",
+            "缺文件/坏行/冲突→该仓 complete=false；complete 只绑定实际选中并完整读取的仓。",
         ],
     }
     Path(args.out).write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"OK: {args.out}")
-    print(f"  warehouses={len(selected)} skus={len(by_sku)} complete={result['complete']}")
+    print(f"  requested={len(requested)} read={len(read_files)} complete={global_complete} "
+          f"skus={len(by_sku)} bad={result['bad_rows_total']} conflicts={len(conflicts)}")
 
 
 if __name__ == "__main__":

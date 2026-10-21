@@ -4,3 +4,5 @@ g1b_en_*.json
 g1b_en_extract.log
 en_*.txt
 g1b_coverage_*.json
+
+rr*_test.json

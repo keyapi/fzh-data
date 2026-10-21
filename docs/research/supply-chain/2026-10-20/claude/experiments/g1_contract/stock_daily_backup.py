@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import sys
@@ -74,6 +75,7 @@ def business_code(payload: dict):
 
 
 def rows_of(payload: dict) -> list:
+    """Return a row array; raise on unrecognized shape (legal empty array is OK)."""
     datas = payload.get("datas") if isinstance(payload, dict) else None
     if isinstance(datas, list):
         return datas
@@ -81,7 +83,8 @@ def rows_of(payload: dict) -> list:
         for key in ("array", "list", "records", "dataList", "items", "rows", "stocks"):
             if isinstance(datas.get(key), list):
                 return datas[key]
-    return []
+        raise ValueError(f"datas 无行数组: {list(datas)[:10]}")
+    raise ValueError("响应缺少 datas")
 
 
 class Client:
@@ -126,7 +129,7 @@ class Client:
                     break
                 delay *= 2
         code = business_code(payload)
-        if code not in (None, CODE_OK):
+        if code != CODE_OK:
             raise RuntimeError(f"{name} 业务码 {code}: {json.dumps(payload, ensure_ascii=False)[:300]}")
         return payload
 
@@ -139,7 +142,17 @@ def active_warehouses(client: Client) -> list[dict]:
         if str(r.get("status")) == "1" and r.get("warehouseName"):
             out.append({"warehouseId": str(r.get("warehouseId") or ""),
                         "warehouseName": str(r.get("warehouseName"))})
+    if not out:
+        raise RuntimeError("仓库列表为空或没有 status=1 的仓")
     return out
+
+
+def sha256(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
 
 
 def backup_warehouse(client: Client, wh: dict, outdir: Path, page_size: int,
@@ -148,12 +161,13 @@ def backup_warehouse(client: Client, wh: dict, outdir: Path, page_size: int,
     wid = wh["warehouseId"] or "unknown"
     safe = "".join(c if c.isalnum() or c in "-_." else "_" for c in name)
     path = outdir / f"warehouse={wid}_{safe}.jsonl"
+    tmp = outdir / f"warehouse={wid}_{safe}.jsonl.tmp"
     start = datetime.now()
     pages = 0
     rows = 0
     bad = 0
-    complete = False
-    with path.open("w", encoding="utf-8") as f:
+    page_terminated = False
+    with tmp.open("w", encoding="utf-8") as f:
         for page in range(1, max_pages + 1):
             payload = client.call(STOCK_QUERY_TOOL, {
                 "warehouseName": name, "pageNo": page, "pageSize": page_size,
@@ -168,18 +182,21 @@ def backup_warehouse(client: Client, wh: dict, outdir: Path, page_size: int,
                 f.write(json.dumps(row, ensure_ascii=False) + "\n")
                 rows += 1
             if len(batch) < page_size:
-                complete = True
+                page_terminated = True
                 break
+    os.replace(tmp, path)
     end = datetime.now()
+    complete = bool(page_terminated and bad == 0)
     return {
         "warehouseId": wid,
         "warehouseName": name,
         "file": str(path),
+        "file_sha256": sha256(path),
         "pages": pages,
         "rows": rows,
         "bad_rows": bad,
         "complete": complete,
-        "truncated": (not complete and pages >= max_pages),
+        "truncated": bool(not page_terminated and pages >= max_pages),
         "capture_start": start.isoformat(timespec="seconds"),
         "capture_end": end.isoformat(timespec="seconds"),
     }
@@ -215,12 +232,17 @@ def main():
         mcp = McpClient(key, secret, client_name="fzh-stock-daily-backup")
         client = Client(mcp, args.min_interval)
 
-        whs = active_warehouses(client)
-        if args.warehouses:
-            wanted = {w.strip() for w in args.warehouses.split(",") if w.strip()}
-            whs = [w for w in whs if w["warehouseName"] in wanted]
+        all_whs = active_warehouses(client)
+        wanted = {w.strip() for w in args.warehouses.split(",") if w.strip()}
+        whs = [w for w in all_whs if not wanted or w["warehouseName"] in wanted]
+        requested_names = sorted(wanted or {w["warehouseName"] for w in all_whs})
+        found_names = {w["warehouseName"] for w in whs}
+        missing_requested = sorted(set(requested_names) - found_names)
+        if not whs:
+            raise RuntimeError(f"请求仓均未命中: {requested_names}")
 
-        print(f"备份日 {day}；启用仓 {len(whs)}；输出 {outdir}")
+        run_id = datetime.now().strftime("%Y%m%dT%H%M%S")
+        print(f"备份日 {day} run={run_id}；启用/请求仓 {len(whs)}/{len(requested_names)}；输出 {outdir}")
         results = []
         for wh in whs:
             print(f"\n仓库 {wh['warehouseName']} ({wh['warehouseId']})")
@@ -234,18 +256,32 @@ def main():
                 results.append({"warehouseId": wh["warehouseId"],
                                 "warehouseName": wh["warehouseName"],
                                 "error": msg, "complete": False})
+        for name in missing_requested:
+            results.append({"warehouseName": name, "error": "not_in_active_warehouse_list",
+                            "complete": False})
 
         manifest = {
+            "run_id": run_id,
+            "script_version": "stock_daily_backup/1.1",
             "snapshot_date": day,
             "snapshot_at": datetime.now().isoformat(timespec="seconds"),
             "source": "tongtool erp2_stocks_stocksquery",
             "requests": client.requests,
+            "requested_warehouses": requested_names,
+            "read_warehouses": sorted(found_names),
+            "missing_warehouses": missing_requested,
             "warehouses": results,
-            "complete": all(r.get("complete") for r in results),
+            "complete": bool(
+                requested_names
+                and not missing_requested
+                and all(r.get("complete") is True and not r.get("error") for r in results)
+            ),
         }
-        (outdir / "manifest.json").write_text(
+        tmp_manifest = outdir / "manifest.json.tmp"
+        tmp_manifest.write_text(
             json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
         )
+        os.replace(tmp_manifest, outdir / "manifest.json")
         print(f"\nOK: {outdir / 'manifest.json'} complete={manifest['complete']}")
         return 0 if manifest["complete"] else 1
     finally:

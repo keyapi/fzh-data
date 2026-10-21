@@ -63,7 +63,7 @@ def _op_order(wo: dict) -> list[str]:
 
 
 def jc_summary(jc_map: dict, wos: list[dict]) -> dict:
-    """按工序聚合 JC；同一工序多卡取 max（批量卡/菲号卡），不跨工序求和。"""
+    """按工序聚合 JC；同一工序多卡求和（批量/菲号卡），不跨工序求和。"""
     wo_by_name = {w.get("name"): w for w in wos}
     out = {}
     for wo_name, cards in (jc_map or {}).items():
@@ -78,14 +78,17 @@ def jc_summary(jc_map: dict, wos: list[dict]) -> dict:
                 "cards": len(rows),
                 "sum_qty": round(sum(qty), 2) if qty else None,
                 "max_qty": round(max(qty), 2) if qty else None,
+                "for_quantity_sum": round(sum(float(c.get("for_quantity") or 0) for c in rows), 2),
+                "jc_ids": [c.get("name") for c in rows if c.get("name")],
                 "statuses": sorted({c.get("status") for c in rows if c.get("status")}),
                 "docstatuses": sorted({c.get("docstatus") for c in rows
                                        if c.get("docstatus") is not None}),
             }
         order = _op_order(wo)
+        first_op = order[0] if order else None
+        last_op = order[-1] if order else None
         with_cards = [op for op in order if op in ops]
-        first_op = with_cards[0] if with_cards else None
-        last_op = with_cards[-1] if with_cards else None
+        last_card_op = with_cards[-1] if with_cards else None
         out[wo_name] = {
             "cards": len(cards),
             "operations": ops,
@@ -94,6 +97,8 @@ def jc_summary(jc_map: dict, wos: list[dict]) -> dict:
             "last_operation": last_op,
             "first_op_qty": ops.get(first_op, {}).get("sum_qty") if first_op else None,
             "last_op_qty": ops.get(last_op, {}).get("sum_qty") if last_op else None,
+            "last_card_operation": last_card_op,
+            "last_card_qty": ops.get(last_card_op, {}).get("sum_qty") if last_card_op else None,
             "statuses": sorted({c.get("status") for c in cards if c.get("status")}),
         }
     return out
@@ -180,15 +185,45 @@ def fetch_manufacture_stock_entries(wo_names: list[str], item_codes: list[str],
         if i + 1 < len(ses):
             time.sleep(sleep_s)
         if not d:
-            out.append({"se": se["name"], "finished_qty": None, "status": "missing_doc"})
+            out.append({"se": se["name"], "status": "missing_doc", "finished_qty": None,
+                        "lines": []})
             continue
+        lines = []
         finished = 0.0
         finished_lines = 0
+        matched_lines = 0
+        uom_issue = False
         for line in d.get("items", []):
-            is_finished = bool(line.get("is_finished_item"))
-            if is_finished and line.get("item_code") in item_set:
-                finished += float(line.get("qty") or 0)
-                finished_lines += 1
+            rec = {
+                "line": line.get("name"),
+                "item_code": line.get("item_code"),
+                "qty": float(line.get("qty") or 0),
+                "uom": line.get("uom"),
+                "stock_uom": line.get("stock_uom"),
+                "is_finished_item": bool(line.get("is_finished_item")),
+                "target_warehouse": line.get("t_warehouse"),
+                "source_warehouse": line.get("s_warehouse"),
+            }
+            lines.append(rec)
+            if not rec["is_finished_item"]:
+                continue
+            finished_lines += 1
+            if rec["item_code"] not in item_set:
+                continue
+            matched_lines += 1
+            if not rec["uom"] or not rec["stock_uom"]:
+                uom_issue = True
+            elif rec["uom"] != rec["stock_uom"]:
+                uom_issue = True
+            finished += rec["qty"]
+        if finished_lines == 0:
+            status = "no_finished_lines"
+        elif matched_lines == 0:
+            status = "no_matching_finished_line"
+        elif uom_issue:
+            status = "uom_unknown"
+        else:
+            status = "ok"
         out.append({
             "se": se["name"],
             "posting_date": d.get("posting_date"),
@@ -196,8 +231,11 @@ def fetch_manufacture_stock_entries(wo_names: list[str], item_codes: list[str],
             "work_order": d.get("work_order"),
             "from_warehouse": d.get("from_warehouse"),
             "to_warehouse": d.get("to_warehouse"),
-            "finished_qty": round(finished, 2),
+            "status": status,
+            "finished_qty": round(finished, 2) if status == "ok" else None,
             "finished_lines": finished_lines,
+            "matched_finished_lines": matched_lines,
+            "lines": lines,
         })
     return out, None
 
@@ -312,26 +350,47 @@ def main():
     )
 
     four_way = {}
-    by_wo_se = defaultdict(float)
+    se_by_wo: dict[str, list[dict]] = defaultdict(list)
     for s in se_rows:
-        if s.get("finished_qty") is not None and s.get("work_order"):
-            by_wo_se[s["work_order"]] += float(s["finished_qty"])
+        if s.get("work_order"):
+            se_by_wo[s["work_order"]].append(s)
     for w in ctx.get("wos", []):
         wo_name = w.get("name")
         j = jc.get(wo_name, {})
         last_qty = j.get("last_op_qty")
-        se_qty = by_wo_se.get(wo_name)
-        if se_qty is None and se_error is None:
+        se_for_wo = se_by_wo.get(wo_name, [])
+        bad_se = [s for s in se_for_wo if s.get("status") != "ok"]
+        if se_for_wo and not bad_se:
+            se_qty = sum(float(s.get("finished_qty") or 0) for s in se_for_wo)
+            se_status = "ok"
+        elif bad_se:
+            se_qty = None
+            se_status = bad_se[0].get("status") or "unknown"
+        elif se_error:
+            se_qty = None
+            se_status = "query_error"
+        else:
             se_qty = 0.0
+            se_status = "none"
         pending = None
         if last_qty is not None and se_qty is not None:
             pending = round(last_qty - se_qty, 2)
+        last_card_qty = j.get("last_card_qty")
+        pending_last_card = None
+        if last_card_qty is not None and se_qty is not None:
+            pending_last_card = round(last_card_qty - se_qty, 2)
         four_way[wo_name] = {
             "jc_present": bool(j),
+            "first_operation": j.get("first_operation"),
+            "last_operation": j.get("last_operation"),
             "first_op_qty": j.get("first_op_qty"),
             "last_op_qty": last_qty,
+            "last_card_operation": j.get("last_card_operation"),
+            "last_card_qty": last_card_qty,
+            "se_status": se_status,
             "se_finished_qty": round(se_qty, 2) if se_qty is not None else None,
             "produced_pending_stock_in": pending,
+            "produced_pending_stock_in_last_card": pending_last_card,
         }
 
     result = {
