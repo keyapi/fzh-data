@@ -1,0 +1,741 @@
+"""Offline executable supply-chain contract examples; synthetic fixtures only.
+
+This is a review oracle, not an ERP adapter, forecasting model, or planner.
+Run: uv run --no-project python <this file>
+"""
+
+from collections import defaultdict
+from datetime import datetime
+from decimal import Decimal
+import json
+
+
+def require(condition, message):
+    if not condition:
+        raise ValueError(message)
+
+
+def kit_ready(component_qty, recipe):
+    require(all(n > 0 for n in recipe.values()), "invalid recipe")
+    return min(component_qty.get(k, 0) // n for k, n in recipe.items())
+
+
+def demand_after_consumption(forecast, confirmed_in_bucket, internal_transfer):
+    # These confirmed orders belong to this forecast bucket; no match by guess.
+    require(min(forecast, confirmed_in_bucket, internal_transfer) >= 0, "negative demand")
+    remaining_forecast = max(0, forecast - confirmed_in_bucket)
+    return remaining_forecast, confirmed_in_bucket + remaining_forecast
+
+
+def normalize_lot_views(views):
+    """Repeat source views must refer to an explicitly reconciled canonical lot."""
+    lots = {}
+    for lot_id, quantity in views:
+        require(quantity >= 0, "negative lot")
+        require(lot_id not in lots or lots[lot_id] == quantity, "conflicting lot views")
+        lots[lot_id] = quantity
+    return sum(lots.values())
+
+
+def validate_allocations(capacities, allocations):
+    totals = defaultdict(int)
+    for line_id, shipment_id, qty in allocations:
+        require(line_id in capacities and shipment_id and qty >= 0, "invalid allocation")
+        totals[line_id] += qty
+    require(all(totals[k] <= v for k, v in capacities.items()), "overallocated DN line")
+    return {k: v - totals[k] for k, v in capacities.items()}
+
+
+def latest_receipt_versions(receipt_lines):
+    """Synthetic revisions are increasing integers, prefiltered to one cutoff.
+
+    Keep input events unchanged; select one effective version per raw line.
+    Production adapters must define revision and observed-at ordering explicitly.
+    """
+    seen = set()
+    latest = {}
+    for raw_id, revision, gross, allocations in receipt_lines:
+        require((raw_id, revision) not in seen, "duplicate receipt revision")
+        require(isinstance(revision, int) and revision > 0, "invalid receipt revision")
+        seen.add((raw_id, revision))
+        if raw_id not in latest or revision > latest[raw_id][0]:
+            latest[raw_id] = (revision, gross, allocations)
+    return [(raw_id, gross, allocations) for raw_id, (_, gross, allocations) in latest.items()]
+
+
+def receipt_totals(capacities, receipt_lines):
+    """Raw receipt line revisions carry explicit DN-row allocations."""
+    gross_by_dn = defaultdict(int)
+    accepted = damaged = 0
+    for raw_id, gross, allocations in latest_receipt_versions(receipt_lines):
+        require(sum(a + d for _, a, d in allocations) == gross, "receipt allocation mismatch")
+        for dn_row, good, bad in allocations:
+            require(dn_row in capacities and min(good, bad) >= 0, "invalid receipt allocation")
+            gross_by_dn[dn_row] += good + bad
+            accepted += good
+            damaged += bad
+    require(all(gross_by_dn[k] <= v for k, v in capacities.items()), "overreceived DN line")
+    return {
+        "gross": sum(gross_by_dn.values()),
+        "accepted": accepted,
+        "damaged": damaged,
+        "unreceived": sum(capacities.values()) - sum(gross_by_dn.values()),
+    }
+
+
+def project(on_hand, demand_by_period, receipts_by_period):
+    """Receipts at period start; unmet demand is lost, not carried as backlog."""
+    require(on_hand >= 0, "negative initial stock")
+    inv = on_hand
+    rows = []
+    for period, demand in enumerate(demand_by_period, 1):
+        receipt = receipts_by_period.get(period, 0)
+        require(min(demand, receipt) >= 0, "negative flow")
+        inv += receipt
+        shortage = max(0, demand - inv)
+        inv = max(0, inv - demand)
+        rows.append({"period": period, "ending": inv, "shortage": shortage})
+    return rows
+
+
+def known_event(events, cutoff):
+    """One milestone, one agreed source; event revision order is observed_at."""
+    known = [e for e in events if e["observed_at"] <= cutoff]
+    actual = [e for e in known if e["kind"] == "actual"]
+    candidates = actual or known
+    return max(candidates, key=lambda e: e["observed_at"]) if candidates else None
+
+
+def approval_valid(proposal, current_hash, now):
+    return proposal["input_hash"] == current_hash and now < proposal["expires_at"]
+
+
+def strict_quantity(value):
+    require(value is not None and not isinstance(value, bool), "unknown quantity")
+    try:
+        qty = Decimal(str(value))
+    except Exception as exc:
+        raise ValueError("invalid quantity") from exc
+    require(qty.is_finite() and qty >= 0 and qty == qty.to_integral_value(), "invalid unit count")
+    return int(qty)
+
+
+def rejects(call):
+    try:
+        call()
+    except ValueError:
+        return True
+    return False
+
+
+FAMILY_LEAVES = {"KS0001", "KS0248"}
+
+
+def family_resolution(exact_candidates):
+    """Caller supplies exact code matches, not category/suffix guesses."""
+    candidates = set(exact_candidates)
+    if not candidates:
+        return {"status": "unmatched", "reason": "no_exact_match"}
+    if len(candidates) != 1:
+        return {"status": "conflict", "reason": "ambiguous_item_or_leaf"}
+    item, leaf = next(iter(candidates))
+    if not item or leaf is None:
+        return {"status": "unknown", "reason": "missing_item_or_leaf"}
+    if leaf not in FAMILY_LEAVES:
+        return {"status": "blocked", "reason": "outside_family"}
+    return {"status": "used", "item": item, "leaf": leaf}
+
+
+def family_totals(lines):
+    seen = set()
+    leaf_totals = defaultdict(int)
+    items = set()
+    for row_id, quantity, candidates in lines:
+        require(row_id not in seen, "duplicate source row")
+        seen.add(row_id)
+        match = family_resolution(candidates)
+        require(match["status"] == "used", "unresolved family line")
+        leaf_totals[match["leaf"]] += strict_quantity(quantity)
+        items.add(match["item"])
+    return {"family_qty": sum(leaf_totals.values()), "leaf_qty": dict(leaf_totals),
+            "distinct_items": len(items)}
+
+
+def mapping_gate(customer_code, candidates, deleted_prefix=False):
+    """Deletion flag is supplied from an evidenced source rule, never guessed."""
+    flags = []
+    if not customer_code or not customer_code.strip():
+        return {"status": "unmatched", "reason": "empty_customer_code", "flags": flags}
+    if deleted_prefix:
+        return {"status": "blocked", "reason": "deleted_prefix", "flags": ["deleted_prefix"]}
+    if customer_code.endswith(("-Cover", "-Foam")):
+        flags.append("component_suffix_requires_role_check")
+    result = family_resolution(candidates)
+    return {**result, "flags": flags}
+
+
+def bucket_demand(forecast, bucket, orders):
+    """Toy cancellation policy: only unshipped units can be cancelled.
+
+    All same-bucket terminal rows are explicitly forecast-covered in this fixture.
+    Cross-bucket/internal rows are reported separately, not silently consumed.
+    """
+    forecast = strict_quantity(forecast)
+    consumed = open_qty = cross_bucket = internal = 0
+    seen = set()
+    dispositions = []
+    covered_ids = []
+    for order_id, order_bucket, kind, quantity, shipped, cancelled in orders:
+        require(order_id not in seen, "duplicate order row")
+        seen.add(order_id)
+        quantity, shipped, cancelled = map(strict_quantity, (quantity, shipped, cancelled))
+        require(shipped + cancelled <= quantity, "cancelled/shipped exceed order")
+        valid = quantity - cancelled
+        if kind == "internal":
+            internal += valid
+            dispositions.append({"order_id": order_id, "status": "used", "role": "internal_excluded",
+                                 "quantity": valid})
+            continue
+        require(kind == "terminal", "unknown demand type")
+        if order_bucket != bucket:
+            cross_bucket += valid
+            dispositions.append({"order_id": order_id, "status": "blocked", "reason": "outside_bucket",
+                                 "target_bucket": order_bucket, "quantity": valid})
+            continue
+        consumed += valid
+        open_qty += valid - shipped
+        covered_ids.append(order_id)
+        dispositions.append({"order_id": order_id, "status": "used", "role": "covered_terminal",
+                             "quantity": valid, "shipped": shipped, "cancelled": cancelled})
+    net = max(0, forecast - consumed)
+    excess = max(0, consumed - forecast)
+    return {"consumed": consumed, "open": open_qty, "net": net,
+            "bucket_total": consumed + net, "remaining": open_qty + net,
+            "cross_bucket": cross_bucket, "internal": internal,
+            "over_forecast": excess, "dispositions": dispositions,
+            "exceptions": ([{"reason": "over_forecast", "quantity": excess,
+                             "related_order_ids": covered_ids, "destination": "retain_in_current_bucket"}]
+                           if excess else [])}
+
+
+def pending_receipt(qualified_received, already_in_snapshot):
+    qualified_received = strict_quantity(qualified_received)
+    already_in_snapshot = strict_quantity(already_in_snapshot)
+    require(already_in_snapshot <= qualified_received, "snapshot receipt exceeds qualified receipt")
+    return qualified_received - already_in_snapshot
+
+
+def receipt_totals_g1(capacities, receipt_lines):
+    """G1 four-field allocation includes rejected; G0 helper stays unchanged."""
+    gross_by_dn = defaultdict(int)
+    accepted = damaged = rejected = 0
+    for raw_id, gross, allocations in latest_receipt_versions(receipt_lines):
+        require(sum(g + d + r for _, g, d, r in allocations) == gross, "receipt allocation mismatch")
+        for dn_row, good, bad, refused in allocations:
+            require(dn_row in capacities and min(good, bad, refused) >= 0, "invalid receipt allocation")
+            gross_by_dn[dn_row] += good + bad + refused
+            accepted += good
+            damaged += bad
+            rejected += refused
+    require(all(gross_by_dn[k] <= v for k, v in capacities.items()), "overreceived DN line")
+    return {"gross": sum(gross_by_dn.values()), "accepted": accepted, "damaged": damaged,
+            "rejected": rejected, "unreceived": sum(capacities.values()) - sum(gross_by_dn.values())}
+
+
+def available_after_receipt(accepted_units, pending_states):
+    """Synthetic unit IDs make disjoint pending allocations testable, not assumed."""
+    required = {"inspection", "processing", "shelving"}
+    if (accepted_units is None or set(pending_states) != required
+            or any(v is None for v in pending_states.values())):
+        return None
+    pending = set()
+    for units in pending_states.values():
+        require(set(units) <= set(accepted_units), "pending units outside accepted")
+        require(not pending.intersection(units), "overlapping pending states")
+        pending.update(units)
+    return len(set(accepted_units) - pending)
+
+
+def snapshot_at(snapshot_time, quantity, query_time):
+    if query_time != snapshot_time:
+        return {"status": "unknown", "quantity": None,
+                "reason": "history_unavailable" if query_time < snapshot_time else "future_events_required"}
+    return {"status": "used", "quantity": strict_quantity(quantity)}
+
+
+def scoped_stockout_signal(sku, warehouse, period, channel, signals):
+    # Absence of a scoped signal is unknown, never proof of no stockout.
+    key = (sku, warehouse, period, channel)
+    return "signal_present" if key in signals else "unknown"
+
+
+def triangle_match(sku, mapping_rows):
+    """Current G1 data authority is the one named BOM snapshot, not Cost Review."""
+    exact_rows = [r for r in mapping_rows if r["customer_code"] == sku]
+    approved = [r for r in exact_rows if r["source"] == "bom_20261016"]
+    match = mapping_gate(sku, [(r["item"], r["leaf"]) for r in approved],
+                         any(r.get("deleted", False) for r in approved))
+    return {**match, "ignored_sources": sorted({r["source"] for r in exact_rows
+                                               if r["source"] != "bom_20261016"})}
+
+
+def triangle_cover_consumption(lines, mapping_rows):
+    """User-confirmed triangle scenario: normalized independent sales consume 1 cover.
+
+    Warehouse names/channels never classify transaction purpose or inventory pools.
+    This returns a known consumption subtotal, not a forecast or replenishment order.
+    """
+    seen = set()
+    dispositions = []
+    known = 0
+    unresolved = []
+    for line in lines:
+        source_id = line["id"]
+        require(source_id not in seen, "duplicate source line")
+        seen.add(source_id)
+        quantity = strict_quantity(line["qty"])
+        match = triangle_match(line["sku"], mapping_rows)
+        result = {"source_id": source_id, "warehouse": line["warehouse"],
+                  "qty": quantity, "match": match, "cover_qty": None}
+        if match["status"] != "used":
+            result["status"] = match["status"]
+            unresolved.append(source_id)
+        elif line["event_kind"] in {"internal_transfer", "return_event", "package_component"}:
+            result.update(status="used", reason="not_new_terminal_demand", cover_qty=0)
+        elif (line["event_kind"] == "terminal_sale"
+              and line["sold_form"] in {"finished", "cover_only"}):
+            result.update(status="used", reason="confirmed_triangle_1_to_1", cover_qty=quantity)
+            known += quantity
+        else:
+            result.update(status="unknown", reason="unconfirmed_form_or_transaction")
+            unresolved.append(source_id)
+        dispositions.append(result)
+    return {"known_cover_consumption": known, "unresolved_source_ids": unresolved,
+            "dispositions": dispositions}
+
+
+def outbound_gross(events):
+    """Kinds describe physical event direction, never warehouse names."""
+    seen = set()
+    total = 0
+    for event_id, kind, qty in events:
+        require(event_id not in seen, "duplicate outbound event")
+        seen.add(event_id)
+        require(kind in {"sale", "replacement", "transfer", "customer_return_receipt"}, "unknown event")
+        qty = strict_quantity(qty)
+        if kind in {"sale", "replacement"}:
+            total += qty
+    return total
+
+
+def manual_inventory(value, source, as_of):
+    if value is None:
+        return {"qty": None, "status": "unknown"}
+    require(source == "wayfair_backend_manual" and as_of, "receipt/transfer is not inventory")
+    return {"qty": strict_quantity(value), "status": "reported_snapshot"}
+
+
+def cohort_key(row):
+    fields = ("branch", "operator_id", "listing_id", "operator_start_date",
+              "listing_launch_date", "demand_cohort")
+    require(all(row.get(f) for f in fields), "missing cohort dimension")
+    return tuple(row[f] for f in fields)
+
+
+def cohort_run_rate(sold, observable_days, censored_days):
+    require(observable_days > 0 and 0 <= censored_days <= observable_days, "invalid exposure")
+    if censored_days:
+        return {"rate": None, "status": "censored_scenario_required"}
+    return {"rate": Decimal(strict_quantity(sold)) / observable_days, "status": "short_window_scenario"}
+
+
+def return_stock_balance(snapshot, returns):
+    balance = strict_quantity(snapshot)
+    seen = set()
+    for return_id, qty, already_in_snapshot, resalable in returns:
+        require(return_id not in seen, "duplicate return event")
+        seen.add(return_id)
+        qty = strict_quantity(qty)
+        require(isinstance(already_in_snapshot, bool) and isinstance(resalable, bool), "unknown return inclusion/state")
+        if not already_in_snapshot and resalable:
+            balance += qty
+    return balance
+
+
+def return_scenario(gross, sales_base, rate, restock_share, family):
+    require(family == "triangle", "triangle assumption cannot transfer to another family")
+    gross, sales_base = Decimal(gross), Decimal(sales_base)
+    rate, restock_share = Decimal(rate), Decimal(restock_share)
+    require(0 <= sales_base <= gross and 0 <= rate <= 1 and 0 <= restock_share <= 1, "invalid return scenario")
+    return {"net": gross - sales_base * rate * restock_share, "status": "assumption",
+            "scope": "same-horizon eligible returns only; not a snapshot adjustment"}
+
+
+def reconcile_dispositions(inputs, outputs):
+    require(len({i for i, q in inputs}) == len(inputs), "duplicate source ID")
+    require(len({i for i, q, status in outputs}) == len(outputs), "duplicate disposition")
+    expected = {i: strict_quantity(q) for i, q in inputs}
+    actual = {i: strict_quantity(q) for i, q, status in outputs}
+    require(all(status in {"family", "pending", "out_of_scope"} for i, q, status in outputs), "bad status")
+    require(expected == actual, "input/disposition identity or quantity mismatch")
+    return sum(expected.values())
+
+
+def supply_attribution(rows, sku, period):
+    amounts = defaultdict(int)
+    seen = set()
+    for row_id, item, window, branch, qty, dispatched in rows:
+        require(row_id not in seen, "duplicate transfer line")
+        seen.add(row_id)
+        if item == sku and window == period and dispatched:
+            amounts[branch] += strict_quantity(qty)
+    total = sum(amounts.values())
+    if not total:
+        return {"status": "unknown", "weights": None}
+    return {"status": "historical_dispatch_evidence",
+            "weights": {k: Decimal(v) / total for k, v in amounts.items()}}
+
+
+def replacement_classification(flag, suffix_hint, rule_matches):
+    # A rule conflict needs evidence; a suffix alone never overrides the field.
+    if len(set(rule_matches)) > 1 or (rule_matches and flag is not None and flag != rule_matches[0]):
+        return "conflict"
+    if rule_matches:
+        return rule_matches[0]
+    return flag if flag is not None else "unknown"
+
+
+def run():
+    report = []
+
+    def record(case, condition, expected):
+        require(condition, f"failed {case}")
+        report.append({"case": case, "status": "PASS", "expected": expected})
+
+    # C01: 20 covers + 10 foam are 10 two-cover kits, not 30 finished items.
+    ready = kit_ready({"cover": 20, "foam": 10}, {"cover": 2, "foam": 1})
+    record("C01_recipe_and_independent_sales", ready == 10 and 10 * 2 + 5 == 25,
+           "10 kits; additional 5 standalone covers imply 25 cover demand, not 15 kits")
+
+    # C02: internal replenishment SO is not another terminal demand.
+    remainder, total = demand_after_consumption(100, 30, 80)
+    record("C02_forecast_consumption", (remainder, total) == (70, 100)
+           and demand_after_consumption(100, 120, 80) == (0, 120),
+           "100 forecast includes 30 orders => 70 remaining, 100 total; excess orders => 120")
+
+    record("C03_supply_view_dedup", normalize_lot_views([("lot-A", 100)] * 3) == 100
+           and rejects(lambda: normalize_lot_views([("lot-A", 100), ("lot-A", 90)])),
+           "three reconciled views = 100; source quantity conflict blocks reconciliation")
+
+    capacities = {"DN-A-row-1": 100, "DN-B-row-1": 40}
+    allocations = [("DN-A-row-1", "shipment-1", 60), ("DN-B-row-1", "shipment-1", 40),
+                   ("DN-A-row-1", "shipment-2", 40)]
+    record("C04_split_and_consolidated_shipments", validate_allocations(capacities, allocations)
+           == {"DN-A-row-1": 0, "DN-B-row-1": 0}
+           and rejects(lambda: validate_allocations(capacities, allocations + [("DN-A-row-1", "shipment-3", 1)])),
+           "two DN rows across two shipments; extra 1 blocks as overallocation")
+
+    receipt_cap = {"DN-C-row-1": 60, "DN-D-row-1": 40}
+    r1 = ("receipt-1-line-1", 1, 70, [("DN-C-row-1", 48, 2), ("DN-D-row-1", 20, 0)])
+    r2 = ("receipt-2-line-1", 1, 30, [("DN-C-row-1", 10, 0), ("DN-D-row-1", 20, 0)])
+    r1_corrected = ("receipt-1-line-1", 2, 70, [("DN-C-row-1", 49, 1), ("DN-D-row-1", 20, 0)])
+    partial = receipt_totals(receipt_cap, [r1])
+    final = receipt_totals(receipt_cap, [r1, r2])
+    record("C05_partial_receipt_and_damage", partial == {"gross": 70, "accepted": 68, "damaged": 2, "unreceived": 30}
+           and final == {"gross": 100, "accepted": 98, "damaged": 2, "unreceived": 0}
+           and receipt_totals(receipt_cap, [r1, r2, r1_corrected])
+           == {"gross": 100, "accepted": 99, "damaged": 1, "unreceived": 0}
+           and rejects(lambda: receipt_totals(receipt_cap, [r1, r1])),
+           "partial68+2+30=100; final98+2=100; correction99+1=100, not170; duplicate revision rejected")
+
+    events = [
+        {"kind": "estimated", "event_time": "2026-05-12", "observed_at": "2026-05-11"},
+        {"kind": "actual", "event_time": "2026-05-13", "observed_at": "2026-05-14"},
+        {"kind": "estimated", "event_time": "2026-05-18", "observed_at": "2026-05-15"},
+    ]
+    record("C06_bitemporal_event", known_event(events, "2026-05-12")["kind"] == "estimated"
+           and known_event(events, "2026-05-16")["event_time"] == "2026-05-13",
+           "as-of May12 cannot know actual; stale estimated revision cannot erase actual milestone")
+
+    projection = project(20, [10] * 6, {4: 40})
+    record("C07_eta_before_coverage", sum(x["shortage"] for x in projection) == 10
+           and projection[2]["shortage"] == 10 and (20 + 40) / 10 == 6,
+           "headline six-month supply still has 10 shortage in period3; receipt in period4")
+
+    first, last, stock_in, shipped, prior_stock = None, None, 60, 80, 20
+    record("C08_production_quantities_are_distinct", first is None and last is None
+           and stock_in + prior_stock == shipped and shipped > stock_in
+           and kit_ready({"cover": 60, "foam": 20}, {"cover": 2, "foam": 1}) == 20,
+           "no Job Card => unknown reports, not zero; inbound60 + prior20 permits shipped80; kit-ready20")
+
+    # Returns may change commercial delivery but do not erase physical departures.
+    ordered, cancelled, dispatched, returned = 100, 20, 70, 10
+    net_delivered = dispatched - returned
+    original_open = ordered - cancelled - dispatched
+    record("C09_returns_and_demand_revision", net_delivered == 60 and original_open == 10
+           and original_open + 0 == 10 and original_open + returned == 20 and dispatched == 70,
+           "valid80=dispatched70+original-open10; netdelivered60; remaining10 or20 depends on approved replacement")
+
+    # Same cash budget need not imply same units, even before scheduling.
+    budget, demand_a, demand_b = 100, 10, 10
+    cheap_units, expensive_units = budget // 10, budget // 20
+    record("C10_money_is_not_quantity_budget", cheap_units == 10 and expensive_units == 5
+           and demand_a + demand_b - cheap_units != demand_a + demand_b - expensive_units,
+           "cash100 buys10 at cost10 or5 at cost20; aggregate shortage differs10 vs15")
+
+    proposal = {"input_hash": "synthetic-snapshot-A", "expires_at": datetime(2026, 5, 20)}
+    record("C11_approval_snapshot_and_expiry", approval_valid(proposal, "synthetic-snapshot-A", datetime(2026, 5, 19))
+           and not approval_valid(proposal, "synthetic-snapshot-B", datetime(2026, 5, 19))
+           and not approval_valid(proposal, "synthetic-snapshot-A", datetime(2026, 5, 20)),
+           "changed inputs or expired proposal require revalidation; approvals do not authorize production writes")
+
+    record("C12_missing_is_not_zero", strict_quantity("0") == 0
+           and all(rejects(lambda v=v: strict_quantity(v)) for v in [None, "bad", "NaN", "inf", -1, "1.5"]),
+           "explicit zero accepted; unknown/invalid/fractional counts quarantined")
+
+    # Relative month indexes: validation origin6 predicts7..9; test origin7 predicts8..10.
+    targets = lambda origin: set(range(origin + 1, origin + 4))
+    overlap = targets(6) & targets(7)
+    available_at = {month: datetime(2025, month + 1, 2) for month in range(5, 10)}
+    decision_at = datetime(2025, 8, 2)
+    known_by = lambda labels: all(available_at[month] <= decision_at for month in labels)
+    record("C13_forecast_selection_label_cutoff", overlap == {8, 9}
+           and not (targets(4) & targets(7)) and known_by(targets(4)) and not known_by(targets(6)),
+           "h3 overlap labels8,9; at Aug2 decision, monthly labels available next-month2 => May-Jul known, Aug-Sep unknown")
+
+    # C14-C20 are G1 extensions; C01-C13 remain the frozen G0 reference cases.
+    family_rows = [("source-line-A", 1, [("synthetic-item-A", "KS0001")]),
+                   ("source-line-B", 1, [("synthetic-item-B", "KS0248")])]
+    family = family_totals(family_rows)
+    record("C14_family_preserves_leaf_and_item", family == {
+        "family_qty": 2, "leaf_qty": {"KS0001": 1, "KS0248": 1}, "distinct_items": 2}
+        and rejects(lambda: family_totals(family_rows + [family_rows[0]])),
+        "one item from each leaf => family2 with two items; duplicate source row rejected")
+
+    ambiguous = [("synthetic-item-A", "KS0001"), ("synthetic-item-B", "KS0248")]
+    record("C15_mapping_ambiguity_and_hints", family_resolution(ambiguous)["status"] == "conflict"
+           and family_resolution([])["status"] == "unmatched"
+           and family_resolution([("synthetic-item-C", "KS9999")])["status"] == "blocked"
+           and family_resolution([("synthetic-item-A", None)])["status"] == "unknown"
+           and family_resolution([family_rows[0][2][0]] * 2)["status"] == "used"
+           and mapping_gate("", family_rows[0][2])["reason"] == "empty_customer_code"
+           and mapping_gate("synthetic-code", family_rows[0][2], True)["reason"] == "deleted_prefix"
+           and mapping_gate("synthetic-code-Cover", [])["status"] == "unmatched"
+           and "component_suffix_requires_role_check" in mapping_gate("synthetic-code-Cover", [])["flags"]
+           and mapping_gate("synthetic-code", ambiguous)["status"] == "conflict"
+           and rejects(lambda: family_totals([("line-hint", 1, [])])),
+           "empty/deleted/Cover/multiple-match marked separately; category or suffix hint cannot establish membership")
+
+    full = bucket_demand(100, "2026-06", [("order-1", "2026-06", "terminal", 30, 30, 0)])
+    partial = bucket_demand(100, "2026-06", [("order-1", "2026-06", "terminal", 30, 10, 0)])
+    cancelled = bucket_demand(100, "2026-06", [("order-1", "2026-06", "terminal", 30, 10, 5)])
+    other = bucket_demand(100, "2026-06", [("order-2", "2026-07", "terminal", 30, 0, 0),
+                                          ("internal-1", "2026-06", "internal", 80, 0, 0)])
+    excess = bucket_demand(100, "2026-06", [("order-3", "2026-06", "terminal", 120, 20, 0)])
+    record("C16_shipped_orders_keep_consuming", (full["consumed"], full["net"], full["bucket_total"], full["remaining"])
+           == (30, 70, 100, 70) and (partial["open"], partial["remaining"]) == (20, 90)
+           and (cancelled["consumed"], cancelled["net"], cancelled["remaining"]) == (25, 75, 90)
+           and (other["remaining"], other["cross_bucket"], other["internal"]) == (100, 30, 80)
+           and len(other["dispositions"]) == 2
+           and other["dispositions"][0]["target_bucket"] == "2026-07"
+           and (excess["bucket_total"], excess["remaining"], excess["over_forecast"]) == (120, 100, 20)
+           and excess["exceptions"][0]["related_order_ids"] == ["order-3"]
+           and excess["exceptions"][0]["quantity"] == 20
+           and rejects(lambda: bucket_demand(100, "2026-06", [("bad", "2026-06", "terminal", 30, 30, 1)])),
+           "fully shipped30 leaves forecast70; partial/cancel tracked; cross-bucket/internal excluded visibly; excess preserved")
+
+    record("C17_snapshot_and_transit_are_exclusive", 100 + pending_receipt(20, 20) == 100
+           and pending_receipt(20, 15) == 5
+           and rejects(lambda: pending_receipt(20, 21))
+           and normalize_lot_views([("transport-lot", 30), ("transport-lot", 30)]) == 30
+           and rejects(lambda: normalize_lot_views([("transport-lot", 30), ("transport-lot", 29)])),
+           "on-hand100 already includes received20 =>100; receipt only partly included leaves5; transit conflict blocks")
+
+    capacities_g1 = {"synthetic-DN-A-row": 55, "synthetic-DN-B-row": 45}
+    g1r1 = ("synthetic-R1-line", 1, 70, [("synthetic-DN-A-row", 45, 0, 0), ("synthetic-DN-B-row", 25, 0, 0)])
+    g1r1v2 = ("synthetic-R1-line", 2, 70, [("synthetic-DN-A-row", 44, 1, 0), ("synthetic-DN-B-row", 25, 0, 0)])
+    g1r2 = ("synthetic-R2-line", 1, 30, [("synthetic-DN-A-row", 10, 0, 0), ("synthetic-DN-B-row", 20, 0, 0)])
+    g1r2v2 = ("synthetic-R2-line", 2, 30, [("synthetic-DN-A-row", 10, 0, 0), ("synthetic-DN-B-row", 19, 0, 1)])
+    receipt_g1 = receipt_totals_g1(capacities_g1, [g1r1, g1r1v2, g1r2])
+    receipt_rejected = receipt_totals_g1(capacities_g1, [g1r1, g1r1v2, g1r2, g1r2v2])
+    accepted_units = set(range(99))
+    record("C18_receipt_revision_allocation_and_availability", receipt_g1 == {
+        "gross": 100, "accepted": 99, "damaged": 1, "rejected": 0, "unreceived": 0}
+        and receipt_rejected == {"gross": 100, "accepted": 98, "damaged": 1, "rejected": 1, "unreceived": 0}
+        and rejects(lambda: receipt_totals_g1(capacities_g1, [g1r1, g1r1]))
+        and available_after_receipt(accepted_units, {"inspection": {0, 1, 2}, "processing": {3, 4},
+                                                     "shelving": {5, 6, 7, 8}}) == 90
+        and available_after_receipt(accepted_units, {"shelving": None}) is None
+        and available_after_receipt(accepted_units, {"inspection": set()}) is None
+        and available_after_receipt(accepted_units, {k: set() for k in ("inspection", "processing", "shelving")}) == 99
+        and rejects(lambda: available_after_receipt(accepted_units, {"inspection": {0}, "processing": {0}, "shelving": set()}))
+        and rejects(lambda: available_after_receipt(accepted_units, {"inspection": set(), "processing": set(), "shelving": {999}})),
+        "revision/disjoint DN allocations yield99+1 or98+1+1; qualified99 not automatically available; overlapping pending rejected")
+
+    cutoff = datetime(2026, 10, 20, 12)
+    record("C19_current_snapshot_cannot_reconstruct_history", snapshot_at(cutoff, 100, cutoff)
+           == {"status": "used", "quantity": 100}
+           and snapshot_at(cutoff, 100, datetime(2026, 7, 31))["status"] == "unknown"
+           and snapshot_at(cutoff, 100, datetime(2026, 10, 21))["status"] == "unknown"
+           and rejects(lambda: snapshot_at(cutoff, None, cutoff)),
+           "current-cutoff100 supports only that snapshot; historical or future balances need other evidence, not zero")
+
+    # Synthetic scope of 30 signal-bearing items in an 80-item family, not a real SKU roster.
+    family_skus = [f"synthetic-family-{i:03}" for i in range(80)]
+    signals = {(sku, "DANEEY" if i < 15 else "CENTRADE", "2026-06", "PB")
+               for i, sku in enumerate(family_skus[:30])}
+    record("C20_pb_signals_are_a_scoped_subset", len(signals) == 30
+           and scoped_stockout_signal(family_skus[0], "DANEEY", "2026-06", "PB", signals) == "signal_present"
+           and scoped_stockout_signal(family_skus[0], "CENTRADE", "2026-06", "PB", signals) == "unknown"
+           and scoped_stockout_signal(family_skus[0], "DANEEY", "2026-06", "other", signals) == "unknown"
+           and scoped_stockout_signal(family_skus[31], "CENTRADE", "2026-06", "PB", signals) == "unknown"
+           and all(scoped_stockout_signal(sku, "DANEEY", "2026-06", "PB", signals) == "unknown"
+                   for sku in family_skus[30:]),
+           "PB subset signals do not label the family; warehouse switch, another channel, or no label remains unknown")
+
+    # Business correction v2: these are triangle-specific, not the generic C01 kit recipe.
+    triangle_map = [
+        {"source": "bom_20261016", "customer_code": "synthetic-base", "item": "synthetic-KS0001-A", "leaf": "KS0001"},
+        {"source": "bom_20261016", "customer_code": "synthetic-base-Cover", "item": "synthetic-KS0001-A", "leaf": "KS0001"},
+    ]
+    sale = {"id": "sale-A", "sku": "synthetic-base", "qty": 1, "event_kind": "terminal_sale",
+            "sold_form": "finished", "warehouse": "USNJ-CENTRADE", "channel": "synthetic-marketplace"}
+    base = triangle_cover_consumption([sale], triangle_map)
+    unknown_form = triangle_cover_consumption([{**sale, "sold_form": "unknown"}], triangle_map)
+    record("C21_triangle_finished_sale_consumes_one_cover", base["known_cover_consumption"] == 1
+           and unknown_form["unresolved_source_ids"] == ["sale-A"]
+           and unknown_form["dispositions"][0]["cover_qty"] is None,
+           "confirmed triangle finished sale1 consumes cover1; uncertain form remains unresolved, not zero or inferred")
+
+    cover_sale = {**sale, "id": "sale-cover", "sku": "synthetic-base-Cover", "qty": 2, "sold_form": "cover_only"}
+    component = {**cover_sale, "id": "parcel-component", "event_kind": "package_component"}
+    mixed = triangle_cover_consumption([{**sale, "qty": 3}, cover_sale, component], triangle_map)
+    record("C22_cover_only_sale_and_component_are_distinct", mixed["known_cover_consumption"] == 5
+           and mixed["dispositions"][2]["cover_qty"] == 0
+           and triangle_match("synthetic-base-Cover-extra", triangle_map)["status"] == "unmatched",
+           "finished3 plus independent Cover-only2 consumes5; package component is not another sale; no suffix stripping")
+
+    cover_warehouse_sale = {**sale, "warehouse": "FZH-DANEEY-皮壳仓库", "qty": 4}
+    transfer = {**cover_warehouse_sale, "id": "transfer", "event_kind": "internal_transfer"}
+    returned = {**cover_warehouse_sale, "id": "return", "event_kind": "return_event", "qty": 2,
+                "warehouse": "DANEEY-退货仓"}
+    uncertain_return_warehouse = {**returned, "id": "unknown-transaction", "event_kind": "unknown"}
+    warehouse_view = triangle_cover_consumption([cover_warehouse_sale, transfer, returned, uncertain_return_warehouse], triangle_map)
+    record("C23_warehouse_name_does_not_define_sale_or_pool", warehouse_view["known_cover_consumption"] == 4
+           and warehouse_view["dispositions"][0]["warehouse"] == "FZH-DANEEY-皮壳仓库"
+           and warehouse_view["dispositions"][1]["cover_qty"] == 0
+           and warehouse_view["dispositions"][2]["cover_qty"] == 0
+           and warehouse_view["unresolved_source_ids"] == ["unknown-transaction"]
+           and warehouse_view["dispositions"][3]["cover_qty"] is None
+           and all("stock_pool" not in d for d in warehouse_view["dispositions"]),
+           "confirmed sale4 from cover-named warehouse still consumes4; same-channel transfer and confirmed return add no new demand")
+
+    text_only = {**sale, "id": "text-hint", "sku": "synthetic-unmatched", "category": "三角靠枕", "qty": 7}
+    diagnostic = triangle_cover_consumption([text_only], triangle_map)
+    record("C24_text_hint_does_not_prove_family_or_nonfamily", diagnostic["known_cover_consumption"] == 0
+           and diagnostic["unresolved_source_ids"] == ["text-hint"]
+           and diagnostic["dispositions"][0]["status"] == "unmatched"
+           and diagnostic["dispositions"][0]["cover_qty"] is None,
+           "triangle text without authoritative exact match is diagnostic/unmatched7, not admitted and not proven outside family")
+
+    review_row = {"source": "cost_review_data", "customer_code": "synthetic-review-only",
+                  "item": "synthetic-KS0248-B", "leaf": "KS0248"}
+    misleading = {**review_row, "customer_code": "synthetic-base"}
+    review_only = triangle_match("synthetic-review-only", [review_row])
+    with_conflicting_review = triangle_match("synthetic-base", triangle_map + [misleading])
+    record("C25_cost_review_data_is_not_mapping_authority", review_only["status"] == "unmatched"
+           and review_only["ignored_sources"] == ["cost_review_data"]
+           and with_conflicting_review["status"] == "used"
+           and with_conflicting_review["item"] == "synthetic-KS0001-A"
+           and with_conflicting_review["ignored_sources"] == ["cost_review_data"],
+           "Cost Review-only mapping cannot admit a row; conflicting review data cannot override exact named-BOM mapping")
+
+    # Incremental v3 fixtures: no real reports, API access, planner or forecasts.
+    events = [("sale-3pl", "sale", 10), ("branch-transfer", "transfer", 10)]
+    record("C26_3pl_sale_counted_transfer_excluded", outbound_gross(events) == 10
+           and rejects(lambda: outbound_gross(events + [events[0]])),
+           "3PL terminal sale10 counts once; upstream transfer10 is not additional consumption; duplicate event rejected")
+
+    missing_stock = manual_inventory(None, None, None)
+    manual_stock = manual_inventory(8, "wayfair_backend_manual", "synthetic-cutoff")
+    dispatched, received, damaged, pending = 10, 8, 0, 1
+    discrepancy = dispatched - received - damaged - pending
+    record("C27_manual_stock_and_receipt_discrepancy", missing_stock["qty"] is None
+           and manual_stock["qty"] == 8 and discrepancy == 1
+           and dispatched == received + damaged + pending + discrepancy
+           and rejects(lambda: manual_inventory(10, "completed_transfer", "synthetic-cutoff")),
+           "unknown inventory stays None; manual8 is a dated snapshot; dispatched10=received8+pending1+discrepancy1, not on-hand10")
+
+    ramp = cohort_run_rate(12, 6, 0)
+    censored = cohort_run_rate(12, 6, 2)
+    record("C28_new_cohort_observation_and_censoring", ramp["rate"] == 2
+           and censored["rate"] is None and rejects(lambda: cohort_run_rate(0, 0, 0)),
+           "new cohort12/6 gives scenario rate2; censored exposure yields unknown; no launched/observable days is not zero demand")
+
+    # Synthetic elapsed days and stock coverage: no probability distribution assumed.
+    coverage_days, lead_days = 90, (60, 120)
+    gaps = tuple(max(0, lead - coverage_days) for lead in lead_days)
+    record("C29_lead_time_bounds_not_fixed_arrival", gaps == (0, 30)
+           and lead_days[0] <= lead_days[1] and len(set(lead_days)) == 2,
+           "coverage90 versus lead60..120 yields shortage-duration scenarios0..30 days; not a fixed ETA or probability")
+
+    cohort = {"branch": "USTX", "operator_id": "op-new", "listing_id": "listing-A",
+              "operator_start_date": "2026-06-01", "listing_launch_date": "2026-07-01", "demand_cohort": "ramp"}
+    record("C30_operator_listing_cohort_keys", cohort_key(cohort) != cohort_key({**cohort, "branch": "USNJ"})
+           and cohort_key(cohort) != cohort_key({**cohort, "operator_id": "op-other"})
+           and rejects(lambda: cohort_key({**cohort, "listing_launch_date": None})),
+           "branch/operator/listing/start/launch/cohort retained; missing dimension rejected rather than pooled")
+
+    gross = outbound_gross([("original", "sale", 9), ("sale-from-return-named-warehouse", "sale", 1),
+                            ("replacement", "replacement", 2), ("returned", "customer_return_receipt", 1)])
+    accepted_return_after_cutoff = 1
+    snapshot_before_return, snapshot_already_includes_return = 5, 6
+    record("C31_gross_replacement_and_return_balance", gross == 12
+           and gross - accepted_return_after_cutoff == 11
+           and return_stock_balance(snapshot_before_return, [("R", 1, False, True)]) == 6
+           and return_stock_balance(snapshot_already_includes_return, [("R", 1, True, True)]) == 6
+           and return_stock_balance(snapshot_before_return, [("R", 1, False, False)]) == 5
+           and rejects(lambda: return_stock_balance(5, [("R", 1, None, True)]))
+           and rejects(lambda: return_stock_balance(5, [("R", 1, False, True), ("R", 1, False, True)]))
+           and rejects(lambda: outbound_gross([("bad", "unknown", 1)])),
+           "sales9+positive-sale-from-return-warehouse1+replacement2=gross12; customer-return-receipt1 gives historical net11 OR stock5->6, never another snapshot deduction")
+
+    inputs = [("A", 3), ("B", 2), ("C", 4)]
+    dispositions = [("A", 3, "family"), ("B", 2, "pending"), ("C", 4, "out_of_scope")]
+    record("C32_every_input_has_one_disposition", reconcile_dispositions(inputs, dispositions) == 9
+           and rejects(lambda: reconcile_dispositions(inputs, dispositions[:-1]))
+           and rejects(lambda: reconcile_dispositions(inputs, dispositions + [dispositions[0]]))
+           and rejects(lambda: reconcile_dispositions(inputs, [("X", 3, "family"), *dispositions[1:]])),
+           "3 unique source rows/9 units reconciled; missing/duplicate/equal-total-wrong-ID rejected; pending preserved")
+
+    transfers = [("T1", "sku-A", "month-1", "USNJ", 6, True),
+                 ("T2", "sku-A", "month-1", "USTX", 4, True),
+                 ("T3", "sku-A", "month-1", "USTX", 99, False),
+                 ("T4", "sku-B", "month-1", "USNJ", 99, True)]
+    allocation = supply_attribution(transfers, "sku-A", "month-1")
+    record("C33_supply_attribution_not_fixed_branch", allocation["weights"] == {"USNJ": Decimal("0.6"), "USTX": Decimal("0.4")}
+           and sum(allocation["weights"].values()) == 1
+           and supply_attribution(transfers, "sku-A", "month-2")["weights"] is None
+           and rejects(lambda: supply_attribution(transfers + [transfers[0]], "sku-A", "month-1")),
+           "SKU/window historical dispatched6:4 gives attribution weights, not receipt or future stock ownership; missing next period stays unknown")
+
+    scenarios = [return_scenario("33719", "33647", "0.05", share, "triangle") for share in ("0", "0.5", "1")]
+    record("C34_triangle_return_assumption_sensitivity", [x["net"] for x in scenarios] == [Decimal("33719"), Decimal("32877.825"), Decimal("32036.65")]
+           and all(x["status"] == "assumption" for x in scenarios)
+           and return_scenario("33719", "33647", "0", "1", "triangle")["net"] == Decimal("33719")
+           and rejects(lambda: return_scenario("33719", "33647", "0.05", "1", "another-family")),
+           "triangle-only 5% assumption with restock0/50/100 gives33719/32877.825/32036.65; not facts or integer bookings")
+
+    record("C35_suffix_not_replacement_authority", replacement_classification(False, True, []) is False
+           and replacement_classification(True, False, []) is True
+           and replacement_classification(None, True, []) == "unknown"
+           and replacement_classification(False, True, [True]) == "conflict",
+           "M hint alone cannot decide; no-M explicit replacement counts; conflicting rule/flag isolated without changing known outbound gross")
+
+    print(json.dumps({"scope": "synthetic contract oracle only", "total": len(report),
+                      "passed": len(report), "failed": 0, "skipped": 0, "cases": report},
+                     ensure_ascii=False, indent=2))
+
+
+if __name__ == "__main__":
+    run()
