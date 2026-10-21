@@ -103,9 +103,13 @@ Updated: 2026-10-21 20:05 (Asia/Shanghai)
 
 - 任务真实存在：`FZH-TongtuStockApiDaily`，每天 **05:17**，输出
   `D:\Work\库存备份\YYYY-MM-DD\*.jsonl + manifest.json`。
-- 现状：**只有 2 天**。10-20 有 1 仓 URLError 10060（400 行部分数据，
-  `complete=false`）；10-21 的 05:17 定时失败（LastTaskResult=1，无 05:17 manifest），
-  09:46 手动补跑 `complete=true`（5,314 行 / 14 仓）。
+- 现状：**已有 3 天**（10-20 不完整、10-21 完整、10-22 补跑完整）。
+  10-20 有 1 仓 URLError 10060（400 行部分数据，`complete=false`）；
+  10-21 的 05:17 结果待证，09:46 完整运行 5,314 行；
+  **10-22 05:17 失败根因已定位**：`stock_daily_backup.py` 第 31 行
+  `next(..., parents[7])` 的默认值被立即求值导致 `IndexError`（10-21 10:58 改动引入）。
+  已改为惰性回退；07:06–07:20 手动补跑成功：14/14 仓、5,314 行、
+  `run_id=20261022T070625`、`complete=true`。
 - **未入库**：`order_store.duckdb` 的 `tongtool_stock` 只有 4 个 10-21 手动快照；
   每日 JSONL 尚未进入分析库，R290/DN-WO-JC-SE 都没用上每日历史。
 - 诊断与入库方案：`control/reviews/2026-10-21-stock-daily-diagnosis.md`

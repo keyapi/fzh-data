@@ -1,5 +1,5 @@
 {
-  "updated": "2026-10-22T07:12:00+08:00",
+  "updated": "2026-10-22T07:33:00+08:00",
   "accepted": [
     "G1 SO evidence gate v5: 9a04741e / d027f981; 66 tests; current_structure_only boundary; historical pending",
     "R1/R2 no-evidence audit gate: d8c473fe",
@@ -73,7 +73,7 @@
     "100-SKU expansion awaiting user authorization for bounded EN read-only (<=4000 requests, <=200MB, <=90min, single concurrency)",
     "Daily stock history: only 2 days (2026-10-20 incomplete, 2026-10-21 manual complete); scheduled 05:17 failed; not ingested into order_store.duckdb",
     "100-SKU production expansion paused by decision Codex until stock history + gate + pilot ETA/Cover/UOM evidence",
-    "Daily stock backup 2026-10-22 05:17 failed: eager parents[7] default IndexError; fixed to lazy root, catch-up run in progress"
+    "Stock history: 3 days available (10-20 incomplete, 10-21 complete, 10-22 catch-up complete); ingest code 571929fa under Codex re-review before writing local stock_history"
   ],
   "quota": {
     "codex_5h_remaining_pct": null,
