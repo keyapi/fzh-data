@@ -22,6 +22,15 @@ Cursor 的全局状态库（聊天记录 + Agent KV blob 都在里面）。膨�
 ### Synology Drive 连续备份 (continuous backup)
 群晖 Drive Client 的备份模式。若备份目标含 Cursor 的 `globalStorage`/`state.vscdb` 这类高频变化大文件，会在 `%LOCALAPPDATA%\SynologyDrive\temp\N\.SynologyWorkingDirectory` 反复暂存上传副本，C 盘空间被吃光（2026-08 事件根因）。诊断脚本：`scripts/check_cursor_cdrive_health.py`。
 
+### Claude Desktop 3P 本地会话
+Claude Desktop 的本地 Agent 模式：每个聊天对应一个 Claude Code CLI 会话，消息追加写入该会话的转录文件；桌面端可以对任意消息执行 rewind（回退到该点后重新发送）。
+
+### 会话转录 (transcript)
+追加式 JSONL，每条消息记录带 `uuid` 与指向上一条记录的 `parentUuid`，因此同一个文件里会保留多条历史分支。CLI 恢复或 rewind 时，从最后一条记录沿 `parentUuid` 回溯得到**活跃分支**；不在这条链上的记录即使文件里存在，也会被当作不存在。
+
+### rewind 锚点 (resumeSessionAt)
+桌面端执行 rewind 时传给 CLI 的目标消息 uuid。CLI 在活跃分支上解析该锚点并 fork 新会话；锚点不在活跃分支上时会报 `No message found with message.uuid`。修复方式是等长改写下一条用户消息的 `parentUuid`，把它接回成功回合的末尾。
+
 ## Unified AI access (ai_access_poc)
 
 ### 壳 PoC (Shell PoC)

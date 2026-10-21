@@ -7,6 +7,9 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-10-21（Claude Desktop 3P rewind：转录分支接错）
+- **新增**: `developer-experience/claude-desktop-3p-rewind-parentuuid-branch-repair.md` —— 桌面端在「发送 → 停止 → rewind → 重发」后反复报 `No message found with message.uuid`。**根因不是消息丢失，而是转录分支接错**：API 重试写出并行的 `new_api_error`/`stop_hook_summary` 分支，末端时间戳比成功回复晚约 1ms，下一条用户消息以它为父；CLI 从最后一条记录沿 `parentUuid` 回溯活跃分支时因此绕过 rewind 锚点。**判据**：锚点 uuid 在文件里但不在活跃分支上（本例修复前 2357 节点/不含锚点，修复后 2365/包含）。**修复**：备份后等长（51 字节）改写下一条用户消息的 `parentUuid`，指回成功回合的 Stop hook 附件；保持文件大小与字节偏移不变，不触碰消息内容。同步在 `CONCEPTS.md` 补「Claude Desktop 3P 本地会话」「会话转录」「rewind 锚点」三个词条。
+
 ## 2026-10-08（PB 无货件：UPS 才算真发 + 重复建单加后缀）
 - **更新**: `workflow-issues/pb-out-of-stock-notification-and-zero-stock-orders.md`（`last_updated: 2026-10-08`）—— 三处补料：**① §2.1.1 新增「重复建单也占 `-N`」**：通途不允许重复订单号；`-N` 与拆单后缀是**同一命名空间**（同批多行占 `-1…-M`、跨批补发继续排），所以**下一个可用 = 该 PO 已用过的最大 `-N` + 1**，不是固定 `-2`（用户纠正：「不一定后缀 -2，比如之前建了 2 单 -1 -2 但是都没发货呢？」）。两种查法都实测：**离线扫历史 `PB_*导入*.xlsx` 的 `PO Number-Line` 列**（286 个文件，结果与「`PBUS-<PO>` 存不存在」完全吻合）或通途模糊搜 `PBUS-{PO}`；注意导入 xlsx 里存的是**光号**（`137770200-1`），`PBUS-` 是通途侧店铺码。已在 `pb_orders` 落地成 `--reorder`/`--history-dir`。**② §6.1 补「通途 `orderStatus=despatched` 同样不等于真发」**：它和 ASN/面单一样只证明「建了单/建了标」，判定「真发」只有 **UPS 取件**一个口径。**③ §6.6 新增 2026-10-08 无货件复核实测**（10 个 PO：真发 2 —— `137770200-1` 与 `137974027` 的有货行 `-194`；只建标未取件 8），并记下本次**先拿 shipment/ASN 反推「已发货」、把 7 行改成已发、被用户纠正**的教训 —— ASN 与通途状态都替代不了 UPS。
 
