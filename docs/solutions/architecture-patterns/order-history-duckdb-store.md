@@ -115,10 +115,11 @@ DuckDB（分析库，独立文件）
   - **回测结果（1,347 条 SKU×仓 序列）：ens5 0.690 最优**，ma3 0.703、ma12 0.705、tsb 0.723、ma6 0.724、croston 0.741。注意这是本数据集结论；PR #300 E1 的 held-out 里 TSB 0.511、ens5 0.520，且 E1 的选择规则选中 Croston，见 §10 末尾。
   - 预测覆盖已扩到 **2,357 条序列**（最少 3 个月历史，短史 SKU 用同一套方法兜底）；其中 **1,156 条有未来月预测**。回测仍只跑 ≥12 个有销量月的 1,347 条，保持与 E1 可比。
   - **口径修正（重要）**：`demand_forecast_90` 早期把 ens5 表的全部月份求和（包含回测 origin 和历史外推），会把已停售 SKU 的旧预测也算进需求。现只取 `month >= 当前月`，并按**实际未来月数 ×30** 归一（有的序列只剩 1–2 个月未来，不能一律除 90）。
-- **补货 v3**：`scripts/forecast_replenishment_v3.py`，`ROP = 日均预测 × (交期 45 + 安全 30)`，`建议 = max(0, ROP − (available + intransit + PO未入库))`。
-  - 供给 = 通途库存 `available` + `intransit` + 通途 PO 未入库量（`erp2_purchase_purchaseorderquery`，180 个 SKU×仓、16,043 件在途）。
-  - 修正后首跑：4,465 个 SKU×仓，**1,156 有未来预测**，**311 需补货**，建议合计 **4,548 件**（美中 2,257 / 美东 1,324 / 波兰 967）。
-  - **物料级合并池**（`replenishment_pool`，同一物料的所有通途 SKU 合并，皮壳/半成品计入 `-Cover`）：1,074 个物料×仓，**277 需补货 / 4,538 件**；与 SKU 级差异来自同一物料的多个通途 SKU 被合并。3PL 单独落 `three_pl_stock`（92 SKU / 880 件），暂不进 ROP。
+- **补货 v3**：`scripts/forecast_replenishment_v3.py`，`ROP = 日均预测 × (交期 45 + 安全 30)`，`建议 = max(0, ROP − (available + max(intransit, PO未入库)))`。
+  - **供给不能把 intransit 和 PO 相加（实测重叠）**：173 个 SKU×仓同时有 `intransit>0` 和 `PO open>0`，其中 146 个两者相差 ≤1；`SUM(LEAST(intransit, PO)) = 13,118`，正好等于全部 intransit 合计，而 PO 合计 15,567。说明 `intransitStockQuantity` 基本就是已发货但未入库的那部分 PO，相加会重复。现按 `available + GREATEST(intransit, PO)` 计一次；行上保留 `supply_note`。
+  - 修正后首跑：4,465 个 SKU×仓，**1,156 有未来预测**，**321 需补货**，建议合计 **4,784 件**。
+  - **物料级合并池**（`replenishment_pool`，同一物料的所有通途 SKU 合并，皮壳/半成品计入 `-Cover`）：1,074 个物料×仓，**296 需补货 / 4,813 件**；与 SKU 级差异来自同一物料的多个通途 SKU 被合并。3PL 单独落 `three_pl_stock`（92 SKU / 880 件），暂不进 ROP。
+  - **缺数不转 0**：`input_health` 记录库存/PO/映射/预测/发货形态的行数与快照时间；`replenishment_pool.data_flags` 标 `po_missing` / `stock_missing` / `ship_type_missing` / `no_stock_row`，PO 或库存源缺失时 `suggested_qty` 置 NULL 而不是当作 0 供给。
 
 ### 10. 分公司补货的发货形态：成品 / 皮壳 / 半成品（2026-10-21 修正）
 
@@ -135,7 +136,7 @@ DuckDB（分析库，独立文件）
   - 成品 → 发成品 KS；
   - 皮壳 → 发 `PK#`；**内胆只按 BOM 发**。BOM 没有内胆就是没有，按钮会加的单独列入 `button_overadd_candidates`，不进发货清单；BOM 有但物料停用的标 `bom_inner_disabled`（清理 BOM）；按钮对不上的标 `bom_nd_no_button_match`；
   - 半成品 → 同样按第一层 BOM，包装半成品暂未进 KS BOM。
-- 首跑（池级 277 行 / 4,538 件）：**皮壳 201 行 / 3,630 件**、成品 62 / 730、半成品 13 / 169、未匹配 1 / 9。组件清单：皮壳 203 行 / 3,757；内胆**只取 BOM** 173 行 / 3,563（其中 6 行 / 51 件的内胆已停用、5 行 / 70 件按钮对不上，均只做标记）；另有 12 行无 BOM；`button_overadd_candidates` 10 行（BOM 无内胆但按钮会误加，执行层拦截）。
+- 首跑（池级 296 行 / 4,813 件）：**皮壳 210 行 / 3,866 件**、成品 72 / 769、半成品 13 / 169、未匹配 1 / 9。组件清单：皮壳 211 行 / 3,990；内胆**只取 BOM** 180 行 / 3,795（其中 6 行 / 51 件的内胆已停用、5 行 / 70 件按钮对不上，均只做标记）；另有 13 行无 BOM；`button_overadd_candidates` 10 行（BOM 无内胆但按钮会误加，执行层拦截）。
 - **不要用 EN Bin 当组件供给**：EN 不扣减通途，`Bin.actual_qty` 只是账面；组件没有独立的可用库存池。上一版用 EN Bin + 负库存夹紧算出 34,283 的做法已废弃。
 - **`-Cover` 与不带后缀的通途 SKU 是两个独立 SKU 账，不是同一数量镜像**（实测）：5 个 cover-only 物料的不带后缀 SKU 库存为 0，`-Cover` 有 50–222；通途 7 天变动明细里，卖哪个 SKU 就只动哪个，二者不联动；全部物料 cover 销量 404 件 vs 非 cover 8,849 件（4.4%）。所以**可售总量按 `通途SKU + -Cover` 相加**（两个不同数量桶，不会重复计数），但不能把同一个数量同步写两遍。是否同一堆实物，数据不能证明（可能是同一批货按渠道拆账，也可能是两堆），需调拨单/盘点/运营确认。
 - **`-Cover` 的用途不止“单卖皮壳”**：大件产品拆包裹时也会用到；同一种皮壳可能配不同填充物（PP 棉/海绵），EN 的 `PK#` 与通途 `-Cover` 未必一一对应。因此 `-Cover` 库存只做「物料级合并」，不强行映射到单个 EN 变体。
@@ -214,6 +215,7 @@ uv run python scripts/nd_button_gap_report.py
 
 ## Related
 
+- [分公司补货与皮壳/内胆业务规则](../conventions/branch-shipment-cover-rules.md) — 已核实的发货形态、内胆、`-Cover`、供给重叠规则
 - [EN 通途订单/包裹同步为什么会漏与空壳](../integration-issues/en-tongtool-order-package-sync-failures.md) — API 可见性/同步缺陷的完整背景
 - [背贴品名缺失怎么补——通途SKU 在 EN 有两种登记写法](../integration-issues/sku-name-backfill-via-en-customer-code.md) — `customer_code` / `customer_items[].ref_code`
 - [生产 2核4G 跑批量回填会压死机器](../developer-experience/prod-batch-backfill-oom-small-box.md) — 为什么历史回补不在生产跑

@@ -13,6 +13,7 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-10-21 | 分公司补货与皮壳/内胆业务规则（原型已核实，待 #300/#301 验收） | [conventions/branch-shipment-cover-rules.md](conventions/branch-shipment-cover-rules.md) |
 | 2026-10-20 | 销售历史分析库（DuckDB）——GS 月表 + EN 并集，支撑销量预测与补货 | [architecture-patterns/order-history-duckdb-store.md](architecture-patterns/order-history-duckdb-store.md) |
 | 2026-10-12 | 生产 2核4G 无 swap 上跑批量回填会把机器压死——瓶颈是内存不是限流，且别在网页进程里啃大表 | [developer-experience/prod-batch-backfill-oom-small-box.md](developer-experience/prod-batch-backfill-oom-small-box.md) |
 | 2026-10-12 | EN 通途订单/包裹同步为什么会漏与空壳——300s 掐断/526/任务重叠/仓库不回写/精确匹配 | [integration-issues/en-tongtool-order-package-sync-failures.md](integration-issues/en-tongtool-order-package-sync-failures.md) |
