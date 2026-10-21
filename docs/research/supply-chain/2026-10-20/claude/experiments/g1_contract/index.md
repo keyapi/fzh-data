@@ -24,9 +24,9 @@ tags: [supply-chain, g1, mapping, index]
 | [g1b_round5_response.md](g1b_round5_response.md) | 对 Codex `862f77d1` 的 S01–S04 与同窗 SO 重跑 |
 | [g1b_round6_response.md](g1b_round6_response.md) | 对 Codex `run_86b2a4645f21` 的 S02/S04：变体证据门、逐行审计、详情闸门与守恒 |
 | [g1b_evidence_producer.md](g1b_evidence_producer.md) | 有界 Item/BOM 证据 producer（20 变体样本，current_structure_only） |
-| [g1b_dn_wo_jc_se.md](g1b_dn_wo_jc_se.md) | **DN/WO/JC/SE 关联与同单位守恒**（5 快照；C1/C2/C3 + 逐行去向；produced_qty 不可作完工账） |
-| [g1b_dn_wo_jc_se.py](g1b_dn_wo_jc_se.py) | 快照离线关联/守恒 + 有界 SE 明细补齐与异常 WO 探针 |
-| [test_g1b_dn_wo_jc_se.py](test_g1b_dn_wo_jc_se.py) | DN/WO/JC/SE 契约离线单测（35 条，不联网） |
+| [g1b_dn_wo_jc_se.md](g1b_dn_wo_jc_se.md) | **DN/WO/JC/SE 关联与同单位守恒 v2**（5 快照；C1 逐行全精度 / C2 覆盖完整 / C3 / C4 原始行账 + 逐行去向；produced_qty 不可作完工账） |
+| [g1b_dn_wo_jc_se.py](g1b_dn_wo_jc_se.py) | 快照离线关联/守恒 + 有界 SE 明细补齐与异常 WO 探针（UOM 分区、SE 元数据校验、请求级预算） |
+| [test_g1b_dn_wo_jc_se.py](test_g1b_dn_wo_jc_se.py) | DN/WO/JC/SE 契约离线单测（78 条，不联网；含 9 项复审反例） |
 | [en_variant_evidence.py](en_variant_evidence.py) | Item/BOM 只读采样 → variant evidence manifest（预算/分页/单并发） |
 | [g1b_top10.md](g1b_top10.md) | 修复后 top10 SKU 抽取；未发分解全部对平 |
 | [g1b_warehouse_evidence.md](g1b_warehouse_evidence.md) | 2026-09 仓名统一，旧皮壳并入美中（用户确认+脚本注释）；旧仓 ID/余额审计 pending |

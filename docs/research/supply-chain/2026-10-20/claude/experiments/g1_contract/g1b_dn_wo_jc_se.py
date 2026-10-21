@@ -13,10 +13,21 @@
 
 守恒口径（只在**同一 UOM**内求和，跨 UOM 一律不出合计）：
   C1 SO 行 delivered_qty == 该行链接的已提交 DN 净量（非退货 - 退货）
+     **逐行全精度**判定；聚合只作展示，任何一行不过即 C1 不通过（不允许正负抵消）。
   C2 WO produced_qty == 该 WO 已提交 Manufacture SE 完工行数量（需 line 级证据）
+     任一已提交 SE 未解决（缺证据/元数据漂移/不一致）时该 WO 不计 conserved，
+     C2 只出 known_subtotal，不出完整总数。
   C3 单个 SE 的 finished 行合计 == SE.finished_qty
-  C4 行账：读入行数 == 逐行去向数，且每个去向恰好一条
+  C4 行账：**原始输入行数** == 逐行去向数（含 rejected/orphan 行），
+     且业务键与派生子键都唯一。
   JC 不是守恒账：工序卡按工序批量开卡、返工卡会重复累加，只作进度证据。
+
+UOM 契约：任何数量聚合都按 UOM 分区；UOM 缺失/未知一律 unverified，不进入合计。
+退货符号契约：is_return=1 的行取 `abs(qty)`（源可能是 -2 或 2，结果都按 2 扣减），
+非退货行负数量视为 invalid；不做二次取反。
+HTTP 契约：`--max-http` 是**请求级**总预算，跨 SE 明细、探针翻页与重试共享；
+预算耗尽必须显式记录并让运行返回 partial。
+校验和契约：`payload_sha256` 在写入 `stable_sha256` **之后**对最终 manifest 计算。
 
 用法：
   uv run python g1b_dn_wo_jc_se.py \
@@ -38,6 +49,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import requests
+
 BASE = Path(__file__).resolve().parent
 REPO_ROOT = next(
     (p for p in Path(__file__).resolve().parents if (p / "EN_API" / "item_shipment_status.py").exists()),
@@ -51,13 +64,20 @@ import EN_API.item_shipment_status as iss  # noqa: E402
 SCHEMA = "dn_wo_jc_se_association/1"
 RULE = "dn-wo-jc-se-association/1"
 SITE = iss.ENV_URLS["prod"]
-PRODUCER = {"name": "g1b_dn_wo_jc_se.py", "version": "1.0.0"}
+PRODUCER = {"name": "g1b_dn_wo_jc_se.py", "version": "1.1.0"}
 EPS = 1e-6
 ROWTYPES = ("so_line", "dn_line", "wo", "jc_operation", "se", "se_line")
+SE_DETAIL_SCHEMA = "dn_wo_jc_se_se_details/1"
+WO_PROBE_SCHEMA = "dn_wo_jc_se_wo_probe/1"
+SE_ENTRY_TYPE = "Manufacture"
 
 
 class InputError(RuntimeError):
     """输入/契约错误：必须 exit 2，不能产出“成功”证据。"""
+
+
+class BudgetExhausted(RuntimeError):
+    """请求级 HTTP 预算耗尽；调用方必须显式记录 partial。"""
 
 
 # ── 小工具 ────────────────────────────────────────────
@@ -124,6 +144,30 @@ def date_part(v: Any) -> str | None:
     return s[:10] if len(s) >= 10 and s[4] == "-" and s[7] == "-" else None
 
 
+def uom_known(v: Any) -> bool:
+    return isinstance(v, str) and bool(v.strip())
+
+
+def uom_key(v: Any) -> str:
+    return v.strip() if uom_known(v) else "unknown"
+
+
+def parse_ts(v: Any) -> datetime | None:
+    """解析 ISO 时间；无时区按本机时区解释（快照 generated_at 是本地时间）。"""
+    if not isinstance(v, str) or len(v) < 10:
+        return None
+    try:
+        return datetime.fromisoformat(v.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def aware(dt: datetime | None) -> datetime | None:
+    if dt is None:
+        return None
+    return dt.astimezone() if dt.tzinfo is None else dt
+
+
 def in_window(d: str | None, window: tuple[str | None, str | None]) -> bool | None:
     lo, hi = window
     if d is None or not lo or not hi:
@@ -148,6 +192,13 @@ def load_snapshot(path: Path) -> dict:
     missing = [k for k in REQUIRED_SNAPSHOT_KEYS if k not in data]
     if missing:
         raise InputError(f"快照缺字段 {missing}: {path}")
+    for k in ("so_rows", "dn_rows", "wos"):
+        if not isinstance(data.get(k), list):
+            raise InputError(f"快照 {k} 必须是数组: {path}")
+    if data.get("se_rows") is not None and not isinstance(data.get("se_rows"), list):
+        raise InputError(f"快照 se_rows 必须是数组或 null: {path}")
+    if not isinstance(data.get("jc_summary") or {}, dict):
+        raise InputError(f"快照 jc_summary 必须是对象: {path}")
     q = data.get("query") or {}
     scope = q.get("customer_code") or q.get("item")
     if not scope:
@@ -178,16 +229,79 @@ def index_rows(rows: list[dict], key_fn, label: str) -> tuple[dict, list[dict]]:
 
 
 # ── 关联与守恒 ────────────────────────────────────────
+def se_detail_for(se_row: dict, by_se: dict, snap_generated_at: Any) -> dict:
+    """解析 SE 行明细并**校验父元数据**；不一致一律不进入守恒。
+
+    来源二选一：快照内联 `lines`（抽取器已按 stock_entry_type=Manufacture 过滤）或
+    本地缓存的按单据 GET 明细。缓存明细必须通过 docstatus / work_order / entry type /
+    posting_date 一致性与取回时间不早于快照这两组校验。
+    """
+    name = se_row.get("se")
+    if isinstance(se_row.get("lines"), list):
+        return {"lines": se_row["lines"], "source": "snapshot", "problem": None,
+                "problems": [], "entry_type": "implied_manufacture"}
+    det = by_se.get(name) if isinstance(by_se, dict) else None
+    if not isinstance(det, dict):
+        return {"lines": None, "source": "absent", "problem": "se_detail_absent",
+                "problems": ["se_detail_absent"], "entry_type": None}
+    problems: list[str] = []
+    if det.get("se") not in (None, name):
+        problems.append("se_detail_name_mismatch")
+    if not det.get("ok"):
+        problems.append("se_detail_fetch_failed")
+    dd, sd = docstatus(det.get("docstatus")), docstatus(se_row.get("docstatus"))
+    if dd is None:
+        problems.append("se_detail_docstatus_unknown")
+    elif sd is not None and sd != dd:
+        problems.append("se_detail_docstatus_drift")
+    dw, sw = det.get("work_order") or "", se_row.get("work_order") or ""
+    if not dw:
+        problems.append("se_detail_work_order_missing")
+    elif sw and sw != dw:
+        problems.append("se_detail_work_order_drift")
+    etype = det.get("stock_entry_type")
+    if etype != SE_ENTRY_TYPE:
+        problems.append("se_detail_entry_type_invalid")
+    spd, dpd = date_part(se_row.get("posting_date")), date_part(det.get("posting_date"))
+    if spd is None or dpd is None:
+        problems.append("se_detail_posting_date_missing")
+    elif spd != dpd:
+        problems.append("se_detail_posting_date_drift")
+    ft, gt = aware(parse_ts(det.get("fetched_at"))), aware(parse_ts(snap_generated_at))
+    if ft is None:
+        problems.append("se_detail_fetched_at_missing")
+    elif gt is not None and ft < gt:
+        problems.append("se_detail_predates_snapshot")
+    lines = det.get("lines")
+    if not isinstance(lines, list):
+        problems.append("se_detail_lines_missing")
+    return {"lines": lines if not problems else None, "source": "en_get",
+            "problem": problems[0] if problems else None, "problems": problems,
+            "entry_type": etype}
+
+
 def build_scope(snap: dict, se_details: dict, window: tuple[str | None, str | None],
                 basis: str) -> dict:
-    """单快照：建索引、连边、逐行去向、守恒检查。"""
+    """单快照：建索引、连边、逐行去向、守恒检查。
+
+    C4 的口径是**原始输入行**（含非对象行）逐行有去向：非对象行落 rejected，
+    快照外 WO 的 JC 组落 orphan，不静默丢弃。
+    """
     scope = snap["_scope"]
-    so_rows = [r for r in snap["so_rows"] if isinstance(r, dict)]
-    dn_rows = [r for r in snap["dn_rows"] if isinstance(r, dict)]
-    wos = [r for r in snap["wos"] if isinstance(r, dict)]
-    se_rows = [r for r in snap["se_rows"] or [] if isinstance(r, dict)]
+    raw_inputs = {
+        "so_line": list(snap["so_rows"]),
+        "dn_line": list(snap["dn_rows"]),
+        "wo": list(snap["wos"]),
+        "se": list(snap.get("se_rows") or []),
+    }
+    so_rows = [r for r in raw_inputs["so_line"] if isinstance(r, dict)]
+    dn_rows = [r for r in raw_inputs["dn_line"] if isinstance(r, dict)]
+    wos = [r for r in raw_inputs["wo"] if isinstance(r, dict)]
+    se_rows = [r for r in raw_inputs["se"] if isinstance(r, dict)]
     jc_map = snap.get("jc_summary") or {}
     as_of = date_part(snap.get("generated_at"))
+    se_query_error = snap.get("se_query_error") or None
+    by_se = (se_details or {}).get("by_se") or {}
 
     # 行键：SO 行 = so + line_id；DN 行 = dn + dn_line_id；SE = 单据名
     so_idx, so_dup = index_rows(so_rows, lambda r: (r.get("so"), r.get("line_id"))
@@ -203,6 +317,8 @@ def build_scope(snap: dict, se_details: dict, window: tuple[str | None, str | No
     so_names = set(so_by_so)
 
     out_rows: list[dict] = []
+    rejected: list[dict] = []
+    child_dup: list[dict] = []
 
     def emit(scope_: str, row_type: str, row_key: Any, link: dict, qty: dict,
              uom: Any, disposition: str, reason_code: str,
@@ -216,49 +332,95 @@ def build_scope(snap: dict, se_details: dict, window: tuple[str | None, str | No
             "reason_detail": reason_detail,
         })
 
-    # ── 1. DN 行：先归属到 SO 行（精确 so_line_id；缺失才按 so+item 唯一匹配）──
+    # ── 0. 非对象原始行：保留为 rejected，不静默丢弃 ──
+    for t, vals in raw_inputs.items():
+        for i, raw in enumerate(vals):
+            if isinstance(raw, dict):
+                continue
+            rec = {"scope": scope, "row_type": t, "row_key": f"raw::{i}",
+                   "link": {"raw_index": i, "raw_type": type(raw).__name__},
+                   "qty": {}, "uom": None, "in_window": None, "dates": {},
+                   "disposition": "rejected", "reason_code": "row_not_object",
+                   "reason_detail": f"{type(raw).__name__}"}
+            out_rows.append(rec)
+            rejected.append(rec)
+
+    # ── 1. DN 行：先归属到 SO 行（精确 so_line_id；**仅当引用缺失**才按 so+item 唯一匹配）──
     dn_net: dict[tuple, float] = defaultdict(float)     # (so, line_id) -> 已提交净量
     dn_ret: dict[tuple, float] = defaultdict(float)
     dn_draft: dict[tuple, float] = defaultdict(float)
     dn_by_line: dict[tuple, list[dict]] = defaultdict(list)
+    dn_unverified: dict[tuple, int] = defaultdict(int)
+    dn_item_bad: dict[tuple, int] = defaultdict(int)
     dn_unlinked: list[dict] = []
     for d in dn_rows:
         so, sl = d.get("so"), d.get("so_line_id")
         key = None
         link_mode = None
-        if so and sl and (so, sl) in so_idx:
-            key, link_mode = (so, sl), "so_line_id"
+        unlink_code = "dn_unlinked_so_line"
+        if so and sl:
+            if (so, sl) in so_idx:
+                key, link_mode = (so, sl), "so_line_id"
+            else:
+                unlink_code = "dn_so_line_ref_not_found"
         elif so:
-            cands = [r for r in so_by_so.get(so, []) if r.get("item_code") == d.get("item_code")]
-            if len(cands) == 1:
-                key = (cands[0].get("so"), cands[0].get("line_id"))
-                link_mode = "so_item_unique"
+            if not d.get("item_code"):
+                unlink_code = "dn_item_missing"
+            else:
+                cands = [r for r in so_by_so.get(so, [])
+                         if r.get("item_code") == d.get("item_code") and r.get("line_id")]
+                if len(cands) == 1:
+                    key = (cands[0].get("so"), cands[0].get("line_id"))
+                    link_mode = "so_item_unique"
+                elif len(cands) > 1:
+                    unlink_code = "dn_item_ambiguous"
+                else:
+                    unlink_code = "dn_item_not_found"
+        else:
+            unlink_code = "dn_no_so_ref"
         ds = docstatus(d.get("dn_docstatus"))
         is_ret = flag01(d.get("is_return"))
-        q = num(d.get("qty"))
+        q_raw = num(d.get("qty"))
+        # 退货符号归一：is_return=1 一律取绝对值；非退货负数视为非法。
+        q: float | None = q_raw
+        sign_normalized = False
+        if q_raw is not None and is_ret == 1 and q_raw < 0:
+            q, sign_normalized = -q_raw, True
         d_date = date_part(d.get("dn_date"))
         in_win = in_window(d_date, window)
+        row_link = {"so": so, "so_line_id": sl, "dn": d.get("dn"),
+                    "dn_line_id": d.get("dn_line_id")}
         if key is None:
             dn_unlinked.append(d)
             emit(scope, "dn_line", f"{d.get('dn')}::{d.get('dn_line_id')}",
-                 {"so": so, "so_line_id": sl, "dn": d.get("dn"),
-                  "dn_line_id": d.get("dn_line_id")},
-                 {"qty": q}, d.get("uom"), "unlinked", "dn_unlinked_so_line",
-                 "DN 行的 so_line_id 不在本快照 SO 行内，且按 so+item 无法唯一归属",
+                 row_link, {"qty": r2(q), "qty_raw": r2(q_raw)}, d.get("uom"),
+                 "unlinked", unlink_code,
+                 "DN 行无法精确归属到本快照 SO 行"
+                 "（引用缺失时只允许 so+item 唯一匹配）",
                  in_win, {"dn_date": d.get("dn_date")})
             continue
         dn_by_line[key].append(d)
         line = so_idx[key]
         line_uom = line.get("uom")
         dn_uom = d.get("uom")
-        if q is None or q < 0:
-            code, detail = "dn_qty_invalid", "DN 行数量缺失/为负/非有限数"
+        code, detail = "", ""
+        if q is None:
+            code, detail = "dn_qty_invalid", "DN 行数量缺失/非有限数"
         elif is_ret is None:
             code, detail = "dn_return_flag_invalid", f"is_return 非 0/1: {d.get('is_return')!r}"
-        elif dn_uom and line_uom and dn_uom != line_uom:
+        elif is_ret == 0 and q < 0:
+            code, detail = "dn_qty_invalid", "非退货行数量为负"
+        elif not uom_known(dn_uom):
+            code, detail = "dn_uom_missing", "DN 行 UOM 缺失"
+        elif not uom_known(line_uom):
+            code, detail = "dn_so_line_uom_missing", "SO 行 UOM 缺失"
+        elif uom_key(dn_uom) != uom_key(line_uom):
             code, detail = "dn_uom_mismatch", f"DN {dn_uom} != SO {line_uom}"
-        else:
-            code, detail = "", ""
+        elif not d.get("item_code") or not line.get("item_code"):
+            code, detail = "dn_item_unknown", "DN/SO 物料缺失，无法校验身份"
+        elif d.get("item_code") != line.get("item_code"):
+            code, detail = "dn_item_mismatch", \
+                f"DN item={d.get('item_code')} != SO item={line.get('item_code')}"
         if not code:
             if ds == 1:
                 if is_ret:
@@ -267,21 +429,28 @@ def build_scope(snap: dict, se_details: dict, window: tuple[str | None, str | No
                 else:
                     dn_net[key] += q
                     code = "dn_submitted"
+                disp = "linked"
             elif ds == 0:
                 dn_draft[key] += q
-                code = "dn_draft"
+                disp, code = "excluded", "dn_draft"
             elif ds == 2:
-                code = "dn_cancelled"
+                disp, code = "excluded", "dn_cancelled"
             else:
-                code = "dn_docstatus_invalid"
+                disp, code = "unverified", "dn_docstatus_invalid"
                 detail = f"docstatus={d.get('dn_docstatus')!r}"
-        disp = "linked" if code in ("dn_submitted", "dn_return_submitted") else "excluded"
+        else:
+            disp = "mismatch" if code == "dn_item_mismatch" else "unverified"
+        if disp == "mismatch":
+            dn_item_bad[key] += 1
+        elif disp == "unverified":
+            dn_unverified[key] += 1
         emit(scope, "dn_line", f"{d.get('dn')}::{d.get('dn_line_id')}",
-             {"so": so, "so_line_id": sl, "so_line_key": f"{key[0]}::{key[1]}",
-              "dn": d.get("dn"), "dn_line_id": d.get("dn_line_id"),
-              "link_mode": link_mode},
-             {"qty": q}, dn_uom, disp, code or "dn_linked", detail, in_win,
+             dict(row_link, so_line_key=f"{key[0]}::{key[1]}", link_mode=link_mode),
+             {"qty": r2(q), "qty_exact": q, "qty_raw": r2(q_raw),
+              "sign_normalized": sign_normalized},
+             dn_uom, disp, code or "dn_linked", detail, in_win,
              {"dn_date": d.get("dn_date")})
+
 
     # ── 2. WO → SO 行（sales_order + production_item 精确；多行则歧义不摊量）──
     wo_link: dict[str, dict] = {}
@@ -312,19 +481,18 @@ def build_scope(snap: dict, se_details: dict, window: tuple[str | None, str | No
         wo_link[name] = {"link": link, "disposition": disp, "reason_code": code,
                          "qty": q, "produced_qty": prod}
 
-    # ── 3. SE：归属 WO；行级同单位校验（有 line 证据时）──
+    # ── 3. SE：归属 WO；行级同单位校验 + 父元数据校验 + 覆盖完整性 ──
     se_line_uoms: dict[str, set] = defaultdict(set)
     se_finished_by_wo: dict[str, float] = defaultdict(float)
-    se_unverified_wo: set[str] = set()   # 有 SE 但行级证据不足以求值
+    se_submitted_by_wo: Counter = Counter()
+    se_blocked_wo: set[str] = set()   # 有已提交但未解决的 SE 的 WO
     se_rows_out: list[dict] = []
-
-    def se_lines_of(s: dict) -> list[dict] | None:
-        if isinstance(s.get("lines"), list):
-            return s["lines"]
-        det = (se_details.get("by_se") or {}).get(s.get("se") or "")
-        if det and det.get("ok") and isinstance(det.get("lines"), list):
-            return det["lines"]
-        return None
+    se_line_keys: dict[str, set] = defaultdict(set)
+    se_coverage: dict[str, Any] = {
+        "query_error": se_query_error, "submitted": 0, "conserved": 0,
+        "draft": 0, "cancelled": 0, "out_of_snapshot": 0,
+        "unresolved": [], "complete": False,
+    }
 
     for s in se_rows:
         name = s.get("se")
@@ -332,37 +500,62 @@ def build_scope(snap: dict, se_details: dict, window: tuple[str | None, str | No
         ds = docstatus(s.get("docstatus"))
         s_date = date_part(s.get("posting_date"))
         in_win = in_window(s_date, window)
-        lines = se_lines_of(s)
-        sources = "snapshot" if isinstance(s.get("lines"), list) else (
-            "en_get" if lines is not None else "absent")
+        resolved = se_detail_for(s, by_se, snap.get("generated_at"))
+        lines = resolved["lines"]
+        sources = resolved["source"]
         finished_lines = s.get("finished_lines")
         wo_item = (wo_idx.get(wo) or {}).get("production_item")
         wo_known = wo in wo_idx
-        # 行级：同 UOM + 身份
+        # 行级：同 UOM + 身份 + 子键唯一
         line_rows = []
         for i, ln in enumerate(lines or []):
+            if not isinstance(ln, dict):
+                rec = {"scope": scope, "row_type": "se_line",
+                       "row_key": f"{name}::raw::{i}",
+                       "link": {"se": name, "se_line_id": None, "work_order": wo or None},
+                       "qty": {}, "uom": None, "in_window": in_win,
+                       "is_finished": None, "dates": {"posting_date": s.get("posting_date")},
+                       "disposition": "rejected", "reason_code": "se_line_row_not_object",
+                       "reason_detail": f"{type(ln).__name__}"}
+                se_rows_out.append(rec)
+                line_rows.append(rec)
+                rejected.append(rec)
+                continue
+            lid = ln.get("line")
+            has_lid = lid not in (None, "")
             q = num(ln.get("qty"))
             uom, suom = ln.get("uom"), ln.get("stock_uom")
             is_fin = flag01(ln.get("is_finished_item"))
-            if is_fin == 1:
-                if not wo_known:
-                    code, disp = "se_line_parent_wo_out_of_snapshot", "unverified"
-                elif not uom or not suom or uom != suom:
-                    code, disp = "se_line_finished_uom_mismatch", "unverified"
-                elif wo_item and ln.get("item_code") != wo_item:
-                    code, disp = "se_line_item_mismatch", "mismatch"
-                elif q is None:
-                    code, disp = "se_line_qty_invalid", "unverified"
-                else:
-                    code, disp = "se_line_finished_same_unit", "conserved"
-            elif is_fin == 0:
-                code, disp = "se_line_not_finished", "excluded"
+            if not has_lid:
+                code, disp = "se_line_key_missing", "unverified"
+            elif lid in se_line_keys[name]:
+                code, disp = "se_line_duplicate_key", "rejected"
             else:
-                code, disp = "se_line_finished_flag_invalid", "unverified"
+                se_line_keys[name].add(lid)
+                if is_fin == 1:
+                    if not wo_known:
+                        code, disp = "se_line_parent_wo_out_of_snapshot", "unverified"
+                    elif not uom_known(uom) or not uom_known(suom):
+                        code, disp = "se_line_finished_uom_missing", "unverified"
+                    elif uom_key(uom) != uom_key(suom):
+                        code, disp = "se_line_finished_uom_mismatch", "unverified"
+                    elif not wo_item:
+                        code, disp = "se_line_wo_item_unknown", "unverified"
+                    elif ln.get("item_code") != wo_item:
+                        code, disp = "se_line_item_mismatch", "mismatch"
+                    elif q is None or q < 0:
+                        code, disp = "se_line_qty_invalid", "unverified"
+                    else:
+                        code, disp = "se_line_finished_same_unit", "conserved"
+                elif is_fin == 0:
+                    code, disp = "se_line_not_finished", "excluded"
+                else:
+                    code, disp = "se_line_finished_flag_invalid", "unverified"
+            key_id = str(lid) if has_lid else f"#{i}"
             rec = {"scope": scope, "row_type": "se_line",
-                   "row_key": f"{name}::{ln.get('line') or i}",
-                   "link": {"se": name, "se_line_id": ln.get("line"), "work_order": wo or None},
-                   "qty": {"qty": q}, "uom": uom, "in_window": in_win,
+                   "row_key": f"{name}::{key_id}",
+                   "link": {"se": name, "se_line_id": lid, "work_order": wo or None},
+                   "qty": {"qty": q}, "uom": uom or None, "in_window": in_win,
                    "is_finished": is_fin,
                    "dates": {"posting_date": s.get("posting_date")},
                    "disposition": disp, "reason_code": code,
@@ -370,55 +563,92 @@ def build_scope(snap: dict, se_details: dict, window: tuple[str | None, str | No
                    f"uom={uom} stock_uom={suom} item={ln.get('item_code')} wo_item={wo_item}"}
             se_rows_out.append(rec)
             line_rows.append(rec)
+            if disp == "rejected":
+                rejected.append({"scope": scope, "row_type": "se_line",
+                                 "row_key": rec["row_key"],
+                                 "link": rec["link"], "qty": rec["qty"], "uom": rec["uom"],
+                                 "in_window": in_win, "dates": rec["dates"],
+                                 "disposition": disp, "reason_code": code,
+                                 "reason_detail": rec["reason_detail"]})
         fin_rows = [r for r in line_rows if r.get("is_finished") == 1]
         fin_bad_item = any(r["reason_code"] == "se_line_item_mismatch" for r in fin_rows)
-        fin_ok = all(r["reason_code"] == "se_line_finished_same_unit" for r in fin_rows)
-        fin_qty = (sum(float(r["qty"]["qty"]) for r in fin_rows) if fin_rows and fin_ok
-                   else None)
-        if lines is not None and not fin_ok:
-            se_unverified_wo.add(wo)
+        fin_ok_rows = [r for r in fin_rows
+                       if r["reason_code"] == "se_line_finished_same_unit"]
+        fin_ok = bool(fin_rows) and len(fin_ok_rows) == len(fin_rows)
+        fin_uoms = {uom_key(r["uom"]) for r in fin_ok_rows}
+        mixed_uom = len(fin_uoms) > 1
+        fin_qty = (sum(float(r["qty"]["qty"]) for r in fin_ok_rows)
+                   if fin_ok and not mixed_uom else None)
         # 文档级去向
         if ds == 2:
             disp, code = "excluded", "se_cancelled"
+        elif ds is None:
+            disp, code = "unverified", "se_docstatus_invalid"
+        elif ds == 0:
+            disp, code = "excluded", "se_docstatus_0"
         elif not wo:
             disp, code = "unlinked", "se_unlinked_work_order"
         elif not wo_known:
             disp, code = "unlinked", "se_work_order_out_of_snapshot"
+        elif resolved["problem"]:
+            disp, code = "unverified", resolved["problem"]
         elif lines is None:
             disp, code = "unverified", "se_detail_absent"
         elif not fin_rows:
             disp, code = "unverified", "se_no_finished_line"
         elif fin_bad_item:
             disp, code = "mismatch", "se_finished_item_mismatch"
+        elif mixed_uom:
+            disp, code = "unverified", "se_finished_uom_mixed"
         elif fin_qty is None:
             disp, code = "unverified", "se_finished_lines_unverified"
         elif not close(num(s.get("finished_qty")), fin_qty):
             disp, code = "mismatch", "se_internal_sum_mismatch"
-        elif ds != 1:
-            disp, code = "excluded", f"se_docstatus_{ds}"
         else:
             disp, code = "conserved", "se_finished_conserved"
-        se_uom = None
-        if fin_qty is not None:
-            us = sorted({r["uom"] for r in fin_rows if r["reason_code"] == "se_line_finished_same_unit"})
-            se_uom = us[0] if len(us) == 1 else None
-        if ds == 1 and wo_known and fin_qty is not None and disp != "mismatch":
+        se_uom = next(iter(fin_uoms)) if len(fin_uoms) == 1 else None
+        if disp == "conserved":
             se_finished_by_wo[wo] += fin_qty
-            if se_uom:
-                se_line_uoms[wo].add(se_uom)
+            se_line_uoms[wo].add(se_uom)
+        # 覆盖：每个已提交 SE 必须有明确结论；未解决的要传播到 WO/C2/证据状态
+        if ds == 1:
+            se_coverage["submitted"] += 1
+            se_submitted_by_wo[wo] += 1
+            if not wo_known:
+                se_coverage["out_of_snapshot"] += 1
+            if disp == "conserved":
+                se_coverage["conserved"] += 1
+            else:
+                se_coverage["unresolved"].append(
+                    {"se": name, "work_order": wo or None,
+                     "disposition": disp, "reason_code": code})
+                if wo:
+                    se_blocked_wo.add(wo)
+        elif ds == 0:
+            se_coverage["draft"] += 1
+        elif ds == 2:
+            se_coverage["cancelled"] += 1
         emit(scope, "se", f"{name}", {"se": name, "work_order": wo or None,
-                                      "wo_key": wo or None, "detail_source": sources},
+                                      "wo_key": wo or None, "detail_source": sources,
+                                      "detail_problems": resolved["problems"],
+                                      "entry_type": resolved["entry_type"]},
              {"finished_qty": r2(num(s.get("finished_qty"))),
               "finished_lines_sum": r2(fin_qty),
+              "finished_lines_sum_exact": fin_qty,
               "declared_finished_lines": finished_lines},
              se_uom, disp, code,
-             "" if disp == "conserved" else f"lines={0 if lines is None else len(lines)}",
+             "" if disp == "conserved" else
+             f"lines={0 if lines is None else len(lines)} "
+             f"problems={','.join(resolved['problems']) or '-'}",
              in_win, {"posting_date": s.get("posting_date")})
     out_rows.extend(se_rows_out)
+    se_coverage["complete"] = bool(se_query_error is None
+                                   and not se_coverage["unresolved"])
 
     # ── 4. WO 行：produced_qty vs SE 完工量；JC 进度证据 ──
     wo_rows_out: list[dict] = []
     wo_summary: dict[str, dict] = {}
+    jc_seen: set = set()
     for w in wos:
         name = w.get("name")
         info = wo_link[name]
@@ -430,16 +660,20 @@ def build_scope(snap: dict, se_details: dict, window: tuple[str | None, str | No
         link_status, link_code = info["disposition"], info["reason_code"]
         codes = []
         wo_status = str(w.get("status") or "")
-        not_started = ((prod is None or prod == 0) and se_q is None
+        not_started = ((prod is None or prod == 0) and se_submitted_by_wo.get(name, 0) == 0
                        and wo_status in ("Not Started", "Draft", "Pending", "Open"))
         if ds == 2:
             disp, code = "excluded", "wo_cancelled"
+        elif ds is None:
+            disp, code = "unverified", "wo_docstatus_invalid"
         elif not_started:
             disp, code = "open", "wo_not_started"
+        elif se_query_error:
+            disp, code = "unverified", "wo_se_query_incomplete"
+        elif name in se_blocked_wo:
+            disp, code = "unverified", "wo_se_incomplete"
         elif uom is None:
             disp, code = "unverified", "wo_uom_unresolved"
-        elif name in se_unverified_wo:
-            disp, code = "unverified", "wo_se_partially_unverified"
         elif se_q is None:
             disp, code = "unverified", "wo_se_missing"
         elif close(prod, se_q):
@@ -451,13 +685,17 @@ def build_scope(snap: dict, se_details: dict, window: tuple[str | None, str | No
         if se_q is not None and q is not None and se_q - q > EPS:
             codes.append("wo_se_exceeds_wo_qty")
         jc = jc_map.get(name) or {}
-        ops = jc.get("operations") or {}
+        jc_seen.add(name)
+        ops = jc.get("operations") if isinstance(jc, dict) else {}
+        ops = ops if isinstance(ops, dict) else {}
         op_sums = {op: num(v.get("sum_qty")) for op, v in ops.items() if isinstance(v, dict)}
         numeric = {k: v for k, v in op_sums.items() if v is not None}
         max_op = max(numeric, key=numeric.get) if numeric else None
         jc_flags = []
         if not jc:
             jc_flags.append("jc_missing")
+        elif not ops:
+            jc_flags.append("jc_no_operations")
         elif not numeric:
             jc_flags.append("jc_zero_completed")
         elif jc.get("last_operation") not in numeric or (
@@ -465,11 +703,13 @@ def build_scope(snap: dict, se_details: dict, window: tuple[str | None, str | No
             jc_flags.append("jc_routing_final_op_not_completion")
         wo_summary[name] = {
             "qty": r2(q), "produced_qty": r2(prod), "se_finished_qty": r2(se_q),
+            "se_finished_qty_exact": se_q,
             "uom": uom, "disposition": disp, "reason_code": code,
             "link_status": link_status, "link_reason_code": link_code,
-            "jc_cards": jc.get("cards"), "jc_ops": len(ops),
+            "jc_cards": jc.get("cards") if isinstance(jc, dict) else None,
+            "jc_ops": len(ops),
             "jc_max_op": max_op, "jc_max_qty": r2(numeric.get(max_op)),
-            "jc_last_op": jc.get("last_operation"),
+            "jc_last_op": jc.get("last_operation") if isinstance(jc, dict) else None,
             "jc_last_op_qty": r2(numeric.get(jc.get("last_operation"))),
             "jc_flags": jc_flags,
         }
@@ -477,6 +717,8 @@ def build_scope(snap: dict, se_details: dict, window: tuple[str | None, str | No
                "link": dict(info["link"]),
                "qty": {"qty": r2(q), "produced_qty": r2(prod),
                        "se_finished_qty": r2(se_q),
+                       "qty_exact": q, "produced_qty_exact": prod,
+                       "se_finished_qty_exact": se_q,
                        "produced_pending": r2(prod - se_q) if prod is not None and se_q is not None else None},
                "uom": uom, "in_window": None,
                "dates": {"planned_start": w.get("planned_start_date"),
@@ -489,17 +731,51 @@ def build_scope(snap: dict, se_details: dict, window: tuple[str | None, str | No
         for op, v in ops.items():
             emit(scope, "jc_operation", f"{name}::{op}",
                  {"work_order": name, "operation": op,
-                  "jc_ids": (v or {}).get("jc_ids") or [],
+                  "jc_ids": (v or {}).get("jc_ids") if isinstance(v, dict) else [],
                   "so_line_key": info["link"].get("so_line_key")},
-                 {"sum_qty": r2(num((v or {}).get("sum_qty"))),
-                  "cards": (v or {}).get("cards")},
+                 {"sum_qty": r2(num((v or {}).get("sum_qty"))) if isinstance(v, dict) else None,
+                  "cards": (v or {}).get("cards") if isinstance(v, dict) else None},
                  None, "progress", "jc_progress_evidence_only",
                  "工序卡按批量/返工重复开卡，不作数量守恒",
                  None, {})
     out_rows.extend(wo_rows_out)
 
-    # ── 5. SO 行：delivered vs DN 净量；窗口与开单状态 ──
+    # 快照外 WO 的 JC 组：保留为 orphan，不静默丢弃
+    jc_stats = {"read": len(jc_map), "matched": 0, "orphan": 0, "invalid": 0}
+    for jc_name, jc in jc_map.items():
+        if jc_name in jc_seen and jc_name in wo_idx:
+            jc_stats["matched"] += 1
+            continue
+        if not isinstance(jc, dict):
+            jc_stats["invalid"] += 1
+            emit(scope, "jc_operation", f"{jc_name}::<invalid>",
+                 {"work_order": jc_name, "operation": None, "jc_ids": []},
+                 {}, None, "orphan", "jc_group_invalid",
+                 f"JC 组不是对象: {type(jc).__name__}", None, {})
+            continue
+        jc_stats["orphan"] += 1
+        ops = jc.get("operations") if isinstance(jc.get("operations"), dict) else {}
+        if not ops:
+            emit(scope, "jc_operation", f"{jc_name}::<no_operation>",
+                 {"work_order": jc_name, "operation": None, "jc_ids": []},
+                 {"sum_qty": None, "cards": jc.get("cards")},
+                 None, "orphan",
+                 "jc_group_invalid" if not isinstance(jc.get("operations"), dict)
+                 else "jc_no_operations",
+                 "JC 组没有任何可用的工序明细", None, {})
+            continue
+        for op, v in ops.items():
+            emit(scope, "jc_operation", f"{jc_name}::{op}",
+                 {"work_order": jc_name, "operation": op,
+                  "jc_ids": (v or {}).get("jc_ids") if isinstance(v, dict) else []},
+                 {"sum_qty": r2(num((v or {}).get("sum_qty"))) if isinstance(v, dict) else None,
+                  "cards": (v or {}).get("cards") if isinstance(v, dict) else None},
+                 None, "orphan", "jc_work_order_out_of_snapshot",
+                 "JC 组指向的 WO 不在本快照内；只作进度证据", None, {})
+
+    # ── 5. SO 行：delivered vs DN 净量；窗口与开单状态（逐行全精度）──
     so_out: list[dict] = []
+    c1_lines: list[dict] = []
     for r in so_rows:
         so, sl = r.get("so"), r.get("line_id")
         key = (so, sl)
@@ -510,15 +786,19 @@ def build_scope(snap: dict, se_details: dict, window: tuple[str | None, str | No
         net = dn_net.get(key, 0.0) - dn_ret.get(key, 0.0)
         linked_dns = dn_by_line.get(key, [])
         line_uom = r.get("uom")
-        dn_uom_bad = any(d.get("uom") and line_uom and d.get("uom") != line_uom
-                         for d in linked_dns)
+        dn_mismatch = dn_item_bad.get(key, 0)
+        dn_incomplete = dn_unverified.get(key, 0)
         codes = []
         if ds == 2 or (r.get("so_status") or "") == "Cancelled":
             disp, code = "excluded", "so_line_voided"
         elif q is None or delivered is None:
             disp, code = "unverified", "so_line_qty_invalid"
-        elif dn_uom_bad:
-            disp, code = "unverified", "so_line_dn_uom_mismatch"
+        elif not uom_known(line_uom):
+            disp, code = "unverified", "so_line_uom_missing"
+        elif dn_mismatch:
+            disp, code = "mismatch", "so_line_dn_item_mismatch"
+        elif dn_incomplete:
+            disp, code = "unverified", "so_line_dn_evidence_incomplete"
         elif not linked_dns and abs(delivered) <= EPS:
             disp, code = "conserved", "so_line_no_dn"
         elif close(delivered, net):
@@ -538,37 +818,81 @@ def build_scope(snap: dict, se_details: dict, window: tuple[str | None, str | No
                         "dn_keys": [f"{d.get('dn')}::{d.get('dn_line_id')}" for d in linked_dns]},
                "qty": {"qty": r2(q), "delivered_qty": r2(delivered),
                        "open_qty": r2(open_q), "dn_net": r2(net),
-                       "dn_return": r2(dn_ret.get(key)), "dn_draft": r2(dn_draft.get(key))},
-               "uom": r.get("uom"), "in_window": in_win,
+                       "dn_return": r2(dn_ret.get(key)), "dn_draft": r2(dn_draft.get(key)),
+                       "qty_exact": q, "delivered_qty_exact": delivered,
+                       "open_qty_exact": open_q, "dn_net_exact": net},
+               "uom": line_uom or None, "in_window": in_win,
                "dates": {"delivery": r.get("so_delivery_date"),
                          "transaction": r.get("transaction_date")},
                "disposition": disp, "reason_code": code,
                "reason_detail": ";".join(codes)}
         so_out.append(rec)
+        eligible = disp != "excluded"
+        passed = True if disp == "conserved" else (False if disp == "mismatch" else None)
+        c1_lines.append({
+            "scope": scope, "so_line_key": f"{so}::{sl}", "row_key": f"{so}::{sl}",
+            "uom": line_uom if uom_known(line_uom) else None,
+            "delivered": delivered, "dn_net": net,
+            "delta": (delivered - net) if delivered is not None else None,
+            "eligible": eligible, "pass": passed, "reason_code": code,
+        })
     out_rows = so_out + out_rows   # 输出顺序：SO 行锚点在前
 
+    # 行键全局唯一性（含派生的 se_line / jc_operation）；重复即 audit 失败
+    seen_keys: set[tuple[str, str]] = set()
+    for r in out_rows:
+        k = (r["row_type"], str(r["row_key"]))
+        if k in seen_keys:
+            child_dup.append({"label": r["row_type"], "key": str(r["row_key"]),
+                              "error": "duplicate_row_key"})
+        seen_keys.add(k)
+
     # ── 守恒检查 ──
-    checks = conservation_checks(scope, so_out, out_rows, wo_summary)
+    checks = conservation_checks(scope, so_out, out_rows, wo_summary, c1_lines,
+                                 raw_inputs, child_dup, rejected, jc_stats)
+    checks["C2_wo_se"]["complete"] = bool(se_coverage["complete"])
     counts = Counter(r["row_type"] for r in out_rows)
     disp_counts = Counter(f"{r['row_type']}:{r['disposition']}" for r in out_rows)
     link_counts = Counter(f"{r['row_type']}:{r.get('link_status')}" for r in out_rows
                           if r.get("link_status"))
-    # 关联覆盖：工单量按关联状态、SO 行有无工单
-    wo_by_link, wo_qty_by_link = Counter(), defaultdict(float)
+    # 关联覆盖：工单量按关联状态 + UOM 分区（UOM 来自链接 SO 行；无 SO 记 unknown）
+    wo_by_link, wo_qty_by_link_uom = Counter(), defaultdict(lambda: defaultdict(float))
     for r in out_rows:
         if r["row_type"] != "wo":
             continue
         k = "linked" if r.get("link_status") == "linked" else (r.get("link_reason_code") or "?")
         wo_by_link[k] += 1
-        wo_qty_by_link[k] += r["qty"]["qty"] or 0
+        u = r.get("link", {}).get("so_line_uom")
+        wo_qty_by_link_uom[k][uom_key(u)] += r["qty"]["qty"] or 0
     so_with_wo = [r for r in so_out if r["link"].get("work_orders")]
+    so_qty_uom: dict[str, dict] = defaultdict(lambda: {"lines": 0, "total": 0.0,
+                                                       "with_work_order": 0.0,
+                                                       "lines_with_work_order": 0})
+    so_uom_unknown = 0
+    for r in so_out:
+        u = r.get("uom")
+        if not uom_known(u):
+            so_uom_unknown += 1
+            continue
+        b = so_qty_uom[u]
+        b["lines"] += 1
+        b["total"] += r["qty"]["qty_exact"] or 0.0
+        if r["link"].get("work_orders"):
+            b["with_work_order"] += r["qty"]["qty_exact"] or 0.0
+            b["lines_with_work_order"] += 1
     association = {
         "wo_by_link": dict(sorted(wo_by_link.items())),
-        "wo_qty_by_link": {k: r2(v) for k, v in sorted(wo_qty_by_link.items())},
+        "wo_qty_by_link_uom": {k: dict(sorted(v.items()))
+                               for k, v in sorted(wo_qty_by_link_uom.items())},
+        "wo_qty_uom_basis": "linked SO line uom; unlinked work orders -> unknown",
         "so_lines": len(so_out),
         "so_lines_with_work_order": len(so_with_wo),
-        "so_qty_with_work_order": r2(sum(r["qty"]["qty"] or 0 for r in so_with_wo)),
-        "so_qty_total": r2(sum(r["qty"]["qty"] or 0 for r in so_out)),
+        "so_qty_by_uom": {u: {"lines": b["lines"],
+                              "lines_with_work_order": b["lines_with_work_order"],
+                              "total": b["total"],
+                              "with_work_order": b["with_work_order"]}
+                          for u, b in sorted(so_qty_uom.items())},
+        "so_lines_uom_unknown": so_uom_unknown,
     }
 
     return {
@@ -584,9 +908,16 @@ def build_scope(snap: dict, se_details: dict, window: tuple[str | None, str | No
         "disposition_counts": dict(sorted(disp_counts.items())),
         "link_counts": dict(sorted(link_counts.items())),
         "association": association,
-        "dup_keys": so_dup + dn_dup + wo_dup + se_dup,
-        "inputs": {"so_rows": len(so_rows), "dn_rows": len(dn_rows), "wos": len(wos),
-                   "se_rows": len(se_rows)},
+        "dup_keys": so_dup + dn_dup + wo_dup + se_dup + child_dup,
+        "child_dup": child_dup,
+        "rejected": [{"row_type": r["row_type"], "row_key": r["row_key"],
+                      "reason_code": r["reason_code"]} for r in rejected],
+        "inputs": {k: len(v) for k, v in raw_inputs.items()},
+        "parsed_inputs": {"so_line": len(so_rows), "dn_line": len(dn_rows),
+                          "wo": len(wos), "se": len(se_rows)},
+        "se_coverage": se_coverage,
+        "jc_stats": jc_stats,
+        "c1_lines": c1_lines,
         "unlinked_dn": len(dn_unlinked),
         "se_unlinked": sum(1 for r in out_rows if r["row_type"] == "se"
                            and r["reason_code"].startswith("se_unlinked")),
@@ -594,56 +925,220 @@ def build_scope(snap: dict, se_details: dict, window: tuple[str | None, str | No
 
 
 def conservation_checks(scope: str, so_out: list[dict], all_rows: list[dict],
-                        wo_summary: dict) -> dict:
-    """C1 SO↔DN、C2 WO↔SE、C3 SE 内部、C4 行账；跨 UOM 只按 UOM 分组求和。"""
-    # C1：按 UOM 分组；只对同 UOM 的 SO 行与 DN 行求和
-    c1: dict[str, dict] = defaultdict(lambda: {"so_delivered": 0.0, "dn_net": 0.0,
-                                               "lines": 0, "uoms_observed": set(),
-                                               "skipped_uom": 0})
-    for r in so_out:
-        if r["disposition"] == "excluded" or r["qty"]["delivered_qty"] is None:
+                        wo_summary: dict, c1_lines: list[dict],
+                        raw_inputs: dict, child_dup: list[dict],
+                        rejected: list[dict], jc_stats: dict) -> dict:
+    """C1 逐行全精度、C2 覆盖完整、C3 SE 内部、C4 原始行账；数量按 UOM 分区。"""
+    # C1：先逐行判定（全精度，不四舍五入、不允许正负抵消），再按 UOM 分组展示
+    unresolved: list[dict] = []
+    per_uom: dict[str, dict] = defaultdict(
+        lambda: {"lines": 0, "lines_pass": 0, "lines_fail": 0,
+                 "so_delivered": 0.0, "dn_net": 0.0})
+    lines_pass = lines_fail = lines_excluded = 0
+    for ln in c1_lines:
+        if not ln["eligible"]:
+            lines_excluded += 1
             continue
-        uom = r["uom"] or "unknown"
-        c1[uom]["uoms_observed"].add(uom)
-        c1[uom]["so_delivered"] += r["qty"]["delivered_qty"]
-        c1[uom]["dn_net"] += r["qty"]["dn_net"] or 0.0
-        c1[uom]["lines"] += 1
+        if ln["pass"] is None or not uom_known(ln["uom"]):
+            unresolved.append({"so_line_key": ln["so_line_key"],
+                               "reason_code": ln["reason_code"]})
+            continue
+        b = per_uom[ln["uom"]]
+        b["lines"] += 1
+        b["so_delivered"] += ln["delivered"] or 0.0
+        b["dn_net"] += ln["dn_net"] or 0.0
+        if ln["pass"]:
+            b["lines_pass"] += 1
+            lines_pass += 1
+        else:
+            b["lines_fail"] += 1
+            lines_fail += 1
     c1_out = []
-    for uom, v in sorted(c1.items()):
-        delta = round(v["so_delivered"] - v["dn_net"], 2)
-        c1_out.append({"uom": uom, "lines": v["lines"],
-                       "so_delivered": round(v["so_delivered"], 2),
-                       "dn_net": round(v["dn_net"], 2), "delta": delta,
-                       "pass": abs(delta) <= EPS})
+    for u, b in sorted(per_uom.items()):
+        c1_out.append({
+            "uom": u, "lines": b["lines"],
+            "lines_pass": b["lines_pass"], "lines_fail": b["lines_fail"],
+            "so_delivered": b["so_delivered"], "dn_net": b["dn_net"],
+            "delta": b["so_delivered"] - b["dn_net"],
+            # 聚合 pass 只是“该 UOM 下每一行都过”的同义表达；不参与抵消
+            "pass": b["lines_fail"] == 0,
+        })
+    c1 = {"pass": lines_fail == 0 and not unresolved,
+          "lines_total": len(c1_lines),
+          "lines_pass": lines_pass, "lines_fail": lines_fail,
+          "lines_excluded": lines_excluded,
+          "lines_unresolved": len(unresolved),
+          "unresolved": unresolved,
+          "per_uom": c1_out,
+          "precision": "per_line_full_precision",
+          "note": "每行 delivered_qty == dn_net 全精度判定；per_uom 汇总仅作展示，"
+                  "任一行为 false 即 C1 不通过"}
 
-    # C2：WO produced_qty vs SE 完工量（只对已求值的 WO 计 pass/mismatch）
+    # C2：WO produced_qty vs SE 完工量；complete 取决于 SE 覆盖，不取决于可见子集
     compared = [w for w in wo_summary.values() if w["disposition"] in ("conserved", "mismatch")]
+    by_uom: dict[str, dict] = defaultdict(
+        lambda: {"wo": 0, "compared": 0, "pass": 0, "mismatch": 0,
+                 "open": 0, "unverified": 0, "excluded": 0})
+    for w in wo_summary.values():
+        b = by_uom[uom_key(w["uom"])]
+        b["wo"] += 1
+        d = w["disposition"]
+        if d == "conserved":
+            b["pass"] += 1
+        elif d in ("mismatch", "open", "unverified", "excluded"):
+            b[d] += 1
+        if d in ("conserved", "mismatch"):
+            b["compared"] += 1
     c2 = {"wo_total": len(wo_summary), "compared": len(compared),
           "pass": sum(1 for w in compared if w["disposition"] == "conserved"),
           "mismatch": sum(1 for w in compared if w["disposition"] == "mismatch"),
           "open": sum(1 for w in wo_summary.values() if w["disposition"] == "open"),
           "unverified": sum(1 for w in wo_summary.values()
                             if w["disposition"] not in ("conserved", "mismatch",
-                                                        "excluded", "open"))}
+                                                        "excluded", "open")),
+          "by_uom": {u: dict(b) for u, b in sorted(by_uom.items())},
+          "known_subtotal": {
+              "compared": len(compared),
+              "pass": sum(1 for w in compared if w["disposition"] == "conserved"),
+              "mismatch": sum(1 for w in compared if w["disposition"] == "mismatch")},
+          "note": "only evaluated work orders are counted; UOM from the single "
+                  "conserved SE finished-unit; quantities are never summed across UOM"}
 
     # C3：单 SE 内部行合计 == finished_qty
     se_rows = [r for r in all_rows if r["row_type"] == "se"]
-    se_eval = [r for r in se_rows if r["reason_code"] != "se_detail_absent"]
-    c3 = {"se_total": len(se_rows), "evaluated": len(se_eval),
-          "pass": sum(1 for r in se_eval if r["disposition"] == "conserved"),
-          "mismatch": sum(1 for r in se_eval if r["disposition"] == "mismatch"),
-          "unverified": sum(1 for r in se_eval if r["disposition"] == "unverified")}
+    c3_counts = Counter(r["disposition"] for r in se_rows)
+    c3 = {"se_total": len(se_rows),
+          "evaluated": c3_counts.get("conserved", 0) + c3_counts.get("mismatch", 0),
+          "pass": c3_counts.get("conserved", 0),
+          "mismatch": c3_counts.get("mismatch", 0),
+          "unverified": c3_counts.get("unverified", 0),
+          "excluded": c3_counts.get("excluded", 0),
+          "acceptance_rule": "mismatch == 0 and unverified == 0"}
 
-    # C4：行账由 build_manifest 统一核对（读入 row_type == 输出 row_type）
+    # C4：原始输入行 == 逐行去向（含 rejected / orphan）；业务键与子键唯一
     emitted = Counter(r["row_type"] for r in all_rows)
-    c4 = {"emitted": dict(sorted(emitted.items()))}
-    return {"C1_so_dn": c1_out, "C2_wo_se": c2, "C3_se_internal": c3, "C4_rows": c4}
+    read = {t: len(v) for t, v in raw_inputs.items()}
+    row_match = {t: read[t] == emitted.get(t, 0) for t in read}
+    rejected_counts = Counter(r["row_type"] for r in rejected)
+    c4 = {
+        "read": read,
+        "emitted": dict(sorted(emitted.items())),
+        "match": row_match,
+        "all_match": all(row_match.values()),
+        "rejected": dict(sorted(rejected_counts.items())),
+        "duplicate_keys": child_dup,
+        "unique_keys": not child_dup,
+        "jc_groups": dict(jc_stats),
+        "jc_operations_emitted": emitted.get("jc_operation", 0),
+        "se_lines_emitted": emitted.get("se_line", 0),
+        "note": "read 是原始输入行数（含非对象行）；非对象行落 rejected，"
+                "快照外 WO 的 JC 组落 orphan，不静默丢弃",
+    }
+    return {"C1_so_dn": c1, "C1_lines": c1_lines, "C2_wo_se": c2,
+            "C3_se_internal": c3, "C4_rows": c4}
 
 
-# ── EN 有界只读：SE 明细 + 异常 WO 探针 ────────────────
-def enrich_se_details(snaps: list[dict], out_dir: Path, budget: int, sleep_s: float,
-                      reuse_path: Path | None, env_file: str | None = None) -> dict:
-    """按单据名 GET 补齐 SE 行明细；只读、单并发、限预算。"""
+# ── EN 有界只读：请求级预算 + SE 明细 + 异常 WO 探针 ─────
+class HttpBudget:
+    """请求级总预算：SE 明细、探针翻页、连接重试共用同一个计数器。"""
+
+    def __init__(self, limit: int):
+        self.limit = max(0, int(limit))
+        self.used = 0
+        self.exhausted = False
+        self.by_kind: Counter = Counter()
+        self.events: list[dict] = []
+
+    @property
+    def remaining(self) -> int:
+        return max(0, self.limit - self.used)
+
+    def spend(self, kind: str, detail: str = "") -> None:
+        if self.used >= self.limit:
+            self.exhausted = True
+            raise BudgetExhausted(f"HTTP budget {self.limit} exhausted ({kind})")
+        self.used += 1
+        self.by_kind[kind] += 1
+        self.events.append({"n": self.used, "kind": kind, "detail": detail})
+
+    def as_log(self) -> dict:
+        return {"limit": self.limit, "used": self.used, "remaining": self.remaining,
+                "by_kind": dict(sorted(self.by_kind.items())),
+                "exhausted": self.exhausted,
+                "events": self.events[:50],
+                "events_truncated": len(self.events) > 50,
+                "note": "request-level budget shared by enrichment, probe pages and retries"}
+
+
+def budgeted_get_status(budget: HttpBudget, path: str, base_url: str, key: str,
+                        secret: str, kind: str = "enrich", timeout: int = 60
+                        ) -> tuple[int, dict]:
+    """与 iss.api_get_status 同语义，但**每次尝试**都计入共享预算。"""
+    url = f"{base_url}{path}"
+    last: Exception | None = None
+    for attempt in range(iss.MAX_RETRIES):
+        budget.spend("retry" if attempt else kind, path[:120])
+        try:
+            resp = requests.get(url, headers=iss._auth_headers(key, secret), timeout=timeout)
+            try:
+                return resp.status_code, resp.json()
+            except ValueError:
+                return resp.status_code, {}
+        except requests.RequestException as e:  # noqa: PERF203 - 重试要计数
+            last = e
+            if attempt < iss.MAX_RETRIES - 1:
+                time.sleep(2 * (attempt + 1))
+    print(f"  ✗ 请求失败 ({type(last).__name__}): {path[:120]}", file=sys.stderr)
+    return 0, {}
+
+
+def budgeted_get_single(budget: HttpBudget, resource: str, docname: str, base_url: str,
+                        key: str, secret: str, kind: str = "probe") -> dict:
+    path = "/api/resource/{}/{}".format(urllib.parse.quote(resource, safe=""),
+                                        urllib.parse.quote(docname, safe=""))
+    status, body = budgeted_get_status(budget, path, base_url, key, secret, kind)
+    if status != 200:
+        raise iss.QueryError(f"{resource}/{docname}: HTTP {status}")
+    return (body or {}).get("data") or {}
+
+
+def budgeted_paginated_get(budget: HttpBudget, resource: str, base_url: str, key: str,
+                           secret: str, filters: list, fields: list,
+                           page_size: int = 100, order_by: str = "name asc",
+                           fallback_fields: list | None = None, kind: str = "probe",
+                           label: str = "") -> dict:
+    """翻页拉取；每页（以及 417 回退重取）各计 1 次请求。"""
+    rows: list[dict] = []
+    start = page = pages = 0
+    while page < 200:
+        path = iss._build_url(resource, filters, fields, start, page_size, order_by)
+        status, body = budgeted_get_status(budget, path, base_url, key, secret, kind)
+        pages += 1
+        if status == 417 and fallback_fields and fields != fallback_fields:
+            print(f"  ⚠ {label or resource}: 字段被拒 (417), 回退字段集 {fallback_fields}")
+            rest = budgeted_paginated_get(budget, resource, base_url, key, secret, filters,
+                                          fallback_fields, page_size, order_by, None,
+                                          kind, label)
+            rest["rows"] = rows + rest["rows"]
+            rest["pages"] += pages
+            return rest
+        if status != 200:
+            raise iss.QueryError(f"{label or resource}: HTTP {status} {str(body)[:140]}")
+        data = body.get("data", []) or []
+        if not data:
+            break
+        rows.extend(data)
+        if len(data) < page_size:
+            break
+        start += len(data)
+        page += 1
+    return {"rows": rows, "pages": pages, "complete": True}
+
+
+def enrich_se_details(snaps: list[dict], out_dir: Path, budget: HttpBudget,
+                      sleep_s: float, reuse_path: Path | None,
+                      env_file: str | None = None) -> dict:
+    """按单据名 GET 补齐 SE 行明细；只读、单并发、共享请求级预算。"""
     env_files = [Path(env_file)] if env_file else iss.resolve_env_files()
     key, secret = iss.load_credentials("prod", env_files)
     if not key or not secret:
@@ -654,28 +1149,42 @@ def enrich_se_details(snaps: list[dict], out_dir: Path, budget: int, sleep_s: fl
             existing = json.loads(reuse_path.read_text(encoding="utf-8"))
         except ValueError:
             existing = {}
+    if existing and existing.get("schema") not in (None, SE_DETAIL_SCHEMA):
+        raise InputError(f"SE 明细缓存 schema 不符: {existing.get('schema')!r}")
     by_se: dict = dict(existing.get("by_se") or {})
     need: list[str] = []
     for snap in snaps:
         for s in snap.get("se_rows") or []:
+            if not isinstance(s, dict):
+                continue
             n = s.get("se")
             if not n or isinstance(s.get("lines"), list):
                 continue
             if n not in by_se and n not in need:
                 need.append(n)
     prev_log = existing.get("log") or {}
+    start_used = budget.used
     log = {"started_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-           "site": SITE, "requested": len(need), "http": 0, "ok": 0, "failed": 0,
-           "status_codes": {}, "budget": budget, "budget_exceeded": False,
+           "site": SITE, "requested": len(need), "requested_this_run": 0,
+           "http": 0, "retries": 0, "ok": 0, "failed": 0,
+           "status_codes": {}, "budget": budget.limit,
+           "budget_used_before": start_used, "budget_exceeded": False,
+           "not_requested": [],
            "kept_from_previous": len(by_se),
            "previous_requested": int(prev_log.get("requested") or 0)}
     for i, name in enumerate(need):
-        if log["http"] >= budget:
-            log["budget_exceeded"] = True
-            break
         path = "/api/resource/Stock%20Entry/" + urllib.parse.quote(str(name), safe="")
-        status, body = iss.api_get_status(path, SITE, key, secret)
-        log["http"] += 1
+        before = dict(budget.by_kind)
+        try:
+            status, body = budgeted_get_status(budget, path, SITE, key, secret, "enrich")
+        except BudgetExhausted:
+            budget.exhausted = True
+            log["budget_exceeded"] = True
+            log["not_requested"] = need[i:]
+            break
+        log["requested_this_run"] += 1
+        log["retries"] += (budget.by_kind.get("retry", 0)
+                           - before.get("retry", 0))
         log["status_codes"][str(status)] = log["status_codes"].get(str(status), 0) + 1
         d = (body or {}).get("data") or {}
         if status == 200 and d:
@@ -708,14 +1217,18 @@ def enrich_se_details(snaps: list[dict], out_dir: Path, budget: int, sleep_s: fl
             log["failed"] += 1
         if i + 1 < len(need):
             time.sleep(sleep_s)
+    log["http"] = budget.used - start_used
+    log["budget_used_after"] = budget.used
+    log["budget_exhausted"] = budget.exhausted
     log["detail_records"] = len(by_se)
     log["detail_records_ok"] = sum(1 for v in by_se.values() if v.get("ok"))
     stamps = sorted(v.get("fetched_at") for v in by_se.values() if v.get("fetched_at"))
     log["fetched_at_range"] = [stamps[0], stamps[-1]] if stamps else []
     log["note"] = ("每条 detail 记录来自一次成功的按单据 GET；本次 requested=0 "
-                   "表示全部命中本地缓存，不代表历史未取数")
+                   "表示全部命中本地缓存，不代表历史未取数。"
+                   "http 含该阶段的重试次数；预算与探针共享。")
     log["finished_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    payload = {"schema": "dn_wo_jc_se_se_details/1", "site": SITE, "log": log,
+    payload = {"schema": SE_DETAIL_SCHEMA, "site": SITE, "log": log,
                "by_se": dict(sorted(by_se.items()))}
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "se_details.json").write_text(
@@ -724,7 +1237,7 @@ def enrich_se_details(snaps: list[dict], out_dir: Path, budget: int, sleep_s: fl
 
 
 def probe_wo_mismatches(scopes: list[dict], out_dir: Path, limit: int, sleep_s: float,
-                        env_file: str | None = None) -> dict:
+                        budget: HttpBudget, env_file: str | None = None) -> dict:
     """对 produced_qty != SE 的 WO，补查 WO 详情与该 WO 的全部 SE 清单（有界）。"""
     targets: list[tuple[str, str]] = []
     for sc in scopes:
@@ -733,40 +1246,62 @@ def probe_wo_mismatches(scopes: list[dict], out_dir: Path, limit: int, sleep_s: 
                 targets.append((sc["scope"], name))
     targets = targets[:limit]
     if not targets:
-        return {"schema": "dn_wo_jc_se_wo_probe/1", "targets": [], "probes": {}}
+        return {"schema": WO_PROBE_SCHEMA, "targets": [], "probes": {},
+                "log": {"http": 0, "retries": 0, "pages": 0,
+                        "budget_exceeded": False, "requests": []}}
     env_files = [Path(env_file)] if env_file else iss.resolve_env_files()
     key, secret = iss.load_credentials("prod", env_files)
     if not key or not secret:
         raise InputError("EN 生产凭证未配置（EN_API/.env）")
     probes: dict = {}
-    log = {"http": 0, "errors": []}
+    start_used = budget.used
+    start_retries = budget.by_kind.get("retry", 0)
+    log = {"http": 0, "retries": 0, "pages": 0, "errors": [],
+           "budget": budget.limit, "budget_used_before": start_used,
+           "budget_exceeded": False, "requests": [], "not_probed": []}
     for i, (scope, wo) in enumerate(targets):
         rec: dict = {"scope": scope, "work_order": wo}
+        before = budget.used
         try:
-            wd = iss.get_single("Work Order", wo, SITE, key, secret)
-            log["http"] += 1
+            wd = budgeted_get_single(budget, "Work Order", wo, SITE, key, secret, "probe")
             rec["wo_detail"] = {k: wd.get(k) for k in
                                 ("name", "status", "docstatus", "qty", "produced_qty",
                                  "material_transferred_for_manufacturing",
                                  "total_produced_qty", "skip_transfer",
                                  "sales_order", "production_item", "bom_no")}
-            ses = iss.paginated_get(
-                "Stock Entry", SITE, key, secret,
+            ses = budgeted_paginated_get(
+                budget, "Stock Entry", SITE, key, secret,
                 [["Stock Entry", "work_order", "=", wo], ["Stock Entry", "docstatus", "<", 2]],
                 ["name", "stock_entry_type", "docstatus", "posting_date", "work_order"],
-                label="SE(probe)")
-            log["http"] += 1
-            rec["stock_entries"] = ses
-            rec["by_type"] = dict(Counter(s.get("stock_entry_type") for s in ses))
+                kind="probe", label="SE(probe)")
+            log["pages"] += ses["pages"]
+            rec["stock_entries"] = ses["rows"]
+            rec["probe_pages"] = ses["pages"]
+            rec["by_type"] = dict(Counter(s.get("stock_entry_type")
+                                          for s in ses["rows"]))
             rec["ok"] = True
+        except BudgetExhausted:
+            budget.exhausted = True
+            log["budget_exceeded"] = True
+            rec["ok"] = False
+            rec["error"] = "budget_exhausted"
+            log["errors"].append({"work_order": wo, "error": "budget_exhausted"})
+            log["not_probed"] = [t[1] for t in targets[i:]]
+            probes[wo] = rec
+            break
         except Exception as e:  # noqa: BLE001 - 探针失败要留证
             rec["ok"] = False
             rec["error"] = f"{type(e).__name__}: {e}"
             log["errors"].append({"work_order": wo, "error": rec["error"]})
+        log["requests"].append({"work_order": wo, "requests": budget.used - before})
         probes[wo] = rec
         if i + 1 < len(targets):
             time.sleep(sleep_s)
-    payload = {"schema": "dn_wo_jc_se_wo_probe/1", "site": SITE, "log": log,
+    log["http"] = budget.used - start_used
+    log["retries"] = budget.by_kind.get("retry", 0) - start_retries
+    log["budget_used_after"] = budget.used
+    log["budget_exhausted"] = budget.exhausted
+    payload = {"schema": WO_PROBE_SCHEMA, "site": SITE, "log": log,
                "probes": probes}
     (out_dir / "wo_probe.json").write_text(
         json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8")
@@ -775,56 +1310,94 @@ def probe_wo_mismatches(scopes: list[dict], out_dir: Path, limit: int, sleep_s: 
 
 # ── 汇总写盘 ──────────────────────────────────────────
 def window_summary(so_out: list[dict]) -> dict:
+    """窗口只作分区；数量按 UOM 分区，绝不跨单位求和。"""
     inw = [r for r in so_out if r["in_window"] is True]
     outw = [r for r in so_out if r["in_window"] is False]
     unk = [r for r in so_out if r["in_window"] is None]
+
     def agg(rows):
+        by_uom: dict[str, dict] = defaultdict(
+            lambda: {"lines": 0, "qty": 0.0, "delivered": 0.0, "open": 0.0})
+        uom_unknown = 0
+        for r in rows:
+            u = r.get("uom")
+            if not uom_known(u):
+                uom_unknown += 1
+                continue
+            b = by_uom[u]
+            b["lines"] += 1
+            b["qty"] += r["qty"]["qty_exact"] or 0.0
+            b["delivered"] += r["qty"]["delivered_qty_exact"] or 0.0
+            b["open"] += r["qty"]["open_qty_exact"] or 0.0
         return {"lines": len(rows),
-                "qty": r2(sum(r["qty"]["qty"] or 0 for r in rows)),
-                "delivered": r2(sum(r["qty"]["delivered_qty"] or 0 for r in rows)),
-                "open": r2(sum(r["qty"]["open_qty"] or 0 for r in rows)),
-                "dispositions": dict(sorted(Counter(r["disposition"] for r in rows).items()))}
+                "lines_uom_unknown": uom_unknown,
+                "by_uom": {u: {"lines": b["lines"],
+                               "qty": b["qty"],
+                               "delivered": b["delivered"],
+                               "open": b["open"]}
+                           for u, b in sorted(by_uom.items())},
+                "dispositions": dict(sorted(Counter(r["disposition"]
+                                                    for r in rows).items()))}
     return {"in_window": agg(inw), "out_of_window": agg(outw), "date_unknown": agg(unk)}
 
 
 def build_manifest(scopes: list[dict], window: tuple[str | None, str | None], basis: str,
-                   se_details: dict | None, probe: dict | None, run_id: str) -> dict:
+                   se_details: dict | None, probe: dict | None, run_id: str,
+                   http_budget: HttpBudget | None = None) -> dict:
     row_type_read = Counter()
     for sc in scopes:
         i = sc["inputs"]
-        row_type_read["so_line"] += i["so_rows"]
-        row_type_read["dn_line"] += i["dn_rows"]
-        row_type_read["wo"] += i["wos"]
-        row_type_read["se"] += i["se_rows"]
+        row_type_read["so_line"] += i["so_line"]
+        row_type_read["dn_line"] += i["dn_line"]
+        row_type_read["wo"] += i["wo"]
+        row_type_read["se"] += i["se"]
     emitted = Counter()
     for sc in scopes:
         emitted.update(r["row_type"] for r in sc["rows"])
     accounting = {}
-    # SO/DN/WO/SE 行账：读入 == 输出（JC 工序与 SE 行是派生子行，单独计）
+    # SO/DN/WO/SE 行账：**原始输入** == 输出（含 rejected 行；JC/SE 行是派生子行）
     ok_all = True
     for t in ("so_line", "dn_line", "wo", "se"):
-        ok = row_type_read[t] == emitted[t]
+        ok = row_type_read[t] == emitted.get(t, 0)
         ok_all &= ok
-        accounting[t] = {"read": row_type_read[t], "emitted": emitted[t], "match": ok}
-    accounting["jc_operation"] = {"derived": emitted["jc_operation"]}
-    accounting["se_line"] = {"derived": emitted["se_line"]}
-    c1 = [x for sc in scopes for x in sc["checks"]["C1_so_dn"]]
-    # 跨 scope 的 C1 不直接加总（同一 DN 可能跨快照重复），这里只汇总 pass 状态
-    c1_pass = all(x["pass"] for x in c1)
+        accounting[t] = {"read": row_type_read[t], "emitted": emitted.get(t, 0),
+                         "match": ok}
+    accounting["jc_operation"] = {"derived": emitted.get("jc_operation", 0)}
+    accounting["se_line"] = {"derived": emitted.get("se_line", 0)}
+
+    c1_all = [x for sc in scopes for x in sc["checks"]["C1_lines"]]
+    c1_evaluated = [x for x in c1_all if x["eligible"] and x["pass"] is not None]
+    c1_unresolved = [x for x in c1_all if x["eligible"] and x["pass"] is None]
+    c1_fail = [x for x in c1_evaluated if x["pass"] is False]
+    c1_pass = not c1_fail and not c1_unresolved
     c3 = [sc["checks"]["C3_se_internal"] for sc in scopes]
     c3_no_mismatch = all(x["mismatch"] == 0 for x in c3)
-    c3_unverified = sum(x["unverified"] for x in c3) + sum(
-        x["se_total"] - x["evaluated"] for x in c3)
+    c3_unverified = sum(x["unverified"] for x in c3)
     dup = [d for sc in scopes for d in sc["dup_keys"]]
-    audit_ok = bool(ok_all and c1_pass and c3_no_mismatch and not dup)
-    evidence_complete = bool(c3_unverified == 0)
+    child_dup = [d for sc in scopes for d in sc["child_dup"]]
+    rejected = [(sc["scope"], r) for sc in scopes for r in sc["rejected"]]
+    se_cov = [dict(sc["se_coverage"]) | {"scope": sc["scope"]} for sc in scopes]
+    se_complete = all(c["complete"] for c in se_cov)
+    unresolved_se = [dict(u) | {"scope": c["scope"]}
+                     for c in se_cov for u in c["unresolved"]]
+    query_errors = [{"scope": c["scope"], "error": c["query_error"]}
+                    for c in se_cov if c["query_error"]]
+    jc_stats = {sc["scope"]: sc["jc_stats"] for sc in scopes}
+    orphan_jc = sum(s["orphan"] + s["invalid"] for s in jc_stats.values())
+
+    audit_ok = bool(ok_all and c1_pass and c3_no_mismatch and c3_unverified == 0
+                    and not dup and se_complete and not rejected)
+    evidence_complete = bool(c3_unverified == 0 and se_complete and not rejected)
+    budget_log = http_budget.as_log() if http_budget is not None else None
+    budget_exhausted = bool(budget_log and budget_log["exhausted"])
 
     probe_by_wo = (probe or {}).get("probes") or {}
     findings = []
     for sc in scopes:
         for name, w in sc["wo_summary"].items():
             if w["reason_code"] in ("wo_se_qty_mismatch", "wo_uom_unresolved",
-                                    "wo_se_partially_unverified", "wo_se_missing"):
+                                    "wo_se_partially_unverified", "wo_se_missing",
+                                    "wo_se_incomplete", "wo_se_query_incomplete"):
                 item = {"scope": sc["scope"], "work_order": name,
                         "reason_code": w["reason_code"],
                         "qty": w["qty"], "produced_qty": w["produced_qty"],
@@ -862,11 +1435,14 @@ def build_manifest(scopes: list[dict], window: tuple[str | None, str | None], ba
         "window": {"from": window[0], "to": window[1], "basis": basis,
                    "logic": "report_partition_not_filter"},
         "scopes": [{"scope": sc["scope"], "snapshot": sc["snapshot"],
-                    "inputs": sc["inputs"], "counts": sc["counts"],
+                    "inputs": sc["inputs"], "parsed_inputs": sc["parsed_inputs"],
+                    "counts": sc["counts"],
                     "disposition_counts": sc["disposition_counts"],
                     "link_counts": sc["link_counts"],
                     "association": sc["association"],
                     "checks": sc["checks"],
+                    "se_coverage": sc["se_coverage"],
+                    "jc_stats": sc["jc_stats"],
                     "window": window_summary([r for r in sc["rows"]
                                               if r["row_type"] == "so_line"]),
                     "unlinked_dn": sc["unlinked_dn"]}
@@ -874,10 +1450,36 @@ def build_manifest(scopes: list[dict], window: tuple[str | None, str | None], ba
         "row_accounting": accounting,
         "audit_ok": audit_ok,
         "evidence_complete": evidence_complete,
+        "coverage": {
+            "se": {"complete": se_complete, "per_scope": se_cov,
+                   "unresolved_submitted": unresolved_se,
+                   "query_errors": query_errors,
+                   "submitted_total": sum(c["submitted"] for c in se_cov),
+                   "resolved_total": sum(c["conserved"] for c in se_cov)},
+            "c1": {"complete": not c1_unresolved,
+                   "lines_total": len(c1_all),
+                   "lines_evaluated": len(c1_evaluated),
+                   "lines_fail": len(c1_fail),
+                   "unresolved": [{"scope": x.get("scope"),
+                                   "so_line_key": x["so_line_key"],
+                                   "reason_code": x["reason_code"]}
+                                  for x in c1_unresolved]},
+            "c3_unverified": c3_unverified,
+            "rejected_rows": [{"scope": s, "row_type": r["row_type"],
+                               "row_key": r["row_key"],
+                               "reason_code": r["reason_code"]} for s, r in rejected],
+            "orphan_jc_groups": orphan_jc,
+            "duplicate_keys": dup,
+            "child_duplicate_keys": child_dup,
+        },
+        "http_budget": budget_log,
         "conservation": {
-            "C1_so_dn": {"pass": c1_pass, "per_scope": c1},
-            "C2_wo_se": [sc["checks"]["C2_wo_se"] | {"scope": sc["scope"]} for sc in scopes],
-            "C3_se_internal": {"pass": c3_no_mismatch,
+            "C1_so_dn": {"pass": c1_pass, "per_scope": [sc["checks"]["C1_so_dn"]
+                                                        for sc in scopes]},
+            "C2_wo_se": [dict(sc["checks"]["C2_wo_se"],
+                              complete=bool(sc["se_coverage"]["complete"]),
+                              scope=sc["scope"]) for sc in scopes],
+            "C3_se_internal": {"pass": c3_no_mismatch and c3_unverified == 0,
                                "unverified": c3_unverified,
                                "per_scope": [dict(x) | {"scope": sc["scope"]}
                                              for x, sc in zip(c3, scopes)]},
@@ -902,34 +1504,47 @@ def build_manifest(scopes: list[dict], window: tuple[str | None, str | None], ba
         "se_evidence": {
             "detail_source_counts": dict(Counter(
                 r["link"].get("detail_source") for sc in scopes for r in sc["rows"]
-                if r["row_type"] == "se")),
+                if r["row_type"] == "se" and r["link"].get("detail_source"))),
             "enrichment": (se_details or {}).get("log"),
         },
         "wo_probe": (probe or {}).get("log"),
         "findings": findings,
         "notes": [
             "本文件只做 DN/WO/JC/SE 关联与数量守恒，不是 G1 验收、不是需求/补货结论。",
-            "C1 只在同一 UOM 内求和；跨 UOM 不出合计。",
+            "C1 逐行全精度判定（不四舍五入、不允许正负抵消）；UOM 汇总仅作展示。",
+            "所有数量聚合按 UOM 分区；UOM 缺失/未知一律 unverified，不进入合计。",
             "JC 仅进度证据，不进入守恒。",
-            "C2 只对已取得 line 级证据的 WO 求值；缺失记 unverified。",
+            "C2 只对已取得 line 级证据且 SE 覆盖完整的 WO 出完整总数；否则只出 known_subtotal。",
             "WO.produced_qty 不作完工真值；SE finished 行合计才是守恒锚点。",
+            "HTTP 预算为请求级（含重试与翻页），跨 SE 明细与探针共享。",
+            "退货行按 is_return=1 取绝对值归一，只扣减一次。",
         ],
     }
-    manifest["payload_sha256"] = canonical_sha(manifest)
+    if budget_exhausted:
+        manifest["run_status"] = "partial_http_budget_exhausted"
     return manifest
 
 
 def stable_hash(manifest: dict) -> str:
-    """去掉 run_id/as_of/在线探针等易变字段后的稳定摘要，用于两次回放比对。"""
+    """去掉 run_id/as_of/在线探针/预算事件等易变字段后的稳定摘要。"""
     payload = {k: v for k, v in manifest.items()
                if k not in ("run_id", "as_of", "payload_sha256", "wo_probe",
-                            "stable_sha256")}
+                            "stable_sha256", "http_budget")}
     payload["findings"] = [{k: v for k, v in f.items() if k != "probe"}
                            for f in payload.get("findings") or []]
     if isinstance(payload.get("se_evidence"), dict):
         payload["se_evidence"] = {k: v for k, v in payload["se_evidence"].items()
                                   if k != "enrichment"}
     return canonical_sha(payload)
+
+
+def finalize_manifest(manifest: dict) -> dict:
+    """先写 stable_sha256，再对**完整最终 manifest** 计算 payload_sha256。"""
+    manifest.pop("payload_sha256", None)
+    manifest.pop("stable_sha256", None)
+    manifest["stable_sha256"] = stable_hash(manifest)
+    manifest["payload_sha256"] = canonical_sha(manifest)
+    return manifest
 
 
 # ── main ─────────────────────────────────────────────
@@ -966,9 +1581,10 @@ def main(argv: list[str] | None = None) -> int:
     window = (args.window_from or None, args.window_to or None)
 
     se_details = None
+    budget = HttpBudget(args.max_http)
     if args.enrich_se:
         try:
-            se_details = enrich_se_details(snaps, out_dir, args.max_http, args.sleep,
+            se_details = enrich_se_details(snaps, out_dir, budget, args.sleep,
                                            out_dir / "se_details.json",
                                            args.env_file or None)
         except InputError as e:
@@ -978,6 +1594,10 @@ def main(argv: list[str] | None = None) -> int:
         p = out_dir / "se_details.json"
         if p.is_file():
             se_details = json.loads(p.read_text(encoding="utf-8"))
+            if se_details.get("schema") not in (None, SE_DETAIL_SCHEMA):
+                print(f"✗ SE 明细缓存 schema 不符: {se_details.get('schema')!r}",
+                      file=sys.stderr)
+                return 2
         else:
             print(f"⚠ 没有可复用的 {p}；SE line 证据按缺失处理", file=sys.stderr)
 
@@ -988,13 +1608,14 @@ def main(argv: list[str] | None = None) -> int:
     if args.probe_mismatch_wos > 0 and args.enrich_se:
         try:
             probe = probe_wo_mismatches(scopes, out_dir, args.probe_mismatch_wos,
-                                        args.sleep, args.env_file or None)
+                                        args.sleep, budget, args.env_file or None)
         except InputError as e:
             print(f"✗ {e}", file=sys.stderr)
             return 2
 
-    manifest = build_manifest(scopes, window, args.date_basis, se_details, probe, run_id)
-    manifest["stable_sha256"] = stable_hash(manifest)
+    manifest = build_manifest(scopes, window, args.date_basis, se_details, probe,
+                              run_id, budget)
+    finalize_manifest(manifest)
 
     # 逐行去向
     with open(out_dir / "line_dispositions.jsonl", "w", encoding="utf-8", newline="\n") as f:
@@ -1028,7 +1649,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"    C2={json.dumps(sc['checks']['C2_wo_se'], ensure_ascii=False)} "
               f"C3={json.dumps(sc['checks']['C3_se_internal'], ensure_ascii=False)}")
     print(f"  stable_sha256={manifest['stable_sha256']}")
-    budget_ok = not (se_details and se_details["log"]["budget_exceeded"])
+    budget_ok = not manifest["http_budget"]["exhausted"]
     if not (manifest["audit_ok"] and manifest["evidence_complete"] and budget_ok):
         print(f"  status=partial audit_ok={manifest['audit_ok']} "
               f"evidence_complete={manifest['evidence_complete']} "
