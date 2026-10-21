@@ -150,7 +150,7 @@ EN 只读：历史取回 **362 次 SE 明细 GET**（425 条 SE 中 362 条需�
 
 ## 4. JC 只作进度证据，不作守恒
 
-- 516 个工序组；124 / 128 张 WO 有工序组（4 张无卡：含未开工/草稿）；0 个 JC 组指向快照外 WO。
+- 105 个 JC 组（516 条工序行）；124 / 128 张 WO 有工序组（4 张无卡：含未开工/草稿）；0 个 JC 组指向快照外 WO。
 - **21 张 WO 的 routing 末道不是完工道**：末道常是 `通用返工` / `质检发现问题`，
   其数量只有 2–4 件；主工序在 100–107 件。例：WO-26-00291 末道 2 件、
   `质检` 103 件、工序最大 107 件，而 SE 完工 103 件。
@@ -169,7 +169,7 @@ EN 只读：历史取回 **362 次 SE 明细 GET**（425 条 SE 中 362 条需�
   **不出 progress 行**（含组内合法工序），只落非法项显式 `invalid` 行
   （`jc_operation_payload_invalid` / `jc_operation_sum_qty_invalid`），并在 WO 行
   `reason_detail` 标 `jc_operation_payload_invalid`。JC 仍不参与守恒。
-  本轮 516 组全部合法，`matched=516`、`invalid=0`。
+  本轮 105 组全部合法，`matched=105`、`invalid=0`（516 条工序行全部为 progress）。
 
 ## 5. 逐行去向
 

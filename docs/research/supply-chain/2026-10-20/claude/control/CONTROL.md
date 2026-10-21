@@ -9,16 +9,16 @@ updated: 2026-10-21
 
 # 供应链整合 — 项目总控页
 
-Updated: 2026-10-21 19:27 (Asia/Shanghai)
+Updated: 2026-10-21 19:36 (Asia/Shanghai)
 
-## 已完成（待交叉复审，非 G1 验收）
+## 已验收（窄样本契约）
 
-> v1 `22ae9a1e` 被 Adapter Review 打回；v2 `49a142e0`、v3 `e6b3cc9a` 又被交叉复审打回
-> （v2：2 P1 + 1 P2；v3：1 P2——JC 工序 payload 未校验）。
-> 返修版 **`4b7ec55f`** 已修复并重跑证据 v4。
+> v1 `22ae9a1e` 被 Adapter Review 打回；v2 `49a142e0`、v3 `e6b3cc9a` 被交叉复审打回。
+> **v4 `4b7ec55f` 已通过 Codex 交叉复审（PASS，1 个非阻塞 P3 文档计数）。**
 
-- **G1B-DN-WO-JC-SE v4 返修**：Claude `4b7ec55f`（PR #300）。5 个 top-SKU 快照
-  （120 SO / 293 DN / 128 WO / 425 SE / 558 SE 行 / 516 工序组，2,040 行去向）。
+- **G1B-DN-WO-JC-SE v4**：Claude `4b7ec55f`（PR #300）。5 个 top-SKU 快照
+  （120 SO / 293 DN / 128 WO / 425 SE / 558 SE 行 / 105 JC 组 / 516 工序行，
+  2,040 行去向）。
   在 v2 的 6 P1 + 3 P2、v3 的 3 项基础上，关闭 v3 交叉复审剩余 1 P2：
   JC 工序 payload **逐个校验**（值必须是对象且 `sum_qty` 为有限数值；null/字符串/数组
   → `jc_operation_payload_invalid`，空对象/缺 `sum_qty` → `jc_operation_sum_qty_invalid`），
@@ -29,10 +29,13 @@ Updated: 2026-10-21 19:27 (Asia/Shanghai)
   84/84 本模块离线单测、150/150 g1_contract 离线全套；两轮回放 stable/行去向一致，0 网络请求。
   v4 的 `stable_sha256` 与 `line_dispositions` 与 v3 逐字节相同（合法数据不变）。
   关键发现不变：`Work Order.produced_qty` 不可当完工账。
+  Codex 复审：PASS（79 read-only tests + 8 独立 payload 探针；2,040 行两轮回放）。
+  P3 已修：文档把 516 条工序行误写成 516 个 JC 组，实际为 105 组（19+18+16+32+20）；
+  仅文档改动，代码/证据未变。
   证据：`out/dn_wo_jc_se/`，zip `dn_wo_jc_se_evidence_v4.zip` `6cec02bd…`；
   manifest `3b381d4d…`；payload `8a376557…`；行级去向 `95197f06…`；stable `6f12333c…`；
-  报告 `g1b_dn_wo_jc_se.md`。
-  **本项只证明窄样本关联/守恒契约，不是 G1 或业务验收。**
+  报告 `g1b_dn_wo_jc_se.md`；复审 `control/reviews/2026-10-21-cross-review-v4.md`。
+  **本项只证明窄样本关联/守恒契约，不是 G1 或业务验收，也不授权扩样。**
 
 ## 已验收
 
@@ -40,15 +43,16 @@ Updated: 2026-10-21 19:27 (Asia/Shanghai)
 - **无证据表 R1/R2 审计门**：`d8c473fe`；52 SO / 2,024 行；family 132 / pending 1,769 / out_of_scope 123；两轮一致；已接受。
 - **历史证据边界**：Codex `d3fc4c8d`（#301）；Version/modified 不足以升级历史，需可信锚点/变化覆盖/生效证据或明确交易绑定。
 
-## 进行中
+## 本轮评审记录（均已完成）
 
-- **G1B-ADAPTER-REVIEW**（Codex）：已完成对 `22ae9a1e` 的只读审查，**6 P1 + 3 P2**；
-  结论：需修复后才能接受适配器。v2 已逐项修复并补反例单测，相关改动由 v3 保留。
-  报告归档 `control/reviews/2026-10-21-adapter-report.md`。
-- **G1B-DN-WO-JC-SE 返修**（Claude）：v4 `4b7ec55f` 已提交并推送（未扩 family、未写生产），
-  证据 v4 已重跑；状态置 `completed`，note 含 commit/测试/哈希。
-- **G1B-CROSS-REVIEW**（Codex）：已置 `ready`，**只审 `4b7ec55f` 及 v4 证据**；
-  v3/`e6b3cc9a` 与更早结论作废。
+- **G1B-ADAPTER-REVIEW**（Codex）：`22ae9a1e` 只读审查，**6 P1 + 3 P2**；
+  报告 `control/reviews/2026-10-21-adapter-report.md`。已由 v2–v4 关闭。
+- **G1B-CROSS-REVIEW v2**（Codex）：`49a142e0` FAIL（2 P1 + 1 P2）；
+  报告 `control/reviews/2026-10-21-cross-review-v2.md`。
+- **G1B-CROSS-REVIEW v3**（Codex）：`e6b3cc9a` FAIL（仅 1 P2）；
+  报告 `control/reviews/2026-10-21-cross-review-v3.md`。
+- **G1B-CROSS-REVIEW v4**（Codex）：`4b7ec55f` **PASS**（1 个非阻塞 P3）；
+  报告 `control/reviews/2026-10-21-cross-review-v4.md`。
 
 ## 阻塞
 
@@ -60,11 +64,12 @@ Updated: 2026-10-21 19:27 (Asia/Shanghai)
 
 ## 下一步
 
-1. ~~Claude 提交 DN/WO/JC/SE 固定 commit + 证据包~~ → v1 `22ae9a1e`、v2 `49a142e0`、
-   v3 `e6b3cc9a` 均被打回；v4 `4b7ec55f` 已交付。
-2. Codex 对 `4b7ec55f` 做关键复审（`G1B-CROSS-REVIEW` 已 ready）；R290 对账结果归档。
-3. 再决定扩样到 100/全 family，还是进入 G2/G3 预测与补货。
-4. 今晚收尾时跑一次 `/ce-okf`，把 SO/证据门与 producer 经验正式归档。
+1. ~~DN/WO/JC/SE 交付与复审~~ → v4 `4b7ec55f` **PASS**，窄样本契约已验收。
+2. **待用户/业务裁决**：扩样到 100 SKU / 全 family，还是直接进入 G2/G3 预测与补货。
+   未获授权前不扩样、不跑全量。
+3. R290-RECON 等待可绑定的冻结包/五例清单；到位后恢复对账。
+4. 今晚收尾跑一次 `/ce-okf`，把 SO 证据门、DN/WO/JC/SE 四轮返修与 producer 经验正式归档。
+5. 已停用 Claude/Cross/Adapter/R290 周期 automation（避免验收后空跑）；需要下一阶段时再启用。
 
 ## 修正
 
@@ -82,6 +87,9 @@ Updated: 2026-10-21 19:27 (Asia/Shanghai)
 - **工具边界**：总控页是唯一项目入口；Orca 保存执行状态；Git/PR 保存交付证据。暂不引入 Linear/GitHub Projects；状态更新使用 `state_update.py`（全局锁），不要直接改 `state.json`。
 
 ## 持续调度（Orca automations）
+
+**当前状态（19:36）：Claude / Cross-Review / Adapter / R290 四个 automation 已停用**
+（本阶段验收完成，避免空跑）；仅保留 Handoff Check。下一阶段需要时再按下方参数启用。
 
 已验证：心跳 run `2eab6670-729e-4646-b216-0852b0470693` 在 `D:/Work/赛狐/Cursor-claude` **completed**（17:37），随后停用。旧 `.claude/worktrees` 路径被 Orca 判为 unavailable，worktree 已移到 `D:/Work/赛狐/Cursor-claude`。Handoff check 已在 fresh session 成功读取控制页与 v5 证据。
 
@@ -110,7 +118,7 @@ Updated: 2026-10-21 19:27 (Asia/Shanghai)
 
 ## 额度
 
-- Codex 五小时：17:37 约 **30%**，18:51:55 重置；**19:00 起**再派 Codex（重置可能延迟生效）。
-- 不再固定保留 30%；以 5%–10% 作收尾余量；关键复审保持 `gpt-6.1-sol`。
-- 额度读数由 `quota_check.py` 带时间/来源写入 `state.json`；19:00 后的复审要求 fresh 读数。
-- 不假定周额度同步重置；每个任务结束刷新额度。
+- Codex 五小时：18:51:55 已重置；19:00 后完成 3 轮关键复审（v2/v3/v4）与 2 次小探针。
+- 重置后页脚在健康额度下不再显示 `5h limit: X%`；`quota_check.py` 无页脚时会跑一次极小
+  `codex exec` 探针，成功才标记 `fresh`、`pause=false`（已实测通过）。
+- 关键复审保持 `gpt-6.1-sol`；收尾保留 5%–10% 余量；不假定周额度同步重置。

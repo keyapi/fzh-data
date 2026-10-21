@@ -1,9 +1,10 @@
 {
-  "updated": "2026-10-21T18:12:20+08:00",
+  "updated": "2026-10-21T19:33:00+08:00",
   "accepted": [
     "G1 SO evidence gate v5: 9a04741e / d027f981; 66 tests; current_structure_only boundary; historical pending",
     "R1/R2 no-evidence audit gate: d8c473fe",
-    "BOM historical boundary report: d3fc4c8d"
+    "BOM historical boundary report: d3fc4c8d",
+    "G1B DN/WO/JC/SE narrow sample: 4b7ec55f PASS cross-review (84 tests; v4 evidence 6cec02bd; scope narrow sample only; P3 doc count corrected post-acceptance)"
   ],
   "tasks": [
     {
@@ -41,7 +42,7 @@
     {
       "id": "G1B-CROSS-REVIEW",
       "owner": "codex",
-      "status": "ready",
+      "status": "completed",
       "depends_on": "G1B-DN-WO-JC-SE",
       "scope": "Review Claude's fixed commit + evidence pack; key review on gpt-6.1-sol; no re-review of accepted SO evidence gate",
       "artifacts": [],
@@ -49,10 +50,8 @@
       "priority": 3,
       "on_failure": "set G1B-DN-WO-JC-SE.status=ready and G1B-CROSS-REVIEW.status=waiting with review notes",
       "unblocked_at": "2026-10-21T18:12:20+08:00",
-      "note": "Review v4 at commit 4b7ec55f (not e6b3cc9a). P2 fix: nested JC operation payloads are validated; malformed values (null/string/empty object/invalid sum_qty) seal the whole group as invalid with no progress rows, covered by CrossReviewV4Tests. Evidence v4: zip 6cec02bd…, manifest 3b381d4d…, payload 8a376557…, stable 6f12333c…, dispositions 95197f06… (2040 rows). v3 evidence and e6b3cc9a conclusions superseded. Report: docs/research/supply-chain/2026-10-20/claude/experiments/g1_contract/g1b_dn_wo_jc_se.md",
-      "updated_at": "2026-10-21T19:26:28+0800",
-      "claimed_at": "2026-10-21T19:18:17.421635+08:00",
-      "claimed_by": "codex"
+      "note": "PASS with nonblocking P3 documentation count correction: reviewed fixed 4b7ec55f code/tests/report against actual files; v4 zip 6cec02bd1623253da20a3d4244171cb4e1af8d8c1c44d6df3ec48e9d89db7e35 and all 6 members plus 5 snapshot hashes verified; payload/stable hashes valid; two memory-only replays reproduce stable 6f12333c688d736e861278a4e2c31ee3191aa945750712753a5548b5cb878636 and all 2040 disposition bytes; 79 read-only module tests and 8 independent malformed/mixed JC probes passed, 5 disk-writing tests excluded; report g1b_dn_wo_jc_se.md:153,172 confuses 516 operations with 105 matched JC groups (manifest scope matched 19+18+16+32+20). No blocking code/evidence findings. Narrow sample contract only, not G1/business acceptance; accepted SO gate untouched; no production queries or source/evidence edits.",
+      "updated_at": "2026-10-21T19:29:59+0800"
     },
     {
       "id": "G1B-ADAPTER-REVIEW",
@@ -76,10 +75,10 @@
     "reset": "18:51:55",
     "reserve_pct": 10,
     "codex_pause": false,
-    "updated": "2026-10-21T19:18:17.276910+08:00",
+    "updated": "2026-10-21T19:32:18+0800",
     "fresh": true,
     "source": "probe:codex-exec",
-    "last_read_at": "2026-10-21T19:18:17.275871+08:00",
+    "last_read_at": "2026-10-21T19:28:46.906779+08:00",
     "raw_line": "no quota footer marker; tiny codex exec probe completed",
     "resets_at": "18:51"
   },
