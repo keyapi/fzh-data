@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -856,12 +857,18 @@ class AcceptanceTests(TempCase):
             conn.close()
 
     def test_a12_lock_concurrency_and_crash_recovery(self) -> None:
-        """验收 12：并发第二个进程拒绝；崩溃遗留锁按 PID/mtime 恢复。"""
+        """验收 12：并发第二个进程拒绝；活进程超时不被抢锁；崩溃锁随进程释放。"""
         lock_path = self.tmp / "stock_history.lock"
         held = ing.acquire_lock(lock_path, "test")
         try:
             with self.assertRaises(ing.LockHeld):
                 ing.acquire_lock(lock_path, "second")
+
+            # 活进程持锁：即使 mtime 很旧、stale 阈值很小，也绝不抢锁
+            ancient = time.time() - 10_000
+            os.utime(lock_path, (ancient, ancient))
+            with self.assertRaises(ing.LockHeld):
+                ing.acquire_lock(lock_path, "age", stale_after_seconds=1)
 
             # 第二个进程走 CLI：锁被占用 → 退出码 3，且不打开 DB
             run_dir = self.simple_run(run_id="run-20261021T090000-aaaaaa")
@@ -888,29 +895,33 @@ class AcceptanceTests(TempCase):
             self.assertFalse(db_path.exists(), "持锁失败时不应创建/打开数据库")
         finally:
             held.release()
-        self.assertFalse(lock_path.exists(), "release 后锁文件应消失")
 
-        # 崩溃遗留锁：pid=0（必然不存活）→ 接管并把旧锁移到 .stale-*
-        lock_path.write_text(
+        # 锁文件保留（删文件会造成 inode 竞态），但 OS 锁已释放，可再次获取
+        self.assertTrue(lock_path.exists(), "文件锁不删除锁文件")
+        again = ing.acquire_lock(lock_path, "again")
+        again.release()
+
+        # 崩溃进程遗留：子进程拿锁后 os._exit（不做任何清理），内核自动释放
+        code = (
+            "import sys, os; sys.path.insert(0, {here!r});"
+            "import stock_history_ingest as ing;"
+            "_lock = ing.acquire_lock({lock!r});"
+            "os._exit(0)"
+        ).format(here=str(HERE), lock=str(lock_path))
+        crashed = subprocess.run(
+            [sys.executable, "-c", code], capture_output=True, text=True, timeout=120
+        )
+        self.assertEqual(crashed.returncode, 0, crashed.stderr)
+        recovered = ing.acquire_lock(lock_path, "recovery")
+        recovered.release()
+
+        # 旧版本遗留的纯文本锁（没有 OS 锁持有者）同样可以直接接管
+        legacy = self.tmp / "legacy.lock"
+        legacy.write_text(
             json.dumps({"pid": 0, "host": "dead", "token": "old"}), encoding="utf-8"
         )
-        old = time.time() - 60
-        os.utime(lock_path, (old, old))
-        recovered = ing.acquire_lock(lock_path, "recovery")
-        try:
-            self.assertTrue(lock_path.exists())
-            self.assertTrue(any(p.name.startswith(lock_path.name + ".stale-") for p in self.tmp.iterdir()))
-        finally:
-            recovered.release()
-
-        # mtime 过期但 PID 看似存活 → 也按过期回收
-        lock_path.write_text(
-            json.dumps({"pid": os.getpid(), "host": "self", "token": "old2"}), encoding="utf-8"
-        )
-        stale_time = time.time() - 10_000
-        os.utime(lock_path, (stale_time, stale_time))
-        by_age = ing.acquire_lock(lock_path, "age", stale_after_seconds=60)
-        by_age.release()
+        legacy_held = ing.acquire_lock(legacy, "legacy")
+        legacy_held.release()
 
     def test_a13_migration_failure_rolls_back(self) -> None:
         """验收 13：schema 迁移失败 → 该版本整版回滚，已成功版本保留。"""
@@ -1140,7 +1151,7 @@ class SupplementaryTests(TempCase):
         self.assertEqual(bundle.warehouses[0].rows_read, 1)
         self.assertTrue((run_dir / "warehouse=W1_WH-W1.jsonl").is_file())
 
-    def test_published_alias_conflict_across_runs_is_rejected(self) -> None:
+    def test_published_alias_conflict_across_runs_is_resolved_by_rank(self) -> None:
         first_dir = make_run(
             self.tmp,
             "2026-10-21-a",
@@ -1161,12 +1172,465 @@ class SupplementaryTests(TempCase):
         try:
             publish(conn, first)
             decision = publish(conn, second)
-            self.assertEqual(decision["action"], "reject")
+            self.assertEqual(decision["action"], "publish")
             self.assertEqual(
-                ing.get_publish(conn, date(2026, 10, 21))["run_id"], first.run_id
+                decision["reason"], "candidate_outranks_published_with_alias_conflict"
+            )
+            self.assertTrue(decision["alias_conflicts"])
+            self.assertEqual(
+                ing.get_publish(conn, date(2026, 10, 21))["run_id"], second.run_id
             )
         finally:
             conn.close()
+
+
+# --------------------------------------------------------------------------- #
+# 代码复审（2026-10-22）六项修复的回归用例
+# --------------------------------------------------------------------------- #
+
+
+def clone_run_with_value(
+    src_run: Path, dst_root: Path, dirname: str, value: float, *, run_id: str
+) -> Path:
+    """复制 run 的 manifest（字节不变），只改 JSONL 与 run_meta/.sealed 哈希。
+
+    这样 manifest_sha256 与源 run 完全相同，只有文件哈希变化——正是复审指出的
+    "同 run_id、只改数据文件"的绕过场景。
+    """
+    dst = dst_root / dirname
+    dst.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(src_run / "manifest.json", dst / "manifest.json")
+    name = _file_name("W1", "WH-W1")
+    with (dst / name).open("w", encoding="utf-8", newline="\n") as fh:
+        fh.write(json.dumps(row("SKU-1", "G1", "W1", available=value)) + "\n")
+    files = {
+        "manifest.json": ing.sha256_file(dst / "manifest.json"),
+        name: ing.sha256_file(dst / name),
+    }
+    timestamp = "2026-10-21T09:00:00"
+    run_meta = {
+        "run_id": run_id,
+        "snapshot_date": "2026-10-21",
+        "started_at": timestamp,
+        "ended_at": timestamp,
+        "exit_code": 0,
+        "trigger": "test",
+        "manifest_sha256": files["manifest.json"],
+        "files": [{"path": n, "sha256": s} for n, s in sorted(files.items())],
+    }
+    (dst / "run_meta.json").write_text(
+        json.dumps(run_meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    seal_payload = {
+        "run_id": run_id,
+        "sealed_at": datetime.now(timezone.utc).isoformat(),
+        "manifest_sha256": files["manifest.json"],
+        "files": files,
+    }
+    (dst / ".sealed").write_text(
+        json.dumps(seal_payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    return dst
+
+
+class CodeReviewFixTests(TempCase):
+    """2026-10-22 Codex 复审六项：每一项都有可复现的回归断言。"""
+
+    def test_r1_reimport_with_changed_file_hash_is_rejected(self) -> None:
+        """① 同 run_id 重导必须比对旧哈希；文件变了就拒绝，绝不先删后插。"""
+        run_id = "run-20261021T090000-aaaaaa"
+        original = make_run(
+            self.tmp / "orig",
+            "2026-10-21",
+            "2026-10-21T09:00:00",
+            [warehouse("W1", "WH-W1", [row("SKU-1", "G1", "W1", available=95)])],
+            run_id=run_id,
+        )
+        changed = clone_run_with_value(
+            original, self.tmp / "changed", "2026-10-21", 123456, run_id=run_id
+        )
+        good = ing.load_run(original, source="scheduled")
+        bad = ing.load_run(changed, source="scheduled")
+        self.assertTrue(good.integrity_ok, good.integrity_errors)
+        self.assertTrue(bad.integrity_ok, bad.integrity_errors)
+        self.assertEqual(good.run_id, bad.run_id)
+        self.assertEqual(
+            good.manifest_sha256,
+            bad.manifest_sha256,
+            "本用例刻意保持 manifest 字节不变，只有 JSONL 内容变化",
+        )
+        self.assertNotEqual(
+            good.warehouses[0].file_sha256, bad.warehouses[0].file_sha256
+        )
+
+        conn = memory_db()
+        try:
+            publish(conn, good)
+            before_history = history_rows(conn)
+            before_rows = expected_rows_from_run(conn, run_id)
+            self.assertEqual(before_history[0][6], 95.0)
+
+            with self.assertRaises(ing.DataIntegrityError):
+                ing.stage_run(conn, bad)
+
+            self.assertEqual(history_rows(conn), before_history, "已发布行不得被覆盖")
+            self.assertEqual(
+                expected_rows_from_run(conn, run_id), before_rows, "审计行不得被删改"
+            )
+            self.assertEqual(
+                conn.execute(
+                    "SELECT integrity_ok FROM stock_run WHERE run_id = ?", [run_id]
+                ).fetchone(),
+                (True,),
+            )
+            events = conn.execute(
+                "SELECT action, detail FROM stock_ingest_event WHERE run_id = ?",
+                [run_id],
+            ).fetchall()
+            actions = [action for action, _ in events]
+            self.assertIn("reimport_changed_rejected", actions)
+            details = " ".join(detail for _, detail in events)
+            self.assertIn(good.warehouses[0].file_sha256, details)
+            self.assertIn(bad.warehouses[0].file_sha256, details)
+
+            # 完全相同的重导仍然幂等（不能误伤正常重复导入）
+            ing.stage_run(conn, ing.load_run(original, source="scheduled"))
+            self.assertEqual(history_rows(conn), before_history)
+            self.assertEqual(expected_rows_from_run(conn, run_id), before_rows)
+        finally:
+            conn.close()
+
+        # dry-run 的只读路径（CLI --dry-run --db）也必须看到同样的变更
+        db_path = self.tmp / "dryrun.duckdb"
+        writer = duckdb.connect(str(db_path))
+        try:
+            ing.migrate(writer)
+            publish(writer, good)
+        finally:
+            writer.close()
+        reader = duckdb.connect(str(db_path), read_only=True)
+        try:
+            decision = ing.evaluate_publish(reader, bad)
+            self.assertEqual(decision["action"], "reject")
+            self.assertEqual(decision["reason"], "reimport_changed")
+        finally:
+            reader.close()
+
+    def test_r2_missing_manifest_complete_flag_is_unknown(self) -> None:
+        """② manifest.complete 缺失 → 保守判 unknown，不能冒充完整日。"""
+        unknown = ing.load_run(
+            self.simple_run(
+                dirname="2026-10-21-unknown",
+                run_id="run-20261021T090000-aaaaaa",
+                complete=None,
+            ),
+            source="scheduled",
+        )
+        known = ing.load_run(
+            self.simple_run(
+                dirname="2026-10-21-known",
+                run_id="run-20261021T090000-bbbbbb",
+                complete=True,
+            ),
+            source="scheduled",
+        )
+        self.assertIsNone(unknown.manifest_complete)
+        self.assertTrue(unknown.scope_complete, "仓级批次仍可全部完整")
+        self.assertFalse(unknown.run_complete, "缺全仓标志只能判 unknown")
+        self.assertFalse(
+            ing.build_report(unknown, {"action": "publish"}, dry_run=True)["complete_day"]
+        )
+        self.assertTrue(known.run_complete)
+        self.assertGreater(known.rank_key(), unknown.rank_key())
+
+        conn = memory_db()
+        try:
+            publish(conn, unknown)
+            stored = conn.execute(
+                "SELECT manifest_complete, scope_complete, run_complete"
+                " FROM stock_run WHERE run_id = ?",
+                [unknown.run_id],
+            ).fetchone()
+            self.assertEqual(stored, (None, True, False))
+            self.assertEqual(
+                conn.execute("SELECT COUNT(*) FROM stock_history").fetchone()[0], 6
+            )
+        finally:
+            conn.close()
+
+    def test_r3_alias_conflict_is_deterministic_regardless_of_order(self) -> None:
+        """③ 跨 run 别名冲突按同一总序裁决：反序导入最终赢家唯一。"""
+
+        def build(dirname: str, run_id: str, goods_id: str):
+            return ing.load_run(
+                make_run(
+                    self.tmp,
+                    dirname,
+                    "2026-10-21T09:00:00",
+                    [
+                        warehouse(
+                            "W1", "WH-W1", [row("SKU-X", goods_id, "W1", available=1)]
+                        )
+                    ],
+                    run_id=run_id,
+                    ended_at="2026-10-21T09:30:00",
+                ),
+                source="scheduled",
+            )
+
+        low = build("low", "run-20261021T090000-aaaaaa", "G1")
+        high = build("high", "run-20261021T090000-zzzzzz", "G2")
+        self.assertEqual(low.rank_key()[:4], high.rank_key()[:4])
+
+        final: list[str] = []
+        second_actions: list[tuple[str, str]] = []
+        for order in ((low, high), (high, low)):
+            conn = memory_db()
+            try:
+                decisions = [publish(conn, bundle) for bundle in order]
+                second_actions.append((decisions[-1]["action"], decisions[-1]["reason"]))
+                final.append(ing.get_publish(conn, date(2026, 10, 21))["run_id"])
+                goods_ids = [
+                    r[0] for r in conn.execute("SELECT goods_id FROM stock_history").fetchall()
+                ]
+                self.assertEqual(goods_ids, ["G2"], f"导入顺序 {order} 结果不一致")
+            finally:
+                conn.close()
+
+        self.assertEqual(final, [high.run_id, high.run_id])
+        self.assertEqual(
+            second_actions,
+            [
+                ("publish", "candidate_outranks_published_with_alias_conflict"),
+                ("reject", "alias_conflict_with_published"),
+            ],
+        )
+
+        # 更低序的冲突候选无论在哪个方向都不能赢
+        lowest = build("lowest", "run-20261021T090000-000000", "G3")
+        for order in ((high, lowest), (lowest, high)):
+            conn = memory_db()
+            try:
+                for bundle in order:
+                    publish(conn, bundle)
+                self.assertEqual(
+                    ing.get_publish(conn, date(2026, 10, 21))["run_id"], high.run_id
+                )
+            finally:
+                conn.close()
+
+    def test_r4_alias_intervals_are_date_rebuilt_and_rollback_restores(self) -> None:
+        """④ 按日期重建别名区间：反序导入不得出现 valid_to < valid_from；回滚恢复。"""
+        old = ing.load_run(
+            make_run(
+                self.tmp / "p_old",
+                "2026-10-20",
+                "2026-10-20T09:00:00",
+                [warehouse("W1", "WH-W1", [row("SKU-OLD", "G1", "W1", available=1)])],
+                run_id="run-20261020T090000-aaaaaa",
+            ),
+            source="scheduled",
+        )
+        new = ing.load_run(
+            make_run(
+                self.tmp / "p_new",
+                "2026-10-21",
+                "2026-10-21T09:00:00",
+                [warehouse("W1", "WH-W1", [row("SKU-NEW", "G1", "W1", available=1)])],
+                run_id="run-20261021T090000-bbbbbb",
+                ended_at="2026-10-21T09:30:00",
+            ),
+            source="scheduled",
+        )
+        newer = ing.load_run(
+            make_run(
+                self.tmp / "p_newer",
+                "2026-10-21",
+                "2026-10-21T10:00:00",
+                [warehouse("W1", "WH-W1", [row("SKU-NEW2", "G1", "W1", available=1)])],
+                run_id="run-20261021T100000-cccccc",
+                ended_at="2026-10-21T10:30:00",
+            ),
+            source="scheduled",
+        )
+
+        def intervals(conn):
+            rows = conn.execute(
+                "SELECT name, valid_from, valid_to FROM stock_id_history"
+                " WHERE entity_type = 'goods' AND entity_id = 'G1' ORDER BY name"
+            ).fetchall()
+            for _, start, end in rows:
+                if end is not None:
+                    self.assertGreaterEqual(end, start, f"区间倒挂: {rows}")
+            return rows
+
+        conn = memory_db()
+        try:
+            # 反序导入：先 10-21 再 10-20
+            publish(conn, new)
+            self.assertEqual(
+                intervals(conn), [("SKU-NEW", date(2026, 10, 21), None)]
+            )
+            publish(conn, old)
+            expected = [
+                ("SKU-NEW", date(2026, 10, 21), None),
+                ("SKU-OLD", date(2026, 10, 20), date(2026, 10, 21)),
+            ]
+            self.assertEqual(intervals(conn), expected)
+
+            # 同日替换：旧别名不再属于当日发布事实，但区间仍不得倒挂
+            decision = publish(conn, newer)
+            self.assertEqual(decision["previous_run_id"], new.run_id)
+            self.assertEqual(
+                intervals(conn),
+                [
+                    ("SKU-NEW2", date(2026, 10, 21), None),
+                    ("SKU-OLD", date(2026, 10, 20), date(2026, 10, 21)),
+                ],
+            )
+
+            # 回滚到 previous run：别名区间必须一起恢复
+            result = ing.rollback(conn, date(2026, 10, 21))
+            self.assertEqual(result["to_run_id"], new.run_id)
+            self.assertEqual(intervals(conn), expected)
+        finally:
+            conn.close()
+
+    def test_r5_zero_row_empty_previous_run_is_rollbackable(self) -> None:
+        """⑤ 合法零行空仓可按批次有效性回滚；批次不完整的零行仍拒绝。"""
+        empty = ing.load_run(
+            make_run(
+                self.tmp / "empty",
+                "2026-10-21",
+                "2026-10-21T08:00:00",
+                [
+                    warehouse("W1", "WH-W1", []),
+                    warehouse("W2", "WH-W2", []),
+                ],
+                complete=True,
+                run_id="run-20261021T080000-aaaaaa",
+                ended_at="2026-10-21T08:30:00",
+            ),
+            source="scheduled",
+        )
+        full = ing.load_run(
+            make_run(
+                self.tmp / "full",
+                "2026-10-21",
+                "2026-10-21T09:00:00",
+                [
+                    warehouse("W1", "WH-W1", [row("SKU-1", "G1", "W1", available=1)]),
+                    warehouse("W2", "WH-W2", [row("SKU-2", "G2", "W2", available=1)]),
+                ],
+                complete=True,
+                run_id="run-20261021T090000-bbbbbb",
+                ended_at="2026-10-21T09:30:00",
+            ),
+            source="scheduled",
+        )
+        self.assertTrue(empty.run_complete)
+        self.assertEqual(empty.rows_ingested, 0)
+
+        conn = memory_db()
+        try:
+            publish(conn, empty)
+            decision = publish(conn, full)
+            self.assertEqual(decision["previous_run_id"], empty.run_id)
+            preview = ing.rollback(conn, date(2026, 10, 21), dry_run=True)
+            self.assertEqual(preview["to_run_id"], empty.run_id)
+            self.assertEqual(preview["rows"], 0)
+            result = ing.rollback(conn, date(2026, 10, 21))
+            self.assertEqual(result["rows"], 0)
+            self.assertEqual(history_rows(conn), [])
+            self.assertEqual(
+                ing.get_publish(conn, date(2026, 10, 21))["run_id"], empty.run_id
+            )
+        finally:
+            conn.close()
+
+        # 反例：0 行但有一个仓没抓到（batch_complete=false）→ 无法断言是真空仓
+        broken = ing.load_run(
+            make_run(
+                self.tmp / "broken",
+                "2026-10-21",
+                "2026-10-21T07:00:00",
+                [
+                    warehouse("W1", "WH-W1", []),
+                    warehouse(
+                        "W2",
+                        "WH-W2",
+                        [],
+                        complete=False,
+                        include_file=False,
+                        manifest_rows=None,
+                        error="URLError: boom",
+                    ),
+                ],
+                complete=False,
+                run_id="run-20261021T070000-000000",
+                ended_at="2026-10-21T07:30:00",
+            ),
+            source="scheduled",
+        )
+        self.assertFalse(broken.run_complete)
+        conn = memory_db()
+        try:
+            publish(conn, broken)
+            publish(conn, full)
+            with self.assertRaises(ing.RollbackUnavailable):
+                ing.rollback(conn, date(2026, 10, 21))
+            # 拒绝回滚时发布指针不得变动
+            self.assertEqual(
+                ing.get_publish(conn, date(2026, 10, 21))["run_id"], full.run_id
+            )
+        finally:
+            conn.close()
+
+    def test_r6_live_process_lock_is_not_stolen_after_timeout(self) -> None:
+        """⑥ 可靠进程锁：活进程持锁即使超时也不被抢；进程退出后自动可获取。"""
+        lock_path = self.tmp / "cross.lock"
+        code = (
+            "import sys, time; sys.path.insert(0, {here!r});"
+            "import stock_history_ingest as ing;"
+            "_lock = ing.acquire_lock({lock!r});"
+            "print('held', flush=True); time.sleep(60)"
+        ).format(here=str(HERE), lock=str(lock_path))
+        child = subprocess.Popen(
+            [sys.executable, "-c", code],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        try:
+            self.assertEqual(child.stdout.readline().strip(), "held")
+            ancient = time.time() - 10_000
+            os.utime(lock_path, (ancient, ancient))
+            with self.assertRaises(ing.LockHeld):
+                ing.acquire_lock(lock_path, "parent", stale_after_seconds=1)
+            self.assertFalse(
+                any(p.name.startswith(lock_path.name + ".stale-") for p in self.tmp.iterdir()),
+                "不得把活进程的锁改名抢走",
+            )
+        finally:
+            child.terminate()
+            child.wait(timeout=30)
+            if child.stdout:
+                child.stdout.close()
+            if child.stderr:
+                child.stderr.close()
+
+        # 子进程退出（含崩溃/被终止）后内核释放锁，父进程即可获取。
+        # TerminateProcess 与内核释放句柄之间可能有极短延迟，给 10s 上限。
+        deadline = time.time() + 10
+        while True:
+            try:
+                held = ing.acquire_lock(lock_path, "parent")
+                break
+            except ing.LockHeld:
+                if time.time() > deadline:
+                    raise
+                time.sleep(0.1)
+        held.release()
 
 
 if __name__ == "__main__":

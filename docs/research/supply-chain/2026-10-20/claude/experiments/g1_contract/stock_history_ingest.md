@@ -2,8 +2,8 @@
 okf: v0.1
 type: Reference
 title: 通途每日库存快照 — 离线历史入库 / dry-run（v4 实现说明）
-description: 读取 YYYY-MM-DD run 目录，计算 run_id/哈希/完整性/稳定 ID，写入内存或临时 DuckDB；含两日固定 SHA256 基线、14 条验收与残余风险
-date: 2026-10-21
+description: 读取 YYYY-MM-DD run 目录，计算 run_id/哈希/完整性/稳定 ID，写入内存或临时 DuckDB；含两日固定 SHA256 基线、26 条测试（14 验收 + 6 补充 + 6 复审回归）与残余风险
+date: 2026-10-22
 tags: [supply-chain, stock, ingest, dry-run, duckdb, legacy]
 ---
 
@@ -59,7 +59,7 @@ CLI 退出码：`0` 成功（含 dry-run 校验失败的报告）/ `2` 输入或
 | `--db PATH` | DuckDB 路径，默认 `:memory:`；写模式禁止 `:memory:` |
 | `--rollback DATE` | 按 `previous_run_id` 重放该日期 |
 | `--lock-path PATH` | 默认 `<db 所在目录>/stock_history.lock` |
-| `--lock-stale-seconds N` | 默认 21600（6h）；超过即视为崩溃遗留 |
+| `--lock-stale-seconds N` | **已废弃**（保留兼容）；OS 文件锁随进程释放，不再按时间抢锁 |
 | `--baseline-in PATH` | 比对既有 SHA256 基线，不一致 → 拒绝发布 |
 | `--baseline-out PATH` | 写出本次 manifest + 每个 JSONL 的 SHA256 |
 | `--json` / `--report PATH` | JSON 输出 / 另存 |
@@ -95,10 +95,15 @@ CLI 退出码：`0` 成功（含 dry-run 校验失败的报告）/ `2` 输入或
 | legacy | `legacy-YYYYMMDDTHHMMSS-<manifest_sha8>`，时间取 `snapshot_at` 的 **Asia/Shanghai 墙钟** |
 | scheduled / manual / unknown | `run_meta.run_id`（或 `run=<id>` 目录名 / `--run-id`） |
 
-同一 legacy 目录重复导入得到同一 run_id；同一 run_id 重复 `stage_run` 会先删后插，
-但保留首次的 `ingested_at`，业务行与哈希不变（验收 1）。若文件被改动，legacy 的
-run_id 会随 manifest 哈希变化；只改 JSONL 不改 manifest 时 run_id 不变，但
-`--baseline-in` 与 `.sealed` 会报哈希异常（验收 9）。
+同一 legacy 目录重复导入得到同一 run_id。**同一 run_id 的重新导入必须与首次入库
+的哈希基线（snapshot_date + manifest SHA256 + 每个 JSONL 的 SHA256）完全一致**：
+一致时幂等（保留首次 `ingested_at`，业务行不变，验收 1）；任何变化——哪怕
+manifest 字节没变、只改了 JSONL——都写 `reimport_changed_rejected` 事件并抛
+`DataIntegrityError`，**绝不先删后插**（复审修复 ①）。只读 dry-run 指向已有
+`--db` 时也会返回 `action=reject, reason=reimport_changed`，与写模式一致。
+legacy run_id 会随 manifest
+哈希变化；只改 JSONL 不改 manifest 时 run_id 不变，但重导会被指纹挡住，
+`--baseline-in` 与 `.sealed` 也会报哈希异常（验收 9）。
 
 ## 5. 三级完整性（不互相冒充）
 
@@ -107,7 +112,8 @@ run_id 会随 manifest 哈希变化；只改 JSONL 不改 manifest 时 run_id �
   与 manifest 一致、无重复键数值冲突。
 - `scope_complete`：manifest 请求的仓集合全部 `batch_complete`。
 - `run_complete`：`scope_complete` **且** `manifest.complete=true`。
-  （“全部启用仓”以 manifest 为代理；本任务不查询通途仓库清单。）
+  `manifest.complete` 缺失时只能判 **unknown → false**，绝不能用 `scope_complete`
+  冒充"全仓完整"（复审修复 ②；“全部启用仓”以 manifest 为代理，本任务不查询通途仓库清单）。
 
 `warehouse_scope` 原样记录 manifest 请求的仓 ID 数组；`scope_coverage` 记录完整仓数。
 
@@ -127,10 +133,12 @@ run_id 会随 manifest 哈希变化；只改 JSONL 不改 manifest 时 run_id �
   `goods_sku` / `warehouse_name` 仅展示。
 - 同 run 同 `(warehouse_id, goods_id)` 重复：四个数值桶完全一致 → 去重并计
   `duplicate_rows`；任一不同 → **整 run 拒绝发布**，不选任一条候选值。
-- 去重前的 `(goods_id, goods_sku)` 写入 `stock_id_observation`；同一 `goods_id`
-  多别名 → 发布时写 `stock_id_history`（`valid_from=snapshot_date`，旧名
-  `valid_to` 截止），不覆盖历史。
-- 同一 `goods_sku` 在同一天指向多个 `goods_id` → 拒绝发布（同时检查当前已发布 run），
+- 去重前的 `(goods_id, goods_sku)` 写入 `stock_id_observation`；发布时按**日期正序
+  重建** `stock_id_history`（复审修复 ④）：某天名字缺席才把 `valid_to` 截止到当天，
+  因此反向导入（先新后旧）不会产生 `valid_to < valid_from`；同日新 run 替换旧 run
+  后，旧 run 的别名不再属于当前发布事实；回滚重放会把它重新建回来。
+- 同一 `goods_sku` 在同一天指向多个 `goods_id` → 拒绝发布（同 run 内直接拒绝；
+  跨 run 与当前已发布 run 冲突时按同一总序裁决，见 §8），
   证据保留在 `stock_run.integrity_errors` / `stock_ingest_event`。
 - 跨日改名按 ID 聚合，历史查询不受影响。
 
@@ -146,7 +154,12 @@ run_complete > scope_complete > scope_coverage > ended_at(NULL 最后) > run_id 
   `stock_publish(snapshot_date, run_id, published_at, previous_run_id=旧 run)`。
 - 候选不优 → `skip`，只留在 `stock_run` / `stock_history_run` 作审计。
 - 候选与已发布相同 → `already`。
-- 完整性/别名/哈希失败 → `reject`，不写发布指针；写模式落 `publish_rejected` 事件。
+- 完整性/同 run 别名/哈希失败 → `reject`，不写发布指针；写模式落 `publish_rejected` 事件。
+- **跨 run 别名冲突按同一总序裁决**（复审修复 ③）：候选与当前已发布 run 的
+  SKU→goods_id 映射冲突时，候选更优 → `publish`（整日行被原子替换，冲突自然消失，
+  reason=`candidate_outranks_published_with_alias_conflict`，落
+  `alias_conflict_superseded` 事件）；候选不优 → `reject`
+  （reason=`alias_conflict_with_published`）。因此无论导入顺序如何，最终赢家唯一。
 - **最好可用即可发布**：若某日只有不完整 run，它会被发布，但 `run_complete=false`
   且报告 `complete_day=false`；一旦出现完整 run 就原子切换。这样分析侧能显式看到
   “当前发布的是不完整日”，而不是把 400 行部分数据误当完整日。
@@ -159,7 +172,10 @@ run_complete > scope_complete > scope_coverage > ended_at(NULL 最后) > run_id 
                 → 发布指针改回旧 run，previous_run_id 指向刚被回滚的 run（可再切回）
 ```
 
-回滚逐行内容与 previous run 完全一致（验收 11）。
+回滚逐行内容与 previous run 完全一致（验收 11）。previous run 为 **0 行**时按
+批次有效性判断（复审修复 ⑤）：`run_complete=true`（全部仓 `batch_complete` 且
+`manifest.complete=true`）的合法空仓可以回滚为 0 行；批次不完整则
+`RollbackUnavailable`，发布指针不动。
 
 ## 9. 表结构（v2 迁移）
 
@@ -196,12 +212,14 @@ run_complete > scope_complete > scope_coverage > ended_at(NULL 最后) > run_id 
 
 ## 11. 锁、崩溃恢复与迁移
 
-- 锁文件：`<db 目录>/stock_history.lock`，`O_CREAT|O_EXCL` 独占；内容含 `pid/host/token`。
+- 锁文件：`<db 目录>/stock_history.lock`，用 **OS 文件锁**独占
+  （Windows `msvcrt.locking`/LockFile，POSIX `fcntl.flock`）；内容含
+  `pid/host/token/created_at`，仅作诊断（复审修复 ⑥）。
 - 第二个进程：直接 `LockHeld`（CLI 退出码 3），**在打开 DB 之前**就拒绝。
-- 崩溃遗留：PID 不存活 **或** mtime 超过 `--lock-stale-seconds` → 把旧锁改名为
-  `.stale-<ts>` 后接管；`release()` 只在 token 匹配时删除，避免误删他人锁。
-- Windows 上用 `OpenProcess/GetExitCodeProcess` 判断 PID，**不使用** `os.kill(pid, 0)`
-  （Windows 上会走 `TerminateProcess`）。
+- 崩溃遗留：进程退出（含崩溃/被强杀）时内核自动释放 OS 锁，下一次直接可获取；
+  **活进程持锁再久也不会因为 `--lock-stale-seconds` 超时被抢**。
+- 锁文件**不删除**：删除会让两个进程各自锁住不同的 inode，制造假并发；
+  `release()` 解锁并关闭句柄即可。旧版本遗留的纯文本锁（无 OS 锁）可直接接管。
 - 迁移：`schema_migrations` + 每版本一个事务；任一条 SQL 失败整版本 `ROLLBACK`
   （DuckDB 2.0 事务性 DDL），已成功版本保留；重复 `migrate` 幂等。
 
@@ -293,21 +311,35 @@ run_complete > scope_complete > scope_coverage > ended_at(NULL 最后) > run_id 
 | 9 | 哈希异常拒绝 | `test_a09_hash_anomaly_rejected` |
 | 10 | 跨日/目录冲突 | `test_a10_cross_day_attribution` |
 | 11 | 回滚逐行一致 | `test_a11_rollback_replays_previous_run_row_by_row` |
-| 12 | 并发锁 + 崩溃恢复 | `test_a12_lock_concurrency_and_crash_recovery` |
+| 12 | 并发锁 + 崩溃恢复 + 活进程超时不被抢 | `test_a12_lock_concurrency_and_crash_recovery` |
 | 13 | 迁移失败回滚 | `test_a13_migration_failure_rolls_back` |
 | 14 | TEST-1 排除 + 禁止跨 SKU 求和 | `test_a14_test_sku_excluded_and_no_cross_sku_sum` |
 
 另有 6 条补充用例：非 legacy 缺封存拒绝、manifest 行数不符拒绝、legacy run_id
-确定性、CLI 基线往返（正常 → 篡改）、manifest 绝对路径忽略、跨 run 已发布别名冲突。
-共 **20 条**；其中 2 条真实数据用例在 `D:/Work/库存备份` 不存在时 `skip`。
+确定性、CLI 基线往返（正常 → 篡改）、manifest 绝对路径忽略、跨 run 已发布别名冲突
+（按总序裁决）。
+
+### 15.1 2026-10-22 代码复审六项回归
+
+| # | 复审问题 | 回归测试 |
+|---|---|---|
+| ① | 重导未比旧哈希、先删后插 | `test_r1_reimport_with_changed_file_hash_is_rejected` |
+| ② | 缺 `manifest.complete` 仍判全仓完整 | `test_r2_missing_manifest_complete_flag_is_unknown` |
+| ③ | 别名冲突先到先占、反序赢家不同 | `test_r3_alias_conflict_is_deterministic_regardless_of_order` |
+| ④ | 反序导入 `valid_to < valid_from`；回滚不恢复区间 | `test_r4_alias_intervals_are_date_rebuilt_and_rollback_restores` |
+| ⑤ | 合法零行空仓不能回滚 | `test_r5_zero_row_empty_previous_run_is_rollbackable` |
+| ⑥ | 活进程仅超时便被抢锁 | `test_r6_live_process_lock_is_not_stolen_after_timeout`（+ `test_a12`） |
+
+共 **26 条**；其中 2 条真实数据用例在 `D:/Work/库存备份` 不存在时 `skip`。
 
 ## 16. 已知限制 / 残余风险
 
 1. **DuckDB 未在 pyproject 声明**：需手动 `uv pip install duckdb`；换机器会缺依赖。
 2. **“全部启用仓”用 manifest 代理**：不以通途实时仓库清单校验；若备份脚本漏抓
    某个启用仓且 manifest 也漏记，`run_complete` 仍可能为 true。
-3. **legacy 文件可变**：没有 `.sealed`，哈希只能靠 `--baseline-in` 外部基线发现漂移；
-   本次基线已记录在 §13，但需要人/任务在导入时传入。
+3. **legacy 文件可变**：没有 `.sealed`；同一库内重导已被哈希指纹挡住，但**首次**
+   导入仍靠 `--baseline-in` 外部基线发现漂移。本次基线已记录在 §13，需要人/任务在
+   导入时传入。
 4. **10-20 的 400 行部分数据会被物化**（若该日只有它）：`batch_complete=false`
    且永不标记断货，但按仓求和的消费者必须自己过滤 `batch_complete`；
    `v_stock_by_sku` 未强制过滤（保留原始事实）。
@@ -322,8 +354,12 @@ run_complete > scope_complete > scope_coverage > ended_at(NULL 最后) > run_id 
 9. **05:17 是否运行仍待证**：两天数据只证明 10-20 18:19 与 10-21 09:46 的 run；
    历史目录可能被同日覆盖，封存改造尚未落地到计划任务。
 10. **legacy run_id 冲突**：同一秒 + 同一 manifest 哈希的两次不同运行会得到同一
-    run_id（概率极低，且内容相同）；legacy 不支持同日多份同内容 run 的区分。
+    run_id（概率极低）。同 run_id 但内容不同的重导会被指纹拒绝（复审修复 ①），
+    不会静默覆盖；legacy 仍不支持同日多份同内容 run 的区分。
 11. **dry-run 的内存发布决策**不包含“与线上已发布 run 的比较”，除非 `--db` 指向
     已有文件（只读）；跨进程并发由锁保护，但 dry-run 不取锁。
 12. **跨 run 别名冲突只与“当前已发布”run 比对**：未被发布的历史/拒绝 run 不会
-    永久阻断后续导入；若需要更严格的同日全 run 校验，应先把审计 run 纳入策略。
+    永久阻断后续导入。冲突由总序裁决，最终赢家与导入顺序无关，但事件流里可能是
+    “后来者发布”或“后来者被拒”，取决于候选与已发布 run 的优劣（复审修复 ③）。
+13. **OS 文件锁依赖本地文件系统语义**：SMB/NFS 上 `flock`/LockFile 的行为可能不同；
+    锁文件默认放在 DB 同目录，建议 DB 与锁都在本地盘。

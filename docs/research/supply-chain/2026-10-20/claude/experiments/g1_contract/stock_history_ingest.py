@@ -30,7 +30,6 @@ import math
 import os
 import re
 import sys
-import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
@@ -265,9 +264,10 @@ class RunBundle:
 
     @property
     def run_complete(self) -> bool:
-        # manifest.complete 是"全量启用仓"的权威标志；缺失时退化为 scope 完整。
+        # manifest.complete 是"全量启用仓"的权威标志。缺失只能判 unknown（false），
+        # 绝不能用 scope_complete 冒充：manifest 没写就不知道是否漏了仓。
         if self.manifest_complete is None:
-            return self.scope_complete
+            return False
         return self.scope_complete and bool(self.manifest_complete)
 
     @property
@@ -1089,34 +1089,6 @@ def migrate(
 # --------------------------------------------------------------------------- #
 
 
-def _pid_alive(pid: int) -> bool:
-    if pid <= 0:
-        return False
-    if os.name == "nt":  # os.kill(pid, 0) 在 Windows 会 TerminateProcess，绝不能用
-        import ctypes
-
-        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
-        STILL_ACTIVE = 259
-        kernel32 = ctypes.windll.kernel32
-        handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
-        if not handle:
-            return False
-        try:
-            code = ctypes.c_ulong()
-            if not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
-                return False
-            return code.value == STILL_ACTIVE
-        finally:
-            kernel32.CloseHandle(handle)
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    return True
-
-
 def _hostname() -> str:
     if os.name == "nt":
         return os.environ.get("COMPUTERNAME", "")
@@ -1133,67 +1105,107 @@ def _lock_payload(run_dir: str | None) -> dict:
     }
 
 
+def _try_lock_handle(handle) -> bool:
+    """对已打开的文件句柄尝试非阻塞独占锁（成功返回 True）。
+
+    用 OS 文件锁而不是 PID/mtime 判断：进程崩溃时内核自动释放，活进程即使
+    持有很久也不会因为超时被别人抢走。
+    """
+    fd = handle.fileno()
+    try:
+        if os.name == "nt":
+            import msvcrt
+
+            handle.seek(0)
+            msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        return False
+    return True
+
+
+def _unlock_handle(handle) -> None:
+    fd = handle.fileno()
+    if os.name == "nt":
+        import msvcrt
+
+        handle.seek(0)
+        msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+    else:
+        import fcntl
+
+        fcntl.flock(fd, fcntl.LOCK_UN)
+
+
 class HistoryLock:
-    def __init__(self, path: Path, payload: dict):
+    def __init__(self, path: Path, payload: dict, handle=None):
         self.path = path
         self.payload = payload
+        self._handle = handle
 
     def release(self) -> None:
+        handle, self._handle = self._handle, None
+        if handle is None:
+            return
         try:
-            current = json.loads(self.path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            current = None
-        if isinstance(current, dict) and current.get("token") != self.payload.get("token"):
-            return  # 锁已被别人接管，不删
-        try:
-            self.path.unlink()
-        except FileNotFoundError:
-            pass
+            _unlock_handle(handle)
+        except OSError:
+            pass  # 关闭句柄本身也会释放锁
+        finally:
+            handle.close()
 
 
 def acquire_lock(
     lock_path: str | Path,
     run_dir: str | None = None,
     stale_after_seconds: int = DEFAULT_LOCK_STALE_SECONDS,
-    pid_alive=_pid_alive,
+    pid_alive=None,
 ) -> HistoryLock:
-    """独占创建锁文件；崩溃遗留锁按 PID/mtime 回收。"""
+    """用 OS 文件锁独占锁文件（Windows LockFile / POSIX flock）。
+
+    锁随持有进程退出（含崩溃）由内核释放，因此不再按 mtime 抢锁——活进程
+    持有再久也不会被 `--lock-stale-seconds` 抢走。锁文件不删除（删除会带来
+    "两个进程各锁一个 inode"的竞态），内容只作诊断信息。
+
+    `stale_after_seconds` / `pid_alive` 参数仅为兼容旧调用保留，不再参与判定。
+    """
+    del stale_after_seconds, pid_alive
     path = Path(lock_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = _lock_payload(run_dir)
-    for attempt in range(2):
+    handle = open(path, "a+b")
+    if not _try_lock_handle(handle):
+        holder: dict = {}
         try:
-            fd = os.open(str(path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-        except FileExistsError:
-            info: dict = {}
-            try:
-                info = json.loads(path.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
-                info = {}
-            pid = info.get("pid") if isinstance(info.get("pid"), int) else -1
-            try:
-                age = time.time() - path.stat().st_mtime
-            except OSError:
-                age = 0
-            stale = (not pid_alive(pid)) or age > stale_after_seconds
-            if stale and attempt == 0:
-                stale_path = path.with_name(path.name + f".stale-{int(time.time())}")
-                try:
-                    os.replace(path, stale_path)
-                except OSError:
-                    pass
-                continue
-            raise LockHeld(
-                f"锁被占用: {path} (pid={pid}, age={int(age)}s, stale={stale}); "
-                "确认无进程后删除锁文件或调小 --lock-stale-seconds"
-            )
-        else:
-            try:
-                os.write(fd, json.dumps(payload).encode("utf-8"))
-            finally:
-                os.close(fd)
-            return HistoryLock(path, payload)
-    raise LockHeld(f"无法获取锁: {path}")
+            handle.seek(0)
+            raw = handle.read()
+            holder = json.loads(raw.decode("utf-8") or "{}")
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            holder = {}
+        handle.close()
+        pid = holder.get("pid") if isinstance(holder.get("pid"), int) else -1
+        raise LockHeld(
+            f"锁被占用: {path} (pid={pid}, host={holder.get('host')}); "
+            "OS 文件锁由持有进程在内核中保持，确认该进程后再重试；"
+            "不要手工删除锁文件来绕过"
+        )
+    try:
+        data = json.dumps(payload).encode("utf-8")
+        handle.seek(0)
+        handle.truncate(0)
+        handle.write(data)
+        handle.flush()
+        os.fsync(handle.fileno())
+    except Exception:
+        try:
+            _unlock_handle(handle)
+        finally:
+            handle.close()
+        raise
+    return HistoryLock(path, payload, handle)
 
 
 # --------------------------------------------------------------------------- #
@@ -1268,6 +1280,52 @@ def _is_published(conn: "duckdb.DuckDBPyConnection", run_id: str) -> bool:
     return bool(rows)
 
 
+def _bundle_fingerprint(bundle: RunBundle) -> dict:
+    """run 的内容指纹：日期 + manifest 哈希 + 每个仓文件的哈希。"""
+    return {
+        "snapshot_date": bundle.snapshot_date.isoformat(),
+        "manifest_sha256": bundle.manifest_sha256,
+        "files": {
+            wh.file_name: wh.file_sha256
+            for wh in bundle.warehouses
+            if wh.file_name and wh.file_sha256
+        },
+    }
+
+
+def _stored_fingerprint(
+    conn: "duckdb.DuckDBPyConnection", run_id: str
+) -> dict | None:
+    """库里已存在的同一 run_id 的指纹；不存在返回 None。"""
+    try:
+        rows = conn.execute(
+            "SELECT snapshot_date, manifest_sha256 FROM stock_run WHERE run_id = ?",
+            [run_id],
+        ).fetchall()
+    except duckdb.CatalogException:
+        return None
+    if not rows:
+        return None
+    snapshot_date, manifest_sha = rows[0]
+    if isinstance(snapshot_date, datetime):
+        snapshot_date = snapshot_date.date()
+    try:
+        files = dict(
+            conn.execute(
+                "SELECT file, file_sha256 FROM stock_run_warehouse"
+                " WHERE run_id = ? AND file IS NOT NULL AND file_sha256 IS NOT NULL",
+                [run_id],
+            ).fetchall()
+        )
+    except duckdb.CatalogException:
+        files = {}
+    return {
+        "snapshot_date": snapshot_date.isoformat() if snapshot_date else None,
+        "manifest_sha256": manifest_sha,
+        "files": files,
+    }
+
+
 def stage_run(
     conn: "duckdb.DuckDBPyConnection", bundle: RunBundle, now: datetime | None = None
 ) -> dict:
@@ -1277,6 +1335,26 @@ def stage_run(
         "SELECT ingested_at FROM stock_run WHERE run_id = ?", [bundle.run_id]
     ).fetchall()
     ingested_at = existing[0][0] if existing and existing[0][0] is not None else now
+
+    # 同一 run_id 的重新导入必须与首次入库的哈希基线完全一致；任何文件内容
+    # 变更（哪怕 manifest 哈希没变，只改了 JSONL）都拒绝，绝不"先删后插"。
+    stored = _stored_fingerprint(conn, bundle.run_id)
+    if stored is not None:
+        incoming = _bundle_fingerprint(bundle)
+        if stored != incoming:
+            _record_event(
+                conn,
+                bundle.run_id,
+                bundle.snapshot_date,
+                "reimport_changed_rejected",
+                {"stored": stored, "incoming": incoming},
+            )
+            raise DataIntegrityError(
+                f"run {bundle.run_id} 已入库且内容哈希与基线不同，拒绝覆盖："
+                f"stored={stored['manifest_sha256']} incoming={incoming['manifest_sha256']} "
+                f"files_changed="
+                f"{sorted(set(stored['files'].items()) ^ set(incoming['files'].items()))}"
+            )
 
     if not bundle.integrity_ok and _is_published(conn, bundle.run_id):
         # 已发布的 run 被重新读入且校验失败：不覆盖物化结果，记录证据后拒绝。
@@ -1466,22 +1544,39 @@ def id_aliases(bundle: RunBundle) -> list[dict]:
 def evaluate_publish(
     conn: "duckdb.DuckDBPyConnection", bundle: RunBundle
 ) -> dict:
-    """决定是否发布；不写任何东西（供 dry-run 与写模式共用）。"""
+    """决定是否发布；不写任何东西（供 dry-run 与写模式共用）。
+
+    同日跨 run 的别名冲突不再"先到先占"：冲突双方用同一个总序（`rank_key`）
+    裁决——低者确定性 `reject`，高者可以发布。因此无论导入顺序如何，最终
+    已发布的 run 相同；冲突证据随决策返回（写模式由 record_decision 落事件）。
+    """
+    hard_errors = list(bundle.integrity_errors)
     conflicts = alias_conflicts(bundle)
-    errors = list(bundle.integrity_errors)
     if conflicts:
-        errors.append({"code": "alias_conflict", "conflicts": conflicts})
-    pub_conflicts = _published_alias_conflicts(conn, bundle)
-    if pub_conflicts:
-        errors.extend(pub_conflicts)
-    if errors:
+        hard_errors.append({"code": "alias_conflict", "conflicts": conflicts})
+    if hard_errors:
         return {
             "action": "reject",
             "reason": "integrity_or_alias_conflict",
-            "reasons": errors,
+            "reasons": hard_errors,
             "current_run_id": (get_publish(conn, bundle.snapshot_date) or {}).get("run_id"),
             "previous_run_id": None,
         }
+
+    # 只读路径（dry-run --db）同样要能发现"同 run_id 内容已变"，与写模式一致。
+    stored = _stored_fingerprint(conn, bundle.run_id)
+    if stored is not None:
+        incoming = _bundle_fingerprint(bundle)
+        if stored != incoming:
+            return {
+                "action": "reject",
+                "reason": "reimport_changed",
+                "reasons": [
+                    {"code": "reimport_changed", "stored": stored, "incoming": incoming}
+                ],
+                "current_run_id": (get_publish(conn, bundle.snapshot_date) or {}).get("run_id"),
+                "previous_run_id": None,
+            }
 
     current = get_publish(conn, bundle.snapshot_date)
     if current is None:
@@ -1514,7 +1609,36 @@ def evaluate_publish(
         to_naive_local(current_row["ended_at"]) or datetime.min,
         current_row["run_id"],
     )
-    if bundle.rank_key() > current_key:
+    candidate_outranks = bundle.rank_key() > current_key
+    candidate_rank = list(bundle.rank_key()[:3]) + [
+        str(bundle.rank_key()[3]),
+        bundle.rank_key()[4],
+    ]
+    current_rank = list(current_key[:3]) + [str(current_key[3]), current_key[4]]
+
+    pub_conflicts = _published_alias_conflicts(conn, bundle)
+    if pub_conflicts:
+        if candidate_outranks:
+            return {
+                "action": "publish",
+                "reason": "candidate_outranks_published_with_alias_conflict",
+                "current_run_id": current["run_id"],
+                "previous_run_id": current["run_id"],
+                "alias_conflicts": pub_conflicts,
+                "candidate_rank": candidate_rank,
+                "current_rank": current_rank,
+            }
+        return {
+            "action": "reject",
+            "reason": "alias_conflict_with_published",
+            "reasons": pub_conflicts,
+            "current_run_id": current["run_id"],
+            "previous_run_id": current.get("previous_run_id"),
+            "candidate_rank": candidate_rank,
+            "current_rank": current_rank,
+        }
+
+    if candidate_outranks:
         return {
             "action": "publish",
             "reason": "candidate_outranks_published",
@@ -1526,8 +1650,8 @@ def evaluate_publish(
         "reason": "published_run_outranks_candidate",
         "current_run_id": current["run_id"],
         "previous_run_id": current.get("previous_run_id"),
-        "candidate_rank": list(bundle.rank_key()[:3]) + [str(bundle.rank_key()[3]), bundle.rank_key()[4]],
-        "current_rank": list(current_key[:3]) + [str(current_key[3]), current_key[4]],
+        "candidate_rank": candidate_rank,
+        "current_rank": current_rank,
     }
 
 
@@ -1545,48 +1669,54 @@ def record_decision(
         )
 
 
-def _update_id_history(
-    conn: "duckdb.DuckDBPyConnection", run_id: str, snapshot_date: date
-) -> None:
-    pairs = {
-        "goods": conn.execute(
-            "SELECT DISTINCT entity_id, name FROM stock_id_observation"
-            " WHERE run_id = ? AND entity_type = 'goods'",
-            [run_id],
-        ).fetchall(),
-        "warehouse": conn.execute(
-            "SELECT DISTINCT entity_id, name FROM stock_id_observation"
-            " WHERE run_id = ? AND entity_type = 'warehouse'",
-            [run_id],
-        ).fetchall(),
-    }
-    for entity_type, rows in pairs.items():
-        current_names: dict[str, set[str]] = {}
-        for entity_id, name in rows:
-            current_names.setdefault(entity_id, set()).add(name)
-        if not current_names:
-            continue
-        ids = list(current_names)
-        placeholders = ",".join("?" for _ in ids)
-        open_rows = conn.execute(
-            "SELECT entity_id, name FROM stock_id_history"
-            f" WHERE entity_type = ? AND valid_to IS NULL AND entity_id IN ({placeholders})",
-            [entity_type, *ids],
-        ).fetchall()
-        for entity_id, old_name in open_rows:
-            if old_name not in current_names.get(entity_id, set()):
-                conn.execute(
-                    "UPDATE stock_id_history SET valid_to = ?"
-                    " WHERE entity_type = ? AND entity_id = ? AND name = ? AND valid_to IS NULL",
-                    [snapshot_date, entity_type, entity_id, old_name],
-                )
-        for entity_id, names in current_names.items():
-            for name in names:
-                conn.execute(
-                    "INSERT INTO stock_id_history VALUES (?,?,?,?,?,?)"
-                    " ON CONFLICT DO NOTHING",
-                    [entity_type, entity_id, name, snapshot_date, None, run_id],
-                )
+def _rebuild_id_history(conn: "duckdb.DuckDBPyConnection") -> None:
+    """按日期重建别名/改名生效区间，结果只取决于已发布的 run，与导入顺序无关。
+
+    只使用 `stock_publish` 当前指向的 run 的观察；按 snapshot_date 升序遍历，
+    某天名字缺席即把该名字的 `valid_to` 截止到当天。因为始终按日期正序重建，
+    反向导入（先新后旧）不会产生 `valid_to < valid_from`。同一天被新 run
+    替换后，旧 run 的别名自然不再出现在当前发布事实里；回滚重放前序 run 时
+    会重新把它的区间建回来。
+    """
+    conn.execute("DELETE FROM stock_id_history")
+    rows = conn.execute(
+        "SELECT o.entity_type, o.entity_id, o.name, r.snapshot_date, p.run_id"
+        " FROM stock_id_observation o"
+        " JOIN stock_run r ON r.run_id = o.run_id"
+        " JOIN stock_publish p"
+        "   ON p.snapshot_date = r.snapshot_date AND p.run_id = r.run_id"
+        " ORDER BY o.entity_type, o.entity_id, r.snapshot_date, o.name"
+    ).fetchall()
+
+    # (entity_type, entity_id) -> date -> (该日发布 run_id, 当天观察到的名字集合)
+    per_entity: dict[tuple[str, str], dict[date, tuple[str, set[str]]]] = {}
+    for entity_type, entity_id, name, snapshot_date, run_id in rows:
+        day = snapshot_date.date() if isinstance(snapshot_date, datetime) else snapshot_date
+        per_entity.setdefault((entity_type, entity_id), {}).setdefault(
+            day, (run_id, set())
+        )[1].add(name)
+
+    intervals: list[tuple] = []
+    for (entity_type, entity_id), by_day in sorted(per_entity.items()):
+        open_names: dict[str, tuple[date, str]] = {}
+        for day in sorted(by_day):
+            run_id, names = by_day[day]
+            for name in sorted(open_names):
+                if name not in names:
+                    start, source_run = open_names.pop(name)
+                    intervals.append(
+                        (entity_type, entity_id, name, start, day, source_run)
+                    )
+            for name in sorted(names):
+                if name not in open_names:
+                    open_names[name] = (day, run_id)
+        for name, (start, source_run) in sorted(open_names.items()):
+            intervals.append((entity_type, entity_id, name, start, None, source_run))
+
+    if intervals:
+        conn.executemany(
+            "INSERT INTO stock_id_history VALUES (?,?,?,?,?,?)", intervals
+        )
 
 
 def materialize(
@@ -1615,12 +1745,13 @@ def materialize(
             " FROM stock_history_run WHERE run_id = ?",
             [run_id],
         )
-        _update_id_history(conn, run_id, snapshot_date)
         conn.execute("DELETE FROM stock_publish WHERE snapshot_date = ?", [snapshot_date])
         conn.execute(
             "INSERT INTO stock_publish VALUES (?,?,?,?)",
             [snapshot_date, run_id, to_utc_naive_now(), previous_run_id],
         )
+        # 必须在发布指针写入之后重建：重建只认 stock_publish 当前指向的 run。
+        _rebuild_id_history(conn)
         _record_event(
             conn,
             run_id,
@@ -1661,7 +1792,20 @@ def rollback(
         "SELECT COUNT(*) FROM stock_history_run WHERE run_id = ?", [previous]
     ).fetchone()[0]
     if expected_rows == 0:
-        raise RollbackUnavailable(f"previous run {previous} 没有可重放的行")
+        # 0 行本身不代表不可回滚：全部仓都 batch_complete 的成功空仓是合法事实。
+        # 只有批次有效性不足（缺文件/截断/坏行，或 manifest 未声明全量）时，
+        # 才无法断言"那天真的是空"。
+        total, complete = conn.execute(
+            "SELECT COUNT(*), COALESCE(SUM(CASE WHEN batch_complete THEN 1 ELSE 0 END), 0)"
+            " FROM stock_run_warehouse WHERE run_id = ?",
+            [previous],
+        ).fetchone()
+        if not previous_run["run_complete"]:
+            raise RollbackUnavailable(
+                f"previous run {previous} 没有可重放的行，且批次不完整"
+                f"（{int(complete)}/{int(total)} 仓 batch_complete,"
+                f" run_complete=false），无法判定为空仓"
+            )
     report = {
         "snapshot_date": snapshot_date.isoformat(),
         "from_run_id": current["run_id"],
@@ -1860,6 +2004,14 @@ def run(args: argparse.Namespace) -> tuple[int, dict]:
                     decision.get("previous_run_id"),
                 )
                 report["materialized"] = materialized
+                if decision.get("alias_conflicts"):
+                    _record_event(
+                        conn,
+                        bundle.run_id,
+                        bundle.snapshot_date,
+                        "alias_conflict_superseded",
+                        decision["alias_conflicts"],
+                    )
         finally:
             conn.close()
     finally:
@@ -1883,7 +2035,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--lock-stale-seconds",
         type=int,
         default=DEFAULT_LOCK_STALE_SECONDS,
-        help="锁文件超过该秒数视为崩溃遗留",
+        help="已废弃（保留兼容）：OS 文件锁由内核随进程释放，不再按时间抢锁",
     )
     parser.add_argument("--baseline-in", help="比对既有 SHA256 基线，不一致则拒绝发布")
     parser.add_argument("--baseline-out", help="把本次 SHA256 基线写入该 JSON 文件")

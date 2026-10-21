@@ -535,6 +535,23 @@ tags: [supply-chain, research, log]
   每个 JSONL 的 64 位 SHA256 见 `experiments/g1_contract/stock_history_ingest.md` §13。
 - 未写 `order_store.duckdb`、未访问通途/EN、未改计划任务、未提交原始数据。
 
+## 2026-10-22 — 库存入库代码复审修复（六项）
+
+- Codex 复审 `2026-10-22-stock-code-review.md` 判 FAIL，六项逐一修复：
+  ① 同 run_id 重导比对 `snapshot_date + manifest SHA + 每个 JSONL SHA`，变更即
+  `reimport_changed_rejected` 并拒绝，不再先删后插；② `manifest.complete` 缺失
+  判 unknown（`run_complete=false`），不再用 `scope_complete` 冒充；③ 跨 run
+  别名冲突按同一总序裁决，低者 `reject`、高者发布，最终赢家与导入顺序无关；
+  ④ `stock_id_history` 按日期正序从已发布 run 重建，反序导入不会出现
+  `valid_to < valid_from`，回滚同步恢复；⑤ 0 行 previous run 按批次有效性
+  （`run_complete`）判断可否回滚；⑥ 锁改为 OS 文件锁（Windows LockFile /
+  POSIX flock），活进程超时不被抢，崩溃后内核自动释放。
+- `test_stock_history_ingest.py` 增加 6 条回归（`test_r1`–`test_r6`），并改写
+  `test_a12` 锁语义与跨 run 别名补充用例；共 26 条离线测试全绿。
+- 两日 dry-run 重跑：10-20 5,192 行 / 13/14 仓 / `run_complete=false`；
+  10-21 5,314 行 / 14/14 / `run_complete=true`；输出见 `control/` 与提交说明。
+- 未访问通途/EN、未写 `order_store.duckdb`、未改计划任务。
+
 ## 模板（后续阶段）
 
 ```text
