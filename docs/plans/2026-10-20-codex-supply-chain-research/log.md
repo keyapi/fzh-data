@@ -6,6 +6,11 @@ title: Codex 供应链独立调研变更日志
 
 # 变更日志
 
+## 2026-10-21 producer P2 flag 数值边界
+
+- 固定 9a04741e：flag 仅接受整数 0/1、有限浮点 0.0/1.0；2/-1/0.5/NaN/Inf -> invalid；66 条离线测试（consumer 45 + producer 21）通过。
+- v5 证据与两轮规范化回放 hash/计数不变；无新取数、无其他语义变化；P2 关闭。
+
 ## 2026-10-21 BOM历史证据边界与producer反例
 
 - 独立验证 current_structure_only / historical_verified / historical_unknown 边界；Version 空集、旧 modified、当前 active/default 均不足以升级 Apr–Sep 历史。
