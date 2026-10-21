@@ -28,14 +28,14 @@ tags: [supply-chain, g1b, codex, review, round2]
 - 2026-10-21 用 4 仓（CENTRADE/DANEEY/PL/WayfairCG-Cranbury）跑
   `daily backup → 转换 → coverage`：requested=4/read=4/complete=True，bad=0、conflict=0；
   Wayfair 标 `unknown_authority`，不计缺口；USNJ/USTX/PL 仍为 `sampled_complete`，
-  缺口 131/194/127 不变。
+  缺口按 presence 重算：129 observed_zero / 2 missing / 192 <2月 / 127 unknown。
 - EN 试点重跑：`first_operation=裁剪`、`last_operation=质检发现问题`（无卡→last_qty=null），
   `last_card_operation=质检`（100）作为辅助；`produced_pending_stock_in=null`，
   `produced_pending_stock_in_last_card=0`（辅助，不替代契约末道）；63 张 SE 全部 `status=ok`，
   含行 ID/UOM/成品标记。
 - `stock_daily_backup.py --max-pages 1`：`truncated=true`、`complete=false`，不再把截断当完整。
-- 131/194/127 仍是 Claude 该批完整快照报告，不称 Codex 复现或 G1 门槛通过。
-- 2026-10-20 18:19 与 2026-10-21 09:46 是两批：前者用于 131/194/127；后者是每日 API 补跑，
+- 129/192/127 + 2 missing 仍是 Claude 该批完整快照报告，不称 Codex 复现或 G1 门槛通过。
+- 2026-10-20 18:19 与 2026-10-21 09:46 是两批：前者用于覆盖；后者是每日 API 补跑，
   `complete=True`，不自动给前批背书。
 - top10 9/9 `difference=0` 只是同 SO 字段分解自洽；不等于四量/全 family 验收。
 - 库存结存 1,527 / 销售报表 568 / API 1,140 的粒度不同（唯一 SKU/branch×SKU/别名），

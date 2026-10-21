@@ -76,6 +76,43 @@ EN SO/DN/WO/JC/SE ───┘        ↓
 - 每批有 `run_id`、输入文件 hash、页数、行数、`complete`、异常清单。
 - 全 family 跑通后再扩到全 SKU；全 SKU 以 `item_group`/`item` 分片，不按客户码。
 
+### 2.5 E01 family 全集与批量完整性
+
+- 版本化 `family_manifest`：KS leaf（KS0001/KS0248）、规范物料、客户码、`PK#`/`ND#` 等角色映射、
+  历史停用/改组、纳入/排除/pending 原因、manifest 版本号。
+- 父单批量拉取后**按订单行筛选**，保留非 family 同行去向；不能因为父单被选中就纳入全部行。
+- 交叉覆盖：两个 `item_group` 筛选 + manifest item_code 并集 + 已知 9 个试点客户码，
+  不能因为不在当前两个组就漏掉已知试点。
+- manifest 记录：查询条件、333/56、原始页数、筛选后行数、未匹配/排除原因。
+- 父单明细字段按本仓库接口核对（既有代码遍历 `items`），不把 `order_items` 当唯一真实字段。
+
+### 2.6 E02 增量与失败重跑
+
+- 每个 DocType 明确变更发现字段：`modified` 发现旧单迟改；`transaction_date`/`posting_date`
+  只作业务日期，不能互换当增量游标。
+- 稳定排序 `(modified, name)`，设置重叠回读窗口与 `run_started_at` 上界。
+- 命中父单后整单重拉子表；删除的子行用失效/tombstone；保留取消、`amended_from`、移出 family、状态修改。
+- 仅 upsert 新行不能清理消失的旧行；周期全量对账发现硬删除。
+- raw/staging/fact 校验并提交后才推进水位；partial/失败不推进；跨来源不装作一个事务快照。
+- 若源不保证子行修改带动父 `modified`，需验证并以子表变更/周期全量补偿。
+
+### 2.7 E03 不可变事实键
+
+- `fact_inventory_snapshot` 键：`(source, run_id/snapshot_id, warehouse_id, sku, 必要库存维度)` + `as_of`；
+  `snapshot_date` 只作分区/筛选，同日多次采集不覆盖；另建“选定合格快照”视图。
+- `fact_in_transit` 去掉可变 `eta_bucket`；用 `source/doc/line/运输腿或lot` 稳定身份，
+  ETA/revision/observed_at 另版本化；无单据行的通途汇总 intransit 独立存 snapshot，
+  不编造 `doc_id`，不与 DN/物流事实重复累计。
+- `float_sales_order_line` 更正为 `fact_sales_order_line`。
+
+### 2.8 E04 守恒与增量回归
+
+- `SO→DN→SE` 不是三层数量直接相等；按相同 cutoff、规范单位、链接粒度检查：
+  有效订单/取消/正向发出/原未交/超发，退货单列；JC/SE/DN 分开；unknown 不补 0；
+  组件与成品经已确认配方/UOM 换算后才对账。
+- 最小回归包：旧日期 SO 后来修改、取消/改单、删子行、移组、相同 `modified` 跨页、
+  失败重跑不推进水位、ETA 修订不增供应、同日双快照、缺 SKU 与 explicit 0、SE 详情失败。
+
 ## 3. 与业界做法的对齐
 
 - **ODS → DWD/事实层 → 语义层**，不直接在 ERP 事务表上算指标。

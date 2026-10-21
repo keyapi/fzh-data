@@ -67,10 +67,10 @@ tags: [supply-chain, g1b, inventory, coverage, tongtool, erpnext]
 > 在途没有 ETA，不能当作缺货前可到；`含在途` 只是名义覆盖，不是服务承诺。
 > 3PL/退货仓不进入缺口统计；PL 已单独采样，WayfairCG 仍 unknown。
 
-**完整快照重算（G1B01）**：USNJ/USTX/PL 均为 `sampled_complete`；
-**131 个 branch×SKU 有需求无供给；194 个覆盖 <2 个月；127 个 supply unknown（WayfairCG/退货仓）**。
-旧 450/501 撤回（它把未采样 PL/3PL/退货仓当零供给，且未按 branch×SKU 说明）。
-WayfairCG `unknown`、退货仓 `demand_only` 不进入缺口；PL 已单独采样 9.66/10.24 个月。
+**完整快照重算（G1B01/T01）**：USNJ/USTX/PL 均为 `sampled_complete`；
+**129 个 branch×SKU 观测到零供给；2 个 missing（未返回，不记 0）；127 个 unknown；
+192 个覆盖 <2 个月**。旧 450/501 撤回；旧 131/194 也按 presence 规则更新为 129/192 + 2 missing。
+WayfairCG `unknown_authority`、退货仓 `demand_only` 不进入缺口；PL 已单独采样 9.66/10.24 个月。
 
 USNJ 头部缺口：
 
@@ -136,8 +136,8 @@ EN 订单行实际物料 `PK#KS0001-XMMBS-194-HEMPNATURAL`。
 
 1. **G1b 链路已跑通**：通途库存快照 + EN SO/DN/WO/JC/PP 结构化提取 + 出库消耗对账均可复现。
 2. **两仓总量覆盖 5.86 / 5.48 个月（名义、含在途），on-hand 4.03 / 3.43**；
-   完整快照重算：**131 个 branch×SKU 有需求无供给、194 个 <2 个月、127 个 supply unknown**
-   （WayfairCG/退货仓不计入缺口）；补货必须按 SKU × 仓。
+   完整快照按 presence 重算：**129 观测零供给 / 2 missing / 127 unknown / 192 <2 月**；
+   missing 不记 0，WayfairCG/退货仓不计入缺口；补货必须按 SKU × 仓。
 3. **Codex `852d7791` 三条硬约束已纳入**：
    ① **退货已计入库存时不得再次冲减**；当前库存净算不扣退货，5% 仅未来需求情景；
    ② **调拨完成 ≠ Wayfair 实收；历史供货占比 ≠ 当前库存归属**；当前库存用后台实盘，归属用近期调拨/unknown；

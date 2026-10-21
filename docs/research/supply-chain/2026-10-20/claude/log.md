@@ -374,7 +374,7 @@ tags: [supply-chain, research, log]
 - **RR07/08**：请求/读取/缺失仓、file hash、逐仓 complete；非整数/NaN 不纳入毛量；
   文本三角 pending 与 non_family 分开。
 - **实跑**：4 仓转换 `complete=True`、bad=0、conflict=0；Wayfair `unknown_authority`；
-  131/194/127 不变；EN 试点 63 SE 全 `ok`，last_route 无卡→null。
+  presence 重算：129 observed_zero / 2 missing / 192 <2 月 / 127 unknown；EN 试点 63 SE 全 `ok`，last_route 无卡→null。
 - **方向修正**：逐客户码 1,486 次只适合试点；批量 SO 探针按
   `item_group in ("三角靠枕","三角靠枕无扣")` 返回 333 行/56 张 SO，证明可按物料组批量。
   新增 `15-full-family-etl.md`：ODS→staging→fact/dim→语义层、水位线、幂等键、manifest/hash。
@@ -382,6 +382,23 @@ tags: [supply-chain, research, log]
   `tongtu_auto_export.py` 与 `tongtu_sales_report.py` 已加载该路径，cookie 过期可走 ddddocr。
 - **库存备份**：浏览器 02:17 成功 4/6 仓/4,575 行；API 05:17 因中文任务路径失败，
   迁 ASCII 后 09:46 补跑 `complete=True`；销售报表 1,954 行/family 568，不能替代库存结存。
+
+## 2026-10-21 — Codex 93e6bd1f 第三轮（T01–T06 / E01–E04）
+
+- Codex #301 `93e6bd1f`：接受批量 ETL；RR 大部分修复；T01–T06 仍待修。
+- **T01**：`presence`/`quantity_status`；未返回 SKU 记 missing，不记 0；3PL/未知
+  `available/intransit/supply=None`，只留 reference。重算 **129 observed_zero / 2 missing /
+  192 <2月 / 127 unknown**；missing 为 `CENVel1612-Black-138-Cover`、`CEN003-DPBLUE-100-old` 各 1。
+- **T02**：daily 改 `day/run=<run_id>/` 不可变目录，仓文件 tmp→replace，日 manifest 最后原子发布；
+  转换器校验 manifest `file_sha256`，失配/缺失拒绝（旧 manifest 用 `--allow-missing-hash`）。
+- **T03/T04**：请求仓保留、缺仓 `missing_requested` 失败；逐仓 complete 绑定
+  `by_warehouse[wh].complete`，不再用 global 降级好仓。
+- **T05**：SE `missing_doc` 保留 list 阶段 `work_order`；无法定位时 `se_error`，
+  相关 WO 全部 unknown，不当 0。
+- **T06**：headline 用 `window_complete + complete_branches`；缺月/partial 不混入无供给/低覆盖。
+- **E01–E04**：写入 `15-full-family-etl.md`（family manifest、增量/tombstone、不可变键、守恒回归）。
+- 负例：hash 全 0 → read=0/complete=false；请求不存在的仓 → requested=2/read=1/complete=false。
+- 旧 131/194 被 presence 更新为 129/192 + 2 missing；仍只是 Claude 报告，不是 G1 验收。
 
 ## 模板（后续阶段）
 

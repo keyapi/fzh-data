@@ -314,9 +314,14 @@ def load_stock(paths: list[Path]):
             if wh not in selected_file_per_wh or fetched > selected_fetched.get(wh, ""):
                 selected_file_per_wh[wh] = path
                 selected_fetched[wh] = fetched
-                selected_complete[wh] = data.get("complete") is True
+                wh_complete = (data.get("by_warehouse", {}).get(wh, {})
+                               .get("complete"))
+                if wh_complete is None:
+                    wh_complete = data.get("complete") is True
+                selected_complete[wh] = wh_complete is True
 
     seen: dict[tuple[str, str], dict] = {}
+    presence: dict[str, set[str]] = defaultdict(set)
     duplicate_conflicts = 0
     duplicates_ignored = 0
     bad_values = 0
@@ -353,6 +358,7 @@ def load_stock(paths: list[Path]):
                                             "values": parsed})
                     continue
                 key = (wh, sku)
+                presence[wh].add(sku)
                 if key in seen:
                     if seen[key] == parsed:
                         duplicates_ignored += 1
@@ -411,6 +417,7 @@ def load_stock(paths: list[Path]):
         "conflict_samples": conflict_samples,
         "incomplete_warehouses": sorted(incomplete_warehouses),
         "complete_warehouses": complete_warehouses,
+        "sku_presence": {wh: sorted(skus) for wh, skus in presence.items()},
         "by_branch": finish(by_branch),
         "by_warehouse": finish(by_wh),
         "by_sku_branch": by_sku_branch,
@@ -424,6 +431,7 @@ def coverage(demand, stock):
         branch for branch, whs in REQUIRED_SUPPLY_WAREHOUSES.items()
         if all(wh in complete_set for wh in whs)
     }
+    presence = {wh: set(skus) for wh, skus in stock.get("sku_presence", {}).items()}
     rows = []
     all_keys = set(demand["by_sku_branch"]) | set(stock["by_sku_branch"])
     for branch, sku in all_keys:
@@ -433,34 +441,63 @@ def coverage(demand, stock):
                                                        "defects": 0.0, "waiting": 0.0})
         gross = float(d.get("gross", 0) or 0)
         reissue = float(d.get("reissue", 0) or 0)
-        available = float(s.get("available", 0) or 0)
-        intransit = float(s.get("intransit", 0) or 0)
-        supply = available + intransit
-        avg_gross = gross / observations
-        if branch in complete_branches:
+        ref_available = round(float(s.get("available", 0) or 0), 2)
+        ref_intransit = round(float(s.get("intransit", 0) or 0), 2)
+        ref_supply = round(ref_available + ref_intransit, 2)
+        required = REQUIRED_SUPPLY_WAREHOUSES.get(branch)
+        available = intransit = supply = None
+        presence_status = "unknown"
+        quantity_status = "unknown"
+        if branch in complete_branches and required:
+            observed = all(sku in presence.get(wh, set()) for wh in required)
+            if observed:
+                available = ref_available
+                intransit = ref_intransit
+                supply = ref_supply
+                presence_status = "observed"
+                quantity_status = "positive" if supply > 0 else "observed_zero"
+            else:
+                presence_status = "missing"
+                quantity_status = "missing"
             supply_status = "sampled_complete"
+            authority = "tongtool_api_or_browser_stock"
         elif branch in REQUIRED_SUPPLY_WAREHOUSES:
             supply_status = "sampled_incomplete"
+            authority = "tongtool_api_or_browser_stock"
         elif branch == "3PL":
             supply_status = "unknown_authority"
+            authority = "wayfair_backend_manual"
         elif branch == "USTX-return":
             supply_status = "demand_only"
+            authority = "not_applicable"
         else:
             supply_status = "not_sampled"
-        authority = "wayfair_backend_manual" if branch == "3PL" else "tongtool_api_or_browser_stock"
+            authority = "not_applicable"
+        avg_gross = gross / observations
+        cov_on_hand = None
+        cov_incl = None
+        if quantity_status in ("positive", "observed_zero") and avg_gross > 0:
+            cov_on_hand = round(available / avg_gross, 2)
+            cov_incl = round(supply / avg_gross, 2)
         rows.append({
             "branch": branch,
             "sku": sku,
             "supply_status": supply_status,
             "authority": authority,
+            "required_warehouses": list(required or []),
+            "presence": presence_status,
+            "quantity_status": quantity_status,
             "gross_6m": round(gross, 2),
             "reissue_6m": round(reissue, 2),
             "avg_monthly_gross": round(avg_gross, 2),
-            "available": round(available, 2),
-            "intransit": round(intransit, 2),
-            "supply": round(supply, 2),
-            "coverage_months_on_hand": round(available / avg_gross, 2) if avg_gross > 0 else None,
-            "coverage_months_incl_intransit": round(supply / avg_gross, 2) if avg_gross > 0 else None,
+            "available": available,
+            "intransit": intransit,
+            "supply": supply,
+            "reference_available": ref_available,
+            "reference_intransit": ref_intransit,
+            "reference_supply": ref_supply,
+            "coverage_months_on_hand": cov_on_hand,
+            "coverage_months_incl_intransit": cov_incl,
         })
     rows.sort(key=lambda r: (r["branch"], -r["gross_6m"], r["sku"]))
     return rows
@@ -488,10 +525,11 @@ def main():
         gross = float(demand["by_branch"].get(branch, 0) or 0)
         avg = gross / observations
         s = stock["by_branch"].get(branch, {})
-        available = float(s.get("available", 0) or 0)
-        intransit = float(s.get("intransit", 0) or 0)
-        supply = available + intransit
-        if branch in complete_branches:
+        ref_available = float(s.get("available", 0) or 0)
+        ref_intransit = float(s.get("intransit", 0) or 0)
+        ref_supply = ref_available + ref_intransit
+        complete = branch in complete_branches
+        if complete:
             supply_status = "sampled_complete"
         elif branch in REQUIRED_SUPPLY_WAREHOUSES:
             supply_status = "sampled_incomplete"
@@ -502,29 +540,50 @@ def main():
         else:
             supply_status = "not_sampled"
         authority = "wayfair_backend_manual" if branch == "3PL" else "tongtool_api_or_browser_stock"
+        branch_rows = [r for r in rows if r["branch"] == branch]
+        observed_skus = sum(1 for r in branch_rows if r["presence"] == "observed")
+        missing_skus = sum(1 for r in branch_rows if r["presence"] == "missing")
+        unknown_skus = sum(1 for r in branch_rows if r["presence"] == "unknown")
+        available = ref_available if complete else None
+        intransit = ref_intransit if complete else None
+        supply = ref_supply if complete else None
         branch_cov[branch] = {
             "supply_status": supply_status,
             "authority": authority,
             "gross_6m": round(gross, 2),
             "avg_monthly_gross": round(avg, 2),
-            "available": round(available, 2),
-            "intransit": round(intransit, 2),
-            "supply": round(supply, 2),
-            "coverage_months_on_hand": round(available / avg, 2) if avg > 0 else None,
-            "coverage_months_incl_intransit": round(supply / avg, 2) if avg > 0 else None,
-            "coverage_eligible": bool(supply_status == "sampled_complete"
-                                      and demand.get("window_complete")),
+            "available": round(available, 2) if available is not None else None,
+            "intransit": round(intransit, 2) if intransit is not None else None,
+            "supply": round(supply, 2) if supply is not None else None,
+            "reference_available": round(ref_available, 2),
+            "reference_intransit": round(ref_intransit, 2),
+            "reference_supply": round(ref_supply, 2),
+            "observed_skus": observed_skus,
+            "missing_skus": missing_skus,
+            "unknown_skus": unknown_skus,
+            "coverage_months_on_hand": (round(available / avg, 2)
+                                        if complete and available is not None and avg > 0 else None),
+            "coverage_months_incl_intransit": (round(supply / avg, 2)
+                                               if complete and supply is not None and avg > 0 else None),
+            "coverage_eligible": bool(complete and demand.get("window_complete")),
         }
 
-    no_supply = [r for r in rows if r["supply_status"] == "sampled_complete"
-                 and r["gross_6m"] > 0 and r["supply"] == 0]
-    unknown_supply = [r for r in rows if r["gross_6m"] > 0
-                      and r["supply_status"] != "sampled_complete"]
-    no_demand = [r for r in rows if r["supply_status"] == "sampled_complete"
-                 and r["gross_6m"] == 0 and r["supply"] > 0]
-    below_2 = [r for r in rows if r["supply_status"] == "sampled_complete"
-               and r["coverage_months_incl_intransit"] is not None
-               and r["coverage_months_incl_intransit"] < 2]
+    headline_eligible = bool(demand.get("window_complete") and complete_branches)
+    if headline_eligible:
+        no_supply = [r for r in rows if r["supply_status"] == "sampled_complete"
+                     and r["quantity_status"] == "observed_zero" and r["gross_6m"] > 0]
+        missing_supply = [r for r in rows if r["supply_status"] == "sampled_complete"
+                          and r["quantity_status"] == "missing" and r["gross_6m"] > 0]
+        unknown_supply = [r for r in rows if r["gross_6m"] > 0
+                          and r["quantity_status"] == "unknown"]
+        no_demand = [r for r in rows if r["supply_status"] == "sampled_complete"
+                     and r["quantity_status"] in ("positive", "observed_zero")
+                     and r["gross_6m"] == 0 and (r["supply"] or 0) > 0]
+        below_2 = [r for r in rows if r["supply_status"] == "sampled_complete"
+                   and r["coverage_months_incl_intransit"] is not None
+                   and r["coverage_months_incl_intransit"] < 2]
+    else:
+        no_supply, missing_supply, unknown_supply, no_demand, below_2 = [], [], [], [], []
 
     result = {
         "okf": "v0.1",
@@ -600,22 +659,27 @@ def main():
             "by_branch": stock["by_branch"],
             "by_warehouse": stock["by_warehouse"],
         },
+        "headline_eligible": headline_eligible,
+        "headline_blocked_reason": (None if headline_eligible else
+                                     "window_incomplete_or_no_complete_branch"),
         "coverage_by_branch": branch_cov,
         "coverage_eligible_branches": sorted(
             b for b, v in branch_cov.items() if v.get("coverage_eligible")),
         "coverage_by_sku": rows,
         "gaps": {
-            "scope": "仅 sampled_complete 分支进入无供给/低覆盖计数；PL/3PL/退货仓单独列 unknown/demand_only",
+            "scope": "仅 window_complete 且 sampled_complete 进入 headline；未返回 SKU 记 missing，不记 observed_zero；3PL/退货仓 unknown",
             "demand_without_supply": no_supply[:200],
+            "missing_supply": missing_supply[:200],
             "unknown_supply": unknown_supply[:200],
             "supply_without_demand": no_demand[:200],
             "coverage_below_2_months": below_2[:200],
             "counts": {
-                "demand_without_supply": len(no_supply),
+                "demand_without_supply_observed_zero": len(no_supply),
+                "missing_supply": len(missing_supply),
                 "unknown_supply": len(unknown_supply),
                 "supply_without_demand": len(no_demand),
                 "coverage_below_2_months": len(below_2),
-                "note": "按 branch×SKU 计数，不是全局去重 SKU",
+                "note": "按 branch×SKU 计数；missing/unknown 不计入无供给",
             },
         },
     }
@@ -627,11 +691,15 @@ def main():
           f"窗口 {demand['months_observed']}/{len(MONTHS)} 月 complete={demand['window_complete']}")
     print(f"  补发货: {demand['reissue_qty']:g} 件 / {demand['reissue_rows']} 行")
     for b, v in branch_cov.items():
-        print(f"  {b} [{v['supply_status']}]: 需求 {v['gross_6m']:g}，供给 {v['supply']:g}"
-              f"（可用 {v['available']:g} + 在途 {v['intransit']:g}），"
-              f"on-hand {v['coverage_months_on_hand']} 月 / 含在途 {v['coverage_months_incl_intransit']} 月")
-    print(f"  缺口(仅已采样完整): 有需求无供给 {len(no_supply)} 个 branch×SKU；"
-          f"覆盖<2月 {len(below_2)}；unknown 供给 {len(unknown_supply)}")
+        if v["supply"] is None:
+            supply_txt = f"None（参考 {v['reference_supply']:g}）"
+        else:
+            supply_txt = f"{v['supply']:g}（可用 {v['available']:g} + 在途 {v['intransit']:g}）"
+        print(f"  {b} [{v['supply_status']}]: 需求 {v['gross_6m']:g}，供给 {supply_txt}，"
+              f"on-hand {v['coverage_months_on_hand']} 月 / 含在途 {v['coverage_months_incl_intransit']} 月，"
+              f"observed/missing/unknown={v['observed_skus']}/{v['missing_skus']}/{v['unknown_skus']}")
+    print(f"  headline_eligible={headline_eligible}；observed_zero {len(no_supply)}；"
+          f"missing {len(missing_supply)}；unknown {len(unknown_supply)}；<2月 {len(below_2)}")
 
 
 if __name__ == "__main__":

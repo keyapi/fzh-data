@@ -11,9 +11,9 @@ tags: [supply-chain, codex, g1, sync, consolidated]
 # 给 Codex 的 G1 同步（合并版，2026-10-20）
 
 > 本文件是当前**唯一同步口径**；前几轮碎片消息以本文件为准。
-> Claude #300 实质更新 `1dafa7b2`、G1b 产物 `fa978f91`、G1B01–09 修复 `f6e97f39`、
-> RR01–RR08 修复（本轮）；Codex #301 最新 `fd1029b4`（G1B06/07/08 关闭，RR01–RR08 待复核）；
-> **已修实际 daily→转换→coverage 入口，下一轮只审修复与重跑差异**。
+> Claude #300 实质更新 `1dafa7b2`、G1B01–09 修复 `f6e97f39`、RR01–RR08 修复 `6ebc03c4`、
+> T01–T06 修复（本轮）；Codex #301 最新 `93e6bd1f`（接受批量方向，T01–T06 待复核）；
+> **已修 presence/SE/完整性入口，下一轮审 T01–T06 与 E01–E04，不重做综述**。
 
 ## 0. Codex 当前所处位置（先对齐）
 
@@ -37,11 +37,11 @@ tags: [supply-chain, codex, g1, sync, consolidated]
 
 ## 1. 当前状态
 
-- Codex #301 `fd1029b4`：G1B06/07/08 关闭；RR01–RR08 未闭合（complete 绑定、转换坏值/冲突、
-  未知响应当空、首/末工序替代、SE 未知当 0、Wayfair 权威源、缺文件/字段、粒度/非整数）。
-- Claude 本轮：修 RR01–RR08；4 仓转换 `complete=True`/bad=0/conflict=0，Wayfair `unknown_authority`；
-  EN 试点 63 SE 全 ok；批量 SO 探针按 `item_group` 333 行/56 SO，证明可批量。
-- **当前状态**：修复已重跑；全 family 未全量抽取；Wayfair 供货归属 unknown。
+- Codex #301 `93e6bd1f`：接受批量 ETL 方向；RR 大部分修复；T01–T06 仍待修
+  （未返回 SKU 当零、SE missing_doc 丢 WO、hash/manifest、缺请求仓、逐仓 complete、窗口过滤）。
+- Claude 本轮：修 T01–T06；presence 重算 129 observed_zero / 2 missing / 192 <2月 / 127 unknown；
+  E01–E04 写入 `15-full-family-etl.md`；Wayfair 仍 `unknown_authority`。
+- **当前状态**：适配器修复完成；全 family 批量 PoC 未实现；G1 未验收。
 - **G1b 已启动**：补发计入；退货**不在库存净算中二次冲减**（5% 只作未来需求情景）；
   WayfairCG 供货归属缺数据标 `unknown`；已跑 CENTRADE + DANEEY 库存快照与 1 个头部 SKU 的 EN 单据试点。
 

@@ -180,13 +180,17 @@ def fetch_manufacture_stock_entries(wo_names: list[str], item_codes: list[str],
     ses = iss.dedupe_by(raw, "name")
     item_set = set(item_codes)
     out = []
+    unlocated_missing = False
     for i, se in enumerate(ses):
         d = iss.get_single("Stock Entry", se["name"], base_url, key, secret)
         if i + 1 < len(ses):
             time.sleep(sleep_s)
         if not d:
-            out.append({"se": se["name"], "status": "missing_doc", "finished_qty": None,
-                        "lines": []})
+            wo = se.get("work_order")
+            if not wo:
+                unlocated_missing = True
+            out.append({"se": se["name"], "work_order": wo, "status": "missing_doc",
+                        "finished_qty": None, "lines": []})
             continue
         lines = []
         finished = 0.0
@@ -228,7 +232,7 @@ def fetch_manufacture_stock_entries(wo_names: list[str], item_codes: list[str],
             "se": se["name"],
             "posting_date": d.get("posting_date"),
             "docstatus": d.get("docstatus"),
-            "work_order": d.get("work_order"),
+            "work_order": d.get("work_order") or se.get("work_order"),
             "from_warehouse": d.get("from_warehouse"),
             "to_warehouse": d.get("to_warehouse"),
             "status": status,
@@ -237,7 +241,7 @@ def fetch_manufacture_stock_entries(wo_names: list[str], item_codes: list[str],
             "matched_finished_lines": matched_lines,
             "lines": lines,
         })
-    return out, None
+    return out, ("missing_doc_without_work_order" if unlocated_missing else None)
 
 
 def main():

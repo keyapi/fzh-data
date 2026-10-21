@@ -72,6 +72,8 @@ def main():
     ap.add_argument("--warehouses", default="", help="逗号分隔仓名；空=manifest 全部")
     ap.add_argument("--bom", default=str(BOM))
     ap.add_argument("--all-skus", action="store_true", help="不过滤 family 客户码")
+    ap.add_argument("--allow-missing-hash", action="store_true",
+                    help="兼容旧 manifest（无 file_sha256）；默认拒绝")
     args = ap.parse_args()
 
     family = None if args.all_skus else load_family_codes(Path(args.bom))
@@ -79,9 +81,11 @@ def main():
     manifest_path = root / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     wanted = {w.strip() for w in args.warehouses.split(",") if w.strip()}
-    entries = manifest.get("warehouses", [])
-    if wanted:
-        entries = [e for e in entries if e.get("warehouseName") in wanted]
+    all_entries = manifest.get("warehouses", [])
+    by_name = {e.get("warehouseName"): e for e in all_entries}
+    requested = sorted(wanted or set(by_name))
+    entries = [by_name[n] for n in requested if n in by_name]
+    missing_requested = [n for n in requested if n not in by_name]
 
     rows_by_key: dict[tuple[str, str], list[dict]] = defaultdict(list)
     row_meta: dict[tuple[str, str], dict] = {}
@@ -90,6 +94,8 @@ def main():
     missing_files = []
     read_files = {}
     file_hashes = {}
+    hash_missing = []
+    hash_mismatches = {}
 
     for e in entries:
         name = e.get("warehouseName")
@@ -97,8 +103,17 @@ def main():
         if not path.is_file():
             missing_files.append(name)
             continue
+        expected = e.get("file_sha256")
+        actual = sha256(path)
+        if expected:
+            if actual != expected:
+                hash_mismatches[name] = {"expected": expected, "actual": actual}
+                continue
+        elif not args.allow_missing_hash:
+            hash_missing.append(name)
+            continue
         read_files[name] = str(path)
-        file_hashes[name] = sha256(path)
+        file_hashes[name] = actual
         with path.open(encoding="utf-8") as f:
             for line_no, line in enumerate(f, 1):
                 line = line.strip()
@@ -167,7 +182,12 @@ def main():
             w[k] += vals[k]
         w["rows"] += 1
 
-    requested = [e.get("warehouseName") for e in entries]
+    for name in missing_requested:
+        by_wh.setdefault(name, {
+            "available": 0.0, "intransit": 0.0, "defects": 0.0, "waiting": 0.0,
+            "rows": 0, "complete": False,
+        })
+        by_wh[name]["error"] = "requested_but_not_in_manifest"
     for e in entries:
         name = e.get("warehouseName")
         w = by_wh.setdefault(name, {
@@ -178,6 +198,8 @@ def main():
             e.get("complete") is True
             and name not in missing_files
             and name not in conflict_warehouses
+            and name not in hash_missing
+            and name not in hash_mismatches
             and bad_rows.get(name, 0) == 0
         )
         w["complete"] = complete
@@ -188,13 +210,20 @@ def main():
     complete_warehouses = sorted(
         name for name, w in by_wh.items() if w.get("complete") is True
     )
+    presence: dict[str, set[str]] = defaultdict(set)
+    for (wh_name, sku) in rows_by_key:
+        presence[wh_name].add(sku)
     global_complete = bool(
         requested
+        and not missing_requested
         and not missing_files
+        and not hash_missing
+        and not hash_mismatches
         and all(by_wh.get(name, {}).get("complete") is True for name in requested)
     )
 
     result = {
+        "run_id": manifest.get("run_id"),
         "fetched_at": manifest.get("snapshot_at"),
         "capture_start": min((e.get("capture_start") for e in entries if e.get("capture_start")),
                              default=None),
@@ -202,13 +231,17 @@ def main():
                            default=None),
         "source": "stock_daily_backup.py (tongtool API)",
         "requested_warehouses": requested,
+        "missing_requested": missing_requested,
         "read_warehouses": sorted(read_files),
         "missing_files": missing_files,
+        "hash_missing": hash_missing,
+        "hash_mismatches": hash_mismatches,
         "file_hashes": file_hashes,
         "warehouses": sorted(read_files),
         "complete": global_complete,
         "complete_warehouses": complete_warehouses,
         "incomplete_warehouses": sorted(set(requested) - set(complete_warehouses)),
+        "sku_presence": {wh: sorted(skus) for wh, skus in presence.items()},
         "bad_rows_total": sum(bad_rows.values()),
         "bad_samples": bad_samples,
         "duplicate_same": duplicate_same,

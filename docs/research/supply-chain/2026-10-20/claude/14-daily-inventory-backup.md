@@ -180,7 +180,7 @@ LEFT JOIN order_monthly o USING (sku);
 - **API 全量备份（2026-10-20）**：CENTRADE 2,072/21、DANEEY 1,024/11、PL 1,369/14、
   WayfairCG-Cranbury 92/1；DANEEY 退货仓一次连接超时，主仓完整。
 - **G1b 覆盖已用完整快照重算**：USNJ 5.86、USTX 5.48、PL 10.24 个月（含在途名义）；
-  131 有需求无供给、194 <2 月、127 unknown。
+  129 观测零供给 / 2 missing / 192 <2 月 / 127 unknown（missing 不记 0）。
 - **DANEEY 退货仓超时原因**：2026-10-20 18:06 全量跑，不在 01:00/02:45/04:30 的 QDY/通途
   API 同步窗口内；是到 `mcp.tongtool.com` 的 **TCP 连接超时**（WinError 10060），不是同步任务抢占。
   2026-10-21 09:2x 补跑该仓已成功（160KB JSONL）；脚本已加 3 次网络重试（10/20s）。

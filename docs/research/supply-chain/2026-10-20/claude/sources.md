@@ -96,8 +96,10 @@ tags: [supply-chain, research, sources]
 | S1-065 | Codex `fd1029b4` 第二轮：G1B06/07/08 关闭；RR01–RR08 未闭合，要求先修 daily→转换→coverage | Codex #301 `review-g1b-round2.md` | C | 2026-10-21 | 「先修 RR01–RR06，再扩全 family」 | A | g1b_round2_response |
 | S1-066 | 批量 SO 按 `item_group in (三角靠枕,三角靠枕无扣)` 返回 333 行/56 张 SO，证明无需逐客户码 1,486 次 | EN 生产只读探针 | C | 2026-10-21 | 56 unique SO | A | 15-full-family-etl §1 |
 | S1-067 | `TONGTU_USER/PASSWORD` 在 `fzh-web-automation/.env`；两个浏览器脚本已加载该路径 | 本机 env 扫描 + 代码修改 | C | 2026-10-21 | `TONGTU_USER True / TONGTU_PASSWORD True` | A | 14-daily-inventory-backup §1、log |
-| S1-068 | 4 仓（含 WayfairCG）转换 `complete=True`、bad=0、conflict=0；Wayfair 标 `unknown_authority` 不计缺口 | `out/stock_snapshot_rr.json`、`out/g1b_coverage_rr.json` | C | 2026-10-21 | 131/194/127 不变 | A | g1b_round2_response |
+| S1-068 | 4 仓（含 WayfairCG）转换 `complete=True`、bad=0、conflict=0；Wayfair 标 `unknown_authority` 不计缺口 | `out/stock_snapshot_rr.json`、`out/g1b_coverage_rr.json` | C | 2026-10-21 | 131/194/127 旧口径 | A | g1b_round2_response |
 | S1-069 | 库存结存会漏零库存 SKU：API 比 CENTRADE 多 386（343 零）/比 DANEEY 多 26（25 零） | 浏览器合并库存 vs API JSONL 对比 | C | 2026-10-21 | 重叠 SKU 数量基本一致；API 无状态/别名 | A | 14-daily-inventory-backup §1.1 |
+| S1-070 | presence 规则后完整快照覆盖：129 observed_zero / 2 missing / 192 <2 月 / 127 unknown | `out/g1b_coverage_u.json` | C | 2026-10-21 | missing 不记 0；Wayfair unknown_authority | A | g1b_round3_response、g1b_results §3 |
+| S1-071 | 新 daily run 目录 + manifest hash 校验：hash 全 0 负例 `read=0/complete=false`；缺请求仓 `requested=2/read=1/complete=false` | `out/t02_bad2.json`、`out/t02_test.json` | C | 2026-10-21 | 不重算 hash 背书 | A | g1b_round3_response §重跑 |
 
 ## 未找到项（N-###）
 

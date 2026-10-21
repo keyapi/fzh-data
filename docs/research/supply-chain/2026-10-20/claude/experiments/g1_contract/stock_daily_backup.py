@@ -7,8 +7,9 @@
 本脚本用 `erp2_stocks_stocksquery` 拉全部启用仓，输出全仓 JSONL + manifest，便于服务器化。
 
 输出（默认 D:/Work/库存备份）：
-  YYYY-MM-DD/warehouse=<warehouseId>_<name>.jsonl
-  YYYY-MM-DD/manifest.json
+  YYYY-MM-DD/run=<run_id>/warehouse=<warehouseId>_<name>.jsonl
+  YYYY-MM-DD/run=<run_id>/manifest.json
+  YYYY-MM-DD/manifest.json（最后原子发布的选定 run 指针）
 
 注意：通途商户级限流 5 次/分钟；默认 13 秒/页。全量 6 仓可能数十分钟到数小时，
 建议凌晨跑，避开 EN 的 01:00 / 02:45 / 04:30 三个通途 API 同步任务。
@@ -214,8 +215,10 @@ def main():
 
     root = Path(args.outdir)
     day = datetime.now().strftime("%Y-%m-%d")
-    outdir = root / day
-    outdir.mkdir(parents=True, exist_ok=True)
+    run_id = datetime.now().strftime("%Y%m%dT%H%M%S")
+    day_dir = root / day
+    run_dir = day_dir / f"run={run_id}"
+    run_dir.mkdir(parents=True, exist_ok=True)
     lock = root / ".lock"
     if lock.exists():
         print(f"✗ 已有任务在跑：{lock}", file=sys.stderr)
@@ -241,13 +244,12 @@ def main():
         if not whs:
             raise RuntimeError(f"请求仓均未命中: {requested_names}")
 
-        run_id = datetime.now().strftime("%Y%m%dT%H%M%S")
-        print(f"备份日 {day} run={run_id}；启用/请求仓 {len(whs)}/{len(requested_names)}；输出 {outdir}")
+        print(f"备份日 {day} run={run_id}；启用/请求仓 {len(whs)}/{len(requested_names)}；输出 {run_dir}")
         results = []
         for wh in whs:
             print(f"\n仓库 {wh['warehouseName']} ({wh['warehouseId']})")
             try:
-                r = backup_warehouse(client, wh, outdir, args.page_size, args.max_pages)
+                r = backup_warehouse(client, wh, run_dir, args.page_size, args.max_pages)
                 results.append(r)
                 print(f"  pages={r['pages']} rows={r['rows']} complete={r['complete']}")
             except Exception as e:  # noqa: BLE001 - 单仓失败不阻断其他仓
@@ -277,12 +279,18 @@ def main():
                 and all(r.get("complete") is True and not r.get("error") for r in results)
             ),
         }
-        tmp_manifest = outdir / "manifest.json.tmp"
+        tmp_manifest = run_dir / "manifest.json.tmp"
         tmp_manifest.write_text(
             json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
         )
-        os.replace(tmp_manifest, outdir / "manifest.json")
-        print(f"\nOK: {outdir / 'manifest.json'} complete={manifest['complete']}")
+        os.replace(tmp_manifest, run_dir / "manifest.json")
+        # day/manifest.json 是“选定 run”的指针；最后原子发布，避免混读半成品。
+        day_tmp = day_dir / "manifest.json.tmp"
+        day_tmp.write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        os.replace(day_tmp, day_dir / "manifest.json")
+        print(f"\nOK: {day_dir / 'manifest.json'} (run={run_id}) complete={manifest['complete']}")
         return 0 if manifest["complete"] else 1
     finally:
         lock.unlink(missing_ok=True)
