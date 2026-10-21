@@ -108,4 +108,5 @@ uv run python scripts/env_doctor.py --probe
 踩过的坑与设计取舍，动手前先读：
 
 - `docs/solutions/developer-experience/codex-chatgpt-windows-setup-config-recovery.md` —— Codex (ChatGPT Desktop) 更新后 Windows 安装失败与对话历史恢复
+- `docs/solutions/developer-experience/claude-desktop-3p-rewind-parentuuid-branch-repair.md` —— Claude Desktop 3P 会话 rewind 报 `No message found with message.uuid`：转录 parentUuid 分支接错与等长修复
 - `docs/solutions/developer-experience/windows-wsl-docker-disk-optimization.md` —— Windows WSL2 Docker VHDX disk space optimization and migration
