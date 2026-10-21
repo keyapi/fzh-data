@@ -60,6 +60,10 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 import EN_API.item_shipment_status as iss  # noqa: E402
+if str(BASE) not in sys.path:
+    sys.path.insert(0, str(BASE))
+import prod_budget as pb  # noqa: E402
+from prod_budget import BudgetExhausted  # noqa: E402
 
 SCHEMA = "dn_wo_jc_se_association/1"
 RULE = "dn-wo-jc-se-association/1"
@@ -76,8 +80,7 @@ class InputError(RuntimeError):
     """输入/契约错误：必须 exit 2，不能产出“成功”证据。"""
 
 
-class BudgetExhausted(RuntimeError):
-    """请求级 HTTP 预算耗尽；调用方必须显式记录 partial。"""
+# BudgetExhausted 见 prod_budget：请求/字节/墙钟任一先到，或 401/403、连续失败、重试耗尽。
 
 
 # ── 小工具 ────────────────────────────────────────────
@@ -1133,58 +1136,31 @@ def conservation_checks(scope: str, so_out: list[dict], all_rows: list[dict],
             "C3_se_internal": c3, "C4_rows": c4}
 
 
-# ── EN 有界只读：请求级预算 + SE 明细 + 异常 WO 探针 ─────
-class HttpBudget:
-    """请求级总预算：SE 明细、探针翻页、连接重试共用同一个计数器。"""
+# ── EN 有界只读：统一预算闸门 + SE 明细 + 异常 WO 探针 ─────
+class HttpBudget(pb.ProductionBudget):
+    """向后兼容包装：`HttpBudget(n)` 只限请求数；闸门参数可选。
 
-    def __init__(self, limit: int):
-        self.limit = max(0, int(limit))
-        self.used = 0
-        self.exhausted = False
-        self.by_kind: Counter = Counter()
-        self.events: list[dict] = []
+    生产闸门（--max-requests/--max-mib/--max-minutes/--budget-file）启用时，
+    请求数、响应字节、墙钟秒共用一个跨进程账本。
+    """
 
-    @property
-    def remaining(self) -> int:
-        return max(0, self.limit - self.used)
-
-    def spend(self, kind: str, detail: str = "") -> None:
-        if self.used >= self.limit:
-            self.exhausted = True
-            raise BudgetExhausted(f"HTTP budget {self.limit} exhausted ({kind})")
-        self.used += 1
-        self.by_kind[kind] += 1
-        self.events.append({"n": self.used, "kind": kind, "detail": detail})
-
-    def as_log(self) -> dict:
-        return {"limit": self.limit, "used": self.used, "remaining": self.remaining,
-                "by_kind": dict(sorted(self.by_kind.items())),
-                "exhausted": self.exhausted,
-                "events": self.events[:50],
-                "events_truncated": len(self.events) > 50,
-                "note": "request-level budget shared by enrichment, probe pages and retries"}
+    def __init__(self, limit: int | None, *, max_bytes: int | None = None,
+                 max_seconds: float | None = None,
+                 ledger_path: str | None = None, log_path: str | None = None,
+                 min_interval: float = 0.0,
+                 clock=None, sleep=None, http_get=None):
+        super().__init__(
+            max_requests=limit, max_bytes=max_bytes, max_seconds=max_seconds,
+            ledger_path=ledger_path, log_path=log_path, min_interval=min_interval,
+            clock=clock, sleep=sleep, http_get=http_get)
 
 
 def budgeted_get_status(budget: HttpBudget, path: str, base_url: str, key: str,
                         secret: str, kind: str = "enrich", timeout: int = 60
                         ) -> tuple[int, dict]:
-    """与 iss.api_get_status 同语义，但**每次尝试**都计入共享预算。"""
-    url = f"{base_url}{path}"
-    last: Exception | None = None
-    for attempt in range(iss.MAX_RETRIES):
-        budget.spend("retry" if attempt else kind, path[:120])
-        try:
-            resp = requests.get(url, headers=iss._auth_headers(key, secret), timeout=timeout)
-            try:
-                return resp.status_code, resp.json()
-            except ValueError:
-                return resp.status_code, {}
-        except requests.RequestException as e:  # noqa: PERF203 - 重试要计数
-            last = e
-            if attempt < iss.MAX_RETRIES - 1:
-                time.sleep(2 * (attempt + 1))
-    print(f"  ✗ 请求失败 ({type(last).__name__}): {path[:120]}", file=sys.stderr)
-    return 0, {}
+    """统一闸门下的 GET：**每次尝试**都计入共享预算（含 429/网络重试）。"""
+    resp = budget.fetch(kind, path, base_url, key, secret, timeout=timeout)
+    return resp.status, resp.body
 
 
 def budgeted_get_single(budget: HttpBudget, resource: str, docname: str, base_url: str,
@@ -1272,9 +1248,10 @@ def enrich_se_details(snaps: list[dict], out_dir: Path, budget: HttpBudget,
         before = dict(budget.by_kind)
         try:
             status, body = budgeted_get_status(budget, path, SITE, key, secret, "enrich")
-        except BudgetExhausted:
+        except BudgetExhausted as e:
             budget.exhausted = True
             log["budget_exceeded"] = True
+            log["stop_reason"] = getattr(e, "reason", None)
             log["not_requested"] = need[i:]
             break
         log["requested_this_run"] += 1
@@ -1375,12 +1352,14 @@ def probe_wo_mismatches(scopes: list[dict], out_dir: Path, limit: int, sleep_s: 
             rec["by_type"] = dict(Counter(s.get("stock_entry_type")
                                           for s in ses["rows"]))
             rec["ok"] = True
-        except BudgetExhausted:
+        except BudgetExhausted as e:
             budget.exhausted = True
             log["budget_exceeded"] = True
+            log["stop_reason"] = getattr(e, "reason", None)
             rec["ok"] = False
             rec["error"] = "budget_exhausted"
-            log["errors"].append({"work_order": wo, "error": "budget_exhausted"})
+            log["errors"].append({"work_order": wo, "error": "budget_exhausted",
+                                  "reason": log["stop_reason"]})
             log["not_probed"] = [t[1] for t in targets[i:]]
             probes[wo] = rec
             break
@@ -1627,7 +1606,10 @@ def build_manifest(scopes: list[dict], window: tuple[str | None, str | None], ba
         ],
     }
     if budget_exhausted:
-        manifest["run_status"] = "partial_http_budget_exhausted"
+        reason = (budget_log or {}).get("stop_reason")
+        manifest["run_status"] = ("partial_http_budget_exhausted"
+                                  if reason in (None, "requests")
+                                  else f"partial_http_budget_{reason}")
     return manifest
 
 
@@ -1653,6 +1635,24 @@ def finalize_manifest(manifest: dict) -> dict:
     return manifest
 
 
+def budget_from_args(args, out_dir: Path) -> tuple[HttpBudget, bool]:
+    """构造预算：未传任何闸门参数 → 旧 HttpBudget（仅请求数、无账本）。"""
+    gate = any(v is not None for v in (args.max_requests, args.max_mib,
+                                       args.max_minutes, args.budget_file,
+                                       args.min_interval))
+    if not gate:
+        return HttpBudget(args.max_http), False
+    ledger = Path(args.budget_file) if args.budget_file else out_dir / "prod_budget.json"
+    return HttpBudget(
+        args.max_requests if args.max_requests is not None else args.max_http,
+        max_bytes=int(args.max_mib * 1024 * 1024) if args.max_mib is not None else None,
+        max_seconds=args.max_minutes * 60 if args.max_minutes is not None else None,
+        ledger_path=str(ledger),
+        log_path=str(ledger.with_suffix(".log")),
+        min_interval=1.0 if args.min_interval is None else args.min_interval,
+    ), True
+
+
 # ── main ─────────────────────────────────────────────
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="G1b 窄范围 DN/WO/JC/SE 关联与数量守恒（只读）")
@@ -1669,6 +1669,16 @@ def main(argv: list[str] | None = None) -> int:
                     help="复用 out-dir/se_details.json 里已有的 SE 明细")
     ap.add_argument("--max-http", type=int, default=500)
     ap.add_argument("--sleep", type=float, default=0.2)
+    ap.add_argument("--max-requests", type=int, default=None,
+                    help="统一闸门：请求数上限（含重试/翻页；缺省沿用 --max-http）")
+    ap.add_argument("--max-mib", type=float, default=None,
+                    help="统一闸门：响应传输字节上限（MiB，同时限制解压后字节）")
+    ap.add_argument("--max-minutes", type=float, default=None,
+                    help="统一闸门：跨进程累计墙钟上限（分钟）")
+    ap.add_argument("--budget-file", default=None,
+                    help="统一闸门账本 JSON（缺省 out-dir/prod_budget.json；日志同名 .log）")
+    ap.add_argument("--min-interval", type=float, default=None,
+                    help="统一闸门请求最小间隔秒（缺省 1.0；不启用闸门时保持旧行为）")
     ap.add_argument("--env-file", default="",
                     help="EN 凭证 .env 路径（worktree 里没有 .env 时指向主仓库）")
     ap.add_argument("--probe-mismatch-wos", type=int, default=0,
@@ -1687,13 +1697,18 @@ def main(argv: list[str] | None = None) -> int:
     window = (args.window_from or None, args.window_to or None)
 
     se_details = None
-    budget = HttpBudget(args.max_http)
+    try:
+        budget, _gate = budget_from_args(args, out_dir)
+    except pb.BudgetLedgerError as e:
+        print(f"✗ {e}", file=sys.stderr)
+        return 2
     if args.enrich_se:
         try:
             se_details = enrich_se_details(snaps, out_dir, budget, args.sleep,
                                            out_dir / "se_details.json",
                                            args.env_file or None)
         except InputError as e:
+            budget.close()
             print(f"✗ {e}", file=sys.stderr)
             return 2
     elif args.reuse_se_details:
@@ -1701,6 +1716,7 @@ def main(argv: list[str] | None = None) -> int:
         if p.is_file():
             se_details = json.loads(p.read_text(encoding="utf-8"))
             if se_details.get("schema") not in (None, SE_DETAIL_SCHEMA):
+                budget.close()
                 print(f"✗ SE 明细缓存 schema 不符: {se_details.get('schema')!r}",
                       file=sys.stderr)
                 return 2
@@ -1716,9 +1732,11 @@ def main(argv: list[str] | None = None) -> int:
             probe = probe_wo_mismatches(scopes, out_dir, args.probe_mismatch_wos,
                                         args.sleep, budget, args.env_file or None)
         except InputError as e:
+            budget.close()
             print(f"✗ {e}", file=sys.stderr)
             return 2
 
+    budget.close()
     manifest = build_manifest(scopes, window, args.date_basis, se_details, probe,
                               run_id, budget)
     finalize_manifest(manifest)

@@ -39,6 +39,9 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 import EN_API.item_shipment_status as iss  # noqa: E402
+if str(BASE) not in sys.path:
+    sys.path.insert(0, str(BASE))
+import prod_budget as pb  # noqa: E402
 
 
 def _op_order(wo: dict) -> list[str]:
@@ -297,14 +300,54 @@ def build_four_way(wos: list[dict], jc: dict, se_rows: list[dict],
     return four_way
 
 
-def main():
+def collect(args, key: str, secret: str, ns) -> tuple[dict, list, str | None]:
+    """所有生产 GET 的唯一入口：build_context（全部分页/逐单）+ Manufacture SE。"""
+    ctx = iss.build_context(ns, iss.ENV_URLS["prod"], key, secret)
+    if ctx.get("empty"):
+        return ctx, [], None
+    se_rows, se_error = fetch_manufacture_stock_entries(
+        [w["name"] for w in ctx.get("wos", [])], ctx.get("item_codes", []),
+        iss.ENV_URLS["prod"], key, secret, args.sleep,
+    )
+    return ctx, se_rows, se_error
+
+
+def budget_from_args(args) -> pb.ProductionBudget | None:
+    """未传闸门参数 → None（旧行为）；传了任一参数 → 统一账本。"""
+    gate = any(v is not None for v in (args.max_requests, args.max_mib,
+                                       args.max_minutes, args.budget_file,
+                                       args.min_interval))
+    if not gate:
+        return None
+    ledger = Path(args.budget_file) if args.budget_file else OUT / "prod_budget.json"
+    return pb.ProductionBudget(
+        max_requests=args.max_requests,
+        max_bytes=int(args.max_mib * 1024 * 1024) if args.max_mib is not None else None,
+        max_seconds=args.max_minutes * 60 if args.max_minutes is not None else None,
+        ledger_path=str(ledger),
+        log_path=str(ledger.with_suffix(".log")),
+        min_interval=1.0 if args.min_interval is None else args.min_interval,
+    )
+
+
+def main(argv: list[str] | None = None):
     ap = argparse.ArgumentParser(description="G1b EN 单据结构化导出（只读）")
     g = ap.add_mutually_exclusive_group(required=True)
     g.add_argument("--customer-code")
     g.add_argument("--item")
     ap.add_argument("--sleep", type=float, default=0.15)
     ap.add_argument("--out", default="")
-    args = ap.parse_args()
+    ap.add_argument("--max-requests", type=int, default=None,
+                    help="统一闸门：请求数上限（含分页/重试）")
+    ap.add_argument("--max-mib", type=float, default=None,
+                    help="统一闸门：响应传输字节上限（MiB，同时限制解压后字节）")
+    ap.add_argument("--max-minutes", type=float, default=None,
+                    help="统一闸门：跨进程累计墙钟上限（分钟）")
+    ap.add_argument("--budget-file", default=None,
+                    help="统一闸门账本 JSON（缺省 out/prod_budget.json；日志同名 .log）")
+    ap.add_argument("--min-interval", type=float, default=None,
+                    help="统一闸门请求最小间隔秒（缺省 1.0，仅启用闸门时生效）")
+    args = ap.parse_args(argv)
 
     key, secret = iss.load_credentials("prod", iss.resolve_env_files())
     if not key or not secret:
@@ -319,7 +362,25 @@ def main():
         lead_months=3,
         sleep=args.sleep,
     )
-    ctx = iss.build_context(ns, iss.ENV_URLS["prod"], key, secret)
+
+    budget = None
+    try:
+        budget = budget_from_args(args)
+        if budget is not None:
+            with pb.iss_budget(budget, iss):
+                ctx, se_rows, se_error = collect(args, key, secret, ns)
+            budget.close()
+        else:
+            ctx, se_rows, se_error = collect(args, key, secret, ns)
+    except pb.BudgetExhausted as e:
+        if budget is not None:
+            budget.close()
+        print(f"✗ 生产预算闸门停止 ({e.reason}): {e}", file=sys.stderr)
+        return 1
+    except pb.BudgetLedgerError as e:
+        print(f"✗ {e}", file=sys.stderr)
+        return 2
+
     if ctx.get("empty"):
         print("无匹配销售订单")
         return 0
@@ -401,10 +462,6 @@ def main():
         })
 
     jc = jc_summary(ctx.get("jc_map", {}), ctx.get("wos", []))
-    se_rows, se_error = fetch_manufacture_stock_entries(
-        [w["name"] for w in wos], ctx.get("item_codes", []),
-        iss.ENV_URLS["prod"], key, secret, args.sleep,
-    )
 
     four_way = build_four_way(ctx.get("wos", []), jc, se_rows, se_error)
 
@@ -435,6 +492,8 @@ def main():
         "anomalies": ctx.get("anomalies", []),
         "field_issues": field_issues,
     }
+    if budget is not None:
+        result["prod_budget"] = budget.as_log()
 
     out = Path(args.out) if args.out else OUT / f"g1b_en_{datetime.now():%Y%m%d_%H%M%S}.json"
     out.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")

@@ -62,4 +62,6 @@ uv run python g1b_coverage.py --stock out/stock_snapshot_YYYYMMDD.json \
 - 通途库存查询按仓库 + `skus` 分块；`pageSize` 上限 100，5 次/分钟。
 - EN SO 行可能用 `PK#`/`ND#` 包装码；用 `--customer-code` 或先做 `KS → PK#` 映射。
 - `g1b_en_extract.py` 输出不含客户名/地址等 PII；原始控制台输出仅本地。
+- 生产只读取数必须走统一闸门（`--max-requests/--max-mib/--max-minutes/--budget-file`）；
+  未获范围授权前不访问生产，离线验证见 `prod_budget.md`。
 - `g1b_coverage.py` 的覆盖月数是历史 run-rate，不是预测；美中受新运营 ramp 影响。
