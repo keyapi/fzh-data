@@ -214,7 +214,17 @@ def write_table(con, name: str, df: pd.DataFrame, month_col: str = "month", repl
 
 
 def fetch_en_sku_map() -> pd.DataFrame:
-    """EN 客户物料号 → 物料编码（通途SKU 在 EN 的登记处之一）。"""
+    """EN 客户物料号 → 物料编码（通途SKU 在 EN 的登记处之一）。
+
+    子表无法通过 REST 列出（403），优先读本地 TSV（由生产 DB 直出）：
+      D:/Work/fzh-order-store/sku_map.tsv  列：item_code 	 tongtool_sku 	 customer_name
+    """
+    tsv = Path("D:/Work/fzh-order-store/sku_map.tsv")
+    if tsv.exists():
+        df = pd.read_csv(tsv, sep="	", header=None, dtype=str, quoting=3,
+                         names=["item_code", "tongtool_sku", "customer_name"])
+        df["tongtool_sku"] = df["tongtool_sku"].astype(str).str.strip()
+        return df[df["tongtool_sku"] != ""].drop_duplicates(subset=["tongtool_sku"])
     import requests
 
     env = load_env(ENV_FILE)
@@ -252,7 +262,7 @@ def main():
     ap.add_argument("--months", default="202507,202608")
     ap.add_argument("--en-sample", type=int, default=200,
                     help="每个 GS 月抽样多少订单号去 EN 核对（0=不查 EN）")
-    ap.add_argument("--out", default=os.path.join(tempfile.gettempdir(), "order_store"))
+    ap.add_argument("--out", default="D:/Work/fzh-order-store")
     ap.add_argument("--fba-only", action="store_true", help="只抓 FBA 报表，不抓订单")
     ap.add_argument("--with-fba", action="store_true", help="同时抓 FBA 报表")
     ap.add_argument("--sku-map", action="store_true", help="抓 EN 客户物料号映射")

@@ -7,6 +7,10 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-10-21（补货 v3：仓库归一 + 通途库存 + ens5 预测）
+- **更新**: `architecture-patterns/order-history-duckdb-store.md` —— 补 §8 仓库归一（旧仓名占绝大多数；组件仓并入美中、波兰成品并入波兰、海外仓 unused）、§9 通途库存快照 + ens5 预测回测（**ens5 WAPE 0.690 最优**，与 PR #300 E1 一致）+ 补货 v3（733 个 SKU×仓需补货）。
+- **新增脚本**: `scripts/tongtool_stock_snapshot.py`、`scripts/forecast_ensemble.py`、`scripts/forecast_replenishment_v2.py`/`v3.py`、`scripts/warehouse_map.py`；产物统一落 `D:/Work/fzh-order-store/`。
+
 ## 2026-10-20（销量预测历史库：DuckDB + GS/EN 并集）
 - **新增**: `architecture-patterns/order-history-duckdb-store.md` —— 为销量预测/补货建立独立分析库：GS 月表（2023-01 起）+ EN 并集进 DuckDB；**实测通途 API 历史不可完整回溯**（不带 accountCode 约 5–6 千条封顶、按账号能更深、可见性跟最近更新时间走），故历史真源用 GS；含运费口径演进、子表 REST 403 绕法、SKU 归一 99.2%、补货快照首版。
 - **更新**: `integration-issues/en-tongtool-order-package-sync-failures.md` —— 补 §⑦「历史回溯：开放 API 的可见性是部分的」。

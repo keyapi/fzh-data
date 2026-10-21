@@ -70,7 +70,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--target-days", type=int, default=60)
     ap.add_argument("--demand-days", type=int, default=90)
-    ap.add_argument("--out", default=os.path.join(tempfile.gettempdir(), "order_store"))
+    ap.add_argument("--out", default="D:/Work/fzh-order-store")
     args = ap.parse_args()
 
     db_path = Path(args.out) / "order_store.duckdb"

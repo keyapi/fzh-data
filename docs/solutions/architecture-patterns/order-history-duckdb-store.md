@@ -86,6 +86,30 @@ DuckDB（分析库，独立文件）
 - 首跑（目标 60 天）：4,682 个物料，**191 个需补货**，平均覆盖 5.6 天，建议合计 7,357 件。
 - 下一步可加：断货标记、交期（PO 创建→入库）、MOQ、按仓拆分（需先建仓库映射）。
 
+### 8. 仓库归一（关键，2026-10-21 按用户确认）
+
+**GS 历史里绝大多数是旧仓名**：`CENTRADE`（16 万行）、`FZHPoland-covers`（10 万行）、`FZH-DANEEY`（2.6 万行）；新前缀名（`美东-CENTRADE` 等）只有少量。**任何按仓聚合前必须先映射**。
+
+规则（`scripts/warehouse_map.py`）：
+
+| 分类 | 举例 | 处理 |
+|---|---|---|
+| `current` | `美东-CENTRADE`、`美中-FZH-DANEEY`、`波兰-FZHPoland-covers` | 直接用 |
+| `renamed` | `CENTRADE` → `美东-CENTRADE`；`FZHPoland-covers` → `波兰-…`；`FZH-DANEEY` → `美中-FZH-DANEEY` | 自动补前缀 |
+| `component->main` | `FZH-DANEEY-成品仓/半成品仓/皮壳仓库`、`美中-FZH-DANEEY-皮壳仓库` | **并入 美中-FZH-DANEEY**（用户确认同属美中 DANEEY 仓） |
+| `finished->main` | `FZHPoland-finished` | **并入 波兰-FZHPoland-covers** |
+| `unused` | 北美之路 LA01/NJ02、枫筝海外仓（多伦多/温哥华）、休斯顿1号/备用、海外仓美西备用 | 海外仓，目前不用 |
+| `pending` | `海外仓美中仓库备用仓`、`扬州仓库` | 待用户确认 |
+
+### 9. 库存快照 + ens5 预测 + 补货 v3（2026-10-21）
+
+- **库存来源改为通途**（EN 库存口径不可用）：`erp2_stocks_stocksquery`，按仓分页（pageSize≤100、5 次/分钟）。已拉三家主仓 **4,465 行**（美东 2,072 / 美中 1,024 / 波兰 1,369）。
+- **预测**：`scripts/forecast_ensemble.py`，MA3/MA6/MA12/Croston/TSB + ens5 中位数，滚动 origin、horizon=3、指标 WAPE。
+  - **回测结果（1,347 条 SKU×仓 序列）：ens5 0.690 最优**，ma3 0.703、ma12 0.705、tsb 0.723、ma6 0.724、croston 0.741 —— 与 PR #300 E1 的结论一致（简单组合优于单模型）。
+- **补货 v3**：`scripts/forecast_replenishment_v3.py`，`ROP = 日均预测 × (交期 45 + 安全 30)`，`建议 = max(0, ROP − (available + intransit))`。
+  - 首跑：4,465 个 SKU×仓，**1,317 有预测**，**733 需补货**，建议合计 **14,826 件**。
+- **仍未覆盖**：组件（皮壳/海绵/PP 棉）需按 BOM 展开；3PL（WayfairCG）库存需人工导出；`intransit` 目前取库存字段，完整在途可接 `erp2_purchase_purchaseorderquery`。
+
 ## Why This Matters
 
 - 预测的准确性首先取决于**历史是否完整**；靠 EN 一家会缺掉 2023–2025 的大半历史。
@@ -104,9 +128,15 @@ DuckDB（分析库，独立文件）
 uv run python scripts/forecast_order_store.py --months 202301,...,202609 --with-fba --sku-map
 # 增量补一个月
 uv run python scripts/forecast_order_store.py --months 202609 --en-sample 0
-# 补货快照
-uv run python scripts/forecast_replenishment.py --target-days 60
+# 通途库存快照（三家主仓；5 次/分钟，12s 间隔）
+uv run python scripts/tongtool_stock_snapshot.py --warehouses "美东-CENTRADE,美中-FZH-DANEEY,波兰-FZHPoland-covers"
+# ens5 预测 + 回测
+uv run python scripts/forecast_ensemble.py --horizon 3 --origins 6
+# 补货建议（ROP）
+uv run python scripts/forecast_replenishment_v3.py --lead-days 45 --safety-days 30
 ```
+
+产物统一落在 **`D:/Work/fzh-order-store/`**（持久目录，不进 git；Windows 临时目录会被清理）。
 
 ## Related
 
