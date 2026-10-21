@@ -9,8 +9,9 @@
 - 销售订单的「为所有行增加配套物料」按钮**不是读 BOM**，而是按
   皮壳物料组 + 尺寸属性找 `内胆#...` 变体（`key_test.item_utils.get_supporting_item`），
   并遵循物料组的 `custom_replaced_by_other_item_group`。本脚本同时给出两种口径：
-  BOM 有内胆但按钮找不到 → `bom_nd_no_button_match`；
-  BOM 没内胆但按钮会加 → `nd_from_button_not_bom`。
+  **内胆以 BOM 为准**：BOM 没有内胆 = 该产品没有内胆，按钮却会按物料组+尺寸
+  误加一条 → 单独输出 `button_overadd_candidates`，不进发货计划；
+  BOM 有内胆但物料停用 → `bom_inner_disabled`，提示清理 BOM，不重置物料。
 - 面料/拉链/PP 棉属于中国生产物料/分公司填充耗材，不做分公司补货。
 - 分公司库存池用通途 SKU 合并（同一物料含 `-Cover`；`-Cover` 是独立 SKU 账，不镜像），
   皮壳/半成品把 `-Cover` 计入供给；成品不自动计入。本脚本只把补货量换算成「该发什么」。
@@ -24,8 +25,9 @@
 
 输出：
   replenishment_pool_ship 补货行 + 发货形态 + cover 库存提示 + 通途 SKU 列表
-  component_ship_plan     按 BOM 第一层 + 按钮逻辑拆到 PK#/ND# 的发货清单
-  component_ship_summary  按仓 × 组件汇总
+  component_ship_plan         按 BOM 第一层拆到 PK#/ND# 的发货清单
+  component_ship_summary      按仓 × 组件汇总
+  button_overadd_candidates   BOM 无内胆但按钮会误加的清单（执行层拦截）
 
 用法：
   uv run python scripts/forecast_shipment_plan.py
@@ -88,13 +90,16 @@ def main():
     con.register("_ks", ks)
     con.register("_grp", grp)
     con.register("_pk_nd", pk_nd)
+    con.register("_nd", nd)
     con.execute("CREATE OR REPLACE TABLE item_group_ship AS SELECT item_group, ship_type FROM _grp")
     con.execute("""CREATE OR REPLACE TABLE item_ship_type AS
         SELECT i.item_code, i.item_group, IFNULL(g.ship_type, '') AS ship_type
         FROM _ks i LEFT JOIN _grp g ON g.item_group = i.item_group""")
     con.execute("""CREATE OR REPLACE TABLE pk_nd_button AS
         SELECT pk_item, nd_item FROM _pk_nd""")
-    for n in ("_ks", "_grp", "_pk_nd"):
+    con.execute("""CREATE OR REPLACE TABLE nd_status AS
+        SELECT item_code, has_variants, disabled FROM _nd""")
+    for n in ("_ks", "_grp", "_pk_nd", "_nd"):
         con.unregister(n)
 
     con.execute("""
@@ -126,16 +131,23 @@ def main():
     """)
 
     con.execute("""
+        CREATE OR REPLACE TABLE need_rows AS
+        SELECT warehouse, item_code AS en_item_code, ship_type, suggested_qty, sku_list
+        FROM replenishment_pool_ship WHERE suggested_qty > 0
+    """)
+    # 内胆以 BOM 为准：BOM 没有内胆 = 该产品就没有内胆，不做「按钮会加」的补行。
+    # 按钮按物料组+尺寸找内胆会误加（82 个反例），这是执行层问题，不进发货计划。
+    con.execute("""
         CREATE OR REPLACE TABLE component_ship_plan AS
-        WITH need AS (
-            SELECT warehouse, item_code AS en_item_code, ship_type, suggested_qty, sku_list
-            FROM replenishment_pool_ship
-            WHERE suggested_qty > 0
-        ), bom_expanded AS (
+        WITH bom_expanded AS (
             SELECT n.warehouse, n.sku_list, n.en_item_code, n.ship_type, n.suggested_qty,
                    c.component_item, c.component_name, c.qty_per_unit,
                    ROUND(n.suggested_qty * c.qty_per_unit, 1) AS component_qty,
                    CASE WHEN c.component_item LIKE 'ND#%'
+                             AND EXISTS (SELECT 1 FROM nd_status ns
+                                         WHERE ns.item_code = c.component_item AND ns.disabled = '1')
+                        THEN 'bom_inner_disabled'
+                        WHEN c.component_item LIKE 'ND#%'
                              AND NOT EXISTS (
                                  SELECT 1 FROM level1_components pk
                                  JOIN pk_nd_button b ON b.pk_item = pk.component_item
@@ -143,37 +155,34 @@ def main():
                                    AND pk.component_item LIKE 'PK#%'
                                    AND b.nd_item = c.component_item)
                         THEN 'bom_nd_no_button_match' ELSE '' END AS flag
-            FROM need n JOIN level1_components c ON c.item_code = n.en_item_code
+            FROM need_rows n JOIN level1_components c ON c.item_code = n.en_item_code
             WHERE n.ship_type IN ('皮壳', '半成品')
-        ), button_added AS (
-            -- BOM 没有内胆，但销售订单按钮会按物料组+尺寸补一条内胆
-            SELECT n.warehouse, n.sku_list, n.en_item_code, n.ship_type, n.suggested_qty,
-                   b.nd_item AS component_item, bi.item_name AS component_name,
-                   1.0 AS qty_per_unit,
-                   ROUND(n.suggested_qty * pk.qty_per_unit, 1) AS component_qty,
-                   'nd_from_button_not_bom' AS flag
-            FROM need n
-            JOIN level1_components pk ON pk.item_code = n.en_item_code AND pk.component_item LIKE 'PK#%'
-            JOIN pk_nd_button b ON b.pk_item = pk.component_item
-            LEFT JOIN (SELECT item_code, MAX(item_name) AS item_name FROM bom_item GROUP BY 1) bi
-                   ON bi.item_code = b.nd_item
-            WHERE n.ship_type IN ('皮壳', '半成品')
-              AND NOT EXISTS (SELECT 1 FROM bom_nd x WHERE x.item_code = n.en_item_code)
         ), fallback AS (
-            -- 成品 / 没匹配到物料 / 没有 BOM：保留原行，明确标记
             SELECT n.warehouse, n.sku_list, n.en_item_code, n.ship_type, n.suggested_qty,
                    n.en_item_code AS component_item, NULL AS component_name, 1.0 AS qty_per_unit,
                    n.suggested_qty AS component_qty,
                    CASE WHEN n.ship_type = '成品' THEN 'ship_finished'
                         WHEN n.en_item_code IS NULL THEN 'no_item_mapping'
                         ELSE 'no_bom' END AS flag
-            FROM need n
+            FROM need_rows n
             WHERE n.ship_type NOT IN ('皮壳', '半成品')
                OR NOT EXISTS (SELECT 1 FROM level1_components c WHERE c.item_code = n.en_item_code)
         )
         SELECT * FROM bom_expanded
-        UNION ALL SELECT * FROM button_added
         UNION ALL SELECT * FROM fallback
+    """)
+
+    # 按钮误加清单：BOM 明确没有内胆，但按钮会按物料组+尺寸加一条 → 执行层要拦
+    con.execute("""
+        CREATE OR REPLACE TABLE button_overadd_candidates AS
+        SELECT n.warehouse, n.en_item_code, n.ship_type, n.suggested_qty,
+               pk.component_item AS pk_item, b.nd_item AS button_nd,
+               'BOM 无内胆，按钮会误加' AS reason
+        FROM need_rows n
+        JOIN level1_components pk ON pk.item_code = n.en_item_code AND pk.component_item LIKE 'PK#%'
+        JOIN pk_nd_button b ON b.pk_item = pk.component_item
+        WHERE n.ship_type IN ('皮壳', '半成品')
+          AND NOT EXISTS (SELECT 1 FROM bom_nd x WHERE x.item_code = n.en_item_code)
     """)
 
     con.execute("""
@@ -209,6 +218,7 @@ def main():
     flags = con.execute("""
         SELECT flag, COUNT(*) n FROM component_ship_plan WHERE flag <> '' GROUP BY 1
     """).df()
+    overadd = con.execute("SELECT COUNT(*) FROM button_overadd_candidates").fetchone()[0]
     con.close()
 
     print(json.dumps({"need_rows": int((split["qty"].sum() or 0)),
@@ -216,6 +226,7 @@ def main():
     print(nd_source.to_string(index=False))
     print(plan.to_string(index=False))
     print(flags.to_string(index=False))
+    print(f"button_overadd_candidates: {overadd}")
 
 
 if __name__ == "__main__":

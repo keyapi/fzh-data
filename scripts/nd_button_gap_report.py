@@ -4,7 +4,10 @@
 输出 `nd_button_gaps.csv`，列出每个含皮壳的成品 BOM：
   - status = both / neither / button_only / bom_only
   - bom_nd / button_nd
-  - reason（bom_only 时给出根因：内胆停用、尺寸取错等）
+  - reason / action：
+    * button_only = BOM 无内胆（产品本身没有内胆），按钮会误加 → 执行层要拦
+    * bom_only = BOM 仍挂内胆，但物料停用 → 多半是后来不需要内胆，清理 BOM
+    * 两者都以 BOM 为准
 
 只读本地 TSV，不调 API。用法：
   uv run python scripts/nd_button_gap_report.py
@@ -73,7 +76,7 @@ def main():
             elif n.has_variants == "1":
                 reason = "BOM 内胆是变体模板"
             elif n.disabled == "1":
-                reason = "BOM 内胆已停用"
+                reason = "BOM 仍挂停用内胆（可能已不再需要内胆）"
             elif not n.item_code or not size.get(n.item_code):
                 reason = "BOM 内胆无尺寸属性"
             elif size.get(n.item_code) != pk_item.size:
@@ -82,10 +85,13 @@ def main():
                 reason = f"物料组不一致: {n.item_group!r} vs {pk_item.target!r}"
             else:
                 reason = "按钮查找遗漏"
+        action = {"button_only": "按钮误加，执行层拦截/标记该产品无内胆",
+                  "bom_only": "清理 BOM 里已停用的内胆",
+                  "both": "", "neither": ""}.get(status, "")
         rows.append({
             "finished_item": fin, "pk_items": ",".join(pks),
             "bom_nd": ",".join(bom_nd), "button_nd": ",".join(button_nd),
-            "status": status, "reason": reason,
+            "status": status, "reason": reason, "action": action,
         })
 
     df = pd.DataFrame(rows).sort_values(["status", "finished_item"])
