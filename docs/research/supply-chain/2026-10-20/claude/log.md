@@ -522,6 +522,19 @@ tags: [supply-chain, research, log]
 - 复用 v5 raw（43 BOM 全 int1、37/6 default、34 Item disabled=0），严格解析全通过；
   evidence/replay hash 不变，无新增生产查询、无样本扩张。
 
+## 2026-10-21 — 库存历史离线入库 dry-run（v4）
+
+- 新增 `experiments/g1_contract/stock_history_ingest.py`：只读 run 目录 →
+  确定性 run_id / SHA256 基线 / 三级完整性 / 稳定 ID 与别名 / 同日多 run 发布指针 /
+  回滚 / 独占锁 / 版本化迁移；默认 `:memory:`，写模式必须显式 `--db`。
+- 新增 `test_stock_history_ingest.py` 20 条离线测试（14 条验收 + 6 条补充）；
+  真实两日只在本地存在时只读校验，不复制、不提交原始 JSONL。
+- 两日 dry-run：10-20 5,192 行、13/14 仓、`run_complete=false`
+  （退货仓 400 行部分批次）；10-21 5,314 行、14/14、`run_complete=true`。
+- 固定 manifest 基线：10-20 `18649875…`、10-21 `4dd9bbfd…`；
+  每个 JSONL 的 64 位 SHA256 见 `experiments/g1_contract/stock_history_ingest.md` §13。
+- 未写 `order_store.duckdb`、未访问通途/EN、未改计划任务、未提交原始数据。
+
 ## 模板（后续阶段）
 
 ```text
