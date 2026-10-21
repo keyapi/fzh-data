@@ -53,5 +53,6 @@ date: 2026-10-20
 | [U01关闭与SO批量PoC复审](review-family-so-poc.md) | 固定e696fa65：U01正例、4个SO反例与同窗/行级manifest；family_so_review_probes.py |
 | [BOM历史证据边界与producer反例](history-evidence-boundary-2026-10-21.md) | current/historical分级、冲突规则、16个producer正反例与阶段总结 |
 | [变更日志](log.md) | 阶段成果记录 |
+| [R290 冻结包接收与对账](r290-reconciliation.md) | 交付阻塞：未定位五例冻结包；0/5 已接收，四项语义未验收 |
 
 当前状态：Codex完成v3增量、35例和629dc7b3的§3/§4定向复核；旧G1a v1失效，Claude可按显式假设进行G1b，Codex等待真实回放报告再核；已完成首轮独立研究、综合与交叉审阅；真实数据回测和整套产品运行仍待下一阶段。已复核Claude #300固定cd7a8a06：共同框架原则已双向对齐，R01/R02原代码问题可关闭，G0细节及真实验证仍待完成；Cursor成果未读。两PR保持独立，不修改其文件。
