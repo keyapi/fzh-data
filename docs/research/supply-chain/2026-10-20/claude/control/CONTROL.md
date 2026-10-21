@@ -9,20 +9,23 @@ updated: 2026-10-21
 
 # 供应链整合 — 项目总控页
 
-Updated: 2026-10-21 18:12 (Asia/Shanghai)
+Updated: 2026-10-21 18:35 (Asia/Shanghai)
 
-## 已完成（待复审，非 G1 验收）
+## 已完成（待交叉复审，非 G1 验收）
 
-> `22ae9a1e` 已被 Adapter Review 打回：6 个 P1 使“守恒/完整性”结论不成立，返修中。
+> `22ae9a1e` 已被 Adapter Review 打回；返修版 **`49a142e0`** 已按 9 项发现收紧契约并重跑证据。
 
-- **G1B-DN-WO-JC-SE**：Claude `22ae9a1e`（PR #300）。5 个 top-SKU 快照
+- **G1B-DN-WO-JC-SE v2 返修**：Claude `49a142e0`（PR #300）。5 个 top-SKU 快照
   （120 SO / 293 DN / 128 WO / 425 SE / 558 SE 行 / 516 工序组，2,040 行去向）。
-  C1 SO↔DN 8,467=8,467 全通过；C2 115 通过 + 2 张 `produced_qty` 失真 + 11 张未开工；
-  C3 425/425；`audit_ok=true`、`evidence_complete=true`；35/35 离线单测；两轮稳定摘要一致。
-  关键发现：`Work Order.produced_qty` 不可当完工账（739/812 vs SE 103/100，
-  可见单据无法解释）；JC 只作进度证据（21 张 WO 末道返工量≠完工量）。
-  证据：`out/dn_wo_jc_se/`，zip `dn_wo_jc_se_evidence_v1.zip`
-  `e557e0ae…`；行级去向 `436bfa97…`；报告 `g1b_dn_wo_jc_se.md`。
+  修复全部 6 P1 + 3 P2：C1 逐行全精度（115/115，禁止抵消/舍入）、DN join 仅在引用缺失时回退
+  且校验物料身份、全部数量聚合按 UOM 分区、缓存 SE 明细校验父元数据/取回时间、
+  `se_query_error` 与未解决已提交 SE 传播到 WO/C2/audit/evidence、C4 数原始输入并保留
+  rejected/orphan + 子键唯一、有符号退货归一、请求级 HTTP 预算、payload 校验和含 stable_sha256。
+  C1 115/115；C2 117 可比（115 通过 + 2 张 `produced_qty` 失真）+ 11 张未开工，`complete=true`；
+  C3 425/425；SE 覆盖 425/425 已解决；`audit_ok=true`、`evidence_complete=true`；78/78 离线单测；
+  两轮回放 stable/行去向一致。关键发现不变：`Work Order.produced_qty` 不可当完工账。
+  证据：`out/dn_wo_jc_se/`，zip `dn_wo_jc_se_evidence_v2.zip` `a0d8bb45…`；
+  manifest `5d3fdabb…`；行级去向 `2941ea1c…`；stable `c45a0838…`；报告 `g1b_dn_wo_jc_se.md`。
   **本项只证明窄样本关联/守恒契约，不是 G1 或业务验收。**
 
 ## 已验收
@@ -33,13 +36,12 @@ Updated: 2026-10-21 18:12 (Asia/Shanghai)
 
 ## 进行中
 
-- **G1B-ADAPTER-REVIEW**（Codex）：已完成对 `22ae9a1e` 的只读审查，**6 P1 + 3 P2**。
-  结论：需修复后才能接受适配器；报告归档
-  `C:/Users/zhang/.agent-ops/fzh-data/reviews/2026-10-21-dn-wo-jc-se-adapter/report.md`。
-- **G1B-DN-WO-JC-SE 返修**（Claude）：已置 `ready` 并派发；按 9 项发现修复
-  （C1 逐行全精度、DN join 语义、UOM 分区、SE 父元数据、SE 覆盖完整性、C4 原始输入计数、
-  有符号退货、请求级 HTTP 预算、最终 payload 校验和），生成新 commit + 新证据包。
-- **G1B-CROSS-REVIEW**（Codex）：`waiting`，**不审 `22ae9a1e`**；待返修新 commit 后置 `ready`。
+- **G1B-ADAPTER-REVIEW**（Codex）：已完成对 `22ae9a1e` 的只读审查，**6 P1 + 3 P2**；
+  结论：需修复后才能接受适配器。返修版 `49a142e0` 已逐项修复并补反例单测。
+  报告归档 `control/reviews/2026-10-21-adapter-report.md`。
+- **G1B-DN-WO-JC-SE 返修**（Claude）：`49a142e0` 已提交并推送（未扩 family、未写生产），
+  证据 v2 已重跑；状态置 `completed`，note `NEW_COMMIT_TESTS_EVIDENCE`。
+- **G1B-CROSS-REVIEW**（Codex）：已置 `ready`，**只审 `49a142e0` 及 v2 证据，不审 `22ae9a1e`**。
 
 ## 阻塞
 
@@ -51,8 +53,8 @@ Updated: 2026-10-21 18:12 (Asia/Shanghai)
 
 ## 下一步
 
-1. ~~Claude 提交 DN/WO/JC/SE 固定 commit + 证据包~~ → 已交付 `22ae9a1e`。
-2. Codex 对 `22ae9a1e` 做关键复审（`G1B-CROSS-REVIEW` 已 ready）；R290 对账结果归档。
+1. ~~Claude 提交 DN/WO/JC/SE 固定 commit + 证据包~~ → v1 `22ae9a1e` 被打回，v2 `49a142e0` 已交付。
+2. Codex 对 `49a142e0` 做关键复审（`G1B-CROSS-REVIEW` 已 ready）；R290 对账结果归档。
 3. 再决定扩样到 100/全 family，还是进入 G2/G3 预测与补货。
 4. 今晚收尾时跑一次 `/ce-okf`，把 SO/证据门与 producer 经验正式归档。
 
@@ -86,8 +88,10 @@ Updated: 2026-10-21 18:12 (Asia/Shanghai)
 ## Commit / 证据路径
 
 - Claude #300：`9a04741e`（producer P2 修复），PR https://github.com/keyapi/fzh-data/pull/300
-- Claude #300 新增：`22ae9a1e`（DN/WO/JC/SE 关联与同单位守恒），
-  evidence `.../g1_contract/out/dn_wo_jc_se/`，zip `out/dn_wo_jc_se_evidence_v1.zip`
+- Claude #300 返修：`49a142e0`（DN/WO/JC/SE 关联与同单位守恒 v2，修复 adapter 6P1+3P2），
+  evidence `.../g1_contract/out/dn_wo_jc_se/`，zip `out/dn_wo_jc_se_evidence_v2.zip`
+  `a0d8bb45…`；manifest `5d3fdabb…`；行去向 `2941ea1c…`；stable `c45a0838…`；
+  78/78 离线单测（`test_g1b_dn_wo_jc_se.py`）；v1 证据作废。
 - Codex #301：`d027f981`（阶段日志）、`09ec820a`（R290 交付阻塞与五例接收记录），PR https://github.com/keyapi/fzh-data/pull/301
 - v5 evidence：`D:/Work/赛狐/Cursor-claude/docs/research/supply-chain/2026-10-20/claude/experiments/g1_contract/out/family_poc/evidence_d8c473fe_v5/`
 - v5 replay zip：同目录 `evidence_replay_e2f9c680_v5.zip`，SHA256 `a3b23cf1684f056daea68f7e7988a12842b40528d61d74f5c5393afaed9bc13c`
