@@ -37,7 +37,11 @@ import os
 def load_env():
     """加载 .env 文件中的环境变量（web_automation 根 + 仓库根）"""
     here = Path(__file__).resolve().parent
-    candidates = [here.parent / ".env", here.parent.parent / ".env"]
+    candidates = [
+        here.parent / ".env",
+        here.parent.parent / ".env",
+        here.parent.parent / "fzh-web-automation" / ".env",
+    ]
     for env_path in candidates:
         if not env_path.exists():
             continue
