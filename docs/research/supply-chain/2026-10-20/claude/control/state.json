@@ -1,0 +1,145 @@
+{
+  "updated": "2026-10-21T18:12:20+08:00",
+  "accepted": [
+    "G1 SO evidence gate v5: 9a04741e / d027f981; 66 tests; current_structure_only boundary; historical pending",
+    "R1/R2 no-evidence audit gate: d8c473fe",
+    "BOM historical boundary report: d3fc4c8d"
+  ],
+  "tasks": [
+    {
+      "id": "G1B-DN-WO-JC-SE",
+      "owner": "claude",
+      "status": "in_progress",
+      "scope": "Narrow DN/WO/JC/SE association and quantity conservation; reuse existing snapshots; bounded EN read-only; no full family; commit + evidence pack + row dispositions",
+      "artifacts": [
+        "commit 22ae9a1e (branch docs/supply-chain-integration-handoff, PR #300)",
+        "docs/research/supply-chain/2026-10-20/claude/experiments/g1_contract/g1b_dn_wo_jc_se.md",
+        "evidence: docs/research/supply-chain/2026-10-20/claude/experiments/g1_contract/out/dn_wo_jc_se/",
+        "evidence zip: out/dn_wo_jc_se_evidence_v1.zip sha256 e557e0ae8f3b88d45634ec0dee0f4ad914c8b65546cb2165b94fb5d77a9d1ef5",
+        "manifest payload_sha256 cca9dc857ec3101bccbe66394e623147fe634f19f76ad3c5e8dee0a9b026a51a; stable_sha256 680c0c54d6cd4011533c861e3544296d2494540d4f85cb68c1f7e6bd58506c5c",
+        "row dispositions: out/dn_wo_jc_se/line_dispositions.jsonl sha256 436bfa9774e2598e95cc3cc9f8c3687da3c41bd498daf34114fc6ccee80e0f24 (2,040 rows)",
+        "35 offline tests: test_g1b_dn_wo_jc_se.py"
+      ],
+      "timeout_minutes": 180,
+      "priority": 1,
+      "claimed_at": "2026-10-21T17:47:15.781255+08:00",
+      "claimed_by": "claude",
+      "completed_at": "2026-10-21T18:12:20+08:00",
+      "summary": "5 top-SKU snapshots (120 SO / 293 DN / 128 WO / 425 SE); C1 SO<->DN 8,467=8,467 all pass; C2 115 pass + 2 produced_qty anomalies + 11 open; C3 425/425 pass; WO.produced_qty found unreliable; JC progress-only; bounded EN read-only 362 SE detail GETs + 4 probe requests, 0 failures; audit_ok=true evidence_complete=true; <=0.0 tests 35/35",
+      "updated_at": "2026-10-21T18:15:51+0800",
+      "note": "Rework run dispatched 18:15 (manual run 2). Fixing 6 P1 + 3 P2 from adapter review of 22ae9a1e. Report: C:/Users/zhang/.agent-ops/fzh-data/reviews/2026-10-21-dn-wo-jc-se-adapter/report.md"
+    },
+    {
+      "id": "R290-RECON",
+      "owner": "codex",
+      "status": "blocked",
+      "scope": "Reconcile #290 frozen package 5 examples: supply overlap, arrival timing, Cover pool, demand units; output accept/scenario/blocker + evidence; no reimplementation; read-only",
+      "artifacts": [],
+      "timeout_minutes": 90,
+      "priority": 2,
+      "updated_at": "2026-10-21T18:05:00+0800",
+      "note": "Delivery blocker: frozen #290 package path/commit/hash and 5 source examples not supplied. 0/5 received; accept=0 scenario=0; semantics not verified. Evidence committed 09ec820a: C:/Users/zhang/.codex/worktrees/supply-chain-independent-research/Cursor/docs/plans/2026-10-20-codex-supply-chain-research/r290-reconciliation.md. Automation disabled until package delivered."
+    },
+    {
+      "id": "G1B-CROSS-REVIEW",
+      "owner": "codex",
+      "status": "waiting",
+      "depends_on": "G1B-DN-WO-JC-SE",
+      "scope": "Review Claude's fixed commit + evidence pack; key review on gpt-6.1-sol; no re-review of accepted SO evidence gate",
+      "artifacts": [],
+      "timeout_minutes": 90,
+      "priority": 3,
+      "on_failure": "set G1B-DN-WO-JC-SE.status=ready and G1B-CROSS-REVIEW.status=waiting with review notes",
+      "unblocked_at": "2026-10-21T18:12:20+08:00",
+      "note": "Do not review 22ae9a1e; adapter review found 6 P1. Waiting for Claude rework commit; then review new commit + regenerated evidence.",
+      "updated_at": "2026-10-21T18:14:33+0800"
+    },
+    {
+      "id": "G1B-ADAPTER-REVIEW",
+      "owner": "codex",
+      "status": "completed",
+      "scope": "Read-only review of current DN/WO/JC/SE extractor/spec at fixed commit; identify gaps, conservation, query/coverage risks; no production; output file:line findings",
+      "artifacts": [],
+      "timeout_minutes": 60,
+      "priority": 2.5,
+      "updated_at": "2026-10-21T18:13:05+0800",
+      "note": "Read-only review of fixed commit 22ae9a1e completed: 6 P1 and 3 P2 findings covering C1 false greens, joins/UOM, SE provenance/coverage, row accounting, signed returns, HTTP budget and payload hash; no production queries or source edits; adapter requires fixes before acceptance."
+    }
+  ],
+  "blocked": [
+    "historical_verified anchors/effective dates missing",
+    "full family expansion not authorized",
+    "business decisions: service level/budget, 3PL supply ownership, return restock share"
+  ],
+  "quota": {
+    "codex_5h_remaining_pct": 23,
+    "reset": "18:51:55",
+    "reserve_pct": 10,
+    "codex_pause": false,
+    "updated": "2026-10-21T17:53:53.982462+08:00",
+    "fresh": true,
+    "source": "terminal:term_d0bcd5e0-9f57-43b9-8dfc-6ffe4578063a",
+    "last_read_at": "2026-10-21T17:53:53.982462+08:00",
+    "raw_line": "⚠ 5h limit: 23% left · resets at 18:51 · /status",
+    "resets_at": "18:51"
+  },
+  "control_page": "D:\\Work\\赛狐\\Cursor-claude\\docs\\research\\supply-chain\\2026-10-20\\claude\\control\\CONTROL.md",
+  "automations": {
+    "G1b-Claude-DN-WO-JC-SE": {
+      "id": "dea2b7b3-c021-458d-88c9-181e4713f003",
+      "trigger": "17,47 * * * *",
+      "provider": "claude",
+      "enabled": true
+    },
+    "G1b-Codex-R290-Recon": {
+      "id": "e6c658fd-d01a-4237-b781-c6d9224d34b9",
+      "trigger": "52 17 * * *",
+      "provider": "codex",
+      "model": "gpt-6.1-sol",
+      "enabled": true
+    },
+    "G1b-Codex-Cross-Review": {
+      "id": "6bb57b9a-c924-4eaa-9c22-601cc9ab55fe",
+      "trigger": "27 19-23 * * *",
+      "provider": "codex",
+      "model": "gpt-6.1-sol",
+      "enabled": true
+    },
+    "G1b-Automation-Heartbeat": {
+      "id": "6d8c54f6-e27b-4673-9c88-c38212c33354",
+      "trigger": "32 17 * * *",
+      "provider": "claude",
+      "enabled": false,
+      "temporary": true,
+      "last_status": "completed"
+    },
+    "G1b-Handoff-Check": {
+      "id": "f604eb6a-f416-4409-a363-0887c467e455",
+      "trigger": "41 17 * * *",
+      "provider": "claude",
+      "enabled": true,
+      "temporary": true
+    },
+    "G1b-Codex-Adapter-Review": {
+      "id": "fec0fb9a-f026-4027-97f7-3788f4af5874",
+      "trigger": "10 18 * * *",
+      "provider": "codex",
+      "model": "gpt-6.1-sol",
+      "enabled": true
+    }
+  },
+  "schedule_end": "2026-10-22T02:00:00+08:00",
+  "scheduler": {
+    "claim_lock": "locks/<task>.lock",
+    "stale_after_minutes": "task.timeout_minutes",
+    "end": "2026-10-22T02:00:00+08:00",
+    "new_session_handoff": [
+      "CONTROL.md",
+      "state.json"
+    ],
+    "verified": true,
+    "verified_run": "2eab6670-729e-4646-b216-0852b0470693",
+    "verified_at": "2026-10-21T17:37:45+08:00"
+  },
+  "state_file": "D:\\Work\\赛狐\\Cursor-claude\\docs\\research\\supply-chain\\2026-10-20\\claude\\control\\state.json"
+}
