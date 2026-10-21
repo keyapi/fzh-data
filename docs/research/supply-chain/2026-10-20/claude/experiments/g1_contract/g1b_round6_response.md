@@ -111,6 +111,18 @@ current_structure_only、历史无 basis、多 BOM 冲突、候选缺 eligible_a
 - 两次 52 SO / 2,024 行 / family 132 / pending 1,770 / out_of_scope 122；忽略 `run_id` 的 audit SHA256 均为 `4fec233b...`；`audit_ok=true`。
 - 五个详情失败状态本次真实数据未触发（`branch_exercised=false`）。
 
+**d8c473fe 重跑 delta（vs bb25327b）**：pending `1770→1769`、out_of_scope `122→123`、
+`variant_base_not_family 957→956`，family/SO 数不变。唯一漂移行
+`SO-26-00110 / dkdau5nmkg`（qty 300 不变）：
+
+| 字段 | 旧 | 新 |
+|---|---|---|
+| `item_code` | `PK#KS0156-NYBDSFH-52x52x5-BLACK` | `KS0156-NYBDSFH-52x52x5-BLACK` |
+| `item_group` | `皮壳#沙发支撑垫` | `沙发支撑垫` |
+| `warehouse` | `半成品仓 - FZH` | `成品仓 - FZH` |
+
+结论：**输入数据漂移，不是分类器回归**；其余 2,023 行 item/disposition/reason 不变。
+
 ### 影响口径
 
 无证据表时，原 1,378 行 PK/ND 全部变 pending，family 行数会显著低于 1,510。

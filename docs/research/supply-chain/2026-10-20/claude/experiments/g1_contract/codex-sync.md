@@ -18,6 +18,16 @@ tags: [supply-chain, codex, g1, sync, consolidated]
 > **S02/S04 已按证据门+逐行审计修复，回放待单独验收**（见 `g1b_round6_response.md`）。
 > bb25327b 复审（CONDITIONAL GO）：S04/candidate union/34 tests VERIFIED；
 > **P1 E1/E2、P2 E3/E4/行键/demand 标签已修，44 tests 全绿，待同一 Codex 会话终审**。
+> d8c473fe 重跑 R1/R2（52 SO/2,024 行/family 132/pending 1,769/out_of_scope 123）：
+> 唯一 delta 是 `SO-26-00110/dkdau5nmkg` 的输入漂移
+> （`item_code PK#KS0156…→KS0156…`、`item_group 皮壳#沙发支撑垫→沙发支撑垫`、
+> `warehouse 半成品仓-FZH→成品仓-FZH`，qty 300 不变），非分类器回归。
+> **Item/BOM producer 首样本（20 变体）**：79/500 HTTP、19.8/900s；
+> 14 PK `consistent/current_structure_only`（ratio=1），6 ND `not_family`
+> （base 不在 KS 成品清单）。无 Version、不升级 Apr–Sep 历史；
+> `modified` 受 `update_modified=False` 影响，不能当历史见证。
+> 证据载入 consumer 后 PK/ND family=0，历史关系仍 pending（见
+> `g1b_evidence_producer.md`）。
 
 ## 0. Codex 当前所处位置（先对齐）
 

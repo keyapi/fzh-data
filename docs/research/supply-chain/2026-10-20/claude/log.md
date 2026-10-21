@@ -473,6 +473,28 @@ tags: [supply-chain, research, log]
   `4fec233b...`，`audit_ok=true`；五个详情失败状态真实数据未触发。
 - 离线单测 44 条全绿（不联网、不调 main）；未提交 out/ 产物。
 
+## 2026-10-21 — 有界 Item/BOM 证据 producer 首样本
+
+- 新增 `en_variant_evidence.py`：从 d8 R1 audit 选 20 个 PK/ND 样本（14 PK、6 ND、
+  6 个 base 不在 family），Item/BOM list 精确 `in` + 父单详情，单并发 0.2s，
+  timeout 30s，预算 500 HTTP/900s。
+- 结果：79 HTTP / 19.8s；14 PK `consistent/current_structure_only`（ratio=1，
+  `ks_parent_variant_component`），6 ND `not_family`（base 不在 969 KS 清单，
+  内胆是多个成品 BOM 的共享子件）。
+- Consumer 校验：`fp.load_variant_evidence` 通过；本地分类 2,024 行中
+  `variant_current_structure_only=119`、`variant_not_in_manifest=694`、
+  `variant_base_not_family=956`；PK/ND family=0，family 仍 132 裸 KS。
+- **历史边界**：当前 BOM 只证明抓取时结构；不凭 `modified/active/default/Version 空集`
+  升级 Apr–Sep；项目存在 `update_modified=False`，`modified` 不可靠；
+  `historical_verified` 需可信锚点 + 完整期段重建，或仅 event 绑定不可变版本。
+  本 producer 不查 Version，历史关系保持 pending。
+- **踩坑**：EN `is_active/is_default` 是 1/0 整数，`is True` 误判（v1 全 missing）；
+  BOM Item 子表 list 403；BOM list 混入无关父单需先过滤；ND# 共享多父单；
+  `qty=1` 不等于 1:1，需 stock 数量归一。
+- 产物：`g1b_evidence_producer.md`；zip `evidence_d8c473fe_v3.zip`
+  sha256 `69b679af…`；evidence `0f365b99…`。
+- 离线单测 53 条全绿（consumer 44 + producer 9），不联网、不调 `main()`。
+
 ## 模板（后续阶段）
 
 ```text
