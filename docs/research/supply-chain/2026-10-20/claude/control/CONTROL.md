@@ -68,14 +68,18 @@ Updated: 2026-10-21 20:05 (Asia/Shanghai)
 2. ~~方向裁决~~ → 决策 Codex 选 **A：扩样**；离线可用仅 10 SKU，已跑完并两轮一致
    （C1 10/10；C2/C3 仅原 5 个完整）。报告
    `control/reviews/2026-10-21-expand10-report.md`。
-3. **待用户授权**：分阶段有界 EN 生产只读到 100 SKU（先补 238 个 SE 明细，再 20，再 70）。
+3. **生产闸门实现中**（Claude worker，20:10 起）：`prod_budget.py` + 两工具接入 +
+   离线测试；**通过决策 Codex 复审前禁止访问生产**。任务书
+   `control/reviews/2026-10-21-gate-task.md`，决策
+   `control/reviews/2026-10-21-decision3-production-gate.md`。
+4. **已由决策 Codex 批准**：分阶段有界 EN 生产只读到 100 SKU（先补 238 个 SE 明细，
+   再 20，再 70）；闸门复审通过后启动。
    Codex 给的边界：仅 GET、单并发、≤1 请求/秒；累计 ≤4000 请求、≤200MB、≤90 分钟；
    429 遵守 Retry-After 最多重试 2 次；401/403 或连续 3 次超时/5xx 立即停；
    分层：退货/取消/跨单位 30、多 WO/多次交付 30、普通 30；缺层/触限/异常扩大必须回报。
-   未获授权前不访问生产。
-4. R290-RECON 等待可绑定的冻结包/五例清单；到位后恢复对账。
-5. 收尾 `/ce-okf` 已完成（PR #306）；DN/WO/JC/SE 四轮返修与 producer 经验已归档。
-6. 已停用 Claude/Cross/Adapter/R290 周期 automation；下一阶段按需再启用。
+5. R290-RECON 等待可绑定的冻结包/五例清单；到位后恢复对账。
+6. 收尾 `/ce-okf` 已完成（PR #306）；DN/WO/JC/SE 四轮返修与 producer 经验已归档。
+7. 已停用 Claude/Cross/Adapter/R290 周期 automation；下一阶段按需再启用。
 
 ## 修正
 
