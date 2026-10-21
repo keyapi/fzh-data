@@ -9,7 +9,7 @@
     {
       "id": "G1B-DN-WO-JC-SE",
       "owner": "claude",
-      "status": "in_progress",
+      "status": "completed",
       "scope": "Narrow DN/WO/JC/SE association and quantity conservation; reuse existing snapshots; bounded EN read-only; no full family; commit + evidence pack + row dispositions",
       "artifacts": [
         "commit 22ae9a1e (branch docs/supply-chain-integration-handoff, PR #300)",
@@ -22,12 +22,10 @@
       ],
       "timeout_minutes": 180,
       "priority": 1,
-      "claimed_at": "2026-10-21T17:47:15.781255+08:00",
-      "claimed_by": "claude",
       "completed_at": "2026-10-21T18:12:20+08:00",
       "summary": "5 top-SKU snapshots (120 SO / 293 DN / 128 WO / 425 SE); C1 SO<->DN 8,467=8,467 all pass; C2 115 pass + 2 produced_qty anomalies + 11 open; C3 425/425 pass; WO.produced_qty found unreliable; JC progress-only; bounded EN read-only 362 SE detail GETs + 4 probe requests, 0 failures; audit_ok=true evidence_complete=true; <=0.0 tests 35/35",
-      "updated_at": "2026-10-21T18:15:51+0800",
-      "note": "Rework run dispatched 18:15 (manual run 2). Fixing 6 P1 + 3 P2 from adapter review of 22ae9a1e. Report: C:/Users/zhang/.agent-ops/fzh-data/reviews/2026-10-21-dn-wo-jc-se-adapter/report.md"
+      "updated_at": "2026-10-21T18:37:41+0800",
+      "note": "v2 commit 49a142e0 fixes all 6 P1 + 3 P2 from adapter review; 78/78 offline tests; C1 115/115 per-line, C2 117 comparable, C3 425/425, SE coverage 425/425; evidence v2 zip a0d8bb45..., manifest 5d3fdabb..., line dispositions 2941ea1c..., stable c45a0838...; pushed on docs/supply-chain-integration-handoff (PR #300). v1 evidence superseded."
     },
     {
       "id": "R290-RECON",
@@ -43,7 +41,7 @@
     {
       "id": "G1B-CROSS-REVIEW",
       "owner": "codex",
-      "status": "waiting",
+      "status": "ready",
       "depends_on": "G1B-DN-WO-JC-SE",
       "scope": "Review Claude's fixed commit + evidence pack; key review on gpt-6.1-sol; no re-review of accepted SO evidence gate",
       "artifacts": [],
@@ -51,8 +49,8 @@
       "priority": 3,
       "on_failure": "set G1B-DN-WO-JC-SE.status=ready and G1B-CROSS-REVIEW.status=waiting with review notes",
       "unblocked_at": "2026-10-21T18:12:20+08:00",
-      "note": "Do not review 22ae9a1e; adapter review found 6 P1. Waiting for Claude rework commit; then review new commit + regenerated evidence.",
-      "updated_at": "2026-10-21T18:14:33+0800"
+      "note": "Review only 49a142e0 + v2 evidence; do not review 22ae9a1e or re-review accepted SO gate v5. Key review gpt-6.1-sol.",
+      "updated_at": "2026-10-21T18:37:41+0800"
     },
     {
       "id": "G1B-ADAPTER-REVIEW",
@@ -72,15 +70,15 @@
     "business decisions: service level/budget, 3PL supply ownership, return restock share"
   ],
   "quota": {
-    "codex_5h_remaining_pct": 23,
+    "codex_5h_remaining_pct": 14,
     "reset": "18:51:55",
     "reserve_pct": 10,
-    "codex_pause": false,
-    "updated": "2026-10-21T17:53:53.982462+08:00",
+    "codex_pause": true,
+    "updated": "2026-10-21T18:34:17.628639+08:00",
     "fresh": true,
     "source": "terminal:term_d0bcd5e0-9f57-43b9-8dfc-6ffe4578063a",
-    "last_read_at": "2026-10-21T17:53:53.982462+08:00",
-    "raw_line": "⚠ 5h limit: 23% left · resets at 18:51 · /status",
+    "last_read_at": "2026-10-21T18:34:17.628639+08:00",
+    "raw_line": "⚠ 5h limit: 14% left · resets at 18:51 · /status",
     "resets_at": "18:51"
   },
   "control_page": "D:\\Work\\赛狐\\Cursor-claude\\docs\\research\\supply-chain\\2026-10-20\\claude\\control\\CONTROL.md",
