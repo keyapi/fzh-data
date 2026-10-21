@@ -35,9 +35,9 @@ tags: [supply-chain, g1, mapping, index]
 | [g1b_warehouse_evidence.md](g1b_warehouse_evidence.md) | 2026-09 仓名统一，旧皮壳并入美中（用户确认+脚本注释）；旧仓 ID/余额审计 pending |
 | [g1b_stock_snapshot.py](g1b_stock_snapshot.py) | 通途 family 库存快照（只读、分块节流） |
 | [stock_daily_backup.py](stock_daily_backup.py) | 每日全仓 API 库存备份（JSONL + manifest） |
-| [stock_history_ingest.md](stock_history_ingest.md) | **库存历史离线入库 / dry-run v4**：run_id、SHA256 基线、三级完整性、稳定 ID/别名、同日多 run、发布指针与回滚、锁与迁移（含 2026-10-22 复审六项修复） |
-| [stock_history_ingest.py](stock_history_ingest.py) | 只读 run 目录 → 内存/临时 DuckDB；默认不落库，绝不写 order_store.duckdb |
-| [test_stock_history_ingest.py](test_stock_history_ingest.py) | 26 条离线测试（14 条验收 + 6 条补充 + 6 条复审回归；真实两日存在时额外校验） |
+| [stock_history_ingest.md](stock_history_ingest.md) | **库存历史离线入库 / dry-run v4**：run_id、SHA256 基线、三级完整性、稳定 ID/别名、同日多 run、发布指针与回滚、锁与迁移（含 2026-10-22 复审六项 + 回滚漏洞 ⑦ 修复） |
+| [stock_history_ingest.py](stock_history_ingest.py) | 只读 run 目录 → 内存/临时 DuckDB；默认不落库，绝不写 order_store.duckdb；失败重导保护覆盖所有已存 run |
+| [test_stock_history_ingest.py](test_stock_history_ingest.py) | 27 条离线测试（14 条验收 + 6 条补充 + 7 条复审回归；真实两日存在时额外校验） |
 | [g1b_from_daily_backup.py](g1b_from_daily_backup.py) | 每日备份 JSONL → G1b 快照 JSON |
 | [g1b_en_extract.py](g1b_en_extract.py) | EN SO/DN/WO/JC/SE/PP 结构化导出（生产只读） |
 | [en_family_poc.py](en_family_poc.py) | Family SO 批量只读 PoC（证据门 + 逐行审计 + 详情守恒） |

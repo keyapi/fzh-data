@@ -1273,13 +1273,6 @@ def _record_event(
     )
 
 
-def _is_published(conn: "duckdb.DuckDBPyConnection", run_id: str) -> bool:
-    rows = conn.execute(
-        "SELECT 1 FROM stock_publish WHERE run_id = ? LIMIT 1", [run_id]
-    ).fetchall()
-    return bool(rows)
-
-
 def _bundle_fingerprint(bundle: RunBundle) -> dict:
     """run 的内容指纹：日期 + manifest 哈希 + 每个仓文件的哈希。"""
     return {
@@ -1356,11 +1349,14 @@ def stage_run(
                 f"{sorted(set(stored['files'].items()) ^ set(incoming['files'].items()))}"
             )
 
-    if not bundle.integrity_ok and _is_published(conn, bundle.run_id):
-        # 已发布的 run 被重新读入且校验失败：不覆盖物化结果，记录证据后拒绝。
+    if stored is not None and not bundle.integrity_ok:
+        # 任何已入库的 run（不只是当前发布的那一个）被重新读入且校验失败：不覆盖
+        # 已存的元数据 / 原始行 / 发布指针，记录证据后拒绝。回滚目标几乎总不是
+        # 当前发布 run：A 发布 → B 替换 → 重导 A 失败 若清掉 A，之后回滚到 A 就
+        # 不再可用。因此"是否仍发布"不能作为保护条件。
         _record_event(conn, bundle.run_id, bundle.snapshot_date, "reimport_rejected", bundle.integrity_errors)
         raise DataIntegrityError(
-            f"run {bundle.run_id} 已发布但重新校验失败，拒绝覆盖: {bundle.integrity_errors[:3]}"
+            f"run {bundle.run_id} 已入库但重新校验失败，拒绝覆盖: {bundle.integrity_errors[:3]}"
         )
 
     conn.execute("BEGIN TRANSACTION")

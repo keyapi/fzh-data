@@ -1234,7 +1234,7 @@ def clone_run_with_value(
 
 
 class CodeReviewFixTests(TempCase):
-    """2026-10-22 Codex 复审六项：每一项都有可复现的回归断言。"""
+    """2026-10-22 Codex 复审：六项修复 + ⑦ 回滚漏洞，每一项都有可复现的回归断言。"""
 
     def test_r1_reimport_with_changed_file_hash_is_rejected(self) -> None:
         """① 同 run_id 重导必须比对旧哈希；文件变了就拒绝，绝不先删后插。"""
@@ -1631,6 +1631,116 @@ class CodeReviewFixTests(TempCase):
                     raise
                 time.sleep(0.1)
         held.release()
+
+
+class FailedReimportRollbackTests(TempCase):
+    """⑦ A 发布 → B 替换 → 重导 A 外部基线失败：A 必须原样保留，回滚仍可用。"""
+
+    def test_r7_failed_reimport_after_supersede_keeps_rollback_target(self) -> None:
+        day = date(2026, 10, 21)
+        run_a_id = "run-20261021T090000-aaaaaa"
+        run_b_id = "run-20261021T100000-bbbbbb"
+        a_dir = make_run(
+            self.tmp / "a",
+            "2026-10-21",
+            "2026-10-21T09:00:00",
+            [warehouse("W1", "WH-W1", [row("SKU-A", "GA", "W1", available=7)])],
+            run_id=run_a_id,
+            ended_at="2026-10-21T09:30:00",
+        )
+        b_dir = make_run(
+            self.tmp / "b",
+            "2026-10-21",
+            "2026-10-21T10:00:00",
+            [warehouse("W1", "WH-W1", [row("SKU-B", "GB", "W1", available=11)])],
+            run_id=run_b_id,
+            ended_at="2026-10-21T10:30:00",
+        )
+        good_a = ing.load_run(a_dir, source="scheduled")
+        good_b = ing.load_run(b_dir, source="scheduled")
+        self.assertTrue(good_a.integrity_ok, good_a.integrity_errors)
+        self.assertTrue(good_b.integrity_ok, good_b.integrity_errors)
+
+        # 外部基线不一致：内容哈希与 A 完全相同，只有校验结论不同。
+        baseline_path = self.tmp / "external_baseline.json"
+        baseline_path.write_text(
+            json.dumps(
+                {
+                    "snapshot_date": "2026-10-21",
+                    "manifest_sha256": "0" * 64,
+                    "files": {"manifest.json": "0" * 64},
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        bad_a = ing.load_run(a_dir, source="scheduled", baseline_in=baseline_path)
+        self.assertFalse(bad_a.integrity_ok)
+        self.assertEqual(bad_a.manifest_sha256, good_a.manifest_sha256)
+        self.assertEqual(
+            [wh.file_sha256 for wh in bad_a.warehouses],
+            [wh.file_sha256 for wh in good_a.warehouses],
+            "失败重导必须与首次入库的哈希基线一致，才走失败重导保护而非 reimport_changed",
+        )
+
+        conn = memory_db()
+        try:
+            publish(conn, good_a)
+            decision = publish(conn, good_b)
+            self.assertEqual(decision["action"], "publish")
+            self.assertEqual(decision["previous_run_id"], run_a_id)
+            self.assertEqual(ing.get_publish(conn, day)["run_id"], run_b_id)
+
+            b_history = history_rows(conn)
+            a_audit_rows = expected_rows_from_run(conn, run_a_id)
+            a_run_row = conn.execute(
+                "SELECT * FROM stock_run WHERE run_id = ?", [run_a_id]
+            ).fetchone()
+            self.assertEqual(len(a_audit_rows), 1)
+
+            # A 已不再是当前发布 run，但它仍是回滚目标：失败重导必须整体拒绝。
+            with self.assertRaises(ing.DataIntegrityError):
+                ing.stage_run(conn, bad_a)
+
+            self.assertEqual(
+                expected_rows_from_run(conn, run_a_id), a_audit_rows, "A 的审计原始行不得被删"
+            )
+            self.assertEqual(history_rows(conn), b_history, "已发布行不得被覆盖")
+            self.assertEqual(
+                conn.execute(
+                    "SELECT * FROM stock_run WHERE run_id = ?", [run_a_id]
+                ).fetchone(),
+                a_run_row,
+                "A 的元数据（含 integrity_ok=true）不得被覆盖",
+            )
+            self.assertEqual(
+                ing.get_publish(conn, day)["run_id"], run_b_id, "发布指针不得被移动"
+            )
+            actions = [
+                action
+                for (action,) in conn.execute(
+                    "SELECT action FROM stock_ingest_event WHERE run_id = ?",
+                    [run_a_id],
+                ).fetchall()
+            ]
+            self.assertIn("reimport_rejected", actions)
+
+            # 无效重导之后，回滚到 A 仍然成功且逐行重放 A 的原始行。
+            preview = ing.rollback(conn, day, dry_run=True)
+            self.assertEqual(preview["to_run_id"], run_a_id)
+            self.assertEqual(preview["rows"], 1)
+            result = ing.rollback(conn, day)
+            self.assertEqual(result["to_run_id"], run_a_id)
+            self.assertEqual(ing.get_publish(conn, day)["run_id"], run_a_id)
+            self.assertEqual(history_rows(conn), expected_rows_from_run(conn, run_a_id))
+            self.assertEqual(
+                conn.execute(
+                    "SELECT integrity_ok FROM stock_run WHERE run_id = ?", [run_a_id]
+                ).fetchone(),
+                (True,),
+            )
+        finally:
+            conn.close()
 
 
 if __name__ == "__main__":

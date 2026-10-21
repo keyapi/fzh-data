@@ -552,6 +552,22 @@ tags: [supply-chain, research, log]
   10-21 5,314 行 / 14/14 / `run_complete=true`；输出见 `control/` 与提交说明。
 - 未访问通途/EN、未写 `order_store.duckdb`、未改计划任务。
 
+## 2026-10-22 — 库存入库回滚漏洞修复（复审 ⑦）
+
+- Codex 二次复审 `control/reviews/2026-10-22-stock-code-review2.md` 判 FAIL：
+  A 发布 → B 替换 → 重导 A（哈希相同、外部基线校验失败）会把 A 改成
+  `integrity_ok=false`，随后回滚到 A 失败。
+- 修复 `stock_history_ingest.py` `stage_run`：失败重导保护从"仅当前发布 run"
+  扩到**所有已存 run**——指纹一致但校验失败时，在删除前抛 `DataIntegrityError`
+  并写 `reimport_rejected` 事件，旧 `stock_history_run` 行、`stock_run` 元数据与
+  `stock_publish` 指针全部保留；`_is_published` 已成死代码，删除。
+- 新增 `test_r7_failed_reimport_after_supersede_keeps_rollback_target`：完整复现
+  上述序列，断言 A 的行/元数据/指针未动，且回滚到 A 成功、逐行重放一致。
+- 全套 27 条离线测试全绿；两日 dry-run 复跑（`out/dryrun-fix2-2026-10-2{0,1}.json`）：
+  10-20 5,192 行 / 13/14 仓 / `run_complete=false`；10-21 5,314 行 / 14/14 /
+  `run_complete=true`，manifest 哈希与固定基线一致。
+- 未访问通途/EN、未写 `order_store.duckdb`、未改计划任务。
+
 ## 模板（后续阶段）
 
 ```text

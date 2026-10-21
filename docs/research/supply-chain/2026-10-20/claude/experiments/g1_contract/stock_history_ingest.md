@@ -2,7 +2,7 @@
 okf: v0.1
 type: Reference
 title: 通途每日库存快照 — 离线历史入库 / dry-run（v4 实现说明）
-description: 读取 YYYY-MM-DD run 目录，计算 run_id/哈希/完整性/稳定 ID，写入内存或临时 DuckDB；含两日固定 SHA256 基线、26 条测试（14 验收 + 6 补充 + 6 复审回归）与残余风险
+description: 读取 YYYY-MM-DD run 目录，计算 run_id/哈希/完整性/稳定 ID，写入内存或临时 DuckDB；含两日固定 SHA256 基线、27 条测试（14 验收 + 6 补充 + 7 复审回归）与残余风险
 date: 2026-10-22
 tags: [supply-chain, stock, ingest, dry-run, duckdb, legacy]
 ---
@@ -101,6 +101,8 @@ CLI 退出码：`0` 成功（含 dry-run 校验失败的报告）/ `2` 输入或
 manifest 字节没变、只改了 JSONL——都写 `reimport_changed_rejected` 事件并抛
 `DataIntegrityError`，**绝不先删后插**（复审修复 ①）。只读 dry-run 指向已有
 `--db` 时也会返回 `action=reject, reason=reimport_changed`，与写模式一致。
+哈希相同但校验结论变坏（如 `--baseline-in` 外部基线不符）的重导同样拒绝，保护
+覆盖**所有已存 run**（不只当前发布 run），删除前保留旧行/元数据/指针（复审修复 ⑦，见 §8）。
 legacy run_id 会随 manifest
 哈希变化；只改 JSONL 不改 manifest 时 run_id 不变，但重导会被指纹挡住，
 `--baseline-in` 与 `.sealed` 也会报哈希异常（验收 9）。
@@ -176,6 +178,13 @@ run_complete > scope_complete > scope_coverage > ended_at(NULL 最后) > run_id 
 批次有效性判断（复审修复 ⑤）：`run_complete=true`（全部仓 `batch_complete` 且
 `manifest.complete=true`）的合法空仓可以回滚为 0 行；批次不完整则
 `RollbackUnavailable`，发布指针不动。
+
+**失败重导保护覆盖所有已存 run**（复审修复 ⑦）：同一 run_id 重新读入时，若内容
+哈希与首次基线一致但校验失败（典型：`--baseline-in` 外部基线不符），无论该 run
+是否仍是当前发布指针，都在删除前拒绝（`DataIntegrityError` + `reimport_rejected`
+事件），旧 `stock_history_run` 行、`stock_run` 元数据与 `stock_publish` 指针全部
+保持不变。这是回滚可用的前提：A 发布 → B 替换 → 重导 A（哈希相同、基线失败）
+之后，回滚仍能按 `previous_run_id` 重放到完好的 A。
 
 ## 9. 表结构（v2 迁移）
 
@@ -329,8 +338,9 @@ run_complete > scope_complete > scope_coverage > ended_at(NULL 最后) > run_id 
 | ④ | 反序导入 `valid_to < valid_from`；回滚不恢复区间 | `test_r4_alias_intervals_are_date_rebuilt_and_rollback_restores` |
 | ⑤ | 合法零行空仓不能回滚 | `test_r5_zero_row_empty_previous_run_is_rollbackable` |
 | ⑥ | 活进程仅超时便被抢锁 | `test_r6_live_process_lock_is_not_stolen_after_timeout`（+ `test_a12`） |
+| ⑦ | 被替换的 run 重导失败会毁掉回滚目标 | `test_r7_failed_reimport_after_supersede_keeps_rollback_target` |
 
-共 **26 条**；其中 2 条真实数据用例在 `D:/Work/库存备份` 不存在时 `skip`。
+共 **27 条**；其中 2 条真实数据用例在 `D:/Work/库存备份` 不存在时 `skip`。
 
 ## 16. 已知限制 / 残余风险
 
