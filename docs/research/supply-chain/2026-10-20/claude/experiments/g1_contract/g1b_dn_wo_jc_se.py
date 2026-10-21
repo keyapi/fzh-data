@@ -482,8 +482,9 @@ def build_scope(snap: dict, se_details: dict, window: tuple[str | None, str | No
                          "qty": q, "produced_qty": prod}
 
     # ── 3. SE：归属 WO；行级同单位校验 + 父元数据校验 + 覆盖完整性 ──
-    se_line_uoms: dict[str, set] = defaultdict(set)
-    se_finished_by_wo: dict[str, float] = defaultdict(float)
+    # (WO, UOM) -> 已守恒 finished 行合计：跨 UOM **永不**相加
+    se_finished_by_wo_uom: dict[str, dict[str, float]] = defaultdict(
+        lambda: defaultdict(float))
     se_submitted_by_wo: Counter = Counter()
     se_blocked_wo: set[str] = set()   # 有已提交但未解决的 SE 的 WO
     se_rows_out: list[dict] = []
@@ -491,7 +492,7 @@ def build_scope(snap: dict, se_details: dict, window: tuple[str | None, str | No
     se_coverage: dict[str, Any] = {
         "query_error": se_query_error, "submitted": 0, "conserved": 0,
         "draft": 0, "cancelled": 0, "out_of_snapshot": 0,
-        "unresolved": [], "complete": False,
+        "unresolved": [], "wo_unresolved": [], "complete": False,
     }
 
     for s in se_rows:
@@ -570,6 +571,10 @@ def build_scope(snap: dict, se_details: dict, window: tuple[str | None, str | No
                                  "in_window": in_win, "dates": rec["dates"],
                                  "disposition": disp, "reason_code": code,
                                  "reason_detail": rec["reason_detail"]})
+        # 未解决的子行（非法 flag / 缺键 / 重复键 / 非对象 / 物料不符）必须向上传播：
+        # 只要有一个子行没有明确为 conserved/excluded，父 SE 就不能 conserved。
+        line_blocking = [r for r in line_rows
+                         if r["disposition"] in ("unverified", "rejected", "mismatch")]
         fin_rows = [r for r in line_rows if r.get("is_finished") == 1]
         fin_bad_item = any(r["reason_code"] == "se_line_item_mismatch" for r in fin_rows)
         fin_ok_rows = [r for r in fin_rows
@@ -578,7 +583,8 @@ def build_scope(snap: dict, se_details: dict, window: tuple[str | None, str | No
         fin_uoms = {uom_key(r["uom"]) for r in fin_ok_rows}
         mixed_uom = len(fin_uoms) > 1
         fin_qty = (sum(float(r["qty"]["qty"]) for r in fin_ok_rows)
-                   if fin_ok and not mixed_uom else None)
+                   if fin_ok and not mixed_uom and not line_blocking else None)
+        child_codes = ",".join(sorted({r["reason_code"] for r in line_blocking}))
         # 文档级去向
         if ds == 2:
             disp, code = "excluded", "se_cancelled"
@@ -598,6 +604,8 @@ def build_scope(snap: dict, se_details: dict, window: tuple[str | None, str | No
             disp, code = "unverified", "se_no_finished_line"
         elif fin_bad_item:
             disp, code = "mismatch", "se_finished_item_mismatch"
+        elif line_blocking:
+            disp, code = "unverified", "se_line_child_unresolved"
         elif mixed_uom:
             disp, code = "unverified", "se_finished_uom_mixed"
         elif fin_qty is None:
@@ -608,8 +616,7 @@ def build_scope(snap: dict, se_details: dict, window: tuple[str | None, str | No
             disp, code = "conserved", "se_finished_conserved"
         se_uom = next(iter(fin_uoms)) if len(fin_uoms) == 1 else None
         if disp == "conserved":
-            se_finished_by_wo[wo] += fin_qty
-            se_line_uoms[wo].add(se_uom)
+            se_finished_by_wo_uom[wo][se_uom] += fin_qty
         # 覆盖：每个已提交 SE 必须有明确结论；未解决的要传播到 WO/C2/证据状态
         if ds == 1:
             se_coverage["submitted"] += 1
@@ -639,11 +646,20 @@ def build_scope(snap: dict, se_details: dict, window: tuple[str | None, str | No
              se_uom, disp, code,
              "" if disp == "conserved" else
              f"lines={0 if lines is None else len(lines)} "
-             f"problems={','.join(resolved['problems']) or '-'}",
+             f"problems={','.join(resolved['problems']) or '-'}"
+             + (f" child_codes={child_codes}" if child_codes else ""),
              in_win, {"posting_date": s.get("posting_date")})
     out_rows.extend(se_rows_out)
+    # 同一 WO 的已守恒 SE 若落在不同 UOM，只保留分桶，不给跨单位总量；
+    # 该 WO 进入未解决清单，C2/C1 完整性与 audit/evidence 一律降级。
+    for wo_name, buckets in sorted(se_finished_by_wo_uom.items()):
+        if len(buckets) > 1:
+            se_coverage["wo_unresolved"].append({
+                "work_order": wo_name, "reason_code": "wo_uom_mixed",
+                "se_finished_by_uom": {u: r2(q) for u, q in sorted(buckets.items())}})
     se_coverage["complete"] = bool(se_query_error is None
-                                   and not se_coverage["unresolved"])
+                                   and not se_coverage["unresolved"]
+                                   and not se_coverage["wo_unresolved"])
 
     # ── 4. WO 行：produced_qty vs SE 完工量；JC 进度证据 ──
     wo_rows_out: list[dict] = []
@@ -654,9 +670,11 @@ def build_scope(snap: dict, se_details: dict, window: tuple[str | None, str | No
         info = wo_link[name]
         ds = docstatus(w.get("docstatus"))
         q, prod = info["qty"], info["produced_qty"]
-        se_q = se_finished_by_wo.get(name)
-        uoms = se_line_uoms.get(name) or set()
-        uom = sorted(uoms)[0] if len(uoms) == 1 else None
+        buckets = dict(se_finished_by_wo_uom.get(name) or {})
+        uoms = set(buckets)
+        uom = next(iter(uoms)) if len(uoms) == 1 else None
+        mixed_uom = len(uoms) > 1
+        se_q = buckets[uom] if uom is not None else None
         link_status, link_code = info["disposition"], info["reason_code"]
         codes = []
         wo_status = str(w.get("status") or "")
@@ -672,6 +690,8 @@ def build_scope(snap: dict, se_details: dict, window: tuple[str | None, str | No
             disp, code = "unverified", "wo_se_query_incomplete"
         elif name in se_blocked_wo:
             disp, code = "unverified", "wo_se_incomplete"
+        elif mixed_uom:
+            disp, code = "unverified", "wo_uom_mixed"
         elif uom is None:
             disp, code = "unverified", "wo_uom_unresolved"
         elif se_q is None:
@@ -684,16 +704,24 @@ def build_scope(snap: dict, se_details: dict, window: tuple[str | None, str | No
             codes.append("wo_over_produced")
         if se_q is not None and q is not None and se_q - q > EPS:
             codes.append("wo_se_exceeds_wo_qty")
-        jc = jc_map.get(name) or {}
+        if mixed_uom:
+            codes.append("wo_se_finished_uom_mixed")
+        raw_jc = jc_map.get(name)
+        jc = raw_jc if isinstance(raw_jc, dict) else {}
         jc_seen.add(name)
-        ops = jc.get("operations") if isinstance(jc, dict) else {}
-        ops = ops if isinstance(ops, dict) else {}
+        raw_ops = jc.get("operations")
+        ops_ok = isinstance(raw_ops, dict)
+        ops = raw_ops if ops_ok else {}
         op_sums = {op: num(v.get("sum_qty")) for op, v in ops.items() if isinstance(v, dict)}
         numeric = {k: v for k, v in op_sums.items() if v is not None}
         max_op = max(numeric, key=numeric.get) if numeric else None
         jc_flags = []
-        if not jc:
+        if name not in jc_map:
             jc_flags.append("jc_missing")
+        elif not isinstance(raw_jc, dict):
+            jc_flags.append("jc_group_invalid")
+        elif not ops_ok:
+            jc_flags.append("jc_operations_invalid")
         elif not ops:
             jc_flags.append("jc_no_operations")
         elif not numeric:
@@ -704,12 +732,14 @@ def build_scope(snap: dict, se_details: dict, window: tuple[str | None, str | No
         wo_summary[name] = {
             "qty": r2(q), "produced_qty": r2(prod), "se_finished_qty": r2(se_q),
             "se_finished_qty_exact": se_q,
+            "se_finished_by_uom": {u: r2(v) for u, v in sorted(buckets.items())},
+            "se_finished_uom_mixed": mixed_uom,
             "uom": uom, "disposition": disp, "reason_code": code,
             "link_status": link_status, "link_reason_code": link_code,
-            "jc_cards": jc.get("cards") if isinstance(jc, dict) else None,
+            "jc_cards": jc.get("cards"),
             "jc_ops": len(ops),
             "jc_max_op": max_op, "jc_max_qty": r2(numeric.get(max_op)),
-            "jc_last_op": jc.get("last_operation") if isinstance(jc, dict) else None,
+            "jc_last_op": jc.get("last_operation"),
             "jc_last_op_qty": r2(numeric.get(jc.get("last_operation"))),
             "jc_flags": jc_flags,
         }
@@ -717,6 +747,7 @@ def build_scope(snap: dict, se_details: dict, window: tuple[str | None, str | No
                "link": dict(info["link"]),
                "qty": {"qty": r2(q), "produced_qty": r2(prod),
                        "se_finished_qty": r2(se_q),
+                       "se_finished_by_uom": {u: r2(v) for u, v in sorted(buckets.items())},
                        "qty_exact": q, "produced_qty_exact": prod,
                        "se_finished_qty_exact": se_q,
                        "produced_pending": r2(prod - se_q) if prod is not None and se_q is not None else None},
@@ -740,11 +771,30 @@ def build_scope(snap: dict, se_details: dict, window: tuple[str | None, str | No
                  None, {})
     out_rows.extend(wo_rows_out)
 
-    # 快照外 WO 的 JC 组：保留为 orphan，不静默丢弃
+    # 快照外 WO 的 JC 组：保留为 orphan；匹配到 WO 但工序明细非法的组：
+    # 必须落**显式 invalid 披露行**，不能静默计入 matched。
     jc_stats = {"read": len(jc_map), "matched": 0, "orphan": 0, "invalid": 0}
     for jc_name, jc in jc_map.items():
+        raw_ops = jc.get("operations") if isinstance(jc, dict) else None
         if jc_name in jc_seen and jc_name in wo_idx:
-            jc_stats["matched"] += 1
+            if isinstance(jc, dict) and isinstance(raw_ops, dict) and raw_ops:
+                jc_stats["matched"] += 1
+                continue
+            jc_stats["invalid"] += 1
+            if not isinstance(jc, dict):
+                reason = "jc_group_invalid"
+                detail = f"JC 组不是对象: {type(jc).__name__}"
+            elif not isinstance(raw_ops, dict):
+                reason = "jc_operations_invalid"
+                detail = f"JC operations 不是对象: {type(raw_ops).__name__}"
+            else:
+                reason = "jc_no_operations"
+                detail = "JC 组没有任何可用的工序明细"
+            emit(scope, "jc_operation", f"{jc_name}::<invalid_operations>",
+                 {"work_order": jc_name, "operation": None, "jc_ids": []},
+                 {"sum_qty": None,
+                  "cards": jc.get("cards") if isinstance(jc, dict) else None},
+                 None, "invalid", reason, detail, None, {})
             continue
         if not isinstance(jc, dict):
             jc_stats["invalid"] += 1
@@ -1002,7 +1052,8 @@ def conservation_checks(scope: str, so_out: list[dict], all_rows: list[dict],
               "pass": sum(1 for w in compared if w["disposition"] == "conserved"),
               "mismatch": sum(1 for w in compared if w["disposition"] == "mismatch")},
           "note": "only evaluated work orders are counted; UOM from the single "
-                  "conserved SE finished-unit; quantities are never summed across UOM"}
+                  "conserved SE finished-unit bucket; a work order whose conserved "
+                  "SEs span multiple UOMs stays unverified and is never summed"}
 
     # C3：单 SE 内部行合计 == finished_qty
     se_rows = [r for r in all_rows if r["row_type"] == "se"]
@@ -1380,10 +1431,13 @@ def build_manifest(scopes: list[dict], window: tuple[str | None, str | None], ba
     se_complete = all(c["complete"] for c in se_cov)
     unresolved_se = [dict(u) | {"scope": c["scope"]}
                      for c in se_cov for u in c["unresolved"]]
+    unresolved_wo = [dict(u) | {"scope": c["scope"]}
+                     for c in se_cov for u in c.get("wo_unresolved") or []]
     query_errors = [{"scope": c["scope"], "error": c["query_error"]}
                     for c in se_cov if c["query_error"]]
     jc_stats = {sc["scope"]: sc["jc_stats"] for sc in scopes}
-    orphan_jc = sum(s["orphan"] + s["invalid"] for s in jc_stats.values())
+    orphan_jc = sum(s["orphan"] for s in jc_stats.values())
+    invalid_jc = sum(s["invalid"] for s in jc_stats.values())
 
     audit_ok = bool(ok_all and c1_pass and c3_no_mismatch and c3_unverified == 0
                     and not dup and se_complete and not rejected)
@@ -1396,12 +1450,14 @@ def build_manifest(scopes: list[dict], window: tuple[str | None, str | None], ba
     for sc in scopes:
         for name, w in sc["wo_summary"].items():
             if w["reason_code"] in ("wo_se_qty_mismatch", "wo_uom_unresolved",
+                                    "wo_uom_mixed",
                                     "wo_se_partially_unverified", "wo_se_missing",
                                     "wo_se_incomplete", "wo_se_query_incomplete"):
                 item = {"scope": sc["scope"], "work_order": name,
                         "reason_code": w["reason_code"],
                         "qty": w["qty"], "produced_qty": w["produced_qty"],
-                        "se_finished_qty": w["se_finished_qty"]}
+                        "se_finished_qty": w["se_finished_qty"],
+                        "se_finished_by_uom": w.get("se_finished_by_uom")}
                 p = probe_by_wo.get(name)
                 if p and p.get("ok"):
                     ses = p.get("stock_entries") or []
@@ -1453,6 +1509,7 @@ def build_manifest(scopes: list[dict], window: tuple[str | None, str | None], ba
         "coverage": {
             "se": {"complete": se_complete, "per_scope": se_cov,
                    "unresolved_submitted": unresolved_se,
+                   "unresolved_work_orders": unresolved_wo,
                    "query_errors": query_errors,
                    "submitted_total": sum(c["submitted"] for c in se_cov),
                    "resolved_total": sum(c["conserved"] for c in se_cov)},
@@ -1469,6 +1526,7 @@ def build_manifest(scopes: list[dict], window: tuple[str | None, str | None], ba
                                "row_key": r["row_key"],
                                "reason_code": r["reason_code"]} for s, r in rejected],
             "orphan_jc_groups": orphan_jc,
+            "invalid_jc_groups": invalid_jc,
             "duplicate_keys": dup,
             "child_duplicate_keys": child_dup,
         },
@@ -1513,7 +1571,11 @@ def build_manifest(scopes: list[dict], window: tuple[str | None, str | None], ba
             "本文件只做 DN/WO/JC/SE 关联与数量守恒，不是 G1 验收、不是需求/补货结论。",
             "C1 逐行全精度判定（不四舍五入、不允许正负抵消）；UOM 汇总仅作展示。",
             "所有数量聚合按 UOM 分区；UOM 缺失/未知一律 unverified，不进入合计。",
-            "JC 仅进度证据，不进入守恒。",
+            "SE finished 量按 (WO, UOM) 分桶；同一 SE 或同一 WO 的已守恒 SE 跨 UOM 时"
+            "只留分桶、不出总量，且 C2/evidence 不完整。",
+            "SE 子行任一未解决（非法 is_finished_item/缺键/重复键/非对象/物料不符）"
+            "都让父 SE 与 WO 失去 conserved。",
+            "JC 仅进度证据，不进入守恒；匹配到 WO 但工序明细非法的 JC 组落显式 invalid 行。",
             "C2 只对已取得 line 级证据且 SE 覆盖完整的 WO 出完整总数；否则只出 known_subtotal。",
             "WO.produced_qty 不作完工真值；SE finished 行合计才是守恒锚点。",
             "HTTP 预算为请求级（含重试与翻页），跨 SE 明细与探针共享。",

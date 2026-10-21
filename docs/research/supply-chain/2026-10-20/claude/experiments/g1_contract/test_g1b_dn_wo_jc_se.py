@@ -6,6 +6,8 @@
   P1-1 逐行全精度 C1、P1-2 DN join 语义、P1-3 UOM 分区、P1-4 SE 父元数据、
   P1-5 SE 覆盖传播、P1-6 C4 原始输入/孤儿/子键唯一、P2-7 有符号退货、
   P2-8 请求级 HTTP 预算、P2-9 最终 payload 校验和。
+并覆盖 v2 交叉复审（2026-10-21 FAIL）的 3 项发现：
+  SE finished 量按 UOM 分桶、子行未解决向父 SE/WO 传播、匹配 JC 组非法工序显式披露。
 """
 
 from __future__ import annotations
@@ -516,6 +518,107 @@ class SeCoverageTests(unittest.TestCase):
         c2 = sc["checks"]["C2_wo_se"]
         self.assertEqual(c2["known_subtotal"]["compared"], 0)
         self.assertFalse(c2["complete"])
+
+
+# ── v3 交叉复审（2026-10-21 v2 FAIL）：UOM 分桶 / 子行传播 / JC 非法披露 ──
+class CrossReviewV3Tests(unittest.TestCase):
+    def test_single_se_mixed_uom_blocks_whole_chain(self):
+        """10 EA + 2 BOX 在同一个 SE：不得出现 12，SE/WO/C2/audit/evidence 全部降级。"""
+        lines = [se_line(qty=10, uom="EA", name="A"),
+                 se_line(qty=2, uom="BOX", name="B")]
+        sc = run(snapshot(se_rows=[se(finished=12, lines=lines)]))
+        se_row = find(sc, "se", "SE-1")
+        self.assertEqual(se_row["disposition"], "unverified")
+        self.assertEqual(se_row["reason_code"], "se_finished_uom_mixed")
+        self.assertIsNone(se_row["qty"]["finished_lines_sum"])
+        self.assertIsNone(se_row["qty"]["finished_lines_sum_exact"])
+        wo_row = find(sc, "wo", "WO-1")
+        self.assertEqual(wo_row["disposition"], "unverified")
+        self.assertIsNone(wo_row["qty"]["se_finished_qty"])
+        self.assertEqual(wo_row["qty"]["se_finished_by_uom"], {})
+        man = final_manifest(sc)
+        self.assertFalse(man["audit_ok"])
+        self.assertFalse(man["evidence_complete"])
+        self.assertFalse(man["conservation"]["C2_wo_se"][0]["complete"])
+        self.assertEqual([u["reason_code"] for u in
+                          man["coverage"]["se"]["unresolved_submitted"]],
+                         ["se_finished_uom_mixed"])
+
+    def test_cross_se_same_wo_mixed_uom_never_summed(self):
+        """同一 WO 的两张 SE 各为 EA/BOX：分桶保留，绝不合成 12。"""
+        se_rows = [se(name="SE-1", lines=[se_line(qty=10, uom="EA", name="A")]),
+                   se(name="SE-2", finished=2,
+                      lines=[se_line(qty=2, uom="BOX", name="B")])]
+        sc = run(snapshot(se_rows=se_rows, wos=[wo(qty=12, produced=12)],
+                          jc_map=jc("WO-1")))
+        # 每张 SE 自身同单位，可以各自守恒；错的是 WO 级跨单位合计
+        self.assertEqual(find(sc, "se", "SE-1")["disposition"], "conserved")
+        self.assertEqual(find(sc, "se", "SE-2")["disposition"], "conserved")
+        wo_row = find(sc, "wo", "WO-1")
+        self.assertEqual(wo_row["disposition"], "unverified")
+        self.assertEqual(wo_row["reason_code"], "wo_uom_mixed")
+        self.assertIsNone(wo_row["qty"]["se_finished_qty"])
+        self.assertIsNone(wo_row["qty"]["se_finished_qty_exact"])
+        self.assertEqual(wo_row["qty"]["se_finished_by_uom"],
+                         {"BOX": 2.0, "EA": 10.0})
+        self.assertIn("wo_se_finished_uom_mixed", wo_row["reason_detail"])
+        man = final_manifest(sc)
+        self.assertFalse(man["audit_ok"])
+        self.assertFalse(man["evidence_complete"])
+        self.assertFalse(man["conservation"]["C2_wo_se"][0]["complete"])
+        mixed = man["coverage"]["se"]["unresolved_work_orders"]
+        self.assertEqual([(m["work_order"], m["reason_code"]) for m in mixed],
+                         [("WO-1", "wo_uom_mixed")])
+        self.assertEqual(mixed[0]["se_finished_by_uom"], {"BOX": 2.0, "EA": 10.0})
+        wo_summary = man["scopes"][0]["checks"]["C2_wo_se"]
+        self.assertNotIn("se_finished_qty", wo_summary)   # C2 不产跨单位总量
+
+    def test_invalid_finished_flag_child_blocks_parent_and_flags(self):
+        """非法 is_finished_item 子行必须让父 SE/WO 不 conserved，并阻断 audit/evidence。"""
+        lines = [se_line(qty=10, name="A"),
+                 se_line(qty=5, name="B", fin="maybe")]
+        sc = run(snapshot(se_rows=[se(finished=10, lines=lines)]))
+        child = find(sc, "se_line", "SE-1::B")
+        self.assertEqual(child["disposition"], "unverified")
+        self.assertEqual(child["reason_code"], "se_line_finished_flag_invalid")
+        se_row = find(sc, "se", "SE-1")
+        self.assertEqual(se_row["disposition"], "unverified")
+        self.assertEqual(se_row["reason_code"], "se_line_child_unresolved")
+        self.assertIn("se_line_finished_flag_invalid", se_row["reason_detail"])
+        self.assertIsNone(se_row["qty"]["finished_lines_sum_exact"])
+        wo_row = find(sc, "wo", "WO-1")
+        self.assertEqual(wo_row["disposition"], "unverified")
+        self.assertEqual(wo_row["reason_code"], "wo_se_incomplete")
+        man = final_manifest(sc)
+        self.assertFalse(man["audit_ok"])
+        self.assertFalse(man["evidence_complete"])
+        self.assertFalse(man["conservation"]["C2_wo_se"][0]["complete"])
+
+    def test_matched_jc_malformed_operations_emit_invalid_row(self):
+        """匹配到 WO 但工序明细非法的 JC 组：显式 invalid 行，不得计 matched。"""
+        cases = [
+            ("garbage", None, "jc_group_invalid"),
+            ({"cards": 0, "operations": "garbage", "last_operation": None}, None,
+             "jc_operations_invalid"),
+            ({"cards": 0, "operations": {}, "last_operation": None}, None,
+             "jc_no_operations"),
+        ]
+        for jc_value, _ops, reason in cases:
+            with self.subTest(reason=reason):
+                jc_map = {"WO-1": jc_value}
+                sc = run(snapshot(jc_map=jc_map))
+                rows = [r for r in by_type(sc, "jc_operation")
+                        if r["row_key"] == "WO-1::<invalid_operations>"]
+                self.assertEqual(len(rows), 1)
+                self.assertEqual(rows[0]["disposition"], "invalid")
+                self.assertEqual(rows[0]["reason_code"], reason)
+                self.assertEqual(sc["jc_stats"],
+                                 {"read": 1, "matched": 0, "orphan": 0, "invalid": 1})
+                # JC 仍只作进度证据：守恒不受影响，但非法披露不可丢
+                self.assertEqual(find(sc, "wo", "WO-1")["disposition"], "conserved")
+                man = final_manifest(sc)
+                self.assertEqual(man["coverage"]["invalid_jc_groups"], 1)
+                self.assertEqual(man["coverage"]["orphan_jc_groups"], 0)
 
 
 # ── P1-6：C4 数原始输入、保留 rejected/orphan、校验子键唯一 ──
