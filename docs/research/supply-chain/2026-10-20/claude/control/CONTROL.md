@@ -99,6 +99,22 @@ Updated: 2026-10-21 20:05 (Asia/Shanghai)
 - **10 SKU 不等于 100**：当前准确说法是“离线材料穷尽，10 SKU 部分验证，3,098 行可追溯；
   C1 通过，C2/C3 仅原 5 个完整，2 处 `produced_qty` 失真；非 100 SKU、非 G1 验收”。
 
+## 数据地基：每日库存（2026-10-21 22:30）
+
+- 任务真实存在：`FZH-TongtuStockApiDaily`，每天 **05:17**，输出
+  `D:\Work\库存备份\YYYY-MM-DD\*.jsonl + manifest.json`。
+- 现状：**只有 2 天**。10-20 有 1 仓 URLError 10060（400 行部分数据，
+  `complete=false`）；10-21 的 05:17 定时失败（LastTaskResult=1，无 05:17 manifest），
+  09:46 手动补跑 `complete=true`（5,314 行 / 14 仓）。
+- **未入库**：`order_store.duckdb` 的 `tongtool_stock` 只有 4 个 10-21 手动快照；
+  每日 JSONL 尚未进入分析库，R290/DN-WO-JC-SE 都没用上每日历史。
+- 诊断与入库方案：`control/reviews/2026-10-21-stock-daily-diagnosis.md`
+  （只读、未落盘、未改任务）。
+- 决策 Codex：**先修数据地基 A，再修闸门 B，暂停 100 SKU 生产扩样**；
+  23:50 复审诊断，次日 05:17 后复审实际定时采集。
+- 关键边界：缺失/失败标 `unknown`，不标 0；不覆盖手动快照；不补造历史；
+  两天不足以做删失校正；每日快照无法定位日内断货。
+
 ## Agent 角色与分工（2026-10-21 20:05）
 
 - **决策 Codex**（`gpt-6.1-sol`，独立进程）：只在关键节点裁决方向、范围、验收标准与放行/停止；
