@@ -120,15 +120,19 @@ DuckDB（分析库，独立文件）
 
 **先把术语摆正**（`CONCEPTS.md:149-153`）：成品 `KS` = 皮壳 `PK#` + 内胆 `ND#` + 充棉；半成品只有皮壳/内胆。「组件」不是公司内部业务分类，上一版把它展开到面料/拉链/PP 棉是错的——那是中国生产物料，不是分公司补货对象。
 
-- **决定发什么的不是 BOM，是物料组的「绍兴发货方式」**：EN `Item Group.custom_shipment_type_to_branch`（皮壳 243 组 / 成品 169 / 半成品 62 / 空 107）。旧称「给分公司发皮壳」是口语，实际发什么以 BOM 为准，通常 `PK# + ND#` 一起发。
-- **补货量只有一套**：`forecast_replenishment_v3` 按分公司仓的通途库存池（listing SKU，必要时 `-Cover` 代理）算 ROP；不要为组件另算一套 ROP，否则同一库存池会被扣两次。
-- **换算成发货形态**（`scripts/forecast_shipment_plan.py`，只取 BOM 第一层 `PK#`/`ND#`）：
+- **发货形态由物料组决定，带不带内胆看 BOM**：EN `Item Group.custom_shipment_type_to_branch`（皮壳 243 组 / 成品 169 / 半成品 62 / 空 107）。旧称「给分公司发皮壳」是口语，具体发什么以 BOM 为准：EN 启用且提交的 KS BOM 2,210 条里，`PK#+ND#` 1,745、`PK# only` 280、都没有 185。个别产品只有皮壳没有内胆，必须看 BOM。
+- **销售订单按钮的真实逻辑（已核实代码与数据）**：Excel 上传只生成 `PK#` 行（`key_test.item_utils.read_excel_file`，`是否皮壳`→`PK#`），**不会自动加内胆**；内胆由另一个启用的 Client Script `销售订单 子表 items 所有行 增加配套物料20241030` 添加，调用 `key_test.item_utils.get_supporting_item`：按 **物料组 + 尺寸属性** 找 `内胆#<无前缀组名>` 变体（不是读 BOM），并遵循 `custom_replaced_by_other_item_group`（如 `内胆#三角靠枕无扣 → 内胆#三角靠枕`）。
+  - 实测最近 90 天 22 张含 `PK#` 的已提交 SO：13 张有内胆、9 张没有；2026-08-17 起基本 1:1（`SO-26-00101` 49/49、`-00110` 106/106）。`SO-26-00102` 的 8 皮壳/5 内胆逐行与 BOM 一致；零内胆的几张（`-00111`/`-00115`/`-00130`）都能找到同尺寸内胆变体，判断是**没点按钮**，不是没有内胆。
+  - BOM 与按钮逻辑在 1,811 个含皮壳的成品 BOM 中：两者都有 1,531（84.5%）、都没有 136、BOM 无但按钮会加 82、BOM 有但按钮找不到 62。规划时必须把这两种偏差显式标出来。
+- **补货量只有一套**：`forecast_replenishment_v3` 按分公司仓的通途库存池（listing SKU）算 ROP；不要为组件另算一套 ROP，否则同一库存池会被扣两次。
+- **换算成发货形态**（`scripts/forecast_shipment_plan.py`）：取 BOM 第一层 `PK#`/`ND#`，并按上面的按钮逻辑补齐：
   - 成品 → 发成品 KS；
-  - 皮壳 → 发 `PK#`，并按 BOM 同时列出 `ND#`（「可能也发内胆」）；
+  - 皮壳 → 发 `PK#`；内胆按 BOM，BOM 没有但按钮会加的标 `nd_from_button_not_bom`，BOM 有但按钮找不到的标 `bom_nd_no_button_match`；
   - 半成品 → 同样按第一层 BOM，包装半成品暂未进 KS BOM。
-- 首跑（311 行 / 4,548 件）：**皮壳 246 行 / 3,702 件**、成品 47 / 655、半成品 14 / 171、未匹配 4 / 20。组件清单前几位是通用内胆（`ND#KS0001-100-CYF-WHITE` 1,470 等）与各色皮壳。
-- **不要用 EN Bin 当组件供给**：EN 不扣减通途，`Bin.actual_qty` 只是账面；组件也没有独立的可用库存池。上一版用 EN Bin + 负库存夹紧算出 34,283 的做法已废弃。
-- **皮壳库存可能在 `-Cover` SKU 上**：107 个物料有 cover 库存、其中 65 个只有 cover 库存（总量 3,534，对比 listing 46,970）。脚本输出 `cover_stock_same_item` / `pool_note`（`cover_only` / `cover_also`）提示复核，但**不自动合并**——一对多映射直接相加会重复承诺 ATP（`CONCEPTS.md:282-283`）。
+- 首跑（311 行 / 4,548 件）：**皮壳 246 行 / 3,702 件**、成品 47 / 655、半成品 14 / 171、未匹配 4 / 20。皮壳 249 行 / 3,831 件，内胆来自 BOM 219 行 / 3,637、按钮补 10 行 / 52、按钮对不上 11 行 / 121；另有 12 行无 BOM、3 行无物料映射。
+- **不要用 EN Bin 当组件供给**：EN 不扣减通途，`Bin.actual_qty` 只是账面；组件没有独立的可用库存池。上一版用 EN Bin + 负库存夹紧算出 34,283 的做法已废弃。
+- **`-Cover` 与 listing 是两个独立 SKU 账，不是同一数量镜像**（实测）：5 个 cover-only 物料的不带后缀 SKU 库存为 0，`-Cover` 有 50–222；通途 7 天变动明细里，卖哪个 SKU 就只动哪个，二者不联动；全部物料 cover 销量 404 件 vs listing 8,849 件（4.4%）。所以**可售总量应按 `listing + -Cover` 相加**（两个不同数量桶，不会重复计数），但不能把同一个数量同步写两遍。是否同一堆实物，数据不能证明（可能是同一批货按渠道拆账，也可能是两堆），需调拨单/盘点/运营确认。
+- 脚本对 107 个有 cover 库存的物料输出 `cover_stock_same_item` / `pool_note`（`cover_only` / `cover_also`），**不自动合并到 ROP**；等实物池确认后再决定是否把 cover 库存计入可用供给。
 - **面料/拉链/PP 棉不在范围内**：面料/拉链走中国生产物料计划；PP 棉是分公司填充耗材（部分产品 BOM 里确有，但本次不做补货）。
 
 **3PL（WayfairCG）**：`erp2_stocks_stocksquery` 能查，但数据很薄——5 个启用仓实测只有 Cranbury 92 个 SKU / 880 件，Perris 4 个 / 0，Romeoville 2 个 / 0，McDonough、PortWentworth 为空；没有报表导出 API（文档镜像只有库存查询/变动/FBA），Excel 只能在 UI 导出。结论：**API 可作交叉核对，权威仍是 Wayfair 后台导出**（PR #300 `13-g1-data-sources` §1.5）；3PL 是否纳入补货等 PR #301 G1b 的责任确认，目前不并入分公司主仓补货。
@@ -151,13 +155,13 @@ open('/tmp/export.tsv','w',encoding='utf-8').write(r.stdout)
 PY"
 ```
 
-需要导的表：`tabBOM`（5,582）、`tabBOM Item`（13,157）、`tabItem`（15,230，含 MOQ/装箱/交期）、`tabItem Group`（`custom_shipment_type_to_branch`）、`tabBin`（非零 3,123）、`tabPurchase Order Item`（未结 21 行）。全部只读，不碰业务写入。
+需要导的表：`tabBOM`（5,582）、`tabBOM Item`（13,157）、`tabItem`（15,230，含 MOQ/装箱/交期）、`tabItem Group`（发货方式 + `custom_replaced_by_other_item_group`）、`tabItem` 的 `ND#` 物料（852）、`tabItem Variant Attribute`（11,494，取「尺寸」）、`tabBin`（非零 3,123）、`tabPurchase Order Item`（未结 21 行）。全部只读，不碰业务写入。
 
 ### 12. 仍未覆盖 / 下一步
 
 - **3PL（WayfairCG）**：API 可查但只有 Cranbury 有量（92 SKU / 880 件），其余仓几乎为空；权威仍是 Wayfair 后台导出，是否纳入补货待责任确认（PR #301 G1b 已暂停）。
 - **BOM 缺口**：22 个 KS + 1 个 TJ 有销量但无默认 BOM；12 行皮壳/半成品补货因此无法拆组件。
-- **皮壳池身份**：65 个物料只有 `-Cover` 库存（无 listing 库存），目前只做提示不合并；需要业务确认这些仓的物理池是否与 listing 同一个池。
+- **皮壳池身份**：`-Cover` 与 listing 在通途是**两个独立 SKU 账**（变动不镜像，cover 销量只占 4.4%），可售总量可相加，但**是否同一堆实物未证**；需调拨单/盘点/运营确认后，才能决定 cover 库存是否计入 ROP。
 - **内胆库存**：通途没有独立的 `ND#` 库存码；本次只按 BOM 算「该发多少内胆」，没有内胆可用库存口径。
 - **半成品包装**：KS BOM 只含 `PK# + ND#`，绍兴包装半成品未进 BOM。
 - **组件（皮壳/内胆）没有独立 ROP**：补货量沿用成品池，发货形态只是换算；等分公司能分别盘点皮壳/成品后再考虑独立库存池。

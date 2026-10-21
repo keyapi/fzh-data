@@ -7,6 +7,13 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-10-21（核实：SO 内胆按钮与 -Cover 库存口径）
+- **核实**: 销售订单 Excel 上传只生成 `PK#` 行；内胆由启用的 Client Script `销售订单 子表 items 所有行 增加配套物料20241030` 添加，`key_test.item_utils.get_supporting_item` 按**物料组+尺寸**找 `内胆#` 变体（不读 BOM），并走 `custom_replaced_by_other_item_group`。近 90 天 22 张含皮壳 SO 中 13 张有内胆、9 张没有；2026-08-17 起基本 1:1，零内胆多为没点按钮。
+- **统计**: EN 启用提交 KS BOM 2,210：PK+ND 1,745 / PK only 280 / neither 185；本地 1,811 个含皮壳 BOM 中 BOM 与按钮逻辑一致 1,531（84.5%），BOM 无但按钮会加 82，BOM 有但按钮找不到 62。
+- **修正**: `forecast_shipment_plan.py` 同时输出 BOM 与按钮两种口径：`nd_from_button_not_bom` 10 行/52、`bom_nd_no_button_match` 11 行/121；皮壳 249 行/3,831、内胆 BOM 219/3,637。
+- **核实**: 通途 `-Cover` 与 listing 是独立 SKU 账（库存/销售/变动均不镜像；cover 销量 404 vs listing 8,849，4.4%），可售总量应相加，不能同一数量写两遍；是否同一堆实物未证，需调拨/盘点/运营确认。Sellfox 的 `PK#→KS x1` 是销售层共享代理，不代表通途合并。
+- **更新**: 文档 §10 补 SO 按钮真实逻辑、BOM/按钮偏差统计、`-Cover` 独立性证据；§11 补 ND 物料与变体属性导出；§12 更新皮壳池待确认项。
+
 ## 2026-10-21（修正：分公司补货是「发货形态」，不是 BOM 叶节点补货）
 - **修正**: 上一版把「组件」展开到面料/拉链/PP 棉并用 EN Bin 当供给，口径错误。公司术语：成品 KS = 皮壳 PK# + 内胆 ND# + 充棉；「组件」不是内部业务分类；面料/拉链属于中国生产物料，PP 棉是分公司填充耗材，均不在分公司补货范围。
 - **正确做法**: `Item Group.custom_shipment_type_to_branch`（皮壳/半成品/成品）决定发什么；补货量仍只有一套（成品池 ROP），`scripts/forecast_shipment_plan.py` 只把补货量按 BOM 第一层换算成 `PK#`/`ND#` 清单。首跑 311 行/4,548 件 → 皮壳 246/3,702、成品 47/655、半成品 14/171、未匹配 4/20。
