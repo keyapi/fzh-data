@@ -39,17 +39,28 @@ Updated: 2026-10-21 17:25 (Asia/Shanghai)
 
 - #290 已有**实验原型**待对账，不是“预测/补货尚未开始”。主线尚未验收，但原型资产存在。
 
+## 规划层级与状态语义（采纳 Codex 建议）
+
+- **L1 路线图**：最终目标、阶段成果、当前里程碑、范围边界；只在范围/阶段变化时更新。
+- **L2 阶段计划**：本阶段验收条件、关键路径、已知未知、退出条件；每次阶段检查更新。
+- **L3 执行看板**：`Ready → 执行中 → 待评审 → 返修/已验收`；阻塞单列。
+- **L4 证据记录**：commit、输入 hash、测试、报告、验收结论；随交付附上。
+- **WIP 上限**：最多 1 个主线实现 + 1 个独立对账 + 必要时 1 个关键评审；不同时改同一 worktree。
+- **状态三分**：worker 完成 ≠ 评审完成 ≠ 业务验收通过；任务成功不等于里程碑完成。
+- **六个指标**：本阶段已验收能力、当前关键路径、最老阻塞及等待时长、待评审积压、同一问题返修轮次、下一份可供业务查看的产物。
+- **工具边界**：总控页是唯一项目入口；Orca 保存执行状态；Git/PR 保存交付证据。暂不引入 Linear/GitHub Projects；状态更新使用 `state_update.py`（全局锁），不要直接改 `state.json`。
+
 ## 持续调度（Orca automations）
 
-已验证：心跳 run `2eab6670-729e-4646-b216-0852b0470693` 在 `D:/Work/赛狐/Cursor-claude` **completed**（17:37），随后停用。旧 `.claude/worktrees` 路径被 Orca 判为 unavailable，worktree 已移到 `D:/Work/赛狐/Cursor-claude`。
+已验证：心跳 run `2eab6670-729e-4646-b216-0852b0470693` 在 `D:/Work/赛狐/Cursor-claude` **completed**（17:37），随后停用。旧 `.claude/worktrees` 路径被 Orca 判为 unavailable，worktree 已移到 `D:/Work/赛狐/Cursor-claude`。Handoff check 已在 fresh session 成功读取控制页与 v5 证据。
 
-- `G1b-Claude-DN-WO-JC-SE`：`17,47 * * * *`，workspace `D:/Work/赛狐/Cursor-claude`，precheck `G1B-DN-WO-JC-SE`；原子领取 + 180 分钟超时回收。
+- `G1b-Claude-DN-WO-JC-SE`：`17,47 * * * *`，workspace `D:/Work/赛狐/Cursor-claude`，precheck `G1B-DN-WO-JC-SE`；原子领取 + 180 分钟超时**只标 needs_verification，不自动重派**。
 - `G1b-Codex-R290-Recon`：`52 17 * * *`（今天 17:52），Codex #301，precheck `R290-RECON`，`gpt-6.1-sol`；90 分钟超时。
 - `G1b-Codex-Adapter-Review`：`10 18 * * *`（18:10），只读审查 DN/WO/JC/SE 抽取器/契约缺口，`gpt-6.1-sol`。
 - `G1b-Codex-Cross-Review`：`*/15 19-23 * * *`（19:00 起每 15 分钟），precheck 先刷新额度再判 `G1B-CROSS-REVIEW`；复审不通过会把 Claude 任务设回 ready。
-- `G1b-Handoff-Check`：`41 17 * * *`，验证新会话能读 CONTROL/state/v5 证据。
-- 状态真相：`state.json`；`precheck.py` 原子领取（`locks/<task>.lock`）、超时回收、`schedule_end=2026-10-22 02:00`；Codex 19:00 后要求新鲜额度读数。
-- 新 automation 会话是 **fresh session，不是 fork**；依赖 CONTROL/state/handoff 文档，handoff check 验证这一点。
+- `G1b-Handoff-Check`：17:41 已成功；验证 fresh session 可读 CONTROL/state/v5 证据。
+- 状态真相：`state.json`；`state_update.py` 带全局锁；`precheck.py` 原子领取（`locks/<task>.lock`）、超时回收、`schedule_end=2026-10-22 02:00`；Codex 19:00 后要求新鲜额度读数。
+- 新 automation 会话是 **fresh session，不是 fork**；依赖 CONTROL/state/handoff 文档，handoff check 已验证。
 
 ## Commit / 证据路径
 
