@@ -6,7 +6,7 @@
   - bom_nd / button_nd
   - reason / action：
     * button_only = BOM 无内胆（产品本身没有内胆），按钮会误加 → 执行层要拦
-    * bom_only = BOM 仍挂内胆，但物料停用 → 多半是后来不需要内胆，清理 BOM
+    * bom_only = BOM 仍挂内胆，但物料停用 → 待清理核实，不凭停用状态自动删
     * 两者都以 BOM 为准
 
 只读本地 TSV，不调 API。用法：
@@ -76,7 +76,7 @@ def main():
             elif n.has_variants == "1":
                 reason = "BOM 内胆是变体模板"
             elif n.disabled == "1":
-                reason = "BOM 仍挂停用内胆（可能已不再需要内胆）"
+                reason = "BOM 仍挂停用内胆（需业务确认是否还需要内胆）"
             elif not n.item_code or not size.get(n.item_code):
                 reason = "BOM 内胆无尺寸属性"
             elif size.get(n.item_code) != pk_item.size:
@@ -86,7 +86,7 @@ def main():
             else:
                 reason = "按钮查找遗漏"
         action = {"button_only": "按钮误加，执行层拦截/标记该产品无内胆",
-                  "bom_only": "清理 BOM 里已停用的内胆",
+                  "bom_only": "待清理核实（停用不等于应删，需业务确认是否还需要内胆）",
                   "both": "", "neither": ""}.get(status, "")
         rows.append({
             "finished_item": fin, "pk_items": ",".join(pks),

@@ -20,6 +20,7 @@ tags: [solutions, log]
 - **核实**: `intransit` 与 PO 未入库高度重叠（173 个 SKU×仓同时有，146 个相差 ≤1；`SUM(LEAST)=13,118` 等于全部 intransit，PO 合计 15,567）→ 供给改 `available + GREATEST(intransit, PO)`；SKU 级 321/4,784、池级 296/4,813，发货清单皮壳 210/3,866、成品 72/769、半成品 13/169。
 - **缺数**: `input_health` + `data_flags` 标 `po_missing`/`stock_missing`/`ship_type_missing`/`no_stock_row`；PO 或库存源缺失时建议量置 NULL，不当作 0 供给。
 - **冻结**: 新增 `freeze_snapshot.py`（代码 commit、输入 SHA256、表行数、输入健康度、已知限制）与 `replenishment_trace.py`（5 个代表性商品的预测→供给→建议→组件追溯）；按 #300/#301 分工定位为快速原型支线，结果保持实验标签、不用于下单。
+- **收紧（按 #300 复核）**: `MAX(intransit, PO)` 只是临时假设，未证明逐笔包含；248 条未结 PO 的 `will_arrive_date` 全空，到货时点无法验证，真正风险是把未发/到货过晚的 PO 当近期供给。Cover 合并改为**显式情景假设**，不写成已批准规则；“成品=皮壳+内胆+充棉”改为“典型配置，实际按有效 BOM+发货形态”；BOM 挂停用内胆改为“待清理核实”，不凭停用自动删。对账包：`D:/Work/fzh-order-store/RECONCILIATION_2026-10-21.md`。
 - **更新**: 文档 §10 补 SO 按钮真实逻辑、BOM/按钮偏差统计、`-Cover` 独立性证据；§11 补 ND 物料与变体属性导出；§12 更新皮壳池待确认项。
 
 ## 2026-10-21（修正：分公司补货是「发货形态」，不是 BOM 叶节点补货）

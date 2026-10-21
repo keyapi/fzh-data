@@ -23,7 +23,7 @@ related_components: [demand_forecast, warehouse_restock, sellfox_cover_inventory
 
 ## 1. 产品结构与发货形态
 
-- 成品 `KS` = 皮壳 `PK#` + 内胆 `ND#` + 充棉（PP 棉/海绵）。
+- **典型配置**：成品 `KS` = 皮壳 `PK#` + 内胆 `ND#` + 充棉（PP 棉/海绵）；但**不是所有商品的通式**——有些产品没有内胆。**实际配置按有效 BOM 与发货形态确定**。
 - 半成品只有皮壳/内胆；`PK#`/`ND#` 是 EN 半成品，不是“组件”这个内部业务分类。
 - 发什么由 EN **物料组** `custom_shipment_type_to_branch` 决定：`皮壳` / `半成品` / `成品`。
 - 分公司（USNJ/CENTRADE、USTX/DANEEY、POLAND）收到后做填充/压缩/包装/发货；绍兴主要发皮壳。
@@ -35,14 +35,14 @@ related_components: [demand_forecast, warehouse_restock, sellfox_cover_inventory
 - 实测 1,811 个含皮壳的成品 BOM：
   - BOM 与按钮一致 1,531（84.5%）；
   - **BOM 无内胆但按钮会加 82**：BOM 正确，产品没有内胆；按钮误加，执行层应拦截；
-  - **BOM 有内胆但按钮找不到 62**：其中 61 个是 **BOM 仍挂已停用的内胆物料**（多半是以前有、后来不需要了）→ 清理 BOM，不重新启用物料；1 个是尺寸属性取错。
+  - **BOM 有内胆但按钮找不到 62**：其中 61 个是 **BOM 仍挂已停用的内胆物料** → 标记为“**待清理核实**”，由业务确认该产品是否还需要内胆；**不能仅凭停用状态自动删 BOM**；1 个是尺寸属性取错。
 - 清单与处置：`D:/Work/fzh-order-store/nd_button_gaps.csv`（`status` + `reason` + `action`），生成脚本 `scripts/nd_button_gap_report.py`。
 
 ## 3. 皮壳 `-Cover` 与不带后缀的通途 SKU
 
 - 两者在通途是**两个独立 SKU 数量桶**：卖哪个只扣哪个，变动不镜像；cover 销量约占 4.4%。
-- 因此**可售总量按两者相加**，但不能把同一个数量同步写两遍。
-- **是否同一堆实物未证**：可能是同一批货按渠道拆账，也可能是两堆；需要调拨单/盘点/运营确认。
+- **当前原型按“两者相加”作为情景假设**，用于展示可能的可售总量；这**不是已批准规则**。
+- **未验证**：两者物理上是否同一堆货（可能是同一批货按渠道拆账，也可能两堆）；成品与皮壳是否可替代；cover PO 能否当成品供给。需调拨单/盘点/运营确认。
 - 赛狐的 `PK# -> KS x1` 组合代理是**销售层**共享扣减，不代表通途合并了两个 SKU。
 - `-Cover` 还用于大件拆包裹、同一皮壳配不同填充物（PP 棉/海绵），与 EN `PK#` 未必一一对应；只做物料级合并，不强行映射到单个 EN 变体。
 
@@ -56,13 +56,27 @@ related_components: [demand_forecast, warehouse_restock, sellfox_cover_inventory
 
 - **EN Bin 不可作可用库存**：EN 不扣减通途，`Bin.actual_qty` 只是账面。
 - 分公司库存用通途按仓快照；同一物料的多个通途 SKU 合并为物料×仓池。
-- **intransit 与 PO 未入库不能相加**：实测 173 个 SKU×仓同时有两者，146 个相差 ≤1；`SUM(LEAST(intransit, PO)) = 13,118` 等于全部 intransit，说明 intransit 基本是已发货未入库的 PO。供给按 `available + GREATEST(intransit, PO)` 计一次。
+- **intransit 与 PO 未入库不能直接相加**：实测 173 个 SKU×仓同时有两者，146 个相差 ≤1；`SUM(LEAST(intransit, PO)) = 13,118` 等于全部 intransit，说明两者很可能重叠。
+- **但 `MAX(intransit, PO)` 只是临时假设，不是已验证的去重规则**：没有逐笔订单/包裹关联，不能证明包含关系；248 条未结 PO 的 `will_arrive_date` **全部为空**，无法判断到货时点。真正风险是把尚未发货、到货过晚的 PO 当作近期供给，从而低估近期补货缺口。应保留“在途 / 未发采购 / 重叠未知”三个状态，最终按订单关联 + 预计可售日期裁定。详见 `D:/Work/fzh-order-store/RECONCILIATION_2026-10-21.md`。
 - 3PL（WayfairCG）库存 API 可查但只有 Cranbury 有量（92 SKU / 880 件），权威仍是 Wayfair 后台导出；按库存数量单独展示，不并入分公司 ROP。
 
 ## 6. 缺数与未知
 
 - 缺表/缺数不能静默转 0：`input_health` 记录库存/PO/映射/预测/发货形态的行数与快照时间；`data_flags` 标 `po_missing` / `stock_missing` / `ship_type_missing` / `no_stock_row`；PO 或库存源缺失时建议量置 NULL。
 - 原型结果统一带“未验收、不用于下单”标签。
+
+## 7. 规则状态
+
+| 规则 | 状态 |
+|---|---|
+| 内胆以 BOM 为准；BOM 无内胆=无内胆 | 已核实（代码+SO 数据） |
+| 按钮按物料组+尺寸会误加内胆 | 已核实（82 个反例） |
+| BOM 挂停用内胆 | 待清理核实（停用≠应删） |
+| EN Bin 不可作可用库存 | 已核实（PR #300） |
+| intransit 与 PO 大量重叠 | 已观测 |
+| `MAX(intransit, PO)` 去重 | **假设，未验证** |
+| cover 与不带后缀 SKU 相加为可售 | **情景假设，未验证** |
+| 3PL 库存以通途为准 | 未采用（权威仍是 Wayfair 后台） |
 
 ## Related
 
