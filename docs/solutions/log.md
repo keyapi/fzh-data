@@ -7,6 +7,10 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-10-21（IA 模板改法补精确入口与 Handsontable 提交手法）
+
+- **更新**: `workflow-issues/sps-portal-ia-akn-operations.md` §2/§6.3 修正两处会让人反复试错的地方：**① 入口不是模板文档页** —— 打开 Template 单据后没有 Create New，正确入口是交易列表右上 Create New → 勾「I don't have a source document.」→ Inventory Advice → 选已有模板 → Number of Documents = 1；**② Handsontable 单元格只认真实键盘事件** —— 必须先 JS `focus()` 那个 `textarea.handsontableInput`，再 `keyboard.type` + `Enter`；`locator.fill()` 或 JS 设 value + dispatchEvent 都不会提交，单元格仍显示旧值（2026-10-21 实测反复踩）。日期单元格是带 `MM/DD/YYYY` placeholder 的 `input`，同样用键盘输入 + Enter。另把底部批量发送按钮的判据从「y > 900」改为「取 send 按钮的 last()（本次 y≈850，视口不同会变）」。
+
 ## 2026-10-19（AKN 到底要不要重发：以 Order 的 Ship No Later 为准）
 
 - **更新**: `workflow-issues/sps-portal-ia-akn-operations.md` 新增 **§0「先判断：这一单到底要不要重发 AKN」** —— **断货 ≠ 必须重发**：读 **Order 单据明细行**的 `Ship No Later` / `Delivery Requested`（**原 ACK 表头这两个日期常为空**，类型是 `Acknowledge - No Detail or Change`，拿它当基准会误判）；计划到货 ≤ Ship No Later → 只点开 Order（New → Open），不发 AKN；晚于它 → 重发（Expected Ship = 到货日，Delivery = +7 天）。**同一 SKU 的不同 PO 给期可能不同**（实测白194 一单 14 天、一单 3 个半月），必须逐单看。同时**纠正旧断言**：「一次 Send 发不出去、必须发两次」不是铁律（10-19 一次即成）→ 判据改为**交易列表里出现当天的新 ACK 且 `Accepted`/`In Transit`**。`pb_orders/docs/reference/stockout-closed-loop.md` §2 第 4 步、skill、handoff、`pb_orders/docs/log.md` 同步。

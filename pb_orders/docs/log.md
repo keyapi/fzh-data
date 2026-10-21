@@ -8,6 +8,20 @@ timestamp: 2026-09-22
 
 # 变更日志
 
+## 2026-10-21（第二十八轮：138120551 断货闭环 + IA 模板改法补精确步骤）
+
+- **背景**：美中仓反馈 `PBUS-138120551`（2017724 / TT0031010K0062878，Queen 1 件）无货。
+  UPS 仅建标未取件；SPS Order 已 Complete（ASN 12646 Accepted）；invoice 已开。
+- **执行**：清 20261019 批 invoice（2083.13→2048.14，31→30）；Notion 建行（白色153）；
+  AKN 重发（01/19/2027 / 01/26/2027，新文档 3038979845）；IA 模板改 2878（Stock 0 / On Order 50 /
+  01/19/2027）并补发 10/21–10/27 共 7 份；网页断货清单加 2878；GSheet「处理特殊订单」登记；
+  给 Diane 发英文邮件并 APPEND 到已发送。
+- **文档修正**：`docs/solutions/workflow-issues/sps-portal-ia-akn-operations.md` §2/§6.3 ——
+  **IA 模板入口是交易列表右上 Create New**（模板文档页没有 Create New）；
+  **Handsontable 只认真实键盘事件**：JS `focus()` textarea → `keyboard.type` → `Enter`，
+  不要用 `fill()` 或 JS 设 value + dispatchEvent。
+- **教训**：这两个点上一轮文档写得含糊，导致本次先走了弯路；已把可复跑步骤写死。
+
 ## 2026-10-19（第二十七轮：SPS Order 先点开 + AKN 到底要不要重发）
 
 - **动机**：预检断货后，SPS 里 Order 状态仍是 `New`（下次操作会重复处理）；

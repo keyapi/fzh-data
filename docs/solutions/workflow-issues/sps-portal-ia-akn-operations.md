@@ -3,7 +3,7 @@ okf: v0.1
 type: Reference
 title: SPS 门户的 IA 与 AKN 操作 — 断货后重发 Inventory Advice / PO Acknowledgement
 date: 2026-10-16
-last_updated: 2026-10-19
+last_updated: 2026-10-21
 category: workflow-issues
 module: pb_orders
 problem_type: workflow_issue
@@ -111,18 +111,38 @@ PB 断货后有两条必须在 **SPS 门户**上做的动作，此前**全无步
 每天的定时任务从模板 **`IA Template 20250605 x100`** 建一份 IA 发出去。
 **改模板 = 改以后每一天发的 IA**，比一次性的补发更根本。
 
+**⚠️ 入口不是模板文档页**：打开状态为 `Template` 的那条单据后，页面上**没有** Create New
+（2026-10-21 实测只有 Edit Tags）。正确入口是**交易列表右上角的 Create New**：
+
 ```
-交易列表搜 "IA Template"，打开状态为 Template 的那条
-→ Create New → Expand for full view → Detail 标签（表格虚拟化，要滚动才渲染）
+交易列表 → 右上 Create New
+→ 1 Select Trading Partner: WILLIAMS SONOMA INC
+→ 2 勾选「I don't have a source document.」→ 选 Inventory Advice
+→ 3 选「Select an existing template」→ 下拉选 IA Template 20250605 x100
+     Number of Documents = 1
+→ Create New → 进 Data Entry（1 份草稿，页面标题可能是 UNDEFINED，正常）
+→ 点卡片「Expand for full view」→ Detail 标签
+→ 表格滚到目标行（虚拟化，只渲染可视区；直接 scrollTop = scrollHeight 到底）
 → 逐行改：Stock Quantity / On Order Quantity / On Order date
-→ 【不要点 Save】← 那是保存单据
-→ 右上 ⋮（More Actions）→ Manage Templates
+→ 【不要点单据的 Save】← 那是保存单据，不是保存模板
+→ ⋮（dataEntry_document-actions-dropdown）→ Manage Templates
 → ● Overwrite an Existing Template → 下拉选 IA Template 20250605 x100 → Save
 → 绿条 "Template of this document has been overwritten."
 ```
 
+**改表格单元格的正确手法（先照这个做，别试 `fill()`）**：
+
+| 列 | 编辑器 | 操作 |
+|---|---|---|
+| Stock Quantity / On Order Quantity | `textarea.handsontableInput` 浮层 | 点单元格 → **JS `focus()` 那个 textarea** → `keyboard.type('0')` → `keyboard.press('Enter')` |
+| On Order date | `input`，placeholder `MM/DD/YYYY` | 点单元格（input 自动聚焦）→ `keyboard.type('01/19/2027')` → `Enter` |
+
+**不要用** `locator.fill()` 或 JS 直接设 `textarea.value` + `dispatchEvent` —— Handsontable
+不会把这当成提交，单元格仍显示旧值（2026-10-21 实测反复踩）。**必须走真实键盘事件 + Enter。**
+
 **⚠️ 覆盖模板不是原地改，而是生成一个新的模板文档**顶替旧的（旧的那份变成 `UNDEFINED / Saved` 草稿）。
-所以「打开原文档看内容」会看到**旧值** —— 要**从列表点开状态为 `Template` 的那份**才准。
+所以「打开原文档看内容」会看到**旧值** —— 要**从列表点开状态为 `Template` 的最新那份**才准
+（覆盖后列表里会出现一条新的 Template 文档，时间就是刚才）。
 
 ### 3. ⚠️ IA 的关键特性：**单日、且日期 = 发送日 + 7**
 
@@ -202,27 +222,31 @@ page
 
 ### 6.3 三个操作层面的坑
 
-1. **表格是 Handsontable**：点单元格进编辑态后，会出现一个 `textarea.handsontableInput` 浮层**盖住该格**。
-   直接 `cell.click()` 会被这个浮层**拦截报 "intercepts pointer events"** → 正确做法是**先点一次进编辑态，
-   再对 textarea 键盘输入**（或 `textarea.focus()` 后 `keyboard.type`）。
-   清空再填：`Ctrl+A` → `Delete` → 输入 → `Enter`。
-2. **编辑后表格会滚回顶部**：行是虚拟化的，目标行会离开 DOM。**每次改完要重新 `mouse.wheel` 滚下去**
-   才能再定位到它 —— 所以「定位行」要写成一个可复用的「滚到出现为止」的小函数。
-3. **日期字段是 date-picker**：`fill('MM/DD/YYYY')` 能直接写；但若键盘输入没提交上，
-   可以点开日历用坐标点（`>` 翻月）—— 坐标**每次都可能变**，点前先截图量。
+1. **表格是 Handsontable，提交只认真实键盘事件**：点单元格进编辑态后出现
+   `textarea.handsontableInput` 浮层。**先 `evaluate` 里对它 `focus()`，再用 `page.keyboard.type()`
+   + `keyboard.press('Enter')`**。不要用 `locator.fill()`，也不要在 JS 里设 `value` + `dispatchEvent`
+   —— 单元格会显示旧值（2026-10-21 反复实测）。清空再填：`Ctrl+A` → 输入 → `Enter`。
+2. **编辑后表格会滚回顶部**：行是虚拟化的，目标行会离开 DOM。**每次改完要重新滚到底**
+   （`scrollTop = scrollHeight`）再定位行。
+3. **日期单元格是 `input`（placeholder `MM/DD/YYYY`）**：点单元格后 input 自动聚焦，
+   `keyboard.type('01/19/2027')` → `Enter`。不要依赖 `fill()`；点日历用坐标也可，但坐标每次会变。
 
 ### 6.4 建议的执行顺序（一次跑完）
 
 ```python
 # 伪代码
 fr = page.frame_locator('[data-testid="app-frame"]')
-# A. 改 IA 模板
-进模板文档 → Create New/Expand → Detail → 逐行 find-and-edit → ⋮ → Manage Templates → Overwrite → Save
+# A. 改 IA 模板（入口是列表右上 Create New，不是模板文档页）
+列表 → Create New → Partner → 勾 "I don't have a source document." → Inventory Advice
+     → Select an existing template → Number of Documents = 1
+     → Create New → Expand → Detail → 滚到目标行
+     → 单元格：JS focus textarea + keyboard.type + Enter（数量）；input + type + Enter（日期）
+     → ⋮ → Manage Templates → Overwrite → 选模板 → Save
 # B. 批量补发
 列表 → Create New → Partner → "I don't have a source document." → Inventory Advice
      → Select an existing template → 填 Number of Documents
-     → 逐份改 reference / reportDate
-     → 勾全选 → 底部 ✈ → modalOkBtn
+     → 逐份改 reference / reportDate（header 的 input 可直接 fill）
+     → 勾全选 → 底部 ✈（用 send 按钮的 last()，本次在 y≈850）→ modalOkBtn
 # C. 核对
 列表搜索编号/PO，看状态是 In Transit（AKN）或 Accepted（IA）
 ```
