@@ -6,6 +6,13 @@ title: Codex 供应链独立调研变更日志
 
 # 变更日志
 
+## 2026-10-21 U01关闭与SO批量PoC
+
+- 固定e696fa65，U01全局SE闸门的混合失败/完整成功正例通过，关闭；15旧定义统一接受，不重开旧适配器项。
+- SO PoC复现日期漏窗、PK角色误计nonfamily、max_sos截断无状态、详情缺失仍成功形态4反例；保留pilot补证路径但明确10/10非独立完整性检验。
+- 新增review-family-so-poc与family_so_review_probes，建议同窗/manifest/逐行纠正后再串DN等段；旧35例不变，不读原始数据/凭证、不访问生产、不改Claude文件。
+
+
 ## 2026-10-21 G1b第四轮关闭与PoC交接
 
 - 固定f14c9709，7个修复正例通过；T01–T04/T06关闭。T05只余混合成功SE与无法定位失败SE时优先走ok分支的U01，已用原fetch和main汇总AST复现。

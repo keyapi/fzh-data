@@ -7,6 +7,8 @@ date: 2026-10-20
 
 # 当前保存点（2026-10-20，三角皮壳口径v2与G1b暂停）
 
+2026-10-21最新固定Claudee696fa65：U01已关闭，15定义统一接受；SO批量PoC开始，见[SO首版复审](review-family-so-poc.md)。需修日期漏窗/包装family分类，显式标截断与详情失败；不重开旧T项，不重做综述。
+
 2026-10-21第四轮固定Claudef14c9709：见[关闭项与family PoC交接](review-g1b-round4.md)。T01–T04/T06关闭，T05仅余成功SE＋无法定位失败SE的U01；7正例/1反例。E01–E04接受，可推进family只读批量PoC，下一轮审核实际PoC，不重做综述。
 
 2026-10-21第三轮复审固定Claudef4797aa0：见[修复关闭项与批量ETL实施边界](review-g1b-round3.md)。8个修复正例、6个剩余反例；接受批量方向，仍需修presence/SE未知/批次完整性并补family manifest与增量键。未取业务数据或访问生产。
