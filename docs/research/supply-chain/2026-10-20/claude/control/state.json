@@ -41,7 +41,7 @@
     {
       "id": "G1B-CROSS-REVIEW",
       "owner": "codex",
-      "status": "ready",
+      "status": "in_progress",
       "depends_on": "G1B-DN-WO-JC-SE",
       "scope": "Review Claude's fixed commit + evidence pack; key review on gpt-6.1-sol; no re-review of accepted SO evidence gate",
       "artifacts": [],
@@ -51,7 +51,7 @@
       "unblocked_at": "2026-10-21T18:12:20+08:00",
       "note": "Review v3 at commit e6b3cc9a (not 49a142e0). Evidence v3: zip 0fe66f09…, manifest 23fb363c…, stable 6f12333c…, dispositions 95197f06… (2040 rows). Verify the three rework items: per-(WO,UOM) SE finished buckets with cross-UOM WO sealed as wo_uom_mixed; unresolved SE child propagates to parent SE/WO and blocks C2/audit/evidence; matched malformed JC groups emit explicit invalid rows. Report: docs/research/supply-chain/2026-10-20/claude/experiments/g1_contract/g1b_dn_wo_jc_se.md",
       "updated_at": "2026-10-21T19:13:55+0800",
-      "claimed_at": "2026-10-21T19:04:31.367966+08:00",
+      "claimed_at": "2026-10-21T19:18:17.421635+08:00",
       "claimed_by": "codex"
     },
     {
@@ -76,10 +76,10 @@
     "reset": "18:51:55",
     "reserve_pct": 10,
     "codex_pause": false,
-    "updated": "2026-10-21T19:04:31.230604+08:00",
+    "updated": "2026-10-21T19:18:17.276910+08:00",
     "fresh": true,
     "source": "probe:codex-exec",
-    "last_read_at": "2026-10-21T19:04:31.230604+08:00",
+    "last_read_at": "2026-10-21T19:18:17.275871+08:00",
     "raw_line": "no quota footer marker; tiny codex exec probe completed",
     "resets_at": "18:51"
   },

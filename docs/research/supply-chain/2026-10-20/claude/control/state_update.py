@@ -6,6 +6,15 @@ import time
 
 STATE = pathlib.Path(__file__).with_name("state.json")
 LOCK = pathlib.Path(__file__).with_name("state.lock")
+TASK_LOCKS = pathlib.Path(r"C:/Users/zhang/.agent-ops/fzh-data/locks")
+
+
+def release_task_lock(task_id: str):
+    # precheck holds locks/<task>.lock; clear it when the worker leaves in_progress
+    try:
+        (TASK_LOCKS / f"{task_id}.lock").unlink()
+    except OSError:
+        pass
 
 
 def acquire():
@@ -64,6 +73,8 @@ def main():
             if status in ("completed", "blocked"):
                 task.pop("claimed_at", None)
                 task.pop("claimed_by", None)
+            if status != "in_progress":
+                release_task_lock(task_id)
             print(json.dumps(task, ensure_ascii=False))
         elif cmd == "flag":
             key, raw = sys.argv[2], sys.argv[3]
