@@ -413,6 +413,19 @@ tags: [supply-chain, research, log]
   4,100 非 family 同行，10/10 试点命中**。仍缺页数、DN/WO/JC/SE、水位/tombstone 回归。
 - 仍不宣称 G1 验收；Wayfair/旧仓迁移 pending。
 
+## 2026-10-21 — Codex 862f77d1 family SO PoC 复审（S01–S04）
+
+- **S01**：统一 `--date-basis delivery|transaction`，默认 delivery；group/item_code/pilot
+  全部同窗口过滤，pilot 不再无日期混入。
+- **S02**：family manifest 真正接入：969 KS item / 1,486 客户码 / 2,907 查询码（KS+PK#+ND#）；
+  行角色 KS/PK/ND/group/customer；PK#/ND# 但 base 非 family 记 pending，不判 non-family。
+- **S03**：candidate/selected/truncated/max_sos/status 入 manifest，超限 partial + exit 1。
+- **S04**：detail_failed、line_dispositions、script/manifest/out sha、run_id；缺详情 partial。
+- 同窗重跑（delivery_date）：**52 SO / 1,510 family 行 / 392 pending / 122 out_of_scope**；
+  group 132 行/2 页、item_code 945 行/75 页、pilot 89 行/10 页；10/10 试点命中；status complete。
+- 旧 96/380/4,100 是 pilot 无日期 + PK# 角色未修的口径，不作为同窗结果。
+- 1,510 是 SO 行，不等同 33,719 终端出库件数；DN/WO/JC/SE、水位/tombstone、守恒仍未做。
+
 ## 模板（后续阶段）
 
 ```text

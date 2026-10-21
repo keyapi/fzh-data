@@ -21,6 +21,7 @@ tags: [supply-chain, g1, mapping, index]
 | [g1b_round2_response.md](g1b_round2_response.md) | 对 Codex `fd1029b4` 的 RR01–RR08 修复记录 |
 | [g1b_round3_response.md](g1b_round3_response.md) | 对 Codex `93e6bd1f` 的 T01–T06 修复与 E01–E04 契约 |
 | [g1b_round4_response.md](g1b_round4_response.md) | 对 Codex `c6275051` 的 U01、15 统一与 family PoC |
+| [g1b_round5_response.md](g1b_round5_response.md) | 对 Codex `862f77d1` 的 S01–S04 与同窗 SO 重跑 |
 | [g1b_top10.md](g1b_top10.md) | 修复后 top10 SKU 抽取；未发分解全部对平 |
 | [g1b_warehouse_evidence.md](g1b_warehouse_evidence.md) | 2026-09 仓名统一，旧皮壳并入美中（用户确认+脚本注释）；旧仓 ID/余额审计 pending |
 | [g1b_stock_snapshot.py](g1b_stock_snapshot.py) | 通途 family 库存快照（只读、分块节流） |

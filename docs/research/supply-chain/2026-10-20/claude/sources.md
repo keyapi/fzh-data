@@ -102,6 +102,7 @@ tags: [supply-chain, research, sources]
 | S1-071 | 新 daily run 目录 + manifest hash 校验：hash 全 0 负例 `read=0/complete=false`；缺请求仓 `requested=2/read=1/complete=false` | `out/t02_bad2.json`、`out/t02_test.json` | C | 2026-10-21 | 不重算 hash 背书 | A | g1b_round3_response §重跑 |
 | S1-072 | U01：同批成功 SE + 未定位失败 SE → WO `se_status=query_incomplete`、`finished_qty=None`、`known_subtotal=5` | `build_four_way` 合成测试 | C | 2026-10-21 | 不再把已知小计当完整产量 | A | g1b_round4_response |
 | S1-073 | family SO PoC：group-only 15 SO/135 行/1 pilot；并集后 96 SO/380 family 行/4,100 非 family/10-10 pilot | `out/family_poc/family_poc_manifest.json` | C | 2026-10-21 | group + item_code + pilot 并集必要 | A | 15-full-family-etl E01、g1b_round4_response |
+| S1-074 | 修正 S01–S04 后同窗 SO PoC：52 SO/1,510 family/392 pending/122 out_of_scope；pilot 10/10；status complete | `family_poc_manifest.json` v3 | C | 2026-10-21 | delivery_date 统一；PK/ND 角色；页数/manifest/hash | A | g1b_round5_response |
 
 ## 未找到项（N-###）
 

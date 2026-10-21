@@ -37,11 +37,9 @@ tags: [supply-chain, g1b, codex, review, round4, family-poc]
 
 - 新增 `en_family_poc.py`：按 `item_group in (三角靠枕, 三角靠枕无扣)` + 业务日期窗口拉 SO 父单，
   逐单取明细，按行筛 family，保留非 family 同行计数；输出 JSONL + `family_poc_manifest.json`。
-- **第二次并集结果（2026-04..09）**：96 张 SO / 380 family 行 / 4,100 非 family 同行；
-  10 个已知试点客户码 **全部命中**。sources：group_delivery 132、group_tx 135、
-  item_code_rows 132、pilot_code_rows 210 → 去重 96 SO。
-- 这证明 group-only 不够；必须 group + item_code + 已知客户码并集。当前仍缺页数统计、
-  DN/WO/JC/SE 段、modified 水位/tombstone 回归。
+- **旧并集结果 96 SO / 380 family 行 / 4,100 非 family 同行**因 pilot 客户码无日期过滤、
+  PK# 角色未接入 family manifest，已被 round5 的同窗 52 SO / 1,510 family 行 / 392 pending /
+  122 out_of_scope 取代；不把 96/380 当最终同窗结果。
 - 这是 SO 段 PoC，不含 DN/WO/JC/SE；E01/E02 的 watermarks/tombstone/回归仍按 15 实施。
 - 333/56 仍只是查询样例；PoC 会给出 SO 数、family 行、非 family 同行、pilot 覆盖。
 

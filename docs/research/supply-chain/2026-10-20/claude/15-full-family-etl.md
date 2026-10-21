@@ -88,8 +88,9 @@ EN SO/DN/WO/JC/SE ───┘        ↓
 - 交叉覆盖：两个 `item_group` 筛选 + manifest item_code 并集 + 已知 9 个试点客户码，
   不能因为不在当前两个组就漏掉已知试点。
   **实测 group-only 只找到 15 SO/135 行，10 个试点客户码只命中 1 个**，所以必须做并集。
-  并集后（group delivery/tx + item_code chunks + 10 个试点客户码）：**96 SO / 380 family 行 /
-  4,100 非 family 同行，10/10 试点命中**。页数、DN/WO/JC/SE 段仍待补。
+  修正 S01/S02 后同窗（delivery_date）结果：**52 SO / 1,510 family 行 / 392 pending /
+  122 out_of_scope，10/10 试点命中**；group 2 页、item_code 75 页、pilot 10 页。
+  旧 96/380 是 pilot 无日期过滤 + PK# 被当非 family 的口径，不作为同窗结果。
 - manifest 记录：查询条件、333/56、原始页数、筛选后行数、未匹配/排除原因。
 - 父单明细字段按本仓库接口核对（既有代码遍历 `items`），不把 `order_items` 当唯一真实字段。
 
