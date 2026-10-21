@@ -10,3 +10,7 @@ t0*_*.json
 family_poc/
 family_poc_manifest.json
 family_poc*.log
+dn_wo_jc_se/
+dn_wo_jc_se_r2/
+dn_wo_jc_se_evidence_*.zip
+dn_wo_jc_se_dry/
