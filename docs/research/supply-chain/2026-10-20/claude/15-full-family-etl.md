@@ -114,23 +114,28 @@ EN SO/DN/WO/JC/SE ───┘        ↓
   `candidate_boms[]`（全部已提交且 `eligible_at_evidence=true`，按 canonical/角色/
   方向/UOM/比例一致；default 与今天的 `is_active` 都不消解冲突）。比例按
   **组件 stock 累计 / 输出 stock 数量** 归一，`10 输出配 10 组件` 才为 1；
-  UOM 换算必须已知且正有限。历史窗口只能是 `historical_verified +
-  historical_basis`，`current_structure_only` 不得回填为历史真值；
-  停用 Item 可保留历史 family 关系，但 `current_planning_eligible=false`。
+  同 UOM 下 `qty` 必须等于 `stock_qty`，factor 若给出只能为 1；UOM 换算必须已知且
+  正有限。历史窗口只能是 `historical_verified + historical_basis`，
+  `current_structure_only` 不得回填为历史真值；停用 Item 可保留历史 family 关系，
+  但 `current_planning_eligible=false`，且与 `disabled` 矛盾时标 conflict。
+  `schema_version/rule_version/source/site` 必须命中白名单并与当前 run 的 EN 端点绑定；
+  源 Item/BOM hash 只是受信 producer 边界，consumer 不重取源文档。
   `evidence_ref` 由消费者从已验证 BOM 派生，不读生产者字符串。
 - **family 与 demand_role 分离**：行上同时记 `family_membership`
-  （ks_finished/cover/inner）、`demand_role`（terminal_finished/independent_cover/
-  assembly_component/unknown）、`canonical_ks`、`cover_equivalent_factor`、
-  `demand_event_id`、`counting_status`。内胆独立销售不产生皮壳需求；
-  SO 行不等于终端销售，本 PoC 不做事件级去重、不输出终端需求合计。
+  （ks_finished/cover/inner）、`demand_role_candidate`（`terminal_finished_candidate/
+  independent_cover_candidate/assembly_component_candidate/unknown`）、`canonical_ks`、
+  `cover_equivalent_factor`、`demand_event_candidate_id`、`counting_status`。
+  内胆独立销售不产生皮壳需求；SO 行不等于终端销售，本 PoC 不做事件级去重、
+  不输出终端需求合计，`cover_equivalent_factor` 不参与任何聚合或补货量。
+  `line.name` 缺失/重复记 invalid + partial 并保留 `line_index`；
   `qty` 缺数/坏值/NaN/负数记 None + `qty_status`，不转 0（修 `iss.num` 的缺口）。
 - 证据表随 `family_manifest` 一起版本化，manifest 记录其
   `schema_version/site/as_of/producer/rule_version/payload_sha256/sha256/
   entries/by_evidence/by_scope`；证据表里实际出现的 code 并入候选查询并记录
   `variant_query_codes_added`。
-- 契约由离线单测 `test_en_family_poc.py` 覆盖（重复 key、假标签、任意 ref、
-  方向/比例/UOM/有效期/多 BOM 冲突/历史范围/demand_role/qty fail-closed），
-  不联网、不调用 `main()`。
+- 契约由离线单测 `test_en_family_poc.py` 覆盖（44 条：重复 key、假标签、任意 ref、
+  方向/比例/同 UOM 数量矛盾/UOM 换算/有效期/多 BOM 冲突/历史范围/行键/
+  demand_role 候选/qty fail-closed），不联网、不调用 `main()`。
 - 父单明细字段按本仓库接口核对（既有代码遍历 `items`），不把 `order_items` 当唯一真实字段。
 
 ### 2.6 E02 增量与失败重跑

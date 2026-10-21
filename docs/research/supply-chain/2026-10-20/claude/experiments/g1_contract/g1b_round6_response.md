@@ -84,12 +84,32 @@ PK=皮壳、ND=内胆；方向固定为 **KS 成品 BOM 消耗 PK/ND 组件**
   `None/requires_item_uom`，不猜。
 - SO 行不等于终端销售；本 PoC 不做事件级去重、不输出终端需求合计。
 
-**离线单测**（`test_en_family_poc.py`，34 条，全绿；不联网、不调用 `main()`）覆盖：
+**离线单测**（`test_en_family_poc.py`，44 条，全绿；不联网、不调用 `main()`）覆盖：
 仅标签记录、非 family base、角色/方向冲突、ratio=0.5 与 ratio 字段不一致、
-UOM 换算缺失/不一致、过期、current_structure_only、历史无 basis、多 BOM 冲突、
-候选缺 eligible_at_evidence、当前 inactive 但当时有效、选中 BOM 不在候选、
-停用 Item 历史保留、缺 current_planning_eligible、行 UOM 不一致、重复 JSON key、
-payload 篡改、缺 producer/schema/site/as_of、合法加载、demand_role 与 qty fail-closed。
+同 UOM `qty!=stock_qty`/factor≠1、UOM 换算缺失/不一致、过期、
+current_structure_only、历史无 basis、多 BOM 冲突、候选缺 eligible_at_evidence、
+当前 inactive 但当时有效、选中 BOM 不在候选、停用 Item 历史保留、
+缺 current_planning_eligible、disabled 与 eligible 冲突、缺行 UOM、行 UOM 不一致、
+坏 docstatus 不抛异常、未知 record schema、重复 JSON key、payload 篡改、
+缺 producer/schema/version/source/site/as_of、未知 schema/rule/source/site、
+行键缺失/重复、validator 异常隔离、demand_role 候选标签与 qty fail-closed。
+
+### P1/P2 修复（bb25327b 复审后）
+
+| 项 | 修复 |
+|---|---|
+| E1 同 UOM 数量矛盾 | `uom == stock_uom` 时强制 `qty ≈ stock_qty`；若给 `conversion_factor` 只能为 1；component/output 两侧都校验。新增 `variant_quantity_mismatch`。 |
+| E2 schema/site/source | 文件层白名单 `schema_version=variant_evidence/1`、`rule_version=variant-evidence/1`、`source=erpnext.vilavi.cn`，`site` 必须等于当前 run 的 `ENV_URLS["prod"]`；`version/source` 必填；未知值 exit 2。manifest 记 `schema_decision`。条目 `schema_version` 也必须白名单，否则 `variant_unsupported_record_schema`。 |
+| E3 坏 docstatus | `int()` 解析失败 → `variant_record_invalid`，不抛异常；`classify_line` 捕获 validator 异常 → `variant_record_invalid` + `exception:<Type>`；结构性错误计入 `variant_record_error_count`，run 标 partial。 |
+| E4 行 UOM / eligibility | 行 `uom` 缺失 → `variant_line_uom_missing`，不再放行；`item.disabled=true` 且 `current_planning_eligible=true` → `variant_planning_eligibility_conflict`。Item/BOM hash 明确为受信 producer 边界，consumer 不重取源文档。 |
+| 行键 | 新增 `line_index`、`line_key_status`；`line.name` 缺失/重复记 `line_key_invalid/duplicate`、pending、run partial；不再生成 `A:None`。 |
+| demand | `demand_role` 改为 `terminal_finished_candidate / independent_cover_candidate / assembly_component_candidate`，`counting_status` 一律 `event_unverified`；`demand_event_id` 改名 `demand_event_candidate_id`；manifest 记 `demand_quantity_available=false`、`cover_equivalent_factor_consumed=false`。 |
+
+**R1/R2 证据包**（bb25327b，提交前执行，未用于验收）：
+
+- R1 `out/family_poc/r1_bb25327b/`：manifest sha256 `4275f55f...`，audit `5ccf2d1d...`；R2 `out/family_poc/r2_bb25327b/`：manifest `57dd5d3c...`，audit `5c7ccded...`。
+- 两次 52 SO / 2,024 行 / family 132 / pending 1,770 / out_of_scope 122；忽略 `run_id` 的 audit SHA256 均为 `4fec233b...`；`audit_ok=true`。
+- 五个详情失败状态本次真实数据未触发（`branch_exercised=false`）。
 
 ### 影响口径
 

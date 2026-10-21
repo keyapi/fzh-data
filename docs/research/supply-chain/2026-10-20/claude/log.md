@@ -453,6 +453,26 @@ tags: [supply-chain, research, log]
 - `status` 只表示查询/详情完整性；逐行证据完成度单列 `adjudication`。
 - 本轮**未跑真实回放**（按用户要求单列验收）；不发布新数字，不宣称 G1 验收。
 
+## 2026-10-21 — bb25327b 复审后 P1/P2 修复
+
+- Codex CONDITIONAL GO：S04/candidate union/34 tests VERIFIED；PK/ND/demand PARTIAL。
+- 本轮按 `next-steps.md` 只修 P1/P2，不跑生产：
+  - **E1** 同 UOM 强制 `qty≈stock_qty`、factor 若给出只能为 1，component/output 两侧；
+  - **E2** schema/rule/source/site 白名单与当前 run 绑定，`version/source` 必填，
+    manifest 记 `schema_decision`，未知值 exit 2；条目 schema 也白名单；
+  - **E3** 坏 `docstatus`/validator 异常转 `variant_record_invalid` 并继续，
+    结构错误标 partial（`variant_record_error`）；
+  - **E4** 行 UOM 缺失 `variant_line_uom_missing`；disabled 与 eligible 矛盾
+    `variant_planning_eligibility_conflict`；源 hash 明确为受信 producer 边界；
+  - **行键** 缺失/重复 `line_key_invalid/duplicate` + partial，保留 `line_index`，
+    改 `demand_event_candidate_id`，不再生成 `A:None`；
+  - **demand** 角色改为 `*_candidate`，counting 一律 `event_unverified`，
+    manifest 明确 `demand_quantity_available=false`、factor 不消费。
+- R1/R2 有界只读回放（bb25327b，未用于验收）：52 SO / 2,024 行 / family 132 /
+  pending 1,770 / out_of_scope 122；两次忽略 run_id 的 audit SHA 相同
+  `4fec233b...`，`audit_ok=true`；五个详情失败状态真实数据未触发。
+- 离线单测 44 条全绿（不联网、不调 main）；未提交 out/ 产物。
+
 ## 模板（后续阶段）
 
 ```text

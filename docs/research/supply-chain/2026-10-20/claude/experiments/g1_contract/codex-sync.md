@@ -16,6 +16,8 @@ tags: [supply-chain, codex, g1, sync, consolidated]
 > （U01 关闭；S01–S04 待修）；**S01–S04 已修，同窗 SO 52/1510/392/122 重跑完成**。
 > 之后 Codex `run_86b2a4645f21` 复审：S01/S03 verified，S02/S04 partially；
 > **S02/S04 已按证据门+逐行审计修复，回放待单独验收**（见 `g1b_round6_response.md`）。
+> bb25327b 复审（CONDITIONAL GO）：S04/candidate union/34 tests VERIFIED；
+> **P1 E1/E2、P2 E3/E4/行键/demand 标签已修，44 tests 全绿，待同一 Codex 会话终审**。
 
 ## 0. Codex 当前所处位置（先对齐）
 

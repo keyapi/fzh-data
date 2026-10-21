@@ -61,11 +61,20 @@ def make_record(**overrides):
     return rec
 
 
-def rules(rec=None, *, family_items=None, line_uom=""):
+def rules(rec=None, *, family_items=None, line_uom="个"):
     return fp.validate_variant_record(
         CODE, BASE, "PK", rec if rec is not None else make_record(),
         family_items if family_items is not None else {BASE},
         WIN_FROM, WIN_TO, line_uom)
+
+
+class LineKeyTest(unittest.TestCase):
+    def test_missing_and_duplicate(self):
+        seen = set()
+        self.assertEqual(fp.check_line_key("A", "", seen), "invalid_missing")
+        self.assertEqual(fp.check_line_key("A", "L1", seen), "ok")
+        self.assertEqual(fp.check_line_key("A", "L1", seen), "invalid_duplicate")
+        self.assertEqual(fp.check_line_key("B", "L1", seen), "ok")
 
 
 class VariantRecordContractTest(unittest.TestCase):
@@ -154,6 +163,41 @@ class VariantRecordContractTest(unittest.TestCase):
         rec["candidate_boms"][0]["is_active"] = False
         self.assertTrue(rules(rec)[0])
 
+    def test_same_uom_qty_stock_mismatch(self):
+        rec = make_record()
+        rec["component"].update({"qty": 20, "stock_qty": 10})
+        self.assertEqual(rules(rec)[1], "variant_quantity_mismatch")
+
+    def test_same_uom_factor_must_be_one(self):
+        rec = make_record()
+        rec["component"]["conversion_factor"] = 2
+        self.assertEqual(rules(rec)[1], "variant_uom_conversion_mismatch")
+
+    def test_output_side_same_uom_mismatch(self):
+        rec = make_record()
+        rec["output"].update({"qty": 9, "stock_qty": 10})
+        self.assertEqual(rules(rec)[1], "variant_quantity_mismatch")
+
+    def test_unsupported_record_schema(self):
+        rec = make_record(schema_version="variant_evidence/999")
+        self.assertEqual(rules(rec)[1], "variant_unsupported_record_schema")
+
+    def test_malformed_docstatus_does_not_raise(self):
+        rec = make_record()
+        rec["candidate_boms"][0]["docstatus"] = "bad"
+        ok, reason, _, detail = rules(rec)
+        self.assertFalse(ok)
+        self.assertEqual(reason, "variant_record_invalid")
+        self.assertEqual(detail, "candidate.docstatus:BOM-A")
+
+    def test_missing_line_uom(self):
+        self.assertEqual(rules(None, line_uom="")[1], "variant_line_uom_missing")
+
+    def test_disabled_with_current_planning_true_is_conflict(self):
+        rec = make_record(current_planning_eligible=True)
+        rec["item"]["disabled"] = 1
+        self.assertEqual(rules(rec)[1], "variant_planning_eligibility_conflict")
+
     def test_selected_bom_not_in_candidates(self):
         rec = make_record()
         rec["bom"]["name"] = "BOM-Z"
@@ -201,21 +245,34 @@ class ClassifyLineTest(unittest.TestCase):
         self.assertEqual(out[0], "pending")
         self.assertEqual(out[2], "variant_base_conflict")
 
+    def test_validator_exception_is_contained(self):
+        class BadRec(dict):
+            def get(self, key, default=None):
+                raise RuntimeError("boom")
+
+        out = fp.classify_line(CODE, "x", "", [], {BASE}, set(),
+                               {CODE: BadRec()}, "evidence",
+                               WIN_FROM, WIN_TO, "个")
+        self.assertEqual(out[0], "pending")
+        self.assertEqual(out[2], "variant_record_invalid")
+        self.assertEqual(out[4], "exception:RuntimeError")
+
 
 class DemandRoleTest(unittest.TestCase):
-    def test_terminal_finished_counts_one_cover(self):
+    def test_terminal_finished_is_candidate_only(self):
         self.assertEqual(fp.derive_demand("family", "KS", ""),
-                         ("ks_finished", "terminal_finished", 1,
+                         ("ks_finished", "terminal_finished_candidate", 1,
                           "count_cover_1to1_event_unverified"))
 
-    def test_cover_only_customer_is_independent_cover(self):
+    def test_cover_only_customer_is_independent_cover_candidate(self):
         self.assertEqual(fp.derive_demand("family", "KS", "CODE-1-Cover"),
-                         ("ks_finished", "independent_cover", 1,
-                          "count_cover_1to1"))
+                         ("ks_finished", "independent_cover_candidate", 1,
+                          "count_cover_1to1_event_unverified"))
 
     def test_inner_does_not_create_cover_demand(self):
         self.assertEqual(fp.derive_demand("family", "ND", ""),
-                         ("inner", "assembly_component", 0, "no_cover_demand"))
+                         ("inner", "assembly_component_candidate", 0,
+                          "no_cover_demand"))
 
     def test_pending_has_no_demand_role(self):
         self.assertEqual(fp.derive_demand("pending", "PK", ""),
@@ -254,10 +311,10 @@ class VariantFileContractTest(unittest.TestCase):
         doc = {
             "schema_version": "variant_evidence/1",
             "version": "family_variant_manifest/test",
-            "source": "stub",
-            "site": "stub://local",
+            "source": "erpnext.vilavi.cn",
+            "site": fp.EXPECTED_SITE,
             "as_of": "2026-10-21",
-            "rule_version": "test/1",
+            "rule_version": "variant-evidence/1",
             "producer": {"name": "unit-test", "version": "1"},
             "items": {CODE: make_record()},
         }
@@ -272,7 +329,7 @@ class VariantFileContractTest(unittest.TestCase):
 
     def test_payload_hash_mismatch_rejected(self):
         doc = self.make_doc()
-        doc["rule_version"] = "tampered"
+        doc["producer"]["version"] = "2"
         with self.assertRaisesRegex(ValueError, "payload_sha256"):
             fp.load_variant_evidence(self.write(json.dumps(doc)))
 
@@ -284,11 +341,23 @@ class VariantFileContractTest(unittest.TestCase):
             fp.load_variant_evidence(self.write(json.dumps(doc)))
 
     def test_missing_schema_or_site_rejected(self):
-        for field in ("schema_version", "site", "as_of"):
+        for field in ("schema_version", "version", "source", "site", "as_of"):
             doc = self.make_doc()
             doc.pop(field)
             doc["payload_sha256"] = self.payload_hash(doc)
             with self.assertRaisesRegex(ValueError, field):
+                fp.load_variant_evidence(self.write(json.dumps(doc)))
+
+    def test_unsupported_schema_rule_source_site_rejected(self):
+        cases = {
+            "schema_version": "variant_evidence/999",
+            "rule_version": "unknown/999",
+            "source": "another-site",
+            "site": "https://another.example",
+        }
+        for field, value in cases.items():
+            doc = self.make_doc(**{field: value})
+            with self.assertRaises(ValueError):
                 fp.load_variant_evidence(self.write(json.dumps(doc)))
 
     def test_valid_file_loads_with_verified_payload_hash(self):

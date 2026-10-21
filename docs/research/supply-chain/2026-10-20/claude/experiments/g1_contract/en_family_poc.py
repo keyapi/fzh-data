@@ -114,13 +114,23 @@ def load_family_manifest(path: Path):
     return manifest
 
 
-def load_variant_evidence(path: Path) -> dict:
+SUPPORTED_SCHEMA_VERSIONS = {"variant_evidence/1"}
+SUPPORTED_RULE_VERSIONS = {"variant-evidence/1"}
+SUPPORTED_SOURCES = {"erpnext.vilavi.cn"}
+EXPECTED_SITE = iss.ENV_URLS["prod"]
+
+
+def load_variant_evidence(path: Path, expected_site: str = EXPECTED_SITE) -> dict:
     """读取并校验 variant→KS 证据表（producer/consumer 信任契约的文件层）。
 
     `payload_sha256` 覆盖 schema_version/version/source/site/as_of/producer/
     rule_version/items；文件层不可信即 exit 2：不可读、重复 key、缺 producer/
-    schema/site/as_of/rule_version/payload_sha256、payload_sha256 不匹配。
+    schema/site/as_of/rule_version/payload_sha256、schema/rule 不在白名单、
+    source 不在白名单、site 与当前 run 不匹配、payload_sha256 不匹配。
     条目级问题留给 classify_line 记 pending。
+
+    注意：Item/BOM hash 只是受信 producer 的边界；consumer 不重取源文档，
+    也不宣称已独立核实源 blob 或枚举完所有 BOM。
     """
     try:
         raw = path.read_bytes()
@@ -129,9 +139,18 @@ def load_variant_evidence(path: Path) -> dict:
         raise ValueError(f"variant manifest 不可读: {e}") from e
     if not isinstance(doc, dict):
         raise ValueError("variant manifest 顶层必须是对象")
-    for field in ("schema_version", "site", "as_of"):
+    for field in ("schema_version", "version", "source", "site", "as_of"):
         if not str(doc.get(field) or "").strip():
             raise ValueError(f"variant manifest 缺 {field}")
+    schema_version = str(doc.get("schema_version")).strip()
+    if schema_version not in SUPPORTED_SCHEMA_VERSIONS:
+        raise ValueError(f"不支持的 schema_version: {schema_version}")
+    site = str(doc.get("site")).strip()
+    if site != expected_site:
+        raise ValueError(f"variant manifest site 不匹配: {site} != {expected_site}")
+    source = str(doc.get("source")).strip()
+    if source not in SUPPORTED_SOURCES:
+        raise ValueError(f"不支持的 source: {source}")
     if not _parse_iso_date(doc.get("as_of")):
         raise ValueError("variant manifest as_of 必须是 YYYY-MM-DD")
     producer = doc.get("producer")
@@ -139,8 +158,8 @@ def load_variant_evidence(path: Path) -> dict:
             or not str(producer.get("version") or "").strip()):
         raise ValueError("variant manifest 缺 producer.name/version")
     rule_version = str(doc.get("rule_version") or "").strip()
-    if not rule_version:
-        raise ValueError("variant manifest 缺 rule_version")
+    if rule_version not in SUPPORTED_RULE_VERSIONS:
+        raise ValueError(f"不支持的 rule_version: {rule_version or '(empty)'}")
     items = doc.get("items")
     if not isinstance(items, dict):
         raise ValueError("variant manifest 缺少 items 对象")
@@ -164,10 +183,10 @@ def load_variant_evidence(path: Path) -> dict:
     return {
         "path": str(path),
         "sha256": sha256_bytes(raw),
-        "schema_version": str(doc.get("schema_version")),
-        "version": str(doc.get("version") or ""),
-        "source": str(doc.get("source") or ""),
-        "site": str(doc.get("site")),
+        "schema_version": schema_version,
+        "version": str(doc.get("version")),
+        "source": source,
+        "site": site,
         "as_of": str(doc.get("as_of")),
         "producer": producer,
         "rule_version": rule_version,
@@ -176,6 +195,14 @@ def load_variant_evidence(path: Path) -> dict:
         "entries": len(items),
         "by_evidence": dict(sorted(by_evidence.items())),
         "by_scope": dict(sorted(by_scope.items())),
+        "schema_decision": {
+            "accepted": True,
+            "schema_version": schema_version,
+            "rule_version": rule_version,
+            "source": source,
+            "site": site,
+            "expected_site": expected_site,
+        },
     }
 
 
@@ -188,6 +215,12 @@ def normalize_item(item: str) -> tuple[str, str]:
 
 VARIANT_DIRECTIONS = {"ks_parent_variant_component"}
 MEMBERSHIP_BY_ROLE = {"KS": "ks_finished", "PK": "cover", "ND": "inner"}
+STRUCTURAL_VARIANT_REASONS = {
+    "variant_record_invalid", "variant_schema_missing",
+    "variant_unsupported_record_schema", "variant_quantity_invalid",
+    "variant_quantity_mismatch", "variant_uom_conversion_missing",
+    "variant_uom_conversion_mismatch", "variant_planning_eligibility_conflict",
+}
 
 
 def _finite_positive(value) -> float | None:
@@ -213,11 +246,23 @@ def _check_quantity(part, label: str) -> tuple[bool, str, str]:
         return False, "variant_quantity_invalid", f"{label}.qty"
     uom = str(part["uom"]).strip()
     stock_uom = str(part["stock_uom"]).strip()
-    if uom != stock_uom:
+    tol = max(1e-9, abs(stock_qty) * 1e-9)
+    if uom == stock_uom:
+        # 同 UOM 下 qty 与 stock_qty 必须一致；factor 若给出只能为 1。
+        if abs(qty - stock_qty) > tol:
+            return False, "variant_quantity_mismatch", f"{label}.stock_qty"
+        factor_raw = part.get("conversion_factor")
+        if factor_raw is not None:
+            factor = _finite_positive(factor_raw)
+            if factor is None or abs(factor - 1.0) > 1e-9:
+                return False, "variant_uom_conversion_mismatch", \
+                    f"{label}.conversion_factor"
+    else:
         factor = _finite_positive(part.get("conversion_factor"))
         if factor is None:
-            return False, "variant_uom_conversion_missing", f"{label}.conversion_factor"
-        if abs(qty * factor - stock_qty) > max(1e-9, abs(stock_qty) * 1e-9):
+            return False, "variant_uom_conversion_missing", \
+                f"{label}.conversion_factor"
+        if abs(qty * factor - stock_qty) > tol:
             return False, "variant_uom_conversion_mismatch", f"{label}.stock_qty"
     return True, "", ""
 
@@ -231,7 +276,11 @@ def _check_candidate(cand, code: str, base: str, direction: str, uom: str
         if not str(cand.get(field) or "").strip():
             return False, "variant_record_invalid", f"candidate.{field}"
     name = str(cand.get("name"))
-    if int(cand.get("docstatus") or 0) != 1:
+    try:
+        docstatus = int(cand.get("docstatus"))
+    except (TypeError, ValueError):
+        return False, "variant_record_invalid", f"candidate.docstatus:{name}"
+    if docstatus != 1:
         return False, "variant_bom_not_submitted", f"candidate.docstatus:{name}"
     # 历史证据看“当时是否有效”，不是今天的 is_active；current planning 由
     # current_planning_eligible 与当前 active 另判。
@@ -265,8 +314,11 @@ def validate_variant_record(code: str, base: str, prefix_role: str, rec,
     """
     if not isinstance(rec, dict):
         return False, "variant_record_invalid", "", "record"
-    if not str(rec.get("schema_version") or "").strip():
+    rec_schema = str(rec.get("schema_version") or "").strip()
+    if not rec_schema:
         return False, "variant_schema_missing", "", "schema_version"
+    if rec_schema not in SUPPORTED_SCHEMA_VERSIONS:
+        return False, "variant_unsupported_record_schema", "", "schema_version"
     canonical = str(rec.get("canonical_ks") or "")
     if not canonical:
         return False, "variant_record_invalid", "", "canonical_ks"
@@ -312,7 +364,9 @@ def validate_variant_record(code: str, base: str, prefix_role: str, rec,
     if (str(comp["stock_uom"]).strip() != uom
             or str(out["stock_uom"]).strip() != uom):
         return False, "variant_uom_mismatch", "", "stock_uom"
-    if line_uom and str(line_uom).strip() != str(comp["uom"]).strip():
+    if not line_uom or not str(line_uom).strip():
+        return False, "variant_line_uom_missing", "", "line.uom"
+    if str(line_uom).strip() != str(comp["uom"]).strip():
         return False, "variant_line_uom_mismatch", "", "line.uom"
     ratio_calc = float(comp["stock_qty"]) / float(out["stock_qty"])
     if abs(ratio_calc - 1.0) > 1e-9:
@@ -327,6 +381,9 @@ def validate_variant_record(code: str, base: str, prefix_role: str, rec,
         return False, "variant_item_mismatch", "", "item.name"
     if not isinstance(rec.get("current_planning_eligible"), bool):
         return False, "variant_current_planning_flag_missing", "", "current_planning_eligible"
+    if item.get("disabled") and rec["current_planning_eligible"] is True:
+        return False, "variant_planning_eligibility_conflict", "", \
+            "current_planning_eligible"
     if str(item.get("stock_uom") or "").strip() != uom:
         return False, "variant_uom_mismatch", "", "item.stock_uom"
     for field in ("sha256", "modified"):
@@ -377,8 +434,13 @@ def classify_line(item: str, group: str, cust: str, groups: list[str],
             reason = ("variant_manifest_absent" if variant_mode == "none"
                       else "variant_not_in_manifest")
             return "pending", prefix_role, reason, "", ""
-        ok, reason, evidence_ref, detail = validate_variant_record(
-            item, base, prefix_role, rec, family_items, date_from, date_to, line_uom)
+        try:
+            ok, reason, evidence_ref, detail = validate_variant_record(
+                item, base, prefix_role, rec, family_items, date_from, date_to,
+                line_uom)
+        except Exception as e:  # noqa: BLE001 - 单条坏记录不中断整轮
+            return "pending", prefix_role, "variant_record_invalid", "", \
+                f"exception:{type(e).__name__}"
         if ok:
             return "family", prefix_role, reason, evidence_ref, ""
         return "pending", prefix_role, reason, "", detail
@@ -393,19 +455,37 @@ def classify_line(item: str, group: str, cust: str, groups: list[str],
 
 def derive_demand(disposition: str, role: str, cust: str
                   ) -> tuple[str, str, float | None, str]:
-    """family_membership 与 demand_role 分离；family 不是数量加总开关。"""
+    """family_membership 与 demand_role 分离；family 不是数量加总开关。
+
+    所有 demand_role 都是候选，不代表已证明的终端销售事件；
+    cover_equivalent_factor 只能作行级候选，禁止用于任何合计或补货量。
+    """
     membership = MEMBERSHIP_BY_ROLE.get(role, "unknown")
     if disposition != "family" or membership == "unknown":
         return membership, "unknown", None, "not_counted"
     if membership == "cover":
-        return membership, "independent_cover", 1, "count_cover_1to1"
+        return membership, "independent_cover_candidate", 1, \
+            "count_cover_1to1_event_unverified"
     if membership == "inner":
-        return membership, "assembly_component", 0, "no_cover_demand"
+        return membership, "assembly_component_candidate", 0, "no_cover_demand"
     if membership == "ks_finished":
         if cust.endswith("-Cover"):
-            return membership, "independent_cover", 1, "count_cover_1to1"
-        return membership, "terminal_finished", 1, "count_cover_1to1_event_unverified"
+            return membership, "independent_cover_candidate", 1, \
+                "count_cover_1to1_event_unverified"
+        return membership, "terminal_finished_candidate", 1, \
+            "count_cover_1to1_event_unverified"
     return membership, "unknown", None, "not_counted"
+
+
+def check_line_key(so: str, line_id: str, seen: set[tuple[str, str]]) -> str:
+    """行键质量：缺失/重复不得当成可去重事件；保留原行序号由调用方记录。"""
+    if not line_id:
+        return "invalid_missing"
+    key = (so, line_id)
+    if key in seen:
+        return "invalid_duplicate"
+    seen.add(key)
+    return "ok"
 
 
 def parse_qty(value) -> tuple[float | None, str]:
@@ -579,9 +659,12 @@ def main():
     pilot_seen_family = set()
     variant_validation_errors: list[dict] = []
     variant_validation_error_count = 0
+    variant_record_error_count = 0
+    variant_record_errors: list[dict] = []
     membership_counts = defaultdict(int)
     demand_role_counts = defaultdict(int)
     qty_status_counts = defaultdict(int)
+    line_key_counts = defaultdict(int)
 
     with out_path.open("w", encoding="utf-8") as f, \
             audit_path.open("w", encoding="utf-8") as af:
@@ -612,19 +695,34 @@ def main():
                 so_detail_failures.append(failure)
                 continue
             srcs = sorted(matched_sources.get(so["name"], []))
-            for line in d.get("items", []):
+            seen_line_ids: set[tuple[str, str]] = set()
+            for line_index, line in enumerate(d.get("items", [])):
                 item = str(line.get("item_code") or "")
                 cust = str(line.get("customer_item_code") or "")
                 group = str(line.get("item_group") or "")
                 base_item, prefix_role = normalize_item(item)
                 line_uom = str(line.get("uom") or "")
-                disposition, role, reason_code, evidence_ref, detail = classify_line(
-                    item, group, cust, groups, family_items, family_codes,
-                    variant_items, variant_mode, date_from, date_to, line_uom)
-                if detail:
+                line_id = str(line.get("name") or "")
+                line_key_status = check_line_key(so["name"], line_id, seen_line_ids)
+                line_key_counts[line_key_status] += 1
+                if line_key_status != "ok":
+                    disposition, role, reason_code, evidence_ref, detail = (
+                        "pending", prefix_role,
+                        ("line_key_invalid" if line_key_status == "invalid_missing"
+                         else "line_key_duplicate"), "", "line.name")
+                else:
+                    disposition, role, reason_code, evidence_ref, detail = classify_line(
+                        item, group, cust, groups, family_items, family_codes,
+                        variant_items, variant_mode, date_from, date_to, line_uom)
+                if detail and reason_code not in ("line_key_invalid", "line_key_duplicate"):
                     variant_validation_error_count += 1
                     if len(variant_validation_errors) < 200:
                         variant_validation_errors.append({
+                            "code": item, "reason": reason_code, "detail": detail})
+                if reason_code in STRUCTURAL_VARIANT_REASONS:
+                    variant_record_error_count += 1
+                    if len(variant_record_errors) < 200:
+                        variant_record_errors.append({
                             "code": item, "reason": reason_code, "detail": detail})
                 customer_hit = cust in PILOT_CODES
                 if customer_hit:
@@ -650,7 +748,9 @@ def main():
                 common = {
                     "run_id": run_id,
                     "so": so["name"],
-                    "line_id": line.get("name"),
+                    "line_index": line_index,
+                    "line_id": line_id or None,
+                    "line_key_status": line_key_status,
                     "so_status": d.get("status"),
                     "so_docstatus": d.get("docstatus"),
                     "transaction_date": d.get("transaction_date"),
@@ -668,8 +768,9 @@ def main():
                     "current_planning_eligible": current_planning_eligible,
                     "demand_role": demand_role,
                     "cover_equivalent_factor": cover_factor,
-                    "demand_event_id": (f"{so['name']}:{line.get('name')}"
-                                        if disposition == "family" else None),
+                    "demand_event_candidate_id": (
+                        f"{so['name']}:{line_id}"
+                        if disposition == "family" and line_key_status == "ok" else None),
                     "counting_status": counting_status,
                     "matched_sources": srcs,
                     "warehouse": line.get("warehouse") or d.get("set_warehouse"),
@@ -729,6 +830,14 @@ def main():
     if any(not s.get("complete") for s in source_stats.values()):
         status = "partial"
         status_reasons.append("source_incomplete")
+    line_key_invalid_count = (line_key_counts.get("invalid_missing", 0)
+                              + line_key_counts.get("invalid_duplicate", 0))
+    if line_key_invalid_count:
+        status = "partial"
+        status_reasons.append("line_key_invalid")
+    if variant_record_error_count:
+        status = "partial"
+        status_reasons.append("variant_record_error")
     if not audit_ok:
         status = "partial"
         status_reasons.append("audit_mismatch")
@@ -767,8 +876,12 @@ def main():
         },
         "line_dispositions": {k: v for k, v in counts.items() if not k.startswith("role:")},
         "line_roles": {k[5:]: v for k, v in counts.items() if k.startswith("role:")},
+        "line_key_counts": dict(sorted(line_key_counts.items())),
+        "line_key_invalid_count": line_key_invalid_count,
         "family_membership_counts": dict(sorted(membership_counts.items())),
         "demand_role_counts": dict(sorted(demand_role_counts.items())),
+        "demand_quantity_available": False,
+        "cover_equivalent_factor_consumed": False,
         "qty_status_counts": dict(sorted(qty_status_counts.items())),
         "stock_qty_status": "requires_item_uom",
         "disposition_reasons": dict(sorted(disposition_reasons.items())),
@@ -798,9 +911,12 @@ def main():
             "entries": variant_manifest["entries"],
             "by_evidence": variant_manifest["by_evidence"],
             "by_scope": variant_manifest["by_scope"],
+            "schema_decision": variant_manifest["schema_decision"],
         } if variant_manifest else None),
         "variant_validation_error_count": variant_validation_error_count,
         "variant_validation_errors": variant_validation_errors,
+        "variant_record_error_count": variant_record_error_count,
+        "variant_record_errors": variant_record_errors,
         "adjudication": "pending_remaining" if pending_reasons else "complete",
         "adjudication_reasons": dict(sorted(pending_reasons.items())),
         "pilot_expected": sorted(PILOT_CODES),
@@ -817,10 +933,15 @@ def main():
             "PK#/ND# 前缀不是证据；无证据表或未命中一律 pending（variant_* 原因码）。",
             "PK=皮壳、ND=内胆；证据方向必须是 KS 成品 BOM 消耗该组件，"
             "ratio=组件 stock 累计/KS 输出 stock，多 BOM 冲突不按 default 消解。",
+            "同 UOM 下 qty 必须等于 stock_qty，factor 若给出只能为 1；两侧都校验。",
+            "证据表 schema/rule/source/site 白名单绑定；Item/BOM hash 仅为受信 "
+            "producer 边界，consumer 不重取源文档、不声称枚举完所有 BOM。",
             "结构证据只证明 family 关系，不证明销量等价；历史窗口需 "
             "historical_verified + 有效期，current_structure_only 一律 pending。",
-            "family_membership 与 demand_role 分离；SO 行不等于终端销售，"
-            "本 PoC 不做事件级去重、不算终端需求。",
+            "family_membership 与 demand_role 分离；demand_role 均为 candidate，"
+            "SO 行不等于终端销售、不做事件级去重、不消费 cover factor。",
+            "line.name 缺失/重复记 invalid + partial，保留 line_index；"
+            "demand_event_candidate_id 只作行级候选，不是已证明事件。",
             "qty/stock_qty：缺数/坏值不转 0；stock_qty 需 Item stock UOM，"
             "本 PoC 记 None（requires_item_uom）。",
             "每行 disposition 写入审计 JSONL；so/line 两层守恒由 audit_checks 校验。",
