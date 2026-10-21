@@ -24,8 +24,8 @@
       "priority": 1,
       "completed_at": "2026-10-21T18:12:20+08:00",
       "summary": "5 top-SKU snapshots (120 SO / 293 DN / 128 WO / 425 SE); C1 SO<->DN 8,467=8,467 all pass; C2 115 pass + 2 produced_qty anomalies + 11 open; C3 425/425 pass; WO.produced_qty found unreliable; JC progress-only; bounded EN read-only 362 SE detail GETs + 4 probe requests, 0 failures; audit_ok=true evidence_complete=true; <=0.0 tests 35/35",
-      "updated_at": "2026-10-21T19:13:55+0800",
-      "note": "v3 rework delivered: commit e6b3cc9a (branch docs/supply-chain-integration-handoff, PR #300); 82/82 offline tests (test_g1b_dn_wo_jc_se.py; 4 new v3 regressions covering per-(WO,UOM) SE buckets, unresolved child propagation, matched malformed JC disclosure); evidence v3 out/dn_wo_jc_se_evidence_v3.zip sha256 0fe66f0916123303d59678116e82190b8b15ac1b74459c47e2b1912a39da7cc9; manifest 23fb363ceda2bdf1a005931bc7f720679673f6eb07cbc9353982752962ba2721, payload_sha256 3a8940c845944b75b80ff925bbdf8e83f71b6e6cea5631644b1b76aae2ebb8ad, stable_sha256 6f12333c688d736e861278a4e2c31ee3191aa945750712753a5548b5cb878636; line_dispositions 95197f0665ffd2046d51ea12f41c6029e30b1f141ab803ce761397468513c39c (2040 rows); replay R1/R2 stable+dispositions identical; audit_ok=true evidence_complete=true; 0 HTTP; no family expansion, no production writes, no merge."
+      "updated_at": "2026-10-21T19:26:28+0800",
+      "note": "v4 rework delivered: commit 4b7ec55f (branch docs/supply-chain-integration-handoff, PR #300); 84/84 module offline tests (test_g1b_dn_wo_jc_se.py; 2 new methods/4 sub-cases in CrossReviewV4Tests covering null, string, empty object and invalid sum_qty nested operation payloads, plus partially-valid group sealing); full g1_contract offline suite 150/150; evidence v4 out/dn_wo_jc_se_evidence_v4.zip sha256 6cec02bd1623253da20a3d4244171cb4e1af8d8c1c44d6df3ec48e9d89db7e35; manifest 3b381d4d2c84300b5e1e5e29a33c3059643344c6b76d3d25a0b8f9322333fa63, payload_sha256 8a3765575b32a82b4fc3869c37258ae940dd97f256e06118188fa8cea9f5b6d2, stable_sha256 6f12333c688d736e861278a4e2c31ee3191aa945750712753a5548b5cb878636; line_dispositions 95197f0665ffd2046d51ea12f41c6029e30b1f141ab803ce761397468513c39c (2040 rows, byte-identical to v3); replay R1/R2 stable+dispositions identical; audit_ok=true evidence_complete=true; 0 HTTP; JC groups 105 matched / 0 invalid / 0 orphan; no family expansion, no production writes, no merge."
     },
     {
       "id": "R290-RECON",
@@ -41,7 +41,7 @@
     {
       "id": "G1B-CROSS-REVIEW",
       "owner": "codex",
-      "status": "in_progress",
+      "status": "ready",
       "depends_on": "G1B-DN-WO-JC-SE",
       "scope": "Review Claude's fixed commit + evidence pack; key review on gpt-6.1-sol; no re-review of accepted SO evidence gate",
       "artifacts": [],
@@ -49,8 +49,8 @@
       "priority": 3,
       "on_failure": "set G1B-DN-WO-JC-SE.status=ready and G1B-CROSS-REVIEW.status=waiting with review notes",
       "unblocked_at": "2026-10-21T18:12:20+08:00",
-      "note": "Review v3 at commit e6b3cc9a (not 49a142e0). Evidence v3: zip 0fe66f09…, manifest 23fb363c…, stable 6f12333c…, dispositions 95197f06… (2040 rows). Verify the three rework items: per-(WO,UOM) SE finished buckets with cross-UOM WO sealed as wo_uom_mixed; unresolved SE child propagates to parent SE/WO and blocks C2/audit/evidence; matched malformed JC groups emit explicit invalid rows. Report: docs/research/supply-chain/2026-10-20/claude/experiments/g1_contract/g1b_dn_wo_jc_se.md",
-      "updated_at": "2026-10-21T19:13:55+0800",
+      "note": "Review v4 at commit 4b7ec55f (not e6b3cc9a). P2 fix: nested JC operation payloads are validated; malformed values (null/string/empty object/invalid sum_qty) seal the whole group as invalid with no progress rows, covered by CrossReviewV4Tests. Evidence v4: zip 6cec02bd…, manifest 3b381d4d…, payload 8a376557…, stable 6f12333c…, dispositions 95197f06… (2040 rows). v3 evidence and e6b3cc9a conclusions superseded. Report: docs/research/supply-chain/2026-10-20/claude/experiments/g1_contract/g1b_dn_wo_jc_se.md",
+      "updated_at": "2026-10-21T19:26:28+0800",
       "claimed_at": "2026-10-21T19:18:17.421635+08:00",
       "claimed_by": "codex"
     },

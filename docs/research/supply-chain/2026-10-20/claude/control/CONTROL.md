@@ -9,26 +9,29 @@ updated: 2026-10-21
 
 # 供应链整合 — 项目总控页
 
-Updated: 2026-10-21 19:14 (Asia/Shanghai)
+Updated: 2026-10-21 19:27 (Asia/Shanghai)
 
 ## 已完成（待交叉复审，非 G1 验收）
 
-> `22ae9a1e` 被 Adapter Review 打回；v2 `49a142e0` 又被交叉复审打回（2 P1 + 1 P2）。
-> 返修版 **`e6b3cc9a`** 已修复三项并重跑证据 v3。
+> v1 `22ae9a1e` 被 Adapter Review 打回；v2 `49a142e0`、v3 `e6b3cc9a` 又被交叉复审打回
+> （v2：2 P1 + 1 P2；v3：1 P2——JC 工序 payload 未校验）。
+> 返修版 **`4b7ec55f`** 已修复并重跑证据 v4。
 
-- **G1B-DN-WO-JC-SE v3 返修**：Claude `e6b3cc9a`（PR #300）。5 个 top-SKU 快照
+- **G1B-DN-WO-JC-SE v4 返修**：Claude `4b7ec55f`（PR #300）。5 个 top-SKU 快照
   （120 SO / 293 DN / 128 WO / 425 SE / 558 SE 行 / 516 工序组，2,040 行去向）。
-  在 v2 的 6 P1 + 3 P2 基础上，关闭交叉复审 3 项：
-  SE finished 量按 **(WO, UOM)** 分桶（同 SE 混单位→`se_finished_uom_mixed`，
-  同 WO 多 SE 跨单位→`wo_uom_mixed`，只留 `se_finished_by_uom`，不出跨单位总量）；
-  任一 SE 子行未解决（非法 `is_finished_item`/缺键/重复键/非对象/物料不符）→ 父 SE
-  `se_line_child_unresolved`、WO `wo_se_incomplete`，阻断 C2/audit/evidence；
-  匹配到 WO 但工序明细非法的 JC 组落显式 `invalid` 行，不再静默计 matched。
+  在 v2 的 6 P1 + 3 P2、v3 的 3 项基础上，关闭 v3 交叉复审剩余 1 P2：
+  JC 工序 payload **逐个校验**（值必须是对象且 `sum_qty` 为有限数值；null/字符串/数组
+  → `jc_operation_payload_invalid`，空对象/缺 `sum_qty` → `jc_operation_sum_qty_invalid`），
+  组内任一非法 → 整组 `matched=0`、`invalid++`、**不出 progress**（含组内合法工序），
+  只落非法项显式 invalid 行，WO 行 `reason_detail` 标 `jc_operation_payload_invalid`。
   C1 115/115；C2 117 可比（115 通过 + 2 张 `produced_qty` 失真）+ 11 张未开工，`complete=true`；
-  C3 425/425；SE 覆盖 425/425 已解决；`audit_ok=true`、`evidence_complete=true`；82/82 离线单测；
-  两轮回放 stable/行去向一致，0 网络请求。关键发现不变：`Work Order.produced_qty` 不可当完工账。
-  证据：`out/dn_wo_jc_se/`，zip `dn_wo_jc_se_evidence_v3.zip` `0fe66f09…`；
-  manifest `23fb363c…`；行级去向 `95197f06…`；stable `6f12333c…`；报告 `g1b_dn_wo_jc_se.md`。
+  C3 425/425；SE 覆盖 425/425 已解决；`audit_ok=true`、`evidence_complete=true`；
+  84/84 本模块离线单测、150/150 g1_contract 离线全套；两轮回放 stable/行去向一致，0 网络请求。
+  v4 的 `stable_sha256` 与 `line_dispositions` 与 v3 逐字节相同（合法数据不变）。
+  关键发现不变：`Work Order.produced_qty` 不可当完工账。
+  证据：`out/dn_wo_jc_se/`，zip `dn_wo_jc_se_evidence_v4.zip` `6cec02bd…`；
+  manifest `3b381d4d…`；payload `8a376557…`；行级去向 `95197f06…`；stable `6f12333c…`；
+  报告 `g1b_dn_wo_jc_se.md`。
   **本项只证明窄样本关联/守恒契约，不是 G1 或业务验收。**
 
 ## 已验收
@@ -42,10 +45,10 @@ Updated: 2026-10-21 19:14 (Asia/Shanghai)
 - **G1B-ADAPTER-REVIEW**（Codex）：已完成对 `22ae9a1e` 的只读审查，**6 P1 + 3 P2**；
   结论：需修复后才能接受适配器。v2 已逐项修复并补反例单测，相关改动由 v3 保留。
   报告归档 `control/reviews/2026-10-21-adapter-report.md`。
-- **G1B-DN-WO-JC-SE 返修**（Claude）：v3 `e6b3cc9a` 已提交并推送（未扩 family、未写生产），
-  证据 v3 已重跑；状态置 `completed`，note 含 commit/测试/哈希。
-- **G1B-CROSS-REVIEW**（Codex）：已置 `ready`，**只审 `e6b3cc9a` 及 v3 证据**；
-  v2/`49a142e0` 结论作废。
+- **G1B-DN-WO-JC-SE 返修**（Claude）：v4 `4b7ec55f` 已提交并推送（未扩 family、未写生产），
+  证据 v4 已重跑；状态置 `completed`，note 含 commit/测试/哈希。
+- **G1B-CROSS-REVIEW**（Codex）：已置 `ready`，**只审 `4b7ec55f` 及 v4 证据**；
+  v3/`e6b3cc9a` 与更早结论作废。
 
 ## 阻塞
 
@@ -57,8 +60,9 @@ Updated: 2026-10-21 19:14 (Asia/Shanghai)
 
 ## 下一步
 
-1. ~~Claude 提交 DN/WO/JC/SE 固定 commit + 证据包~~ → v1 `22ae9a1e`、v2 `49a142e0` 均被打回；v3 `e6b3cc9a` 已交付。
-2. Codex 对 `e6b3cc9a` 做关键复审（`G1B-CROSS-REVIEW` 已 ready）；R290 对账结果归档。
+1. ~~Claude 提交 DN/WO/JC/SE 固定 commit + 证据包~~ → v1 `22ae9a1e`、v2 `49a142e0`、
+   v3 `e6b3cc9a` 均被打回；v4 `4b7ec55f` 已交付。
+2. Codex 对 `4b7ec55f` 做关键复审（`G1B-CROSS-REVIEW` 已 ready）；R290 对账结果归档。
 3. 再决定扩样到 100/全 family，还是进入 G2/G3 预测与补货。
 4. 今晚收尾时跑一次 `/ce-okf`，把 SO/证据门与 producer 经验正式归档。
 
@@ -93,10 +97,12 @@ Updated: 2026-10-21 19:14 (Asia/Shanghai)
 
 - Claude #300：`9a04741e`（producer P2 修复），PR https://github.com/keyapi/fzh-data/pull/300
 - Claude #300 返修 v2：`49a142e0`（已被交叉复审打回，作废）
-- Claude #300 返修 v3：`e6b3cc9a`（UOM 分桶 / 子行传播 / JC 非法披露），
-  evidence `.../g1_contract/out/dn_wo_jc_se/`，zip `out/dn_wo_jc_se_evidence_v3.zip`
-  `0fe66f09…`；manifest `23fb363c…`；行去向 `95197f06…`；stable `6f12333c…`；
-  82/82 离线单测（`test_g1b_dn_wo_jc_se.py`）；v1/v2 证据作废。
+- Claude #300 返修 v3：`e6b3cc9a`（UOM 分桶 / 子行传播 / JC 组级非法披露；已被 v3 交叉复审打回，作废）
+- Claude #300 返修 v4：`4b7ec55f`（JC 工序 payload 逐个校验 / 整组 invalid 不出 progress），
+  evidence `.../g1_contract/out/dn_wo_jc_se/`，zip `out/dn_wo_jc_se_evidence_v4.zip`
+  `6cec02bd…`；manifest `3b381d4d…`；payload `8a376557…`；行去向 `95197f06…`；
+  stable `6f12333c…`；84/84 本模块离线单测、150/150 g1_contract 离线全套；
+  v1/v2/v3 证据作废。
 - Codex #301：`d027f981`（阶段日志）、`09ec820a`（R290 交付阻塞与五例接收记录），PR https://github.com/keyapi/fzh-data/pull/301
 - v5 evidence：`D:/Work/赛狐/Cursor-claude/docs/research/supply-chain/2026-10-20/claude/experiments/g1_contract/out/family_poc/evidence_d8c473fe_v5/`
 - v5 replay zip：同目录 `evidence_replay_e2f9c680_v5.zip`，SHA256 `a3b23cf1684f056daea68f7e7988a12842b40528d61d74f5c5393afaed9bc13c`
