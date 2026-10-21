@@ -426,6 +426,33 @@ tags: [supply-chain, research, log]
 - 旧 96/380/4,100 是 pilot 无日期 + PK# 角色未修的口径，不作为同窗结果。
 - 1,510 是 SO 行，不等同 33,719 终端出库件数；DN/WO/JC/SE、水位/tombstone、守恒仍未做。
 
+## 2026-10-21 — Codex run_86b2a4645f21 S02/S04 复审
+
+- Codex：S01/S03 verified；S02 partially（前缀接纳未证实 PK#/ND#）；S04 partially
+  （只计数不存逐行 disposition；缺 items 静默零行并 complete）。
+- **S02**：`classify_line()` 对 PK#/ND# 取消 KS 前缀规则，改为证据表门控；
+  `--variant-manifest` 不传则变体一律 pending（`variant_manifest_absent`）。
+- **提交前阻塞修复 + 证据设计对齐**（`reviews/2026-10-21-s02-evidence-design`）：
+  PK=皮壳、ND=内胆；方向固定 KS 成品 BOM → PK/ND 组件，不反转、不要求 PK/ND 的 BOM 必有 KS。
+  文件层 `schema_version/site/as_of/producer/rule_version/payload_sha256`
+  + 重复 JSON key 拒绝；条目层 canonical KS/role/direction/有效期/Item+BOM 身份与 hash/
+  `candidate_boms[]`（全 `eligible_at_evidence` 且比例一致，default/当前 active 不消解冲突）/
+  组件 stock 累计 ÷ 输出 stock 数量 = 1/UOM 换算已知/历史窗口
+  `historical_verified + historical_basis`；停用 Item 保留历史关系但
+  `current_planning_eligible=false`；`evidence_ref` 由已验证 BOM 派生。
+  结构证据只证明 family，不证明销量等价。
+  行上分离 `family_membership` 与 `demand_role`（内胆独立销售不产生皮壳需求）；
+  qty 缺/坏值记 None 不转 0。证据表 code 并入候选查询；
+  离线单测 34 条全绿（不联网、不调 main）。
+- **本地证据边界**：BOM xlsx 3,700 行无任何 PK#/ND# 单元格（包装列是 SXBZCP# 等），
+  因此 variant→KS 证据只能由独立只读 EN Item/BOM 步骤生成；本补丁不访问生产。
+- **S04**：新增 `<out>.audit.jsonl` 逐行 disposition；详情状态机
+  `detail_ok/detail_none/items_missing/items_not_list/items_empty/detail_error`，
+  失败一律 partial + exit 1；`so_audit`/`line_audit` 两条守恒 + `audit_ok`。
+  `pilot_seen` 改为 disposition 前统计，另记 `pilot_seen_family`。
+- `status` 只表示查询/详情完整性；逐行证据完成度单列 `adjudication`。
+- 本轮**未跑真实回放**（按用户要求单列验收）；不发布新数字，不宣称 G1 验收。
+
 ## 模板（后续阶段）
 
 ```text

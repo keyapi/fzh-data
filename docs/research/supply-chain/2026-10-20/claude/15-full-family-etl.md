@@ -76,8 +76,17 @@ EN SO/DN/WO/JC/SE ───┘        ↓
 ### 2.4 验收
 
 - 每个输入行有 disposition：`used / pending / unmatched / conflict / unknown`。
+  逐行记录写入审计 JSONL（`so/line_id/item_code/base/prefix_role/disposition/
+  disposition_reason/evidence_ref/qty/uom`），不能只留聚合计数。
+- 详情必须完整：`get_single` 返回缺 `items`、`items` 为空/非列表、查询异常都记为
+  `detail_none/items_missing/items_not_list/items_empty/detail_error`，`status=partial`；
+  不得写 0 行后仍 `complete`。
+- 守恒：`detail_ok + 详情失败数 == selected_sos`，`sum(line_dispositions) == 审计行数`；
+  不成立即 `audit_mismatch` + exit 1。
+- `status` 只表示查询/详情完整性；逐行证据完成度用 `adjudication`
+  （`complete / pending_remaining` + 原因码计数）单独表达，两者都不等于 G1 验收。
 - 数量守恒：SO→DN→SE、库存→覆盖、在途→实收；不把跨层累加当余额。
-- 每批有 `run_id`、输入文件 hash、页数、行数、`complete`、异常清单。
+- 每批有 `run_id`、输入文件 hash、页数、行数、`complete`、异常清单、审计文件 hash。
 - 全 family 跑通后再扩到全 SKU；全 SKU 以 `item_group`/`item` 分片，不按客户码。
 
 ### 2.5 E01 family 全集与批量完整性
@@ -92,6 +101,36 @@ EN SO/DN/WO/JC/SE ───┘        ↓
   122 out_of_scope，10/10 试点命中**；group 2 页、item_code 75 页、pilot 10 页。
   旧 96/380 是 pilot 无日期过滤 + PK# 被当非 family 的口径，不作为同窗结果。
 - manifest 记录：查询条件、333/56、原始页数、筛选后行数、未匹配/排除原因。
+- **变体码不凭前缀接纳**：`PK#`/`ND#` 只说明编码形态（PK=皮壳、ND=内胆），
+  必须由版本化证据表证明 **KS 成品 BOM 消耗该组件**；方向不能反转，
+  不能要求 PK/ND 的 BOM 必有 KS（其 BOM 可能是布料）。证据表缺失/未命中/冲突
+  一律 pending 并记原因码（`variant_manifest_absent`、`variant_not_in_manifest`、
+  `variant_base_not_family`、`variant_base_conflict`、`variant_bom_conflict` 等）。
+  本地 BOM 成本表（3,700 行）没有 `PK#`/`ND#` 单元格，包装列是 `SXBZCP#`/
+  `SXBZBCP#` 另一套编码，不能当证据。
+- **结构证据，不是标签**：证据表必须有 `schema_version/site/as_of/producer/
+  rule_version/payload_sha256`（重复 JSON key 直接报错）；每条记录带 canonical KS/
+  角色/方向/`valid_from,valid_to`/Item 与 BOM 的 `name,sha256,modified`/
+  `candidate_boms[]`（全部已提交且 `eligible_at_evidence=true`，按 canonical/角色/
+  方向/UOM/比例一致；default 与今天的 `is_active` 都不消解冲突）。比例按
+  **组件 stock 累计 / 输出 stock 数量** 归一，`10 输出配 10 组件` 才为 1；
+  UOM 换算必须已知且正有限。历史窗口只能是 `historical_verified +
+  historical_basis`，`current_structure_only` 不得回填为历史真值；
+  停用 Item 可保留历史 family 关系，但 `current_planning_eligible=false`。
+  `evidence_ref` 由消费者从已验证 BOM 派生，不读生产者字符串。
+- **family 与 demand_role 分离**：行上同时记 `family_membership`
+  （ks_finished/cover/inner）、`demand_role`（terminal_finished/independent_cover/
+  assembly_component/unknown）、`canonical_ks`、`cover_equivalent_factor`、
+  `demand_event_id`、`counting_status`。内胆独立销售不产生皮壳需求；
+  SO 行不等于终端销售，本 PoC 不做事件级去重、不输出终端需求合计。
+  `qty` 缺数/坏值/NaN/负数记 None + `qty_status`，不转 0（修 `iss.num` 的缺口）。
+- 证据表随 `family_manifest` 一起版本化，manifest 记录其
+  `schema_version/site/as_of/producer/rule_version/payload_sha256/sha256/
+  entries/by_evidence/by_scope`；证据表里实际出现的 code 并入候选查询并记录
+  `variant_query_codes_added`。
+- 契约由离线单测 `test_en_family_poc.py` 覆盖（重复 key、假标签、任意 ref、
+  方向/比例/UOM/有效期/多 BOM 冲突/历史范围/demand_role/qty fail-closed），
+  不联网、不调用 `main()`。
 - 父单明细字段按本仓库接口核对（既有代码遍历 `items`），不把 `order_items` 当唯一真实字段。
 
 ### 2.6 E02 增量与失败重跑

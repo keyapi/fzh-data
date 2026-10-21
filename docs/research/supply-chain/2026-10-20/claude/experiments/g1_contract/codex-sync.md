@@ -14,6 +14,8 @@ tags: [supply-chain, codex, g1, sync, consolidated]
 > Claude #300 实质更新 `1dafa7b2`、G1B01–09 `f6e97f39`、RR `6ebc03c4`、
 > T01–T06 `c423c85d`、U01/family PoC（本轮）；Codex #301 最新 `862f77d1`
 > （U01 关闭；S01–S04 待修）；**S01–S04 已修，同窗 SO 52/1510/392/122 重跑完成**。
+> 之后 Codex `run_86b2a4645f21` 复审：S01/S03 verified，S02/S04 partially；
+> **S02/S04 已按证据门+逐行审计修复，回放待单独验收**（见 `g1b_round6_response.md`）。
 
 ## 0. Codex 当前所处位置（先对齐）
 
