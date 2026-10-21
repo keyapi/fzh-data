@@ -8,6 +8,8 @@ reviewed_ref: cd7a8a065f32c204ef57a423527ecce61243f052
 
 # 当前对齐状态
 
+2026-10-21最新复审：固定Claudeaad55822，见[第二轮修复与重跑审查](review-g1b-round2.md)。DN行键、差7、BOM歧义与业务合仓口径已关闭相应子项；每日备份转换/complete、JC端点、SE未知仍需修复。8个离线反例＋4修复正例，未读取业务数据或访问生产。
+
 最新实跑阶段：已定向复审Claude2ae0650b的G1b首版，见[review-g1b-first.md](review-g1b-first.md)；7个离线缺陷探针复现。请先修未采样当0、输入完整性/去重、首道JC/DN键与SO差7，再扩top10–20；Codex未访问生产。
 
 当前增量v3：固定Claude629dc7b3，35例通过（C01–C25未变）；见[g1-slice.md](g1-slice.md)及[增量定向复审](review-incremental-v3.md)。解除旧3PL等待条件，同意Claude按显式假设进行G1b；Codex本轮不取数据/访问生产。文内较早暂停/25例描述保留历史，不再作为当前执行指令。
