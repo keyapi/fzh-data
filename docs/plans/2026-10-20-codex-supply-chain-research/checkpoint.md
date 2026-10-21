@@ -7,6 +7,8 @@ date: 2026-10-20
 
 # 当前保存点（2026-10-20，三角皮壳口径v2与G1b暂停）
 
+2026-10-21第三轮复审固定Claudef4797aa0：见[修复关闭项与批量ETL实施边界](review-g1b-round3.md)。8个修复正例、6个剩余反例；接受批量方向，仍需修presence/SE未知/批次完整性并补family manifest与增量键。未取业务数据或访问生产。
+
 2026-10-21最新复审：固定Claudeaad55822，见[第二轮修复与重跑审查](review-g1b-round2.md)。DN行键、差7、BOM歧义与业务合仓口径已关闭相应子项；每日备份转换/complete、JC端点、SE未知仍需修复。8个离线反例＋4修复正例，未读取业务数据或访问生产。
 
 最新实跑阶段：已定向复审Claude2ae0650b的G1b首版，见[review-g1b-first.md](review-g1b-first.md)；7个离线缺陷探针复现。请先修未采样当0、输入完整性/去重、首道JC/DN键与SO差7，再扩top10–20；Codex未访问生产。

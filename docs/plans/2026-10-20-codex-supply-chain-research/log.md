@@ -6,6 +6,13 @@ title: Codex 供应链独立调研变更日志
 
 # 变更日志
 
+## 2026-10-21 G1b第三轮与批量ETL
+
+- 固定f4797aa0接受8个修复正例；复现6个剩余反例：未返回SKU当0、hash不校验/整批发布、请求缺仓消失、逐仓complete未贯通、SE失败丢WO仍汇0、缺月仍进headline。
+- 接受15的批量方向；补family全集/历史包装映射、modified与子行删除、不可变快照/ETA身份、同单位cutoff守恒及本地PoC回放建议，不重做泛调研。
+- 新增review-g1b-round3与g1b_round3_probes；旧35例不变；未读凭证/真实数据、未访问API/浏览器/任务计划，未改Claude文件或合并PR。
+
+
 ## 2026-10-21 G1b修复第二轮
 
 - 固定aad55822定向核修复和daily backup→转换→coverage实际路径；关闭DN自身键/差7/BOM fail-open子项，接受业务确认合仓，余额迁移审计另pending。
