@@ -510,6 +510,23 @@ uv run pytest tests/ -q
 
 ## 9. 本会话成果
 
+### 2026-10-21（138120551 断货闭环 + IA 模板操作补精确步骤）
+
+- **背景**：美中仓反馈 `PBUS-138120551` 无货（2017724 / TT0031010K0062878，Queen 1 件）。
+  UPS `1ZC0019E0326994977` 仅建标未取件；SPS Order 已 `Complete`（ASN 12646 Accepted）；invoice 已开。
+- **执行**：清 20261019 批 invoice（**2083.13 → 2048.14**，31→30）；Notion 建行「白色153」；
+  AKN 重发（01/19/2027 / 01/26/2027，新文档 `3038979845`）；IA 模板改 2878（Stock 0 / On Order 50 /
+  01/19/2027）并补发 10/21–10/27 共 7 份；网页断货清单加 2878；GSheet「处理特殊订单」登记；
+  给 Diane 发英文邮件并 APPEND 到已发送。
+- **IA 模板操作的两个硬点（这次踩了，已写进 `sps-portal-ia-akn-operations.md` §2/§6.3）**：
+  1. **入口不是模板文档页** —— 打开 Template 单据后没有 Create New；入口是**交易列表右上 Create New**
+     → 勾「I don't have a source document.」→ Inventory Advice → 选已有模板 → Number of Documents = 1。
+  2. **Handsontable 只认真实键盘事件** —— 点单元格后，先 JS `focus()` `textarea.handsontableInput`，
+     再 `keyboard.type` + `Enter`；`locator.fill()` 或 JS 设 `value` + `dispatchEvent` **不会提交**。
+     日期单元格是带 `MM/DD/YYYY` placeholder 的 `input`，同样键盘输入 + `Enter`。
+- **教训**：上一轮文档把入口写成「打开模板 → Create New」、只写「对 textarea 键盘输入」，
+  不够明确 → 本次先走了弯路。可复跑步骤已写死，下次第一步就按它做。
+
 ### 2026-10-19（SPS Order 先点开 + AKN 重发的判断口径）
 
 - **背景**：当日网页平台跑了一批 `check0stock order x35 …`，4 个整单缺货 PO

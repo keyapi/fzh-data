@@ -57,7 +57,9 @@ uv run python run_pb_orders.py --dir "<批次目录>"                           
    「当天新 ACK + Accepted/In Transit」。IA 重提（`SPS_Selenium_Local/sps_automation.py` 每天定时发，
    模板 `IA Template 20250605 x100`）—— 完整点法见
    `docs/solutions/workflow-issues/sps-portal-ia-akn-operations.md`
-   （⚠️ 一次 Send 不一定发得出去，以交易列表为准；IA 是「发送日+7」的单日报告，改模板只影响 7 天后）。
+   （⚠️ 一次 Send 不一定发得出去，以交易列表为准；IA 是「发送日+7」的单日报告，改模板只影响 7 天后。
+   **改 IA 模板的入口是交易列表右上 Create New**（不是模板文档页）；**Handsontable 单元格只认
+   `focus()` textarea + 真实键盘 `type` + `Enter`**，`fill()` / JS dispatch 不提交）。
 5. **把断货 SKU 加进网页预检的断货清单**（`https://api.vilavi.cn/pb/settings`；
    存 `sh-erpnext-test:/opt/pb-orders/pb_orders/runtime/jobs.sqlite` 的 `app_settings.default_no_stock`）。
    **最容易漏** —— 不改的话下一批预检仍会把它当有货放过。**到货后必须删掉**。
