@@ -118,6 +118,14 @@ Updated: 2026-10-21 20:05 (Asia/Shanghai)
   23:50 复审诊断，次日 05:17 后复审实际定时采集。
 - 关键边界：缺失/失败标 `unknown`，不标 0；不覆盖手动快照；不补造历史；
   两天不足以做删失校正；每日快照无法定位日内断货。
+- **2026-10-22 07:50 已入库本地 `order_store.duckdb`**（Codex 复审 PASS `53291689` 后）：
+  `stock_run` 3 / `stock_run_warehouse` 42 / `stock_history` **15,820 行** /
+  `stock_publish` 3 天。10-20：400 行部分批次 + 4,792 行完整批次（该日仍标不完整）；
+  10-21/22：各 5,314 行、14/14 仓完整。`tongtool_stock` 未动；
+  DB 备份 `order_store.duckdb.bak-20261022`。报告 `out/stock_history_reports/`。
+- `stockout_observed` 只在完整批置位；`uom_basis='unknown'`；TEST-1 已标记；
+  `stock_id_history` 3,876 条。空仓是有效结果，不写 0。
+- 下一步：`run_id` 封存归档器（不改抓取逻辑）→ Codex 复审 → 次日 05:17 验证。
 
 ## Agent 角色与分工（2026-10-21 20:05）
 

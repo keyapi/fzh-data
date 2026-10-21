@@ -1,11 +1,12 @@
 {
-  "updated": "2026-10-22T07:33:00+08:00",
+  "updated": "2026-10-22T07:52:00+08:00",
   "accepted": [
     "G1 SO evidence gate v5: 9a04741e / d027f981; 66 tests; current_structure_only boundary; historical pending",
     "R1/R2 no-evidence audit gate: d8c473fe",
     "BOM historical boundary report: d3fc4c8d",
     "G1B DN/WO/JC/SE narrow sample: 4b7ec55f PASS cross-review (84 tests; v4 evidence 6cec02bd; scope narrow sample only; P3 doc count corrected post-acceptance)",
-    "G1B offline expansion: 10 SKUs, 3,098 rows, C1 10/10; C2/C3 complete only for original 5; 238 SE unverified; two-round stable 5aa41e8e; target 100 requires bounded production read-only authorization"
+    "G1B offline expansion: 10 SKUs, 3,098 rows, C1 10/10; C2/C3 complete only for original 5; 238 SE unverified; two-round stable 5aa41e8e; target 100 requires bounded production read-only authorization",
+    "Stock history local ingest: 3 days, 15,820 rows, code 53291689 PASS; 10-20 incomplete batch preserved, 10-21/22 complete; tongtool_stock untouched"
   ],
   "tasks": [
     {
