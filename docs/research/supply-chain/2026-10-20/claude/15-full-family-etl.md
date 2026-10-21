@@ -60,7 +60,16 @@ EN SO/DN/WO/JC/SE ───┘        ↓
 - **库存**：通途 API 全仓分页（13 秒/页，526 退避），每仓保存 `complete/page/hash`。
 - **幂等**：所有事实表按主键 upsert；重复快照同键按 `snapshot_at` 取最新，冲突不静默 first-wins。
 
-### 2.3 验收
+### 2.3 零库存 vs 缺失（必须分开）
+
+- API 返回该 SKU/仓且数量为 0 → `observed_zero`（真的 0）。
+- API 没返回该 SKU/仓 → `missing/unknown`，**不能补 0**；可能是未铺货、停售、漏拉或接口截断。
+- 库存结存可能省略零库存 SKU（实测 API 比 CENTRADE 多 386 个、其中 343 个零；
+  DANEEY 多 26 个、其中 25 个零），所以零库存以 API 为准，状态/别名用库存结存补。
+- 建议加 `sku_presence(snapshot_date, warehouse_id, sku, presence, qty_status, source)`：
+  `presence=observed|missing`，`qty_status=positive|observed_zero|bad|unknown`。
+
+### 2.4 验收
 
 - 每个输入行有 disposition：`used / pending / unmatched / conflict / unknown`。
 - 数量守恒：SO→DN→SE、库存→覆盖、在途→实收；不把跨层累加当余额。
