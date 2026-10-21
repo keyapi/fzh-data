@@ -32,13 +32,13 @@
     {
       "id": "R290-RECON",
       "owner": "codex",
-      "status": "blocked",
+      "status": "completed",
       "scope": "Reconcile #290 frozen package 5 examples: supply overlap, arrival timing, Cover pool, demand units; output accept/scenario/blocker + evidence; no reimplementation; read-only",
       "artifacts": [],
       "timeout_minutes": 90,
       "priority": 2,
-      "updated_at": "2026-10-21T18:05:00+0800",
-      "note": "Delivery blocker: frozen #290 package path/commit/hash and 5 source examples not supplied. 0/5 received; accept=0 scenario=0; semantics not verified. Evidence committed 09ec820a: C:/Users/zhang/.codex/worktrees/supply-chain-independent-research/Cursor/docs/plans/2026-10-20-codex-supply-chain-research/r290-reconciliation.md. Automation disabled until package delivered."
+      "updated_at": "2026-10-21T21:53:13+0800",
+      "note": "Package located at D:/Work/fzh-order-store; 5/5 received. accept=3 (KS0001, KS0230, KS0153 frozen numbers match), scenario=1 (KS0316 cover-only pool), blocker=1 (KS0249 export warehouse name mismatch; correct 美东-CENTRADE matches). Valid freeze 67f73c5 (ae6a6793 old). Remaining blockers: global MAX(intransit,PO) unproven, all PO ETA null/no field, cover co-pool unproven, demand/inventory UOM absent. Report: control/reviews/2026-10-21-r290-reconciliation.md"
     },
     {
       "id": "G1B-CROSS-REVIEW",

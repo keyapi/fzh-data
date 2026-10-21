@@ -56,7 +56,19 @@ Updated: 2026-10-21 20:05 (Asia/Shanghai)
 
 ## 阻塞
 
-- **R290-RECON（2026-10-21 17:56）交付阻塞**：未提供可绑定 #290 的冻结包路径/commit/hash 及五例清单；已检查交付位置未定位到包。5 = 已接收 0 + 待交付 5；accept=0、scenario=0，四项语义均未验收。未重复领取、未访问生产、未改原型。证据：[Codex 对账记录](C:/Users/zhang/.codex/worktrees/supply-chain-independent-research/Cursor/docs/plans/2026-10-20-codex-supply-chain-research/r290-reconciliation.md)。待交付后继续。
+- **R290-RECON（2026-10-21 21:45 解除阻塞）**：冻结包已定位在
+  `D:/Work/fzh-order-store/`：`order_store.duckdb`（407,898 行 / 400,754 单，
+  202301–202609）、`FREEZE_2026-10-21-prototype-corrected.md/json`（代码 `67f73c5`）、
+  `RECONCILIATION_2026-10-21.md`（代码 `ae6a6793`）、`trace_examples.md/json`（五例）。
+  已完成 Codex 只读对账：**5 = 已接收 5 + 待交付 0；accept 3 / scenario 1 / blocker 1**。
+  有效冻结为 corrected `67f73c5`（`ae6a6793` 是旧声明；`scripts/` 仅说明文本差异）。
+  accept 仅指冻结数值一致：KS0001 / KS0230 / KS0153；scenario：KS0316（cover-only 池）；
+  blocker：KS0249（导出仓名与 trace 不一致；按正确“美东-CENTRADE”补查后数值吻合）。
+  仍为全局 blocker/scenario：`MAX(intransit, PO)` 去重未证；未结 PO 的 ETA 全空、无字段；
+  Cover 实物同池/可替代未证；需求/库存无 UOM。报告
+  `control/reviews/2026-10-21-r290-reconciliation.md`。
+  **注意：本轮 DN/WO/JC/SE 未使用该 DuckDB**——那是 EN 单据层；DuckDB 是通途订单历史/需求层，
+  供 R290 原型与后续 G2/G3 使用。
 
 - `historical_verified` 的历史锚点/有效期证据仍缺，历史关系保持 pending。
 - 全 family 扩样未授权。
