@@ -100,6 +100,8 @@ tags: [supply-chain, research, sources]
 | S1-069 | 库存结存会漏零库存 SKU：API 比 CENTRADE 多 386（343 零）/比 DANEEY 多 26（25 零） | 浏览器合并库存 vs API JSONL 对比 | C | 2026-10-21 | 重叠 SKU 数量基本一致；API 无状态/别名 | A | 14-daily-inventory-backup §1.1 |
 | S1-070 | presence 规则后完整快照覆盖：129 observed_zero / 2 missing / 192 <2 月 / 127 unknown | `out/g1b_coverage_u.json` | C | 2026-10-21 | missing 不记 0；Wayfair unknown_authority | A | g1b_round3_response、g1b_results §3 |
 | S1-071 | 新 daily run 目录 + manifest hash 校验：hash 全 0 负例 `read=0/complete=false`；缺请求仓 `requested=2/read=1/complete=false` | `out/t02_bad2.json`、`out/t02_test.json` | C | 2026-10-21 | 不重算 hash 背书 | A | g1b_round3_response §重跑 |
+| S1-072 | U01：同批成功 SE + 未定位失败 SE → WO `se_status=query_incomplete`、`finished_qty=None`、`known_subtotal=5` | `build_four_way` 合成测试 | C | 2026-10-21 | 不再把已知小计当完整产量 | A | g1b_round4_response |
+| S1-073 | family SO PoC：group-only 15 SO/135 行/1 pilot；并集后 96 SO/380 family 行/4,100 非 family/10-10 pilot | `out/family_poc/family_poc_manifest.json` | C | 2026-10-21 | group + item_code + pilot 并集必要 | A | 15-full-family-etl E01、g1b_round4_response |
 
 ## 未找到项（N-###）
 

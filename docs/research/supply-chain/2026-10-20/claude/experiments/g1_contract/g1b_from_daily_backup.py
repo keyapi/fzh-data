@@ -224,6 +224,8 @@ def main():
 
     result = {
         "run_id": manifest.get("run_id"),
+        "integrity_mode": ("legacy_unverified" if args.allow_missing_hash else "strict"),
+        "integrity_exception": ("--allow-missing-hash" if args.allow_missing_hash else None),
         "fetched_at": manifest.get("snapshot_at"),
         "capture_start": min((e.get("capture_start") for e in entries if e.get("capture_start")),
                              default=None),

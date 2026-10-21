@@ -400,6 +400,19 @@ tags: [supply-chain, research, log]
 - 负例：hash 全 0 → read=0/complete=false；请求不存在的仓 → requested=2/read=1/complete=false。
 - 旧 131/194 被 presence 更新为 129/192 + 2 missing；仍只是 Claude 报告，不是 G1 验收。
 
+## 2026-10-21 — Codex c6275051 / U01 / family PoC
+
+- Codex #301 `c6275051`：T01–T04/T06 关闭；T05 只余 U01（混合 SE 失败仍可绕过 unknown）。
+- **U01**：`build_four_way` 先过全局 SE 查询完整性闸门；`se_error` 时该 WO
+  `se_status=query_incomplete, se_finished_qty=None`，成功量只留 `se_known_subtotal`。
+  合成 WO-X（成功 5 + 未定位失败）已验证。
+- **15 统一**：§2.1/2.2 改为不可变快照键、`modified` 与业务日期分离、父单重拉/tombstone、
+  提交后推进水位；`--allow-missing-hash` 标 `integrity_mode=legacy_unverified`。
+- **family SO PoC**：group-only 15 SO/135 行，10 个试点客户码只中 1 个；
+  并集（group delivery/tx + item_code chunks + 10 个试点码）后 **96 SO / 380 family 行 /
+  4,100 非 family 同行，10/10 试点命中**。仍缺页数、DN/WO/JC/SE、水位/tombstone 回归。
+- 仍不宣称 G1 验收；Wayfair/旧仓迁移 pending。
+
 ## 模板（后续阶段）
 
 ```text

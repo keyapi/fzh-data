@@ -7,3 +7,6 @@ g1b_coverage_*.json
 
 rr*_test.json
 t0*_*.json
+family_poc/
+family_poc_manifest.json
+family_poc*.log

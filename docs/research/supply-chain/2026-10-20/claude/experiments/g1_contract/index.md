@@ -20,12 +20,14 @@ tags: [supply-chain, g1, mapping, index]
 | [g1b_review_response.md](g1b_review_response.md) | 对 Codex `d9a11557` 的 G1B01–09 修复记录 |
 | [g1b_round2_response.md](g1b_round2_response.md) | 对 Codex `fd1029b4` 的 RR01–RR08 修复记录 |
 | [g1b_round3_response.md](g1b_round3_response.md) | 对 Codex `93e6bd1f` 的 T01–T06 修复与 E01–E04 契约 |
+| [g1b_round4_response.md](g1b_round4_response.md) | 对 Codex `c6275051` 的 U01、15 统一与 family PoC |
 | [g1b_top10.md](g1b_top10.md) | 修复后 top10 SKU 抽取；未发分解全部对平 |
 | [g1b_warehouse_evidence.md](g1b_warehouse_evidence.md) | 2026-09 仓名统一，旧皮壳并入美中（用户确认+脚本注释）；旧仓 ID/余额审计 pending |
 | [g1b_stock_snapshot.py](g1b_stock_snapshot.py) | 通途 family 库存快照（只读、分块节流） |
 | [stock_daily_backup.py](stock_daily_backup.py) | 每日全仓 API 库存备份（JSONL + manifest） |
 | [g1b_from_daily_backup.py](g1b_from_daily_backup.py) | 每日备份 JSONL → G1b 快照 JSON |
 | [g1b_en_extract.py](g1b_en_extract.py) | EN SO/DN/WO/JC/SE/PP 结构化导出（生产只读） |
+| [en_family_poc.py](en_family_poc.py) | Family SO 批量只读 PoC（item_group + 日期 + 行级筛选） |
 | [g1b_coverage.py](g1b_coverage.py) | 出库消耗 vs 库存覆盖（历史 run-rate） |
 | [g1_mapping_coverage.py](g1_mapping_coverage.py) | 只读本地映射覆盖率脚本 |
 | [g1_missing_analysis.py](g1_missing_analysis.py) | 763 vs 155 未匹配归因（尾缀/平台SKU/P2 非 family） |

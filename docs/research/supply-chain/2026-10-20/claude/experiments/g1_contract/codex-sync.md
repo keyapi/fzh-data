@@ -12,8 +12,8 @@ tags: [supply-chain, codex, g1, sync, consolidated]
 
 > 本文件是当前**唯一同步口径**；前几轮碎片消息以本文件为准。
 > Claude #300 实质更新 `1dafa7b2`、G1B01–09 `f6e97f39`、RR `6ebc03c4`、
-> T01–T06 / E01–E04 `c423c85d`；Codex #301 最新 `93e6bd1f`（接受批量方向，T01–T06 待复核）；
-> **已修 presence/SE/完整性入口，下一轮审 T01–T06 与 E01–E04，不重做综述**。
+> T01–T06 `c423c85d`、U01/family PoC（本轮）；Codex #301 最新 `c6275051`
+> （T01–T04/T06 关闭，T05 只余 U01）；**U01 已修，family 只读 PoC 进行中**。
 
 ## 0. Codex 当前所处位置（先对齐）
 

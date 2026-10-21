@@ -38,27 +38,31 @@ EN SO/DN/WO/JC/SE ───┘        ↓
                          语义层 metrics（覆盖/缺货/建议）
 ```
 
-### 2.1 事实表与幂等键
+### 2.1 事实表与幂等键（与 §2.5–2.8 一致）
 
 | 事实 | 来源 | 幂等键 |
 |---|---|---|
-| `float_sales_order_line` | SO + SO Item | `Sales Order Item.name` |
+| `fact_sales_order_line` | SO + SO Item | `Sales Order Item.name` |
 | `fact_delivery_note_line` | DN + DN Item | `Delivery Note Item.name` |
 | `fact_work_order` | Work Order | `Work Order.name` |
 | `fact_job_card` | Job Card | `Job Card.name` |
 | `fact_stock_entry_line` | Manufacture SE + Detail | `Stock Entry Detail.name` |
-| `fact_inventory_snapshot` | 通途 API/浏览器 | `(snapshot_date, warehouse_id, sku)` |
-| `fact_in_transit` | 通途 `intransit` / PO / 头程 | `(source, doc_id, line_id, sku, eta_bucket)` |
-| `fact_3pl_inventory` | Wayfair 后台手工 | `(as_of, 3pl_warehouse, sku)` |
+| `fact_inventory_snapshot` | 通途 API/浏览器 | `(source, run_id/snapshot_id, warehouse_id, sku, 必要库存维度)` + `as_of`；`snapshot_date` 只作分区 |
+| `sku_presence` | 库存快照 | `(source, run_id, warehouse_id, sku)`；`presence=observed/missing`、`qty_status=positive/observed_zero/bad/unknown` |
+| `fact_in_transit` | 通途 `intransit` / PO / 头程 | `(source, doc_id, line_id, 运输腿/lot)`；`eta_bucket` 可变，不进主键 |
+| `fact_3pl_inventory` | Wayfair 后台手工 | `(as_of, 3pl_warehouse, sku)`，`authority=wayfair_backend_manual` |
 
-### 2.2 增量策略
+### 2.2 增量策略（与 §2.6 一致）
 
-- **EN**：按 `modified`/`transaction_date`/`posting_date` 水位线拉增量；每日一次，周度全量对账。
-- **SO 批量**：`item_group in (family groups)` + 日期窗口；一次拉父单，再按父单 `order_items` 展开。
-- **WO/JC/SE**：按 `production_item in (item_code chunks, ≤40)`；JC/SE 按 WO chunks。
+- **变更发现**：EN 用 `modified` 发现旧单迟改；`transaction_date`/`posting_date` 只作业务日期，**不能当增量游标**。
+- **稳定排序/回读**：`(modified, name)` 排序，设置重叠回读窗口和 `run_started_at` 上界；相同 `modified` 跨页用 name 去重。
+- **父单/子行**：命中父单后**整单重拉子表**；删除子行写 tombstone；保留取消、`amended_from`、移出 family、状态修改。
+- **提交后推进**：raw→staging→fact 校验并提交后才推进对应水位；partial/失败不推进；周期全量对账发现硬删除。
+- **SO 批量**：`item_group in (family groups)` + 日期窗口；父单拉取后按行筛选，保留非 family 同行去向。
+- **WO/JC/SE**：按 `production_item in (item_code chunks, ≤40)`；JC/SE 按 WO chunks；SE 查询不完整时产量 unknown，成功量只作 `known_subtotal`。
 - **DN**：按 `against_sales_order in (SO chunks)` 或 `posting_date` + item group。
-- **库存**：通途 API 全仓分页（13 秒/页，526 退避），每仓保存 `complete/page/hash`。
-- **幂等**：所有事实表按主键 upsert；重复快照同键按 `snapshot_at` 取最新，冲突不静默 first-wins。
+- **库存**：通途 API 全仓分页（13 秒/页，526 退避），每仓保存 `complete/page/hash`；新 run 严格 hash，旧 manifest 用 `--allow-missing-hash` 时标 `integrity_mode=legacy_unverified`。
+- **幂等**：所有事实表按主键 upsert；快照不覆盖历史，冲突不静默 first-wins；没有单据行的通途汇总 intransit 独立 snapshot，不编造 `doc_id`。
 
 ### 2.3 零库存 vs 缺失（必须分开）
 
@@ -83,6 +87,9 @@ EN SO/DN/WO/JC/SE ───┘        ↓
 - 父单批量拉取后**按订单行筛选**，保留非 family 同行去向；不能因为父单被选中就纳入全部行。
 - 交叉覆盖：两个 `item_group` 筛选 + manifest item_code 并集 + 已知 9 个试点客户码，
   不能因为不在当前两个组就漏掉已知试点。
+  **实测 group-only 只找到 15 SO/135 行，10 个试点客户码只命中 1 个**，所以必须做并集。
+  并集后（group delivery/tx + item_code chunks + 10 个试点客户码）：**96 SO / 380 family 行 /
+  4,100 非 family 同行，10/10 试点命中**。页数、DN/WO/JC/SE 段仍待补。
 - manifest 记录：查询条件、333/56、原始页数、筛选后行数、未匹配/排除原因。
 - 父单明细字段按本仓库接口核对（既有代码遍历 `items`），不把 `order_items` 当唯一真实字段。
 

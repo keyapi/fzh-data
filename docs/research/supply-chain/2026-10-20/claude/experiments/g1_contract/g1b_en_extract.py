@@ -244,6 +244,59 @@ def fetch_manufacture_stock_entries(wo_names: list[str], item_codes: list[str],
     return out, ("missing_doc_without_work_order" if unlocated_missing else None)
 
 
+def build_four_way(wos: list[dict], jc: dict, se_rows: list[dict],
+                   se_error: str | None) -> dict:
+    """P1/P2/P3/P4 per WO；U01: 全局 SE 查询不完整时先置 unknown，成功量留 known_subtotal。"""
+    four_way = {}
+    se_by_wo: dict[str, list[dict]] = defaultdict(list)
+    for s in se_rows:
+        if s.get("work_order"):
+            se_by_wo[s["work_order"]].append(s)
+    for w in wos:
+        wo_name = w.get("name")
+        j = jc.get(wo_name, {})
+        last_qty = j.get("last_op_qty")
+        se_for_wo = se_by_wo.get(wo_name, [])
+        bad_se = [s for s in se_for_wo if s.get("status") != "ok"]
+        known_subtotal = None
+        if se_for_wo and not bad_se:
+            known_subtotal = sum(float(s.get("finished_qty") or 0) for s in se_for_wo)
+        if se_error:
+            se_qty = None
+            se_status = "query_incomplete"
+        elif bad_se:
+            se_qty = None
+            se_status = bad_se[0].get("status") or "unknown"
+        elif se_for_wo:
+            se_qty = known_subtotal or 0.0
+            se_status = "ok"
+        else:
+            se_qty = 0.0
+            se_status = "none"
+        pending = None
+        if last_qty is not None and se_qty is not None:
+            pending = round(last_qty - se_qty, 2)
+        last_card_qty = j.get("last_card_qty")
+        pending_last_card = None
+        if last_card_qty is not None and se_qty is not None:
+            pending_last_card = round(last_card_qty - se_qty, 2)
+        four_way[wo_name] = {
+            "jc_present": bool(j),
+            "first_operation": j.get("first_operation"),
+            "last_operation": j.get("last_operation"),
+            "first_op_qty": j.get("first_op_qty"),
+            "last_op_qty": last_qty,
+            "last_card_operation": j.get("last_card_operation"),
+            "last_card_qty": last_card_qty,
+            "se_status": se_status,
+            "se_finished_qty": round(se_qty, 2) if se_qty is not None else None,
+            "se_known_subtotal": round(known_subtotal, 2) if known_subtotal is not None else None,
+            "produced_pending_stock_in": pending,
+            "produced_pending_stock_in_last_card": pending_last_card,
+        }
+    return four_way
+
+
 def main():
     ap = argparse.ArgumentParser(description="G1b EN 单据结构化导出（只读）")
     g = ap.add_mutually_exclusive_group(required=True)
@@ -353,49 +406,7 @@ def main():
         iss.ENV_URLS["prod"], key, secret, args.sleep,
     )
 
-    four_way = {}
-    se_by_wo: dict[str, list[dict]] = defaultdict(list)
-    for s in se_rows:
-        if s.get("work_order"):
-            se_by_wo[s["work_order"]].append(s)
-    for w in ctx.get("wos", []):
-        wo_name = w.get("name")
-        j = jc.get(wo_name, {})
-        last_qty = j.get("last_op_qty")
-        se_for_wo = se_by_wo.get(wo_name, [])
-        bad_se = [s for s in se_for_wo if s.get("status") != "ok"]
-        if se_for_wo and not bad_se:
-            se_qty = sum(float(s.get("finished_qty") or 0) for s in se_for_wo)
-            se_status = "ok"
-        elif bad_se:
-            se_qty = None
-            se_status = bad_se[0].get("status") or "unknown"
-        elif se_error:
-            se_qty = None
-            se_status = "query_error"
-        else:
-            se_qty = 0.0
-            se_status = "none"
-        pending = None
-        if last_qty is not None and se_qty is not None:
-            pending = round(last_qty - se_qty, 2)
-        last_card_qty = j.get("last_card_qty")
-        pending_last_card = None
-        if last_card_qty is not None and se_qty is not None:
-            pending_last_card = round(last_card_qty - se_qty, 2)
-        four_way[wo_name] = {
-            "jc_present": bool(j),
-            "first_operation": j.get("first_operation"),
-            "last_operation": j.get("last_operation"),
-            "first_op_qty": j.get("first_op_qty"),
-            "last_op_qty": last_qty,
-            "last_card_operation": j.get("last_card_operation"),
-            "last_card_qty": last_card_qty,
-            "se_status": se_status,
-            "se_finished_qty": round(se_qty, 2) if se_qty is not None else None,
-            "produced_pending_stock_in": pending,
-            "produced_pending_stock_in_last_card": pending_last_card,
-        }
+    four_way = build_four_way(ctx.get("wos", []), jc, se_rows, se_error)
 
     result = {
         "okf": "v0.1",
