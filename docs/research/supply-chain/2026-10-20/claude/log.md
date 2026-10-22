@@ -568,6 +568,20 @@ tags: [supply-chain, research, log]
   `run_complete=true`，manifest 哈希与固定基线一致。
 - 未访问通途/EN、未写 `order_store.duckdb`、未改计划任务。
 
+## 2026-10-22 — SKU 匹配只读审计（C）
+
+- 执行 `control/reviews/2026-10-22-sku-audit-task.md`：GS 订单侧未匹配 **297 SKU / 4,115 行**
+  拆成 base_candidate 61 / duplicate_mapping 2 / true_missing 228 / insufficient_evidence 6，
+  行数与 SKU 数均逐项对账；`en_orders` 无 SKU 列，旧 6,549 行口径无法本地复算，报告中单列。
+- 关键发现：`TT0031245K0064088` 及其 `-0` 共 789 行（19.2%）只存在「删除」前缀 alias；
+  `sku_map.tsv` 有 10 条别名对在 DuckDB `sku_map` 表按 `tongtool_sku` 去重时丢失，
+  影响 231 行已命中订单的 item_code 解析；EN `ref_code` 有 169 个删除/作废标记键。
+- 产物：`out/sku_match_audit/{unmatched_all.csv,categories.json,deep100.md}`（本地、已 gitignore）+
+  `scripts/audit_sku_match.py`（`read_only=True`，重跑即对账）。报告：
+  `control/reviews/2026-10-22-sku-match-audit.md`。
+- 未访问通途/EN 生产、未改 EN 数据、未改 `sku_map`、未做模糊认领。
+- 失败/放弃：无（8 分钟完成）；缺口是权限边界（EN Item master、EN 侧订单 SKU），不是时间。
+
 ## 模板（后续阶段）
 
 ```text
