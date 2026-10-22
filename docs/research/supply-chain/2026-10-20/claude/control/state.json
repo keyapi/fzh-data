@@ -1,5 +1,5 @@
 {
-  "updated": "2026-10-22T14:10:00+08:00",
+  "updated": "2026-10-22T14:39:00+08:00",
   "accepted": [
     "G1 SO evidence gate v5: 9a04741e / d027f981; 66 tests; current_structure_only boundary; historical pending",
     "R1/R2 no-evidence audit gate: d8c473fe",
@@ -198,5 +198,11 @@
       "allowed": "layered action list: prepare/verify/hold",
       "deadline": "14:38 status report; completion-driven"
     }
+  },
+  "control_rules": {
+    "fixed_responsibility": "Claude coordinator; Claude worker; Codex1/#301 main reviewer; Codex2 supervisor",
+    "status_requires_evidence": true,
+    "completion_triggers_next": true,
+    "no_silent_restart_or_global_pause": true
   }
 }
