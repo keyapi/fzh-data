@@ -4,7 +4,7 @@
 
 ## 规则执行（七条）
 
-- **r1_strata**：sample, tier, dominant warehouse and intermittent labels use THIS block's training window only (never post-origin sales)
+- **r1_strata**：sample mother set, tier, dominant warehouse and intermittent labels use THIS block's training window only; the mother set also requires the first order month <= the outer origin (no not-yet-started SKUs)
 - **r2_inner**：model chosen on inner cut points inside each outer training window
 - **r3_outer**：outer refits every candidate and compares with fixed MA3/naive on the same sample
 - **r4_window**：monthly cumulative h=3, step 3, labels available at the time (label_available_at), refit per window
@@ -14,8 +14,9 @@
 
 ## 计算规模
 
-- 实际拟合 **9820** 次（上限 14400）；运行 **32.5 s**，tracemalloc 峰值 **130.0 MB**
+- 实际拟合 **10688** 次（上限 14400）；运行 **36.4 s**，tracemalloc 峰值 **130.1 MB**
 - 每块样本 {'2025-10': 200, '2026-01': 200, '2026-06': 200} 序列 × 外层 3 × 内层 3，候选 6；样本按各块训练窗销量抽取（块间不同）
+- 母集按块起点限制（**首单 ≤ 块起点**）：2025-10 母集 1027、剔除未首单 210、样本内最晚首单 2025-09、旧规则样本中当时未首单 28、新旧样本差异 332；2026-01 母集 1134、剔除未首单 103、样本内最晚首单 2025-12、旧规则样本中当时未首单 11、新旧样本差异 332；2026-06 母集 1206、剔除未首单 31、样本内最晚首单 2026-06、旧规则样本中当时未首单 0、新旧样本差异 0
 
 ## 同样本对比（WAPE，零需求单元格保留）
 
@@ -23,8 +24,8 @@
 
 | 外层 | 性质 | n | 有效 | 共同可评 | 计分(非零) | 零需求(保留) | 缺失预测 | 选择流程 | MA3 | naive |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| 2025-10 | exploratory | 200 | 172 | 170 | 148 | 22 | 2 | 0.463 | 0.5312 | 0.4823 |
-| 2026-01 | exploratory | 200 | 181 | 176 | 150 | 26 | 5 | 0.7722 | 0.7713 | 0.5779 |
+| 2025-10 | exploratory | 200 | 200 | 197 | 176 | 21 | 3 | 0.721 | 0.7408 | 0.5918 |
+| 2026-01 | exploratory | 200 | 200 | 192 | 167 | 25 | 8 | 0.6515 | 0.6711 | 0.5553 |
 | 2026-06 | last_evaluable_no_clean_holdout | 200 | 198 | 197 | 175 | 22 | 1 | 0.5255 | 0.4978 | 0.5016 |
 
 - 最后一个可评估块：**2026-06|last_evaluable_no_clean_holdout**（目标窗 2026-07..09）。**它不是干净留出块**：T2 的 2026-03 外层切点其 90 天目标窗已触及 2026-07，因此该块已被部分使用；更早两块是探索性（旧测试期）。当前标签覆盖内**不存在干净留出块**，唯一干净证据来自前向影子。
@@ -33,12 +34,12 @@
 
 | 被选中模型 | 次数 |
 |---|---:|
-| naive | 146 |
-| seasonal_naive | 91 |
-| autoets | 87 |
-| ma6 | 85 |
-| ma3 | 76 |
-| combo_ew | 66 |
+| naive | 136 |
+| ma6 | 103 |
+| seasonal_naive | 99 |
+| autoets | 92 |
+| ma3 | 89 |
+| combo_ew | 79 |
 
 ## 最后一个可评估块的分层指标（tier/主仓/间歇均只用该块训练窗）
 
@@ -62,7 +63,7 @@
 
 ## 失败与边界
 
-- 失败（保留，不删序列）：`seasonal_naive:ValueError` × 318；`autoets:NotImplementedError` × 131；`outer:insufficient_history` × 49；`outer:autoets:NotImplementedError` × 45；`autoets:ValueError` × 25；`autoets:KeyError` × 2
+- 失败（保留，不删序列）：`seasonal_naive:ValueError` × 343；`autoets:NotImplementedError` × 153；`outer:autoets:NotImplementedError` × 35；`autoets:ValueError` × 24；`outer:insufficient_history` × 2；`autoets:KeyError` × 1；`outer:autoets:KeyError` × 1
 - 零需求单元格保留在 WAPE 分子中；`零需求(保留)` 列单独给出数量，缺失预测为 null（不进共同可评分子集，也不按 0 计分）。
 
 ## 前向影子（唯一干净证据路径）

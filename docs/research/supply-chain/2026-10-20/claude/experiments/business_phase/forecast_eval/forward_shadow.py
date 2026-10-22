@@ -29,6 +29,16 @@ Usage
   # score (run when labels are available; never re-selects a model)
   uv run python forward_shadow.py --mode score --pred-file shadow_2026-09.json
 
+  # synthetic counterexample for the zero-demand rule (no DB, no files)
+  uv run python forward_shadow.py --mode selftest
+
+Scoring mother set
+  The presaved `sample.skus` is the mother set. Once every target month has
+  labels, a sampled SKU with no order rows is a zero-demand cell: its |forecast|
+  enters the WAPE numerator, it contributes 0 to the denominator. If any target
+  month lacks labels the whole window is `labels_incomplete` and every excluded
+  SKU is listed with its reason (nothing disappears silently).
+
 Outputs
   shadow_<origin>.json         pre-registered predictions (immutable evidence)
   shadow_<origin>_score.json   scores, only in --mode score
@@ -72,7 +82,7 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--h", type=int, default=3)
     ap.add_argument("--inner-offsets", default="3,6,9")
     ap.add_argument("--n-series", type=int, default=200)
-    ap.add_argument("--mode", choices=["presave", "score"], default="presave")
+    ap.add_argument("--mode", choices=["presave", "score", "selftest"], default="presave")
     ap.add_argument("--pred-file", help="pre-registered file to score (score mode)")
     ap.add_argument("--out-dir", default=str(OUT_DIR))
     ap.add_argument("--force", action="store_true",
@@ -272,6 +282,93 @@ def presave(args) -> None:
     print("selection", payload["selection_distribution"], "failures", dict(failures))
 
 
+def build_score(pre: dict, actual: dict, months_present: set,
+                db_hash: str | None, presave_name: str) -> dict:
+    """Score a pre-registered file on its OWN sample (M03, T14).
+
+    The mother set is the presaved sample, never "SKUs that happen to have order
+    rows in the target window". Once label coverage is complete, a sampled SKU
+    with no order rows is a genuine zero-demand cell: its |forecast| enters the
+    WAPE numerator and it contributes 0 to the denominator. If coverage is
+    incomplete the whole window is marked unknown with explicit exclusions — a
+    SKU never disappears silently.
+    """
+    origin = pre["origin"]
+    targets = pre["target_months"]
+    methods = ["selected", "naive", "ma3"]
+    sample_skus = [r["sku"] for r in pre["sample"]["skus"]]
+    missing_months = [t for t in targets if t not in months_present]
+    excluded, by_sku = [], {}
+    if missing_months:
+        excluded = [dict(sku=s, reason="missing_labels:" + ",".join(missing_months))
+                    for s in sample_skus]
+    else:
+        for sku in sample_skus:
+            fc = pre["forecasts"].get(sku)
+            if not fc:
+                excluded.append(dict(sku=sku, reason="missing_presaved_forecast"))
+                continue
+            miss = [m for m in methods if m not in fc]
+            if miss:
+                excluded.append(dict(sku=sku, reason="incomplete_forecast:" + ",".join(miss)))
+                continue
+            # actual defaults to 0.0: no order rows in a fully covered window
+            by_sku[sku] = dict(actual=float(actual.get(sku, 0.0)),
+                               **{m: float(np.sum(fc[m])) for m in methods})
+    den = sum(v["actual"] for v in by_sku.values())
+    zero = sum(1 for v in by_sku.values() if abs(v["actual"]) < 1e-9)
+    status = ("labels_incomplete" if missing_months else
+              "undefined_denominator" if den <= 1e-9 else "scored")
+    wape = {m: (round(sum(abs(v[m] - v["actual"]) for v in by_sku.values()) / den, 4)
+                if den > 1e-9 else None) for m in methods}
+    bootstrap = None
+    if den > 1e-9:
+        rng = np.random.default_rng(ym_i(origin) * 100 + 4)   # deterministic, origin-derived
+        skus = sorted(by_sku)
+        diffs = {"selected_minus_ma3": [], "selected_minus_naive": []}
+        for _ in range(300):
+            pick = [skus[rng.integers(0, len(skus))] for _ in range(len(skus))]
+            sden = sum(by_sku[s]["actual"] for s in pick)
+            if sden < 1e-9:
+                continue
+            sel = sum(abs(by_sku[s]["selected"] - by_sku[s]["actual"]) for s in pick) / sden
+            ma3 = sum(abs(by_sku[s]["ma3"] - by_sku[s]["actual"]) for s in pick) / sden
+            nai = sum(abs(by_sku[s]["naive"] - by_sku[s]["actual"]) for s in pick) / sden
+            diffs["selected_minus_ma3"].append(sel - ma3)
+            diffs["selected_minus_naive"].append(sel - nai)
+        bootstrap = dict(iterations=300,
+                         **{k: dict(mean=round(float(np.mean(v)), 4),
+                                    p5=round(float(np.percentile(v, 5)), 4),
+                                    p95=round(float(np.percentile(v, 95)), 4))
+                            for k, v in diffs.items()})
+    return dict(
+        schema_version="t10_forward_shadow_score/2",
+        scored_at=datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"),
+        presave_file=presave_name, generated_at=pre["generated_at"],
+        origin=origin, target_months=targets, status=status,
+        inputs=dict(db_sha256=db_hash,
+                    presave_db_sha256=pre["inputs"]["db_sha256"],
+                    destinations_sha256=pre["inputs"]["destinations_sha256"]),
+        coverage=dict(months_present=sorted(set(targets) & set(months_present)),
+                      missing_months=missing_months),
+        mother_set=dict(kind="presaved sample", n=len(sample_skus),
+                        rule=("shadow_<origin>.json → sample.skus；不按目标窗订单记录收缩；"
+                              "标签完整时无订单 = 零需求")),
+        n_sample=len(sample_skus), n_scored=len(by_sku),
+        n_zero_demand_retained=zero,
+        n_excluded=len(excluded), excluded=excluded,
+        extra_forecasts_not_in_sample=sorted(set(pre["forecasts"]) - set(sample_skus)),
+        denominator=round(den, 2), wape=wape, bootstrap=bootstrap,
+        metric_definition=dict(
+            wape="Σ|F−A| / ΣA over the mother set (zero-demand cells retained in the numerator)",
+            zero_demand="零需求单元格的 |F| 进入分子，对分母贡献 0",
+            denominator_zero="仅当聚合总实际量为 0 时该聚合无定义（status=undefined_denominator）",
+            missing_labels="任一目标月无标签则整窗 unknown，逐 SKU 列出排除原因"),
+        note=("一次月度结果不构成改默认的依据；区间跨 0 时只能说方向不稳定；"
+              "选择结果来自预存文件，评分阶段未重新选模。"),
+    )
+
+
 def score(args) -> None:
     if not args.pred_file:
         raise SystemExit("--mode score requires --pred-file shadow_YYYY-MM.json")
@@ -284,78 +381,74 @@ def score(args) -> None:
         raise SystemExit(f"labels missing: need through {targets[-1]}, DB has {db_hi}; "
                          f"score again after {pre['scoring_due']}")
     db_hash = hashlib.sha256(Path(args.db).read_bytes()).hexdigest()
+    ph = ",".join("?" * len(targets))
     con = duckdb.connect(args.db, read_only=True)
     try:
-        rows = con.execute("""
+        rows = con.execute(f"""
             SELECT sku_tongtool, substr(despatch_date,1,7), SUM(qty)
             FROM gs_orders
-            WHERE substr(despatch_date,1,7) IN ({})
+            WHERE substr(despatch_date,1,7) IN ({ph})
               AND NOT regexp_matches(lower(platform_sku), '(^|[-_])test([-_]|$)')
-            GROUP BY 1,2""".format(",".join("?" * len(targets))), targets).fetchall()
+            GROUP BY 1,2""", targets).fetchall()
+        present = {r[0] for r in con.execute(f"""
+            SELECT DISTINCT substr(despatch_date,1,7)
+            FROM gs_orders
+            WHERE substr(despatch_date,1,7) IN ({ph})
+              AND NOT regexp_matches(lower(platform_sku), '(^|[-_])test([-_]|$)')""",
+            targets).fetchall()}
     finally:
         con.close()
     actual = defaultdict(float)
     for sku, _ym, q in rows:
         actual[sku] += float(q)
 
-    methods = ["selected", "naive", "ma3"]
-    by_sku = {}
-    for sku, fc in pre["forecasts"].items():
-        if sku not in actual:
-            continue
-        if not all(m in fc for m in methods):
-            continue
-        by_sku[sku] = dict(actual=actual[sku],
-                           **{m: float(np.sum(fc[m])) for m in methods})
-    if not by_sku:
-        raise SystemExit("no common evaluable SKU between presave file and labels")
-    den = sum(v["actual"] for v in by_sku.values())
-    zero = sum(1 for v in by_sku.values() if abs(v["actual"]) < 1e-9)
-    wape = {m: (round(sum(abs(v[m] - v["actual"]) for v in by_sku.values()) / den, 4)
-                if den > 1e-9 else None) for m in methods}
-    rng = np.random.default_rng(ym_i(origin) * 100 + 4)   # deterministic, origin-derived
-    skus = sorted(by_sku)
-    diffs = {"selected_minus_ma3": [], "selected_minus_naive": []}
-    for _ in range(300):
-        pick = [skus[rng.integers(0, len(skus))] for _ in range(len(skus))]
-        sden = sum(by_sku[s]["actual"] for s in pick)
-        if sden < 1e-9:
-            continue
-        sel = sum(abs(by_sku[s]["selected"] - by_sku[s]["actual"]) for s in pick) / sden
-        ma3 = sum(abs(by_sku[s]["ma3"] - by_sku[s]["actual"]) for s in pick) / sden
-        nai = sum(abs(by_sku[s]["naive"] - by_sku[s]["actual"]) for s in pick) / sden
-        diffs["selected_minus_ma3"].append(sel - ma3)
-        diffs["selected_minus_naive"].append(sel - nai)
-    payload = dict(
-        schema_version="t10_forward_shadow_score/1",
-        scored_at=datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"),
-        presave_file=str(path.name), generated_at=pre["generated_at"],
-        origin=origin, target_months=targets,
-        inputs=dict(db_sha256=db_hash,
-                    presave_db_sha256=pre["inputs"]["db_sha256"],
-                    destinations_sha256=pre["inputs"]["destinations_sha256"]),
-        n_scored=len(by_sku), n_zero_demand_retained=zero,
-        denominator=round(den, 2),
-        wape=wape,
-        bootstrap=dict(iterations=300,
-                       **{k: dict(mean=round(float(np.mean(v)), 4),
-                                  p5=round(float(np.percentile(v, 5)), 4),
-                                  p95=round(float(np.percentile(v, 95)), 4))
-                          for k, v in diffs.items()}),
-        note=("一次月度结果不构成改默认的依据；区间跨 0 时只能说方向不稳定；"
-              "选择结果来自预存文件，评分阶段未重新选模。"),
-    )
+    payload = build_score(pre, actual, present, db_hash, path.name)
     out_path = Path(args.out_dir) / f"shadow_{origin}_score.json"
     out_path.write_text(json.dumps(payload, ensure_ascii=False, indent=1) + "\n",
                         encoding="utf-8")
     print(f"wrote {out_path}")
-    print("n", len(by_sku), "zero", zero, "wape", wape)
+    print("status", payload["status"], "sample", payload["n_sample"],
+          "scored", payload["n_scored"], "zero", payload["n_zero_demand_retained"],
+          "excluded", payload["n_excluded"], "wape", payload["wape"])
     print("bootstrap", payload["bootstrap"])
+
+
+def selftest() -> None:
+    """Synthetic counterexample for M03: a presaved 15 with no order rows.
+
+    Two SKUs: A forecast 15 / actual 0 (no order rows), B forecast 100 / actual 100.
+    The zero-demand SKU must contribute 15 to the numerator:
+    WAPE = (15 + 0) / 100 = 0.15. Dropping it would give 0.0.
+    """
+    pre = dict(origin="2026-09", target_months=["2026-10", "2026-11", "2026-12"],
+               generated_at="synthetic", inputs=dict(db_sha256="x", destinations_sha256="x"),
+               sample=dict(skus=[dict(sku="A"), dict(sku="B")]),
+               forecasts={"A": {"selected": [5, 5, 5], "naive": [5, 5, 5], "ma3": [4, 4, 4]},
+                          "B": {"selected": [40, 30, 30], "naive": [40, 30, 30],
+                                "ma3": [40, 30, 30]}})
+    out = build_score(pre, {"B": 100.0}, set(pre["target_months"]), None, "synthetic")
+    assert out["status"] == "scored"
+    assert out["n_scored"] == 2 and out["n_zero_demand_retained"] == 1
+    assert out["wape"]["selected"] == 0.15, out["wape"]
+    excluded_variant = out["wape"]["selected"] - 15.0 / out["denominator"]
+    assert abs(excluded_variant - 0.0) < 1e-12
+    missing = build_score(pre, {}, set(), None, "synthetic")
+    assert missing["status"] == "labels_incomplete"
+    assert missing["n_excluded"] == 2 and missing["n_scored"] == 0
+    print(json.dumps(dict(status=out["status"], denominator=out["denominator"],
+                          wape_with_zero=out["wape"]["selected"],
+                          wape_excluding_zero=excluded_variant,
+                          zero_demand_retained=out["n_zero_demand_retained"],
+                          labels_incomplete_status=missing["status"]),
+                     ensure_ascii=False, indent=1))
 
 
 def main() -> None:
     t0 = time.time()
     args = parse_args()
+    if args.mode == "selftest":
+        selftest()
+        return
     (presave if args.mode == "presave" else score)(args)
     print(f"done in {time.time() - t0:.1f} s")
 

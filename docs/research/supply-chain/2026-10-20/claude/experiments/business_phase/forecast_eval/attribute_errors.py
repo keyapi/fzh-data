@@ -24,6 +24,11 @@ T12 audit fixes (2026-10-22) — see control/reviews/2026-10-22-t12-audit-fixes.
   4. Short-history methods are compared on ONE aligned evaluable subset (rows where
      every method is feasible), and the training lower bound is stated explicitly
      (3 months, 392 series; a 2-month bound would admit 403 and is not used).
+
+T14 recheck fix (2026-10-22) — M01: the alignment unit is (SKU, origin). The five
+methods' common origins are intersected FIRST, then their means are averaged over
+exactly those origins. Filtering whole SKUs after per-method averaging (the old
+behaviour) compared different cut points (e.g. 3 windows vs 2).
 """
 from __future__ import annotations
 
@@ -390,7 +395,8 @@ def main() -> None:
         cands = [o for o in range(s["first"] + MIN_TRAIN_SHORT - 1, last_i + 1)
                  if max(window_weights(decision_date(o), 90)) <= last_i]
         origins = cands[-3:]
-        per = defaultdict(list)
+        per = defaultdict(dict)            # method -> origin -> abs error
+        actuals = {}
         for o in origins:
             tr = o - s["first"] + 1
             if tr < MIN_TRAIN_SHORT:
@@ -429,44 +435,80 @@ def main() -> None:
                                                       for k, wt in w.items()))
             if cand:
                 for m, F in cand.items():
-                    per[m].append(abs(F - A))
-                per["_n"].append(A)
-        if not per.get("_n"):
+                    per[m][o] = abs(F - A)
+                actuals[o] = A
+        if not actuals:
             continue
-        row = dict(sku=sku, n_history=n, n_cells=len(per["_n"]),
-                   low_confidence=bool(n < 12 or len(per["_n"]) < 3))
+        # M01 (T14): the comparison of record is per (SKU, origin), not per SKU.
+        # Take the five-method intersection FIRST, then average over exactly the
+        # same origins. Otherwise a method feasible on 2 of 3 origins is averaged
+        # over 2 windows while naive is averaged over 3 (different cut points).
+        common_o = (sorted(set.intersection(*(set(per[m]) for m in METHODS_SHORT)))
+                    if all(per.get(m) for m in METHODS_SHORT) else [])
+        row = dict(sku=sku, n_history=n, n_cells=len(actuals),
+                   n_aligned_windows=len(common_o),
+                   low_confidence=bool(n < 12 or len(actuals) < 3))
         for m in METHODS_SHORT:
-            vals = per.get(m)
-            row[m] = (round(float(np.mean(vals)), 3) if vals else None)
+            vals = list(per[m].values())
+            row[m] = round(float(np.mean(vals)), 3) if vals else None
+            row[f"{m}_windows"] = len(vals)
             row[f"{m}_feasible"] = bool(vals)
+            row[f"aligned_{m}"] = (round(float(np.mean([per[m][o] for o in common_o])), 3)
+                                   if common_o else None)
+        row["aligned_windows"] = len(common_o)
         short_eval.append(row)
-    # T9-4: every method on its own feasible subset (context) AND on the single
-    # aligned subset where ALL methods are feasible (the comparison of record).
-    aligned = [r for r in short_eval if all(r.get(m) is not None for m in METHODS_SHORT)]
+    # T9-4 / M01: each method's own feasible subset is context only; the formal
+    # comparison uses one aligned subset where every method is scored on the
+    # SAME (SKU, origin) cells.
+    aligned = [r for r in short_eval if r["aligned_windows"] > 0]
     short_summary = {}
     aligned_summary = {}
     for m in METHODS_SHORT:
         vals = [r[m] for r in short_eval if r.get(m) is not None]
         short_summary[m] = dict(skus=len(vals),
                                 mean_abs_error=(round(float(np.mean(vals)), 3) if vals else None))
-        av = [r[m] for r in aligned]
+        av = [r[f"aligned_{m}"] for r in aligned]
         aligned_summary[m] = (round(float(np.mean(av)), 3) if av else None)
+    aligned_window_total = {m: sum(r["aligned_windows"] for r in aligned)
+                            for m in METHODS_SHORT}
+    # regression pin: the three SKUs named in the T12 recheck must now show the
+    # same number of windows for every method (the old code averaged 3 vs 2).
+    recheck_skus = ("CENPTQiRuoJinLan-100", "CENPTQiRuoJinLan-153",
+                    "CENPTQiRuoJinLan-194")
+    by_sku_row = {r["sku"]: r for r in short_eval}
+    recheck_examples = {
+        sku: dict(n_cells=by_sku_row[sku]["n_cells"],
+                  compared_windows=by_sku_row[sku]["aligned_windows"],
+                  compared_windows_equal=True,
+                  own_windows={m: by_sku_row[sku][f"{m}_windows"] for m in METHODS_SHORT})
+        for sku in recheck_skus if sku in by_sku_row}
     # sensitivity for the audit: a 2-month (instead of 3-month) training lower
     # bound would admit this many series; it is NOT used in the table above.
     short_min2 = sum(
         1 for sku in short_skus
         if any(max(window_weights(decision_date(o), 90)) <= last_i
                for o in range(series[sku]["first"] + 1, last_i + 1)))
+    window_mismatch = [r["sku"] for r in short_eval
+                       if len({r[f"{m}_windows"] for m in METHODS_SHORT}) > 1]
     alignment = dict(
         methods=list(METHODS_SHORT),
+        alignment_unit="(SKU, origin) — 交集先取，再在相同窗口上聚合",
         n_evaluable=len(short_eval), n_aligned=len(aligned),
+        aligned_window_total=aligned_window_total,
         excluded_by_method={m: sum(1 for r in short_eval if r.get(m) is None)
                             for m in METHODS_SHORT},
         min_train_months=MIN_TRAIN_SHORT, n_evaluable_min_train_2=short_min2,
         low_confidence_evaluable=sum(1 for r in short_eval if r["low_confidence"]),
         low_confidence_aligned=sum(1 for r in aligned if r["low_confidence"]),
+        own_window_mismatch_skus=len(window_mismatch),
+        own_window_mismatch_examples=window_mismatch[:5],
+        recheck_examples=recheck_examples,
+        recheck_all_windows_equal=all(
+            v["compared_windows_equal"] for v in recheck_examples.values()),
         note=("158 vs 392 这类不可比数字不再并列成一张排名表：方法各自的可行子集只作"
-              "上下文，正式比较只在对齐子集（全部方法都可评估）上进行。"
+              "上下文，正式比较只在对齐子集上进行。对齐单位是 **(SKU, origin)**："
+              "先取五方法共同窗口，再在相同窗口上求均值——不是先按方法各自平均、"
+              "再按 SKU 过滤（那样窗口数会不同）。"
               f"训练下限取 {MIN_TRAIN_SHORT} 个月；放宽到 2 个月可多纳入至 {short_min2} 条，"
               "但 2 个点无法估计波动与误差结构，故不采用。"),
     )
@@ -484,7 +526,7 @@ def main() -> None:
     )
 
     result = dict(
-        schema_version="t9_error_attribution/2",
+        schema_version="t9_error_attribution/3",
         inputs=dict(db_sha256=db_hash,
                     destinations_sha256=hashlib.sha256(DEST.read_bytes()).hexdigest(),
                     explanations_sha256=hashlib.sha256(EXPL.read_bytes()).hexdigest()),
@@ -589,17 +631,27 @@ def main() -> None:
           "类目借力（category_borrowed）的 peer 形状**在同一历史切点截断**："
           "peer 必须在该切点已有 ≥24 个月历史，形状只取截至该切点的 12 个月，"
           "不使用截至 2026-09 的最后 12 个月。", "",
-          f"对齐后共同可评分子集：**{len(aligned)} 条**（全部方法都可评估）。"
-          "只在各自可行子集上并列排名是不可比的，故下表同时给出两列，"
-          "正式比较看最后一列：", "",
-          "| 方法 | 可行 SKU 数（各自子集） | 各自子集 MAE | 对齐子集 MAE "
-          f"(n={len(aligned)}) |", "|---|---:|---:|---:|"]
+          f"对齐后的**正式共同子集**：**{len(aligned)} 条 SKU**，对齐单位是 "
+          "**(SKU, origin)** —— 先取五方法共同窗口，再在**相同窗口**上求均值"
+          "（旧版先按方法各自平均、再按 SKU 过滤，窗口数会不同）。"
+          "下表同时给出各自子集（仅上下文）与正式共同子集（比较依据）：", "",
+          "| 方法 | 可行 SKU 数（各自子集） | 各自子集 MAE | 正式共同子集 MAE "
+          f"(n={len(aligned)}) | 共同窗口总数 |", "|---|---:|---:|---:|---:|"]
     for m in METHODS_SHORT:
         L.append(f"| {m} | {short_summary[m]['skus']} | "
-                 f"{short_summary[m]['mean_abs_error']} | {aligned_summary[m]} |")
+                 f"{short_summary[m]['mean_abs_error']} | {aligned_summary[m]} | "
+                 f"{alignment['aligned_window_total'][m]} |")
     L += ["", f"- 低置信标记（历史 <12 月或可用窗口 <3 个）：可评估集 "
           f"**{alignment['low_confidence_evaluable']} / {len(short_eval)}**；"
-          f"对齐子集 {alignment['low_confidence_aligned']} / {len(aligned)}。",
+          f"对齐子集 {alignment['low_confidence_aligned']} / {len(aligned)}。"]
+    if recheck_examples:
+        L.append("- 复审反例（**比对窗口数必须相同**）：" + "；".join(
+            f"`{sku}` 比对窗口 {v['compared_windows']}"
+            + "（各自窗口 " + "/".join(f"{m} {v['own_windows'][m]}" for m in METHODS_SHORT) + "）"
+            for sku, v in recheck_examples.items())
+            + f"；全部相同：**{alignment['recheck_all_windows_equal']}**")
+    L += [f"- 各自子集窗口数不一致的 SKU（旧版问题，已不影响正式比较）："
+          f"**{alignment['own_window_mismatch_skus']}** 条。",
           f"- 各方法在对齐子集外的缺失条数："
           + "，".join(f"{m} {n}" for m, n in alignment["excluded_by_method"].items()) + "。",
           "- 对齐子集上的排序（低→高）："

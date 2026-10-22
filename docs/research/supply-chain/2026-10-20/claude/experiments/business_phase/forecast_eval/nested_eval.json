@@ -1,5 +1,5 @@
 {
- "schema_version": "t10_nested_eval/2",
+ "schema_version": "t10_nested_eval/3",
  "inputs": {
   "db_sha256": "25579c5dcd802c7e67f610432a19d08f8e6952696bd50d43bdfa47d6b9241ae9",
   "destinations_sha256": "720b478809128156cc1609cd10720cb926a98382a7c2f8a8179c55cadbf7bf60"
@@ -11,7 +11,7 @@
   "missing_forecast": "缺失预测写 null（CSV 为空），不写 0。"
  },
  "rules": {
-  "r1_strata": "sample, tier, dominant warehouse and intermittent labels use THIS block's training window only (never post-origin sales)",
+  "r1_strata": "sample mother set, tier, dominant warehouse and intermittent labels use THIS block's training window only; the mother set also requires the first order month <= the outer origin (no not-yet-started SKUs)",
   "r2_inner": "model chosen on inner cut points inside each outer training window",
   "r3_outer": "outer refits every candidate and compares with fixed MA3/naive on the same sample",
   "r4_window": "monthly cumulative h=3, step 3, labels available at the time (label_available_at), refit per window",
@@ -46,25 +46,54 @@
   },
   "overlap_with_first_block": {
    "2025-10": 200,
-   "2026-01": 32,
-   "2026-06": 41
+   "2026-01": 50,
+   "2026-06": 33
   },
-  "rule": "per block: rank by TRAINING-window qty only (first .. outer origin), every k-th, first 200; blocks are therefore not the same series list",
-  "note": "三个外层块的样本各自独立抽取；块间不可直接比较，只做块内同样本对比。旧版用截至 2026-09 的全历史总量抽样，会让最终块实际值决定哪些序列被评估。"
+  "per_block": {
+   "2025-10": {
+    "n_mother": 1027,
+    "n_excluded_not_started": 210,
+    "n_sample": 200,
+    "sample_first_le_origin": true,
+    "max_first_in_sample": "2025-09",
+    "old_rule_not_started_in_sample": 28,
+    "n_changed_vs_old_rule": 332
+   },
+   "2026-01": {
+    "n_mother": 1134,
+    "n_excluded_not_started": 103,
+    "n_sample": 200,
+    "sample_first_le_origin": true,
+    "max_first_in_sample": "2025-12",
+    "old_rule_not_started_in_sample": 11,
+    "n_changed_vs_old_rule": 332
+   },
+   "2026-06": {
+    "n_mother": 1206,
+    "n_excluded_not_started": 31,
+    "n_sample": 200,
+    "sample_first_le_origin": true,
+    "max_first_in_sample": "2026-06",
+    "old_rule_not_started_in_sample": 0,
+    "n_changed_vs_old_rule": 0
+   }
+  },
+  "rule": "per block: mother set = series with first order month <= outer origin; rank by TRAINING-window qty only (first .. origin), every k-th, first 200; blocks are therefore not the same series list",
+  "note": "三个外层块的样本各自独立抽取；块间不可直接比较，只做块内同样本对比。旧版用截至 2026-09 的全历史总量抽样，且母集包含当时尚未首单的 SKU，会让最终块实际值和未来才出现的 SKU 进入早期块。"
  },
  "layout_note": "最后一个外层块 2026-06 的目标窗为 2026-07..09；它不是干净留出块（见 rules.r6_final）。",
  "common_subset": {
   "2025-10|exploratory": {
-   "n_common": 170,
-   "n_scored": 148,
-   "zero_retained": 22,
-   "missing_forecast": 2
+   "n_common": 197,
+   "n_scored": 176,
+   "zero_retained": 21,
+   "missing_forecast": 3
   },
   "2026-01|exploratory": {
-   "n_common": 176,
-   "n_scored": 150,
-   "zero_retained": 26,
-   "missing_forecast": 5
+   "n_common": 192,
+   "n_scored": 167,
+   "zero_retained": 25,
+   "missing_forecast": 8
   },
   "2026-06|last_evaluable_no_clean_holdout": {
    "n_common": 197,
@@ -74,46 +103,47 @@
   }
  },
  "fits": {
-  "total": 9820,
+  "total": 10688,
   "by_model": {
-   "naive": 2022,
-   "ma3": 2014,
-   "ma6": 2014,
-   "seasonal_naive": 1756,
-   "autoets": 2014
+   "naive": 2199,
+   "ma3": 2187,
+   "ma6": 2187,
+   "seasonal_naive": 1928,
+   "autoets": 2187
   },
   "cap": 14400
  },
  "failures": {
-  "seasonal_naive:ValueError": 318,
-  "autoets:NotImplementedError": 131,
-  "outer:insufficient_history": 49,
-  "outer:autoets:NotImplementedError": 45,
-  "autoets:ValueError": 25,
-  "autoets:KeyError": 2
+  "seasonal_naive:ValueError": 343,
+  "autoets:NotImplementedError": 153,
+  "outer:autoets:NotImplementedError": 35,
+  "autoets:ValueError": 24,
+  "outer:insufficient_history": 2,
+  "autoets:KeyError": 1,
+  "outer:autoets:KeyError": 1
  },
  "blocks": {
   "2025-10|exploratory": {
    "n": 200,
-   "n_valid": 172,
-   "n_common": 170,
-   "n_scored": 148,
-   "zero_retained": 22,
-   "missing_forecast": 2,
-   "selected": 0.463,
-   "ma3": 0.5312,
-   "naive": 0.4823
+   "n_valid": 200,
+   "n_common": 197,
+   "n_scored": 176,
+   "zero_retained": 21,
+   "missing_forecast": 3,
+   "selected": 0.721,
+   "ma3": 0.7408,
+   "naive": 0.5918
   },
   "2026-01|exploratory": {
    "n": 200,
-   "n_valid": 181,
-   "n_common": 176,
-   "n_scored": 150,
-   "zero_retained": 26,
-   "missing_forecast": 5,
-   "selected": 0.7722,
-   "ma3": 0.7713,
-   "naive": 0.5779
+   "n_valid": 200,
+   "n_common": 192,
+   "n_scored": 167,
+   "zero_retained": 25,
+   "missing_forecast": 8,
+   "selected": 0.6515,
+   "ma3": 0.6711,
+   "naive": 0.5553
   },
   "2026-06|last_evaluable_no_clean_holdout": {
    "n": 200,
@@ -129,12 +159,12 @@
  },
  "final_block": "2026-06|last_evaluable_no_clean_holdout",
  "selection_distribution": {
-  "naive": 146,
-  "seasonal_naive": 91,
-  "autoets": 87,
-  "ma6": 85,
-  "ma3": 76,
-  "combo_ew": 66
+  "naive": 136,
+  "ma6": 103,
+  "seasonal_naive": 99,
+  "autoets": 92,
+  "ma3": 89,
+  "combo_ew": 79
  },
  "strata": {
   "intermittent:no": {
@@ -260,15 +290,15 @@
   "next_window": "2026-10..12（该窗口标签闭合后按预存文件评分）"
  },
  "zero_denominator": {
-  "2025-10|exploratory": 22,
-  "2026-01|exploratory": 26,
+  "2025-10|exploratory": 21,
+  "2026-01|exploratory": 25,
   "2026-06|last_evaluable_no_clean_holdout": 22
  },
  "wording_note": "WAPE 是加权绝对百分比误差，不是“错 SKU 比例”或“准确率”，也没有通用阈值；本报告只陈述“在（部分）未见样本上的差异与不确定性”，不使用“改进/稳健/干净留出”等说法，也不把探索性时段称作留出验证；模型选择仍未定。",
  "compute": {
-  "seconds": 32.5,
-  "tracemalloc_peak_mb": 130.0,
-  "fits": 9820,
+  "seconds": 36.4,
+  "tracemalloc_peak_mb": 130.1,
+  "fits": 10688,
   "fit_cap": 14400
  }
 }

@@ -31,6 +31,10 @@ T12 audit fixes (2026-10-22) — see control/reviews/2026-10-22-t12-audit-fixes.
   window only; the "unused block" wording is corrected; zero-demand errors are
   retained; missing predictions are null; the common evaluable subset is stated.
 
+T14 recheck fix (2026-10-22) — M02: each block's sampling mother set is
+restricted to SKUs whose first order month is <= that block's origin, so series
+that did not exist yet cannot be sampled into an earlier block.
+
 Diagnostic only: the main table and the T2 model choice are NOT changed.
 Outputs: nested_eval.json, nested_eval.csv, nested_report.md
 """
@@ -158,6 +162,7 @@ def main() -> None:
     failures = Counter()
     rows_out = []
     sample_by_block = {}
+    sample_meta = {}
 
     def fit_forecast(model: str, y: np.ndarray, h: int):
         nonlocal fits
@@ -197,10 +202,30 @@ def main() -> None:
         # T10-1: the 200-series sample is drawn from THIS block's training
         # window only. Ranking by the full-history total (through 2026-09) would
         # let final-block actuals decide which series are evaluated.
-        keys = sorted(series, key=lambda s: (-training_total(s, O), s))
+        # M02 (T14): the mother set is ALSO restricted to series that already
+        # exist at this origin (first order month <= O). Sampling all eligible
+        # keys let SKUs whose first order came later enter earlier blocks
+        # (2025-10: 28 such SKUs, 2026-01: 11) — a forward-looking mother set.
+        mother = [s for s in series if series[s]["first"] <= O]
+        keys = sorted(mother, key=lambda s: (-training_total(s, O), s))
         step = max(1, len(keys) // N_SERIES)
         sample = keys[::step][:N_SERIES]
         sample_by_block[outer_ym] = sample
+        # diagnostic: how many SKUs the OLD (all-keys) rule would have sampled
+        # before they existed, and how much the sample changed
+        old_keys = sorted(series, key=lambda s: (-training_total(s, O), s))
+        old_sample = old_keys[::max(1, len(old_keys) // N_SERIES)][:N_SERIES]
+        sample_meta[outer_ym] = dict(
+            n_mother=len(mother),
+            n_excluded_not_started=len(series) - len(mother),
+            n_sample=len(sample),
+            sample_first_le_origin=all(series[s]["first"] <= O for s in sample),
+            max_first_in_sample=(i_ym(max(series[s]["first"] for s in sample))
+                                 if sample else None),
+            old_rule_not_started_in_sample=sum(1 for s in old_sample
+                                               if series[s]["first"] > O),
+            n_changed_vs_old_rule=len(set(sample) ^ set(old_sample)),
+        )
         for sku in sample:
             s = series[sku]
             n_tr = O - s["first"] + 1
@@ -377,7 +402,7 @@ def main() -> None:
     sample_overlap = {
         o: len(set(v) & set(sample_by_block[OUTER[0][0]])) for o, v in sample_by_block.items()}
     result = dict(
-        schema_version="t10_nested_eval/2",
+        schema_version="t10_nested_eval/3",
         inputs=dict(db_sha256=db_hash,
                     destinations_sha256=hashlib.sha256(DEST.read_bytes()).hexdigest()),
         metric_definition=dict(
@@ -388,8 +413,9 @@ def main() -> None:
                            "的行；三种方法在同一批单元格上比较。"),
             missing_forecast="缺失预测写 null（CSV 为空），不写 0。"),
         rules=dict(
-            r1_strata=("sample, tier, dominant warehouse and intermittent labels use THIS block's "
-                       "training window only (never post-origin sales)"),
+            r1_strata=("sample mother set, tier, dominant warehouse and intermittent labels use "
+                       "THIS block's training window only; the mother set also requires the first "
+                       "order month <= the outer origin (no not-yet-started SKUs)"),
             r2_inner="model chosen on inner cut points inside each outer training window",
             r3_outer="outer refits every candidate and compares with fixed MA3/naive on the same sample",
             r4_window="monthly cumulative h=3, step 3, labels available at the time (label_available_at), refit per window",
@@ -406,10 +432,13 @@ def main() -> None:
         candidates=CANDIDATES,
         series_sample=dict(
             n_per_block=sample_per_block, overlap_with_first_block=sample_overlap,
-            rule=("per block: rank by TRAINING-window qty only (first .. outer origin), "
-                  "every k-th, first 200; blocks are therefore not the same series list"),
+            per_block=sample_meta,
+            rule=("per block: mother set = series with first order month <= outer origin; "
+                  "rank by TRAINING-window qty only (first .. origin), every k-th, "
+                  "first 200; blocks are therefore not the same series list"),
             note=("三个外层块的样本各自独立抽取；块间不可直接比较，只做块内同样本对比。"
-                  "旧版用截至 2026-09 的全历史总量抽样，会让最终块实际值决定哪些序列被评估。")),
+                  "旧版用截至 2026-09 的全历史总量抽样，且母集包含当时尚未首单的 SKU，"
+                  "会让最终块实际值和未来才出现的 SKU 进入早期块。")),
         layout_note=("最后一个外层块 2026-06 的目标窗为 2026-07..09；它不是干净留出块"
                      "（见 rules.r6_final）。"),
         common_subset={k: dict(n_common=v["n_common"], n_scored=v["n_scored"],
@@ -469,7 +498,13 @@ def main() -> None:
           f"- 实际拟合 **{fits}** 次（上限 {FIT_CAP}）；运行 **{result['compute']['seconds']} s**，"
           f"tracemalloc 峰值 **{result['compute']['tracemalloc_peak_mb']} MB**",
           f"- 每块样本 {sample_per_block} 序列 × 外层 {len(OUTER)} × 内层 {len(INNER_OFFSETS)}，"
-          f"候选 {len(CANDIDATES)}；样本按各块训练窗销量抽取（块间不同）", "",
+          f"候选 {len(CANDIDATES)}；样本按各块训练窗销量抽取（块间不同）",
+          "- 母集按块起点限制（**首单 ≤ 块起点**）：" + "；".join(
+              f"{o} 母集 {m['n_mother']}、剔除未首单 {m['n_excluded_not_started']}、"
+              f"样本内最晚首单 {m['max_first_in_sample']}、"
+              f"旧规则样本中当时未首单 {m['old_rule_not_started_in_sample']}、"
+              f"新旧样本差异 {m['n_changed_vs_old_rule']}"
+              for o, m in sample_meta.items()), "",
           "## 同样本对比（WAPE，零需求单元格保留）", "",
           "口径：`Σ|F−A| / ΣA`，三种方法都在**同一共同可评分子集**上"
           "（该块 valid 且三个预测均非 null）。零需求单元格保留在分子中"
