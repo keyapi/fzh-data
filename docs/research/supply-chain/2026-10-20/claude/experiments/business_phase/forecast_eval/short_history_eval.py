@@ -60,6 +60,28 @@ STEP = 3
 METHODS = ["naive", "ses", "tsb", "category_borrowed", "combo_ew"]
 RULES = ["rule_current", "rule_tsb", "rule_ses", "rule_naive"]
 
+# T20 pre-registered guard threshold.
+# Evidence in statsforecast 2.1.1: AutoETS(season_length=1) raises
+# KeyError('fitted') at len=1 and NotImplementedError('tiny datasets') at
+# len=2..6; len>=7 fits. So len<7 must never attempt AutoETS. len<3 → naive
+# (no meaningful MA3 window), 3<=len<7 → MA3. Lengths >=7 keep the previous
+# behaviour (attempt AutoETS, fall back to MA3 on any exception).
+MIN_AUTOETS_LEN = 7
+
+
+def autoets_with_guard(y: np.ndarray, h: int) -> tuple[np.ndarray, str]:
+    """AutoETS with the pre-registered len<7 guard; returns (forecast, status)."""
+    n = len(y)
+    if n < 3:
+        return np.asarray(forecast("naive", y, h), dtype=float), "fallback_naive(len<3)"
+    if n < MIN_AUTOETS_LEN:
+        return np.asarray(forecast("ma3", y, h), dtype=float), "fallback_MA3(3<=len<7)"
+    try:
+        return np.asarray(forecast("autoets", y, h), dtype=float), "ok"
+    except Exception as exc:
+        return (np.asarray(forecast("ma3", y, h), dtype=float),
+                f"fallback_MA3({type(exc).__name__})")
+
 
 def bucket(n: int) -> str:
     if n < 3:
@@ -115,6 +137,9 @@ def main() -> None:
         g = item_group.get(dest.get(s, {}).get("mapped_item_code"))
         if g:
             group_members[g].append(s)
+    # deterministic peer order (DB GROUP BY order is not guaranteed)
+    for _v in group_members.values():
+        _v.sort()
 
     def borrowed(sku: str, origin_i: int) -> dict[int, float] | None:
         g = item_group.get(dest.get(sku, {}).get("mapped_item_code"))
@@ -152,20 +177,19 @@ def main() -> None:
                 lvl = float(np.mean(ytr[-min(3, tr):]))
                 pred["category_borrowed"] = float(np.sum(
                     [shape[(o + k) % 12] * lvl for k in range(1, H + 1)]))
-            # AutoETS raw status (production default) and its MA3 fallback
-            try:
-                f_auto = float(np.sum(forecast("autoets", ytr, H)))
-                auto_status = "ok"
-            except Exception as exc:
-                f_auto, auto_status = None, type(exc).__name__
+            # AutoETS via the T20 guard: len<7 never attempts AutoETS.
+            f_auto_vec, auto_status = autoets_with_guard(ytr, H)
+            if auto_status == "ok":
+                f_auto, rule_val = float(np.sum(f_auto_vec)), float(np.sum(f_auto_vec))
+            else:
+                f_auto, rule_val = None, float(np.sum(f_auto_vec))
                 autoets_fail[auto_status] += 1
-            f_ma3 = float(np.sum(forecast("ma3", ytr, H)))
             cells.append(dict(
                 sku=sku, n_history=n, bucket=bucket(n), origin=i_ym(o),
                 target_months=f"{i_ym(o+1)}..{i_ym(o+H)}", tr=tr, actual=actual,
                 **{m: pred.get(m) for m in METHODS},
                 autoets=f_auto, autoets_status=auto_status,
-                rule_current=(f_auto if f_auto is not None else f_ma3),
+                rule_current=rule_val,
                 rule_tsb=pred["tsb"], rule_ses=pred["ses"], rule_naive=pred["naive"],
                 zero_actual=bool(abs(actual) < 1e-9),
             ))
@@ -237,9 +261,13 @@ def main() -> None:
             alt: boot_delta(fb_cells, alt)
             for alt in ("rule_tsb", "rule_ses", "rule_naive")}
 
-    # ---- KeyError guard: raw AutoETS vs guarded, on each short series -------
+    # ---- KeyError / tiny-dataset guard: raw AutoETS vs guarded ------------
     guard = dict(
-        guard_rule="len(y) < 3 → naive（T9 建议的最小 guard）；长度 2–6 的 tiny_datasets 仍会抛错",
+        guard_rule=(f"len(y) < {MIN_AUTOETS_LEN} → 不尝试 AutoETS，直接 fallback"
+                    "（len<3→naive，3<=len<7→MA3）；len>=7 才尝试 AutoETS"),
+        threshold_basis=("statsforecast 2.1.1 实测：len=1 抛 KeyError('fitted')；"
+                         "len=2..6 抛 NotImplementedError('tiny datasets')；len=7 起可拟合。"
+                         "阈值 7 由此预先注册，未按评估效果调参。"),
         before={}, after={}, notes=[],
     )
     for b in ("n<3", "3<=n<13", "13<=n<24"):
@@ -253,10 +281,9 @@ def main() -> None:
                 raw["ok"] += 1
             except Exception as exc:
                 raw[type(exc).__name__] += 1
-            # guarded path: <3 points use naive, otherwise AutoETS
             try:
-                forecast("naive" if len(y) < 3 else "autoets", y, H)
-                after_ok["forecast_ok"] += 1
+                _f, status = autoets_with_guard(y, H)
+                after_ok[status] += 1
             except Exception as exc:
                 after_ok[f"still_{type(exc).__name__}"] += 1
         guard["before"][b] = dict(n=len(skus), status=dict(raw))
@@ -277,17 +304,33 @@ def main() -> None:
             except Exception as exc:
                 raw_l[type(exc).__name__] += 1
             try:
-                forecast("naive" if len(y) < 3 else "autoets", y, H)
-                after_l["forecast_ok"] += 1
+                _f, status = autoets_with_guard(y, H)
+                after_l[status] += 1
             except Exception as exc:
                 after_l[f"still_{type(exc).__name__}"] += 1
         by_length[L] = dict(n=len(skus_l), before=dict(raw_l), after=dict(after_l))
     guard["by_length"] = by_length
+    # T20 assertions: every len<7 series falls back, forecasts are finite, and
+    # no exception escapes the guard.
+    n_lt7 = 0
+    for s in short:
+        y = short[s]["y"]
+        f, status = autoets_with_guard(y, H)
+        if len(y) < MIN_AUTOETS_LEN:
+            n_lt7 += 1
+            assert status.startswith("fallback_"), (s, len(y), status)
+        assert len(f) == H and bool(np.all(np.isfinite(f))), (s, status)
+    guard["assertions"] = dict(
+        n_short=len(short), n_lt7=n_lt7, all_lt7_fallback=True,
+        uncaught_exceptions=0,
+        note="len<7 全部走 fallback 且预测有限；guard 内无未捕获异常")
     guard["notes"] = [
-        "len<3 guard 只覆盖 KeyError 类型（len=1 为主；len=2 有 1 例）；len=3..6 的 "
-        "tiny_datasets 仍会抛错，完整修复应把 guard 扩到 len<7 或捕获后回退 MA3",
+        "len<7 全部走 fallback：len=1–2 用 naive，len=3–6 用 MA3；不再尝试 AutoETS，"
+        "因此不再触发 tiny_datasets/KeyError",
         "len=1–2 的序列首单在 2026-08/09，当前没有完整 3 个月目标窗，故不进入计分；"
         "guard 只保证不再抛错，不伪造评分",
+        "阈值 7 来自库的实测行为（见 threshold_basis），不是按效果挑选；"
+        "len>=7 的行为与扩展前完全一致",
     ]
 
     # ---- anomalies (never silent) ------------------------------------------
@@ -377,7 +420,9 @@ def main() -> None:
          f"目标窗必须完全落在标签覆盖（≤{LABEL_END}）内。",
          "- 对齐：先取五方法 **(SKU, origin)** 共同交集，再聚合；不使用各方法各自子集。",
          "- 类目借力：peer 必须在该切点已有 ≥24 个月历史，形状只取截至该切点的 12 个月。",
-         "- 组合：naive/SES/TSB 固定等权；低置信：历史 <12 月或共同窗口 <3 个。", "",
+         "- 组合：naive/SES/TSB 固定等权；低置信：历史 <12 月或共同窗口 <3 个。",
+         f"- AutoETS guard（T20）：**len<{MIN_AUTOETS_LEN} 直接 fallback，不尝试 AutoETS**；"
+         "阈值来自 statsforecast 2.1.1 实测（§3）。", "",
          "## 1. 各方法指标（共同交集）", "",
          "| 方法 | MAE | WAPE | Bias | 单元格 | SKU |", "|---|---:|---:|---:|---:|---:|"]
     for m in METHODS:
@@ -414,8 +459,10 @@ def main() -> None:
                      f"[{d['p5']:+.3f}, {d['p95']:+.3f}] | "
                      f"{'是' if d['p5'] <= 0 <= d['p95'] else '否'} |")
         L.append("")
-    L += ["## 3. KeyError guard 前后对照", "",
-          "| 历史长度 | 条数 | 修复前（raw AutoETS） | 修复后（len<3→naive） |",
+    L += ["## 3. KeyError/tiny-dataset guard 前后对照", "",
+          f"规则：{guard['guard_rule']}",
+          f"阈值依据：{guard['threshold_basis']}", "",
+          "| 历史长度 | 条数 | 修复前（raw AutoETS） | 修复后（len<7→fallback） |",
           "|---|---:|---|---|"]
     for b in ("n<3", "3<=n<13", "13<=n<24"):
         L.append(f"| {b} | {guard['before'][b]['n']} | {guard['before'][b]['status']} | "
@@ -427,6 +474,9 @@ def main() -> None:
             v = guard["by_length"][L2]
             L.append(f"| {L2} | {v['n']} | {v['before']} | {v['after']} |")
     L += [""] + [f"- {n}" for n in guard["notes"]]
+    a = guard["assertions"]
+    L += [f"- 断言：len<7 共 {a['n_lt7']} 条全部走 fallback、预测有限；"
+          f"未捕获异常 {a['uncaught_exceptions']} 条（{a['n_short']} 条短历史逐条检查）。"]
     L += ["", "## 4. 同类异常（计数与处理）", "",
           "| 异常 | 数量 | 处理 |", "|---|---:|---|",
           f"| 单点序列（len=1） | {anomalies['single_point']['n']} | {anomalies['single_point']['handling']} |",

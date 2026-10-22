@@ -123,12 +123,10 @@
  "fallback_reliability": {
   "current_rule": "AutoETS 成功则用 AutoETS，失败（KeyError / tiny_datasets）则用 MA3",
   "autoets_failures": {
-   "NotImplementedError": 286,
-   "KeyError": 3
+   "fallback_MA3(3<=len<7)": 289
   },
   "autoets_failures_all_cells": {
-   "NotImplementedError": 751,
-   "KeyError": 12
+   "fallback_MA3(3<=len<7)": 763
   },
   "n_fallback_cells": 289,
   "n_fallback_sku": 147,
@@ -236,7 +234,8 @@
   }
  },
  "keyerror_guard": {
-  "guard_rule": "len(y) < 3 → naive（T9 建议的最小 guard）；长度 2–6 的 tiny_datasets 仍会抛错",
+  "guard_rule": "len(y) < 7 → 不尝试 AutoETS，直接 fallback（len<3→naive，3<=len<7→MA3）；len>=7 才尝试 AutoETS",
+  "threshold_basis": "statsforecast 2.1.1 实测：len=1 抛 KeyError('fitted')；len=2..6 抛 NotImplementedError('tiny datasets')；len=7 起可拟合。阈值 7 由此预先注册，未按评估效果调参。",
   "before": {
    "n<3": {
     "n": 15,
@@ -263,26 +262,27 @@
    "n<3": {
     "n": 15,
     "status": {
-     "forecast_ok": 15
+     "fallback_naive(len<3)": 15
     }
    },
    "3<=n<13": {
     "n": 203,
     "status": {
-     "forecast_ok": 147,
-     "still_NotImplementedError": 56
+     "ok": 147,
+     "fallback_MA3(3<=len<7)": 56
     }
    },
    "13<=n<24": {
     "n": 245,
     "status": {
-     "forecast_ok": 245
+     "ok": 245
     }
    }
   },
   "notes": [
-   "len<3 guard 只覆盖 KeyError 类型（len=1 为主；len=2 有 1 例）；len=3..6 的 tiny_datasets 仍会抛错，完整修复应把 guard 扩到 len<7 或捕获后回退 MA3",
-   "len=1–2 的序列首单在 2026-08/09，当前没有完整 3 个月目标窗，故不进入计分；guard 只保证不再抛错，不伪造评分"
+   "len<7 全部走 fallback：len=1–2 用 naive，len=3–6 用 MA3；不再尝试 AutoETS，因此不再触发 tiny_datasets/KeyError",
+   "len=1–2 的序列首单在 2026-08/09，当前没有完整 3 个月目标窗，故不进入计分；guard 只保证不再抛错，不伪造评分",
+   "阈值 7 来自库的实测行为（见 threshold_basis），不是按效果挑选；len>=7 的行为与扩展前完全一致"
   ],
   "by_length": {
    "1": {
@@ -291,7 +291,7 @@
      "KeyError": 4
     },
     "after": {
-     "forecast_ok": 4
+     "fallback_naive(len<3)": 4
     }
    },
    "2": {
@@ -301,7 +301,7 @@
      "KeyError": 1
     },
     "after": {
-     "forecast_ok": 11
+     "fallback_naive(len<3)": 11
     }
    },
    "3": {
@@ -310,7 +310,7 @@
      "NotImplementedError": 16
     },
     "after": {
-     "still_NotImplementedError": 16
+     "fallback_MA3(3<=len<7)": 16
     }
    },
    "4": {
@@ -319,7 +319,7 @@
      "NotImplementedError": 16
     },
     "after": {
-     "still_NotImplementedError": 16
+     "fallback_MA3(3<=len<7)": 16
     }
    },
    "5": {
@@ -328,7 +328,7 @@
      "NotImplementedError": 13
     },
     "after": {
-     "still_NotImplementedError": 13
+     "fallback_MA3(3<=len<7)": 13
     }
    },
    "6": {
@@ -337,7 +337,7 @@
      "NotImplementedError": 11
     },
     "after": {
-     "still_NotImplementedError": 11
+     "fallback_MA3(3<=len<7)": 11
     }
    },
    "7": {
@@ -346,9 +346,16 @@
      "ok": 11
     },
     "after": {
-     "forecast_ok": 11
+     "ok": 11
     }
    }
+  },
+  "assertions": {
+   "n_short": 463,
+   "n_lt7": 71,
+   "all_lt7_fallback": true,
+   "uncaught_exceptions": 0,
+   "note": "len<7 全部走 fallback 且预测有限；guard 内无未捕获异常"
   }
  },
  "anomalies": {
@@ -398,8 +405,7 @@
   "autoets_non_ok_cells": {
    "n": 289,
    "by_reason": {
-    "NotImplementedError": 286,
-    "KeyError": 3
+    "fallback_MA3(3<=len<7)": 289
    }
   }
  },
@@ -749,7 +755,7 @@
   ]
  },
  "runtime": {
-  "seconds": 5.2,
+  "seconds": 5.9,
   "cells": 1457,
   "aligned_cells": 685,
   "origins_rule": "step 3, h=3"

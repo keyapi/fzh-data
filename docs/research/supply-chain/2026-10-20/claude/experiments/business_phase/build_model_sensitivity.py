@@ -30,13 +30,16 @@ unfounded thresholds):
     and relative to the median lower);
   * sales and sales coverage.
 
-Three review lists
-  1. zero/positive divergence (highest priority for manual review);
-  2. same direction but the five intervals share no common point (review);
-  3. all five calibers give the same lower value (a basis for review priority,
-     NOT proof of correctness and NOT a purchase approval).
-Rows that are same-direction with overlapping intervals but different values
-are counted as a residual category, not silently dropped.
+Five-class partition (sums to 2,309)
+  ① zero/positive divergence (highest priority for manual review);
+  ③a all five calibers > 0 (priority manual review; inside it, ② = the five
+     intervals share no common point, ④ = intervals overlap but quantities
+     differ);
+  ③b all five calibers = 0 (no replenishment recommended under these
+     assumptions — conditional on the inventory/supply basis);
+  unknown inventory; out-of-scope (C).
+  ③a/③b split direction consistency; they are NOT a quality ranking. Agreement
+  between calibers is not correctness and not a purchase approval.
 
 T18 fix (2026-10-22)
   Direction consistency is the five-class partition that sums to 2,309:

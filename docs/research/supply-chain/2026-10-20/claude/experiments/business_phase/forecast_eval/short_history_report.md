@@ -9,6 +9,7 @@
 - 对齐：先取五方法 **(SKU, origin)** 共同交集，再聚合；不使用各方法各自子集。
 - 类目借力：peer 必须在该切点已有 ≥24 个月历史，形状只取截至该切点的 12 个月。
 - 组合：naive/SES/TSB 固定等权；低置信：历史 <12 月或共同窗口 <3 个。
+- AutoETS guard（T20）：**len<7 直接 fallback，不尝试 AutoETS**；阈值来自 statsforecast 2.1.1 实测（§3）。
 
 ## 1. 各方法指标（共同交集）
 
@@ -37,8 +38,8 @@
 
 ## 2. fallback 可靠性（AutoETS 失败 → MA3 的现规则）
 
-- 对齐子集内 AutoETS 失败单元格 **289**（涉及 147 SKU）：`NotImplementedError` × 286；`KeyError` × 3
-- 全部候选单元格（1457）上的失败计数：`NotImplementedError` × 751；`KeyError` × 12
+- 对齐子集内 AutoETS 失败单元格 **289**（涉及 147 SKU）：`fallback_MA3(3<=len<7)` × 289
+- 全部候选单元格（1457）上的失败计数：`fallback_MA3(3<=len<7)` × 763
 
 失败单元格上各规则的差异（tr<7 是 AutoETS 不可用的主要区间）：
 
@@ -59,28 +60,33 @@ SKU 重抽 300 次的 MAE 差（alt − 现规则）：
 | rule_ses | -0.026 | [-0.710, +0.613] | 是 |
 | rule_naive | +0.064 | [-1.680, +1.510] | 是 |
 
-## 3. KeyError guard 前后对照
+## 3. KeyError/tiny-dataset guard 前后对照
 
-| 历史长度 | 条数 | 修复前（raw AutoETS） | 修复后（len<3→naive） |
+规则：len(y) < 7 → 不尝试 AutoETS，直接 fallback（len<3→naive，3<=len<7→MA3）；len>=7 才尝试 AutoETS
+阈值依据：statsforecast 2.1.1 实测：len=1 抛 KeyError('fitted')；len=2..6 抛 NotImplementedError('tiny datasets')；len=7 起可拟合。阈值 7 由此预先注册，未按评估效果调参。
+
+| 历史长度 | 条数 | 修复前（raw AutoETS） | 修复后（len<7→fallback） |
 |---|---:|---|---|
-| n<3 | 15 | {'NotImplementedError': 10, 'KeyError': 5} | {'forecast_ok': 15} |
-| 3<=n<13 | 203 | {'ok': 147, 'NotImplementedError': 56} | {'forecast_ok': 147, 'still_NotImplementedError': 56} |
-| 13<=n<24 | 245 | {'ok': 245} | {'forecast_ok': 245} |
+| n<3 | 15 | {'NotImplementedError': 10, 'KeyError': 5} | {'fallback_naive(len<3)': 15} |
+| 3<=n<13 | 203 | {'ok': 147, 'NotImplementedError': 56} | {'ok': 147, 'fallback_MA3(3<=len<7)': 56} |
+| 13<=n<24 | 245 | {'ok': 245} | {'ok': 245} |
 
 按精确长度拆分：
 
 | len | 条数 | 修复前 | 修复后 |
 |---:|---:|---|---|
-| 1 | 4 | {'KeyError': 4} | {'forecast_ok': 4} |
-| 2 | 11 | {'NotImplementedError': 10, 'KeyError': 1} | {'forecast_ok': 11} |
-| 3 | 16 | {'NotImplementedError': 16} | {'still_NotImplementedError': 16} |
-| 4 | 16 | {'NotImplementedError': 16} | {'still_NotImplementedError': 16} |
-| 5 | 13 | {'NotImplementedError': 13} | {'still_NotImplementedError': 13} |
-| 6 | 11 | {'NotImplementedError': 11} | {'still_NotImplementedError': 11} |
-| 7 | 11 | {'ok': 11} | {'forecast_ok': 11} |
+| 1 | 4 | {'KeyError': 4} | {'fallback_naive(len<3)': 4} |
+| 2 | 11 | {'NotImplementedError': 10, 'KeyError': 1} | {'fallback_naive(len<3)': 11} |
+| 3 | 16 | {'NotImplementedError': 16} | {'fallback_MA3(3<=len<7)': 16} |
+| 4 | 16 | {'NotImplementedError': 16} | {'fallback_MA3(3<=len<7)': 16} |
+| 5 | 13 | {'NotImplementedError': 13} | {'fallback_MA3(3<=len<7)': 13} |
+| 6 | 11 | {'NotImplementedError': 11} | {'fallback_MA3(3<=len<7)': 11} |
+| 7 | 11 | {'ok': 11} | {'ok': 11} |
 
-- len<3 guard 只覆盖 KeyError 类型（len=1 为主；len=2 有 1 例）；len=3..6 的 tiny_datasets 仍会抛错，完整修复应把 guard 扩到 len<7 或捕获后回退 MA3
+- len<7 全部走 fallback：len=1–2 用 naive，len=3–6 用 MA3；不再尝试 AutoETS，因此不再触发 tiny_datasets/KeyError
 - len=1–2 的序列首单在 2026-08/09，当前没有完整 3 个月目标窗，故不进入计分；guard 只保证不再抛错，不伪造评分
+- 阈值 7 来自库的实测行为（见 threshold_basis），不是按效果挑选；len>=7 的行为与扩展前完全一致
+- 断言：len<7 共 71 条全部走 fallback、预测有限；未捕获异常 0 条（463 条短历史逐条检查）。
 
 ## 4. 同类异常（计数与处理）
 
@@ -104,7 +110,7 @@ SKU 重抽 300 次的 MAE 差（alt − 现规则）：
 - fallback（tr<7，289 格）相对现规则的 MAE 差：tsb +0.459（[-0.697, +1.980]），ses -0.026（[-0.710, +0.613]），naive +0.064（[-1.680, +1.510]）。
 - 判定（区间是否跨 0）：更差且区间不含 0 = 无；与现规则不可区分 = tsb, ses, naive；明确更优 = 无。
 - **结论：不建议**仅凭本表改用 TSB/SES——没有任何替代方法的区间整体更优；tsb、ses、naive 与现规则不可区分（区间跨 0）；现规则（AutoETS 失败→MA3）保留。
-- 计算规模：1457 个候选单元格、5.2 s。
+- 计算规模：1457 个候选单元格、5.9 s。
 
 ## 7. 复现
 
