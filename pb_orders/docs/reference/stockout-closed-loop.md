@@ -17,12 +17,35 @@ timestamp: 2026-10-16
 
 ## 1. 先查清（每次都要）
 
+**断货不是只看「通途可用库存 = 0」。** 报给 Diane / 填 Notion 的 restock date，
+必须由「上游有没有货、货到哪了」推出来，不能默认拍一个 +3 个月。
+
+### 1.1 本地与 SPS 事实
+
 | 要查 | 怎么查 |
 |---|---|
 | 是哪个 SKU | PB 批次目录的 `check0stock / checked0stock` CSV 的 `Vendor Style`（按 PO 找明细行） |
 | SPS 打没打单 | 批次目录的 `shipment x*.csv` 里有没有该 PO（有 = 建了 ASN）。**≠ 真发货** |
 | 有没有 invoice | `invoice/invoice x*.csv` 里有没有该 PO 的 H 行；记下 `Invoice Number` 与 `Invoice Total` |
-| 追踪号是否真走 | `ups_track` 查 `Carrier Tracking`，只看「除 MP 外有没有节点」 |
+| 追踪号是否真走 | `ups_track` 查 **`Pack Level Carrier Tracking ID`**（一单多件时 `Carrier Tracking` 可能是同一个汇总号；2026-10-19 实测看错过） |
+
+### 1.2 上游供给（决定 restock date，**最容易漏**）
+
+| 要查 | 怎么查 | 注意 |
+|---|---|---|
+| 有没有已下单未交 | EN **Sales Order**（按客户物料号 / EN 物料号） | SO 的「未交量」≠ 在途，货可能已出境 |
+| 生产做到哪 | EN **Production Plan / Work Order / Job Card** | 工单头部状态会滞后，看最后一道真实扫码 |
+| 工厂出了没有 | EN **Delivery Note** | 部分出库按行看，不能按整单 |
+| 头程在途 / 何时到 | 钉钉 **`2026年下单表`**（`2026年度订单明细` + `物流信息表`→ZMT 号）+ **`发货信息总表`**（`物流跟踪Tracking`：离港/到港/入库） | 用 **EN 销售订单编号** 匹配，不是 `po_no`；批次号只在首行有值，要向下填充 |
+| 有没有采购在途 | 通途 **采购单查询** | 通途可用库存恒 0 是常态，别拿它判「没货」 |
+| 海外仓还有没有 | 通途对应仓可用库存 | **EN Bin 不能当可用库存**（EN 不扣减通途） |
+
+**判定规则**：
+
+- 头程/采购里**有在途**且 ETA 早于客户最晚发货日 → 以在途 ETA 为准，不重复下单；
+- 没有在途 → 用「补货下单日 + 采购/生产提前期」推，**明确标注 TBC**；
+- 所有日期按 `事实 / 推导 / 估算 / 人工判断` 标注来源，别把估算写成事实（详见
+  `docs/solutions/architecture-patterns/en-end-to-end-supply-chain-fulfillment-visibility.md`）。
 
 ## 2. 五步
 

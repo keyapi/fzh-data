@@ -8,6 +8,19 @@ timestamp: 2026-09-22
 
 # 变更日志
 
+## 2026-10-22（第二十九轮：restock date 必须先查 EN 上游 + 钉钉头程）
+
+- **背景**：复盘「一个断货 SKU 的完整流程」时发现，之前的闭环只查了本地 CSV / SPS / UPS /
+  通途库存，**漏了 EN 销售订单、生产工单、工厂出库和钉钉头程表**；这四块决定 restock date，
+  不查就只能拍「+3 个月」。
+- **补进 reference §1.2**：EN **SO / PP / WO / 工序卡 / DN** + 钉钉 **`2026年下单表` /
+  `发货信息总表`**（ZMT、离港/到港/入库）+ 通途**采购在途** + 通途海外仓可用。
+  有在途且 ETA 早于客户最晚发货日 → 以在途为准；没有才按下单+提前期推，标 TBC。
+- **顺带修正**：§1 的 UPS 判据从 `Carrier Tracking` 改为 **`Pack Level Carrier Tracking ID`**
+  （一单多件时前者可能是汇总号，10-19 实测看错过）。
+- **文档**：`docs/reference/stockout-closed-loop.md`、`docs/solutions/.../pb-stockout-...md` §7、
+  skill、handoff 同步。
+
 ## 2026-10-21（第二十八轮：138120551 断货闭环 + IA 模板改法补精确步骤）
 
 - **背景**：美中仓反馈 `PBUS-138120551`（2017724 / TT0031010K0062878，Queen 1 件）无货。

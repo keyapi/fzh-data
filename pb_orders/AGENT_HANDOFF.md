@@ -526,6 +526,11 @@ uv run pytest tests/ -q
      日期单元格是带 `MM/DD/YYYY` placeholder 的 `input`，同样键盘输入 + `Enter`。
 - **教训**：上一轮文档把入口写成「打开模板 → Create New」、只写「对 textarea 键盘输入」，
   不够明确 → 本次先走了弯路。可复跑步骤已写死，下次第一步就按它做。
+- **2026-10-22 补（restock date 口径）**：报给 Diane / Notion 的到货日**不能默认 +3 个月**，
+  必须先查上游 —— EN **SO / PP / WO / 工序卡 / DN** + 钉钉 **`2026年下单表` / `发货信息总表`**
+  （ZMT 号、离港/到港/入库）+ 通途**采购在途**。有在途且 ETA 早于客户最晚发货日 → 以在途为准；
+  没有才按「补货下单 + 提前期」推并标 TBC。`stockout-closed-loop.md` §1.2 与
+  `pb-stockout-post-shipment-closed-loop.md` §7 已补。
 
 ### 2026-10-19（SPS Order 先点开 + AKN 重发的判断口径）
 

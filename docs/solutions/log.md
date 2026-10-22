@@ -7,6 +7,10 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-10-22（断货 restock date 必须先查 EN 上游 + 钉钉头程）
+
+- **更新**: `workflow-issues/pb-stockout-post-shipment-closed-loop.md` 新增 **§7「restock date 必须先查上游」**：断货 ≠ 拍一个 +3 个月。报给 Diane / Notion 的日期要从六处推出来 —— EN **Sales Order**（已下单未交）、**Production Plan / Work Order / 工序卡**（生产到哪）、**Delivery Note**（工厂出了没有）、**钉钉 `2026年下单表` + `发货信息总表`**（ZMT、离港/到港/入库）、**通途采购在途**、**通途海外仓可用**。判定：有在途且 ETA 早于客户最晚发货日 → 以在途为准；没有才按「补货下单 + 提前期」推并标 TBC。另补一条 Why：不查上游会把「已在生产/已在海上」的货报成还要等 3 个月，导致 PB 重新排期或内部重复下单。同步 `pb_orders/docs/reference/stockout-closed-loop.md` §1.2、`pb-orders` skill 与 `AGENT_HANDOFF.md`；同时把 §1 的 UPS 判据从 `Carrier Tracking` 改为 **`Pack Level Carrier Tracking ID`**。
+
 ## 2026-10-21（IA 模板改法补精确入口与 Handsontable 提交手法）
 
 - **更新**: `workflow-issues/sps-portal-ia-akn-operations.md` §2/§6.3 修正两处会让人反复试错的地方：**① 入口不是模板文档页** —— 打开 Template 单据后没有 Create New，正确入口是交易列表右上 Create New → 勾「I don't have a source document.」→ Inventory Advice → 选已有模板 → Number of Documents = 1；**② Handsontable 单元格只认真实键盘事件** —— 必须先 JS `focus()` 那个 `textarea.handsontableInput`，再 `keyboard.type` + `Enter`；`locator.fill()` 或 JS 设 value + dispatchEvent 都不会提交，单元格仍显示旧值（2026-10-21 实测反复踩）。日期单元格是带 `MM/DD/YYYY` placeholder 的 `input`，同样用键盘输入 + Enter。另把底部批量发送按钮的判据从「y > 900」改为「取 send 按钮的 last()（本次 y≈850，视口不同会变）」。

@@ -39,7 +39,12 @@ uv run python run_pb_orders.py --dir "<批次目录>"                           
 
 ### B. 打单后才发现无货（本 skill 的重点）
 
-美中仓回话说某 PO 无货时，按顺序做四件事 —— 见 reference 文档 §2：
+**先查上游再报 restock date**：EN **Sales Order / Production Plan / Work Order / Delivery Note**
++ 钉钉 **`2026年下单表` / `发货信息总表`**（头程在途、ETA）+ 通途**采购在途**。
+有在途且 ETA 早于客户最晚发货日 → 以在途为准；没有才按「补货下单 + 提前期」推并标 TBC。
+**不要默认拍 +3 个月**（reference 文档 §1.2）。
+
+美中仓回话说某 PO 无货时，按顺序做五件事 —— 见 reference 文档 §2：
 
 1. **清 invoice**（月底钉钉提交前必须做）：原 `invoice xNN …csv` + 总额 txt 移进 `invoice/NotUsed/`；
    生成去掉无货 H+D 行的新 csv；**新总额写进新的 0 字节 txt 文件名**，格式
