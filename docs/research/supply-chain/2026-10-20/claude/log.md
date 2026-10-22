@@ -625,6 +625,66 @@ tags: [supply-chain, research, log]
   `gs_orders` 无状态字段，取消/退货未剔除；PO021733/735 重复候选仅按行同值判定。
 - 失败/放弃：无（约 20 分钟完成样例与全量 + review 修正）；剩余是业务/单据证据缺口，不是时间。
 
+## 2026-10-22 — V1 候选模型赛马（10 SKU，共形累计 P90）
+
+- 执行 `control/reviews/2026-10-22-model-race-task.md`；只读 `order_store.duckdb`（`read_only=True`，
+  sha256 `25579c5d…` 运行前后不变）与 V0.1 `out/replenishment_v0/evidence.json`
+  （sha256 `7eea7c6f…`）。0 次生产访问、0 下单、未扩样；未改 `build_v0.py`/V0.1 报告。
+- 五候选：seasonal naive、mean3、seasonal×YoY（6 月窗口、截断/收缩、近零/零窗口保护）、
+  **ETS 明确跳过**（无 statsmodels/statsforecast，不复活 V0 手写 HW）、peer shape
+  （其余 9 SKU 同日历月中位形状 × 本 SKU 近 12 月水平）。
+- 回测：2026-01..06 六个起点，h1/h3；零实际单元保留；**累计 P90 用滚动累计误差的
+  经验/共形分位**（`ceil((n+1)*0.9)/n`、`method='higher'`），不用 √h/√6；本 SKU 主口径
+  n≥3、n≥10 才标 `conformal_empirical`，不足用 pooled 相对误差并标 estimate。
+- 结果（h3 聚合，60 单元）：s1 WAPE **44.7%** / bias −10.1% / 覆盖 **83.3%**；
+  s×YoY 51.3% / +8.6% / 86.7%；peer 58.5% / +23.3% / **96.7%**；mean3 63.6% / −53.4% / 91.7%。
+  h1 最好的是 mean3（58.0%）。逐 SKU h3 赢家：s1 5 个、peer 3 个、mean3 2 个、s×YoY 0 个。
+  3 月 P50 最大/最小：**3.9–14.9×**，10/10 SKU 都是 high 分歧。
+- 6 个 8%–20% SKU（DEEPGREY/DEEPBLUE/XMMBS-100/CMKTR-DB/PR-GREY/CMKTR-GREY）：
+  `ratio = 季节反差 / 同比水平`，季节反差 **4.7%–15.7%**、同比 **0.50–1.08**，恒等式误差 0；
+  **V0 的“6–9 月明显更高”只对 2/6 成立**（XMMBS-100 1.29×、PR-GREY 1.37×），
+  其余 4 个 Jun–Sep 同比 0.74–0.76。6/6 可用库存低于正向 SO、Sep/Aug 0.4%–41%，
+  删失方向不能证；结论写成“淡季情景 + 删失未校正”。
+- White：2025-08（首月）240 → 2026-08 **280**（+16.7%），280 = 237 笔 Amazon 单件单
+  （qty 1–2）+ 32 Wayfair + 5 Shopify，最大单行 2 件；2026-06 也有 141 尖峰。
+  mean3 107.7/月 = 2025 Q4 均值 7.3 的 **14.7×**；候选 3 月总量 22/22/47/323，
+  P90 78/78/163/728。建议：8 月作事件情景，Q4 低基线用 s1/peer，mean3 只作上限。
+- 动作敏感性（L90，P90 窗口 + 正向 SO vs A/B 边界）：**always 4**（DEEPGREY/DEEPBLUE/
+  PR-GREY/Natural-194）、**insufficient 6**（XMMBS-100/CMKTR-DB/Linen-153/CMKTR-GREY/
+  White/HLR）；L60 时 153/HLR 四候选一致 `depends_on_arrival`，L90/L120 因候选分歧转 I。
+  s×YoY 是 XMMBS-100/CMKTR-DB/CMKTR-GREY 翻转来源（P90 小样本），White/HLR 翻转来自 mean3。
+  聚合 L90 需补区间（不是订单）：s1 1,912–6,316、s×YoY 2,015–5,717、peer 3,693–7,951、
+  mean3 8,607–13,311。
+- 产物：`experiments/g2g3_pilot/model_race.py`、`control/reviews/2026-10-22-model-race.md`、
+  `out/replenishment_v0/model_race.json`（约 474 KB；行数 21,826 → 300 单元，坏日期 0，
+  零填充 2）。固定 commit 后推送；不合并 PR。
+- 失败/放弃：无（约 1 小时含实现与复核）。剩余是外部输入缺口（断货校正、PO ETA/WO 日期、
+  UOM、Cover、White 促销/Listing 日历），不是模型能补的。
+
+## 2026-10-22 — P90-free 10 SKU 暂行行动清单（D10 后）
+
+- 执行 `control/reviews/2026-10-22-actions-task.md`；**只读** 98e1c664 的两份产物
+  （`out/replenishment_v0/evidence.json` sha256 `15d52072…`、V0 报告 sha256 `cc5ab459…`），
+  未读取任何后续工作区产物；0 次生产访问、未下单、未扩样。
+- 判定规则先定后算：D1 = P50（不含 SO，日历窗口积分）；D2 = P50 + 正向 live SO（重叠未证）；
+  供给用 A 下/上、B_min/B_max。T1 身份 10/10；**T2 单位 10/10 不成立**（uom unknown_conditional）；
+  T3 `B_max < D1` 仅 1/10；T4 `A_low < D2 ≤ B_max` 6/10。
+- 结果：**always_replenish 0 / depends_on_arrival 6 / insufficient_evidence 4**。
+  White 是唯一算术上满足 always 的 SKU（B_max 221 < D1 250.1，缺 29.1，占 B_max 13.2%），
+  但卡在 T2 与低置信 mean3，按规则不升级，标 `arithmetic_qualifies`。
+- 关键发现：去掉 P90 后短缺面大幅收窄，主要问题变成“到货时点/单据重叠未证”；
+  3 个 SKU（DEEPGREY/DEEPBLUE/PR-GREY）A=B 无到货杠杆，结论只取决于 SO 与预测是否重叠。
+- 窗口敏感性：9/10 在 remaining_3m/L60/L90/L120 分类一致；XMMBS-194 在 L120 会落入
+  insufficient_evidence（D2 1,025.2 > B_max 980 而 D1 394.2 < 980），已在 JSON 写明。
+- D9 逐行对应并标注 4 处变化（含 **XMMBS-194 由“可准备”降为 depends_on_arrival**：
+  D9 依据的 60 天区间为 P90 派生，P50 下在手 360 < 859.8，必须靠在产 620 完工）。
+- 对账：入 10 → 出 10；分类合计 0+6+4；与冻结 aggregate 逐项相等
+  （available 1,015 / 在途 1,184 / PO 原始 1,465 / A 1,015–3,205 / B 3,953–5,854 /
+  live SO 2,924 / 死单 1,675 / 超发 -907）；D1 1,152.4 + live SO 2,924 = D2 4,076.4。
+- 产物：`control/reviews/2026-10-22-replenishment-actions-v0.md`、`out/replenishment_v0/actions.json`。
+- 失败/放弃：无；剩余是业务/单据证据（UOM、PO 重复候选与 ETA、WO 日期、在途关单键、
+  SO 增量性），不是时间。
+
 ## 模板（后续阶段）
 
 ```text

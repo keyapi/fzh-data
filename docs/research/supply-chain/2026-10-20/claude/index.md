@@ -45,10 +45,15 @@ tags: [supply-chain, research, index]
 | [control/reviews/2026-10-22-eta-cover-uom-evidence.md](control/reviews/2026-10-22-eta-cover-uom-evidence.md) | B v2：5 trace SKU 主口径 + 10 expand10 扩展；ETA/Cover/UOM/在途证据与可复算键 |
 | [control/reviews/2026-10-22-sample-2sku.md](control/reviews/2026-10-22-sample-2sku.md) | G2+G3 2-SKU 端到端样例（历史需求→预测/回测→库存/PO/在产→A/B 情景） |
 | [control/reviews/2026-10-22-supply-demand-replenishment-v0.md](control/reviews/2026-10-22-supply-demand-replenishment-v0.md) | G2+G3 10-SKU 窄范围 V0（只读；不是下单建议） |
+| [control/reviews/2026-10-22-model-race.md](control/reviews/2026-10-22-model-race.md) | **V1 五候选赛马**：6 起点回测、共形累计 P90、6 SKU 8%–20% 分解、White 8 月峰值、补货动作敏感性 |
+| [control/reviews/2026-10-22-model-race-task.md](control/reviews/2026-10-22-model-race-task.md) | V1 赛马任务书（10 SKU、五候选、滚动回测、经验/共形 P90） |
 | [control/reviews/2026-10-22-v0-review1-response.md](control/reviews/2026-10-22-v0-review1-response.md) | 对 Codex1 V0 review1 的逐条修复响应（正向 SO、A/B 边界、日历窗口、P90 √6、零需求保留） |
 | [control/reviews/2026-10-22-replenishment-triage.md](control/reviews/2026-10-22-replenishment-triage.md) | D9 补货行动分层：可准备 1 / 待核实 2 / 暂缓 7（不是下单清单） |
+| [control/reviews/2026-10-22-replenishment-actions-v0.md](control/reviews/2026-10-22-replenishment-actions-v0.md) | **P90-free 暂行行动清单**：always_replenish 0 / depends_on_arrival 6 / insufficient_evidence 4；只读 98e1c664，不含 P90 与数量 |
+| [out/replenishment_v0/actions.json](out/replenishment_v0/actions.json) | 行动清单机器可读版（T1–T4 判定、D1/D2 与 A/B 边界、需补证据、责任角色、启动条件） |
 | [out/replenishment_v0/evidence.json](out/replenishment_v0/evidence.json) | V0 聚合证据（10 SKU；无原始订单行；含查询定义与源哈希） |
-| [experiments/g2g3_pilot/](experiments/g2g3_pilot/) | G2+G3 只读构建脚本与 2-SKU 样例 JSON |
+| [out/replenishment_v0/model_race.json](out/replenishment_v0/model_race.json) | **V1 赛马 canonical 证据**（逐 SKU 候选/回测/共形标定/动作敏感性） |
+| [experiments/g2g3_pilot/](experiments/g2g3_pilot/) | G2+G3 只读构建脚本、2-SKU 样例 JSON、V1 `model_race.py` |
 | [sources.md](sources.md) | 证据账本（ID / 主张 / 来源 / 日期 / 原文 / 强度） |
 | [log.md](log.md) | 过程记录、失败与放弃方向 |
 | [experiments/](experiments/index.md) | E1–E3 最小验证的代码、输入哈希与结果 |
