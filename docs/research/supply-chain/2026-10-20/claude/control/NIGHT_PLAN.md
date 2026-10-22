@@ -54,13 +54,27 @@ status: active
 | N1 | - | done | 16:44 | 16:46 | `8b2a23e5`（收口证明）+ `d04e943c`（标签更正） | 14/14 断言真；并集 122；`model_race_commit=d2eac9a3` 且保留 `declared_baseline_commit=f9df4357`；122 行仍全 pending、数量全 null；`check_secrets` 622 零输出 | 完成，无阻塞 |
 | N2 | S0 选样冻结 | done | 16:46 | 16:48 | `909635da` | 10 名额：8 填充 / 2 缺额（`work_order_not_in_snapshot`、`no_open_po_line_with_eta`），8 个不同 SKU，已冻结不换 | 无阻塞；缺额为外部数据缺失 |
 | N2 | B1 | done | 16:49 | 16:51 | `4626a779` | 2 SKU（S1 紧急 / S2 重叠）；每链 facts 7 / scenarios 5 / blockers 5；可算结余 345 与 55、`gap_lower_bound=0.0` 且注明是已证下界；建议全「待核实」 | 已知 minor：`counts.recommendations` 记为 1，实际 2，待 N3 整理时修正 |
-| N2 | B2 | running | 16:52 | | | `TT0312701K0064561`(重叠) + `C/Cord-DKBlue-100-713-wow`(PO-ETA 不确定) | 同三层结构；counts 必须相加 |
-| N2 | B1 | pending | | | | | |
-| N2 | B2 | pending | | | | | |
-| N2 | B3 | pending | | | | | |
-| N2 | B4 | pending | | | | | |
-| N2 | B5 | pending | | | | | |
-| N3 | - | pending | | | | | |
+| N2 | B3 | done | 16:54 | 16:56 | `9dc1f0df` | 2 个零库存 SKU，零库存已定性 `proven_zero_available`（完整盘点快照 14/14 仓、available=0）；facts 16 / scenarios 10 / blockers 8，计数断言全过 | 完成 |
+| N2 | B4 | superseded | — | — | — | 用户 2026-10-22 指令：范围扩至全 1,328 母集，B4/B5 不再单独做 2-SKU 报告 | 代表链结构由 FULL-BATCH 复算自检 |
+| N2 | B5 | superseded | — | — | — | 同上 | — |
+| FULL-BATCH | 全母集批处理 | done | 16:57 | 17:00 | `c1d8f1f5`（修 `7baa4918`） | 1,328 行、A=0/B 2,058/C 91；8 例自检一致 | 后续见下方 T5–T13 结果 |
+
+## 夜间执行结果（T5–T13，2026-10-22 18:30）
+
+| 任务 | commit | 结果 | 审查 |
+|---|---|---|---|
+| FULL-BATCH | `c1d8f1f5` → 修 `7baa4918` | 全 1,328 SKU 条件建议；A=0 / B 2,058 / C 91 | #301 FULL-REVIEW FAIL→已修 |
+| T2 | `c38a07e1` → 修 `94527b62` | 9 候选对照；共同子集选模 | #301 FAIL（3 major）→ 已修 |
+| T3 | `ab808652` | SKU×仓 2,309 行 + PR297 对拍 | — |
+| T4 | `ba0c13cc` | 逐行解释 + 8 类异常 | — |
+| T5 | `1c071548` → `7e0f6fc4` | 迭代版 2,309×45，全表无 P90 | 双轨审 FAIL→两轮未全清（见 T9/T10） |
+| T6 | `5b9b5ca9` | **同仓库存 2,058 行 0 不符**；摊派 0；责任方 7 类；lead_days 518 SKU（3–30 天，不能当端到端） | — |
+| T9 | `2b405bb9` → `ad3687c4` | 误差归因；112 行=**71 SKU=0.1% 销量**；KeyError 最小复现 | #301 FAIL→已修 |
+| T10 | `ad206aae` → `ad3687c4` | 嵌套评估；**无干净留出块**；修正后 MA3 0.4978 / naive 0.5016 / 选择流程 0.5255，区间跨 0 | #301 FAIL→已修 |
+| T11 | `8e8731d5` | 模型证据节 + 证据索取包（7 责任方）+ 前向影子方案 | — |
+| T13 | `dd2a57e5` | 前向影子零分母口径对齐 | — |
+
+**模型结论**：不支持"选择流程/AutoETS 更好"；AutoETS 仅为规则默认；模型选择未定，待前向影子（见 DECISIONS D19）。
 
 ## 晨间交接
 
