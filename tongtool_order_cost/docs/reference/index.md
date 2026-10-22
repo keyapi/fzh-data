@@ -13,4 +13,5 @@ tags: [reference, index]
 | [gsheets-credentials.md](gsheets-credentials.md) | gspread 本地 SA JSON |
 | [gsheet-monthly-sheet-upload.md](gsheet-monthly-sheet-upload.md) | 月度成品 xlsx → 固定 gsheet 月度 ws（patch 写入：复制/归档/只覆盖变化列） |
 | [monthly-tail-cost-pipeline.md](monthly-tail-cost-pipeline.md) | 月度尾程补齐全链路（通途导出→EN 预估→键值合并→GSheet）+ 覆盖率口径 + 缺尾清单 |
+| [fedex-billing-online-download.md](fedex-billing-online-download.md) | FedEx 官方账单下载指引（FedEx Billing Online 登录 / 两条下载路径 / 限额 / 按号查票 / 无 API） |
 | [sku-remap.md](sku-remap.md) | 订单旧 SKU → 井新名 |
