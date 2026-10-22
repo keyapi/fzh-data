@@ -25,6 +25,9 @@
     预算）预占 wire 与解压后字节；正常返回即结算为实际字节，并释放多余预占。
     边界放弃（取消）后工作线程不再改账本，预占值作为**保守上界留在账本里**——
     已从 socket 读走但来不及结算的字节不会丢账（复审反例：实读 16 字节、账本 0）。
+    **阻塞读抛异常（超时/断连）同样保留预占**：http.client/urllib3 可能已从
+    socket 读走部分字节再抛超时，无法证明未消耗；保留并计入日志/账本，续跑不会
+    把已消耗字节当 0。只有 EOF 能证明未消耗，才释放。
   * **绝对截止**：`deadline=`（epoch 秒 / datetime / `"22:30"`）与相对墙钟预算
     取**更早**者；越过绝对截止后任何请求都在发请求前拒绝。
   * 429 遵守 Retry-After、最多重试 2 次；401/403 立即停；连续 3 次网络错误/5xx 立即停。
@@ -1154,12 +1157,22 @@ class ProductionBudget:
                     and not _stream_at_eof(resp, body.wire, headers)):
                 body.oversized = True
         except (requests.RequestException, _Urllib3HTTPError, OSError) as e:
-            # 读流超时/断连：已结算字节保留。本次阻塞读以异常结束、**没有交付
-            # 任何块**，属于已结算而非“取消后未结算”，因此释放它的预占；
-            # 否则一次瞬时超时就会吃掉剩余全部字节额度，重试也失去意义。
+            # 读流超时/断连：已结算字节保留。异常**不能证明**本次阻塞读没从
+            # socket 读走任何字节：http.client/urllib3 会先把数据读进缓冲区、
+            # 再在等剩余数据时抛超时（实测：读走 16 字节后 timeout，调用方
+            # 一个字节也拿不到）。过去在这里整笔释放预占，这些已消耗字节就从
+            # 账本/日志里消失（实读 16 字节、账本 0，续跑仍是 0）。现在与取消
+            # 路径同口径：预占作为**保守上界**保留，并入 body 计数并同步 call，
+            # 让日志 `bytes`、账本 `cum_bytes` 与重试/续跑口径一致。只有能证明
+            # 未消耗的 EOF 才释放预占（见上面的 StopIteration 分支）。
             with self._io_lock:
-                if call is None or not call.cancelled:
-                    self._release_reservation(res)
+                body.wire += res.wire
+                body.decoded += res.decoded
+                res.wire = 0
+                res.decoded = 0
+                if call is not None:
+                    call.wire = body.wire
+                    call.decoded = body.decoded
             body.error = e
         return body
 

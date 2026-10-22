@@ -24,7 +24,8 @@
 
   * 取消后丢弃已读块（实读 16 字节、账本 0）：阻塞读**之前**预占读取额度，
     取消后工作线程不再结算、预占作为保守上界保留（绝不清除未结算字节）；
-    正常完成 / EOF / 读流异常分别结算为实际字节 / 0 / 释放。
+    正常完成 / EOF / 读流异常分别结算为实际字节 / 0 / 保留预占
+    （读流异常可能是“socket 已读走部分字节后再抛超时”，无法证明未消耗）。
   * 截止返回路径同步 `close()`（80ms 预算实测 437ms）：主线程到点不再关闭
     响应，交给工作线程的 `finally`；回归用例用会阻塞 1 秒的 close 证明主线程
     立即返回且不是它调用 close。
@@ -765,25 +766,86 @@ class ExecutionBoundaryTests(BudgetExhaustedAssertions):
             self.assertEqual(ledger(d)["used"]["bytes"], len(body))
             self.assertTrue(b.reconcile()["ok"])
 
-    def test_inflight_read_error_releases_reservation_and_reconciles(self):
-        """阻塞读以异常结束（未交付任何块）：释放预占，不能一次吃掉全部额度。"""
-        class TimeoutRaw(FakeRaw):
+    def test_partial_read_then_timeout_keeps_reserved_bytes_across_retry_and_resume(self):
+        """复审反例（P:1157）：读流异常整笔释放预占 → 实读 16 字节、账本/日志 0。
+
+        真实 http.client/urllib3 的 `read(amt)` 可能先把部分字节读进缓冲区、再在
+        等剩余数据时抛超时：调用方拿到异常而非字节，但 socket 上那 16 字节已经
+        消耗。异常无法证明本次读未消耗，因此预占必须保留并并入 body 计数，让
+        日志 `bytes`、账本 `cum_bytes`、重试与续跑口径一致（绝不归 0）。
+        """
+        class PartialThenTimeoutRaw(FakeRaw):
+            """第一次 read 已从 socket 读走 16 字节，随后抛超时（交付 0 字节）。"""
+
+            def __init__(self):
+                super().__init__([])
+                self.internal_bytes_read = 0
+                self.raised = False
+
+            def read(self, amt, decode_content=False):
+                if not self.raised:
+                    self.raised = True
+                    self.internal_bytes_read = 16   # 已读走，但随异常丢弃
+                    raise pb.requests.Timeout("read timed out")
+                return super().read(amt, decode_content=decode_content)
+
+        resp = FakeResponse(chunks=[])
+        resp.raw = PartialThenTimeoutRaw()
+        body = b'{"data": [{"name": "SO-1"}]}'
+        http = FakeHTTP([resp, FakeResponse(chunks=[body])])
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
+            b = make(d, http)                       # 无字节上限：预占 = CHUNK
+            out = fetch(b)                          # 第 1 次超时 → 第 2 次成功
+            self.assertEqual(resp.raw.internal_bytes_read, 16)
+            self.assertEqual(out.body, {"data": [{"name": "SO-1"}]})
+            self.assertEqual(len(http.calls), 2)    # 保留预占没有吃掉重试
+            self.assertEqual(b.used_bytes, pb.CHUNK + len(body))
+            self.assertEqual(b.used_failures, 1)
+            lines = log_lines(d)
+            self.assertEqual([x["status"] for x in lines], ["read_error", 200])
+            self.assertEqual(lines[0]["bytes"], pb.CHUNK)   # 不是 0
+            self.assertEqual(lines[1]["bytes"], len(body))
+            b.close()
+            led = ledger(d)
+            self.assertEqual(led["used"]["bytes"], pb.CHUNK + len(body))
+            self.assertIsNone(led["pending"])
+            self.assertTrue(b.reconcile()["ok"])
+
+            # 续跑：新进程从同一账本继续，已消耗字节不会被当 0 重置
+            b2 = make(d, FakeHTTP([FakeResponse(chunks=[b'{"data": []}'])]))
+            self.assertEqual(b2.used_bytes, pb.CHUNK + len(body))
+            self.assertFalse(b2.exhausted)
+            fetch(b2)
+            self.assertEqual(b2.used_bytes, pb.CHUNK + len(body) + len(b'{"data": []}'))
+            self.assertTrue(b2.reconcile()["ok"])
+            b2.close()
+
+    def test_partial_read_timeout_never_undercounts_capped_byte_budget(self):
+        """有字节上限时同样不得把已消耗字节清 0：宁可保守停，不可少记。"""
+        class PartialThenTimeoutRaw(FakeRaw):
             def read(self, amt, decode_content=False):
                 raise pb.requests.Timeout("read timed out")
 
         resp = FakeResponse(chunks=[])
-        resp.raw = TimeoutRaw([])
-        http = FakeHTTP([resp, resp, resp])
+        resp.raw = PartialThenTimeoutRaw([])
+        http = FakeHTTP([resp])
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
             b = make(d, http, max_bytes=1000)
             with self.assertRaises(pb.BudgetExhausted) as ctx:
                 fetch(b)
-            self.assertStopped(ctx, "consecutive_failures")
-            self.assertEqual(len(http.calls), 3)        # 预占释放后仍可重试
-            self.assertEqual(b.used_bytes, 0)
+            # 预占 = min(CHUNK, 剩余字节) = 1000，保留后预算用尽 → 下一次请求前拒绝
+            self.assertStopped(ctx, "bytes")
+            self.assertEqual(len(http.calls), 1)
+            self.assertEqual(b.used_bytes, 1000)
+            self.assertEqual(log_lines(d)[-1]["bytes"], 1000)
             b.close()
-            self.assertEqual(ledger(d)["used"]["bytes"], 0)
+            self.assertEqual(ledger(d)["used"]["bytes"], 1000)
             self.assertTrue(b.reconcile()["ok"])
+
+            b2 = make(d, http, max_bytes=1000)      # 持久停：续跑不静默少记后放行
+            self.assertTrue(b2.exhausted)
+            self.assertEqual(b2.used_bytes, 1000)
+            b2.close()
 
     def test_deadline_return_never_calls_blocking_close(self):
         """复审反例（P:1138）：主线程同步 close() → 80ms 预算实测 437ms。

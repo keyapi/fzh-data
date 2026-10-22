@@ -29,7 +29,7 @@ tags: [supply-chain, g1, mapping, index]
 | [prod_budget.md](prod_budget.md) | **生产只读统一预算闸门**：请求/字节/墙钟/绝对截止四类预算、跨进程账本、日志对账、持久锁停（终止态原子落盘 + 从日志重建）、在途读取预占与崩溃恢复 |
 | [prod_budget.py](prod_budget.py) | 两取数工具共用的预算账本与唯一 HTTP 出口（按剩余额度读、限长解压、禁重定向且关闭隐式预读、整次 HTTP 可中断边界、取消时保守入账在途读取、截止返回路径不阻塞、独占锁） |
 | [test_g1b_dn_wo_jc_se.py](test_g1b_dn_wo_jc_se.py) | DN/WO/JC/SE 契约离线单测（84 条，不联网；含 9 项 adapter + v2/v3 交叉复审反例） |
-| [test_prod_budget.py](test_prod_budget.py) | 统一闸门离线单测（63 条，不联网；含三轮复审全部反例、隐式预读复现、在途读取预占、截止返回路径不阻塞、封网守卫与父版本逐字节对照） |
+| [test_prod_budget.py](test_prod_budget.py) | 统一闸门离线单测（64 条，不联网；含三轮复审全部反例、隐式预读复现、在途读取预占、读流异常保留预占、截止返回路径不阻塞、封网守卫与父版本逐字节对照） |
 | [en_variant_evidence.py](en_variant_evidence.py) | Item/BOM 只读采样 → variant evidence manifest（预算/分页/单并发） |
 | [g1b_top10.md](g1b_top10.md) | 修复后 top10 SKU 抽取；未发分解全部对平 |
 | [g1b_warehouse_evidence.md](g1b_warehouse_evidence.md) | 2026-09 仓名统一，旧皮壳并入美中（用户确认+脚本注释）；旧仓 ID/余额审计 pending |

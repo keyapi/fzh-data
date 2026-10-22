@@ -14,7 +14,8 @@ tags: [supply-chain, production-readonly, budget, gate, safety]
 `control/reviews/2026-10-21-decision3-production-gate.md`；复审 FAIL 与逐项修复见
 `control/reviews/2026-10-21-gate-review-fail.md`、`2026-10-21-gate-fix-response.md`、
 `2026-10-21-gate-review2-fail.md`、`2026-10-22-gate-fix2-response.md`、
-`2026-10-22-gate-review3.md`、`2026-10-22-gate-fix3-response.md`。
+`2026-10-22-gate-review3.md`、`2026-10-22-gate-fix3-response.md`、
+`2026-10-22-gate-fix4-response.md`。
 
 **本模块只做闸门，不授权生产访问。** 未获用户对范围/额度的授权前，只能用离线 mock 验证。
 
@@ -23,7 +24,7 @@ tags: [supply-chain, production-readonly, budget, gate, safety]
 | 文件 | 作用 |
 |---|---|
 | `prod_budget.py` | `ProductionBudget` / `BudgetExhausted` / `BudgetLedgerError` / `BudgetContextError` / `iss_budget()`；唯一 HTTP 出口 |
-| `test_prod_budget.py` | 63 条离线单测（含三轮复审全部反例、隐式预读复现、在途读取预占与截止返回路径不阻塞、父版本逐字节对照） |
+| `test_prod_budget.py` | 64 条离线单测（含三轮复审全部反例、隐式预读复现、在途读取预占、读流异常保留预占与截止返回路径不阻塞、父版本逐字节对照） |
 | `g1b_en_extract.py` | 所有分页/逐单 GET 经 `iss_budget` 接入同一账本 |
 | `g1b_dn_wo_jc_se.py` | SE 明细补齐、WO 探针、翻页与重试经同一账本 |
 
@@ -61,7 +62,7 @@ uv run python g1b_dn_wo_jc_se.py --snapshot out/g1b_en_top_1.json \
 | 单请求超时 | 计入请求数与失败；socket 超时绑定**剩余墙钟**（含绝对截止） |
 | 等响应头/读体阻塞 | **可中断执行边界**：整次 HTTP 在工作线程里，主线程只等到截止；到点放弃本次尝试、**立刻返回**（主线程绝不调用可能阻塞的 `close()`），记 `deadline` 并持久停机；响应由被放弃的工作线程在 `finally` 关闭 |
 | 取消时已有在途读 | 阻塞读**之前**已预占读取额度（≤CHUNK 且不越字节预算）；取消后工作线程不再结算，预占作为**保守上界留在账本/日志**，绝不清成 0（复审反例：实读 16 字节、账本 0） |
-| 读流超时/断连 | 已结算字节保留；本次阻塞读以异常结束、未交付任何块 → 释放其预占（不算“取消后未结算”），不会一次吃掉剩余字节额度 |
+| 读流超时/断连 | 已结算字节保留；**异常无法证明本次阻塞读未消耗**（http.client/urllib3 可能先读走部分字节再抛超时）→ 与取消同口径：预占作为**保守上界**并入 `body` 计数，日志 `bytes`、账本 `cum_bytes` 与续跑一致，绝不归 0。只有 EOF 能证明未消耗，才释放预占 |
 | 空响应但已越过墙钟 | 读完后再查截止；`status=deadline`，不返回成功 |
 | 429 | 遵守 `Retry-After`（秒数或 HTTP-date），最多重试 2 次；仍 429 → `retry_exhausted` |
 | 401 / 403 | 立即停（`reason=auth`），不重试；**终止态与清 pending 一次原子落盘** |
@@ -85,9 +86,10 @@ uv run python g1b_dn_wo_jc_se.py --snapshot out/g1b_en_top_1.json \
   `pending{seq,kind,path,timeout_seconds,wire_bytes,decoded_bytes,content_encoding}`，
   再发 HTTP。HTTP 途中崩溃时请求不会丢。
 - **在途读取预占**：每次阻塞读之前按本次额度（`min(CHUNK, 剩余字节)`）预占 wire
-  与解压后字节；正常返回结算为实际字节并释放多余额度，EOF 结算为 0。**取消后
-  不得清除**：已从 socket 读走但来不及结算的字节按预占上界保留，日志 `bytes`、
-  账本 `used.bytes` 与 `cum_bytes` 同步采用该上界，三方仍然对账一致。
+  与解压后字节；正常返回结算为实际字节并释放多余额度，EOF 结算为 0。**取消与
+  读流异常都不得清除**：已从 socket 读走但来不及结算/交付的字节按预占上界保留，
+  日志 `bytes`、账本 `used.bytes` 与 `cum_bytes` 同步采用该上界，三方仍然对账一致。
+  读流异常时预占并入 `body` 计数（因此重试不会把它当 0，续跑也从该上界继续）。
 - **独占运行锁**：`<ledger>.lock` 用 OS 文件锁（Windows `msvcrt` / POSIX `flock`），
   进程死亡自动释放；同一账本第二个活进程启动即 `BudgetLedgerError`。
 - `prod_budget.log` 每行一个 JSON（schema `prod_budget_log/1`），每**实际 HTTP 尝试**一行：
@@ -112,8 +114,8 @@ uv run python g1b_dn_wo_jc_se.py --snapshot out/g1b_en_top_1.json \
 ## 离线验证
 
 ```bash
-uv run python -m unittest test_prod_budget -v        # 63 条（本模块）
-uv run python -m unittest discover -p 'test_*.py'    # 240 条全离线
+uv run python -m unittest test_prod_budget -v        # 64 条（本模块）
+uv run python -m unittest discover -p 'test_*.py'    # 241 条全离线
 ```
 
 全部 HTTP 用 mock（`FakeResponse` / `FakeHTTP`），不访问生产、不读生产凭证。
@@ -142,3 +144,8 @@ uv run python -m unittest discover -p 'test_*.py'    # 240 条全离线
    跨天场景一律用 `--deadline 2026-10-22T22:30:00+08:00`。
 7. **退出码/清单未新增绝对截止字段**：`as_log()["seconds"]["absolute_deadline"]`
    只在闸门模式出现，离线默认输出（与父版本逐字节对照的部分）不变。
+8. **读流异常的预占是保守上界，可能多记**：异常时无法知道 urllib3/http.client
+   究竟从 socket 读走多少字节，只能按本次预占（≤`CHUNK`，且不越过剩余字节预算）
+   记账。正常 MiB 级预算下影响可忽略；但若字节预算本身小于一个 `CHUNK`，一次瞬时
+   读超时就会用尽预算并触发持久停（`reason=bytes`）。这是刻意取舍：**宁可保守停，
+   不可少记已消耗字节**（复审反例：实读 16 字节、账本/日志 0、续跑仍 0）。
