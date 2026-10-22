@@ -1,0 +1,1329 @@
+{
+ "schema_version": "t3_decision_v2/1",
+ "generated_at": "2026-10-22T17:17:54+08:00",
+ "inputs": {
+  "db": {
+   "path": "D:\\Work\\fzh-order-store\\order_store.duckdb",
+   "sha256": "25579c5dcd802c7e67f610432a19d08f8e6952696bd50d43bdfa47d6b9241ae9"
+  },
+  "destinations_sha256": "720b478809128156cc1609cd10720cb926a98382a7c2f8a8179c55cadbf7bf60",
+  "ranking_sha256": "bb042cc881817a7b99565b739e6802eb1d2a22dcd85547ce1d18b9ad2b894db8",
+  "first_batch_sha256": "abd3de4e3287502267a3189e73c147e4e99413d16f9a6f8f02c9cf2c4456f3df"
+ },
+ "settings": {
+  "allow_transfer_default": false,
+  "allow_transfer_run": false,
+  "granularity": "SKU × warehouse",
+  "leads": [
+   60,
+   90,
+   120
+  ],
+  "demand_rate": "warehouse last-3-month mean (zero-filled)",
+  "so_netting": "not netted (overlap unproven); internal SO not added",
+  "pr297_baseline": "monthly rate × coverage(days/30) − available − intransit"
+ },
+ "counts": {
+  "rows": 2309,
+  "eligible_rows": 2218,
+  "skus": 1237,
+  "warehouses": 10,
+  "status": {
+   "B": 2058,
+   "B_pending_inventory": 160,
+   "C": 91
+  },
+  "changed_vs_first": 123
+ },
+ "comparison": [
+  {
+   "sku": "C/Cord-Black-100-707-wow",
+   "first_low": 135.24,
+   "first_high": 671.61,
+   "v2_low": 154.24,
+   "v2_high": 940.95,
+   "diff_low": 19.0,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "C/Cord-Coffee-100-712-wow",
+   "first_low": 76.28,
+   "first_high": 186.31,
+   "v2_low": 77.28,
+   "v2_high": 312.12,
+   "diff_low": 1.0,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "C/Cord-DKBlue-100-713-wow",
+   "first_low": 196.28,
+   "first_high": 1155.98,
+   "v2_low": 194.32,
+   "v2_high": 1755.29,
+   "diff_low": -1.96,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "C/Cord-DKBlue-153-713-wow",
+   "first_low": 0.0,
+   "first_high": 0.0,
+   "v2_low": 7.83,
+   "v2_high": 16.8,
+   "diff_low": 7.83,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "C/Cord-Red-100-709-wow",
+   "first_low": 0.0,
+   "first_high": 180.72,
+   "v2_low": 2.94,
+   "v2_high": 321.43,
+   "diff_low": 2.94,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "C/Linen-DKBlue-100-660-WOW",
+   "first_low": 145.61,
+   "first_high": 512.76,
+   "v2_low": 144.63,
+   "v2_high": 1057.51,
+   "diff_low": -0.98,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "C/Linen-DKGrey-100-651-WOW",
+   "first_low": 0.0,
+   "first_high": 186.91,
+   "v2_low": 7.83,
+   "v2_high": 560.08,
+   "diff_low": 7.83,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "C/Linen-LTGrey-100-658-WOW",
+   "first_low": 24.62,
+   "first_high": 324.72,
+   "v2_low": 24.63,
+   "v2_high": 613.5,
+   "diff_low": 0.01,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "C/Linen-Natural-100-688-wow",
+   "first_low": 314.23,
+   "first_high": 877.47,
+   "v2_low": 343.33,
+   "v2_high": 1920.33,
+   "diff_low": 29.1,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "C/Linen-Natural-183-688-wow",
+   "first_low": 2.73,
+   "first_high": 91.15,
+   "v2_low": 14.73,
+   "v2_high": 230.92,
+   "diff_low": 12.0,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "C/Linen-White-100-662-WOW",
+   "first_low": 185.05,
+   "first_high": 576.05,
+   "v2_low": 186.05,
+   "v2_high": 750.5,
+   "diff_low": 1.0,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "C/Velvet-Black-194-703-wow",
+   "first_low": 38.68,
+   "first_high": 81.71,
+   "v2_low": 39.68,
+   "v2_high": 142.81,
+   "diff_low": 1.0,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "C/Velvet-Camel-153-704-wow",
+   "first_low": 49.47,
+   "first_high": 70.84,
+   "v2_low": 61.47,
+   "v2_high": 90.22,
+   "diff_low": 12.0,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "C/Velvet-Camel-194-704-wow",
+   "first_low": 0.0,
+   "first_high": 56.04,
+   "v2_low": 5.87,
+   "v2_high": 153.91,
+   "diff_low": 5.87,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "C/Velvet-Grey-100-705-wow",
+   "first_low": 309.06,
+   "first_high": 642.73,
+   "v2_low": 323.06,
+   "v2_high": 1406.26,
+   "diff_low": 14.0,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "C/Velvet-Grey-153-705-wow",
+   "first_low": 0.0,
+   "first_high": 185.87,
+   "v2_low": 0.31,
+   "v2_high": 304.94,
+   "diff_low": 0.31,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "C/Velvet-White-194-664-wow",
+   "first_low": 0.0,
+   "first_high": 96.87,
+   "v2_low": 4.89,
+   "v2_high": 131.22,
+   "diff_low": 4.89,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "C/Velvet-Yellow-138-698-wow",
+   "first_low": 32.29,
+   "first_high": 56.4,
+   "v2_low": 31.31,
+   "v2_high": 125.25,
+   "diff_low": -0.98,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "C/Velvet-Yellow-153-698-wow",
+   "first_low": 55.71,
+   "first_high": 88.86,
+   "v2_low": 55.77,
+   "v2_high": 108.77,
+   "diff_low": 0.06,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "C/Velvet-Yellow-194-698-wow",
+   "first_low": 76.24,
+   "first_high": 166.66,
+   "v2_low": 78.24,
+   "v2_high": 196.59,
+   "diff_low": 2.0,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "CEN-No/B-967-Linen-Beige-100",
+   "first_low": 0.0,
+   "first_high": 20.06,
+   "v2_low": 12.73,
+   "v2_high": 236.79,
+   "diff_low": 12.73,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "CEN-No/B-967-Linen-Beige-138",
+   "first_low": 0.0,
+   "first_high": 81.67,
+   "v2_low": 11.53,
+   "v2_high": 151.13,
+   "diff_low": 11.53,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "CEN-No/B-967-Linen-Beige-153",
+   "first_low": 0.0,
+   "first_high": 0.0,
+   "v2_low": 14.99,
+   "v2_high": 86.2,
+   "diff_low": 14.99,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "CEN003-DPBLUE-100",
+   "first_low": 609.58,
+   "first_high": 1260.3,
+   "v2_low": 608.6,
+   "v2_high": 2437.41,
+   "diff_low": -0.98,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "CEN003-DPBLUE-138",
+   "first_low": 40.24,
+   "first_high": 155.54,
+   "v2_low": 38.28,
+   "v2_high": 312.12,
+   "diff_low": -1.96,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "CEN1607NLinen-Ivory-138",
+   "first_low": 18.88,
+   "first_high": 277.86,
+   "v2_low": 31.88,
+   "v2_high": 369.1,
+   "diff_low": 13.0,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "CEN1607NLinen-Ivory-153",
+   "first_low": 0.0,
+   "first_high": 491.28,
+   "v2_low": 24.46,
+   "v2_high": 423.75,
+   "diff_low": 24.46,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "CEN1607NLinen-Ivory-194",
+   "first_low": 0.0,
+   "first_high": 222.32,
+   "v2_low": 43.99,
+   "v2_high": 162.31,
+   "diff_low": 43.99,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "CEN1607NLinen-Ivory-97",
+   "first_low": 227.56,
+   "first_high": 815.73,
+   "v2_low": 224.62,
+   "v2_high": 1342.49,
+   "diff_low": -2.94,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "CEN803NLinen-Black-100",
+   "first_low": 0.0,
+   "first_high": 264.11,
+   "v2_low": 17.61,
+   "v2_high": 378.65,
+   "diff_low": 17.61,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "CEN961NLinen-SageGreen-153",
+   "first_low": 0.0,
+   "first_high": 149.18,
+   "v2_low": 26.35,
+   "v2_high": 124.49,
+   "diff_low": 26.35,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "CEN961NLinen-SageGreen-194",
+   "first_low": 0.0,
+   "first_high": 214.38,
+   "v2_low": 16.57,
+   "v2_high": 244.84,
+   "diff_low": 16.57,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "CENCord995-DKGrey-97",
+   "first_low": 710.37,
+   "first_high": 1539.96,
+   "v2_low": 706.47,
+   "v2_high": 2825.89,
+   "diff_low": -3.9,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "CENKZ1323-LTGrey-97",
+   "first_low": 354.83,
+   "first_high": 977.04,
+   "v2_low": 355.19,
+   "v2_high": 1466.39,
+   "diff_low": 0.36,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "CENKZ1324-SkyBlue-138",
+   "first_low": 51.86,
+   "first_high": 163.73,
+   "v2_low": 50.88,
+   "v2_high": 203.53,
+   "diff_low": -0.98,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "CENKZ1324-SkyBlue-97",
+   "first_low": 65.95,
+   "first_high": 356.4,
+   "v2_low": 65.94,
+   "v2_high": 554.79,
+   "diff_low": -0.01,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "CENKZ1325-Yellow-138",
+   "first_low": 0.03,
+   "first_high": 89.68,
+   "v2_low": 0.0,
+   "v2_high": 61.57,
+   "diff_low": -0.03,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "CENKZ1325-Yellow-194",
+   "first_low": 0.0,
+   "first_high": 27.57,
+   "v2_low": 7.76,
+   "v2_high": 12.97,
+   "diff_low": 7.76,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "CENKZ15339428-Ivory-100",
+   "first_low": 21.13,
+   "first_high": 241.75,
+   "v2_low": 19.17,
+   "v2_high": 331.69,
+   "diff_low": -1.96,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "CENKZ15349435-DBlue-100",
+   "first_low": 123.39,
+   "first_high": 631.78,
+   "v2_low": 116.53,
+   "v2_high": 994.15,
+   "diff_low": -6.86,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "CENKZ15349436-DBlue-138-DN",
+   "first_low": 2.28,
+   "first_high": 58.75,
+   "v2_low": 0.0,
+   "v2_high": 225.38,
+   "diff_low": -2.28,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "CENKZ15389463-Grey-100",
+   "first_low": 194.13,
+   "first_high": 1025.73,
+   "v2_low": 193.15,
+   "v2_high": 1427.6,
+   "diff_low": -0.98,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "CENKZ15940285-BLACK-60",
+   "first_low": 46.3,
+   "first_high": 116.58,
+   "v2_low": 45.32,
+   "v2_high": 274.29,
+   "diff_low": -0.98,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "CENMM-Ivory-200-Cover",
+   "first_low": 0.0,
+   "first_high": 2.26,
+   "v2_low": 0.98,
+   "v2_high": 2.12,
+   "diff_low": 0.98,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "CENQiRuoJinLan-194",
+   "first_low": 0.0,
+   "first_high": 0.0,
+   "v2_low": 2.94,
+   "v2_high": 10.79,
+   "diff_low": 2.94,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "Curve-Pillow-50-PPCotton",
+   "first_low": 0.0,
+   "first_high": 0.0,
+   "v2_low": 1.96,
+   "v2_high": 5.0,
+   "diff_low": 1.96,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "PTC/Linen-Natural-153-681-wow",
+   "first_low": 0.0,
+   "first_high": 26.81,
+   "v2_low": 11.74,
+   "v2_high": 144.36,
+   "diff_low": 11.74,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "PTC/Linen-Natural-194-681-wow",
+   "first_low": 0.0,
+   "first_high": 14.86,
+   "v2_low": 4.89,
+   "v2_high": 178.32,
+   "diff_low": 4.89,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "PTC/Velvet-Yellow-194-690-wow",
+   "first_low": 11.66,
+   "first_high": 22.46,
+   "v2_low": 13.66,
+   "v2_high": 51.42,
+   "diff_low": 2.0,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0000667K0063805",
+   "first_low": 155.57,
+   "first_high": 451.41,
+   "v2_low": 168.59,
+   "v2_high": 800.37,
+   "diff_low": 13.02,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0000667K0063807",
+   "first_low": 0.0,
+   "first_high": 45.49,
+   "v2_low": 6.42,
+   "v2_high": 105.68,
+   "diff_low": 6.42,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0000668K0063798",
+   "first_low": 33.11,
+   "first_high": 162.15,
+   "v2_low": 35.24,
+   "v2_high": 332.52,
+   "diff_low": 2.13,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0000671K0063721",
+   "first_low": 0.0,
+   "first_high": 773.94,
+   "v2_low": 21.38,
+   "v2_high": 1011.49,
+   "diff_low": 21.38,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0000672K0063713",
+   "first_low": 0.0,
+   "first_high": 23.56,
+   "v2_low": 1.96,
+   "v2_high": 5.48,
+   "diff_low": 1.96,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0000673K0063701",
+   "first_low": 26.03,
+   "first_high": 80.45,
+   "v2_low": 41.1,
+   "v2_high": 164.39,
+   "diff_low": 15.07,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0000718K0063433",
+   "first_low": 0.0,
+   "first_high": 7.21,
+   "v2_low": 1.96,
+   "v2_high": 7.83,
+   "diff_low": 1.96,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0000720K0063411",
+   "first_low": 49.86,
+   "first_high": 116.89,
+   "v2_low": 50.86,
+   "v2_high": 206.44,
+   "diff_low": 1.0,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0000721K0063400",
+   "first_low": 31.29,
+   "first_high": 74.6,
+   "v2_low": 30.31,
+   "v2_high": 124.25,
+   "diff_low": -0.98,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0000722K0063389",
+   "first_low": 64.54,
+   "first_high": 132.68,
+   "v2_low": 64.58,
+   "v2_high": 264.15,
+   "diff_low": 0.04,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0000753K0063319",
+   "first_low": 58.67,
+   "first_high": 122.73,
+   "v2_low": 55.73,
+   "v2_high": 228.92,
+   "diff_low": -2.94,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0000753K0063323",
+   "first_low": 18.55,
+   "first_high": 34.76,
+   "v2_low": 17.57,
+   "v2_high": 76.28,
+   "diff_low": -0.98,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0000754K0063311",
+   "first_low": 62.58,
+   "first_high": 144.03,
+   "v2_low": 59.65,
+   "v2_high": 244.58,
+   "diff_low": -2.93,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0000756K0063295",
+   "first_low": 3.83,
+   "first_high": 77.98,
+   "v2_low": 3.91,
+   "v2_high": 27.32,
+   "diff_low": 0.08,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0000930K0011510",
+   "first_low": 0.0,
+   "first_high": 0.0,
+   "v2_low": 6.85,
+   "v2_high": 12.96,
+   "diff_low": 6.85,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0000931K0011512",
+   "first_low": 0.0,
+   "first_high": 8.26,
+   "v2_low": 2.76,
+   "v2_high": 61.17,
+   "diff_low": 2.76,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0000932K0011514",
+   "first_low": 0.0,
+   "first_high": 43.3,
+   "v2_low": 5.87,
+   "v2_high": 27.49,
+   "diff_low": 5.87,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0000933K0011516",
+   "first_low": 0.0,
+   "first_high": 57.51,
+   "v2_low": 26.83,
+   "v2_high": 112.89,
+   "diff_low": 26.83,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0000959K0011362",
+   "first_low": 0.0,
+   "first_high": 4.96,
+   "v2_low": 0.98,
+   "v2_high": 3.47,
+   "diff_low": 0.98,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0020013K0062821",
+   "first_low": 104.48,
+   "first_high": 354.35,
+   "v2_low": 100.57,
+   "v2_high": 338.91,
+   "diff_low": -3.91,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0020018K0062866",
+   "first_low": 6.33,
+   "first_high": 34.54,
+   "v2_low": 6.74,
+   "v2_high": 35.7,
+   "diff_low": 0.41,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0020018K0062867",
+   "first_low": 195.66,
+   "first_high": 294.2,
+   "v2_low": 189.79,
+   "v2_high": 482.44,
+   "diff_low": -5.87,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0020019K0062887",
+   "first_low": 47.78,
+   "first_high": 100.97,
+   "v2_low": 47.79,
+   "v2_high": 169.48,
+   "diff_low": 0.01,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0020037K0063335",
+   "first_low": 0.0,
+   "first_high": 11.46,
+   "v2_low": 1.76,
+   "v2_high": 34.05,
+   "diff_low": 1.76,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0020038K0063336",
+   "first_low": 0.12,
+   "first_high": 65.24,
+   "v2_low": 28.23,
+   "v2_high": 79.42,
+   "diff_low": 28.11,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0020047K0063669",
+   "first_low": 0.0,
+   "first_high": 0.0,
+   "v2_low": 4.89,
+   "v2_high": 10.39,
+   "diff_low": 4.89,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0020048K0063670",
+   "first_low": 0.0,
+   "first_high": 0.0,
+   "v2_low": 9.48,
+   "v2_high": 79.94,
+   "diff_low": 9.48,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0020049K0063671",
+   "first_low": 0.0,
+   "first_high": 0.0,
+   "v2_low": 1.83,
+   "v2_high": 13.29,
+   "diff_low": 1.83,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0031010K0062878",
+   "first_low": 34.25,
+   "first_high": 54.7,
+   "v2_low": 33.27,
+   "v2_high": 85.22,
+   "diff_low": -0.98,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0031035K0062923",
+   "first_low": 0.0,
+   "first_high": 0.0,
+   "v2_low": 20.51,
+   "v2_high": 88.02,
+   "diff_low": 20.51,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0031073K0063251",
+   "first_low": 24.97,
+   "first_high": 100.8,
+   "v2_low": 45.99,
+   "v2_high": 162.77,
+   "diff_low": 21.02,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0031084K0063339",
+   "first_low": 13.63,
+   "first_high": 258.15,
+   "v2_low": 91.78,
+   "v2_high": 266.4,
+   "diff_low": 78.15,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0031085K0063341",
+   "first_low": 0.0,
+   "first_high": 406.48,
+   "v2_low": 7.14,
+   "v2_high": 420.36,
+   "diff_low": 7.14,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0031085K0063342",
+   "first_low": 0.0,
+   "first_high": 530.18,
+   "v2_low": 124.84,
+   "v2_high": 746.32,
+   "diff_low": 124.84,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0031086K0063344",
+   "first_low": 0.0,
+   "first_high": 42.44,
+   "v2_low": 21.2,
+   "v2_high": 129.82,
+   "diff_low": 21.2,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0031087K0063345",
+   "first_low": 44.84,
+   "first_high": 174.7,
+   "v2_low": 46.84,
+   "v2_high": 152.85,
+   "diff_low": 2.0,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0031099K0063666",
+   "first_low": 173.53,
+   "first_high": 313.38,
+   "v2_low": 186.89,
+   "v2_high": 497.2,
+   "diff_low": 13.36,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0031104K0063682",
+   "first_low": 0.0,
+   "first_high": 0.0,
+   "v2_low": 1.96,
+   "v2_high": 7.83,
+   "diff_low": 1.96,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0031111K0063735",
+   "first_low": 0.0,
+   "first_high": 48.88,
+   "v2_low": 10.76,
+   "v2_high": 64.96,
+   "diff_low": 10.76,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0031123K0063769",
+   "first_low": 0.0,
+   "first_high": 0.0,
+   "v2_low": 4.87,
+   "v2_high": 14.0,
+   "diff_low": 4.87,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0031146K0063846",
+   "first_low": 9.14,
+   "first_high": 151.92,
+   "v2_low": 93.91,
+   "v2_high": 395.65,
+   "diff_low": 84.77,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0031151K0063854",
+   "first_low": 20.35,
+   "first_high": 54.73,
+   "v2_low": 25.42,
+   "v2_high": 108.42,
+   "diff_low": 5.07,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0031152K0063855",
+   "first_low": 0.0,
+   "first_high": 287.88,
+   "v2_low": 2.94,
+   "v2_high": 105.38,
+   "diff_low": 2.94,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0031154K0063859",
+   "first_low": 0.0,
+   "first_high": 14.98,
+   "v2_low": 0.98,
+   "v2_high": 15.65,
+   "diff_low": 0.98,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0031159K0063865-Cover",
+   "first_low": 0.0,
+   "first_high": 1.49,
+   "v2_low": 0.96,
+   "v2_high": 4.5,
+   "diff_low": 0.96,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0031159K0063865-Foam",
+   "first_low": 4.4,
+   "first_high": 6.74,
+   "v2_low": 2.94,
+   "v2_high": 7.5,
+   "diff_low": -1.46,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0031161K0063869",
+   "first_low": 0.0,
+   "first_high": 3.96,
+   "v2_low": 0.96,
+   "v2_high": 8.74,
+   "diff_low": 0.96,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0031189K0063924-Cover",
+   "first_low": 0.0,
+   "first_high": 0.0,
+   "v2_low": 1.96,
+   "v2_high": 5.0,
+   "diff_low": 1.96,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0031196K0063937",
+   "first_low": 0.0,
+   "first_high": 60.8,
+   "v2_low": 3.91,
+   "v2_high": 24.23,
+   "diff_low": 3.91,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0031205K0064015",
+   "first_low": 0.0,
+   "first_high": 5.11,
+   "v2_low": 1.94,
+   "v2_high": 36.79,
+   "diff_low": 1.94,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0031217K0064032-2",
+   "first_low": 3.89,
+   "first_high": 6.57,
+   "v2_low": 3.91,
+   "v2_high": 11.5,
+   "diff_low": 0.02,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0031232K0064061",
+   "first_low": 0.0,
+   "first_high": 0.0,
+   "v2_low": 9.7,
+   "v2_high": 28.85,
+   "diff_low": 9.7,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0031244K0064084-Cover",
+   "first_low": 0.0,
+   "first_high": 0.0,
+   "v2_low": 6.66,
+   "v2_high": 31.0,
+   "diff_low": 6.66,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0031249K0064108-Cover",
+   "first_low": 0.0,
+   "first_high": 0.48,
+   "v2_low": 0.91,
+   "v2_high": 7.5,
+   "diff_low": 0.91,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0031251K0064120-Cover",
+   "first_low": 0.0,
+   "first_high": 1.97,
+   "v2_low": 0.96,
+   "v2_high": 10.0,
+   "diff_low": 0.96,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0031251K0064122-Cover",
+   "first_low": 0.0,
+   "first_high": 14.97,
+   "v2_low": 7.83,
+   "v2_high": 25.0,
+   "diff_low": 7.83,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0031252K0064128",
+   "first_low": 0.0,
+   "first_high": 0.0,
+   "v2_low": 0.98,
+   "v2_high": 2.5,
+   "diff_low": 0.98,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0312574K0064146",
+   "first_low": 0.0,
+   "first_high": 0.0,
+   "v2_low": 0.96,
+   "v2_high": 4.0,
+   "diff_low": 0.96,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0312577K0064157",
+   "first_low": 9.78,
+   "first_high": 16.06,
+   "v2_low": 8.81,
+   "v2_high": 22.5,
+   "diff_low": -0.97,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0312587K0064173-Foam",
+   "first_low": 0.0,
+   "first_high": 12.46,
+   "v2_low": 8.81,
+   "v2_high": 23.5,
+   "diff_low": 8.81,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0312587K0064174-Foam",
+   "first_low": 2.34,
+   "first_high": 6.23,
+   "v2_low": 0.0,
+   "v2_high": 7.5,
+   "diff_low": -2.34,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0312588K0064179-Foam",
+   "first_low": 0.0,
+   "first_high": 13.96,
+   "v2_low": 0.76,
+   "v2_high": 28.0,
+   "diff_low": 0.76,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0312588K0064184-Foam",
+   "first_low": 5.76,
+   "first_high": 11.46,
+   "v2_low": 5.85,
+   "v2_high": 22.5,
+   "diff_low": 0.09,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0312599K0064196",
+   "first_low": 0.0,
+   "first_high": 0.0,
+   "v2_low": 2.94,
+   "v2_high": 7.5,
+   "diff_low": 2.94,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0312606K0064204",
+   "first_low": 10.48,
+   "first_high": 32.63,
+   "v2_low": 16.61,
+   "v2_high": 47.0,
+   "diff_low": 6.13,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0312607K0064208",
+   "first_low": 0.0,
+   "first_high": 0.0,
+   "v2_low": 1.94,
+   "v2_high": 6.5,
+   "diff_low": 1.94,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0312607K0064209",
+   "first_low": 0.0,
+   "first_high": 0.5,
+   "v2_low": 0.98,
+   "v2_high": 2.5,
+   "diff_low": 0.98,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0312607K0064210",
+   "first_low": 0.94,
+   "first_high": 0.94,
+   "v2_low": 1.96,
+   "v2_high": 5.5,
+   "diff_low": 1.02,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0312612K0064235",
+   "first_low": 0.0,
+   "first_high": 0.0,
+   "v2_low": 4.81,
+   "v2_high": 18.5,
+   "diff_low": 4.81,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0312613K0064243-Foam",
+   "first_low": 0.0,
+   "first_high": 0.0,
+   "v2_low": 1.96,
+   "v2_high": 5.0,
+   "diff_low": 1.96,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0312614K0064238",
+   "first_low": 50.95,
+   "first_high": 559.75,
+   "v2_low": 158.23,
+   "v2_high": 940.5,
+   "diff_low": 107.28,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0312676K0064343",
+   "first_low": 2.94,
+   "first_high": 4.49,
+   "v2_low": 1.96,
+   "v2_high": 5.0,
+   "diff_low": -0.98,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0312681K0064361",
+   "first_low": 0.0,
+   "first_high": 1.96,
+   "v2_low": 9.78,
+   "v2_high": 25.0,
+   "diff_low": 9.78,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  },
+  {
+   "sku": "TT0312681K0064363",
+   "first_low": 0.0,
+   "first_high": 8.94,
+   "v2_low": 10.76,
+   "v2_high": 27.5,
+   "diff_low": 10.76,
+   "reason": "粒度从 SKU 聚合改为 SKU×仓后求和；仓库级月需求率取该仓近 3 月均值，与 SKU 级 mean3 不同；PO/在途仍按假设计入情景"
+  }
+ ],
+ "rows_sample": [
+  {
+   "SKU": "C/Cord-Black-100-707-wow",
+   "仓": "WayfairCG-Cranbury仓",
+   "月需求率": 0.0,
+   "需求P50(冲减前)": 0.0,
+   "需求P50(冲减后)": 0.0,
+   "冲减说明": "SO 与预测重叠未证 → 不冲减；内部 SO 不作额外终端需求",
+   "已承诺待发": 0,
+   "可用": 18,
+   "在途": 0,
+   "PO未结": null,
+   "在产": null,
+   "PO去重状态": "none_recorded",
+   "在途去重状态": "none_recorded",
+   "在产状态": "work_order_not_in_snapshot",
+   "缺口L60": -18.0,
+   "缺口L90": -18.0,
+   "缺口L120": -18.0,
+   "建议下限L90": 0.0,
+   "建议上限L90": 0.0,
+   "PR297_L60": 0.0,
+   "PR297_L90": 0.0,
+   "PR297_L120": 0.0,
+   "与PR297差异L90": 0.0,
+   "差异原因": "same",
+   "MOQ": null,
+   "包装倍数": null,
+   "成本": null,
+   "跨仓调拨": "(off)",
+   "需要时间": null,
+   "缺失字段与证据": "在产 WO 不在快照；MOQ/包装/成本未提供 → 采购约束待定；共享池不默认跨仓可调拨（如需调拨须显式开启并单列假设）；需求上下界 G8 未提供（P50/P90 为估计）",
+   "状态": "B",
+   "assumptions": "无未结 PO 记录，按 0 计（假设）；在产 WO 未入快照，按 0 计（假设）；PO 与在途按两批相加（未去重假设）；仓库级销量样本 <3 个月，月需求率按含 0 的近 3 月均值",
+   "_sku_lo": 0.0,
+   "_sku_hi": 0.0
+  },
+  {
+   "SKU": "C/Cord-Black-100-707-wow",
+   "仓": "美东-CENTRADE",
+   "月需求率": 89.3333,
+   "需求P50(冲减前)": 262.24,
+   "需求P50(冲减后)": 262.24,
+   "冲减说明": "SO 与预测重叠未证 → 不冲减；内部 SO 不作额外终端需求",
+   "已承诺待发": 0,
+   "可用": 108,
+   "在途": 0,
+   "PO未结": null,
+   "在产": null,
+   "PO去重状态": "none_recorded",
+   "在途去重状态": "none_recorded",
+   "在产状态": "work_order_not_in_snapshot",
+   "缺口L60": 67.78,
+   "缺口L90": 154.24,
+   "缺口L120": 246.25,
+   "建议下限L90": 154.24,
+   "建议上限L90": 940.95,
+   "PR297_L60": 70.67,
+   "PR297_L90": 160.0,
+   "PR297_L120": 249.33,
+   "与PR297差异L90": -5.76,
+   "差异原因": "本方法用 L90 窗口 P50，PR297 用 3 个月覆盖期（90/30）",
+   "MOQ": null,
+   "包装倍数": null,
+   "成本": null,
+   "跨仓调拨": "(off)",
+   "需要时间": null,
+   "缺失字段与证据": "在产 WO 不在快照；MOQ/包装/成本未提供 → 采购约束待定；共享池不默认跨仓可调拨（如需调拨须显式开启并单列假设）；需求上下界 G8 未提供（P50/P90 为估计）",
+   "状态": "B",
+   "assumptions": "无未结 PO 记录，按 0 计（假设）；在产 WO 未入快照，按 0 计（假设）；PO 与在途按两批相加（未去重假设）",
+   "_sku_lo": 154.24,
+   "_sku_hi": 940.95
+  },
+  {
+   "SKU": "C/Cord-Black-100-707-wow",
+   "仓": "美中-FZH-DANEEY",
+   "月需求率": 0.0,
+   "需求P50(冲减前)": 0.0,
+   "需求P50(冲减后)": 0.0,
+   "冲减说明": "SO 与预测重叠未证 → 不冲减；内部 SO 不作额外终端需求",
+   "已承诺待发": 0,
+   "可用": 1,
+   "在途": 0,
+   "PO未结": null,
+   "在产": null,
+   "PO去重状态": "none_recorded",
+   "在途去重状态": "none_recorded",
+   "在产状态": "work_order_not_in_snapshot",
+   "缺口L60": -1.0,
+   "缺口L90": -1.0,
+   "缺口L120": -1.0,
+   "建议下限L90": 0.0,
+   "建议上限L90": 0.0,
+   "PR297_L60": 0.0,
+   "PR297_L90": 0.0,
+   "PR297_L120": 0.0,
+   "与PR297差异L90": 0.0,
+   "差异原因": "same",
+   "MOQ": null,
+   "包装倍数": null,
+   "成本": null,
+   "跨仓调拨": "(off)",
+   "需要时间": null,
+   "缺失字段与证据": "在产 WO 不在快照；MOQ/包装/成本未提供 → 采购约束待定；共享池不默认跨仓可调拨（如需调拨须显式开启并单列假设）；需求上下界 G8 未提供（P50/P90 为估计）",
+   "状态": "B",
+   "assumptions": "无未结 PO 记录，按 0 计（假设）；在产 WO 未入快照，按 0 计（假设）；PO 与在途按两批相加（未去重假设）；仓库级销量样本 <3 个月，月需求率按含 0 的近 3 月均值",
+   "_sku_lo": 0.0,
+   "_sku_hi": 0.0
+  },
+  {
+   "SKU": "C/Cord-Black-100-707-wow-Cover",
+   "仓": "美东-CENTRADE",
+   "月需求率": 2.0,
+   "需求P50(冲减前)": 5.87,
+   "需求P50(冲减后)": 5.87,
+   "冲减说明": "SO 与预测重叠未证 → 不冲减；内部 SO 不作额外终端需求",
+   "已承诺待发": 0,
+   "可用": 2,
+   "在途": 0,
+   "PO未结": null,
+   "在产": null,
+   "PO去重状态": "none_recorded",
+   "在途去重状态": "none_recorded",
+   "在产状态": "work_order_not_in_snapshot",
+   "缺口L60": 1.94,
+   "缺口L90": 3.87,
+   "缺口L120": 5.93,
+   "建议下限L90": 3.87,
+   "建议上限L90": 21.48,
+   "PR297_L60": 2.0,
+   "PR297_L90": 4.0,
+   "PR297_L120": 6.0,
+   "与PR297差异L90": -0.13,
+   "差异原因": "本方法用 L90 窗口 P50，PR297 用 3 个月覆盖期（90/30）",
+   "MOQ": null,
+   "包装倍数": null,
+   "成本": null,
+   "跨仓调拨": "(off)",
+   "需要时间": null,
+   "缺失字段与证据": "在产 WO 不在快照；MOQ/包装/成本未提供 → 采购约束待定；共享池不默认跨仓可调拨（如需调拨须显式开启并单列假设）；需求上下界 G8 未提供（P50/P90 为估计）",
+   "状态": "B",
+   "assumptions": "无未结 PO 记录，按 0 计（假设）；在产 WO 未入快照，按 0 计（假设）；PO 与在途按两批相加（未去重假设）；仓库级销量样本 <3 个月，月需求率按含 0 的近 3 月均值",
+   "_sku_lo": 3.87,
+   "_sku_hi": 21.48
+  },
+  {
+   "SKU": "C/Cord-Black-138-707-wow",
+   "仓": "美东-CENTRADE",
+   "月需求率": 9.6667,
+   "需求P50(冲减前)": 28.38,
+   "需求P50(冲减后)": 28.38,
+   "冲减说明": "SO 与预测重叠未证 → 不冲减；内部 SO 不作额外终端需求",
+   "已承诺待发": 0,
+   "可用": 74,
+   "在途": 0,
+   "PO未结": null,
+   "在产": null,
+   "PO去重状态": "none_recorded",
+   "在途去重状态": "none_recorded",
+   "在产状态": "work_order_not_in_snapshot",
+   "缺口L60": -54.98,
+   "缺口L90": -45.62,
+   "缺口L120": -35.67,
+   "建议下限L90": 0.0,
+   "建议上限L90": 0.0,
+   "PR297_L60": 0.0,
+   "PR297_L90": 0.0,
+   "PR297_L120": 0.0,
+   "与PR297差异L90": 0.0,
+   "差异原因": "same",
+   "MOQ": null,
+   "包装倍数": null,
+   "成本": null,
+   "跨仓调拨": "(off)",
+   "需要时间": null,
+   "缺失字段与证据": "在产 WO 不在快照；MOQ/包装/成本未提供 → 采购约束待定；共享池不默认跨仓可调拨（如需调拨须显式开启并单列假设）；需求上下界 G8 未提供（P50/P90 为估计）",
+   "状态": "B",
+   "assumptions": "无未结 PO 记录，按 0 计（假设）；在产 WO 未入快照，按 0 计（假设）；PO 与在途按两批相加（未去重假设）",
+   "_sku_lo": 0.0,
+   "_sku_hi": 0.0
+  }
+ ]
+}
