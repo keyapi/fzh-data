@@ -1,0 +1,1047 @@
+{
+  "meta": {
+    "task": "B: 10-SKU ETA/Cover/UOM/in-transit evidence (read-only)",
+    "date": "2026-10-22",
+    "db": "D:/Work/fzh-order-store/order_store.duckdb",
+    "db_sha256": "25579c5dcd802c7e67f610432a19d08f8e6952696bd50d43bdfa47d6b9241ae9",
+    "db_bytes": 51654656,
+    "db_mtime": "2026-10-22T07:50:35.936866",
+    "access": "duckdb read_only=True; no Tongtool/EN network calls; no writes",
+    "stock_snapshot": "stock_latest (2026-10-21 13:48 抓取) + stock_history 2026-10-22",
+    "scope_decision": {
+      "sku_set": "G1B expand10（9 个 g1b_en_top_1..9 + 1 个 g1b_en_rr2）",
+      "why": "任务书提到 10 SKU 且指定 g1b_en_top_*.json/g1b_en_rr2.json；trace_examples.json/md 实际只有 5 个 SKU，其中仅 KS0001-QDKTR-100-DEEPGREY 与 expand10 重叠",
+      "trace_examples_sku_count": 5,
+      "trace_overlap": [
+        "KS0001-QDKTR-100-DEEPGREY"
+      ]
+    }
+  },
+  "rubric": {
+    "evidence_present": "有名表/字段/行且非空，直接回答维度，无未证假设",
+    "scenario": "有可引用值，但使用需一条明确假设",
+    "blocker": "关键字段/行缺失或全空，本地数据无法给出值，需外部输入"
+  },
+  "global_field_completeness": {
+    "tongtool_po_rows": 524,
+    "will_arrive_date_nonnull": 0,
+    "purchase_date_nonnull": 524,
+    "stock_history_rows": 15820,
+    "stock_history_uom_basis_unknown": 15820,
+    "item_cover_stock_rows": 155,
+    "eta_field_anywhere_else": "仅 tongtool_po.will_arrive_date（全 NULL）；item_attr.lead_days 是提前期属性，不是到货日期",
+    "item_attr_lead_days_populated": 15230,
+    "item_attr_lead_days_positive": 3344
+  },
+  "counts": {
+    "skus": 10,
+    "pool_rows": 13,
+    "pool_warehouses": 3,
+    "po_records_joined": 32,
+    "open_po_lines": 13,
+    "open_po_qty": 1465.0,
+    "distinct_open_po": 6,
+    "bom_rows": 10,
+    "bom_item_rows": 20,
+    "stock_rows_joined": 34,
+    "item_cover_stock_rows": 0,
+    "cover_alias_stock_rows": 6
+  },
+  "verdict_matrix": {
+    "cover.evidence_present": 6,
+    "cover.scenario": 4,
+    "eta.blocker": 6,
+    "eta.evidence_present": 4,
+    "intransit.evidence_present": 10,
+    "uom.scenario": 10
+  },
+  "skus": [
+    {
+      "customer_code": "CENCord995-DKGrey-97",
+      "item_code": "KS0001-QDKTR-100-DEEPGREY",
+      "warehouses": [
+        "波兰-FZHPoland-covers",
+        "美中-FZH-DANEEY"
+      ],
+      "pool": [
+        {
+          "warehouse": "波兰-FZHPoland-covers",
+          "ship_type": "皮壳",
+          "available_all": 57,
+          "intransit_all": 0,
+          "cover_available": 0,
+          "cover_intransit": 0,
+          "on_order": 0.0,
+          "cover_on_order": 0.0,
+          "supply_in_rop": 57.0,
+          "rop_qty": 18.0,
+          "suggested_qty": 0.0,
+          "supply_basis": "available + max(intransit, PO)",
+          "n_skus": 2
+        },
+        {
+          "warehouse": "美中-FZH-DANEEY",
+          "ship_type": "皮壳",
+          "available_all": 0,
+          "intransit_all": 0,
+          "cover_available": 0,
+          "cover_intransit": 0,
+          "on_order": 0.0,
+          "cover_on_order": 0.0,
+          "supply_in_rop": 0.0,
+          "rop_qty": 246.0,
+          "suggested_qty": 246.0,
+          "supply_basis": "available + max(intransit, PO)",
+          "n_skus": 1
+        }
+      ],
+      "eta": {
+        "verdict": "evidence_present",
+        "note": "无未结 PO 行，ETA 不适用",
+        "po_rows_total": 0,
+        "open_po_lines": 0,
+        "open_qty": 0,
+        "open_po_numbers": [],
+        "will_arrive_date_populated_rows": 0,
+        "open_lines_with_eta": 0,
+        "purchase_date_populated_rows": 0,
+        "item_attr_lead_days": 14
+      },
+      "intransit": {
+        "verdict": "evidence_present",
+        "po_relation_verdict": "evidence_present",
+        "stock_rows": 5,
+        "intransit_total": 0,
+        "intransit_by_warehouse": {},
+        "relation": [],
+        "per_line_link_key_present": false
+      },
+      "cover": {
+        "verdict": "evidence_present",
+        "note": "观察到的 cover 桶值；未计入 supply_in_rop",
+        "item_cover_stock_rows": 0,
+        "item_cover_stock_values": [],
+        "cover_alias_stock_rows": 1,
+        "cover_alias_available": 0,
+        "cover_alias_intransit": 0,
+        "pool_cover_available": 0,
+        "counted_in_supply": false,
+        "supply_basis": "available + max(intransit, PO)"
+      },
+      "uom": {
+        "verdict": "scenario",
+        "note": "BOM uom=个，子件同单位 1:1；库存快照无 uom 字段（stock_history.uom_basis=unknown）",
+        "bom_uom": "个",
+        "bom_qty_per": 1.0,
+        "children": [
+          {
+            "item": "ND#KS0001-100-CYF-WHITE",
+            "qty": 1.0,
+            "uom": "个"
+          },
+          {
+            "item": "PK#KS0001-QDKTR-100-DEEPGREY",
+            "qty": 1.0,
+            "uom": "个"
+          }
+        ],
+        "en_so_uom": "个",
+        "stock_uom_field_present": false,
+        "stock_history_uom_basis": "unknown",
+        "conversion_needed_under_assumption": false
+      }
+    },
+    {
+      "customer_code": "CEN003-DPBLUE-100",
+      "item_code": "KS0001-QDKTR-100-DEEPBLUE",
+      "warehouses": [
+        "波兰-FZHPoland-covers",
+        "美中-FZH-DANEEY"
+      ],
+      "pool": [
+        {
+          "warehouse": "波兰-FZHPoland-covers",
+          "ship_type": "皮壳",
+          "available_all": 30,
+          "intransit_all": 0,
+          "cover_available": 0,
+          "cover_intransit": 0,
+          "on_order": 0.0,
+          "cover_on_order": 0.0,
+          "supply_in_rop": 30.0,
+          "rop_qty": 8.0,
+          "suggested_qty": 0.0,
+          "supply_basis": "available + max(intransit, PO)",
+          "n_skus": 2
+        },
+        {
+          "warehouse": "美中-FZH-DANEEY",
+          "ship_type": "皮壳",
+          "available_all": 1,
+          "intransit_all": 0,
+          "cover_available": 0,
+          "cover_intransit": 0,
+          "on_order": 0.0,
+          "cover_on_order": 0.0,
+          "supply_in_rop": 1.0,
+          "rop_qty": 214.0,
+          "suggested_qty": 213.0,
+          "supply_basis": "available + max(intransit, PO)",
+          "n_skus": 1
+        }
+      ],
+      "eta": {
+        "verdict": "evidence_present",
+        "note": "无未结 PO 行，ETA 不适用",
+        "po_rows_total": 1,
+        "open_po_lines": 0,
+        "open_qty": 0,
+        "open_po_numbers": [],
+        "will_arrive_date_populated_rows": 0,
+        "open_lines_with_eta": 0,
+        "purchase_date_populated_rows": 1,
+        "item_attr_lead_days": 14
+      },
+      "intransit": {
+        "verdict": "evidence_present",
+        "po_relation_verdict": "evidence_present",
+        "stock_rows": 4,
+        "intransit_total": 0,
+        "intransit_by_warehouse": {},
+        "relation": [],
+        "per_line_link_key_present": false
+      },
+      "cover": {
+        "verdict": "evidence_present",
+        "note": "观察到的 cover 桶值；未计入 supply_in_rop",
+        "item_cover_stock_rows": 0,
+        "item_cover_stock_values": [],
+        "cover_alias_stock_rows": 1,
+        "cover_alias_available": 0,
+        "cover_alias_intransit": 0,
+        "pool_cover_available": 0,
+        "counted_in_supply": false,
+        "supply_basis": "available + max(intransit, PO)"
+      },
+      "uom": {
+        "verdict": "scenario",
+        "note": "BOM uom=个，子件同单位 1:1；库存快照无 uom 字段（stock_history.uom_basis=unknown）",
+        "bom_uom": "个",
+        "bom_qty_per": 1.0,
+        "children": [
+          {
+            "item": "ND#KS0001-100-CYF-WHITE",
+            "qty": 1.0,
+            "uom": "个"
+          },
+          {
+            "item": "PK#KS0001-QDKTR-100-DEEPBLUE",
+            "qty": 1.0,
+            "uom": "个"
+          }
+        ],
+        "en_so_uom": "个",
+        "stock_uom_field_present": false,
+        "stock_history_uom_basis": "unknown",
+        "conversion_needed_under_assumption": false
+      }
+    },
+    {
+      "customer_code": "C/Linen-Natural-100-688-wow",
+      "item_code": "KS0001-XMMBS-100-HEMPNATURAL",
+      "warehouses": [
+        "美东-CENTRADE"
+      ],
+      "pool": [
+        {
+          "warehouse": "美东-CENTRADE",
+          "ship_type": "皮壳",
+          "available_all": 21,
+          "intransit_all": 121,
+          "cover_available": 0,
+          "cover_intransit": 0,
+          "on_order": 121.0,
+          "cover_on_order": 0.0,
+          "supply_in_rop": 142.0,
+          "rop_qty": 188.0,
+          "suggested_qty": 46.0,
+          "supply_basis": "available + max(intransit, PO)",
+          "n_skus": 1
+        }
+      ],
+      "eta": {
+        "verdict": "blocker",
+        "note": "will_arrive_date 全空；本地无其它 ETA 字段",
+        "po_rows_total": 3,
+        "open_po_lines": 1,
+        "open_qty": 121.0,
+        "open_po_numbers": [
+          "PO021717"
+        ],
+        "will_arrive_date_populated_rows": 0,
+        "open_lines_with_eta": 0,
+        "purchase_date_populated_rows": 3,
+        "item_attr_lead_days": 14
+      },
+      "intransit": {
+        "verdict": "evidence_present",
+        "po_relation_verdict": "scenario",
+        "stock_rows": 2,
+        "intransit_total": 121,
+        "intransit_by_warehouse": {
+          "美东-CENTRADE": 121
+        },
+        "relation": [
+          {
+            "warehouse": "美东-CENTRADE",
+            "open_po_qty": 121.0,
+            "stock_intransit": 121,
+            "po_ge_intransit": true
+          }
+        ],
+        "per_line_link_key_present": false
+      },
+      "cover": {
+        "verdict": "scenario",
+        "note": "无 cover 桶映射；pool cover_available=0 为派生值，absence≠0 未证",
+        "item_cover_stock_rows": 0,
+        "item_cover_stock_values": [],
+        "cover_alias_stock_rows": 0,
+        "cover_alias_available": 0,
+        "cover_alias_intransit": 0,
+        "pool_cover_available": 0,
+        "counted_in_supply": false,
+        "supply_basis": "available + max(intransit, PO)"
+      },
+      "uom": {
+        "verdict": "scenario",
+        "note": "BOM uom=个，子件同单位 1:1；库存快照无 uom 字段（stock_history.uom_basis=unknown）",
+        "bom_uom": "个",
+        "bom_qty_per": 1.0,
+        "children": [
+          {
+            "item": "ND#KS0001-100-CYF-WHITE",
+            "qty": 1.0,
+            "uom": "个"
+          },
+          {
+            "item": "PK#KS0001-XMMBS-100-HEMPNATURAL",
+            "qty": 1.0,
+            "uom": "个"
+          }
+        ],
+        "en_so_uom": "个",
+        "stock_uom_field_present": false,
+        "stock_history_uom_basis": "unknown",
+        "conversion_needed_under_assumption": false
+      }
+    },
+    {
+      "customer_code": "C/Cord-DKBlue-100-713-wow",
+      "item_code": "KS0001-CMKTR-100-DEEPBLUE",
+      "warehouses": [
+        "美东-CENTRADE"
+      ],
+      "pool": [
+        {
+          "warehouse": "美东-CENTRADE",
+          "ship_type": "皮壳",
+          "available_all": 6,
+          "intransit_all": 120,
+          "cover_available": 0,
+          "cover_intransit": 0,
+          "on_order": 240.0,
+          "cover_on_order": 0.0,
+          "supply_in_rop": 246.0,
+          "rop_qty": 189.0,
+          "suggested_qty": 0.0,
+          "supply_basis": "available + max(intransit, PO)",
+          "n_skus": 2
+        }
+      ],
+      "eta": {
+        "verdict": "blocker",
+        "note": "will_arrive_date 全空；本地无其它 ETA 字段",
+        "po_rows_total": 2,
+        "open_po_lines": 2,
+        "open_qty": 240.0,
+        "open_po_numbers": [
+          "PO021733",
+          "PO021735"
+        ],
+        "will_arrive_date_populated_rows": 0,
+        "open_lines_with_eta": 0,
+        "purchase_date_populated_rows": 2,
+        "item_attr_lead_days": 14
+      },
+      "intransit": {
+        "verdict": "evidence_present",
+        "po_relation_verdict": "scenario",
+        "stock_rows": 4,
+        "intransit_total": 120,
+        "intransit_by_warehouse": {
+          "美东-CENTRADE": 120
+        },
+        "relation": [
+          {
+            "warehouse": "美东-CENTRADE",
+            "open_po_qty": 240.0,
+            "stock_intransit": 120,
+            "po_ge_intransit": true
+          }
+        ],
+        "per_line_link_key_present": false
+      },
+      "cover": {
+        "verdict": "evidence_present",
+        "note": "观察到的 cover 桶值；未计入 supply_in_rop",
+        "item_cover_stock_rows": 0,
+        "item_cover_stock_values": [],
+        "cover_alias_stock_rows": 1,
+        "cover_alias_available": 0,
+        "cover_alias_intransit": 0,
+        "pool_cover_available": 0,
+        "counted_in_supply": false,
+        "supply_basis": "available + max(intransit, PO)"
+      },
+      "uom": {
+        "verdict": "scenario",
+        "note": "BOM uom=个，子件同单位 1:1；库存快照无 uom 字段（stock_history.uom_basis=unknown）",
+        "bom_uom": "个",
+        "bom_qty_per": 1.0,
+        "children": [
+          {
+            "item": "ND#KS0001-100-CYF-WHITE",
+            "qty": 1.0,
+            "uom": "个"
+          },
+          {
+            "item": "PK#KS0001-CMKTR-100-DEEPBLUE",
+            "qty": 1.0,
+            "uom": "个"
+          }
+        ],
+        "en_so_uom": "个",
+        "stock_uom_field_present": false,
+        "stock_history_uom_basis": "unknown",
+        "conversion_needed_under_assumption": false
+      }
+    },
+    {
+      "customer_code": "C/Linen-Natural-153-688-wow",
+      "item_code": "KS0001-XMMBS-153-HEMPNATURAL",
+      "warehouses": [
+        "美东-CENTRADE"
+      ],
+      "pool": [
+        {
+          "warehouse": "美东-CENTRADE",
+          "ship_type": "皮壳",
+          "available_all": 338,
+          "intransit_all": 215,
+          "cover_available": 0,
+          "cover_intransit": 0,
+          "on_order": 223.0,
+          "cover_on_order": 0.0,
+          "supply_in_rop": 561.0,
+          "rop_qty": 226.0,
+          "suggested_qty": 0.0,
+          "supply_basis": "available + max(intransit, PO)",
+          "n_skus": 2
+        }
+      ],
+      "eta": {
+        "verdict": "blocker",
+        "note": "will_arrive_date 全空；本地无其它 ETA 字段",
+        "po_rows_total": 7,
+        "open_po_lines": 3,
+        "open_qty": 223.0,
+        "open_po_numbers": [
+          "PO021717",
+          "PO021733",
+          "PO021735"
+        ],
+        "will_arrive_date_populated_rows": 0,
+        "open_lines_with_eta": 0,
+        "purchase_date_populated_rows": 7,
+        "item_attr_lead_days": 14
+      },
+      "intransit": {
+        "verdict": "evidence_present",
+        "po_relation_verdict": "scenario",
+        "stock_rows": 4,
+        "intransit_total": 215,
+        "intransit_by_warehouse": {
+          "美东-CENTRADE": 215
+        },
+        "relation": [
+          {
+            "warehouse": "美东-CENTRADE",
+            "open_po_qty": 223.0,
+            "stock_intransit": 215,
+            "po_ge_intransit": true
+          }
+        ],
+        "per_line_link_key_present": false
+      },
+      "cover": {
+        "verdict": "evidence_present",
+        "note": "观察到的 cover 桶值；未计入 supply_in_rop",
+        "item_cover_stock_rows": 0,
+        "item_cover_stock_values": [],
+        "cover_alias_stock_rows": 1,
+        "cover_alias_available": 0,
+        "cover_alias_intransit": 0,
+        "pool_cover_available": 0,
+        "counted_in_supply": false,
+        "supply_basis": "available + max(intransit, PO)"
+      },
+      "uom": {
+        "verdict": "scenario",
+        "note": "BOM uom=个，子件同单位 1:1；库存快照无 uom 字段（stock_history.uom_basis=unknown）",
+        "bom_uom": "个",
+        "bom_qty_per": 1.0,
+        "children": [
+          {
+            "item": "ND#KS0001-153-CYF-WHITE",
+            "qty": 1.0,
+            "uom": "个"
+          },
+          {
+            "item": "PK#KS0001-XMMBS-153-HEMPNATURAL",
+            "qty": 1.0,
+            "uom": "个"
+          }
+        ],
+        "en_so_uom": "个",
+        "stock_uom_field_present": false,
+        "stock_history_uom_basis": "unknown",
+        "conversion_needed_under_assumption": false
+      }
+    },
+    {
+      "customer_code": "C/Velvet-Grey-100-705-wow",
+      "item_code": "KS0001-PR-100-GREY",
+      "warehouses": [
+        "美东-CENTRADE"
+      ],
+      "pool": [
+        {
+          "warehouse": "美东-CENTRADE",
+          "ship_type": "皮壳",
+          "available_all": 38,
+          "intransit_all": 0,
+          "cover_available": 0,
+          "cover_intransit": 0,
+          "on_order": 0.0,
+          "cover_on_order": 0.0,
+          "supply_in_rop": 38.0,
+          "rop_qty": 210.0,
+          "suggested_qty": 172.0,
+          "supply_basis": "available + max(intransit, PO)",
+          "n_skus": 2
+        }
+      ],
+      "eta": {
+        "verdict": "evidence_present",
+        "note": "无未结 PO 行，ETA 不适用",
+        "po_rows_total": 3,
+        "open_po_lines": 0,
+        "open_qty": 0,
+        "open_po_numbers": [],
+        "will_arrive_date_populated_rows": 0,
+        "open_lines_with_eta": 0,
+        "purchase_date_populated_rows": 3,
+        "item_attr_lead_days": 14
+      },
+      "intransit": {
+        "verdict": "evidence_present",
+        "po_relation_verdict": "evidence_present",
+        "stock_rows": 3,
+        "intransit_total": 0,
+        "intransit_by_warehouse": {},
+        "relation": [],
+        "per_line_link_key_present": false
+      },
+      "cover": {
+        "verdict": "evidence_present",
+        "note": "观察到的 cover 桶值；未计入 supply_in_rop",
+        "item_cover_stock_rows": 0,
+        "item_cover_stock_values": [],
+        "cover_alias_stock_rows": 1,
+        "cover_alias_available": 0,
+        "cover_alias_intransit": 0,
+        "pool_cover_available": 0,
+        "counted_in_supply": false,
+        "supply_basis": "available + max(intransit, PO)"
+      },
+      "uom": {
+        "verdict": "scenario",
+        "note": "BOM uom=个，子件同单位 1:1；库存快照无 uom 字段（stock_history.uom_basis=unknown）",
+        "bom_uom": "个",
+        "bom_qty_per": 1.0,
+        "children": [
+          {
+            "item": "ND#KS0001-100-CYF-WHITE",
+            "qty": 1.0,
+            "uom": "个"
+          },
+          {
+            "item": "PK#KS0001-PR-100-GREY",
+            "qty": 1.0,
+            "uom": "个"
+          }
+        ],
+        "en_so_uom": "个",
+        "stock_uom_field_present": false,
+        "stock_history_uom_basis": "unknown",
+        "conversion_needed_under_assumption": false
+      }
+    },
+    {
+      "customer_code": "C/Cord-Grey-100-710-wow",
+      "item_code": "KS0001-CMKTR-100-GREY",
+      "warehouses": [
+        "美东-CENTRADE"
+      ],
+      "pool": [
+        {
+          "warehouse": "美东-CENTRADE",
+          "ship_type": "皮壳",
+          "available_all": 0,
+          "intransit_all": 165,
+          "cover_available": 0,
+          "cover_intransit": 0,
+          "on_order": 318.0,
+          "cover_on_order": 0.0,
+          "supply_in_rop": 318.0,
+          "rop_qty": 164.0,
+          "suggested_qty": 0.0,
+          "supply_basis": "available + max(intransit, PO)",
+          "n_skus": 2
+        }
+      ],
+      "eta": {
+        "verdict": "blocker",
+        "note": "will_arrive_date 全空；本地无其它 ETA 字段",
+        "po_rows_total": 4,
+        "open_po_lines": 3,
+        "open_qty": 318.0,
+        "open_po_numbers": [
+          "PO021717",
+          "PO021733",
+          "PO021735"
+        ],
+        "will_arrive_date_populated_rows": 0,
+        "open_lines_with_eta": 0,
+        "purchase_date_populated_rows": 4,
+        "item_attr_lead_days": 14
+      },
+      "intransit": {
+        "verdict": "evidence_present",
+        "po_relation_verdict": "scenario",
+        "stock_rows": 3,
+        "intransit_total": 165,
+        "intransit_by_warehouse": {
+          "美东-CENTRADE": 165
+        },
+        "relation": [
+          {
+            "warehouse": "美东-CENTRADE",
+            "open_po_qty": 318.0,
+            "stock_intransit": 165,
+            "po_ge_intransit": true
+          }
+        ],
+        "per_line_link_key_present": false
+      },
+      "cover": {
+        "verdict": "evidence_present",
+        "note": "观察到的 cover 桶值；未计入 supply_in_rop",
+        "item_cover_stock_rows": 0,
+        "item_cover_stock_values": [],
+        "cover_alias_stock_rows": 1,
+        "cover_alias_available": 0,
+        "cover_alias_intransit": 0,
+        "pool_cover_available": 0,
+        "counted_in_supply": false,
+        "supply_basis": "available + max(intransit, PO)"
+      },
+      "uom": {
+        "verdict": "scenario",
+        "note": "BOM uom=个，子件同单位 1:1；库存快照无 uom 字段（stock_history.uom_basis=unknown）",
+        "bom_uom": "个",
+        "bom_qty_per": 1.0,
+        "children": [
+          {
+            "item": "ND#KS0001-100-CYF-WHITE",
+            "qty": 1.0,
+            "uom": "个"
+          },
+          {
+            "item": "PK#KS0001-CMKTR-100-GREY",
+            "qty": 1.0,
+            "uom": "个"
+          }
+        ],
+        "en_so_uom": "个",
+        "stock_uom_field_present": false,
+        "stock_history_uom_basis": "unknown",
+        "conversion_needed_under_assumption": false
+      }
+    },
+    {
+      "customer_code": "C/Linen-White-100-662-WOW",
+      "item_code": "KS0001-CMM-100-WHITE",
+      "warehouses": [
+        "美东-CENTRADE"
+      ],
+      "pool": [
+        {
+          "warehouse": "美东-CENTRADE",
+          "ship_type": "皮壳",
+          "available_all": 57,
+          "intransit_all": 73,
+          "cover_available": 0,
+          "cover_intransit": 0,
+          "on_order": 73.0,
+          "cover_on_order": 0.0,
+          "supply_in_rop": 130.0,
+          "rop_qty": 263.0,
+          "suggested_qty": 133.0,
+          "supply_basis": "available + max(intransit, PO)",
+          "n_skus": 1
+        }
+      ],
+      "eta": {
+        "verdict": "blocker",
+        "note": "will_arrive_date 全空；本地无其它 ETA 字段",
+        "po_rows_total": 5,
+        "open_po_lines": 2,
+        "open_qty": 73.0,
+        "open_po_numbers": [
+          "PO021717",
+          "PO021726"
+        ],
+        "will_arrive_date_populated_rows": 0,
+        "open_lines_with_eta": 0,
+        "purchase_date_populated_rows": 5,
+        "item_attr_lead_days": 14
+      },
+      "intransit": {
+        "verdict": "evidence_present",
+        "po_relation_verdict": "scenario",
+        "stock_rows": 3,
+        "intransit_total": 73,
+        "intransit_by_warehouse": {
+          "美东-CENTRADE": 73
+        },
+        "relation": [
+          {
+            "warehouse": "美东-CENTRADE",
+            "open_po_qty": 73.0,
+            "stock_intransit": 73,
+            "po_ge_intransit": true
+          }
+        ],
+        "per_line_link_key_present": false
+      },
+      "cover": {
+        "verdict": "scenario",
+        "note": "无 cover 桶映射；pool cover_available=0 为派生值，absence≠0 未证",
+        "item_cover_stock_rows": 0,
+        "item_cover_stock_values": [],
+        "cover_alias_stock_rows": 0,
+        "cover_alias_available": 0,
+        "cover_alias_intransit": 0,
+        "pool_cover_available": 0,
+        "counted_in_supply": false,
+        "supply_basis": "available + max(intransit, PO)"
+      },
+      "uom": {
+        "verdict": "scenario",
+        "note": "BOM uom=个，子件同单位 1:1；库存快照无 uom 字段（stock_history.uom_basis=unknown）",
+        "bom_uom": "个",
+        "bom_qty_per": 1.0,
+        "children": [
+          {
+            "item": "ND#KS0001-100-CYF-WHITE",
+            "qty": 1.0,
+            "uom": "个"
+          },
+          {
+            "item": "PK#KS0001-CMM-100-WHITE",
+            "qty": 1.0,
+            "uom": "个"
+          }
+        ],
+        "en_so_uom": "个",
+        "stock_uom_field_present": false,
+        "stock_history_uom_basis": "unknown",
+        "conversion_needed_under_assumption": false
+      }
+    },
+    {
+      "customer_code": "TT0000671K0063721",
+      "item_code": "KS0001-HLR-100-OFFWHITE",
+      "warehouses": [
+        "波兰-FZHPoland-covers",
+        "美中-FZH-DANEEY"
+      ],
+      "pool": [
+        {
+          "warehouse": "波兰-FZHPoland-covers",
+          "ship_type": "皮壳",
+          "available_all": 27,
+          "intransit_all": 0,
+          "cover_available": 0,
+          "cover_intransit": 0,
+          "on_order": 0.0,
+          "cover_on_order": 0.0,
+          "supply_in_rop": 27.0,
+          "rop_qty": 7.0,
+          "suggested_qty": 0.0,
+          "supply_basis": "available + max(intransit, PO)",
+          "n_skus": 1
+        },
+        {
+          "warehouse": "美中-FZH-DANEEY",
+          "ship_type": "皮壳",
+          "available_all": 70,
+          "intransit_all": 490,
+          "cover_available": 0,
+          "cover_intransit": 0,
+          "on_order": 490.0,
+          "cover_on_order": 0.0,
+          "supply_in_rop": 560.0,
+          "rop_qty": 169.0,
+          "suggested_qty": 0.0,
+          "supply_basis": "available + max(intransit, PO)",
+          "n_skus": 1
+        }
+      ],
+      "eta": {
+        "verdict": "blocker",
+        "note": "will_arrive_date 全空；本地无其它 ETA 字段",
+        "po_rows_total": 3,
+        "open_po_lines": 2,
+        "open_qty": 490.0,
+        "open_po_numbers": [
+          "PO021716",
+          "PO021727"
+        ],
+        "will_arrive_date_populated_rows": 0,
+        "open_lines_with_eta": 0,
+        "purchase_date_populated_rows": 3,
+        "item_attr_lead_days": 14
+      },
+      "intransit": {
+        "verdict": "evidence_present",
+        "po_relation_verdict": "scenario",
+        "stock_rows": 3,
+        "intransit_total": 490,
+        "intransit_by_warehouse": {
+          "美中-FZH-DANEEY": 490
+        },
+        "relation": [
+          {
+            "warehouse": "美中-FZH-DANEEY",
+            "open_po_qty": 490.0,
+            "stock_intransit": 490,
+            "po_ge_intransit": true
+          }
+        ],
+        "per_line_link_key_present": false
+      },
+      "cover": {
+        "verdict": "scenario",
+        "note": "无 cover 桶映射；pool cover_available=0 为派生值，absence≠0 未证",
+        "item_cover_stock_rows": 0,
+        "item_cover_stock_values": [],
+        "cover_alias_stock_rows": 0,
+        "cover_alias_available": 0,
+        "cover_alias_intransit": 0,
+        "pool_cover_available": 0,
+        "counted_in_supply": false,
+        "supply_basis": "available + max(intransit, PO)"
+      },
+      "uom": {
+        "verdict": "scenario",
+        "note": "BOM uom=个，子件同单位 1:1；库存快照无 uom 字段（stock_history.uom_basis=unknown）",
+        "bom_uom": "个",
+        "bom_qty_per": 1.0,
+        "children": [
+          {
+            "item": "ND#KS0001-100-CYF-WHITE",
+            "qty": 1.0,
+            "uom": "个"
+          },
+          {
+            "item": "PK#KS0001-HLR-100-OFFWHITE",
+            "qty": 1.0,
+            "uom": "个"
+          }
+        ],
+        "en_so_uom": "个",
+        "stock_uom_field_present": false,
+        "stock_history_uom_basis": "unknown",
+        "conversion_needed_under_assumption": false
+      }
+    },
+    {
+      "customer_code": "C/Linen-Natural-194-688-wow",
+      "item_code": "KS0001-XMMBS-194-HEMPNATURAL",
+      "warehouses": [
+        "美东-CENTRADE"
+      ],
+      "pool": [
+        {
+          "warehouse": "美东-CENTRADE",
+          "ship_type": "皮壳",
+          "available_all": 319,
+          "intransit_all": 0,
+          "cover_available": 0,
+          "cover_intransit": 0,
+          "on_order": 0.0,
+          "cover_on_order": 0.0,
+          "supply_in_rop": 319.0,
+          "rop_qty": 258.0,
+          "suggested_qty": 0.0,
+          "supply_basis": "available + max(intransit, PO)",
+          "n_skus": 1
+        }
+      ],
+      "eta": {
+        "verdict": "evidence_present",
+        "note": "无未结 PO 行，ETA 不适用",
+        "po_rows_total": 4,
+        "open_po_lines": 0,
+        "open_qty": 0,
+        "open_po_numbers": [],
+        "will_arrive_date_populated_rows": 0,
+        "open_lines_with_eta": 0,
+        "purchase_date_populated_rows": 4,
+        "item_attr_lead_days": 14
+      },
+      "intransit": {
+        "verdict": "evidence_present",
+        "po_relation_verdict": "evidence_present",
+        "stock_rows": 3,
+        "intransit_total": 0,
+        "intransit_by_warehouse": {},
+        "relation": [],
+        "per_line_link_key_present": false
+      },
+      "cover": {
+        "verdict": "scenario",
+        "note": "无 cover 桶映射；pool cover_available=0 为派生值，absence≠0 未证",
+        "item_cover_stock_rows": 0,
+        "item_cover_stock_values": [],
+        "cover_alias_stock_rows": 0,
+        "cover_alias_available": 0,
+        "cover_alias_intransit": 0,
+        "pool_cover_available": 0,
+        "counted_in_supply": false,
+        "supply_basis": "available + max(intransit, PO)"
+      },
+      "uom": {
+        "verdict": "scenario",
+        "note": "BOM uom=个，子件同单位 1:1；库存快照无 uom 字段（stock_history.uom_basis=unknown）",
+        "bom_uom": "个",
+        "bom_qty_per": 1.0,
+        "children": [
+          {
+            "item": "ND#KS0001-194-CYF-WHITE",
+            "qty": 1.0,
+            "uom": "个"
+          },
+          {
+            "item": "PK#KS0001-XMMBS-194-HEMPNATURAL",
+            "qty": 1.0,
+            "uom": "个"
+          }
+        ],
+        "en_so_uom": "个",
+        "stock_uom_field_present": false,
+        "stock_history_uom_basis": "unknown",
+        "conversion_needed_under_assumption": false
+      }
+    }
+  ],
+  "blockers": [
+    {
+      "dimension": "ETA",
+      "sku": "KS0001-XMMBS-100-HEMPNATURAL",
+      "customer_code": "C/Linen-Natural-100-688-wow",
+      "evidence": "tongtool_po will_arrive_date=0/3 非空；open lines=1，open_qty=121.0",
+      "min_input": "逐 PO 行的预计到货日期（通途采购单/采购 API 的 ETA 字段）；本 SKU 涉及 PO：PO021717"
+    },
+    {
+      "dimension": "ETA",
+      "sku": "KS0001-CMKTR-100-DEEPBLUE",
+      "customer_code": "C/Cord-DKBlue-100-713-wow",
+      "evidence": "tongtool_po will_arrive_date=0/2 非空；open lines=2，open_qty=240.0",
+      "min_input": "逐 PO 行的预计到货日期（通途采购单/采购 API 的 ETA 字段）；本 SKU 涉及 PO：PO021733, PO021735"
+    },
+    {
+      "dimension": "ETA",
+      "sku": "KS0001-XMMBS-153-HEMPNATURAL",
+      "customer_code": "C/Linen-Natural-153-688-wow",
+      "evidence": "tongtool_po will_arrive_date=0/7 非空；open lines=3，open_qty=223.0",
+      "min_input": "逐 PO 行的预计到货日期（通途采购单/采购 API 的 ETA 字段）；本 SKU 涉及 PO：PO021717, PO021733, PO021735"
+    },
+    {
+      "dimension": "ETA",
+      "sku": "KS0001-CMKTR-100-GREY",
+      "customer_code": "C/Cord-Grey-100-710-wow",
+      "evidence": "tongtool_po will_arrive_date=0/4 非空；open lines=3，open_qty=318.0",
+      "min_input": "逐 PO 行的预计到货日期（通途采购单/采购 API 的 ETA 字段）；本 SKU 涉及 PO：PO021717, PO021733, PO021735"
+    },
+    {
+      "dimension": "ETA",
+      "sku": "KS0001-CMM-100-WHITE",
+      "customer_code": "C/Linen-White-100-662-WOW",
+      "evidence": "tongtool_po will_arrive_date=0/5 非空；open lines=2，open_qty=73.0",
+      "min_input": "逐 PO 行的预计到货日期（通途采购单/采购 API 的 ETA 字段）；本 SKU 涉及 PO：PO021717, PO021726"
+    },
+    {
+      "dimension": "ETA",
+      "sku": "KS0001-HLR-100-OFFWHITE",
+      "customer_code": "TT0000671K0063721",
+      "evidence": "tongtool_po will_arrive_date=0/3 非空；open lines=2，open_qty=490.0",
+      "min_input": "逐 PO 行的预计到货日期（通途采购单/采购 API 的 ETA 字段）；本 SKU 涉及 PO：PO021716, PO021727"
+    }
+  ],
+  "blocker_count": 6,
+  "scenario_inputs": [
+    {
+      "dimension": "在途↔PO 逐笔关系",
+      "applies_to": "6 个有未结 PO 的 SKU",
+      "assumption": "同仓 sum(open PO) >= intransit，故 max(intransit,PO)=PO，不重复计；逐笔归属仍需单据键",
+      "evidence": "13 条未结 PO 行分属 6 个 PO；每仓 open_qty >= stock intransit（见 relation）",
+      "min_input": "通途采购单的已发/在途/入库分录（PO 行 ↔ 发运批次），或确认 intransit 为 open PO 的子集"
+    },
+    {
+      "dimension": "ETA（可推导路径，未采用）",
+      "applies_to": "6 个有未结 PO 的 SKU",
+      "assumption": "若业务确认「PO 采购日期 + item_attr.lead_days = 计划到货日期」，ETA 可从 blocker 降为 scenario",
+      "evidence": "item_attr.lead_days = 14（10/10 SKU）；本轮 13 条未结行 purchase_date 均非空",
+      "min_input": "业务书面确认该推导规则（本轮未计算任何 ETA）"
+    },
+    {
+      "dimension": "Cover 同池替代",
+      "applies_to": "全部 10 个 SKU（本轮 cover 未计入供给）",
+      "assumption": "无 -Cover 桶的 4 个 SKU 视为无 cover 池；有 -Cover 桶的 6 个 SKU 观测值为 0",
+      "evidence": "item_cover_stock 对这 10 个 item 0 行；6 个 -Cover 别名在 stock_latest 均 available=0",
+      "min_input": "业务确认这些 SKU 是否存在共享 Cover 池；或提供 PK# 皮壳 bin 快照"
+    },
+    {
+      "dimension": "UOM",
+      "applies_to": "全部 10 个 SKU",
+      "assumption": "库存/需求单位均为「个」；BOM 与 EN SO 均为 个，子件 1:1",
+      "evidence": "bom.uom=个（10/10）；bom_item.uom=个（20/20）；EN SO uom=个（10 个快照全部）；stock_latest 无 uom 列；stock_history.uom_basis=unknown（15820/15820）",
+      "min_input": "确认通途库存 SKU 的计量单位（或补 uom 字段的库存快照）"
+    }
+  ],
+  "trace_appendix_note": "trace_examples 的另外 4 个 SKU（KS0230/KS0153/KS0316/KS0249）不在 expand10 矩阵内，未计入 10；其 ETA/Cover 状态见 md 附录"
+}
