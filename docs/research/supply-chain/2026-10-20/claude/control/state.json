@@ -1,5 +1,5 @@
 {
-  "updated": "2026-10-22T12:05:00+08:00",
+  "updated": "2026-10-22T12:34:00+08:00",
   "accepted": [
     "G1 SO evidence gate v5: 9a04741e / d027f981; 66 tests; current_structure_only boundary; historical pending",
     "R1/R2 no-evidence audit gate: d8c473fe",
@@ -72,15 +72,13 @@
     }
   ],
   "blocked": [
-    "historical_verified anchors/effective dates missing",
+    "historical_verified anchors/effective dates missing; historical relations remain pending",
     "full family expansion not authorized",
     "business decisions: service level/budget, 3PL supply ownership, return restock share",
-    "100-SKU expansion awaiting user authorization for bounded EN read-only (<=4000 requests, <=200MB, <=90min, single concurrency)",
-    "Daily stock history: only 2 days (2026-10-20 incomplete, 2026-10-21 manual complete); scheduled 05:17 failed; not ingested into order_store.duckdb",
-    "100-SKU production expansion paused by decision Codex until stock history + gate + pilot ETA/Cover/UOM evidence",
-    "Stock history: 3 days available (10-20 incomplete, 10-21 complete, 10-22 catch-up complete); ingest code 571929fa under Codex re-review before writing local stock_history",
+    "100-SKU expansion paused: production gate PASS and stock history done, but mapping/ETA/Cover/UOM must close and an explicit go decision is required",
     "B ETA follow-up blocked on Jack's delivery_plan tracking data push and missing DN first-leg numbers from PJ/YYS",
-    "100-SKU expansion paused until mapping/ETA/Cover/UOM close"
+    "true_missing 28 business decisions pending: EN identity, deleted-alias intent, suffix/naming policy",
+    "Daily stock validation pending: verify 2026-10-23 05:17 sealed run + incremental stock_history ingest"
   ],
   "quota": {
     "codex_5h_remaining_pct": null,
@@ -152,5 +150,18 @@
     "verified_run": "2eab6670-729e-4646-b216-0852b0470693",
     "verified_at": "2026-10-21T17:37:45+08:00"
   },
-  "state_file": "D:\\Work\\赛狐\\Cursor-claude\\docs\\research\\supply-chain\\2026-10-20\\claude\\control\\state.json"
+  "state_file": "D:\\Work\\赛狐\\Cursor-claude\\docs\\research\\supply-chain\\2026-10-20\\claude\\control\\state.json",
+  "waiting_on": {
+    "event_1": "Jack provides delivery_plan tracking schema, one desensitized sample, push confirmation, and missing-DN list (or PJ/YYS fill numbers)",
+    "event_2": "Business answers the 28 true_missing decision items (EN existence/deletion intent/suffix policy)",
+    "event_3": "2026-10-23 05:17 daily stock run completes; then validate archive + ingest",
+    "event_4": "User/codex2 authorizes next phase (100-SKU expansion or G2/G3); no production scope change before that"
+  },
+  "heartbeat": {
+    "id": "f2b0d212",
+    "cron": "*/20",
+    "durable": false,
+    "verified": false,
+    "note": "CronList exposes no last-run; no heartbeat prompt observed since 11:59; treat as unverified backstop, not a guarantee"
+  }
 }
