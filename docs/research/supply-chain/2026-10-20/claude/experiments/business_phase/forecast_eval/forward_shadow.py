@@ -32,6 +32,10 @@ Usage
   # synthetic counterexample for the zero-demand rule (no DB, no files)
   uv run python forward_shadow.py --mode selftest
 
+  # entry-path regression: missing last target month returns labels_incomplete
+  # (structured reasons, retry date) instead of exiting; no DB, temp dir only
+  uv run python forward_shadow.py --mode entrytest
+
 Scoring mother set
   The presaved `sample.skus` is the mother set. Once every target month has
   labels, a sampled SKU with no order rows is a zero-demand cell: its |forecast|
@@ -52,6 +56,7 @@ import argparse
 import hashlib
 import json
 import sys
+import tempfile
 import time
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
@@ -82,7 +87,8 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--h", type=int, default=3)
     ap.add_argument("--inner-offsets", default="3,6,9")
     ap.add_argument("--n-series", type=int, default=200)
-    ap.add_argument("--mode", choices=["presave", "score", "selftest"], default="presave")
+    ap.add_argument("--mode", choices=["presave", "score", "selftest", "entrytest"],
+                    default="presave")
     ap.add_argument("--pred-file", help="pre-registered file to score (score mode)")
     ap.add_argument("--out-dir", default=str(OUT_DIR))
     ap.add_argument("--force", action="store_true",
@@ -350,7 +356,10 @@ def build_score(pre: dict, actual: dict, months_present: set,
                     presave_db_sha256=pre["inputs"]["db_sha256"],
                     destinations_sha256=pre["inputs"]["destinations_sha256"]),
         coverage=dict(months_present=sorted(set(targets) & set(months_present)),
-                      missing_months=missing_months),
+                      missing_months=missing_months,
+                      labels_complete=not missing_months),
+        scoring_due=pre.get("scoring_due"),
+        labels_needed_through=targets[-1],
         mother_set=dict(kind="presaved sample", n=len(sample_skus),
                         rule=("shadow_<origin>.json → sample.skus；不按目标窗订单记录收缩；"
                               "标签完整时无订单 = 零需求")),
@@ -369,20 +378,10 @@ def build_score(pre: dict, actual: dict, months_present: set,
     )
 
 
-def score(args) -> None:
-    if not args.pred_file:
-        raise SystemExit("--mode score requires --pred-file shadow_YYYY-MM.json")
-    path = Path(args.pred_file)
-    pre = json.loads(path.read_text(encoding="utf-8"))
-    origin = pre["origin"]
-    targets = pre["target_months"]
-    _, db_hi = db_months(args.db)
-    if ym_i(db_hi) < ym_i(targets[-1]):
-        raise SystemExit(f"labels missing: need through {targets[-1]}, DB has {db_hi}; "
-                         f"score again after {pre['scoring_due']}")
-    db_hash = hashlib.sha256(Path(args.db).read_bytes()).hexdigest()
+def load_score_inputs(db: str, targets: list[str]) -> tuple[dict, set]:
+    """Read-only actuals and month coverage for the target window."""
     ph = ",".join("?" * len(targets))
-    con = duckdb.connect(args.db, read_only=True)
+    con = duckdb.connect(db, read_only=True)
     try:
         rows = con.execute(f"""
             SELECT sku_tongtool, substr(despatch_date,1,7), SUM(qty)
@@ -401,6 +400,28 @@ def score(args) -> None:
     actual = defaultdict(float)
     for sku, _ym, q in rows:
         actual[sku] += float(q)
+    return actual, present
+
+
+def score(args, fetch=None) -> dict:
+    """Entry point for scoring. NEVER exits early on missing labels (T15).
+
+    Missing target months are a normal outcome of the monthly job, not a crash:
+    the window is scored as `labels_incomplete` with the missing months, every
+    affected SKU and its reason, plus the date to retry. Only a missing
+    --pred-file is an argument error.
+    """
+    if not args.pred_file:
+        raise SystemExit("--mode score requires --pred-file shadow_YYYY-MM.json")
+    path = Path(args.pred_file)
+    pre = json.loads(path.read_text(encoding="utf-8"))
+    origin = pre["origin"]
+    targets = pre["target_months"]
+    actual, present = (fetch or load_score_inputs)(args.db, targets)
+    # db hash is only meaningful for the real reader; injected readers (the
+    # entry regression test) pass None and build_score records it as such.
+    db_hash = (hashlib.sha256(Path(args.db).read_bytes()).hexdigest()
+               if fetch is None else None)
 
     payload = build_score(pre, actual, present, db_hash, path.name)
     out_path = Path(args.out_dir) / f"shadow_{origin}_score.json"
@@ -410,7 +431,11 @@ def score(args) -> None:
     print("status", payload["status"], "sample", payload["n_sample"],
           "scored", payload["n_scored"], "zero", payload["n_zero_demand_retained"],
           "excluded", payload["n_excluded"], "wape", payload["wape"])
+    if payload["coverage"]["missing_months"]:
+        print("missing_months", payload["coverage"]["missing_months"],
+              "retry_after", payload["scoring_due"])
     print("bootstrap", payload["bootstrap"])
+    return payload
 
 
 def selftest() -> None:
@@ -443,11 +468,62 @@ def selftest() -> None:
                      ensure_ascii=False, indent=1))
 
 
+def entrytest() -> None:
+    """Entry-path regression: missing last target month must NOT SystemExit.
+
+    The old entry raised SystemExit before build_score() could report, so the
+    monthly job produced no `labels_incomplete` file and no per-SKU reasons.
+    This drives the real `score()` entry with an injected read-only reader
+    (no DB, no network) and a temporary presave/out directory.
+    """
+    with tempfile.TemporaryDirectory() as td:
+        pre = dict(origin="2026-09", target_months=["2026-10", "2026-11", "2026-12"],
+                   scoring_due="2027-01-04", generated_at="synthetic",
+                   inputs=dict(db_sha256="x", destinations_sha256="x"),
+                   sample=dict(skus=[dict(sku="A"), dict(sku="B")]),
+                   forecasts={"A": {"selected": [5, 5, 5], "naive": [5, 5, 5],
+                                     "ma3": [4, 4, 4]},
+                              "B": {"selected": [40, 30, 30], "naive": [40, 30, 30],
+                                    "ma3": [40, 30, 30]}})
+        pred = Path(td) / "shadow_2026-09.json"
+        pred.write_text(json.dumps(pre, ensure_ascii=False), encoding="utf-8")
+        args = argparse.Namespace(pred_file=str(pred), out_dir=td, db="unused")
+
+        # labels stop one month short of the target window
+        partial = score(args, fetch=lambda _db, targets: ({}, set(targets[:-1])))
+        assert partial["status"] == "labels_incomplete", partial["status"]
+        assert partial["coverage"]["missing_months"] == [pre["target_months"][-1]]
+        assert partial["coverage"]["labels_complete"] is False
+        assert partial["n_scored"] == 0
+        assert partial["n_excluded"] == 2
+        assert all(e["reason"].startswith("missing_labels:")
+                   for e in partial["excluded"])
+        assert partial["scoring_due"] == "2027-01-04"
+        assert partial["wape"] == {m: None for m in ("selected", "naive", "ma3")}
+        # the same entry still scores normally once labels are complete
+        complete = score(args, fetch=lambda _db, targets: ({"B": 100.0}, set(targets)))
+        assert complete["status"] == "scored", complete["status"]
+        assert complete["wape"]["selected"] == 0.15
+        assert complete["coverage"]["labels_complete"] is True
+    print(json.dumps(dict(
+        entry_missing_last_month=partial["status"],
+        missing_months=partial["coverage"]["missing_months"],
+        excluded=partial["n_excluded"],
+        per_sku_reasons=sorted({e["reason"] for e in partial["excluded"]}),
+        retry_after=partial["scoring_due"],
+        entry_complete_labels=complete["status"],
+        wape_when_complete=complete["wape"]["selected"],
+    ), ensure_ascii=False, indent=1))
+
+
 def main() -> None:
     t0 = time.time()
     args = parse_args()
     if args.mode == "selftest":
         selftest()
+        return
+    if args.mode == "entrytest":
+        entrytest()
         return
     (presave if args.mode == "presave" else score)(args)
     print(f"done in {time.time() - t0:.1f} s")
