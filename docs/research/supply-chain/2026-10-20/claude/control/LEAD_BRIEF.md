@@ -23,7 +23,9 @@ last_seen_commit: ae8bcc55
 - 库存历史：3 天入 `stock_history` 15,820 行；归档器 1.3 PASS；次日 05:17 验证。
 - R290：5/5 接收，accept 3 / scenario 1 / blocker 1；ETA/Cover/UOM 仍缺。
 - SKU 匹配审计 C：`c583ace9`；GS 侧 4,115 行 / 297 SKU；四类 61/2/228/6；PASS。
-- B（ETA/Cover/UOM 证据）：10 SKU；ETA 6 blocker（`will_arrive_date` 0/524 非空）。
+- B（ETA/Cover/UOM 证据）：v1 两轮 FAIL；v2 主口径 5 trace SKU（ETA blocker 1 / cover scenario 3）
+  + 扩展 10 expand10 SKU（ETA blocker 6 / cover scenario 4）；null/0 分离、PO 行键、
+  215 SO 行、1,465 未结可复算；待复审。
 
 ## 审核标准
 

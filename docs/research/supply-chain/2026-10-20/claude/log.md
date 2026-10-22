@@ -582,6 +582,22 @@ tags: [supply-chain, research, log]
 - 未访问通途/EN 生产、未改 EN 数据、未改 `sku_map`、未做模糊认领。
 - 失败/放弃：无（8 分钟完成）；缺口是权限边界（EN Item master、EN 侧订单 SKU），不是时间。
 
+## 2026-10-22 — B v2：ETA / Cover / UOM / 在途证据（返修）
+
+- B v1 被两轮独立复审判 FAIL。v2 按 5 条整改重做：
+  ① 主口径回到 **5 个 trace SKU**，10 个 expand10 SKU 单列为扩展、不相加；
+  ② 缺失 cover 一律 `null` + `cover_observed=false`，不写 0；观测 0 与池输出 0 分开；
+  ③ 补 PO 行键 `(ponum, goods_sku, warehouse)`、Cover 仓键、逐文件 SO 行数与源哈希；
+  ④ `max(intransit,PO)`、UOM 换算、`open_qty=0` 全部改为条件结论，补 ETA 三类型
+  （planned/confirmed/usable）与皮壳/cover 规则说明；
+  ⑤ v2 证据 JSON 两处同字节，canonical 在 `experiments/g1_contract/out/eta_cover_uom/`。
+- 主口径：5 SKU；ETA blocker **1**（KS0316 / PO021715 / 10 件）；Cover evidence 2 /
+  scenario 3；在途 5/5 可观测；UOM 5/5 条件结论。
+- 扩展口径：10 SKU；ETA blocker **6**（13 行 / 1,465 件 / 6 个 PO）；Cover evidence 6 /
+  scenario 4；在途 10/10；EN SO **215** 行（10 个文件逐文件对账）。
+- 未访问生产、未改 `order_store.duckdb`（前后 sha256 `25579c5d…`）、未估算缺失值。
+- 失败/放弃：无；剩余是 ETA 外部输入与 cover 同池/UOM 的业务确认，不是时间。
+
 ## 模板（后续阶段）
 
 ```text

@@ -24,6 +24,9 @@ date: 2026-10-22
 | 10-22 | 归档器 1.0/1.2/1.3 | review ×3 | 1.3 PASS | tmp/锁/run-state；已真实归档 |
 | 10-22 | 阶段 1 `ca27163c` 证据 | review | FAIL→PASS | 3,416 行、wo_uom_unresolved；修正后 PASS |
 | 10-22 | SKU 审计 C `c583ace9` | review | PASS | 4,115 行/297 SKU；61/2/228/6 |
+| 10-22 | B v1 证据 | review ×2 | FAIL | 范围错位（expand10 当主口径，trace 只有 5 SKU）；无映射 cover 写 0；缺 PO 行键/cover 仓键/逐文件 SO/源哈希；max/UOM/open_qty 结论过强 |
+| 10-22 | B v2 证据 | — | 待复审 | 主口径 5 trace + 扩展 10 分列；null/0 分离；补 PO 行键、215 SO、1,465 复算、源哈希；条件结论 |
 
 ## 当前待审
-- B（ETA/Cover/UOM 证据）：已完成，待 lead 与 fresh reviewer 对照。
+- B v2（`2026-10-22-eta-cover-uom-evidence.md` + `evidence.json` sha256 `5b6bca32…`）：
+  v1 已两轮 FAIL，v2 待 lead 与 fresh reviewer 对照。

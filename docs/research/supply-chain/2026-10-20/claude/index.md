@@ -42,6 +42,7 @@ tags: [supply-chain, research, index]
 | [14-daily-inventory-backup.md](14-daily-inventory-backup.md) | 每日库存备份、销售报表对比、落库与服务器建议 |
 | [15-full-family-etl.md](15-full-family-etl.md) | 全 family/全 SKU 批量 ETL 方向与架构 |
 | [control/reviews/2026-10-22-sku-match-audit.md](control/reviews/2026-10-22-sku-match-audit.md) | 通途-EN SKU 匹配只读审计（GS 订单侧 297 SKU / 4,115 行四分类） |
+| [control/reviews/2026-10-22-eta-cover-uom-evidence.md](control/reviews/2026-10-22-eta-cover-uom-evidence.md) | B v2：5 trace SKU 主口径 + 10 expand10 扩展；ETA/Cover/UOM/在途证据与可复算键 |
 | [sources.md](sources.md) | 证据账本（ID / 主张 / 来源 / 日期 / 原文 / 强度） |
 | [log.md](log.md) | 过程记录、失败与放弃方向 |
 | [experiments/](experiments/index.md) | E1–E3 最小验证的代码、输入哈希与结果 |
