@@ -1,0 +1,5758 @@
+{
+ "schema_version": "business_phase_ranking/1",
+ "stage": "Phase 1B (sales metric + ranking only; no quantity, no fill call)",
+ "generated_at": "2026-10-22T16:34:00+08:00",
+ "inputs": {
+  "destinations_path": "D:\\Work\\赛狐\\Cursor-claude\\docs\\research\\supply-chain\\2026-10-20\\claude\\out\\business_phase\\destinations.json",
+  "destinations_sha256": "720b478809128156cc1609cd10720cb926a98382a7c2f8a8179c55cadbf7bf60",
+  "db_path": "D:\\Work\\fzh-order-store\\order_store.duckdb",
+  "db_sha256_before": "25579c5dcd802c7e67f610432a19d08f8e6952696bd50d43bdfa47d6b9241ae9",
+  "db_sha256_after": "25579c5dcd802c7e67f610432a19d08f8e6952696bd50d43bdfa47d6b9241ae9",
+  "phase1a_commit": "44def7f5"
+ },
+ "metric": {
+  "name": "net_qty_6m",
+  "definition": "shipped quantity minus returns/cancellations, per SKU, over six complete months; zero-filled for months without rows",
+  "date_field": "despatch_date",
+  "date_field_note": "sale_date would give 1,326 mother-set SKUs vs 1,328 for despatch_date (2-SKU difference); despatch_date is frozen and the difference is recorded, not silently switched",
+  "window": {
+   "first": "2026-04",
+   "last": "2026-09",
+   "complete_months": 6,
+   "excluded_partial_months": "2026-10 (decision date 2026-10-22)"
+  },
+  "zero_fill": "every SKU carries all six months with rows=0/qty=0 marked zero_filled",
+  "returns_and_cancellations": {
+   "negative_qty_rows": 0,
+   "zero_qty_rows": 1,
+   "rule": "qty is summed as signed; this snapshot has 0 negative lines, so net equals shipped. gs_orders has no status field, so cancellations cannot be removed beyond what the source already excludes"
+  },
+  "test_order_exclusion": {
+   "rule": "platform_sku matches (^|[-_])test([-_]|$), case-insensitive",
+   "rows_excluded": 5,
+   "qty_excluded": 6,
+   "skus_affected": [
+    "TT0001538K0009462",
+    "TT0001538K0011180"
+   ],
+   "line_ids": [
+    "202604:1697",
+    "202606:631",
+    "202606:1449",
+    "202607:927",
+    "202607:4928"
+   ],
+   "note": "Excluding test lines does not drop a SKU: affected SKUs keep their non-test sales and stay in the table"
+  },
+  "internal_transfer_exclusion": {
+   "rule": "warehouse/account/channel matches 调拨|transfer|内部|internal",
+   "rows_excluded": 0,
+   "note": "0 rows matched in the window; the search is recorded so it is recomputable"
+  },
+  "kit_and_unit_rules": {
+   "unit_basis": "all 1,237 eligible items have BOM uom in 件/个/套 (Phase 1A check); 29 items without a BOM row were excluded from the eligible set, so no unit mixing in this ranking",
+   "kit_rule": "a TJ# bundle row would be counted once and its component rows excluded; the window contains 0 TJ# sales rows, so no bundle/component double count exists here",
+   "tj_rows_in_window": 0
+  },
+  "traceability": "each row carries 6 monthly cells and first/last line_id over its gs_orders predicate"
+ },
+ "scope": {
+  "eligible_skus": 1237,
+  "excluded_from_ranking": {
+   "mapped_ineligible": 29,
+   "unmapped": 62,
+   "discontinued_excluded": 0
+  },
+  "no_quantities": true,
+  "no_fill_call": true,
+  "no_replenishment_judgement": true
+ },
+ "stratification": {
+  "dominance_threshold": 0.5,
+  "dimensions": {
+   "item_group": {
+    "strata": 226,
+    "top_stratum": "三角靠枕",
+    "top_share": 0.6317,
+    "dominated": true
+   },
+   "warehouse": {
+    "strata": 12,
+    "top_stratum": "CENTRADE",
+    "top_share": 0.3133,
+    "dominated": false
+   }
+  },
+  "chosen_dimension": "item_group",
+  "rationale": "single-dimension dominance: '三角靠枕' is 63.2% of eligible net quantity (>= 50%), so ranks are computed inside strata and Top 50 seats are allocated by stratum share",
+  "strata": [
+   {
+    "stratum": "三角靠枕",
+    "share": 0.6317,
+    "quota": 32,
+    "eligible_skus": 464,
+    "selected": 32
+   },
+   {
+    "stratum": "三角靠枕无扣",
+    "share": 0.0668,
+    "quota": 4,
+    "eligible_skus": 91,
+    "selected": 4
+   },
+   {
+    "stratum": "软包墙围",
+    "share": 0.0287,
+    "quota": 2,
+    "eligible_skus": 6,
+    "selected": 2
+   },
+   {
+    "stratum": "平条靠枕",
+    "share": 0.0282,
+    "quota": 2,
+    "eligible_skus": 114,
+    "selected": 2
+   },
+   {
+    "stratum": "身体支撑阅读枕",
+    "share": 0.0204,
+    "quota": 1,
+    "eligible_skus": 2,
+    "selected": 1
+   },
+   {
+    "stratum": "沙发支撑垫",
+    "share": 0.0163,
+    "quota": 1,
+    "eligible_skus": 3,
+    "selected": 1
+   },
+   {
+    "stratum": "车载宠物窝",
+    "share": 0.0157,
+    "quota": 1,
+    "eligible_skus": 5,
+    "selected": 1
+   },
+   {
+    "stratum": "弧形PP棉靠枕",
+    "share": 0.0156,
+    "quota": 1,
+    "eligible_skus": 60,
+    "selected": 1
+   },
+   {
+    "stratum": "主体骨架",
+    "share": 0.014,
+    "quota": 1,
+    "eligible_skus": 1,
+    "selected": 1
+   },
+   {
+    "stratum": "床楔形枕头",
+    "share": 0.0113,
+    "quota": 1,
+    "eligible_skus": 16,
+    "selected": 1
+   },
+   {
+    "stratum": "三角带圆柱靠枕",
+    "share": 0.0092,
+    "quota": 1,
+    "eligible_skus": 5,
+    "selected": 1
+   },
+   {
+    "stratum": "平条靠枕无压条",
+    "share": 0.0089,
+    "quota": 1,
+    "eligible_skus": 20,
+    "selected": 1
+   },
+   {
+    "stratum": "沙发床头靠枕",
+    "share": 0.0082,
+    "quota": 1,
+    "eligible_skus": 4,
+    "selected": 1
+   },
+   {
+    "stratum": "侧睡两用楔形枕",
+    "share": 0.008,
+    "quota": 1,
+    "eligible_skus": 1,
+    "selected": 1
+   },
+   {
+    "stratum": "几何坐墩-梯形",
+    "share": 0.0062,
+    "quota": 0,
+    "eligible_skus": 4,
+    "selected": 0
+   },
+   {
+    "stratum": "弧形PP棉印花靠枕",
+    "share": 0.0055,
+    "quota": 0,
+    "eligible_skus": 8,
+    "selected": 0
+   },
+   {
+    "stratum": "组合趴睡枕",
+    "share": 0.0051,
+    "quota": 0,
+    "eligible_skus": 2,
+    "selected": 0
+   },
+   {
+    "stratum": "侧睡枕-第三版",
+    "share": 0.0046,
+    "quota": 0,
+    "eligible_skus": 2,
+    "selected": 0
+   },
+   {
+    "stratum": "轻置物床头靠枕",
+    "share": 0.0043,
+    "quota": 0,
+    "eligible_skus": 5,
+    "selected": 0
+   },
+   {
+    "stratum": "长方形枕套",
+    "share": 0.0034,
+    "quota": 0,
+    "eligible_skus": 2,
+    "selected": 0
+   },
+   {
+    "stratum": "带孔耳枕",
+    "share": 0.0034,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "欧式床头靠枕-花边款",
+    "share": 0.0032,
+    "quota": 0,
+    "eligible_skus": 12,
+    "selected": 0
+   },
+   {
+    "stratum": "大尺寸车载宠物窝",
+    "share": 0.0031,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "手臂支撑枕",
+    "share": 0.0031,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "巧克力床头板",
+    "share": 0.0029,
+    "quota": 0,
+    "eligible_skus": 23,
+    "selected": 0
+   },
+   {
+    "stratum": "弧形海绵靠枕-拉链款",
+    "share": 0.0028,
+    "quota": 0,
+    "eligible_skus": 13,
+    "selected": 0
+   },
+   {
+    "stratum": "复古拼色褶皱三角靠枕",
+    "share": 0.0026,
+    "quota": 0,
+    "eligible_skus": 5,
+    "selected": 0
+   },
+   {
+    "stratum": "贝壳床头靠垫",
+    "share": 0.0026,
+    "quota": 0,
+    "eligible_skus": 2,
+    "selected": 0
+   },
+   {
+    "stratum": "欧式复古茶几坐凳流苏款",
+    "share": 0.0024,
+    "quota": 0,
+    "eligible_skus": 2,
+    "selected": 0
+   },
+   {
+    "stratum": "床垫连接垫",
+    "share": 0.0022,
+    "quota": 0,
+    "eligible_skus": 2,
+    "selected": 0
+   },
+   {
+    "stratum": "欧式宠物沙发",
+    "share": 0.0019,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "方形抱枕",
+    "share": 0.0018,
+    "quota": 0,
+    "eligible_skus": 2,
+    "selected": 0
+   },
+   {
+    "stratum": "印花石头抱枕",
+    "share": 0.0017,
+    "quota": 0,
+    "eligible_skus": 21,
+    "selected": 0
+   },
+   {
+    "stratum": "泰迪熊",
+    "share": 0.0016,
+    "quota": 0,
+    "eligible_skus": 9,
+    "selected": 0
+   },
+   {
+    "stratum": "三角带圆柱靠枕-圆柱",
+    "share": 0.0016,
+    "quota": 0,
+    "eligible_skus": 11,
+    "selected": 0
+   },
+   {
+    "stratum": "抽条大兔毛系列-圆沙发",
+    "share": 0.0016,
+    "quota": 0,
+    "eligible_skus": 2,
+    "selected": 0
+   },
+   {
+    "stratum": "绗缝方格扣子床头板",
+    "share": 0.0015,
+    "quota": 0,
+    "eligible_skus": 15,
+    "selected": 0
+   },
+   {
+    "stratum": "几何坐墩-长方体",
+    "share": 0.0014,
+    "quota": 0,
+    "eligible_skus": 4,
+    "selected": 0
+   },
+   {
+    "stratum": "中控台车载狗窝",
+    "share": 0.0014,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "蓝白条纹款中控台车载狗窝",
+    "share": 0.0014,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "模块化宠物楼梯",
+    "share": 0.0013,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "小马抱枕",
+    "share": 0.0013,
+    "quota": 0,
+    "eligible_skus": 7,
+    "selected": 0
+   },
+   {
+    "stratum": "侧睡两用楔形枕迭代",
+    "share": 0.0012,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "转角靠枕-转角款",
+    "share": 0.0011,
+    "quota": 0,
+    "eligible_skus": 2,
+    "selected": 0
+   },
+   {
+    "stratum": "材质方墩",
+    "share": 0.0011,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "棉花床头板",
+    "share": 0.0011,
+    "quota": 0,
+    "eligible_skus": 2,
+    "selected": 0
+   },
+   {
+    "stratum": "松饼大沙发-放大版",
+    "share": 0.0011,
+    "quota": 0,
+    "eligible_skus": 3,
+    "selected": 0
+   },
+   {
+    "stratum": "欧式腰果花吊穗方抱枕",
+    "share": 0.001,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "组合式侧睡枕",
+    "share": 0.001,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "转角靠枕-直条款",
+    "share": 0.0009,
+    "quota": 0,
+    "eligible_skus": 2,
+    "selected": 0
+   },
+   {
+    "stratum": "组合式户外沙发-转角",
+    "share": 0.0009,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "弧形PP棉靠枕-拉链款",
+    "share": 0.0009,
+    "quota": 0,
+    "eligible_skus": 6,
+    "selected": 0
+   },
+   {
+    "stratum": "方形皮革坐垫",
+    "share": 0.0008,
+    "quota": 0,
+    "eligible_skus": 2,
+    "selected": 0
+   },
+   {
+    "stratum": "深睡眠狗窝",
+    "share": 0.0007,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "豌豆宠物窝",
+    "share": 0.0007,
+    "quota": 0,
+    "eligible_skus": 2,
+    "selected": 0
+   },
+   {
+    "stratum": "吐司地垫",
+    "share": 0.0007,
+    "quota": 0,
+    "eligible_skus": 2,
+    "selected": 0
+   },
+   {
+    "stratum": "可盘腿办公椅垫",
+    "share": 0.0006,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "多功能床上靠背趴睡枕",
+    "share": 0.0006,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "深卧单人沙发椅",
+    "share": 0.0006,
+    "quota": 0,
+    "eligible_skus": 3,
+    "selected": 0
+   },
+   {
+    "stratum": "多色可折叠豆袋椅",
+    "share": 0.0006,
+    "quota": 0,
+    "eligible_skus": 2,
+    "selected": 0
+   },
+   {
+    "stratum": "现代款宠物沙发",
+    "share": 0.0006,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "云朵宠物窝",
+    "share": 0.0006,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "松饼沙发床",
+    "share": 0.0006,
+    "quota": 0,
+    "eligible_skus": 2,
+    "selected": 0
+   },
+   {
+    "stratum": "床头板弧形款",
+    "share": 0.0005,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "几何坐墩-椭圆形",
+    "share": 0.0005,
+    "quota": 0,
+    "eligible_skus": 3,
+    "selected": 0
+   },
+   {
+    "stratum": "绗缝菱形扣子床头板",
+    "share": 0.0005,
+    "quota": 0,
+    "eligible_skus": 7,
+    "selected": 0
+   },
+   {
+    "stratum": "星球抱枕",
+    "share": 0.0005,
+    "quota": 0,
+    "eligible_skus": 9,
+    "selected": 0
+   },
+   {
+    "stratum": "绑带款膝盖腿枕",
+    "share": 0.0005,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "BBL坐趴两用枕",
+    "share": 0.0005,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "弹簧床头靠枕",
+    "share": 0.0005,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "折叠软垫沙发床",
+    "share": 0.0005,
+    "quota": 0,
+    "eligible_skus": 4,
+    "selected": 0
+   },
+   {
+    "stratum": "双人豆袋躺椅",
+    "share": 0.0005,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "单双人地板沙发-单人位",
+    "share": 0.0005,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "可调节趴睡枕",
+    "share": 0.0005,
+    "quota": 0,
+    "eligible_skus": 2,
+    "selected": 0
+   },
+   {
+    "stratum": "功能性手臂支撑阅读枕",
+    "share": 0.0004,
+    "quota": 0,
+    "eligible_skus": 3,
+    "selected": 0
+   },
+   {
+    "stratum": "组合式户外沙发-靠背",
+    "share": 0.0004,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "组合式户外沙发-脚踏",
+    "share": 0.0004,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "蛋椅坐垫",
+    "share": 0.0004,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "印花款-星球床头靠枕",
+    "share": 0.0004,
+    "quota": 0,
+    "eligible_skus": 3,
+    "selected": 0
+   },
+   {
+    "stratum": "麻将沙发BOHO风格",
+    "share": 0.0004,
+    "quota": 0,
+    "eligible_skus": 13,
+    "selected": 0
+   },
+   {
+    "stratum": "户外托盘垫-坐垫",
+    "share": 0.0004,
+    "quota": 0,
+    "eligible_skus": 6,
+    "selected": 0
+   },
+   {
+    "stratum": "多片折叠沙发-迭代款",
+    "share": 0.0004,
+    "quota": 0,
+    "eligible_skus": 2,
+    "selected": 0
+   },
+   {
+    "stratum": "心形沙发",
+    "share": 0.0004,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "单双人地板沙发-双人位",
+    "share": 0.0004,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "户外托盘垫-靠背",
+    "share": 0.0004,
+    "quota": 0,
+    "eligible_skus": 3,
+    "selected": 0
+   },
+   {
+    "stratum": "欧式床头靠枕-流苏款",
+    "share": 0.0004,
+    "quota": 0,
+    "eligible_skus": 2,
+    "selected": 0
+   },
+   {
+    "stratum": "欧式腰果花吊穗长条枕",
+    "share": 0.0003,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "零重力体感单人椅",
+    "share": 0.0003,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "可调节层高枕",
+    "share": 0.0003,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "脚凳",
+    "share": 0.0003,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "户外托盘垫-转角垫",
+    "share": 0.0003,
+    "quota": 0,
+    "eligible_skus": 5,
+    "selected": 0
+   },
+   {
+    "stratum": "中控台车载狗窝四季款",
+    "share": 0.0003,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "折叠豆袋沙发床",
+    "share": 0.0003,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "欧式腰果花吊穗大靠背",
+    "share": 0.0003,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "悬挂式床头靠枕-海绵款",
+    "share": 0.0003,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "牛仔风阅读枕",
+    "share": 0.0003,
+    "quota": 0,
+    "eligible_skus": 2,
+    "selected": 0
+   },
+   {
+    "stratum": "假日休闲躺椅",
+    "share": 0.0003,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "鹅卵石套装",
+    "share": 0.0003,
+    "quota": 0,
+    "eligible_skus": 3,
+    "selected": 0
+   },
+   {
+    "stratum": "多功能格子组合坐垫4个",
+    "share": 0.0002,
+    "quota": 0,
+    "eligible_skus": 2,
+    "selected": 0
+   },
+   {
+    "stratum": "麻将沙发衍生款",
+    "share": 0.0002,
+    "quota": 0,
+    "eligible_skus": 3,
+    "selected": 0
+   },
+   {
+    "stratum": "英伦风翻转沙发",
+    "share": 0.0002,
+    "quota": 0,
+    "eligible_skus": 2,
+    "selected": 0
+   },
+   {
+    "stratum": "糖果床头靠枕",
+    "share": 0.0002,
+    "quota": 0,
+    "eligible_skus": 2,
+    "selected": 0
+   },
+   {
+    "stratum": "南瓜豆袋椅",
+    "share": 0.0002,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "户外托盘垫-装饰方靠枕",
+    "share": 0.0002,
+    "quota": 0,
+    "eligible_skus": 3,
+    "selected": 0
+   },
+   {
+    "stratum": "摩登沙发",
+    "share": 0.0002,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "狗护膝",
+    "share": 0.0002,
+    "quota": 0,
+    "eligible_skus": 2,
+    "selected": 0
+   },
+   {
+    "stratum": "组合式兔毛沙发",
+    "share": 0.0002,
+    "quota": 0,
+    "eligible_skus": 2,
+    "selected": 0
+   },
+   {
+    "stratum": "圆滚靠枕",
+    "share": 0.0002,
+    "quota": 0,
+    "eligible_skus": 2,
+    "selected": 0
+   },
+   {
+    "stratum": "读书角地垫",
+    "share": 0.0002,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "拼色褶皱床头靠枕",
+    "share": 0.0002,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "good靠枕",
+    "share": 0.0002,
+    "quota": 0,
+    "eligible_skus": 3,
+    "selected": 0
+   },
+   {
+    "stratum": "模块组合坐垫4个",
+    "share": 0.0002,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "瑜伽组合沙发",
+    "share": 0.0002,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "钟摆沙发",
+    "share": 0.0002,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "消波块解压靠枕",
+    "share": 0.0002,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "欧式米白滚边吊穗方抱枕",
+    "share": 0.0002,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "门挡风神器",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "抱枕三件套",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "麻将沙发优化款",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 3,
+    "selected": 0
+   },
+   {
+    "stratum": "欧式蓝色滚边吊穗方抱枕",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "弧形pp棉靠枕二次迭代",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "储物罐坐墩",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "欧式米白滚边吊穗长条枕",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "欧式蓝色滚边吊穗大靠背",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "地板沙发套装",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "落地式床头板",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "双十字床头靠垫",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "荧光床头板",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "泡芙沙发",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "欧式米白滚边吊穗大靠背",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 2,
+    "selected": 0
+   },
+   {
+    "stratum": "欧式蓝色滚边吊穗长条枕",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "方形有扣地垫",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 3,
+    "selected": 0
+   },
+   {
+    "stratum": "五件套靠枕",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "蝴蝶护肩枕",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "牵手椅凳",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "室内外躺椅垫",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "高围挡宠物窝",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "欧式床头靠枕-蓝色滚边吊穗款",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 2,
+    "selected": 0
+   },
+   {
+    "stratum": "曲线沙发座椅",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 2,
+    "selected": 0
+   },
+   {
+    "stratum": "逗号组合沙发左扶手款",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 2,
+    "selected": 0
+   },
+   {
+    "stratum": "抽条大兔毛沙发躺椅",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 2,
+    "selected": 0
+   },
+   {
+    "stratum": "多边形单人豆袋椅",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "灵活拼接床头板",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "角落单人软垫沙发",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "角落单人软垫沙发-脚踏",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "圆柱颈枕弧形海绵靠枕",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 2,
+    "selected": 0
+   },
+   {
+    "stratum": "圆形坐垫",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 2,
+    "selected": 0
+   },
+   {
+    "stratum": "欧式沙发狗床",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "宠物度假风椰树躺椅",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "护颈枕",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "多功能膝盖腿枕",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "多功能阅读枕",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "床边收纳袋",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "侧睡U形身体枕",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 2,
+    "selected": 0
+   },
+   {
+    "stratum": "床头板拼装款",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "汉堡地板坐垫",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "贪吃蛇长条靠枕",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "逗号组合沙发右扶手款",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 2,
+    "selected": 0
+   },
+   {
+    "stratum": "逗号组合沙发靠背款",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 2,
+    "selected": 0
+   },
+   {
+    "stratum": "窝垫两用宠物窝",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "创意香蕉船豆袋沙发椅",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "双排扣双层靠枕",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "竹节地板沙发",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "麻将沙发纯色版",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 2,
+    "selected": 0
+   },
+   {
+    "stratum": "罗马假日休闲脚凳",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "装饰风床头靠枕组合",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "怀抱沙发",
+    "share": 0.0001,
+    "quota": 0,
+    "eligible_skus": 3,
+    "selected": 0
+   },
+   {
+    "stratum": "褶皱手提坐垫方形",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "褶皱手提坐垫圆形",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 2,
+    "selected": 0
+   },
+   {
+    "stratum": "宽边正方形枕头",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "安抚宠物窝",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "耳朵汽车后座保护套",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "汽车后座延长器",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "墙面游戏猫爬梯",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "新被子狗床",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "透气椅垫",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "幼儿积木沙发",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "游戏软趴靠垫",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "毛毡多层猫窝",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "便携收纳U形枕",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "家庭地垫沙发",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "梯形单元组合沙发",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "歌剧院猫窝",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 2,
+    "selected": 0
+   },
+   {
+    "stratum": "襁褓宠物窝",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 2,
+    "selected": 0
+   },
+   {
+    "stratum": "双人躺椅",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "南瓜茶几",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "杨桃多功能靠枕",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "可调节地板阅读椅",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "襁褓豆袋躺椅",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "homie小沙发",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "椭圆墩-旧铁皮",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "音孔枕",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "圆柱小枕",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "安全感靠墙宠物窝",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "多功能猫窝",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "三角猫隧道",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "猫秋千",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "宠物外出手提包",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "防猫抓沙发保护垫",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "狗狗出行辅助带",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "宠物冰垫",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "多片折叠沙发",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "拉带沙发",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "绑带沙发",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "书虫沙发",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "坐坐熊地板沙发",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "游戏阅读枕",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "毛毡杯垫套装",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "折叠沙发床",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "坐墩三角款",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "贝壳造型沙发椅",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "创意花生地垫",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "U形锁沙发",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "欧式床头靠枕-米白滚边吊穗款",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "抽象手形地垫",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "儿童游戏床",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "曲线沙发茶几",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "复古曲线拼色靠枕",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "上下连接大型豆袋沙发",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "弧形流苏沙发",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "游乐场懒人沙发模块-转角款",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "双排扣床头靠枕",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "休闲地板沙发椅",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "大空间圆饼地垫沙发",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "苔丝沙发",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   },
+   {
+    "stratum": "白日梦躺椅",
+    "share": 0.0,
+    "quota": 0,
+    "eligible_skus": 1,
+    "selected": 0
+   }
+  ]
+ },
+ "top50": [
+  {
+   "rank": 1,
+   "stratum_rank": 1,
+   "global_rank": 1,
+   "sku": "CENCord995-DKGrey-97",
+   "mapped_item_code": "KS0001-QDKTR-100-DEEPGREY",
+   "item_group": "三角靠枕",
+   "stratum": "三角靠枕",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 801,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 4,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 14,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 56,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 147,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 531,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 49,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": false,
+   "partial_fulfillment": false,
+   "waiting_shipment": 0,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='CENCord995-DKGrey-97'] lines=792, line_id 202604:3957..202609:991; stock_latest[sku='CENCord995-DKGrey-97'] rows=3"
+  },
+  {
+   "rank": 2,
+   "stratum_rank": 1,
+   "global_rank": 2,
+   "sku": "TT0031038K0062927",
+   "mapped_item_code": "KS0156-NYBDSFH-52x52x5-BLACK",
+   "item_group": "沙发支撑垫",
+   "stratum": "沙发支撑垫",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 707,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 143,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 159,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 124,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 131,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 57,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 93,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": false,
+   "partial_fulfillment": true,
+   "waiting_shipment": 5,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='TT0031038K0062927'] lines=337, line_id 202604:1012..202609:788; stock_latest[sku='TT0031038K0062927'] rows=4"
+  },
+  {
+   "rank": 3,
+   "stratum_rank": 2,
+   "global_rank": 3,
+   "sku": "CEN003-DPBLUE-100",
+   "mapped_item_code": "KS0001-QDKTR-100-DEEPBLUE",
+   "item_group": "三角靠枕",
+   "stratum": "三角靠枕",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 704,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 4,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 19,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 57,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 138,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 484,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 2,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": false,
+   "partial_fulfillment": false,
+   "waiting_shipment": 0,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='CEN003-DPBLUE-100'] lines=690, line_id 202604:1156..202609:458; stock_latest[sku='CEN003-DPBLUE-100'] rows=2"
+  },
+  {
+   "rank": 4,
+   "stratum_rank": 3,
+   "global_rank": 4,
+   "sku": "C/Linen-Natural-100-688-wow",
+   "mapped_item_code": "KS0001-XMMBS-100-HEMPNATURAL",
+   "item_group": "三角靠枕",
+   "stratum": "三角靠枕",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 675,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 16,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 32,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 126,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 190,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 245,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 66,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": false,
+   "partial_fulfillment": false,
+   "waiting_shipment": 0,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='C/Linen-Natural-100-688-wow'] lines=655, line_id 202604:1269..202609:90; stock_latest[sku='C/Linen-Natural-100-688-wow'] rows=2"
+  },
+  {
+   "rank": 5,
+   "stratum_rank": 1,
+   "global_rank": 5,
+   "sku": "TT0312701K0064561",
+   "mapped_item_code": "ZTGJ5525-SOFALSHAPEDBRACKET-IRON-55x45x45",
+   "item_group": "主体骨架",
+   "stratum": "主体骨架",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 670,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 15,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 43,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 158,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 88,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 172,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 194,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": false,
+   "partial_fulfillment": false,
+   "waiting_shipment": 0,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='TT0312701K0064561'] lines=376, line_id 202604:2029..202609:98; stock_latest[sku='TT0312701K0064561'] rows=1"
+  },
+  {
+   "rank": 6,
+   "stratum_rank": 4,
+   "global_rank": 6,
+   "sku": "C/Linen-Natural-194-688-wow",
+   "mapped_item_code": "KS0001-XMMBS-194-HEMPNATURAL",
+   "item_group": "三角靠枕",
+   "stratum": "三角靠枕",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 643,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 92,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 99,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 128,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 143,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 52,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 129,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": false,
+   "partial_fulfillment": false,
+   "waiting_shipment": 0,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='C/Linen-Natural-194-688-wow'] lines=634, line_id 202604:1078..202609:932; stock_latest[sku='C/Linen-Natural-194-688-wow'] rows=3"
+  },
+  {
+   "rank": 7,
+   "stratum_rank": 5,
+   "global_rank": 7,
+   "sku": "C/Cord-DKBlue-100-713-wow",
+   "mapped_item_code": "KS0001-CMKTR-100-DEEPBLUE",
+   "item_group": "三角靠枕",
+   "stratum": "三角靠枕",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 631,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 16,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 24,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 139,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 225,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 224,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 3,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": false,
+   "partial_fulfillment": false,
+   "waiting_shipment": 0,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='C/Cord-DKBlue-100-713-wow'] lines=626, line_id 202604:1053..202609:884; stock_latest[sku='C/Cord-DKBlue-100-713-wow'] rows=3"
+  },
+  {
+   "rank": 8,
+   "stratum_rank": 6,
+   "global_rank": 8,
+   "sku": "C/Linen-Natural-153-688-wow",
+   "mapped_item_code": "KS0001-XMMBS-153-HEMPNATURAL",
+   "item_group": "三角靠枕",
+   "stratum": "三角靠枕",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 627,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 105,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 104,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 147,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 123,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 69,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 79,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": false,
+   "partial_fulfillment": false,
+   "waiting_shipment": 0,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='C/Linen-Natural-153-688-wow'] lines=612, line_id 202604:1051..202609:890; stock_latest[sku='C/Linen-Natural-153-688-wow'] rows=3"
+  },
+  {
+   "rank": 9,
+   "stratum_rank": 7,
+   "global_rank": 9,
+   "sku": "C/Cord-Grey-100-710-wow",
+   "mapped_item_code": "KS0001-CMKTR-100-GREY",
+   "item_group": "三角靠枕",
+   "stratum": "三角靠枕",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 583,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 33,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 18,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 196,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 316,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 18,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 2,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": false,
+   "partial_fulfillment": false,
+   "waiting_shipment": 0,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='C/Cord-Grey-100-710-wow'] lines=575, line_id 202604:1056..202609:3740; stock_latest[sku='C/Cord-Grey-100-710-wow'] rows=2"
+  },
+  {
+   "rank": 10,
+   "stratum_rank": 8,
+   "global_rank": 10,
+   "sku": "C/Velvet-Grey-100-705-wow",
+   "mapped_item_code": "KS0001-PR-100-GREY",
+   "item_group": "三角靠枕",
+   "stratum": "三角靠枕",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 581,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 21,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 50,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 141,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 98,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 192,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 79,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": false,
+   "partial_fulfillment": false,
+   "waiting_shipment": 0,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='C/Velvet-Grey-100-705-wow'] lines=566, line_id 202604:1576..202609:96; stock_latest[sku='C/Velvet-Grey-100-705-wow'] rows=2"
+  },
+  {
+   "rank": 11,
+   "stratum_rank": 9,
+   "global_rank": 11,
+   "sku": "TT0000671K0063721",
+   "mapped_item_code": "KS0001-HLR-100-OFFWHITE",
+   "item_group": "三角靠枕",
+   "stratum": "三角靠枕",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 535,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 16,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 35,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 197,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 276,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 7,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 4,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": false,
+   "partial_fulfillment": false,
+   "waiting_shipment": 0,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='TT0000671K0063721'] lines=523, line_id 202604:1510..202609:5871; stock_latest[sku='TT0000671K0063721'] rows=3"
+  },
+  {
+   "rank": 12,
+   "stratum_rank": 10,
+   "global_rank": 12,
+   "sku": "CENKZ15389463-Grey-100",
+   "mapped_item_code": "KS0001-HLR-100-GREY",
+   "item_group": "三角靠枕",
+   "stratum": "三角靠枕",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 499,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 22,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 42,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 69,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 101,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 264,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 1,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": false,
+   "partial_fulfillment": false,
+   "waiting_shipment": 0,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='CENKZ15389463-Grey-100'] lines=484, line_id 202604:1161..202609:3783; stock_latest[sku='CENKZ15389463-Grey-100'] rows=3"
+  },
+  {
+   "rank": 13,
+   "stratum_rank": 1,
+   "global_rank": 13,
+   "sku": "TT0312614K0064239",
+   "mapped_item_code": "KS0455-FHXWXNE-92x56x75-GREY",
+   "item_group": "身体支撑阅读枕",
+   "stratum": "身体支撑阅读枕",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 497,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 30,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 39,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 50,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 41,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 99,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 238,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": false,
+   "partial_fulfillment": false,
+   "waiting_shipment": 0,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='TT0312614K0064239'] lines=493, line_id 202604:1190..202609:985; stock_latest[sku='TT0312614K0064239'] rows=3"
+  },
+  {
+   "rank": 14,
+   "stratum_rank": 11,
+   "global_rank": 14,
+   "sku": "C/Linen-White-100-662-WOW",
+   "mapped_item_code": "KS0001-CMM-100-WHITE",
+   "item_group": "三角靠枕",
+   "stratum": "三角靠枕",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 496,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 8,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 24,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 141,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 27,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 280,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 16,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": false,
+   "partial_fulfillment": false,
+   "waiting_shipment": 0,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='C/Linen-White-100-662-WOW'] lines=485, line_id 202604:3077..202609:6095; stock_latest[sku='C/Linen-White-100-662-WOW'] rows=3"
+  },
+  {
+   "rank": 15,
+   "stratum_rank": 12,
+   "global_rank": 15,
+   "sku": "TT0000668K0063796",
+   "mapped_item_code": "KS0001-QDKTR-100-WHITE",
+   "item_group": "三角靠枕",
+   "stratum": "三角靠枕",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 490,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 11,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 12,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 95,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 333,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 10,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 29,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": false,
+   "partial_fulfillment": false,
+   "waiting_shipment": 0,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='TT0000668K0063796'] lines=479, line_id 202604:1746..202609:6206; stock_latest[sku='TT0000668K0063796'] rows=3"
+  },
+  {
+   "rank": 16,
+   "stratum_rank": 13,
+   "global_rank": 17,
+   "sku": "CEN1607NLinen-Ivory-153",
+   "mapped_item_code": "KS0001-DM-153-IVORY",
+   "item_group": "三角靠枕",
+   "stratum": "三角靠枕",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 467,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 81,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 100,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 83,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 78,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 93,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 32,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": false,
+   "partial_fulfillment": false,
+   "waiting_shipment": 0,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='CEN1607NLinen-Ivory-153'] lines=460, line_id 202604:1107..202609:663; stock_latest[sku='CEN1607NLinen-Ivory-153'] rows=3"
+  },
+  {
+   "rank": 17,
+   "stratum_rank": 14,
+   "global_rank": 18,
+   "sku": "CENKZ15389465-Grey-150",
+   "mapped_item_code": "KS0001-HLR-153-GREY",
+   "item_group": "三角靠枕",
+   "stratum": "三角靠枕",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 463,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 95,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 166,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 29,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 3,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 55,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 115,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": false,
+   "partial_fulfillment": false,
+   "waiting_shipment": 0,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='CENKZ15389465-Grey-150'] lines=452, line_id 202604:1143..202609:5982; stock_latest[sku='CENKZ15389465-Grey-150'] rows=2"
+  },
+  {
+   "rank": 18,
+   "stratum_rank": 15,
+   "global_rank": 19,
+   "sku": "CENKZ1323-LTGrey-97",
+   "mapped_item_code": "KS0001-DM-100-GREY",
+   "item_group": "三角靠枕",
+   "stratum": "三角靠枕",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 456,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 17,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 28,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 31,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 52,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 260,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 68,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": false,
+   "partial_fulfillment": false,
+   "waiting_shipment": 0,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='CENKZ1323-LTGrey-97'] lines=452, line_id 202604:1500..202609:981; stock_latest[sku='CENKZ1323-LTGrey-97'] rows=3"
+  },
+  {
+   "rank": 19,
+   "stratum_rank": 16,
+   "global_rank": 20,
+   "sku": "C/Cord-White-100-706-wow",
+   "mapped_item_code": "KS0001-CMKTR-100-WHITE",
+   "item_group": "三角靠枕",
+   "stratum": "三角靠枕",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 454,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 10,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 28,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 112,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 302,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 1,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 1,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": false,
+   "partial_fulfillment": false,
+   "waiting_shipment": 0,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='C/Cord-White-100-706-wow'] lines=445, line_id 202604:1297..202609:3079; stock_latest[sku='C/Cord-White-100-706-wow'] rows=2"
+  },
+  {
+   "rank": 20,
+   "stratum_rank": 17,
+   "global_rank": 21,
+   "sku": "CENKZ159410289-BLACK-153",
+   "mapped_item_code": "KS0001-HLR-153-BLACK",
+   "item_group": "三角靠枕",
+   "stratum": "三角靠枕",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 449,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 83,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 80,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 137,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 55,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 42,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 52,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": false,
+   "partial_fulfillment": false,
+   "waiting_shipment": 0,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='CENKZ159410289-BLACK-153'] lines=444, line_id 202604:1206..202609:990; stock_latest[sku='CENKZ159410289-BLACK-153'] rows=2"
+  },
+  {
+   "rank": 21,
+   "stratum_rank": 18,
+   "global_rank": 22,
+   "sku": "CEN1607NLinen-Ivory-194",
+   "mapped_item_code": "KS0001-DM-194-IVORY",
+   "item_group": "三角靠枕",
+   "stratum": "三角靠枕",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 423,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 71,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 70,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 87,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 76,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 65,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 54,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": false,
+   "partial_fulfillment": false,
+   "waiting_shipment": 0,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='CEN1607NLinen-Ivory-194'] lines=423, line_id 202604:1170..202609:989; stock_latest[sku='CEN1607NLinen-Ivory-194'] rows=5"
+  },
+  {
+   "rank": 22,
+   "stratum_rank": 19,
+   "global_rank": 23,
+   "sku": "CENKZ159410287-BLACK-97",
+   "mapped_item_code": "KS0001-HLR-100-BLACK",
+   "item_group": "三角靠枕",
+   "stratum": "三角靠枕",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 422,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 21,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 45,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 98,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 254,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 4,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 0,
+     "zero_filled": true
+    }
+   ],
+   "zero_stock_with_sales": false,
+   "partial_fulfillment": false,
+   "waiting_shipment": 0,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='CENKZ159410287-BLACK-97'] lines=413, line_id 202604:1158..202608:6353; stock_latest[sku='CENKZ159410287-BLACK-97'] rows=2"
+  },
+  {
+   "rank": 23,
+   "stratum_rank": 20,
+   "global_rank": 24,
+   "sku": "C/Velvet-Black-100-703-wow",
+   "mapped_item_code": "KS0001-PR-100-BLACK",
+   "item_group": "三角靠枕",
+   "stratum": "三角靠枕",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 405,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 9,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 9,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 54,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 144,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 162,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 27,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": false,
+   "partial_fulfillment": false,
+   "waiting_shipment": 0,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='C/Velvet-Black-100-703-wow'] lines=399, line_id 202604:1064..202609:92; stock_latest[sku='C/Velvet-Black-100-703-wow'] rows=1"
+  },
+  {
+   "rank": 24,
+   "stratum_rank": 21,
+   "global_rank": 25,
+   "sku": "CEN1607NLinen-Ivory-97",
+   "mapped_item_code": "KS0001-DM-100-IVORY",
+   "item_group": "三角靠枕",
+   "stratum": "三角靠枕",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 405,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 15,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 15,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 29,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 64,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 207,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 75,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": true,
+   "partial_fulfillment": false,
+   "waiting_shipment": 0,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='CEN1607NLinen-Ivory-97'] lines=402, line_id 202604:2080..202609:972; stock_latest[sku='CEN1607NLinen-Ivory-97'] rows=3"
+  },
+  {
+   "rank": 25,
+   "stratum_rank": 1,
+   "global_rank": 26,
+   "sku": "TT0031085K0063342",
+   "mapped_item_code": "KS0211-KJB-90-BEIGE",
+   "item_group": "软包墙围",
+   "stratum": "软包墙围",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 400,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 1,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 21,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 126,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 118,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 67,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 67,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": false,
+   "partial_fulfillment": false,
+   "waiting_shipment": 0,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='TT0031085K0063342'] lines=82, line_id 202604:3531..202609:5545; stock_latest[sku='TT0031085K0063342'] rows=3"
+  },
+  {
+   "rank": 26,
+   "stratum_rank": 22,
+   "global_rank": 27,
+   "sku": "C/Velvet-White-100-664-wow",
+   "mapped_item_code": "KS0001-PR-100-WHITE",
+   "item_group": "三角靠枕",
+   "stratum": "三角靠枕",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 395,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 15,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 31,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 169,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 9,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 159,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 12,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": true,
+   "partial_fulfillment": false,
+   "waiting_shipment": 0,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='C/Velvet-White-100-664-wow'] lines=388, line_id 202604:1811..202609:5703; stock_latest[sku='C/Velvet-White-100-664-wow'] rows=2"
+  },
+  {
+   "rank": 27,
+   "stratum_rank": 23,
+   "global_rank": 28,
+   "sku": "CENKZ15349435-DBlue-100",
+   "mapped_item_code": "KS0001-HLR-100-DEEPBLUE",
+   "item_group": "三角靠枕",
+   "stratum": "三角靠枕",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 395,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 22,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 33,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 79,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 192,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 69,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 0,
+     "zero_filled": true
+    }
+   ],
+   "zero_stock_with_sales": true,
+   "partial_fulfillment": false,
+   "waiting_shipment": 0,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='CENKZ15349435-DBlue-100'] lines=381, line_id 202604:1155..202608:5243; stock_latest[sku='CENKZ15349435-DBlue-100'] rows=3"
+  },
+  {
+   "rank": 28,
+   "stratum_rank": 1,
+   "global_rank": 29,
+   "sku": "TT0031099K0063666",
+   "mapped_item_code": "KS0230-WGMSRKQCLG-60-WHITE",
+   "item_group": "侧睡两用楔形枕",
+   "stratum": "侧睡两用楔形枕",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 386,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 82,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 44,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 52,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 70,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 114,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 24,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": false,
+   "partial_fulfillment": false,
+   "waiting_shipment": 0,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='TT0031099K0063666'] lines=385, line_id 202604:1036..202609:813; stock_latest[sku='TT0031099K0063666'] rows=4"
+  },
+  {
+   "rank": 29,
+   "stratum_rank": 24,
+   "global_rank": 30,
+   "sku": "C/Velvet-DKBlue-100-700-wow",
+   "mapped_item_code": "KS0001-PR-100-DEEPBLUE",
+   "item_group": "三角靠枕",
+   "stratum": "三角靠枕",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 380,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 10,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 14,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 76,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 121,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 154,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 5,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": false,
+   "partial_fulfillment": false,
+   "waiting_shipment": 0,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='C/Velvet-DKBlue-100-700-wow'] lines=375, line_id 202604:1901..202609:624; stock_latest[sku='C/Velvet-DKBlue-100-700-wow'] rows=2"
+  },
+  {
+   "rank": 30,
+   "stratum_rank": 25,
+   "global_rank": 31,
+   "sku": "C/Linen-DKBlue-100-660-WOW",
+   "mapped_item_code": "KS0001-CMM-100-DEEPBLUE",
+   "item_group": "三角靠枕",
+   "stratum": "三角靠枕",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 350,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 5,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 14,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 57,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 102,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 150,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 22,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": false,
+   "partial_fulfillment": false,
+   "waiting_shipment": 0,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='C/Linen-DKBlue-100-660-WOW'] lines=345, line_id 202604:1063..202609:84; stock_latest[sku='C/Linen-DKBlue-100-660-WOW'] rows=2"
+  },
+  {
+   "rank": 31,
+   "stratum_rank": 1,
+   "global_rank": 32,
+   "sku": "CEN-No/B-967-Linen-Beige-194",
+   "mapped_item_code": "KS0248-DM-194-IVORY",
+   "item_group": "三角靠枕无扣",
+   "stratum": "三角靠枕无扣",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 337,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 62,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 82,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 67,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 41,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 43,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 42,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": false,
+   "partial_fulfillment": false,
+   "waiting_shipment": 0,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='CEN-No/B-967-Linen-Beige-194'] lines=336, line_id 202604:1250..202609:790; stock_latest[sku='CEN-No/B-967-Linen-Beige-194'] rows=3"
+  },
+  {
+   "rank": 32,
+   "stratum_rank": 2,
+   "global_rank": 33,
+   "sku": "TT0031085K0063341",
+   "mapped_item_code": "KS0211-KJB-60-BEIGE",
+   "item_group": "软包墙围",
+   "stratum": "软包墙围",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 337,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 25,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 71,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 79,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 80,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 59,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 23,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": false,
+   "partial_fulfillment": false,
+   "waiting_shipment": 0,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='TT0031085K0063341'] lines=119, line_id 202604:1367..202609:761; stock_latest[sku='TT0031085K0063341'] rows=3"
+  },
+  {
+   "rank": 33,
+   "stratum_rank": 26,
+   "global_rank": 34,
+   "sku": "C/Cord-Black-100-707-wow",
+   "mapped_item_code": "KS0001-CMKTR-100-BLACK",
+   "item_group": "三角靠枕",
+   "stratum": "三角靠枕",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 336,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 9,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 5,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 54,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 98,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 154,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 16,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": false,
+   "partial_fulfillment": false,
+   "waiting_shipment": 0,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='C/Cord-Black-100-707-wow'] lines=334, line_id 202604:1905..202609:888; stock_latest[sku='C/Cord-Black-100-707-wow'] rows=3"
+  },
+  {
+   "rank": 34,
+   "stratum_rank": 27,
+   "global_rank": 35,
+   "sku": "CEN961NLinen-SageGreen-153",
+   "mapped_item_code": "KS0001-DM-153-GRASSGREEN",
+   "item_group": "三角靠枕",
+   "stratum": "三角靠枕",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 300,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 48,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 47,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 55,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 54,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 57,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 39,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": false,
+   "partial_fulfillment": false,
+   "waiting_shipment": 0,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='CEN961NLinen-SageGreen-153'] lines=300, line_id 202604:1178..202609:659; stock_latest[sku='CEN961NLinen-SageGreen-153'] rows=3"
+  },
+  {
+   "rank": 35,
+   "stratum_rank": 28,
+   "global_rank": 36,
+   "sku": "CEN961NLinen-SageGreen-194",
+   "mapped_item_code": "KS0001-DM-194-GRASSGREEN",
+   "item_group": "三角靠枕",
+   "stratum": "三角靠枕",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 284,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 36,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 45,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 49,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 51,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 50,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 53,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": false,
+   "partial_fulfillment": false,
+   "waiting_shipment": 0,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='CEN961NLinen-SageGreen-194'] lines=282, line_id 202604:1194..202609:779; stock_latest[sku='CEN961NLinen-SageGreen-194'] rows=4"
+  },
+  {
+   "rank": 36,
+   "stratum_rank": 1,
+   "global_rank": 37,
+   "sku": "TT0020013K0062821",
+   "mapped_item_code": "KS0118-ZQTW-7652-NAVYSTRIPE",
+   "item_group": "车载宠物窝",
+   "stratum": "车载宠物窝",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 277,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 48,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 63,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 49,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 35,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 43,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 39,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": false,
+   "partial_fulfillment": true,
+   "waiting_shipment": 1,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='TT0020013K0062821'] lines=270, line_id 202604:1009..202609:872; stock_latest[sku='TT0020013K0062821'] rows=3"
+  },
+  {
+   "rank": 37,
+   "stratum_rank": 29,
+   "global_rank": 40,
+   "sku": "TT0000671K0063724",
+   "mapped_item_code": "KS0001-HLR-153-OFFWHITE",
+   "item_group": "三角靠枕",
+   "stratum": "三角靠枕",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 254,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 25,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 33,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 46,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 55,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 89,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 6,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": false,
+   "partial_fulfillment": false,
+   "waiting_shipment": 0,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='TT0000671K0063724'] lines=251, line_id 202604:1195..202609:662; stock_latest[sku='TT0000671K0063724'] rows=1"
+  },
+  {
+   "rank": 38,
+   "stratum_rank": 30,
+   "global_rank": 41,
+   "sku": "C/Linen-Natural-138-688-wow",
+   "mapped_item_code": "KS0001-XMMBS-140-HEMPNATURAL",
+   "item_group": "三角靠枕",
+   "stratum": "三角靠枕",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 253,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 27,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 24,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 44,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 57,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 59,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 42,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": false,
+   "partial_fulfillment": false,
+   "waiting_shipment": 0,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='C/Linen-Natural-138-688-wow'] lines=243, line_id 202604:10..202609:926; stock_latest[sku='C/Linen-Natural-138-688-wow'] rows=2"
+  },
+  {
+   "rank": 39,
+   "stratum_rank": 31,
+   "global_rank": 42,
+   "sku": "C/Linen-DKGrey-100-651-WOW",
+   "mapped_item_code": "KS0001-CMM-100-DEEPGREY",
+   "item_group": "三角靠枕",
+   "stratum": "三角靠枕",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 240,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 5,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 11,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 39,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 77,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 99,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 9,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": false,
+   "partial_fulfillment": false,
+   "waiting_shipment": 0,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='C/Linen-DKGrey-100-651-WOW'] lines=229, line_id 202604:4462..202609:589; stock_latest[sku='C/Linen-DKGrey-100-651-WOW'] rows=3"
+  },
+  {
+   "rank": 40,
+   "stratum_rank": 2,
+   "global_rank": 43,
+   "sku": "CENC/Linen-Ivory-60",
+   "mapped_item_code": "KS0248-DM-60-WHITE",
+   "item_group": "三角靠枕无扣",
+   "stratum": "三角靠枕无扣",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 238,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 50,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 26,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 43,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 42,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 36,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 41,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": false,
+   "partial_fulfillment": false,
+   "waiting_shipment": 0,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='CENC/Linen-Ivory-60'] lines=231, line_id 202604:1149..202609:6156; stock_latest[sku='CENC/Linen-Ivory-60'] rows=2"
+  },
+  {
+   "rank": 41,
+   "stratum_rank": 32,
+   "global_rank": 44,
+   "sku": "CEN1607NLinen-Ivory-138",
+   "mapped_item_code": "KS0001-DM-140-IVORY",
+   "item_group": "三角靠枕",
+   "stratum": "三角靠枕",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 236,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 21,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 23,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 47,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 33,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 60,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 52,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": false,
+   "partial_fulfillment": false,
+   "waiting_shipment": 0,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='CEN1607NLinen-Ivory-138'] lines=234, line_id 202604:1071..202609:673; stock_latest[sku='CEN1607NLinen-Ivory-138'] rows=3"
+  },
+  {
+   "rank": 42,
+   "stratum_rank": 3,
+   "global_rank": 52,
+   "sku": "CENC/Linen-Grey-60CM",
+   "mapped_item_code": "KS0248-DM-60-GREY",
+   "item_group": "三角靠枕无扣",
+   "stratum": "三角靠枕无扣",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 211,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 18,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 35,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 49,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 35,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 34,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 40,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": false,
+   "partial_fulfillment": false,
+   "waiting_shipment": 0,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='CENC/Linen-Grey-60CM'] lines=208, line_id 202604:2035..202609:6185; stock_latest[sku='CENC/Linen-Grey-60CM'] rows=2"
+  },
+  {
+   "rank": 43,
+   "stratum_rank": 4,
+   "global_rank": 55,
+   "sku": "CEN-No/B-967-Linen-Beige-100",
+   "mapped_item_code": "KS0248-DM-100-IVORY",
+   "item_group": "三角靠枕无扣",
+   "stratum": "三角靠枕无扣",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 200,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 31,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 38,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 24,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 24,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 42,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 41,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": false,
+   "partial_fulfillment": false,
+   "waiting_shipment": 0,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='CEN-No/B-967-Linen-Beige-100'] lines=199, line_id 202604:1247..202609:942; stock_latest[sku='CEN-No/B-967-Linen-Beige-100'] rows=3"
+  },
+  {
+   "rank": 44,
+   "stratum_rank": 1,
+   "global_rank": 91,
+   "sku": "TT0031073K0063250",
+   "mapped_item_code": "KS0194-HLR-60-GREY",
+   "item_group": "沙发床头靠枕",
+   "stratum": "沙发床头靠枕",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 128,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 0,
+     "zero_filled": true
+    },
+    {
+     "month": "2026-05",
+     "qty": 7,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 20,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 17,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 20,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 64,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": false,
+   "partial_fulfillment": false,
+   "waiting_shipment": 0,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='TT0031073K0063250'] lines=55, line_id 202605:2372..202609:967; stock_latest[sku='TT0031073K0063250'] rows=2"
+  },
+  {
+   "rank": 45,
+   "stratum_rank": 1,
+   "global_rank": 100,
+   "sku": "TT0000933K0011516",
+   "mapped_item_code": "KS0003-DM-60-IVORY",
+   "item_group": "三角带圆柱靠枕",
+   "stratum": "三角带圆柱靠枕",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 118,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 12,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 28,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 21,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 12,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 22,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 23,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": false,
+   "partial_fulfillment": true,
+   "waiting_shipment": 2,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='TT0000933K0011516'] lines=113, line_id 202604:182..202609:6252; stock_latest[sku='TT0000933K0011516'] rows=4"
+  },
+  {
+   "rank": 46,
+   "stratum_rank": 1,
+   "global_rank": 115,
+   "sku": "PTC/Linen-Natural-194-681-wow",
+   "mapped_item_code": "KS0249-CMM-194-HEMPNATURAL",
+   "item_group": "平条靠枕无压条",
+   "stratum": "平条靠枕无压条",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 105,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 10,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 12,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 17,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 19,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 13,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 34,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": false,
+   "partial_fulfillment": false,
+   "waiting_shipment": 0,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='PTC/Linen-Natural-194-681-wow'] lines=105, line_id 202604:1048..202609:613; stock_latest[sku='PTC/Linen-Natural-194-681-wow'] rows=2"
+  },
+  {
+   "rank": 47,
+   "stratum_rank": 1,
+   "global_rank": 120,
+   "sku": "TT0031010K0062880",
+   "mapped_item_code": "KS0121-KQC-194-WHITE",
+   "item_group": "床楔形枕头",
+   "stratum": "床楔形枕头",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 104,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 0,
+     "zero_filled": true
+    },
+    {
+     "month": "2026-05",
+     "qty": 31,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 12,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 25,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 20,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 16,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": true,
+   "partial_fulfillment": false,
+   "waiting_shipment": 0,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='TT0031010K0062880'] lines=104, line_id 202605:1849..202609:6192; stock_latest[sku='TT0031010K0062880'] rows=3"
+  },
+  {
+   "rank": 48,
+   "stratum_rank": 1,
+   "global_rank": 176,
+   "sku": "TT0000752K0062993",
+   "mapped_item_code": "KS0002-DL-153-IVORY",
+   "item_group": "平条靠枕",
+   "stratum": "平条靠枕",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 68,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 9,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 5,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 11,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 9,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 13,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 21,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": true,
+   "partial_fulfillment": false,
+   "waiting_shipment": 0,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='TT0000752K0062993'] lines=64, line_id 202604:1487..202609:713; stock_latest[sku='TT0000752K0062993'] rows=1"
+  },
+  {
+   "rank": 49,
+   "stratum_rank": 2,
+   "global_rank": 181,
+   "sku": "TT0000750K0063009",
+   "mapped_item_code": "KS0002-DL-100-BLACK",
+   "item_group": "平条靠枕",
+   "stratum": "平条靠枕",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 65,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 8,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 5,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 5,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 1,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 40,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 6,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": false,
+   "partial_fulfillment": false,
+   "waiting_shipment": 0,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='TT0000750K0063009'] lines=61, line_id 202604:3030..202609:988; stock_latest[sku='TT0000750K0063009'] rows=2"
+  },
+  {
+   "rank": 50,
+   "stratum_rank": 1,
+   "global_rank": 189,
+   "sku": "TT0000914K0011634",
+   "mapped_item_code": "KS0007-DM-140-GREY",
+   "item_group": "弧形PP棉靠枕",
+   "stratum": "弧形PP棉靠枕",
+   "stratum_dimension": "item_group",
+   "net_qty_6m": 62,
+   "months": [
+    {
+     "month": "2026-04",
+     "qty": 14,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-05",
+     "qty": 8,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-06",
+     "qty": 10,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-07",
+     "qty": 10,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-08",
+     "qty": 10,
+     "zero_filled": false
+    },
+    {
+     "month": "2026-09",
+     "qty": 10,
+     "zero_filled": false
+    }
+   ],
+   "zero_stock_with_sales": false,
+   "partial_fulfillment": false,
+   "waiting_shipment": 0,
+   "destination": "mapped_eligible",
+   "evidence_pointer": "gs_orders[despatch_date in 2026-04..2026-09, sku_tongtool='TT0000914K0011634'] lines=62, line_id 202604:1005..202609:6239; stock_latest[sku='TT0000914K0011634'] rows=1"
+  }
+ ],
+ "urgent_fulfilment_exceptions": [
+  {
+   "sku": "STPPW-04-2",
+   "destination": "not_in_mother_set",
+   "in_mother_set": false,
+   "mapped_item_code": null,
+   "item_group": null,
+   "waiting_shipment_units": 16,
+   "waiting_warehouses": [
+    {
+     "warehouse": "美东-CENTRADE",
+     "waiting": 16
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": null,
+   "in_eligible_ranking": false,
+   "evidence_pointer": "stock_latest[sku='STPPW-04-2'] waiting=16 warehouses=[{'warehouse': '美东-CENTRADE', 'waiting': 16}]; v_stockout_observed[goods_sku='STPPW-04-2'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "STPPW-08-2",
+   "destination": "not_in_mother_set",
+   "in_mother_set": false,
+   "mapped_item_code": null,
+   "item_group": null,
+   "waiting_shipment_units": 7,
+   "waiting_warehouses": [
+    {
+     "warehouse": "美东-CENTRADE",
+     "waiting": 7
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": null,
+   "in_eligible_ranking": false,
+   "evidence_pointer": "stock_latest[sku='STPPW-08-2'] waiting=7 warehouses=[{'warehouse': '美东-CENTRADE', 'waiting': 7}]; v_stockout_observed[goods_sku='STPPW-08-2'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "STPPW-02-2",
+   "destination": "not_in_mother_set",
+   "in_mother_set": false,
+   "mapped_item_code": null,
+   "item_group": null,
+   "waiting_shipment_units": 6,
+   "waiting_warehouses": [
+    {
+     "warehouse": "美东-CENTRADE",
+     "waiting": 6
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": null,
+   "in_eligible_ranking": false,
+   "evidence_pointer": "stock_latest[sku='STPPW-02-2'] waiting=6 warehouses=[{'warehouse': '美东-CENTRADE', 'waiting': 6}]; v_stockout_observed[goods_sku='STPPW-02-2'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "STPPW-01-1",
+   "destination": "not_in_mother_set",
+   "in_mother_set": false,
+   "mapped_item_code": null,
+   "item_group": null,
+   "waiting_shipment_units": 5,
+   "waiting_warehouses": [
+    {
+     "warehouse": "美东-CENTRADE",
+     "waiting": 5
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": null,
+   "in_eligible_ranking": false,
+   "evidence_pointer": "stock_latest[sku='STPPW-01-1'] waiting=5 warehouses=[{'warehouse': '美东-CENTRADE', 'waiting': 5}]; v_stockout_observed[goods_sku='STPPW-01-1'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "STPPW-01-2",
+   "destination": "not_in_mother_set",
+   "in_mother_set": false,
+   "mapped_item_code": null,
+   "item_group": null,
+   "waiting_shipment_units": 5,
+   "waiting_warehouses": [
+    {
+     "warehouse": "美东-CENTRADE",
+     "waiting": 5
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": null,
+   "in_eligible_ranking": false,
+   "evidence_pointer": "stock_latest[sku='STPPW-01-2'] waiting=5 warehouses=[{'warehouse': '美东-CENTRADE', 'waiting': 5}]; v_stockout_observed[goods_sku='STPPW-01-2'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "STPPW-04-1",
+   "destination": "not_in_mother_set",
+   "in_mother_set": false,
+   "mapped_item_code": null,
+   "item_group": null,
+   "waiting_shipment_units": 5,
+   "waiting_warehouses": [
+    {
+     "warehouse": "美东-CENTRADE",
+     "waiting": 5
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": null,
+   "in_eligible_ranking": false,
+   "evidence_pointer": "stock_latest[sku='STPPW-04-1'] waiting=5 warehouses=[{'warehouse': '美东-CENTRADE', 'waiting': 5}]; v_stockout_observed[goods_sku='STPPW-04-1'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "STPPW-06-2",
+   "destination": "not_in_mother_set",
+   "in_mother_set": false,
+   "mapped_item_code": null,
+   "item_group": null,
+   "waiting_shipment_units": 5,
+   "waiting_warehouses": [
+    {
+     "warehouse": "美东-CENTRADE",
+     "waiting": 5
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": null,
+   "in_eligible_ranking": false,
+   "evidence_pointer": "stock_latest[sku='STPPW-06-2'] waiting=5 warehouses=[{'warehouse': '美东-CENTRADE', 'waiting': 5}]; v_stockout_observed[goods_sku='STPPW-06-2'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "STPPW-08-1",
+   "destination": "not_in_mother_set",
+   "in_mother_set": false,
+   "mapped_item_code": null,
+   "item_group": null,
+   "waiting_shipment_units": 5,
+   "waiting_warehouses": [
+    {
+     "warehouse": "美东-CENTRADE",
+     "waiting": 5
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": null,
+   "in_eligible_ranking": false,
+   "evidence_pointer": "stock_latest[sku='STPPW-08-1'] waiting=5 warehouses=[{'warehouse': '美东-CENTRADE', 'waiting': 5}]; v_stockout_observed[goods_sku='STPPW-08-1'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "STPPW-13-2",
+   "destination": "not_in_mother_set",
+   "in_mother_set": false,
+   "mapped_item_code": null,
+   "item_group": null,
+   "waiting_shipment_units": 5,
+   "waiting_warehouses": [
+    {
+     "warehouse": "美东-CENTRADE",
+     "waiting": 5
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": null,
+   "in_eligible_ranking": false,
+   "evidence_pointer": "stock_latest[sku='STPPW-13-2'] waiting=5 warehouses=[{'warehouse': '美东-CENTRADE', 'waiting': 5}]; v_stockout_observed[goods_sku='STPPW-13-2'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "TT0031038K0062927",
+   "destination": "mapped_eligible",
+   "in_mother_set": true,
+   "mapped_item_code": "KS0156-NYBDSFH-52x52x5-BLACK",
+   "item_group": "沙发支撑垫",
+   "waiting_shipment_units": 5,
+   "waiting_warehouses": [
+    {
+     "warehouse": "波兰-FZHPoland-covers",
+     "waiting": 5
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": 707,
+   "in_eligible_ranking": true,
+   "evidence_pointer": "stock_latest[sku='TT0031038K0062927'] waiting=5 warehouses=[{'warehouse': '波兰-FZHPoland-covers', 'waiting': 5}]; v_stockout_observed[goods_sku='TT0031038K0062927'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "STPPW-12-1",
+   "destination": "not_in_mother_set",
+   "in_mother_set": false,
+   "mapped_item_code": null,
+   "item_group": null,
+   "waiting_shipment_units": 4,
+   "waiting_warehouses": [
+    {
+     "warehouse": "美东-CENTRADE",
+     "waiting": 4
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": null,
+   "in_eligible_ranking": false,
+   "evidence_pointer": "stock_latest[sku='STPPW-12-1'] waiting=4 warehouses=[{'warehouse': '美东-CENTRADE', 'waiting': 4}]; v_stockout_observed[goods_sku='STPPW-12-1'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "TT0000931K0011512",
+   "destination": "mapped_eligible",
+   "in_mother_set": true,
+   "mapped_item_code": "KS0003-DM-60-GREY",
+   "item_group": "三角带圆柱靠枕",
+   "waiting_shipment_units": 3,
+   "waiting_warehouses": [
+    {
+     "warehouse": "波兰-FZHPoland-covers",
+     "waiting": 3
+    }
+   ],
+   "stockout_observed_rows": 2,
+   "net_qty_6m": 99,
+   "in_eligible_ranking": true,
+   "evidence_pointer": "stock_latest[sku='TT0000931K0011512'] waiting=3 warehouses=[{'warehouse': '波兰-FZHPoland-covers', 'waiting': 3}]; v_stockout_observed[goods_sku='TT0000931K0011512'] rows=2",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "STPPW-12-2",
+   "destination": "not_in_mother_set",
+   "in_mother_set": false,
+   "mapped_item_code": null,
+   "item_group": null,
+   "waiting_shipment_units": 3,
+   "waiting_warehouses": [
+    {
+     "warehouse": "美东-CENTRADE",
+     "waiting": 3
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": null,
+   "in_eligible_ranking": false,
+   "evidence_pointer": "stock_latest[sku='STPPW-12-2'] waiting=3 warehouses=[{'warehouse': '美东-CENTRADE', 'waiting': 3}]; v_stockout_observed[goods_sku='STPPW-12-2'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "CENC/Linen-Yellow-60",
+   "destination": "mapped_eligible",
+   "in_mother_set": true,
+   "mapped_item_code": "KS0248-DM-60-YELLOW",
+   "item_group": "三角靠枕无扣",
+   "waiting_shipment_units": 2,
+   "waiting_warehouses": [
+    {
+     "warehouse": "美中-FZH-DANEEY",
+     "waiting": 2
+    }
+   ],
+   "stockout_observed_rows": 3,
+   "net_qty_6m": 118,
+   "in_eligible_ranking": true,
+   "evidence_pointer": "stock_latest[sku='CENC/Linen-Yellow-60'] waiting=2 warehouses=[{'warehouse': '美中-FZH-DANEEY', 'waiting': 2}]; v_stockout_observed[goods_sku='CENC/Linen-Yellow-60'] rows=3",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "TT0000933K0011516",
+   "destination": "mapped_eligible",
+   "in_mother_set": true,
+   "mapped_item_code": "KS0003-DM-60-IVORY",
+   "item_group": "三角带圆柱靠枕",
+   "waiting_shipment_units": 2,
+   "waiting_warehouses": [
+    {
+     "warehouse": "波兰-FZHPoland-covers",
+     "waiting": 2
+    }
+   ],
+   "stockout_observed_rows": 3,
+   "net_qty_6m": 118,
+   "in_eligible_ranking": true,
+   "evidence_pointer": "stock_latest[sku='TT0000933K0011516'] waiting=2 warehouses=[{'warehouse': '波兰-FZHPoland-covers', 'waiting': 2}]; v_stockout_observed[goods_sku='TT0000933K0011516'] rows=3",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "DLPPW-08-2",
+   "destination": "not_in_mother_set",
+   "in_mother_set": false,
+   "mapped_item_code": null,
+   "item_group": null,
+   "waiting_shipment_units": 2,
+   "waiting_warehouses": [
+    {
+     "warehouse": "美东-CENTRADE",
+     "waiting": 2
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": null,
+   "in_eligible_ranking": false,
+   "evidence_pointer": "stock_latest[sku='DLPPW-08-2'] waiting=2 warehouses=[{'warehouse': '美东-CENTRADE', 'waiting': 2}]; v_stockout_observed[goods_sku='DLPPW-08-2'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "LSPPW-02",
+   "destination": "not_in_mother_set",
+   "in_mother_set": false,
+   "mapped_item_code": null,
+   "item_group": null,
+   "waiting_shipment_units": 2,
+   "waiting_warehouses": [
+    {
+     "warehouse": "美东-CENTRADE",
+     "waiting": 2
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": null,
+   "in_eligible_ranking": false,
+   "evidence_pointer": "stock_latest[sku='LSPPW-02'] waiting=2 warehouses=[{'warehouse': '美东-CENTRADE', 'waiting': 2}]; v_stockout_observed[goods_sku='LSPPW-02'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "LSPPW-02-2-6",
+   "destination": "not_in_mother_set",
+   "in_mother_set": false,
+   "mapped_item_code": null,
+   "item_group": null,
+   "waiting_shipment_units": 2,
+   "waiting_warehouses": [
+    {
+     "warehouse": "美东-CENTRADE",
+     "waiting": 2
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": null,
+   "in_eligible_ranking": false,
+   "evidence_pointer": "stock_latest[sku='LSPPW-02-2-6'] waiting=2 warehouses=[{'warehouse': '美东-CENTRADE', 'waiting': 2}]; v_stockout_observed[goods_sku='LSPPW-02-2-6'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "LSPPW-08-2-6",
+   "destination": "not_in_mother_set",
+   "in_mother_set": false,
+   "mapped_item_code": null,
+   "item_group": null,
+   "waiting_shipment_units": 2,
+   "waiting_warehouses": [
+    {
+     "warehouse": "美东-CENTRADE",
+     "waiting": 2
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": null,
+   "in_eligible_ranking": false,
+   "evidence_pointer": "stock_latest[sku='LSPPW-08-2-6'] waiting=2 warehouses=[{'warehouse': '美东-CENTRADE', 'waiting': 2}]; v_stockout_observed[goods_sku='LSPPW-08-2-6'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "PPW01904",
+   "destination": "not_in_mother_set",
+   "in_mother_set": false,
+   "mapped_item_code": null,
+   "item_group": null,
+   "waiting_shipment_units": 2,
+   "waiting_warehouses": [
+    {
+     "warehouse": "美东-CENTRADE",
+     "waiting": 2
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": null,
+   "in_eligible_ranking": false,
+   "evidence_pointer": "stock_latest[sku='PPW01904'] waiting=2 warehouses=[{'warehouse': '美东-CENTRADE', 'waiting': 2}]; v_stockout_observed[goods_sku='PPW01904'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "PPW02004",
+   "destination": "not_in_mother_set",
+   "in_mother_set": false,
+   "mapped_item_code": null,
+   "item_group": null,
+   "waiting_shipment_units": 2,
+   "waiting_warehouses": [
+    {
+     "warehouse": "美东-CENTRADE",
+     "waiting": 2
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": null,
+   "in_eligible_ranking": false,
+   "evidence_pointer": "stock_latest[sku='PPW02004'] waiting=2 warehouses=[{'warehouse': '美东-CENTRADE', 'waiting': 2}]; v_stockout_observed[goods_sku='PPW02004'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "STPPW-03-2",
+   "destination": "not_in_mother_set",
+   "in_mother_set": false,
+   "mapped_item_code": null,
+   "item_group": null,
+   "waiting_shipment_units": 2,
+   "waiting_warehouses": [
+    {
+     "warehouse": "美东-CENTRADE",
+     "waiting": 2
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": null,
+   "in_eligible_ranking": false,
+   "evidence_pointer": "stock_latest[sku='STPPW-03-2'] waiting=2 warehouses=[{'warehouse': '美东-CENTRADE', 'waiting': 2}]; v_stockout_observed[goods_sku='STPPW-03-2'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "TT0001325K0010667",
+   "destination": "mapped_eligible",
+   "in_mother_set": true,
+   "mapped_item_code": "KS0248-DM-45-YELLOW",
+   "item_group": "三角靠枕无扣",
+   "waiting_shipment_units": 2,
+   "waiting_warehouses": [
+    {
+     "warehouse": "波兰-FZHPoland-covers",
+     "waiting": 2
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": 62,
+   "in_eligible_ranking": true,
+   "evidence_pointer": "stock_latest[sku='TT0001325K0010667'] waiting=2 warehouses=[{'warehouse': '波兰-FZHPoland-covers', 'waiting': 2}]; v_stockout_observed[goods_sku='TT0001325K0010667'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "TT0031087K0063345",
+   "destination": "mapped_eligible",
+   "in_mother_set": true,
+   "mapped_item_code": "KS0212-QMZZML-54-DEEPGREY",
+   "item_group": "带孔耳枕",
+   "waiting_shipment_units": 2,
+   "waiting_warehouses": [
+    {
+     "warehouse": "波兰-FZHPoland-covers",
+     "waiting": 2
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": 163,
+   "in_eligible_ranking": true,
+   "evidence_pointer": "stock_latest[sku='TT0031087K0063345'] waiting=2 warehouses=[{'warehouse': '波兰-FZHPoland-covers', 'waiting': 2}]; v_stockout_observed[goods_sku='TT0031087K0063345'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "C/Linen-DKGrey-60-651-WOW",
+   "destination": "mapped_eligible",
+   "in_mother_set": true,
+   "mapped_item_code": "KS0248-CMM-60-DEEPGREY",
+   "item_group": "三角靠枕无扣",
+   "waiting_shipment_units": 2,
+   "waiting_warehouses": [
+    {
+     "warehouse": "美东-CENTRADE",
+     "waiting": 2
+    }
+   ],
+   "stockout_observed_rows": 0,
+   "net_qty_6m": 18,
+   "in_eligible_ranking": true,
+   "evidence_pointer": "stock_latest[sku='C/Linen-DKGrey-60-651-WOW'] waiting=2 warehouses=[{'warehouse': '美东-CENTRADE', 'waiting': 2}]; v_stockout_observed[goods_sku='C/Linen-DKGrey-60-651-WOW'] rows=0",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "TT0000758K0062945",
+   "destination": "mapped_eligible",
+   "in_mother_set": true,
+   "mapped_item_code": "KS0001-AHR-60-BROWN2",
+   "item_group": "三角靠枕",
+   "waiting_shipment_units": 2,
+   "waiting_warehouses": [
+    {
+     "warehouse": "波兰-FZHPoland-covers",
+     "waiting": 2
+    }
+   ],
+   "stockout_observed_rows": 0,
+   "net_qty_6m": 4,
+   "in_eligible_ranking": true,
+   "evidence_pointer": "stock_latest[sku='TT0000758K0062945'] waiting=2 warehouses=[{'warehouse': '波兰-FZHPoland-covers', 'waiting': 2}]; v_stockout_observed[goods_sku='TT0000758K0062945'] rows=0",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "TT0000995K0010982",
+   "destination": "mapped_eligible",
+   "in_mother_set": true,
+   "mapped_item_code": "KS0001-QDKTR-100-DEEPGREY",
+   "item_group": "三角靠枕",
+   "waiting_shipment_units": 2,
+   "waiting_warehouses": [
+    {
+     "warehouse": "波兰-FZHPoland-covers",
+     "waiting": 2
+    }
+   ],
+   "stockout_observed_rows": 0,
+   "net_qty_6m": 21,
+   "in_eligible_ranking": true,
+   "evidence_pointer": "stock_latest[sku='TT0000995K0010982'] waiting=2 warehouses=[{'warehouse': '波兰-FZHPoland-covers', 'waiting': 2}]; v_stockout_observed[goods_sku='TT0000995K0010982'] rows=0",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "TT0020013K0062821",
+   "destination": "mapped_eligible",
+   "in_mother_set": true,
+   "mapped_item_code": "KS0118-ZQTW-7652-NAVYSTRIPE",
+   "item_group": "车载宠物窝",
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "波兰-FZHPoland-covers",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 3,
+   "net_qty_6m": 277,
+   "in_eligible_ranking": true,
+   "evidence_pointer": "stock_latest[sku='TT0020013K0062821'] waiting=1 warehouses=[{'warehouse': '波兰-FZHPoland-covers', 'waiting': 1}]; v_stockout_observed[goods_sku='TT0020013K0062821'] rows=3",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "CENKZ15349436-DBlue-138-DN",
+   "destination": "mapped_eligible",
+   "in_mother_set": true,
+   "mapped_item_code": "KS0001-HLR-140-DEEPBLUE",
+   "item_group": "三角靠枕",
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "美中-FZH-DANEEY",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 2,
+   "net_qty_6m": 157,
+   "in_eligible_ranking": true,
+   "evidence_pointer": "stock_latest[sku='CENKZ15349436-DBlue-138-DN'] waiting=1 warehouses=[{'warehouse': '美中-FZH-DANEEY', 'waiting': 1}]; v_stockout_observed[goods_sku='CENKZ15349436-DBlue-138-DN'] rows=2",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "KDHY-020-MAHUI-45CM",
+   "destination": "mapped_eligible",
+   "in_mother_set": true,
+   "mapped_item_code": "KS0248-MH-45-FLAXGREY",
+   "item_group": "三角靠枕无扣",
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "波兰-FZHPoland-covers",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 2,
+   "net_qty_6m": 141,
+   "in_eligible_ranking": true,
+   "evidence_pointer": "stock_latest[sku='KDHY-020-MAHUI-45CM'] waiting=1 warehouses=[{'warehouse': '波兰-FZHPoland-covers', 'waiting': 1}]; v_stockout_observed[goods_sku='KDHY-020-MAHUI-45CM'] rows=2",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "TT0000668K0063798",
+   "destination": "mapped_eligible",
+   "in_mother_set": true,
+   "mapped_item_code": "KS0001-QDKTR-140-WHITE",
+   "item_group": "三角靠枕",
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "波兰-FZHPoland-covers",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 2,
+   "net_qty_6m": 100,
+   "in_eligible_ranking": true,
+   "evidence_pointer": "stock_latest[sku='TT0000668K0063798'] waiting=1 warehouses=[{'warehouse': '波兰-FZHPoland-covers', 'waiting': 1}]; v_stockout_observed[goods_sku='TT0000668K0063798'] rows=2",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "TT0020013K0062820",
+   "destination": "mapped_eligible",
+   "in_mother_set": true,
+   "mapped_item_code": "KS0118-ZQTW-5252-NAVYSTRIPE",
+   "item_group": "车载宠物窝",
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "波兰-FZHPoland-covers",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 2,
+   "net_qty_6m": 71,
+   "in_eligible_ranking": true,
+   "evidence_pointer": "stock_latest[sku='TT0020013K0062820'] waiting=1 warehouses=[{'warehouse': '波兰-FZHPoland-covers', 'waiting': 1}]; v_stockout_observed[goods_sku='TT0020013K0062820'] rows=2",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "18ZHI-ZONG-302808",
+   "destination": "not_in_mother_set",
+   "in_mother_set": false,
+   "mapped_item_code": null,
+   "item_group": null,
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "美东-CENTRADE",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": null,
+   "in_eligible_ranking": false,
+   "evidence_pointer": "stock_latest[sku='18ZHI-ZONG-302808'] waiting=1 warehouses=[{'warehouse': '美东-CENTRADE', 'waiting': 1}]; v_stockout_observed[goods_sku='18ZHI-ZONG-302808'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "18ZHI-ZONG-423112",
+   "destination": "not_in_mother_set",
+   "in_mother_set": false,
+   "mapped_item_code": null,
+   "item_group": null,
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "美东-CENTRADE",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": null,
+   "in_eligible_ranking": false,
+   "evidence_pointer": "stock_latest[sku='18ZHI-ZONG-423112'] waiting=1 warehouses=[{'warehouse': '美东-CENTRADE', 'waiting': 1}]; v_stockout_observed[goods_sku='18ZHI-ZONG-423112'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "C/Linen-White-153-662-WOW",
+   "destination": "mapped_eligible",
+   "in_mother_set": true,
+   "mapped_item_code": "KS0001-CMM-153-WHITE",
+   "item_group": "三角靠枕",
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "美东-CENTRADE",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": 195,
+   "in_eligible_ranking": true,
+   "evidence_pointer": "stock_latest[sku='C/Linen-White-153-662-WOW'] waiting=1 warehouses=[{'warehouse': '美东-CENTRADE', 'waiting': 1}]; v_stockout_observed[goods_sku='C/Linen-White-153-662-WOW'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "CFDLPPW-01-1c",
+   "destination": "not_in_mother_set",
+   "in_mother_set": false,
+   "mapped_item_code": null,
+   "item_group": null,
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "美东-CENTRADE",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": null,
+   "in_eligible_ranking": false,
+   "evidence_pointer": "stock_latest[sku='CFDLPPW-01-1c'] waiting=1 warehouses=[{'warehouse': '美东-CENTRADE', 'waiting': 1}]; v_stockout_observed[goods_sku='CFDLPPW-01-1c'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "CFDLPPW-08-1c",
+   "destination": "not_in_mother_set",
+   "in_mother_set": false,
+   "mapped_item_code": null,
+   "item_group": null,
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "美东-CENTRADE",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": null,
+   "in_eligible_ranking": false,
+   "evidence_pointer": "stock_latest[sku='CFDLPPW-08-1c'] waiting=1 warehouses=[{'warehouse': '美东-CENTRADE', 'waiting': 1}]; v_stockout_observed[goods_sku='CFDLPPW-08-1c'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "CFDLPPW-09-1c",
+   "destination": "not_in_mother_set",
+   "in_mother_set": false,
+   "mapped_item_code": null,
+   "item_group": null,
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "美东-CENTRADE",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": null,
+   "in_eligible_ranking": false,
+   "evidence_pointer": "stock_latest[sku='CFDLPPW-09-1c'] waiting=1 warehouses=[{'warehouse': '美东-CENTRADE', 'waiting': 1}]; v_stockout_observed[goods_sku='CFDLPPW-09-1c'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "DLPPW-01-2",
+   "destination": "not_in_mother_set",
+   "in_mother_set": false,
+   "mapped_item_code": null,
+   "item_group": null,
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "美东-CENTRADE",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": null,
+   "in_eligible_ranking": false,
+   "evidence_pointer": "stock_latest[sku='DLPPW-01-2'] waiting=1 warehouses=[{'warehouse': '美东-CENTRADE', 'waiting': 1}]; v_stockout_observed[goods_sku='DLPPW-01-2'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "DLPPW-05-2",
+   "destination": "not_in_mother_set",
+   "in_mother_set": false,
+   "mapped_item_code": null,
+   "item_group": null,
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "美东-CENTRADE",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": null,
+   "in_eligible_ranking": false,
+   "evidence_pointer": "stock_latest[sku='DLPPW-05-2'] waiting=1 warehouses=[{'warehouse': '美东-CENTRADE', 'waiting': 1}]; v_stockout_observed[goods_sku='DLPPW-05-2'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "DLPPW-08-1",
+   "destination": "not_in_mother_set",
+   "in_mother_set": false,
+   "mapped_item_code": null,
+   "item_group": null,
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "美东-CENTRADE",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": null,
+   "in_eligible_ranking": false,
+   "evidence_pointer": "stock_latest[sku='DLPPW-08-1'] waiting=1 warehouses=[{'warehouse': '美东-CENTRADE', 'waiting': 1}]; v_stockout_observed[goods_sku='DLPPW-08-1'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "KZ0001325K0005896",
+   "destination": "mapped_eligible",
+   "in_mother_set": true,
+   "mapped_item_code": "KS0001-DM-183-YELLOW",
+   "item_group": "三角靠枕",
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "波兰-FZHPoland-covers",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": 22,
+   "in_eligible_ranking": true,
+   "evidence_pointer": "stock_latest[sku='KZ0001325K0005896'] waiting=1 warehouses=[{'warehouse': '波兰-FZHPoland-covers', 'waiting': 1}]; v_stockout_observed[goods_sku='KZ0001325K0005896'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "LSPPW-01-2-2",
+   "destination": "not_in_mother_set",
+   "in_mother_set": false,
+   "mapped_item_code": null,
+   "item_group": null,
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "美东-CENTRADE",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": null,
+   "in_eligible_ranking": false,
+   "evidence_pointer": "stock_latest[sku='LSPPW-01-2-2'] waiting=1 warehouses=[{'warehouse': '美东-CENTRADE', 'waiting': 1}]; v_stockout_observed[goods_sku='LSPPW-01-2-2'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "LSPPW-02-2-5",
+   "destination": "not_in_mother_set",
+   "in_mother_set": false,
+   "mapped_item_code": null,
+   "item_group": null,
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "美东-CENTRADE",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": null,
+   "in_eligible_ranking": false,
+   "evidence_pointer": "stock_latest[sku='LSPPW-02-2-5'] waiting=1 warehouses=[{'warehouse': '美东-CENTRADE', 'waiting': 1}]; v_stockout_observed[goods_sku='LSPPW-02-2-5'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "LSPPW-08-2-1",
+   "destination": "not_in_mother_set",
+   "in_mother_set": false,
+   "mapped_item_code": null,
+   "item_group": null,
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "美东-CENTRADE",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": null,
+   "in_eligible_ranking": false,
+   "evidence_pointer": "stock_latest[sku='LSPPW-08-2-1'] waiting=1 warehouses=[{'warehouse': '美东-CENTRADE', 'waiting': 1}]; v_stockout_observed[goods_sku='LSPPW-08-2-1'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "LSPPW-11-3",
+   "destination": "not_in_mother_set",
+   "in_mother_set": false,
+   "mapped_item_code": null,
+   "item_group": null,
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "美东-CENTRADE",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": null,
+   "in_eligible_ranking": false,
+   "evidence_pointer": "stock_latest[sku='LSPPW-11-3'] waiting=1 warehouses=[{'warehouse': '美东-CENTRADE', 'waiting': 1}]; v_stockout_observed[goods_sku='LSPPW-11-3'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "LSPPW-11-6",
+   "destination": "not_in_mother_set",
+   "in_mother_set": false,
+   "mapped_item_code": null,
+   "item_group": null,
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "美东-CENTRADE",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": null,
+   "in_eligible_ranking": false,
+   "evidence_pointer": "stock_latest[sku='LSPPW-11-6'] waiting=1 warehouses=[{'warehouse': '美东-CENTRADE', 'waiting': 1}]; v_stockout_observed[goods_sku='LSPPW-11-6'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "PPW01803",
+   "destination": "not_in_mother_set",
+   "in_mother_set": false,
+   "mapped_item_code": null,
+   "item_group": null,
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "美东-CENTRADE",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": null,
+   "in_eligible_ranking": false,
+   "evidence_pointer": "stock_latest[sku='PPW01803'] waiting=1 warehouses=[{'warehouse': '美东-CENTRADE', 'waiting': 1}]; v_stockout_observed[goods_sku='PPW01803'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "PPW01804",
+   "destination": "not_in_mother_set",
+   "in_mother_set": false,
+   "mapped_item_code": null,
+   "item_group": null,
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "美东-CENTRADE",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": null,
+   "in_eligible_ranking": false,
+   "evidence_pointer": "stock_latest[sku='PPW01804'] waiting=1 warehouses=[{'warehouse': '美东-CENTRADE', 'waiting': 1}]; v_stockout_observed[goods_sku='PPW01804'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "PPW01903",
+   "destination": "not_in_mother_set",
+   "in_mother_set": false,
+   "mapped_item_code": null,
+   "item_group": null,
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "美东-CENTRADE",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": null,
+   "in_eligible_ranking": false,
+   "evidence_pointer": "stock_latest[sku='PPW01903'] waiting=1 warehouses=[{'warehouse': '美东-CENTRADE', 'waiting': 1}]; v_stockout_observed[goods_sku='PPW01903'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "STPPW-06-1",
+   "destination": "not_in_mother_set",
+   "in_mother_set": false,
+   "mapped_item_code": null,
+   "item_group": null,
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "美东-CENTRADE",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": null,
+   "in_eligible_ranking": false,
+   "evidence_pointer": "stock_latest[sku='STPPW-06-1'] waiting=1 warehouses=[{'warehouse': '美东-CENTRADE', 'waiting': 1}]; v_stockout_observed[goods_sku='STPPW-06-1'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "STPPW-09-2",
+   "destination": "not_in_mother_set",
+   "in_mother_set": false,
+   "mapped_item_code": null,
+   "item_group": null,
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "美东-CENTRADE",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": null,
+   "in_eligible_ranking": false,
+   "evidence_pointer": "stock_latest[sku='STPPW-09-2'] waiting=1 warehouses=[{'warehouse': '美东-CENTRADE', 'waiting': 1}]; v_stockout_observed[goods_sku='STPPW-09-2'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "STPPW-11-2",
+   "destination": "not_in_mother_set",
+   "in_mother_set": false,
+   "mapped_item_code": null,
+   "item_group": null,
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "美东-CENTRADE",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": null,
+   "in_eligible_ranking": false,
+   "evidence_pointer": "stock_latest[sku='STPPW-11-2'] waiting=1 warehouses=[{'warehouse': '美东-CENTRADE', 'waiting': 1}]; v_stockout_observed[goods_sku='STPPW-11-2'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "STPPW-13-1",
+   "destination": "not_in_mother_set",
+   "in_mother_set": false,
+   "mapped_item_code": null,
+   "item_group": null,
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "美东-CENTRADE",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": null,
+   "in_eligible_ranking": false,
+   "evidence_pointer": "stock_latest[sku='STPPW-13-1'] waiting=1 warehouses=[{'warehouse': '美东-CENTRADE', 'waiting': 1}]; v_stockout_observed[goods_sku='STPPW-13-1'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "TT0020019K0062887",
+   "destination": "mapped_eligible",
+   "in_mother_set": true,
+   "mapped_item_code": "KS0125-MM-110-NAVYSTRIPE",
+   "item_group": "大尺寸车载宠物窝",
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "波兰-FZHPoland-covers",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": 151,
+   "in_eligible_ranking": true,
+   "evidence_pointer": "stock_latest[sku='TT0020019K0062887'] waiting=1 warehouses=[{'warehouse': '波兰-FZHPoland-covers', 'waiting': 1}]; v_stockout_observed[goods_sku='TT0020019K0062887'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "TT0020029K0063031",
+   "destination": "mapped_eligible",
+   "in_mother_set": true,
+   "mapped_item_code": "KS0118-YLZNSR-7652-GREY",
+   "item_group": "车载宠物窝",
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "波兰-FZHPoland-covers",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": 57,
+   "in_eligible_ranking": true,
+   "evidence_pointer": "stock_latest[sku='TT0020029K0063031'] waiting=1 warehouses=[{'warehouse': '波兰-FZHPoland-covers', 'waiting': 1}]; v_stockout_observed[goods_sku='TT0020029K0063031'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "TT0031010K0062877",
+   "destination": "mapped_eligible",
+   "in_mother_set": true,
+   "mapped_item_code": "KS0121-KQC-100-GREY",
+   "item_group": "床楔形枕头",
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "波兰-FZHPoland-covers",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": 33,
+   "in_eligible_ranking": true,
+   "evidence_pointer": "stock_latest[sku='TT0031010K0062877'] waiting=1 warehouses=[{'warehouse': '波兰-FZHPoland-covers', 'waiting': 1}]; v_stockout_observed[goods_sku='TT0031010K0062877'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "TT0031244K0064084-Cover",
+   "destination": "mapped_eligible",
+   "in_mother_set": true,
+   "mapped_item_code": "KS0390-CTTM-120x120x70-CREAMYBEIGE",
+   "item_group": "抽条大兔毛系列-圆沙发",
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "波兰-FZHPoland-covers",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": 39,
+   "in_eligible_ranking": true,
+   "evidence_pointer": "stock_latest[sku='TT0031244K0064084-Cover'] waiting=1 warehouses=[{'warehouse': '波兰-FZHPoland-covers', 'waiting': 1}]; v_stockout_observed[goods_sku='TT0031244K0064084-Cover'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "TT0031244K0064084-Foam",
+   "destination": "mapped_eligible",
+   "in_mother_set": true,
+   "mapped_item_code": "KS0390-CTTM-120x120x70-CREAMYBEIGE",
+   "item_group": "抽条大兔毛系列-圆沙发",
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "波兰-FZHPoland-covers",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 1,
+   "net_qty_6m": 37,
+   "in_eligible_ranking": true,
+   "evidence_pointer": "stock_latest[sku='TT0031244K0064084-Foam'] waiting=1 warehouses=[{'warehouse': '波兰-FZHPoland-covers', 'waiting': 1}]; v_stockout_observed[goods_sku='TT0031244K0064084-Foam'] rows=1",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "TT0000396K0009608",
+   "destination": "mapped_eligible",
+   "in_mother_set": true,
+   "mapped_item_code": "KS0026-TDR-183-LIGHTBROWN",
+   "item_group": "泰迪熊",
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "波兰-FZHPoland-covers",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 0,
+   "net_qty_6m": 29,
+   "in_eligible_ranking": true,
+   "evidence_pointer": "stock_latest[sku='TT0000396K0009608'] waiting=1 warehouses=[{'warehouse': '波兰-FZHPoland-covers', 'waiting': 1}]; v_stockout_observed[goods_sku='TT0000396K0009608'] rows=0",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "TT0000671K0063722",
+   "destination": "mapped_eligible",
+   "in_mother_set": true,
+   "mapped_item_code": "KS0001-HLR-120-OFFWHITE",
+   "item_group": "三角靠枕",
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "波兰-FZHPoland-covers",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 0,
+   "net_qty_6m": 8,
+   "in_eligible_ranking": true,
+   "evidence_pointer": "stock_latest[sku='TT0000671K0063722'] waiting=1 warehouses=[{'warehouse': '波兰-FZHPoland-covers', 'waiting': 1}]; v_stockout_observed[goods_sku='TT0000671K0063722'] rows=0",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "TT0000752K0062990",
+   "destination": "mapped_eligible",
+   "in_mother_set": true,
+   "mapped_item_code": "KS0002-DL-120-IVORY",
+   "item_group": "平条靠枕",
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "波兰-FZHPoland-covers",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 0,
+   "net_qty_6m": 3,
+   "in_eligible_ranking": true,
+   "evidence_pointer": "stock_latest[sku='TT0000752K0062990'] waiting=1 warehouses=[{'warehouse': '波兰-FZHPoland-covers', 'waiting': 1}]; v_stockout_observed[goods_sku='TT0000752K0062990'] rows=0",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "TT0000912K0011660",
+   "destination": "mapped_eligible",
+   "in_mother_set": true,
+   "mapped_item_code": "KS0007-DM-200-BLUE",
+   "item_group": "弧形PP棉靠枕",
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "波兰-FZHPoland-covers",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 0,
+   "net_qty_6m": 28,
+   "in_eligible_ranking": true,
+   "evidence_pointer": "stock_latest[sku='TT0000912K0011660'] waiting=1 warehouses=[{'warehouse': '波兰-FZHPoland-covers', 'waiting': 1}]; v_stockout_observed[goods_sku='TT0000912K0011660'] rows=0",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "TT0000914K0011636",
+   "destination": "mapped_eligible",
+   "in_mother_set": true,
+   "mapped_item_code": "KS0007-DM-160-GREY",
+   "item_group": "弧形PP棉靠枕",
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "波兰-FZHPoland-covers",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 0,
+   "net_qty_6m": 23,
+   "in_eligible_ranking": true,
+   "evidence_pointer": "stock_latest[sku='TT0000914K0011636'] waiting=1 warehouses=[{'warehouse': '波兰-FZHPoland-covers', 'waiting': 1}]; v_stockout_observed[goods_sku='TT0000914K0011636'] rows=0",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "TT0000915K0011624",
+   "destination": "mapped_eligible",
+   "in_mother_set": true,
+   "mapped_item_code": "KS0007-DM-140-YELLOW",
+   "item_group": "弧形PP棉靠枕",
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "波兰-FZHPoland-covers",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 0,
+   "net_qty_6m": 16,
+   "in_eligible_ranking": true,
+   "evidence_pointer": "stock_latest[sku='TT0000915K0011624'] waiting=1 warehouses=[{'warehouse': '波兰-FZHPoland-covers', 'waiting': 1}]; v_stockout_observed[goods_sku='TT0000915K0011624'] rows=0",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "TT0000915K0011626",
+   "destination": "mapped_eligible",
+   "in_mother_set": true,
+   "mapped_item_code": "KS0007-DM-160-YELLOW",
+   "item_group": "弧形PP棉靠枕",
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "波兰-FZHPoland-covers",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 0,
+   "net_qty_6m": 11,
+   "in_eligible_ranking": true,
+   "evidence_pointer": "stock_latest[sku='TT0000915K0011626'] waiting=1 warehouses=[{'warehouse': '波兰-FZHPoland-covers', 'waiting': 1}]; v_stockout_observed[goods_sku='TT0000915K0011626'] rows=0",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "TT0000995K0010978",
+   "destination": "mapped_eligible",
+   "in_mother_set": true,
+   "mapped_item_code": "KS0248-QDKTR-45-DEEPGREY",
+   "item_group": "三角靠枕无扣",
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "波兰-FZHPoland-covers",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 0,
+   "net_qty_6m": 52,
+   "in_eligible_ranking": true,
+   "evidence_pointer": "stock_latest[sku='TT0000995K0010978'] waiting=1 warehouses=[{'warehouse': '波兰-FZHPoland-covers', 'waiting': 1}]; v_stockout_observed[goods_sku='TT0000995K0010978'] rows=0",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "TT0000995K0010988",
+   "destination": "mapped_eligible",
+   "in_mother_set": true,
+   "mapped_item_code": "KS0001-TR-183-DEEPGREY",
+   "item_group": "三角靠枕",
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "波兰-FZHPoland-covers",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 0,
+   "net_qty_6m": 10,
+   "in_eligible_ranking": true,
+   "evidence_pointer": "stock_latest[sku='TT0000995K0010988'] waiting=1 warehouses=[{'warehouse': '波兰-FZHPoland-covers', 'waiting': 1}]; v_stockout_observed[goods_sku='TT0000995K0010988'] rows=0",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "TT0001005K0011138",
+   "destination": "mapped_eligible",
+   "in_mother_set": true,
+   "mapped_item_code": "KS0001-QDKTR-140-DEEPBLUE",
+   "item_group": "三角靠枕",
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "波兰-FZHPoland-covers",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 0,
+   "net_qty_6m": 9,
+   "in_eligible_ranking": true,
+   "evidence_pointer": "stock_latest[sku='TT0001005K0011138'] waiting=1 warehouses=[{'warehouse': '波兰-FZHPoland-covers', 'waiting': 1}]; v_stockout_observed[goods_sku='TT0001005K0011138'] rows=0",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "TT0001323K0010505",
+   "destination": "mapped_eligible",
+   "in_mother_set": true,
+   "mapped_item_code": "KS0001-DM-60-GREY",
+   "item_group": "三角靠枕",
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "波兰-FZHPoland-covers",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 0,
+   "net_qty_6m": 55,
+   "in_eligible_ranking": true,
+   "evidence_pointer": "stock_latest[sku='TT0001323K0010505'] waiting=1 warehouses=[{'warehouse': '波兰-FZHPoland-covers', 'waiting': 1}]; v_stockout_observed[goods_sku='TT0001323K0010505'] rows=0",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "TT0001324K0011163",
+   "destination": "mapped_eligible",
+   "in_mother_set": true,
+   "mapped_item_code": "KS0001-DM-160-BLUE",
+   "item_group": "三角靠枕",
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "波兰-FZHPoland-covers",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 0,
+   "net_qty_6m": 14,
+   "in_eligible_ranking": true,
+   "evidence_pointer": "stock_latest[sku='TT0001324K0011163'] waiting=1 warehouses=[{'warehouse': '波兰-FZHPoland-covers', 'waiting': 1}]; v_stockout_observed[goods_sku='TT0001324K0011163'] rows=0",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "TT0001325K0010512",
+   "destination": "mapped_eligible",
+   "in_mother_set": true,
+   "mapped_item_code": "KS0001-DM-80-YELLOW",
+   "item_group": "三角靠枕",
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "波兰-FZHPoland-covers",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 0,
+   "net_qty_6m": 43,
+   "in_eligible_ranking": true,
+   "evidence_pointer": "stock_latest[sku='TT0001325K0010512'] waiting=1 warehouses=[{'warehouse': '波兰-FZHPoland-covers', 'waiting': 1}]; v_stockout_observed[goods_sku='TT0001325K0010512'] rows=0",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "TT0031009K0062882",
+   "destination": "mapped_eligible",
+   "in_mother_set": true,
+   "mapped_item_code": "KS0120-TKM-200-WHITE",
+   "item_group": "床垫连接垫",
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "波兰-FZHPoland-covers",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 0,
+   "net_qty_6m": 18,
+   "in_eligible_ranking": true,
+   "evidence_pointer": "stock_latest[sku='TT0031009K0062882'] waiting=1 warehouses=[{'warehouse': '波兰-FZHPoland-covers', 'waiting': 1}]; v_stockout_observed[goods_sku='TT0031009K0062882'] rows=0",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "TT0312573K0064144",
+   "destination": "mapped_eligible",
+   "in_mother_set": true,
+   "mapped_item_code": "KS0420-YDR-140x60x20-MILKWHITE",
+   "item_group": "棉花床头板",
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "波兰-FZHPoland-covers",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 0,
+   "net_qty_6m": 9,
+   "in_eligible_ranking": true,
+   "evidence_pointer": "stock_latest[sku='TT0312573K0064144'] waiting=1 warehouses=[{'warehouse': '波兰-FZHPoland-covers', 'waiting': 1}]; v_stockout_observed[goods_sku='TT0312573K0064144'] rows=0",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  },
+  {
+   "sku": "TT0312606K0064204",
+   "destination": "mapped_eligible",
+   "in_mother_set": true,
+   "mapped_item_code": "KS0450-FHXWXNE-90x22x42-BEIGE",
+   "item_group": "转角靠枕-转角款",
+   "waiting_shipment_units": 1,
+   "waiting_warehouses": [
+    {
+     "warehouse": "波兰-FZHPoland-covers",
+     "waiting": 1
+    }
+   ],
+   "stockout_observed_rows": 0,
+   "net_qty_6m": 30,
+   "in_eligible_ranking": true,
+   "evidence_pointer": "stock_latest[sku='TT0312606K0064204'] waiting=1 warehouses=[{'warehouse': '波兰-FZHPoland-covers', 'waiting': 1}]; v_stockout_observed[goods_sku='TT0312606K0064204'] rows=0",
+   "note": "trigger = waiting-to-ship units; stockout rows are supporting evidence only; NOT ranked by sales and NOT a fill/no-fill call"
+  }
+ ],
+ "high_sellers_outside_eligible": {
+  "rule": "listed separately; they are NOT moved into the eligible ranking",
+  "candidates": [
+   {
+    "sku": "C/Linen-Natural-60-688-wow",
+    "destination": "mapped_ineligible",
+    "reason_codes": [
+     "uom_unknown"
+    ],
+    "mapped_item_code": "KS0248-CMM-60-HEMPNATURAL",
+    "net_qty_6m": 60,
+    "order_lines": 56,
+    "not_in_eligible_ranking": true,
+    "evidence_pointer": "sku_map[tongtool_sku='C/Linen-Natural-60-688-wow'].item_code='KS0248-CMM-60-HEMPNATURAL'; sku_item[sku='C/Linen-Natural-60-688-wow'].item_code='KS0248-CMM-60-HEMPNATURAL'; item_attr[item='KS0248-CMM-60-HEMPNATURAL']; gs_orders lines=56"
+   },
+   {
+    "sku": "TT0031112K0063740",
+    "destination": "mapped_ineligible",
+    "reason_codes": [
+     "uom_unknown"
+    ],
+    "mapped_item_code": "KS0301-XER-194-GREYBEIGE",
+    "net_qty_6m": 50,
+    "order_lines": 49,
+    "not_in_eligible_ranking": true,
+    "evidence_pointer": "sku_map[tongtool_sku='TT0031112K0063740'].item_code='KS0301-XER-194-GREYBEIGE'; sku_item[sku='TT0031112K0063740'].item_code='KS0301-XER-194-GREYBEIGE'; item_attr[item='KS0301-XER-194-GREYBEIGE']; gs_orders lines=49"
+   },
+   {
+    "sku": "TT0031112K0063739",
+    "destination": "mapped_ineligible",
+    "reason_codes": [
+     "uom_unknown"
+    ],
+    "mapped_item_code": "KS0301-XER-153-GREYBEIGE",
+    "net_qty_6m": 42,
+    "order_lines": 41,
+    "not_in_eligible_ranking": true,
+    "evidence_pointer": "sku_map[tongtool_sku='TT0031112K0063739'].item_code='KS0301-XER-153-GREYBEIGE'; sku_item[sku='TT0031112K0063739'].item_code='KS0301-XER-153-GREYBEIGE'; item_attr[item='KS0301-XER-153-GREYBEIGE']; gs_orders lines=41"
+   },
+   {
+    "sku": "C/Leaves-Grey-153-684-wow",
+    "destination": "mapped_ineligible",
+    "reason_codes": [
+     "uom_unknown"
+    ],
+    "mapped_item_code": "KS0001-CMGDTH-153-GREY",
+    "net_qty_6m": 20,
+    "order_lines": 20,
+    "not_in_eligible_ranking": true,
+    "evidence_pointer": "sku_map[tongtool_sku='C/Leaves-Grey-153-684-wow'].item_code='KS0001-CMGDTH-153-GREY'; sku_item[sku='C/Leaves-Grey-153-684-wow'].item_code='KS0001-CMGDTH-153-GREY'; item_attr[item='KS0001-CMGDTH-153-GREY']; gs_orders lines=20"
+   },
+   {
+    "sku": "CEN963Velvet-DKGreen-138",
+    "destination": "mapped_ineligible",
+    "reason_codes": [
+     "uom_unknown"
+    ],
+    "mapped_item_code": "KS0001-HLR-140-DARKGREEN",
+    "net_qty_6m": 18,
+    "order_lines": 18,
+    "not_in_eligible_ranking": true,
+    "evidence_pointer": "sku_map[tongtool_sku='CEN963Velvet-DKGreen-138'].item_code='KS0001-HLR-140-DARKGREEN'; sku_item[sku='CEN963Velvet-DKGreen-138'].item_code='KS0001-HLR-140-DARKGREEN'; item_attr[item='KS0001-HLR-140-DARKGREEN']; gs_orders lines=18"
+   },
+   {
+    "sku": "C/Leaves-Grey-183-684-wow",
+    "destination": "mapped_ineligible",
+    "reason_codes": [
+     "uom_unknown"
+    ],
+    "mapped_item_code": "KS0001-CMGDTH-183-GREY",
+    "net_qty_6m": 17,
+    "order_lines": 17,
+    "not_in_eligible_ranking": true,
+    "evidence_pointer": "sku_map[tongtool_sku='C/Leaves-Grey-183-684-wow'].item_code='KS0001-CMGDTH-183-GREY'; sku_item[sku='C/Leaves-Grey-183-684-wow'].item_code='KS0001-CMGDTH-183-GREY'; item_attr[item='KS0001-CMGDTH-183-GREY']; gs_orders lines=17"
+   },
+   {
+    "sku": "TT0031112K0063738",
+    "destination": "mapped_ineligible",
+    "reason_codes": [
+     "uom_unknown"
+    ],
+    "mapped_item_code": "KS0301-XER-100-GREYBEIGE",
+    "net_qty_6m": 17,
+    "order_lines": 15,
+    "not_in_eligible_ranking": true,
+    "evidence_pointer": "sku_map[tongtool_sku='TT0031112K0063738'].item_code='KS0301-XER-100-GREYBEIGE'; sku_item[sku='TT0031112K0063738'].item_code='KS0301-XER-100-GREYBEIGE'; item_attr[item='KS0301-XER-100-GREYBEIGE']; gs_orders lines=15"
+   },
+   {
+    "sku": "Buttonkit",
+    "destination": "unmapped",
+    "reason_codes": [
+     "unmapped"
+    ],
+    "mapped_item_code": null,
+    "net_qty_6m": 16,
+    "order_lines": 16,
+    "not_in_eligible_ranking": true,
+    "evidence_pointer": "gs_orders[sku_tongtool='Buttonkit'] line_id='202605:4312'; stock_latest[sku='Buttonkit'] rows=4; gs_orders lines=16"
+   },
+   {
+    "sku": "C/Leaves-Grey-138-684-wow",
+    "destination": "mapped_ineligible",
+    "reason_codes": [
+     "uom_unknown"
+    ],
+    "mapped_item_code": "KS0001-CMGDTH-140-GREY",
+    "net_qty_6m": 14,
+    "order_lines": 13,
+    "not_in_eligible_ranking": true,
+    "evidence_pointer": "sku_map[tongtool_sku='C/Leaves-Grey-138-684-wow'].item_code='KS0001-CMGDTH-140-GREY'; sku_item[sku='C/Leaves-Grey-138-684-wow'].item_code='KS0001-CMGDTH-140-GREY'; item_attr[item='KS0001-CMGDTH-140-GREY']; gs_orders lines=13"
+   },
+   {
+    "sku": "PP10LB",
+    "destination": "unmapped",
+    "reason_codes": [
+     "unmapped"
+    ],
+    "mapped_item_code": null,
+    "net_qty_6m": 13,
+    "order_lines": 13,
+    "not_in_eligible_ranking": true,
+    "evidence_pointer": "gs_orders[sku_tongtool='PP10LB'] line_id='202608:10248'; stock_latest[sku='PP10LB'] rows=1; gs_orders lines=13"
+   },
+   {
+    "sku": "TT0031102-zuhe-all",
+    "destination": "mapped_ineligible",
+    "reason_codes": [
+     "uom_unknown"
+    ],
+    "mapped_item_code": "TJ#KS0238x1_KS0240x1_KS0241x1_KS0242x1_KS0243x1-001",
+    "net_qty_6m": 13,
+    "order_lines": 13,
+    "not_in_eligible_ranking": true,
+    "evidence_pointer": "sku_map[tongtool_sku='TT0031102-zuhe-all'].item_code='TJ#KS0238x1_KS0240x1_KS0241x1_KS0242x1_KS0243x1-001'; sku_item[sku='TT0031102-zuhe-all'].item_code='TJ#KS0238x1_KS0240x1_KS0241x1_KS0242x1_KS0243x1-001'; item_attr[item='TJ#KS0238x1_KS0240x1_KS0241x1_KS0242x1_KS0243x1-001']; gs_orders lines=13"
+   },
+   {
+    "sku": "T2398P154418",
+    "destination": "unmapped",
+    "reason_codes": [
+     "unmapped"
+    ],
+    "mapped_item_code": null,
+    "net_qty_6m": 12,
+    "order_lines": 12,
+    "not_in_eligible_ranking": true,
+    "evidence_pointer": "gs_orders[sku_tongtool='T2398P154418'] line_id='202604:1242'; stock_latest[sku='T2398P154418'] rows=None; gs_orders lines=12"
+   },
+   {
+    "sku": "TT0312639K0064284",
+    "destination": "mapped_ineligible",
+    "reason_codes": [
+     "uom_unknown"
+    ],
+    "mapped_item_code": "KS0464-FHXYR-60x45x42-RED",
+    "net_qty_6m": 12,
+    "order_lines": 11,
+    "not_in_eligible_ranking": true,
+    "evidence_pointer": "sku_map[tongtool_sku='TT0312639K0064284'].item_code='KS0464-FHXYR-60x45x42-RED'; sku_item[sku='TT0312639K0064284'].item_code='KS0464-FHXYR-60x45x42-RED'; item_attr[item='KS0464-FHXYR-60x45x42-RED']; gs_orders lines=11"
+   },
+   {
+    "sku": "TT0312687K0064377-Cover",
+    "destination": "unmapped",
+    "reason_codes": [
+     "unmapped"
+    ],
+    "mapped_item_code": null,
+    "net_qty_6m": 12,
+    "order_lines": 12,
+    "not_in_eligible_ranking": true,
+    "evidence_pointer": "gs_orders[sku_tongtool='TT0312687K0064377-Cover'] line_id='202608:10205'; stock_latest[sku='TT0312687K0064377-Cover'] rows=3; gs_orders lines=12"
+   },
+   {
+    "sku": "TT0312687K0064377-Foam",
+    "destination": "unmapped",
+    "reason_codes": [
+     "unmapped"
+    ],
+    "mapped_item_code": null,
+    "net_qty_6m": 11,
+    "order_lines": 11,
+    "not_in_eligible_ranking": true,
+    "evidence_pointer": "gs_orders[sku_tongtool='TT0312687K0064377-Foam'] line_id='202608:10206'; stock_latest[sku='TT0312687K0064377-Foam'] rows=3; gs_orders lines=11"
+   },
+   {
+    "sku": "C/Leaves-Grey-100-684-wow",
+    "destination": "mapped_ineligible",
+    "reason_codes": [
+     "uom_unknown"
+    ],
+    "mapped_item_code": "KS0001-CMGDTH-100-GREY",
+    "net_qty_6m": 9,
+    "order_lines": 8,
+    "not_in_eligible_ranking": true,
+    "evidence_pointer": "sku_map[tongtool_sku='C/Leaves-Grey-100-684-wow'].item_code='KS0001-CMGDTH-100-GREY'; sku_item[sku='C/Leaves-Grey-100-684-wow'].item_code='KS0001-CMGDTH-100-GREY'; item_attr[item='KS0001-CMGDTH-100-GREY']; gs_orders lines=8"
+   },
+   {
+    "sku": "PP5LB",
+    "destination": "unmapped",
+    "reason_codes": [
+     "unmapped"
+    ],
+    "mapped_item_code": null,
+    "net_qty_6m": 9,
+    "order_lines": 9,
+    "not_in_eligible_ranking": true,
+    "evidence_pointer": "gs_orders[sku_tongtool='PP5LB'] line_id='202608:10703'; stock_latest[sku='PP5LB'] rows=1; gs_orders lines=9"
+   },
+   {
+    "sku": "SXQC-CEN003-ROBLUE-150",
+    "destination": "mapped_ineligible",
+    "reason_codes": [
+     "uom_unknown"
+    ],
+    "mapped_item_code": "KS0001-TR-153-ROYALBLUE",
+    "net_qty_6m": 9,
+    "order_lines": 9,
+    "not_in_eligible_ranking": true,
+    "evidence_pointer": "sku_map[tongtool_sku='SXQC-CEN003-ROBLUE-150'].item_code='KS0001-TR-153-ROYALBLUE'; sku_item[sku='SXQC-CEN003-ROBLUE-150'].item_code='KS0001-TR-153-ROYALBLUE'; item_attr[item='KS0001-TR-153-ROYALBLUE']; gs_orders lines=9"
+   },
+   {
+    "sku": "TT0031112K0063742",
+    "destination": "mapped_ineligible",
+    "reason_codes": [
+     "uom_unknown"
+    ],
+    "mapped_item_code": "KS0301-XER-200-GREYBEIGE",
+    "net_qty_6m": 9,
+    "order_lines": 9,
+    "not_in_eligible_ranking": true,
+    "evidence_pointer": "sku_map[tongtool_sku='TT0031112K0063742'].item_code='KS0301-XER-200-GREYBEIGE'; sku_item[sku='TT0031112K0063742'].item_code='KS0301-XER-200-GREYBEIGE'; item_attr[item='KS0301-XER-200-GREYBEIGE']; gs_orders lines=9"
+   },
+   {
+    "sku": "C/Cord-White-138-706-wow-Cover",
+    "destination": "unmapped",
+    "reason_codes": [
+     "unmapped"
+    ],
+    "mapped_item_code": null,
+    "net_qty_6m": 8,
+    "order_lines": 7,
+    "not_in_eligible_ranking": true,
+    "evidence_pointer": "gs_orders[sku_tongtool='C/Cord-White-138-706-wow-Cover'] line_id='202605:2513'; stock_latest[sku='C/Cord-White-138-706-wow-Cover'] rows=1; gs_orders lines=7"
+   }
+  ]
+ },
+ "counts": {
+  "eligible_in": 1237,
+  "eligible_out": 1237,
+  "dropped": [],
+  "top50": 50,
+  "urgent_exceptions": 75,
+  "urgent_in_eligible": 37,
+  "urgent_in_mother_set": 37,
+  "urgent_outside_mother_set": 38,
+  "total_net_qty_6m": 48001
+ }
+}
