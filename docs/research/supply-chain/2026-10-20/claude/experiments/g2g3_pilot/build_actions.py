@@ -190,6 +190,12 @@ def build_gates(ev_sku: dict, sup: dict, live_so: float) -> list[dict]:
     inv = ev_sku["inventory"]
     po = ev_sku["po"]
     prod = ev_sku["production"]
+    cover = ev_sku.get("cover") or {}
+    # Cover counts as "no unbooked supply" only if its absence is proven, or it
+    # is actually booked into supply. An unmapped/substitutable pool means the
+    # record sum is not an upper bound.
+    cover_absence_proven = bool(cover.get("absence_proven")) or bool(
+        cover.get("counted_in_supply"))
 
     uom_status = inv.get("uom_status")
     uom_ok = bool(uom_status and str(uom_status).startswith("verified"))
@@ -215,24 +221,39 @@ def build_gates(ev_sku: dict, sup: dict, live_so: float) -> list[dict]:
                        if live_so > 0 else "无正向 live SO"),
              owner_role="业务/运营",
              blocks_promotion="任何把 SO 计入需求的动作"),
-        dict(id="G4_supply_overlap", label="PO / 在途 / 在产逐笔重叠键",
+        dict(id="G4_supply_overlap", label="PO / 在途 / 在产逐笔重叠键（去重后才是数量）",
              state=("unproven" if has_supply_docs else "ok"),
              evidence=str(sup.get("overlap_status", "not_proven")),
              owner_role="数据/系统",
-             blocks_promotion="把 B_min 当供给下界（不影响 B_max 上界的短缺判断）"),
+             blocks_promotion=("任何确定结论：去重前只能得到“记录之和”，"
+                               "既不是已证下界，也不保证是紧上界")),
         dict(id="G5_arrival_in_window", label="PO 到货日 / WO 完工日在窗口内",
              state=("unproven" if (has_supply_docs and eta_missing) else
                     ("unproven" if has_supply_docs else "ok")),
              evidence=(f"PO ETA 缺失 {po.get('eta_missing_lines')} 行；"
                        f"WO 完工日缺失 {prod.get('eta_missing_count')} 张"),
              owner_role="采购/供应链；生产/PMC",
-             blocks_promotion="always_replenish（B_max 假设全部到货）"),
+             blocks_promotion="供给下界（未证到货的批次不能计入下界）"),
         dict(id="G6_pk_ks_1to1", label="在产 PK# 皮壳按 1:1 计 KS 成品",
              state=("unproven" if has_prod else "ok"),
              evidence=(f"在产剩余 {prod.get('remaining_qty')} 件按 1:1 计入" if has_prod
                        else "无在产"),
              owner_role="生产/PMC",
-             blocks_promotion="在产计入供给（只影响下界大小，不改变 B_max 短缺）"),
+             blocks_promotion="供给下界与上界（换算比例未证则数量不可用）"),
+        dict(id="G7_unbooked_supply", label="不存在未上账的可替代供给（Cover 等）",
+             state=("ok" if cover_absence_proven else "unproven"),
+             evidence=("cover.absence_proven=True" if cover_absence_proven else
+                       f"cover.verdict={cover.get('verdict')}；"
+                       f"absence_proven={cover.get('absence_proven')}；"
+                       "Cover 未并入供给，故实际供给可能高于记录之和"),
+             owner_role="商品主数据/仓储",
+             blocks_promotion="供给上界（有未上账替代供给时，记录之和不再是上界）"),
+        dict(id="G8_demand_bounds", label="需求下界与上界均已给出（分位或业务人工界）",
+             state="unproven",
+             evidence=("P90-free 清单只有 P50 点预测：D1 是点估计不是下界，"
+                       "D2=P50+SO 也不是上界；缺少需求下/上分位或业务人工上下限"),
+             owner_role="业务/运营",
+             blocks_promotion="任何确定结论（短缺要需求下界，充足要需求上界）"),
     ]
     for g in gates:
         if g["state"] not in ("ok", "unproven", "fail"):
@@ -240,12 +261,13 @@ def build_gates(ev_sku: dict, sup: dict, live_so: float) -> list[dict]:
     return gates
 
 
-# R3-Major2: one gate set for BOTH definite conclusions. A row may be called
-# short (always_replenish) or sufficient (no_shortage_within_window) only when
-# every one of these is ok; anything less stays 待核实.
+# R3/R4: one gate set for BOTH definite conclusions. A row may be called short
+# (always_replenish) or sufficient (no_shortage_within_window) only when every
+# one of these is ok AND the bound test in §R4 passes; anything less stays 待核实.
 DEFINITIVE_GATES = [
-    "G1_identity", "G2_uom", "G3_demand_overlap",
-    "G4_supply_overlap", "G5_arrival_in_window", "G6_pk_ks_1to1",
+    "G1_identity", "G2_uom", "G3_demand_overlap", "G4_supply_overlap",
+    "G5_arrival_in_window", "G6_pk_ks_1to1", "G7_unbooked_supply",
+    "G8_demand_bounds",
 ]
 
 
@@ -254,27 +276,136 @@ def gate(gates: list[dict], gid: str) -> dict:
 
 
 # ----------------------------------------------------------------------------
+# explicit supply / demand bounds (R4)
+# ----------------------------------------------------------------------------
+def build_bounds(sup: dict, po: dict, prod: dict, inv: dict, d1: float, d2: float,
+                 live_so: float, gates: list[dict]) -> dict:
+    """Two-sided bounds with provenance.
+
+    Shortage needs  supply upper  < demand lower .
+    Sufficiency needs supply lower >= demand upper .
+    `B_max` is only the record sum (a loose upper bound for as long as no
+    unbooked supply exists and the unit cannot scale); it is NEVER evidence of
+    sufficiency on its own.
+    """
+    st = {g["id"]: g["state"] for g in gates}
+    uom_ok = st["G2_uom"] == "ok"
+    dedup_ok = st["G4_supply_overlap"] == "ok"
+    unbooked_ok = st["G7_unbooked_supply"] == "ok"
+    demand_bounds_ok = st["G8_demand_bounds"] == "ok"
+
+    po_lines = po.get("open_lines") or []
+    wo_lines = prod.get("open_wo") or []
+    lower_components = [dict(
+        source="inventory.available", qty=r4(sup["available"]),
+        documents=[], deduped=True, in_window=True, uom_converted=uom_ok,
+        note="在手库存：天然在窗口内、无单据重复问题")]
+    upper_components = lower_components + [
+        dict(source="po.open_lines", qty=r4(sum(float(x.get("open_qty", 0)) for x in po_lines)),
+             documents=[x.get("ponum") for x in po_lines],
+             deduped=False, in_window=False, uom_converted=uom_ok,
+             note="未去重、到货日未证；重复只会高估"),
+        dict(source="production.open_wo",
+             qty=r4(sum(float(x.get("remaining_qty", 0)) for x in wo_lines)),
+             documents=[x.get("name") for x in wo_lines],
+             deduped=False, in_window=False, uom_converted=uom_ok,
+             note="PK# 计 KS 的 1:1 未证；完工日未证"),
+        dict(source="inventory.intransit", qty=r4(sup["intransit"]),
+             documents=[], deduped=False, in_window=False, uom_converted=uom_ok,
+             note="与 PO 数值相同（10/10），可能重复；重复只会高估"),
+    ]
+    upper_sum = sum(float(c["qty"]) for c in upper_components)
+    if abs(upper_sum - float(sup["B_max"])) > 1e-6:
+        raise AssertionError(
+            f"supply upper components {upper_sum} != frozen B_max {sup['B_max']}")
+
+    supply_lower = dict(
+        value=r4(sup["available"]),
+        status=("ok" if (uom_ok and st["G1_identity"] == "ok") else "unproven"),
+        basis=("已证下界 = 在手可用量；只计入确定在窗口内、无重复、"
+               "且单位已换算的数量"),
+        components=lower_components,
+        excluded=[dict(source=c["source"], qty=c["qty"], reason=c["note"])
+                  for c in upper_components[1:]],
+        blockers=[g for g in ("G1_identity", "G2_uom") if st[g] != "ok"],
+        missing_evidence=(["库存/单据单位口径（UOM）"] if not uom_ok else []),
+    )
+    supply_upper = dict(
+        value=r4(sup["B_max"]),
+        status=("ok" if (uom_ok and dedup_ok and unbooked_ok) else "unproven"),
+        basis=("记录之和（每条未结记录只计一次）：重复只会高估，故方向上可作上界；"
+               "但它只有在 UOM 换算已知、且不存在未上账替代供给时才是可用的上界"),
+        components=upper_components,
+        blockers=[g for g in ("G2_uom", "G4_supply_overlap", "G7_unbooked_supply")
+                  if st[g] != "ok"],
+        missing_evidence=(
+            ([] if uom_ok else ["库存/单据单位口径（UOM）"]) +
+            ([] if dedup_ok else ["PO/在途/在产逐笔重叠键"]) +
+            ([] if unbooked_ok else ["Cover 等未上账可替代供给的缺席证明"])),
+    )
+    demand_lower = dict(
+        value=r4(d1),
+        status=("ok" if demand_bounds_ok else "unproven"),
+        basis="P50 点预测（不含 live SO）；点估计不是已证下界",
+        blockers=[] if demand_bounds_ok else ["G8_demand_bounds"],
+        missing_evidence=[] if demand_bounds_ok else ["需求下分位或业务人工下限"],
+    )
+    demand_upper = dict(
+        value=r4(d2),
+        status=("ok" if demand_bounds_ok else "unproven"),
+        basis=("P50 + 正向 live SO；SO 若与预测重复只会高估，故在方向上可作上界，"
+               "但 P50 若低估则不再是上界"),
+        blockers=[] if demand_bounds_ok else ["G8_demand_bounds"],
+        missing_evidence=[] if demand_bounds_ok else ["需求上分位或业务人工上限"],
+    )
+    return dict(supply=dict(lower=supply_lower, upper=supply_upper),
+                demand=dict(lower=demand_lower, upper=demand_upper),
+                rule=("充足：已证供给下界 ≥ 需求上界；短缺：供给上界 < 需求下界；"
+                      "其余保持待核实"))
+
+
+def definitive_conclusion(gates: list[dict], bounds: dict):
+    """Return (class, reason) only when BOTH the gates and the bound test pass."""
+    st = {g["id"]: g["state"] for g in gates}
+    if any(st[g] != "ok" for g in DEFINITIVE_GATES):
+        return None, "gates"
+    sl, su = bounds["supply"]["lower"], bounds["supply"]["upper"]
+    dl, du = bounds["demand"]["lower"], bounds["demand"]["upper"]
+    if su["status"] == "ok" and dl["status"] == "ok" and su["value"] < dl["value"]:
+        return "always_replenish", "shortage_bounds"
+    if sl["status"] == "ok" and du["status"] == "ok" and sl["value"] >= du["value"]:
+        return "no_shortage_within_window", "sufficiency_bounds"
+    return None, "bounds"
+
+
+# ----------------------------------------------------------------------------
 # classification
 # ----------------------------------------------------------------------------
-def classify(tests: dict, gates: list[dict]) -> dict:
-    """Tri-state gate-driven class.
+def classify(tests: dict, gates: list[dict], bounds: dict | None = None) -> dict:
+    """Screening class + definitive class.
 
-    A shortage claim needs the arithmetic shortfall AND every definitive gate.
-    Supply lower-bound shortfalls are explicitly not a promotion path.
+    The screening class (T3/T4) is a signal, never a conclusion. A definite
+    conclusion requires every definitive gate AND the bound test (R4):
+    shortage on (supply upper < demand lower), sufficiency on
+    (supply lower >= demand upper). B_max >= D2 proves nothing.
     """
     blockers = [g for g in DEFINITIVE_GATES if gate(gates, g)["state"] != "ok"]
     if tests["t3"]:
-        arithmetic = "always_replenish"
+        screening = "always_replenish"
     elif tests["t4"]:
-        arithmetic = "depends_on_arrival"
+        screening = "depends_on_arrival"
     else:
-        arithmetic = "insufficient_evidence"
-    if arithmetic == "always_replenish":
-        cls = "always_replenish" if not blockers else "insufficient_evidence"
+        screening = "insufficient_evidence"
+    definitive, why = (definitive_conclusion(gates, bounds) if bounds else (None, "no_bounds"))
+    if definitive:
+        cls = definitive
+    elif screening == "always_replenish":
+        cls = "insufficient_evidence"      # never promote a screening signal
     else:
-        cls = arithmetic
-    return dict(arithmetic_class=arithmetic, cls=cls,
-                promotion_blockers=blockers)
+        cls = screening
+    return dict(arithmetic_class=screening, screening_class=screening, cls=cls,
+                promotion_blockers=blockers, definitive=definitive,
+                definitive_blocked_by=why)
 
 
 def horizon_class(d1: float, d2: float, sup: dict, tests: dict, gates: list[dict]):
@@ -327,12 +458,33 @@ def build(ev: dict, binding: dict, hash_info: dict) -> dict:
             t2_uom_verified=str(inv.get("uom_status", "")).startswith("verified"),
             t3_bmax_lt_d1=supply["B_max"] < d1,
             t4_a_low_lt_d2_le_bmax=supply["A_low"] < d2 <= supply["B_max"],
+            screening_only=True,
+            screening_note=("T3/T4 只用冻结值做筛查（B_max 是记录之和、A_low 是在手），"
+                            "不是结论；确定结论必须走 bounds 检验"),
         )
         gates = build_gates(ev_sku, sup, live_so)
+        bounds = build_bounds(sup, po, prod, inv, d1, d2, live_so, gates)
         cl = classify(dict(t1=tests["t1_identity_confirmed"],
                            t2=tests["t2_uom_verified"],
                            t3=tests["t3_bmax_lt_d1"], t4=tests["t4_a_low_lt_d2_le_bmax"]),
-                      gates)
+                      gates, bounds)
+        # R4 counterexample guard (review's XMMBS-100 case): when the record sum
+        # clears the demand upper bound but the dedup-stress point does not, an
+        # "all records are the same supply" reading makes the row short. Under R4
+        # neither reading can be certified, so it must stay 待核实.
+        trap_active = (supply["B_max"] >= d2
+                       and supply["B_min_po_dedup"] < d2)
+        counterexample = dict(
+            active=bool(trap_active),
+            record_sum=supply["B_max"],
+            dedup_stress_point=supply["B_min_po_dedup"],
+            demand_upper=r4(d2),
+            note=("若未结记录属同一批供应，唯一供给可低至 {:.1f}；而记录之和 {:.1f} "
+                  "仍 ≥ 需求上界 {:.1f}。旧规则会用记录之和判“不缺”；"
+                  "R4 要求已证供给下界覆盖需求上界，两者都未证，只能待核实"
+                  ).format(supply["B_min_po_dedup"], supply["B_max"], d2)
+            if trap_active else "该行不存在“记录之和够、去重后不够”的陷阱",
+        )
 
         # ---- horizon windows (M03) ----
         stab = []
@@ -393,9 +545,12 @@ def build(ev: dict, binding: dict, hash_info: dict) -> dict:
             customer_code=ev_sku["customer_code"],
             item_name=ev_sku["identity"].get("item_name"),
             **{"class": cl["cls"]},
-            arithmetic_qualifies=("always_replenish"
-                                  if tests["t3_bmax_lt_d1"] and not tests["t2_uom_verified"]
-                                  else None),
+            screening_class=cl["screening_class"],
+            definitive_conclusion=cl["definitive"],
+            definitive_blocked_by=cl["definitive_blocked_by"],
+            bounds=bounds,
+            r4_counterexample=counterexample,
+            arithmetic_qualifies=("always_replenish" if tests["t3_bmax_lt_d1"] else None),
             arithmetic_class=cl["arithmetic_class"],
             promotion_blockers=cl["promotion_blockers"],
             demand_overlap=("unproven" if live_so > 0 else "not_applicable"),
@@ -478,6 +633,22 @@ def build(ev: dict, binding: dict, hash_info: dict) -> dict:
                   for c in ("always_replenish", "depends_on_arrival",
                             "insufficient_evidence")},
         demand_overlap_unproven=sum(1 for r in rows if r["demand_overlap"] == "unproven"),
+        definitive_shortage=sum(1 for r in rows if r["definitive_conclusion"] == "always_replenish"),
+        definitive_sufficiency=sum(
+            1 for r in rows
+            if r["definitive_conclusion"] == "no_shortage_within_window"),
+        definitive_pending=sum(1 for r in rows if r["definitive_conclusion"] is None),
+        pending_blocked_by=dict(
+            gates=sum(1 for r in rows if r["definitive_blocked_by"] == "gates"),
+            bounds=sum(1 for r in rows if r["definitive_blocked_by"] == "bounds")),
+        screening=dict(
+            t3=sum(1 for r in rows if r["tests"]["t3_bmax_lt_d1"]),
+            t4=sum(1 for r in rows if r["tests"]["t4_a_low_lt_d2_le_bmax"]),
+            neither=sum(1 for r in rows if not r["tests"]["t3_bmax_lt_d1"]
+                        and not r["tests"]["t4_a_low_lt_d2_le_bmax"]),
+            note="screening 只是信号；确定结论数见 definitive_*"),
+        counterexample_traps=sum(1 for r in rows
+                                 if r["r4_counterexample"]["active"]),
     )
 
     totals = dict(
@@ -542,10 +713,22 @@ def build(ev: dict, binding: dict, hash_info: dict) -> dict:
             states=["ok", "unproven", "fail"],
             definitive_conclusion_gates=DEFINITIVE_GATES,
             hard_gates_for_always=DEFINITIVE_GATES,
-            note=("R3-Major2: 短缺（always_replenish）与充足（no_shortage_within_window）"
-                  "都必须过同一组 6 个 definitive gates；没有任何局部捷径"
-                  "（SO 重叠→删 SO、只凭到货日→不缺）被保留。"
-                  "G4/G6 过去只被当作下界项，现在也是充足结论的必要条件。"),
+            note=("R4: 短缺与充足都必须过同一组 8 个 definitive gates，"
+                  "并各自通过双边界检验。G7（无未上账替代供给）保证记录之和仍是上界；"
+                  "G8（需求上下界）保证需求侧有真实界而不是把 P50 当界。"
+                  "G4 只表示逐笔关系已核实，不代表记录互不重叠。"),
+        ),
+        bounds=dict(
+            rule=("充足：已证供给下界 ≥ 需求上界；短缺：供给上界 < 需求下界；"
+                  "其余保持待核实"),
+            supply_lower=("在手 available，且仅在 G1/G2 ok 时才算已证（天然在窗口内、"
+                          "无单据重复问题）"),
+            supply_upper=("available + 未结 PO 原始量 + 在产剩余 + 在途（每条只计一次；"
+                          "重复只会高估，方向上可作上界；需 G2/G4/G7 才可当作可用上界）"),
+            demand_lower="D1 = P50，不含 live SO；点估计不是已证下界（需 G8）",
+            demand_upper=("D2 = P50 + 正向 live SO；SO 若重复只会高估，方向上可作上界，"
+                          "但 P50 若低估则不再是上界（需 G8）"),
+            forbidden="B_max ≥ D2 永远不能证明充足：B_max 是记录之和，不是已证下界",
         ),
         cover_treatment=(
             "cover is not counted in supply (V0). It is an unbooked upside supply "
@@ -602,10 +785,26 @@ def build(ev: dict, binding: dict, hash_info: dict) -> dict:
         d9_mapping="10/10 行给出 D9 层级 -> 新分类的对应与差异原因，不静默替换",
         unmatched_reason=("入 10 客户码全部在 evidence.skus 中且 identity_status=confirmed；"
                           "无未匹配记录，故无丢弃项"),
+        bounds=dict(
+            supply_lower_proven=sum(1 for r in rows
+                                    if r["bounds"]["supply"]["lower"]["status"] == "ok"),
+            supply_upper_proven=sum(1 for r in rows
+                                    if r["bounds"]["supply"]["upper"]["status"] == "ok"),
+            demand_lower_proven=sum(1 for r in rows
+                                    if r["bounds"]["demand"]["lower"]["status"] == "ok"),
+            demand_upper_proven=sum(1 for r in rows
+                                    if r["bounds"]["demand"]["upper"]["status"] == "ok"),
+            rows_with_all_four_proven=sum(
+                1 for r in rows if all(r["bounds"][s][k]["status"] == "ok"
+                                       for s in ("supply", "demand")
+                                       for k in ("lower", "upper"))),
+            note=("四侧界分别计数；任何一侧 unproven 都不会产出确定结论。"
+                  "supply.upper 的数量 = 冻结 B_max，但其 status 必须另过 G2/G4/G7。"),
+        ),
     )
 
     return dict(
-        schema_version="replenishment_actions_v0/2",
+        schema_version="replenishment_actions_v0/3",
         title=TITLE,
         status="provisional; not an instruction list; no quantities",
         owner="claude-worker",
@@ -671,38 +870,50 @@ def start_condition(row: dict) -> dict:
     if s["A_low"] < d2:
         shortfalls.append("只在手 A_low {:.1f} < D2 {:.1f}".format(s["A_low"], d2))
     lower_bound_shortfall = (s["B_min"] < d2) or (s["B_min_po_dedup"] < d2)
-    # One gate set for both directions (R3-Major2). No conclusion — shortage OR
-    # sufficiency — is emitted as a reachable outcome until every gate is ok.
-    all_ok = "∧".join(f"{g} ok" for g in DEFINITIVE_GATES)
-    not_ok = "任一闸门 unproven/fail"
+    b = row["bounds"]
+    sl, su = b["supply"]["lower"], b["supply"]["upper"]
+    dl, du = b["demand"]["lower"], b["demand"]["upper"]
+    bound_blockers = sorted({x for x in (
+        su["blockers"] + dl["blockers"] + sl["blockers"] + du["blockers"])})
+    # R4: definitive conclusions are bound tests, never "B_max >= D2".
     outcomes = [
-        dict(when="{} ∧ B_max {:.1f} < D1 {:.1f}".format(
-                all_ok, s["B_max"], d["D1_p50_forecast"]),
+        dict(when=("8 门全 ok ∧ "
+                   "供给上界（当前记录之和 {:.1f}，未证 UOM/去重则不可用）"
+                   " < 需求下界（当前 P50 {:.1f}，未证分位则不可用）").format(
+                       su["value"], dl["value"]),
              then_class="always_replenish",
-             arithmetic="结构短缺：最宽松供给上界也低于不含 SO 的 P50"),
-        dict(when="{} ∧ B_max {:.1f} ≥ D2 {:.1f}".format(all_ok, s["B_max"], d2),
+             uses=["supply.upper", "demand.lower"],
+             arithmetic="短缺：连供给上界都低于需求下界"),
+        dict(when=("8 门全 ok ∧ "
+                   "供给下界（当前在手 {:.1f}）"
+                   " ≥ 需求上界（当前 P50+SO {:.1f}）").format(
+                       sl["value"], du["value"]),
              then_class="no_shortage_within_window",
-             arithmetic="充足：最宽松供给上界覆盖含 SO 的大口径需求（D2 为上界，故不必先删 SO）"),
-        dict(when="{} ∧ D1 {:.1f} ≤ B_max {:.1f} < D2 {:.1f}".format(
-                all_ok, d["D1_p50_forecast"], s["B_max"], d2),
+             uses=["supply.lower", "demand.upper"],
+             arithmetic=("充足只能由“已证供给下界 ≥ 需求上界”支持；"
+                         "冻结的 B_max {:.1f} 不是已证下界，不能用来证明充足").format(su["value"])),
+        dict(when="任一闸门 unproven/fail，或任一侧界 unproven",
              then_class="insufficient_evidence",
-             arithmetic="差在 SO：必须做桶级消费/分配后重算净需求，再比较；"
-                        "不得把 SO 当重复直接删掉回退 D1"),
-        dict(when=not_ok,
-             then_class="insufficient_evidence",
-             arithmetic="维持待核实；未证状态不产出任何短缺/充足结论"),
+             uses=[],
+             arithmetic=("维持待核实；当前缺：" + "、".join(bound_blockers)
+                         if bound_blockers else "维持待核实")),
     ]
     blocking = [x for x in gates if x["id"] in DEFINITIVE_GATES and x["state"] != "ok"]
     return dict(
-        rule=("同一条结论门槛：短缺与充足都必须过同一组 definitive gates；"
-              "文字条件不能替代闸门"),
-        demand_view_for_promotion=("D1" if s["B_max"] < d["D1_p50_forecast"] else "D2"),
+        rule=("R4 双向界规则：充足 = 已证供给下界 ≥ 需求上界；短缺 = 供给上界 < 需求下界；"
+              "两侧数量都必须来自按证据去重并换算（UOM）后的窗口内数量；"
+              "B_max 只是记录之和，永远不能单独证明充足"),
+        demand_bounds_used=dict(lower="D1（P50，不含 SO）", upper="D2（P50 + 正向 live SO）"),
         demand_overlap=row["demand_overlap"],
+        supply_bounds=dict(lower=sl, upper=su),
+        demand_bounds=dict(lower=dl, upper=du),
+        bound_blockers=bound_blockers,
         supply_lower_bound_shortfall=lower_bound_shortfall,
         supply_lower_bound_shortfall_note=(
-            "B_min/B_min_po_dedup < D2 只说明存在短缺情景；该行仍不得升级到 always_replenish"
-            if lower_bound_shortfall else "下界未低于 D2；短缺情景来自到货时点/在手不足，"
-                                          "同样不得据此直接升级"),
+            "B_min/B_min_po_dedup < D2 只说明存在短缺情景；在 R4 规则下，"
+            "短缺需要“供给上界 < 需求下界”，下界不足本身不构成任何结论"
+            if lower_bound_shortfall else
+            "下界未低于 D2；短缺情景来自到货时点/在手不足，同样不构成结论"),
         binding_shortfall_conditions=shortfalls,
         required_gates=[dict(id=x["id"], label=x["label"], state=x["state"],
                              owner_role=x["owner_role"], evidence_needed=x["evidence"],
@@ -713,16 +924,21 @@ def start_condition(row: dict) -> dict:
         gate_summary=st,
         outcomes=outcomes,
         forbidden=[
+            "B_max >= D2 never proves sufficiency: B_max is the record sum, and G4 only "
+            "means line-level overlap was checked, not that records are disjoint",
+            "sufficiency requires a proven supply LOWER bound covering a demand UPPER bound",
+            "shortage requires a supply UPPER bound below a demand LOWER bound",
             "SO overlapping the forecast never means SO can be deleted: bucket-level consumption first",
-            "arrival/ completion dates alone never establish sufficiency (need G2 units, G4 overlap, G6 PK#->KS too)",
-            "supply lower bound below demand (B_min / B_min_po_dedup < D2) never promotes to always_replenish",
+            "arrival/ completion dates alone never establish sufficiency",
+            "supply lower bound below demand never promotes to always_replenish",
             "live SO in the demand view never becomes net demand before bucket-level consumption",
             "Cover or any unbooked supply never counts until mapping and substitutability are proven",
         ],
-        summary=("补齐 " + "、".join(x["id"] for x in blocking) +
+        summary=("补齐 " + "、".join(sorted({x["id"] for x in blocking} |
+                                            set(bound_blockers))) +
                  " 后按 outcomes 重算；在此之前不发起采购/生产指令，也不宣布“不缺”。")
-        if blocking else
-        "全部 definitive gates 已 ok；仍须按 outcomes 重算一次再行动。",
+        if (blocking or bound_blockers) else
+        "全部闸门与四侧界已 ok；仍须按 outcomes 重算一次再行动。",
     )
 
 
@@ -807,7 +1023,9 @@ def basis(row: dict) -> str:
                      f"（占 B_max {g['d1_shortfall_vs_bmax_pct']}%）。")
     elif t["t4_a_low_lt_d2_le_bmax"]:
         parts.append("结论只在“全部到货且不重叠”与“重叠/迟到”两个情景之间翻转；"
-                     "两个方向都要过同一组 6 个 definitive gates，闸门未齐前只作待核实。")
+                     "两个方向都要过同一组 8 个 definitive gates，并且短缺看"
+                     "“供给上界 < 需求下界”、充足看“供给下界 ≥ 需求上界”，"
+                     "闸门与界未齐前只作待核实。")
     else:
         parts.append("B_max 覆盖 D1；只有在 live SO 确为增量、且完成桶级消费后才可能短缺。")
     parts.append(f"需求口径比值 {d['run_rate_ratio']}（近 3 月均值 {d['recent3_mean']}）。")

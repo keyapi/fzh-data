@@ -1,12 +1,12 @@
 {
- "schema_version": "replenishment_actions_v0/2",
+ "schema_version": "replenishment_actions_v0/3",
  "title": "10 SKU 暂行补货行动清单（P90-free）",
  "status": "provisional; not an instruction list; no quantities",
  "owner": "claude-worker",
- "generated_at": "2026-10-22T16:14:04+08:00",
+ "generated_at": "2026-10-22T16:25:49+08:00",
  "revision": "R2 (R1 review fixes: M01/M03/M04/N01/N03)",
  "based_on": {
-  "fixed_commit": "a59dc2139a6edd403090751f6cf2614f5f00563b",
+  "fixed_commit": "c5237701756db28ebe7ab2ff83162dfbae9074a9",
   "commit_semantics": "HEAD at run time; this artifact is committed in the next commit, so code_commit is that commit's parent",
   "inputs": [
    {
@@ -68,7 +68,9 @@
     "G3_demand_overlap",
     "G4_supply_overlap",
     "G5_arrival_in_window",
-    "G6_pk_ks_1to1"
+    "G6_pk_ks_1to1",
+    "G7_unbooked_supply",
+    "G8_demand_bounds"
    ],
    "hard_gates_for_always": [
     "G1_identity",
@@ -76,9 +78,19 @@
     "G3_demand_overlap",
     "G4_supply_overlap",
     "G5_arrival_in_window",
-    "G6_pk_ks_1to1"
+    "G6_pk_ks_1to1",
+    "G7_unbooked_supply",
+    "G8_demand_bounds"
    ],
-   "note": "R3-Major2: 短缺（always_replenish）与充足（no_shortage_within_window）都必须过同一组 6 个 definitive gates；没有任何局部捷径（SO 重叠→删 SO、只凭到货日→不缺）被保留。G4/G6 过去只被当作下界项，现在也是充足结论的必要条件。"
+   "note": "R4: 短缺与充足都必须过同一组 8 个 definitive gates，并各自通过双边界检验。G7（无未上账替代供给）保证记录之和仍是上界；G8（需求上下界）保证需求侧有真实界而不是把 P50 当界。G4 只表示逐笔关系已核实，不代表记录互不重叠。"
+  },
+  "bounds": {
+   "rule": "充足：已证供给下界 ≥ 需求上界；短缺：供给上界 < 需求下界；其余保持待核实",
+   "supply_lower": "在手 available，且仅在 G1/G2 ok 时才算已证（天然在窗口内、无单据重复问题）",
+   "supply_upper": "available + 未结 PO 原始量 + 在产剩余 + 在途（每条只计一次；重复只会高估，方向上可作上界；需 G2/G4/G7 才可当作可用上界）",
+   "demand_lower": "D1 = P50，不含 live SO；点估计不是已证下界（需 G8）",
+   "demand_upper": "D2 = P50 + 正向 live SO；SO 若重复只会高估，方向上可作上界，但 P50 若低估则不再是上界（需 G8）",
+   "forbidden": "B_max ≥ D2 永远不能证明充足：B_max 是记录之和，不是已证下界"
   },
   "cover_treatment": "cover is not counted in supply (V0). It is an unbooked upside supply scenario: once alias mapping and substitutability are confirmed it may REMOVE a shortage and the row must be recomputed; it can never create a shortage. It is NOT evidence that a shortage cannot occur while unmapped.",
   "window_basis": {
@@ -120,7 +132,21 @@
     "KS0001-CMM-100-WHITE"
    ]
   },
-  "demand_overlap_unproven": 10
+  "demand_overlap_unproven": 10,
+  "definitive_shortage": 0,
+  "definitive_sufficiency": 0,
+  "definitive_pending": 10,
+  "pending_blocked_by": {
+   "gates": 10,
+   "bounds": 0
+  },
+  "screening": {
+   "t3": 1,
+   "t4": 6,
+   "neither": 3,
+   "note": "screening 只是信号；确定结论数见 definitive_*"
+  },
+  "counterexample_traps": 2
  },
  "totals": {
   "window": "2026-10-22 -> 2026-12-31",
@@ -148,6 +174,140 @@
    "customer_code": "CENCord995-DKGrey-97",
    "item_name": "三角靠枕-全涤宽条绒-100-深灰色",
    "class": "insufficient_evidence",
+   "screening_class": "insufficient_evidence",
+   "definitive_conclusion": null,
+   "definitive_blocked_by": "gates",
+   "bounds": {
+    "supply": {
+     "lower": {
+      "value": 1,
+      "status": "unproven",
+      "basis": "已证下界 = 在手可用量；只计入确定在窗口内、无重复、且单位已换算的数量",
+      "components": [
+       {
+        "source": "inventory.available",
+        "qty": 1,
+        "documents": [],
+        "deduped": true,
+        "in_window": true,
+        "uom_converted": false,
+        "note": "在手库存：天然在窗口内、无单据重复问题"
+       }
+      ],
+      "excluded": [
+       {
+        "source": "po.open_lines",
+        "qty": 0,
+        "reason": "未去重、到货日未证；重复只会高估"
+       },
+       {
+        "source": "production.open_wo",
+        "qty": 152,
+        "reason": "PK# 计 KS 的 1:1 未证；完工日未证"
+       },
+       {
+        "source": "inventory.intransit",
+        "qty": 0,
+        "reason": "与 PO 数值相同（10/10），可能重复；重复只会高估"
+       }
+      ],
+      "blockers": [
+       "G2_uom"
+      ],
+      "missing_evidence": [
+       "库存/单据单位口径（UOM）"
+      ]
+     },
+     "upper": {
+      "value": 153,
+      "status": "unproven",
+      "basis": "记录之和（每条未结记录只计一次）：重复只会高估，故方向上可作上界；但它只有在 UOM 换算已知、且不存在未上账替代供给时才是可用的上界",
+      "components": [
+       {
+        "source": "inventory.available",
+        "qty": 1,
+        "documents": [],
+        "deduped": true,
+        "in_window": true,
+        "uom_converted": false,
+        "note": "在手库存：天然在窗口内、无单据重复问题"
+       },
+       {
+        "source": "po.open_lines",
+        "qty": 0,
+        "documents": [],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "未去重、到货日未证；重复只会高估"
+       },
+       {
+        "source": "production.open_wo",
+        "qty": 152,
+        "documents": [
+         "WO-26-00684",
+         "WO-26-03366"
+        ],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "PK# 计 KS 的 1:1 未证；完工日未证"
+       },
+       {
+        "source": "inventory.intransit",
+        "qty": 0,
+        "documents": [],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "与 PO 数值相同（10/10），可能重复；重复只会高估"
+       }
+      ],
+      "blockers": [
+       "G2_uom",
+       "G4_supply_overlap",
+       "G7_unbooked_supply"
+      ],
+      "missing_evidence": [
+       "库存/单据单位口径（UOM）",
+       "PO/在途/在产逐笔重叠键",
+       "Cover 等未上账可替代供给的缺席证明"
+      ]
+     }
+    },
+    "demand": {
+     "lower": {
+      "value": 51.1,
+      "status": "unproven",
+      "basis": "P50 点预测（不含 live SO）；点估计不是已证下界",
+      "blockers": [
+       "G8_demand_bounds"
+      ],
+      "missing_evidence": [
+       "需求下分位或业务人工下限"
+      ]
+     },
+     "upper": {
+      "value": 347.1,
+      "status": "unproven",
+      "basis": "P50 + 正向 live SO；SO 若与预测重复只会高估，故在方向上可作上界，但 P50 若低估则不再是上界",
+      "blockers": [
+       "G8_demand_bounds"
+      ],
+      "missing_evidence": [
+       "需求上分位或业务人工上限"
+      ]
+     }
+    },
+    "rule": "充足：已证供给下界 ≥ 需求上界；短缺：供给上界 < 需求下界；其余保持待核实"
+   },
+   "r4_counterexample": {
+    "active": false,
+    "record_sum": 153,
+    "dedup_stress_point": 153,
+    "demand_upper": 347.1,
+    "note": "该行不存在“记录之和够、去重后不够”的陷阱"
+   },
    "arithmetic_qualifies": null,
    "arithmetic_class": "insufficient_evidence",
    "promotion_blockers": [
@@ -155,7 +315,9 @@
     "G3_demand_overlap",
     "G4_supply_overlap",
     "G5_arrival_in_window",
-    "G6_pk_ks_1to1"
+    "G6_pk_ks_1to1",
+    "G7_unbooked_supply",
+    "G8_demand_bounds"
    ],
    "demand_overlap": "unproven",
    "demand_overlap_note": "live SO 与 P50 是否同一批需求未证；未做桶级消费/分配前，D2 不能当净需求",
@@ -206,7 +368,9 @@
     "t1_identity_confirmed": true,
     "t2_uom_verified": false,
     "t3_bmax_lt_d1": false,
-    "t4_a_low_lt_d2_le_bmax": false
+    "t4_a_low_lt_d2_le_bmax": false,
+    "screening_only": true,
+    "screening_note": "T3/T4 只用冻结值做筛查（B_max 是记录之和、A_low 是在手），不是结论；确定结论必须走 bounds 检验"
    },
    "gates": [
     {
@@ -235,11 +399,11 @@
     },
     {
      "id": "G4_supply_overlap",
-     "label": "PO / 在途 / 在产逐笔重叠键",
+     "label": "PO / 在途 / 在产逐笔重叠键（去重后才是数量）",
      "state": "unproven",
      "evidence": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
      "owner_role": "数据/系统",
-     "blocks_promotion": "把 B_min 当供给下界（不影响 B_max 上界的短缺判断）"
+     "blocks_promotion": "任何确定结论：去重前只能得到“记录之和”，既不是已证下界，也不保证是紧上界"
     },
     {
      "id": "G5_arrival_in_window",
@@ -247,7 +411,7 @@
      "state": "unproven",
      "evidence": "PO ETA 缺失 0 行；WO 完工日缺失 2 张",
      "owner_role": "采购/供应链；生产/PMC",
-     "blocks_promotion": "always_replenish（B_max 假设全部到货）"
+     "blocks_promotion": "供给下界（未证到货的批次不能计入下界）"
     },
     {
      "id": "G6_pk_ks_1to1",
@@ -255,7 +419,23 @@
      "state": "unproven",
      "evidence": "在产剩余 152 件按 1:1 计入",
      "owner_role": "生产/PMC",
-     "blocks_promotion": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
+     "blocks_promotion": "供给下界与上界（换算比例未证则数量不可用）"
+    },
+    {
+     "id": "G7_unbooked_supply",
+     "label": "不存在未上账的可替代供给（Cover 等）",
+     "state": "unproven",
+     "evidence": "cover.verdict=evidence_present；absence_proven=False；Cover 未并入供给，故实际供给可能高于记录之和",
+     "owner_role": "商品主数据/仓储",
+     "blocks_promotion": "供给上界（有未上账替代供给时，记录之和不再是上界）"
+    },
+    {
+     "id": "G8_demand_bounds",
+     "label": "需求下界与上界均已给出（分位或业务人工界）",
+     "state": "unproven",
+     "evidence": "P90-free 清单只有 P50 点预测：D1 是点估计不是下界，D2=P50+SO 也不是上界；缺少需求下/上分位或业务人工上下限",
+     "owner_role": "业务/运营",
+     "blocks_promotion": "任何确定结论（短缺要需求下界，充足要需求上界）"
     }
    ],
    "horizon_stability": [
@@ -323,11 +503,141 @@
     "calibration_insufficiency": "P90-free 清单不做区间校准，校准不足不在本清单判定内"
    },
    "start_condition": {
-    "rule": "同一条结论门槛：短缺与充足都必须过同一组 definitive gates；文字条件不能替代闸门",
-    "demand_view_for_promotion": "D2",
+    "rule": "R4 双向界规则：充足 = 已证供给下界 ≥ 需求上界；短缺 = 供给上界 < 需求下界；两侧数量都必须来自按证据去重并换算（UOM）后的窗口内数量；B_max 只是记录之和，永远不能单独证明充足",
+    "demand_bounds_used": {
+     "lower": "D1（P50，不含 SO）",
+     "upper": "D2（P50 + 正向 live SO）"
+    },
     "demand_overlap": "unproven",
+    "supply_bounds": {
+     "lower": {
+      "value": 1,
+      "status": "unproven",
+      "basis": "已证下界 = 在手可用量；只计入确定在窗口内、无重复、且单位已换算的数量",
+      "components": [
+       {
+        "source": "inventory.available",
+        "qty": 1,
+        "documents": [],
+        "deduped": true,
+        "in_window": true,
+        "uom_converted": false,
+        "note": "在手库存：天然在窗口内、无单据重复问题"
+       }
+      ],
+      "excluded": [
+       {
+        "source": "po.open_lines",
+        "qty": 0,
+        "reason": "未去重、到货日未证；重复只会高估"
+       },
+       {
+        "source": "production.open_wo",
+        "qty": 152,
+        "reason": "PK# 计 KS 的 1:1 未证；完工日未证"
+       },
+       {
+        "source": "inventory.intransit",
+        "qty": 0,
+        "reason": "与 PO 数值相同（10/10），可能重复；重复只会高估"
+       }
+      ],
+      "blockers": [
+       "G2_uom"
+      ],
+      "missing_evidence": [
+       "库存/单据单位口径（UOM）"
+      ]
+     },
+     "upper": {
+      "value": 153,
+      "status": "unproven",
+      "basis": "记录之和（每条未结记录只计一次）：重复只会高估，故方向上可作上界；但它只有在 UOM 换算已知、且不存在未上账替代供给时才是可用的上界",
+      "components": [
+       {
+        "source": "inventory.available",
+        "qty": 1,
+        "documents": [],
+        "deduped": true,
+        "in_window": true,
+        "uom_converted": false,
+        "note": "在手库存：天然在窗口内、无单据重复问题"
+       },
+       {
+        "source": "po.open_lines",
+        "qty": 0,
+        "documents": [],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "未去重、到货日未证；重复只会高估"
+       },
+       {
+        "source": "production.open_wo",
+        "qty": 152,
+        "documents": [
+         "WO-26-00684",
+         "WO-26-03366"
+        ],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "PK# 计 KS 的 1:1 未证；完工日未证"
+       },
+       {
+        "source": "inventory.intransit",
+        "qty": 0,
+        "documents": [],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "与 PO 数值相同（10/10），可能重复；重复只会高估"
+       }
+      ],
+      "blockers": [
+       "G2_uom",
+       "G4_supply_overlap",
+       "G7_unbooked_supply"
+      ],
+      "missing_evidence": [
+       "库存/单据单位口径（UOM）",
+       "PO/在途/在产逐笔重叠键",
+       "Cover 等未上账可替代供给的缺席证明"
+      ]
+     }
+    },
+    "demand_bounds": {
+     "lower": {
+      "value": 51.1,
+      "status": "unproven",
+      "basis": "P50 点预测（不含 live SO）；点估计不是已证下界",
+      "blockers": [
+       "G8_demand_bounds"
+      ],
+      "missing_evidence": [
+       "需求下分位或业务人工下限"
+      ]
+     },
+     "upper": {
+      "value": 347.1,
+      "status": "unproven",
+      "basis": "P50 + 正向 live SO；SO 若与预测重复只会高估，故在方向上可作上界，但 P50 若低估则不再是上界",
+      "blockers": [
+       "G8_demand_bounds"
+      ],
+      "missing_evidence": [
+       "需求上分位或业务人工上限"
+      ]
+     }
+    },
+    "bound_blockers": [
+     "G2_uom",
+     "G4_supply_overlap",
+     "G7_unbooked_supply",
+     "G8_demand_bounds"
+    ],
     "supply_lower_bound_shortfall": true,
-    "supply_lower_bound_shortfall_note": "B_min/B_min_po_dedup < D2 只说明存在短缺情景；该行仍不得升级到 always_replenish",
+    "supply_lower_bound_shortfall_note": "B_min/B_min_po_dedup < D2 只说明存在短缺情景；在 R4 规则下，短缺需要“供给上界 < 需求下界”，下界不足本身不构成任何结论",
     "binding_shortfall_conditions": [
      "最大重叠下 B_min 153.0 < D2 347.1",
      "只在手+在产 A_high 153.0 < D2 347.1（到货落在窗口外）",
@@ -360,11 +670,11 @@
      },
      {
       "id": "G4_supply_overlap",
-      "label": "PO / 在途 / 在产逐笔重叠键",
+      "label": "PO / 在途 / 在产逐笔重叠键（去重后才是数量）",
       "state": "unproven",
       "owner_role": "数据/系统",
       "evidence_needed": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
-      "blocks": "把 B_min 当供给下界（不影响 B_max 上界的短缺判断）"
+      "blocks": "任何确定结论：去重前只能得到“记录之和”，既不是已证下界，也不保证是紧上界"
      },
      {
       "id": "G5_arrival_in_window",
@@ -372,7 +682,7 @@
       "state": "unproven",
       "owner_role": "采购/供应链；生产/PMC",
       "evidence_needed": "PO ETA 缺失 0 行；WO 完工日缺失 2 张",
-      "blocks": "always_replenish（B_max 假设全部到货）"
+      "blocks": "供给下界（未证到货的批次不能计入下界）"
      },
      {
       "id": "G6_pk_ks_1to1",
@@ -380,7 +690,23 @@
       "state": "unproven",
       "owner_role": "生产/PMC",
       "evidence_needed": "在产剩余 152 件按 1:1 计入",
-      "blocks": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
+      "blocks": "供给下界与上界（换算比例未证则数量不可用）"
+     },
+     {
+      "id": "G7_unbooked_supply",
+      "label": "不存在未上账的可替代供给（Cover 等）",
+      "state": "unproven",
+      "owner_role": "商品主数据/仓储",
+      "evidence_needed": "cover.verdict=evidence_present；absence_proven=False；Cover 未并入供给，故实际供给可能高于记录之和",
+      "blocks": "供给上界（有未上账替代供给时，记录之和不再是上界）"
+     },
+     {
+      "id": "G8_demand_bounds",
+      "label": "需求下界与上界均已给出（分位或业务人工界）",
+      "state": "unproven",
+      "owner_role": "业务/运营",
+      "evidence_needed": "P90-free 清单只有 P50 点预测：D1 是点估计不是下界，D2=P50+SO 也不是上界；缺少需求下/上分位或业务人工上下限",
+      "blocks": "任何确定结论（短缺要需求下界，充足要需求上界）"
      }
     ],
     "gates_required_for_definitive_conclusion": [
@@ -389,7 +715,9 @@
      "G3_demand_overlap",
      "G4_supply_overlap",
      "G5_arrival_in_window",
-     "G6_pk_ks_1to1"
+     "G6_pk_ks_1to1",
+     "G7_unbooked_supply",
+     "G8_demand_bounds"
     ],
     "gates_required_for_shortage": [
      "G1_identity",
@@ -397,7 +725,9 @@
      "G3_demand_overlap",
      "G4_supply_overlap",
      "G5_arrival_in_window",
-     "G6_pk_ks_1to1"
+     "G6_pk_ks_1to1",
+     "G7_unbooked_supply",
+     "G8_demand_bounds"
     ],
     "gates_required_for_sufficiency": [
      "G1_identity",
@@ -405,7 +735,9 @@
      "G3_demand_overlap",
      "G4_supply_overlap",
      "G5_arrival_in_window",
-     "G6_pk_ks_1to1"
+     "G6_pk_ks_1to1",
+     "G7_unbooked_supply",
+     "G8_demand_bounds"
     ],
     "gate_summary": {
      "G1_identity": "ok",
@@ -413,38 +745,47 @@
      "G3_demand_overlap": "unproven",
      "G4_supply_overlap": "unproven",
      "G5_arrival_in_window": "unproven",
-     "G6_pk_ks_1to1": "unproven"
+     "G6_pk_ks_1to1": "unproven",
+     "G7_unbooked_supply": "unproven",
+     "G8_demand_bounds": "unproven"
     },
     "outcomes": [
      {
-      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ B_max 153.0 < D1 51.1",
+      "when": "8 门全 ok ∧ 供给上界（当前记录之和 153.0，未证 UOM/去重则不可用） < 需求下界（当前 P50 51.1，未证分位则不可用）",
       "then_class": "always_replenish",
-      "arithmetic": "结构短缺：最宽松供给上界也低于不含 SO 的 P50"
+      "uses": [
+       "supply.upper",
+       "demand.lower"
+      ],
+      "arithmetic": "短缺：连供给上界都低于需求下界"
      },
      {
-      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ B_max 153.0 ≥ D2 347.1",
+      "when": "8 门全 ok ∧ 供给下界（当前在手 1.0） ≥ 需求上界（当前 P50+SO 347.1）",
       "then_class": "no_shortage_within_window",
-      "arithmetic": "充足：最宽松供给上界覆盖含 SO 的大口径需求（D2 为上界，故不必先删 SO）"
+      "uses": [
+       "supply.lower",
+       "demand.upper"
+      ],
+      "arithmetic": "充足只能由“已证供给下界 ≥ 需求上界”支持；冻结的 B_max 153.0 不是已证下界，不能用来证明充足"
      },
      {
-      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ D1 51.1 ≤ B_max 153.0 < D2 347.1",
+      "when": "任一闸门 unproven/fail，或任一侧界 unproven",
       "then_class": "insufficient_evidence",
-      "arithmetic": "差在 SO：必须做桶级消费/分配后重算净需求，再比较；不得把 SO 当重复直接删掉回退 D1"
-     },
-     {
-      "when": "任一闸门 unproven/fail",
-      "then_class": "insufficient_evidence",
-      "arithmetic": "维持待核实；未证状态不产出任何短缺/充足结论"
+      "uses": [],
+      "arithmetic": "维持待核实；当前缺：G2_uom、G4_supply_overlap、G7_unbooked_supply、G8_demand_bounds"
      }
     ],
     "forbidden": [
+     "B_max >= D2 never proves sufficiency: B_max is the record sum, and G4 only means line-level overlap was checked, not that records are disjoint",
+     "sufficiency requires a proven supply LOWER bound covering a demand UPPER bound",
+     "shortage requires a supply UPPER bound below a demand LOWER bound",
      "SO overlapping the forecast never means SO can be deleted: bucket-level consumption first",
-     "arrival/ completion dates alone never establish sufficiency (need G2 units, G4 overlap, G6 PK#->KS too)",
-     "supply lower bound below demand (B_min / B_min_po_dedup < D2) never promotes to always_replenish",
+     "arrival/ completion dates alone never establish sufficiency",
+     "supply lower bound below demand never promotes to always_replenish",
      "live SO in the demand view never becomes net demand before bucket-level consumption",
      "Cover or any unbooked supply never counts until mapping and substitutability are proven"
     ],
-    "summary": "补齐 G2_uom、G3_demand_overlap、G4_supply_overlap、G5_arrival_in_window、G6_pk_ks_1to1 后按 outcomes 重算；在此之前不发起采购/生产指令，也不宣布“不缺”。"
+    "summary": "补齐 G2_uom、G3_demand_overlap、G4_supply_overlap、G5_arrival_in_window、G6_pk_ks_1to1、G7_unbooked_supply、G8_demand_bounds 后按 outcomes 重算；在此之前不发起采购/生产指令，也不宣布“不缺”。"
    },
    "missing_evidence": [
     {
@@ -480,6 +821,139 @@
    "customer_code": "CEN003-DPBLUE-100",
    "item_name": "三角靠枕-全涤宽条绒-100-深蓝色",
    "class": "insufficient_evidence",
+   "screening_class": "insufficient_evidence",
+   "definitive_conclusion": null,
+   "definitive_blocked_by": "gates",
+   "bounds": {
+    "supply": {
+     "lower": {
+      "value": 1,
+      "status": "unproven",
+      "basis": "已证下界 = 在手可用量；只计入确定在窗口内、无重复、且单位已换算的数量",
+      "components": [
+       {
+        "source": "inventory.available",
+        "qty": 1,
+        "documents": [],
+        "deduped": true,
+        "in_window": true,
+        "uom_converted": false,
+        "note": "在手库存：天然在窗口内、无单据重复问题"
+       }
+      ],
+      "excluded": [
+       {
+        "source": "po.open_lines",
+        "qty": 0,
+        "reason": "未去重、到货日未证；重复只会高估"
+       },
+       {
+        "source": "production.open_wo",
+        "qty": 260,
+        "reason": "PK# 计 KS 的 1:1 未证；完工日未证"
+       },
+       {
+        "source": "inventory.intransit",
+        "qty": 0,
+        "reason": "与 PO 数值相同（10/10），可能重复；重复只会高估"
+       }
+      ],
+      "blockers": [
+       "G2_uom"
+      ],
+      "missing_evidence": [
+       "库存/单据单位口径（UOM）"
+      ]
+     },
+     "upper": {
+      "value": 261,
+      "status": "unproven",
+      "basis": "记录之和（每条未结记录只计一次）：重复只会高估，故方向上可作上界；但它只有在 UOM 换算已知、且不存在未上账替代供给时才是可用的上界",
+      "components": [
+       {
+        "source": "inventory.available",
+        "qty": 1,
+        "documents": [],
+        "deduped": true,
+        "in_window": true,
+        "uom_converted": false,
+        "note": "在手库存：天然在窗口内、无单据重复问题"
+       },
+       {
+        "source": "po.open_lines",
+        "qty": 0,
+        "documents": [],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "未去重、到货日未证；重复只会高估"
+       },
+       {
+        "source": "production.open_wo",
+        "qty": 260,
+        "documents": [
+         "WO-26-03283"
+        ],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "PK# 计 KS 的 1:1 未证；完工日未证"
+       },
+       {
+        "source": "inventory.intransit",
+        "qty": 0,
+        "documents": [],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "与 PO 数值相同（10/10），可能重复；重复只会高估"
+       }
+      ],
+      "blockers": [
+       "G2_uom",
+       "G4_supply_overlap",
+       "G7_unbooked_supply"
+      ],
+      "missing_evidence": [
+       "库存/单据单位口径（UOM）",
+       "PO/在途/在产逐笔重叠键",
+       "Cover 等未上账可替代供给的缺席证明"
+      ]
+     }
+    },
+    "demand": {
+     "lower": {
+      "value": 39.1,
+      "status": "unproven",
+      "basis": "P50 点预测（不含 live SO）；点估计不是已证下界",
+      "blockers": [
+       "G8_demand_bounds"
+      ],
+      "missing_evidence": [
+       "需求下分位或业务人工下限"
+      ]
+     },
+     "upper": {
+      "value": 501.1,
+      "status": "unproven",
+      "basis": "P50 + 正向 live SO；SO 若与预测重复只会高估，故在方向上可作上界，但 P50 若低估则不再是上界",
+      "blockers": [
+       "G8_demand_bounds"
+      ],
+      "missing_evidence": [
+       "需求上分位或业务人工上限"
+      ]
+     }
+    },
+    "rule": "充足：已证供给下界 ≥ 需求上界；短缺：供给上界 < 需求下界；其余保持待核实"
+   },
+   "r4_counterexample": {
+    "active": false,
+    "record_sum": 261,
+    "dedup_stress_point": 261,
+    "demand_upper": 501.1,
+    "note": "该行不存在“记录之和够、去重后不够”的陷阱"
+   },
    "arithmetic_qualifies": null,
    "arithmetic_class": "insufficient_evidence",
    "promotion_blockers": [
@@ -487,7 +961,9 @@
     "G3_demand_overlap",
     "G4_supply_overlap",
     "G5_arrival_in_window",
-    "G6_pk_ks_1to1"
+    "G6_pk_ks_1to1",
+    "G7_unbooked_supply",
+    "G8_demand_bounds"
    ],
    "demand_overlap": "unproven",
    "demand_overlap_note": "live SO 与 P50 是否同一批需求未证；未做桶级消费/分配前，D2 不能当净需求",
@@ -538,7 +1014,9 @@
     "t1_identity_confirmed": true,
     "t2_uom_verified": false,
     "t3_bmax_lt_d1": false,
-    "t4_a_low_lt_d2_le_bmax": false
+    "t4_a_low_lt_d2_le_bmax": false,
+    "screening_only": true,
+    "screening_note": "T3/T4 只用冻结值做筛查（B_max 是记录之和、A_low 是在手），不是结论；确定结论必须走 bounds 检验"
    },
    "gates": [
     {
@@ -567,11 +1045,11 @@
     },
     {
      "id": "G4_supply_overlap",
-     "label": "PO / 在途 / 在产逐笔重叠键",
+     "label": "PO / 在途 / 在产逐笔重叠键（去重后才是数量）",
      "state": "unproven",
      "evidence": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
      "owner_role": "数据/系统",
-     "blocks_promotion": "把 B_min 当供给下界（不影响 B_max 上界的短缺判断）"
+     "blocks_promotion": "任何确定结论：去重前只能得到“记录之和”，既不是已证下界，也不保证是紧上界"
     },
     {
      "id": "G5_arrival_in_window",
@@ -579,7 +1057,7 @@
      "state": "unproven",
      "evidence": "PO ETA 缺失 0 行；WO 完工日缺失 1 张",
      "owner_role": "采购/供应链；生产/PMC",
-     "blocks_promotion": "always_replenish（B_max 假设全部到货）"
+     "blocks_promotion": "供给下界（未证到货的批次不能计入下界）"
     },
     {
      "id": "G6_pk_ks_1to1",
@@ -587,7 +1065,23 @@
      "state": "unproven",
      "evidence": "在产剩余 260 件按 1:1 计入",
      "owner_role": "生产/PMC",
-     "blocks_promotion": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
+     "blocks_promotion": "供给下界与上界（换算比例未证则数量不可用）"
+    },
+    {
+     "id": "G7_unbooked_supply",
+     "label": "不存在未上账的可替代供给（Cover 等）",
+     "state": "unproven",
+     "evidence": "cover.verdict=evidence_present；absence_proven=False；Cover 未并入供给，故实际供给可能高于记录之和",
+     "owner_role": "商品主数据/仓储",
+     "blocks_promotion": "供给上界（有未上账替代供给时，记录之和不再是上界）"
+    },
+    {
+     "id": "G8_demand_bounds",
+     "label": "需求下界与上界均已给出（分位或业务人工界）",
+     "state": "unproven",
+     "evidence": "P90-free 清单只有 P50 点预测：D1 是点估计不是下界，D2=P50+SO 也不是上界；缺少需求下/上分位或业务人工上下限",
+     "owner_role": "业务/运营",
+     "blocks_promotion": "任何确定结论（短缺要需求下界，充足要需求上界）"
     }
    ],
    "horizon_stability": [
@@ -655,11 +1149,140 @@
     "calibration_insufficiency": "P90-free 清单不做区间校准，校准不足不在本清单判定内"
    },
    "start_condition": {
-    "rule": "同一条结论门槛：短缺与充足都必须过同一组 definitive gates；文字条件不能替代闸门",
-    "demand_view_for_promotion": "D2",
+    "rule": "R4 双向界规则：充足 = 已证供给下界 ≥ 需求上界；短缺 = 供给上界 < 需求下界；两侧数量都必须来自按证据去重并换算（UOM）后的窗口内数量；B_max 只是记录之和，永远不能单独证明充足",
+    "demand_bounds_used": {
+     "lower": "D1（P50，不含 SO）",
+     "upper": "D2（P50 + 正向 live SO）"
+    },
     "demand_overlap": "unproven",
+    "supply_bounds": {
+     "lower": {
+      "value": 1,
+      "status": "unproven",
+      "basis": "已证下界 = 在手可用量；只计入确定在窗口内、无重复、且单位已换算的数量",
+      "components": [
+       {
+        "source": "inventory.available",
+        "qty": 1,
+        "documents": [],
+        "deduped": true,
+        "in_window": true,
+        "uom_converted": false,
+        "note": "在手库存：天然在窗口内、无单据重复问题"
+       }
+      ],
+      "excluded": [
+       {
+        "source": "po.open_lines",
+        "qty": 0,
+        "reason": "未去重、到货日未证；重复只会高估"
+       },
+       {
+        "source": "production.open_wo",
+        "qty": 260,
+        "reason": "PK# 计 KS 的 1:1 未证；完工日未证"
+       },
+       {
+        "source": "inventory.intransit",
+        "qty": 0,
+        "reason": "与 PO 数值相同（10/10），可能重复；重复只会高估"
+       }
+      ],
+      "blockers": [
+       "G2_uom"
+      ],
+      "missing_evidence": [
+       "库存/单据单位口径（UOM）"
+      ]
+     },
+     "upper": {
+      "value": 261,
+      "status": "unproven",
+      "basis": "记录之和（每条未结记录只计一次）：重复只会高估，故方向上可作上界；但它只有在 UOM 换算已知、且不存在未上账替代供给时才是可用的上界",
+      "components": [
+       {
+        "source": "inventory.available",
+        "qty": 1,
+        "documents": [],
+        "deduped": true,
+        "in_window": true,
+        "uom_converted": false,
+        "note": "在手库存：天然在窗口内、无单据重复问题"
+       },
+       {
+        "source": "po.open_lines",
+        "qty": 0,
+        "documents": [],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "未去重、到货日未证；重复只会高估"
+       },
+       {
+        "source": "production.open_wo",
+        "qty": 260,
+        "documents": [
+         "WO-26-03283"
+        ],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "PK# 计 KS 的 1:1 未证；完工日未证"
+       },
+       {
+        "source": "inventory.intransit",
+        "qty": 0,
+        "documents": [],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "与 PO 数值相同（10/10），可能重复；重复只会高估"
+       }
+      ],
+      "blockers": [
+       "G2_uom",
+       "G4_supply_overlap",
+       "G7_unbooked_supply"
+      ],
+      "missing_evidence": [
+       "库存/单据单位口径（UOM）",
+       "PO/在途/在产逐笔重叠键",
+       "Cover 等未上账可替代供给的缺席证明"
+      ]
+     }
+    },
+    "demand_bounds": {
+     "lower": {
+      "value": 39.1,
+      "status": "unproven",
+      "basis": "P50 点预测（不含 live SO）；点估计不是已证下界",
+      "blockers": [
+       "G8_demand_bounds"
+      ],
+      "missing_evidence": [
+       "需求下分位或业务人工下限"
+      ]
+     },
+     "upper": {
+      "value": 501.1,
+      "status": "unproven",
+      "basis": "P50 + 正向 live SO；SO 若与预测重复只会高估，故在方向上可作上界，但 P50 若低估则不再是上界",
+      "blockers": [
+       "G8_demand_bounds"
+      ],
+      "missing_evidence": [
+       "需求上分位或业务人工上限"
+      ]
+     }
+    },
+    "bound_blockers": [
+     "G2_uom",
+     "G4_supply_overlap",
+     "G7_unbooked_supply",
+     "G8_demand_bounds"
+    ],
     "supply_lower_bound_shortfall": true,
-    "supply_lower_bound_shortfall_note": "B_min/B_min_po_dedup < D2 只说明存在短缺情景；该行仍不得升级到 always_replenish",
+    "supply_lower_bound_shortfall_note": "B_min/B_min_po_dedup < D2 只说明存在短缺情景；在 R4 规则下，短缺需要“供给上界 < 需求下界”，下界不足本身不构成任何结论",
     "binding_shortfall_conditions": [
      "最大重叠下 B_min 261.0 < D2 501.1",
      "只在手+在产 A_high 261.0 < D2 501.1（到货落在窗口外）",
@@ -692,11 +1315,11 @@
      },
      {
       "id": "G4_supply_overlap",
-      "label": "PO / 在途 / 在产逐笔重叠键",
+      "label": "PO / 在途 / 在产逐笔重叠键（去重后才是数量）",
       "state": "unproven",
       "owner_role": "数据/系统",
       "evidence_needed": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
-      "blocks": "把 B_min 当供给下界（不影响 B_max 上界的短缺判断）"
+      "blocks": "任何确定结论：去重前只能得到“记录之和”，既不是已证下界，也不保证是紧上界"
      },
      {
       "id": "G5_arrival_in_window",
@@ -704,7 +1327,7 @@
       "state": "unproven",
       "owner_role": "采购/供应链；生产/PMC",
       "evidence_needed": "PO ETA 缺失 0 行；WO 完工日缺失 1 张",
-      "blocks": "always_replenish（B_max 假设全部到货）"
+      "blocks": "供给下界（未证到货的批次不能计入下界）"
      },
      {
       "id": "G6_pk_ks_1to1",
@@ -712,7 +1335,23 @@
       "state": "unproven",
       "owner_role": "生产/PMC",
       "evidence_needed": "在产剩余 260 件按 1:1 计入",
-      "blocks": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
+      "blocks": "供给下界与上界（换算比例未证则数量不可用）"
+     },
+     {
+      "id": "G7_unbooked_supply",
+      "label": "不存在未上账的可替代供给（Cover 等）",
+      "state": "unproven",
+      "owner_role": "商品主数据/仓储",
+      "evidence_needed": "cover.verdict=evidence_present；absence_proven=False；Cover 未并入供给，故实际供给可能高于记录之和",
+      "blocks": "供给上界（有未上账替代供给时，记录之和不再是上界）"
+     },
+     {
+      "id": "G8_demand_bounds",
+      "label": "需求下界与上界均已给出（分位或业务人工界）",
+      "state": "unproven",
+      "owner_role": "业务/运营",
+      "evidence_needed": "P90-free 清单只有 P50 点预测：D1 是点估计不是下界，D2=P50+SO 也不是上界；缺少需求下/上分位或业务人工上下限",
+      "blocks": "任何确定结论（短缺要需求下界，充足要需求上界）"
      }
     ],
     "gates_required_for_definitive_conclusion": [
@@ -721,7 +1360,9 @@
      "G3_demand_overlap",
      "G4_supply_overlap",
      "G5_arrival_in_window",
-     "G6_pk_ks_1to1"
+     "G6_pk_ks_1to1",
+     "G7_unbooked_supply",
+     "G8_demand_bounds"
     ],
     "gates_required_for_shortage": [
      "G1_identity",
@@ -729,7 +1370,9 @@
      "G3_demand_overlap",
      "G4_supply_overlap",
      "G5_arrival_in_window",
-     "G6_pk_ks_1to1"
+     "G6_pk_ks_1to1",
+     "G7_unbooked_supply",
+     "G8_demand_bounds"
     ],
     "gates_required_for_sufficiency": [
      "G1_identity",
@@ -737,7 +1380,9 @@
      "G3_demand_overlap",
      "G4_supply_overlap",
      "G5_arrival_in_window",
-     "G6_pk_ks_1to1"
+     "G6_pk_ks_1to1",
+     "G7_unbooked_supply",
+     "G8_demand_bounds"
     ],
     "gate_summary": {
      "G1_identity": "ok",
@@ -745,38 +1390,47 @@
      "G3_demand_overlap": "unproven",
      "G4_supply_overlap": "unproven",
      "G5_arrival_in_window": "unproven",
-     "G6_pk_ks_1to1": "unproven"
+     "G6_pk_ks_1to1": "unproven",
+     "G7_unbooked_supply": "unproven",
+     "G8_demand_bounds": "unproven"
     },
     "outcomes": [
      {
-      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ B_max 261.0 < D1 39.1",
+      "when": "8 门全 ok ∧ 供给上界（当前记录之和 261.0，未证 UOM/去重则不可用） < 需求下界（当前 P50 39.1，未证分位则不可用）",
       "then_class": "always_replenish",
-      "arithmetic": "结构短缺：最宽松供给上界也低于不含 SO 的 P50"
+      "uses": [
+       "supply.upper",
+       "demand.lower"
+      ],
+      "arithmetic": "短缺：连供给上界都低于需求下界"
      },
      {
-      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ B_max 261.0 ≥ D2 501.1",
+      "when": "8 门全 ok ∧ 供给下界（当前在手 1.0） ≥ 需求上界（当前 P50+SO 501.1）",
       "then_class": "no_shortage_within_window",
-      "arithmetic": "充足：最宽松供给上界覆盖含 SO 的大口径需求（D2 为上界，故不必先删 SO）"
+      "uses": [
+       "supply.lower",
+       "demand.upper"
+      ],
+      "arithmetic": "充足只能由“已证供给下界 ≥ 需求上界”支持；冻结的 B_max 261.0 不是已证下界，不能用来证明充足"
      },
      {
-      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ D1 39.1 ≤ B_max 261.0 < D2 501.1",
+      "when": "任一闸门 unproven/fail，或任一侧界 unproven",
       "then_class": "insufficient_evidence",
-      "arithmetic": "差在 SO：必须做桶级消费/分配后重算净需求，再比较；不得把 SO 当重复直接删掉回退 D1"
-     },
-     {
-      "when": "任一闸门 unproven/fail",
-      "then_class": "insufficient_evidence",
-      "arithmetic": "维持待核实；未证状态不产出任何短缺/充足结论"
+      "uses": [],
+      "arithmetic": "维持待核实；当前缺：G2_uom、G4_supply_overlap、G7_unbooked_supply、G8_demand_bounds"
      }
     ],
     "forbidden": [
+     "B_max >= D2 never proves sufficiency: B_max is the record sum, and G4 only means line-level overlap was checked, not that records are disjoint",
+     "sufficiency requires a proven supply LOWER bound covering a demand UPPER bound",
+     "shortage requires a supply UPPER bound below a demand LOWER bound",
      "SO overlapping the forecast never means SO can be deleted: bucket-level consumption first",
-     "arrival/ completion dates alone never establish sufficiency (need G2 units, G4 overlap, G6 PK#->KS too)",
-     "supply lower bound below demand (B_min / B_min_po_dedup < D2) never promotes to always_replenish",
+     "arrival/ completion dates alone never establish sufficiency",
+     "supply lower bound below demand never promotes to always_replenish",
      "live SO in the demand view never becomes net demand before bucket-level consumption",
      "Cover or any unbooked supply never counts until mapping and substitutability are proven"
     ],
-    "summary": "补齐 G2_uom、G3_demand_overlap、G4_supply_overlap、G5_arrival_in_window、G6_pk_ks_1to1 后按 outcomes 重算；在此之前不发起采购/生产指令，也不宣布“不缺”。"
+    "summary": "补齐 G2_uom、G3_demand_overlap、G4_supply_overlap、G5_arrival_in_window、G6_pk_ks_1to1、G7_unbooked_supply、G8_demand_bounds 后按 outcomes 重算；在此之前不发起采购/生产指令，也不宣布“不缺”。"
    },
    "missing_evidence": [
     {
@@ -812,6 +1466,143 @@
    "customer_code": "C/Linen-Natural-100-688-wow",
    "item_name": "三角靠枕-新棉麻本色-100-麻本色",
    "class": "depends_on_arrival",
+   "screening_class": "depends_on_arrival",
+   "definitive_conclusion": null,
+   "definitive_blocked_by": "gates",
+   "bounds": {
+    "supply": {
+     "lower": {
+      "value": 54,
+      "status": "unproven",
+      "basis": "已证下界 = 在手可用量；只计入确定在窗口内、无重复、且单位已换算的数量",
+      "components": [
+       {
+        "source": "inventory.available",
+        "qty": 54,
+        "documents": [],
+        "deduped": true,
+        "in_window": true,
+        "uom_converted": false,
+        "note": "在手库存：天然在窗口内、无单据重复问题"
+       }
+      ],
+      "excluded": [
+       {
+        "source": "po.open_lines",
+        "qty": 121,
+        "reason": "未去重、到货日未证；重复只会高估"
+       },
+       {
+        "source": "production.open_wo",
+        "qty": 101,
+        "reason": "PK# 计 KS 的 1:1 未证；完工日未证"
+       },
+       {
+        "source": "inventory.intransit",
+        "qty": 121,
+        "reason": "与 PO 数值相同（10/10），可能重复；重复只会高估"
+       }
+      ],
+      "blockers": [
+       "G2_uom"
+      ],
+      "missing_evidence": [
+       "库存/单据单位口径（UOM）"
+      ]
+     },
+     "upper": {
+      "value": 397,
+      "status": "unproven",
+      "basis": "记录之和（每条未结记录只计一次）：重复只会高估，故方向上可作上界；但它只有在 UOM 换算已知、且不存在未上账替代供给时才是可用的上界",
+      "components": [
+       {
+        "source": "inventory.available",
+        "qty": 54,
+        "documents": [],
+        "deduped": true,
+        "in_window": true,
+        "uom_converted": false,
+        "note": "在手库存：天然在窗口内、无单据重复问题"
+       },
+       {
+        "source": "po.open_lines",
+        "qty": 121,
+        "documents": [
+         "PO021717"
+        ],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "未去重、到货日未证；重复只会高估"
+       },
+       {
+        "source": "production.open_wo",
+        "qty": 101,
+        "documents": [
+         "WO-26-00254",
+         "WO-26-01609",
+         "WO-26-03171"
+        ],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "PK# 计 KS 的 1:1 未证；完工日未证"
+       },
+       {
+        "source": "inventory.intransit",
+        "qty": 121,
+        "documents": [],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "与 PO 数值相同（10/10），可能重复；重复只会高估"
+       }
+      ],
+      "blockers": [
+       "G2_uom",
+       "G4_supply_overlap",
+       "G7_unbooked_supply"
+      ],
+      "missing_evidence": [
+       "库存/单据单位口径（UOM）",
+       "PO/在途/在产逐笔重叠键",
+       "Cover 等未上账可替代供给的缺席证明"
+      ]
+     }
+    },
+    "demand": {
+     "lower": {
+      "value": 43.7,
+      "status": "unproven",
+      "basis": "P50 点预测（不含 live SO）；点估计不是已证下界",
+      "blockers": [
+       "G8_demand_bounds"
+      ],
+      "missing_evidence": [
+       "需求下分位或业务人工下限"
+      ]
+     },
+     "upper": {
+      "value": 187.7,
+      "status": "unproven",
+      "basis": "P50 + 正向 live SO；SO 若与预测重复只会高估，故在方向上可作上界，但 P50 若低估则不再是上界",
+      "blockers": [
+       "G8_demand_bounds"
+      ],
+      "missing_evidence": [
+       "需求上分位或业务人工上限"
+      ]
+     }
+    },
+    "rule": "充足：已证供给下界 ≥ 需求上界；短缺：供给上界 < 需求下界；其余保持待核实"
+   },
+   "r4_counterexample": {
+    "active": true,
+    "record_sum": 397,
+    "dedup_stress_point": 175,
+    "demand_upper": 187.7,
+    "note": "若未结记录属同一批供应，唯一供给可低至 175.0；而记录之和 397.0 仍 ≥ 需求上界 187.7。旧规则会用记录之和判“不缺”；R4 要求已证供给下界覆盖需求上界，两者都未证，只能待核实"
+   },
    "arithmetic_qualifies": null,
    "arithmetic_class": "depends_on_arrival",
    "promotion_blockers": [
@@ -819,7 +1610,9 @@
     "G3_demand_overlap",
     "G4_supply_overlap",
     "G5_arrival_in_window",
-    "G6_pk_ks_1to1"
+    "G6_pk_ks_1to1",
+    "G7_unbooked_supply",
+    "G8_demand_bounds"
    ],
    "demand_overlap": "unproven",
    "demand_overlap_note": "live SO 与 P50 是否同一批需求未证；未做桶级消费/分配前，D2 不能当净需求",
@@ -870,7 +1663,9 @@
     "t1_identity_confirmed": true,
     "t2_uom_verified": false,
     "t3_bmax_lt_d1": false,
-    "t4_a_low_lt_d2_le_bmax": true
+    "t4_a_low_lt_d2_le_bmax": true,
+    "screening_only": true,
+    "screening_note": "T3/T4 只用冻结值做筛查（B_max 是记录之和、A_low 是在手），不是结论；确定结论必须走 bounds 检验"
    },
    "gates": [
     {
@@ -899,11 +1694,11 @@
     },
     {
      "id": "G4_supply_overlap",
-     "label": "PO / 在途 / 在产逐笔重叠键",
+     "label": "PO / 在途 / 在产逐笔重叠键（去重后才是数量）",
      "state": "unproven",
      "evidence": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
      "owner_role": "数据/系统",
-     "blocks_promotion": "把 B_min 当供给下界（不影响 B_max 上界的短缺判断）"
+     "blocks_promotion": "任何确定结论：去重前只能得到“记录之和”，既不是已证下界，也不保证是紧上界"
     },
     {
      "id": "G5_arrival_in_window",
@@ -911,7 +1706,7 @@
      "state": "unproven",
      "evidence": "PO ETA 缺失 1 行；WO 完工日缺失 3 张",
      "owner_role": "采购/供应链；生产/PMC",
-     "blocks_promotion": "always_replenish（B_max 假设全部到货）"
+     "blocks_promotion": "供给下界（未证到货的批次不能计入下界）"
     },
     {
      "id": "G6_pk_ks_1to1",
@@ -919,7 +1714,23 @@
      "state": "unproven",
      "evidence": "在产剩余 101 件按 1:1 计入",
      "owner_role": "生产/PMC",
-     "blocks_promotion": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
+     "blocks_promotion": "供给下界与上界（换算比例未证则数量不可用）"
+    },
+    {
+     "id": "G7_unbooked_supply",
+     "label": "不存在未上账的可替代供给（Cover 等）",
+     "state": "unproven",
+     "evidence": "cover.verdict=scenario；absence_proven=False；Cover 未并入供给，故实际供给可能高于记录之和",
+     "owner_role": "商品主数据/仓储",
+     "blocks_promotion": "供给上界（有未上账替代供给时，记录之和不再是上界）"
+    },
+    {
+     "id": "G8_demand_bounds",
+     "label": "需求下界与上界均已给出（分位或业务人工界）",
+     "state": "unproven",
+     "evidence": "P90-free 清单只有 P50 点预测：D1 是点估计不是下界，D2=P50+SO 也不是上界；缺少需求下/上分位或业务人工上下限",
+     "owner_role": "业务/运营",
+     "blocks_promotion": "任何确定结论（短缺要需求下界，充足要需求上界）"
     }
    ],
    "horizon_stability": [
@@ -981,11 +1792,144 @@
    "arithmetic_qualifies_at_windows": [],
    "insufficient_evidence_causes": null,
    "start_condition": {
-    "rule": "同一条结论门槛：短缺与充足都必须过同一组 definitive gates；文字条件不能替代闸门",
-    "demand_view_for_promotion": "D2",
+    "rule": "R4 双向界规则：充足 = 已证供给下界 ≥ 需求上界；短缺 = 供给上界 < 需求下界；两侧数量都必须来自按证据去重并换算（UOM）后的窗口内数量；B_max 只是记录之和，永远不能单独证明充足",
+    "demand_bounds_used": {
+     "lower": "D1（P50，不含 SO）",
+     "upper": "D2（P50 + 正向 live SO）"
+    },
     "demand_overlap": "unproven",
+    "supply_bounds": {
+     "lower": {
+      "value": 54,
+      "status": "unproven",
+      "basis": "已证下界 = 在手可用量；只计入确定在窗口内、无重复、且单位已换算的数量",
+      "components": [
+       {
+        "source": "inventory.available",
+        "qty": 54,
+        "documents": [],
+        "deduped": true,
+        "in_window": true,
+        "uom_converted": false,
+        "note": "在手库存：天然在窗口内、无单据重复问题"
+       }
+      ],
+      "excluded": [
+       {
+        "source": "po.open_lines",
+        "qty": 121,
+        "reason": "未去重、到货日未证；重复只会高估"
+       },
+       {
+        "source": "production.open_wo",
+        "qty": 101,
+        "reason": "PK# 计 KS 的 1:1 未证；完工日未证"
+       },
+       {
+        "source": "inventory.intransit",
+        "qty": 121,
+        "reason": "与 PO 数值相同（10/10），可能重复；重复只会高估"
+       }
+      ],
+      "blockers": [
+       "G2_uom"
+      ],
+      "missing_evidence": [
+       "库存/单据单位口径（UOM）"
+      ]
+     },
+     "upper": {
+      "value": 397,
+      "status": "unproven",
+      "basis": "记录之和（每条未结记录只计一次）：重复只会高估，故方向上可作上界；但它只有在 UOM 换算已知、且不存在未上账替代供给时才是可用的上界",
+      "components": [
+       {
+        "source": "inventory.available",
+        "qty": 54,
+        "documents": [],
+        "deduped": true,
+        "in_window": true,
+        "uom_converted": false,
+        "note": "在手库存：天然在窗口内、无单据重复问题"
+       },
+       {
+        "source": "po.open_lines",
+        "qty": 121,
+        "documents": [
+         "PO021717"
+        ],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "未去重、到货日未证；重复只会高估"
+       },
+       {
+        "source": "production.open_wo",
+        "qty": 101,
+        "documents": [
+         "WO-26-00254",
+         "WO-26-01609",
+         "WO-26-03171"
+        ],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "PK# 计 KS 的 1:1 未证；完工日未证"
+       },
+       {
+        "source": "inventory.intransit",
+        "qty": 121,
+        "documents": [],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "与 PO 数值相同（10/10），可能重复；重复只会高估"
+       }
+      ],
+      "blockers": [
+       "G2_uom",
+       "G4_supply_overlap",
+       "G7_unbooked_supply"
+      ],
+      "missing_evidence": [
+       "库存/单据单位口径（UOM）",
+       "PO/在途/在产逐笔重叠键",
+       "Cover 等未上账可替代供给的缺席证明"
+      ]
+     }
+    },
+    "demand_bounds": {
+     "lower": {
+      "value": 43.7,
+      "status": "unproven",
+      "basis": "P50 点预测（不含 live SO）；点估计不是已证下界",
+      "blockers": [
+       "G8_demand_bounds"
+      ],
+      "missing_evidence": [
+       "需求下分位或业务人工下限"
+      ]
+     },
+     "upper": {
+      "value": 187.7,
+      "status": "unproven",
+      "basis": "P50 + 正向 live SO；SO 若与预测重复只会高估，故在方向上可作上界，但 P50 若低估则不再是上界",
+      "blockers": [
+       "G8_demand_bounds"
+      ],
+      "missing_evidence": [
+       "需求上分位或业务人工上限"
+      ]
+     }
+    },
+    "bound_blockers": [
+     "G2_uom",
+     "G4_supply_overlap",
+     "G7_unbooked_supply",
+     "G8_demand_bounds"
+    ],
     "supply_lower_bound_shortfall": true,
-    "supply_lower_bound_shortfall_note": "B_min/B_min_po_dedup < D2 只说明存在短缺情景；该行仍不得升级到 always_replenish",
+    "supply_lower_bound_shortfall_note": "B_min/B_min_po_dedup < D2 只说明存在短缺情景；在 R4 规则下，短缺需要“供给上界 < 需求下界”，下界不足本身不构成任何结论",
     "binding_shortfall_conditions": [
      "最大重叠下 B_min 175.0 < D2 187.7",
      "只在手+在产 A_high 155.0 < D2 187.7（到货落在窗口外）",
@@ -1018,11 +1962,11 @@
      },
      {
       "id": "G4_supply_overlap",
-      "label": "PO / 在途 / 在产逐笔重叠键",
+      "label": "PO / 在途 / 在产逐笔重叠键（去重后才是数量）",
       "state": "unproven",
       "owner_role": "数据/系统",
       "evidence_needed": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
-      "blocks": "把 B_min 当供给下界（不影响 B_max 上界的短缺判断）"
+      "blocks": "任何确定结论：去重前只能得到“记录之和”，既不是已证下界，也不保证是紧上界"
      },
      {
       "id": "G5_arrival_in_window",
@@ -1030,7 +1974,7 @@
       "state": "unproven",
       "owner_role": "采购/供应链；生产/PMC",
       "evidence_needed": "PO ETA 缺失 1 行；WO 完工日缺失 3 张",
-      "blocks": "always_replenish（B_max 假设全部到货）"
+      "blocks": "供给下界（未证到货的批次不能计入下界）"
      },
      {
       "id": "G6_pk_ks_1to1",
@@ -1038,7 +1982,23 @@
       "state": "unproven",
       "owner_role": "生产/PMC",
       "evidence_needed": "在产剩余 101 件按 1:1 计入",
-      "blocks": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
+      "blocks": "供给下界与上界（换算比例未证则数量不可用）"
+     },
+     {
+      "id": "G7_unbooked_supply",
+      "label": "不存在未上账的可替代供给（Cover 等）",
+      "state": "unproven",
+      "owner_role": "商品主数据/仓储",
+      "evidence_needed": "cover.verdict=scenario；absence_proven=False；Cover 未并入供给，故实际供给可能高于记录之和",
+      "blocks": "供给上界（有未上账替代供给时，记录之和不再是上界）"
+     },
+     {
+      "id": "G8_demand_bounds",
+      "label": "需求下界与上界均已给出（分位或业务人工界）",
+      "state": "unproven",
+      "owner_role": "业务/运营",
+      "evidence_needed": "P90-free 清单只有 P50 点预测：D1 是点估计不是下界，D2=P50+SO 也不是上界；缺少需求下/上分位或业务人工上下限",
+      "blocks": "任何确定结论（短缺要需求下界，充足要需求上界）"
      }
     ],
     "gates_required_for_definitive_conclusion": [
@@ -1047,7 +2007,9 @@
      "G3_demand_overlap",
      "G4_supply_overlap",
      "G5_arrival_in_window",
-     "G6_pk_ks_1to1"
+     "G6_pk_ks_1to1",
+     "G7_unbooked_supply",
+     "G8_demand_bounds"
     ],
     "gates_required_for_shortage": [
      "G1_identity",
@@ -1055,7 +2017,9 @@
      "G3_demand_overlap",
      "G4_supply_overlap",
      "G5_arrival_in_window",
-     "G6_pk_ks_1to1"
+     "G6_pk_ks_1to1",
+     "G7_unbooked_supply",
+     "G8_demand_bounds"
     ],
     "gates_required_for_sufficiency": [
      "G1_identity",
@@ -1063,7 +2027,9 @@
      "G3_demand_overlap",
      "G4_supply_overlap",
      "G5_arrival_in_window",
-     "G6_pk_ks_1to1"
+     "G6_pk_ks_1to1",
+     "G7_unbooked_supply",
+     "G8_demand_bounds"
     ],
     "gate_summary": {
      "G1_identity": "ok",
@@ -1071,38 +2037,47 @@
      "G3_demand_overlap": "unproven",
      "G4_supply_overlap": "unproven",
      "G5_arrival_in_window": "unproven",
-     "G6_pk_ks_1to1": "unproven"
+     "G6_pk_ks_1to1": "unproven",
+     "G7_unbooked_supply": "unproven",
+     "G8_demand_bounds": "unproven"
     },
     "outcomes": [
      {
-      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ B_max 397.0 < D1 43.7",
+      "when": "8 门全 ok ∧ 供给上界（当前记录之和 397.0，未证 UOM/去重则不可用） < 需求下界（当前 P50 43.7，未证分位则不可用）",
       "then_class": "always_replenish",
-      "arithmetic": "结构短缺：最宽松供给上界也低于不含 SO 的 P50"
+      "uses": [
+       "supply.upper",
+       "demand.lower"
+      ],
+      "arithmetic": "短缺：连供给上界都低于需求下界"
      },
      {
-      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ B_max 397.0 ≥ D2 187.7",
+      "when": "8 门全 ok ∧ 供给下界（当前在手 54.0） ≥ 需求上界（当前 P50+SO 187.7）",
       "then_class": "no_shortage_within_window",
-      "arithmetic": "充足：最宽松供给上界覆盖含 SO 的大口径需求（D2 为上界，故不必先删 SO）"
+      "uses": [
+       "supply.lower",
+       "demand.upper"
+      ],
+      "arithmetic": "充足只能由“已证供给下界 ≥ 需求上界”支持；冻结的 B_max 397.0 不是已证下界，不能用来证明充足"
      },
      {
-      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ D1 43.7 ≤ B_max 397.0 < D2 187.7",
+      "when": "任一闸门 unproven/fail，或任一侧界 unproven",
       "then_class": "insufficient_evidence",
-      "arithmetic": "差在 SO：必须做桶级消费/分配后重算净需求，再比较；不得把 SO 当重复直接删掉回退 D1"
-     },
-     {
-      "when": "任一闸门 unproven/fail",
-      "then_class": "insufficient_evidence",
-      "arithmetic": "维持待核实；未证状态不产出任何短缺/充足结论"
+      "uses": [],
+      "arithmetic": "维持待核实；当前缺：G2_uom、G4_supply_overlap、G7_unbooked_supply、G8_demand_bounds"
      }
     ],
     "forbidden": [
+     "B_max >= D2 never proves sufficiency: B_max is the record sum, and G4 only means line-level overlap was checked, not that records are disjoint",
+     "sufficiency requires a proven supply LOWER bound covering a demand UPPER bound",
+     "shortage requires a supply UPPER bound below a demand LOWER bound",
      "SO overlapping the forecast never means SO can be deleted: bucket-level consumption first",
-     "arrival/ completion dates alone never establish sufficiency (need G2 units, G4 overlap, G6 PK#->KS too)",
-     "supply lower bound below demand (B_min / B_min_po_dedup < D2) never promotes to always_replenish",
+     "arrival/ completion dates alone never establish sufficiency",
+     "supply lower bound below demand never promotes to always_replenish",
      "live SO in the demand view never becomes net demand before bucket-level consumption",
      "Cover or any unbooked supply never counts until mapping and substitutability are proven"
     ],
-    "summary": "补齐 G2_uom、G3_demand_overlap、G4_supply_overlap、G5_arrival_in_window、G6_pk_ks_1to1 后按 outcomes 重算；在此之前不发起采购/生产指令，也不宣布“不缺”。"
+    "summary": "补齐 G2_uom、G3_demand_overlap、G4_supply_overlap、G5_arrival_in_window、G6_pk_ks_1to1、G7_unbooked_supply、G8_demand_bounds 后按 outcomes 重算；在此之前不发起采购/生产指令，也不宣布“不缺”。"
    },
    "missing_evidence": [
     {
@@ -1143,7 +2118,7 @@
    ],
    "responsible_role": "采购/供应链（PO ETA/重复）；生产/PMC（WO 完工日）；业务/运营（需求口径）；商品主数据/仓储（UOM）",
    "decisive_unknown": "到货/完工时点与重叠：在产 101、PO 121、在途 121",
-   "basis": "可供上限 B_max 397 vs D1 43.7、D2 187.7。在手 A_low 54；B_min 175（最大重叠，去重压力 175）。结论只在“全部到货且不重叠”与“重叠/迟到”两个情景之间翻转；两个方向都要过同一组 6 个 definitive gates，闸门未齐前只作待核实。需求口径比值 0.12（近 3 月均值 167）。所有含 SO 的判断均标 demand_overlap=unproven。"
+   "basis": "可供上限 B_max 397 vs D1 43.7、D2 187.7。在手 A_low 54；B_min 175（最大重叠，去重压力 175）。结论只在“全部到货且不重叠”与“重叠/迟到”两个情景之间翻转；两个方向都要过同一组 8 个 definitive gates，并且短缺看“供给上界 < 需求下界”、充足看“供给下界 ≥ 需求上界”，闸门与界未齐前只作待核实。需求口径比值 0.12（近 3 月均值 167）。所有含 SO 的判断均标 demand_overlap=unproven。"
   },
   {
    "seq": 4,
@@ -1153,6 +2128,142 @@
    "customer_code": "C/Cord-DKBlue-100-713-wow",
    "item_name": "三角靠枕-纯棉宽条绒-100-深蓝色",
    "class": "depends_on_arrival",
+   "screening_class": "depends_on_arrival",
+   "definitive_conclusion": null,
+   "definitive_blocked_by": "gates",
+   "bounds": {
+    "supply": {
+     "lower": {
+      "value": 6,
+      "status": "unproven",
+      "basis": "已证下界 = 在手可用量；只计入确定在窗口内、无重复、且单位已换算的数量",
+      "components": [
+       {
+        "source": "inventory.available",
+        "qty": 6,
+        "documents": [],
+        "deduped": true,
+        "in_window": true,
+        "uom_converted": false,
+        "note": "在手库存：天然在窗口内、无单据重复问题"
+       }
+      ],
+      "excluded": [
+       {
+        "source": "po.open_lines",
+        "qty": 240,
+        "reason": "未去重、到货日未证；重复只会高估"
+       },
+       {
+        "source": "production.open_wo",
+        "qty": 35,
+        "reason": "PK# 计 KS 的 1:1 未证；完工日未证"
+       },
+       {
+        "source": "inventory.intransit",
+        "qty": 120,
+        "reason": "与 PO 数值相同（10/10），可能重复；重复只会高估"
+       }
+      ],
+      "blockers": [
+       "G2_uom"
+      ],
+      "missing_evidence": [
+       "库存/单据单位口径（UOM）"
+      ]
+     },
+     "upper": {
+      "value": 401,
+      "status": "unproven",
+      "basis": "记录之和（每条未结记录只计一次）：重复只会高估，故方向上可作上界；但它只有在 UOM 换算已知、且不存在未上账替代供给时才是可用的上界",
+      "components": [
+       {
+        "source": "inventory.available",
+        "qty": 6,
+        "documents": [],
+        "deduped": true,
+        "in_window": true,
+        "uom_converted": false,
+        "note": "在手库存：天然在窗口内、无单据重复问题"
+       },
+       {
+        "source": "po.open_lines",
+        "qty": 240,
+        "documents": [
+         "PO021733",
+         "PO021735"
+        ],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "未去重、到货日未证；重复只会高估"
+       },
+       {
+        "source": "production.open_wo",
+        "qty": 35,
+        "documents": [
+         "WO-26-03150"
+        ],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "PK# 计 KS 的 1:1 未证；完工日未证"
+       },
+       {
+        "source": "inventory.intransit",
+        "qty": 120,
+        "documents": [],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "与 PO 数值相同（10/10），可能重复；重复只会高估"
+       }
+      ],
+      "blockers": [
+       "G2_uom",
+       "G4_supply_overlap",
+       "G7_unbooked_supply"
+      ],
+      "missing_evidence": [
+       "库存/单据单位口径（UOM）",
+       "PO/在途/在产逐笔重叠键",
+       "Cover 等未上账可替代供给的缺席证明"
+      ]
+     }
+    },
+    "demand": {
+     "lower": {
+      "value": 24.5,
+      "status": "unproven",
+      "basis": "P50 点预测（不含 live SO）；点估计不是已证下界",
+      "blockers": [
+       "G8_demand_bounds"
+      ],
+      "missing_evidence": [
+       "需求下分位或业务人工下限"
+      ]
+     },
+     "upper": {
+      "value": 104.5,
+      "status": "unproven",
+      "basis": "P50 + 正向 live SO；SO 若与预测重复只会高估，故在方向上可作上界，但 P50 若低估则不再是上界",
+      "blockers": [
+       "G8_demand_bounds"
+      ],
+      "missing_evidence": [
+       "需求上分位或业务人工上限"
+      ]
+     }
+    },
+    "rule": "充足：已证供给下界 ≥ 需求上界；短缺：供给上界 < 需求下界；其余保持待核实"
+   },
+   "r4_counterexample": {
+    "active": false,
+    "record_sum": 401,
+    "dedup_stress_point": 126,
+    "demand_upper": 104.5,
+    "note": "该行不存在“记录之和够、去重后不够”的陷阱"
+   },
    "arithmetic_qualifies": null,
    "arithmetic_class": "depends_on_arrival",
    "promotion_blockers": [
@@ -1160,7 +2271,9 @@
     "G3_demand_overlap",
     "G4_supply_overlap",
     "G5_arrival_in_window",
-    "G6_pk_ks_1to1"
+    "G6_pk_ks_1to1",
+    "G7_unbooked_supply",
+    "G8_demand_bounds"
    ],
    "demand_overlap": "unproven",
    "demand_overlap_note": "live SO 与 P50 是否同一批需求未证；未做桶级消费/分配前，D2 不能当净需求",
@@ -1211,7 +2324,9 @@
     "t1_identity_confirmed": true,
     "t2_uom_verified": false,
     "t3_bmax_lt_d1": false,
-    "t4_a_low_lt_d2_le_bmax": true
+    "t4_a_low_lt_d2_le_bmax": true,
+    "screening_only": true,
+    "screening_note": "T3/T4 只用冻结值做筛查（B_max 是记录之和、A_low 是在手），不是结论；确定结论必须走 bounds 检验"
    },
    "gates": [
     {
@@ -1240,11 +2355,11 @@
     },
     {
      "id": "G4_supply_overlap",
-     "label": "PO / 在途 / 在产逐笔重叠键",
+     "label": "PO / 在途 / 在产逐笔重叠键（去重后才是数量）",
      "state": "unproven",
      "evidence": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
      "owner_role": "数据/系统",
-     "blocks_promotion": "把 B_min 当供给下界（不影响 B_max 上界的短缺判断）"
+     "blocks_promotion": "任何确定结论：去重前只能得到“记录之和”，既不是已证下界，也不保证是紧上界"
     },
     {
      "id": "G5_arrival_in_window",
@@ -1252,7 +2367,7 @@
      "state": "unproven",
      "evidence": "PO ETA 缺失 2 行；WO 完工日缺失 1 张",
      "owner_role": "采购/供应链；生产/PMC",
-     "blocks_promotion": "always_replenish（B_max 假设全部到货）"
+     "blocks_promotion": "供给下界（未证到货的批次不能计入下界）"
     },
     {
      "id": "G6_pk_ks_1to1",
@@ -1260,7 +2375,23 @@
      "state": "unproven",
      "evidence": "在产剩余 35 件按 1:1 计入",
      "owner_role": "生产/PMC",
-     "blocks_promotion": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
+     "blocks_promotion": "供给下界与上界（换算比例未证则数量不可用）"
+    },
+    {
+     "id": "G7_unbooked_supply",
+     "label": "不存在未上账的可替代供给（Cover 等）",
+     "state": "unproven",
+     "evidence": "cover.verdict=evidence_present；absence_proven=False；Cover 未并入供给，故实际供给可能高于记录之和",
+     "owner_role": "商品主数据/仓储",
+     "blocks_promotion": "供给上界（有未上账替代供给时，记录之和不再是上界）"
+    },
+    {
+     "id": "G8_demand_bounds",
+     "label": "需求下界与上界均已给出（分位或业务人工界）",
+     "state": "unproven",
+     "evidence": "P90-free 清单只有 P50 点预测：D1 是点估计不是下界，D2=P50+SO 也不是上界；缺少需求下/上分位或业务人工上下限",
+     "owner_role": "业务/运营",
+     "blocks_promotion": "任何确定结论（短缺要需求下界，充足要需求上界）"
     }
    ],
    "horizon_stability": [
@@ -1322,11 +2453,143 @@
    "arithmetic_qualifies_at_windows": [],
    "insufficient_evidence_causes": null,
    "start_condition": {
-    "rule": "同一条结论门槛：短缺与充足都必须过同一组 definitive gates；文字条件不能替代闸门",
-    "demand_view_for_promotion": "D2",
+    "rule": "R4 双向界规则：充足 = 已证供给下界 ≥ 需求上界；短缺 = 供给上界 < 需求下界；两侧数量都必须来自按证据去重并换算（UOM）后的窗口内数量；B_max 只是记录之和，永远不能单独证明充足",
+    "demand_bounds_used": {
+     "lower": "D1（P50，不含 SO）",
+     "upper": "D2（P50 + 正向 live SO）"
+    },
     "demand_overlap": "unproven",
+    "supply_bounds": {
+     "lower": {
+      "value": 6,
+      "status": "unproven",
+      "basis": "已证下界 = 在手可用量；只计入确定在窗口内、无重复、且单位已换算的数量",
+      "components": [
+       {
+        "source": "inventory.available",
+        "qty": 6,
+        "documents": [],
+        "deduped": true,
+        "in_window": true,
+        "uom_converted": false,
+        "note": "在手库存：天然在窗口内、无单据重复问题"
+       }
+      ],
+      "excluded": [
+       {
+        "source": "po.open_lines",
+        "qty": 240,
+        "reason": "未去重、到货日未证；重复只会高估"
+       },
+       {
+        "source": "production.open_wo",
+        "qty": 35,
+        "reason": "PK# 计 KS 的 1:1 未证；完工日未证"
+       },
+       {
+        "source": "inventory.intransit",
+        "qty": 120,
+        "reason": "与 PO 数值相同（10/10），可能重复；重复只会高估"
+       }
+      ],
+      "blockers": [
+       "G2_uom"
+      ],
+      "missing_evidence": [
+       "库存/单据单位口径（UOM）"
+      ]
+     },
+     "upper": {
+      "value": 401,
+      "status": "unproven",
+      "basis": "记录之和（每条未结记录只计一次）：重复只会高估，故方向上可作上界；但它只有在 UOM 换算已知、且不存在未上账替代供给时才是可用的上界",
+      "components": [
+       {
+        "source": "inventory.available",
+        "qty": 6,
+        "documents": [],
+        "deduped": true,
+        "in_window": true,
+        "uom_converted": false,
+        "note": "在手库存：天然在窗口内、无单据重复问题"
+       },
+       {
+        "source": "po.open_lines",
+        "qty": 240,
+        "documents": [
+         "PO021733",
+         "PO021735"
+        ],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "未去重、到货日未证；重复只会高估"
+       },
+       {
+        "source": "production.open_wo",
+        "qty": 35,
+        "documents": [
+         "WO-26-03150"
+        ],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "PK# 计 KS 的 1:1 未证；完工日未证"
+       },
+       {
+        "source": "inventory.intransit",
+        "qty": 120,
+        "documents": [],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "与 PO 数值相同（10/10），可能重复；重复只会高估"
+       }
+      ],
+      "blockers": [
+       "G2_uom",
+       "G4_supply_overlap",
+       "G7_unbooked_supply"
+      ],
+      "missing_evidence": [
+       "库存/单据单位口径（UOM）",
+       "PO/在途/在产逐笔重叠键",
+       "Cover 等未上账可替代供给的缺席证明"
+      ]
+     }
+    },
+    "demand_bounds": {
+     "lower": {
+      "value": 24.5,
+      "status": "unproven",
+      "basis": "P50 点预测（不含 live SO）；点估计不是已证下界",
+      "blockers": [
+       "G8_demand_bounds"
+      ],
+      "missing_evidence": [
+       "需求下分位或业务人工下限"
+      ]
+     },
+     "upper": {
+      "value": 104.5,
+      "status": "unproven",
+      "basis": "P50 + 正向 live SO；SO 若与预测重复只会高估，故在方向上可作上界，但 P50 若低估则不再是上界",
+      "blockers": [
+       "G8_demand_bounds"
+      ],
+      "missing_evidence": [
+       "需求上分位或业务人工上限"
+      ]
+     }
+    },
+    "bound_blockers": [
+     "G2_uom",
+     "G4_supply_overlap",
+     "G7_unbooked_supply",
+     "G8_demand_bounds"
+    ],
     "supply_lower_bound_shortfall": false,
-    "supply_lower_bound_shortfall_note": "下界未低于 D2；短缺情景来自到货时点/在手不足，同样不得据此直接升级",
+    "supply_lower_bound_shortfall_note": "下界未低于 D2；短缺情景来自到货时点/在手不足，同样不构成结论",
     "binding_shortfall_conditions": [
      "只在手+在产 A_high 41.0 < D2 104.5（到货落在窗口外）",
      "只在手 A_low 6.0 < D2 104.5"
@@ -1358,11 +2621,11 @@
      },
      {
       "id": "G4_supply_overlap",
-      "label": "PO / 在途 / 在产逐笔重叠键",
+      "label": "PO / 在途 / 在产逐笔重叠键（去重后才是数量）",
       "state": "unproven",
       "owner_role": "数据/系统",
       "evidence_needed": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
-      "blocks": "把 B_min 当供给下界（不影响 B_max 上界的短缺判断）"
+      "blocks": "任何确定结论：去重前只能得到“记录之和”，既不是已证下界，也不保证是紧上界"
      },
      {
       "id": "G5_arrival_in_window",
@@ -1370,7 +2633,7 @@
       "state": "unproven",
       "owner_role": "采购/供应链；生产/PMC",
       "evidence_needed": "PO ETA 缺失 2 行；WO 完工日缺失 1 张",
-      "blocks": "always_replenish（B_max 假设全部到货）"
+      "blocks": "供给下界（未证到货的批次不能计入下界）"
      },
      {
       "id": "G6_pk_ks_1to1",
@@ -1378,7 +2641,23 @@
       "state": "unproven",
       "owner_role": "生产/PMC",
       "evidence_needed": "在产剩余 35 件按 1:1 计入",
-      "blocks": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
+      "blocks": "供给下界与上界（换算比例未证则数量不可用）"
+     },
+     {
+      "id": "G7_unbooked_supply",
+      "label": "不存在未上账的可替代供给（Cover 等）",
+      "state": "unproven",
+      "owner_role": "商品主数据/仓储",
+      "evidence_needed": "cover.verdict=evidence_present；absence_proven=False；Cover 未并入供给，故实际供给可能高于记录之和",
+      "blocks": "供给上界（有未上账替代供给时，记录之和不再是上界）"
+     },
+     {
+      "id": "G8_demand_bounds",
+      "label": "需求下界与上界均已给出（分位或业务人工界）",
+      "state": "unproven",
+      "owner_role": "业务/运营",
+      "evidence_needed": "P90-free 清单只有 P50 点预测：D1 是点估计不是下界，D2=P50+SO 也不是上界；缺少需求下/上分位或业务人工上下限",
+      "blocks": "任何确定结论（短缺要需求下界，充足要需求上界）"
      }
     ],
     "gates_required_for_definitive_conclusion": [
@@ -1387,7 +2666,9 @@
      "G3_demand_overlap",
      "G4_supply_overlap",
      "G5_arrival_in_window",
-     "G6_pk_ks_1to1"
+     "G6_pk_ks_1to1",
+     "G7_unbooked_supply",
+     "G8_demand_bounds"
     ],
     "gates_required_for_shortage": [
      "G1_identity",
@@ -1395,7 +2676,9 @@
      "G3_demand_overlap",
      "G4_supply_overlap",
      "G5_arrival_in_window",
-     "G6_pk_ks_1to1"
+     "G6_pk_ks_1to1",
+     "G7_unbooked_supply",
+     "G8_demand_bounds"
     ],
     "gates_required_for_sufficiency": [
      "G1_identity",
@@ -1403,7 +2686,9 @@
      "G3_demand_overlap",
      "G4_supply_overlap",
      "G5_arrival_in_window",
-     "G6_pk_ks_1to1"
+     "G6_pk_ks_1to1",
+     "G7_unbooked_supply",
+     "G8_demand_bounds"
     ],
     "gate_summary": {
      "G1_identity": "ok",
@@ -1411,38 +2696,47 @@
      "G3_demand_overlap": "unproven",
      "G4_supply_overlap": "unproven",
      "G5_arrival_in_window": "unproven",
-     "G6_pk_ks_1to1": "unproven"
+     "G6_pk_ks_1to1": "unproven",
+     "G7_unbooked_supply": "unproven",
+     "G8_demand_bounds": "unproven"
     },
     "outcomes": [
      {
-      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ B_max 401.0 < D1 24.5",
+      "when": "8 门全 ok ∧ 供给上界（当前记录之和 401.0，未证 UOM/去重则不可用） < 需求下界（当前 P50 24.5，未证分位则不可用）",
       "then_class": "always_replenish",
-      "arithmetic": "结构短缺：最宽松供给上界也低于不含 SO 的 P50"
+      "uses": [
+       "supply.upper",
+       "demand.lower"
+      ],
+      "arithmetic": "短缺：连供给上界都低于需求下界"
      },
      {
-      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ B_max 401.0 ≥ D2 104.5",
+      "when": "8 门全 ok ∧ 供给下界（当前在手 6.0） ≥ 需求上界（当前 P50+SO 104.5）",
       "then_class": "no_shortage_within_window",
-      "arithmetic": "充足：最宽松供给上界覆盖含 SO 的大口径需求（D2 为上界，故不必先删 SO）"
+      "uses": [
+       "supply.lower",
+       "demand.upper"
+      ],
+      "arithmetic": "充足只能由“已证供给下界 ≥ 需求上界”支持；冻结的 B_max 401.0 不是已证下界，不能用来证明充足"
      },
      {
-      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ D1 24.5 ≤ B_max 401.0 < D2 104.5",
+      "when": "任一闸门 unproven/fail，或任一侧界 unproven",
       "then_class": "insufficient_evidence",
-      "arithmetic": "差在 SO：必须做桶级消费/分配后重算净需求，再比较；不得把 SO 当重复直接删掉回退 D1"
-     },
-     {
-      "when": "任一闸门 unproven/fail",
-      "then_class": "insufficient_evidence",
-      "arithmetic": "维持待核实；未证状态不产出任何短缺/充足结论"
+      "uses": [],
+      "arithmetic": "维持待核实；当前缺：G2_uom、G4_supply_overlap、G7_unbooked_supply、G8_demand_bounds"
      }
     ],
     "forbidden": [
+     "B_max >= D2 never proves sufficiency: B_max is the record sum, and G4 only means line-level overlap was checked, not that records are disjoint",
+     "sufficiency requires a proven supply LOWER bound covering a demand UPPER bound",
+     "shortage requires a supply UPPER bound below a demand LOWER bound",
      "SO overlapping the forecast never means SO can be deleted: bucket-level consumption first",
-     "arrival/ completion dates alone never establish sufficiency (need G2 units, G4 overlap, G6 PK#->KS too)",
-     "supply lower bound below demand (B_min / B_min_po_dedup < D2) never promotes to always_replenish",
+     "arrival/ completion dates alone never establish sufficiency",
+     "supply lower bound below demand never promotes to always_replenish",
      "live SO in the demand view never becomes net demand before bucket-level consumption",
      "Cover or any unbooked supply never counts until mapping and substitutability are proven"
     ],
-    "summary": "补齐 G2_uom、G3_demand_overlap、G4_supply_overlap、G5_arrival_in_window、G6_pk_ks_1to1 后按 outcomes 重算；在此之前不发起采购/生产指令，也不宣布“不缺”。"
+    "summary": "补齐 G2_uom、G3_demand_overlap、G4_supply_overlap、G5_arrival_in_window、G6_pk_ks_1to1、G7_unbooked_supply、G8_demand_bounds 后按 outcomes 重算；在此之前不发起采购/生产指令，也不宣布“不缺”。"
    },
    "missing_evidence": [
     {
@@ -1488,7 +2782,7 @@
    ],
    "responsible_role": "采购/供应链（PO ETA/重复）；生产/PMC（WO 完工日）；业务/运营（需求口径）；商品主数据/仓储（UOM）",
    "decisive_unknown": "PO 是否重复（去重后 B_min 126 vs D2 104.5），以及到货能否在窗口内",
-   "basis": "可供上限 B_max 401 vs D1 24.5、D2 104.5。在手 A_low 6；B_min 246（最大重叠，去重压力 126）。结论只在“全部到货且不重叠”与“重叠/迟到”两个情景之间翻转；两个方向都要过同一组 6 个 definitive gates，闸门未齐前只作待核实。需求口径比值 0.075（近 3 月均值 150.7）。所有含 SO 的判断均标 demand_overlap=unproven。"
+   "basis": "可供上限 B_max 401 vs D1 24.5、D2 104.5。在手 A_low 6；B_min 246（最大重叠，去重压力 126）。结论只在“全部到货且不重叠”与“重叠/迟到”两个情景之间翻转；两个方向都要过同一组 8 个 definitive gates，并且短缺看“供给上界 < 需求下界”、充足看“供给下界 ≥ 需求上界”，闸门与界未齐前只作待核实。需求口径比值 0.075（近 3 月均值 150.7）。所有含 SO 的判断均标 demand_overlap=unproven。"
   },
   {
    "seq": 5,
@@ -1498,6 +2792,145 @@
    "customer_code": "C/Linen-Natural-153-688-wow",
    "item_name": "三角靠枕-新棉麻本色-153-麻本色",
    "class": "depends_on_arrival",
+   "screening_class": "depends_on_arrival",
+   "definitive_conclusion": null,
+   "definitive_blocked_by": "gates",
+   "bounds": {
+    "supply": {
+     "lower": {
+      "value": 376,
+      "status": "unproven",
+      "basis": "已证下界 = 在手可用量；只计入确定在窗口内、无重复、且单位已换算的数量",
+      "components": [
+       {
+        "source": "inventory.available",
+        "qty": 376,
+        "documents": [],
+        "deduped": true,
+        "in_window": true,
+        "uom_converted": false,
+        "note": "在手库存：天然在窗口内、无单据重复问题"
+       }
+      ],
+      "excluded": [
+       {
+        "source": "po.open_lines",
+        "qty": 223,
+        "reason": "未去重、到货日未证；重复只会高估"
+       },
+       {
+        "source": "production.open_wo",
+        "qty": 612,
+        "reason": "PK# 计 KS 的 1:1 未证；完工日未证"
+       },
+       {
+        "source": "inventory.intransit",
+        "qty": 215,
+        "reason": "与 PO 数值相同（10/10），可能重复；重复只会高估"
+       }
+      ],
+      "blockers": [
+       "G2_uom"
+      ],
+      "missing_evidence": [
+       "库存/单据单位口径（UOM）"
+      ]
+     },
+     "upper": {
+      "value": 1426,
+      "status": "unproven",
+      "basis": "记录之和（每条未结记录只计一次）：重复只会高估，故方向上可作上界；但它只有在 UOM 换算已知、且不存在未上账替代供给时才是可用的上界",
+      "components": [
+       {
+        "source": "inventory.available",
+        "qty": 376,
+        "documents": [],
+        "deduped": true,
+        "in_window": true,
+        "uom_converted": false,
+        "note": "在手库存：天然在窗口内、无单据重复问题"
+       },
+       {
+        "source": "po.open_lines",
+        "qty": 223,
+        "documents": [
+         "PO021717",
+         "PO021733",
+         "PO021735"
+        ],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "未去重、到货日未证；重复只会高估"
+       },
+       {
+        "source": "production.open_wo",
+        "qty": 612,
+        "documents": [
+         "WO-26-02775",
+         "WO-26-03175",
+         "WO-26-03341"
+        ],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "PK# 计 KS 的 1:1 未证；完工日未证"
+       },
+       {
+        "source": "inventory.intransit",
+        "qty": 215,
+        "documents": [],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "与 PO 数值相同（10/10），可能重复；重复只会高估"
+       }
+      ],
+      "blockers": [
+       "G2_uom",
+       "G4_supply_overlap",
+       "G7_unbooked_supply"
+      ],
+      "missing_evidence": [
+       "库存/单据单位口径（UOM）",
+       "PO/在途/在产逐笔重叠键",
+       "Cover 等未上账可替代供给的缺席证明"
+      ]
+     }
+    },
+    "demand": {
+     "lower": {
+      "value": 247.8,
+      "status": "unproven",
+      "basis": "P50 点预测（不含 live SO）；点估计不是已证下界",
+      "blockers": [
+       "G8_demand_bounds"
+      ],
+      "missing_evidence": [
+       "需求下分位或业务人工下限"
+      ]
+     },
+     "upper": {
+      "value": 884.8,
+      "status": "unproven",
+      "basis": "P50 + 正向 live SO；SO 若与预测重复只会高估，故在方向上可作上界，但 P50 若低估则不再是上界",
+      "blockers": [
+       "G8_demand_bounds"
+      ],
+      "missing_evidence": [
+       "需求上分位或业务人工上限"
+      ]
+     }
+    },
+    "rule": "充足：已证供给下界 ≥ 需求上界；短缺：供给上界 < 需求下界；其余保持待核实"
+   },
+   "r4_counterexample": {
+    "active": false,
+    "record_sum": 1426,
+    "dedup_stress_point": 988,
+    "demand_upper": 884.8,
+    "note": "该行不存在“记录之和够、去重后不够”的陷阱"
+   },
    "arithmetic_qualifies": null,
    "arithmetic_class": "depends_on_arrival",
    "promotion_blockers": [
@@ -1505,7 +2938,9 @@
     "G3_demand_overlap",
     "G4_supply_overlap",
     "G5_arrival_in_window",
-    "G6_pk_ks_1to1"
+    "G6_pk_ks_1to1",
+    "G7_unbooked_supply",
+    "G8_demand_bounds"
    ],
    "demand_overlap": "unproven",
    "demand_overlap_note": "live SO 与 P50 是否同一批需求未证；未做桶级消费/分配前，D2 不能当净需求",
@@ -1556,7 +2991,9 @@
     "t1_identity_confirmed": true,
     "t2_uom_verified": false,
     "t3_bmax_lt_d1": false,
-    "t4_a_low_lt_d2_le_bmax": true
+    "t4_a_low_lt_d2_le_bmax": true,
+    "screening_only": true,
+    "screening_note": "T3/T4 只用冻结值做筛查（B_max 是记录之和、A_low 是在手），不是结论；确定结论必须走 bounds 检验"
    },
    "gates": [
     {
@@ -1585,11 +3022,11 @@
     },
     {
      "id": "G4_supply_overlap",
-     "label": "PO / 在途 / 在产逐笔重叠键",
+     "label": "PO / 在途 / 在产逐笔重叠键（去重后才是数量）",
      "state": "unproven",
      "evidence": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
      "owner_role": "数据/系统",
-     "blocks_promotion": "把 B_min 当供给下界（不影响 B_max 上界的短缺判断）"
+     "blocks_promotion": "任何确定结论：去重前只能得到“记录之和”，既不是已证下界，也不保证是紧上界"
     },
     {
      "id": "G5_arrival_in_window",
@@ -1597,7 +3034,7 @@
      "state": "unproven",
      "evidence": "PO ETA 缺失 3 行；WO 完工日缺失 3 张",
      "owner_role": "采购/供应链；生产/PMC",
-     "blocks_promotion": "always_replenish（B_max 假设全部到货）"
+     "blocks_promotion": "供给下界（未证到货的批次不能计入下界）"
     },
     {
      "id": "G6_pk_ks_1to1",
@@ -1605,7 +3042,23 @@
      "state": "unproven",
      "evidence": "在产剩余 612 件按 1:1 计入",
      "owner_role": "生产/PMC",
-     "blocks_promotion": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
+     "blocks_promotion": "供给下界与上界（换算比例未证则数量不可用）"
+    },
+    {
+     "id": "G7_unbooked_supply",
+     "label": "不存在未上账的可替代供给（Cover 等）",
+     "state": "unproven",
+     "evidence": "cover.verdict=evidence_present；absence_proven=False；Cover 未并入供给，故实际供给可能高于记录之和",
+     "owner_role": "商品主数据/仓储",
+     "blocks_promotion": "供给上界（有未上账替代供给时，记录之和不再是上界）"
+    },
+    {
+     "id": "G8_demand_bounds",
+     "label": "需求下界与上界均已给出（分位或业务人工界）",
+     "state": "unproven",
+     "evidence": "P90-free 清单只有 P50 点预测：D1 是点估计不是下界，D2=P50+SO 也不是上界；缺少需求下/上分位或业务人工上下限",
+     "owner_role": "业务/运营",
+     "blocks_promotion": "任何确定结论（短缺要需求下界，充足要需求上界）"
     }
    ],
    "horizon_stability": [
@@ -1667,11 +3120,146 @@
    "arithmetic_qualifies_at_windows": [],
    "insufficient_evidence_causes": null,
    "start_condition": {
-    "rule": "同一条结论门槛：短缺与充足都必须过同一组 definitive gates；文字条件不能替代闸门",
-    "demand_view_for_promotion": "D2",
+    "rule": "R4 双向界规则：充足 = 已证供给下界 ≥ 需求上界；短缺 = 供给上界 < 需求下界；两侧数量都必须来自按证据去重并换算（UOM）后的窗口内数量；B_max 只是记录之和，永远不能单独证明充足",
+    "demand_bounds_used": {
+     "lower": "D1（P50，不含 SO）",
+     "upper": "D2（P50 + 正向 live SO）"
+    },
     "demand_overlap": "unproven",
+    "supply_bounds": {
+     "lower": {
+      "value": 376,
+      "status": "unproven",
+      "basis": "已证下界 = 在手可用量；只计入确定在窗口内、无重复、且单位已换算的数量",
+      "components": [
+       {
+        "source": "inventory.available",
+        "qty": 376,
+        "documents": [],
+        "deduped": true,
+        "in_window": true,
+        "uom_converted": false,
+        "note": "在手库存：天然在窗口内、无单据重复问题"
+       }
+      ],
+      "excluded": [
+       {
+        "source": "po.open_lines",
+        "qty": 223,
+        "reason": "未去重、到货日未证；重复只会高估"
+       },
+       {
+        "source": "production.open_wo",
+        "qty": 612,
+        "reason": "PK# 计 KS 的 1:1 未证；完工日未证"
+       },
+       {
+        "source": "inventory.intransit",
+        "qty": 215,
+        "reason": "与 PO 数值相同（10/10），可能重复；重复只会高估"
+       }
+      ],
+      "blockers": [
+       "G2_uom"
+      ],
+      "missing_evidence": [
+       "库存/单据单位口径（UOM）"
+      ]
+     },
+     "upper": {
+      "value": 1426,
+      "status": "unproven",
+      "basis": "记录之和（每条未结记录只计一次）：重复只会高估，故方向上可作上界；但它只有在 UOM 换算已知、且不存在未上账替代供给时才是可用的上界",
+      "components": [
+       {
+        "source": "inventory.available",
+        "qty": 376,
+        "documents": [],
+        "deduped": true,
+        "in_window": true,
+        "uom_converted": false,
+        "note": "在手库存：天然在窗口内、无单据重复问题"
+       },
+       {
+        "source": "po.open_lines",
+        "qty": 223,
+        "documents": [
+         "PO021717",
+         "PO021733",
+         "PO021735"
+        ],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "未去重、到货日未证；重复只会高估"
+       },
+       {
+        "source": "production.open_wo",
+        "qty": 612,
+        "documents": [
+         "WO-26-02775",
+         "WO-26-03175",
+         "WO-26-03341"
+        ],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "PK# 计 KS 的 1:1 未证；完工日未证"
+       },
+       {
+        "source": "inventory.intransit",
+        "qty": 215,
+        "documents": [],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "与 PO 数值相同（10/10），可能重复；重复只会高估"
+       }
+      ],
+      "blockers": [
+       "G2_uom",
+       "G4_supply_overlap",
+       "G7_unbooked_supply"
+      ],
+      "missing_evidence": [
+       "库存/单据单位口径（UOM）",
+       "PO/在途/在产逐笔重叠键",
+       "Cover 等未上账可替代供给的缺席证明"
+      ]
+     }
+    },
+    "demand_bounds": {
+     "lower": {
+      "value": 247.8,
+      "status": "unproven",
+      "basis": "P50 点预测（不含 live SO）；点估计不是已证下界",
+      "blockers": [
+       "G8_demand_bounds"
+      ],
+      "missing_evidence": [
+       "需求下分位或业务人工下限"
+      ]
+     },
+     "upper": {
+      "value": 884.8,
+      "status": "unproven",
+      "basis": "P50 + 正向 live SO；SO 若与预测重复只会高估，故在方向上可作上界，但 P50 若低估则不再是上界",
+      "blockers": [
+       "G8_demand_bounds"
+      ],
+      "missing_evidence": [
+       "需求上分位或业务人工上限"
+      ]
+     }
+    },
+    "bound_blockers": [
+     "G2_uom",
+     "G4_supply_overlap",
+     "G7_unbooked_supply",
+     "G8_demand_bounds"
+    ],
     "supply_lower_bound_shortfall": false,
-    "supply_lower_bound_shortfall_note": "下界未低于 D2；短缺情景来自到货时点/在手不足，同样不得据此直接升级",
+    "supply_lower_bound_shortfall_note": "下界未低于 D2；短缺情景来自到货时点/在手不足，同样不构成结论",
     "binding_shortfall_conditions": [
      "只在手 A_low 376.0 < D2 884.8"
     ],
@@ -1702,11 +3290,11 @@
      },
      {
       "id": "G4_supply_overlap",
-      "label": "PO / 在途 / 在产逐笔重叠键",
+      "label": "PO / 在途 / 在产逐笔重叠键（去重后才是数量）",
       "state": "unproven",
       "owner_role": "数据/系统",
       "evidence_needed": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
-      "blocks": "把 B_min 当供给下界（不影响 B_max 上界的短缺判断）"
+      "blocks": "任何确定结论：去重前只能得到“记录之和”，既不是已证下界，也不保证是紧上界"
      },
      {
       "id": "G5_arrival_in_window",
@@ -1714,7 +3302,7 @@
       "state": "unproven",
       "owner_role": "采购/供应链；生产/PMC",
       "evidence_needed": "PO ETA 缺失 3 行；WO 完工日缺失 3 张",
-      "blocks": "always_replenish（B_max 假设全部到货）"
+      "blocks": "供给下界（未证到货的批次不能计入下界）"
      },
      {
       "id": "G6_pk_ks_1to1",
@@ -1722,7 +3310,23 @@
       "state": "unproven",
       "owner_role": "生产/PMC",
       "evidence_needed": "在产剩余 612 件按 1:1 计入",
-      "blocks": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
+      "blocks": "供给下界与上界（换算比例未证则数量不可用）"
+     },
+     {
+      "id": "G7_unbooked_supply",
+      "label": "不存在未上账的可替代供给（Cover 等）",
+      "state": "unproven",
+      "owner_role": "商品主数据/仓储",
+      "evidence_needed": "cover.verdict=evidence_present；absence_proven=False；Cover 未并入供给，故实际供给可能高于记录之和",
+      "blocks": "供给上界（有未上账替代供给时，记录之和不再是上界）"
+     },
+     {
+      "id": "G8_demand_bounds",
+      "label": "需求下界与上界均已给出（分位或业务人工界）",
+      "state": "unproven",
+      "owner_role": "业务/运营",
+      "evidence_needed": "P90-free 清单只有 P50 点预测：D1 是点估计不是下界，D2=P50+SO 也不是上界；缺少需求下/上分位或业务人工上下限",
+      "blocks": "任何确定结论（短缺要需求下界，充足要需求上界）"
      }
     ],
     "gates_required_for_definitive_conclusion": [
@@ -1731,7 +3335,9 @@
      "G3_demand_overlap",
      "G4_supply_overlap",
      "G5_arrival_in_window",
-     "G6_pk_ks_1to1"
+     "G6_pk_ks_1to1",
+     "G7_unbooked_supply",
+     "G8_demand_bounds"
     ],
     "gates_required_for_shortage": [
      "G1_identity",
@@ -1739,7 +3345,9 @@
      "G3_demand_overlap",
      "G4_supply_overlap",
      "G5_arrival_in_window",
-     "G6_pk_ks_1to1"
+     "G6_pk_ks_1to1",
+     "G7_unbooked_supply",
+     "G8_demand_bounds"
     ],
     "gates_required_for_sufficiency": [
      "G1_identity",
@@ -1747,7 +3355,9 @@
      "G3_demand_overlap",
      "G4_supply_overlap",
      "G5_arrival_in_window",
-     "G6_pk_ks_1to1"
+     "G6_pk_ks_1to1",
+     "G7_unbooked_supply",
+     "G8_demand_bounds"
     ],
     "gate_summary": {
      "G1_identity": "ok",
@@ -1755,38 +3365,47 @@
      "G3_demand_overlap": "unproven",
      "G4_supply_overlap": "unproven",
      "G5_arrival_in_window": "unproven",
-     "G6_pk_ks_1to1": "unproven"
+     "G6_pk_ks_1to1": "unproven",
+     "G7_unbooked_supply": "unproven",
+     "G8_demand_bounds": "unproven"
     },
     "outcomes": [
      {
-      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ B_max 1426.0 < D1 247.8",
+      "when": "8 门全 ok ∧ 供给上界（当前记录之和 1426.0，未证 UOM/去重则不可用） < 需求下界（当前 P50 247.8，未证分位则不可用）",
       "then_class": "always_replenish",
-      "arithmetic": "结构短缺：最宽松供给上界也低于不含 SO 的 P50"
+      "uses": [
+       "supply.upper",
+       "demand.lower"
+      ],
+      "arithmetic": "短缺：连供给上界都低于需求下界"
      },
      {
-      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ B_max 1426.0 ≥ D2 884.8",
+      "when": "8 门全 ok ∧ 供给下界（当前在手 376.0） ≥ 需求上界（当前 P50+SO 884.8）",
       "then_class": "no_shortage_within_window",
-      "arithmetic": "充足：最宽松供给上界覆盖含 SO 的大口径需求（D2 为上界，故不必先删 SO）"
+      "uses": [
+       "supply.lower",
+       "demand.upper"
+      ],
+      "arithmetic": "充足只能由“已证供给下界 ≥ 需求上界”支持；冻结的 B_max 1426.0 不是已证下界，不能用来证明充足"
      },
      {
-      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ D1 247.8 ≤ B_max 1426.0 < D2 884.8",
+      "when": "任一闸门 unproven/fail，或任一侧界 unproven",
       "then_class": "insufficient_evidence",
-      "arithmetic": "差在 SO：必须做桶级消费/分配后重算净需求，再比较；不得把 SO 当重复直接删掉回退 D1"
-     },
-     {
-      "when": "任一闸门 unproven/fail",
-      "then_class": "insufficient_evidence",
-      "arithmetic": "维持待核实；未证状态不产出任何短缺/充足结论"
+      "uses": [],
+      "arithmetic": "维持待核实；当前缺：G2_uom、G4_supply_overlap、G7_unbooked_supply、G8_demand_bounds"
      }
     ],
     "forbidden": [
+     "B_max >= D2 never proves sufficiency: B_max is the record sum, and G4 only means line-level overlap was checked, not that records are disjoint",
+     "sufficiency requires a proven supply LOWER bound covering a demand UPPER bound",
+     "shortage requires a supply UPPER bound below a demand LOWER bound",
      "SO overlapping the forecast never means SO can be deleted: bucket-level consumption first",
-     "arrival/ completion dates alone never establish sufficiency (need G2 units, G4 overlap, G6 PK#->KS too)",
-     "supply lower bound below demand (B_min / B_min_po_dedup < D2) never promotes to always_replenish",
+     "arrival/ completion dates alone never establish sufficiency",
+     "supply lower bound below demand never promotes to always_replenish",
      "live SO in the demand view never becomes net demand before bucket-level consumption",
      "Cover or any unbooked supply never counts until mapping and substitutability are proven"
     ],
-    "summary": "补齐 G2_uom、G3_demand_overlap、G4_supply_overlap、G5_arrival_in_window、G6_pk_ks_1to1 后按 outcomes 重算；在此之前不发起采购/生产指令，也不宣布“不缺”。"
+    "summary": "补齐 G2_uom、G3_demand_overlap、G4_supply_overlap、G5_arrival_in_window、G6_pk_ks_1to1、G7_unbooked_supply、G8_demand_bounds 后按 outcomes 重算；在此之前不发起采购/生产指令，也不宣布“不缺”。"
    },
    "missing_evidence": [
     {
@@ -1832,7 +3451,7 @@
    ],
    "responsible_role": "采购/供应链（PO ETA/重复）；生产/PMC（WO 完工日）；业务/运营（需求口径）；商品主数据/仓储（UOM）",
    "decisive_unknown": "PO 是否重复（去重后 B_min 988 vs D2 884.8），以及到货能否在窗口内",
-   "basis": "可供上限 B_max 1426 vs D1 247.8、D2 884.8。在手 A_low 376；B_min 988（最大重叠，去重压力 988）。结论只在“全部到货且不重叠”与“重叠/迟到”两个情景之间翻转；两个方向都要过同一组 6 个 definitive gates，闸门未齐前只作待核实。需求口径比值 1.114（近 3 月均值 90.3）。所有含 SO 的判断均标 demand_overlap=unproven。"
+   "basis": "可供上限 B_max 1426 vs D1 247.8、D2 884.8。在手 A_low 376；B_min 988（最大重叠，去重压力 988）。结论只在“全部到货且不重叠”与“重叠/迟到”两个情景之间翻转；两个方向都要过同一组 8 个 definitive gates，并且短缺看“供给上界 < 需求下界”、充足看“供给下界 ≥ 需求上界”，闸门与界未齐前只作待核实。需求口径比值 1.114（近 3 月均值 90.3）。所有含 SO 的判断均标 demand_overlap=unproven。"
   },
   {
    "seq": 6,
@@ -1842,6 +3461,140 @@
    "customer_code": "C/Velvet-Grey-100-705-wow",
    "item_name": "三角靠枕-平绒-100-灰色",
    "class": "insufficient_evidence",
+   "screening_class": "insufficient_evidence",
+   "definitive_conclusion": null,
+   "definitive_blocked_by": "gates",
+   "bounds": {
+    "supply": {
+     "lower": {
+      "value": 52,
+      "status": "unproven",
+      "basis": "已证下界 = 在手可用量；只计入确定在窗口内、无重复、且单位已换算的数量",
+      "components": [
+       {
+        "source": "inventory.available",
+        "qty": 52,
+        "documents": [],
+        "deduped": true,
+        "in_window": true,
+        "uom_converted": false,
+        "note": "在手库存：天然在窗口内、无单据重复问题"
+       }
+      ],
+      "excluded": [
+       {
+        "source": "po.open_lines",
+        "qty": 0,
+        "reason": "未去重、到货日未证；重复只会高估"
+       },
+       {
+        "source": "production.open_wo",
+        "qty": 52,
+        "reason": "PK# 计 KS 的 1:1 未证；完工日未证"
+       },
+       {
+        "source": "inventory.intransit",
+        "qty": 0,
+        "reason": "与 PO 数值相同（10/10），可能重复；重复只会高估"
+       }
+      ],
+      "blockers": [
+       "G2_uom"
+      ],
+      "missing_evidence": [
+       "库存/单据单位口径（UOM）"
+      ]
+     },
+     "upper": {
+      "value": 104,
+      "status": "unproven",
+      "basis": "记录之和（每条未结记录只计一次）：重复只会高估，故方向上可作上界；但它只有在 UOM 换算已知、且不存在未上账替代供给时才是可用的上界",
+      "components": [
+       {
+        "source": "inventory.available",
+        "qty": 52,
+        "documents": [],
+        "deduped": true,
+        "in_window": true,
+        "uom_converted": false,
+        "note": "在手库存：天然在窗口内、无单据重复问题"
+       },
+       {
+        "source": "po.open_lines",
+        "qty": 0,
+        "documents": [],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "未去重、到货日未证；重复只会高估"
+       },
+       {
+        "source": "production.open_wo",
+        "qty": 52,
+        "documents": [
+         "WO-26-01349",
+         "WO-26-02745"
+        ],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "PK# 计 KS 的 1:1 未证；完工日未证"
+       },
+       {
+        "source": "inventory.intransit",
+        "qty": 0,
+        "documents": [],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "与 PO 数值相同（10/10），可能重复；重复只会高估"
+       }
+      ],
+      "blockers": [
+       "G2_uom",
+       "G4_supply_overlap",
+       "G7_unbooked_supply"
+      ],
+      "missing_evidence": [
+       "库存/单据单位口径（UOM）",
+       "PO/在途/在产逐笔重叠键",
+       "Cover 等未上账可替代供给的缺席证明"
+      ]
+     }
+    },
+    "demand": {
+     "lower": {
+      "value": 54,
+      "status": "unproven",
+      "basis": "P50 点预测（不含 live SO）；点估计不是已证下界",
+      "blockers": [
+       "G8_demand_bounds"
+      ],
+      "missing_evidence": [
+       "需求下分位或业务人工下限"
+      ]
+     },
+     "upper": {
+      "value": 149,
+      "status": "unproven",
+      "basis": "P50 + 正向 live SO；SO 若与预测重复只会高估，故在方向上可作上界，但 P50 若低估则不再是上界",
+      "blockers": [
+       "G8_demand_bounds"
+      ],
+      "missing_evidence": [
+       "需求上分位或业务人工上限"
+      ]
+     }
+    },
+    "rule": "充足：已证供给下界 ≥ 需求上界；短缺：供给上界 < 需求下界；其余保持待核实"
+   },
+   "r4_counterexample": {
+    "active": false,
+    "record_sum": 104,
+    "dedup_stress_point": 104,
+    "demand_upper": 149,
+    "note": "该行不存在“记录之和够、去重后不够”的陷阱"
+   },
    "arithmetic_qualifies": null,
    "arithmetic_class": "insufficient_evidence",
    "promotion_blockers": [
@@ -1849,7 +3602,9 @@
     "G3_demand_overlap",
     "G4_supply_overlap",
     "G5_arrival_in_window",
-    "G6_pk_ks_1to1"
+    "G6_pk_ks_1to1",
+    "G7_unbooked_supply",
+    "G8_demand_bounds"
    ],
    "demand_overlap": "unproven",
    "demand_overlap_note": "live SO 与 P50 是否同一批需求未证；未做桶级消费/分配前，D2 不能当净需求",
@@ -1900,7 +3655,9 @@
     "t1_identity_confirmed": true,
     "t2_uom_verified": false,
     "t3_bmax_lt_d1": false,
-    "t4_a_low_lt_d2_le_bmax": false
+    "t4_a_low_lt_d2_le_bmax": false,
+    "screening_only": true,
+    "screening_note": "T3/T4 只用冻结值做筛查（B_max 是记录之和、A_low 是在手），不是结论；确定结论必须走 bounds 检验"
    },
    "gates": [
     {
@@ -1929,11 +3686,11 @@
     },
     {
      "id": "G4_supply_overlap",
-     "label": "PO / 在途 / 在产逐笔重叠键",
+     "label": "PO / 在途 / 在产逐笔重叠键（去重后才是数量）",
      "state": "unproven",
      "evidence": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
      "owner_role": "数据/系统",
-     "blocks_promotion": "把 B_min 当供给下界（不影响 B_max 上界的短缺判断）"
+     "blocks_promotion": "任何确定结论：去重前只能得到“记录之和”，既不是已证下界，也不保证是紧上界"
     },
     {
      "id": "G5_arrival_in_window",
@@ -1941,7 +3698,7 @@
      "state": "unproven",
      "evidence": "PO ETA 缺失 0 行；WO 完工日缺失 2 张",
      "owner_role": "采购/供应链；生产/PMC",
-     "blocks_promotion": "always_replenish（B_max 假设全部到货）"
+     "blocks_promotion": "供给下界（未证到货的批次不能计入下界）"
     },
     {
      "id": "G6_pk_ks_1to1",
@@ -1949,7 +3706,23 @@
      "state": "unproven",
      "evidence": "在产剩余 52 件按 1:1 计入",
      "owner_role": "生产/PMC",
-     "blocks_promotion": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
+     "blocks_promotion": "供给下界与上界（换算比例未证则数量不可用）"
+    },
+    {
+     "id": "G7_unbooked_supply",
+     "label": "不存在未上账的可替代供给（Cover 等）",
+     "state": "unproven",
+     "evidence": "cover.verdict=evidence_present；absence_proven=False；Cover 未并入供给，故实际供给可能高于记录之和",
+     "owner_role": "商品主数据/仓储",
+     "blocks_promotion": "供给上界（有未上账替代供给时，记录之和不再是上界）"
+    },
+    {
+     "id": "G8_demand_bounds",
+     "label": "需求下界与上界均已给出（分位或业务人工界）",
+     "state": "unproven",
+     "evidence": "P90-free 清单只有 P50 点预测：D1 是点估计不是下界，D2=P50+SO 也不是上界；缺少需求下/上分位或业务人工上下限",
+     "owner_role": "业务/运营",
+     "blocks_promotion": "任何确定结论（短缺要需求下界，充足要需求上界）"
     }
    ],
    "horizon_stability": [
@@ -2017,11 +3790,141 @@
     "calibration_insufficiency": "P90-free 清单不做区间校准，校准不足不在本清单判定内"
    },
    "start_condition": {
-    "rule": "同一条结论门槛：短缺与充足都必须过同一组 definitive gates；文字条件不能替代闸门",
-    "demand_view_for_promotion": "D2",
+    "rule": "R4 双向界规则：充足 = 已证供给下界 ≥ 需求上界；短缺 = 供给上界 < 需求下界；两侧数量都必须来自按证据去重并换算（UOM）后的窗口内数量；B_max 只是记录之和，永远不能单独证明充足",
+    "demand_bounds_used": {
+     "lower": "D1（P50，不含 SO）",
+     "upper": "D2（P50 + 正向 live SO）"
+    },
     "demand_overlap": "unproven",
+    "supply_bounds": {
+     "lower": {
+      "value": 52,
+      "status": "unproven",
+      "basis": "已证下界 = 在手可用量；只计入确定在窗口内、无重复、且单位已换算的数量",
+      "components": [
+       {
+        "source": "inventory.available",
+        "qty": 52,
+        "documents": [],
+        "deduped": true,
+        "in_window": true,
+        "uom_converted": false,
+        "note": "在手库存：天然在窗口内、无单据重复问题"
+       }
+      ],
+      "excluded": [
+       {
+        "source": "po.open_lines",
+        "qty": 0,
+        "reason": "未去重、到货日未证；重复只会高估"
+       },
+       {
+        "source": "production.open_wo",
+        "qty": 52,
+        "reason": "PK# 计 KS 的 1:1 未证；完工日未证"
+       },
+       {
+        "source": "inventory.intransit",
+        "qty": 0,
+        "reason": "与 PO 数值相同（10/10），可能重复；重复只会高估"
+       }
+      ],
+      "blockers": [
+       "G2_uom"
+      ],
+      "missing_evidence": [
+       "库存/单据单位口径（UOM）"
+      ]
+     },
+     "upper": {
+      "value": 104,
+      "status": "unproven",
+      "basis": "记录之和（每条未结记录只计一次）：重复只会高估，故方向上可作上界；但它只有在 UOM 换算已知、且不存在未上账替代供给时才是可用的上界",
+      "components": [
+       {
+        "source": "inventory.available",
+        "qty": 52,
+        "documents": [],
+        "deduped": true,
+        "in_window": true,
+        "uom_converted": false,
+        "note": "在手库存：天然在窗口内、无单据重复问题"
+       },
+       {
+        "source": "po.open_lines",
+        "qty": 0,
+        "documents": [],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "未去重、到货日未证；重复只会高估"
+       },
+       {
+        "source": "production.open_wo",
+        "qty": 52,
+        "documents": [
+         "WO-26-01349",
+         "WO-26-02745"
+        ],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "PK# 计 KS 的 1:1 未证；完工日未证"
+       },
+       {
+        "source": "inventory.intransit",
+        "qty": 0,
+        "documents": [],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "与 PO 数值相同（10/10），可能重复；重复只会高估"
+       }
+      ],
+      "blockers": [
+       "G2_uom",
+       "G4_supply_overlap",
+       "G7_unbooked_supply"
+      ],
+      "missing_evidence": [
+       "库存/单据单位口径（UOM）",
+       "PO/在途/在产逐笔重叠键",
+       "Cover 等未上账可替代供给的缺席证明"
+      ]
+     }
+    },
+    "demand_bounds": {
+     "lower": {
+      "value": 54,
+      "status": "unproven",
+      "basis": "P50 点预测（不含 live SO）；点估计不是已证下界",
+      "blockers": [
+       "G8_demand_bounds"
+      ],
+      "missing_evidence": [
+       "需求下分位或业务人工下限"
+      ]
+     },
+     "upper": {
+      "value": 149,
+      "status": "unproven",
+      "basis": "P50 + 正向 live SO；SO 若与预测重复只会高估，故在方向上可作上界，但 P50 若低估则不再是上界",
+      "blockers": [
+       "G8_demand_bounds"
+      ],
+      "missing_evidence": [
+       "需求上分位或业务人工上限"
+      ]
+     }
+    },
+    "bound_blockers": [
+     "G2_uom",
+     "G4_supply_overlap",
+     "G7_unbooked_supply",
+     "G8_demand_bounds"
+    ],
     "supply_lower_bound_shortfall": true,
-    "supply_lower_bound_shortfall_note": "B_min/B_min_po_dedup < D2 只说明存在短缺情景；该行仍不得升级到 always_replenish",
+    "supply_lower_bound_shortfall_note": "B_min/B_min_po_dedup < D2 只说明存在短缺情景；在 R4 规则下，短缺需要“供给上界 < 需求下界”，下界不足本身不构成任何结论",
     "binding_shortfall_conditions": [
      "最大重叠下 B_min 104.0 < D2 149.0",
      "只在手+在产 A_high 104.0 < D2 149.0（到货落在窗口外）",
@@ -2054,11 +3957,11 @@
      },
      {
       "id": "G4_supply_overlap",
-      "label": "PO / 在途 / 在产逐笔重叠键",
+      "label": "PO / 在途 / 在产逐笔重叠键（去重后才是数量）",
       "state": "unproven",
       "owner_role": "数据/系统",
       "evidence_needed": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
-      "blocks": "把 B_min 当供给下界（不影响 B_max 上界的短缺判断）"
+      "blocks": "任何确定结论：去重前只能得到“记录之和”，既不是已证下界，也不保证是紧上界"
      },
      {
       "id": "G5_arrival_in_window",
@@ -2066,7 +3969,7 @@
       "state": "unproven",
       "owner_role": "采购/供应链；生产/PMC",
       "evidence_needed": "PO ETA 缺失 0 行；WO 完工日缺失 2 张",
-      "blocks": "always_replenish（B_max 假设全部到货）"
+      "blocks": "供给下界（未证到货的批次不能计入下界）"
      },
      {
       "id": "G6_pk_ks_1to1",
@@ -2074,7 +3977,23 @@
       "state": "unproven",
       "owner_role": "生产/PMC",
       "evidence_needed": "在产剩余 52 件按 1:1 计入",
-      "blocks": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
+      "blocks": "供给下界与上界（换算比例未证则数量不可用）"
+     },
+     {
+      "id": "G7_unbooked_supply",
+      "label": "不存在未上账的可替代供给（Cover 等）",
+      "state": "unproven",
+      "owner_role": "商品主数据/仓储",
+      "evidence_needed": "cover.verdict=evidence_present；absence_proven=False；Cover 未并入供给，故实际供给可能高于记录之和",
+      "blocks": "供给上界（有未上账替代供给时，记录之和不再是上界）"
+     },
+     {
+      "id": "G8_demand_bounds",
+      "label": "需求下界与上界均已给出（分位或业务人工界）",
+      "state": "unproven",
+      "owner_role": "业务/运营",
+      "evidence_needed": "P90-free 清单只有 P50 点预测：D1 是点估计不是下界，D2=P50+SO 也不是上界；缺少需求下/上分位或业务人工上下限",
+      "blocks": "任何确定结论（短缺要需求下界，充足要需求上界）"
      }
     ],
     "gates_required_for_definitive_conclusion": [
@@ -2083,7 +4002,9 @@
      "G3_demand_overlap",
      "G4_supply_overlap",
      "G5_arrival_in_window",
-     "G6_pk_ks_1to1"
+     "G6_pk_ks_1to1",
+     "G7_unbooked_supply",
+     "G8_demand_bounds"
     ],
     "gates_required_for_shortage": [
      "G1_identity",
@@ -2091,7 +4012,9 @@
      "G3_demand_overlap",
      "G4_supply_overlap",
      "G5_arrival_in_window",
-     "G6_pk_ks_1to1"
+     "G6_pk_ks_1to1",
+     "G7_unbooked_supply",
+     "G8_demand_bounds"
     ],
     "gates_required_for_sufficiency": [
      "G1_identity",
@@ -2099,7 +4022,9 @@
      "G3_demand_overlap",
      "G4_supply_overlap",
      "G5_arrival_in_window",
-     "G6_pk_ks_1to1"
+     "G6_pk_ks_1to1",
+     "G7_unbooked_supply",
+     "G8_demand_bounds"
     ],
     "gate_summary": {
      "G1_identity": "ok",
@@ -2107,38 +4032,47 @@
      "G3_demand_overlap": "unproven",
      "G4_supply_overlap": "unproven",
      "G5_arrival_in_window": "unproven",
-     "G6_pk_ks_1to1": "unproven"
+     "G6_pk_ks_1to1": "unproven",
+     "G7_unbooked_supply": "unproven",
+     "G8_demand_bounds": "unproven"
     },
     "outcomes": [
      {
-      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ B_max 104.0 < D1 54.0",
+      "when": "8 门全 ok ∧ 供给上界（当前记录之和 104.0，未证 UOM/去重则不可用） < 需求下界（当前 P50 54.0，未证分位则不可用）",
       "then_class": "always_replenish",
-      "arithmetic": "结构短缺：最宽松供给上界也低于不含 SO 的 P50"
+      "uses": [
+       "supply.upper",
+       "demand.lower"
+      ],
+      "arithmetic": "短缺：连供给上界都低于需求下界"
      },
      {
-      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ B_max 104.0 ≥ D2 149.0",
+      "when": "8 门全 ok ∧ 供给下界（当前在手 52.0） ≥ 需求上界（当前 P50+SO 149.0）",
       "then_class": "no_shortage_within_window",
-      "arithmetic": "充足：最宽松供给上界覆盖含 SO 的大口径需求（D2 为上界，故不必先删 SO）"
+      "uses": [
+       "supply.lower",
+       "demand.upper"
+      ],
+      "arithmetic": "充足只能由“已证供给下界 ≥ 需求上界”支持；冻结的 B_max 104.0 不是已证下界，不能用来证明充足"
      },
      {
-      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ D1 54.0 ≤ B_max 104.0 < D2 149.0",
+      "when": "任一闸门 unproven/fail，或任一侧界 unproven",
       "then_class": "insufficient_evidence",
-      "arithmetic": "差在 SO：必须做桶级消费/分配后重算净需求，再比较；不得把 SO 当重复直接删掉回退 D1"
-     },
-     {
-      "when": "任一闸门 unproven/fail",
-      "then_class": "insufficient_evidence",
-      "arithmetic": "维持待核实；未证状态不产出任何短缺/充足结论"
+      "uses": [],
+      "arithmetic": "维持待核实；当前缺：G2_uom、G4_supply_overlap、G7_unbooked_supply、G8_demand_bounds"
      }
     ],
     "forbidden": [
+     "B_max >= D2 never proves sufficiency: B_max is the record sum, and G4 only means line-level overlap was checked, not that records are disjoint",
+     "sufficiency requires a proven supply LOWER bound covering a demand UPPER bound",
+     "shortage requires a supply UPPER bound below a demand LOWER bound",
      "SO overlapping the forecast never means SO can be deleted: bucket-level consumption first",
-     "arrival/ completion dates alone never establish sufficiency (need G2 units, G4 overlap, G6 PK#->KS too)",
-     "supply lower bound below demand (B_min / B_min_po_dedup < D2) never promotes to always_replenish",
+     "arrival/ completion dates alone never establish sufficiency",
+     "supply lower bound below demand never promotes to always_replenish",
      "live SO in the demand view never becomes net demand before bucket-level consumption",
      "Cover or any unbooked supply never counts until mapping and substitutability are proven"
     ],
-    "summary": "补齐 G2_uom、G3_demand_overlap、G4_supply_overlap、G5_arrival_in_window、G6_pk_ks_1to1 后按 outcomes 重算；在此之前不发起采购/生产指令，也不宣布“不缺”。"
+    "summary": "补齐 G2_uom、G3_demand_overlap、G4_supply_overlap、G5_arrival_in_window、G6_pk_ks_1to1、G7_unbooked_supply、G8_demand_bounds 后按 outcomes 重算；在此之前不发起采购/生产指令，也不宣布“不缺”。"
    },
    "missing_evidence": [
     {
@@ -2179,6 +4113,144 @@
    "customer_code": "C/Cord-Grey-100-710-wow",
    "item_name": "三角靠枕-纯棉宽条绒-100-灰色",
    "class": "depends_on_arrival",
+   "screening_class": "depends_on_arrival",
+   "definitive_conclusion": null,
+   "definitive_blocked_by": "gates",
+   "bounds": {
+    "supply": {
+     "lower": {
+      "value": 6,
+      "status": "unproven",
+      "basis": "已证下界 = 在手可用量；只计入确定在窗口内、无重复、且单位已换算的数量",
+      "components": [
+       {
+        "source": "inventory.available",
+        "qty": 6,
+        "documents": [],
+        "deduped": true,
+        "in_window": true,
+        "uom_converted": false,
+        "note": "在手库存：天然在窗口内、无单据重复问题"
+       }
+      ],
+      "excluded": [
+       {
+        "source": "po.open_lines",
+        "qty": 318,
+        "reason": "未去重、到货日未证；重复只会高估"
+       },
+       {
+        "source": "production.open_wo",
+        "qty": 28,
+        "reason": "PK# 计 KS 的 1:1 未证；完工日未证"
+       },
+       {
+        "source": "inventory.intransit",
+        "qty": 165,
+        "reason": "与 PO 数值相同（10/10），可能重复；重复只会高估"
+       }
+      ],
+      "blockers": [
+       "G2_uom"
+      ],
+      "missing_evidence": [
+       "库存/单据单位口径（UOM）"
+      ]
+     },
+     "upper": {
+      "value": 517,
+      "status": "unproven",
+      "basis": "记录之和（每条未结记录只计一次）：重复只会高估，故方向上可作上界；但它只有在 UOM 换算已知、且不存在未上账替代供给时才是可用的上界",
+      "components": [
+       {
+        "source": "inventory.available",
+        "qty": 6,
+        "documents": [],
+        "deduped": true,
+        "in_window": true,
+        "uom_converted": false,
+        "note": "在手库存：天然在窗口内、无单据重复问题"
+       },
+       {
+        "source": "po.open_lines",
+        "qty": 318,
+        "documents": [
+         "PO021717",
+         "PO021733",
+         "PO021735"
+        ],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "未去重、到货日未证；重复只会高估"
+       },
+       {
+        "source": "production.open_wo",
+        "qty": 28,
+        "documents": [
+         "WO-26-02142",
+         "WO-26-03170"
+        ],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "PK# 计 KS 的 1:1 未证；完工日未证"
+       },
+       {
+        "source": "inventory.intransit",
+        "qty": 165,
+        "documents": [],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "与 PO 数值相同（10/10），可能重复；重复只会高估"
+       }
+      ],
+      "blockers": [
+       "G2_uom",
+       "G4_supply_overlap",
+       "G7_unbooked_supply"
+      ],
+      "missing_evidence": [
+       "库存/单据单位口径（UOM）",
+       "PO/在途/在产逐笔重叠键",
+       "Cover 等未上账可替代供给的缺席证明"
+      ]
+     }
+    },
+    "demand": {
+     "lower": {
+      "value": 48,
+      "status": "unproven",
+      "basis": "P50 点预测（不含 live SO）；点估计不是已证下界",
+      "blockers": [
+       "G8_demand_bounds"
+      ],
+      "missing_evidence": [
+       "需求下分位或业务人工下限"
+      ]
+     },
+     "upper": {
+      "value": 173,
+      "status": "unproven",
+      "basis": "P50 + 正向 live SO；SO 若与预测重复只会高估，故在方向上可作上界，但 P50 若低估则不再是上界",
+      "blockers": [
+       "G8_demand_bounds"
+      ],
+      "missing_evidence": [
+       "需求上分位或业务人工上限"
+      ]
+     }
+    },
+    "rule": "充足：已证供给下界 ≥ 需求上界；短缺：供给上界 < 需求下界；其余保持待核实"
+   },
+   "r4_counterexample": {
+    "active": true,
+    "record_sum": 517,
+    "dedup_stress_point": 171,
+    "demand_upper": 173,
+    "note": "若未结记录属同一批供应，唯一供给可低至 171.0；而记录之和 517.0 仍 ≥ 需求上界 173.0。旧规则会用记录之和判“不缺”；R4 要求已证供给下界覆盖需求上界，两者都未证，只能待核实"
+   },
    "arithmetic_qualifies": null,
    "arithmetic_class": "depends_on_arrival",
    "promotion_blockers": [
@@ -2186,7 +4258,9 @@
     "G3_demand_overlap",
     "G4_supply_overlap",
     "G5_arrival_in_window",
-    "G6_pk_ks_1to1"
+    "G6_pk_ks_1to1",
+    "G7_unbooked_supply",
+    "G8_demand_bounds"
    ],
    "demand_overlap": "unproven",
    "demand_overlap_note": "live SO 与 P50 是否同一批需求未证；未做桶级消费/分配前，D2 不能当净需求",
@@ -2237,7 +4311,9 @@
     "t1_identity_confirmed": true,
     "t2_uom_verified": false,
     "t3_bmax_lt_d1": false,
-    "t4_a_low_lt_d2_le_bmax": true
+    "t4_a_low_lt_d2_le_bmax": true,
+    "screening_only": true,
+    "screening_note": "T3/T4 只用冻结值做筛查（B_max 是记录之和、A_low 是在手），不是结论；确定结论必须走 bounds 检验"
    },
    "gates": [
     {
@@ -2266,11 +4342,11 @@
     },
     {
      "id": "G4_supply_overlap",
-     "label": "PO / 在途 / 在产逐笔重叠键",
+     "label": "PO / 在途 / 在产逐笔重叠键（去重后才是数量）",
      "state": "unproven",
      "evidence": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
      "owner_role": "数据/系统",
-     "blocks_promotion": "把 B_min 当供给下界（不影响 B_max 上界的短缺判断）"
+     "blocks_promotion": "任何确定结论：去重前只能得到“记录之和”，既不是已证下界，也不保证是紧上界"
     },
     {
      "id": "G5_arrival_in_window",
@@ -2278,7 +4354,7 @@
      "state": "unproven",
      "evidence": "PO ETA 缺失 3 行；WO 完工日缺失 2 张",
      "owner_role": "采购/供应链；生产/PMC",
-     "blocks_promotion": "always_replenish（B_max 假设全部到货）"
+     "blocks_promotion": "供给下界（未证到货的批次不能计入下界）"
     },
     {
      "id": "G6_pk_ks_1to1",
@@ -2286,7 +4362,23 @@
      "state": "unproven",
      "evidence": "在产剩余 28 件按 1:1 计入",
      "owner_role": "生产/PMC",
-     "blocks_promotion": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
+     "blocks_promotion": "供给下界与上界（换算比例未证则数量不可用）"
+    },
+    {
+     "id": "G7_unbooked_supply",
+     "label": "不存在未上账的可替代供给（Cover 等）",
+     "state": "unproven",
+     "evidence": "cover.verdict=evidence_present；absence_proven=False；Cover 未并入供给，故实际供给可能高于记录之和",
+     "owner_role": "商品主数据/仓储",
+     "blocks_promotion": "供给上界（有未上账替代供给时，记录之和不再是上界）"
+    },
+    {
+     "id": "G8_demand_bounds",
+     "label": "需求下界与上界均已给出（分位或业务人工界）",
+     "state": "unproven",
+     "evidence": "P90-free 清单只有 P50 点预测：D1 是点估计不是下界，D2=P50+SO 也不是上界；缺少需求下/上分位或业务人工上下限",
+     "owner_role": "业务/运营",
+     "blocks_promotion": "任何确定结论（短缺要需求下界，充足要需求上界）"
     }
    ],
    "horizon_stability": [
@@ -2348,11 +4440,145 @@
    "arithmetic_qualifies_at_windows": [],
    "insufficient_evidence_causes": null,
    "start_condition": {
-    "rule": "同一条结论门槛：短缺与充足都必须过同一组 definitive gates；文字条件不能替代闸门",
-    "demand_view_for_promotion": "D2",
+    "rule": "R4 双向界规则：充足 = 已证供给下界 ≥ 需求上界；短缺 = 供给上界 < 需求下界；两侧数量都必须来自按证据去重并换算（UOM）后的窗口内数量；B_max 只是记录之和，永远不能单独证明充足",
+    "demand_bounds_used": {
+     "lower": "D1（P50，不含 SO）",
+     "upper": "D2（P50 + 正向 live SO）"
+    },
     "demand_overlap": "unproven",
+    "supply_bounds": {
+     "lower": {
+      "value": 6,
+      "status": "unproven",
+      "basis": "已证下界 = 在手可用量；只计入确定在窗口内、无重复、且单位已换算的数量",
+      "components": [
+       {
+        "source": "inventory.available",
+        "qty": 6,
+        "documents": [],
+        "deduped": true,
+        "in_window": true,
+        "uom_converted": false,
+        "note": "在手库存：天然在窗口内、无单据重复问题"
+       }
+      ],
+      "excluded": [
+       {
+        "source": "po.open_lines",
+        "qty": 318,
+        "reason": "未去重、到货日未证；重复只会高估"
+       },
+       {
+        "source": "production.open_wo",
+        "qty": 28,
+        "reason": "PK# 计 KS 的 1:1 未证；完工日未证"
+       },
+       {
+        "source": "inventory.intransit",
+        "qty": 165,
+        "reason": "与 PO 数值相同（10/10），可能重复；重复只会高估"
+       }
+      ],
+      "blockers": [
+       "G2_uom"
+      ],
+      "missing_evidence": [
+       "库存/单据单位口径（UOM）"
+      ]
+     },
+     "upper": {
+      "value": 517,
+      "status": "unproven",
+      "basis": "记录之和（每条未结记录只计一次）：重复只会高估，故方向上可作上界；但它只有在 UOM 换算已知、且不存在未上账替代供给时才是可用的上界",
+      "components": [
+       {
+        "source": "inventory.available",
+        "qty": 6,
+        "documents": [],
+        "deduped": true,
+        "in_window": true,
+        "uom_converted": false,
+        "note": "在手库存：天然在窗口内、无单据重复问题"
+       },
+       {
+        "source": "po.open_lines",
+        "qty": 318,
+        "documents": [
+         "PO021717",
+         "PO021733",
+         "PO021735"
+        ],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "未去重、到货日未证；重复只会高估"
+       },
+       {
+        "source": "production.open_wo",
+        "qty": 28,
+        "documents": [
+         "WO-26-02142",
+         "WO-26-03170"
+        ],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "PK# 计 KS 的 1:1 未证；完工日未证"
+       },
+       {
+        "source": "inventory.intransit",
+        "qty": 165,
+        "documents": [],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "与 PO 数值相同（10/10），可能重复；重复只会高估"
+       }
+      ],
+      "blockers": [
+       "G2_uom",
+       "G4_supply_overlap",
+       "G7_unbooked_supply"
+      ],
+      "missing_evidence": [
+       "库存/单据单位口径（UOM）",
+       "PO/在途/在产逐笔重叠键",
+       "Cover 等未上账可替代供给的缺席证明"
+      ]
+     }
+    },
+    "demand_bounds": {
+     "lower": {
+      "value": 48,
+      "status": "unproven",
+      "basis": "P50 点预测（不含 live SO）；点估计不是已证下界",
+      "blockers": [
+       "G8_demand_bounds"
+      ],
+      "missing_evidence": [
+       "需求下分位或业务人工下限"
+      ]
+     },
+     "upper": {
+      "value": 173,
+      "status": "unproven",
+      "basis": "P50 + 正向 live SO；SO 若与预测重复只会高估，故在方向上可作上界，但 P50 若低估则不再是上界",
+      "blockers": [
+       "G8_demand_bounds"
+      ],
+      "missing_evidence": [
+       "需求上分位或业务人工上限"
+      ]
+     }
+    },
+    "bound_blockers": [
+     "G2_uom",
+     "G4_supply_overlap",
+     "G7_unbooked_supply",
+     "G8_demand_bounds"
+    ],
     "supply_lower_bound_shortfall": true,
-    "supply_lower_bound_shortfall_note": "B_min/B_min_po_dedup < D2 只说明存在短缺情景；该行仍不得升级到 always_replenish",
+    "supply_lower_bound_shortfall_note": "B_min/B_min_po_dedup < D2 只说明存在短缺情景；在 R4 规则下，短缺需要“供给上界 < 需求下界”，下界不足本身不构成任何结论",
     "binding_shortfall_conditions": [
      "去重压力下 B_min 171.0 < D2 173.0",
      "只在手+在产 A_high 34.0 < D2 173.0（到货落在窗口外）",
@@ -2385,11 +4611,11 @@
      },
      {
       "id": "G4_supply_overlap",
-      "label": "PO / 在途 / 在产逐笔重叠键",
+      "label": "PO / 在途 / 在产逐笔重叠键（去重后才是数量）",
       "state": "unproven",
       "owner_role": "数据/系统",
       "evidence_needed": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
-      "blocks": "把 B_min 当供给下界（不影响 B_max 上界的短缺判断）"
+      "blocks": "任何确定结论：去重前只能得到“记录之和”，既不是已证下界，也不保证是紧上界"
      },
      {
       "id": "G5_arrival_in_window",
@@ -2397,7 +4623,7 @@
       "state": "unproven",
       "owner_role": "采购/供应链；生产/PMC",
       "evidence_needed": "PO ETA 缺失 3 行；WO 完工日缺失 2 张",
-      "blocks": "always_replenish（B_max 假设全部到货）"
+      "blocks": "供给下界（未证到货的批次不能计入下界）"
      },
      {
       "id": "G6_pk_ks_1to1",
@@ -2405,7 +4631,23 @@
       "state": "unproven",
       "owner_role": "生产/PMC",
       "evidence_needed": "在产剩余 28 件按 1:1 计入",
-      "blocks": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
+      "blocks": "供给下界与上界（换算比例未证则数量不可用）"
+     },
+     {
+      "id": "G7_unbooked_supply",
+      "label": "不存在未上账的可替代供给（Cover 等）",
+      "state": "unproven",
+      "owner_role": "商品主数据/仓储",
+      "evidence_needed": "cover.verdict=evidence_present；absence_proven=False；Cover 未并入供给，故实际供给可能高于记录之和",
+      "blocks": "供给上界（有未上账替代供给时，记录之和不再是上界）"
+     },
+     {
+      "id": "G8_demand_bounds",
+      "label": "需求下界与上界均已给出（分位或业务人工界）",
+      "state": "unproven",
+      "owner_role": "业务/运营",
+      "evidence_needed": "P90-free 清单只有 P50 点预测：D1 是点估计不是下界，D2=P50+SO 也不是上界；缺少需求下/上分位或业务人工上下限",
+      "blocks": "任何确定结论（短缺要需求下界，充足要需求上界）"
      }
     ],
     "gates_required_for_definitive_conclusion": [
@@ -2414,7 +4656,9 @@
      "G3_demand_overlap",
      "G4_supply_overlap",
      "G5_arrival_in_window",
-     "G6_pk_ks_1to1"
+     "G6_pk_ks_1to1",
+     "G7_unbooked_supply",
+     "G8_demand_bounds"
     ],
     "gates_required_for_shortage": [
      "G1_identity",
@@ -2422,7 +4666,9 @@
      "G3_demand_overlap",
      "G4_supply_overlap",
      "G5_arrival_in_window",
-     "G6_pk_ks_1to1"
+     "G6_pk_ks_1to1",
+     "G7_unbooked_supply",
+     "G8_demand_bounds"
     ],
     "gates_required_for_sufficiency": [
      "G1_identity",
@@ -2430,7 +4676,9 @@
      "G3_demand_overlap",
      "G4_supply_overlap",
      "G5_arrival_in_window",
-     "G6_pk_ks_1to1"
+     "G6_pk_ks_1to1",
+     "G7_unbooked_supply",
+     "G8_demand_bounds"
     ],
     "gate_summary": {
      "G1_identity": "ok",
@@ -2438,38 +4686,47 @@
      "G3_demand_overlap": "unproven",
      "G4_supply_overlap": "unproven",
      "G5_arrival_in_window": "unproven",
-     "G6_pk_ks_1to1": "unproven"
+     "G6_pk_ks_1to1": "unproven",
+     "G7_unbooked_supply": "unproven",
+     "G8_demand_bounds": "unproven"
     },
     "outcomes": [
      {
-      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ B_max 517.0 < D1 48.0",
+      "when": "8 门全 ok ∧ 供给上界（当前记录之和 517.0，未证 UOM/去重则不可用） < 需求下界（当前 P50 48.0，未证分位则不可用）",
       "then_class": "always_replenish",
-      "arithmetic": "结构短缺：最宽松供给上界也低于不含 SO 的 P50"
+      "uses": [
+       "supply.upper",
+       "demand.lower"
+      ],
+      "arithmetic": "短缺：连供给上界都低于需求下界"
      },
      {
-      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ B_max 517.0 ≥ D2 173.0",
+      "when": "8 门全 ok ∧ 供给下界（当前在手 6.0） ≥ 需求上界（当前 P50+SO 173.0）",
       "then_class": "no_shortage_within_window",
-      "arithmetic": "充足：最宽松供给上界覆盖含 SO 的大口径需求（D2 为上界，故不必先删 SO）"
+      "uses": [
+       "supply.lower",
+       "demand.upper"
+      ],
+      "arithmetic": "充足只能由“已证供给下界 ≥ 需求上界”支持；冻结的 B_max 517.0 不是已证下界，不能用来证明充足"
      },
      {
-      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ D1 48.0 ≤ B_max 517.0 < D2 173.0",
+      "when": "任一闸门 unproven/fail，或任一侧界 unproven",
       "then_class": "insufficient_evidence",
-      "arithmetic": "差在 SO：必须做桶级消费/分配后重算净需求，再比较；不得把 SO 当重复直接删掉回退 D1"
-     },
-     {
-      "when": "任一闸门 unproven/fail",
-      "then_class": "insufficient_evidence",
-      "arithmetic": "维持待核实；未证状态不产出任何短缺/充足结论"
+      "uses": [],
+      "arithmetic": "维持待核实；当前缺：G2_uom、G4_supply_overlap、G7_unbooked_supply、G8_demand_bounds"
      }
     ],
     "forbidden": [
+     "B_max >= D2 never proves sufficiency: B_max is the record sum, and G4 only means line-level overlap was checked, not that records are disjoint",
+     "sufficiency requires a proven supply LOWER bound covering a demand UPPER bound",
+     "shortage requires a supply UPPER bound below a demand LOWER bound",
      "SO overlapping the forecast never means SO can be deleted: bucket-level consumption first",
-     "arrival/ completion dates alone never establish sufficiency (need G2 units, G4 overlap, G6 PK#->KS too)",
-     "supply lower bound below demand (B_min / B_min_po_dedup < D2) never promotes to always_replenish",
+     "arrival/ completion dates alone never establish sufficiency",
+     "supply lower bound below demand never promotes to always_replenish",
      "live SO in the demand view never becomes net demand before bucket-level consumption",
      "Cover or any unbooked supply never counts until mapping and substitutability are proven"
     ],
-    "summary": "补齐 G2_uom、G3_demand_overlap、G4_supply_overlap、G5_arrival_in_window、G6_pk_ks_1to1 后按 outcomes 重算；在此之前不发起采购/生产指令，也不宣布“不缺”。"
+    "summary": "补齐 G2_uom、G3_demand_overlap、G4_supply_overlap、G5_arrival_in_window、G6_pk_ks_1to1、G7_unbooked_supply、G8_demand_bounds 后按 outcomes 重算；在此之前不发起采购/生产指令，也不宣布“不缺”。"
    },
    "missing_evidence": [
     {
@@ -2515,7 +4772,7 @@
    ],
    "responsible_role": "采购/供应链（PO ETA/重复）；生产/PMC（WO 完工日）；业务/运营（需求口径）；商品主数据/仓储（UOM）",
    "decisive_unknown": "PO 是否重复（去重后 B_min 171 vs D2 173），以及到货能否在窗口内",
-   "basis": "可供上限 B_max 517 vs D1 48、D2 173。在手 A_low 6；B_min 324（最大重叠，去重压力 171）。结论只在“全部到货且不重叠”与“重叠/迟到”两个情景之间翻转；两个方向都要过同一组 6 个 definitive gates，闸门未齐前只作待核实。需求口径比值 0.199（近 3 月均值 112）。所有含 SO 的判断均标 demand_overlap=unproven。"
+   "basis": "可供上限 B_max 517 vs D1 48、D2 173。在手 A_low 6；B_min 324（最大重叠，去重压力 171）。结论只在“全部到货且不重叠”与“重叠/迟到”两个情景之间翻转；两个方向都要过同一组 8 个 definitive gates，并且短缺看“供给上界 < 需求下界”、充足看“供给下界 ≥ 需求上界”，闸门与界未齐前只作待核实。需求口径比值 0.199（近 3 月均值 112）。所有含 SO 的判断均标 demand_overlap=unproven。"
   },
   {
    "seq": 8,
@@ -2525,6 +4782,142 @@
    "customer_code": "C/Linen-White-100-662-WOW",
    "item_name": "三角靠枕-纯棉麻-100-白色",
    "class": "insufficient_evidence",
+   "screening_class": "always_replenish",
+   "definitive_conclusion": null,
+   "definitive_blocked_by": "gates",
+   "bounds": {
+    "supply": {
+     "lower": {
+      "value": 55,
+      "status": "unproven",
+      "basis": "已证下界 = 在手可用量；只计入确定在窗口内、无重复、且单位已换算的数量",
+      "components": [
+       {
+        "source": "inventory.available",
+        "qty": 55,
+        "documents": [],
+        "deduped": true,
+        "in_window": true,
+        "uom_converted": false,
+        "note": "在手库存：天然在窗口内、无单据重复问题"
+       }
+      ],
+      "excluded": [
+       {
+        "source": "po.open_lines",
+        "qty": 73,
+        "reason": "未去重、到货日未证；重复只会高估"
+       },
+       {
+        "source": "production.open_wo",
+        "qty": 20,
+        "reason": "PK# 计 KS 的 1:1 未证；完工日未证"
+       },
+       {
+        "source": "inventory.intransit",
+        "qty": 73,
+        "reason": "与 PO 数值相同（10/10），可能重复；重复只会高估"
+       }
+      ],
+      "blockers": [
+       "G2_uom"
+      ],
+      "missing_evidence": [
+       "库存/单据单位口径（UOM）"
+      ]
+     },
+     "upper": {
+      "value": 221,
+      "status": "unproven",
+      "basis": "记录之和（每条未结记录只计一次）：重复只会高估，故方向上可作上界；但它只有在 UOM 换算已知、且不存在未上账替代供给时才是可用的上界",
+      "components": [
+       {
+        "source": "inventory.available",
+        "qty": 55,
+        "documents": [],
+        "deduped": true,
+        "in_window": true,
+        "uom_converted": false,
+        "note": "在手库存：天然在窗口内、无单据重复问题"
+       },
+       {
+        "source": "po.open_lines",
+        "qty": 73,
+        "documents": [
+         "PO021717",
+         "PO021726"
+        ],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "未去重、到货日未证；重复只会高估"
+       },
+       {
+        "source": "production.open_wo",
+        "qty": 20,
+        "documents": [
+         "WO-26-03156"
+        ],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "PK# 计 KS 的 1:1 未证；完工日未证"
+       },
+       {
+        "source": "inventory.intransit",
+        "qty": 73,
+        "documents": [],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "与 PO 数值相同（10/10），可能重复；重复只会高估"
+       }
+      ],
+      "blockers": [
+       "G2_uom",
+       "G4_supply_overlap",
+       "G7_unbooked_supply"
+      ],
+      "missing_evidence": [
+       "库存/单据单位口径（UOM）",
+       "PO/在途/在产逐笔重叠键",
+       "Cover 等未上账可替代供给的缺席证明"
+      ]
+     }
+    },
+    "demand": {
+     "lower": {
+      "value": 250.1,
+      "status": "unproven",
+      "basis": "P50 点预测（不含 live SO）；点估计不是已证下界",
+      "blockers": [
+       "G8_demand_bounds"
+      ],
+      "missing_evidence": [
+       "需求下分位或业务人工下限"
+      ]
+     },
+     "upper": {
+      "value": 276.1,
+      "status": "unproven",
+      "basis": "P50 + 正向 live SO；SO 若与预测重复只会高估，故在方向上可作上界，但 P50 若低估则不再是上界",
+      "blockers": [
+       "G8_demand_bounds"
+      ],
+      "missing_evidence": [
+       "需求上分位或业务人工上限"
+      ]
+     }
+    },
+    "rule": "充足：已证供给下界 ≥ 需求上界；短缺：供给上界 < 需求下界；其余保持待核实"
+   },
+   "r4_counterexample": {
+    "active": false,
+    "record_sum": 221,
+    "dedup_stress_point": 128,
+    "demand_upper": 276.1,
+    "note": "该行不存在“记录之和够、去重后不够”的陷阱"
+   },
    "arithmetic_qualifies": "always_replenish",
    "arithmetic_class": "always_replenish",
    "promotion_blockers": [
@@ -2532,7 +4925,9 @@
     "G3_demand_overlap",
     "G4_supply_overlap",
     "G5_arrival_in_window",
-    "G6_pk_ks_1to1"
+    "G6_pk_ks_1to1",
+    "G7_unbooked_supply",
+    "G8_demand_bounds"
    ],
    "demand_overlap": "unproven",
    "demand_overlap_note": "live SO 与 P50 是否同一批需求未证；未做桶级消费/分配前，D2 不能当净需求",
@@ -2583,7 +4978,9 @@
     "t1_identity_confirmed": true,
     "t2_uom_verified": false,
     "t3_bmax_lt_d1": true,
-    "t4_a_low_lt_d2_le_bmax": false
+    "t4_a_low_lt_d2_le_bmax": false,
+    "screening_only": true,
+    "screening_note": "T3/T4 只用冻结值做筛查（B_max 是记录之和、A_low 是在手），不是结论；确定结论必须走 bounds 检验"
    },
    "gates": [
     {
@@ -2612,11 +5009,11 @@
     },
     {
      "id": "G4_supply_overlap",
-     "label": "PO / 在途 / 在产逐笔重叠键",
+     "label": "PO / 在途 / 在产逐笔重叠键（去重后才是数量）",
      "state": "unproven",
      "evidence": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
      "owner_role": "数据/系统",
-     "blocks_promotion": "把 B_min 当供给下界（不影响 B_max 上界的短缺判断）"
+     "blocks_promotion": "任何确定结论：去重前只能得到“记录之和”，既不是已证下界，也不保证是紧上界"
     },
     {
      "id": "G5_arrival_in_window",
@@ -2624,7 +5021,7 @@
      "state": "unproven",
      "evidence": "PO ETA 缺失 2 行；WO 完工日缺失 1 张",
      "owner_role": "采购/供应链；生产/PMC",
-     "blocks_promotion": "always_replenish（B_max 假设全部到货）"
+     "blocks_promotion": "供给下界（未证到货的批次不能计入下界）"
     },
     {
      "id": "G6_pk_ks_1to1",
@@ -2632,7 +5029,23 @@
      "state": "unproven",
      "evidence": "在产剩余 20 件按 1:1 计入",
      "owner_role": "生产/PMC",
-     "blocks_promotion": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
+     "blocks_promotion": "供给下界与上界（换算比例未证则数量不可用）"
+    },
+    {
+     "id": "G7_unbooked_supply",
+     "label": "不存在未上账的可替代供给（Cover 等）",
+     "state": "unproven",
+     "evidence": "cover.verdict=scenario；absence_proven=False；Cover 未并入供给，故实际供给可能高于记录之和",
+     "owner_role": "商品主数据/仓储",
+     "blocks_promotion": "供给上界（有未上账替代供给时，记录之和不再是上界）"
+    },
+    {
+     "id": "G8_demand_bounds",
+     "label": "需求下界与上界均已给出（分位或业务人工界）",
+     "state": "unproven",
+     "evidence": "P90-free 清单只有 P50 点预测：D1 是点估计不是下界，D2=P50+SO 也不是上界；缺少需求下/上分位或业务人工上下限",
+     "owner_role": "业务/运营",
+     "blocks_promotion": "任何确定结论（短缺要需求下界，充足要需求上界）"
     }
    ],
    "horizon_stability": [
@@ -2704,11 +5117,143 @@
     "calibration_insufficiency": "P90-free 清单不做区间校准，校准不足不在本清单判定内"
    },
    "start_condition": {
-    "rule": "同一条结论门槛：短缺与充足都必须过同一组 definitive gates；文字条件不能替代闸门",
-    "demand_view_for_promotion": "D1",
+    "rule": "R4 双向界规则：充足 = 已证供给下界 ≥ 需求上界；短缺 = 供给上界 < 需求下界；两侧数量都必须来自按证据去重并换算（UOM）后的窗口内数量；B_max 只是记录之和，永远不能单独证明充足",
+    "demand_bounds_used": {
+     "lower": "D1（P50，不含 SO）",
+     "upper": "D2（P50 + 正向 live SO）"
+    },
     "demand_overlap": "unproven",
+    "supply_bounds": {
+     "lower": {
+      "value": 55,
+      "status": "unproven",
+      "basis": "已证下界 = 在手可用量；只计入确定在窗口内、无重复、且单位已换算的数量",
+      "components": [
+       {
+        "source": "inventory.available",
+        "qty": 55,
+        "documents": [],
+        "deduped": true,
+        "in_window": true,
+        "uom_converted": false,
+        "note": "在手库存：天然在窗口内、无单据重复问题"
+       }
+      ],
+      "excluded": [
+       {
+        "source": "po.open_lines",
+        "qty": 73,
+        "reason": "未去重、到货日未证；重复只会高估"
+       },
+       {
+        "source": "production.open_wo",
+        "qty": 20,
+        "reason": "PK# 计 KS 的 1:1 未证；完工日未证"
+       },
+       {
+        "source": "inventory.intransit",
+        "qty": 73,
+        "reason": "与 PO 数值相同（10/10），可能重复；重复只会高估"
+       }
+      ],
+      "blockers": [
+       "G2_uom"
+      ],
+      "missing_evidence": [
+       "库存/单据单位口径（UOM）"
+      ]
+     },
+     "upper": {
+      "value": 221,
+      "status": "unproven",
+      "basis": "记录之和（每条未结记录只计一次）：重复只会高估，故方向上可作上界；但它只有在 UOM 换算已知、且不存在未上账替代供给时才是可用的上界",
+      "components": [
+       {
+        "source": "inventory.available",
+        "qty": 55,
+        "documents": [],
+        "deduped": true,
+        "in_window": true,
+        "uom_converted": false,
+        "note": "在手库存：天然在窗口内、无单据重复问题"
+       },
+       {
+        "source": "po.open_lines",
+        "qty": 73,
+        "documents": [
+         "PO021717",
+         "PO021726"
+        ],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "未去重、到货日未证；重复只会高估"
+       },
+       {
+        "source": "production.open_wo",
+        "qty": 20,
+        "documents": [
+         "WO-26-03156"
+        ],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "PK# 计 KS 的 1:1 未证；完工日未证"
+       },
+       {
+        "source": "inventory.intransit",
+        "qty": 73,
+        "documents": [],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "与 PO 数值相同（10/10），可能重复；重复只会高估"
+       }
+      ],
+      "blockers": [
+       "G2_uom",
+       "G4_supply_overlap",
+       "G7_unbooked_supply"
+      ],
+      "missing_evidence": [
+       "库存/单据单位口径（UOM）",
+       "PO/在途/在产逐笔重叠键",
+       "Cover 等未上账可替代供给的缺席证明"
+      ]
+     }
+    },
+    "demand_bounds": {
+     "lower": {
+      "value": 250.1,
+      "status": "unproven",
+      "basis": "P50 点预测（不含 live SO）；点估计不是已证下界",
+      "blockers": [
+       "G8_demand_bounds"
+      ],
+      "missing_evidence": [
+       "需求下分位或业务人工下限"
+      ]
+     },
+     "upper": {
+      "value": 276.1,
+      "status": "unproven",
+      "basis": "P50 + 正向 live SO；SO 若与预测重复只会高估，故在方向上可作上界，但 P50 若低估则不再是上界",
+      "blockers": [
+       "G8_demand_bounds"
+      ],
+      "missing_evidence": [
+       "需求上分位或业务人工上限"
+      ]
+     }
+    },
+    "bound_blockers": [
+     "G2_uom",
+     "G4_supply_overlap",
+     "G7_unbooked_supply",
+     "G8_demand_bounds"
+    ],
     "supply_lower_bound_shortfall": true,
-    "supply_lower_bound_shortfall_note": "B_min/B_min_po_dedup < D2 只说明存在短缺情景；该行仍不得升级到 always_replenish",
+    "supply_lower_bound_shortfall_note": "B_min/B_min_po_dedup < D2 只说明存在短缺情景；在 R4 规则下，短缺需要“供给上界 < 需求下界”，下界不足本身不构成任何结论",
     "binding_shortfall_conditions": [
      "最大重叠下 B_min 128.0 < D2 276.1",
      "只在手+在产 A_high 75.0 < D2 276.1（到货落在窗口外）",
@@ -2741,11 +5286,11 @@
      },
      {
       "id": "G4_supply_overlap",
-      "label": "PO / 在途 / 在产逐笔重叠键",
+      "label": "PO / 在途 / 在产逐笔重叠键（去重后才是数量）",
       "state": "unproven",
       "owner_role": "数据/系统",
       "evidence_needed": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
-      "blocks": "把 B_min 当供给下界（不影响 B_max 上界的短缺判断）"
+      "blocks": "任何确定结论：去重前只能得到“记录之和”，既不是已证下界，也不保证是紧上界"
      },
      {
       "id": "G5_arrival_in_window",
@@ -2753,7 +5298,7 @@
       "state": "unproven",
       "owner_role": "采购/供应链；生产/PMC",
       "evidence_needed": "PO ETA 缺失 2 行；WO 完工日缺失 1 张",
-      "blocks": "always_replenish（B_max 假设全部到货）"
+      "blocks": "供给下界（未证到货的批次不能计入下界）"
      },
      {
       "id": "G6_pk_ks_1to1",
@@ -2761,7 +5306,23 @@
       "state": "unproven",
       "owner_role": "生产/PMC",
       "evidence_needed": "在产剩余 20 件按 1:1 计入",
-      "blocks": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
+      "blocks": "供给下界与上界（换算比例未证则数量不可用）"
+     },
+     {
+      "id": "G7_unbooked_supply",
+      "label": "不存在未上账的可替代供给（Cover 等）",
+      "state": "unproven",
+      "owner_role": "商品主数据/仓储",
+      "evidence_needed": "cover.verdict=scenario；absence_proven=False；Cover 未并入供给，故实际供给可能高于记录之和",
+      "blocks": "供给上界（有未上账替代供给时，记录之和不再是上界）"
+     },
+     {
+      "id": "G8_demand_bounds",
+      "label": "需求下界与上界均已给出（分位或业务人工界）",
+      "state": "unproven",
+      "owner_role": "业务/运营",
+      "evidence_needed": "P90-free 清单只有 P50 点预测：D1 是点估计不是下界，D2=P50+SO 也不是上界；缺少需求下/上分位或业务人工上下限",
+      "blocks": "任何确定结论（短缺要需求下界，充足要需求上界）"
      }
     ],
     "gates_required_for_definitive_conclusion": [
@@ -2770,7 +5331,9 @@
      "G3_demand_overlap",
      "G4_supply_overlap",
      "G5_arrival_in_window",
-     "G6_pk_ks_1to1"
+     "G6_pk_ks_1to1",
+     "G7_unbooked_supply",
+     "G8_demand_bounds"
     ],
     "gates_required_for_shortage": [
      "G1_identity",
@@ -2778,7 +5341,9 @@
      "G3_demand_overlap",
      "G4_supply_overlap",
      "G5_arrival_in_window",
-     "G6_pk_ks_1to1"
+     "G6_pk_ks_1to1",
+     "G7_unbooked_supply",
+     "G8_demand_bounds"
     ],
     "gates_required_for_sufficiency": [
      "G1_identity",
@@ -2786,7 +5351,9 @@
      "G3_demand_overlap",
      "G4_supply_overlap",
      "G5_arrival_in_window",
-     "G6_pk_ks_1to1"
+     "G6_pk_ks_1to1",
+     "G7_unbooked_supply",
+     "G8_demand_bounds"
     ],
     "gate_summary": {
      "G1_identity": "ok",
@@ -2794,38 +5361,47 @@
      "G3_demand_overlap": "unproven",
      "G4_supply_overlap": "unproven",
      "G5_arrival_in_window": "unproven",
-     "G6_pk_ks_1to1": "unproven"
+     "G6_pk_ks_1to1": "unproven",
+     "G7_unbooked_supply": "unproven",
+     "G8_demand_bounds": "unproven"
     },
     "outcomes": [
      {
-      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ B_max 221.0 < D1 250.1",
+      "when": "8 门全 ok ∧ 供给上界（当前记录之和 221.0，未证 UOM/去重则不可用） < 需求下界（当前 P50 250.1，未证分位则不可用）",
       "then_class": "always_replenish",
-      "arithmetic": "结构短缺：最宽松供给上界也低于不含 SO 的 P50"
+      "uses": [
+       "supply.upper",
+       "demand.lower"
+      ],
+      "arithmetic": "短缺：连供给上界都低于需求下界"
      },
      {
-      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ B_max 221.0 ≥ D2 276.1",
+      "when": "8 门全 ok ∧ 供给下界（当前在手 55.0） ≥ 需求上界（当前 P50+SO 276.1）",
       "then_class": "no_shortage_within_window",
-      "arithmetic": "充足：最宽松供给上界覆盖含 SO 的大口径需求（D2 为上界，故不必先删 SO）"
+      "uses": [
+       "supply.lower",
+       "demand.upper"
+      ],
+      "arithmetic": "充足只能由“已证供给下界 ≥ 需求上界”支持；冻结的 B_max 221.0 不是已证下界，不能用来证明充足"
      },
      {
-      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ D1 250.1 ≤ B_max 221.0 < D2 276.1",
+      "when": "任一闸门 unproven/fail，或任一侧界 unproven",
       "then_class": "insufficient_evidence",
-      "arithmetic": "差在 SO：必须做桶级消费/分配后重算净需求，再比较；不得把 SO 当重复直接删掉回退 D1"
-     },
-     {
-      "when": "任一闸门 unproven/fail",
-      "then_class": "insufficient_evidence",
-      "arithmetic": "维持待核实；未证状态不产出任何短缺/充足结论"
+      "uses": [],
+      "arithmetic": "维持待核实；当前缺：G2_uom、G4_supply_overlap、G7_unbooked_supply、G8_demand_bounds"
      }
     ],
     "forbidden": [
+     "B_max >= D2 never proves sufficiency: B_max is the record sum, and G4 only means line-level overlap was checked, not that records are disjoint",
+     "sufficiency requires a proven supply LOWER bound covering a demand UPPER bound",
+     "shortage requires a supply UPPER bound below a demand LOWER bound",
      "SO overlapping the forecast never means SO can be deleted: bucket-level consumption first",
-     "arrival/ completion dates alone never establish sufficiency (need G2 units, G4 overlap, G6 PK#->KS too)",
-     "supply lower bound below demand (B_min / B_min_po_dedup < D2) never promotes to always_replenish",
+     "arrival/ completion dates alone never establish sufficiency",
+     "supply lower bound below demand never promotes to always_replenish",
      "live SO in the demand view never becomes net demand before bucket-level consumption",
      "Cover or any unbooked supply never counts until mapping and substitutability are proven"
     ],
-    "summary": "补齐 G2_uom、G3_demand_overlap、G4_supply_overlap、G5_arrival_in_window、G6_pk_ks_1to1 后按 outcomes 重算；在此之前不发起采购/生产指令，也不宣布“不缺”。"
+    "summary": "补齐 G2_uom、G3_demand_overlap、G4_supply_overlap、G5_arrival_in_window、G6_pk_ks_1to1、G7_unbooked_supply、G8_demand_bounds 后按 outcomes 重算；在此之前不发起采购/生产指令，也不宣布“不缺”。"
    },
    "missing_evidence": [
     {
@@ -2881,6 +5457,148 @@
    "customer_code": "TT0000671K0063721",
    "item_name": "三角靠枕-荷兰绒-100-米白色",
    "class": "depends_on_arrival",
+   "screening_class": "depends_on_arrival",
+   "definitive_conclusion": null,
+   "definitive_blocked_by": "gates",
+   "bounds": {
+    "supply": {
+     "lower": {
+      "value": 104,
+      "status": "unproven",
+      "basis": "已证下界 = 在手可用量；只计入确定在窗口内、无重复、且单位已换算的数量",
+      "components": [
+       {
+        "source": "inventory.available",
+        "qty": 104,
+        "documents": [],
+        "deduped": true,
+        "in_window": true,
+        "uom_converted": false,
+        "note": "在手库存：天然在窗口内、无单据重复问题"
+       }
+      ],
+      "excluded": [
+       {
+        "source": "po.open_lines",
+        "qty": 490,
+        "reason": "未去重、到货日未证；重复只会高估"
+       },
+       {
+        "source": "production.open_wo",
+        "qty": 310,
+        "reason": "PK# 计 KS 的 1:1 未证；完工日未证"
+       },
+       {
+        "source": "inventory.intransit",
+        "qty": 490,
+        "reason": "与 PO 数值相同（10/10），可能重复；重复只会高估"
+       }
+      ],
+      "blockers": [
+       "G2_uom"
+      ],
+      "missing_evidence": [
+       "库存/单据单位口径（UOM）"
+      ]
+     },
+     "upper": {
+      "value": 1394,
+      "status": "unproven",
+      "basis": "记录之和（每条未结记录只计一次）：重复只会高估，故方向上可作上界；但它只有在 UOM 换算已知、且不存在未上账替代供给时才是可用的上界",
+      "components": [
+       {
+        "source": "inventory.available",
+        "qty": 104,
+        "documents": [],
+        "deduped": true,
+        "in_window": true,
+        "uom_converted": false,
+        "note": "在手库存：天然在窗口内、无单据重复问题"
+       },
+       {
+        "source": "po.open_lines",
+        "qty": 490,
+        "documents": [
+         "PO021716",
+         "PO021727"
+        ],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "未去重、到货日未证；重复只会高估"
+       },
+       {
+        "source": "production.open_wo",
+        "qty": 310,
+        "documents": [
+         "WO-26-00285",
+         "WO-26-00680",
+         "WO-26-01791",
+         "WO-26-02081",
+         "WO-26-03354",
+         "WO-26-03485",
+         "WO-26-03648"
+        ],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "PK# 计 KS 的 1:1 未证；完工日未证"
+       },
+       {
+        "source": "inventory.intransit",
+        "qty": 490,
+        "documents": [],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "与 PO 数值相同（10/10），可能重复；重复只会高估"
+       }
+      ],
+      "blockers": [
+       "G2_uom",
+       "G4_supply_overlap",
+       "G7_unbooked_supply"
+      ],
+      "missing_evidence": [
+       "库存/单据单位口径（UOM）",
+       "PO/在途/在产逐笔重叠键",
+       "Cover 等未上账可替代供给的缺席证明"
+      ]
+     }
+    },
+    "demand": {
+     "lower": {
+      "value": 165.3,
+      "status": "unproven",
+      "basis": "P50 点预测（不含 live SO）；点估计不是已证下界",
+      "blockers": [
+       "G8_demand_bounds"
+      ],
+      "missing_evidence": [
+       "需求下分位或业务人工下限"
+      ]
+     },
+     "upper": {
+      "value": 593.3,
+      "status": "unproven",
+      "basis": "P50 + 正向 live SO；SO 若与预测重复只会高估，故在方向上可作上界，但 P50 若低估则不再是上界",
+      "blockers": [
+       "G8_demand_bounds"
+      ],
+      "missing_evidence": [
+       "需求上分位或业务人工上限"
+      ]
+     }
+    },
+    "rule": "充足：已证供给下界 ≥ 需求上界；短缺：供给上界 < 需求下界；其余保持待核实"
+   },
+   "r4_counterexample": {
+    "active": false,
+    "record_sum": 1394,
+    "dedup_stress_point": 594,
+    "demand_upper": 593.3,
+    "note": "该行不存在“记录之和够、去重后不够”的陷阱"
+   },
    "arithmetic_qualifies": null,
    "arithmetic_class": "depends_on_arrival",
    "promotion_blockers": [
@@ -2888,7 +5606,9 @@
     "G3_demand_overlap",
     "G4_supply_overlap",
     "G5_arrival_in_window",
-    "G6_pk_ks_1to1"
+    "G6_pk_ks_1to1",
+    "G7_unbooked_supply",
+    "G8_demand_bounds"
    ],
    "demand_overlap": "unproven",
    "demand_overlap_note": "live SO 与 P50 是否同一批需求未证；未做桶级消费/分配前，D2 不能当净需求",
@@ -2939,7 +5659,9 @@
     "t1_identity_confirmed": true,
     "t2_uom_verified": false,
     "t3_bmax_lt_d1": false,
-    "t4_a_low_lt_d2_le_bmax": true
+    "t4_a_low_lt_d2_le_bmax": true,
+    "screening_only": true,
+    "screening_note": "T3/T4 只用冻结值做筛查（B_max 是记录之和、A_low 是在手），不是结论；确定结论必须走 bounds 检验"
    },
    "gates": [
     {
@@ -2968,11 +5690,11 @@
     },
     {
      "id": "G4_supply_overlap",
-     "label": "PO / 在途 / 在产逐笔重叠键",
+     "label": "PO / 在途 / 在产逐笔重叠键（去重后才是数量）",
      "state": "unproven",
      "evidence": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
      "owner_role": "数据/系统",
-     "blocks_promotion": "把 B_min 当供给下界（不影响 B_max 上界的短缺判断）"
+     "blocks_promotion": "任何确定结论：去重前只能得到“记录之和”，既不是已证下界，也不保证是紧上界"
     },
     {
      "id": "G5_arrival_in_window",
@@ -2980,7 +5702,7 @@
      "state": "unproven",
      "evidence": "PO ETA 缺失 2 行；WO 完工日缺失 7 张",
      "owner_role": "采购/供应链；生产/PMC",
-     "blocks_promotion": "always_replenish（B_max 假设全部到货）"
+     "blocks_promotion": "供给下界（未证到货的批次不能计入下界）"
     },
     {
      "id": "G6_pk_ks_1to1",
@@ -2988,7 +5710,23 @@
      "state": "unproven",
      "evidence": "在产剩余 310 件按 1:1 计入",
      "owner_role": "生产/PMC",
-     "blocks_promotion": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
+     "blocks_promotion": "供给下界与上界（换算比例未证则数量不可用）"
+    },
+    {
+     "id": "G7_unbooked_supply",
+     "label": "不存在未上账的可替代供给（Cover 等）",
+     "state": "unproven",
+     "evidence": "cover.verdict=scenario；absence_proven=False；Cover 未并入供给，故实际供给可能高于记录之和",
+     "owner_role": "商品主数据/仓储",
+     "blocks_promotion": "供给上界（有未上账替代供给时，记录之和不再是上界）"
+    },
+    {
+     "id": "G8_demand_bounds",
+     "label": "需求下界与上界均已给出（分位或业务人工界）",
+     "state": "unproven",
+     "evidence": "P90-free 清单只有 P50 点预测：D1 是点估计不是下界，D2=P50+SO 也不是上界；缺少需求下/上分位或业务人工上下限",
+     "owner_role": "业务/运营",
+     "blocks_promotion": "任何确定结论（短缺要需求下界，充足要需求上界）"
     }
    ],
    "horizon_stability": [
@@ -3050,11 +5788,149 @@
    "arithmetic_qualifies_at_windows": [],
    "insufficient_evidence_causes": null,
    "start_condition": {
-    "rule": "同一条结论门槛：短缺与充足都必须过同一组 definitive gates；文字条件不能替代闸门",
-    "demand_view_for_promotion": "D2",
+    "rule": "R4 双向界规则：充足 = 已证供给下界 ≥ 需求上界；短缺 = 供给上界 < 需求下界；两侧数量都必须来自按证据去重并换算（UOM）后的窗口内数量；B_max 只是记录之和，永远不能单独证明充足",
+    "demand_bounds_used": {
+     "lower": "D1（P50，不含 SO）",
+     "upper": "D2（P50 + 正向 live SO）"
+    },
     "demand_overlap": "unproven",
+    "supply_bounds": {
+     "lower": {
+      "value": 104,
+      "status": "unproven",
+      "basis": "已证下界 = 在手可用量；只计入确定在窗口内、无重复、且单位已换算的数量",
+      "components": [
+       {
+        "source": "inventory.available",
+        "qty": 104,
+        "documents": [],
+        "deduped": true,
+        "in_window": true,
+        "uom_converted": false,
+        "note": "在手库存：天然在窗口内、无单据重复问题"
+       }
+      ],
+      "excluded": [
+       {
+        "source": "po.open_lines",
+        "qty": 490,
+        "reason": "未去重、到货日未证；重复只会高估"
+       },
+       {
+        "source": "production.open_wo",
+        "qty": 310,
+        "reason": "PK# 计 KS 的 1:1 未证；完工日未证"
+       },
+       {
+        "source": "inventory.intransit",
+        "qty": 490,
+        "reason": "与 PO 数值相同（10/10），可能重复；重复只会高估"
+       }
+      ],
+      "blockers": [
+       "G2_uom"
+      ],
+      "missing_evidence": [
+       "库存/单据单位口径（UOM）"
+      ]
+     },
+     "upper": {
+      "value": 1394,
+      "status": "unproven",
+      "basis": "记录之和（每条未结记录只计一次）：重复只会高估，故方向上可作上界；但它只有在 UOM 换算已知、且不存在未上账替代供给时才是可用的上界",
+      "components": [
+       {
+        "source": "inventory.available",
+        "qty": 104,
+        "documents": [],
+        "deduped": true,
+        "in_window": true,
+        "uom_converted": false,
+        "note": "在手库存：天然在窗口内、无单据重复问题"
+       },
+       {
+        "source": "po.open_lines",
+        "qty": 490,
+        "documents": [
+         "PO021716",
+         "PO021727"
+        ],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "未去重、到货日未证；重复只会高估"
+       },
+       {
+        "source": "production.open_wo",
+        "qty": 310,
+        "documents": [
+         "WO-26-00285",
+         "WO-26-00680",
+         "WO-26-01791",
+         "WO-26-02081",
+         "WO-26-03354",
+         "WO-26-03485",
+         "WO-26-03648"
+        ],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "PK# 计 KS 的 1:1 未证；完工日未证"
+       },
+       {
+        "source": "inventory.intransit",
+        "qty": 490,
+        "documents": [],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "与 PO 数值相同（10/10），可能重复；重复只会高估"
+       }
+      ],
+      "blockers": [
+       "G2_uom",
+       "G4_supply_overlap",
+       "G7_unbooked_supply"
+      ],
+      "missing_evidence": [
+       "库存/单据单位口径（UOM）",
+       "PO/在途/在产逐笔重叠键",
+       "Cover 等未上账可替代供给的缺席证明"
+      ]
+     }
+    },
+    "demand_bounds": {
+     "lower": {
+      "value": 165.3,
+      "status": "unproven",
+      "basis": "P50 点预测（不含 live SO）；点估计不是已证下界",
+      "blockers": [
+       "G8_demand_bounds"
+      ],
+      "missing_evidence": [
+       "需求下分位或业务人工下限"
+      ]
+     },
+     "upper": {
+      "value": 593.3,
+      "status": "unproven",
+      "basis": "P50 + 正向 live SO；SO 若与预测重复只会高估，故在方向上可作上界，但 P50 若低估则不再是上界",
+      "blockers": [
+       "G8_demand_bounds"
+      ],
+      "missing_evidence": [
+       "需求上分位或业务人工上限"
+      ]
+     }
+    },
+    "bound_blockers": [
+     "G2_uom",
+     "G4_supply_overlap",
+     "G7_unbooked_supply",
+     "G8_demand_bounds"
+    ],
     "supply_lower_bound_shortfall": false,
-    "supply_lower_bound_shortfall_note": "下界未低于 D2；短缺情景来自到货时点/在手不足，同样不得据此直接升级",
+    "supply_lower_bound_shortfall_note": "下界未低于 D2；短缺情景来自到货时点/在手不足，同样不构成结论",
     "binding_shortfall_conditions": [
      "只在手+在产 A_high 414.0 < D2 593.3（到货落在窗口外）",
      "只在手 A_low 104.0 < D2 593.3"
@@ -3086,11 +5962,11 @@
      },
      {
       "id": "G4_supply_overlap",
-      "label": "PO / 在途 / 在产逐笔重叠键",
+      "label": "PO / 在途 / 在产逐笔重叠键（去重后才是数量）",
       "state": "unproven",
       "owner_role": "数据/系统",
       "evidence_needed": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
-      "blocks": "把 B_min 当供给下界（不影响 B_max 上界的短缺判断）"
+      "blocks": "任何确定结论：去重前只能得到“记录之和”，既不是已证下界，也不保证是紧上界"
      },
      {
       "id": "G5_arrival_in_window",
@@ -3098,7 +5974,7 @@
       "state": "unproven",
       "owner_role": "采购/供应链；生产/PMC",
       "evidence_needed": "PO ETA 缺失 2 行；WO 完工日缺失 7 张",
-      "blocks": "always_replenish（B_max 假设全部到货）"
+      "blocks": "供给下界（未证到货的批次不能计入下界）"
      },
      {
       "id": "G6_pk_ks_1to1",
@@ -3106,7 +5982,23 @@
       "state": "unproven",
       "owner_role": "生产/PMC",
       "evidence_needed": "在产剩余 310 件按 1:1 计入",
-      "blocks": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
+      "blocks": "供给下界与上界（换算比例未证则数量不可用）"
+     },
+     {
+      "id": "G7_unbooked_supply",
+      "label": "不存在未上账的可替代供给（Cover 等）",
+      "state": "unproven",
+      "owner_role": "商品主数据/仓储",
+      "evidence_needed": "cover.verdict=scenario；absence_proven=False；Cover 未并入供给，故实际供给可能高于记录之和",
+      "blocks": "供给上界（有未上账替代供给时，记录之和不再是上界）"
+     },
+     {
+      "id": "G8_demand_bounds",
+      "label": "需求下界与上界均已给出（分位或业务人工界）",
+      "state": "unproven",
+      "owner_role": "业务/运营",
+      "evidence_needed": "P90-free 清单只有 P50 点预测：D1 是点估计不是下界，D2=P50+SO 也不是上界；缺少需求下/上分位或业务人工上下限",
+      "blocks": "任何确定结论（短缺要需求下界，充足要需求上界）"
      }
     ],
     "gates_required_for_definitive_conclusion": [
@@ -3115,7 +6007,9 @@
      "G3_demand_overlap",
      "G4_supply_overlap",
      "G5_arrival_in_window",
-     "G6_pk_ks_1to1"
+     "G6_pk_ks_1to1",
+     "G7_unbooked_supply",
+     "G8_demand_bounds"
     ],
     "gates_required_for_shortage": [
      "G1_identity",
@@ -3123,7 +6017,9 @@
      "G3_demand_overlap",
      "G4_supply_overlap",
      "G5_arrival_in_window",
-     "G6_pk_ks_1to1"
+     "G6_pk_ks_1to1",
+     "G7_unbooked_supply",
+     "G8_demand_bounds"
     ],
     "gates_required_for_sufficiency": [
      "G1_identity",
@@ -3131,7 +6027,9 @@
      "G3_demand_overlap",
      "G4_supply_overlap",
      "G5_arrival_in_window",
-     "G6_pk_ks_1to1"
+     "G6_pk_ks_1to1",
+     "G7_unbooked_supply",
+     "G8_demand_bounds"
     ],
     "gate_summary": {
      "G1_identity": "ok",
@@ -3139,38 +6037,47 @@
      "G3_demand_overlap": "unproven",
      "G4_supply_overlap": "unproven",
      "G5_arrival_in_window": "unproven",
-     "G6_pk_ks_1to1": "unproven"
+     "G6_pk_ks_1to1": "unproven",
+     "G7_unbooked_supply": "unproven",
+     "G8_demand_bounds": "unproven"
     },
     "outcomes": [
      {
-      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ B_max 1394.0 < D1 165.3",
+      "when": "8 门全 ok ∧ 供给上界（当前记录之和 1394.0，未证 UOM/去重则不可用） < 需求下界（当前 P50 165.3，未证分位则不可用）",
       "then_class": "always_replenish",
-      "arithmetic": "结构短缺：最宽松供给上界也低于不含 SO 的 P50"
+      "uses": [
+       "supply.upper",
+       "demand.lower"
+      ],
+      "arithmetic": "短缺：连供给上界都低于需求下界"
      },
      {
-      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ B_max 1394.0 ≥ D2 593.3",
+      "when": "8 门全 ok ∧ 供给下界（当前在手 104.0） ≥ 需求上界（当前 P50+SO 593.3）",
       "then_class": "no_shortage_within_window",
-      "arithmetic": "充足：最宽松供给上界覆盖含 SO 的大口径需求（D2 为上界，故不必先删 SO）"
+      "uses": [
+       "supply.lower",
+       "demand.upper"
+      ],
+      "arithmetic": "充足只能由“已证供给下界 ≥ 需求上界”支持；冻结的 B_max 1394.0 不是已证下界，不能用来证明充足"
      },
      {
-      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ D1 165.3 ≤ B_max 1394.0 < D2 593.3",
+      "when": "任一闸门 unproven/fail，或任一侧界 unproven",
       "then_class": "insufficient_evidence",
-      "arithmetic": "差在 SO：必须做桶级消费/分配后重算净需求，再比较；不得把 SO 当重复直接删掉回退 D1"
-     },
-     {
-      "when": "任一闸门 unproven/fail",
-      "then_class": "insufficient_evidence",
-      "arithmetic": "维持待核实；未证状态不产出任何短缺/充足结论"
+      "uses": [],
+      "arithmetic": "维持待核实；当前缺：G2_uom、G4_supply_overlap、G7_unbooked_supply、G8_demand_bounds"
      }
     ],
     "forbidden": [
+     "B_max >= D2 never proves sufficiency: B_max is the record sum, and G4 only means line-level overlap was checked, not that records are disjoint",
+     "sufficiency requires a proven supply LOWER bound covering a demand UPPER bound",
+     "shortage requires a supply UPPER bound below a demand LOWER bound",
      "SO overlapping the forecast never means SO can be deleted: bucket-level consumption first",
-     "arrival/ completion dates alone never establish sufficiency (need G2 units, G4 overlap, G6 PK#->KS too)",
-     "supply lower bound below demand (B_min / B_min_po_dedup < D2) never promotes to always_replenish",
+     "arrival/ completion dates alone never establish sufficiency",
+     "supply lower bound below demand never promotes to always_replenish",
      "live SO in the demand view never becomes net demand before bucket-level consumption",
      "Cover or any unbooked supply never counts until mapping and substitutability are proven"
     ],
-    "summary": "补齐 G2_uom、G3_demand_overlap、G4_supply_overlap、G5_arrival_in_window、G6_pk_ks_1to1 后按 outcomes 重算；在此之前不发起采购/生产指令，也不宣布“不缺”。"
+    "summary": "补齐 G2_uom、G3_demand_overlap、G4_supply_overlap、G5_arrival_in_window、G6_pk_ks_1to1、G7_unbooked_supply、G8_demand_bounds 后按 outcomes 重算；在此之前不发起采购/生产指令，也不宣布“不缺”。"
    },
    "missing_evidence": [
     {
@@ -3211,7 +6118,7 @@
    ],
    "responsible_role": "采购/供应链（PO ETA/重复）；生产/PMC（WO 完工日）；业务/运营（需求口径）；商品主数据/仓储（UOM）",
    "decisive_unknown": "到货/完工时点与重叠：在产 310、PO 490、在途 490",
-   "basis": "可供上限 B_max 1394 vs D1 165.3、D2 593.3。在手 A_low 104；B_min 594（最大重叠，去重压力 594）。结论只在“全部到货且不重叠”与“重叠/迟到”两个情景之间翻转；两个方向都要过同一组 6 个 definitive gates，闸门未齐前只作待核实。需求口径比值 0.659（近 3 月均值 95.7）。所有含 SO 的判断均标 demand_overlap=unproven。"
+   "basis": "可供上限 B_max 1394 vs D1 165.3、D2 593.3。在手 A_low 104；B_min 594（最大重叠，去重压力 594）。结论只在“全部到货且不重叠”与“重叠/迟到”两个情景之间翻转；两个方向都要过同一组 8 个 definitive gates，并且短缺看“供给上界 < 需求下界”、充足看“供给下界 ≥ 需求上界”，闸门与界未齐前只作待核实。需求口径比值 0.659（近 3 月均值 95.7）。所有含 SO 的判断均标 demand_overlap=unproven。"
   },
   {
    "seq": 10,
@@ -3221,6 +6128,140 @@
    "customer_code": "C/Linen-Natural-194-688-wow",
    "item_name": "三角靠枕-新棉麻本色-194-麻本色",
    "class": "depends_on_arrival",
+   "screening_class": "depends_on_arrival",
+   "definitive_conclusion": null,
+   "definitive_blocked_by": "gates",
+   "bounds": {
+    "supply": {
+     "lower": {
+      "value": 360,
+      "status": "unproven",
+      "basis": "已证下界 = 在手可用量；只计入确定在窗口内、无重复、且单位已换算的数量",
+      "components": [
+       {
+        "source": "inventory.available",
+        "qty": 360,
+        "documents": [],
+        "deduped": true,
+        "in_window": true,
+        "uom_converted": false,
+        "note": "在手库存：天然在窗口内、无单据重复问题"
+       }
+      ],
+      "excluded": [
+       {
+        "source": "po.open_lines",
+        "qty": 0,
+        "reason": "未去重、到货日未证；重复只会高估"
+       },
+       {
+        "source": "production.open_wo",
+        "qty": 620,
+        "reason": "PK# 计 KS 的 1:1 未证；完工日未证"
+       },
+       {
+        "source": "inventory.intransit",
+        "qty": 0,
+        "reason": "与 PO 数值相同（10/10），可能重复；重复只会高估"
+       }
+      ],
+      "blockers": [
+       "G2_uom"
+      ],
+      "missing_evidence": [
+       "库存/单据单位口径（UOM）"
+      ]
+     },
+     "upper": {
+      "value": 980,
+      "status": "unproven",
+      "basis": "记录之和（每条未结记录只计一次）：重复只会高估，故方向上可作上界；但它只有在 UOM 换算已知、且不存在未上账替代供给时才是可用的上界",
+      "components": [
+       {
+        "source": "inventory.available",
+        "qty": 360,
+        "documents": [],
+        "deduped": true,
+        "in_window": true,
+        "uom_converted": false,
+        "note": "在手库存：天然在窗口内、无单据重复问题"
+       },
+       {
+        "source": "po.open_lines",
+        "qty": 0,
+        "documents": [],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "未去重、到货日未证；重复只会高估"
+       },
+       {
+        "source": "production.open_wo",
+        "qty": 620,
+        "documents": [
+         "WO-26-02663",
+         "WO-26-03128"
+        ],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "PK# 计 KS 的 1:1 未证；完工日未证"
+       },
+       {
+        "source": "inventory.intransit",
+        "qty": 0,
+        "documents": [],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "与 PO 数值相同（10/10），可能重复；重复只会高估"
+       }
+      ],
+      "blockers": [
+       "G2_uom",
+       "G4_supply_overlap",
+       "G7_unbooked_supply"
+      ],
+      "missing_evidence": [
+       "库存/单据单位口径（UOM）",
+       "PO/在途/在产逐笔重叠键",
+       "Cover 等未上账可替代供给的缺席证明"
+      ]
+     }
+    },
+    "demand": {
+     "lower": {
+      "value": 228.8,
+      "status": "unproven",
+      "basis": "P50 点预测（不含 live SO）；点估计不是已证下界",
+      "blockers": [
+       "G8_demand_bounds"
+      ],
+      "missing_evidence": [
+       "需求下分位或业务人工下限"
+      ]
+     },
+     "upper": {
+      "value": 859.8,
+      "status": "unproven",
+      "basis": "P50 + 正向 live SO；SO 若与预测重复只会高估，故在方向上可作上界，但 P50 若低估则不再是上界",
+      "blockers": [
+       "G8_demand_bounds"
+      ],
+      "missing_evidence": [
+       "需求上分位或业务人工上限"
+      ]
+     }
+    },
+    "rule": "充足：已证供给下界 ≥ 需求上界；短缺：供给上界 < 需求下界；其余保持待核实"
+   },
+   "r4_counterexample": {
+    "active": false,
+    "record_sum": 980,
+    "dedup_stress_point": 980,
+    "demand_upper": 859.8,
+    "note": "该行不存在“记录之和够、去重后不够”的陷阱"
+   },
    "arithmetic_qualifies": null,
    "arithmetic_class": "depends_on_arrival",
    "promotion_blockers": [
@@ -3228,7 +6269,9 @@
     "G3_demand_overlap",
     "G4_supply_overlap",
     "G5_arrival_in_window",
-    "G6_pk_ks_1to1"
+    "G6_pk_ks_1to1",
+    "G7_unbooked_supply",
+    "G8_demand_bounds"
    ],
    "demand_overlap": "unproven",
    "demand_overlap_note": "live SO 与 P50 是否同一批需求未证；未做桶级消费/分配前，D2 不能当净需求",
@@ -3279,7 +6322,9 @@
     "t1_identity_confirmed": true,
     "t2_uom_verified": false,
     "t3_bmax_lt_d1": false,
-    "t4_a_low_lt_d2_le_bmax": true
+    "t4_a_low_lt_d2_le_bmax": true,
+    "screening_only": true,
+    "screening_note": "T3/T4 只用冻结值做筛查（B_max 是记录之和、A_low 是在手），不是结论；确定结论必须走 bounds 检验"
    },
    "gates": [
     {
@@ -3308,11 +6353,11 @@
     },
     {
      "id": "G4_supply_overlap",
-     "label": "PO / 在途 / 在产逐笔重叠键",
+     "label": "PO / 在途 / 在产逐笔重叠键（去重后才是数量）",
      "state": "unproven",
      "evidence": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
      "owner_role": "数据/系统",
-     "blocks_promotion": "把 B_min 当供给下界（不影响 B_max 上界的短缺判断）"
+     "blocks_promotion": "任何确定结论：去重前只能得到“记录之和”，既不是已证下界，也不保证是紧上界"
     },
     {
      "id": "G5_arrival_in_window",
@@ -3320,7 +6365,7 @@
      "state": "unproven",
      "evidence": "PO ETA 缺失 0 行；WO 完工日缺失 2 张",
      "owner_role": "采购/供应链；生产/PMC",
-     "blocks_promotion": "always_replenish（B_max 假设全部到货）"
+     "blocks_promotion": "供给下界（未证到货的批次不能计入下界）"
     },
     {
      "id": "G6_pk_ks_1to1",
@@ -3328,7 +6373,23 @@
      "state": "unproven",
      "evidence": "在产剩余 620 件按 1:1 计入",
      "owner_role": "生产/PMC",
-     "blocks_promotion": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
+     "blocks_promotion": "供给下界与上界（换算比例未证则数量不可用）"
+    },
+    {
+     "id": "G7_unbooked_supply",
+     "label": "不存在未上账的可替代供给（Cover 等）",
+     "state": "unproven",
+     "evidence": "cover.verdict=scenario；absence_proven=False；Cover 未并入供给，故实际供给可能高于记录之和",
+     "owner_role": "商品主数据/仓储",
+     "blocks_promotion": "供给上界（有未上账替代供给时，记录之和不再是上界）"
+    },
+    {
+     "id": "G8_demand_bounds",
+     "label": "需求下界与上界均已给出（分位或业务人工界）",
+     "state": "unproven",
+     "evidence": "P90-free 清单只有 P50 点预测：D1 是点估计不是下界，D2=P50+SO 也不是上界；缺少需求下/上分位或业务人工上下限",
+     "owner_role": "业务/运营",
+     "blocks_promotion": "任何确定结论（短缺要需求下界，充足要需求上界）"
     }
    ],
    "horizon_stability": [
@@ -3390,11 +6451,141 @@
    "arithmetic_qualifies_at_windows": [],
    "insufficient_evidence_causes": null,
    "start_condition": {
-    "rule": "同一条结论门槛：短缺与充足都必须过同一组 definitive gates；文字条件不能替代闸门",
-    "demand_view_for_promotion": "D2",
+    "rule": "R4 双向界规则：充足 = 已证供给下界 ≥ 需求上界；短缺 = 供给上界 < 需求下界；两侧数量都必须来自按证据去重并换算（UOM）后的窗口内数量；B_max 只是记录之和，永远不能单独证明充足",
+    "demand_bounds_used": {
+     "lower": "D1（P50，不含 SO）",
+     "upper": "D2（P50 + 正向 live SO）"
+    },
     "demand_overlap": "unproven",
+    "supply_bounds": {
+     "lower": {
+      "value": 360,
+      "status": "unproven",
+      "basis": "已证下界 = 在手可用量；只计入确定在窗口内、无重复、且单位已换算的数量",
+      "components": [
+       {
+        "source": "inventory.available",
+        "qty": 360,
+        "documents": [],
+        "deduped": true,
+        "in_window": true,
+        "uom_converted": false,
+        "note": "在手库存：天然在窗口内、无单据重复问题"
+       }
+      ],
+      "excluded": [
+       {
+        "source": "po.open_lines",
+        "qty": 0,
+        "reason": "未去重、到货日未证；重复只会高估"
+       },
+       {
+        "source": "production.open_wo",
+        "qty": 620,
+        "reason": "PK# 计 KS 的 1:1 未证；完工日未证"
+       },
+       {
+        "source": "inventory.intransit",
+        "qty": 0,
+        "reason": "与 PO 数值相同（10/10），可能重复；重复只会高估"
+       }
+      ],
+      "blockers": [
+       "G2_uom"
+      ],
+      "missing_evidence": [
+       "库存/单据单位口径（UOM）"
+      ]
+     },
+     "upper": {
+      "value": 980,
+      "status": "unproven",
+      "basis": "记录之和（每条未结记录只计一次）：重复只会高估，故方向上可作上界；但它只有在 UOM 换算已知、且不存在未上账替代供给时才是可用的上界",
+      "components": [
+       {
+        "source": "inventory.available",
+        "qty": 360,
+        "documents": [],
+        "deduped": true,
+        "in_window": true,
+        "uom_converted": false,
+        "note": "在手库存：天然在窗口内、无单据重复问题"
+       },
+       {
+        "source": "po.open_lines",
+        "qty": 0,
+        "documents": [],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "未去重、到货日未证；重复只会高估"
+       },
+       {
+        "source": "production.open_wo",
+        "qty": 620,
+        "documents": [
+         "WO-26-02663",
+         "WO-26-03128"
+        ],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "PK# 计 KS 的 1:1 未证；完工日未证"
+       },
+       {
+        "source": "inventory.intransit",
+        "qty": 0,
+        "documents": [],
+        "deduped": false,
+        "in_window": false,
+        "uom_converted": false,
+        "note": "与 PO 数值相同（10/10），可能重复；重复只会高估"
+       }
+      ],
+      "blockers": [
+       "G2_uom",
+       "G4_supply_overlap",
+       "G7_unbooked_supply"
+      ],
+      "missing_evidence": [
+       "库存/单据单位口径（UOM）",
+       "PO/在途/在产逐笔重叠键",
+       "Cover 等未上账可替代供给的缺席证明"
+      ]
+     }
+    },
+    "demand_bounds": {
+     "lower": {
+      "value": 228.8,
+      "status": "unproven",
+      "basis": "P50 点预测（不含 live SO）；点估计不是已证下界",
+      "blockers": [
+       "G8_demand_bounds"
+      ],
+      "missing_evidence": [
+       "需求下分位或业务人工下限"
+      ]
+     },
+     "upper": {
+      "value": 859.8,
+      "status": "unproven",
+      "basis": "P50 + 正向 live SO；SO 若与预测重复只会高估，故在方向上可作上界，但 P50 若低估则不再是上界",
+      "blockers": [
+       "G8_demand_bounds"
+      ],
+      "missing_evidence": [
+       "需求上分位或业务人工上限"
+      ]
+     }
+    },
+    "bound_blockers": [
+     "G2_uom",
+     "G4_supply_overlap",
+     "G7_unbooked_supply",
+     "G8_demand_bounds"
+    ],
     "supply_lower_bound_shortfall": false,
-    "supply_lower_bound_shortfall_note": "下界未低于 D2；短缺情景来自到货时点/在手不足，同样不得据此直接升级",
+    "supply_lower_bound_shortfall_note": "下界未低于 D2；短缺情景来自到货时点/在手不足，同样不构成结论",
     "binding_shortfall_conditions": [
      "只在手 A_low 360.0 < D2 859.8"
     ],
@@ -3425,11 +6616,11 @@
      },
      {
       "id": "G4_supply_overlap",
-      "label": "PO / 在途 / 在产逐笔重叠键",
+      "label": "PO / 在途 / 在产逐笔重叠键（去重后才是数量）",
       "state": "unproven",
       "owner_role": "数据/系统",
       "evidence_needed": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
-      "blocks": "把 B_min 当供给下界（不影响 B_max 上界的短缺判断）"
+      "blocks": "任何确定结论：去重前只能得到“记录之和”，既不是已证下界，也不保证是紧上界"
      },
      {
       "id": "G5_arrival_in_window",
@@ -3437,7 +6628,7 @@
       "state": "unproven",
       "owner_role": "采购/供应链；生产/PMC",
       "evidence_needed": "PO ETA 缺失 0 行；WO 完工日缺失 2 张",
-      "blocks": "always_replenish（B_max 假设全部到货）"
+      "blocks": "供给下界（未证到货的批次不能计入下界）"
      },
      {
       "id": "G6_pk_ks_1to1",
@@ -3445,7 +6636,23 @@
       "state": "unproven",
       "owner_role": "生产/PMC",
       "evidence_needed": "在产剩余 620 件按 1:1 计入",
-      "blocks": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
+      "blocks": "供给下界与上界（换算比例未证则数量不可用）"
+     },
+     {
+      "id": "G7_unbooked_supply",
+      "label": "不存在未上账的可替代供给（Cover 等）",
+      "state": "unproven",
+      "owner_role": "商品主数据/仓储",
+      "evidence_needed": "cover.verdict=scenario；absence_proven=False；Cover 未并入供给，故实际供给可能高于记录之和",
+      "blocks": "供给上界（有未上账替代供给时，记录之和不再是上界）"
+     },
+     {
+      "id": "G8_demand_bounds",
+      "label": "需求下界与上界均已给出（分位或业务人工界）",
+      "state": "unproven",
+      "owner_role": "业务/运营",
+      "evidence_needed": "P90-free 清单只有 P50 点预测：D1 是点估计不是下界，D2=P50+SO 也不是上界；缺少需求下/上分位或业务人工上下限",
+      "blocks": "任何确定结论（短缺要需求下界，充足要需求上界）"
      }
     ],
     "gates_required_for_definitive_conclusion": [
@@ -3454,7 +6661,9 @@
      "G3_demand_overlap",
      "G4_supply_overlap",
      "G5_arrival_in_window",
-     "G6_pk_ks_1to1"
+     "G6_pk_ks_1to1",
+     "G7_unbooked_supply",
+     "G8_demand_bounds"
     ],
     "gates_required_for_shortage": [
      "G1_identity",
@@ -3462,7 +6671,9 @@
      "G3_demand_overlap",
      "G4_supply_overlap",
      "G5_arrival_in_window",
-     "G6_pk_ks_1to1"
+     "G6_pk_ks_1to1",
+     "G7_unbooked_supply",
+     "G8_demand_bounds"
     ],
     "gates_required_for_sufficiency": [
      "G1_identity",
@@ -3470,7 +6681,9 @@
      "G3_demand_overlap",
      "G4_supply_overlap",
      "G5_arrival_in_window",
-     "G6_pk_ks_1to1"
+     "G6_pk_ks_1to1",
+     "G7_unbooked_supply",
+     "G8_demand_bounds"
     ],
     "gate_summary": {
      "G1_identity": "ok",
@@ -3478,38 +6691,47 @@
      "G3_demand_overlap": "unproven",
      "G4_supply_overlap": "unproven",
      "G5_arrival_in_window": "unproven",
-     "G6_pk_ks_1to1": "unproven"
+     "G6_pk_ks_1to1": "unproven",
+     "G7_unbooked_supply": "unproven",
+     "G8_demand_bounds": "unproven"
     },
     "outcomes": [
      {
-      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ B_max 980.0 < D1 228.8",
+      "when": "8 门全 ok ∧ 供给上界（当前记录之和 980.0，未证 UOM/去重则不可用） < 需求下界（当前 P50 228.8，未证分位则不可用）",
       "then_class": "always_replenish",
-      "arithmetic": "结构短缺：最宽松供给上界也低于不含 SO 的 P50"
+      "uses": [
+       "supply.upper",
+       "demand.lower"
+      ],
+      "arithmetic": "短缺：连供给上界都低于需求下界"
      },
      {
-      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ B_max 980.0 ≥ D2 859.8",
+      "when": "8 门全 ok ∧ 供给下界（当前在手 360.0） ≥ 需求上界（当前 P50+SO 859.8）",
       "then_class": "no_shortage_within_window",
-      "arithmetic": "充足：最宽松供给上界覆盖含 SO 的大口径需求（D2 为上界，故不必先删 SO）"
+      "uses": [
+       "supply.lower",
+       "demand.upper"
+      ],
+      "arithmetic": "充足只能由“已证供给下界 ≥ 需求上界”支持；冻结的 B_max 980.0 不是已证下界，不能用来证明充足"
      },
      {
-      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ D1 228.8 ≤ B_max 980.0 < D2 859.8",
+      "when": "任一闸门 unproven/fail，或任一侧界 unproven",
       "then_class": "insufficient_evidence",
-      "arithmetic": "差在 SO：必须做桶级消费/分配后重算净需求，再比较；不得把 SO 当重复直接删掉回退 D1"
-     },
-     {
-      "when": "任一闸门 unproven/fail",
-      "then_class": "insufficient_evidence",
-      "arithmetic": "维持待核实；未证状态不产出任何短缺/充足结论"
+      "uses": [],
+      "arithmetic": "维持待核实；当前缺：G2_uom、G4_supply_overlap、G7_unbooked_supply、G8_demand_bounds"
      }
     ],
     "forbidden": [
+     "B_max >= D2 never proves sufficiency: B_max is the record sum, and G4 only means line-level overlap was checked, not that records are disjoint",
+     "sufficiency requires a proven supply LOWER bound covering a demand UPPER bound",
+     "shortage requires a supply UPPER bound below a demand LOWER bound",
      "SO overlapping the forecast never means SO can be deleted: bucket-level consumption first",
-     "arrival/ completion dates alone never establish sufficiency (need G2 units, G4 overlap, G6 PK#->KS too)",
-     "supply lower bound below demand (B_min / B_min_po_dedup < D2) never promotes to always_replenish",
+     "arrival/ completion dates alone never establish sufficiency",
+     "supply lower bound below demand never promotes to always_replenish",
      "live SO in the demand view never becomes net demand before bucket-level consumption",
      "Cover or any unbooked supply never counts until mapping and substitutability are proven"
     ],
-    "summary": "补齐 G2_uom、G3_demand_overlap、G4_supply_overlap、G5_arrival_in_window、G6_pk_ks_1to1 后按 outcomes 重算；在此之前不发起采购/生产指令，也不宣布“不缺”。"
+    "summary": "补齐 G2_uom、G3_demand_overlap、G4_supply_overlap、G5_arrival_in_window、G6_pk_ks_1to1、G7_unbooked_supply、G8_demand_bounds 后按 outcomes 重算；在此之前不发起采购/生产指令，也不宣布“不缺”。"
    },
    "missing_evidence": [
     {
@@ -3545,7 +6767,7 @@
    ],
    "responsible_role": "生产/PMC（WO 完工日）；业务/运营（需求口径）；商品主数据/仓储（UOM）",
    "decisive_unknown": "到货/完工时点与重叠：在产 620、PO 0、在途 0",
-   "basis": "可供上限 B_max 980 vs D1 228.8、D2 859.8。在手 A_low 360；B_min 980（最大重叠，去重压力 980）。结论只在“全部到货且不重叠”与“重叠/迟到”两个情景之间翻转；两个方向都要过同一组 6 个 definitive gates，闸门未齐前只作待核实。需求口径比值 0.932（近 3 月均值 108）。所有含 SO 的判断均标 demand_overlap=unproven。"
+   "basis": "可供上限 B_max 980 vs D1 228.8、D2 859.8。在手 A_low 360；B_min 980（最大重叠，去重压力 980）。结论只在“全部到货且不重叠”与“重叠/迟到”两个情景之间翻转；两个方向都要过同一组 8 个 definitive gates，并且短缺看“供给上界 < 需求下界”、充足看“供给下界 ≥ 需求上界”，闸门与界未齐前只作待核实。需求口径比值 0.932（近 3 月均值 108）。所有含 SO 的判断均标 demand_overlap=unproven。"
   }
  ],
  "d9_mapping": [
@@ -3702,6 +6924,14 @@
    "note": "computed per row; no blanket 'N rows agree across windows' claim"
   },
   "d9_mapping": "10/10 行给出 D9 层级 -> 新分类的对应与差异原因，不静默替换",
-  "unmatched_reason": "入 10 客户码全部在 evidence.skus 中且 identity_status=confirmed；无未匹配记录，故无丢弃项"
+  "unmatched_reason": "入 10 客户码全部在 evidence.skus 中且 identity_status=confirmed；无未匹配记录，故无丢弃项",
+  "bounds": {
+   "supply_lower_proven": 0,
+   "supply_upper_proven": 0,
+   "demand_lower_proven": 0,
+   "demand_upper_proven": 0,
+   "rows_with_all_four_proven": 0,
+   "note": "四侧界分别计数；任何一侧 unproven 都不会产出确定结论。supply.upper 的数量 = 冻结 B_max，但其 status 必须另过 G2/G4/G7。"
+  }
  }
 }
