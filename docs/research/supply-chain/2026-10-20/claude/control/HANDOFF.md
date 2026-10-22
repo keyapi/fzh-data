@@ -34,7 +34,7 @@ date: 2026-10-22
 | 角色 | 精确 handle | 当前任务 | 状态 | 最近证据 | 下一负责人 |
 |---|---|---|---|---|---|
 | Claude工头｜项目调度 | `term_3f397f4a-1360-4af0-900e-08f014acfed1` | 唯一调度：派工、收结果、送审 | 工作中 | run `run_ab028056dc4e`；task `task_84a848a8e987`；#301 派工 request `f9993dfb…`、更正 `ab1f8738…` | 工头 |
-| Claude打工仔｜实施 | `term_6d7a52b3-26e4-4278-b21f-4269cd5c5b89` | T12 审核修正（task `task_5590072d0546` / dispatch `ctx_62ea588a1bfa`） | 运行中 | 旧终端 `term_4c1c8d12…` 上下文超限（1,065,907 > 1,048,576）停用，保留未删；旧 dispatch `ctx_87dd584e4aaf` 已 abandon | 工头收结果 |
+| Claude打工仔｜实施 | `term_dae491ca-08bf-462c-b402-0938a02cb4f6` | T39 下单时点回测（dispatch `ctx_1dff4226e7b4`） | 运行中 | 第三次上下文超限更换终端（`term_6d7a52b3…` 100% context）；旧终端保留未删 | 工头收结果 |
 | Codex #301 | `term_d0bcd5e0-9f57-43b9-8dfc-6ffe4578063a` | R3 复审（已完成） | 空闲 | 读屏 `DONE R3`：**FAIL，无 blocking，仅剩 1 major**（六门过后仍用冻结 B_max 判充足）；报告抄入 `control/reviews/2026-10-22-v1-r3.md` | 待 R4 后再审 |
 | Codex2｜决策参谋 | `term_0eb8e41d-dc3e-4b3f-bbb2-7e7e4aed1a87` | 只读待命：回答取舍与判定标准 | 待命 | 读屏 `GPT-6.1-Sol medium`；rename ok；旧终端 `term_a137bdd7…`（GPT-5.6-Terra）保留未删 | 工头 |
 
