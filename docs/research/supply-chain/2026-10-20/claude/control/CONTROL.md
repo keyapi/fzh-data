@@ -97,6 +97,10 @@ Updated: 2026-10-22 09:00 (Asia/Shanghai)
 6. ~~R290-RECON~~ → 已完成：5/5 接收，accept 3 / scenario 1 / blocker 1。
 7. 收尾 `/ce-okf` 已完成（PR #306）；四轮返修与 producer 经验已归档。
 8. 周期 automation 保持停用；次日 05:17 用新归档 cmd 验证库存历史。
+9. **决策 Codex（09:05）：先 C（SKU 匹配只读审计）→ 再 B（10 SKU 的 ETA/Cover/UOM 证据）；
+   A/D 暂停。** C 任务书 `control/reviews/2026-10-22-sku-audit-task.md`；
+   旧 6,549 是 EN 订单口径，本地 GS 口径为 297 SKU / 4,115 行，不硬凑。
+   Codex1 计划 11:05 审 C、13:05 审 B。
 
 ## 修正
 
