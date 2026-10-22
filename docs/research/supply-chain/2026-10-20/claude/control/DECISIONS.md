@@ -223,6 +223,20 @@ KeyError guard 后 len=1（4 条）与 len=2（11 条）可出预测；len 3–6
 关联键覆盖：WO↔SO 173/214、**DN↔WO 0/507**、**WO↔PO 0/214**。
 **结论**：本地材料里没有一条工单/出库证据能升级为"已证供给"——这与 A=0 一致，但不是"没有任何材料"。
 
+## 2026-10-22 D21：交付指南、lead_days 旁表与"假通过"纠正（T23–T25）
+
+- **T23 交付指南**（`delivery_guide.md`）：优先看 **①308 分歧 + ③a 214 一致要补 = 522 行、479 个商品**，
+  按近 6 月销量合计覆盖约 **67%**（分歧类单独约 37%）；三红线（A=0 / B 非采购批准 / 一致≠正确）；
+  两件必做（核实 160 行库存、按 `evidence_request.md` 取数）；**不能据此下单**。
+- **lead_days 旁表**（`lead_days_enrichment.csv`）：2,309 行，configured **841** / missing **1,468**；
+  3–30 天为**配置提前期，不是端到端**，不替代 L60/90/120，**不重算任何数量**。
+- **一次"假通过"被工头抓住**：T24 报巡检 8/8 PASS，但 `forward_shadow.py` 实际只有 selected 侧指标，
+  文档仍写"其余候选待扩" —— PASS 是靠注释换来，不是实现存在。
+- **T25 真实现**：`per_candidate` 覆盖 **7 个候选**（selected/naive/ma3/ma6/seasonal_naive/autoets/combo_ew），
+  每个含 `n_cells / wape_with_zero / bias / upper_coverage`，`n_common` 共同子集一致；
+  文档"待扩"清零；工头复跑 `audit_consistency.py` = **8/8 PASS 且实现存在**。
+- **纪律固化**：巡检 PASS 必须建立在"实现已存在"之上；**用"待扩/例外"注释换来的 PASS 不算收口**。
+
 ## 2026-10-22 D18：Codex2 三项裁定（16:49）——选样口径、情景假设、N2 后任务
 
 **1) 选样改为「唯一 SKU + 交叉属性覆盖」**
