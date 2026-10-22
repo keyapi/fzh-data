@@ -2,13 +2,23 @@
 # -*- coding: utf-8 -*-
 """生产只读统一预算闸门离线单测（全部 mock，不访问生产）。
 
-覆盖任务书 2026-10-21-gate-task.md 的验收项，以及 2026-10-21 复审 FAIL 的
+覆盖任务书 2026-10-21-gate-task.md 的验收项，以及 2026-10-21 两轮复审 FAIL 的
 全部反例：
 
   零预算 / 精确边界（请求、字节）/ 按剩余额度读取（不是先读后裁）/
   解压后字节硬限 / 重定向不跟随 / 墙钟绑定剩余时间与空响应越时 /
   403 后 fetch 不再发请求 / 停止状态跨进程持久 / 崩溃途中保守恢复 /
   独占运行锁 / 最小间隔跨进程 / 重叠上下文禁止 / 离线输出与父版本逐字节一致。
+
+第二轮复审（`control/reviews/2026-10-21-gate-review2-fail.md`）三个反例各有专属类：
+
+  * `ImplicitPreReadTests`——requests 在禁止跳转时仍整包预读跳转响应体
+    （离线复现：读走 16 字节、闸门记账 0）；会话层关闭预读，且**每一个**
+    响应体都经有界读取器记账。
+  * `ExecutionBoundaryTests`——watchdog 原在收到响应头后才启动；改为覆盖整次
+    HTTP 的可中断执行边界 + 绝对截止（含等头阶段与阻塞读体）。
+  * `AtomicStopTests`——403 终止态与清 pending 一次原子落盘；崩溃在两写之间时
+    从日志重建停机状态，续跑不会放行。
 """
 
 from __future__ import annotations
@@ -19,8 +29,10 @@ import json
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 
@@ -32,6 +44,9 @@ import prod_budget as pb  # noqa: E402
 import g1b_dn_wo_jc_se as dn  # noqa: E402
 import g1b_en_extract as ex  # noqa: E402
 import EN_API.item_shipment_status as iss  # noqa: E402
+
+# 离线保险：任何一条测试若漏注入 http_get 就立刻失败，不得真实访问生产
+pb.block_default_transport()
 
 PARENT_COMMIT = "be37645b^"
 DN_RELPATH = ("docs/research/supply-chain/2026-10-20/claude/experiments/"
@@ -51,6 +66,7 @@ class FakeRaw:
         self.bytes_yielded = 0
         self.reads: list[int] = []
         self.eof = not self.chunks
+        self.closed = False
 
     def read(self, amt, decode_content=False):
         if self.tick:
@@ -83,6 +99,9 @@ class FakeRaw:
 
     def isclosed(self):
         return self.eof and not self.chunks
+
+    def close(self):
+        self.closed = True
 
 
 class FakeResponse:
@@ -476,6 +495,337 @@ class RedirectAndDeadlineTests(BudgetExhaustedAssertions):
             b.close()
 
 
+# ── 第二轮复审 ①②：隐式预读 / 整次 HTTP 有界 ─────────
+class _FakeAdapter(pb.requests.adapters.BaseAdapter):
+    """真实 requests 会话的传输替身：原样返回预置响应并记录调用参数。"""
+
+    def __init__(self, resp):
+        self.resp = resp
+        self.seen: dict = {}
+
+    def send(self, request, stream=False, timeout=None, verify=True, cert=None,
+             proxies=None):
+        self.seen = {"stream": stream, "timeout": timeout}
+        return self.resp
+
+    def close(self):
+        pass
+
+
+def _raw_response(status, body=b"", headers=None, url="http://en/api"):
+    """用**真实** requests.Response 包一个可计数的传输流，复现库层行为。"""
+    resp = pb.requests.Response()
+    resp.status_code = status
+    # 真实响应头是大小写不敏感映射；用普通 dict 会让 is_redirect 判不出来
+    resp.headers = pb.requests.structures.CaseInsensitiveDict(headers or {})
+    resp.url = url
+    resp.raw = FakeRaw([body] if body else [])
+    resp.request = pb.requests.Request("GET", url).prepare()
+    return resp
+
+
+def _join_http_thread(timeout: float = 2.0) -> None:
+    """等被放弃的工作线程收敛，避免它落到别的测试里。"""
+    for t in threading.enumerate():
+        if t.name == "prod-budget-http":
+            t.join(timeout)
+
+
+class ImplicitPreReadTests(BudgetExhaustedAssertions):
+    """复审反例 ①②：库预读 16 字节、闸门记账 0。"""
+
+    BODY = b"0123456789abcdef"                       # 16 字节
+
+    def _redirect_response(self):
+        return _raw_response(302, self.BODY,
+                             {"Location": "http://elsewhere/",
+                              "Content-Length": str(len(self.BODY))})
+
+    def _send_via(self, session):
+        adapter = _FakeAdapter(self._redirect_response())
+        session.mount("http://", adapter)
+        resp = session.get("http://en/api/resource/Sales%20Order",
+                           stream=True, allow_redirects=False)
+        return resp, adapter
+
+    def test_requests_by_itself_prereads_redirect_body(self):
+        """反例复现：原生会话即使 allow_redirects=False 也把跳转体读走。"""
+        resp, adapter = self._send_via(pb.requests.Session())
+        self.assertEqual(adapter.seen["stream"], True)
+        self.assertEqual(resp.raw.bytes_yielded, 16)  # 库读走 16，闸门无从记账
+        self.assertTrue(resp._content_consumed)
+
+    def test_gate_session_never_prereads(self):
+        """修复：会话层关闭两条隐式预读路径 → 一个字节都不自行读。"""
+        resp, adapter = self._send_via(pb._GateSession())
+        self.assertEqual(resp.raw.bytes_yielded, 0)
+        self.assertFalse(resp._content_consumed)
+
+    def test_gate_session_forces_safe_stream_flags(self):
+        session = pb._GateSession()
+        adapter = _FakeAdapter(self._redirect_response())
+        session.mount("http://", adapter)
+        # 调用方即使传 stream=False / allow_redirects=True 也必须被强制成安全值
+        session.get("http://en/api/x", stream=False, allow_redirects=True)
+        self.assertEqual(adapter.seen["stream"], True)
+
+    def test_gated_get_refuses_real_network_in_offline_suite(self):
+        with self.assertRaises(AssertionError):
+            pb.gated_get("http://en/api/x")
+
+    def test_redirect_bytes_are_accounted_by_gate(self):
+        http = FakeHTTP([FakeResponse(status=302, chunks=[self.BODY],
+                                      headers={"Location": "http://elsewhere/",
+                                               "Content-Length": "16"})])
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
+            b = make(d, http)
+            with self.assertRaises(pb.BudgetExhausted) as ctx:
+                fetch(b)
+            self.assertStopped(ctx, "redirect")
+            self.assertEqual(http.served[0].raw.bytes_yielded, 16)  # 经有界读取器
+            self.assertEqual(b.used_bytes, 16)                      # 且记了账
+            b.close()
+            line = log_lines(d)[0]
+            self.assertEqual(line["status"], 302)
+            self.assertEqual(line["bytes"], 16)
+            self.assertEqual(line["stop_reason"], "redirect")
+            self.assertEqual(ledger(d)["used"]["bytes"], 16)
+            self.assertTrue(b.reconcile()["ok"])
+
+    def test_forbidden_bytes_are_accounted_by_gate(self):
+        body = b'{"exc_type": "PermissionError"}'
+        http = FakeHTTP([FakeResponse(status=403, chunks=[body])])
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
+            b = make(d, http)
+            with self.assertRaises(pb.BudgetExhausted) as ctx:
+                fetch(b)
+            self.assertStopped(ctx, "auth")
+            self.assertEqual(b.used_bytes, len(body))
+            b.close()
+            self.assertEqual(log_lines(d)[0]["bytes"], len(body))
+            self.assertEqual(ledger(d)["used"]["bytes"], len(body))
+            self.assertTrue(b.reconcile()["ok"])
+
+    def test_rate_limited_body_is_accounted(self):
+        body = b'{"error": "slow down"}'
+        clk = FakeClock()
+        http = FakeHTTP([FakeResponse(status=429, chunks=[body],
+                                      headers={"Retry-After": "1"}),
+                         FakeResponse(chunks=[b'{"data": []}'])], clock=clk)
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
+            b = make(d, http, clock=clk)
+            self.assertEqual(fetch(b).status, 200)
+            b.close()
+            self.assertEqual(log_lines(d)[0]["bytes"], len(body))
+            self.assertTrue(b.reconcile()["ok"])
+
+
+class ExecutionBoundaryTests(BudgetExhaustedAssertions):
+    """复审反例 ②：watchdog 只在收到响应头后才启动、等头阻塞不可打断、无绝对截止。"""
+
+    @staticmethod
+    def _blocked_get(gate: threading.Event, body: bytes = b'{"data": []}'):
+        def blocked(url, headers=None, timeout=None, stream=False,
+                    allow_redirects=None):
+            gate.wait(10)                     # 模拟对端一个字节都不发
+            return FakeResponse(chunks=[body] if body else [])
+        return blocked
+
+    def test_absolute_deadline_cuts_off_blocking_wait_for_headers(self):
+        gate = threading.Event()
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
+            b = make(d, self._blocked_get(gate),
+                     deadline=time.time() + 0.3, max_seconds=3600.0)
+            started = time.time()
+            try:
+                with self.assertRaises(pb.BudgetExhausted) as ctx:
+                    fetch(b)
+            finally:
+                elapsed = time.time() - started
+                gate.set()
+                _join_http_thread()
+            self.assertStopped(ctx, "seconds")
+            self.assertLess(elapsed, 3.0)      # 没有等满 10 秒的阻塞读
+            b.close()
+            self.assertEqual(ledger(d)["stop_reason"], "seconds")
+            self.assertEqual(log_lines(d)[-1]["status"], "deadline")
+            self.assertEqual(log_lines(d)[-1]["stop_reason"], "seconds")
+
+    def test_relative_wall_budget_also_covers_wait_for_headers(self):
+        gate = threading.Event()
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
+            b = make(d, self._blocked_get(gate), max_seconds=0.3)
+            started = time.time()
+            try:
+                with self.assertRaises(pb.BudgetExhausted) as ctx:
+                    fetch(b)
+            finally:
+                elapsed = time.time() - started
+                gate.set()
+                _join_http_thread()
+            self.assertStopped(ctx, "seconds")
+            self.assertLess(elapsed, 3.0)
+            b.close()
+
+    def test_blocking_body_read_is_cut_off(self):
+        gate = threading.Event()
+
+        class BlockingRaw(FakeRaw):
+            def read(self, amt, decode_content=False):
+                gate.wait(10)
+                return b"0123456789abcdef"
+
+        resp = FakeResponse(chunks=[])
+        resp.raw = BlockingRaw([])
+        http = FakeHTTP([resp])
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
+            b = make(d, http, deadline=time.time() + 0.3)
+            started = time.time()
+            try:
+                with self.assertRaises(pb.BudgetExhausted) as ctx:
+                    fetch(b)
+            finally:
+                elapsed = time.time() - started
+                gate.set()
+                _join_http_thread()
+            self.assertStopped(ctx, "seconds")
+            self.assertLess(elapsed, 3.0)
+            # 被放弃的读返回后不得再改账本
+            self.assertEqual(b.used_bytes, 0)
+            b.close()
+            self.assertEqual(ledger(d)["used"]["bytes"], 0)
+            self.assertTrue(b.reconcile()["ok"])
+
+    def test_abandoned_attempt_never_charges_bytes(self):
+        gate = threading.Event()
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
+            b = make(d, self._blocked_get(gate, b"0123456789abcdef"),
+                     deadline=time.time() + 0.2)
+            with self.assertRaises(pb.BudgetExhausted):
+                fetch(b)
+            gate.set()
+            _join_http_thread()
+            self.assertEqual(b.used_bytes, 0)
+            self.assertEqual(b.decoded_bytes, 0)
+            self.assertEqual(ledger(d)["used"]["bytes"], 0)
+            self.assertEqual(len(log_lines(d)), 1)     # 只有 deadline 一行
+            b.close()
+
+    def test_absolute_deadline_in_the_past_refuses_before_http(self):
+        http = FakeHTTP([])
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
+            b = make(d, http, deadline=time.time() - 1)
+            with self.assertRaises(pb.BudgetExhausted) as ctx:
+                fetch(b)
+            self.assertStopped(ctx, "seconds")
+            self.assertEqual(http.calls, [])
+            self.assertEqual(b.refused, 1)
+            b.close()
+            self.assertEqual(ledger(d)["stop_reason"], "seconds")
+
+    def test_socket_timeout_is_bound_by_absolute_deadline(self):
+        http = FakeHTTP([FakeResponse(chunks=[b'{"data": []}'])])
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
+            b = make(d, http, deadline=time.time() + 5.0, timeout=60.0)
+            fetch(b)
+            self.assertLessEqual(http.timeouts[0], 5.0)
+            self.assertGreater(http.timeouts[0], 0)
+            b.close()
+
+    def test_coerce_deadline_forms(self):
+        self.assertIsNone(pb.coerce_deadline(None))
+        self.assertEqual(pb.coerce_deadline(1700000000), 1700000000.0)
+        local = datetime(2026, 10, 21, 22, 30)
+        self.assertAlmostEqual(pb.coerce_deadline(local), local.timestamp(), places=3)
+        hhmm = pb.coerce_deadline("22:30")
+        stamp = datetime.fromtimestamp(hhmm)
+        self.assertEqual((stamp.hour, stamp.minute), (22, 30))
+        self.assertEqual(stamp.date(), datetime.now().date())
+        with self.assertRaises(ValueError):
+            pb.coerce_deadline("not-a-time")
+
+
+# ── 第二轮复审 ③：终止态原子落盘 / 从日志重建 ────────
+class AtomicStopTests(BudgetExhaustedAssertions):
+    def test_stop_and_pending_clear_land_in_one_ledger_write(self):
+        """反例：先清 pending、再落 stop，两次写之间的崩溃可续跑。"""
+        http = FakeHTTP([FakeResponse(status=403, chunks=[])])
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
+            b = make(d, http)
+            seen: list[dict] = []
+            real_persist = b._persist
+
+            def spy():
+                real_persist()
+                seen.append(json.loads((Path(d) / "prod_budget.json")
+                                       .read_text(encoding="utf-8")))
+
+            with mock.patch.object(b, "_persist", spy):
+                with self.assertRaises(pb.BudgetExhausted):
+                    fetch(b)
+            cleared = [p for p in seen if p["pending"] is None]
+            self.assertTrue(cleared)
+            for payload in cleared:          # 不存在“停了但账本没记”的中间态
+                self.assertTrue(payload["exhausted"])
+                self.assertEqual(payload["stop_reason"], "auth")
+            b.close()
+
+    def test_crash_after_log_before_ledger_rebuilds_terminal_stop(self):
+        http = FakeHTTP([FakeResponse(status=403, chunks=[])])
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
+            b1 = make(d, http)
+            with mock.patch.object(b1, "_persist", lambda: None):
+                with self.assertRaises(pb.BudgetExhausted):
+                    fetch(b1)                        # 日志落盘、账本没写
+            self.assertFalse((Path(d) / "prod_budget.json").exists())
+            self.assertEqual(log_lines(d)[0]["stop_reason"], "auth")
+            crash(b1)
+
+            b2 = make(d, http)                        # 新进程：从日志重建停机
+            self.assertTrue(b2.exhausted)
+            self.assertEqual(b2.stop_reason, "auth")
+            with self.assertRaises(pb.BudgetExhausted) as ctx:
+                fetch(b2)
+            self.assertStopped(ctx, "auth")
+            self.assertEqual(len(http.calls), 1)      # 没有第二次 HTTP
+            b2.close()
+            self.assertEqual(ledger(d)["stop_reason"], "auth")
+
+    def test_log_tail_stop_is_adopted_when_ledger_lags(self):
+        body = b'{"data": []}'
+        http = FakeHTTP([FakeResponse(chunks=[body]),
+                         FakeResponse(status=403, chunks=[])])
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
+            b1 = make(d, http)
+            fetch(b1)
+            with mock.patch.object(b1, "_persist", lambda: None):
+                with self.assertRaises(pb.BudgetExhausted):
+                    fetch(b1)                        # 403 只进了日志
+            crash(b1)
+
+            b2 = make(d, http)
+            self.assertEqual(b2.used, 2)
+            self.assertTrue(b2.exhausted)
+            self.assertEqual(b2.stop_reason, "auth")
+            with self.assertRaises(pb.BudgetExhausted):
+                fetch(b2)
+            self.assertEqual(len(http.calls), 2)
+            b2.close()
+            self.assertTrue(b2.reconcile()["ok"])
+
+    def test_ledger_stop_survives_when_log_has_no_stop_field(self):
+        """旧账本（无 stop 字段的日志）仍以账本为准，不误判为可续跑。"""
+        http = FakeHTTP([FakeResponse(status=403, chunks=[])])
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
+            b1 = make(d, http)
+            with self.assertRaises(pb.BudgetExhausted):
+                fetch(b1)
+            b1.close()
+            b2 = make(d, http)
+            self.assertEqual(b2.stop_reason, "auth")
+            b2.close()
+
+
 # ── 崩溃续跑 / 日志对账 / 并发 ───────────────────────
 class ResumeAndReconcileTests(BudgetExhaustedAssertions):
     def test_resume_after_crash_does_not_reset(self):
@@ -693,7 +1043,7 @@ class ToolWiringTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
             ledger_p = Path(d) / "prod_budget.json"
             with mock.patch.object(ex.iss, "load_credentials", return_value=("k", "s")), \
-                 mock.patch.object(pb.requests, "get",
+                 mock.patch.object(pb, "gated_get",
                                    side_effect=AssertionError("must not touch HTTP")):
                 rc = ex.main(["--customer-code", "C-TEST", "--max-requests", "0",
                               "--budget-file", str(ledger_p),
@@ -703,12 +1053,29 @@ class ToolWiringTests(unittest.TestCase):
             self.assertEqual(led["used"]["requests"], 0)
             self.assertEqual(led["stop_reason"], "requests")
 
+    def test_extract_deadline_flag_enables_gate_and_refuses_after_it(self):
+        """绝对截止可经 CLI 生效：已过期 → 发请求前就拒绝。"""
+        past = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
+            ledger_p = Path(d) / "prod_budget.json"
+            with mock.patch.object(ex.iss, "load_credentials", return_value=("k", "s")), \
+                 mock.patch.object(pb, "gated_get",
+                                   side_effect=AssertionError("must not touch HTTP")):
+                rc = ex.main(["--customer-code", "C-TEST", "--deadline", past,
+                              "--budget-file", str(ledger_p),
+                              "--out", str(Path(d) / "out.json")])
+            self.assertEqual(rc, 1)
+            led = json.loads(ledger_p.read_text(encoding="utf-8"))
+            self.assertEqual(led["used"]["requests"], 0)
+            self.assertEqual(led["stop_reason"], "seconds")
+            self.assertIsNotNone(led["limits"]["deadline_epoch"])
+
     def test_extract_gate_counts_all_gets(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
             ledger_p = Path(d) / "prod_budget.json"
             http = FakeHTTP([FakeResponse(chunks=[b'{"data": []}'])])
             with mock.patch.object(ex.iss, "load_credentials", return_value=("k", "s")), \
-                 mock.patch.object(pb.requests, "get", http):
+                 mock.patch.object(pb, "gated_get", http):
                 rc = ex.main(["--customer-code", "C-TEST", "--max-requests", "5",
                               "--budget-file", str(ledger_p),
                               "--min-interval", "0",
@@ -736,7 +1103,7 @@ class ToolWiringTests(unittest.TestCase):
             out = Path(d) / "out"
             ledger_p = Path(d) / "prod_budget.json"
             with mock.patch.object(dn.iss, "load_credentials", return_value=("k", "s")), \
-                 mock.patch.object(pb.requests, "get",
+                 mock.patch.object(pb, "gated_get",
                                    side_effect=AssertionError("must not touch HTTP")):
                 rc = dn.main(["--snapshot", str(snap), "--out-dir", str(out),
                               "--enrich-se", "--max-requests", "0",

@@ -32,6 +32,9 @@ def _import():
 
 m = _import()
 
+# 离线保险：漏注入 http_get 时立刻失败，不得真实访问生产
+m.pb.block_default_transport()
+
 WINDOW = ("2026-04-01", "2026-09-30")
 
 
@@ -776,7 +779,7 @@ class HttpBudgetTests(unittest.TestCase):
 
     def test_retries_are_charged(self):
         b = m.HttpBudget(2)
-        with mock.patch.object(m.requests, "get",
+        with mock.patch.object(m.pb, "gated_get",
                                side_effect=m.requests.ConnectionError("down")), \
              mock.patch.object(m.time, "sleep", return_value=None):
             with self.assertRaises(m.BudgetExhausted):

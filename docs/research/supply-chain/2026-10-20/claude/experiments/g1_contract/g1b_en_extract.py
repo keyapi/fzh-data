@@ -316,7 +316,7 @@ def budget_from_args(args) -> pb.ProductionBudget | None:
     """未传闸门参数 → None（旧行为）；传了任一参数 → 统一账本。"""
     gate = any(v is not None for v in (args.max_requests, args.max_mib,
                                        args.max_minutes, args.budget_file,
-                                       args.min_interval))
+                                       args.min_interval, args.deadline))
     if not gate:
         return None
     ledger = Path(args.budget_file) if args.budget_file else OUT / "prod_budget.json"
@@ -324,6 +324,7 @@ def budget_from_args(args) -> pb.ProductionBudget | None:
         max_requests=args.max_requests,
         max_bytes=int(args.max_mib * 1024 * 1024) if args.max_mib is not None else None,
         max_seconds=args.max_minutes * 60 if args.max_minutes is not None else None,
+        deadline=args.deadline,
         ledger_path=str(ledger),
         log_path=str(ledger.with_suffix(".log")),
         min_interval=1.0 if args.min_interval is None else args.min_interval,
@@ -347,6 +348,9 @@ def main(argv: list[str] | None = None):
                     help="统一闸门账本 JSON（缺省 out/prod_budget.json；日志同名 .log）")
     ap.add_argument("--min-interval", type=float, default=None,
                     help="统一闸门请求最小间隔秒（缺省 1.0，仅启用闸门时生效）")
+    ap.add_argument("--deadline", default=None,
+                    help="统一闸门绝对截止时刻（HH:MM 本机时区当天 / ISO 8601）；"
+                         "与 --max-minutes 取更早者")
     args = ap.parse_args(argv)
 
     key, secret = iss.load_credentials("prod", iss.resolve_env_files())
