@@ -1,0 +1,1013 @@
+{
+ "schema_version": "n2_b1_chain/2",
+ "generated_at": "2026-10-22T16:50:31+08:00",
+ "batch": "N2 B1（2 个 SKU；冻结名单 909635da）",
+ "layers_policy": {
+  "facts": "proven，带证据指针；不得混入假设",
+  "scenarios": "显式假设，逐条写 assumption / purpose / if_overturned",
+  "blockers": "缺证，写准确阻塞码与责任人",
+  "computable_now": "只用 proven 数量算缺口下界/结余，避免整表写成“无法计算”"
+ },
+ "columns": [
+  "商品×仓库",
+  "未来需求",
+  "当前库存",
+  "分阶段供应",
+  "时间情景",
+  "缺口",
+  "建议/成立条件"
+ ],
+ "inputs": {
+  "freeze": {
+   "path": "out/business_phase/ten_sample_freeze.json",
+   "sha256": "55f602ba557cf163a2d2674816eeab96b0e0d8041d663bda634695d09a72124e",
+   "commit": "909635da"
+  },
+  "plan": {
+   "path": "out/business_phase/plan.json",
+   "sha256": "8bae9082d86390def7dcac9e01545d260a98e53b11038f8a10e17e39b12df719",
+   "commit": "d04e943c"
+  },
+  "ranking": {
+   "path": "out/business_phase/ranking.json",
+   "sha256": "bb042cc881817a7b99565b739e6802eb1d2a22dcd85547ce1d18b9ad2b894db8"
+  },
+  "destinations": {
+   "path": "out/business_phase/destinations.json",
+   "sha256": "720b478809128156cc1609cd10720cb926a98382a7c2f8a8179c55cadbf7bf60"
+  },
+  "db": {
+   "path": "D:/Work/fzh-order-store/order_store.duckdb",
+   "sha256": "25579c5dcd802c7e67f610432a19d08f8e6952696bd50d43bdfa47d6b9241ae9"
+  }
+ },
+ "rules": {
+  "unknown_rule": "未知一律 null + blocker_codes，不填 0",
+  "no_estimate_rule": "不给区间估算冒充结论；unresolved_gap 保持 null",
+  "recommendation_domain": [
+   "补",
+   "不补",
+   "待核实"
+  ],
+  "cell_status_domain": [
+   "proven",
+   "unproven",
+   "blocker"
+  ],
+  "no_quantities": true
+ },
+ "chains": [
+  {
+   "sku": "TT0031038K0062927",
+   "slot": "S1_urgent",
+   "top50_rank": 2,
+   "mapped_item_code": "KS0156-NYBDSFH-52x52x5-BLACK",
+   "item_name": "沙发支撑垫-鸟眼布滴塑防滑面料-52x52x5cm-黑色",
+   "item_group": "沙发支撑垫",
+   "destination": "mapped_eligible",
+   "layers": {
+    "facts": [
+     {
+      "id": "F1_mapping",
+      "statement": "SKU 唯一映射到 KS0156-NYBDSFH-52x52x5-BLACK（沙发支撑垫-鸟眼布滴塑防滑面料-52x52x5cm-黑色，沙发支撑垫）",
+      "value": "KS0156-NYBDSFH-52x52x5-BLACK",
+      "status": "proven",
+      "evidence_pointer": "sku_map[tongtool_sku='TT0031038K0062927'].item_code='KS0156-NYBDSFH-52x52x5-BLACK'; item_attr[item='KS0156-NYBDSFH-52x52x5-BLACK']"
+     },
+     {
+      "id": "F2_uom",
+      "statement": "物料 BOM 单位为 个（可作件数比较）",
+      "value": "个",
+      "status": "proven",
+      "evidence_pointer": "bom[item='KS0156-NYBDSFH-52x52x5-BLACK'].uom"
+     },
+     {
+      "id": "F3_on_hand",
+      "statement": "在手可用库存（快照 2026-10-22）",
+      "value": {
+       "total": 350,
+       "by_warehouse": [
+        {
+         "warehouse": "FZH-DANEEY-成品仓",
+         "available": 0
+        },
+        {
+         "warehouse": "WayfairCG-Cranbury仓",
+         "available": 153
+        },
+        {
+         "warehouse": "波兰-FZHPoland-covers",
+         "available": 157
+        },
+        {
+         "warehouse": "美中-FZH-DANEEY",
+         "available": 40
+        }
+       ]
+      },
+      "status": "proven",
+      "evidence_pointer": "stock_latest[sku='TT0031038K0062927']"
+     },
+     {
+      "id": "F4_committed_demand",
+      "statement": "已承诺且等待发货的订单量（可验证需求下界）",
+      "value": 5,
+      "status": "proven",
+      "evidence_pointer": "stock_latest[sku='TT0031038K0062927'].waiting_shipment"
+     },
+     {
+      "id": "F5_balance",
+      "statement": "可算结余 = 在手 − 已承诺需求（仅此两项均 proven）",
+      "value": 345,
+      "status": "proven",
+      "evidence_pointer": "由 F3、F4 直接相减，无假设"
+     },
+     {
+      "id": "F6_gap_lower_bound",
+      "statement": "已证缺口下界 = max(0, 已承诺需求 − 在手)",
+      "value": 0.0,
+      "status": "proven",
+      "evidence_pointer": "由 F3、F4 直接计算，无假设",
+      "note": "这是缺口的下界，不是缺口本身；未承诺需求不在此列"
+     },
+     {
+      "id": "F7_history",
+      "statement": "6 个月净销量（P1B 冻结口径）仅作背景，不作需求界",
+      "value": 707,
+      "status": "proven",
+      "evidence_pointer": "ranking.json → top50[sku='TT0031038K0062927'].net_qty_6m"
+     }
+    ],
+    "scenarios": [
+     {
+      "id": "S_demand_p50",
+      "assumption": "未来 90 天需求等于 P50 点估计（滚动经验/ conformal-style），即把它当成真实需求",
+      "purpose": "给出“若需求取中位”时的结余/缺口情景，供业务对照",
+      "value": {
+       "demand": 274.957,
+       "balance": 75.04,
+       "gap": 0.0
+      },
+      "if_overturned": "P50 若低估，缺口按低估量放大；若高估，结余变大。该情景不得当结论，也不得替代需求上下界",
+      "status": "scenario",
+      "evidence_pointer": "plan.json rows[sku='TT0031038K0062927'].demand.p50"
+     },
+     {
+      "id": "S_demand_p90",
+      "assumption": "未来 90 天需求等于 P90 估计（上分位，非已证上界）",
+      "purpose": "压力情景：看上限估计下会差多少",
+      "value": {
+       "demand": 715.0337,
+       "balance": -365.03,
+       "gap": 365.03
+      },
+      "if_overturned": "P90 不是上界，真实需求可能更高；此情景只作压力参考",
+      "status": "scenario",
+      "evidence_pointer": "plan.json rows[sku='TT0031038K0062927'].demand.interval.p90_like"
+     },
+     {
+      "id": "S_supply_batch_distinct",
+      "assumption": "在途与未结 PO 是两批不同货物，且都能在 90 天内到货（当前 0 条 PO 有 ETA）",
+      "purpose": "上界情景：显示若全部到货可分时，供应最多能到多少",
+      "value": {
+       "adds": 402.0,
+       "supply_if_all_arrives": 752.0
+      },
+      "if_overturned": "若二者是同一批（数值相同，疑似重复），供应要少算 201；若到货晚于需要日，近期缺口不变",
+      "status": "scenario",
+      "evidence_pointer": "tongtool_po[goods_sku='TT0031038K0062927'] + stock_latest.intransit"
+     },
+     {
+      "id": "S_supply_batch_once",
+      "assumption": "在途与 PO 指同一批货（按一次计），且能在 90 天内到货",
+      "purpose": "去重口径情景：与上一条互为上下限",
+      "value": {
+       "adds": 201,
+       "supply_if_all_arrives": 551
+      },
+      "if_overturned": "若其实是两批不同货，供应反而更多；若晚到则不计入窗口",
+      "status": "scenario",
+      "evidence_pointer": "tongtool_po[goods_sku='TT0031038K0062927']"
+     },
+     {
+      "id": "S_production_present",
+      "assumption": "存在未纳入快照的在产 WO，且能在窗口内完工",
+      "purpose": "提示供应侧可能被低估的方向",
+      "value": {
+       "adds": null
+      },
+      "if_overturned": "无在产或不能按期完工 → 供应更少；当前无法量化",
+      "status": "scenario",
+      "evidence_pointer": "order_store.duckdb 无工单/生产表"
+     }
+    ],
+    "blockers": [
+     {
+      "code": "demand_bounds_missing_G8",
+      "statement": "需求上/下界（分位或业务人工界）未提供",
+      "owner_role": "业务/运营",
+      "evidence_pointer": "plan.json rows[].decision.refs.demand_upper.status=unproven"
+     },
+     {
+      "code": "po_eta_missing",
+      "statement": "未结 PO 无 will_arrive_date，无法确认窗口内到货",
+      "owner_role": "采购/供应链；数据/系统",
+      "evidence_pointer": "tongtool_po[goods_sku='TT0031038K0062927'] will_arrive_date 全为 null"
+     },
+     {
+      "code": "po_intransit_line_key_missing",
+      "statement": "在途与未结 PO 数值相同，缺逐笔关单键，无法证实是否同一批",
+      "owner_role": "数据/系统",
+      "evidence_pointer": "stock_latest.intransit=201 vs PO open=201"
+     },
+     {
+      "code": "work_order_not_in_snapshot",
+      "statement": "在产 WO 剩余量与完工日不在本快照",
+      "owner_role": "生产/PMC",
+      "evidence_pointer": "order_store.duckdb 无工单/生产表"
+     },
+     {
+      "code": "warehouse_level_demand_split_not_attempted",
+      "statement": "需求为 SKU 级；按仓拆分需要未证假设，故不做",
+      "owner_role": "业务/运营",
+      "evidence_pointer": "plan.json demand 为 SKU 级"
+     }
+    ]
+   },
+   "computable_now": {
+    "available_proven": 350,
+    "verifiable_demand_committed": 5,
+    "balance_available_minus_committed": 345,
+    "gap_lower_bound": 0.0,
+    "note": "只用两项 proven 数量（在手、已承诺待发）计算；这是缺口的下界/结余，不是完整缺口，也不含任何未证在途/生产"
+   },
+   "controls": {
+    "uom_status": {
+     "value": "proven_piece_unit",
+     "status": "proven",
+     "detail": "bom[item='KS0156-NYBDSFH-52x52x5-BLACK'].uom='个'",
+     "evidence_pointer": "bom[item='KS0156-NYBDSFH-52x52x5-BLACK']"
+    },
+    "dedup_status": {
+     "value": "suspected_duplicate",
+     "status": "unproven",
+     "detail": "open_po=201，intransit=201，数值相同 → 疑似同一批",
+     "evidence_pointer": "tongtool_po[goods_sku='TT0031038K0062927']+stock_latest.intransit",
+     "blocker_codes": [
+      "po_intransit_line_key_missing"
+     ]
+    },
+    "need_date": {
+     "value": "2026-10-22（快照日；已有待发订单）",
+     "status": "proven_orders_exist",
+     "detail": "waiting_shipment=5",
+     "evidence_pointer": "stock_latest[sku='TT0031038K0062927'].waiting_shipment",
+     "blocker_codes": [
+      "order_promised_date_missing"
+     ]
+    },
+    "supply_available_date": {
+     "value": "2026-10-22（仅在手）",
+     "status": "partial",
+     "detail": "在手已可发；在途/PO 无 ETA，在产不在快照",
+     "evidence_pointer": "stock_latest[sku='TT0031038K0062927']; tongtool_po[goods_sku='TT0031038K0062927']",
+     "blocker_codes": [
+      "po_eta_missing",
+      "work_order_missing"
+     ]
+    }
+   },
+   "cells": {
+    "商品×仓库": {
+     "value": {
+      "sku": "TT0031038K0062927",
+      "item_code": "KS0156-NYBDSFH-52x52x5-BLACK",
+      "item_name": "沙发支撑垫-鸟眼布滴塑防滑面料-52x52x5cm-黑色",
+      "item_group": "沙发支撑垫",
+      "warehouses": [
+       {
+        "warehouse": "FZH-DANEEY-成品仓",
+        "available": 0,
+        "intransit": 0,
+        "waiting_shipment": 0,
+        "defects": 0
+       },
+       {
+        "warehouse": "WayfairCG-Cranbury仓",
+        "available": 153,
+        "intransit": 0,
+        "waiting_shipment": 0,
+        "defects": 0
+       },
+       {
+        "warehouse": "波兰-FZHPoland-covers",
+        "available": 157,
+        "intransit": 0,
+        "waiting_shipment": 5,
+        "defects": 0
+       },
+       {
+        "warehouse": "美中-FZH-DANEEY",
+        "available": 40,
+        "intransit": 201,
+        "waiting_shipment": 0,
+        "defects": 0
+       }
+      ]
+     },
+     "status": "proven",
+     "layer": [
+      "facts(F1,F3)"
+     ],
+     "evidence_pointer": "sku_map[tongtool_sku='TT0031038K0062927']; item_attr[item='KS0156-NYBDSFH-52x52x5-BLACK']; stock_latest[sku='TT0031038K0062927']",
+     "blocker_codes": []
+    },
+    "未来需求": {
+     "value": {
+      "p50": 274.957,
+      "p90_like": 715.0337,
+      "interval_status": "conformal_empirical",
+      "demand_is_sku_level": true,
+      "warehouse_split": null
+     },
+     "status": "unproven",
+     "layer": [
+      "scenarios(S_demand_p50,S_demand_p90)",
+      "blockers(G8)"
+     ],
+     "evidence_pointer": "plan.json rows[sku='TT0031038K0062927'].demand",
+     "blocker_codes": [
+      "demand_bounds_missing_G8",
+      "p50_p90_are_estimates",
+      "warehouse_level_demand_split_not_attempted"
+     ]
+    },
+    "当前库存": {
+     "value": {
+      "available_total": 350,
+      "by_warehouse": [
+       {
+        "warehouse": "FZH-DANEEY-成品仓",
+        "available": 0,
+        "waiting_shipment": 0,
+        "defects": 0
+       },
+       {
+        "warehouse": "WayfairCG-Cranbury仓",
+        "available": 153,
+        "waiting_shipment": 0,
+        "defects": 0
+       },
+       {
+        "warehouse": "波兰-FZHPoland-covers",
+        "available": 157,
+        "waiting_shipment": 5,
+        "defects": 0
+       },
+       {
+        "warehouse": "美中-FZH-DANEEY",
+        "available": 40,
+        "waiting_shipment": 0,
+        "defects": 0
+       }
+      ]
+     },
+     "status": "proven",
+     "layer": [
+      "facts(F3,F4)"
+     ],
+     "evidence_pointer": "stock_latest[sku='TT0031038K0062927']（2026-10-22）",
+     "blocker_codes": []
+    },
+    "分阶段供应": {
+     "value": {
+      "stages": [
+       {
+        "stage": "on_hand",
+        "qty": 350,
+        "status": "proven",
+        "available_date": "2026-10-22",
+        "evidence_pointer": "stock_latest[sku='TT0031038K0062927'].available"
+       },
+       {
+        "stage": "intransit",
+        "qty": 201,
+        "status": "unproven",
+        "available_date": null,
+        "evidence_pointer": "stock_latest[sku='TT0031038K0062927'].intransit",
+        "blocker_codes": [
+         "eta_missing",
+         "dedup_with_open_po_unproven"
+        ]
+       },
+       {
+        "stage": "open_po",
+        "qty": 201.0,
+        "status": "unproven",
+        "lines": [
+         {
+          "ponum": "PO021716",
+          "warehouse": "美中-FZH-DANEEY",
+          "quantity": 91,
+          "open_qty": 91.0,
+          "status": "0",
+          "will_arrive_date": null
+         },
+         {
+          "ponum": "PO021727",
+          "warehouse": "美中-FZH-DANEEY",
+          "quantity": 110,
+          "open_qty": 110.0,
+          "status": "0",
+          "will_arrive_date": null
+         }
+        ],
+        "available_date": null,
+        "evidence_pointer": "tongtool_po[goods_sku='TT0031038K0062927', open_qty>0] lines=2",
+        "blocker_codes": [
+         "eta_missing"
+        ]
+       },
+       {
+        "stage": "production_wo",
+        "qty": null,
+        "status": "blocker",
+        "available_date": null,
+        "evidence_pointer": "order_store.duckdb 无工单/生产表",
+        "blocker_codes": [
+         "work_order_not_in_snapshot"
+        ]
+       }
+      ]
+     },
+     "status": "unproven",
+     "layer": [
+      "facts(on_hand)",
+      "scenarios(S_supply_batch_*)",
+      "blockers"
+     ],
+     "evidence_pointer": "stock_latest[sku='TT0031038K0062927']; tongtool_po[goods_sku='TT0031038K0062927']",
+     "blocker_codes": [
+      "po_eta_missing",
+      "dedup_unproven",
+      "work_order_missing"
+     ]
+    },
+    "时间情景": {
+     "value": {
+      "buckets": [
+       {
+        "bucket": "A_0_40d",
+        "start": "2026-10-22",
+        "end": "2026-11-30",
+        "supply_lower": 350,
+        "supply_lower_status": "ok",
+        "supply_upper": 752,
+        "supply_upper_status": "unproven",
+        "note": "arrivals without ETA are excluded from the lower bound and cannot close a near-term gap; the upper bound counts them as a stress scenario at the earliest bucket"
+       },
+       {
+        "bucket": "B_41_71d",
+        "start": "2026-12-01",
+        "end": "2026-12-31",
+        "supply_lower": 0,
+        "supply_lower_status": "ok",
+        "supply_upper": 0,
+        "supply_upper_status": "unproven",
+        "note": "no proven arrival in this bucket"
+       },
+       {
+        "bucket": "C_72_91d",
+        "start": "2027-01-01",
+        "end": "2027-01-20",
+        "supply_lower": 0,
+        "supply_lower_status": "ok",
+        "supply_upper": 0,
+        "supply_upper_status": "unproven",
+        "note": "no proven arrival in this bucket"
+       },
+       {
+        "bucket": "D_beyond_91d",
+        "start": "2027-01-21",
+        "end": null,
+        "supply_lower": 0,
+        "supply_lower_status": "ok",
+        "supply_upper": 0,
+        "supply_upper_status": "ok",
+        "note": "no proven arrival in this bucket"
+       }
+      ],
+      "rule": "late/no-ETA supply never closes a near-term gap"
+     },
+     "status": "unproven",
+     "layer": [
+      "scenarios",
+      "blockers"
+     ],
+     "evidence_pointer": "plan.json rows[sku='TT0031038K0062927'].supply.buckets",
+     "blocker_codes": [
+      "arrival_dates_missing",
+      "supply_upper_not_a_proof"
+     ]
+    },
+    "缺口": {
+     "value": {
+      "proven_gap_lower_bound": 0.0,
+      "proven_balance": 345,
+      "scenario_gap_p50": 0.0,
+      "scenario_gap_p90": 365.03,
+      "unresolved_gap": null
+     },
+     "status": "unproven",
+     "layer": [
+      "facts(F5,F6)",
+      "scenarios",
+      "blockers"
+     ],
+     "evidence_pointer": "F5/F6 为已证；scenario_gap_* 为情景；unresolved_gap 需 G8+去重+ETA",
+     "blocker_codes": [
+      "demand_bounds_missing_G8",
+      "dedup_unproven",
+      "po_eta_missing",
+      "work_order_not_in_snapshot"
+     ],
+     "note": "proven_gap_lower_bound 为 0 是**已证下界**（已承诺订单已被在手覆盖），不是“未知填 0”；未决缺口 unresolved_gap=null（缺需求上下界与去重/ETA）"
+    },
+    "建议/成立条件": {
+     "value": "待核实",
+     "status": "unproven",
+     "layer": [
+      "conclusion-blocked"
+     ],
+     "evidence_pointer": "依据 facts/scenarios/blockers 三层；不含任何补货数量",
+     "blocker_codes": [],
+     "conditions": [
+      "已证结余/缺口（facts F5/F6）只覆盖已承诺订单，不足以判断补或不补",
+      "业务给出需求上下界（G8）并把 SO 与预测做桶级消费",
+      "PO/在途逐笔去重键 + PO 到货日；在产 WO 剩余量与完工日纳入快照",
+      "满足后可判：已证供给下界 ≥ 需求上界 → 不补；供给上界 < 需求下界 → 补；否则继续待核实"
+     ]
+    }
+   }
+  },
+  {
+   "sku": "C/Linen-Natural-100-688-wow",
+   "slot": "S2_overlap_1",
+   "top50_rank": 4,
+   "mapped_item_code": "KS0001-XMMBS-100-HEMPNATURAL",
+   "item_name": "三角靠枕-新棉麻本色-100-麻本色",
+   "item_group": "三角靠枕",
+   "destination": "mapped_eligible",
+   "layers": {
+    "facts": [
+     {
+      "id": "F1_mapping",
+      "statement": "SKU 唯一映射到 KS0001-XMMBS-100-HEMPNATURAL（三角靠枕-新棉麻本色-100-麻本色，三角靠枕）",
+      "value": "KS0001-XMMBS-100-HEMPNATURAL",
+      "status": "proven",
+      "evidence_pointer": "sku_map[tongtool_sku='C/Linen-Natural-100-688-wow'].item_code='KS0001-XMMBS-100-HEMPNATURAL'; item_attr[item='KS0001-XMMBS-100-HEMPNATURAL']"
+     },
+     {
+      "id": "F2_uom",
+      "statement": "物料 BOM 单位为 个（可作件数比较）",
+      "value": "个",
+      "status": "proven",
+      "evidence_pointer": "bom[item='KS0001-XMMBS-100-HEMPNATURAL'].uom"
+     },
+     {
+      "id": "F3_on_hand",
+      "statement": "在手可用库存（快照 2026-10-22）",
+      "value": {
+       "total": 55,
+       "by_warehouse": [
+        {
+         "warehouse": "WayfairCG-Cranbury仓",
+         "available": 34
+        },
+        {
+         "warehouse": "美东-CENTRADE",
+         "available": 21
+        }
+       ]
+      },
+      "status": "proven",
+      "evidence_pointer": "stock_latest[sku='C/Linen-Natural-100-688-wow']"
+     },
+     {
+      "id": "F4_committed_demand",
+      "statement": "已承诺且等待发货的订单量（可验证需求下界）",
+      "value": 0,
+      "status": "proven",
+      "evidence_pointer": "stock_latest[sku='C/Linen-Natural-100-688-wow'].waiting_shipment"
+     },
+     {
+      "id": "F5_balance",
+      "statement": "可算结余 = 在手 − 已承诺需求（仅此两项均 proven）",
+      "value": 55,
+      "status": "proven",
+      "evidence_pointer": "由 F3、F4 直接相减，无假设"
+     },
+     {
+      "id": "F6_gap_lower_bound",
+      "statement": "已证缺口下界 = max(0, 已承诺需求 − 在手)",
+      "value": 0.0,
+      "status": "proven",
+      "evidence_pointer": "由 F3、F4 直接计算，无假设",
+      "note": "这是缺口的下界，不是缺口本身；未承诺需求不在此列"
+     },
+     {
+      "id": "F7_history",
+      "statement": "6 个月净销量（P1B 冻结口径）仅作背景，不作需求界",
+      "value": 675,
+      "status": "proven",
+      "evidence_pointer": "ranking.json → top50[sku='C/Linen-Natural-100-688-wow'].net_qty_6m"
+     }
+    ],
+    "scenarios": [
+     {
+      "id": "S_demand_p50",
+      "assumption": "未来 90 天需求等于 P50 点估计（滚动经验/ conformal-style），即把它当成真实需求",
+      "purpose": "给出“若需求取中位”时的结余/缺口情景，供业务对照",
+      "value": {
+       "demand": 490.2258,
+       "balance": -435.23,
+       "gap": 435.23
+      },
+      "if_overturned": "P50 若低估，缺口按低估量放大；若高估，结余变大。该情景不得当结论，也不得替代需求上下界",
+      "status": "scenario",
+      "evidence_pointer": "plan.json rows[sku='C/Linen-Natural-100-688-wow'].demand.p50"
+     },
+     {
+      "id": "S_demand_p90",
+      "assumption": "未来 90 天需求等于 P90 估计（上分位，非已证上界）",
+      "purpose": "压力情景：看上限估计下会差多少",
+      "value": {
+       "demand": 932.4702,
+       "balance": -877.47,
+       "gap": 877.47
+      },
+      "if_overturned": "P90 不是上界，真实需求可能更高；此情景只作压力参考",
+      "status": "scenario",
+      "evidence_pointer": "plan.json rows[sku='C/Linen-Natural-100-688-wow'].demand.interval.p90_like"
+     },
+     {
+      "id": "S_supply_batch_distinct",
+      "assumption": "在途与未结 PO 是两批不同货物，且都能在 90 天内到货（当前 0 条 PO 有 ETA）",
+      "purpose": "上界情景：显示若全部到货可分时，供应最多能到多少",
+      "value": {
+       "adds": 242.0,
+       "supply_if_all_arrives": 297.0
+      },
+      "if_overturned": "若二者是同一批（数值相同，疑似重复），供应要少算 121；若到货晚于需要日，近期缺口不变",
+      "status": "scenario",
+      "evidence_pointer": "tongtool_po[goods_sku='C/Linen-Natural-100-688-wow'] + stock_latest.intransit"
+     },
+     {
+      "id": "S_supply_batch_once",
+      "assumption": "在途与 PO 指同一批货（按一次计），且能在 90 天内到货",
+      "purpose": "去重口径情景：与上一条互为上下限",
+      "value": {
+       "adds": 121,
+       "supply_if_all_arrives": 176
+      },
+      "if_overturned": "若其实是两批不同货，供应反而更多；若晚到则不计入窗口",
+      "status": "scenario",
+      "evidence_pointer": "tongtool_po[goods_sku='C/Linen-Natural-100-688-wow']"
+     },
+     {
+      "id": "S_production_present",
+      "assumption": "存在未纳入快照的在产 WO，且能在窗口内完工",
+      "purpose": "提示供应侧可能被低估的方向",
+      "value": {
+       "adds": null
+      },
+      "if_overturned": "无在产或不能按期完工 → 供应更少；当前无法量化",
+      "status": "scenario",
+      "evidence_pointer": "order_store.duckdb 无工单/生产表"
+     }
+    ],
+    "blockers": [
+     {
+      "code": "demand_bounds_missing_G8",
+      "statement": "需求上/下界（分位或业务人工界）未提供",
+      "owner_role": "业务/运营",
+      "evidence_pointer": "plan.json rows[].decision.refs.demand_upper.status=unproven"
+     },
+     {
+      "code": "po_eta_missing",
+      "statement": "未结 PO 无 will_arrive_date，无法确认窗口内到货",
+      "owner_role": "采购/供应链；数据/系统",
+      "evidence_pointer": "tongtool_po[goods_sku='C/Linen-Natural-100-688-wow'] will_arrive_date 全为 null"
+     },
+     {
+      "code": "po_intransit_line_key_missing",
+      "statement": "在途与未结 PO 数值相同，缺逐笔关单键，无法证实是否同一批",
+      "owner_role": "数据/系统",
+      "evidence_pointer": "stock_latest.intransit=121 vs PO open=121"
+     },
+     {
+      "code": "work_order_not_in_snapshot",
+      "statement": "在产 WO 剩余量与完工日不在本快照",
+      "owner_role": "生产/PMC",
+      "evidence_pointer": "order_store.duckdb 无工单/生产表"
+     },
+     {
+      "code": "warehouse_level_demand_split_not_attempted",
+      "statement": "需求为 SKU 级；按仓拆分需要未证假设，故不做",
+      "owner_role": "业务/运营",
+      "evidence_pointer": "plan.json demand 为 SKU 级"
+     }
+    ]
+   },
+   "computable_now": {
+    "available_proven": 55,
+    "verifiable_demand_committed": 0,
+    "balance_available_minus_committed": 55,
+    "gap_lower_bound": 0.0,
+    "note": "只用两项 proven 数量（在手、已承诺待发）计算；这是缺口的下界/结余，不是完整缺口，也不含任何未证在途/生产"
+   },
+   "controls": {
+    "uom_status": {
+     "value": "proven_piece_unit",
+     "status": "proven",
+     "detail": "bom[item='KS0001-XMMBS-100-HEMPNATURAL'].uom='个'",
+     "evidence_pointer": "bom[item='KS0001-XMMBS-100-HEMPNATURAL']"
+    },
+    "dedup_status": {
+     "value": "suspected_duplicate",
+     "status": "unproven",
+     "detail": "open_po=121，intransit=121，数值相同 → 疑似同一批",
+     "evidence_pointer": "tongtool_po[goods_sku='C/Linen-Natural-100-688-wow']+stock_latest.intransit",
+     "blocker_codes": [
+      "po_intransit_line_key_missing"
+     ]
+    },
+    "need_date": {
+     "value": null,
+     "status": "blocker",
+     "detail": "无订单级需要日；预测不给日期",
+     "evidence_pointer": "stock_latest[sku='C/Linen-Natural-100-688-wow'].waiting_shipment",
+     "blocker_codes": [
+      "no_order_level_need_date"
+     ]
+    },
+    "supply_available_date": {
+     "value": "2026-10-22（仅在手）",
+     "status": "partial",
+     "detail": "在手已可发；在途/PO 无 ETA，在产不在快照",
+     "evidence_pointer": "stock_latest[sku='C/Linen-Natural-100-688-wow']; tongtool_po[goods_sku='C/Linen-Natural-100-688-wow']",
+     "blocker_codes": [
+      "po_eta_missing",
+      "work_order_missing"
+     ]
+    }
+   },
+   "cells": {
+    "商品×仓库": {
+     "value": {
+      "sku": "C/Linen-Natural-100-688-wow",
+      "item_code": "KS0001-XMMBS-100-HEMPNATURAL",
+      "item_name": "三角靠枕-新棉麻本色-100-麻本色",
+      "item_group": "三角靠枕",
+      "warehouses": [
+       {
+        "warehouse": "WayfairCG-Cranbury仓",
+        "available": 34,
+        "intransit": 0,
+        "waiting_shipment": 0,
+        "defects": 0
+       },
+       {
+        "warehouse": "美东-CENTRADE",
+        "available": 21,
+        "intransit": 121,
+        "waiting_shipment": 0,
+        "defects": 1
+       }
+      ]
+     },
+     "status": "proven",
+     "layer": [
+      "facts(F1,F3)"
+     ],
+     "evidence_pointer": "sku_map[tongtool_sku='C/Linen-Natural-100-688-wow']; item_attr[item='KS0001-XMMBS-100-HEMPNATURAL']; stock_latest[sku='C/Linen-Natural-100-688-wow']",
+     "blocker_codes": []
+    },
+    "未来需求": {
+     "value": {
+      "p50": 490.2258,
+      "p90_like": 932.4702,
+      "interval_status": "conformal_empirical",
+      "demand_is_sku_level": true,
+      "warehouse_split": null
+     },
+     "status": "unproven",
+     "layer": [
+      "scenarios(S_demand_p50,S_demand_p90)",
+      "blockers(G8)"
+     ],
+     "evidence_pointer": "plan.json rows[sku='C/Linen-Natural-100-688-wow'].demand",
+     "blocker_codes": [
+      "demand_bounds_missing_G8",
+      "p50_p90_are_estimates",
+      "warehouse_level_demand_split_not_attempted"
+     ]
+    },
+    "当前库存": {
+     "value": {
+      "available_total": 55,
+      "by_warehouse": [
+       {
+        "warehouse": "WayfairCG-Cranbury仓",
+        "available": 34,
+        "waiting_shipment": 0,
+        "defects": 0
+       },
+       {
+        "warehouse": "美东-CENTRADE",
+        "available": 21,
+        "waiting_shipment": 0,
+        "defects": 1
+       }
+      ]
+     },
+     "status": "proven",
+     "layer": [
+      "facts(F3,F4)"
+     ],
+     "evidence_pointer": "stock_latest[sku='C/Linen-Natural-100-688-wow']（2026-10-22）",
+     "blocker_codes": []
+    },
+    "分阶段供应": {
+     "value": {
+      "stages": [
+       {
+        "stage": "on_hand",
+        "qty": 55,
+        "status": "proven",
+        "available_date": "2026-10-22",
+        "evidence_pointer": "stock_latest[sku='C/Linen-Natural-100-688-wow'].available"
+       },
+       {
+        "stage": "intransit",
+        "qty": 121,
+        "status": "unproven",
+        "available_date": null,
+        "evidence_pointer": "stock_latest[sku='C/Linen-Natural-100-688-wow'].intransit",
+        "blocker_codes": [
+         "eta_missing",
+         "dedup_with_open_po_unproven"
+        ]
+       },
+       {
+        "stage": "open_po",
+        "qty": 121.0,
+        "status": "unproven",
+        "lines": [
+         {
+          "ponum": "PO021717",
+          "warehouse": "美东-CENTRADE",
+          "quantity": 121,
+          "open_qty": 121.0,
+          "status": "0",
+          "will_arrive_date": null
+         }
+        ],
+        "available_date": null,
+        "evidence_pointer": "tongtool_po[goods_sku='C/Linen-Natural-100-688-wow', open_qty>0] lines=1",
+        "blocker_codes": [
+         "eta_missing"
+        ]
+       },
+       {
+        "stage": "production_wo",
+        "qty": null,
+        "status": "blocker",
+        "available_date": null,
+        "evidence_pointer": "order_store.duckdb 无工单/生产表",
+        "blocker_codes": [
+         "work_order_not_in_snapshot"
+        ]
+       }
+      ]
+     },
+     "status": "unproven",
+     "layer": [
+      "facts(on_hand)",
+      "scenarios(S_supply_batch_*)",
+      "blockers"
+     ],
+     "evidence_pointer": "stock_latest[sku='C/Linen-Natural-100-688-wow']; tongtool_po[goods_sku='C/Linen-Natural-100-688-wow']",
+     "blocker_codes": [
+      "po_eta_missing",
+      "dedup_unproven",
+      "work_order_missing"
+     ]
+    },
+    "时间情景": {
+     "value": {
+      "buckets": [
+       {
+        "bucket": "A_0_40d",
+        "start": "2026-10-22",
+        "end": "2026-11-30",
+        "supply_lower": 55,
+        "supply_lower_status": "ok",
+        "supply_upper": 297,
+        "supply_upper_status": "unproven",
+        "note": "arrivals without ETA are excluded from the lower bound and cannot close a near-term gap; the upper bound counts them as a stress scenario at the earliest bucket"
+       },
+       {
+        "bucket": "B_41_71d",
+        "start": "2026-12-01",
+        "end": "2026-12-31",
+        "supply_lower": 0,
+        "supply_lower_status": "ok",
+        "supply_upper": 0,
+        "supply_upper_status": "unproven",
+        "note": "no proven arrival in this bucket"
+       },
+       {
+        "bucket": "C_72_91d",
+        "start": "2027-01-01",
+        "end": "2027-01-20",
+        "supply_lower": 0,
+        "supply_lower_status": "ok",
+        "supply_upper": 0,
+        "supply_upper_status": "unproven",
+        "note": "no proven arrival in this bucket"
+       },
+       {
+        "bucket": "D_beyond_91d",
+        "start": "2027-01-21",
+        "end": null,
+        "supply_lower": 0,
+        "supply_lower_status": "ok",
+        "supply_upper": 0,
+        "supply_upper_status": "ok",
+        "note": "no proven arrival in this bucket"
+       }
+      ],
+      "rule": "late/no-ETA supply never closes a near-term gap"
+     },
+     "status": "unproven",
+     "layer": [
+      "scenarios",
+      "blockers"
+     ],
+     "evidence_pointer": "plan.json rows[sku='C/Linen-Natural-100-688-wow'].supply.buckets",
+     "blocker_codes": [
+      "arrival_dates_missing",
+      "supply_upper_not_a_proof"
+     ]
+    },
+    "缺口": {
+     "value": {
+      "proven_gap_lower_bound": 0.0,
+      "proven_balance": 55,
+      "scenario_gap_p50": 435.23,
+      "scenario_gap_p90": 877.47,
+      "unresolved_gap": null
+     },
+     "status": "unproven",
+     "layer": [
+      "facts(F5,F6)",
+      "scenarios",
+      "blockers"
+     ],
+     "evidence_pointer": "F5/F6 为已证；scenario_gap_* 为情景；unresolved_gap 需 G8+去重+ETA",
+     "blocker_codes": [
+      "demand_bounds_missing_G8",
+      "dedup_unproven",
+      "po_eta_missing",
+      "work_order_not_in_snapshot"
+     ],
+     "note": "proven_gap_lower_bound 为 0 是**已证下界**（已承诺订单已被在手覆盖），不是“未知填 0”；未决缺口 unresolved_gap=null（缺需求上下界与去重/ETA）"
+    },
+    "建议/成立条件": {
+     "value": "待核实",
+     "status": "unproven",
+     "layer": [
+      "conclusion-blocked"
+     ],
+     "evidence_pointer": "依据 facts/scenarios/blockers 三层；不含任何补货数量",
+     "blocker_codes": [],
+     "conditions": [
+      "已证结余/缺口（facts F5/F6）只覆盖已承诺订单，不足以判断补或不补",
+      "业务给出需求上下界（G8）并把 SO 与预测做桶级消费",
+      "PO/在途逐笔去重键 + PO 到货日；在产 WO 剩余量与完工日纳入快照",
+      "满足后可判：已证供给下界 ≥ 需求上界 → 不补；供给上界 < 需求下界 → 补；否则继续待核实"
+     ]
+    }
+   }
+  }
+ ],
+ "counts": {
+  "skus": 2,
+  "cells_per_sku": 7,
+  "recommendations": {
+   "待核实": 1
+  }
+ },
+ "note": "只做链条表；不含任何补货数量或补/不补结论（当前全部待核实）"
+}
