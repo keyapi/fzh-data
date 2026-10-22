@@ -200,7 +200,8 @@ def main() -> None:
 
     out_rows, diff_rows = [], []
     method_counts = Counter()
-    v2_by_sku = defaultdict(lambda: [0.0, 0.0])
+    # per-SKU accumulation that distinguishes KNOWN from UNKNOWN warehouses
+    sku_acc = defaultdict(lambda: dict(lo=0.0, hi=0.0, known=0, unknown=0))
     for r in decision:
         sku, wh = r["SKU"], r["仓"]
         e = expl.get((sku, wh), {})
@@ -235,7 +236,9 @@ def main() -> None:
                 if 0 <= k < len(f):
                     total += wt * float(f[k])
             dem[d] = total * share
-        dem_p90 = {d: dem[d] * (1.0 + rel_lift) for d in LEADS}
+        # NOT a calibrated P90: the coefficient comes from MA3 residuals, is
+        # clipped at 3x and is not validated after warehouse allocation.
+        dem_stress = {d: dem[d] * (1.0 + rel_lift) for d in LEADS}
 
         avail = r["可用"]
         po_raw = r["PO未结"]
@@ -246,12 +249,14 @@ def main() -> None:
         if method == "MA3" and mstat == "fallback":
             assumptions.append(f"AutoETS 不可用（{reason}）→ 用 SKU 级 MA3（假设）")
         assumptions.append("AutoETS 在 SKU 级拟合，按该仓近 3 月销量占比分配到仓（分配假设）")
+        assumptions.append("上限为压力情景：MA3 残差相对系数、截顶 3×、未做分配后覆盖验证；不是 P90")
         if share == 0:
             assumptions.append("该仓近 3 月无销量 → 需求分配为 0（不是缺需求）")
         batch_val = None
         if avail == "" or avail is None:
             status = "B_pending_inventory"
             qty_lo = qty_hi = None
+            sku_acc[sku]["unknown"] += 1
         else:
             status = "B"
             po_dups = "duplicate" in (r["PO去重状态"] or "")
@@ -263,20 +268,31 @@ def main() -> None:
                 batch = po_s + intr_s
             batch_val = batch
             qty_lo = max(0.0, round(dem[90] - (float(avail) + batch), 2))
-            qty_hi = max(0.0, round(dem_p90[90] - float(avail), 2))
+            qty_hi = max(0.0, round(dem_stress[90] - float(avail), 2))
             if qty_hi < qty_lo:
                 qty_lo, qty_hi = qty_hi, qty_lo
-            v2_by_sku[sku][0] += qty_lo
-            v2_by_sku[sku][1] += qty_hi
+            sku_acc[sku]["lo"] += qty_lo
+            sku_acc[sku]["hi"] += qty_hi
+            sku_acc[sku]["known"] += 1
+        hist_rate = r.get("月需求率", "")
+        new_rate = (dem[90] / WSUM[90]) if WSUM[90] > 0 else None
         pr = {}
         for d in LEADS:
-            rate = (dem[90] / WSUM[90]) if WSUM[90] > 0 else 0.0
+            rate = new_rate if new_rate is not None else 0.0
             if avail == "" or avail is None:
                 pr[d] = None
             else:
                 pr[d] = round(max(0.0, rate * (d / 30.0) - float(avail) - intr_s), 2)
         diff90 = (round(qty_lo - pr[90], 2)
                   if (qty_lo is not None and pr[90] is not None) else None)
+        if diff90 is None:
+            new_reason = None
+        elif abs(diff90) < 1e-9:
+            new_reason = "same"
+        else:
+            new_reason = ("本方法情景批含 PO/在途去重（PR297 只扣在途）；"
+                          "覆盖期 L90 日历窗口 vs PR297 90/30 月；"
+                          "两者使用同一 T5 新预测率")
         row = dict(r)
         row.update({
             "预测方法(实际使用)": f"{method}（SKU 级 × 仓占比分配）",
@@ -290,16 +306,19 @@ def main() -> None:
             "该序列验证表现": e.get("该序列验证表现", ""),
             "需求P50(冲减前)": round(dem[90], 2),
             "需求P50(冲减后)": round(dem[90], 2),
-            "需求P90": round(dem_p90[90], 2),
+            "压力情景(MA3残差系数×,截顶3×)": round(dem_stress[90], 2),
             "缺口L60": (round(dem[60] - (float(avail) + batch_val), 2)
                       if batch_val is not None else None),
             "缺口L90": (round(dem[90] - (float(avail) + batch_val), 2)
                       if batch_val is not None else None),
             "缺口L120": (round(dem[120] - (float(avail) + batch_val), 2)
                        if batch_val is not None else None),
-            "建议下限L90": qty_lo, "建议上限L90": qty_hi,
+            "建议下限L90": qty_lo, "建议上限L90(压力情景)": qty_hi,
             "PR297_L60": pr[60], "PR297_L90": pr[90], "PR297_L120": pr[120],
             "与PR297差异L90": diff90,
+            "差异原因": new_reason,
+            "历史率(T3)": hist_rate,
+            "新预测等效率(T5)": (round(new_rate, 4) if new_rate is not None else None),
             "缺口公式": e.get("缺口公式", ""),
             "建议量公式": e.get("建议量公式", ""),
             "异常标签": e.get("异常标签", ""),
@@ -315,32 +334,67 @@ def main() -> None:
         w.writerows(out_rows)
 
     # ---- diff vs v1 (per SKU, L90 range) ---------------------------------
+    scope_status = defaultdict(list)
+    for r in out_rows:
+        if r["状态"] != "C":
+            scope_status[r["SKU"]].append(r["状态"])
+
     for sku, v1row in sorted(v1.items()):
         old = parse_qty(v1row.get("建议补货数量或条件区间", ""))
-        lo, hi = v2_by_sku.get(sku, [0.0, 0.0])
-        new = (round(lo, 2), round(hi, 2))
-        if old is None:
+        acc = sku_acc.get(sku)
+        known = 0 if acc is None else acc["known"]
+        unknown = 0 if acc is None else acc["unknown"]
+        lo = 0.0 if acc is None else acc["lo"]
+        hi = 0.0 if acc is None else acc["hi"]
+        complete = (known > 0 and unknown == 0)
+        v2_low = round(lo, 2) if known > 0 else None
+        v2_high = round(hi, 2) if known > 0 else None
+        delta_low = delta_high = None
+        reasons = []
+        if not scope_status.get(sku):
             status = "v1_no_quantity"
-        elif abs(old[0] - new[0]) < 1e-9 and abs(old[1] - new[1]) < 1e-9:
+            reasons.append("v1/v2 均无数量（范围外）")
+        elif known == 0:
+            # every warehouse is pending inventory -> total is UNKNOWN, not 0
+            status = "all_unknown"
+            reasons.append(f"{unknown} 个仓全部待库存核实 → v2 合计为 null（不是 0）")
+        elif unknown > 0:
+            status = "partial_unknown"
+            reasons.append(f"{unknown} 个仓待库存核实 → 合计不完整，不计算完整差值")
+        elif old is None:
+            status = "v1_no_quantity"
+            reasons.append("v1 无数量（当时为待库存核实）")
+        elif abs(old[0] - round(lo, 2)) < 1e-9 and abs(old[1] - round(hi, 2)) < 1e-9:
             status = "unchanged"
         else:
             status = "changed"
-        reasons = []
-        if status == "changed":
             reasons.append("模型切换到 AutoETS（SKU 级）并按仓占比分配，v1 为 SKU 级 MA3")
-            reasons.append("SKU×仓粒度求和；PO/在途按去重批进入情景（与 v1 相同规则，但基数不同）")
+            reasons.append("SKU×仓粒度求和；PO/在途按去重批进入情景（规则同 v1，基数随需求变）")
+        if complete and old is not None:
+            delta_low = round(round(lo, 2) - old[0], 2)
+            delta_high = round(round(hi, 2) - old[1], 2)
+            if status == "unchanged" and (abs(delta_low) > 1e-9 or abs(delta_high) > 1e-9):
+                raise AssertionError(f"unchanged but delta != 0 for {sku}")
         diff_rows.append(dict(
             SKU=sku, v1_class=v1row.get("状态"), v1_low=(old[0] if old else None),
-            v1_high=(old[1] if old else None), v2_low=new[0], v2_high=new[1],
-            delta_low=(round(new[0] - old[0], 2) if old else None),
-            delta_high=(round(new[1] - old[1], 2) if old else None),
+            v1_high=(old[1] if old else None), v2_low=v2_low, v2_high=v2_high,
+            v2_known_rows=known, v2_unknown_rows=unknown, v2_complete=complete,
+            comparable=(complete and old is not None),
+            delta_low=delta_low, delta_high=delta_high,
             change_status=status, change_reason="；".join(reasons)))
     # SKUs present in v2 but not v1 (none expected)
-    for sku in v2_by_sku:
+    for sku in sku_acc:
         if sku not in v1:
             diff_rows.append(dict(SKU=sku, v1_class="(missing)", v1_low=None, v1_high=None,
-                                  v2_low=round(v2_by_sku[sku][0], 2),
-                                  v2_high=round(v2_by_sku[sku][1], 2),
+                                  v2_low=(round(sku_acc[sku]["lo"], 2)
+                                          if sku_acc[sku]["known"] > 0 else None),
+                                  v2_high=(round(sku_acc[sku]["hi"], 2)
+                                           if sku_acc[sku]["known"] > 0 else None),
+                                  v2_known_rows=sku_acc[sku]["known"],
+                                  v2_unknown_rows=sku_acc[sku]["unknown"],
+                                  v2_complete=(sku_acc[sku]["unknown"] == 0
+                                               and sku_acc[sku]["known"] > 0),
+                                  comparable=True,
                                   delta_low=None, delta_high=None,
                                   change_status="new_in_v2",
                                   change_reason="v1 无该 SKU"))
@@ -383,7 +437,12 @@ def main() -> None:
     t2_full = next((x for x in t2["runs"] if x["run"] == "full"), {})
     t2_val_common = t2_full.get("validation_common", {})
     t2_test = t2_full.get("test_own", {})
-    changed = sum(1 for d in diff_rows if d["change_status"] == "changed")
+    status_of = Counter(d["change_status"] for d in diff_rows)
+    comparable = sum(1 for d in diff_rows if d["comparable"])
+    changed = status_of.get("changed", 0)
+    partial = status_of.get("partial_unknown", 0)
+    all_unknown = status_of.get("all_unknown", 0)
+    all_unknown_skus = [d["SKU"] for d in diff_rows if d["change_status"] == "all_unknown"]
     md_lines = [
         "---", "okf: v0.1", "type: Report",
         "title: T5 全范围迭代版摘要（AutoETS 默认 + MA3 fallback）",
@@ -422,9 +481,16 @@ def main() -> None:
         f"seasonal_naive **{(t2_test.get('seasonal_naive') or {}).get('wape_keep_zero')}**。",
         "- 按裁定 A 仍以 AutoETS 为默认；**测试反转只作为迁移风险**记录，不据此改选。", "",
         "## 3. 与首版（v1）差异", "",
-        f"- 逐 SKU 对比：**{changed:,} 个 SKU 数量变化**，其余不变或无数量；明细见 `diff_v1_v2.csv`。",
+        f"- 逐 SKU 对比（`diff_v1_v2.csv`）：**可比 SKU {comparable:,} 个**（v2 全部仓均有库存、可算完整合计），"
+        f"其中 **{changed:,} 个数量变化**、其余不变；另有 **{partial} 个 SKU 部分仓待核实（partial_unknown，"
+        f"不算完整差值）**、**{all_unknown} 个 SKU 全部仓待核实（all_unknown，v2 合计为 null，不是 0）**、"
+        f"{status_of.get('v1_no_quantity', 0)} 个 v1 无数量（范围外）。",
         "- 变化主因：① 模型由 SKU 级 MA3 切到 AutoETS（失败则 MA3）；② 粒度改为 SKU×仓并按销量占比分配；"
         "③ PO/在途仍按去重批进入情景，但基数随需求变。", "",
+        "- 主表同时列 **历史率(T3)** 与 **新预测等效率(T5)**；PR#297 基线用 **T5 新率**重算，"
+        "差异原因据此重写，`same` 行已断言差值 = 0。", "",
+        "- **上限列改为“建议上限L90(压力情景)”**：系数来自 MA3 残差、截顶 3×、分配后未验证覆盖，"
+        "**不是已标定的 P90**。", "",
         "## 4. 使用条件（必须随表一起说明）", "",
         "- A 类为 0：需求上下界（G8）未给、在产 WO 不在快照，**没有任何行可当已审批数量**。",
         "- B 类数量是**条件区间**，依赖行内 `assumptions`；MOQ/包装/成本未提供，**采购约束待定**。",
