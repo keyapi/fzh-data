@@ -260,3 +260,17 @@ D9 分层用的是 `可准备 / 待核实 / 暂缓`，其中“可准备/待核�
 - 本清单有效期至**下一批单据证据到位**（PO ETA / WO `planned_end_date` / 在途关单键）或**需求口径确认**为止；任一到位即按 §2.3 规则重跑同一 10 行。
 - 建议的证据顺序即 `evidence_priority` 1→10：White 的 UOM 与需求口径、XMMBS-100 与 CMKTR-GREY 的 PO 重复候选/ETA、HLR 的在途关单键，是四个“一证定成败”的点。
 - 本清单不自行宣布验收；交 Codex1 复审、Codex2 裁决。
+
+## 10. 验证记录（可复跑）
+
+| 校验 | 方法 | 结果 |
+|---|---|---|
+| 无 P90 读取 | 生成器对每个 SKU 只读 `remaining_3m.forecast_p50` / `.p50` / `lead_time.L*.forecast_p50` / `.p50` 与供给字段；对 `rows`/`totals` 做 `p90` 键断言 | 通过；产物无 `p90_3m` / `forecast_p90` / `p90_status` |
+| 数量型结论 | 产物 schema 无 quantity/order 字段；`guards.order_quantities_emitted=false` | 通过 |
+| SKU 覆盖 | 10 个客户码逐一在 MD 与 JSON 出现；`evidence_priority` 为 1..10 唯一排列 | 通过 |
+| 分类一致性 | 每行按 T1–T4 重算分类，与写入值比对 | 10/10 一致 |
+| 聚合对账 | 逐项加总 vs 冻结 `aggregate`（10 项，容差 1e-6） | 10/10 相等 |
+| 数值溯源 | 每行 D1/D2/A/B 与 `evidence.json` 同名字段比对 | 10/10 相等 |
+| 凭证扫描 | `uv run python scripts/check_secrets.py` + 任务书要求的 4 条 diff 扫描 | 618 文件 OK；4 条扫描零输出 |
+
+复算入口：`out/replenishment_v0/actions.json` 每行含 `tests`、`gaps`、`horizon_stability`、`basis`；把 `rule` 块与 `evidence.json` 的同名字段代入即可重现分类。
