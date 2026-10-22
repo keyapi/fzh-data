@@ -16,7 +16,15 @@ Updated: 2026-10-21 20:05 (Asia/Shanghai)
 > v1 `22ae9a1e` 被 Adapter Review 打回；v2 `49a142e0`、v3 `e6b3cc9a` 被交叉复审打回。
 > **v4 `4b7ec55f` 已通过 Codex 交叉复审（PASS，1 个非阻塞 P3 文档计数）。**
 
-- **G1B-DN-WO-JC-SE v4**：Claude `4b7ec55f`（PR #300）。5 个 top-SKU 快照
+- **G1B DN/WO/JC/SE 窄样本 v4**：`4b7ec55f` PASS（5 SKU）。
+- **G1B 10 SKU 第一阶段 SE 补齐（2026-10-22）**：闸门 `ca27163c`（Codex PASS）下
+  补齐 238 个 SE 明细；10/10 SKU C1/C2/C3 完整，SE 663/663 resolved；
+  C2 195 可比 / 193 通过 / 2 张 `produced_qty` 失真 / 1 张 UOM 混合 unverified；
+  两轮回放逐字节一致。用量 239/300 请求、0.24 MiB/32 MiB、241/900 秒。
+  证据 `out/dn_wo_jc_se_expand10_phase1/`，manifest `92318843…`，
+  stable `1732d590…`。**仍只是 10 SKU，不是 100/全 family/G1。**
+
+- **G1B DN/WO/JC/SE 窄样本 v4**：`4b7ec55f`（5 SKU）。
   （120 SO / 293 DN / 128 WO / 425 SE / 558 SE 行 / 105 JC 组 / 516 工序行，
   2,040 行去向）。
   在 v2 的 6 P1 + 3 P2、v3 的 3 项基础上，关闭 v3 交叉复审剩余 1 P2：
@@ -80,18 +88,16 @@ Updated: 2026-10-21 20:05 (Asia/Shanghai)
 2. ~~方向裁决~~ → 决策 Codex 选 **A：扩样**；离线可用仅 10 SKU，已跑完并两轮一致
    （C1 10/10；C2/C3 仅原 5 个完整）。报告
    `control/reviews/2026-10-21-expand10-report.md`。
-3. **生产闸门实现中**（Claude worker，20:10 起）：`prod_budget.py` + 两工具接入 +
-   离线测试；**通过决策 Codex 复审前禁止访问生产**。任务书
-   `control/reviews/2026-10-21-gate-task.md`，决策
-   `control/reviews/2026-10-21-decision3-production-gate.md`。
-4. **已由决策 Codex 批准**：分阶段有界 EN 生产只读到 100 SKU（先补 238 个 SE 明细，
-   再 20，再 70）；闸门复审通过后启动。
-   Codex 给的边界：仅 GET、单并发、≤1 请求/秒；累计 ≤4000 请求、≤200MB、≤90 分钟；
-   429 遵守 Retry-After 最多重试 2 次；401/403 或连续 3 次超时/5xx 立即停；
-   分层：退货/取消/跨单位 30、多 WO/多次交付 30、普通 30；缺层/触限/异常扩大必须回报。
-5. R290-RECON 等待可绑定的冻结包/五例清单；到位后恢复对账。
-6. 收尾 `/ce-okf` 已完成（PR #306）；DN/WO/JC/SE 四轮返修与 producer 经验已归档。
-7. 已停用 Claude/Cross/Adapter/R290 周期 automation；下一阶段按需再启用。
+3. ~~生产闸门~~ → Codex 第五次复审 **PASS `ca27163c`**（读流异常保留在途预占；
+   重定向预读/绝对截止/403 原子停机均已关闭）。生产只读已按批准边界开放。
+4. ~~第一阶段 238 个 SE 明细~~ → **已完成**：239/300 请求、0.24/32 MiB、241/900 秒；
+   10/10 SKU C1/C2/C3 完整，SE 663/663 resolved；两轮回放逐字节一致。
+   报告 `control/reviews/2026-10-22-phase1-se-enrichment.md`。
+5. **100 SKU 扩样仍暂停**（决策 Codex：先 A 库存地基、再 B 闸门，扩样需
+   ETA/Cover/UOM 与明确放行）；下一步由 Codex2 决定扩样还是转 ETA/Cover/UOM。
+6. ~~R290-RECON~~ → 已完成：5/5 接收，accept 3 / scenario 1 / blocker 1。
+7. 收尾 `/ce-okf` 已完成（PR #306）；四轮返修与 producer 经验已归档。
+8. 周期 automation 保持停用；次日 05:17 用新归档 cmd 验证库存历史。
 
 ## 修正
 
