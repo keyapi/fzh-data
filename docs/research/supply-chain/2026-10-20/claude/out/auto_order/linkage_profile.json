@@ -1,0 +1,527 @@
+{
+ "schema_version": "en_so_linkage/1",
+ "generated_at": "2026-10-22T22:46:09+08:00",
+ "base_url": "https://erpnext.vilavi.cn",
+ "sample_rule": "SO 级统计=分段全量；Delivery Plan 关联、item 级政策字段、配对=每段按 name 升序取前 15 单的样本",
+ "segments": {
+  "A": {
+   "window": "2024-11..2025-05",
+   "full": {
+    "so": 108,
+    "cancelled": 9,
+    "cancelled_ratio": 0.0833,
+    "submitted": 99,
+    "unshipped": 70,
+    "unshipped_ratio": 0.7071,
+    "status": {
+     "Cancelled": 9,
+     "Closed": 72,
+     "To Bill": 27
+    },
+    "type_of_manufacturing": {
+     "In House": 108
+    }
+   },
+   "sample": {
+    "n": 15,
+    "so_hashes": [
+     "472a4b7a2e5d",
+     "101afde405aa",
+     "48a4c703537e",
+     "0535ab1d858b",
+     "c88f5b0af1e3",
+     "ed44e47a8cbf",
+     "3228f03cee36",
+     "0955473ec0fc",
+     "facf8c19f6e6",
+     "429e4ec911fb",
+     "ed48cfc331b7",
+     "6a6eeb31ed0a",
+     "695113f1d99f",
+     "719aa9651e04",
+     "f93aa8d2574a"
+    ],
+    "items": 852,
+    "pairing": {
+     "both": 15
+    },
+    "dp": {
+     "so_linked": 0,
+     "so_link_ratio": 0.0,
+     "dp_items": 0,
+     "so_detail_nonempty": 0,
+     "dp_parents": 0,
+     "dn_pending": {},
+     "total_planned_qty": 0,
+     "total_actual_delivered_qty": null
+    },
+    "policy_so": {},
+    "policy_item": {}
+   },
+   "monthly_type": {
+    "2024-11": {
+     "In House": 7
+    },
+    "2024-12": {
+     "In House": 14
+    },
+    "2025-01": {
+     "In House": 2
+    },
+    "2025-02": {
+     "In House": 23
+    },
+    "2025-03": {
+     "In House": 18
+    },
+    "2025-04": {
+     "In House": 23
+    },
+    "2025-05": {
+     "In House": 21
+    }
+   }
+  },
+  "B": {
+   "window": "2025-06..2025-12",
+   "full": {
+    "so": 116,
+    "cancelled": 2,
+    "cancelled_ratio": 0.0172,
+    "submitted": 113,
+    "unshipped": 93,
+    "unshipped_ratio": 0.823,
+    "status": {
+     "Closed": 94,
+     "To Bill": 19,
+     "Cancelled": 2,
+     "Draft": 1
+    },
+    "type_of_manufacturing": {
+     "In House": 116
+    }
+   },
+   "sample": {
+    "n": 15,
+    "so_hashes": [
+     "09b69eba629f",
+     "23f3f2b262d6",
+     "fe6584009ab0",
+     "4ec3da2524e6",
+     "08b3d2e5c42d",
+     "7a6f22f0c239",
+     "fd0fcc86699d",
+     "2c086279b155",
+     "eda19235c094",
+     "3bf7e20a48a7",
+     "84e12325c2c3",
+     "c48eb5c893ea",
+     "115c60a5fc9e",
+     "491a76dce902",
+     "528c2ab7f42f"
+    ],
+    "items": 467,
+    "pairing": {
+     "both": 10,
+     "neither": 5
+    },
+    "dp": {
+     "so_linked": 15,
+     "so_link_ratio": 1.0,
+     "dp_items": 392,
+     "so_detail_nonempty": 392,
+     "dp_parents": 58,
+     "dn_pending": {
+      "1": 58
+     },
+     "total_planned_qty": 9486.0,
+     "total_actual_delivered_qty": null
+    },
+    "policy_so": {},
+    "policy_item": {}
+   },
+   "monthly_type": {
+    "2025-06": {
+     "In House": 27
+    },
+    "2025-07": {
+     "In House": 24
+    },
+    "2025-08": {
+     "In House": 28
+    },
+    "2025-09": {
+     "In House": 22
+    },
+    "2025-10": {
+     "In House": 13
+    },
+    "2025-11": {
+     "In House": 2
+    }
+   }
+  },
+  "C": {
+   "window": "2026-01..2026-06",
+   "full": {
+    "so": 83,
+    "cancelled": 8,
+    "cancelled_ratio": 0.0964,
+    "submitted": 74,
+    "unshipped": 68,
+    "unshipped_ratio": 0.9189,
+    "status": {
+     "Closed": 7,
+     "Cancelled": 8,
+     "To Deliver and Bill": 61,
+     "To Bill": 6,
+     "Draft": 1
+    },
+    "type_of_manufacturing": {
+     "In House": 70,
+     "Subcontract": 13
+    }
+   },
+   "sample": {
+    "n": 15,
+    "so_hashes": [
+     "a6e449757d72",
+     "ac9e69927885",
+     "d182cee2c35c",
+     "e13d0511c978",
+     "1ebdba331439",
+     "453f016ebf6c",
+     "248b41e59ad9",
+     "6b78df16ad83",
+     "b320068522dc",
+     "9aeb53070c62",
+     "68be857425bd",
+     "88b70ffcef6e",
+     "6c69b65a7ac0",
+     "6a3cce1158bb",
+     "0c568b41c40c"
+    ],
+    "items": 509,
+    "pairing": {
+     "both": 8,
+     "neither": 5,
+     "cover_only": 1,
+     "inner_only": 1
+    },
+    "dp": {
+     "so_linked": 10,
+     "so_link_ratio": 0.6667,
+     "dp_items": 577,
+     "so_detail_nonempty": 577,
+     "dp_parents": 25,
+     "dn_pending": {
+      "1": 25
+     },
+     "total_planned_qty": 12530.0,
+     "total_actual_delivered_qty": null
+    },
+    "policy_so": {},
+    "policy_item": {}
+   },
+   "monthly_type": {
+    "2026-01": {
+     "In House": 10
+    },
+    "2026-03": {
+     "In House": 25,
+     "Subcontract": 6
+    },
+    "2026-04": {
+     "In House": 13,
+     "Subcontract": 1
+    },
+    "2026-05": {
+     "In House": 10,
+     "Subcontract": 1
+    },
+    "2026-06": {
+     "Subcontract": 5,
+     "In House": 12
+    }
+   }
+  },
+  "D": {
+   "window": "2026-07..2026-10",
+   "full": {
+    "so": 50,
+    "cancelled": 0,
+    "cancelled_ratio": 0.0,
+    "submitted": 49,
+    "unshipped": 46,
+    "unshipped_ratio": 0.9388,
+    "status": {
+     "To Deliver and Bill": 36,
+     "To Bill": 3,
+     "Closed": 10,
+     "Draft": 1
+    },
+    "type_of_manufacturing": {
+     "In House": 47,
+     "Subcontract": 3
+    }
+   },
+   "sample": {
+    "n": 15,
+    "so_hashes": [
+     "3becec95ca76",
+     "0007e8b40a1b",
+     "eb92b6e44ddb",
+     "60ccd8f31e86",
+     "164af144d6f3",
+     "1e7e40e6c28e",
+     "aed0513bed4a",
+     "e50194d1a521",
+     "3ff21f111a9e",
+     "45ab8bc1e479",
+     "7fec5a54b1c1",
+     "88e257a6c173",
+     "b18c5afeb777",
+     "54d2298caf51",
+     "6821e18c1cc7"
+    ],
+    "items": 229,
+    "pairing": {
+     "cover_only": 7,
+     "neither": 8
+    },
+    "dp": {
+     "so_linked": 10,
+     "so_link_ratio": 0.6667,
+     "dp_items": 1914,
+     "so_detail_nonempty": 1914,
+     "dp_parents": 17,
+     "dn_pending": {
+      "1": 17
+     },
+     "total_planned_qty": 14047.0,
+     "total_actual_delivered_qty": null
+    },
+    "policy_so": {},
+    "policy_item": {}
+   },
+   "monthly_type": {
+    "2026-07": {
+     "In House": 9,
+     "Subcontract": 3
+    },
+    "2026-08": {
+     "In House": 14
+    },
+    "2026-09": {
+     "In House": 12
+    },
+    "2026-10": {
+     "In House": 12
+    }
+   }
+  }
+ },
+ "policy": {
+  "monthly_type": {
+   "A": {
+    "2024-11": {
+     "In House": 7
+    },
+    "2024-12": {
+     "In House": 14
+    },
+    "2025-01": {
+     "In House": 2
+    },
+    "2025-02": {
+     "In House": 23
+    },
+    "2025-03": {
+     "In House": 18
+    },
+    "2025-04": {
+     "In House": 23
+    },
+    "2025-05": {
+     "In House": 21
+    }
+   },
+   "B": {
+    "2025-06": {
+     "In House": 27
+    },
+    "2025-07": {
+     "In House": 24
+    },
+    "2025-08": {
+     "In House": 28
+    },
+    "2025-09": {
+     "In House": 22
+    },
+    "2025-10": {
+     "In House": 13
+    },
+    "2025-11": {
+     "In House": 2
+    }
+   },
+   "C": {
+    "2026-01": {
+     "In House": 10
+    },
+    "2026-03": {
+     "In House": 25,
+     "Subcontract": 6
+    },
+    "2026-04": {
+     "In House": 13,
+     "Subcontract": 1
+    },
+    "2026-05": {
+     "In House": 10,
+     "Subcontract": 1
+    },
+    "2026-06": {
+     "Subcontract": 5,
+     "In House": 12
+    }
+   },
+   "D": {
+    "2026-07": {
+     "In House": 9,
+     "Subcontract": 3
+    },
+    "2026-08": {
+     "In House": 14
+    },
+    "2026-09": {
+     "In House": 12
+    },
+    "2026-10": {
+     "In House": 12
+    }
+   }
+  },
+  "abrupt_changes": {
+   "A": [],
+   "B": [],
+   "C": [],
+   "D": []
+  },
+  "first_seen_by_value": {
+   "In House": "2024-11",
+   "Subcontract": "2026-03"
+  },
+  "custom_fields_found": {
+   "so": false,
+   "item": false
+  },
+  "note": "按段分布为全量；月份级突变检测使用各段全量 header 的 transaction_date × type_of_manufacturing，见 monthly_type"
+ },
+ "reference": {
+  "custom_fields": [
+   {
+    "dt": "Sales Order",
+    "fieldname": "custom_attach_file_customer_item_code",
+    "label": "Attach File Customer Item Code",
+    "fieldtype": "Attach",
+    "options": null
+   },
+   {
+    "dt": "Sales Order",
+    "fieldname": "custom_filters",
+    "label": "Filters",
+    "fieldtype": "Section Break",
+    "options": null
+   },
+   {
+    "dt": "Sales Order",
+    "fieldname": "custom_item_group",
+    "label": "Item Group",
+    "fieldtype": "Link",
+    "options": "Item Group"
+   },
+   {
+    "dt": "Sales Order",
+    "fieldname": "custom_process_file_customer_item_code",
+    "label": "Process File Customer Item Code",
+    "fieldtype": "Button",
+    "options": null
+   },
+   {
+    "dt": "Sales Order",
+    "fieldname": "exempt_from_sales_tax",
+    "label": "Is customer exempted from sales tax?",
+    "fieldtype": "Check",
+    "options": null
+   },
+   {
+    "dt": "Sales Order",
+    "fieldname": "type_of_manufacturing",
+    "label": "Default Manufacturing Type",
+    "fieldtype": "Select",
+    "options": "In House\nSubcontract\nMaterial Request"
+   },
+   {
+    "dt": "Sales Order Item",
+    "fieldname": "custom_fba_sku",
+    "label": "FBA SKU",
+    "fieldtype": "Data",
+    "options": null
+   },
+   {
+    "dt": "Sales Order Item",
+    "fieldname": "custom_label_combination",
+    "label": "Label Combination",
+    "fieldtype": "Link",
+    "options": "Label Combination"
+   },
+   {
+    "dt": "Sales Order Item",
+    "fieldname": "custom_tongtool_item_name",
+    "label": "TongTool Item Name",
+    "fieldtype": "Data",
+    "options": null
+   },
+   {
+    "dt": "Sales Order Item",
+    "fieldname": "plan_reserved_stock_qty",
+    "label": "Plan Reserved Stock Qty",
+    "fieldtype": "Float",
+    "options": null
+   },
+   {
+    "dt": "Sales Order Item",
+    "fieldname": "type_of_manufacturing",
+    "label": "Manufacturing Type",
+    "fieldtype": "Select",
+    "options": "In House\nSubcontract\nMaterial Request"
+   }
+  ],
+  "policy_fields": {
+   "so": [],
+   "item": []
+  }
+ },
+ "limits": [
+  "只读 GET；无写入/无下单/无配置变更",
+  "样本与全量在每张表注明；不做全量外推",
+  "不解释字段业务含义"
+ ],
+ "budget": {
+  "requests": 98,
+  "cap": 200,
+  "interval_s": 0.2,
+  "page_length_max": 100,
+  "elapsed_s": 19.5,
+  "by_path": {
+   "/api/resource/Custom Field": 1,
+   "/api/resource/Sales Order": 6,
+   "/api/resource/Sales Order/<doc>": 60,
+   "/api/resource/Delivery Plan": 31
+  },
+  "stop_reason": null,
+  "errors": []
+ }
+}
