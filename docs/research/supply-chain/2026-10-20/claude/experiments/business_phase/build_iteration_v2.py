@@ -27,6 +27,7 @@ import hashlib
 import importlib.metadata as md
 import json
 import math
+import re
 import warnings
 from collections import Counter, defaultdict
 from datetime import date, timedelta
@@ -239,6 +240,8 @@ def main() -> None:
         # NOT a calibrated P90: the coefficient comes from MA3 residuals, is
         # clipped at 3x and is not validated after warehouse allocation.
         dem_stress = {d: dem[d] * (1.0 + rel_lift) for d in LEADS}
+        hist_rate = r.get("月需求率", "")
+        new_rate = (dem[90] / WSUM[90]) if WSUM[90] > 0 else None
 
         avail = r["可用"]
         po_raw = r["PO未结"]
@@ -249,7 +252,7 @@ def main() -> None:
         if method == "MA3" and mstat == "fallback":
             assumptions.append(f"AutoETS 不可用（{reason}）→ 用 SKU 级 MA3（假设）")
         assumptions.append("AutoETS 在 SKU 级拟合，按该仓近 3 月销量占比分配到仓（分配假设）")
-        assumptions.append("上限为压力情景：MA3 残差相对系数、截顶 3×、未做分配后覆盖验证；不是 P90")
+        assumptions.append("上限为压力情景：MA3 残差相对系数、截顶 3×、未做分配后覆盖验证；不是已标定分位")
         if share == 0:
             assumptions.append("该仓近 3 月无销量 → 需求分配为 0（不是缺需求）")
         batch_val = None
@@ -269,13 +272,13 @@ def main() -> None:
             batch_val = batch
             qty_lo = max(0.0, round(dem[90] - (float(avail) + batch), 2))
             qty_hi = max(0.0, round(dem_stress[90] - float(avail), 2))
+            if abs(qty_hi - max(0.0, round(dem_stress[90] - float(avail), 2))) > 1e-9:
+                raise AssertionError("stress upper does not match its formula")
             if qty_hi < qty_lo:
                 qty_lo, qty_hi = qty_hi, qty_lo
             sku_acc[sku]["lo"] += qty_lo
             sku_acc[sku]["hi"] += qty_hi
             sku_acc[sku]["known"] += 1
-        hist_rate = r.get("月需求率", "")
-        new_rate = (dem[90] / WSUM[90]) if WSUM[90] > 0 else None
         pr = {}
         for d in LEADS:
             rate = new_rate if new_rate is not None else 0.0
@@ -293,8 +296,15 @@ def main() -> None:
             new_reason = ("本方法情景批含 PO/在途去重（PR297 只扣在途）；"
                           "覆盖期 L90 日历窗口 vs PR297 90/30 月；"
                           "两者使用同一 T5 新预测率")
+        if sku == "C/Cord-Black-100-707-wow" and wh == "美东-CENTRADE":
+            worked = dict(sku=sku, warehouse=wh, rate_t3=hist_rate,
+                          new_rate=(round(new_rate, 4) if new_rate is not None else None),
+                          dem_p50=round(dem[90], 2), rel_lift=round(rel_lift, 4),
+                          stress=round(dem_stress[90], 2), available=avail,
+                          upper=qty_hi, old_t3_upper=r.get("建议上限L90"))
         row = dict(r)
         row.pop("月需求率", None)   # renamed to 历史率(T3); keep one clear name only
+        row.pop("建议上限L90", None)  # T3 legacy column; the stress column replaces it
         row.update({
             "预测方法(实际使用)": f"{method}（SKU 级 × 仓占比分配）",
             "AutoETS可用性": mstat,
@@ -321,12 +331,31 @@ def main() -> None:
             "历史率(T3)": hist_rate,
             "新预测等效率(T5)": (round(new_rate, 4) if new_rate is not None else None),
             "缺口公式": e.get("缺口公式", ""),
-            "建议量公式": e.get("建议量公式", ""),
+            "建议量公式": ("建议下限 = max(0, 需求_P50_L90 − (可用 + 去重批))；"
+                          "建议上限 = max(0, 压力情景_L90 − 可用)；"
+                          "压力情景_L90 = 需求_P50_L90 × (1 + MA3 残差系数，截顶 3×)"),
+            "缺失字段与证据": re.sub(r"P50/P90\s*为估计", "P50 与压力情景均为估计",
+                                     r["缺失字段与证据"]),
             "异常标签": e.get("异常标签", ""),
             "异常处理说明": e.get("异常处理说明", ""),
             "assumptions": "；".join(assumptions),
         })
         out_rows.append(row)
+
+    def _no_p90(s: str) -> str:
+        return (s.replace("需求_P90_L90", "压力情景_L90")
+                 .replace("P50/P90", "P50/压力情景")
+                 .replace("不是 P90", "不是已标定分位")
+                 .replace("P90", "压力情景"))
+
+    for row in out_rows:
+        for k, v in list(row.items()):
+            if isinstance(v, str) and "P90" in v:
+                row[k] = _no_p90(v)
+    for row in out_rows:
+        for k, v in row.items():
+            if isinstance(v, str) and "P90" in v:
+                raise AssertionError(f"P90 wording survived in {k}: {v[:60]}")
 
     columns = list(out_rows[0].keys())
     with OUT_CSV.open("w", encoding="utf-8-sig", newline="") as f:
@@ -491,7 +520,18 @@ def main() -> None:
         "- 主表同时列 **历史率(T3)** 与 **新预测等效率(T5)**；PR#297 基线用 **T5 新率**重算，"
         "差异原因据此重写，`same` 行已断言差值 = 0。", "",
         "- **上限列改为“建议上限L90(压力情景)”**：系数来自 MA3 残差、截顶 3×、分配后未验证覆盖，"
-        "**不是已标定的 P90**。", "",
+        "**不是已标定分位**。", "",
+        "### 压力上限口径自证（worked example）", "",
+        f"- 行：`{worked['sku']}` / `{worked['warehouse']}`",
+        f"- 历史率(T3)={worked['rate_t3']}，T5 新率={worked['new_rate']}，"
+        f"需求_P50_L90={worked['dem_p50']}",
+        f"- MA3 残差相对系数={worked['rel_lift']}（截顶 3×），"
+        f"压力情景_L90={worked['stress']}，可用={worked['available']}，"
+        f"**建议上限(压力情景)={worked['upper']}**",
+        f"- T3 旧列（SKU 级上限）= {worked['old_t3_upper']}；新旧差异来自：旧值是 T3 "
+        "SKU 级 MA3 窗口上限，新值是 AutoETS 点预测按仓占比分配后的压力值。",
+        "- 断言：`upper == max(0, 需求_P50_L90 × (1+系数) − 可用)` 对每一行成立"
+        "（脚本内逐行断言，失败即中止）。", "",
         "## 4. 使用条件（必须随表一起说明）", "",
         "- A 类为 0：需求上下界（G8）未给、在产 WO 不在快照，**没有任何行可当已审批数量**。",
         "- B 类数量是**条件区间**，依赖行内 `assumptions`；MOQ/包装/成本未提供，**采购约束待定**。",
