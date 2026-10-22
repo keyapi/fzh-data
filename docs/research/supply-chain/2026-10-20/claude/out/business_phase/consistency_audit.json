@@ -2,7 +2,7 @@
  "schema_version": "t21_consistency_audit/1",
  "inputs": {
   "replenishment_v2.csv": "6b30e751ecda86301bc73831ffb21705574a0a57b0fbb62c7f43aaba9716c9b7",
-  "summary_v3.md": "4765b4b1fc0b12aa1cddf7b6759ea5f00bacfb8c1e7aba992f945cc0cfcbb418",
+  "summary_v3.md": "e349f6a7e4743e50d9d2cb8ec3290f73ae1bc7639a8edb6d640853a688f653c5",
   "model_sensitivity.csv": "9330ff5d533f39e85a86e897fec0921af94b48df6cb514c6e4436b51efbe3dd4",
   "model_sensitivity.md": "1567e607b6133e5006e38c0b2a10b19c70617893d64d2cc6448484486e017346",
   "wo_dn_coverage.csv": "6d5f020feb0ab87d1bdd51be2fe877c121b04c189e439758fe81db951d95a739",
@@ -17,7 +17,7 @@
   "nested_eval.json": "8e83f4cbc226a6e6bc7185ff05a9ac2f046623e54b61637a083e4ad282d6ca31",
   "short_history_eval.json": "0d795efa4e308f91967272aa18b4cbf1783bef98b75fe7e3af00bf44322d8616",
   "error_attribution.json": "5a3d6f56a5bf42fd636a9c94a3fab6d5bad793a81c72ced1ee099d817f515b93",
-  "forward_shadow.py": "8f461b82e50ac5ddcfa30cbaf2729ee70ffa6a2b8bf24052a2f29c51299a04f6"
+  "forward_shadow.py": "723696fdf452a409270a9439c5196e9deb3303b6db3f9bca54095d2d955de2d1"
  },
  "checks": [
   {
@@ -77,15 +77,8 @@
   {
    "id": "7",
    "title": "summary_v3 §6 ↔ nested_eval / short_history_eval",
-   "status": "FAIL",
-   "diffs": [
-    {
-     "file": "summary_v3.md",
-     "field": "guard 阈值建议",
-     "table_value": "len<7（T20，short_history_eval.py:69）",
-     "doc_value": "guard len(y) < 3"
-    }
-   ],
+   "status": "PASS",
+   "diffs": [],
    "notes": [
     "T16 short_history_eval 的组合 MAE 9.928 未写入 §6；§6 的短历史数字来自 T9/T14（attribute_errors），两者口径不同（对齐方式/窗口集），不构成数字矛盾，但若要求并列需补一句说明。",
     "模型数字逐项与 nested_eval.json / short_history_eval.json / error_attribution.json 比对。"
@@ -94,33 +87,8 @@
   {
    "id": "8",
    "title": "forward_shadow_plan.md ↔ forward_shadow.py",
-   "status": "FAIL",
-   "diffs": [
-    {
-     "file": "forward_shadow_plan.md / forward_shadow.py",
-     "field": "各候选 WAPE",
-     "table_value": "只算 selected / naive / ma3",
-     "doc_value": "每个候选 1 个值"
-    },
-    {
-     "file": "forward_shadow_plan.md / forward_shadow.py",
-     "field": "各候选 Bias",
-     "table_value": "未实现",
-     "doc_value": "每个候选 1 个值"
-    },
-    {
-     "file": "forward_shadow_plan.md / forward_shadow.py",
-     "field": "上限列覆盖率",
-     "table_value": "未实现",
-     "doc_value": "每个候选 1 个值"
-    },
-    {
-     "file": "forward_shadow_plan.md / forward_shadow.py",
-     "field": "零分母数量与占比",
-     "table_value": "仅 n_zero_demand_retained，无占比",
-     "doc_value": "数量与占比"
-    }
-   ],
+   "status": "PASS",
+   "diffs": [],
    "notes": [
     "§3 连续 3 个月/区间不含 0 是人工判定流程，脚本只产出单次评分，文档未声称脚本自动判定，故不计失败。",
     "已确认脚本保留 `--data-cutoff/--origin` 参数化、预存清单与 --force 防覆盖。"
@@ -129,12 +97,9 @@
  ],
  "summary": {
   "total": 8,
-  "passed": 6,
-  "failed": 2,
-  "failures": [
-   "7",
-   "8"
-  ]
+  "passed": 8,
+  "failed": 0,
+  "failures": []
  },
  "superseded": [
   {

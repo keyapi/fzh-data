@@ -55,6 +55,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import sys
 import tempfile
 import time
@@ -301,10 +302,13 @@ def build_score(pre: dict, actual: dict, months_present: set,
     """
     origin = pre["origin"]
     targets = pre["target_months"]
-    methods = ["selected", "naive", "ma3"]
+    required = ("selected", "naive", "ma3")     # top-level comparators (kept for continuity)
+    # every candidate the presave file can produce (T24: all, not just three)
+    candidates = ["selected"] + sorted(
+        {c for fc in pre["forecasts"].values() for c in fc} - {"selected"})
     sample_skus = [r["sku"] for r in pre["sample"]["skus"]]
     missing_months = [t for t in targets if t not in months_present]
-    excluded, by_sku = [], {}
+    excluded, included = [], {}
     if missing_months:
         excluded = [dict(sku=s, reason="missing_labels:" + ",".join(missing_months))
                     for s in sample_skus]
@@ -314,19 +318,39 @@ def build_score(pre: dict, actual: dict, months_present: set,
             if not fc:
                 excluded.append(dict(sku=sku, reason="missing_presaved_forecast"))
                 continue
-            miss = [m for m in methods if m not in fc]
+            miss = [m for m in required if m not in fc]
             if miss:
                 excluded.append(dict(sku=sku, reason="incomplete_forecast:" + ",".join(miss)))
                 continue
             # actual defaults to 0.0: no order rows in a fully covered window
-            by_sku[sku] = dict(actual=float(actual.get(sku, 0.0)),
-                               **{m: float(np.sum(fc[m])) for m in methods})
-    den = sum(v["actual"] for v in by_sku.values())
-    zero = sum(1 for v in by_sku.values() if abs(v["actual"]) < 1e-9)
+            included[sku] = float(actual.get(sku, 0.0))
+
+    def cand_stats(c: str) -> dict:
+        cells = [(float(np.sum(pre["forecasts"][sku][c])), a)
+                 for sku, a in included.items() if c in pre["forecasts"][sku]]
+        if not cells:
+            return dict(n=0, wape=None, bias=None, upper_coverage=None)
+        den_c = sum(a for _, a in cells)
+        return dict(
+            n=len(cells),
+            wape=round(sum(abs(f - a) for f, a in cells) / den_c, 4) if den_c > 1e-9 else None,
+            # Bias = Σ(F−A)/ΣA；读作方向，不读作准确率
+            bias=round(sum(f - a for f, a in cells) / den_c, 4) if den_c > 1e-9 else None,
+            # 上限区间覆盖率：单边上界（点预测）的实测覆盖，只作观察、不构成保证
+            upper_coverage=round(sum(1 for f, a in cells if a <= f + 1e-9) / len(cells), 4))
+
+    candidate_metrics = {c: cand_stats(c) for c in candidates}
+    by_sku = {sku: dict(actual=a,
+                        **{m: float(np.sum(pre["forecasts"][sku][m])) for m in required})
+              for sku, a in included.items()}
+    den = sum(included.values())
+    zero = sum(1 for a in included.values() if abs(a) < 1e-9)
+    # 零分母：数量与占比（占比 = 零分母格数 / 该块可评单元格数）
+    zero_share = round(zero / len(included), 4) if included else None
     status = ("labels_incomplete" if missing_months else
               "undefined_denominator" if den <= 1e-9 else "scored")
-    wape = {m: (round(sum(abs(v[m] - v["actual"]) for v in by_sku.values()) / den, 4)
-                if den > 1e-9 else None) for m in methods}
+    wape = {m: candidate_metrics[m]["wape"] for m in required}
+    bias = {c: candidate_metrics[c]["bias"] for c in candidates}
     bootstrap = None
     if den > 1e-9:
         rng = np.random.default_rng(ym_i(origin) * 100 + 4)   # deterministic, origin-derived
@@ -348,7 +372,7 @@ def build_score(pre: dict, actual: dict, months_present: set,
                                     p95=round(float(np.percentile(v, 95)), 4))
                             for k, v in diffs.items()})
     return dict(
-        schema_version="t10_forward_shadow_score/2",
+        schema_version="t10_forward_shadow_score/3",
         scored_at=datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"),
         presave_file=presave_name, generated_at=pre["generated_at"],
         origin=origin, target_months=targets, status=status,
@@ -363,16 +387,26 @@ def build_score(pre: dict, actual: dict, months_present: set,
         mother_set=dict(kind="presaved sample", n=len(sample_skus),
                         rule=("shadow_<origin>.json → sample.skus；不按目标窗订单记录收缩；"
                               "标签完整时无订单 = 零需求")),
-        n_sample=len(sample_skus), n_scored=len(by_sku),
+        n_sample=len(sample_skus), n_scored=len(included),
         n_zero_demand_retained=zero,
+        zero_demand_share=zero_share,
         n_excluded=len(excluded), excluded=excluded,
         extra_forecasts_not_in_sample=sorted(set(pre["forecasts"]) - set(sample_skus)),
-        denominator=round(den, 2), wape=wape, bootstrap=bootstrap,
+        denominator=round(den, 2), wape=wape, bias=bias,
+        candidate_metrics=candidate_metrics,
+        upper_coverage={c: candidate_metrics[c]["upper_coverage"] for c in candidates},
+        bootstrap=bootstrap,
         metric_definition=dict(
             wape="Σ|F−A| / ΣA over the mother set (zero-demand cells retained in the numerator)",
+            bias="Σ(F−A) / ΣA；读作方向，不读作准确率",
+            upper_coverage=("上限区间覆盖率：实际 ≤ 点预测（单边上界）的单元格占比；"
+                            "只作观察，不构成保证"),
             zero_demand="零需求单元格的 |F| 进入分子，对分母贡献 0",
+            zero_demand_share="零分母单元格占比 = 零分母格数 / 该块可评单元格数",
             denominator_zero="仅当聚合总实际量为 0 时该聚合无定义（status=undefined_denominator）",
-            missing_labels="任一目标月无标签则整窗 unknown，逐 SKU 列出排除原因"),
+            missing_labels="任一目标月无标签则整窗 unknown，逐 SKU 列出排除原因",
+            candidates=("参与候选：selected 与预存文件实际可产出的全部候选"
+                        "（naive/ma3/ma6/seasonal_naive/autoets/combo_ew 中该 SKU 可产出者）")),
         note=("一次月度结果不构成改默认的依据；区间跨 0 时只能说方向不稳定；"
               "选择结果来自预存文件，评分阶段未重新选模。"),
     )
@@ -448,22 +482,45 @@ def selftest() -> None:
     pre = dict(origin="2026-09", target_months=["2026-10", "2026-11", "2026-12"],
                generated_at="synthetic", inputs=dict(db_sha256="x", destinations_sha256="x"),
                sample=dict(skus=[dict(sku="A"), dict(sku="B")]),
-               forecasts={"A": {"selected": [5, 5, 5], "naive": [5, 5, 5], "ma3": [4, 4, 4]},
-                          "B": {"selected": [40, 30, 30], "naive": [40, 30, 30],
-                                "ma3": [40, 30, 30]}})
+               forecasts={
+                   "A": {"selected": [5, 5, 5], "naive": [5, 5, 5], "ma3": [4, 4, 4],
+                         "ma6": [5, 5, 5], "seasonal_naive": [5, 5, 5],
+                         "autoets": [5, 5, 5], "combo_ew": [5, 5, 5]},
+                   "B": {"selected": [40, 30, 30], "naive": [40, 30, 30],
+                         "ma3": [40, 30, 30], "ma6": [40, 30, 30],
+                         "seasonal_naive": [40, 30, 30], "autoets": [40, 30, 30],
+                         "combo_ew": [40, 30, 30]}})
     out = build_score(pre, {"B": 100.0}, set(pre["target_months"]), None, "synthetic")
     assert out["status"] == "scored"
     assert out["n_scored"] == 2 and out["n_zero_demand_retained"] == 1
+    assert out["zero_demand_share"] == 0.5
     assert out["wape"]["selected"] == 0.15, out["wape"]
+    for c in ("selected", "naive", "ma3", "ma6", "seasonal_naive",
+              "autoets", "combo_ew"):
+        assert c in out["candidate_metrics"], c
+        m = out["candidate_metrics"][c]
+        for k in ("wape", "bias", "upper_coverage"):
+            assert m[k] is not None and math.isfinite(m[k]), (c, k, m[k])
+    assert set(out["candidate_metrics"]) == {
+        "selected", "naive", "ma3", "ma6", "seasonal_naive", "autoets", "combo_ew"}
+    assert out["bias"]["selected"] == 0.15
+    assert out["upper_coverage"]["selected"] == 1.0
     excluded_variant = out["wape"]["selected"] - 15.0 / out["denominator"]
     assert abs(excluded_variant - 0.0) < 1e-12
     missing = build_score(pre, {}, set(), None, "synthetic")
     assert missing["status"] == "labels_incomplete"
     assert missing["n_excluded"] == 2 and missing["n_scored"] == 0
+    assert missing["zero_demand_share"] is None
+    assert set(missing["candidate_metrics"]) == {
+        "selected", "naive", "ma3", "ma6", "seasonal_naive", "autoets", "combo_ew"}
     print(json.dumps(dict(status=out["status"], denominator=out["denominator"],
                           wape_with_zero=out["wape"]["selected"],
                           wape_excluding_zero=excluded_variant,
+                          bias_selected=out["bias"]["selected"],
+                          upper_coverage_selected=out["upper_coverage"]["selected"],
                           zero_demand_retained=out["n_zero_demand_retained"],
+                          zero_demand_share=out["zero_demand_share"],
+                          candidates=sorted(out["candidate_metrics"]),
                           labels_incomplete_status=missing["status"]),
                      ensure_ascii=False, indent=1))
 
@@ -481,10 +538,15 @@ def entrytest() -> None:
                    scoring_due="2027-01-04", generated_at="synthetic",
                    inputs=dict(db_sha256="x", destinations_sha256="x"),
                    sample=dict(skus=[dict(sku="A"), dict(sku="B")]),
-                   forecasts={"A": {"selected": [5, 5, 5], "naive": [5, 5, 5],
-                                     "ma3": [4, 4, 4]},
-                              "B": {"selected": [40, 30, 30], "naive": [40, 30, 30],
-                                    "ma3": [40, 30, 30]}})
+                   forecasts={
+                       "A": {"selected": [5, 5, 5], "naive": [5, 5, 5],
+                             "ma3": [4, 4, 4], "ma6": [5, 5, 5],
+                             "seasonal_naive": [5, 5, 5], "autoets": [5, 5, 5],
+                             "combo_ew": [5, 5, 5]},
+                       "B": {"selected": [40, 30, 30], "naive": [40, 30, 30],
+                             "ma3": [40, 30, 30], "ma6": [40, 30, 30],
+                             "seasonal_naive": [40, 30, 30], "autoets": [40, 30, 30],
+                             "combo_ew": [40, 30, 30]}})
         pred = Path(td) / "shadow_2026-09.json"
         pred.write_text(json.dumps(pre, ensure_ascii=False), encoding="utf-8")
         args = argparse.Namespace(pred_file=str(pred), out_dir=td, db="unused")
@@ -500,11 +562,17 @@ def entrytest() -> None:
                    for e in partial["excluded"])
         assert partial["scoring_due"] == "2027-01-04"
         assert partial["wape"] == {m: None for m in ("selected", "naive", "ma3")}
+        assert partial["zero_demand_share"] is None
+        assert all(m["n"] == 0 for m in partial["candidate_metrics"].values())
         # the same entry still scores normally once labels are complete
         complete = score(args, fetch=lambda _db, targets: ({"B": 100.0}, set(targets)))
         assert complete["status"] == "scored", complete["status"]
         assert complete["wape"]["selected"] == 0.15
         assert complete["coverage"]["labels_complete"] is True
+        assert complete["zero_demand_share"] == 0.5
+        for c, m in complete["candidate_metrics"].items():
+            for k in ("wape", "bias", "upper_coverage"):
+                assert m[k] is not None and math.isfinite(m[k]), (c, k, m[k])
     print(json.dumps(dict(
         entry_missing_last_month=partial["status"],
         missing_months=partial["coverage"]["missing_months"],
@@ -513,6 +581,10 @@ def entrytest() -> None:
         retry_after=partial["scoring_due"],
         entry_complete_labels=complete["status"],
         wape_when_complete=complete["wape"]["selected"],
+        bias_when_complete=complete["bias"]["selected"],
+        upper_coverage_when_complete=complete["upper_coverage"]["selected"],
+        zero_demand_share=complete["zero_demand_share"],
+        candidates=sorted(complete["candidate_metrics"]),
     ), ensure_ascii=False, indent=1))
 
 

@@ -98,10 +98,10 @@ artifacts:
 - **fallback 影响面**：112 行 = 去重 **71 个 SKU** = **0.10% 销量（全历史口径）**；
   其中 `KeyError:'fitted'` 属库输入校验缺口（长度 1 的序列、statsforecast 2.1.1
   `models.py:788`）。
-  > <原>建议调用前 `guard len(y) < 3`，与历史不足（`tiny_datasets`）是两类问题。</原>
-  > <改>**T22 更正**：guard 阈值与 T20 一致——`MIN_AUTOETS_LEN = 7`；`len < 3 → naive`、
-  > `3 ≤ len < 7 → MA3`、`len ≥ 7` 行为不变。原句只覆盖 KeyError，未覆盖 len 3–6 的
-  > `tiny_datasets`；完整 guard 见 `short_history_eval.py:69`。</改>
+  > **T22/T24 更正**：guard 阈值统一为 `MIN_AUTOETS_LEN = 7`；`len < 3 → naive`、
+  > `3 ≤ len < 7 → MA3`、`len ≥ 7` 行为不变。曾写为 len<3（仅覆盖 KeyError，
+  > 未覆盖 len 3–6 的 `tiny_datasets`），该旧值已作废、**不再作为现行建议**；
+  > 完整 guard 见 `short_history_eval.py:69`。
 
 **结论（明确写）**：当前主表沿用 **AutoETS 只是规则默认（裁定 A）**，
 **不是效果改进**；在上述数字上，选择流程既不优于也不劣于两个固定基线（区间跨 0），

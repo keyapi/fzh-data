@@ -4,8 +4,8 @@
 
 ## 总览
 
-- 检查项 **8**：PASS **6** / FAIL **2**
-- FAIL 项：7, 8
+- 检查项 **8**：PASS **8** / FAIL **0**
+- FAIL 项：无
 
 | # | 检查 | 结果 | 差异数 |
 |---:|---|---|---:|
@@ -15,8 +15,8 @@
 | 4 | explanations.csv ↔ decision_v2.csv（异常计数） | **PASS** | 0 |
 | 5 | diff_v1_v2.csv ↔ replenishment_all.csv / replenishment_v2.csv | **PASS** | 0 |
 | 6 | evidence_request.md 责任方行数 ↔ decision_v2.csv（T3） | **PASS** | 0 |
-| 7 | summary_v3 §6 ↔ nested_eval / short_history_eval | **FAIL** | 1 |
-| 8 | forward_shadow_plan.md ↔ forward_shadow.py | **FAIL** | 4 |
+| 7 | summary_v3 §6 ↔ nested_eval / short_history_eval | **PASS** | 0 |
+| 8 | forward_shadow_plan.md ↔ forward_shadow.py | **PASS** | 0 |
 
 ## 1. replenishment_v2.csv ↔ summary_v3.md — **PASS**
 
@@ -42,22 +42,13 @@
 
 - 文档另写“248 条 open 行 0 条有日期”；本地 CSV/JSON 无该口径，未纳入本轮核对。
 
-## 7. summary_v3 §6 ↔ nested_eval / short_history_eval — **FAIL**
+## 7. summary_v3 §6 ↔ nested_eval / short_history_eval — **PASS**
 
-| 文件 | 字段 | 表/脚本值 | 文档值 |
-|---|---|---|---|
-| summary_v3.md | guard 阈值建议 | `len<7（T20，short_history_eval.py:69）` | `guard len(y) < 3` |
 - T16 short_history_eval 的组合 MAE 9.928 未写入 §6；§6 的短历史数字来自 T9/T14（attribute_errors），两者口径不同（对齐方式/窗口集），不构成数字矛盾，但若要求并列需补一句说明。
 - 模型数字逐项与 nested_eval.json / short_history_eval.json / error_attribution.json 比对。
 
-## 8. forward_shadow_plan.md ↔ forward_shadow.py — **FAIL**
+## 8. forward_shadow_plan.md ↔ forward_shadow.py — **PASS**
 
-| 文件 | 字段 | 表/脚本值 | 文档值 |
-|---|---|---|---|
-| forward_shadow_plan.md / forward_shadow.py | 各候选 WAPE | `只算 selected / naive / ma3` | `每个候选 1 个值` |
-| forward_shadow_plan.md / forward_shadow.py | 各候选 Bias | `未实现` | `每个候选 1 个值` |
-| forward_shadow_plan.md / forward_shadow.py | 上限列覆盖率 | `未实现` | `每个候选 1 个值` |
-| forward_shadow_plan.md / forward_shadow.py | 零分母数量与占比 | `仅 n_zero_demand_retained，无占比` | `数量与占比` |
 - §3 连续 3 个月/区间不含 0 是人工判定流程，脚本只产出单次评分，文档未声称脚本自动判定，故不计失败。
 - 已确认脚本保留 `--data-cutoff/--origin` 参数化、预存清单与 --force 防覆盖。
 
