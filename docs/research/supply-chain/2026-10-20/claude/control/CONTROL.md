@@ -97,6 +97,10 @@ Updated: 2026-10-22 09:00 (Asia/Shanghai)
 6. ~~R290-RECON~~ → 已完成：5/5 接收，accept 3 / scenario 1 / blocker 1。
 7. 收尾 `/ce-okf` 已完成（PR #306）；四轮返修与 producer 经验已归档。
 8. 周期 automation 保持停用；次日 05:17 用新归档 cmd 验证库存历史。
+10. **Jack 头程跟踪（2026-10-22）**：`delivery_plan` 新跟踪代码已上生产并重启；
+   数据仍需 Jack 的爬取/推送写入测试与生产；部分 DN 缺头程单号，需 PJ/YYS 补。
+   最小输入清单 `control/reviews/2026-10-22-jack-input-request.md`；未到位前 ETA 保持 blocker。
+11. **new-api 今日额度已于 2026-10-22 重置**；Claude worker 继续，避免无谓 subagent。
 9. **决策 Codex（09:05）：先 C（SKU 匹配只读审计）→ 再 B（10 SKU 的 ETA/Cover/UOM 证据）；
    A/D 暂停。** C 任务书 `control/reviews/2026-10-22-sku-audit-task.md`；
    旧 6,549 是 EN 订单口径，本地 GS 口径为 297 SKU / 4,115 行，不硬凑。
