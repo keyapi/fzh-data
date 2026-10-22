@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-22T10:57:44+08:00",
+  "generated_at": "2026-10-22T11:38:41+08:00",
   "task": "只读 true_missing Top10 证据审计（含 TT0031245K0064088）",
   "mode": "read_only_evidence_audit",
   "inputs": {
@@ -7,7 +7,42 @@
     "sku_map_tsv": "D:\\Work\\fzh-order-store\\sku_map.tsv",
     "c_audit_actual_dir": "D:\\Work\\赛狐\\Cursor-claude\\out\\sku_match_audit",
     "c_audit_task_stated_dir": "D:\\Work\\赛狐\\Cursor-claude\\docs\\research\\supply-chain\\2026-10-20\\claude\\experiments\\g1_contract\\out\\sku_match_audit",
-    "path_note": "任务书写的 experiments/g1_contract/out/sku_match_audit/ 当前不存在；C 产物实际在仓库根 out/sku_match_audit/（.gitignore: out/*）。本审计读取实际目录，并把 JSON 写到任务书路径。"
+    "path_note": "任务书写的 experiments/g1_contract/out/sku_match_audit/ 当前不存在；C 产物实际在仓库根 out/sku_match_audit/（.gitignore: out/*）。本审计读取实际目录，并把 JSON 写到任务书路径。",
+    "pins_sha256": {
+      "order_store_duckdb": {
+        "path": "D:\\Work\\fzh-order-store\\order_store.duckdb",
+        "sha256": "25579c5dcd802c7e67f610432a19d08f8e6952696bd50d43bdfa47d6b9241ae9",
+        "bytes": 51654656,
+        "recheck_sha256_after_run": "25579c5dcd802c7e67f610432a19d08f8e6952696bd50d43bdfa47d6b9241ae9",
+        "unchanged_during_run": true
+      },
+      "sku_map_tsv": {
+        "path": "D:\\Work\\fzh-order-store\\sku_map.tsv",
+        "sha256": "7da3dfd62969c2c06f5b01ce752ccd1bc8d26c46c693eaca22cacaad4d13d42e",
+        "bytes": 204002
+      },
+      "c_audit_unmatched_all_csv": {
+        "path": "D:\\Work\\赛狐\\Cursor-claude\\out\\sku_match_audit\\unmatched_all.csv",
+        "sha256": "af5c4d91107a15a2c333042d31a93b8ae08a445e9f671ed615fe7911b8dc08c1",
+        "bytes": 843192
+      },
+      "c_audit_categories_json": {
+        "path": "D:\\Work\\赛狐\\Cursor-claude\\out\\sku_match_audit\\categories.json",
+        "sha256": "d9820ca65a0b64c5ab6f5ce8748206b42d7dc37ef19ac6c9f5782f5d7aafa78e",
+        "bytes": 129282
+      },
+      "c_audit_deep100_md": {
+        "path": "D:\\Work\\赛狐\\Cursor-claude\\out\\sku_match_audit\\deep100.md",
+        "sha256": "fe1ed1bb1a502be7130452538ac899a6d1016aa63e135447dbc2579823bc0beb",
+        "bytes": 21594
+      },
+      "audit_script": {
+        "path": "D:\\Work\\赛狐\\Cursor-claude\\scripts\\audit_true_missing_top10.py",
+        "sha256": "f58e38abbc4897406f22f4e5cf642bd42a59f59ff60e1087e39441a896a5a235",
+        "bytes": 45037
+      }
+    },
+    "pins_note": "所有输入在审计开始时算 SHA256；DuckDB 关闭连接后复算一次，unchanged_during_run 证明只读。"
   },
   "selection_rule": {
     "top10": "categories.json 中 category=true_missing，按 order_lines 降序、qty 降序、sku 升序取前 10。",
@@ -39,7 +74,10 @@
       "csv_total_matches": true,
       "top10_count": true,
       "mandatory_included": true,
-      "no_sku_duplicated": true
+      "no_sku_duplicated": true,
+      "mandatory_candidate_audit_present": true,
+      "mandatory_cross_candidates_all_listed": true,
+      "status_counts_unchanged": true
     }
   },
   "summary": {
@@ -1010,11 +1048,11 @@
           "lines": 7,
           "qty": 7
         },
-        "DLZ": {
+        "PotteryBarn": {
           "lines": 1,
           "qty": 1
         },
-        "PotteryBarn": {
+        "DLZ": {
           "lines": 1,
           "qty": 1
         }
@@ -2133,6 +2171,642 @@
           }
         ]
       },
+      "candidate_count_audit": {
+        "definitions": {
+          "platform_sku_values_total": "gs_orders 中该 sku_tongtool 的 platform_sku distinct 数（含空串）",
+          "self_rows": "platform_sku = sku_tongtool 的行",
+          "other_code_rows": "total_rows - self_rows，含空 platform_sku",
+          "direct_platform_code_lookup": "本 SKU 的非空 platform_sku 本身是 sku_map.tongtool_sku 键；返回平台码 → item_code",
+          "cross_row_nonblank_query": "本 SKU 的非空 platform_sku 也出现在 sku_tongtool<>本 SKU 的其它行上，且其它行的 sku_tongtool 在 sku_map 有 item_code；返回 distinct item_code"
+        },
+        "platform_sku_values": {
+          "total_rows": 553,
+          "total_qty": 483,
+          "distinct_including_blank": 23,
+          "distinct_nonblank": 22,
+          "blank_rows": 4,
+          "blank_qty": 4,
+          "self_rows": 364,
+          "self_qty": 300,
+          "other_code_rows": 189,
+          "other_code_qty": 183,
+          "values_all": [
+            {
+              "platform_sku": "TT0031245K0064088",
+              "is_blank": false,
+              "is_self": true,
+              "lines": 364,
+              "qty": 300,
+              "direct_item_codes": [],
+              "cross_row_item_code_count": 3
+            },
+            {
+              "platform_sku": "TT0031245K0064086-SOFA-Beige",
+              "is_blank": false,
+              "is_self": false,
+              "lines": 50,
+              "qty": 49,
+              "direct_item_codes": [],
+              "cross_row_item_code_count": 2
+            },
+            {
+              "platform_sku": "TT0031245K0064087-SOFA-Gray",
+              "is_blank": false,
+              "is_self": false,
+              "lines": 40,
+              "qty": 40,
+              "direct_item_codes": [
+                "KS0394-CTTM-135x152x80-REDDISHGRAY"
+              ],
+              "cross_row_item_code_count": 2
+            },
+            {
+              "platform_sku": "TT0020043K0063354",
+              "is_blank": false,
+              "is_self": false,
+              "lines": 19,
+              "qty": 19,
+              "direct_item_codes": [
+                "KS0223-NL-65XL-BLUERED"
+              ],
+              "cross_row_item_code_count": 3
+            },
+            {
+              "platform_sku": "TT0031194K0063935",
+              "is_blank": false,
+              "is_self": false,
+              "lines": 17,
+              "qty": 17,
+              "direct_item_codes": [
+                "KS0344-MZ-70-GREENWHITESE"
+              ],
+              "cross_row_item_code_count": 1
+            },
+            {
+              "platform_sku": "BNDE031245Red",
+              "is_blank": false,
+              "is_self": false,
+              "lines": 13,
+              "qty": 11,
+              "direct_item_codes": [],
+              "cross_row_item_code_count": 1
+            },
+            {
+              "platform_sku": "TT0020040K0063347",
+              "is_blank": false,
+              "is_self": false,
+              "lines": 8,
+              "qty": 8,
+              "direct_item_codes": [
+                "KS0210-FBWB-74-DENIMBLUE"
+              ],
+              "cross_row_item_code_count": 1
+            },
+            {
+              "platform_sku": "TT0031074K0063249-2",
+              "is_blank": false,
+              "is_self": false,
+              "lines": 8,
+              "qty": 8,
+              "direct_item_codes": [],
+              "cross_row_item_code_count": 2
+            },
+            {
+              "platform_sku": "BNDE031245Yellow",
+              "is_blank": false,
+              "is_self": false,
+              "lines": 7,
+              "qty": 6,
+              "direct_item_codes": [],
+              "cross_row_item_code_count": 1
+            },
+            {
+              "platform_sku": "",
+              "is_blank": true,
+              "is_self": false,
+              "lines": 4,
+              "qty": 4,
+              "direct_item_codes": [],
+              "cross_row_item_code_count": 0
+            },
+            {
+              "platform_sku": "FUDE031245Yellow",
+              "is_blank": false,
+              "is_self": false,
+              "lines": 3,
+              "qty": 3,
+              "direct_item_codes": [],
+              "cross_row_item_code_count": 1
+            },
+            {
+              "platform_sku": "TT0020045K0063458",
+              "is_blank": false,
+              "is_self": false,
+              "lines": 3,
+              "qty": 3,
+              "direct_item_codes": [
+                "KS0226-NJB-47-BLACK"
+              ],
+              "cross_row_item_code_count": 2
+            },
+            {
+              "platform_sku": "TT0031245K0064087-Gr",
+              "is_blank": false,
+              "is_self": false,
+              "lines": 3,
+              "qty": 3,
+              "direct_item_codes": [],
+              "cross_row_item_code_count": 1
+            },
+            {
+              "platform_sku": "Et-songbing-beige",
+              "is_blank": false,
+              "is_self": false,
+              "lines": 2,
+              "qty": 2,
+              "direct_item_codes": [],
+              "cross_row_item_code_count": 1
+            },
+            {
+              "platform_sku": "Et-songbing-gray",
+              "is_blank": false,
+              "is_self": false,
+              "lines": 2,
+              "qty": 2,
+              "direct_item_codes": [],
+              "cross_row_item_code_count": 1
+            },
+            {
+              "platform_sku": "TT0031244K0064084-3",
+              "is_blank": false,
+              "is_self": false,
+              "lines": 2,
+              "qty": 0,
+              "direct_item_codes": [
+                "KS0390-CTTM-120x120x70-CREAMYBEIGE"
+              ],
+              "cross_row_item_code_count": 1
+            },
+            {
+              "platform_sku": "XUE766YAN62834",
+              "is_blank": false,
+              "is_self": false,
+              "lines": 2,
+              "qty": 2,
+              "direct_item_codes": [],
+              "cross_row_item_code_count": 2
+            },
+            {
+              "platform_sku": "8S-GQ9D-E0L3",
+              "is_blank": false,
+              "is_self": false,
+              "lines": 1,
+              "qty": 1,
+              "direct_item_codes": [],
+              "cross_row_item_code_count": 1
+            },
+            {
+              "platform_sku": "DLZTD-HS-002-60-NJBLBTW-C224BLUEWHITESTRIPE",
+              "is_blank": false,
+              "is_self": false,
+              "lines": 1,
+              "qty": 1,
+              "direct_item_codes": [],
+              "cross_row_item_code_count": 1
+            },
+            {
+              "platform_sku": "DLZTO-DM-Pillow-002-27-C226GREYAPPLEGREEN",
+              "is_blank": false,
+              "is_self": false,
+              "lines": 1,
+              "qty": 1,
+              "direct_item_codes": [],
+              "cross_row_item_code_count": 4
+            },
+            {
+              "platform_sku": "TT0031245K0064087",
+              "is_blank": false,
+              "is_self": false,
+              "lines": 1,
+              "qty": 1,
+              "direct_item_codes": [
+                "KS0394-CTTM-135x152x80-REDDISHGRAY"
+              ],
+              "cross_row_item_code_count": 8
+            },
+            {
+              "platform_sku": "XUE765YAN62835",
+              "is_blank": false,
+              "is_self": false,
+              "lines": 1,
+              "qty": 1,
+              "direct_item_codes": [],
+              "cross_row_item_code_count": 2
+            },
+            {
+              "platform_sku": "dan-songbing-oversize-mi",
+              "is_blank": false,
+              "is_self": false,
+              "lines": 1,
+              "qty": 1,
+              "direct_item_codes": [],
+              "cross_row_item_code_count": 1
+            }
+          ]
+        },
+        "direct_platform_code_lookup": {
+          "platform_codes": 7,
+          "item_codes": 6,
+          "rows": 90,
+          "qty": 88,
+          "codes": [
+            {
+              "platform_sku": "TT0031245K0064087-SOFA-Gray",
+              "lines": 40,
+              "qty": 40,
+              "item_codes": [
+                "KS0394-CTTM-135x152x80-REDDISHGRAY"
+              ]
+            },
+            {
+              "platform_sku": "TT0020043K0063354",
+              "lines": 19,
+              "qty": 19,
+              "item_codes": [
+                "KS0223-NL-65XL-BLUERED"
+              ]
+            },
+            {
+              "platform_sku": "TT0031194K0063935",
+              "lines": 17,
+              "qty": 17,
+              "item_codes": [
+                "KS0344-MZ-70-GREENWHITESE"
+              ]
+            },
+            {
+              "platform_sku": "TT0020040K0063347",
+              "lines": 8,
+              "qty": 8,
+              "item_codes": [
+                "KS0210-FBWB-74-DENIMBLUE"
+              ]
+            },
+            {
+              "platform_sku": "TT0020045K0063458",
+              "lines": 3,
+              "qty": 3,
+              "item_codes": [
+                "KS0226-NJB-47-BLACK"
+              ]
+            },
+            {
+              "platform_sku": "TT0031244K0064084-3",
+              "lines": 2,
+              "qty": 0,
+              "item_codes": [
+                "KS0390-CTTM-120x120x70-CREAMYBEIGE"
+              ]
+            },
+            {
+              "platform_sku": "TT0031245K0064087",
+              "lines": 1,
+              "qty": 1,
+              "item_codes": [
+                "KS0394-CTTM-135x152x80-REDDISHGRAY"
+              ]
+            }
+          ],
+          "item_code_list": [
+            "KS0210-FBWB-74-DENIMBLUE",
+            "KS0223-NL-65XL-BLUERED",
+            "KS0226-NJB-47-BLACK",
+            "KS0344-MZ-70-GREENWHITESE",
+            "KS0390-CTTM-120x120x70-CREAMYBEIGE",
+            "KS0394-CTTM-135x152x80-REDDISHGRAY"
+          ],
+          "omitted_item_codes": 0
+        },
+        "cross_row_nonblank_query": {
+          "item_codes": 18,
+          "rows": 773,
+          "qty": 765,
+          "items_all": [
+            {
+              "item_code": "KS0394-CTTM-135x152x80-REDDISHGRAY",
+              "lines_elsewhere": 401,
+              "qty_elsewhere": 399,
+              "mapped_skus": 3,
+              "platform_skus": 9,
+              "mapped_sku_list": [
+                "TT0031245K0064087",
+                "TT0031245K0064087-Cover",
+                "TT0031245K0064088-Foam"
+              ],
+              "platform_list": [
+                "8S-GQ9D-E0L3",
+                "BNDE031245Red",
+                "Et-songbing-gray",
+                "TT0020045K0063458",
+                "TT0031245K0064086-SOFA-Beige",
+                "TT0031245K0064087",
+                "TT0031245K0064087-Gr",
+                "TT0031245K0064087-SOFA-Gray",
+                "TT0031245K0064088"
+              ]
+            },
+            {
+              "item_code": "KS0394-CTTM-135x152x80-CREAMYBEIGE",
+              "lines_elsewhere": 126,
+              "qty_elsewhere": 126,
+              "mapped_skus": 2,
+              "platform_skus": 6,
+              "mapped_sku_list": [
+                "TT0031245K0064086",
+                "TT0031245K0064086-Cover"
+              ],
+              "platform_list": [
+                "BNDE031245Yellow",
+                "Et-songbing-beige",
+                "FUDE031245Yellow",
+                "TT0031245K0064086-SOFA-Beige",
+                "TT0031245K0064087-SOFA-Gray",
+                "dan-songbing-oversize-mi"
+              ]
+            },
+            {
+              "item_code": "KS0228-HLR-25-GREY",
+              "lines_elsewhere": 106,
+              "qty_elsewhere": 106,
+              "mapped_skus": 1,
+              "platform_skus": 3,
+              "mapped_sku_list": [
+                "TT0031096K0063457"
+              ],
+              "platform_list": [
+                "DLZTO-DM-Pillow-002-27-C226GREYAPPLEGREEN",
+                "TT0031245K0064087",
+                "TT0031245K0064088"
+              ]
+            },
+            {
+              "item_code": "KS0116-HLR-45-GREY",
+              "lines_elsewhere": 31,
+              "qty_elsewhere": 32,
+              "mapped_skus": 1,
+              "platform_skus": 3,
+              "mapped_sku_list": [
+                "TT0000765K0062835"
+              ],
+              "platform_list": [
+                "TT0031245K0064087",
+                "XUE765YAN62835",
+                "XUE766YAN62834"
+              ]
+            },
+            {
+              "item_code": "KS0223-NL-65XL-BLUERED",
+              "lines_elsewhere": 26,
+              "qty_elsewhere": 26,
+              "mapped_skus": 1,
+              "platform_skus": 2,
+              "mapped_sku_list": [
+                "TT0020043K0063354"
+              ],
+              "platform_list": [
+                "TT0020043K0063354",
+                "TT0031245K0064087"
+              ]
+            },
+            {
+              "item_code": "KS0390-CTTM-120x120x70-CREAMYBEIGE",
+              "lines_elsewhere": 18,
+              "qty_elsewhere": 9,
+              "mapped_skus": 3,
+              "platform_skus": 3,
+              "mapped_sku_list": [
+                "TT0031244K0064084",
+                "TT0031244K0064084-2",
+                "TT0031244K0064084-3"
+              ],
+              "platform_list": [
+                "TT0020043K0063354",
+                "TT0031074K0063249-2",
+                "TT0031244K0064084-3"
+              ]
+            },
+            {
+              "item_code": "KS0210-FBWB-74-DENIMBLUE",
+              "lines_elsewhere": 12,
+              "qty_elsewhere": 12,
+              "mapped_skus": 1,
+              "platform_skus": 2,
+              "mapped_sku_list": [
+                "TT0020040K0063347"
+              ],
+              "platform_list": [
+                "TT0020040K0063347",
+                "TT0020043K0063354"
+              ]
+            },
+            {
+              "item_code": "KS0116-HLR-45-CYAN",
+              "lines_elsewhere": 11,
+              "qty_elsewhere": 13,
+              "mapped_skus": 1,
+              "platform_skus": 2,
+              "mapped_sku_list": [
+                "TT0000766K0062834"
+              ],
+              "platform_list": [
+                "TT0031245K0064087",
+                "XUE766YAN62834"
+              ]
+            },
+            {
+              "item_code": "KS0344-MZ-70-GREENWHITESE",
+              "lines_elsewhere": 11,
+              "qty_elsewhere": 11,
+              "mapped_skus": 1,
+              "platform_skus": 1,
+              "mapped_sku_list": [
+                "TT0031194K0063935"
+              ],
+              "platform_list": [
+                "TT0031194K0063935"
+              ]
+            },
+            {
+              "item_code": "KS0193-MZ-16-GREY",
+              "lines_elsewhere": 8,
+              "qty_elsewhere": 8,
+              "mapped_skus": 1,
+              "platform_skus": 1,
+              "mapped_sku_list": [
+                "TT0031074K0063249"
+              ],
+              "platform_list": [
+                "TT0031074K0063249-2"
+              ]
+            },
+            {
+              "item_code": "KS0164-QLR-101.5-OFFWHITE",
+              "lines_elsewhere": 5,
+              "qty_elsewhere": 5,
+              "mapped_skus": 1,
+              "platform_skus": 1,
+              "mapped_sku_list": [
+                "TT0020027K0062935"
+              ],
+              "platform_list": [
+                "DLZTO-DM-Pillow-002-27-C226GREYAPPLEGREEN"
+              ]
+            },
+            {
+              "item_code": "KS0213-HLR-120-BROWN2",
+              "lines_elsewhere": 4,
+              "qty_elsewhere": 4,
+              "mapped_skus": 2,
+              "platform_skus": 2,
+              "mapped_sku_list": [
+                "TT0020041K0063349",
+                "TT0020041K0063350"
+              ],
+              "platform_list": [
+                "TT0031245K0064087",
+                "XUE765YAN62835"
+              ]
+            },
+            {
+              "item_code": "KS0223-NL-65L-BLUERED",
+              "lines_elsewhere": 4,
+              "qty_elsewhere": 4,
+              "mapped_skus": 1,
+              "platform_skus": 2,
+              "mapped_sku_list": [
+                "TT0020043K0063353"
+              ],
+              "platform_list": [
+                "DLZTO-DM-Pillow-002-27-C226GREYAPPLEGREEN",
+                "TT0031245K0064087"
+              ]
+            },
+            {
+              "item_code": "KS0310-NJBLBTW-60-BLUEWHITESTRIPE",
+              "lines_elsewhere": 4,
+              "qty_elsewhere": 4,
+              "mapped_skus": 1,
+              "platform_skus": 1,
+              "mapped_sku_list": [
+                "TT0031115K0063745"
+              ],
+              "platform_list": [
+                "DLZTD-HS-002-60-NJBLBTW-C224BLUEWHITESTRIPE"
+              ]
+            },
+            {
+              "item_code": "KS0226-NJB-47-BLACK",
+              "lines_elsewhere": 3,
+              "qty_elsewhere": 3,
+              "mapped_skus": 1,
+              "platform_skus": 1,
+              "mapped_sku_list": [
+                "TT0020045K0063458"
+              ],
+              "platform_list": [
+                "TT0020045K0063458"
+              ]
+            },
+            {
+              "item_code": "KS0115-HLR-45-GREY",
+              "lines_elsewhere": 1,
+              "qty_elsewhere": 1,
+              "mapped_skus": 1,
+              "platform_skus": 1,
+              "mapped_sku_list": [
+                "TT0000772K0062828"
+              ],
+              "platform_list": [
+                "DLZTO-DM-Pillow-002-27-C226GREYAPPLEGREEN"
+              ]
+            },
+            {
+              "item_code": "KS0150-NJB-45-DEEPBLUE",
+              "lines_elsewhere": 1,
+              "qty_elsewhere": 1,
+              "mapped_skus": 1,
+              "platform_skus": 1,
+              "mapped_sku_list": [
+                "TT0031032K0062920"
+              ],
+              "platform_list": [
+                "TT0031245K0064088"
+              ]
+            },
+            {
+              "item_code": "KS0306-MX-5.5-BROWN",
+              "lines_elsewhere": 1,
+              "qty_elsewhere": 1,
+              "mapped_skus": 1,
+              "platform_skus": 1,
+              "mapped_sku_list": [
+                "TT0031107K0063729"
+              ],
+              "platform_list": [
+                "TT0031245K0064087"
+              ]
+            }
+          ],
+          "omitted_item_codes": 0
+        },
+        "union_item_codes": [
+          "KS0115-HLR-45-GREY",
+          "KS0116-HLR-45-CYAN",
+          "KS0116-HLR-45-GREY",
+          "KS0150-NJB-45-DEEPBLUE",
+          "KS0164-QLR-101.5-OFFWHITE",
+          "KS0193-MZ-16-GREY",
+          "KS0210-FBWB-74-DENIMBLUE",
+          "KS0213-HLR-120-BROWN2",
+          "KS0223-NL-65L-BLUERED",
+          "KS0223-NL-65XL-BLUERED",
+          "KS0226-NJB-47-BLACK",
+          "KS0228-HLR-25-GREY",
+          "KS0306-MX-5.5-BROWN",
+          "KS0310-NJBLBTW-60-BLUEWHITESTRIPE",
+          "KS0344-MZ-70-GREENWHITESE",
+          "KS0390-CTTM-120x120x70-CREAMYBEIGE",
+          "KS0394-CTTM-135x152x80-CREAMYBEIGE",
+          "KS0394-CTTM-135x152x80-REDDISHGRAY"
+        ],
+        "v1_claim_reconciliation": {
+          "v1_direct_platform_codes": 7,
+          "v1_cross_row_item_codes_claimed": 8,
+          "v1_cross_row_item_codes_listed": 10,
+          "v2_direct_platform_codes": 7,
+          "v2_direct_item_codes": 6,
+          "v2_cross_row_item_codes": 18,
+          "v1_cross_total_reproducible": false,
+          "explanation": "v1 的 “8 个 item_code” 无法由任何显式查询复现：直接口径是 7 个平台码 / 6 个 item_code，跨行口径是 18 个 item_code。v1 用 cross_rows[:10] 只列了前 10 个，恰好隐藏 8 个；8 = 18 − 10，即「被截断隐藏的数量」，不是总数。该数字是在 commit d6115ea6 中以纯文本写入的（该 commit 未改任何计算代码），且与同一条 JSON 候选已列出的 10 个 item_code 自相矛盾。v2 的 8 个被隐藏项见 cross_row_nonblank_query.items_all 的第 11–18 位。",
+          "v1_hidden_items": [
+            "KS0164-QLR-101.5-OFFWHITE",
+            "KS0213-HLR-120-BROWN2",
+            "KS0223-NL-65L-BLUERED",
+            "KS0310-NJBLBTW-60-BLUEWHITESTRIPE",
+            "KS0226-NJB-47-BLACK",
+            "KS0115-HLR-45-GREY",
+            "KS0150-NJB-45-DEEPBLUE",
+            "KS0306-MX-5.5-BROWN"
+          ]
+        },
+        "checks": {
+          "self_plus_other_equals_total": true,
+          "direct_code_count_matches": true,
+          "direct_items_subset_of_cross": true,
+          "cross_item_count_matches": true,
+          "direct_list_not_truncated": true
+        }
+      },
       "raw_identifier": {
         "value": "TT0031245K0064088",
         "table_column": "gs_orders.sku_tongtool",
@@ -2174,12 +2848,21 @@
             "KS0210-FBWB-74-DENIMBLUE",
             "KS0116-HLR-45-CYAN",
             "KS0344-MZ-70-GREENWHITESE",
-            "KS0193-MZ-16-GREY"
+            "KS0193-MZ-16-GREY",
+            "KS0164-QLR-101.5-OFFWHITE",
+            "KS0213-HLR-120-BROWN2",
+            "KS0223-NL-65L-BLUERED",
+            "KS0310-NJBLBTW-60-BLUEWHITESTRIPE",
+            "KS0226-NJB-47-BLACK",
+            "KS0115-HLR-45-GREY",
+            "KS0150-NJB-45-DEEPBLUE",
+            "KS0306-MX-5.5-BROWN"
           ],
           "evidence_type": "cross_row_platform_sku_match",
-          "evidence": "23 个平台码中有 7 个直接命中已映射 item_code；跨行合计涉及 8 个 item_code，另有多行平台码是其它 tongtool 码（汇总码特征）。",
+          "evidence": "跨行非空平台码查询：18 个 item_code，全部列出（见 candidate_count_audit.cross_row_nonblank_query.items_all）；直接口径：7 个平台码 → 6 个 item_code。",
           "confidence": "medium",
           "registered": true,
+          "omitted_item_codes": 0,
           "source": "gs_orders.platform_sku 跨行证据"
         }
       ],
@@ -2205,8 +2888,17 @@
             "KS0210-FBWB-74-DENIMBLUE",
             "KS0116-HLR-45-CYAN",
             "KS0344-MZ-70-GREENWHITESE",
-            "KS0193-MZ-16-GREY"
-          ]
+            "KS0193-MZ-16-GREY",
+            "KS0164-QLR-101.5-OFFWHITE",
+            "KS0213-HLR-120-BROWN2",
+            "KS0223-NL-65L-BLUERED",
+            "KS0310-NJBLBTW-60-BLUEWHITESTRIPE",
+            "KS0226-NJB-47-BLACK",
+            "KS0115-HLR-45-GREY",
+            "KS0150-NJB-45-DEEPBLUE",
+            "KS0306-MX-5.5-BROWN"
+          ],
+          "omitted_item_codes": 0
         }
       ],
       "evidence_sources": [
@@ -2391,7 +3083,7 @@
   ],
   "not_modified": [
     "未写 EN / ERPNext",
-    "未改 sku_map.tsv 或 DuckDB",
+    "未改 sku_map.tsv 或 DuckDB（DuckDB SHA256 审计前后一致，见 inputs.pins_sha256）",
     "未恢复任何删除别名",
     "未创建任何映射",
     "未估算数量或成本",

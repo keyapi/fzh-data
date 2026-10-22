@@ -4,12 +4,19 @@ type: Report
 title: true_missing Top10 SKU 证据审计（含 TT0031245K0064088）
 description: 只读核对 GS 订单侧 Top10 true_missing + 指定删除 alias 的订单行、候选基础码、冲突映射与待业务裁决项；不写 EN、不改 sku_map
 date: 2026-10-22
+revision: v2（按 lead review FAIL 修正 TT 候选计数 + 固定输入 SHA256）
 owner: claude-worker
 status: completed
 tags: [supply-chain, sku-mapping, true-missing, evidence, read-only]
 ---
 
 # true_missing Top10 SKU 证据审计
+
+> **v2 修订（2026-10-22，按 lead review FAIL）**
+> 1. `TT0031245K0064088` 候选计数改为两个显式口径并**全量列出**：直接平台码 **7 码 → 6 item_code**；
+>    跨行非空平台码 **18 item_code**（v1 的「8」已定位为 top-10 截断隐藏数，不是总数）。
+> 2. 所有输入固定 SHA256（DuckDB / sku_map.tsv / C 三件产物 / 审计脚本），见 §2。
+> 3. 选择范围（12 SKU / 2,109 行 / 2,025 qty）与 12 个 SKU 的状态**均未改动**。
 
 ## 一句话结论
 
@@ -18,6 +25,8 @@ tags: [supply-chain, sku-mapping, true-missing, evidence, read-only]
 **10 个 SKU 有候选证据，8 个 SKU 存在冲突**；其中 `YCSOFA001`、`FBA-duo`、`TT0031245K0064088`
 是「一个通途码挂多个商品/平台码」的汇总码，不能按单条 alias 处理。全部 12 个 SKU 仍为
 **pending / conflicting**，没有任何一条被认领或写回。
+**v2 计数更正**：`TT0031245K0064088` 的直接平台码为 **7 码 → 6 item_code**，跨行非空平台码为
+**18 item_code**；v1 的「8」是 top-10 截断隐藏数，不是总数（详见 §5.11）。
 
 ## 1. 范围与选择规则
 
@@ -39,6 +48,22 @@ tags: [supply-chain, sku-mapping, true-missing, evidence, read-only]
 - `D:/Work/fzh-order-store/sku_map.tsv`：只读；用于取回 DuckDB 表按 `tongtool_sku` 去重前的别名对。
 - C 产物：`unmatched_all.csv`、`categories.json`、`deep100.md`。
 - **未写 EN / ERPNext、未改 sku_map、未恢复删除别名、未创建映射、未估算、未访问生产、未扩族。**
+
+### 2.1 输入指纹（SHA256，审计开始时计算）
+
+| 输入 | 用途 | SHA256 | 字节 |
+|---|---|---|---|
+| `D:/Work/fzh-order-store/order_store.duckdb` | `gs_orders` / `sku_map`（read_only） | `25579c5dcd802c7e67f610432a19d08f8e6952696bd50d43bdfa47d6b9241ae9` | 51,654,656 |
+| `D:/Work/fzh-order-store/sku_map.tsv` | 别名对（含删除前缀键） | `7da3dfd62969c2c06f5b01ce752ccd1bc8d26c46c693eaca22cacaad4d13d42e` | 204,002 |
+| `out/sku_match_audit/unmatched_all.csv` | 未命中行清单 | `af5c4d91107a15a2c333042d31a93b8ae08a445e9f671ed615fe7911b8dc08c1` | 843,192 |
+| `out/sku_match_audit/categories.json` | C 分类 / 行数 / qty | `d9820ca65a0b64c5ab6f5ce8748206b42d7dc37ef19ac6c9f5782f5d7aafa78e` | 129,282 |
+| `out/sku_match_audit/deep100.md` | C 深挖清单 | `fe1ed1bb1a502be7130452538ac899a6d1016aa63e135447dbc2579823bc0beb` | 21,594 |
+| `scripts/audit_true_missing_top10.py` | 本审计脚本（v2） | `f58e38abbc4897406f22f4e5cf642bd42a59f59ff60e1087e39441a896a5a235` | 45,037 |
+
+- DuckDB 在关闭只读连接后复算一次，两次哈希一致（`inputs.pins_sha256.order_store_duckdb.unchanged_during_run = true`），证明审计期间未写库。
+- C 三件产物在 `out/`（`.gitignore: out/*`）不入库，因此**用上面的哈希而不是 commit 固定版本**；同一 JSON 的 `inputs.pins_sha256` 有完整记录。
+- 审计脚本的哈希是生成该 JSON 时磁盘上的 v2 脚本；任何后续改动都会使哈希对不上，需重跑。
+
 
 ## 3. 行数对账（不丢行）
 
@@ -165,18 +190,70 @@ tags: [supply-chain, sku-mapping, true-missing, evidence, read-only]
 
 - 渠道：TiktokUS 371、tiktok 56、XXXL 51、亚马逊 26、HOME24 22、Cdiscount 18、ETSY 4、OSTK 3、kaufland.de 2。
 - 仓库：半成品仓 275、星链海外仓 161、FZHPoland-covers 116、成品仓 1；15 个账号。
-- `platform_sku` 23 个：**364 行为自身**（`TT0031245K0064088`），**189 行是别的商品码**
-  （`TT0031245K0064086-SOFA-Beige`、`...64087-SOFA-Gray`、`TT0020043K0063354` 等）。
+- **平台码结构（显式定义，v2）**：
+  - `platform_sku` distinct = **23**（含 1 个空串值；非空 **22**）。
+  - 自身行（`platform_sku = sku_tongtool`）= **364 行 / 300 qty**。
+  - 其它商品码行 = **189 行 / 183 qty**（553 − 364；其中 4 行 `platform_sku` 为空）。
+  - 23 个取值的全量分布（含每个码的跨行 item_code 数）见 JSON `candidate_count_audit.platform_sku_values.values_all`，不截断。
 - 证据 A（已删除 alias，低）：`删除TT0031245K0064088` → `HM1510-YD2-135x152x80-WHITE`；无活映射。
 - 证据 B（活族别名，中）：`TT0031245K0064088-Foam` → `KS0394-CTTM-135x152x80-REDDISHGRAY`；
-  同族 `TT0031245K0064086`（Beige）与 `64087`（Gray）基础码也映射 KS0394。
-- 证据 C（跨行平台码，中）：23 个平台码中 7 个直接命中已映射 item_code，跨行合计 8 个 item_code，
-  涉及 `KS0394`（红灰/米色）、`KS0228-HLR-25-GREY`、`KS0116-HLR-45-GREY`、`KS0223-NL-65XL-BLUERED`、
-  `KS0390-CTTM-120x120x70-CREAMYBEIGE`、`KS0210-FBWB-74-DENIMBLUE` 等。
+  同族 `TT0031245K0064086`（Beige）与 `TT0031245K0064087`（Gray）基础码也映射 KS0394。
+- **证据 C（跨行平台码，中）— 两个口径分开算、都报总数、全量列出（不 top-N 截断）**：
+
+  **口径 C1：直接平台码查询** — 本 SKU 的非空 `platform_sku` 本身是 `sku_map.tongtool_sku` 键：
+  **7 个平台码 → 6 个 item_code**（覆盖 90 行 / 88 qty）。
+
+  | 平台码 | 行 | qty | item_code |
+  |---|---:|---:|---|
+  | `TT0031245K0064087-SOFA-Gray` | 40 | 40 | `KS0394-CTTM-135x152x80-REDDISHGRAY` |
+  | `TT0020043K0063354` | 19 | 19 | `KS0223-NL-65XL-BLUERED` |
+  | `TT0031194K0063935` | 17 | 17 | `KS0344-MZ-70-GREENWHITESE` |
+  | `TT0020040K0063347` | 8 | 8 | `KS0210-FBWB-74-DENIMBLUE` |
+  | `TT0020045K0063458` | 3 | 3 | `KS0226-NJB-47-BLACK` |
+  | `TT0031244K0064084-3` | 2 | 0 | `KS0390-CTTM-120x120x70-CREAMYBEIGE` |
+  | `TT0031245K0064087` | 1 | 1 | `KS0394-CTTM-135x152x80-REDDISHGRAY` |
+
+  **口径 C2：跨行非空平台码查询** — 本 SKU 的非空 `platform_sku` 也出现在 `sku_tongtool <> 本 SKU`
+  的其它订单行上、且那些行的 `sku_tongtool` 已在 `sku_map` 有 item_code：
+  **18 个 item_code**（覆盖其它 SKU 的 773 行 / 765 qty），全部列出、`omitted_item_codes = 0`。
+
+  | # | item_code | 其它行 | 其它 qty | 涉及 tongtool SKU | 涉及平台码 |
+  |---:|---|---:|---:|---:|---:|
+  | 1 | `KS0394-CTTM-135x152x80-REDDISHGRAY` | 401 | 399 | 3 | 9 |
+  | 2 | `KS0394-CTTM-135x152x80-CREAMYBEIGE` | 126 | 126 | 2 | 6 |
+  | 3 | `KS0228-HLR-25-GREY` | 106 | 106 | 1 | 3 |
+  | 4 | `KS0116-HLR-45-GREY` | 31 | 32 | 1 | 3 |
+  | 5 | `KS0223-NL-65XL-BLUERED` | 26 | 26 | 1 | 2 |
+  | 6 | `KS0390-CTTM-120x120x70-CREAMYBEIGE` | 18 | 9 | 3 | 3 |
+  | 7 | `KS0210-FBWB-74-DENIMBLUE` | 12 | 12 | 1 | 2 |
+  | 8 | `KS0116-HLR-45-CYAN` | 11 | 13 | 1 | 2 |
+  | 9 | `KS0344-MZ-70-GREENWHITESE` | 11 | 11 | 1 | 1 |
+  | 10 | `KS0193-MZ-16-GREY` | 8 | 8 | 1 | 1 |
+  | 11 | `KS0164-QLR-101.5-OFFWHITE` | 5 | 5 | 1 | 1 |
+  | 12 | `KS0213-HLR-120-BROWN2` | 4 | 4 | 2 | 2 |
+  | 13 | `KS0223-NL-65L-BLUERED` | 4 | 4 | 1 | 2 |
+  | 14 | `KS0310-NJBLBTW-60-BLUEWHITESTRIPE` | 4 | 4 | 1 | 1 |
+  | 15 | `KS0226-NJB-47-BLACK` | 3 | 3 | 1 | 1 |
+  | 16 | `KS0115-HLR-45-GREY` | 1 | 1 | 1 | 1 |
+  | 17 | `KS0150-NJB-45-DEEPBLUE` | 1 | 1 | 1 | 1 |
+  | 18 | `KS0306-MX-5.5-BROWN` | 1 | 1 | 1 | 1 |
+
+  两口径并集也是 **18**（C1 的 6 个 item_code 全部包含在 C2 的 18 个里）。
+
+- **v1「8 个 item_code」核对（为什么旧报告说 8）**：
+  - v1 正文写「跨行合计 8 个 item_code」，但同一段/同一 JSON 候选实际列了 **10** 个；
+    当前数据复算的跨行总数是 **18**。`18 − 10 = 8`，即 **8 恰好是 `cross_rows[:10]` 截断后隐藏的数量，不是总数**。
+  - 该数字是在 commit `d6115ea6` 中以纯文本写入的（该 commit 只改文案、未改任何计算代码），
+    无法用任何显式查询复现；直接口径是 7 码 / 6 item_code，跨行口径是 18 item_code。
+  - 被 v1 隐藏的 8 项（即上表第 11–18 位）：`KS0164-QLR-101.5-OFFWHITE`、`KS0213-HLR-120-BROWN2`、
+    `KS0223-NL-65L-BLUERED`、`KS0310-NJBLBTW-60-BLUEWHITESTRIPE`、`KS0226-NJB-47-BLACK`、
+    `KS0115-HLR-45-GREY`、`KS0150-NJB-45-DEEPBLUE`、`KS0306-MX-5.5-BROWN`。
+  - v2 已在 JSON 中保留全部 18 项及每个 item_code 的行数/qty/来源 SKU/来源平台码，`omitted_item_codes = 0`。
 - **冲突 1**：活键 `-Foam` → KS0394 红灰，删除键 `删除...-Foam` → HM1510 白；同一别名族两侧指向不同物料。
-- **冲突 2**：189/553 行的平台码是别的 tongtool 码并映射到多个 item_code；该码不是单品身份。
+- **冲突 2**：189/553 行的平台码是别的 tongtool 码并映射到多个 item_code（见上表 18 项）；该码不是单品身份。
 - 需裁决：该码是否为 Tiktok 沙发的汇总/占位码；HM1510（白）与 KS0394（红灰）哪个才是主体；
   删除原因与是否恢复（恢复属禁止项，只能由业务决定）。
+
 
 ### 5.12 `TT0031245K0064088-0`（关联变体）— 236 行 / 170 qty / 7 个月（202504–202511）
 
@@ -197,7 +274,7 @@ tags: [supply-chain, sku-mapping, true-missing, evidence, read-only]
 | 5 | `FBA-duo` | `aggregate_bucket_multi_item` | 30 个平台码跨行对应多个 item_code；duo 套件口径未知 |
 | 6 | `CEN-No/B-Velvet-Grey-194` | `platform_sku_reused_across_fabrics` | `WM-971-Velvet-Grey-King` 也映射 DM 面料物料 |
 | 7 | `TT0031245K0064088` | `live_vs_deleted_alias_conflict` | 活 `-Foam`→KS0394 vs 删 `-Foam`→HM1510 |
-| 8 | `TT0031245K0064088` | `aggregate_umbrella_code` | 189/553 行平台码指向其它商品码 |
+| 8 | `TT0031245K0064088` | `aggregate_umbrella_code` | 189/553 行平台码指向其它商品码；跨行 18 个 item_code（§5.11 C2 全列） |
 | 9 | `TT0031245K0064088-0` | `platform_sku_contamination` | 13/236 行指向其它商品码 |
 
 ## 7. 需业务裁决事项（28 条，按 SKU）
@@ -229,11 +306,12 @@ tags: [supply-chain, sku-mapping, true-missing, evidence, read-only]
 ## 9. 未做 / 禁止项（逐条确认）
 
 - 未写 EN / ERPNext，未创建/修改任何物料。
-- 未改 `sku_map.tsv`、未改 DuckDB；全程 `read_only=True`。
+- 未改 `sku_map.tsv`、未改 DuckDB；全程 `read_only=True`，DuckDB SHA256 审计前后一致。
 - 未恢复任何删除别名（`删除TT0031245K0064088*` 保持原样）。
 - 未创建映射、未做模糊认领、未估算数量或成本。
 - 未访问通途 / EN 生产系统。
 - 未把审计扩展到 Top10 之外的 SKU 族。
+- 输入指纹（含脚本自身）全部固定并写入 JSON，见 §2.1。
 
 ## 10. 缺口
 
@@ -252,9 +330,14 @@ tags: [supply-chain, sku-mapping, true-missing, evidence, read-only]
 uv run python scripts/audit_true_missing_top10.py
 ```
 
+- 运行前先按 §2.1 核对输入 SHA256；JSON 的 `inputs.pins_sha256` 记录同一组指纹。
+- 脚本会复算 DuckDB 关闭连接后的哈希（`unchanged_during_run`），并检查
+  `status_counts_unchanged`、`mandatory_cross_candidates_all_listed`、`csv_total_matches` 等闸门；
+  任一失败会 exit 非零。
+
 产物：
 
 - `docs/research/supply-chain/2026-10-20/claude/experiments/g1_contract/out/sku_match_audit/true_missing_top10.json`
-  （聚合证据，无订单行级明细）
+  （聚合证据，无订单行级明细；含 `candidate_count_audit` 全量 18 项）
 - 本报告：`docs/research/supply-chain/2026-10-20/claude/control/reviews/2026-10-22-true-missing-top10.md`
-- 复现脚本：`scripts/audit_true_missing_top10.py`
+- 复现脚本：`scripts/audit_true_missing_top10.py`（SHA256 见 §2.1）

@@ -8,6 +8,8 @@
    该目录当前不存在，报告中已单列该路径差异。）
 
 禁止：写 EN、改 sku_map、恢复别名、创建映射、估算补数、访问生产、扩族。
+所有输入（DuckDB / sku_map.tsv / C 三件产物 / 本脚本）在审计开始时计算 SHA256，
+DuckDB 在关闭只读连接后复算一次，指纹写入 JSON 的 inputs.pins_sha256。
 输出：聚合证据 JSON（不含订单行级明细），供人工裁决。
 
 用法：``uv run python scripts/audit_true_missing_top10.py``
@@ -16,6 +18,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
@@ -33,6 +36,20 @@ MANDATORY = "TT0031245K0064088"
 RELATED_VARIANT = "TT0031245K0064088-0"
 
 ANNOTATION_PREFIXES = ("已删除", "删除", "作废", "停用")
+
+
+def sha256_file(path: Path) -> str:
+    """对输入文件做 SHA256（分块读取，不把整库读进内存）。"""
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def pin(path: Path) -> dict:
+    """固定一个输入文件的路径 + SHA256 + 字节数，供报告复算。"""
+    return {"path": str(path), "sha256": sha256_file(path), "bytes": path.stat().st_size}
 
 
 def load_map_tsv() -> tuple[dict[str, set[str]], int]:
@@ -61,6 +78,18 @@ def strip_annotation(key: str) -> str:
 
 def main() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
+
+    # --- 输入指纹（审计前固定；报告与 JSON 同时记录）---
+    input_pins = {
+        "order_store_duckdb": pin(DB),
+        "sku_map_tsv": pin(MAP_TSV),
+        "c_audit_unmatched_all_csv": pin(C_OUT / "unmatched_all.csv"),
+        "c_audit_categories_json": pin(C_OUT / "categories.json"),
+        "c_audit_deep100_md": pin(C_OUT / "deep100.md"),
+        "audit_script": pin(Path(__file__).resolve()),
+    }
+    db_sha256_before = input_pins["order_store_duckdb"]["sha256"]
+
     by_tt, tsv_pairs = load_map_tsv()
 
     cats = json.loads((C_OUT / "categories.json").read_text(encoding="utf-8"))
@@ -385,11 +414,13 @@ def main() -> int:
             if cross_rows:
                 cands.append({
                     "base_code": "platform_sku_cross_row",
-                    "item_codes": [r["item_code"] for r in cross_rows[:10]],
+                    "item_codes": [r["item_code"] for r in cross_rows],
                     "evidence_type": "cross_row_platform_sku_match",
-                    "evidence": "23 个平台码中有 7 个直接命中已映射 item_code；跨行合计涉及 8 个 item_code，另有多行平台码是其它 tongtool 码（汇总码特征）。",
+                    "evidence": "平台码跨行证据全量列在 candidate_count_audit.cross_row_nonblank_query（不截断）；"
+                                "另有多行平台码是其它 tongtool 码（汇总码特征）。",
                     "confidence": "medium",
                     "registered": True,
+                    "omitted_item_codes": 0,
                     "source": "gs_orders.platform_sku 跨行证据",
                 })
             decisions += [
@@ -403,7 +434,8 @@ def main() -> int:
                  "item_codes": ["KS0394-CTTM-135x152x80-REDDISHGRAY", "HM1510-YD2-135x152x80-WHITE"]},
                 {"type": "aggregate_umbrella_code",
                  "detail": "189/553 行的 platform_sku 是别的 tongtool 码（如 TT0031245K0064087-SOFA-Gray、TT0020043K0063354），跨行映射到多个 item_code；该码不是单品身份。",
-                 "item_codes": [r["item_code"] for r in cross_rows[:10]]},
+                 "item_codes": [r["item_code"] for r in cross_rows],
+                 "omitted_item_codes": 0},
             ]
         elif sku == RELATED_VARIANT:
             item = "KS0394-CTTM-135x152x80-REDDISHGRAY"
@@ -458,11 +490,196 @@ def main() -> int:
             })
         return cands, conflicts, decisions
 
+    def platform_code_audit(sku: str) -> dict:
+        """v2：TT0031245K0064088 候选计数的显式定义与全量清单。
+
+        两个口径分开算、都报总数：
+        - 直接口径：本 SKU 的（非空）platform_sku 本身是 sku_map.tongtool_sku 键；
+        - 跨行口径：本 SKU 的（非空）platform_sku 出现在 sku_tongtool<>本 SKU 的
+          其它订单行上，且那些行的 sku_tongtool 已在 sku_map 中映射。
+        两个口径都列出全部 item_code，不做 top-N 截断。
+        """
+        total_rows, total_qty = con.execute(
+            "select count(*), coalesce(sum(qty),0) from gs_orders where sku_tongtool=?", [sku],
+        ).fetchone()
+        self_rows, self_qty = con.execute(
+            "select count(*), coalesce(sum(qty),0) from gs_orders "
+            "where sku_tongtool=? and platform_sku=sku_tongtool", [sku],
+        ).fetchone()
+        blank_rows, blank_qty = con.execute(
+            "select count(*), coalesce(sum(qty),0) from gs_orders "
+            "where sku_tongtool=? and platform_sku=''", [sku],
+        ).fetchone()
+        distinct_all = con.execute(
+            "select count(distinct platform_sku) from gs_orders where sku_tongtool=?", [sku],
+        ).fetchone()[0]
+        distinct_nonblank = con.execute(
+            "select count(distinct platform_sku) from gs_orders "
+            "where sku_tongtool=? and platform_sku<>''", [sku],
+        ).fetchone()[0]
+
+        values = con.execute(
+            """select platform_sku, count(*) lines, coalesce(sum(qty),0) qty
+               from gs_orders where sku_tongtool=? group by 1 order by 2 desc, 1""", [sku],
+        ).fetchall()
+
+        # 口径 1：直接平台码查询（非空 platform_sku = sku_map 键）
+        direct = con.execute(
+            """select g.platform_sku, count(*) lines, coalesce(sum(g.qty),0) qty,
+                      list(distinct m.item_code) items
+               from gs_orders g join sku_map m on g.platform_sku=m.tongtool_sku
+               where g.sku_tongtool=? and g.platform_sku<>''
+               group by 1 order by 2 desc, 1""", [sku],
+        ).fetchall()
+        direct_by_code = {code: sorted(items) for code, _l, _q, items in direct}
+        direct_items = sorted({i for items in direct_by_code.values() for i in items})
+
+        # 口径 2：跨行非空平台码查询（排除本 SKU 自身行；本 SKU 未映射，含入与否结果相同）
+        cross = con.execute(
+            """select m.item_code, count(*) lines, coalesce(sum(g.qty),0) qty,
+                      count(distinct g.sku_tongtool) mapped_skus,
+                      count(distinct g.platform_sku) platform_skus,
+                      list(distinct g.sku_tongtool) sku_list,
+                      list(distinct g.platform_sku) platform_list
+               from gs_orders g join sku_map m on g.sku_tongtool=m.tongtool_sku
+               where g.platform_sku in (
+                       select distinct platform_sku from gs_orders
+                       where sku_tongtool=? and platform_sku<>'')
+                 and g.sku_tongtool<>?
+               group by 1 order by 2 desc, 1""", [sku, sku],
+        ).fetchall()
+        cross_items = [
+            {"item_code": item, "lines_elsewhere": lines, "qty_elsewhere": qty,
+             "mapped_skus": skus, "platform_skus": plats,
+             "mapped_sku_list": sorted(sku_list), "platform_list": sorted(platform_list)}
+            for item, lines, qty, skus, plats, sku_list, platform_list in cross
+        ]
+        cross_item_set = {r["item_code"] for r in cross_items}
+
+        # 每个平台码的跨行 item_code 数（用于全量分布表，不截断）
+        per_code_cross = dict(con.execute(
+            """select g.platform_sku, count(distinct m.item_code)
+               from gs_orders g join sku_map m on g.sku_tongtool=m.tongtool_sku
+               where g.platform_sku in (
+                       select distinct platform_sku from gs_orders
+                       where sku_tongtool=? and platform_sku<>'')
+                 and g.sku_tongtool<>?
+               group by 1""", [sku, sku],
+        ).fetchall())
+
+        value_rows = []
+        for platsku, lines, qty in values:
+            is_blank = platsku == ""
+            value_rows.append({
+                "platform_sku": platsku if not is_blank else "",
+                "is_blank": is_blank,
+                "is_self": platsku == sku,
+                "lines": lines,
+                "qty": qty,
+                "direct_item_codes": direct_by_code.get(platsku, []),
+                "cross_row_item_code_count": per_code_cross.get(platsku, 0),
+            })
+
+        other_rows = total_rows - self_rows
+        direct_lines = sum(r[1] for r in direct)
+        direct_qty = sum(r[2] for r in direct)
+        cross_lines = sum(r["lines_elsewhere"] for r in cross_items)
+        cross_qty = sum(r["qty_elsewhere"] for r in cross_items)
+        listed_in_v1 = 10  # v1 用 cross_rows[:10] 截断
+        omitted = len(cross_items) - listed_in_v1
+
+        return {
+            "definitions": {
+                "platform_sku_values_total": "gs_orders 中该 sku_tongtool 的 platform_sku distinct 数（含空串）",
+                "self_rows": "platform_sku = sku_tongtool 的行",
+                "other_code_rows": "total_rows - self_rows，含空 platform_sku",
+                "direct_platform_code_lookup": "本 SKU 的非空 platform_sku 本身是 sku_map.tongtool_sku 键；返回平台码 → item_code",
+                "cross_row_nonblank_query": "本 SKU 的非空 platform_sku 也出现在 sku_tongtool<>本 SKU 的其它行上，且其它行的 sku_tongtool 在 sku_map 有 item_code；返回 distinct item_code",
+            },
+            "platform_sku_values": {
+                "total_rows": total_rows,
+                "total_qty": total_qty,
+                "distinct_including_blank": distinct_all,
+                "distinct_nonblank": distinct_nonblank,
+                "blank_rows": blank_rows,
+                "blank_qty": blank_qty,
+                "self_rows": self_rows,
+                "self_qty": self_qty,
+                "other_code_rows": other_rows,
+                "other_code_qty": total_qty - self_qty,
+                "values_all": value_rows,
+            },
+            "direct_platform_code_lookup": {
+                "platform_codes": len(direct_by_code),
+                "item_codes": len(direct_items),
+                "rows": direct_lines,
+                "qty": direct_qty,
+                "codes": [{"platform_sku": code, "lines": l, "qty": q,
+                           "item_codes": direct_by_code[code]} for code, l, q, _ in direct],
+                "item_code_list": direct_items,
+                "omitted_item_codes": 0,
+            },
+            "cross_row_nonblank_query": {
+                "item_codes": len(cross_items),
+                "rows": cross_lines,
+                "qty": cross_qty,
+                "items_all": cross_items,
+                "omitted_item_codes": 0,
+            },
+            "union_item_codes": sorted(set(direct_items) | cross_item_set),
+            "v1_claim_reconciliation": {
+                "v1_direct_platform_codes": 7,
+                "v1_cross_row_item_codes_claimed": 8,
+                "v1_cross_row_item_codes_listed": listed_in_v1,
+                "v2_direct_platform_codes": len(direct_by_code),
+                "v2_direct_item_codes": len(direct_items),
+                "v2_cross_row_item_codes": len(cross_items),
+                "v1_cross_total_reproducible": 8 == len(cross_items),
+                "explanation": (
+                    "v1 的 “8 个 item_code” 无法由任何显式查询复现：直接口径是 7 个平台码 / 6 个 item_code，"
+                    f"跨行口径是 {len(cross_items)} 个 item_code。v1 用 cross_rows[:10] 只列了前 10 个，"
+                    f"恰好隐藏 {omitted} 个；8 = {len(cross_items)} − {listed_in_v1}，即「被截断隐藏的数量」，"
+                    "不是总数。该数字是在 commit d6115ea6 中以纯文本写入的（该 commit 未改任何计算代码），"
+                    "且与同一条 JSON 候选已列出的 10 个 item_code 自相矛盾。v2 的 8 个被隐藏项见 "
+                    "cross_row_nonblank_query.items_all 的第 11–18 位。"
+                ),
+                "v1_hidden_items": [r["item_code"] for r in cross_items[listed_in_v1:]],
+            },
+            "checks": {
+                "self_plus_other_equals_total": self_rows + other_rows == total_rows,
+                "direct_code_count_matches": len(direct_by_code) == len(direct),
+                "direct_items_subset_of_cross": set(direct_items) <= cross_item_set,
+                "cross_item_count_matches": len(cross_items) == len(cross_item_set),
+                "direct_list_not_truncated": len(direct) == len(direct_by_code),
+            },
+        }
+
     out_skus = []
     for i, sku in enumerate(selected, 1):
         prof = base_profile(sku)
         cands, conflicts, decisions = candidates_for(sku, prof)
         c = c_by_sku.get(sku, {})
+        candidate_count_audit = None
+        if sku == MANDATORY:
+            # v2：候选计数显式定义 + 全量清单；同时用全量结果覆盖 v1 的 top-10 截断。
+            candidate_count_audit = platform_code_audit(sku)
+            cross_all = candidate_count_audit["cross_row_nonblank_query"]["items_all"]
+            for cand in cands:
+                if cand["base_code"] == "platform_sku_cross_row":
+                    cand["item_codes"] = [r["item_code"] for r in cross_all]
+                    cand["omitted_item_codes"] = 0
+                    cand["evidence"] = (
+                        "跨行非空平台码查询："
+                        f"{candidate_count_audit['cross_row_nonblank_query']['item_codes']} 个 item_code，"
+                        "全部列出（见 candidate_count_audit.cross_row_nonblank_query.items_all）；"
+                        "直接口径："
+                        f"{candidate_count_audit['direct_platform_code_lookup']['platform_codes']} 个平台码 → "
+                        f"{candidate_count_audit['direct_platform_code_lookup']['item_codes']} 个 item_code。"
+                    )
+            for conf in conflicts:
+                if conf["type"] == "aggregate_umbrella_code":
+                    conf["item_codes"] = [r["item_code"] for r in cross_all]
+                    conf["omitted_item_codes"] = 0
         # 证据状态显式裁决（不是业务结论）：
         # - conflicting_evidence：同一码存在指向不同 item_code 的证据，需先裁决冲突；
         # - pending_insufficient_evidence：本地无候选；
@@ -496,6 +713,7 @@ def main() -> int:
             "accounts_distinct": prof["accounts_distinct"],
             "warehouses": prof["warehouses"],
             "platform_sku": prof["platform_sku"],
+            **({"candidate_count_audit": candidate_count_audit} if candidate_count_audit else {}),
             "raw_identifier": {
                 "value": sku,
                 "table_column": "gs_orders.sku_tongtool",
@@ -521,6 +739,12 @@ def main() -> int:
     insuf = [r for r in cats["skus"] if r["category"] == "insufficient_evidence"]
     insuf_lines = sum(r["lines"] for r in insuf)
     mandatory_lines = sum(r["order_lines"] for r in out_skus if r["sku"] in (MANDATORY, RELATED_VARIANT))
+
+    # 关闭只读连接后再复核 DB 指纹：证明审计期间未写库。
+    con.close()
+    db_sha256_after = sha256_file(DB)
+    input_pins["order_store_duckdb"]["recheck_sha256_after_run"] = db_sha256_after
+    input_pins["order_store_duckdb"]["unchanged_during_run"] = db_sha256_after == db_sha256_before
 
     recon = {
         "gs_orders_total_rows": gs_total,
@@ -548,6 +772,15 @@ def main() -> int:
             "top10_count": sum(1 for r in out_skus if r["selection"] == "top10_true_missing") == 10,
             "mandatory_included": MANDATORY in {r["sku"] for r in out_skus},
             "no_sku_duplicated": len({r["sku"] for r in out_skus}) == len(out_skus),
+            "mandatory_candidate_audit_present": any("candidate_count_audit" in r for r in out_skus),
+            "mandatory_cross_candidates_all_listed": all(
+                r["candidate_count_audit"]["cross_row_nonblank_query"]["omitted_item_codes"] == 0
+                for r in out_skus if "candidate_count_audit" in r),
+            "status_counts_unchanged": Counter(r["status"] for r in out_skus) == Counter({
+                "conflicting_evidence": 7,
+                "pending_insufficient_evidence": 2,
+                "pending_business_confirmation": 3,
+            }),
         },
     }
     if not all(recon["checks"].values()):
@@ -564,6 +797,8 @@ def main() -> int:
             "c_audit_actual_dir": str(C_OUT),
             "c_audit_task_stated_dir": str(OUT),
             "path_note": "任务书写的 experiments/g1_contract/out/sku_match_audit/ 当前不存在；C 产物实际在仓库根 out/sku_match_audit/（.gitignore: out/*）。本审计读取实际目录，并把 JSON 写到任务书路径。",
+            "pins_sha256": input_pins,
+            "pins_note": "所有输入在审计开始时算 SHA256；DuckDB 关闭连接后复算一次，unchanged_during_run 证明只读。",
         },
         "selection_rule": {
             "top10": "categories.json 中 category=true_missing，按 order_lines 降序、qty 降序、sku 升序取前 10。",
@@ -584,7 +819,7 @@ def main() -> int:
         "skus": out_skus,
         "not_modified": [
             "未写 EN / ERPNext",
-            "未改 sku_map.tsv 或 DuckDB",
+            "未改 sku_map.tsv 或 DuckDB（DuckDB SHA256 审计前后一致，见 inputs.pins_sha256）",
             "未恢复任何删除别名",
             "未创建任何映射",
             "未估算数量或成本",
