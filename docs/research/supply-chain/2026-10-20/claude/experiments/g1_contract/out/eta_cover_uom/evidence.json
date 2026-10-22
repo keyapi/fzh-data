@@ -587,7 +587,8 @@
           "conversion_needed_under_condition": false,
           "conversion_status": "conditional",
           "condition": "IF stock UOM = 个 THEN no conversion is needed; the IF is unproven",
-          "note": "BOM/需求侧单位可观测；通途库存侧无 uom 字段、stock_history.uom_basis=unknown，因此不能断言\"不需要换算\"，只能给出条件结论。"
+          "note": "需求侧单位可观测；通途库存侧无 uom 字段、stock_history.uom_basis=unknown，因此换算仍为条件结论，需库存单位确认。",
+          "conversion_requirement": "demand_uom_known && stock_uom_known"
         },
         "trace_pool_note": null,
         "trace_ship_type": "皮壳",
@@ -771,7 +772,8 @@
           "conversion_needed_under_condition": false,
           "conversion_status": "conditional",
           "condition": "IF stock UOM = 个 THEN no conversion is needed; the IF is unproven",
-          "note": "BOM/需求侧单位可观测；通途库存侧无 uom 字段、stock_history.uom_basis=unknown，因此不能断言\"不需要换算\"，只能给出条件结论。"
+          "note": "需求侧单位未知（本地无 EN SO 观测）；库存侧无 uom；不得写“需求单位=个”或“不需要换算”。",
+          "conversion_requirement": "demand_uom_known && stock_uom_known"
         },
         "trace_pool_note": null,
         "trace_ship_type": "成品",
@@ -957,7 +959,8 @@
           "conversion_needed_under_condition": false,
           "conversion_status": "conditional",
           "condition": "IF stock UOM = 个 THEN no conversion is needed; the IF is unproven",
-          "note": "BOM/需求侧单位可观测；通途库存侧无 uom 字段、stock_history.uom_basis=unknown，因此不能断言\"不需要换算\"，只能给出条件结论。"
+          "note": "需求侧单位未知（本地无 EN SO 观测）；库存侧无 uom；不得写“需求单位=个”或“不需要换算”。",
+          "conversion_requirement": "demand_uom_known && stock_uom_known"
         },
         "trace_pool_note": null,
         "trace_ship_type": "半成品",
@@ -1200,7 +1203,8 @@
           "conversion_needed_under_condition": false,
           "conversion_status": "conditional",
           "condition": "IF stock UOM = 个 THEN no conversion is needed; the IF is unproven",
-          "note": "BOM/需求侧单位可观测；通途库存侧无 uom 字段、stock_history.uom_basis=unknown，因此不能断言\"不需要换算\"，只能给出条件结论。"
+          "note": "需求侧单位未知（本地无 EN SO 观测）；库存侧无 uom；不得写“需求单位=个”或“不需要换算”。",
+          "conversion_requirement": "demand_uom_known && stock_uom_known"
         },
         "trace_pool_note": "cover_only",
         "trace_ship_type": "成品",
@@ -1358,7 +1362,8 @@
           "conversion_needed_under_condition": false,
           "conversion_status": "conditional",
           "condition": "IF stock UOM = 个 THEN no conversion is needed; the IF is unproven",
-          "note": "BOM/需求侧单位可观测；通途库存侧无 uom 字段、stock_history.uom_basis=unknown，因此不能断言\"不需要换算\"，只能给出条件结论。"
+          "note": "需求侧单位未知（本地无 EN SO 观测）；库存侧无 uom；不得写“需求单位=个”或“不需要换算”。",
+          "conversion_requirement": "demand_uom_known && stock_uom_known"
         },
         "trace_pool_note": null,
         "trace_ship_type": "皮壳",
@@ -1723,7 +1728,8 @@
           "conversion_needed_under_condition": false,
           "conversion_status": "conditional",
           "condition": "IF stock UOM = 个 THEN no conversion is needed; the IF is unproven",
-          "note": "BOM/需求侧单位可观测；通途库存侧无 uom 字段、stock_history.uom_basis=unknown，因此不能断言\"不需要换算\"，只能给出条件结论。"
+          "note": "需求侧单位可观测；通途库存侧无 uom 字段、stock_history.uom_basis=unknown，因此换算仍为条件结论，需库存单位确认。",
+          "conversion_requirement": "demand_uom_known && stock_uom_known"
         }
       },
       {
@@ -1896,7 +1902,8 @@
           "conversion_needed_under_condition": false,
           "conversion_status": "conditional",
           "condition": "IF stock UOM = 个 THEN no conversion is needed; the IF is unproven",
-          "note": "BOM/需求侧单位可观测；通途库存侧无 uom 字段、stock_history.uom_basis=unknown，因此不能断言\"不需要换算\"，只能给出条件结论。"
+          "note": "需求侧单位可观测；通途库存侧无 uom 字段、stock_history.uom_basis=unknown，因此换算仍为条件结论，需库存单位确认。",
+          "conversion_requirement": "demand_uom_known && stock_uom_known"
         }
       },
       {
@@ -2070,7 +2077,8 @@
           "conversion_needed_under_condition": false,
           "conversion_status": "conditional",
           "condition": "IF stock UOM = 个 THEN no conversion is needed; the IF is unproven",
-          "note": "BOM/需求侧单位可观测；通途库存侧无 uom 字段、stock_history.uom_basis=unknown，因此不能断言\"不需要换算\"，只能给出条件结论。"
+          "note": "需求侧单位可观测；通途库存侧无 uom 字段、stock_history.uom_basis=unknown，因此换算仍为条件结论，需库存单位确认。",
+          "conversion_requirement": "demand_uom_known && stock_uom_known"
         }
       },
       {
@@ -2266,7 +2274,8 @@
           "conversion_needed_under_condition": false,
           "conversion_status": "conditional",
           "condition": "IF stock UOM = 个 THEN no conversion is needed; the IF is unproven",
-          "note": "BOM/需求侧单位可观测；通途库存侧无 uom 字段、stock_history.uom_basis=unknown，因此不能断言\"不需要换算\"，只能给出条件结论。"
+          "note": "需求侧单位可观测；通途库存侧无 uom 字段、stock_history.uom_basis=unknown，因此换算仍为条件结论，需库存单位确认。",
+          "conversion_requirement": "demand_uom_known && stock_uom_known"
         }
       },
       {
@@ -2478,7 +2487,8 @@
           "conversion_needed_under_condition": false,
           "conversion_status": "conditional",
           "condition": "IF stock UOM = 个 THEN no conversion is needed; the IF is unproven",
-          "note": "BOM/需求侧单位可观测；通途库存侧无 uom 字段、stock_history.uom_basis=unknown，因此不能断言\"不需要换算\"，只能给出条件结论。"
+          "note": "需求侧单位可观测；通途库存侧无 uom 字段、stock_history.uom_basis=unknown，因此换算仍为条件结论，需库存单位确认。",
+          "conversion_requirement": "demand_uom_known && stock_uom_known"
         }
       },
       {
@@ -2629,7 +2639,8 @@
           "conversion_needed_under_condition": false,
           "conversion_status": "conditional",
           "condition": "IF stock UOM = 个 THEN no conversion is needed; the IF is unproven",
-          "note": "BOM/需求侧单位可观测；通途库存侧无 uom 字段、stock_history.uom_basis=unknown，因此不能断言\"不需要换算\"，只能给出条件结论。"
+          "note": "需求侧单位可观测；通途库存侧无 uom 字段、stock_history.uom_basis=unknown，因此换算仍为条件结论，需库存单位确认。",
+          "conversion_requirement": "demand_uom_known && stock_uom_known"
         }
       },
       {
@@ -2839,7 +2850,8 @@
           "conversion_needed_under_condition": false,
           "conversion_status": "conditional",
           "condition": "IF stock UOM = 个 THEN no conversion is needed; the IF is unproven",
-          "note": "BOM/需求侧单位可观测；通途库存侧无 uom 字段、stock_history.uom_basis=unknown，因此不能断言\"不需要换算\"，只能给出条件结论。"
+          "note": "需求侧单位可观测；通途库存侧无 uom 字段、stock_history.uom_basis=unknown，因此换算仍为条件结论，需库存单位确认。",
+          "conversion_requirement": "demand_uom_known && stock_uom_known"
         }
       },
       {
@@ -3029,7 +3041,8 @@
           "conversion_needed_under_condition": false,
           "conversion_status": "conditional",
           "condition": "IF stock UOM = 个 THEN no conversion is needed; the IF is unproven",
-          "note": "BOM/需求侧单位可观测；通途库存侧无 uom 字段、stock_history.uom_basis=unknown，因此不能断言\"不需要换算\"，只能给出条件结论。"
+          "note": "需求侧单位可观测；通途库存侧无 uom 字段、stock_history.uom_basis=unknown，因此换算仍为条件结论，需库存单位确认。",
+          "conversion_requirement": "demand_uom_known && stock_uom_known"
         }
       },
       {
@@ -3239,7 +3252,8 @@
           "conversion_needed_under_condition": false,
           "conversion_status": "conditional",
           "condition": "IF stock UOM = 个 THEN no conversion is needed; the IF is unproven",
-          "note": "BOM/需求侧单位可观测；通途库存侧无 uom 字段、stock_history.uom_basis=unknown，因此不能断言\"不需要换算\"，只能给出条件结论。"
+          "note": "需求侧单位可观测；通途库存侧无 uom 字段、stock_history.uom_basis=unknown，因此换算仍为条件结论，需库存单位确认。",
+          "conversion_requirement": "demand_uom_known && stock_uom_known"
         }
       },
       {
@@ -3384,7 +3398,8 @@
           "conversion_needed_under_condition": false,
           "conversion_status": "conditional",
           "condition": "IF stock UOM = 个 THEN no conversion is needed; the IF is unproven",
-          "note": "BOM/需求侧单位可观测；通途库存侧无 uom 字段、stock_history.uom_basis=unknown，因此不能断言\"不需要换算\"，只能给出条件结论。"
+          "note": "需求侧单位可观测；通途库存侧无 uom 字段、stock_history.uom_basis=unknown，因此换算仍为条件结论，需库存单位确认。",
+          "conversion_requirement": "demand_uom_known && stock_uom_known"
         }
       }
     ]

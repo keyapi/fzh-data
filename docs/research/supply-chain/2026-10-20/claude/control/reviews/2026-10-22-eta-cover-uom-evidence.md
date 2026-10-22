@@ -107,7 +107,10 @@ v2 的处理：
 - 需求侧/BOM 侧是 `个`，但 `stock_latest` 无 uom 列、`stock_history.uom_basis`
   15,820/15,820 全 `unknown`。
 - 因此只能写「**若**库存单位=个，则 1:1 不需要换算」，不能写「不需要换算」。
-  JSON 里 `conversion_status = "conditional"`。
+- **换算条件同时要求需求单位与库存单位均已知**：4 个主口径 SKU 的需求单位为
+  `unknown`（本地无 EN SO），不能写成“需求侧可观测”；JSON 里
+  `conversion_status = "conditional"`、`conversion_requirement =
+  "demand_uom_known && stock_uom_known"`。
 
 **`open_qty=0` 不证明已收货**：
 
