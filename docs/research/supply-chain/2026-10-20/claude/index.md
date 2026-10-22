@@ -45,6 +45,8 @@ tags: [supply-chain, research, index]
 | [control/reviews/2026-10-22-eta-cover-uom-evidence.md](control/reviews/2026-10-22-eta-cover-uom-evidence.md) | B v2：5 trace SKU 主口径 + 10 expand10 扩展；ETA/Cover/UOM/在途证据与可复算键 |
 | [control/reviews/2026-10-22-sample-2sku.md](control/reviews/2026-10-22-sample-2sku.md) | G2+G3 2-SKU 端到端样例（历史需求→预测/回测→库存/PO/在产→A/B 情景） |
 | [control/reviews/2026-10-22-supply-demand-replenishment-v0.md](control/reviews/2026-10-22-supply-demand-replenishment-v0.md) | G2+G3 10-SKU 窄范围 V0（只读；不是下单建议） |
+| [control/reviews/2026-10-22-v0-review1-response.md](control/reviews/2026-10-22-v0-review1-response.md) | 对 Codex1 V0 review1 的逐条修复响应（正向 SO、A/B 边界、日历窗口、P90 √6、零需求保留） |
+| [control/reviews/2026-10-22-replenishment-triage.md](control/reviews/2026-10-22-replenishment-triage.md) | D9 补货行动分层：可准备 1 / 待核实 2 / 暂缓 7（不是下单清单） |
 | [out/replenishment_v0/evidence.json](out/replenishment_v0/evidence.json) | V0 聚合证据（10 SKU；无原始订单行；含查询定义与源哈希） |
 | [experiments/g2g3_pilot/](experiments/g2g3_pilot/) | G2+G3 只读构建脚本与 2-SKU 样例 JSON |
 | [sources.md](sources.md) | 证据账本（ID / 主张 / 来源 / 日期 / 原文 / 强度） |

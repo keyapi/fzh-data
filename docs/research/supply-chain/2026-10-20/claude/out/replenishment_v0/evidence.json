@@ -1,6 +1,7 @@
 {
-  "schema_version": "supply_replenishment_v0/1",
-  "generated_at": "2026-10-22T14:06:48+08:00",
+  "schema_version": "supply_replenishment_v0_1/1",
+  "report_version": "V0.1",
+  "generated_at": "2026-10-22T14:24:09+08:00",
   "scope": {
     "skus": [
       "KS0001-QDKTR-100-DEEPGREY",
@@ -28,6 +29,7 @@
     ],
     "sales_cutoff": "2026-09",
     "stock_as_of": "2026-10-22",
+    "decision_time": "2026-10-22T00:00:00+08:00",
     "document_snapshot": "EN phase1 (2026-10-20/21); not re-read from production",
     "future_months": [
       "2026-10",
@@ -44,6 +46,17 @@
     "production_access": false,
     "contains_raw_order_lines": false,
     "note": "aggregates only; SO/WO/PO identifiers are document-level keys, not order lines"
+  },
+  "time_alignment": {
+    "decision_time": "2026-10-22T00:00:00+08:00",
+    "stock_as_of": "2026-10-22",
+    "document_as_of": [
+      "2026-10-20",
+      "2026-10-21"
+    ],
+    "gap_days": "1-2",
+    "aligned": false,
+    "treatment": "SO/WO balances are 2026-10-20/21 and inventory is 2026-10-22. The intervening movements cannot be reconciled without production access, so balances are treated as unchanged through the decision time; this is an unquantified time-point scenario, not a bridge."
   },
   "sources": {
     "db": {
@@ -190,15 +203,16 @@
     "forecast_primary": "seasonal_naive (lag 12) when history >= 24 months; otherwise mean of last 3 months; low confidence <24 months",
     "forecast_candidate": "Holt-Winters additive (level+trend+seasonal, grid-search alpha/beta/gamma); reported, not selected",
     "p50": "point forecast, clamped at 0",
-    "p90": "p50 + max(1.2816*sigma, q90_residual)*sqrt(h); sigma/q90 from training residuals only",
-    "backtest": "last 6 origins with known h=3; WAPE/bias exclude zero-actual cells; P90 coverage = share actual<=P90",
-    "supply_A": "available + open production remaining; no PO and no intransit",
-    "supply_B": "available + dedup open PO + production not in PO + independent intransit; PO assumed to arrive within lead time (ETA all null)",
+    "p90": "month h: p50_h + z_sig*sqrt(h); cumulative 3m: sum(p50) + z_sig*sqrt(1+2+3)=sqrt(6); consistent random-walk error model; z_sig=1.2816*sigma_used; sigma_used=max(in-sample effective sigma, rolling-origin h1 std) calibrated over all eligible origins, not only the 6 reporting origins; rolling bias is reported but not corrected",
+    "backtest": "last 6 origins with known h=3; zero-actual cells retained (all-zero denominator -> WAPE/bias null); P90 coverage = share actual<=P90; target 0.90 recorded separately from achieved coverage; achieved coverage below 0.90 -> P90 labelled estimate",
+    "supply_A": "bounds: A_low=available (no production); A_high=available+open production remaining (no PO); no intransit",
+    "supply_B": "bounds: B_min=available+max(raw PO, production remaining, intransit) (maximum overlap: union is at least the largest component); B_max=available+raw PO+all production+intransit (no overlap, all components added). PO duplicate-candidate sensitivity: B_min_po_dedup / B_max_po_dedup. B_mid treats intransit as already inside the open PO (observed intransit==deduped PO) and production as partially overlapping; it is an assumption, not a verified link. PO arrival within lead time is an assumption (ETA all null)",
+    "open_so": "positive remaining per live SO line; over-delivery on other lines is NOT netted against it (kept separate)",
     "production": "open WO = docstatus=1 and status in (Not Started, In Process); remaining = max(0, qty - produced_qty); Draft/Stopped excluded and shown separately",
     "production_uom_assumption": "WO production_item is PK#皮壳; counted 1:1 against the KS finished item (not proven)",
     "po_dedup": "identical (sku, warehouse, quantity) open lines across different POs: later purchase_date treated as duplicate candidate; not document-proven",
-    "recommendation": "max(0, P90(lead+30d) - scenario supply); unrounded; no MOQ/pack multiple; not order-ready",
-    "lead_time": "P50 = 3-month average monthly rate x months + live open SO; P90 adds z_sig*sqrt(months); beyond 3 months uses the same average rate (linear extrapolation, not an independent forecast)",
+    "recommendation": "max(0, P90(lead+30d calendar window) - supply bound); unrounded; no MOQ/pack multiple; not order-ready",
+    "lead_time": "calendar window from 2026-10-22; partial-month weights (Oct 22-31 = 10/31); monthly h has variance h*sigma^2; Jan+ uses the 3-month average rate (extrapolation, not an independent forecast); document balances are 10-20/21 and are not rolled forward to 10-22",
     "censoring": "NOT corrected: only 3 days of stock history, cannot reconstruct lost sales"
   },
   "queries": {
@@ -223,23 +237,45 @@
     "production_sku_count": 10,
     "open_wo_count": 24,
     "stopped_wo_qty": 600,
-    "open_so_live_total": 2017,
+    "open_so_live_total": 2924,
+    "open_so_live_net_total": 2017,
+    "negative_over_delivery_total": -907,
     "dead_so_total": 1675,
     "forecast_p50_3m_total": 1457,
-    "forecast_p90_3m_total": 3560.3,
-    "supply_A_total": 3205,
-    "supply_B_total": 3680,
-    "supply_B_raw_po_total": 3953,
+    "forecast_p90_3m_total": 4811,
+    "supply_A_low_total": 1015,
+    "supply_A_high_total": 3205,
+    "supply_B_min_total": 3953,
+    "supply_B_max_total": 5854,
+    "supply_B_min_po_dedup_total": 3680,
+    "supply_B_max_po_dedup_total": 5573,
+    "supply_B_mid_intransit_in_po_total": 3953,
+    "intransit_equals_po_dedup_skus": 10,
     "recommendation_sums": {
-      "A_L60": 2336.3,
-      "B_L60": 1861.3,
-      "AVAIL_L60": 4526.3,
-      "A_L90": 3137.9,
-      "B_L90": 2662.9,
-      "AVAIL_L90": 5327.9,
-      "A_L120": 3901.2,
-      "B_L120": 3426.2,
-      "AVAIL_L120": 6091.2
+      "A_L60_lo": 4688.6,
+      "A_L60_hi": 6878.6,
+      "B_L60_lo": 2588.4,
+      "B_L60_hi": 3940.6,
+      "B_mid_L60": 3940.6,
+      "B_po_dedup_L60_lo": 2861.4,
+      "B_po_dedup_L60_hi": 4213.6,
+      "AVAIL_L60": 6878.6,
+      "A_L90_lo": 6245.7,
+      "A_L90_hi": 8435.7,
+      "B_L90_lo": 3768.9,
+      "B_L90_hi": 5497.7,
+      "B_mid_L90": 5497.7,
+      "B_po_dedup_L90_lo": 4041.9,
+      "B_po_dedup_L90_hi": 5770.7,
+      "AVAIL_L90": 8435.7,
+      "A_L120_lo": 7735.3,
+      "A_L120_hi": 9925.3,
+      "B_L120_lo": 5086.3,
+      "B_L120_hi": 6987.3,
+      "B_mid_L120": 6987.3,
+      "B_po_dedup_L120_lo": 5367.3,
+      "B_po_dedup_L120_hi": 7260.3,
+      "AVAIL_L120": 9925.3
     },
     "confidence_counts": {
       "medium": 2,
@@ -253,17 +289,35 @@
     "backtest_aggregate": {
       "h1": {
         "n": 60,
-        "zero_excluded": 0,
+        "zero_actual_cells": 0,
         "wape": 0.6051,
         "bias": -0.1052,
         "coverage": 0.8833
       },
       "h3": {
         "n": 60,
-        "zero_excluded": 0,
+        "zero_actual_cells": 0,
         "wape": 0.5261,
         "bias": -0.1353,
-        "coverage": 0.7
+        "coverage": 0.8
+      },
+      "calibration": {
+        "h1_q90_normalized_error": 1.275,
+        "h3_q90_normalized_error": 1.29,
+        "applied_per_sku": true,
+        "sigma_train_range": [
+          56.65,
+          183.996
+        ],
+        "sigma_roll_range": [
+          41.01,
+          147.787
+        ],
+        "sigma_used_range": [
+          56.65,
+          183.996
+        ],
+        "note": "per-SKU sigma_used=max(sigma_train_eff, rolling-origin h1 std); the normalized-error diagnostic is not applied; achieved coverage is reported separately from target_service_level=0.90"
       }
     },
     "demand_share": {
@@ -614,26 +668,47 @@
           {
             "month": "2026-10",
             "p50": 25,
-            "p90": 129.8
+            "p90": 214.4
           },
           {
             "month": "2026-11",
             "p50": 25,
-            "p90": 173.3
+            "p90": 292.8
           },
           {
             "month": "2026-12",
             "p50": 18,
-            "p90": 199.6
+            "p90": 346.0
           }
         ],
         "p50_3m": 68,
-        "p90_3m": 249.6,
-        "sigma": 81.809,
+        "p90_3m": 531.9,
+        "sigma_train": 81.809,
         "q90": 16.2,
-        "z_sig": 104.843,
+        "sigma_roll": 147.787,
+        "sigma_roll_rms": 146.303,
+        "sigma_used": 147.787,
+        "roll_bias": -9.813,
+        "z_sig": 189.396,
+        "calibration": {
+          "method": "rolling_origin_h1_out_of_sample",
+          "n_origins": 41,
+          "sigma_train_eff": 81.809,
+          "sigma_roll_std": 147.787,
+          "sigma_roll_rms": 146.303,
+          "sigma_used": 147.787,
+          "roll_bias": -9.813,
+          "applied": true,
+          "h1_q90_normalized_error": 0.07,
+          "h3_q90_normalized_error": 0.049,
+          "note": "sigma_used=max(in-sample effective sigma, rolling-origin h1 std); the normalized-error diagnostic is not applied; achieved coverage is reported separately from target_service_level=0.90"
+        },
+        "p90_status": "calibrated_estimate",
         "recent3_mean": 242.3,
         "run_rate_ratio": 0.094,
+        "target_service_level": 0.9,
+        "achieved_coverage_h1": 1.0,
+        "achieved_coverage_h3": 1.0,
         "ets_candidate": {
           "available": true,
           "alpha": 0.1,
@@ -655,31 +730,44 @@
       "backtest": {
         "h1": {
           "n": 6,
-          "zero_excluded": 0,
+          "zero_actual_cells": 0,
           "wape": 1.4545,
           "bias": 1.3333,
           "coverage": 1.0
         },
         "h3": {
           "n": 6,
-          "zero_excluded": 0,
+          "zero_actual_cells": 0,
           "wape": 0.4838,
           "bias": 0.4569,
           "coverage": 1.0
         },
         "ets_h1": {
           "n": 6,
-          "zero_excluded": 0,
+          "zero_actual_cells": 0,
           "wape": 1.5658,
           "bias": 1.5658,
           "coverage": 1.0
         },
         "ets_h3": {
           "n": 6,
-          "zero_excluded": 0,
+          "zero_actual_cells": 0,
           "wape": 0.5289,
           "bias": 0.5289,
           "coverage": 1.0
+        },
+        "calibration": {
+          "method": "rolling_origin_h1_out_of_sample",
+          "n_origins": 41,
+          "sigma_train_eff": 81.809,
+          "sigma_roll_std": 147.787,
+          "sigma_roll_rms": 146.303,
+          "sigma_used": 147.787,
+          "roll_bias": -9.813,
+          "applied": true,
+          "h1_q90_normalized_error": 0.07,
+          "h3_q90_normalized_error": 0.049,
+          "note": "sigma_used=max(in-sample effective sigma, rolling-origin h1 std); the normalized-error diagnostic is not applied; achieved coverage is reported separately from target_service_level=0.90"
         },
         "origins": [
           {
@@ -697,7 +785,7 @@
               1.0
             ],
             "p90_1": 93.57,
-            "p90_3": 166.15,
+            "p90_3": 230.41,
             "ets": {
               "f": [
                 18.07,
@@ -705,7 +793,7 @@
                 27.22
               ],
               "p90_1": 66.07,
-              "p90_3": 145.67
+              "p90_3": 180.1
             }
           },
           {
@@ -723,7 +811,7 @@
               5.0
             ],
             "p90_1": 94.04,
-            "p90_3": 164.48,
+            "p90_3": 227.64,
             "ets": {
               "f": [
                 16.15,
@@ -731,7 +819,7 @@
                 41.31
               ],
               "p90_1": 63.32,
-              "p90_3": 164.98
+              "p90_3": 198.82
             }
           },
           {
@@ -749,7 +837,7 @@
               57.0
             ],
             "p90_1": 87.5,
-            "p90_3": 212.83,
+            "p90_3": 274.89,
             "ets": {
               "f": [
                 24.72,
@@ -757,7 +845,7 @@
                 96.61
               ],
               "p90_1": 71.12,
-              "p90_3": 241.61
+              "p90_3": 274.9
             }
           },
           {
@@ -775,7 +863,7 @@
               466.0
             ],
             "p90_1": 90.13,
-            "p90_3": 675.45,
+            "p90_3": 736.53,
             "ets": {
               "f": [
                 37.82,
@@ -783,7 +871,7 @@
                 411.03
               ],
               "p90_1": 83.65,
-              "p90_3": 622.21
+              "p90_3": 655.09
             }
           },
           {
@@ -801,7 +889,7 @@
               485.0
             ],
             "p90_1": 140.94,
-            "p90_3": 1153.38,
+            "p90_3": 1213.6,
             "ets": {
               "f": [
                 91.53,
@@ -809,7 +897,7 @@
                 467.08
               ],
               "p90_1": 136.61,
-              "p90_3": 1044.66
+              "p90_3": 1077.0
             }
           },
           {
@@ -827,7 +915,7 @@
               32.0
             ],
             "p90_1": 548.62,
-            "p90_3": 1126.1,
+            "p90_3": 1185.37,
             "ets": {
               "f": [
                 404.41,
@@ -835,7 +923,7 @@
                 50.12
               ],
               "p90_1": 448.06,
-              "p90_3": 992.73
+              "p90_3": 1024.04
             }
           }
         ],
@@ -851,7 +939,7 @@
             "2026-06+1..+3"
           ]
         },
-        "rule": "last 6 origins with known h=3; zero-actual cells excluded; residual sigma from training only; no future data in fit"
+        "rule": "last 6 origins with known h=3; zero-actual cells retained; residual sigma from training only; no future data in fit"
       },
       "inventory": {
         "as_of": "2026-10-22",
@@ -1018,12 +1106,16 @@
       "open_so": {
         "reconciled_open": 111,
         "dead": 0,
-        "live_open": 111,
+        "live_open": 296,
+        "live_open_net": 111,
+        "positive_open": 296,
+        "negative_over_delivery": -185,
         "in_progress": 281,
         "no_plan": 15,
         "over_delivered": -185,
         "voided": 150,
         "bucket_check": 0.0,
+        "live_lines": 18,
         "dead_so": [],
         "in_progress_so": [
           {
@@ -1062,15 +1154,20 @@
       },
       "supply": {
         "available": 1,
+        "intransit": 0,
         "open_po_raw": 0,
         "open_po_dedup": 0,
-        "independent_intransit": 0,
         "production_gross": 390,
         "production_remaining": 152,
-        "production_not_in_po": 152,
-        "scenario_A": 153,
-        "scenario_B": 153,
-        "scenario_B_raw_po": 153,
+        "A_low": 1,
+        "A_high": 153,
+        "B_min": 153,
+        "B_max": 153,
+        "B_min_po_dedup": 153,
+        "B_max_po_dedup": 153,
+        "B_mid_intransit_in_po": 153,
+        "intransit_equals_po_dedup": true,
+        "overlap_status": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
         "independent_intransit_by_warehouse": {
           "WayfairCG-Cranbury仓": 0,
           "美东-CENTRADE": 0,
@@ -1080,43 +1177,179 @@
       },
       "demand": {
         "forecast_p50_3m": 68,
-        "forecast_p90_3m": 249.6,
-        "open_so_live": 111,
-        "total_p50": 179,
-        "total_p90": 360.6,
-        "dead_so_excluded": 0
+        "forecast_p90_3m": 531.9,
+        "remaining_3m": {
+          "days": 71,
+          "months": 2.333,
+          "forecast_p50": 51.1,
+          "forecast_p90": 479.0,
+          "open_so": 296.0,
+          "p50": 347.1,
+          "p90": 775.0,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 25.0,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 25.0,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 1.0,
+              "p50": 18.0,
+              "h": 3
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
+        },
+        "open_so_live": 296,
+        "total_p50": 364,
+        "total_p90": 827.9,
+        "dead_so_excluded": 0,
+        "over_delivery_not_netted": -185
       },
       "lead_time": {
         "L60": {
           "days": 60,
           "months": 1.971,
-          "p50": 155.7,
-          "p90": 302.9
+          "forecast_p50": 44.7,
+          "forecast_p90": 391.5,
+          "open_so": 296.0,
+          "p50": 340.7,
+          "p90": 687.5,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 25.0,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 25.0,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 0.6452,
+              "p50": 18.0,
+              "h": 3
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
         },
         "L90": {
           "days": 90,
           "months": 2.957,
-          "p50": 178.0,
-          "p90": 358.3
+          "forecast_p50": 65.0,
+          "forecast_p90": 551.8,
+          "open_so": 296.0,
+          "p50": 361.0,
+          "p90": 847.8,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 25.0,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 25.0,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 1.0,
+              "p50": 18.0,
+              "h": 3
+            },
+            {
+              "month": "2027-01",
+              "weight": 0.6129,
+              "p50": 22.67,
+              "h": 4
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
         },
         "L120": {
           "days": 120,
           "months": 3.943,
-          "p50": 200.4,
-          "p90": 408.5
+          "forecast_p50": 88.3,
+          "forecast_p90": 721.3,
+          "open_so": 296.0,
+          "p50": 384.3,
+          "p90": 1017.3,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 25.0,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 25.0,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 1.0,
+              "p50": 18.0,
+              "h": 3
+            },
+            {
+              "month": "2027-01",
+              "weight": 1.0,
+              "p50": 22.67,
+              "h": 4
+            },
+            {
+              "month": "2027-02",
+              "weight": 0.6429,
+              "p50": 22.67,
+              "h": 5
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
         }
       },
       "recommendation": {
         "values": {
-          "A_L60": 205.3,
-          "B_L60": 205.3,
-          "AVAIL_L60": 357.3,
-          "A_L90": 255.5,
-          "B_L90": 255.5,
-          "AVAIL_L90": 407.5,
-          "A_L120": 302.4,
-          "B_L120": 302.4,
-          "AVAIL_L120": 454.4
+          "A_L60_lo": 694.8,
+          "A_L60_hi": 846.8,
+          "B_L60_lo": 694.8,
+          "B_L60_hi": 694.8,
+          "B_mid_L60": 694.8,
+          "B_po_dedup_L60_lo": 694.8,
+          "B_po_dedup_L60_hi": 694.8,
+          "AVAIL_L60": 846.8,
+          "A_L90_lo": 864.3,
+          "A_L90_hi": 1016.3,
+          "B_L90_lo": 864.3,
+          "B_L90_hi": 864.3,
+          "B_mid_L90": 864.3,
+          "B_po_dedup_L90_lo": 864.3,
+          "B_po_dedup_L90_hi": 864.3,
+          "AVAIL_L90": 1016.3,
+          "A_L120_lo": 1025.7,
+          "A_L120_hi": 1177.7,
+          "B_L120_lo": 1025.7,
+          "B_L120_hi": 1025.7,
+          "B_mid_L120": 1025.7,
+          "B_po_dedup_L120_lo": 1025.7,
+          "B_po_dedup_L120_hi": 1025.7,
+          "AVAIL_L120": 1177.7
         },
         "note": "unrounded; no MOQ/pack multiple; not an order quantity"
       },
@@ -1488,26 +1721,47 @@
           {
             "month": "2026-10",
             "p50": 25,
-            "p90": 135.1
+            "p90": 172.3
           },
           {
             "month": "2026-11",
             "p50": 9,
-            "p90": 164.8
+            "p90": 217.4
           },
           {
             "month": "2026-12",
             "p50": 22,
-            "p90": 212.8
+            "p90": 277.2
           }
         ],
         "p50_3m": 56,
-        "p90_3m": 246.8,
-        "sigma": 85.939,
+        "p90_3m": 416.9,
+        "sigma_train": 85.939,
         "q90": 64.8,
-        "z_sig": 110.135,
+        "sigma_roll": 114.975,
+        "sigma_roll_rms": 113.589,
+        "sigma_used": 114.975,
+        "roll_bias": -2.35,
+        "z_sig": 147.347,
+        "calibration": {
+          "method": "rolling_origin_h1_out_of_sample",
+          "n_origins": 41,
+          "sigma_train_eff": 85.939,
+          "sigma_roll_std": 114.975,
+          "sigma_roll_rms": 113.589,
+          "sigma_used": 114.975,
+          "roll_bias": -2.35,
+          "applied": true,
+          "h1_q90_normalized_error": 0.193,
+          "h3_q90_normalized_error": 0.059,
+          "note": "sigma_used=max(in-sample effective sigma, rolling-origin h1 std); the normalized-error diagnostic is not applied; achieved coverage is reported separately from target_service_level=0.90"
+        },
+        "p90_status": "calibrated_estimate",
         "recent3_mean": 208,
         "run_rate_ratio": 0.09,
+        "target_service_level": 0.9,
+        "achieved_coverage_h1": 1.0,
+        "achieved_coverage_h3": 1.0,
         "ets_candidate": {
           "available": true,
           "alpha": 0.1,
@@ -1529,31 +1783,44 @@
       "backtest": {
         "h1": {
           "n": 6,
-          "zero_excluded": 0,
+          "zero_actual_cells": 0,
           "wape": 1.5172,
           "bias": 1.2241,
           "coverage": 1.0
         },
         "h3": {
           "n": 6,
-          "zero_excluded": 0,
+          "zero_actual_cells": 0,
           "wape": 0.3976,
           "bias": 0.3696,
           "coverage": 1.0
         },
         "ets_h1": {
           "n": 6,
-          "zero_excluded": 0,
+          "zero_actual_cells": 0,
           "wape": 1.0405,
           "bias": 1.0405,
           "coverage": 1.0
         },
         "ets_h3": {
           "n": 6,
-          "zero_excluded": 0,
+          "zero_actual_cells": 0,
           "wape": 0.2191,
           "bias": 0.1989,
           "coverage": 1.0
+        },
+        "calibration": {
+          "method": "rolling_origin_h1_out_of_sample",
+          "n_origins": 41,
+          "sigma_train_eff": 85.939,
+          "sigma_roll_std": 114.975,
+          "sigma_roll_rms": 113.589,
+          "sigma_used": 114.975,
+          "roll_bias": -2.35,
+          "applied": true,
+          "h1_q90_normalized_error": 0.193,
+          "h3_q90_normalized_error": 0.059,
+          "note": "sigma_used=max(in-sample effective sigma, rolling-origin h1 std); the normalized-error diagnostic is not applied; achieved coverage is reported separately from target_service_level=0.90"
         },
         "origins": [
           {
@@ -1571,7 +1838,7 @@
               12.0
             ],
             "p90_1": 86.12,
-            "p90_3": 166.97,
+            "p90_3": 226.61,
             "ets": {
               "f": [
                 16.75,
@@ -1579,7 +1846,7 @@
                 23.82
               ],
               "p90_1": 64.9,
-              "p90_3": 136.37
+              "p90_3": 170.91
             }
           },
           {
@@ -1597,7 +1864,7 @@
               9.0
             ],
             "p90_1": 89.6,
-            "p90_3": 170.33,
+            "p90_3": 228.87,
             "ets": {
               "f": [
                 9.32,
@@ -1605,7 +1872,7 @@
                 28.5
               ],
               "p90_1": 56.65,
-              "p90_3": 140.38
+              "p90_3": 174.34
             }
           },
           {
@@ -1623,7 +1890,7 @@
               37.0
             ],
             "p90_1": 92.09,
-            "p90_3": 196.72,
+            "p90_3": 254.18,
             "ets": {
               "f": [
                 21.25,
@@ -1631,7 +1898,7 @@
                 62.93
               ],
               "p90_1": 67.62,
-              "p90_3": 193.84
+              "p90_3": 227.11
             }
           },
           {
@@ -1649,7 +1916,7 @@
               447.0
             ],
             "p90_1": 87.61,
-            "p90_3": 629.15,
+            "p90_3": 685.55,
             "ets": {
               "f": [
                 23.35,
@@ -1657,7 +1924,7 @@
                 342.39
               ],
               "p90_1": 69.12,
-              "p90_3": 501.59
+              "p90_3": 534.43
             }
           },
           {
@@ -1675,7 +1942,7 @@
               304.0
             ],
             "p90_1": 114.41,
-            "p90_3": 922.08,
+            "p90_3": 977.61,
             "ets": {
               "f": [
                 57.12,
@@ -1683,7 +1950,7 @@
                 262.16
               ],
               "p90_1": 101.96,
-              "p90_3": 740.08
+              "p90_3": 772.25
             }
           },
           {
@@ -1701,7 +1968,7 @@
               111.0
             ],
             "p90_1": 523.47,
-            "p90_3": 994.45,
+            "p90_3": 1049.31,
             "ets": {
               "f": [
                 345.61,
@@ -1709,7 +1976,7 @@
                 51.94
               ],
               "p90_1": 389.5,
-              "p90_3": 738.56
+              "p90_3": 770.05
             }
           }
         ],
@@ -1725,7 +1992,7 @@
             "2026-06+1..+3"
           ]
         },
-        "rule": "last 6 origins with known h=3; zero-actual cells excluded; residual sigma from training only; no future data in fit"
+        "rule": "last 6 origins with known h=3; zero-actual cells retained; residual sigma from training only; no future data in fit"
       },
       "inventory": {
         "as_of": "2026-10-22",
@@ -1855,12 +2122,16 @@
       "open_so": {
         "reconciled_open": 245,
         "dead": 0,
-        "live_open": 245,
+        "live_open": 462,
+        "live_open_net": 245,
+        "positive_open": 462,
+        "negative_over_delivery": -217,
         "in_progress": 367,
         "no_plan": 95,
         "over_delivered": -217,
         "voided": 100,
         "bucket_check": 0.0,
+        "live_lines": 14,
         "dead_so": [],
         "in_progress_so": [
           {
@@ -1907,15 +2178,20 @@
       },
       "supply": {
         "available": 1,
+        "intransit": 0,
         "open_po_raw": 0,
         "open_po_dedup": 0,
-        "independent_intransit": 0,
         "production_gross": 260,
         "production_remaining": 260,
-        "production_not_in_po": 260,
-        "scenario_A": 261,
-        "scenario_B": 261,
-        "scenario_B_raw_po": 261,
+        "A_low": 1,
+        "A_high": 261,
+        "B_min": 261,
+        "B_max": 261,
+        "B_min_po_dedup": 261,
+        "B_max_po_dedup": 261,
+        "B_mid_intransit_in_po": 261,
+        "intransit_equals_po_dedup": true,
+        "overlap_status": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
         "independent_intransit_by_warehouse": {
           "美东-CENTRADE": 0,
           "美中-FZH-DANEEY": 0,
@@ -1924,43 +2200,179 @@
       },
       "demand": {
         "forecast_p50_3m": 56,
-        "forecast_p90_3m": 246.8,
-        "open_so_live": 245,
-        "total_p50": 301,
-        "total_p90": 491.8,
-        "dead_so_excluded": 0
+        "forecast_p90_3m": 416.9,
+        "remaining_3m": {
+          "days": 71,
+          "months": 2.333,
+          "forecast_p50": 39.1,
+          "forecast_p90": 372.0,
+          "open_so": 462.0,
+          "p50": 501.1,
+          "p90": 834.0,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 25.0,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 9.0,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 1.0,
+              "p50": 22.0,
+              "h": 3
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
+        },
+        "open_so_live": 462,
+        "total_p50": 518,
+        "total_p90": 878.9,
+        "dead_so_excluded": 0,
+        "over_delivery_not_netted": -217
       },
       "lead_time": {
         "L60": {
           "days": 60,
           "months": 1.971,
-          "p50": 281.8,
-          "p90": 436.4
+          "forecast_p50": 31.3,
+          "forecast_p90": 301.1,
+          "open_so": 462.0,
+          "p50": 493.3,
+          "p90": 763.1,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 25.0,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 9.0,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 0.6452,
+              "p50": 22.0,
+              "h": 3
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
         },
         "L90": {
           "days": 90,
           "months": 2.957,
-          "p50": 300.2,
-          "p90": 489.6
+          "forecast_p50": 50.5,
+          "forecast_p90": 429.2,
+          "open_so": 462.0,
+          "p50": 512.5,
+          "p90": 891.2,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 25.0,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 9.0,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 1.0,
+              "p50": 22.0,
+              "h": 3
+            },
+            {
+              "month": "2027-01",
+              "weight": 0.6129,
+              "p50": 18.67,
+              "h": 4
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
         },
         "L120": {
           "days": 120,
           "months": 3.943,
-          "p50": 318.6,
-          "p90": 537.3
+          "forecast_p50": 69.7,
+          "forecast_p90": 562.2,
+          "open_so": 462.0,
+          "p50": 531.7,
+          "p90": 1024.2,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 25.0,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 9.0,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 1.0,
+              "p50": 22.0,
+              "h": 3
+            },
+            {
+              "month": "2027-01",
+              "weight": 1.0,
+              "p50": 18.67,
+              "h": 4
+            },
+            {
+              "month": "2027-02",
+              "weight": 0.6429,
+              "p50": 18.67,
+              "h": 5
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
         }
       },
       "recommendation": {
         "values": {
-          "A_L60": 228.6,
-          "B_L60": 228.6,
-          "AVAIL_L60": 488.6,
-          "A_L90": 276.3,
-          "B_L90": 276.3,
-          "AVAIL_L90": 536.3,
-          "A_L120": 320.5,
-          "B_L120": 320.5,
-          "AVAIL_L120": 580.5
+          "A_L60_lo": 630.2,
+          "A_L60_hi": 890.2,
+          "B_L60_lo": 630.2,
+          "B_L60_hi": 630.2,
+          "B_mid_L60": 630.2,
+          "B_po_dedup_L60_lo": 630.2,
+          "B_po_dedup_L60_hi": 630.2,
+          "AVAIL_L60": 890.2,
+          "A_L90_lo": 763.2,
+          "A_L90_hi": 1023.2,
+          "B_L90_lo": 763.2,
+          "B_L90_hi": 763.2,
+          "B_mid_L90": 763.2,
+          "B_po_dedup_L90_lo": 763.2,
+          "B_po_dedup_L90_hi": 763.2,
+          "AVAIL_L90": 1023.2,
+          "A_L120_lo": 889.8,
+          "A_L120_hi": 1149.8,
+          "B_L120_lo": 889.8,
+          "B_L120_hi": 889.8,
+          "B_mid_L120": 889.8,
+          "B_po_dedup_L120_lo": 889.8,
+          "B_po_dedup_L120_hi": 889.8,
+          "AVAIL_L120": 1149.8
         },
         "note": "unrounded; no MOQ/pack multiple; not an order quantity"
       },
@@ -2224,26 +2636,47 @@
           {
             "month": "2026-10",
             "p50": 24,
-            "p90": 101.2
+            "p90": 109.2
           },
           {
             "month": "2026-11",
             "p50": 12,
-            "p90": 121.2
+            "p90": 132.5
           },
           {
             "month": "2026-12",
             "p50": 24,
-            "p90": 157.7
+            "p90": 171.5
           }
         ],
         "p50_3m": 60,
-        "p90_3m": 193.7,
-        "sigma": 60.239,
+        "p90_3m": 268.7,
+        "sigma_train": 60.239,
         "q90": 77.2,
-        "z_sig": 77.2,
+        "sigma_roll": 66.47,
+        "sigma_roll_rms": 65.197,
+        "sigma_used": 66.47,
+        "roll_bias": 3.013,
+        "z_sig": 85.185,
+        "calibration": {
+          "method": "rolling_origin_h1_out_of_sample",
+          "n_origins": 25,
+          "sigma_train_eff": 60.239,
+          "sigma_roll_std": 66.47,
+          "sigma_roll_rms": 65.197,
+          "sigma_used": 66.47,
+          "roll_bias": 3.013,
+          "applied": true,
+          "h1_q90_normalized_error": 0.886,
+          "h3_q90_normalized_error": 0.747,
+          "note": "sigma_used=max(in-sample effective sigma, rolling-origin h1 std); the normalized-error diagnostic is not applied; achieved coverage is reported separately from target_service_level=0.90"
+        },
+        "p90_status": "estimate_coverage_below_target",
         "recent3_mean": 167,
         "run_rate_ratio": 0.12,
+        "target_service_level": 0.9,
+        "achieved_coverage_h1": 0.8333,
+        "achieved_coverage_h3": 1.0,
         "ets_candidate": {
           "available": true,
           "alpha": 0.1,
@@ -2265,31 +2698,44 @@
       "backtest": {
         "h1": {
           "n": 6,
-          "zero_excluded": 0,
+          "zero_actual_cells": 0,
           "wape": 0.4433,
           "bias": -0.3441,
           "coverage": 0.8333
         },
         "h3": {
           "n": 6,
-          "zero_excluded": 0,
+          "zero_actual_cells": 0,
           "wape": 0.2604,
           "bias": -0.2405,
-          "coverage": 0.6667
+          "coverage": 1.0
         },
         "ets_h1": {
           "n": 3,
-          "zero_excluded": 0,
+          "zero_actual_cells": 0,
           "wape": 0.3411,
           "bias": -0.3411,
           "coverage": 0.6667
         },
         "ets_h3": {
           "n": 3,
-          "zero_excluded": 0,
+          "zero_actual_cells": 0,
           "wape": 0.312,
           "bias": -0.312,
           "coverage": 0.3333
+        },
+        "calibration": {
+          "method": "rolling_origin_h1_out_of_sample",
+          "n_origins": 25,
+          "sigma_train_eff": 60.239,
+          "sigma_roll_std": 66.47,
+          "sigma_roll_rms": 65.197,
+          "sigma_used": 66.47,
+          "roll_bias": 3.013,
+          "applied": true,
+          "h1_q90_normalized_error": 0.886,
+          "h3_q90_normalized_error": 0.747,
+          "note": "sigma_used=max(in-sample effective sigma, rolling-origin h1 std); the normalized-error diagnostic is not applied; achieved coverage is reported separately from target_service_level=0.90"
         },
         "origins": [
           {
@@ -2307,7 +2753,7 @@
               24.0
             ],
             "p90_1": 118.96,
-            "p90_3": 236.47,
+            "p90_3": 304.6,
             "ets": null
           },
           {
@@ -2325,7 +2771,7 @@
               24.33
             ],
             "p90_1": 116.64,
-            "p90_3": 232.87,
+            "p90_3": 299.09,
             "ets": null
           },
           {
@@ -2343,7 +2789,7 @@
               25.0
             ],
             "p90_1": 114.86,
-            "p90_3": 230.64,
+            "p90_3": 295.11,
             "ets": null
           },
           {
@@ -2361,7 +2807,7 @@
               151.0
             ],
             "p90_1": 101.91,
-            "p90_3": 332.86,
+            "p90_3": 391.63,
             "ets": {
               "f": [
                 26.65,
@@ -2369,7 +2815,7 @@
                 146.36
               ],
               "p90_1": 73.93,
-              "p90_3": 281.45
+              "p90_3": 315.37
             }
           },
           {
@@ -2387,7 +2833,7 @@
               253.0
             ],
             "p90_1": 98.7,
-            "p90_3": 560.31,
+            "p90_3": 616.77,
             "ets": {
               "f": [
                 27.18,
@@ -2395,7 +2841,7 @@
                 156.28
               ],
               "p90_1": 72.72,
-              "p90_3": 409.37
+              "p90_3": 442.05
             }
           },
           {
@@ -2413,7 +2859,7 @@
               62.0
             ],
             "p90_1": 242.6,
-            "p90_3": 624.66,
+            "p90_3": 690.37,
             "ets": {
               "f": [
                 175.46,
@@ -2421,7 +2867,7 @@
                 75.55
               ],
               "p90_1": 225.64,
-              "p90_3": 526.91
+              "p90_3": 562.91
             }
           }
         ],
@@ -2437,7 +2883,7 @@
             "2026-06+1..+3"
           ]
         },
-        "rule": "last 6 origins with known h=3; zero-actual cells excluded; residual sigma from training only; no future data in fit"
+        "rule": "last 6 origins with known h=3; zero-actual cells retained; residual sigma from training only; no future data in fit"
       },
       "inventory": {
         "as_of": "2026-10-22",
@@ -2607,12 +3053,16 @@
       "open_so": {
         "reconciled_open": 172,
         "dead": 120,
-        "live_open": 52,
+        "live_open": 144,
+        "live_open_net": 52,
+        "positive_open": 144,
+        "negative_over_delivery": -92,
         "in_progress": 71,
         "no_plan": 73,
         "over_delivered": -92,
         "voided": 0,
         "bucket_check": 0.0,
+        "live_lines": 18,
         "dead_so": [
           {
             "so": "SO-26-00098",
@@ -2656,15 +3106,20 @@
       },
       "supply": {
         "available": 54,
+        "intransit": 121,
         "open_po_raw": 121,
         "open_po_dedup": 121,
-        "independent_intransit": 0,
         "production_gross": 300,
         "production_remaining": 101,
-        "production_not_in_po": 0,
-        "scenario_A": 155,
-        "scenario_B": 175,
-        "scenario_B_raw_po": 175,
+        "A_low": 54,
+        "A_high": 155,
+        "B_min": 175,
+        "B_max": 397,
+        "B_min_po_dedup": 175,
+        "B_max_po_dedup": 397,
+        "B_mid_intransit_in_po": 175,
+        "intransit_equals_po_dedup": true,
+        "overlap_status": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
         "independent_intransit_by_warehouse": {
           "WayfairCG-Cranbury仓": 0,
           "美东-CENTRADE": 0,
@@ -2673,43 +3128,179 @@
       },
       "demand": {
         "forecast_p50_3m": 60,
-        "forecast_p90_3m": 193.7,
-        "open_so_live": 52,
-        "total_p50": 112,
-        "total_p90": 245.7,
-        "dead_so_excluded": 120
+        "forecast_p90_3m": 268.7,
+        "remaining_3m": {
+          "days": 71,
+          "months": 2.333,
+          "forecast_p50": 43.7,
+          "forecast_p90": 236.2,
+          "open_so": 144.0,
+          "p50": 187.7,
+          "p90": 380.2,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 24.0,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 12.0,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 1.0,
+              "p50": 24.0,
+              "h": 3
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
+        },
+        "open_so_live": 144,
+        "total_p50": 204,
+        "total_p90": 412.7,
+        "dead_so_excluded": 120,
+        "over_delivery_not_netted": -92
       },
       "lead_time": {
         "L60": {
           "days": 60,
           "months": 1.971,
-          "p50": 91.4,
-          "p90": 199.8
+          "forecast_p50": 35.2,
+          "forecast_p90": 191.2,
+          "open_so": 144.0,
+          "p50": 179.2,
+          "p90": 335.2,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 24.0,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 12.0,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 0.6452,
+              "p50": 24.0,
+              "h": 3
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
         },
         "L90": {
           "days": 90,
           "months": 2.957,
-          "p50": 111.1,
-          "p90": 243.9
+          "forecast_p50": 56.0,
+          "forecast_p90": 275.0,
+          "open_so": 144.0,
+          "p50": 200.0,
+          "p90": 419.0,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 24.0,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 12.0,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 1.0,
+              "p50": 24.0,
+              "h": 3
+            },
+            {
+              "month": "2027-01",
+              "weight": 0.6129,
+              "p50": 20.0,
+              "h": 4
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
         },
         "L120": {
           "days": 120,
           "months": 3.943,
-          "p50": 130.9,
-          "p90": 284.1
+          "forecast_p50": 76.6,
+          "forecast_p90": 361.3,
+          "open_so": 144.0,
+          "p50": 220.6,
+          "p90": 505.3,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 24.0,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 12.0,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 1.0,
+              "p50": 24.0,
+              "h": 3
+            },
+            {
+              "month": "2027-01",
+              "weight": 1.0,
+              "p50": 20.0,
+              "h": 4
+            },
+            {
+              "month": "2027-02",
+              "weight": 0.6429,
+              "p50": 20.0,
+              "h": 5
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
         }
       },
       "recommendation": {
         "values": {
-          "A_L60": 88.9,
-          "B_L60": 68.9,
-          "AVAIL_L60": 189.9,
-          "A_L90": 129.1,
-          "B_L90": 109.1,
-          "AVAIL_L90": 230.1,
-          "A_L120": 166.9,
-          "B_L120": 146.9,
-          "AVAIL_L120": 267.9
+          "A_L60_lo": 264.0,
+          "A_L60_hi": 365.0,
+          "B_L60_lo": 22.0,
+          "B_L60_hi": 244.0,
+          "B_mid_L60": 244.0,
+          "B_po_dedup_L60_lo": 22.0,
+          "B_po_dedup_L60_hi": 244.0,
+          "AVAIL_L60": 365.0,
+          "A_L90_lo": 350.3,
+          "A_L90_hi": 451.3,
+          "B_L90_lo": 108.3,
+          "B_L90_hi": 330.3,
+          "B_mid_L90": 330.3,
+          "B_po_dedup_L90_lo": 108.3,
+          "B_po_dedup_L90_hi": 330.3,
+          "AVAIL_L90": 451.3,
+          "A_L120_lo": 432.7,
+          "A_L120_hi": 533.7,
+          "B_L120_lo": 190.7,
+          "B_L120_hi": 412.7,
+          "B_mid_L120": 412.7,
+          "B_po_dedup_L120_lo": 190.7,
+          "B_po_dedup_L120_hi": 412.7,
+          "AVAIL_L120": 533.7
         },
         "note": "unrounded; no MOQ/pack multiple; not an order quantity"
       },
@@ -2981,26 +3572,47 @@
           {
             "month": "2026-10",
             "p50": 14,
-            "p90": 139.8
+            "p90": 165.0
           },
           {
             "month": "2026-11",
             "p50": 3,
-            "p90": 180.9
+            "p90": 216.5
           },
           {
             "month": "2026-12",
             "p50": 17,
-            "p90": 234.9
+            "p90": 278.5
           }
         ],
         "p50_3m": 34,
-        "p90_3m": 251.9,
-        "sigma": 98.17,
+        "p90_3m": 403.8,
+        "sigma_train": 98.17,
         "q90": 92.2,
-        "z_sig": 125.81,
+        "sigma_roll": 117.816,
+        "sigma_roll_rms": 116.686,
+        "sigma_used": 117.816,
+        "roll_bias": -17.04,
+        "z_sig": 150.987,
+        "calibration": {
+          "method": "rolling_origin_h1_out_of_sample",
+          "n_origins": 25,
+          "sigma_train_eff": 98.17,
+          "sigma_roll_std": 117.816,
+          "sigma_roll_rms": 116.686,
+          "sigma_used": 117.816,
+          "roll_bias": -17.04,
+          "applied": true,
+          "h1_q90_normalized_error": 0.438,
+          "h3_q90_normalized_error": 0.146,
+          "note": "sigma_used=max(in-sample effective sigma, rolling-origin h1 std); the normalized-error diagnostic is not applied; achieved coverage is reported separately from target_service_level=0.90"
+        },
+        "p90_status": "calibrated_estimate",
         "recent3_mean": 150.7,
         "run_rate_ratio": 0.075,
+        "target_service_level": 0.9,
+        "achieved_coverage_h1": 1.0,
+        "achieved_coverage_h3": 1.0,
         "ets_candidate": {
           "available": true,
           "alpha": 0.1,
@@ -3022,31 +3634,44 @@
       "backtest": {
         "h1": {
           "n": 6,
-          "zero_excluded": 0,
+          "zero_actual_cells": 0,
           "wape": 0.5382,
           "bias": 0.0008,
           "coverage": 1.0
         },
         "h3": {
           "n": 6,
-          "zero_excluded": 0,
+          "zero_actual_cells": 0,
           "wape": 0.3769,
           "bias": 0.1639,
           "coverage": 1.0
         },
         "ets_h1": {
           "n": 3,
-          "zero_excluded": 0,
+          "zero_actual_cells": 0,
           "wape": 0.3201,
           "bias": -0.2889,
           "coverage": 0.6667
         },
         "ets_h3": {
           "n": 3,
-          "zero_excluded": 0,
+          "zero_actual_cells": 0,
           "wape": 0.2848,
           "bias": -0.0003,
-          "coverage": 0.6667
+          "coverage": 1.0
+        },
+        "calibration": {
+          "method": "rolling_origin_h1_out_of_sample",
+          "n_origins": 25,
+          "sigma_train_eff": 98.17,
+          "sigma_roll_std": 117.816,
+          "sigma_roll_rms": 116.686,
+          "sigma_used": 117.816,
+          "roll_bias": -17.04,
+          "applied": true,
+          "h1_q90_normalized_error": 0.438,
+          "h3_q90_normalized_error": 0.146,
+          "note": "sigma_used=max(in-sample effective sigma, rolling-origin h1 std); the normalized-error diagnostic is not applied; achieved coverage is reported separately from target_service_level=0.90"
         },
         "origins": [
           {
@@ -3064,7 +3689,7 @@
               8.33
             ],
             "p90_1": 250.93,
-            "p90_3": 445.2,
+            "p90_3": 619.25,
             "ets": null
           },
           {
@@ -3082,7 +3707,7 @@
               11.0
             ],
             "p90_1": 251.4,
-            "p90_3": 449.39,
+            "p90_3": 621.86,
             "ets": null
           },
           {
@@ -3100,7 +3725,7 @@
               8.0
             ],
             "p90_1": 246.2,
-            "p90_3": 436.57,
+            "p90_3": 607.47,
             "ets": null
           },
           {
@@ -3118,7 +3743,7 @@
               336.0
             ],
             "p90_1": 127.65,
-            "p90_3": 606.71,
+            "p90_3": 693.98,
             "ets": {
               "f": [
                 6.72,
@@ -3126,7 +3751,7 @@
                 183.06
               ],
               "p90_1": 76.53,
-              "p90_3": 342.32
+              "p90_3": 392.41
             }
           },
           {
@@ -3144,7 +3769,7 @@
               368.0
             ],
             "p90_1": 170.74,
-            "p90_3": 960.2,
+            "p90_3": 1043.95,
             "ets": {
               "f": [
                 38.12,
@@ -3152,7 +3777,7 @@
                 322.86
               ],
               "p90_1": 105.8,
-              "p90_3": 668.3
+              "p90_3": 716.86
             }
           },
           {
@@ -3170,7 +3795,7 @@
               27.0
             ],
             "p90_1": 449.28,
-            "p90_3": 927.21,
+            "p90_3": 1008.49,
             "ets": {
               "f": [
                 231.05,
@@ -3178,7 +3803,7 @@
                 60.24
               ],
               "p90_1": 299.52,
-              "p90_3": 773.77
+              "p90_3": 822.89
             }
           }
         ],
@@ -3194,7 +3819,7 @@
             "2026-06+1..+3"
           ]
         },
-        "rule": "last 6 origins with known h=3; zero-actual cells excluded; residual sigma from training only; no future data in fit"
+        "rule": "last 6 origins with known h=3; zero-actual cells retained; residual sigma from training only; no future data in fit"
       },
       "inventory": {
         "as_of": "2026-10-22",
@@ -3394,12 +4019,16 @@
       "open_so": {
         "reconciled_open": 127,
         "dead": 110,
-        "live_open": 17,
+        "live_open": 80,
+        "live_open_net": 17,
+        "positive_open": 80,
+        "negative_over_delivery": -63,
         "in_progress": 80,
         "no_plan": 0,
         "over_delivered": -63,
         "voided": 0,
         "bucket_check": 0.0,
+        "live_lines": 15,
         "dead_so": [
           {
             "so": "SO-26-00098",
@@ -3434,15 +4063,20 @@
       },
       "supply": {
         "available": 6,
+        "intransit": 120,
         "open_po_raw": 240,
         "open_po_dedup": 120,
-        "independent_intransit": 0,
         "production_gross": 35,
         "production_remaining": 35,
-        "production_not_in_po": 0,
-        "scenario_A": 41,
-        "scenario_B": 126,
-        "scenario_B_raw_po": 246,
+        "A_low": 6,
+        "A_high": 41,
+        "B_min": 246,
+        "B_max": 401,
+        "B_min_po_dedup": 126,
+        "B_max_po_dedup": 281,
+        "B_mid_intransit_in_po": 246,
+        "intransit_equals_po_dedup": true,
+        "overlap_status": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
         "independent_intransit_by_warehouse": {
           "WayfairCG-Cranbury仓": 0,
           "美东-CENTRADE": 0,
@@ -3452,43 +4086,179 @@
       },
       "demand": {
         "forecast_p50_3m": 34,
-        "forecast_p90_3m": 251.9,
-        "open_so_live": 17,
-        "total_p50": 51,
-        "total_p90": 268.9,
-        "dead_so_excluded": 110
+        "forecast_p90_3m": 403.8,
+        "remaining_3m": {
+          "days": 71,
+          "months": 2.333,
+          "forecast_p50": 24.5,
+          "forecast_p90": 365.6,
+          "open_so": 80.0,
+          "p50": 104.5,
+          "p90": 445.6,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 14.0,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 3.0,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 1.0,
+              "p50": 17.0,
+              "h": 3
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
+        },
+        "open_so_live": 80,
+        "total_p50": 114,
+        "total_p90": 483.8,
+        "dead_so_excluded": 110,
+        "over_delivery_not_netted": -63
       },
       "lead_time": {
         "L60": {
           "days": 60,
           "months": 1.971,
-          "p50": 39.3,
-          "p90": 216.0
+          "forecast_p50": 18.5,
+          "forecast_p90": 294.9,
+          "open_so": 80.0,
+          "p50": 98.5,
+          "p90": 374.9,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 14.0,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 3.0,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 0.6452,
+              "p50": 17.0,
+              "h": 3
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
         },
         "L90": {
           "days": 90,
           "months": 2.957,
-          "p50": 50.5,
-          "p90": 266.8
+          "forecast_p50": 31.5,
+          "forecast_p90": 419.6,
+          "open_so": 80.0,
+          "p50": 111.5,
+          "p90": 499.6,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 14.0,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 3.0,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 1.0,
+              "p50": 17.0,
+              "h": 3
+            },
+            {
+              "month": "2027-01",
+              "weight": 0.6129,
+              "p50": 11.33,
+              "h": 4
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
         },
         "L120": {
           "days": 120,
           "months": 3.943,
-          "p50": 61.7,
-          "p90": 311.5
+          "forecast_p50": 43.1,
+          "forecast_p90": 547.8,
+          "open_so": 80.0,
+          "p50": 123.1,
+          "p90": 627.8,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 14.0,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 3.0,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 1.0,
+              "p50": 17.0,
+              "h": 3
+            },
+            {
+              "month": "2027-01",
+              "weight": 1.0,
+              "p50": 11.33,
+              "h": 4
+            },
+            {
+              "month": "2027-02",
+              "weight": 0.6429,
+              "p50": 11.33,
+              "h": 5
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
         }
       },
       "recommendation": {
         "values": {
-          "A_L60": 225.8,
-          "B_L60": 140.8,
-          "AVAIL_L60": 260.8,
-          "A_L90": 270.5,
-          "B_L90": 185.5,
-          "AVAIL_L90": 305.5,
-          "A_L120": 311.1,
-          "B_L120": 226.1,
-          "AVAIL_L120": 346.1
+          "A_L60_lo": 458.6,
+          "A_L60_hi": 493.6,
+          "B_L60_lo": 98.6,
+          "B_L60_hi": 253.6,
+          "B_mid_L60": 253.6,
+          "B_po_dedup_L60_lo": 218.6,
+          "B_po_dedup_L60_hi": 373.6,
+          "AVAIL_L60": 493.6,
+          "A_L90_lo": 586.8,
+          "A_L90_hi": 621.8,
+          "B_L90_lo": 226.8,
+          "B_L90_hi": 381.8,
+          "B_mid_L90": 381.8,
+          "B_po_dedup_L90_lo": 346.8,
+          "B_po_dedup_L90_hi": 501.8,
+          "AVAIL_L90": 621.8,
+          "A_L120_lo": 708.7,
+          "A_L120_hi": 743.7,
+          "B_L120_lo": 348.7,
+          "B_L120_hi": 503.7,
+          "B_mid_L120": 503.7,
+          "B_po_dedup_L120_lo": 468.7,
+          "B_po_dedup_L120_hi": 623.7,
+          "AVAIL_L120": 743.7
         },
         "note": "unrounded; no MOQ/pack multiple; not an order quantity"
       },
@@ -3794,12 +4564,33 @@
           }
         ],
         "p50_3m": 302,
-        "p90_3m": 427.7,
-        "sigma": 56.65,
+        "p90_3m": 479.8,
+        "sigma_train": 56.65,
         "q90": 72.6,
+        "sigma_roll": 47.92,
+        "sigma_roll_rms": 49.064,
+        "sigma_used": 56.65,
+        "roll_bias": 14.24,
         "z_sig": 72.6,
+        "calibration": {
+          "method": "rolling_origin_h1_out_of_sample",
+          "n_origins": 25,
+          "sigma_train_eff": 56.65,
+          "sigma_roll_std": 47.92,
+          "sigma_roll_rms": 49.064,
+          "sigma_used": 56.65,
+          "roll_bias": 14.24,
+          "applied": true,
+          "h1_q90_normalized_error": 1.21,
+          "h3_q90_normalized_error": 1.216,
+          "note": "sigma_used=max(in-sample effective sigma, rolling-origin h1 std); the normalized-error diagnostic is not applied; achieved coverage is reported separately from target_service_level=0.90"
+        },
+        "p90_status": "estimate_coverage_below_target",
         "recent3_mean": 90.3,
         "run_rate_ratio": 1.114,
+        "target_service_level": 0.9,
+        "achieved_coverage_h1": 0.8333,
+        "achieved_coverage_h3": 0.6667,
         "ets_candidate": {
           "available": true,
           "alpha": 0.1,
@@ -3821,31 +4612,44 @@
       "backtest": {
         "h1": {
           "n": 6,
-          "zero_excluded": 0,
+          "zero_actual_cells": 0,
           "wape": 0.4344,
           "bias": -0.1837,
           "coverage": 0.8333
         },
         "h3": {
           "n": 6,
-          "zero_excluded": 0,
+          "zero_actual_cells": 0,
           "wape": 0.3609,
           "bias": -0.1497,
           "coverage": 0.6667
         },
         "ets_h1": {
           "n": 3,
-          "zero_excluded": 0,
+          "zero_actual_cells": 0,
           "wape": 0.3428,
           "bias": -0.3428,
           "coverage": 0.0
         },
         "ets_h3": {
           "n": 3,
-          "zero_excluded": 0,
+          "zero_actual_cells": 0,
           "wape": 0.235,
           "bias": -0.2123,
           "coverage": 0.3333
+        },
+        "calibration": {
+          "method": "rolling_origin_h1_out_of_sample",
+          "n_origins": 25,
+          "sigma_train_eff": 56.65,
+          "sigma_roll_std": 47.92,
+          "sigma_roll_rms": 49.064,
+          "sigma_used": 56.65,
+          "roll_bias": 14.24,
+          "applied": true,
+          "h1_q90_normalized_error": 1.21,
+          "h3_q90_normalized_error": 1.216,
+          "note": "sigma_used=max(in-sample effective sigma, rolling-origin h1 std); the normalized-error diagnostic is not applied; achieved coverage is reported separately from target_service_level=0.90"
         },
         "origins": [
           {
@@ -3863,7 +4667,7 @@
               128.0
             ],
             "p90_1": 202.53,
-            "p90_3": 513.1,
+            "p90_3": 566.57,
             "ets": null
           },
           {
@@ -3881,7 +4685,7 @@
               147.0
             ],
             "p90_1": 217.13,
-            "p90_3": 562.47,
+            "p90_3": 612.79,
             "ets": null
           },
           {
@@ -3899,7 +4703,7 @@
               123.0
             ],
             "p90_1": 188.73,
-            "p90_3": 482.85,
+            "p90_3": 530.01,
             "ets": null
           },
           {
@@ -3917,7 +4721,7 @@
               54.0
             ],
             "p90_1": 130.1,
-            "p90_3": 279.95,
+            "p90_3": 328.81,
             "ets": {
               "f": [
                 78.91,
@@ -3925,7 +4729,7 @@
                 82.45
               ],
               "p90_1": 101.57,
-              "p90_3": 275.59
+              "p90_3": 291.85
             }
           },
           {
@@ -3943,7 +4747,7 @@
               48.0
             ],
             "p90_1": 113.2,
-            "p90_3": 264.39,
+            "p90_3": 312.61,
             "ets": {
               "f": [
                 76.48,
@@ -3951,7 +4755,7 @@
                 95.99
               ],
               "p90_1": 97.62,
-              "p90_3": 293.23
+              "p90_3": 308.39
             }
           },
           {
@@ -3969,7 +4773,7 @@
               69.0
             ],
             "p90_1": 129.3,
-            "p90_3": 301.42,
+            "p90_3": 355.45,
             "ets": {
               "f": [
                 90.39,
@@ -3977,7 +4781,7 @@
                 88.88
               ],
               "p90_1": 117.83,
-              "p90_3": 329.67
+              "p90_3": 349.36
             }
           }
         ],
@@ -3993,7 +4797,7 @@
             "2026-06+1..+3"
           ]
         },
-        "rule": "last 6 origins with known h=3; zero-actual cells excluded; residual sigma from training only; no future data in fit"
+        "rule": "last 6 origins with known h=3; zero-actual cells retained; residual sigma from training only; no future data in fit"
       },
       "inventory": {
         "as_of": "2026-10-22",
@@ -4231,12 +5035,16 @@
       "open_so": {
         "reconciled_open": 1073,
         "dead": 500,
-        "live_open": 573,
+        "live_open": 637,
+        "live_open_net": 573,
+        "positive_open": 637,
+        "negative_over_delivery": -64,
         "in_progress": 636,
         "no_plan": 1,
         "over_delivered": -64,
         "voided": 20,
         "bucket_check": 0.0,
+        "live_lines": 25,
         "dead_so": [
           {
             "so": "SO-24-00036",
@@ -4292,15 +5100,20 @@
       },
       "supply": {
         "available": 376,
+        "intransit": 215,
         "open_po_raw": 223,
         "open_po_dedup": 215,
-        "independent_intransit": 0,
         "production_gross": 620,
         "production_remaining": 612,
-        "production_not_in_po": 397,
-        "scenario_A": 988,
-        "scenario_B": 988,
-        "scenario_B_raw_po": 988,
+        "A_low": 376,
+        "A_high": 988,
+        "B_min": 988,
+        "B_max": 1426,
+        "B_min_po_dedup": 988,
+        "B_max_po_dedup": 1418,
+        "B_mid_intransit_in_po": 988,
+        "intransit_equals_po_dedup": true,
+        "overlap_status": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
         "independent_intransit_by_warehouse": {
           "WayfairCG-Cranbury仓": 0,
           "美东-CENTRADE": 0,
@@ -4310,43 +5123,179 @@
       },
       "demand": {
         "forecast_p50_3m": 302,
-        "forecast_p90_3m": 427.7,
-        "open_so_live": 573,
-        "total_p50": 875,
-        "total_p90": 1000.7,
-        "dead_so_excluded": 500
+        "forecast_p90_3m": 479.8,
+        "remaining_3m": {
+          "days": 71,
+          "months": 2.333,
+          "forecast_p50": 247.8,
+          "forecast_p90": 411.8,
+          "open_so": 637.0,
+          "p50": 884.8,
+          "p90": 1048.8,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 80.0,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 41.0,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 1.0,
+              "p50": 181.0,
+              "h": 3
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
+        },
+        "open_so_live": 637,
+        "total_p50": 939,
+        "total_p90": 1116.8,
+        "dead_so_excluded": 500,
+        "over_delivery_not_netted": -64
       },
       "lead_time": {
         "L60": {
           "days": 60,
           "months": 1.971,
-          "p50": 771.4,
-          "p90": 873.4
+          "forecast_p50": 183.6,
+          "forecast_p90": 316.5,
+          "open_so": 637.0,
+          "p50": 820.6,
+          "p90": 953.5,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 80.0,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 41.0,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 0.6452,
+              "p50": 181.0,
+              "h": 3
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
         },
         "L90": {
           "days": 90,
           "months": 2.957,
-          "p50": 870.7,
-          "p90": 995.5
+          "forecast_p50": 309.5,
+          "forecast_p90": 496.1,
+          "open_so": 637.0,
+          "p50": 946.5,
+          "p90": 1133.1,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 80.0,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 41.0,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 1.0,
+              "p50": 181.0,
+              "h": 3
+            },
+            {
+              "month": "2027-01",
+              "weight": 0.6129,
+              "p50": 100.67,
+              "h": 4
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
         },
         "L120": {
           "days": 120,
           "months": 3.943,
-          "p50": 969.9,
-          "p90": 1114.0
+          "forecast_p50": 413.2,
+          "forecast_p90": 655.8,
+          "open_so": 637.0,
+          "p50": 1050.2,
+          "p90": 1292.8,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 80.0,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 41.0,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 1.0,
+              "p50": 181.0,
+              "h": 3
+            },
+            {
+              "month": "2027-01",
+              "weight": 1.0,
+              "p50": 100.67,
+              "h": 4
+            },
+            {
+              "month": "2027-02",
+              "weight": 0.6429,
+              "p50": 100.67,
+              "h": 5
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
         }
       },
       "recommendation": {
         "values": {
-          "A_L60": 7.5,
-          "B_L60": 7.5,
-          "AVAIL_L60": 619.5,
-          "A_L90": 126.0,
-          "B_L90": 126.0,
-          "AVAIL_L90": 738.0,
-          "A_L120": 242.3,
-          "B_L120": 242.3,
-          "AVAIL_L120": 854.3
+          "A_L60_lo": 145.1,
+          "A_L60_hi": 757.1,
+          "B_L60_lo": 0.0,
+          "B_L60_hi": 145.1,
+          "B_mid_L60": 145.1,
+          "B_po_dedup_L60_lo": 0.0,
+          "B_po_dedup_L60_hi": 145.1,
+          "AVAIL_L60": 757.1,
+          "A_L90_lo": 304.8,
+          "A_L90_hi": 916.8,
+          "B_L90_lo": 0.0,
+          "B_L90_hi": 304.8,
+          "B_mid_L90": 304.8,
+          "B_po_dedup_L90_lo": 0.0,
+          "B_po_dedup_L90_hi": 304.8,
+          "AVAIL_L90": 916.8,
+          "A_L120_lo": 458.9,
+          "A_L120_hi": 1070.9,
+          "B_L120_lo": 20.9,
+          "B_L120_hi": 458.9,
+          "B_mid_L120": 458.9,
+          "B_po_dedup_L120_lo": 28.9,
+          "B_po_dedup_L120_hi": 458.9,
+          "AVAIL_L120": 1070.9
         },
         "note": "unrounded; no MOQ/pack multiple; not an order quantity"
       },
@@ -4634,12 +5583,33 @@
           }
         ],
         "p50_3m": 56,
-        "p90_3m": 206.3,
-        "sigma": 67.704,
+        "p90_3m": 268.5,
+        "sigma_train": 67.704,
         "q90": 61.2,
+        "sigma_roll": 59.789,
+        "sigma_roll_rms": 59.73,
+        "sigma_used": 67.704,
+        "roll_bias": 12.47,
         "z_sig": 86.766,
+        "calibration": {
+          "method": "rolling_origin_h1_out_of_sample",
+          "n_origins": 22,
+          "sigma_train_eff": 67.704,
+          "sigma_roll_std": 59.789,
+          "sigma_roll_rms": 59.73,
+          "sigma_used": 67.704,
+          "roll_bias": 12.47,
+          "applied": true,
+          "h1_q90_normalized_error": 0.947,
+          "h3_q90_normalized_error": 1.536,
+          "note": "sigma_used=max(in-sample effective sigma, rolling-origin h1 std); the normalized-error diagnostic is not applied; achieved coverage is reported separately from target_service_level=0.90"
+        },
+        "p90_status": "estimate_coverage_below_target",
         "recent3_mean": 123,
         "run_rate_ratio": 0.152,
+        "target_service_level": 0.9,
+        "achieved_coverage_h1": 0.8333,
+        "achieved_coverage_h3": 0.6667,
         "ets_candidate": {
           "available": true,
           "alpha": 0.1,
@@ -4661,20 +5631,33 @@
       "backtest": {
         "h1": {
           "n": 6,
-          "zero_excluded": 0,
+          "zero_actual_cells": 0,
           "wape": 0.6494,
           "bias": -0.457,
           "coverage": 0.8333
         },
         "h3": {
           "n": 6,
-          "zero_excluded": 0,
+          "zero_actual_cells": 0,
           "wape": 0.6828,
           "bias": -0.6239,
-          "coverage": 0.3333
+          "coverage": 0.6667
         },
         "ets_h1": null,
         "ets_h3": null,
+        "calibration": {
+          "method": "rolling_origin_h1_out_of_sample",
+          "n_origins": 22,
+          "sigma_train_eff": 67.704,
+          "sigma_roll_std": 59.789,
+          "sigma_roll_rms": 59.73,
+          "sigma_used": 67.704,
+          "roll_bias": 12.47,
+          "applied": true,
+          "h1_q90_normalized_error": 0.947,
+          "h3_q90_normalized_error": 1.536,
+          "note": "sigma_used=max(in-sample effective sigma, rolling-origin h1 std); the normalized-error diagnostic is not applied; achieved coverage is reported separately from target_service_level=0.90"
+        },
         "origins": [
           {
             "origin": "2026-01",
@@ -4691,7 +5674,7 @@
               27.33
             ],
             "p90_1": 115.19,
-            "p90_3": 234.16,
+            "p90_3": 297.19,
             "ets": null
           },
           {
@@ -4709,7 +5692,7 @@
               23.33
             ],
             "p90_1": 108.35,
-            "p90_3": 217.26,
+            "p90_3": 278.25,
             "ets": null
           },
           {
@@ -4727,7 +5710,7 @@
               16.0
             ],
             "p90_1": 98.33,
-            "p90_3": 190.59,
+            "p90_3": 249.66,
             "ets": null
           },
           {
@@ -4745,7 +5728,7 @@
               13.33
             ],
             "p90_1": 93.28,
-            "p90_3": 178.48,
+            "p90_3": 235.84,
             "ets": null
           },
           {
@@ -4763,7 +5746,7 @@
               28.0
             ],
             "p90_1": 106.72,
-            "p90_3": 220.35,
+            "p90_3": 276.82,
             "ets": null
           },
           {
@@ -4781,7 +5764,7 @@
               70.67
             ],
             "p90_1": 154.31,
-            "p90_3": 356.87,
+            "p90_3": 416.88,
             "ets": null
           }
         ],
@@ -4797,7 +5780,7 @@
             "2026-06+1..+3"
           ]
         },
-        "rule": "last 6 origins with known h=3; zero-actual cells excluded; residual sigma from training only; no future data in fit"
+        "rule": "last 6 origins with known h=3; zero-actual cells retained; residual sigma from training only; no future data in fit"
       },
       "inventory": {
         "as_of": "2026-10-22",
@@ -4935,12 +5918,16 @@
       "open_so": {
         "reconciled_open": 101,
         "dead": 51,
-        "live_open": 50,
+        "live_open": 95,
+        "live_open_net": 50,
+        "positive_open": 95,
+        "negative_over_delivery": -45,
         "in_progress": 95,
         "no_plan": 0,
         "over_delivered": -45,
         "voided": 0,
         "bucket_check": 0.0,
+        "live_lines": 13,
         "dead_so": [
           {
             "so": "SO-25-00021",
@@ -4987,15 +5974,20 @@
       },
       "supply": {
         "available": 52,
+        "intransit": 0,
         "open_po_raw": 0,
         "open_po_dedup": 0,
-        "independent_intransit": 0,
         "production_gross": 70,
         "production_remaining": 52,
-        "production_not_in_po": 52,
-        "scenario_A": 104,
-        "scenario_B": 104,
-        "scenario_B_raw_po": 104,
+        "A_low": 52,
+        "A_high": 104,
+        "B_min": 104,
+        "B_max": 104,
+        "B_min_po_dedup": 104,
+        "B_max_po_dedup": 104,
+        "B_mid_intransit_in_po": 104,
+        "intransit_equals_po_dedup": true,
+        "overlap_status": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
         "independent_intransit_by_warehouse": {
           "WayfairCG-Cranbury仓": 0,
           "美东-CENTRADE": 0,
@@ -5004,43 +5996,179 @@
       },
       "demand": {
         "forecast_p50_3m": 56,
-        "forecast_p90_3m": 206.3,
-        "open_so_live": 50,
-        "total_p50": 106,
-        "total_p90": 256.3,
-        "dead_so_excluded": 51
+        "forecast_p90_3m": 268.5,
+        "remaining_3m": {
+          "days": 71,
+          "months": 2.333,
+          "forecast_p50": 54.0,
+          "forecast_p90": 250.0,
+          "open_so": 95.0,
+          "p50": 149.0,
+          "p90": 345.0,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 3.0,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 18.0,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 1.0,
+              "p50": 35.0,
+              "h": 3
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
+        },
+        "open_so_live": 95,
+        "total_p50": 151,
+        "total_p90": 363.5,
+        "dead_so_excluded": 51,
+        "over_delivery_not_netted": -45
       },
       "lead_time": {
         "L60": {
           "days": 60,
           "months": 1.971,
-          "p50": 86.8,
-          "p90": 208.6
+          "forecast_p50": 41.5,
+          "forecast_p90": 200.4,
+          "open_so": 95.0,
+          "p50": 136.5,
+          "p90": 295.4,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 3.0,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 18.0,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 0.6452,
+              "p50": 35.0,
+              "h": 3
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
         },
         "L90": {
           "days": 90,
           "months": 2.957,
-          "p50": 105.2,
-          "p90": 254.4
+          "forecast_p50": 65.4,
+          "forecast_p90": 288.4,
+          "open_so": 95.0,
+          "p50": 160.4,
+          "p90": 383.4,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 3.0,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 18.0,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 1.0,
+              "p50": 35.0,
+              "h": 3
+            },
+            {
+              "month": "2027-01",
+              "weight": 0.6129,
+              "p50": 18.67,
+              "h": 4
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
         },
         "L120": {
           "days": 120,
           "months": 3.943,
-          "p50": 123.6,
-          "p90": 295.9
+          "forecast_p50": 84.6,
+          "forecast_p90": 374.6,
+          "open_so": 95.0,
+          "p50": 179.6,
+          "p90": 469.6,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 3.0,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 18.0,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 1.0,
+              "p50": 35.0,
+              "h": 3
+            },
+            {
+              "month": "2027-01",
+              "weight": 1.0,
+              "p50": 18.67,
+              "h": 4
+            },
+            {
+              "month": "2027-02",
+              "weight": 0.6429,
+              "p50": 18.67,
+              "h": 5
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
         }
       },
       "recommendation": {
         "values": {
-          "A_L60": 150.4,
-          "B_L60": 150.4,
-          "AVAIL_L60": 202.4,
-          "A_L90": 191.9,
-          "B_L90": 191.9,
-          "AVAIL_L90": 243.9,
-          "A_L120": 230.6,
-          "B_L120": 230.6,
-          "AVAIL_L120": 282.6
+          "A_L60_lo": 279.4,
+          "A_L60_hi": 331.4,
+          "B_L60_lo": 279.4,
+          "B_L60_hi": 279.4,
+          "B_mid_L60": 279.4,
+          "B_po_dedup_L60_lo": 279.4,
+          "B_po_dedup_L60_hi": 279.4,
+          "AVAIL_L60": 331.4,
+          "A_L90_lo": 365.6,
+          "A_L90_hi": 417.6,
+          "B_L90_lo": 365.6,
+          "B_L90_hi": 365.6,
+          "B_mid_L90": 365.6,
+          "B_po_dedup_L90_lo": 365.6,
+          "B_po_dedup_L90_hi": 365.6,
+          "AVAIL_L90": 417.6,
+          "A_L120_lo": 447.9,
+          "A_L120_hi": 499.9,
+          "B_L120_lo": 447.9,
+          "B_L120_hi": 447.9,
+          "B_mid_L120": 447.9,
+          "B_po_dedup_L120_lo": 447.9,
+          "B_po_dedup_L120_hi": 447.9,
+          "AVAIL_L120": 499.9
         },
         "note": "unrounded; no MOQ/pack multiple; not an order quantity"
       },
@@ -5325,12 +6453,33 @@
           }
         ],
         "p50_3m": 67,
-        "p90_3m": 475.4,
-        "sigma": 183.996,
+        "p90_3m": 644.6,
+        "sigma_train": 183.996,
         "q90": 235.8,
+        "sigma_roll": 119.298,
+        "sigma_roll_rms": 116.809,
+        "sigma_used": 183.996,
+        "roll_bias": -5.58,
         "z_sig": 235.8,
+        "calibration": {
+          "method": "rolling_origin_h1_out_of_sample",
+          "n_origins": 23,
+          "sigma_train_eff": 183.996,
+          "sigma_roll_std": 119.298,
+          "sigma_roll_rms": 116.809,
+          "sigma_used": 183.996,
+          "roll_bias": -5.58,
+          "applied": true,
+          "h1_q90_normalized_error": 0.683,
+          "h3_q90_normalized_error": 1.374,
+          "note": "sigma_used=max(in-sample effective sigma, rolling-origin h1 std); the normalized-error diagnostic is not applied; achieved coverage is reported separately from target_service_level=0.90"
+        },
+        "p90_status": "estimate_coverage_below_target",
         "recent3_mean": 112,
         "run_rate_ratio": 0.199,
+        "target_service_level": 0.9,
+        "achieved_coverage_h1": 0.8333,
+        "achieved_coverage_h3": 0.6667,
         "ets_candidate": {
           "available": true,
           "alpha": 0.3,
@@ -5352,31 +6501,44 @@
       "backtest": {
         "h1": {
           "n": 6,
-          "zero_excluded": 0,
+          "zero_actual_cells": 0,
           "wape": 0.351,
           "bias": -0.276,
           "coverage": 0.8333
         },
         "h3": {
           "n": 6,
-          "zero_excluded": 0,
+          "zero_actual_cells": 0,
           "wape": 0.8152,
           "bias": -0.4368,
           "coverage": 0.6667
         },
         "ets_h1": {
           "n": 1,
-          "zero_excluded": 0,
+          "zero_actual_cells": 0,
           "wape": 0.2298,
           "bias": -0.2298,
           "coverage": 1.0
         },
         "ets_h3": {
           "n": 1,
-          "zero_excluded": 0,
+          "zero_actual_cells": 0,
           "wape": 0.7887,
           "bias": 0.7887,
           "coverage": 1.0
+        },
+        "calibration": {
+          "method": "rolling_origin_h1_out_of_sample",
+          "n_origins": 23,
+          "sigma_train_eff": 183.996,
+          "sigma_roll_std": 119.298,
+          "sigma_roll_rms": 116.809,
+          "sigma_used": 183.996,
+          "roll_bias": -5.58,
+          "applied": true,
+          "h1_q90_normalized_error": 0.683,
+          "h3_q90_normalized_error": 1.374,
+          "note": "sigma_used=max(in-sample effective sigma, rolling-origin h1 std); the normalized-error diagnostic is not applied; achieved coverage is reported separately from target_service_level=0.90"
         },
         "origins": [
           {
@@ -5394,7 +6556,7 @@
               19.67
             ],
             "p90_1": 169.01,
-            "p90_3": 317.67,
+            "p90_3": 424.82,
             "ets": null
           },
           {
@@ -5412,7 +6574,7 @@
               20.33
             ],
             "p90_1": 164.95,
-            "p90_3": 311.49,
+            "p90_3": 415.25,
             "ets": null
           },
           {
@@ -5430,7 +6592,7 @@
               20.67
             ],
             "p90_1": 160.98,
-            "p90_3": 305.03,
+            "p90_3": 405.7,
             "ets": null
           },
           {
@@ -5448,7 +6610,7 @@
               25.0
             ],
             "p90_1": 161.4,
-            "p90_3": 311.25,
+            "p90_3": 409.1,
             "ets": null
           },
           {
@@ -5466,7 +6628,7 @@
               26.33
             ],
             "p90_1": 159.12,
-            "p90_3": 308.99,
+            "p90_3": 404.26,
             "ets": null
           },
           {
@@ -5484,7 +6646,7 @@
               52.0
             ],
             "p90_1": 601.7,
-            "p90_3": 1153.53,
+            "p90_3": 1351.32,
             "ets": {
               "f": [
                 243.39,
@@ -5492,7 +6654,7 @@
                 119.32
               ],
               "p90_1": 331.08,
-              "p90_3": 752.91
+              "p90_3": 815.82
             }
           }
         ],
@@ -5508,7 +6670,7 @@
             "2026-06+1..+3"
           ]
         },
-        "rule": "last 6 origins with known h=3; zero-actual cells excluded; residual sigma from training only; no future data in fit"
+        "rule": "last 6 origins with known h=3; zero-actual cells retained; residual sigma from training only; no future data in fit"
       },
       "inventory": {
         "as_of": "2026-10-22",
@@ -5692,12 +6854,16 @@
       "open_so": {
         "reconciled_open": 166,
         "dead": 150,
-        "live_open": 16,
+        "live_open": 125,
+        "live_open_net": 16,
+        "positive_open": 125,
+        "negative_over_delivery": -109,
         "in_progress": 125,
         "no_plan": 0,
         "over_delivered": -109,
         "voided": 0,
         "bucket_check": 0.0,
+        "live_lines": 17,
         "dead_so": [
           {
             "so": "SO-26-00098",
@@ -5740,15 +6906,20 @@
       },
       "supply": {
         "available": 6,
+        "intransit": 165,
         "open_po_raw": 318,
         "open_po_dedup": 165,
-        "independent_intransit": 0,
         "production_gross": 40,
         "production_remaining": 28,
-        "production_not_in_po": 0,
-        "scenario_A": 34,
-        "scenario_B": 171,
-        "scenario_B_raw_po": 324,
+        "A_low": 6,
+        "A_high": 34,
+        "B_min": 324,
+        "B_max": 517,
+        "B_min_po_dedup": 171,
+        "B_max_po_dedup": 364,
+        "B_mid_intransit_in_po": 324,
+        "intransit_equals_po_dedup": true,
+        "overlap_status": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
         "independent_intransit_by_warehouse": {
           "WayfairCG-Cranbury仓": 0,
           "美东-CENTRADE": 0,
@@ -5757,43 +6928,179 @@
       },
       "demand": {
         "forecast_p50_3m": 67,
-        "forecast_p90_3m": 475.4,
-        "open_so_live": 16,
-        "total_p50": 83,
-        "total_p90": 491.4,
-        "dead_so_excluded": 150
+        "forecast_p90_3m": 644.6,
+        "remaining_3m": {
+          "days": 71,
+          "months": 2.333,
+          "forecast_p50": 48.0,
+          "forecast_p90": 580.8,
+          "open_so": 125.0,
+          "p50": 173.0,
+          "p90": 705.8,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 28.0,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 12.0,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 1.0,
+              "p50": 27.0,
+              "h": 3
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
+        },
+        "open_so_live": 125,
+        "total_p50": 192,
+        "total_p90": 769.6,
+        "dead_so_excluded": 150,
+        "over_delivery_not_netted": -109
       },
       "lead_time": {
         "L60": {
           "days": 60,
           "months": 1.971,
-          "p50": 60.0,
-          "p90": 391.1
+          "forecast_p50": 38.5,
+          "forecast_p90": 470.2,
+          "open_so": 125.0,
+          "p50": 163.5,
+          "p90": 595.2,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 28.0,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 12.0,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 0.6452,
+              "p50": 27.0,
+              "h": 3
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
         },
         "L90": {
           "days": 90,
           "months": 2.957,
-          "p50": 82.0,
-          "p90": 487.5
+          "forecast_p50": 61.7,
+          "forecast_p90": 667.8,
+          "open_so": 125.0,
+          "p50": 186.7,
+          "p90": 792.8,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 28.0,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 12.0,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 1.0,
+              "p50": 27.0,
+              "h": 3
+            },
+            {
+              "month": "2027-01",
+              "weight": 0.6129,
+              "p50": 22.33,
+              "h": 4
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
         },
         "L120": {
           "days": 120,
           "months": 3.943,
-          "p50": 104.0,
-          "p90": 572.2
+          "forecast_p50": 84.7,
+          "forecast_p90": 872.8,
+          "open_so": 125.0,
+          "p50": 209.7,
+          "p90": 997.8,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 28.0,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 12.0,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 1.0,
+              "p50": 27.0,
+              "h": 3
+            },
+            {
+              "month": "2027-01",
+              "weight": 1.0,
+              "p50": 22.33,
+              "h": 4
+            },
+            {
+              "month": "2027-02",
+              "weight": 0.6429,
+              "p50": 22.33,
+              "h": 5
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
         }
       },
       "recommendation": {
         "values": {
-          "A_L60": 453.5,
-          "B_L60": 316.5,
-          "AVAIL_L60": 481.5,
-          "A_L90": 538.2,
-          "B_L90": 401.2,
-          "AVAIL_L90": 566.2,
-          "A_L120": 615.5,
-          "B_L120": 478.5,
-          "AVAIL_L120": 643.5
+          "A_L60_lo": 758.8,
+          "A_L60_hi": 786.8,
+          "B_L60_lo": 275.8,
+          "B_L60_hi": 468.8,
+          "B_mid_L60": 468.8,
+          "B_po_dedup_L60_lo": 428.8,
+          "B_po_dedup_L60_hi": 621.8,
+          "AVAIL_L60": 786.8,
+          "A_L90_lo": 963.8,
+          "A_L90_hi": 991.8,
+          "B_L90_lo": 480.8,
+          "B_L90_hi": 673.8,
+          "B_mid_L90": 673.8,
+          "B_po_dedup_L90_lo": 633.8,
+          "B_po_dedup_L90_hi": 826.8,
+          "AVAIL_L90": 991.8,
+          "A_L120_lo": 1158.9,
+          "A_L120_hi": 1186.9,
+          "B_L120_lo": 675.9,
+          "B_L120_hi": 868.9,
+          "B_mid_L120": 868.9,
+          "B_po_dedup_L120_lo": 828.9,
+          "B_po_dedup_L120_hi": 1021.9,
+          "AVAIL_L120": 1186.9
         },
         "note": "unrounded; no MOQ/pack multiple; not an order quantity"
       },
@@ -6005,12 +7312,33 @@
           }
         ],
         "p50_3m": 323,
-        "p90_3m": 542.4,
-        "sigma": 98.839,
+        "p90_3m": 633.3,
+        "sigma_train": 98.839,
         "q90": 126.667,
+        "sigma_roll": 92.956,
+        "sigma_roll_rms": 90.432,
+        "sigma_used": 98.839,
+        "roll_bias": 20.033,
         "z_sig": 126.667,
+        "calibration": {
+          "method": "rolling_origin_h1_out_of_sample",
+          "n_origins": 10,
+          "sigma_train_eff": 98.839,
+          "sigma_roll_std": 92.956,
+          "sigma_roll_rms": 90.432,
+          "sigma_used": 98.839,
+          "roll_bias": 20.033,
+          "applied": true,
+          "h1_q90_normalized_error": 1.677,
+          "h3_q90_normalized_error": 2.738,
+          "note": "sigma_used=max(in-sample effective sigma, rolling-origin h1 std); the normalized-error diagnostic is not applied; achieved coverage is reported separately from target_service_level=0.90"
+        },
+        "p90_status": "estimate_coverage_below_target",
         "recent3_mean": 107.7,
         "run_rate_ratio": 1.0,
+        "target_service_level": 0.9,
+        "achieved_coverage_h1": 0.8333,
+        "achieved_coverage_h3": 0.5,
         "ets_candidate": {
           "available": false,
           "reason": "history_lt_24m"
@@ -6019,20 +7347,33 @@
       "backtest": {
         "h1": {
           "n": 6,
-          "zero_excluded": 0,
+          "zero_actual_cells": 0,
           "wape": 0.8109,
           "bias": -0.4564,
           "coverage": 0.8333
         },
         "h3": {
           "n": 6,
-          "zero_excluded": 0,
+          "zero_actual_cells": 0,
           "wape": 0.7105,
           "bias": -0.7006,
-          "coverage": 0.3333
+          "coverage": 0.5
         },
         "ets_h1": null,
         "ets_h3": null,
+        "calibration": {
+          "method": "rolling_origin_h1_out_of_sample",
+          "n_origins": 10,
+          "sigma_train_eff": 98.839,
+          "sigma_roll_std": 92.956,
+          "sigma_roll_rms": 90.432,
+          "sigma_used": 98.839,
+          "roll_bias": 20.033,
+          "applied": true,
+          "h1_q90_normalized_error": 1.677,
+          "h3_q90_normalized_error": 2.738,
+          "note": "sigma_used=max(in-sample effective sigma, rolling-origin h1 std); the normalized-error diagnostic is not applied; achieved coverage is reported separately from target_service_level=0.90"
+        },
         "origins": [
           {
             "origin": "2026-01",
@@ -6049,7 +7390,7 @@
               12.0
             ],
             "p90_1": 77.73,
-            "p90_3": 149.85,
+            "p90_3": 197.01,
             "ets": null
           },
           {
@@ -6067,7 +7408,7 @@
               14.0
             ],
             "p90_1": 69.25,
-            "p90_3": 137.69,
+            "p90_3": 177.32,
             "ets": null
           },
           {
@@ -6085,7 +7426,7 @@
               12.67
             ],
             "p90_1": 61.12,
-            "p90_3": 121.92,
+            "p90_3": 156.68,
             "ets": null
           },
           {
@@ -6103,7 +7444,7 @@
               10.0
             ],
             "p90_1": 53.59,
-            "p90_3": 105.5,
+            "p90_3": 136.77,
             "ets": null
           },
           {
@@ -6121,7 +7462,7 @@
               14.33
             ],
             "p90_1": 56.1,
-            "p90_3": 115.33,
+            "p90_3": 145.3,
             "ets": null
           },
           {
@@ -6139,7 +7480,7 @@
               57.67
             ],
             "p90_1": 130.07,
-            "p90_3": 298.4,
+            "p90_3": 350.34,
             "ets": null
           }
         ],
@@ -6155,7 +7496,7 @@
             "2026-06+1..+3"
           ]
         },
-        "rule": "last 6 origins with known h=3; zero-actual cells excluded; residual sigma from training only; no future data in fit"
+        "rule": "last 6 origins with known h=3; zero-actual cells retained; residual sigma from training only; no future data in fit"
       },
       "inventory": {
         "as_of": "2026-10-22",
@@ -6343,12 +7684,16 @@
       "open_so": {
         "reconciled_open": 90,
         "dead": 70,
-        "live_open": 20,
+        "live_open": 26,
+        "live_open_net": 20,
+        "positive_open": 26,
+        "negative_over_delivery": -6,
         "in_progress": 26,
         "no_plan": 0,
         "over_delivered": -6,
         "voided": 50,
         "bucket_check": 0.0,
+        "live_lines": 15,
         "dead_so": [
           {
             "so": "SO-26-00098",
@@ -6379,15 +7724,20 @@
       },
       "supply": {
         "available": 55,
+        "intransit": 73,
         "open_po_raw": 73,
         "open_po_dedup": 73,
-        "independent_intransit": 0,
         "production_gross": 20,
         "production_remaining": 20,
-        "production_not_in_po": 0,
-        "scenario_A": 75,
-        "scenario_B": 128,
-        "scenario_B_raw_po": 128,
+        "A_low": 55,
+        "A_high": 75,
+        "B_min": 128,
+        "B_max": 221,
+        "B_min_po_dedup": 128,
+        "B_max_po_dedup": 221,
+        "B_mid_intransit_in_po": 128,
+        "intransit_equals_po_dedup": true,
+        "overlap_status": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
         "independent_intransit_by_warehouse": {
           "WayfairCG-Cranbury仓": 0,
           "美东-CENTRADE": 0,
@@ -6397,43 +7747,179 @@
       },
       "demand": {
         "forecast_p50_3m": 323,
-        "forecast_p90_3m": 542.4,
-        "open_so_live": 20,
-        "total_p50": 343,
-        "total_p90": 562.4,
-        "dead_so_excluded": 70
+        "forecast_p90_3m": 633.3,
+        "remaining_3m": {
+          "days": 71,
+          "months": 2.333,
+          "forecast_p50": 250.1,
+          "forecast_p90": 536.2,
+          "open_so": 26.0,
+          "p50": 276.1,
+          "p90": 562.2,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 107.67,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 107.67,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 1.0,
+              "p50": 107.67,
+              "h": 3
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
+        },
+        "open_so_live": 26,
+        "total_p50": 349,
+        "total_p90": 659.3,
+        "dead_so_excluded": 70,
+        "over_delivery_not_netted": -6
       },
       "lead_time": {
         "L60": {
           "days": 60,
           "months": 1.971,
-          "p50": 232.2,
-          "p90": 410.1
+          "forecast_p50": 211.9,
+          "forecast_p90": 443.8,
+          "open_so": 26.0,
+          "p50": 237.9,
+          "p90": 469.8,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 107.67,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 107.67,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 0.6452,
+              "p50": 107.67,
+              "h": 3
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
         },
         "L90": {
           "days": 90,
           "months": 2.957,
-          "p50": 338.4,
-          "p90": 556.2
+          "forecast_p50": 316.1,
+          "forecast_p90": 641.6,
+          "open_so": 26.0,
+          "p50": 342.1,
+          "p90": 667.6,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 107.67,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 107.67,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 1.0,
+              "p50": 107.67,
+              "h": 3
+            },
+            {
+              "month": "2027-01",
+              "weight": 0.6129,
+              "p50": 107.67,
+              "h": 4
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
         },
         "L120": {
           "days": 120,
           "months": 3.943,
-          "p50": 444.5,
-          "p90": 696.0
+          "forecast_p50": 426.9,
+          "forecast_p90": 850.3,
+          "open_so": 26.0,
+          "p50": 452.9,
+          "p90": 876.3,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 107.67,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 107.67,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 1.0,
+              "p50": 107.67,
+              "h": 3
+            },
+            {
+              "month": "2027-01",
+              "weight": 1.0,
+              "p50": 107.67,
+              "h": 4
+            },
+            {
+              "month": "2027-02",
+              "weight": 0.6429,
+              "p50": 107.67,
+              "h": 5
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
         }
       },
       "recommendation": {
         "values": {
-          "A_L60": 481.2,
-          "B_L60": 428.2,
-          "AVAIL_L60": 501.2,
-          "A_L90": 621.0,
-          "B_L90": 568.0,
-          "AVAIL_L90": 641.0,
-          "A_L120": 756.8,
-          "B_L120": 703.8,
-          "AVAIL_L120": 776.8
+          "A_L60_lo": 592.6,
+          "A_L60_hi": 612.6,
+          "B_L60_lo": 446.6,
+          "B_L60_hi": 539.6,
+          "B_mid_L60": 539.6,
+          "B_po_dedup_L60_lo": 446.6,
+          "B_po_dedup_L60_hi": 539.6,
+          "AVAIL_L60": 612.6,
+          "A_L90_lo": 801.3,
+          "A_L90_hi": 821.3,
+          "B_L90_lo": 655.3,
+          "B_L90_hi": 748.3,
+          "B_mid_L90": 748.3,
+          "B_po_dedup_L90_lo": 655.3,
+          "B_po_dedup_L90_hi": 748.3,
+          "AVAIL_L90": 821.3,
+          "A_L120_lo": 1002.0,
+          "A_L120_hi": 1022.0,
+          "B_L120_lo": 856.0,
+          "B_L120_hi": 949.0,
+          "B_mid_L120": 949.0,
+          "B_po_dedup_L120_lo": 856.0,
+          "B_po_dedup_L120_hi": 949.0,
+          "AVAIL_L120": 1022.0
         },
         "note": "unrounded; no MOQ/pack multiple; not an order quantity"
       },
@@ -6736,12 +8222,33 @@
           }
         ],
         "p50_3m": 189,
-        "p90_3m": 530.1,
-        "sigma": 153.682,
+        "p90_3m": 671.4,
+        "sigma_train": 153.682,
         "q90": 130.0,
+        "sigma_roll": 138.158,
+        "sigma_roll_rms": 135.372,
+        "sigma_used": 153.682,
+        "roll_bias": -8.232,
         "z_sig": 196.952,
+        "calibration": {
+          "method": "rolling_origin_h1_out_of_sample",
+          "n_origins": 23,
+          "sigma_train_eff": 153.682,
+          "sigma_roll_std": 138.158,
+          "sigma_roll_rms": 135.372,
+          "sigma_used": 153.682,
+          "roll_bias": -8.232,
+          "applied": true,
+          "h1_q90_normalized_error": 1.139,
+          "h3_q90_normalized_error": 1.331,
+          "note": "sigma_used=max(in-sample effective sigma, rolling-origin h1 std); the normalized-error diagnostic is not applied; achieved coverage is reported separately from target_service_level=0.90"
+        },
+        "p90_status": "estimate_coverage_below_target",
         "recent3_mean": 95.7,
         "run_rate_ratio": 0.659,
+        "target_service_level": 0.9,
+        "achieved_coverage_h1": 0.8333,
+        "achieved_coverage_h3": 0.6667,
         "ets_candidate": {
           "available": true,
           "alpha": 0.1,
@@ -6763,31 +8270,44 @@
       "backtest": {
         "h1": {
           "n": 6,
-          "zero_excluded": 0,
+          "zero_actual_cells": 0,
           "wape": 0.6948,
           "bias": -0.4526,
           "coverage": 0.8333
         },
         "h3": {
           "n": 6,
-          "zero_excluded": 0,
+          "zero_actual_cells": 0,
           "wape": 0.9829,
           "bias": -0.3305,
           "coverage": 0.6667
         },
         "ets_h1": {
           "n": 1,
-          "zero_excluded": 0,
+          "zero_actual_cells": 0,
           "wape": 0.484,
           "bias": -0.484,
           "coverage": 0.0
         },
         "ets_h3": {
           "n": 1,
-          "zero_excluded": 0,
+          "zero_actual_cells": 0,
           "wape": 0.8299,
           "bias": 0.8299,
           "coverage": 1.0
+        },
+        "calibration": {
+          "method": "rolling_origin_h1_out_of_sample",
+          "n_origins": 23,
+          "sigma_train_eff": 153.682,
+          "sigma_roll_std": 138.158,
+          "sigma_roll_rms": 135.372,
+          "sigma_used": 153.682,
+          "roll_bias": -8.232,
+          "applied": true,
+          "h1_q90_normalized_error": 1.139,
+          "h3_q90_normalized_error": 1.331,
+          "note": "sigma_used=max(in-sample effective sigma, rolling-origin h1 std); the normalized-error diagnostic is not applied; achieved coverage is reported separately from target_service_level=0.90"
         },
         "origins": [
           {
@@ -6805,7 +8325,7 @@
               58.0
             ],
             "p90_1": 206.51,
-            "p90_3": 431.23,
+            "p90_3": 537.78,
             "ets": null
           },
           {
@@ -6823,7 +8343,7 @@
               40.0
             ],
             "p90_1": 184.27,
-            "p90_3": 369.88,
+            "p90_3": 473.38,
             "ets": null
           },
           {
@@ -6841,7 +8361,7 @@
               17.33
             ],
             "p90_1": 157.5,
-            "p90_3": 294.77,
+            "p90_3": 395.34,
             "ets": null
           },
           {
@@ -6859,7 +8379,7 @@
               16.0
             ],
             "p90_1": 152.22,
-            "p90_3": 283.94,
+            "p90_3": 381.67,
             "ets": null
           },
           {
@@ -6877,7 +8397,7 @@
               21.0
             ],
             "p90_1": 153.75,
-            "p90_3": 292.93,
+            "p90_3": 388.17,
             "ets": null
           },
           {
@@ -6895,7 +8415,7 @@
               67.0
             ],
             "p90_1": 282.2,
-            "p90_3": 862.51,
+            "p90_3": 955.92,
             "ets": {
               "f": [
                 142.42,
@@ -6903,7 +8423,7 @@
                 89.08
               ],
               "p90_1": 220.21,
-              "p90_3": 659.92
+              "p90_3": 715.74
             }
           }
         ],
@@ -6919,7 +8439,7 @@
             "2026-06+1..+3"
           ]
         },
-        "rule": "last 6 origins with known h=3; zero-actual cells excluded; residual sigma from training only; no future data in fit"
+        "rule": "last 6 origins with known h=3; zero-actual cells retained; residual sigma from training only; no future data in fit"
       },
       "inventory": {
         "as_of": "2026-10-22",
@@ -7214,12 +8734,16 @@
       "open_so": {
         "reconciled_open": 571,
         "dead": 253,
-        "live_open": 318,
+        "live_open": 428,
+        "live_open_net": 318,
+        "positive_open": 428,
+        "negative_over_delivery": -110,
         "in_progress": 428,
         "no_plan": 0,
         "over_delivered": -110,
         "voided": 60,
         "bucket_check": 0.0,
+        "live_lines": 34,
         "dead_so": [
           {
             "so": "SO-24-00030-1",
@@ -7274,15 +8798,20 @@
       },
       "supply": {
         "available": 104,
+        "intransit": 490,
         "open_po_raw": 490,
         "open_po_dedup": 490,
-        "independent_intransit": 0,
         "production_gross": 665,
         "production_remaining": 310,
-        "production_not_in_po": 0,
-        "scenario_A": 414,
-        "scenario_B": 594,
-        "scenario_B_raw_po": 594,
+        "A_low": 104,
+        "A_high": 414,
+        "B_min": 594,
+        "B_max": 1394,
+        "B_min_po_dedup": 594,
+        "B_max_po_dedup": 1394,
+        "B_mid_intransit_in_po": 594,
+        "intransit_equals_po_dedup": true,
+        "overlap_status": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
         "independent_intransit_by_warehouse": {
           "WayfairCG-Cranbury仓": 0,
           "波兰-FZHPoland-covers": 0,
@@ -7292,43 +8821,179 @@
       },
       "demand": {
         "forecast_p50_3m": 189,
-        "forecast_p90_3m": 530.1,
-        "open_so_live": 318,
-        "total_p50": 507,
-        "total_p90": 848.1,
-        "dead_so_excluded": 253
+        "forecast_p90_3m": 671.4,
+        "remaining_3m": {
+          "days": 71,
+          "months": 2.333,
+          "forecast_p50": 165.3,
+          "forecast_p90": 610.2,
+          "open_so": 428.0,
+          "p50": 593.3,
+          "p90": 1038.2,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 35.0,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 74.0,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 1.0,
+              "p50": 80.0,
+              "h": 3
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
+        },
+        "open_so_live": 428,
+        "total_p50": 617,
+        "total_p90": 1099.4,
+        "dead_so_excluded": 253,
+        "over_delivery_not_netted": -110
       },
       "lead_time": {
         "L60": {
           "days": 60,
           "months": 1.971,
-          "p50": 442.2,
-          "p90": 718.7
+          "forecast_p50": 136.9,
+          "forecast_p90": 497.5,
+          "open_so": 428.0,
+          "p50": 564.9,
+          "p90": 925.5,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 35.0,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 74.0,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 0.6452,
+              "p50": 80.0,
+              "h": 3
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
         },
         "L90": {
           "days": 90,
           "months": 2.957,
-          "p50": 504.3,
-          "p90": 843.0
+          "forecast_p50": 203.9,
+          "forecast_p90": 710.1,
+          "open_so": 428.0,
+          "p50": 631.9,
+          "p90": 1138.1,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 35.0,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 74.0,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 1.0,
+              "p50": 80.0,
+              "h": 3
+            },
+            {
+              "month": "2027-01",
+              "weight": 0.6129,
+              "p50": 63.0,
+              "h": 4
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
         },
         "L120": {
           "days": 120,
           "months": 3.943,
-          "p50": 566.4,
-          "p90": 957.4
+          "forecast_p50": 268.8,
+          "forecast_p90": 927.0,
+          "open_so": 428.0,
+          "p50": 696.8,
+          "p90": 1355.0,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 35.0,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 74.0,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 1.0,
+              "p50": 80.0,
+              "h": 3
+            },
+            {
+              "month": "2027-01",
+              "weight": 1.0,
+              "p50": 63.0,
+              "h": 4
+            },
+            {
+              "month": "2027-02",
+              "weight": 0.6429,
+              "p50": 63.0,
+              "h": 5
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
         }
       },
       "recommendation": {
         "values": {
-          "A_L60": 429.0,
-          "B_L60": 249.0,
-          "AVAIL_L60": 739.0,
-          "A_L90": 543.4,
-          "B_L90": 363.4,
-          "AVAIL_L90": 853.4,
-          "A_L120": 651.7,
-          "B_L120": 471.7,
-          "AVAIL_L120": 961.7
+          "A_L60_lo": 724.1,
+          "A_L60_hi": 1034.1,
+          "B_L60_lo": 0.0,
+          "B_L60_hi": 544.1,
+          "B_mid_L60": 544.1,
+          "B_po_dedup_L60_lo": 0.0,
+          "B_po_dedup_L60_hi": 544.1,
+          "AVAIL_L60": 1034.1,
+          "A_L90_lo": 941.0,
+          "A_L90_hi": 1251.0,
+          "B_L90_lo": 0.0,
+          "B_L90_hi": 761.0,
+          "B_mid_L90": 761.0,
+          "B_po_dedup_L90_lo": 0.0,
+          "B_po_dedup_L90_hi": 761.0,
+          "AVAIL_L90": 1251.0,
+          "A_L120_lo": 1148.4,
+          "A_L120_hi": 1458.4,
+          "B_L120_lo": 168.4,
+          "B_L120_hi": 968.4,
+          "B_mid_L120": 968.4,
+          "B_po_dedup_L120_lo": 168.4,
+          "B_po_dedup_L120_hi": 968.4,
+          "AVAIL_L120": 1458.4
         },
         "note": "unrounded; no MOQ/pack multiple; not an order quantity"
       },
@@ -7612,12 +9277,33 @@
           }
         ],
         "p50_3m": 302,
-        "p90_3m": 436.4,
-        "sigma": 60.552,
+        "p90_3m": 492.1,
+        "sigma_train": 60.552,
         "q90": 77.6,
+        "sigma_roll": 41.01,
+        "sigma_roll_rms": 42.742,
+        "sigma_used": 60.552,
+        "roll_bias": 14.573,
         "z_sig": 77.6,
+        "calibration": {
+          "method": "rolling_origin_h1_out_of_sample",
+          "n_origins": 25,
+          "sigma_train_eff": 60.552,
+          "sigma_roll_std": 41.01,
+          "sigma_roll_rms": 42.742,
+          "sigma_used": 60.552,
+          "roll_bias": 14.573,
+          "applied": true,
+          "h1_q90_normalized_error": 0.986,
+          "h3_q90_normalized_error": 0.955,
+          "note": "sigma_used=max(in-sample effective sigma, rolling-origin h1 std); the normalized-error diagnostic is not applied; achieved coverage is reported separately from target_service_level=0.90"
+        },
+        "p90_status": "estimate_coverage_below_target",
         "recent3_mean": 108,
         "run_rate_ratio": 0.932,
+        "target_service_level": 0.9,
+        "achieved_coverage_h1": 0.8333,
+        "achieved_coverage_h3": 0.8333,
         "ets_candidate": {
           "available": true,
           "alpha": 0.1,
@@ -7639,31 +9325,44 @@
       "backtest": {
         "h1": {
           "n": 6,
-          "zero_excluded": 0,
+          "zero_actual_cells": 0,
           "wape": 0.3825,
           "bias": -0.1703,
           "coverage": 0.8333
         },
         "h3": {
           "n": 6,
-          "zero_excluded": 0,
+          "zero_actual_cells": 0,
           "wape": 0.3285,
           "bias": -0.1085,
-          "coverage": 0.6667
+          "coverage": 0.8333
         },
         "ets_h1": {
           "n": 3,
-          "zero_excluded": 0,
+          "zero_actual_cells": 0,
           "wape": 0.2288,
           "bias": -0.2288,
           "coverage": 0.3333
         },
         "ets_h3": {
           "n": 3,
-          "zero_excluded": 0,
+          "zero_actual_cells": 0,
           "wape": 0.1031,
           "bias": -0.1031,
           "coverage": 0.6667
+        },
+        "calibration": {
+          "method": "rolling_origin_h1_out_of_sample",
+          "n_origins": 25,
+          "sigma_train_eff": 60.552,
+          "sigma_roll_std": 41.01,
+          "sigma_roll_rms": 42.742,
+          "sigma_used": 60.552,
+          "roll_bias": 14.573,
+          "applied": true,
+          "h1_q90_normalized_error": 0.986,
+          "h3_q90_normalized_error": 0.955,
+          "note": "sigma_used=max(in-sample effective sigma, rolling-origin h1 std); the normalized-error diagnostic is not applied; achieved coverage is reported separately from target_service_level=0.90"
         },
         "origins": [
           {
@@ -7681,7 +9380,7 @@
               122.33
             ],
             "p90_1": 186.7,
-            "p90_3": 478.49,
+            "p90_3": 524.67,
             "ets": null
           },
           {
@@ -7699,7 +9398,7 @@
               138.0
             ],
             "p90_1": 201.47,
-            "p90_3": 523.93,
+            "p90_3": 569.46,
             "ets": null
           },
           {
@@ -7717,7 +9416,7 @@
               134.0
             ],
             "p90_1": 196.57,
-            "p90_3": 510.37,
+            "p90_3": 555.26,
             "ets": null
           },
           {
@@ -7735,7 +9434,7 @@
               85.0
             ],
             "p90_1": 124.9,
-            "p90_3": 300.07,
+            "p90_3": 350.22,
             "ets": {
               "f": [
                 87.96,
@@ -7743,7 +9442,7 @@
                 116.92
               ],
               "p90_1": 111.09,
-              "p90_3": 326.57
+              "p90_3": 343.17
             }
           },
           {
@@ -7761,7 +9460,7 @@
               63.0
             ],
             "p90_1": 108.8,
-            "p90_3": 307.9,
+            "p90_3": 357.97,
             "ets": {
               "f": [
                 81.21,
@@ -7769,7 +9468,7 @@
                 105.38
               ],
               "p90_1": 103.38,
-              "p90_3": 347.77
+              "p90_3": 363.67
             }
           },
           {
@@ -7787,7 +9486,7 @@
               70.0
             ],
             "p90_1": 168.3,
-            "p90_3": 362.28,
+            "p90_3": 422.04,
             "ets": {
               "f": [
                 116.18,
@@ -7795,7 +9494,7 @@
                 92.86
               ],
               "p90_1": 142.14,
-              "p90_3": 361.24
+              "p90_3": 379.86
             }
           }
         ],
@@ -7811,7 +9510,7 @@
             "2026-06+1..+3"
           ]
         },
-        "rule": "last 6 origins with known h=3; zero-actual cells excluded; residual sigma from training only; no future data in fit"
+        "rule": "last 6 origins with known h=3; zero-actual cells retained; residual sigma from training only; no future data in fit"
       },
       "inventory": {
         "as_of": "2026-10-22",
@@ -7991,12 +9690,16 @@
       "open_so": {
         "reconciled_open": 1036,
         "dead": 421,
-        "live_open": 615,
+        "live_open": 631,
+        "live_open_net": 615,
+        "positive_open": 631,
+        "negative_over_delivery": -16,
         "in_progress": 622,
         "no_plan": 9,
         "over_delivered": -16,
         "voided": 100,
         "bucket_check": 0.0,
+        "live_lines": 22,
         "dead_so": [
           {
             "so": "SO-24-00033-1",
@@ -8044,15 +9747,20 @@
       },
       "supply": {
         "available": 360,
+        "intransit": 0,
         "open_po_raw": 0,
         "open_po_dedup": 0,
-        "independent_intransit": 0,
         "production_gross": 620,
         "production_remaining": 620,
-        "production_not_in_po": 620,
-        "scenario_A": 980,
-        "scenario_B": 980,
-        "scenario_B_raw_po": 980,
+        "A_low": 360,
+        "A_high": 980,
+        "B_min": 980,
+        "B_max": 980,
+        "B_min_po_dedup": 980,
+        "B_max_po_dedup": 980,
+        "B_mid_intransit_in_po": 980,
+        "intransit_equals_po_dedup": true,
+        "overlap_status": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
         "independent_intransit_by_warehouse": {
           "WayfairCG-Cranbury仓": 0,
           "美东-CENTRADE": 0,
@@ -8062,43 +9770,179 @@
       },
       "demand": {
         "forecast_p50_3m": 302,
-        "forecast_p90_3m": 436.4,
-        "open_so_live": 615,
-        "total_p50": 917,
-        "total_p90": 1051.4,
-        "dead_so_excluded": 421
+        "forecast_p90_3m": 492.1,
+        "remaining_3m": {
+          "days": 71,
+          "months": 2.333,
+          "forecast_p50": 228.8,
+          "forecast_p90": 404.2,
+          "open_so": 631.0,
+          "p50": 859.8,
+          "p90": 1035.2,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 108.0,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 48.0,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 1.0,
+              "p50": 146.0,
+              "h": 3
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
+        },
+        "open_so_live": 631,
+        "total_p50": 933,
+        "total_p90": 1123.1,
+        "dead_so_excluded": 421,
+        "over_delivery_not_netted": -16
       },
       "lead_time": {
         "L60": {
           "days": 60,
           "months": 1.971,
-          "p50": 813.4,
-          "p90": 922.4
+          "forecast_p50": 177.0,
+          "forecast_p90": 319.1,
+          "open_so": 631.0,
+          "p50": 808.0,
+          "p90": 950.1,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 108.0,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 48.0,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 0.6452,
+              "p50": 146.0,
+              "h": 3
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
         },
         "L90": {
           "days": 90,
           "months": 2.957,
-          "p50": 912.7,
-          "p90": 1046.1
+          "forecast_p50": 290.5,
+          "forecast_p90": 490.0,
+          "open_so": 631.0,
+          "p50": 921.5,
+          "p90": 1121.0,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 108.0,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 48.0,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 1.0,
+              "p50": 146.0,
+              "h": 3
+            },
+            {
+              "month": "2027-01",
+              "weight": 0.6129,
+              "p50": 100.67,
+              "h": 4
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
         },
         "L120": {
           "days": 120,
           "months": 3.943,
-          "p50": 1011.9,
-          "p90": 1166.0
+          "forecast_p50": 394.2,
+          "forecast_p90": 653.6,
+          "open_so": 631.0,
+          "p50": 1025.2,
+          "p90": 1284.6,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 108.0,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 48.0,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 1.0,
+              "p50": 146.0,
+              "h": 3
+            },
+            {
+              "month": "2027-01",
+              "weight": 1.0,
+              "p50": 100.67,
+              "h": 4
+            },
+            {
+              "month": "2027-02",
+              "weight": 0.6429,
+              "p50": 100.67,
+              "h": 5
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
         }
       },
       "recommendation": {
         "values": {
-          "A_L60": 66.1,
-          "B_L60": 66.1,
-          "AVAIL_L60": 686.1,
-          "A_L90": 186.0,
-          "B_L90": 186.0,
-          "AVAIL_L90": 806.0,
-          "A_L120": 303.4,
-          "B_L120": 303.4,
-          "AVAIL_L120": 923.4
+          "A_L60_lo": 141.0,
+          "A_L60_hi": 761.0,
+          "B_L60_lo": 141.0,
+          "B_L60_hi": 141.0,
+          "B_mid_L60": 141.0,
+          "B_po_dedup_L60_lo": 141.0,
+          "B_po_dedup_L60_hi": 141.0,
+          "AVAIL_L60": 761.0,
+          "A_L90_lo": 304.6,
+          "A_L90_hi": 924.6,
+          "B_L90_lo": 304.6,
+          "B_L90_hi": 304.6,
+          "B_mid_L90": 304.6,
+          "B_po_dedup_L90_lo": 304.6,
+          "B_po_dedup_L90_hi": 304.6,
+          "AVAIL_L90": 924.6,
+          "A_L120_lo": 462.3,
+          "A_L120_hi": 1082.3,
+          "B_L120_lo": 462.3,
+          "B_L120_hi": 462.3,
+          "B_mid_L120": 462.3,
+          "B_po_dedup_L120_lo": 462.3,
+          "B_po_dedup_L120_hi": 462.3,
+          "AVAIL_L120": 1082.3
         },
         "note": "unrounded; no MOQ/pack multiple; not an order quantity"
       },
@@ -8124,11 +9968,14 @@
     "6 SKUs / 13 open PO lines / 1465 units have no will_arrive_date; Scenario B is an assumption, not an ETA",
     "Open WOs have planned_end_date = null for all open WOs; production arrival date unconfirmed",
     "Open WOs produce PK# covers; counted 1:1 against KS finished items. Insert (ND#) availability and assembly are not modeled",
-    "intransit <= open PO at every observed warehouse, but row-level PO<->intransit link is not proven",
+    "PO<->production and PO<->intransit overlap is not linked; B_min (maximum overlap) and B_max (no overlap) are bounds, not a point; no max(WO-PO,0) or max(transit-PO,0) is treated as verified supply",
+    "intransit equals the deduped open PO at 10/10 SKUs, which indicates (but does not prove) that intransit is the same goods as the open PO; B_max therefore double-counts them by design and is an extreme upper bound",
     "stock UOM is unknown (stock_history.uom_basis=unknown for all rows); quantities treated as pieces, no conversion",
     "Cover substitution is not proven; cover stock is not added to supply",
     "stockout censoring not corrected (3 days of stock history)",
     "gs_orders has no order-status field; cancellation/return exclusion is not possible and unproven",
-    "PO duplicate candidates (PO021733 vs PO021735 on 3 SKUs) are excluded from the main scenario but the document relation is unproven"
+    "PO duplicate candidates (PO021733 vs PO021735 on 3 SKUs) are a separate sensitivity; the document relation is unproven",
+    "document balances (SO/WO) are 2026-10-20/21; inventory is 10-22; intervening movements are not bridged",
+    "rolling-origin calibration is out-of-sample per fit but overlaps the 6 reporting origins; achieved coverage is reported, not claimed as a 90% service guarantee"
   ]
 }

@@ -20,7 +20,7 @@ import hashlib
 import json
 import math
 import os
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import duckdb
@@ -56,6 +56,7 @@ TH_BACKTEST_ORIGINS = 6
 LEAD_DAYS = [60, 90, 120]
 REVIEW_DAYS = 30
 Z90 = 1.2815515655446004
+CUM3 = math.sqrt(6.0)  # random-walk error model: monthly h has variance h*sigma^2; 1+2+3=6
 DAYS_PER_MONTH = 30.4375
 
 
@@ -194,16 +195,20 @@ def residual_for(y: np.ndarray, model: str) -> np.ndarray:
 
 
 def metrics(cells: list[dict]) -> dict:
-    """cells: [{a, f, p90}]. Zero-actual cells excluded from WAPE/bias."""
-    usable = [c for c in cells if c["a"] != 0]
-    excluded = len(cells) - len(usable)
-    if not usable:
-        return dict(n=0, zero_excluded=excluded, wape=None, bias=None, coverage=None)
-    sum_a = sum(c["a"] for c in usable)
-    wape = sum(abs(c["f"] - c["a"]) for c in usable) / sum_a
-    bias = sum(c["f"] - c["a"] for c in usable) / sum_a
-    cov = sum(1 for c in usable if c["a"] <= c["p90"] + 1e-9) / len(usable)
-    return dict(n=len(usable), zero_excluded=excluded, wape=round(wape, 4),
+    """cells: [{a, f, p90}]. Zero-actual cells are retained; only an
+    all-zero aggregate denominator makes WAPE/bias undefined."""
+    n = len(cells)
+    zero_cells = sum(1 for c in cells if c["a"] == 0)
+    if n == 0:
+        return dict(n=0, zero_actual_cells=0, wape=None, bias=None, coverage=None)
+    sum_a = sum(c["a"] for c in cells)
+    if sum_a == 0:
+        return dict(n=n, zero_actual_cells=zero_cells, wape=None, bias=None,
+                    coverage=round(sum(1 for c in cells if c["a"] <= c["p90"] + 1e-9) / n, 4))
+    wape = sum(abs(c["f"] - c["a"]) for c in cells) / sum_a
+    bias = sum(c["f"] - c["a"] for c in cells) / sum_a
+    cov = sum(1 for c in cells if c["a"] <= c["p90"] + 1e-9) / n
+    return dict(n=n, zero_actual_cells=zero_cells, wape=round(wape, 4),
                 bias=round(bias, 4), coverage=round(cov, 4))
 
 
@@ -359,7 +364,20 @@ def build_sku(code, sku, snap, data, cover_map=None):
     fc_point = np.maximum(fc_point, 0.0)
     resid = residual_for(y, primary_model)
     sigma, q90 = sigma_from_resid(resid)
-    z_sig = max(Z90 * sigma, q90, 0.0)
+    # Rolling-origin one-step calibration over every eligible origin. Each fit
+    # uses y[:t] only, so the errors are out-of-sample; the set is wider than
+    # the 6 reporting origins, so sigma is not tuned on the reported cells alone.
+    roll_errs = []
+    for t in range(4, len(y)):
+        train = y[:t]
+        m_t = model_name_for(len(train))
+        f_t = float(max(0.0, point_forecast(train, 1, m_t)[0]))
+        roll_errs.append(float(y[t]) - f_t)
+    sigma_roll = float(np.std(roll_errs, ddof=1)) if len(roll_errs) > 1 else 0.0
+    sigma_roll_rms = float(np.sqrt(np.mean(np.square(roll_errs)))) if roll_errs else 0.0
+    sigma_used = max(sigma, sigma_roll)
+    roll_bias = float(np.mean(roll_errs)) if roll_errs else 0.0
+    z_sig = Z90 * sigma_used
     fc_months = []
     for i, m in enumerate(FUTURE_MONTHS):
         h = i + 1
@@ -367,7 +385,7 @@ def build_sku(code, sku, snap, data, cover_map=None):
         p90 = p50 + z_sig * math.sqrt(h)
         fc_months.append(dict(month=m, p50=num(p50), p90=num(p90)))
     p50_3m = float(fc_point.sum())
-    p90_3m = p50_3m + z_sig * math.sqrt(3)
+    p90_3m = p50_3m + z_sig * CUM3
     # monthly point values for lead-time proration
     avg_p50 = p50_3m / 3.0
     recent3 = float(np.mean(y[-3:]))
@@ -414,7 +432,7 @@ def build_sku(code, sku, snap, data, cover_map=None):
             bt.append(dict(origin=i_to_ym(oi), n_train=len(train), skipped="target_out_of_range"))
             continue
         p90_1 = float(f[0] + zs)
-        p90_3 = float(f.sum() + zs * math.sqrt(3))
+        p90_3 = float(f.sum() + zs * CUM3)
         # ETS candidate on the same origin (only if >=24m train)
         etcell = None
         if len(train) >= 24:
@@ -425,7 +443,7 @@ def build_sku(code, sku, snap, data, cover_map=None):
                 ezs = max(Z90 * es, eq, 0.0)
                 etcell = dict(f=[round(float(v), 2) for v in ef],
                               p90_1=round(float(ef[0] + ezs), 2),
-                              p90_3=round(float(ef.sum() + ezs * math.sqrt(3)), 2))
+                              p90_3=round(float(ef.sum() + ezs * CUM3), 2))
         bt.append(dict(
             origin=i_to_ym(oi), n_train=len(train), model=model,
             actual=[round(v, 2) for v in a],
@@ -455,6 +473,35 @@ def build_sku(code, sku, snap, data, cover_map=None):
         ets_cells3.append(dict(a=sum(r["actual"]), f=sum(r["ets"]["f"]), p90=r["ets"]["p90_3"]))
     ets_h1 = metrics(ets_cells1) if ets_cells1 else None
     ets_h3 = metrics(ets_cells3) if ets_cells3 else None
+
+    # pooled calibration diagnostic: 90th percentile of (actual-forecast)/(P90-forecast)
+    def _calib(h):
+        vals = []
+        for r in bt:
+            if "actual" not in r:
+                continue
+            if h == 1:
+                a, f, p = r["actual"][0], r["forecast"][0], r["p90_1"]
+            else:
+                a, f, p = sum(r["actual"]), sum(r["forecast"]), r["p90_3"]
+            if p - f > 1e-9:
+                vals.append((a - f) / (p - f))
+        return round(float(np.quantile(vals, 0.90)), 3) if vals else None
+
+    calibration = dict(
+        method="rolling_origin_h1_out_of_sample",
+        n_origins=len(roll_errs),
+        sigma_train_eff=round(sigma, 3),
+        sigma_roll_std=round(sigma_roll, 3),
+        sigma_roll_rms=round(sigma_roll_rms, 3),
+        sigma_used=round(sigma_used, 3),
+        roll_bias=round(roll_bias, 3),
+        applied=True,
+        h1_q90_normalized_error=_calib(1), h3_q90_normalized_error=_calib(3),
+        note="sigma_used=max(in-sample effective sigma, rolling-origin h1 std); "
+             "the normalized-error diagnostic is not applied; achieved coverage is "
+             "reported separately from target_service_level=0.90",
+    )
 
     # ---- inventory (2026-10-22 complete snapshot) ----
     stock_rows = [r for r in data["stock"] if r[0] == code]
@@ -513,9 +560,17 @@ def build_sku(code, sku, snap, data, cover_map=None):
     no_plan = float(ob.get("no_plan_qty") or 0)
     over = float(ob.get("over_delivered_qty") or 0)
     voided = float(ob.get("voided_qty") or 0)
-    live_open = reconciled - dead
-    # conservation check on the published buckets
-    bucket_check = round(live_open - (in_prog + no_plan + over), 6)
+    live_open_net = reconciled - dead
+    # positive remaining per live SO line; over-delivery on one line must not
+    # cancel another line's outstanding demand (Codex1 V0 review1 finding 1).
+    live_lines = [r for r in so_rows
+                  if r.get("so_docstatus") == 1
+                  and not any("死单" in str(a) for a in r.get("anomalies", []))]
+    positive_open = sum(max(0.0, float(r.get("open_qty") or 0)) for r in live_lines)
+    negative_open = sum(min(0.0, float(r.get("open_qty") or 0)) for r in live_lines)
+    live_open = positive_open
+    # conservation check: positive live = in-progress + no-plan (over-delivery is negative and separate)
+    bucket_check = round(positive_open - (in_prog + no_plan), 6)
 
     # ---- production (open WOs) ----
     open_wo, stopped_wo, draft_wo = [], [], []
@@ -551,29 +606,78 @@ def build_sku(code, sku, snap, data, cover_map=None):
         indep_by_wh[wh] = indep
         indep_transit += indep
 
-    # ---- supply scenarios ----
-    prod_not_in_po = max(0.0, wo_remaining - po_dedup)
-    supply_A = available + wo_remaining            # no PO / no intransit
-    supply_B = available + po_dedup + prod_not_in_po + indep_transit
-    supply_B_raw = available + po_raw + max(0.0, wo_remaining - po_raw) + indep_transit
+    # ---- supply bounds (overlap is NOT proven; publish bounds, not a point) ----
+    # Main bounds use the raw open-PO quantity. The duplicate-candidate
+    # deduction is a separate sensitivity and is never applied to the main bound.
+    supply_A_low = available                                  # no production, no PO
+    supply_A_high = available + wo_remaining                  # all production, no PO
+    # Maximum-overlap bound: PO, production and intransit may all be the same
+    # units, so their union is at least max(PO, WO, transit). No max(WO-PO,0)
+    # or max(transit-PO,0) is published as verified supply.
+    supply_B_min = available + max(po_raw, wo_remaining, intransit)
+    # No-overlap bound: every component is added in full.
+    supply_B_max = available + po_raw + wo_remaining + intransit
+    # PO duplicate-candidate sensitivity (same bounds, later PO removed).
+    supply_B_min_po_dedup = available + max(po_dedup, wo_remaining, intransit)
+    supply_B_max_po_dedup = available + po_dedup + wo_remaining + intransit
+    # Central scenario supported by the observed equality intransit == deduped
+    # open PO at every SKU: transit is already inside the PO, production may
+    # still overlap the PO. This is an assumption, not a verified link.
+    supply_B_mid = available + po_raw + max(0.0, wo_remaining - po_raw)
+    intransit_equals_po_dedup = abs(intransit - po_dedup) < 1e-9
 
-    # ---- lead-time demand / recommendation ----
-    def lt(days):
-        m = days / DAYS_PER_MONTH
-        p50 = avg_p50 * m + live_open
-        p90 = p50 + z_sig * math.sqrt(m)
-        return dict(days=days, months=round(m, 3),
-                    p50=round(p50, 1), p90=round(p90, 1))
+    # ---- calendar-window demand from decision date (2026-10-22) ----
+    # Monthly forecast h has variance h*sigma^2 (random-walk error model).
+    # For a window, weight each month by its overlap fraction and use w^2*h.
+    def _month_start(k):
+        y = 2026 + (9 + k) // 12
+        m = (9 + k) % 12 + 1
+        return date(y, m, 1)
 
-    lead = {f"L{d}": lt(d) for d in LEAD_DAYS}
+    def window_demand(days):
+        start = date(2026, 10, 22)
+        end = start + timedelta(days=days)
+        p50 = 0.0
+        var = 0.0
+        parts = []
+        for k in range(0, 8):
+            ms = _month_start(k)
+            me = _month_start(k + 1)
+            ov_start = max(start, ms)
+            ov_end = min(end, me)
+            if ov_end <= ov_start:
+                continue
+            frac = (ov_end - ov_start).days / (me - ms).days
+            h = k + 1
+            p = float(fc_point[k]) if k < len(fc_point) else avg_p50
+            p50 += frac * p
+            var += (frac ** 2) * (z_sig ** 2 * h)
+            parts.append(dict(month=i_to_ym(2026 * 12 + 9 + k), weight=round(frac, 4),
+                              p50=round(p, 2), h=h))
+        p90_forecast = p50 + math.sqrt(var)
+        return dict(days=days, months=round(days / DAYS_PER_MONTH, 3),
+                    forecast_p50=round(p50, 1), forecast_p90=round(p90_forecast, 1),
+                    open_so=round(live_open, 1),
+                    p50=round(p50 + live_open, 1), p90=round(p90_forecast + live_open, 1),
+                    buckets=parts,
+                    assumption="Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)")
+
+    lead = {f"L{d}": window_demand(d) for d in LEAD_DAYS}
+
     def rec(days, supply):
-        v = lead[f"L{days}"]["p90"]  # overwritten below for L+30
-        plus = lt(days + REVIEW_DAYS)
+        plus = window_demand(days + REVIEW_DAYS)
         return max(0.0, plus["p90"] - supply)
+
     recs = {}
     for days in LEAD_DAYS:
-        recs[f"A_L{days}"] = round(rec(days, supply_A), 1)
-        recs[f"B_L{days}"] = round(rec(days, supply_B), 1)
+        # _lo = lower recommendation (higher supply bound); _hi = upper
+        recs[f"A_L{days}_lo"] = round(rec(days, supply_A_high), 1)
+        recs[f"A_L{days}_hi"] = round(rec(days, supply_A_low), 1)
+        recs[f"B_L{days}_lo"] = round(rec(days, supply_B_max), 1)
+        recs[f"B_L{days}_hi"] = round(rec(days, supply_B_min), 1)
+        recs[f"B_mid_L{days}"] = round(rec(days, supply_B_mid), 1)
+        recs[f"B_po_dedup_L{days}_lo"] = round(rec(days, supply_B_max_po_dedup), 1)
+        recs[f"B_po_dedup_L{days}_hi"] = round(rec(days, supply_B_min_po_dedup), 1)
         recs[f"AVAIL_L{days}"] = round(rec(days, available), 1)
 
     # ---- unknowns / scenarios for this SKU ----
@@ -643,13 +747,26 @@ def build_sku(code, sku, snap, data, cover_map=None):
         forecast=dict(primary_model=primary_model, confidence=confidence,
                       history_months=n_months, months=fc_months,
                       p50_3m=num(p50_3m), p90_3m=num(p90_3m),
-                      sigma=round(sigma, 3), q90=round(q90, 3),
+                      sigma_train=round(sigma, 3), q90=round(q90, 3),
+                      sigma_roll=round(sigma_roll, 3),
+                      sigma_roll_rms=round(sigma_roll_rms, 3),
+                      sigma_used=round(sigma_used, 3),
+                      roll_bias=round(roll_bias, 3),
                       z_sig=round(z_sig, 3),
+                      calibration=calibration,
+                      p90_status=("estimate_coverage_below_target"
+                                  if (bt_h1.get("coverage") or 0) < 0.90
+                                  or (bt_h3.get("coverage") or 0) < 0.90
+                                  else "calibrated_estimate"),
                       recent3_mean=num(recent3),
                       run_rate_ratio=round(run_rate_ratio, 3) if run_rate_ratio is not None else None,
+                      target_service_level=0.90,
+                      achieved_coverage_h1=bt_h1.get("coverage"),
+                      achieved_coverage_h3=bt_h3.get("coverage"),
                       ets_candidate=ets),
         backtest=dict(h1=bt_h1, h3=bt_h3,
                       ets_h1=ets_h1, ets_h3=ets_h3,
+                      calibration=calibration,
                       origins=bt,
                       leakage_check=dict(
                           structural_pass=all(ym_to_i(r["origin"]) + h > ym_to_i(r["origin"])
@@ -657,7 +774,7 @@ def build_sku(code, sku, snap, data, cover_map=None):
                           train_rule="fit uses y[month <= origin]; targets are origin+1..origin+3",
                           target_months=[f"{r['origin']}+1..+3" for r in bt if "actual" in r],
                       ),
-                      rule="last 6 origins with known h=3; zero-actual cells excluded; "
+                      rule="last 6 origins with known h=3; zero-actual cells retained; "
                            "residual sigma from training only; no future data in fit"),
         inventory=dict(as_of=AS_OF_STOCK, available=num(available), intransit=num(intransit),
                        defects=num(defects), waiting_shipment=num(waiting),
@@ -695,25 +812,36 @@ def build_sku(code, sku, snap, data, cover_map=None):
                         production_item_kinds=prod_type_kind,
                         eta_missing_count=wo_eta_missing,
                         eta_status="planned_end_date_all_null"),
-        open_so=dict(reconciled_open=num(reconciled), dead=num(dead), live_open=num(live_open),
+        open_so=dict(reconciled_open=num(reconciled), dead=num(dead),
+                     live_open=num(positive_open), live_open_net=num(live_open_net),
+                     positive_open=num(positive_open), negative_over_delivery=num(negative_open),
                      in_progress=num(in_prog), no_plan=num(no_plan),
                      over_delivered=num(over), voided=num(voided),
                      bucket_check=bucket_check,
+                     live_lines=len(live_lines),
                      dead_so=[b for b in ob.get("buckets", {}).get("dead", [])],
                      in_progress_so=[b for b in ob.get("buckets", {}).get("in_progress", [])],
                      no_plan_so=[b for b in ob.get("buckets", {}).get("no_plan", [])],
                      over_delivered_so=[b for b in ob.get("buckets", {}).get("over_delivered", [])]),
-        supply=dict(available=num(available), open_po_raw=num(po_raw),
-                    open_po_dedup=num(po_dedup), independent_intransit=num(indep_transit),
+        supply=dict(available=num(available), intransit=num(intransit),
+                    open_po_raw=num(po_raw), open_po_dedup=num(po_dedup),
                     production_gross=num(wo_gross), production_remaining=num(wo_remaining),
-                    production_not_in_po=num(prod_not_in_po),
-                    scenario_A=num(supply_A), scenario_B=num(supply_B),
-                    scenario_B_raw_po=num(supply_B_raw),
+                    A_low=num(supply_A_low), A_high=num(supply_A_high),
+                    B_min=num(supply_B_min), B_max=num(supply_B_max),
+                    B_min_po_dedup=num(supply_B_min_po_dedup),
+                    B_max_po_dedup=num(supply_B_max_po_dedup),
+                    B_mid_intransit_in_po=num(supply_B_mid),
+                    intransit_equals_po_dedup=intransit_equals_po_dedup,
+                    overlap_status="not_proven; B_min=max-overlap bound, "
+                                   "B_max=no-overlap bound; PO duplicate candidates "
+                                   "are a separate sensitivity",
                     independent_intransit_by_warehouse={k: num(v) for k, v in indep_by_wh.items()}),
         demand=dict(forecast_p50_3m=num(p50_3m), forecast_p90_3m=num(p90_3m),
+                    remaining_3m=window_demand(71),
                     open_so_live=num(live_open), total_p50=num(p50_3m + live_open),
                     total_p90=num(p90_3m + live_open),
-                    dead_so_excluded=num(dead)),
+                    dead_so_excluded=num(dead),
+                    over_delivery_not_netted=num(negative_open)),
         lead_time=lead,
         recommendation=dict(values=recs,
                             note="unrounded; no MOQ/pack multiple; not an order quantity"),
@@ -738,11 +866,18 @@ def aggregate(skus, data, manifest, manifest_path, snapshots, db_hash):
     stopped = sum(float(x["production"]["stopped_qty"]) for x in skus)
     dead = sum(float(x["open_so"]["dead"]) for x in skus)
     live = sum(float(x["open_so"]["live_open"]) for x in skus)
+    live_net = sum(float(x["open_so"]["live_open_net"]) for x in skus)
+    neg_over = sum(float(x["open_so"]["negative_over_delivery"]) for x in skus)
     available = sum(float(x["inventory"]["available"]) for x in skus)
     intransit = sum(float(x["inventory"]["intransit"]) for x in skus)
-    supply_A = sum(float(x["supply"]["scenario_A"]) for x in skus)
-    supply_B = sum(float(x["supply"]["scenario_B"]) for x in skus)
-    supply_B_raw = sum(float(x["supply"]["scenario_B_raw_po"]) for x in skus)
+    supply_A_low = sum(float(x["supply"]["A_low"]) for x in skus)
+    supply_A_high = sum(float(x["supply"]["A_high"]) for x in skus)
+    supply_B_min = sum(float(x["supply"]["B_min"]) for x in skus)
+    supply_B_max = sum(float(x["supply"]["B_max"]) for x in skus)
+    supply_B_min_po_dedup = sum(float(x["supply"]["B_min_po_dedup"]) for x in skus)
+    supply_B_max_po_dedup = sum(float(x["supply"]["B_max_po_dedup"]) for x in skus)
+    supply_B_mid = sum(float(x["supply"]["B_mid_intransit_in_po"]) for x in skus)
+    intransit_eq_po = sum(1 for x in skus if x["supply"]["intransit_equals_po_dedup"])
     fc50 = sum(float(x["forecast"]["p50_3m"]) for x in skus)
     fc90 = sum(float(x["forecast"]["p90_3m"]) for x in skus)
     recs = {}
@@ -766,6 +901,32 @@ def aggregate(skus, data, manifest, manifest_path, snapshots, db_hash):
                     cells.append(dict(a=sum(r["actual"]), f=sum(r["forecast"]), p90=r["p90_3"]))
         return metrics(cells)
     bt = dict(h1=agg_metric("h1"), h3=agg_metric("h3"))
+    def calib(h):
+        vals = []
+        for x in skus:
+            for r in x["backtest"]["origins"]:
+                if "actual" not in r:
+                    continue
+                if h == 1:
+                    a, f, p = r["actual"][0], r["forecast"][0], r["p90_1"]
+                else:
+                    a, f, p = sum(r["actual"]), sum(r["forecast"]), r["p90_3"]
+                if p - f > 1e-9:
+                    vals.append((a - f) / (p - f))
+        return round(float(np.quantile(vals, 0.90)), 3) if vals else None
+    sig_train = [float(x["forecast"]["sigma_train"]) for x in skus]
+    sig_roll = [float(x["forecast"]["sigma_roll"]) for x in skus]
+    sig_used = [float(x["forecast"]["sigma_used"]) for x in skus]
+    bt["calibration"] = dict(
+        h1_q90_normalized_error=calib(1), h3_q90_normalized_error=calib(3),
+        applied_per_sku=True,
+        sigma_train_range=[round(min(sig_train), 3), round(max(sig_train), 3)],
+        sigma_roll_range=[round(min(sig_roll), 3), round(max(sig_roll), 3)],
+        sigma_used_range=[round(min(sig_used), 3), round(max(sig_used), 3)],
+        note="per-SKU sigma_used=max(sigma_train_eff, rolling-origin h1 std); the "
+             "normalized-error diagnostic is not applied; achieved coverage is reported "
+             "separately from target_service_level=0.90",
+    )
     # scope demand share (qty in window covered by gs_orders global)
     total_scope = sum(float(x["history"]["total_qty"]) for x in skus)
     global_total = data.get("global_qty")
@@ -776,10 +937,15 @@ def aggregate(skus, data, manifest, manifest_path, snapshots, db_hash):
         open_po_line_count=open_lines, open_po_sku_count=po_skus,
         po_eta_missing_lines=eta_missing,
         production_sku_count=prod_skus, open_wo_count=wo_count, stopped_wo_qty=num(stopped),
-        open_so_live_total=num(live), dead_so_total=num(dead),
+        open_so_live_total=num(live), open_so_live_net_total=num(live_net),
+        negative_over_delivery_total=num(neg_over), dead_so_total=num(dead),
         forecast_p50_3m_total=num(fc50), forecast_p90_3m_total=num(fc90),
-        supply_A_total=num(supply_A), supply_B_total=num(supply_B),
-        supply_B_raw_po_total=num(supply_B_raw),
+        supply_A_low_total=num(supply_A_low), supply_A_high_total=num(supply_A_high),
+        supply_B_min_total=num(supply_B_min), supply_B_max_total=num(supply_B_max),
+        supply_B_min_po_dedup_total=num(supply_B_min_po_dedup),
+        supply_B_max_po_dedup_total=num(supply_B_max_po_dedup),
+        supply_B_mid_intransit_in_po_total=num(supply_B_mid),
+        intransit_equals_po_dedup_skus=intransit_eq_po,
         recommendation_sums=recs,
         confidence_counts=conf, primary_model_counts=models,
         backtest_aggregate=bt,
@@ -793,19 +959,32 @@ def build_evidence(data, snapshots, manifest, manifest_path, manifest_hash, skus
                    cover_path=None, cover_hash=None):
     agg = aggregate(skus, data, manifest, manifest_path, snapshots, data["db_hash"])
     return dict(
-        schema_version="supply_replenishment_v0/1",
+        schema_version="supply_replenishment_v0_1/1",
+        report_version="V0.1",
         generated_at=datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"),
         scope=dict(
             skus=[x["sku"] for x in skus],
             customer_codes=[x["customer_code"] for x in skus],
             sales_cutoff=SALES_CUTOFF,
             stock_as_of=AS_OF_STOCK,
+            decision_time="2026-10-22T00:00:00+08:00",
             document_snapshot="EN phase1 (2026-10-20/21); not re-read from production",
             future_months=FUTURE_MONTHS,
             lead_days=LEAD_DAYS, review_days=REVIEW_DAYS, service_level=0.90,
             production_access=False,
             contains_raw_order_lines=False,
             note="aggregates only; SO/WO/PO identifiers are document-level keys, not order lines",
+        ),
+        time_alignment=dict(
+            decision_time="2026-10-22T00:00:00+08:00",
+            stock_as_of=AS_OF_STOCK,
+            document_as_of=sorted({str(v["data"].get("date")) for v in snapshots.values()}),
+            gap_days="1-2",
+            aligned=False,
+            treatment="SO/WO balances are 2026-10-20/21 and inventory is 2026-10-22. "
+                      "The intervening movements cannot be reconciled without production "
+                      "access, so balances are treated as unchanged through the decision "
+                      "time; this is an unquantified time-point scenario, not a bridge.",
         ),
         sources=dict(
             db=dict(path=str(DB_PATH), sha256=data["db_hash"], read_only=True),
@@ -848,15 +1027,24 @@ def build_evidence(data, snapshots, manifest, manifest_path, manifest_hash, skus
             forecast_primary="seasonal_naive (lag 12) when history >= 24 months; otherwise mean of last 3 months; low confidence <24 months",
             forecast_candidate="Holt-Winters additive (level+trend+seasonal, grid-search alpha/beta/gamma); reported, not selected",
             p50="point forecast, clamped at 0",
-            p90="p50 + max(1.2816*sigma, q90_residual)*sqrt(h); sigma/q90 from training residuals only",
-            backtest="last 6 origins with known h=3; WAPE/bias exclude zero-actual cells; P90 coverage = share actual<=P90",
-            supply_A="available + open production remaining; no PO and no intransit",
-            supply_B="available + dedup open PO + production not in PO + independent intransit; PO assumed to arrive within lead time (ETA all null)",
+            p90="month h: p50_h + z_sig*sqrt(h); cumulative 3m: sum(p50) + z_sig*sqrt(1+2+3)=sqrt(6); "
+                "consistent random-walk error model; z_sig=1.2816*sigma_used; "
+                "sigma_used=max(in-sample effective sigma, rolling-origin h1 std) "
+                "calibrated over all eligible origins, not only the 6 reporting origins; "
+                "rolling bias is reported but not corrected",
+            backtest="last 6 origins with known h=3; zero-actual cells retained (all-zero denominator -> WAPE/bias null); P90 coverage = share actual<=P90; target 0.90 recorded separately from achieved coverage; achieved coverage below 0.90 -> P90 labelled estimate",
+            supply_A="bounds: A_low=available (no production); A_high=available+open production remaining (no PO); no intransit",
+            supply_B="bounds: B_min=available+max(raw PO, production remaining, intransit) (maximum overlap: union is at least the largest component); "
+                     "B_max=available+raw PO+all production+intransit (no overlap, all components added). "
+                     "PO duplicate-candidate sensitivity: B_min_po_dedup / B_max_po_dedup. "
+                     "B_mid treats intransit as already inside the open PO (observed intransit==deduped PO) and production as partially overlapping; it is an assumption, not a verified link. "
+                     "PO arrival within lead time is an assumption (ETA all null)",
+            open_so="positive remaining per live SO line; over-delivery on other lines is NOT netted against it (kept separate)",
             production="open WO = docstatus=1 and status in (Not Started, In Process); remaining = max(0, qty - produced_qty); Draft/Stopped excluded and shown separately",
             production_uom_assumption="WO production_item is PK#皮壳; counted 1:1 against the KS finished item (not proven)",
             po_dedup="identical (sku, warehouse, quantity) open lines across different POs: later purchase_date treated as duplicate candidate; not document-proven",
-            recommendation="max(0, P90(lead+30d) - scenario supply); unrounded; no MOQ/pack multiple; not order-ready",
-            lead_time="P50 = 3-month average monthly rate x months + live open SO; P90 adds z_sig*sqrt(months); beyond 3 months uses the same average rate (linear extrapolation, not an independent forecast)",
+            recommendation="max(0, P90(lead+30d calendar window) - supply bound); unrounded; no MOQ/pack multiple; not order-ready",
+            lead_time="calendar window from 2026-10-22; partial-month weights (Oct 22-31 = 10/31); monthly h has variance h*sigma^2; Jan+ uses the 3-month average rate (extrapolation, not an independent forecast); document balances are 10-20/21 and are not rolled forward to 10-22",
             censoring="NOT corrected: only 3 days of stock history, cannot reconstruct lost sales",
         ),
         queries=dict(
@@ -888,12 +1076,15 @@ def build_evidence(data, snapshots, manifest, manifest_path, manifest_hash, skus
             f"{agg['open_po_raw_total']} units have no will_arrive_date; Scenario B is an assumption, not an ETA",
             "Open WOs have planned_end_date = null for all open WOs; production arrival date unconfirmed",
             "Open WOs produce PK# covers; counted 1:1 against KS finished items. Insert (ND#) availability and assembly are not modeled",
-            "intransit <= open PO at every observed warehouse, but row-level PO<->intransit link is not proven",
+            "PO<->production and PO<->intransit overlap is not linked; B_min (maximum overlap) and B_max (no overlap) are bounds, not a point; no max(WO-PO,0) or max(transit-PO,0) is treated as verified supply",
+            "intransit equals the deduped open PO at 10/10 SKUs, which indicates (but does not prove) that intransit is the same goods as the open PO; B_max therefore double-counts them by design and is an extreme upper bound",
             "stock UOM is unknown (stock_history.uom_basis=unknown for all rows); quantities treated as pieces, no conversion",
             "Cover substitution is not proven; cover stock is not added to supply",
             "stockout censoring not corrected (3 days of stock history)",
             "gs_orders has no order-status field; cancellation/return exclusion is not possible and unproven",
-            "PO duplicate candidates (PO021733 vs PO021735 on 3 SKUs) are excluded from the main scenario but the document relation is unproven",
+            "PO duplicate candidates (PO021733 vs PO021735 on 3 SKUs) are a separate sensitivity; the document relation is unproven",
+            "document balances (SO/WO) are 2026-10-20/21; inventory is 10-22; intervening movements are not bridged",
+            "rolling-origin calibration is out-of-sample per fit but overlaps the 6 reporting origins; achieved coverage is reported, not claimed as a 90% service guarantee",
         ],
     )
 
@@ -944,7 +1135,10 @@ def render_sku_section(x, level=2):
         out.append(f"| {m['month']} | {q(m['p50'])} | {q(m['p90'])} |")
     out.append(f"| **3 月合计** | **{q(f['p50_3m'])}** | **{q(f['p90_3m'])}** |")
     out.append("")
-    out.append("> 3 月 P90 按 P50 合计 + z·σ·√3 计算，不是三个月 P90 相加（独立残差假设）。")
+    out.append("> 3 月 P90 按 P50 合计 + z·σ·√6 计算（月度 h 方差 = h·σ²，1+2+3=6），不是三个月 P90 相加。"
+               f"σ 用滚动起点一步误差校准：σ_train {f['sigma_train']}、σ_roll {f['sigma_roll']}、σ_used {f['sigma_used']}；"
+               f"目标服务水平 {f['target_service_level']:.2f}，回测实现覆盖率 h1 {pct(f['achieved_coverage_h1'])} / h3 {pct(f['achieved_coverage_h3'])}；"
+               f"P90 状态 `{f['p90_status']}`（估计值，不是服务承诺）。")
     out.append("")
     out.append(f"ETS 候选：{'可用' if f['ets_candidate'].get('available') else '不可用（' + str(f['ets_candidate'].get('reason')) + '）'}"
                + (f"，3 月 P50 {q(f['ets_candidate'].get('p50_3m'))}" if f['ets_candidate'].get('available') else ""))
@@ -956,10 +1150,10 @@ def render_sku_section(x, level=2):
         if not m or m.get("n", 0) == 0:
             return f"| {label} | — | — | — | 0 | — |"
         return (f"| {label} | {pct(m['wape'])} | {pct(m['bias'])} | {pct(m['coverage'])} | "
-                f"{m['n']} | {m['zero_excluded']} |")
+                f"{m['n']} | {m.get('zero_actual_cells', 0)} |")
     out.append("**回测（最近 6 个起点，1/3 月）**")
     out.append("")
-    out.append("| 口径 | WAPE | bias | P90 覆盖率 | 有效起点 | 零需求剔除 |")
+    out.append("| 口径 | WAPE | bias | P90 覆盖率 | 有效起点 | 零需求单元（保留） |")
     out.append("|---|---:|---:|---:|---:|---:|")
     out.append(mrow("1 月", b["h1"]))
     out.append(mrow("3 月累计", b["h3"]))
@@ -1024,25 +1218,35 @@ def render_sku_section(x, level=2):
     out.append("")
     out.append(f"**已开未发 SO**：reconciled {q(so['reconciled_open'])} = 死单 {q(so['dead'])} + "
                f"在产 {q(so['in_progress'])} + 无计划 {q(so['no_plan'])} + 超发 {q(so['over_delivered'])}；"
-               f"**计入需求的 live open = {q(so['live_open'])}**（死单不计）。")
+               f"**正向 live open = {q(so['live_open'])}**（= 在产 + 无计划；死单不计；超发不冲抵其他行）。"
+               f"净额口径 {q(so['live_open_net'])} 仅作对照。")
     if so["dead_so"]:
         out.append(f"死单明细：{', '.join(b['so'] + '=' + q(b['open_qty']) for b in so['dead_so'])}。")
     out.append("")
-    out.append("**供给情景与建议量（未取整、不可直接下单）**")
+    out.append("**供给边界与建议量（未取整、不可直接下单）**")
     out.append("")
-    out.append(f"- 情景 A（无 PO / 无在途）= available {q(sup['available'])} + 在产剩余 {q(sup['production_remaining'])} = **{q(sup['scenario_A'])}**")
-    out.append(f"- 情景 B（PO 按假设到货）= available {q(sup['available'])} + 去重 PO {q(sup['open_po_dedup'])} + "
-               f"未含于 PO 的在产 {q(sup['production_not_in_po'])} + 独立在途 {q(sup['independent_intransit'])} = **{q(sup['scenario_B'])}**")
-    out.append(f"- B 敏感性（PO 不去重）= {q(sup['scenario_B_raw_po'])}；仅可用库存 = {q(sup['available'])}")
+    out.append(f"- A 下界 = available {q(sup['available'])}；A 上界 = available + 在产剩余 {q(sup['production_remaining'])} = **{q(sup['A_high'])}**")
+    out.append(f"- B 下界（最大重叠）= available + max(原始 PO {q(sup['open_po_raw'])}, 在产剩余 {q(sup['production_remaining'])}, 在途 {q(sup['intransit'])}) = **{q(sup['B_min'])}**")
+    out.append(f"- B 上界（完全不重叠、全部相加）= available + 原始 PO {q(sup['open_po_raw'])} + 在产剩余 {q(sup['production_remaining'])} + 在途 {q(sup['intransit'])} = **{q(sup['B_max'])}**")
+    out.append(f"- PO 重复候选敏感性（剔除较晚 PO）= **{q(sup['B_min_po_dedup'])} – {q(sup['B_max_po_dedup'])}**；主口径不使用去重")
+    out.append(f"- B 中间情景（在途已含于未结 PO）= 原始 PO + max(在产−PO,0) = {q(sup['B_mid_intransit_in_po'])}；"
+               f"在途=去重 PO：{'是' if sup['intransit_equals_po_dedup'] else '否'}（假设，不是单据级证明）")
     out.append("")
-    out.append("| 提前期 | 需求 P50（含 open SO） | 需求 P90（ROP） | 建议量 A | 建议量 B | 仅可用库存 |")
-    out.append("|---|---:|---:|---:|---:|---:|")
+    out.append("| 提前期 | 窗口需求 P50 | 窗口需求 P90（ROP） | A 建议范围 | B 建议范围 | B 中间情景 | PO重复候选敏感性 | 仅可用库存 |")
+    out.append("|---|---:|---:|---|---|---:|---|---:|")
     for d in LEAD_DAYS:
         l = x["lead_time"][f"L{d}"]
         rv = x["recommendation"]["values"]
-        out.append(f"| {d} 天 | {q(l['p50'])} | {q(l['p90'])} | {q(rv[f'A_L{d}'])} | "
-                   f"{q(rv[f'B_L{d}'])} | {q(rv[f'AVAIL_L{d}'])} |")
+        out.append(f"| {d} 天 | {q(l['p50'])} | {q(l['p90'])} | "
+                   f"{q(rv[f'A_L{d}_lo'])} – {q(rv[f'A_L{d}_hi'])} | "
+                   f"{q(rv[f'B_L{d}_lo'])} – {q(rv[f'B_L{d}_hi'])} | "
+                   f"{q(rv[f'B_mid_L{d}'])} | "
+                   f"{q(rv[f'B_po_dedup_L{d}_lo'])} – {q(rv[f'B_po_dedup_L{d}_hi'])} | "
+                   f"{q(rv[f'AVAIL_L{d}'])} |")
     out.append("")
+    out.append("> 建议范围按“供给上界→较小需求 / 供给下界→较大需求”给出；不是下单量。"
+               "窗口从 2026-10-22 起算，含 10 月剩余 10/31；120/150 天超出 3 个月预测窗，用 3 月均率外推。"
+               "P90 的 σ 用滚动起点一步误差校准；回测实现覆盖率低于 0.90，故 P90 仍是估计值，不是服务承诺。")
     out.append("需单列的未知/情景：")
     for u in x["unknowns"]:
         out.append(f"- {u}")
@@ -1065,6 +1269,9 @@ def render_sample(skus, ev):
     parts.append("")
     parts.append("> 目的：在 60 分钟内交付可检查的端到端样例，证明历史需求、预测/回测、库存、"
                  "PO/在产、情景 A/B 和证据链接能跑通。**不是下单建议**；全量 10 SKU 见同目录 V0 报告。")
+    parts.append("")
+    parts.append("> **本版按 Codex1 V0 review1 修正**：正向 open SO（超发不冲抵）、A/B 供给边界（不发单点）、"
+                 "2026-10-22 日历窗口、P90 √6 一致模型、零需求单元保留。")
     parts.append("")
     parts.append(f"- 数据：`{DB_PATH}`（read_only=True，sha256 `{ev['sources']['db']['sha256'][:16]}…`），"
                  f"销量截止 {SALES_CUTOFF}-30，库存 {AS_OF_STOCK} 完整批次。")
@@ -1097,17 +1304,27 @@ def render_full(skus, ev):
     parts.append("---")
     parts.append("okf: v0.1")
     parts.append("type: Review")
-    parts.append("title: G2+G3 窄范围供需与补货决策报告 V0（只读）")
+    parts.append("title: G2+G3 窄范围供需与补货决策报告 V0.1（只读）")
     parts.append("date: 2026-10-22")
     parts.append("owner: claude-worker")
     parts.append("scope: 10 EN-chain-complete SKUs")
-    parts.append("status: V0 for review; not order-ready")
+    parts.append("status: V0.1 for review; not order-ready")
     parts.append("---")
     parts.append("")
-    parts.append("# G2+G3 窄范围供需与补货决策报告 V0")
+    parts.append("# G2+G3 窄范围供需与补货决策报告 V0.1")
     parts.append("")
     parts.append("> **范围与边界**：只覆盖 phase1 已验收的 10 个 SKU；只读 `order_store.duckdb` 与 EN phase1 快照；"
                  "不访问生产、不下单、不扩样。所有建议量未取整、未套 MOQ/包装倍数，**不是可直接下单的结论**。")
+    parts.append("")
+    parts.append("## 0. 本版对 Codex1 V0 review1 的修正")
+    parts.append("")
+    parts.append("| Review 项 | 本版处理 |")
+    parts.append("|---|---|")
+    parts.append("| 1. 超发冲抵其他行 | 改为逐行正向余额求和：正向 live SO 2,924（原净额 2,017）；超发 -907 单列、不冲抵 |")
+    parts.append("| 2. PO/在产/在途去重未证 | 不再自动扣减、不再发单点：B_min = available + max(原始 PO, 在产, 在途)（最大重叠）；B_max = available + 原始 PO + 在产 + 在途（完全不重叠、全部相加）；PO 重复候选只作单独敏感性 |")
+    parts.append("| 3. 提前期与库存时点脱节 | 决定时点固定 2026-10-22；ROP/建议量按日历窗口积分预测（10 月剩余 10/31）；SO/WO 10-20/21 与库存 10-22 的 1–2 天差单列为未桥接情景 |")
+    parts.append("| 4. P90 月度/累计不一致 | 统一随机游走：月 h 方差 h·σ²，3 月累计 √6；σ 用全部可用滚动起点一步误差校准（σ_used=max(σ_train, σ_roll)）；目标 0.90 与回测实现覆盖率分开记录，覆盖率不足即标 estimate |")
+    parts.append("| 5. 零需求单元被剔除 | 指标保留全部单元；仅全零分母使 WAPE/bias 为空；本轮零需求单元 0 |")
     parts.append("")
     parts.append("## 1. 结论先行")
     parts.append("")
@@ -1119,12 +1336,19 @@ def render_full(skus, ev):
                  f"占全表 {pct(agg['demand_share']['share'])}（仅作规模参考，不是总体覆盖率）。")
     parts.append(f"- **需求**：3 个月（2026-10..12）预测 P50 合计 **{q(agg['forecast_p50_3m_total'])}**、"
                  f"P90 合计 **{q(agg['forecast_p90_3m_total'])}**（逐 SKU P90 相加，不是组合 P90）；"
-                 f"已开未发 live SO **{q(agg['open_so_live_total'])}** 件，死单 {q(agg['dead_so_total'])} 件未计入。")
-    parts.append(f"- **供给**：可用库存 **{q(agg['available_total'])}**；去重未结 PO **{q(agg['open_po_total'])}**"
-                 f"（原始 {q(agg['open_po_raw_total'])}，重复候选剔除 {q(agg['open_po_raw_total'] - agg['open_po_total'])}）；"
-                 f"在产剩余已单列；独立在途 0。")
-    parts.append(f"- **情景 A 总供给 {q(agg['supply_A_total'])} / 情景 B {q(agg['supply_B_total'])}**；"
-                 f"B 的 PO 到货是假设（13 行未结 PO 的 ETA 全空），不是证据。")
+                 f"正向 live SO **{q(agg['open_so_live_total'])}** 件（超发 {q(agg['negative_over_delivery_total'])} 不冲抵），"
+                 f"死单 {q(agg['dead_so_total'])} 件未计入；净额口径 {q(agg['open_so_live_net_total'])} 仅作对照。")
+    parts.append(f"- **供给**：可用库存 **{q(agg['available_total'])}**；未结 PO 原始 **{q(agg['open_po_raw_total'])}** / "
+                 f"去重 **{q(agg['open_po_total'])}**；在产剩余 **{q(sum(float(x['supply']['production_remaining']) for x in skus))}**；"
+                 f"在途 **{q(agg['intransit_total'])}**。"
+                 f"**A 边界 {q(agg['supply_A_low_total'])}–{q(agg['supply_A_high_total'])}；"
+                 f"B 边界 {q(agg['supply_B_min_total'])}–{q(agg['supply_B_max_total'])}**"
+                 f"（B_min=最大重叠，B_max=完全不重叠全部相加；PO 重复候选敏感性 "
+                 f"{q(agg['supply_B_min_po_dedup_total'])}–{q(agg['supply_B_max_po_dedup_total'])}；"
+                 f"在途已含于 PO 的中间情景 {q(agg['supply_B_mid_intransit_in_po_total'])}）。")
+    parts.append(f"- **B 的 PO 到货是假设**（{agg['open_po_line_count']} 行未结 PO 的 ETA 全空），不是证据；"
+                 "PO↔在产、PO↔在途的逐笔重叠未证，故只发边界，不发单点。"
+                 f"在途=去重 PO 的 SKU 有 {agg['intransit_equals_po_dedup_skus']}/10 个——这是重叠的强指示，但不是单据级证明。")
     parts.append(f"- **回测**：聚合 1 月 WAPE {pct(agg['backtest_aggregate']['h1']['wape'])}、"
                  f"3 月 WAPE {pct(agg['backtest_aggregate']['h3']['wape'])}；"
                  f"P90 覆盖率 1 月 {pct(agg['backtest_aggregate']['h1']['coverage'])}、"
@@ -1132,6 +1356,10 @@ def render_full(skus, ev):
                  "覆盖率不足 90% 时，P90 区间偏窄，服务水平不能按名义值承诺。")
     parts.append("- **不能做的结论**：不能把 A/B、60/90/120 天、PO 去重与否合成一个“建议下单量”；"
                  "ETA、在产日期、UOM、Cover 可替代、断货删失都未证。")
+    parts.append("")
+    parts.append("> **行动分层（D9）**：`control/reviews/2026-10-22-replenishment-triage.md` —— "
+                 "可准备 1（Natural-194，仅备货/产能准备）、待核实 2（Linen-153、HLR）、暂缓 7。"
+                 "分层不是下单许可。")
     parts.append("")
     parts.append("## 2. 范围、身份与排除")
     parts.append("")
@@ -1157,10 +1385,12 @@ def render_full(skus, ev):
                  "`gs_orders` 无订单状态字段，本层无法剔除取消/退货；若源表已只含发货行则无影响，但未证。")
     parts.append("- 主模型：历史 ≥24 月用 seasonal naive（lag 12）；<24 月用近 3 月均值。ETS 候选为 Holt-Winters 加法"
                  "（level+trend+seasonal，网格搜索 α/β/γ），**仅报告、不选为主模型**，避免在同一 6 个回测起点上选模的乐观偏差。")
-    parts.append("- P50 = 点预测（下限 0）；P90 = P50 + max(1.2816·σ, q90(残差))·√h。σ/q90 只用训练残差。"
-                 "3 月 P90 不是三个月 P90 相加，而是按 √3 缩放（独立残差假设）。")
+    parts.append("- P50 = 点预测（下限 0）；月度 h 的 P90 = P50_h + z_sig·√h（随机游走误差，方差 h·σ²）；"
+                 "3 月累计 P90 = P50 合计 + z_sig·√(1+2+3)=√6，与月度模型一致。"
+                 "z_sig=1.2816·σ_used，σ_used=max(训练残差有效 σ, 全部可用滚动起点一步误差 σ)；"
+                 "滚动误差是逐起点 out-of-sample 的，但校准集与 6 个报告起点有重叠，故覆盖率仍按实测报告。")
     parts.append("- 回测：最近 6 个已知 h=3 的起点（2026-01..2026-06）；1 月按单月、3 月按累计；"
-                 "实际为 0 的单元不参与 WAPE/bias；P90 覆盖率 = 实际 ≤ P90 的比例。")
+                 "实际为 0 的单元保留，只有全零分母才让 WAPE/bias 为空；P90 覆盖率 = 实际 ≤ P90 的比例。")
     parts.append("- ETS 只在训练 ≥24 月的起点可算，因此它的样本起点数可能少于 6；表中 ETS 行只作参考，"
                  "不与主模型 6 起点 WAPE 直接比较。")
     parts.append("")
@@ -1185,7 +1415,18 @@ def render_full(skus, ev):
                  f"3 月 WAPE {pct(agg['backtest_aggregate']['h3']['wape'])}；"
                  f"1 月 P90 覆盖 {pct(agg['backtest_aggregate']['h1']['coverage'])}、"
                  f"3 月 P90 覆盖 {pct(agg['backtest_aggregate']['h3']['coverage'])}；"
-                 f"有效单元 1 月 {agg['backtest_aggregate']['h1']['n']}、3 月 {agg['backtest_aggregate']['h3']['n']}。")
+                 f"有效单元 1 月 {agg['backtest_aggregate']['h1']['n']}、3 月 {agg['backtest_aggregate']['h3']['n']}；"
+                 f"零需求单元（保留）1 月 {agg['backtest_aggregate']['h1'].get('zero_actual_cells', 0)}、"
+                 f"3 月 {agg['backtest_aggregate']['h3'].get('zero_actual_cells', 0)}。"
+                 "目标服务水平 0.90 与回测实现覆盖率分开记录；实现覆盖率不足 0.90 时，P90 只是**估计值**，"
+                 "即使 σ 已用滚动起点校准，也不能按 90% 承诺。")
+    parts.append("")
+    cal = agg["backtest_aggregate"].get("calibration", {})
+    parts.append(f"> **校准**：σ 已按全部可用滚动起点的一步误差校准（逐 SKU `σ_used=max(σ_train, σ_roll)`；"
+                 f"本轮 σ_used 范围 {cal.get('sigma_used_range')}）。6 起点池化的归一化误差 90 分位 "
+                 f"h1={cal.get('h1_q90_normalized_error')}、h3={cal.get('h3_q90_normalized_error')} 只作诊断、未 applied；"
+                 "把它当倍数可把覆盖率推到约 90%，但在同一条回测集上拟合，本轮不用于 P90。"
+                 "实现覆盖率仍低于 0.90，故 P90 是估计值。")
     parts.append("")
     div = [x for x in skus if x["forecast"].get("run_rate_ratio") is not None
            and x["forecast"]["run_rate_ratio"] < 0.5]
@@ -1217,51 +1458,76 @@ def render_full(skus, ev):
                  "因此另给毛量；主口径用剩余量，并在未知项中标注。")
     parts.append("- **在产 1:1 假设**：WO 的 `production_item` 是 `PK#` 皮壳，本轮按 1:1 对应 KS 成品计入；"
                  "该关系未证（若 BOM/加工损耗不是 1:1，在产量需重算）。")
-    parts.append("- **独立在途**：同仓 `intransit − open PO` 的正部；本轮 10/10 为 0。"
-                 "但是否逐笔属于同一 PO 未证，故只作“独立在途=0”的条件结论。")
+    parts.append("- **在途与 PO**：在途 10/10 SKU 恰好等于去重后的未结 PO；这说明在途很可能就是同一批 PO 货，"
+                 "但逐笔关联未证。因此 B_max 仍按“完全不重叠、全部相加”给出（会有意重复计算在途），"
+                 "B_min 按“最大重叠”给出；中间情景假设在途已含于 PO。")
+    parts.append("- **未结 PO / 在产重叠未证**：不再把 max(WO−PO,0) 或 max(transit−PO,0) 当成已验证供给，"
+                 "也不再自动扣减 PO 重复候选。B_min = available + max(原始 PO, 在产, 在途)（最大重叠）；"
+                 "B_max = available + 原始 PO + 在产 + 在途（完全不重叠）；PO 重复候选是单独敏感性。")
     parts.append("- **严格口径**：若坚持“ETA 空不得视为及时到货”，则 A/B 都不能算作可到货供给，"
                  "只能看“仅可用库存”列；A/B 是情景，不是承诺。")
     parts.append("")
-    parts.append("### 4.2 逐 SKU 供给")
+    parts.append("### 4.2 逐 SKU 供给边界")
     parts.append("")
-    parts.append("| SKU | 可用 | 在途 | 未结PO原始 | PO重复候选 | 去重PO | 在产毛量 | 在产剩余 | 未含PO在产 | 独立在途 | A | B |")
-    parts.append("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|")
+    parts.append("| SKU | 可用 | 在途 | 未结PO原始 | PO重复候选 | 去重PO | 在产毛量 | 在产剩余 | A 下/上 | B_min/B_max | B_min/B_max（PO去重） | B 中间情景 |")
+    parts.append("|---|---:|---:|---:|---:|---:|---:|---:|---|---|---|---:|")
     for x in skus:
         s = x["supply"]
-        parts.append(f"| `{x['sku']}` | {q(s['available'])} | {q(x['inventory']['intransit'])} | "
+        parts.append(f"| `{x['sku']}` | {q(s['available'])} | {q(s['intransit'])} | "
                      f"{q(s['open_po_raw'])} | {q(s['open_po_raw'] - s['open_po_dedup'])} | "
                      f"{q(s['open_po_dedup'])} | {q(s['production_gross'])} | {q(s['production_remaining'])} | "
-                     f"{q(s['production_not_in_po'])} | {q(s['independent_intransit'])} | "
-                     f"{q(s['scenario_A'])} | {q(s['scenario_B'])} |")
+                     f"{q(s['A_low'])}/{q(s['A_high'])} | "
+                     f"{q(s['B_min'])}/{q(s['B_max'])} | "
+                     f"{q(s['B_min_po_dedup'])}/{q(s['B_max_po_dedup'])} | "
+                     f"{q(s['B_mid_intransit_in_po'])} |")
+    parts.append("")
+    parts.append(f"> 在途=去重 PO 的 SKU：{agg['intransit_equals_po_dedup_skus']}/10。"
+                 "这是重叠的强指示，但不是单据级证明；B_max 是有意取“完全不重叠”的极端上界，"
+                 "因此比中间情景高出整段在途量。")
     parts.append("")
     dedup_ok = [x["sku"] for x in skus if x["po"].get("dedup_equals_intransit")]
     if dedup_ok:
         parts.append(f"> 去重一致性：{len(dedup_ok)} 个 SKU（{', '.join('`'+s+'`' for s in dedup_ok)}）"
                      "剔除较晚重复候选后，未结 PO 恰好等于同 SKU 在途量。这与“重复候选”假设一致，"
-                     "但仍不是单据级证明；原始 PO 口径作敏感性（B_raw）。")
+                     "但仍不是单据级证明；主 B 边界用原始 PO，去重口径只作单独敏感性。")
         parts.append("")
-    parts.append("## 5. 需求与建议量（情景，不是订单）")
+    parts.append("## 5. 需求与建议量（边界/情景，不是订单）")
     parts.append("")
-    parts.append("需求 = 预测 + 已开未发 live SO（死单不计）。ROP = 提前期需求 P90；建议量 = max(0, P90(提前期+30天) − 同期净供给)。"
-                 "所有值未取整、无 MOQ/包装倍数。提前期 120/150 天超出 3 个月预测窗口，用 3 个月平均月率线性外推，"
-                 "不是独立预测。")
+    parts.append("需求 = 预测 + 正向 live SO（死单不计、超发不冲抵）。决定时点 **2026-10-22**；"
+                 "ROP 按 `[10-22, 10-22+提前期]` 的日历窗口积分预测（10 月剩余 10/31），不是月均率乘月份。"
+                 "建议量 = max(0, P90(提前期+30天窗口) − 供给边界)；所有值未取整、无 MOQ/包装倍数。"
+                 "120/150 天超出 3 个月预测窗，1 月以后用 3 月均率外推。"
+                 "**时点差未桥接**：库存是 10-22，SO/WO 快照是 10-20/21；这 1–2 天的单据变动不在本模型内，"
+                 "作为时点情景单列，不伪造已对平。")
     parts.append("")
-    parts.append("| SKU | 预测P50 | 预测P90 | live SO | 需求P50 | 需求P90 | ROP60 | 建议60 A/B | ROP90 | 建议90 A/B | ROP120 | 建议120 A/B |")
-    parts.append("|---|---:|---:|---:|---:|---:|---:|---|---:|---|---:|---|")
+    parts.append("| SKU | 全 3 月 P50 | 全 3 月 P90 | live SO(+) | 决定窗 P50（含 SO） | 决定窗 P90（含 SO） |")
+    parts.append("|---|---:|---:|---:|---:|---:|")
     for x in skus:
-        f = x["forecast"]; so = x["open_so"]; d = x["demand"]; lt = x["lead_time"]; rv = x["recommendation"]["values"]
+        f = x["forecast"]; so = x["open_so"]; rem = x["demand"]["remaining_3m"]
         parts.append(f"| `{x['sku']}` | {q(f['p50_3m'])} | {q(f['p90_3m'])} | {q(so['live_open'])} | "
-                     f"{q(d['total_p50'])} | {q(d['total_p90'])} | "
-                     f"{q(lt['L60']['p90'])} | "
-                     f"{q(rv['A_L60'])} / {q(rv['B_L60'])} | "
-                     f"{q(lt['L90']['p90'])} | "
-                     f"{q(rv['A_L90'])} / {q(rv['B_L90'])} | "
-                     f"{q(lt['L120']['p90'])} | "
-                     f"{q(rv['A_L120'])} / {q(rv['B_L120'])} |")
+                     f"{q(rem['p50'])} | {q(rem['p90'])} |")
     parts.append("")
-    parts.append("> ROP 只依赖需求，不依赖供给情景；建议量按 A/B 分列。聚合值：A 建议 60/90/120 = "
-                 f"{q(agg['recommendation_sums']['A_L60'])} / {q(agg['recommendation_sums']['A_L90'])} / {q(agg['recommendation_sums']['A_L120'])}；"
-                 f"B = {q(agg['recommendation_sums']['B_L60'])} / {q(agg['recommendation_sums']['B_L90'])} / {q(agg['recommendation_sums']['B_L120'])}。"
+    for days in LEAD_DAYS:
+        parts.append(f"**提前期 {days} 天（复核 {REVIEW_DAYS} 天，窗口 {days}+{REVIEW_DAYS} 天）**")
+        parts.append("")
+        parts.append("| SKU | 窗口 P50 | 窗口 P90（ROP） | A 建议范围 | B 建议范围 | B 中间情景 | PO去重敏感性 |")
+        parts.append("|---|---:|---:|---|---|---:|---|")
+        for x in skus:
+            lt = x["lead_time"][f"L{days}"]; rv = x["recommendation"]["values"]
+            parts.append(f"| `{x['sku']}` | {q(lt['p50'])} | {q(lt['p90'])} | "
+                         f"{q(rv[f'A_L{days}_lo'])} – {q(rv[f'A_L{days}_hi'])} | "
+                         f"{q(rv[f'B_L{days}_lo'])} – {q(rv[f'B_L{days}_hi'])} | "
+                         f"{q(rv[f'B_mid_L{days}'])} | "
+                         f"{q(rv[f'B_po_dedup_L{days}_lo'])} – {q(rv[f'B_po_dedup_L{days}_hi'])} |")
+        parts.append("")
+    parts.append("> 建议范围按“供给上界→较小需求 / 供给下界→较大需求”给出；不是下单量。"
+                 "聚合边界：A 60/90/120 = "
+                 f"{q(agg['recommendation_sums']['A_L60_lo'])}–{q(agg['recommendation_sums']['A_L60_hi'])} / "
+                 f"{q(agg['recommendation_sums']['A_L90_lo'])}–{q(agg['recommendation_sums']['A_L90_hi'])} / "
+                 f"{q(agg['recommendation_sums']['A_L120_lo'])}–{q(agg['recommendation_sums']['A_L120_hi'])}；"
+                 f"B = {q(agg['recommendation_sums']['B_L60_lo'])}–{q(agg['recommendation_sums']['B_L60_hi'])} / "
+                 f"{q(agg['recommendation_sums']['B_L90_lo'])}–{q(agg['recommendation_sums']['B_L90_hi'])} / "
+                 f"{q(agg['recommendation_sums']['B_L120_lo'])}–{q(agg['recommendation_sums']['B_L120_hi'])}。"
                  "这些合计**不是**采购/生产总量。")
     parts.append("")
     parts.append("## 6. 未知项与情景隔离")
@@ -1272,11 +1538,15 @@ def render_full(skus, ev):
     parts.append(f"| 在产无日期 | {agg['open_wo_count']} 张开放 WO | 计入供给但标“到货日未确认”；Draft/Stopped 单列 |")
     parts.append(f"| Stopped WO | {agg['stopped_wo_qty']} 件 | 未计入在产 |")
     parts.append(f"| 死单 SO | {q(agg['dead_so_total'])} 件 | 未计入需求；若确认补发需另加 |")
+    parts.append(f"| 超发 SO | {q(agg['negative_over_delivery_total'])} 件 | 不冲抵其他行；净额口径 {q(agg['open_so_live_net_total'])} 仅对照 |")
+    parts.append("| PO↔在产/在途重叠 | 10/10 SKU | 无逐笔键；发 B_min/B_max 边界，不发单点；B_mid 只作情景；不把 max(WO−PO,0) 或 max(transit−PO,0) 写成已验证供给 |")
+    parts.append("| 单据/库存时点 | SO/WO 10-20/21，库存 10-22 | 未做 1–2 天桥接；影响列为时点情景 |")
+    parts.append("| P90 校准 | 10/10 SKU | σ_used=max(σ_train, 滚动起点一步 σ)；校准集与 6 报告起点重叠；实现覆盖率低于 0.90 → 标 estimate |")
     parts.append("| 库存 UOM | 10/10 SKU | `uom_basis=unknown`；按件计数、未换算 |")
     parts.append("| Cover 可替代 | 10/10 SKU | 未证；cover 库存不并入供给 |")
     parts.append("| 断货删失 | 10/10 SKU | 仅 3 天库存历史，未校正；历史缺口可能低估需求 |")
     parts.append("| 取消/退货 | 10/10 SKU | `gs_orders` 无状态字段，未剔除；若源表只含发货行则无影响，未证 |")
-    parts.append("| PO 重复候选 | 3 SKU（Cord-DKBlue/Cord-Grey/Linen-153）| 主口径剔除较晚 PO；原始值作敏感性 |")
+    parts.append("| PO 重复候选 | 3 SKU（Cord-DKBlue/Cord-Grey/Linen-153）| 主 B 边界不扣减；去重口径只作单独敏感性 |")
     parts.append("")
     parts.append("## 7. 对账与可复现性")
     parts.append("")
@@ -1310,22 +1580,36 @@ def render_full(skus, ev):
     parts.append("")
     parts.append("## 8. 复审建议")
     parts.append("")
-    parts.append("1. 先审样例（`2026-10-22-sample-2sku.md`）与供给去重：特别是 PO021733/PO021735 重复候选、"
-                 "intransit 与 PO 的 max 口径、在产 remaining vs gross。")
-    parts.append("2. 再审回测：6 个起点的零需求剔除、P90 覆盖、<24 月退化是否按规则执行。")
+    parts.append("1. 先审样例（`2026-10-22-sample-2sku.md`）与供给边界：B_min 的最大重叠假设、"
+                 "B_max 的完全不重叠全额相加、PO021733/PO021735 重复候选敏感性、在产 remaining vs gross。")
+    parts.append("2. 再审回测与校准：零需求单元已保留、P90 覆盖 vs 目标 0.90、滚动起点 σ 校准、<24 月退化是否按规则执行。")
     parts.append("3. 业务侧只需先回答三件事：PO021733/735 是否重复；死单是否补发；库存单位是否为件。"
                  "这三项不解决，建议量只能作情景。")
     parts.append("")
-    parts.append("## 9. 附：逐 SKU 明细")
+    parts.append("## 9. V0.1 残余风险")
+    parts.append("")
+    parts.append("| 风险 | 影响 | 本版处理 |")
+    parts.append("|---|---|---|")
+    parts.append("| PO/在产/在途无逐笔链接 | 供给仍是一个区间，不是单点 | 发 B_min–B_max；B_max 有意重复计算在途 |")
+    parts.append("| PO ETA 全空 | 无法确认提前期内能否到货 | B 是到货假设；另给“仅可用库存”列 |")
+    parts.append("| 在产 planned_end_date 全空 | 无法确认在产在提前期内完工 | 计入供给但标日期未确认 |")
+    parts.append("| SO/WO 10-20/21 vs 库存 10-22 | 1–2 天的单据变动未桥接 | 列为时点情景，未伪造对平 |")
+    parts.append("| P90 实现覆盖率低于 0.90 | P90 偏窄（尤其 3 月） | σ 已滚动校准；P90 标 estimate，不承诺服务 |")
+    parts.append("| 库存 UOM=unknown | 件数口径未证 | 按件计数、不换算，单列 unknown |")
+    parts.append("| Cover 可替代未证 | 可能低估有效供给 | cover 不并入供给 |")
+    parts.append("| 断货删失未校正 | 历史需求可能低估 | 单列 unknown，未做校正 |")
+    parts.append("| gs_orders 无状态字段 | 取消/退货可能混入 | 单列 unknown，未剔除 |")
+    parts.append("")
+    parts.append("## 10. 附：逐 SKU 明细")
     parts.append("")
     for x in skus:
         parts.append(render_sku_section(x, 2))
     parts.append("")
-    parts.append("## 10. 运行限制")
+    parts.append("## 11. 运行限制")
     parts.append("")
     parts.append("- 0 次生产访问；`order_store.duckdb` 以 read_only 打开；未写下单/采购/生产系统。")
     parts.append("- 10 SKU 是 phase1 固定范围，未扩样；全 family / 100 SKU 需用户明确授权。")
-    parts.append("- 本报告是 V0，供 Codex1 复审；不自行宣布 PASS。")
+    parts.append("- 本报告是 V0.1，供复审；不自行宣布 PASS。")
     parts.append("")
     return "\n".join(parts)
 
@@ -1365,10 +1649,12 @@ def main():
     write_json(EVIDENCE_DIR / "evidence.json", ev)
     sample = [x for x in skus if x["customer_code"] in SAMPLE_CODES]
     write_json(PILOT_OUT / "sample_2sku.json", dict(
-        schema_version="supply_replenishment_v0_sample/1",
+        schema_version="supply_replenishment_v0_1_sample/1",
+        report_version="V0.1",
         generated_at=ev["generated_at"],
         note="2-SKU end-to-end sample; full 10-SKU evidence in out/replenishment_v0/evidence.json",
         sources=ev["sources"],
+        time_alignment=ev["time_alignment"],
         method=ev["method"],
         skus=sample,
     ))
@@ -1382,9 +1668,12 @@ def main():
     for x in sample:
         print(x["sku"], "hist", x["history"]["n_months"], x["forecast"]["primary_model"],
               "fc50", x["forecast"]["p50_3m"], "fc90", x["forecast"]["p90_3m"],
+              "sigma_used", x["forecast"]["sigma_used"],
               "avail", x["inventory"]["available"], "po", x["po"]["open_qty_dedup"],
-              "wo_rem", x["production"]["remaining_qty"], "liveSO", x["open_so"]["live_open"],
-              "A", x["supply"]["scenario_A"], "B", x["supply"]["scenario_B"])
+              "wo_rem", x["production"]["remaining_qty"], "liveSO+", x["open_so"]["live_open"],
+              "over", x["open_so"]["negative_over_delivery"],
+              "A", f"{x['supply']['A_low']}-{x['supply']['A_high']}",
+              "B_min/max", f"{x['supply']['B_min']}-{x['supply']['B_max']}")
 
 
 if __name__ == "__main__":
