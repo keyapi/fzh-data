@@ -598,6 +598,26 @@ tags: [supply-chain, research, log]
 - 未访问生产、未改 `order_store.duckdb`（前后 sha256 `25579c5d…`）、未估算缺失值。
 - 失败/放弃：无；剩余是 ETA 外部输入与 cover 同池/UOM 的业务确认，不是时间。
 
+## 2026-10-22 — G2+G3 窄范围试点 V0（2-SKU 样例 + 10 SKU 报告）
+
+- 执行 `control/reviews/2026-10-22-g2g3-pilot-task.md`；只读 `order_store.duckdb`（`read_only=True`，
+  运行前后 sha256 `25579c5d…` 不变）与 EN phase1 快照；0 次生产访问、0 下单、未扩样。
+- 先交 2-SKU 样例：`control/reviews/2026-10-22-sample-2sku.md`（Linen-Natural-194 高量/无 PO/在产，
+  Linen-White 14 月/mean3/低库存）。全量：`control/reviews/2026-10-22-supply-demand-replenishment-v0.md`
+  + `out/replenishment_v0/evidence.json`（230 KB，聚合，无原始订单行）。
+- 入 10 SKU → 出 10 SKU；客户码→单一 KS 物料 10/10；G3 排除 0。历史 300 个月度单元；
+  `gs_orders` 21,826 行全部聚合，无坏日期行。
+- 需求：3 月 P50 1,457 / P90 3,560（逐 SKU 相加，非组合 P90）；live SO 2,017；死单 1,675 未计。
+  供给：available 1,015；未结 PO 原始 1,465 / 去重 1,184 / 重复候选 281；在产剩余 2,190；
+  A 3,205 / B 3,680；独立在途 0。
+- 回测：最近 6 起点；聚合 1 月 WAPE 60.5%、3 月 52.6%；P90 覆盖 88.3% / 70.0%。
+  关键发现：6/10 SKU 的预测月均 < 近 3 月均值 50%（seasonal naive 用去年 10–12 月，2026 量级更高）；
+  已在报告中单列为“模型分歧”，建议量只作下限情景。ETS 候选不稳定（1 例 P50=0），未采用。
+- 未决/未证：PO ETA 全空（13 行/1,465 件）；在产 planned_end_date 全空；PK#→KS 1:1 未证；
+  ND# 内胆可用性未建模；库存 UOM=unknown；Cover 可替代未证；断货删失未校正；
+  `gs_orders` 无状态字段，取消/退货未剔除；PO021733/735 重复候选仅按行同值判定。
+- 失败/放弃：无（约 15 分钟完成样例与全量）；剩余是业务/单据证据缺口，不是时间。
+
 ## 模板（后续阶段）
 
 ```text

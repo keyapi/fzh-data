@@ -14,6 +14,8 @@ status: V0 for review; not order-ready
 
 ## 1. 结论先行
 
+> **先看样例**：`control/reviews/2026-10-22-sample-2sku.md`（Linen-Natural-194 + Linen-White）是同一套代码的端到端最小切片；本报告是全量 10 SKU。
+
 - **入 10 SKU → 出 10 SKU**；客户码→单一 KS 物料确认 10/10，G3 排除 0 个。10 个 SKU 在 gs_orders 窗口内合计 22,399 件，占全表 5.2%（仅作规模参考，不是总体覆盖率）。
 - **需求**：3 个月（2026-10..12）预测 P50 合计 **1,457**、P90 合计 **3,560.3**（逐 SKU P90 相加，不是组合 P90）；已开未发 live SO **2,017** 件，死单 1,675 件未计入。
 - **供给**：可用库存 **1,015**；去重未结 PO **1,184**（原始 1,465，重复候选剔除 281）；在产剩余已单列；独立在途 0。
@@ -36,7 +38,7 @@ status: V0 for review; not order-ready
 | 9 | `TT0000671K0063721` | `KS0001-HLR-100-OFFWHITE` | 皮壳 | 5 | 27 | medium-low | seasonal_naive |
 | 10 | `C/Linen-Natural-194-688-wow` | `KS0001-XMMBS-194-HEMPNATURAL` | 皮壳 | 1 | 29 | medium-low | seasonal_naive |
 
-- 排除：**0/10**。每个客户码只指向一个 KS 物料（10/10 confirmed）；同一 KS 物料另有平台别名（本轮 6 个别名常见），这是多渠道/cover 命名，不是跨物料歧义。没有身份不明到需要排除 G3 的 SKU。单位口径仍是条件结论：需求/BOM 为「个」，库存 `uom_basis=unknown`，本轮按件计数、不做换算。
+- 排除：**0/10**。每个客户码只指向一个 KS 物料（10/10 confirmed）；同一 KS 物料另有平台别名（本轮 1–8 个），这是多渠道/cover 命名，不是跨物料歧义。没有身份不明到需要排除 G3 的 SKU。单位口径仍是条件结论：需求/BOM 为「个」，库存 `uom_basis=unknown`，本轮按件计数、不做换算。
 - 置信度分布：{'medium': 2, 'medium-low': 7, 'low': 1}；主模型：{'seasonal_naive': 9, 'mean3': 1}。
 - 历史 <24 月退化为近 3 月均值（本批仅 Linen-White 14 月）；24–35 月标 medium-low，36+ 标 medium。所有 SKU 都不声称稳定季节性。
 

@@ -1111,6 +1111,9 @@ def render_full(skus, ev):
     parts.append("")
     parts.append("## 1. 结论先行")
     parts.append("")
+    parts.append("> **先看样例**：`control/reviews/2026-10-22-sample-2sku.md`（Linen-Natural-194 + Linen-White）"
+                 "是同一套代码的端到端最小切片；本报告是全量 10 SKU。")
+    parts.append("")
     parts.append(f"- **入 10 SKU → 出 10 SKU**；客户码→单一 KS 物料确认 10/10，G3 排除 0 个。"
                  f"10 个 SKU 在 gs_orders 窗口内合计 {q(agg['demand_share']['scope_qty'])} 件，"
                  f"占全表 {pct(agg['demand_share']['share'])}（仅作规模参考，不是总体覆盖率）。")
@@ -1140,7 +1143,7 @@ def render_full(skus, ev):
                      f"{x['history']['n_months']} | {x['forecast']['confidence']} | {x['forecast']['primary_model']} |")
     parts.append("")
     parts.append("- 排除：**0/10**。每个客户码只指向一个 KS 物料（10/10 confirmed）；同一 KS 物料另有平台别名"
-                 "（本轮 6 个别名常见），这是多渠道/cover 命名，不是跨物料歧义。没有身份不明到需要排除 G3 的 SKU。"
+                 "（本轮 1–8 个），这是多渠道/cover 命名，不是跨物料歧义。没有身份不明到需要排除 G3 的 SKU。"
                  "单位口径仍是条件结论：需求/BOM 为「个」，库存 `uom_basis=unknown`，本轮按件计数、不做换算。")
     parts.append(f"- 置信度分布：{agg['confidence_counts']}；主模型：{agg['primary_model_counts']}。")
     parts.append("- 历史 <24 月退化为近 3 月均值（本批仅 Linen-White 14 月）；24–35 月标 medium-low，36+ 标 medium。"

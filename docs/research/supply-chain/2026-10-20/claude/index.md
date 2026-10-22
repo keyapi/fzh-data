@@ -43,6 +43,10 @@ tags: [supply-chain, research, index]
 | [15-full-family-etl.md](15-full-family-etl.md) | 全 family/全 SKU 批量 ETL 方向与架构 |
 | [control/reviews/2026-10-22-sku-match-audit.md](control/reviews/2026-10-22-sku-match-audit.md) | 通途-EN SKU 匹配只读审计（GS 订单侧 297 SKU / 4,115 行四分类） |
 | [control/reviews/2026-10-22-eta-cover-uom-evidence.md](control/reviews/2026-10-22-eta-cover-uom-evidence.md) | B v2：5 trace SKU 主口径 + 10 expand10 扩展；ETA/Cover/UOM/在途证据与可复算键 |
+| [control/reviews/2026-10-22-sample-2sku.md](control/reviews/2026-10-22-sample-2sku.md) | G2+G3 2-SKU 端到端样例（历史需求→预测/回测→库存/PO/在产→A/B 情景） |
+| [control/reviews/2026-10-22-supply-demand-replenishment-v0.md](control/reviews/2026-10-22-supply-demand-replenishment-v0.md) | G2+G3 10-SKU 窄范围 V0（只读；不是下单建议） |
+| [out/replenishment_v0/evidence.json](out/replenishment_v0/evidence.json) | V0 聚合证据（10 SKU；无原始订单行；含查询定义与源哈希） |
+| [experiments/g2g3_pilot/](experiments/g2g3_pilot/) | G2+G3 只读构建脚本与 2-SKU 样例 JSON |
 | [sources.md](sources.md) | 证据账本（ID / 主张 / 来源 / 日期 / 原文 / 强度） |
 | [log.md](log.md) | 过程记录、失败与放弃方向 |
 | [experiments/](experiments/index.md) | E1–E3 最小验证的代码、输入哈希与结果 |

@@ -1,6 +1,6 @@
 {
   "schema_version": "supply_replenishment_v0_sample/1",
-  "generated_at": "2026-10-22T14:00:04+08:00",
+  "generated_at": "2026-10-22T14:06:48+08:00",
   "note": "2-SKU end-to-end sample; full 10-SKU evidence in out/replenishment_v0/evidence.json",
   "sources": {
     "db": {
