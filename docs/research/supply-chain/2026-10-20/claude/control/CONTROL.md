@@ -9,14 +9,13 @@ updated: 2026-10-21
 
 # 供应链整合 — 项目总控页
 
-Updated: 2026-10-21 20:05 (Asia/Shanghai)
+Updated: 2026-10-22 09:00 (Asia/Shanghai)
 
 ## 已验收（窄样本契约）
 
 > v1 `22ae9a1e` 被 Adapter Review 打回；v2 `49a142e0`、v3 `e6b3cc9a` 被交叉复审打回。
 > **v4 `4b7ec55f` 已通过 Codex 交叉复审（PASS，1 个非阻塞 P3 文档计数）。**
 
-- **G1B DN/WO/JC/SE 窄样本 v4**：`4b7ec55f` PASS（5 SKU）。
 - **G1B 10 SKU 第一阶段 SE 补齐（2026-10-22）**：闸门 `ca27163c`（Codex PASS）下
   补齐 238 个 SE 明细；10/10 SKU C1/C2/C3 完整，SE 663/663 resolved；
   C2 195 可比 / 193 通过 / 2 张 `produced_qty` 失真 / 1 张 `wo_uom_unresolved`（WO-25-07755）unverified；
@@ -117,8 +116,7 @@ Updated: 2026-10-21 20:05 (Asia/Shanghai)
   `next(..., parents[7])` 的默认值被立即求值导致 `IndexError`（10-21 10:58 改动引入）。
   已改为惰性回退；07:06–07:20 手动补跑成功：14/14 仓、5,314 行、
   `run_id=20261022T070625`、`complete=true`。
-- **未入库**：`order_store.duckdb` 的 `tongtool_stock` 只有 4 个 10-21 手动快照；
-  每日 JSONL 尚未进入分析库，R290/DN-WO-JC-SE 都没用上每日历史。
+- （历史）当时每日 JSONL 尚未入库；2026-10-22 07:50 已写入 `stock_history`（见下）。
 - 诊断与入库方案：`control/reviews/2026-10-21-stock-daily-diagnosis.md`
   （只读、未落盘、未改任务）。
 - 决策 Codex：**先修数据地基 A，再修闸门 B，暂停 100 SKU 生产扩样**；
