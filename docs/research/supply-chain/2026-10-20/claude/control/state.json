@@ -1,5 +1,5 @@
 {
-  "updated": "2026-10-22T14:39:00+08:00",
+  "updated": "2026-10-22T14:41:00+08:00",
   "accepted": [
     "G1 SO evidence gate v5: 9a04741e / d027f981; 66 tests; current_structure_only boundary; historical pending",
     "R1/R2 no-evidence audit gate: d8c473fe",
@@ -165,12 +165,27 @@
   },
   "active": [
     {
-      "task": "G2+G3 narrow pilot",
+      "task": "V1 model race",
       "owner": "claude",
-      "status": "in_progress",
-      "scope": "10 EN-chain-complete SKUs; forecast 3 months; replenishment scenarios A/B; unknown isolated",
-      "deliverable": "2-SKU sample within 60 min, then full V0 report + evidence",
-      "review": "codex1 sample + full"
+      "status": "running",
+      "pid": 46980,
+      "started_at": "2026-10-22T14:32:25+08:00",
+      "outputs_pending": true
+    },
+    {
+      "task": "P90-free action list",
+      "owner": "claude",
+      "status": "running",
+      "background_id": "b9mn39b2c",
+      "scope": "10 SKU layered actions",
+      "outputs_pending": true
+    },
+    {
+      "task": "V0.1 review",
+      "owner": "codex301",
+      "status": "completed",
+      "verdict": "FAIL 2 major + 1 minor, no blocking",
+      "completed_at": "2026-10-22T14:34:00+08:00"
     }
   ],
   "supervisor": {
@@ -188,15 +203,9 @@
       "completion-driven: worker done -> commit -> codex1 review -> codex2 acceptance -> next task; time is only an escalation cap, not a gate"
     ],
     "latest_decision": {
-      "id": "D9",
-      "verdict": "rework + local pause",
-      "affected": [
-        "White",
-        "Natural-194",
-        "SKUs affected by 907 undercount / 281 unproven PO offset"
-      ],
-      "allowed": "layered action list: prepare/verify/hold",
-      "deadline": "14:38 status report; completion-driven"
+      "id": "D10",
+      "verdict": "freeze V0.1; P90 to V1; P90-free action list allowed",
+      "deadlines": "16:00 action list; 18:00 V1 evidence"
     }
   },
   "control_rules": {
