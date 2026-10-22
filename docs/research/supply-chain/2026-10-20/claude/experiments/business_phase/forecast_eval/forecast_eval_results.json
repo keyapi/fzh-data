@@ -1,0 +1,598 @@
+{
+ "schema_version": "t2_forecast_eval/1",
+ "inputs": {
+  "db": {
+   "path": "D:\\Work\\fzh-order-store\\order_store.duckdb",
+   "sha256": "25579c5dcd802c7e67f610432a19d08f8e6952696bd50d43bdfa47d6b9241ae9"
+  },
+  "destinations_sha256": "720b478809128156cc1609cd10720cb926a98382a7c2f8a8179c55cadbf7bf60"
+ },
+ "settings": {
+  "window_days": 90,
+  "min_train_months": 24,
+  "validation_origins": [
+   "2025-01",
+   "2025-02",
+   "2025-03",
+   "2025-04",
+   "2025-05",
+   "2025-06"
+  ],
+  "test_origins": [
+   "2025-10",
+   "2025-11",
+   "2025-12",
+   "2026-01",
+   "2026-02",
+   "2026-03"
+  ],
+  "candidates": [
+   "naive",
+   "seasonal_naive",
+   "ma3",
+   "ma6",
+   "ma12",
+   "tsb",
+   "croston",
+   "autoets",
+   "combo"
+  ],
+  "selection_rule": "best validation WAPE (coverage >= 90% of cells)",
+  "calibration_rule": "same-shape rolling residuals with label_available_at <= decision date"
+ },
+ "library_versions": {
+  "statsforecast": "2.1.1",
+  "statsmodels": "0.15.0",
+  "numpy": "2.4.4",
+  "pandas": "3.0.2"
+ },
+ "runs": [
+  {
+   "run": "minimal",
+   "n_series": 200,
+   "n_cells": {
+    "naive": 400,
+    "seasonal_naive": 363,
+    "ma3": 400,
+    "ma6": 400,
+    "ma12": 400,
+    "tsb": 400,
+    "croston": 400,
+    "autoets": 400,
+    "combo": 400
+   },
+   "validation": {
+    "naive": {
+     "n": 200,
+     "n_scored": 193,
+     "zero_actual_cells": 7,
+     "wape": 0.5523,
+     "bias": -0.4269,
+     "mase": 1.2646,
+     "coverage": null,
+     "width": null
+    },
+    "seasonal_naive": {
+     "n": 163,
+     "n_scored": 156,
+     "zero_actual_cells": 7,
+     "wape": 0.3942,
+     "bias": -0.1026,
+     "mase": 0.8987,
+     "coverage": null,
+     "width": null
+    },
+    "ma3": {
+     "n": 200,
+     "n_scored": 193,
+     "zero_actual_cells": 7,
+     "wape": 0.5659,
+     "bias": -0.4769,
+     "mase": 1.2959,
+     "coverage": null,
+     "width": null
+    },
+    "ma6": {
+     "n": 200,
+     "n_scored": 193,
+     "zero_actual_cells": 7,
+     "wape": 0.5708,
+     "bias": -0.4509,
+     "mase": 1.307,
+     "coverage": null,
+     "width": null
+    },
+    "ma12": {
+     "n": 200,
+     "n_scored": 193,
+     "zero_actual_cells": 7,
+     "wape": 0.4679,
+     "bias": -0.3158,
+     "mase": 1.0714,
+     "coverage": null,
+     "width": null
+    },
+    "tsb": {
+     "n": 200,
+     "n_scored": 193,
+     "zero_actual_cells": 7,
+     "wape": 0.5308,
+     "bias": -0.4314,
+     "mase": 1.2154,
+     "coverage": null,
+     "width": null
+    },
+    "croston": {
+     "n": 200,
+     "n_scored": 193,
+     "zero_actual_cells": 7,
+     "wape": 0.5249,
+     "bias": -0.4246,
+     "mase": 1.2018,
+     "coverage": null,
+     "width": null
+    },
+    "autoets": {
+     "n": 200,
+     "n_scored": 193,
+     "zero_actual_cells": 7,
+     "wape": 0.4459,
+     "bias": -0.3025,
+     "mase": 1.0209,
+     "coverage": null,
+     "width": null
+    },
+    "combo": {
+     "n": 200,
+     "n_scored": 193,
+     "zero_actual_cells": 7,
+     "wape": 0.4579,
+     "bias": -0.3622,
+     "mase": 1.0484,
+     "coverage": null,
+     "width": null
+    }
+   },
+   "test": {
+    "naive": {
+     "n": 200,
+     "n_scored": 193,
+     "zero_actual_cells": 7,
+     "wape": 0.6005,
+     "bias": -0.2458,
+     "mase": 0.7934,
+     "coverage": 0.7409,
+     "width": 79.815
+    },
+    "seasonal_naive": {
+     "n": 200,
+     "n_scored": 193,
+     "zero_actual_cells": 7,
+     "wape": 0.7435,
+     "bias": 0.3489,
+     "mase": 0.9823,
+     "coverage": 0.9326,
+     "width": 105.967
+    },
+    "ma3": {
+     "n": 200,
+     "n_scored": 193,
+     "zero_actual_cells": 7,
+     "wape": 0.5848,
+     "bias": -0.1027,
+     "mase": 0.7726,
+     "coverage": 0.886,
+     "width": 107.92
+    },
+    "ma6": {
+     "n": 200,
+     "n_scored": 193,
+     "zero_actual_cells": 7,
+     "wape": 0.6619,
+     "bias": 0.1357,
+     "mase": 0.8745,
+     "coverage": 0.9741,
+     "width": 145.361
+    },
+    "ma12": {
+     "n": 200,
+     "n_scored": 193,
+     "zero_actual_cells": 7,
+     "wape": 0.6005,
+     "bias": 0.3143,
+     "mase": 0.7933,
+     "coverage": 0.9845,
+     "width": 77.378
+    },
+    "tsb": {
+     "n": 200,
+     "n_scored": 193,
+     "zero_actual_cells": 7,
+     "wape": 0.5414,
+     "bias": 0.0723,
+     "mase": 0.7153,
+     "coverage": 0.9793,
+     "width": 93.483
+    },
+    "croston": {
+     "n": 200,
+     "n_scored": 193,
+     "zero_actual_cells": 7,
+     "wape": 0.5309,
+     "bias": 0.2041,
+     "mase": 0.7014,
+     "coverage": 1.0,
+     "width": 90.951
+    },
+    "autoets": {
+     "n": 200,
+     "n_scored": 193,
+     "zero_actual_cells": 7,
+     "wape": 0.6602,
+     "bias": 0.2327,
+     "mase": 0.8722,
+     "coverage": 0.9378,
+     "width": 126.037
+    },
+    "combo": {
+     "n": 200,
+     "n_scored": 193,
+     "zero_actual_cells": 7,
+     "wape": 0.5128,
+     "bias": 0.0901,
+     "mase": 0.6775,
+     "coverage": 0.9741,
+     "width": 71.871
+    }
+   },
+   "selected_model": "autoets",
+   "selection_reason": "最低验证 WAPE（覆盖率门槛 90%）",
+   "groups": {
+    "tier:high": {
+     "n": 66,
+     "n_scored": 66,
+     "wape": 0.5713,
+     "bias": 0.1404
+    },
+    "warehouse:美中-FZH-DANEEY": {
+     "n": 68,
+     "n_scored": 67,
+     "wape": 0.573,
+     "bias": 0.213
+    },
+    "intermittent:no": {
+     "n": 192,
+     "n_scored": 188,
+     "wape": 0.6571,
+     "bias": 0.2292
+    },
+    "warehouse:美东-CENTRADE": {
+     "n": 41,
+     "n_scored": 40,
+     "wape": 0.6172,
+     "bias": 0.0156
+    },
+    "warehouse:WayfairCG-Cranbury仓": {
+     "n": 1,
+     "n_scored": 1,
+     "wape": 1.6587,
+     "bias": 1.6587
+    },
+    "warehouse:波兰-FZHPoland-covers": {
+     "n": 89,
+     "n_scored": 84,
+     "wape": 0.9628,
+     "bias": 0.7301
+    },
+    "tier:mid": {
+     "n": 66,
+     "n_scored": 66,
+     "wape": 0.8941,
+     "bias": 0.4788
+    },
+    "tier:low": {
+     "n": 68,
+     "n_scored": 61,
+     "wape": 3.2269,
+     "bias": 2.8821
+    },
+    "warehouse:FZH-DANEEY-成品仓": {
+     "n": 1,
+     "n_scored": 1,
+     "wape": 0.2742,
+     "bias": -0.2742
+    },
+    "intermittent:yes": {
+     "n": 8,
+     "n_scored": 5,
+     "wape": 3.0931,
+     "bias": 3.0931
+    }
+   },
+   "failures": {
+    "seasonal_naive:ValueError:history_lt_13m": 37
+   },
+   "n_failures_total": 37
+  },
+  {
+   "run": "full",
+   "n_series": 774,
+   "n_cells": {
+    "naive": 9288,
+    "seasonal_naive": 7675,
+    "ma3": 9288,
+    "ma6": 9288,
+    "ma12": 9288,
+    "tsb": 9288,
+    "croston": 9288,
+    "autoets": 9016,
+    "combo": 9288
+   },
+   "validation": {
+    "naive": {
+     "n": 4644,
+     "n_scored": 4201,
+     "zero_actual_cells": 443,
+     "wape": 0.5951,
+     "bias": -0.2815,
+     "mase": 1.0236,
+     "coverage": 0.5124,
+     "width": 19.282
+    },
+    "seasonal_naive": {
+     "n": 3031,
+     "n_scored": 2751,
+     "zero_actual_cells": 280,
+     "wape": 0.6438,
+     "bias": 0.1452,
+     "mase": 1.0633,
+     "coverage": 0.799,
+     "width": 71.901
+    },
+    "ma3": {
+     "n": 4644,
+     "n_scored": 4201,
+     "zero_actual_cells": 443,
+     "wape": 0.6074,
+     "bias": -0.2275,
+     "mase": 1.0449,
+     "coverage": 0.5895,
+     "width": 17.618
+    },
+    "ma6": {
+     "n": 4644,
+     "n_scored": 4201,
+     "zero_actual_cells": 443,
+     "wape": 0.6285,
+     "bias": -0.1755,
+     "mase": 1.0811,
+     "coverage": 0.6624,
+     "width": 18.564
+    },
+    "ma12": {
+     "n": 4644,
+     "n_scored": 4201,
+     "zero_actual_cells": 443,
+     "wape": 0.6134,
+     "bias": -0.101,
+     "mase": 1.0551,
+     "coverage": 0.7325,
+     "width": 25.304
+    },
+    "tsb": {
+     "n": 4644,
+     "n_scored": 4201,
+     "zero_actual_cells": 443,
+     "wape": 0.5855,
+     "bias": -0.1926,
+     "mase": 1.0071,
+     "coverage": 0.6674,
+     "width": 18.556
+    },
+    "croston": {
+     "n": 4644,
+     "n_scored": 4201,
+     "zero_actual_cells": 443,
+     "wape": 0.5892,
+     "bias": -0.1682,
+     "mase": 1.0136,
+     "coverage": 0.6801,
+     "width": 13.988
+    },
+    "autoets": {
+     "n": 4372,
+     "n_scored": 3968,
+     "zero_actual_cells": 404,
+     "wape": 0.5565,
+     "bias": -0.1864,
+     "mase": 0.9608,
+     "coverage": 0.6454,
+     "width": 22.385
+    },
+    "combo": {
+     "n": 4644,
+     "n_scored": 4201,
+     "zero_actual_cells": 443,
+     "wape": 0.569,
+     "bias": -0.1574,
+     "mase": 0.9788,
+     "coverage": 0.6992,
+     "width": 22.62
+    }
+   },
+   "test": {
+    "naive": {
+     "n": 4644,
+     "n_scored": 4179,
+     "zero_actual_cells": 465,
+     "wape": 0.6715,
+     "bias": 0.2282,
+     "mase": 0.8035,
+     "coverage": 0.8717,
+     "width": 37.662
+    },
+    "seasonal_naive": {
+     "n": 4644,
+     "n_scored": 4179,
+     "zero_actual_cells": 465,
+     "wape": 0.5903,
+     "bias": 0.129,
+     "mase": 0.7064,
+     "coverage": 0.8346,
+     "width": 28.56
+    },
+    "ma3": {
+     "n": 4644,
+     "n_scored": 4179,
+     "zero_actual_cells": 465,
+     "wape": 0.6915,
+     "bias": 0.3441,
+     "mase": 0.8274,
+     "coverage": 0.8382,
+     "width": 33.749
+    },
+    "ma6": {
+     "n": 4644,
+     "n_scored": 4179,
+     "zero_actual_cells": 465,
+     "wape": 0.8142,
+     "bias": 0.4896,
+     "mase": 0.9742,
+     "coverage": 0.8088,
+     "width": 31.654
+    },
+    "ma12": {
+     "n": 4644,
+     "n_scored": 4179,
+     "zero_actual_cells": 465,
+     "wape": 0.6526,
+     "bias": 0.3689,
+     "mase": 0.7808,
+     "coverage": 0.8136,
+     "width": 28.181
+    },
+    "tsb": {
+     "n": 4644,
+     "n_scored": 4179,
+     "zero_actual_cells": 465,
+     "wape": 0.6806,
+     "bias": 0.3927,
+     "mase": 0.8143,
+     "coverage": 0.826,
+     "width": 31.51
+    },
+    "croston": {
+     "n": 4644,
+     "n_scored": 4179,
+     "zero_actual_cells": 465,
+     "wape": 0.6903,
+     "bias": 0.4217,
+     "mase": 0.826,
+     "coverage": 0.8311,
+     "width": 30.965
+    },
+    "autoets": {
+     "n": 4644,
+     "n_scored": 4179,
+     "zero_actual_cells": 465,
+     "wape": 0.6934,
+     "bias": 0.3513,
+     "mase": 0.8297,
+     "coverage": 0.8177,
+     "width": 32.023
+    },
+    "combo": {
+     "n": 4644,
+     "n_scored": 4179,
+     "zero_actual_cells": 465,
+     "wape": 0.5921,
+     "bias": 0.312,
+     "mase": 0.7085,
+     "coverage": 0.8392,
+     "width": 29.155
+    }
+   },
+   "selected_model": "autoets",
+   "selection_reason": "最低验证 WAPE（覆盖率门槛 90%）",
+   "groups": {
+    "tier:high": {
+     "n": 1548,
+     "n_scored": 1548,
+     "wape": 0.6579,
+     "bias": 0.3275
+    },
+    "warehouse:美中-FZH-DANEEY": {
+     "n": 1230,
+     "n_scored": 1179,
+     "wape": 0.7191,
+     "bias": 0.4252
+    },
+    "intermittent:no": {
+     "n": 3726,
+     "n_scored": 3534,
+     "wape": 0.6897,
+     "bias": 0.3554
+    },
+    "warehouse:波兰-FZHPoland-covers": {
+     "n": 2262,
+     "n_scored": 1972,
+     "wape": 0.7831,
+     "bias": 0.417
+    },
+    "warehouse:美东-CENTRADE": {
+     "n": 1032,
+     "n_scored": 942,
+     "wape": 0.6005,
+     "bias": 0.1979
+    },
+    "warehouse:WayfairCG-Cranbury仓": {
+     "n": 54,
+     "n_scored": 54,
+     "wape": 0.4358,
+     "bias": 0.0871
+    },
+    "warehouse:FZH-DANEEY-半成品仓": {
+     "n": 12,
+     "n_scored": 12,
+     "wape": 0.3025,
+     "bias": -0.0924
+    },
+    "tier:mid": {
+     "n": 1548,
+     "n_scored": 1545,
+     "wape": 0.8424,
+     "bias": 0.4596
+    },
+    "tier:low": {
+     "n": 1548,
+     "n_scored": 1086,
+     "wape": 1.5258,
+     "bias": 0.8538
+    },
+    "warehouse:unknown": {
+     "n": 18,
+     "n_scored": 10,
+     "wape": 1.7884,
+     "bias": 1.7492
+    },
+    "warehouse:FZH-DANEEY-成品仓": {
+     "n": 36,
+     "n_scored": 10,
+     "wape": 0.5466,
+     "bias": -0.4511
+    },
+    "intermittent:yes": {
+     "n": 918,
+     "n_scored": 645,
+     "wape": 0.968,
+     "bias": 0.0472
+    }
+   },
+   "failures": {
+    "seasonal_naive:ValueError:history_lt_13m": 1613,
+    "autoets:NotImplementedError:tiny datasets": 272
+   },
+   "n_failures_total": 1885
+  }
+ ]
+}
