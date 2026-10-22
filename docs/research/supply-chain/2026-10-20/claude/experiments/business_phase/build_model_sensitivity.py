@@ -38,6 +38,13 @@ Three review lists
 Rows that are same-direction with overlapping intervals but different values
 are counted as a residual category, not silently dropped.
 
+T18 fix (2026-10-22)
+  Direction consistency is the five-class partition that sums to 2,309:
+  ① divergence 308 | ③a all-positive 214 | ③b all-zero 1,536 | unknown 160 | C 91.
+  ③a is the priority review list; its interior is split into ② (no interval
+  overlap, 74) and ④ (overlap with quantity difference, 140). ③b means "no
+  replenishment recommended under these assumptions", not correctness.
+
 Wording: this is a sensitivity table under stated assumptions. It is not a
 statistical proof, not a purchase approval, and agreement between calibers is
 not "correctness".
@@ -72,13 +79,17 @@ CALIBERS = ["MA3", "naive", "seasonal_naive", "combo_ew", "AutoETS"]
 LAST_I = ym_i(WINDOW_LAST)
 W = {d: window_weights(DECISION_DATE, d) for d in LEADS}
 H = max(W[120]) - LAST_I
+
+# five-class partition (sums to 2,309) + a sub-label inside ③a
 CAT_DIV = "①0/正量分歧"
-CAT_GAP = "②同向·区间不重叠"
-CAT_SAME = "③五口径一致"
-CAT_OTHER = "④同向·区间重叠·有数量差"
+CAT_POS = "③a全正量一致"
+CAT_ZERO = "③b全零一致"
+CAT_SUB_GAP = "②同向·区间不重叠"
+CAT_SUB_OTHER = "④同向·区间重叠·有数量差"
 CAT_C = "范围外(C)"
 CAT_UNKNOWN = "库存未知"
 CAT_NOHIST = "无历史"
+MAIN_CATS = (CAT_DIV, CAT_POS, CAT_ZERO, CAT_UNKNOWN, CAT_C, CAT_NOHIST)
 
 
 def ym_series(y: np.ndarray, n: int) -> dict:
@@ -169,8 +180,6 @@ def main() -> None:
         s = series.get(sku)
         fc[sku] = (ym_series(s["y"], len(s["y"])) if s is not None else None)
 
-    total_sales_all = sum(float(series[s]["y"].sum())
-                          for s in {r["SKU"] for r in decision} if s in series) or 1.0
     out = []
     for r in decision:
         sku, wh, status = r["SKU"], r["仓"], r["状态"]
@@ -195,7 +204,7 @@ def main() -> None:
             base[f"建议上限_{c}"] = None
             base[f"标记_{c}"] = "na"
         base.update(方向一致性=None, 区间重叠=None, 数量差_绝对=None,
-                    数量差_相对=None, 建议中位下限=None, 方向=None)
+                    数量差_相对=None, 建议中位下限=None, 方向=None, 子类=None)
         if status == "C":
             cat, note = CAT_C, "范围外（UOM/未映射），不计算建议量"
         elif r["可用"] in ("", None):
@@ -252,26 +261,60 @@ def main() -> None:
             med = float(np.median(lo_list))
             diff_rel = (round(diff_abs / med, 4) if med > 1e-9
                         else (0.0 if diff_abs <= 1e-9 else None))
-            identical = diff_abs <= 0.005
+            sub = ""
             if direction == "0/正量分歧":
                 cat = CAT_DIV
-            elif not overlap:
-                cat = CAT_GAP
-            elif identical:
-                cat = CAT_SAME
-            else:
-                cat = CAT_OTHER
+            elif direction == "全零":
+                cat = CAT_ZERO                 # ③b: all five lower values are 0
+            else:                              # 全正量 -> ③a, split ② / ④
+                cat = CAT_POS
+                sub = CAT_SUB_GAP if not overlap else CAT_SUB_OTHER
             base.update(方向一致性=direction, 区间重叠=bool(overlap),
                         数量差_绝对=diff_abs, 数量差_相对=diff_rel,
-                        建议中位下限=round(med, 2), 方向=direction)
+                        建议中位下限=round(med, 2), 方向=direction, 子类=sub)
             note = ("五口径只改需求口径；库存/PO/在途去重、L60/L90/L120、"
                     "分配与压力系数与 T5 相同")
         base["分类"] = cat
         base["说明"] = note
         out.append(base)
 
+    # ---------------- T18 assertions: classes are a partition --------------
+    n_div = sum(1 for r in out if r["分类"] == CAT_DIV)
+    n_pos = sum(1 for r in out if r["分类"] == CAT_POS)
+    n_zero = sum(1 for r in out if r["分类"] == CAT_ZERO)
+    n_unknown = sum(1 for r in out if r["分类"] == CAT_UNKNOWN)
+    n_c = sum(1 for r in out if r["分类"] == CAT_C)
+    n_nohist = sum(1 for r in out if r["分类"] == CAT_NOHIST)
+    assert len(out) == len(decision) == 2309, (len(out), len(decision))
+    assert n_div + n_pos + n_zero + n_unknown + n_c + n_nohist == 2309
+    assert n_unknown + n_c + n_nohist == 251, (n_unknown, n_c, n_nohist)
+    for r in out:
+        if r["分类"] == CAT_ZERO:
+            assert all(r[f"建议下限_{c}"] == 0 for c in CALIBERS), r["SKU"]
+        elif r["分类"] == CAT_POS:
+            assert all(r[f"建议下限_{c}"] > 0 for c in CALIBERS), r["SKU"]
+    # counts pinned to the reviewed dataset; a data refresh must update them
+    assert (n_div, n_pos, n_zero) == (308, 214, 1536), (n_div, n_pos, n_zero)
+
+    # ---------------- cross-check against the main table (T5) ---------------
+    main = {(r["SKU"], r["仓"]): r
+            for r in csv.DictReader(open(OUT / "replenishment_v2.csv",
+                                         encoding="utf-8-sig"))}
+    n_cmp = exact_rows = 0
+    max_diff = 0.0
+    for r in out:
+        if r["状态"] != "B" or (r["SKU"], r["仓"]) not in main:
+            continue
+        m = main[(r["SKU"], r["仓"])]
+        d = max(abs(r["建议下限_AutoETS"] - float(m["建议下限L90"])),
+                abs(r["建议上限_AutoETS"] - float(m["建议上限L90(压力情景)"])))
+        n_cmp += 1
+        max_diff = max(max_diff, d)
+        exact_rows += d <= 0.011
+    assert n_cmp == 2058 and max_diff <= 0.1, (n_cmp, max_diff)
+
     # ---------------- summary / lists --------------------------------------
-    fields = (["SKU", "仓", "状态", "分类", "方向一致性", "区间重叠",
+    fields = (["SKU", "仓", "状态", "分类", "子类", "方向一致性", "区间重叠",
                "数量差_绝对", "数量差_相对", "建议中位下限", "销量_全历史",
                "销量_近6月", "该仓销量_近3月", "仓销量占比", "可用", "在途",
                "PO未结", "情景批", "MOQ", "包装倍数", "PO去重状态", "在途去重状态"]
@@ -282,28 +325,43 @@ def main() -> None:
         w.writeheader()
         w.writerows(out)
 
-    def sales_of(rows):
-        """Distinct-SKU full-history sales (a SKU may appear in several rows)."""
-        return sum(float(series[s]["y"].sum()) for s in {r["SKU"] for r in rows}
-                   if s in series)
+    sku6 = {s: float(np.sum(v["y"][max(0, len(v["y"]) - 6):]))
+            for s, v in series.items()}
+    total_6m = sum(sku6.get(s, 0.0) for s in {r["SKU"] for r in decision}) or 1.0
+
+    def sales6_of(rows):
+        """Distinct-SKU last-6-month sales (a SKU may appear in several rows)."""
+        return sum(sku6.get(s, 0.0) for s in {r["SKU"] for r in rows})
 
     by_cat = defaultdict(list)
     for r in out:
         by_cat[r["分类"]].append(r)
     cat_stats = {k: dict(rows=len(v), skus=len({r["SKU"] for r in v}),
-                         sales=round(sales_of(v), 1),
-                         sales_share=round(sales_of(v) / total_sales_all, 4))
+                         sales6=round(sales6_of(v), 1),
+                         share6=round(sales6_of(v) / total_6m, 4))
                  for k, v in by_cat.items()}
     mark_counts = {c: dict(Counter(r[f"标记_{c}"] for r in out)) for c in CALIBERS}
+    pos_rows = by_cat[CAT_POS]
+    sub_gap = [r for r in pos_rows if r["子类"] == CAT_SUB_GAP]
+    sub_other = [r for r in pos_rows if r["子类"] == CAT_SUB_OTHER]
+    assert len(sub_gap) + len(sub_other) == len(pos_rows)
 
-    list1 = sorted(by_cat[CAT_DIV],
-                   key=lambda r: (-float(r["建议中位下限"] or 0), -float(r["销量_全历史"] or 0)))
-    list2 = sorted(by_cat[CAT_GAP], key=lambda r: (-float(r["数量差_绝对"] or 0),
+    def by_median(rows):
+        return sorted(rows, key=lambda r: (-float(r["建议中位下限"] or 0),
+                                           -float(r["销量_全历史"] or 0)))
+
+    list1 = by_median(by_cat[CAT_DIV])
+    list_pos = by_median(pos_rows)
+    list_zero = sorted(by_cat[CAT_ZERO],
+                       key=lambda r: (-float(r["销量_全历史"] or 0), r["SKU"]))
+    list_gap = sorted(sub_gap, key=lambda r: (-float(r["数量差_绝对"] or 0),
+                                              -float(r["销量_全历史"] or 0)))
+    list_other = sorted(sub_other, key=lambda r: (-float(r["数量差_绝对"] or 0),
                                                   -float(r["销量_全历史"] or 0)))
-    list3 = sorted(by_cat[CAT_SAME], key=lambda r: (-float(r["销量_全历史"] or 0), r["SKU"]))
 
     def fmt_list(rows, n=20):
-        L = ["| SKU | 仓 | " + " | ".join(CALIBERS) + " | 区间重叠 | 数量差(绝对/相对) | 销量_全历史 |",
+        L = ["| SKU | 仓 | " + " | ".join(CALIBERS)
+             + " | 区间重叠 | 数量差(绝对/相对) | 销量_全历史 |",
              "|---|---|" + "---:|" * len(CALIBERS) + "---|---:|---:|"]
         for r in rows[:n]:
             cells = " | ".join(
@@ -315,11 +373,17 @@ def main() -> None:
                      f"{r['数量差_绝对']:.2f} / {rel} | {r['销量_全历史']:.1f} |")
         return L
 
-    md = ["# T17 全范围模型敏感性表", "",
+    def head(k):
+        v = cat_stats[k]
+        return (f"行数 **{v['rows']}** / SKU **{v['skus']}**；"
+                f"近 6 月销量覆盖 **{v['share6']:.2%}**")
+
+    md = ["# T17/T18 全范围模型敏感性表", "",
           "> **口径说明**：同一套已核实库存与供给假设下，只替换需求预测口径；"
           "本表**不是统计证明**、**不是采购批准**，五口径一致也**不等于正确**。",
-          "> 库存/PO/在途/在产去重、L60/L90/L120 情景、共享池默认不跨仓、"
-          "分配规则与压力系数均沿用 T3/T5；MOQ/包装未提供，单列不参与计算。", "",
+          "> 分类按**方向一致性**先分成五类（相加 = 2,309）："
+          "①0/正量分歧、③a全正量一致、③b全零一致、库存未知、范围外(C)；"
+          "③a 内部再按区间重叠拆成 ②/④ 两个复核子集。", "",
           "## 0. 口径与假设", "",
           "| 项 | 内容 |", "|---|---|",
           "| 需求口径 | MA3 / naive / seasonal_naive / 固定等权组合 / AutoETS |",
@@ -333,74 +397,104 @@ def main() -> None:
           "| 区间重叠 | 五口径 [下限, 上限] 存在共同交集 |",
           "| 数量差 | `max(下限) − min(下限)`；相对差 = 绝对差 / 五口径下限中位数 |",
           "| 判据 | 方向、区间、数量差**分别列示**，不合成评分，不设无依据阈值 |", "",
-          "## 1. 覆盖", "",
+          "## 1. 覆盖与五类计数（相加 = 2,309）", "",
           f"- 输出 **{len(out)} 行 / {len({r['SKU'] for r in out})} SKU**"
           f"（主表 2,309 行 / 1,328 SKU 全覆盖）。",
           f"- 状态：{dict(Counter(r['状态'] for r in out))}。",
-          f"- 分类计数：" + "；".join(
-              f"{k} {v['rows']} 行 / {v['skus']} SKU" for k, v in
-              sorted(cat_stats.items())) + "。", "",
-          "> 销量占比按**去重 SKU** 计算；同一 SKU 可跨分类，故各分类占比不可相加。", "",
-          "| 分类 | 行数 | SKU | 全历史销量 | 销量占比(按 SKU，可重叠) |",
+          "- 断言：全零类五口径下限均为 0；全正量类五口径下限均 >0；"
+          f"五类相加 = {n_div}+{n_pos}+{n_zero}+{n_unknown}+{n_c} = "
+          f"{n_div + n_pos + n_zero + n_unknown + n_c}（无历史 {n_nohist} 行）；"
+          f"空值 {n_unknown}+{n_c}+{n_nohist} = {n_unknown + n_c + n_nohist}。", "",
+          "> 销量覆盖按**近 6 月**、去重 SKU 计算；同一 SKU 可跨分类，占比不可相加。", "",
+          "| 分类 | 行数 | SKU | 近 6 月销量 | 近 6 月销量覆盖 |",
           "|---|---:|---:|---:|---:|"]
-    for k in (CAT_DIV, CAT_GAP, CAT_SAME, CAT_OTHER, CAT_UNKNOWN, CAT_C, CAT_NOHIST):
+    for k in MAIN_CATS:
         if k in cat_stats:
             v = cat_stats[k]
-            md.append(f"| {k} | {v['rows']} | {v['skus']} | {v['sales']:.1f} | "
-                      f"{v['sales_share']:.2%} |")
+            md.append(f"| {k} | {v['rows']} | {v['skus']} | {v['sales6']:.1f} | "
+                      f"{v['share6']:.2%} |")
     md += ["", "标记计数（各口径）：", "",
            "| 口径 | 标记分布 |", "|---|---|"]
     for c in CALIBERS:
         md.append(f"| {c} | {mark_counts[c]} |")
-    md += ["", f"## 2. 清单① 0/正量分歧（最高优先人工核查，{len(list1)} 行 / "
-           f"{len({r['SKU'] for r in list1})} SKU）", "",
-           "> 同一 (SKU, 仓) 下，至少一个口径给 0、另一个给正量。",
-           "> 列为各口径**建议下限**；上限见 CSV。", ""]
+    md += ["", "## 2. 修订说明（T17 正文错误 → T18 更正）", "",
+           "> **原文（错误）**：“清单③ 的 1,536 行全部是全零（全正量 0 行）……"
+           "没有出现‘五口径一致且都为正量’的行”。",
+           "> **更正**：1,536 行是**③b 全零一致**；另有 **214 行 ③a 全正量一致**"
+           "（五口径下限都 >0），此前被并入 ②/④ 而未被计入“全正量”。"
+           "五类合计 308+214+1536+160+91 = 2,309。", "",
+           f"## 3. 清单① 0/正量分歧（最高优先复核）", "",
+           f"{head(CAT_DIV)}。同一 (SKU, 仓) 下，至少一个口径给 0、另一个给正量；"
+           "列为各口径**建议下限**，上限见 CSV。", ""]
     md += fmt_list(list1)
-    md += ["", f"## 3. 清单② 同向但区间不重叠（复核，{len(list2)} 行 / "
-           f"{len({r['SKU'] for r in list2})} SKU）", "",
-           "> 五口径方向相同，但 [下限, 上限] 没有共同交集；判据是结构性的，"
-           "不使用数量阈值。", ""]
-    md += fmt_list(list2)
-    md += ["", f"## 4. 清单③ 五口径一致（{len(list3)} 行 / "
-           f"{len({r['SKU'] for r in list3})} SKU）", "",
-           "> 五口径建议下限在 0.01 内相同。**全零 1536 行 = 在这组假设下无需动作**；"
-           f"全正量 {sum(1 for r in list3 if r['方向一致性'] == '全正量')} 行——"
-           "只有全正量行才适合作为优先核查依据；一致不等于正确，也不等于可采购。", ""]
-    md += fmt_list(list3)
-    md += ["", f"## 5. 残留类别④（同向、区间重叠但数量有差，{len(by_cat[CAT_OTHER])} 行）", "",
-           "> 未进入三张清单，但数量差在 CSV 中逐行列示，可按 `数量差_绝对` 排序复核。", "",
-           "## 6. 复算示例", ""]
-    ex = next((r for r in (list1 + list2 + list3)
-               if all(r[f"建议下限_{c}"] is not None for c in CALIBERS)
-               and float(r["建议中位下限"] or 0) > 0), None)
+    md += ["", "## 4. 清单③a 全正量一致（优先人工核查）", "",
+           f"{head(CAT_POS)}。五口径都 >0，但数量可能不同；"
+           "内部再按区间是否重叠拆成 ②（不重叠，优先复核）与 ④（重叠但有数量差）。",
+           "", f"- ② 同向·区间不重叠：**{len(sub_gap)} 行** / "
+           f"{len({r['SKU'] for r in sub_gap})} SKU，近 6 月销量覆盖 "
+           f"{sales6_of(sub_gap) / total_6m:.2%}",
+           f"- ④ 同向·区间重叠·有数量差：**{len(sub_other)} 行** / "
+           f"{len({r['SKU'] for r in sub_other})} SKU，近 6 月销量覆盖 "
+           f"{sales6_of(sub_other) / total_6m:.2%}", ""]
+    md += fmt_list(list_pos)
+    md += ["", "## 5. 清单② 同向但区间不重叠（复核）", "",
+           f"行数 **{len(list_gap)}** / SKU **{len({r['SKU'] for r in list_gap})}**；"
+           f"近 6 月销量覆盖 **{sales6_of(list_gap) / total_6m:.2%}**（③a 子集）。"
+           "五口径方向相同，但 [下限, 上限] 没有共同交集；判据是结构性的，不使用数量阈值。", ""]
+    md += fmt_list(list_gap)
+    md += ["", "## 6. 清单④ 同向·区间重叠·有数量差（复核）", "",
+           f"行数 **{len(list_other)}** / SKU **{len({r['SKU'] for r in list_other})}**；"
+           f"近 6 月销量覆盖 **{sales6_of(list_other) / total_6m:.2%}**（③a 子集）。"
+           "区间有共同交集，但五口径数量不同；按 `数量差_绝对` 降序，"
+           "不设“大/小”阈值。", ""]
+    md += fmt_list(list_other)
+    md += ["", "## 7. 清单③b 全零一致（五口径均不建议补，条件性）", "",
+           f"{head(CAT_ZERO)}。五口径下限都为 0，表示**在这组库存/供给假设下**"
+           "都不需要补；库存未知、在产不在快照、MOQ/成本缺失等前提若变化，结论需重跑。"
+           "**一致 ≠ 正确，≠ 采购批准**。", "",
+           "> 该清单行数较多（1,536），正文只列销量最高的 20 行，完整清单见 CSV"
+           "（`分类=③b全零一致`）。", ""]
+    md += fmt_list(list_zero)
+    md += ["", "## 8. 与主表 B 行对拍（保留并复核）", "",
+           f"- 可比 B 行 **{n_cmp}** 行：完全一致（差 ≤0.01）**{exact_rows}** 行，"
+           f"其余差 ≤ **{max_diff:.2f}**（仅浮点拟合差）。",
+           "- 结论：库存/供给/分配/压力系数与 T5 一致，敏感性只改变需求口径。", "",
+           "## 9. 复算示例", ""]
+    ex = next((r for r in (list1 + list_pos)
+               if all(r[f"建议下限_{c}"] is not None for c in CALIBERS)), None)
     if ex:
-        md += [f"- 行：`{ex['SKU']}` / `{ex['仓']}`（{ex['分类']}）",
+        md += [f"- 行：`{ex['SKU']}` / `{ex['仓']}`（{ex['分类']}"
+               + (f" / {ex['子类']}" if ex["子类"] else "") + "）",
                f"- 可用 {ex['可用']}，去重批 {ex.get('情景批')}，仓销量占比 {ex['仓销量占比']}",
                "- 五口径建议下限：" + "，".join(
                    f"{c} {ex[f'建议下限_{c}']:.2f}" for c in CALIBERS),
                f"- 数量差 {ex['数量差_绝对']:.2f}（相对 {ex['数量差_相对']}），"
                f"区间重叠 {'是' if ex['区间重叠'] else '否'}。", ""]
-    md += ["## 7. 局限与措辞红线", "",
+    md += ["## 10. 局限与措辞红线", "",
            "- 本表只做**敏感性**：五口径共享同一库存、同一供给假设、同一分配与压力系数；"
            "它回答“换需求口径会怎样”，不回答“哪个口径对”。",
            "- 不构成统计证明；不构成采购批准或下单依据；不改变主表默认（仍为 AutoETS）。",
-           "- 五口径一致只说明在这组假设下结果不敏感，**不等于正确**，也不等于可采购。",
+           "- 五口径一致（无论全零还是全正量）只说明在这组假设下结果不敏感，"
+           "**不等于正确**，也不等于可采购。",
            "- MOQ/包装/成本仍缺失，未参与计算；共享池默认不跨仓调拨；在产不在快照。",
            "- 零需求单元格按 0 参与；未知库存写 null，不写 0。", "",
-           "## 8. 复现", "",
+           "## 11. 复现", "",
            "```bash",
            "uv run python docs/research/supply-chain/2026-10-20/claude/"
            "experiments/business_phase/build_model_sensitivity.py",
            "uv run python scripts/check_secrets.py",
            "```", "",
-           "DB 只读（前后 sha256 一致）；固定切点、固定参数，脚本确定性。", ""]
+           "DB 只读（前后 sha256 一致）；固定切点、固定参数，脚本确定性；"
+           "五类计数与全零/全正量断言在脚本内，失败即中止。", ""]
     OUT_MD.write_text("\n".join(md) + "\n", encoding="utf-8")
 
     print("wrote", OUT_CSV.name, "and", OUT_MD.name)
     print("rows", len(out), "skus", len({r["SKU"] for r in out}),
-          "categories", {k: len(v) for k, v in by_cat.items()})
-    print("lists", len(list1), len(list2), len(list3))
+          "classes", {k: len(v) for k, v in by_cat.items()})
+    print("assert classes", n_div, n_pos, n_zero, n_unknown, n_c, n_nohist,
+          "sum", n_div + n_pos + n_zero + n_unknown + n_c + n_nohist)
+    print("subsets", len(sub_gap), len(sub_other), "pos", len(pos_rows))
+    print("cross-check", exact_rows, "/", n_cmp, "max_diff", round(max_diff, 4))
     print("markers", mark_counts)
 
 
