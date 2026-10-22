@@ -1,0 +1,163 @@
+{
+ "schema_version": "t21_consistency_audit/1",
+ "inputs": {
+  "replenishment_v2.csv": "6b30e751ecda86301bc73831ffb21705574a0a57b0fbb62c7f43aaba9716c9b7",
+  "summary_v3.md": "7f578c1857a164692cf4533c932ffd9a17c9c1f2979a03d49a9692eb778e0e35",
+  "model_sensitivity.csv": "9330ff5d533f39e85a86e897fec0921af94b48df6cb514c6e4436b51efbe3dd4",
+  "model_sensitivity.md": "1567e607b6133e5006e38c0b2a10b19c70617893d64d2cc6448484486e017346",
+  "wo_dn_coverage.csv": "6d5f020feb0ab87d1bdd51be2fe877c121b04c189e439758fe81db951d95a739",
+  "wo_dn_coverage.json": "0094a5207b9b18102f24de844e542832b2de4d993ec54b132b9d7df33a4f71b6",
+  "wo_dn_coverage.md": "5df140e74a2ae5b1d95f816cb52877cd2c8d39d415e7b7fcf0f76117a8e667ea",
+  "explanations.csv": "94606979c006deeafa1cc9dbbcbe3650eaad325bfee81dd34de47c62767fcb04",
+  "decision_v2.csv": "4b9efecc892342bfb2f463a814b53fed91b0b91750e112dd57e5f63f9899b30e",
+  "diff_v1_v2.csv": "5c4e781fcc441f49c6076b0016f179bd1bc7c32909f7ed90ecddb9678e2a48e8",
+  "replenishment_all.csv": "abd3de4e3287502267a3189e73c147e4e99413d16f9a6f8f02c9cf2c4456f3df",
+  "evidence_request.md": "23b991c76497a61cb4a19f4cacccf27634c2bcfd2b475836c00cb47d546cde6f",
+  "forward_shadow_plan.md": "d69b30deadaa8a39de29ea886ddc14dde8c95386deed893f5d336c32bdd359e6",
+  "nested_eval.json": "8e83f4cbc226a6e6bc7185ff05a9ac2f046623e54b61637a083e4ad282d6ca31",
+  "short_history_eval.json": "0d795efa4e308f91967272aa18b4cbf1783bef98b75fe7e3af00bf44322d8616",
+  "error_attribution.json": "5a3d6f56a5bf42fd636a9c94a3fab6d5bad793a81c72ced1ee099d817f515b93",
+  "forward_shadow.py": "8f461b82e50ac5ddcfa30cbaf2729ee70ffa6a2b8bf24052a2f29c51299a04f6"
+ },
+ "checks": [
+  {
+   "id": "1",
+   "title": "replenishment_v2.csv ↔ summary_v3.md",
+   "status": "PASS",
+   "diffs": [],
+   "notes": [
+    "replenishment_v2.csv 无 6 个月销量列；占比按 summary_v3 自身原始值验算，并与 summary.md 的 48,001/543 一致（可复核但不能从 CSV 重算）。"
+   ]
+  },
+  {
+   "id": "2",
+   "title": "model_sensitivity.csv ↔ model_sensitivity.md",
+   "status": "PASS",
+   "diffs": [],
+   "notes": [
+    "CSV 分类/子类计数与 md 表一致；销量覆盖按去重 SKU 近 6 月值重算。"
+   ]
+  },
+  {
+   "id": "3",
+   "title": "wo_dn_coverage.csv ↔ wo_dn_coverage.md",
+   "status": "PASS",
+   "diffs": [],
+   "notes": [
+    "三态合计与 CSV/JSON 一致；关联键按 JSON 的 total/linked/missing 比对。"
+   ]
+  },
+  {
+   "id": "4",
+   "title": "explanations.csv ↔ decision_v2.csv（异常计数）",
+   "status": "PASS",
+   "diffs": [],
+   "notes": [
+    "八类标签按「；」拆分计数；与 T4 评审表逐项比对，缺失标签计 0。"
+   ]
+  },
+  {
+   "id": "5",
+   "title": "diff_v1_v2.csv ↔ replenishment_all.csv / replenishment_v2.csv",
+   "status": "PASS",
+   "diffs": [],
+   "notes": [
+    "475 unchanged 由行数差额核对（1,328 − 602 − 154 − 6 − 91）；文档未单独写 475。"
+   ]
+  },
+  {
+   "id": "6",
+   "title": "evidence_request.md 责任方行数 ↔ decision_v2.csv（T3）",
+   "status": "PASS",
+   "diffs": [],
+   "notes": [
+    "文档另写“248 条 open 行 0 条有日期”；本地 CSV/JSON 无该口径，未纳入本轮核对。"
+   ]
+  },
+  {
+   "id": "7",
+   "title": "summary_v3 §6 ↔ nested_eval / short_history_eval",
+   "status": "FAIL",
+   "diffs": [
+    {
+     "file": "summary_v3.md",
+     "field": "guard 阈值建议",
+     "table_value": "len<7（T20，short_history_eval.py:69）",
+     "doc_value": "guard len(y) < 3"
+    }
+   ],
+   "notes": [
+    "T16 short_history_eval 的组合 MAE 9.928 未写入 §6；§6 的短历史数字来自 T9/T14（attribute_errors），两者口径不同（对齐方式/窗口集），不构成数字矛盾，但若要求并列需补一句说明。",
+    "模型数字逐项与 nested_eval.json / short_history_eval.json / error_attribution.json 比对。"
+   ]
+  },
+  {
+   "id": "8",
+   "title": "forward_shadow_plan.md ↔ forward_shadow.py",
+   "status": "FAIL",
+   "diffs": [
+    {
+     "file": "forward_shadow_plan.md / forward_shadow.py",
+     "field": "使用代码路径",
+     "table_value": "forward_shadow.py（实际实现）",
+     "doc_value": "nested_eval.py（文档 §1）"
+    },
+    {
+     "file": "forward_shadow_plan.md / forward_shadow.py",
+     "field": "各候选 WAPE",
+     "table_value": "只算 selected / naive / ma3",
+     "doc_value": "每个候选 1 个值"
+    },
+    {
+     "file": "forward_shadow_plan.md / forward_shadow.py",
+     "field": "各候选 Bias",
+     "table_value": "未实现",
+     "doc_value": "每个候选 1 个值"
+    },
+    {
+     "file": "forward_shadow_plan.md / forward_shadow.py",
+     "field": "上限列覆盖率",
+     "table_value": "未实现",
+     "doc_value": "每个候选 1 个值"
+    },
+    {
+     "file": "forward_shadow_plan.md / forward_shadow.py",
+     "field": "零分母数量与占比",
+     "table_value": "仅 n_zero_demand_retained，无占比",
+     "doc_value": "数量与占比"
+    }
+   ],
+   "notes": [
+    "§3 连续 3 个月/区间不含 0 是人工判定流程，脚本只产出单次评分，文档未声称脚本自动判定，故不计失败。",
+    "已确认脚本保留 `--data-cutoff/--origin` 参数化、预存清单与 --force 防覆盖。"
+   ]
+  }
+ ],
+ "summary": {
+  "total": 8,
+  "passed": 6,
+  "failed": 2,
+  "failures": [
+   "7",
+   "8"
+  ]
+ },
+ "superseded": [
+  {
+   "doc": "control/reviews/2026-10-22-t17-sensitivity.md",
+   "by": "control/reviews/2026-10-22-t18-sensitivity-fix.md",
+   "reason": "T17 正文“五口径一致 1,536 行全部全零、无全正量行”与数据矛盾，T18 已重分五类并更正。"
+  },
+  {
+   "doc": "control/reviews/2026-10-22-t16-short-history.md",
+   "by": "control/reviews/2026-10-22-t20-guard.md",
+   "reason": "T16 称 len 3–6 的 tiny_datasets 仍抛错；T20 已将 guard 扩到 len<7。"
+  },
+  {
+   "doc": "control/reviews/2026-10-22-t12-audit-fixes.md",
+   "by": "control/reviews/2026-10-22-t14-recheck-fixes.md",
+   "reason": "T12 的 M01 对齐 MAE 与 M02 早期块指标已被 T14 取代。"
+  }
+ ],
+ "policy": "只核对、不改数：FAIL 只列差异与建议；不修改任何数字产物；文档若为纯措辞错误也不在本轮改写（ownership 仅限本审计输出）。"
+}
