@@ -649,7 +649,7 @@ tags: [supply-chain, research, log]
   （qty 1–2）+ 32 Wayfair + 5 Shopify，最大单行 2 件；2026-06 也有 141 尖峰。
   mean3 107.7/月 = 2025 Q4 均值 7.3 的 **14.7×**；候选 3 月总量 22/22/47/323，
   P90 78/78/163/728。建议：8 月作事件情景，Q4 低基线用 s1/peer，mean3 只作上限。
-- 动作敏感性（L90，P90 窗口 + 正向 SO vs A/B 边界）：**always 4**（DEEPGREY/DEEPBLUE/
+- 动作敏感性（L90，P90 窗口 + 正向 SO vs A/B 边界；SO 与预测重叠未证，只作联合上界）：**always 4**（DEEPGREY/DEEPBLUE/
   PR-GREY/Natural-194）、**insufficient 6**（XMMBS-100/CMKTR-DB/Linen-153/CMKTR-GREY/
   White/HLR）；L60 时 153/HLR 四候选一致 `depends_on_arrival`，L90/L120 因候选分歧转 I。
   s×YoY 是 XMMBS-100/CMKTR-DB/CMKTR-GREY 翻转来源（P90 小样本），White/HLR 翻转来自 mean3。

@@ -1,7 +1,7 @@
 {
  "schema_version": "model_race_v1/1",
  "report_version": "V1",
- "generated_at": "2026-10-22T14:49:17+08:00",
+ "generated_at": "2026-10-22T15:01:31+08:00",
  "task": "control/reviews/2026-10-22-model-race-task.md",
  "scope": {
   "skus": [
@@ -2523,7 +2523,7 @@
     "action_counts": {
      "always_replenish": 4
     },
-    "note": "unrounded; no MOQ/pack multiple; not an order quantity; B_min=max-overlap, B_max=no-overlap; supply is a bound, not a point"
+    "note": "unrounded; no MOQ/pack multiple; not an order quantity; B_min=max-overlap, B_max=no-overlap; supply is a bound, not a point; P90 + positive live SO is a conservative joint upper bound: whether SO duplicates demand already in the forecast is unproven, so this is not a reconciled demand number"
    },
    "explanation": {
     "oct_dec_last_year": {
@@ -4613,7 +4613,7 @@
     "action_counts": {
      "always_replenish": 4
     },
-    "note": "unrounded; no MOQ/pack multiple; not an order quantity; B_min=max-overlap, B_max=no-overlap; supply is a bound, not a point"
+    "note": "unrounded; no MOQ/pack multiple; not an order quantity; B_min=max-overlap, B_max=no-overlap; supply is a bound, not a point; P90 + positive live SO is a conservative joint upper bound: whether SO duplicates demand already in the forecast is unproven, so this is not a reconciled demand number"
    },
    "explanation": {
     "oct_dec_last_year": {
@@ -6486,8 +6486,8 @@
       },
       "sku_action": "insufficient_evidence",
       "action_counts": {
-       "depends_on_arrival": 1,
-       "always_replenish": 3
+       "always_replenish": 3,
+       "depends_on_arrival": 1
       },
       "need_min": 0,
       "need_max": 1067.2258
@@ -6558,8 +6558,8 @@
       },
       "sku_action": "insufficient_evidence",
       "action_counts": {
-       "depends_on_arrival": 1,
-       "always_replenish": 3
+       "always_replenish": 3,
+       "depends_on_arrival": 1
       },
       "need_min": 0,
       "need_max": 1280.5614
@@ -6630,8 +6630,8 @@
       },
       "sku_action": "insufficient_evidence",
       "action_counts": {
-       "depends_on_arrival": 1,
-       "always_replenish": 3
+       "always_replenish": 3,
+       "depends_on_arrival": 1
       },
       "need_min": 0,
       "need_max": 1379.2043
@@ -6640,10 +6640,10 @@
     "primary_lead_days": 90,
     "action": "insufficient_evidence",
     "action_counts": {
-     "depends_on_arrival": 1,
-     "always_replenish": 3
+     "always_replenish": 3,
+     "depends_on_arrival": 1
     },
-    "note": "unrounded; no MOQ/pack multiple; not an order quantity; B_min=max-overlap, B_max=no-overlap; supply is a bound, not a point"
+    "note": "unrounded; no MOQ/pack multiple; not an order quantity; B_min=max-overlap, B_max=no-overlap; supply is a bound, not a point; P90 + positive live SO is a conservative joint upper bound: whether SO duplicates demand already in the forecast is unproven, so this is not a reconciled demand number"
    },
    "explanation": {
     "oct_dec_last_year": {
@@ -8516,8 +8516,8 @@
       },
       "sku_action": "insufficient_evidence",
       "action_counts": {
-       "depends_on_arrival": 1,
-       "always_replenish": 3
+       "always_replenish": 3,
+       "depends_on_arrival": 1
       },
       "need_min": 0,
       "need_max": 1256.2796
@@ -8588,8 +8588,8 @@
       },
       "sku_action": "insufficient_evidence",
       "action_counts": {
-       "depends_on_arrival": 1,
-       "always_replenish": 3
+       "always_replenish": 3,
+       "depends_on_arrival": 1
       },
       "need_min": 0,
       "need_max": 1432.4593
@@ -8660,8 +8660,8 @@
       },
       "sku_action": "insufficient_evidence",
       "action_counts": {
-       "depends_on_arrival": 1,
-       "always_replenish": 3
+       "always_replenish": 3,
+       "depends_on_arrival": 1
       },
       "need_min": 0,
       "need_max": 1494.2688
@@ -8670,10 +8670,10 @@
     "primary_lead_days": 90,
     "action": "insufficient_evidence",
     "action_counts": {
-     "depends_on_arrival": 1,
-     "always_replenish": 3
+     "always_replenish": 3,
+     "depends_on_arrival": 1
     },
-    "note": "unrounded; no MOQ/pack multiple; not an order quantity; B_min=max-overlap, B_max=no-overlap; supply is a bound, not a point"
+    "note": "unrounded; no MOQ/pack multiple; not an order quantity; B_min=max-overlap, B_max=no-overlap; supply is a bound, not a point; P90 + positive live SO is a conservative joint upper bound: whether SO duplicates demand already in the forecast is unproven, so this is not a reconciled demand number"
    },
    "explanation": {
     "oct_dec_last_year": {
@@ -10617,8 +10617,8 @@
       },
       "sku_action": "insufficient_evidence",
       "action_counts": {
-       "depends_on_arrival": 3,
-       "always_replenish": 1
+       "always_replenish": 1,
+       "depends_on_arrival": 3
       },
       "need_min": 0,
       "need_max": 1111.5362
@@ -10689,8 +10689,8 @@
       },
       "sku_action": "insufficient_evidence",
       "action_counts": {
-       "depends_on_arrival": 2,
-       "always_replenish": 2
+       "always_replenish": 2,
+       "depends_on_arrival": 2
       },
       "need_min": 0,
       "need_max": 1801.841
@@ -10699,10 +10699,10 @@
     "primary_lead_days": 90,
     "action": "insufficient_evidence",
     "action_counts": {
-     "depends_on_arrival": 3,
-     "always_replenish": 1
+     "always_replenish": 1,
+     "depends_on_arrival": 3
     },
-    "note": "unrounded; no MOQ/pack multiple; not an order quantity; B_min=max-overlap, B_max=no-overlap; supply is a bound, not a point"
+    "note": "unrounded; no MOQ/pack multiple; not an order quantity; B_min=max-overlap, B_max=no-overlap; supply is a bound, not a point; P90 + positive live SO is a conservative joint upper bound: whether SO duplicates demand already in the forecast is unproven, so this is not a reconciled demand number"
    },
    "explanation": {
     "oct_dec_last_year": {
@@ -12716,7 +12716,7 @@
     "action_counts": {
      "always_replenish": 4
     },
-    "note": "unrounded; no MOQ/pack multiple; not an order quantity; B_min=max-overlap, B_max=no-overlap; supply is a bound, not a point"
+    "note": "unrounded; no MOQ/pack multiple; not an order quantity; B_min=max-overlap, B_max=no-overlap; supply is a bound, not a point; P90 + positive live SO is a conservative joint upper bound: whether SO duplicates demand already in the forecast is unproven, so this is not a reconciled demand number"
    },
    "explanation": {
     "oct_dec_last_year": {
@@ -14581,8 +14581,8 @@
       },
       "sku_action": "insufficient_evidence",
       "action_counts": {
-       "depends_on_arrival": 1,
-       "always_replenish": 3
+       "always_replenish": 3,
+       "depends_on_arrival": 1
       },
       "need_min": 0,
       "need_max": 1083.7742
@@ -14653,8 +14653,8 @@
       },
       "sku_action": "insufficient_evidence",
       "action_counts": {
-       "depends_on_arrival": 1,
-       "always_replenish": 3
+       "always_replenish": 3,
+       "depends_on_arrival": 1
       },
       "need_min": 0,
       "need_max": 1241.7957
@@ -14725,8 +14725,8 @@
       },
       "sku_action": "insufficient_evidence",
       "action_counts": {
-       "depends_on_arrival": 1,
-       "always_replenish": 3
+       "always_replenish": 3,
+       "depends_on_arrival": 1
       },
       "need_min": 0,
       "need_max": 1300.4623
@@ -14735,10 +14735,10 @@
     "primary_lead_days": 90,
     "action": "insufficient_evidence",
     "action_counts": {
-     "depends_on_arrival": 1,
-     "always_replenish": 3
+     "always_replenish": 3,
+     "depends_on_arrival": 1
     },
-    "note": "unrounded; no MOQ/pack multiple; not an order quantity; B_min=max-overlap, B_max=no-overlap; supply is a bound, not a point"
+    "note": "unrounded; no MOQ/pack multiple; not an order quantity; B_min=max-overlap, B_max=no-overlap; supply is a bound, not a point; P90 + positive live SO is a conservative joint upper bound: whether SO duplicates demand already in the forecast is unproven, so this is not a reconciled demand number"
    },
    "explanation": {
     "oct_dec_last_year": {
@@ -16538,8 +16538,8 @@
       },
       "sku_action": "insufficient_evidence",
       "action_counts": {
-       "depends_on_arrival": 3,
-       "always_replenish": 1
+       "always_replenish": 1,
+       "depends_on_arrival": 3
       },
       "need_min": 0,
       "need_max": 692.0538
@@ -16610,8 +16610,8 @@
       },
       "sku_action": "insufficient_evidence",
       "action_counts": {
-       "depends_on_arrival": 3,
-       "always_replenish": 1
+       "always_replenish": 1,
+       "depends_on_arrival": 3
       },
       "need_min": 0,
       "need_max": 829.9455
@@ -16682,8 +16682,8 @@
       },
       "sku_action": "insufficient_evidence",
       "action_counts": {
-       "depends_on_arrival": 3,
-       "always_replenish": 1
+       "always_replenish": 1,
+       "depends_on_arrival": 3
       },
       "need_min": 0,
       "need_max": 874.3978
@@ -16692,10 +16692,10 @@
     "primary_lead_days": 90,
     "action": "insufficient_evidence",
     "action_counts": {
-     "depends_on_arrival": 3,
-     "always_replenish": 1
+     "always_replenish": 1,
+     "depends_on_arrival": 3
     },
-    "note": "unrounded; no MOQ/pack multiple; not an order quantity; B_min=max-overlap, B_max=no-overlap; supply is a bound, not a point"
+    "note": "unrounded; no MOQ/pack multiple; not an order quantity; B_min=max-overlap, B_max=no-overlap; supply is a bound, not a point; P90 + positive live SO is a conservative joint upper bound: whether SO duplicates demand already in the forecast is unproven, so this is not a reconciled demand number"
    },
    "explanation": null,
    "white_peak": {
@@ -18710,8 +18710,8 @@
       },
       "sku_action": "insufficient_evidence",
       "action_counts": {
-       "depends_on_arrival": 3,
-       "always_replenish": 1
+       "always_replenish": 1,
+       "depends_on_arrival": 3
       },
       "need_min": 0,
       "need_max": 1356.6935
@@ -18782,8 +18782,8 @@
       },
       "sku_action": "insufficient_evidence",
       "action_counts": {
-       "depends_on_arrival": 3,
-       "always_replenish": 1
+       "always_replenish": 1,
+       "depends_on_arrival": 3
       },
       "need_min": 0,
       "need_max": 1414.1936
@@ -18792,10 +18792,10 @@
     "primary_lead_days": 90,
     "action": "insufficient_evidence",
     "action_counts": {
-     "depends_on_arrival": 3,
-     "always_replenish": 1
+     "always_replenish": 1,
+     "depends_on_arrival": 3
     },
-    "note": "unrounded; no MOQ/pack multiple; not an order quantity; B_min=max-overlap, B_max=no-overlap; supply is a bound, not a point"
+    "note": "unrounded; no MOQ/pack multiple; not an order quantity; B_min=max-overlap, B_max=no-overlap; supply is a bound, not a point; P90 + positive live SO is a conservative joint upper bound: whether SO duplicates demand already in the forecast is unproven, so this is not a reconciled demand number"
    },
    "explanation": {
     "oct_dec_last_year": {
@@ -20821,7 +20821,7 @@
     "action_counts": {
      "always_replenish": 4
     },
-    "note": "unrounded; no MOQ/pack multiple; not an order quantity; B_min=max-overlap, B_max=no-overlap; supply is a bound, not a point"
+    "note": "unrounded; no MOQ/pack multiple; not an order quantity; B_min=max-overlap, B_max=no-overlap; supply is a bound, not a point; P90 + positive live SO is a conservative joint upper bound: whether SO duplicates demand already in the forecast is unproven, so this is not a reconciled demand number"
    },
    "explanation": {
     "oct_dec_last_year": {

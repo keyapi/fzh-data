@@ -697,7 +697,10 @@ def build_sku(sku: str, d: dict, ev_sku: dict, stockout: dict, data: dict,
     replenishment["action"] = replenishment["by_lead"]["90"]["sku_action"]
     replenishment["action_counts"] = replenishment["by_lead"]["90"]["action_counts"]
     replenishment["note"] = ("unrounded; no MOQ/pack multiple; not an order quantity; "
-                             "B_min=max-overlap, B_max=no-overlap; supply is a bound, not a point")
+                             "B_min=max-overlap, B_max=no-overlap; supply is a bound, not a point; "
+                             "P90 + positive live SO is a conservative joint upper bound: whether SO "
+                             "duplicates demand already in the forecast is unproven, so this is not a "
+                             "reconciled demand number")
 
     # ---------------- history / ratio facts ----------------------------------
     ratio_observed = (future["seasonal_naive"]["p50_3m"] / 3.0 / recent3) if recent3 > 1e-9 else None
