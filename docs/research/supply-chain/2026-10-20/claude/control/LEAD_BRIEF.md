@@ -23,6 +23,9 @@ last_seen_commit: ae8bcc55
 - 库存历史：3 天入 `stock_history` 15,820 行；归档器 1.3 PASS；次日 05:17 验证。
 - R290：5/5 接收，accept 3 / scenario 1 / blocker 1；ETA/Cover/UOM 仍缺。
 - SKU 匹配审计 C：`c583ace9`；GS 侧 4,115 行 / 297 SKU；四类 61/2/228/6；PASS。
+- true_missing v2 `93229954` 双审 PASS：12 SKU/2,109 行/2,025 qty；
+  TT0031245K0064088 直接 7 码→6 item_code（90 行/88 qty）、跨行 18 item_code（773/765），
+  0 省略；输入 6 个 SHA256 固定；EN 身份/删除原因仍待业务裁决。
 - B（ETA/Cover/UOM 证据）：v1 两轮 FAIL；v2 `611d9066` 双审 PASS
   （5 trace 主口径 + 10 expand10 扩展；null/0 分离；PO 行键、215 SO、1,465 可复算）。
   v2.1 仅修 UOM 注记（`a8b83618…`），待定向复核。

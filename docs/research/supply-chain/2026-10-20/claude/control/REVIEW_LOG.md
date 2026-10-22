@@ -27,6 +27,8 @@ date: 2026-10-22
 | 10-22 | B v1 证据 | review ×2 | FAIL | 范围错位（expand10 当主口径，trace 只有 5 SKU）；无映射 cover 写 0；缺 PO 行键/cover 仓键/逐文件 SO/源哈希；max/UOM/open_qty 结论过强 |
 | 10-22 | B v2 证据 `611d9066` | review ×2 | PASS | lead+fresh 双审；5 trace 主口径 + 10 扩展分列；null/0 分离；PO 行键/215 SO/1,465 复算/源哈希 |
 | 10-22 | B v2.1 UOM 注记 `3741882c` | targeted | PASS | 4 个主口径需求单位 unknown note 改正；15 条 conversion_requirement=demand+stock UOM；其余未变 |
+| 10-22 | true_missing v1 `d6115ea6` | review ×2 | FAIL | 候选数 8 与实际 18 不一致；输入无 SHA256 |
+| 10-22 | true_missing v2 `93229954` | review ×2 | PASS | 7→6（90 行/88 qty）与 18（773/765）双口径、0 省略；6 个输入哈希匹配；12 SKU/2,109 行/2,025 qty 不变 |
 
 ## 当前待审
 - B v2.1（`2026-10-22-eta-cover-uom-evidence.md` + `evidence.json`）：
