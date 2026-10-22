@@ -7,6 +7,41 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-10-22（断货 restock date 必须先查 EN 上游 + 钉钉头程）
+
+- **更新**: `workflow-issues/pb-stockout-post-shipment-closed-loop.md` 新增 **§7「restock date 必须先查上游」**：断货 ≠ 拍一个 +3 个月。报给 Diane / Notion 的日期要从六处推出来 —— EN **Sales Order**（已下单未交）、**Production Plan / Work Order / 工序卡**（生产到哪）、**Delivery Note**（工厂出了没有）、**钉钉 `2026年下单表` + `发货信息总表`**（ZMT、离港/到港/入库）、**通途采购在途**、**通途海外仓可用**。判定：有在途且 ETA 早于客户最晚发货日 → 以在途为准；没有才按「补货下单 + 提前期」推并标 TBC。另补一条 Why：不查上游会把「已在生产/已在海上」的货报成还要等 3 个月，导致 PB 重新排期或内部重复下单。同步 `pb_orders/docs/reference/stockout-closed-loop.md` §1.2、`pb-orders` skill 与 `AGENT_HANDOFF.md`；同时把 §1 的 UPS 判据从 `Carrier Tracking` 改为 **`Pack Level Carrier Tracking ID`**。
+
+## 2026-10-21（IA 模板改法补精确入口与 Handsontable 提交手法）
+
+- **更新**: `workflow-issues/sps-portal-ia-akn-operations.md` §2/§6.3 修正两处会让人反复试错的地方：**① 入口不是模板文档页** —— 打开 Template 单据后没有 Create New，正确入口是交易列表右上 Create New → 勾「I don't have a source document.」→ Inventory Advice → 选已有模板 → Number of Documents = 1；**② Handsontable 单元格只认真实键盘事件** —— 必须先 JS `focus()` 那个 `textarea.handsontableInput`，再 `keyboard.type` + `Enter`；`locator.fill()` 或 JS 设 value + dispatchEvent 都不会提交，单元格仍显示旧值（2026-10-21 实测反复踩）。日期单元格是带 `MM/DD/YYYY` placeholder 的 `input`，同样用键盘输入 + Enter。另把底部批量发送按钮的判据从「y > 900」改为「取 send 按钮的 last()（本次 y≈850，视口不同会变）」。
+
+## 2026-10-19（AKN 到底要不要重发：以 Order 的 Ship No Later 为准）
+
+- **更新**: `workflow-issues/sps-portal-ia-akn-operations.md` 新增 **§0「先判断：这一单到底要不要重发 AKN」** —— **断货 ≠ 必须重发**：读 **Order 单据明细行**的 `Ship No Later` / `Delivery Requested`（**原 ACK 表头这两个日期常为空**，类型是 `Acknowledge - No Detail or Change`，拿它当基准会误判）；计划到货 ≤ Ship No Later → 只点开 Order（New → Open），不发 AKN；晚于它 → 重发（Expected Ship = 到货日，Delivery = +7 天）。**同一 SKU 的不同 PO 给期可能不同**（实测白194 一单 14 天、一单 3 个半月），必须逐单看。同时**纠正旧断言**：「一次 Send 发不出去、必须发两次」不是铁律（10-19 一次即成）→ 判据改为**交易列表里出现当天的新 ACK 且 `Accepted`/`In Transit`**。`pb_orders/docs/reference/stockout-closed-loop.md` §2 第 4 步、skill、handoff、`pb_orders/docs/log.md` 同步。
+
+## 2026-10-19（断货闭环补第 5 步：网页预检的断货 SKU 清单）
+
+- **更新**: `pb_orders/docs/reference/stockout-closed-loop.md` 由「四步」改为「**五步**」，补上此前漏掉的第 5 步 —— **把断货 SKU 加进网页预检的断货清单**（`api.vilavi.cn/pb` 设置页 / `app_settings.default_no_stock`，存 `/opt/pb-orders/pb_orders/runtime/jobs.sqlite`）。不改这一步，**下一批预检仍会把这些 SKU 当有货放过**，断货件继续被打单。同时给「到货之后」补了两行：**到货必须把 SKU 从清单删掉** + 同步改 IA 模板。skill 与 `pb_orders/docs/log.md` 同步。
+
+## 2026-10-16（Notion 操作记录：落点规则 + 换行坑）
+
+- **更新**: `pb_orders/docs/reference/notion-stockout.md` §5 补两条（**单行 vs 任务页**的落点规则、**富文本换行别写 `\n` 字面量** 的坑），并同步 `pb_orders/AGENT_HANDOFF.md` 与 `.agents/skills/pb-orders/SKILL.md`。起因：上一轮定了「所有操作都要记进 Notion 该行备注」，但**跨单/不挂在 PO 上的操作**（BOM 成本刷新、补货量决策、断货预警）没有落点 —— 补齐为「跨单的建 `任务202408-` 任务页」。
+
+## 2026-10-16（SPS 门户 IA/AKN 操作成文 + 邮件发信纠正）
+
+- **新增**: `workflow-issues/sps-portal-ia-akn-operations.md` —— SPS 门户里断货后必做的两条动作，此前**全无步骤记录**（`sps_automation.py` 只会每天自动发 IA，不碰 AKN）。三个关键点：**① AKN 一次 Send 发不出去** —— 点完 Send 后当前单据变 `Overridden Draft` 并冒出一条新草稿，必须**对新草稿再 Send 一次**，状态到 `In Transit` 才算发出；**② IA 是「发送日 + 7 天」的单日报告**（实测 `Inventory Advice #: IA7_20261016_124353` 而 `Date/Time: 10/23/2026`，Report Start/End 空）→ **PB 对某一天的认知由那天往前 7 天发的那份决定**，所以改模板只影响 7 天后；**③ 覆盖模板不是原地改** —— 会生成一个新的模板文档顶替旧的，从旧文档看会以为改动没生效。补发窗口用 Create New 的 `Number of Documents`（最多 100）一次建 N 份、逐份改日期/编号、勾选后走**底部工具条的 ✈** 批量发。
+- **更新**: `workflow-issues/pb-stockout-post-shipment-closed-loop.md` + `pb_orders/docs/reference/stockout-closed-loop.md` —— 纠正两处**过期断言**：①「邮件靠 Foxmail 手动、项目里没有发信代码」是错的，实际可用 **SMTP 直发**（Tencent Exmail `smtp.exmail.qq.com:465`，账号 `us@mxdeals.com`）；② 新增一条坑：**Tencent Exmail 不会把 SMTP 发出的信自动存进「已发送」**，发完必须 IMAP `APPEND` 一份，否则邮箱里查不到这条线（本次实测 Sent 总数 5553 → 5554）。同时把「SPS 重发 AKN 是唯一黑盒」改为指向新文档。
+
+## 2026-10-16（PB 补货量估算方法）
+
+- **新增**: `workflow-issues/pb-replenishment-sizing-from-sales.md` —— 给 PB 物料家族算「下多少货」的方法与陷阱。要点：**只算美中 Daneey 仓**（仓名一整族 alias 都要收进来，波兰/FBA 排除）；销量读 `通途订单YYYYMM` 的 `2026年X月订单` tab（`渠道=PotteryBarn` 即 PB；**202610 表不存在**；读表要带重试）；**在途只能看通途采购单**（SO 未交量 ≠ 在途、EN Bin 不能当库存，实测差 351 件）；断货月与到货冲量月要剔出月需求率，断货窗口靠 Notion 任务页 + 已发送邮件 + 逐批 check0stock 差分**三源交叉**；交付同事用 **Excel 且结论打头**。**并记下一条教训**：子代理两次报「某 SKU 整表查不到」，据此误下「有别名」的结论，用户质疑后自己读原表发现数据一行不少 —— **「查不到/从未发货」这类否定结论必须自己复核再落地**。
+
+## 2026-10-16（PB 打单后才发现无货的闭环成文）
+
+- **新增**: `workflow-issues/pb-stockout-post-shipment-closed-loop.md` —— 出件都做完了、美中仓才回话「实际无货」这条**绕过预检**的路径，此前只有散落的历史文件名与邮件。三条踩实的规范：**① invoice 的总额写在 0 字节 txt 的文件名里**（`<新总额> 已去除无货N单<PO…> 之前是<旧总额>.txt`），摘无货单要把原 csv/原总额搬进 `invoice/NotUsed/`；`Invoice Total` 第 79 列（1-based）只累加 H 行，而 **H 行才带 PO 号、D 行为空 → 必须 H+D 整块删**，否则留孤儿明细。**② 通知 Diane 的邮件是一条链**：首封 `SKU:<PB买家SKU> out of stock Vendor 5806`，之后**每次都回复上一封**（主题滚成 `Re:RE: …`）。**③ 两套数字不能混用**：EN **不扣减**通途库存 → EN Bin 不能当可用库存（实测差 351 件、方向还不一致）；SO 的「未交量」≠ 在途（货已出境，成品仓预留量与未交量一一对上）；判在途的可靠来源是**通途采购单**。2026-10-16 实测：PO `138093033`/`138099748` 清 invoice **1596.54 → 1526.05**（x22 → x20）。
+- **新增**: skill `.agents/skills/pb-orders/` —— AGENTS.md 早有 `pb-orders` 行但 **skill 文件一直缺**，本轮补上（触发词覆盖 PB 出件 / 库存预检 / 无货未发 / Diane / invoice 总额）。
+- **新增**: `pb_orders/docs/reference/stockout-closed-loop.md` —— 上面那篇的可执行版四步（含邮件正文模板）。
+
 ## 2026-10-08（PB 无货件：UPS 才算真发 + 重复建单加后缀）
 - **更新**: `workflow-issues/pb-out-of-stock-notification-and-zero-stock-orders.md`（`last_updated: 2026-10-08`）—— 三处补料：**① §2.1.1 新增「重复建单也占 `-N`」**：通途不允许重复订单号；`-N` 与拆单后缀是**同一命名空间**（同批多行占 `-1…-M`、跨批补发继续排），所以**下一个可用 = 该 PO 已用过的最大 `-N` + 1**，不是固定 `-2`（用户纠正：「不一定后缀 -2，比如之前建了 2 单 -1 -2 但是都没发货呢？」）。两种查法都实测：**离线扫历史 `PB_*导入*.xlsx` 的 `PO Number-Line` 列**（286 个文件，结果与「`PBUS-<PO>` 存不存在」完全吻合）或通途模糊搜 `PBUS-{PO}`；注意导入 xlsx 里存的是**光号**（`137770200-1`），`PBUS-` 是通途侧店铺码。已在 `pb_orders` 落地成 `--reorder`/`--history-dir`。**② §6.1 补「通途 `orderStatus=despatched` 同样不等于真发」**：它和 ASN/面单一样只证明「建了单/建了标」，判定「真发」只有 **UPS 取件**一个口径。**③ §6.6 新增 2026-10-08 无货件复核实测**（10 个 PO：真发 2 —— `137770200-1` 与 `137974027` 的有货行 `-194`；只建标未取件 8），并记下本次**先拿 shipment/ASN 反推「已发货」、把 7 行改成已发、被用户纠正**的教训 —— ASN 与通途状态都替代不了 UPS。
 

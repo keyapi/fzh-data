@@ -290,6 +290,13 @@ options:
     exclusions: 不用于群晖外网访问与证书（那是 nas-access）；不用于物料组文件夹对账（那是 nas-itemgroup-folders）
     examples: [NAS 产品目录, 产品视觉, ACL 权限修复, 群晖脚本, 目录扫描, 产品图目录]
 
+  - skill: pb-orders
+    dir: pb_orders/
+    summary: Pottery Barn 出件（SPS 库存预检 → 通途导入 xlsx + 标签/背贴 PDF）+ 打单后发现无货的闭环
+    coverage: PB 出件全链路：库存预检（明细级分类，出 checked CSV + 操作表）、通途导入 Excel、标签/背贴 PDF；以及打单后才发现无货时的清 invoice、Notion 断货台账登记、通知 Diane 邮件、SPS 后台 IA/AKN
+    exclusions: 不用于 PB 月度对账 / TM 佣金 / UPS 交付核查（那是 pb-reconciliation）
+    examples: [PB出件, Pottery Barn, 库存预检, 标签PDF, 背贴, Packslip, 无货未发, 断货台账, Diane, invoice总额, 楔形枕补货]
+
   - skill: pb-reconciliation
     dir: pb_reconciliation/
     summary: Pottery Barn 对账月度更新 + TM 佣金结算表

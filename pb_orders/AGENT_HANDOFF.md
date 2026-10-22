@@ -84,6 +84,29 @@ uv run python compare_runs.py --dir "..."                    # 与 <dir>/Colab�
 | `--cache-only` | 背贴品名表只用本地缓存，不联网 |
 | `--dry-run` | 只算不写 |
 
+### 3.3 `notion_stockout.py`（断货登记，半自动）
+
+把预检产出的 `SPS库存检查操作表-*.xlsx` 算成 **Notion 待追加行**，输出可直接喂
+`notion-create-pages` 的 JSON。**不连 Notion**（写入走交互式 MCP，见
+[reference/notion-stockout.md](docs/reference/notion-stockout.md)）。
+
+```bash
+uv run python notion_stockout.py --xlsx "<SPS库存检查操作表-*.xlsx>" --out rows_to_add.json
+```
+
+| 参数 | 默认 | 说明 |
+|------|------|------|
+| `--xlsx` | 必填 | 预检操作表 |
+| `--sku-map` | `data/notion_sku_map.json` | Vendor Style → SKU 简称 / 通途SKU / 到货日期 |
+| `--known-pos` | `data/notion_pb_nostock_pos.json` | 已有 PO 快照（去重）；传 `''` 关闭 |
+| `--sps-date` | 文件名里的 `YYYYMMDD` | 覆盖 SPS 操作日期 |
+| `--batch` | 自动拼 | 覆盖「检出批次」文案 |
+| `--out` | stdout | 输出 JSON 路径 |
+
+硬约束：Vendor Style 不在映射表 → **退出码 2 且不产出半成品**；「缺货明细」里标
+`全部缺货` 的行必须与「全部缺货PO」sheet 一致。去重命中 / 同 PO 多缺货行 / 缺到货日期
+全部写进 `summary`。推完把新 PO 追加进 `data/notion_pb_nostock_pos.json`。
+
 ## 4. 网页版服务（FastAPI + Redis/RQ + SQLite）
 
 命令行是薄适配器，真正的编排在 **`service.py`**；网页和队列复用同一层，
@@ -486,6 +509,130 @@ uv run pytest tests/ -q
 - 输出页数：标签 PDF = 输入页数 × 2；背贴 PDF = 订单行数。
 
 ## 9. 本会话成果
+
+### 2026-10-21（138120551 断货闭环 + IA 模板操作补精确步骤）
+
+- **背景**：美中仓反馈 `PBUS-138120551` 无货（2017724 / TT0031010K0062878，Queen 1 件）。
+  UPS `1ZC0019E0326994977` 仅建标未取件；SPS Order 已 `Complete`（ASN 12646 Accepted）；invoice 已开。
+- **执行**：清 20261019 批 invoice（**2083.13 → 2048.14**，31→30）；Notion 建行「白色153」；
+  AKN 重发（01/19/2027 / 01/26/2027，新文档 `3038979845`）；IA 模板改 2878（Stock 0 / On Order 50 /
+  01/19/2027）并补发 10/21–10/27 共 7 份；网页断货清单加 2878；GSheet「处理特殊订单」登记；
+  给 Diane 发英文邮件并 APPEND 到已发送。
+- **IA 模板操作的两个硬点（这次踩了，已写进 `sps-portal-ia-akn-operations.md` §2/§6.3）**：
+  1. **入口不是模板文档页** —— 打开 Template 单据后没有 Create New；入口是**交易列表右上 Create New**
+     → 勾「I don't have a source document.」→ Inventory Advice → 选已有模板 → Number of Documents = 1。
+  2. **Handsontable 只认真实键盘事件** —— 点单元格后，先 JS `focus()` `textarea.handsontableInput`，
+     再 `keyboard.type` + `Enter`；`locator.fill()` 或 JS 设 `value` + `dispatchEvent` **不会提交**。
+     日期单元格是带 `MM/DD/YYYY` placeholder 的 `input`，同样键盘输入 + `Enter`。
+- **教训**：上一轮文档把入口写成「打开模板 → Create New」、只写「对 textarea 键盘输入」，
+  不够明确 → 本次先走了弯路。可复跑步骤已写死，下次第一步就按它做。
+- **2026-10-22 补（restock date 口径）**：报给 Diane / Notion 的到货日**不能默认 +3 个月**，
+  必须先查上游 —— EN **SO / PP / WO / 工序卡 / DN** + 钉钉 **`2026年下单表` / `发货信息总表`**
+  （ZMT 号、离港/到港/入库）+ 通途**采购在途**。有在途且 ETA 早于客户最晚发货日 → 以在途为准；
+  没有才按「补货下单 + 提前期」推并标 TBC。`stockout-closed-loop.md` §1.2 与
+  `pb-stockout-post-shipment-closed-loop.md` §7 已补。
+
+### 2026-10-19（SPS Order 先点开 + AKN 重发的判断口径）
+
+- **背景**：当日网页平台跑了一批 `check0stock order x35 …`，4 个整单缺货 PO
+  （`138112580` 草绿153 / `138113357` 白194 / `138121964` 黄138 / `138126605` 白194）。
+  用户要求：① 断货登记 Notion；② SPS 上状态还是 `New` 的 Order 点开（→ `Open`），免得下次重复处理；
+  ③ 判断是否需要重发 AKN。
+- **新增判断口径（最容易搞错）**：**断货 ≠ 必须重发 AKN**。基准要读 **Order 单据明细行**的
+  `Ship No Later` / `Delivery Requested`（**原 ACK 表头这两个日期常是空的**，因为 ACK 类型是
+  `Acknowledge - No Detail or Change`）：
+  - 计划到货日 ≤ `Ship No Later` → 来得及，**只点开 Order，不发 AKN**；
+  - 计划到货日 > `Ship No Later` → 重发，Expected Ship = 计划到货日，Delivery = **+7 天**。
+  - **同一 SKU 的不同 PO 给期可能不同**（白194 两单：一单给 14 天，一单给 3 个半月）→ 逐单看。
+- **本次执行**：4 单全部 New → Open；只有 `138113357` 需改期（Ship No Later 10/29 vs 到货 01/19/2027），
+  重发 AKN 新文档 `3036283408`：Expected Ship `01/19/2027` / Delivery `01/26/2027`，状态 `Accepted`。
+- **「一次 Send 发不出去」不是铁律**：10-16 两次都要发两遍，10-19 一次 Send + Continue 就成功。
+  **判据改成看交易列表**：搜 PO → 出现「当天的新 ACK + `Accepted`/`In Transit`」才算成功。
+- 四单过程已追加到 Notion「PB 无货未发」对应行备注；`sps-portal-ia-akn-operations.md` 与
+  `docs/reference/stockout-closed-loop.md` 同步更新。
+
+### 2026-10-16（Notion 操作记录的落点规则 + 换行坑）
+
+- 「所有操作过程都要记进 Notion」这条，**落点分两种**：
+  - 只涉及某几个 PO 的（清 invoice / 重发 AKN / 改 IA / 发断货邮件）→ **追加到该行「备注」**；
+  - **跨单 / 不挂在 PO 上的**（BOM 成本刷新、补货量决策、断货预警）→ **在 `任务202408-` 库建任务页**
+    （`Name` + `Status` + `标签`），正文分「事件表 / 操作清单 / 其他操作 / 待办」四块。
+- **⚠️ 换行坑**：通过 MCP 写 `备注` 时换行要写**真换行符**；写成 `\n` 字面量会存成字母 `n`
+  （实测整段变成 `…下单。n【操作记录】n① …`）。**写完回读确认。**
+- 本次落地：`138093033` 到货日期填 `2027-01-19`（备注注明 WX 提醒可能延到 2 月、差距不大）；
+  建任务页「PB 断货处理 2026-10-16（2 单…）」记录当天全部操作。
+
+### 2026-10-16（SPS 后台 IA/AKN 实操成文 —— 闭环最后一块黑盒补齐）
+
+- **背景**：断货后在 SPS 门户要做的两条动作（重发 AKN、改 IA）此前**全无步骤记录**。
+  本次实操作了两单（`138093033` 楔形枕白194、`138099748` 三角靠枕黄60）跑通。
+- **新增** `docs/solutions/workflow-issues/sps-portal-ia-akn-operations.md`（完整点法 + 三个坑）。
+- **三个关键点**：
+  1. **AKN 一次 Send 发不出去** —— 点完 Send 当前单据变 `Overridden Draft` 并冒出一条**新草稿**，
+     必须**对新草稿再 Send 一次**；状态 `Saved` → **`In Transit`** 才算发出。
+  2. **IA 是「发送日 + 7 天」的单日报告**（实测 `IA7_20261016_124353` / Date `10/23/2026`）→
+     **PB 对某一天的认知由那天往前 7 天发的那份决定**；改模板只影响 7 天后，
+     **已发出的 7 天窗口要逐天补发**（Create New 填 `Number of Documents` 一次建 N 份）。
+  3. **覆盖模板会生成新模板文档**（旧的变 `UNDEFINED/Saved`），从旧文档看会误判「没生效」。
+- **邮件纠正**：实际可用 **SMTP 直发**（`smtp.exmail.qq.com:465`，`us@mxdeals.com`），
+  不是 Foxmail 手动；**且 Tencent Exmail 不把 SMTP 发出的信存进「已发送」，要 IMAP `APPEND`**
+  （实测 Sent 5553 → 5554）。
+- **本次实际执行**：AKN 两单发出（01/19/2027、12/02/2026）；IA 模板改 2880 与黄60；
+  IA 批量补发 8 份（10/16–10/23）全部 Accepted；英文邮件已发 Diane。
+
+### 2026-10-16（补货量估算：给同事下单用的口径与方法）
+
+- **背景**：PB 床楔形枕头 8 款（`TT0031010K0062870–62881`）连续几个月没下过补货单、已断货，
+  要当天算出建议下单量交 WX。
+- **新增** `docs/solutions/workflow-issues/pb-replenishment-sizing-from-sales.md`（方法 + 陷阱）。
+- **口径**：只算**美中 Daneey 仓**（仓名一整族 alias 都收；波兰/FBA 排除）；销量读
+  `通途订单YYYYMM` 的 `2026年X月订单` tab（`渠道=PotteryBarn` 即 PB，**202610 表不存在**）；
+  **在途只看通途采购单**（`erp2_purchase_purchaseorderquery`）—— SO 未交量 ≠ 在途、
+  EN Bin 不能当库存（差 351 件）；断货月与到货冲量月剔出月需求率，覆盖期 6 个月。
+- **断货窗口三源交叉**：Notion「任务202408-」**任务页** + `us@mxdeals.com` 已发送邮件 +
+  逐批 `check0stock` 差分。（楔形枕断货**不在**「PB 无货未发」台账库里。）
+- **交付物**：Excel（8 sheet，第一张即结论、前几列 `通途SKU/EN物料号/物料名称/★建议下单`），
+  不是 md；EN SO 号与通途 PO 号都带在表里。
+- **实测**：美中 Daneey 仓 2026-03~09 全渠道 404（PB 268 / 非 PB 136）；在途仅 6 件（`PO021724`）；
+  EN 近 5.5 个月未下单；建议 2880=110、2878=88、2881=33、2879=19、2876=7，合计 257。
+- **教训**：子代理两次报「某 SKU 整表查不到」，据此误下「有别名」的结论；用户质疑后自己读原表
+  发现数据一行不少。**「查不到/从未发货」这类否定结论必须自己复核再落地。**
+
+### 2026-10-16（打单后才发现无货的闭环成文 + 补 `pb-orders` skill）
+
+- **背景**：出件完成后美中仓才回话「这单实际无货」——绕过预检的路径此前无规范。
+  20261015 批的 `138093033` / `138099748` 是实例（已打单、已出 invoice）。
+- **新增** `docs/reference/stockout-closed-loop.md`（四步可执行版）+ `.agents/skills/pb-orders/`
+  （AGENTS.md 早有 `pb-orders` 行但 **skill 文件一直缺**，本轮补上）。
+- **三条踩实的规范**（详见 reference）：
+  1. **invoice**：总额写在 0 字节 txt 的**文件名**里；摘无货单 = 原件搬 `invoice/NotUsed/` +
+     新文件 `invoice x<新PO数> 已去除无货N单 <原时间戳>.csv` + 新 txt
+     `<新总额> 已去除无货N单<PO…> 之前是<旧总额>.txt`。`Invoice Total` 第 79 列（1-based）
+     只累加 H 行；**H 行才带 PO 号、D 行为空 → 必须 H+D 整块删**。回写保持 UTF-8 无 BOM + LF。
+  2. **邮件**：`SKU:<PB买家SKU> out of stock Vendor 5806` 首封，之后**全部回复上一封**（主题滚 `Re:RE:`）；
+     `us@mxdeals.com`(Service U.S.) → PB 采购对接人；Foxmail 手动，**项目无发信代码**。
+  3. **数字口径**：EN **不扣减**通途库存 → EN Bin 不能当可用库存（实测差 351 件）；
+     SO「未交量」≠ 在途（货已出境到目的仓）。判在途用通途采购单查询。
+- **本次执行**：20261015 批 invoice 1596.54 → **1526.05**（x22 → x20，原件入 NotUsed）；
+  Notion 加 `白色194` / `黄色60` 选项 + 登记两行。
+- **仍缺**：SPS 后台**重发 AKN(855)** 无脚本无记录（`sps_automation.py` 只发 IA）。
+
+### 2026-10-15（断货登记：库存预检缺货 → Notion「PB 无货未发」库）
+
+- **背景**：预检筛出的整单缺货 PO 要登记到 Notion 跟踪。2026-10-08 已把手写表迁成结构化库
+  「**PB 无货未发（一行一个 PO）**」（`collection://fa2f272d-289a-4a88-88eb-9ef39be00e43`，
+  库 URL 见 reference）。此后每批新增缺货靠人对照手抄。
+- **本次**：20261012 批的 3 条新缺货补进库（`138066286` `138067758` 草绿153、`138083193` 草绿138；
+  `138034395` 10-08 已录不重复）→ 库 32 → 35 行；新增 `notion_stockout.py`（§3.3）+
+  `data/notion_sku_map.json` + `data/notion_pb_nostock_pos.json`。
+- **为什么半自动（关键约束）**：Notion 写入只有交互式 MCP 可用 —— 它缓存的 OAuth token
+  **实测打 REST API 返回 401**（token 只对 MCP 服务器有效）。所以脚本不连 Notion、只出 JSON；
+  用户明确选择不引入 Notion 集成 token。
+- **到货日期跟 SKU 走**：草绿153 → 2026-10-30、草绿138 → 2026-11-17（来自老表组标题）；
+  改了只动 `data/notion_sku_map.json`。黄色97 老表没记 → `eta=null`，该行留空并报出来。
+- **踩到的坑**：Notion `打单` 列部分缺货时填 `部分`，**不是** PO 库存状态的 `部分缺货`；
+  单测先写错、跑出来才发现（`打单` 是 select，值必须与库里的选项字面一致）。
+- **测试**：`tests/test_notion_stockout.py` +15；pb_orders 全套 178 passed / 2 skipped。
 
 ### 2026-09-23（库存预检：把「出件前那一天的手工筛选」也做进本模块）
 
