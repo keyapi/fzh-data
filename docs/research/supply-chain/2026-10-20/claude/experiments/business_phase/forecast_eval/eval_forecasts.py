@@ -1,22 +1,25 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""T2: forecast evaluation against a mature-model library (statsforecast).
+"""T2: forecast evaluation against statsforecast (v2, after T2-REVIEW).
 
-Design (fixed before looking at results):
-  data      : order_store.duckdb, monthly net sales per tongtool SKU
-              (sum(qty) by despatch month, test lines excluded, zero-filled)
-  window    : SAME shape as the first batch -- 90 calendar days starting on the
-              22nd of the month after each origin (bucket weights, 4 months)
-  split     : validation origins 2025-01..2025-06, test origins 2025-10..2026-03
-              (model selection uses validation ONLY)
-  isolation : interval calibration for an origin uses residuals whose
-              label_available_at (first day after the window's last month) is
-              <= that origin's decision date -- the same rule as V1 R3
-  candidates: naive, seasonal_naive, ma3, ma6, ma12, TSB, Croston, AutoETS,
-              equal-weight combo of the simple point models
-  failures  : every failed / inapplicable (model, series, origin) is kept with a
-              reason code; nothing is silently dropped.
+Fixes vs the first version
+--------------------------
+1. Zero-actual cells are RETAINED in aggregate WAPE (only an all-zero actual
+   total makes it undefined). Both variants are reported: keep-zero and
+   exclude-zero, so a ranking change is visible instead of hidden.
+2. Validation and test are compared on the COMMON SUBSET of cells where every
+   candidate produced a forecast; per-candidate availability and failure reasons
+   are reported. Per-model (own-availability) numbers are kept only as context.
+3. The combination candidate is named `combo_dynamic_ew`: per cell it is the
+   equal-weight mean of whichever simple models were available in that cell, and
+   its composition per split is reported. It is NOT a fixed five-model combo.
+4. Model selection uses the validation set ONLY (common subset, keep-zero WAPE);
+   the test set is reported, never used to override the selection. Uncertainty
+   comes from a SKU bootstrap on the validation cells.
+5. Stratification (tier / warehouse / intermittent) is labelled POST-HOC with
+   its basis stated; it is not treated as information available at the origin.
 
+Read-only inputs: order_store.duckdb, destinations.json.
 Outputs: forecast_eval_results.json, report.md
 """
 from __future__ import annotations
@@ -25,6 +28,7 @@ import argparse
 import hashlib
 import json
 import math
+import random
 import warnings
 from collections import Counter, defaultdict
 from datetime import date, timedelta
@@ -41,10 +45,11 @@ DEST = CLAUDE_DIR / "out" / "business_phase" / "destinations.json"
 
 VAL_ORIGINS = ["2025-01", "2025-02", "2025-03", "2025-04", "2025-05", "2025-06"]
 TEST_ORIGINS = ["2025-10", "2025-11", "2025-12", "2026-01", "2026-02", "2026-03"]
-MIN_TRAIN = 24            # months needed to be "trainable" for this evaluation
+MIN_TRAIN = 24
 WINDOW_DAYS = 90
 SIMPLE = ["naive", "seasonal_naive", "ma3", "ma6", "ma12"]
-MODELS = SIMPLE + ["tsb", "croston", "autoets", "combo"]
+MODELS = SIMPLE + ["tsb", "croston", "autoets", "combo_dynamic_ew"]
+BOOTSTRAP = 300
 warnings.filterwarnings("ignore")
 
 
@@ -55,12 +60,6 @@ def ym_i(ym: str) -> int:
 def i_ym(i: int) -> str:
     y, m = divmod(i, 12)
     return f"{y:04d}-{m + 1:02d}"
-
-
-def month_len(i: int) -> int:
-    y, m = divmod(i, 12)
-    leap = (y % 4 == 0 and (y % 100 != 0 or y % 400 == 0))
-    return [31, 29 if leap else 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][m]
 
 
 def window_weights(start: date, days: int) -> dict[int, float]:
@@ -82,7 +81,6 @@ def decision_date(origin_i: int) -> date:
 
 
 def forecast(model: str, y: np.ndarray, h: int):
-    """Return monthly point forecast (length h) or raise with a reason."""
     n = len(y)
     if model == "naive":
         return np.repeat(y[-1], h)
@@ -91,8 +89,7 @@ def forecast(model: str, y: np.ndarray, h: int):
             raise ValueError("history_lt_13m")
         return np.array([y[n - 12 + (k % 12)] for k in range(h)], dtype=float)
     if model in ("ma3", "ma6", "ma12"):
-        k = int(model[2:])
-        k = min(k, n)
+        k = min(int(model[2:]), n)
         if k < 1:
             raise ValueError("no_history")
         return np.repeat(float(np.mean(y[-k:])), h)
@@ -106,8 +103,7 @@ def forecast(model: str, y: np.ndarray, h: int):
     else:
         raise ValueError(f"unknown_model:{model}")
     m.fit(y.astype(np.float32))
-    out = m.predict(h=h)
-    return np.asarray(out["mean"], dtype=float)
+    return np.asarray(m.predict(h=h)["mean"], dtype=float)
 
 
 def conf_q(vals: list[float]) -> float:
@@ -148,12 +144,10 @@ def main() -> None:
     monthly = defaultdict(dict)
     for sku, ym, qty in rows:
         monthly[sku][ym] = float(qty)
-    dom_wh = {}
     tmp = defaultdict(Counter)
     for sku, w, a in wh:
         tmp[sku][w] += int(a or 0)
-    for sku, c in tmp.items():
-        dom_wh[sku] = c.most_common(1)[0][0]
+    dom_wh = {s: c.most_common(1)[0][0] for s, c in tmp.items()}
 
     last_i = ym_i("2026-09")
     series = {}
@@ -167,24 +161,32 @@ def main() -> None:
         if len(y) >= MIN_TRAIN:
             series[sku] = dict(first=first, y=y, months=months)
 
-    # minimal reproducible comparison: deterministic sample of 200 series
     keys = sorted(series, key=lambda s: (-series[s]["y"].sum(), s))
     step = max(1, len(keys) // 200)
-    minimal = keys[::step][:200]
-    plan = [("minimal", minimal, ["2025-06"], ["2026-03"])]
+    plan = [("minimal", keys[::step][:200], ["2025-06"], ["2026-03"])]
     if not args.minimal_only:
         plan.append(("full", keys, VAL_ORIGINS, TEST_ORIGINS))
 
     results = dict(
-        schema_version="t2_forecast_eval/1",
+        schema_version="t2_forecast_eval/2",
         inputs=dict(db=dict(path=str(db), sha256=db_hash),
                     destinations_sha256=hashlib.sha256(DEST.read_bytes()).hexdigest()),
-        settings=dict(window_days=WINDOW_DAYS, min_train_months=MIN_TRAIN,
-                      validation_origins=VAL_ORIGINS, test_origins=TEST_ORIGINS,
-                      candidates=MODELS,
-                      selection_rule="best validation WAPE (coverage >= 90% of cells)",
-                      calibration_rule=("same-shape rolling residuals with "
-                                        "label_available_at <= decision date")),
+        settings=dict(
+            window_days=WINDOW_DAYS, min_train_months=MIN_TRAIN,
+            validation_origins=VAL_ORIGINS, test_origins=TEST_ORIGINS,
+            candidates=MODELS,
+            combo_definition=("combo_dynamic_ew = per-cell equal-weight mean of the "
+                              "SIMPLE candidates that produced a forecast in that "
+                              "cell; composition reported per split"),
+            zero_rule=("zero-actual cells are KEPT in WAPE; the aggregate is undefined "
+                       "only when the actual total is zero"),
+            common_subset_rule=("validation and test are compared on cells where EVERY "
+                                "candidate produced a forecast"),
+            selection_rule=("lowest validation WAPE on the common subset, keep-zero; "
+                            "the test set is reported only"),
+            calibration_rule=("same-shape rolling residuals with label_available_at "
+                              "<= decision date; estimate, not a guarantee"),
+        ),
         library_versions={},
         runs=[],
     )
@@ -197,51 +199,51 @@ def main() -> None:
 
     for run_name, skus, val_origins, test_origins in plan:
         all_origins = val_origins + test_origins
-        # ---- build cells per model/origin ----------------------------------
-        cells = {m: [] for m in MODELS}          # (sku, origin, F, A, split)
+        cells = {m: {} for m in MODELS}          # (sku,origin) -> dict(F,A,split,sku,origin)
+        attempted = defaultdict(int)
         failures = Counter()
-        resid = defaultdict(list)                # (sku, model) -> [(label_at, err, F)]
+        combo_sizes = defaultdict(Counter)       # split -> size -> count
+        resid = defaultdict(list)
         for origin_ym in all_origins:
             o = ym_i(origin_ym)
             dec = decision_date(o)
             w = window_weights(dec, WINDOW_DAYS)
             h = max(w) - o
+            split = "val" if origin_ym in val_origins else "test"
             for sku in skus:
                 s = series[sku]
                 tr = o - s["first"] + 1
                 if tr < 3:
-                    failures["short_history"] += 1
+                    attempted[("short_history", split)] += 1
                     continue
                 ytr = s["y"][:tr]
-                actual = sum(wt * s["y"][idx - s["first"]] for idx, wt in w.items()
-                             if idx - s["first"] < len(s["y"]))
+                actual = sum(wt * s["y"][idx - s["first"]] for idx, wt in w.items())
                 got = {}
-                for m in MODELS[:-1]:
+                for m in SIMPLE + ["tsb", "croston", "autoets"]:
+                    attempted[(m, split)] += 1
                     try:
                         got[m] = forecast(m, ytr, h)
                     except Exception as exc:
                         failures[f"{m}:{type(exc).__name__}:{str(exc)[:40]}"] += 1
                 if got:
-                    got["combo"] = np.mean(np.vstack([got[m] for m in SIMPLE
-                                                      if m in got]), axis=0)
+                    simple = [m for m in SIMPLE if m in got]
+                    got["combo_dynamic_ew"] = np.mean(np.vstack([got[m] for m in simple]),
+                                                      axis=0)
+                    combo_sizes[split][len(simple)] += 1
                 for m, f in got.items():
                     F = sum(wt * f[idx - (o + 1)] for idx, wt in w.items())
-                    split = "val" if origin_ym in val_origins else "test"
-                    cells[m].append(dict(sku=sku, origin=origin_ym, split=split,
-                                         F=float(F), A=float(actual)))
-                    # residual available for FUTURE origins only
+                    cells[m][(sku, origin_ym)] = dict(F=float(F), A=float(actual),
+                                                      split=split, sku=sku,
+                                                      origin=origin_ym)
                     label_at = date((max(w) + 1) // 12, (max(w) + 1) % 12 + 1, 1)
-                    resid[(sku, m)].append(dict(label_at=label_at,
-                                                err=float(actual - F),
+                    resid[(sku, m)].append(dict(label_at=label_at, err=float(actual - F),
                                                 F=float(F)))
-        # ---- interval calibration per (sku, model, origin) ------------------
+
         def p90_lift(sku: str, m: str, origin_ym: str):
-            o = ym_i(origin_ym)
-            dec = decision_date(o)
-            vals = [r["err"] for r in resid.get((sku, m), [])
-                    if r["label_at"] <= dec]
+            dec = decision_date(ym_i(origin_ym))
+            vals = [r["err"] for r in resid.get((sku, m), []) if r["label_at"] <= dec]
             if len(vals) >= 3:
-                return conf_q(vals), "own"
+                return conf_q(vals)
             pool = []
             for (s2, m2), rs in resid.items():
                 if m2 != m:
@@ -250,116 +252,163 @@ def main() -> None:
                     if r["label_at"] <= dec and abs(r["F"]) > 1e-9:
                         pool.append(r["err"] / r["F"])
             if len(pool) >= 3:
-                base = next(c["F"] for c in cells[m]
-                            if c["sku"] == sku and c["origin"] == origin_ym)
-                return conf_q(pool) * base, "pooled"
-            return None, "not_calibrated"
+                return conf_q(pool) * cells[m][(sku, origin_ym)]["F"]
+            return None
 
-        def metrics(m: str, split: str):
-            cs = [c for c in cells[m] if c["split"] == split]
+        # common subsets
+        common = {}
+        for split in ("val", "test"):
+            per = [set(k for k, c in cells[m].items() if c["split"] == split)
+                   for m in MODELS]
+            common[split] = set.intersection(*per) if per else set()
+
+        # MASE scale in window units (in-sample seasonal naive)
+        def scale_for(sku: str) -> float | None:
+            s = series[sku]
+            vals = []
+            for idx in range(s["first"] + 12, last_i):
+                ww = window_weights(decision_date(idx), WINDOW_DAYS)
+                if max(ww) > last_i:
+                    continue
+                a_now = sum(wt * s["y"][k - s["first"]] for k, wt in ww.items())
+                a_prev = sum(wt * s["y"][k - 12 - s["first"]] for k, wt in ww.items()
+                             if k - 12 >= s["first"])
+                vals.append(abs(a_now - a_prev))
+            return float(np.mean(vals)) if vals and np.mean(vals) > 1e-9 else None
+
+        scales = {sku: scale_for(sku) for sku in skus}
+
+        def stats(m: str, split: str, key_filter=None) -> dict:
+            cs = [c for k, c in cells[m].items()
+                  if c["split"] == split and (key_filter is None or k in key_filter)]
             n = len(cs)
+            if n == 0:
+                return dict(n=0)
+            sum_a = sum(c["A"] for c in cs)
             zero = sum(1 for c in cs if abs(c["A"]) < 1e-9)
-            usable = [c for c in cs if abs(c["A"]) > 1e-9]
-            sum_a = sum(c["A"] for c in usable)
-            if not usable or sum_a < 1e-9:
-                return dict(n=n, n_scored=len(usable), zero_actual_cells=zero,
-                            wape=None, bias=None, mase=None, coverage=None,
-                            width=None)
-            wape = sum(abs(c["F"] - c["A"]) for c in usable) / sum_a
-            bias = sum(c["F"] - c["A"] for c in usable) / sum_a
-            # MASE scale must be in the SAME units as F/A (cumulative window):
-            # mean |A_window(o) - A_window(o-12)| over in-sample origins.
-            per_series = defaultdict(list)
-            for c in cs:
-                per_series[c["sku"]].append(c)
-            scale = {}
-            for sku in per_series:
-                s = series[sku]
-                vals = []
-                for idx in range(s["first"] + 12, last_i):
-                    o = idx
-                    dec = decision_date(o)
-                    ww = window_weights(dec, WINDOW_DAYS)
-                    if max(ww) > last_i:
-                        continue
-                    a_now = sum(wt * s["y"][k - s["first"]] for k, wt in ww.items())
-                    a_prev = sum(wt * s["y"][k - 12 - s["first"]] for k, wt in ww.items()
-                                 if k - 12 >= s["first"])
-                    vals.append(abs(a_now - a_prev))
-                if vals and float(np.mean(vals)) > 1e-9:
-                    scale[sku] = float(np.mean(vals))
+            keep = (sum(abs(c["F"] - c["A"]) for c in cs) / sum_a) if sum_a > 1e-9 else None
+            bias = (sum(c["F"] - c["A"] for c in cs) / sum_a) if sum_a > 1e-9 else None
+            pos = [c for c in cs if abs(c["A"]) > 1e-9]
+            sum_ap = sum(c["A"] for c in pos)
+            excl = (sum(abs(c["F"] - c["A"]) for c in pos) / sum_ap) if sum_ap > 1e-9 else None
             num, den = [], []
-            for c in usable:
-                if c["sku"] in scale:
+            for c in cs:
+                sc = scales.get(c["sku"])
+                if sc is not None:
                     num.append(abs(c["F"] - c["A"]))
-                    den.append(scale[c["sku"]])
-            mase = (np.mean(num) / np.mean(den)) if num and np.mean(den) > 1e-9 else None
+                    den.append(sc)
+            mase = (float(np.mean(num)) / float(np.mean(den))) if num and np.mean(den) > 1e-9 else None
             covs, widths = [], []
-            for c in usable:
-                lift, kind = p90_lift(c["sku"], m, c["origin"])
+            for c in cs:
+                lift = p90_lift(c["sku"], m, c["origin"])
                 if lift is None:
                     continue
                 p90 = c["F"] + max(0.0, float(lift))
                 covs.append(1.0 if c["A"] <= p90 + 1e-9 else 0.0)
                 widths.append(p90 - c["F"])
-            return dict(n=n, n_scored=len(usable), zero_actual_cells=zero,
-                        wape=round(float(wape), 4), bias=round(float(bias), 4),
-                        mase=(round(float(mase), 4) if mase is not None else None),
+            return dict(n=n, zero_actual_cells=zero,
+                        wape_keep_zero=(round(keep, 4) if keep is not None else None),
+                        wape_exclude_zero=(round(excl, 4) if excl is not None else None),
+                        bias=(round(bias, 4) if bias is not None else None),
+                        mase=(round(mase, 4) if mase is not None else None),
                         coverage=(round(float(np.mean(covs)), 4) if covs else None),
                         width=(round(float(np.mean(widths)), 3) if widths else None))
-        # ---- group breakdown for the selected model -------------------------
-        val_metrics = {m: metrics(m, "val") for m in MODELS}
-        eligible_models = [m for m in MODELS
-                           if val_metrics[m]["wape"] is not None
-                           and val_metrics[m]["n_scored"] >= 0.9 * max(
-                               v["n_scored"] for v in val_metrics.values())]
-        best = min(eligible_models, key=lambda m: val_metrics[m]["wape"]) if eligible_models else None
 
-        def group_metrics(m: str, split: str):
-            cs = [c for c in cells[m] if c["split"] == split]
-            tiers = {}
+        # ---- selection strictly on validation (common subset, keep-zero) ----
+        val_stats = {m: stats(m, "val") for m in MODELS}
+        val_common = {m: stats(m, "val", common["val"]) for m in MODELS}
+        pool = [m for m in MODELS if val_common[m].get("wape_keep_zero") is not None]
+        best = min(pool, key=lambda m: val_common[m]["wape_keep_zero"]) if pool else None
+
+        # ---- SKU bootstrap on validation common cells -----------------------
+        rng = random.Random(20261022)
+        boot_best = Counter()
+        boot_wape = defaultdict(list)
+        if pool:
+            per_sku = {m: defaultdict(lambda: [0.0, 0.0]) for m in MODELS}
+            for m in MODELS:
+                for k, c in cells[m].items():
+                    if k in common["val"]:
+                        per_sku[m][c["sku"]][0] += abs(c["F"] - c["A"])
+                        per_sku[m][c["sku"]][1] += c["A"]
+            sku_list = sorted({c["sku"] for k, c in cells[MODELS[0]].items()
+                               if k in common["val"]})
+            for _ in range(BOOTSTRAP):
+                sample = [sku_list[rng.randrange(len(sku_list))] for _ in range(len(sku_list))]
+                vals = {}
+                for m in MODELS:
+                    num = sum(per_sku[m][s][0] for s in sample)
+                    den = sum(per_sku[m][s][1] for s in sample)
+                    if den > 1e-9:
+                        vals[m] = num / den
+                        boot_wape[m].append(vals[m])
+                if vals:
+                    boot_best[min(vals, key=vals.get)] += 1
+
+        # ---- groups (post-hoc) ---------------------------------------------
+        def groups(m: str, split: str):
+            cs = [c for c in cells[m].values() if c["split"] == split]
             tot = defaultdict(float)
             for c in cs:
                 tot[c["sku"]] += c["A"]
             order = sorted(tot, key=lambda s: -tot[s])
             third = max(1, len(order) // 3)
-            tier_of = {}
-            for i, sku in enumerate(order):
-                tier_of[sku] = "high" if i < third else ("mid" if i < 2 * third else "low")
-            groups = defaultdict(list)
+            tier = {s: ("high" if i < third else "mid" if i < 2 * third else "low")
+                    for i, s in enumerate(order)}
+            out = defaultdict(list)
             for c in cs:
-                groups[f"tier:{tier_of[c['sku']]}"].append(c)
-                groups[f"warehouse:{dom_wh.get(c['sku'], 'unknown')}"].append(c)
+                out[f"tier:{tier[c['sku']]}"].append(c)
+                out[f"warehouse:{dom_wh.get(c['sku'], 'unknown')}"].append(c)
                 y = series[c["sku"]]["y"]
-                zero_share = float(np.mean(y == 0))
-                groups[f"intermittent:{'yes' if zero_share >= 0.5 else 'no'}"].append(c)
-            out = {}
-            for g, arr in groups.items():
-                usable = [c for c in arr if abs(c["A"]) > 1e-9]
-                if not usable:
+                out[f"intermittent:{'yes' if float(np.mean(y == 0)) >= 0.5 else 'no'}"].append(c)
+            res = {}
+            for g, arr in out.items():
+                sa = sum(c["A"] for c in arr)
+                if sa < 1e-9:
                     continue
-                sa = sum(c["A"] for c in usable)
-                out[g] = dict(n=len(arr), n_scored=len(usable),
-                              wape=round(sum(abs(c["F"] - c["A"]) for c in usable) / sa, 4),
-                              bias=round(sum(c["F"] - c["A"] for c in usable) / sa, 4))
-            return out
+                res[g] = dict(n=len(arr), zero_cells=sum(1 for c in arr if c["A"] == 0),
+                              wape=round(sum(abs(c["F"] - c["A"]) for c in arr) / sa, 4),
+                              bias=round(sum(c["F"] - c["A"] for c in arr) / sa, 4))
+            return res
 
         results["runs"].append(dict(
             run=run_name, n_series=len(skus),
-            n_cells={m: len(cells[m]) for m in MODELS},
-            validation=val_metrics, test={m: metrics(m, "test") for m in MODELS},
+            availability={
+                "attempted": {f"{k[0]}|{k[1]}": v for k, v in attempted.items()},
+                "available": {m: {s: sum(1 for c in cells[m].values() if c["split"] == s)
+                                  for s in ("val", "test")} for m in MODELS},
+                "measured": {m: {s: sum(1 for c in cells[m].values() if c["split"] == s)
+                                 for s in ("val", "test")} for m in MODELS},
+                "common": {s: len(common[s]) for s in ("val", "test")},
+                "failures": dict(failures.most_common(20)),
+                "n_failures_total": sum(failures.values()),
+            },
+            combo_composition={s: dict(combo_sizes[s]) for s in ("val", "test")},
+            validation_own=val_stats,
+            validation_common=val_common,
+            test_own={m: stats(m, "test") for m in MODELS},
+            test_common={m: stats(m, "test", common["test"]) for m in MODELS},
             selected_model=best,
-            selection_reason=("最低验证 WAPE（覆盖率门槛 90%）" if best else "无可用模型"),
-            groups=(group_metrics(best, "test") if best else {}),
-            failures=dict(failures.most_common(20)),
-            n_failures_total=sum(failures.values()),
+            selection_basis=("validation common subset, keep-zero WAPE"),
+            selection_uncertainty=dict(
+                bootstrap=BOOTSTRAP,
+                best_model_frequency=dict(boot_best.most_common()),
+                wape_p5_p95={m: [round(float(np.percentile(v, 5)), 4),
+                                 round(float(np.percentile(v, 95)), 4)]
+                             for m, v in boot_wape.items() if len(v) > 10},
+            ),
+            groups_post_hoc=(groups(best, "test") if best else {}),
+            groups_note=("post-hoc only: tier uses TEST-period sales, intermittent uses "
+                         "full-history zero share, warehouse uses the CURRENT primary "
+                         "warehouse -- none of these is known at the forecast origin"),
         ))
-        print(f"[{run_name}] series={len(skus)} best={best} "
-              f"val_wape={val_metrics.get(best, {}).get('wape') if best else None} "
-              f"test_wape={results['runs'][-1]['test'][best]['wape'] if best else None}")
+        print(f"[{run_name}] series={len(skus)} common_val={len(common['val'])} "
+              f"common_test={len(common['test'])} selected={best} "
+              f"val_keep={val_common.get(best, {}).get('wape_keep_zero')}")
 
     out_json = Path(args.json)
-    out_json.write_text(json.dumps(results, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    out_json.write_text(json.dumps(results, ensure_ascii=False, indent=1) + "\n",
+                        encoding="utf-8")
     print("wrote", out_json)
 
 
