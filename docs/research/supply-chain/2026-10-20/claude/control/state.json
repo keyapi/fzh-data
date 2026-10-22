@@ -1,5 +1,5 @@
 {
-  "updated": "2026-10-22T08:55:00+08:00",
+  "updated": "2026-10-22T12:05:00+08:00",
   "accepted": [
     "G1 SO evidence gate v5: 9a04741e / d027f981; 66 tests; current_structure_only boundary; historical pending",
     "R1/R2 no-evidence audit gate: d8c473fe",
@@ -8,7 +8,9 @@
     "Stock history local ingest: 3 days, 15,820 rows, code 53291689 PASS; 10-20 incomplete batch preserved, 10-21/22 complete; tongtool_stock untouched",
     "Stock daily archiver 1.3 PASS; 3 days sealed under D:/Work/库存备份/runs; new cmd uses run_id dirs from 2026-10-23 05:17",
     "Production gate PASS ca27163c (redirect pre-read, absolute deadline, partial-read accounting, atomic stop)",
-    "Phase 1 SE enrichment: 10 SKUs, 3,416 rows, 663/663 SE resolved; budget 239/300 req, 0.24/32 MiB, 241/900s; two-round stable 1732d590"
+    "Phase 1 SE enrichment: 10 SKUs, 3,416 rows, 663/663 SE resolved; budget 239/300 req, 0.24/32 MiB, 241/900s; two-round stable 1732d590",
+    "true_missing Top10 v2 93229954 dual-review PASS: 12 SKU/2,109 rows/2,025 qty; 7 conflicting/2 pending insufficient/3 pending business; 28 decision items",
+    "B ETA/Cover/UOM v2.1 3741882c dual-review PASS; ETA remains blocked (will_arrive_date 0/524 non-null)"
   ],
   "tasks": [
     {
@@ -76,7 +78,9 @@
     "100-SKU expansion awaiting user authorization for bounded EN read-only (<=4000 requests, <=200MB, <=90min, single concurrency)",
     "Daily stock history: only 2 days (2026-10-20 incomplete, 2026-10-21 manual complete); scheduled 05:17 failed; not ingested into order_store.duckdb",
     "100-SKU production expansion paused by decision Codex until stock history + gate + pilot ETA/Cover/UOM evidence",
-    "Stock history: 3 days available (10-20 incomplete, 10-21 complete, 10-22 catch-up complete); ingest code 571929fa under Codex re-review before writing local stock_history"
+    "Stock history: 3 days available (10-20 incomplete, 10-21 complete, 10-22 catch-up complete); ingest code 571929fa under Codex re-review before writing local stock_history",
+    "B ETA follow-up blocked on Jack's delivery_plan tracking data push and missing DN first-leg numbers from PJ/YYS",
+    "100-SKU expansion paused until mapping/ETA/Cover/UOM close"
   ],
   "quota": {
     "codex_5h_remaining_pct": null,
