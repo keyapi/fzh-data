@@ -43,13 +43,18 @@ status: active
 2. 系统性映射/UOM/重叠问题 → 停止数量计算，保留事实清单。
 3. 同一任务失败 2 次，或 30 分钟无进展 → 停该任务并登记，不换名/不循环。
 4. LR1 未回 → 按待审处理，不引用其标签做数量。
+   **实际状态（16:45 更新）**：LR1 已于 16:38 `DONE LR1（通过）`，但那只是**限定通过**；
+   `51efaa67` 标「LR1 限定通过（不含数量结论）」，**仍不得用于任何数量结论**，本条实质继续生效。
 5. 额度/进程异常 → 记录检查点后停，不重启/不复制。
 
 ## 进度表（工头维护）
 
 | 任务 | 批次 | 状态 | 开始 | 结束 | commit | 证据 | 阻塞/下一动作 |
 |---|---|---|---|---|---|---|---|
-| N1 | - | pending | | | | | |
+| N1 | - | done | 16:44 | 16:46 | `8b2a23e5`（收口证明）+ `d04e943c`（标签更正） | 14/14 断言真；并集 122；`model_race_commit=d2eac9a3` 且保留 `declared_baseline_commit=f9df4357`；122 行仍全 pending、数量全 null；`check_secrets` 622 零输出 | 完成，无阻塞 |
+| N2 | S0 选样冻结 | done | 16:46 | 16:48 | `909635da` | 10 名额：8 填充 / 2 缺额（`work_order_not_in_snapshot`、`no_open_po_line_with_eta`），8 个不同 SKU，已冻结不换 | 无阻塞；缺额为外部数据缺失 |
+| N2 | B1 | done | 16:49 | 16:51 | `4626a779` | 2 SKU（S1 紧急 / S2 重叠）；每链 facts 7 / scenarios 5 / blockers 5；可算结余 345 与 55、`gap_lower_bound=0.0` 且注明是已证下界；建议全「待核实」 | 已知 minor：`counts.recommendations` 记为 1，实际 2，待 N3 整理时修正 |
+| N2 | B2 | running | 16:52 | | | `TT0312701K0064561`(重叠) + `C/Cord-DKBlue-100-713-wow`(PO-ETA 不确定) | 同三层结构；counts 必须相加 |
 | N2 | B1 | pending | | | | | |
 | N2 | B2 | pending | | | | | |
 | N2 | B3 | pending | | | | | |
