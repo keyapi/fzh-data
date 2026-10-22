@@ -1,5 +1,5 @@
 {
-  "updated": "2026-10-22T13:40:00+08:00",
+  "updated": "2026-10-22T14:00:00+08:00",
   "accepted": [
     "G1 SO evidence gate v5: 9a04741e / d027f981; 66 tests; current_structure_only boundary; historical pending",
     "R1/R2 no-evidence audit gate: d8c473fe",
@@ -172,5 +172,22 @@
       "deliverable": "2-SKU sample within 60 min, then full V0 report + evidence",
       "review": "codex1 sample + full"
     }
-  ]
+  ],
+  "supervisor": {
+    "role": "codex2",
+    "protocol": "control/SUPERVISOR.md",
+    "triggers": [
+      "stage_complete",
+      "declared_blocker",
+      "overdue",
+      "ready_idle_10m",
+      "scope_change"
+    ],
+    "patrol": "coordinator every 15 min",
+    "today": [
+      "14:30 V0",
+      "15:00 acceptance + spot-check",
+      "16:00 action list"
+    ]
+  }
 }
