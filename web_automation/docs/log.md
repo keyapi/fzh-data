@@ -8,6 +8,10 @@ tags: [web-automation, tongtu, sellfox, playwright, log]
 
 # 迁移日志
 
+## 2026-10-22
+
+- **修复（通途登录密码框选择器）**：`legacy-compatible/tongtu_login_ocr.py` 的 `SELECTORS["password"]` 由 `input[name="password"]` 改为 `input[type="password"]`。登录页现有两个密码字段——可见 `input[type=password]#password` 与隐藏 `input[name=password]#passwordMd5`；按 name 会命中隐藏框，`fill` 等到 15s 超时（日志 `resolved to hidden <input ... id="passwordMd5">`），导致会话过期后自动登录失败、订单详情导出 `BLOCKED`。改按 type 后复导 2026-09 成功。
+
 ## 2026-09-20
 
 - **修复（链接）**：`solutions/integration-issues/ddddocr-playwright-login-fixes.md` 指向 `docs/lessons/`、`docs/reference/` 的 2 条链接少退一级，由 `../` → `../../`。

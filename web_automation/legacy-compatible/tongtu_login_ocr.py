@@ -48,7 +48,9 @@ PASSWORD = os.getenv("TONGTU_PASSWORD", "")
 
 SELECTORS = {
     "username": 'input[name="username"]',
-    "password": 'input[name="password"]',
+    # 可见密码框为 input[type=password]#password；另有隐藏 input[name=password]#passwordMd5，
+    # 按 name 会命中隐藏框（fill 超时），故按 type 选可见框。
+    "password": 'input[type="password"]',
     "captcha_img": 'img[alt="验证码"]',
     "captcha_input": 'input[name="captcha"]',
     "login_btn": 'button:has-text("立即登录")',
