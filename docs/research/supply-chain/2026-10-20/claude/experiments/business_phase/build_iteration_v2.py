@@ -294,6 +294,7 @@ def main() -> None:
                           "覆盖期 L90 日历窗口 vs PR297 90/30 月；"
                           "两者使用同一 T5 新预测率")
         row = dict(r)
+        row.pop("月需求率", None)   # renamed to 历史率(T3); keep one clear name only
         row.update({
             "预测方法(实际使用)": f"{method}（SKU 级 × 仓占比分配）",
             "AutoETS可用性": mstat,
