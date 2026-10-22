@@ -4,7 +4,8 @@
 
 Rules implemented here (and reported one by one)
 1. Strata are built ONLY from each training window (never from the full period
-   or the test period).
+   or the test period). This also applies to the 200-series SAMPLE and to the
+   dominant-warehouse label: both use sales up to each outer origin only.
 2. Inner rolling selection: within each outer training window, the model is
    chosen on inner cut points; the outer outcome is never visible.
 3. Outer loop re-runs the whole selection (including the equal-weight combo)
@@ -12,12 +13,23 @@ Rules implemented here (and reported one by one)
 4. Monthly cumulative h=3, step 3; only labels available at the time are used
    (label_available_at), every window is refit.
 5. Short histories follow a PRE-REGISTERED fallback rule; failures are kept, not
-   dropped; zero-denominator cells are listed separately.
-6. The old T2 test period is exploratory only. The final evaluation is on a
-   genuinely unused consecutive 3 months (2026-07..09); for months whose labels
-   do not exist yet a forward shadow plan is given instead.
+   dropped; missing forecasts are written as null (never 0).
+6. The old T2 test period is exploratory only. There is NO clean hold-out block
+   inside the current label coverage: T2's 2026-03 origin already reaches July
+   2026 with its 90-day target window, so 2026-07..09 is only "last evaluable",
+   not "unused". The only clean evidence comes from the forward shadow.
 7. Compute budget: <=6 candidates, 200 series, 3 outer x 3 inner cut points,
    <=14,400 fits, 30-minute cap; on overflow partial results + explicit gap.
+
+Metric: WAPE = Σ|F−A| / ΣA on the COMMON evaluable subset (rows where selected,
+MA3 and naive all produced a forecast). Zero-demand cells are RETAINED in the
+numerator — their |F| is an error; they contribute 0 to the denominator. Dropping
+them would delete real over-forecast error.
+
+T12 audit fixes (2026-10-22) — see control/reviews/2026-10-22-t12-audit-fixes.md
+  Sampling / tier / dominant warehouse now use each outer block's training
+  window only; the "unused block" wording is corrected; zero-demand errors are
+  retained; missing predictions are null; the common evaluable subset is stated.
 
 Diagnostic only: the main table and the T2 model choice are NOT changed.
 Outputs: nested_eval.json, nested_eval.csv, nested_report.md
@@ -49,11 +61,12 @@ DEST = CLAUDE_DIR / "out" / "business_phase" / "destinations.json"
 CANDIDATES = ["naive", "ma3", "ma6", "seasonal_naive", "autoets", "combo_ew"]
 N_SERIES = 200
 OUTER = [("2025-10", "exploratory"), ("2026-01", "exploratory"),
-         ("2026-06", "final_unused")]
+         ("2026-06", "last_evaluable_no_clean_holdout")]
 INNER_OFFSETS = (3, 6, 9)          # months before the outer origin, step 3
 H = 3
 FIT_CAP = 14400
 TIME_CAP_S = 1800
+SCORED_FIELDS = ("sel_forecast", "ma3_forecast", "naive_forecast")
 
 
 def ym_i(ym: str) -> int:
@@ -108,10 +121,11 @@ def main() -> None:
     if hashlib.sha256(DB_PATH.read_bytes()).hexdigest() != db_hash:
         raise SystemExit("DB changed")
 
-    month, wh_month = defaultdict(dict), defaultdict(lambda: defaultdict(float))
+    month = defaultdict(dict)
+    wh_month = defaultdict(lambda: defaultdict(lambda: defaultdict(float)))
     for sku, ym, wh, q in rows:
         month[sku][ym] = month[sku].get(ym, 0.0) + float(q)
-        wh_month[sku][wmap.get(wh, wh)] += float(q)
+        wh_month[sku][wmap.get(wh, wh)][ym] += float(q)
     last_i = ym_i("2026-09")
     series = {}
     for sku in eligible:
@@ -123,15 +137,27 @@ def main() -> None:
         series[sku] = dict(first=first, y=np.array([by.get(m, 0.0) for m in months],
                                                    dtype=float), months=months)
 
-    # deterministic stratified-by-size sample of 200 series
-    keys = sorted(series, key=lambda s: (-series[s]["y"].sum(), s))
-    step = max(1, len(keys) // N_SERIES)
-    sample = keys[::step][:N_SERIES]
+    # --- training-window-only helpers (T10-1: no full-period information) -----
+    def training_total(sku: str, origin_i: int) -> float:
+        s = series[sku]
+        n = origin_i - s["first"] + 1
+        return float(np.sum(s["y"][:n])) if n > 0 else 0.0
+
+    def dominant_warehouse(sku: str, origin_i: int) -> str | None:
+        """Dominant warehouse using only months <= the outer origin."""
+        first = series[sku]["first"]
+        if origin_i < first:
+            return None
+        agg = {wh: sum(q for ym, q in by.items() if first <= ym_i(ym) <= origin_i)
+               for wh, by in wh_month.get(sku, {}).items()}
+        agg = {k: v for k, v in agg.items() if v > 0}
+        return max(agg.items(), key=lambda kv: kv[1])[0] if agg else None
 
     fits = 0
     fit_by_model = Counter()
     failures = Counter()
     rows_out = []
+    sample_by_block = {}
 
     def fit_forecast(model: str, y: np.ndarray, h: int):
         nonlocal fits
@@ -168,6 +194,13 @@ def main() -> None:
     for outer_ym, outer_kind in OUTER:
         O = ym_i(outer_ym)
         inner = [O - k for k in INNER_OFFSETS]
+        # T10-1: the 200-series sample is drawn from THIS block's training
+        # window only. Ranking by the full-history total (through 2026-09) would
+        # let final-block actuals decide which series are evaluated.
+        keys = sorted(series, key=lambda s: (-training_total(s, O), s))
+        step = max(1, len(keys) // N_SERIES)
+        sample = keys[::step][:N_SERIES]
+        sample_by_block[outer_ym] = sample
         for sku in sample:
             s = series[sku]
             n_tr = O - s["first"] + 1
@@ -217,11 +250,11 @@ def main() -> None:
                     outer=outer_ym, outer_kind=outer_kind, sku=sku, chosen=None,
                     selection_reason="no training history before this outer origin",
                     fallback_rule=rule["reason"], n_train=max(n_tr, 0),
+                    train_total=0.0,
                     actual=round(A_out, 2), sel_forecast=None, ma3_forecast=None,
                     naive_forecast=None, zero_actual=bool(abs(A_out) < 1e-9),
                     intermittent=False, zero_share_train=0.0,
-                    warehouse=(max(wh_month[sku].items(), key=lambda kv: kv[1])[0]
-                               if wh_month[sku] else "unknown"),
+                    warehouse=dominant_warehouse(sku, O) or "unknown",
                     low_confidence=True, inner_wape={}, valid=False))
                 continue
             out_pred = {}
@@ -243,14 +276,17 @@ def main() -> None:
             # ---- strata from the TRAINING window only (rule 1) ------------
             hist = ytr
             zshare = float(np.mean(hist == 0)) if len(hist) else 0.0
-            dom_wh = max(wh_month[sku].items(), key=lambda kv: kv[1])[0] if wh_month[sku] else "unknown"
+            dom_wh = dominant_warehouse(sku, O) or "unknown"
             rows_out.append(dict(
                 outer=outer_ym, outer_kind=outer_kind, sku=sku, chosen=chosen,
                 selection_reason=reason_sel, fallback_rule=rule["reason"],
                 n_train=n_tr,
+                train_total=round(float(np.sum(ytr)), 2),
                 actual=round(A_out, 2),
                 sel_forecast=round(float(np.sum(sel_f)), 2),
-                ma3_forecast=(round(float(np.sum(out_pred["ma3"])) if "ma3" in out_pred else 0.0)),
+                # T10-4: a missing prediction is null, never 0.
+                ma3_forecast=(round(float(np.sum(out_pred["ma3"])))
+                              if "ma3" in out_pred else None),
                 naive_forecast=round(float(np.sum(out_pred["naive"])), 2),
                 zero_actual=bool(abs(A_out) < 1e-9),
                 intermittent=bool(zshare >= 0.5),
@@ -266,20 +302,30 @@ def main() -> None:
             raise SystemExit("time cap reached; partial results not published")
 
     # ---------------- aggregate -------------------------------------------
+    def common_rows(subset):
+        """Rows where every compared method produced a forecast (T10-4)."""
+        return [r for r in subset if r.get("valid")
+                and all(r.get(f) is not None for f in SCORED_FIELDS)]
+
     def wape(field: str, subset) -> float | None:
-        cells = [r for r in subset if r.get("valid") and not r["zero_actual"]
-                 and r.get(field) is not None]
+        # zero-demand cells stay in the numerator: |F − 0| is a real error.
+        # They add 0 to the denominator, so no divide-by-zero is introduced.
+        cells = common_rows(subset)
         sa = sum(r["actual"] for r in cells)
         if not cells or sa < 1e-9:
             return None
         return round(sum(abs(r[field] - r["actual"]) for r in cells) / sa, 4)
 
     def block_stats(subset):
+        common = common_rows(subset)
         return dict(
             n=len(subset),
             n_valid=sum(1 for r in subset if r.get("valid")),
-            n_scored=sum(1 for r in subset if r.get("valid") and not r["zero_actual"]),
-            zero_denominator=sum(1 for r in subset if r["zero_actual"]),
+            n_common=len(common),
+            n_scored=sum(1 for r in common if r["actual"] > 1e-9),
+            zero_retained=sum(1 for r in common if abs(r["actual"]) < 1e-9),
+            missing_forecast=sum(1 for r in subset if r.get("valid")
+                                 and not all(r.get(f) is not None for f in SCORED_FIELDS)),
             selected=wape("sel_forecast", subset), ma3=wape("ma3_forecast", subset),
             naive=wape("naive_forecast", subset))
 
@@ -289,19 +335,23 @@ def main() -> None:
     final_key = f"{OUTER[-1][0]}|{OUTER[-1][1]}"
     final_rows = [r for r in by_outer[OUTER[-1][0]] if r.get("valid")]
 
-    # tier strata from the FINAL training window only
-    tot = sorted(final_rows, key=lambda r: -r["actual"])
-    third = max(1, len(tot) // 3)
-    tier = {}
-    for idx, r in enumerate(tot):
-        tier[(r["outer"], r["sku"])] = ("high" if idx < third else
-                                        "mid" if idx < 2 * third else "low")
+    # tier strata from each block's OWN training-window total (T10-1). The old
+    # code ranked the final block by its ACTUAL, i.e. it used the outcome.
+    for outer_ym, _ in OUTER:
+        ranked = sorted([r for r in by_outer[outer_ym] if r.get("valid")],
+                        key=lambda r: (-r["train_total"], r["sku"]))
+        third = max(1, len(ranked) // 3)
+        for idx, r in enumerate(ranked):
+            r["tier"] = ("high" if idx < third else
+                         "mid" if idx < 2 * third else "low")
+        for r in by_outer[outer_ym]:
+            r.setdefault("tier", "no_history")
     strata = defaultdict(list)
     for r in final_rows:
-        strata[f"tier:{tier[(r['outer'], r['sku'])]}"].append(r)
+        strata[f"tier:{r['tier']}"].append(r)
         strata[f"warehouse:{r['warehouse']}"].append(r)
         strata[f"intermittent:{'yes' if r['intermittent'] else 'no'}"].append(r)
-    stratum_stats = {g: block_stats(v) for g, v in strata.items()}
+    stratum_stats = {g: block_stats(strata[g]) for g in sorted(strata)}
 
     # SKU bootstrap on the final block (uncertainty, not significance claim)
     rng = np.random.default_rng(20261022)
@@ -312,7 +362,7 @@ def main() -> None:
     skus = sorted(by_sku)
     for _ in range(300):
         pick = [skus[rng.integers(0, len(skus))] for _ in range(len(skus))]
-        rows_b = [r for s in pick for r in by_sku[s] if not r["zero_actual"]]
+        rows_b = [r for s in pick for r in common_rows(by_sku[s])]
         sa = sum(r["actual"] for r in rows_b)
         if sa < 1e-9:
             continue
@@ -323,24 +373,49 @@ def main() -> None:
         diffs_naive.append(sel - nai)
 
     sel_dist = Counter(r["chosen"] for r in rows_out if r.get("valid") and r["chosen"])
+    sample_per_block = {o: len(v) for o, v in sample_by_block.items()}
+    sample_overlap = {
+        o: len(set(v) & set(sample_by_block[OUTER[0][0]])) for o, v in sample_by_block.items()}
     result = dict(
-        schema_version="t10_nested_eval/1",
+        schema_version="t10_nested_eval/2",
         inputs=dict(db_sha256=db_hash,
                     destinations_sha256=hashlib.sha256(DEST.read_bytes()).hexdigest()),
+        metric_definition=dict(
+            wape="Σ|F−A| / ΣA on the common evaluable subset",
+            zero_demand=("零需求单元格保留在分子中（|F| 计为误差），对分母贡献 0；"
+                         "不再把它们从 WAPE 中删除。"),
+            common_subset=("共同可评分子集 = 该块 valid 且 sel/MA3/naive 三个预测均非 null "
+                           "的行；三种方法在同一批单元格上比较。"),
+            missing_forecast="缺失预测写 null（CSV 为空），不写 0。"),
         rules=dict(
-            r1_strata="strata use each training window only (final block uses its own training data)",
+            r1_strata=("sample, tier, dominant warehouse and intermittent labels use THIS block's "
+                       "training window only (never post-origin sales)"),
             r2_inner="model chosen on inner cut points inside each outer training window",
             r3_outer="outer refits every candidate and compares with fixed MA3/naive on the same sample",
             r4_window="monthly cumulative h=3, step 3, labels available at the time (label_available_at), refit per window",
-            r5_fallback="pre-registered short-history rules; failures kept; zero-denominator cells listed separately",
-            r6_final=("old T2 test period is exploratory; final evaluation uses the unused 2026-07..09 block; "
-                      "a forward shadow plan covers months whose labels do not exist yet"),
-            r7_budget=dict(candidates=len(CANDIDATES), series=len(sample),
-                           outer=len(OUTER), inner=len(INNER_OFFSETS),
+            r5_fallback="pre-registered short-history rules; failures kept; missing predictions kept as null",
+            r6_final=("旧 T2 测试期只作探索。当前标签覆盖（≤2026-09）内**不存在干净留出块**："
+                      "T2 的 2026-03 外层切点其 90 天目标窗已触及 2026-07，故 2026-07..09 只是"
+                      "“最后一个可评估块”，不是“未使用块”。唯一干净证据来自前向影子"
+                      "（参数化脚本 forward_shadow.py；目标月标签闭合后按每月 4 日评分）。"),
+            r7_budget=dict(candidates=len(CANDIDATES),
+                           series=sample_per_block, outer=len(OUTER),
+                           inner=len(INNER_OFFSETS),
                            fit_cap=FIT_CAP, time_cap_s=TIME_CAP_S),
         ),
         candidates=CANDIDATES,
-        series_sample=dict(n=len(sample), rule="sorted by total qty, every k-th, first 200"),
+        series_sample=dict(
+            n_per_block=sample_per_block, overlap_with_first_block=sample_overlap,
+            rule=("per block: rank by TRAINING-window qty only (first .. outer origin), "
+                  "every k-th, first 200; blocks are therefore not the same series list"),
+            note=("三个外层块的样本各自独立抽取；块间不可直接比较，只做块内同样本对比。"
+                  "旧版用截至 2026-09 的全历史总量抽样，会让最终块实际值决定哪些序列被评估。")),
+        layout_note=("最后一个外层块 2026-06 的目标窗为 2026-07..09；它不是干净留出块"
+                     "（见 rules.r6_final）。"),
+        common_subset={k: dict(n_common=v["n_common"], n_scored=v["n_scored"],
+                               zero_retained=v["zero_retained"],
+                               missing_forecast=v["missing_forecast"])
+                       for k, v in blocks.items()},
         fits=dict(total=fits, by_model=dict(fit_by_model), cap=FIT_CAP),
         failures=dict(failures.most_common()),
         blocks=blocks,
@@ -356,18 +431,20 @@ def main() -> None:
                                       p5=round(float(np.percentile(diffs_naive, 5)), 4),
                                       p95=round(float(np.percentile(diffs_naive, 95)), 4)),
             note=("range across resampled SKUs; describes uncertainty of the difference "
-                  "on unseen samples, not a significance test")),
+                  "on unseen samples, not a significance test; zero-demand cells retained")),
         shadow_plan=dict(
             when="每月 4 日（上月标签闭合后）",
             who="数据分析 worker（离线，只读 order_store）",
-            what="用同一脚本、同一 200 序列样本与同一内层规则，重跑上一个连续 3 个月的累积 h=3 评估，"
-                 "记录各候选 WAPE、被选中模型、零分母单元格数、失败原因与 fallback 次数",
-            status="2026-10..12 的标签尚不存在，故本轮只交付 2026-07..09 的最终评估与影子方案",
-            next_window="2026-10..12（标签可得后执行）"),
-        zero_denominator={k: v["zero_denominator"] for k, v in blocks.items()},
+            what=("用 forecast_eval/forward_shadow.py（参数化：--data-cutoff/--origin，"
+                  "无写死截止期）预存样本、内层选模结果、各候选预测与生成时间；"
+                  "标签可得后再用同一文件评分"),
+            status=("当前标签覆盖内没有干净留出块；2026-10..12 的标签尚不存在，"
+                    "故本轮只交付最后一个可评估块（2026-07..09）与前向影子预存方案"),
+            next_window="2026-10..12（该窗口标签闭合后按预存文件评分）"),
+        zero_denominator={k: v["zero_retained"] for k, v in blocks.items()},
         wording_note=("WAPE 是加权绝对百分比误差，不是“错 SKU 比例”或“准确率”，也没有通用阈值；"
-                      "本报告只陈述“在未见样本上的差异与不确定性”，不使用评价性结论，"
-                      "也不把探索性时段称作留出验证。"),
+                      "本报告只陈述“在（部分）未见样本上的差异与不确定性”，不使用“改进/稳健/"
+                      "干净留出”等说法，也不把探索性时段称作留出验证；模型选择仍未定。"),
     )
     mem = tracemalloc.get_traced_memory()[1]
     tracemalloc.stop()
@@ -391,26 +468,34 @@ def main() -> None:
     L += ["", "## 计算规模", "",
           f"- 实际拟合 **{fits}** 次（上限 {FIT_CAP}）；运行 **{result['compute']['seconds']} s**，"
           f"tracemalloc 峰值 **{result['compute']['tracemalloc_peak_mb']} MB**",
-          f"- 样本 {len(sample)} 序列 × 外层 {len(OUTER)} × 内层 {len(INNER_OFFSETS)}，候选 {len(CANDIDATES)}", "",
-          "## 同样本对比（WAPE，零分母单元格单列）", "",
-          "| 外层 | 性质 | n | 计分 | 零分母 | 选择流程 | MA3 | naive |",
-          "|---|---|---:|---:|---:|---:|---:|---:|"]
+          f"- 每块样本 {sample_per_block} 序列 × 外层 {len(OUTER)} × 内层 {len(INNER_OFFSETS)}，"
+          f"候选 {len(CANDIDATES)}；样本按各块训练窗销量抽取（块间不同）", "",
+          "## 同样本对比（WAPE，零需求单元格保留）", "",
+          "口径：`Σ|F−A| / ΣA`，三种方法都在**同一共同可评分子集**上"
+          "（该块 valid 且三个预测均非 null）。零需求单元格保留在分子中"
+          "（|F| 计为误差），对分母贡献 0；缺失预测为 null，不写 0。", "",
+          "| 外层 | 性质 | n | 有效 | 共同可评 | 计分(非零) | 零需求(保留) | 缺失预测 | 选择流程 | MA3 | naive |",
+          "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|"]
     for (o, kind), v in zip(OUTER, [blocks[f"{o}|{k}"] for o, k in OUTER]):
-        L.append(f"| {o} | {kind} | {v['n']} | {v['n_scored']} | {v['zero_denominator']} | "
+        L.append(f"| {o} | {kind} | {v['n']} | {v['n_valid']} | {v['n_common']} | "
+                 f"{v['n_scored']} | {v['zero_retained']} | {v['missing_forecast']} | "
                  f"{v['selected']} | {v['ma3']} | {v['naive']} |")
-    L += ["", f"- 最终评估块：**{final_key}**（2026-07..09，T2 未用作测试期）；"
-          "更早两块是探索性（旧测试期）。", "",
+    L += ["", f"- 最后一个可评估块：**{final_key}**（目标窗 2026-07..09）。"
+          "**它不是干净留出块**：T2 的 2026-03 外层切点其 90 天目标窗已触及 2026-07，"
+          "因此该块已被部分使用；更早两块是探索性（旧测试期）。"
+          "当前标签覆盖内**不存在干净留出块**，唯一干净证据来自前向影子。", "",
           "## 内层选模分布", "",
           "| 被选中模型 | 次数 |", "|---|---:|"]
     for c, n in sel_dist.most_common():
         L.append(f"| {c} | {n} |")
-    L += ["", "## 最终块分层指标（分层只用该外层训练窗的数据）", "",
-          "| 层 | n | 计分 | 零分母 | 选择流程 | MA3 | naive |", "|---|---:|---:|---:|---:|---:|---:|"]
+    L += ["", "## 最后一个可评估块的分层指标（tier/主仓/间歇均只用该块训练窗）", "",
+          "| 层 | n | 共同可评 | 零需求(保留) | 选择流程 | MA3 | naive |",
+          "|---|---:|---:|---:|---:|---:|---:|"]
     for g, v in stratum_stats.items():
-        L.append(f"| {g} | {v['n']} | {v['n_scored']} | {v['zero_denominator']} | "
+        L.append(f"| {g} | {v['n']} | {v['n_common']} | {v['zero_retained']} | "
                  f"{v['selected']} | {v['ma3']} | {v['naive']} |")
     b = result["bootstrap_final"]
-    L += ["", "## 不确定性（最终块，重抽 SKU 300 次）", "",
+    L += ["", "## 不确定性（最后一个可评估块，重抽 SKU 300 次）", "",
           f"- 选择流程 − MA3：均值 {b['selected_minus_ma3']['mean']}，"
           f"5–95% [{b['selected_minus_ma3']['p5']}, {b['selected_minus_ma3']['p95']}]",
           f"- 选择流程 − naive：均值 {b['selected_minus_naive']['mean']}，"
@@ -419,18 +504,21 @@ def main() -> None:
           "## 失败与边界", "",
           "- 失败（保留，不删序列）：" + ("；".join(f"`{k}` × {v}" for k, v in
                                               result["failures"].items()) or "无"),
-          "- 零分母单元格按外层单列（见上表 `零分母` 列），不计入 WAPE 分母。", "",
-          "## 前向影子方案（未使用月份）", "",
+          "- 零需求单元格保留在 WAPE 分子中；`零需求(保留)` 列单独给出数量，"
+          "缺失预测为 null（不进共同可评分子集，也不按 0 计分）。", "",
+          "## 前向影子（唯一干净证据路径）", "",
           f"- {result['shadow_plan']['when']}；执行人：{result['shadow_plan']['who']}",
-          f"- 记录内容：{result['shadow_plan']['what']}",
+          f"- 预存内容：{result['shadow_plan']['what']}",
           f"- 状态：{result['shadow_plan']['status']}；下一窗口：{result['shadow_plan']['next_window']}", "",
           "## 措辞纪律", "",
           f"- {result['wording_note']}", "",
           "## 结论", "",
-          f"- 在最终未使用块（2026-07..09）上，选择流程与 MA3 / naive 的 WAPE 分别为 "
-          f"{blocks[final_key]['selected']} / {blocks[final_key]['ma3']} / "
-          f"{blocks[final_key]['naive']}；差异的 SKU 重抽区间见上节。",
-          "- 内层选模分布显示没有单一候选占绝对多数，选模本身带来方差；本报告不据此宣布任何候选更好。", ""]
+          f"- 在最后一个可评估块（2026-07..09，非干净留出）上，选择流程与 MA3 / naive 的 "
+          f"WAPE 分别为 {blocks[final_key]['selected']} / {blocks[final_key]['ma3']} / "
+          f"{blocks[final_key]['naive']}（共同可评 n={blocks[final_key]['n_common']}，"
+          f"零需求保留 {blocks[final_key]['zero_retained']} 条）；差异的 SKU 重抽区间见上节。",
+          "- 内层选模分布显示没有单一候选占绝对多数，选模本身带来方差；"
+          "本报告不据此宣布任何候选更好，模型选择仍未定。", ""]
     (OUT / "nested_report.md").write_text("\n".join(L) + "\n", encoding="utf-8")
 
     print("wrote nested_eval.json / .csv / nested_report.md")

@@ -1,5 +1,5 @@
 {
- "schema_version": "t9_error_attribution/1",
+ "schema_version": "t9_error_attribution/2",
  "inputs": {
   "db_sha256": "25579c5dcd802c7e67f610432a19d08f8e6952696bd50d43bdfa47d6b9241ae9",
   "destinations_sha256": "720b478809128156cc1609cd10720cb926a98382a7c2f8a8179c55cadbf7bf60",
@@ -26,6 +26,38 @@
  },
  "error_rows": 9016,
  "total_abs_error": 156074.49,
+ "sales_caliber": {
+  "used": "全历史（该 SKU 首单月..2026-09，标签覆盖内）；分母 = 全部 eligible 序列同期总销量。全文所有‘销量占比/覆盖’均用此口径，不混用近 6 个月。",
+  "total_sales_all_history": 346086.0
+ },
+ "warehouse_alias": {
+  "raw_distinct_warehouses": 26,
+  "mapped_distinct_warehouses": 17,
+  "skus_raw_multi": 1046,
+  "skus_mapped_multi": 528,
+  "reclassified_multi_to_single": 518,
+  "reclassified_examples": [
+   "C/Cord-Black-100-707-wow-Cover",
+   "C/Cord-Black-138-707-wow",
+   "C/Cord-Black-138-707-wow-Cover",
+   "C/Cord-Black-153-707-wow",
+   "C/Cord-Black-153-707-wow-Cover"
+  ],
+  "unmapped_raw_names": [],
+  "note": "先按 warehouse_map 统一仓库别名，再判定该 SKU 期内只有一个真实仓；未映射名称原样保留并在此列出（当前为空）。"
+ },
+ "series_kind": {
+  "rows": {
+   "warehouse_level_true": 4985,
+   "multi_warehouse_true_sum": 4031,
+   "proxy_current_primary": 0
+  },
+  "skus": {
+   "multi_warehouse_true_sum": 344,
+   "warehouse_level_true": 430
+  },
+  "note": "仓库别名先映射再判定；CSV 的 series_kind 列已是映射后口径。"
+ },
  "top20": [
   {
    "sku": "TT0031038K0062927",
@@ -259,14 +291,44 @@
     "skus": 392,
     "mean_abs_error": 9.692
    },
-   "category_borrowed": {
-    "skus": 158,
-    "mean_abs_error": 14.002
-   },
    "combo2": {
     "skus": 392,
     "mean_abs_error": 9.593
+   },
+   "category_borrowed": {
+    "skus": 151,
+    "mean_abs_error": 13.118
    }
+  },
+  "aligned_summary": {
+   "naive": 14.275,
+   "ses": 12.662,
+   "tsb": 12.03,
+   "combo2": 12.756,
+   "category_borrowed": 13.118
+  },
+  "alignment": {
+   "methods": [
+    "naive",
+    "ses",
+    "tsb",
+    "combo2",
+    "category_borrowed"
+   ],
+   "n_evaluable": 392,
+   "n_aligned": 151,
+   "excluded_by_method": {
+    "naive": 0,
+    "ses": 0,
+    "tsb": 0,
+    "combo2": 0,
+    "category_borrowed": 241
+   },
+   "min_train_months": 3,
+   "n_evaluable_min_train_2": 403,
+   "low_confidence_evaluable": 139,
+   "low_confidence_aligned": 21,
+   "note": "158 vs 392 这类不可比数字不再并列成一张排名表：方法各自的可行子集只作上下文，正式比较只在对齐子集（全部方法都可评估）上进行。训练下限取 3 个月；放宽到 2 个月可多纳入至 403 条，但 2 个点无法估计波动与误差结构，故不采用。"
   },
   "per_sku": [
    {
@@ -280,10 +342,10 @@
     "ses_feasible": true,
     "tsb": 2.358,
     "tsb_feasible": true,
-    "category_borrowed": 2.77,
-    "category_borrowed_feasible": true,
     "combo2": 2.299,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 2.252,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Cord-Black-138-707-wow-Cover",
@@ -296,10 +358,10 @@
     "ses_feasible": true,
     "tsb": 1.089,
     "tsb_feasible": true,
-    "category_borrowed": 1.239,
-    "category_borrowed_feasible": true,
     "combo2": 1.342,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 0.716,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Cord-Black-153-707-wow-Cover",
@@ -312,10 +374,10 @@
     "ses_feasible": true,
     "tsb": 1.713,
     "tsb_feasible": true,
-    "category_borrowed": 1.455,
-    "category_borrowed_feasible": true,
     "combo2": 2.312,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 1.838,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Cord-Black-183-707-wow-Cover",
@@ -328,10 +390,10 @@
     "ses_feasible": true,
     "tsb": 1.416,
     "tsb_feasible": true,
-    "category_borrowed": 0.481,
-    "category_borrowed_feasible": true,
     "combo2": 1.201,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 1.297,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Cord-Grey-100-710-wow-Cover",
@@ -344,10 +406,10 @@
     "ses_feasible": true,
     "tsb": 0.918,
     "tsb_feasible": true,
-    "category_borrowed": 1.08,
-    "category_borrowed_feasible": true,
     "combo2": 1.191,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 1.12,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Cord-Red-100-709-wow-Cover",
@@ -360,10 +422,10 @@
     "ses_feasible": true,
     "tsb": 1.486,
     "tsb_feasible": true,
-    "category_borrowed": 1.476,
-    "category_borrowed_feasible": true,
     "combo2": 1.655,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 1.23,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Cord-Rustorang-183-708-wow-Cover",
@@ -376,10 +438,10 @@
     "ses_feasible": true,
     "tsb": 1.032,
     "tsb_feasible": true,
-    "category_borrowed": 0.669,
-    "category_borrowed_feasible": true,
     "combo2": 0.878,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 1.319,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Cord-White-100-706-wow-Cover",
@@ -392,10 +454,10 @@
     "ses_feasible": true,
     "tsb": 14.397,
     "tsb_feasible": true,
-    "category_borrowed": 14.951,
-    "category_borrowed_feasible": true,
     "combo2": 14.699,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 14.951,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Cord-White-153-706-wow-Cover",
@@ -408,10 +470,10 @@
     "ses_feasible": true,
     "tsb": 2.435,
     "tsb_feasible": true,
-    "category_borrowed": 6.548,
-    "category_borrowed_feasible": true,
     "combo2": 3.091,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 3.959,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Cord-White-183-706-wow-Cover",
@@ -424,10 +486,10 @@
     "ses_feasible": true,
     "tsb": 0.642,
     "tsb_feasible": true,
-    "category_borrowed": 0.888,
-    "category_borrowed_feasible": true,
     "combo2": 1.073,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 1.28,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Cord-White-194-706-wow-Cover",
@@ -440,10 +502,10 @@
     "ses_feasible": true,
     "tsb": 2.38,
     "tsb_feasible": true,
-    "category_borrowed": 3.323,
-    "category_borrowed_feasible": true,
     "combo2": 3.037,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 1.715,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Linen-Black-100-659-WOW",
@@ -456,10 +518,10 @@
     "ses_feasible": true,
     "tsb": 52.309,
     "tsb_feasible": true,
-    "category_borrowed": 63.405,
-    "category_borrowed_feasible": true,
     "combo2": 57.768,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 56.607,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Linen-Black-138-659-WOW",
@@ -472,10 +534,10 @@
     "ses_feasible": true,
     "tsb": 3.375,
     "tsb_feasible": true,
-    "category_borrowed": 5.062,
-    "category_borrowed_feasible": true,
     "combo2": 3.539,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 4.201,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Linen-Black-153-659-WOW",
@@ -488,10 +550,10 @@
     "ses_feasible": true,
     "tsb": 15.406,
     "tsb_feasible": true,
-    "category_borrowed": 20.2,
-    "category_borrowed_feasible": true,
     "combo2": 14.689,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 7.673,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Linen-Black-183-659-WOW",
@@ -504,10 +566,10 @@
     "ses_feasible": true,
     "tsb": 9.367,
     "tsb_feasible": true,
-    "category_borrowed": 6.667,
-    "category_borrowed_feasible": true,
     "combo2": 7.768,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 13.762,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Linen-Black-194-659-WOW",
@@ -520,10 +582,10 @@
     "ses_feasible": true,
     "tsb": 8.689,
     "tsb_feasible": true,
-    "category_borrowed": 10.882,
-    "category_borrowed_feasible": true,
     "combo2": 11.002,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 7.305,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Linen-Black-60-659-WOW",
@@ -536,10 +598,10 @@
     "ses_feasible": true,
     "tsb": 2.35,
     "tsb_feasible": true,
-    "category_borrowed": 1.427,
-    "category_borrowed_feasible": true,
     "combo2": 1.139,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 1.775,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Linen-Coffee-100-661-WOW",
@@ -552,10 +614,10 @@
     "ses_feasible": true,
     "tsb": 36.49,
     "tsb_feasible": true,
-    "category_borrowed": 41.145,
-    "category_borrowed_feasible": true,
     "combo2": 38.516,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 37.266,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Linen-Coffee-138-661-WOW",
@@ -568,10 +630,10 @@
     "ses_feasible": true,
     "tsb": 11.252,
     "tsb_feasible": true,
-    "category_borrowed": 14.219,
-    "category_borrowed_feasible": true,
     "combo2": 13.343,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 9.051,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Linen-Coffee-153-661-WOW",
@@ -584,10 +646,10 @@
     "ses_feasible": true,
     "tsb": 10.768,
     "tsb_feasible": true,
-    "category_borrowed": 16.823,
-    "category_borrowed_feasible": true,
     "combo2": 12.853,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 9.27,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Linen-Coffee-183-661-WOW",
@@ -600,10 +662,10 @@
     "ses_feasible": true,
     "tsb": 5.069,
     "tsb_feasible": true,
-    "category_borrowed": 4.084,
-    "category_borrowed_feasible": true,
     "combo2": 4.736,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 5.731,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Linen-Coffee-194-661-WOW",
@@ -616,10 +678,10 @@
     "ses_feasible": true,
     "tsb": 2.459,
     "tsb_feasible": true,
-    "category_borrowed": 12.897,
-    "category_borrowed_feasible": true,
     "combo2": 2.72,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 6.774,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Linen-DKBlue-100-660-WOW",
@@ -632,10 +694,10 @@
     "ses_feasible": true,
     "tsb": 185.237,
     "tsb_feasible": true,
-    "category_borrowed": 201.983,
-    "category_borrowed_feasible": true,
     "combo2": 191.452,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 188.126,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Linen-DKBlue-138-660-WOW",
@@ -648,10 +710,10 @@
     "ses_feasible": true,
     "tsb": 28.737,
     "tsb_feasible": true,
-    "category_borrowed": 34.331,
-    "category_borrowed_feasible": true,
     "combo2": 30.314,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 28.144,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Linen-DKBlue-153-660-WOW",
@@ -664,10 +726,10 @@
     "ses_feasible": true,
     "tsb": 2.082,
     "tsb_feasible": true,
-    "category_borrowed": 7.114,
-    "category_borrowed_feasible": true,
     "combo2": 4.206,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 21.697,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Linen-DKBlue-183-660-WOW",
@@ -680,10 +742,10 @@
     "ses_feasible": true,
     "tsb": 6.866,
     "tsb_feasible": true,
-    "category_borrowed": 5.959,
-    "category_borrowed_feasible": true,
     "combo2": 10.052,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 6.182,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Linen-DKBlue-194-660-WOW",
@@ -696,10 +758,10 @@
     "ses_feasible": true,
     "tsb": 13.331,
     "tsb_feasible": true,
-    "category_borrowed": 20.753,
-    "category_borrowed_feasible": true,
     "combo2": 15.947,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 16.468,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Linen-DKBlue-60-660-WOW",
@@ -712,10 +774,10 @@
     "ses_feasible": true,
     "tsb": 2.278,
     "tsb_feasible": true,
-    "category_borrowed": 4.422,
-    "category_borrowed_feasible": true,
     "combo2": 1.523,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 5.642,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Linen-DKGrey-100-651-WOW",
@@ -728,10 +790,10 @@
     "ses_feasible": true,
     "tsb": 132.959,
     "tsb_feasible": true,
-    "category_borrowed": 144.943,
-    "category_borrowed_feasible": true,
     "combo2": 135.984,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 136.159,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Linen-DKGrey-138-651-WOW",
@@ -744,10 +806,10 @@
     "ses_feasible": true,
     "tsb": 6.799,
     "tsb_feasible": true,
-    "category_borrowed": 12.493,
-    "category_borrowed_feasible": true,
     "combo2": 7.728,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 6.15,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Linen-DKGrey-153-651-WOW",
@@ -760,10 +822,10 @@
     "ses_feasible": true,
     "tsb": 7.453,
     "tsb_feasible": true,
-    "category_borrowed": 10.867,
-    "category_borrowed_feasible": true,
     "combo2": 8.862,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 7.044,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Linen-DKGrey-183-651-WOW",
@@ -776,10 +838,10 @@
     "ses_feasible": true,
     "tsb": 2.369,
     "tsb_feasible": true,
-    "category_borrowed": 6.152,
-    "category_borrowed_feasible": true,
     "combo2": 3.428,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 3.189,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Linen-DKGrey-194-651-WOW",
@@ -792,10 +854,10 @@
     "ses_feasible": true,
     "tsb": 12.585,
     "tsb_feasible": true,
-    "category_borrowed": 17.483,
-    "category_borrowed_feasible": true,
     "combo2": 15.551,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 4.778,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Linen-DKGrey-60-651-WOW",
@@ -808,10 +870,10 @@
     "ses_feasible": true,
     "tsb": 4.09,
     "tsb_feasible": true,
-    "category_borrowed": 5.703,
-    "category_borrowed_feasible": true,
     "combo2": 4.122,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 4.896,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Linen-LTGrey-100-658-WOW",
@@ -824,10 +886,10 @@
     "ses_feasible": true,
     "tsb": 100.034,
     "tsb_feasible": true,
-    "category_borrowed": 112.322,
-    "category_borrowed_feasible": true,
     "combo2": 104.187,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 103.464,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Linen-LTGrey-138-658-WOW",
@@ -840,10 +902,10 @@
     "ses_feasible": true,
     "tsb": 18.077,
     "tsb_feasible": true,
-    "category_borrowed": 21.991,
-    "category_borrowed_feasible": true,
     "combo2": 18.004,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 18.494,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Linen-LTGrey-153-658-WOW",
@@ -856,10 +918,10 @@
     "ses_feasible": true,
     "tsb": 19.914,
     "tsb_feasible": true,
-    "category_borrowed": 22.818,
-    "category_borrowed_feasible": true,
     "combo2": 19.353,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 9.912,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Linen-LTGrey-183-658-WOW",
@@ -872,10 +934,10 @@
     "ses_feasible": true,
     "tsb": 2.269,
     "tsb_feasible": true,
-    "category_borrowed": 3.576,
-    "category_borrowed_feasible": true,
     "combo2": 4.059,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 2.2,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Linen-LTGrey-194-658-WOW",
@@ -888,10 +950,10 @@
     "ses_feasible": true,
     "tsb": 7.094,
     "tsb_feasible": true,
-    "category_borrowed": 7.981,
-    "category_borrowed_feasible": true,
     "combo2": 6.39,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 17.267,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Linen-Natural-153-688-wow-Cover",
@@ -904,10 +966,10 @@
     "ses_feasible": true,
     "tsb": 1.165,
     "tsb_feasible": true,
-    "category_borrowed": 1.171,
-    "category_borrowed_feasible": true,
     "combo2": 1.169,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 1.171,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Linen-White-100-662-WOW",
@@ -920,10 +982,10 @@
     "ses_feasible": true,
     "tsb": 221.238,
     "tsb_feasible": true,
-    "category_borrowed": 269.707,
-    "category_borrowed_feasible": true,
     "combo2": 241.552,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 252.356,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Linen-White-138-662-WOW",
@@ -936,10 +998,10 @@
     "ses_feasible": true,
     "tsb": 37.514,
     "tsb_feasible": true,
-    "category_borrowed": 43.275,
-    "category_borrowed_feasible": true,
     "combo2": 37.156,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 27.702,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Linen-White-153-662-WOW",
@@ -952,10 +1014,10 @@
     "ses_feasible": true,
     "tsb": 29.852,
     "tsb_feasible": true,
-    "category_borrowed": 46.866,
-    "category_borrowed_feasible": true,
     "combo2": 30.846,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 9.459,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Linen-White-183-662-WOW",
@@ -968,10 +1030,10 @@
     "ses_feasible": true,
     "tsb": 3.544,
     "tsb_feasible": true,
-    "category_borrowed": 1.093,
-    "category_borrowed_feasible": true,
     "combo2": 4.911,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 14.481,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Linen-White-194-662-WOW",
@@ -984,10 +1046,10 @@
     "ses_feasible": true,
     "tsb": 7.966,
     "tsb_feasible": true,
-    "category_borrowed": 18.295,
-    "category_borrowed_feasible": true,
     "combo2": 6.993,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 12.124,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Linen-White-60-662-WOW",
@@ -1000,10 +1062,10 @@
     "ses_feasible": true,
     "tsb": 7.121,
     "tsb_feasible": true,
-    "category_borrowed": 8.103,
-    "category_borrowed_feasible": true,
     "combo2": 6.062,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 11.38,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Velvet-Black-100-703-wow-Cover",
@@ -1016,10 +1078,10 @@
     "ses_feasible": true,
     "tsb": 1.819,
     "tsb_feasible": true,
-    "category_borrowed": 1.824,
-    "category_borrowed_feasible": true,
     "combo2": 1.822,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 1.824,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Velvet-Black-138-703-wow-Cover",
@@ -1032,10 +1094,10 @@
     "ses_feasible": true,
     "tsb": 0.393,
     "tsb_feasible": true,
-    "category_borrowed": 0.231,
-    "category_borrowed_feasible": true,
     "combo2": 0.765,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 0.326,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Velvet-Black-183-703-wow-Cover",
@@ -1048,10 +1110,10 @@
     "ses_feasible": true,
     "tsb": 2.085,
     "tsb_feasible": true,
-    "category_borrowed": 2.131,
-    "category_borrowed_feasible": true,
     "combo2": 2.784,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 3.446,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Velvet-Black-194-703-wow",
@@ -1064,10 +1126,10 @@
     "ses_feasible": true,
     "tsb": 18.952,
     "tsb_feasible": true,
-    "category_borrowed": 33.003,
-    "category_borrowed_feasible": true,
     "combo2": 13.154,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 23.75,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Velvet-Black-194-703-wow-Cover",
@@ -1080,10 +1142,10 @@
     "ses_feasible": true,
     "tsb": 1.008,
     "tsb_feasible": true,
-    "category_borrowed": 0.651,
-    "category_borrowed_feasible": true,
     "combo2": 1.577,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 1.09,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Velvet-Black-60-703-wow",
@@ -1096,10 +1158,10 @@
     "ses_feasible": true,
     "tsb": 0.722,
     "tsb_feasible": true,
-    "category_borrowed": 0.735,
-    "category_borrowed_feasible": true,
     "combo2": 0.533,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 0.886,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Velvet-Camel-100-704-wow-Cover",
@@ -1112,10 +1174,10 @@
     "ses_feasible": true,
     "tsb": 1.336,
     "tsb_feasible": true,
-    "category_borrowed": 2.078,
-    "category_borrowed_feasible": true,
     "combo2": 1.953,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 1.771,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Velvet-Camel-138-704-wow-Cover",
@@ -1128,10 +1190,10 @@
     "ses_feasible": true,
     "tsb": 1.228,
     "tsb_feasible": true,
-    "category_borrowed": 1.419,
-    "category_borrowed_feasible": true,
     "combo2": 1.328,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 1.419,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Velvet-Camel-153-704-wow-Cover",
@@ -1144,10 +1206,10 @@
     "ses_feasible": true,
     "tsb": 1.183,
     "tsb_feasible": true,
-    "category_borrowed": 1.572,
-    "category_borrowed_feasible": true,
     "combo2": 1.189,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 1.307,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Velvet-DKBlue-153-700-wow-Cover",
@@ -1160,10 +1222,10 @@
     "ses_feasible": true,
     "tsb": 0.587,
     "tsb_feasible": true,
-    "category_borrowed": 0.363,
-    "category_borrowed_feasible": true,
     "combo2": 0.737,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 1.1,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Velvet-DKBlue-194-700-wow-Cover",
@@ -1176,10 +1238,10 @@
     "ses_feasible": true,
     "tsb": 2.05,
     "tsb_feasible": true,
-    "category_borrowed": 2.002,
-    "category_borrowed_feasible": true,
     "combo2": 1.441,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 1.436,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Velvet-Grey-100-705-wow-Cover",
@@ -1192,10 +1254,10 @@
     "ses_feasible": true,
     "tsb": 0.616,
     "tsb_feasible": true,
-    "category_borrowed": 0.798,
-    "category_borrowed_feasible": true,
     "combo2": 0.518,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 0.86,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Velvet-Grey-138-705-wow-Cover",
@@ -1208,10 +1270,10 @@
     "ses_feasible": true,
     "tsb": 1.013,
     "tsb_feasible": true,
-    "category_borrowed": 1.107,
-    "category_borrowed_feasible": true,
     "combo2": 1.765,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 1.486,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Velvet-Grey-153-705-wow",
@@ -1224,10 +1286,10 @@
     "ses_feasible": true,
     "tsb": 22.422,
     "tsb_feasible": true,
-    "category_borrowed": 43.29,
-    "category_borrowed_feasible": true,
     "combo2": 22.415,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 12.261,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Velvet-Grey-153-705-wow-Cover",
@@ -1240,10 +1302,10 @@
     "ses_feasible": true,
     "tsb": 0.711,
     "tsb_feasible": true,
-    "category_borrowed": 0.684,
-    "category_borrowed_feasible": true,
     "combo2": 0.986,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 0.904,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Velvet-Grey-183-705-wow-Cover",
@@ -1256,10 +1318,10 @@
     "ses_feasible": true,
     "tsb": 0.795,
     "tsb_feasible": true,
-    "category_borrowed": 1.08,
-    "category_borrowed_feasible": true,
     "combo2": 1.131,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 1.12,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Velvet-Grey-194-705-wow-Cover",
@@ -1272,10 +1334,10 @@
     "ses_feasible": true,
     "tsb": 1.075,
     "tsb_feasible": true,
-    "category_borrowed": 0.963,
-    "category_borrowed_feasible": true,
     "combo2": 1.903,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 1.097,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Velvet-Grey-60-705-wow",
@@ -1288,10 +1350,10 @@
     "ses_feasible": true,
     "tsb": 3.729,
     "tsb_feasible": true,
-    "category_borrowed": 1.546,
-    "category_borrowed_feasible": true,
     "combo2": 2.411,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 2.29,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Velvet-White-100-664-wow",
@@ -1304,10 +1366,10 @@
     "ses_feasible": true,
     "tsb": 193.034,
     "tsb_feasible": true,
-    "category_borrowed": 213.869,
-    "category_borrowed_feasible": true,
     "combo2": 193.342,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 195.174,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Velvet-White-100-664-wow-Cover",
@@ -1320,10 +1382,10 @@
     "ses_feasible": true,
     "tsb": 1.462,
     "tsb_feasible": true,
-    "category_borrowed": 2.919,
-    "category_borrowed_feasible": true,
     "combo2": 2.18,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 1.582,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Velvet-White-138-664-wow",
@@ -1336,10 +1398,10 @@
     "ses_feasible": true,
     "tsb": 57.14,
     "tsb_feasible": true,
-    "category_borrowed": 66.842,
-    "category_borrowed_feasible": true,
     "combo2": 61.187,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 61.304,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Velvet-White-153-664-wow",
@@ -1352,10 +1414,10 @@
     "ses_feasible": true,
     "tsb": 24.979,
     "tsb_feasible": true,
-    "category_borrowed": 37.389,
-    "category_borrowed_feasible": true,
     "combo2": 25.926,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 16.407,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Velvet-White-153-664-wow-Cover",
@@ -1368,10 +1430,10 @@
     "ses_feasible": true,
     "tsb": 1.63,
     "tsb_feasible": true,
-    "category_borrowed": 2.114,
-    "category_borrowed_feasible": true,
     "combo2": 2.954,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 4.257,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Velvet-White-183-664-wow",
@@ -1384,10 +1446,10 @@
     "ses_feasible": true,
     "tsb": 5.176,
     "tsb_feasible": true,
-    "category_borrowed": 9.261,
-    "category_borrowed_feasible": true,
     "combo2": 4.631,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 6.124,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Velvet-White-194-664-wow",
@@ -1400,10 +1462,10 @@
     "ses_feasible": true,
     "tsb": 10.073,
     "tsb_feasible": true,
-    "category_borrowed": 20.031,
-    "category_borrowed_feasible": true,
     "combo2": 13.417,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 9.716,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Velvet-White-194-664-wow-Cover",
@@ -1416,10 +1478,10 @@
     "ses_feasible": true,
     "tsb": 1.135,
     "tsb_feasible": true,
-    "category_borrowed": 1.925,
-    "category_borrowed_feasible": true,
     "combo2": 1.605,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 1.863,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Velvet-White-60-664-wow",
@@ -1432,10 +1494,10 @@
     "ses_feasible": true,
     "tsb": 1.051,
     "tsb_feasible": true,
-    "category_borrowed": 0.66,
-    "category_borrowed_feasible": true,
     "combo2": 0.316,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 0.72,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "C/Velvet-Yellow-194-698-wow-Cover",
@@ -1448,10 +1510,10 @@
     "ses_feasible": true,
     "tsb": 0.455,
     "tsb_feasible": true,
-    "category_borrowed": 0.473,
-    "category_borrowed_feasible": true,
     "combo2": 0.754,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 0.693,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "CEN1608NLinen-Purple-153",
@@ -1464,10 +1526,10 @@
     "ses_feasible": true,
     "tsb": 1.852,
     "tsb_feasible": true,
-    "category_borrowed": 0.729,
-    "category_borrowed_feasible": true,
     "combo2": 2.38,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 3.245,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "CEN961NLinen-SageGreen-100-Cover",
@@ -1480,10 +1542,10 @@
     "ses_feasible": true,
     "tsb": 0.25,
     "tsb_feasible": true,
-    "category_borrowed": 0.268,
-    "category_borrowed_feasible": true,
     "combo2": 0.415,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 0.199,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "CENKZ15349436-DBlue-138-DN",
@@ -1496,10 +1558,10 @@
     "ses_feasible": true,
     "tsb": 31.362,
     "tsb_feasible": true,
-    "category_borrowed": 45.886,
-    "category_borrowed_feasible": true,
     "combo2": 31.099,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 19.497,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "CENKZ159410292-BLACK-138-DN",
@@ -1512,10 +1574,10 @@
     "ses_feasible": true,
     "tsb": 24.443,
     "tsb_feasible": true,
-    "category_borrowed": 43.957,
-    "category_borrowed_feasible": true,
     "combo2": 35.59,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 35.058,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "CENPTQiRuoJinLan-100",
@@ -1528,10 +1590,10 @@
     "ses_feasible": true,
     "tsb": 0.305,
     "tsb_feasible": true,
-    "category_borrowed": 1.069,
-    "category_borrowed_feasible": true,
     "combo2": 0.432,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 1.023,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "CENPTQiRuoJinLan-153",
@@ -1544,10 +1606,10 @@
     "ses_feasible": true,
     "tsb": 7.496,
     "tsb_feasible": true,
-    "category_borrowed": 8.693,
-    "category_borrowed_feasible": true,
     "combo2": 7.334,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 11.031,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "CENPTQiRuoJinLan-194",
@@ -1560,10 +1622,10 @@
     "ses_feasible": true,
     "tsb": 10.135,
     "tsb_feasible": true,
-    "category_borrowed": 11.697,
-    "category_borrowed_feasible": true,
     "combo2": 9.407,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 12.873,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "CENVel1612-Black-153-Cover-xin",
@@ -1576,10 +1638,10 @@
     "ses_feasible": true,
     "tsb": 0.531,
     "tsb_feasible": true,
-    "category_borrowed": 0.767,
-    "category_borrowed_feasible": true,
     "combo2": 0.632,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 0.767,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "Curve-Pillow-50-Foam",
@@ -1592,10 +1654,10 @@
     "ses_feasible": true,
     "tsb": 21.43,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 14.702,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "Curve-Pillow-50-PPCotton",
@@ -1608,10 +1670,10 @@
     "ses_feasible": true,
     "tsb": 16.209,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 8.274,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "PTC/Linen-Black-100-653-WOW",
@@ -1624,10 +1686,10 @@
     "ses_feasible": true,
     "tsb": 5.237,
     "tsb_feasible": true,
-    "category_borrowed": 5.429,
-    "category_borrowed_feasible": true,
     "combo2": 5.337,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 5.429,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "PTC/Linen-Black-138-653-WOW",
@@ -1640,10 +1702,10 @@
     "ses_feasible": true,
     "tsb": 2.852,
     "tsb_feasible": true,
-    "category_borrowed": 2.935,
-    "category_borrowed_feasible": true,
     "combo2": 2.899,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 2.935,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "PTC/Linen-Black-153-653-WOW",
@@ -1656,10 +1718,10 @@
     "ses_feasible": true,
     "tsb": 2.206,
     "tsb_feasible": true,
-    "category_borrowed": 3.151,
-    "category_borrowed_feasible": true,
     "combo2": 2.499,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 2.535,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "PTC/Linen-Black-194-653-WOW",
@@ -1672,10 +1734,10 @@
     "ses_feasible": true,
     "tsb": 2.303,
     "tsb_feasible": true,
-    "category_borrowed": 3.1,
-    "category_borrowed_feasible": true,
     "combo2": 2.818,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 2.743,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "PTC/Linen-DKBlue-100-654-WOW",
@@ -1688,10 +1750,10 @@
     "ses_feasible": true,
     "tsb": 4.237,
     "tsb_feasible": true,
-    "category_borrowed": 4.741,
-    "category_borrowed_feasible": true,
     "combo2": 4.304,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 4.741,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "PTC/Linen-DKBlue-138-654-WOW",
@@ -1704,10 +1766,10 @@
     "ses_feasible": true,
     "tsb": 0.691,
     "tsb_feasible": true,
-    "category_borrowed": 1.708,
-    "category_borrowed_feasible": true,
     "combo2": 1.315,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 1.347,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "PTC/Linen-DKBlue-153-654-WOW",
@@ -1720,10 +1782,10 @@
     "ses_feasible": true,
     "tsb": 0.754,
     "tsb_feasible": true,
-    "category_borrowed": 0.988,
-    "category_borrowed_feasible": true,
     "combo2": 1.306,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 0.68,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "PTC/Linen-DKBlue-194-654-WOW",
@@ -1736,10 +1798,10 @@
     "ses_feasible": true,
     "tsb": 5.574,
     "tsb_feasible": true,
-    "category_borrowed": 7.907,
-    "category_borrowed_feasible": true,
     "combo2": 5.494,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 5.993,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "PTC/Linen-DKGrey-100-656-WOW",
@@ -1752,10 +1814,10 @@
     "ses_feasible": true,
     "tsb": 0.728,
     "tsb_feasible": true,
-    "category_borrowed": 0.749,
-    "category_borrowed_feasible": true,
     "combo2": 0.743,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 0.749,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "PTC/Linen-DKGrey-138-656-WOW",
@@ -1768,10 +1830,10 @@
     "ses_feasible": true,
     "tsb": 1.243,
     "tsb_feasible": true,
-    "category_borrowed": 1.286,
-    "category_borrowed_feasible": true,
     "combo2": 1.274,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 1.286,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "PTC/Linen-DKGrey-153-656-WOW",
@@ -1784,10 +1846,10 @@
     "ses_feasible": true,
     "tsb": 1.231,
     "tsb_feasible": true,
-    "category_borrowed": 0.506,
-    "category_borrowed_feasible": true,
     "combo2": 1.039,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 0.959,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "PTC/Linen-DKGrey-194-656-WOW",
@@ -1800,10 +1862,10 @@
     "ses_feasible": true,
     "tsb": 1.549,
     "tsb_feasible": true,
-    "category_borrowed": 0.542,
-    "category_borrowed_feasible": true,
     "combo2": 1.33,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 1.99,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "PTC/Linen-LTGrey-138-652-WOW",
@@ -1816,10 +1878,10 @@
     "ses_feasible": true,
     "tsb": 2.511,
     "tsb_feasible": true,
-    "category_borrowed": 3.27,
-    "category_borrowed_feasible": true,
     "combo2": 3.05,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 2.962,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "PTC/Linen-LTGrey-153-652-WOW",
@@ -1832,10 +1894,10 @@
     "ses_feasible": true,
     "tsb": 3.563,
     "tsb_feasible": true,
-    "category_borrowed": 4.276,
-    "category_borrowed_feasible": true,
     "combo2": 3.768,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 3.766,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "PTC/Linen-LTGrey-194-652-WOW",
@@ -1848,10 +1910,10 @@
     "ses_feasible": true,
     "tsb": 1.308,
     "tsb_feasible": true,
-    "category_borrowed": 1.606,
-    "category_borrowed_feasible": true,
     "combo2": 1.754,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 2.134,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "PTC/Linen-White-100-657-WOW",
@@ -1864,10 +1926,10 @@
     "ses_feasible": true,
     "tsb": 11.66,
     "tsb_feasible": true,
-    "category_borrowed": 14.249,
-    "category_borrowed_feasible": true,
     "combo2": 12.867,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 13.306,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "PTC/Linen-White-138-657-WOW",
@@ -1880,10 +1942,10 @@
     "ses_feasible": true,
     "tsb": 13.409,
     "tsb_feasible": true,
-    "category_borrowed": 15.236,
-    "category_borrowed_feasible": true,
     "combo2": 14.335,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 13.849,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "PTC/Linen-White-153-657-WOW",
@@ -1896,10 +1958,10 @@
     "ses_feasible": true,
     "tsb": 17.73,
     "tsb_feasible": true,
-    "category_borrowed": 20.528,
-    "category_borrowed_feasible": true,
     "combo2": 17.716,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 17.207,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "PTC/Linen-White-194-657-WOW",
@@ -1912,10 +1974,10 @@
     "ses_feasible": true,
     "tsb": 23.67,
     "tsb_feasible": true,
-    "category_borrowed": 26.035,
-    "category_borrowed_feasible": true,
     "combo2": 24.074,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 24.187,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "PTC/Velvet-Black-100-695-wow",
@@ -1928,10 +1990,10 @@
     "ses_feasible": true,
     "tsb": 3.376,
     "tsb_feasible": true,
-    "category_borrowed": 4.196,
-    "category_borrowed_feasible": true,
     "combo2": 6.64,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 5.849,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "PTC/Velvet-Grey-153-697-wow",
@@ -1944,10 +2006,10 @@
     "ses_feasible": true,
     "tsb": 2.408,
     "tsb_feasible": true,
-    "category_borrowed": 2.494,
-    "category_borrowed_feasible": true,
     "combo2": 2.806,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 3.001,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "PTC/Velvet-White-100-663-wow",
@@ -1960,10 +2022,10 @@
     "ses_feasible": true,
     "tsb": 3.848,
     "tsb_feasible": true,
-    "category_borrowed": 1.881,
-    "category_borrowed_feasible": true,
     "combo2": 4.001,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 3.848,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "PTC/Velvet-White-138-663-wow",
@@ -1976,10 +2038,10 @@
     "ses_feasible": true,
     "tsb": 3.116,
     "tsb_feasible": true,
-    "category_borrowed": 2.807,
-    "category_borrowed_feasible": true,
     "combo2": 4.628,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 1.884,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "PTC/Velvet-White-153-663-wow",
@@ -1992,10 +2054,10 @@
     "ses_feasible": true,
     "tsb": 3.532,
     "tsb_feasible": true,
-    "category_borrowed": 3.371,
-    "category_borrowed_feasible": true,
     "combo2": 3.45,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 4.697,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "PTC/Velvet-White-194-663-wow",
@@ -2008,10 +2070,10 @@
     "ses_feasible": true,
     "tsb": 4.479,
     "tsb_feasible": true,
-    "category_borrowed": 6.366,
-    "category_borrowed_feasible": true,
     "combo2": 5.344,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 3.564,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "SXQC-CEN003-RED-150",
@@ -2024,10 +2086,10 @@
     "ses_feasible": true,
     "tsb": 1.906,
     "tsb_feasible": true,
-    "category_borrowed": 1.751,
-    "category_borrowed_feasible": true,
     "combo2": 2.221,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 2.39,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "SXQC-CEN003-SKYBLUE-150",
@@ -2040,10 +2102,10 @@
     "ses_feasible": true,
     "tsb": 2.259,
     "tsb_feasible": true,
-    "category_borrowed": 0.635,
-    "category_borrowed_feasible": true,
     "combo2": 1.325,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 1.408,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "SXQC-CEN964NLinen-GrayLilac-153",
@@ -2056,10 +2118,10 @@
     "ses_feasible": true,
     "tsb": 0.542,
     "tsb_feasible": true,
-    "category_borrowed": 2.07,
-    "category_borrowed_feasible": true,
     "combo2": 1.202,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 4.553,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "SXQC-CENCord996-RustyOrange-153",
@@ -2072,10 +2134,10 @@
     "ses_feasible": true,
     "tsb": 0.923,
     "tsb_feasible": true,
-    "category_borrowed": 1.509,
-    "category_borrowed_feasible": true,
     "combo2": 1.926,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 1.278,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "SXQC-CENKZ15319416-Hblue-150",
@@ -2088,10 +2150,10 @@
     "ses_feasible": true,
     "tsb": 13.231,
     "tsb_feasible": true,
-    "category_borrowed": 14.032,
-    "category_borrowed_feasible": true,
     "combo2": 13.492,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 22.303,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "TT0000667K0063810",
@@ -2104,10 +2166,10 @@
     "ses_feasible": true,
     "tsb": 1.517,
     "tsb_feasible": true,
-    "category_borrowed": 0.727,
-    "category_borrowed_feasible": true,
     "combo2": 2.146,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 1.281,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "TT0000668K0063800",
@@ -2120,10 +2182,10 @@
     "ses_feasible": true,
     "tsb": 1.886,
     "tsb_feasible": true,
-    "category_borrowed": 2.459,
-    "category_borrowed_feasible": true,
     "combo2": 1.515,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 3.25,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "TT0000668K0063801",
@@ -2136,10 +2198,10 @@
     "ses_feasible": true,
     "tsb": 2.494,
     "tsb_feasible": true,
-    "category_borrowed": 1.59,
-    "category_borrowed_feasible": true,
     "combo2": 2.303,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 1.947,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "TT0000669K0063785",
@@ -2152,10 +2214,10 @@
     "ses_feasible": true,
     "tsb": 2.211,
     "tsb_feasible": true,
-    "category_borrowed": 2.165,
-    "category_borrowed_feasible": true,
     "combo2": 1.766,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 3.552,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "TT0000669K0063786",
@@ -2168,10 +2230,10 @@
     "ses_feasible": true,
     "tsb": 2.131,
     "tsb_feasible": true,
-    "category_borrowed": 3.156,
-    "category_borrowed_feasible": true,
     "combo2": 4.118,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 6.333,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "TT0000669K0063788",
@@ -2184,10 +2246,10 @@
     "ses_feasible": true,
     "tsb": 0.207,
     "tsb_feasible": true,
-    "category_borrowed": 0.268,
-    "category_borrowed_feasible": true,
     "combo2": 0.266,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 0.199,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "TT0000669K0063790",
@@ -2200,10 +2262,10 @@
     "ses_feasible": true,
     "tsb": 1.893,
     "tsb_feasible": true,
-    "category_borrowed": 3.602,
-    "category_borrowed_feasible": true,
     "combo2": 2.128,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 1.271,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "TT0000669K0063791",
@@ -2216,10 +2278,10 @@
     "ses_feasible": true,
     "tsb": 0.891,
     "tsb_feasible": true,
-    "category_borrowed": 0.443,
-    "category_borrowed_feasible": true,
     "combo2": 1.348,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 0.944,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "TT0000669K0063792",
@@ -2232,10 +2294,10 @@
     "ses_feasible": true,
     "tsb": 1.209,
     "tsb_feasible": true,
-    "category_borrowed": 1.417,
-    "category_borrowed_feasible": true,
     "combo2": 1.728,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 1.772,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "TT0000672K0063715",
@@ -2248,10 +2310,10 @@
     "ses_feasible": true,
     "tsb": 4.908,
     "tsb_feasible": true,
-    "category_borrowed": 2.896,
-    "category_borrowed_feasible": true,
     "combo2": 4.481,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 6.061,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "TT0000673K0063699",
@@ -2264,10 +2326,10 @@
     "ses_feasible": true,
     "tsb": 1.357,
     "tsb_feasible": true,
-    "category_borrowed": 1.76,
-    "category_borrowed_feasible": true,
     "combo2": 2.224,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 4.091,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "TT0000673K0063700",
@@ -2280,10 +2342,10 @@
     "ses_feasible": true,
     "tsb": 1.237,
     "tsb_feasible": true,
-    "category_borrowed": 1.033,
-    "category_borrowed_feasible": true,
     "combo2": 1.301,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 2.623,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "TT0000673K0063708",
@@ -2296,10 +2358,10 @@
     "ses_feasible": true,
     "tsb": 1.352,
     "tsb_feasible": true,
-    "category_borrowed": 1.58,
-    "category_borrowed_feasible": true,
     "combo2": 2.106,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 1.627,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "TT0000718K0063435",
@@ -2312,10 +2374,10 @@
     "ses_feasible": true,
     "tsb": 0.663,
     "tsb_feasible": true,
-    "category_borrowed": 0.684,
-    "category_borrowed_feasible": true,
     "combo2": 0.947,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 0.859,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "TT0000718K0063439",
@@ -2328,10 +2390,10 @@
     "ses_feasible": true,
     "tsb": 0.928,
     "tsb_feasible": true,
-    "category_borrowed": 0.432,
-    "category_borrowed_feasible": true,
     "combo2": 0.621,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 0.632,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "TT0000719K0063420",
@@ -2344,10 +2406,10 @@
     "ses_feasible": true,
     "tsb": 5.056,
     "tsb_feasible": true,
-    "category_borrowed": 4.772,
-    "category_borrowed_feasible": true,
     "combo2": 4.481,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 7.111,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "TT0000719K0063421",
@@ -2360,10 +2422,10 @@
     "ses_feasible": true,
     "tsb": 2.489,
     "tsb_feasible": true,
-    "category_borrowed": 1.567,
-    "category_borrowed_feasible": true,
     "combo2": 1.46,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 1.74,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "TT0000750K0063010",
@@ -2376,10 +2438,10 @@
     "ses_feasible": true,
     "tsb": 0.953,
     "tsb_feasible": true,
-    "category_borrowed": 1.133,
-    "category_borrowed_feasible": true,
     "combo2": 0.685,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 1.363,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "TT0000750K0063014",
@@ -2392,10 +2454,10 @@
     "ses_feasible": true,
     "tsb": 1.121,
     "tsb_feasible": true,
-    "category_borrowed": 0.719,
-    "category_borrowed_feasible": true,
     "combo2": 1.723,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 1.678,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "TT0000750K0063015",
@@ -2408,10 +2470,10 @@
     "ses_feasible": true,
     "tsb": 1.326,
     "tsb_feasible": true,
-    "category_borrowed": 1.395,
-    "category_borrowed_feasible": true,
     "combo2": 1.793,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 1.349,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "TT0000751K0063002",
@@ -2424,10 +2486,10 @@
     "ses_feasible": true,
     "tsb": 1.486,
     "tsb_feasible": true,
-    "category_borrowed": 1.127,
-    "category_borrowed_feasible": true,
     "combo2": 1.241,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 1.8,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "TT0000752K0062990",
@@ -2440,10 +2502,10 @@
     "ses_feasible": true,
     "tsb": 1.306,
     "tsb_feasible": true,
-    "category_borrowed": 1.544,
-    "category_borrowed_feasible": true,
     "combo2": 1.579,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 1.293,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "TT0000752K0062992",
@@ -2456,10 +2518,10 @@
     "ses_feasible": true,
     "tsb": 0.831,
     "tsb_feasible": true,
-    "category_borrowed": 1.586,
-    "category_borrowed_feasible": true,
     "combo2": 0.977,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 1.306,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "TT0000752K0062994",
@@ -2472,10 +2534,10 @@
     "ses_feasible": true,
     "tsb": 0.312,
     "tsb_feasible": true,
-    "category_borrowed": 1.089,
-    "category_borrowed_feasible": true,
     "combo2": 1.083,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 0.364,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "TT0000753K0063321",
@@ -2488,10 +2550,10 @@
     "ses_feasible": true,
     "tsb": 1.14,
     "tsb_feasible": true,
-    "category_borrowed": 1.147,
-    "category_borrowed_feasible": true,
     "combo2": 1.482,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 2.545,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "TT0000760K0062941",
@@ -2504,10 +2566,10 @@
     "ses_feasible": true,
     "tsb": 0.484,
     "tsb_feasible": true,
-    "category_borrowed": 0.882,
-    "category_borrowed_feasible": true,
     "combo2": 0.676,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 0.882,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "TT0000779K0054313",
@@ -2520,10 +2582,10 @@
     "ses_feasible": true,
     "tsb": 2.086,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.918,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0001586K0010033",
@@ -2536,10 +2598,10 @@
     "ses_feasible": true,
     "tsb": 0.614,
     "tsb_feasible": true,
-    "category_borrowed": 0.671,
-    "category_borrowed_feasible": true,
     "combo2": 0.736,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 0.885,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "TT0001586K0010036",
@@ -2552,10 +2614,10 @@
     "ses_feasible": true,
     "tsb": 2.77,
     "tsb_feasible": true,
-    "category_borrowed": 2.845,
-    "category_borrowed_feasible": true,
     "combo2": 2.963,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 2.421,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "TT0020030K0063032",
@@ -2568,10 +2630,10 @@
     "ses_feasible": true,
     "tsb": 2.29,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 3.037,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0020031K0063033",
@@ -2584,10 +2646,10 @@
     "ses_feasible": true,
     "tsb": 2.29,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 3.037,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031004K0064223",
@@ -2600,10 +2662,10 @@
     "ses_feasible": true,
     "tsb": 8.724,
     "tsb_feasible": true,
-    "category_borrowed": 13.317,
-    "category_borrowed_feasible": true,
     "combo2": 8.947,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 18.612,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "TT0031010K0063847",
@@ -2616,10 +2678,10 @@
     "ses_feasible": true,
     "tsb": 6.666,
     "tsb_feasible": true,
-    "category_borrowed": 8.708,
-    "category_borrowed_feasible": true,
     "combo2": 6.183,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 7.686,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "TT0031035K0062924",
@@ -2632,10 +2694,10 @@
     "ses_feasible": true,
     "tsb": 2.641,
     "tsb_feasible": true,
-    "category_borrowed": 2.845,
-    "category_borrowed_feasible": true,
     "combo2": 2.082,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 3.022,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "TT0031038K0064291",
@@ -2648,10 +2710,10 @@
     "ses_feasible": true,
     "tsb": 53.275,
     "tsb_feasible": true,
-    "category_borrowed": 60.485,
-    "category_borrowed_feasible": true,
     "combo2": 57.8,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 86.402,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "TT0031038K0064292",
@@ -2664,10 +2726,10 @@
     "ses_feasible": true,
     "tsb": 38.101,
     "tsb_feasible": true,
-    "category_borrowed": 37.55,
-    "category_borrowed_feasible": true,
     "combo2": 38.62,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 50.525,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "TT0031073K0064138",
@@ -2680,10 +2742,10 @@
     "ses_feasible": true,
     "tsb": 14.08,
     "tsb_feasible": true,
-    "category_borrowed": 5.358,
-    "category_borrowed_feasible": true,
     "combo2": 18.333,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 14.502,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "TT0031073K0064139",
@@ -2696,10 +2758,10 @@
     "ses_feasible": true,
     "tsb": 19.904,
     "tsb_feasible": true,
-    "category_borrowed": 34.91,
-    "category_borrowed_feasible": true,
     "combo2": 22.94,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 31.11,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "TT0031104K0063681",
@@ -2712,10 +2774,10 @@
     "ses_feasible": true,
     "tsb": 0.444,
     "tsb_feasible": true,
-    "category_borrowed": 1.648,
-    "category_borrowed_feasible": true,
     "combo2": 0.989,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031111K0063736",
@@ -2728,10 +2790,10 @@
     "ses_feasible": true,
     "tsb": 1.963,
     "tsb_feasible": true,
-    "category_borrowed": 2.587,
-    "category_borrowed_feasible": true,
     "combo2": 2.031,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031111K0063737",
@@ -2744,10 +2806,10 @@
     "ses_feasible": true,
     "tsb": 1.348,
     "tsb_feasible": true,
-    "category_borrowed": 0.914,
-    "category_borrowed_feasible": true,
     "combo2": 1.529,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031113K0063743",
@@ -2760,10 +2822,10 @@
     "ses_feasible": true,
     "tsb": 1.687,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 2.315,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031120K0063751",
@@ -2776,10 +2838,10 @@
     "ses_feasible": true,
     "tsb": 4.557,
     "tsb_feasible": true,
-    "category_borrowed": 4.156,
-    "category_borrowed_feasible": true,
     "combo2": 3.077,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031121K0063766",
@@ -2792,10 +2854,10 @@
     "ses_feasible": true,
     "tsb": 1.113,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.107,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031121K0063767",
@@ -2808,10 +2870,10 @@
     "ses_feasible": true,
     "tsb": 4.375,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 3.587,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031122K0063765",
@@ -2824,10 +2886,10 @@
     "ses_feasible": true,
     "tsb": 1.256,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.672,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031123K0063768",
@@ -2840,10 +2902,10 @@
     "ses_feasible": true,
     "tsb": 0.681,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 0.492,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031123K0063769",
@@ -2856,10 +2918,10 @@
     "ses_feasible": true,
     "tsb": 4.861,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 5.164,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031124K0063771",
@@ -2872,10 +2934,10 @@
     "ses_feasible": true,
     "tsb": 8.012,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 8.27,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031125K0063772",
@@ -2888,10 +2950,10 @@
     "ses_feasible": true,
     "tsb": 0.809,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.405,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031125K0063773",
@@ -2904,10 +2966,10 @@
     "ses_feasible": true,
     "tsb": 3.159,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 3.885,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031126K0063774",
@@ -2920,10 +2982,10 @@
     "ses_feasible": true,
     "tsb": 3.243,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 3.155,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031126K0063775",
@@ -2936,10 +2998,10 @@
     "ses_feasible": true,
     "tsb": 0.605,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.552,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031127K0063818",
@@ -2952,10 +3014,10 @@
     "ses_feasible": true,
     "tsb": 0.99,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 0.837,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031128K0063817-Foam",
@@ -2968,10 +3030,10 @@
     "ses_feasible": true,
     "tsb": 4.14,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 3.051,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031128K00638171-Cover",
@@ -2984,10 +3046,10 @@
     "ses_feasible": true,
     "tsb": 2.668,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 8.245,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031128K00638172-Cover",
@@ -3000,10 +3062,10 @@
     "ses_feasible": true,
     "tsb": 3.985,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.977,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031128K00638173-Cover",
@@ -3016,10 +3078,10 @@
     "ses_feasible": true,
     "tsb": 2.176,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 7.442,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031129K0063819",
@@ -3032,10 +3094,10 @@
     "ses_feasible": true,
     "tsb": 7.683,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 5.251,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031131K0063816-Foam",
@@ -3048,10 +3110,10 @@
     "ses_feasible": true,
     "tsb": 64.197,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 87.43,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031131K00638161-Cover",
@@ -3064,10 +3126,10 @@
     "ses_feasible": true,
     "tsb": 24.517,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 29.952,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031131K00638162-Cover",
@@ -3080,10 +3142,10 @@
     "ses_feasible": true,
     "tsb": 24.27,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 29.553,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031131K00638163-Cover",
@@ -3096,10 +3158,10 @@
     "ses_feasible": true,
     "tsb": 25.715,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 31.554,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031136K0063825",
@@ -3112,10 +3174,10 @@
     "ses_feasible": true,
     "tsb": 2.474,
     "tsb_feasible": true,
-    "category_borrowed": 2.932,
-    "category_borrowed_feasible": true,
     "combo2": 1.69,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031143K0063834",
@@ -3128,10 +3190,10 @@
     "ses_feasible": true,
     "tsb": 1.622,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 2.403,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031143K0063835",
@@ -3144,10 +3206,10 @@
     "ses_feasible": true,
     "tsb": 1.225,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.406,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031143K0063836",
@@ -3160,10 +3222,10 @@
     "ses_feasible": true,
     "tsb": 1.335,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 0.932,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031143K0063837",
@@ -3176,10 +3238,10 @@
     "ses_feasible": true,
     "tsb": 0.648,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 0.973,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031144K0063838",
@@ -3192,10 +3254,10 @@
     "ses_feasible": true,
     "tsb": 1.787,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 4.412,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031144K0063839",
@@ -3208,10 +3270,10 @@
     "ses_feasible": true,
     "tsb": 16.278,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 15.828,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031144K0063840",
@@ -3224,10 +3286,10 @@
     "ses_feasible": true,
     "tsb": 12.951,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 11.854,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031144K0063841",
@@ -3240,10 +3302,10 @@
     "ses_feasible": true,
     "tsb": 7.522,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 8.304,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031145K0063842",
@@ -3256,10 +3318,10 @@
     "ses_feasible": true,
     "tsb": 0.739,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 0.652,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031145K0063843",
@@ -3272,10 +3334,10 @@
     "ses_feasible": true,
     "tsb": 0.491,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.01,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031145K0063844",
@@ -3288,10 +3350,10 @@
     "ses_feasible": true,
     "tsb": 0.726,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.932,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031145K0063845",
@@ -3304,10 +3366,10 @@
     "ses_feasible": true,
     "tsb": 2.29,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.558,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031147K0063849",
@@ -3320,10 +3382,10 @@
     "ses_feasible": true,
     "tsb": 13.736,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 7.791,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031148K0063850",
@@ -3336,10 +3398,10 @@
     "ses_feasible": true,
     "tsb": 8.001,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 5.537,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031149K0063851",
@@ -3352,10 +3414,10 @@
     "ses_feasible": true,
     "tsb": 1.256,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 0.419,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031151K0063853",
@@ -3368,10 +3430,10 @@
     "ses_feasible": true,
     "tsb": 17.541,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 7.853,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031151K0063854",
@@ -3384,10 +3446,10 @@
     "ses_feasible": true,
     "tsb": 10.477,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 7.724,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031152K0063855",
@@ -3400,10 +3462,10 @@
     "ses_feasible": true,
     "tsb": 46.905,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 34.363,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031152K0063856",
@@ -3416,10 +3478,10 @@
     "ses_feasible": true,
     "tsb": 3.194,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 7.052,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031153K0063857",
@@ -3432,10 +3494,10 @@
     "ses_feasible": true,
     "tsb": 0.525,
     "tsb_feasible": true,
-    "category_borrowed": 0.767,
-    "category_borrowed_feasible": true,
     "combo2": 0.63,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031154K0063859",
@@ -3448,10 +3510,10 @@
     "ses_feasible": true,
     "tsb": 1.483,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 2.837,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031157K0063862",
@@ -3464,10 +3526,10 @@
     "ses_feasible": true,
     "tsb": 9.095,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 7.799,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031158K0063863",
@@ -3480,10 +3542,10 @@
     "ses_feasible": true,
     "tsb": 14.689,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 18.57,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031158K0063864",
@@ -3496,10 +3558,10 @@
     "ses_feasible": true,
     "tsb": 26.753,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 31.452,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031159K0063865-Cover",
@@ -3512,10 +3574,10 @@
     "ses_feasible": true,
     "tsb": 1.114,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.158,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031159K0063866-Cover",
@@ -3528,10 +3590,10 @@
     "ses_feasible": true,
     "tsb": 3.63,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 3.753,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031161K0063869",
@@ -3544,10 +3606,10 @@
     "ses_feasible": true,
     "tsb": 1.482,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 2.677,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031162K0063870",
@@ -3560,10 +3622,10 @@
     "ses_feasible": true,
     "tsb": 2.317,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 2.493,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031177K0063900-Cover",
@@ -3576,10 +3638,10 @@
     "ses_feasible": true,
     "tsb": 2.707,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.663,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031178K0063902-Cover",
@@ -3592,10 +3654,10 @@
     "ses_feasible": true,
     "tsb": 0.578,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.286,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031179K0063904-Cover",
@@ -3608,10 +3670,10 @@
     "ses_feasible": true,
     "tsb": 2.198,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 2.486,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031180K0063910-Cover",
@@ -3624,10 +3686,10 @@
     "ses_feasible": true,
     "tsb": 1.931,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.188,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031181K0063906-Cover",
@@ -3640,10 +3702,10 @@
     "ses_feasible": true,
     "tsb": 2.937,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 2.471,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031182K0063908-Cover",
@@ -3656,10 +3718,10 @@
     "ses_feasible": true,
     "tsb": 1.693,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.514,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031183K0063912-Cover",
@@ -3672,10 +3734,10 @@
     "ses_feasible": true,
     "tsb": 1.834,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 2.389,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031184K0063914-Cover",
@@ -3688,10 +3750,10 @@
     "ses_feasible": true,
     "tsb": 0.659,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 0.996,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031185K0063916-Cover",
@@ -3704,10 +3766,10 @@
     "ses_feasible": true,
     "tsb": 2.081,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.504,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031186K0063918-Cover",
@@ -3720,10 +3782,10 @@
     "ses_feasible": true,
     "tsb": 4.543,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 2.243,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031187K0063920-Cover",
@@ -3736,10 +3798,10 @@
     "ses_feasible": true,
     "tsb": 3.617,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 3.426,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031188K0063922-Cover",
@@ -3752,10 +3814,10 @@
     "ses_feasible": true,
     "tsb": 4.918,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 2.213,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031189K0063924-Cover",
@@ -3768,10 +3830,10 @@
     "ses_feasible": true,
     "tsb": 2.259,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 2.619,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031190K0063926-Cover",
@@ -3784,10 +3846,10 @@
     "ses_feasible": true,
     "tsb": 9.608,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 7.668,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031191K0063929",
@@ -3800,10 +3862,10 @@
     "ses_feasible": true,
     "tsb": 3.683,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 2.538,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031191K0063930",
@@ -3816,10 +3878,10 @@
     "ses_feasible": true,
     "tsb": 1.565,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 2.216,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031193K0063933",
@@ -3832,10 +3894,10 @@
     "ses_feasible": true,
     "tsb": 1.882,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.595,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031193K0063934",
@@ -3848,10 +3910,10 @@
     "ses_feasible": true,
     "tsb": 2.552,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.8,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031196K0063937",
@@ -3864,10 +3926,10 @@
     "ses_feasible": true,
     "tsb": 13.224,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 8.873,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031197K0063938",
@@ -3880,10 +3942,10 @@
     "ses_feasible": true,
     "tsb": 14.172,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 15.546,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031198K0063939",
@@ -3896,10 +3958,10 @@
     "ses_feasible": true,
     "tsb": 2.19,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.3,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031199K0064009",
@@ -3912,10 +3974,10 @@
     "ses_feasible": true,
     "tsb": 2.368,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.761,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031200K0064010",
@@ -3928,10 +3990,10 @@
     "ses_feasible": true,
     "tsb": 0.609,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 0.804,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031202K0064012",
@@ -3944,10 +4006,10 @@
     "ses_feasible": true,
     "tsb": 2.07,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 2.614,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031205K0064015",
@@ -3960,10 +4022,10 @@
     "ses_feasible": true,
     "tsb": 5.749,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 6.618,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031206K0064016",
@@ -3976,10 +4038,10 @@
     "ses_feasible": true,
     "tsb": 0.421,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 0.35,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031208K0064019",
@@ -3992,10 +4054,10 @@
     "ses_feasible": true,
     "tsb": 1.342,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.888,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031208K0064019-2",
@@ -4008,10 +4070,10 @@
     "ses_feasible": true,
     "tsb": 1.806,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 2.157,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031209K0064020",
@@ -4024,10 +4086,10 @@
     "ses_feasible": true,
     "tsb": 0.661,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 0.485,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031209K0064021",
@@ -4040,10 +4102,10 @@
     "ses_feasible": true,
     "tsb": 2.427,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 2.287,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031210K0064022",
@@ -4056,10 +4118,10 @@
     "ses_feasible": true,
     "tsb": 1.756,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 2.159,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031211K0064023",
@@ -4072,10 +4134,10 @@
     "ses_feasible": true,
     "tsb": 2.933,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.803,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031212K0064024-Cover",
@@ -4088,10 +4150,10 @@
     "ses_feasible": true,
     "tsb": 3.013,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 4.094,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031214K0064027",
@@ -4104,10 +4166,10 @@
     "ses_feasible": true,
     "tsb": 1.993,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.317,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031216K0064030",
@@ -4120,10 +4182,10 @@
     "ses_feasible": true,
     "tsb": 0.977,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.389,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031216K0064031",
@@ -4136,10 +4198,10 @@
     "ses_feasible": true,
     "tsb": 1.134,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 0.354,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031217K0064032",
@@ -4152,10 +4214,10 @@
     "ses_feasible": true,
     "tsb": 2.381,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.337,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031217K0064032-2",
@@ -4168,10 +4230,10 @@
     "ses_feasible": true,
     "tsb": 1.526,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.757,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031218K0064033",
@@ -4184,10 +4246,10 @@
     "ses_feasible": true,
     "tsb": 1.623,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.976,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031219K0064034",
@@ -4200,10 +4262,10 @@
     "ses_feasible": true,
     "tsb": 3.314,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 2.075,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031222K0064037",
@@ -4216,10 +4278,10 @@
     "ses_feasible": true,
     "tsb": 1.332,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.634,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031223K0064038",
@@ -4232,10 +4294,10 @@
     "ses_feasible": true,
     "tsb": 1.693,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.792,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031225K0064040",
@@ -4248,10 +4310,10 @@
     "ses_feasible": true,
     "tsb": 1.891,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.32,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031226K0064041",
@@ -4264,10 +4326,10 @@
     "ses_feasible": true,
     "tsb": 1.221,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 0.465,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031227K0064042",
@@ -4280,10 +4342,10 @@
     "ses_feasible": true,
     "tsb": 0.437,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 0.879,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031227K0064043",
@@ -4296,10 +4358,10 @@
     "ses_feasible": true,
     "tsb": 1.273,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.902,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031227K0064044",
@@ -4312,10 +4374,10 @@
     "ses_feasible": true,
     "tsb": 0.55,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 0.72,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031230K0064047-Cover",
@@ -4328,10 +4390,10 @@
     "ses_feasible": true,
     "tsb": 2.577,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 2.671,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031230K0064050-Cover",
@@ -4344,10 +4406,10 @@
     "ses_feasible": true,
     "tsb": 2.944,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 2.885,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031230K0064053-Cover",
@@ -4360,10 +4422,10 @@
     "ses_feasible": true,
     "tsb": 2.436,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 2.786,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031230K0064056-Foam",
@@ -4376,10 +4438,10 @@
     "ses_feasible": true,
     "tsb": 3.151,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 2.532,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031230K0064057-Foam",
@@ -4392,10 +4454,10 @@
     "ses_feasible": true,
     "tsb": 3.151,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 2.532,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031230K0064058-Foam",
@@ -4408,10 +4470,10 @@
     "ses_feasible": true,
     "tsb": 3.151,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 2.532,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031231K0064059",
@@ -4424,10 +4486,10 @@
     "ses_feasible": true,
     "tsb": 1.44,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 0.634,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031232K0064060",
@@ -4440,10 +4502,10 @@
     "ses_feasible": true,
     "tsb": 10.13,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 8.404,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031232K0064061",
@@ -4456,10 +4518,10 @@
     "ses_feasible": true,
     "tsb": 5.916,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 6.172,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031233K0064062",
@@ -4472,10 +4534,10 @@
     "ses_feasible": true,
     "tsb": 0.749,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 0.633,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031234K0064063",
@@ -4488,10 +4550,10 @@
     "ses_feasible": true,
     "tsb": 0.328,
     "tsb_feasible": true,
-    "category_borrowed": 0.288,
-    "category_borrowed_feasible": true,
     "combo2": 0.546,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 0.648,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "TT0031234K0064064",
@@ -4504,10 +4566,10 @@
     "ses_feasible": true,
     "tsb": 1.626,
     "tsb_feasible": true,
-    "category_borrowed": 2.467,
-    "category_borrowed_feasible": true,
     "combo2": 1.836,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 2.185,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "TT0031234K0064065",
@@ -4520,10 +4582,10 @@
     "ses_feasible": true,
     "tsb": 1.536,
     "tsb_feasible": true,
-    "category_borrowed": 0.746,
-    "category_borrowed_feasible": true,
     "combo2": 1.189,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 1.12,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "TT0031234K0064066",
@@ -4536,10 +4598,10 @@
     "ses_feasible": true,
     "tsb": 0.635,
     "tsb_feasible": true,
-    "category_borrowed": 0.767,
-    "category_borrowed_feasible": true,
     "combo2": 0.204,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": 0.767,
+    "category_borrowed_feasible": true
    },
    {
     "sku": "TT0031235K0064067",
@@ -4552,10 +4614,10 @@
     "ses_feasible": true,
     "tsb": 2.328,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.943,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031236K0064069",
@@ -4568,10 +4630,10 @@
     "ses_feasible": true,
     "tsb": 11.891,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 12.175,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031236K0064070",
@@ -4584,10 +4646,10 @@
     "ses_feasible": true,
     "tsb": 1.397,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 3.008,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031237K0064071",
@@ -4600,10 +4662,10 @@
     "ses_feasible": true,
     "tsb": 2.216,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 2.36,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031238K0064073",
@@ -4616,10 +4678,10 @@
     "ses_feasible": true,
     "tsb": 5.509,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 5.145,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031240K0064075",
@@ -4632,10 +4694,10 @@
     "ses_feasible": true,
     "tsb": 0.332,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 0.715,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031242K0064082",
@@ -4648,10 +4710,10 @@
     "ses_feasible": true,
     "tsb": 0.614,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 0.806,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031243K0064083",
@@ -4664,10 +4726,10 @@
     "ses_feasible": true,
     "tsb": 0.371,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 0.429,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031244K0064084-Cover",
@@ -4680,10 +4742,10 @@
     "ses_feasible": true,
     "tsb": 30.535,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 15.43,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031244K0064084-Foam",
@@ -4696,10 +4758,10 @@
     "ses_feasible": true,
     "tsb": 28.159,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 14.816,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031245K0064086-Cover",
@@ -4712,10 +4774,10 @@
     "ses_feasible": true,
     "tsb": 53.638,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 36.642,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031245K0064087-Cover",
@@ -4728,10 +4790,10 @@
     "ses_feasible": true,
     "tsb": 69.148,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 48.992,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031245K0064088-Foam",
@@ -4744,10 +4806,10 @@
     "ses_feasible": true,
     "tsb": 143.895,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 97.341,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031246K0064094-Cover",
@@ -4760,10 +4822,10 @@
     "ses_feasible": true,
     "tsb": 5.354,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 4.628,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031246K0064094-Foam",
@@ -4776,10 +4838,10 @@
     "ses_feasible": true,
     "tsb": 4.842,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 4.986,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031248K0064096-Cover",
@@ -4792,10 +4854,10 @@
     "ses_feasible": true,
     "tsb": 3.499,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 3.608,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031248K0064097-Cover",
@@ -4808,10 +4870,10 @@
     "ses_feasible": true,
     "tsb": 1.45,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.182,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031248K0064098-Cover",
@@ -4824,10 +4886,10 @@
     "ses_feasible": true,
     "tsb": 2.196,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 2.802,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031248K0064099-Cover",
@@ -4840,10 +4902,10 @@
     "ses_feasible": true,
     "tsb": 0.466,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 0.883,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031248K0064100-Cover",
@@ -4856,10 +4918,10 @@
     "ses_feasible": true,
     "tsb": 1.168,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.351,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031248K0064102-Cover",
@@ -4872,10 +4934,10 @@
     "ses_feasible": true,
     "tsb": 1.249,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.411,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031248K0064103-Cover",
@@ -4888,10 +4950,10 @@
     "ses_feasible": true,
     "tsb": 1.742,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 0.978,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031249K0064104-Cover",
@@ -4904,10 +4966,10 @@
     "ses_feasible": true,
     "tsb": 3.067,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 3.067,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031249K0064105-Cover",
@@ -4920,10 +4982,10 @@
     "ses_feasible": true,
     "tsb": 0.986,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.051,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031249K0064106-Cover",
@@ -4936,10 +4998,10 @@
     "ses_feasible": true,
     "tsb": 2.944,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.54,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031249K0064108-Cover",
@@ -4952,10 +5014,10 @@
     "ses_feasible": true,
     "tsb": 2.522,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 2.891,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031249K0064109-Cover",
@@ -4968,10 +5030,10 @@
     "ses_feasible": true,
     "tsb": 0.906,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 0.459,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031249K0064110-Cover",
@@ -4984,10 +5046,10 @@
     "ses_feasible": true,
     "tsb": 3.908,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.986,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031250K0064112-Cover",
@@ -5000,10 +5062,10 @@
     "ses_feasible": true,
     "tsb": 0.998,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 2.226,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031250K0064113-Cover",
@@ -5016,10 +5078,10 @@
     "ses_feasible": true,
     "tsb": 0.78,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 0.972,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031250K0064114-Cover",
@@ -5032,10 +5094,10 @@
     "ses_feasible": true,
     "tsb": 2.783,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 3.253,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031250K0064115-Cover",
@@ -5048,10 +5110,10 @@
     "ses_feasible": true,
     "tsb": 1.148,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.011,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031250K0064116-Cover",
@@ -5064,10 +5126,10 @@
     "ses_feasible": true,
     "tsb": 1.163,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.996,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031250K0064119-Cover",
@@ -5080,10 +5142,10 @@
     "ses_feasible": true,
     "tsb": 2.016,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 0.989,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031251K0064120-Cover",
@@ -5096,10 +5158,10 @@
     "ses_feasible": true,
     "tsb": 6.651,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 6.861,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031251K0064121-Cover",
@@ -5112,10 +5174,10 @@
     "ses_feasible": true,
     "tsb": 2.074,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.294,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031251K0064122-Cover",
@@ -5128,10 +5190,10 @@
     "ses_feasible": true,
     "tsb": 7.728,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 7.119,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031251K0064124-Cover",
@@ -5144,10 +5206,10 @@
     "ses_feasible": true,
     "tsb": 1.343,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.627,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031251K0064125-Cover",
@@ -5160,10 +5222,10 @@
     "ses_feasible": true,
     "tsb": 6.337,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 4.049,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031251K0064127-Cover",
@@ -5176,10 +5238,10 @@
     "ses_feasible": true,
     "tsb": 1.569,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.111,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031252K0064128",
@@ -5192,10 +5254,10 @@
     "ses_feasible": true,
     "tsb": 1.995,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.221,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031253K0064129",
@@ -5208,10 +5270,10 @@
     "ses_feasible": true,
     "tsb": 1.165,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.297,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031254K0064130",
@@ -5224,10 +5286,10 @@
     "ses_feasible": true,
     "tsb": 2.506,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 3.186,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0031255K0064131",
@@ -5240,10 +5302,10 @@
     "ses_feasible": true,
     "tsb": 1.82,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 0.799,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312566K0064133",
@@ -5256,10 +5318,10 @@
     "ses_feasible": true,
     "tsb": 7.729,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 7.038,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312567K0064134",
@@ -5272,10 +5334,10 @@
     "ses_feasible": true,
     "tsb": 1.501,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.563,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312569K0064140",
@@ -5288,10 +5350,10 @@
     "ses_feasible": true,
     "tsb": 2.526,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.193,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312571K0064142",
@@ -5304,10 +5366,10 @@
     "ses_feasible": true,
     "tsb": 0.559,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 0.402,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312572K0064143",
@@ -5320,10 +5382,10 @@
     "ses_feasible": true,
     "tsb": 4.131,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 4.814,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312573K0064144",
@@ -5336,10 +5398,10 @@
     "ses_feasible": true,
     "tsb": 4.26,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 4.383,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312573K0064145",
@@ -5352,10 +5414,10 @@
     "ses_feasible": true,
     "tsb": 9.266,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 10.947,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312574K0064146",
@@ -5368,10 +5430,10 @@
     "ses_feasible": true,
     "tsb": 1.847,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 2.312,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312575K0064147",
@@ -5384,10 +5446,10 @@
     "ses_feasible": true,
     "tsb": 3.985,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 5.81,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312575K0064147-2",
@@ -5400,10 +5462,10 @@
     "ses_feasible": true,
     "tsb": 4.913,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 6.721,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312576K0064149",
@@ -5416,10 +5478,10 @@
     "ses_feasible": true,
     "tsb": 1.734,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 2.145,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312576K0064150",
@@ -5432,10 +5494,10 @@
     "ses_feasible": true,
     "tsb": 5.388,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 2.35,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312576K0064152",
@@ -5448,10 +5510,10 @@
     "ses_feasible": true,
     "tsb": 1.66,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.862,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312577K0064154",
@@ -5464,10 +5526,10 @@
     "ses_feasible": true,
     "tsb": 3.037,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 3.964,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312577K0064155",
@@ -5480,10 +5542,10 @@
     "ses_feasible": true,
     "tsb": 2.22,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 3.647,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312577K0064157",
@@ -5496,10 +5558,10 @@
     "ses_feasible": true,
     "tsb": 2.985,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 3.687,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312578K0064159",
@@ -5512,10 +5574,10 @@
     "ses_feasible": true,
     "tsb": 0.99,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.488,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312578K0064160",
@@ -5528,10 +5590,10 @@
     "ses_feasible": true,
     "tsb": 3.779,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 3.924,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312578K0064162",
@@ -5544,10 +5606,10 @@
     "ses_feasible": true,
     "tsb": 1.197,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.45,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312583K0064167",
@@ -5560,10 +5622,10 @@
     "ses_feasible": true,
     "tsb": 2.393,
     "tsb_feasible": true,
-    "category_borrowed": 2.645,
-    "category_borrowed_feasible": true,
     "combo2": 2.531,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312584K0064168",
@@ -5576,10 +5638,10 @@
     "ses_feasible": true,
     "tsb": 1.463,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.635,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312585K0064169",
@@ -5592,10 +5654,10 @@
     "ses_feasible": true,
     "tsb": 0.526,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 0.519,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312587K0064173-Foam",
@@ -5608,10 +5670,10 @@
     "ses_feasible": true,
     "tsb": 7.677,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 8.535,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312587K0064175-Foam",
@@ -5624,10 +5686,10 @@
     "ses_feasible": true,
     "tsb": 4.445,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 3.263,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312587K0064176-Foam",
@@ -5640,10 +5702,10 @@
     "ses_feasible": true,
     "tsb": 4.426,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 4.91,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312587K0064178-Foam",
@@ -5656,10 +5718,10 @@
     "ses_feasible": true,
     "tsb": 1.037,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.239,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312588K0064179-Foam",
@@ -5672,10 +5734,10 @@
     "ses_feasible": true,
     "tsb": 7.17,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 7.522,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312588K0064183-Foam",
@@ -5688,10 +5750,10 @@
     "ses_feasible": true,
     "tsb": 0.84,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 0.551,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312588K0064184-Foam",
@@ -5704,10 +5766,10 @@
     "ses_feasible": true,
     "tsb": 3.128,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 3.467,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312588K0064186-Foam",
@@ -5720,10 +5782,10 @@
     "ses_feasible": true,
     "tsb": 1.679,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.781,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312589K0064187-Foam",
@@ -5736,10 +5798,10 @@
     "ses_feasible": true,
     "tsb": 6.183,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 22.851,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312599K0064196",
@@ -5752,10 +5814,10 @@
     "ses_feasible": true,
     "tsb": 4.367,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 5.078,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312600K0064198",
@@ -5768,10 +5830,10 @@
     "ses_feasible": true,
     "tsb": 1.971,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.741,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312602K0064200",
@@ -5784,10 +5846,10 @@
     "ses_feasible": true,
     "tsb": 1.634,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 2.344,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312603K0064201",
@@ -5800,10 +5862,10 @@
     "ses_feasible": true,
     "tsb": 1.977,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 2.178,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312605K0064203",
@@ -5816,10 +5878,10 @@
     "ses_feasible": true,
     "tsb": 11.2,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 8.249,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312606K0064204",
@@ -5832,10 +5894,10 @@
     "ses_feasible": true,
     "tsb": 11.474,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 13.745,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312606K0064205",
@@ -5848,10 +5910,10 @@
     "ses_feasible": true,
     "tsb": 11.808,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 13.64,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312606K0064206",
@@ -5864,10 +5926,10 @@
     "ses_feasible": true,
     "tsb": 8.597,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 9.583,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312606K0064207",
@@ -5880,10 +5942,10 @@
     "ses_feasible": true,
     "tsb": 6.058,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 8.329,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312607K0064208",
@@ -5896,10 +5958,10 @@
     "ses_feasible": true,
     "tsb": 7.421,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 5.402,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312607K0064209",
@@ -5912,10 +5974,10 @@
     "ses_feasible": true,
     "tsb": 9.105,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 5.166,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312607K0064210",
@@ -5928,10 +5990,10 @@
     "ses_feasible": true,
     "tsb": 5.257,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 5.086,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312609K0064212",
@@ -5944,10 +6006,10 @@
     "ses_feasible": true,
     "tsb": 18.666,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 16.722,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312610K0064213",
@@ -5960,10 +6022,10 @@
     "ses_feasible": true,
     "tsb": 0.597,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 0.66,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312612K0064235",
@@ -5976,10 +6038,10 @@
     "ses_feasible": true,
     "tsb": 3.187,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 3.907,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312612K0064236",
@@ -5992,10 +6054,10 @@
     "ses_feasible": true,
     "tsb": 1.331,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.391,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312613K0064237-Cover",
@@ -6008,10 +6070,10 @@
     "ses_feasible": true,
     "tsb": 1.46,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 2.174,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312613K0064243-Cover",
@@ -6024,10 +6086,10 @@
     "ses_feasible": true,
     "tsb": 0.711,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 0.513,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312613K0064243-Foam",
@@ -6040,10 +6102,10 @@
     "ses_feasible": true,
     "tsb": 3.686,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 3.694,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312614K0064238",
@@ -6056,10 +6118,10 @@
     "ses_feasible": true,
     "tsb": 130.726,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 121.656,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312614K0064239",
@@ -6072,10 +6134,10 @@
     "ses_feasible": true,
     "tsb": 123.968,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 111.522,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312615K0064241",
@@ -6088,10 +6150,10 @@
     "ses_feasible": true,
     "tsb": 1.446,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.504,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312616K0064244",
@@ -6104,10 +6166,10 @@
     "ses_feasible": true,
     "tsb": 0.804,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 0.198,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312617K0064245",
@@ -6120,10 +6182,10 @@
     "ses_feasible": true,
     "tsb": 1.425,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.137,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312618K0064246",
@@ -6136,10 +6198,10 @@
     "ses_feasible": true,
     "tsb": 0.338,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 0.576,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312621K0064249",
@@ -6152,10 +6214,10 @@
     "ses_feasible": true,
     "tsb": 1.212,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 0.932,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312623K0064251",
@@ -6168,10 +6230,10 @@
     "ses_feasible": true,
     "tsb": 1.178,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.534,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312624K0064252",
@@ -6184,10 +6246,10 @@
     "ses_feasible": true,
     "tsb": 2.206,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 2.054,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312625K0064253",
@@ -6200,10 +6262,10 @@
     "ses_feasible": true,
     "tsb": 2.469,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.611,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312627K0064255",
@@ -6216,10 +6278,10 @@
     "ses_feasible": true,
     "tsb": 0.678,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.086,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312628K0064256",
@@ -6232,10 +6294,10 @@
     "ses_feasible": true,
     "tsb": 1.139,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.361,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312630K0064258",
@@ -6248,10 +6310,10 @@
     "ses_feasible": true,
     "tsb": 4.472,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 2.899,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312632K0064260",
@@ -6264,10 +6326,10 @@
     "ses_feasible": true,
     "tsb": 5.86,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 3.426,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312636K0064266",
@@ -6280,10 +6342,10 @@
     "ses_feasible": true,
     "tsb": 2.773,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 2.773,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312636K0064269",
@@ -6296,10 +6358,10 @@
     "ses_feasible": true,
     "tsb": 0.025,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.238,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312636K0064272",
@@ -6312,10 +6374,10 @@
     "ses_feasible": true,
     "tsb": 2.067,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.527,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312636K0064278",
@@ -6328,10 +6390,10 @@
     "ses_feasible": true,
     "tsb": 1.039,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 0.486,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312636K0064281",
@@ -6344,10 +6406,10 @@
     "ses_feasible": true,
     "tsb": 0.025,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.238,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312637K0064267",
@@ -6360,10 +6422,10 @@
     "ses_feasible": true,
     "tsb": 1.136,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.551,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312637K0064270",
@@ -6376,10 +6438,10 @@
     "ses_feasible": true,
     "tsb": 1.683,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 2.06,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312637K0064276",
@@ -6392,10 +6454,10 @@
     "ses_feasible": true,
     "tsb": 1.296,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.61,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312637K0064279",
@@ -6408,10 +6470,10 @@
     "ses_feasible": true,
     "tsb": 1.401,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 2.212,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312639K0064283",
@@ -6424,10 +6486,10 @@
     "ses_feasible": true,
     "tsb": 1.953,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 1.89,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312676K0064342",
@@ -6440,10 +6502,10 @@
     "ses_feasible": true,
     "tsb": 21.919,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 16.201,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312676K0064343",
@@ -6456,10 +6518,10 @@
     "ses_feasible": true,
     "tsb": 0.667,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 0.802,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312678K0064345",
@@ -6472,10 +6534,10 @@
     "ses_feasible": true,
     "tsb": 8.939,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 14.433,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312678K0064346",
@@ -6488,10 +6550,10 @@
     "ses_feasible": true,
     "tsb": 14.831,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 14.058,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312701K0064561",
@@ -6504,10 +6566,10 @@
     "ses_feasible": true,
     "tsb": 381.749,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 351.36,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312705K0064584",
@@ -6520,10 +6582,10 @@
     "ses_feasible": true,
     "tsb": 1.179,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 2.14,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    },
    {
     "sku": "TT0312705K0064585",
@@ -6536,20 +6598,21 @@
     "ses_feasible": true,
     "tsb": 0.317,
     "tsb_feasible": true,
-    "category_borrowed": null,
-    "category_borrowed_feasible": false,
     "combo2": 0.493,
-    "combo2_feasible": true
+    "combo2_feasible": true,
+    "category_borrowed": null,
+    "category_borrowed_feasible": false
    }
   ],
   "n_short_total": 463,
   "n_evaluated": 392,
+  "n_aligned": 151,
   "n_infeasible": 71,
-  "infeasible_reason": "历史过短（如仅 1–6 个月），在其自有历史内找不到“≥2 个月训练 + 完整 90 天目标窗”的滚动起点；这些序列不参与比较，也不填默认值"
+  "infeasible_reason": "历史过短（如仅 1–6 个月），在其自有历史内找不到“≥3 个月训练 + 完整 90 天目标窗”的滚动起点；这些序列不参与比较，也不填默认值"
  },
  "runtime": {
-  "seconds": 156.9,
-  "tracemalloc_peak_mb": 153.3,
+  "seconds": 139.0,
+  "tracemalloc_peak_mb": 154.1,
   "scope": {
    "series": 1237,
    "trainable": 774,

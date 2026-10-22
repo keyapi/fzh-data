@@ -11,6 +11,19 @@ Outputs
                           fallback dedup + sales coverage / KeyError repro /
                           short-history multi-method / runtime + memory
   attribution_report.md   the narrative report
+
+T12 audit fixes (2026-10-22) — see control/reviews/2026-10-22-t12-audit-fixes.md
+  1. Warehouse aliases are mapped with `warehouse_map` BEFORE `series_kind` is
+     assigned (CENTRADE vs 美东-CENTRADE, FZH-DANEEY-成品仓 vs 美中-FZH-DANEEY, ...).
+  2. Every "sales share" number uses ONE stated caliber: full history inside the
+     label coverage (first order month .. 2026-09). No line claims "last 6 months"
+     while dividing by the full-history total.
+  3. Category-borrowed shape truncates every peer at the SAME origin as the series
+     being scored (>= 24 months at that origin, shape = the 12 months ending at the
+     origin). It never uses the last 12 months ending at 2026-09.
+  4. Short-history methods are compared on ONE aligned evaluable subset (rows where
+     every method is feasible), and the training lower bound is stated explicitly
+     (3 months, 392 series; a 2-month bound would admit 403 and is not used).
 """
 from __future__ import annotations
 
@@ -42,7 +55,11 @@ EXPL = CLAUDE_DIR / "out" / "business_phase" / "explanations.csv"
 VAL_ORIGINS = ["2025-01", "2025-02", "2025-03", "2025-04", "2025-05", "2025-06"]
 TEST_ORIGINS = ["2025-10", "2025-11", "2025-12", "2026-01", "2026-02", "2026-03"]
 MIN_TRAIN = 24
+MIN_TRAIN_SHORT = 3        # explicit lower bound for the short-history rolling eval
 SIMPLE = ["naive", "seasonal_naive", "ma3", "ma6", "ma12"]
+METHODS_SHORT = ("naive", "ses", "tsb", "combo2", "category_borrowed")
+SALES_CALIBER = ("全历史（该 SKU 首单月..2026-09，标签覆盖内）；分母 = 全部 eligible "
+                 "序列同期总销量。全文所有‘销量占比/覆盖’均用此口径，不混用近 6 个月。")
 
 
 def ym_i(ym: str) -> int:
@@ -105,6 +122,8 @@ def main() -> None:
 
     con = duckdb.connect(str(DB_PATH), read_only=True)
     try:
+        wmap = {r[0]: r[1] for r in con.execute(
+            "SELECT gs_warehouse, current_warehouse FROM warehouse_map").fetchall()}
         rows = con.execute("""
             SELECT sku_tongtool, substr(despatch_date,1,7), warehouse, SUM(qty)
             FROM gs_orders
@@ -118,10 +137,12 @@ def main() -> None:
     if hashlib.sha256(DB_PATH.read_bytes()).hexdigest() != db_hash:
         raise SystemExit("DB changed")
 
-    sku_month, sku_wh = defaultdict(dict), defaultdict(set)
+    # T9-1: count distinct warehouses on the MAPPED names, not the raw aliases.
+    sku_month, sku_wh, sku_wh_raw = defaultdict(dict), defaultdict(set), defaultdict(set)
     for sku, ym, wh, q in rows:
         sku_month[sku][ym] = sku_month[sku].get(ym, 0.0) + float(q)
-        sku_wh[sku].add(wh)
+        sku_wh_raw[sku].add(wh)
+        sku_wh[sku].add(wmap.get(wh, wh))
     last_i = ym_i("2026-09")
     series = {}
     for sku in eligible:
@@ -169,12 +190,16 @@ def main() -> None:
     total_abs = sum(abs(F - A) for F, A in cells["autoets"].values()) or 1.0
     total_sales = sum(float(s["y"].sum()) for s in series.values()) or 1.0
     out_rows = []
+    kind_rows = Counter()
+    kind_skus = defaultdict(set)
     for (sku, origin), (F, A) in sorted(cells["autoets"].items()):
         s = series[sku]
         kind = ("warehouse_level_true" if len(sku_wh.get(sku, set())) == 1
                 else "multi_warehouse_true_sum")
         if not sku_wh.get(sku):
             kind = "proxy_current_primary"
+        kind_rows[kind] += 1
+        kind_skus[kind].add(sku)
         out_rows.append(dict(
             SKU=sku, origin=origin,
             split=("val" if origin in VAL_ORIGINS else "test"),
@@ -183,6 +208,21 @@ def main() -> None:
             abs_error_share=(round(abs(F - A) / total_abs, 6)),
             series_kind=kind, n_history=len(s["y"]),
         ))
+    alias_skus = sorted(s for s in series
+                        if len(sku_wh_raw.get(s, set())) > 1
+                        and len(sku_wh.get(s, set())) == 1)
+    alias = dict(
+        raw_distinct_warehouses=len(set().union(*sku_wh_raw.values())) if sku_wh_raw else 0,
+        mapped_distinct_warehouses=len(set().union(*sku_wh.values())) if sku_wh else 0,
+        skus_raw_multi=sum(1 for s in series if len(sku_wh_raw.get(s, set())) > 1),
+        skus_mapped_multi=sum(1 for s in series if len(sku_wh.get(s, set())) > 1),
+        reclassified_multi_to_single=len(alias_skus),
+        reclassified_examples=alias_skus[:5],
+        unmapped_raw_names=sorted({w for ws in sku_wh_raw.values() for w in ws
+                                   if w not in wmap}),
+        note=("先按 warehouse_map 统一仓库别名，再判定该 SKU 期内只有一个真实仓；"
+              "未映射名称原样保留并在此列出（当前为空）。"),
+    )
     with (OUT / "error_attribution.csv").open("w", encoding="utf-8-sig", newline="") as f:
         w = csv.DictWriter(f, fieldnames=list(out_rows[0].keys()))
         w.writeheader()
@@ -312,26 +352,48 @@ def main() -> None:
     fallback["key_error_repro"] = repro
 
     # ---------------- 5) short-history multi-method rolling ----------------
+    # T9-3: a peer only counts if it has >= 24 months of history AT THE ORIGIN,
+    # and its shape is the 12 months ending at that origin. Using the last 12
+    # months ending at 2026-09 would let post-origin labels leak into the score.
     short_eval = []
     short_skus = sorted(short)
-    # category-borrowed: peer seasonal shape (item_group) x own level
-    group_members = defaultdict(list)
+    group_members = defaultdict(list)          # item_group -> SKUs (pool only)
     for s, v in series.items():
         item = dest.get(s, {}).get("mapped_item_code")
         g = item_group.get(item)
         if g:
             group_members[g].append(s)
+
+    def borrowed_shape(sku: str, origin_i: int) -> dict[int, float] | None:
+        """Calendar-month seasonal shape from peers truncated at origin_i."""
+        g = item_group.get(dest.get(sku, {}).get("mapped_item_code"))
+        vals = defaultdict(list)
+        for p in group_members.get(g, []):
+            sp = series[p]
+            if p == sku or origin_i - sp["first"] + 1 < MIN_TRAIN:
+                continue
+            seg = sp["y"][origin_i - 11 - sp["first"]: origin_i + 1 - sp["first"]]
+            mean = float(np.mean(seg)) if len(seg) else 0.0
+            if len(seg) != 12 or mean <= 0:
+                continue
+            for j in range(12):               # month (origin_i - 11 + j)
+                vals[(origin_i - 11 + j) % 12].append(float(seg[j]) / mean)
+        if not vals:
+            return None
+        return {m: float(np.mean(v)) for m, v in vals.items()}
+
     for sku in short_skus:
         s = series[sku]
         n = len(s["y"])
-        # only origins whose 90-day window is fully inside the known data
-        cands = [o for o in range(s["first"] + 2, last_i + 1)
+        # origins need >= MIN_TRAIN_SHORT months of own history and a full
+        # 90-day target window inside the label coverage
+        cands = [o for o in range(s["first"] + MIN_TRAIN_SHORT - 1, last_i + 1)
                  if max(window_weights(decision_date(o), 90)) <= last_i]
         origins = cands[-3:]
         per = defaultdict(list)
         for o in origins:
             tr = o - s["first"] + 1
-            if tr < 2:
+            if tr < MIN_TRAIN_SHORT:
                 continue
             dec = date((o + 1) // 12, (o + 1) % 12 + 1, 22)
             w = window_weights(dec, 90)
@@ -359,12 +421,8 @@ def main() -> None:
                 except Exception:
                     continue
             # category-borrowed: peer seasonal shape x own trailing level
-            item = dest.get(sku, {}).get("mapped_item_code")
-            g = item_group.get(item)
-            peers = [p for p in group_members.get(g, []) if p != sku and len(series[p]["y"]) >= 24]
-            if peers:
-                shape = np.mean([series[p]["y"][-12:] / (np.mean(series[p]["y"][-12:]) or 1)
-                                 for p in peers], axis=0)
+            shape = borrowed_shape(sku, o)
+            if shape is not None:
                 lvl = float(np.mean(ytr[-min(3, tr):]))
                 prof = [shape[(o + k) % 12] * lvl for k in range(1, h + 1)]
                 cand["category_borrowed"] = float(sum(wt * prof[k - (o + 1)]
@@ -377,16 +435,41 @@ def main() -> None:
             continue
         row = dict(sku=sku, n_history=n, n_cells=len(per["_n"]),
                    low_confidence=bool(n < 12 or len(per["_n"]) < 3))
-        for m in ("naive", "ses", "tsb", "category_borrowed", "combo2"):
+        for m in METHODS_SHORT:
             vals = per.get(m)
             row[m] = (round(float(np.mean(vals)), 3) if vals else None)
             row[f"{m}_feasible"] = bool(vals)
         short_eval.append(row)
+    # T9-4: every method on its own feasible subset (context) AND on the single
+    # aligned subset where ALL methods are feasible (the comparison of record).
+    aligned = [r for r in short_eval if all(r.get(m) is not None for m in METHODS_SHORT)]
     short_summary = {}
-    for m in ("naive", "ses", "tsb", "category_borrowed", "combo2"):
+    aligned_summary = {}
+    for m in METHODS_SHORT:
         vals = [r[m] for r in short_eval if r.get(m) is not None]
         short_summary[m] = dict(skus=len(vals),
                                 mean_abs_error=(round(float(np.mean(vals)), 3) if vals else None))
+        av = [r[m] for r in aligned]
+        aligned_summary[m] = (round(float(np.mean(av)), 3) if av else None)
+    # sensitivity for the audit: a 2-month (instead of 3-month) training lower
+    # bound would admit this many series; it is NOT used in the table above.
+    short_min2 = sum(
+        1 for sku in short_skus
+        if any(max(window_weights(decision_date(o), 90)) <= last_i
+               for o in range(series[sku]["first"] + 1, last_i + 1)))
+    alignment = dict(
+        methods=list(METHODS_SHORT),
+        n_evaluable=len(short_eval), n_aligned=len(aligned),
+        excluded_by_method={m: sum(1 for r in short_eval if r.get(m) is None)
+                            for m in METHODS_SHORT},
+        min_train_months=MIN_TRAIN_SHORT, n_evaluable_min_train_2=short_min2,
+        low_confidence_evaluable=sum(1 for r in short_eval if r["low_confidence"]),
+        low_confidence_aligned=sum(1 for r in aligned if r["low_confidence"]),
+        note=("158 vs 392 这类不可比数字不再并列成一张排名表：方法各自的可行子集只作"
+              "上下文，正式比较只在对齐子集（全部方法都可评估）上进行。"
+              f"训练下限取 {MIN_TRAIN_SHORT} 个月；放宽到 2 个月可多纳入至 {short_min2} 条，"
+              "但 2 个点无法估计波动与误差结构，故不采用。"),
+    )
 
     # ---------------- runtime / memory ------------------------------------
     cur, peak = tracemalloc.get_traced_memory()
@@ -401,7 +484,7 @@ def main() -> None:
     )
 
     result = dict(
-        schema_version="t9_error_attribution/1",
+        schema_version="t9_error_attribution/2",
         inputs=dict(db_sha256=db_hash,
                     destinations_sha256=hashlib.sha256(DEST.read_bytes()).hexdigest(),
                     explanations_sha256=hashlib.sha256(EXPL.read_bytes()).hexdigest()),
@@ -409,17 +492,27 @@ def main() -> None:
                    origins=VAL_ORIGINS + TEST_ORIGINS),
         error_rows=len(out_rows),
         total_abs_error=round(total_abs, 2),
+        sales_caliber=dict(used=SALES_CALIBER, total_sales_all_history=round(total_sales, 1)),
+        warehouse_alias=alias,
+        series_kind=dict(
+            rows={k: kind_rows[k] for k in
+                  ("warehouse_level_true", "multi_warehouse_true_sum", "proxy_current_primary")},
+            skus={k: len(v) for k, v in kind_skus.items()},
+            note="仓库别名先映射再判定；CSV 的 series_kind 列已是映射后口径。",
+        ),
         top20=top20,
         top10_sku_error_share=round(top10_sku_error, 4),
         concentration=concentration,
         reversal=reversal,
         fallback=fallback,
         short_history=dict(
-            summary=short_summary, per_sku=short_eval,
+            summary=short_summary, aligned_summary=aligned_summary,
+            alignment=alignment, per_sku=short_eval,
             n_short_total=len(short), n_evaluated=len(short_eval),
+            n_aligned=len(aligned),
             n_infeasible=len(short) - len(short_eval),
-            infeasible_reason=("历史过短（如仅 1–6 个月），在其自有历史内找不到"
-                               "“≥2 个月训练 + 完整 90 天目标窗”的滚动起点；"
+            infeasible_reason=(f"历史过短（如仅 1–6 个月），在其自有历史内找不到"
+                               f"“≥{MIN_TRAIN_SHORT} 个月训练 + 完整 90 天目标窗”的滚动起点；"
                                "这些序列不参与比较，也不填默认值"),
         ),
         runtime=runtime,
@@ -436,15 +529,27 @@ def main() -> None:
          "## 1. 逐 SKU × 切点误差", "",
          "`error_attribution.csv` 每行：forecast / actual / error / abs_error / "
          "abs_error_share / series_kind / n_history。",
-         "`series_kind`：`warehouse_level_true`（该 SKU 只有一个真实仓）/ "
-         "`multi_warehouse_true_sum`（多仓真实和）；**没有 proxy**（订单行仓库名齐全）。", "",
+         "`series_kind` 先按 `warehouse_map` 统一仓库别名再判定（T12 修正）：", "",
+         "| `series_kind` | 行数 | SKU 数 | 含义 |", "|---|---:|---:|---|",
+         f"| `warehouse_level_true` | {kind_rows['warehouse_level_true']} | "
+         f"{len(kind_skus['warehouse_level_true'])} | 映射后该 SKU 期内只有一个真实仓 |",
+         f"| `multi_warehouse_true_sum` | {kind_rows['multi_warehouse_true_sum']} | "
+         f"{len(kind_skus['multi_warehouse_true_sum'])} | 映射后多仓真实销量之和 |",
+         f"| `proxy_current_primary` | {kind_rows['proxy_current_primary']} | "
+         f"{len(kind_skus['proxy_current_primary'])} | 无仓库信息，需用主仓代理 |", "",
+         f"- 原始仓库名 {alias['raw_distinct_warehouses']} 个 → 映射后 "
+         f"{alias['mapped_distinct_warehouses']} 个；"
+         f"**{alias['reclassified_multi_to_single']} 条序列**因别名归一从“多仓”改判为“单仓”"
+         f"（例：{', '.join(f'`{x}`' for x in alias['reclassified_examples'])}）。",
+         f"- 未映射仓库名：{alias['unmapped_raw_names'] or '无'}。", "",
          "## 2. 误差贡献与集中度", "",
-         "| Top20 SKU | 绝对误差 | 占总误差 | 占总销量 |", "|---|---:|---:|---:|"]
+         f"> 销量占比口径（全表统一）：{SALES_CALIBER}", "",
+         "| Top20 SKU | 绝对误差 | 占总误差 | 占总销量(全历史) |", "|---|---:|---:|---:|"]
     for t in top20[:10]:
         L.append(f"| `{t['sku']}` | {t['abs_error']} | {t['error_share']:.2%} | "
                  f"{t['sales_share']:.2%} |")
     L += ["", f"- Top10 SKU 合计占总绝对误差 **{top10_sku_error:.2%}**", ""]
-    L += ["| 集中度 | SKU 数 | 销量占比 | 误差占比 |", "|---|---:|---:|---:|"]
+    L += ["| 集中度 | SKU 数 | 销量占比(全历史) | 误差占比 |", "|---|---:|---:|---:|"]
     for k, v in concentration.items():
         L.append(f"| {k} | {v['skus']} | {v['sales_share']:.2%} | {v['error_share']:.2%} |")
     L += ["", "## 3. 反转分解（验证 → 测试）", "",
@@ -462,13 +567,13 @@ def main() -> None:
           "", f"> {d['note']}", "",
           "## 4. fallback 去重与销量覆盖", "",
           f"- fallback 行数 **{fallback['rows']}**，去重 SKU **{fallback['distinct_skus']}**，"
-          f"销量覆盖 **{fallback['sales_coverage']:.2%}**",
+          f"全历史销量覆盖 **{fallback['sales_coverage']:.2%}**（与 §2 同一口径）",
           f"- `tiny_datasets`：{fallback['by_reason']['tiny_datasets']['rows']} 行 / "
           f"{fallback['by_reason']['tiny_datasets']['skus']} SKU / "
-          f"销量 {fallback['by_reason']['tiny_datasets']['sales_share']:.3%}",
+          f"销量（全历史）{fallback['by_reason']['tiny_datasets']['sales_share']:.3%}",
           f"- `KeyError:'fitted'`：{fallback['by_reason']['key_error']['rows']} 行 / "
           f"{fallback['by_reason']['key_error']['skus']} SKU / "
-          f"销量 {fallback['by_reason']['key_error']['sales_share']:.3%}"]
+          f"销量（全历史）{fallback['by_reason']['key_error']['sales_share']:.3%}"]
     if repro:
         L += ["", "**KeyError 最小复现**：",
               f"- SKU `{repro['sku']}`，序列长度 **{repro['series_len']}**，值 {repro['values']}",
@@ -477,16 +582,32 @@ def main() -> None:
               f"- 分类：{repro['classification']} —— {repro['detail']}",
               f"- 建议：{repro['fix_suggestion']}"]
     L += ["", "## 5. 短历史序列的多方法滚动", "",
-          f"短历史 SKU {len(short)} 条，在其自有历史内做滚动 90 天窗口评估：", "",
-          "| 方法 | 可行 SKU 数 | 平均绝对误差 |", "|---|---:|---:|"]
-    for m, v in short_summary.items():
-        L.append(f"| {m} | {v['skus']} | {v['mean_abs_error']} |")
-    L += ["", f"- 短历史共 {len(short)} 条，其中 **{len(short_eval)} 条可评估**、"
-          f"**{len(short) - len(short_eval)} 条不可评估**"
-          "（历史过短，找不到“≥2 个月训练 + 完整 90 天目标窗”的滚动起点；不填默认值）",
-          "低置信标记：历史 <12 月或可用窗口 <3 个的序列标 `low_confidence=True`"
-          f"（{sum(1 for r in short_eval if r['low_confidence'])} / {len(short_eval)}）。",
-          "没有用任何默认值冒充实测。", "",
+          f"短历史 SKU {len(short)} 条。训练下限取 **{MIN_TRAIN_SHORT} 个月**，"
+          f"目标窗必须是完整 90 天且落在标签覆盖内："
+          f"**{len(short_eval)} 条可评估**、{len(short) - len(short_eval)} 条不可评估。"
+          f"（放宽到 2 个月可纳入 {short_min2} 条，不采用：2 个点无法估计波动。）",
+          "类目借力（category_borrowed）的 peer 形状**在同一历史切点截断**："
+          "peer 必须在该切点已有 ≥24 个月历史，形状只取截至该切点的 12 个月，"
+          "不使用截至 2026-09 的最后 12 个月。", "",
+          f"对齐后共同可评分子集：**{len(aligned)} 条**（全部方法都可评估）。"
+          "只在各自可行子集上并列排名是不可比的，故下表同时给出两列，"
+          "正式比较看最后一列：", "",
+          "| 方法 | 可行 SKU 数（各自子集） | 各自子集 MAE | 对齐子集 MAE "
+          f"(n={len(aligned)}) |", "|---|---:|---:|---:|"]
+    for m in METHODS_SHORT:
+        L.append(f"| {m} | {short_summary[m]['skus']} | "
+                 f"{short_summary[m]['mean_abs_error']} | {aligned_summary[m]} |")
+    L += ["", f"- 低置信标记（历史 <12 月或可用窗口 <3 个）：可评估集 "
+          f"**{alignment['low_confidence_evaluable']} / {len(short_eval)}**；"
+          f"对齐子集 {alignment['low_confidence_aligned']} / {len(aligned)}。",
+          f"- 各方法在对齐子集外的缺失条数："
+          + "，".join(f"{m} {n}" for m, n in alignment["excluded_by_method"].items()) + "。",
+          "- 对齐子集上的排序（低→高）："
+          + " < ".join(m for m in sorted(METHODS_SHORT, key=lambda x: aligned_summary[x]))
+          + "。各方法在各自子集上的数字不可横向比较（子集不同、难度不同），"
+          "因此“类目借力 14.0 比 naive 10.3 差”这类并列结论在修正后不再成立。",
+          "- 没有用任何默认值冒充实测；类目借力只在有合格 peer 的序列上出现，"
+          "它是兜底而不是默认首选。", "",
           "## 6. 计算规模", "",
           f"- 运行 **{runtime['seconds']} s**，tracemalloc 峰值 **{runtime['tracemalloc_peak_mb']} MB**",
           f"- 范围：{runtime['scope']}", "",
@@ -495,8 +616,8 @@ def main() -> None:
           f"2. 反转不是单一原因：同 SKU 跨期变化 = {d.get('same_sku_change')}，"
           f"SKU 构成差异 = {d.get('composition_effect')}（两部分都已量化，"
           "季节不同只是背景）。",
-          f"3. fallback 的 112 行只对应 {fallback['distinct_skus']} 个 SKU、"
-          f"销量覆盖 {fallback['sales_coverage']:.2%}；其中 KeyError 属库输入校验缺口"
+          f"3. fallback 的 {fallback['rows']} 行只对应 {fallback['distinct_skus']} 个 SKU、"
+          f"全历史销量覆盖 {fallback['sales_coverage']:.2%}；其中 KeyError 属库输入校验缺口"
           "（长度 1–2 的序列），与 tiny_datasets 不是一类。", ""]
     (OUT / "attribution_report.md").write_text("\n".join(L) + "\n", encoding="utf-8")
 

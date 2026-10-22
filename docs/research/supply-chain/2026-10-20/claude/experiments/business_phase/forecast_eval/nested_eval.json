@@ -1,19 +1,29 @@
 {
- "schema_version": "t10_nested_eval/1",
+ "schema_version": "t10_nested_eval/2",
  "inputs": {
   "db_sha256": "25579c5dcd802c7e67f610432a19d08f8e6952696bd50d43bdfa47d6b9241ae9",
   "destinations_sha256": "720b478809128156cc1609cd10720cb926a98382a7c2f8a8179c55cadbf7bf60"
  },
+ "metric_definition": {
+  "wape": "Σ|F−A| / ΣA on the common evaluable subset",
+  "zero_demand": "零需求单元格保留在分子中（|F| 计为误差），对分母贡献 0；不再把它们从 WAPE 中删除。",
+  "common_subset": "共同可评分子集 = 该块 valid 且 sel/MA3/naive 三个预测均非 null 的行；三种方法在同一批单元格上比较。",
+  "missing_forecast": "缺失预测写 null（CSV 为空），不写 0。"
+ },
  "rules": {
-  "r1_strata": "strata use each training window only (final block uses its own training data)",
+  "r1_strata": "sample, tier, dominant warehouse and intermittent labels use THIS block's training window only (never post-origin sales)",
   "r2_inner": "model chosen on inner cut points inside each outer training window",
   "r3_outer": "outer refits every candidate and compares with fixed MA3/naive on the same sample",
   "r4_window": "monthly cumulative h=3, step 3, labels available at the time (label_available_at), refit per window",
-  "r5_fallback": "pre-registered short-history rules; failures kept; zero-denominator cells listed separately",
-  "r6_final": "old T2 test period is exploratory; final evaluation uses the unused 2026-07..09 block; a forward shadow plan covers months whose labels do not exist yet",
+  "r5_fallback": "pre-registered short-history rules; failures kept; missing predictions kept as null",
+  "r6_final": "旧 T2 测试期只作探索。当前标签覆盖（≤2026-09）内**不存在干净留出块**：T2 的 2026-03 外层切点其 90 天目标窗已触及 2026-07，故 2026-07..09 只是“最后一个可评估块”，不是“未使用块”。唯一干净证据来自前向影子（参数化脚本 forward_shadow.py；目标月标签闭合后按每月 4 日评分）。",
   "r7_budget": {
    "candidates": 6,
-   "series": 200,
+   "series": {
+    "2025-10": 200,
+    "2026-01": 200,
+    "2026-06": 200
+   },
    "outer": 3,
    "inner": 3,
    "fit_cap": 14400,
@@ -29,182 +39,236 @@
   "combo_ew"
  ],
  "series_sample": {
-  "n": 200,
-  "rule": "sorted by total qty, every k-th, first 200"
+  "n_per_block": {
+   "2025-10": 200,
+   "2026-01": 200,
+   "2026-06": 200
+  },
+  "overlap_with_first_block": {
+   "2025-10": 200,
+   "2026-01": 32,
+   "2026-06": 41
+  },
+  "rule": "per block: rank by TRAINING-window qty only (first .. outer origin), every k-th, first 200; blocks are therefore not the same series list",
+  "note": "三个外层块的样本各自独立抽取；块间不可直接比较，只做块内同样本对比。旧版用截至 2026-09 的全历史总量抽样，会让最终块实际值决定哪些序列被评估。"
+ },
+ "layout_note": "最后一个外层块 2026-06 的目标窗为 2026-07..09；它不是干净留出块（见 rules.r6_final）。",
+ "common_subset": {
+  "2025-10|exploratory": {
+   "n_common": 170,
+   "n_scored": 148,
+   "zero_retained": 22,
+   "missing_forecast": 2
+  },
+  "2026-01|exploratory": {
+   "n_common": 176,
+   "n_scored": 150,
+   "zero_retained": 26,
+   "missing_forecast": 5
+  },
+  "2026-06|last_evaluable_no_clean_holdout": {
+   "n_common": 197,
+   "n_scored": 175,
+   "zero_retained": 22,
+   "missing_forecast": 1
+  }
  },
  "fits": {
-  "total": 9525,
+  "total": 9820,
   "by_model": {
-   "naive": 1980,
-   "ma3": 1963,
-   "ma6": 1963,
-   "seasonal_naive": 1656,
-   "autoets": 1963
+   "naive": 2022,
+   "ma3": 2014,
+   "ma6": 2014,
+   "seasonal_naive": 1756,
+   "autoets": 2014
   },
   "cap": 14400
  },
  "failures": {
-  "seasonal_naive:ValueError": 333,
-  "autoets:NotImplementedError": 162,
-  "outer:insufficient_history": 50,
-  "outer:autoets:NotImplementedError": 39,
-  "autoets:ValueError": 35,
-  "outer:autoets:KeyError": 1,
-  "autoets:KeyError": 1
+  "seasonal_naive:ValueError": 318,
+  "autoets:NotImplementedError": 131,
+  "outer:insufficient_history": 49,
+  "outer:autoets:NotImplementedError": 45,
+  "autoets:ValueError": 25,
+  "autoets:KeyError": 2
  },
  "blocks": {
   "2025-10|exploratory": {
    "n": 200,
-   "n_valid": 168,
-   "n_scored": 149,
-   "zero_denominator": 45,
-   "selected": 0.6461,
-   "ma3": 0.755,
-   "naive": 0.5297
+   "n_valid": 172,
+   "n_common": 170,
+   "n_scored": 148,
+   "zero_retained": 22,
+   "missing_forecast": 2,
+   "selected": 0.463,
+   "ma3": 0.5312,
+   "naive": 0.4823
   },
   "2026-01|exploratory": {
    "n": 200,
-   "n_valid": 184,
-   "n_scored": 159,
-   "zero_denominator": 28,
-   "selected": 0.5973,
-   "ma3": 0.6633,
-   "naive": 0.5454
+   "n_valid": 181,
+   "n_common": 176,
+   "n_scored": 150,
+   "zero_retained": 26,
+   "missing_forecast": 5,
+   "selected": 0.7722,
+   "ma3": 0.7713,
+   "naive": 0.5779
   },
-  "2026-06|final_unused": {
+  "2026-06|last_evaluable_no_clean_holdout": {
    "n": 200,
    "n_valid": 198,
-   "n_scored": 173,
-   "zero_denominator": 25,
-   "selected": 0.4629,
-   "ma3": 0.5253,
-   "naive": 0.426
+   "n_common": 197,
+   "n_scored": 175,
+   "zero_retained": 22,
+   "missing_forecast": 1,
+   "selected": 0.5255,
+   "ma3": 0.4978,
+   "naive": 0.5016
   }
  },
- "final_block": "2026-06|final_unused",
+ "final_block": "2026-06|last_evaluable_no_clean_holdout",
  "selection_distribution": {
-  "naive": 136,
-  "ma6": 94,
-  "autoets": 92,
-  "seasonal_naive": 86,
-  "combo_ew": 74,
-  "ma3": 68
+  "naive": 146,
+  "seasonal_naive": 91,
+  "autoets": 87,
+  "ma6": 85,
+  "ma3": 76,
+  "combo_ew": 66
  },
  "strata": {
+  "intermittent:no": {
+   "n": 149,
+   "n_valid": 149,
+   "n_common": 148,
+   "n_scored": 138,
+   "zero_retained": 10,
+   "missing_forecast": 1,
+   "selected": 0.517,
+   "ma3": 0.4887,
+   "naive": 0.4895
+  },
+  "intermittent:yes": {
+   "n": 49,
+   "n_valid": 49,
+   "n_common": 49,
+   "n_scored": 37,
+   "zero_retained": 12,
+   "missing_forecast": 0,
+   "selected": 0.8593,
+   "ma3": 0.8561,
+   "naive": 0.9773
+  },
   "tier:high": {
    "n": 66,
    "n_valid": 66,
-   "n_scored": 66,
-   "zero_denominator": 0,
-   "selected": 0.4324,
-   "ma3": 0.5098,
-   "naive": 0.3998
-  },
-  "warehouse:美东-CENTRADE": {
-   "n": 67,
-   "n_valid": 67,
-   "n_scored": 60,
-   "zero_denominator": 7,
-   "selected": 0.3473,
-   "ma3": 0.5033,
-   "naive": 0.357
-  },
-  "intermittent:no": {
-   "n": 153,
-   "n_valid": 153,
-   "n_scored": 139,
-   "zero_denominator": 14,
-   "selected": 0.4566,
-   "ma3": 0.5208,
-   "naive": 0.4139
-  },
-  "warehouse:美中-FZH-DANEEY": {
-   "n": 58,
-   "n_valid": 58,
-   "n_scored": 48,
-   "zero_denominator": 10,
-   "selected": 0.701,
-   "ma3": 0.6009,
-   "naive": 0.5646
-  },
-  "warehouse:波兰-FZHPoland-covers": {
-   "n": 71,
-   "n_valid": 71,
-   "n_scored": 63,
-   "zero_denominator": 8,
-   "selected": 0.5286,
-   "ma3": 0.4216,
-   "naive": 0.4839
-  },
-  "tier:mid": {
-   "n": 66,
-   "n_valid": 66,
-   "n_scored": 66,
-   "zero_denominator": 0,
-   "selected": 0.9043,
-   "ma3": 0.637,
-   "naive": 0.7651
-  },
-  "warehouse:星链海外仓": {
-   "n": 2,
-   "n_valid": 2,
-   "n_scored": 2,
-   "zero_denominator": 0,
-   "selected": 0.1111,
-   "ma3": 0.6296,
-   "naive": 0.1111
+   "n_common": 66,
+   "n_scored": 65,
+   "zero_retained": 1,
+   "missing_forecast": 0,
+   "selected": 0.4935,
+   "ma3": 0.4676,
+   "naive": 0.4567
   },
   "tier:low": {
    "n": 66,
    "n_valid": 66,
-   "n_scored": 41,
-   "zero_denominator": 25,
-   "selected": 1.8924,
-   "ma3": 1.9556,
-   "naive": 1.9111
+   "n_common": 65,
+   "n_scored": 52,
+   "zero_retained": 13,
+   "missing_forecast": 1,
+   "selected": 0.7667,
+   "ma3": 0.7542,
+   "naive": 0.8517
   },
-  "intermittent:yes": {
-   "n": 45,
-   "n_valid": 45,
-   "n_scored": 34,
-   "zero_denominator": 11,
-   "selected": 0.9583,
-   "ma3": 0.878,
-   "naive": 1.378
+  "tier:mid": {
+   "n": 66,
+   "n_valid": 66,
+   "n_common": 66,
+   "n_scored": 58,
+   "zero_retained": 8,
+   "missing_forecast": 0,
+   "selected": 0.7656,
+   "ma3": 0.7073,
+   "naive": 0.8316
+  },
+  "warehouse:休斯顿1号仓": {
+   "n": 1,
+   "n_valid": 1,
+   "n_common": 1,
+   "n_scored": 1,
+   "zero_retained": 0,
+   "missing_forecast": 0,
+   "selected": 1.0,
+   "ma3": 1.0,
+   "naive": 1.0
+  },
+  "warehouse:波兰-FZHPoland-covers": {
+   "n": 82,
+   "n_valid": 82,
+   "n_common": 82,
+   "n_scored": 66,
+   "zero_retained": 16,
+   "missing_forecast": 0,
+   "selected": 0.5313,
+   "ma3": 0.4211,
+   "naive": 0.5647
+  },
+  "warehouse:美东-CENTRADE": {
+   "n": 54,
+   "n_valid": 54,
+   "n_common": 54,
+   "n_scored": 52,
+   "zero_retained": 2,
+   "missing_forecast": 0,
+   "selected": 0.4211,
+   "ma3": 0.4882,
+   "naive": 0.5202
+  },
+  "warehouse:美中-FZH-DANEEY": {
+   "n": 61,
+   "n_valid": 61,
+   "n_common": 60,
+   "n_scored": 56,
+   "zero_retained": 4,
+   "missing_forecast": 1,
+   "selected": 0.6563,
+   "ma3": 0.532,
+   "naive": 0.4558
   }
  },
  "bootstrap_final": {
   "n": 300,
   "iterations": 300,
   "selected_minus_ma3": {
-   "mean": -0.0589,
-   "p5": -0.1928,
-   "p95": 0.05
+   "mean": 0.0346,
+   "p5": -0.1052,
+   "p95": 0.1672
   },
   "selected_minus_naive": {
-   "mean": 0.039,
-   "p5": -0.0847,
-   "p95": 0.1455
+   "mean": 0.0294,
+   "p5": -0.1114,
+   "p95": 0.1654
   },
-  "note": "range across resampled SKUs; describes uncertainty of the difference on unseen samples, not a significance test"
+  "note": "range across resampled SKUs; describes uncertainty of the difference on unseen samples, not a significance test; zero-demand cells retained"
  },
  "shadow_plan": {
   "when": "每月 4 日（上月标签闭合后）",
   "who": "数据分析 worker（离线，只读 order_store）",
-  "what": "用同一脚本、同一 200 序列样本与同一内层规则，重跑上一个连续 3 个月的累积 h=3 评估，记录各候选 WAPE、被选中模型、零分母单元格数、失败原因与 fallback 次数",
-  "status": "2026-10..12 的标签尚不存在，故本轮只交付 2026-07..09 的最终评估与影子方案",
-  "next_window": "2026-10..12（标签可得后执行）"
+  "what": "用 forecast_eval/forward_shadow.py（参数化：--data-cutoff/--origin，无写死截止期）预存样本、内层选模结果、各候选预测与生成时间；标签可得后再用同一文件评分",
+  "status": "当前标签覆盖内没有干净留出块；2026-10..12 的标签尚不存在，故本轮只交付最后一个可评估块（2026-07..09）与前向影子预存方案",
+  "next_window": "2026-10..12（该窗口标签闭合后按预存文件评分）"
  },
  "zero_denominator": {
-  "2025-10|exploratory": 45,
-  "2026-01|exploratory": 28,
-  "2026-06|final_unused": 25
+  "2025-10|exploratory": 22,
+  "2026-01|exploratory": 26,
+  "2026-06|last_evaluable_no_clean_holdout": 22
  },
- "wording_note": "WAPE 是加权绝对百分比误差，不是“错 SKU 比例”或“准确率”，也没有通用阈值；本报告只陈述“在未见样本上的差异与不确定性”，不使用评价性结论，也不把探索性时段称作留出验证。",
+ "wording_note": "WAPE 是加权绝对百分比误差，不是“错 SKU 比例”或“准确率”，也没有通用阈值；本报告只陈述“在（部分）未见样本上的差异与不确定性”，不使用“改进/稳健/干净留出”等说法，也不把探索性时段称作留出验证；模型选择仍未定。",
  "compute": {
-  "seconds": 30.9,
-  "tracemalloc_peak_mb": 127.0,
-  "fits": 9525,
+  "seconds": 32.5,
+  "tracemalloc_peak_mb": 130.0,
+  "fits": 9820,
   "fit_cap": 14400
  }
 }

@@ -4,77 +4,79 @@
 
 ## 规则执行（七条）
 
-- **r1_strata**：strata use each training window only (final block uses its own training data)
+- **r1_strata**：sample, tier, dominant warehouse and intermittent labels use THIS block's training window only (never post-origin sales)
 - **r2_inner**：model chosen on inner cut points inside each outer training window
 - **r3_outer**：outer refits every candidate and compares with fixed MA3/naive on the same sample
 - **r4_window**：monthly cumulative h=3, step 3, labels available at the time (label_available_at), refit per window
-- **r5_fallback**：pre-registered short-history rules; failures kept; zero-denominator cells listed separately
-- **r6_final**：old T2 test period is exploratory; final evaluation uses the unused 2026-07..09 block; a forward shadow plan covers months whose labels do not exist yet
-- **r7_budget**：{"candidates": 6, "series": 200, "outer": 3, "inner": 3, "fit_cap": 14400, "time_cap_s": 1800}
+- **r5_fallback**：pre-registered short-history rules; failures kept; missing predictions kept as null
+- **r6_final**：旧 T2 测试期只作探索。当前标签覆盖（≤2026-09）内**不存在干净留出块**：T2 的 2026-03 外层切点其 90 天目标窗已触及 2026-07，故 2026-07..09 只是“最后一个可评估块”，不是“未使用块”。唯一干净证据来自前向影子（参数化脚本 forward_shadow.py；目标月标签闭合后按每月 4 日评分）。
+- **r7_budget**：{"candidates": 6, "series": {"2025-10": 200, "2026-01": 200, "2026-06": 200}, "outer": 3, "inner": 3, "fit_cap": 14400, "time_cap_s": 1800}
 
 ## 计算规模
 
-- 实际拟合 **9525** 次（上限 14400）；运行 **30.9 s**，tracemalloc 峰值 **127.0 MB**
-- 样本 200 序列 × 外层 3 × 内层 3，候选 6
+- 实际拟合 **9820** 次（上限 14400）；运行 **32.5 s**，tracemalloc 峰值 **130.0 MB**
+- 每块样本 {'2025-10': 200, '2026-01': 200, '2026-06': 200} 序列 × 外层 3 × 内层 3，候选 6；样本按各块训练窗销量抽取（块间不同）
 
-## 同样本对比（WAPE，零分母单元格单列）
+## 同样本对比（WAPE，零需求单元格保留）
 
-| 外层 | 性质 | n | 计分 | 零分母 | 选择流程 | MA3 | naive |
-|---|---|---:|---:|---:|---:|---:|---:|
-| 2025-10 | exploratory | 200 | 149 | 45 | 0.6461 | 0.755 | 0.5297 |
-| 2026-01 | exploratory | 200 | 159 | 28 | 0.5973 | 0.6633 | 0.5454 |
-| 2026-06 | final_unused | 200 | 173 | 25 | 0.4629 | 0.5253 | 0.426 |
+口径：`Σ|F−A| / ΣA`，三种方法都在**同一共同可评分子集**上（该块 valid 且三个预测均非 null）。零需求单元格保留在分子中（|F| 计为误差），对分母贡献 0；缺失预测为 null，不写 0。
 
-- 最终评估块：**2026-06|final_unused**（2026-07..09，T2 未用作测试期）；更早两块是探索性（旧测试期）。
+| 外层 | 性质 | n | 有效 | 共同可评 | 计分(非零) | 零需求(保留) | 缺失预测 | 选择流程 | MA3 | naive |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 2025-10 | exploratory | 200 | 172 | 170 | 148 | 22 | 2 | 0.463 | 0.5312 | 0.4823 |
+| 2026-01 | exploratory | 200 | 181 | 176 | 150 | 26 | 5 | 0.7722 | 0.7713 | 0.5779 |
+| 2026-06 | last_evaluable_no_clean_holdout | 200 | 198 | 197 | 175 | 22 | 1 | 0.5255 | 0.4978 | 0.5016 |
+
+- 最后一个可评估块：**2026-06|last_evaluable_no_clean_holdout**（目标窗 2026-07..09）。**它不是干净留出块**：T2 的 2026-03 外层切点其 90 天目标窗已触及 2026-07，因此该块已被部分使用；更早两块是探索性（旧测试期）。当前标签覆盖内**不存在干净留出块**，唯一干净证据来自前向影子。
 
 ## 内层选模分布
 
 | 被选中模型 | 次数 |
 |---|---:|
-| naive | 136 |
-| ma6 | 94 |
-| autoets | 92 |
-| seasonal_naive | 86 |
-| combo_ew | 74 |
-| ma3 | 68 |
+| naive | 146 |
+| seasonal_naive | 91 |
+| autoets | 87 |
+| ma6 | 85 |
+| ma3 | 76 |
+| combo_ew | 66 |
 
-## 最终块分层指标（分层只用该外层训练窗的数据）
+## 最后一个可评估块的分层指标（tier/主仓/间歇均只用该块训练窗）
 
-| 层 | n | 计分 | 零分母 | 选择流程 | MA3 | naive |
+| 层 | n | 共同可评 | 零需求(保留) | 选择流程 | MA3 | naive |
 |---|---:|---:|---:|---:|---:|---:|
-| tier:high | 66 | 66 | 0 | 0.4324 | 0.5098 | 0.3998 |
-| warehouse:美东-CENTRADE | 67 | 60 | 7 | 0.3473 | 0.5033 | 0.357 |
-| intermittent:no | 153 | 139 | 14 | 0.4566 | 0.5208 | 0.4139 |
-| warehouse:美中-FZH-DANEEY | 58 | 48 | 10 | 0.701 | 0.6009 | 0.5646 |
-| warehouse:波兰-FZHPoland-covers | 71 | 63 | 8 | 0.5286 | 0.4216 | 0.4839 |
-| tier:mid | 66 | 66 | 0 | 0.9043 | 0.637 | 0.7651 |
-| warehouse:星链海外仓 | 2 | 2 | 0 | 0.1111 | 0.6296 | 0.1111 |
-| tier:low | 66 | 41 | 25 | 1.8924 | 1.9556 | 1.9111 |
-| intermittent:yes | 45 | 34 | 11 | 0.9583 | 0.878 | 1.378 |
+| intermittent:no | 149 | 148 | 10 | 0.517 | 0.4887 | 0.4895 |
+| intermittent:yes | 49 | 49 | 12 | 0.8593 | 0.8561 | 0.9773 |
+| tier:high | 66 | 66 | 1 | 0.4935 | 0.4676 | 0.4567 |
+| tier:low | 66 | 65 | 13 | 0.7667 | 0.7542 | 0.8517 |
+| tier:mid | 66 | 66 | 8 | 0.7656 | 0.7073 | 0.8316 |
+| warehouse:休斯顿1号仓 | 1 | 1 | 0 | 1.0 | 1.0 | 1.0 |
+| warehouse:波兰-FZHPoland-covers | 82 | 82 | 16 | 0.5313 | 0.4211 | 0.5647 |
+| warehouse:美东-CENTRADE | 54 | 54 | 2 | 0.4211 | 0.4882 | 0.5202 |
+| warehouse:美中-FZH-DANEEY | 61 | 60 | 4 | 0.6563 | 0.532 | 0.4558 |
 
-## 不确定性（最终块，重抽 SKU 300 次）
+## 不确定性（最后一个可评估块，重抽 SKU 300 次）
 
-- 选择流程 − MA3：均值 -0.0589，5–95% [-0.1928, 0.05]
-- 选择流程 − naive：均值 0.039，5–95% [-0.0847, 0.1455]
-- range across resampled SKUs; describes uncertainty of the difference on unseen samples, not a significance test
+- 选择流程 − MA3：均值 0.0346，5–95% [-0.1052, 0.1672]
+- 选择流程 − naive：均值 0.0294，5–95% [-0.1114, 0.1654]
+- range across resampled SKUs; describes uncertainty of the difference on unseen samples, not a significance test; zero-demand cells retained
 
 ## 失败与边界
 
-- 失败（保留，不删序列）：`seasonal_naive:ValueError` × 333；`autoets:NotImplementedError` × 162；`outer:insufficient_history` × 50；`outer:autoets:NotImplementedError` × 39；`autoets:ValueError` × 35；`outer:autoets:KeyError` × 1；`autoets:KeyError` × 1
-- 零分母单元格按外层单列（见上表 `零分母` 列），不计入 WAPE 分母。
+- 失败（保留，不删序列）：`seasonal_naive:ValueError` × 318；`autoets:NotImplementedError` × 131；`outer:insufficient_history` × 49；`outer:autoets:NotImplementedError` × 45；`autoets:ValueError` × 25；`autoets:KeyError` × 2
+- 零需求单元格保留在 WAPE 分子中；`零需求(保留)` 列单独给出数量，缺失预测为 null（不进共同可评分子集，也不按 0 计分）。
 
-## 前向影子方案（未使用月份）
+## 前向影子（唯一干净证据路径）
 
 - 每月 4 日（上月标签闭合后）；执行人：数据分析 worker（离线，只读 order_store）
-- 记录内容：用同一脚本、同一 200 序列样本与同一内层规则，重跑上一个连续 3 个月的累积 h=3 评估，记录各候选 WAPE、被选中模型、零分母单元格数、失败原因与 fallback 次数
-- 状态：2026-10..12 的标签尚不存在，故本轮只交付 2026-07..09 的最终评估与影子方案；下一窗口：2026-10..12（标签可得后执行）
+- 预存内容：用 forecast_eval/forward_shadow.py（参数化：--data-cutoff/--origin，无写死截止期）预存样本、内层选模结果、各候选预测与生成时间；标签可得后再用同一文件评分
+- 状态：当前标签覆盖内没有干净留出块；2026-10..12 的标签尚不存在，故本轮只交付最后一个可评估块（2026-07..09）与前向影子预存方案；下一窗口：2026-10..12（该窗口标签闭合后按预存文件评分）
 
 ## 措辞纪律
 
-- WAPE 是加权绝对百分比误差，不是“错 SKU 比例”或“准确率”，也没有通用阈值；本报告只陈述“在未见样本上的差异与不确定性”，不使用评价性结论，也不把探索性时段称作留出验证。
+- WAPE 是加权绝对百分比误差，不是“错 SKU 比例”或“准确率”，也没有通用阈值；本报告只陈述“在（部分）未见样本上的差异与不确定性”，不使用“改进/稳健/干净留出”等说法，也不把探索性时段称作留出验证；模型选择仍未定。
 
 ## 结论
 
-- 在最终未使用块（2026-07..09）上，选择流程与 MA3 / naive 的 WAPE 分别为 0.4629 / 0.5253 / 0.426；差异的 SKU 重抽区间见上节。
-- 内层选模分布显示没有单一候选占绝对多数，选模本身带来方差；本报告不据此宣布任何候选更好。
+- 在最后一个可评估块（2026-07..09，非干净留出）上，选择流程与 MA3 / naive 的 WAPE 分别为 0.5255 / 0.4978 / 0.5016（共同可评 n=197，零需求保留 22 条）；差异的 SKU 重抽区间见上节。
+- 内层选模分布显示没有单一候选占绝对多数，选模本身带来方差；本报告不据此宣布任何候选更好，模型选择仍未定。
 
