@@ -9,7 +9,7 @@ updated: 2026-10-21
 
 # 供应链整合 — 项目总控页
 
-Updated: 2026-10-22 10:45 (Asia/Shanghai)
+Updated: 2026-10-22 13:40 (Asia/Shanghai)
 
 ## 已验收（窄样本契约）
 
@@ -105,6 +105,18 @@ Updated: 2026-10-22 10:45 (Asia/Shanghai)
    数据仍需 Jack 的爬取/推送写入测试与生产；部分 DN 缺头程单号，需 PJ/YYS 补。
    最小输入清单 `control/reviews/2026-10-22-jack-input-request.md`；未到位前 ETA 保持 blocker。
 11. **new-api 今日额度已于 2026-10-22 重置**；Claude worker 继续，避免无谓 subagent。
+
+## 当前阶段：G2+G3 窄范围试点（2026-10-22 13:40）
+
+- codex2 裁决（decision7）：**立即放行 G2+G3 只读试点**；不等 Jack 在途、
+  不等长历史每日库存、不等 28 项 SKU 身份裁决。
+- 范围：10 个 EN 链完整 SKU；预测未来 3 个月（seasonal naive + ETS 候选，P50/P90，
+  6 起点回测）；补货情景 A（无在途/PO 不计到货）与 B（仅 PO 假设到货）；
+  提前期 60/90/120，复核 30 天，服务水平 90%。
+- 未知隔离：Cover 不并入主建议；UOM/身份不明排除或聚合；ETA 空不视为及时到货。
+- 交付：60 分钟内 2 SKU 样例，今日内 10 SKU V0 报告 + 证据 JSON；Codex1 先审样例、
+  再审判算与建议。
+- 任务书 `control/reviews/2026-10-22-g2g3-pilot-task.md`；**不输出可直接下单的结论**。
 
 ## 修正
 
