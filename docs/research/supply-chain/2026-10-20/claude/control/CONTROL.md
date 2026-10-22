@@ -126,6 +126,12 @@ Updated: 2026-10-21 20:05 (Asia/Shanghai)
 - `stockout_observed` 只在完整批置位；`uom_basis='unknown'`；TEST-1 已标记；
   `stock_id_history` 3,876 条。空仓是有效结果，不写 0。
 - 下一步：`run_id` 封存归档器（不改抓取逻辑）→ Codex 复审 → 次日 05:17 验证。
+- **2026-10-22 08:35 归档器 PASS（1.3）并已真实归档**：
+  `runs/2026-10-20/legacy-20261020T181947/`（scope/run=false，14 文件）、
+  `runs/2026-10-21/legacy-20261021T094623/`（true/true）、
+  `runs/2026-10-22/20261022T070625/`（true/true）；均有 `.sealed`。
+  新 `run_stock_daily_backup.cmd` 已把 OUTDIR 固定为 `D:\Work\库存备份`，
+  次日 05:17 起使用 run_id 封存目录；旧 `fzh-inventory` 数据不迁移。
 
 ## Agent 角色与分工（2026-10-21 20:05）
 
