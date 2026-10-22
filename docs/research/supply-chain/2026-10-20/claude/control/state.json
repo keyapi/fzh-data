@@ -5,11 +5,10 @@
     "R1/R2 no-evidence audit gate: d8c473fe",
     "BOM historical boundary report: d3fc4c8d",
     "G1B DN/WO/JC/SE narrow sample: 4b7ec55f PASS cross-review (84 tests; v4 evidence 6cec02bd; scope narrow sample only; P3 doc count corrected post-acceptance)",
-    "G1B offline expansion: 10 SKUs, 3,098 rows, C1 10/10; C2/C3 complete only for original 5; 238 SE unverified; two-round stable 5aa41e8e; target 100 requires bounded production read-only authorization",
     "Stock history local ingest: 3 days, 15,820 rows, code 53291689 PASS; 10-20 incomplete batch preserved, 10-21/22 complete; tongtool_stock untouched",
     "Stock daily archiver 1.3 PASS; 3 days sealed under D:/Work/库存备份/runs; new cmd uses run_id dirs from 2026-10-23 05:17",
     "Production gate PASS ca27163c (redirect pre-read, absolute deadline, partial-read accounting, atomic stop)",
-    "Phase 1 SE enrichment: 10 SKUs, 3,098 rows, 663/663 SE resolved; budget 239/300 req, 0.24/32 MiB, 241/900s; two-round stable 1732d590"
+    "Phase 1 SE enrichment: 10 SKUs, 3,416 rows, 663/663 SE resolved; budget 239/300 req, 0.24/32 MiB, 241/900s; two-round stable 1732d590"
   ],
   "tasks": [
     {

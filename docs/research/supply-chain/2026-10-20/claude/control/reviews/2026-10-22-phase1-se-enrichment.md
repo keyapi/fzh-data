@@ -16,7 +16,7 @@ verdict: complete-10sku
   传输 253,308 B（≈0.24 MiB）/ 32 MiB；解压后 670,069 B（≈0.64 MiB）；
   241 秒 / 900 秒；`exhausted=false`、`stop_reason=null`、`refused=0`。
 - **10/10 SKU 的 C1/C2/C3 均完整**；SE 覆盖 663/663 已解决；
-  C2 共 195 可比、193 通过、**2 张 `produced_qty` 失真**、1 张 UOM 混合未验证；
+  C2 共 195 可比、193 通过、**2 张 `produced_qty` 失真**、1 张 `wo_uom_unresolved`（WO-25-07755，SE 单位桶为空）；
   C3 663/663 通过。
 - 两轮离线回放：`stable_sha256`、`row_accounting`、`line_dispositions.jsonl`
   逐字节一致。
@@ -35,16 +35,16 @@ verdict: complete-10sku
 
 | 项 | 值 |
 |---|---|
-| SKU / 行数 | 10 / 3,098 |
+| SKU / 行数 | 10 / 3,416 |
 | SE | 663（全部 resolved） |
-| SE 行 | 876（补齐后） |
+| SE 行 | 876（补齐后；总行 3,416 = 215+507+214+663+876+941） |
 | C1 | 10/10 pass（逐行全精度） |
 | C2 | 195 可比 / 193 pass / 2 mismatch / 1 unverified |
 | C3 | 663 evaluated / 663 pass / 0 unverified |
 | `audit_ok` / `evidence_complete` | true / true |
 
 C2 的 2 处 mismatch 仍在 `CEN003-DPBLUE-100` 与 `C/Cord-Grey-100-710-wow`
-（`Work Order.produced_qty` 失真）；1 张 UOM 混合 WO 保持 `unverified`，不强行合计。
+（`Work Order.produced_qty` 失真）；1 张 `wo_uom_unresolved`（WO-25-07755，SE 单位桶为空）保持 `unverified`，不强行合计。
 
 ## 证据哈希
 

@@ -19,7 +19,7 @@ Updated: 2026-10-21 20:05 (Asia/Shanghai)
 - **G1B DN/WO/JC/SE 窄样本 v4**：`4b7ec55f` PASS（5 SKU）。
 - **G1B 10 SKU 第一阶段 SE 补齐（2026-10-22）**：闸门 `ca27163c`（Codex PASS）下
   补齐 238 个 SE 明细；10/10 SKU C1/C2/C3 完整，SE 663/663 resolved；
-  C2 195 可比 / 193 通过 / 2 张 `produced_qty` 失真 / 1 张 UOM 混合 unverified；
+  C2 195 可比 / 193 通过 / 2 张 `produced_qty` 失真 / 1 张 `wo_uom_unresolved`（WO-25-07755）unverified；
   两轮回放逐字节一致。用量 239/300 请求、0.24 MiB/32 MiB、241/900 秒。
   证据 `out/dn_wo_jc_se_expand10_phase1/`，manifest `92318843…`，
   stable `1732d590…`。**仍只是 10 SKU，不是 100/全 family/G1。**
@@ -102,8 +102,9 @@ Updated: 2026-10-21 20:05 (Asia/Shanghai)
 ## 修正
 
 - #290 已有**实验原型**待对账，不是“预测/补货尚未开始”。主线尚未验收，但原型资产存在。
-- **10 SKU 不等于 100**：当前准确说法是“离线材料穷尽，10 SKU 部分验证，3,098 行可追溯；
-  C1 通过，C2/C3 仅原 5 个完整，2 处 `produced_qty` 失真；非 100 SKU、非 G1 验收”。
+- **10 SKU 不等于 100**：当前准确说法是“10 SKU 已补齐至 **3,416 行**，
+  C1/C2/C3 完整，SE 663/663 resolved；2 处 `produced_qty` 失真、1 张
+  `wo_uom_unresolved`；非 100 SKU、非 G1 验收”。
 
 ## 数据地基：每日库存（2026-10-21 22:30）
 
