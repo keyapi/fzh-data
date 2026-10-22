@@ -18,6 +18,13 @@
   * **可中断执行边界**：整个 HTTP 调用（建连 → 等响应头 → 读体）都在工作线程里，
     主线程只等到截止时刻；到点即放弃本次尝试、记 `deadline` 并持久停机，
     不会被对端的阻塞读无限期卡住。socket 超时同时绑定剩余墙钟。
+    **主线程到点绝不调用 `close()`**（关连接可能同步阻塞，把 80ms 预算拖成数百 ms）；
+    响应由被放弃的工作线程在自己的 `finally` 里关闭，线程本身是 daemon 且以
+    socket 超时为收敛上界。若需要连网络活动都立即硬停，只能用可终止的进程边界。
+  * **在途读取预占**：每次阻塞读**之前**按本次读取额度（≤`CHUNK`，且不越过字节
+    预算）预占 wire 与解压后字节；正常返回即结算为实际字节，并释放多余预占。
+    边界放弃（取消）后工作线程不再改账本，预占值作为**保守上界留在账本里**——
+    已从 socket 读走但来不及结算的字节不会丢账（复审反例：实读 16 字节、账本 0）。
   * **绝对截止**：`deadline=`（epoch 秒 / datetime / `"22:30"`）与相对墙钟预算
     取**更早**者；越过绝对截止后任何请求都在发请求前拒绝。
   * 429 遵守 Retry-After、最多重试 2 次；401/403 立即停；连续 3 次网络错误/5xx 立即停。
@@ -230,15 +237,29 @@ class _Body:
     deadline: bool = False
 
 
+class _Reservation:
+    """一次在途阻塞读的额度预占。
+
+    预占在真正 `read()` 之前完成；正常返回后结算为实际字节，取消时**保留**
+    （工作线程不得再改账本，预占即保守上界，绝不把未结算字节清成 0）。
+    """
+
+    __slots__ = ("wire", "decoded")
+
+    def __init__(self) -> None:
+        self.wire = 0
+        self.decoded = 0
+
+
 class _Attempt:
     """一次 HTTP 尝试在可中断边界里的载体（工作线程写，主线程读）。"""
 
     def __init__(self) -> None:
         self.done = threading.Event()
         self.cancel = threading.Event()
-        self.hold: Any = None          # 已拿到的响应，供到点时关闭以打断阻塞读
-        self.wire = 0
-        self.decoded = 0
+        self.wire = 0                  # 已结算的传输字节
+        self.decoded = 0               # 已结算的解压后字节
+        self.reservation = _Reservation()  # 在途读预占（未结算）
         self.status: int | None = None
         self.headers: dict = {}
         self.body: _Body | None = None
@@ -367,12 +388,21 @@ def _stream_at_eof(resp: Any, wire: int, headers: dict) -> bool:
     return False
 
 
-def _iter_wire_chunks(resp: Any, limit_fn: Callable[[], int]) -> Iterator[bytes]:
-    """优先读未解压的传输字节；`limit_fn()` 在**每次读之前**给出本次最大读取量。"""
+def _iter_wire_chunks(resp: Any,
+                      reserve_fn: Callable[[], int]) -> Iterator[tuple[int, bytes]]:
+    """读未解压的传输字节；每次阻塞读**之前**调用 `reserve_fn()` 预占读取额度。
+
+    `reserve_fn()` 返回本次允许读取的最大字节数（≤0 表示额度已尽，停止）。
+    预占发生在真正 `read()` 之前，因此阻塞读期间被取消时，已从 socket 读走
+    但来不及结算的字节仍按该额度留在账本里（保守上界，不会丢账）。
+
+    每次交付 `(预占额度, 原始块)`；原始块可能大于额度（传输层无视 amt），
+    由 `_read_body` 裁剪并保守判 `oversized`。
+    """
     raw = getattr(resp, "raw", None)
     if raw is not None and hasattr(raw, "read"):
         while True:
-            amt = limit_fn()
+            amt = reserve_fn()
             if amt <= 0:
                 return
             try:
@@ -381,19 +411,37 @@ def _iter_wire_chunks(resp: Any, limit_fn: Callable[[], int]) -> Iterator[bytes]
                 chunk = raw.read(amt)
             if not chunk:
                 return
-            if len(chunk) > amt:
-                # 传输层无视 amt：只交付额度内字节并停止，绝不继续超额读
-                yield chunk[:amt]
-                return
-            yield chunk
+            yield amt, chunk
         return
     if raw is not None and hasattr(raw, "stream"):
         # 旧式替身 / 无 read 的传输层：无法在流中途缩小 amt，退化为固定块读取；
-        # `_read_body` 仍会按剩余额度裁剪并停止。
-        yield from raw.stream(CHUNK, decode_content=False)
+        # `_read_body` 仍会按预占额度裁剪并保守判超界。
+        stream = raw.stream(CHUNK, decode_content=False)
+        while True:
+            amt = reserve_fn()
+            if amt <= 0:
+                return
+            try:
+                chunk = next(stream)
+            except StopIteration:
+                return
+            if not chunk:
+                return
+            yield amt, chunk
         return
     # 没有 raw（如简单替身）：iter_content 已是解压后的字节，wire=decoded
-    yield from resp.iter_content(CHUNK)
+    content = iter(resp.iter_content(CHUNK))
+    while True:
+        amt = reserve_fn()
+        if amt <= 0:
+            return
+        try:
+            chunk = next(content)
+        except StopIteration:
+            return
+        if not chunk:
+            continue
+        yield amt, chunk
 
 
 class ProductionBudget:
@@ -991,12 +1039,47 @@ class ProductionBudget:
         return None
 
     # ── 读流 ──────────────────────────────────────────
+    def _reserve_read(self, call: "_Attempt | None", res: _Reservation,
+                      expandable: bool) -> int:
+        """阻塞读之前预占额度：wire 与解压后字节都先按本次读的上界记账。
+
+        预占在真正 `read()` 之前完成（`_io_lock` 内），所以“已从 socket 读走、
+        但取消后工作线程不再结算”的字节也有账可查。预占只存在于内存；崩溃
+        恢复沿用 `_recover_pending` 的同一 CHUNK 上界，不会少记。
+        """
+        with self._io_lock:
+            if call is not None and (call.cancelled or call.cancel.is_set()):
+                raise _Cancelled()
+            amt = self._wire_read_limit()
+            if amt <= 0:
+                return 0
+            if self.max_bytes is None:
+                dec = amt
+            else:
+                rem_dec = max(0, self.max_bytes - self.decoded_bytes)
+                # 只有 gzip/deflate 会膨胀；其它编码按 1:1，最多 amt
+                dec = rem_dec if expandable else min(rem_dec, amt)
+            self.used_bytes += amt
+            self.decoded_bytes += dec
+            res.wire = amt
+            res.decoded = dec
+            return amt
+
+    def _release_reservation(self, res: _Reservation) -> None:
+        """释放未消费的预占（EOF / 结算前撤离解压预占）。调用方须持 `_io_lock`。"""
+        self.used_bytes -= res.wire
+        self.decoded_bytes -= res.decoded
+        res.wire = 0
+        res.decoded = 0
+
     def _read_body(self, resp: Any, headers: dict, started: float,
                    call: "_Attempt | None" = None) -> _Body:
         """有界读体：唯一消费响应体的路径（含 3xx/4xx）。
 
         `call` 非空时是执行边界内的尝试：每个阻塞读前后与每次记账前都检查
-        取消标记。一旦边界放弃本次尝试，工作线程不得再改任何账本数字。
+        取消标记。读取额度在**阻塞读之前**预占；一旦边界放弃本次尝试，工作
+        线程不再改账本，预占额度（可能含已从 socket 读走但未结算的字节）
+        作为保守上界保留，绝不清成 0。
         """
         body = _Body()
         decoder = _Decoder(str(headers.get("Content-Encoding") or ""))
@@ -1006,7 +1089,9 @@ class ProductionBudget:
                     raise _Cancelled()
                 self._pending["content_encoding"] = decoder.encoding
                 self._persist()
-        chunks = _iter_wire_chunks(resp, self._wire_read_limit)
+        res = call.reservation if call is not None else _Reservation()
+        chunks = _iter_wire_chunks(
+            resp, lambda: self._reserve_read(call, res, decoder.compressed))
 
         def cancelled() -> bool:
             return call is not None and call.cancel.is_set()
@@ -1020,28 +1105,30 @@ class ProductionBudget:
                     body.deadline = True
                     return body
                 try:
-                    chunk = next(chunks)
+                    amt, chunk = next(chunks)
                 except StopIteration:
+                    # EOF 是正常完成：本次空读的预占结算为 0 字节
+                    with self._io_lock:
+                        if call is not None and call.cancelled:
+                            raise _Cancelled()
+                        self._release_reservation(res)
                     break
                 if cancelled():          # 阻塞读刚返回就可能已被放弃
-                    raise _Cancelled()
-                if not chunk:
-                    continue
-                remaining_wire = self.remaining_bytes
-                take = len(chunk)
-                if remaining_wire is not None:
-                    take = min(take, remaining_wire)
-                if take <= 0:
-                    body.oversized = True
-                    return body
-                piece = chunk[:take]
+                    raise _Cancelled()   # 预占留在账本：已读字节的保守上界
                 with self._io_lock:
-                    if cancelled():
+                    if call is not None and call.cancelled:
                         raise _Cancelled()
-                    self.used_bytes += take
+                    # 先撤掉解压预占，才能按剩余解压额度限制本次解压
+                    self.decoded_bytes -= res.decoded
+                    res.decoded = 0
+                    over = len(chunk) > amt       # 传输层无视额度
+                    take = min(len(chunk), amt)
+                    self.used_bytes += take - res.wire   # 预占结算为实际字节
+                    res.wire = 0
                     body.wire += take
                     if call is not None:
                         call.wire = body.wire
+                    piece = chunk[:take]
                     try:
                         out = decoder.feed(piece, self._decoded_max_out())
                     except zlib.error:
@@ -1049,7 +1136,6 @@ class ProductionBudget:
                         self._checkpoint(body, started)
                         body.oversized = True
                         return body
-                    over = False
                     remaining_decoded = self.remaining_decoded
                     if remaining_decoded is not None and len(out) > remaining_decoded:
                         out = out[:remaining_decoded]
@@ -1060,7 +1146,7 @@ class ProductionBudget:
                     if call is not None:
                         call.decoded = body.decoded
                     self._checkpoint(body, started)
-                if over or take < len(chunk):
+                if over:
                     body.oversized = True
                     return body
             # 额度恰好用尽且流未结束：按超大响应处理（读之前已封顶，不会超额读）
@@ -1068,7 +1154,12 @@ class ProductionBudget:
                     and not _stream_at_eof(resp, body.wire, headers)):
                 body.oversized = True
         except (requests.RequestException, _Urllib3HTTPError, OSError) as e:
-            # 读流超时/断连：已计字节保留
+            # 读流超时/断连：已结算字节保留。本次阻塞读以异常结束、**没有交付
+            # 任何块**，属于已结算而非“取消后未结算”，因此释放它的预占；
+            # 否则一次瞬时超时就会吃掉剩余全部字节额度，重试也失去意义。
+            with self._io_lock:
+                if call is None or not call.cancelled:
+                    self._release_reservation(res)
             body.error = e
         return body
 
@@ -1081,9 +1172,12 @@ class ProductionBudget:
         也没有绝对截止。现在边界从**发请求之前**开始，覆盖整次调用：
 
           * 主线程最多等到 `remaining_seconds`（相对预算与绝对截止取更早者）；
-          * 到点即：置取消标记 → 取字节快照 → 关闭已拿到的响应（打断阻塞读）；
+          * 到点即：置取消标记 → 取**含在途预占**的字节快照 → 立刻返回；
+          * **主线程绝不 `close()` 响应**：关闭可能同步阻塞（80ms 预算实测被拖到
+            437ms）。关闭交给工作线程的 `finally`；被放弃的线程是 daemon，socket
+            超时已绑定剩余墙钟，是有界收敛的；需要硬停网络活动只能用可终止进程边界；
           * 工作线程在每个阻塞调用前后与每次记账前查取消标记，放弃后不再改账本；
-          * socket 超时同时绑定剩余墙钟，被放弃的线程也会在有界时间内自然收敛。
+            在途读取的预占额度留在账本里（保守上界，绝不清除）。
         """
         call = _Attempt()
 
@@ -1093,7 +1187,6 @@ class ProductionBudget:
                 get = self.http_get or gated_get
                 resp = get(url, headers=headers, timeout=timeout_bound, stream=True,
                            allow_redirects=False)
-                call.hold = resp
                 if call.cancel.is_set():
                     call.cancelled = True
                     return
@@ -1125,19 +1218,14 @@ class ProductionBudget:
         wait_for = self.remaining_seconds
         if call.done.wait(None if wait_for is None else max(0.0, wait_for)):
             return call
-        # 到点：先取消（工作线程不再记账），再取快照，最后关连接打断阻塞读
+        # 到点：先取消（工作线程不再记账），再在锁内取含预占的快照。
+        # 不在这里 close()：关连接可能同步阻塞，会把截止返回路径拖长；响应由
+        # 工作线程的 finally 关闭（daemon 线程 + socket 超时 = 有界收敛）。
         call.cancel.set()
         with self._io_lock:
             call.cancelled = True
-            wire, decoded = call.wire, call.decoded
-        hold = call.hold
-        if hold is not None:
-            close = getattr(hold, "close", None)
-            if callable(close):
-                try:
-                    close()
-                except Exception:           # noqa: BLE001
-                    pass
+            wire = call.wire + call.reservation.wire
+            decoded = call.decoded + call.reservation.decoded
         call.wire, call.decoded = wire, decoded
         return call
 

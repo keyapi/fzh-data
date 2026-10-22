@@ -19,6 +19,15 @@
     HTTP 的可中断执行边界 + 绝对截止（含等头阶段与阻塞读体）。
   * `AtomicStopTests`——403 终止态与清 pending 一次原子落盘；崩溃在两写之间时
     从日志重建停机状态，续跑不会放行。
+
+第三轮复审（`control/reviews/2026-10-22-gate-review3.md`）两个阻断反例：
+
+  * 取消后丢弃已读块（实读 16 字节、账本 0）：阻塞读**之前**预占读取额度，
+    取消后工作线程不再结算、预占作为保守上界保留（绝不清除未结算字节）；
+    正常完成 / EOF / 读流异常分别结算为实际字节 / 0 / 释放。
+  * 截止返回路径同步 `close()`（80ms 预算实测 437ms）：主线程到点不再关闭
+    响应，交给工作线程的 `finally`；回归用例用会阻塞 1 秒的 close 证明主线程
+    立即返回且不是它调用 close。
 """
 
 from __future__ import annotations
@@ -690,11 +699,133 @@ class ExecutionBoundaryTests(BudgetExhaustedAssertions):
                 _join_http_thread()
             self.assertStopped(ctx, "seconds")
             self.assertLess(elapsed, 3.0)
-            # 被放弃的读返回后不得再改账本
+            # 复审反例：实际读出 16 字节，账本 0。阻塞读**之前**已预占读取额度；
+            # 边界放弃后工作线程不得再结算 → 预占作为保守上界留在账本里。
+            self.assertEqual(b.used_bytes, pb.CHUNK)
+            self.assertEqual(b.decoded_bytes, pb.CHUNK)
+            b.close()
+            self.assertEqual(ledger(d)["used"]["bytes"], pb.CHUNK)
+            self.assertEqual(log_lines(d)[-1]["bytes"], pb.CHUNK)
+            self.assertTrue(b.reconcile()["ok"])
+
+    def test_cancelled_inflight_read_keeps_reserved_quota(self):
+        """复审反例（P:1026）：取消后丢弃已读块 → 实读 16 字节、账本 0。
+
+        读取额度在阻塞读**之前**预占；取消后工作线程不得结算，预占作为
+        保守上界一直保留到日志、账本与续跑（绝不清除未结算字节）。
+        """
+        gate = threading.Event()
+
+        class BlockingRaw(FakeRaw):
+            def read(self, amt, decode_content=False):
+                gate.wait(10)
+                return b"0123456789abcdef"      # 实际从 socket 读出 16 字节
+
+        resp = FakeResponse(chunks=[])
+        resp.raw = BlockingRaw([])
+        http = FakeHTTP([resp])
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
+            b = make(d, http, max_bytes=1000, deadline=time.time() + 0.2)
+            with self.assertRaises(pb.BudgetExhausted) as ctx:
+                fetch(b)
+            self.assertStopped(ctx, "seconds")
+            # 预占 = min(CHUNK, 剩余字节额度) = 1000；实读的 16 字节在其中
+            self.assertEqual(b.used_bytes, 1000)
+            self.assertEqual(b.decoded_bytes, 1000)
+            gate.set()
+            _join_http_thread()
+            self.assertEqual(b.used_bytes, 1000)    # 工作线程返回后也不清除
+            b.close()
+            self.assertEqual(ledger(d)["used"]["bytes"], 1000)
+            self.assertEqual(log_lines(d)[-1]["bytes"], 1000)
+            self.assertEqual(log_lines(d)[-1]["stop_reason"], "seconds")
+            self.assertTrue(b.reconcile()["ok"])
+
+            # 续跑：账本/日志一致、停机状态持久，不会再发 HTTP
+            b2 = make(d, http, max_bytes=1000)
+            self.assertTrue(b2.exhausted)
+            self.assertEqual(b2.stop_reason, "seconds")
+            self.assertEqual(b2.used_bytes, 1000)
+            with self.assertRaises(pb.BudgetExhausted) as ctx2:
+                fetch(b2)
+            self.assertStopped(ctx2, "seconds")
+            self.assertEqual(len(http.calls), 1)
+            b2.close()
+
+    def test_completed_read_settles_reservation_to_actual_bytes(self):
+        """正常完成必须把预占结算为实际字节，不能长期占着整块额度。"""
+        body = b'{"data": [1]}'
+        http = FakeHTTP([FakeResponse(chunks=[body])])
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
+            b = make(d, http)
+            fetch(b)
+            self.assertEqual(b.used_bytes, len(body))
+            self.assertEqual(b.decoded_bytes, len(body))
+            b.close()
+            self.assertEqual(ledger(d)["used"]["bytes"], len(body))
+            self.assertTrue(b.reconcile()["ok"])
+
+    def test_inflight_read_error_releases_reservation_and_reconciles(self):
+        """阻塞读以异常结束（未交付任何块）：释放预占，不能一次吃掉全部额度。"""
+        class TimeoutRaw(FakeRaw):
+            def read(self, amt, decode_content=False):
+                raise pb.requests.Timeout("read timed out")
+
+        resp = FakeResponse(chunks=[])
+        resp.raw = TimeoutRaw([])
+        http = FakeHTTP([resp, resp, resp])
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
+            b = make(d, http, max_bytes=1000)
+            with self.assertRaises(pb.BudgetExhausted) as ctx:
+                fetch(b)
+            self.assertStopped(ctx, "consecutive_failures")
+            self.assertEqual(len(http.calls), 3)        # 预占释放后仍可重试
             self.assertEqual(b.used_bytes, 0)
             b.close()
             self.assertEqual(ledger(d)["used"]["bytes"], 0)
             self.assertTrue(b.reconcile()["ok"])
+
+    def test_deadline_return_never_calls_blocking_close(self):
+        """复审反例（P:1138）：主线程同步 close() → 80ms 预算实测 437ms。
+
+        截止返回路径不得调用任何可能阻塞的关闭；由被放弃的工作线程在
+        自己的 finally 里关闭（daemon + socket 超时 = 有界收敛）。
+        """
+        gate = threading.Event()
+        closed_by: list[int] = []
+        main_ident = threading.get_ident()
+
+        class BlockingRaw(FakeRaw):
+            def read(self, amt, decode_content=False):
+                gate.wait(10)
+                return b"0123456789abcdef"
+
+        class SlowCloseResponse(FakeResponse):
+            def close(self):
+                closed_by.append(threading.get_ident())
+                time.sleep(1.0)                 # 模拟真实关连接被阻塞
+                super().close()
+
+        resp = SlowCloseResponse(chunks=[])
+        resp.raw = BlockingRaw([])
+        http = FakeHTTP([resp])
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
+            b = make(d, http, max_seconds=0.08)
+            started = time.time()
+            try:
+                with self.assertRaises(pb.BudgetExhausted) as ctx:
+                    fetch(b)
+                elapsed = time.time() - started
+                # 主线程立即返回：close() 还没被调用（否则这里会是 1.0s+）
+                self.assertEqual(closed_by, [])
+                self.assertLess(elapsed, 0.6)
+            finally:
+                gate.set()
+                _join_http_thread()
+            self.assertStopped(ctx, "seconds")
+            self.assertEqual(len(closed_by), 1)     # 工作线程退出时才关闭
+            self.assertNotEqual(closed_by[0], main_ident)
+            b.close()
 
     def test_abandoned_attempt_never_charges_bytes(self):
         gate = threading.Event()
