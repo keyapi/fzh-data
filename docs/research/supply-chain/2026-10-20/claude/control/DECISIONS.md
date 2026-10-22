@@ -278,6 +278,37 @@ KeyError guard 后 len=1（4 条）与 len=2（11 条）可出预测；len 3–6
 - 模型层：无干净留出块；MA3 0.4978 / naive 0.5016 / 选择流程 0.5255，区间跨 0；**AutoETS 仅为规则默认**。
 - 上限为**压力情景**（MA3 残差系数、截顶 3×），非已标定分位。
 
+## 2026-10-22 D24：T29 定点复核 PASS —— 最终交付版本与 hash
+
+**#301 T29-REVIEW（21:1x，固定 `9d5451dd`）= PASS，无 blocking / major。**
+
+1. **PO 事实化已修**：`worked_examples.md:64/79/95` 与 `worked_examples.csv:4–6` 均写明
+   "未取得未结 PO 记录，本情景暂按 0 计；在途快照为 0"；无残留"无 PO/无在途"；MD:46 负缺口已限定为供给情景并注明 ETA 待核实。
+2. **等效表述已修**：`summary_v3.md:115` = "现有证据不足以确认优劣，不代表等效"；全文无残留。
+3. **绑定与回归通过**：`delivery_verification.json:3–11` 输入 hash 全部匹配固定版本（含 CRLF 口径）；
+   JSON:149 / MD:135–138 正确引用 `summary.md:40`；对比 `8fb31a97`，示例 CSV 原字段未变（仅新增 assumptions），
+   主表/敏感性/库存核验/WO-DN/去向清单均无变化。
+
+**最终交付版本（`out/business_phase/`，SHA256 前 16 位）**
+
+| 文件 | sha256 |
+|---|---|
+| `delivery_guide.md` | `2E84E3EB4DF1F41E` |
+| `replenishment_v2.csv` | `6B30E751ECDA8630` |
+| `model_sensitivity.csv` | `9330FF5D533F39E8` |
+| `worked_examples.md` | `71D91F9602AFCBC7` |
+| `worked_examples.csv` | `D31330105C83C058` |
+| `diff_v1_v2.csv` | `5C4E781FCC441F49` |
+| `usability_audit.csv` | `D98C7DD75EAC4CAE` |
+| `wo_dn_coverage.csv` | `6D5F020FEB0AB87D` |
+| `evidence_request.md` | `23B991C76497A61C` |
+| `forward_shadow_plan.md` | `EDF00723BD72A3D0` |
+| `delivery_verification.md` | `DA9D03BA209BDD01` |
+| `summary_v3.md` | `7E1795C821EDFF9F` |
+
+**交付位置**：`D:\Work\赛狐\Cursor-claude\docs\research\supply-chain\2026-10-20\claude\out\business_phase\`；
+xlsx 本地生成、仓库忽略。
+
 ## 2026-10-22 D18：Codex2 三项裁定（16:49）——选样口径、情景假设、N2 后任务
 
 **1) 选样改为「唯一 SKU + 交叉属性覆盖」**
