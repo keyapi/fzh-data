@@ -67,6 +67,12 @@ COLUMNS = [
 ]
 
 
+def _int(x) -> int:
+    """DB row-level NULL -> 0 for aggregate sums only. Missing SKU rows are a
+    different case and are handled upstream as UNKNOWN (never 0)."""
+    return 0 if x is None else int(x)
+
+
 def sha256(p: Path) -> str:
     return hashlib.sha256(p.read_bytes()).hexdigest()
 
@@ -201,12 +207,12 @@ def main() -> None:
                 FROM stock_latest""").fetchall():
             s = stock[sku]
             s["rows"] += 1
-            s["available"] += int(av or 0)
-            s["intransit"] += int(it or 0)
-            s["waiting"] += int(wt or 0)
-            s["defects"] += int(df or 0)
-            s["warehouses"].append(dict(warehouse=wh, available=int(av or 0),
-                                        intransit=int(it or 0)))
+            s["available"] += _int(av)
+            s["intransit"] += _int(it)
+            s["waiting"] += _int(wt)
+            s["defects"] += _int(df)
+            s["warehouses"].append(dict(warehouse=wh, available=_int(av),
+                                        intransit=_int(it)))
         po = defaultdict(lambda: dict(qty=0.0, lines=[], etas=[]))
         for sku, ponum, wh, qty, eta in con.execute("""
                 SELECT goods_sku, ponum, warehouse, open_qty, will_arrive_date
@@ -338,7 +344,7 @@ def main() -> None:
         elif p and intr is not None and intr > 0 and abs(intr - po_qty) < 1e-9:
             dedup = "suspected_duplicate"
             dedup_note = f"在途 {intr:g} = 未结 PO {po_qty:g}，疑似同一批"
-        elif p or (intr or 0) > 0:
+        elif p is not None or (intr is not None and intr > 0):
             dedup = "unproven"
             dedup_note = "在途与 PO 数量不同或不可比，仍缺逐笔关单键"
         else:
@@ -353,26 +359,41 @@ def main() -> None:
         missing.append("MOQ/成本未提供 → 采购约束待定")
 
         if d == "mapped_eligible" and fc is not None:
-            status = "B"
-            if dedup == "suspected_duplicate":
-                batch = max(po_qty or 0, intr or 0)
-                assumptions.append("PO 与在途按同一批只计一次（去重假设）")
-            elif dedup == "duplicate_candidate_lines":
-                batch = (po_qty or 0) / 2 + (intr or 0)
-                assumptions.append("重复候选 PO 行按一笔计（假设）")
+            if avail is None:
+                # Inventory unknown MUST NOT be treated as 0 (FULL-REVIEW major).
+                status = "B_pending_inventory"
+                qty_text = ""
+                missing.append("库存未知，待核实（无库存行，未按 0 计算）")
+                assumptions.append("库存未知：本行不给条件数量；补齐库存行后再算")
+                demand_text = f"P50 {fc['p50'][90]:.2f}; P90 {fc['p90']:.2f}"
+                method_text = fc["method"]
+                lead_text = " / ".join(f"L{d} {fc['p50'][d]:.1f}" for d in LEAD_DAYS)
+                status_reason = "pending_inventory"
             else:
-                batch = (po_qty or 0) + (intr or 0)
-                assumptions.append("PO 与在途按两批相加（未去重假设）")
-            base = (avail or 0) + batch
-            qty_low = max(0.0, round(fc["p50"][90] - base, 2))
-            qty_high = max(0.0, round(fc["p90"] - (avail or 0), 2))
-            if qty_high < qty_low:
-                qty_low, qty_high = qty_high, qty_low
-            qty_text = f"{qty_low:g}–{qty_high:g}"
-            demand_text = f"P50 {fc['p50'][90]:.2f}; P90 {fc['p90']:.2f}"
-            method_text = fc["method"]
-            lead_text = " / ".join(f"L{d} {fc['p50'][d]:.1f}" for d in LEAD_DAYS)
-            status_reason = "conditional_on_assumptions"
+                status = "B"
+                # scenario quantities for PO / intransit are explicit assumptions,
+                # never silent zeros for inventory
+                po_s = 0.0 if po_qty is None else float(po_qty)
+                intr_s = 0.0 if intr is None else float(intr)
+                if dedup == "suspected_duplicate":
+                    batch = max(po_s, intr_s)
+                    assumptions.append("PO 与在途按同一批只计一次（去重假设）")
+                elif dedup == "duplicate_candidate_lines":
+                    batch = po_s / 2 + intr_s
+                    assumptions.append("重复候选 PO 行按一笔计（假设）")
+                else:
+                    batch = po_s + intr_s
+                    assumptions.append("PO 与在途按两批相加（未去重假设）")
+                base = float(avail) + batch
+                qty_low = max(0.0, round(fc["p50"][90] - base, 2))
+                qty_high = max(0.0, round(fc["p90"] - float(avail), 2))
+                if qty_high < qty_low:
+                    qty_low, qty_high = qty_high, qty_low
+                qty_text = f"{qty_low:g}–{qty_high:g}"
+                demand_text = f"P50 {fc['p50'][90]:.2f}; P90 {fc['p90']:.2f}"
+                method_text = fc["method"]
+                lead_text = " / ".join(f"L{d} {fc['p50'][d]:.1f}" for d in LEAD_DAYS)
+                status_reason = "conditional_on_assumptions"
         elif d == "mapped_eligible":
             status = "B"
             qty_text, demand_text, method_text, lead_text = "", "", "no history", ""
@@ -387,10 +408,11 @@ def main() -> None:
 
         inv_text = ""
         if st is None:
-            inv_text = "null（无库存行，不等于 0）"
+            inv_text = "null（无库存行，不等于 0；未按 0 计算）"
         else:
-            inv_text = f"2026-10-22: available={avail}" + (
-                "（已证为 0）" if avail == 0 else "")
+            inv_text = (f"2026-10-22: available={avail}"
+                        f"（SKU 跨仓汇总；仓列仅为标注，非分仓分配）"
+                        + ("；已证为 0" if avail == 0 else ""))
         po_text = "" if po_qty is None else f"{po_qty:g}（{len(p['lines'])} 行，ETA 全缺）"
         if po_qty is None:
             po_text = "null（无未结 PO 记录；按 0 假设）"
@@ -412,8 +434,9 @@ def main() -> None:
             "需要时间": need_text,
             "缺失字段与证据": "；".join(missing),
             "状态": status,
-            "assumptions": "；".join(assumptions) if status == "B" else "",
-            "_sale6": sale6 or 0.0,
+            "assumptions": ("；".join(assumptions)
+                            if status in ("B", "B_pending_inventory") else ""),
+            "_sale6": (0.0 if sale6 is None else sale6),
             "_reason": status_reason,
         })
 
@@ -451,10 +474,14 @@ def main() -> None:
     # ---------------- summary ----------------------------------------------
     total = len(out_rows)
     status_cnt = Counter(r["状态"] for r in out_rows)
+    b_pending = status_cnt.get("B_pending_inventory", 0)
+    b_total = status_cnt.get("B", 0) + b_pending
     total_sales = sum(r["_sale6"] for r in out_rows) or 1.0
     sales_by_status = Counter()
     for r in out_rows:
-        sales_by_status[r["状态"]] += r["_sale6"]
+        # B_pending_inventory is a B sub-status
+        key = "B" if r["状态"] == "B_pending_inventory" else r["状态"]
+        sales_by_status[key] += r["_sale6"]
     blockers = Counter()
     for r in out_rows:
         for part in r["缺失字段与证据"].split("；"):
@@ -483,13 +510,21 @@ def main() -> None:
         "## 2. 状态分布与销量占比", "",
         "| 状态 | 行数 | 6 个月净销量 | 销量占比 |", "|---|---:|---:|---:|",
     ]
-    for st in ("A", "B", "C"):
-        summary.append(f"| {st} | {status_cnt.get(st, 0):,} | "
+    for st, n in (("A", status_cnt.get("A", 0)), ("B", b_total),
+                  ("C", status_cnt.get("C", 0))):
+        summary.append(f"| {st} | {n:,} | "
                        f"{sales_by_status.get(st, 0):,.0f} | "
                        f"{sales_by_status.get(st, 0) / total_sales:.1%} |")
-    summary += ["", f"- **A = 0**：需求上下界（G8）未提供、在产不在快照，没有任何行达到"
-                "“可审批数量”的证据门槛。这不是漏算，是按 R4 标准的结果。",
-                f"- C 的原因分布：" + "、".join(f"{k} {v}" for k, v in reasons.items()), "",
+    summary += [
+        f"| ├─ 其中 B_pending_inventory（库存未知，数量留空） | {b_pending:,} | "
+        f"— | — |",
+        "", f"- **A = 0**：需求上下界（G8）未提供、在产不在快照，没有任何行达到"
+        "“可审批数量”的证据门槛。这不是漏算，是按 R4 标准的结果。",
+        f"- **{b_pending} 行待库存核实**：这些 SKU 在快照中没有库存行（库存未知，**不是 0**），"
+        "建议数量留空，状态标 `B_pending_inventory`，不计入可执行数量。",
+        "- **库存口径**：库存为 **SKU 跨仓汇总**（`stock_latest` 所有仓相加）；"
+        "表里的「仓」列只是标注主仓，**不是分仓补货分配**。",
+        f"- C 的原因分布：" + "、".join(f"{k} {v}" for k, v in reasons.items()), "",
                 "## 3. 主要阻塞（按行计）", "",
                 "| 阻塞项 | 行数 |", "|---|---:|"]
     for k, v in blockers.most_common(10):
@@ -505,7 +540,9 @@ def main() -> None:
         "", "## 5. 口径与限制", "",
         "- SO 与预测不重复冲减（重叠未证），内部 SO 不作额外终端需求。",
         "- PO / 在途只作情景变量；无记录时按 0 处理，但这是**假设**，行内 `assumptions` 明写。",
-        "- 未知一律 null + 说明，不用 0 冒充；“无在途”只是假设，不是真实无在途。",
+        "- 未知一律 null + 说明，不用 0 冒充；库存缺失时建议数量直接留空（B_pending_inventory）。",
+        "- 库存是 SKU 跨仓汇总；「仓」列仅为标注，不是分仓分配。",
+        "- “无在途”只是假设，不是真实无在途。",
         "- MOQ / 成本未提供：所有数量都标「采购约束待定」，不是订单量。",
         "- 提前期为 L60/L90/L120 情景（P50 口径），不是承诺到货时间。",
         "- 本表为聚合建议，不含原始订单明细。", "",

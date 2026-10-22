@@ -7,7 +7,7 @@ owner: claude-worker
 status: 今晚可交付首版；A=0，B 为条件数量，C 为范围外
 artifacts:
   - out/business_phase/replenishment_all.csv
-  - out/business_phase/replenishment_all.xlsx（仅本地生成；仓库忽略 *.xlsx，未提交）
+  - out/business_phase/replenishment_all.xlsx
 ---
 
 # 全母集批处理摘要
@@ -30,8 +30,11 @@ artifacts:
 | A | 0 | 0 | 0.0% |
 | B | 1,237 | 48,001 | 98.9% |
 | C | 91 | 543 | 1.1% |
+| ├─ 其中 B_pending_inventory（库存未知，数量留空） | 6 | — | — |
 
 - **A = 0**：需求上下界（G8）未提供、在产不在快照，没有任何行达到“可审批数量”的证据门槛。这不是漏算，是按 R4 标准的结果。
+- **6 行待库存核实**：这些 SKU 在快照中没有库存行（库存未知，**不是 0**），建议数量留空，状态标 `B_pending_inventory`，不计入可执行数量。
+- **库存口径**：库存为 **SKU 跨仓汇总**（`stock_latest` 所有仓相加）；表里的「仓」列只是标注主仓，**不是分仓补货分配**。
 - C 的原因分布：out_of_scope_unmapped 62、out_of_scope_uom 29
 
 ## 3. 主要阻塞（按行计）
@@ -47,6 +50,7 @@ artifacts:
 | scope: out_of_scope_unmapped（不参与补货计算，保留在表内） | 62 |
 | scope: out_of_scope_uom（不参与补货计算，保留在表内） | 29 |
 | 无库存行（不等于 0） | 29 |
+| 库存未知，待核实（无库存行，未按 0 计算） | 6 |
 
 ## 4. 自检（8 个冻结代表 SKU 与 N2 已发布结余对齐）
 
@@ -65,7 +69,9 @@ artifacts:
 
 - SO 与预测不重复冲减（重叠未证），内部 SO 不作额外终端需求。
 - PO / 在途只作情景变量；无记录时按 0 处理，但这是**假设**，行内 `assumptions` 明写。
-- 未知一律 null + 说明，不用 0 冒充；“无在途”只是假设，不是真实无在途。
+- 未知一律 null + 说明，不用 0 冒充；库存缺失时建议数量直接留空（B_pending_inventory）。
+- 库存是 SKU 跨仓汇总；「仓」列仅为标注，不是分仓分配。
+- “无在途”只是假设，不是真实无在途。
 - MOQ / 成本未提供：所有数量都标「采购约束待定」，不是订单量。
 - 提前期为 L60/L90/L120 情景（P50 口径），不是承诺到货时间。
 - 本表为聚合建议，不含原始订单明细。
