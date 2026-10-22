@@ -16,7 +16,7 @@
 | 5 | diff_v1_v2.csv ↔ replenishment_all.csv / replenishment_v2.csv | **PASS** | 0 |
 | 6 | evidence_request.md 责任方行数 ↔ decision_v2.csv（T3） | **PASS** | 0 |
 | 7 | summary_v3 §6 ↔ nested_eval / short_history_eval | **FAIL** | 1 |
-| 8 | forward_shadow_plan.md ↔ forward_shadow.py | **FAIL** | 5 |
+| 8 | forward_shadow_plan.md ↔ forward_shadow.py | **FAIL** | 4 |
 
 ## 1. replenishment_v2.csv ↔ summary_v3.md — **PASS**
 
@@ -54,7 +54,6 @@
 
 | 文件 | 字段 | 表/脚本值 | 文档值 |
 |---|---|---|---|
-| forward_shadow_plan.md / forward_shadow.py | 使用代码路径 | `forward_shadow.py（实际实现）` | `nested_eval.py（文档 §1）` |
 | forward_shadow_plan.md / forward_shadow.py | 各候选 WAPE | `只算 selected / naive / ma3` | `每个候选 1 个值` |
 | forward_shadow_plan.md / forward_shadow.py | 各候选 Bias | `未实现` | `每个候选 1 个值` |
 | forward_shadow_plan.md / forward_shadow.py | 上限列覆盖率 | `未实现` | `每个候选 1 个值` |

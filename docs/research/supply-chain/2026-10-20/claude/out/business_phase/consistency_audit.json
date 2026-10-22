@@ -2,7 +2,7 @@
  "schema_version": "t21_consistency_audit/1",
  "inputs": {
   "replenishment_v2.csv": "6b30e751ecda86301bc73831ffb21705574a0a57b0fbb62c7f43aaba9716c9b7",
-  "summary_v3.md": "7f578c1857a164692cf4533c932ffd9a17c9c1f2979a03d49a9692eb778e0e35",
+  "summary_v3.md": "4765b4b1fc0b12aa1cddf7b6759ea5f00bacfb8c1e7aba992f945cc0cfcbb418",
   "model_sensitivity.csv": "9330ff5d533f39e85a86e897fec0921af94b48df6cb514c6e4436b51efbe3dd4",
   "model_sensitivity.md": "1567e607b6133e5006e38c0b2a10b19c70617893d64d2cc6448484486e017346",
   "wo_dn_coverage.csv": "6d5f020feb0ab87d1bdd51be2fe877c121b04c189e439758fe81db951d95a739",
@@ -13,7 +13,7 @@
   "diff_v1_v2.csv": "5c4e781fcc441f49c6076b0016f179bd1bc7c32909f7ed90ecddb9678e2a48e8",
   "replenishment_all.csv": "abd3de4e3287502267a3189e73c147e4e99413d16f9a6f8f02c9cf2c4456f3df",
   "evidence_request.md": "23b991c76497a61cb4a19f4cacccf27634c2bcfd2b475836c00cb47d546cde6f",
-  "forward_shadow_plan.md": "d69b30deadaa8a39de29ea886ddc14dde8c95386deed893f5d336c32bdd359e6",
+  "forward_shadow_plan.md": "5f9f1105a34d9b021a2608a7aea282f433bc2882f7c3095a6ca27aa0ea425b1f",
   "nested_eval.json": "8e83f4cbc226a6e6bc7185ff05a9ac2f046623e54b61637a083e4ad282d6ca31",
   "short_history_eval.json": "0d795efa4e308f91967272aa18b4cbf1783bef98b75fe7e3af00bf44322d8616",
   "error_attribution.json": "5a3d6f56a5bf42fd636a9c94a3fab6d5bad793a81c72ced1ee099d817f515b93",
@@ -96,12 +96,6 @@
    "title": "forward_shadow_plan.md ↔ forward_shadow.py",
    "status": "FAIL",
    "diffs": [
-    {
-     "file": "forward_shadow_plan.md / forward_shadow.py",
-     "field": "使用代码路径",
-     "table_value": "forward_shadow.py（实际实现）",
-     "doc_value": "nested_eval.py（文档 §1）"
-    },
     {
      "file": "forward_shadow_plan.md / forward_shadow.py",
      "field": "各候选 WAPE",
