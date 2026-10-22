@@ -303,9 +303,11 @@ def build_score(pre: dict, actual: dict, months_present: set,
     origin = pre["origin"]
     targets = pre["target_months"]
     required = ("selected", "naive", "ma3")     # top-level comparators (kept for continuity)
-    # every candidate the presave file can produce (T24: all, not just three)
-    candidates = ["selected"] + sorted(
-        {c for fc in pre["forecasts"].values() for c in fc} - {"selected"})
+    # T25: fixed candidate set reported per candidate. A cell enters the common
+    # evaluable subset only if EVERY candidate has a presaved forecast there, so
+    # all candidates are scored on the same (SKU, origin) cells.
+    candidates = ["selected", "naive", "ma3", "ma6", "seasonal_naive",
+                  "autoets", "combo_ew"]
     sample_skus = [r["sku"] for r in pre["sample"]["skus"]]
     missing_months = [t for t in targets if t not in months_present]
     excluded, included = [], {}
@@ -324,32 +326,60 @@ def build_score(pre: dict, actual: dict, months_present: set,
                 continue
             # actual defaults to 0.0: no order rows in a fully covered window
             included[sku] = float(actual.get(sku, 0.0))
+    # common evaluable subset: same cells for every candidate
+    common = [sku for sku in included
+              if all(c in pre["forecasts"][sku] for c in candidates)]
+    unavailable = {}
+    for c in candidates:
+        missing_skus = [sku for sku in included if c not in pre["forecasts"][sku]]
+        if missing_skus:
+            unavailable[c] = dict(
+                n=len(missing_skus), examples=sorted(missing_skus)[:5],
+                reason=("该候选在该块不可评：预存文件缺少该 SKU 的候选预测"
+                        "（例如历史过短时该候选未拟合）"))
 
     def cand_stats(c: str) -> dict:
-        cells = [(float(np.sum(pre["forecasts"][sku][c])), a)
-                 for sku, a in included.items() if c in pre["forecasts"][sku]]
-        if not cells:
-            return dict(n=0, wape=None, bias=None, upper_coverage=None)
+        """Per-candidate metrics on the COMMON (SKU, origin) subset."""
+        cells = [(float(np.sum(pre["forecasts"][sku][c])), included[sku])
+                 for sku in common]
+        n = len(cells)
+        if n == 0:
+            return dict(n_cells=0, wape_with_zero=None, wape_excluding_zero=None,
+                        bias=None, upper_coverage=None, zero_count=0, zero_share=None)
         den_c = sum(a for _, a in cells)
+        zero_cells = [(f, a) for f, a in cells if abs(a) < 1e-9]
+        nz_cells = [(f, a) for f, a in cells if abs(a) >= 1e-9]
+        den_nz = sum(a for _, a in nz_cells)
         return dict(
-            n=len(cells),
-            wape=round(sum(abs(f - a) for f, a in cells) / den_c, 4) if den_c > 1e-9 else None,
+            n_cells=n,
+            # 与零需求口径一致：零实际量单元格的 |F| 保留在分子，分母贡献 0
+            wape_with_zero=(round(sum(abs(f - a) for f, a in cells) / den_c, 4)
+                            if den_c > 1e-9 else None),
+            # 仅非零实际量单元格（分子分母都排除）——对照口径，不替代主口径
+            wape_excluding_zero=(round(sum(abs(f - a) for f, a in nz_cells) / den_nz, 4)
+                                 if den_nz > 1e-9 else None),
             # Bias = Σ(F−A)/ΣA；读作方向，不读作准确率
             bias=round(sum(f - a for f, a in cells) / den_c, 4) if den_c > 1e-9 else None,
             # 上限区间覆盖率：单边上界（点预测）的实测覆盖，只作观察、不构成保证
-            upper_coverage=round(sum(1 for f, a in cells if a <= f + 1e-9) / len(cells), 4))
+            upper_coverage=round(sum(1 for f, a in cells if a <= f + 1e-9) / n, 4),
+            zero_count=len(zero_cells),
+            zero_share=round(len(zero_cells) / n, 4))
 
     candidate_metrics = {c: cand_stats(c) for c in candidates}
-    by_sku = {sku: dict(actual=a,
+    # all candidates must share the same common-subset size by construction
+    _sizes = {m["n_cells"] for m in candidate_metrics.values()}
+    assert len(_sizes) <= 1, f"candidates not on one common subset: {_sizes}"
+    by_sku = {sku: dict(actual=included[sku],
                         **{m: float(np.sum(pre["forecasts"][sku][m])) for m in required})
-              for sku, a in included.items()}
-    den = sum(included.values())
-    zero = sum(1 for a in included.values() if abs(a) < 1e-9)
-    # 零分母：数量与占比（占比 = 零分母格数 / 该块可评单元格数）
-    zero_share = round(zero / len(included), 4) if included else None
+              for sku in common}
+    den = sum(included[s] for s in common)
+    zero = sum(1 for s in common if abs(included[s]) < 1e-9)
+    # 零分母：数量与占比（占比 = 零分母格数 / 该块共同可评单元格数）
+    zero_share = round(zero / len(common), 4) if common else None
     status = ("labels_incomplete" if missing_months else
+              "no_common_subset" if not common else
               "undefined_denominator" if den <= 1e-9 else "scored")
-    wape = {m: candidate_metrics[m]["wape"] for m in required}
+    wape = {m: candidate_metrics[m]["wape_with_zero"] for m in required}
     bias = {c: candidate_metrics[c]["bias"] for c in candidates}
     bootstrap = None
     if den > 1e-9:
@@ -372,7 +402,7 @@ def build_score(pre: dict, actual: dict, months_present: set,
                                     p95=round(float(np.percentile(v, 95)), 4))
                             for k, v in diffs.items()})
     return dict(
-        schema_version="t10_forward_shadow_score/3",
+        schema_version="t10_forward_shadow_score/4",
         scored_at=datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"),
         presave_file=presave_name, generated_at=pre["generated_at"],
         origin=origin, target_months=targets, status=status,
@@ -387,26 +417,34 @@ def build_score(pre: dict, actual: dict, months_present: set,
         mother_set=dict(kind="presaved sample", n=len(sample_skus),
                         rule=("shadow_<origin>.json → sample.skus；不按目标窗订单记录收缩；"
                               "标签完整时无订单 = 零需求")),
-        n_sample=len(sample_skus), n_scored=len(included),
+        n_sample=len(sample_skus), n_scored=len(common),
+        n_included=len(included), n_common=len(common),
         n_zero_demand_retained=zero,
         zero_demand_share=zero_share,
         n_excluded=len(excluded), excluded=excluded,
+        unavailable_candidates=unavailable,
+        common_subset_rule=("共同可评分子集 = 预存样本中 selected/naive/ma3/ma6/"
+                            "seasonal_naive/autoets/combo_ew 七个候选均有预测的同一批 "
+                            "(SKU, origin) 单元格；所有候选指标都在该交集上计算"),
         extra_forecasts_not_in_sample=sorted(set(pre["forecasts"]) - set(sample_skus)),
         denominator=round(den, 2), wape=wape, bias=bias,
         candidate_metrics=candidate_metrics,
         upper_coverage={c: candidate_metrics[c]["upper_coverage"] for c in candidates},
         bootstrap=bootstrap,
         metric_definition=dict(
-            wape="Σ|F−A| / ΣA over the mother set (zero-demand cells retained in the numerator)",
+            wape="Σ|F−A| / ΣA over the common subset (zero-demand cells retained in the numerator)",
+            wape_excluding_zero="仅非零实际量单元格的 Σ|F−A| / ΣA（对照口径，不替代主口径）",
             bias="Σ(F−A) / ΣA；读作方向，不读作准确率",
             upper_coverage=("上限区间覆盖率：实际 ≤ 点预测（单边上界）的单元格占比；"
                             "只作观察，不构成保证"),
             zero_demand="零需求单元格的 |F| 进入分子，对分母贡献 0",
-            zero_demand_share="零分母单元格占比 = 零分母格数 / 该块可评单元格数",
+            zero_demand_share="零分母单元格占比 = 零分母格数 / 该块共同可评单元格数",
             denominator_zero="仅当聚合总实际量为 0 时该聚合无定义（status=undefined_denominator）",
             missing_labels="任一目标月无标签则整窗 unknown，逐 SKU 列出排除原因",
-            candidates=("参与候选：selected 与预存文件实际可产出的全部候选"
-                        "（naive/ma3/ma6/seasonal_naive/autoets/combo_ew 中该 SKU 可产出者）")),
+            candidates=("参与候选：selected / naive / ma3 / ma6 / seasonal_naive / "
+                        "autoets / combo_ew；每候选输出 wape_with_zero / "
+                        "wape_excluding_zero / bias / upper_coverage / n_cells / "
+                        "zero_count / zero_share")),
         note=("一次月度结果不构成改默认的依据；区间跨 0 时只能说方向不稳定；"
               "选择结果来自预存文件，评分阶段未重新选模。"),
     )
@@ -492,17 +530,23 @@ def selftest() -> None:
                          "combo_ew": [40, 30, 30]}})
     out = build_score(pre, {"B": 100.0}, set(pre["target_months"]), None, "synthetic")
     assert out["status"] == "scored"
-    assert out["n_scored"] == 2 and out["n_zero_demand_retained"] == 1
+    assert out["n_scored"] == 2 and out["n_common"] == 2
+    assert out["n_zero_demand_retained"] == 1
     assert out["zero_demand_share"] == 0.5
-    assert out["wape"]["selected"] == 0.15, out["wape"]
+    assert out["wape"]["selected"] == 0.15
+    assert out["unavailable_candidates"] == {}
     for c in ("selected", "naive", "ma3", "ma6", "seasonal_naive",
               "autoets", "combo_ew"):
         assert c in out["candidate_metrics"], c
         m = out["candidate_metrics"][c]
-        for k in ("wape", "bias", "upper_coverage"):
+        for k in ("wape_with_zero", "wape_excluding_zero", "bias", "upper_coverage"):
             assert m[k] is not None and math.isfinite(m[k]), (c, k, m[k])
+        assert m["n_cells"] == 2, (c, m["n_cells"])
+        assert m["zero_count"] == 1 and m["zero_share"] == 0.5
     assert set(out["candidate_metrics"]) == {
         "selected", "naive", "ma3", "ma6", "seasonal_naive", "autoets", "combo_ew"}
+    assert len({m["n_cells"] for m in out["candidate_metrics"].values()}) == 1
+    assert out["candidate_metrics"]["selected"]["wape_excluding_zero"] == 0.0
     assert out["bias"]["selected"] == 0.15
     assert out["upper_coverage"]["selected"] == 1.0
     excluded_variant = out["wape"]["selected"] - 15.0 / out["denominator"]
@@ -510,17 +554,25 @@ def selftest() -> None:
     missing = build_score(pre, {}, set(), None, "synthetic")
     assert missing["status"] == "labels_incomplete"
     assert missing["n_excluded"] == 2 and missing["n_scored"] == 0
+    assert missing["n_common"] == 0
     assert missing["zero_demand_share"] is None
     assert set(missing["candidate_metrics"]) == {
         "selected", "naive", "ma3", "ma6", "seasonal_naive", "autoets", "combo_ew"}
+    assert all(m["n_cells"] == 0 for m in missing["candidate_metrics"].values())
     print(json.dumps(dict(status=out["status"], denominator=out["denominator"],
                           wape_with_zero=out["wape"]["selected"],
-                          wape_excluding_zero=excluded_variant,
+                          wape_excluding_zero=out["candidate_metrics"]["selected"]["wape_excluding_zero"],
                           bias_selected=out["bias"]["selected"],
                           upper_coverage_selected=out["upper_coverage"]["selected"],
                           zero_demand_retained=out["n_zero_demand_retained"],
                           zero_demand_share=out["zero_demand_share"],
+                          n_common=out["n_common"],
                           candidates=sorted(out["candidate_metrics"]),
+                          per_candidate={c: dict(n_cells=m["n_cells"],
+                                                 wape_with_zero=m["wape_with_zero"],
+                                                 bias=m["bias"],
+                                                 upper_coverage=m["upper_coverage"])
+                                         for c, m in out["candidate_metrics"].items()},
                           labels_incomplete_status=missing["status"]),
                      ensure_ascii=False, indent=1))
 
@@ -563,16 +615,19 @@ def entrytest() -> None:
         assert partial["scoring_due"] == "2027-01-04"
         assert partial["wape"] == {m: None for m in ("selected", "naive", "ma3")}
         assert partial["zero_demand_share"] is None
-        assert all(m["n"] == 0 for m in partial["candidate_metrics"].values())
+        assert partial["n_common"] == 0
+        assert all(m["n_cells"] == 0 for m in partial["candidate_metrics"].values())
         # the same entry still scores normally once labels are complete
         complete = score(args, fetch=lambda _db, targets: ({"B": 100.0}, set(targets)))
         assert complete["status"] == "scored", complete["status"]
         assert complete["wape"]["selected"] == 0.15
         assert complete["coverage"]["labels_complete"] is True
         assert complete["zero_demand_share"] == 0.5
+        assert complete["n_common"] == 2
         for c, m in complete["candidate_metrics"].items():
-            for k in ("wape", "bias", "upper_coverage"):
+            for k in ("wape_with_zero", "wape_excluding_zero", "bias", "upper_coverage"):
                 assert m[k] is not None and math.isfinite(m[k]), (c, k, m[k])
+            assert m["n_cells"] == 2
     print(json.dumps(dict(
         entry_missing_last_month=partial["status"],
         missing_months=partial["coverage"]["missing_months"],
@@ -584,7 +639,9 @@ def entrytest() -> None:
         bias_when_complete=complete["bias"]["selected"],
         upper_coverage_when_complete=complete["upper_coverage"]["selected"],
         zero_demand_share=complete["zero_demand_share"],
+        n_common=complete["n_common"],
         candidates=sorted(complete["candidate_metrics"]),
+        per_candidate_n={c: m["n_cells"] for c, m in complete["candidate_metrics"].items()},
     ), ensure_ascii=False, indent=1))
 
 
