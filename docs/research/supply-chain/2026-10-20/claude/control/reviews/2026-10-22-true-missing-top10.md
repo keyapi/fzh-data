@@ -170,7 +170,7 @@ tags: [supply-chain, sku-mapping, true-missing, evidence, read-only]
 - 证据 A（已删除 alias，低）：`删除TT0031245K0064088` → `HM1510-YD2-135x152x80-WHITE`；无活映射。
 - 证据 B（活族别名，中）：`TT0031245K0064088-Foam` → `KS0394-CTTM-135x152x80-REDDISHGRAY`；
   同族 `TT0031245K0064086`（Beige）与 `64087`（Gray）基础码也映射 KS0394。
-- 证据 C（跨行平台码，中）：23 个平台码中 7 个直接命中已映射 item_code，
+- 证据 C（跨行平台码，中）：23 个平台码中 7 个直接命中已映射 item_code，跨行合计 8 个 item_code，
   涉及 `KS0394`（红灰/米色）、`KS0228-HLR-25-GREY`、`KS0116-HLR-45-GREY`、`KS0223-NL-65XL-BLUERED`、
   `KS0390-CTTM-120x120x70-CREAMYBEIGE`、`KS0210-FBWB-74-DENIMBLUE` 等。
 - **冲突 1**：活键 `-Foam` → KS0394 红灰，删除键 `删除...-Foam` → HM1510 白；同一别名族两侧指向不同物料。

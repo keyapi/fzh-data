@@ -387,7 +387,7 @@ def main() -> int:
                     "base_code": "platform_sku_cross_row",
                     "item_codes": [r["item_code"] for r in cross_rows[:10]],
                     "evidence_type": "cross_row_platform_sku_match",
-                    "evidence": "23 个平台码中有 7 个直接命中已映射 item_code；另有多行平台码是其它 tongtool 码（汇总码特征）。",
+                    "evidence": "23 个平台码中有 7 个直接命中已映射 item_code；跨行合计涉及 8 个 item_code，另有多行平台码是其它 tongtool 码（汇总码特征）。",
                     "confidence": "medium",
                     "registered": True,
                     "source": "gs_orders.platform_sku 跨行证据",
