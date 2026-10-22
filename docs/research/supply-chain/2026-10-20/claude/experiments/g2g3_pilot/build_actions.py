@@ -240,6 +240,15 @@ def build_gates(ev_sku: dict, sup: dict, live_so: float) -> list[dict]:
     return gates
 
 
+# R3-Major2: one gate set for BOTH definite conclusions. A row may be called
+# short (always_replenish) or sufficient (no_shortage_within_window) only when
+# every one of these is ok; anything less stays 待核实.
+DEFINITIVE_GATES = [
+    "G1_identity", "G2_uom", "G3_demand_overlap",
+    "G4_supply_overlap", "G5_arrival_in_window", "G6_pk_ks_1to1",
+]
+
+
 def gate(gates: list[dict], gid: str) -> dict:
     return next(g for g in gates if g["id"] == gid)
 
@@ -250,11 +259,10 @@ def gate(gates: list[dict], gid: str) -> dict:
 def classify(tests: dict, gates: list[dict]) -> dict:
     """Tri-state gate-driven class.
 
-    always_replenish needs the arithmetic shortfall AND every hard gate ok.
+    A shortage claim needs the arithmetic shortfall AND every definitive gate.
     Supply lower-bound shortfalls are explicitly not a promotion path.
     """
-    always_gates = ["G1_identity", "G2_uom", "G5_arrival_in_window"]
-    blockers = [g for g in always_gates if gate(gates, g)["state"] != "ok"]
+    blockers = [g for g in DEFINITIVE_GATES if gate(gates, g)["state"] != "ok"]
     if tests["t3"]:
         arithmetic = "always_replenish"
     elif tests["t4"]:
@@ -532,10 +540,12 @@ def build(ev: dict, binding: dict, hash_info: dict) -> dict:
         ],
         gates=dict(
             states=["ok", "unproven", "fail"],
-            hard_gates_for_always=["G1_identity", "G2_uom", "G5_arrival_in_window"],
-            note=("M04: start_condition is generated from these gates; prose cannot "
-                  "promote a row. G4/G6 affect only the lower supply bound, so they do "
-                  "not gate a B_max shortage claim."),
+            definitive_conclusion_gates=DEFINITIVE_GATES,
+            hard_gates_for_always=DEFINITIVE_GATES,
+            note=("R3-Major2: 短缺（always_replenish）与充足（no_shortage_within_window）"
+                  "都必须过同一组 6 个 definitive gates；没有任何局部捷径"
+                  "（SO 重叠→删 SO、只凭到货日→不缺）被保留。"
+                  "G4/G6 过去只被当作下界项，现在也是充足结论的必要条件。"),
         ),
         cover_treatment=(
             "cover is not counted in supply (V0). It is an unbooked upside supply "
@@ -661,55 +671,32 @@ def start_condition(row: dict) -> dict:
     if s["A_low"] < d2:
         shortfalls.append("只在手 A_low {:.1f} < D2 {:.1f}".format(s["A_low"], d2))
     lower_bound_shortfall = (s["B_min"] < d2) or (s["B_min_po_dedup"] < d2)
-    outcomes = []
-    if t["t3_bmax_lt_d1"]:
-        outcomes.append(dict(
-            when="G1 ok ∧ G2 ok ∧ G5 ok（到货/完工日已证在窗口内）",
-            then_class="always_replenish",
-            arithmetic="B_max {:.1f} < D1 {:.1f}".format(s["B_max"], d["D1_p50_forecast"])))
-        outcomes.append(dict(
-            when="任何硬门仍为 unproven",
-            then_class="insufficient_evidence",
-            arithmetic="算术已短缺但证据闸门未过，不升级"))
-    elif t["t4_a_low_lt_d2_le_bmax"]:
-        outcomes.append(dict(
-            when="G2 ok ∧ G4 ok（PO/在途/在产不重叠）∧ G5 ok（全部在窗口内到货）",
-            then_class="no_shortage_within_window",
-            arithmetic="供给达到 B_max {:.1f} ≥ D2 {:.1f}".format(s["B_max"], d2)))
-        outcomes.append(dict(
-            when="到货/完工落到窗口外，或确认重叠（供给低于 B_max）",
-            then_class="insufficient_evidence",
-            arithmetic=("；".join(shortfalls) if shortfalls
-                        else "供给不足情景需逐笔重算") +
-                       "。下界不足只证明存在短缺情景，D2 含未证的 live SO，故不得直接判 always"))
-        outcomes.append(dict(
-            when="上述短缺情景被证实 ∧ G2 ok ∧ G3 ok（live SO 确为增量且已做桶级分配）",
-            then_class="always_replenish",
-            arithmetic="只有在 D2 成为已对平需求后才允许升级"))
-    else:
-        outcomes.append(dict(
-            when="G3 ok（live SO 确为增量/未重复）∧ G2 ok ∧ G5 ok",
-            then_class="always_replenish",
-            arithmetic="B_max {:.1f} < D2 {:.1f}".format(s["B_max"], d2)))
-        outcomes.append(dict(
-            when="G3 确认与预测重叠",
-            then_class="no_shortage_within_window",
-            arithmetic="按 D1 {:.1f} 口径 B_max {:.1f} 覆盖".format(
-                d["D1_p50_forecast"], s["B_max"])))
-        outcomes.append(dict(
-            when="G3 仍 unproven",
-            then_class="insufficient_evidence",
-            arithmetic="D2 不是已对平需求，不能据此报短缺或充足"))
-    # Gates that actually gate THIS row's promotion path. G3 is required only
-    # when the promotion view is D2 (i.e. the shortage rests on live SO).
-    view = "D1" if s["B_max"] < d["D1_p50_forecast"] else "D2"
-    required = ["G1_identity", "G2_uom", "G5_arrival_in_window"]
-    if view == "D2":
-        required.append("G3_demand_overlap")
-    blocking = [x for x in gates if x["id"] in required and x["state"] != "ok"]
+    # One gate set for both directions (R3-Major2). No conclusion — shortage OR
+    # sufficiency — is emitted as a reachable outcome until every gate is ok.
+    all_ok = "∧".join(f"{g} ok" for g in DEFINITIVE_GATES)
+    not_ok = "任一闸门 unproven/fail"
+    outcomes = [
+        dict(when="{} ∧ B_max {:.1f} < D1 {:.1f}".format(
+                all_ok, s["B_max"], d["D1_p50_forecast"]),
+             then_class="always_replenish",
+             arithmetic="结构短缺：最宽松供给上界也低于不含 SO 的 P50"),
+        dict(when="{} ∧ B_max {:.1f} ≥ D2 {:.1f}".format(all_ok, s["B_max"], d2),
+             then_class="no_shortage_within_window",
+             arithmetic="充足：最宽松供给上界覆盖含 SO 的大口径需求（D2 为上界，故不必先删 SO）"),
+        dict(when="{} ∧ D1 {:.1f} ≤ B_max {:.1f} < D2 {:.1f}".format(
+                all_ok, d["D1_p50_forecast"], s["B_max"], d2),
+             then_class="insufficient_evidence",
+             arithmetic="差在 SO：必须做桶级消费/分配后重算净需求，再比较；"
+                        "不得把 SO 当重复直接删掉回退 D1"),
+        dict(when=not_ok,
+             then_class="insufficient_evidence",
+             arithmetic="维持待核实；未证状态不产出任何短缺/充足结论"),
+    ]
+    blocking = [x for x in gates if x["id"] in DEFINITIVE_GATES and x["state"] != "ok"]
     return dict(
-        rule="升级由结构化 required_gates 驱动；文字条件不能替代闸门",
-        demand_view_for_promotion=view,
+        rule=("同一条结论门槛：短缺与充足都必须过同一组 definitive gates；"
+              "文字条件不能替代闸门"),
+        demand_view_for_promotion=("D1" if s["B_max"] < d["D1_p50_forecast"] else "D2"),
         demand_overlap=row["demand_overlap"],
         supply_lower_bound_shortfall=lower_bound_shortfall,
         supply_lower_bound_shortfall_note=(
@@ -720,18 +707,22 @@ def start_condition(row: dict) -> dict:
         required_gates=[dict(id=x["id"], label=x["label"], state=x["state"],
                              owner_role=x["owner_role"], evidence_needed=x["evidence"],
                              blocks=x["blocks_promotion"]) for x in gates],
-        gates_required_for_promotion=required,
+        gates_required_for_definitive_conclusion=DEFINITIVE_GATES,
+        gates_required_for_shortage=DEFINITIVE_GATES,
+        gates_required_for_sufficiency=DEFINITIVE_GATES,
         gate_summary=st,
         outcomes=outcomes,
         forbidden=[
+            "SO overlapping the forecast never means SO can be deleted: bucket-level consumption first",
+            "arrival/ completion dates alone never establish sufficiency (need G2 units, G4 overlap, G6 PK#->KS too)",
             "supply lower bound below demand (B_min / B_min_po_dedup < D2) never promotes to always_replenish",
             "live SO in the demand view never becomes net demand before bucket-level consumption",
             "Cover or any unbooked supply never counts until mapping and substitutability are proven",
         ],
         summary=("补齐 " + "、".join(x["id"] for x in blocking) +
-                 " 后按 outcomes 重算；在此之前不发起采购/生产指令。")
+                 " 后按 outcomes 重算；在此之前不发起采购/生产指令，也不宣布“不缺”。")
         if blocking else
-        "本行 promotion 所需的闸门已全部 ok；仍须按 outcomes 重算一次再行动。",
+        "全部 definitive gates 已 ok；仍须按 outcomes 重算一次再行动。",
     )
 
 
@@ -815,9 +806,10 @@ def basis(row: dict) -> str:
         parts.append(f"即使全部到货也不够 D1，缺 {r4(d['D1_p50_forecast'] - s['B_max'])}"
                      f"（占 B_max {g['d1_shortfall_vs_bmax_pct']}%）。")
     elif t["t4_a_low_lt_d2_le_bmax"]:
-        parts.append("结论在“全部到货不重叠”（不缺）与“重叠/迟到”（短缺）之间翻转。")
+        parts.append("结论只在“全部到货且不重叠”与“重叠/迟到”两个情景之间翻转；"
+                     "两个方向都要过同一组 6 个 definitive gates，闸门未齐前只作待核实。")
     else:
-        parts.append("B_max 覆盖 D1；只有在 live SO 确为增量时才会短缺。")
+        parts.append("B_max 覆盖 D1；只有在 live SO 确为增量、且完成桶级消费后才可能短缺。")
     parts.append(f"需求口径比值 {d['run_rate_ratio']}（近 3 月均值 {d['recent3_mean']}）。")
     if row["demand_overlap"] == "unproven":
         parts.append("所有含 SO 的判断均标 demand_overlap=unproven。")

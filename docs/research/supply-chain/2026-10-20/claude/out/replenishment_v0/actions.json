@@ -3,10 +3,10 @@
  "title": "10 SKU 暂行补货行动清单（P90-free）",
  "status": "provisional; not an instruction list; no quantities",
  "owner": "claude-worker",
- "generated_at": "2026-10-22T16:01:10+08:00",
+ "generated_at": "2026-10-22T16:14:04+08:00",
  "revision": "R2 (R1 review fixes: M01/M03/M04/N01/N03)",
  "based_on": {
-  "fixed_commit": "f9df43574fc507f436167e943f886d85ef243e32",
+  "fixed_commit": "a59dc2139a6edd403090751f6cf2614f5f00563b",
   "commit_semantics": "HEAD at run time; this artifact is committed in the next commit, so code_commit is that commit's parent",
   "inputs": [
    {
@@ -62,12 +62,23 @@
     "unproven",
     "fail"
    ],
+   "definitive_conclusion_gates": [
+    "G1_identity",
+    "G2_uom",
+    "G3_demand_overlap",
+    "G4_supply_overlap",
+    "G5_arrival_in_window",
+    "G6_pk_ks_1to1"
+   ],
    "hard_gates_for_always": [
     "G1_identity",
     "G2_uom",
-    "G5_arrival_in_window"
+    "G3_demand_overlap",
+    "G4_supply_overlap",
+    "G5_arrival_in_window",
+    "G6_pk_ks_1to1"
    ],
-   "note": "M04: start_condition is generated from these gates; prose cannot promote a row. G4/G6 affect only the lower supply bound, so they do not gate a B_max shortage claim."
+   "note": "R3-Major2: 短缺（always_replenish）与充足（no_shortage_within_window）都必须过同一组 6 个 definitive gates；没有任何局部捷径（SO 重叠→删 SO、只凭到货日→不缺）被保留。G4/G6 过去只被当作下界项，现在也是充足结论的必要条件。"
   },
   "cover_treatment": "cover is not counted in supply (V0). It is an unbooked upside supply scenario: once alias mapping and substitutability are confirmed it may REMOVE a shortage and the row must be recomputed; it can never create a shortage. It is NOT evidence that a shortage cannot occur while unmapped.",
   "window_basis": {
@@ -141,7 +152,10 @@
    "arithmetic_class": "insufficient_evidence",
    "promotion_blockers": [
     "G2_uom",
-    "G5_arrival_in_window"
+    "G3_demand_overlap",
+    "G4_supply_overlap",
+    "G5_arrival_in_window",
+    "G6_pk_ks_1to1"
    ],
    "demand_overlap": "unproven",
    "demand_overlap_note": "live SO 与 P50 是否同一批需求未证；未做桶级消费/分配前，D2 不能当净需求",
@@ -309,7 +323,7 @@
     "calibration_insufficiency": "P90-free 清单不做区间校准，校准不足不在本清单判定内"
    },
    "start_condition": {
-    "rule": "升级由结构化 required_gates 驱动；文字条件不能替代闸门",
+    "rule": "同一条结论门槛：短缺与充足都必须过同一组 definitive gates；文字条件不能替代闸门",
     "demand_view_for_promotion": "D2",
     "demand_overlap": "unproven",
     "supply_lower_bound_shortfall": true,
@@ -369,11 +383,29 @@
       "blocks": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
      }
     ],
-    "gates_required_for_promotion": [
+    "gates_required_for_definitive_conclusion": [
      "G1_identity",
      "G2_uom",
+     "G3_demand_overlap",
+     "G4_supply_overlap",
      "G5_arrival_in_window",
-     "G3_demand_overlap"
+     "G6_pk_ks_1to1"
+    ],
+    "gates_required_for_shortage": [
+     "G1_identity",
+     "G2_uom",
+     "G3_demand_overlap",
+     "G4_supply_overlap",
+     "G5_arrival_in_window",
+     "G6_pk_ks_1to1"
+    ],
+    "gates_required_for_sufficiency": [
+     "G1_identity",
+     "G2_uom",
+     "G3_demand_overlap",
+     "G4_supply_overlap",
+     "G5_arrival_in_window",
+     "G6_pk_ks_1to1"
     ],
     "gate_summary": {
      "G1_identity": "ok",
@@ -385,27 +417,34 @@
     },
     "outcomes": [
      {
-      "when": "G3 ok（live SO 确为增量/未重复）∧ G2 ok ∧ G5 ok",
+      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ B_max 153.0 < D1 51.1",
       "then_class": "always_replenish",
-      "arithmetic": "B_max 153.0 < D2 347.1"
+      "arithmetic": "结构短缺：最宽松供给上界也低于不含 SO 的 P50"
      },
      {
-      "when": "G3 确认与预测重叠",
+      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ B_max 153.0 ≥ D2 347.1",
       "then_class": "no_shortage_within_window",
-      "arithmetic": "按 D1 51.1 口径 B_max 153.0 覆盖"
+      "arithmetic": "充足：最宽松供给上界覆盖含 SO 的大口径需求（D2 为上界，故不必先删 SO）"
      },
      {
-      "when": "G3 仍 unproven",
+      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ D1 51.1 ≤ B_max 153.0 < D2 347.1",
       "then_class": "insufficient_evidence",
-      "arithmetic": "D2 不是已对平需求，不能据此报短缺或充足"
+      "arithmetic": "差在 SO：必须做桶级消费/分配后重算净需求，再比较；不得把 SO 当重复直接删掉回退 D1"
+     },
+     {
+      "when": "任一闸门 unproven/fail",
+      "then_class": "insufficient_evidence",
+      "arithmetic": "维持待核实；未证状态不产出任何短缺/充足结论"
      }
     ],
     "forbidden": [
+     "SO overlapping the forecast never means SO can be deleted: bucket-level consumption first",
+     "arrival/ completion dates alone never establish sufficiency (need G2 units, G4 overlap, G6 PK#->KS too)",
      "supply lower bound below demand (B_min / B_min_po_dedup < D2) never promotes to always_replenish",
      "live SO in the demand view never becomes net demand before bucket-level consumption",
      "Cover or any unbooked supply never counts until mapping and substitutability are proven"
     ],
-    "summary": "补齐 G2_uom、G3_demand_overlap、G5_arrival_in_window 后按 outcomes 重算；在此之前不发起采购/生产指令。"
+    "summary": "补齐 G2_uom、G3_demand_overlap、G4_supply_overlap、G5_arrival_in_window、G6_pk_ks_1to1 后按 outcomes 重算；在此之前不发起采购/生产指令，也不宣布“不缺”。"
    },
    "missing_evidence": [
     {
@@ -431,7 +470,7 @@
    ],
    "responsible_role": "生产/PMC（WO 完工日）；业务/运营（需求口径）；商品主数据/仓储（UOM）",
    "decisive_unknown": "需求口径：live SO 是否与 P50 重叠，以及旺势是否延续",
-   "basis": "可供上限 B_max 153 vs D1 51.1、D2 347.1。在手 A_low 1；B_min 153（最大重叠，去重压力 153）。B_max 覆盖 D1；只有在 live SO 确为增量时才会短缺。需求口径比值 0.094（近 3 月均值 242.3）。所有含 SO 的判断均标 demand_overlap=unproven。"
+   "basis": "可供上限 B_max 153 vs D1 51.1、D2 347.1。在手 A_low 1；B_min 153（最大重叠，去重压力 153）。B_max 覆盖 D1；只有在 live SO 确为增量、且完成桶级消费后才可能短缺。需求口径比值 0.094（近 3 月均值 242.3）。所有含 SO 的判断均标 demand_overlap=unproven。"
   },
   {
    "seq": 2,
@@ -445,7 +484,10 @@
    "arithmetic_class": "insufficient_evidence",
    "promotion_blockers": [
     "G2_uom",
-    "G5_arrival_in_window"
+    "G3_demand_overlap",
+    "G4_supply_overlap",
+    "G5_arrival_in_window",
+    "G6_pk_ks_1to1"
    ],
    "demand_overlap": "unproven",
    "demand_overlap_note": "live SO 与 P50 是否同一批需求未证；未做桶级消费/分配前，D2 不能当净需求",
@@ -613,7 +655,7 @@
     "calibration_insufficiency": "P90-free 清单不做区间校准，校准不足不在本清单判定内"
    },
    "start_condition": {
-    "rule": "升级由结构化 required_gates 驱动；文字条件不能替代闸门",
+    "rule": "同一条结论门槛：短缺与充足都必须过同一组 definitive gates；文字条件不能替代闸门",
     "demand_view_for_promotion": "D2",
     "demand_overlap": "unproven",
     "supply_lower_bound_shortfall": true,
@@ -673,11 +715,29 @@
       "blocks": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
      }
     ],
-    "gates_required_for_promotion": [
+    "gates_required_for_definitive_conclusion": [
      "G1_identity",
      "G2_uom",
+     "G3_demand_overlap",
+     "G4_supply_overlap",
      "G5_arrival_in_window",
-     "G3_demand_overlap"
+     "G6_pk_ks_1to1"
+    ],
+    "gates_required_for_shortage": [
+     "G1_identity",
+     "G2_uom",
+     "G3_demand_overlap",
+     "G4_supply_overlap",
+     "G5_arrival_in_window",
+     "G6_pk_ks_1to1"
+    ],
+    "gates_required_for_sufficiency": [
+     "G1_identity",
+     "G2_uom",
+     "G3_demand_overlap",
+     "G4_supply_overlap",
+     "G5_arrival_in_window",
+     "G6_pk_ks_1to1"
     ],
     "gate_summary": {
      "G1_identity": "ok",
@@ -689,27 +749,34 @@
     },
     "outcomes": [
      {
-      "when": "G3 ok（live SO 确为增量/未重复）∧ G2 ok ∧ G5 ok",
+      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ B_max 261.0 < D1 39.1",
       "then_class": "always_replenish",
-      "arithmetic": "B_max 261.0 < D2 501.1"
+      "arithmetic": "结构短缺：最宽松供给上界也低于不含 SO 的 P50"
      },
      {
-      "when": "G3 确认与预测重叠",
+      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ B_max 261.0 ≥ D2 501.1",
       "then_class": "no_shortage_within_window",
-      "arithmetic": "按 D1 39.1 口径 B_max 261.0 覆盖"
+      "arithmetic": "充足：最宽松供给上界覆盖含 SO 的大口径需求（D2 为上界，故不必先删 SO）"
      },
      {
-      "when": "G3 仍 unproven",
+      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ D1 39.1 ≤ B_max 261.0 < D2 501.1",
       "then_class": "insufficient_evidence",
-      "arithmetic": "D2 不是已对平需求，不能据此报短缺或充足"
+      "arithmetic": "差在 SO：必须做桶级消费/分配后重算净需求，再比较；不得把 SO 当重复直接删掉回退 D1"
+     },
+     {
+      "when": "任一闸门 unproven/fail",
+      "then_class": "insufficient_evidence",
+      "arithmetic": "维持待核实；未证状态不产出任何短缺/充足结论"
      }
     ],
     "forbidden": [
+     "SO overlapping the forecast never means SO can be deleted: bucket-level consumption first",
+     "arrival/ completion dates alone never establish sufficiency (need G2 units, G4 overlap, G6 PK#->KS too)",
      "supply lower bound below demand (B_min / B_min_po_dedup < D2) never promotes to always_replenish",
      "live SO in the demand view never becomes net demand before bucket-level consumption",
      "Cover or any unbooked supply never counts until mapping and substitutability are proven"
     ],
-    "summary": "补齐 G2_uom、G3_demand_overlap、G5_arrival_in_window 后按 outcomes 重算；在此之前不发起采购/生产指令。"
+    "summary": "补齐 G2_uom、G3_demand_overlap、G4_supply_overlap、G5_arrival_in_window、G6_pk_ks_1to1 后按 outcomes 重算；在此之前不发起采购/生产指令，也不宣布“不缺”。"
    },
    "missing_evidence": [
     {
@@ -735,7 +802,7 @@
    ],
    "responsible_role": "生产/PMC（WO 完工日）；业务/运营（需求口径）；商品主数据/仓储（UOM）",
    "decisive_unknown": "需求口径：live SO 是否与 P50 重叠，以及旺势是否延续",
-   "basis": "可供上限 B_max 261 vs D1 39.1、D2 501.1。在手 A_low 1；B_min 261（最大重叠，去重压力 261）。B_max 覆盖 D1；只有在 live SO 确为增量时才会短缺。需求口径比值 0.09（近 3 月均值 208）。所有含 SO 的判断均标 demand_overlap=unproven。"
+   "basis": "可供上限 B_max 261 vs D1 39.1、D2 501.1。在手 A_low 1；B_min 261（最大重叠，去重压力 261）。B_max 覆盖 D1；只有在 live SO 确为增量、且完成桶级消费后才可能短缺。需求口径比值 0.09（近 3 月均值 208）。所有含 SO 的判断均标 demand_overlap=unproven。"
   },
   {
    "seq": 3,
@@ -749,7 +816,10 @@
    "arithmetic_class": "depends_on_arrival",
    "promotion_blockers": [
     "G2_uom",
-    "G5_arrival_in_window"
+    "G3_demand_overlap",
+    "G4_supply_overlap",
+    "G5_arrival_in_window",
+    "G6_pk_ks_1to1"
    ],
    "demand_overlap": "unproven",
    "demand_overlap_note": "live SO 与 P50 是否同一批需求未证；未做桶级消费/分配前，D2 不能当净需求",
@@ -911,7 +981,7 @@
    "arithmetic_qualifies_at_windows": [],
    "insufficient_evidence_causes": null,
    "start_condition": {
-    "rule": "升级由结构化 required_gates 驱动；文字条件不能替代闸门",
+    "rule": "同一条结论门槛：短缺与充足都必须过同一组 definitive gates；文字条件不能替代闸门",
     "demand_view_for_promotion": "D2",
     "demand_overlap": "unproven",
     "supply_lower_bound_shortfall": true,
@@ -971,11 +1041,29 @@
       "blocks": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
      }
     ],
-    "gates_required_for_promotion": [
+    "gates_required_for_definitive_conclusion": [
      "G1_identity",
      "G2_uom",
+     "G3_demand_overlap",
+     "G4_supply_overlap",
      "G5_arrival_in_window",
-     "G3_demand_overlap"
+     "G6_pk_ks_1to1"
+    ],
+    "gates_required_for_shortage": [
+     "G1_identity",
+     "G2_uom",
+     "G3_demand_overlap",
+     "G4_supply_overlap",
+     "G5_arrival_in_window",
+     "G6_pk_ks_1to1"
+    ],
+    "gates_required_for_sufficiency": [
+     "G1_identity",
+     "G2_uom",
+     "G3_demand_overlap",
+     "G4_supply_overlap",
+     "G5_arrival_in_window",
+     "G6_pk_ks_1to1"
     ],
     "gate_summary": {
      "G1_identity": "ok",
@@ -987,27 +1075,34 @@
     },
     "outcomes": [
      {
-      "when": "G2 ok ∧ G4 ok（PO/在途/在产不重叠）∧ G5 ok（全部在窗口内到货）",
-      "then_class": "no_shortage_within_window",
-      "arithmetic": "供给达到 B_max 397.0 ≥ D2 187.7"
-     },
-     {
-      "when": "到货/完工落到窗口外，或确认重叠（供给低于 B_max）",
-      "then_class": "insufficient_evidence",
-      "arithmetic": "最大重叠下 B_min 175.0 < D2 187.7；只在手+在产 A_high 155.0 < D2 187.7（到货落在窗口外）；只在手 A_low 54.0 < D2 187.7。下界不足只证明存在短缺情景，D2 含未证的 live SO，故不得直接判 always"
-     },
-     {
-      "when": "上述短缺情景被证实 ∧ G2 ok ∧ G3 ok（live SO 确为增量且已做桶级分配）",
+      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ B_max 397.0 < D1 43.7",
       "then_class": "always_replenish",
-      "arithmetic": "只有在 D2 成为已对平需求后才允许升级"
+      "arithmetic": "结构短缺：最宽松供给上界也低于不含 SO 的 P50"
+     },
+     {
+      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ B_max 397.0 ≥ D2 187.7",
+      "then_class": "no_shortage_within_window",
+      "arithmetic": "充足：最宽松供给上界覆盖含 SO 的大口径需求（D2 为上界，故不必先删 SO）"
+     },
+     {
+      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ D1 43.7 ≤ B_max 397.0 < D2 187.7",
+      "then_class": "insufficient_evidence",
+      "arithmetic": "差在 SO：必须做桶级消费/分配后重算净需求，再比较；不得把 SO 当重复直接删掉回退 D1"
+     },
+     {
+      "when": "任一闸门 unproven/fail",
+      "then_class": "insufficient_evidence",
+      "arithmetic": "维持待核实；未证状态不产出任何短缺/充足结论"
      }
     ],
     "forbidden": [
+     "SO overlapping the forecast never means SO can be deleted: bucket-level consumption first",
+     "arrival/ completion dates alone never establish sufficiency (need G2 units, G4 overlap, G6 PK#->KS too)",
      "supply lower bound below demand (B_min / B_min_po_dedup < D2) never promotes to always_replenish",
      "live SO in the demand view never becomes net demand before bucket-level consumption",
      "Cover or any unbooked supply never counts until mapping and substitutability are proven"
     ],
-    "summary": "补齐 G2_uom、G3_demand_overlap、G5_arrival_in_window 后按 outcomes 重算；在此之前不发起采购/生产指令。"
+    "summary": "补齐 G2_uom、G3_demand_overlap、G4_supply_overlap、G5_arrival_in_window、G6_pk_ks_1to1 后按 outcomes 重算；在此之前不发起采购/生产指令，也不宣布“不缺”。"
    },
    "missing_evidence": [
     {
@@ -1048,7 +1143,7 @@
    ],
    "responsible_role": "采购/供应链（PO ETA/重复）；生产/PMC（WO 完工日）；业务/运营（需求口径）；商品主数据/仓储（UOM）",
    "decisive_unknown": "到货/完工时点与重叠：在产 101、PO 121、在途 121",
-   "basis": "可供上限 B_max 397 vs D1 43.7、D2 187.7。在手 A_low 54；B_min 175（最大重叠，去重压力 175）。结论在“全部到货不重叠”（不缺）与“重叠/迟到”（短缺）之间翻转。需求口径比值 0.12（近 3 月均值 167）。所有含 SO 的判断均标 demand_overlap=unproven。"
+   "basis": "可供上限 B_max 397 vs D1 43.7、D2 187.7。在手 A_low 54；B_min 175（最大重叠，去重压力 175）。结论只在“全部到货且不重叠”与“重叠/迟到”两个情景之间翻转；两个方向都要过同一组 6 个 definitive gates，闸门未齐前只作待核实。需求口径比值 0.12（近 3 月均值 167）。所有含 SO 的判断均标 demand_overlap=unproven。"
   },
   {
    "seq": 4,
@@ -1062,7 +1157,10 @@
    "arithmetic_class": "depends_on_arrival",
    "promotion_blockers": [
     "G2_uom",
-    "G5_arrival_in_window"
+    "G3_demand_overlap",
+    "G4_supply_overlap",
+    "G5_arrival_in_window",
+    "G6_pk_ks_1to1"
    ],
    "demand_overlap": "unproven",
    "demand_overlap_note": "live SO 与 P50 是否同一批需求未证；未做桶级消费/分配前，D2 不能当净需求",
@@ -1224,7 +1322,7 @@
    "arithmetic_qualifies_at_windows": [],
    "insufficient_evidence_causes": null,
    "start_condition": {
-    "rule": "升级由结构化 required_gates 驱动；文字条件不能替代闸门",
+    "rule": "同一条结论门槛：短缺与充足都必须过同一组 definitive gates；文字条件不能替代闸门",
     "demand_view_for_promotion": "D2",
     "demand_overlap": "unproven",
     "supply_lower_bound_shortfall": false,
@@ -1283,11 +1381,29 @@
       "blocks": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
      }
     ],
-    "gates_required_for_promotion": [
+    "gates_required_for_definitive_conclusion": [
      "G1_identity",
      "G2_uom",
+     "G3_demand_overlap",
+     "G4_supply_overlap",
      "G5_arrival_in_window",
-     "G3_demand_overlap"
+     "G6_pk_ks_1to1"
+    ],
+    "gates_required_for_shortage": [
+     "G1_identity",
+     "G2_uom",
+     "G3_demand_overlap",
+     "G4_supply_overlap",
+     "G5_arrival_in_window",
+     "G6_pk_ks_1to1"
+    ],
+    "gates_required_for_sufficiency": [
+     "G1_identity",
+     "G2_uom",
+     "G3_demand_overlap",
+     "G4_supply_overlap",
+     "G5_arrival_in_window",
+     "G6_pk_ks_1to1"
     ],
     "gate_summary": {
      "G1_identity": "ok",
@@ -1299,27 +1415,34 @@
     },
     "outcomes": [
      {
-      "when": "G2 ok ∧ G4 ok（PO/在途/在产不重叠）∧ G5 ok（全部在窗口内到货）",
-      "then_class": "no_shortage_within_window",
-      "arithmetic": "供给达到 B_max 401.0 ≥ D2 104.5"
-     },
-     {
-      "when": "到货/完工落到窗口外，或确认重叠（供给低于 B_max）",
-      "then_class": "insufficient_evidence",
-      "arithmetic": "只在手+在产 A_high 41.0 < D2 104.5（到货落在窗口外）；只在手 A_low 6.0 < D2 104.5。下界不足只证明存在短缺情景，D2 含未证的 live SO，故不得直接判 always"
-     },
-     {
-      "when": "上述短缺情景被证实 ∧ G2 ok ∧ G3 ok（live SO 确为增量且已做桶级分配）",
+      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ B_max 401.0 < D1 24.5",
       "then_class": "always_replenish",
-      "arithmetic": "只有在 D2 成为已对平需求后才允许升级"
+      "arithmetic": "结构短缺：最宽松供给上界也低于不含 SO 的 P50"
+     },
+     {
+      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ B_max 401.0 ≥ D2 104.5",
+      "then_class": "no_shortage_within_window",
+      "arithmetic": "充足：最宽松供给上界覆盖含 SO 的大口径需求（D2 为上界，故不必先删 SO）"
+     },
+     {
+      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ D1 24.5 ≤ B_max 401.0 < D2 104.5",
+      "then_class": "insufficient_evidence",
+      "arithmetic": "差在 SO：必须做桶级消费/分配后重算净需求，再比较；不得把 SO 当重复直接删掉回退 D1"
+     },
+     {
+      "when": "任一闸门 unproven/fail",
+      "then_class": "insufficient_evidence",
+      "arithmetic": "维持待核实；未证状态不产出任何短缺/充足结论"
      }
     ],
     "forbidden": [
+     "SO overlapping the forecast never means SO can be deleted: bucket-level consumption first",
+     "arrival/ completion dates alone never establish sufficiency (need G2 units, G4 overlap, G6 PK#->KS too)",
      "supply lower bound below demand (B_min / B_min_po_dedup < D2) never promotes to always_replenish",
      "live SO in the demand view never becomes net demand before bucket-level consumption",
      "Cover or any unbooked supply never counts until mapping and substitutability are proven"
     ],
-    "summary": "补齐 G2_uom、G3_demand_overlap、G5_arrival_in_window 后按 outcomes 重算；在此之前不发起采购/生产指令。"
+    "summary": "补齐 G2_uom、G3_demand_overlap、G4_supply_overlap、G5_arrival_in_window、G6_pk_ks_1to1 后按 outcomes 重算；在此之前不发起采购/生产指令，也不宣布“不缺”。"
    },
    "missing_evidence": [
     {
@@ -1365,7 +1488,7 @@
    ],
    "responsible_role": "采购/供应链（PO ETA/重复）；生产/PMC（WO 完工日）；业务/运营（需求口径）；商品主数据/仓储（UOM）",
    "decisive_unknown": "PO 是否重复（去重后 B_min 126 vs D2 104.5），以及到货能否在窗口内",
-   "basis": "可供上限 B_max 401 vs D1 24.5、D2 104.5。在手 A_low 6；B_min 246（最大重叠，去重压力 126）。结论在“全部到货不重叠”（不缺）与“重叠/迟到”（短缺）之间翻转。需求口径比值 0.075（近 3 月均值 150.7）。所有含 SO 的判断均标 demand_overlap=unproven。"
+   "basis": "可供上限 B_max 401 vs D1 24.5、D2 104.5。在手 A_low 6；B_min 246（最大重叠，去重压力 126）。结论只在“全部到货且不重叠”与“重叠/迟到”两个情景之间翻转；两个方向都要过同一组 6 个 definitive gates，闸门未齐前只作待核实。需求口径比值 0.075（近 3 月均值 150.7）。所有含 SO 的判断均标 demand_overlap=unproven。"
   },
   {
    "seq": 5,
@@ -1379,7 +1502,10 @@
    "arithmetic_class": "depends_on_arrival",
    "promotion_blockers": [
     "G2_uom",
-    "G5_arrival_in_window"
+    "G3_demand_overlap",
+    "G4_supply_overlap",
+    "G5_arrival_in_window",
+    "G6_pk_ks_1to1"
    ],
    "demand_overlap": "unproven",
    "demand_overlap_note": "live SO 与 P50 是否同一批需求未证；未做桶级消费/分配前，D2 不能当净需求",
@@ -1541,7 +1667,7 @@
    "arithmetic_qualifies_at_windows": [],
    "insufficient_evidence_causes": null,
    "start_condition": {
-    "rule": "升级由结构化 required_gates 驱动；文字条件不能替代闸门",
+    "rule": "同一条结论门槛：短缺与充足都必须过同一组 definitive gates；文字条件不能替代闸门",
     "demand_view_for_promotion": "D2",
     "demand_overlap": "unproven",
     "supply_lower_bound_shortfall": false,
@@ -1599,11 +1725,29 @@
       "blocks": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
      }
     ],
-    "gates_required_for_promotion": [
+    "gates_required_for_definitive_conclusion": [
      "G1_identity",
      "G2_uom",
+     "G3_demand_overlap",
+     "G4_supply_overlap",
      "G5_arrival_in_window",
-     "G3_demand_overlap"
+     "G6_pk_ks_1to1"
+    ],
+    "gates_required_for_shortage": [
+     "G1_identity",
+     "G2_uom",
+     "G3_demand_overlap",
+     "G4_supply_overlap",
+     "G5_arrival_in_window",
+     "G6_pk_ks_1to1"
+    ],
+    "gates_required_for_sufficiency": [
+     "G1_identity",
+     "G2_uom",
+     "G3_demand_overlap",
+     "G4_supply_overlap",
+     "G5_arrival_in_window",
+     "G6_pk_ks_1to1"
     ],
     "gate_summary": {
      "G1_identity": "ok",
@@ -1615,27 +1759,34 @@
     },
     "outcomes": [
      {
-      "when": "G2 ok ∧ G4 ok（PO/在途/在产不重叠）∧ G5 ok（全部在窗口内到货）",
-      "then_class": "no_shortage_within_window",
-      "arithmetic": "供给达到 B_max 1426.0 ≥ D2 884.8"
-     },
-     {
-      "when": "到货/完工落到窗口外，或确认重叠（供给低于 B_max）",
-      "then_class": "insufficient_evidence",
-      "arithmetic": "只在手 A_low 376.0 < D2 884.8。下界不足只证明存在短缺情景，D2 含未证的 live SO，故不得直接判 always"
-     },
-     {
-      "when": "上述短缺情景被证实 ∧ G2 ok ∧ G3 ok（live SO 确为增量且已做桶级分配）",
+      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ B_max 1426.0 < D1 247.8",
       "then_class": "always_replenish",
-      "arithmetic": "只有在 D2 成为已对平需求后才允许升级"
+      "arithmetic": "结构短缺：最宽松供给上界也低于不含 SO 的 P50"
+     },
+     {
+      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ B_max 1426.0 ≥ D2 884.8",
+      "then_class": "no_shortage_within_window",
+      "arithmetic": "充足：最宽松供给上界覆盖含 SO 的大口径需求（D2 为上界，故不必先删 SO）"
+     },
+     {
+      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ D1 247.8 ≤ B_max 1426.0 < D2 884.8",
+      "then_class": "insufficient_evidence",
+      "arithmetic": "差在 SO：必须做桶级消费/分配后重算净需求，再比较；不得把 SO 当重复直接删掉回退 D1"
+     },
+     {
+      "when": "任一闸门 unproven/fail",
+      "then_class": "insufficient_evidence",
+      "arithmetic": "维持待核实；未证状态不产出任何短缺/充足结论"
      }
     ],
     "forbidden": [
+     "SO overlapping the forecast never means SO can be deleted: bucket-level consumption first",
+     "arrival/ completion dates alone never establish sufficiency (need G2 units, G4 overlap, G6 PK#->KS too)",
      "supply lower bound below demand (B_min / B_min_po_dedup < D2) never promotes to always_replenish",
      "live SO in the demand view never becomes net demand before bucket-level consumption",
      "Cover or any unbooked supply never counts until mapping and substitutability are proven"
     ],
-    "summary": "补齐 G2_uom、G3_demand_overlap、G5_arrival_in_window 后按 outcomes 重算；在此之前不发起采购/生产指令。"
+    "summary": "补齐 G2_uom、G3_demand_overlap、G4_supply_overlap、G5_arrival_in_window、G6_pk_ks_1to1 后按 outcomes 重算；在此之前不发起采购/生产指令，也不宣布“不缺”。"
    },
    "missing_evidence": [
     {
@@ -1681,7 +1832,7 @@
    ],
    "responsible_role": "采购/供应链（PO ETA/重复）；生产/PMC（WO 完工日）；业务/运营（需求口径）；商品主数据/仓储（UOM）",
    "decisive_unknown": "PO 是否重复（去重后 B_min 988 vs D2 884.8），以及到货能否在窗口内",
-   "basis": "可供上限 B_max 1426 vs D1 247.8、D2 884.8。在手 A_low 376；B_min 988（最大重叠，去重压力 988）。结论在“全部到货不重叠”（不缺）与“重叠/迟到”（短缺）之间翻转。需求口径比值 1.114（近 3 月均值 90.3）。所有含 SO 的判断均标 demand_overlap=unproven。"
+   "basis": "可供上限 B_max 1426 vs D1 247.8、D2 884.8。在手 A_low 376；B_min 988（最大重叠，去重压力 988）。结论只在“全部到货且不重叠”与“重叠/迟到”两个情景之间翻转；两个方向都要过同一组 6 个 definitive gates，闸门未齐前只作待核实。需求口径比值 1.114（近 3 月均值 90.3）。所有含 SO 的判断均标 demand_overlap=unproven。"
   },
   {
    "seq": 6,
@@ -1695,7 +1846,10 @@
    "arithmetic_class": "insufficient_evidence",
    "promotion_blockers": [
     "G2_uom",
-    "G5_arrival_in_window"
+    "G3_demand_overlap",
+    "G4_supply_overlap",
+    "G5_arrival_in_window",
+    "G6_pk_ks_1to1"
    ],
    "demand_overlap": "unproven",
    "demand_overlap_note": "live SO 与 P50 是否同一批需求未证；未做桶级消费/分配前，D2 不能当净需求",
@@ -1863,7 +2017,7 @@
     "calibration_insufficiency": "P90-free 清单不做区间校准，校准不足不在本清单判定内"
    },
    "start_condition": {
-    "rule": "升级由结构化 required_gates 驱动；文字条件不能替代闸门",
+    "rule": "同一条结论门槛：短缺与充足都必须过同一组 definitive gates；文字条件不能替代闸门",
     "demand_view_for_promotion": "D2",
     "demand_overlap": "unproven",
     "supply_lower_bound_shortfall": true,
@@ -1923,11 +2077,29 @@
       "blocks": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
      }
     ],
-    "gates_required_for_promotion": [
+    "gates_required_for_definitive_conclusion": [
      "G1_identity",
      "G2_uom",
+     "G3_demand_overlap",
+     "G4_supply_overlap",
      "G5_arrival_in_window",
-     "G3_demand_overlap"
+     "G6_pk_ks_1to1"
+    ],
+    "gates_required_for_shortage": [
+     "G1_identity",
+     "G2_uom",
+     "G3_demand_overlap",
+     "G4_supply_overlap",
+     "G5_arrival_in_window",
+     "G6_pk_ks_1to1"
+    ],
+    "gates_required_for_sufficiency": [
+     "G1_identity",
+     "G2_uom",
+     "G3_demand_overlap",
+     "G4_supply_overlap",
+     "G5_arrival_in_window",
+     "G6_pk_ks_1to1"
     ],
     "gate_summary": {
      "G1_identity": "ok",
@@ -1939,27 +2111,34 @@
     },
     "outcomes": [
      {
-      "when": "G3 ok（live SO 确为增量/未重复）∧ G2 ok ∧ G5 ok",
+      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ B_max 104.0 < D1 54.0",
       "then_class": "always_replenish",
-      "arithmetic": "B_max 104.0 < D2 149.0"
+      "arithmetic": "结构短缺：最宽松供给上界也低于不含 SO 的 P50"
      },
      {
-      "when": "G3 确认与预测重叠",
+      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ B_max 104.0 ≥ D2 149.0",
       "then_class": "no_shortage_within_window",
-      "arithmetic": "按 D1 54.0 口径 B_max 104.0 覆盖"
+      "arithmetic": "充足：最宽松供给上界覆盖含 SO 的大口径需求（D2 为上界，故不必先删 SO）"
      },
      {
-      "when": "G3 仍 unproven",
+      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ D1 54.0 ≤ B_max 104.0 < D2 149.0",
       "then_class": "insufficient_evidence",
-      "arithmetic": "D2 不是已对平需求，不能据此报短缺或充足"
+      "arithmetic": "差在 SO：必须做桶级消费/分配后重算净需求，再比较；不得把 SO 当重复直接删掉回退 D1"
+     },
+     {
+      "when": "任一闸门 unproven/fail",
+      "then_class": "insufficient_evidence",
+      "arithmetic": "维持待核实；未证状态不产出任何短缺/充足结论"
      }
     ],
     "forbidden": [
+     "SO overlapping the forecast never means SO can be deleted: bucket-level consumption first",
+     "arrival/ completion dates alone never establish sufficiency (need G2 units, G4 overlap, G6 PK#->KS too)",
      "supply lower bound below demand (B_min / B_min_po_dedup < D2) never promotes to always_replenish",
      "live SO in the demand view never becomes net demand before bucket-level consumption",
      "Cover or any unbooked supply never counts until mapping and substitutability are proven"
     ],
-    "summary": "补齐 G2_uom、G3_demand_overlap、G5_arrival_in_window 后按 outcomes 重算；在此之前不发起采购/生产指令。"
+    "summary": "补齐 G2_uom、G3_demand_overlap、G4_supply_overlap、G5_arrival_in_window、G6_pk_ks_1to1 后按 outcomes 重算；在此之前不发起采购/生产指令，也不宣布“不缺”。"
    },
    "missing_evidence": [
     {
@@ -1990,7 +2169,7 @@
    ],
    "responsible_role": "生产/PMC（WO 完工日）；业务/运营（需求口径）；商品主数据/仓储（UOM）",
    "decisive_unknown": "需求口径：live SO 是否与 P50 重叠，以及旺势是否延续",
-   "basis": "可供上限 B_max 104 vs D1 54、D2 149。在手 A_low 52；B_min 104（最大重叠，去重压力 104）。B_max 覆盖 D1；只有在 live SO 确为增量时才会短缺。需求口径比值 0.152（近 3 月均值 123）。所有含 SO 的判断均标 demand_overlap=unproven。"
+   "basis": "可供上限 B_max 104 vs D1 54、D2 149。在手 A_low 52；B_min 104（最大重叠，去重压力 104）。B_max 覆盖 D1；只有在 live SO 确为增量、且完成桶级消费后才可能短缺。需求口径比值 0.152（近 3 月均值 123）。所有含 SO 的判断均标 demand_overlap=unproven。"
   },
   {
    "seq": 7,
@@ -2004,7 +2183,10 @@
    "arithmetic_class": "depends_on_arrival",
    "promotion_blockers": [
     "G2_uom",
-    "G5_arrival_in_window"
+    "G3_demand_overlap",
+    "G4_supply_overlap",
+    "G5_arrival_in_window",
+    "G6_pk_ks_1to1"
    ],
    "demand_overlap": "unproven",
    "demand_overlap_note": "live SO 与 P50 是否同一批需求未证；未做桶级消费/分配前，D2 不能当净需求",
@@ -2166,7 +2348,7 @@
    "arithmetic_qualifies_at_windows": [],
    "insufficient_evidence_causes": null,
    "start_condition": {
-    "rule": "升级由结构化 required_gates 驱动；文字条件不能替代闸门",
+    "rule": "同一条结论门槛：短缺与充足都必须过同一组 definitive gates；文字条件不能替代闸门",
     "demand_view_for_promotion": "D2",
     "demand_overlap": "unproven",
     "supply_lower_bound_shortfall": true,
@@ -2226,11 +2408,29 @@
       "blocks": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
      }
     ],
-    "gates_required_for_promotion": [
+    "gates_required_for_definitive_conclusion": [
      "G1_identity",
      "G2_uom",
+     "G3_demand_overlap",
+     "G4_supply_overlap",
      "G5_arrival_in_window",
-     "G3_demand_overlap"
+     "G6_pk_ks_1to1"
+    ],
+    "gates_required_for_shortage": [
+     "G1_identity",
+     "G2_uom",
+     "G3_demand_overlap",
+     "G4_supply_overlap",
+     "G5_arrival_in_window",
+     "G6_pk_ks_1to1"
+    ],
+    "gates_required_for_sufficiency": [
+     "G1_identity",
+     "G2_uom",
+     "G3_demand_overlap",
+     "G4_supply_overlap",
+     "G5_arrival_in_window",
+     "G6_pk_ks_1to1"
     ],
     "gate_summary": {
      "G1_identity": "ok",
@@ -2242,27 +2442,34 @@
     },
     "outcomes": [
      {
-      "when": "G2 ok ∧ G4 ok（PO/在途/在产不重叠）∧ G5 ok（全部在窗口内到货）",
-      "then_class": "no_shortage_within_window",
-      "arithmetic": "供给达到 B_max 517.0 ≥ D2 173.0"
-     },
-     {
-      "when": "到货/完工落到窗口外，或确认重叠（供给低于 B_max）",
-      "then_class": "insufficient_evidence",
-      "arithmetic": "去重压力下 B_min 171.0 < D2 173.0；只在手+在产 A_high 34.0 < D2 173.0（到货落在窗口外）；只在手 A_low 6.0 < D2 173.0。下界不足只证明存在短缺情景，D2 含未证的 live SO，故不得直接判 always"
-     },
-     {
-      "when": "上述短缺情景被证实 ∧ G2 ok ∧ G3 ok（live SO 确为增量且已做桶级分配）",
+      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ B_max 517.0 < D1 48.0",
       "then_class": "always_replenish",
-      "arithmetic": "只有在 D2 成为已对平需求后才允许升级"
+      "arithmetic": "结构短缺：最宽松供给上界也低于不含 SO 的 P50"
+     },
+     {
+      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ B_max 517.0 ≥ D2 173.0",
+      "then_class": "no_shortage_within_window",
+      "arithmetic": "充足：最宽松供给上界覆盖含 SO 的大口径需求（D2 为上界，故不必先删 SO）"
+     },
+     {
+      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ D1 48.0 ≤ B_max 517.0 < D2 173.0",
+      "then_class": "insufficient_evidence",
+      "arithmetic": "差在 SO：必须做桶级消费/分配后重算净需求，再比较；不得把 SO 当重复直接删掉回退 D1"
+     },
+     {
+      "when": "任一闸门 unproven/fail",
+      "then_class": "insufficient_evidence",
+      "arithmetic": "维持待核实；未证状态不产出任何短缺/充足结论"
      }
     ],
     "forbidden": [
+     "SO overlapping the forecast never means SO can be deleted: bucket-level consumption first",
+     "arrival/ completion dates alone never establish sufficiency (need G2 units, G4 overlap, G6 PK#->KS too)",
      "supply lower bound below demand (B_min / B_min_po_dedup < D2) never promotes to always_replenish",
      "live SO in the demand view never becomes net demand before bucket-level consumption",
      "Cover or any unbooked supply never counts until mapping and substitutability are proven"
     ],
-    "summary": "补齐 G2_uom、G3_demand_overlap、G5_arrival_in_window 后按 outcomes 重算；在此之前不发起采购/生产指令。"
+    "summary": "补齐 G2_uom、G3_demand_overlap、G4_supply_overlap、G5_arrival_in_window、G6_pk_ks_1to1 后按 outcomes 重算；在此之前不发起采购/生产指令，也不宣布“不缺”。"
    },
    "missing_evidence": [
     {
@@ -2308,7 +2515,7 @@
    ],
    "responsible_role": "采购/供应链（PO ETA/重复）；生产/PMC（WO 完工日）；业务/运营（需求口径）；商品主数据/仓储（UOM）",
    "decisive_unknown": "PO 是否重复（去重后 B_min 171 vs D2 173），以及到货能否在窗口内",
-   "basis": "可供上限 B_max 517 vs D1 48、D2 173。在手 A_low 6；B_min 324（最大重叠，去重压力 171）。结论在“全部到货不重叠”（不缺）与“重叠/迟到”（短缺）之间翻转。需求口径比值 0.199（近 3 月均值 112）。所有含 SO 的判断均标 demand_overlap=unproven。"
+   "basis": "可供上限 B_max 517 vs D1 48、D2 173。在手 A_low 6；B_min 324（最大重叠，去重压力 171）。结论只在“全部到货且不重叠”与“重叠/迟到”两个情景之间翻转；两个方向都要过同一组 6 个 definitive gates，闸门未齐前只作待核实。需求口径比值 0.199（近 3 月均值 112）。所有含 SO 的判断均标 demand_overlap=unproven。"
   },
   {
    "seq": 8,
@@ -2322,7 +2529,10 @@
    "arithmetic_class": "always_replenish",
    "promotion_blockers": [
     "G2_uom",
-    "G5_arrival_in_window"
+    "G3_demand_overlap",
+    "G4_supply_overlap",
+    "G5_arrival_in_window",
+    "G6_pk_ks_1to1"
    ],
    "demand_overlap": "unproven",
    "demand_overlap_note": "live SO 与 P50 是否同一批需求未证；未做桶级消费/分配前，D2 不能当净需求",
@@ -2494,7 +2704,7 @@
     "calibration_insufficiency": "P90-free 清单不做区间校准，校准不足不在本清单判定内"
    },
    "start_condition": {
-    "rule": "升级由结构化 required_gates 驱动；文字条件不能替代闸门",
+    "rule": "同一条结论门槛：短缺与充足都必须过同一组 definitive gates；文字条件不能替代闸门",
     "demand_view_for_promotion": "D1",
     "demand_overlap": "unproven",
     "supply_lower_bound_shortfall": true,
@@ -2554,10 +2764,29 @@
       "blocks": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
      }
     ],
-    "gates_required_for_promotion": [
+    "gates_required_for_definitive_conclusion": [
      "G1_identity",
      "G2_uom",
-     "G5_arrival_in_window"
+     "G3_demand_overlap",
+     "G4_supply_overlap",
+     "G5_arrival_in_window",
+     "G6_pk_ks_1to1"
+    ],
+    "gates_required_for_shortage": [
+     "G1_identity",
+     "G2_uom",
+     "G3_demand_overlap",
+     "G4_supply_overlap",
+     "G5_arrival_in_window",
+     "G6_pk_ks_1to1"
+    ],
+    "gates_required_for_sufficiency": [
+     "G1_identity",
+     "G2_uom",
+     "G3_demand_overlap",
+     "G4_supply_overlap",
+     "G5_arrival_in_window",
+     "G6_pk_ks_1to1"
     ],
     "gate_summary": {
      "G1_identity": "ok",
@@ -2569,22 +2798,34 @@
     },
     "outcomes": [
      {
-      "when": "G1 ok ∧ G2 ok ∧ G5 ok（到货/完工日已证在窗口内）",
+      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ B_max 221.0 < D1 250.1",
       "then_class": "always_replenish",
-      "arithmetic": "B_max 221.0 < D1 250.1"
+      "arithmetic": "结构短缺：最宽松供给上界也低于不含 SO 的 P50"
      },
      {
-      "when": "任何硬门仍为 unproven",
+      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ B_max 221.0 ≥ D2 276.1",
+      "then_class": "no_shortage_within_window",
+      "arithmetic": "充足：最宽松供给上界覆盖含 SO 的大口径需求（D2 为上界，故不必先删 SO）"
+     },
+     {
+      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ D1 250.1 ≤ B_max 221.0 < D2 276.1",
       "then_class": "insufficient_evidence",
-      "arithmetic": "算术已短缺但证据闸门未过，不升级"
+      "arithmetic": "差在 SO：必须做桶级消费/分配后重算净需求，再比较；不得把 SO 当重复直接删掉回退 D1"
+     },
+     {
+      "when": "任一闸门 unproven/fail",
+      "then_class": "insufficient_evidence",
+      "arithmetic": "维持待核实；未证状态不产出任何短缺/充足结论"
      }
     ],
     "forbidden": [
+     "SO overlapping the forecast never means SO can be deleted: bucket-level consumption first",
+     "arrival/ completion dates alone never establish sufficiency (need G2 units, G4 overlap, G6 PK#->KS too)",
      "supply lower bound below demand (B_min / B_min_po_dedup < D2) never promotes to always_replenish",
      "live SO in the demand view never becomes net demand before bucket-level consumption",
      "Cover or any unbooked supply never counts until mapping and substitutability are proven"
     ],
-    "summary": "补齐 G2_uom、G5_arrival_in_window 后按 outcomes 重算；在此之前不发起采购/生产指令。"
+    "summary": "补齐 G2_uom、G3_demand_overlap、G4_supply_overlap、G5_arrival_in_window、G6_pk_ks_1to1 后按 outcomes 重算；在此之前不发起采购/生产指令，也不宣布“不缺”。"
    },
    "missing_evidence": [
     {
@@ -2644,7 +2885,10 @@
    "arithmetic_class": "depends_on_arrival",
    "promotion_blockers": [
     "G2_uom",
-    "G5_arrival_in_window"
+    "G3_demand_overlap",
+    "G4_supply_overlap",
+    "G5_arrival_in_window",
+    "G6_pk_ks_1to1"
    ],
    "demand_overlap": "unproven",
    "demand_overlap_note": "live SO 与 P50 是否同一批需求未证；未做桶级消费/分配前，D2 不能当净需求",
@@ -2806,7 +3050,7 @@
    "arithmetic_qualifies_at_windows": [],
    "insufficient_evidence_causes": null,
    "start_condition": {
-    "rule": "升级由结构化 required_gates 驱动；文字条件不能替代闸门",
+    "rule": "同一条结论门槛：短缺与充足都必须过同一组 definitive gates；文字条件不能替代闸门",
     "demand_view_for_promotion": "D2",
     "demand_overlap": "unproven",
     "supply_lower_bound_shortfall": false,
@@ -2865,11 +3109,29 @@
       "blocks": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
      }
     ],
-    "gates_required_for_promotion": [
+    "gates_required_for_definitive_conclusion": [
      "G1_identity",
      "G2_uom",
+     "G3_demand_overlap",
+     "G4_supply_overlap",
      "G5_arrival_in_window",
-     "G3_demand_overlap"
+     "G6_pk_ks_1to1"
+    ],
+    "gates_required_for_shortage": [
+     "G1_identity",
+     "G2_uom",
+     "G3_demand_overlap",
+     "G4_supply_overlap",
+     "G5_arrival_in_window",
+     "G6_pk_ks_1to1"
+    ],
+    "gates_required_for_sufficiency": [
+     "G1_identity",
+     "G2_uom",
+     "G3_demand_overlap",
+     "G4_supply_overlap",
+     "G5_arrival_in_window",
+     "G6_pk_ks_1to1"
     ],
     "gate_summary": {
      "G1_identity": "ok",
@@ -2881,27 +3143,34 @@
     },
     "outcomes": [
      {
-      "when": "G2 ok ∧ G4 ok（PO/在途/在产不重叠）∧ G5 ok（全部在窗口内到货）",
-      "then_class": "no_shortage_within_window",
-      "arithmetic": "供给达到 B_max 1394.0 ≥ D2 593.3"
-     },
-     {
-      "when": "到货/完工落到窗口外，或确认重叠（供给低于 B_max）",
-      "then_class": "insufficient_evidence",
-      "arithmetic": "只在手+在产 A_high 414.0 < D2 593.3（到货落在窗口外）；只在手 A_low 104.0 < D2 593.3。下界不足只证明存在短缺情景，D2 含未证的 live SO，故不得直接判 always"
-     },
-     {
-      "when": "上述短缺情景被证实 ∧ G2 ok ∧ G3 ok（live SO 确为增量且已做桶级分配）",
+      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ B_max 1394.0 < D1 165.3",
       "then_class": "always_replenish",
-      "arithmetic": "只有在 D2 成为已对平需求后才允许升级"
+      "arithmetic": "结构短缺：最宽松供给上界也低于不含 SO 的 P50"
+     },
+     {
+      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ B_max 1394.0 ≥ D2 593.3",
+      "then_class": "no_shortage_within_window",
+      "arithmetic": "充足：最宽松供给上界覆盖含 SO 的大口径需求（D2 为上界，故不必先删 SO）"
+     },
+     {
+      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ D1 165.3 ≤ B_max 1394.0 < D2 593.3",
+      "then_class": "insufficient_evidence",
+      "arithmetic": "差在 SO：必须做桶级消费/分配后重算净需求，再比较；不得把 SO 当重复直接删掉回退 D1"
+     },
+     {
+      "when": "任一闸门 unproven/fail",
+      "then_class": "insufficient_evidence",
+      "arithmetic": "维持待核实；未证状态不产出任何短缺/充足结论"
      }
     ],
     "forbidden": [
+     "SO overlapping the forecast never means SO can be deleted: bucket-level consumption first",
+     "arrival/ completion dates alone never establish sufficiency (need G2 units, G4 overlap, G6 PK#->KS too)",
      "supply lower bound below demand (B_min / B_min_po_dedup < D2) never promotes to always_replenish",
      "live SO in the demand view never becomes net demand before bucket-level consumption",
      "Cover or any unbooked supply never counts until mapping and substitutability are proven"
     ],
-    "summary": "补齐 G2_uom、G3_demand_overlap、G5_arrival_in_window 后按 outcomes 重算；在此之前不发起采购/生产指令。"
+    "summary": "补齐 G2_uom、G3_demand_overlap、G4_supply_overlap、G5_arrival_in_window、G6_pk_ks_1to1 后按 outcomes 重算；在此之前不发起采购/生产指令，也不宣布“不缺”。"
    },
    "missing_evidence": [
     {
@@ -2942,7 +3211,7 @@
    ],
    "responsible_role": "采购/供应链（PO ETA/重复）；生产/PMC（WO 完工日）；业务/运营（需求口径）；商品主数据/仓储（UOM）",
    "decisive_unknown": "到货/完工时点与重叠：在产 310、PO 490、在途 490",
-   "basis": "可供上限 B_max 1394 vs D1 165.3、D2 593.3。在手 A_low 104；B_min 594（最大重叠，去重压力 594）。结论在“全部到货不重叠”（不缺）与“重叠/迟到”（短缺）之间翻转。需求口径比值 0.659（近 3 月均值 95.7）。所有含 SO 的判断均标 demand_overlap=unproven。"
+   "basis": "可供上限 B_max 1394 vs D1 165.3、D2 593.3。在手 A_low 104；B_min 594（最大重叠，去重压力 594）。结论只在“全部到货且不重叠”与“重叠/迟到”两个情景之间翻转；两个方向都要过同一组 6 个 definitive gates，闸门未齐前只作待核实。需求口径比值 0.659（近 3 月均值 95.7）。所有含 SO 的判断均标 demand_overlap=unproven。"
   },
   {
    "seq": 10,
@@ -2956,7 +3225,10 @@
    "arithmetic_class": "depends_on_arrival",
    "promotion_blockers": [
     "G2_uom",
-    "G5_arrival_in_window"
+    "G3_demand_overlap",
+    "G4_supply_overlap",
+    "G5_arrival_in_window",
+    "G6_pk_ks_1to1"
    ],
    "demand_overlap": "unproven",
    "demand_overlap_note": "live SO 与 P50 是否同一批需求未证；未做桶级消费/分配前，D2 不能当净需求",
@@ -3118,7 +3390,7 @@
    "arithmetic_qualifies_at_windows": [],
    "insufficient_evidence_causes": null,
    "start_condition": {
-    "rule": "升级由结构化 required_gates 驱动；文字条件不能替代闸门",
+    "rule": "同一条结论门槛：短缺与充足都必须过同一组 definitive gates；文字条件不能替代闸门",
     "demand_view_for_promotion": "D2",
     "demand_overlap": "unproven",
     "supply_lower_bound_shortfall": false,
@@ -3176,11 +3448,29 @@
       "blocks": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
      }
     ],
-    "gates_required_for_promotion": [
+    "gates_required_for_definitive_conclusion": [
      "G1_identity",
      "G2_uom",
+     "G3_demand_overlap",
+     "G4_supply_overlap",
      "G5_arrival_in_window",
-     "G3_demand_overlap"
+     "G6_pk_ks_1to1"
+    ],
+    "gates_required_for_shortage": [
+     "G1_identity",
+     "G2_uom",
+     "G3_demand_overlap",
+     "G4_supply_overlap",
+     "G5_arrival_in_window",
+     "G6_pk_ks_1to1"
+    ],
+    "gates_required_for_sufficiency": [
+     "G1_identity",
+     "G2_uom",
+     "G3_demand_overlap",
+     "G4_supply_overlap",
+     "G5_arrival_in_window",
+     "G6_pk_ks_1to1"
     ],
     "gate_summary": {
      "G1_identity": "ok",
@@ -3192,27 +3482,34 @@
     },
     "outcomes": [
      {
-      "when": "G2 ok ∧ G4 ok（PO/在途/在产不重叠）∧ G5 ok（全部在窗口内到货）",
-      "then_class": "no_shortage_within_window",
-      "arithmetic": "供给达到 B_max 980.0 ≥ D2 859.8"
-     },
-     {
-      "when": "到货/完工落到窗口外，或确认重叠（供给低于 B_max）",
-      "then_class": "insufficient_evidence",
-      "arithmetic": "只在手 A_low 360.0 < D2 859.8。下界不足只证明存在短缺情景，D2 含未证的 live SO，故不得直接判 always"
-     },
-     {
-      "when": "上述短缺情景被证实 ∧ G2 ok ∧ G3 ok（live SO 确为增量且已做桶级分配）",
+      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ B_max 980.0 < D1 228.8",
       "then_class": "always_replenish",
-      "arithmetic": "只有在 D2 成为已对平需求后才允许升级"
+      "arithmetic": "结构短缺：最宽松供给上界也低于不含 SO 的 P50"
+     },
+     {
+      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ B_max 980.0 ≥ D2 859.8",
+      "then_class": "no_shortage_within_window",
+      "arithmetic": "充足：最宽松供给上界覆盖含 SO 的大口径需求（D2 为上界，故不必先删 SO）"
+     },
+     {
+      "when": "G1_identity ok∧G2_uom ok∧G3_demand_overlap ok∧G4_supply_overlap ok∧G5_arrival_in_window ok∧G6_pk_ks_1to1 ok ∧ D1 228.8 ≤ B_max 980.0 < D2 859.8",
+      "then_class": "insufficient_evidence",
+      "arithmetic": "差在 SO：必须做桶级消费/分配后重算净需求，再比较；不得把 SO 当重复直接删掉回退 D1"
+     },
+     {
+      "when": "任一闸门 unproven/fail",
+      "then_class": "insufficient_evidence",
+      "arithmetic": "维持待核实；未证状态不产出任何短缺/充足结论"
      }
     ],
     "forbidden": [
+     "SO overlapping the forecast never means SO can be deleted: bucket-level consumption first",
+     "arrival/ completion dates alone never establish sufficiency (need G2 units, G4 overlap, G6 PK#->KS too)",
      "supply lower bound below demand (B_min / B_min_po_dedup < D2) never promotes to always_replenish",
      "live SO in the demand view never becomes net demand before bucket-level consumption",
      "Cover or any unbooked supply never counts until mapping and substitutability are proven"
     ],
-    "summary": "补齐 G2_uom、G3_demand_overlap、G5_arrival_in_window 后按 outcomes 重算；在此之前不发起采购/生产指令。"
+    "summary": "补齐 G2_uom、G3_demand_overlap、G4_supply_overlap、G5_arrival_in_window、G6_pk_ks_1to1 后按 outcomes 重算；在此之前不发起采购/生产指令，也不宣布“不缺”。"
    },
    "missing_evidence": [
     {
@@ -3248,7 +3545,7 @@
    ],
    "responsible_role": "生产/PMC（WO 完工日）；业务/运营（需求口径）；商品主数据/仓储（UOM）",
    "decisive_unknown": "到货/完工时点与重叠：在产 620、PO 0、在途 0",
-   "basis": "可供上限 B_max 980 vs D1 228.8、D2 859.8。在手 A_low 360；B_min 980（最大重叠，去重压力 980）。结论在“全部到货不重叠”（不缺）与“重叠/迟到”（短缺）之间翻转。需求口径比值 0.932（近 3 月均值 108）。所有含 SO 的判断均标 demand_overlap=unproven。"
+   "basis": "可供上限 B_max 980 vs D1 228.8、D2 859.8。在手 A_low 360；B_min 980（最大重叠，去重压力 980）。结论只在“全部到货且不重叠”与“重叠/迟到”两个情景之间翻转；两个方向都要过同一组 6 个 definitive gates，闸门未齐前只作待核实。需求口径比值 0.932（近 3 月均值 108）。所有含 SO 的判断均标 demand_overlap=unproven。"
   }
  ],
  "d9_mapping": [

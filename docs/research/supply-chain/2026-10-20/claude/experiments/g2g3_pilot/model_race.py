@@ -25,6 +25,12 @@ R1 fixes (control/reviews/2026-10-22-v1-r1.md):
   N02 the estimator is labelled rolling empirical / conformal-style: no
       finite-sample 90% guarantee is claimed.
 
+R3 fixes (control/reviews/2026-10-22-v1-r2.md):
+  M1 every window residual records label_available_at (first day after its last
+     touched month); calibration only uses residuals whose monthly labels were
+     already available at the decision date. Window coverage is regenerated and
+     is described as rolling-origin / overlap-correlated, not strict OOS.
+
 Candidates (same rolling origins):
   1 seasonal_naive          last year's same month
   2 mean3                   last-3-month mean (levels off recent, not seasonal)
@@ -615,9 +621,15 @@ def window_residual_series(sku: str, data: dict, cid: str, days: int,
     [decision, decision+days), and both the forecast and the actual are
     integrated with the identical bucket weights. This is the quantity the
     action window needs; a full-month cumulative residual is NOT used as a
-    stand-in. Each row carries its window end date so a calibration point can
-    filter to windows ending at or before its own decision date — the target
-    window is never in its own calibration set.
+    stand-in.
+
+    LABEL AVAILABILITY (R3-Major1): the actual is built from monthly shipped
+    totals, and a month's total only exists once the month has ended. So each
+    residual carries `label_available_at` = the first day AFTER the last month
+    the window touches. A calibration point may only use residuals whose
+    label_available_at <= its own decision date; filtering on window_end alone
+    would let a window ending mid-month consume that month's full total, i.e.
+    data that did not exist yet.
 
     relative=True returns (A-F)/F for the pooled peer-relative variant.
     Results are cached: the same series is reused by every calibration point
@@ -660,7 +672,12 @@ def window_residual_series(sku: str, data: dict, cid: str, days: int,
             err = (A - F) / F
         else:
             err = A - F
+        # the monthly total for the last touched month is only final after it ends
+        label_available_at = month_start(buckets[-1]["month_index"] + 1)
         rows.append(dict(origin=i_to_ym(o), window_end=wend,
+                         label_available_at=label_available_at,
+                         last_month=buckets[-1]["month"],
+                         label_uses_full_month_total=True,
                          forecast=_round(F), actual=_round(A), err=_round(err)))
     out = dict(rows=rows, n_fallback=n_fallback, n_delegated=n_delegated,
                n_skipped_unknown_target=n_skipped_unknown_target)
@@ -672,15 +689,31 @@ def window_calibration(sku: str, data: dict, cid: str, days: int,
                        asof_start: date, delegate: str | None = None) -> dict:
     """Calibration for a calendar-weight window of `days` days.
 
-    Own same-shape window residuals (windows ending <= asof_start) >=3 -> own
-    rolling-empirical quantile. Fewer -> pooled peer-relative same-shape
-    windows, explicitly labelled. The window shape is recorded for audit.
+    Only residuals whose monthly labels were already available at the decision
+    date may enter: `label_available_at <= asof_start` (NOT `window_end <=
+    asof_start`, which would peek at the last month's full total).
+
+    Own residuals >=3 -> own rolling-empirical quantile. Fewer -> pooled
+    peer-relative same-shape windows, explicitly labelled.
     """
     cal_cid = delegate or cid
     ser = window_residual_series(sku, data, cal_cid, days)
-    errs = [r["err"] for r in ser["rows"] if r["window_end"] <= asof_start]
+    usable = [r for r in ser["rows"] if r["label_available_at"] <= asof_start]
+    # Audit that the filter really is the label-availability rule.
+    for r in usable:
+        if r["label_available_at"] > asof_start:
+            raise AssertionError(
+                f"{sku}/{cid}/{days}d: residual {r['origin']} used a label "
+                f"available {r['label_available_at']} > asof {asof_start}")
+    errs = [r["err"] for r in usable]
+    n_window_ended_but_label_pending = sum(
+        1 for r in ser["rows"]
+        if r["window_end"] <= asof_start and r["label_available_at"] > asof_start)
     shape_buckets = calendar_window_weights(DECISION_DATE, days)
     base = dict(calibration_basis="same_shape_calendar_window_residuals",
+                label_rule=("residual used only when label_available_at "
+                            "(first day after its last month) <= asof; monthly "
+                            "totals are never used before the month closes"),
                 shape=dict(window_days=days,
                            bucket_days=[b["days"] for b in shape_buckets],
                            weights=[_round(b["weight"]) for b in shape_buckets],
@@ -688,6 +721,7 @@ def window_calibration(sku: str, data: dict, cid: str, days: int,
                 n_fallback_excluded=ser["n_fallback"],
                 n_delegated_excluded=ser["n_delegated"],
                 n_skipped_unknown_target=ser["n_skipped_unknown_target"],
+                n_window_ended_but_label_pending=n_window_ended_but_label_pending,
                 calibration_candidate=cal_cid,
                 asof=asof_start.isoformat())
     if len(errs) >= 3:
@@ -701,7 +735,8 @@ def window_calibration(sku: str, data: dict, cid: str, days: int,
         if s2 == sku:
             continue
         ser2 = window_residual_series(s2, data, cal_cid, days, relative=True)
-        rel.extend(r["err"] for r in ser2["rows"] if r["window_end"] <= asof_start)
+        rel.extend(r["err"] for r in ser2["rows"]
+                   if r["label_available_at"] <= asof_start)
     if len(rel) >= 3:
         qrel, level, qinfo = conf_q90(rel)
         return dict(base, status="estimate_pooled_peer_relative",
@@ -715,8 +750,12 @@ def window_calibration(sku: str, data: dict, cid: str, days: int,
 def window_backtest(sku: str, data: dict, cid: str, days: int) -> dict:
     """Same-shape window P90 backtest at the six report origins.
 
-    Windows whose end month is not yet known are skipped and counted; they are
-    never silently treated as covered.
+    For each origin the P90 is calibrated with only the residuals whose monthly
+    labels were available at that decision date (R3-Major1). The cell is scored
+    against the final actual, which is legitimate out-of-sample scoring; it is
+    NOT a claim that the calibration sample is independent (it is rolling and
+    overlapping). Windows whose end month is not yet known are skipped and
+    counted; they are never silently treated as covered.
     """
     d = data[sku]
     y = d["y"]
@@ -731,7 +770,8 @@ def window_backtest(sku: str, data: dict, cid: str, days: int) -> dict:
         f, meta = forecast_candidate(cid, sku, data, o - first + 1, o, max(1, wend_i - o))
         delegate = meta.get("delegate_calibration")
         base = dict(origin=om, decision=dec.isoformat(),
-                    window_end=wend.isoformat())
+                    window_end=wend.isoformat(),
+                    label_available_at=month_start(wend_i + 1).isoformat())
         if wend_i > cutoff_i:
             rows.append(dict(base, available=False,
                              reason="target month beyond 2026-09"))
@@ -750,13 +790,18 @@ def window_backtest(sku: str, data: dict, cid: str, days: int) -> dict:
             lift=_round(lift) if lift is not None else None,
             covered=None if p90 is None else bool(A <= p90 + 1e-9),
             calibration=dict(status=cal["status"], scope=cal["scope"],
-                             n_own=cal["n_own"], n_pool=cal["n_pool"]),
+                             n_own=cal["n_own"], n_pool=cal["n_pool"],
+                             n_window_ended_but_label_pending=cal[
+                                 "n_window_ended_but_label_pending"]),
         ))
     avail = [r for r in rows if r["available"] and r.get("covered") is not None]
     return dict(window_days=days, rows=rows, n_available=len(avail),
                 n_unavailable=sum(1 for r in rows if not r["available"]),
                 coverage=((sum(1 for r in avail if r["covered"]) / len(avail))
-                          if avail else None))
+                          if avail else None),
+                coverage_scope=("rolling-origin, overlap-correlated, monthly-"
+                                "label-based synthetic window; NOT a strict "
+                                "independent out-of-sample estimate"))
 
 
 # ----------------------------------------------------------------------------
@@ -1234,7 +1279,8 @@ def aggregate(skus: list[dict], ev: dict, db_hash_before: str, db_hash_after: st
         window_coverage=win_cov,
         note=("sums across SKUs are scenario totals, not a purchase/production order; "
               "P90 is per-SKU upper bound, not a portfolio P90; window coverage is a "
-              "rolling-empirical estimate, not a finite-sample guarantee"),
+              "rolling-origin, overlap-correlated estimate on monthly-label windows, "
+              "NOT a strict independent out-of-sample coverage and not a guarantee"),
     )
 
 
@@ -1475,6 +1521,11 @@ def main():
                 calibration=("same-shape historical calendar windows: decision = the 22nd "
                              "of the origin+1 month, identical bucket weights, residuals "
                              "A_window - F_window"),
+                label_availability=("the actual uses monthly shipped totals, so a residual "
+                                    "enters a calibration point only when its last month has "
+                                    "closed: label_available_at (first day of the next month) "
+                                    "<= asof. Filtering on window_end alone would consume a "
+                                    "month total before it existed (R3-Major1)."),
                 forbidden=("a full-month cumulative residual (h = round(days/30.4375)) may "
                            "NOT stand in for a partial-month window P90"),
                 horizon_months=HORIZON_MONTHS,
