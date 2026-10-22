@@ -132,10 +132,10 @@
   "no": 894
  },
  "mismatches": 0,
- "v1_summary_old_claim_line": 37
+ "v1_summary_old_claim_line": 40
 }
 ```
-- `summary.md`（v1，已被 `summary_v3.md` 取代）第 37 行仍写“库存为 SKU 跨仓汇总”；该文件不在本轮 ownership，未改。现行摘要与指南已加准确表述（按仓快照；需求按仓销量占比分配）。
+- `summary.md`（v1，已被 `summary_v3.md` 取代）第 40 行仍写“库存为 SKU 跨仓汇总”；该文件不在本轮 ownership，未改。现行摘要与指南已加准确表述（按仓快照；需求按仓销量占比分配）。
 - usability_audit：2,058 行主表可用=同仓库存事实、0 行不符、0 行库存摊派；需求摊派 1,415 行（按仓销量占比），其余 894 行占比为 0。
 
 ## 5. 全 1,328 SKU 去向 — **PASS**

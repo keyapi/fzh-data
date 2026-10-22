@@ -5,9 +5,9 @@
   "replenishment_v2.csv": "6b30e751ecda86301bc73831ffb21705574a0a57b0fbb62c7f43aaba9716c9b7",
   "usability_audit.csv": "d98c7dd75eac4caee9591b6c26f204711fb1948699e2943032ae74c87c22da33",
   "wo_dn_coverage.csv": "6d5f020feb0ab87d1bdd51be2fe877c121b04c189e439758fe81db951d95a739",
-  "delivery_guide.md": "b6dfd8524fca88d4f49c7d5e9f3fc4c79dc64c56e6fbddbc05192746308fb48d",
-  "summary_v3.md": "dc086698d364bc6f873a091b37f3386b9afe83b1ffcfb5afdfc6ab09e290f1ad",
-  "summary.md": "10d8a96d1baffc82091b81ce015c3f583790c1d86aa8a873a82bceddcca6c17b",
+  "delivery_guide.md": "2e84e3eb4df1f41ef7d4b550420332c7ac78f96be1737f2858d39d9c80156c64",
+  "summary_v3.md": "7e1795c821edff9f0c5190a935df51162cace86a13dbdbe7446c941d99abb90d",
+  "summary.md": "f0f88702fc9470bb7fdd537299db57128ac02a45c8925c0f6d0811bdfb59e90a",
   "destinations.json": "720b478809128156cc1609cd10720cb926a98382a7c2f8a8179c55cadbf7bf60"
  },
  "checks": [
@@ -127,7 +127,7 @@
    "status": "PASS",
    "diffs": [],
    "notes": [
-    "`summary.md`（v1，已被 `summary_v3.md` 取代）第 37 行仍写“库存为 SKU 跨仓汇总”；该文件不在本轮 ownership，未改。现行摘要与指南已加准确表述（按仓快照；需求按仓销量占比分配）。",
+    "`summary.md`（v1，已被 `summary_v3.md` 取代）第 40 行仍写“库存为 SKU 跨仓汇总”；该文件不在本轮 ownership，未改。现行摘要与指南已加准确表述（按仓快照；需求按仓销量占比分配）。",
     "usability_audit：2,058 行主表可用=同仓库存事实、0 行不符、0 行库存摊派；需求摊派 1,415 行（按仓销量占比），其余 894 行占比为 0。"
    ],
    "facts": {
@@ -146,7 +146,7 @@
      "no": 894
     },
     "mismatches": 0,
-    "v1_summary_old_claim_line": 37
+    "v1_summary_old_claim_line": 40
    }
   },
   {
