@@ -16,10 +16,10 @@ date: 2026-10-22
 
 - V0.1：`98e1c664` **已冻结**。SO 正向求和 2,924（超发 -907 单列）、B_min/B_max、日历点预测、
   零需求处理有效；**P90/区间及衍生补货结论失效**（#301 FAIL：2 major + 1 minor，无 blocking）。
-- 暂行行动清单：10 SKU，`always_replenish 0 / depends_on_arrival 6 / insufficient_evidence 4`；
+- 暂行行动清单：`540e8d7f`；10 SKU，`always_replenish 0 / depends_on_arrival 6 / insufficient_evidence 4`；
   不含 P90、不含数量。
-- V1 候选模型赛马：10 SKU；seasonal naive / mean3 / seasonal×YoY / peer shape（ETS 因库缺失跳过）；
-  累计 P90 用滚动累计误差/共形校准；报告已生成。
+- V1 候选模型赛马：`617a4315`；10 SKU；seasonal naive / mean3 / seasonal×YoY / peer shape
+  （ETS 因库缺失跳过）；累计 P90 用滚动累计误差/共形校准；报告已生成。
 - R290/Cover/UOM/SKU 映射：保留为局部未知，不阻塞本轮。
 
 ## 正在运行（不要重启、不要重复派）
