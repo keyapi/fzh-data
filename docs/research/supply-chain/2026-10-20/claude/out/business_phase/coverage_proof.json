@@ -1082,7 +1082,11 @@
    "line_ending_normalization": "crlf_to_lf",
    "frozen_commit": "f9df4357",
    "blob_sha256": "9dd044b1f06c8b4e765e404dd0c5b9185da50112dc5ab1d544244706f9e52946",
-   "content_matches_commit": false
+   "content_matches_commit": false,
+   "actual_content_commit": "d2eac9a3",
+   "blob_sha256_d2eac9a3": "c05fd6b8965cd31e79c85fa45dadb1c0f2bdff96",
+   "matches_actual_commit": true,
+   "note": "frozen_commit 字段保留为原始 declared 基线（证据）；实际内容见 actual_content_commit"
   },
   "model_race_py": {
    "path": "D:\\Work\\赛狐\\Cursor-claude\\docs\\research\\supply-chain\\2026-10-20\\claude\\experiments\\g2g3_pilot\\model_race.py",
@@ -1092,7 +1096,11 @@
    "line_ending_normalization": "crlf_to_lf",
    "frozen_commit": "f9df4357",
    "blob_sha256": "929f0899dc4baab80fae44598908ed4489f05d83ae9c125950916217979982fa",
-   "content_matches_commit": false
+   "content_matches_commit": false,
+   "actual_content_commit": "d2eac9a3",
+   "blob_sha256_d2eac9a3": "574b0c127d87d9f5f22da79da68a042f1480b608",
+   "matches_actual_commit": true,
+   "note": "frozen_commit 字段保留为原始 declared 基线（证据）；实际内容见 actual_content_commit"
   },
   "order_store_duckdb": {
    "path": "D:\\Work\\fzh-order-store\\order_store.duckdb",
@@ -1109,7 +1117,10 @@
    "actual_content_sha256_lf": "81aa9f9a71bc00ec330eb3b131573bc48ebff1c0cebc8c15860ef519f2712f84",
    "matches_commit_d2eac9a3": true,
    "explanation": "P1C 的输入清单把 model_race 标为 f9df4357，但实际读到的文件内容是 d2eac9a3（R3 返修把 label_available_at 写进 model_race 产物与脚本）。P1C 计算用的是工作区实际内容，其 model_race_json_sha256 记录的是 raw hash，只有 commit 标签写错；本收口按实际内容披露，不改任何产物。",
-   "p1c_metadata": "plan.json inputs.model_race_commit=f9df4357"
+   "p1c_metadata": "plan.json inputs.model_race_commit=f9df4357",
+   "status": "resolved",
+   "resolved_in": "2026-10-22-p1c-label-fix.md",
+   "resolution": "plan.json 的两个输入标签已改为 d2eac9a3，并补充 canonical-LF sha256 与 git blob id；原始 declared 证据字段全部保留"
   },
   {
    "item": "model_race.py content vs declared frozen commit",
@@ -1118,8 +1129,29 @@
    "actual_content_sha256_lf": "869873dfeb730951d4eaf36022a15eec225951c50c317d96370d13ca356ab7ba",
    "matches_commit_d2eac9a3": true,
    "explanation": "P1C 的输入清单把 model_race 标为 f9df4357，但实际读到的文件内容是 d2eac9a3（R3 返修把 label_available_at 写进 model_race 产物与脚本）。P1C 计算用的是工作区实际内容，其 model_race_json_sha256 记录的是 raw hash，只有 commit 标签写错；本收口按实际内容披露，不改任何产物。",
-   "p1c_metadata": "plan.json inputs.model_race_commit=f9df4357"
+   "p1c_metadata": "plan.json inputs.model_race_commit=f9df4357",
+   "status": "resolved",
+   "resolved_in": "2026-10-22-p1c-label-fix.md",
+   "resolution": "plan.json 的两个输入标签已改为 d2eac9a3，并补充 canonical-LF sha256 与 git blob id；原始 declared 证据字段全部保留"
   }
  ],
- "note": "不修改任何产物；差异只为如实披露。所有计数均由产物重算，不复制 P1C 的声明。"
+ "note": "不修改任何产物；差异只为如实披露。所有计数均由产物重算，不复制 P1C 的声明。",
+ "label_correction": {
+  "status": "resolved",
+  "resolved_in": "2026-10-22-p1c-label-fix.md",
+  "declared_baseline_commit": "f9df4357",
+  "corrected_commit": "d2eac9a3",
+  "model_race_json": {
+   "canonical_lf_sha256": "81aa9f9a71bc00ec330eb3b131573bc48ebff1c0cebc8c15860ef519f2712f84",
+   "blob_d2eac9a3": "c05fd6b8965cd31e79c85fa45dadb1c0f2bdff96",
+   "declared_baseline_blob_f9df4357": "9dd044b1f06c8b4e765e404dd0c5b9185da50112dc5ab1d544244706f9e52946"
+  },
+  "model_race_py": {
+   "canonical_lf_sha256": "869873dfeb730951d4eaf36022a15eec225951c50c317d96370d13ca356ab7ba",
+   "blob_d2eac9a3": "574b0c127d87d9f5f22da79da68a042f1480b608",
+   "declared_baseline_blob_f9df4357": "929f0899dc4baab80fae44598908ed4489f05d83ae9c125950916217979982fa"
+  },
+  "p1c_consumed": "P1C 的需求侧消费的是 d2eac9a3 的 model_race（含 label_available_at 与 conformal-style 标定），不是 f9df4357 的字节内容",
+  "plan_json_note": "本 proof 未记录 plan.json 的 sha256，故无该值需要重算；plan.json 的 rows 数值零变化见记录"
+ }
 }

@@ -22,10 +22,16 @@
   "evidence_sha256": "7eea7c6f41d444bb69728646fb8cb90a174bbc71f5124c3876f5bd13508175b1",
   "model_race_json_sha256": "13be6ab4d6a118f3879964128a3357b2d994495fd9eb47b3bd4fa5b3628214fd",
   "model_race_py_sha256": "0db651a533bcf38752b73b781c557f543726e3fa00d8a83ad3fe8d05ad4ed472",
-  "model_race_commit": "f9df4357",
+  "model_race_commit": "d2eac9a3",
   "db_sha256_before": "25579c5dcd802c7e67f610432a19d08f8e6952696bd50d43bdfa47d6b9241ae9",
   "db_sha256_after": "25579c5dcd802c7e67f610432a19d08f8e6952696bd50d43bdfa47d6b9241ae9",
-  "db_unchanged": true
+  "db_unchanged": true,
+  "model_race_json_sha256_canonical_lf": "81aa9f9a71bc00ec330eb3b131573bc48ebff1c0cebc8c15860ef519f2712f84",
+  "model_race_py_sha256_canonical_lf": "869873dfeb730951d4eaf36022a15eec225951c50c317d96370d13ca356ab7ba",
+  "model_race_json_blob_d2eac9a3": "c05fd6b8965cd31e79c85fa45dadb1c0f2bdff96",
+  "model_race_py_blob_d2eac9a3": "574b0c127d87d9f5f22da79da68a042f1480b608",
+  "declared_baseline_commit": "f9df4357",
+  "correction_note": "原 inputs 把 model_race.json/.py 标为 f9df4357；实际消费的是 d2eac9a3（R2/R3 返修后版本，含 label_available_at 与 conformal-style 标定）。原始 raw sha256 字段保留不动；本更正只改标签并补充 canonical-LF sha256 与 git blob id，不重算任何数值。"
  },
  "demand_caliber": {
   "training": "6-month net sales per Phase 1B (2026-04..09), zero-filled",

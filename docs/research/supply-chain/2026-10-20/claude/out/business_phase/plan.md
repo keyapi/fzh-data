@@ -8,7 +8,8 @@ status: delivery only; no purchase instruction
 inputs:
   - out/business_phase/ranking.json（d50310a6，只读）
   - out/business_phase/destinations.json（44def7f5，只读）
-  - out/replenishment_v0/evidence.json / model_race.json（f9df4357，只读）
+  - out/replenishment_v0/evidence.json（f9df4357，只读）
+  - out/replenishment_v0/model_race.json 与 experiments/g2g3_pilot/model_race.py（**d2eac9a3**，只读；canonical-LF sha256 model_race.json=81aa9f9a71bc00ec…、model_race.py=869873dfeb730951…；原 declared_baseline_commit=f9df4357）
   - D:/Work/fzh-order-store/order_store.duckdb（read_only）
 artifacts:
   - experiments/business_phase/build_plan.py
