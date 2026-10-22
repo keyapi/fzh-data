@@ -1,10 +1,11 @@
 ---
 okf: v0.1
 type: Report
-title: V1 候选模型赛马（10 SKU，滚动回测 + 共形累计 P90）
+title: V1 候选模型赛马（10 SKU，滚动回测 + 滚动经验累计 P90）
 date: 2026-10-22
 owner: claude-worker
 status: read_only_evidence; not order-ready
+revision: R2（#301 R1 返修：M01/M02/N01/N02）
 inputs:
   - D:/Work/fzh-order-store/order_store.duckdb
   - out/replenishment_v0/evidence.json
@@ -18,7 +19,8 @@ artifacts:
 > 只读证据，不是下单清单。0 次生产访问、0 下单、未扩样。
 > V0.1 的 P90 及其衍生补货结论按 D10 失效；本文件接管 P90/区间校准。
 > 固定输入：`order_store.duckdb`（sha256 `25579c5d…`，运行前后不变）与
-> `out/replenishment_v0/evidence.json`（sha256 `7eea7c6f…`，V0.1 冻结证据）。
+> `out/replenishment_v0/evidence.json`（**canonical LF 字节** sha256 `15d52072…`，V0.1 冻结证据）。
+> 生成入口对该 hash 做硬绑定：不符即 `SystemExit`，不写产物（R1-M01）。
 > 复现：`uv run python docs/research/supply-chain/2026-10-20/claude/experiments/g2g3_pilot/model_race.py`
 
 ## 1. 结论先行
@@ -45,6 +47,8 @@ artifacts:
   **总是需补 4 个**（DEEPGREY、DEEPBLUE、PR-GREY、Natural-194）；**证据不足 6 个**
   （XMMBS-100、CMKTR-DB、Linen-153、CMKTR-GREY、White、HLR）。L60 时 Linen-153 与 HLR
   在 4 个候选下都是“取决于到货假设”；到 L90/L120 因候选分歧转为证据不足。
+  但 4 个 always 里 **PR-GREY / Natural-194 的窗口标定只有 3–6 个残差**（`estimate_small_sample`），
+  按 N01 单列为“校准不足”——**加校准闸门后 always 只剩 2 个**。
   **没有 SKU 给出采购数量**；所有数量都是未取整情景值。
 
 ## 2. 输入、口径与对账
@@ -57,8 +61,14 @@ artifacts:
   （XMMBS-100 2024-11、XMMBS-153 2024-09），保留为 0，不静默丢弃。
 - **DB/证据一致性**：逐 SKU 把证据 `history.series` 与 DB 查询结果做全等比较，**10/10 通过**；
   库存/PO/在产/正向 SO 直接取自冻结的 `evidence.json`，本脚本不重算供给。
-- **时间口径**：决定时点 **2026-10-22**；预测月 **2026-10..2027-02**（5 个月，够 120+30 天窗口）；
-  提前期 60/90/120 + 复核 30 天；服务水平目标 0.90，实测覆盖单独记录。
+- **时间口径**：决定时点 **2026-10-22**；预测月 **2026-10..2027-03**（6 个月，按窗口末端
+  2027-03-21 动态生成，不是写死 5 个月）；动作窗口为提前期 60/90/120 + 复核 30 = **90/120/150 天**；
+  服务水平目标 0.90，实测覆盖单独记录，**不构成 90% 保证**。
+- **输入绑定（R1-M01）**：`evidence.json` 按 **canonical（git 存储的 LF）字节** 校验
+  `15d52072…`（287,307 bytes）。工作区在 Windows 上是 CRLF（297,288 bytes，raw sha
+  `7eea7c6f…`），与 git 内容逐字节相同、仅换行不同 —— V1 首版记录的 `7eea7c6f` 就是
+  工作区 raw hash，所以无法从任何固定提交复现。现在产物同时记录两套 hash、字节数、
+  `evidence_blob_sha1` 与 `code_commit`。
 - **供给**：A 下/上 = available / available+在产；B_min = available+max(PO, 在产, 在途)（最大重叠）；
   B_max = available+PO+在产+在途（完全不重叠）。PO ETA 全空、在产 `planned_end_date` 全空，
   所以 B 的“提前期内到货”是假设，不是证据。
@@ -78,11 +88,20 @@ artifacts:
 目标 0.90 与实测覆盖分开记录。
 
 **累计 P90（关键改动）**：对每个候选/每个 SKU/每个累计 h，取**滚动起点累计误差**
-`A_h − F_h` 的经验/共形分位数，有限样本水平 `ceil((n+1)×0.9)/n`，`method='higher'`。
-**不用 √h、不用 √6、不用随机游走假设。**
+`A_h − F_h` 的**滚动经验 / conformal-style** 上分位，水平 `ceil((n+1)×0.9)/n`，
+`method='higher'`。**不用 √h、不用 √6、不用随机游走假设。**
+
+> **措辞降格（R1-N02）**：这不是 split-conformal，也不声称有限样本 90% 保证。
+> ① 实现取的是 `ceil((n+1)×0.9)/n` 分位再 `method='higher'`，n=20 时落在**最大值**，
+> 而精确秩是第 19 个次序统计量 —— 实现**更保守**，但不是文中所写的精确秩；
+> ② n<9 时理论 k>n，分位被截到样本最大值，**推不出**分布无关 90% 覆盖；
+> ③ 滚动重训 + 重叠多步残差不满足固定模型 split-conformal 的可交换性论证。
+> 每个标定对象都写入 `estimator=rolling_empirical_conformal_style`、
+> `finite_sample_guarantee=false`、`rank_k_theory` / `rank_index_used` / `clamped_to_max`。
+
 - 本 SKU 主口径残差 ≥3 个才用自己的分位数；≥10 个标 `conformal_empirical`，3–9 个标
   `estimate_small_sample`；
-- <3 个时用**其他 SKU 的相对误差** `(A−F)/F` 做 pooled 共形，标
+- <3 个时用**其他 SKU 的相对误差** `(A−F)/F` 做 pooled 相对误差估计，标
   `estimate_pooled_peer_relative`，不假装是本 SKU 的历史；
 - 候选在某起点退化为别的模型（如 seasonal×YoY 跳过修正、peer shape 无形状退回 seasonal）时，
   该起点**不计入**该候选的标定（`n_delegated_excluded`），避免用 fallback 残差冒充主方法；
@@ -93,6 +112,33 @@ artifacts:
 - **与 V0 的差异**：V0 对 <24 个月退化为 mean3；本赛马允许 12–23 个月算 lag-12（标低置信），
   因为赛马要检验 seasonal naive 本身。两者在 8 个短历史 SKU 的早期起点会不同；
   V0 的逐 SKU 值保留在 JSON `v0_reference`，不静默替换。
+
+### 3.1 动作窗口的同形标定（R1-M02）
+
+动作窗口不是 3 个月累计，而是**日历窗口** `[2026-10-22, +days)`。旧实现把
+`h = round(days/30.4375)` 的**完整月累计残差**直接套到部分月窗口上，并且只生成 5 个月
+（2026-10..2027-02），150 天窗口的 3 月 1–20 日被静默漏掉。现在：
+
+1. **按 end 动态生成月数**：`HORIZON_MONTHS = 6`（到 2027-03），由 `DECISION_DATE +
+   MAX_WINDOW_DAYS` 推出，不是常量 5。
+2. **逐桶日数断言**：每个窗口拆成整数日的日历桶，`sum(bucket.days) == requested_days`
+   在生成函数里 `assert`，并写进 JSON（`requested_days` / `covered_days` / `start` / `end`）。
+   150 天 = 10 月 10 天 + 11/12/1/2 月 31/30/31/28 + 3 月 20 天。
+3. **同形历史窗口残差**：历史起点 o 的决定日取 `o+1 月 22 日`（与 2026-10-22 同形），
+   窗口长度相同、桶权重相同，`残差 = A_window − F_window`，只取**窗口结束 ≤ 当前决定日**
+   的样本。**禁止**再用完整月累计残差冒充部分月窗口 P90。
+4. **窗口覆盖回测**（窗口末端已进入现有数据的样本）：
+
+| 窗口 | 样本 | seasonal naive | seasonal×YoY | peer shape | mean3 |
+|---|---:|---:|---:|---:|---:|
+| 90 天 | 50（10 SKU × 5 起点；10 个样本窗口未到期，未计分） | **74.0%** | 86.0% | **96.0%** | 90.0% |
+| 120 天 | 40（10 × 4） | **75.0%** | 85.0% | 92.5% | 90.0% |
+| 150 天 | 30（10 × 3） | **73.3%** | 83.3% | 90.0% | **93.3%** |
+
+**读法**：同形窗口上 seasonal naive 的 P90 覆盖只有 **73%–75%**，明显低于 h1/h3 的
+83.3% —— 说明旧版“用 h3 覆盖推断动作窗口可用”不成立，M02 的担心方向正确。
+`mean3` / `peer` 的窗口覆盖较高但点预测偏差大（见 §4）。窗口未到期的样本一律
+记 `n_unavailable`，不当成已覆盖。
 
 **候选 3 的保护**（避免除小分母）：
 - 历史 <18 个月 → 跳过；任一 6 个月窗口均值 <10 → 跳过；
@@ -150,7 +196,7 @@ artifacts:
 
 ## 5. 未来 3 个月（2026-10..12）候选预测与分歧
 
-`P50 / 累计 P90`（逐 SKU 相加不是组合 P90；P90 是经验/共形校准，不是 90% 服务承诺）：
+`P50 / 累计 P90`（逐 SKU 相加不是组合 P90；P90 是滚动经验 / conformal-style 估计，不是 90% 服务承诺）：
 
 | SKU | s1 | s×YoY | peer | mean3 | 最大/最小 |
 |---|---:|---:|---:|---:|---:|
@@ -239,64 +285,67 @@ artifacts:
   mean3（323）只作“8 月事件重演”的上限情景。要识别峰值，需要 2 个以上 8 月观测，
   或 2025–2026 的促销/Listing/上架时间表；当前只能标 `insufficient_evidence`。
 
-## 8. 补货动作敏感性（P90 + 正向 SO vs A/B 供给边界）
+## 8. 补货动作敏感性（窗口 P90 + 正向 SO vs A/B 供给边界）
 
-**口径**：动作基于 **P90（提前期+30 天日历窗口）+ 正向 live SO**，对照
+**口径**：动作基于**同形日历窗口 P90（提前期 + 30 天，见 §3.1）+ 正向 live SO**，对照
 `available`、`A_high`、`B_min`、`B_max`。这里把 P90 与 SO 相加是**保守联合上界**，
 不是已对平的需求：SO 是否与预测重复计需求**未证**（若预测已包含这些已承诺订单的后续需求，
-相加会高估）。因此动作只用于“是否需要补/是否取决于到货”的分类，不用于数量。分类：
+相加会高估）。因此动作只用于“是否需要补/是否取决于到货”的分类，不用于数量。
+所有含 SO 的判断在产物里都带 `demand_overlap=unproven`。分类：
 - `A = always_replenish`：即使 **B_max**（最乐观供给）也盖不住 P90+SO；
 - `D = depends_on_arrival`：B_max 能盖住，但 `A_high`（无 PO/在途）盖不住；
-- `I = insufficient_evidence`：候选之间动作不一致，或 P90 本身是 pooled/small-sample。
+- `I = insufficient_evidence`：候选之间动作不一致（**N01：候选分歧**），
+  或标定不足（`estimate_small_sample` / pooled / not_calibrated，**N01：校准不足**）。
+  两者现在是**两个独立字段**（`classification.candidate_divergence` /
+  `classification.calibration_sufficiency`），不再混在一个 I 里。
 `0` 表示至少一个候选/供给锚点已覆盖，不表示“不用补”。
 
-| SKU | L60 | L90 | L120 | L90 候选（s1 / s×YoY / peer / mean3） | L90 需补区间（最小–最大） | 主要依据 |
+| SKU | L60 | L90 | L120 | L90 候选（s1 / s×YoY / peer / mean3） | L90 需补区间（最小–最大） | 主要依据（窗口 P90 + SO） |
 |---|---|---|---|---|---|---|
-| DEEPGREY | A | A | A | A / A / A / A | 300.9 – 2,254.3 | SO 296 > 全部供给 153；预测再低也要补 |
-| DEEPBLUE | A | A | A | A / A / A / A | 568.6 – 2,095.5 | SO 462 > 全部供给 261 |
-| XMMBS-100 | I | I | I | A / D / A / A | 0 – 1,280.6 | s×YoY 的 P90 低（估算小样本），B_max 可盖住；其余 3 个说 always |
-| CMKTR-DB | I | I | I | A / D / A / A | 0 – 1,432.5 | s×YoY 把 34→30，120 天窗口 P90 **150.7**，B_max 可盖住；s1/peer 说 always |
-| Linen-153 | **D** | I | I | D / A / D / D | 0 – 1,111.5 | L60 四候选都是 D；L90 s×YoY 的 421 点 + 窗口 P90 850.5 让 B_max 不够 |
-| PR-GREY | A | A | A | A / A / A / A | 216.3 – 958.4 | SO 95 已接近 B_max 104；所有候选 always |
-| CMKTR-GREY | I | I | I | A / D / A / A | 0 – 1,241.8 | s×YoY 的 120 天窗口 P90 **147.8** 让 B_max 可盖；s1/peer 说 always |
-| White | I | I | I | D / D / D / A | 0 – 829.9 | mean3 的 120 天窗口 P90 **858.9** 说 always；其余 3 个窗口 P90 143.7–171.6 说 D；分歧最大 |
-| HLR | **D** | I | I | D / D / D / A | 0 – 1,356.7 | L60 四候选 D；L90 mean3 窗口 P90 **1,032.7** + SO 428 > B_max 1,394，仅 mean3 说 A |
-| Natural-194 | A | A | A | A / A / A / A | 265.6 – 1,033.7 | SO 631 + 窗口 P90 **615–763** > B_max 980 |
+| DEEPGREY | A | A | A | A / A / A / A | 303.0 – 2,255.7 | SO 296 > 全部供给 153；最低窗口 P90 159.97 + 296 = 456 > 153 |
+| DEEPBLUE | A | A | A | A / A / A / A | 593.9 – 2,113.2 | SO 462 > 全部供给 261；最低窗口 P90 392.85 + 462 = 855 > 261 |
+| XMMBS-100 | I | I | I | A / D / A / A | 0 – 1,291.2 | s×YoY 窗口 P90 **205.19** + SO 144 = 349 < B_max 397；其余 3 个说 A |
+| CMKTR-DB | I | I | I | A / D / A / A | 0 – 1,421.4 | s×YoY 窗口 P90 **115.09** + 80 = 195 < B_max 401；其余 3 个说 A |
+| Linen-153 | **D** | I | I | D / A / D / D | 0 – 1,610.5 | L60 四候选一致 D；L90 s×YoY P90 **1,349.5** + 637 = 1,986 > B_max 1,426 → A，其余 D |
+| PR-GREY | A | A | A | A / A / A / A | 183.1 – 973.0 | SO 95 + 最低窗口 P90 192.12 = 287 > B_max 104 |
+| CMKTR-GREY | I | I | I | D / D / A / A | 0 – 1,232.1 | s1 268.74+125=394、s×YoY 140.91+125=266 均 < B_max 517（D）；peer 736.80+125=862 > 517（A） |
+| White | I | I | I | D / D / D / A | 0 – 824.1 | mean3 窗口 P90 **853.06** + 26 = 879 > B_max 221；其余 3 个 89.57–156.03+26 < 221 说 D |
+| HLR | **D** | I | I | D / D / D / A | 0 – 1,340.5 | L60 四候选 D；L90 mean3 P90 **1,016.54** + 428 = 1,445 > B_max 1,394（A），其余 D |
+| Natural-194 | A | A | A | A / A / A / A | 234.3 – 1,017.4 | SO 631 + 最低窗口 P90 583.32 = 1,214 > B_max 980 |
 
-**计数**：
+**计数**（最终 class，按候选一致性）：
 - L60（90 天窗口）：A **4** / D **2**（153、HLR）/ I **4**；
 - L90（120 天窗口）：A **4** / D **0** / I **6**；
 - L120（150 天窗口）：A **4** / D **0** / I **6**。
+- **加校准闸门后（N01 第二字段）**：L90 A **2**（DEEPGREY、DEEPBLUE）/ I **8** ——
+  PR-GREY 与 Natural-194 的候选一致说 A，但窗口 P90 属 `estimate_small_sample`，
+  只能算“候选一致 + 校准不足”，不能当“证据已足够”。
 
 **读法**：
-- **4 个 always 是模型无关的**：DEEPGREY、DEEPBLUE、PR-GREY、Natural-194。它们的正向 SO
-  或 P90+SO 已经超过最乐观 B_max；即使 forecast 取最低候选也成立。这不是“下单许可”，
-  而是“无论模型怎么选，都需要补”的稳健结论。
+- **4 个 raw always 里只有 2 个连校准也够**：DEEPGREY、DEEPBLUE 的四个候选窗口标定都是
+  `conformal_empirical`（own n=21/37/17），且 SO 已超过全部供给 —— 与模型无关。
+  PR-GREY、Natural-194 的结论方向稳健，但标定样本 3–6 个，只能读作“倾向”，不是保证。
 - **6 个 insufficient 是模型敏感的**：不是“不用补”，而是“补不补/补多少取决于你信哪个模型、
-  PO/在产是否到货”。最典型的是 White：mean3 说 always（窗口 P90 858.9），其余三个说
-  depends（窗口 P90 143.7–171.6）；CMKTR-DB：s1 说 always（窗口 P90 537.6），
-  s×YoY 说 depends（窗口 P90 150.7）。
+  PO/在产是否到货”。最典型的是 White：mean3 说 A（窗口 P90 853.06），其余三个说 D
+  （89.57–156.03）；CMKTR-DB：s1/peer/mean3 说 A，s×YoY 说 D（115.09）。
 - **提前期会改变结论**：Linen-153/HLR 在 L60 四候选一致 D（PO/在产能到货就不补），
-  到 L90/L120 因候选分歧转为 I。短提前期的“取决于到货”
-  不能外推到长提前期。
-- **动作翻转的来源不同**：XMMBS-100/CMKTR-DB/CMKTR-GREY 是候选 3（s×YoY）把 P90 压低后
-  说 D，其余说 A；White/HLR 是 mean3 的高 P90 说 A，其余三个说 D；Linen-153 是候选 3
-  在 L90 反向说 A。候选 3 的 P90 在 8/10 SKU 不是本 SKU 经验分位，且对 4/6 低比例
-  SKU 是**下调**（因子 0.88–0.89）。如果业务不接受“用 6 个月同比折减冬季”，
-  就不应把它的 P90 当成“可以少补”的证据。
+  到 L90/L120 因候选分歧转为 I。短提前期的“取决于到货”不能外推到长提前期。
+- **重算后个别候选的方向变了**：CMKTR-GREY 的 s1 从 A 变 D（s1 窗口 P90 268.74，旧实现
+  用 4 个完整月残差得到更高上界）；Linen-153 的 s1 在 L120 变 A。这些变化来自
+  **把窗口标定换成同形残差**，不是数据变了 —— 旧版“s1 说 A”的结论不应继续引用。
 - **聚合需补合计**（L90，跨 10 SKU，未取整，不是订单）：
-  s1 **1,912–6,316**；s×YoY **2,015–5,717**；peer **3,693–7,951**；mean3 **8,607–13,311**。
-  区间两端不是同一置信水平的组合，不能相加成采购总量。
+  s1 **1,800.5–5,868.2**；s×YoY **2,289.8–5,866.9**；peer **3,592.0–7,792.4**；
+  mean3 **8,601.2–13,283.1**。区间两端不是同一置信水平的组合，不能相加成采购总量。
 
 ## 9. 建议：保留 / 修正 / 需数据
 
 | 对象 | 保留 | 修正 | 需要的数据/决定 |
 |---|---|---|---|
 | 点预测 | seasonal naive 作为默认点模型（h3 最好、5/10 赢家）；平稳 SKU 153/194 用 mean3；短历史/事件型 White、XMMBS-100、CMKTR-DB 用 peer 作保守情景 | 不再用 V0 的 √6 P90；不再用 mean3 作为 White 的 Q4 基线 | 无（模型选择可在下一次滚动回测重验） |
-| P90 | 共形经验分位；目标 0.90 与实测覆盖分开 | s1 h3 覆盖 83.3% < 90%，PR-GREY/153/White 只有 33%–50%；标 estimate，不承诺服务 | 更长的滚动起点/更多 SKU 才能稳定尾部；当前 60 单元不足 |
+| P90 | 滚动经验 / conformal-style 上分位；目标 0.90 与实测覆盖分开；**不声称有限样本保证** | s1 h3 覆盖 83.3%、同形窗口 73%–75%，均低于目标；PR-GREY/153/White 逐 SKU 覆盖只有 33%–50% | 更长的滚动起点/更多 SKU 才能稳定尾部；当前 60 单元、窗口 30–50 单元不足 |
 | 6 个低比例 SKU | 淡季情景 + 季节反差解释 | V0 的“近期更强”只对 2/6 成立；4/6 实际同比更低 | 断货校正后的需求序列；2025 Q4 库存/缺货记录 |
 | White | 8 月作事件情景；Q4 用 s1/peer 低基线 | mean3 107.7/月不能当 Q4；8 月不是单笔批发，但也不是已证季节 | 2 个以上 8 月观测；促销/Listing/上架时间表 |
-| 补货动作 | 4 个 always 的稳健结论；6 个 insufficient 的敏感性区间 | 不把 A/B 区间合成一个下单量；不把 s×YoY 的低 P90 当“少补”证据 | PO ETA、WO planned_end_date、UOM、Cover 可替代、时点桥接 |
+| 补货动作 | 2 个与模型/校准都无关的 always（DEEPGREY、DEEPBLUE）；6 个 insufficient 的敏感性区间 | 不把 A/B 区间合成一个下单量；不把 s×YoY 的低 P90 当“少补”证据；不把“候选一致”当“证据足够”（N01 两字段分列） | PO ETA、WO planned_end_date、UOM、Cover 可替代、时点桥接 |
 | ETS | 明确跳过 | 若业务要 AutoETS，先装 `statsmodels`/`statsforecast` 再重跑；不复活 V0 手写 HW | 依赖安装决定（不是本脚本能补） |
 
 **明确不做的**：不输出采购/生产数量；不把任何候选的 P90 当 90% 服务承诺；不访问生产；
@@ -306,13 +355,13 @@ artifacts:
 
 | 项 | V0.1（冻结 `98e1c664`） | V1（本文件） |
 |---|---|---|
-| 累计 P90 | 随机游走：月 h 方差 h·σ²，3 月 √6 | 滚动累计误差的经验/共形分位；无 √h/√6 |
+| 累计 P90 | 随机游走：月 h 方差 h·σ²，3 月 √6 | 滚动经验（conformal-style）分位；无 √h/√6，无有限样本保证 |
 | White Q4 P50 | 323（mean3，14 月退化） | s1 22 / s×YoY 22 / peer 47 / mean3 323（候选区间） |
 | 6 SKU 解释 | “2026 年 6–9 月量级明显更高，P50 会低估” | 季节反差 4.7%–15.7% × 同比 0.50–1.08；只有 2/6 的 Jun–Sep >1.10 |
 | 回测主模型 | <24 月退化为 mean3 | 12–23 月允许 lag-12（标低置信）；V0 值保留在 `v0_reference` |
 | 聚合 3 月 P50 | 1,457 | s1 1,156（差 301 = White 323→22）；其他 SKU 与 V0 同口径 |
 | 聚合 h3 WAPE | 52.6% | s1 44.7%；差异来自 12–23 月不再强制 mean3（逐 SKU 见 §4.2） |
-| 动作 | D9 分层：可准备 1 / 待核实 2 / 暂缓 7（P50 口径） | V1 P90 口径：always 4 / insufficient 6；这是敏感性，不是 D9 的替代 |
+| 动作 | D9 分层：可准备 1 / 待核实 2 / 暂缓 7（P50 口径） | V1 P90 口径：always 4 / insufficient 6（加校准闸门 2 / 8）；这是敏感性，不是 D9 的替代 |
 
 ## 11. 限制与未决
 
@@ -334,24 +383,42 @@ artifacts:
 11. 12–23 个月的 seasonal naive 只有一个季节，标 `low_confidence_lt_24m`；
     不能据此声称稳定季节性。
 12. 本文件不解决 ETA/UOM/Cover/时点桥接；这些是业务/系统输入，不是模型能补的。
+13. **窗口 P90 的样本更小**：90/120/150 天窗口的可用回测单元只有 50/40/30
+    （其余目标月未到期，记 `n_unavailable`），比 60 个 h3 单元还少；覆盖差异一个单元
+    就是 2–3.3 个百分点。
+14. **标定集不是独立留出**：同形窗口残差按“窗口结束 ≤ 当前决定日”过滤，避免目标泄漏，
+    但滚动样本相互重叠、且 2026-01..06 报告起点的目标窗口彼此重叠；这是在线滚动评估，
+    不是独立训练/校准/测试划分。
+15. **P90 仍不是服务承诺**：窗口覆盖 s1 73%–75%、mean3 90%–93%、peer 90%–96%；
+    达到目标不改变“估计值”性质。
 
 ## 12. 复现与产物
 
 ```bash
 uv run python docs/research/supply-chain/2026-10-20/claude/experiments/g2g3_pilot/model_race.py
+uv run python docs/research/supply-chain/2026-10-20/claude/experiments/g2g3_pilot/build_actions.py
 ```
 
-- 脚本：`experiments/g2g3_pilot/model_race.py`（只读；`duckdb.connect(read_only=True)`）。
-- 证据：`out/replenishment_v0/model_race.json`（约 474 KB；逐 SKU 候选预测、逐起点回测、
-  共形标定、动作敏感性、6 SKU/White 事实）。
+- 脚本：`experiments/g2g3_pilot/model_race.py`（只读；`duckdb.connect(read_only=True)`；
+  入口断言 evidence canonical hash）。
+- 脚本：`experiments/g2g3_pilot/build_actions.py`（只读 evidence、不读 P90、不读
+  `model_race.json`；这是 V0 行动清单此前缺失的同源生成器）。
+- 证据：`out/replenishment_v0/model_race.json`（1,081,069 bytes；逐 SKU 候选预测、
+  逐起点回测、同形窗口回测与标定、动作敏感性、6 SKU/White 事实）。
 - DB sha256 `25579c5dcd802c7e67f610432a19d08f8e6952696bd50d43bdfa47d6b9241ae9`，运行前后一致；
-  证据 sha256 `7eea7c6f41d444bb69728646fb8cb90a174bbc71f5124c3876f5bd13508175b1`。
+  证据 **canonical** sha256 `15d52072dc5d0461f032de1a7df0b9a3a39f0c450da50366dbf63680693178ea`
+  （287,307 bytes LF；工作区 raw `7eea7c6f…` / 297,288 bytes CRLF，`evidence_blob_sha1`
+  `04c30f79…`，`code_commit` 记录为运行时的 HEAD）。
 - 行数：21,826 行 → 300 个月度单元；坏日期 0；零填充 2（XMMBS-100 2024-11、XMMBS-153 2024-09）。
 - 逐起点明细在 JSON `skus[].backtest[].origins`；逐候选 P90 标定在
-  `skus[].candidates[].calibration`；动作明细在 `skus[].replenishment.by_lead`。
+  `skus[].candidates[].calibration`；**同形窗口回测在 `skus[].window_backtest`**；
+  窗口标定在 `skus[].replenishment.by_lead[*].candidates[*].calibration_*`；
+  动作明细在 `skus[].replenishment.by_lead`；N01 两字段在
+  `skus[].replenishment.by_lead[*].classification`。
 
 ---
 
-**一句话**：这批数据上，seasonal naive 是 h3 点预测的最好默认，但不是 90% 服务边界；
-平稳 SKU 该用 mean3，短历史/事件型该用 peer 作保守情景；6 个 8%–20% 主要是季节反差而非旺势；
-White 的 8 月峰值是重复事件、不能外推到 Q4；10 个 SKU 里只有 4 个的补货动作对模型不敏感。
+**一句话**：这批数据上，seasonal naive 是 h3 点预测的最好默认，但不是 90% 服务边界
+（同形窗口覆盖仅 73%–75%）；平稳 SKU 该用 mean3，短历史/事件型该用 peer 作保守情景；
+6 个 8%–20% 主要是季节反差而非旺势；White 的 8 月峰值是重复事件、不能外推到 Q4；
+10 个 SKU 里只有 2 个的“需补”结论同时经得起候选一致与标定样本两项检验。

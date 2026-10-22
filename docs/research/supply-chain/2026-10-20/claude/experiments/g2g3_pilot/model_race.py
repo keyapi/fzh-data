@@ -1,16 +1,29 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """V1 candidate model race: 10-SKU demand forecast, rolling 6-origin backtest,
-empirical/conformal cumulative P90, and replenishment action sensitivity.
+rolling-empirical cumulative P90, and replenishment action sensitivity.
 
 Read-only inputs:
   - D:/Work/fzh-order-store/order_store.duckdb (read_only=True)
-  - out/replenishment_v0/evidence.json (V0.1 supply/SO evidence; frozen 98e1c664)
+  - out/replenishment_v0/evidence.json (V0.1 supply/SO evidence)
+    bound to EXPECTED_EVIDENCE_SHA256 below; a mismatch aborts the run.
 Output:
   - out/replenishment_v0/model_race.json
 
 No production access, no order placement, no scope expansion. The V0.1 report and
 build_v0.py are not modified.
+
+R1 fixes (control/reviews/2026-10-22-v1-r1.md):
+  M01 the evidence input is bound to the canonical (git-stored, LF) byte hash;
+      a mismatch aborts the run. The artifact records the expected/actual hash,
+      raw and canonical byte counts, the evidence blob and the code commit.
+  M02 action windows are generated from the calendar end date (enough months for
+      150 days = 2027-03-21); every bucket's day count must sum to requested_days,
+      and the window P90 is calibrated on same-shape calendar-window residuals
+      (never on a full-month cumulative residual standing in for a partial month).
+  N01 candidate divergence and calibration insufficiency are separate fields.
+  N02 the estimator is labelled rolling empirical / conformal-style: no
+      finite-sample 90% guarantee is claimed.
 
 Candidates (same rolling origins):
   1 seasonal_naive          last year's same month
@@ -20,11 +33,13 @@ Candidates (same rolling origins):
   5 peer_shape              peer seasonal shape x own trailing-12m level
 
 Uncertainty:
-  Cumulative P90 uses the empirical/conformal quantile of rolling-origin
-  cumulative errors, not sqrt(h) or sqrt(6). No random-walk assumption.
-  Own-SKU primary residuals are used when >=3 exist; otherwise a pooled
-  peer-relative conformal estimate is used and labelled. Target 0.90 and
-  achieved coverage are recorded separately.
+  Cumulative P90 uses a rolling empirical / conformal-style quantile of
+  rolling-origin cumulative errors, not sqrt(h) or sqrt(6). No random-walk
+  assumption, and NO finite-sample 90% coverage guarantee is claimed: origins
+  are few and overlapping, and the implemented level is conservative rather
+  than an exact order statistic. Own-SKU primary residuals are used when >=3
+  exist; otherwise a pooled peer-relative estimate is used and labelled.
+  Target 0.90 and achieved coverage are recorded separately.
 """
 from __future__ import annotations
 
@@ -60,12 +75,26 @@ SCOPES = [
 
 SALES_CUTOFF = "2026-09"
 DECISION_DATE = date(2026, 10, 22)
-HORIZON_MONTHS = 5  # 2026-10 .. 2027-02, enough for 120+30 day windows
-REPORT_ORIGINS = [f"2026-{m:02d}" for m in range(1, 7)]
-TARGET_COVERAGE = 0.90
+DECISION_DAY = DECISION_DATE.day          # history windows keep the same calendar shape
 LEAD_DAYS = [60, 90, 120]
 REVIEW_DAYS = 30
+MAX_WINDOW_DAYS = max(LEAD_DAYS) + REVIEW_DAYS
 DAYS_PER_MONTH = 30.4375
+
+# M01: the frozen V0.1 evidence this run is bound to. A mismatch aborts the run
+# instead of re-hashing whatever file is on disk and calling it an input.
+EXPECTED_EVIDENCE_SHA256 = (
+    "15d52072dc5d0461f032de1a7df0b9a3a39f0c450da50366dbf63680693178ea")
+EXPECTED_EVIDENCE_BYTES = 287307
+
+# M02: forecast enough calendar months to cover DECISION_DATE + MAX_WINDOW_DAYS
+# (2026-10-22 + 150d = 2027-03-21 -> 2026-10 .. 2027-03 = 6 months).
+_CUTOFF_I = int(SALES_CUTOFF[:4]) * 12 + int(SALES_CUTOFF[5:7]) - 1
+_WINDOW_END = DECISION_DATE + timedelta(days=MAX_WINDOW_DAYS)
+_WINDOW_END_I = _WINDOW_END.year * 12 + _WINDOW_END.month - 1
+HORIZON_MONTHS = _WINDOW_END_I - _CUTOFF_I
+REPORT_ORIGINS = [f"2026-{m:02d}" for m in range(1, 7)]
+TARGET_COVERAGE = 0.90
 
 MIN_LEVEL = 10.0          # near-zero protection for the YoY level window
 PEER_MIN_HIST = 12        # a peer needs 12 months before contributing a shape
@@ -110,6 +139,24 @@ def sha256_file(path: Path) -> str:
     return h.hexdigest()
 
 
+def canonical_hash(path: Path) -> dict:
+    """Hash the file's canonical (LF) bytes, i.e. what git stores.
+
+    Windows checkouts rewrite LF -> CRLF, so hashing the working-tree bytes
+    yields a different digest for identical content (that is exactly how the
+    first V1 run recorded 7eea7c6f instead of the frozen 15d52072). The
+    binding below is on the canonical form; the raw form is recorded too.
+    """
+    raw = path.read_bytes()
+    lf = raw.replace(b"\r\n", b"\n")
+    return dict(
+        raw_sha256=hashlib.sha256(raw).hexdigest(), raw_bytes=len(raw),
+        canonical_sha256=hashlib.sha256(lf).hexdigest(), canonical_bytes=len(lf),
+        crlf_count=raw.count(b"\r\n"),
+        line_ending_normalization=("crlf_to_lf" if raw != lf else "none"),
+    )
+
+
 def ym_to_i(ym: str) -> int:
     return int(ym[:4]) * 12 + int(ym[5:7]) - 1
 
@@ -147,12 +194,34 @@ def clean(obj):
     return obj
 
 
-def conf_q90(vals: list[float]) -> tuple[float, float]:
-    """Split-conformal empirical 90% upper quantile with finite-sample level."""
+def conf_q90(vals: list[float]) -> tuple[float, float, dict]:
+    """Rolling empirical / conformal-style upper quantile — not a finite-sample
+    guarantee.
+
+    level = ceil((n+1)*0.9)/n, then np.quantile(level, method="higher"). For
+    n=20 this lands on the maximum (index 19), whereas the exact finite-sample
+    rank would be the 19th order statistic (index 18) — i.e. this is one step
+    MORE conservative, not the written exact rank. For n<9 the theoretical
+    ceil((n+1)*0.9) exceeds n and the quantile clamps to the sample maximum, so
+    no distribution-free 90% coverage follows. Both facts are recorded.
+    """
     n = len(vals)
     level = min(1.0, math.ceil((n + 1) * TARGET_COVERAGE) / n)
     q = float(np.quantile(np.asarray(vals, dtype=float), level, method="higher"))
-    return q, level
+    k_theory = math.ceil((n + 1) * TARGET_COVERAGE)
+    # np.quantile(level, method="higher") -> 0-based index ceil(level*(n-1))
+    idx_used = min(n - 1, math.ceil(level * (n - 1) - 1e-12))
+    info = dict(
+        estimator="rolling_empirical_conformal_style",
+        finite_sample_guarantee=False,
+        n=n, level=_round(level),
+        rank_k_theory=k_theory, rank_index_used=idx_used,
+        clamped_to_max=bool(k_theory > n),
+        more_conservative_than_exact_rank=bool(idx_used > k_theory - 1),
+        note=("rolling-origin residuals, not an i.i.d. calibration sample; "
+              "multi-step overlapping windows; target 0.90 is a goal, not a bound"),
+    )
+    return q, level, info
 
 
 def metrics(cells: list[dict]) -> dict:
@@ -450,22 +519,22 @@ def calibration_for(sku: str, data: dict, cid: str, h: int, asof_abs: int,
     cal_cid = delegate or cid
     errs, n_fallback, n_delegated = primary_errors(sku, data, cal_cid, h, asof_abs)
     if len(errs) >= 3:
-        q, level = conf_q90(errs)
+        q, level, qinfo = conf_q90(errs)
         status = "conformal_empirical" if len(errs) >= 10 else "estimate_small_sample"
         return dict(
             status=status, scope="own_sku_primary", n_own=len(errs),
             n_fallback_excluded=n_fallback, n_delegated_excluded=n_delegated, n_pool=0,
-            q90_abs=_round(q), conformal_level=_round(level),
+            q90_abs=_round(q), conformal_level=_round(level), estimator_info=qinfo,
             calibration_candidate=cal_cid,
         )
     rel = pooled_relative_errors(sku, data, cal_cid, h, asof_abs)
     if len(rel) >= 3:
-        qrel, level = conf_q90(rel)
+        qrel, level, qinfo = conf_q90(rel)
         return dict(
             status="estimate_pooled_peer_relative",
             scope="pooled_peer_relative", n_own=len(errs),
             n_fallback_excluded=n_fallback, n_delegated_excluded=n_delegated, n_pool=len(rel),
-            q90_rel=_round(qrel), conformal_level=_round(level),
+            q90_rel=_round(qrel), conformal_level=_round(level), estimator_info=qinfo,
             calibration_candidate=cal_cid,
         )
     return dict(status="not_calibrated", scope="none", n_own=len(errs),
@@ -483,6 +552,211 @@ def p90_from_cal(point: float, cal: dict):
     else:
         return None, None
     return p, p - point
+
+
+# ----------------------------------------------------------------------------
+# calendar-window integration and same-shape window calibration (M02)
+# ----------------------------------------------------------------------------
+def month_start(abs_i: int) -> date:
+    y, m = divmod(abs_i, 12)
+    return date(y, m + 1, 1)
+
+
+def calendar_window_weights(start: date, days: int) -> list[dict]:
+    """Split [start, start+days) into calendar-month buckets.
+
+    A partial month is integrated over the days actually requested, so the
+    bucket day counts must sum exactly to `days`. That identity is asserted
+    here and re-asserted in the emitted JSON.
+    """
+    end = start + timedelta(days=days)
+    cur = start.year * 12 + start.month - 1
+    last = end.year * 12 + end.month - 1
+    buckets = []
+    while cur <= last:
+        ms = month_start(cur)
+        me = month_start(cur + 1)
+        ov_s = max(start, ms)
+        ov_e = min(end, me)
+        if ov_e > ov_s:
+            n = (ov_e - ov_s).days
+            buckets.append(dict(
+                month=i_to_ym(cur), month_index=cur,
+                month_days=(me - ms).days, days=n,
+                weight=n / (me - ms).days))
+        cur += 1
+    total = sum(b["days"] for b in buckets)
+    if total != days:
+        raise AssertionError(f"window bucket days {total} != requested_days {days}")
+    if not buckets:
+        raise AssertionError(f"empty window for {start} + {days}d")
+    return buckets
+
+
+def _window_value(by_index: dict[int, float], buckets: list[dict]) -> float:
+    return sum(b["weight"] * float(by_index[b["month_index"]]) for b in buckets)
+
+
+def origin_decision_date(origin_abs: int) -> date:
+    """Historical decision date with the SAME calendar shape as 2026-10-22:
+    the 22nd of the month after the forecast origin."""
+    y, m = divmod(origin_abs + 1, 12)
+    return date(y, m + 1, DECISION_DAY)
+
+
+_WINDOW_RESID_CACHE: dict[tuple, dict] = {}
+
+
+def window_residual_series(sku: str, data: dict, cid: str, days: int,
+                           relative: bool = False) -> dict:
+    """Residuals of the SAME calendar-weight window at every historical origin.
+
+    For origin o the decision date is the 22nd of month o+1, the window is
+    [decision, decision+days), and both the forecast and the actual are
+    integrated with the identical bucket weights. This is the quantity the
+    action window needs; a full-month cumulative residual is NOT used as a
+    stand-in. Each row carries its window end date so a calibration point can
+    filter to windows ending at or before its own decision date — the target
+    window is never in its own calibration set.
+
+    relative=True returns (A-F)/F for the pooled peer-relative variant.
+    Results are cached: the same series is reused by every calibration point
+    and by the window backtest.
+    """
+    key = (sku, cid, days, relative)
+    if key in _WINDOW_RESID_CACHE:
+        return _WINDOW_RESID_CACHE[key]
+    d = data[sku]
+    y = d["y"]
+    first = d["first"]
+    cutoff_i = d["last"]
+    rows = []
+    n_fallback = 0
+    n_delegated = 0
+    n_skipped_unknown_target = 0
+    for o in range(first + PRIMARY_MIN[cid], cutoff_i):
+        dec = origin_decision_date(o)
+        wend = dec + timedelta(days=days)
+        wend_i = wend.year * 12 + wend.month - 1
+        if wend_i > cutoff_i:
+            n_skipped_unknown_target += 1
+            continue
+        tr = o - first + 1
+        h = wend_i - o
+        f, meta = forecast_candidate(cid, sku, data, tr, o, h)
+        if meta.get("delegate_calibration"):
+            n_delegated += 1
+            continue
+        buckets = calendar_window_weights(dec, days)
+        f_by = {o + 1 + k: float(f[k]) for k in range(h)}
+        a_by = {first + i: float(y[i]) for i in range(len(y))}
+        F = _window_value(f_by, buckets)
+        A = _window_value(a_by, buckets)
+        if meta.get("fallback"):
+            n_fallback += 1
+        if relative:
+            if F <= 1e-9:
+                continue
+            err = (A - F) / F
+        else:
+            err = A - F
+        rows.append(dict(origin=i_to_ym(o), window_end=wend,
+                         forecast=_round(F), actual=_round(A), err=_round(err)))
+    out = dict(rows=rows, n_fallback=n_fallback, n_delegated=n_delegated,
+               n_skipped_unknown_target=n_skipped_unknown_target)
+    _WINDOW_RESID_CACHE[key] = out
+    return out
+
+
+def window_calibration(sku: str, data: dict, cid: str, days: int,
+                       asof_start: date, delegate: str | None = None) -> dict:
+    """Calibration for a calendar-weight window of `days` days.
+
+    Own same-shape window residuals (windows ending <= asof_start) >=3 -> own
+    rolling-empirical quantile. Fewer -> pooled peer-relative same-shape
+    windows, explicitly labelled. The window shape is recorded for audit.
+    """
+    cal_cid = delegate or cid
+    ser = window_residual_series(sku, data, cal_cid, days)
+    errs = [r["err"] for r in ser["rows"] if r["window_end"] <= asof_start]
+    shape_buckets = calendar_window_weights(DECISION_DATE, days)
+    base = dict(calibration_basis="same_shape_calendar_window_residuals",
+                shape=dict(window_days=days,
+                           bucket_days=[b["days"] for b in shape_buckets],
+                           weights=[_round(b["weight"]) for b in shape_buckets],
+                           months=[b["month"] for b in shape_buckets]),
+                n_fallback_excluded=ser["n_fallback"],
+                n_delegated_excluded=ser["n_delegated"],
+                n_skipped_unknown_target=ser["n_skipped_unknown_target"],
+                calibration_candidate=cal_cid,
+                asof=asof_start.isoformat())
+    if len(errs) >= 3:
+        q, level, qinfo = conf_q90(errs)
+        status = "conformal_empirical" if len(errs) >= 10 else "estimate_small_sample"
+        return dict(base, status=status, scope="own_sku_window", n_own=len(errs),
+                    n_pool=0, q90_abs=_round(q), conformal_level=_round(level),
+                    estimator_info=qinfo)
+    rel = []
+    for s2 in data:
+        if s2 == sku:
+            continue
+        ser2 = window_residual_series(s2, data, cal_cid, days, relative=True)
+        rel.extend(r["err"] for r in ser2["rows"] if r["window_end"] <= asof_start)
+    if len(rel) >= 3:
+        qrel, level, qinfo = conf_q90(rel)
+        return dict(base, status="estimate_pooled_peer_relative",
+                    scope="pooled_peer_relative_window", n_own=len(errs),
+                    n_pool=len(rel), q90_rel=_round(qrel),
+                    conformal_level=_round(level), estimator_info=qinfo)
+    return dict(base, status="not_calibrated", scope="none", n_own=len(errs),
+                n_pool=len(rel))
+
+
+def window_backtest(sku: str, data: dict, cid: str, days: int) -> dict:
+    """Same-shape window P90 backtest at the six report origins.
+
+    Windows whose end month is not yet known are skipped and counted; they are
+    never silently treated as covered.
+    """
+    d = data[sku]
+    y = d["y"]
+    first = d["first"]
+    cutoff_i = d["last"]
+    rows = []
+    for om in REPORT_ORIGINS:
+        o = ym_to_i(om)
+        dec = origin_decision_date(o)
+        wend = dec + timedelta(days=days)
+        wend_i = wend.year * 12 + wend.month - 1
+        f, meta = forecast_candidate(cid, sku, data, o - first + 1, o, max(1, wend_i - o))
+        delegate = meta.get("delegate_calibration")
+        base = dict(origin=om, decision=dec.isoformat(),
+                    window_end=wend.isoformat())
+        if wend_i > cutoff_i:
+            rows.append(dict(base, available=False,
+                             reason="target month beyond 2026-09"))
+            continue
+        cal = window_calibration(sku, data, cid, days, dec, delegate=delegate)
+        buckets = calendar_window_weights(dec, days)
+        h = wend_i - o
+        f_by = {o + 1 + k: float(f[k]) for k in range(h)}
+        a_by = {first + i: float(y[i]) for i in range(len(y))}
+        F = _window_value(f_by, buckets)
+        A = _window_value(a_by, buckets)
+        p90, lift = p90_from_cal(F, cal)
+        rows.append(dict(
+            base, available=True, forecast=_round(F), actual=_round(A),
+            p90=_round(p90) if p90 is not None else None,
+            lift=_round(lift) if lift is not None else None,
+            covered=None if p90 is None else bool(A <= p90 + 1e-9),
+            calibration=dict(status=cal["status"], scope=cal["scope"],
+                             n_own=cal["n_own"], n_pool=cal["n_pool"]),
+        ))
+    avail = [r for r in rows if r["available"] and r.get("covered") is not None]
+    return dict(window_days=days, rows=rows, n_available=len(avail),
+                n_unavailable=sum(1 for r in rows if not r["available"]),
+                coverage=((sum(1 for r in avail if r["covered"]) / len(avail))
+                          if avail else None))
 
 
 # ----------------------------------------------------------------------------
@@ -625,29 +899,40 @@ def build_sku(sku: str, d: dict, ev_sku: dict, stockout: dict, data: dict,
 
     # ---------------- calendar-window P50/P90 and action sensitivity ---------
     def window_integration(f5: np.ndarray, cid: str, days: int):
-        start = DECISION_DATE
-        end = start + timedelta(days=days)
-        p50 = 0.0
-        parts = []
-        for k in range(HORIZON_MONTHS):
-            ms = date(2026 + (9 + k) // 12, (9 + k) % 12 + 1, 1)
-            me = date(2026 + (9 + k + 1) // 12, (9 + k + 1) % 12 + 1, 1)
-            ov_start = max(start, ms)
-            ov_end = min(end, me)
-            if ov_end <= ov_start:
-                continue
-            frac = (ov_end - ov_start).days / (me - ms).days
-            p50 += frac * float(f5[k])
-            parts.append(dict(month=i_to_ym(last_abs + k + 1),
-                              weight=_round(frac), p50=_round(float(f5[k]))))
-        h = max(1, min(HORIZON_MONTHS, int(round(days / DAYS_PER_MONTH))))
-        cal = future[cid]["calibration"][str(h)]
+        """Same-shape calendar window: bucket day counts sum to `days`, and the
+        P90 lift comes from historical windows with the identical weights, not
+        from a full-month cumulative horizon."""
+        buckets = calendar_window_weights(DECISION_DATE, days)
+        f_by = {last_abs + 1 + k: float(f5[k]) for k in range(len(f5))}
+        missing = [b["month"] for b in buckets if b["month_index"] not in f_by]
+        if missing:
+            raise AssertionError(
+                f"{sku}/{cid} window {days}d needs forecast months {missing}; "
+                f"only {len(f5)} months generated")
+        p50 = _window_value(f_by, buckets)
+        cal = window_calibration(sku, data, cid, days, DECISION_DATE)
         p90, lift = p90_from_cal(p50, cal)
-        return dict(days=days, months=_round(days / DAYS_PER_MONTH),
-                    p50=_round(p50), p90=_round(p90) if p90 is not None else None,
-                    lift=_round(lift) if lift is not None else None,
-                    calibration_horizon=h, calibration_status=cal["status"],
-                    buckets=parts)
+        covered_days = sum(b["days"] for b in buckets)
+        if covered_days != days:
+            raise AssertionError(
+                f"{sku}/{cid} bucket days {covered_days} != requested_days {days}")
+        return dict(
+            requested_days=days, covered_days=covered_days,
+            start=DECISION_DATE.isoformat(),
+            end=(DECISION_DATE + timedelta(days=days)).isoformat(),
+            months=_round(days / DAYS_PER_MONTH),
+            p50=_round(p50), p90=_round(p90) if p90 is not None else None,
+            lift=_round(lift) if lift is not None else None,
+            calibration_status=cal["status"], calibration_scope=cal["scope"],
+            calibration_basis=cal["calibration_basis"],
+            calibration_n_own=cal["n_own"], calibration_n_pool=cal["n_pool"],
+            calibration_estimator="rolling_empirical_conformal_style",
+            finite_sample_guarantee=False,
+            buckets=[dict(month=b["month"], days=b["days"],
+                          weight=_round(b["weight"]),
+                          p50=_round(f_by[b["month_index"]]))
+                     for b in buckets],
+        )
 
     def action_for(need_Bmax: float, need_Ahigh: float):
         if need_Bmax > 1e-9:
@@ -672,7 +957,14 @@ def build_sku(sku: str, d: dict, ev_sku: dict, stockout: dict, data: dict,
                 needs={k: _round(v) for k, v in needs.items()},
                 action=action_for(needs["B_max"], needs["A_high"]),
                 calibration_status=w["calibration_status"],
-                calibration_horizon=w["calibration_horizon"],
+                calibration_scope=w["calibration_scope"],
+                calibration_basis=w["calibration_basis"],
+                calibration_n_own=w["calibration_n_own"],
+                calibration_n_pool=w["calibration_n_pool"],
+                requested_days=w["requested_days"],
+                covered_days=w["covered_days"],
+                window_start=w["start"], window_end=w["end"],
+                buckets=w["buckets"],
             )
         actions = [v["action"] for v in by_cand.values()]
         if actions and all(a == "always_replenish" for a in actions):
@@ -688,19 +980,43 @@ def build_sku(sku: str, d: dict, ev_sku: dict, stockout: dict, data: dict,
         counts = {a: actions.count(a) for a in set(actions)}
         needs_all = [v["needs"][a] for v in by_cand.values()
                      for a in ("available", "A_high", "B_min", "B_max")]
+        divergent = len(set(actions)) > 1
+        weak_cal = sorted({v["calibration_status"] for v in by_cand.values()
+                           if v["calibration_status"] != "conformal_empirical"})
+        gated_action = (sku_action if not weak_cal
+                        else ("insufficient_evidence"
+                              if sku_action == "always_replenish" else sku_action))
         replenishment["by_lead"][str(lead)] = dict(
             window_days=window_days, candidates=by_cand, sku_action=sku_action,
             action_counts=counts, need_min=_round(min(needs_all)) if needs_all else None,
             need_max=_round(max(needs_all)) if needs_all else None,
+            classification=dict(
+                candidate_divergence=dict(
+                    divergent=divergent, counts=counts,
+                    rule="candidate action disagreement; independent of calibration"),
+                calibration_sufficiency=dict(
+                    sufficient=not weak_cal, weak_statuses=weak_cal,
+                    scope_statuses={cid: v["calibration_status"]
+                                    for cid, v in by_cand.items()},
+                    rule=("all candidate windows must be conformal_empirical to be "
+                          "sufficient; estimate_small_sample / pooled / not_calibrated "
+                          "are recorded here instead of being folded into the class")),
+                action_with_calibration_gate=gated_action,
+                note=("N01: the class below reflects candidate unanimity only; the "
+                      "calibration flag is a separate field, so 'all candidates agree "
+                      "on a shortage' is not read as 'the evidence is sufficient'."),
+            ),
         )
 
     replenishment["action"] = replenishment["by_lead"]["90"]["sku_action"]
     replenishment["action_counts"] = replenishment["by_lead"]["90"]["action_counts"]
     replenishment["note"] = ("unrounded; no MOQ/pack multiple; not an order quantity; "
                              "B_min=max-overlap, B_max=no-overlap; supply is a bound, not a point; "
-                             "P90 + positive live SO is a conservative joint upper bound: whether SO "
-                             "duplicates demand already in the forecast is unproven, so this is not a "
-                             "reconciled demand number")
+                             "P90 is a rolling-empirical estimate of the same-shape calendar "
+                             "window (own or pooled residuals), with no finite-sample 90% "
+                             "guarantee; P90 + positive live SO is a conservative joint upper "
+                             "bound: whether SO duplicates demand already in the forecast is "
+                             "unproven, so this is not a reconciled demand number")
 
     # ---------------- history / ratio facts ----------------------------------
     ratio_observed = (future["seasonal_naive"]["p50_3m"] / 3.0 / recent3) if recent3 > 1e-9 else None
@@ -809,6 +1125,12 @@ def build_sku(sku: str, d: dict, ev_sku: dict, stockout: dict, data: dict,
             calibration=future[cid]["calibration"], meta=future[cid]["meta"],
         ) for cid in future},
         backtest=backtest,
+        window_backtest={
+            str(lead + REVIEW_DAYS): {
+                cid: window_backtest(sku, data, cid, lead + REVIEW_DAYS)
+                for cid in future}
+            for lead in LEAD_DAYS
+        },
         divergence=divergence,
         supply=supply, open_so=open_so,
         replenishment=replenishment,
@@ -882,6 +1204,26 @@ def aggregate(skus: list[dict], ev: dict, db_hash_before: str, db_hash_after: st
             per[cid] = dict(min_need_sum=_round(lo), max_need_sum=_round(hi))
         lead_totals[str(lead)] = per
 
+    # Window coverage: the same-shape calendar-window P90 measured out of sample
+    # at the report origins (windows whose target month is unknown are skipped
+    # and counted in n_unavailable, never scored as covered).
+    win_cov = {}
+    for days in [lead + REVIEW_DAYS for lead in LEAD_DAYS]:
+        per = {}
+        for cid in agg:
+            cells = [r for s in skus
+                     for r in s["window_backtest"][str(days)][cid]["rows"]
+                     if r.get("covered") is not None]
+            cov = sum(1 for r in cells if r["covered"])
+            per[cid] = dict(
+                n=len(cells), covered=cov,
+                coverage=_round(cov / len(cells)) if cells else None,
+                n_unavailable=sum(
+                    1 for s in skus
+                    for r in s["window_backtest"][str(days)][cid]["rows"]
+                    if not r["available"]))
+        win_cov[str(days)] = per
+
     return dict(
         candidates=agg,
         ranking_h3=ranking,
@@ -889,26 +1231,72 @@ def aggregate(skus: list[dict], ev: dict, db_hash_before: str, db_hash_after: st
         candidate_totals_3m=totals,
         action_counts=action_counts,
         lead_totals=lead_totals,
+        window_coverage=win_cov,
         note=("sums across SKUs are scenario totals, not a purchase/production order; "
-              "P90 is per-SKU upper bound, not a portfolio P90"),
+              "P90 is per-SKU upper bound, not a portfolio P90; window coverage is a "
+              "rolling-empirical estimate, not a finite-sample guarantee"),
     )
 
 
 # ----------------------------------------------------------------------------
 # main
 # ----------------------------------------------------------------------------
+def git_binding(path: Path) -> dict:
+    """Record the code commit and the evidence blob at HEAD, so the run is
+    reproducible from git rather than only from the working tree."""
+    import subprocess
+    def _run(*args):
+        try:
+            return subprocess.run(args, capture_output=True, text=True,
+                                  check=True, cwd=CLAUDE_DIR).stdout.strip()
+        except Exception as exc:  # git absent / not a repo: record, don't fake
+            return f"unavailable: {exc.__class__.__name__}"
+    try:
+        top = _run("git", "rev-parse", "--show-toplevel")
+        rel = path.resolve().relative_to(Path(top).resolve()).as_posix()
+    except Exception:
+        rel = None
+    return dict(
+        code_commit=_run("git", "rev-parse", "HEAD"),
+        code_commit_semantics=("HEAD at run time; this artifact is committed in the "
+                               "next commit, so code_commit is that commit's parent"),
+        repo_relative_path=rel,
+        evidence_blob_sha1=(_run("git", "rev-parse", f"HEAD:{rel}") if rel else None),
+    )
+
+
 def main():
+    global EVIDENCE_PATH
     ap = argparse.ArgumentParser()
     ap.add_argument("--json", default=str(OUT_PATH), help="output JSON path")
+    ap.add_argument("--evidence", default=str(EVIDENCE_PATH),
+                    help="evidence input path (default: the frozen V0.1 file); the "
+                         "canonical hash must still match or the run aborts")
     args = ap.parse_args()
+    EVIDENCE_PATH = Path(args.evidence).resolve()
 
     if not DB_PATH.exists():
         raise SystemExit(f"missing db: {DB_PATH}")
     if not EVIDENCE_PATH.exists():
         raise SystemExit(f"missing evidence: {EVIDENCE_PATH}")
 
+    # M01: refuse to run against an unexpected evidence file. Re-hashing the
+    # file on disk and writing that hash into the manifest would only document
+    # whatever happened to be there; the expected canonical hash is the binding.
     db_hash_before = sha256_file(DB_PATH)
-    evidence_hash = sha256_file(EVIDENCE_PATH)
+    ev_hash = canonical_hash(EVIDENCE_PATH)
+    if ev_hash["canonical_sha256"] != EXPECTED_EVIDENCE_SHA256:
+        raise SystemExit(
+            "evidence content mismatch: expected canonical sha256 "
+            f"{EXPECTED_EVIDENCE_SHA256} ({EXPECTED_EVIDENCE_BYTES} bytes LF), got "
+            f"{ev_hash['canonical_sha256']} ({ev_hash['canonical_bytes']} bytes LF; "
+            f"raw {ev_hash['raw_sha256']}, {ev_hash['raw_bytes']} bytes). Refusing "
+            "to run: the frozen V0.1 input is not the one this analysis is bound to.")
+    if ev_hash["canonical_bytes"] != EXPECTED_EVIDENCE_BYTES:
+        raise SystemExit(
+            "evidence size mismatch: expected canonical "
+            f"{EXPECTED_EVIDENCE_BYTES} bytes, got {ev_hash['canonical_bytes']}")
+    binding = git_binding(EVIDENCE_PATH)
     ev, ev_by_sku = load_evidence()
 
     con = duckdb.connect(str(DB_PATH), read_only=True)
@@ -1019,9 +1407,22 @@ def main():
         inputs=dict(
             db_path=str(DB_PATH), db_sha256_before=db_hash_before,
             db_sha256_after=db_hash_after, db_unchanged=db_hash_before == db_hash_after,
-            evidence_path=str(EVIDENCE_PATH), evidence_sha256=evidence_hash,
+            evidence_path=str(EVIDENCE_PATH),
+            evidence_sha256=ev_hash["canonical_sha256"],
+            evidence_sha256_raw=ev_hash["raw_sha256"],
+            evidence_raw_bytes=ev_hash["raw_bytes"],
+            evidence_line_ending_normalization=ev_hash["line_ending_normalization"],
+            evidence_crlf_count=ev_hash["crlf_count"],
+            evidence_sha256_expected=EXPECTED_EVIDENCE_SHA256,
+            evidence_bytes=ev_hash["canonical_bytes"],
+            evidence_bytes_expected=EXPECTED_EVIDENCE_BYTES,
+            hash_binding_verified=True,
+            hash_binding_note=("bound to the canonical LF bytes that git stores; the "
+                               "working tree is CRLF on Windows, whose raw digest "
+                               "differs for identical content"),
             evidence_report_version=ev.get("report_version"),
             evidence_generated_at=ev.get("generated_at"),
+            **binding,
             series_checks=series_checks,
             row_accounting=dict(
                 gs_orders_rows_for_10_skus=total_rows,
@@ -1047,17 +1448,37 @@ def main():
                 horizons=[1, 3],
             ),
             p90=dict(
-                method="split-conformal empirical quantile of rolling-origin cumulative errors (A_h - F_h), finite-sample level ceil((n+1)*0.9)/n, method='higher'",
+                method=("rolling empirical / conformal-style quantile of rolling-origin "
+                        "cumulative errors (A_h - F_h); level ceil((n+1)*0.9)/n then "
+                        "np.quantile(method='higher')"),
+                estimator="rolling_empirical_conformal_style",
+                finite_sample_guarantee=False,
                 no_random_walk=True,
                 no_sqrt_h=True,
                 own_min_n=3,
                 empirical_min_n=10,
+                exact_finite_sample_rank=False,
+                rank_note=("the implemented level is one step MORE conservative than the "
+                           "exact k=ceil((n+1)*0.9) order statistic (n=20: max instead of "
+                           "the 19th); for n<9 k>n and the quantile clamps to the sample "
+                           "max, so no distribution-free 90% coverage follows"),
                 small_sample_label="estimate_small_sample",
                 pooled_fallback="estimate_pooled_peer_relative: (A-F)/F from other SKUs' primary cells when own n<3",
                 delegated_excluded="origins where the candidate delegates to another model (e.g. seasonal_yoy skipped) are excluded from its calibration",
                 floor="P90 >= P50; negative residual quantiles do not lower the P50",
                 target_coverage=TARGET_COVERAGE,
                 achieved_coverage_recorded_separately=True,
+            ),
+            window_p90=dict(
+                window=("calendar [decision, decision+days) with integer bucket days; "
+                        "asserted sum(bucket days) == requested_days"),
+                calibration=("same-shape historical calendar windows: decision = the 22nd "
+                             "of the origin+1 month, identical bucket weights, residuals "
+                             "A_window - F_window"),
+                forbidden=("a full-month cumulative residual (h = round(days/30.4375)) may "
+                           "NOT stand in for a partial-month window P90"),
+                horizon_months=HORIZON_MONTHS,
+                horizon_end=(DECISION_DATE + timedelta(days=MAX_WINDOW_DAYS)).isoformat(),
             ),
             seasonal_yoy=dict(
                 window="trailing 6 months vs same 6 months last year",

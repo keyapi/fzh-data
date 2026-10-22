@@ -7,13 +7,20 @@ date: 2026-10-22
 owner: claude-worker
 status: provisional; not an instruction list; no quantities
 based_on: 98e1c6643f1f97a32225be26f2283347da95c4ab
+revision: R2（#301 R1 返修：M01/M03/M04/N01/N03）
+generator: experiments/g2g3_pilot/build_actions.py
 ---
 
 # 10 SKU 暂行补货行动清单 V0（P90-free）
 
 > **边界**：只覆盖 phase1 已验收的 10 个 SKU；只读冻结产物，**未访问生产**、未改 EN / `sku_map`、未扩样。
-> **不含 P90、不含任何数量型建议**：D10 已宣布 V0.1 的 P90 与派生补货结论失效，本清单逐字段不读取任何 P90 值。
+> **不含 P90、不含任何数量型建议**：D10 已宣布 V0.1 的 P90 与派生补货结论失效，本清单逐字段不读取任何 P90 值
+> （生成器里有运行时 guard：任何 `p90*` 字段被读取即抛错）。
 > 本清单**不是采购/生产指令清单**，只回答三件事：哪类 SKU 现在就能定、哪类只差到货时点、哪类还缺证据。
+> **R2 变更**：`start_condition` 改为结构化 `required_gates`（ok/unproven/fail 三态）+ outcomes
+> + forbidden；窗口标签改为实际天数（去掉错误的 “+30”）；I 类的“候选分歧/校准不足”分列；
+> Cover 推理与“N 行稳定”概括已删除。逐条修复记录见
+> `control/reviews/2026-10-22-v1-r2-fix.md`。
 
 ## 0. 结论先行
 
@@ -21,7 +28,17 @@ based_on: 98e1c6643f1f97a32225be26f2283347da95c4ab
 - **三层计数：always_replenish 0 / depends_on_arrival 6 / insufficient_evidence 4。**
 - **P90-free 的关键发现**：去掉 P90 只看 P50 后，10 个 SKU 里只有 **1 个**（`CMM-100-WHITE`）在“全部供给到账且完全不重叠”的最宽松上界下仍然短缺（B_max 221 < D1 250.1，缺 29.1）。其余 9 个的 P50 都被某种供给边界覆盖。
 - 因此本批的主要问题**不是“普遍缺货”，而是“到货时点与单据重叠未证”**：6 个 SKU 的结论在“在手”与“全部到货”之间翻转；另外 3 个（DEEPGREY / DEEPBLUE / PR-GREY）完全没有到货杠杆，结论只取决于 live SO 是否与预测重叠。
-- **always_replenish 为空不是“都不用补”**，而是 T2（单位可核实）在 10/10 上不成立，按任务书规则没有任何 SKU 能无条件入层；White 的算术条件已满足，只差单位与需求口径两项证据（见 §4.3）。
+- **always_replenish 为空不是“都不用补”**，而是硬门未过：T2（单位可核实）在 10/10 上不成立，
+  且凡是 B_max 假设“全部到货”的行还需要 G5（到货/完工日已证在窗口内）——同样 10/10 未证。
+  按任务书规则没有任何 SKU 能无条件入层；White 的算术条件已满足，只差这两项硬门与需求口径
+  （见 §4.3）。
+- **升级条件不是文字，是闸门**：每行的 `start_condition` 现在是
+  `required_gates`（`ok/unproven/fail` 三态）+ `outcomes` + `forbidden`。
+  **供给下界不足（B_min / B_min_po_dedup < D2）只证明“存在短缺情景”，永远不会把行升级为
+  always_replenish**；含 live SO 的 10 行一律 `demand_overlap=unproven`。
+- **I 类拆成两个字段**：`candidate_divergence`（候选/口径分歧）与
+  `calibration_sufficiency`（标定不足）分列，不再用一个 I 盖住两种不同问题。
+  本清单 P90-free，因此校准项记为“不适用”，而不是把“候选一致”当“证据足够”。
 
 ## 1. 依据与输入（只读）
 
@@ -29,12 +46,17 @@ based_on: 98e1c6643f1f97a32225be26f2283347da95c4ab
 |---|---|
 | 冻结 commit | `98e1c6643f1f97a32225be26f2283347da95c4ab`（D10） |
 | 任务书 | `control/reviews/2026-10-22-actions-task.md` |
-| 输入 1 | `out/replenishment_v0/evidence.json` — sha256 `15d52072dc5d0461f032de1a7df0b9a3a39f0c450da50366dbf63680693178ea`，287,307 bytes |
-| 输入 2 | `control/reviews/2026-10-22-supply-demand-replenishment-v0.md` — sha256 `cc5ab459ba84583fd987616701be04a2655516f2df936a0e873f688c4a1cb9d9`，85,910 bytes |
+| 生成器 | `experiments/g2g3_pilot/build_actions.py`（R2 新增；此前 `actions.json` 没有同源脚本） |
+| 输入 | `out/replenishment_v0/evidence.json` — **canonical（git 存储 LF）** sha256 `15d52072dc5d0461f032de1a7df0b9a3a39f0c450da50366dbf63680693178ea`，287,307 bytes；工作区 raw `7eea7c6f…`，297,288 bytes（CRLF），`evidence_blob_sha1` `04c30f79…` |
+| 输入 2（参照，未程序化读取） | `control/reviews/2026-10-22-supply-demand-replenishment-v0.md` — sha256 `cc5ab459ba84583fd987616701be04a2655516f2df936a0e873f688c4a1cb9d9`，85,910 bytes |
 
-- 两份输入在 `98e1c664` 与工作区**逐字节一致**（`git diff 98e1c664 -- <两份文件>` 为空）。
-- 未读取、未使用任何后续工作区产物；工作区里与本任务无关的未跟踪文件（如 `model_race.json`、`*_run.json`）**未打开**。
-- 机器可读产物：`out/replenishment_v0/actions.json`（含每行原始数字、判定、证据项、复算所需字段）。
+- 生成器对 evidence 做**硬绑定**：canonical hash 不符即 `SystemExit`，不写产物（R1-M01）。
+  同时记录两套 hash / 字节数 / `evidence_blob_sha1` / `code_commit`。
+- 未读取、未使用 `model_race.json` 或任何 P90 字段（运行时 guard 会抛错）。
+- 机器可读产物：`out/replenishment_v0/actions.json`（schema `replenishment_actions_v0/2`，
+  含每行原始数字、判定、**结构化闸门**、窗口日数断言、复算所需字段）。
+- **可复现性**：R2 生成器对 R1 冻结版 `actions.json` 做逐字段比对，
+  supply / demand / gaps / tests / 四窗口数值 **0 处差异**；变化只在标签、闸门结构与措辞。
 
 ## 2. 口径与判定规则（先定规则再看结果）
 
@@ -62,9 +84,30 @@ based_on: 98e1c6643f1f97a32225be26f2283347da95c4ab
 | **T3** 结构短缺 | `B_max < D1`（最宽松供给仍低于 P50） | 1/10 成立（仅 White） |
 | **T4** 到货翻转 | `A_low < D2 ≤ B_max`（在手不足、到货可能补上） | 6/10 成立 |
 
-分类：`always_replenish ⇐ T3 ∧ T1 ∧ T2`；`depends_on_arrival ⇐ ¬T3 ∧ T4`；其余 → `insufficient_evidence`。
+分类：`always_replenish ⇐ T3 ∧ T1 ∧ T2 ∧ 全部硬门 ok`；`depends_on_arrival ⇐ ¬T3 ∧ T4`；其余 → `insufficient_evidence`。
 
-- **Cover 的处理**：cover 不进供给（沿用 V0.1）。cover 只会**增加**供给，不可能把“够”变成“缺”，所以不改变短缺类判定；每行仍列为本行证据项（其中 4 个 SKU 的 cover 为 `scenario`，连映射都没有）。
+**结构化闸门（R1-M04）**：每行 `gates` 都有 `id / label / state / evidence / owner_role / blocks_promotion`，
+`state ∈ {ok, unproven, fail}`：
+
+| 闸门 | 含义 | 10 行现状 | 是否闸 always |
+|---|---|---|---|
+| `G1_identity` | 客户码→单一 KS 物料 | 10/10 `ok` | 是 |
+| `G2_uom` | 库存/单据单位已核实（即 T2 硬门） | 10/10 `unproven` | 是 |
+| `G3_demand_overlap` | live SO 与预测是否同一批需求 | 10/10 `unproven`（10 行都有正向 SO） | 仅在 D2 视图升级时 |
+| `G4_supply_overlap` | PO / 在途 / 在产逐笔重叠键 | 10/10 `unproven` | 否（只影响下界） |
+| `G5_arrival_in_window` | PO 到货日 / WO 完工日在窗口内 | 10/10 `unproven` | 是（B_max 假设全部到货） |
+| `G6_pk_ks_1to1` | 在产 PK# 按 1:1 计 KS | 10/10 `unproven` | 否（只影响下界大小） |
+
+**禁止的升级路径**（写进每行 `start_condition.forbidden`）：
+1. 供给下界不足（`B_min` / `B_min_po_dedup` < D2）**只证明存在短缺情景**，
+   永远不升级为 always_replenish；
+2. live SO 在未做桶级消费/分配前，不能变成净需求；
+3. Cover 或任何未上账供给，在映射与可替代性证实前不计入。
+
+- **Cover 的处理（R1-N03 已更正）**：cover 不进供给（沿用 V0.1）。它是**未上账的上行供给情景**：
+  一旦 alias 映射与可替代性证实，它**可能消除短缺**，该行必须重算；
+  但它不可能**创造**短缺。**未证之前不能把“有 cover”当作“不缺”的证据**——
+  旧版“只会增加供给，所以不改变短缺分类”的推理不成立，已删除。
 - **在途处理**：10/10 SKU 的在途数值 = 去重 PO（含 4 个两侧均为 0 的 SKU），这是重叠的强指示但不是单据级证明；PO 级“重复候选”标记另需同 SKU/仓/数量且不同 PO。
 - **在产处理**：WO 生产物是 `PK#` 皮壳，按 1:1 计入 KS 成品——**未证**，只会向下修正，列入全局残余未知。
 - **证据优先级**（`priority_tier`，只表示“先补哪条证据”，**不是采购紧迫度**）：
@@ -72,12 +115,32 @@ based_on: 98e1c6643f1f97a32225be26f2283347da95c4ab
   2. T4 且（去重压力下 B_min − D2 < D2 的 10%，或重复候选 PO 占 B_max ≥ 25%）；
   3. 其余 T4；
   4. 无到货杠杆、只在计入 live SO 后才短缺。
+  同一 tier 内按去重压力边际（`bmin_po_dedup_margin_pct_of_d2`）从小到大排，再按报告顺序。
+  （R2 中 DEEPGREY 与 DEEPBLUE 的名次因此对调：-55.9% 早于 -47.9%；旧文件这两行
+  的名次无法由任何写明的规则复现，属排序口径修正，不影响分类。）
 
 ### 2.4 窗口敏感性（同规则重跑 L60 / L90 / L120，仍只用 P50）
 
-- 10 行中 **9 行**在 4 个窗口上分类一致。
-- **1 行不一致**：`XMMBS-194` 在 **L120（150 天窗口）** 会落入 insufficient_evidence——此时 D2 1,025.2 > B_max 980，而 D1 394.2 < 980，需求视图重新成为决定项。已在 `actions.json` 的 `class_horizon_note` 中写明，不静默取整。
-- `CMM-WHITE` 的算术资格也是窗口相关：T3 在 `remaining_3m / L90 / L120` 成立，在 `L60` 不成立（211.9 < 221）。
+**R1-M03 更正**：旧版把这三个窗格标成“60+30 / 90+30 / 120+30”，但实际读取的是
+`evidence.lead_time.L60/L90/L120`，`days` 分别是 **60 / 90 / 120**。标签与实际差 30 天，
+已全部去掉 “+30”，并在每格写入 `requested_days`、`covered_days`、`start`、`end`：
+- `remaining_3m`：71 天（2026-10-22 → 2026-12-31）；
+- `L60`：60 天（→ 2026-12-21）；`L90`：90 天（→ 2027-01-20）；`L120`：120 天（→ 2027-02-19）。
+- 生成器断言每格 `sum(bucket.weight × 当月天数) == requested_days`，并对标签做
+  “必须写明该天数、不得含 +30”的断言。
+
+**与 V1 窗口不同（不可互换）**：V1（`model_race.py`）的动作窗口是**提前期 + 复核 30 天**
+= 90 / 120 / 150 天，且用同形日历残差标定 P90。本清单只用提前期窗口本身、且不含 P90。
+两者天数与口径都不同，任何分类/数字都不能互相引用。
+
+- 10 行中 **9 行**在 4 个窗口上分类一致（逐行计算，写入 `class_horizon_stable`）。
+- **1 行不一致**：`XMMBS-194` 在 **L120（120 天窗口）** 会落入 insufficient_evidence——
+  此时 D2 1,025.2 > B_max 980，而 D1 394.2 < 980。**翻转发生在 120 天，不是 150 天**；
+  旧版把它写成“L120（150 天）”，是标签错误的直接后果。已在 `class_horizon_note` 写明。
+- `CMM-WHITE` 的算术资格也是窗口相关：T3 在 `remaining_3m / L90 / L120` 成立，
+  在 `L60` 不成立（211.9 < 221）。
+- **不做概括**（R1-N03）：稳定性只逐行报告，不写“N 行在 4 个窗口一致”这类
+  由局部推出整体的结论。
 
 ## 3. 主表（10 SKU 全覆盖，按 V0 报告顺序）
 
@@ -95,20 +158,28 @@ based_on: 98e1c6643f1f97a32225be26f2283347da95c4ab
 | 10 | `KS0001-XMMBS-194-HEMPNATURAL` | 228.8 | 859.8 | 360 / 980 | 980 / 980 | 980–980 | – | ✓ | depends_on_arrival | 3 | 7 |
 | | **合计** | **1,152.4** | **4,076.4** | **1,015 / 3,205** | **3,953 / 5,854** | 3,680–5,573 | 1 | 6 | 0 / 6 / 4 | | |
 
-† White 的算术条件已满足 `always_replenish`，但 T2 不成立，按规则不升级；见 §4.3。
+† White 的算术条件已满足 `always_replenish`，但 T2 不成立、G5 未证，按规则不升级；见 §4.3。
 合计与冻结 `aggregate` 逐项相等（§5）。**合计不是需求/供给计划，也不是任何总量指令。**
+证据优先级列在同 tier 内按去重压力边际排序，因此 DEEPGREY（9）排在 DEEPBLUE（8）之后
+（见 §2.3 末段；分类不受影响）。
 
-## 4. 分层明细（每项：供需数字 / 依据 / 需补证据 / 责任角色 / 启动条件）
+## 4. 分层明细（每项：供需数字 / 依据 / 需补证据 / 责任角色 / 启动闸门）
 
 ### 4.1 always_replenish — 0 个
 
-按任务书规则，`always_replenish` 需要 T3 ∧ T1 ∧ T2 同时成立。T1 在 10/10 成立，**T2 在 10/10 不成立**（`uom_status = unknown_conditional`：库存按件计数、未做换算，是 V0.1 的条件假设而不是已证事实）。因此**本层为空**，唯一算术合格者 White 落在 §4.3 并标注 `arithmetic_qualifies = always_replenish`。
+按任务书规则，`always_replenish` 需要 T3 ∧ T1 ∧ T2 同时成立，并且生成器额外要求
+`G5_arrival_in_window = ok`（B_max 的前提是“全部到货”）。T1 在 10/10 成立，
+**T2 与 G5 在 10/10 不成立**（`uom_status = unknown_conditional`；
+PO ETA / WO `planned_end_date` 全空）。因此**本层为空**，唯一算术合格者 White 落在
+§4.3 并标注 `arithmetic_qualifies = always_replenish`、`promotion_blockers = [G2_uom, G5_arrival_in_window]`。
 
 > 这不是把结论藏起来：White 的缺口（29.1 件，占 B_max 13.2%）已经小于任何合理的单位/包装换算误差，所以“证明单位”本身就是本清单的第一优先证据动作。
 
 ### 4.2 depends_on_arrival — 6 个
 
-共同特征：在手（A_low）不足以覆盖 D2，但把所有未结 PO、在产剩余、在途都算上（B_max）就能覆盖；**结论只差“到不到、到得是不是同一批”**。6 行在 4 个窗口上分类一致。共同未证项：UOM、PK#→KS 1:1、SO↔预测重叠、时点差 1–2 天。
+共同特征：在手（A_low）不足以覆盖 D2，但把所有未结 PO、在产剩余、在途都算上（B_max）就能覆盖；**结论只差“到不到、到得是不是同一批”**。共同未证项：UOM、PK#→KS 1:1、SO↔预测重叠、时点差 1–2 天。
+6 行的窗口一致性**逐行给出**（L60 = 60 天 / L90 = 90 天 / L120 = 120 天；见 §2.4），
+本文不再写“6 行在 4 个窗口一致”这类概括：实际上只有 5 行四窗一致，`XMMBS-194` 在 120 天窗口翻转。
 
 #### 4.2.1 `KS0001-XMMBS-100-HEMPNATURAL`（客户码 `C/Linen-Natural-100-688-wow`；tier 2，证据优先级 2）
 
@@ -116,7 +187,10 @@ based_on: 98e1c6643f1f97a32225be26f2283347da95c4ab
 - **依据**：在手 54 远低于 187.7；全部到货且不重叠才覆盖；最大重叠即短缺。A_high 155 也不足。
 - **需补证据**：① PO021717 实际到货日（采购/供应链）；② 3/3 张 WO 的 `planned_end_date`（生产/PMC）；③ 在途 121 与 PO 121 的逐笔关单键（数据/系统）；④ cover 无映射能否替代（商品主数据）；⑤ UOM（商品主数据）。
 - **责任角色**：采购/供应链（PO ETA）＋ 生产/PMC（WO 日期）。
-- **启动条件**：到货日与完工日均早于窗口末端且确认在途非重复 → 供给 ≥ 397，窗口内不缺（仍不给量）；任一到货日超出窗口或确认在途已含于 PO → B_min 175 < 187.7，**转为 always_replenish**。补齐前不发起采购/生产指令。
+- **启动闸门**（结构化，`start_condition`）：升级所需 = `G1`（已 ok）+ `G2_uom` + `G5_arrival_in_window` + `G3_demand_overlap`（本行 `demand_view_for_promotion=D2`）。
+  ① G2 ∧ G4 ∧ G5 ok → 供给达 B_max 397 ≥ D2 187.7，窗口内不缺（仍不给量）；
+  ② 到货落窗外或确认重叠 → 只落 `insufficient_evidence`：去重压力 B_min 175 < D2 187.7（差 12.7）、A_high 155 也不足，但**下界不足本身不升级为 always**；
+  ③ 短缺情景证实 ∧ G2 ∧ G3 ok（SO 已做桶级分配）→ 才允许 always。补齐前不发起采购/生产指令。
 
 #### 4.2.2 `KS0001-CMKTR-100-GREY`（客户码 `C/Cord-Grey-100-710-wow`；tier 2，证据优先级 3）
 
@@ -124,7 +198,11 @@ based_on: 98e1c6643f1f97a32225be26f2283347da95c4ab
 - **依据**：主口径 B_min 324 覆盖，但只要 PO021733/735 被确认重复，去重 B_min 171 就低于 D2——结论完全由“那 153 件是不是同一笔”决定。
 - **需补证据**：① PO021733 与 PO021735 是否同一笔（采购/供应链，决定性）；② 3/3 条 PO 到货日；③ 2/2 张 WO 日期；④ 在途 165 与去重 PO 165 的关单键（数据/系统）；⑤ 死单 150 是否补发（业务/运营）；⑥ UOM。
 - **责任角色**：采购/供应链（PO 重复候选）。
-- **启动条件**：确认不重复且到货日在窗口内 → 供给 324–517 ≥ 173，窗口内不缺；**确认重复 → B_min 171 < 173，转为 always_replenish（在手仅 6）**；到货日超出窗口同样转短缺。补齐前不发起采购/生产指令。
+- **启动闸门**（结构化）：升级所需 = `G1`（已 ok）+ `G2` + `G5` + `G3`（`demand_view_for_promotion=D2`）。
+  ① 确认不重复且到货日在窗口内 → 供给 324–517 ≥ 173，窗口内不缺；
+  ② 确认重复 → 去重压力 B_min 171 < D2 173（差 2.0），A_high 34 更不足；此时只能落 `insufficient_evidence`，
+  **不得由“下界不足”直接升 always**；
+  ③ 短缺情景证实 ∧ G2 ∧ G3 ok（SO 桶级分配完成）→ 才允许 always。补齐前不发起采购/生产指令。
 
 #### 4.2.3 `KS0001-HLR-100-OFFWHITE`（客户码 `TT0000671K0063721`；tier 2，证据优先级 4）
 
@@ -132,7 +210,11 @@ based_on: 98e1c6643f1f97a32225be26f2283347da95c4ab
 - **依据**：在途与 PO 数值完全相等（490 = 490），只要有任何一处重叠被证实、或 310 件在产里少 1 件，结论即转短缺；A_high 414 本身不足。
 - **需补证据**：① 在途 490 与 PO 490 的逐笔关单键（数据/系统，决定性）；② 2/2 条 PO 到货日；③ 7/7 张 WO 日期与 3 张 Draft 是否释放（生产/PMC）；④ PK#→KS 1:1（生产/PMC；本行 WO 同时含 KS 与 PK# 生产物）；⑤ 死单 253 是否补发（业务/运营）；⑥ UOM。
 - **责任角色**：数据/系统（在途↔PO 关单键）＋ 采购/供应链（ETA）。
-- **启动条件**：确认在途 490 即 PO 490 且全部到账、在产 310 全部完工 → B_min 594 ≥ 593.3，但只维持 0.7 的边距；任一重复/缺口被证实 → **转 always_replenish**。补齐前不发起采购/生产指令。
+- **启动闸门**（结构化）：升级所需 = `G1`（已 ok）+ `G2` + `G5` + `G3`（`demand_view_for_promotion=D2`）。
+  ① 确认在途 490 即 PO 490 且全部到账、在产 310 全部完工 → B_min 594 ≥ 593.3，但只维持 0.7 的边距；
+  ② 任一重复/到货落窗外 → 供给落到 A_high 414 < D2 593.3，只落 `insufficient_evidence`，
+  **不得由下界/边距不足直接升 always**；
+  ③ 短缺情景证实 ∧ G2 ∧ G3 ok → 才允许 always。补齐前不发起采购/生产指令。
 
 #### 4.2.4 `KS0001-CMKTR-100-DEEPBLUE`（客户码 `C/Cord-DKBlue-100-713-wow`；tier 2，证据优先级 5）
 
@@ -140,7 +222,10 @@ based_on: 98e1c6643f1f97a32225be26f2283347da95c4ab
 - **依据**：在手 6 几乎为空；即使去重压力口径 126 也高于 D2 104.5，所以结论不是“够不够”而是“PO/在途来不来”——不到货时仅 41。
 - **需补证据**：① PO021733/735 是否同一笔（采购/供应链）；② 2/2 条 PO 到货日；③ 1/1 张 WO 日期与 Draft WO 是否释放（生产/PMC）；④ 在途 120 与去重 PO 120 的关单键（数据/系统）；⑤ UOM。
 - **责任角色**：采购/供应链（重复候选与 ETA）。
-- **启动条件**：确认同一笔且到货日在窗口内 → 去重供给 126–246 ≥ 104.5，窗口内不缺；确认不到货或在窗口外 → A_high 41 < 104.5，**转 always_replenish**。补齐前不发起采购/生产指令。
+- **启动闸门**（结构化）：升级所需 = `G1`（已 ok）+ `G2` + `G5` + `G3`（`demand_view_for_promotion=D2`）。
+  ① 确认同一笔且到货日在窗口内 → 去重供给 126–246 ≥ 104.5，窗口内不缺；
+  ② 确认不到货或落窗外 → A_high 41 < 104.5，只落 `insufficient_evidence`，**不直接升 always**；
+  ③ 短缺情景证实 ∧ G2 ∧ G3 ok → 才允许 always。补齐前不发起采购/生产指令。
 
 #### 4.2.5 `KS0001-XMMBS-153-HEMPNATURAL`（客户码 `C/Linen-Natural-153-688-wow`；tier 3，证据优先级 6）
 
@@ -148,7 +233,11 @@ based_on: 98e1c6643f1f97a32225be26f2283347da95c4ab
 - **依据**：结论取决于 612 件在产能否在窗口内完工（这是主杠杆），以及 PO 215 是否与在产重复；若不完工按在手 376 计，缺 508.8。
 - **需补证据**：① 3/3 张 WO 完工日（生产/PMC，决定性）；② 3/3 条 PO 到货日（采购/供应链）；③ 在途 215 与去重 PO 215 的关单键（数据/系统）；④ Stopped WO 300 是否重启（生产/PMC）；⑤ 死单 500 是否补发（业务/运营）；⑥ UOM。
 - **责任角色**：生产/PMC（WO 完工日）＋ 采购/供应链（PO ETA）。
-- **启动条件**：完工日与到货日均早于窗口末端 → 供给 ≥ 988 ≥ 884.8，窗口内不缺；任一大宗（在产 612 或 PO 215）落在窗口外或与其重复 → 按 A_low 376 或扣除后重算，缺 508.8，**转 always_replenish**。补齐前不发起采购/生产指令。
+- **启动闸门**（结构化）：升级所需 = `G1`（已 ok）+ `G2` + `G5` + `G3`（`demand_view_for_promotion=D2`）。
+  ① 完工日与到货日均早于窗口末端 → 供给 ≥ 988 ≥ 884.8，窗口内不缺；
+  ② 任一大宗（在产 612 或 PO 215）落窗外/重复 → 供给落到 A_low 376 < D2 884.8，只落 `insufficient_evidence`，
+  **不直接升 always**；
+  ③ 短缺情景证实 ∧ G2 ∧ G3 ok → 才允许 always。补齐前不发起采购/生产指令。
 
 #### 4.2.6 `KS0001-XMMBS-194-HEMPNATURAL`（客户码 `C/Linen-Natural-194-688-wow`；tier 3，证据优先级 7）
 
@@ -156,7 +245,10 @@ based_on: 98e1c6643f1f97a32225be26f2283347da95c4ab
 - **依据**：唯一杠杆是 620 件在产。两张都完工 → 980 ≥ 859.8；都不完工 → 仅 360，缺 499.8；单张完工也不足。
 - **需补证据**：① 2/2 张 WO 的 `planned_end_date`（生产/PMC，决定性）；② PK#→KS 1:1（生产/PMC）；③ Stopped WO 300 是否重启（生产/PMC）；④ 死单 421 是否补发（业务/运营）；⑤ UOM；⑥ cover 无映射。
 - **责任角色**：生产/PMC（WO 完工日）。
-- **启动条件**：两张 WO 完工日均早于窗口末端 → 供给 980 ≥ 859.8，窗口内不缺；任一张落在窗外 → 供给 ≤ 在手 + 单张在产 < 859.8，**转 always_replenish**。补齐前不发起采购/生产指令。
+- **启动闸门**（结构化）：升级所需 = `G1`（已 ok）+ `G2` + `G5` + `G3`（`demand_view_for_promotion=D2`）。
+  ① 两张 WO 完工日均早于窗口末端 → 供给 980 ≥ 859.8，窗口内不缺；
+  ② 任一张落窗外 → 供给落回 A_low 360 < D2 859.8，只落 `insufficient_evidence`，**不直接升 always**；
+  ③ 短缺情景证实 ∧ G2 ∧ G3 ok → 才允许 always。补齐前不发起采购/生产指令。
 - **窗口敏感性**：在 L120（150 天）窗口，D2 1,025.2 > B_max 980 而 D1 394.2 < 980，同规则会落入 insufficient_evidence；即更长提前期下“需求视图”重新成为决定项。
 
 ### 4.3 insufficient_evidence — 4 个
@@ -167,7 +259,9 @@ based_on: 98e1c6643f1f97a32225be26f2283347da95c4ab
 - **依据**：本批**唯一**在最宽松供给上界下仍低于 P50 的 SKU。但 ① 单位口径 `unknown_conditional`（T2 不成立）；② 预测来自 14 个月、mean3 机械外推峰值月（近 3 月 27/280/16 → 均值 107.7）。缺口 13.2% 小于任何合理的单位/包装换算误差，不能凭它下结论。
 - **需补证据**：① 库存/PO 数量单位是否为“件”（商品主数据/仓储，决定性）；② 峰值月能否外推或改人工需求覆盖（业务/运营）；③ 2/2 条 PO 到货日（采购/供应链）；④ 1/1 张 WO 日期（生产/PMC）；⑤ cover 无映射（商品主数据）；⑥ 死单 70 是否补发（业务/运营）。
 - **责任角色**：商品主数据/仓储（UOM）＋ 业务/运营（需求口径）。
-- **启动条件**：UOM 核实为“件”且需求口径人工确认 → **升级为 always_replenish（算术条件已满足）**；在此之前只做证据收集，不排产、不发起采购/生产指令。
+- **启动闸门**（结构化）：本行 `demand_view_for_promotion=D1`（B_max 221 < D1 250.1），升级所需 = `G1`（已 ok）+ `G2_uom` + `G5_arrival_in_window`；
+  `promotion_blockers = [G2_uom, G5_arrival_in_window]`。G2 与 G5 都 ok → 才升级为 always_replenish（算术条件已满足）；
+  在此之前只做证据收集，不排产、不发起采购/生产指令。
 
 #### 4.3.2 `KS0001-QDKTR-100-DEEPBLUE`（客户码 `CEN003-DPBLUE-100`；tier 4，证据优先级 8）
 
@@ -175,7 +269,10 @@ based_on: 98e1c6643f1f97a32225be26f2283347da95c4ab
 - **依据**：A = B，无到货杠杆；结论取决于 462 件 live SO 的增量性与需求口径（比值 9.0%）。
 - **需补证据**：① live SO 462 是否与预测重叠（业务/运营，决定性）；② 旺势是否延续 / 人工覆盖（业务/运营）；③ UOM；④ 1/1 张 WO 日期（生产/PMC）。
 - **责任角色**：业务/运营（需求口径）＋ 商品主数据/仓储（UOM）。
-- **启动条件**：确认 SO 为增量且旺势延续 → B_max 261 < 需求，转 always_replenish 算术区；确认重叠 → 按 P50 窗口内不缺。落定前不发起采购/生产指令。
+- **启动闸门**（结构化）：`demand_view_for_promotion=D2`（B_max 261 ≥ D1 39.1、< D2 501.1），升级所需 = `G2` + `G5` + `G3`。
+  ① G3 ok（SO 确为增量）∧ G2 ∧ G5 ok → B_max 261 < D2，才允许 always；
+  ② G3 确认 SO 与预测重叠 → 按 D1 39.1 口径 B_max 261 覆盖，窗口内不缺；
+  ③ G3 仍 unproven → 维持 `insufficient_evidence`。落定前不发起采购/生产指令。
 
 #### 4.3.3 `KS0001-QDKTR-100-DEEPGREY`（客户码 `CENCord995-DKGrey-97`；tier 4，证据优先级 9）
 
@@ -183,7 +280,10 @@ based_on: 98e1c6643f1f97a32225be26f2283347da95c4ab
 - **依据**：A = B，**没有任何到货杠杆**；结论只取决于 296 件 live SO 是否与 P50 重叠、以及 P50 是否低估（预测月均仅为近 3 月均值 242.3 的 9.4%）。
 - **需补证据**：① live SO 296 是否与预测重叠（业务/运营，决定性）；② 2026 年 6–9 月旺势是否延续 / 人工需求覆盖（业务/运营）；③ UOM（商品主数据）；④ 2/2 张 WO 日期（生产/PMC）。
 - **责任角色**：业务/运营（需求口径）＋ 商品主数据/仓储（UOM）。
-- **启动条件**：确认 SO 为增量且旺势延续 → B_max 153 < 需求，进入 always_replenish 算术区；确认与预测重叠 → 按 P50 窗口内不缺，只留 UOM/在产日期待证。任一方向落定前不发起采购/生产指令。
+- **启动闸门**（结构化）：`demand_view_for_promotion=D2`（B_max 153 ≥ D1 51.1、< D2 347.1），升级所需 = `G2` + `G5` + `G3`。
+  ① G3 ok（SO 确为增量）∧ G2 ∧ G5 ok → B_max 153 < D2 347.1，才允许 always；
+  ② G3 确认与预测重叠 → 按 D1 51.1 口径窗口内不缺，只留 UOM/在产日期待证；
+  ③ G3 仍 unproven → 维持 `insufficient_evidence`。任一方向落定前不发起采购/生产指令。
 
 #### 4.3.4 `KS0001-PR-100-GREY`（客户码 `C/Velvet-Grey-100-705-wow`；tier 4，证据优先级 10）
 
@@ -191,7 +291,10 @@ based_on: 98e1c6643f1f97a32225be26f2283347da95c4ab
 - **依据**：A = B，无到货杠杆；结论取决于 95 件 live SO 的增量性与需求口径（比值 15.2%，3 月 bias -62.4%）。
 - **需补证据**：① live SO 95 是否与预测重叠（业务/运营，决定性）；② 旺势是否延续 / 人工覆盖（业务/运营）；③ 死单 51 是否补发（业务/运营）；④ UOM；⑤ 2/2 张 WO 日期（生产/PMC）。
 - **责任角色**：业务/运营（需求口径）。
-- **启动条件**：确认 SO 为增量 → B_max 104 < 149.0，转 always_replenish 算术区；确认重叠 → 按 P50 窗口内不缺。落定前不发起采购/生产指令。
+- **启动闸门**（结构化）：`demand_view_for_promotion=D2`（B_max 104 ≥ D1 54.0、< D2 149.0），升级所需 = `G2` + `G5` + `G3`。
+  ① G3 ok ∧ G2 ∧ G5 ok → B_max 104 < D2 149.0，才允许 always；
+  ② G3 确认重叠 → 按 D1 口径窗口内不缺；
+  ③ G3 仍 unproven → 维持 `insufficient_evidence`。落定前不发起采购/生产指令。
 
 ## 5. 计数对账
 
@@ -209,6 +312,12 @@ based_on: 98e1c6643f1f97a32225be26f2283347da95c4ab
 | B_min / B_max 合计 | 3,953 / 5,854 | 3,953 / 5,854 ✓ |
 | live SO 合计 | 2,924 | 2,924 ✓（D1 1,152.4 + 2,924 = D2 4,076.4） |
 | 死单 / 超发 | 1,675 / -907 | 与冻结值一致；未计入/未冲抵 |
+| 逐字段复现 | supply / demand / gaps / tests / 四窗口数值 vs R1 冻结 `actions.json` | **0 处差异** |
+| 窗口日数断言 | 10 行 × 4 窗口：`covered_days == requested_days` | **40/40 通过**（71/60/90/120 天） |
+| 窗口标签断言 | 标签必须写明实际天数、不得含 “+30” | **40/40 通过** |
+| 闸门三态 | 每行 6 个闸门，`state ∈ {ok, unproven, fail}` | 10 行 × 6 = 60 个，全部合法；`ok` 10 个（G1） |
+| 升级拦截 | 任何 `B_min`/`B_min_po_dedup` < D2 的行不得为 always | 10/10 维持非 always（always 层为空） |
+| SO 标注 | 含 live SO 的行 `demand_overlap=unproven` | **10/10** |
 
 ## 6. 与 D9 分层的关系（不静默替换）
 
@@ -229,7 +338,10 @@ D9 分层用的是 `可准备 / 待核实 / 暂缓`，其中“可准备/待核�
 
 > 本清单**不废除** D9 的“局部暂停/隔离未知项”裁决，只替换其中依赖 P90 的补货派生结论；两套分层并存，以本清单的三分类作为 P90-free 视图。
 >
-> 另有一项**并行任务**在做 V1 的 P90 赛马（其动作敏感性按“P90 窗口 + 正向 SO vs A/B”判定）。那套判定与本清单的三分类**不是同一规则**，数字不可互相替代；本清单未使用其任何数值，也不对其结论表态。
+> 另有一项**并行任务**在做 V1 的 P90 赛马（其动作敏感性按“同形日历窗口 P90 + 正向 SO vs A/B”判定）。
+> 那套判定与本清单的三分类**不是同一规则**：V1 的窗口是提前期 + 30 天（90/120/150 天），
+> 本清单只用提前期本身（60/90/120 天）且不含 P90；数字与分类都不可互相替代。
+> 本清单未使用其任何数值，也不对其结论表态。
 
 ## 7. 残余未知（全局，10/10 或跨 SKU）
 
@@ -239,7 +351,7 @@ D9 分层用的是 `可准备 / 待核实 / 暂缓`，其中“可准备/待核�
 | 在产无日期 | 24 张开放 WO | 计入供给但到货日未确认（4.2 各行决定性证据） |
 | PK#→KS 1:1 | 10/10 | 在产按 1:1 计入；若不成立，在产量需下修 |
 | 库存 UOM | 10/10 `unknown_conditional` | T2 全不成立 → always_replenish 层为空 |
-| Cover 可替代 | 10/10 未证（4 个无映射） | 不并入供给；只可能向上修正 |
+| Cover 可替代 | 10/10 未证（4 个无映射） | 不并入供给；映射与可替代性确认后**可能消除短缺、需重算**；未证前不能当作“不缺” |
 | PO ↔ 在途 / 在产重叠 | 10/10（在途 = 去重 PO 数值一致） | 只发 B_min/B_max 边界 |
 | SO ↔ 预测重叠 | 10/10 | D2 可能重复计算；D1/D2 并列 |
 | 单据/库存时点 | SO/WO 10-20/21 vs 库存 10-22 | 1–2 天未桥接，时点情景 |
@@ -265,12 +377,18 @@ D9 分层用的是 `可准备 / 待核实 / 暂缓`，其中“可准备/待核�
 
 | 校验 | 方法 | 结果 |
 |---|---|---|
-| 无 P90 读取 | 生成器对每个 SKU 只读 `remaining_3m.forecast_p50` / `.p50` / `lead_time.L*.forecast_p50` / `.p50` 与供给字段；对 `rows`/`totals` 做 `p90` 键断言 | 通过；产物无 `p90_3m` / `forecast_p90` / `p90_status` |
+| 输入绑定（M01） | 生成器对 evidence 做 canonical（LF）sha256 断言；另用篡改副本跑一次 | 正常跑通过；篡改副本 **`SystemExit`、退出码 1、未写产物** |
+| 同源复现 | 新生成器与 R1 冻结 `actions.json` 逐字段比 supply/demand/gaps/tests/四窗口 | **0 处差异** |
+| 无 P90 读取 | `P90Guard` 对任何含 `p90` 的键抛错；产物再做 `p90_3m`/`forecast_p90`/`p90_status` 子串断言 | 通过；产物无任何 P90 字段 |
 | 数量型结论 | 产物 schema 无 quantity/order 字段；`guards.order_quantities_emitted=false` | 通过 |
 | SKU 覆盖 | 10 个客户码逐一在 MD 与 JSON 出现；`evidence_priority` 为 1..10 唯一排列 | 通过 |
-| 分类一致性 | 每行按 T1–T4 重算分类，与写入值比对 | 10/10 一致 |
+| 分类一致性 | 每行按 T1–T4 + 闸门重算分类，与写入值比对 | 10/10 一致（0/6/4） |
+| 窗口日数/标签（M03） | 40 个窗口断言 `covered_days == requested_days`；标签写明天数且不含 “+30” | 40/40 通过 |
+| 闸门三态（M04） | 60 个闸门 state 合法性 + 每行 `start_condition` 由闸门生成 | 通过；always 层 0 |
 | 聚合对账 | 逐项加总 vs 冻结 `aggregate`（10 项，容差 1e-6） | 10/10 相等 |
 | 数值溯源 | 每行 D1/D2/A/B 与 `evidence.json` 同名字段比对 | 10/10 相等 |
-| 凭证扫描 | `uv run python scripts/check_secrets.py` + 任务书要求的 4 条 diff 扫描 | 618 文件 OK；4 条扫描零输出 |
+| 凭证扫描 | `uv run python scripts/check_secrets.py` + 任务书要求的 4 条 diff 扫描 | 见返修记录（零输出） |
 
-复算入口：`out/replenishment_v0/actions.json` 每行含 `tests`、`gaps`、`horizon_stability`、`basis`；把 `rule` 块与 `evidence.json` 的同名字段代入即可重现分类。
+复算入口：`out/replenishment_v0/actions.json` 每行含 `tests`、`gates`、`gaps`、
+`horizon_stability`（含 `requested_days`/`covered_days`）、结构化 `start_condition`；
+把 `rule` 块与 `evidence.json` 的同名字段代入即可重现分类。

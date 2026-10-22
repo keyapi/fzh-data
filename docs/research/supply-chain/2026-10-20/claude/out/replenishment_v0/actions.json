@@ -1,1570 +1,3410 @@
 {
-  "schema_version": "replenishment_actions_v0/1",
-  "title": "10 SKU 暂行补货行动清单（P90-free）",
-  "status": "provisional; not an instruction list; no quantities",
-  "owner": "claude-worker",
-  "generated_at": "2026-10-22T14:49:40+08:00",
-  "based_on": {
-    "fixed_commit": "98e1c6643f1f97a32225be26f2283347da95c4ab",
-    "inputs": [
-      {
-        "path": "docs/research/supply-chain/2026-10-20/claude/out/replenishment_v0/evidence.json",
-        "sha256": "15d52072dc5d0461f032de1a7df0b9a3a39f0c450da50366dbf63680693178ea",
-        "bytes": 287307
-      },
-      {
-        "path": "docs/research/supply-chain/2026-10-20/claude/control/reviews/2026-10-22-supply-demand-replenishment-v0.md",
-        "sha256": "cc5ab459ba84583fd987616701be04a2655516f2df936a0e873f688c4a1cb9d9",
-        "bytes": 85910
-      }
-    ],
-    "later_workspace_changes_used": false,
-    "note": "两份输入在 98e1c664 与工作区逐字节一致；未读取任何后续产物（含 model_race.json）"
-  },
-  "guards": {
-    "p90_used": false,
-    "p90_based_recommendations_used": false,
-    "order_quantities_emitted": false,
-    "production_accessed": false,
-    "en_or_sku_map_modified": false,
-    "scope_expanded": false,
-    "dead_so_excluded": true,
-    "over_delivery_not_netted": true
-  },
-  "rule": {
-    "horizon_primary": "remaining_3m: 2026-10-22 -> 2026-12-31 (calendar-integrated, decision time 2026-10-22)",
-    "D1": "demand.remaining_3m.forecast_p50 (P50 point forecast, live SO excluded)",
-    "D2": "demand.remaining_3m.p50 (= D1 + positive live open SO; SO<->forecast overlap unproven, may double count)",
-    "supply_A": "A_low = available; A_high = available + open production remaining (no PO, no intransit)",
-    "supply_B": "B_min = available + max(raw PO, production remaining, intransit) (maximum overlap); B_max = available + raw PO + production remaining + intransit (no overlap)",
-    "tests": {
-      "t1": "identity_status == confirmed",
-      "t2": "inventory.uom_status is a verified unit basis (false for 10/10: unknown_conditional)",
-      "t3": "B_max < D1 (short even at the most generous supply bound, on the P50 forecast)",
-      "t4": "A_low < D2 <= B_max (conclusion flips between on-hand-only and all-arrivals)"
-    },
-    "assignment": [
-      "always_replenish <= t3 and t1 and t2",
-      "depends_on_arrival <= not t3 and t4",
-      "insufficient_evidence <= otherwise"
-    ],
-    "cover_treatment": "cover is not counted in supply (V0); it can only add supply, so it cannot turn adequacy into shortage and does not change a shortage class; recorded per row as upside evidence",
-    "priority_tier": {
-      "1": "t3: structurally short at B_max",
-      "2": "t4 and (dedup-stress B_min - D2 < 10% of D2 or duplicate PO share >= 25% of B_max)",
-      "3": "t4, other",
-      "4": "no arrival lever; short only when live SO is added (D2)",
-      "note": "tier orders evidence urgency, not purchase urgency"
-    }
-  },
-  "counts": {
-    "skus_in": 10,
-    "skus_out": 10,
-    "excluded": 0,
-    "always_replenish": 0,
-    "depends_on_arrival": 6,
-    "insufficient_evidence": 4,
-    "arithmetic_qualifies_always_replenish": 1,
-    "class_horizon_stable": 9,
-    "by_class": {
-      "always_replenish": [],
-      "depends_on_arrival": [
-        "KS0001-XMMBS-100-HEMPNATURAL",
-        "KS0001-CMKTR-100-DEEPBLUE",
-        "KS0001-XMMBS-153-HEMPNATURAL",
-        "KS0001-CMKTR-100-GREY",
-        "KS0001-HLR-100-OFFWHITE",
-        "KS0001-XMMBS-194-HEMPNATURAL"
-      ],
-      "insufficient_evidence": [
-        "KS0001-QDKTR-100-DEEPGREY",
-        "KS0001-QDKTR-100-DEEPBLUE",
-        "KS0001-PR-100-GREY",
-        "KS0001-CMM-100-WHITE"
-      ]
-    }
-  },
-  "totals": {
-    "window": "2026-10-22 -> 2026-12-31",
-    "available": 1015,
-    "intransit": 1184,
-    "open_po_raw": 1465,
-    "production_remaining": 2190,
-    "A_low": 1015,
-    "A_high": 3205,
-    "B_min": 3953,
-    "B_max": 5854,
-    "D1": 1152.4,
-    "D2": 4076.4,
-    "live_so": 2924,
-    "dead_so": 1675,
-    "over_delivery": -907,
-    "note": "totals are cross-checks of the frozen evidence, not an aggregate demand or supply plan"
-  },
-  "rows": [
-    {
-      "seq": 1,
-      "evidence_priority": 9,
-      "priority_tier": 4,
-      "sku": "KS0001-QDKTR-100-DEEPGREY",
-      "customer_code": "CENCord995-DKGrey-97",
-      "item_name": "三角靠枕-全涤宽条绒-100-深灰色",
-      "class": "insufficient_evidence",
-      "arithmetic_qualifies": null,
-      "supply": {
-        "available": 1,
-        "intransit": 0,
-        "open_po_raw": 0,
-        "open_po_dedup": 0,
-        "po_duplicate_candidate": 0,
-        "open_po_lines": 0,
-        "po_eta_missing_lines": 0,
-        "production_gross": 390,
-        "production_remaining": 152,
-        "open_wo": 2,
-        "stopped_qty": 0,
-        "draft_wo": 0,
-        "A_low": 1,
-        "A_high": 153,
-        "B_min": 153,
-        "B_max": 153,
-        "B_min_po_dedup": 153,
-        "B_max_po_dedup": 153,
-        "intransit_equals_po_dedup": true
-      },
-      "demand": {
-        "D1_p50_forecast": 51.1,
-        "D2_p50_plus_live_so": 347.1,
-        "live_so": 296,
-        "dead_so_excluded": 0,
-        "over_delivery_not_netted": -185,
-        "forecast_model": "seasonal_naive",
-        "forecast_confidence": "medium",
-        "history_months": 45,
-        "run_rate_ratio": 0.094,
-        "recent3_mean": 242.3,
-        "d2_overlap_status": "unproven: live SO may or may not be the same demand the P50 already covers"
-      },
-      "gaps": {
-        "bmax_minus_d1": 101.9,
-        "bmax_minus_d2": -194.1,
-        "bmin_minus_d2": -194.1,
-        "bmin_po_dedup_minus_d2": -194.1,
-        "bmin_po_dedup_margin_pct_of_d2": -55.9,
-        "duplicate_po_share_of_bmax_pct": 0.0,
-        "d1_shortfall_vs_bmax_pct": -66.6
-      },
-      "tests": {
-        "t1_identity_confirmed": true,
-        "t2_uom_verified": false,
-        "t3_bmax_lt_d1": false,
-        "t4_a_low_lt_d2_le_bmax": false
-      },
-      "decisive_unknown": "需求口径：live SO 是否与 P50 重叠，以及近 3 月旺势是否延续",
-      "basis": "可供上限 B_max 153 ≥ D1 51.1，仅按 P50 看窗口内不缺；计入 296 件正向 live SO 后 D2 347.1 > 153，缺 194.1。无未结 PO、无在途，A=B，不存在“等货到”的杠杆——结论完全取决于 live SO 是否与预测重叠（重叠未证），以及 P50 是否低估（预测月均/近 3 月均值 = 9.4%）。",
-      "horizon_stability": [
-        {
-          "window": "remaining_3m",
-          "label": "决定窗 2026-10-22→2026-12-31",
-          "d1_p50_forecast": 51.1,
-          "d2_p50_plus_live_so": 347.1,
-          "t3_bmax_lt_d1": false,
-          "t4_a_low_lt_d2_le_bmax": false,
-          "class_if_evaluated_here": "insufficient_evidence"
-        },
-        {
-          "window": "L60",
-          "label": "提前期 60 天（窗口 60+30）",
-          "d1_p50_forecast": 44.7,
-          "d2_p50_plus_live_so": 340.7,
-          "t3_bmax_lt_d1": false,
-          "t4_a_low_lt_d2_le_bmax": false,
-          "class_if_evaluated_here": "insufficient_evidence"
-        },
-        {
-          "window": "L90",
-          "label": "提前期 90 天（窗口 90+30）",
-          "d1_p50_forecast": 65.0,
-          "d2_p50_plus_live_so": 361.0,
-          "t3_bmax_lt_d1": false,
-          "t4_a_low_lt_d2_le_bmax": false,
-          "class_if_evaluated_here": "insufficient_evidence"
-        },
-        {
-          "window": "L120",
-          "label": "提前期 120 天（窗口 120+30）",
-          "d1_p50_forecast": 88.3,
-          "d2_p50_plus_live_so": 384.3,
-          "t3_bmax_lt_d1": false,
-          "t4_a_low_lt_d2_le_bmax": false,
-          "class_if_evaluated_here": "insufficient_evidence"
-        }
-      ],
-      "class_horizon_stable": true,
-      "class_horizon_note": "四个窗口同规则判定一致（remaining_3m / L60 / L90 / L120）",
-      "arithmetic_qualifies_at_windows": [],
-      "missing_evidence": [
-        {
-          "item": "live SO 296 件是否与 P50 指向同一批需求",
-          "owner_role": "业务/运营",
-          "why_it_changes_answer": "决定 D2 是增量还是重复；决定本行是否结构短缺"
-        },
-        {
-          "item": "2026 年 6–9 月旺势是否延续 / 人工需求覆盖",
-          "owner_role": "业务/运营",
-          "why_it_changes_answer": "P50 仅为近 3 月均速的 9.4%；若旺势延续，B_max 153 远低于需求"
-        },
-        {
-          "item": "库存 UOM 是否为“件”",
-          "owner_role": "商品主数据/仓储",
-          "why_it_changes_answer": "单位未证时，任何短缺幅度都不能当结论"
-        },
-        {
-          "item": "2/2 张开放 WO 的 planned_end_date",
-          "owner_role": "生产/PMC",
-          "why_it_changes_answer": "A_high 153 已含在产剩余 152；完工日决定这部分能否算窗口内"
-        }
-      ],
-      "responsible_role": "业务/运营（需求口径）；商品主数据/仓储（UOM）",
-      "start_condition": "业务确认 live SO 为增量且旺势延续 → B_max 153 < 需求，本行进入 always_replenish 的算术区；确认与预测重叠 → 按 P50 口径窗口内不缺，本行仅留 UOM/在产日期待证。任一方向落定前不发起采购/生产指令。"
-    },
-    {
-      "seq": 2,
-      "evidence_priority": 8,
-      "priority_tier": 4,
-      "sku": "KS0001-QDKTR-100-DEEPBLUE",
-      "customer_code": "CEN003-DPBLUE-100",
-      "item_name": "三角靠枕-全涤宽条绒-100-深蓝色",
-      "class": "insufficient_evidence",
-      "arithmetic_qualifies": null,
-      "supply": {
-        "available": 1,
-        "intransit": 0,
-        "open_po_raw": 0,
-        "open_po_dedup": 0,
-        "po_duplicate_candidate": 0,
-        "open_po_lines": 0,
-        "po_eta_missing_lines": 0,
-        "production_gross": 260,
-        "production_remaining": 260,
-        "open_wo": 1,
-        "stopped_qty": 0,
-        "draft_wo": 0,
-        "A_low": 1,
-        "A_high": 261,
-        "B_min": 261,
-        "B_max": 261,
-        "B_min_po_dedup": 261,
-        "B_max_po_dedup": 261,
-        "intransit_equals_po_dedup": true
-      },
-      "demand": {
-        "D1_p50_forecast": 39.1,
-        "D2_p50_plus_live_so": 501.1,
-        "live_so": 462,
-        "dead_so_excluded": 0,
-        "over_delivery_not_netted": -217,
-        "forecast_model": "seasonal_naive",
-        "forecast_confidence": "medium",
-        "history_months": 45,
-        "run_rate_ratio": 0.09,
-        "recent3_mean": 208,
-        "d2_overlap_status": "unproven: live SO may or may not be the same demand the P50 already covers"
-      },
-      "gaps": {
-        "bmax_minus_d1": 221.9,
-        "bmax_minus_d2": -240.1,
-        "bmin_minus_d2": -240.1,
-        "bmin_po_dedup_minus_d2": -240.1,
-        "bmin_po_dedup_margin_pct_of_d2": -47.9,
-        "duplicate_po_share_of_bmax_pct": 0.0,
-        "d1_shortfall_vs_bmax_pct": -85.0
-      },
-      "tests": {
-        "t1_identity_confirmed": true,
-        "t2_uom_verified": false,
-        "t3_bmax_lt_d1": false,
-        "t4_a_low_lt_d2_le_bmax": false
-      },
-      "decisive_unknown": "需求口径：live SO 是否与 P50 重叠，以及近 3 月旺势是否延续",
-      "basis": "可供上限 B_max 261 ≥ D1 39.1；计入 462 件 live SO 后 D2 501.1 > 261，缺 240.1。无 PO、无在途，A=B，无到货杠杆；结论取决于 SO 重叠与需求口径（预测月均/近 3 月均值 = 9.0%）。",
-      "horizon_stability": [
-        {
-          "window": "remaining_3m",
-          "label": "决定窗 2026-10-22→2026-12-31",
-          "d1_p50_forecast": 39.1,
-          "d2_p50_plus_live_so": 501.1,
-          "t3_bmax_lt_d1": false,
-          "t4_a_low_lt_d2_le_bmax": false,
-          "class_if_evaluated_here": "insufficient_evidence"
-        },
-        {
-          "window": "L60",
-          "label": "提前期 60 天（窗口 60+30）",
-          "d1_p50_forecast": 31.3,
-          "d2_p50_plus_live_so": 493.3,
-          "t3_bmax_lt_d1": false,
-          "t4_a_low_lt_d2_le_bmax": false,
-          "class_if_evaluated_here": "insufficient_evidence"
-        },
-        {
-          "window": "L90",
-          "label": "提前期 90 天（窗口 90+30）",
-          "d1_p50_forecast": 50.5,
-          "d2_p50_plus_live_so": 512.5,
-          "t3_bmax_lt_d1": false,
-          "t4_a_low_lt_d2_le_bmax": false,
-          "class_if_evaluated_here": "insufficient_evidence"
-        },
-        {
-          "window": "L120",
-          "label": "提前期 120 天（窗口 120+30）",
-          "d1_p50_forecast": 69.7,
-          "d2_p50_plus_live_so": 531.7,
-          "t3_bmax_lt_d1": false,
-          "t4_a_low_lt_d2_le_bmax": false,
-          "class_if_evaluated_here": "insufficient_evidence"
-        }
-      ],
-      "class_horizon_stable": true,
-      "class_horizon_note": "四个窗口同规则判定一致（remaining_3m / L60 / L90 / L120）",
-      "arithmetic_qualifies_at_windows": [],
-      "missing_evidence": [
-        {
-          "item": "live SO 462 件是否与 P50 重叠",
-          "owner_role": "业务/运营",
-          "why_it_changes_answer": "决定 D2 是否增量"
-        },
-        {
-          "item": "2026 旺势是否延续 / 人工需求覆盖",
-          "owner_role": "业务/运营",
-          "why_it_changes_answer": "P50 仅为近 3 月均速的 9.0%"
-        },
-        {
-          "item": "库存 UOM 是否为“件”",
-          "owner_role": "商品主数据/仓储",
-          "why_it_changes_answer": "单位未证则短缺幅度不可下结论"
-        },
-        {
-          "item": "1/1 张开放 WO 的 planned_end_date",
-          "owner_role": "生产/PMC",
-          "why_it_changes_answer": "A_high 261 全部来自在产剩余 260"
-        }
-      ],
-      "responsible_role": "业务/运营（需求口径）；商品主数据/仓储（UOM）",
-      "start_condition": "业务确认 live SO 为增量且旺势延续 → B_max 261 < 需求，转 always_replenish 算术区；确认重叠 → 按 P50 窗口内不缺。落定前不发起采购/生产指令。"
-    },
-    {
-      "seq": 3,
-      "evidence_priority": 2,
-      "priority_tier": 2,
-      "sku": "KS0001-XMMBS-100-HEMPNATURAL",
-      "customer_code": "C/Linen-Natural-100-688-wow",
-      "item_name": "三角靠枕-新棉麻本色-100-麻本色",
-      "class": "depends_on_arrival",
-      "arithmetic_qualifies": null,
-      "supply": {
-        "available": 54,
-        "intransit": 121,
-        "open_po_raw": 121,
-        "open_po_dedup": 121,
-        "po_duplicate_candidate": 0,
-        "open_po_lines": 1,
-        "po_eta_missing_lines": 1,
-        "production_gross": 300,
-        "production_remaining": 101,
-        "open_wo": 3,
-        "stopped_qty": 0,
-        "draft_wo": 0,
-        "A_low": 54,
-        "A_high": 155,
-        "B_min": 175,
-        "B_max": 397,
-        "B_min_po_dedup": 175,
-        "B_max_po_dedup": 397,
-        "intransit_equals_po_dedup": true
-      },
-      "demand": {
-        "D1_p50_forecast": 43.7,
-        "D2_p50_plus_live_so": 187.7,
-        "live_so": 144,
-        "dead_so_excluded": 120,
-        "over_delivery_not_netted": -92,
-        "forecast_model": "seasonal_naive",
-        "forecast_confidence": "medium-low",
-        "history_months": 29,
-        "run_rate_ratio": 0.12,
-        "recent3_mean": 167,
-        "d2_overlap_status": "unproven: live SO may or may not be the same demand the P50 already covers"
-      },
-      "gaps": {
-        "bmax_minus_d1": 353.3,
-        "bmax_minus_d2": 209.3,
-        "bmin_minus_d2": -12.7,
-        "bmin_po_dedup_minus_d2": -12.7,
-        "bmin_po_dedup_margin_pct_of_d2": -6.8,
-        "duplicate_po_share_of_bmax_pct": 0.0,
-        "d1_shortfall_vs_bmax_pct": -89.0
-      },
-      "tests": {
-        "t1_identity_confirmed": true,
-        "t2_uom_verified": false,
-        "t3_bmax_lt_d1": false,
-        "t4_a_low_lt_d2_le_bmax": true
-      },
-      "decisive_unknown": "到货时点：未结 PO 121、在产 101、在途 121 是否在窗口内到货/完工，以及三者是否重复",
-      "basis": "在手仅 54，远低于 D2 187.7；若 PO 121 + 在产 101 + 在途 121 全部到账且不重叠，B_max 397 覆盖；但最大重叠下 B_min 175 仍低于 D2 达 12.7——结论在“全部到货不重叠”（不缺）与“重叠/迟到”（短缺）之间翻转。A_high 155 也不足。",
-      "horizon_stability": [
-        {
-          "window": "remaining_3m",
-          "label": "决定窗 2026-10-22→2026-12-31",
-          "d1_p50_forecast": 43.7,
-          "d2_p50_plus_live_so": 187.7,
-          "t3_bmax_lt_d1": false,
-          "t4_a_low_lt_d2_le_bmax": true,
-          "class_if_evaluated_here": "depends_on_arrival"
-        },
-        {
-          "window": "L60",
-          "label": "提前期 60 天（窗口 60+30）",
-          "d1_p50_forecast": 35.2,
-          "d2_p50_plus_live_so": 179.2,
-          "t3_bmax_lt_d1": false,
-          "t4_a_low_lt_d2_le_bmax": true,
-          "class_if_evaluated_here": "depends_on_arrival"
-        },
-        {
-          "window": "L90",
-          "label": "提前期 90 天（窗口 90+30）",
-          "d1_p50_forecast": 56.0,
-          "d2_p50_plus_live_so": 200.0,
-          "t3_bmax_lt_d1": false,
-          "t4_a_low_lt_d2_le_bmax": true,
-          "class_if_evaluated_here": "depends_on_arrival"
-        },
-        {
-          "window": "L120",
-          "label": "提前期 120 天（窗口 120+30）",
-          "d1_p50_forecast": 76.6,
-          "d2_p50_plus_live_so": 220.6,
-          "t3_bmax_lt_d1": false,
-          "t4_a_low_lt_d2_le_bmax": true,
-          "class_if_evaluated_here": "depends_on_arrival"
-        }
-      ],
-      "class_horizon_stable": true,
-      "class_horizon_note": "四个窗口同规则判定一致（remaining_3m / L60 / L90 / L120）",
-      "arithmetic_qualifies_at_windows": [],
-      "missing_evidence": [
-        {
-          "item": "PO021717（121 件）的实际到货日",
-          "owner_role": "采购/供应链",
-          "why_it_changes_answer": "1/1 无 will_arrive_date；决定能否算窗口内"
-        },
-        {
-          "item": "3/3 张开放 WO 的 planned_end_date",
-          "owner_role": "生产/PMC",
-          "why_it_changes_answer": "在产剩余 101 无日期"
-        },
-        {
-          "item": "在途 121 与 PO 121 的逐笔关单键",
-          "owner_role": "数据/系统（worker）",
-          "why_it_changes_answer": "决定 B 取 B_min 还是 B_max"
-        },
-        {
-          "item": "Cover 无映射（scenario）能否替代",
-          "owner_role": "商品主数据/仓储",
-          "why_it_changes_answer": "若有 cover 可补充供给，只会向上修正"
-        },
-        {
-          "item": "库存 UOM 是否为“件”",
-          "owner_role": "商品主数据/仓储",
-          "why_it_changes_answer": "单位未证"
-        }
-      ],
-      "responsible_role": "采购/供应链（PO ETA）；生产/PMC（WO 日期）",
-      "start_condition": "PO 到货日与 WO 完工日均早于窗口末端且确认在途非重复 → 供给 ≥ 397，窗口内不缺（仍不给量）；任一到货日超出窗口，或确认在途已含于 PO → B_min 175 < 187.7，转 always_replenish。补齐前不发起采购/生产指令。"
-    },
-    {
-      "seq": 4,
-      "evidence_priority": 5,
-      "priority_tier": 2,
-      "sku": "KS0001-CMKTR-100-DEEPBLUE",
-      "customer_code": "C/Cord-DKBlue-100-713-wow",
-      "item_name": "三角靠枕-纯棉宽条绒-100-深蓝色",
-      "class": "depends_on_arrival",
-      "arithmetic_qualifies": null,
-      "supply": {
-        "available": 6,
-        "intransit": 120,
-        "open_po_raw": 240,
-        "open_po_dedup": 120,
-        "po_duplicate_candidate": 120,
-        "open_po_lines": 2,
-        "po_eta_missing_lines": 2,
-        "production_gross": 35,
-        "production_remaining": 35,
-        "open_wo": 1,
-        "stopped_qty": 0,
-        "draft_wo": 1,
-        "A_low": 6,
-        "A_high": 41,
-        "B_min": 246,
-        "B_max": 401,
-        "B_min_po_dedup": 126,
-        "B_max_po_dedup": 281,
-        "intransit_equals_po_dedup": true
-      },
-      "demand": {
-        "D1_p50_forecast": 24.5,
-        "D2_p50_plus_live_so": 104.5,
-        "live_so": 80,
-        "dead_so_excluded": 110,
-        "over_delivery_not_netted": -63,
-        "forecast_model": "seasonal_naive",
-        "forecast_confidence": "medium-low",
-        "history_months": 29,
-        "run_rate_ratio": 0.075,
-        "recent3_mean": 150.7,
-        "d2_overlap_status": "unproven: live SO may or may not be the same demand the P50 already covers"
-      },
-      "gaps": {
-        "bmax_minus_d1": 376.5,
-        "bmax_minus_d2": 296.5,
-        "bmin_minus_d2": 141.5,
-        "bmin_po_dedup_minus_d2": 21.5,
-        "bmin_po_dedup_margin_pct_of_d2": 20.6,
-        "duplicate_po_share_of_bmax_pct": 29.9,
-        "d1_shortfall_vs_bmax_pct": -93.9
-      },
-      "tests": {
-        "t1_identity_confirmed": true,
-        "t2_uom_verified": false,
-        "t3_bmax_lt_d1": false,
-        "t4_a_low_lt_d2_le_bmax": true
-      },
-      "decisive_unknown": "PO021733/PO021735 是否为同一笔，以及 PO/在途能否在窗口内到货",
-      "basis": "在手仅 6；PO 名义 240 中 120 是重复候选（同 SKU/仓/数量），去重后 120；加在产 35 与在途 120 后 B_min 246（去重压力 126）均高于 D2 104.5。若 PO/在途不到货则仅 A_high 41 < 104.5——结论由到货与重复判定翻转。",
-      "horizon_stability": [
-        {
-          "window": "remaining_3m",
-          "label": "决定窗 2026-10-22→2026-12-31",
-          "d1_p50_forecast": 24.5,
-          "d2_p50_plus_live_so": 104.5,
-          "t3_bmax_lt_d1": false,
-          "t4_a_low_lt_d2_le_bmax": true,
-          "class_if_evaluated_here": "depends_on_arrival"
-        },
-        {
-          "window": "L60",
-          "label": "提前期 60 天（窗口 60+30）",
-          "d1_p50_forecast": 18.5,
-          "d2_p50_plus_live_so": 98.5,
-          "t3_bmax_lt_d1": false,
-          "t4_a_low_lt_d2_le_bmax": true,
-          "class_if_evaluated_here": "depends_on_arrival"
-        },
-        {
-          "window": "L90",
-          "label": "提前期 90 天（窗口 90+30）",
-          "d1_p50_forecast": 31.5,
-          "d2_p50_plus_live_so": 111.5,
-          "t3_bmax_lt_d1": false,
-          "t4_a_low_lt_d2_le_bmax": true,
-          "class_if_evaluated_here": "depends_on_arrival"
-        },
-        {
-          "window": "L120",
-          "label": "提前期 120 天（窗口 120+30）",
-          "d1_p50_forecast": 43.1,
-          "d2_p50_plus_live_so": 123.1,
-          "t3_bmax_lt_d1": false,
-          "t4_a_low_lt_d2_le_bmax": true,
-          "class_if_evaluated_here": "depends_on_arrival"
-        }
-      ],
-      "class_horizon_stable": true,
-      "class_horizon_note": "四个窗口同规则判定一致（remaining_3m / L60 / L90 / L120）",
-      "arithmetic_qualifies_at_windows": [],
-      "missing_evidence": [
-        {
-          "item": "PO021733 与 PO021735 是否同一笔",
-          "owner_role": "采购/供应链",
-          "why_it_changes_answer": "重复候选 120 占 B_max 29.9%"
-        },
-        {
-          "item": "2/2 条未结 PO 的实际到货日",
-          "owner_role": "采购/供应链",
-          "why_it_changes_answer": "ETA 全空"
-        },
-        {
-          "item": "1/1 张开放 WO 的 planned_end_date；1 张 Draft WO 是否释放",
-          "owner_role": "生产/PMC",
-          "why_it_changes_answer": "在产剩余 35 无日期"
-        },
-        {
-          "item": "在途 120 与去重 PO 120 的逐笔关单键",
-          "owner_role": "数据/系统（worker）",
-          "why_it_changes_answer": "决定 B 取 126 还是 246–401"
-        },
-        {
-          "item": "库存 UOM 是否为“件”",
-          "owner_role": "商品主数据/仓储",
-          "why_it_changes_answer": "单位未证"
-        }
-      ],
-      "responsible_role": "采购/供应链（PO 重复候选与 ETA）",
-      "start_condition": "确认 733/735 为同一笔且到货日在窗口内 → 去重供给 126–246 ≥ 104.5，本行窗口内不缺；确认 PO 不到货或在窗口外 → A_high 41 < 104.5，转 always_replenish。补齐前不发起采购/生产指令。"
-    },
-    {
-      "seq": 5,
-      "evidence_priority": 6,
-      "priority_tier": 3,
-      "sku": "KS0001-XMMBS-153-HEMPNATURAL",
-      "customer_code": "C/Linen-Natural-153-688-wow",
-      "item_name": "三角靠枕-新棉麻本色-153-麻本色",
-      "class": "depends_on_arrival",
-      "arithmetic_qualifies": null,
-      "supply": {
-        "available": 376,
-        "intransit": 215,
-        "open_po_raw": 223,
-        "open_po_dedup": 215,
-        "po_duplicate_candidate": 8,
-        "open_po_lines": 3,
-        "po_eta_missing_lines": 3,
-        "production_gross": 620,
-        "production_remaining": 612,
-        "open_wo": 3,
-        "stopped_qty": 300,
-        "draft_wo": 0,
-        "A_low": 376,
-        "A_high": 988,
-        "B_min": 988,
-        "B_max": 1426,
-        "B_min_po_dedup": 988,
-        "B_max_po_dedup": 1418,
-        "intransit_equals_po_dedup": true
-      },
-      "demand": {
-        "D1_p50_forecast": 247.8,
-        "D2_p50_plus_live_so": 884.8,
-        "live_so": 637,
-        "dead_so_excluded": 500,
-        "over_delivery_not_netted": -64,
-        "forecast_model": "seasonal_naive",
-        "forecast_confidence": "medium-low",
-        "history_months": 29,
-        "run_rate_ratio": 1.114,
-        "recent3_mean": 90.3,
-        "d2_overlap_status": "unproven: live SO may or may not be the same demand the P50 already covers"
-      },
-      "gaps": {
-        "bmax_minus_d1": 1178.2,
-        "bmax_minus_d2": 541.2,
-        "bmin_minus_d2": 103.2,
-        "bmin_po_dedup_minus_d2": 103.2,
-        "bmin_po_dedup_margin_pct_of_d2": 11.7,
-        "duplicate_po_share_of_bmax_pct": 0.6,
-        "d1_shortfall_vs_bmax_pct": -82.6
-      },
-      "tests": {
-        "t1_identity_confirmed": true,
-        "t2_uom_verified": false,
-        "t3_bmax_lt_d1": false,
-        "t4_a_low_lt_d2_le_bmax": true
-      },
-      "decisive_unknown": "612 件在产能否在窗口内完工，以及 PO 223 / 在途 215 是否与在产重复",
-      "basis": "在手 376 < D2 884.8；在产剩余 612 完工且 PO/在途不重叠时 B_max 1426，B_min 988 也已 ≥ 884.8。A_high 988 ≥ 884.8，但 A_low 376 不足——结论取决于 612 件在产与 215 件 PO 的到货时点。",
-      "horizon_stability": [
-        {
-          "window": "remaining_3m",
-          "label": "决定窗 2026-10-22→2026-12-31",
-          "d1_p50_forecast": 247.8,
-          "d2_p50_plus_live_so": 884.8,
-          "t3_bmax_lt_d1": false,
-          "t4_a_low_lt_d2_le_bmax": true,
-          "class_if_evaluated_here": "depends_on_arrival"
-        },
-        {
-          "window": "L60",
-          "label": "提前期 60 天（窗口 60+30）",
-          "d1_p50_forecast": 183.6,
-          "d2_p50_plus_live_so": 820.6,
-          "t3_bmax_lt_d1": false,
-          "t4_a_low_lt_d2_le_bmax": true,
-          "class_if_evaluated_here": "depends_on_arrival"
-        },
-        {
-          "window": "L90",
-          "label": "提前期 90 天（窗口 90+30）",
-          "d1_p50_forecast": 309.5,
-          "d2_p50_plus_live_so": 946.5,
-          "t3_bmax_lt_d1": false,
-          "t4_a_low_lt_d2_le_bmax": true,
-          "class_if_evaluated_here": "depends_on_arrival"
-        },
-        {
-          "window": "L120",
-          "label": "提前期 120 天（窗口 120+30）",
-          "d1_p50_forecast": 413.2,
-          "d2_p50_plus_live_so": 1050.2,
-          "t3_bmax_lt_d1": false,
-          "t4_a_low_lt_d2_le_bmax": true,
-          "class_if_evaluated_here": "depends_on_arrival"
-        }
-      ],
-      "class_horizon_stable": true,
-      "class_horizon_note": "四个窗口同规则判定一致（remaining_3m / L60 / L90 / L120）",
-      "arithmetic_qualifies_at_windows": [],
-      "missing_evidence": [
-        {
-          "item": "3/3 张开放 WO 的 planned_end_date",
-          "owner_role": "生产/PMC",
-          "why_it_changes_answer": "在产剩余 612 无日期，是本行主杠杆"
-        },
-        {
-          "item": "3/3 条未结 PO 的到货日",
-          "owner_role": "采购/供应链",
-          "why_it_changes_answer": "ETA 全空；重复候选 8 件"
-        },
-        {
-          "item": "在途 215 与去重 PO 215 的逐笔关单键",
-          "owner_role": "数据/系统（worker）",
-          "why_it_changes_answer": "决定 B 区间取哪端"
-        },
-        {
-          "item": "Stopped WO 300 件是否重启",
-          "owner_role": "生产/PMC",
-          "why_it_changes_answer": "未计入在产"
-        },
-        {
-          "item": "死单 SO 500 件是否补发",
-          "owner_role": "业务/运营",
-          "why_it_changes_answer": "未计入需求；若补发则需求上移"
-        },
-        {
-          "item": "库存 UOM 是否为“件”",
-          "owner_role": "商品主数据/仓储",
-          "why_it_changes_answer": "单位未证"
-        }
-      ],
-      "responsible_role": "生产/PMC（WO 完工日）；采购/供应链（PO ETA）",
-      "start_condition": "WO 完工日与 PO 到货日均早于窗口末端 → 供给 ≥ 988 ≥ 884.8，窗口内不缺；任一大宗（在产 612 或 PO 215）落在窗口外或与其重复 → 按 A_low 376 或扣除后重算，缺 508.8，转 always_replenish。补齐前不发起采购/生产指令。"
-    },
-    {
-      "seq": 6,
-      "evidence_priority": 10,
-      "priority_tier": 4,
-      "sku": "KS0001-PR-100-GREY",
-      "customer_code": "C/Velvet-Grey-100-705-wow",
-      "item_name": "三角靠枕-平绒-100-灰色",
-      "class": "insufficient_evidence",
-      "arithmetic_qualifies": null,
-      "supply": {
-        "available": 52,
-        "intransit": 0,
-        "open_po_raw": 0,
-        "open_po_dedup": 0,
-        "po_duplicate_candidate": 0,
-        "open_po_lines": 0,
-        "po_eta_missing_lines": 0,
-        "production_gross": 70,
-        "production_remaining": 52,
-        "open_wo": 2,
-        "stopped_qty": 0,
-        "draft_wo": 0,
-        "A_low": 52,
-        "A_high": 104,
-        "B_min": 104,
-        "B_max": 104,
-        "B_min_po_dedup": 104,
-        "B_max_po_dedup": 104,
-        "intransit_equals_po_dedup": true
-      },
-      "demand": {
-        "D1_p50_forecast": 54.0,
-        "D2_p50_plus_live_so": 149.0,
-        "live_so": 95,
-        "dead_so_excluded": 51,
-        "over_delivery_not_netted": -45,
-        "forecast_model": "seasonal_naive",
-        "forecast_confidence": "medium-low",
-        "history_months": 26,
-        "run_rate_ratio": 0.152,
-        "recent3_mean": 123,
-        "d2_overlap_status": "unproven: live SO may or may not be the same demand the P50 already covers"
-      },
-      "gaps": {
-        "bmax_minus_d1": 50.0,
-        "bmax_minus_d2": -45.0,
-        "bmin_minus_d2": -45.0,
-        "bmin_po_dedup_minus_d2": -45.0,
-        "bmin_po_dedup_margin_pct_of_d2": -30.2,
-        "duplicate_po_share_of_bmax_pct": 0.0,
-        "d1_shortfall_vs_bmax_pct": -48.1
-      },
-      "tests": {
-        "t1_identity_confirmed": true,
-        "t2_uom_verified": false,
-        "t3_bmax_lt_d1": false,
-        "t4_a_low_lt_d2_le_bmax": false
-      },
-      "decisive_unknown": "需求口径：live SO 95 是否与 P50 重叠，以及旺势是否延续",
-      "basis": "可供上限 B_max 104 ≥ D1 54.0；计入 95 件 live SO 后 D2 149.0 > 104，缺 45.0。无 PO、无在途，A=B，无到货杠杆；结论取决于 SO 重叠与需求口径（预测月均/近 3 月均值 = 15.2%）。",
-      "horizon_stability": [
-        {
-          "window": "remaining_3m",
-          "label": "决定窗 2026-10-22→2026-12-31",
-          "d1_p50_forecast": 54.0,
-          "d2_p50_plus_live_so": 149.0,
-          "t3_bmax_lt_d1": false,
-          "t4_a_low_lt_d2_le_bmax": false,
-          "class_if_evaluated_here": "insufficient_evidence"
-        },
-        {
-          "window": "L60",
-          "label": "提前期 60 天（窗口 60+30）",
-          "d1_p50_forecast": 41.5,
-          "d2_p50_plus_live_so": 136.5,
-          "t3_bmax_lt_d1": false,
-          "t4_a_low_lt_d2_le_bmax": false,
-          "class_if_evaluated_here": "insufficient_evidence"
-        },
-        {
-          "window": "L90",
-          "label": "提前期 90 天（窗口 90+30）",
-          "d1_p50_forecast": 65.4,
-          "d2_p50_plus_live_so": 160.4,
-          "t3_bmax_lt_d1": false,
-          "t4_a_low_lt_d2_le_bmax": false,
-          "class_if_evaluated_here": "insufficient_evidence"
-        },
-        {
-          "window": "L120",
-          "label": "提前期 120 天（窗口 120+30）",
-          "d1_p50_forecast": 84.6,
-          "d2_p50_plus_live_so": 179.6,
-          "t3_bmax_lt_d1": false,
-          "t4_a_low_lt_d2_le_bmax": false,
-          "class_if_evaluated_here": "insufficient_evidence"
-        }
-      ],
-      "class_horizon_stable": true,
-      "class_horizon_note": "四个窗口同规则判定一致（remaining_3m / L60 / L90 / L120）",
-      "arithmetic_qualifies_at_windows": [],
-      "missing_evidence": [
-        {
-          "item": "live SO 95 件是否与 P50 重叠",
-          "owner_role": "业务/运营",
-          "why_it_changes_answer": "决定 D2 是否增量"
-        },
-        {
-          "item": "2026 旺势是否延续 / 人工需求覆盖",
-          "owner_role": "业务/运营",
-          "why_it_changes_answer": "P50 仅为近 3 月均速的 15.2%"
-        },
-        {
-          "item": "死单 SO 51 件是否补发",
-          "owner_role": "业务/运营",
-          "why_it_changes_answer": "未计入需求"
-        },
-        {
-          "item": "库存 UOM 是否为“件”",
-          "owner_role": "商品主数据/仓储",
-          "why_it_changes_answer": "单位未证"
-        },
-        {
-          "item": "2/2 张开放 WO 的 planned_end_date",
-          "owner_role": "生产/PMC",
-          "why_it_changes_answer": "A_high 104 含在产剩余 52"
-        }
-      ],
-      "responsible_role": "业务/运营（需求口径）",
-      "start_condition": "确认 live SO 为增量 → B_max 104 < 149.0，转 always_replenish 算术区；确认重叠 → 按 P50 窗口内不缺。落定前不发起采购/生产指令。"
-    },
-    {
-      "seq": 7,
-      "evidence_priority": 3,
-      "priority_tier": 2,
-      "sku": "KS0001-CMKTR-100-GREY",
-      "customer_code": "C/Cord-Grey-100-710-wow",
-      "item_name": "三角靠枕-纯棉宽条绒-100-灰色",
-      "class": "depends_on_arrival",
-      "arithmetic_qualifies": null,
-      "supply": {
-        "available": 6,
-        "intransit": 165,
-        "open_po_raw": 318,
-        "open_po_dedup": 165,
-        "po_duplicate_candidate": 153,
-        "open_po_lines": 3,
-        "po_eta_missing_lines": 3,
-        "production_gross": 40,
-        "production_remaining": 28,
-        "open_wo": 2,
-        "stopped_qty": 0,
-        "draft_wo": 0,
-        "A_low": 6,
-        "A_high": 34,
-        "B_min": 324,
-        "B_max": 517,
-        "B_min_po_dedup": 171,
-        "B_max_po_dedup": 364,
-        "intransit_equals_po_dedup": true
-      },
-      "demand": {
-        "D1_p50_forecast": 48.0,
-        "D2_p50_plus_live_so": 173.0,
-        "live_so": 125,
-        "dead_so_excluded": 150,
-        "over_delivery_not_netted": -109,
-        "forecast_model": "seasonal_naive",
-        "forecast_confidence": "medium-low",
-        "history_months": 27,
-        "run_rate_ratio": 0.199,
-        "recent3_mean": 112,
-        "d2_overlap_status": "unproven: live SO may or may not be the same demand the P50 already covers"
-      },
-      "gaps": {
-        "bmax_minus_d1": 469.0,
-        "bmax_minus_d2": 344.0,
-        "bmin_minus_d2": 151.0,
-        "bmin_po_dedup_minus_d2": -2.0,
-        "bmin_po_dedup_margin_pct_of_d2": -1.2,
-        "duplicate_po_share_of_bmax_pct": 29.6,
-        "d1_shortfall_vs_bmax_pct": -90.7
-      },
-      "tests": {
-        "t1_identity_confirmed": true,
-        "t2_uom_verified": false,
-        "t3_bmax_lt_d1": false,
-        "t4_a_low_lt_d2_le_bmax": true
-      },
-      "decisive_unknown": "PO021733/PO021735 是否为同一笔；去重压力下 B_min 171 已低于 D2 173",
-      "basis": "在手仅 6；PO 名义 318 中 153 为重复候选，去重后 165。主口径 B_min 324、B_max 517 均高于 D2 173.0；但去重压力下 B_min 171 < 173.0，低 2.0——结论只在“PO 不重复且到货”时成立。",
-      "horizon_stability": [
-        {
-          "window": "remaining_3m",
-          "label": "决定窗 2026-10-22→2026-12-31",
-          "d1_p50_forecast": 48.0,
-          "d2_p50_plus_live_so": 173.0,
-          "t3_bmax_lt_d1": false,
-          "t4_a_low_lt_d2_le_bmax": true,
-          "class_if_evaluated_here": "depends_on_arrival"
-        },
-        {
-          "window": "L60",
-          "label": "提前期 60 天（窗口 60+30）",
-          "d1_p50_forecast": 38.5,
-          "d2_p50_plus_live_so": 163.5,
-          "t3_bmax_lt_d1": false,
-          "t4_a_low_lt_d2_le_bmax": true,
-          "class_if_evaluated_here": "depends_on_arrival"
-        },
-        {
-          "window": "L90",
-          "label": "提前期 90 天（窗口 90+30）",
-          "d1_p50_forecast": 61.7,
-          "d2_p50_plus_live_so": 186.7,
-          "t3_bmax_lt_d1": false,
-          "t4_a_low_lt_d2_le_bmax": true,
-          "class_if_evaluated_here": "depends_on_arrival"
-        },
-        {
-          "window": "L120",
-          "label": "提前期 120 天（窗口 120+30）",
-          "d1_p50_forecast": 84.7,
-          "d2_p50_plus_live_so": 209.7,
-          "t3_bmax_lt_d1": false,
-          "t4_a_low_lt_d2_le_bmax": true,
-          "class_if_evaluated_here": "depends_on_arrival"
-        }
-      ],
-      "class_horizon_stable": true,
-      "class_horizon_note": "四个窗口同规则判定一致（remaining_3m / L60 / L90 / L120）",
-      "arithmetic_qualifies_at_windows": [],
-      "missing_evidence": [
-        {
-          "item": "PO021733 与 PO021735 是否同一笔",
-          "owner_role": "采购/供应链",
-          "why_it_changes_answer": "重复候选 153 占 B_max 29.6%；决定是否已短缺"
-        },
-        {
-          "item": "3/3 条未结 PO 的到货日",
-          "owner_role": "采购/供应链",
-          "why_it_changes_answer": "ETA 全空"
-        },
-        {
-          "item": "2/2 张开放 WO 的 planned_end_date",
-          "owner_role": "生产/PMC",
-          "why_it_changes_answer": "在产剩余 28 无日期"
-        },
-        {
-          "item": "在途 165 与去重 PO 165 的逐笔关单键",
-          "owner_role": "数据/系统（worker）",
-          "why_it_changes_answer": "决定 B 取 171 还是 324–517"
-        },
-        {
-          "item": "死单 SO 150 件是否补发",
-          "owner_role": "业务/运营",
-          "why_it_changes_answer": "未计入需求"
-        },
-        {
-          "item": "库存 UOM 是否为“件”",
-          "owner_role": "商品主数据/仓储",
-          "why_it_changes_answer": "单位未证"
-        }
-      ],
-      "responsible_role": "采购/供应链（PO 重复候选）",
-      "start_condition": "确认 PO 不重复且到货日在窗口内 → 供给 324–517 ≥ 173.0，窗口内不缺；确认重复 → B_min 171 < 173.0，转 always_replenish（在手仅 6）；到货日超出窗口同样转短缺。补齐前不发起采购/生产指令。"
-    },
-    {
-      "seq": 8,
-      "evidence_priority": 1,
-      "priority_tier": 1,
-      "sku": "KS0001-CMM-100-WHITE",
-      "customer_code": "C/Linen-White-100-662-WOW",
-      "item_name": "三角靠枕-纯棉麻-100-白色",
-      "class": "insufficient_evidence",
-      "arithmetic_qualifies": "always_replenish",
-      "supply": {
-        "available": 55,
-        "intransit": 73,
-        "open_po_raw": 73,
-        "open_po_dedup": 73,
-        "po_duplicate_candidate": 0,
-        "open_po_lines": 2,
-        "po_eta_missing_lines": 2,
-        "production_gross": 20,
-        "production_remaining": 20,
-        "open_wo": 1,
-        "stopped_qty": 0,
-        "draft_wo": 0,
-        "A_low": 55,
-        "A_high": 75,
-        "B_min": 128,
-        "B_max": 221,
-        "B_min_po_dedup": 128,
-        "B_max_po_dedup": 221,
-        "intransit_equals_po_dedup": true
-      },
-      "demand": {
-        "D1_p50_forecast": 250.1,
-        "D2_p50_plus_live_so": 276.1,
-        "live_so": 26,
-        "dead_so_excluded": 70,
-        "over_delivery_not_netted": -6,
-        "forecast_model": "mean3",
-        "forecast_confidence": "low",
-        "history_months": 14,
-        "run_rate_ratio": 1.0,
-        "recent3_mean": 107.7,
-        "d2_overlap_status": "unproven: live SO may or may not be the same demand the P50 already covers"
-      },
-      "gaps": {
-        "bmax_minus_d1": -29.1,
-        "bmax_minus_d2": -55.1,
-        "bmin_minus_d2": -148.1,
-        "bmin_po_dedup_minus_d2": -148.1,
-        "bmin_po_dedup_margin_pct_of_d2": -53.6,
-        "duplicate_po_share_of_bmax_pct": 0.0,
-        "d1_shortfall_vs_bmax_pct": 13.2
-      },
-      "tests": {
-        "t1_identity_confirmed": true,
-        "t2_uom_verified": false,
-        "t3_bmax_lt_d1": true,
-        "t4_a_low_lt_d2_le_bmax": false
-      },
-      "decisive_unknown": "UOM 口径（唯一算术上已短缺的 SKU，卡在单位未证与低置信预测）",
-      "basis": "B_max 221 < D1 250.1：即使未结 PO 73、在产 20、在途 73 全部到账且完全不重叠，仍缺 29.1（占 B_max 13.2%）。这是本批唯一在算术上满足 always_replenish 的 SKU；但单位口径 unknown_conditional（T2 不成立），且预测来自 14 个月、mean3 机械外推峰值月（近 3 月 27/280/16，均值 107.7），故按规则归 insufficient_evidence，不升级。",
-      "horizon_stability": [
-        {
-          "window": "remaining_3m",
-          "label": "决定窗 2026-10-22→2026-12-31",
-          "d1_p50_forecast": 250.1,
-          "d2_p50_plus_live_so": 276.1,
-          "t3_bmax_lt_d1": true,
-          "t4_a_low_lt_d2_le_bmax": false,
-          "class_if_evaluated_here": "insufficient_evidence"
-        },
-        {
-          "window": "L60",
-          "label": "提前期 60 天（窗口 60+30）",
-          "d1_p50_forecast": 211.9,
-          "d2_p50_plus_live_so": 237.9,
-          "t3_bmax_lt_d1": false,
-          "t4_a_low_lt_d2_le_bmax": false,
-          "class_if_evaluated_here": "insufficient_evidence"
-        },
-        {
-          "window": "L90",
-          "label": "提前期 90 天（窗口 90+30）",
-          "d1_p50_forecast": 316.1,
-          "d2_p50_plus_live_so": 342.1,
-          "t3_bmax_lt_d1": true,
-          "t4_a_low_lt_d2_le_bmax": false,
-          "class_if_evaluated_here": "insufficient_evidence"
-        },
-        {
-          "window": "L120",
-          "label": "提前期 120 天（窗口 120+30）",
-          "d1_p50_forecast": 426.9,
-          "d2_p50_plus_live_so": 452.9,
-          "t3_bmax_lt_d1": true,
-          "t4_a_low_lt_d2_le_bmax": false,
-          "class_if_evaluated_here": "insufficient_evidence"
-        }
-      ],
-      "class_horizon_stable": true,
-      "class_horizon_note": "四个窗口同规则判定一致（remaining_3m / L60 / L90 / L120）",
-      "arithmetic_qualifies_at_windows": [
-        "remaining_3m",
-        "L90",
-        "L120"
-      ],
-      "missing_evidence": [
-        {
-          "item": "库存/PO 数量是否为“件”",
-          "owner_role": "商品主数据/仓储",
-          "why_it_changes_answer": "决定 29.1 的缺口是否真实存在"
-        },
-        {
-          "item": "近 3 月峰值月（280）能否外推 / 人工需求覆盖",
-          "owner_role": "业务/运营",
-          "why_it_changes_answer": "低置信 mean3 是缺口的来源之一"
-        },
-        {
-          "item": "2/2 条未结 PO 的实际到货日",
-          "owner_role": "采购/供应链",
-          "why_it_changes_answer": "ETA 全空，共 73 件"
-        },
-        {
-          "item": "1/1 张开放 WO 的 planned_end_date",
-          "owner_role": "生产/PMC",
-          "why_it_changes_answer": "在产剩余 20 无日期"
-        },
-        {
-          "item": "Cover 无映射（scenario）",
-          "owner_role": "商品主数据/仓储",
-          "why_it_changes_answer": "若有 cover 可补充供给"
-        },
-        {
-          "item": "死单 SO 70 件是否补发",
-          "owner_role": "业务/运营",
-          "why_it_changes_answer": "未计入需求；若补发缺口更大"
-        }
-      ],
-      "responsible_role": "商品主数据/仓储（UOM）；业务/运营（需求口径）",
-      "start_condition": "UOM 核实为“件”且需求口径人工确认（峰值月可外推或改为人工覆盖）→ 升级为 always_replenish（算术条件已满足）；在此之前只做证据收集，不排产、不发起采购/生产指令。"
-    },
-    {
-      "seq": 9,
-      "evidence_priority": 4,
-      "priority_tier": 2,
-      "sku": "KS0001-HLR-100-OFFWHITE",
-      "customer_code": "TT0000671K0063721",
-      "item_name": "三角靠枕-荷兰绒-100-米白色",
-      "class": "depends_on_arrival",
-      "arithmetic_qualifies": null,
-      "supply": {
-        "available": 104,
-        "intransit": 490,
-        "open_po_raw": 490,
-        "open_po_dedup": 490,
-        "po_duplicate_candidate": 0,
-        "open_po_lines": 2,
-        "po_eta_missing_lines": 2,
-        "production_gross": 665,
-        "production_remaining": 310,
-        "open_wo": 7,
-        "stopped_qty": 0,
-        "draft_wo": 3,
-        "A_low": 104,
-        "A_high": 414,
-        "B_min": 594,
-        "B_max": 1394,
-        "B_min_po_dedup": 594,
-        "B_max_po_dedup": 1394,
-        "intransit_equals_po_dedup": true
-      },
-      "demand": {
-        "D1_p50_forecast": 165.3,
-        "D2_p50_plus_live_so": 593.3,
-        "live_so": 428,
-        "dead_so_excluded": 253,
-        "over_delivery_not_netted": -110,
-        "forecast_model": "seasonal_naive",
-        "forecast_confidence": "medium-low",
-        "history_months": 27,
-        "run_rate_ratio": 0.659,
-        "recent3_mean": 95.7,
-        "d2_overlap_status": "unproven: live SO may or may not be the same demand the P50 already covers"
-      },
-      "gaps": {
-        "bmax_minus_d1": 1228.7,
-        "bmax_minus_d2": 800.7,
-        "bmin_minus_d2": 0.7,
-        "bmin_po_dedup_minus_d2": 0.7,
-        "bmin_po_dedup_margin_pct_of_d2": 0.1,
-        "duplicate_po_share_of_bmax_pct": 0.0,
-        "d1_shortfall_vs_bmax_pct": -88.1
-      },
-      "tests": {
-        "t1_identity_confirmed": true,
-        "t2_uom_verified": false,
-        "t3_bmax_lt_d1": false,
-        "t4_a_low_lt_d2_le_bmax": true
-      },
-      "decisive_unknown": "在途 490 是否就是 PO 490 的同一批；B_min 594 仅比 D2 593.3 高 0.7",
-      "basis": "在手 104 < D2 593.3；PO 490 + 在产 310 + 在途 490 全部到账时 B_min 594，仅高于 D2 0.7（0.1%）。任何一处重叠被证实或 1 件在产落空，结论即转为短缺；A_high 414 < 593.3。",
-      "horizon_stability": [
-        {
-          "window": "remaining_3m",
-          "label": "决定窗 2026-10-22→2026-12-31",
-          "d1_p50_forecast": 165.3,
-          "d2_p50_plus_live_so": 593.3,
-          "t3_bmax_lt_d1": false,
-          "t4_a_low_lt_d2_le_bmax": true,
-          "class_if_evaluated_here": "depends_on_arrival"
-        },
-        {
-          "window": "L60",
-          "label": "提前期 60 天（窗口 60+30）",
-          "d1_p50_forecast": 136.9,
-          "d2_p50_plus_live_so": 564.9,
-          "t3_bmax_lt_d1": false,
-          "t4_a_low_lt_d2_le_bmax": true,
-          "class_if_evaluated_here": "depends_on_arrival"
-        },
-        {
-          "window": "L90",
-          "label": "提前期 90 天（窗口 90+30）",
-          "d1_p50_forecast": 203.9,
-          "d2_p50_plus_live_so": 631.9,
-          "t3_bmax_lt_d1": false,
-          "t4_a_low_lt_d2_le_bmax": true,
-          "class_if_evaluated_here": "depends_on_arrival"
-        },
-        {
-          "window": "L120",
-          "label": "提前期 120 天（窗口 120+30）",
-          "d1_p50_forecast": 268.8,
-          "d2_p50_plus_live_so": 696.8,
-          "t3_bmax_lt_d1": false,
-          "t4_a_low_lt_d2_le_bmax": true,
-          "class_if_evaluated_here": "depends_on_arrival"
-        }
-      ],
-      "class_horizon_stable": true,
-      "class_horizon_note": "四个窗口同规则判定一致（remaining_3m / L60 / L90 / L120）",
-      "arithmetic_qualifies_at_windows": [],
-      "missing_evidence": [
-        {
-          "item": "在途 490 与 PO 490 的逐笔关单键",
-          "owner_role": "数据/系统（worker）",
-          "why_it_changes_answer": "本行决定性未知；差 0.7 的边距无法承受重复"
-        },
-        {
-          "item": "2/2 条未结 PO 的到货日",
-          "owner_role": "采购/供应链",
-          "why_it_changes_answer": "ETA 全空"
-        },
-        {
-          "item": "7/7 张开放 WO 的 planned_end_date；3 张 Draft WO 是否释放",
-          "owner_role": "生产/PMC",
-          "why_it_changes_answer": "在产剩余 310 无日期；WO 同时含 KS 与 PK# 生产物"
-        },
-        {
-          "item": "PK#→KS 是否 1:1 计入",
-          "owner_role": "生产/PMC",
-          "why_it_changes_answer": "在产 1:1 未证；若不成立在产量需重算"
-        },
-        {
-          "item": "死单 SO 253 件是否补发",
-          "owner_role": "业务/运营",
-          "why_it_changes_answer": "未计入需求"
-        },
-        {
-          "item": "库存 UOM 是否为“件”",
-          "owner_role": "商品主数据/仓储",
-          "why_it_changes_answer": "单位未证"
-        }
-      ],
-      "responsible_role": "数据/系统（在途↔PO 关单键）；采购/供应链（ETA）",
-      "start_condition": "确认在途 490 与 PO 490 为同一批且全部到货、在产 310 全部完工 → B_min 594 ≥ 593.3，仅维持 0.7 的边距；任一重复/缺口被证实 → 转 always_replenish。补齐前不发起采购/生产指令。"
-    },
-    {
-      "seq": 10,
-      "evidence_priority": 7,
-      "priority_tier": 3,
-      "sku": "KS0001-XMMBS-194-HEMPNATURAL",
-      "customer_code": "C/Linen-Natural-194-688-wow",
-      "item_name": "三角靠枕-新棉麻本色-194-麻本色",
-      "class": "depends_on_arrival",
-      "arithmetic_qualifies": null,
-      "supply": {
-        "available": 360,
-        "intransit": 0,
-        "open_po_raw": 0,
-        "open_po_dedup": 0,
-        "po_duplicate_candidate": 0,
-        "open_po_lines": 0,
-        "po_eta_missing_lines": 0,
-        "production_gross": 620,
-        "production_remaining": 620,
-        "open_wo": 2,
-        "stopped_qty": 300,
-        "draft_wo": 0,
-        "A_low": 360,
-        "A_high": 980,
-        "B_min": 980,
-        "B_max": 980,
-        "B_min_po_dedup": 980,
-        "B_max_po_dedup": 980,
-        "intransit_equals_po_dedup": true
-      },
-      "demand": {
-        "D1_p50_forecast": 228.8,
-        "D2_p50_plus_live_so": 859.8,
-        "live_so": 631,
-        "dead_so_excluded": 421,
-        "over_delivery_not_netted": -16,
-        "forecast_model": "seasonal_naive",
-        "forecast_confidence": "medium-low",
-        "history_months": 29,
-        "run_rate_ratio": 0.932,
-        "recent3_mean": 108,
-        "d2_overlap_status": "unproven: live SO may or may not be the same demand the P50 already covers"
-      },
-      "gaps": {
-        "bmax_minus_d1": 751.2,
-        "bmax_minus_d2": 120.2,
-        "bmin_minus_d2": 120.2,
-        "bmin_po_dedup_minus_d2": 120.2,
-        "bmin_po_dedup_margin_pct_of_d2": 14.0,
-        "duplicate_po_share_of_bmax_pct": 0.0,
-        "d1_shortfall_vs_bmax_pct": -76.7
-      },
-      "tests": {
-        "t1_identity_confirmed": true,
-        "t2_uom_verified": false,
-        "t3_bmax_lt_d1": false,
-        "t4_a_low_lt_d2_le_bmax": true
-      },
-      "decisive_unknown": "620 件在产（2 张 WO）能否在窗口内完工；无 PO、无在途，唯一杠杆是在产",
-      "basis": "在手 360 < D2 859.8；无未结 PO、无在途，B_min = B_max = 980，全部来自在产剩余 620。两张 WO 均完工 → 980 ≥ 859.8；均未完工 → 仅 360，缺 499.8。结论只取决于在产完工时点。",
-      "horizon_stability": [
-        {
-          "window": "remaining_3m",
-          "label": "决定窗 2026-10-22→2026-12-31",
-          "d1_p50_forecast": 228.8,
-          "d2_p50_plus_live_so": 859.8,
-          "t3_bmax_lt_d1": false,
-          "t4_a_low_lt_d2_le_bmax": true,
-          "class_if_evaluated_here": "depends_on_arrival"
-        },
-        {
-          "window": "L60",
-          "label": "提前期 60 天（窗口 60+30）",
-          "d1_p50_forecast": 177.0,
-          "d2_p50_plus_live_so": 808.0,
-          "t3_bmax_lt_d1": false,
-          "t4_a_low_lt_d2_le_bmax": true,
-          "class_if_evaluated_here": "depends_on_arrival"
-        },
-        {
-          "window": "L90",
-          "label": "提前期 90 天（窗口 90+30）",
-          "d1_p50_forecast": 290.5,
-          "d2_p50_plus_live_so": 921.5,
-          "t3_bmax_lt_d1": false,
-          "t4_a_low_lt_d2_le_bmax": true,
-          "class_if_evaluated_here": "depends_on_arrival"
-        },
-        {
-          "window": "L120",
-          "label": "提前期 120 天（窗口 120+30）",
-          "d1_p50_forecast": 394.2,
-          "d2_p50_plus_live_so": 1025.2,
-          "t3_bmax_lt_d1": false,
-          "t4_a_low_lt_d2_le_bmax": false,
-          "class_if_evaluated_here": "insufficient_evidence"
-        }
-      ],
-      "class_horizon_stable": false,
-      "class_horizon_note": "L120 按同规则会落入 insufficient_evidence（D1 394.2 / D2 1025.2 vs B_max 980）",
-      "arithmetic_qualifies_at_windows": [],
-      "missing_evidence": [
-        {
-          "item": "2/2 张开放 WO 的 planned_end_date",
-          "owner_role": "生产/PMC",
-          "why_it_changes_answer": "在产剩余 620 无日期，是本行唯一杠杆"
-        },
-        {
-          "item": "PK#→KS 是否 1:1 计入",
-          "owner_role": "生产/PMC",
-          "why_it_changes_answer": "在产 1:1 未证"
-        },
-        {
-          "item": "Stopped WO 300 件是否重启",
-          "owner_role": "生产/PMC",
-          "why_it_changes_answer": "未计入在产"
-        },
-        {
-          "item": "死单 SO 421 件是否补发",
-          "owner_role": "业务/运营",
-          "why_it_changes_answer": "未计入需求；若补发需求上移"
-        },
-        {
-          "item": "库存 UOM 是否为“件”",
-          "owner_role": "商品主数据/仓储",
-          "why_it_changes_answer": "单位未证"
-        },
-        {
-          "item": "Cover 无映射（scenario）",
-          "owner_role": "商品主数据/仓储",
-          "why_it_changes_answer": "若有 cover 可补充供给"
-        }
-      ],
-      "responsible_role": "生产/PMC（WO 完工日）",
-      "start_condition": "两张 WO 完工日均早于窗口末端 → 供给 980 ≥ 859.8，窗口内不缺；任一张落在窗外 → 供给 ≤ 在手 + 单张在产 < 859.8，转 always_replenish。补齐前不发起采购/生产指令。"
-    }
+ "schema_version": "replenishment_actions_v0/2",
+ "title": "10 SKU 暂行补货行动清单（P90-free）",
+ "status": "provisional; not an instruction list; no quantities",
+ "owner": "claude-worker",
+ "generated_at": "2026-10-22T16:01:10+08:00",
+ "revision": "R2 (R1 review fixes: M01/M03/M04/N01/N03)",
+ "based_on": {
+  "fixed_commit": "f9df43574fc507f436167e943f886d85ef243e32",
+  "commit_semantics": "HEAD at run time; this artifact is committed in the next commit, so code_commit is that commit's parent",
+  "inputs": [
+   {
+    "path": "docs/research/supply-chain/2026-10-20/claude/out/replenishment_v0/evidence.json",
+    "sha256": "15d52072dc5d0461f032de1a7df0b9a3a39f0c450da50366dbf63680693178ea",
+    "sha256_expected": "15d52072dc5d0461f032de1a7df0b9a3a39f0c450da50366dbf63680693178ea",
+    "bytes": 287307,
+    "bytes_expected": 287307,
+    "sha256_raw": "7eea7c6f41d444bb69728646fb8cb90a174bbc71f5124c3876f5bd13508175b1",
+    "raw_bytes": 297288,
+    "line_ending_normalization": "crlf_to_lf",
+    "crlf_count": 9981,
+    "blob_sha1": "04c30f791c1e627aaa7d12a327202b0f70e9eb52"
+   }
   ],
-  "d9_mapping": [
-    {
-      "sku": "KS0001-QDKTR-100-DEEPGREY",
-      "d9_layer": "暂缓",
-      "v0_actions_class": "insufficient_evidence",
-      "reason": "同向：模型分歧；新分类只换了名字并为 P90-free 去掉派生量"
-    },
-    {
-      "sku": "KS0001-QDKTR-100-DEEPBLUE",
-      "d9_layer": "暂缓",
-      "v0_actions_class": "insufficient_evidence",
-      "reason": "同向"
-    },
-    {
-      "sku": "KS0001-XMMBS-100-HEMPNATURAL",
-      "d9_layer": "暂缓",
-      "v0_actions_class": "depends_on_arrival",
-      "reason": "变化：D9 依据的是 P90 派生区间（D10 已失效）；P50 下由到货时点决定"
-    },
-    {
-      "sku": "KS0001-CMKTR-100-DEEPBLUE",
-      "d9_layer": "暂缓",
-      "v0_actions_class": "depends_on_arrival",
-      "reason": "变化：D9 依据的是 P90 派生区间；P50 下去重供给仍覆盖"
-    },
-    {
-      "sku": "KS0001-XMMBS-153-HEMPNATURAL",
-      "d9_layer": "待核实",
-      "v0_actions_class": "depends_on_arrival",
-      "reason": "同向：B 随 PO/在产重叠翻转，只是改用 P50 表述"
-    },
-    {
-      "sku": "KS0001-PR-100-GREY",
-      "d9_layer": "暂缓",
-      "v0_actions_class": "insufficient_evidence",
-      "reason": "同向"
-    },
-    {
-      "sku": "KS0001-CMKTR-100-GREY",
-      "d9_layer": "暂缓",
-      "v0_actions_class": "depends_on_arrival",
-      "reason": "变化：D9 依据的是 P90 派生区间；P50 下主口径覆盖、去重压力短 2"
-    },
-    {
-      "sku": "KS0001-CMM-100-WHITE",
-      "d9_layer": "暂缓",
-      "v0_actions_class": "insufficient_evidence",
-      "reason": "同向（但算术上已是唯一结构短缺，见 arithmetic_qualifies）"
-    },
-    {
-      "sku": "KS0001-HLR-100-OFFWHITE",
-      "d9_layer": "待核实",
-      "v0_actions_class": "depends_on_arrival",
-      "reason": "同向：B 下界贴近需求，取决于在途/PO"
-    },
-    {
-      "sku": "KS0001-XMMBS-194-HEMPNATURAL",
-      "d9_layer": "可准备（仅准备）",
-      "v0_actions_class": "depends_on_arrival",
-      "reason": "变化：D9 依据的是 P90 派生的 60 天区间；P50 下在手 360 < 859.8，必须靠在产完工"
-    }
+  "hash_binding_verified": true,
+  "later_workspace_changes_used": false,
+  "note": "只读冻结 evidence.json（canonical LF 字节 hash 绑定，失配即拒）；未读取 model_race.json / 任何 P90 字段"
+ },
+ "guards": {
+  "p90_used": false,
+  "p90_based_recommendations_used": false,
+  "order_quantities_emitted": false,
+  "production_accessed": false,
+  "en_or_sku_map_modified": false,
+  "scope_expanded": false,
+  "dead_so_excluded": true,
+  "over_delivery_not_netted": true,
+  "hash_binding_enforced": true,
+  "p90_free_runtime_guard": true
+ },
+ "rule": {
+  "horizon_primary": "remaining_3m: 2026-10-22 -> 2026-12-31 (calendar-integrated, decision time 2026-10-22)",
+  "D1": "demand.remaining_3m.forecast_p50 (P50 point forecast, live SO excluded)",
+  "D2": "demand.remaining_3m.p50 (= D1 + positive live open SO; SO<->forecast overlap unproven, may double count)",
+  "supply_A": "A_low = available; A_high = available + open production remaining (no PO, no intransit)",
+  "supply_B": "B_min = available + max(raw PO, production remaining, intransit) (maximum overlap); B_max = available + raw PO + production remaining + intransit (no overlap)",
+  "tests": {
+   "t1": "identity_status == confirmed",
+   "t2": "inventory.uom_status is a verified unit basis (false for 10/10: unknown_conditional)",
+   "t3": "B_max < D1 (short even at the most generous supply bound, on the P50 forecast)",
+   "t4": "A_low < D2 <= B_max (conclusion flips between on-hand-only and all-arrivals)"
+  },
+  "assignment": [
+   "always_replenish <= t3 and t1 and t2 and every required gate is ok",
+   "depends_on_arrival <= not t3 and t4",
+   "insufficient_evidence <= otherwise",
+   "supply lower bound (B_min, B_min_po_dedup) below demand NEVER promotes a row: it only shows a shortage scenario exists"
   ],
-  "residual_unknowns": [
-    {
-      "item": "PO ETA 空",
-      "count": "13 行 / 1,465 件 / 6 SKU",
-      "impact": "无法确认能否在窗口内到货；B 是到货假设"
-    },
-    {
-      "item": "在产无日期",
-      "count": "24 张开放 WO planned_end_date 全空",
-      "impact": "计入供给但到货日未确认"
-    },
-    {
-      "item": "PK# -> KS 1:1",
-      "count": "10/10 SKU",
-      "impact": "在产按 1:1 计入 KS 成品；未证，若不成立在产量需重算（只会向下）"
-    },
-    {
-      "item": "库存 UOM",
-      "count": "10/10 SKU unknown_conditional",
-      "impact": "按件计数、未换算；T2 因此 10/10 不成立"
-    },
-    {
-      "item": "Cover 可替代",
-      "count": "10/10 未证（4 个无映射 scenario）",
-      "impact": "cover 不并入供给；只会向上修正"
-    },
-    {
-      "item": "PO <-> 在途 / 在产 重叠",
-      "count": "10/10（在途与去重 PO 数值一致 10/10）",
-      "impact": "只发 B_min/B_max 边界，不发单点"
-    },
-    {
-      "item": "SO <-> 预测重叠",
-      "count": "10/10",
-      "impact": "D2 可能重复计算未来需求；D1/D2 分列"
-    },
-    {
-      "item": "单据/库存时点",
-      "count": "SO/WO 10-20/21 vs 库存 10-22（1–2 天）",
-      "impact": "未桥接；时点情景，不伪造对平"
-    },
-    {
-      "item": "断货删失",
-      "count": "stock_history 仅 3 天",
-      "impact": "历史需求可能低估；未校正"
-    },
-    {
-      "item": "取消/退货",
-      "count": "gs_orders 无状态字段",
-      "impact": "未剔除；若源表只含发货行则无影响，未证"
-    },
-    {
-      "item": "死单 SO",
-      "count": "1,675 件",
-      "impact": "未计入需求；若确认补发需另加"
-    },
-    {
-      "item": "超发 SO",
-      "count": "-907 件",
-      "impact": "不冲抵其他行；净额 2,017 仅对照"
-    }
-  ],
-  "reconciliation": {
-    "skus": "入 10 客户码 -> 出 10 行；排除 0；无静默丢弃",
-    "class_sum": "0 + 6 + 4 = 10",
-    "test_count": {
-      "t3_true": 1,
-      "t4_true": 6,
-      "neither": 3
-    },
-    "against_frozen_aggregate": "10 项合计逐项相等（available 1,015 / intransit 1,184 / PO raw 1,465 / A 1,015–3,205 / B 3,953–5,854 / live SO 2,924 / dead SO 1,675 / over -907）",
-    "d9_mapping": "10/10 行给出 D9 层级 -> 新分类的对应与差异原因，不静默替换"
+  "gates": {
+   "states": [
+    "ok",
+    "unproven",
+    "fail"
+   ],
+   "hard_gates_for_always": [
+    "G1_identity",
+    "G2_uom",
+    "G5_arrival_in_window"
+   ],
+   "note": "M04: start_condition is generated from these gates; prose cannot promote a row. G4/G6 affect only the lower supply bound, so they do not gate a B_max shortage claim."
+  },
+  "cover_treatment": "cover is not counted in supply (V0). It is an unbooked upside supply scenario: once alias mapping and substitutability are confirmed it may REMOVE a shortage and the row must be recomputed; it can never create a shortage. It is NOT evidence that a shortage cannot occur while unmapped.",
+  "window_basis": {
+   "note": "本清单的 L60/L90/L120 是**提前期窗口本身**（60/90/120 天）；V1（model_race）的动作窗口是 lead+30（90/120/150 天）。两套窗口天数不同，分类与数字不可互换。",
+   "requested_vs_covered": "every window asserts requested_days == covered_days"
+  },
+  "priority_tier": {
+   "1": "t3: structurally short at B_max",
+   "2": "t4 and (dedup-stress B_min - D2 < 10% of D2 or duplicate PO share >= 25% of B_max)",
+   "3": "t4, other",
+   "4": "no arrival lever; short only when live SO is added (D2)",
+   "note": "tier orders evidence urgency, not purchase urgency"
   }
+ },
+ "counts": {
+  "skus_in": 10,
+  "skus_out": 10,
+  "excluded": 0,
+  "always_replenish": 0,
+  "depends_on_arrival": 6,
+  "insufficient_evidence": 4,
+  "arithmetic_qualifies_always_replenish": 1,
+  "class_horizon_stable": 9,
+  "class_horizon_unstable": 1,
+  "by_class": {
+   "always_replenish": [],
+   "depends_on_arrival": [
+    "KS0001-XMMBS-100-HEMPNATURAL",
+    "KS0001-CMKTR-100-DEEPBLUE",
+    "KS0001-XMMBS-153-HEMPNATURAL",
+    "KS0001-CMKTR-100-GREY",
+    "KS0001-HLR-100-OFFWHITE",
+    "KS0001-XMMBS-194-HEMPNATURAL"
+   ],
+   "insufficient_evidence": [
+    "KS0001-QDKTR-100-DEEPGREY",
+    "KS0001-QDKTR-100-DEEPBLUE",
+    "KS0001-PR-100-GREY",
+    "KS0001-CMM-100-WHITE"
+   ]
+  },
+  "demand_overlap_unproven": 10
+ },
+ "totals": {
+  "window": "2026-10-22 -> 2026-12-31",
+  "available": 1015,
+  "intransit": 1184,
+  "open_po_raw": 1465,
+  "production_remaining": 2190,
+  "A_low": 1015,
+  "A_high": 3205,
+  "B_min": 3953,
+  "B_max": 5854,
+  "D1": 1152.4,
+  "D2": 4076.4,
+  "live_so": 2924,
+  "dead_so": 1675,
+  "over_delivery": -907,
+  "note": "totals are cross-checks of the frozen evidence, not an aggregate demand or supply plan"
+ },
+ "rows": [
+  {
+   "seq": 1,
+   "evidence_priority": 8,
+   "priority_tier": 4,
+   "sku": "KS0001-QDKTR-100-DEEPGREY",
+   "customer_code": "CENCord995-DKGrey-97",
+   "item_name": "三角靠枕-全涤宽条绒-100-深灰色",
+   "class": "insufficient_evidence",
+   "arithmetic_qualifies": null,
+   "arithmetic_class": "insufficient_evidence",
+   "promotion_blockers": [
+    "G2_uom",
+    "G5_arrival_in_window"
+   ],
+   "demand_overlap": "unproven",
+   "demand_overlap_note": "live SO 与 P50 是否同一批需求未证；未做桶级消费/分配前，D2 不能当净需求",
+   "supply": {
+    "available": 1,
+    "intransit": 0,
+    "open_po_raw": 0,
+    "open_po_dedup": 0,
+    "po_duplicate_candidate": 0,
+    "open_po_lines": 0,
+    "po_eta_missing_lines": 0,
+    "production_gross": 390,
+    "production_remaining": 152,
+    "open_wo": 2,
+    "stopped_qty": 0,
+    "draft_wo": 0,
+    "A_low": 1,
+    "A_high": 153,
+    "B_min": 153,
+    "B_max": 153,
+    "B_min_po_dedup": 153,
+    "B_max_po_dedup": 153,
+    "intransit_equals_po_dedup": true
+   },
+   "demand": {
+    "D1_p50_forecast": 51.1,
+    "D2_p50_plus_live_so": 347.1,
+    "live_so": 296,
+    "dead_so_excluded": 0,
+    "over_delivery_not_netted": -185,
+    "forecast_model": "seasonal_naive",
+    "forecast_confidence": "medium",
+    "history_months": 45,
+    "run_rate_ratio": 0.094,
+    "recent3_mean": 242.3,
+    "d2_overlap_status": "unproven: live SO may or may not be the same demand the P50 already covers"
+   },
+   "gaps": {
+    "bmax_minus_d1": 101.9,
+    "bmax_minus_d2": -194.1,
+    "bmin_minus_d2": -194.1,
+    "bmin_po_dedup_minus_d2": -194.1,
+    "bmin_po_dedup_margin_pct_of_d2": -55.9,
+    "duplicate_po_share_of_bmax_pct": 0,
+    "d1_shortfall_vs_bmax_pct": -66.6
+   },
+   "tests": {
+    "t1_identity_confirmed": true,
+    "t2_uom_verified": false,
+    "t3_bmax_lt_d1": false,
+    "t4_a_low_lt_d2_le_bmax": false
+   },
+   "gates": [
+    {
+     "id": "G1_identity",
+     "label": "客户码→单一 KS 物料",
+     "state": "ok",
+     "evidence": "identity_status=confirmed",
+     "owner_role": "商品主数据",
+     "blocks_promotion": "always_replenish"
+    },
+    {
+     "id": "G2_uom",
+     "label": "库存/单据单位已核实（T2 硬门）",
+     "state": "unproven",
+     "evidence": "inventory.uom_status=unknown_conditional",
+     "owner_role": "商品主数据/仓储",
+     "blocks_promotion": "always_replenish"
+    },
+    {
+     "id": "G3_demand_overlap",
+     "label": "live SO 与预测是否为同一批需求",
+     "state": "unproven",
+     "evidence": "live SO 296 件；证据只证明单据存在，未做桶级消费/分配",
+     "owner_role": "业务/运营",
+     "blocks_promotion": "任何把 SO 计入需求的动作"
+    },
+    {
+     "id": "G4_supply_overlap",
+     "label": "PO / 在途 / 在产逐笔重叠键",
+     "state": "unproven",
+     "evidence": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
+     "owner_role": "数据/系统",
+     "blocks_promotion": "把 B_min 当供给下界（不影响 B_max 上界的短缺判断）"
+    },
+    {
+     "id": "G5_arrival_in_window",
+     "label": "PO 到货日 / WO 完工日在窗口内",
+     "state": "unproven",
+     "evidence": "PO ETA 缺失 0 行；WO 完工日缺失 2 张",
+     "owner_role": "采购/供应链；生产/PMC",
+     "blocks_promotion": "always_replenish（B_max 假设全部到货）"
+    },
+    {
+     "id": "G6_pk_ks_1to1",
+     "label": "在产 PK# 皮壳按 1:1 计 KS 成品",
+     "state": "unproven",
+     "evidence": "在产剩余 152 件按 1:1 计入",
+     "owner_role": "生产/PMC",
+     "blocks_promotion": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
+    }
+   ],
+   "horizon_stability": [
+    {
+     "window": "remaining_3m",
+     "label": "决定窗 2026-10-22→2026-12-31（窗口 71 天）",
+     "requested_days": 71,
+     "covered_days": 71,
+     "start": "2026-10-22",
+     "end": "2027-01-01",
+     "d1_p50_forecast": 51.1,
+     "d2_p50_plus_live_so": 347.1,
+     "t3_bmax_lt_d1": false,
+     "t4_a_low_lt_d2_le_bmax": false,
+     "class_if_evaluated_here": "insufficient_evidence"
+    },
+    {
+     "window": "L60",
+     "label": "提前期 60 天（窗口 60 天）",
+     "requested_days": 60,
+     "covered_days": 60,
+     "start": "2026-10-22",
+     "end": "2026-12-21",
+     "d1_p50_forecast": 44.7,
+     "d2_p50_plus_live_so": 340.7,
+     "t3_bmax_lt_d1": false,
+     "t4_a_low_lt_d2_le_bmax": false,
+     "class_if_evaluated_here": "insufficient_evidence"
+    },
+    {
+     "window": "L90",
+     "label": "提前期 90 天（窗口 90 天）",
+     "requested_days": 90,
+     "covered_days": 90,
+     "start": "2026-10-22",
+     "end": "2027-01-20",
+     "d1_p50_forecast": 65,
+     "d2_p50_plus_live_so": 361,
+     "t3_bmax_lt_d1": false,
+     "t4_a_low_lt_d2_le_bmax": false,
+     "class_if_evaluated_here": "insufficient_evidence"
+    },
+    {
+     "window": "L120",
+     "label": "提前期 120 天（窗口 120 天）",
+     "requested_days": 120,
+     "covered_days": 120,
+     "start": "2026-10-22",
+     "end": "2027-02-19",
+     "d1_p50_forecast": 88.3,
+     "d2_p50_plus_live_so": 384.3,
+     "t3_bmax_lt_d1": false,
+     "t4_a_low_lt_d2_le_bmax": false,
+     "class_if_evaluated_here": "insufficient_evidence"
+    }
+   ],
+   "class_horizon_stable": true,
+   "class_horizon_note": "四个窗口同规则判定一致（remaining_3m / L60 60 天 / L90 90 天 / L120 120 天）",
+   "arithmetic_qualifies_at_windows": [],
+   "insufficient_evidence_causes": {
+    "demand_side": "SO 与预测重叠未证",
+    "supply_side": "PO/WO/在途重叠或到货日未证",
+    "unit_side": "库存 UOM 未证",
+    "candidate_divergence": "P90-free 清单只有单一 P50 模型，候选分歧不在本清单判定内",
+    "calibration_insufficiency": "P90-free 清单不做区间校准，校准不足不在本清单判定内"
+   },
+   "start_condition": {
+    "rule": "升级由结构化 required_gates 驱动；文字条件不能替代闸门",
+    "demand_view_for_promotion": "D2",
+    "demand_overlap": "unproven",
+    "supply_lower_bound_shortfall": true,
+    "supply_lower_bound_shortfall_note": "B_min/B_min_po_dedup < D2 只说明存在短缺情景；该行仍不得升级到 always_replenish",
+    "binding_shortfall_conditions": [
+     "最大重叠下 B_min 153.0 < D2 347.1",
+     "只在手+在产 A_high 153.0 < D2 347.1（到货落在窗口外）",
+     "只在手 A_low 1.0 < D2 347.1"
+    ],
+    "required_gates": [
+     {
+      "id": "G1_identity",
+      "label": "客户码→单一 KS 物料",
+      "state": "ok",
+      "owner_role": "商品主数据",
+      "evidence_needed": "identity_status=confirmed",
+      "blocks": "always_replenish"
+     },
+     {
+      "id": "G2_uom",
+      "label": "库存/单据单位已核实（T2 硬门）",
+      "state": "unproven",
+      "owner_role": "商品主数据/仓储",
+      "evidence_needed": "inventory.uom_status=unknown_conditional",
+      "blocks": "always_replenish"
+     },
+     {
+      "id": "G3_demand_overlap",
+      "label": "live SO 与预测是否为同一批需求",
+      "state": "unproven",
+      "owner_role": "业务/运营",
+      "evidence_needed": "live SO 296 件；证据只证明单据存在，未做桶级消费/分配",
+      "blocks": "任何把 SO 计入需求的动作"
+     },
+     {
+      "id": "G4_supply_overlap",
+      "label": "PO / 在途 / 在产逐笔重叠键",
+      "state": "unproven",
+      "owner_role": "数据/系统",
+      "evidence_needed": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
+      "blocks": "把 B_min 当供给下界（不影响 B_max 上界的短缺判断）"
+     },
+     {
+      "id": "G5_arrival_in_window",
+      "label": "PO 到货日 / WO 完工日在窗口内",
+      "state": "unproven",
+      "owner_role": "采购/供应链；生产/PMC",
+      "evidence_needed": "PO ETA 缺失 0 行；WO 完工日缺失 2 张",
+      "blocks": "always_replenish（B_max 假设全部到货）"
+     },
+     {
+      "id": "G6_pk_ks_1to1",
+      "label": "在产 PK# 皮壳按 1:1 计 KS 成品",
+      "state": "unproven",
+      "owner_role": "生产/PMC",
+      "evidence_needed": "在产剩余 152 件按 1:1 计入",
+      "blocks": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
+     }
+    ],
+    "gates_required_for_promotion": [
+     "G1_identity",
+     "G2_uom",
+     "G5_arrival_in_window",
+     "G3_demand_overlap"
+    ],
+    "gate_summary": {
+     "G1_identity": "ok",
+     "G2_uom": "unproven",
+     "G3_demand_overlap": "unproven",
+     "G4_supply_overlap": "unproven",
+     "G5_arrival_in_window": "unproven",
+     "G6_pk_ks_1to1": "unproven"
+    },
+    "outcomes": [
+     {
+      "when": "G3 ok（live SO 确为增量/未重复）∧ G2 ok ∧ G5 ok",
+      "then_class": "always_replenish",
+      "arithmetic": "B_max 153.0 < D2 347.1"
+     },
+     {
+      "when": "G3 确认与预测重叠",
+      "then_class": "no_shortage_within_window",
+      "arithmetic": "按 D1 51.1 口径 B_max 153.0 覆盖"
+     },
+     {
+      "when": "G3 仍 unproven",
+      "then_class": "insufficient_evidence",
+      "arithmetic": "D2 不是已对平需求，不能据此报短缺或充足"
+     }
+    ],
+    "forbidden": [
+     "supply lower bound below demand (B_min / B_min_po_dedup < D2) never promotes to always_replenish",
+     "live SO in the demand view never becomes net demand before bucket-level consumption",
+     "Cover or any unbooked supply never counts until mapping and substitutability are proven"
+    ],
+    "summary": "补齐 G2_uom、G3_demand_overlap、G5_arrival_in_window 后按 outcomes 重算；在此之前不发起采购/生产指令。"
+   },
+   "missing_evidence": [
+    {
+     "item": "2/2 张开放 WO 的 planned_end_date",
+     "owner_role": "生产/PMC",
+     "why_it_changes_answer": "在产剩余 152 无日期"
+    },
+    {
+     "item": "PK#→KS 是否 1:1 计入",
+     "owner_role": "生产/PMC",
+     "why_it_changes_answer": "在产 1:1 未证；若不成立在产量需重算（只会向下）"
+    },
+    {
+     "item": "live SO 296 件是否与 P50 指向同一批需求",
+     "owner_role": "业务/运营",
+     "why_it_changes_answer": "决定 D2 是增量还是重复；决定本行是否结构短缺"
+    },
+    {
+     "item": "库存 UOM 是否为“件”",
+     "owner_role": "商品主数据/仓储",
+     "why_it_changes_answer": "单位未证时，任何短缺幅度都不能当结论"
+    }
+   ],
+   "responsible_role": "生产/PMC（WO 完工日）；业务/运营（需求口径）；商品主数据/仓储（UOM）",
+   "decisive_unknown": "需求口径：live SO 是否与 P50 重叠，以及旺势是否延续",
+   "basis": "可供上限 B_max 153 vs D1 51.1、D2 347.1。在手 A_low 1；B_min 153（最大重叠，去重压力 153）。B_max 覆盖 D1；只有在 live SO 确为增量时才会短缺。需求口径比值 0.094（近 3 月均值 242.3）。所有含 SO 的判断均标 demand_overlap=unproven。"
+  },
+  {
+   "seq": 2,
+   "evidence_priority": 9,
+   "priority_tier": 4,
+   "sku": "KS0001-QDKTR-100-DEEPBLUE",
+   "customer_code": "CEN003-DPBLUE-100",
+   "item_name": "三角靠枕-全涤宽条绒-100-深蓝色",
+   "class": "insufficient_evidence",
+   "arithmetic_qualifies": null,
+   "arithmetic_class": "insufficient_evidence",
+   "promotion_blockers": [
+    "G2_uom",
+    "G5_arrival_in_window"
+   ],
+   "demand_overlap": "unproven",
+   "demand_overlap_note": "live SO 与 P50 是否同一批需求未证；未做桶级消费/分配前，D2 不能当净需求",
+   "supply": {
+    "available": 1,
+    "intransit": 0,
+    "open_po_raw": 0,
+    "open_po_dedup": 0,
+    "po_duplicate_candidate": 0,
+    "open_po_lines": 0,
+    "po_eta_missing_lines": 0,
+    "production_gross": 260,
+    "production_remaining": 260,
+    "open_wo": 1,
+    "stopped_qty": 0,
+    "draft_wo": 0,
+    "A_low": 1,
+    "A_high": 261,
+    "B_min": 261,
+    "B_max": 261,
+    "B_min_po_dedup": 261,
+    "B_max_po_dedup": 261,
+    "intransit_equals_po_dedup": true
+   },
+   "demand": {
+    "D1_p50_forecast": 39.1,
+    "D2_p50_plus_live_so": 501.1,
+    "live_so": 462,
+    "dead_so_excluded": 0,
+    "over_delivery_not_netted": -217,
+    "forecast_model": "seasonal_naive",
+    "forecast_confidence": "medium",
+    "history_months": 45,
+    "run_rate_ratio": 0.09,
+    "recent3_mean": 208,
+    "d2_overlap_status": "unproven: live SO may or may not be the same demand the P50 already covers"
+   },
+   "gaps": {
+    "bmax_minus_d1": 221.9,
+    "bmax_minus_d2": -240.1,
+    "bmin_minus_d2": -240.1,
+    "bmin_po_dedup_minus_d2": -240.1,
+    "bmin_po_dedup_margin_pct_of_d2": -47.9,
+    "duplicate_po_share_of_bmax_pct": 0,
+    "d1_shortfall_vs_bmax_pct": -85.0
+   },
+   "tests": {
+    "t1_identity_confirmed": true,
+    "t2_uom_verified": false,
+    "t3_bmax_lt_d1": false,
+    "t4_a_low_lt_d2_le_bmax": false
+   },
+   "gates": [
+    {
+     "id": "G1_identity",
+     "label": "客户码→单一 KS 物料",
+     "state": "ok",
+     "evidence": "identity_status=confirmed",
+     "owner_role": "商品主数据",
+     "blocks_promotion": "always_replenish"
+    },
+    {
+     "id": "G2_uom",
+     "label": "库存/单据单位已核实（T2 硬门）",
+     "state": "unproven",
+     "evidence": "inventory.uom_status=unknown_conditional",
+     "owner_role": "商品主数据/仓储",
+     "blocks_promotion": "always_replenish"
+    },
+    {
+     "id": "G3_demand_overlap",
+     "label": "live SO 与预测是否为同一批需求",
+     "state": "unproven",
+     "evidence": "live SO 462 件；证据只证明单据存在，未做桶级消费/分配",
+     "owner_role": "业务/运营",
+     "blocks_promotion": "任何把 SO 计入需求的动作"
+    },
+    {
+     "id": "G4_supply_overlap",
+     "label": "PO / 在途 / 在产逐笔重叠键",
+     "state": "unproven",
+     "evidence": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
+     "owner_role": "数据/系统",
+     "blocks_promotion": "把 B_min 当供给下界（不影响 B_max 上界的短缺判断）"
+    },
+    {
+     "id": "G5_arrival_in_window",
+     "label": "PO 到货日 / WO 完工日在窗口内",
+     "state": "unproven",
+     "evidence": "PO ETA 缺失 0 行；WO 完工日缺失 1 张",
+     "owner_role": "采购/供应链；生产/PMC",
+     "blocks_promotion": "always_replenish（B_max 假设全部到货）"
+    },
+    {
+     "id": "G6_pk_ks_1to1",
+     "label": "在产 PK# 皮壳按 1:1 计 KS 成品",
+     "state": "unproven",
+     "evidence": "在产剩余 260 件按 1:1 计入",
+     "owner_role": "生产/PMC",
+     "blocks_promotion": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
+    }
+   ],
+   "horizon_stability": [
+    {
+     "window": "remaining_3m",
+     "label": "决定窗 2026-10-22→2026-12-31（窗口 71 天）",
+     "requested_days": 71,
+     "covered_days": 71,
+     "start": "2026-10-22",
+     "end": "2027-01-01",
+     "d1_p50_forecast": 39.1,
+     "d2_p50_plus_live_so": 501.1,
+     "t3_bmax_lt_d1": false,
+     "t4_a_low_lt_d2_le_bmax": false,
+     "class_if_evaluated_here": "insufficient_evidence"
+    },
+    {
+     "window": "L60",
+     "label": "提前期 60 天（窗口 60 天）",
+     "requested_days": 60,
+     "covered_days": 60,
+     "start": "2026-10-22",
+     "end": "2026-12-21",
+     "d1_p50_forecast": 31.3,
+     "d2_p50_plus_live_so": 493.3,
+     "t3_bmax_lt_d1": false,
+     "t4_a_low_lt_d2_le_bmax": false,
+     "class_if_evaluated_here": "insufficient_evidence"
+    },
+    {
+     "window": "L90",
+     "label": "提前期 90 天（窗口 90 天）",
+     "requested_days": 90,
+     "covered_days": 90,
+     "start": "2026-10-22",
+     "end": "2027-01-20",
+     "d1_p50_forecast": 50.5,
+     "d2_p50_plus_live_so": 512.5,
+     "t3_bmax_lt_d1": false,
+     "t4_a_low_lt_d2_le_bmax": false,
+     "class_if_evaluated_here": "insufficient_evidence"
+    },
+    {
+     "window": "L120",
+     "label": "提前期 120 天（窗口 120 天）",
+     "requested_days": 120,
+     "covered_days": 120,
+     "start": "2026-10-22",
+     "end": "2027-02-19",
+     "d1_p50_forecast": 69.7,
+     "d2_p50_plus_live_so": 531.7,
+     "t3_bmax_lt_d1": false,
+     "t4_a_low_lt_d2_le_bmax": false,
+     "class_if_evaluated_here": "insufficient_evidence"
+    }
+   ],
+   "class_horizon_stable": true,
+   "class_horizon_note": "四个窗口同规则判定一致（remaining_3m / L60 60 天 / L90 90 天 / L120 120 天）",
+   "arithmetic_qualifies_at_windows": [],
+   "insufficient_evidence_causes": {
+    "demand_side": "SO 与预测重叠未证",
+    "supply_side": "PO/WO/在途重叠或到货日未证",
+    "unit_side": "库存 UOM 未证",
+    "candidate_divergence": "P90-free 清单只有单一 P50 模型，候选分歧不在本清单判定内",
+    "calibration_insufficiency": "P90-free 清单不做区间校准，校准不足不在本清单判定内"
+   },
+   "start_condition": {
+    "rule": "升级由结构化 required_gates 驱动；文字条件不能替代闸门",
+    "demand_view_for_promotion": "D2",
+    "demand_overlap": "unproven",
+    "supply_lower_bound_shortfall": true,
+    "supply_lower_bound_shortfall_note": "B_min/B_min_po_dedup < D2 只说明存在短缺情景；该行仍不得升级到 always_replenish",
+    "binding_shortfall_conditions": [
+     "最大重叠下 B_min 261.0 < D2 501.1",
+     "只在手+在产 A_high 261.0 < D2 501.1（到货落在窗口外）",
+     "只在手 A_low 1.0 < D2 501.1"
+    ],
+    "required_gates": [
+     {
+      "id": "G1_identity",
+      "label": "客户码→单一 KS 物料",
+      "state": "ok",
+      "owner_role": "商品主数据",
+      "evidence_needed": "identity_status=confirmed",
+      "blocks": "always_replenish"
+     },
+     {
+      "id": "G2_uom",
+      "label": "库存/单据单位已核实（T2 硬门）",
+      "state": "unproven",
+      "owner_role": "商品主数据/仓储",
+      "evidence_needed": "inventory.uom_status=unknown_conditional",
+      "blocks": "always_replenish"
+     },
+     {
+      "id": "G3_demand_overlap",
+      "label": "live SO 与预测是否为同一批需求",
+      "state": "unproven",
+      "owner_role": "业务/运营",
+      "evidence_needed": "live SO 462 件；证据只证明单据存在，未做桶级消费/分配",
+      "blocks": "任何把 SO 计入需求的动作"
+     },
+     {
+      "id": "G4_supply_overlap",
+      "label": "PO / 在途 / 在产逐笔重叠键",
+      "state": "unproven",
+      "owner_role": "数据/系统",
+      "evidence_needed": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
+      "blocks": "把 B_min 当供给下界（不影响 B_max 上界的短缺判断）"
+     },
+     {
+      "id": "G5_arrival_in_window",
+      "label": "PO 到货日 / WO 完工日在窗口内",
+      "state": "unproven",
+      "owner_role": "采购/供应链；生产/PMC",
+      "evidence_needed": "PO ETA 缺失 0 行；WO 完工日缺失 1 张",
+      "blocks": "always_replenish（B_max 假设全部到货）"
+     },
+     {
+      "id": "G6_pk_ks_1to1",
+      "label": "在产 PK# 皮壳按 1:1 计 KS 成品",
+      "state": "unproven",
+      "owner_role": "生产/PMC",
+      "evidence_needed": "在产剩余 260 件按 1:1 计入",
+      "blocks": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
+     }
+    ],
+    "gates_required_for_promotion": [
+     "G1_identity",
+     "G2_uom",
+     "G5_arrival_in_window",
+     "G3_demand_overlap"
+    ],
+    "gate_summary": {
+     "G1_identity": "ok",
+     "G2_uom": "unproven",
+     "G3_demand_overlap": "unproven",
+     "G4_supply_overlap": "unproven",
+     "G5_arrival_in_window": "unproven",
+     "G6_pk_ks_1to1": "unproven"
+    },
+    "outcomes": [
+     {
+      "when": "G3 ok（live SO 确为增量/未重复）∧ G2 ok ∧ G5 ok",
+      "then_class": "always_replenish",
+      "arithmetic": "B_max 261.0 < D2 501.1"
+     },
+     {
+      "when": "G3 确认与预测重叠",
+      "then_class": "no_shortage_within_window",
+      "arithmetic": "按 D1 39.1 口径 B_max 261.0 覆盖"
+     },
+     {
+      "when": "G3 仍 unproven",
+      "then_class": "insufficient_evidence",
+      "arithmetic": "D2 不是已对平需求，不能据此报短缺或充足"
+     }
+    ],
+    "forbidden": [
+     "supply lower bound below demand (B_min / B_min_po_dedup < D2) never promotes to always_replenish",
+     "live SO in the demand view never becomes net demand before bucket-level consumption",
+     "Cover or any unbooked supply never counts until mapping and substitutability are proven"
+    ],
+    "summary": "补齐 G2_uom、G3_demand_overlap、G5_arrival_in_window 后按 outcomes 重算；在此之前不发起采购/生产指令。"
+   },
+   "missing_evidence": [
+    {
+     "item": "1/1 张开放 WO 的 planned_end_date",
+     "owner_role": "生产/PMC",
+     "why_it_changes_answer": "在产剩余 260 无日期"
+    },
+    {
+     "item": "PK#→KS 是否 1:1 计入",
+     "owner_role": "生产/PMC",
+     "why_it_changes_answer": "在产 1:1 未证；若不成立在产量需重算（只会向下）"
+    },
+    {
+     "item": "live SO 462 件是否与 P50 指向同一批需求",
+     "owner_role": "业务/运营",
+     "why_it_changes_answer": "决定 D2 是增量还是重复；决定本行是否结构短缺"
+    },
+    {
+     "item": "库存 UOM 是否为“件”",
+     "owner_role": "商品主数据/仓储",
+     "why_it_changes_answer": "单位未证时，任何短缺幅度都不能当结论"
+    }
+   ],
+   "responsible_role": "生产/PMC（WO 完工日）；业务/运营（需求口径）；商品主数据/仓储（UOM）",
+   "decisive_unknown": "需求口径：live SO 是否与 P50 重叠，以及旺势是否延续",
+   "basis": "可供上限 B_max 261 vs D1 39.1、D2 501.1。在手 A_low 1；B_min 261（最大重叠，去重压力 261）。B_max 覆盖 D1；只有在 live SO 确为增量时才会短缺。需求口径比值 0.09（近 3 月均值 208）。所有含 SO 的判断均标 demand_overlap=unproven。"
+  },
+  {
+   "seq": 3,
+   "evidence_priority": 2,
+   "priority_tier": 2,
+   "sku": "KS0001-XMMBS-100-HEMPNATURAL",
+   "customer_code": "C/Linen-Natural-100-688-wow",
+   "item_name": "三角靠枕-新棉麻本色-100-麻本色",
+   "class": "depends_on_arrival",
+   "arithmetic_qualifies": null,
+   "arithmetic_class": "depends_on_arrival",
+   "promotion_blockers": [
+    "G2_uom",
+    "G5_arrival_in_window"
+   ],
+   "demand_overlap": "unproven",
+   "demand_overlap_note": "live SO 与 P50 是否同一批需求未证；未做桶级消费/分配前，D2 不能当净需求",
+   "supply": {
+    "available": 54,
+    "intransit": 121,
+    "open_po_raw": 121,
+    "open_po_dedup": 121,
+    "po_duplicate_candidate": 0,
+    "open_po_lines": 1,
+    "po_eta_missing_lines": 1,
+    "production_gross": 300,
+    "production_remaining": 101,
+    "open_wo": 3,
+    "stopped_qty": 0,
+    "draft_wo": 0,
+    "A_low": 54,
+    "A_high": 155,
+    "B_min": 175,
+    "B_max": 397,
+    "B_min_po_dedup": 175,
+    "B_max_po_dedup": 397,
+    "intransit_equals_po_dedup": true
+   },
+   "demand": {
+    "D1_p50_forecast": 43.7,
+    "D2_p50_plus_live_so": 187.7,
+    "live_so": 144,
+    "dead_so_excluded": 120,
+    "over_delivery_not_netted": -92,
+    "forecast_model": "seasonal_naive",
+    "forecast_confidence": "medium-low",
+    "history_months": 29,
+    "run_rate_ratio": 0.12,
+    "recent3_mean": 167,
+    "d2_overlap_status": "unproven: live SO may or may not be the same demand the P50 already covers"
+   },
+   "gaps": {
+    "bmax_minus_d1": 353.3,
+    "bmax_minus_d2": 209.3,
+    "bmin_minus_d2": -12.7,
+    "bmin_po_dedup_minus_d2": -12.7,
+    "bmin_po_dedup_margin_pct_of_d2": -6.8,
+    "duplicate_po_share_of_bmax_pct": 0,
+    "d1_shortfall_vs_bmax_pct": -89.0
+   },
+   "tests": {
+    "t1_identity_confirmed": true,
+    "t2_uom_verified": false,
+    "t3_bmax_lt_d1": false,
+    "t4_a_low_lt_d2_le_bmax": true
+   },
+   "gates": [
+    {
+     "id": "G1_identity",
+     "label": "客户码→单一 KS 物料",
+     "state": "ok",
+     "evidence": "identity_status=confirmed",
+     "owner_role": "商品主数据",
+     "blocks_promotion": "always_replenish"
+    },
+    {
+     "id": "G2_uom",
+     "label": "库存/单据单位已核实（T2 硬门）",
+     "state": "unproven",
+     "evidence": "inventory.uom_status=unknown_conditional",
+     "owner_role": "商品主数据/仓储",
+     "blocks_promotion": "always_replenish"
+    },
+    {
+     "id": "G3_demand_overlap",
+     "label": "live SO 与预测是否为同一批需求",
+     "state": "unproven",
+     "evidence": "live SO 144 件；证据只证明单据存在，未做桶级消费/分配",
+     "owner_role": "业务/运营",
+     "blocks_promotion": "任何把 SO 计入需求的动作"
+    },
+    {
+     "id": "G4_supply_overlap",
+     "label": "PO / 在途 / 在产逐笔重叠键",
+     "state": "unproven",
+     "evidence": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
+     "owner_role": "数据/系统",
+     "blocks_promotion": "把 B_min 当供给下界（不影响 B_max 上界的短缺判断）"
+    },
+    {
+     "id": "G5_arrival_in_window",
+     "label": "PO 到货日 / WO 完工日在窗口内",
+     "state": "unproven",
+     "evidence": "PO ETA 缺失 1 行；WO 完工日缺失 3 张",
+     "owner_role": "采购/供应链；生产/PMC",
+     "blocks_promotion": "always_replenish（B_max 假设全部到货）"
+    },
+    {
+     "id": "G6_pk_ks_1to1",
+     "label": "在产 PK# 皮壳按 1:1 计 KS 成品",
+     "state": "unproven",
+     "evidence": "在产剩余 101 件按 1:1 计入",
+     "owner_role": "生产/PMC",
+     "blocks_promotion": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
+    }
+   ],
+   "horizon_stability": [
+    {
+     "window": "remaining_3m",
+     "label": "决定窗 2026-10-22→2026-12-31（窗口 71 天）",
+     "requested_days": 71,
+     "covered_days": 71,
+     "start": "2026-10-22",
+     "end": "2027-01-01",
+     "d1_p50_forecast": 43.7,
+     "d2_p50_plus_live_so": 187.7,
+     "t3_bmax_lt_d1": false,
+     "t4_a_low_lt_d2_le_bmax": true,
+     "class_if_evaluated_here": "depends_on_arrival"
+    },
+    {
+     "window": "L60",
+     "label": "提前期 60 天（窗口 60 天）",
+     "requested_days": 60,
+     "covered_days": 60,
+     "start": "2026-10-22",
+     "end": "2026-12-21",
+     "d1_p50_forecast": 35.2,
+     "d2_p50_plus_live_so": 179.2,
+     "t3_bmax_lt_d1": false,
+     "t4_a_low_lt_d2_le_bmax": true,
+     "class_if_evaluated_here": "depends_on_arrival"
+    },
+    {
+     "window": "L90",
+     "label": "提前期 90 天（窗口 90 天）",
+     "requested_days": 90,
+     "covered_days": 90,
+     "start": "2026-10-22",
+     "end": "2027-01-20",
+     "d1_p50_forecast": 56,
+     "d2_p50_plus_live_so": 200,
+     "t3_bmax_lt_d1": false,
+     "t4_a_low_lt_d2_le_bmax": true,
+     "class_if_evaluated_here": "depends_on_arrival"
+    },
+    {
+     "window": "L120",
+     "label": "提前期 120 天（窗口 120 天）",
+     "requested_days": 120,
+     "covered_days": 120,
+     "start": "2026-10-22",
+     "end": "2027-02-19",
+     "d1_p50_forecast": 76.6,
+     "d2_p50_plus_live_so": 220.6,
+     "t3_bmax_lt_d1": false,
+     "t4_a_low_lt_d2_le_bmax": true,
+     "class_if_evaluated_here": "depends_on_arrival"
+    }
+   ],
+   "class_horizon_stable": true,
+   "class_horizon_note": "四个窗口同规则判定一致（remaining_3m / L60 60 天 / L90 90 天 / L120 120 天）",
+   "arithmetic_qualifies_at_windows": [],
+   "insufficient_evidence_causes": null,
+   "start_condition": {
+    "rule": "升级由结构化 required_gates 驱动；文字条件不能替代闸门",
+    "demand_view_for_promotion": "D2",
+    "demand_overlap": "unproven",
+    "supply_lower_bound_shortfall": true,
+    "supply_lower_bound_shortfall_note": "B_min/B_min_po_dedup < D2 只说明存在短缺情景；该行仍不得升级到 always_replenish",
+    "binding_shortfall_conditions": [
+     "最大重叠下 B_min 175.0 < D2 187.7",
+     "只在手+在产 A_high 155.0 < D2 187.7（到货落在窗口外）",
+     "只在手 A_low 54.0 < D2 187.7"
+    ],
+    "required_gates": [
+     {
+      "id": "G1_identity",
+      "label": "客户码→单一 KS 物料",
+      "state": "ok",
+      "owner_role": "商品主数据",
+      "evidence_needed": "identity_status=confirmed",
+      "blocks": "always_replenish"
+     },
+     {
+      "id": "G2_uom",
+      "label": "库存/单据单位已核实（T2 硬门）",
+      "state": "unproven",
+      "owner_role": "商品主数据/仓储",
+      "evidence_needed": "inventory.uom_status=unknown_conditional",
+      "blocks": "always_replenish"
+     },
+     {
+      "id": "G3_demand_overlap",
+      "label": "live SO 与预测是否为同一批需求",
+      "state": "unproven",
+      "owner_role": "业务/运营",
+      "evidence_needed": "live SO 144 件；证据只证明单据存在，未做桶级消费/分配",
+      "blocks": "任何把 SO 计入需求的动作"
+     },
+     {
+      "id": "G4_supply_overlap",
+      "label": "PO / 在途 / 在产逐笔重叠键",
+      "state": "unproven",
+      "owner_role": "数据/系统",
+      "evidence_needed": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
+      "blocks": "把 B_min 当供给下界（不影响 B_max 上界的短缺判断）"
+     },
+     {
+      "id": "G5_arrival_in_window",
+      "label": "PO 到货日 / WO 完工日在窗口内",
+      "state": "unproven",
+      "owner_role": "采购/供应链；生产/PMC",
+      "evidence_needed": "PO ETA 缺失 1 行；WO 完工日缺失 3 张",
+      "blocks": "always_replenish（B_max 假设全部到货）"
+     },
+     {
+      "id": "G6_pk_ks_1to1",
+      "label": "在产 PK# 皮壳按 1:1 计 KS 成品",
+      "state": "unproven",
+      "owner_role": "生产/PMC",
+      "evidence_needed": "在产剩余 101 件按 1:1 计入",
+      "blocks": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
+     }
+    ],
+    "gates_required_for_promotion": [
+     "G1_identity",
+     "G2_uom",
+     "G5_arrival_in_window",
+     "G3_demand_overlap"
+    ],
+    "gate_summary": {
+     "G1_identity": "ok",
+     "G2_uom": "unproven",
+     "G3_demand_overlap": "unproven",
+     "G4_supply_overlap": "unproven",
+     "G5_arrival_in_window": "unproven",
+     "G6_pk_ks_1to1": "unproven"
+    },
+    "outcomes": [
+     {
+      "when": "G2 ok ∧ G4 ok（PO/在途/在产不重叠）∧ G5 ok（全部在窗口内到货）",
+      "then_class": "no_shortage_within_window",
+      "arithmetic": "供给达到 B_max 397.0 ≥ D2 187.7"
+     },
+     {
+      "when": "到货/完工落到窗口外，或确认重叠（供给低于 B_max）",
+      "then_class": "insufficient_evidence",
+      "arithmetic": "最大重叠下 B_min 175.0 < D2 187.7；只在手+在产 A_high 155.0 < D2 187.7（到货落在窗口外）；只在手 A_low 54.0 < D2 187.7。下界不足只证明存在短缺情景，D2 含未证的 live SO，故不得直接判 always"
+     },
+     {
+      "when": "上述短缺情景被证实 ∧ G2 ok ∧ G3 ok（live SO 确为增量且已做桶级分配）",
+      "then_class": "always_replenish",
+      "arithmetic": "只有在 D2 成为已对平需求后才允许升级"
+     }
+    ],
+    "forbidden": [
+     "supply lower bound below demand (B_min / B_min_po_dedup < D2) never promotes to always_replenish",
+     "live SO in the demand view never becomes net demand before bucket-level consumption",
+     "Cover or any unbooked supply never counts until mapping and substitutability are proven"
+    ],
+    "summary": "补齐 G2_uom、G3_demand_overlap、G5_arrival_in_window 后按 outcomes 重算；在此之前不发起采购/生产指令。"
+   },
+   "missing_evidence": [
+    {
+     "item": "1/1 条未结 PO 的实际到货日",
+     "owner_role": "采购/供应链",
+     "why_it_changes_answer": "ETA 缺失 1 行；决定能否算窗口内到货"
+    },
+    {
+     "item": "3/3 张开放 WO 的 planned_end_date",
+     "owner_role": "生产/PMC",
+     "why_it_changes_answer": "在产剩余 101 无日期"
+    },
+    {
+     "item": "PK#→KS 是否 1:1 计入",
+     "owner_role": "生产/PMC",
+     "why_it_changes_answer": "在产 1:1 未证；若不成立在产量需重算（只会向下）"
+    },
+    {
+     "item": "在途 121 与去重 PO 121 的逐笔关单键",
+     "owner_role": "数据/系统（worker）",
+     "why_it_changes_answer": "决定 B 取 175 还是 397"
+    },
+    {
+     "item": "live SO 144 件是否与 P50 指向同一批需求",
+     "owner_role": "业务/运营",
+     "why_it_changes_answer": "决定 D2 是增量还是重复；决定本行是否结构短缺"
+    },
+    {
+     "item": "死单 SO 120 件是否补发",
+     "owner_role": "业务/运营",
+     "why_it_changes_answer": "未计入需求；若补发则需求上移"
+    },
+    {
+     "item": "库存 UOM 是否为“件”",
+     "owner_role": "商品主数据/仓储",
+     "why_it_changes_answer": "单位未证时，任何短缺幅度都不能当结论"
+    }
+   ],
+   "responsible_role": "采购/供应链（PO ETA/重复）；生产/PMC（WO 完工日）；业务/运营（需求口径）；商品主数据/仓储（UOM）",
+   "decisive_unknown": "到货/完工时点与重叠：在产 101、PO 121、在途 121",
+   "basis": "可供上限 B_max 397 vs D1 43.7、D2 187.7。在手 A_low 54；B_min 175（最大重叠，去重压力 175）。结论在“全部到货不重叠”（不缺）与“重叠/迟到”（短缺）之间翻转。需求口径比值 0.12（近 3 月均值 167）。所有含 SO 的判断均标 demand_overlap=unproven。"
+  },
+  {
+   "seq": 4,
+   "evidence_priority": 5,
+   "priority_tier": 2,
+   "sku": "KS0001-CMKTR-100-DEEPBLUE",
+   "customer_code": "C/Cord-DKBlue-100-713-wow",
+   "item_name": "三角靠枕-纯棉宽条绒-100-深蓝色",
+   "class": "depends_on_arrival",
+   "arithmetic_qualifies": null,
+   "arithmetic_class": "depends_on_arrival",
+   "promotion_blockers": [
+    "G2_uom",
+    "G5_arrival_in_window"
+   ],
+   "demand_overlap": "unproven",
+   "demand_overlap_note": "live SO 与 P50 是否同一批需求未证；未做桶级消费/分配前，D2 不能当净需求",
+   "supply": {
+    "available": 6,
+    "intransit": 120,
+    "open_po_raw": 240,
+    "open_po_dedup": 120,
+    "po_duplicate_candidate": 120,
+    "open_po_lines": 2,
+    "po_eta_missing_lines": 2,
+    "production_gross": 35,
+    "production_remaining": 35,
+    "open_wo": 1,
+    "stopped_qty": 0,
+    "draft_wo": 1,
+    "A_low": 6,
+    "A_high": 41,
+    "B_min": 246,
+    "B_max": 401,
+    "B_min_po_dedup": 126,
+    "B_max_po_dedup": 281,
+    "intransit_equals_po_dedup": true
+   },
+   "demand": {
+    "D1_p50_forecast": 24.5,
+    "D2_p50_plus_live_so": 104.5,
+    "live_so": 80,
+    "dead_so_excluded": 110,
+    "over_delivery_not_netted": -63,
+    "forecast_model": "seasonal_naive",
+    "forecast_confidence": "medium-low",
+    "history_months": 29,
+    "run_rate_ratio": 0.075,
+    "recent3_mean": 150.7,
+    "d2_overlap_status": "unproven: live SO may or may not be the same demand the P50 already covers"
+   },
+   "gaps": {
+    "bmax_minus_d1": 376.5,
+    "bmax_minus_d2": 296.5,
+    "bmin_minus_d2": 141.5,
+    "bmin_po_dedup_minus_d2": 21.5,
+    "bmin_po_dedup_margin_pct_of_d2": 20.6,
+    "duplicate_po_share_of_bmax_pct": 29.9,
+    "d1_shortfall_vs_bmax_pct": -93.9
+   },
+   "tests": {
+    "t1_identity_confirmed": true,
+    "t2_uom_verified": false,
+    "t3_bmax_lt_d1": false,
+    "t4_a_low_lt_d2_le_bmax": true
+   },
+   "gates": [
+    {
+     "id": "G1_identity",
+     "label": "客户码→单一 KS 物料",
+     "state": "ok",
+     "evidence": "identity_status=confirmed",
+     "owner_role": "商品主数据",
+     "blocks_promotion": "always_replenish"
+    },
+    {
+     "id": "G2_uom",
+     "label": "库存/单据单位已核实（T2 硬门）",
+     "state": "unproven",
+     "evidence": "inventory.uom_status=unknown_conditional",
+     "owner_role": "商品主数据/仓储",
+     "blocks_promotion": "always_replenish"
+    },
+    {
+     "id": "G3_demand_overlap",
+     "label": "live SO 与预测是否为同一批需求",
+     "state": "unproven",
+     "evidence": "live SO 80 件；证据只证明单据存在，未做桶级消费/分配",
+     "owner_role": "业务/运营",
+     "blocks_promotion": "任何把 SO 计入需求的动作"
+    },
+    {
+     "id": "G4_supply_overlap",
+     "label": "PO / 在途 / 在产逐笔重叠键",
+     "state": "unproven",
+     "evidence": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
+     "owner_role": "数据/系统",
+     "blocks_promotion": "把 B_min 当供给下界（不影响 B_max 上界的短缺判断）"
+    },
+    {
+     "id": "G5_arrival_in_window",
+     "label": "PO 到货日 / WO 完工日在窗口内",
+     "state": "unproven",
+     "evidence": "PO ETA 缺失 2 行；WO 完工日缺失 1 张",
+     "owner_role": "采购/供应链；生产/PMC",
+     "blocks_promotion": "always_replenish（B_max 假设全部到货）"
+    },
+    {
+     "id": "G6_pk_ks_1to1",
+     "label": "在产 PK# 皮壳按 1:1 计 KS 成品",
+     "state": "unproven",
+     "evidence": "在产剩余 35 件按 1:1 计入",
+     "owner_role": "生产/PMC",
+     "blocks_promotion": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
+    }
+   ],
+   "horizon_stability": [
+    {
+     "window": "remaining_3m",
+     "label": "决定窗 2026-10-22→2026-12-31（窗口 71 天）",
+     "requested_days": 71,
+     "covered_days": 71,
+     "start": "2026-10-22",
+     "end": "2027-01-01",
+     "d1_p50_forecast": 24.5,
+     "d2_p50_plus_live_so": 104.5,
+     "t3_bmax_lt_d1": false,
+     "t4_a_low_lt_d2_le_bmax": true,
+     "class_if_evaluated_here": "depends_on_arrival"
+    },
+    {
+     "window": "L60",
+     "label": "提前期 60 天（窗口 60 天）",
+     "requested_days": 60,
+     "covered_days": 60,
+     "start": "2026-10-22",
+     "end": "2026-12-21",
+     "d1_p50_forecast": 18.5,
+     "d2_p50_plus_live_so": 98.5,
+     "t3_bmax_lt_d1": false,
+     "t4_a_low_lt_d2_le_bmax": true,
+     "class_if_evaluated_here": "depends_on_arrival"
+    },
+    {
+     "window": "L90",
+     "label": "提前期 90 天（窗口 90 天）",
+     "requested_days": 90,
+     "covered_days": 90,
+     "start": "2026-10-22",
+     "end": "2027-01-20",
+     "d1_p50_forecast": 31.5,
+     "d2_p50_plus_live_so": 111.5,
+     "t3_bmax_lt_d1": false,
+     "t4_a_low_lt_d2_le_bmax": true,
+     "class_if_evaluated_here": "depends_on_arrival"
+    },
+    {
+     "window": "L120",
+     "label": "提前期 120 天（窗口 120 天）",
+     "requested_days": 120,
+     "covered_days": 120,
+     "start": "2026-10-22",
+     "end": "2027-02-19",
+     "d1_p50_forecast": 43.1,
+     "d2_p50_plus_live_so": 123.1,
+     "t3_bmax_lt_d1": false,
+     "t4_a_low_lt_d2_le_bmax": true,
+     "class_if_evaluated_here": "depends_on_arrival"
+    }
+   ],
+   "class_horizon_stable": true,
+   "class_horizon_note": "四个窗口同规则判定一致（remaining_3m / L60 60 天 / L90 90 天 / L120 120 天）",
+   "arithmetic_qualifies_at_windows": [],
+   "insufficient_evidence_causes": null,
+   "start_condition": {
+    "rule": "升级由结构化 required_gates 驱动；文字条件不能替代闸门",
+    "demand_view_for_promotion": "D2",
+    "demand_overlap": "unproven",
+    "supply_lower_bound_shortfall": false,
+    "supply_lower_bound_shortfall_note": "下界未低于 D2；短缺情景来自到货时点/在手不足，同样不得据此直接升级",
+    "binding_shortfall_conditions": [
+     "只在手+在产 A_high 41.0 < D2 104.5（到货落在窗口外）",
+     "只在手 A_low 6.0 < D2 104.5"
+    ],
+    "required_gates": [
+     {
+      "id": "G1_identity",
+      "label": "客户码→单一 KS 物料",
+      "state": "ok",
+      "owner_role": "商品主数据",
+      "evidence_needed": "identity_status=confirmed",
+      "blocks": "always_replenish"
+     },
+     {
+      "id": "G2_uom",
+      "label": "库存/单据单位已核实（T2 硬门）",
+      "state": "unproven",
+      "owner_role": "商品主数据/仓储",
+      "evidence_needed": "inventory.uom_status=unknown_conditional",
+      "blocks": "always_replenish"
+     },
+     {
+      "id": "G3_demand_overlap",
+      "label": "live SO 与预测是否为同一批需求",
+      "state": "unproven",
+      "owner_role": "业务/运营",
+      "evidence_needed": "live SO 80 件；证据只证明单据存在，未做桶级消费/分配",
+      "blocks": "任何把 SO 计入需求的动作"
+     },
+     {
+      "id": "G4_supply_overlap",
+      "label": "PO / 在途 / 在产逐笔重叠键",
+      "state": "unproven",
+      "owner_role": "数据/系统",
+      "evidence_needed": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
+      "blocks": "把 B_min 当供给下界（不影响 B_max 上界的短缺判断）"
+     },
+     {
+      "id": "G5_arrival_in_window",
+      "label": "PO 到货日 / WO 完工日在窗口内",
+      "state": "unproven",
+      "owner_role": "采购/供应链；生产/PMC",
+      "evidence_needed": "PO ETA 缺失 2 行；WO 完工日缺失 1 张",
+      "blocks": "always_replenish（B_max 假设全部到货）"
+     },
+     {
+      "id": "G6_pk_ks_1to1",
+      "label": "在产 PK# 皮壳按 1:1 计 KS 成品",
+      "state": "unproven",
+      "owner_role": "生产/PMC",
+      "evidence_needed": "在产剩余 35 件按 1:1 计入",
+      "blocks": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
+     }
+    ],
+    "gates_required_for_promotion": [
+     "G1_identity",
+     "G2_uom",
+     "G5_arrival_in_window",
+     "G3_demand_overlap"
+    ],
+    "gate_summary": {
+     "G1_identity": "ok",
+     "G2_uom": "unproven",
+     "G3_demand_overlap": "unproven",
+     "G4_supply_overlap": "unproven",
+     "G5_arrival_in_window": "unproven",
+     "G6_pk_ks_1to1": "unproven"
+    },
+    "outcomes": [
+     {
+      "when": "G2 ok ∧ G4 ok（PO/在途/在产不重叠）∧ G5 ok（全部在窗口内到货）",
+      "then_class": "no_shortage_within_window",
+      "arithmetic": "供给达到 B_max 401.0 ≥ D2 104.5"
+     },
+     {
+      "when": "到货/完工落到窗口外，或确认重叠（供给低于 B_max）",
+      "then_class": "insufficient_evidence",
+      "arithmetic": "只在手+在产 A_high 41.0 < D2 104.5（到货落在窗口外）；只在手 A_low 6.0 < D2 104.5。下界不足只证明存在短缺情景，D2 含未证的 live SO，故不得直接判 always"
+     },
+     {
+      "when": "上述短缺情景被证实 ∧ G2 ok ∧ G3 ok（live SO 确为增量且已做桶级分配）",
+      "then_class": "always_replenish",
+      "arithmetic": "只有在 D2 成为已对平需求后才允许升级"
+     }
+    ],
+    "forbidden": [
+     "supply lower bound below demand (B_min / B_min_po_dedup < D2) never promotes to always_replenish",
+     "live SO in the demand view never becomes net demand before bucket-level consumption",
+     "Cover or any unbooked supply never counts until mapping and substitutability are proven"
+    ],
+    "summary": "补齐 G2_uom、G3_demand_overlap、G5_arrival_in_window 后按 outcomes 重算；在此之前不发起采购/生产指令。"
+   },
+   "missing_evidence": [
+    {
+     "item": "2/2 条未结 PO 的实际到货日",
+     "owner_role": "采购/供应链",
+     "why_it_changes_answer": "ETA 缺失 2 行；决定能否算窗口内到货"
+    },
+    {
+     "item": "重复候选 PO 120 件是否为同一笔",
+     "owner_role": "采购/供应链",
+     "why_it_changes_answer": "决定 B 取下界还是上界"
+    },
+    {
+     "item": "1/1 张开放 WO 的 planned_end_date；1 张 Draft WO 是否释放",
+     "owner_role": "生产/PMC",
+     "why_it_changes_answer": "在产剩余 35 无日期"
+    },
+    {
+     "item": "PK#→KS 是否 1:1 计入",
+     "owner_role": "生产/PMC",
+     "why_it_changes_answer": "在产 1:1 未证；若不成立在产量需重算（只会向下）"
+    },
+    {
+     "item": "在途 120 与去重 PO 120 的逐笔关单键",
+     "owner_role": "数据/系统（worker）",
+     "why_it_changes_answer": "决定 B 取 246 还是 401"
+    },
+    {
+     "item": "live SO 80 件是否与 P50 指向同一批需求",
+     "owner_role": "业务/运营",
+     "why_it_changes_answer": "决定 D2 是增量还是重复；决定本行是否结构短缺"
+    },
+    {
+     "item": "死单 SO 110 件是否补发",
+     "owner_role": "业务/运营",
+     "why_it_changes_answer": "未计入需求；若补发则需求上移"
+    },
+    {
+     "item": "库存 UOM 是否为“件”",
+     "owner_role": "商品主数据/仓储",
+     "why_it_changes_answer": "单位未证时，任何短缺幅度都不能当结论"
+    }
+   ],
+   "responsible_role": "采购/供应链（PO ETA/重复）；生产/PMC（WO 完工日）；业务/运营（需求口径）；商品主数据/仓储（UOM）",
+   "decisive_unknown": "PO 是否重复（去重后 B_min 126 vs D2 104.5），以及到货能否在窗口内",
+   "basis": "可供上限 B_max 401 vs D1 24.5、D2 104.5。在手 A_low 6；B_min 246（最大重叠，去重压力 126）。结论在“全部到货不重叠”（不缺）与“重叠/迟到”（短缺）之间翻转。需求口径比值 0.075（近 3 月均值 150.7）。所有含 SO 的判断均标 demand_overlap=unproven。"
+  },
+  {
+   "seq": 5,
+   "evidence_priority": 6,
+   "priority_tier": 3,
+   "sku": "KS0001-XMMBS-153-HEMPNATURAL",
+   "customer_code": "C/Linen-Natural-153-688-wow",
+   "item_name": "三角靠枕-新棉麻本色-153-麻本色",
+   "class": "depends_on_arrival",
+   "arithmetic_qualifies": null,
+   "arithmetic_class": "depends_on_arrival",
+   "promotion_blockers": [
+    "G2_uom",
+    "G5_arrival_in_window"
+   ],
+   "demand_overlap": "unproven",
+   "demand_overlap_note": "live SO 与 P50 是否同一批需求未证；未做桶级消费/分配前，D2 不能当净需求",
+   "supply": {
+    "available": 376,
+    "intransit": 215,
+    "open_po_raw": 223,
+    "open_po_dedup": 215,
+    "po_duplicate_candidate": 8,
+    "open_po_lines": 3,
+    "po_eta_missing_lines": 3,
+    "production_gross": 620,
+    "production_remaining": 612,
+    "open_wo": 3,
+    "stopped_qty": 300,
+    "draft_wo": 0,
+    "A_low": 376,
+    "A_high": 988,
+    "B_min": 988,
+    "B_max": 1426,
+    "B_min_po_dedup": 988,
+    "B_max_po_dedup": 1418,
+    "intransit_equals_po_dedup": true
+   },
+   "demand": {
+    "D1_p50_forecast": 247.8,
+    "D2_p50_plus_live_so": 884.8,
+    "live_so": 637,
+    "dead_so_excluded": 500,
+    "over_delivery_not_netted": -64,
+    "forecast_model": "seasonal_naive",
+    "forecast_confidence": "medium-low",
+    "history_months": 29,
+    "run_rate_ratio": 1.114,
+    "recent3_mean": 90.3,
+    "d2_overlap_status": "unproven: live SO may or may not be the same demand the P50 already covers"
+   },
+   "gaps": {
+    "bmax_minus_d1": 1178.2,
+    "bmax_minus_d2": 541.2,
+    "bmin_minus_d2": 103.2,
+    "bmin_po_dedup_minus_d2": 103.2,
+    "bmin_po_dedup_margin_pct_of_d2": 11.7,
+    "duplicate_po_share_of_bmax_pct": 0.6,
+    "d1_shortfall_vs_bmax_pct": -82.6
+   },
+   "tests": {
+    "t1_identity_confirmed": true,
+    "t2_uom_verified": false,
+    "t3_bmax_lt_d1": false,
+    "t4_a_low_lt_d2_le_bmax": true
+   },
+   "gates": [
+    {
+     "id": "G1_identity",
+     "label": "客户码→单一 KS 物料",
+     "state": "ok",
+     "evidence": "identity_status=confirmed",
+     "owner_role": "商品主数据",
+     "blocks_promotion": "always_replenish"
+    },
+    {
+     "id": "G2_uom",
+     "label": "库存/单据单位已核实（T2 硬门）",
+     "state": "unproven",
+     "evidence": "inventory.uom_status=unknown_conditional",
+     "owner_role": "商品主数据/仓储",
+     "blocks_promotion": "always_replenish"
+    },
+    {
+     "id": "G3_demand_overlap",
+     "label": "live SO 与预测是否为同一批需求",
+     "state": "unproven",
+     "evidence": "live SO 637 件；证据只证明单据存在，未做桶级消费/分配",
+     "owner_role": "业务/运营",
+     "blocks_promotion": "任何把 SO 计入需求的动作"
+    },
+    {
+     "id": "G4_supply_overlap",
+     "label": "PO / 在途 / 在产逐笔重叠键",
+     "state": "unproven",
+     "evidence": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
+     "owner_role": "数据/系统",
+     "blocks_promotion": "把 B_min 当供给下界（不影响 B_max 上界的短缺判断）"
+    },
+    {
+     "id": "G5_arrival_in_window",
+     "label": "PO 到货日 / WO 完工日在窗口内",
+     "state": "unproven",
+     "evidence": "PO ETA 缺失 3 行；WO 完工日缺失 3 张",
+     "owner_role": "采购/供应链；生产/PMC",
+     "blocks_promotion": "always_replenish（B_max 假设全部到货）"
+    },
+    {
+     "id": "G6_pk_ks_1to1",
+     "label": "在产 PK# 皮壳按 1:1 计 KS 成品",
+     "state": "unproven",
+     "evidence": "在产剩余 612 件按 1:1 计入",
+     "owner_role": "生产/PMC",
+     "blocks_promotion": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
+    }
+   ],
+   "horizon_stability": [
+    {
+     "window": "remaining_3m",
+     "label": "决定窗 2026-10-22→2026-12-31（窗口 71 天）",
+     "requested_days": 71,
+     "covered_days": 71,
+     "start": "2026-10-22",
+     "end": "2027-01-01",
+     "d1_p50_forecast": 247.8,
+     "d2_p50_plus_live_so": 884.8,
+     "t3_bmax_lt_d1": false,
+     "t4_a_low_lt_d2_le_bmax": true,
+     "class_if_evaluated_here": "depends_on_arrival"
+    },
+    {
+     "window": "L60",
+     "label": "提前期 60 天（窗口 60 天）",
+     "requested_days": 60,
+     "covered_days": 60,
+     "start": "2026-10-22",
+     "end": "2026-12-21",
+     "d1_p50_forecast": 183.6,
+     "d2_p50_plus_live_so": 820.6,
+     "t3_bmax_lt_d1": false,
+     "t4_a_low_lt_d2_le_bmax": true,
+     "class_if_evaluated_here": "depends_on_arrival"
+    },
+    {
+     "window": "L90",
+     "label": "提前期 90 天（窗口 90 天）",
+     "requested_days": 90,
+     "covered_days": 90,
+     "start": "2026-10-22",
+     "end": "2027-01-20",
+     "d1_p50_forecast": 309.5,
+     "d2_p50_plus_live_so": 946.5,
+     "t3_bmax_lt_d1": false,
+     "t4_a_low_lt_d2_le_bmax": true,
+     "class_if_evaluated_here": "depends_on_arrival"
+    },
+    {
+     "window": "L120",
+     "label": "提前期 120 天（窗口 120 天）",
+     "requested_days": 120,
+     "covered_days": 120,
+     "start": "2026-10-22",
+     "end": "2027-02-19",
+     "d1_p50_forecast": 413.2,
+     "d2_p50_plus_live_so": 1050.2,
+     "t3_bmax_lt_d1": false,
+     "t4_a_low_lt_d2_le_bmax": true,
+     "class_if_evaluated_here": "depends_on_arrival"
+    }
+   ],
+   "class_horizon_stable": true,
+   "class_horizon_note": "四个窗口同规则判定一致（remaining_3m / L60 60 天 / L90 90 天 / L120 120 天）",
+   "arithmetic_qualifies_at_windows": [],
+   "insufficient_evidence_causes": null,
+   "start_condition": {
+    "rule": "升级由结构化 required_gates 驱动；文字条件不能替代闸门",
+    "demand_view_for_promotion": "D2",
+    "demand_overlap": "unproven",
+    "supply_lower_bound_shortfall": false,
+    "supply_lower_bound_shortfall_note": "下界未低于 D2；短缺情景来自到货时点/在手不足，同样不得据此直接升级",
+    "binding_shortfall_conditions": [
+     "只在手 A_low 376.0 < D2 884.8"
+    ],
+    "required_gates": [
+     {
+      "id": "G1_identity",
+      "label": "客户码→单一 KS 物料",
+      "state": "ok",
+      "owner_role": "商品主数据",
+      "evidence_needed": "identity_status=confirmed",
+      "blocks": "always_replenish"
+     },
+     {
+      "id": "G2_uom",
+      "label": "库存/单据单位已核实（T2 硬门）",
+      "state": "unproven",
+      "owner_role": "商品主数据/仓储",
+      "evidence_needed": "inventory.uom_status=unknown_conditional",
+      "blocks": "always_replenish"
+     },
+     {
+      "id": "G3_demand_overlap",
+      "label": "live SO 与预测是否为同一批需求",
+      "state": "unproven",
+      "owner_role": "业务/运营",
+      "evidence_needed": "live SO 637 件；证据只证明单据存在，未做桶级消费/分配",
+      "blocks": "任何把 SO 计入需求的动作"
+     },
+     {
+      "id": "G4_supply_overlap",
+      "label": "PO / 在途 / 在产逐笔重叠键",
+      "state": "unproven",
+      "owner_role": "数据/系统",
+      "evidence_needed": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
+      "blocks": "把 B_min 当供给下界（不影响 B_max 上界的短缺判断）"
+     },
+     {
+      "id": "G5_arrival_in_window",
+      "label": "PO 到货日 / WO 完工日在窗口内",
+      "state": "unproven",
+      "owner_role": "采购/供应链；生产/PMC",
+      "evidence_needed": "PO ETA 缺失 3 行；WO 完工日缺失 3 张",
+      "blocks": "always_replenish（B_max 假设全部到货）"
+     },
+     {
+      "id": "G6_pk_ks_1to1",
+      "label": "在产 PK# 皮壳按 1:1 计 KS 成品",
+      "state": "unproven",
+      "owner_role": "生产/PMC",
+      "evidence_needed": "在产剩余 612 件按 1:1 计入",
+      "blocks": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
+     }
+    ],
+    "gates_required_for_promotion": [
+     "G1_identity",
+     "G2_uom",
+     "G5_arrival_in_window",
+     "G3_demand_overlap"
+    ],
+    "gate_summary": {
+     "G1_identity": "ok",
+     "G2_uom": "unproven",
+     "G3_demand_overlap": "unproven",
+     "G4_supply_overlap": "unproven",
+     "G5_arrival_in_window": "unproven",
+     "G6_pk_ks_1to1": "unproven"
+    },
+    "outcomes": [
+     {
+      "when": "G2 ok ∧ G4 ok（PO/在途/在产不重叠）∧ G5 ok（全部在窗口内到货）",
+      "then_class": "no_shortage_within_window",
+      "arithmetic": "供给达到 B_max 1426.0 ≥ D2 884.8"
+     },
+     {
+      "when": "到货/完工落到窗口外，或确认重叠（供给低于 B_max）",
+      "then_class": "insufficient_evidence",
+      "arithmetic": "只在手 A_low 376.0 < D2 884.8。下界不足只证明存在短缺情景，D2 含未证的 live SO，故不得直接判 always"
+     },
+     {
+      "when": "上述短缺情景被证实 ∧ G2 ok ∧ G3 ok（live SO 确为增量且已做桶级分配）",
+      "then_class": "always_replenish",
+      "arithmetic": "只有在 D2 成为已对平需求后才允许升级"
+     }
+    ],
+    "forbidden": [
+     "supply lower bound below demand (B_min / B_min_po_dedup < D2) never promotes to always_replenish",
+     "live SO in the demand view never becomes net demand before bucket-level consumption",
+     "Cover or any unbooked supply never counts until mapping and substitutability are proven"
+    ],
+    "summary": "补齐 G2_uom、G3_demand_overlap、G5_arrival_in_window 后按 outcomes 重算；在此之前不发起采购/生产指令。"
+   },
+   "missing_evidence": [
+    {
+     "item": "3/3 条未结 PO 的实际到货日",
+     "owner_role": "采购/供应链",
+     "why_it_changes_answer": "ETA 缺失 3 行；决定能否算窗口内到货"
+    },
+    {
+     "item": "重复候选 PO 8 件是否为同一笔",
+     "owner_role": "采购/供应链",
+     "why_it_changes_answer": "决定 B 取下界还是上界"
+    },
+    {
+     "item": "3/3 张开放 WO 的 planned_end_date",
+     "owner_role": "生产/PMC",
+     "why_it_changes_answer": "在产剩余 612 无日期"
+    },
+    {
+     "item": "PK#→KS 是否 1:1 计入",
+     "owner_role": "生产/PMC",
+     "why_it_changes_answer": "在产 1:1 未证；若不成立在产量需重算（只会向下）"
+    },
+    {
+     "item": "在途 215 与去重 PO 215 的逐笔关单键",
+     "owner_role": "数据/系统（worker）",
+     "why_it_changes_answer": "决定 B 取 988 还是 1426"
+    },
+    {
+     "item": "live SO 637 件是否与 P50 指向同一批需求",
+     "owner_role": "业务/运营",
+     "why_it_changes_answer": "决定 D2 是增量还是重复；决定本行是否结构短缺"
+    },
+    {
+     "item": "死单 SO 500 件是否补发",
+     "owner_role": "业务/运营",
+     "why_it_changes_answer": "未计入需求；若补发则需求上移"
+    },
+    {
+     "item": "库存 UOM 是否为“件”",
+     "owner_role": "商品主数据/仓储",
+     "why_it_changes_answer": "单位未证时，任何短缺幅度都不能当结论"
+    }
+   ],
+   "responsible_role": "采购/供应链（PO ETA/重复）；生产/PMC（WO 完工日）；业务/运营（需求口径）；商品主数据/仓储（UOM）",
+   "decisive_unknown": "PO 是否重复（去重后 B_min 988 vs D2 884.8），以及到货能否在窗口内",
+   "basis": "可供上限 B_max 1426 vs D1 247.8、D2 884.8。在手 A_low 376；B_min 988（最大重叠，去重压力 988）。结论在“全部到货不重叠”（不缺）与“重叠/迟到”（短缺）之间翻转。需求口径比值 1.114（近 3 月均值 90.3）。所有含 SO 的判断均标 demand_overlap=unproven。"
+  },
+  {
+   "seq": 6,
+   "evidence_priority": 10,
+   "priority_tier": 4,
+   "sku": "KS0001-PR-100-GREY",
+   "customer_code": "C/Velvet-Grey-100-705-wow",
+   "item_name": "三角靠枕-平绒-100-灰色",
+   "class": "insufficient_evidence",
+   "arithmetic_qualifies": null,
+   "arithmetic_class": "insufficient_evidence",
+   "promotion_blockers": [
+    "G2_uom",
+    "G5_arrival_in_window"
+   ],
+   "demand_overlap": "unproven",
+   "demand_overlap_note": "live SO 与 P50 是否同一批需求未证；未做桶级消费/分配前，D2 不能当净需求",
+   "supply": {
+    "available": 52,
+    "intransit": 0,
+    "open_po_raw": 0,
+    "open_po_dedup": 0,
+    "po_duplicate_candidate": 0,
+    "open_po_lines": 0,
+    "po_eta_missing_lines": 0,
+    "production_gross": 70,
+    "production_remaining": 52,
+    "open_wo": 2,
+    "stopped_qty": 0,
+    "draft_wo": 0,
+    "A_low": 52,
+    "A_high": 104,
+    "B_min": 104,
+    "B_max": 104,
+    "B_min_po_dedup": 104,
+    "B_max_po_dedup": 104,
+    "intransit_equals_po_dedup": true
+   },
+   "demand": {
+    "D1_p50_forecast": 54,
+    "D2_p50_plus_live_so": 149,
+    "live_so": 95,
+    "dead_so_excluded": 51,
+    "over_delivery_not_netted": -45,
+    "forecast_model": "seasonal_naive",
+    "forecast_confidence": "medium-low",
+    "history_months": 26,
+    "run_rate_ratio": 0.152,
+    "recent3_mean": 123,
+    "d2_overlap_status": "unproven: live SO may or may not be the same demand the P50 already covers"
+   },
+   "gaps": {
+    "bmax_minus_d1": 50,
+    "bmax_minus_d2": -45,
+    "bmin_minus_d2": -45,
+    "bmin_po_dedup_minus_d2": -45,
+    "bmin_po_dedup_margin_pct_of_d2": -30.2,
+    "duplicate_po_share_of_bmax_pct": 0,
+    "d1_shortfall_vs_bmax_pct": -48.1
+   },
+   "tests": {
+    "t1_identity_confirmed": true,
+    "t2_uom_verified": false,
+    "t3_bmax_lt_d1": false,
+    "t4_a_low_lt_d2_le_bmax": false
+   },
+   "gates": [
+    {
+     "id": "G1_identity",
+     "label": "客户码→单一 KS 物料",
+     "state": "ok",
+     "evidence": "identity_status=confirmed",
+     "owner_role": "商品主数据",
+     "blocks_promotion": "always_replenish"
+    },
+    {
+     "id": "G2_uom",
+     "label": "库存/单据单位已核实（T2 硬门）",
+     "state": "unproven",
+     "evidence": "inventory.uom_status=unknown_conditional",
+     "owner_role": "商品主数据/仓储",
+     "blocks_promotion": "always_replenish"
+    },
+    {
+     "id": "G3_demand_overlap",
+     "label": "live SO 与预测是否为同一批需求",
+     "state": "unproven",
+     "evidence": "live SO 95 件；证据只证明单据存在，未做桶级消费/分配",
+     "owner_role": "业务/运营",
+     "blocks_promotion": "任何把 SO 计入需求的动作"
+    },
+    {
+     "id": "G4_supply_overlap",
+     "label": "PO / 在途 / 在产逐笔重叠键",
+     "state": "unproven",
+     "evidence": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
+     "owner_role": "数据/系统",
+     "blocks_promotion": "把 B_min 当供给下界（不影响 B_max 上界的短缺判断）"
+    },
+    {
+     "id": "G5_arrival_in_window",
+     "label": "PO 到货日 / WO 完工日在窗口内",
+     "state": "unproven",
+     "evidence": "PO ETA 缺失 0 行；WO 完工日缺失 2 张",
+     "owner_role": "采购/供应链；生产/PMC",
+     "blocks_promotion": "always_replenish（B_max 假设全部到货）"
+    },
+    {
+     "id": "G6_pk_ks_1to1",
+     "label": "在产 PK# 皮壳按 1:1 计 KS 成品",
+     "state": "unproven",
+     "evidence": "在产剩余 52 件按 1:1 计入",
+     "owner_role": "生产/PMC",
+     "blocks_promotion": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
+    }
+   ],
+   "horizon_stability": [
+    {
+     "window": "remaining_3m",
+     "label": "决定窗 2026-10-22→2026-12-31（窗口 71 天）",
+     "requested_days": 71,
+     "covered_days": 71,
+     "start": "2026-10-22",
+     "end": "2027-01-01",
+     "d1_p50_forecast": 54,
+     "d2_p50_plus_live_so": 149,
+     "t3_bmax_lt_d1": false,
+     "t4_a_low_lt_d2_le_bmax": false,
+     "class_if_evaluated_here": "insufficient_evidence"
+    },
+    {
+     "window": "L60",
+     "label": "提前期 60 天（窗口 60 天）",
+     "requested_days": 60,
+     "covered_days": 60,
+     "start": "2026-10-22",
+     "end": "2026-12-21",
+     "d1_p50_forecast": 41.5,
+     "d2_p50_plus_live_so": 136.5,
+     "t3_bmax_lt_d1": false,
+     "t4_a_low_lt_d2_le_bmax": false,
+     "class_if_evaluated_here": "insufficient_evidence"
+    },
+    {
+     "window": "L90",
+     "label": "提前期 90 天（窗口 90 天）",
+     "requested_days": 90,
+     "covered_days": 90,
+     "start": "2026-10-22",
+     "end": "2027-01-20",
+     "d1_p50_forecast": 65.4,
+     "d2_p50_plus_live_so": 160.4,
+     "t3_bmax_lt_d1": false,
+     "t4_a_low_lt_d2_le_bmax": false,
+     "class_if_evaluated_here": "insufficient_evidence"
+    },
+    {
+     "window": "L120",
+     "label": "提前期 120 天（窗口 120 天）",
+     "requested_days": 120,
+     "covered_days": 120,
+     "start": "2026-10-22",
+     "end": "2027-02-19",
+     "d1_p50_forecast": 84.6,
+     "d2_p50_plus_live_so": 179.6,
+     "t3_bmax_lt_d1": false,
+     "t4_a_low_lt_d2_le_bmax": false,
+     "class_if_evaluated_here": "insufficient_evidence"
+    }
+   ],
+   "class_horizon_stable": true,
+   "class_horizon_note": "四个窗口同规则判定一致（remaining_3m / L60 60 天 / L90 90 天 / L120 120 天）",
+   "arithmetic_qualifies_at_windows": [],
+   "insufficient_evidence_causes": {
+    "demand_side": "SO 与预测重叠未证",
+    "supply_side": "PO/WO/在途重叠或到货日未证",
+    "unit_side": "库存 UOM 未证",
+    "candidate_divergence": "P90-free 清单只有单一 P50 模型，候选分歧不在本清单判定内",
+    "calibration_insufficiency": "P90-free 清单不做区间校准，校准不足不在本清单判定内"
+   },
+   "start_condition": {
+    "rule": "升级由结构化 required_gates 驱动；文字条件不能替代闸门",
+    "demand_view_for_promotion": "D2",
+    "demand_overlap": "unproven",
+    "supply_lower_bound_shortfall": true,
+    "supply_lower_bound_shortfall_note": "B_min/B_min_po_dedup < D2 只说明存在短缺情景；该行仍不得升级到 always_replenish",
+    "binding_shortfall_conditions": [
+     "最大重叠下 B_min 104.0 < D2 149.0",
+     "只在手+在产 A_high 104.0 < D2 149.0（到货落在窗口外）",
+     "只在手 A_low 52.0 < D2 149.0"
+    ],
+    "required_gates": [
+     {
+      "id": "G1_identity",
+      "label": "客户码→单一 KS 物料",
+      "state": "ok",
+      "owner_role": "商品主数据",
+      "evidence_needed": "identity_status=confirmed",
+      "blocks": "always_replenish"
+     },
+     {
+      "id": "G2_uom",
+      "label": "库存/单据单位已核实（T2 硬门）",
+      "state": "unproven",
+      "owner_role": "商品主数据/仓储",
+      "evidence_needed": "inventory.uom_status=unknown_conditional",
+      "blocks": "always_replenish"
+     },
+     {
+      "id": "G3_demand_overlap",
+      "label": "live SO 与预测是否为同一批需求",
+      "state": "unproven",
+      "owner_role": "业务/运营",
+      "evidence_needed": "live SO 95 件；证据只证明单据存在，未做桶级消费/分配",
+      "blocks": "任何把 SO 计入需求的动作"
+     },
+     {
+      "id": "G4_supply_overlap",
+      "label": "PO / 在途 / 在产逐笔重叠键",
+      "state": "unproven",
+      "owner_role": "数据/系统",
+      "evidence_needed": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
+      "blocks": "把 B_min 当供给下界（不影响 B_max 上界的短缺判断）"
+     },
+     {
+      "id": "G5_arrival_in_window",
+      "label": "PO 到货日 / WO 完工日在窗口内",
+      "state": "unproven",
+      "owner_role": "采购/供应链；生产/PMC",
+      "evidence_needed": "PO ETA 缺失 0 行；WO 完工日缺失 2 张",
+      "blocks": "always_replenish（B_max 假设全部到货）"
+     },
+     {
+      "id": "G6_pk_ks_1to1",
+      "label": "在产 PK# 皮壳按 1:1 计 KS 成品",
+      "state": "unproven",
+      "owner_role": "生产/PMC",
+      "evidence_needed": "在产剩余 52 件按 1:1 计入",
+      "blocks": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
+     }
+    ],
+    "gates_required_for_promotion": [
+     "G1_identity",
+     "G2_uom",
+     "G5_arrival_in_window",
+     "G3_demand_overlap"
+    ],
+    "gate_summary": {
+     "G1_identity": "ok",
+     "G2_uom": "unproven",
+     "G3_demand_overlap": "unproven",
+     "G4_supply_overlap": "unproven",
+     "G5_arrival_in_window": "unproven",
+     "G6_pk_ks_1to1": "unproven"
+    },
+    "outcomes": [
+     {
+      "when": "G3 ok（live SO 确为增量/未重复）∧ G2 ok ∧ G5 ok",
+      "then_class": "always_replenish",
+      "arithmetic": "B_max 104.0 < D2 149.0"
+     },
+     {
+      "when": "G3 确认与预测重叠",
+      "then_class": "no_shortage_within_window",
+      "arithmetic": "按 D1 54.0 口径 B_max 104.0 覆盖"
+     },
+     {
+      "when": "G3 仍 unproven",
+      "then_class": "insufficient_evidence",
+      "arithmetic": "D2 不是已对平需求，不能据此报短缺或充足"
+     }
+    ],
+    "forbidden": [
+     "supply lower bound below demand (B_min / B_min_po_dedup < D2) never promotes to always_replenish",
+     "live SO in the demand view never becomes net demand before bucket-level consumption",
+     "Cover or any unbooked supply never counts until mapping and substitutability are proven"
+    ],
+    "summary": "补齐 G2_uom、G3_demand_overlap、G5_arrival_in_window 后按 outcomes 重算；在此之前不发起采购/生产指令。"
+   },
+   "missing_evidence": [
+    {
+     "item": "2/2 张开放 WO 的 planned_end_date",
+     "owner_role": "生产/PMC",
+     "why_it_changes_answer": "在产剩余 52 无日期"
+    },
+    {
+     "item": "PK#→KS 是否 1:1 计入",
+     "owner_role": "生产/PMC",
+     "why_it_changes_answer": "在产 1:1 未证；若不成立在产量需重算（只会向下）"
+    },
+    {
+     "item": "live SO 95 件是否与 P50 指向同一批需求",
+     "owner_role": "业务/运营",
+     "why_it_changes_answer": "决定 D2 是增量还是重复；决定本行是否结构短缺"
+    },
+    {
+     "item": "死单 SO 51 件是否补发",
+     "owner_role": "业务/运营",
+     "why_it_changes_answer": "未计入需求；若补发则需求上移"
+    },
+    {
+     "item": "库存 UOM 是否为“件”",
+     "owner_role": "商品主数据/仓储",
+     "why_it_changes_answer": "单位未证时，任何短缺幅度都不能当结论"
+    }
+   ],
+   "responsible_role": "生产/PMC（WO 完工日）；业务/运营（需求口径）；商品主数据/仓储（UOM）",
+   "decisive_unknown": "需求口径：live SO 是否与 P50 重叠，以及旺势是否延续",
+   "basis": "可供上限 B_max 104 vs D1 54、D2 149。在手 A_low 52；B_min 104（最大重叠，去重压力 104）。B_max 覆盖 D1；只有在 live SO 确为增量时才会短缺。需求口径比值 0.152（近 3 月均值 123）。所有含 SO 的判断均标 demand_overlap=unproven。"
+  },
+  {
+   "seq": 7,
+   "evidence_priority": 3,
+   "priority_tier": 2,
+   "sku": "KS0001-CMKTR-100-GREY",
+   "customer_code": "C/Cord-Grey-100-710-wow",
+   "item_name": "三角靠枕-纯棉宽条绒-100-灰色",
+   "class": "depends_on_arrival",
+   "arithmetic_qualifies": null,
+   "arithmetic_class": "depends_on_arrival",
+   "promotion_blockers": [
+    "G2_uom",
+    "G5_arrival_in_window"
+   ],
+   "demand_overlap": "unproven",
+   "demand_overlap_note": "live SO 与 P50 是否同一批需求未证；未做桶级消费/分配前，D2 不能当净需求",
+   "supply": {
+    "available": 6,
+    "intransit": 165,
+    "open_po_raw": 318,
+    "open_po_dedup": 165,
+    "po_duplicate_candidate": 153,
+    "open_po_lines": 3,
+    "po_eta_missing_lines": 3,
+    "production_gross": 40,
+    "production_remaining": 28,
+    "open_wo": 2,
+    "stopped_qty": 0,
+    "draft_wo": 0,
+    "A_low": 6,
+    "A_high": 34,
+    "B_min": 324,
+    "B_max": 517,
+    "B_min_po_dedup": 171,
+    "B_max_po_dedup": 364,
+    "intransit_equals_po_dedup": true
+   },
+   "demand": {
+    "D1_p50_forecast": 48,
+    "D2_p50_plus_live_so": 173,
+    "live_so": 125,
+    "dead_so_excluded": 150,
+    "over_delivery_not_netted": -109,
+    "forecast_model": "seasonal_naive",
+    "forecast_confidence": "medium-low",
+    "history_months": 27,
+    "run_rate_ratio": 0.199,
+    "recent3_mean": 112,
+    "d2_overlap_status": "unproven: live SO may or may not be the same demand the P50 already covers"
+   },
+   "gaps": {
+    "bmax_minus_d1": 469,
+    "bmax_minus_d2": 344,
+    "bmin_minus_d2": 151,
+    "bmin_po_dedup_minus_d2": -2,
+    "bmin_po_dedup_margin_pct_of_d2": -1.2,
+    "duplicate_po_share_of_bmax_pct": 29.6,
+    "d1_shortfall_vs_bmax_pct": -90.7
+   },
+   "tests": {
+    "t1_identity_confirmed": true,
+    "t2_uom_verified": false,
+    "t3_bmax_lt_d1": false,
+    "t4_a_low_lt_d2_le_bmax": true
+   },
+   "gates": [
+    {
+     "id": "G1_identity",
+     "label": "客户码→单一 KS 物料",
+     "state": "ok",
+     "evidence": "identity_status=confirmed",
+     "owner_role": "商品主数据",
+     "blocks_promotion": "always_replenish"
+    },
+    {
+     "id": "G2_uom",
+     "label": "库存/单据单位已核实（T2 硬门）",
+     "state": "unproven",
+     "evidence": "inventory.uom_status=unknown_conditional",
+     "owner_role": "商品主数据/仓储",
+     "blocks_promotion": "always_replenish"
+    },
+    {
+     "id": "G3_demand_overlap",
+     "label": "live SO 与预测是否为同一批需求",
+     "state": "unproven",
+     "evidence": "live SO 125 件；证据只证明单据存在，未做桶级消费/分配",
+     "owner_role": "业务/运营",
+     "blocks_promotion": "任何把 SO 计入需求的动作"
+    },
+    {
+     "id": "G4_supply_overlap",
+     "label": "PO / 在途 / 在产逐笔重叠键",
+     "state": "unproven",
+     "evidence": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
+     "owner_role": "数据/系统",
+     "blocks_promotion": "把 B_min 当供给下界（不影响 B_max 上界的短缺判断）"
+    },
+    {
+     "id": "G5_arrival_in_window",
+     "label": "PO 到货日 / WO 完工日在窗口内",
+     "state": "unproven",
+     "evidence": "PO ETA 缺失 3 行；WO 完工日缺失 2 张",
+     "owner_role": "采购/供应链；生产/PMC",
+     "blocks_promotion": "always_replenish（B_max 假设全部到货）"
+    },
+    {
+     "id": "G6_pk_ks_1to1",
+     "label": "在产 PK# 皮壳按 1:1 计 KS 成品",
+     "state": "unproven",
+     "evidence": "在产剩余 28 件按 1:1 计入",
+     "owner_role": "生产/PMC",
+     "blocks_promotion": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
+    }
+   ],
+   "horizon_stability": [
+    {
+     "window": "remaining_3m",
+     "label": "决定窗 2026-10-22→2026-12-31（窗口 71 天）",
+     "requested_days": 71,
+     "covered_days": 71,
+     "start": "2026-10-22",
+     "end": "2027-01-01",
+     "d1_p50_forecast": 48,
+     "d2_p50_plus_live_so": 173,
+     "t3_bmax_lt_d1": false,
+     "t4_a_low_lt_d2_le_bmax": true,
+     "class_if_evaluated_here": "depends_on_arrival"
+    },
+    {
+     "window": "L60",
+     "label": "提前期 60 天（窗口 60 天）",
+     "requested_days": 60,
+     "covered_days": 60,
+     "start": "2026-10-22",
+     "end": "2026-12-21",
+     "d1_p50_forecast": 38.5,
+     "d2_p50_plus_live_so": 163.5,
+     "t3_bmax_lt_d1": false,
+     "t4_a_low_lt_d2_le_bmax": true,
+     "class_if_evaluated_here": "depends_on_arrival"
+    },
+    {
+     "window": "L90",
+     "label": "提前期 90 天（窗口 90 天）",
+     "requested_days": 90,
+     "covered_days": 90,
+     "start": "2026-10-22",
+     "end": "2027-01-20",
+     "d1_p50_forecast": 61.7,
+     "d2_p50_plus_live_so": 186.7,
+     "t3_bmax_lt_d1": false,
+     "t4_a_low_lt_d2_le_bmax": true,
+     "class_if_evaluated_here": "depends_on_arrival"
+    },
+    {
+     "window": "L120",
+     "label": "提前期 120 天（窗口 120 天）",
+     "requested_days": 120,
+     "covered_days": 120,
+     "start": "2026-10-22",
+     "end": "2027-02-19",
+     "d1_p50_forecast": 84.7,
+     "d2_p50_plus_live_so": 209.7,
+     "t3_bmax_lt_d1": false,
+     "t4_a_low_lt_d2_le_bmax": true,
+     "class_if_evaluated_here": "depends_on_arrival"
+    }
+   ],
+   "class_horizon_stable": true,
+   "class_horizon_note": "四个窗口同规则判定一致（remaining_3m / L60 60 天 / L90 90 天 / L120 120 天）",
+   "arithmetic_qualifies_at_windows": [],
+   "insufficient_evidence_causes": null,
+   "start_condition": {
+    "rule": "升级由结构化 required_gates 驱动；文字条件不能替代闸门",
+    "demand_view_for_promotion": "D2",
+    "demand_overlap": "unproven",
+    "supply_lower_bound_shortfall": true,
+    "supply_lower_bound_shortfall_note": "B_min/B_min_po_dedup < D2 只说明存在短缺情景；该行仍不得升级到 always_replenish",
+    "binding_shortfall_conditions": [
+     "去重压力下 B_min 171.0 < D2 173.0",
+     "只在手+在产 A_high 34.0 < D2 173.0（到货落在窗口外）",
+     "只在手 A_low 6.0 < D2 173.0"
+    ],
+    "required_gates": [
+     {
+      "id": "G1_identity",
+      "label": "客户码→单一 KS 物料",
+      "state": "ok",
+      "owner_role": "商品主数据",
+      "evidence_needed": "identity_status=confirmed",
+      "blocks": "always_replenish"
+     },
+     {
+      "id": "G2_uom",
+      "label": "库存/单据单位已核实（T2 硬门）",
+      "state": "unproven",
+      "owner_role": "商品主数据/仓储",
+      "evidence_needed": "inventory.uom_status=unknown_conditional",
+      "blocks": "always_replenish"
+     },
+     {
+      "id": "G3_demand_overlap",
+      "label": "live SO 与预测是否为同一批需求",
+      "state": "unproven",
+      "owner_role": "业务/运营",
+      "evidence_needed": "live SO 125 件；证据只证明单据存在，未做桶级消费/分配",
+      "blocks": "任何把 SO 计入需求的动作"
+     },
+     {
+      "id": "G4_supply_overlap",
+      "label": "PO / 在途 / 在产逐笔重叠键",
+      "state": "unproven",
+      "owner_role": "数据/系统",
+      "evidence_needed": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
+      "blocks": "把 B_min 当供给下界（不影响 B_max 上界的短缺判断）"
+     },
+     {
+      "id": "G5_arrival_in_window",
+      "label": "PO 到货日 / WO 完工日在窗口内",
+      "state": "unproven",
+      "owner_role": "采购/供应链；生产/PMC",
+      "evidence_needed": "PO ETA 缺失 3 行；WO 完工日缺失 2 张",
+      "blocks": "always_replenish（B_max 假设全部到货）"
+     },
+     {
+      "id": "G6_pk_ks_1to1",
+      "label": "在产 PK# 皮壳按 1:1 计 KS 成品",
+      "state": "unproven",
+      "owner_role": "生产/PMC",
+      "evidence_needed": "在产剩余 28 件按 1:1 计入",
+      "blocks": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
+     }
+    ],
+    "gates_required_for_promotion": [
+     "G1_identity",
+     "G2_uom",
+     "G5_arrival_in_window",
+     "G3_demand_overlap"
+    ],
+    "gate_summary": {
+     "G1_identity": "ok",
+     "G2_uom": "unproven",
+     "G3_demand_overlap": "unproven",
+     "G4_supply_overlap": "unproven",
+     "G5_arrival_in_window": "unproven",
+     "G6_pk_ks_1to1": "unproven"
+    },
+    "outcomes": [
+     {
+      "when": "G2 ok ∧ G4 ok（PO/在途/在产不重叠）∧ G5 ok（全部在窗口内到货）",
+      "then_class": "no_shortage_within_window",
+      "arithmetic": "供给达到 B_max 517.0 ≥ D2 173.0"
+     },
+     {
+      "when": "到货/完工落到窗口外，或确认重叠（供给低于 B_max）",
+      "then_class": "insufficient_evidence",
+      "arithmetic": "去重压力下 B_min 171.0 < D2 173.0；只在手+在产 A_high 34.0 < D2 173.0（到货落在窗口外）；只在手 A_low 6.0 < D2 173.0。下界不足只证明存在短缺情景，D2 含未证的 live SO，故不得直接判 always"
+     },
+     {
+      "when": "上述短缺情景被证实 ∧ G2 ok ∧ G3 ok（live SO 确为增量且已做桶级分配）",
+      "then_class": "always_replenish",
+      "arithmetic": "只有在 D2 成为已对平需求后才允许升级"
+     }
+    ],
+    "forbidden": [
+     "supply lower bound below demand (B_min / B_min_po_dedup < D2) never promotes to always_replenish",
+     "live SO in the demand view never becomes net demand before bucket-level consumption",
+     "Cover or any unbooked supply never counts until mapping and substitutability are proven"
+    ],
+    "summary": "补齐 G2_uom、G3_demand_overlap、G5_arrival_in_window 后按 outcomes 重算；在此之前不发起采购/生产指令。"
+   },
+   "missing_evidence": [
+    {
+     "item": "3/3 条未结 PO 的实际到货日",
+     "owner_role": "采购/供应链",
+     "why_it_changes_answer": "ETA 缺失 3 行；决定能否算窗口内到货"
+    },
+    {
+     "item": "重复候选 PO 153 件是否为同一笔",
+     "owner_role": "采购/供应链",
+     "why_it_changes_answer": "决定 B 取下界还是上界"
+    },
+    {
+     "item": "2/2 张开放 WO 的 planned_end_date",
+     "owner_role": "生产/PMC",
+     "why_it_changes_answer": "在产剩余 28 无日期"
+    },
+    {
+     "item": "PK#→KS 是否 1:1 计入",
+     "owner_role": "生产/PMC",
+     "why_it_changes_answer": "在产 1:1 未证；若不成立在产量需重算（只会向下）"
+    },
+    {
+     "item": "在途 165 与去重 PO 165 的逐笔关单键",
+     "owner_role": "数据/系统（worker）",
+     "why_it_changes_answer": "决定 B 取 324 还是 517"
+    },
+    {
+     "item": "live SO 125 件是否与 P50 指向同一批需求",
+     "owner_role": "业务/运营",
+     "why_it_changes_answer": "决定 D2 是增量还是重复；决定本行是否结构短缺"
+    },
+    {
+     "item": "死单 SO 150 件是否补发",
+     "owner_role": "业务/运营",
+     "why_it_changes_answer": "未计入需求；若补发则需求上移"
+    },
+    {
+     "item": "库存 UOM 是否为“件”",
+     "owner_role": "商品主数据/仓储",
+     "why_it_changes_answer": "单位未证时，任何短缺幅度都不能当结论"
+    }
+   ],
+   "responsible_role": "采购/供应链（PO ETA/重复）；生产/PMC（WO 完工日）；业务/运营（需求口径）；商品主数据/仓储（UOM）",
+   "decisive_unknown": "PO 是否重复（去重后 B_min 171 vs D2 173），以及到货能否在窗口内",
+   "basis": "可供上限 B_max 517 vs D1 48、D2 173。在手 A_low 6；B_min 324（最大重叠，去重压力 171）。结论在“全部到货不重叠”（不缺）与“重叠/迟到”（短缺）之间翻转。需求口径比值 0.199（近 3 月均值 112）。所有含 SO 的判断均标 demand_overlap=unproven。"
+  },
+  {
+   "seq": 8,
+   "evidence_priority": 1,
+   "priority_tier": 1,
+   "sku": "KS0001-CMM-100-WHITE",
+   "customer_code": "C/Linen-White-100-662-WOW",
+   "item_name": "三角靠枕-纯棉麻-100-白色",
+   "class": "insufficient_evidence",
+   "arithmetic_qualifies": "always_replenish",
+   "arithmetic_class": "always_replenish",
+   "promotion_blockers": [
+    "G2_uom",
+    "G5_arrival_in_window"
+   ],
+   "demand_overlap": "unproven",
+   "demand_overlap_note": "live SO 与 P50 是否同一批需求未证；未做桶级消费/分配前，D2 不能当净需求",
+   "supply": {
+    "available": 55,
+    "intransit": 73,
+    "open_po_raw": 73,
+    "open_po_dedup": 73,
+    "po_duplicate_candidate": 0,
+    "open_po_lines": 2,
+    "po_eta_missing_lines": 2,
+    "production_gross": 20,
+    "production_remaining": 20,
+    "open_wo": 1,
+    "stopped_qty": 0,
+    "draft_wo": 0,
+    "A_low": 55,
+    "A_high": 75,
+    "B_min": 128,
+    "B_max": 221,
+    "B_min_po_dedup": 128,
+    "B_max_po_dedup": 221,
+    "intransit_equals_po_dedup": true
+   },
+   "demand": {
+    "D1_p50_forecast": 250.1,
+    "D2_p50_plus_live_so": 276.1,
+    "live_so": 26,
+    "dead_so_excluded": 70,
+    "over_delivery_not_netted": -6,
+    "forecast_model": "mean3",
+    "forecast_confidence": "low",
+    "history_months": 14,
+    "run_rate_ratio": 1.0,
+    "recent3_mean": 107.7,
+    "d2_overlap_status": "unproven: live SO may or may not be the same demand the P50 already covers"
+   },
+   "gaps": {
+    "bmax_minus_d1": -29.1,
+    "bmax_minus_d2": -55.1,
+    "bmin_minus_d2": -148.1,
+    "bmin_po_dedup_minus_d2": -148.1,
+    "bmin_po_dedup_margin_pct_of_d2": -53.6,
+    "duplicate_po_share_of_bmax_pct": 0,
+    "d1_shortfall_vs_bmax_pct": 13.2
+   },
+   "tests": {
+    "t1_identity_confirmed": true,
+    "t2_uom_verified": false,
+    "t3_bmax_lt_d1": true,
+    "t4_a_low_lt_d2_le_bmax": false
+   },
+   "gates": [
+    {
+     "id": "G1_identity",
+     "label": "客户码→单一 KS 物料",
+     "state": "ok",
+     "evidence": "identity_status=confirmed",
+     "owner_role": "商品主数据",
+     "blocks_promotion": "always_replenish"
+    },
+    {
+     "id": "G2_uom",
+     "label": "库存/单据单位已核实（T2 硬门）",
+     "state": "unproven",
+     "evidence": "inventory.uom_status=unknown_conditional",
+     "owner_role": "商品主数据/仓储",
+     "blocks_promotion": "always_replenish"
+    },
+    {
+     "id": "G3_demand_overlap",
+     "label": "live SO 与预测是否为同一批需求",
+     "state": "unproven",
+     "evidence": "live SO 26 件；证据只证明单据存在，未做桶级消费/分配",
+     "owner_role": "业务/运营",
+     "blocks_promotion": "任何把 SO 计入需求的动作"
+    },
+    {
+     "id": "G4_supply_overlap",
+     "label": "PO / 在途 / 在产逐笔重叠键",
+     "state": "unproven",
+     "evidence": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
+     "owner_role": "数据/系统",
+     "blocks_promotion": "把 B_min 当供给下界（不影响 B_max 上界的短缺判断）"
+    },
+    {
+     "id": "G5_arrival_in_window",
+     "label": "PO 到货日 / WO 完工日在窗口内",
+     "state": "unproven",
+     "evidence": "PO ETA 缺失 2 行；WO 完工日缺失 1 张",
+     "owner_role": "采购/供应链；生产/PMC",
+     "blocks_promotion": "always_replenish（B_max 假设全部到货）"
+    },
+    {
+     "id": "G6_pk_ks_1to1",
+     "label": "在产 PK# 皮壳按 1:1 计 KS 成品",
+     "state": "unproven",
+     "evidence": "在产剩余 20 件按 1:1 计入",
+     "owner_role": "生产/PMC",
+     "blocks_promotion": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
+    }
+   ],
+   "horizon_stability": [
+    {
+     "window": "remaining_3m",
+     "label": "决定窗 2026-10-22→2026-12-31（窗口 71 天）",
+     "requested_days": 71,
+     "covered_days": 71,
+     "start": "2026-10-22",
+     "end": "2027-01-01",
+     "d1_p50_forecast": 250.1,
+     "d2_p50_plus_live_so": 276.1,
+     "t3_bmax_lt_d1": true,
+     "t4_a_low_lt_d2_le_bmax": false,
+     "class_if_evaluated_here": "insufficient_evidence"
+    },
+    {
+     "window": "L60",
+     "label": "提前期 60 天（窗口 60 天）",
+     "requested_days": 60,
+     "covered_days": 60,
+     "start": "2026-10-22",
+     "end": "2026-12-21",
+     "d1_p50_forecast": 211.9,
+     "d2_p50_plus_live_so": 237.9,
+     "t3_bmax_lt_d1": false,
+     "t4_a_low_lt_d2_le_bmax": false,
+     "class_if_evaluated_here": "insufficient_evidence"
+    },
+    {
+     "window": "L90",
+     "label": "提前期 90 天（窗口 90 天）",
+     "requested_days": 90,
+     "covered_days": 90,
+     "start": "2026-10-22",
+     "end": "2027-01-20",
+     "d1_p50_forecast": 316.1,
+     "d2_p50_plus_live_so": 342.1,
+     "t3_bmax_lt_d1": true,
+     "t4_a_low_lt_d2_le_bmax": false,
+     "class_if_evaluated_here": "insufficient_evidence"
+    },
+    {
+     "window": "L120",
+     "label": "提前期 120 天（窗口 120 天）",
+     "requested_days": 120,
+     "covered_days": 120,
+     "start": "2026-10-22",
+     "end": "2027-02-19",
+     "d1_p50_forecast": 426.9,
+     "d2_p50_plus_live_so": 452.9,
+     "t3_bmax_lt_d1": true,
+     "t4_a_low_lt_d2_le_bmax": false,
+     "class_if_evaluated_here": "insufficient_evidence"
+    }
+   ],
+   "class_horizon_stable": true,
+   "class_horizon_note": "四个窗口同规则判定一致（remaining_3m / L60 60 天 / L90 90 天 / L120 120 天）",
+   "arithmetic_qualifies_at_windows": [
+    "remaining_3m",
+    "L90",
+    "L120"
+   ],
+   "insufficient_evidence_causes": {
+    "demand_side": "SO 与预测重叠未证",
+    "supply_side": "PO/WO/在途重叠或到货日未证",
+    "unit_side": "库存 UOM 未证",
+    "candidate_divergence": "P90-free 清单只有单一 P50 模型，候选分歧不在本清单判定内",
+    "calibration_insufficiency": "P90-free 清单不做区间校准，校准不足不在本清单判定内"
+   },
+   "start_condition": {
+    "rule": "升级由结构化 required_gates 驱动；文字条件不能替代闸门",
+    "demand_view_for_promotion": "D1",
+    "demand_overlap": "unproven",
+    "supply_lower_bound_shortfall": true,
+    "supply_lower_bound_shortfall_note": "B_min/B_min_po_dedup < D2 只说明存在短缺情景；该行仍不得升级到 always_replenish",
+    "binding_shortfall_conditions": [
+     "最大重叠下 B_min 128.0 < D2 276.1",
+     "只在手+在产 A_high 75.0 < D2 276.1（到货落在窗口外）",
+     "只在手 A_low 55.0 < D2 276.1"
+    ],
+    "required_gates": [
+     {
+      "id": "G1_identity",
+      "label": "客户码→单一 KS 物料",
+      "state": "ok",
+      "owner_role": "商品主数据",
+      "evidence_needed": "identity_status=confirmed",
+      "blocks": "always_replenish"
+     },
+     {
+      "id": "G2_uom",
+      "label": "库存/单据单位已核实（T2 硬门）",
+      "state": "unproven",
+      "owner_role": "商品主数据/仓储",
+      "evidence_needed": "inventory.uom_status=unknown_conditional",
+      "blocks": "always_replenish"
+     },
+     {
+      "id": "G3_demand_overlap",
+      "label": "live SO 与预测是否为同一批需求",
+      "state": "unproven",
+      "owner_role": "业务/运营",
+      "evidence_needed": "live SO 26 件；证据只证明单据存在，未做桶级消费/分配",
+      "blocks": "任何把 SO 计入需求的动作"
+     },
+     {
+      "id": "G4_supply_overlap",
+      "label": "PO / 在途 / 在产逐笔重叠键",
+      "state": "unproven",
+      "owner_role": "数据/系统",
+      "evidence_needed": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
+      "blocks": "把 B_min 当供给下界（不影响 B_max 上界的短缺判断）"
+     },
+     {
+      "id": "G5_arrival_in_window",
+      "label": "PO 到货日 / WO 完工日在窗口内",
+      "state": "unproven",
+      "owner_role": "采购/供应链；生产/PMC",
+      "evidence_needed": "PO ETA 缺失 2 行；WO 完工日缺失 1 张",
+      "blocks": "always_replenish（B_max 假设全部到货）"
+     },
+     {
+      "id": "G6_pk_ks_1to1",
+      "label": "在产 PK# 皮壳按 1:1 计 KS 成品",
+      "state": "unproven",
+      "owner_role": "生产/PMC",
+      "evidence_needed": "在产剩余 20 件按 1:1 计入",
+      "blocks": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
+     }
+    ],
+    "gates_required_for_promotion": [
+     "G1_identity",
+     "G2_uom",
+     "G5_arrival_in_window"
+    ],
+    "gate_summary": {
+     "G1_identity": "ok",
+     "G2_uom": "unproven",
+     "G3_demand_overlap": "unproven",
+     "G4_supply_overlap": "unproven",
+     "G5_arrival_in_window": "unproven",
+     "G6_pk_ks_1to1": "unproven"
+    },
+    "outcomes": [
+     {
+      "when": "G1 ok ∧ G2 ok ∧ G5 ok（到货/完工日已证在窗口内）",
+      "then_class": "always_replenish",
+      "arithmetic": "B_max 221.0 < D1 250.1"
+     },
+     {
+      "when": "任何硬门仍为 unproven",
+      "then_class": "insufficient_evidence",
+      "arithmetic": "算术已短缺但证据闸门未过，不升级"
+     }
+    ],
+    "forbidden": [
+     "supply lower bound below demand (B_min / B_min_po_dedup < D2) never promotes to always_replenish",
+     "live SO in the demand view never becomes net demand before bucket-level consumption",
+     "Cover or any unbooked supply never counts until mapping and substitutability are proven"
+    ],
+    "summary": "补齐 G2_uom、G5_arrival_in_window 后按 outcomes 重算；在此之前不发起采购/生产指令。"
+   },
+   "missing_evidence": [
+    {
+     "item": "2/2 条未结 PO 的实际到货日",
+     "owner_role": "采购/供应链",
+     "why_it_changes_answer": "ETA 缺失 2 行；决定能否算窗口内到货"
+    },
+    {
+     "item": "1/1 张开放 WO 的 planned_end_date",
+     "owner_role": "生产/PMC",
+     "why_it_changes_answer": "在产剩余 20 无日期"
+    },
+    {
+     "item": "PK#→KS 是否 1:1 计入",
+     "owner_role": "生产/PMC",
+     "why_it_changes_answer": "在产 1:1 未证；若不成立在产量需重算（只会向下）"
+    },
+    {
+     "item": "在途 73 与去重 PO 73 的逐笔关单键",
+     "owner_role": "数据/系统（worker）",
+     "why_it_changes_answer": "决定 B 取 128 还是 221"
+    },
+    {
+     "item": "live SO 26 件是否与 P50 指向同一批需求",
+     "owner_role": "业务/运营",
+     "why_it_changes_answer": "决定 D2 是增量还是重复；决定本行是否结构短缺"
+    },
+    {
+     "item": "死单 SO 70 件是否补发",
+     "owner_role": "业务/运营",
+     "why_it_changes_answer": "未计入需求；若补发则需求上移"
+    },
+    {
+     "item": "库存 UOM 是否为“件”",
+     "owner_role": "商品主数据/仓储",
+     "why_it_changes_answer": "单位未证时，任何短缺幅度都不能当结论"
+    },
+    {
+     "item": "Cover 无映射（scenario）能否替代",
+     "owner_role": "商品主数据/仓储",
+     "why_it_changes_answer": "若有 cover 且映射成立，可减少/消除短缺情景，需重算（不能据此断定不缺）"
+    }
+   ],
+   "responsible_role": "采购/供应链（PO ETA/重复）；生产/PMC（WO 完工日）；业务/运营（需求口径）；商品主数据/仓储（UOM）",
+   "decisive_unknown": "UOM 口径（唯一算术上已短缺的 SKU，卡在单位未证与低置信预测）",
+   "basis": "可供上限 B_max 221 vs D1 250.1、D2 276.1。在手 A_low 55；B_min 128（最大重叠，去重压力 128）。即使全部到货也不够 D1，缺 29.1（占 B_max 13.2%）。需求口径比值 1.0（近 3 月均值 107.7）。所有含 SO 的判断均标 demand_overlap=unproven。"
+  },
+  {
+   "seq": 9,
+   "evidence_priority": 4,
+   "priority_tier": 2,
+   "sku": "KS0001-HLR-100-OFFWHITE",
+   "customer_code": "TT0000671K0063721",
+   "item_name": "三角靠枕-荷兰绒-100-米白色",
+   "class": "depends_on_arrival",
+   "arithmetic_qualifies": null,
+   "arithmetic_class": "depends_on_arrival",
+   "promotion_blockers": [
+    "G2_uom",
+    "G5_arrival_in_window"
+   ],
+   "demand_overlap": "unproven",
+   "demand_overlap_note": "live SO 与 P50 是否同一批需求未证；未做桶级消费/分配前，D2 不能当净需求",
+   "supply": {
+    "available": 104,
+    "intransit": 490,
+    "open_po_raw": 490,
+    "open_po_dedup": 490,
+    "po_duplicate_candidate": 0,
+    "open_po_lines": 2,
+    "po_eta_missing_lines": 2,
+    "production_gross": 665,
+    "production_remaining": 310,
+    "open_wo": 7,
+    "stopped_qty": 0,
+    "draft_wo": 3,
+    "A_low": 104,
+    "A_high": 414,
+    "B_min": 594,
+    "B_max": 1394,
+    "B_min_po_dedup": 594,
+    "B_max_po_dedup": 1394,
+    "intransit_equals_po_dedup": true
+   },
+   "demand": {
+    "D1_p50_forecast": 165.3,
+    "D2_p50_plus_live_so": 593.3,
+    "live_so": 428,
+    "dead_so_excluded": 253,
+    "over_delivery_not_netted": -110,
+    "forecast_model": "seasonal_naive",
+    "forecast_confidence": "medium-low",
+    "history_months": 27,
+    "run_rate_ratio": 0.659,
+    "recent3_mean": 95.7,
+    "d2_overlap_status": "unproven: live SO may or may not be the same demand the P50 already covers"
+   },
+   "gaps": {
+    "bmax_minus_d1": 1228.7,
+    "bmax_minus_d2": 800.7,
+    "bmin_minus_d2": 0.7,
+    "bmin_po_dedup_minus_d2": 0.7,
+    "bmin_po_dedup_margin_pct_of_d2": 0.1,
+    "duplicate_po_share_of_bmax_pct": 0,
+    "d1_shortfall_vs_bmax_pct": -88.1
+   },
+   "tests": {
+    "t1_identity_confirmed": true,
+    "t2_uom_verified": false,
+    "t3_bmax_lt_d1": false,
+    "t4_a_low_lt_d2_le_bmax": true
+   },
+   "gates": [
+    {
+     "id": "G1_identity",
+     "label": "客户码→单一 KS 物料",
+     "state": "ok",
+     "evidence": "identity_status=confirmed",
+     "owner_role": "商品主数据",
+     "blocks_promotion": "always_replenish"
+    },
+    {
+     "id": "G2_uom",
+     "label": "库存/单据单位已核实（T2 硬门）",
+     "state": "unproven",
+     "evidence": "inventory.uom_status=unknown_conditional",
+     "owner_role": "商品主数据/仓储",
+     "blocks_promotion": "always_replenish"
+    },
+    {
+     "id": "G3_demand_overlap",
+     "label": "live SO 与预测是否为同一批需求",
+     "state": "unproven",
+     "evidence": "live SO 428 件；证据只证明单据存在，未做桶级消费/分配",
+     "owner_role": "业务/运营",
+     "blocks_promotion": "任何把 SO 计入需求的动作"
+    },
+    {
+     "id": "G4_supply_overlap",
+     "label": "PO / 在途 / 在产逐笔重叠键",
+     "state": "unproven",
+     "evidence": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
+     "owner_role": "数据/系统",
+     "blocks_promotion": "把 B_min 当供给下界（不影响 B_max 上界的短缺判断）"
+    },
+    {
+     "id": "G5_arrival_in_window",
+     "label": "PO 到货日 / WO 完工日在窗口内",
+     "state": "unproven",
+     "evidence": "PO ETA 缺失 2 行；WO 完工日缺失 7 张",
+     "owner_role": "采购/供应链；生产/PMC",
+     "blocks_promotion": "always_replenish（B_max 假设全部到货）"
+    },
+    {
+     "id": "G6_pk_ks_1to1",
+     "label": "在产 PK# 皮壳按 1:1 计 KS 成品",
+     "state": "unproven",
+     "evidence": "在产剩余 310 件按 1:1 计入",
+     "owner_role": "生产/PMC",
+     "blocks_promotion": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
+    }
+   ],
+   "horizon_stability": [
+    {
+     "window": "remaining_3m",
+     "label": "决定窗 2026-10-22→2026-12-31（窗口 71 天）",
+     "requested_days": 71,
+     "covered_days": 71,
+     "start": "2026-10-22",
+     "end": "2027-01-01",
+     "d1_p50_forecast": 165.3,
+     "d2_p50_plus_live_so": 593.3,
+     "t3_bmax_lt_d1": false,
+     "t4_a_low_lt_d2_le_bmax": true,
+     "class_if_evaluated_here": "depends_on_arrival"
+    },
+    {
+     "window": "L60",
+     "label": "提前期 60 天（窗口 60 天）",
+     "requested_days": 60,
+     "covered_days": 60,
+     "start": "2026-10-22",
+     "end": "2026-12-21",
+     "d1_p50_forecast": 136.9,
+     "d2_p50_plus_live_so": 564.9,
+     "t3_bmax_lt_d1": false,
+     "t4_a_low_lt_d2_le_bmax": true,
+     "class_if_evaluated_here": "depends_on_arrival"
+    },
+    {
+     "window": "L90",
+     "label": "提前期 90 天（窗口 90 天）",
+     "requested_days": 90,
+     "covered_days": 90,
+     "start": "2026-10-22",
+     "end": "2027-01-20",
+     "d1_p50_forecast": 203.9,
+     "d2_p50_plus_live_so": 631.9,
+     "t3_bmax_lt_d1": false,
+     "t4_a_low_lt_d2_le_bmax": true,
+     "class_if_evaluated_here": "depends_on_arrival"
+    },
+    {
+     "window": "L120",
+     "label": "提前期 120 天（窗口 120 天）",
+     "requested_days": 120,
+     "covered_days": 120,
+     "start": "2026-10-22",
+     "end": "2027-02-19",
+     "d1_p50_forecast": 268.8,
+     "d2_p50_plus_live_so": 696.8,
+     "t3_bmax_lt_d1": false,
+     "t4_a_low_lt_d2_le_bmax": true,
+     "class_if_evaluated_here": "depends_on_arrival"
+    }
+   ],
+   "class_horizon_stable": true,
+   "class_horizon_note": "四个窗口同规则判定一致（remaining_3m / L60 60 天 / L90 90 天 / L120 120 天）",
+   "arithmetic_qualifies_at_windows": [],
+   "insufficient_evidence_causes": null,
+   "start_condition": {
+    "rule": "升级由结构化 required_gates 驱动；文字条件不能替代闸门",
+    "demand_view_for_promotion": "D2",
+    "demand_overlap": "unproven",
+    "supply_lower_bound_shortfall": false,
+    "supply_lower_bound_shortfall_note": "下界未低于 D2；短缺情景来自到货时点/在手不足，同样不得据此直接升级",
+    "binding_shortfall_conditions": [
+     "只在手+在产 A_high 414.0 < D2 593.3（到货落在窗口外）",
+     "只在手 A_low 104.0 < D2 593.3"
+    ],
+    "required_gates": [
+     {
+      "id": "G1_identity",
+      "label": "客户码→单一 KS 物料",
+      "state": "ok",
+      "owner_role": "商品主数据",
+      "evidence_needed": "identity_status=confirmed",
+      "blocks": "always_replenish"
+     },
+     {
+      "id": "G2_uom",
+      "label": "库存/单据单位已核实（T2 硬门）",
+      "state": "unproven",
+      "owner_role": "商品主数据/仓储",
+      "evidence_needed": "inventory.uom_status=unknown_conditional",
+      "blocks": "always_replenish"
+     },
+     {
+      "id": "G3_demand_overlap",
+      "label": "live SO 与预测是否为同一批需求",
+      "state": "unproven",
+      "owner_role": "业务/运营",
+      "evidence_needed": "live SO 428 件；证据只证明单据存在，未做桶级消费/分配",
+      "blocks": "任何把 SO 计入需求的动作"
+     },
+     {
+      "id": "G4_supply_overlap",
+      "label": "PO / 在途 / 在产逐笔重叠键",
+      "state": "unproven",
+      "owner_role": "数据/系统",
+      "evidence_needed": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
+      "blocks": "把 B_min 当供给下界（不影响 B_max 上界的短缺判断）"
+     },
+     {
+      "id": "G5_arrival_in_window",
+      "label": "PO 到货日 / WO 完工日在窗口内",
+      "state": "unproven",
+      "owner_role": "采购/供应链；生产/PMC",
+      "evidence_needed": "PO ETA 缺失 2 行；WO 完工日缺失 7 张",
+      "blocks": "always_replenish（B_max 假设全部到货）"
+     },
+     {
+      "id": "G6_pk_ks_1to1",
+      "label": "在产 PK# 皮壳按 1:1 计 KS 成品",
+      "state": "unproven",
+      "owner_role": "生产/PMC",
+      "evidence_needed": "在产剩余 310 件按 1:1 计入",
+      "blocks": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
+     }
+    ],
+    "gates_required_for_promotion": [
+     "G1_identity",
+     "G2_uom",
+     "G5_arrival_in_window",
+     "G3_demand_overlap"
+    ],
+    "gate_summary": {
+     "G1_identity": "ok",
+     "G2_uom": "unproven",
+     "G3_demand_overlap": "unproven",
+     "G4_supply_overlap": "unproven",
+     "G5_arrival_in_window": "unproven",
+     "G6_pk_ks_1to1": "unproven"
+    },
+    "outcomes": [
+     {
+      "when": "G2 ok ∧ G4 ok（PO/在途/在产不重叠）∧ G5 ok（全部在窗口内到货）",
+      "then_class": "no_shortage_within_window",
+      "arithmetic": "供给达到 B_max 1394.0 ≥ D2 593.3"
+     },
+     {
+      "when": "到货/完工落到窗口外，或确认重叠（供给低于 B_max）",
+      "then_class": "insufficient_evidence",
+      "arithmetic": "只在手+在产 A_high 414.0 < D2 593.3（到货落在窗口外）；只在手 A_low 104.0 < D2 593.3。下界不足只证明存在短缺情景，D2 含未证的 live SO，故不得直接判 always"
+     },
+     {
+      "when": "上述短缺情景被证实 ∧ G2 ok ∧ G3 ok（live SO 确为增量且已做桶级分配）",
+      "then_class": "always_replenish",
+      "arithmetic": "只有在 D2 成为已对平需求后才允许升级"
+     }
+    ],
+    "forbidden": [
+     "supply lower bound below demand (B_min / B_min_po_dedup < D2) never promotes to always_replenish",
+     "live SO in the demand view never becomes net demand before bucket-level consumption",
+     "Cover or any unbooked supply never counts until mapping and substitutability are proven"
+    ],
+    "summary": "补齐 G2_uom、G3_demand_overlap、G5_arrival_in_window 后按 outcomes 重算；在此之前不发起采购/生产指令。"
+   },
+   "missing_evidence": [
+    {
+     "item": "2/2 条未结 PO 的实际到货日",
+     "owner_role": "采购/供应链",
+     "why_it_changes_answer": "ETA 缺失 2 行；决定能否算窗口内到货"
+    },
+    {
+     "item": "7/7 张开放 WO 的 planned_end_date；3 张 Draft WO 是否释放",
+     "owner_role": "生产/PMC",
+     "why_it_changes_answer": "在产剩余 310 无日期"
+    },
+    {
+     "item": "PK#→KS 是否 1:1 计入",
+     "owner_role": "生产/PMC",
+     "why_it_changes_answer": "在产 1:1 未证；若不成立在产量需重算（只会向下）"
+    },
+    {
+     "item": "在途 490 与去重 PO 490 的逐笔关单键",
+     "owner_role": "数据/系统（worker）",
+     "why_it_changes_answer": "决定 B 取 594 还是 1394"
+    },
+    {
+     "item": "live SO 428 件是否与 P50 指向同一批需求",
+     "owner_role": "业务/运营",
+     "why_it_changes_answer": "决定 D2 是增量还是重复；决定本行是否结构短缺"
+    },
+    {
+     "item": "死单 SO 253 件是否补发",
+     "owner_role": "业务/运营",
+     "why_it_changes_answer": "未计入需求；若补发则需求上移"
+    },
+    {
+     "item": "库存 UOM 是否为“件”",
+     "owner_role": "商品主数据/仓储",
+     "why_it_changes_answer": "单位未证时，任何短缺幅度都不能当结论"
+    }
+   ],
+   "responsible_role": "采购/供应链（PO ETA/重复）；生产/PMC（WO 完工日）；业务/运营（需求口径）；商品主数据/仓储（UOM）",
+   "decisive_unknown": "到货/完工时点与重叠：在产 310、PO 490、在途 490",
+   "basis": "可供上限 B_max 1394 vs D1 165.3、D2 593.3。在手 A_low 104；B_min 594（最大重叠，去重压力 594）。结论在“全部到货不重叠”（不缺）与“重叠/迟到”（短缺）之间翻转。需求口径比值 0.659（近 3 月均值 95.7）。所有含 SO 的判断均标 demand_overlap=unproven。"
+  },
+  {
+   "seq": 10,
+   "evidence_priority": 7,
+   "priority_tier": 3,
+   "sku": "KS0001-XMMBS-194-HEMPNATURAL",
+   "customer_code": "C/Linen-Natural-194-688-wow",
+   "item_name": "三角靠枕-新棉麻本色-194-麻本色",
+   "class": "depends_on_arrival",
+   "arithmetic_qualifies": null,
+   "arithmetic_class": "depends_on_arrival",
+   "promotion_blockers": [
+    "G2_uom",
+    "G5_arrival_in_window"
+   ],
+   "demand_overlap": "unproven",
+   "demand_overlap_note": "live SO 与 P50 是否同一批需求未证；未做桶级消费/分配前，D2 不能当净需求",
+   "supply": {
+    "available": 360,
+    "intransit": 0,
+    "open_po_raw": 0,
+    "open_po_dedup": 0,
+    "po_duplicate_candidate": 0,
+    "open_po_lines": 0,
+    "po_eta_missing_lines": 0,
+    "production_gross": 620,
+    "production_remaining": 620,
+    "open_wo": 2,
+    "stopped_qty": 300,
+    "draft_wo": 0,
+    "A_low": 360,
+    "A_high": 980,
+    "B_min": 980,
+    "B_max": 980,
+    "B_min_po_dedup": 980,
+    "B_max_po_dedup": 980,
+    "intransit_equals_po_dedup": true
+   },
+   "demand": {
+    "D1_p50_forecast": 228.8,
+    "D2_p50_plus_live_so": 859.8,
+    "live_so": 631,
+    "dead_so_excluded": 421,
+    "over_delivery_not_netted": -16,
+    "forecast_model": "seasonal_naive",
+    "forecast_confidence": "medium-low",
+    "history_months": 29,
+    "run_rate_ratio": 0.932,
+    "recent3_mean": 108,
+    "d2_overlap_status": "unproven: live SO may or may not be the same demand the P50 already covers"
+   },
+   "gaps": {
+    "bmax_minus_d1": 751.2,
+    "bmax_minus_d2": 120.2,
+    "bmin_minus_d2": 120.2,
+    "bmin_po_dedup_minus_d2": 120.2,
+    "bmin_po_dedup_margin_pct_of_d2": 14.0,
+    "duplicate_po_share_of_bmax_pct": 0,
+    "d1_shortfall_vs_bmax_pct": -76.7
+   },
+   "tests": {
+    "t1_identity_confirmed": true,
+    "t2_uom_verified": false,
+    "t3_bmax_lt_d1": false,
+    "t4_a_low_lt_d2_le_bmax": true
+   },
+   "gates": [
+    {
+     "id": "G1_identity",
+     "label": "客户码→单一 KS 物料",
+     "state": "ok",
+     "evidence": "identity_status=confirmed",
+     "owner_role": "商品主数据",
+     "blocks_promotion": "always_replenish"
+    },
+    {
+     "id": "G2_uom",
+     "label": "库存/单据单位已核实（T2 硬门）",
+     "state": "unproven",
+     "evidence": "inventory.uom_status=unknown_conditional",
+     "owner_role": "商品主数据/仓储",
+     "blocks_promotion": "always_replenish"
+    },
+    {
+     "id": "G3_demand_overlap",
+     "label": "live SO 与预测是否为同一批需求",
+     "state": "unproven",
+     "evidence": "live SO 631 件；证据只证明单据存在，未做桶级消费/分配",
+     "owner_role": "业务/运营",
+     "blocks_promotion": "任何把 SO 计入需求的动作"
+    },
+    {
+     "id": "G4_supply_overlap",
+     "label": "PO / 在途 / 在产逐笔重叠键",
+     "state": "unproven",
+     "evidence": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
+     "owner_role": "数据/系统",
+     "blocks_promotion": "把 B_min 当供给下界（不影响 B_max 上界的短缺判断）"
+    },
+    {
+     "id": "G5_arrival_in_window",
+     "label": "PO 到货日 / WO 完工日在窗口内",
+     "state": "unproven",
+     "evidence": "PO ETA 缺失 0 行；WO 完工日缺失 2 张",
+     "owner_role": "采购/供应链；生产/PMC",
+     "blocks_promotion": "always_replenish（B_max 假设全部到货）"
+    },
+    {
+     "id": "G6_pk_ks_1to1",
+     "label": "在产 PK# 皮壳按 1:1 计 KS 成品",
+     "state": "unproven",
+     "evidence": "在产剩余 620 件按 1:1 计入",
+     "owner_role": "生产/PMC",
+     "blocks_promotion": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
+    }
+   ],
+   "horizon_stability": [
+    {
+     "window": "remaining_3m",
+     "label": "决定窗 2026-10-22→2026-12-31（窗口 71 天）",
+     "requested_days": 71,
+     "covered_days": 71,
+     "start": "2026-10-22",
+     "end": "2027-01-01",
+     "d1_p50_forecast": 228.8,
+     "d2_p50_plus_live_so": 859.8,
+     "t3_bmax_lt_d1": false,
+     "t4_a_low_lt_d2_le_bmax": true,
+     "class_if_evaluated_here": "depends_on_arrival"
+    },
+    {
+     "window": "L60",
+     "label": "提前期 60 天（窗口 60 天）",
+     "requested_days": 60,
+     "covered_days": 60,
+     "start": "2026-10-22",
+     "end": "2026-12-21",
+     "d1_p50_forecast": 177,
+     "d2_p50_plus_live_so": 808,
+     "t3_bmax_lt_d1": false,
+     "t4_a_low_lt_d2_le_bmax": true,
+     "class_if_evaluated_here": "depends_on_arrival"
+    },
+    {
+     "window": "L90",
+     "label": "提前期 90 天（窗口 90 天）",
+     "requested_days": 90,
+     "covered_days": 90,
+     "start": "2026-10-22",
+     "end": "2027-01-20",
+     "d1_p50_forecast": 290.5,
+     "d2_p50_plus_live_so": 921.5,
+     "t3_bmax_lt_d1": false,
+     "t4_a_low_lt_d2_le_bmax": true,
+     "class_if_evaluated_here": "depends_on_arrival"
+    },
+    {
+     "window": "L120",
+     "label": "提前期 120 天（窗口 120 天）",
+     "requested_days": 120,
+     "covered_days": 120,
+     "start": "2026-10-22",
+     "end": "2027-02-19",
+     "d1_p50_forecast": 394.2,
+     "d2_p50_plus_live_so": 1025.2,
+     "t3_bmax_lt_d1": false,
+     "t4_a_low_lt_d2_le_bmax": false,
+     "class_if_evaluated_here": "insufficient_evidence"
+    }
+   ],
+   "class_horizon_stable": false,
+   "class_horizon_note": "窗口间不一致：L120=insufficient_evidence（各窗口 requested_days 与 covered_days 已逐项断言相等）",
+   "arithmetic_qualifies_at_windows": [],
+   "insufficient_evidence_causes": null,
+   "start_condition": {
+    "rule": "升级由结构化 required_gates 驱动；文字条件不能替代闸门",
+    "demand_view_for_promotion": "D2",
+    "demand_overlap": "unproven",
+    "supply_lower_bound_shortfall": false,
+    "supply_lower_bound_shortfall_note": "下界未低于 D2；短缺情景来自到货时点/在手不足，同样不得据此直接升级",
+    "binding_shortfall_conditions": [
+     "只在手 A_low 360.0 < D2 859.8"
+    ],
+    "required_gates": [
+     {
+      "id": "G1_identity",
+      "label": "客户码→单一 KS 物料",
+      "state": "ok",
+      "owner_role": "商品主数据",
+      "evidence_needed": "identity_status=confirmed",
+      "blocks": "always_replenish"
+     },
+     {
+      "id": "G2_uom",
+      "label": "库存/单据单位已核实（T2 硬门）",
+      "state": "unproven",
+      "owner_role": "商品主数据/仓储",
+      "evidence_needed": "inventory.uom_status=unknown_conditional",
+      "blocks": "always_replenish"
+     },
+     {
+      "id": "G3_demand_overlap",
+      "label": "live SO 与预测是否为同一批需求",
+      "state": "unproven",
+      "owner_role": "业务/运营",
+      "evidence_needed": "live SO 631 件；证据只证明单据存在，未做桶级消费/分配",
+      "blocks": "任何把 SO 计入需求的动作"
+     },
+     {
+      "id": "G4_supply_overlap",
+      "label": "PO / 在途 / 在产逐笔重叠键",
+      "state": "unproven",
+      "owner_role": "数据/系统",
+      "evidence_needed": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
+      "blocks": "把 B_min 当供给下界（不影响 B_max 上界的短缺判断）"
+     },
+     {
+      "id": "G5_arrival_in_window",
+      "label": "PO 到货日 / WO 完工日在窗口内",
+      "state": "unproven",
+      "owner_role": "采购/供应链；生产/PMC",
+      "evidence_needed": "PO ETA 缺失 0 行；WO 完工日缺失 2 张",
+      "blocks": "always_replenish（B_max 假设全部到货）"
+     },
+     {
+      "id": "G6_pk_ks_1to1",
+      "label": "在产 PK# 皮壳按 1:1 计 KS 成品",
+      "state": "unproven",
+      "owner_role": "生产/PMC",
+      "evidence_needed": "在产剩余 620 件按 1:1 计入",
+      "blocks": "在产计入供给（只影响下界大小，不改变 B_max 短缺）"
+     }
+    ],
+    "gates_required_for_promotion": [
+     "G1_identity",
+     "G2_uom",
+     "G5_arrival_in_window",
+     "G3_demand_overlap"
+    ],
+    "gate_summary": {
+     "G1_identity": "ok",
+     "G2_uom": "unproven",
+     "G3_demand_overlap": "unproven",
+     "G4_supply_overlap": "unproven",
+     "G5_arrival_in_window": "unproven",
+     "G6_pk_ks_1to1": "unproven"
+    },
+    "outcomes": [
+     {
+      "when": "G2 ok ∧ G4 ok（PO/在途/在产不重叠）∧ G5 ok（全部在窗口内到货）",
+      "then_class": "no_shortage_within_window",
+      "arithmetic": "供给达到 B_max 980.0 ≥ D2 859.8"
+     },
+     {
+      "when": "到货/完工落到窗口外，或确认重叠（供给低于 B_max）",
+      "then_class": "insufficient_evidence",
+      "arithmetic": "只在手 A_low 360.0 < D2 859.8。下界不足只证明存在短缺情景，D2 含未证的 live SO，故不得直接判 always"
+     },
+     {
+      "when": "上述短缺情景被证实 ∧ G2 ok ∧ G3 ok（live SO 确为增量且已做桶级分配）",
+      "then_class": "always_replenish",
+      "arithmetic": "只有在 D2 成为已对平需求后才允许升级"
+     }
+    ],
+    "forbidden": [
+     "supply lower bound below demand (B_min / B_min_po_dedup < D2) never promotes to always_replenish",
+     "live SO in the demand view never becomes net demand before bucket-level consumption",
+     "Cover or any unbooked supply never counts until mapping and substitutability are proven"
+    ],
+    "summary": "补齐 G2_uom、G3_demand_overlap、G5_arrival_in_window 后按 outcomes 重算；在此之前不发起采购/生产指令。"
+   },
+   "missing_evidence": [
+    {
+     "item": "2/2 张开放 WO 的 planned_end_date",
+     "owner_role": "生产/PMC",
+     "why_it_changes_answer": "在产剩余 620 无日期"
+    },
+    {
+     "item": "PK#→KS 是否 1:1 计入",
+     "owner_role": "生产/PMC",
+     "why_it_changes_answer": "在产 1:1 未证；若不成立在产量需重算（只会向下）"
+    },
+    {
+     "item": "live SO 631 件是否与 P50 指向同一批需求",
+     "owner_role": "业务/运营",
+     "why_it_changes_answer": "决定 D2 是增量还是重复；决定本行是否结构短缺"
+    },
+    {
+     "item": "死单 SO 421 件是否补发",
+     "owner_role": "业务/运营",
+     "why_it_changes_answer": "未计入需求；若补发则需求上移"
+    },
+    {
+     "item": "库存 UOM 是否为“件”",
+     "owner_role": "商品主数据/仓储",
+     "why_it_changes_answer": "单位未证时，任何短缺幅度都不能当结论"
+    },
+    {
+     "item": "Cover 无映射（scenario）能否替代",
+     "owner_role": "商品主数据/仓储",
+     "why_it_changes_answer": "若有 cover 且映射成立，可减少/消除短缺情景，需重算（不能据此断定不缺）"
+    }
+   ],
+   "responsible_role": "生产/PMC（WO 完工日）；业务/运营（需求口径）；商品主数据/仓储（UOM）",
+   "decisive_unknown": "到货/完工时点与重叠：在产 620、PO 0、在途 0",
+   "basis": "可供上限 B_max 980 vs D1 228.8、D2 859.8。在手 A_low 360；B_min 980（最大重叠，去重压力 980）。结论在“全部到货不重叠”（不缺）与“重叠/迟到”（短缺）之间翻转。需求口径比值 0.932（近 3 月均值 108）。所有含 SO 的判断均标 demand_overlap=unproven。"
+  }
+ ],
+ "d9_mapping": [
+  {
+   "sku": "KS0001-QDKTR-100-DEEPGREY",
+   "d9_layer": "暂缓",
+   "v0_actions_class": "insufficient_evidence",
+   "reason": "同向：模型分歧；新分类只换了名字并为 P90-free 去掉派生量"
+  },
+  {
+   "sku": "KS0001-QDKTR-100-DEEPBLUE",
+   "d9_layer": "暂缓",
+   "v0_actions_class": "insufficient_evidence",
+   "reason": "同向"
+  },
+  {
+   "sku": "KS0001-XMMBS-100-HEMPNATURAL",
+   "d9_layer": "暂缓",
+   "v0_actions_class": "depends_on_arrival",
+   "reason": "变化：D9 依据的是 P90 派生区间（D10 已失效）；P50 下由到货时点决定"
+  },
+  {
+   "sku": "KS0001-CMKTR-100-DEEPBLUE",
+   "d9_layer": "暂缓",
+   "v0_actions_class": "depends_on_arrival",
+   "reason": "变化：D9 依据的是 P90 派生区间；P50 下去重供给仍覆盖"
+  },
+  {
+   "sku": "KS0001-XMMBS-153-HEMPNATURAL",
+   "d9_layer": "待核实",
+   "v0_actions_class": "depends_on_arrival",
+   "reason": "同向：B 随 PO/在产重叠翻转，只是改用 P50 表述"
+  },
+  {
+   "sku": "KS0001-PR-100-GREY",
+   "d9_layer": "暂缓",
+   "v0_actions_class": "insufficient_evidence",
+   "reason": "同向"
+  },
+  {
+   "sku": "KS0001-CMKTR-100-GREY",
+   "d9_layer": "暂缓",
+   "v0_actions_class": "depends_on_arrival",
+   "reason": "变化：D9 依据的是 P90 派生区间；P50 下主口径覆盖、去重压力短 2"
+  },
+  {
+   "sku": "KS0001-CMM-100-WHITE",
+   "d9_layer": "暂缓",
+   "v0_actions_class": "insufficient_evidence",
+   "reason": "同向（但算术上已是唯一结构短缺，见 arithmetic_qualifies）"
+  },
+  {
+   "sku": "KS0001-HLR-100-OFFWHITE",
+   "d9_layer": "待核实",
+   "v0_actions_class": "depends_on_arrival",
+   "reason": "同向：B 下界贴近需求，取决于在途/PO"
+  },
+  {
+   "sku": "KS0001-XMMBS-194-HEMPNATURAL",
+   "d9_layer": "可准备（仅准备）",
+   "v0_actions_class": "depends_on_arrival",
+   "reason": "变化：D9 依据的是 P90 派生的 60 天区间；P50 下在手 360 < 859.8，必须靠在产完工"
+  }
+ ],
+ "residual_unknowns": [
+  {
+   "item": "PO ETA 空",
+   "count": "13 行 / 1,465 件 / 6 SKU",
+   "impact": "无法确认能否在窗口内到货；B 是到货假设"
+  },
+  {
+   "item": "在产无日期",
+   "count": "24 张开放 WO planned_end_date 全空",
+   "impact": "计入供给但到货日未确认"
+  },
+  {
+   "item": "PK# -> KS 1:1",
+   "count": "10/10 SKU",
+   "impact": "在产按 1:1 计入 KS 成品；未证，若不成立在产量需重算（只会向下）"
+  },
+  {
+   "item": "库存 UOM",
+   "count": "10/10 SKU unknown_conditional",
+   "impact": "按件计数、未换算；T2 因此 10/10 不成立，always 层为空"
+  },
+  {
+   "item": "Cover 可替代",
+   "count": "10/10 未证（4 个无映射 scenario）",
+   "impact": "不上账；确认映射与可替代后可重算并可能消除短缺，但未证前不能当作“不缺”"
+  },
+  {
+   "item": "PO <-> 在途 / 在产 重叠",
+   "count": "10/10（在途与去重 PO 数值一致 10/10）",
+   "impact": "只发 B_min/B_max 边界，不发单点"
+  },
+  {
+   "item": "SO <-> 预测重叠",
+   "count": "10/10",
+   "impact": "D2 可能重复计算未来需求；所有含 SO 动作 demand_overlap=unproven"
+  },
+  {
+   "item": "单据/库存时点",
+   "count": "SO/WO 10-20/21 vs 库存 10-22（1–2 天）",
+   "impact": "未桥接；时点情景，不伪造对平"
+  },
+  {
+   "item": "断货删失",
+   "count": "stock_history 仅 3 天",
+   "impact": "历史需求可能低估；未校正"
+  },
+  {
+   "item": "取消/退货",
+   "count": "gs_orders 无状态字段",
+   "impact": "未剔除；若源表只含发货行则无影响，未证"
+  },
+  {
+   "item": "死单 SO",
+   "count": "1,675 件",
+   "impact": "未计入需求；若确认补发需另加"
+  },
+  {
+   "item": "超发 SO",
+   "count": "-907 件",
+   "impact": "不冲抵其他行；净额仅对照"
+  }
+ ],
+ "reconciliation": {
+  "skus_in": 10,
+  "skus_out": 10,
+  "excluded": [],
+  "dropped_rows": [],
+  "class_sum": "0 + 6 + 4 = 10",
+  "test_count": {
+   "t3_true": 1,
+   "t4_true": 6,
+   "neither": 3
+  },
+  "against_frozen_aggregate": "10 项合计逐项相等（available 1,015 / intransit 1,184 / PO raw 1,465 / A 1,015–3,205 / B 3,953–5,854 / live SO 2,924 / dead SO 1,675 / over -907）",
+  "class_horizon": {
+   "stable": 9,
+   "unstable": 1,
+   "per_row": {
+    "KS0001-QDKTR-100-DEEPGREY": true,
+    "KS0001-QDKTR-100-DEEPBLUE": true,
+    "KS0001-XMMBS-100-HEMPNATURAL": true,
+    "KS0001-CMKTR-100-DEEPBLUE": true,
+    "KS0001-XMMBS-153-HEMPNATURAL": true,
+    "KS0001-PR-100-GREY": true,
+    "KS0001-CMKTR-100-GREY": true,
+    "KS0001-CMM-100-WHITE": true,
+    "KS0001-HLR-100-OFFWHITE": true,
+    "KS0001-XMMBS-194-HEMPNATURAL": false
+   },
+   "note": "computed per row; no blanket 'N rows agree across windows' claim"
+  },
+  "d9_mapping": "10/10 行给出 D9 层级 -> 新分类的对应与差异原因，不静默替换",
+  "unmatched_reason": "入 10 客户码全部在 evidence.skus 中且 identity_status=confirmed；无未匹配记录，故无丢弃项"
+ }
 }
