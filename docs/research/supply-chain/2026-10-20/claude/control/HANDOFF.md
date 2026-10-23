@@ -33,11 +33,11 @@ date: 2026-10-22
 
 | 角色 | 精确 handle | 当前任务 | 状态 | 最近证据 | 下一负责人 |
 |---|---|---|---|---|---|
-| Claude工头｜项目调度 | `term_3f397f4a-1360-4af0-900e-08f014acfed1` | 唯一日常调度：派工、收 worker_done、送审 | 工作中 | 2026-10-23 原终端 `/clear` 后同 handle 恢复；run `run_ab028056dc4e`（coordinator_handle 实测一致）；本轮三次 dispatch `ctx_88424bd7d26f` / `ctx_a3e08d14c590` / `ctx_3a0b09995bad` | 工头 |
-| Claude打工仔1｜全 SKU 主线 | `term_dae491ca-08bf-462c-b402-0938a02cb4f6` | 全 SKU 预测分型 + 全局 LightGBM / 供需主线衔接（task `task_8a0d035f4046`） | 运行中 | dispatch `ctx_a3e08d14c590`，`injected=true`，读屏已见读 `RESEARCH_ADOPTION.md` + `duckdb read_only` 查询（turn 已起，24s） | 工头收 DONE FULLSKU |
-| Claude打工仔2｜PB 断货验证 | `term_696190a8-f7c6-4869-87bf-ed59c893677b` | PB 删失实验核查与改进（task `task_fcbda0190e33`） | 运行中 | 用户新授权（非 Codex）；session `33a53c4b…`；READY WORKER2 已核（`deepseek-v4-flash[1m]`、bypass、cwd 正确）；dispatch `ctx_88424bd7d26f`，读屏已见读 `stockout_intervals.csv` + `2026-10-23-pb-stockout.md`（turn 已起） | 工头收 DONE PB-AUDIT |
-| Codex #301｜独立审核 | `term_d0bcd5e0-9f57-43b9-8dfc-6ffe4578063a` | e1b9b5d7 删失对照 + D32 三源交叉复审（task `task_cba657429b75`） | 运行中 | dispatch `ctx_3a0b09995bad`，`GPT-6.1-Sol medium`，读屏 `Working` | 工头收 DONE CENSOR-REVIEW |
-| Codex2｜决策参谋 | `term_0eb8e41d-dc3e-4b3f-bbb2-7e7e4aed1a87` | 只读待命：回答取舍与判定标准 | 待命 | 读屏 `GPT-6.1-Sol medium`；rename ok；旧终端 `term_a137bdd7…`（GPT-5.6-Terra）保留未删 | 工头 |
+| Claude工头｜项目调度 | `term_3f397f4a-1360-4af0-900e-08f014acfed1` | 唯一日常调度 + **唯一提交者** | 工作中 | run `run_ab028056dc4e`；本轮已落地 commit `dcdc430b`（清关阻塞）→ `b9c9b4ed`（全 SKU）→ `b2217e4d`（PB R2） | 工头 |
+| Claude打工仔1｜全 SKU 主线 | `term_dae491ca-08bf-462c-b402-0938a02cb4f6` | R3 窄返修：A 包训练池归因 / 分型时点措辞 / 冻结 CSV hash（task `task_0fca24196c39`，base `b9c9b4ed`） | 运行中 | 前置已交付 `b9c9b4ed`；301 判 FAIL（1 major + 3 minor，数值全可复现）；dispatch `ctx_42cf3871fe7f` | 工头收 DONE FULLSKU-R3 |
+| Claude打工仔2｜PB 断货验证 | `term_696190a8-f7c6-4869-87bf-ed59c893677b` | 空闲（R2 已交付） | 空闲 | session `33a53c4b…`；`task_4fe287aaeeb5` 完成，成果已提交 `b2217e4d`：M01 方向已修、旧改善作废、R2 在未删失月可测更差 | 工头按 301 窄复审结果决定是否再派 |
+| Codex #301｜独立审核 | `term_d0bcd5e0-9f57-43b9-8dfc-6ffe4578063a` | 窄复审 `b2217e4d`（task `task_22bdff00ce5d`） | 运行中 | 已交两份 FAIL 报告：CENSOR-REVIEW、FULLSKU-REVIEW；5h 额度紧张，**只接窄审**；dispatch `ctx_8c64e2e56c80` | 工头收 DONE PB-R2-REVIEW |
+| Codex2｜决策参谋 | `term_0eb8e41d-dc3e-4b3f-bbb2-7e7e4aed1a87` | 有界决策：模型准入 / 538 SKU 去向 / 数量衔接（task `task_1cf75e2ea940`） | 运行中 | `GPT-6.1-Sol medium`；dispatch `ctx_2575f587b47a` | 工头收决策 |
 | ~~Claude打工仔｜旧实施~~ | `term_4c1c8d12-ba0a-4cdb-9dc3-b3b464bc7449` | — | **已退役（2026-10-23）** | 上下文近满；R1-FIX 已交付 commit `a59dc213`；**不再派新任务**，终端保留不删 | 无人 |
 | ~~Claude打工仔｜旧终端~~ | `term_6d7a52b3-26e4-4278-b21f-4269cd5c5b89` | — | **已退役（2026-10-23）** | 读屏 `100% context used`；**不再派新任务**，终端保留不删 | 无人 |
 
