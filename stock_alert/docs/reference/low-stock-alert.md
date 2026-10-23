@@ -65,6 +65,16 @@ uv run python -m stock_alert.cli probe --warehouse "美中-FZH-DANEEY"
 
 其它业务码：`524` 无权限、`525` 参数错、`519` 签名错、`523` token 过期 —— 直接抛错，不重试。
 
+## 容错（瞬时错误与会话失效）
+
+- **HTTP 5xx / 网络错误**（如网关 `502 Bad Gateway`）：`client.py` 对**每次 tools/call** 做
+  指数退避重试（60s → 120s → 240s，`max_retries=3`）；**4xx（524/525 等）直接抛**，不浪费时间。
+- **会话失效**：`tools/call` 可能返回
+  `HTTP 400 {"jsonrpc":"2.0","error":{"code":-32000,"message":"Bad Request: Server not initialized"}}`
+  —— 服务端/负载均衡抖动把已建会话丢了，**重试同一会话无效**。`McpClient.call()` 检测到该错误会
+  **重建会话（initialize + notifications/initialized）后重试一次**；仍失败则交给外层退避。
+- 两类错误最终仍失败时，包装脚本会推一条**失败告警**到钉钉（含异常摘要）。
+
 ## 凭证
 
 | 用途 | 位置 | 键 |
@@ -112,6 +122,8 @@ powershell -ExecutionPolicy Bypass -File stock_alert\scripts\install_stock_alert
 - **没收到钉钉**：看日志末尾；跑挂时包装脚本会先推一条失败告警（告警失败只打 stderr，不盖原异常）。
 - **业务码 526**：限流。确认只有一个跑批在打，且 `--min-interval` 没被调小。
 - **业务码 524**：该通途 App 无 `stocksquery` 权限（工具可见 ≠ 有权限）。
+- **HTTP 502 / 400 Server not initialized**：通途 MCP 网关/会话抖动。程序已自动退避重试并重建会话；
+  若持续失败，隔段时间补跑（`Start-ScheduledTask -TaskName FZH-StockAlert-daily`）或联系通途。
 - **中文乱码**：日志里设了 `PYTHONIOENCODING=utf-8`；手工跑时同样 `export PYTHONIOENCODING=utf-8`。
 - **凭证 `KeyError`**：`.env` 不全（根 `.env` 缺钉钉键，或 `tongtool_api/.env` 缺通途键）。
 - **电脑睡眠/关机不补跑**：Windows 任务计划默认不补跑错过的触发。

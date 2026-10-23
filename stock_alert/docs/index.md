@@ -17,6 +17,7 @@ tags: [stock-alert, tongtool, erp2, dingtalk, inventory]
   （既没货也无在途，一般是历史/停用 SKU）；正文**附带在途数量**提示。
 - **监控仓库**：`美中-FZH-DANEEY`、`美东-CENTRADE`、`波兰-FZHPoland-covers`。
 - **扫描范围**：整仓全量 SKU（按仓库分页拉取，不是固定清单）。
+- **容错**：网关 5xx / 网络错误自动退避重试；MCP 会话失效（Server not initialized）自动重建后重试。
 - **消息形式**：正文给每仓「N 个 SKU 可用<5（在途合计 M 件）」；**总数 > 10 时**另发一张
   **按仓库分 sheet 的 Excel**（ActionCard 下载卡片），≤10 时明细直接写进正文。
 
