@@ -685,6 +685,31 @@ tags: [supply-chain, research, log]
 - 失败/放弃：无；剩余是业务/单据证据（UOM、PO 重复候选与 ETA、WO 日期、在途关单键、
   SO 增量性），不是时间。
 
+## 2026-10-23 — Phase 11 删失对照返修 + 全 SKU 主线（只读离线）
+
+- 做了什么：打工仔扩编为 2 名（用户授权用 Claude 而非 Codex）；三线并行——
+  ① PB 删失实验核查与返修；② 全 SKU 分型 + 全局树对照 + 自审；③ Codex2 有界准入裁决。
+  所有 worker 输出由**工头唯一提交**，行级业务 CSV/JSON 按 D33 清关规则不入库。
+- 检索/验证命令：`orca orchestration {run-current,task-create,dispatch,check --wait}`、
+  `git show <commit>`、`git rev-list --left-right --count @{u}...HEAD`、`uv run python scripts/check_secrets.py`、
+  `uv run python scripts/update_index.py`。
+- 结果/发现：
+  - **Git 清关阻塞（D33）**：本地领先 upstream **69 提交**、含 **38 个业务 CSV**、仓库 **PUBLIC** → 禁 push、禁改历史。
+  - **301 CENSOR-REVIEW = FAIL**：M01 删失损失**方向相反**（`pred<y` 时给零权，而 y 是真实需求下限；
+    反例 `y=[0,0,10]` → 拟合被压到 0）。R2 修正后未删失月 WAPE **0.5520 vs 0.5266**、Δ**+0.0254**、
+    CI **[+0.0110,+0.0436]** → 旧「0.527→0.518 删失更好」**作废**；不反推 raw 更好（无需求真值）。
+  - **301 FULLSKU-REVIEW = FAIL**：数值/ bootstrap/计数全复现，但 A 包树差 `−0.0002` **不是取整**，
+    是**训练母集 1237→1328 重训**（限回 1237 精确恢复 A 值）。R3 已改归因、统一时点措辞、补冻结 hash。
+  - **Codex2 裁决（D35）**：树只作**有条件影子候选**，不得凭点估计/现有 CI 替换默认；
+    538 SKU 默认保留事实 + 未验证标签；数量走 A/B 分批。计数纠正：**2,690 完全未评分单元 + 1,130 缺失切点**。
+- 失败或放弃的方向 + 原因：
+  - 「删失感知训练更好」——**放弃**，符号错误造成的假改善。
+  - 「树 WAPE 最低 → 更优」——**不采用**，CI 只覆盖固定预测重采样，不含重训/选模方差。
+  - 探针脚本 `_probe_schema.py` / `_probe_map.py` 删除被本机权限拒绝 → **提交时排除**（未 git add）。
+  - 行级产物（`censored_r2.json`、`stockout_intervals*.csv`、`sku_set_diff.csv`、
+    `full_sku_classification.csv`、`final_bundle_routing.csv`）**不入库**，改由
+    `out/business_phase/frozen_artifacts.json` 提供 hash/manifest 受控对拍。
+
 ## 模板（后续阶段）
 
 ```text
